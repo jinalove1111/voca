@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh auth *)",
+      "Bash(git --version)",
+      "PowerShell(Get-Command *)",
+      "PowerShell(if \\($env:GITHUB_TOKEN\\) { \"TOKEN_SET: $\\($env:GITHUB_TOKEN.Substring\\(0,8\\)\\)...\" } else { \"TOKEN_NOT_SET\" })"
+    ]
+  }
+}
