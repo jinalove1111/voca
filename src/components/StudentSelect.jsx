@@ -35,7 +35,7 @@ export default function StudentSelect({ onSelect, onAdmin }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-purple-50 to-pink-50">
       <div className="text-center mb-8 animate-fade-in">
-        <img src="/image/KakaoTalk_20260620_210208708.png" alt="Paul Easy Voca" className="mx-auto mb-3 w-[180px] sm:w-[250px] h-auto rounded-[20px] shadow-lg object-cover" />
+        <img src={`${import.meta.env.BASE_URL}image/KakaoTalk_20260620_210208708.png`} alt="Paul Easy Voca" className="mx-auto mb-3 w-[180px] sm:w-[250px] h-auto rounded-[20px] shadow-lg object-cover" />
         <h1 className="text-4xl font-black text-purple-700">Paul Easy Voca</h1>
         <p className="text-purple-400 font-medium mt-1">누구로 시작할까요? ✨</p>
       </div>
