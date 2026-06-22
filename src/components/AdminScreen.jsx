@@ -202,11 +202,14 @@ function PdfUpload({ onDone }) {
 }
 
 export default function AdminScreen({ onBack }) {
-  const [pin, setPin]       = useState('')
-  const [authed, setAuthed] = useState(false)
-  const [tab, setTab]       = useState('classes') // classes | excel | pdf
+  const [pin, setPin]         = useState('')
+  const [authed, setAuthed]   = useState(false)
+  const [tab, setTab]         = useState('classes') // classes | excel | pdf
   const [classes, setClasses] = useState(() => getClassNames())
   const [viewClass, setView]  = useState(null)
+  const [newClassName, setNewClassName] = useState('')
+  const [newWord, setNewWord] = useState('')
+  const [newMeaning, setNewMeaning] = useState('')
 
   const refresh = () => setClasses(getClassNames())
 
@@ -258,39 +261,88 @@ export default function AdminScreen({ onBack }) {
                 <p className="font-bold text-gray-500">아직 반이 없어요.</p>
                 <p className="text-sm text-gray-400 mt-1">Excel 업로드로 반을 만들어보세요!</p>
               </div>
-            ) : classes.map(c => {
-              const words = getClassWords(c)
-              return (
-                <div key={c} className="bg-white rounded-2xl card-shadow p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-black text-gray-800">{c}</p>
-                      <p className="text-sm text-gray-400">{words.length}개 단어</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => setView(viewClass === c ? null : c)}
-                        className="bg-blue-100 text-blue-600 font-bold px-3 py-2 rounded-xl text-sm btn-press">
-                        {viewClass === c ? '닫기' : '보기'}
-                      </button>
-                      <button onClick={() => { if (window.confirm(`"${c}" 반을 삭제할까요?`)) { deleteClass(c); refresh() } }}
-                        className="bg-red-100 text-red-500 font-bold px-3 py-2 rounded-xl text-sm btn-press">
-                        삭제
-                      </button>
-                    </div>
-                  </div>
-                  {viewClass === c && words.length > 0 && (
-                    <div className="mt-3 bg-gray-50 rounded-xl p-3 max-h-40 overflow-y-auto">
-                      {words.map((w, i) => (
-                        <div key={i} className="flex gap-3 py-1 border-b border-gray-100 last:border-0 text-sm">
-                          <span className="font-bold text-gray-800 min-w-0">{w.word}</span>
-                          <span className="text-gray-500">{w.meaning}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+            ) : (
+            <div className="space-y-4">
+              <div className="bg-white rounded-3xl card-shadow p-5">
+                <p className="text-sm font-black text-gray-700 mb-3">새 반 추가하기</p>
+                <div className="flex gap-2">
+                  <input type="text" value={newClassName} onChange={e => setNewClassName(e.target.value)}
+                    placeholder="반 이름 입력 (예: Basic 1)"
+                    className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-purple-400" />
+                  <button onClick={() => {
+                      const name = newClassName.trim()
+                      if (!name) return alert('반 이름을 입력해주세요!')
+                      if (classes.includes(name)) return alert('이미 있는 반 이름이에요.')
+                      setClassWords(name, [])
+                      setNewClassName('')
+                      refresh()
+                    }}
+                    className="bg-purple-500 text-white font-black px-4 py-3 rounded-xl btn-press hover:bg-purple-600">
+                    추가
+                  </button>
                 </div>
-              )
-            })}
+              </div>
+
+              {classes.map(c => {
+                const words = getClassWords(c)
+                const isOpen = viewClass === c
+                return (
+                  <div key={c} className="bg-white rounded-2xl card-shadow p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-black text-gray-800">{c}</p>
+                        <p className="text-sm text-gray-400">{words.length}개 단어</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => setView(isOpen ? null : c)}
+                          className="bg-blue-100 text-blue-600 font-bold px-3 py-2 rounded-xl text-sm btn-press">
+                          {isOpen ? '닫기' : '보기'}
+                        </button>
+                        <button onClick={() => { if (window.confirm(`"${c}" 반을 삭제할까요?`)) { deleteClass(c); setView(null); refresh() } }}
+                          className="bg-red-100 text-red-500 font-bold px-3 py-2 rounded-xl text-sm btn-press">
+                          삭제
+                        </button>
+                      </div>
+                    </div>
+                    {isOpen && (
+                      <div className="mt-3 space-y-3">
+                        <div className="bg-gray-50 rounded-xl p-3 max-h-40 overflow-y-auto">
+                          {words.length === 0 ? (
+                            <p className="text-gray-400 text-sm">단어가 아직 없습니다.</p>
+                          ) : words.map((w, i) => (
+                            <div key={i} className="flex gap-3 py-1 border-b border-gray-100 last:border-0 text-sm">
+                              <span className="font-bold text-gray-800 min-w-0">{w.word}</span>
+                              <span className="text-gray-500">{w.meaning}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <input type="text" value={newWord} onChange={e => setNewWord(e.target.value)}
+                            placeholder="단어"
+                            className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-purple-400" />
+                          <input type="text" value={newMeaning} onChange={e => setNewMeaning(e.target.value)}
+                            placeholder="뜻"
+                            className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-purple-400" />
+                        </div>
+                        <button onClick={() => {
+                            if (!newWord.trim() || !newMeaning.trim()) return alert('단어와 뜻을 모두 입력해주세요.')
+                            const existing = getClassWords(c)
+                            setClassWords(c, [...existing, { word: newWord.trim(), meaning: newMeaning.trim() }])
+                            setNewWord('')
+                            setNewMeaning('')
+                            refresh()
+                          }}
+                          className="w-full bg-green-500 text-white font-black py-3 rounded-xl btn-press hover:bg-green-600">
+                          단어 추가
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
           </div>
         )}
 
