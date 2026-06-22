@@ -1,3 +1,5 @@
+import { getStudentClass } from '../utils/wordLibrary'
+
 const GOAL = 5
 
 function MissionBar({ label, current, goal, emoji }) {
@@ -24,6 +26,8 @@ function MissionBar({ label, current, goal, emoji }) {
 export default function Dashboard({ student, studentData, onGo, onLogout }) {
   const { stars, pets, activeMissions, dailyProgress, allDailyDone, cleared } = studentData
 
+  const className = getStudentClass(student)
+
   return (
     <div className="min-h-screen p-4 pb-8">
       {/* Header */}
@@ -40,6 +44,9 @@ export default function Dashboard({ student, studentData, onGo, onLogout }) {
         <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl p-6 text-white text-center card-shadow">
           <div className="text-5xl mb-2">👑</div>
           <h1 className="text-3xl font-black">{student}</h1>
+          {className && (
+            <p className="text-sm text-purple-200 mt-1">반: {className}</p>
+          )}
           <div className="flex justify-center gap-4 mt-3">
             <div className="bg-white/20 rounded-xl px-3 py-2 text-center">
               <p className="text-white font-black text-xl">{cleared.length}</p>

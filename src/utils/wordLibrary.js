@@ -3,16 +3,45 @@ import { WORDS as DB_WORDS } from '../data/words'
 const CLS_KEY = 'paulEasyVoca_classWords'
 const STU_CLS = (name) => `paulEasyVoca_${name}_class`
 
+const FIXED_CLASS_NAMES = ['월수금초급', '화목초급', '중등내신']
+const DEFAULT_CLASS_WORDS = {
+  '월수금초급': [
+    { word: 'apple', meaning: '사과' },
+    { word: 'banana', meaning: '바나나' },
+    { word: 'orange', meaning: '오렌지' },
+    { word: 'milk', meaning: '우유' },
+    { word: 'water', meaning: '물' },
+  ],
+  '화목초급': [
+    { word: 'pizza', meaning: '피자' },
+    { word: 'cake', meaning: '케이크' },
+    { word: 'bread', meaning: '빵' },
+    { word: 'cookie', meaning: '쿠키' },
+    { word: 'juice', meaning: '주스' },
+  ],
+  '중등내신': [
+    { word: 'school', meaning: '학교' },
+    { word: 'book', meaning: '책' },
+    { word: 'pencil', meaning: '연필' },
+    { word: 'teacher', meaning: '선생님' },
+    { word: 'student', meaning: '학생' },
+  ],
+}
+
 export const getAllClasses = () => {
   try { return JSON.parse(localStorage.getItem(CLS_KEY)) || {} } catch { return {} }
 }
 export const saveAllClasses = (obj) => localStorage.setItem(CLS_KEY, JSON.stringify(obj))
 
-export const getClassNames = () => Object.keys(getAllClasses())
+export const getClassNames = () => {
+  const saved = Object.keys(getAllClasses())
+  return [...new Set([...FIXED_CLASS_NAMES, ...saved])]
+}
 
 export const getClassWords = (className) => {
   const all = getAllClasses()
-  return all[className] || []
+  if (all[className] && all[className].length > 0) return all[className]
+  return DEFAULT_CLASS_WORDS[className] || []
 }
 
 export const setClassWords = (className, words) => {

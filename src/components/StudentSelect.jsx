@@ -16,9 +16,10 @@ export default function StudentSelect({ onSelect, onAdmin }) {
     const name = input.trim()
     if (!name)               { setError('이름을 입력해주세요!'); return }
     if (name.length > 10)    { setError('이름은 10글자 이하로 해주세요!'); return }
+    if (!selectedClass)      { setError('반을 선택해주세요!'); return }
     if (students.includes(name)) { setError('이미 있는 이름이에요!'); return }
     addStudent(name)
-    if (selectedClass) setStudentClass(name, selectedClass)
+    setStudentClass(name, selectedClass)
     refresh()
     setInput('')
     setClass('')
@@ -84,7 +85,7 @@ export default function StudentSelect({ onSelect, onAdmin }) {
             {classNames.length > 0 && (
               <select value={selectedClass} onChange={e => setClass(e.target.value)}
                 className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-purple-500 bg-white">
-                <option value="">반 선택 (선택사항)</option>
+                <option value="">반 선택</option>
                 {classNames.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             )}
