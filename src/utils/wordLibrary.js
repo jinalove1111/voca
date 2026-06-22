@@ -64,7 +64,7 @@ export const getStudentWords = (name) => {
   const cls = getStudentClass(name)
   if (!cls) return DB_WORDS
   const raw = getClassWords(cls)
-  if (!raw.length) return DB_WORDS
+  if (!raw.length) return []
   return raw.map(cw => {
     const db = DB_WORDS.find(w => w.word.toLowerCase() === cw.word.toLowerCase())
     if (db) return db
