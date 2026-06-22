@@ -32,8 +32,18 @@ const RATE_KEY = 'paulEasyVoca_speechRate'
 export const getSpeechRate = () => parseFloat(localStorage.getItem(RATE_KEY) || '0.6')
 export const setSpeechRate = (r) => localStorage.setItem(RATE_KEY, String(r))
 
-function getBritishVoice() {
-  const voices = window.speechSynthesis.getVoices()
+// Unlock AudioContext on Android/iOS — call on any user gesture
+let _audioCtx = null
+export function unlockAudio() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext
+    if (!AC) return
+    if (!_audioCtx) _audioCtx = new AC()
+    if (_audioCtx.state === 'suspended') _audioCtx.resume()
+  } catch {}
+}
+
+function findBritish(voices) {
   return (
     voices.find(v => v.lang === 'en-GB') ||
     voices.find(v => v.name.toLowerCase().includes('british')) ||
@@ -42,19 +52,34 @@ function getBritishVoice() {
   )
 }
 
+// Android Chrome loads voices asynchronously — wait for voiceschanged if needed
+function withVoice(cb) {
+  const voices = window.speechSynthesis.getVoices()
+  if (voices.length > 0) { cb(findBritish(voices)); return }
+  let fired = false
+  const fire = () => {
+    if (fired) return
+    fired = true
+    cb(findBritish(window.speechSynthesis.getVoices()))
+  }
+  window.speechSynthesis.addEventListener('voiceschanged', fire, { once: true })
+  // Fallback: if voiceschanged never fires (some Android), speak without a specific voice
+  setTimeout(fire, 500)
+}
+
 export function speak(text, opts = {}) {
   const { twice = true, onEnd = null, rate = null } = opts
   const r = rate ?? getSpeechRate()
   if (!window.speechSynthesis) { onEnd?.(); return }
+  unlockAudio()
   window.speechSynthesis.cancel()
 
-  const playOne = (cb) => {
+  const playOne = (voice, cb) => {
     const u = new SpeechSynthesisUtterance(text)
     u.lang = 'en-GB'
     u.rate = r
     u.pitch = 1
-    const britishVoice = getBritishVoice()
-    if (britishVoice) u.voice = britishVoice
+    if (voice) u.voice = voice
     let done = false
     const finish = () => { if (!done) { done = true; cb?.() } }
     u.onend = finish
@@ -64,30 +89,33 @@ export function speak(text, opts = {}) {
     window.speechSynthesis.speak(u)
   }
 
-  if (twice) {
-    playOne(() => setTimeout(() => playOne(() => onEnd?.()), 500))
-  } else {
-    playOne(() => onEnd?.())
-  }
+  withVoice(voice => {
+    if (twice) {
+      playOne(voice, () => setTimeout(() => playOne(voice, () => onEnd?.()), 500))
+    } else {
+      playOne(voice, () => onEnd?.())
+    }
+  })
 }
 
-// Fixed-rate praise (en-GB, rate 0.95). Calls onEnd when done.
 export function speakPraise(text, onEnd) {
   if (!window.speechSynthesis) { onEnd?.(); return }
+  unlockAudio()
   window.speechSynthesis.cancel()
-  const u = new SpeechSynthesisUtterance(text)
-  u.lang = 'en-GB'
-  u.rate = 0.95
-  u.pitch = 1
-  const britishVoice = getBritishVoice()
-  if (britishVoice) u.voice = britishVoice
-  let fired = false
-  const finish = () => { if (!fired) { fired = true; onEnd?.() } }
-  u.onend = finish
-  u.onerror = finish
-  // Fallback: fire after estimated duration
-  setTimeout(finish, Math.max(1500, text.length * 80))
-  window.speechSynthesis.speak(u)
+
+  withVoice(voice => {
+    const u = new SpeechSynthesisUtterance(text)
+    u.lang = 'en-GB'
+    u.rate = 0.95
+    u.pitch = 1
+    if (voice) u.voice = voice
+    let fired = false
+    const finish = () => { if (!fired) { fired = true; onEnd?.() } }
+    u.onend = finish
+    u.onerror = finish
+    setTimeout(finish, Math.max(1500, text.length * 80))
+    window.speechSynthesis.speak(u)
+  })
 }
 
 export function hasSpeechRecognition() {

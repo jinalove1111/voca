@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { speak, speakPraise, SUCCESS_MSGS, FAIL_MSGS, rndMsg } from '../utils/speech'
+import { speak, speakPraise, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
 
 const KO_PRAISE = [
   '야르~ 정답!', '야르! 이건 그냥 맞추네!', '와 대박! 단어 고수인데?',
@@ -23,6 +23,7 @@ function PronStep({ word, canRecord, onSuccess }) {
   const [phase, setPhase]      = useState('wait')
   // wait | listening | success | fail
   const [msg, setMsg]          = useState('')
+  const [micError, setMicErr]  = useState('')
   const [tries, setTries]      = useState(0)
   const [audioUrl, setUrl]     = useState(null)
   const [processing, setProc]  = useState(false)
@@ -57,25 +58,39 @@ function PronStep({ word, canRecord, onSuccess }) {
   // Cleanup on unmount or word change
   useEffect(() => () => stopAll(), [word])
 
+  const MIC_ERR = {
+    'not-allowed':   '마이크 권한을 허용해주세요! 설정 → 사이트 권한 → 마이크 🎤',
+    'no-speech':     '소리가 안 들렸어요. 크게 다시 말해봐요! 🗣️',
+    'audio-capture': '마이크를 찾을 수 없어요. 기기 마이크를 확인해주세요 😢',
+    'network':       '네트워크 오류예요. 인터넷 연결을 확인해주세요 📶',
+  }
+
   const startListening = () => {
     if (processing) return
     setProc(true)
+    setMicErr('')
+    unlockAudio()
     stopAll()
     setUrl(null)
     setPhase('listening')
 
-    // MediaRecorder (best-effort — failure is silent)
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-      const mr = new MediaRecorder(stream)
-      const chunks = []
-      mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
-      mr.onstop = () => {
-        setUrl(URL.createObjectURL(new Blob(chunks, { type: 'audio/webm' })))
-        stream.getTracks().forEach(t => t.stop())
-      }
-      mr.start()
-      mrRef.current = mr
-    }).catch(() => {})
+    // MediaRecorder (best-effort — shows error if permission denied)
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        const mr = new MediaRecorder(stream)
+        const chunks = []
+        mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
+        mr.onstop = () => {
+          setUrl(URL.createObjectURL(new Blob(chunks, { type: 'audio/webm' })))
+          stream.getTracks().forEach(t => t.stop())
+        }
+        mr.start()
+        mrRef.current = mr
+      }).catch((err) => {
+        const msg = MIC_ERR[err.name] || '마이크 오류가 발생했어요 😢'
+        setMicErr(msg)
+      })
+    }
 
     // SpeechRecognition
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -125,9 +140,9 @@ function PronStep({ word, canRecord, onSuccess }) {
       finish(ok, null)
     }
 
-    rec.onerror = () => {
+    rec.onerror = (event) => {
       clearTimeout(autoStop)
-      finish(false, '마이크를 확인해보세요!')
+      finish(false, MIC_ERR[event.error] || '마이크를 확인해보세요!')
     }
 
     // onend fires after onresult AND after onerror — use as safety net only
@@ -191,6 +206,12 @@ function PronStep({ word, canRecord, onSuccess }) {
       >
         {btnLabel}
       </button>
+
+      {micError && (
+        <p className="text-center text-xs font-bold text-red-500 bg-red-50 rounded-xl px-3 py-2">
+          ⚠️ {micError}
+        </p>
+      )}
 
       {msg && (
         <p className={`text-center text-sm font-bold ${phase === 'success' ? 'text-green-600' : 'text-orange-500'}`}>

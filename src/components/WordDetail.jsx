@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { speak, listenFor, SUCCESS_MSGS, FAIL_MSGS, rndMsg } from '../utils/speech'
+import { speak, listenFor, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
 
 function SpeechBtn({ target, label = '따라 말하기', onSuccess }) {
   const [phase, setPhase] = useState('idle')
@@ -18,23 +18,33 @@ function SpeechBtn({ target, label = '따라 말하기', onSuccess }) {
   const addTimer = (fn, ms) => { const t = setTimeout(fn, ms); timers.current.push(t); return t }
   const clearAll = () => { timers.current.forEach(clearTimeout); timers.current = [] }
 
+  const MIC_ERR = {
+    'not-allowed':   '마이크 권한을 허용해주세요! 🎤',
+    'no-speech':     '소리가 안 들렸어요. 크게 다시 말해봐요! 🗣️',
+    'audio-capture': '마이크를 찾을 수 없어요 😢',
+    'network':       '네트워크 오류예요. 인터넷을 확인해주세요 📶',
+    'unsupported':   '이 브라우저는 음성 인식을 지원하지 않아요 😢',
+  }
+
   const startListen = () => {
     setPhase('listening')
     setUrl(null)
 
     // MediaRecorder (optional — no crash if denied)
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-      const mr = new MediaRecorder(stream)
-      const chunks = []
-      mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
-      mr.onstop = () => {
-        const blob = new Blob(chunks, { type: 'audio/webm' })
-        setUrl(URL.createObjectURL(blob))
-        stream.getTracks().forEach(t => t.stop())
-      }
-      mr.start()
-      recRef.current = mr
-    }).catch(() => {})
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        const mr = new MediaRecorder(stream)
+        const chunks = []
+        mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
+        mr.onstop = () => {
+          const blob = new Blob(chunks, { type: 'audio/webm' })
+          setUrl(URL.createObjectURL(blob))
+          stream.getTracks().forEach(t => t.stop())
+        }
+        mr.start()
+        recRef.current = mr
+      }).catch(() => {})
+    }
 
     listenFor(target, {
       onResult: (ok) => {
@@ -49,16 +59,17 @@ function SpeechBtn({ target, label = '따라 말하기', onSuccess }) {
           setMsg(rndMsg(FAIL_MSGS))
         }
       },
-      onError: () => {
+      onError: (errCode) => {
         if (recRef.current?.state === 'recording') recRef.current.stop()
         setPhase('fail')
-        setMsg('마이크를 확인해보세요! 🎤')
+        setMsg(MIC_ERR[errCode] || '마이크를 확인해보세요! 🎤')
       },
     })
   }
 
   const handleClick = () => {
     if (!['idle', 'fail', 'success'].includes(phase)) return
+    unlockAudio()
     clearAll()
     setMsg('')
     setPhase('speaking')
