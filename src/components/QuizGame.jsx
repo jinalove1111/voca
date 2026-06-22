@@ -76,16 +76,21 @@ function PronStep({ word, canRecord, onSuccess }) {
 
     // MediaRecorder (best-effort — shows error if permission denied)
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-        const mr = new MediaRecorder(stream)
-        const chunks = []
-        mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
-        mr.onstop = () => {
-          setUrl(URL.createObjectURL(new Blob(chunks, { type: 'audio/webm' })))
+      navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }).then(stream => {
+        try {
+          const mr = new MediaRecorder(stream)
+          const chunks = []
+          mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
+          mr.onstop = () => {
+            setUrl(URL.createObjectURL(new Blob(chunks, { type: 'audio/webm' })))
+            stream.getTracks().forEach(t => t.stop())
+          }
+          mr.start()
+          mrRef.current = mr
+        } catch (err) {
           stream.getTracks().forEach(t => t.stop())
+          console.warn('MediaRecorder unsupported on this device', err)
         }
-        mr.start()
-        mrRef.current = mr
       }).catch((err) => {
         const msg = MIC_ERR[err.name] || '마이크 오류가 발생했어요 😢'
         setMicErr(msg)

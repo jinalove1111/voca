@@ -32,18 +32,25 @@ function SpeechBtn({ target, label = '따라 말하기', onSuccess }) {
 
     // MediaRecorder (optional — no crash if denied)
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-        const mr = new MediaRecorder(stream)
-        const chunks = []
-        mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
-        mr.onstop = () => {
-          const blob = new Blob(chunks, { type: 'audio/webm' })
-          setUrl(URL.createObjectURL(blob))
+      navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }).then(stream => {
+        try {
+          const mr = new MediaRecorder(stream)
+          const chunks = []
+          mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
+          mr.onstop = () => {
+            const blob = new Blob(chunks, { type: 'audio/webm' })
+            setUrl(URL.createObjectURL(blob))
+            stream.getTracks().forEach(t => t.stop())
+          }
+          mr.start()
+          recRef.current = mr
+        } catch (err) {
           stream.getTracks().forEach(t => t.stop())
+          console.warn('MediaRecorder unsupported on this device', err)
         }
-        mr.start()
-        recRef.current = mr
-      }).catch(() => {})
+      }).catch((err) => {
+        console.warn('getUserMedia failed', err)
+      })
     }
 
     listenFor(target, {

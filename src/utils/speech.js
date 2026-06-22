@@ -39,8 +39,22 @@ export function unlockAudio() {
     const AC = window.AudioContext || window.webkitAudioContext
     if (!AC) return
     if (!_audioCtx) _audioCtx = new AC()
-    if (_audioCtx.state === 'suspended') _audioCtx.resume()
+    if (_audioCtx.state === 'suspended') {
+      _audioCtx.resume().catch(() => {})
+    }
+    if (_audioCtx.state === 'running') {
+      const buffer = _audioCtx.createBuffer(1, 1, _audioCtx.sampleRate)
+      const source = _audioCtx.createBufferSource()
+      source.buffer = buffer
+      source.connect(_audioCtx.destination)
+      try { source.start(0) } catch {}
+      setTimeout(() => { try { source.disconnect() } catch {} }, 200)
+    }
   } catch {}
+}
+
+function safeGetVoices() {
+  return (window.speechSynthesis && window.speechSynthesis.getVoices) ? window.speechSynthesis.getVoices() : []
 }
 
 function findBritish(voices) {
@@ -54,17 +68,19 @@ function findBritish(voices) {
 
 // Android Chrome loads voices asynchronously — wait for voiceschanged if needed
 function withVoice(cb) {
-  const voices = window.speechSynthesis.getVoices()
+  const voices = safeGetVoices()
   if (voices.length > 0) { cb(findBritish(voices)); return }
   let fired = false
   const fire = () => {
     if (fired) return
     fired = true
-    cb(findBritish(window.speechSynthesis.getVoices()))
+    cb(findBritish(safeGetVoices()))
   }
-  window.speechSynthesis.addEventListener('voiceschanged', fire, { once: true })
+  if (window.speechSynthesis && window.speechSynthesis.addEventListener) {
+    window.speechSynthesis.addEventListener('voiceschanged', fire, { once: true })
+  }
   // Fallback: if voiceschanged never fires (some Android), speak without a specific voice
-  setTimeout(fire, 500)
+  setTimeout(fire, 1000)
 }
 
 export function speak(text, opts = {}) {
@@ -79,6 +95,7 @@ export function speak(text, opts = {}) {
     u.lang = 'en-GB'
     u.rate = r
     u.pitch = 1
+    u.volume = 1
     if (voice) u.voice = voice
     let done = false
     const finish = () => { if (!done) { done = true; cb?.() } }
