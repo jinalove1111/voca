@@ -1,21 +1,40 @@
 import { useState, useRef } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, getAllClasses } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, getAllClasses, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames } from '../utils/wordLibrary'
 import FeatureManagementPanel from './FeatureManagementPanel'
 
 const PIN = '1234'
 
-function parseExcelRows(rows) {
+function parseExcelRows(rows, selectedClass = '') {
   return rows
-    .filter(r => r.length >= 2 && typeof r[0] === 'string' && typeof r[1] === 'string')
-    .map(r => ({ className: String(r[0]).trim(), word: String(r[1]).trim(), meaning: r[2] ? String(r[2]).trim() : '' }))
-    .filter(r => r.word)
+    .map(r => {
+      if (!Array.isArray(r) || r.length < 2) return null
+      const values = r.map((cell) => (cell == null ? '' : String(cell).trim()))
+      if (values.length >= 4) {
+        // 기존 형식: 반이름 | Unit | 단어 | 뜻
+        return { className: values[0], unit: values[1] || 'Unit 1', word: values[2], meaning: values[3] }
+      }
+      if (values.length === 3) {
+        const isUnit = /^(unit|유닛)\s*\d*/i.test(values[0])
+        if (isUnit) {
+          // 새 형식: Unit | 단어 | 뜻
+          return { className: selectedClass, unit: values[0], word: values[1], meaning: values[2] }
+        }
+        // 기존 3열 형식: 반이름 | 단어 | 뜻
+        return { className: values[0], unit: 'Unit 1', word: values[1], meaning: values[2] }
+      }
+      // 2열: 단어 | 뜻
+      return { className: selectedClass, unit: 'Unit 1', word: values[0], meaning: values[1] }
+    })
+    .filter(r => r && r.word)
 }
 
 function ExcelUpload({ onDone }) {
-  const [preview, setPreview] = useState(null)
-  const [cls, setCls]         = useState('')
-  const fileRef               = useRef()
+  const [selectedClass, setSelectedClass] = useState('')
+  const [preview, setPreview]             = useState(null)
+  const [classOverride, setClassOverride] = useState('')
+  const fileRef                           = useRef()
+  const classList                         = getClassNames()
 
   const handleFile = async (e) => {
     const file = e.target.files[0]
@@ -24,49 +43,76 @@ function ExcelUpload({ onDone }) {
     const wb   = XLSX.read(data)
     const ws   = wb.Sheets[wb.SheetNames[0]]
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1 })
-    const parsed = parseExcelRows(rows)
+    const parsed = parseExcelRows(rows, selectedClass)
     setPreview(parsed)
-    if (parsed[0]?.className) setCls(parsed[0].className)
+    // 기존 형식(반이름 포함)이면 파일의 첫 반이름 사용, 아니면 선택된 반 유지
+    const fileClass = parsed[0]?.className
+    setClassOverride(fileClass || selectedClass)
   }
 
   const handleSave = () => {
-    if (!cls.trim()) { alert('반 이름을 입력해주세요!'); return }
+    const targetClass = classOverride.trim() || selectedClass.trim()
+    if (!targetClass) { alert('반을 선택하거나 반 이름을 입력해주세요!'); return }
     const byClass = {}
     preview.forEach(r => {
-      const c = r.className || cls
-      if (!byClass[c]) byClass[c] = []
-      byClass[c].push({ word: r.word, meaning: r.meaning })
+      const c = r.className || targetClass
+      if (!c) return
+      const u = r.unit || 'Unit 1'
+      if (!byClass[c]) byClass[c] = {}
+      if (!byClass[c][u]) byClass[c][u] = []
+      byClass[c][u].push({ word: r.word, meaning: r.meaning })
     })
-    // If all same class or no className column, use cls
-    const targetClass = Object.keys(byClass).length === 1 ? Object.keys(byClass)[0] : cls
-    const words = byClass[targetClass] || Object.values(byClass).flat()
-    setClassWords(cls.trim(), words)
-    alert(`"${cls}" 반에 ${words.length}개 단어 저장 완료!`)
+    let totalWords = 0
+    Object.entries(byClass).forEach(([className, units]) => {
+      Object.entries(units).forEach(([unit, words]) => {
+        setClassWords(className, words, unit)
+        totalWords += words.length
+      })
+    })
+    const displayClass = Object.keys(byClass)[0] || targetClass
+    alert(`"${displayClass}" 반에 ${totalWords}개 단어 저장 완료!`)
     onDone()
   }
 
   return (
     <div className="space-y-4">
       <div className="bg-blue-50 rounded-2xl p-4 text-sm text-blue-700 font-bold">
-        <p>📋 Excel/CSV 형식:</p>
-        <p className="text-xs mt-1 font-normal">반이름 | 단어 | 뜻 (또는 단어 | 뜻)</p>
+        <p>📋 Excel/CSV 기본 형식:</p>
+        <p className="text-xs mt-1 font-normal">Unit 1 | incorrect | 틀린, 옳지 않은</p>
+        <p className="text-xs mt-2 text-blue-500 font-normal">※ 기존 형식(반이름 | Unit | 단어 | 뜻)도 계속 지원됩니다.</p>
       </div>
 
-      <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} className="hidden" />
-      <button onClick={() => fileRef.current.click()}
-        className="w-full border-2 border-dashed border-blue-300 text-blue-600 font-black py-4 rounded-2xl btn-press hover:bg-blue-50">
-        📂 파일 선택 (.xlsx / .csv)
-      </button>
+      <div className="space-y-2">
+        <p className="font-black text-gray-700 text-sm">① 반 선택</p>
+        <select
+          value={selectedClass}
+          onChange={e => { setSelectedClass(e.target.value); setClassOverride(e.target.value); setPreview(null) }}
+          className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-purple-500 bg-white"
+        >
+          <option value="">-- 반을 선택하세요 --</option>
+          {classList.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+
+      <div className="space-y-2">
+        <p className="font-black text-gray-700 text-sm">② 파일 선택</p>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} className="hidden" />
+        <button onClick={() => fileRef.current.click()}
+          className="w-full border-2 border-dashed border-blue-300 text-blue-600 font-black py-4 rounded-2xl btn-press hover:bg-blue-50">
+          📂 파일 선택 (.xlsx / .csv)
+        </button>
+      </div>
 
       {preview && (
         <div className="space-y-3">
-          <input type="text" value={cls} onChange={e => setCls(e.target.value)}
-            placeholder="저장할 반 이름 (예: Basic 1)"
+          <input type="text" value={classOverride} onChange={e => setClassOverride(e.target.value)}
+            placeholder="저장할 반 이름 확인/수정"
             className="w-full border-2 border-blue-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500" />
           <div className="bg-white rounded-2xl border-2 border-gray-200 overflow-hidden max-h-48 overflow-y-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 sticky top-0">
                 <tr>
+                  <th className="text-left p-2 font-black text-gray-600">유닛</th>
                   <th className="text-left p-2 font-black text-gray-600">단어</th>
                   <th className="text-left p-2 font-black text-gray-600">뜻</th>
                 </tr>
@@ -74,6 +120,7 @@ function ExcelUpload({ onDone }) {
               <tbody>
                 {preview.slice(0, 20).map((r, i) => (
                   <tr key={i} className="border-t border-gray-100">
+                    <td className="p-2 text-xs text-gray-400">{r.unit}</td>
                     <td className="p-2 font-bold">{r.word}</td>
                     <td className="p-2 text-gray-600">{r.meaning}</td>
                   </tr>
@@ -87,7 +134,7 @@ function ExcelUpload({ onDone }) {
           <p className="text-center text-sm text-gray-500">총 {preview.length}개 단어 발견</p>
           <button onClick={handleSave}
             className="w-full bg-blue-500 text-white font-black py-4 rounded-2xl btn-press hover:bg-blue-600">
-            💾 "{cls}" 반에 저장
+            💾 "{classOverride || selectedClass}" 반에 저장
           </button>
         </div>
       )}
@@ -208,11 +255,19 @@ export default function AdminScreen({ onBack }) {
   const [tab, setTab]         = useState('classes') // classes | excel | pdf | features
   const [classes, setClasses] = useState(() => getClassNames())
   const [viewClass, setView]  = useState(null)
+  const [viewUnit, setViewUnit] = useState('Unit 1')
   const [newClassName, setNewClassName] = useState('')
+  const [newUnitName, setNewUnitName] = useState('')
   const [newWord, setNewWord] = useState('')
   const [newMeaning, setNewMeaning] = useState('')
 
-  const refresh = () => setClasses(getClassNames())
+  const refresh = () => {
+    setClasses(getClassNames())
+    if (viewClass) {
+      const units = getClassUnitNames(viewClass)
+      if (!units.includes(viewUnit)) setViewUnit(units[0] || 'Unit 1')
+    }
+  }
 
   const handlePin = () => {
     if (pin === PIN) setAuthed(true)
@@ -285,17 +340,25 @@ export default function AdminScreen({ onBack }) {
               </div>
 
               {classes.map(c => {
-                const words = getClassWords(c)
+                const units = getClassUnits(c)
+                const totalWords = units.reduce((sum, unit) => sum + unit.words.length, 0)
+                const unitNames = getClassUnitNames(c)
                 const isOpen = viewClass === c
+                const activeUnit = isOpen ? viewUnit : unitNames[0] || 'Unit 1'
+                const words = getClassWords(c, activeUnit)
                 return (
                   <div key={c} className="bg-white rounded-2xl card-shadow p-4">
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-black text-gray-800">{c}</p>
-                        <p className="text-sm text-gray-400">{words.length}개 단어</p>
+                        <p className="text-sm text-gray-400">{units.length}개 유닛 · {totalWords}개 단어</p>
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={() => setView(isOpen ? null : c)}
+                        <button onClick={() => {
+                            const next = isOpen ? null : c
+                            setView(next)
+                            if (next) setViewUnit(unitNames[0] || 'Unit 1')
+                          }}
                           className="bg-blue-100 text-blue-600 font-bold px-3 py-2 rounded-xl text-sm btn-press">
                           {isOpen ? '닫기' : '보기'}
                         </button>
@@ -307,9 +370,37 @@ export default function AdminScreen({ onBack }) {
                     </div>
                     {isOpen && (
                       <div className="mt-3 space-y-3">
+                        <div className="flex flex-col gap-3">
+                          <div className="flex gap-2 flex-wrap">
+                            <select value={viewUnit} onChange={e => setViewUnit(e.target.value)}
+                              className="flex-1 min-w-[160px] border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-purple-400 bg-white">
+                              {unitNames.map(u => <option key={u} value={u}>{u}</option>)}
+                            </select>
+                            <input type="text" value={newUnitName} onChange={e => setNewUnitName(e.target.value)}
+                              placeholder="새 유닛 이름 (예: Unit 2)"
+                              className="flex-1 min-w-[160px] border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-purple-400" />
+                            <button onClick={() => {
+                              const name = newUnitName.trim()
+                              if (!name) return alert('유닛 이름을 입력해주세요.')
+                              if (unitNames.includes(name)) return alert('이미 있는 유닛이에요.')
+                              addClassUnit(c, name)
+                              setNewUnitName('')
+                              setViewUnit(name)
+                              refresh()
+                            }}
+                              className="bg-indigo-500 text-white font-black px-4 py-3 rounded-xl btn-press hover:bg-indigo-600">
+                              유닛 추가
+                            </button>
+                          </div>
+                          <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-500">
+                            <p>현재 유닛: <span className="font-black text-gray-700">{viewUnit}</span> ({words.length}개 단어)</p>
+                            <p>전체 유닛: {unitNames.join(', ')}</p>
+                          </div>
+                        </div>
+
                         <div className="bg-gray-50 rounded-xl p-3 max-h-40 overflow-y-auto">
                           {words.length === 0 ? (
-                            <p className="text-gray-400 text-sm">단어가 아직 없습니다.</p>
+                            <p className="text-gray-400 text-sm">이 유닛에 단어가 아직 없습니다.</p>
                           ) : words.map((w, i) => (
                             <div key={i} className="flex gap-3 py-1 border-b border-gray-100 last:border-0 text-sm">
                               <span className="font-bold text-gray-800 min-w-0">{w.word}</span>
@@ -328,8 +419,8 @@ export default function AdminScreen({ onBack }) {
                         </div>
                         <button onClick={() => {
                             if (!newWord.trim() || !newMeaning.trim()) return alert('단어와 뜻을 모두 입력해주세요.')
-                            const existing = getClassWords(c)
-                            setClassWords(c, [...existing, { word: newWord.trim(), meaning: newMeaning.trim() }])
+                            const existing = getClassWords(c, viewUnit)
+                            setClassWords(c, [...existing, { word: newWord.trim(), meaning: newMeaning.trim() }], viewUnit)
                             setNewWord('')
                             setNewMeaning('')
                             refresh()
