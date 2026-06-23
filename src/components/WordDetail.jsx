@@ -162,7 +162,7 @@ function ExCard({ emoji, title, color, english, korean, word, onListen, onPronun
             🔊
           </button>
         </div>
-        <SpeechBtn target={word} label="예문 따라 말하기" onSuccess={onPronunciationOk} />
+        <SpeechBtn target={english} label="예문 따라 말하기" onSuccess={onPronunciationOk} />
       </div>
     </div>
   )
