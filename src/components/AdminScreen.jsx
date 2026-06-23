@@ -1,9 +1,37 @@
-import { useState, useRef } from 'react'
+import React, { useState, useRef } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, getAllClasses, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, getAllClasses, saveAllClasses, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames } from '../utils/wordLibrary'
 import FeatureManagementPanel from './FeatureManagementPanel'
 
 const PIN = '1234'
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+          <div className="bg-white rounded-3xl p-8 text-center max-w-sm w-full shadow-lg">
+            <div className="text-5xl mb-4">⚠️</div>
+            <h2 className="font-black text-xl text-gray-800 mb-2">오류가 발생했어요</h2>
+            <p className="text-xs text-gray-400 mb-4 break-all">{String(this.state.error)}</p>
+            <button onClick={() => this.setState({ hasError: false, error: null })}
+              className="bg-purple-500 text-white font-black py-3 px-6 rounded-2xl">
+              다시 시도
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 function parseExcelRows(rows, selectedClass = '') {
   return rows
@@ -291,6 +319,7 @@ export default function AdminScreen({ onBack }) {
   )
 
   return (
+    <ErrorBoundary>
     <div className="min-h-screen p-4 pb-8 bg-gray-50">
       <div className="max-w-lg mx-auto">
         <div className="flex items-center gap-3 pt-2 mb-6">
@@ -329,7 +358,9 @@ export default function AdminScreen({ onBack }) {
                       const name = newClassName.trim()
                       if (!name) return alert('반 이름을 입력해주세요!')
                       if (classes.includes(name)) return alert('이미 있는 반 이름이에요.')
-                      setClassWords(name, [])
+                      const all = getAllClasses()
+                      all[name] = { units: [{ name: 'Unit 1', words: [] }] }
+                      saveAllClasses(all)
                       setNewClassName('')
                       refresh()
                     }}
@@ -339,13 +370,13 @@ export default function AdminScreen({ onBack }) {
                 </div>
               </div>
 
-              {classes.map(c => {
-                const units = getClassUnits(c)
-                const totalWords = units.reduce((sum, unit) => sum + unit.words.length, 0)
-                const unitNames = getClassUnitNames(c)
+              {(classes || []).map(c => {
+                const units = getClassUnits(c) || []
+                const totalWords = units.reduce((sum, unit) => sum + (unit?.words?.length ?? 0), 0)
+                const unitNames = getClassUnitNames(c) || []
                 const isOpen = viewClass === c
-                const activeUnit = isOpen ? viewUnit : unitNames[0] || 'Unit 1'
-                const words = getClassWords(c, activeUnit)
+                const activeUnit = isOpen ? viewUnit : (unitNames[0] || 'Unit 1')
+                const words = getClassWords(c, activeUnit) || []
                 return (
                   <div key={c} className="bg-white rounded-2xl card-shadow p-4">
                     <div className="flex items-center justify-between">
@@ -399,9 +430,9 @@ export default function AdminScreen({ onBack }) {
                         </div>
 
                         <div className="bg-gray-50 rounded-xl p-3 max-h-40 overflow-y-auto">
-                          {words.length === 0 ? (
+                          {(words || []).length === 0 ? (
                             <p className="text-gray-400 text-sm">이 유닛에 단어가 아직 없습니다.</p>
-                          ) : words.map((w, i) => (
+                          ) : (words || []).map((w, i) => (
                             <div key={i} className="flex gap-3 py-1 border-b border-gray-100 last:border-0 text-sm">
                               <span className="font-bold text-gray-800 min-w-0">{w.word}</span>
                               <span className="text-gray-500">{w.meaning}</span>
@@ -443,5 +474,6 @@ export default function AdminScreen({ onBack }) {
         {tab === 'features' && <FeatureManagementPanel />}
       </div>
     </div>
+    </ErrorBoundary>
   )
 }
