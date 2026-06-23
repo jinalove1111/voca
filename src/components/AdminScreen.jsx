@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import * as XLSX from 'xlsx'
 import { getClassNames, getClassWords, setClassWords, deleteClass, getAllClasses } from '../utils/wordLibrary'
+import FeatureManagementPanel from './FeatureManagementPanel'
 
 const PIN = '1234'
 
@@ -204,7 +205,7 @@ function PdfUpload({ onDone }) {
 export default function AdminScreen({ onBack }) {
   const [pin, setPin]         = useState('')
   const [authed, setAuthed]   = useState(false)
-  const [tab, setTab]         = useState('classes') // classes | excel | pdf
+  const [tab, setTab]         = useState('classes') // classes | excel | pdf | features
   const [classes, setClasses] = useState(() => getClassNames())
   const [viewClass, setView]  = useState(null)
   const [newClassName, setNewClassName] = useState('')
@@ -243,10 +244,10 @@ export default function AdminScreen({ onBack }) {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6">
-          {[['classes','📚 반 관리'],['excel','📊 Excel 업로드'],['pdf','📄 PDF 업로드']].map(([k,l]) => (
+        <div className="flex gap-2 mb-6 overflow-x-auto">
+          {[['classes','📚 반 관리'],['excel','📊 Excel'],['pdf','📄 PDF'],['features','🎯 기능']].map(([k,l]) => (
             <button key={k} onClick={() => setTab(k)}
-              className={`flex-1 py-2 rounded-xl font-black text-sm btn-press transition-colors ${tab === k ? 'bg-purple-500 text-white' : 'bg-white text-gray-500 border-2 border-gray-200'}`}>
+              className={`py-2 px-3 rounded-xl font-black text-sm btn-press transition-colors whitespace-nowrap ${tab === k ? 'bg-purple-500 text-white' : 'bg-white text-gray-500 border-2 border-gray-200'}`}>
               {l}
             </button>
           ))}
@@ -348,6 +349,7 @@ export default function AdminScreen({ onBack }) {
 
         {tab === 'excel' && <ExcelUpload onDone={() => { refresh(); setTab('classes') }} />}
         {tab === 'pdf'   && <PdfUpload   onDone={() => { refresh(); setTab('classes') }} />}
+        {tab === 'features' && <FeatureManagementPanel />}
       </div>
     </div>
   )

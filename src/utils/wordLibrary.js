@@ -1,9 +1,35 @@
 import { WORDS as DB_WORDS } from '../data/words'
 
 const CLS_KEY = 'paulEasyVoca_classWords'
+const CLS_META_KEY = 'paulEasyVoca_classMeta'
 const STU_CLS = (name) => `paulEasyVoca_${name}_class`
 
-const FIXED_CLASS_NAMES = ['월수금초급', '화목초급', '중등내신']
+// Real class list provided by user
+const DEFAULT_CLASS_LIST = [
+  // 정규반 (regular)
+  'Presentation 6 - 2025',
+  '2026 Conversation1',
+  'MS advanced class (8:00) - 2026',
+  'Conversation 4 - 2026',
+  '2026 - Conversation 2',
+  'Presentation1 - 2026',
+  'Pre-middle school MW (8:00) - 2026',
+  'Presentation 3 - 2026',
+  '2026 Phonics 2',
+  // 특강반 (special)
+  'MS 중1',
+  'MS 중2',
+  'MS 중3',
+]
+
+// Default metadata for classes
+const DEFAULT_CLASS_META = {}
+DEFAULT_CLASS_LIST.forEach(name => {
+  const specialNames = ['MS 중1', 'MS 중2', 'MS 중3']
+  DEFAULT_CLASS_META[name] = { classType: specialNames.includes(name) ? 'special' : 'regular' }
+})
+
+// Backwards-compatible small sample word sets for legacy classes
 const DEFAULT_CLASS_WORDS = {
   '월수금초급': [
     { word: 'apple', meaning: '사과' },
@@ -33,9 +59,39 @@ export const getAllClasses = () => {
 }
 export const saveAllClasses = (obj) => localStorage.setItem(CLS_KEY, JSON.stringify(obj))
 
+export const getAllClassMeta = () => {
+  try { return JSON.parse(localStorage.getItem(CLS_META_KEY)) || {} } catch { return {} }
+}
+export const saveAllClassMeta = (obj) => localStorage.setItem(CLS_META_KEY, JSON.stringify(obj))
+
+// Ensure defaults exist in storage (called lazily)
+const ensureDefaults = () => {
+  const classes = getAllClasses()
+  const meta = getAllClassMeta()
+  let changed = false
+
+  // Initialize meta for default class list
+  Object.entries(DEFAULT_CLASS_META).forEach(([name, m]) => {
+    if (!meta[name]) { meta[name] = m; changed = true }
+  })
+
+  // Initialize empty word arrays for default classes if missing
+  DEFAULT_CLASS_LIST.forEach(name => {
+    if (!classes[name]) { classes[name] = [] ; changed = true }
+  })
+
+  if (changed) {
+    saveAllClassMeta(meta)
+    saveAllClasses(classes)
+  }
+}
+
 export const getClassNames = () => {
+  ensureDefaults()
   const saved = Object.keys(getAllClasses())
-  return [...new Set([...FIXED_CLASS_NAMES, ...saved])]
+  const metaNames = Object.keys(getAllClassMeta())
+  const legacy = Object.keys(DEFAULT_CLASS_WORDS)
+  return [...new Set([...DEFAULT_CLASS_LIST, ...metaNames, ...saved, ...legacy])]
 }
 
 export const getClassWords = (className) => {
