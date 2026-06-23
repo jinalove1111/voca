@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { getStudents, addStudent, removeStudent } from '../hooks/useStudent'
-import { getClassNames, setStudentClass, getStudentClass } from '../utils/wordLibrary'
+import { getClassNames, setStudentClass, getStudentClass, getClassUnitNames, getStudentUnit, setStudentUnit } from '../utils/wordLibrary'
 
 export default function StudentSelect({ onSelect, onAdmin }) {
   const [students, setStudents]     = useState(() => getStudents())
   const [input, setInput]           = useState('')
   const [selectedClass, setClass]   = useState('')
+  const [selectedUnit, setUnit]     = useState('')
   const [error, setError]           = useState('')
   const [showAdd, setShowAdd]       = useState(false)
   const classNames                  = getClassNames()
@@ -17,12 +18,15 @@ export default function StudentSelect({ onSelect, onAdmin }) {
     if (!name)               { setError('이름을 입력해주세요!'); return }
     if (name.length > 10)    { setError('이름은 10글자 이하로 해주세요!'); return }
     if (!selectedClass)      { setError('반을 선택해주세요!'); return }
+    if (!selectedUnit)       { setError('유닛을 선택해주세요!'); return }
     if (students.includes(name)) { setError('이미 있는 이름이에요!'); return }
     addStudent(name)
     setStudentClass(name, selectedClass)
+    setStudentUnit(name, selectedUnit)
     refresh()
     setInput('')
     setClass('')
+    setUnit('')
     setError('')
     setShowAdd(false)
     onSelect(name)
@@ -48,6 +52,7 @@ export default function StudentSelect({ onSelect, onAdmin }) {
             <div className="space-y-2">
               {students.map((s, i) => {
                 const cls = getStudentClass(s)
+                const unit = getStudentUnit(s)
                 return (
                   <button key={s} onClick={() => onSelect(s)}
                     className="w-full flex items-center justify-between bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-2xl px-4 py-3 btn-press hover:border-purple-400 transition-all group">
@@ -55,7 +60,9 @@ export default function StudentSelect({ onSelect, onAdmin }) {
                       <span className="text-2xl">{['🦊','🐱','🐶','🐰','🐹','🐼','🦄'][i % 7]}</span>
                       <div className="text-left">
                         <p className="font-black text-lg text-purple-700">{s}</p>
-                        {cls && <p className="text-xs text-purple-400">{cls}</p>}
+                        {(cls || unit) && (
+                          <p className="text-xs text-purple-400">{[cls, unit].filter(Boolean).join(' · ')}</p>
+                        )}
                       </div>
                     </div>
                     <button onClick={(e) => handleRemove(e, s)}
@@ -83,10 +90,21 @@ export default function StudentSelect({ onSelect, onAdmin }) {
               className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold focus:outline-none focus:border-purple-500 transition-colors"
               autoFocus />
             {classNames.length > 0 && (
-              <select value={selectedClass} onChange={e => setClass(e.target.value)}
+              <select value={selectedClass} onChange={e => {
+                  const nextClass = e.target.value
+                  setClass(nextClass)
+                  setUnit(getClassUnitNames(nextClass)[0] || 'Unit 1')
+                }}
                 className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-purple-500 bg-white">
                 <option value="">반 선택</option>
                 {classNames.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            )}
+            {selectedClass && (
+              <select value={selectedUnit} onChange={e => setUnit(e.target.value)}
+                className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-purple-500 bg-white">
+                <option value="">유닛 선택</option>
+                {getClassUnitNames(selectedClass).map(u => <option key={u} value={u}>{u}</option>)}
               </select>
             )}
             {error && <p className="text-red-500 text-xs text-center">⚠️ {error}</p>}

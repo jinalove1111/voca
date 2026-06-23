@@ -27,6 +27,7 @@ export default function Dashboard({ student, studentData, onGo, onLogout }) {
   const { stars, pets, activeMissions, dailyProgress, allDailyDone, cleared } = studentData
 
   const className = getStudentClass(student)
+  const unitName = getStudentUnit(student)
 
   return (
     <div className="min-h-screen p-4 pb-8">
@@ -45,7 +46,7 @@ export default function Dashboard({ student, studentData, onGo, onLogout }) {
           <div className="text-5xl mb-2">👑</div>
           <h1 className="text-3xl font-black">{student}</h1>
           {className && (
-            <p className="text-sm text-purple-200 mt-1">반: {className}</p>
+            <p className="text-sm text-purple-200 mt-1">반: {className} · 유닛: {unitName}</p>
           )}
           <div className="flex justify-center gap-4 mt-3">
             <div className="bg-white/20 rounded-xl px-3 py-2 text-center">

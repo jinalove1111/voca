@@ -3,6 +3,8 @@ import { WORDS as DB_WORDS } from '../data/words'
 const CLS_KEY = 'paulEasyVoca_classWords'
 const CLS_META_KEY = 'paulEasyVoca_classMeta'
 const STU_CLS = (name) => `paulEasyVoca_${name}_class`
+const STU_UNIT = (name) => `paulEasyVoca_${name}_unit`
+const DEFAULT_UNIT_NAME = 'Unit 1'
 
 // Real class list provided by user
 const DEFAULT_CLASS_LIST = [
@@ -75,7 +77,7 @@ const ensureDefaults = () => {
     if (!meta[name]) { meta[name] = m; changed = true }
   })
 
-  // Initialize empty word arrays for default classes if missing
+  // Initialize empty class entries for default classes if missing
   DEFAULT_CLASS_LIST.forEach(name => {
     if (!classes[name]) { classes[name] = [] ; changed = true }
   })
@@ -94,15 +96,68 @@ export const getClassNames = () => {
   return [...new Set([...DEFAULT_CLASS_LIST, ...metaNames, ...saved, ...legacy])]
 }
 
-export const getClassWords = (className) => {
-  const all = getAllClasses()
-  if (all[className] && all[className].length > 0) return all[className]
-  return DEFAULT_CLASS_WORDS[className] || []
+const normalizeClassData = (value) => {
+  if (Array.isArray(value)) {
+    return [{ name: DEFAULT_UNIT_NAME, words: value }]
+  }
+  if (value && Array.isArray(value.units)) {
+    return value.units.map((unit) => ({
+      name: typeof unit.name === 'string' ? unit.name : DEFAULT_UNIT_NAME,
+      words: Array.isArray(unit.words) ? unit.words : [],
+    }))
+  }
+  return [{ name: DEFAULT_UNIT_NAME, words: [] }]
 }
 
-export const setClassWords = (className, words) => {
+export const getClassUnits = (className) => {
   const all = getAllClasses()
-  all[className] = words
+  const raw = all[className]
+  if (raw === undefined) {
+    const fallback = DEFAULT_CLASS_WORDS[className]
+    if (fallback) return [{ name: DEFAULT_UNIT_NAME, words: fallback }]
+    return [{ name: DEFAULT_UNIT_NAME, words: [] }]
+  }
+  return normalizeClassData(raw)
+}
+
+export const getClassUnitNames = (className) => getClassUnits(className).map((unit) => unit.name)
+
+export const getClassWords = (className, unitName = DEFAULT_UNIT_NAME) => {
+  const units = getClassUnits(className)
+  const unit = units.find((u) => u.name === unitName) || units[0]
+  return unit?.words || []
+}
+
+export const setClassWords = (className, words, unitName = DEFAULT_UNIT_NAME) => {
+  const all = getAllClasses()
+  const units = getClassUnits(className)
+  const target = units.find((u) => u.name === unitName)
+  if (target) {
+    target.words = words
+  } else {
+    units.push({ name: unitName, words })
+  }
+  all[className] = { units }
+  saveAllClasses(all)
+}
+
+export const addClassUnit = (className, unitName) => {
+  const all = getAllClasses()
+  const units = getClassUnits(className)
+  if (!units.some((u) => u.name === unitName)) {
+    units.push({ name: unitName, words: [] })
+  }
+  all[className] = { units }
+  saveAllClasses(all)
+}
+
+export const deleteClassUnit = (className, unitName) => {
+  const all = getAllClasses()
+  const units = getClassUnits(className).filter((u) => u.name !== unitName)
+  if (units.length === 0) {
+    units.push({ name: DEFAULT_UNIT_NAME, words: [] })
+  }
+  all[className] = { units }
   saveAllClasses(all)
 }
 
@@ -114,15 +169,18 @@ export const deleteClass = (className) => {
 
 export const getStudentClass = (name) => localStorage.getItem(STU_CLS(name)) || ''
 export const setStudentClass = (name, cls) => localStorage.setItem(STU_CLS(name), cls)
+export const getStudentUnit = (name) => localStorage.getItem(STU_UNIT(name)) || DEFAULT_UNIT_NAME
+export const setStudentUnit = (name, unit) => localStorage.setItem(STU_UNIT(name), unit)
 
 // Returns full word objects for a student (merged with DB if possible)
 export const getStudentWords = (name) => {
   const cls = getStudentClass(name)
   if (!cls) return DB_WORDS
-  const raw = getClassWords(cls)
+  const unitName = getStudentUnit(name)
+  const raw = getClassWords(cls, unitName)
   if (!raw.length) return []
-  return raw.map(cw => {
-    const db = DB_WORDS.find(w => w.word.toLowerCase() === cw.word.toLowerCase())
+  return raw.map((cw) => {
+    const db = DB_WORDS.find((w) => w.word.toLowerCase() === cw.word.toLowerCase())
     if (db) return db
     return {
       id:           cw.word.toLowerCase().replace(/\s+/g, '_'),
