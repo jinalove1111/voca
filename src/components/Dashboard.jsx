@@ -1,4 +1,4 @@
-import { getStudentClass } from '../utils/wordLibrary'
+import { getStudentClass, getStudentUnit } from '../utils/wordLibrary'
 
 const GOAL = 5
 
