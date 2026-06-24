@@ -1,5 +1,127 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { speak, listenFor, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
+
+const FALLBACK_MEANINGS = ['탐험하다','결정하다','변화하다','도착하다','사라지다','만들다','이해하다','중요한','특별한','연습하다']
+
+function WordQuizFlow({ word, classWords, onClose }) {
+  const [stage, setStage]           = useState(1)
+  const [mcSelected, setMcSelected] = useState(null)
+  const [e2kRevealed, setE2k]       = useState(false)
+  const [k2eRevealed, setK2e]       = useState(false)
+
+  const options = useMemo(() => {
+    const pool = (classWords || []).filter(w => w.id !== word.id && w.meaning && w.meaning !== word.meaning)
+    const wrongs = [...pool].sort(() => Math.random() - 0.5).slice(0, 3).map(w => w.meaning)
+    let fi = 0
+    while (wrongs.length < 3 && fi < FALLBACK_MEANINGS.length) {
+      const fb = FALLBACK_MEANINGS[fi++]
+      if (!wrongs.includes(fb) && fb !== word.meaning) wrongs.push(fb)
+    }
+    return [word.meaning, ...wrongs].sort(() => Math.random() - 0.5)
+  }, [word.id])
+
+  const correctIdx = options.indexOf(word.meaning)
+  const isCorrect  = mcSelected !== null && mcSelected === correctIdx
+
+  if (stage === 1) return (
+    <div className="space-y-4">
+      <div className="text-center">
+        <span className="inline-block bg-purple-100 text-purple-700 font-black text-xs px-3 py-1 rounded-full mb-3">1단계 · 객관식</span>
+        <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-6 text-white">
+          <p className="text-4xl font-black">{word.word}</p>
+          <p className="text-purple-200 text-sm mt-1">이 단어의 뜻은? 🤔</p>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {options.map((opt, i) => {
+          let cls = 'border-2 border-gray-200 bg-gray-50 text-gray-700 hover:border-purple-300'
+          if (mcSelected !== null) {
+            if (i === correctIdx)       cls = 'border-2 border-green-400 bg-green-50 text-green-800'
+            else if (i === mcSelected)  cls = 'border-2 border-red-400 bg-red-50 text-red-700'
+            else                        cls = 'border-2 border-gray-100 bg-gray-50 text-gray-400'
+          }
+          return (
+            <button key={i} disabled={mcSelected !== null} onClick={() => setMcSelected(i)}
+              className={`w-full p-4 rounded-2xl font-bold text-left flex items-center gap-3 btn-press transition-all ${cls}`}>
+              <span className="w-8 h-8 rounded-full bg-purple-100 text-purple-600 font-black text-sm flex items-center justify-center flex-shrink-0">
+                {['①','②','③','④'][i]}
+              </span>
+              <span className="flex-1">{opt}</span>
+              {mcSelected !== null && i === correctIdx && <span>✅</span>}
+              {mcSelected !== null && i === mcSelected && i !== correctIdx && <span>❌</span>}
+            </button>
+          )
+        })}
+      </div>
+      {isCorrect && (
+        <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-4 text-center">
+          <p className="font-black text-green-700 text-lg">🎉 정답이에요! 잘했어요!</p>
+          <button onClick={() => setStage(2)} className="mt-3 w-full bg-green-500 text-white font-black py-3 rounded-2xl btn-press">2단계로 →</button>
+        </div>
+      )}
+      {mcSelected !== null && !isCorrect && (
+        <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 text-center">
+          <p className="font-black text-orange-700">아쉽지만 다시 해봐요! 💪</p>
+          <p className="text-sm text-orange-600 mt-1">정답: <span className="font-black">{word.meaning}</span></p>
+          <button onClick={() => setMcSelected(null)} className="mt-3 w-full bg-orange-400 text-white font-black py-3 rounded-2xl btn-press">🔄 다시 시도</button>
+        </div>
+      )}
+    </div>
+  )
+
+  if (stage === 2) return (
+    <div className="space-y-4">
+      <div className="text-center">
+        <span className="inline-block bg-blue-100 text-blue-700 font-black text-xs px-3 py-1 rounded-full mb-3">2단계 · 영어 → 한국어</span>
+        <div className="bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl p-6 text-white">
+          <p className="text-4xl font-black">{word.word}</p>
+          <p className="text-blue-200 text-sm mt-2">한국어 뜻을 말해보세요 🗣️</p>
+        </div>
+      </div>
+      {!e2kRevealed ? (
+        <button onClick={() => setE2k(true)} className="w-full bg-blue-500 text-white font-black py-4 rounded-2xl btn-press hover:bg-blue-600">정답 확인</button>
+      ) : (
+        <div className="space-y-3">
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 text-center">
+            <p className="text-xs text-gray-500 font-bold mb-1">정답</p>
+            <p className="text-2xl font-black text-blue-700">{word.meaning}</p>
+          </div>
+          <button onClick={() => setStage(3)} className="w-full bg-blue-500 text-white font-black py-3 rounded-2xl btn-press">3단계로 →</button>
+        </div>
+      )}
+    </div>
+  )
+
+  if (stage === 3) return (
+    <div className="space-y-4">
+      <div className="text-center">
+        <span className="inline-block bg-green-100 text-green-700 font-black text-xs px-3 py-1 rounded-full mb-3">3단계 · 한국어 → 영어</span>
+        <div className="bg-gradient-to-br from-green-500 to-teal-500 rounded-2xl p-6 text-white">
+          <p className="text-4xl font-black">{word.meaning}</p>
+          <p className="text-green-200 text-sm mt-2">영어 단어를 말해보세요 🗣️</p>
+        </div>
+      </div>
+      {!k2eRevealed ? (
+        <button onClick={() => setK2e(true)} className="w-full bg-green-500 text-white font-black py-4 rounded-2xl btn-press hover:bg-green-600">정답 확인</button>
+      ) : (
+        <div className="space-y-3">
+          <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 text-center">
+            <p className="text-xs text-gray-500 font-bold mb-1">정답</p>
+            <p className="text-2xl font-black text-green-700">{word.word}</p>
+          </div>
+          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-4 text-center">
+            <p className="text-3xl mb-1">🏆</p>
+            <p className="font-black text-yellow-800 text-lg">퀴즈 완료!</p>
+            <p className="text-sm text-yellow-700">3단계를 모두 마쳤어요!</p>
+          </div>
+          <button onClick={onClose} className="w-full bg-purple-500 text-white font-black py-3 rounded-2xl btn-press">✅ 완료</button>
+        </div>
+      )}
+    </div>
+  )
+
+  return null
+}
 
 function SpeechBtn({ target, label = '따라 말하기', onSuccess }) {
   const [phase, setPhase] = useState('idle')
@@ -168,7 +290,8 @@ function ExCard({ emoji, title, color, english, korean, word, onListen, onPronun
   )
 }
 
-export default function WordDetail({ word, onBack, onQuiz, onMarkViewed, onMarkExampleHeard, onMarkPronunciationOk }) {
+export default function WordDetail({ word, onBack, onQuiz, onMarkViewed, onMarkExampleHeard, onMarkPronunciationOk, classWords }) {
+  const [showQuiz, setShowQuiz] = useState(false)
   useState(() => { onMarkViewed(word.id) })
 
   const listenExample = (text) => {
@@ -222,11 +345,21 @@ export default function WordDetail({ word, onBack, onQuiz, onMarkViewed, onMarkE
           {word.realExample  && <ExCard emoji="💬" title="실제 회화"  color="bg-green-500"  english={word.realExample}  korean={word.realMeaning}  word={word.word} onListen={listenExample} onPronunciationOk={onMarkPronunciationOk} />}
         </div>
 
-        {/* Quiz button */}
-        <button onClick={() => onQuiz(word)}
-          className="w-full bg-gradient-to-r from-yellow-400 to-orange-400 text-white font-black text-xl py-5 rounded-3xl btn-press card-shadow">
-          🎮 이 단어 퀴즈 풀기!
-        </button>
+        {/* Quiz section */}
+        {showQuiz ? (
+          <div className="bg-white rounded-3xl card-shadow p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-black text-gray-800 text-lg">🎮 퀴즈</h2>
+              <button onClick={() => setShowQuiz(false)} className="text-gray-400 font-bold text-xl btn-press hover:text-gray-600">✕</button>
+            </div>
+            <WordQuizFlow word={word} classWords={classWords || []} onClose={() => setShowQuiz(false)} />
+          </div>
+        ) : (
+          <button onClick={() => setShowQuiz(true)}
+            className="w-full bg-gradient-to-r from-yellow-400 to-orange-400 text-white font-black text-xl py-5 rounded-3xl btn-press card-shadow">
+            🎮 퀴즈 시작
+          </button>
+        )}
       </div>
     </div>
   )

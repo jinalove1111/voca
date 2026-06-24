@@ -111,6 +111,7 @@ function AppInner({ student, onLogout }) {
       {screen === 'wordBrowser'   && <WordBrowser words={classWords} cleared={cleared} onSelect={handleWordSelect} onBack={() => setScreen('dashboard')} />}
       {screen === 'wordDetail'    && selectedWord && (
         <WordDetail word={selectedWord}
+          classWords={classWords}
           onBack={() => setScreen('wordBrowser')}
           onQuiz={w => { setWord(w); setScreen('quiz') }}
           onMarkViewed={studentData.markWordViewed}
