@@ -288,6 +288,7 @@ export default function AdminScreen({ onBack }) {
   const [newUnitName, setNewUnitName] = useState('')
   const [newWord, setNewWord] = useState('')
   const [newMeaning, setNewMeaning] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(null)
 
   const refresh = () => {
     setClasses(getClassNames())
@@ -393,7 +394,7 @@ export default function AdminScreen({ onBack }) {
                           className="bg-blue-100 text-blue-600 font-bold px-3 py-2 rounded-xl text-sm btn-press">
                           {isOpen ? '닫기' : '보기'}
                         </button>
-                        <button onClick={() => { if (window.confirm(`"${c}" 반을 삭제할까요?`)) { deleteClass(c); setView(null); refresh() } }}
+                        <button onClick={() => setConfirmDelete(c)}
                           className="bg-red-100 text-red-500 font-bold px-3 py-2 rounded-xl text-sm btn-press">
                           삭제
                         </button>
@@ -474,6 +475,33 @@ export default function AdminScreen({ onBack }) {
         {tab === 'features' && <FeatureManagementPanel />}
       </div>
     </div>
+
+    {/* 반 삭제 확인 다이얼로그 */}
+    {confirmDelete && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-3xl p-6 max-w-sm w-full card-shadow">
+          <div className="text-4xl text-center mb-3">🗑️</div>
+          <h3 className="font-black text-gray-800 text-lg text-center mb-2">반 삭제</h3>
+          <p className="text-gray-600 text-sm text-center mb-1"><span className="font-black text-red-500">"{confirmDelete}"</span></p>
+          <p className="text-gray-500 text-sm text-center mb-5">이 반과 연결된 단어/Unit/학습기록이 함께 삭제됩니다. 정말 삭제하시겠습니까?</p>
+          <div className="flex gap-2">
+            <button onClick={() => setConfirmDelete(null)}
+              className="flex-1 border-2 border-gray-200 text-gray-600 font-bold py-3 rounded-2xl btn-press">
+              취소
+            </button>
+            <button onClick={() => {
+              deleteClass(confirmDelete)
+              if (viewClass === confirmDelete) setView(null)
+              setConfirmDelete(null)
+              refresh()
+            }}
+              className="flex-1 bg-red-500 text-white font-black py-3 rounded-2xl btn-press hover:bg-red-600">
+              삭제
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </ErrorBoundary>
   )
 }

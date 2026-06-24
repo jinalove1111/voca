@@ -2,9 +2,15 @@ import { WORDS as DB_WORDS } from '../data/words'
 
 const CLS_KEY = 'paulEasyVoca_classWords'
 const CLS_META_KEY = 'paulEasyVoca_classMeta'
+const CLS_DELETED_KEY = 'paulEasyVoca_deletedClasses'
 const STU_CLS = (name) => `paulEasyVoca_${name}_class`
 const STU_UNIT = (name) => `paulEasyVoca_${name}_unit`
 const DEFAULT_UNIT_NAME = 'Unit 1'
+
+const getDeletedClasses = () => {
+  try { return new Set(JSON.parse(localStorage.getItem(CLS_DELETED_KEY)) || []) } catch { return new Set() }
+}
+const saveDeletedClasses = (set) => localStorage.setItem(CLS_DELETED_KEY, JSON.stringify([...set]))
 
 // Real class list provided by user
 const DEFAULT_CLASS_LIST = [
@@ -70,16 +76,17 @@ export const saveAllClassMeta = (obj) => localStorage.setItem(CLS_META_KEY, JSON
 const ensureDefaults = () => {
   const classes = getAllClasses()
   const meta = getAllClassMeta()
+  const deleted = getDeletedClasses()
   let changed = false
 
-  // Initialize meta for default class list
+  // Initialize meta for default class list (skip deleted)
   Object.entries(DEFAULT_CLASS_META).forEach(([name, m]) => {
-    if (!meta[name]) { meta[name] = m; changed = true }
+    if (!deleted.has(name) && !meta[name]) { meta[name] = m; changed = true }
   })
 
-  // Initialize empty class entries for default classes if missing
+  // Initialize empty class entries for default classes if missing (skip deleted)
   DEFAULT_CLASS_LIST.forEach(name => {
-    if (!classes[name]) { classes[name] = [] ; changed = true }
+    if (!deleted.has(name) && !classes[name]) { classes[name] = []; changed = true }
   })
 
   if (changed) {
@@ -90,10 +97,11 @@ const ensureDefaults = () => {
 
 export const getClassNames = () => {
   ensureDefaults()
-  const saved = Object.keys(getAllClasses())
-  const metaNames = Object.keys(getAllClassMeta())
-  const legacy = Object.keys(DEFAULT_CLASS_WORDS)
-  return [...new Set([...DEFAULT_CLASS_LIST, ...metaNames, ...saved, ...legacy])]
+  const deleted = getDeletedClasses()
+  const saved = Object.keys(getAllClasses()).filter(n => !deleted.has(n))
+  const metaNames = Object.keys(getAllClassMeta()).filter(n => !deleted.has(n))
+  const legacy = Object.keys(DEFAULT_CLASS_WORDS).filter(n => !deleted.has(n))
+  return [...new Set([...DEFAULT_CLASS_LIST.filter(n => !deleted.has(n)), ...metaNames, ...saved, ...legacy])]
 }
 
 const normalizeClassData = (value) => {
@@ -165,6 +173,12 @@ export const deleteClass = (className) => {
   const all = getAllClasses()
   delete all[className]
   saveAllClasses(all)
+  const meta = getAllClassMeta()
+  delete meta[className]
+  saveAllClassMeta(meta)
+  const deleted = getDeletedClasses()
+  deleted.add(className)
+  saveDeletedClasses(deleted)
 }
 
 export const getStudentClass = (name) => localStorage.getItem(STU_CLS(name)) || ''
