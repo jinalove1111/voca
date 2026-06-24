@@ -341,36 +341,36 @@ export default function AdminScreen({ onBack }) {
         {/* Classes tab */}
         {tab === 'classes' && (
           <div className="space-y-3">
+            <div className="bg-white rounded-3xl card-shadow p-5">
+              <p className="text-sm font-black text-gray-700 mb-3">새 반 추가하기</p>
+              <div className="flex gap-2">
+                <input type="text" value={newClassName} onChange={e => setNewClassName(e.target.value)}
+                  placeholder="반 이름 입력 (예: Basic 1)"
+                  className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-purple-400" />
+                <button onClick={() => {
+                    const name = newClassName.trim()
+                    if (!name) return alert('반 이름을 입력해주세요!')
+                    if (classes.includes(name)) return alert('이미 있는 반 이름이에요.')
+                    const all = getAllClasses()
+                    all[name] = { units: [{ name: 'Unit 1', words: [] }] }
+                    saveAllClasses(all)
+                    setNewClassName('')
+                    refresh()
+                  }}
+                  className="bg-purple-500 text-white font-black px-4 py-3 rounded-xl btn-press hover:bg-purple-600">
+                  추가
+                </button>
+              </div>
+            </div>
+
             {classes.length === 0 ? (
               <div className="bg-white rounded-3xl card-shadow p-8 text-center">
                 <div className="text-5xl mb-3">📭</div>
                 <p className="font-bold text-gray-500">아직 반이 없어요.</p>
-                <p className="text-sm text-gray-400 mt-1">Excel 업로드로 반을 만들어보세요!</p>
+                <p className="text-sm text-gray-400 mt-1">아래에서 새 반을 추가해보세요!</p>
               </div>
             ) : (
             <div className="space-y-4">
-              <div className="bg-white rounded-3xl card-shadow p-5">
-                <p className="text-sm font-black text-gray-700 mb-3">새 반 추가하기</p>
-                <div className="flex gap-2">
-                  <input type="text" value={newClassName} onChange={e => setNewClassName(e.target.value)}
-                    placeholder="반 이름 입력 (예: Basic 1)"
-                    className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-purple-400" />
-                  <button onClick={() => {
-                      const name = newClassName.trim()
-                      if (!name) return alert('반 이름을 입력해주세요!')
-                      if (classes.includes(name)) return alert('이미 있는 반 이름이에요.')
-                      const all = getAllClasses()
-                      all[name] = { units: [{ name: 'Unit 1', words: [] }] }
-                      saveAllClasses(all)
-                      setNewClassName('')
-                      refresh()
-                    }}
-                    className="bg-purple-500 text-white font-black px-4 py-3 rounded-xl btn-press hover:bg-purple-600">
-                    추가
-                  </button>
-                </div>
-              </div>
-
               {(classes || []).map(c => {
                 const units = getClassUnits(c) || []
                 const totalWords = units.reduce((sum, unit) => sum + (unit?.words?.length ?? 0), 0)

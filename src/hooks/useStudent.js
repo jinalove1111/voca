@@ -3,6 +3,8 @@ import { useState, useCallback } from 'react'
 const PREFIX = 'paulEasyVoca'
 const sk = (name, type) => `${PREFIX}_${name}_${type}`
 const load = (key, def) => { try { return JSON.parse(localStorage.getItem(key)) ?? def } catch { return def } }
+const loadArr = (key) => { const v = load(key, []); return Array.isArray(v) ? v : [] }
+const loadNum = (key) => { const v = load(key, 0); return typeof v === 'number' ? v : 0 }
 const save = (key, val) => localStorage.setItem(key, JSON.stringify(val))
 
 export const getStudents = () => load(`${PREFIX}_students`, [])
@@ -25,13 +27,14 @@ const freshDaily = () => ({
 })
 
 export function useStudent(name) {
-  const [stars, _setStars] = useState(() => load(sk(name, 'stars'), 0))
-  const [pets, _setPets] = useState(() => load(sk(name, 'pets'), []))
-  const [missions, _setMissions] = useState(() => load(sk(name, 'missions'), []))
-  const [cleared, _setCleared] = useState(() => load(sk(name, 'cleared'), []))
+  const [stars, _setStars] = useState(() => loadNum(sk(name, 'stars')))
+  const [pets, _setPets] = useState(() => loadArr(sk(name, 'pets')))
+  const [missions, _setMissions] = useState(() => loadArr(sk(name, 'missions')))
+  const [cleared, _setCleared] = useState(() => loadArr(sk(name, 'cleared')))
   const [daily, _setDaily] = useState(() => {
     const s = load(sk(name, 'daily'), null)
-    return (s && s.date === todayStr()) ? s : freshDaily()
+    if (s && typeof s === 'object' && !Array.isArray(s) && s.date === todayStr()) return s
+    return freshDaily()
   })
 
   const setStars = useCallback(v => {

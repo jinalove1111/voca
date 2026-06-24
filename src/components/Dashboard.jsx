@@ -1,4 +1,4 @@
-import { getStudentClass, getStudentUnit } from '../utils/wordLibrary'
+import { getStudentClass, getStudentUnit, getClassNames } from '../utils/wordLibrary'
 
 const GOAL = 5
 
@@ -28,6 +28,7 @@ export default function Dashboard({ student, studentData, onGo, onLogout }) {
 
   const className = getStudentClass(student)
   const unitName = getStudentUnit(student)
+  const classDeleted = className && !getClassNames().includes(className)
 
   return (
     <div className="min-h-screen p-4 pb-8">
@@ -63,6 +64,18 @@ export default function Dashboard({ student, studentData, onGo, onLogout }) {
             </div>
           </div>
         </div>
+
+        {/* 반 삭제 경고 배너 */}
+        {classDeleted && (
+          <div className="bg-orange-50 border-2 border-orange-200 rounded-3xl p-4 text-center">
+            <div className="text-3xl mb-2">⚠️</div>
+            <p className="font-black text-orange-700">등록된 반이 없어요</p>
+            <p className="text-sm text-orange-500 mt-1">
+              &ldquo;{className}&rdquo; 반이 삭제되었습니다.<br/>
+              선생님께 문의해주세요.
+            </p>
+          </div>
+        )}
 
         {/* Daily Mission */}
         <div className="bg-white rounded-3xl card-shadow p-5">
