@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import StudentSelect from './components/StudentSelect'
 import Dashboard from './components/Dashboard'
 import WordBrowser from './components/WordBrowser'
@@ -12,6 +12,45 @@ import { useStudent } from './hooks/useStudent'
 import { getRandomPet } from './data/pets'
 import { getStudentWords } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate } from './utils/speech'
+
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+          <div className="bg-white rounded-3xl p-8 text-center max-w-sm w-full shadow-lg">
+            <div className="text-5xl mb-4">😵</div>
+            <h2 className="font-black text-xl text-gray-800 mb-2">앱 오류가 발생했어요</h2>
+            <p className="text-xs text-red-400 mb-6 break-all bg-red-50 p-3 rounded-xl">{String(this.state.error)}</p>
+            <button
+              onClick={() => {
+                localStorage.removeItem('paulEasyVoca_currentStudent')
+                this.setState({ hasError: false, error: null })
+              }}
+              className="w-full bg-purple-500 text-white font-black py-3 rounded-2xl mb-2"
+            >
+              로그아웃 후 다시 시작
+            </button>
+            <button
+              onClick={() => this.setState({ hasError: false, error: null })}
+              className="w-full border-2 border-gray-200 text-gray-500 font-bold py-3 rounded-2xl"
+            >
+              그냥 다시 시도
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 const RATE_OPTIONS = [
   { label: '🐢 천천히', value: 0.6 },
@@ -42,7 +81,9 @@ function AppInner({ student, onLogout }) {
   const [eggPet, setEggPet]         = useState(null)
   const studentData                 = useStudent(student)
   const { cleared, addPet, answerMission, missions, addStars, markPronunciationOk } = studentData
-  const classWords                  = useMemo(() => getStudentWords(student), [student])
+  const classWords                  = useMemo(() => {
+    try { return getStudentWords(student) || [] } catch { return [] }
+  }, [student])
 
   useEffect(() => {
     if (cleared.length > 0 && cleared.length % 5 === 0) {
@@ -99,7 +140,7 @@ export default function App() {
   const handleSelect = (name) => { localStorage.setItem('paulEasyVoca_currentStudent', name); setStudent(name) }
   const handleLogout = () => { localStorage.removeItem('paulEasyVoca_currentStudent'); setStudent('') }
 
-  if (showAdmin) return <AdminScreen onBack={() => setAdmin(false)} />
-  if (!student)  return <StudentSelect onSelect={handleSelect} onAdmin={() => setAdmin(true)} />
-  return <AppInner student={student} onLogout={handleLogout} />
+  if (showAdmin) return <AppErrorBoundary><AdminScreen onBack={() => setAdmin(false)} /></AppErrorBoundary>
+  if (!student)  return <AppErrorBoundary><StudentSelect onSelect={handleSelect} onAdmin={() => setAdmin(true)} /></AppErrorBoundary>
+  return <AppErrorBoundary><AppInner student={student} onLogout={handleLogout} /></AppErrorBoundary>
 }

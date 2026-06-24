@@ -174,27 +174,32 @@ export const setStudentUnit = (name, unit) => localStorage.setItem(STU_UNIT(name
 
 // Returns full word objects for a student (merged with DB if possible)
 export const getStudentWords = (name) => {
-  const cls = getStudentClass(name)
-  if (!cls) return DB_WORDS
-  const unitName = getStudentUnit(name)
-  const raw = getClassWords(cls, unitName)
-  if (!raw.length) return []
-  return raw.map((cw) => {
-    const db = DB_WORDS.find((w) => w.word.toLowerCase() === cw.word.toLowerCase())
-    if (db) return db
-    return {
-      id:           cw.word.toLowerCase().replace(/\s+/g, '_'),
-      word:         cw.word,
-      meaning:      cw.meaning,
-      memoryTip:    `${cw.word} = ${cw.meaning}`,
-      easyExample:  `I know the word "${cw.word}".`,
-      easyMeaning:  `나는 "${cw.meaning}"이라는 단어를 알아요.`,
-      funnyExample: `Even my dog knows "${cw.word}"!`,
-      funnyMeaning: `내 강아지도 "${cw.meaning}"를 알아요!`,
-      realExample:  `Can you use "${cw.word}" in a sentence?`,
-      realMeaning:  `"${cw.meaning}"를 문장에서 사용해볼 수 있나요?`,
-      quiz:         `${cw.word} means ____.`,
-      answer:       cw.meaning,
-    }
-  })
+  try {
+    const cls = getStudentClass(name)
+    if (!cls) return Array.isArray(DB_WORDS) ? DB_WORDS : []
+    const unitName = getStudentUnit(name)
+    const raw = getClassWords(cls, unitName)
+    if (!Array.isArray(raw) || !raw.length) return []
+    return raw.map((cw) => {
+      if (!cw || !cw.word) return null
+      const db = Array.isArray(DB_WORDS) ? DB_WORDS.find((w) => w.word.toLowerCase() === cw.word.toLowerCase()) : null
+      if (db) return db
+      return {
+        id:           cw.word.toLowerCase().replace(/\s+/g, '_'),
+        word:         cw.word,
+        meaning:      cw.meaning || '',
+        memoryTip:    `${cw.word} = ${cw.meaning}`,
+        easyExample:  `I know the word "${cw.word}".`,
+        easyMeaning:  `나는 "${cw.meaning}"이라는 단어를 알아요.`,
+        funnyExample: `Even my dog knows "${cw.word}"!`,
+        funnyMeaning: `내 강아지도 "${cw.meaning}"를 알아요!`,
+        realExample:  `Can you use "${cw.word}" in a sentence?`,
+        realMeaning:  `"${cw.meaning}"를 문장에서 사용해볼 수 있나요?`,
+        quiz:         `${cw.word} means ____.`,
+        answer:       cw.meaning || '',
+      }
+    }).filter(Boolean)
+  } catch {
+    return []
+  }
 }
