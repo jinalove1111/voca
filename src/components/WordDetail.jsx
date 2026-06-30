@@ -216,24 +216,17 @@ function getAudioMimeType() {
   return types.find(t => MediaRecorder.isTypeSupported(t)) || ''
 }
 
-function SpeechBtn({ target, label = '따라 말하기', onSuccess }) {
+function SpeechBtn({ target, label = '따라 말하기', playCount = 3, onSuccess }) {
   const [phase, setPhase] = useState('idle')
-  // idle | speaking | 3 | 2 | 1 | ready | listening | success | fail
-  // 'ready' = TTS finished, waiting for user tap to start mic (iOS requires
-  // SpeechRecognition.start() inside a direct user-gesture handler)
+  // idle | speaking | listening | success | fail
   const [msg, setMsg]      = useState('')
   const [audioUrl, setUrl] = useState(null)
   const [tries, setTries]  = useState(0)
   const mrRef              = useRef(null)
-  const timers             = useRef([])
 
   useEffect(() => () => {
-    timers.current.forEach(clearTimeout)
     if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
   }, [])
-
-  const addTimer = (fn, ms) => { const t = setTimeout(fn, ms); timers.current.push(t); return t }
-  const clearAll = () => { timers.current.forEach(clearTimeout); timers.current = [] }
 
   const MIC_ERR = {
     'not-allowed':   '마이크 권한을 허용해주세요! 🎤',
@@ -243,12 +236,10 @@ function SpeechBtn({ target, label = '따라 말하기', onSuccess }) {
     'unsupported':   '이 브라우저는 음성 인식을 지원하지 않아요 😢',
   }
 
-  // Called directly from a button onClick — must stay in user-gesture context for iOS
   const startListen = () => {
     setPhase('listening')
     setUrl(null)
 
-    // MediaRecorder: best-effort recording of student's voice
     if (navigator.mediaDevices?.getUserMedia) {
       const mimeType = getAudioMimeType()
       navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
@@ -292,34 +283,19 @@ function SpeechBtn({ target, label = '따라 말하기', onSuccess }) {
     })
   }
 
-  // Initial button click: play TTS then show 'ready' tap button.
-  // Do NOT call startListen() from inside setTimeout/onEnd — iOS blocks
-  // SpeechRecognition.start() outside a direct user-gesture handler.
   const handleClick = () => {
     if (!['idle', 'fail', 'success'].includes(phase)) return
     unlockAudio()
-    clearAll()
     setMsg('')
     setPhase('speaking')
+    // Play word playCount times, then immediately start mic — no countdown
     speak(target, {
-      twice: true,
-      onEnd: () => {
-        setPhase('3')
-        addTimer(() => setPhase('2'), 1000)
-        addTimer(() => setPhase('1'), 2000)
-        addTimer(() => setPhase('ready'), 3000)
-      },
+      times: playCount,
+      onEnd: () => startListen(),
     })
   }
 
-  // User taps this after countdown — starts mic in a fresh user gesture
-  const handleReady = () => {
-    unlockAudio()
-    startListen()
-  }
-
-  const isCountdown = ['3', '2', '1'].includes(phase)
-  const busy = phase === 'speaking' || isCountdown || phase === 'listening'
+  const busy = phase === 'speaking' || phase === 'listening'
 
   const btnColor =
     phase === 'success' ? 'bg-green-500 text-white' :
@@ -329,29 +305,17 @@ function SpeechBtn({ target, label = '따라 말하기', onSuccess }) {
 
   const btnLabel =
     phase === 'idle'      ? `🎤 ${label}` :
-    phase === 'speaking'  ? '🔊 듣는 중...' :
-    isCountdown           ? <span className="text-2xl font-black">{phase}</span> :
-    phase === 'listening' ? '👂 말해보세요!' :
+    phase === 'speaking'  ? '🔊 잘 들어봐요...' :
+    phase === 'listening' ? '👂 이제 말해봐요!' :
     phase === 'success'   ? '✅ 성공! 다시하기' :
                             '🔄 다시 시도'
 
   return (
     <div className="space-y-2">
-      {/* Main action button (hidden while in 'ready' state) */}
-      {phase !== 'ready' && (
-        <button onClick={handleClick} disabled={busy}
-          className={`w-full py-3 rounded-xl font-black text-sm btn-press transition-colors ${btnColor}`}>
-          {btnLabel}
-        </button>
-      )}
-
-      {/* 'ready' state: user must tap to start mic (iOS user-gesture requirement) */}
-      {phase === 'ready' && (
-        <button onClick={handleReady}
-          className="w-full py-4 rounded-xl font-black text-base btn-press bg-green-500 hover:bg-green-600 text-white animate-pulse">
-          🎤 탭해서 말하기!
-        </button>
-      )}
+      <button onClick={handleClick} disabled={busy}
+        className={`w-full py-3 rounded-xl font-black text-sm btn-press transition-colors ${btnColor}`}>
+        {btnLabel}
+      </button>
 
       {msg && (
         <p className={`text-center text-sm font-bold ${phase === 'success' ? 'text-green-600' : 'text-orange-500'}`}>
@@ -359,10 +323,9 @@ function SpeechBtn({ target, label = '따라 말하기', onSuccess }) {
         </p>
       )}
 
-      {/* Comparison buttons */}
       {(phase === 'success' || phase === 'fail') && (
         <div className="flex gap-2">
-          <button onClick={() => { unlockAudio(); speak(target, { twice: false }) }}
+          <button onClick={() => { unlockAudio(); speak(target, { times: 1 }) }}
             className="flex-1 bg-blue-100 text-blue-700 font-bold py-2 rounded-xl text-xs btn-press">
             🔊 원어민
           </button>
@@ -400,7 +363,7 @@ function ExCard({ emoji, title, color, english, korean, word, onListen, onPronun
             🔊
           </button>
         </div>
-        <SpeechBtn target={english} label="예문 따라 말하기" onSuccess={onPronunciationOk} />
+        <SpeechBtn target={english} label="예문 따라 말하기" playCount={2} onSuccess={onPronunciationOk} />
       </div>
     </div>
   )
@@ -411,9 +374,12 @@ export default function WordDetail({ word, onBack, onQuiz, onMarkViewed, onMarkE
   useState(() => { onMarkViewed(word.id) })
 
   const listenExample = (text) => {
-    speak(text, { twice: false })
+    speak(text, { times: 2 })
     onMarkExampleHeard()
   }
+
+  const exampleEnglish = word.easyExample || word.funnyExample || word.realExample
+  const exampleKorean  = word.easyMeaning || word.funnyMeaning || word.realMeaning
 
   return (
     <div className="min-h-screen p-4 pb-8">
@@ -425,7 +391,7 @@ export default function WordDetail({ word, onBack, onQuiz, onMarkViewed, onMarkE
         {/* Word card — click word to hear */}
         <div className="bg-gradient-to-br from-blue-500 to-purple-500 rounded-3xl p-6 text-white card-shadow">
           <div className="text-center mb-4">
-            <button onClick={() => speak(word.word)} className="btn-press">
+            <button onClick={() => speak(word.word, { times: 3 })} className="btn-press">
               <h1 className="text-5xl font-black hover:scale-110 transition-transform">{word.word}</h1>
             </button>
             <p className="text-blue-200 text-xs mt-1">탭하면 발음이 나와요 👆</p>
@@ -434,11 +400,11 @@ export default function WordDetail({ word, onBack, onQuiz, onMarkViewed, onMarkE
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => speak(word.word)}
+            <button onClick={() => speak(word.word, { times: 3 })}
               className="bg-white/20 hover:bg-white/30 rounded-2xl py-3 font-black text-sm btn-press transition-colors">
               🔊 단어 듣기
             </button>
-            <SpeechBtn target={word.word} label="단어 따라 말하기" onSuccess={onMarkPronunciationOk} />
+            <SpeechBtn target={word.word} label="단어 따라 말하기" playCount={3} onSuccess={onMarkPronunciationOk} />
           </div>
         </div>
 
@@ -453,13 +419,15 @@ export default function WordDetail({ word, onBack, onQuiz, onMarkViewed, onMarkE
           </div>
         )}
 
-        {/* Examples */}
-        <div className="space-y-3">
-          <p className="font-black text-gray-600 text-sm px-1">📝 예문 (듣고 따라 말해봐요!)</p>
-          {word.easyExample  && <ExCard emoji="⭐" title="쉬운 예문"  color="bg-blue-500"   english={word.easyExample}  korean={word.easyMeaning}  word={word.word} onListen={listenExample} onPronunciationOk={onMarkPronunciationOk} />}
-          {word.funnyExample && <ExCard emoji="😂" title="웃긴 예문"  color="bg-orange-500" english={word.funnyExample} korean={word.funnyMeaning} word={word.word} onListen={listenExample} onPronunciationOk={onMarkPronunciationOk} />}
-          {word.realExample  && <ExCard emoji="💬" title="실제 회화"  color="bg-green-500"  english={word.realExample}  korean={word.realMeaning}  word={word.word} onListen={listenExample} onPronunciationOk={onMarkPronunciationOk} />}
-        </div>
+        {/* Example — 1개만, 가장 쉬운 것 우선 */}
+        {exampleEnglish && (
+          <div className="space-y-2">
+            <p className="font-black text-gray-600 text-sm px-1">📝 예문</p>
+            <ExCard emoji="⭐" title="예문" color="bg-blue-500"
+              english={exampleEnglish} korean={exampleKorean} word={word.word}
+              onListen={listenExample} onPronunciationOk={onMarkPronunciationOk} />
+          </div>
+        )}
 
         {/* Quiz section */}
         {showQuiz ? (

@@ -97,7 +97,10 @@ if (typeof document !== 'undefined') {
 // Do NOT wrap speechSynthesis.speak() in setTimeout or async callbacks —
 // iOS Safari silently blocks TTS that starts outside a user gesture context.
 export function speak(text, opts = {}) {
-  const { twice = true, onEnd = null, rate = null } = opts
+  // times: explicit repeat count (takes precedence over twice)
+  // twice: legacy — kept for backward compat (true=2, false=1)
+  const { twice = true, times = null, onEnd = null, rate = null } = opts
+  const repeatCount = times !== null ? times : (twice ? 2 : 1)
   const r = rate ?? getSpeechRate()
   if (!window.speechSynthesis) { onEnd?.(); return }
   unlockAudio()
@@ -122,11 +125,15 @@ export function speak(text, opts = {}) {
     window.speechSynthesis.speak(u)
   }
 
-  if (twice) {
-    playOne(() => setTimeout(() => playOne(() => onEnd?.()), 500))
-  } else {
-    playOne(() => onEnd?.())
+  const playN = (n, cb) => {
+    if (n <= 0) { cb?.(); return }
+    playOne(() => {
+      if (n > 1) setTimeout(() => playN(n - 1, cb), 400)
+      else cb?.()
+    })
   }
+
+  playN(repeatCount, () => onEnd?.())
 }
 
 export function speakPraise(text, onEnd) {
@@ -179,15 +186,30 @@ function lenientMatch(transcript, target) {
   if (normT.includes(normTarget)) return true
   const targetWords = normTarget.split(' ')
   if (targetWords.length === 1) {
-    const stem = normTarget.replace(/(ing|tion|ed|ies|es|s)$/, '')
-    if (stem.length >= 3 && normT.includes(stem)) return true
-    return normT.split(' ').some(w => levenshtein(w, normTarget) <= (normTarget.length <= 5 ? 1 : 2))
+    const len = normTarget.length
+    // Stem: remove common suffixes
+    const stem = normTarget.replace(/(ing|tion|ness|ment|ed|ies|es|s)$/, '')
+    if (stem.length >= 2 && normT.includes(stem)) return true
+    // Prefix: if first ~60% of chars match (handles dropped endings common in Korean accent)
+    const prefixLen = Math.max(3, Math.floor(len * 0.6))
+    if (len >= 4 && normT.split(' ').some(w => w.startsWith(normTarget.slice(0, prefixLen)))) return true
+    // Levenshtein: more lenient thresholds for Korean learners
+    // Korean accent issues: v↔b, f↔p, l↔r, dropped consonant clusters, etc.
+    const maxDist = len <= 4 ? 2 : len <= 7 ? 3 : 4
+    return normT.split(' ').some(w => levenshtein(w, normTarget) <= maxDist)
   }
   const stopWords = new Set(['a','an','the','is','are','was','were','i','you','he','she','it','we','they','to','of','in','on','at','and','or','my','your','his','her','do','does','did'])
   const content = targetWords.filter(w => !stopWords.has(w) && w.length > 1)
   if (content.length === 0) return normT.includes(normTarget)
-  const matched = content.filter(w => normT.includes(w)).length
-  return matched >= Math.ceil(content.length * 0.6)
+  const transcriptWords = normT.split(' ')
+  // 50% threshold (was 60%) — Korean students often get most words but miss some
+  const matched = content.filter(tw =>
+    transcriptWords.some(rw =>
+      rw.includes(tw) || tw.includes(rw) ||
+      levenshtein(rw, tw) <= (tw.length <= 5 ? 2 : 3)
+    )
+  ).length
+  return matched >= Math.ceil(content.length * 0.5)
 }
 
 export function listenFor(targetWord, { onStart, onResult, onError } = {}) {
