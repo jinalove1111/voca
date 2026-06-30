@@ -18,6 +18,13 @@ function buildQuiz(wordList, all) {
   return wordList.map(w => ({ word: w, ...makeOptions(w, all) }))
 }
 
+// Returns the best supported audio mime type for MediaRecorder
+function getAudioMimeType() {
+  if (typeof MediaRecorder === 'undefined') return ''
+  const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
+  return types.find(t => MediaRecorder.isTypeSupported(t)) || ''
+}
+
 // ─── PronStep ───────────────────────────────────────────────────────────────
 function PronStep({ word, canRecord, onSuccess }) {
   const [phase, setPhase]      = useState('wait')
@@ -75,25 +82,26 @@ function PronStep({ word, canRecord, onSuccess }) {
     setPhase('listening')
 
     // MediaRecorder (best-effort — shows error if permission denied)
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    if (navigator.mediaDevices?.getUserMedia) {
+      const mimeType = getAudioMimeType()
       navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }).then(stream => {
         try {
-          const mr = new MediaRecorder(stream)
+          const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
           const chunks = []
           mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
           mr.onstop = () => {
-            setUrl(URL.createObjectURL(new Blob(chunks, { type: 'audio/webm' })))
+            const blobType = mimeType || 'audio/webm'
+            setUrl(URL.createObjectURL(new Blob(chunks, { type: blobType })))
             stream.getTracks().forEach(t => t.stop())
           }
           mr.start()
           mrRef.current = mr
-        } catch (err) {
+        } catch {
           stream.getTracks().forEach(t => t.stop())
-          console.warn('MediaRecorder unsupported on this device', err)
         }
       }).catch((err) => {
-        const msg = MIC_ERR[err.name] || '마이크 오류가 발생했어요 😢'
-        setMicErr(msg)
+        const errMsg = MIC_ERR[err.name] || '마이크 오류가 발생했어요 😢'
+        setMicErr(errMsg)
       })
     }
 

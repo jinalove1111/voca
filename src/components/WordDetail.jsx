@@ -209,18 +209,27 @@ function WordQuizFlow({ word, classWords, onClose }) {
   return null
 }
 
+// Returns the best supported audio mime type for MediaRecorder
+function getAudioMimeType() {
+  if (typeof MediaRecorder === 'undefined') return ''
+  const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
+  return types.find(t => MediaRecorder.isTypeSupported(t)) || ''
+}
+
 function SpeechBtn({ target, label = '따라 말하기', onSuccess }) {
   const [phase, setPhase] = useState('idle')
-  // idle | speaking | 3 | 2 | 1 | listening | success | fail
-  const [msg, setMsg]     = useState('')
+  // idle | speaking | 3 | 2 | 1 | ready | listening | success | fail
+  // 'ready' = TTS finished, waiting for user tap to start mic (iOS requires
+  // SpeechRecognition.start() inside a direct user-gesture handler)
+  const [msg, setMsg]      = useState('')
   const [audioUrl, setUrl] = useState(null)
-  const [tries, setTries] = useState(0)
-  const recRef            = useRef(null)
-  const timers            = useRef([])
+  const [tries, setTries]  = useState(0)
+  const mrRef              = useRef(null)
+  const timers             = useRef([])
 
   useEffect(() => () => {
     timers.current.forEach(clearTimeout)
-    if (recRef.current?.state === 'recording') recRef.current.stop()
+    if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
   }, [])
 
   const addTimer = (fn, ms) => { const t = setTimeout(fn, ms); timers.current.push(t); return t }
@@ -234,36 +243,37 @@ function SpeechBtn({ target, label = '따라 말하기', onSuccess }) {
     'unsupported':   '이 브라우저는 음성 인식을 지원하지 않아요 😢',
   }
 
+  // Called directly from a button onClick — must stay in user-gesture context for iOS
   const startListen = () => {
     setPhase('listening')
     setUrl(null)
 
-    // MediaRecorder (optional — no crash if denied)
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }).then(stream => {
-        try {
-          const mr = new MediaRecorder(stream)
-          const chunks = []
-          mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
-          mr.onstop = () => {
-            const blob = new Blob(chunks, { type: 'audio/webm' })
-            setUrl(URL.createObjectURL(blob))
+    // MediaRecorder: best-effort recording of student's voice
+    if (navigator.mediaDevices?.getUserMedia) {
+      const mimeType = getAudioMimeType()
+      navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
+        .then(stream => {
+          try {
+            const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
+            const chunks = []
+            mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
+            mr.onstop = () => {
+              const blobType = mimeType || 'audio/webm'
+              setUrl(URL.createObjectURL(new Blob(chunks, { type: blobType })))
+              stream.getTracks().forEach(t => t.stop())
+            }
+            mr.start()
+            mrRef.current = mr
+          } catch {
             stream.getTracks().forEach(t => t.stop())
           }
-          mr.start()
-          recRef.current = mr
-        } catch (err) {
-          stream.getTracks().forEach(t => t.stop())
-          console.warn('MediaRecorder unsupported on this device', err)
-        }
-      }).catch((err) => {
-        console.warn('getUserMedia failed', err)
-      })
+        })
+        .catch(() => {})
     }
 
     listenFor(target, {
       onResult: (ok) => {
-        if (recRef.current?.state === 'recording') recRef.current.stop()
+        if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
         if (ok) {
           setPhase('success')
           setMsg(rndMsg(SUCCESS_MSGS))
@@ -275,13 +285,16 @@ function SpeechBtn({ target, label = '따라 말하기', onSuccess }) {
         }
       },
       onError: (errCode) => {
-        if (recRef.current?.state === 'recording') recRef.current.stop()
+        if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
         setPhase('fail')
         setMsg(MIC_ERR[errCode] || '마이크를 확인해보세요! 🎤')
       },
     })
   }
 
+  // Initial button click: play TTS then show 'ready' tap button.
+  // Do NOT call startListen() from inside setTimeout/onEnd — iOS blocks
+  // SpeechRecognition.start() outside a direct user-gesture handler.
   const handleClick = () => {
     if (!['idle', 'fail', 'success'].includes(phase)) return
     unlockAudio()
@@ -294,19 +307,25 @@ function SpeechBtn({ target, label = '따라 말하기', onSuccess }) {
         setPhase('3')
         addTimer(() => setPhase('2'), 1000)
         addTimer(() => setPhase('1'), 2000)
-        addTimer(() => startListen(), 3000)
+        addTimer(() => setPhase('ready'), 3000)
       },
     })
+  }
+
+  // User taps this after countdown — starts mic in a fresh user gesture
+  const handleReady = () => {
+    unlockAudio()
+    startListen()
   }
 
   const isCountdown = ['3', '2', '1'].includes(phase)
   const busy = phase === 'speaking' || isCountdown || phase === 'listening'
 
   const btnColor =
-    phase === 'success'   ? 'bg-green-500 text-white' :
-    phase === 'fail'      ? 'bg-orange-400 text-white' :
-    busy                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed' :
-                            'bg-purple-500 hover:bg-purple-600 text-white'
+    phase === 'success' ? 'bg-green-500 text-white' :
+    phase === 'fail'    ? 'bg-orange-400 text-white' :
+    busy                ? 'bg-gray-200 text-gray-400 cursor-not-allowed' :
+                          'bg-purple-500 hover:bg-purple-600 text-white'
 
   const btnLabel =
     phase === 'idle'      ? `🎤 ${label}` :
@@ -318,10 +337,21 @@ function SpeechBtn({ target, label = '따라 말하기', onSuccess }) {
 
   return (
     <div className="space-y-2">
-      <button onClick={handleClick} disabled={busy}
-        className={`w-full py-3 rounded-xl font-black text-sm btn-press transition-colors ${btnColor}`}>
-        {btnLabel}
-      </button>
+      {/* Main action button (hidden while in 'ready' state) */}
+      {phase !== 'ready' && (
+        <button onClick={handleClick} disabled={busy}
+          className={`w-full py-3 rounded-xl font-black text-sm btn-press transition-colors ${btnColor}`}>
+          {btnLabel}
+        </button>
+      )}
+
+      {/* 'ready' state: user must tap to start mic (iOS user-gesture requirement) */}
+      {phase === 'ready' && (
+        <button onClick={handleReady}
+          className="w-full py-4 rounded-xl font-black text-base btn-press bg-green-500 hover:bg-green-600 text-white animate-pulse">
+          🎤 탭해서 말하기!
+        </button>
+      )}
 
       {msg && (
         <p className={`text-center text-sm font-bold ${phase === 'success' ? 'text-green-600' : 'text-orange-500'}`}>
@@ -332,7 +362,7 @@ function SpeechBtn({ target, label = '따라 말하기', onSuccess }) {
       {/* Comparison buttons */}
       {(phase === 'success' || phase === 'fail') && (
         <div className="flex gap-2">
-          <button onClick={() => speak(target, { twice: false })}
+          <button onClick={() => { unlockAudio(); speak(target, { twice: false }) }}
             className="flex-1 bg-blue-100 text-blue-700 font-bold py-2 rounded-xl text-xs btn-press">
             🔊 원어민
           </button>

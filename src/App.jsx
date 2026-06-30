@@ -11,7 +11,7 @@ import AdminScreen from './components/AdminScreen'
 import { useStudent } from './hooks/useStudent'
 import { getRandomPet } from './data/pets'
 import { getStudentWords } from './utils/wordLibrary'
-import { getSpeechRate, setSpeechRate } from './utils/speech'
+import { getSpeechRate, setSpeechRate, unlockAudio } from './utils/speech'
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -137,6 +137,14 @@ function AppInner({ student, onLogout }) {
 export default function App() {
   const [student, setStudent] = useState(() => localStorage.getItem('paulEasyVoca_currentStudent') || '')
   const [showAdmin, setAdmin] = useState(false)
+
+  // Unlock AudioContext on the very first user touch (iOS/Android requirement).
+  // Must be done before any audio plays to avoid the "blocked by browser policy" error.
+  useEffect(() => {
+    const handler = () => { unlockAudio() }
+    document.addEventListener('touchstart', handler, { once: true, passive: true })
+    return () => document.removeEventListener('touchstart', handler)
+  }, [])
 
   const handleSelect = (name) => { localStorage.setItem('paulEasyVoca_currentStudent', name); setStudent(name) }
   const handleLogout = () => { localStorage.removeItem('paulEasyVoca_currentStudent'); setStudent('') }

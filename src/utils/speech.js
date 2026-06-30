@@ -32,7 +32,7 @@ const RATE_KEY = 'paulEasyVoca_speechRate'
 export const getSpeechRate = () => parseFloat(localStorage.getItem(RATE_KEY) || '0.6')
 export const setSpeechRate = (r) => localStorage.setItem(RATE_KEY, String(r))
 
-// Unlock AudioContext on Android/iOS — call on any user gesture
+// ── AudioContext unlock ─────────────────────────────────────────────────────
 let _audioCtx = null
 export function unlockAudio() {
   try {
@@ -53,8 +53,17 @@ export function unlockAudio() {
   } catch {}
 }
 
+// ── Voice cache ─────────────────────────────────────────────────────────────
+// Android Chrome loads voices asynchronously — cache them via voiceschanged.
+// iOS Safari often returns voices synchronously; calling speak() with null
+// voice is fine — the device uses its system default.
+let _cachedVoices = []
+
 function safeGetVoices() {
-  return (window.speechSynthesis && window.speechSynthesis.getVoices) ? window.speechSynthesis.getVoices() : []
+  if (!window.speechSynthesis?.getVoices) return _cachedVoices
+  const v = window.speechSynthesis.getVoices()
+  if (v.length > 0) _cachedVoices = v
+  return _cachedVoices
 }
 
 function findBritish(voices) {
@@ -66,23 +75,27 @@ function findBritish(voices) {
   )
 }
 
-// Android Chrome loads voices asynchronously — wait for voiceschanged if needed
-function withVoice(cb) {
-  const voices = safeGetVoices()
-  if (voices.length > 0) { cb(findBritish(voices)); return }
-  let fired = false
-  const fire = () => {
-    if (fired) return
-    fired = true
-    cb(findBritish(safeGetVoices()))
-  }
-  if (window.speechSynthesis && window.speechSynthesis.addEventListener) {
-    window.speechSynthesis.addEventListener('voiceschanged', fire, { once: true })
-  }
-  // Fallback: if voiceschanged never fires (some Android), speak without a specific voice
-  setTimeout(fire, 1000)
+// Pre-cache voices as soon as they become available (Android Chrome)
+if (typeof window !== 'undefined' && window.speechSynthesis?.addEventListener) {
+  window.speechSynthesis.addEventListener('voiceschanged', () => {
+    _cachedVoices = window.speechSynthesis.getVoices()
+  })
 }
 
+// iOS bug: speechSynthesis stops after page goes to background.
+// Resume it when the page becomes visible again.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && window.speechSynthesis?.paused) {
+      window.speechSynthesis.resume()
+    }
+  })
+}
+
+// ── speak() ─────────────────────────────────────────────────────────────────
+// IMPORTANT: Must be called synchronously inside a user-gesture handler on iOS.
+// Do NOT wrap speechSynthesis.speak() in setTimeout or async callbacks —
+// iOS Safari silently blocks TTS that starts outside a user gesture context.
 export function speak(text, opts = {}) {
   const { twice = true, onEnd = null, rate = null } = opts
   const r = rate ?? getSpeechRate()
@@ -90,7 +103,11 @@ export function speak(text, opts = {}) {
   unlockAudio()
   window.speechSynthesis.cancel()
 
-  const playOne = (voice, cb) => {
+  // Use cached voice synchronously — may be null on first call on Android,
+  // which is fine: the device will use its default English voice.
+  const voice = findBritish(safeGetVoices())
+
+  const playOne = (cb) => {
     const u = new SpeechSynthesisUtterance(text)
     u.lang = 'en-GB'
     u.rate = r
@@ -101,18 +118,15 @@ export function speak(text, opts = {}) {
     const finish = () => { if (!done) { done = true; cb?.() } }
     u.onend = finish
     u.onerror = finish
-    const ms = Math.max(2000, (text.length * 120) / r)
-    setTimeout(finish, ms)
+    setTimeout(finish, Math.max(2000, (text.length * 120) / r))
     window.speechSynthesis.speak(u)
   }
 
-  withVoice(voice => {
-    if (twice) {
-      playOne(voice, () => setTimeout(() => playOne(voice, () => onEnd?.()), 500))
-    } else {
-      playOne(voice, () => onEnd?.())
-    }
-  })
+  if (twice) {
+    playOne(() => setTimeout(() => playOne(() => onEnd?.()), 500))
+  } else {
+    playOne(() => onEnd?.())
+  }
 }
 
 export function speakPraise(text, onEnd) {
@@ -120,19 +134,19 @@ export function speakPraise(text, onEnd) {
   unlockAudio()
   window.speechSynthesis.cancel()
 
-  withVoice(voice => {
-    const u = new SpeechSynthesisUtterance(text)
-    u.lang = 'en-GB'
-    u.rate = 0.95
-    u.pitch = 1
-    if (voice) u.voice = voice
-    let fired = false
-    const finish = () => { if (!fired) { fired = true; onEnd?.() } }
-    u.onend = finish
-    u.onerror = finish
-    setTimeout(finish, Math.max(1500, text.length * 80))
-    window.speechSynthesis.speak(u)
-  })
+  const voice = findBritish(safeGetVoices())
+  const u = new SpeechSynthesisUtterance(text)
+  u.lang = 'en-GB'
+  u.rate = 0.95
+  u.pitch = 1
+  u.volume = 1
+  if (voice) u.voice = voice
+  let fired = false
+  const finish = () => { if (!fired) { fired = true; onEnd?.() } }
+  u.onend = finish
+  u.onerror = finish
+  setTimeout(finish, Math.max(1500, text.length * 80))
+  window.speechSynthesis.speak(u)
 }
 
 export function hasSpeechRecognition() {
