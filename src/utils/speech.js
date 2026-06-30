@@ -139,6 +139,43 @@ export function hasSpeechRecognition() {
   return !!(window.SpeechRecognition || window.webkitSpeechRecognition)
 }
 
+function normalize(str) {
+  return str.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim()
+}
+
+function levenshtein(a, b) {
+  if (Math.abs(a.length - b.length) > 3) return 99
+  const m = a.length, n = b.length
+  const row = Array.from({ length: n + 1 }, (_, i) => i)
+  for (let i = 1; i <= m; i++) {
+    let prev = i
+    for (let j = 1; j <= n; j++) {
+      const curr = a[i - 1] === b[j - 1] ? row[j - 1] : 1 + Math.min(row[j], prev, row[j - 1])
+      row[j - 1] = prev
+      prev = curr
+    }
+    row[n] = prev
+  }
+  return row[n]
+}
+
+function lenientMatch(transcript, target) {
+  const normT = normalize(transcript)
+  const normTarget = normalize(target)
+  if (normT.includes(normTarget)) return true
+  const targetWords = normTarget.split(' ')
+  if (targetWords.length === 1) {
+    const stem = normTarget.replace(/(ing|tion|ed|ies|es|s)$/, '')
+    if (stem.length >= 3 && normT.includes(stem)) return true
+    return normT.split(' ').some(w => levenshtein(w, normTarget) <= (normTarget.length <= 5 ? 1 : 2))
+  }
+  const stopWords = new Set(['a','an','the','is','are','was','were','i','you','he','she','it','we','they','to','of','in','on','at','and','or','my','your','his','her','do','does','did'])
+  const content = targetWords.filter(w => !stopWords.has(w) && w.length > 1)
+  if (content.length === 0) return normT.includes(normTarget)
+  const matched = content.filter(w => normT.includes(w)).length
+  return matched >= Math.ceil(content.length * 0.6)
+}
+
 export function listenFor(targetWord, { onStart, onResult, onError } = {}) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition
   if (!SR) { onError?.('unsupported'); return null }
@@ -148,9 +185,8 @@ export function listenFor(targetWord, { onStart, onResult, onError } = {}) {
   rec.maxAlternatives = 5
   rec.onstart = () => onStart?.()
   rec.onresult = (event) => {
-    const transcripts = Array.from(event.results[0]).map(r => r.transcript.toLowerCase().trim())
-    const target = targetWord.toLowerCase().trim()
-    const success = transcripts.some(t => t.includes(target))
+    const transcripts = Array.from(event.results[0]).map(r => r.transcript)
+    const success = transcripts.some(t => lenientMatch(t, targetWord))
     onResult?.(success, transcripts[0] || '')
   }
   rec.onerror = (event) => onError?.(event.error)

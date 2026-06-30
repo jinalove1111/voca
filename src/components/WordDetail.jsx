@@ -7,7 +7,10 @@ function WordQuizFlow({ word, classWords, onClose }) {
   const [stage, setStage]           = useState(1)
   const [mcSelected, setMcSelected] = useState(null)
   const [e2kRevealed, setE2k]       = useState(false)
-  const [k2eRevealed, setK2e]       = useState(false)
+  const [voiceOk, setVoiceOk]       = useState(false)
+  const [voiceTries, setVoiceTries] = useState(0)
+  const [voicePhase, setVoicePhase] = useState('idle') // idle | listening | success | fail
+  const [voiceMsg, setVoiceMsg]     = useState('')
 
   const options = useMemo(() => {
     const pool = (classWords || []).filter(w => w.id !== word.id && w.meaning && w.meaning !== word.meaning)
@@ -92,33 +95,116 @@ function WordQuizFlow({ word, classWords, onClose }) {
     </div>
   )
 
-  if (stage === 3) return (
-    <div className="space-y-4">
-      <div className="text-center">
-        <span className="inline-block bg-green-100 text-green-700 font-black text-xs px-3 py-1 rounded-full mb-3">3단계 · 한국어 → 영어</span>
-        <div className="bg-gradient-to-br from-green-500 to-teal-500 rounded-2xl p-6 text-white">
-          <p className="text-4xl font-black">{word.meaning}</p>
-          <p className="text-green-200 text-sm mt-2">영어 단어를 말해보세요 🗣️</p>
+  if (stage === 3) {
+    const MIC_ERR = {
+      'not-allowed':   '마이크 권한을 허용해주세요! 🎤',
+      'no-speech':     '소리가 안 들렸어요. 크게 다시 말해봐요! 🗣️',
+      'audio-capture': '마이크를 찾을 수 없어요 😢',
+      'network':       '네트워크 오류예요. 인터넷을 확인해주세요 📶',
+      'unsupported':   '이 브라우저는 음성 인식을 지원하지 않아요 😢',
+    }
+    const QUIZ_SUCCESS = ['잘했어요! 정확해요! 🎉', '완벽해요! 원어민 발음! 🌟', '최고야! 이 단어 완전 잡았다! 💪', '오 발음 미쳤다! 🔥']
+    const canComplete = voiceOk || voiceTries >= 2
+
+    const startQuizListen = () => {
+      unlockAudio()
+      setVoicePhase('listening')
+      setVoiceMsg('')
+      listenFor(word.word, {
+        onResult: (ok) => {
+          if (ok) {
+            setVoicePhase('success')
+            setVoiceMsg(rndMsg(QUIZ_SUCCESS))
+            setVoiceOk(true)
+          } else {
+            const next = voiceTries + 1
+            setVoiceTries(next)
+            setVoicePhase('fail')
+            setVoiceMsg(next >= 2 ? `아쉽지만 정답은 "${word.word}"이에요!` : rndMsg(FAIL_MSGS))
+          }
+        },
+        onError: (errCode) => {
+          const next = voiceTries + 1
+          setVoiceTries(next)
+          setVoicePhase('fail')
+          setVoiceMsg(MIC_ERR[errCode] || '마이크를 확인해보세요! 🎤')
+        },
+      })
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="text-center">
+          <span className="inline-block bg-green-100 text-green-700 font-black text-xs px-3 py-1 rounded-full mb-3">3단계 · 한국어 → 영어</span>
+          <div className="bg-gradient-to-br from-green-500 to-teal-500 rounded-2xl p-6 text-white">
+            <p className="text-4xl font-black">{word.meaning}</p>
+            <p className="text-green-200 text-sm mt-2">영어 단어를 소리 내서 말해봐요 🗣️</p>
+          </div>
         </div>
+
+        {voicePhase === 'idle' && (
+          <button onClick={startQuizListen}
+            className="w-full bg-green-500 text-white font-black py-4 rounded-2xl btn-press hover:bg-green-600 text-lg">
+            🎤 영어로 말해봐요!
+          </button>
+        )}
+
+        {voicePhase === 'listening' && (
+          <div className="bg-green-50 border-2 border-green-300 rounded-2xl p-5 text-center">
+            <p className="text-3xl mb-2 animate-pulse">👂</p>
+            <p className="font-black text-green-700">듣고 있어요... 크게 말해봐요!</p>
+          </div>
+        )}
+
+        {voicePhase === 'success' && (
+          <div className="space-y-3">
+            <div className="bg-green-50 border-2 border-green-300 rounded-2xl p-5 text-center">
+              <p className="text-2xl mb-1">🎉</p>
+              <p className="font-black text-green-700 text-lg">{voiceMsg}</p>
+            </div>
+            <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-4 text-center">
+              <p className="text-xs text-gray-500 font-bold mb-1">정답</p>
+              <p className="text-2xl font-black text-green-700">{word.word}</p>
+            </div>
+          </div>
+        )}
+
+        {voicePhase === 'fail' && (
+          <div className="space-y-3">
+            <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 text-center">
+              <p className="font-black text-orange-700">{voiceMsg}</p>
+              {voiceTries < 2 && (
+                <p className="text-xs text-orange-500 mt-1">{voiceTries}번 시도 · 1번 더 할 수 있어요!</p>
+              )}
+            </div>
+            {voiceTries < 2 && (
+              <button onClick={() => setVoicePhase('idle')}
+                className="w-full bg-orange-400 text-white font-black py-3 rounded-2xl btn-press hover:bg-orange-500">
+                🔄 다시 시도
+              </button>
+            )}
+            {voiceTries >= 2 && (
+              <div className="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center">
+                <p className="text-xs text-gray-500 font-bold mb-1">정답</p>
+                <p className="text-2xl font-black text-gray-700">{word.word}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {canComplete && (
+          <div className="space-y-3">
+            <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-4 text-center">
+              <p className="text-3xl mb-1">🏆</p>
+              <p className="font-black text-yellow-800 text-lg">퀴즈 완료!</p>
+              <p className="text-sm text-yellow-700">3단계를 모두 마쳤어요!</p>
+            </div>
+            <button onClick={onClose} className="w-full bg-purple-500 text-white font-black py-3 rounded-2xl btn-press">✅ 완료</button>
+          </div>
+        )}
       </div>
-      {!k2eRevealed ? (
-        <button onClick={() => setK2e(true)} className="w-full bg-green-500 text-white font-black py-4 rounded-2xl btn-press hover:bg-green-600">정답 확인</button>
-      ) : (
-        <div className="space-y-3">
-          <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 text-center">
-            <p className="text-xs text-gray-500 font-bold mb-1">정답</p>
-            <p className="text-2xl font-black text-green-700">{word.word}</p>
-          </div>
-          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-4 text-center">
-            <p className="text-3xl mb-1">🏆</p>
-            <p className="font-black text-yellow-800 text-lg">퀴즈 완료!</p>
-            <p className="text-sm text-yellow-700">3단계를 모두 마쳤어요!</p>
-          </div>
-          <button onClick={onClose} className="w-full bg-purple-500 text-white font-black py-3 rounded-2xl btn-press">✅ 완료</button>
-        </div>
-      )}
-    </div>
-  )
+    )
+  }
 
   return null
 }
