@@ -1,225 +1,18 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { speak, listenFor, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
 
-const FALLBACK_MEANINGS = ['탐험하다','결정하다','변화하다','도착하다','사라지다','만들다','이해하다','중요한','특별한','연습하다']
-
-function WordQuizFlow({ word, classWords, onClose }) {
-  const [stage, setStage]           = useState(1)
-  const [mcSelected, setMcSelected] = useState(null)
-  const [e2kRevealed, setE2k]       = useState(false)
-  const [voiceOk, setVoiceOk]       = useState(false)
-  const [voiceTries, setVoiceTries] = useState(0)
-  const [voicePhase, setVoicePhase] = useState('idle') // idle | listening | success | fail
-  const [voiceMsg, setVoiceMsg]     = useState('')
-
-  const options = useMemo(() => {
-    const pool = (classWords || []).filter(w => w.id !== word.id && w.meaning && w.meaning !== word.meaning)
-    const wrongs = [...pool].sort(() => Math.random() - 0.5).slice(0, 3).map(w => w.meaning)
-    let fi = 0
-    while (wrongs.length < 3 && fi < FALLBACK_MEANINGS.length) {
-      const fb = FALLBACK_MEANINGS[fi++]
-      if (!wrongs.includes(fb) && fb !== word.meaning) wrongs.push(fb)
-    }
-    return [word.meaning, ...wrongs].sort(() => Math.random() - 0.5)
-  }, [word.id])
-
-  const correctIdx = options.indexOf(word.meaning)
-  const isCorrect  = mcSelected !== null && mcSelected === correctIdx
-
-  if (stage === 1) return (
-    <div className="space-y-4">
-      <div className="text-center">
-        <span className="inline-block bg-purple-100 text-purple-700 font-black text-xs px-3 py-1 rounded-full mb-3">1단계 · 객관식</span>
-        <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-6 text-white">
-          <p className="text-4xl font-black">{word.word}</p>
-          <p className="text-purple-200 text-sm mt-1">이 단어의 뜻은? 🤔</p>
-        </div>
-      </div>
-      <div className="space-y-2">
-        {options.map((opt, i) => {
-          let cls = 'border-2 border-gray-200 bg-gray-50 text-gray-700 hover:border-purple-300'
-          if (mcSelected !== null) {
-            if (i === correctIdx)       cls = 'border-2 border-green-400 bg-green-50 text-green-800'
-            else if (i === mcSelected)  cls = 'border-2 border-red-400 bg-red-50 text-red-700'
-            else                        cls = 'border-2 border-gray-100 bg-gray-50 text-gray-400'
-          }
-          return (
-            <button key={i} disabled={mcSelected !== null} onClick={() => setMcSelected(i)}
-              className={`w-full p-4 rounded-2xl font-bold text-left flex items-center gap-3 btn-press transition-all ${cls}`}>
-              <span className="w-8 h-8 rounded-full bg-purple-100 text-purple-600 font-black text-sm flex items-center justify-center flex-shrink-0">
-                {['①','②','③','④'][i]}
-              </span>
-              <span className="flex-1">{opt}</span>
-              {mcSelected !== null && i === correctIdx && <span>✅</span>}
-              {mcSelected !== null && i === mcSelected && i !== correctIdx && <span>❌</span>}
-            </button>
-          )
-        })}
-      </div>
-      {isCorrect && (
-        <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-4 text-center">
-          <p className="font-black text-green-700 text-lg">🎉 정답이에요! 잘했어요!</p>
-          <button onClick={() => setStage(2)} className="mt-3 w-full bg-green-500 text-white font-black py-3 rounded-2xl btn-press">2단계로 →</button>
-        </div>
-      )}
-      {mcSelected !== null && !isCorrect && (
-        <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 text-center">
-          <p className="font-black text-orange-700">아쉽지만 다시 해봐요! 💪</p>
-          <p className="text-sm text-orange-600 mt-1">정답: <span className="font-black">{word.meaning}</span></p>
-          <button onClick={() => setMcSelected(null)} className="mt-3 w-full bg-orange-400 text-white font-black py-3 rounded-2xl btn-press">🔄 다시 시도</button>
-        </div>
-      )}
-    </div>
-  )
-
-  if (stage === 2) return (
-    <div className="space-y-4">
-      <div className="text-center">
-        <span className="inline-block bg-blue-100 text-blue-700 font-black text-xs px-3 py-1 rounded-full mb-3">2단계 · 영어 → 한국어</span>
-        <div className="bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl p-6 text-white">
-          <p className="text-4xl font-black">{word.word}</p>
-          <p className="text-blue-200 text-sm mt-2">한국어 뜻을 말해보세요 🗣️</p>
-        </div>
-      </div>
-      {!e2kRevealed ? (
-        <button onClick={() => setE2k(true)} className="w-full bg-blue-500 text-white font-black py-4 rounded-2xl btn-press hover:bg-blue-600">정답 확인</button>
-      ) : (
-        <div className="space-y-3">
-          <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 text-center">
-            <p className="text-xs text-gray-500 font-bold mb-1">정답</p>
-            <p className="text-2xl font-black text-blue-700">{word.meaning}</p>
-          </div>
-          <button onClick={() => setStage(3)} className="w-full bg-blue-500 text-white font-black py-3 rounded-2xl btn-press">3단계로 →</button>
-        </div>
-      )}
-    </div>
-  )
-
-  if (stage === 3) {
-    const MIC_ERR = {
-      'not-allowed':   '마이크 권한을 허용해주세요! 🎤',
-      'no-speech':     '소리가 안 들렸어요. 크게 다시 말해봐요! 🗣️',
-      'audio-capture': '마이크를 찾을 수 없어요 😢',
-      'network':       '네트워크 오류예요. 인터넷을 확인해주세요 📶',
-      'unsupported':   '이 브라우저는 음성 인식을 지원하지 않아요 😢',
-    }
-    const QUIZ_SUCCESS = ['잘했어요! 정확해요! 🎉', '완벽해요! 원어민 발음! 🌟', '최고야! 이 단어 완전 잡았다! 💪', '오 발음 미쳤다! 🔥']
-    const canComplete = voiceOk || voiceTries >= 2
-
-    const startQuizListen = () => {
-      unlockAudio()
-      setVoicePhase('listening')
-      setVoiceMsg('')
-      listenFor(word.word, {
-        onResult: (ok) => {
-          if (ok) {
-            setVoicePhase('success')
-            setVoiceMsg(rndMsg(QUIZ_SUCCESS))
-            setVoiceOk(true)
-          } else {
-            const next = voiceTries + 1
-            setVoiceTries(next)
-            setVoicePhase('fail')
-            setVoiceMsg(next >= 2 ? `아쉽지만 정답은 "${word.word}"이에요!` : rndMsg(FAIL_MSGS))
-          }
-        },
-        onError: (errCode) => {
-          const next = voiceTries + 1
-          setVoiceTries(next)
-          setVoicePhase('fail')
-          setVoiceMsg(MIC_ERR[errCode] || '마이크를 확인해보세요! 🎤')
-        },
-      })
-    }
-
-    return (
-      <div className="space-y-4">
-        <div className="text-center">
-          <span className="inline-block bg-green-100 text-green-700 font-black text-xs px-3 py-1 rounded-full mb-3">3단계 · 한국어 → 영어</span>
-          <div className="bg-gradient-to-br from-green-500 to-teal-500 rounded-2xl p-6 text-white">
-            <p className="text-4xl font-black">{word.meaning}</p>
-            <p className="text-green-200 text-sm mt-2">영어 단어를 소리 내서 말해봐요 🗣️</p>
-          </div>
-        </div>
-
-        {voicePhase === 'idle' && (
-          <button onClick={startQuizListen}
-            className="w-full bg-green-500 text-white font-black py-4 rounded-2xl btn-press hover:bg-green-600 text-lg">
-            🎤 영어로 말해봐요!
-          </button>
-        )}
-
-        {voicePhase === 'listening' && (
-          <div className="bg-green-50 border-2 border-green-300 rounded-2xl p-5 text-center">
-            <p className="text-3xl mb-2 animate-pulse">👂</p>
-            <p className="font-black text-green-700">듣고 있어요... 크게 말해봐요!</p>
-          </div>
-        )}
-
-        {voicePhase === 'success' && (
-          <div className="space-y-3">
-            <div className="bg-green-50 border-2 border-green-300 rounded-2xl p-5 text-center">
-              <p className="text-2xl mb-1">🎉</p>
-              <p className="font-black text-green-700 text-lg">{voiceMsg}</p>
-            </div>
-            <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-4 text-center">
-              <p className="text-xs text-gray-500 font-bold mb-1">정답</p>
-              <p className="text-2xl font-black text-green-700">{word.word}</p>
-            </div>
-          </div>
-        )}
-
-        {voicePhase === 'fail' && (
-          <div className="space-y-3">
-            <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 text-center">
-              <p className="font-black text-orange-700">{voiceMsg}</p>
-              {voiceTries < 2 && (
-                <p className="text-xs text-orange-500 mt-1">{voiceTries}번 시도 · 1번 더 할 수 있어요!</p>
-              )}
-            </div>
-            {voiceTries < 2 && (
-              <button onClick={() => setVoicePhase('idle')}
-                className="w-full bg-orange-400 text-white font-black py-3 rounded-2xl btn-press hover:bg-orange-500">
-                🔄 다시 시도
-              </button>
-            )}
-            {voiceTries >= 2 && (
-              <div className="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center">
-                <p className="text-xs text-gray-500 font-bold mb-1">정답</p>
-                <p className="text-2xl font-black text-gray-700">{word.word}</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {canComplete && (
-          <div className="space-y-3">
-            <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-4 text-center">
-              <p className="text-3xl mb-1">🏆</p>
-              <p className="font-black text-yellow-800 text-lg">퀴즈 완료!</p>
-              <p className="text-sm text-yellow-700">3단계를 모두 마쳤어요!</p>
-            </div>
-            <button onClick={onClose} className="w-full bg-purple-500 text-white font-black py-3 rounded-2xl btn-press">✅ 완료</button>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  return null
-}
-
-// Returns the best supported audio mime type for MediaRecorder
 function getAudioMimeType() {
   if (typeof MediaRecorder === 'undefined') return ''
   const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
   return types.find(t => MediaRecorder.isTypeSupported(t)) || ''
 }
 
-function SpeechBtn({ target, label = '따라 말하기', playCount = 3, onSuccess }) {
+// ── SpeechBtn ─────────────────────────────────────────────────────────────────
+// onAnyResult fires when: pronunciation success OR tries >= 2 (fail)
+// This lets the parent know it's safe to show a "계속" button.
+function SpeechBtn({ target, label = '따라 말하기', playCount = 3, onSuccess, onAnyResult }) {
   const [phase, setPhase] = useState('idle')
-  // idle | speaking | listening | success | fail
-  const [msg, setMsg]      = useState('')
+  const [msg, setMsg]     = useState('')
   const [audioUrl, setUrl] = useState(null)
   const [tries, setTries]  = useState(0)
   const mrRef              = useRef(null)
@@ -249,17 +42,13 @@ function SpeechBtn({ target, label = '따라 말하기', playCount = 3, onSucces
             const chunks = []
             mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
             mr.onstop = () => {
-              const blobType = mimeType || 'audio/webm'
-              setUrl(URL.createObjectURL(new Blob(chunks, { type: blobType })))
+              setUrl(URL.createObjectURL(new Blob(chunks, { type: mimeType || 'audio/webm' })))
               stream.getTracks().forEach(t => t.stop())
             }
             mr.start()
             mrRef.current = mr
-          } catch {
-            stream.getTracks().forEach(t => t.stop())
-          }
-        })
-        .catch(() => {})
+          } catch { stream.getTracks().forEach(t => t.stop()) }
+        }).catch(() => {})
     }
 
     listenFor(target, {
@@ -269,14 +58,24 @@ function SpeechBtn({ target, label = '따라 말하기', playCount = 3, onSucces
           setPhase('success')
           setMsg(rndMsg(SUCCESS_MSGS))
           onSuccess?.()
+          onAnyResult?.()
         } else {
-          setTries(t => t + 1)
+          setTries(prev => {
+            const next = prev + 1
+            if (next >= 2) onAnyResult?.()
+            return next
+          })
           setPhase('fail')
           setMsg(rndMsg(FAIL_MSGS))
         }
       },
       onError: (errCode) => {
         if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
+        setTries(prev => {
+          const next = prev + 1
+          if (next >= 2) onAnyResult?.()
+          return next
+        })
         setPhase('fail')
         setMsg(MIC_ERR[errCode] || '마이크를 확인해보세요! 🎤')
       },
@@ -284,37 +83,29 @@ function SpeechBtn({ target, label = '따라 말하기', playCount = 3, onSucces
   }
 
   const handleClick = () => {
-    if (!['idle', 'fail', 'success'].includes(phase)) return
+    if (phase === 'speaking' || phase === 'listening' || phase === 'success') return
     unlockAudio()
     setMsg('')
     setPhase('speaking')
-    // Play word playCount times, then immediately start mic — no countdown
-    speak(target, {
-      times: playCount,
-      onEnd: () => startListen(),
-    })
+    speak(target, { times: playCount, onEnd: () => startListen() })
   }
 
   const busy = phase === 'speaking' || phase === 'listening'
 
-  const btnColor =
-    phase === 'success' ? 'bg-green-500 text-white' :
-    phase === 'fail'    ? 'bg-orange-400 text-white' :
-    busy                ? 'bg-gray-200 text-gray-400 cursor-not-allowed' :
-                          'bg-purple-500 hover:bg-purple-600 text-white'
-
-  const btnLabel =
-    phase === 'idle'      ? `🎤 ${label}` :
-    phase === 'speaking'  ? '🔊 잘 들어봐요...' :
-    phase === 'listening' ? '👂 이제 말해봐요!' :
-    phase === 'success'   ? '✅ 성공! 다시하기' :
-                            '🔄 다시 시도'
-
   return (
     <div className="space-y-2">
-      <button onClick={handleClick} disabled={busy}
-        className={`w-full py-3 rounded-xl font-black text-sm btn-press transition-colors ${btnColor}`}>
-        {btnLabel}
+      <button onClick={handleClick} disabled={busy || phase === 'success'}
+        className={`w-full py-3 rounded-xl font-black text-sm btn-press transition-colors ${
+          phase === 'success' ? 'bg-green-500 text-white' :
+          phase === 'fail'    ? 'bg-orange-400 text-white' :
+          busy                ? 'bg-gray-200 text-gray-400 cursor-not-allowed' :
+                                'bg-purple-500 hover:bg-purple-600 text-white'
+        }`}>
+        {phase === 'idle'      ? `🎤 ${label}` :
+         phase === 'speaking'  ? '🔊 잘 들어봐요...' :
+         phase === 'listening' ? '👂 이제 말해봐요!' :
+         phase === 'success'   ? '✅ 발음 성공!' :
+                                 tries >= 2 ? '🔄 한 번 더 (선택)' : '🔄 다시 시도'}
       </button>
 
       {msg && (
@@ -323,126 +114,236 @@ function SpeechBtn({ target, label = '따라 말하기', playCount = 3, onSucces
         </p>
       )}
 
-      {(phase === 'success' || phase === 'fail') && (
+      {(phase === 'success' || (phase === 'fail' && tries >= 2)) && (
         <div className="flex gap-2">
           <button onClick={() => { unlockAudio(); speak(target, { times: 1 }) }}
             className="flex-1 bg-blue-100 text-blue-700 font-bold py-2 rounded-xl text-xs btn-press">
             🔊 원어민
           </button>
           {audioUrl && (
-            <button onClick={() => { const a = new Audio(audioUrl); a.play() }}
+            <button onClick={() => new Audio(audioUrl).play()}
               className="flex-1 bg-purple-100 text-purple-700 font-bold py-2 rounded-xl text-xs btn-press">
               🎧 내 발음
             </button>
           )}
         </div>
       )}
+    </div>
+  )
+}
 
-      {tries > 0 && phase !== 'success' && (
-        <p className="text-center text-xs text-gray-400">{tries}번 시도 중 · 성공해야 ⭐</p>
+// ── Step 1: 발음 연습 ──────────────────────────────────────────────────────────
+function PronounceStep({ word, onDone, onMarkPronunciationOk }) {
+  const [canProceed, setCanProceed] = useState(false)
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-gradient-to-br from-blue-500 to-purple-500 rounded-3xl p-6 text-white card-shadow">
+        <div className="text-center mb-4">
+          <button onClick={() => speak(word.word, { times: 3 })} className="btn-press">
+            <h1 className="text-5xl font-black hover:scale-110 transition-transform">{word.word}</h1>
+          </button>
+          <p className="text-blue-200 text-xs mt-1">탭하면 발음이 나와요 👆</p>
+          <div className="bg-white/20 rounded-2xl px-4 py-3 mt-3 inline-block">
+            <p className="text-3xl font-black">{word.meaning}</p>
+          </div>
+        </div>
+        <SpeechBtn
+          target={word.word}
+          label="따라 말하기"
+          playCount={3}
+          onSuccess={onMarkPronunciationOk}
+          onAnyResult={() => setCanProceed(true)}
+        />
+      </div>
+
+      {word.memoryTip && (
+        <div className="bg-yellow-50 border-2 border-yellow-200 rounded-3xl p-4 card-shadow">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xl">🧠</span>
+            <span className="font-black text-yellow-800 text-sm">이렇게 외워봐요!</span>
+          </div>
+          <p className="text-yellow-900 text-sm leading-relaxed">{word.memoryTip}</p>
+        </div>
+      )}
+
+      {canProceed && (
+        <button onClick={onDone}
+          className="w-full bg-purple-500 text-white font-black py-4 rounded-3xl btn-press card-shadow text-lg animate-slide-up">
+          계속 → 📝 예문 보기
+        </button>
       )}
     </div>
   )
 }
 
-function ExCard({ emoji, title, color, english, korean, word, onListen, onPronunciationOk }) {
+// ── Step 2: 예문 ───────────────────────────────────────────────────────────────
+function ExampleStep({ english, korean, onDone, onMarkExampleHeard }) {
+  const handlePlay = () => {
+    unlockAudio()
+    speak(english, { times: 2 })
+    onMarkExampleHeard?.()
+  }
+
   return (
-    <div className="rounded-2xl overflow-hidden card-shadow">
-      <div className={`px-4 py-2 flex items-center gap-2 ${color}`}>
-        <span>{emoji}</span>
-        <span className="text-white font-black text-sm">{title}</span>
-      </div>
-      <div className="bg-white p-4 space-y-3">
-        <div className="flex items-start gap-3">
-          <div className="flex-1">
-            <p className="font-bold text-gray-800 text-base leading-snug">{english}</p>
-            <p className="text-gray-500 text-sm mt-1">→ {korean}</p>
-          </div>
-          <button onClick={() => onListen(english)}
-            className="flex-shrink-0 w-10 h-10 bg-blue-100 hover:bg-blue-200 rounded-xl flex items-center justify-center text-lg btn-press transition-colors">
-            🔊
-          </button>
+    <div className="space-y-4">
+      <div className="bg-white rounded-3xl card-shadow p-6">
+        <p className="font-black text-gray-500 text-sm mb-3">📝 예문</p>
+        <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5">
+          <p className="font-bold text-gray-800 text-lg leading-snug">{english}</p>
+          <p className="text-gray-500 text-sm mt-2">→ {korean}</p>
         </div>
-        <SpeechBtn target={english} label="예문 따라 말하기" playCount={2} onSuccess={onPronunciationOk} />
+        <button onClick={handlePlay}
+          className="w-full mt-4 bg-blue-500 hover:bg-blue-600 text-white font-black py-3 rounded-2xl btn-press transition-colors">
+          🔊 예문 듣기
+        </button>
       </div>
+
+      <button onClick={onDone}
+        className="w-full bg-purple-500 text-white font-black py-4 rounded-3xl btn-press card-shadow text-lg">
+        계속 → 🎮 퀴즈
+      </button>
     </div>
   )
 }
 
-export default function WordDetail({ word, onBack, onQuiz, onMarkViewed, onMarkExampleHeard, onMarkPronunciationOk, classWords }) {
-  const [showQuiz, setShowQuiz] = useState(false)
-  useState(() => { onMarkViewed(word.id) })
+// ── Step 3: 퀴즈 ───────────────────────────────────────────────────────────────
+const FALLBACK_MEANINGS = ['탐험하다','결정하다','변화하다','도착하다','사라지다','만들다','이해하다','중요한','특별한','연습하다']
 
-  const listenExample = (text) => {
-    speak(text, { times: 2 })
-    onMarkExampleHeard()
+function QuizStep({ word, classWords, onDone, onMarkQuizSolved }) {
+  const options = useMemo(() => {
+    const pool = (classWords || []).filter(w => w.id !== word.id && w.meaning && w.meaning !== word.meaning)
+    const wrongs = [...pool].sort(() => Math.random() - 0.5).slice(0, 3).map(w => w.meaning)
+    let fi = 0
+    while (wrongs.length < 3 && fi < FALLBACK_MEANINGS.length) {
+      const fb = FALLBACK_MEANINGS[fi++]
+      if (!wrongs.includes(fb) && fb !== word.meaning) wrongs.push(fb)
+    }
+    return [word.meaning, ...wrongs].sort(() => Math.random() - 0.5)
+  }, [word.id])
+
+  const correctIdx   = options.indexOf(word.meaning)
+  const [selected, setSelected] = useState(null)
+  const isAnswered   = selected !== null
+  const isCorrect    = isAnswered && selected === correctIdx
+
+  const handleSelect = (i) => {
+    if (isAnswered) return
+    setSelected(i)
+    if (i === correctIdx) onMarkQuizSolved?.()
   }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-3xl card-shadow p-6">
+        <p className="text-center text-gray-500 font-bold text-sm mb-4">🎮 뜻 맞히기</p>
+        <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-5 text-center text-white mb-5">
+          <p className="text-4xl font-black">{word.word}</p>
+          <p className="text-purple-200 text-sm mt-1">이 단어의 뜻은?</p>
+        </div>
+        <div className="space-y-2">
+          {options.map((opt, i) => {
+            let cls = 'border-2 border-gray-200 bg-gray-50 text-gray-700 hover:border-purple-300'
+            if (isAnswered) {
+              if (i === correctIdx)    cls = 'border-2 border-green-400 bg-green-50 text-green-800'
+              else if (i === selected) cls = 'border-2 border-red-400 bg-red-50 text-red-700'
+              else                     cls = 'border-2 border-gray-100 bg-gray-50 text-gray-400'
+            }
+            return (
+              <button key={i} disabled={isAnswered} onClick={() => handleSelect(i)}
+                className={`w-full p-4 rounded-2xl font-bold text-left flex items-center gap-3 btn-press transition-all ${cls}`}>
+                <span className="w-8 h-8 rounded-full bg-purple-100 text-purple-600 font-black text-sm flex items-center justify-center flex-shrink-0">
+                  {['①','②','③','④'][i]}
+                </span>
+                <span className="flex-1">{opt}</span>
+                {isAnswered && i === correctIdx && <span>✅</span>}
+                {isAnswered && i === selected && i !== correctIdx && <span>❌</span>}
+              </button>
+            )
+          })}
+        </div>
+        {isAnswered && (
+          <div className={`mt-4 p-3 rounded-2xl text-center animate-slide-up border-2 ${
+            isCorrect ? 'bg-green-50 border-green-200 text-green-700' : 'bg-orange-50 border-orange-200 text-orange-700'
+          }`}>
+            <p className="font-black">
+              {isCorrect ? '🎉 정답! 잘했어요!' : `정답은 "${word.meaning}"이에요 💪`}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {isAnswered && (
+        <button onClick={onDone}
+          className="w-full bg-gradient-to-r from-green-400 to-teal-500 text-white font-black py-4 rounded-3xl btn-press card-shadow text-lg animate-slide-up">
+          ✅ 완료! 다음 단어 →
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ── Main ───────────────────────────────────────────────────────────────────────
+export default function WordDetail({
+  word, onBack, onNext,
+  onMarkViewed, onMarkExampleHeard, onMarkPronunciationOk, onMarkQuizSolved,
+  classWords,
+}) {
+  const [step, setStep] = useState('pronounce')
+
+  // Reset to first step whenever the word changes
+  useEffect(() => {
+    setStep('pronounce')
+    onMarkViewed?.(word.id)
+  }, [word.id])
 
   const exampleEnglish = word.easyExample || word.funnyExample || word.realExample
   const exampleKorean  = word.easyMeaning || word.funnyMeaning || word.realMeaning
+
+  const handlePronDone   = () => setStep(exampleEnglish ? 'example' : 'quiz')
+  const handleExampleDone = () => setStep('quiz')
+  const handleQuizDone   = () => { onNext ? onNext() : onBack?.() }
+
+  // Progress dots: pronounce → example (if exists) → quiz
+  const STEPS = ['pronounce', ...(exampleEnglish ? ['example'] : []), 'quiz']
+  const stepIdx = STEPS.indexOf(step)
 
   return (
     <div className="min-h-screen p-4 pb-8">
       <div className="flex items-center justify-between max-w-lg mx-auto mb-4 pt-2">
         <button onClick={onBack} className="text-blue-600 font-bold btn-press">← 단어 목록</button>
+        <div className="flex items-center gap-2">
+          {STEPS.map((s, i) => (
+            <div key={s}
+              className={`rounded-full transition-all ${i < stepIdx ? 'w-3 h-3 bg-purple-400' : i === stepIdx ? 'w-4 h-4 bg-purple-600' : 'w-3 h-3 bg-gray-200'}`}
+            />
+          ))}
+        </div>
       </div>
 
-      <div className="max-w-lg mx-auto space-y-4 animate-fade-in">
-        {/* Word card — click word to hear */}
-        <div className="bg-gradient-to-br from-blue-500 to-purple-500 rounded-3xl p-6 text-white card-shadow">
-          <div className="text-center mb-4">
-            <button onClick={() => speak(word.word, { times: 3 })} className="btn-press">
-              <h1 className="text-5xl font-black hover:scale-110 transition-transform">{word.word}</h1>
-            </button>
-            <p className="text-blue-200 text-xs mt-1">탭하면 발음이 나와요 👆</p>
-            <div className="bg-white/20 rounded-2xl px-4 py-3 mt-3 inline-block">
-              <p className="text-3xl font-black">{word.meaning}</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => speak(word.word, { times: 3 })}
-              className="bg-white/20 hover:bg-white/30 rounded-2xl py-3 font-black text-sm btn-press transition-colors">
-              🔊 단어 듣기
-            </button>
-            <SpeechBtn target={word.word} label="단어 따라 말하기" playCount={3} onSuccess={onMarkPronunciationOk} />
-          </div>
-        </div>
-
-        {/* Memory tip */}
-        {word.memoryTip && (
-          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-3xl p-5 card-shadow">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-2xl">🧠</span>
-              <h2 className="font-black text-yellow-800">이렇게 외워봐요!</h2>
-            </div>
-            <p className="text-yellow-900 leading-relaxed">{word.memoryTip}</p>
-          </div>
+      <div className="max-w-lg mx-auto animate-fade-in">
+        {step === 'pronounce' && (
+          <PronounceStep
+            word={word}
+            onDone={handlePronDone}
+            onMarkPronunciationOk={onMarkPronunciationOk}
+          />
         )}
-
-        {/* Example — 1개만, 가장 쉬운 것 우선 */}
-        {exampleEnglish && (
-          <div className="space-y-2">
-            <p className="font-black text-gray-600 text-sm px-1">📝 예문</p>
-            <ExCard emoji="⭐" title="예문" color="bg-blue-500"
-              english={exampleEnglish} korean={exampleKorean} word={word.word}
-              onListen={listenExample} onPronunciationOk={onMarkPronunciationOk} />
-          </div>
+        {step === 'example' && exampleEnglish && (
+          <ExampleStep
+            english={exampleEnglish}
+            korean={exampleKorean}
+            onDone={handleExampleDone}
+            onMarkExampleHeard={onMarkExampleHeard}
+          />
         )}
-
-        {/* Quiz section */}
-        {showQuiz ? (
-          <div className="bg-white rounded-3xl card-shadow p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-black text-gray-800 text-lg">🎮 퀴즈</h2>
-              <button onClick={() => setShowQuiz(false)} className="text-gray-400 font-bold text-xl btn-press hover:text-gray-600">✕</button>
-            </div>
-            <WordQuizFlow word={word} classWords={classWords || []} onClose={() => setShowQuiz(false)} />
-          </div>
-        ) : (
-          <button onClick={() => setShowQuiz(true)}
-            className="w-full bg-gradient-to-r from-yellow-400 to-orange-400 text-white font-black text-xl py-5 rounded-3xl btn-press card-shadow">
-            🎮 퀴즈 시작
-          </button>
+        {step === 'quiz' && (
+          <QuizStep
+            word={word}
+            classWords={classWords}
+            onDone={handleQuizDone}
+            onMarkQuizSolved={onMarkQuizSolved}
+          />
         )}
       </div>
     </div>

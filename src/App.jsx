@@ -78,6 +78,7 @@ function SpeedBtn() {
 function AppInner({ student, onLogout }) {
   const [screen, setScreen]         = useState('dashboard')
   const [selectedWord, setWord]     = useState(null)
+  const [selectedWordIdx, setWordIdx] = useState(0)
   const [eggPet, setEggPet]         = useState(null)
   const studentData                 = useStudent(student)
   const { cleared, addPet, answerMission, missions, addStars, markPronunciationOk } = studentData
@@ -93,7 +94,23 @@ function AppInner({ student, onLogout }) {
     }
   }, [cleared.length])
 
-  const handleWordSelect = (w) => { setWord(w); setScreen('wordDetail') }
+  const handleWordSelect = (w) => {
+    const idx = classWords.findIndex(cw => cw.id === w.id)
+    setWord(w)
+    setWordIdx(idx >= 0 ? idx : 0)
+    setScreen('wordDetail')
+  }
+
+  // Advance to next word in classWords; go back to browser after last word
+  const handleNextWord = () => {
+    const nextIdx = selectedWordIdx + 1
+    if (nextIdx < classWords.length) {
+      setWord(classWords[nextIdx])
+      setWordIdx(nextIdx)
+    } else {
+      setScreen('wordBrowser')
+    }
+  }
 
   const handleAnswerMission = (wordId) => {
     const didClear = answerMission(wordId)
@@ -113,10 +130,11 @@ function AppInner({ student, onLogout }) {
         <WordDetail word={selectedWord}
           classWords={classWords}
           onBack={() => setScreen('wordBrowser')}
-          onQuiz={w => { setWord(w); setScreen('quiz') }}
+          onNext={handleNextWord}
           onMarkViewed={studentData.markWordViewed}
           onMarkExampleHeard={studentData.markExampleHeard}
-          onMarkPronunciationOk={markPronunciationOk} />
+          onMarkPronunciationOk={() => { markPronunciationOk(); addStars(1) }}
+          onMarkQuizSolved={studentData.markQuizSolved} />
       )}
       {screen === 'quiz'          && (
         <QuizGame initWord={selectedWord} classWords={classWords}
