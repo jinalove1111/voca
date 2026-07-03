@@ -37,7 +37,7 @@ export async function refreshWordLibrary() {
   const [classesRes, unitsRes, wordsRes] = await Promise.all([
     supabase.from('classes').select('id,name,class_type').order('created_at'),
     supabase.from('units').select('id,class_id,name,position').order('position'),
-    supabase.from('words').select('id,unit_id,word,meaning,position,word_audio_url,example_audio_url').order('position'),
+    supabase.from('words').select('id,unit_id,word,meaning,position,word_audio_url,example_audio_url,example_text').order('position'),
   ])
   if (classesRes.error) throw classesRes.error
   if (unitsRes.error) throw unitsRes.error
@@ -62,6 +62,7 @@ export async function refreshWordLibrary() {
         id: w.id, word: w.word, meaning: w.meaning,
         wordAudioUrl: w.word_audio_url || null,
         exampleAudioUrl: w.example_audio_url || null,
+        exampleText: w.example_text || null,
       })
     }
   })
@@ -172,44 +173,47 @@ export async function setClassWords(className, words, unitName = DEFAULT_UNIT_NA
   const cls = await ensureClass(className)
   const unit = await ensureUnit(cls.id, unitName)
 
-  // Carry forward audio for words that already had it (matched by word
-  // text) so re-saving a unit — e.g. adding one more word to an existing
-  // list — doesn't throw away and regenerate audio that already worked.
+  // Carry forward audio + example for words that already had it (matched by
+  // word text) so re-saving a unit — e.g. adding one more word to an
+  // existing list — doesn't throw away and regenerate content that already
+  // worked.
   const { data: existingRows, error: selErr } = await supabase
-    .from('words').select('word,word_audio_url,example_audio_url').eq('unit_id', unit.id)
+    .from('words').select('word,word_audio_url,example_audio_url,example_text').eq('unit_id', unit.id)
   if (selErr) throw selErr
-  const priorAudioByWord = new Map((existingRows || []).map((r) => [r.word.toLowerCase(), r]))
+  const priorByWord = new Map((existingRows || []).map((r) => [r.word.toLowerCase(), r]))
 
   const { error: delErr } = await supabase.from('words').delete().eq('unit_id', unit.id)
   if (delErr) throw delErr
 
   if (words.length > 0) {
     const rows = words.map((w, i) => {
-      const prior = priorAudioByWord.get(w.word.toLowerCase())
+      const prior = priorByWord.get(w.word.toLowerCase())
       return {
         unit_id: unit.id, word: w.word, meaning: w.meaning, position: i,
         word_audio_url: prior?.word_audio_url || null,
         example_audio_url: prior?.example_audio_url || null,
+        example_text: prior?.example_text || (w.example || '').trim() || null,
       }
     })
-    const { data: inserted, error: insErr } = await supabase.from('words').insert(rows).select('id,word,word_audio_url')
+    const { data: inserted, error: insErr } = await supabase.from('words').insert(rows).select('id,word,meaning,word_audio_url,example_text')
     if (insErr) throw insErr
     // Fire-and-forget: ask the server to generate + attach pronunciation
-    // audio for any word that doesn't already have it. Never blocks the
-    // save, never throws — if the API route isn't deployed yet (e.g. local
-    // dev) the word just has no audio until this succeeds later.
+    // audio (and an AI example sentence, if none was carried forward or
+    // admin-provided) for any word that doesn't already have audio. Never
+    // blocks the save, never throws — if the API route isn't deployed yet
+    // (e.g. local dev) the word just has no audio until this succeeds later.
     inserted.forEach((row) => {
-      if (!row.word_audio_url) requestAudioGeneration(row.id, row.word, exampleTextFor(row.word))
+      if (!row.word_audio_url) requestAudioGeneration(row.id, row.word, row.meaning, row.example_text)
     })
   }
   await refreshWordLibrary()
 }
 
-function requestAudioGeneration(wordId, word, example) {
+function requestAudioGeneration(wordId, word, meaning, example) {
   fetch('/api/generate-audio', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wordId, word, example }),
+    body: JSON.stringify({ wordId, word, meaning, example }),
   })
     .then((res) => { if (res.ok) refreshWordLibrary().catch(() => {}) })
     .catch((err) => console.warn('[wordLibrary] audio generation request failed (non-fatal):', err.message))
@@ -296,12 +300,12 @@ export const getStudentWords = (name) => {
         word:            cw.word,
         meaning:         cw.meaning || '',
         memoryTip:       `${cw.word} = ${cw.meaning}`,
-        easyExample:     exampleTextFor(cw.word),
-        easyMeaning:     `나는 "${cw.meaning}"이라는 단어를 알아요.`,
-        funnyExample:    `Even my dog knows "${cw.word}"!`,
-        funnyMeaning:    `내 강아지도 "${cw.meaning}"를 알아요!`,
-        realExample:     `Can you use "${cw.word}" in a sentence?`,
-        realMeaning:     `"${cw.meaning}"를 문장에서 사용해볼 수 있나요?`,
+        // Real example text is admin-provided or AI-generated server-side
+        // (see api/generate-audio.js) and stored on the word row. Until that
+        // finishes (brand-new word, generation still in flight), fall back
+        // to a generic placeholder rather than showing nothing.
+        easyExample:     cw.exampleText || exampleTextFor(cw.word),
+        easyMeaning:     cw.exampleText ? `(뜻: ${cw.meaning})` : `나는 "${cw.meaning}"이라는 단어를 알아요.`,
         quiz:            `${cw.word} means ____.`,
         answer:          cw.meaning || '',
         wordAudioUrl:    cw.wordAudioUrl || null,

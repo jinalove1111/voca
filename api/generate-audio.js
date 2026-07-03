@@ -1,9 +1,30 @@
 // Vercel Serverless Function — runs server-side, never in the browser.
-// Generates British-English (en-GB) pronunciation audio for a word and its
-// example sentence, uploads both to the Supabase Storage "audio" bucket, and
-// writes the resulting public URLs back onto the word's row. Called once per
-// new word (see setClassWords in src/utils/wordLibrary.js) — students never
-// call any TTS service themselves, they only ever play the stored mp3.
+// For a new word this:
+//   1. Uses the admin-provided example sentence, or asks Claude (Haiku 4.5)
+//      to write a short, simple one if none was given.
+//   2. Generates British-English (en-GB) pronunciation audio for the word
+//      and the example, via Google Translate's TTS endpoint.
+//   3. Uploads both mp3s to the Supabase Storage "AUDIO" bucket.
+//   4. Writes example_text + both audio URLs back onto the word's row.
+// Called once per new word (see setClassWords in src/utils/wordLibrary.js) —
+// students never call any TTS or AI service themselves, they only ever play
+// the stored mp3 / read the stored example text.
+
+import Anthropic from '@anthropic-ai/sdk'
+
+async function generateExampleSentence(word, meaning) {
+  const anthropic = new Anthropic() // reads ANTHROPIC_API_KEY from env
+  const response = await anthropic.messages.create({
+    model: 'claude-haiku-4-5',
+    max_tokens: 60,
+    messages: [{
+      role: 'user',
+      content: `Write ONE short, simple English example sentence for a Korean beginner student learning the English word "${word}" (Korean meaning: "${meaning}"). Rules: use "${word}" naturally, keep it under 10 words, use only beginner-level vocabulary and grammar, output ONLY the sentence itself — no quotes, no explanation, no translation.`,
+    }],
+  })
+  const text = response.content.find((b) => b.type === 'text')?.text?.trim() || ''
+  return text.replace(/^["'“]+|["'”]+$/g, '').trim()
+}
 
 const TTS_ENDPOINTS = (text) => {
   const q = encodeURIComponent(text.slice(0, 190))
@@ -65,7 +86,7 @@ export default async function handler(req, res) {
     return
   }
 
-  const { wordId, word, example } = req.body || {}
+  const { wordId, word, meaning, example } = req.body || {}
   if (!wordId || !word) {
     res.status(400).json({ error: 'wordId and word are required' })
     return
@@ -75,9 +96,15 @@ export default async function handler(req, res) {
     const wordMp3 = await fetchTtsMp3(word)
     const wordAudioUrl = await uploadToStorage(supabaseUrl, serviceKey, `${wordId}-word.mp3`, wordMp3)
 
+    // Admin-provided example wins as-is; only ask Claude when none was given.
+    let exampleText = (example || '').trim()
+    if (!exampleText) {
+      exampleText = await generateExampleSentence(word, meaning || '')
+    }
+
     let exampleAudioUrl = null
-    if (example) {
-      const exampleMp3 = await fetchTtsMp3(example)
+    if (exampleText) {
+      const exampleMp3 = await fetchTtsMp3(exampleText)
       exampleAudioUrl = await uploadToStorage(supabaseUrl, serviceKey, `${wordId}-example.mp3`, exampleMp3)
     }
 
@@ -89,14 +116,14 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
         Prefer: 'return=minimal',
       },
-      body: JSON.stringify({ word_audio_url: wordAudioUrl, example_audio_url: exampleAudioUrl }),
+      body: JSON.stringify({ word_audio_url: wordAudioUrl, example_audio_url: exampleAudioUrl, example_text: exampleText || null }),
     })
     if (!patchRes.ok) {
       const body = await patchRes.text().catch(() => '')
       throw new Error(`DB update failed (${patchRes.status}): ${body}`)
     }
 
-    res.status(200).json({ wordAudioUrl, exampleAudioUrl })
+    res.status(200).json({ wordAudioUrl, exampleAudioUrl, exampleText })
   } catch (err) {
     res.status(500).json({ error: err.message || String(err) })
   }

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { playAudioUrl, speakPraise, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio, playSuccessSound } from '../utils/speech'
+import { playAudioUrl, stopCurrentAudio, getMicStream, speakPraise, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio, playSuccessSound } from '../utils/speech'
 
 const KO_PRAISE = [
   '야르~ 정답!', '야르! 이건 그냥 맞추네!', '와 대박! 단어 고수인데?',
@@ -81,10 +81,12 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
     setUrl(null)
     setPhase('listening')
 
-    // MediaRecorder (best-effort — shows error if permission denied)
+    // MediaRecorder (best-effort — shows error if permission denied).
+    // Reuses one shared mic stream for the whole session so the browser
+    // doesn't re-prompt for permission on every word.
     if (navigator.mediaDevices?.getUserMedia) {
       const mimeType = getAudioMimeType()
-      navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }).then(stream => {
+      getMicStream().then(stream => {
         try {
           const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
           const chunks = []
@@ -92,13 +94,10 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
           mr.onstop = () => {
             const blobType = mimeType || 'audio/webm'
             setUrl(URL.createObjectURL(new Blob(chunks, { type: blobType })))
-            stream.getTracks().forEach(t => t.stop())
           }
           mr.start()
           mrRef.current = mr
-        } catch {
-          stream.getTracks().forEach(t => t.stop())
-        }
+        } catch {}
       }).catch((err) => {
         const errMsg = MIC_ERR[err.name] || '마이크 오류가 발생했어요 😢'
         setMicErr(errMsg)
@@ -285,6 +284,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
 
     // Cancel any ongoing speech/recognition immediately
     window.speechSynthesis?.cancel()
+    stopCurrentAudio()
 
     setSelect(optIdx)
     const correct = optIdx === current.correctIdx
@@ -316,6 +316,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
   const handleNext = () => {
     // Cancel everything before advancing
     window.speechSynthesis?.cancel()
+    stopCurrentAudio()
     setPlayErr('')
     if (idx + 1 >= pool.length) { setDone(true); return }
     setIdx(i => i + 1)
@@ -328,6 +329,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
 
   const handleRestart = () => {
     window.speechSynthesis?.cancel()
+    stopCurrentAudio()
     setPlayErr('')
     setIdx(0); setSelect(null); setResults([])
     setDone(false); setShowP(false); setPronD(false)

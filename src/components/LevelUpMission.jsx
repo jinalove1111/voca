@@ -1,15 +1,14 @@
 import { useState } from 'react'
-import { WORDS } from '../data/words'
 
-function makeOptions(w) {
-  const others = WORDS.filter(x => x.id !== w.id).sort(() => Math.random() - 0.5).slice(0, 3)
+function makeOptions(w, allWords) {
+  const others = allWords.filter(x => x.id !== w.id).sort(() => Math.random() - 0.5).slice(0, 3)
   const opts = [w.meaning, ...others.map(x => x.meaning)].sort(() => Math.random() - 0.5)
   return { opts, correctIdx: opts.indexOf(w.meaning) }
 }
 
 const PROGRESS_MSGS = ['보스 단어 등장! ⚔️', '이 단어는 거의 잡았어요! 💪', '한 번만 더 맞히면 탈출! 🔥']
 
-export default function LevelUpMission({ missions, onAnswer, onBack }) {
+export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
   const [practiceId, setPracticeId] = useState(null)
   const [selected, setSelected] = useState(null)
   const [didClear, setDidClear] = useState(false)
@@ -20,9 +19,9 @@ export default function LevelUpMission({ missions, onAnswer, onBack }) {
   const doneMissions   = missions.filter(m => m.done)
 
   const startPractice = (wordId) => {
-    const w = WORDS.find(x => x.id === wordId)
+    const w = words.find(x => x.id === wordId)
     if (!w) return
-    const { opts: o, correctIdx: ci } = makeOptions(w)
+    const { opts: o, correctIdx: ci } = makeOptions(w, words)
     setOpts(o)
     setCorrectIdx(ci)
     setSelected(null)
@@ -46,7 +45,7 @@ export default function LevelUpMission({ missions, onAnswer, onBack }) {
   }
 
   if (practiceId) {
-    const w = WORDS.find(x => x.id === practiceId)
+    const w = words.find(x => x.id === practiceId)
     const m = missions.find(x => x.wordId === practiceId)
     const isAnswered = selected !== null
     const isCorrect  = isAnswered && selected === correctIdx
@@ -151,7 +150,7 @@ export default function LevelUpMission({ missions, onAnswer, onBack }) {
             </div>
 
             {activeMissions.map((m) => {
-              const w = WORDS.find(x => x.id === m.wordId)
+              const w = words.find(x => x.id === m.wordId)
               if (!w) return null
               return (
                 <div key={m.wordId} className="bg-white rounded-2xl card-shadow p-4 flex items-center gap-4">
@@ -182,7 +181,7 @@ export default function LevelUpMission({ missions, onAnswer, onBack }) {
                 <p className="text-xs text-gray-400 font-bold mb-2 px-1">✅ 클리어한 단어 ({doneMissions.length}개)</p>
                 <div className="flex flex-wrap gap-2">
                   {doneMissions.map(m => {
-                    const w = WORDS.find(x => x.id === m.wordId)
+                    const w = words.find(x => x.id === m.wordId)
                     return w ? (
                       <span key={m.wordId} className="bg-green-100 text-green-700 font-bold text-sm px-3 py-1 rounded-full">
                         ✓ {w.word}

@@ -162,7 +162,7 @@ function AppInner({ student, onLogout }) {
           onMarkPronunciationOk={markPronunciationOk}
           onAddStars={addStars} />
       )}
-      {screen === 'levelUpMission' && <LevelUpMission missions={missions} onAnswer={handleAnswerMission} onBack={() => setScreen('dashboard')} />}
+      {screen === 'levelUpMission' && <LevelUpMission missions={missions} words={classWords} onAnswer={handleAnswerMission} onBack={() => setScreen('dashboard')} />}
       {screen === 'petCollection'  && <PetCollection pets={studentData.pets} onBack={() => setScreen('dashboard')} />}
       {eggPet && <EggReveal pet={eggPet} onClose={() => setEggPet(null)} />}
       <SpeedBtn />

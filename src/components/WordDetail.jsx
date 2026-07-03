@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { playAudioUrl, listenFor, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
+import { playAudioUrl, stopCurrentAudio, listenFor, getMicStream, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
 
 function getAudioMimeType() {
   if (typeof MediaRecorder === 'undefined') return ''
@@ -35,7 +35,10 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
 
     if (navigator.mediaDevices?.getUserMedia) {
       const mimeType = getAudioMimeType()
-      navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
+      // Reuses one shared mic stream for the whole session (see getMicStream)
+      // — only the MediaRecorder is stopped between words, not the
+      // underlying stream, so the browser doesn't re-prompt for permission.
+      getMicStream()
         .then(stream => {
           try {
             const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
@@ -43,11 +46,10 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
             mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
             mr.onstop = () => {
               setUrl(URL.createObjectURL(new Blob(chunks, { type: mimeType || 'audio/webm' })))
-              stream.getTracks().forEach(t => t.stop())
             }
             mr.start()
             mrRef.current = mr
-          } catch { stream.getTracks().forEach(t => t.stop()) }
+          } catch {}
         }).catch(() => {})
     }
 
@@ -306,8 +308,10 @@ export default function WordDetail({
 }) {
   const [step, setStep] = useState('pronounce')
 
-  // Reset to first step whenever the word changes
+  // Reset to first step whenever the word changes, and cut off whatever
+  // audio was playing for the previous word.
   useEffect(() => {
+    stopCurrentAudio()
     setStep('pronounce')
     onMarkViewed?.(word.id)
   }, [word.id])

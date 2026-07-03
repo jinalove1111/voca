@@ -304,6 +304,7 @@ export default function AdminScreen({ onBack }) {
   const [newUnitName, setNewUnitName] = useState('')
   const [newWord, setNewWord] = useState('')
   const [newMeaning, setNewMeaning] = useState('')
+  const [newExample, setNewExample] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)
 
   const refresh = () => {
@@ -471,13 +472,17 @@ export default function AdminScreen({ onBack }) {
                             placeholder="뜻"
                             className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-purple-400" />
                         </div>
+                        <input type="text" value={newExample} onChange={e => setNewExample(e.target.value)}
+                          placeholder="예문 (선택사항 — 비워두면 AI가 자동 생성해요)"
+                          className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-purple-400" />
                         <button onClick={async () => {
                             if (!newWord.trim() || !newMeaning.trim()) return alert('단어와 뜻을 모두 입력해주세요.')
                             try {
                               const existing = getClassWords(c, viewUnit)
-                              await setClassWords(c, [...existing, { word: newWord.trim(), meaning: newMeaning.trim() }], viewUnit)
+                              await setClassWords(c, [...existing, { word: newWord.trim(), meaning: newMeaning.trim(), example: newExample.trim() }], viewUnit)
                               setNewWord('')
                               setNewMeaning('')
+                              setNewExample('')
                               refresh()
                             } catch (err) {
                               alert('단어 추가 중 오류가 발생했어요: ' + (err.message || err))

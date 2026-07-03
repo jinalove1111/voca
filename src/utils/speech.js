@@ -143,20 +143,35 @@ if (typeof document !== 'undefined') {
 // was generated once, server-side, when the word was added (see
 // api/generate-audio.js). If there's no url yet, reports that via onError
 // instead of silently doing nothing or substituting different audio.
+// Only one word/example audio should ever be audible at once. Switching
+// words mid-playback (fast tapping, auto-advance) must cut off whatever was
+// playing before — otherwise the previous word's audio bleeds into the new
+// screen.
+let _currentAudio = null
+export function stopCurrentAudio() {
+  if (_currentAudio) {
+    try { _currentAudio.pause() } catch {}
+    _currentAudio = null
+  }
+}
+
 export function playAudioUrl(url, opts = {}) {
   const { times = 1, rate = null, onEnd = null, onError = null } = opts
+  stopCurrentAudio()
   if (!url) { onError?.('발음 파일이 없습니다.'); return }
   const r = rate ?? getSpeechRate()
   let played = 0
 
   const playOnce = () => {
     const audio = new Audio(url)
+    _currentAudio = audio
     audio.playbackRate = Math.min(2, Math.max(0.5, r || 1))
     audio.volume = 1
     let done = false
     const advance = () => {
       if (done) return
       done = true
+      if (_currentAudio === audio) _currentAudio = null
       played += 1
       if (played < times) setTimeout(playOnce, 400)
       else onEnd?.()
@@ -204,6 +219,21 @@ export function speakPraise(text, onEnd) {
 
 export function hasSpeechRecognition() {
   return !!(window.SpeechRecognition || window.webkitSpeechRecognition)
+}
+
+// ── Shared microphone stream ────────────────────────────────────────────────
+// Requesting a fresh getUserMedia() stream for every single recording
+// attempt — and stopping all its tracks right after — causes some mobile
+// browsers to re-prompt for mic permission on every word. Request the stream
+// once per app session and hand the same live stream out to every caller;
+// individual recordings just start/stop a MediaRecorder on top of it.
+let _micStreamPromise = null
+export function getMicStream() {
+  if (_micStreamPromise) return _micStreamPromise
+  _micStreamPromise = navigator.mediaDevices
+    .getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
+    .catch((err) => { _micStreamPromise = null; throw err })
+  return _micStreamPromise
 }
 
 function normalize(str) {
