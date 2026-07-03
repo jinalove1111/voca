@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, getAllClasses, saveAllClasses, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames } from '../utils/wordLibrary'
 import FeatureManagementPanel from './FeatureManagementPanel'
 
 const PIN = '1234'
@@ -61,6 +61,7 @@ function ExcelUpload({ onDone }) {
   const [selectedClass, setSelectedClass] = useState('')
   const [preview, setPreview]             = useState(null)
   const [classOverride, setClassOverride] = useState('')
+  const [saving, setSaving]               = useState(false)
   const fileRef                           = useRef()
   const classList                         = getClassNames()
 
@@ -78,7 +79,7 @@ function ExcelUpload({ onDone }) {
     setClassOverride(fileClass || selectedClass)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const targetClass = classOverride.trim() || selectedClass.trim()
     if (!targetClass) { alert('반을 선택하거나 반 이름을 입력해주세요!'); return }
     const byClass = {}
@@ -90,16 +91,23 @@ function ExcelUpload({ onDone }) {
       if (!byClass[c][u]) byClass[c][u] = []
       byClass[c][u].push({ word: r.word, meaning: r.meaning })
     })
-    let totalWords = 0
-    Object.entries(byClass).forEach(([className, units]) => {
-      Object.entries(units).forEach(([unit, words]) => {
-        setClassWords(className, words, unit)
-        totalWords += words.length
-      })
-    })
-    const displayClass = Object.keys(byClass)[0] || targetClass
-    alert(`"${displayClass}" 반에 ${totalWords}개 단어 저장 완료!`)
-    onDone()
+    setSaving(true)
+    try {
+      let totalWords = 0
+      for (const [className, units] of Object.entries(byClass)) {
+        for (const [unit, words] of Object.entries(units)) {
+          await setClassWords(className, words, unit)
+          totalWords += words.length
+        }
+      }
+      const displayClass = Object.keys(byClass)[0] || targetClass
+      alert(`"${displayClass}" 반에 ${totalWords}개 단어 저장 완료!`)
+      onDone()
+    } catch (err) {
+      alert('저장 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -160,9 +168,9 @@ function ExcelUpload({ onDone }) {
             )}
           </div>
           <p className="text-center text-sm text-gray-500">총 {preview.length}개 단어 발견</p>
-          <button onClick={handleSave}
-            className="w-full bg-blue-500 text-white font-black py-4 rounded-2xl btn-press hover:bg-blue-600">
-            💾 "{classOverride || selectedClass}" 반에 저장
+          <button onClick={handleSave} disabled={saving}
+            className="w-full bg-blue-500 text-white font-black py-4 rounded-2xl btn-press hover:bg-blue-600 disabled:opacity-50">
+            {saving ? '⏳ 저장 중...' : `💾 "${classOverride || selectedClass}" 반에 저장`}
           </button>
         </div>
       )}
@@ -175,6 +183,7 @@ function PdfUpload({ onDone }) {
   const [cls, setCls]       = useState('')
   const [loading, setLoad]  = useState(false)
   const [words, setWords]   = useState([])
+  const [saving, setSaving] = useState(false)
   const fileRef             = useRef()
 
   const handleFile = async (e) => {
@@ -210,12 +219,19 @@ function PdfUpload({ onDone }) {
     setWords(parsed)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!cls.trim()) { alert('반 이름을 입력해주세요!'); return }
     if (!words.length) { alert('먼저 [단어 파싱] 버튼을 눌러주세요!'); return }
-    setClassWords(cls.trim(), words)
-    alert(`"${cls}" 반에 ${words.length}개 단어 저장 완료!`)
-    onDone()
+    setSaving(true)
+    try {
+      await setClassWords(cls.trim(), words)
+      alert(`"${cls}" 반에 ${words.length}개 단어 저장 완료!`)
+      onDone()
+    } catch (err) {
+      alert('저장 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -265,9 +281,9 @@ function PdfUpload({ onDone }) {
               <input type="text" value={cls} onChange={e => setCls(e.target.value)}
                 placeholder="저장할 반 이름 (예: Reading 2)"
                 className="w-full border-2 border-orange-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-orange-500" />
-              <button onClick={handleSave}
-                className="w-full bg-orange-500 text-white font-black py-4 rounded-2xl btn-press hover:bg-orange-600">
-                💾 관리자 확인 후 저장 ({words.length}개)
+              <button onClick={handleSave} disabled={saving}
+                className="w-full bg-orange-500 text-white font-black py-4 rounded-2xl btn-press hover:bg-orange-600 disabled:opacity-50">
+                {saving ? '⏳ 저장 중...' : `💾 관리자 확인 후 저장 (${words.length}개)`}
               </button>
             </>
           )}
@@ -347,15 +363,17 @@ export default function AdminScreen({ onBack }) {
                 <input type="text" value={newClassName} onChange={e => setNewClassName(e.target.value)}
                   placeholder="반 이름 입력 (예: Basic 1)"
                   className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-purple-400" />
-                <button onClick={() => {
+                <button onClick={async () => {
                     const name = newClassName.trim()
                     if (!name) return alert('반 이름을 입력해주세요!')
                     if (classes.includes(name)) return alert('이미 있는 반 이름이에요.')
-                    const all = getAllClasses()
-                    all[name] = { units: [{ name: 'Unit 1', words: [] }] }
-                    saveAllClasses(all)
-                    setNewClassName('')
-                    refresh()
+                    try {
+                      await createClass(name)
+                      setNewClassName('')
+                      refresh()
+                    } catch (err) {
+                      alert('반 추가 중 오류가 발생했어요: ' + (err.message || err))
+                    }
                   }}
                   className="bg-purple-500 text-white font-black px-4 py-3 rounded-xl btn-press hover:bg-purple-600">
                   추가
@@ -411,14 +429,18 @@ export default function AdminScreen({ onBack }) {
                             <input type="text" value={newUnitName} onChange={e => setNewUnitName(e.target.value)}
                               placeholder="새 유닛 이름 (예: Unit 2)"
                               className="flex-1 min-w-[160px] border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-purple-400" />
-                            <button onClick={() => {
+                            <button onClick={async () => {
                               const name = newUnitName.trim()
                               if (!name) return alert('유닛 이름을 입력해주세요.')
                               if (unitNames.includes(name)) return alert('이미 있는 유닛이에요.')
-                              addClassUnit(c, name)
-                              setNewUnitName('')
-                              setViewUnit(name)
-                              refresh()
+                              try {
+                                await addClassUnit(c, name)
+                                setNewUnitName('')
+                                setViewUnit(name)
+                                refresh()
+                              } catch (err) {
+                                alert('유닛 추가 중 오류가 발생했어요: ' + (err.message || err))
+                              }
                             }}
                               className="bg-indigo-500 text-white font-black px-4 py-3 rounded-xl btn-press hover:bg-indigo-600">
                               유닛 추가
@@ -449,13 +471,17 @@ export default function AdminScreen({ onBack }) {
                             placeholder="뜻"
                             className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-purple-400" />
                         </div>
-                        <button onClick={() => {
+                        <button onClick={async () => {
                             if (!newWord.trim() || !newMeaning.trim()) return alert('단어와 뜻을 모두 입력해주세요.')
-                            const existing = getClassWords(c, viewUnit)
-                            setClassWords(c, [...existing, { word: newWord.trim(), meaning: newMeaning.trim() }], viewUnit)
-                            setNewWord('')
-                            setNewMeaning('')
-                            refresh()
+                            try {
+                              const existing = getClassWords(c, viewUnit)
+                              await setClassWords(c, [...existing, { word: newWord.trim(), meaning: newMeaning.trim() }], viewUnit)
+                              setNewWord('')
+                              setNewMeaning('')
+                              refresh()
+                            } catch (err) {
+                              alert('단어 추가 중 오류가 발생했어요: ' + (err.message || err))
+                            }
                           }}
                           className="w-full bg-green-500 text-white font-black py-3 rounded-xl btn-press hover:bg-green-600">
                           단어 추가
@@ -489,11 +515,15 @@ export default function AdminScreen({ onBack }) {
               className="flex-1 border-2 border-gray-200 text-gray-600 font-bold py-3 rounded-2xl btn-press">
               취소
             </button>
-            <button onClick={() => {
-              deleteClass(confirmDelete)
-              if (viewClass === confirmDelete) setView(null)
-              setConfirmDelete(null)
-              refresh()
+            <button onClick={async () => {
+              try {
+                await deleteClass(confirmDelete)
+                if (viewClass === confirmDelete) setView(null)
+                setConfirmDelete(null)
+                refresh()
+              } catch (err) {
+                alert('반 삭제 중 오류가 발생했어요: ' + (err.message || err))
+              }
             }}
               className="flex-1 bg-red-500 text-white font-black py-3 rounded-2xl btn-press hover:bg-red-600">
               삭제

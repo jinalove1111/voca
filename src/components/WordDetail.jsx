@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { speak, listenFor, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
+import { playAudioUrl, listenFor, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
 
 function getAudioMimeType() {
   if (typeof MediaRecorder === 'undefined') return ''
@@ -10,10 +10,10 @@ function getAudioMimeType() {
 // ── SpeechBtn ─────────────────────────────────────────────────────────────────
 // onAnyResult fires when: pronunciation success OR tries >= 2 (fail)
 // This lets the parent know it's safe to show a "계속" button.
-function SpeechBtn({ target, label = '따라 말하기', playCount = 3, onSuccess, onAnyResult }) {
+function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess, onAnyResult }) {
   const [phase, setPhase] = useState('idle')
   const [msg, setMsg]     = useState('')
-  const [audioUrl, setUrl] = useState(null)
+  const [myRecUrl, setUrl] = useState(null)
   const [tries, setTries]  = useState(0)
   const mrRef              = useRef(null)
 
@@ -87,7 +87,11 @@ function SpeechBtn({ target, label = '따라 말하기', playCount = 3, onSucces
     unlockAudio()
     setMsg('')
     setPhase('speaking')
-    speak(target, { times: playCount, onEnd: () => startListen() })
+    playAudioUrl(wordAudioUrl, {
+      times: 2,
+      onEnd: () => startListen(),
+      onError: () => { setMsg('🔇 발음 파일이 없습니다.'); startListen() },
+    })
   }
 
   const busy = phase === 'speaking' || phase === 'listening'
@@ -116,12 +120,12 @@ function SpeechBtn({ target, label = '따라 말하기', playCount = 3, onSucces
 
       {(phase === 'success' || (phase === 'fail' && tries >= 2)) && (
         <div className="flex gap-2">
-          <button onClick={() => { unlockAudio(); speak(target, { times: 1 }) }}
+          <button onClick={() => { unlockAudio(); playAudioUrl(wordAudioUrl, { onError: () => setMsg('🔇 발음 파일이 없습니다.') }) }}
             className="flex-1 bg-blue-100 text-blue-700 font-bold py-2 rounded-xl text-xs btn-press">
             🔊 원어민
           </button>
-          {audioUrl && (
-            <button onClick={() => new Audio(audioUrl).play()}
+          {myRecUrl && (
+            <button onClick={() => new Audio(myRecUrl).play()}
               className="flex-1 bg-purple-100 text-purple-700 font-bold py-2 rounded-xl text-xs btn-press">
               🎧 내 발음
             </button>
@@ -135,23 +139,30 @@ function SpeechBtn({ target, label = '따라 말하기', playCount = 3, onSucces
 // ── Step 1: 발음 연습 ──────────────────────────────────────────────────────────
 function PronounceStep({ word, onDone, onMarkPronunciationOk }) {
   const [canProceed, setCanProceed] = useState(false)
+  const [playErr, setPlayErr] = useState('')
+
+  const playWord = () => {
+    setPlayErr('')
+    playAudioUrl(word.wordAudioUrl, { times: 3, onError: (err) => setPlayErr('🔇 ' + err) })
+  }
 
   return (
     <div className="space-y-4">
       <div className="bg-gradient-to-br from-blue-500 to-purple-500 rounded-3xl p-6 text-white card-shadow">
         <div className="text-center mb-4">
-          <button onClick={() => speak(word.word, { times: 3 })} className="btn-press">
+          <button onClick={playWord} className="btn-press">
             <h1 className="text-5xl font-black hover:scale-110 transition-transform">{word.word}</h1>
           </button>
           <p className="text-blue-200 text-xs mt-1">탭하면 발음이 나와요 👆</p>
+          {playErr && <p className="text-red-200 text-xs mt-1 font-bold">{playErr}</p>}
           <div className="bg-white/20 rounded-2xl px-4 py-3 mt-3 inline-block">
             <p className="text-3xl font-black">{word.meaning}</p>
           </div>
         </div>
         <SpeechBtn
           target={word.word}
+          wordAudioUrl={word.wordAudioUrl}
           label="따라 말하기"
-          playCount={3}
           onSuccess={onMarkPronunciationOk}
           onAnyResult={() => setCanProceed(true)}
         />
@@ -178,10 +189,13 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk }) {
 }
 
 // ── Step 2: 예문 ───────────────────────────────────────────────────────────────
-function ExampleStep({ english, korean, onDone, onMarkExampleHeard }) {
+function ExampleStep({ english, korean, audioUrl, onDone, onMarkExampleHeard }) {
+  const [playErr, setPlayErr] = useState('')
+
   const handlePlay = () => {
     unlockAudio()
-    speak(english, { times: 2 })
+    setPlayErr('')
+    playAudioUrl(audioUrl, { times: 2, onError: (err) => setPlayErr('🔇 ' + err) })
     onMarkExampleHeard?.()
   }
 
@@ -197,6 +211,7 @@ function ExampleStep({ english, korean, onDone, onMarkExampleHeard }) {
           className="w-full mt-4 bg-blue-500 hover:bg-blue-600 text-white font-black py-3 rounded-2xl btn-press transition-colors">
           🔊 예문 듣기
         </button>
+        {playErr && <p className="text-red-500 text-xs mt-2 font-bold text-center">{playErr}</p>}
       </div>
 
       <button onClick={onDone}
@@ -333,6 +348,7 @@ export default function WordDetail({
           <ExampleStep
             english={exampleEnglish}
             korean={exampleKorean}
+            audioUrl={word.exampleAudioUrl}
             onDone={handleExampleDone}
             onMarkExampleHeard={onMarkExampleHeard}
           />

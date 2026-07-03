@@ -10,8 +10,8 @@ import EggReveal from './components/EggReveal'
 import AdminScreen from './components/AdminScreen'
 import { useStudent } from './hooks/useStudent'
 import { getRandomPet } from './data/pets'
-import { getStudentWords } from './utils/wordLibrary'
-import { getSpeechRate, setSpeechRate, unlockAudio } from './utils/speech'
+import { getStudentWords, initWordLibrary, refreshWordLibrary } from './utils/wordLibrary'
+import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech } from './utils/speech'
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -80,11 +80,12 @@ function AppInner({ student, onLogout }) {
   const [selectedWord, setWord]     = useState(null)
   const [selectedWordIdx, setWordIdx] = useState(0)
   const [eggPet, setEggPet]         = useState(null)
+  const [refreshTick, setRefreshTick] = useState(0)
   const studentData                 = useStudent(student)
   const { cleared, addPet, answerMission, missions, addStars, markPronunciationOk } = studentData
   const classWords                  = useMemo(() => {
     try { return getStudentWords(student) || [] } catch { return [] }
-  }, [student])
+  }, [student, refreshTick])
 
   useEffect(() => {
     if (cleared.length > 0 && cleared.length % 5 === 0) {
@@ -93,6 +94,23 @@ function AppInner({ student, onLogout }) {
       setEggPet(pet)
     }
   }, [cleared.length])
+
+  // Re-pull the latest word data from Supabase whenever the app regains focus
+  // (e.g. switching back from another app on mobile) so a word added on
+  // another device doesn't stay hidden behind stale cached data.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        refreshWordLibrary().then(() => setRefreshTick((t) => t + 1)).catch(() => {})
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
+  }, [])
 
   const handleWordSelect = (w) => {
     const idx = classWords.findIndex(cw => cw.id === w.id)
@@ -155,17 +173,57 @@ function AppInner({ student, onLogout }) {
 export default function App() {
   const [student, setStudent] = useState(() => localStorage.getItem('paulEasyVoca_currentStudent') || '')
   const [showAdmin, setAdmin] = useState(false)
+  const [ready, setReady]     = useState(false)
+  const [loadError, setLoadError] = useState(null)
 
-  // Unlock AudioContext on the very first user touch (iOS/Android requirement).
-  // Must be done before any audio plays to avoid the "blocked by browser policy" error.
+  // Load class/word data from Supabase before rendering anything that needs
+  // it — guarantees every screen starts from the current DB state, not a
+  // stale local cache.
   useEffect(() => {
-    const handler = () => { unlockAudio() }
+    initWordLibrary().then(() => setReady(true)).catch((err) => setLoadError(err))
+  }, [])
+
+  // Unlock AudioContext + warm up speechSynthesis on the very first user
+  // gesture (iOS/Android requirement). touchstart covers mobile; pointerdown
+  // also covers PC mouse clicks, where touchstart never fires.
+  useEffect(() => {
+    const handler = () => { unlockAudio(); primeSpeech() }
     document.addEventListener('touchstart', handler, { once: true, passive: true })
-    return () => document.removeEventListener('touchstart', handler)
+    document.addEventListener('pointerdown', handler, { once: true, passive: true })
+    return () => {
+      document.removeEventListener('touchstart', handler)
+      document.removeEventListener('pointerdown', handler)
+    }
   }, [])
 
   const handleSelect = (name) => { localStorage.setItem('paulEasyVoca_currentStudent', name); setStudent(name) }
   const handleLogout = () => { localStorage.removeItem('paulEasyVoca_currentStudent'); setStudent('') }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+        <div className="bg-white rounded-3xl p-8 text-center max-w-sm w-full shadow-lg">
+          <div className="text-5xl mb-4">📡</div>
+          <h2 className="font-black text-xl text-gray-800 mb-2">단어 서버에 연결할 수 없어요</h2>
+          <p className="text-xs text-red-400 mb-6 break-all bg-red-50 p-3 rounded-xl">{String(loadError.message || loadError)}</p>
+          <button onClick={() => window.location.reload()} className="w-full bg-purple-500 text-white font-black py-3 rounded-2xl">
+            다시 시도
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!ready) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50">
+        <div className="text-center">
+          <div className="text-5xl mb-3 animate-bounce">📚</div>
+          <p className="text-purple-400 font-bold">단어를 불러오는 중...</p>
+        </div>
+      </div>
+    )
+  }
 
   if (showAdmin) return <AppErrorBoundary><AdminScreen onBack={() => setAdmin(false)} /></AppErrorBoundary>
   if (!student)  return <AppErrorBoundary><StudentSelect onSelect={handleSelect} onAdmin={() => setAdmin(true)} /></AppErrorBoundary>

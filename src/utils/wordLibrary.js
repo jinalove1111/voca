@@ -1,18 +1,9 @@
-import { WORDS as DB_WORDS } from '../data/words'
+import { supabase } from './supabaseClient'
 
-const CLS_KEY = 'paulEasyVoca_classWords'
-const CLS_META_KEY = 'paulEasyVoca_classMeta'
-const CLS_DELETED_KEY = 'paulEasyVoca_deletedClasses'
-const STU_CLS = (name) => `paulEasyVoca_${name}_class`
-const STU_UNIT = (name) => `paulEasyVoca_${name}_unit`
 const DEFAULT_UNIT_NAME = 'Unit 1'
 
-const getDeletedClasses = () => {
-  try { return new Set(JSON.parse(localStorage.getItem(CLS_DELETED_KEY)) || []) } catch { return new Set() }
-}
-const saveDeletedClasses = (set) => localStorage.setItem(CLS_DELETED_KEY, JSON.stringify([...set]))
-
-// Real class list provided by user
+// Real class list provided by user — used only to seed Supabase the very
+// first time the app runs against an empty database.
 const DEFAULT_CLASS_LIST = [
   // 정규반 (regular)
   'Presentation 6 - 2025',
@@ -29,106 +20,141 @@ const DEFAULT_CLASS_LIST = [
   'MS 중2',
   'MS 중3',
 ]
+const SPECIAL_CLASS_NAMES = new Set(['MS 중1', 'MS 중2', 'MS 중3'])
 
-// Default metadata for classes
-const DEFAULT_CLASS_META = {}
-DEFAULT_CLASS_LIST.forEach(name => {
-  const specialNames = ['MS 중1', 'MS 중2', 'MS 중3']
-  DEFAULT_CLASS_META[name] = { classType: specialNames.includes(name) ? 'special' : 'regular' }
-})
+// ── In-memory cache, rebuilt from Supabase on init/refresh ────────────────
+// { [className]: { id, classType, units: [{ id, name, words: [{id,word,meaning}] }] } }
+let _cache = {}
+let _initPromise = null
 
-// Backwards-compatible small sample word sets for legacy classes
-const DEFAULT_CLASS_WORDS = {
-  '월수금초급': [
-    { word: 'apple', meaning: '사과' },
-    { word: 'banana', meaning: '바나나' },
-    { word: 'orange', meaning: '오렌지' },
-    { word: 'milk', meaning: '우유' },
-    { word: 'water', meaning: '물' },
-  ],
-  '화목초급': [
-    { word: 'pizza', meaning: '피자' },
-    { word: 'cake', meaning: '케이크' },
-    { word: 'bread', meaning: '빵' },
-    { word: 'cookie', meaning: '쿠키' },
-    { word: 'juice', meaning: '주스' },
-  ],
-  '중등내신': [
-    { word: 'school', meaning: '학교' },
-    { word: 'book', meaning: '책' },
-    { word: 'pencil', meaning: '연필' },
-    { word: 'teacher', meaning: '선생님' },
-    { word: 'student', meaning: '학생' },
-  ],
+export function isWordLibraryReady() {
+  return _initPromise !== null
 }
 
-export const getAllClasses = () => {
-  try { return JSON.parse(localStorage.getItem(CLS_KEY)) || {} } catch { return {} }
-}
-export const saveAllClasses = (obj) => localStorage.setItem(CLS_KEY, JSON.stringify(obj))
+// Rebuilds the entire in-memory cache from Supabase. Call this any time you
+// need guaranteed-fresh data (app start, tab refocus, after a write).
+export async function refreshWordLibrary() {
+  const [classesRes, unitsRes, wordsRes] = await Promise.all([
+    supabase.from('classes').select('id,name,class_type').order('created_at'),
+    supabase.from('units').select('id,class_id,name,position').order('position'),
+    supabase.from('words').select('id,unit_id,word,meaning,position,word_audio_url,example_audio_url').order('position'),
+  ])
+  if (classesRes.error) throw classesRes.error
+  if (unitsRes.error) throw unitsRes.error
+  if (wordsRes.error) throw wordsRes.error
 
-export const getAllClassMeta = () => {
-  try { return JSON.parse(localStorage.getItem(CLS_META_KEY)) || {} } catch { return {} }
-}
-export const saveAllClassMeta = (obj) => localStorage.setItem(CLS_META_KEY, JSON.stringify(obj))
-
-// Ensure defaults exist in storage (called lazily)
-const ensureDefaults = () => {
-  const classes = getAllClasses()
-  const meta = getAllClassMeta()
-  const deleted = getDeletedClasses()
-  let changed = false
-
-  // Initialize meta for default class list (skip deleted)
-  Object.entries(DEFAULT_CLASS_META).forEach(([name, m]) => {
-    if (!deleted.has(name) && !meta[name]) { meta[name] = m; changed = true }
+  const tree = {}
+  classesRes.data.forEach((c) => {
+    tree[c.name] = { id: c.id, classType: c.class_type, units: [] }
   })
-
-  // Initialize empty class entries for default classes if missing (skip deleted)
-  DEFAULT_CLASS_LIST.forEach(name => {
-    if (!deleted.has(name) && !classes[name]) { classes[name] = []; changed = true }
+  const unitById = {}
+  unitsRes.data.forEach((u) => {
+    const cls = classesRes.data.find((c) => c.id === u.class_id)
+    if (!cls) return
+    const unitObj = { id: u.id, name: u.name, words: [] }
+    tree[cls.name].units.push(unitObj)
+    unitById[u.id] = unitObj
   })
-
-  if (changed) {
-    saveAllClassMeta(meta)
-    saveAllClasses(classes)
-  }
+  wordsRes.data.forEach((w) => {
+    const unitObj = unitById[w.unit_id]
+    if (unitObj) {
+      unitObj.words.push({
+        id: w.id, word: w.word, meaning: w.meaning,
+        wordAudioUrl: w.word_audio_url || null,
+        exampleAudioUrl: w.example_audio_url || null,
+      })
+    }
+  })
+  _cache = tree
+  return tree
 }
 
-export const getClassNames = () => {
-  ensureDefaults()
-  const deleted = getDeletedClasses()
-  const saved = Object.keys(getAllClasses()).filter(n => !deleted.has(n))
-  const metaNames = Object.keys(getAllClassMeta()).filter(n => !deleted.has(n))
-  const legacy = Object.keys(DEFAULT_CLASS_WORDS).filter(n => !deleted.has(n))
-  return [...new Set([...DEFAULT_CLASS_LIST.filter(n => !deleted.has(n)), ...metaNames, ...saved, ...legacy])]
+// The single example sentence the app actually shows/speaks for a word when
+// no admin-authored example exists — kept here so the audio we generate
+// matches the text on screen exactly.
+export const exampleTextFor = (word) => `I know the word "${word}".`
+
+// ── Students cache: { [name]: { id, className, unitName } } ───────────────
+let _students = {}
+
+export async function refreshStudents() {
+  const { data, error } = await supabase
+    .from('students')
+    .select('id,name,unit_name,classes(name)')
+    .order('created_at')
+  if (error) throw error
+  const map = {}
+  data.forEach((s) => {
+    map[s.name] = { id: s.id, className: s.classes?.name || '', unitName: s.unit_name || DEFAULT_UNIT_NAME }
+  })
+  _students = map
+  return map
 }
 
-const normalizeClassData = (value) => {
-  if (Array.isArray(value)) {
-    return [{ name: DEFAULT_UNIT_NAME, words: value }]
-  }
-  if (value && Array.isArray(value.units)) {
-    return value.units.map((unit) => ({
-      name: typeof unit.name === 'string' ? unit.name : DEFAULT_UNIT_NAME,
-      words: Array.isArray(unit.words) ? unit.words : [],
-    }))
-  }
-  return [{ name: DEFAULT_UNIT_NAME, words: [] }]
+async function seedDefaultClasses() {
+  const rows = DEFAULT_CLASS_LIST.map((name) => ({
+    name,
+    class_type: SPECIAL_CLASS_NAMES.has(name) ? 'special' : 'regular',
+  }))
+  const { data: inserted, error } = await supabase.from('classes').insert(rows).select()
+  if (error) { console.error('[wordLibrary] seed classes failed', error); return }
+  const unitRows = inserted.map((c) => ({ class_id: c.id, name: DEFAULT_UNIT_NAME, position: 0 }))
+  const { error: uerr } = await supabase.from('units').insert(unitRows)
+  if (uerr) console.error('[wordLibrary] seed units failed', uerr)
 }
+
+// Call once at app startup, before rendering anything that reads class/word
+// data. Safe to call multiple times — subsequent calls reuse the same promise.
+// NOTE: there is deliberately no localStorage->Supabase auto-migration here.
+// An earlier version imported each device's old local word/student data into
+// Supabase on first load, which polluted the shared database with stale
+// per-device test data. Supabase is the single source of truth; local data
+// is never read back into it.
+export function initWordLibrary() {
+  if (_initPromise) return _initPromise
+  _initPromise = (async () => {
+    await Promise.all([refreshWordLibrary(), refreshStudents()])
+    if (Object.keys(_cache).length === 0) {
+      await seedDefaultClasses()
+      await refreshWordLibrary()
+    }
+  })()
+  return _initPromise
+}
+
+// ── DB write helpers (do not touch the class_type of an existing class) ───
+async function ensureClass(name, classType = 'regular') {
+  const { data: existing, error: selErr } = await supabase
+    .from('classes').select('id,name,class_type').eq('name', name).maybeSingle()
+  if (selErr) throw selErr
+  if (existing) return existing
+  const { data, error } = await supabase
+    .from('classes').insert({ name, class_type: classType }).select().single()
+  if (error) throw error
+  return data
+}
+
+async function ensureUnit(classId, unitName) {
+  const { data: existing, error: selErr } = await supabase
+    .from('units').select('id,name').eq('class_id', classId).eq('name', unitName).maybeSingle()
+  if (selErr) throw selErr
+  if (existing) return existing
+  const { data, error } = await supabase
+    .from('units').insert({ class_id: classId, name: unitName }).select().single()
+  if (error) throw error
+  return data
+}
+
+// ── Public API (mirrors the old localStorage-backed shape) ────────────────
+export const getClassNames = () => Object.keys(_cache)
 
 export const getClassUnits = (className) => {
-  const all = getAllClasses()
-  const raw = all[className]
-  if (raw === undefined) {
-    const fallback = DEFAULT_CLASS_WORDS[className]
-    if (fallback) return [{ name: DEFAULT_UNIT_NAME, words: fallback }]
-    return [{ name: DEFAULT_UNIT_NAME, words: [] }]
-  }
-  return normalizeClassData(raw)
+  const cls = _cache[className]
+  if (!cls || cls.units.length === 0) return [{ name: DEFAULT_UNIT_NAME, words: [] }]
+  return cls.units
 }
 
-export const getClassUnitNames = (className) => getClassUnits(className).map((unit) => unit.name)
+export const getClassUnitNames = (className) => getClassUnits(className).map((u) => u.name)
 
 export const getClassWords = (className, unitName = DEFAULT_UNIT_NAME) => {
   const units = getClassUnits(className)
@@ -136,81 +162,150 @@ export const getClassWords = (className, unitName = DEFAULT_UNIT_NAME) => {
   return unit?.words || []
 }
 
-export const setClassWords = (className, words, unitName = DEFAULT_UNIT_NAME) => {
-  const all = getAllClasses()
-  const units = getClassUnits(className)
-  const target = units.find((u) => u.name === unitName)
-  if (target) {
-    target.words = words
-  } else {
-    units.push({ name: unitName, words })
+export async function createClass(name, classType = 'regular') {
+  const cls = await ensureClass(name, classType)
+  await ensureUnit(cls.id, DEFAULT_UNIT_NAME)
+  await refreshWordLibrary()
+}
+
+export async function setClassWords(className, words, unitName = DEFAULT_UNIT_NAME) {
+  const cls = await ensureClass(className)
+  const unit = await ensureUnit(cls.id, unitName)
+
+  // Carry forward audio for words that already had it (matched by word
+  // text) so re-saving a unit — e.g. adding one more word to an existing
+  // list — doesn't throw away and regenerate audio that already worked.
+  const { data: existingRows, error: selErr } = await supabase
+    .from('words').select('word,word_audio_url,example_audio_url').eq('unit_id', unit.id)
+  if (selErr) throw selErr
+  const priorAudioByWord = new Map((existingRows || []).map((r) => [r.word.toLowerCase(), r]))
+
+  const { error: delErr } = await supabase.from('words').delete().eq('unit_id', unit.id)
+  if (delErr) throw delErr
+
+  if (words.length > 0) {
+    const rows = words.map((w, i) => {
+      const prior = priorAudioByWord.get(w.word.toLowerCase())
+      return {
+        unit_id: unit.id, word: w.word, meaning: w.meaning, position: i,
+        word_audio_url: prior?.word_audio_url || null,
+        example_audio_url: prior?.example_audio_url || null,
+      }
+    })
+    const { data: inserted, error: insErr } = await supabase.from('words').insert(rows).select('id,word,word_audio_url')
+    if (insErr) throw insErr
+    // Fire-and-forget: ask the server to generate + attach pronunciation
+    // audio for any word that doesn't already have it. Never blocks the
+    // save, never throws — if the API route isn't deployed yet (e.g. local
+    // dev) the word just has no audio until this succeeds later.
+    inserted.forEach((row) => {
+      if (!row.word_audio_url) requestAudioGeneration(row.id, row.word, exampleTextFor(row.word))
+    })
   }
-  all[className] = { units }
-  saveAllClasses(all)
+  await refreshWordLibrary()
 }
 
-export const addClassUnit = (className, unitName) => {
-  const all = getAllClasses()
-  const units = getClassUnits(className)
-  if (!units.some((u) => u.name === unitName)) {
-    units.push({ name: unitName, words: [] })
-  }
-  all[className] = { units }
-  saveAllClasses(all)
+function requestAudioGeneration(wordId, word, example) {
+  fetch('/api/generate-audio', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ wordId, word, example }),
+  })
+    .then((res) => { if (res.ok) refreshWordLibrary().catch(() => {}) })
+    .catch((err) => console.warn('[wordLibrary] audio generation request failed (non-fatal):', err.message))
 }
 
-export const deleteClassUnit = (className, unitName) => {
-  const all = getAllClasses()
-  const units = getClassUnits(className).filter((u) => u.name !== unitName)
-  if (units.length === 0) {
-    units.push({ name: DEFAULT_UNIT_NAME, words: [] })
-  }
-  all[className] = { units }
-  saveAllClasses(all)
+export async function addClassUnit(className, unitName) {
+  const cls = await ensureClass(className)
+  await ensureUnit(cls.id, unitName)
+  await refreshWordLibrary()
 }
 
-export const deleteClass = (className) => {
-  const all = getAllClasses()
-  delete all[className]
-  saveAllClasses(all)
-  const meta = getAllClassMeta()
-  delete meta[className]
-  saveAllClassMeta(meta)
-  const deleted = getDeletedClasses()
-  deleted.add(className)
-  saveDeletedClasses(deleted)
+export async function deleteClassUnit(className, unitName) {
+  const unit = _cache[className]?.units.find((u) => u.name === unitName)
+  if (!unit) return
+  const { error } = await supabase.from('units').delete().eq('id', unit.id)
+  if (error) throw error
+  await refreshWordLibrary()
 }
 
-export const getStudentClass = (name) => localStorage.getItem(STU_CLS(name)) || ''
-export const setStudentClass = (name, cls) => localStorage.setItem(STU_CLS(name), cls)
-export const getStudentUnit = (name) => localStorage.getItem(STU_UNIT(name)) || DEFAULT_UNIT_NAME
-export const setStudentUnit = (name, unit) => localStorage.setItem(STU_UNIT(name), unit)
+export async function deleteClass(className) {
+  const cls = _cache[className]
+  if (!cls) return
+  const { error } = await supabase.from('classes').delete().eq('id', cls.id)
+  if (error) throw error
+  await refreshWordLibrary()
+}
 
-// Returns full word objects for a student (merged with DB if possible)
+// ── Students: roster + class/unit assignment, shared across every device ──
+export const getStudents = () => Object.keys(_students)
+
+export async function addStudent(name, className = '', unitName = DEFAULT_UNIT_NAME) {
+  let classId = null
+  if (className) classId = (await ensureClass(className)).id
+  const { error } = await supabase
+    .from('students').insert({ name, class_id: classId, unit_name: unitName || DEFAULT_UNIT_NAME })
+  if (error) throw error
+  await refreshStudents()
+}
+
+export async function removeStudent(name) {
+  const s = _students[name]
+  if (!s) return
+  const { error } = await supabase.from('students').delete().eq('id', s.id)
+  if (error) throw error
+  await refreshStudents()
+}
+
+export const getStudentClass = (name) => _students[name]?.className || ''
+export const getStudentUnit = (name) => _students[name]?.unitName || DEFAULT_UNIT_NAME
+
+export async function setStudentClass(name, className) {
+  const s = _students[name]
+  if (!s) return
+  const classId = className ? (await ensureClass(className)).id : null
+  const { error } = await supabase.from('students').update({ class_id: classId }).eq('id', s.id)
+  if (error) throw error
+  await refreshStudents()
+}
+
+export async function setStudentUnit(name, unitName) {
+  const s = _students[name]
+  if (!s) return
+  const { error } = await supabase.from('students').update({ unit_name: unitName }).eq('id', s.id)
+  if (error) throw error
+  await refreshStudents()
+}
+
+// Returns full word objects for a student, sourced ONLY from Supabase class
+// data — word and meaning always come straight from the DB row, never from
+// the built-in demo bank (data/words.js), even if the text happens to match.
+// No class assigned (on this device) or an empty unit both mean "no words
+// yet"; the screen shows nothing rather than substituting sample content.
 export const getStudentWords = (name) => {
   try {
     const cls = getStudentClass(name)
-    if (!cls) return Array.isArray(DB_WORDS) ? DB_WORDS : []
+    if (!cls) return []
     const unitName = getStudentUnit(name)
     const raw = getClassWords(cls, unitName)
     if (!Array.isArray(raw) || !raw.length) return []
     return raw.map((cw) => {
       if (!cw || !cw.word) return null
-      const db = Array.isArray(DB_WORDS) ? DB_WORDS.find((w) => w.word.toLowerCase() === cw.word.toLowerCase()) : null
-      if (db) return db
       return {
-        id:           cw.word.toLowerCase().replace(/\s+/g, '_'),
-        word:         cw.word,
-        meaning:      cw.meaning || '',
-        memoryTip:    `${cw.word} = ${cw.meaning}`,
-        easyExample:  `I know the word "${cw.word}".`,
-        easyMeaning:  `나는 "${cw.meaning}"이라는 단어를 알아요.`,
-        funnyExample: `Even my dog knows "${cw.word}"!`,
-        funnyMeaning: `내 강아지도 "${cw.meaning}"를 알아요!`,
-        realExample:  `Can you use "${cw.word}" in a sentence?`,
-        realMeaning:  `"${cw.meaning}"를 문장에서 사용해볼 수 있나요?`,
-        quiz:         `${cw.word} means ____.`,
-        answer:       cw.meaning || '',
+        id:              cw.word.toLowerCase().replace(/\s+/g, '_'),
+        word:            cw.word,
+        meaning:         cw.meaning || '',
+        memoryTip:       `${cw.word} = ${cw.meaning}`,
+        easyExample:     exampleTextFor(cw.word),
+        easyMeaning:     `나는 "${cw.meaning}"이라는 단어를 알아요.`,
+        funnyExample:    `Even my dog knows "${cw.word}"!`,
+        funnyMeaning:    `내 강아지도 "${cw.meaning}"를 알아요!`,
+        realExample:     `Can you use "${cw.word}" in a sentence?`,
+        realMeaning:     `"${cw.meaning}"를 문장에서 사용해볼 수 있나요?`,
+        quiz:            `${cw.word} means ____.`,
+        answer:          cw.meaning || '',
+        wordAudioUrl:    cw.wordAudioUrl || null,
+        exampleAudioUrl: cw.exampleAudioUrl || null,
       }
     }).filter(Boolean)
   } catch {

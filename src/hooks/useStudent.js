@@ -1,20 +1,16 @@
 import { useState, useCallback } from 'react'
 
+// Student roster + class assignment live in Supabase (shared across every
+// device) — see utils/wordLibrary.js. Only per-student progress (stars,
+// pets, missions, daily counters) stays device-local below.
+export { getStudents, addStudent, removeStudent } from '../utils/wordLibrary'
+
 const PREFIX = 'paulEasyVoca'
 const sk = (name, type) => `${PREFIX}_${name}_${type}`
 const load = (key, def) => { try { return JSON.parse(localStorage.getItem(key)) ?? def } catch { return def } }
 const loadArr = (key) => { const v = load(key, []); return Array.isArray(v) ? v : [] }
 const loadNum = (key) => { const v = load(key, 0); return typeof v === 'number' ? v : 0 }
 const save = (key, val) => localStorage.setItem(key, JSON.stringify(val))
-
-export const getStudents = () => load(`${PREFIX}_students`, [])
-export const addStudent = (name) => {
-  const list = getStudents()
-  if (!list.includes(name)) save(`${PREFIX}_students`, [...list, name])
-}
-export const removeStudent = (name) => {
-  save(`${PREFIX}_students`, getStudents().filter(s => s !== name))
-}
 
 const todayStr = () => new Date().toDateString()
 const freshDaily = () => ({

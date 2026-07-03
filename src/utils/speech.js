@@ -32,6 +32,27 @@ const RATE_KEY = 'paulEasyVoca_speechRate'
 export const getSpeechRate = () => parseFloat(localStorage.getItem(RATE_KEY) || '0.6')
 export const setSpeechRate = (r) => localStorage.setItem(RATE_KEY, String(r))
 
+// ── Success sound effect ────────────────────────────────────────────────────
+// Single preloaded Audio instance — reused (not recreated) on every play so
+// there's no allocation/decoding delay and no overlapping playback.
+let _successAudio = null
+function getSuccessAudio() {
+  if (!_successAudio) {
+    _successAudio = new Audio('/success.wav')
+    _successAudio.preload = 'auto'
+    _successAudio.volume = 0.75
+  }
+  return _successAudio
+}
+
+export function playSuccessSound() {
+  const audio = getSuccessAudio()
+  try {
+    audio.currentTime = 0
+  } catch {}
+  audio.play()?.catch(() => {})
+}
+
 // ── AudioContext unlock ─────────────────────────────────────────────────────
 let _audioCtx = null
 export function unlockAudio() {
@@ -75,6 +96,29 @@ function findBritish(voices) {
   )
 }
 
+// Android Chrome has a well-known bug where speak() called immediately after
+// cancel() on an otherwise-idle queue silently drops the utterance (no sound,
+// no error). Only cancel when something is actually queued/playing.
+function safeCancelSpeech() {
+  const s = window.speechSynthesis
+  if (s.speaking || s.pending) s.cancel()
+}
+
+// "Warms up" the speech engine on the very first user gesture. Some Android
+// Chrome builds stay silent on the first real speak() call until the engine
+// has been touched once; a near-silent primer avoids that dead first tap.
+let _primed = false
+export function primeSpeech() {
+  if (_primed || !window.speechSynthesis) return
+  _primed = true
+  try {
+    const u = new SpeechSynthesisUtterance(' ')
+    u.volume = 0
+    u.rate = 10
+    window.speechSynthesis.speak(u)
+  } catch {}
+}
+
 // Pre-cache voices as soon as they become available (Android Chrome)
 if (typeof window !== 'undefined' && window.speechSynthesis?.addEventListener) {
   window.speechSynthesis.addEventListener('voiceschanged', () => {
@@ -92,68 +136,70 @@ if (typeof document !== 'undefined') {
   })
 }
 
+// ── playAudioUrl() ──────────────────────────────────────────────────────────
+// Plays a pre-generated, stored mp3 (Supabase Storage word_audio_url /
+// example_audio_url) — the only way word pronunciation and example audio are
+// played in student-facing screens. No live TTS call happens here; the audio
+// was generated once, server-side, when the word was added (see
+// api/generate-audio.js). If there's no url yet, reports that via onError
+// instead of silently doing nothing or substituting different audio.
+export function playAudioUrl(url, opts = {}) {
+  const { times = 1, rate = null, onEnd = null, onError = null } = opts
+  if (!url) { onError?.('발음 파일이 없습니다.'); return }
+  const r = rate ?? getSpeechRate()
+  let played = 0
+
+  const playOnce = () => {
+    const audio = new Audio(url)
+    audio.playbackRate = Math.min(2, Math.max(0.5, r || 1))
+    audio.volume = 1
+    let done = false
+    const advance = () => {
+      if (done) return
+      done = true
+      played += 1
+      if (played < times) setTimeout(playOnce, 400)
+      else onEnd?.()
+    }
+    audio.onerror = () => { onError?.(audio.error?.message || `오디오 로드 실패: ${url}`); advance() }
+    audio.onended = advance
+    audio.play().catch((err) => { onError?.(err?.message || String(err)); advance() })
+  }
+
+  playOnce()
+}
+
 // ── speak() ─────────────────────────────────────────────────────────────────
+// Live TTS for short fixed phrases that aren't tied to a stored word/example
+// (e.g. the quiz's "Yar! Correct!" praise voice). Student-facing word and
+// example pronunciation never goes through this — see playAudioUrl() above.
 // IMPORTANT: Must be called synchronously inside a user-gesture handler on iOS.
 // Do NOT wrap speechSynthesis.speak() in setTimeout or async callbacks —
 // iOS Safari silently blocks TTS that starts outside a user gesture context.
 export function speak(text, opts = {}) {
-  // times: explicit repeat count (takes precedence over twice)
-  // twice: legacy — kept for backward compat (true=2, false=1)
-  const { twice = true, times = null, onEnd = null, rate = null } = opts
-  const repeatCount = times !== null ? times : (twice ? 2 : 1)
+  const { onEnd = null, rate = null } = opts
   const r = rate ?? getSpeechRate()
   if (!window.speechSynthesis) { onEnd?.(); return }
+
   unlockAudio()
-  window.speechSynthesis.cancel()
-
-  // Use cached voice synchronously — may be null on first call on Android,
-  // which is fine: the device will use its default English voice.
-  const voice = findBritish(safeGetVoices())
-
-  const playOne = (cb) => {
-    const u = new SpeechSynthesisUtterance(text)
-    u.lang = 'en-GB'
-    u.rate = r
-    u.pitch = 1
-    u.volume = 1
-    if (voice) u.voice = voice
-    let done = false
-    const finish = () => { if (!done) { done = true; cb?.() } }
-    u.onend = finish
-    u.onerror = finish
-    setTimeout(finish, Math.max(2000, (text.length * 120) / r))
-    window.speechSynthesis.speak(u)
-  }
-
-  const playN = (n, cb) => {
-    if (n <= 0) { cb?.(); return }
-    playOne(() => {
-      if (n > 1) setTimeout(() => playN(n - 1, cb), 400)
-      else cb?.()
-    })
-  }
-
-  playN(repeatCount, () => onEnd?.())
-}
-
-export function speakPraise(text, onEnd) {
-  if (!window.speechSynthesis) { onEnd?.(); return }
-  unlockAudio()
-  window.speechSynthesis.cancel()
-
+  safeCancelSpeech()
   const voice = findBritish(safeGetVoices())
   const u = new SpeechSynthesisUtterance(text)
   u.lang = 'en-GB'
-  u.rate = 0.95
+  u.rate = r
   u.pitch = 1
   u.volume = 1
   if (voice) u.voice = voice
-  let fired = false
-  const finish = () => { if (!fired) { fired = true; onEnd?.() } }
+  let done = false
+  const finish = () => { if (!done) { done = true; onEnd?.() } }
   u.onend = finish
   u.onerror = finish
-  setTimeout(finish, Math.max(1500, text.length * 80))
+  setTimeout(finish, Math.max(2000, (text.length * 120) / r))
   window.speechSynthesis.speak(u)
+}
+
+export function speakPraise(text, onEnd) {
+  speak(text, { rate: 0.95, onEnd })
 }
 
 export function hasSpeechRecognition() {

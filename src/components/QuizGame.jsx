@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { speak, speakPraise, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
+import { playAudioUrl, speakPraise, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio, playSuccessSound } from '../utils/speech'
 
 const KO_PRAISE = [
   '야르~ 정답!', '야르! 이건 그냥 맞추네!', '와 대박! 단어 고수인데?',
@@ -26,13 +26,13 @@ function getAudioMimeType() {
 }
 
 // ─── PronStep ───────────────────────────────────────────────────────────────
-function PronStep({ word, canRecord, onSuccess }) {
+function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
   const [phase, setPhase]      = useState('wait')
   // wait | listening | success | fail
   const [msg, setMsg]          = useState('')
   const [micError, setMicErr]  = useState('')
   const [tries, setTries]      = useState(0)
-  const [audioUrl, setUrl]     = useState(null)
+  const [myRecUrl, setUrl]     = useState(null)
   const [processing, setProc]  = useState(false)
 
   const recRef    = useRef(null)   // SpeechRecognition
@@ -52,7 +52,7 @@ function PronStep({ word, canRecord, onSuccess }) {
 
   const stopAll = () => {
     clearTimers()
-    window.speechSynthesis.cancel()
+    window.speechSynthesis?.cancel()
     if (recRef.current) {
       try { recRef.current.abort() } catch {}
       recRef.current = null
@@ -234,12 +234,12 @@ function PronStep({ word, canRecord, onSuccess }) {
 
       {(phase === 'success' || phase === 'fail') && (
         <div className="flex gap-2">
-          <button onClick={() => speak(word, { twice: false })}
+          <button onClick={() => playAudioUrl(wordAudioUrl, { onError: () => setMsg('🔇 발음 파일이 없습니다.') })}
             className="flex-1 bg-blue-100 text-blue-700 font-bold py-2 rounded-xl text-xs btn-press">
             🔊 원어민
           </button>
-          {audioUrl && (
-            <button onClick={() => new Audio(audioUrl).play()}
+          {myRecUrl && (
+            <button onClick={() => new Audio(myRecUrl).play()}
               className="flex-1 bg-purple-100 text-purple-700 font-bold py-2 rounded-xl text-xs btn-press">
               🎧 내 발음
             </button>
@@ -272,6 +272,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
   const [pronDone, setPronD]    = useState(false)
   const [praiseMsg, setPraise]  = useState('')
   const [canRecord, setCanRec]  = useState(false)  // unlocks after praise voice ends
+  const [playErr, setPlayErr]   = useState('')
   const processing              = useRef(false)     // guard against double-select
 
   const current    = pool[idx] || pool[0]
@@ -283,7 +284,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
     processing.current = true
 
     // Cancel any ongoing speech/recognition immediately
-    window.speechSynthesis.cancel()
+    window.speechSynthesis?.cancel()
 
     setSelect(optIdx)
     const correct = optIdx === current.correctIdx
@@ -307,13 +308,15 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
 
   const handlePronSuccess = () => {
     setPronD(true)
+    playSuccessSound()
     onMarkPronunciationOk?.()
     onAddStars?.(1)
   }
 
   const handleNext = () => {
     // Cancel everything before advancing
-    window.speechSynthesis.cancel()
+    window.speechSynthesis?.cancel()
+    setPlayErr('')
     if (idx + 1 >= pool.length) { setDone(true); return }
     setIdx(i => i + 1)
     setSelect(null)
@@ -324,7 +327,8 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
   }
 
   const handleRestart = () => {
-    window.speechSynthesis.cancel()
+    window.speechSynthesis?.cancel()
+    setPlayErr('')
     setIdx(0); setSelect(null); setResults([])
     setDone(false); setShowP(false); setPronD(false)
     setPraise(''); setCanRec(false)
@@ -388,10 +392,11 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
           <p className="text-center text-gray-400 text-sm font-bold mb-4">이 단어의 뜻은? 🤔</p>
 
           <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-6 text-center text-white mb-6">
-            <button onClick={() => speak(current.word.word, { twice: false })} className="btn-press">
+            <button onClick={() => { setPlayErr(''); playAudioUrl(current.word.wordAudioUrl, { onError: () => setPlayErr('🔇 발음 파일이 없습니다.') }) }} className="btn-press">
               <p className="text-5xl font-black hover:scale-110 transition-transform">{current.word.word}</p>
             </button>
             <p className="text-purple-200 text-xs mt-1">탭하면 발음 🔊</p>
+            {playErr && <p className="text-red-200 text-xs mt-1 font-bold">{playErr}</p>}
           </div>
 
           <div className="space-y-3">
@@ -439,6 +444,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
             <PronStep
               key={current.word.word}
               word={current.word.word}
+              wordAudioUrl={current.word.wordAudioUrl}
               canRecord={canRecord}
               onSuccess={handlePronSuccess}
             />

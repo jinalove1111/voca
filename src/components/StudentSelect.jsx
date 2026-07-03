@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { getStudents, addStudent, removeStudent } from '../hooks/useStudent'
-import { getClassNames, setStudentClass, getStudentClass, getClassUnitNames, getStudentUnit, setStudentUnit } from '../utils/wordLibrary'
+import { getClassNames, getStudentClass, getClassUnitNames, getStudentUnit } from '../utils/wordLibrary'
 
 export default function StudentSelect({ onSelect, onAdmin }) {
   const [students, setStudents]     = useState(() => getStudents())
@@ -9,32 +9,45 @@ export default function StudentSelect({ onSelect, onAdmin }) {
   const [selectedUnit, setUnit]     = useState('')
   const [error, setError]           = useState('')
   const [showAdd, setShowAdd]       = useState(false)
+  const [saving, setSaving]         = useState(false)
   const classNames                  = getClassNames()
 
   const refresh = () => setStudents(getStudents())
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const name = input.trim()
     if (!name)               { setError('이름을 입력해주세요!'); return }
     if (name.length > 10)    { setError('이름은 10글자 이하로 해주세요!'); return }
     if (!selectedClass)      { setError('반을 선택해주세요!'); return }
     if (!selectedUnit)       { setError('유닛을 선택해주세요!'); return }
     if (students.includes(name)) { setError('이미 있는 이름이에요!'); return }
-    addStudent(name)
-    setStudentClass(name, selectedClass)
-    setStudentUnit(name, selectedUnit)
-    refresh()
-    setInput('')
-    setClass('')
-    setUnit('')
-    setError('')
-    setShowAdd(false)
-    onSelect(name)
+    setSaving(true)
+    try {
+      await addStudent(name, selectedClass, selectedUnit)
+      refresh()
+      setInput('')
+      setClass('')
+      setUnit('')
+      setError('')
+      setShowAdd(false)
+      onSelect(name)
+    } catch (err) {
+      setError('학생 추가 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const handleRemove = (e, name) => {
+  const handleRemove = async (e, name) => {
     e.stopPropagation()
-    if (window.confirm(`"${name}" 학생을 삭제할까요?`)) { removeStudent(name); refresh() }
+    if (window.confirm(`"${name}" 학생을 삭제할까요?`)) {
+      try {
+        await removeStudent(name)
+        refresh()
+      } catch (err) {
+        alert('삭제 중 오류가 발생했어요: ' + (err.message || err))
+      }
+    }
   }
 
   return (
@@ -111,8 +124,10 @@ export default function StudentSelect({ onSelect, onAdmin }) {
             <div className="flex gap-2">
               <button onClick={() => { setShowAdd(false); setError('') }}
                 className="flex-1 border-2 border-gray-200 text-gray-500 font-bold py-3 rounded-xl btn-press">취소</button>
-              <button onClick={handleAdd}
-                className="flex-1 bg-purple-500 text-white font-black py-3 rounded-xl btn-press hover:bg-purple-600">시작!</button>
+              <button onClick={handleAdd} disabled={saving}
+                className="flex-1 bg-purple-500 text-white font-black py-3 rounded-xl btn-press hover:bg-purple-600 disabled:opacity-50">
+                {saving ? '⏳ 저장 중...' : '시작!'}
+              </button>
             </div>
           </div>
         )}
