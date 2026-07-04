@@ -318,7 +318,22 @@ let globalMicStream = null
 // browser itself ended the stream's tracks (screen lock, backgrounding,
 // another app taking the mic, etc.) — `.active` goes false when that
 // happens. We only re-request in that case, never on a fixed schedule.
+//
+// The Permissions API (navigator.permissions.query) is logged for
+// diagnostics ONLY and never used to decide anything — on some Android
+// Chrome builds it reports "denied"/unreliable states even when the site
+// permission is actually fine, so trusting it produced false "마이크 권한이
+// 거부됐어요" messages for students who had genuinely allowed the mic.
+// getUserMedia() is the only source of truth: if it resolves, we're ready;
+// if it rejects, only THEN do we tell the student, and only with the
+// specific reason getUserMedia itself gave us.
 export async function getMicStreamOnce() {
+  if (navigator.permissions?.query) {
+    navigator.permissions.query({ name: 'microphone' })
+      .then((status) => console.log('[speech] permission state (reference only, not used to decide anything):', status.state))
+      .catch(() => {})
+  }
+
   if (globalMicStream && globalMicStream.active) {
     console.log('[speech] reuse mic stream')
     return globalMicStream
@@ -326,10 +341,18 @@ export async function getMicStreamOnce() {
   if (globalMicStream && !globalMicStream.active) {
     console.warn('[speech] stream stopped unexpectedly — requesting a new one')
   }
-  console.log('[speech] request mic permission once')
-  globalMicStream = await navigator.mediaDevices
-    .getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
-    .catch((err) => { globalMicStream = null; console.warn('[speech] getUserMedia failed:', err.message); throw err })
+  console.log('[speech] getUserMedia trying')
+  try {
+    // Plain `{ audio: true }` — the extra constraints (echoCancellation etc.)
+    // some devices reject with OverconstrainedError, which we were mislabeling
+    // as a permission denial even though it had nothing to do with permission.
+    globalMicStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+  } catch (err) {
+    globalMicStream = null
+    console.warn('[speech] getUserMedia error:', err.name, err.message)
+    throw err
+  }
+  console.log('[speech] getUserMedia success')
   globalMicStream.getAudioTracks().forEach((t) => {
     t.onended = () => console.warn('[speech] stream stopped unexpectedly (track ended):', t.label)
   })

@@ -11,8 +11,7 @@ const GOAL = 5
 // reuses the same granted stream and never prompts again.
 function MicPrimeBtn() {
   const [state, setState] = useState(() => (hasMicStream() ? 'ready' : 'idle'))
-
-  if (isInAppBrowser()) return <InAppBrowserNotice />
+  const [errMsg, setErrMsg] = useState('')
 
   useEffect(() => {
     if (state === 'ready') return
@@ -20,13 +19,30 @@ function MicPrimeBtn() {
     return () => clearInterval(t)
   }, [state])
 
+  if (isInAppBrowser()) return <InAppBrowserNotice />
+
   const handleClick = async () => {
     setState('requesting')
+    setErrMsg('')
     try {
       await getMicStreamOnce()
       setState('ready')
-    } catch {
+    } catch (err) {
       setState('error')
+      // Only getUserMedia's own rejection decides this — never the
+      // Permissions API, which can report a stale/wrong state. Only
+      // NotAllowedError/PermissionDeniedError actually mean "denied";
+      // everything else (no mic hardware, already in use, bad constraints)
+      // is a different problem and gets its own message.
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setErrMsg('마이크 권한이 거부됐어요. 브라우저 설정에서 마이크를 허용해주세요.')
+      } else if (err.name === 'NotFoundError') {
+        setErrMsg('마이크를 찾을 수 없어요. 기기에 마이크가 있는지 확인해주세요.')
+      } else if (err.name === 'NotReadableError') {
+        setErrMsg('다른 앱이 마이크를 사용 중이에요. 다른 앱을 종료하고 다시 시도해주세요.')
+      } else {
+        setErrMsg(`마이크를 시작할 수 없어요 (${err.name || err.message}). 다시 시도해주세요.`)
+      }
     }
   }
 
@@ -45,7 +61,7 @@ function MicPrimeBtn() {
         {state === 'requesting' ? '⏳ 허용을 눌러주세요...' : '🎤 마이크 준비하기'}
       </button>
       {state === 'error' && (
-        <p className="text-red-500 text-xs font-bold mt-2">마이크 권한이 거부됐어요. 브라우저 설정에서 허용해주세요.</p>
+        <p className="text-red-500 text-xs font-bold mt-2">{errMsg}</p>
       )}
       <p className="text-purple-400 text-xs mt-2">처음 1번만 누르면 계속 유지돼요!</p>
     </div>
