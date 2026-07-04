@@ -26,7 +26,9 @@ function MicPrimeBtn() {
     setErrMsg('')
     try {
       await getMicStreamOnce()
+      console.log('[Dashboard] mic ready success')
       setState('ready')
+      console.log('[Dashboard] micReady state true')
     } catch (err) {
       setState('error')
       console.error('[Dashboard] mic prime failed:', err.name, '-', err.message, '\n', err.stack)

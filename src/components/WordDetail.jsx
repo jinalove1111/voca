@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { playWordAudio, stopCurrentAudio, listenFor, getMicStream, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
+import { playWordAudio, stopCurrentAudio, listenFor, getMicStream, hasMicStream, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
 import { requestAudioGeneration } from '../utils/wordLibrary'
 import { isInAppBrowser } from '../utils/browserDetect'
 import InAppBrowserNotice from './InAppBrowserNotice'
@@ -18,11 +18,27 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
   const [msg, setMsg]     = useState('')
   const [myRecUrl, setUrl] = useState(null)
   const [tries, setTries]  = useState(0)
+  const [micReady, setMicReady] = useState(() => hasMicStream())
   const mrRef              = useRef(null)
 
   useEffect(() => () => {
     if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
   }, [])
+
+  // The mic stream primed on Dashboard (see getMicStreamOnce, a module-level
+  // singleton in speech.js) isn't React state, so this screen can't just
+  // "receive" it as a prop — it polls the same shared source of truth
+  // instead. Logged once so it's visible that this screen actually saw it.
+  useEffect(() => {
+    if (micReady) return
+    const t = setInterval(() => {
+      if (hasMicStream()) {
+        console.log('[WordDetail] word screen received micReady true')
+        setMicReady(true)
+      }
+    }, 500)
+    return () => clearInterval(t)
+  }, [micReady])
 
   // In-app browsers (KakaoTalk etc.) handle mic permission unreliably — skip
   // the recording step there instead of letting students hit a flaky/
@@ -99,6 +115,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
   }
 
   const handleClick = () => {
+    console.log('[WordDetail] record button clicked')
     if (phase === 'speaking' || phase === 'listening' || phase === 'success') return
     unlockAudio()
     setMsg('')
@@ -116,10 +133,14 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
     <div className="space-y-2">
       <button onClick={handleClick} disabled={busy || phase === 'success'}
         className={`w-full py-3 rounded-xl font-black text-sm btn-press transition-colors ${
-          phase === 'success' ? 'bg-green-500 text-white' :
-          phase === 'fail'    ? 'bg-orange-400 text-white' :
-          busy                ? 'bg-gray-200 text-gray-400 cursor-not-allowed' :
-                                'bg-purple-500 hover:bg-purple-600 text-white'
+          phase === 'success'   ? 'bg-green-500 text-white' :
+          phase === 'fail'      ? 'bg-orange-400 text-white' :
+          // 'listening' is the ACTIVE recording state — the student should be
+          // talking right now, so it must look alive (pulsing), not flat gray
+          // like a disabled/broken button (that was being misread as "stuck").
+          phase === 'listening' ? 'bg-yellow-400 text-white animate-pulse cursor-not-allowed' :
+          phase === 'speaking'  ? 'bg-gray-200 text-gray-400 cursor-not-allowed' :
+                                  'bg-purple-500 hover:bg-purple-600 text-white'
         }`}>
         {phase === 'idle'      ? `🎤 ${label}` :
          phase === 'speaking'  ? '🔊 잘 들어봐요...' :

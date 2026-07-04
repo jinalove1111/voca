@@ -188,6 +188,7 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
   }
 
   const handleClick = () => {
+    console.log('[QuizGame] record button clicked')
     if (processing) return
     if (!canRecord) return   // praise voice still playing
     if (phase === 'listening') return
