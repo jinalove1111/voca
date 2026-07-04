@@ -456,31 +456,23 @@ function lenientMatch(transcript, target) {
   return matched >= Math.ceil(content.length * 0.5)
 }
 
-// Reuse one SpeechRecognition instance for the whole session instead of
-// `new SR()` on every word — some Android Chrome / Samsung Internet builds
-// treat each fresh instance's first start() as its own permission/consent
-// event, which can look like a repeated "allow microphone" prompt even
-// though the underlying getUserMedia grant (see getMicStream) never expired.
-let _recognition = null
-function getRecognition() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-  if (!SR) return null
-  if (!_recognition) {
-    _recognition = new SR()
-    _recognition.interimResults = false
-    _recognition.maxAlternatives = 5
-  }
-  return _recognition
-}
-
+// A fresh SpeechRecognition instance per attempt. (An earlier version reused
+// one instance across the whole session to avoid a suspected repeat-
+// permission-prompt issue — that turned out to be caused by insecure-context
+// getUserMedia, not SpeechRecognition, and reusing one instance risked
+// leaving it in a stuck/stale state after repeated start/abort cycles.
+// A fresh instance is cheap and safer.)
 export function listenFor(targetWord, { onStart, onResult, onError } = {}) {
-  const rec = getRecognition()
-  if (!rec) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!SR) {
     console.warn('[speech] listenFor: no SpeechRecognition available on this browser')
     onError?.('unsupported')
     return null
   }
+  const rec = new SR()
   rec.lang = 'en-US'
+  rec.interimResults = false
+  rec.maxAlternatives = 5
   rec.onstart = () => { console.log('[speech] recognition onstart'); onStart?.() }
   rec.onresult = (event) => {
     const transcripts = Array.from(event.results[0]).map(r => r.transcript)
@@ -493,19 +485,22 @@ export function listenFor(targetWord, { onStart, onResult, onError } = {}) {
   try {
     rec.start()
   } catch (e) {
-    // "already started" from a still-active previous session — abort it and
-    // retry once its onend fires, instead of surfacing a spurious error.
     console.warn('[speech] recognition.start() threw:', e.name, '-', e.message)
-    if (e?.name === 'InvalidStateError') {
-      rec.onend = () => {
-        rec.onend = null
-        console.log('[speech] recognition onend (retry after abort), retrying start()')
-        try { rec.start() } catch (e2) { console.warn('[speech] retry start() also threw:', e2.name, e2.message); onError?.(e2.message) }
-      }
-      try { rec.abort() } catch { onError?.(e.message) }
-    } else {
-      onError?.(e.message)
-    }
+    onError?.(e.message)
   }
   return rec
+}
+
+// ── STT fallback structure ───────────────────────────────────────────────
+// Preferred: native Web Speech API (listenFor, above) — free, real-time.
+// Where it's unavailable (hasSpeechRecognition() === false — e.g. some
+// desktop Firefox, some in-app WebViews), a server-side STT call (Whisper
+// or similar) could transcribe the recorded blob instead. That's a paid,
+// per-request API and needs its own key/cost decision before wiring up for
+// real, so this is a stub: swap the body for a real fetch('/api/transcribe',
+// {body: audioBlob}) call once that's decided, everything else (callers,
+// UI) stays the same since the shape (Promise<string|null>) doesn't change.
+export async function transcribeViaServerSTT(/* audioBlob */) {
+  console.warn('[speech] transcribeViaServerSTT: not wired up yet (no STT provider configured)')
+  return null
 }
