@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { getStudentClass, getStudentUnit, getClassNames } from '../utils/wordLibrary'
 import { getMicStreamOnce, hasMicStream } from '../utils/speech'
+import { isInAppBrowser } from '../utils/browserDetect'
+import InAppBrowserNotice from './InAppBrowserNotice'
 
 const GOAL = 5
 
@@ -9,6 +11,8 @@ const GOAL = 5
 // reuses the same granted stream and never prompts again.
 function MicPrimeBtn() {
   const [state, setState] = useState(() => (hasMicStream() ? 'ready' : 'idle'))
+
+  if (isInAppBrowser()) return <InAppBrowserNotice />
 
   useEffect(() => {
     if (state === 'ready') return

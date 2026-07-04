@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { playWordAudio, stopCurrentAudio, listenFor, getMicStream, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
 import { requestAudioGeneration } from '../utils/wordLibrary'
+import { isInAppBrowser } from '../utils/browserDetect'
+import InAppBrowserNotice from './InAppBrowserNotice'
 
 function getAudioMimeType() {
   if (typeof MediaRecorder === 'undefined') return ''
@@ -21,6 +23,15 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
   useEffect(() => () => {
     if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
   }, [])
+
+  // In-app browsers (KakaoTalk etc.) handle mic permission unreliably — skip
+  // the recording step there instead of letting students hit a flaky/
+  // repeating permission prompt, but still let them move on with the lesson.
+  const inApp = isInAppBrowser()
+  useEffect(() => {
+    if (inApp) onAnyResult?.()
+  }, [inApp])
+  if (inApp) return <InAppBrowserNotice compact />
 
   const MIC_ERR = {
     'not-allowed':   '마이크 권한을 허용해주세요! 🎤',

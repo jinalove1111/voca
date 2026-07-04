@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { playWordAudio, stopCurrentAudio, getMicStream, speakPraise, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio, playSuccessSound } from '../utils/speech'
 import { requestAudioGeneration } from '../utils/wordLibrary'
+import { isInAppBrowser } from '../utils/browserDetect'
+import InAppBrowserNotice from './InAppBrowserNotice'
 
 const KO_PRAISE = [
   '야르~ 정답!', '야르! 이건 그냥 맞추네!', '와 대박! 단어 고수인데?',
@@ -449,15 +451,20 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
             </div>
           )}
 
-          {/* Pronunciation step */}
+          {/* Pronunciation step — skipped in in-app browsers (KakaoTalk etc.),
+              where mic permission is unreliable; everything else still works. */}
           {isCorrect && showPron && !pronDone && (
-            <PronStep
-              key={current.word.word}
-              word={current.word.word}
-              wordAudioUrl={current.word.wordAudioUrl}
-              canRecord={canRecord}
-              onSuccess={handlePronSuccess}
-            />
+            isInAppBrowser() ? (
+              <InAppBrowserNotice compact />
+            ) : (
+              <PronStep
+                key={current.word.word}
+                word={current.word.word}
+                wordAudioUrl={current.word.wordAudioUrl}
+                canRecord={canRecord}
+                onSuccess={handlePronSuccess}
+              />
+            )
           )}
 
           {/* Star earned */}
