@@ -369,13 +369,27 @@ function lenientMatch(transcript, target) {
   return matched >= Math.ceil(content.length * 0.5)
 }
 
-export function listenFor(targetWord, { onStart, onResult, onError } = {}) {
+// Reuse one SpeechRecognition instance for the whole session instead of
+// `new SR()` on every word — some Android Chrome / Samsung Internet builds
+// treat each fresh instance's first start() as its own permission/consent
+// event, which can look like a repeated "allow microphone" prompt even
+// though the underlying getUserMedia grant (see getMicStream) never expired.
+let _recognition = null
+function getRecognition() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-  if (!SR) { onError?.('unsupported'); return null }
-  const rec = new SR()
+  if (!SR) return null
+  if (!_recognition) {
+    _recognition = new SR()
+    _recognition.interimResults = false
+    _recognition.maxAlternatives = 5
+  }
+  return _recognition
+}
+
+export function listenFor(targetWord, { onStart, onResult, onError } = {}) {
+  const rec = getRecognition()
+  if (!rec) { onError?.('unsupported'); return null }
   rec.lang = 'en-US'
-  rec.interimResults = false
-  rec.maxAlternatives = 5
   rec.onstart = () => onStart?.()
   rec.onresult = (event) => {
     const transcripts = Array.from(event.results[0]).map(r => r.transcript)
@@ -383,6 +397,20 @@ export function listenFor(targetWord, { onStart, onResult, onError } = {}) {
     onResult?.(success, transcripts[0] || '')
   }
   rec.onerror = (event) => onError?.(event.error)
-  try { rec.start() } catch (e) { onError?.(e.message) }
+  try {
+    rec.start()
+  } catch (e) {
+    // "already started" from a still-active previous session — abort it and
+    // retry once its onend fires, instead of surfacing a spurious error.
+    if (e?.name === 'InvalidStateError') {
+      rec.onend = () => {
+        rec.onend = null
+        try { rec.start() } catch (e2) { onError?.(e2.message) }
+      }
+      try { rec.abort() } catch { onError?.(e.message) }
+    } else {
+      onError?.(e.message)
+    }
+  }
   return rec
 }
