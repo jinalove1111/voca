@@ -11,7 +11,7 @@ import AdminScreen from './components/AdminScreen'
 import { useStudent } from './hooks/useStudent'
 import { getRandomPet } from './data/pets'
 import { getStudentWords, initWordLibrary, refreshWordLibrary } from './utils/wordLibrary'
-import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech } from './utils/speech'
+import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech, getMicStream } from './utils/speech'
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -183,11 +183,14 @@ export default function App() {
     initWordLibrary().then(() => setReady(true)).catch((err) => setLoadError(err))
   }, [])
 
-  // Unlock AudioContext + warm up speechSynthesis on the very first user
-  // gesture (iOS/Android requirement). touchstart covers mobile; pointerdown
-  // also covers PC mouse clicks, where touchstart never fires.
+  // Unlock AudioContext + warm up speechSynthesis + ask for microphone
+  // permission, all on the very first user gesture in the whole app
+  // (iOS/Android requirement — must happen inside a gesture handler).
+  // getMicStream() caches the granted stream module-wide, so no later
+  // getUserMedia() call — on any word, on any screen — asks again.
+  // touchstart covers mobile; pointerdown also covers PC mouse clicks.
   useEffect(() => {
-    const handler = () => { unlockAudio(); primeSpeech() }
+    const handler = () => { unlockAudio(); primeSpeech(); getMicStream().catch(() => {}) }
     document.addEventListener('touchstart', handler, { once: true, passive: true })
     document.addEventListener('pointerdown', handler, { once: true, passive: true })
     return () => {

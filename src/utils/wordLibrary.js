@@ -37,7 +37,7 @@ export async function refreshWordLibrary() {
   const [classesRes, unitsRes, wordsRes] = await Promise.all([
     supabase.from('classes').select('id,name,class_type').order('created_at'),
     supabase.from('units').select('id,class_id,name,position').order('position'),
-    supabase.from('words').select('id,unit_id,word,meaning,position,word_audio_url,example_audio_url,example_text').order('position'),
+    supabase.from('words').select('id,unit_id,word,meaning,position,word_audio_url,example_audio_url,example_text,memory_tip').order('position'),
   ])
   if (classesRes.error) throw classesRes.error
   if (unitsRes.error) throw unitsRes.error
@@ -63,6 +63,7 @@ export async function refreshWordLibrary() {
         wordAudioUrl: w.word_audio_url || null,
         exampleAudioUrl: w.example_audio_url || null,
         exampleText: w.example_text || null,
+        memoryTip: w.memory_tip || null,
       })
     }
   })
@@ -70,10 +71,14 @@ export async function refreshWordLibrary() {
   return tree
 }
 
-// The single example sentence the app actually shows/speaks for a word when
-// no admin-authored example exists — kept here so the audio we generate
-// matches the text on screen exactly.
-export const exampleTextFor = (word) => `I know the word "${word}".`
+// The example sentence the app shows/speaks for a word before the real one
+// (admin-authored or AI-generated) is ready — per-word, never one generic
+// sentence for every word, and matches the audio we generate for it.
+const VOWEL_SOUND = /^[aeiou]/i
+export const exampleTextFor = (word) => `I can see ${VOWEL_SOUND.test(word) ? 'an' : 'a'} ${word}.`
+
+// Default memory tip shown before the real AI-generated one is ready.
+export const memoryTipFor = (word, meaning) => `${word} = ${meaning}! 소리 내어 3번 읽어보면 금방 외워져요.`
 
 // ── Students cache: { [name]: { id, className, unitName } } ───────────────
 let _students = {}
@@ -316,13 +321,13 @@ export const getStudentWords = (name) => {
         id:              cw.word.toLowerCase().replace(/\s+/g, '_'),
         word:            cw.word,
         meaning:         cw.meaning || '',
-        memoryTip:       `${cw.word} = ${cw.meaning}`,
-        // Real example text is admin-provided or AI-generated server-side
-        // (see api/generate-audio.js) and stored on the word row. Until that
-        // finishes (brand-new word, generation still in flight), fall back
-        // to a generic placeholder rather than showing nothing.
+        // Real example/tip are admin-provided (example only) or AI-generated
+        // server-side (see api/generate-audio.js) and stored per word. Until
+        // that finishes (brand-new word, generation still in flight), fall
+        // back to a per-word placeholder rather than showing nothing.
+        memoryTip:       cw.memoryTip || memoryTipFor(cw.word, cw.meaning),
         easyExample:     cw.exampleText || exampleTextFor(cw.word),
-        easyMeaning:     cw.exampleText ? `(뜻: ${cw.meaning})` : `나는 "${cw.meaning}"이라는 단어를 알아요.`,
+        easyMeaning:     cw.meaning ? `뜻: ${cw.meaning}` : '',
         quiz:            `${cw.word} means ____.`,
         answer:          cw.meaning || '',
         wordAudioUrl:    cw.wordAudioUrl || null,

@@ -189,7 +189,7 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk }) {
 }
 
 // ── Step 2: 예문 ───────────────────────────────────────────────────────────────
-function ExampleStep({ english, korean, audioUrl, onDone, onMarkExampleHeard }) {
+function ExampleStep({ english, korean, memoryTip, audioUrl, onDone, onMarkExampleHeard }) {
   const handlePlay = () => {
     unlockAudio()
     playWordAudio(audioUrl, english, { times: 2 })
@@ -208,6 +208,15 @@ function ExampleStep({ english, korean, audioUrl, onDone, onMarkExampleHeard }) 
           className="w-full mt-4 bg-blue-500 hover:bg-blue-600 text-white font-black py-3 rounded-2xl btn-press transition-colors">
           🔊 예문 듣기
         </button>
+        {memoryTip && (
+          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-4 mt-4">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xl">🧠</span>
+              <span className="font-black text-yellow-800 text-sm">암기 꿀팁</span>
+            </div>
+            <p className="text-yellow-900 text-sm leading-relaxed">{memoryTip}</p>
+          </div>
+        )}
       </div>
 
       <button onClick={onDone}
@@ -353,6 +362,7 @@ export default function WordDetail({
           <ExampleStep
             english={exampleEnglish}
             korean={exampleKorean}
+            memoryTip={word.memoryTip}
             audioUrl={word.exampleAudioUrl}
             onDone={handleExampleDone}
             onMarkExampleHeard={onMarkExampleHeard}
