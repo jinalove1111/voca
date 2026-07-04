@@ -97,15 +97,25 @@ export default async function handler(req, res) {
     const wordAudioUrl = await uploadToStorage(supabaseUrl, serviceKey, `${wordId}-word.mp3`, wordMp3)
 
     // Admin-provided example wins as-is; only ask Claude when none was given.
+    // The AI call (and its own TTS/upload) is isolated in its own try/catch —
+    // if Anthropic billing isn't set up yet, or the call fails for any other
+    // reason, the word's pronunciation audio (already generated above, no
+    // Anthropic dependency) still gets saved. The word just has no example
+    // yet, same as "발음 파일이 없습니다" for missing audio elsewhere.
     let exampleText = (example || '').trim()
-    if (!exampleText) {
-      exampleText = await generateExampleSentence(word, meaning || '')
-    }
-
     let exampleAudioUrl = null
-    if (exampleText) {
-      const exampleMp3 = await fetchTtsMp3(exampleText)
-      exampleAudioUrl = await uploadToStorage(supabaseUrl, serviceKey, `${wordId}-example.mp3`, exampleMp3)
+    try {
+      if (!exampleText) {
+        exampleText = await generateExampleSentence(word, meaning || '')
+      }
+      if (exampleText) {
+        const exampleMp3 = await fetchTtsMp3(exampleText)
+        exampleAudioUrl = await uploadToStorage(supabaseUrl, serviceKey, `${wordId}-example.mp3`, exampleMp3)
+      }
+    } catch (exampleErr) {
+      console.error('[generate-audio] example generation failed (non-fatal):', exampleErr.message || exampleErr)
+      exampleText = example || null
+      exampleAudioUrl = null
     }
 
     const patchRes = await fetch(`${supabaseUrl}/rest/v1/words?id=eq.${wordId}`, {
