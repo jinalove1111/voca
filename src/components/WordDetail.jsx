@@ -19,7 +19,6 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
   const [myRecUrl, setUrl] = useState(null)
   const [tries, setTries]  = useState(0)
   const [micReady, setMicReady] = useState(() => hasMicStream())
-  const [debugBlobSize, setDebugBlobSize] = useState(null)
   const [transcript, setTranscript] = useState('')
   const mrRef              = useRef(null)
   const settledRef         = useRef(true) // true = not currently waiting on a result
@@ -63,12 +62,12 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
     setUrl(null)
     setMsg('')
     setTranscript('')
-    setDebugBlobSize(null)
     settledRef.current = false
 
     const finish = (nextPhase, message, { countTry = false, success = false } = {}) => {
       if (settledRef.current) return
       settledRef.current = true
+      console.log('[WordDetail] STEP7 Success or Fail:', nextPhase)
       clearTimeout(hangTimerRef.current)
       if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
       if (success) { onSuccess?.(); onAnyResult?.() }
@@ -84,7 +83,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
     }
 
     // MediaRecorder side — best-effort, only for the "내 발음 듣기" replay
-    // feature and the debug blob-size readout; never decides pass/fail.
+    // feature and a console-only blob-size readout; never decides pass/fail.
     if (navigator.mediaDevices?.getUserMedia) {
       const mimeType = getAudioMimeType()
       getMicStream()
@@ -94,12 +93,11 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
           console.log('[WordDetail] MediaRecorder created')
           const chunks = []
           mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
-          mr.onstart = () => console.log('[WordDetail] recorder onstart')
+          mr.onstart = () => console.log('[WordDetail] STEP1 Recording Started')
           mr.onstop = () => {
-            console.log('[WordDetail] recorder onstop')
+            console.log('[WordDetail] STEP2 Recording Stopped')
             const blob = new Blob(chunks, { type: mimeType || 'audio/webm' })
-            console.log('[WordDetail] blob.size =', blob.size)
-            setDebugBlobSize(blob.size)
+            console.log('[WordDetail] STEP3 Blob Created — blob.size =', blob.size)
             setUrl(URL.createObjectURL(blob))
           }
           mr.start()
@@ -110,40 +108,52 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
             if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
           }, 2500)
         })
-        .catch((err) => console.error('[WordDetail] mic stream error:', err.name, '-', err.message))
+        .catch((err) => console.error('[WordDetail] mic stream error:', err))
     }
 
     // Safety net: if grading never resolves at all (recognition hangs with
     // no event, or the server STT fallback never returns), don't leave the
     // student stuck forever.
     hangTimerRef.current = setTimeout(() => {
+      console.warn('[WordDetail] grading timed out with no result after 8s')
       finish('fail', '인식이 오래 걸려요. 다시 시도해봐요! 🗣️', { countTry: true })
     }, 8000)
 
+    console.log('[WordDetail] STEP4 Start Speech Recognition — hasSpeechRecognition:', hasSpeechRecognition())
     if (hasSpeechRecognition()) {
-      listenFor(target, {
-        onResult: (ok, heard) => {
-          setTranscript(heard)
-          if (ok) finish('success', rndMsg(SUCCESS_MSGS), { success: true })
-          else finish('fail', rndMsg(FAIL_MSGS), { countTry: true })
-        },
-        onError: (errCode) => {
-          const errMsg = errCode === 'no-speech'
-            ? '소리가 안 들렸어요. 크게 다시 말해봐요! 🗣️'
-            : errCode === 'not-allowed'
-              ? '마이크 권한을 허용해주세요! 🎤'
-              : errCode === 'network'
-                ? '네트워크 오류예요. 인터넷을 확인해주세요 📶'
-                : `음성 인식 오류: ${errCode}`
-          finish('fail', errMsg, { countTry: true })
-        },
-      })
+      try {
+        listenFor(target, {
+          onResult: (ok, heard) => {
+            console.log('[WordDetail] STEP5 Speech Result:', heard)
+            console.log('[WordDetail] STEP6 Compare — heard:', heard, 'target:', target, '-> match:', ok)
+            setTranscript(heard)
+            if (ok) finish('success', rndMsg(SUCCESS_MSGS), { success: true })
+            else finish('fail', rndMsg(FAIL_MSGS), { countTry: true })
+          },
+          onError: (errCode) => {
+            console.log('[WordDetail] STEP5 Speech Result: (error)', errCode)
+            const errMsg = errCode === 'no-speech'
+              ? '소리가 안 들렸어요. 크게 다시 말해봐요! 🗣️'
+              : errCode === 'not-allowed'
+                ? '마이크 권한을 허용해주세요! 🎤'
+                : errCode === 'network'
+                  ? '네트워크 오류예요. 인터넷을 확인해주세요 📶'
+                  : `음성 인식 오류: ${errCode}`
+            finish('fail', errMsg, { countTry: true })
+          },
+        })
+      } catch (err) {
+        console.error('[WordDetail] listenFor() threw synchronously:', err)
+        finish('fail', `음성 인식을 시작할 수 없어요 (${err.name}: ${err.message})`, { countTry: true })
+      }
     } else {
       // Fallback path for browsers without Web Speech API — currently a
       // stub (see transcribeViaServerSTT in speech.js) until a paid STT
       // provider is wired up; don't block the lesson, just skip grading.
       transcribeViaServerSTT(null).then((heard) => {
+        console.log('[WordDetail] STEP5 Speech Result (server STT):', heard)
         if (heard) {
+          console.log('[WordDetail] STEP6 Compare — heard:', heard, 'target:', target)
           setTranscript(heard)
           const ok = heard.toLowerCase().includes(target.toLowerCase())
           if (ok) finish('success', rndMsg(SUCCESS_MSGS), { success: true })
@@ -151,6 +161,9 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
         } else {
           finish('fail', '이 브라우저는 음성 인식을 지원하지 않아요 😢', { countTry: true })
         }
+      }).catch((err) => {
+        console.error('[WordDetail] transcribeViaServerSTT() failed:', err)
+        finish('fail', `음성 인식 오류 (${err.name}: ${err.message})`, { countTry: true })
       })
     }
   }
@@ -212,10 +225,6 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
         <p className="text-center text-xs text-gray-500">
           인식 결과: &ldquo;{transcript}&rdquo; · 정답: &ldquo;{target}&rdquo;
         </p>
-      )}
-
-      {debugBlobSize !== null && (
-        <p className="text-center text-xs text-gray-400">🐛 debug: blob.size = {debugBlobSize}</p>
       )}
 
       {(phase === 'success' || (phase === 'fail' && tries >= 2)) && (
