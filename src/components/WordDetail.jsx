@@ -20,6 +20,8 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
   const [tries, setTries]  = useState(0)
   const [micReady, setMicReady] = useState(() => hasMicStream())
   const mrRef              = useRef(null)
+  const settledRef         = useRef(true) // true = not currently waiting on a result
+  const hangTimerRef       = useRef(null)
 
   useEffect(() => () => {
     if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
@@ -97,65 +99,61 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
       if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
     }
 
-    // Safety net: if SpeechRecognition never fires onresult/onerror/onend
-    // (seen on some Android builds — it can silently hang with no event at
-    // all), force it to stop after 6s instead of leaving the student stuck
-    // on "이제 말해봐요!" forever with no way to recover.
-    let settled = false
-    const hangTimer = setTimeout(() => {
-      if (settled) return
-      settled = true
-      console.warn('[WordDetail] speech recognition timed out with no result — forcing stop')
+    const finish = (nextPhase, message, { countTry = false, success = false } = {}) => {
+      if (settledRef.current) return
+      settledRef.current = true
+      clearTimeout(hangTimerRef.current)
       stopRecorder()
-      setTries(prev => {
-        const next = prev + 1
-        if (next >= 2) onAnyResult?.()
-        return next
-      })
-      setPhase('fail')
-      setMsg('소리가 안 들렸어요. 다시 시도해봐요! 🗣️')
-    }, 6000)
-
-    listenFor(target, {
-      onResult: (ok) => {
-        if (settled) return
-        settled = true
-        clearTimeout(hangTimer)
-        stopRecorder()
-        if (ok) {
-          setPhase('success')
-          setMsg(rndMsg(SUCCESS_MSGS))
-          onSuccess?.()
-          onAnyResult?.()
-        } else {
-          setTries(prev => {
-            const next = prev + 1
-            if (next >= 2) onAnyResult?.()
-            return next
-          })
-          setPhase('fail')
-          setMsg(rndMsg(FAIL_MSGS))
-        }
-      },
-      onError: (errCode) => {
-        if (settled) return
-        settled = true
-        clearTimeout(hangTimer)
-        stopRecorder()
+      if (success) { onSuccess?.(); onAnyResult?.() }
+      if (countTry) {
         setTries(prev => {
           const next = prev + 1
           if (next >= 2) onAnyResult?.()
           return next
         })
-        setPhase('fail')
-        setMsg(MIC_ERR[errCode] || `마이크 오류: ${errCode}`)
+      }
+      setPhase(nextPhase)
+      setMsg(message)
+    }
+
+    // Safety net: if SpeechRecognition never fires onresult/onerror/onend
+    // (seen on some Android builds — it can silently hang with no event at
+    // all), force it to stop after 6s instead of leaving the student stuck
+    // on "이제 말해봐요!" forever with no way to recover.
+    settledRef.current = false
+    hangTimerRef.current = setTimeout(() => {
+      console.warn('[WordDetail] speech recognition timed out with no result — forcing stop')
+      finish('fail', '소리가 안 들렸어요. 다시 시도해봐요! 🗣️', { countTry: true })
+    }, 6000)
+
+    listenFor(target, {
+      onResult: (ok) => {
+        if (ok) finish('success', rndMsg(SUCCESS_MSGS), { success: true })
+        else finish('fail', rndMsg(FAIL_MSGS), { countTry: true })
+      },
+      onError: (errCode) => {
+        finish('fail', MIC_ERR[errCode] || `마이크 오류: ${errCode}`, { countTry: true })
       },
     })
   }
 
+  // Escape hatch: if a student taps the yellow "이제 말해봐요!" button while
+  // it's genuinely stuck (no event ever arrived), let them cancel and retry
+  // immediately instead of waiting out the 6s timeout.
+  const cancelListen = () => {
+    console.log('[WordDetail] listening cancelled by tap — retrying')
+    if (settledRef.current) return
+    settledRef.current = true
+    clearTimeout(hangTimerRef.current)
+    if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
+    setPhase('fail')
+    setMsg('다시 눌러서 시도해봐요! 🎤')
+  }
+
   const handleClick = () => {
     console.log('[WordDetail] record button clicked')
-    if (phase === 'speaking' || phase === 'listening' || phase === 'success') return
+    if (phase === 'listening') { cancelListen(); return }
+    if (phase === 'speaking' || phase === 'success') return
     unlockAudio()
     setMsg('')
     setPhase('speaking')
@@ -166,11 +164,9 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
     })
   }
 
-  const busy = phase === 'speaking' || phase === 'listening'
-
   return (
     <div className="space-y-2">
-      <button onClick={handleClick} disabled={busy || phase === 'success'}
+      <button onClick={handleClick} disabled={phase === 'speaking' || phase === 'success'}
         className={`w-full py-3 rounded-xl font-black text-sm btn-press transition-colors ${
           phase === 'success'   ? 'bg-green-500 text-white' :
           phase === 'fail'      ? 'bg-orange-400 text-white' :
