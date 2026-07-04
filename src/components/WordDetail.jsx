@@ -58,8 +58,10 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
   }
 
   const startListen = () => {
+    console.log('[WordDetail] startRecording called')
     setPhase('listening')
     setUrl(null)
+    setMsg('')
 
     if (navigator.mediaDevices?.getUserMedia) {
       const mimeType = getAudioMimeType()
@@ -68,24 +70,58 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
       // underlying stream, so the browser doesn't re-prompt for permission.
       getMicStream()
         .then(stream => {
+          console.log('[WordDetail] mic stream received')
           try {
             const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
+            console.log('[WordDetail] MediaRecorder created')
             const chunks = []
             mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
+            mr.onstart = () => console.log('[WordDetail] recorder onstart')
             mr.onstop = () => {
-              console.log('[WordDetail] recorder stop')
+              console.log('[WordDetail] recorder onstop')
               setUrl(URL.createObjectURL(new Blob(chunks, { type: mimeType || 'audio/webm' })))
             }
             mr.start()
-            console.log('[WordDetail] recorder start')
+            console.log('[WordDetail] recorder.start called')
             mrRef.current = mr
-          } catch {}
-        }).catch(() => {})
+          } catch (err) {
+            console.error('[WordDetail] MediaRecorder error:', err.name, '-', err.message)
+          }
+        }).catch((err) => {
+          console.error('[WordDetail] mic stream error:', err.name, '-', err.message)
+        })
     }
+
+    const stopRecorder = () => {
+      console.log('[WordDetail] recorder stop called')
+      if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
+    }
+
+    // Safety net: if SpeechRecognition never fires onresult/onerror/onend
+    // (seen on some Android builds — it can silently hang with no event at
+    // all), force it to stop after 6s instead of leaving the student stuck
+    // on "이제 말해봐요!" forever with no way to recover.
+    let settled = false
+    const hangTimer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      console.warn('[WordDetail] speech recognition timed out with no result — forcing stop')
+      stopRecorder()
+      setTries(prev => {
+        const next = prev + 1
+        if (next >= 2) onAnyResult?.()
+        return next
+      })
+      setPhase('fail')
+      setMsg('소리가 안 들렸어요. 다시 시도해봐요! 🗣️')
+    }, 6000)
 
     listenFor(target, {
       onResult: (ok) => {
-        if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
+        if (settled) return
+        settled = true
+        clearTimeout(hangTimer)
+        stopRecorder()
         if (ok) {
           setPhase('success')
           setMsg(rndMsg(SUCCESS_MSGS))
@@ -102,14 +138,17 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
         }
       },
       onError: (errCode) => {
-        if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
+        if (settled) return
+        settled = true
+        clearTimeout(hangTimer)
+        stopRecorder()
         setTries(prev => {
           const next = prev + 1
           if (next >= 2) onAnyResult?.()
           return next
         })
         setPhase('fail')
-        setMsg(MIC_ERR[errCode] || '마이크를 확인해보세요! 🎤')
+        setMsg(MIC_ERR[errCode] || `마이크 오류: ${errCode}`)
       },
     })
   }

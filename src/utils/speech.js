@@ -475,24 +475,32 @@ function getRecognition() {
 
 export function listenFor(targetWord, { onStart, onResult, onError } = {}) {
   const rec = getRecognition()
-  if (!rec) { onError?.('unsupported'); return null }
+  if (!rec) {
+    console.warn('[speech] listenFor: no SpeechRecognition available on this browser')
+    onError?.('unsupported')
+    return null
+  }
   rec.lang = 'en-US'
-  rec.onstart = () => onStart?.()
+  rec.onstart = () => { console.log('[speech] recognition onstart'); onStart?.() }
   rec.onresult = (event) => {
     const transcripts = Array.from(event.results[0]).map(r => r.transcript)
     const success = transcripts.some(t => lenientMatch(t, targetWord))
+    console.log('[speech] recognition onresult:', transcripts, '-> match:', success)
     onResult?.(success, transcripts[0] || '')
   }
-  rec.onerror = (event) => onError?.(event.error)
+  rec.onerror = (event) => { console.warn('[speech] recognition onerror:', event.error); onError?.(event.error) }
+  console.log('[speech] recognition.start() attempted for target:', targetWord)
   try {
     rec.start()
   } catch (e) {
     // "already started" from a still-active previous session — abort it and
     // retry once its onend fires, instead of surfacing a spurious error.
+    console.warn('[speech] recognition.start() threw:', e.name, '-', e.message)
     if (e?.name === 'InvalidStateError') {
       rec.onend = () => {
         rec.onend = null
-        try { rec.start() } catch (e2) { onError?.(e2.message) }
+        console.log('[speech] recognition onend (retry after abort), retrying start()')
+        try { rec.start() } catch (e2) { console.warn('[speech] retry start() also threw:', e2.name, e2.message); onError?.(e2.message) }
       }
       try { rec.abort() } catch { onError?.(e.message) }
     } else {
