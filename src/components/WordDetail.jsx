@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { playWordAudio, stopCurrentAudio, listenFor, getMicStream, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
+import { requestAudioGeneration } from '../utils/wordLibrary'
 
 function getAudioMimeType() {
   if (typeof MediaRecorder === 'undefined') return ''
@@ -92,7 +93,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
     playWordAudio(wordAudioUrl, target, {
       times: 2,
       onEnd: () => startListen(),
-      onError: () => { setMsg('🔇 발음 파일이 없습니다.'); startListen() },
+      onError: () => startListen(),
     })
   }
 
@@ -122,7 +123,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
 
       {(phase === 'success' || (phase === 'fail' && tries >= 2)) && (
         <div className="flex gap-2">
-          <button onClick={() => { unlockAudio(); playWordAudio(wordAudioUrl, target, { onError: () => setMsg('🔇 발음 파일이 없습니다.') }) }}
+          <button onClick={() => { unlockAudio(); playWordAudio(wordAudioUrl, target) }}
             className="flex-1 bg-blue-100 text-blue-700 font-bold py-2 rounded-xl text-xs btn-press">
             🔊 원어민
           </button>
@@ -141,11 +142,9 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
 // ── Step 1: 발음 연습 ──────────────────────────────────────────────────────────
 function PronounceStep({ word, onDone, onMarkPronunciationOk }) {
   const [canProceed, setCanProceed] = useState(false)
-  const [playErr, setPlayErr] = useState('')
 
   const playWord = () => {
-    setPlayErr('')
-    playWordAudio(word.wordAudioUrl, word.word, { times: 3, onError: (err) => setPlayErr('🔇 ' + err) })
+    playWordAudio(word.wordAudioUrl, word.word, { times: 3 })
   }
 
   return (
@@ -156,7 +155,6 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk }) {
             <h1 className="text-5xl font-black hover:scale-110 transition-transform">{word.word}</h1>
           </button>
           <p className="text-blue-200 text-xs mt-1">탭하면 발음이 나와요 👆</p>
-          {playErr && <p className="text-red-200 text-xs mt-1 font-bold">{playErr}</p>}
           <div className="bg-white/20 rounded-2xl px-4 py-3 mt-3 inline-block">
             <p className="text-3xl font-black">{word.meaning}</p>
           </div>
@@ -192,12 +190,9 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk }) {
 
 // ── Step 2: 예문 ───────────────────────────────────────────────────────────────
 function ExampleStep({ english, korean, audioUrl, onDone, onMarkExampleHeard }) {
-  const [playErr, setPlayErr] = useState('')
-
   const handlePlay = () => {
     unlockAudio()
-    setPlayErr('')
-    playWordAudio(audioUrl, english, { times: 2, onError: (err) => setPlayErr('🔇 ' + err) })
+    playWordAudio(audioUrl, english, { times: 2 })
     onMarkExampleHeard?.()
   }
 
@@ -213,7 +208,6 @@ function ExampleStep({ english, korean, audioUrl, onDone, onMarkExampleHeard }) 
           className="w-full mt-4 bg-blue-500 hover:bg-blue-600 text-white font-black py-3 rounded-2xl btn-press transition-colors">
           🔊 예문 듣기
         </button>
-        {playErr && <p className="text-red-500 text-xs mt-2 font-bold text-center">{playErr}</p>}
       </div>
 
       <button onClick={onDone}
@@ -314,6 +308,13 @@ export default function WordDetail({
     stopCurrentAudio()
     setStep('pronounce')
     onMarkViewed?.(word.id)
+    // Lazily backfill audio for words that never got it — e.g. the admin's
+    // save-time request got cut off by the browser backgrounding the tab.
+    // Safe to call even if generation already ran; requestAudioGeneration
+    // de-dupes and the server is idempotent per word.
+    if (!word.wordAudioUrl && word.dbId) {
+      requestAudioGeneration(word.dbId, word.word, word.meaning, word.exampleText)
+    }
   }, [word.id])
 
   const exampleEnglish = word.easyExample || word.funnyExample || word.realExample

@@ -209,14 +209,31 @@ export async function setClassWords(className, words, unitName = DEFAULT_UNIT_NA
   await refreshWordLibrary()
 }
 
-function requestAudioGeneration(wordId, word, meaning, example) {
+// Tracks in-flight requests so a word is never asked for twice at once (e.g.
+// admin save + a student opening the word a second later both notice missing
+// audio).
+const _pendingAudioRequests = new Set()
+
+export function requestAudioGeneration(wordId, word, meaning, example) {
+  if (!wordId || !word || _pendingAudioRequests.has(wordId)) return
+  _pendingAudioRequests.add(wordId)
+  console.log('[wordLibrary] requesting audio generation for', word, wordId)
   fetch('/api/generate-audio', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ wordId, word, meaning, example }),
+    // keepalive lets this request finish even if the tab is backgrounded or
+    // the user navigates away right after triggering it — without this, a
+    // mobile browser can silently cancel the fetch mid-flight, leaving the
+    // word with no audio forever.
+    keepalive: true,
   })
-    .then((res) => { if (res.ok) refreshWordLibrary().catch(() => {}) })
-    .catch((err) => console.warn('[wordLibrary] audio generation request failed (non-fatal):', err.message))
+    .then((res) => {
+      if (res.ok) { console.log('[wordLibrary] audio generation done for', word); refreshWordLibrary().catch(() => {}) }
+      else console.warn('[wordLibrary] audio generation failed for', word, res.status)
+    })
+    .catch((err) => console.warn('[wordLibrary] audio generation request failed (non-fatal):', word, err.message))
+    .finally(() => _pendingAudioRequests.delete(wordId))
 }
 
 export async function addClassUnit(className, unitName) {
@@ -310,6 +327,12 @@ export const getStudentWords = (name) => {
         answer:          cw.meaning || '',
         wordAudioUrl:    cw.wordAudioUrl || null,
         exampleAudioUrl: cw.exampleAudioUrl || null,
+        // Raw DB id + example (nullable) — used to lazily (re)trigger server
+        // audio/example generation when a word is opened without it. The
+        // display `id` above is a word-text slug used elsewhere (missions,
+        // quiz option de-dup) and must not change.
+        dbId:            cw.id || null,
+        exampleText:     cw.exampleText || null,
       }
     }).filter(Boolean)
   } catch {

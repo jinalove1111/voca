@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { playWordAudio, stopCurrentAudio, getMicStream, speakPraise, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio, playSuccessSound } from '../utils/speech'
+import { requestAudioGeneration } from '../utils/wordLibrary'
 
 const KO_PRAISE = [
   '야르~ 정답!', '야르! 이건 그냥 맞추네!', '와 대박! 단어 고수인데?',
@@ -233,7 +234,7 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
 
       {(phase === 'success' || phase === 'fail') && (
         <div className="flex gap-2">
-          <button onClick={() => playWordAudio(wordAudioUrl, word, { onError: () => setMsg('🔇 발음 파일이 없습니다.') })}
+          <button onClick={() => playWordAudio(wordAudioUrl, word)}
             className="flex-1 bg-blue-100 text-blue-700 font-bold py-2 rounded-xl text-xs btn-press">
             🔊 원어민
           </button>
@@ -271,12 +272,20 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
   const [pronDone, setPronD]    = useState(false)
   const [praiseMsg, setPraise]  = useState('')
   const [canRecord, setCanRec]  = useState(false)  // unlocks after praise voice ends
-  const [playErr, setPlayErr]   = useState('')
   const processing              = useRef(false)     // guard against double-select
 
   const current    = pool[idx] || pool[0]
   const isAnswered = selected !== null
   const isCorrect  = isAnswered && selected === current?.correctIdx
+
+  // Lazily backfill audio for words that never got it (e.g. the admin's
+  // save-time request got cut off). de-duped and idempotent server-side.
+  useEffect(() => {
+    const w = current?.word
+    if (w && !w.wordAudioUrl && w.dbId) {
+      requestAudioGeneration(w.dbId, w.word, w.meaning, w.exampleText)
+    }
+  }, [current?.word?.id])
 
   const handleSelect = (optIdx) => {
     if (isAnswered || !current || processing.current) return
@@ -317,7 +326,6 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
     // Cancel everything before advancing
     window.speechSynthesis?.cancel()
     stopCurrentAudio()
-    setPlayErr('')
     if (idx + 1 >= pool.length) { setDone(true); return }
     setIdx(i => i + 1)
     setSelect(null)
@@ -330,7 +338,6 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
   const handleRestart = () => {
     window.speechSynthesis?.cancel()
     stopCurrentAudio()
-    setPlayErr('')
     setIdx(0); setSelect(null); setResults([])
     setDone(false); setShowP(false); setPronD(false)
     setPraise(''); setCanRec(false)
@@ -394,11 +401,10 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
           <p className="text-center text-gray-400 text-sm font-bold mb-4">이 단어의 뜻은? 🤔</p>
 
           <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-6 text-center text-white mb-6">
-            <button onClick={() => { setPlayErr(''); playWordAudio(current.word.wordAudioUrl, current.word.word, { onError: () => setPlayErr('🔇 발음 파일이 없습니다.') }) }} className="btn-press">
+            <button onClick={() => playWordAudio(current.word.wordAudioUrl, current.word.word)} className="btn-press">
               <p className="text-5xl font-black hover:scale-110 transition-transform">{current.word.word}</p>
             </button>
             <p className="text-purple-200 text-xs mt-1">탭하면 발음 🔊</p>
-            {playErr && <p className="text-red-200 text-xs mt-1 font-bold">{playErr}</p>}
           </div>
 
           <div className="space-y-3">

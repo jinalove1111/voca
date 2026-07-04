@@ -193,21 +193,52 @@ export function playAudioUrl(url, opts = {}) {
   playOnce()
 }
 
+// translate.googleapis.com is the API-only subdomain — always returns raw
+// audio/mpeg with correct CORS headers, unlike translate.google.com (the
+// web-app domain), which can serve a non-audio consent/redirect page on some
+// networks. Used only as the last-resort tier below, never for words that
+// already have stored audio.
+function networkTtsUrl(text) {
+  const q = encodeURIComponent(text.slice(0, 190))
+  return `https://translate.googleapis.com/translate_tts?ie=UTF-8&q=${q}&tl=en-GB&client=tw-ob`
+}
+
 // ── playWordAudio() ─────────────────────────────────────────────────────────
 // The single entry point student screens should use for word/example
-// playback. Stored audio (Supabase Storage) is always tried first — it's
-// free and reliable once generated. If it's missing (generation still in
-// flight, or failed) or fails to load, this transparently falls back to the
-// device's own speechSynthesis (en-GB) for the same text, instead of just
-// showing "발음 파일이 없습니다." with no sound. Only reports an error if
-// there's no stored audio AND no native TTS available on the device.
+// playback. Three tiers, in order — each one only runs if the previous is
+// missing or fails:
+//   1. Stored mp3 (Supabase Storage) — free and reliable once generated.
+//   2. Device speechSynthesis (en-GB) — works on most real phones; some
+//      in-app/WebView browsers expose no SpeechSynthesis at all.
+//   3. Live network TTS (Google, en-GB) — works even where tier 2 doesn't,
+//      as long as the device has normal internet access.
+// This never blocks the lesson flow on missing audio — even if every tier
+// fails, onEnd still fires so the caller (e.g. "따라 말하기" → listening)
+// proceeds. Failures are logged to the console, not shown to the student.
 export function playWordAudio(url, fallbackText, opts = {}) {
   const { times = 1, rate = null, onEnd = null, onError = null } = opts
+  console.log('[speech] playWordAudio — word/text:', fallbackText, '| stored url:', url || '(none)')
 
-  const useFallback = (reason) => {
-    if (reason) console.warn('[speech] stored audio unavailable, falling back to device TTS:', reason)
-    if (!fallbackText) { onError?.('발음 파일이 없습니다.'); return }
-    if (!window.speechSynthesis) { onError?.('발음 파일이 없습니다.'); return }
+  const giveUp = (reason) => {
+    console.warn('[speech] all playback tiers failed for:', fallbackText, '| reason:', reason)
+    onError?.(reason)
+    onEnd?.()
+  }
+
+  const tryNetworkTts = (reason) => {
+    if (reason) console.warn('[speech] device TTS unavailable, trying network TTS:', reason)
+    if (!fallbackText) { giveUp('no text to speak'); return }
+    const netUrl = networkTtsUrl(fallbackText)
+    console.log('[speech] network TTS url:', netUrl)
+    playAudioUrl(netUrl, {
+      times, rate, onEnd,
+      onError: (err) => giveUp(err),
+    })
+  }
+
+  const tryDeviceTts = (reason) => {
+    if (reason) console.warn('[speech] stored audio unavailable, trying device TTS:', reason)
+    if (!fallbackText || !window.speechSynthesis) { tryNetworkTts('no speechSynthesis on this device'); return }
     let played = 0
     const playOnce = () => {
       speak(fallbackText, {
@@ -217,16 +248,16 @@ export function playWordAudio(url, fallbackText, opts = {}) {
           if (played < times) setTimeout(playOnce, 400)
           else onEnd?.()
         },
+        onError: (err) => tryNetworkTts(err),
       })
     }
     playOnce()
   }
 
   if (url) {
-    playAudioUrl(url, { times, rate, onEnd, onError: useFallback })
+    playAudioUrl(url, { times, rate, onEnd, onError: tryDeviceTts })
   } else {
-    console.log('[speech] no stored audio url yet for:', fallbackText)
-    useFallback(null)
+    tryDeviceTts('no stored audio url yet')
   }
 }
 
@@ -238,9 +269,12 @@ export function playWordAudio(url, fallbackText, opts = {}) {
 // Do NOT wrap speechSynthesis.speak() in setTimeout or async callbacks —
 // iOS Safari silently blocks TTS that starts outside a user gesture context.
 export function speak(text, opts = {}) {
-  const { onEnd = null, rate = null } = opts
+  // onError is optional — callers that don't care whether the utterance
+  // actually succeeded (e.g. speakPraise) can omit it and errors behave like
+  // completion, same as before.
+  const { onEnd = null, onError = null, rate = null } = opts
   const r = rate ?? getSpeechRate()
-  if (!window.speechSynthesis) { onEnd?.(); return }
+  if (!window.speechSynthesis) { (onError || onEnd)?.('no speechSynthesis'); return }
 
   unlockAudio()
   safeCancelSpeech()
@@ -252,10 +286,11 @@ export function speak(text, opts = {}) {
   u.volume = 1
   if (voice) u.voice = voice
   let done = false
-  const finish = () => { if (!done) { done = true; onEnd?.() } }
-  u.onend = finish
-  u.onerror = finish
-  setTimeout(finish, Math.max(2000, (text.length * 120) / r))
+  const finishOk = () => { if (!done) { done = true; onEnd?.() } }
+  const finishErr = (e) => { if (!done) { done = true; (onError || onEnd)?.(e?.error || 'speechSynthesis error') } }
+  u.onend = finishOk
+  u.onerror = finishErr
+  setTimeout(finishOk, Math.max(2000, (text.length * 120) / r))
   window.speechSynthesis.speak(u)
 }
 
