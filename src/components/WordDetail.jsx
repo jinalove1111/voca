@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { playWordAudio, stopCurrentAudio, listenFor, getMicStream, hasMicStream, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
+import { playWordAudio, stopCurrentAudio, getMicStream, hasMicStream, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
 import { requestAudioGeneration } from '../utils/wordLibrary'
 import { isInAppBrowser } from '../utils/browserDetect'
 import InAppBrowserNotice from './InAppBrowserNotice'
@@ -19,6 +19,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
   const [myRecUrl, setUrl] = useState(null)
   const [tries, setTries]  = useState(0)
   const [micReady, setMicReady] = useState(() => hasMicStream())
+  const [debugBlobSize, setDebugBlobSize] = useState(null)
   const mrRef              = useRef(null)
   const settledRef         = useRef(true) // true = not currently waiting on a result
   const hangTimerRef       = useRef(null)
@@ -51,59 +52,24 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
   }, [inApp])
   if (inApp) return <InAppBrowserNotice compact />
 
-  const MIC_ERR = {
-    'not-allowed':   '마이크 권한을 허용해주세요! 🎤',
-    'no-speech':     '소리가 안 들렸어요. 크게 다시 말해봐요! 🗣️',
-    'audio-capture': '마이크를 찾을 수 없어요 😢',
-    'network':       '네트워크 오류예요. 인터넷을 확인해주세요 📶',
-    'unsupported':   '이 브라우저는 음성 인식을 지원하지 않아요 😢',
-  }
-
+  // TEMPORARY judging rule (per explicit request): SpeechRecognition's
+  // no-speech/volume-based judgment was failing loud, correct pronunciation
+  // on real devices, so pass/fail is decided purely by whether the recorder
+  // actually captured any audio at all — blob.size > 0 = success,
+  // blob.size === 0 = "소리가 안 들렸어요". Not real pronunciation grading;
+  // a stand-in until the SpeechRecognition issue is root-caused separately.
   const startListen = () => {
     console.log('[WordDetail] startRecording called')
     setPhase('listening')
     setUrl(null)
     setMsg('')
-
-    if (navigator.mediaDevices?.getUserMedia) {
-      const mimeType = getAudioMimeType()
-      // Reuses one shared mic stream for the whole session (see getMicStream)
-      // — only the MediaRecorder is stopped between words, not the
-      // underlying stream, so the browser doesn't re-prompt for permission.
-      getMicStream()
-        .then(stream => {
-          console.log('[WordDetail] mic stream received')
-          try {
-            const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
-            console.log('[WordDetail] MediaRecorder created')
-            const chunks = []
-            mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
-            mr.onstart = () => console.log('[WordDetail] recorder onstart')
-            mr.onstop = () => {
-              console.log('[WordDetail] recorder onstop')
-              setUrl(URL.createObjectURL(new Blob(chunks, { type: mimeType || 'audio/webm' })))
-            }
-            mr.start()
-            console.log('[WordDetail] recorder.start called')
-            mrRef.current = mr
-          } catch (err) {
-            console.error('[WordDetail] MediaRecorder error:', err.name, '-', err.message)
-          }
-        }).catch((err) => {
-          console.error('[WordDetail] mic stream error:', err.name, '-', err.message)
-        })
-    }
-
-    const stopRecorder = () => {
-      console.log('[WordDetail] recorder stop called')
-      if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
-    }
+    setDebugBlobSize(null)
+    settledRef.current = false
 
     const finish = (nextPhase, message, { countTry = false, success = false } = {}) => {
       if (settledRef.current) return
       settledRef.current = true
       clearTimeout(hangTimerRef.current)
-      stopRecorder()
       if (success) { onSuccess?.(); onAnyResult?.() }
       if (countTry) {
         setTries(prev => {
@@ -116,25 +82,53 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
       setMsg(message)
     }
 
-    // Safety net: if SpeechRecognition never fires onresult/onerror/onend
-    // (seen on some Android builds — it can silently hang with no event at
-    // all), force it to stop after 6s instead of leaving the student stuck
-    // on "이제 말해봐요!" forever with no way to recover.
-    settledRef.current = false
-    hangTimerRef.current = setTimeout(() => {
-      console.warn('[WordDetail] speech recognition timed out with no result — forcing stop')
-      finish('fail', '소리가 안 들렸어요. 다시 시도해봐요! 🗣️', { countTry: true })
-    }, 6000)
+    if (!navigator.mediaDevices?.getUserMedia) {
+      finish('fail', '이 브라우저는 녹음을 지원하지 않아요 😢', { countTry: true })
+      return
+    }
 
-    listenFor(target, {
-      onResult: (ok) => {
-        if (ok) finish('success', rndMsg(SUCCESS_MSGS), { success: true })
-        else finish('fail', rndMsg(FAIL_MSGS), { countTry: true })
-      },
-      onError: (errCode) => {
-        finish('fail', MIC_ERR[errCode] || `마이크 오류: ${errCode}`, { countTry: true })
-      },
-    })
+    const mimeType = getAudioMimeType()
+    // Reuses one shared mic stream for the whole session (see getMicStream)
+    // — only the MediaRecorder is stopped between words, not the
+    // underlying stream, so the browser doesn't re-prompt for permission.
+    getMicStream()
+      .then(stream => {
+        console.log('[WordDetail] mic stream received')
+        let mr
+        try {
+          mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
+          console.log('[WordDetail] MediaRecorder created')
+        } catch (err) {
+          console.error('[WordDetail] MediaRecorder error:', err.name, '-', err.message)
+          finish('fail', `녹음을 시작할 수 없어요 (${err.name}: ${err.message})`, { countTry: true })
+          return
+        }
+        const chunks = []
+        mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
+        mr.onstart = () => console.log('[WordDetail] recorder onstart')
+        mr.onstop = () => {
+          console.log('[WordDetail] recorder onstop')
+          const blob = new Blob(chunks, { type: mimeType || 'audio/webm' })
+          console.log('[WordDetail] blob.size =', blob.size)
+          setDebugBlobSize(blob.size)
+          setUrl(URL.createObjectURL(blob))
+          if (blob.size > 0) finish('success', rndMsg(SUCCESS_MSGS), { success: true })
+          else finish('fail', '소리가 안 들렸어요. 다시 시도해봐요! 🗣️', { countTry: true })
+        }
+        mr.start()
+        console.log('[WordDetail] recorder.start called')
+        mrRef.current = mr
+
+        // Fixed ~2.5s recording window, then judge by blob.size.
+        hangTimerRef.current = setTimeout(() => {
+          console.log('[WordDetail] recorder stop called')
+          if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
+        }, 2500)
+      })
+      .catch((err) => {
+        console.error('[WordDetail] mic stream error:', err.name, '-', err.message)
+        finish('fail', `마이크 오류 (${err.name}: ${err.message})`, { countTry: true })
+      })
   }
 
   // Escape hatch: if a student taps the yellow "이제 말해봐요!" button while
@@ -188,6 +182,10 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
         <p className={`text-center text-sm font-bold ${phase === 'success' ? 'text-green-600' : 'text-orange-500'}`}>
           {msg}
         </p>
+      )}
+
+      {debugBlobSize !== null && (
+        <p className="text-center text-xs text-gray-400">🐛 debug: blob.size = {debugBlobSize}</p>
       )}
 
       {(phase === 'success' || (phase === 'fail' && tries >= 2)) && (
