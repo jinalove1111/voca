@@ -202,7 +202,7 @@ function ExampleStep({ english, korean, memoryTip, audioUrl, onDone, onMarkExamp
         <p className="font-black text-gray-500 text-sm mb-3">📝 예문</p>
         <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5">
           <p className="font-bold text-gray-800 text-lg leading-snug">{english}</p>
-          <p className="text-gray-500 text-sm mt-2">→ {korean}</p>
+          {korean && <p className="text-gray-500 text-sm mt-2">→ {korean}</p>}
         </div>
         <button onClick={handlePlay}
           className="w-full mt-4 bg-blue-500 hover:bg-blue-600 text-white font-black py-3 rounded-2xl btn-press transition-colors">
@@ -327,7 +327,7 @@ export default function WordDetail({
   }, [word.id])
 
   const exampleEnglish = word.easyExample || word.funnyExample || word.realExample
-  const exampleKorean  = word.easyMeaning || word.funnyMeaning || word.realMeaning
+  const exampleKorean  = word.exampleTranslation
 
   const handlePronDone   = () => setStep(exampleEnglish ? 'example' : 'quiz')
   const handleExampleDone = () => setStep('quiz')

@@ -310,10 +310,18 @@ export function hasSpeechRecognition() {
 // individual recordings just start/stop a MediaRecorder on top of it.
 let _micStreamPromise = null
 export function getMicStream() {
-  if (_micStreamPromise) return _micStreamPromise
+  if (_micStreamPromise) {
+    console.log('[speech] reusing existing microphone stream')
+    return _micStreamPromise
+  }
+  console.log('[speech] getUserMedia called (first time this session)')
   _micStreamPromise = navigator.mediaDevices
     .getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
-    .catch((err) => { _micStreamPromise = null; throw err })
+    .then((stream) => {
+      console.log('[speech] microphone permission granted, stream cached for the rest of the session')
+      return stream
+    })
+    .catch((err) => { _micStreamPromise = null; console.warn('[speech] getUserMedia failed:', err.message); throw err })
   return _micStreamPromise
 }
 

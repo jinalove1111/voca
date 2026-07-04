@@ -37,7 +37,7 @@ export async function refreshWordLibrary() {
   const [classesRes, unitsRes, wordsRes] = await Promise.all([
     supabase.from('classes').select('id,name,class_type').order('created_at'),
     supabase.from('units').select('id,class_id,name,position').order('position'),
-    supabase.from('words').select('id,unit_id,word,meaning,position,word_audio_url,example_audio_url,example_text,memory_tip').order('position'),
+    supabase.from('words').select('id,unit_id,word,meaning,position,word_audio_url,example_audio_url,example_text,example_translation,memory_tip').order('position'),
   ])
   if (classesRes.error) throw classesRes.error
   if (unitsRes.error) throw unitsRes.error
@@ -63,6 +63,7 @@ export async function refreshWordLibrary() {
         wordAudioUrl: w.word_audio_url || null,
         exampleAudioUrl: w.example_audio_url || null,
         exampleText: w.example_text || null,
+        exampleTranslation: w.example_translation || null,
         memoryTip: w.memory_tip || null,
       })
     }
@@ -325,9 +326,13 @@ export const getStudentWords = (name) => {
         // server-side (see api/generate-audio.js) and stored per word. Until
         // that finishes (brand-new word, generation still in flight), fall
         // back to a per-word placeholder rather than showing nothing.
-        memoryTip:       cw.memoryTip || memoryTipFor(cw.word, cw.meaning),
-        easyExample:     cw.exampleText || exampleTextFor(cw.word),
-        easyMeaning:     cw.meaning ? `뜻: ${cw.meaning}` : '',
+        memoryTip:          cw.memoryTip || memoryTipFor(cw.word, cw.meaning),
+        easyExample:        cw.exampleText || exampleTextFor(cw.word),
+        // Translation of the example SENTENCE (not the word's meaning) —
+        // only real, AI-generated translations are shown; null until that
+        // finishes, rather than substituting the word's meaning, which was
+        // confusingly wrong for a full-sentence example.
+        exampleTranslation: cw.exampleTranslation || null,
         quiz:            `${cw.word} means ____.`,
         answer:          cw.meaning || '',
         wordAudioUrl:    cw.wordAudioUrl || null,

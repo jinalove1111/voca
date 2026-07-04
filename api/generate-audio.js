@@ -18,29 +18,33 @@ function stripQuotes(s) {
   return (s || '').replace(/^["'“]+|["'”]+$/g, '').trim()
 }
 
-// One call generates both the example sentence and a memory tip together —
-// cheaper and faster than two separate requests.
+// One call generates the example sentence, its Korean translation, and a
+// memory tip together — cheaper and faster than separate requests.
 async function generateExampleAndTip(word, meaning) {
   const anthropic = new Anthropic() // reads ANTHROPIC_API_KEY from env
   const response = await anthropic.messages.create({
     model: 'claude-haiku-4-5',
-    max_tokens: 150,
+    max_tokens: 200,
     messages: [{
       role: 'user',
-      content: `A Korean elementary-school student is learning the English word "${word}" (Korean meaning: "${meaning}"). Give me two things:
+      content: `A Korean elementary-school student is learning the English word "${word}" (Korean meaning: "${meaning}"). Give me three things:
 1. One short, simple English example sentence using "${word}" naturally — under 10 words, beginner-level vocabulary and grammar only.
-2. A short, fun Korean memory tip (mnemonic) to help the child remember the word — playful, one sentence, can use sound-alikes or a silly association. Write it in Korean.
+2. The natural Korean translation of that exact example sentence (translate the whole sentence, not just the word).
+3. A short, fun Korean memory tip (mnemonic) to help the child remember the word — playful, one sentence, can use sound-alikes or a silly association. Write it in Korean.
 
 Respond in EXACTLY this format, nothing else:
 EXAMPLE: <the example sentence>
+TRANSLATION: <the Korean translation of the example sentence>
 TIP: <the Korean memory tip>`,
     }],
   })
   const text = response.content.find((b) => b.type === 'text')?.text?.trim() || ''
   const exampleMatch = text.match(/EXAMPLE:\s*(.+)/i)
+  const translationMatch = text.match(/TRANSLATION:\s*(.+)/i)
   const tipMatch = text.match(/TIP:\s*(.+)/i)
   return {
     example: stripQuotes(exampleMatch?.[1] || ''),
+    exampleTranslation: stripQuotes(translationMatch?.[1] || ''),
     memoryTip: stripQuotes(tipMatch?.[1] || ''),
   }
 }
@@ -122,12 +126,14 @@ export default async function handler(req, res) {
     // Anthropic dependency) still gets saved. The word just has no example/
     // memory tip yet, filled in gracefully client-side until this succeeds.
     let exampleText = (example || '').trim()
+    let exampleTranslation = ''
     let memoryTip = ''
     let exampleAudioUrl = null
     try {
       if (!exampleText) {
         const generated = await generateExampleAndTip(word, meaning || '')
         exampleText = generated.example
+        exampleTranslation = generated.exampleTranslation
         memoryTip = generated.memoryTip
       }
       if (exampleText) {
@@ -152,6 +158,7 @@ export default async function handler(req, res) {
         word_audio_url: wordAudioUrl,
         example_audio_url: exampleAudioUrl,
         example_text: exampleText || null,
+        example_translation: exampleTranslation || null,
         memory_tip: memoryTip || null,
       }),
     })
@@ -160,7 +167,7 @@ export default async function handler(req, res) {
       throw new Error(`DB update failed (${patchRes.status}): ${body}`)
     }
 
-    res.status(200).json({ wordAudioUrl, exampleAudioUrl, exampleText, memoryTip })
+    res.status(200).json({ wordAudioUrl, exampleAudioUrl, exampleText, exampleTranslation, memoryTip })
   } catch (err) {
     res.status(500).json({ error: err.message || String(err) })
   }
