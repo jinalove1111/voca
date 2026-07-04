@@ -492,15 +492,19 @@ export function listenFor(targetWord, { onStart, onResult, onError } = {}) {
 }
 
 // ── STT fallback structure ───────────────────────────────────────────────
-// Preferred: native Web Speech API (listenFor, above) — free, real-time.
-// Where it's unavailable (hasSpeechRecognition() === false — e.g. some
-// desktop Firefox, some in-app WebViews), a server-side STT call (Whisper
-// or similar) could transcribe the recorded blob instead. That's a paid,
-// per-request API and needs its own key/cost decision before wiring up for
-// real, so this is a stub: swap the body for a real fetch('/api/transcribe',
-// {body: audioBlob}) call once that's decided, everything else (callers,
-// UI) stays the same since the shape (Promise<string|null>) doesn't change.
-export async function transcribeViaServerSTT(/* audioBlob */) {
-  console.warn('[speech] transcribeViaServerSTT: not wired up yet (no STT provider configured)')
+// Pronunciation grading works from the RECORDED BLOB, sent here for
+// transcription — never from the live Web Speech API (that's for real-time
+// mic input; running it alongside MediaRecorder fights over the microphone
+// on real devices and was the source of the "no-speech"/hang issues).
+//
+// This is a stub: no STT provider is wired up yet (Whisper or similar is a
+// paid, per-request API and needs its own key/cost decision first). Once
+// that's decided, swap the body for a real
+// `fetch('/api/transcribe', { method: 'POST', body: audioBlob })` call —
+// callers already treat the result as Promise<string|null>, so nothing
+// else needs to change.
+export async function transcribeViaServerSTT(audioBlob) {
+  if (!audioBlob) return null
+  console.warn('[speech] transcribeViaServerSTT: not wired up yet (no STT provider configured), blob.size =', audioBlob.size)
   return null
 }

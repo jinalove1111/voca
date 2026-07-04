@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { playWordAudio, stopCurrentAudio, getMicStream, hasMicStream, hasSpeechRecognition, listenFor, transcribeViaServerSTT, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
+import { playWordAudio, stopCurrentAudio, getMicStream, hasMicStream, transcribeViaServerSTT, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
 import { requestAudioGeneration } from '../utils/wordLibrary'
 import { isInAppBrowser } from '../utils/browserDetect'
 import InAppBrowserNotice from './InAppBrowserNotice'
@@ -20,6 +20,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
   const [tries, setTries]  = useState(0)
   const [micReady, setMicReady] = useState(() => hasMicStream())
   const [transcript, setTranscript] = useState('')
+  const [ungraded, setUngraded] = useState(false) // true = recorded OK but no STT grading available
   const mrRef              = useRef(null)
   const settledRef         = useRef(true) // true = not currently waiting on a result
   const hangTimerRef       = useRef(null)
@@ -56,12 +57,25 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
   // the target word — blob.size>0 only proved the mic captures audio, it
   // never proved the word was said correctly. MediaRecorder still runs in
   // parallel purely to power "내 발음 듣기" playback, not to judge anything.
+  // Grading is done from the RECORDED BLOB, sent to a server-side STT
+  // (Whisper or similar) — never from the live Web Speech API. Running
+  // Web Speech API's own live mic capture at the same time as MediaRecorder
+  // was fighting over the microphone on real devices (recording worked,
+  // recognition just hung with no event ever firing). Web Speech API is
+  // for real-time mic input, not for judging an already-recorded clip, so
+  // it has no role here anymore.
+  //
+  // transcribeViaServerSTT() is currently a stub (no STT provider wired up
+  // — that's a paid API and needs its own setup) — until it's live, a
+  // successful recording is just recording: no accuracy grading, no
+  // pass/fail, just "here's what you sound like, compare it yourself."
   const startListen = () => {
     console.log('[WordDetail] startRecording called')
     setPhase('listening')
     setUrl(null)
     setMsg('')
     setTranscript('')
+    setUngraded(false)
     settledRef.current = false
 
     const finish = (nextPhase, message, { countTry = false, success = false } = {}) => {
@@ -82,90 +96,70 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
       setMsg(message)
     }
 
-    // MediaRecorder side — best-effort, only for the "내 발음 듣기" replay
-    // feature and a console-only blob-size readout; never decides pass/fail.
-    if (navigator.mediaDevices?.getUserMedia) {
-      const mimeType = getAudioMimeType()
-      getMicStream()
-        .then(stream => {
-          console.log('[WordDetail] mic stream received')
-          const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
-          console.log('[WordDetail] MediaRecorder created')
-          const chunks = []
-          mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
-          mr.onstart = () => console.log('[WordDetail] STEP1 Recording Started')
-          mr.onstop = () => {
-            console.log('[WordDetail] STEP2 Recording Stopped')
-            const blob = new Blob(chunks, { type: mimeType || 'audio/webm' })
-            console.log('[WordDetail] STEP3 Blob Created — blob.size =', blob.size)
-            setUrl(URL.createObjectURL(blob))
-          }
-          mr.start()
-          console.log('[WordDetail] recorder.start called')
-          mrRef.current = mr
-          setTimeout(() => {
-            console.log('[WordDetail] recorder stop called')
-            if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
-          }, 2500)
-        })
-        .catch((err) => console.error('[WordDetail] mic stream error:', err))
+    if (!navigator.mediaDevices?.getUserMedia) {
+      finish('fail', '이 브라우저는 녹음을 지원하지 않아요 😢', { countTry: true })
+      return
     }
 
-    // Safety net: if grading never resolves at all (recognition hangs with
-    // no event, or the server STT fallback never returns), don't leave the
-    // student stuck forever.
     hangTimerRef.current = setTimeout(() => {
-      console.warn('[WordDetail] grading timed out with no result after 8s')
-      finish('fail', '인식이 오래 걸려요. 다시 시도해봐요! 🗣️', { countTry: true })
+      console.warn('[WordDetail] recording+grading timed out after 8s')
+      finish('fail', '시간이 오래 걸려요. 다시 시도해봐요! 🗣️', { countTry: true })
     }, 8000)
 
-    console.log('[WordDetail] STEP4 Start Speech Recognition — hasSpeechRecognition:', hasSpeechRecognition())
-    if (hasSpeechRecognition()) {
-      try {
-        listenFor(target, {
-          onResult: (ok, heard) => {
-            console.log('[WordDetail] STEP5 Speech Result:', heard)
-            console.log('[WordDetail] STEP6 Compare — heard:', heard, 'target:', target, '-> match:', ok)
-            setTranscript(heard)
-            if (ok) finish('success', rndMsg(SUCCESS_MSGS), { success: true })
-            else finish('fail', rndMsg(FAIL_MSGS), { countTry: true })
-          },
-          onError: (errCode) => {
-            console.log('[WordDetail] STEP5 Speech Result: (error)', errCode)
-            const errMsg = errCode === 'no-speech'
-              ? '소리가 안 들렸어요. 크게 다시 말해봐요! 🗣️'
-              : errCode === 'not-allowed'
-                ? '마이크 권한을 허용해주세요! 🎤'
-                : errCode === 'network'
-                  ? '네트워크 오류예요. 인터넷을 확인해주세요 📶'
-                  : `음성 인식 오류: ${errCode}`
-            finish('fail', errMsg, { countTry: true })
-          },
-        })
-      } catch (err) {
-        console.error('[WordDetail] listenFor() threw synchronously:', err)
-        finish('fail', `음성 인식을 시작할 수 없어요 (${err.name}: ${err.message})`, { countTry: true })
-      }
-    } else {
-      // Fallback path for browsers without Web Speech API — currently a
-      // stub (see transcribeViaServerSTT in speech.js) until a paid STT
-      // provider is wired up; don't block the lesson, just skip grading.
-      transcribeViaServerSTT(null).then((heard) => {
-        console.log('[WordDetail] STEP5 Speech Result (server STT):', heard)
-        if (heard) {
-          console.log('[WordDetail] STEP6 Compare — heard:', heard, 'target:', target)
-          setTranscript(heard)
-          const ok = heard.toLowerCase().includes(target.toLowerCase())
-          if (ok) finish('success', rndMsg(SUCCESS_MSGS), { success: true })
-          else finish('fail', rndMsg(FAIL_MSGS), { countTry: true })
-        } else {
-          finish('fail', '이 브라우저는 음성 인식을 지원하지 않아요 😢', { countTry: true })
+    const mimeType = getAudioMimeType()
+    getMicStream()
+      .then(stream => {
+        console.log('[WordDetail] mic stream received')
+        const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
+        console.log('[WordDetail] MediaRecorder created')
+        const chunks = []
+        mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
+        mr.onstart = () => console.log('[WordDetail] STEP1 Recording Started')
+        mr.onstop = async () => {
+          console.log('[WordDetail] STEP2 Recording Stopped')
+          const blob = new Blob(chunks, { type: mimeType || 'audio/webm' })
+          console.log('[WordDetail] STEP3 Blob Created — blob.size =', blob.size)
+          setUrl(URL.createObjectURL(blob))
+
+          if (blob.size === 0) {
+            finish('fail', '소리가 안 들렸어요. 다시 시도해봐요! 🗣️', { countTry: true })
+            return
+          }
+
+          console.log('[WordDetail] STEP4 Send blob to server STT')
+          try {
+            const heard = await transcribeViaServerSTT(blob)
+            console.log('[WordDetail] STEP5 STT Result:', heard)
+            if (heard) {
+              console.log('[WordDetail] STEP6 Compare — heard:', heard, 'target:', target)
+              setTranscript(heard)
+              const ok = heard.toLowerCase().includes(target.toLowerCase())
+              if (ok) finish('success', rndMsg(SUCCESS_MSGS), { success: true })
+              else finish('fail', rndMsg(FAIL_MSGS), { countTry: true })
+            } else {
+              // No STT provider configured yet — recording itself succeeded,
+              // just no accuracy grading available. Not a failure.
+              setUngraded(true)
+              finish('success', '녹음 완료! 내 발음을 들어보고 원어민과 비교해봐요. 🎧', { success: true })
+            }
+          } catch (err) {
+            console.error('[WordDetail] transcribeViaServerSTT() failed:', err)
+            setUngraded(true)
+            finish('success', '녹음 완료! 내 발음을 들어보고 원어민과 비교해봐요. 🎧', { success: true })
+          }
         }
-      }).catch((err) => {
-        console.error('[WordDetail] transcribeViaServerSTT() failed:', err)
-        finish('fail', `음성 인식 오류 (${err.name}: ${err.message})`, { countTry: true })
+        mr.start()
+        console.log('[WordDetail] recorder.start called')
+        mrRef.current = mr
+        setTimeout(() => {
+          console.log('[WordDetail] recorder stop called')
+          if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
+        }, 2500)
       })
-    }
+      .catch((err) => {
+        console.error('[WordDetail] mic stream error:', err)
+        finish('fail', `마이크 오류 (${err.name}: ${err.message})`, { countTry: true })
+      })
   }
 
   // Escape hatch: if a student taps the yellow "이제 말해봐요!" button while
@@ -211,7 +205,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
         {phase === 'idle'      ? `🎤 ${label}` :
          phase === 'speaking'  ? '🔊 잘 들어봐요...' :
          phase === 'listening' ? '👂 이제 말해봐요!' :
-         phase === 'success'   ? '✅ 발음 성공!' :
+         phase === 'success'   ? (ungraded ? '✅ 녹음 완료!' : '✅ 발음 성공!') :
                                  tries >= 2 ? '🔄 한 번 더 (선택)' : '🔄 다시 시도'}
       </button>
 
