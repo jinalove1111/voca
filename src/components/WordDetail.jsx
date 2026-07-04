@@ -46,9 +46,11 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
             const chunks = []
             mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
             mr.onstop = () => {
+              console.log('[WordDetail] recorder stop')
               setUrl(URL.createObjectURL(new Blob(chunks, { type: mimeType || 'audio/webm' })))
             }
             mr.start()
+            console.log('[WordDetail] recorder start')
             mrRef.current = mr
           } catch {}
         }).catch(() => {})

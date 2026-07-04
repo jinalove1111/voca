@@ -1,6 +1,52 @@
+import { useState, useEffect } from 'react'
 import { getStudentClass, getStudentUnit, getClassNames } from '../utils/wordLibrary'
+import { getMicStreamOnce, hasMicStream } from '../utils/speech'
 
 const GOAL = 5
+
+// One explicit button to request mic permission up front — a single user
+// gesture, once per app session. After this, every word's "따라 말하기"
+// reuses the same granted stream and never prompts again.
+function MicPrimeBtn() {
+  const [state, setState] = useState(() => (hasMicStream() ? 'ready' : 'idle'))
+
+  useEffect(() => {
+    if (state === 'ready') return
+    const t = setInterval(() => { if (hasMicStream()) setState('ready') }, 1000)
+    return () => clearInterval(t)
+  }, [state])
+
+  const handleClick = async () => {
+    setState('requesting')
+    try {
+      await getMicStreamOnce()
+      setState('ready')
+    } catch {
+      setState('error')
+    }
+  }
+
+  if (state === 'ready') {
+    return (
+      <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-3 text-center">
+        <p className="font-black text-green-700 text-sm">✅ 마이크 준비 완료 — 이제 녹음할 때 권한을 다시 묻지 않아요</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-3 text-center">
+      <button onClick={handleClick} disabled={state === 'requesting'}
+        className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white font-black py-3 rounded-xl btn-press">
+        {state === 'requesting' ? '⏳ 허용을 눌러주세요...' : '🎤 마이크 준비하기'}
+      </button>
+      {state === 'error' && (
+        <p className="text-red-500 text-xs font-bold mt-2">마이크 권한이 거부됐어요. 브라우저 설정에서 허용해주세요.</p>
+      )}
+      <p className="text-purple-400 text-xs mt-2">처음 1번만 누르면 계속 유지돼요!</p>
+    </div>
+  )
+}
 
 function MissionBar({ label, current, goal, emoji }) {
   const pct = Math.min(100, (current / goal) * 100)
@@ -64,6 +110,8 @@ export default function Dashboard({ student, studentData, onGo, onLogout }) {
             </div>
           </div>
         </div>
+
+        <MicPrimeBtn />
 
         {/* 반 삭제 경고 배너 */}
         {classDeleted && (

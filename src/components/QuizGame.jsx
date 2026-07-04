@@ -93,10 +93,12 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
           const chunks = []
           mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
           mr.onstop = () => {
+            console.log('[QuizGame] recorder stop')
             const blobType = mimeType || 'audio/webm'
             setUrl(URL.createObjectURL(new Blob(chunks, { type: blobType })))
           }
           mr.start()
+          console.log('[QuizGame] recorder start')
           mrRef.current = mr
         } catch {}
       }).catch((err) => {

@@ -302,28 +302,47 @@ export function hasSpeechRecognition() {
   return !!(window.SpeechRecognition || window.webkitSpeechRecognition)
 }
 
-// ── Shared microphone stream ────────────────────────────────────────────────
+// ── Shared microphone stream — the ONLY getUserMedia() call site in the app ──
 // Requesting a fresh getUserMedia() stream for every single recording
 // attempt — and stopping all its tracks right after — causes some mobile
-// browsers to re-prompt for mic permission on every word. Request the stream
-// once per app session and hand the same live stream out to every caller;
-// individual recordings just start/stop a MediaRecorder on top of it.
-let _micStreamPromise = null
-export function getMicStream() {
-  if (_micStreamPromise) {
-    console.log('[speech] reusing existing microphone stream')
-    return _micStreamPromise
+// browsers to re-prompt for mic permission on every word. This module holds
+// the one live MediaStream for the whole app session in a plain module
+// variable (not React state/ref — it must survive across every component
+// that records, and outlive any single component's mount/unmount).
+//
+// Every caller MUST go through getMicStreamOnce(); nothing else in this
+// codebase may call navigator.mediaDevices.getUserMedia() directly.
+let globalMicStream = null
+
+// The one condition where we DO legitimately need to ask again: the OS/
+// browser itself ended the stream's tracks (screen lock, backgrounding,
+// another app taking the mic, etc.) — `.active` goes false when that
+// happens. We only re-request in that case, never on a fixed schedule.
+export async function getMicStreamOnce() {
+  if (globalMicStream && globalMicStream.active) {
+    console.log('[speech] reuse mic stream')
+    return globalMicStream
   }
-  console.log('[speech] getUserMedia called (first time this session)')
-  _micStreamPromise = navigator.mediaDevices
+  if (globalMicStream && !globalMicStream.active) {
+    console.warn('[speech] stream stopped unexpectedly — requesting a new one')
+  }
+  console.log('[speech] request mic permission once')
+  globalMicStream = await navigator.mediaDevices
     .getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
-    .then((stream) => {
-      console.log('[speech] microphone permission granted, stream cached for the rest of the session')
-      return stream
-    })
-    .catch((err) => { _micStreamPromise = null; console.warn('[speech] getUserMedia failed:', err.message); throw err })
-  return _micStreamPromise
+    .catch((err) => { globalMicStream = null; console.warn('[speech] getUserMedia failed:', err.message); throw err })
+  globalMicStream.getAudioTracks().forEach((t) => {
+    t.onended = () => console.warn('[speech] stream stopped unexpectedly (track ended):', t.label)
+  })
+  return globalMicStream
 }
+
+// For UI that wants to show "마이크 준비 완료" without triggering a request.
+export function hasMicStream() {
+  return !!(globalMicStream && globalMicStream.active)
+}
+
+// Back-compat name used by the rest of the app.
+export const getMicStream = getMicStreamOnce
 
 function normalize(str) {
   return str.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim()
