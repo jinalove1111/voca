@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { playAudioUrl, stopCurrentAudio, getMicStream, speakPraise, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio, playSuccessSound } from '../utils/speech'
+import { playWordAudio, stopCurrentAudio, getMicStream, speakPraise, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio, playSuccessSound } from '../utils/speech'
 
 const KO_PRAISE = [
   '야르~ 정답!', '야르! 이건 그냥 맞추네!', '와 대박! 단어 고수인데?',
@@ -233,7 +233,7 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
 
       {(phase === 'success' || phase === 'fail') && (
         <div className="flex gap-2">
-          <button onClick={() => playAudioUrl(wordAudioUrl, { onError: () => setMsg('🔇 발음 파일이 없습니다.') })}
+          <button onClick={() => playWordAudio(wordAudioUrl, word, { onError: () => setMsg('🔇 발음 파일이 없습니다.') })}
             className="flex-1 bg-blue-100 text-blue-700 font-bold py-2 rounded-xl text-xs btn-press">
             🔊 원어민
           </button>
@@ -394,7 +394,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
           <p className="text-center text-gray-400 text-sm font-bold mb-4">이 단어의 뜻은? 🤔</p>
 
           <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-6 text-center text-white mb-6">
-            <button onClick={() => { setPlayErr(''); playAudioUrl(current.word.wordAudioUrl, { onError: () => setPlayErr('🔇 발음 파일이 없습니다.') }) }} className="btn-press">
+            <button onClick={() => { setPlayErr(''); playWordAudio(current.word.wordAudioUrl, current.word.word, { onError: () => setPlayErr('🔇 발음 파일이 없습니다.') }) }} className="btn-press">
               <p className="text-5xl font-black hover:scale-110 transition-transform">{current.word.word}</p>
             </button>
             <p className="text-purple-200 text-xs mt-1">탭하면 발음 🔊</p>

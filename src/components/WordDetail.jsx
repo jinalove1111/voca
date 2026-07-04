@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { playAudioUrl, stopCurrentAudio, listenFor, getMicStream, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
+import { playWordAudio, stopCurrentAudio, listenFor, getMicStream, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
 
 function getAudioMimeType() {
   if (typeof MediaRecorder === 'undefined') return ''
@@ -89,7 +89,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
     unlockAudio()
     setMsg('')
     setPhase('speaking')
-    playAudioUrl(wordAudioUrl, {
+    playWordAudio(wordAudioUrl, target, {
       times: 2,
       onEnd: () => startListen(),
       onError: () => { setMsg('🔇 발음 파일이 없습니다.'); startListen() },
@@ -122,7 +122,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
 
       {(phase === 'success' || (phase === 'fail' && tries >= 2)) && (
         <div className="flex gap-2">
-          <button onClick={() => { unlockAudio(); playAudioUrl(wordAudioUrl, { onError: () => setMsg('🔇 발음 파일이 없습니다.') }) }}
+          <button onClick={() => { unlockAudio(); playWordAudio(wordAudioUrl, target, { onError: () => setMsg('🔇 발음 파일이 없습니다.') }) }}
             className="flex-1 bg-blue-100 text-blue-700 font-bold py-2 rounded-xl text-xs btn-press">
             🔊 원어민
           </button>
@@ -145,7 +145,7 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk }) {
 
   const playWord = () => {
     setPlayErr('')
-    playAudioUrl(word.wordAudioUrl, { times: 3, onError: (err) => setPlayErr('🔇 ' + err) })
+    playWordAudio(word.wordAudioUrl, word.word, { times: 3, onError: (err) => setPlayErr('🔇 ' + err) })
   }
 
   return (
@@ -197,7 +197,7 @@ function ExampleStep({ english, korean, audioUrl, onDone, onMarkExampleHeard }) 
   const handlePlay = () => {
     unlockAudio()
     setPlayErr('')
-    playAudioUrl(audioUrl, { times: 2, onError: (err) => setPlayErr('🔇 ' + err) })
+    playWordAudio(audioUrl, english, { times: 2, onError: (err) => setPlayErr('🔇 ' + err) })
     onMarkExampleHeard?.()
   }
 

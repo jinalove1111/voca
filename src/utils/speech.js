@@ -158,6 +158,7 @@ export function stopCurrentAudio() {
 export function playAudioUrl(url, opts = {}) {
   const { times = 1, rate = null, onEnd = null, onError = null } = opts
   stopCurrentAudio()
+  console.log('[speech] playAudioUrl:', url || '(no url)')
   if (!url) { onError?.('발음 파일이 없습니다.'); return }
   const r = rate ?? getSpeechRate()
   let played = 0
@@ -176,12 +177,57 @@ export function playAudioUrl(url, opts = {}) {
       if (played < times) setTimeout(playOnce, 400)
       else onEnd?.()
     }
-    audio.onerror = () => { onError?.(audio.error?.message || `오디오 로드 실패: ${url}`); advance() }
+    audio.onerror = () => {
+      console.warn('[speech] failed to load stored audio:', url, audio.error?.message)
+      onError?.(audio.error?.message || `오디오 로드 실패: ${url}`)
+      advance()
+    }
     audio.onended = advance
-    audio.play().catch((err) => { onError?.(err?.message || String(err)); advance() })
+    audio.play().catch((err) => {
+      console.warn('[speech] play() rejected for stored audio:', url, err?.message || err)
+      onError?.(err?.message || String(err))
+      advance()
+    })
   }
 
   playOnce()
+}
+
+// ── playWordAudio() ─────────────────────────────────────────────────────────
+// The single entry point student screens should use for word/example
+// playback. Stored audio (Supabase Storage) is always tried first — it's
+// free and reliable once generated. If it's missing (generation still in
+// flight, or failed) or fails to load, this transparently falls back to the
+// device's own speechSynthesis (en-GB) for the same text, instead of just
+// showing "발음 파일이 없습니다." with no sound. Only reports an error if
+// there's no stored audio AND no native TTS available on the device.
+export function playWordAudio(url, fallbackText, opts = {}) {
+  const { times = 1, rate = null, onEnd = null, onError = null } = opts
+
+  const useFallback = (reason) => {
+    if (reason) console.warn('[speech] stored audio unavailable, falling back to device TTS:', reason)
+    if (!fallbackText) { onError?.('발음 파일이 없습니다.'); return }
+    if (!window.speechSynthesis) { onError?.('발음 파일이 없습니다.'); return }
+    let played = 0
+    const playOnce = () => {
+      speak(fallbackText, {
+        rate,
+        onEnd: () => {
+          played += 1
+          if (played < times) setTimeout(playOnce, 400)
+          else onEnd?.()
+        },
+      })
+    }
+    playOnce()
+  }
+
+  if (url) {
+    playAudioUrl(url, { times, rate, onEnd, onError: useFallback })
+  } else {
+    console.log('[speech] no stored audio url yet for:', fallbackText)
+    useFallback(null)
+  }
 }
 
 // ── speak() ─────────────────────────────────────────────────────────────────
