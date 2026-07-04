@@ -29,19 +29,23 @@ function MicPrimeBtn() {
       setState('ready')
     } catch (err) {
       setState('error')
+      console.error('[Dashboard] mic prime failed:', err.name, '-', err.message, '\n', err.stack)
       // Only getUserMedia's own rejection decides this — never the
       // Permissions API, which can report a stale/wrong state. Only
       // NotAllowedError/PermissionDeniedError actually mean "denied";
-      // everything else (no mic hardware, already in use, bad constraints)
-      // is a different problem and gets its own message.
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setErrMsg('마이크 권한이 거부됐어요. 브라우저 설정에서 마이크를 허용해주세요.')
+      // everything else (no mic hardware, insecure origin, bad constraints)
+      // is a different problem, and we always show the real error.message
+      // rather than a generic label so the actual cause is visible.
+      if (err.name === 'InsecureContextError' || err.name === 'MediaDevicesUnavailableError') {
+        setErrMsg(err.message)
+      } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setErrMsg(`마이크 권한이 거부됐어요. 브라우저 설정에서 마이크를 허용해주세요. (${err.name}: ${err.message})`)
       } else if (err.name === 'NotFoundError') {
-        setErrMsg('마이크를 찾을 수 없어요. 기기에 마이크가 있는지 확인해주세요.')
+        setErrMsg(`마이크를 찾을 수 없어요. 기기에 마이크가 있는지 확인해주세요. (${err.name}: ${err.message})`)
       } else if (err.name === 'NotReadableError') {
-        setErrMsg('다른 앱이 마이크를 사용 중이에요. 다른 앱을 종료하고 다시 시도해주세요.')
+        setErrMsg(`다른 앱이 마이크를 사용 중이에요. (${err.name}: ${err.message})`)
       } else {
-        setErrMsg(`마이크를 시작할 수 없어요 (${err.name || err.message}). 다시 시도해주세요.`)
+        setErrMsg(`마이크를 시작할 수 없어요 — ${err.name}: ${err.message}`)
       }
     }
   }

@@ -327,7 +327,30 @@ let globalMicStream = null
 // getUserMedia() is the only source of truth: if it resolves, we're ready;
 // if it rejects, only THEN do we tell the student, and only with the
 // specific reason getUserMedia itself gave us.
+// getUserMedia (and navigator.mediaDevices itself) only exists in a "secure
+// context" — https://, or http://localhost / http://127.0.0.1. Any other
+// http:// origin, including a LAN IP like http://192.168.x.x:5173, is NOT
+// secure, and on those pages `navigator.mediaDevices` is simply `undefined`
+// — so `navigator.mediaDevices.getUserMedia(...)` throws a plain
+// `TypeError: Cannot read properties of undefined (reading 'getUserMedia')`.
+// That's a browser platform rule, not a permission problem and not
+// something any app code can work around — the fix is testing over https
+// (the deployed Vercel URL) or http://localhost, never a raw LAN IP.
+function diagnoseMicEnvironment() {
+  const report = {
+    isSecureContext: typeof window !== 'undefined' ? window.isSecureContext : undefined,
+    origin: typeof location !== 'undefined' ? location.origin : undefined,
+    hasMediaDevices: typeof navigator !== 'undefined' && !!navigator.mediaDevices,
+    getUserMediaIsFunction: typeof navigator !== 'undefined' && typeof navigator.mediaDevices?.getUserMedia === 'function',
+    hasMediaRecorder: typeof MediaRecorder !== 'undefined',
+  }
+  console.log('[speech] mic environment check:', report)
+  return report
+}
+
 export async function getMicStreamOnce() {
+  const env = diagnoseMicEnvironment()
+
   if (navigator.permissions?.query) {
     navigator.permissions.query({ name: 'microphone' })
       .then((status) => console.log('[speech] permission state (reference only, not used to decide anything):', status.state))
@@ -341,6 +364,20 @@ export async function getMicStreamOnce() {
   if (globalMicStream && !globalMicStream.active) {
     console.warn('[speech] stream stopped unexpectedly — requesting a new one')
   }
+
+  if (!env.isSecureContext) {
+    const err = new Error(`이 페이지는 보안 연결(HTTPS)이 아니에요 (현재 주소: ${env.origin}). 마이크는 HTTPS 또는 http://localhost 에서만 쓸 수 있어요 — 배포된 https 주소로 접속해주세요.`)
+    err.name = 'InsecureContextError'
+    console.error('[speech] getUserMedia error:', err.name, '-', err.message)
+    throw err
+  }
+  if (!env.hasMediaDevices || !env.getUserMediaIsFunction) {
+    const err = new Error(!env.hasMediaDevices ? 'navigator.mediaDevices is undefined' : 'getUserMedia is not a function')
+    err.name = 'MediaDevicesUnavailableError'
+    console.error('[speech] getUserMedia error:', err.name, '-', err.message)
+    throw err
+  }
+
   console.log('[speech] getUserMedia trying')
   try {
     // Plain `{ audio: true }` — the extra constraints (echoCancellation etc.)
@@ -349,7 +386,7 @@ export async function getMicStreamOnce() {
     globalMicStream = await navigator.mediaDevices.getUserMedia({ audio: true })
   } catch (err) {
     globalMicStream = null
-    console.warn('[speech] getUserMedia error:', err.name, err.message)
+    console.error('[speech] getUserMedia error:', err.name, '-', err.message, '\n', err.stack)
     throw err
   }
   console.log('[speech] getUserMedia success')
