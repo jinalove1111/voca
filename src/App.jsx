@@ -6,6 +6,7 @@ import WordDetail from './components/WordDetail'
 import QuizGame from './components/QuizGame'
 import LevelUpMission from './components/LevelUpMission'
 import PetCollection from './components/PetCollection'
+import BalloonGame from './components/BalloonGame'
 import EggReveal from './components/EggReveal'
 import AdminScreen from './components/AdminScreen'
 import { useStudent } from './hooks/useStudent'
@@ -164,6 +165,7 @@ function AppInner({ student, onLogout }) {
       )}
       {screen === 'levelUpMission' && <LevelUpMission missions={missions} words={classWords} onAnswer={handleAnswerMission} onBack={() => setScreen('dashboard')} />}
       {screen === 'petCollection'  && <PetCollection pets={studentData.pets} onBack={() => setScreen('dashboard')} />}
+      {screen === 'balloonGame'   && <BalloonGame words={classWords} onBack={() => setScreen('dashboard')} onAddStars={addStars} />}
       {eggPet && <EggReveal pet={eggPet} onClose={() => setEggPet(null)} />}
       <SpeedBtn />
     </>
