@@ -91,7 +91,7 @@ function AppInner({ student, onLogout }) {
   useEffect(() => { if (screen === 'dashboard') setBalloonFromLesson(false) }, [screen])
   const [refreshTick, setRefreshTick] = useState(0)
   const studentData                 = useStudent(student)
-  const { cleared, answerMission, missions, addStars, markPronunciationOk, pendingGift, clearPendingGift } = studentData
+  const { cleared, answerMission, missions, addStars, markPronunciationOk, pendingGift, dismissGift } = studentData
   const classWords                  = useMemo(() => {
     try { return getStudentWords(student) || [] } catch { return [] }
   }, [student, refreshTick])
@@ -191,11 +191,12 @@ function AppInner({ student, onLogout }) {
       )}
       {pendingGift && (
         <GiftReveal
+          key={`${pendingGift.sticker.id}-${pendingGift.isMilestone ? 'm' : 'r'}-${pendingGift.streakDays || 0}`}
           sticker={pendingGift.sticker}
           isDuplicate={pendingGift.isDuplicate}
           isMilestone={pendingGift.isMilestone}
           streakDays={pendingGift.streakDays}
-          onClose={clearPendingGift}
+          onClose={dismissGift}
         />
       )}
       <SpeedBtn />

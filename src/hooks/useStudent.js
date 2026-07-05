@@ -60,7 +60,11 @@ export function useStudent(name) {
   })
   const [history, _setHistory] = useState(() => loadObj(sk(name, 'history')))
   const [milestoneStreak, _setMilestoneStreak] = useState(() => loadNum(sk(name, 'milestoneStreak')))
-  const [pendingGift, setPendingGift] = useState(null) // { sticker, isDuplicate, isMilestone } | null
+  // A queue, not a single slot — a round completion and a streak milestone
+  // can land in the same instant (finishing today's first round can push
+  // the streak past a threshold at the same time), and neither should get
+  // silently dropped in favor of the other.
+  const [giftQueue, setGiftQueue] = useState([])
   const handledRoundRef = useRef(null)
 
   const setStars = useCallback(v => {
@@ -180,7 +184,7 @@ export function useStudent(name) {
     bumpHistory(day => ({ missionsCompleted: day.missionsCompleted + 1 }))
     const sticker = getRandomSticker()
     const isDuplicate = grantSticker(sticker)
-    setPendingGift({ sticker, isDuplicate, isMilestone: false })
+    setGiftQueue(q => [...q, { sticker, isDuplicate, isMilestone: false }])
     setRound(freshRound())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [round])
@@ -195,11 +199,11 @@ export function useStudent(name) {
     setMilestoneStreak(nextMilestone)
     const sticker = getMilestoneSticker()
     const isDuplicate = grantSticker(sticker)
-    setPendingGift(prev => prev || { sticker, isDuplicate, isMilestone: true, streakDays: nextMilestone })
+    setGiftQueue(q => [...q, { sticker, isDuplicate, isMilestone: true, streakDays: nextMilestone }])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [history])
 
-  const clearPendingGift = useCallback(() => setPendingGift(null), [])
+  const dismissGift = useCallback(() => setGiftQueue(q => q.slice(1)), [])
 
   const placeSticker = useCallback((stickerId, x, y) => {
     setDiaryPlacements(prev => [...prev, {
@@ -229,7 +233,7 @@ export function useStudent(name) {
     stars, stickerTypes, diaryPlacements, missions,
     activeMissions: missions.filter(m => !m.done),
     cleared, round, dailyProgress, missionsCompletedToday, history, streak,
-    pendingGift, clearPendingGift,
+    pendingGift: giftQueue[0] || null, dismissGift,
     addStars, addMission, answerMission,
     markWordViewed, markExampleHeard, markQuizSolved, markPronunciationOk,
     placeSticker, updatePlacement, removePlacement,
