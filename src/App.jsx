@@ -92,18 +92,18 @@ function AppInner({ student, onLogout }) {
   const [eggPet, setEggPet]         = useState(null)
   const [refreshTick, setRefreshTick] = useState(0)
   const studentData                 = useStudent(student)
-  const { cleared, addPet, answerMission, missions, addStars, markPronunciationOk } = studentData
+  const { cleared, answerMission, claimEgg, missions, addStars, markPronunciationOk } = studentData
   const classWords                  = useMemo(() => {
     try { return getStudentWords(student) || [] } catch { return [] }
   }, [student, refreshTick])
 
-  useEffect(() => {
-    if (cleared.length > 0 && cleared.length % 5 === 0) {
-      const pet = getRandomPet()
-      addPet(pet)
-      setEggPet(pet)
-    }
-  }, [cleared.length])
+  // Egg pick is tied to finishing all 4 daily missions (단어/예문/퀴즈/발음),
+  // not to any word/mission-clear count — see useStudent's eggReady.
+  const handleClaimEgg = () => {
+    const pet = getRandomPet()
+    claimEgg(pet)
+    setEggPet(pet)
+  }
 
   // Re-pull the latest word data from Supabase whenever the app regains focus
   // (e.g. switching back from another app on mobile) so a word added on
@@ -155,19 +155,11 @@ function AppInner({ student, onLogout }) {
     setScreen('wordDetail')
   }
 
-  const handleAnswerMission = (wordId) => {
-    const didClear = answerMission(wordId)
-    if (didClear && cleared.length > 0 && (cleared.length + 1) % 5 === 0) {
-      const pet = getRandomPet()
-      addPet(pet)
-      setEggPet(pet)
-    }
-    return didClear
-  }
+  const handleAnswerMission = (wordId) => answerMission(wordId)
 
   return (
     <>
-      {screen === 'dashboard'     && <Dashboard student={student} studentData={studentData} onGo={setScreen} onLogout={onLogout} />}
+      {screen === 'dashboard'     && <Dashboard student={student} studentData={studentData} onGo={setScreen} onLogout={onLogout} onClaimEgg={handleClaimEgg} />}
       {screen === 'wordBrowser'   && <WordBrowser words={classWords} cleared={cleared} onSelect={handleWordSelect} onBack={() => setScreen('dashboard')} />}
       {screen === 'wordDetail'    && selectedWord && (
         <WordDetail word={selectedWord}

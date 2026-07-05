@@ -95,8 +95,8 @@ function MissionBar({ label, current, goal, emoji }) {
   )
 }
 
-export default function Dashboard({ student, studentData, onGo, onLogout }) {
-  const { stars, pets, activeMissions, dailyProgress, allDailyDone, cleared } = studentData
+export default function Dashboard({ student, studentData, onGo, onLogout, onClaimEgg }) {
+  const { stars, pets, activeMissions, dailyProgress, allDailyDone, eggReady, cleared } = studentData
 
   const className = getStudentClass(student)
   const unitName = getStudentUnit(student)
@@ -174,6 +174,15 @@ export default function Dashboard({ student, studentData, onGo, onLogout }) {
               onClick={studentData.completeDailyMission}
               className="w-full mt-3 bg-gradient-to-r from-yellow-400 to-orange-400 text-white font-black py-3 rounded-2xl btn-press"
             >🎉 보상 받기! (+20⭐)</button>
+          )}
+          {eggReady && (
+            <button
+              onClick={onClaimEgg}
+              className="w-full mt-3 bg-gradient-to-r from-sky-400 to-indigo-500 text-white font-black py-3 rounded-2xl btn-press animate-bounce"
+            >🥚 알 뽑기!</button>
+          )}
+          {!allDailyDone && (
+            <p className="text-center text-xs text-gray-400 mt-3">오늘의 미션 4개를 모두 완료하면 🥚 알 뽑기!</p>
           )}
         </div>
 

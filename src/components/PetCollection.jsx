@@ -16,7 +16,7 @@ export default function PetCollection({ pets, onBack }) {
 
       <div className="max-w-lg mx-auto">
         <div className="bg-green-50 rounded-2xl p-3 border-2 border-green-100 text-center mb-4">
-          <p className="text-green-700 font-bold text-sm">💡 레벨업 미션 5개 클리어하면 알 뽑기!</p>
+          <p className="text-green-700 font-bold text-sm">💡 오늘의 미션 4개 모두 완료하면 알 뽑기!</p>
         </div>
 
         <div className="grid grid-cols-3 gap-3 animate-fade-in">

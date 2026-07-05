@@ -20,6 +20,7 @@ const freshDaily = () => ({
   quizSolved: 0,
   pronunciationOk: 0,
   missionDone: false,
+  eggPicked: false,
 })
 
 export function useStudent(name) {
@@ -95,6 +96,13 @@ export function useStudent(name) {
     addStars(20)
   }, [setDaily, addStars])
 
+  // Egg pick is separate from the +20★ daily bonus above — both require all
+  // 4 daily categories done, but claiming one doesn't consume the other.
+  const claimEgg = useCallback((pet) => {
+    setDaily(prev => ({ ...prev, eggPicked: true }))
+    addPet(pet)
+  }, [setDaily, addPet])
+
   const GOAL = 5
   const dailyProgress = {
     words:          Math.min(daily.wordsViewed.length, GOAL),
@@ -104,18 +112,20 @@ export function useStudent(name) {
     done:           daily.missionDone,
   }
 
+  // The 4 completion conditions: word study, example study, quiz, pronunciation.
   const allDailyDone = (
     dailyProgress.words >= GOAL &&
     dailyProgress.examples >= GOAL &&
     dailyProgress.quizzes >= GOAL &&
     dailyProgress.pronunciations >= GOAL
   )
+  const eggReady = allDailyDone && !daily.eggPicked
 
   return {
     stars, pets, missions,
     activeMissions: missions.filter(m => !m.done),
-    cleared, daily, dailyProgress, allDailyDone,
-    addStars, addMission, answerMission, addPet,
+    cleared, daily, dailyProgress, allDailyDone, eggReady,
+    addStars, addMission, answerMission, addPet, claimEgg,
     markWordViewed, markExampleHeard, markQuizSolved,
     markPronunciationOk, completeDailyMission,
   }

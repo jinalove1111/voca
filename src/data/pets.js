@@ -1,20 +1,22 @@
+// UK-themed character set (16 total) — swapped in place of the old generic
+// animal set so every pull feels tied to learning British-accented English.
 export const PETS = [
-  { id: 'puppy',    name: '강아지',       emoji: '🐶', rarity: 'common',    desc: '꼬리를 살랑살랑 흔들어요!' },
-  { id: 'kitty',    name: '고양이',       emoji: '🐱', rarity: 'common',    desc: '골골골 소리를 내요!' },
-  { id: 'bunny',    name: '토끼',         emoji: '🐰', rarity: 'common',    desc: '폴짝폴짝 잘 뛰어요!' },
-  { id: 'chick',    name: '병아리',       emoji: '🐥', rarity: 'common',    desc: '삐약삐약 귀여워요!' },
-  { id: 'hamster',  name: '햄스터',       emoji: '🐹', rarity: 'common',    desc: '볼이 빵빵해요!' },
-  { id: 'panda',    name: '판다',         emoji: '🐼', rarity: 'common',    desc: '대나무를 좋아해요!' },
-  { id: 'penguin',  name: '펭귄',         emoji: '🐧', rarity: 'common',    desc: '뒤뚱뒤뚱 귀여워요!' },
-  { id: 'fox',      name: '여우',         emoji: '🦊', rarity: 'rare',      desc: '영리하고 빠른 여우!' },
-  { id: 'dragon',   name: '드래곤',       emoji: '🐲', rarity: 'rare',      desc: '불을 뿜어요! 멋져요!' },
-  { id: 'owl',      name: '부엉이',       emoji: '🦉', rarity: 'rare',      desc: '책을 읽는 걸 좋아해요!' },
-  { id: 'tiger',    name: '호랑이',       emoji: '🐯', rarity: 'rare',      desc: '으르렁! 용감한 친구!' },
-  { id: 'alien',    name: '외계인',       emoji: '👽', rarity: 'epic',      desc: '우주에서 왔어요! 희귀해요!' },
-  { id: 'robot',    name: '로봇',         emoji: '🤖', rarity: 'epic',      desc: '빵야빵야! 첨단 친구!' },
-  { id: 'unicorn',  name: '유니콘',       emoji: '🦄', rarity: 'epic',      desc: '무지개를 타고 달려요!' },
-  { id: 'phoenix',  name: '불사조',       emoji: '🔥🐦', rarity: 'legendary', desc: '전설의 새! 엄청 희귀해요!' },
-  { id: 'stardrgn', name: '별빛 드래곤',  emoji: '⭐🐲', rarity: 'legendary', desc: '세상에서 가장 강한 드래곤!' },
+  { id: 'ukflag',   name: '영국 국기',     emoji: '🇬🇧', rarity: 'common',    desc: '유니언잭! 영국을 상징해요!' },
+  { id: 'busred',   name: '런던 버스',     emoji: '🚌', rarity: 'common',    desc: '런던 시내를 달리는 2층 버스!' },
+  { id: 'corgi',    name: '코기',         emoji: '🐶', rarity: 'common',    desc: '여왕님이 사랑한 다리 짧은 강아지!' },
+  { id: 'telbooth', name: '빨간 전화박스', emoji: '☎️', rarity: 'common',    desc: '런던 거리의 상징이에요!' },
+  { id: 'tea',      name: '홍차',         emoji: '🍵', rarity: 'common',    desc: '오후 3시엔 꼭 티타임!' },
+  { id: 'football', name: '축구공',       emoji: '⚽', rarity: 'common',    desc: '축구의 고향, 영국!' },
+  { id: 'postbox',  name: '빨간 우체통',   emoji: '📮', rarity: 'common',    desc: '영국 거리마다 있는 빨간 우체통!' },
+  { id: 'crown',    name: '왕관',         emoji: '👑', rarity: 'rare',      desc: '왕실의 상징, 반짝반짝!' },
+  { id: 'paddington', name: '패딩턴',     emoji: '🐻', rarity: 'rare',      desc: '마멀레이드를 좋아하는 곰돌이!' },
+  { id: 'gentleman', name: '신사',        emoji: '🎩', rarity: 'rare',      desc: '중절모를 쓴 멋쟁이 신사!' },
+  { id: 'umbrella', name: '우산',         emoji: '☂️', rarity: 'rare',      desc: '비 오는 런던엔 우산이 필수!' },
+  { id: 'guard',    name: '근위병',       emoji: '💂', rarity: 'epic',      desc: '버킹엄 궁전을 지키는 근위병!' },
+  { id: 'castle',   name: '성',           emoji: '🏰', rarity: 'epic',      desc: '영국의 오래된 멋진 성!' },
+  { id: 'piepot',   name: '미트파이',     emoji: '🥧', rarity: 'epic',      desc: '따끈따끈 영국식 미트파이!' },
+  { id: 'lion',     name: '사자',         emoji: '🦁', rarity: 'legendary', desc: '영국 왕실 문장의 용맹한 사자!' },
+  { id: 'blackcab', name: '블랙캡 택시',  emoji: '🚕', rarity: 'legendary', desc: '런던의 상징, 검은 택시!' },
 ]
 
 export const RARITY_COLORS = {
