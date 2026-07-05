@@ -1,9 +1,55 @@
 import React, { useState, useRef } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit } from '../utils/wordLibrary'
+import { getStudents, removeStudent } from '../hooks/useStudent'
 import FeatureManagementPanel from './FeatureManagementPanel'
 
-const PIN = '1234'
+// 학생 관리 — admin-only. Students themselves never see this roster (see
+// StudentSelect.jsx, which only ever shows a name/class entry form).
+function StudentManagement() {
+  const [students, setStudents] = useState(() => getStudents())
+
+  const refresh = () => setStudents(getStudents())
+
+  const handleRemove = async (name) => {
+    if (!window.confirm(`"${name}" 학생을 삭제할까요? 학습 기록도 함께 삭제됩니다.`)) return
+    try {
+      await removeStudent(name)
+      refresh()
+    } catch (err) {
+      alert('삭제 중 오류가 발생했어요: ' + (err.message || err))
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="bg-white rounded-3xl card-shadow p-5">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-black text-gray-700">👦 전체 학생 ({students.length}명)</p>
+          <button onClick={refresh} className="text-xs text-purple-500 font-bold btn-press">🔄 새로고침</button>
+        </div>
+        {students.length === 0 ? (
+          <p className="text-center text-gray-400 text-sm py-8">아직 등록된 학생이 없어요.</p>
+        ) : (
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {students.map((s) => (
+              <div key={s} className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
+                <div>
+                  <p className="font-black text-gray-800">{s}</p>
+                  <p className="text-xs text-gray-400">
+                    {[getStudentClass(s), getStudentUnit(s)].filter(Boolean).join(' · ') || '반 미배정'}
+                  </p>
+                </div>
+                <button onClick={() => handleRemove(s)}
+                  className="bg-red-100 text-red-500 font-bold px-3 py-2 rounded-xl text-xs btn-press">삭제</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -317,6 +363,7 @@ function PdfUpload({ onDone }) {
 export default function AdminScreen({ onBack }) {
   const [pin, setPin]         = useState('')
   const [authed, setAuthed]   = useState(false)
+  const [checkingPin, setCheckingPin] = useState(false)
   const [tab, setTab]         = useState('classes') // classes | excel | pdf | features
   const [classes, setClasses] = useState(() => getClassNames())
   const [viewClass, setView]  = useState(null)
@@ -336,9 +383,22 @@ export default function AdminScreen({ onBack }) {
     }
   }
 
-  const handlePin = () => {
-    if (pin === PIN) setAuthed(true)
-    else { alert('비밀번호가 틀렸어요!'); setPin('') }
+  const handlePin = async () => {
+    setCheckingPin(true)
+    try {
+      const res = await fetch('/api/verify-admin-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin }),
+      })
+      const data = await res.json()
+      if (data.ok) setAuthed(true)
+      else { alert('비밀번호가 틀렸어요!'); setPin('') }
+    } catch (err) {
+      alert('확인 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setCheckingPin(false)
+    }
   }
 
   if (!authed) return (
@@ -347,11 +407,13 @@ export default function AdminScreen({ onBack }) {
         <div className="text-5xl mb-4">🔒</div>
         <h2 className="font-black text-xl text-gray-800 mb-6">관리자 로그인</h2>
         <input type="password" value={pin} onChange={e => setPin(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handlePin()}
-          placeholder="비밀번호 (기본: 1234)" maxLength={8}
+          onKeyDown={e => e.key === 'Enter' && !checkingPin && handlePin()}
+          placeholder="비밀번호" maxLength={8}
           className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 font-bold text-center focus:outline-none focus:border-purple-400 mb-3" autoFocus />
-        <button onClick={handlePin}
-          className="w-full bg-purple-500 text-white font-black py-3 rounded-2xl btn-press mb-3">로그인</button>
+        <button onClick={handlePin} disabled={checkingPin}
+          className="w-full bg-purple-500 text-white font-black py-3 rounded-2xl btn-press mb-3 disabled:opacity-50">
+          {checkingPin ? '⏳ 확인 중...' : '로그인'}
+        </button>
         <button onClick={onBack} className="text-gray-400 font-bold text-sm btn-press">← 돌아가기</button>
       </div>
     </div>
@@ -368,7 +430,7 @@ export default function AdminScreen({ onBack }) {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6 overflow-x-auto">
-          {[['classes','📚 반 관리'],['excel','📊 Excel'],['pdf','📄 PDF'],['features','🎯 기능']].map(([k,l]) => (
+          {[['classes','📚 반 관리'],['students','👦 학생 관리'],['excel','📊 Excel'],['pdf','📄 PDF'],['features','🎯 기능']].map(([k,l]) => (
             <button key={k} onClick={() => setTab(k)}
               className={`py-2 px-3 rounded-xl font-black text-sm btn-press transition-colors whitespace-nowrap ${tab === k ? 'bg-purple-500 text-white' : 'bg-white text-gray-500 border-2 border-gray-200'}`}>
               {l}
@@ -522,6 +584,7 @@ export default function AdminScreen({ onBack }) {
           </div>
         )}
 
+        {tab === 'students' && <StudentManagement />}
         {tab === 'excel' && <ExcelUpload onDone={() => { refresh(); setTab('classes') }} />}
         {tab === 'pdf'   && <PdfUpload   onDone={() => { refresh(); setTab('classes') }} />}
         {tab === 'features' && <FeatureManagementPanel />}
