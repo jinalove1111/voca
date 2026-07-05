@@ -404,6 +404,112 @@ export function hasMicStream() {
 // Back-compat name used by the rest of the app.
 export const getMicStream = getMicStreamOnce
 
+// ── Volume-based auto-stop recording ────────────────────────────────────────
+// Records from the shared mic stream and stops itself as soon as the child
+// has clearly finished talking, instead of always waiting out a fixed
+// window. Purely local volume (RMS) analysis via Web Audio's AnalyserNode —
+// no STT/Whisper/cloud service involved, so this costs nothing and works
+// offline.
+//
+// Rules (all local, no network):
+//   - Recording never stops before `minMs` — a slow starter isn't cut off.
+//   - Once `minMs` has passed, `silenceMs` of continuous quiet ends it
+//     immediately (no waiting out the rest of `maxMs`).
+//   - If the child just keeps talking, `maxMs` is the hard ceiling.
+const SILENCE_RMS_THRESHOLD = 0.02 // tuned for typical phone mic gain; a
+// louder background room may need this raised — it's a single constant to
+// adjust if silence is detected too eagerly/rarely in practice.
+const SILENCE_CHECK_MS = 100
+
+// Returns { promise, stop } — `promise` resolves with the recorded Blob
+// once stopped (by silence, maxMs, or an external `stop()` call); `stop()`
+// lets a caller (e.g. a "cancel" tap, or a safety timeout) end the
+// recording early and still get whatever was captured so far.
+export function recordWithAutoStop(stream, {
+  maxMs = 5000,
+  minMs = 2000,
+  silenceMs = 1000,
+  mimeType = '',
+} = {}) {
+  let externalStop = () => {}
+  const promise = new Promise((resolve, reject) => {
+    let mr
+    try {
+      mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
+    } catch (err) {
+      reject(err)
+      return
+    }
+
+    const chunks = []
+    mr.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data) }
+
+    // Web Audio analysis runs alongside MediaRecorder on the same stream —
+    // it only reads the signal, it doesn't consume/lock the track, so this
+    // doesn't conflict with the recorder (unlike the earlier SpeechRecognition
+    // + MediaRecorder mic contention issue: this never opens a second
+    // capture session, just a second consumer of the same one).
+    const AudioCtx = window.AudioContext || window.webkitAudioContext
+    const audioCtx = new AudioCtx()
+    const source = audioCtx.createMediaStreamSource(stream)
+    const analyser = audioCtx.createAnalyser()
+    analyser.fftSize = 2048
+    source.connect(analyser)
+    const data = new Uint8Array(analyser.fftSize)
+
+    const startedAt = Date.now()
+    let lastLoudAt = startedAt
+    let stopped = false
+    let pollTimer = null
+
+    const cleanup = () => {
+      clearTimeout(pollTimer)
+      try { source.disconnect() } catch {}
+      try { audioCtx.close() } catch {}
+    }
+
+    const finish = () => {
+      if (stopped) return
+      stopped = true
+      cleanup()
+      if (mr.state === 'recording') {
+        try { mr.stop() } catch { /* onstop still fires */ }
+      }
+    }
+    externalStop = finish
+
+    mr.onstop = () => {
+      cleanup()
+      resolve(new Blob(chunks, { type: mimeType || 'audio/webm' }))
+    }
+    mr.onerror = (e) => { cleanup(); reject(e.error || new Error('MediaRecorder error')) }
+
+    const poll = () => {
+      analyser.getByteTimeDomainData(data)
+      let sumSquares = 0
+      for (let i = 0; i < data.length; i++) {
+        const v = (data[i] - 128) / 128
+        sumSquares += v * v
+      }
+      const rms = Math.sqrt(sumSquares / data.length)
+      const now = Date.now()
+      if (rms > SILENCE_RMS_THRESHOLD) lastLoudAt = now
+
+      const elapsed = now - startedAt
+      const silentFor = now - lastLoudAt
+
+      if (elapsed >= maxMs) { finish(); return }
+      if (elapsed >= minMs && silentFor >= silenceMs) { finish(); return }
+
+      pollTimer = setTimeout(poll, SILENCE_CHECK_MS)
+    }
+
+    mr.start()
+    poll()
+  })
+  return { promise, stop: () => externalStop() }
+}
+
 function normalize(str) {
   return str.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim()
 }

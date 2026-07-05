@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { playWordAudio, stopCurrentAudio, getMicStream, hasMicStream, transcribeViaServerSTT, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
+import { playWordAudio, stopCurrentAudio, getMicStream, hasMicStream, recordWithAutoStop, transcribeViaServerSTT, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
 import { requestAudioGeneration } from '../utils/wordLibrary'
 import { isInAppBrowser } from '../utils/browserDetect'
 import InAppBrowserNotice from './InAppBrowserNotice'
@@ -13,7 +13,7 @@ function getAudioMimeType() {
 // ── SpeechBtn ─────────────────────────────────────────────────────────────────
 // onAnyResult fires when: pronunciation success OR tries >= 2 (fail)
 // This lets the parent know it's safe to show a "계속" button.
-function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess, onAnyResult }) {
+function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5000, onSuccess, onAnyResult }) {
   const [phase, setPhase] = useState('idle')
   const [msg, setMsg]     = useState('')
   const [myRecUrl, setUrl] = useState(null)
@@ -26,7 +26,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
   const hangTimerRef       = useRef(null)
 
   useEffect(() => () => {
-    if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
+    try { mrRef.current?.stop?.() } catch {}
   }, [])
 
   // The mic stream primed on Dashboard (see getMicStreamOnce, a module-level
@@ -83,7 +83,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
       settledRef.current = true
       console.log('[WordDetail] STEP7 Success or Fail:', nextPhase)
       clearTimeout(hangTimerRef.current)
-      if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
+      try { mrRef.current?.stop?.() } catch {}
       if (success) { onSuccess?.(); onAnyResult?.() }
       if (countTry) {
         setTries(prev => {
@@ -101,60 +101,63 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
       return
     }
 
+    // Safety net sized to the recording's own max length (+ buffer for the
+    // STT stub call) — must never be shorter than maxMs itself, or a long
+    // (e.g. 15s example) recording would get cut off by this timeout before
+    // it ever gets a chance to finish on its own.
     hangTimerRef.current = setTimeout(() => {
-      console.warn('[WordDetail] recording+grading timed out after 8s')
+      console.warn('[WordDetail] recording+grading timed out')
       finish('fail', '시간이 오래 걸려요. 다시 시도해봐요! 🗣️', { countTry: true })
-    }, 8000)
+    }, maxMs + 4000)
 
     const mimeType = getAudioMimeType()
     getMicStream()
-      .then(stream => {
+      .then(async (stream) => {
         console.log('[WordDetail] mic stream received')
-        const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
-        console.log('[WordDetail] MediaRecorder created')
-        const chunks = []
-        mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
-        mr.onstart = () => console.log('[WordDetail] STEP1 Recording Started')
-        mr.onstop = async () => {
-          console.log('[WordDetail] STEP2 Recording Stopped')
-          const blob = new Blob(chunks, { type: mimeType || 'audio/webm' })
-          console.log('[WordDetail] STEP3 Blob Created — blob.size =', blob.size)
-          setUrl(URL.createObjectURL(blob))
+        console.log('[WordDetail] STEP1 Recording Started (maxMs:', maxMs, ')')
+        let blob
+        try {
+          // Volume-only auto-stop (no STT/AI) — never ends before minMs
+          // (2s), ends as soon as 1s of silence follows any speech, and
+          // never runs past maxMs regardless.
+          const rec = recordWithAutoStop(stream, { maxMs, minMs: 2000, silenceMs: 1000, mimeType })
+          mrRef.current = rec // exposes .stop() for cancelListen()/the hang timer
+          blob = await rec.promise
+        } catch (err) {
+          console.error('[WordDetail] recordWithAutoStop error:', err)
+          finish('fail', `녹음 오류 (${err.name}: ${err.message})`, { countTry: true })
+          return
+        }
+        console.log('[WordDetail] STEP2 Recording Stopped')
+        console.log('[WordDetail] STEP3 Blob Created — blob.size =', blob.size)
+        setUrl(URL.createObjectURL(blob))
 
-          if (blob.size === 0) {
-            finish('fail', '소리가 안 들렸어요. 다시 시도해봐요! 🗣️', { countTry: true })
-            return
-          }
+        if (blob.size === 0) {
+          finish('fail', '소리가 안 들렸어요. 다시 시도해봐요! 🗣️', { countTry: true })
+          return
+        }
 
-          console.log('[WordDetail] STEP4 Send blob to server STT')
-          try {
-            const heard = await transcribeViaServerSTT(blob)
-            console.log('[WordDetail] STEP5 STT Result:', heard)
-            if (heard) {
-              console.log('[WordDetail] STEP6 Compare — heard:', heard, 'target:', target)
-              setTranscript(heard)
-              const ok = heard.toLowerCase().includes(target.toLowerCase())
-              if (ok) finish('success', rndMsg(SUCCESS_MSGS), { success: true })
-              else finish('fail', rndMsg(FAIL_MSGS), { countTry: true })
-            } else {
-              // No STT provider configured yet — recording itself succeeded,
-              // just no accuracy grading available. Not a failure.
-              setUngraded(true)
-              finish('success', '녹음 완료! 내 발음을 들어보고 원어민과 비교해봐요. 🎧', { success: true })
-            }
-          } catch (err) {
-            console.error('[WordDetail] transcribeViaServerSTT() failed:', err)
+        console.log('[WordDetail] STEP4 Send blob to server STT')
+        try {
+          const heard = await transcribeViaServerSTT(blob)
+          console.log('[WordDetail] STEP5 STT Result:', heard)
+          if (heard) {
+            console.log('[WordDetail] STEP6 Compare — heard:', heard, 'target:', target)
+            setTranscript(heard)
+            const ok = heard.toLowerCase().includes(target.toLowerCase())
+            if (ok) finish('success', rndMsg(SUCCESS_MSGS), { success: true })
+            else finish('fail', rndMsg(FAIL_MSGS), { countTry: true })
+          } else {
+            // No STT provider configured yet — recording itself succeeded,
+            // just no accuracy grading available. Not a failure.
             setUngraded(true)
             finish('success', '녹음 완료! 내 발음을 들어보고 원어민과 비교해봐요. 🎧', { success: true })
           }
+        } catch (err) {
+          console.error('[WordDetail] transcribeViaServerSTT() failed:', err)
+          setUngraded(true)
+          finish('success', '녹음 완료! 내 발음을 들어보고 원어민과 비교해봐요. 🎧', { success: true })
         }
-        mr.start()
-        console.log('[WordDetail] recorder.start called')
-        mrRef.current = mr
-        setTimeout(() => {
-          console.log('[WordDetail] recorder stop called')
-          if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
-        }, 2500)
       })
       .catch((err) => {
         console.error('[WordDetail] mic stream error:', err)
@@ -170,7 +173,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', onSuccess
     if (settledRef.current) return
     settledRef.current = true
     clearTimeout(hangTimerRef.current)
-    if (mrRef.current?.state === 'recording') { try { mrRef.current.stop() } catch {} }
+    try { mrRef.current?.stop?.() } catch {}
     setPhase('fail')
     setMsg('다시 눌러서 시도해봐요! 🎤')
   }
@@ -263,6 +266,7 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk }) {
           target={word.word}
           wordAudioUrl={word.wordAudioUrl}
           label="따라 말하기"
+          maxMs={5000}
           onSuccess={onMarkPronunciationOk}
           onAnyResult={() => setCanProceed(true)}
         />
@@ -316,6 +320,7 @@ function ExampleStep({ english, korean, memoryTip, audioUrl, onDone, onMarkExamp
             target={english}
             wordAudioUrl={audioUrl}
             label="예문 따라 말하기"
+            maxMs={15000}
             onAnyResult={() => setCanProceed(true)}
           />
         </div>
