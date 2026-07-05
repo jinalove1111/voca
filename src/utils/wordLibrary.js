@@ -365,6 +365,19 @@ export async function setStudentUnit(name, unitName) {
   await refreshStudents()
 }
 
+// Bulk reassignment (admin "일괄 이동") — one Supabase write + one refresh for
+// N students, instead of N sequential setStudentClass/setStudentUnit calls
+// (which would be 2N round-trips and could leave the roster in a
+// half-moved state if one call in the middle failed).
+export async function setStudentsClassBulk(names, className, unitName) {
+  const ids = names.map(n => _students[n]?.id).filter(Boolean)
+  if (ids.length === 0) return
+  const classId = className ? (await ensureClass(className)).id : null
+  const { error } = await supabase.from('students').update({ class_id: classId, unit_name: unitName }).in('id', ids)
+  if (error) throw error
+  await refreshStudents()
+}
+
 // Returns full word objects for a student, sourced ONLY from Supabase class
 // data — word and meaning always come straight from the DB row, never from
 // the built-in demo bank (data/words.js), even if the text happens to match.

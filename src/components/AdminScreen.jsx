@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, getStudentsInClass } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass } from '../utils/wordLibrary'
 import { getStudents, removeStudent } from '../hooks/useStudent'
 import FeatureManagementPanel from './FeatureManagementPanel'
 
@@ -73,26 +73,27 @@ function StudentManagement() {
   }
 
   // 반별로 묶어 보여주기 — 관리자가 여러 반을 한눈에 비교할 수 있게. 미배정
-  // 학생은 별도 그룹으로 맨 위에 표시해 눈에 잘 띄게 함.
+  // 학생은 별도 그룹으로 맨 위에 표시해 눈에 잘 띄게 함. classList에 없는
+  // (반 삭제 직후 등으로 이름이 어긋난) 학생도 별도 그룹으로 반드시 표시해
+  // 전체 학생 수(헤더)·CSV에는 있는데 목록에서만 조용히 사라지는 일이 없게 함.
+  const knownClassNames = new Set(classList)
   const groups = [
     { name: '⚠️ 반 미배정', students: students.filter(s => !getStudentClass(s)) },
     ...classList.map(c => ({ name: c, students: students.filter(s => getStudentClass(s) === c) })),
+    { name: '❓ 알 수 없는 반 (새로고침 필요)', students: students.filter(s => { const c = getStudentClass(s); return c && !knownClassNames.has(c) }) },
   ].filter(g => g.students.length > 0)
 
   const handleBulkMove = async () => {
     if (!bulkTargetClass || selected.size === 0) return
     setBulkBusy(true)
     try {
-      for (const name of selected) {
-        await setStudentClass(name, bulkTargetClass)
-        await setStudentUnit(name, getClassUnitNames(bulkTargetClass)[0] || 'Unit 1')
-      }
+      await setStudentsClassBulk([...selected], bulkTargetClass, getClassUnitNames(bulkTargetClass)[0] || 'Unit 1')
       setSelected(new Set())
       setBulkTargetClass('')
-      refresh()
     } catch (err) {
       alert('일괄 이동 중 오류가 발생했어요: ' + (err.message || err))
     } finally {
+      refresh()
       setBulkBusy(false)
     }
   }
