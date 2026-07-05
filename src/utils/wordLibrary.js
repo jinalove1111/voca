@@ -87,12 +87,17 @@ let _students = {}
 export async function refreshStudents() {
   const { data, error } = await supabase
     .from('students')
-    .select('id,name,unit_name,classes(name)')
+    .select('id,name,class_id,unit_name,classes(name)')
     .order('created_at')
   if (error) throw error
   const map = {}
   data.forEach((s) => {
-    map[s.name] = { id: s.id, className: s.classes?.name || '', unitName: s.unit_name || DEFAULT_UNIT_NAME }
+    map[s.name] = {
+      id: s.id,
+      classId: s.class_id || null,
+      className: s.classes?.name || '',
+      unitName: s.unit_name || DEFAULT_UNIT_NAME,
+    }
   })
   _students = map
   return map
@@ -285,7 +290,21 @@ export async function removeStudent(name) {
 }
 
 export const getStudentClass = (name) => _students[name]?.className || ''
+export const getStudentClassId = (name) => _students[name]?.classId || null
 export const getStudentUnit = (name) => _students[name]?.unitName || DEFAULT_UNIT_NAME
+
+// _cache is keyed by class NAME (see refreshWordLibrary), but a student is
+// linked to a class by class_id (the DB foreign key) — this resolves a
+// class's current name from its id, which is robust against the same class
+// being renamed after a student was assigned to it (a plain className
+// string comparison would silently break in that case).
+const getClassNameById = (classId) => {
+  if (!classId) return ''
+  for (const [name, cls] of Object.entries(_cache)) {
+    if (cls.id === classId) return name
+  }
+  return ''
+}
 
 export async function setStudentClass(name, className) {
   const s = _students[name]
@@ -310,12 +329,35 @@ export async function setStudentUnit(name, unitName) {
 // No class assigned (on this device) or an empty unit both mean "no words
 // yet"; the screen shows nothing rather than substituting sample content.
 export const getStudentWords = (name) => {
+  const classId = getStudentClassId(name)
+  const unitName = getStudentUnit(name)
+  // Resolve the class by id first (robust to renames) — the joined
+  // className is only a fallback for legacy rows with no class_id at all.
+  const cls = getClassNameById(classId) || getStudentClass(name)
   try {
-    const cls = getStudentClass(name)
-    if (!cls) return []
-    const unitName = getStudentUnit(name)
+    if (!cls) {
+      console.log('[wordLibrary] getStudentWords: no class resolved', {
+        selectedStudent: name,
+        selectedClass: getStudentClass(name),
+        selectedClassId: classId,
+        selectedUnit: unitName,
+        queryResult: null,
+        queryError: 'student has no class_id and no joined class name',
+      })
+      return []
+    }
     const raw = getClassWords(cls, unitName)
-    if (!Array.isArray(raw) || !raw.length) return []
+    if (!Array.isArray(raw) || !raw.length) {
+      console.log('[wordLibrary] getStudentWords: empty result', {
+        selectedStudent: name,
+        selectedClass: cls,
+        selectedClassId: classId,
+        selectedUnit: unitName,
+        queryResult: raw,
+        queryError: null,
+      })
+      return []
+    }
     return raw.map((cw) => {
       if (!cw || !cw.word) return null
       return {
@@ -345,7 +387,15 @@ export const getStudentWords = (name) => {
         exampleText:     cw.exampleText || null,
       }
     }).filter(Boolean)
-  } catch {
+  } catch (err) {
+    console.log('[wordLibrary] getStudentWords: query error', {
+      selectedStudent: name,
+      selectedClass: cls,
+      selectedClassId: classId,
+      selectedUnit: unitName,
+      queryResult: null,
+      queryError: err?.message || String(err),
+    })
     return []
   }
 }

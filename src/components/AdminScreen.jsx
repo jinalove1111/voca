@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit } from '../utils/wordLibrary'
 import { getStudents, removeStudent } from '../hooks/useStudent'
 import FeatureManagementPanel from './FeatureManagementPanel'
 
@@ -8,6 +8,10 @@ import FeatureManagementPanel from './FeatureManagementPanel'
 // StudentSelect.jsx, which only ever shows a name/class entry form).
 function StudentManagement() {
   const [students, setStudents] = useState(() => getStudents())
+  const [editing, setEditing] = useState(null) // student name currently being reassigned
+  const [editClass, setEditClass] = useState('')
+  const [editUnit, setEditUnit] = useState('')
+  const classList = getClassNames()
 
   const refresh = () => setStudents(getStudents())
 
@@ -18,6 +22,24 @@ function StudentManagement() {
       refresh()
     } catch (err) {
       alert('삭제 중 오류가 발생했어요: ' + (err.message || err))
+    }
+  }
+
+  const startEdit = (name) => {
+    setEditing(name)
+    setEditClass(getStudentClass(name))
+    setEditUnit(getStudentUnit(name))
+  }
+
+  const saveEdit = async () => {
+    if (!editClass) { alert('반을 선택해주세요!'); return }
+    try {
+      await setStudentClass(editing, editClass)
+      await setStudentUnit(editing, editUnit || 'Unit 1')
+      setEditing(null)
+      refresh()
+    } catch (err) {
+      alert('반 배정 중 오류가 발생했어요: ' + (err.message || err))
     }
   }
 
@@ -33,15 +55,45 @@ function StudentManagement() {
         ) : (
           <div className="space-y-2 max-h-[60vh] overflow-y-auto">
             {students.map((s) => (
-              <div key={s} className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
-                <div>
-                  <p className="font-black text-gray-800">{s}</p>
-                  <p className="text-xs text-gray-400">
-                    {[getStudentClass(s), getStudentUnit(s)].filter(Boolean).join(' · ') || '반 미배정'}
-                  </p>
+              <div key={s} className="bg-gray-50 rounded-xl px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-black text-gray-800">{s}</p>
+                    <p className={`text-xs ${getStudentClass(s) ? 'text-gray-400' : 'text-red-500 font-bold'}`}>
+                      {[getStudentClass(s), getStudentUnit(s)].filter(Boolean).join(' · ') || '⚠️ 반 미배정'}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => startEdit(s)}
+                      className="bg-blue-100 text-blue-600 font-bold px-3 py-2 rounded-xl text-xs btn-press">반 배정</button>
+                    <button onClick={() => handleRemove(s)}
+                      className="bg-red-100 text-red-500 font-bold px-3 py-2 rounded-xl text-xs btn-press">삭제</button>
+                  </div>
                 </div>
-                <button onClick={() => handleRemove(s)}
-                  className="bg-red-100 text-red-500 font-bold px-3 py-2 rounded-xl text-xs btn-press">삭제</button>
+                {editing === s && (
+                  <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
+                    <select value={editClass} onChange={e => {
+                        setEditClass(e.target.value)
+                        setEditUnit(getClassUnitNames(e.target.value)[0] || 'Unit 1')
+                      }}
+                      className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-bold bg-white">
+                      <option value="">반 선택</option>
+                      {classList.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    {editClass && (
+                      <select value={editUnit} onChange={e => setEditUnit(e.target.value)}
+                        className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-bold bg-white">
+                        {getClassUnitNames(editClass).map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    )}
+                    <div className="flex gap-2">
+                      <button onClick={() => setEditing(null)}
+                        className="flex-1 border-2 border-gray-200 text-gray-500 font-bold py-2 rounded-xl text-xs btn-press">취소</button>
+                      <button onClick={saveEdit}
+                        className="flex-1 bg-blue-500 text-white font-black py-2 rounded-xl text-xs btn-press">저장</button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
