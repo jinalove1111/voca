@@ -106,7 +106,7 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
               {isAnswered && (
                 <div className={`mt-4 p-3 rounded-2xl border-2 text-sm animate-slide-up ${isCorrect ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
                   {isCorrect
-                    ? `정답! (+1⭐) — ${Math.max(0, 3 - (count + 1))}번 더 맞히면 클리어!`
+                    ? `정답! — ${Math.max(0, 3 - (count + 1))}번 더 맞히면 클리어! (+3⭐)`
                     : `틀렸어요! 정답: ${w?.meaning}`}
                 </div>
               )}
