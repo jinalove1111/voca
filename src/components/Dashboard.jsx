@@ -106,7 +106,7 @@ function MissionBar({ label, current, goal, emoji }) {
 //   3. Mid-unit — offer to resume exactly where they left off.
 //   4. Otherwise — plain "start studying" default.
 function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onPlayGame }) {
-  const { activeMissions, missionsCompletedToday, lastWordIndex } = studentData
+  const { activeMissions, giftsToday, lastWordIndex } = studentData
   const hasWords = classWords.length > 0
   const canResume = hasWords && lastWordIndex > 0 && lastWordIndex < classWords.length
 
@@ -117,10 +117,10 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
       desc: `${activeMissions.length}개 단어를 다시 연습하면 완전히 내 것이 돼요.`,
       label: '지금 복습하기', onClick: () => onGo('levelUpMission'),
     }
-  } else if (missionsCompletedToday >= 5) {
+  } else if (giftsToday >= 2) {
     rec = {
       emoji: '🌟', title: '정말 열심히 했어요!',
-      desc: '오늘 미션을 이미 많이 완료했어요. 보너스 게임 어때요?',
+      desc: '오늘 미션을 이미 여러 번 완료했어요. 보너스 게임 어때요?',
       label: '보너스 게임 하기', onClick: onPlayGame,
     }
   } else if (canResume) {
@@ -235,7 +235,9 @@ export default function Dashboard({ student, studentData, classWords, onGo, onLo
             <span className="text-2xl">🎯</span>
             <h2 className="font-black text-gray-800 text-lg">오늘의 미션</h2>
             {missionsCompletedToday > 0 && (
-              <span className="ml-auto bg-green-100 text-green-600 font-black text-xs px-3 py-1 rounded-full">오늘 {missionsCompletedToday}회 완료! 🎉</span>
+              <span className={`ml-auto font-black text-xs px-3 py-1 rounded-full ${missionsCompletedToday >= 4 ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-700'}`}>
+                오늘 미션 {missionsCompletedToday}/4 완료{missionsCompletedToday >= 4 ? '! 🎉' : ''}
+              </span>
             )}
           </div>
           <div className="space-y-2">

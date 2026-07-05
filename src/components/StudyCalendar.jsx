@@ -7,16 +7,18 @@ const stickerEmoji = (id) => STICKERS.find(s => s.id === id)?.emoji
 const FALLBACK_MARKERS = ['🌸', '⭐', '🎀', '🧋', '🌈', '💖']
 
 function markerFor(day, dateKey) {
-  if (!day || day.missionsCompleted <= 0) return null
+  if (!day || day.categoriesCompleted <= 0) return null
   if (day.stickersEarned?.length) return stickerEmoji(day.stickersEarned[day.stickersEarned.length - 1]) || '⭐'
   const idx = Math.abs([...dateKey].reduce((a, c) => a + c.charCodeAt(0), 0)) % FALLBACK_MARKERS.length
   return FALLBACK_MARKERS[idx]
 }
 
-function sizeFor(count) {
-  if (count >= 10) return 'text-3xl'
-  if (count >= 5) return 'text-2xl'
-  if (count >= 3) return 'text-xl'
+// categoriesCompleted is 0-4 (단어/예문/퀴즈/발음 중 완료한 개수) — bigger
+// sticker the more of today's 4 categories were finished that day.
+function sizeFor(categoriesCompleted) {
+  if (categoriesCompleted >= 4) return 'text-3xl'
+  if (categoriesCompleted >= 3) return 'text-2xl'
+  if (categoriesCompleted >= 2) return 'text-xl'
   return 'text-lg'
 }
 
@@ -76,7 +78,7 @@ export default function StudyCalendar({ studentData, onBack }) {
                 <button key={i} onClick={() => setSelectedDay({ key, day, dateNum: d })}
                   className={`aspect-square rounded-xl flex flex-col items-center justify-center btn-press ${isToday ? 'ring-2 ring-purple-400' : ''} ${marker ? 'bg-yellow-50' : 'bg-gray-50'}`}>
                   {marker ? (
-                    <span className={sizeFor(day.missionsCompleted)}>{marker}</span>
+                    <span className={sizeFor(day.categoriesCompleted)}>{marker}</span>
                   ) : (
                     <span className="text-xs text-gray-400">{d}</span>
                   )}
@@ -96,7 +98,7 @@ export default function StudyCalendar({ studentData, onBack }) {
             {selectedDay.day ? (
               <div className="space-y-2 text-left">
                 <p className="text-sm">✔ 공부 여부: <span className="font-bold text-green-600">공부했어요!</span></p>
-                <p className="text-sm">✔ 완료한 미션: <span className="font-bold">{selectedDay.day.missionsCompleted}회</span></p>
+                <p className="text-sm">✔ 완료한 미션: <span className="font-bold">{selectedDay.day.categoriesCompleted}/4</span></p>
                 <p className="text-sm">✔ 획득한 별: <span className="font-bold text-yellow-600">⭐ {selectedDay.day.starsEarned}</span></p>
                 <div className="text-sm">
                   ✔ 획득한 스티커:{' '}

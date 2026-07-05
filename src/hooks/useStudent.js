@@ -10,13 +10,30 @@ import { getRandomSticker, getMilestoneSticker, STICKERS } from '../data/sticker
 // student roster/class itself is already shared via Supabase).
 export { getStudents, addStudent, removeStudent } from '../utils/wordLibrary'
 
-const PREFIX = 'paulEasyVoca'
-const sk = (name, type) => `${PREFIX}_${name}_${type}`
-const load = (key, def) => { try { return JSON.parse(localStorage.getItem(key)) ?? def } catch { return def } }
-const loadArr = (key) => { const v = load(key, []); return Array.isArray(v) ? v : [] }
-const loadNum = (key) => { const v = load(key, 0); return typeof v === 'number' ? v : 0 }
-const loadObj = (key) => { const v = load(key, {}); return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {} }
-const save = (key, val) => localStorage.setItem(key, JSON.stringify(val))
+// ── Single unified progress store ───────────────────────────────────────
+// Every per-student value the app tracks (stars, stickers, today's mission
+// progress, permanent calendar history, streak bookkeeping, diary, level-up
+// missions...) lives under ONE localStorage key, keyed by student name. This
+// replaces the old scattered paulEasyVoca_{name}_{field} keys — the bug
+// where the Dashboard, calendar, and reward popup could show different
+// numbers for "today" came from those being read/written independently;
+// one record read by every screen makes that impossible by construction.
+const STORE_KEY = 'paul_easy_progress'
+const OLD_PREFIX = 'paulEasyVoca'
+const oldKey = (name, type) => `${OLD_PREFIX}_${name}_${type}`
+
+function loadStore() {
+  try {
+    const v = JSON.parse(localStorage.getItem(STORE_KEY))
+    return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}
+  } catch { return {} }
+}
+function saveStore(store) {
+  localStorage.setItem(STORE_KEY, JSON.stringify(store))
+}
+function readOld(key, def) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? def } catch { return def }
+}
 
 const GOAL = 5
 const MISSION_BONUS_STARS = 10
@@ -39,188 +56,242 @@ const freshRound = () => ({
   quizSolved: 0,
   pronunciationOk: 0,
 })
-const freshHistoryDay = () => ({ missionsCompleted: 0, starsEarned: 0, stickersEarned: [] })
+const freshHistoryDay = () => ({
+  studied: true,
+  categoriesCompleted: 0, // 0-4: how many of today's 4 mission categories reached goal — THE single "완료한 미션" number shown everywhere
+  giftsToday: 0,          // how many full 4/4 rounds were completed today (missions repeat all day) — internal bookkeeping only, never shown as "완료한 미션"
+  starsEarned: 0,
+  stickersEarned: [],
+})
 
-// Consecutive days (walking back from today) with at least 1 mission
-// completed. If today has nothing yet, today isn't counted but doesn't
-// zero out an existing streak either — it's just "not extended yet".
+function freshRecord(name) {
+  return {
+    studentId: name,
+    totalStars: 0,
+    stickers: [],          // owned sticker ids — badges (star/streak milestones) are just specific sticker ids granted via a guaranteed (non-gacha) path, tracked in this same collection rather than a separate list
+    diaryPlacements: [],
+    missions: [],          // level-up boss missions
+    cleared: [],
+    round: freshRound(),
+    history: {},            // date string -> freshHistoryDay()
+    milestoneStreak: 0,      // highest streak milestone already celebrated
+    starBadgeThreshold: 0,   // highest star badge already granted
+    lastGamePlayed: null,
+    lastWordIndex: 0,
+  }
+}
+
+// One-time migration from the old scattered paulEasyVoca_{name}_{field} keys
+// into the unified record, so existing students' progress isn't lost. Old
+// keys are left in place untouched (harmless, just unused going forward).
+function migrateOldData(name) {
+  const rec = freshRecord(name)
+  rec.totalStars = readOld(oldKey(name, 'stars'), 0) || 0
+  rec.stickers = readOld(oldKey(name, 'stickerTypes'), [])
+  rec.diaryPlacements = readOld(oldKey(name, 'diaryPlacements'), [])
+  rec.missions = readOld(oldKey(name, 'missions'), [])
+  rec.cleared = readOld(oldKey(name, 'cleared'), [])
+  const oldRound = readOld(oldKey(name, 'round'), null)
+  if (oldRound && oldRound.date === todayStr()) rec.round = oldRound
+  const oldHistory = readOld(oldKey(name, 'history'), {})
+  // Old history used `missionsCompleted` as a repeat counter — map it onto
+  // the new fields as a best-effort guess (>=1 repeat implies all 4
+  // categories were completed at least once that day).
+  rec.history = Object.fromEntries(Object.entries(oldHistory).map(([date, day]) => [date, {
+    studied: true,
+    categoriesCompleted: (day.missionsCompleted || 0) > 0 ? 4 : 0,
+    giftsToday: day.missionsCompleted || 0,
+    starsEarned: day.starsEarned || 0,
+    stickersEarned: day.stickersEarned || [],
+  }]))
+  rec.milestoneStreak = readOld(oldKey(name, 'milestoneStreak'), 0) || 0
+  rec.starBadgeThreshold = readOld(oldKey(name, 'starBadgeThreshold'), 0) || 0
+  rec.lastGamePlayed = readOld(oldKey(name, 'lastGamePlayed'), null)
+  rec.lastWordIndex = readOld(oldKey(name, 'lastWordIndex'), 0) || 0
+  return rec
+}
+
+function loadRecord(name) {
+  const store = loadStore()
+  if (store[name]) return store[name]
+  const migrated = migrateOldData(name)
+  store[name] = migrated
+  saveStore(store)
+  return migrated
+}
+
+// Streak = consecutive days (walking back from today) with a fully
+// completed mission (4/4 categories). If today has nothing yet, today
+// isn't counted but doesn't zero out an existing streak either.
 function calcStreak(history) {
   let streak = 0
   const d = new Date()
-  if (!(history[d.toDateString()]?.missionsCompleted > 0)) d.setDate(d.getDate() - 1)
-  while (history[d.toDateString()]?.missionsCompleted > 0) {
+  if (!(history[d.toDateString()]?.categoriesCompleted >= 4)) d.setDate(d.getDate() - 1)
+  while (history[d.toDateString()]?.categoriesCompleted >= 4) {
     streak++
     d.setDate(d.getDate() - 1)
   }
   return streak
 }
 
+// 0-4: how many of today's 4 mission categories (단어/예문/퀴즈/발음) are at
+// or above GOAL right now — the single formula behind "완료한 미션",
+// computed identically wherever it's needed (Dashboard, calendar, tests).
+function countCategoriesCompleted(round) {
+  return [
+    round.wordsViewed.length >= GOAL,
+    round.examplesHeard >= GOAL,
+    round.quizSolved >= GOAL,
+    (round.pronunciationOk || 0) >= GOAL,
+  ].filter(Boolean).length
+}
+
+// Pure helpers exported for testing (see scripts/testProgress.mjs) — no
+// behavior change, just visibility into the same logic the hook uses.
+export { freshRecord, freshRound, freshHistoryDay, migrateOldData, calcStreak, countCategoriesCompleted, todayStr, GOAL }
+
 export function useStudent(name) {
-  const [stars, _setStars] = useState(() => loadNum(sk(name, 'stars')))
-  const [stickerTypes, _setStickerTypes] = useState(() => loadArr(sk(name, 'stickerTypes')))
-  const [diaryPlacements, _setDiaryPlacements] = useState(() => loadArr(sk(name, 'diaryPlacements')))
-  const [missions, _setMissions] = useState(() => loadArr(sk(name, 'missions')))
-  const [cleared, _setCleared] = useState(() => loadArr(sk(name, 'cleared')))
-  const [round, _setRound] = useState(() => {
-    const s = load(sk(name, 'round'), null)
-    if (s && typeof s === 'object' && !Array.isArray(s) && s.date === todayStr()) return s
-    return freshRound()
-  })
-  const [history, _setHistory] = useState(() => loadObj(sk(name, 'history')))
-  const [milestoneStreak, _setMilestoneStreak] = useState(() => loadNum(sk(name, 'milestoneStreak')))
-  const [starBadgeThreshold, _setStarBadgeThreshold] = useState(() => loadNum(sk(name, 'starBadgeThreshold')))
-  const [lastGamePlayed, _setLastGamePlayed] = useState(() => load(sk(name, 'lastGamePlayed'), null))
-  // Where to resume word study — the "이어서 학습하기" recommendation reads
-  // this instead of always restarting from word 1.
-  const [lastWordIndex, _setLastWordIndex] = useState(() => loadNum(sk(name, 'lastWordIndex')))
-  // A queue, not a single slot — a round completion and a streak milestone
-  // can land in the same instant (finishing today's first round can push
-  // the streak past a threshold at the same time), and neither should get
-  // silently dropped in favor of the other.
-  const [giftQueue, setGiftQueue] = useState([])
+  const [record, _setRecord] = useState(() => loadRecord(name))
   const handledRoundRef = useRef(null)
 
-  const setStars = useCallback(v => {
-    _setStars(prev => { const n = typeof v === 'function' ? v(prev) : v; save(sk(name, 'stars'), n); return n })
+  // Every mutation goes through here — one place that both updates React
+  // state and persists the ENTIRE record back to the one unified key, so no
+  // field can ever be written to a stale/partial place.
+  const patch = useCallback((patchFn) => {
+    _setRecord(prev => {
+      const next = { ...prev, ...patchFn(prev) }
+      const store = loadStore()
+      store[name] = next
+      saveStore(store)
+      return next
+    })
   }, [name])
-  const setStickerTypes = useCallback(v => {
-    _setStickerTypes(prev => { const n = typeof v === 'function' ? v(prev) : v; save(sk(name, 'stickerTypes'), n); return n })
-  }, [name])
-  const setDiaryPlacements = useCallback(v => {
-    _setDiaryPlacements(prev => { const n = typeof v === 'function' ? v(prev) : v; save(sk(name, 'diaryPlacements'), n); return n })
-  }, [name])
-  const setMissions = useCallback(v => {
-    _setMissions(prev => { const n = typeof v === 'function' ? v(prev) : v; save(sk(name, 'missions'), n); return n })
-  }, [name])
-  const setCleared = useCallback(v => {
-    _setCleared(prev => { const n = typeof v === 'function' ? v(prev) : v; save(sk(name, 'cleared'), n); return n })
-  }, [name])
-  const setRound = useCallback(v => {
-    _setRound(prev => { const n = typeof v === 'function' ? v(prev) : v; save(sk(name, 'round'), n); return n })
-  }, [name])
-  const setHistory = useCallback(v => {
-    _setHistory(prev => { const n = typeof v === 'function' ? v(prev) : v; save(sk(name, 'history'), n); return n })
-  }, [name])
-  const setMilestoneStreak = useCallback(v => {
-    _setMilestoneStreak(prev => { const n = typeof v === 'function' ? v(prev) : v; save(sk(name, 'milestoneStreak'), n); return n })
-  }, [name])
-  const setStarBadgeThreshold = useCallback(v => {
-    _setStarBadgeThreshold(prev => { const n = typeof v === 'function' ? v(prev) : v; save(sk(name, 'starBadgeThreshold'), n); return n })
-  }, [name])
-  const setLastGamePlayed = useCallback((gameId) => {
-    _setLastGamePlayed(gameId)
-    save(sk(name, 'lastGamePlayed'), gameId)
-  }, [name])
-  const setLastWordIndex = useCallback((idx) => {
-    _setLastWordIndex(idx)
-    save(sk(name, 'lastWordIndex'), idx)
-  }, [name])
+
+  const { round, history, stickers: stickerTypes, diaryPlacements, missions, cleared, milestoneStreak, starBadgeThreshold, lastGamePlayed, lastWordIndex, totalStars: stars } = record
+
+  const [giftQueue, setGiftQueue] = useState([])
 
   // Mission round resets at midnight even mid-session (not just on reopen).
   useEffect(() => {
-    const check = () => { if (round.date !== todayStr()) setRound(freshRound()) }
+    const check = () => { if (round.date !== todayStr()) patch(() => ({ round: freshRound() })) }
     const t = setInterval(check, 30000)
     return () => clearInterval(t)
-  }, [round.date, setRound])
+  }, [round.date, patch])
 
   const bumpHistory = useCallback((patchFn) => {
     const today = todayStr()
-    setHistory(prev => {
-      const day = prev[today] || freshHistoryDay()
-      return { ...prev, [today]: { ...day, ...patchFn(day) } }
+    patch(prev => {
+      const day = prev.history[today] || freshHistoryDay()
+      return { history: { ...prev.history, [today]: { ...day, ...patchFn(day) } } }
     })
-  }, [setHistory])
+  }, [patch])
 
   // Every star gain (quiz, pronunciation, level-up mission, mission bonus,
   // duplicate sticker) funnels through here, so the daily history's
   // starsEarned total is always accurate without touching every call site.
   const addStars = useCallback((n = 1) => {
-    setStars(s => s + n)
+    patch(prev => ({ totalStars: prev.totalStars + n }))
     bumpHistory(day => ({ starsEarned: day.starsEarned + n }))
-  }, [setStars, bumpHistory])
+  }, [patch, bumpHistory])
 
   const addMission = useCallback((wordId) => {
-    setMissions(prev => prev.some(m => m.wordId === wordId) ? prev : [...prev, { wordId, correctCount: 0, done: false }])
-  }, [setMissions])
+    patch(prev => ({
+      missions: prev.missions.some(m => m.wordId === wordId)
+        ? prev.missions
+        : [...prev.missions, { wordId, correctCount: 0, done: false }],
+    }))
+  }, [patch])
 
   const answerMission = useCallback((wordId) => {
     let didClear = false
-    setMissions(prev => prev.map(m => {
-      if (m.wordId !== wordId || m.done) return m
-      const next = m.correctCount + 1
-      if (next >= 3) { didClear = true; return { ...m, correctCount: 3, done: true } }
-      return { ...m, correctCount: next }
+    patch(prev => ({
+      missions: prev.missions.map(m => {
+        if (m.wordId !== wordId || m.done) return m
+        const next = m.correctCount + 1
+        if (next >= 3) { didClear = true; return { ...m, correctCount: 3, done: true } }
+        return { ...m, correctCount: next }
+      }),
     }))
     if (didClear) {
-      setCleared(prev => prev.includes(wordId) ? prev : [...prev, wordId])
+      patch(prev => ({ cleared: prev.cleared.includes(wordId) ? prev.cleared : [...prev.cleared, wordId] }))
       addStars(3)
     }
     return didClear
-  }, [setMissions, setCleared, addStars])
+  }, [patch, addStars])
 
   const markWordViewed = useCallback((wordId) => {
-    setRound(prev => prev.wordsViewed.includes(wordId) ? prev : { ...prev, wordsViewed: [...prev.wordsViewed, wordId] })
-  }, [setRound])
+    patch(prev => prev.round.wordsViewed.includes(wordId)
+      ? {}
+      : { round: { ...prev.round, wordsViewed: [...prev.round.wordsViewed, wordId] } })
+  }, [patch])
 
   const markExampleHeard = useCallback(() => {
-    setRound(prev => ({ ...prev, examplesHeard: prev.examplesHeard + 1 }))
-  }, [setRound])
+    patch(prev => ({ round: { ...prev.round, examplesHeard: prev.round.examplesHeard + 1 } }))
+  }, [patch])
 
   const markQuizSolved = useCallback(() => {
-    setRound(prev => ({ ...prev, quizSolved: prev.quizSolved + 1 }))
-  }, [setRound])
+    patch(prev => ({ round: { ...prev.round, quizSolved: prev.round.quizSolved + 1 } }))
+  }, [patch])
 
   const markPronunciationOk = useCallback(() => {
-    setRound(prev => ({ ...prev, pronunciationOk: (prev.pronunciationOk || 0) + 1 }))
-  }, [setRound])
+    patch(prev => ({ round: { ...prev.round, pronunciationOk: (prev.round.pronunciationOk || 0) + 1 } }))
+  }, [patch])
 
-  // Grants a sticker directly, bypassing the gift-box gacha (used for the
-  // guaranteed streak-milestone reward). Duplicates still convert to stars
-  // so a milestone pull is never wasted either.
+  // Grants a sticker directly, bypassing the gift-box gacha (used for
+  // guaranteed streak/star-badge rewards). Duplicates still convert to
+  // stars so a guaranteed pull is never wasted either.
   const grantSticker = useCallback((sticker) => {
     const isDuplicate = stickerTypes.includes(sticker.id)
     if (isDuplicate) addStars(DUPLICATE_BONUS_STARS)
     else {
-      setStickerTypes(prev => [...prev, sticker.id])
+      patch(prev => ({ stickers: [...prev.stickers, sticker.id] }))
       bumpHistory(day => ({ stickersEarned: [...day.stickersEarned, sticker.id] }))
     }
     return isDuplicate
-  }, [stickerTypes, addStars, setStickerTypes, bumpHistory])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stickerTypes, addStars, patch, bumpHistory])
 
-  // Round completion: all 4 daily categories reached goal → open a gift box
-  // (rarity-weighted random sticker, duplicates become bonus stars instead
-  // of a second copy), award a flat completion bonus, log it in today's
-  // history (feeds the diary calendar + streak), then immediately start
-  // the next round — missions repeat all day, not once.
+  // Keeps today's "완료한 미션" (0-4 categories) as a running high-water
+  // mark, independent of the round auto-resetting after a full completion —
+  // this is the ONE value the Dashboard, calendar, and reward popup all read,
+  // so they can never disagree about how many of today's 4 categories are done.
   useEffect(() => {
-    const allDone = (
-      round.wordsViewed.length >= GOAL &&
-      round.examplesHeard >= GOAL &&
-      round.quizSolved >= GOAL &&
-      (round.pronunciationOk || 0) >= GOAL
-    )
+    const count = countCategoriesCompleted(round)
+    const today = todayStr()
+    const existing = history[today]?.categoriesCompleted || 0
+    if (count > existing) bumpHistory(() => ({ categoriesCompleted: count }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [round])
+
+  // Full round completion: all 4 daily categories reached goal → open a
+  // gift box (rarity-weighted random sticker, duplicates become bonus stars
+  // instead of a second copy), award a flat completion bonus, log it in
+  // today's history (feeds the diary calendar + streak), then immediately
+  // start the next round — missions repeat all day, not once.
+  useEffect(() => {
+    const allDone = countCategoriesCompleted(round) >= 4
     if (!allDone) return
     const signature = `${round.date}:${round.wordsViewed.length}:${round.examplesHeard}:${round.quizSolved}:${round.pronunciationOk}`
     if (handledRoundRef.current === signature) return
     handledRoundRef.current = signature
 
     addStars(MISSION_BONUS_STARS)
-    bumpHistory(day => ({ missionsCompleted: day.missionsCompleted + 1 }))
+    bumpHistory(day => ({ giftsToday: day.giftsToday + 1 }))
     const sticker = getRandomSticker()
     const isDuplicate = grantSticker(sticker)
     setGiftQueue(q => [...q, { sticker, isDuplicate, isMilestone: false }])
-    setRound(freshRound())
+    patch(() => ({ round: freshRound() }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [round])
 
-  // Streak milestones (3/7/14/30 consecutive days) — checked whenever
-  // history changes, guarded by the highest milestone already celebrated so
-  // it only fires once per threshold, ever, per student.
+  // Streak milestones (3/7/14/30 consecutive fully-completed days) —
+  // checked whenever history changes, guarded by the highest milestone
+  // already celebrated so it only fires once per threshold, ever.
   useEffect(() => {
     const streak = calcStreak(history)
     const nextMilestone = STREAK_MILESTONES.find(m => streak >= m && m > milestoneStreak)
     if (!nextMilestone) return
-    setMilestoneStreak(nextMilestone)
+    patch(() => ({ milestoneStreak: nextMilestone }))
     const sticker = getMilestoneSticker()
     const isDuplicate = grantSticker(sticker)
     setGiftQueue(q => [...q, { sticker, isDuplicate, isMilestone: true, streakDays: nextMilestone }])
@@ -232,7 +303,7 @@ export function useStudent(name) {
   useEffect(() => {
     const nextBadge = STAR_BADGES.find(b => stars >= b.threshold && b.threshold > starBadgeThreshold)
     if (!nextBadge) return
-    setStarBadgeThreshold(nextBadge.threshold)
+    patch(() => ({ starBadgeThreshold: nextBadge.threshold }))
     const sticker = STICKERS.find(s => s.id === nextBadge.stickerId)
     if (!sticker) return
     const isDuplicate = grantSticker(sticker)
@@ -243,19 +314,26 @@ export function useStudent(name) {
   const dismissGift = useCallback(() => setGiftQueue(q => q.slice(1)), [])
 
   const placeSticker = useCallback((stickerId, x, y) => {
-    setDiaryPlacements(prev => [...prev, {
-      placementId: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      stickerId, x, y, rotation: 0, scale: 1,
-    }])
-  }, [setDiaryPlacements])
+    patch(prev => ({
+      diaryPlacements: [...prev.diaryPlacements, {
+        placementId: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        stickerId, x, y, rotation: 0, scale: 1,
+      }],
+    }))
+  }, [patch])
 
-  const updatePlacement = useCallback((placementId, patch) => {
-    setDiaryPlacements(prev => prev.map(p => p.placementId === placementId ? { ...p, ...patch } : p))
-  }, [setDiaryPlacements])
+  const updatePlacement = useCallback((placementId, patchFields) => {
+    patch(prev => ({
+      diaryPlacements: prev.diaryPlacements.map(p => p.placementId === placementId ? { ...p, ...patchFields } : p),
+    }))
+  }, [patch])
 
   const removePlacement = useCallback((placementId) => {
-    setDiaryPlacements(prev => prev.filter(p => p.placementId !== placementId))
-  }, [setDiaryPlacements])
+    patch(prev => ({ diaryPlacements: prev.diaryPlacements.filter(p => p.placementId !== placementId) }))
+  }, [patch])
+
+  const setLastGamePlayed = useCallback((gameId) => patch(() => ({ lastGamePlayed: gameId })), [patch])
+  const setLastWordIndex = useCallback((idx) => patch(() => ({ lastWordIndex: idx })), [patch])
 
   const dailyProgress = {
     words:          Math.min(round.wordsViewed.length, GOAL),
@@ -263,13 +341,20 @@ export function useStudent(name) {
     quizzes:        Math.min(round.quizSolved, GOAL),
     pronunciations: Math.min(round.pronunciationOk || 0, GOAL),
   }
-  const missionsCompletedToday = history[todayStr()]?.missionsCompleted || 0
+  const today = todayStr()
+  const todayHistory = history[today]
+  const missionsCompletedToday = todayHistory?.categoriesCompleted || 0 // 0-4, THE "완료한 미션" number
+  const missionFullyDoneToday = missionsCompletedToday >= 4
+  const giftsToday = todayHistory?.giftsToday || 0 // how many full 4/4 rounds today — for "studied a lot" nudges only, never displayed as "완료한 미션"
+  const todayStars = todayHistory?.starsEarned || 0
   const streak = calcStreak(history)
 
   return {
     stars, stickerTypes, diaryPlacements, missions,
     activeMissions: missions.filter(m => !m.done),
-    cleared, round, dailyProgress, missionsCompletedToday, history, streak,
+    cleared, round, dailyProgress,
+    missionsCompletedToday, missionFullyDoneToday, giftsToday, todayStars,
+    history, streak,
     lastGamePlayed, setLastGamePlayed,
     lastWordIndex, setLastWordIndex,
     pendingGift: giftQueue[0] || null, dismissGift,

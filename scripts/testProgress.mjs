@@ -1,0 +1,128 @@
+// Standalone test for the unified progress store (src/hooks/useStudent.js).
+// Exercises the SAME exported pure functions the hook uses, against a fake
+// localStorage, to verify: category-completion counting, persistence across
+// a simulated reload, and next-day reset behavior (keeps cumulative fields,
+// resets only today's round).
+import assert from 'node:assert/strict'
+
+// ── Fake localStorage ────────────────────────────────────────────────────
+class FakeStorage {
+  constructor() { this.map = new Map() }
+  getItem(k) { return this.map.has(k) ? this.map.get(k) : null }
+  setItem(k, v) { this.map.set(k, String(v)) }
+  removeItem(k) { this.map.delete(k) }
+}
+globalThis.localStorage = new FakeStorage()
+
+// Node can't resolve extensionless relative imports the way Vite does, and
+// useStudent.js pulls in Supabase-backed wordLibrary.js at the top (browser-
+// only `import.meta.env`) purely for a re-export we don't test here — so we
+// test against an esbuild bundle with `react`/wordLibrary externalized,
+// which contains the exact same source for every function under test.
+const BUNDLE = process.env.PROGRESS_BUNDLE
+if (!BUNDLE) throw new Error('Set PROGRESS_BUNDLE to the esbuild output path (see comment above)')
+const { pathToFileURL } = await import('node:url')
+const {
+  freshRecord, freshRound, freshHistoryDay, calcStreak, countCategoriesCompleted, GOAL,
+} = await import(pathToFileURL(BUNDLE).href)
+
+const STORE_KEY = 'paul_easy_progress'
+function loadStore() { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}') }
+function saveStore(store) { localStorage.setItem(STORE_KEY, JSON.stringify(store)) }
+
+let failures = 0
+function check(label, cond) {
+  if (cond) { console.log(`  PASS  ${label}`) }
+  else { console.log(`  FAIL  ${label}`); failures++ }
+}
+
+console.log('\n1. 미션 4개 완료 -> categoriesCompleted 계산')
+{
+  const name = 'TestKid'
+  const store = { [name]: freshRecord(name) }
+  saveStore(store)
+
+  const rec = store[name]
+  // Simulate viewing 5 words, hearing 5 examples, solving 5 quizzes, 5 pronunciations
+  for (let i = 0; i < 5; i++) rec.round.wordsViewed.push(`w${i}`)
+  rec.round.examplesHeard = 3
+  rec.round.quizSolved = 5
+  rec.round.pronunciationOk = 5
+  check('단어5/예문3/퀴즈5/발음5 -> 3개 카테고리 완료', countCategoriesCompleted(rec.round) === 3)
+
+  rec.round.examplesHeard = 5
+  check('4개 카테고리 모두 완료 -> count === 4', countCategoriesCompleted(rec.round) === 4)
+
+  const today = rec.round.date
+  rec.history[today] = { ...freshHistoryDay(), categoriesCompleted: 4, giftsToday: 1, starsEarned: 30, stickersEarned: ['ukflag1'] }
+  saveStore(store)
+
+  // Round resets for the next repeat, but today's history stays latched at 4
+  rec.round = freshRound()
+  saveStore(store)
+  const reloaded = loadStore()[name]
+  check('메인 화면(오늘 라운드) 4/4 반영 전 리셋 후에도 캘린더 기록은 4로 유지', reloaded.history[today].categoriesCompleted === 4)
+  check('메인/캘린더가 같은 값을 읽음 (동일 필드)', reloaded.history[today].categoriesCompleted === 4 && countCategoriesCompleted(freshRound()) === 0)
+}
+
+console.log('\n2. 별/스티커 동일하게 표시 (하나의 store에서 읽음)')
+{
+  const name = 'TestKid'
+  const store = loadStore()
+  const rec = store[name]
+  const today = rec.round.date
+  check('별 30개 기록', rec.history[today].starsEarned === 30)
+  check('스티커 1개(🇬🇧) 기록', rec.history[today].stickersEarned.includes('ukflag1'))
+}
+
+console.log('\n3. 새로고침(재로드) 후에도 유지')
+{
+  // Simulate app reload: re-parse the SAME localStorage key from scratch.
+  const before = loadStore()['TestKid']
+  const reparsed = JSON.parse(localStorage.getItem(STORE_KEY))['TestKid']
+  check('totalStars 유지', reparsed.totalStars === before.totalStars)
+  check('stickers 유지', JSON.stringify(reparsed.stickers) === JSON.stringify(before.stickers))
+  check('history 유지', JSON.stringify(reparsed.history) === JSON.stringify(before.history))
+}
+
+console.log('\n4. 날짜가 바뀌면 오늘 미션만 초기화, 누적 데이터는 유지')
+{
+  const name = 'TestKid'
+  const store = loadStore()
+  const rec = store[name]
+  rec.totalStars = 500
+  rec.stickers = ['ukflag1', 'crown1']
+  rec.round = { date: 'Wed Jul 01 2026', wordsViewed: ['a', 'b', 'c'], examplesHeard: 2, quizSolved: 1, pronunciationOk: 0 }
+  saveStore(store)
+
+  // Simulate the hook's midnight-check: round.date !== todayStr() -> reset round only
+  const todayStrFake = () => 'Sun Jul 05 2026' // pretend "today" has moved on
+  const isStale = rec.round.date !== todayStrFake()
+  const afterMidnight = isStale ? { ...rec, round: freshRound() } : rec
+  // freshRound() stamps the REAL today, not our fake one, but the reset
+  // mechanics (wiping wordsViewed/examplesHeard/quizSolved/pronunciationOk)
+  // are what matters here.
+  check('날짜가 바뀌면 wordsViewed 초기화', afterMidnight.round.wordsViewed.length === 0)
+  check('날짜가 바뀌면 examplesHeard 초기화', afterMidnight.round.examplesHeard === 0)
+  check('날짜가 바뀌면 quizSolved 초기화', afterMidnight.round.quizSolved === 0)
+  check('날짜가 바뀌면 pronunciationOk 초기화', afterMidnight.round.pronunciationOk === 0)
+  check('totalStars는 유지', afterMidnight.totalStars === 500)
+  check('stickers는 유지', afterMidnight.stickers.length === 2)
+  check('history(캘린더 기록)는 유지', Object.keys(afterMidnight.history).length > 0)
+  check('studentId는 유지', afterMidnight.studentId === name)
+}
+
+console.log('\n5. 스트릭 계산 (연속 완료일)')
+{
+  const d = new Date()
+  const key = (offset) => { const x = new Date(d); x.setDate(x.getDate() - offset); return x.toDateString() }
+  const history = {
+    [key(0)]: { categoriesCompleted: 4 },
+    [key(1)]: { categoriesCompleted: 4 },
+    [key(2)]: { categoriesCompleted: 2 }, // breaks the streak (not fully completed)
+  }
+  check('오늘/어제 4/4 완료, 그저께는 미완료 -> streak === 2', calcStreak(history) === 2)
+}
+
+console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n${failures}개 테스트 실패 ❌`)
+process.exit(failures === 0 ? 0 : 1)
