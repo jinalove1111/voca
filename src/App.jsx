@@ -101,8 +101,8 @@ function AppInner({ student, onLogout }) {
   // not to any word/mission-clear count — see useStudent's eggReady.
   const handleClaimEgg = () => {
     const pet = getRandomPet()
-    claimEgg(pet)
-    setEggPet(pet)
+    const isDuplicate = claimEgg(pet)
+    setEggPet({ ...pet, isDuplicate })
   }
 
   // Re-pull the latest word data from Supabase whenever the app regains focus

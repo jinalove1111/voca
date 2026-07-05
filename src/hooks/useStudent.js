@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 
 // Student roster + class assignment live in Supabase (shared across every
 // device) — see utils/wordLibrary.js. Only per-student progress (stars,
@@ -50,6 +50,18 @@ export function useStudent(name) {
     _setDaily(prev => { const n = typeof v === 'function' ? v(prev) : v; save(sk(name, 'daily'), n); return n })
   }, [name])
 
+  // Missions reset at midnight even if the app is left open across the day
+  // boundary — the mount-time check above only catches "reopened on a new
+  // day", not "still open when midnight passes". A light periodic check is
+  // simpler and just as reliable as computing exact ms-until-midnight.
+  useEffect(() => {
+    const checkNewDay = () => {
+      if (daily.date !== todayStr()) setDaily(freshDaily())
+    }
+    const t = setInterval(checkNewDay, 30000)
+    return () => clearInterval(t)
+  }, [daily.date, setDaily])
+
   const addStars = useCallback((n = 1) => setStars(s => s + n), [setStars])
 
   const addMission = useCallback((wordId) => {
@@ -98,10 +110,15 @@ export function useStudent(name) {
 
   // Egg pick is separate from the +20★ daily bonus above — both require all
   // 4 daily categories done, but claiming one doesn't consume the other.
+  // Duplicates don't add a second copy to the collection — they convert
+  // into a +20★ bonus instead, so a pick is never wasted.
   const claimEgg = useCallback((pet) => {
+    const isDuplicate = pets.some(p => p.id === pet.id)
     setDaily(prev => ({ ...prev, eggPicked: true }))
-    addPet(pet)
-  }, [setDaily, addPet])
+    if (isDuplicate) addStars(20)
+    else addPet(pet)
+    return isDuplicate
+  }, [pets, setDaily, addStars, addPet])
 
   const GOAL = 5
   const dailyProgress = {

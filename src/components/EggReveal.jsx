@@ -38,7 +38,12 @@ export default function EggReveal({ pet, onClose }) {
               {rc.label}
             </div>
             <h2 className="text-3xl font-black text-gray-800 mb-2">{pet.name}</h2>
-            <p className="text-gray-500 text-sm mb-6">{pet.desc}</p>
+            <p className="text-gray-500 text-sm mb-3">{pet.desc}</p>
+            {pet.isDuplicate ? (
+              <p className="text-orange-500 font-black mb-6">✨ 중복! ⭐ 별 +20 지급!</p>
+            ) : (
+              <p className="text-green-600 font-black mb-6">🥚 새로운 캐릭터 등장!</p>
+            )}
             <button
               onClick={onClose}
               className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-black py-4 rounded-2xl btn-press"
