@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, getStudentsInClass } from '../utils/wordLibrary'
 import { getStudents, removeStudent } from '../hooks/useStudent'
 import FeatureManagementPanel from './FeatureManagementPanel'
 
@@ -244,7 +244,7 @@ function ExcelUpload({ onDone }) {
         <p className="font-black text-gray-700 text-sm">① 반 선택</p>
         <select
           value={selectedClass}
-          onChange={e => { setSelectedClass(e.target.value); setClassOverride(e.target.value); setPreview(null) }}
+          onChange={e => { setSelectedClass(e.target.value); setPreview(null) }}
           className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-purple-500 bg-white"
         >
           <option value="">-- 반을 선택하세요 --</option>
@@ -426,12 +426,29 @@ export default function AdminScreen({ onBack }) {
   const [newMeaning, setNewMeaning] = useState('')
   const [newExample, setNewExample] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [renamingClass, setRenamingClass] = useState(null)
+  const [renameValue, setRenameValue] = useState('')
 
   const refresh = () => {
     setClasses(getClassNames())
     if (viewClass) {
       const units = getClassUnitNames(viewClass)
       if (!units.includes(viewUnit)) setViewUnit(units[0] || 'Unit 1')
+    }
+  }
+
+  const startRename = (c) => { setRenamingClass(c); setRenameValue(c) }
+
+  const saveRename = async () => {
+    const next = renameValue.trim()
+    if (!next) return alert('반 이름을 입력해주세요!')
+    try {
+      await renameClass(renamingClass, next)
+      if (viewClass === renamingClass) setView(next)
+      setRenamingClass(null)
+      refresh()
+    } catch (err) {
+      alert('반 이름 수정 중 오류가 발생했어요: ' + (err.message || err))
     }
   }
 
@@ -532,27 +549,45 @@ export default function AdminScreen({ onBack }) {
                 const isOpen = viewClass === c
                 const activeUnit = isOpen ? viewUnit : (unitNames[0] || 'Unit 1')
                 const words = getClassWords(c, activeUnit) || []
+                const studentsInClass = isOpen ? getStudentsInClass(c) : []
                 return (
                   <div key={c} className="bg-white rounded-2xl card-shadow p-4">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-black text-gray-800">{c}</p>
-                        <p className="text-sm text-gray-400">{units.length}개 유닛 · {totalWords}개 단어</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => {
-                            const next = isOpen ? null : c
-                            setView(next)
-                            if (next) setViewUnit(unitNames[0] || 'Unit 1')
-                          }}
-                          className="bg-blue-100 text-blue-600 font-bold px-3 py-2 rounded-xl text-sm btn-press">
-                          {isOpen ? '닫기' : '보기'}
-                        </button>
-                        <button onClick={() => setConfirmDelete(c)}
-                          className="bg-red-100 text-red-500 font-bold px-3 py-2 rounded-xl text-sm btn-press">
-                          삭제
-                        </button>
-                      </div>
+                      {renamingClass === c ? (
+                        <div className="flex gap-2 flex-1 mr-2">
+                          <input type="text" value={renameValue} onChange={e => setRenameValue(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && saveRename()}
+                            className="flex-1 border-2 border-purple-300 rounded-xl px-3 py-2 font-bold focus:outline-none focus:border-purple-500"
+                            autoFocus />
+                          <button onClick={saveRename} className="bg-purple-500 text-white font-black px-3 py-2 rounded-xl text-sm btn-press">저장</button>
+                          <button onClick={() => setRenamingClass(null)} className="border-2 border-gray-200 text-gray-500 font-bold px-3 py-2 rounded-xl text-sm btn-press">취소</button>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="font-black text-gray-800">{c}</p>
+                          <p className="text-sm text-gray-400">{units.length}개 유닛 · {totalWords}개 단어 · 학생 {getStudentsInClass(c).length}명</p>
+                        </div>
+                      )}
+                      {renamingClass !== c && (
+                        <div className="flex gap-2">
+                          <button onClick={() => {
+                              const next = isOpen ? null : c
+                              setView(next)
+                              if (next) setViewUnit(unitNames[0] || 'Unit 1')
+                            }}
+                            className="bg-blue-100 text-blue-600 font-bold px-3 py-2 rounded-xl text-sm btn-press">
+                            {isOpen ? '닫기' : '보기'}
+                          </button>
+                          <button onClick={() => startRename(c)}
+                            className="bg-gray-100 text-gray-600 font-bold px-3 py-2 rounded-xl text-sm btn-press">
+                            이름 수정
+                          </button>
+                          <button onClick={() => setConfirmDelete(c)}
+                            className="bg-red-100 text-red-500 font-bold px-3 py-2 rounded-xl text-sm btn-press">
+                            삭제
+                          </button>
+                        </div>
+                      )}
                     </div>
                     {isOpen && (
                       <div className="mt-3 space-y-3">
@@ -597,6 +632,21 @@ export default function AdminScreen({ onBack }) {
                               <span className="text-gray-500">{w.meaning}</span>
                             </div>
                           ))}
+                        </div>
+
+                        <div className="bg-gray-50 rounded-xl p-3">
+                          <p className="text-xs font-black text-gray-500 mb-2">👦 이 반 학생 ({studentsInClass.length}명)</p>
+                          {studentsInClass.length === 0 ? (
+                            <p className="text-gray-400 text-sm">아직 이 반에 배정된 학생이 없어요.</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {studentsInClass.map(s => (
+                                <span key={s.name} className="bg-white border-2 border-gray-200 rounded-xl px-3 py-1 text-sm font-bold text-gray-700">
+                                  {s.name} <span className="text-gray-400 font-normal">· {s.unitName}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">

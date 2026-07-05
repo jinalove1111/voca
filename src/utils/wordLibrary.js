@@ -51,7 +51,7 @@ export async function refreshWordLibrary() {
   unitsRes.data.forEach((u) => {
     const cls = classesRes.data.find((c) => c.id === u.class_id)
     if (!cls) return
-    const unitObj = { id: u.id, name: u.name, words: [] }
+    const unitObj = { id: u.id, classId: cls.id, name: u.name, words: [] }
     tree[cls.name].units.push(unitObj)
     unitById[u.id] = unitObj
   })
@@ -59,7 +59,8 @@ export async function refreshWordLibrary() {
     const unitObj = unitById[w.unit_id]
     if (unitObj) {
       unitObj.words.push({
-        id: w.id, word: w.word, meaning: w.meaning,
+        id: w.id, classId: unitObj.classId, unitId: unitObj.id,
+        word: w.word, meaning: w.meaning,
         wordAudioUrl: w.word_audio_url || null,
         exampleAudioUrl: w.example_audio_url || null,
         exampleText: w.example_text || null,
@@ -269,8 +270,33 @@ export async function deleteClass(className) {
   await refreshWordLibrary()
 }
 
+// Renaming only ever touches the classes.name column — every student is
+// linked by class_id (see getStudentClassId/getClassNameById below), so a
+// rename never breaks an existing student's class assignment.
+export async function renameClass(oldName, newName) {
+  const cls = _cache[oldName]
+  if (!cls) return
+  const trimmed = newName.trim()
+  if (!trimmed || trimmed === oldName) return
+  if (_cache[trimmed]) throw new Error(`"${trimmed}" 반이 이미 있어요.`)
+  const { error } = await supabase.from('classes').update({ name: trimmed }).eq('id', cls.id)
+  if (error) throw error
+  await refreshWordLibrary()
+}
+
 // ── Students: roster + class/unit assignment, shared across every device ──
 export const getStudents = () => Object.keys(_students)
+
+// Students linked by class_id (the DB foreign key), never by matching the
+// className string — so this stays correct even if the class was renamed
+// after the student was assigned to it.
+export function getStudentsInClass(className) {
+  const classId = _cache[className]?.id
+  if (!classId) return []
+  return Object.entries(_students)
+    .filter(([, s]) => s.classId === classId)
+    .map(([name, s]) => ({ name, unitName: s.unitName }))
+}
 
 export async function addStudent(name, className = '', unitName = DEFAULT_UNIT_NAME) {
   let classId = null
@@ -385,6 +411,12 @@ export const getStudentWords = (name) => {
         // quiz option de-dup) and must not change.
         dbId:            cw.id || null,
         exampleText:     cw.exampleText || null,
+        // classId/unitId: the real DB foreign keys this word belongs to —
+        // words are looked up via unit_id -> class_id in Supabase (never by
+        // matching a className string), these are exposed for callers that
+        // need to confirm/display which class+unit a word belongs to.
+        classId:         cw.classId || classId,
+        unitId:          cw.unitId || null,
       }
     }).filter(Boolean)
   } catch (err) {
