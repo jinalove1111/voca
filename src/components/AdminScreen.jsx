@@ -33,34 +33,67 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// Column mapping is ALWAYS by header name, never by position/guessing — a
+// "No" column (row numbers 1, 2, 3...) was previously being mistaken for a
+// class name column, which created bogus classes literally named "1", "2",
+// etc. The class a word belongs to always comes from the class selected in
+// the admin UI (selectedClass), never from anything in the file.
+const HEADER_ALIASES = {
+  word:    ['word', '단어', '영단어'],
+  meaning: ['meaning', '뜻', '의미', '한글뜻'],
+  unit:    ['unit', '유닛'],
+  // "no"/"번호" is recognized only so it can be explicitly ignored — it's
+  // a row number, never a word/meaning/class.
+  no:      ['no', '번호'],
+}
+
+function detectHeaderMap(row) {
+  const norm = (row || []).map(cell => String(cell ?? '').trim().toLowerCase())
+  const map = {}
+  for (const [field, aliases] of Object.entries(HEADER_ALIASES)) {
+    const idx = norm.findIndex(h => aliases.includes(h))
+    if (idx !== -1) map[field] = idx
+  }
+  return map
+}
+
 function parseExcelRows(rows, selectedClass = '') {
-  return rows
+  if (!rows.length) return []
+
+  // If the first row's headers match known names, use them to map columns
+  // exactly and skip that row as data. Otherwise fall back to a plain
+  // "word, meaning" (or "unit, word, meaning") positional guess — but
+  // NEVER treat any column as a class name.
+  const headerMap = detectHeaderMap(rows[0])
+  const hasHeader = headerMap.word !== undefined && headerMap.meaning !== undefined
+  const dataRows = hasHeader ? rows.slice(1) : rows
+
+  return dataRows
     .map(r => {
-      if (!Array.isArray(r) || r.length < 2) return null
+      if (!Array.isArray(r) || r.length === 0) return null
       const values = r.map((cell) => (cell == null ? '' : String(cell).trim()))
-      if (values.length >= 4) {
-        // 기존 형식: 반이름 | Unit | 단어 | 뜻
-        return { className: values[0], unit: values[1] || 'Unit 1', word: values[2], meaning: values[3] }
-      }
-      if (values.length === 3) {
+      let word = '', meaning = '', unit = ''
+
+      if (hasHeader) {
+        word    = headerMap.word    !== undefined ? values[headerMap.word]    : ''
+        meaning = headerMap.meaning !== undefined ? values[headerMap.meaning] : ''
+        unit    = headerMap.unit   !== undefined ? values[headerMap.unit]     : ''
+      } else if (values.length >= 3) {
         const isUnit = /^(unit|유닛)\s*\d*/i.test(values[0])
-        if (isUnit) {
-          // 새 형식: Unit | 단어 | 뜻
-          return { className: selectedClass, unit: values[0], word: values[1], meaning: values[2] }
-        }
-        // 기존 3열 형식: 반이름 | 단어 | 뜻
-        return { className: values[0], unit: 'Unit 1', word: values[1], meaning: values[2] }
+        if (isUnit) { unit = values[0]; word = values[1]; meaning = values[2] }
+        else { word = values[0]; meaning = values[1] }
+      } else {
+        word = values[0]; meaning = values[1]
       }
-      // 2열: 단어 | 뜻
-      return { className: selectedClass, unit: 'Unit 1', word: values[0], meaning: values[1] }
+
+      return { className: selectedClass, unit: unit || 'Unit 1', word, meaning }
     })
-    .filter(r => r && r.word)
+    .filter(r => r && r.word && r.meaning)
 }
 
 function ExcelUpload({ onDone }) {
   const [selectedClass, setSelectedClass] = useState('')
   const [preview, setPreview]             = useState(null)
-  const [classOverride, setClassOverride] = useState('')
   const [saving, setSaving]               = useState(false)
   const fileRef                           = useRef()
   const classList                         = getClassNames()
@@ -72,36 +105,27 @@ function ExcelUpload({ onDone }) {
     const wb   = XLSX.read(data)
     const ws   = wb.Sheets[wb.SheetNames[0]]
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1 })
-    const parsed = parseExcelRows(rows, selectedClass)
-    setPreview(parsed)
-    // 기존 형식(반이름 포함)이면 파일의 첫 반이름 사용, 아니면 선택된 반 유지
-    const fileClass = parsed[0]?.className
-    setClassOverride(fileClass || selectedClass)
+    // Class always comes from the dropdown above — never from the file.
+    setPreview(parseExcelRows(rows, selectedClass))
   }
 
   const handleSave = async () => {
-    const targetClass = classOverride.trim() || selectedClass.trim()
-    if (!targetClass) { alert('반을 선택하거나 반 이름을 입력해주세요!'); return }
-    const byClass = {}
+    const targetClass = selectedClass.trim()
+    if (!targetClass) { alert('반을 선택해주세요!'); return }
+    const byUnit = {}
     preview.forEach(r => {
-      const c = r.className || targetClass
-      if (!c) return
       const u = r.unit || 'Unit 1'
-      if (!byClass[c]) byClass[c] = {}
-      if (!byClass[c][u]) byClass[c][u] = []
-      byClass[c][u].push({ word: r.word, meaning: r.meaning })
+      if (!byUnit[u]) byUnit[u] = []
+      byUnit[u].push({ word: r.word, meaning: r.meaning })
     })
     setSaving(true)
     try {
       let totalWords = 0
-      for (const [className, units] of Object.entries(byClass)) {
-        for (const [unit, words] of Object.entries(units)) {
-          await setClassWords(className, words, unit)
-          totalWords += words.length
-        }
+      for (const [unit, words] of Object.entries(byUnit)) {
+        await setClassWords(targetClass, words, unit)
+        totalWords += words.length
       }
-      const displayClass = Object.keys(byClass)[0] || targetClass
-      alert(`"${displayClass}" 반에 ${totalWords}개 단어 저장 완료!`)
+      alert(`"${targetClass}" 반에 ${totalWords}개 단어 저장 완료!`)
       onDone()
     } catch (err) {
       alert('저장 중 오류가 발생했어요: ' + (err.message || err))
@@ -113,9 +137,9 @@ function ExcelUpload({ onDone }) {
   return (
     <div className="space-y-4">
       <div className="bg-blue-50 rounded-2xl p-4 text-sm text-blue-700 font-bold">
-        <p>📋 Excel/CSV 기본 형식:</p>
-        <p className="text-xs mt-1 font-normal">Unit 1 | incorrect | 틀린, 옳지 않은</p>
-        <p className="text-xs mt-2 text-blue-500 font-normal">※ 기존 형식(반이름 | Unit | 단어 | 뜻)도 계속 지원됩니다.</p>
+        <p>📋 지원하는 컬럼 (첫 줄이 헤더일 때):</p>
+        <p className="text-xs mt-1 font-normal">No/번호 (무시됨) · Word/단어 · Meaning/뜻 · Unit/유닛 (선택, 없으면 Unit 1)</p>
+        <p className="text-xs mt-2 text-blue-500 font-normal">※ 반은 항상 아래에서 선택한 반으로 저장돼요 — 엑셀 안의 어떤 칸도 반 이름으로 쓰지 않습니다.</p>
       </div>
 
       <div className="space-y-2">
@@ -141,9 +165,6 @@ function ExcelUpload({ onDone }) {
 
       {preview && (
         <div className="space-y-3">
-          <input type="text" value={classOverride} onChange={e => setClassOverride(e.target.value)}
-            placeholder="저장할 반 이름 확인/수정"
-            className="w-full border-2 border-blue-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500" />
           <div className="bg-white rounded-2xl border-2 border-gray-200 overflow-hidden max-h-48 overflow-y-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 sticky top-0">
@@ -168,9 +189,9 @@ function ExcelUpload({ onDone }) {
             )}
           </div>
           <p className="text-center text-sm text-gray-500">총 {preview.length}개 단어 발견</p>
-          <button onClick={handleSave} disabled={saving}
+          <button onClick={handleSave} disabled={saving || !selectedClass}
             className="w-full bg-blue-500 text-white font-black py-4 rounded-2xl btn-press hover:bg-blue-600 disabled:opacity-50">
-            {saving ? '⏳ 저장 중...' : `💾 "${classOverride || selectedClass}" 반에 저장`}
+            {saving ? '⏳ 저장 중...' : `💾 "${selectedClass}" 반에 저장`}
           </button>
         </div>
       )}
