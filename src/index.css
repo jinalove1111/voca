@@ -2,14 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Title font — cute, rounded, playful (applied to every <h1>/<h2> app-wide
+   via the rule below, so individual screens never need to opt in by hand). */
+@font-face {
+  font-family: 'OneStoreMobilePop';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2105_2@1.0/ONE-Mobile-POP.woff') format('woff');
+  font-weight: normal;
+  font-display: swap;
+}
+
 * {
   -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  font-family: 'Noto Sans KR', sans-serif;
+  font-family: 'Pretendard', 'Noto Sans KR', sans-serif;
   background: linear-gradient(135deg, #fdf4ff 0%, #fef3c7 50%, #ecfdf5 100%);
   min-height: 100vh;
+}
+
+h1, h2 {
+  font-family: 'OneStoreMobilePop', 'Pretendard', 'Noto Sans KR', sans-serif;
 }
 
 .card-shadow {

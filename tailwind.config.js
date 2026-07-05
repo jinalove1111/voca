@@ -7,7 +7,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Noto Sans KR', 'sans-serif'],
+        sans: ['Pretendard', 'Noto Sans KR', 'sans-serif'],
+        title: ['OneStoreMobilePop', 'Pretendard', 'Noto Sans KR', 'sans-serif'],
       },
       animation: {
         'bounce-slow': 'bounce 2s infinite',
