@@ -46,11 +46,11 @@ export default function StudentSelect({ onSelect, onAdmin, removedNotice }) {
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-purple-50 to-pink-50">
       <div className="text-center mb-8 animate-fade-in min-w-0 max-w-full px-2">
         <img src={`${import.meta.env.BASE_URL}image/KakaoTalk_20260620_210208708.png`} alt="Paul Easy Voca" className="mx-auto mb-3 w-[180px] sm:w-[250px] h-auto rounded-[20px] shadow-lg object-cover" />
-        <h1 className="text-4xl font-black text-purple-700">Paul Easy Voca</h1>
+        <h1 className="text-3xl sm:text-4xl font-black text-purple-700">Paul Easy Voca</h1>
         <p className="text-purple-400 font-medium mt-1">이름을 입력하고 시작해요 ✨</p>
       </div>
 
-      <div className="w-full max-w-sm bg-white rounded-3xl card-shadow p-6 animate-slide-up space-y-3">
+      <div className="w-[calc(100vw-2rem)] max-w-sm min-w-0 bg-white rounded-3xl card-shadow p-6 animate-slide-up space-y-3">
         {removedNotice && (
           <p className="bg-orange-50 border-2 border-orange-200 text-orange-600 text-xs font-bold text-center rounded-xl p-3">
             ⚠️ 계정 정보를 찾을 수 없어요. 선생님께 문의하거나 다시 시작해주세요.

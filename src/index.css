@@ -15,6 +15,17 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+html, body {
+  /* Safety net against narrow real-phone viewports (375-412px) — a flex
+     child's default min-width:auto can force its container wider than the
+     screen even when every element is individually "w-full/max-w-*", which
+     was pushing the whole login card off-screen to the right on real
+     phones (confirmed: renders fine at 800px wide, cut off at 390px).
+     Clipping horizontal overflow app-wide is a robust catch-all rather than
+     chasing the exact forcing element on every screen. */
+  overflow-x: hidden;
+}
+
 body {
   font-family: 'Pretendard', 'Noto Sans KR', sans-serif;
   background: linear-gradient(135deg, #fdf4ff 0%, #fef3c7 50%, #ecfdf5 100%);
