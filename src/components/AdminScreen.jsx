@@ -210,20 +210,41 @@ function ExcelUpload({ onDone }) {
   const handleSave = async () => {
     const targetClass = selectedClass.trim()
     if (!targetClass) { alert('반을 선택해주세요!'); return }
+    if (!preview || preview.length === 0) { alert('저장할 단어가 없어요. 파일 내용을 확인해주세요!'); return }
+
+    // De-dupe within this one upload (case-insensitive on the word) — an
+    // accidental double row would otherwise create duplicate quiz options.
     const byUnit = {}
+    let skippedDupes = 0
     preview.forEach(r => {
       const u = r.unit || 'Unit 1'
-      if (!byUnit[u]) byUnit[u] = []
-      byUnit[u].push({ word: r.word, meaning: r.meaning })
+      if (!byUnit[u]) byUnit[u] = { seen: new Set(), words: [] }
+      const key = r.word.toLowerCase()
+      if (byUnit[u].seen.has(key)) { skippedDupes++; return }
+      byUnit[u].seen.add(key)
+      byUnit[u].words.push({ word: r.word, meaning: r.meaning })
     })
+
+    // Saving to a unit that already has words REPLACES them entirely
+    // (setClassWords deletes-then-inserts) — confirm first so a wrong file
+    // pick can't silently wipe existing data.
+    const unitsWithExisting = Object.keys(byUnit).filter(u => getClassWords(targetClass, u).length > 0)
+    if (unitsWithExisting.length > 0) {
+      const ok = window.confirm(
+        `"${targetClass}" 반의 ${unitsWithExisting.join(', ')}에 이미 단어가 있어요.\n` +
+        `업로드하면 기존 단어는 모두 지워지고 새 파일 내용으로 바뀝니다. 계속할까요?`
+      )
+      if (!ok) return
+    }
+
     setSaving(true)
     try {
       let totalWords = 0
-      for (const [unit, words] of Object.entries(byUnit)) {
+      for (const [unit, { words }] of Object.entries(byUnit)) {
         await setClassWords(targetClass, words, unit)
         totalWords += words.length
       }
-      alert(`"${targetClass}" 반에 ${totalWords}개 단어 저장 완료!`)
+      alert(`"${targetClass}" 반에 ${totalWords}개 단어 저장 완료!` + (skippedDupes > 0 ? `\n(중복 단어 ${skippedDupes}개는 제외했어요)` : ''))
       onDone()
     } catch (err) {
       alert('저장 중 오류가 발생했어요: ' + (err.message || err))
@@ -300,10 +321,12 @@ function ExcelUpload({ onDone }) {
 function PdfUpload({ onDone }) {
   const [text, setText]     = useState('')
   const [cls, setCls]       = useState('')
+  const [unit, setUnit]     = useState('')
   const [loading, setLoad]  = useState(false)
   const [words, setWords]   = useState([])
   const [saving, setSaving] = useState(false)
   const fileRef             = useRef()
+  const classList           = getClassNames()
 
   const handleFile = async (e) => {
     const file = e.target.files[0]
@@ -339,12 +362,31 @@ function PdfUpload({ onDone }) {
   }
 
   const handleSave = async () => {
-    if (!cls.trim()) { alert('반 이름을 입력해주세요!'); return }
+    if (!cls) { alert('반을 선택해주세요!'); return }
+    if (!unit) { alert('유닛을 선택해주세요!'); return }
     if (!words.length) { alert('먼저 [단어 파싱] 버튼을 눌러주세요!'); return }
+
+    // Same de-dupe + overwrite-confirm safeguards as the Excel upload.
+    const seen = new Set()
+    const deduped = words.filter(w => {
+      const key = w.word.toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    const skippedDupes = words.length - deduped.length
+
+    if (getClassWords(cls, unit).length > 0) {
+      const ok = window.confirm(
+        `"${cls}" 반의 ${unit}에 이미 단어가 있어요.\n업로드하면 기존 단어는 모두 지워지고 새 내용으로 바뀝니다. 계속할까요?`
+      )
+      if (!ok) return
+    }
+
     setSaving(true)
     try {
-      await setClassWords(cls.trim(), words)
-      alert(`"${cls}" 반에 ${words.length}개 단어 저장 완료!`)
+      await setClassWords(cls, deduped, unit)
+      alert(`"${cls}" 반 ${unit}에 ${deduped.length}개 단어 저장 완료!` + (skippedDupes > 0 ? `\n(중복 단어 ${skippedDupes}개는 제외했어요)` : ''))
       onDone()
     } catch (err) {
       alert('저장 중 오류가 발생했어요: ' + (err.message || err))
@@ -397,9 +439,21 @@ function PdfUpload({ onDone }) {
                 </table>
                 {words.length > 15 && <p className="text-center text-xs text-gray-400 p-2">... 외 {words.length - 15}개</p>}
               </div>
-              <input type="text" value={cls} onChange={e => setCls(e.target.value)}
-                placeholder="저장할 반 이름 (예: Reading 2)"
-                className="w-full border-2 border-orange-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-orange-500" />
+              <select value={cls} onChange={e => {
+                  const next = e.target.value
+                  setCls(next)
+                  setUnit(getClassUnitNames(next)[0] || 'Unit 1')
+                }}
+                className="w-full border-2 border-orange-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-orange-500 bg-white">
+                <option value="">-- 반을 선택하세요 --</option>
+                {classList.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              {cls && (
+                <select value={unit} onChange={e => setUnit(e.target.value)}
+                  className="w-full border-2 border-orange-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-orange-500 bg-white">
+                  {getClassUnitNames(cls).map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              )}
               <button onClick={handleSave} disabled={saving}
                 className="w-full bg-orange-500 text-white font-black py-4 rounded-2xl btn-press hover:bg-orange-600 disabled:opacity-50">
                 {saving ? '⏳ 저장 중...' : `💾 관리자 확인 후 저장 (${words.length}개)`}
