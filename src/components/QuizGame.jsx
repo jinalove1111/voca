@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { playWordAudio, stopCurrentAudio, getMicStream, speakPraise, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio, playSuccessSound } from '../utils/speech'
+import { playWordAudio, stopCurrentAudio, getMicStream, recordWithAutoStop, speakPraise, unlockAudio, playSuccessSound } from '../utils/speech'
 import { requestAudioGeneration } from '../utils/wordLibrary'
 import { isInAppBrowser } from '../utils/browserDetect'
 import InAppBrowserNotice from './InAppBrowserNotice'
@@ -38,15 +38,8 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
   const [myRecUrl, setUrl]     = useState(null)
   const [processing, setProc]  = useState(false)
 
-  const recRef    = useRef(null)   // SpeechRecognition
-  const mrRef     = useRef(null)   // MediaRecorder
+  const mrRef     = useRef(null)   // { stop } handle from recordWithAutoStop
   const timersRef = useRef([])     // setTimeout ids
-
-  const addTimer = (fn, ms) => {
-    const t = setTimeout(fn, ms)
-    timersRef.current.push(t)
-    return t
-  }
 
   const clearTimers = () => {
     timersRef.current.forEach(clearTimeout)
@@ -56,13 +49,7 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
   const stopAll = () => {
     clearTimers()
     window.speechSynthesis?.cancel()
-    if (recRef.current) {
-      try { recRef.current.abort() } catch {}
-      recRef.current = null
-    }
-    if (mrRef.current && mrRef.current.state === 'recording') {
-      try { mrRef.current.stop() } catch {}
-    }
+    try { mrRef.current?.stop?.() } catch {}
   }
 
   // Cleanup on unmount or word change
@@ -70,11 +57,14 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
 
   const MIC_ERR = {
     'not-allowed':   '마이크 권한을 허용해주세요! 설정 → 사이트 권한 → 마이크 🎤',
-    'no-speech':     '소리가 안 들렸어요. 크게 다시 말해봐요! 🗣️',
     'audio-capture': '마이크를 찾을 수 없어요. 기기 마이크를 확인해주세요 😢',
     'network':       '네트워크 오류예요. 인터넷 연결을 확인해주세요 📶',
   }
 
+  // Grading is just "did a recording actually happen" — blob.size > 0 = the
+  // student practiced the pronunciation, so it counts as success. This app
+  // doesn't grade pronunciation accuracy (no STT/Whisper/Azure): recording
+  // successfully IS the pronunciation practice being complete.
   const startListening = () => {
     if (processing) return
     setProc(true)
@@ -84,107 +74,44 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
     setUrl(null)
     setPhase('listening')
 
-    // MediaRecorder (best-effort — shows error if permission denied).
-    // Reuses one shared mic stream for the whole session so the browser
-    // doesn't re-prompt for permission on every word.
-    if (navigator.mediaDevices?.getUserMedia) {
-      const mimeType = getAudioMimeType()
-      getMicStream().then(stream => {
-        try {
-          const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
-          const chunks = []
-          mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
-          mr.onstop = () => {
-            console.log('[QuizGame] recorder stop')
-            const blobType = mimeType || 'audio/webm'
-            setUrl(URL.createObjectURL(new Blob(chunks, { type: blobType })))
-          }
-          mr.start()
-          console.log('[QuizGame] recorder start')
-          mrRef.current = mr
-        } catch {}
-      }).catch((err) => {
-        const errMsg = MIC_ERR[err.name] || '마이크 오류가 발생했어요 😢'
-        setMicErr(errMsg)
-      })
-    }
-
-    // SpeechRecognition
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) {
+    if (!navigator.mediaDevices?.getUserMedia) {
       setPhase('fail')
-      setMsg('이 브라우저는 음성 인식을 지원하지 않아요 😢')
+      setMsg('이 브라우저는 녹음을 지원하지 않아요 😢')
       setProc(false)
       return
     }
 
-    const rec = new SR()
-    rec.lang = 'en-US'
-    rec.interimResults = false
-    rec.maxAlternatives = 5
-    recRef.current = rec
-
-    // Auto-stop after 5 s
-    const autoStop = addTimer(() => {
-      try { rec.stop() } catch {}
-    }, 5000)
-
-    const finish = (ok, failMsg) => {
-      clearTimers()
-      if (mrRef.current && mrRef.current.state === 'recording') {
-        try { mrRef.current.stop() } catch {}
-      }
-      if (ok) {
-        setPhase('success')
-        setMsg(rndMsg(SUCCESS_MSGS))
-        onSuccess()
-      } else {
-        setTries(prev => {
-          const n = prev + 1
-          setMsg(n >= 3 ? '괜찮아! 다음에 다시 해보자! 💪' : rndMsg(FAIL_MSGS))
-          return n
-        })
-        setPhase('fail')
-        if (failMsg) setMsg(failMsg)
-      }
-      setProc(false)
-    }
-
-    rec.onresult = (event) => {
-      clearTimeout(autoStop)
-      const transcripts = Array.from(event.results[0]).map(r => r.transcript.toLowerCase().trim())
-      const ok = transcripts.some(t => t.includes(word.toLowerCase().trim()))
-      finish(ok, null)
-    }
-
-    rec.onerror = (event) => {
-      clearTimeout(autoStop)
-      finish(false, MIC_ERR[event.error] || '마이크를 확인해보세요!')
-    }
-
-    // onend fires after onresult AND after onerror — use as safety net only
-    rec.onend = () => {
-      clearTimeout(autoStop)
-      // If still in 'listening', result/error never fired → treat as fail
-      setPhase(prev => {
-        if (prev === 'listening') {
-          setMsg('다시 시도해보세요!')
-          setProc(false)
-          return 'fail'
-        }
-        setProc(false)
-        return prev
+    const mimeType = getAudioMimeType()
+    getMicStream()
+      .then((stream) => {
+        const rec = recordWithAutoStop(stream, { maxMs: 5000, minMs: 2000, silenceMs: 1000, mimeType })
+        mrRef.current = rec
+        return rec.promise
       })
-      if (mrRef.current && mrRef.current.state === 'recording') {
-        try { mrRef.current.stop() } catch {}
-      }
-    }
-
-    try { rec.start() } catch {
-      setPhase('fail')
-      setMsg('마이크를 시작할 수 없어요!')
-      setProc(false)
-    }
+      .then((blob) => {
+        console.log('[QuizGame] recorder stop, blob.size =', blob.size)
+        setUrl(URL.createObjectURL(blob))
+        setProc(false)
+        if (blob.size > 0) {
+          setPhase('success')
+          setMsg('발음 성공! ⭐ 1개 획득!')
+          onSuccess()
+        } else {
+          setTries(prev => {
+            const n = prev + 1
+            setMsg(n >= 3 ? '괜찮아! 다음에 다시 해보자! 💪' : '다시 시도해보세요!')
+            return n
+          })
+          setPhase('fail')
+        }
+      })
+      .catch((err) => {
+        console.error('[QuizGame] recording error:', err)
+        const errMsg = MIC_ERR[err.name] || '마이크 오류가 발생했어요 😢'
+        setMicErr(errMsg)
+        setPhase('fail')
+        setProc(false)
+      })
   }
 
   const handleClick = () => {
