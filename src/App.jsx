@@ -96,7 +96,7 @@ function AppInner({ student, onLogout }) {
   const [currentGameId, setCurrentGameId] = useState('balloon')
   const [refreshTick, setRefreshTick] = useState(0)
   const studentData                 = useStudent(student)
-  const { cleared, answerMission, missions, addStars, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed } = studentData
+  const { cleared, answerMission, missions, addStars, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed } = studentData
 
   // Rotates through the 4 mini-games, never repeating whichever was played
   // last (across the whole app, not just this checkpoint) — used both by
@@ -105,6 +105,7 @@ function AppInner({ student, onLogout }) {
     const game = pickNextGame(lastGamePlayed)
     setCurrentGameId(game.id)
     setLastGamePlayed(game.id)
+    recordGamePlayed(game.id)
     setScreen('game')
   }
   const GAME_COMPONENTS = { balloon: BalloonGame, fishing: FishingGame, pizza: PizzaGame, train: TrainGame }

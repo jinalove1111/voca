@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import { STICKERS } from '../data/stickers'
+import { GAMES } from '../utils/matchGame'
+
+const gameLabel = (id) => GAMES.find(g => g.id === id)
 
 const stickerEmoji = (id) => STICKERS.find(s => s.id === id)?.emoji
 // Fallback day-markers when missions were completed but every pull that day
@@ -104,6 +107,14 @@ export default function StudyCalendar({ studentData, onBack }) {
                   ✔ 획득한 스티커:{' '}
                   {selectedDay.day.stickersEarned?.length
                     ? selectedDay.day.stickersEarned.map(stickerEmoji).join(' ')
+                    : '없음'}
+                </div>
+                <div className="text-sm">
+                  ✔ 플레이한 게임:{' '}
+                  {selectedDay.day.gamesPlayed && Object.keys(selectedDay.day.gamesPlayed).length
+                    ? Object.entries(selectedDay.day.gamesPlayed)
+                        .map(([id, count]) => `${gameLabel(id)?.emoji || '🎮'}×${count}`)
+                        .join(' ')
                     : '없음'}
                 </div>
               </div>

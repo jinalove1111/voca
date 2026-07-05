@@ -5,3 +5,4 @@
 export const getStudents = () => []
 export const addStudent = () => {}
 export const removeStudent = () => {}
+export const findStudentByName = () => null

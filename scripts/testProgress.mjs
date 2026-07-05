@@ -23,7 +23,7 @@ const BUNDLE = process.env.PROGRESS_BUNDLE
 if (!BUNDLE) throw new Error('Set PROGRESS_BUNDLE to the esbuild output path (see comment above)')
 const { pathToFileURL } = await import('node:url')
 const {
-  freshRecord, freshRound, freshHistoryDay, calcStreak, countCategoriesCompleted, GOAL,
+  freshRecord, freshRound, freshHistoryDay, calcStreak, countCategoriesCompleted, GOAL, migrateOldData,
 } = await import(pathToFileURL(BUNDLE).href)
 
 const STORE_KEY = 'paul_easy_progress'
@@ -122,6 +122,30 @@ console.log('\n5. 스트릭 계산 (연속 완료일)')
     [key(2)]: { categoriesCompleted: 2 }, // breaks the streak (not fully completed)
   }
   check('오늘/어제 4/4 완료, 그저께는 미완료 -> streak === 2', calcStreak(history) === 2)
+}
+
+console.log('\n6. 게임 플레이 기록 (v1.1)')
+{
+  const day = freshHistoryDay()
+  check('새 히스토리 day에 gamesPlayed 빈 객체 기본값', JSON.stringify(day.gamesPlayed) === '{}')
+
+  // Simulate what recordGamePlayed does (same increment logic, since the
+  // real function is a hook-internal callback wrapping bumpHistory/patch).
+  const bumped1 = { ...day, gamesPlayed: { ...(day.gamesPlayed || {}), balloon: (day.gamesPlayed?.balloon || 0) + 1 } }
+  const bumped2 = { ...bumped1, gamesPlayed: { ...(bumped1.gamesPlayed || {}), balloon: (bumped1.gamesPlayed?.balloon || 0) + 1 } }
+  const bumped3 = { ...bumped2, gamesPlayed: { ...(bumped2.gamesPlayed || {}), fishing: (bumped2.gamesPlayed?.fishing || 0) + 1 } }
+  check('풍선 게임 2번 플레이 -> balloon: 2', bumped3.gamesPlayed.balloon === 2)
+  check('낚시 게임 1번 플레이 -> fishing: 1', bumped3.gamesPlayed.fishing === 1)
+
+  // Seed a pre-v1.1 scattered-key history entry (no gamesPlayed field at all)
+  // to confirm migration backfills it instead of leaving it undefined.
+  localStorage.setItem('paulEasyVoca_OldKid_history', JSON.stringify({
+    'Mon Jan 01 2026': { missionsCompleted: 1, starsEarned: 10, stickersEarned: [] },
+  }))
+  const oldHistoryEntry = migrateOldData('OldKid').history
+  check('구버전 기록 마이그레이션 시 gamesPlayed는 빈 객체로 채워짐 (undefined 아님)',
+    Object.values(oldHistoryEntry).length > 0 &&
+    Object.values(oldHistoryEntry).every(d => d.gamesPlayed && typeof d.gamesPlayed === 'object'))
 }
 
 console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n${failures}개 테스트 실패 ❌`)

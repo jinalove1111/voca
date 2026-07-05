@@ -62,6 +62,7 @@ const freshHistoryDay = () => ({
   giftsToday: 0,          // how many full 4/4 rounds were completed today (missions repeat all day) — internal bookkeeping only, never shown as "완료한 미션"
   starsEarned: 0,
   stickersEarned: [],
+  gamesPlayed: {},        // gameId -> play count today, e.g. { balloon: 2, fishing: 1 }
 })
 
 function freshRecord(name) {
@@ -103,6 +104,7 @@ function migrateOldData(name) {
     giftsToday: day.missionsCompleted || 0,
     starsEarned: day.starsEarned || 0,
     stickersEarned: day.stickersEarned || [],
+    gamesPlayed: {},
   }]))
   rec.milestoneStreak = readOld(oldKey(name, 'milestoneStreak'), 0) || 0
   rec.starBadgeThreshold = readOld(oldKey(name, 'starBadgeThreshold'), 0) || 0
@@ -333,6 +335,15 @@ export function useStudent(name) {
   }, [patch])
 
   const setLastGamePlayed = useCallback((gameId) => patch(() => ({ lastGamePlayed: gameId })), [patch])
+
+  // Logs one play of a mini-game into today's history (calendar "게임 결과
+  // 히스토리") — separate from setLastGamePlayed, which only tracks the most
+  // recent game for the no-repeat rotation, not a per-day count.
+  const recordGamePlayed = useCallback((gameId) => {
+    bumpHistory(day => ({
+      gamesPlayed: { ...(day.gamesPlayed || {}), [gameId]: (day.gamesPlayed?.[gameId] || 0) + 1 },
+    }))
+  }, [bumpHistory])
   const setLastWordIndex = useCallback((idx) => patch(() => ({ lastWordIndex: idx })), [patch])
 
   const dailyProgress = {
@@ -355,7 +366,7 @@ export function useStudent(name) {
     cleared, round, dailyProgress,
     missionsCompletedToday, missionFullyDoneToday, giftsToday, todayStars,
     history, streak,
-    lastGamePlayed, setLastGamePlayed,
+    lastGamePlayed, setLastGamePlayed, recordGamePlayed,
     lastWordIndex, setLastWordIndex,
     pendingGift: giftQueue[0] || null, dismissGift,
     addStars, addMission, answerMission,
