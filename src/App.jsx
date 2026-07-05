@@ -7,6 +7,7 @@ import QuizGame from './components/QuizGame'
 import LevelUpMission from './components/LevelUpMission'
 import PetCollection from './components/PetCollection'
 import BalloonGame from './components/BalloonGame'
+import BonusChoiceScreen from './components/BonusChoiceScreen'
 import EggReveal from './components/EggReveal'
 import AdminScreen from './components/AdminScreen'
 import { useStudent } from './hooks/useStudent'
@@ -80,6 +81,14 @@ function AppInner({ student, onLogout }) {
   const [screen, setScreen]         = useState('dashboard')
   const [selectedWord, setWord]     = useState(null)
   const [selectedWordIdx, setWordIdx] = useState(0)
+  const [pendingNextIdx, setPendingNextIdx] = useState(0)
+  // Whether the balloon game was entered mid-lesson (bonus checkpoint) vs.
+  // directly from the Dashboard nav button — changes what its result
+  // screen offers ("다음 단어 공부하기" vs. just "홈으로"). Always false
+  // again once back on the dashboard, so a later direct-from-dashboard
+  // play never inherits a stale lesson context.
+  const [balloonFromLesson, setBalloonFromLesson] = useState(false)
+  useEffect(() => { if (screen === 'dashboard') setBalloonFromLesson(false) }, [screen])
   const [eggPet, setEggPet]         = useState(null)
   const [refreshTick, setRefreshTick] = useState(0)
   const studentData                 = useStudent(student)
@@ -120,15 +129,30 @@ function AppInner({ student, onLogout }) {
     setScreen('wordDetail')
   }
 
-  // Advance to next word in classWords; go back to browser after last word
+  // Advance to next word in classWords; go back to browser after last word.
+  // Every 5th completed word (and only if there's a next word to continue
+  // to), offer the balloon-game bonus screen instead of jumping straight to
+  // the next word — the student picks whether to play or keep going.
   const handleNextWord = () => {
     const nextIdx = selectedWordIdx + 1
+    const completedCount = selectedWordIdx + 1
+    if (completedCount % 5 === 0 && nextIdx < classWords.length) {
+      setPendingNextIdx(nextIdx)
+      setScreen('bonusChoice')
+      return
+    }
     if (nextIdx < classWords.length) {
       setWord(classWords[nextIdx])
       setWordIdx(nextIdx)
     } else {
       setScreen('wordBrowser')
     }
+  }
+
+  const goToPendingWord = () => {
+    setWord(classWords[pendingNextIdx])
+    setWordIdx(pendingNextIdx)
+    setScreen('wordDetail')
   }
 
   const handleAnswerMission = (wordId) => {
@@ -165,7 +189,22 @@ function AppInner({ student, onLogout }) {
       )}
       {screen === 'levelUpMission' && <LevelUpMission missions={missions} words={classWords} onAnswer={handleAnswerMission} onBack={() => setScreen('dashboard')} />}
       {screen === 'petCollection'  && <PetCollection pets={studentData.pets} onBack={() => setScreen('dashboard')} />}
-      {screen === 'balloonGame'   && <BalloonGame words={classWords} onBack={() => setScreen('dashboard')} onAddStars={addStars} />}
+      {screen === 'bonusChoice'   && (
+        <BonusChoiceScreen
+          completedCount={pendingNextIdx}
+          wordCount={classWords.length}
+          onPlayGame={() => { setBalloonFromLesson(true); setScreen('balloonGame') }}
+          onContinue={goToPendingWord}
+        />
+      )}
+      {screen === 'balloonGame'   && (
+        <BalloonGame
+          words={classWords}
+          onBack={balloonFromLesson ? goToPendingWord : () => setScreen('dashboard')}
+          onAddStars={addStars}
+          onContinue={balloonFromLesson ? goToPendingWord : null}
+        />
+      )}
       {eggPet && <EggReveal pet={eggPet} onClose={() => setEggPet(null)} />}
       <SpeedBtn />
     </>

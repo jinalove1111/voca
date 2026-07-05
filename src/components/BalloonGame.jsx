@@ -1,7 +1,9 @@
 import { useState, useMemo, useRef } from 'react'
 import { playWordAudio, stopCurrentAudio, playSuccessSound, unlockAudio } from '../utils/speech'
 
-const ROUNDS = 10
+const ROUNDS = 5
+const STAR_PER_CORRECT = 10
+const PERFECT_BONUS = 10
 const BALLOON_COLORS = ['bg-red-400', 'bg-blue-400', 'bg-yellow-400', 'bg-green-400', 'bg-pink-400', 'bg-purple-400']
 // Only used as filler if the current unit has fewer than 4 words — never
 // mixed in with AI/network content, just a small fixed English word list.
@@ -34,27 +36,35 @@ function buildBalloons(target, words) {
 }
 
 const TIER = (score) =>
-  score === ROUNDS ? { emoji: '🏆', msg: 'Excellent!!' } :
-  score >= 7        ? { emoji: '🎉', msg: 'Great Job!' } :
-                       { emoji: '💪', msg: 'Keep Going!' }
+  score === ROUNDS ? { emoji: '🏆', msg: 'Excellent!' } :
+  score === ROUNDS - 1 ? { emoji: '🎉', msg: 'Great Job!' } :
+  score === ROUNDS - 2 ? { emoji: '👍', msg: 'Good!' } :
+                          { emoji: '💪', msg: 'Keep Going!' }
 
-export default function BalloonGame({ words, onBack, onAddStars }) {
+// words: the CURRENT class+unit's word list only (caller scopes this).
+// onContinue: if provided, this game was opened mid-lesson (bonus
+// checkpoint) — its result screen offers "다음 단어 공부하기" using it,
+// and "그만하기" resumes the lesson too instead of leaving the game.
+// If omitted (opened from the Dashboard directly), it behaves standalone.
+export default function BalloonGame({ words, onBack, onAddStars, onContinue }) {
   const [phase, setPhase] = useState('intro') // intro | playing | result
   const [round, setRound] = useState(0)
-  const [score, setScore] = useState(0)
+  const [score, setScore] = useState(0) // rounds correct on the first try
   const [target, setTarget] = useState(null)
   const [balloons, setBalloons] = useState([])
-  const [popped, setPopped] = useState(null) // { word, correct }
+  const [popped, setPopped] = useState(null)
   const [shakeWord, setShakeWord] = useState(null)
+  const [wrongWords, setWrongWords] = useState([]) // tapped-wrong balloons this round, disabled
+  const [firstTryUsed, setFirstTryUsed] = useState(false)
   const [locked, setLocked] = useState(false)
   const lastWordRef = useRef(null)
 
   const eligible = useMemo(() => (words || []).filter(w => w.word), [words])
+  const canPlay = eligible.length >= 4
 
   const startGame = () => {
     unlockAudio()
     setScore(0)
-    setRound(0)
     nextRound(0)
     setPhase('playing')
   }
@@ -66,6 +76,8 @@ export default function BalloonGame({ words, onBack, onAddStars }) {
     setBalloons(buildBalloons(t, eligible))
     setPopped(null)
     setShakeWord(null)
+    setWrongWords([])
+    setFirstTryUsed(false)
     setLocked(false)
     setRound(roundIdx)
     if (t) {
@@ -81,21 +93,24 @@ export default function BalloonGame({ words, onBack, onAddStars }) {
   }
 
   const handleTap = (b) => {
-    if (locked || !target) return
-    setLocked(true)
+    if (locked || !target || wrongWords.includes(b.word)) return
+
     if (b.correct) {
-      setPopped({ word: b.word, correct: true })
+      setLocked(true)
+      setPopped({ word: b.word })
       playSuccessSound()
-      setScore(s => s + 1)
-      onAddStars?.(10)
+      if (!firstTryUsed) { setScore(s => s + 1); onAddStars?.(STAR_PER_CORRECT) }
+      setTimeout(() => {
+        const next = round + 1
+        if (next >= ROUNDS) setPhase('result')
+        else nextRound(next)
+      }, 1100)
     } else {
+      setFirstTryUsed(true)
       setShakeWord(b.word)
+      setWrongWords(prev => [...prev, b.word])
+      setTimeout(() => setShakeWord(null), 500)
     }
-    setTimeout(() => {
-      const next = round + 1
-      if (next >= ROUNDS) setPhase('result')
-      else nextRound(next)
-    }, 1100)
   }
 
   if (phase === 'intro') {
@@ -103,17 +118,19 @@ export default function BalloonGame({ words, onBack, onAddStars }) {
       <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-sky-400 to-indigo-500">
         <div className="bg-white rounded-3xl card-shadow p-8 max-w-sm w-full text-center animate-slide-up">
           <div className="text-7xl mb-4 animate-bounce">🎈</div>
-          <h1 className="text-2xl font-black text-gray-800 mb-2">보너스 게임 시작!</h1>
-          <p className="text-gray-500 text-sm mb-6">발음을 듣고 맞는 단어 풍선을 터치하세요!</p>
-          {eligible.length < 2 ? (
-            <p className="text-red-400 text-sm font-bold mb-4">이 유닛에 단어가 너무 적어요 😢</p>
+          <h1 className="text-2xl font-black text-gray-800 mb-2">풍선 터뜨리기</h1>
+          <p className="text-gray-500 text-sm mb-6">발음을 듣고 맞는 단어 풍선을 터치하세요! (5문제)</p>
+          {!canPlay ? (
+            <p className="text-red-400 text-sm font-bold mb-4">단어가 4개 이상일 때 게임을 할 수 있어요.</p>
           ) : (
             <button onClick={startGame}
               className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-black py-4 rounded-2xl btn-press text-lg">
               🎮 시작하기
             </button>
           )}
-          <button onClick={onBack} className="mt-3 text-gray-400 text-sm font-bold btn-press">← 홈으로</button>
+          <button onClick={onBack} className="mt-3 text-gray-400 text-sm font-bold btn-press">
+            {onContinue ? '← 학습으로 돌아가기' : '← 홈으로'}
+          </button>
         </div>
       </div>
     )
@@ -121,19 +138,27 @@ export default function BalloonGame({ words, onBack, onAddStars }) {
 
   if (phase === 'result') {
     const { emoji, msg } = TIER(score)
+    const bonus = score === ROUNDS ? PERFECT_BONUS : 0
+    const totalStars = score * STAR_PER_CORRECT + bonus
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-sky-400 to-indigo-500">
         <div className="bg-white rounded-3xl card-shadow p-8 max-w-sm w-full text-center animate-slide-up">
-          <div className="text-6xl mb-2">{emoji}</div>
-          <p className="text-3xl mb-2">⭐⭐⭐⭐⭐</p>
+          <div className="text-6xl mb-2">🎉</div>
+          <p className="font-black text-gray-700 mb-4">풍선 게임 완료!</p>
+          <div className="text-5xl mb-2">{emoji}</div>
           <p className="text-4xl font-black text-indigo-600 mb-1">{score}/{ROUNDS}</p>
-          <p className="text-3xl mb-2">⭐⭐⭐⭐⭐</p>
-          <p className="text-xl font-black text-gray-700 mb-6">{msg}</p>
+          <p className="text-xl font-black text-gray-700 mb-4">{msg}</p>
+          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-3 mb-6">
+            <p className="text-yellow-700 font-black">⭐ +{totalStars}</p>
+            {bonus > 0 && <p className="text-yellow-600 text-xs">(정답 {score * STAR_PER_CORRECT} + 올클리어 보너스 {bonus})</p>}
+          </div>
           <div className="flex gap-2">
-            <button onClick={onBack}
-              className="flex-1 border-2 border-gray-200 text-gray-500 font-bold py-3 rounded-2xl btn-press">홈으로</button>
             <button onClick={startGame}
-              className="flex-1 bg-indigo-500 text-white font-black py-3 rounded-2xl btn-press">다시 하기</button>
+              className="flex-1 border-2 border-gray-200 text-gray-600 font-bold py-3 rounded-2xl btn-press">한 번 더 하기</button>
+            <button onClick={onContinue || onBack}
+              className="flex-1 bg-indigo-500 text-white font-black py-3 rounded-2xl btn-press">
+              {onContinue ? '다음 단어 공부하기' : '홈으로'}
+            </button>
           </div>
         </div>
       </div>
@@ -145,7 +170,7 @@ export default function BalloonGame({ words, onBack, onAddStars }) {
       <div className="flex items-center justify-between max-w-lg mx-auto w-full pt-2 mb-4">
         <button onClick={onBack} className="text-white font-bold btn-press">← 그만하기</button>
         <div className="bg-white/90 rounded-2xl px-4 py-2 font-black text-indigo-600">
-          {round + 1} / {ROUNDS} · ⭐ {score * 10}
+          {round + 1} / {ROUNDS} · ⭐ {score * STAR_PER_CORRECT}
         </div>
       </div>
 
@@ -160,12 +185,13 @@ export default function BalloonGame({ words, onBack, onAddStars }) {
           {balloons.map((b) => {
             const isPopped = popped?.word === b.word
             const isShaking = shakeWord === b.word
+            const isWrongDisabled = wrongWords.includes(b.word)
             return (
               <button
                 key={b.word}
                 onClick={() => handleTap(b)}
-                disabled={locked}
-                className={`relative transition-all duration-300 ${isPopped ? 'scale-150 opacity-0' : 'scale-100'} ${isShaking ? 'animate-wiggle' : ''}`}
+                disabled={locked || isWrongDisabled}
+                className={`relative transition-all duration-300 ${isPopped ? 'scale-150 opacity-0' : 'scale-100'} ${isShaking ? 'animate-wiggle' : ''} ${isWrongDisabled ? 'opacity-30' : ''}`}
               >
                 <div className={`${b.color} rounded-full aspect-square w-full flex items-center justify-center text-white font-black text-lg shadow-lg btn-press`}
                   style={{ borderRadius: '50% 50% 50% 50% / 55% 55% 45% 45%' }}>
@@ -176,11 +202,11 @@ export default function BalloonGame({ words, onBack, onAddStars }) {
           })}
         </div>
 
-        {popped?.correct && (
+        {popped && (
           <div className="mt-8 text-center animate-slide-up">
             <p className="text-4xl mb-1">🎉🎊✨</p>
-            <p className="text-2xl font-black text-yellow-300">야르!!</p>
-            <p className="text-white font-bold">⭐ +10점</p>
+            <p className="text-2xl font-black text-yellow-300">야르!! 🎉</p>
+            {!firstTryUsed && <p className="text-white font-bold">⭐ +{STAR_PER_CORRECT}</p>}
           </div>
         )}
         {shakeWord && !popped && (
