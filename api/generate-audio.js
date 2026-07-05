@@ -30,12 +30,12 @@ async function generateExampleAndTip(word, meaning) {
       content: `A Korean elementary-school student is learning the English word "${word}" (Korean meaning: "${meaning}"). Give me three things:
 1. One short, simple English example sentence using "${word}" naturally — under 10 words, beginner-level vocabulary and grammar only.
 2. The natural Korean translation of that exact example sentence (translate the whole sentence, not just the word).
-3. A short, fun Korean memory tip (mnemonic) to help the child remember the word — playful, one sentence, can use sound-alikes or a silly association. Write it in Korean.
+3. A friendly, natural Korean explanation (about 2 sentences) that helps the child understand when/how "${word}" is actually used — like explaining it to a curious kid, not a mechanical "word = meaning" formula. It's fine to reference how the word sounds in Korean if that genuinely helps, but the main point is real-world context and usage, ideally with a short quoted example phrase. Write both sentences on a single line (no line breaks).
 
 Respond in EXACTLY this format, nothing else:
 EXAMPLE: <the example sentence>
 TRANSLATION: <the Korean translation of the example sentence>
-TIP: <the Korean memory tip>`,
+TIP: <the two-sentence Korean explanation, on one line>`,
     }],
   })
   const text = response.content.find((b) => b.type === 'text')?.text?.trim() || ''

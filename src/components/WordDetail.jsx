@@ -290,6 +290,8 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk }) {
 
 // ── Step 2: 예문 ───────────────────────────────────────────────────────────────
 function ExampleStep({ english, korean, memoryTip, audioUrl, onDone, onMarkExampleHeard }) {
+  const [canProceed, setCanProceed] = useState(false)
+
   const handlePlay = () => {
     unlockAudio()
     playWordAudio(audioUrl, english, { times: 2 })
@@ -308,6 +310,16 @@ function ExampleStep({ english, korean, memoryTip, audioUrl, onDone, onMarkExamp
           className="w-full mt-4 bg-blue-500 hover:bg-blue-600 text-white font-black py-3 rounded-2xl btn-press transition-colors">
           🔊 예문 듣기
         </button>
+
+        <div className="mt-4">
+          <SpeechBtn
+            target={english}
+            wordAudioUrl={audioUrl}
+            label="예문 따라 말하기"
+            onAnyResult={() => setCanProceed(true)}
+          />
+        </div>
+
         {memoryTip && (
           <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-4 mt-4">
             <div className="flex items-center gap-2 mb-1">
@@ -319,10 +331,12 @@ function ExampleStep({ english, korean, memoryTip, audioUrl, onDone, onMarkExamp
         )}
       </div>
 
-      <button onClick={onDone}
-        className="w-full bg-purple-500 text-white font-black py-4 rounded-3xl btn-press card-shadow text-lg">
-        계속 → 🎮 퀴즈
-      </button>
+      {canProceed && (
+        <button onClick={onDone}
+          className="w-full bg-purple-500 text-white font-black py-4 rounded-3xl btn-press card-shadow text-lg animate-slide-up">
+          계속 → 🎮 퀴즈
+        </button>
+      )}
     </div>
   )
 }
