@@ -16,7 +16,7 @@ import GiftReveal from './components/GiftReveal'
 import AdminScreen from './components/AdminScreen'
 import { useStudent } from './hooks/useStudent'
 import { pickNextGame } from './utils/matchGame'
-import { getStudentWords, initWordLibrary, refreshWordLibrary } from './utils/wordLibrary'
+import { getStudentWords, initWordLibrary, refreshWordLibrary, findStudentByName } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech, getMicStream } from './utils/speech'
 
 class AppErrorBoundary extends React.Component {
@@ -247,6 +247,7 @@ export default function App() {
   const [showAdmin, setAdmin] = useState(false)
   const [ready, setReady]     = useState(false)
   const [loadError, setLoadError] = useState(null)
+  const [removedNotice, setRemovedNotice] = useState(false)
 
   // Load class/word data from Supabase before rendering anything that needs
   // it — guarantees every screen starts from the current DB state, not a
@@ -254,6 +255,18 @@ export default function App() {
   useEffect(() => {
     initWordLibrary().then(() => setReady(true)).catch((err) => setLoadError(err))
   }, [])
+
+  // If an admin deleted this student's account from another device while
+  // this one was still logged in, don't silently fall through to an empty
+  // "0 words" dashboard under a name that no longer exists — log out with a
+  // clear explanation instead.
+  useEffect(() => {
+    if (ready && student && !findStudentByName(student)) {
+      localStorage.removeItem('paulEasyVoca_currentStudent')
+      setStudent('')
+      setRemovedNotice(true)
+    }
+  }, [ready, student])
 
   // Unlock AudioContext + warm up speechSynthesis + ask for microphone
   // permission, all on the very first user gesture in the whole app
@@ -271,7 +284,7 @@ export default function App() {
     }
   }, [])
 
-  const handleSelect = (name) => { localStorage.setItem('paulEasyVoca_currentStudent', name); setStudent(name) }
+  const handleSelect = (name) => { localStorage.setItem('paulEasyVoca_currentStudent', name); setRemovedNotice(false); setStudent(name) }
   const handleLogout = () => { localStorage.removeItem('paulEasyVoca_currentStudent'); setStudent('') }
 
   if (loadError) {
@@ -301,6 +314,6 @@ export default function App() {
   }
 
   if (showAdmin) return <AppErrorBoundary><AdminScreen onBack={() => setAdmin(false)} /></AppErrorBoundary>
-  if (!student)  return <AppErrorBoundary><StudentSelect onSelect={handleSelect} onAdmin={() => setAdmin(true)} /></AppErrorBoundary>
+  if (!student)  return <AppErrorBoundary><StudentSelect onSelect={handleSelect} onAdmin={() => setAdmin(true)} removedNotice={removedNotice} /></AppErrorBoundary>
   return <AppErrorBoundary><AppInner student={student} onLogout={handleLogout} /></AppErrorBoundary>
 }

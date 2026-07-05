@@ -287,6 +287,19 @@ export async function renameClass(oldName, newName) {
 // ── Students: roster + class/unit assignment, shared across every device ──
 export const getStudents = () => Object.keys(_students)
 
+// Case-insensitive lookup — returns the student's name exactly as stored in
+// the DB (the "canonical" casing), or null if no student matches. A young
+// student retyping their name with different capitalization (e.g. "heeja"
+// vs "Heeja") must resolve back to the SAME account: progress is keyed by
+// exact name string (see useStudent.js), so logging in under a differently-
+// cased spelling would silently fork into a brand-new, empty progress
+// record and look like all their stars/stickers vanished.
+export function findStudentByName(name) {
+  const target = name.trim().toLowerCase()
+  if (!target) return null
+  return Object.keys(_students).find(n => n.toLowerCase() === target) || null
+}
+
 // Students linked by class_id (the DB foreign key), never by matching the
 // className string — so this stays correct even if the class was renamed
 // after the student was assigned to it.
@@ -299,6 +312,9 @@ export function getStudentsInClass(className) {
 }
 
 export async function addStudent(name, className = '', unitName = DEFAULT_UNIT_NAME) {
+  // Defense in depth: never create a second account that only differs by
+  // capitalization — see findStudentByName for why that's dangerous.
+  if (findStudentByName(name)) return
   let classId = null
   if (className) classId = (await ensureClass(className)).id
   const { error } = await supabase

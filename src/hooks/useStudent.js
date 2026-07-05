@@ -8,7 +8,7 @@ import { getRandomSticker, getMilestoneSticker, STICKERS } from '../data/sticker
 // shared, and survives logging in from a different phone (same name = same
 // localStorage key, restored fresh from whatever device is used, since the
 // student roster/class itself is already shared via Supabase).
-export { getStudents, addStudent, removeStudent } from '../utils/wordLibrary'
+export { getStudents, addStudent, removeStudent, findStudentByName } from '../utils/wordLibrary'
 
 // ── Single unified progress store ───────────────────────────────────────
 // Every per-student value the app tracks (stars, stickers, today's mission

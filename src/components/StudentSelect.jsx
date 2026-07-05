@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getStudents, addStudent } from '../hooks/useStudent'
+import { addStudent, findStudentByName } from '../hooks/useStudent'
 import { getClassNames, getClassUnitNames } from '../utils/wordLibrary'
 
 // Students only ever see a name/class entry form here — never a roster of
@@ -8,7 +8,7 @@ import { getClassNames, getClassUnitNames } from '../utils/wordLibrary'
 // one student); a new name registers with the chosen class/unit. Once
 // selected, App.jsx caches the name in localStorage so returning to the
 // app skips this screen entirely and loads only that student's own data.
-export default function StudentSelect({ onSelect, onAdmin }) {
+export default function StudentSelect({ onSelect, onAdmin, removedNotice }) {
   const [input, setInput]           = useState('')
   const [selectedClass, setClass]   = useState('')
   const [selectedUnit, setUnit]     = useState('')
@@ -21,9 +21,11 @@ export default function StudentSelect({ onSelect, onAdmin }) {
     if (!name)            { setError('이름을 입력해주세요!'); return }
     if (name.length > 10) { setError('이름은 10글자 이하로 해주세요!'); return }
 
-    const existing = getStudents().includes(name)
+    // Case-insensitive: a student retyping "heeja" instead of "Heeja" must
+    // log back into the SAME account, not silently fork a new empty one.
+    const existing = findStudentByName(name)
     if (existing) {
-      onSelect(name)
+      onSelect(existing)
       return
     }
 
@@ -49,6 +51,11 @@ export default function StudentSelect({ onSelect, onAdmin }) {
       </div>
 
       <div className="w-full max-w-sm bg-white rounded-3xl card-shadow p-6 animate-slide-up space-y-3">
+        {removedNotice && (
+          <p className="bg-orange-50 border-2 border-orange-200 text-orange-600 text-xs font-bold text-center rounded-xl p-3">
+            ⚠️ 계정 정보를 찾을 수 없어요. 선생님께 문의하거나 다시 시작해주세요.
+          </p>
+        )}
         <input type="text" value={input} onChange={e => { setInput(e.target.value); setError('') }}
           onKeyDown={e => e.key === 'Enter' && handleStart()}
           placeholder="이름 입력..." maxLength={10}
