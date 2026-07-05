@@ -189,7 +189,7 @@ export default function Dashboard({ student, studentData, onGo, onLogout }) {
             badge={activeMissions.length > 0 ? activeMissions.length : null}
           />
           <NavBtn emoji="🐾" label="내 캐릭터"    sub={`${pets.length}마리 수집`}           color="from-green-400 to-teal-500"    onClick={() => onGo('petCollection')} />
-          <NavBtn emoji="🎈" label="보너스 게임"  sub="풍선 터뜨리기"                       color="from-sky-400 to-indigo-500"    onClick={() => onGo('balloonGame')} />
+          <NavBtn emoji="🎈" label="뜻 풍선 게임" sub="뜻 찾기 풍선 게임"                    color="from-sky-400 to-indigo-500"    onClick={() => onGo('balloonGame')} />
         </div>
 
         {/* Recent pets */}

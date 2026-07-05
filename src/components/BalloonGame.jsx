@@ -5,9 +5,10 @@ const ROUNDS = 5
 const STAR_PER_CORRECT = 10
 const PERFECT_BONUS = 10
 const BALLOON_COLORS = ['bg-red-400', 'bg-blue-400', 'bg-yellow-400', 'bg-green-400', 'bg-pink-400', 'bg-purple-400']
-// Only used as filler if the current unit has fewer than 4 words — never
-// mixed in with AI/network content, just a small fixed English word list.
-const FILLER_WORDS = ['apple', 'happy', 'river', 'music', 'sunny', 'friend', 'tiger', 'cloud', 'brave', 'quiet']
+// Only used as filler if the current unit has fewer than 4 words with
+// distinct meanings — never mixed in with AI/network content, just a small
+// fixed set of simple Korean meaning strings.
+const FILLER_MEANINGS = ['사과', '행복한', '강', '음악', '화창한', '친구', '호랑이', '구름', '용감한', '조용한']
 
 function shuffle(arr) {
   const a = [...arr]
@@ -23,16 +24,18 @@ function pickNextTarget(words, lastWord) {
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
+// The question is spoken as the English word; the balloons are Korean
+// meanings — the student matches sound to meaning, not sound to spelling.
 function buildBalloons(target, words) {
-  const others = words.filter(w => w.word !== target.word)
-  const distractorWords = shuffle(others).slice(0, 3).map(w => w.word)
+  const others = words.filter(w => w.word !== target.word && w.meaning !== target.meaning)
+  const distractorMeanings = [...new Set(shuffle(others).map(w => w.meaning))].slice(0, 3)
   let fi = 0
-  while (distractorWords.length < 3 && fi < FILLER_WORDS.length) {
-    const fw = FILLER_WORDS[fi++]
-    if (fw !== target.word && !distractorWords.includes(fw)) distractorWords.push(fw)
+  while (distractorMeanings.length < 3 && fi < FILLER_MEANINGS.length) {
+    const fm = FILLER_MEANINGS[fi++]
+    if (fm !== target.meaning && !distractorMeanings.includes(fm)) distractorMeanings.push(fm)
   }
-  const all = shuffle([target.word, ...distractorWords])
-  return all.map((word, i) => ({ word, color: BALLOON_COLORS[i % BALLOON_COLORS.length], correct: word === target.word }))
+  const all = shuffle([target.meaning, ...distractorMeanings])
+  return all.map((meaning, i) => ({ meaning, color: BALLOON_COLORS[i % BALLOON_COLORS.length], correct: meaning === target.meaning }))
 }
 
 const TIER = (score) =>
@@ -53,13 +56,13 @@ export default function BalloonGame({ words, onBack, onAddStars, onContinue }) {
   const [target, setTarget] = useState(null)
   const [balloons, setBalloons] = useState([])
   const [popped, setPopped] = useState(null)
-  const [shakeWord, setShakeWord] = useState(null)
-  const [wrongWords, setWrongWords] = useState([]) // tapped-wrong balloons this round, disabled
+  const [shakeMeaning, setShakeMeaning] = useState(null)
+  const [wrongMeanings, setWrongMeanings] = useState([]) // tapped-wrong balloons this round, disabled
   const [firstTryUsed, setFirstTryUsed] = useState(false)
   const [locked, setLocked] = useState(false)
   const lastWordRef = useRef(null)
 
-  const eligible = useMemo(() => (words || []).filter(w => w.word), [words])
+  const eligible = useMemo(() => (words || []).filter(w => w.word && w.meaning), [words])
   const canPlay = eligible.length >= 4
 
   const startGame = () => {
@@ -75,8 +78,8 @@ export default function BalloonGame({ words, onBack, onAddStars, onContinue }) {
     setTarget(t)
     setBalloons(buildBalloons(t, eligible))
     setPopped(null)
-    setShakeWord(null)
-    setWrongWords([])
+    setShakeMeaning(null)
+    setWrongMeanings([])
     setFirstTryUsed(false)
     setLocked(false)
     setRound(roundIdx)
@@ -93,11 +96,11 @@ export default function BalloonGame({ words, onBack, onAddStars, onContinue }) {
   }
 
   const handleTap = (b) => {
-    if (locked || !target || wrongWords.includes(b.word)) return
+    if (locked || !target || wrongMeanings.includes(b.meaning)) return
 
     if (b.correct) {
       setLocked(true)
-      setPopped({ word: b.word })
+      setPopped({ meaning: b.meaning })
       playSuccessSound()
       if (!firstTryUsed) { setScore(s => s + 1); onAddStars?.(STAR_PER_CORRECT) }
       setTimeout(() => {
@@ -107,9 +110,9 @@ export default function BalloonGame({ words, onBack, onAddStars, onContinue }) {
       }, 1100)
     } else {
       setFirstTryUsed(true)
-      setShakeWord(b.word)
-      setWrongWords(prev => [...prev, b.word])
-      setTimeout(() => setShakeWord(null), 500)
+      setShakeMeaning(b.meaning)
+      setWrongMeanings(prev => [...prev, b.meaning])
+      setTimeout(() => setShakeMeaning(null), 500)
     }
   }
 
@@ -118,8 +121,8 @@ export default function BalloonGame({ words, onBack, onAddStars, onContinue }) {
       <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-sky-400 to-indigo-500">
         <div className="bg-white rounded-3xl card-shadow p-8 max-w-sm w-full text-center animate-slide-up">
           <div className="text-7xl mb-4 animate-bounce">🎈</div>
-          <h1 className="text-2xl font-black text-gray-800 mb-2">풍선 터뜨리기</h1>
-          <p className="text-gray-500 text-sm mb-6">발음을 듣고 맞는 단어 풍선을 터치하세요! (5문제)</p>
+          <h1 className="text-2xl font-black text-gray-800 mb-2">뜻 찾기 풍선 게임</h1>
+          <p className="text-gray-500 text-sm mb-6">발음을 듣고 맞는 뜻 풍선을 터치하세요! (5문제)</p>
           {!canPlay ? (
             <p className="text-red-400 text-sm font-bold mb-4">단어가 4개 이상일 때 게임을 할 수 있어요.</p>
           ) : (
@@ -183,19 +186,19 @@ export default function BalloonGame({ words, onBack, onAddStars, onContinue }) {
 
         <div className="grid grid-cols-2 gap-6 w-full px-6">
           {balloons.map((b) => {
-            const isPopped = popped?.word === b.word
-            const isShaking = shakeWord === b.word
-            const isWrongDisabled = wrongWords.includes(b.word)
+            const isPopped = popped?.meaning === b.meaning
+            const isShaking = shakeMeaning === b.meaning
+            const isWrongDisabled = wrongMeanings.includes(b.meaning)
             return (
               <button
-                key={b.word}
+                key={b.meaning}
                 onClick={() => handleTap(b)}
                 disabled={locked || isWrongDisabled}
                 className={`relative transition-all duration-300 ${isPopped ? 'scale-150 opacity-0' : 'scale-100'} ${isShaking ? 'animate-wiggle' : ''} ${isWrongDisabled ? 'opacity-30' : ''}`}
               >
-                <div className={`${b.color} rounded-full aspect-square w-full flex items-center justify-center text-white font-black text-lg shadow-lg btn-press`}
+                <div className={`${b.color} rounded-full aspect-square w-full flex items-center justify-center text-white font-black text-sm px-2 text-center shadow-lg btn-press`}
                   style={{ borderRadius: '50% 50% 50% 50% / 55% 55% 45% 45%' }}>
-                  🎈 {b.word}
+                  🎈 {b.meaning}
                 </div>
               </button>
             )
@@ -209,7 +212,7 @@ export default function BalloonGame({ words, onBack, onAddStars, onContinue }) {
             {!firstTryUsed && <p className="text-white font-bold">⭐ +{STAR_PER_CORRECT}</p>}
           </div>
         )}
-        {shakeWord && !popped && (
+        {shakeMeaning && !popped && (
           <div className="mt-8 text-center animate-slide-up">
             <p className="text-3xl mb-1">😆</p>
             <p className="text-xl font-black text-white">다시 한번!</p>

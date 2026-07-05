@@ -15,7 +15,7 @@ export default function BonusChoiceScreen({ completedCount, wordCount, onPlayGam
         <div className="space-y-3">
           <button onClick={onPlayGame} disabled={!canPlay}
             className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:bg-gray-200 disabled:text-gray-400 text-white font-black py-4 rounded-2xl btn-press text-lg">
-            🎈 풍선 게임 하기
+            🎈 뜻 풍선 게임 하기
           </button>
           {!canPlay && (
             <p className="text-xs text-gray-400">단어가 4개 이상일 때 게임을 할 수 있어요.</p>
