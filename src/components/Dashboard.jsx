@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react'
 import { getStudentClass, getStudentUnit, getClassNames } from '../utils/wordLibrary'
 import { getMicStreamOnce, hasMicStream } from '../utils/speech'
 import { isInAppBrowser } from '../utils/browserDetect'
+import { STICKERS } from '../data/stickers'
 import InAppBrowserNotice from './InAppBrowserNotice'
 
 const GOAL = 5
+const stickerById = (id) => STICKERS.find(s => s.id === id)
 
 // One explicit button to request mic permission up front — a single user
 // gesture, once per app session. After this, every word's "따라 말하기"
@@ -95,21 +97,30 @@ function MissionBar({ label, current, goal, emoji }) {
   )
 }
 
-export default function Dashboard({ student, studentData, onGo, onLogout, onClaimEgg }) {
-  const { stars, pets, activeMissions, dailyProgress, allDailyDone, eggReady, cleared } = studentData
+export default function Dashboard({ student, studentData, onGo, onLogout }) {
+  const { stars, stickerTypes, activeMissions, dailyProgress, missionsCompletedToday, streak, cleared } = studentData
 
   const className = getStudentClass(student)
   const unitName = getStudentUnit(student)
   const classDeleted = className && !getClassNames().includes(className)
+  const recentStickers = [...stickerTypes].reverse().slice(0, 8).map(stickerById).filter(Boolean)
 
   return (
     <div className="min-h-screen p-4 pb-8">
       {/* Header */}
       <div className="max-w-lg mx-auto pt-2 mb-4 flex items-center justify-between">
         <button onClick={onLogout} className="text-purple-400 text-sm font-bold btn-press hover:text-purple-600">← 나가기</button>
-        <div className="flex items-center gap-2 bg-yellow-100 px-4 py-2 rounded-2xl">
-          <span className="text-xl">⭐</span>
-          <span className="font-black text-yellow-700 text-lg">{stars}</span>
+        <div className="flex items-center gap-2">
+          {streak > 0 && (
+            <div className="flex items-center gap-1 bg-orange-100 px-3 py-2 rounded-2xl">
+              <span className="text-lg">🔥</span>
+              <span className="font-black text-orange-600 text-sm">{streak}일</span>
+            </div>
+          )}
+          <div className="flex items-center gap-2 bg-yellow-100 px-4 py-2 rounded-2xl">
+            <span className="text-xl">⭐</span>
+            <span className="font-black text-yellow-700 text-lg">{stars}</span>
+          </div>
         </div>
       </div>
 
@@ -127,8 +138,8 @@ export default function Dashboard({ student, studentData, onGo, onLogout, onClai
               <p className="text-purple-200 text-xs">단어 클리어</p>
             </div>
             <div className="bg-white/20 rounded-xl px-3 py-2 text-center">
-              <p className="text-white font-black text-xl">{pets.length}</p>
-              <p className="text-purple-200 text-xs">캐릭터</p>
+              <p className="text-white font-black text-xl">{stickerTypes.length}</p>
+              <p className="text-purple-200 text-xs">스티커</p>
             </div>
             <div className="bg-white/20 rounded-xl px-3 py-2 text-center">
               <p className="text-white font-black text-xl">{activeMissions.length}</p>
@@ -151,16 +162,13 @@ export default function Dashboard({ student, studentData, onGo, onLogout, onClai
           </div>
         )}
 
-        {/* Daily Mission */}
+        {/* Daily Mission — repeats all day, each round pops a gift automatically */}
         <div className="bg-white rounded-3xl card-shadow p-5">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-2xl">🎯</span>
             <h2 className="font-black text-gray-800 text-lg">오늘의 미션</h2>
-            {allDailyDone && !dailyProgress.done && (
-              <span className="ml-auto bg-yellow-100 text-yellow-700 font-black text-xs px-3 py-1 rounded-full animate-pulse">+20⭐ 대기!</span>
-            )}
-            {dailyProgress.done && (
-              <span className="ml-auto bg-green-100 text-green-600 font-black text-xs px-3 py-1 rounded-full">완료! 🎉</span>
+            {missionsCompletedToday > 0 && (
+              <span className="ml-auto bg-green-100 text-green-600 font-black text-xs px-3 py-1 rounded-full">오늘 {missionsCompletedToday}회 완료! 🎉</span>
             )}
           </div>
           <div className="space-y-2">
@@ -169,21 +177,7 @@ export default function Dashboard({ student, studentData, onGo, onLogout, onClai
             <MissionBar label="퀴즈 5개 풀기"       current={dailyProgress.quizzes}         goal={GOAL} emoji="🎮" />
             <MissionBar label="발음 5개 성공하기"   current={dailyProgress.pronunciations}  goal={GOAL} emoji="🎤" />
           </div>
-          {allDailyDone && !dailyProgress.done && (
-            <button
-              onClick={studentData.completeDailyMission}
-              className="w-full mt-3 bg-gradient-to-r from-yellow-400 to-orange-400 text-white font-black py-3 rounded-2xl btn-press"
-            >🎉 보상 받기! (+20⭐)</button>
-          )}
-          {eggReady && (
-            <button
-              onClick={onClaimEgg}
-              className="w-full mt-3 bg-gradient-to-r from-sky-400 to-indigo-500 text-white font-black py-3 rounded-2xl btn-press animate-bounce"
-            >🥚 알 뽑기!</button>
-          )}
-          {!allDailyDone && (
-            <p className="text-center text-xs text-gray-400 mt-3">오늘의 미션 4개를 모두 완료하면 🥚 알 뽑기!</p>
-          )}
+          <p className="text-center text-xs text-gray-400 mt-3">4개를 모두 완료하면 🎁 선물상자! 완료 즉시 새 미션이 또 시작돼요</p>
         </div>
 
         {/* Nav Grid */}
@@ -197,19 +191,20 @@ export default function Dashboard({ student, studentData, onGo, onLogout, onClai
             onClick={() => onGo('levelUpMission')}
             badge={activeMissions.length > 0 ? activeMissions.length : null}
           />
-          <NavBtn emoji="🐾" label="내 캐릭터"    sub={`${pets.length}마리 수집`}           color="from-green-400 to-teal-500"    onClick={() => onGo('petCollection')} />
+          <NavBtn emoji="📔" label="내 다이어리" sub={`스티커 ${stickerTypes.length}개`}    color="from-pink-400 to-purple-500"    onClick={() => onGo('diary')} />
+          <NavBtn emoji="📅" label="공부 캘린더" sub={`🔥 ${streak}일 연속`}                color="from-amber-400 to-orange-500"   onClick={() => onGo('studyCalendar')} />
           <NavBtn emoji="🎈" label="뜻 풍선 게임" sub="뜻 찾기 풍선 게임"                    color="from-sky-400 to-indigo-500"    onClick={() => onGo('balloonGame')} />
         </div>
 
-        {/* Recent pets */}
-        {pets.length > 0 && (
+        {/* Recent stickers */}
+        {recentStickers.length > 0 && (
           <div className="bg-white rounded-3xl card-shadow p-4">
-            <p className="text-sm font-black text-gray-600 mb-3">🐾 최근 수집한 친구들</p>
+            <p className="text-sm font-black text-gray-600 mb-3">🎀 최근 모은 스티커</p>
             <div className="flex gap-3 overflow-x-auto pb-1">
-              {[...pets].reverse().slice(0, 6).map((p, i) => (
+              {recentStickers.map((s, i) => (
                 <div key={i} className="flex-shrink-0 text-center">
-                  <div className="text-3xl mb-1">{p.emoji}</div>
-                  <p className="text-xs text-gray-500 font-bold">{p.name}</p>
+                  <div className="text-3xl mb-1">{s.emoji}</div>
+                  <p className="text-xs text-gray-500 font-bold">{s.name}</p>
                 </div>
               ))}
             </div>

@@ -5,13 +5,13 @@ import WordBrowser from './components/WordBrowser'
 import WordDetail from './components/WordDetail'
 import QuizGame from './components/QuizGame'
 import LevelUpMission from './components/LevelUpMission'
-import PetCollection from './components/PetCollection'
+import DiaryPage from './components/DiaryPage'
+import StudyCalendar from './components/StudyCalendar'
 import BalloonGame from './components/BalloonGame'
 import BonusChoiceScreen from './components/BonusChoiceScreen'
-import EggReveal from './components/EggReveal'
+import GiftReveal from './components/GiftReveal'
 import AdminScreen from './components/AdminScreen'
 import { useStudent } from './hooks/useStudent'
-import { getRandomPet } from './data/pets'
 import { getStudentWords, initWordLibrary, refreshWordLibrary } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech, getMicStream } from './utils/speech'
 
@@ -89,21 +89,12 @@ function AppInner({ student, onLogout }) {
   // play never inherits a stale lesson context.
   const [balloonFromLesson, setBalloonFromLesson] = useState(false)
   useEffect(() => { if (screen === 'dashboard') setBalloonFromLesson(false) }, [screen])
-  const [eggPet, setEggPet]         = useState(null)
   const [refreshTick, setRefreshTick] = useState(0)
   const studentData                 = useStudent(student)
-  const { cleared, answerMission, claimEgg, missions, addStars, markPronunciationOk } = studentData
+  const { cleared, answerMission, missions, addStars, markPronunciationOk, pendingGift, clearPendingGift } = studentData
   const classWords                  = useMemo(() => {
     try { return getStudentWords(student) || [] } catch { return [] }
   }, [student, refreshTick])
-
-  // Egg pick is tied to finishing all 4 daily missions (단어/예문/퀴즈/발음),
-  // not to any word/mission-clear count — see useStudent's eggReady.
-  const handleClaimEgg = () => {
-    const pet = getRandomPet()
-    const isDuplicate = claimEgg(pet)
-    setEggPet({ ...pet, isDuplicate })
-  }
 
   // Re-pull the latest word data from Supabase whenever the app regains focus
   // (e.g. switching back from another app on mobile) so a word added on
@@ -159,7 +150,7 @@ function AppInner({ student, onLogout }) {
 
   return (
     <>
-      {screen === 'dashboard'     && <Dashboard student={student} studentData={studentData} onGo={setScreen} onLogout={onLogout} onClaimEgg={handleClaimEgg} />}
+      {screen === 'dashboard'     && <Dashboard student={student} studentData={studentData} onGo={setScreen} onLogout={onLogout} />}
       {screen === 'wordBrowser'   && <WordBrowser words={classWords} cleared={cleared} onSelect={handleWordSelect} onBack={() => setScreen('dashboard')} />}
       {screen === 'wordDetail'    && selectedWord && (
         <WordDetail word={selectedWord}
@@ -180,7 +171,8 @@ function AppInner({ student, onLogout }) {
           onAddStars={addStars} />
       )}
       {screen === 'levelUpMission' && <LevelUpMission missions={missions} words={classWords} onAnswer={handleAnswerMission} onBack={() => setScreen('dashboard')} />}
-      {screen === 'petCollection'  && <PetCollection pets={studentData.pets} onBack={() => setScreen('dashboard')} />}
+      {screen === 'diary'         && <DiaryPage studentData={studentData} onBack={() => setScreen('dashboard')} />}
+      {screen === 'studyCalendar' && <StudyCalendar studentData={studentData} onBack={() => setScreen('dashboard')} />}
       {screen === 'bonusChoice'   && (
         <BonusChoiceScreen
           completedCount={pendingNextIdx}
@@ -197,7 +189,15 @@ function AppInner({ student, onLogout }) {
           onContinue={balloonFromLesson ? goToPendingWord : null}
         />
       )}
-      {eggPet && <EggReveal pet={eggPet} onClose={() => setEggPet(null)} />}
+      {pendingGift && (
+        <GiftReveal
+          sticker={pendingGift.sticker}
+          isDuplicate={pendingGift.isDuplicate}
+          isMilestone={pendingGift.isMilestone}
+          streakDays={pendingGift.streakDays}
+          onClose={clearPendingGift}
+        />
+      )}
       <SpeedBtn />
     </>
   )
