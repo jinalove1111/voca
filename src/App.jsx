@@ -8,10 +8,14 @@ import LevelUpMission from './components/LevelUpMission'
 import DiaryPage from './components/DiaryPage'
 import StudyCalendar from './components/StudyCalendar'
 import BalloonGame from './components/BalloonGame'
+import FishingGame from './components/FishingGame'
+import PizzaGame from './components/PizzaGame'
+import TrainGame from './components/TrainGame'
 import BonusChoiceScreen from './components/BonusChoiceScreen'
 import GiftReveal from './components/GiftReveal'
 import AdminScreen from './components/AdminScreen'
 import { useStudent } from './hooks/useStudent'
+import { pickNextGame } from './utils/matchGame'
 import { getStudentWords, initWordLibrary, refreshWordLibrary } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech, getMicStream } from './utils/speech'
 
@@ -89,9 +93,22 @@ function AppInner({ student, onLogout }) {
   // play never inherits a stale lesson context.
   const [balloonFromLesson, setBalloonFromLesson] = useState(false)
   useEffect(() => { if (screen === 'dashboard') setBalloonFromLesson(false) }, [screen])
+  const [currentGameId, setCurrentGameId] = useState('balloon')
   const [refreshTick, setRefreshTick] = useState(0)
   const studentData                 = useStudent(student)
-  const { cleared, answerMission, missions, addStars, markPronunciationOk, pendingGift, dismissGift } = studentData
+  const { cleared, answerMission, missions, addStars, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed } = studentData
+
+  // Rotates through the 4 mini-games, never repeating whichever was played
+  // last (across the whole app, not just this checkpoint) — used both by
+  // the mid-lesson bonus checkpoint and the Dashboard's direct game button.
+  const startRandomGame = () => {
+    const game = pickNextGame(lastGamePlayed)
+    setCurrentGameId(game.id)
+    setLastGamePlayed(game.id)
+    setScreen('game')
+  }
+  const GAME_COMPONENTS = { balloon: BalloonGame, fishing: FishingGame, pizza: PizzaGame, train: TrainGame }
+  const CurrentGame = GAME_COMPONENTS[currentGameId] || BalloonGame
   const classWords                  = useMemo(() => {
     try { return getStudentWords(student) || [] } catch { return [] }
   }, [student, refreshTick])
@@ -115,8 +132,21 @@ function AppInner({ student, onLogout }) {
 
   const handleWordSelect = (w) => {
     const idx = classWords.findIndex(cw => cw.id === w.id)
+    const safeIdx = idx >= 0 ? idx : 0
     setWord(w)
-    setWordIdx(idx >= 0 ? idx : 0)
+    setWordIdx(safeIdx)
+    studentData.setLastWordIndex(safeIdx)
+    setScreen('wordDetail')
+  }
+
+  // Jumps straight into word study at a specific index — used by the
+  // Dashboard's "이어서 학습하기" recommendation, which reads
+  // studentData.lastWordIndex instead of always restarting from word 1.
+  const goToWordIndex = (idx) => {
+    if (idx < 0 || idx >= classWords.length) return
+    setWord(classWords[idx])
+    setWordIdx(idx)
+    studentData.setLastWordIndex(idx)
     setScreen('wordDetail')
   }
 
@@ -135,6 +165,7 @@ function AppInner({ student, onLogout }) {
     if (nextIdx < classWords.length) {
       setWord(classWords[nextIdx])
       setWordIdx(nextIdx)
+      studentData.setLastWordIndex(nextIdx)
     } else {
       setScreen('wordBrowser')
     }
@@ -143,6 +174,7 @@ function AppInner({ student, onLogout }) {
   const goToPendingWord = () => {
     setWord(classWords[pendingNextIdx])
     setWordIdx(pendingNextIdx)
+    studentData.setLastWordIndex(pendingNextIdx)
     setScreen('wordDetail')
   }
 
@@ -150,7 +182,11 @@ function AppInner({ student, onLogout }) {
 
   return (
     <>
-      {screen === 'dashboard'     && <Dashboard student={student} studentData={studentData} onGo={setScreen} onLogout={onLogout} />}
+      {screen === 'dashboard'     && (
+        <Dashboard student={student} studentData={studentData} classWords={classWords}
+          onGo={setScreen} onLogout={onLogout} onPlayGame={startRandomGame}
+          onResumeWord={goToWordIndex} />
+      )}
       {screen === 'wordBrowser'   && <WordBrowser words={classWords} cleared={cleared} onSelect={handleWordSelect} onBack={() => setScreen('dashboard')} />}
       {screen === 'wordDetail'    && selectedWord && (
         <WordDetail word={selectedWord}
@@ -177,12 +213,12 @@ function AppInner({ student, onLogout }) {
         <BonusChoiceScreen
           completedCount={pendingNextIdx}
           wordCount={classWords.length}
-          onPlayGame={() => { setBalloonFromLesson(true); setScreen('balloonGame') }}
+          onPlayGame={() => { setBalloonFromLesson(true); startRandomGame() }}
           onContinue={goToPendingWord}
         />
       )}
-      {screen === 'balloonGame'   && (
-        <BalloonGame
+      {screen === 'game'          && (
+        <CurrentGame
           words={classWords}
           onBack={balloonFromLesson ? goToPendingWord : () => setScreen('dashboard')}
           onAddStars={addStars}
@@ -191,11 +227,13 @@ function AppInner({ student, onLogout }) {
       )}
       {pendingGift && (
         <GiftReveal
-          key={`${pendingGift.sticker.id}-${pendingGift.isMilestone ? 'm' : 'r'}-${pendingGift.streakDays || 0}`}
+          key={`${pendingGift.sticker.id}-${pendingGift.isMilestone ? 'm' : pendingGift.isBadge ? 'b' : 'r'}-${pendingGift.streakDays || pendingGift.badgeThreshold || 0}`}
           sticker={pendingGift.sticker}
           isDuplicate={pendingGift.isDuplicate}
           isMilestone={pendingGift.isMilestone}
           streakDays={pendingGift.streakDays}
+          isBadge={pendingGift.isBadge}
+          badgeThreshold={pendingGift.badgeThreshold}
           onClose={dismissGift}
         />
       )}

@@ -55,12 +55,6 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
   // Cleanup on unmount or word change
   useEffect(() => () => stopAll(), [word])
 
-  const MIC_ERR = {
-    'not-allowed':   '마이크 권한을 허용해주세요! 설정 → 사이트 권한 → 마이크 🎤',
-    'audio-capture': '마이크를 찾을 수 없어요. 기기 마이크를 확인해주세요 😢',
-    'network':       '네트워크 오류예요. 인터넷 연결을 확인해주세요 📶',
-  }
-
   // Grading is just "did a recording actually happen" — blob.size > 0 = the
   // student practiced the pronunciation, so it counts as success. This app
   // doesn't grade pronunciation accuracy (no STT/Whisper/Azure): recording
@@ -107,8 +101,8 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
       })
       .catch((err) => {
         console.error('[QuizGame] recording error:', err)
-        const errMsg = MIC_ERR[err.name] || '마이크 오류가 발생했어요 😢'
-        setMicErr(errMsg)
+        // Mic genuinely unavailable — don't dead-end the quiz on it.
+        setMicErr('녹음은 나중에 하고 먼저 듣기와 퀴즈를 해볼까요? 🎧')
         setPhase('fail')
         setProc(false)
       })

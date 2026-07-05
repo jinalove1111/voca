@@ -97,7 +97,72 @@ function MissionBar({ label, current, goal, emoji }) {
   )
 }
 
-export default function Dashboard({ student, studentData, onGo, onLogout }) {
+// Rule-based "what should I do next?" banner — no AI, just reads existing
+// student state (review queue, today's mission progress, resume position)
+// and picks ONE recommendation, in priority order:
+//   1. Review words waiting (레벨업 미션 대기 중) — always comes first.
+//   2. Studied a lot already today — nudge toward a fun bonus game instead
+//      of pushing more drilling.
+//   3. Mid-unit — offer to resume exactly where they left off.
+//   4. Otherwise — plain "start studying" default.
+function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onPlayGame }) {
+  const { activeMissions, missionsCompletedToday, lastWordIndex } = studentData
+  const hasWords = classWords.length > 0
+  const canResume = hasWords && lastWordIndex > 0 && lastWordIndex < classWords.length
+
+  let rec
+  if (activeMissions.length > 0) {
+    rec = {
+      emoji: '🔁', title: '복습할 단어가 있어요!',
+      desc: `${activeMissions.length}개 단어를 다시 연습하면 완전히 내 것이 돼요.`,
+      label: '지금 복습하기', onClick: () => onGo('levelUpMission'),
+    }
+  } else if (missionsCompletedToday >= 5) {
+    rec = {
+      emoji: '🌟', title: '정말 열심히 했어요!',
+      desc: '오늘 미션을 이미 많이 완료했어요. 보너스 게임 어때요?',
+      label: '보너스 게임 하기', onClick: onPlayGame,
+    }
+  } else if (canResume) {
+    rec = {
+      emoji: '📖', title: '이어서 학습할까요?',
+      desc: `${lastWordIndex + 1}번째 단어부터 이어서 공부해요.`,
+      label: '이어서 학습하기', onClick: () => onResumeWord(lastWordIndex),
+    }
+  } else if (hasWords) {
+    rec = {
+      emoji: '✨', title: '오늘도 시작해볼까요?',
+      desc: '단어 학습부터 차근차근 시작해요!',
+      label: '단어 공부 시작', onClick: () => onResumeWord(0),
+    }
+  } else {
+    rec = {
+      emoji: '📭', title: '단어가 부족해요',
+      desc: '선생님이 단어를 추가하면 학습을 시작할 수 있어요.',
+      label: null, onClick: null,
+    }
+  }
+
+  return (
+    <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl p-5 text-white card-shadow">
+      <div className="flex items-start gap-3">
+        <span className="text-4xl">{rec.emoji}</span>
+        <div className="flex-1">
+          <p className="font-black text-lg">{rec.title}</p>
+          <p className="text-indigo-100 text-sm mt-0.5">{rec.desc}</p>
+        </div>
+      </div>
+      {rec.label && (
+        <button onClick={rec.onClick}
+          className="w-full mt-4 bg-white text-indigo-600 font-black py-3 rounded-2xl btn-press">
+          {rec.label} →
+        </button>
+      )}
+    </div>
+  )
+}
+
+export default function Dashboard({ student, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord }) {
   const { stars, stickerTypes, activeMissions, dailyProgress, missionsCompletedToday, streak, cleared } = studentData
 
   const className = getStudentClass(student)
@@ -148,6 +213,8 @@ export default function Dashboard({ student, studentData, onGo, onLogout }) {
           </div>
         </div>
 
+        <RecommendationBanner studentData={studentData} classWords={classWords} onGo={onGo} onResumeWord={onResumeWord} onPlayGame={onPlayGame} />
+
         <MicPrimeBtn />
 
         {/* 반 삭제 경고 배너 */}
@@ -193,7 +260,7 @@ export default function Dashboard({ student, studentData, onGo, onLogout }) {
           />
           <NavBtn emoji="📔" label="내 다이어리" sub={`스티커 ${stickerTypes.length}개`}    color="from-pink-400 to-purple-500"    onClick={() => onGo('diary')} />
           <NavBtn emoji="📅" label="공부 캘린더" sub={`🔥 ${streak}일 연속`}                color="from-amber-400 to-orange-500"   onClick={() => onGo('studyCalendar')} />
-          <NavBtn emoji="🎈" label="뜻 풍선 게임" sub="뜻 찾기 풍선 게임"                    color="from-sky-400 to-indigo-500"    onClick={() => onGo('balloonGame')} />
+          <NavBtn emoji="🎮" label="미니 게임"    sub="풍선/낚시/피자/기차 중 랜덤"          color="from-sky-400 to-indigo-500"    onClick={onPlayGame} />
         </div>
 
         {/* Recent stickers */}

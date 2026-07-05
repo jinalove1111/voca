@@ -5,7 +5,7 @@ import { RARITY_COLORS } from '../data/stickers'
 // automatically whenever a mission round completes (see useStudent.js's
 // pendingGift), not from a manual "pick" button, since missions now repeat
 // all day instead of once.
-export default function GiftReveal({ sticker, isDuplicate, isMilestone, streakDays, onClose }) {
+export default function GiftReveal({ sticker, isDuplicate, isMilestone, streakDays, isBadge, badgeThreshold, onClose }) {
   const [stage, setStage] = useState('box') // box → shake → open
 
   useEffect(() => {
@@ -20,9 +20,9 @@ export default function GiftReveal({ sticker, isDuplicate, isMilestone, streakDa
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={stage === 'open' ? onClose : undefined}>
       <div className="bg-white rounded-3xl p-8 text-center max-w-sm w-full animate-slide-up" onClick={e => e.stopPropagation()}>
         <p className="text-indigo-600 font-black text-lg mb-1">
-          {isMilestone ? `🔥 ${streakDays}일 연속 달성!` : '🎁 미션 완료!'}
+          {isMilestone ? `🔥 ${streakDays}일 연속 달성!` : isBadge ? `⭐ 별 ${badgeThreshold}개 달성!` : '🎁 미션 완료!'}
         </p>
-        {isMilestone && <p className="text-gray-400 text-xs mb-3">특별 스티커가 왔어요!</p>}
+        {(isMilestone || isBadge) && <p className="text-gray-400 text-xs mb-3">특별 스티커가 왔어요!</p>}
 
         {stage === 'box' && (
           <div className="py-4">

@@ -161,7 +161,11 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
       })
       .catch((err) => {
         console.error('[WordDetail] mic stream error:', err)
-        finish('fail', `마이크 오류 (${err.name}: ${err.message})`, { countTry: true })
+        // Mic genuinely unavailable (no hardware, denied, insecure origin,
+        // etc.) — don't block the lesson on it. Suggest skipping ahead to
+        // listening/quiz instead of showing a dead-end technical error.
+        finish('fail', '녹음은 나중에 하고 먼저 듣기와 퀴즈를 해볼까요? 🎧', { countTry: false })
+        onAnyResult?.()
       })
   }
 

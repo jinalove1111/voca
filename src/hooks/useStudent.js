@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { getRandomSticker, getMilestoneSticker } from '../data/stickers'
+import { getRandomSticker, getMilestoneSticker, STICKERS } from '../data/stickers'
 
 // Student roster + class assignment live in Supabase (shared across every
 // device) — see utils/wordLibrary.js. Only per-student progress (stars,
@@ -22,6 +22,14 @@ const GOAL = 5
 const MISSION_BONUS_STARS = 10
 const DUPLICATE_BONUS_STARS = 20
 const STREAK_MILESTONES = [3, 7, 14, 30]
+// Star-count badges — guaranteed special stickers awarded once per
+// threshold, independent of the gacha/streak systems (never duplicated).
+const STAR_BADGES = [
+  { threshold: 100,  stickerId: 'ukflag1' },
+  { threshold: 300,  stickerId: 'crown1' },
+  { threshold: 500,  stickerId: 'guard1' },
+  { threshold: 1000, stickerId: 'lion' },
+]
 
 const todayStr = () => new Date().toDateString()
 const freshRound = () => ({
@@ -60,6 +68,11 @@ export function useStudent(name) {
   })
   const [history, _setHistory] = useState(() => loadObj(sk(name, 'history')))
   const [milestoneStreak, _setMilestoneStreak] = useState(() => loadNum(sk(name, 'milestoneStreak')))
+  const [starBadgeThreshold, _setStarBadgeThreshold] = useState(() => loadNum(sk(name, 'starBadgeThreshold')))
+  const [lastGamePlayed, _setLastGamePlayed] = useState(() => load(sk(name, 'lastGamePlayed'), null))
+  // Where to resume word study — the "이어서 학습하기" recommendation reads
+  // this instead of always restarting from word 1.
+  const [lastWordIndex, _setLastWordIndex] = useState(() => loadNum(sk(name, 'lastWordIndex')))
   // A queue, not a single slot — a round completion and a streak milestone
   // can land in the same instant (finishing today's first round can push
   // the streak past a threshold at the same time), and neither should get
@@ -90,6 +103,17 @@ export function useStudent(name) {
   }, [name])
   const setMilestoneStreak = useCallback(v => {
     _setMilestoneStreak(prev => { const n = typeof v === 'function' ? v(prev) : v; save(sk(name, 'milestoneStreak'), n); return n })
+  }, [name])
+  const setStarBadgeThreshold = useCallback(v => {
+    _setStarBadgeThreshold(prev => { const n = typeof v === 'function' ? v(prev) : v; save(sk(name, 'starBadgeThreshold'), n); return n })
+  }, [name])
+  const setLastGamePlayed = useCallback((gameId) => {
+    _setLastGamePlayed(gameId)
+    save(sk(name, 'lastGamePlayed'), gameId)
+  }, [name])
+  const setLastWordIndex = useCallback((idx) => {
+    _setLastWordIndex(idx)
+    save(sk(name, 'lastWordIndex'), idx)
   }, [name])
 
   // Mission round resets at midnight even mid-session (not just on reopen).
@@ -203,6 +227,19 @@ export function useStudent(name) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [history])
 
+  // Star-count badges (100/300/500/1000⭐) — same guaranteed-once pattern as
+  // streak milestones, just gated by total stars instead of days.
+  useEffect(() => {
+    const nextBadge = STAR_BADGES.find(b => stars >= b.threshold && b.threshold > starBadgeThreshold)
+    if (!nextBadge) return
+    setStarBadgeThreshold(nextBadge.threshold)
+    const sticker = STICKERS.find(s => s.id === nextBadge.stickerId)
+    if (!sticker) return
+    const isDuplicate = grantSticker(sticker)
+    setGiftQueue(q => [...q, { sticker, isDuplicate, isBadge: true, badgeThreshold: nextBadge.threshold }])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stars])
+
   const dismissGift = useCallback(() => setGiftQueue(q => q.slice(1)), [])
 
   const placeSticker = useCallback((stickerId, x, y) => {
@@ -233,6 +270,8 @@ export function useStudent(name) {
     stars, stickerTypes, diaryPlacements, missions,
     activeMissions: missions.filter(m => !m.done),
     cleared, round, dailyProgress, missionsCompletedToday, history, streak,
+    lastGamePlayed, setLastGamePlayed,
+    lastWordIndex, setLastWordIndex,
     pendingGift: giftQueue[0] || null, dismissGift,
     addStars, addMission, answerMission,
     markWordViewed, markExampleHeard, markQuizSolved, markPronunciationOk,
