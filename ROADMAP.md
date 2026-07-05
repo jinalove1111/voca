@@ -49,7 +49,10 @@ _최종 갱신: 2026-07-06_
 - [x] 게임 결과 히스토리 (어떤 게임을 몇 번 했는지 캘린더에 함께 표시) — `useStudent.js`(`gamesPlayed` per-day, `recordGamePlayed`), `StudyCalendar.jsx` 일별 상세 팝업에 표시. 2026-07-06 완료, 자동 테스트(`testProgress.mjs`) + build 통과.
 - [ ] 날짜별 단어 배정 (오늘의 단어 = 반 전체 단어가 아니라 그날 지정된 단어만)
 - [ ] 숙제 완료 상태 관리 (학생별/반별, 완료 여부를 관리자가 확인)
-- [ ] 관리자 반 관리 고도화: 학생 일괄 이동, 반별 진도 통계, CSV 내보내기
+- [x] 관리자 학생 로스터 고도화: 반별 그룹핑, 체크박스 일괄 이동, CSV 내보내기 — `AdminScreen.jsx`(`StudentManagement`). 2026-07-06 완료, build 통과.
+- [ ] 관리자 반별 진도 통계 (별/클리어 단어 수/최근 학습일) — **보류, 아래 참고**
+
+> **반별 진도 통계 관련 중요 사항 (2026-07-06):** 학생 진행도(별/클리어/스트릭 등)는 현재 각 학생 기기의 localStorage(`paul_easy_progress`)에만 저장되고 Supabase에는 전혀 없음 — 즉 관리자가 자기 기기에서 다른 학생의 진행도를 볼 방법이 원천적으로 없는 구조. 실제로 구현하려면 Supabase에 진행도 동기화용 새 테이블이 필요한데, 이 프로젝트는 SQL 마이그레이션 도구 없이 Supabase 대시보드에서 수동으로 스키마를 관리하는 방식이라 앱 코드만으로는 새 테이블을 만들 수 없음. **운영자 확인 없이 프로덕션 DB 스키마를 임의로 바꾸는 것은 위험 부담이 커서 보류함.** 다음에 진행하려면: (1) Supabase 대시보드에서 `student_progress` 테이블 생성 필요(권장 컬럼: student_id, total_stars, cleared_count, streak, last_studied_date, updated_at), (2) 그 다음 `useStudent.js`의 patch()에 실패해도 무시되는 fire-and-forget 동기화 호출 추가, (3) 관리자 화면에 통계 뷰 추가. 스키마가 실제로 준비되면 알려주세요.
 
 ## v1.2 — 백로그 (미구현)
 

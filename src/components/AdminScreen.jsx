@@ -4,6 +4,23 @@ import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, 
 import { getStudents, removeStudent } from '../hooks/useStudent'
 import FeatureManagementPanel from './FeatureManagementPanel'
 
+// CSV 셀 안전 이스케이프 — 이름/반/유닛에 쉼표·따옴표·줄바꿈이 섞여도 깨지지 않게.
+function csvCell(v) {
+  const s = String(v ?? '')
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+function downloadCsv(filename, rows) {
+  const csv = '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\n') // BOM: 엑셀에서 한글 깨짐 방지
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 // 학생 관리 — admin-only. Students themselves never see this roster (see
 // StudentSelect.jsx, which only ever shows a name/class entry form).
 function StudentManagement() {
@@ -11,6 +28,9 @@ function StudentManagement() {
   const [editing, setEditing] = useState(null) // student name currently being reassigned
   const [editClass, setEditClass] = useState('')
   const [editUnit, setEditUnit] = useState('')
+  const [selected, setSelected] = useState(() => new Set()) // bulk-move checkbox selection
+  const [bulkTargetClass, setBulkTargetClass] = useState('')
+  const [bulkBusy, setBulkBusy] = useState(false)
   const classList = getClassNames()
 
   const refresh = () => setStudents(getStudents())
@@ -19,6 +39,7 @@ function StudentManagement() {
     if (!window.confirm(`"${name}" 학생을 삭제할까요? 학습 기록도 함께 삭제됩니다.`)) return
     try {
       await removeStudent(name)
+      setSelected(prev => { const next = new Set(prev); next.delete(name); return next })
       refresh()
     } catch (err) {
       alert('삭제 중 오류가 발생했어요: ' + (err.message || err))
@@ -43,57 +64,127 @@ function StudentManagement() {
     }
   }
 
+  const toggleSelected = (name) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name); else next.add(name)
+      return next
+    })
+  }
+
+  // 반별로 묶어 보여주기 — 관리자가 여러 반을 한눈에 비교할 수 있게. 미배정
+  // 학생은 별도 그룹으로 맨 위에 표시해 눈에 잘 띄게 함.
+  const groups = [
+    { name: '⚠️ 반 미배정', students: students.filter(s => !getStudentClass(s)) },
+    ...classList.map(c => ({ name: c, students: students.filter(s => getStudentClass(s) === c) })),
+  ].filter(g => g.students.length > 0)
+
+  const handleBulkMove = async () => {
+    if (!bulkTargetClass || selected.size === 0) return
+    setBulkBusy(true)
+    try {
+      for (const name of selected) {
+        await setStudentClass(name, bulkTargetClass)
+        await setStudentUnit(name, getClassUnitNames(bulkTargetClass)[0] || 'Unit 1')
+      }
+      setSelected(new Set())
+      setBulkTargetClass('')
+      refresh()
+    } catch (err) {
+      alert('일괄 이동 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
+  const exportCsv = () => {
+    const rows = [['반', '유닛', '이름'], ...students.map(s => [getStudentClass(s) || '미배정', getStudentUnit(s) || '', s])]
+    downloadCsv(`학생명단_${new Date().toISOString().slice(0, 10)}.csv`, rows)
+  }
+
   return (
     <div className="space-y-3">
       <div className="bg-white rounded-3xl card-shadow p-5">
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-black text-gray-700">👦 전체 학생 ({students.length}명)</p>
-          <button onClick={refresh} className="text-xs text-purple-500 font-bold btn-press">🔄 새로고침</button>
+          <div className="flex gap-2">
+            <button onClick={exportCsv} className="text-xs text-green-600 font-bold btn-press">⬇️ CSV</button>
+            <button onClick={refresh} className="text-xs text-purple-500 font-bold btn-press">🔄 새로고침</button>
+          </div>
         </div>
+
+        {selected.size > 0 && (
+          <div className="bg-blue-50 rounded-2xl p-3 mb-3 flex items-center gap-2 flex-wrap">
+            <p className="text-xs font-bold text-blue-700">{selected.size}명 선택됨</p>
+            <select value={bulkTargetClass} onChange={e => setBulkTargetClass(e.target.value)}
+              className="flex-1 min-w-[8rem] border-2 border-blue-200 rounded-xl px-2 py-1.5 text-xs font-bold bg-white">
+              <option value="">이동할 반 선택</option>
+              {classList.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <button onClick={handleBulkMove} disabled={!bulkTargetClass || bulkBusy}
+              className="bg-blue-500 disabled:bg-gray-300 text-white font-black px-3 py-1.5 rounded-xl text-xs btn-press">
+              {bulkBusy ? '이동 중...' : '이동'}
+            </button>
+            <button onClick={() => setSelected(new Set())}
+              className="text-gray-400 font-bold px-2 py-1.5 text-xs btn-press">선택 해제</button>
+          </div>
+        )}
+
         {students.length === 0 ? (
           <p className="text-center text-gray-400 text-sm py-8">아직 등록된 학생이 없어요.</p>
         ) : (
-          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-            {students.map((s) => (
-              <div key={s} className="bg-gray-50 rounded-xl px-4 py-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-black text-gray-800">{s}</p>
-                    <p className={`text-xs ${getStudentClass(s) ? 'text-gray-400' : 'text-red-500 font-bold'}`}>
-                      {[getStudentClass(s), getStudentUnit(s)].filter(Boolean).join(' · ') || '⚠️ 반 미배정'}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => startEdit(s)}
-                      className="bg-blue-100 text-blue-600 font-bold px-3 py-2 rounded-xl text-xs btn-press">반 배정</button>
-                    <button onClick={() => handleRemove(s)}
-                      className="bg-red-100 text-red-500 font-bold px-3 py-2 rounded-xl text-xs btn-press">삭제</button>
-                  </div>
-                </div>
-                {editing === s && (
-                  <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
-                    <select value={editClass} onChange={e => {
-                        setEditClass(e.target.value)
-                        setEditUnit(getClassUnitNames(e.target.value)[0] || 'Unit 1')
-                      }}
-                      className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-bold bg-white">
-                      <option value="">반 선택</option>
-                      {classList.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                    {editClass && (
-                      <select value={editUnit} onChange={e => setEditUnit(e.target.value)}
-                        className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-bold bg-white">
-                        {getClassUnitNames(editClass).map(u => <option key={u} value={u}>{u}</option>)}
-                      </select>
-                    )}
-                    <div className="flex gap-2">
-                      <button onClick={() => setEditing(null)}
-                        className="flex-1 border-2 border-gray-200 text-gray-500 font-bold py-2 rounded-xl text-xs btn-press">취소</button>
-                      <button onClick={saveEdit}
-                        className="flex-1 bg-blue-500 text-white font-black py-2 rounded-xl text-xs btn-press">저장</button>
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+            {groups.map(group => (
+              <div key={group.name}>
+                <p className="text-xs font-black text-gray-500 mb-1.5 px-1">{group.name} ({group.students.length}명)</p>
+                <div className="space-y-2">
+                  {group.students.map((s) => (
+                    <div key={s} className="bg-gray-50 rounded-xl px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <input type="checkbox" checked={selected.has(s)} onChange={() => toggleSelected(s)}
+                            className="w-4 h-4 accent-blue-500" />
+                          <div>
+                            <p className="font-black text-gray-800">{s}</p>
+                            <p className={`text-xs ${getStudentClass(s) ? 'text-gray-400' : 'text-red-500 font-bold'}`}>
+                              {[getStudentClass(s), getStudentUnit(s)].filter(Boolean).join(' · ') || '⚠️ 반 미배정'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => startEdit(s)}
+                            className="bg-blue-100 text-blue-600 font-bold px-3 py-2 rounded-xl text-xs btn-press">반 배정</button>
+                          <button onClick={() => handleRemove(s)}
+                            className="bg-red-100 text-red-500 font-bold px-3 py-2 rounded-xl text-xs btn-press">삭제</button>
+                        </div>
+                      </div>
+                      {editing === s && (
+                        <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
+                          <select value={editClass} onChange={e => {
+                              setEditClass(e.target.value)
+                              setEditUnit(getClassUnitNames(e.target.value)[0] || 'Unit 1')
+                            }}
+                            className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-bold bg-white">
+                            <option value="">반 선택</option>
+                            {classList.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                          {editClass && (
+                            <select value={editUnit} onChange={e => setEditUnit(e.target.value)}
+                              className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-bold bg-white">
+                              {getClassUnitNames(editClass).map(u => <option key={u} value={u}>{u}</option>)}
+                            </select>
+                          )}
+                          <div className="flex gap-2">
+                            <button onClick={() => setEditing(null)}
+                              className="flex-1 border-2 border-gray-200 text-gray-500 font-bold py-2 rounded-xl text-xs btn-press">취소</button>
+                            <button onClick={saveEdit}
+                              className="flex-1 bg-blue-500 text-white font-black py-2 rounded-xl text-xs btn-press">저장</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
+                  ))}
+                </div>
               </div>
             ))}
           </div>
