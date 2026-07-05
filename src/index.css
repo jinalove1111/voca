@@ -23,6 +23,14 @@ body {
 
 h1, h2 {
   font-family: 'OneStoreMobilePop', 'Pretendard', 'Noto Sans KR', sans-serif;
+  /* ONE Mobile POP renders noticeably wider than the previous body font —
+     titles that fit fine before can now overflow a flex-centered container
+     (flex items default to min-width:auto, which blocks wrapping instead of
+     shrinking). This is a safety net so no title can push the page wider
+     than the viewport; per-screen fixes (see StudentSelect.jsx) still help
+     wrap at a sensible point rather than mid-word. */
+  overflow-wrap: break-word;
+  max-width: 100%;
 }
 
 .card-shadow {
