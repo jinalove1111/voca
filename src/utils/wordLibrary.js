@@ -368,7 +368,10 @@ export async function setStudentClass(name, className) {
   const s = _students[name]
   if (!s) return
   const classId = className ? (await ensureClass(className)).id : null
-  const { error } = await supabase.from('students').update({ class_id: classId }).eq('id', s.id)
+  const payload = { class_id: classId }
+  console.log('[wordLibrary] setStudentClass — Supabase update payload:', { studentId: s.id, name, ...payload })
+  const { data, error } = await supabase.from('students').update(payload).eq('id', s.id).select()
+  console.log('[wordLibrary] setStudentClass — Supabase update result:', { data, error })
   if (error) throw error
   await refreshStudents()
 }
@@ -376,7 +379,10 @@ export async function setStudentClass(name, className) {
 export async function setStudentUnit(name, unitName) {
   const s = _students[name]
   if (!s) return
-  const { error } = await supabase.from('students').update({ unit_name: unitName }).eq('id', s.id)
+  const payload = { unit_name: unitName }
+  console.log('[wordLibrary] setStudentUnit — Supabase update payload:', { studentId: s.id, name, ...payload })
+  const { data, error } = await supabase.from('students').update(payload).eq('id', s.id).select()
+  console.log('[wordLibrary] setStudentUnit — Supabase update result:', { data, error })
   if (error) throw error
   await refreshStudents()
 }

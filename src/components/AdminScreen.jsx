@@ -139,6 +139,8 @@ function StudentManagement() {
 
   const saveEdit = async () => {
     if (!editClass) { alert('반을 선택해주세요!'); return }
+    // [진단 로그 1] 관리자가 선택한 unit 값
+    console.log('[AdminScreen] saveEdit — 선택한 unit 값:', { student: editing, editClass, editUnit })
     try {
       await setStudentClass(editing, editClass)
       await setStudentUnit(editing, editUnit || 'Unit 1')

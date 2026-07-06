@@ -16,7 +16,7 @@ import GiftReveal from './components/GiftReveal'
 import AdminScreen from './components/AdminScreen'
 import { useStudent } from './hooks/useStudent'
 import { pickNextGame } from './utils/matchGame'
-import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, findStudentByName } from './utils/wordLibrary'
+import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, findStudentByName, getStudentClass, getStudentUnit } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech, getMicStream } from './utils/speech'
 
 class AppErrorBoundary extends React.Component {
@@ -266,7 +266,17 @@ export default function App() {
   // it — guarantees every screen starts from the current DB state, not a
   // stale local cache.
   useEffect(() => {
-    initWordLibrary().then(() => setReady(true)).catch((err) => setLoadError(err))
+    initWordLibrary().then(() => {
+      setReady(true)
+      // [진단 로그 4-b] 캐시된 로그인(페이지 새로고침으로 재입장)의 경우도
+      // 여기서 Home 진입 직전 상태를 확인할 수 있음.
+      if (student) {
+        console.log('[App] initWordLibrary 완료 — 캐시된 currentStudent:', {
+          name: student, class: getStudentClass(student), unit: getStudentUnit(student),
+        })
+      }
+    }).catch((err) => setLoadError(err))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // If an admin deleted this student's account from another device while
@@ -304,6 +314,10 @@ export default function App() {
   // _students was otherwise only ever loaded once when the tab first opened.
   const handleSelect = async (name) => {
     try { await refreshStudents() } catch {}
+    // [진단 로그 4] Home(Dashboard) 진입 직전 currentStudent + 그 시점의 반/유닛
+    console.log('[App] handleSelect — Home 진입 직전 currentStudent:', {
+      name, class: getStudentClass(name), unit: getStudentUnit(name),
+    })
     localStorage.setItem('paulEasyVoca_currentStudent', name)
     setRemovedNotice(false)
     setStudent(name)

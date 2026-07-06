@@ -167,6 +167,8 @@ export default function Dashboard({ student, studentData, classWords, onGo, onLo
 
   const className = getStudentClass(student)
   const unitName = getStudentUnit(student)
+  // [진단 로그 5] Home(Dashboard)에서 실제로 표시하는 unit 값 — 렌더될 때마다 확인
+  console.log('[Dashboard] 표시하는 unit 값:', { student, className, unitName })
   const classDeleted = className && !getClassNames().includes(className)
   const recentStickers = [...stickerTypes].reverse().slice(0, 8).map(stickerById).filter(Boolean)
 
