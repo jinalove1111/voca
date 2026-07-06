@@ -1,6 +1,8 @@
 import React, { useState, useRef } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment } from '../utils/wordLibrary'
+
+const wordSlug = (word) => word.toLowerCase().replace(/\s+/g, '_')
 import { getStudents, removeStudent } from '../hooks/useStudent'
 import FeatureManagementPanel from './FeatureManagementPanel'
 
@@ -696,6 +698,17 @@ export default function AdminScreen({ onBack }) {
                 const activeUnit = isOpen ? viewUnit : (unitNames[0] || 'Unit 1')
                 const words = getClassWords(c, activeUnit) || []
                 const studentsInClass = isOpen ? getStudentsInClass(c) : []
+                const todaysAssigned = isOpen ? new Set(getTodaysAssignmentWordIds(c)) : new Set()
+                const toggleTodaysWord = async (slug) => {
+                  const current = getTodaysAssignmentWordIds(c)
+                  const next = current.includes(slug) ? current.filter(id => id !== slug) : [...current, slug]
+                  try {
+                    await setTodaysAssignment(c, next)
+                    refresh()
+                  } catch (err) {
+                    alert('오늘의 단어 배정 중 오류가 발생했어요: ' + (err.message || err))
+                  }
+                }
                 return (
                   <div key={c} className="bg-white rounded-2xl card-shadow p-4">
                     <div className="flex items-center justify-between">
@@ -772,12 +785,36 @@ export default function AdminScreen({ onBack }) {
                         <div className="bg-gray-50 rounded-xl p-3 max-h-40 overflow-y-auto">
                           {(words || []).length === 0 ? (
                             <p className="text-gray-400 text-sm">이 유닛에 단어가 아직 없습니다.</p>
-                          ) : (words || []).map((w, i) => (
-                            <div key={i} className="flex gap-3 py-1 border-b border-gray-100 last:border-0 text-sm">
-                              <span className="font-bold text-gray-800 min-w-0">{w.word}</span>
-                              <span className="text-gray-500">{w.meaning}</span>
-                            </div>
-                          ))}
+                          ) : (words || []).map((w, i) => {
+                            const slug = wordSlug(w.word)
+                            const isAssigned = todaysAssigned.has(slug)
+                            return (
+                              <div key={i} className="flex items-center gap-3 py-1 border-b border-gray-100 last:border-0 text-sm">
+                                <button onClick={() => toggleTodaysWord(slug)}
+                                  className={`flex-shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center text-xs btn-press ${isAssigned ? 'bg-teal-500 border-teal-500 text-white' : 'border-gray-300 text-transparent'}`}>
+                                  ✓
+                                </button>
+                                <span className="font-bold text-gray-800 min-w-0">{w.word}</span>
+                                <span className="text-gray-500">{w.meaning}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+
+                        <div className="bg-teal-50 rounded-xl p-3 flex items-center justify-between gap-2">
+                          <p className="text-xs text-teal-700">
+                            <span className="font-black">📌 오늘의 단어:</span>{' '}
+                            {todaysAssigned.size > 0 ? `${todaysAssigned.size}개 지정됨 (체크박스로 선택)` : '지정 안 함 (학생은 유닛 전체 단어를 봐요)'}
+                          </p>
+                          {todaysAssigned.size > 0 && (
+                            <button onClick={async () => {
+                                try { await setTodaysAssignment(c, []); refresh() }
+                                catch (err) { alert('해제 중 오류가 발생했어요: ' + (err.message || err)) }
+                              }}
+                              className="flex-shrink-0 bg-white border-2 border-teal-300 text-teal-600 font-bold px-2 py-1 rounded-lg text-xs btn-press">
+                              전체 해제
+                            </button>
+                          )}
                         </div>
 
                         <div className="bg-gray-50 rounded-xl p-3">

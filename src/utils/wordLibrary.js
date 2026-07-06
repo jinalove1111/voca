@@ -33,15 +33,31 @@ export function isWordLibraryReady() {
 
 // Rebuilds the entire in-memory cache from Supabase. Call this any time you
 // need guaranteed-fresh data (app start, tab refocus, after a write).
+// classId -> today's assigned word-slug array (v1.3 "오늘의 단어 배정") —
+// preloaded alongside everything else so getStudentWords stays synchronous.
+// Absent/empty for a class = no assignment set = fall back to showing the
+// full unit (existing v1.0/v1.1/v1.2 behavior, never broken by this).
+let _dailyAssignments = {}
+const todayDateStr = () => new Date().toISOString().slice(0, 10)
+
 export async function refreshWordLibrary() {
-  const [classesRes, unitsRes, wordsRes] = await Promise.all([
+  const [classesRes, unitsRes, wordsRes, assignmentsRes] = await Promise.all([
     supabase.from('classes').select('id,name,class_type').order('created_at'),
     supabase.from('units').select('id,class_id,name,position').order('position'),
     supabase.from('words').select('id,unit_id,word,meaning,position,word_audio_url,example_audio_url,example_text,example_translation,memory_tip').order('position'),
+    supabase.from('daily_assignments').select('class_id,word_ids').eq('date', todayDateStr()),
   ])
   if (classesRes.error) throw classesRes.error
   if (unitsRes.error) throw unitsRes.error
   if (wordsRes.error) throw wordsRes.error
+  // Assignments table is new (v1.3) — don't let a query hiccup here ever
+  // break the whole app; worst case, today's assignment silently falls back
+  // to "no assignment" (full unit shown), never a hard failure.
+  if (!assignmentsRes.error) {
+    _dailyAssignments = Object.fromEntries((assignmentsRes.data || []).map((a) => [a.class_id, a.word_ids || []]))
+  } else {
+    console.warn('[wordLibrary] daily_assignments fetch failed (non-fatal):', assignmentsRes.error.message)
+  }
 
   const tree = {}
   classesRes.data.forEach((c) => {
@@ -449,7 +465,8 @@ export const getStudentWords = (name) => {
       })
       return []
     }
-    return raw.map((cw) => {
+    const todaysAssignment = _dailyAssignments[classId]
+    const mapped = raw.map((cw) => {
       if (!cw || !cw.word) return null
       return {
         id:              cw.word.toLowerCase().replace(/\s+/g, '_'),
@@ -484,6 +501,16 @@ export const getStudentWords = (name) => {
         unitId:          cw.unitId || null,
       }
     }).filter(Boolean)
+
+    // v1.3 날짜별 단어 배정: 오늘 지정된 단어가 있으면 그 서브셋만, 없으면
+    // (배정 안 함/전부 삭제됨 등) 기존처럼 유닛 전체 단어를 그대로 보여줌 —
+    // 기존 동작을 절대 깨뜨리지 않기 위한 폴백.
+    if (Array.isArray(todaysAssignment) && todaysAssignment.length > 0) {
+      const assignedSet = new Set(todaysAssignment)
+      const filtered = mapped.filter((w) => assignedSet.has(w.id))
+      if (filtered.length > 0) return filtered
+    }
+    return mapped
   } catch (err) {
     console.log('[wordLibrary] getStudentWords: query error', {
       selectedStudent: name,
@@ -495,4 +522,26 @@ export const getStudentWords = (name) => {
     })
     return []
   }
+}
+
+// v1.3 관리자용 — 오늘 이 반에 배정된 단어 slug 목록 (없으면 빈 배열 =
+// "배정 안 함", getStudentWords는 이 경우 유닛 전체 단어를 그대로 보여줌).
+export function getTodaysAssignmentWordIds(className) {
+  const classId = _cache[className]?.id
+  if (!classId) return []
+  return _dailyAssignments[classId] || []
+}
+
+// 반별 오늘의 단어 배정 저장/해제. wordIds가 빈 배열이면 배정을 지우는
+// 것과 같음 (getStudentWords가 빈 배열은 "배정 없음"으로 취급).
+export async function setTodaysAssignment(className, wordIds) {
+  const classId = _cache[className]?.id
+  if (!classId) return
+  const { error } = await supabase.from('daily_assignments').upsert({
+    class_id: classId,
+    date: todayDateStr(),
+    word_ids: wordIds,
+  }, { onConflict: 'class_id,date' })
+  if (error) throw error
+  await refreshWordLibrary()
 }
