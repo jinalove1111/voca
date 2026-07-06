@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { playWordAudio, stopCurrentAudio } from '../utils/speech'
+import { playWordAudio, stopCurrentAudio, playSuccessSound } from '../utils/speech'
 import { isSpellingCorrect, spellingHintFor } from '../utils/spelling'
 
 // 쓰기 시험 한 문제 — 발음만 2~3번 들려주고 영어 단어는 절대 보여주지
@@ -8,42 +8,82 @@ import { isSpellingCorrect, spellingHintFor } from '../utils/spelling'
 // 직접 다시 입력해서 정확히 맞혀야 이 문제를 통과함(재입력도 동일하게
 // 대소문자/공백 무시). onResult(correct)는 첫 시도 결과만 분석용으로
 // 한 번 보고하고, onDone()은 (첫 시도든 재입력 후든) 최종적으로 통과한
-// 순간에만 호출됨 — 부모가 onDone을 받아야 다음으로 넘어감.
+// 순간에 정답 효과음이 끝난 뒤 호출됨 — 부모가 onDone을 받아야 다음으로 넘어감.
 export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnabled, onResult, onDone }) {
   const [phase, setPhase] = useState('listening') // listening | answer | wrong | correct
   const [input, setInput] = useState('')
   const [retryInput, setRetryInput] = useState('')
   const [showHint, setShowHint] = useState(false)
+  const [manualPlaying, setManualPlaying] = useState(false)
   const reportedRef = useRef(false)
 
+  // 처음 들어왔을 때 발음을 3번 들려주는 루프를 컴포넌트가 직접 취소
+  // 가능하게 관리 — playWordAudio(times:3)에 내부적으로 맡기면 그
+  // setTimeout 체인을 외부에서 취소할 방법이 없어서, StrictMode의
+  // effect 이중 실행이나 이 화면이 빠르게 재마운트되는 경우 이전 재생과
+  // 새 재생이 겹쳐 "에코"처럼 두 번 들리는 문제가 있었음. cancelled
+  // 플래그로 매 단계마다 취소 여부를 확인해 이전 루프의 잔여 재생이
+  // 이후에 끼어들지 못하게 함.
   useEffect(() => {
     setPhase('listening')
     setInput('')
     setRetryInput('')
     setShowHint(false)
+    setManualPlaying(false)
     reportedRef.current = false
-    playWordAudio(wordAudioUrl, word, { times: 3, onEnd: () => setPhase('answer') })
-    return () => stopCurrentAudio()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [word])
 
-  useEffect(() => {
-    if (phase === 'correct') onDone?.()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase])
+    let cancelled = false
+    let played = 0
+    const playOnce = () => {
+      if (cancelled) return
+      playWordAudio(wordAudioUrl, word, {
+        times: 1,
+        onEnd: () => {
+          if (cancelled) return
+          played += 1
+          if (played < 3) setTimeout(() => { if (!cancelled) playOnce() }, 400)
+          else setPhase('answer')
+        },
+        onError: () => {
+          if (cancelled) return
+          setPhase('answer') // 재생이 계속 실패해도 학생이 입력 자체는 할 수 있게
+        },
+      })
+    }
+    playOnce()
 
-  const playAgain = () => playWordAudio(wordAudioUrl, word, { times: 1 })
+    return () => { cancelled = true; stopCurrentAudio() }
+  }, [word, wordAudioUrl])
+
+  const playAgain = () => {
+    if (manualPlaying || phase === 'listening') return
+    setManualPlaying(true)
+    playWordAudio(wordAudioUrl, word, {
+      times: 1,
+      onEnd: () => setManualPlaying(false),
+      onError: () => setManualPlaying(false),
+    })
+  }
+
+  // 정답이면 효과음을 먼저 들려주고, 0.7초 후에 다음 문제로 — 효과음이
+  // 잘리지 않고 다 들리도록 onDone을 곧바로 부르지 않음.
+  const markCorrect = () => {
+    setPhase('correct')
+    playSuccessSound()
+    setTimeout(() => onDone?.(), 700)
+  }
 
   const submitFirst = () => {
     if (!input.trim()) return
     const correct = isSpellingCorrect(input, word)
     if (!reportedRef.current) { reportedRef.current = true; onResult?.(correct) }
-    setPhase(correct ? 'correct' : 'wrong')
+    if (correct) markCorrect()
+    else setPhase('wrong')
   }
 
   const submitRetry = () => {
     if (!retryInput.trim()) return
-    if (isSpellingCorrect(retryInput, word)) setPhase('correct')
+    if (isSpellingCorrect(retryInput, word)) markCorrect()
     // 틀리면 재입력 화면에 계속 머무름 — 맞을 때까지 다시 시도.
   }
 
@@ -54,7 +94,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
       <p className="text-center text-gray-500 font-bold text-sm">✏️ 철자 쓰기</p>
 
       <div className="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl p-6 text-center text-white">
-        <button onClick={playAgain} className="btn-press" disabled={phase === 'listening'}>
+        <button onClick={playAgain} className="btn-press" disabled={phase === 'listening' || manualPlaying}>
           <p className="text-4xl mb-2">🔊</p>
         </button>
         <p className="text-3xl font-black">{meaning}</p>
