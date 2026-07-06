@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
 import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData } from '../utils/wordLibrary'
 import { getStudents, removeStudent } from '../hooks/useStudent'
+import { buildWeeklyReport } from '../utils/weeklyReport'
 import FeatureManagementPanel from './FeatureManagementPanel'
 
 const wordSlug = (word) => word.toLowerCase().replace(/\s+/g, '_')
@@ -293,6 +294,8 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(false)
   const [rows, setRows] = useState([])
   const [expanded, setExpanded] = useState(null)
+  const [reportFor, setReportFor] = useState(null) // student name currently showing a generated report
+  const [copied, setCopied] = useState(false)
 
   const wordLookup = useMemo(() => {
     if (!selectedClass) return {}
@@ -404,6 +407,28 @@ function AdminDashboard() {
                     </div>
                   )}
                 </div>
+
+                <button onClick={() => { setReportFor(reportFor === r.name ? null : r.name); setCopied(false) }}
+                  className="w-full bg-pink-100 text-pink-600 font-bold py-2 rounded-xl text-xs btn-press">
+                  📝 {reportFor === r.name ? '리포트 닫기' : '학부모 리포트 만들기'}
+                </button>
+                {reportFor === r.name && (() => {
+                  const report = buildWeeklyReport({
+                    name: r.name, last7, quizAccuracy, quizCorrect, quizTotal, pronAttempts,
+                    progress: r.progress, topMissed, wordLookup,
+                  })
+                  return (
+                    <div className="bg-pink-50 rounded-xl p-3">
+                      <pre className="whitespace-pre-wrap text-xs text-gray-700 font-sans mb-2">{report}</pre>
+                      <button onClick={() => {
+                          navigator.clipboard?.writeText(report).then(() => setCopied(true)).catch(() => {})
+                        }}
+                        className="w-full bg-pink-500 text-white font-bold py-2 rounded-xl text-xs btn-press">
+                        {copied ? '✅ 복사됨!' : '📋 복사하기'}
+                      </button>
+                    </div>
+                  )
+                })()}
               </div>
             )}
           </div>
