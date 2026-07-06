@@ -215,7 +215,7 @@ function AppInner({ student, onLogout }) {
       )}
       {screen === 'wordBrowser'   && (
         <WordBrowser words={classWords} cleared={cleared} onSelect={handleWordSelect} onBack={() => setScreen('dashboard')}
-          mode={studyMode} onModeChange={setStudyMode} spellingEnabled={spellingSettings.spellingTestEnabled} />
+          mode={studyMode} onModeChange={setStudyMode} />
       )}
       {screen === 'wordDetail'    && selectedWord && (
         <WordDetail word={selectedWord}
