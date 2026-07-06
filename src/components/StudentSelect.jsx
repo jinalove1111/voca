@@ -25,7 +25,15 @@ export default function StudentSelect({ onSelect, onAdmin, removedNotice }) {
     // log back into the SAME account, not silently fork a new empty one.
     const existing = findStudentByName(name)
     if (existing) {
-      onSelect(existing)
+      setSaving(true)
+      try {
+        // onSelect re-pulls this student's class/unit from Supabase before
+        // switching screens, so a reassignment made earlier in this tab's
+        // session (by an admin, on another device) is never stale.
+        await onSelect(existing)
+      } finally {
+        setSaving(false)
+      }
       return
     }
 
@@ -34,7 +42,7 @@ export default function StudentSelect({ onSelect, onAdmin, removedNotice }) {
     setSaving(true)
     try {
       await addStudent(name, selectedClass, selectedUnit)
-      onSelect(name)
+      await onSelect(name)
     } catch (err) {
       setError('시작하는 중 오류가 발생했어요: ' + (err.message || err))
     } finally {

@@ -16,7 +16,7 @@ import GiftReveal from './components/GiftReveal'
 import AdminScreen from './components/AdminScreen'
 import { useStudent } from './hooks/useStudent'
 import { pickNextGame } from './utils/matchGame'
-import { getStudentWords, initWordLibrary, refreshWordLibrary, findStudentByName } from './utils/wordLibrary'
+import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, findStudentByName } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech, getMicStream } from './utils/speech'
 
 class AppErrorBoundary extends React.Component {
@@ -114,13 +114,21 @@ function AppInner({ student, onLogout }) {
     try { return getStudentWords(student) || [] } catch { return [] }
   }, [student, refreshTick])
 
-  // Re-pull the latest word data from Supabase whenever the app regains focus
-  // (e.g. switching back from another app on mobile) so a word added on
-  // another device doesn't stay hidden behind stale cached data.
+  // Re-pull the latest word AND student data from Supabase whenever the app
+  // regains focus (e.g. switching back from another app on mobile) so a word
+  // added on another device — or a class/unit reassignment an admin made on
+  // a different device while this tab stayed open — doesn't stay hidden
+  // behind stale cached data. refreshStudents() is included here because
+  // _students (unlike _cache) was previously only ever populated once at
+  // initWordLibrary() and never refreshed again for a tab's whole lifetime,
+  // which is exactly what let a student's re-assigned unit silently revert
+  // to whatever it was when the tab first loaded.
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible') {
-        refreshWordLibrary().then(() => setRefreshTick((t) => t + 1)).catch(() => {})
+        Promise.all([refreshWordLibrary(), refreshStudents()])
+          .then(() => setRefreshTick((t) => t + 1))
+          .catch(() => {})
       }
     }
     document.addEventListener('visibilitychange', onVisible)
@@ -289,7 +297,17 @@ export default function App() {
     }
   }, [])
 
-  const handleSelect = (name) => { localStorage.setItem('paulEasyVoca_currentStudent', name); setRemovedNotice(false); setStudent(name) }
+  // Always re-pull this student's class/unit from Supabase at the exact
+  // moment of login — logout->re-login is a pure client-side state change
+  // (no page reload), so without this, a unit reassignment an admin made
+  // earlier in the same tab's lifetime would keep being invisible, since
+  // _students was otherwise only ever loaded once when the tab first opened.
+  const handleSelect = async (name) => {
+    try { await refreshStudents() } catch {}
+    localStorage.setItem('paulEasyVoca_currentStudent', name)
+    setRemovedNotice(false)
+    setStudent(name)
+  }
   const handleLogout = () => { localStorage.removeItem('paulEasyVoca_currentStudent'); setStudent('') }
 
   if (loadError) {
