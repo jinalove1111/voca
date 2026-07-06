@@ -38,8 +38,9 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
   const [myRecUrl, setUrl]     = useState(null)
   const [processing, setProc]  = useState(false)
 
-  const mrRef     = useRef(null)   // { stop } handle from recordWithAutoStop
-  const timersRef = useRef([])     // setTimeout ids
+  const mrRef      = useRef(null)   // { stop } handle from recordWithAutoStop
+  const timersRef  = useRef([])     // setTimeout ids
+  const settledRef = useRef(true)   // true = not currently waiting on a recording result
 
   const clearTimers = () => {
     timersRef.current.forEach(clearTimeout)
@@ -67,13 +68,32 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
     stopAll()
     setUrl(null)
     setPhase('listening')
+    settledRef.current = false
 
     if (!navigator.mediaDevices?.getUserMedia) {
+      settledRef.current = true
       setPhase('fail')
       setMsg('이 브라우저는 녹음을 지원하지 않아요 😢')
       setProc(false)
       return
     }
+
+    // Safety net: if getMicStream()/recordWithAutoStop's promise never
+    // settles (a real device hang — permission dialog dismissed without a
+    // choice, mic contention, etc.), this is the ONLY way out. Without it,
+    // the button stays stuck on "지금 말해보세요!" forever (see
+    // WordDetail.jsx's SpeechBtn, which already has this same net + a
+    // tap-to-cancel escape hatch below).
+    const hangTimer = setTimeout(() => {
+      if (settledRef.current) return
+      console.warn('[QuizGame] recording timed out')
+      settledRef.current = true
+      try { mrRef.current?.stop?.() } catch {}
+      setProc(false)
+      setPhase('fail')
+      setMsg('시간이 오래 걸려요. 다시 시도해봐요! 🗣️')
+    }, 9000)
+    timersRef.current.push(hangTimer)
 
     const mimeType = getAudioMimeType()
     getMicStream()
@@ -83,6 +103,8 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
         return rec.promise
       })
       .then((blob) => {
+        if (settledRef.current) return
+        settledRef.current = true
         console.log('[QuizGame] recorder stop, blob.size =', blob.size)
         setUrl(URL.createObjectURL(blob))
         setProc(false)
@@ -100,6 +122,8 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
         }
       })
       .catch((err) => {
+        if (settledRef.current) return
+        settledRef.current = true
         console.error('[QuizGame] recording error:', err)
         // Mic genuinely unavailable — don't dead-end the quiz on it.
         setMicErr('녹음은 나중에 하고 먼저 듣기와 퀴즈를 해볼까요? 🎧')
@@ -108,11 +132,24 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
       })
   }
 
+  // Escape hatch: tapping the button while it's genuinely stuck on
+  // "listening" cancels and lets the student retry immediately, instead of
+  // waiting out the 9s hang timer — mirrors WordDetail.jsx's cancelListen().
+  const cancelListening = () => {
+    if (settledRef.current) return
+    settledRef.current = true
+    clearTimers()
+    try { mrRef.current?.stop?.() } catch {}
+    setProc(false)
+    setPhase('fail')
+    setMsg('다시 눌러서 시도해봐요! 🎤')
+  }
+
   const handleClick = () => {
     console.log('[QuizGame] record button clicked')
-    if (processing) return
     if (!canRecord) return   // praise voice still playing
-    if (phase === 'listening') return
+    if (phase === 'listening') { cancelListening(); return }
+    if (processing) return
 
     // Retry: reset to re-listen
     startListening()
@@ -140,7 +177,7 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
 
       <button
         onClick={handleClick}
-        disabled={processing || phase === 'listening' || !canRecord}
+        disabled={!canRecord || (processing && phase !== 'listening')}
         className={`w-full py-3 rounded-xl font-black btn-press transition-colors text-sm ${btnColor}`}
       >
         {btnLabel}
