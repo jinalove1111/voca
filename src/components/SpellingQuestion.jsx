@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { playWordAudio, stopCurrentAudio, playSuccessSound } from '../utils/speech'
+import { playWordAudio, playRepeating, stopCurrentAudio, playSuccessSound } from '../utils/speech'
 import { isSpellingCorrect, spellingHintFor } from '../utils/spelling'
 
 // 쓰기 시험 한 문제 — 발음만 2~3번 들려주고 영어 단어는 절대 보여주지
@@ -17,13 +17,10 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
   const [manualPlaying, setManualPlaying] = useState(false)
   const reportedRef = useRef(false)
 
-  // 처음 들어왔을 때 발음을 3번 들려주는 루프를 컴포넌트가 직접 취소
-  // 가능하게 관리 — playWordAudio(times:3)에 내부적으로 맡기면 그
-  // setTimeout 체인을 외부에서 취소할 방법이 없어서, StrictMode의
-  // effect 이중 실행이나 이 화면이 빠르게 재마운트되는 경우 이전 재생과
-  // 새 재생이 겹쳐 "에코"처럼 두 번 들리는 문제가 있었음. cancelled
-  // 플래그로 매 단계마다 취소 여부를 확인해 이전 루프의 잔여 재생이
-  // 이후에 끼어들지 못하게 함.
+  // 처음 들어왔을 때 발음을 3번 들려줌 — playRepeating()이 취소 가능하게
+  // 관리해줘서, StrictMode의 effect 이중 실행이나 화면이 빠르게
+  // 재마운트되는 경우에도 이전 재생이 새 재생과 겹쳐 "에코"처럼 두 번
+  // 들리는 일이 없음(cleanup에서 cancel() 호출).
   useEffect(() => {
     setPhase('listening')
     setInput('')
@@ -32,27 +29,13 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
     setManualPlaying(false)
     reportedRef.current = false
 
-    let cancelled = false
-    let played = 0
-    const playOnce = () => {
-      if (cancelled) return
-      playWordAudio(wordAudioUrl, word, {
-        times: 1,
-        onEnd: () => {
-          if (cancelled) return
-          played += 1
-          if (played < 3) setTimeout(() => { if (!cancelled) playOnce() }, 400)
-          else setPhase('answer')
-        },
-        onError: () => {
-          if (cancelled) return
-          setPhase('answer') // 재생이 계속 실패해도 학생이 입력 자체는 할 수 있게
-        },
-      })
-    }
-    playOnce()
+    const cancel = playRepeating(wordAudioUrl, word, {
+      times: 3,
+      onAllDone: () => setPhase('answer'),
+      onError: () => setPhase('answer'), // 재생이 계속 실패해도 학생이 입력 자체는 할 수 있게
+    })
 
-    return () => { cancelled = true; stopCurrentAudio() }
+    return () => { cancel(); stopCurrentAudio() }
   }, [word, wordAudioUrl])
 
   const playAgain = () => {

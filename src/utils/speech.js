@@ -261,6 +261,44 @@ export function playWordAudio(url, fallbackText, opts = {}) {
   }
 }
 
+// ── playRepeating() ──────────────────────────────────────────────────────────
+// A cancellable "play this N times in a row" wrapper around playWordAudio().
+// Use this (never playWordAudio's own `times` option) whenever the caller
+// might unmount or re-run before the sequence finishes — e.g. a React effect
+// that fires on mount, which under React.StrictMode's dev-mode double-invoke
+// runs the effect body twice in quick succession. playWordAudio's internal
+// times-loop has no way to be cancelled once started, so two overlapping
+// calls each running their own 2-3x repeat produced an audible "echo" (this
+// bit SpellingQuestion.jsx once — see its git history). playRepeating avoids
+// that class of bug entirely: every step checks a local `cancelled` flag
+// before doing anything, so calling the returned cancel() function — e.g.
+// from the effect's cleanup — guarantees no further audio from that call,
+// no matter how many are in flight.
+export function playRepeating(url, fallbackText, { times = 1, rate = null, onEachEnd, onAllDone, onError } = {}) {
+  let cancelled = false
+  let played = 0
+  const playOnce = () => {
+    if (cancelled) return
+    playWordAudio(url, fallbackText, {
+      times: 1,
+      rate,
+      onEnd: () => {
+        if (cancelled) return
+        played += 1
+        onEachEnd?.(played)
+        if (played < times) setTimeout(() => { if (!cancelled) playOnce() }, 400)
+        else onAllDone?.()
+      },
+      onError: (err) => {
+        if (cancelled) return
+        onError?.(err)
+      },
+    })
+  }
+  playOnce()
+  return () => { cancelled = true }
+}
+
 // ── speak() ─────────────────────────────────────────────────────────────────
 // Live TTS for short fixed phrases that aren't tied to a stored word/example
 // (e.g. the quiz's "Yar! Correct!" praise voice). Student-facing word and
