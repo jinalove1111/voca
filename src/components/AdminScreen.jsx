@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, fetchDashboardData } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData } from '../utils/wordLibrary'
 import { getStudents, removeStudent } from '../hooks/useStudent'
 import FeatureManagementPanel from './FeatureManagementPanel'
 
@@ -21,6 +21,88 @@ function downloadCsv(filename, rows) {
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
+}
+
+const tomorrowIsoStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10) }
+
+// v1.3 "날짜별 숙제 배정" — 오늘이 아닌 미래 날짜(내일 이후)에 미리 단어를
+// 배정해두는 UI. 과거 날짜는 min 속성으로 아예 선택 못 하게 막아 이미
+// 지나간 학습 기록을 실수로 고쳐쓰는 걸 방지. 오늘 배정(체크박스 토글, 위
+// 블록)과 완전히 분리된 별도 컴포넌트라 기존 "오늘의 단어" 동작에는 전혀
+// 영향 없음.
+function FutureAssignmentPlanner({ targetClass, words }) {
+  const [date, setDate] = useState(tomorrowIsoStr())
+  const [selected, setSelected] = useState(new Set())
+  const [loading, setLoading] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const load = async (d) => {
+    setLoading(true)
+    setSaved(false)
+    try {
+      const ids = await getAssignmentForDate(targetClass, d)
+      setSelected(new Set(ids))
+    } catch (err) {
+      alert('불러오는 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load(date) }, [date, targetClass]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggle = (slug) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(slug)) next.delete(slug); else next.add(slug)
+      return next
+    })
+    setSaved(false)
+  }
+
+  const save = async () => {
+    try {
+      await setAssignmentForDate(targetClass, date, [...selected])
+      setSaved(true)
+    } catch (err) {
+      alert('저장 중 오류가 발생했어요: ' + (err.message || err))
+    }
+  }
+
+  return (
+    <div className="bg-indigo-50 rounded-xl p-3 space-y-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <p className="text-xs font-black text-indigo-700 flex-shrink-0">📅 다음 날짜 미리 배정</p>
+        <input type="date" value={date} min={tomorrowIsoStr()} onChange={e => setDate(e.target.value)}
+          className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold bg-white" />
+      </div>
+      {loading ? <p className="text-xs text-gray-400">불러오는 중...</p> : (
+        <>
+          {words.length === 0 ? (
+            <p className="text-xs text-gray-400">이 유닛에 단어가 없어요.</p>
+          ) : (
+            <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+              {words.map((w, i) => {
+                const slug = wordSlug(w.word)
+                const isOn = selected.has(slug)
+                return (
+                  <button key={i} onClick={() => toggle(slug)}
+                    className={`px-2 py-1 rounded-lg text-xs font-bold btn-press ${isOn ? 'bg-indigo-500 text-white' : 'bg-white border-2 border-gray-200 text-gray-600'}`}>
+                    {w.word}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={save} className="bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs btn-press">저장</button>
+            <p className="text-xs text-gray-500">{selected.size > 0 ? `${selected.size}개 선택됨` : '선택 안 하면 그날 전체 단어가 보여요'}</p>
+            {saved && <p className="text-xs text-green-600 font-bold">✅ 저장됨</p>}
+          </div>
+        </>
+      )}
+    </div>
+  )
 }
 
 // 학생 관리 — admin-only. Students themselves never see this roster (see
@@ -950,6 +1032,8 @@ export default function AdminScreen({ onBack }) {
                             </button>
                           )}
                         </div>
+
+                        <FutureAssignmentPlanner targetClass={c} words={words} />
 
                         <div className="bg-gray-50 rounded-xl p-3">
                           <p className="text-xs font-black text-gray-500 mb-2">👦 이 반 학생 ({studentsInClass.length}명)</p>

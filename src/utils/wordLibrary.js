@@ -572,11 +572,29 @@ export function getTodaysAssignmentWordIds(className) {
 // 반별 오늘의 단어 배정 저장/해제. wordIds가 빈 배열이면 배정을 지우는
 // 것과 같음 (getStudentWords가 빈 배열은 "배정 없음"으로 취급).
 export async function setTodaysAssignment(className, wordIds) {
+  return setAssignmentForDate(className, todayDateStr(), wordIds)
+}
+
+// v1.3 "날짜별 숙제 배정" — 오늘 외의 날짜(주로 내일 이후, 미리 준비) 배정
+// 조회/저장. 미래 날짜는 그날이 되기 전까지 학생에게 전혀 영향 없음
+// (getStudentWords는 오늘 날짜로 미리 로드된 _dailyAssignments 캐시만
+// 봄) — 과거 날짜를 고쳐써서 이미 지나간 학습 기록을 바꾸는 실수를
+// 막기 위해 관리자 화면에서는 오늘 이전 날짜를 선택할 수 없게 함.
+export async function getAssignmentForDate(className, dateStr) {
+  const classId = _cache[className]?.id
+  if (!classId) return []
+  const { data, error } = await supabase.from('daily_assignments')
+    .select('word_ids').eq('class_id', classId).eq('date', dateStr).maybeSingle()
+  if (error) throw error
+  return data?.word_ids || []
+}
+
+export async function setAssignmentForDate(className, dateStr, wordIds) {
   const classId = _cache[className]?.id
   if (!classId) return
   const { error } = await supabase.from('daily_assignments').upsert({
     class_id: classId,
-    date: todayDateStr(),
+    date: dateStr,
     word_ids: wordIds,
   }, { onConflict: 'class_id,date' })
   if (error) throw error
