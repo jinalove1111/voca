@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { getStudentClass, getStudentUnit, getClassNames } from '../utils/wordLibrary'
 import { getMicStreamOnce, hasMicStream } from '../utils/speech'
+import { useMicReady } from '../hooks/useMicReady'
 import { isInAppBrowser } from '../utils/browserDetect'
 import { STICKERS } from '../data/stickers'
 import InAppBrowserNotice from './InAppBrowserNotice'
@@ -12,14 +13,16 @@ const stickerById = (id) => STICKERS.find(s => s.id === id)
 // gesture, once per app session. After this, every word's "따라 말하기"
 // reuses the same granted stream and never prompts again.
 function MicPrimeBtn() {
+  const micReady = useMicReady(1000)
   const [state, setState] = useState(() => (hasMicStream() ? 'ready' : 'idle'))
   const [errMsg, setErrMsg] = useState('')
 
+  // micReady flips true if the stream becomes available from ANY source
+  // (e.g. another screen's getMicStream() call) — mirror that into this
+  // button's own richer state machine without duplicating the polling.
   useEffect(() => {
-    if (state === 'ready') return
-    const t = setInterval(() => { if (hasMicStream()) setState('ready') }, 1000)
-    return () => clearInterval(t)
-  }, [state])
+    if (micReady && state !== 'ready') setState('ready')
+  }, [micReady, state])
 
   if (isInAppBrowser()) return <InAppBrowserNotice />
 

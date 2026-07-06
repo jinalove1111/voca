@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { playWordAudio, stopCurrentAudio, getMicStream, hasMicStream, recordWithAutoStop, transcribeViaServerSTT, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
+import { playWordAudio, stopCurrentAudio, getMicStream, recordWithAutoStop, transcribeViaServerSTT, SUCCESS_MSGS, FAIL_MSGS, rndMsg, unlockAudio } from '../utils/speech'
 import { requestAudioGeneration } from '../utils/wordLibrary'
 import { isInAppBrowser } from '../utils/browserDetect'
 import InAppBrowserNotice from './InAppBrowserNotice'
 import SpellingQuestion from './SpellingQuestion'
+import { useMicReady } from '../hooks/useMicReady'
 
 function getAudioMimeType() {
   if (typeof MediaRecorder === 'undefined') return ''
@@ -19,7 +20,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
   const [msg, setMsg]     = useState('')
   const [myRecUrl, setUrl] = useState(null)
   const [tries, setTries]  = useState(0)
-  const [micReady, setMicReady] = useState(() => hasMicStream())
+  const micReady = useMicReady()
   const [transcript, setTranscript] = useState('')
   const [ungraded, setUngraded] = useState(false) // true = recorded OK but no STT grading available
   const mrRef              = useRef(null)
@@ -29,21 +30,6 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
   useEffect(() => () => {
     try { mrRef.current?.stop?.() } catch {}
   }, [])
-
-  // The mic stream primed on Dashboard (see getMicStreamOnce, a module-level
-  // singleton in speech.js) isn't React state, so this screen can't just
-  // "receive" it as a prop — it polls the same shared source of truth
-  // instead. Logged once so it's visible that this screen actually saw it.
-  useEffect(() => {
-    if (micReady) return
-    const t = setInterval(() => {
-      if (hasMicStream()) {
-        console.log('[WordDetail] word screen received micReady true')
-        setMicReady(true)
-      }
-    }, 500)
-    return () => clearInterval(t)
-  }, [micReady])
 
   // In-app browsers (KakaoTalk etc.) handle mic permission unreliably — skip
   // the recording step there instead of letting students hit a flaky/

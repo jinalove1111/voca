@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { playWordAudio, stopCurrentAudio, playSuccessSound, unlockAudio } from '../utils/speech'
 import { ROUNDS, STAR_PER_CORRECT, PERFECT_BONUS, pickNextTarget, buildOptions, TIER } from '../utils/matchGame'
 
@@ -21,6 +21,16 @@ export default function MatchGameShell({ theme, words, onBack, onAddStars, onCon
   const [firstTryUsed, setFirstTryUsed] = useState(false)
   const [locked, setLocked] = useState(false)
   const lastWordRef = useRef(null)
+  const advanceTimerRef = useRef(null)
+  const shakeTimerRef = useRef(null)
+
+  // 정답 후 다음 라운드로 넘어가는 setTimeout, 오답 흔들림 표시를 되돌리는
+  // setTimeout 둘 다 컴포넌트가 언마운트되면(예: 정답 직후 바로 "그만하기"
+  // 연타) 취소 — 이미 사라진 화면에 setState가 뒤늦게 걸리는 일이 없게 함.
+  useEffect(() => () => {
+    clearTimeout(advanceTimerRef.current)
+    clearTimeout(shakeTimerRef.current)
+  }, [])
 
   const eligible = useMemo(() => (words || []).filter(w => w.word && w.meaning), [words])
   const canPlay = eligible.length >= 4
@@ -63,7 +73,7 @@ export default function MatchGameShell({ theme, words, onBack, onAddStars, onCon
       setPicked(opt.meaning)
       playSuccessSound()
       if (!firstTryUsed) { setScore(s => s + 1); onAddStars?.(STAR_PER_CORRECT) }
-      setTimeout(() => {
+      advanceTimerRef.current = setTimeout(() => {
         const next = round + 1
         if (next >= ROUNDS) setPhase('result')
         else nextRound(next)
@@ -72,7 +82,7 @@ export default function MatchGameShell({ theme, words, onBack, onAddStars, onCon
       setFirstTryUsed(true)
       setShakeMeaning(opt.meaning)
       setWrongMeanings(prev => [...prev, opt.meaning])
-      setTimeout(() => setShakeMeaning(null), 500)
+      shakeTimerRef.current = setTimeout(() => setShakeMeaning(null), 500)
     }
   }
 
@@ -156,8 +166,8 @@ export default function MatchGameShell({ theme, words, onBack, onAddStars, onCon
                 disabled={locked || isWrongDisabled}
                 className={`relative transition-all duration-300 ${isPicked ? 'scale-150 opacity-0' : 'scale-100'} ${isShaking ? 'animate-wiggle' : ''} ${isWrongDisabled ? 'opacity-30' : ''}`}
               >
-                <div className={`${theme.colors[i % theme.colors.length]} ${theme.itemShape} aspect-square w-full flex items-center justify-center text-white font-black text-sm px-2 text-center shadow-lg btn-press`}>
-                  {theme.itemEmoji} {opt.meaning}
+                <div className={`${theme.colors[i % theme.colors.length]} ${theme.itemShape} aspect-square w-full flex items-center justify-center text-white font-black text-sm px-2 text-center shadow-lg btn-press overflow-hidden`}>
+                  <span className="max-w-full break-words [word-break:keep-all] leading-tight">{theme.itemEmoji} {opt.meaning}</span>
                 </div>
               </button>
             )
