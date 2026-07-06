@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { playSuccessSound } from '../utils/speech'
 
 function makeOptions(w, allWords) {
   const others = allWords.filter(x => x.id !== w.id).sort(() => Math.random() - 0.5).slice(0, 3)
@@ -34,7 +35,7 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
     setSelected(i)
     if (i === correctIdx) {
       const cleared = onAnswer(practiceId)
-      if (cleared) setDidClear(true)
+      if (cleared) { setDidClear(true); playSuccessSound() }
     }
   }
 

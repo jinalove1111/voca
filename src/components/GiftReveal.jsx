@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { RARITY_COLORS } from '../data/stickers'
+import { playSuccessSound } from '../utils/speech'
 
 // Gift-box reveal — replaces the old egg-crack animation. Fires
 // automatically whenever a mission round completes (see useStudent.js's
@@ -10,7 +11,7 @@ export default function GiftReveal({ sticker, isDuplicate, isMilestone, streakDa
 
   useEffect(() => {
     const t1 = setTimeout(() => setStage('shake'), 900)
-    const t2 = setTimeout(() => setStage('open'), 2000)
+    const t2 = setTimeout(() => { setStage('open'); playSuccessSound() }, 2000)
     return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [])
 

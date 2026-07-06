@@ -376,6 +376,18 @@ function QuizStep({ word, classWords, onDone, onMarkQuizSolved }) {
     if (i === correctIdx) onMarkQuizSolved?.()
   }
 
+  // Auto-advance to the next word a couple seconds after answering, so kids
+  // don't have to tap through every single word — the "다음 단어" button
+  // stays as a manual override for anyone who wants to move on immediately.
+  // QuizStep only ever mounts fresh per word (WordDetail resets `step` back
+  // to 'pronounce' on word change before 'quiz' is reachable again), so this
+  // timer can never fire for a word other than the one it was set up for.
+  useEffect(() => {
+    if (!isAnswered) return
+    const t = setTimeout(() => onDone(), 1800)
+    return () => clearTimeout(t)
+  }, [isAnswered])
+
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-3xl card-shadow p-6">
@@ -440,11 +452,17 @@ export default function WordDetail({
     stopCurrentAudio()
     setStep('pronounce')
     onMarkViewed?.(word.id)
-    // Lazily backfill audio for words that never got it — e.g. the admin's
-    // save-time request got cut off by the browser backgrounding the tab.
-    // Safe to call even if generation already ran; requestAudioGeneration
-    // de-dupes and the server is idempotent per word.
-    if (!word.wordAudioUrl && word.dbId) {
+    // Lazily backfill audio AND example text for words that never got either
+    // — e.g. the admin's save-time request got cut off by the browser
+    // backgrounding the tab, or Anthropic generation failed while TTS still
+    // succeeded (see api/generate-audio.js's isolated try/catch around the
+    // example call). Without retrying on missing exampleText specifically, a
+    // word that already has audio but no example was stuck showing the
+    // generic "I can see a/an {word}." filler (exampleTextFor()) forever —
+    // every such word looked the same. Safe to call even if generation
+    // already ran; requestAudioGeneration de-dupes and the server is
+    // idempotent per word.
+    if ((!word.wordAudioUrl || !word.exampleText) && word.dbId) {
       requestAudioGeneration(word.dbId, word.word, word.meaning, word.exampleText)
     }
   }, [word.id])

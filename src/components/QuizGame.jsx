@@ -204,11 +204,13 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
   const isAnswered = selected !== null
   const isCorrect  = isAnswered && selected === current?.correctIdx
 
-  // Lazily backfill audio for words that never got it (e.g. the admin's
-  // save-time request got cut off). de-duped and idempotent server-side.
+  // Lazily backfill audio AND example text for words that never got either
+  // (e.g. the admin's save-time request got cut off, or Anthropic example
+  // generation failed while TTS still succeeded — see WordDetail.jsx for the
+  // matching fix and full rationale). de-duped and idempotent server-side.
   useEffect(() => {
     const w = current?.word
-    if (w && !w.wordAudioUrl && w.dbId) {
+    if (w && (!w.wordAudioUrl || !w.exampleText) && w.dbId) {
       requestAudioGeneration(w.dbId, w.word, w.meaning, w.exampleText)
     }
   }, [current?.word?.id])
@@ -260,6 +262,17 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
     setPraise('')
     setCanRec(false)
   }
+
+  // Auto-advance on a WRONG answer only — a correct answer offers a bonus
+  // pronunciation recording (PronStep) for +1 star, so auto-advancing there
+  // would yank the screen away mid-recording and cost the student that star.
+  // Wrong answers have nothing further to do on this screen, so it's safe.
+  useEffect(() => {
+    if (!isAnswered || isCorrect) return
+    const t = setTimeout(() => handleNext(), 2000)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAnswered, isCorrect])
 
   const handleRestart = () => {
     window.speechSynthesis?.cancel()
