@@ -3,6 +3,7 @@ import { playWordAudio, stopCurrentAudio, getMicStream, hasMicStream, recordWith
 import { requestAudioGeneration } from '../utils/wordLibrary'
 import { isInAppBrowser } from '../utils/browserDetect'
 import InAppBrowserNotice from './InAppBrowserNotice'
+import SpellingQuestion from './SpellingQuestion'
 
 function getAudioMimeType() {
   if (typeof MediaRecorder === 'undefined') return ''
@@ -248,12 +249,19 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
 }
 
 // ── Step 1: 발음 연습 ──────────────────────────────────────────────────────────
-function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAttempt }) {
-  const [canProceed, setCanProceed] = useState(false)
+function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAttempt, listenOnly }) {
+  const [canProceed, setCanProceed] = useState(listenOnly)
 
   const playWord = () => {
     playWordAudio(word.wordAudioUrl, word.word, { times: 3 })
   }
+
+  // 듣기 모드에서는 처음 화면에 들어오자마자 한 번 들려주고, 녹음 없이
+  // 바로 "계속" 버튼을 활성화 — 듣기 전용이라 따라 말하기를 요구하지 않음.
+  useEffect(() => {
+    if (listenOnly) playWord()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listenOnly, word.word])
 
   return (
     <div className="space-y-4">
@@ -267,15 +275,17 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
             <p className="text-3xl font-black">{word.meaning}</p>
           </div>
         </div>
-        <SpeechBtn
-          target={word.word}
-          wordAudioUrl={word.wordAudioUrl}
-          label="따라 말하기"
-          maxMs={5000}
-          onSuccess={onMarkPronunciationOk}
-          onAnyResult={() => setCanProceed(true)}
-          onAttempt={onPronunciationAttempt}
-        />
+        {!listenOnly && (
+          <SpeechBtn
+            target={word.word}
+            wordAudioUrl={word.wordAudioUrl}
+            label="따라 말하기"
+            maxMs={5000}
+            onSuccess={onMarkPronunciationOk}
+            onAnyResult={() => setCanProceed(true)}
+            onAttempt={onPronunciationAttempt}
+          />
+        )}
       </div>
 
       {word.memoryTip && (
@@ -299,14 +309,19 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
 }
 
 // ── Step 2: 예문 ───────────────────────────────────────────────────────────────
-function ExampleStep({ english, korean, memoryTip, audioUrl, onDone, onMarkExampleHeard }) {
-  const [canProceed, setCanProceed] = useState(false)
+function ExampleStep({ english, korean, memoryTip, audioUrl, onDone, onMarkExampleHeard, listenOnly }) {
+  const [canProceed, setCanProceed] = useState(listenOnly)
 
   const handlePlay = () => {
     unlockAudio()
     playWordAudio(audioUrl, english, { times: 2 })
     onMarkExampleHeard?.()
   }
+
+  useEffect(() => {
+    if (listenOnly) handlePlay()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listenOnly, english])
 
   return (
     <div className="space-y-4">
@@ -321,15 +336,17 @@ function ExampleStep({ english, korean, memoryTip, audioUrl, onDone, onMarkExamp
           🔊 예문 듣기
         </button>
 
-        <div className="mt-4">
-          <SpeechBtn
-            target={english}
-            wordAudioUrl={audioUrl}
-            label="예문 따라 말하기"
-            maxMs={15000}
-            onAnyResult={() => setCanProceed(true)}
-          />
-        </div>
+        {!listenOnly && (
+          <div className="mt-4">
+            <SpeechBtn
+              target={english}
+              wordAudioUrl={audioUrl}
+              label="예문 따라 말하기"
+              maxMs={15000}
+              onAnyResult={() => setCanProceed(true)}
+            />
+          </div>
+        )}
 
         {memoryTip && (
           <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-4 mt-4">
@@ -441,20 +458,38 @@ function QuizStep({ word, classWords, onDone, onMarkQuizSolved, onQuizAnswer }) 
   )
 }
 
+// 학습 모드별 단계 구성 — 모드 선택(WordBrowser)에 따라 WordDetail이 어떤
+// 단계를 몇 개 요구할지 결정. "종합" 모드만 스펠링 단계를 조건부로 포함
+// (반 설정에서 쓰기 시험이 켜져 있을 때만) — 나머지 모드는 항상 고정.
+function buildSteps(mode, hasExample, spellingAllowed) {
+  if (mode === 'write') return ['spelling']
+  if (mode === 'listen' || mode === 'speak') return ['pronounce', ...(hasExample ? ['example'] : [])]
+  // comprehensive (기본값이자 모르는 모드에 대한 안전한 폴백 — 기존 v1.0 동작과 동일 + 스펠링만 추가)
+  return ['pronounce', ...(hasExample ? ['example'] : []), 'quiz', ...(spellingAllowed ? ['spelling'] : [])]
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────────
 export default function WordDetail({
   word, onBack, onNext,
   onMarkViewed, onMarkExampleHeard, onMarkPronunciationOk, onMarkQuizSolved,
-  onQuizAnswer, onPronunciationAttempt,
+  onQuizAnswer, onPronunciationAttempt, onSpellingAnswer,
   classWords,
+  mode = 'comprehensive',
+  spellingSettings,
 }) {
-  const [step, setStep] = useState('pronounce')
+  const exampleEnglish = word.easyExample || word.funnyExample || word.realExample
+  const exampleKorean  = word.exampleTranslation
+  const listenOnly = mode === 'listen'
+  const spellingAllowed = !!spellingSettings?.spellingTestEnabled
+  const STEPS = buildSteps(mode, !!exampleEnglish, spellingAllowed)
+
+  const [step, setStep] = useState(STEPS[0])
 
   // Reset to first step whenever the word changes, and cut off whatever
   // audio was playing for the previous word.
   useEffect(() => {
     stopCurrentAudio()
-    setStep('pronounce')
+    setStep(STEPS[0])
     onMarkViewed?.(word.id)
     // Lazily backfill audio AND example text for words that never got either
     // — e.g. the admin's save-time request got cut off by the browser
@@ -469,18 +504,18 @@ export default function WordDetail({
     if ((!word.wordAudioUrl || !word.exampleText) && word.dbId) {
       requestAudioGeneration(word.dbId, word.word, word.meaning, word.exampleText)
     }
-  }, [word.id])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [word.id, mode])
 
-  const exampleEnglish = word.easyExample || word.funnyExample || word.realExample
-  const exampleKorean  = word.exampleTranslation
-
-  const handlePronDone   = () => setStep(exampleEnglish ? 'example' : 'quiz')
-  const handleExampleDone = () => setStep('quiz')
-  const handleQuizDone   = () => { onNext ? onNext() : onBack?.() }
-
-  // Progress dots: pronounce → example (if exists) → quiz
-  const STEPS = ['pronounce', ...(exampleEnglish ? ['example'] : []), 'quiz']
   const stepIdx = STEPS.indexOf(step)
+  // 현재 단계 다음으로 — 모드마다 단계 구성이 달라서 각 단계 이름을
+  // 하드코딩하지 않고 STEPS 배열 안에서 다음 항목으로만 이동. 마지막
+  // 단계였으면 다음 단어로.
+  const goNext = () => {
+    const nextIdx = stepIdx + 1
+    if (nextIdx < STEPS.length) setStep(STEPS[nextIdx])
+    else { onNext ? onNext() : onBack?.() }
+  }
 
   return (
     <div className="min-h-screen p-4 pb-8">
@@ -499,9 +534,10 @@ export default function WordDetail({
         {step === 'pronounce' && (
           <PronounceStep
             word={word}
-            onDone={handlePronDone}
+            onDone={goNext}
             onMarkPronunciationOk={onMarkPronunciationOk}
             onPronunciationAttempt={onPronunciationAttempt}
+            listenOnly={listenOnly}
           />
         )}
         {step === 'example' && exampleEnglish && (
@@ -510,17 +546,28 @@ export default function WordDetail({
             korean={exampleKorean}
             memoryTip={word.memoryTip}
             audioUrl={word.exampleAudioUrl}
-            onDone={handleExampleDone}
+            onDone={goNext}
             onMarkExampleHeard={onMarkExampleHeard}
+            listenOnly={listenOnly}
           />
         )}
         {step === 'quiz' && (
           <QuizStep
             word={word}
             classWords={classWords}
-            onDone={handleQuizDone}
+            onDone={goNext}
             onMarkQuizSolved={onMarkQuizSolved}
             onQuizAnswer={onQuizAnswer}
+          />
+        )}
+        {step === 'spelling' && (
+          <SpellingQuestion
+            word={word.word}
+            meaning={word.meaning}
+            wordAudioUrl={word.wordAudioUrl}
+            hintEnabled={!!spellingSettings?.spellingHintEnabled}
+            onResult={(correct) => onSpellingAnswer?.(word.id, correct)}
+            onDone={goNext}
           />
         )}
       </div>

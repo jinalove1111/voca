@@ -56,6 +56,7 @@ const freshRound = () => ({
   examplesHeard: 0,
   quizSolved: 0,
   pronunciationOk: 0,
+  spellingWrongToday: [], // wordIds missed at least once in a spelling test today (deduped) — the "오답노트" queue the end-of-day review cycles through
 })
 const freshHistoryDay = () => ({
   studied: true,
@@ -68,6 +69,8 @@ const freshHistoryDay = () => ({
   quizTotal: 0,
   pronunciationAttempts: 0, // every pronunciation recording attempt, success or fail (see markPronunciationAttempt)
   missedWordIds: [],      // wordIds answered wrong today (duplicates allowed — frequency = how often missed)
+  spellingCorrect: 0,     // spelling test analytics — first-try correct count
+  spellingTotal: 0,       // spelling test analytics — total first attempts
 })
 
 function freshRecord(name) {
@@ -98,7 +101,7 @@ function migrateOldData(name) {
   rec.missions = readOld(oldKey(name, 'missions'), [])
   rec.cleared = readOld(oldKey(name, 'cleared'), [])
   const oldRound = readOld(oldKey(name, 'round'), null)
-  if (oldRound && oldRound.date === todayStr()) rec.round = oldRound
+  if (oldRound && oldRound.date === todayStr()) rec.round = { spellingWrongToday: [], ...oldRound }
   const oldHistory = readOld(oldKey(name, 'history'), {})
   // Old history used `missionsCompleted` as a repeat counter — map it onto
   // the new fields as a best-effort guess (>=1 repeat implies all 4
@@ -114,6 +117,8 @@ function migrateOldData(name) {
     quizTotal: 0,
     pronunciationAttempts: 0,
     missedWordIds: [],
+    spellingCorrect: 0,
+    spellingTotal: 0,
   }]))
   rec.milestoneStreak = readOld(oldKey(name, 'milestoneStreak'), 0) || 0
   rec.starBadgeThreshold = readOld(oldKey(name, 'starBadgeThreshold'), 0) || 0
@@ -372,6 +377,32 @@ export function useStudent(name) {
   const markPronunciationAttempt = useCallback(() => {
     bumpHistory(day => ({ pronunciationAttempts: (day.pronunciationAttempts || 0) + 1 }))
   }, [bumpHistory])
+
+  // 쓰기 시험(Spelling Test) — 정답률 통계는 history(오늘 하루 누적)에,
+  // 오답노트 큐는 round(오늘 하루치, 자정에 초기화)에 따로 둠. 큐는
+  // "오늘 학습이 끝나면 자동 복습" 화면이 그대로 순회할 목록이라 굳이
+  // history에 겹쳐 넣지 않고 round 쪽에만 둠 — 두 값 모두 자정 리셋
+  // 타이밍이 같아서 항상 같은 날짜 범위를 가리킴.
+  const recordSpellingAnswer = useCallback((wordId, correct) => {
+    bumpHistory(day => ({
+      spellingTotal: (day.spellingTotal || 0) + 1,
+      spellingCorrect: (day.spellingCorrect || 0) + (correct ? 1 : 0),
+    }))
+    if (!correct) {
+      patch(prev => prev.round.spellingWrongToday.includes(wordId)
+        ? {}
+        : { round: { ...prev.round, spellingWrongToday: [...prev.round.spellingWrongToday, wordId] } })
+    }
+  }, [bumpHistory, patch])
+
+  // 복습 화면에서 한 단어를 맞히면 오답노트 큐에서 제거 — 큐가 비면
+  // "오늘 틀린 단어 복습"이 끝난 것.
+  const clearSpellingReviewWord = useCallback((wordId) => {
+    patch(prev => ({
+      round: { ...prev.round, spellingWrongToday: prev.round.spellingWrongToday.filter(id => id !== wordId) },
+    }))
+  }, [patch])
+
   const setLastWordIndex = useCallback((idx) => patch(() => ({ lastWordIndex: idx })), [patch])
 
   const dailyProgress = {
@@ -423,6 +454,7 @@ export function useStudent(name) {
     history, streak,
     lastGamePlayed, setLastGamePlayed, recordGamePlayed,
     recordQuizAnswer, markPronunciationAttempt,
+    recordSpellingAnswer, clearSpellingReviewWord, spellingWrongToday: round.spellingWrongToday,
     lastWordIndex, setLastWordIndex,
     pendingGift: giftQueue[0] || null, dismissGift,
     addStars, addMission, answerMission,

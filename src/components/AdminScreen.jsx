@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData, getClassSettings, setClassSettings } from '../utils/wordLibrary'
 import { getStudents, removeStudent } from '../hooks/useStudent'
 import { buildWeeklyReport } from '../utils/weeklyReport'
 import FeatureManagementPanel from './FeatureManagementPanel'
@@ -25,6 +25,53 @@ function downloadCsv(filename, rows) {
 }
 
 const tomorrowIsoStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10) }
+
+// 쓰기 시험(Spelling Test) 반별 설정 — 쓰기시험 사용 여부/철자 힌트 사용
+// 여부/오답 반복 횟수. 기본값이 전부 꺼짐/3회라, 관리자가 여기서 직접
+// 켜기 전까지는 학생 쪽에 아무 변화도 없음(WordBrowser의 모드 선택에서
+// "쓰기"/"종합"의 스펠링 단계가 숨겨진 채로 유지됨).
+function SpellingSettingsPanel({ targetClass, onSaved }) {
+  const [settings, setSettings] = useState(() => getClassSettings(targetClass))
+  const [saving, setSaving] = useState(false)
+
+  const save = async (next) => {
+    setSettings(next) // 즉시 반영 (낙관적 업데이트) — 실패하면 아래서 되돌림
+    setSaving(true)
+    try {
+      await setClassSettings(targetClass, next)
+      onSaved?.()
+    } catch (err) {
+      alert('설정 저장 중 오류가 발생했어요: ' + (err.message || err))
+      setSettings(getClassSettings(targetClass)) // 실패 시 이전 값으로 복구
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-purple-50 rounded-xl p-3 space-y-2">
+      <p className="text-xs font-black text-purple-700">✏️ 쓰기 시험 설정</p>
+      <label className="flex items-center justify-between text-xs font-bold text-gray-700">
+        쓰기 시험 사용
+        <input type="checkbox" checked={settings.spellingTestEnabled} disabled={saving}
+          onChange={e => save({ ...settings, spellingTestEnabled: e.target.checked })}
+          className="w-5 h-5 accent-purple-500" />
+      </label>
+      <label className="flex items-center justify-between text-xs font-bold text-gray-700">
+        철자 힌트 사용
+        <input type="checkbox" checked={settings.spellingHintEnabled} disabled={saving}
+          onChange={e => save({ ...settings, spellingHintEnabled: e.target.checked })}
+          className="w-5 h-5 accent-purple-500" />
+      </label>
+      <label className="flex items-center justify-between text-xs font-bold text-gray-700 gap-2">
+        오답 반복 횟수
+        <input type="number" min={1} max={10} value={settings.wrongAnswerRepeatCount} disabled={saving}
+          onChange={e => save({ ...settings, wrongAnswerRepeatCount: e.target.value })}
+          className="w-16 border-2 border-purple-200 rounded-lg px-2 py-1 text-center font-bold bg-white" />
+      </label>
+    </div>
+  )
+}
 
 // v1.3 "날짜별 숙제 배정" — 오늘이 아닌 미래 날짜(내일 이후)에 미리 단어를
 // 배정해두는 UI. 과거 날짜는 min 속성으로 아예 선택 못 하게 막아 이미
@@ -1061,6 +1108,8 @@ export default function AdminScreen({ onBack }) {
                         </div>
 
                         <FutureAssignmentPlanner targetClass={c} words={words} />
+
+                        <SpellingSettingsPanel targetClass={c} onSaved={refresh} />
 
                         <div className="bg-gray-50 rounded-xl p-3">
                           <p className="text-xs font-black text-gray-500 mb-2">👦 이 반 학생 ({studentsInClass.length}명)</p>

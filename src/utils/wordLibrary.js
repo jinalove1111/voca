@@ -142,13 +142,55 @@ async function seedDefaultClasses() {
 export function initWordLibrary() {
   if (_initPromise) return _initPromise
   _initPromise = (async () => {
-    await Promise.all([refreshWordLibrary(), refreshStudents()])
+    await Promise.all([refreshWordLibrary(), refreshStudents(), refreshClassSettings()])
     if (Object.keys(_cache).length === 0) {
       await seedDefaultClasses()
       await refreshWordLibrary()
     }
   })()
   return _initPromise
+}
+
+// ── 쓰기 시험(Spelling Test) 반별 관리자 설정 ──────────────────────────────
+// 별도의 격리된 조회 — classes 테이블의 select 목록에 이 컬럼들을 바로
+// 끼워 넣지 않는 이유: supabase_spelling_test_schema.sql이 아직 실행되기
+// 전이면 그 컬럼들 자체가 없어서 select 자체가 에러가 나고, 그게
+// refreshWordLibrary() 안에 있으면 앱 전체(반/단어 로딩)가 깨짐. 이 조회는
+// 완전히 분리해서 실패해도 그냥 "전부 꺼짐"으로 안전하게 기본값 처리 —
+// SQL을 실행하기 전에 이 코드가 먼저 배포돼도 앱이 절대 깨지지 않음.
+let _classSettings = {}
+const DEFAULT_CLASS_SETTINGS = { spellingTestEnabled: false, spellingHintEnabled: false, wrongAnswerRepeatCount: 3 }
+
+export async function refreshClassSettings() {
+  try {
+    const { data, error } = await supabase
+      .from('classes').select('name,spelling_test_enabled,spelling_hint_enabled,wrong_answer_repeat_count')
+    if (error) throw error
+    _classSettings = Object.fromEntries((data || []).map((c) => [c.name, {
+      spellingTestEnabled: !!c.spelling_test_enabled,
+      spellingHintEnabled: !!c.spelling_hint_enabled,
+      wrongAnswerRepeatCount: c.wrong_answer_repeat_count ?? 3,
+    }]))
+  } catch (err) {
+    console.warn('[wordLibrary] class settings fetch failed (spelling_test_schema.sql이 아직 실행 안 됐을 수 있음, 전부 꺼짐으로 처리):', err.message)
+    _classSettings = {}
+  }
+}
+
+export function getClassSettings(className) {
+  return _classSettings[className] || DEFAULT_CLASS_SETTINGS
+}
+
+export async function setClassSettings(className, settings) {
+  const classId = _cache[className]?.id
+  if (!classId) return
+  const payload = {}
+  if ('spellingTestEnabled' in settings) payload.spelling_test_enabled = !!settings.spellingTestEnabled
+  if ('spellingHintEnabled' in settings) payload.spelling_hint_enabled = !!settings.spellingHintEnabled
+  if ('wrongAnswerRepeatCount' in settings) payload.wrong_answer_repeat_count = Number(settings.wrongAnswerRepeatCount) || 3
+  const { error } = await supabase.from('classes').update(payload).eq('id', classId)
+  if (error) throw error
+  await refreshClassSettings()
 }
 
 // ── DB write helpers (do not touch the class_type of an existing class) ───

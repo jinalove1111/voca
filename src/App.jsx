@@ -13,10 +13,11 @@ import PizzaGame from './components/PizzaGame'
 import TrainGame from './components/TrainGame'
 import BonusChoiceScreen from './components/BonusChoiceScreen'
 import GiftReveal from './components/GiftReveal'
+import SpellingReview from './components/SpellingReview'
 import AdminScreen from './components/AdminScreen'
 import { useStudent } from './hooks/useStudent'
 import { pickNextGame } from './utils/matchGame'
-import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, findStudentByName, getStudentClass, getStudentUnit } from './utils/wordLibrary'
+import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, findStudentByName, getStudentClass, getStudentUnit, getClassSettings } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech, getMicStream } from './utils/speech'
 
 class AppErrorBoundary extends React.Component {
@@ -95,8 +96,18 @@ function AppInner({ student, onLogout }) {
   useEffect(() => { if (screen === 'dashboard') setBalloonFromLesson(false) }, [screen])
   const [currentGameId, setCurrentGameId] = useState('balloon')
   const [refreshTick, setRefreshTick] = useState(0)
+  // 학습 모드(듣기/말하기/쓰기/종합) — 세션 동안만 유지, 매번 앱을 새로
+  // 열면 종합으로 돌아옴(기존 기본 동작과 가장 가까운 모드).
+  const [studyMode, setStudyMode] = useState('comprehensive')
   const studentData                 = useStudent(student)
-  const { cleared, answerMission, missions, addStars, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed } = studentData
+  const { cleared, answerMission, missions, addStars, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord } = studentData
+
+  // 선물상자를 닫은 직후, 오늘 틀린 스펠링 단어가 남아있으면 자동으로
+  // "오늘 틀린 단어 복습"을 시작 — 맞을 때까지 반복(SpellingReview 참고).
+  const handleDismissGift = () => {
+    dismissGift()
+    if (spellingWrongToday.length > 0) setScreen('spellingReview')
+  }
 
   // Rotates through the 4 mini-games, never repeating whichever was played
   // last (across the whole app, not just this checkpoint) — used both by
@@ -113,6 +124,12 @@ function AppInner({ student, onLogout }) {
   const classWords                  = useMemo(() => {
     try { return getStudentWords(student) || [] } catch { return [] }
   }, [student, refreshTick])
+  // 쓰기 시험 반별 설정 — 관리자가 켜지 않았으면 항상 안전한 기본값(전부
+  // 꺼짐)이 돌아오므로, 스키마 SQL을 아직 안 돌렸어도 이 값은 절대
+  // 에러나지 않음 (getClassSettings 참고).
+  const spellingSettings            = useMemo(() => {
+    try { return getClassSettings(getStudentClass(student)) } catch { return { spellingTestEnabled: false, spellingHintEnabled: false, wrongAnswerRepeatCount: 3 } }
+  }, [student, refreshTick])
 
   // Re-pull the latest word AND student data from Supabase whenever the app
   // regains focus (e.g. switching back from another app on mobile) so a word
@@ -126,7 +143,7 @@ function AppInner({ student, onLogout }) {
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible') {
-        Promise.all([refreshWordLibrary(), refreshStudents()])
+        Promise.all([refreshWordLibrary(), refreshStudents(), refreshClassSettings()])
           .then(() => setRefreshTick((t) => t + 1))
           .catch(() => {})
       }
@@ -196,10 +213,16 @@ function AppInner({ student, onLogout }) {
           onGo={setScreen} onLogout={onLogout} onPlayGame={startRandomGame}
           onResumeWord={goToWordIndex} />
       )}
-      {screen === 'wordBrowser'   && <WordBrowser words={classWords} cleared={cleared} onSelect={handleWordSelect} onBack={() => setScreen('dashboard')} />}
+      {screen === 'wordBrowser'   && (
+        <WordBrowser words={classWords} cleared={cleared} onSelect={handleWordSelect} onBack={() => setScreen('dashboard')}
+          mode={studyMode} onModeChange={setStudyMode} spellingEnabled={spellingSettings.spellingTestEnabled} />
+      )}
       {screen === 'wordDetail'    && selectedWord && (
         <WordDetail word={selectedWord}
           classWords={classWords}
+          mode={studyMode}
+          spellingSettings={spellingSettings}
+          onSpellingAnswer={studentData.recordSpellingAnswer}
           onBack={() => setScreen('wordBrowser')}
           onNext={handleNextWord}
           onMarkViewed={studentData.markWordViewed}
@@ -247,7 +270,16 @@ function AppInner({ student, onLogout }) {
           streakDays={pendingGift.streakDays}
           isBadge={pendingGift.isBadge}
           badgeThreshold={pendingGift.badgeThreshold}
-          onClose={dismissGift}
+          onClose={handleDismissGift}
+        />
+      )}
+      {screen === 'spellingReview' && (
+        <SpellingReview
+          wrongWordIds={spellingWrongToday}
+          classWords={classWords}
+          onClearWord={clearSpellingReviewWord}
+          onDone={() => setScreen('dashboard')}
+          hintEnabled={spellingSettings.spellingHintEnabled}
         />
       )}
       <SpeedBtn />

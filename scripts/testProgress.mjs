@@ -188,5 +188,31 @@ console.log('\n7. 퀴즈 정답률/발음 횟수/틀린 단어 (v1.3)')
       d.pronunciationAttempts === 0 && Array.isArray(d.missedWordIds)))
 }
 
+console.log('\n8. 쓰기 시험 오답노트 (spellingWrongToday)')
+{
+  const round = freshRound()
+  check('새 round에 spellingWrongToday 빈 배열 기본값', Array.isArray(round.spellingWrongToday) && round.spellingWrongToday.length === 0)
+
+  // Simulate recordSpellingAnswer's logic: wrong answers get added (deduped), correct answers don't
+  const addWrong = (r, wordId) => r.spellingWrongToday.includes(wordId) ? r : { ...r, spellingWrongToday: [...r.spellingWrongToday, wordId] }
+  let r = round
+  r = addWrong(r, 'apple')
+  r = addWrong(r, 'banana')
+  r = addWrong(r, 'apple') // 중복 — 이미 있으면 추가 안 됨
+  check('apple을 두 번 틀려도 오답노트엔 한 번만 기록됨(중복 제거)', r.spellingWrongToday.filter(w => w === 'apple').length === 1)
+  check('오답노트에 apple, banana 둘 다 있음', r.spellingWrongToday.includes('apple') && r.spellingWrongToday.includes('banana'))
+
+  // Simulate clearSpellingReviewWord's logic: removes one word from the queue
+  const clear = (r, wordId) => ({ ...r, spellingWrongToday: r.spellingWrongToday.filter(id => id !== wordId) })
+  r = clear(r, 'apple')
+  check('복습에서 apple을 맞히면 오답노트에서 제거됨', !r.spellingWrongToday.includes('apple'))
+  check('banana는 그대로 남아있음', r.spellingWrongToday.includes('banana'))
+  r = clear(r, 'banana')
+  check('전부 맞히면 오답노트가 빈 배열이 됨(복습 종료 조건)', r.spellingWrongToday.length === 0)
+
+  const day = freshHistoryDay()
+  check('새 히스토리 day에 spellingCorrect/spellingTotal 기본값 0', day.spellingCorrect === 0 && day.spellingTotal === 0)
+}
+
 console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n${failures}개 테스트 실패 ❌`)
 process.exit(failures === 0 ? 0 : 1)

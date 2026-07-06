@@ -1,7 +1,18 @@
 import { useState, useMemo } from 'react'
 
-export default function WordBrowser({ words, cleared, onSelect, onBack }) {
+const MODES = [
+  { id: 'listen',        label: '듣기',  emoji: '🔊' },
+  { id: 'speak',         label: '말하기', emoji: '🎤' },
+  { id: 'write',         label: '쓰기',  emoji: '✏️' },
+  { id: 'comprehensive', label: '종합',  emoji: '🏆' },
+]
+
+export default function WordBrowser({ words, cleared, onSelect, onBack, mode, onModeChange, spellingEnabled }) {
   const [query, setQuery] = useState('')
+  // 쓰기 시험이 이 반에서 꺼져 있으면(관리자 설정), "쓰기" 전용 모드만
+  // 숨김 — "종합"은 그대로 두되 WordDetail이 스펠링 단계를 건너뛰어서
+  // 기존 3단계(발음/예문/퀴즈)로 자연스럽게 동작함.
+  const visibleModes = spellingEnabled ? MODES : MODES.filter(m => m.id !== 'write')
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim()
@@ -20,6 +31,19 @@ export default function WordBrowser({ words, cleared, onSelect, onBack }) {
       </div>
 
       <div className="max-w-lg mx-auto">
+        {onModeChange && (
+          <div className="grid grid-cols-4 gap-2 mb-4">
+            {visibleModes.map(m => (
+              <button key={m.id} onClick={() => onModeChange(m.id)}
+                className={`rounded-2xl py-3 text-center btn-press transition-all ${
+                  mode === m.id ? 'bg-blue-500 text-white card-shadow' : 'bg-white text-gray-500 border-2 border-gray-200'}`}>
+                <div className="text-xl">{m.emoji}</div>
+                <div className="text-xs font-black mt-0.5">{m.label}</div>
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="relative mb-4">
           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl">🔍</span>
           <input type="text" value={query} onChange={e => setQuery(e.target.value)}
