@@ -524,6 +524,43 @@ export const getStudentWords = (name) => {
   }
 }
 
+// v1.3 관리자 대시보드용 — 반 학생들의 누적 진행도 + 최근 일별 기록을 한
+// 번에 배치 조회 (학생별로 N번 조회하지 않음). 최근 60일로 제한해 계정이
+// 오래될수록 쿼리가 무한정 커지지 않게 함 — "최근 7일"/최근 정답률·발음
+// 횟수·많이 틀린 단어 전부 이 정도 기간이면 충분히 의미 있는 표본.
+export async function fetchDashboardData(studentNames) {
+  const ids = studentNames.map(n => _students[n]?.id).filter(Boolean)
+  if (ids.length === 0) return []
+
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() - 60)
+  const cutoffStr = cutoff.toISOString().slice(0, 10)
+
+  const [progressRes, dailyRes] = await Promise.all([
+    supabase.from('student_progress').select('*').in('student_id', ids),
+    supabase.from('student_daily_progress').select('*').in('student_id', ids).gte('date', cutoffStr).order('date', { ascending: false }),
+  ])
+  if (progressRes.error) throw progressRes.error
+  if (dailyRes.error) throw dailyRes.error
+
+  const progressByStudent = Object.fromEntries((progressRes.data || []).map(p => [p.student_id, p]))
+  const dailyByStudent = {}
+  ;(dailyRes.data || []).forEach(d => {
+    if (!dailyByStudent[d.student_id]) dailyByStudent[d.student_id] = []
+    dailyByStudent[d.student_id].push(d)
+  })
+
+  return studentNames.map(name => {
+    const id = _students[name]?.id
+    return {
+      name,
+      studentId: id || null,
+      progress: id ? (progressByStudent[id] || null) : null,
+      dailyRows: id ? (dailyByStudent[id] || []) : [],
+    }
+  })
+}
+
 // v1.3 관리자용 — 오늘 이 반에 배정된 단어 slug 목록 (없으면 빈 배열 =
 // "배정 안 함", getStudentWords는 이 경우 유닛 전체 단어를 그대로 보여줌).
 export function getTodaysAssignmentWordIds(className) {

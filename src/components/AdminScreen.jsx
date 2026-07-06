@@ -1,10 +1,10 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment } from '../utils/wordLibrary'
-
-const wordSlug = (word) => word.toLowerCase().replace(/\s+/g, '_')
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, fetchDashboardData } from '../utils/wordLibrary'
 import { getStudents, removeStudent } from '../hooks/useStudent'
 import FeatureManagementPanel from './FeatureManagementPanel'
+
+const wordSlug = (word) => word.toLowerCase().replace(/\s+/g, '_')
 
 // CSV 셀 안전 이스케이프 — 이름/반/유닛에 쉼표·따옴표·줄바꿈이 섞여도 깨지지 않게.
 function csvCell(v) {
@@ -193,6 +193,140 @@ function StudentManagement() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+const todayIsoStr = () => new Date().toISOString().slice(0, 10)
+
+// v1.3 관리자 대시보드 — 반 선택 시 그 반 학생들의 누적 진행도(별/스티커/
+// 클리어 단어 수/스트릭) + 최근 60일 일별 기록(오늘 공부 여부, 숙제=오늘의
+// 단어 배정 완료 여부, 퀴즈 정답률, 발음 연습 횟수, 많이 틀린 단어)을
+// fetchDashboardData()로 한 번에 배치 조회해서 보여줌. Supabase 동기화가
+// 아직 안 된 학생(방금 가입해서 첫 동기화 전 등)은 "기록 없음"으로 표시될
+// 뿐 에러가 나지 않음.
+function AdminDashboard() {
+  const classList = getClassNames()
+  const [selectedClass, setSelectedClass] = useState(classList[0] || '')
+  const [loading, setLoading] = useState(false)
+  const [rows, setRows] = useState([])
+  const [expanded, setExpanded] = useState(null)
+
+  const wordLookup = useMemo(() => {
+    if (!selectedClass) return {}
+    const units = getClassUnits(selectedClass) || []
+    const map = {}
+    units.forEach(u => (u.words || []).forEach(w => { map[wordSlug(w.word)] = w }))
+    return map
+  }, [selectedClass])
+
+  const load = async (className) => {
+    if (!className) { setRows([]); return }
+    setLoading(true)
+    try {
+      const names = getStudentsInClass(className).map(s => s.name)
+      setRows(await fetchDashboardData(names))
+    } catch (err) {
+      alert('반 현황을 불러오는 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load(selectedClass) }, [selectedClass]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="space-y-3">
+      <div className="bg-white rounded-3xl card-shadow p-5">
+        <p className="text-sm font-black text-gray-700 mb-3">📊 반별 학생 현황</p>
+        <div className="flex gap-2">
+          <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)}
+            className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 font-bold bg-white">
+            <option value="">반 선택</option>
+            {classList.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <button onClick={() => load(selectedClass)}
+            className="bg-purple-100 text-purple-600 font-bold px-3 rounded-xl btn-press">🔄</button>
+        </div>
+      </div>
+
+      {loading && <p className="text-center text-gray-400 text-sm py-6">불러오는 중...</p>}
+      {!loading && selectedClass && rows.length === 0 && (
+        <p className="text-center text-gray-400 text-sm py-6">이 반에 학생이 없어요.</p>
+      )}
+
+      {!loading && rows.map(r => {
+        const today = r.dailyRows.find(d => d.date === todayIsoStr())
+        const studiedToday = !!today && today.categories_completed > 0
+        const homeworkDone = (today?.categories_completed || 0) >= 4
+        const last7 = r.dailyRows.slice(0, 7)
+        const quizCorrect = r.dailyRows.reduce((s, d) => s + (d.quiz_correct || 0), 0)
+        const quizTotal = r.dailyRows.reduce((s, d) => s + (d.quiz_total || 0), 0)
+        const quizAccuracy = quizTotal > 0 ? Math.round((quizCorrect / quizTotal) * 100) : null
+        const pronAttempts = r.dailyRows.reduce((s, d) => s + (d.pronunciation_attempts || 0), 0)
+        const missCount = {}
+        r.dailyRows.forEach(d => (d.missed_word_ids || []).forEach(id => { missCount[id] = (missCount[id] || 0) + 1 }))
+        const topMissed = Object.entries(missCount).sort((a, b) => b[1] - a[1]).slice(0, 5)
+        const isOpen = expanded === r.name
+
+        return (
+          <div key={r.name} className="bg-white rounded-2xl card-shadow p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-black text-gray-800">{r.name}</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {studiedToday ? '✅ 오늘 공부함' : '⬜ 오늘 아직 안 함'} · {homeworkDone ? '✅ 숙제 완료' : '⬜ 숙제 미완료'}
+                </p>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="font-black text-yellow-600">⭐ {r.progress?.total_stars ?? 0}</p>
+                <p className="text-xs text-orange-400">🔥 {r.progress?.streak ?? 0}일 연속</p>
+              </div>
+            </div>
+            <button onClick={() => setExpanded(isOpen ? null : r.name)}
+              className="mt-2 text-xs text-blue-500 font-bold btn-press">
+              {isOpen ? '접기 ▲' : '자세히 보기 ▼'}
+            </button>
+            {isOpen && (
+              <div className="mt-3 pt-3 border-t border-gray-100 space-y-3 text-sm">
+                <div>
+                  <p className="text-xs font-black text-gray-500 mb-1">최근 7일 (숫자 = 0~4개 미션 완료)</p>
+                  {last7.length === 0 ? (
+                    <p className="text-gray-400 text-xs">기록 없음 (아직 동기화 전이거나 공부한 적 없음)</p>
+                  ) : (
+                    <div className="flex gap-1">
+                      {last7.map(d => (
+                        <div key={d.date} title={d.date}
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black ${
+                            d.categories_completed >= 4 ? 'bg-green-400 text-white' :
+                            d.categories_completed > 0  ? 'bg-yellow-200 text-yellow-700' :
+                                                          'bg-gray-100 text-gray-400'}`}>
+                          {d.categories_completed}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <p>퀴즈 정답률: <span className="font-black">{quizAccuracy !== null ? `${quizAccuracy}% (${quizCorrect}/${quizTotal})` : '기록 없음'}</span></p>
+                <p>발음 연습 횟수: <span className="font-black">{pronAttempts}회</span></p>
+                <p>스티커 <span className="font-black">{r.progress?.stickers_count ?? 0}개</span> · 클리어한 단어 <span className="font-black">{r.progress?.cleared_count ?? 0}개</span></p>
+                <div>
+                  <p className="text-xs font-black text-gray-500 mb-1">많이 틀린 단어</p>
+                  {topMissed.length === 0 ? <p className="text-gray-400 text-xs">없음</p> : (
+                    <div className="flex flex-wrap gap-1">
+                      {topMissed.map(([slug, count]) => (
+                        <span key={slug} className="bg-red-50 text-red-600 rounded-lg px-2 py-1 text-xs font-bold">
+                          {wordLookup[slug]?.word || slug} ×{count}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -647,7 +781,7 @@ export default function AdminScreen({ onBack }) {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6 overflow-x-auto">
-          {[['classes','📚 반 관리'],['students','👦 학생 관리'],['excel','📊 Excel'],['pdf','📄 PDF'],['features','🎯 기능']].map(([k,l]) => (
+          {[['classes','📚 반 관리'],['students','👦 학생 관리'],['dashboard','📊 대시보드'],['excel','📊 Excel'],['pdf','📄 PDF'],['features','🎯 기능']].map(([k,l]) => (
             <button key={k} onClick={() => setTab(k)}
               className={`py-2 px-3 rounded-xl font-black text-sm btn-press transition-colors whitespace-nowrap ${tab === k ? 'bg-purple-500 text-white' : 'bg-white text-gray-500 border-2 border-gray-200'}`}>
               {l}
@@ -870,6 +1004,7 @@ export default function AdminScreen({ onBack }) {
         )}
 
         {tab === 'students' && <StudentManagement />}
+        {tab === 'dashboard' && <AdminDashboard />}
         {tab === 'excel' && <ExcelUpload onDone={() => { refresh(); setTab('classes') }} />}
         {tab === 'pdf'   && <PdfUpload   onDone={() => { refresh(); setTab('classes') }} />}
         {tab === 'features' && <FeatureManagementPanel />}
