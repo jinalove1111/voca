@@ -265,10 +265,10 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
 
   return (
     <div className="space-y-4">
-      <div className="bg-gradient-to-br from-blue-500 to-purple-500 rounded-3xl p-6 text-white card-shadow">
+      <div className="bg-gradient-to-br from-blue-500 to-purple-500 rounded-3xl p-6 text-white card-shadow word-card">
         <div className="text-center mb-4">
-          <button onClick={playWord} className="btn-press">
-            <h1 className="text-5xl font-black hover:scale-110 transition-transform">{word.word}</h1>
+          <button onClick={playWord} className="btn-press max-w-full">
+            <h1 className="word-text font-black hover:scale-110 transition-transform">{word.word}</h1>
           </button>
           <p className="text-blue-200 text-xs mt-1">탭하면 발음이 나와요 👆</p>
           <div className="bg-white/20 rounded-2xl px-4 py-3 mt-3 inline-block">
@@ -412,8 +412,8 @@ function QuizStep({ word, classWords, onDone, onMarkQuizSolved, onQuizAnswer }) 
     <div className="space-y-4">
       <div className="bg-white rounded-3xl card-shadow p-6">
         <p className="text-center text-gray-500 font-bold text-sm mb-4">🎮 뜻 맞히기</p>
-        <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-5 text-center text-white mb-5">
-          <p className="text-4xl font-black">{word.word}</p>
+        <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-5 text-center text-white mb-5 word-card">
+          <p className="word-text font-black">{word.word}</p>
           <p className="text-purple-200 text-sm mt-1">이 단어의 뜻은?</p>
         </div>
         <div className="space-y-2">

@@ -378,9 +378,9 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
         <div className="bg-white rounded-3xl card-shadow p-6 mb-4">
           <p className="text-center text-gray-400 text-sm font-bold mb-4">이 단어의 뜻은? 🤔</p>
 
-          <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-6 text-center text-white mb-6">
-            <button onClick={() => playWordAudio(current.word.wordAudioUrl, current.word.word)} className="btn-press">
-              <p className="text-5xl font-black hover:scale-110 transition-transform">{current.word.word}</p>
+          <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-6 text-center text-white mb-6 word-card">
+            <button onClick={() => playWordAudio(current.word.wordAudioUrl, current.word.word)} className="btn-press max-w-full">
+              <p className="word-text font-black hover:scale-110 transition-transform">{current.word.word}</p>
             </button>
             <p className="text-purple-200 text-xs mt-1">탭하면 발음 🔊</p>
           </div>

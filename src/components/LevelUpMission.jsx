@@ -80,8 +80,8 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
                 </div>
               </div>
 
-              <div className="bg-gradient-to-br from-red-500 to-rose-600 rounded-2xl p-5 text-white text-center mb-5">
-                <p className="text-4xl font-black">{w?.word}</p>
+              <div className="bg-gradient-to-br from-red-500 to-rose-600 rounded-2xl p-5 text-white text-center mb-5 word-card">
+                <p className="word-text font-black">{w?.word}</p>
                 <p className="text-red-200 text-sm mt-1">{w?.meaning}</p>
               </div>
 

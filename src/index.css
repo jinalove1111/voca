@@ -48,6 +48,26 @@ h1, h2 {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
+/* Big word-display cards (pronounce/quiz/level-up mission) — a long phrase
+   like "according to" was overflowing past the card's right edge on real
+   phones instead of wrapping, because these are plain <p>/<h1> elements
+   whose text sizing/wrapping wasn't guaranteed against the card's fixed
+   width. .word-card clips as a hard guarantee even if wrapping ever fails
+   for some other reason; .word-text does the actual wrapping/shrinking. */
+.word-card {
+  overflow: hidden;
+}
+
+.word-text {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: keep-all;
+  text-align: center;
+  line-height: 1.15;
+  font-size: clamp(28px, 9vw, 48px);
+}
+
 .btn-press {
   transition: all 0.1s ease;
 }
