@@ -1,10 +1,10 @@
 import { useState, useMemo } from 'react'
 
 const MODES = [
-  { id: 'listen',        label: '듣기',  emoji: '🔊' },
-  { id: 'speak',         label: '말하기', emoji: '🎤' },
-  { id: 'write',         label: '쓰기',  emoji: '✏️' },
-  { id: 'comprehensive', label: '종합',  emoji: '🏆' },
+  { id: 'study',         label: '공부하기', emoji: '📖' },
+  { id: 'quiz',          label: '퀴즈',    emoji: '🎮' },
+  { id: 'write',         label: '쓰기',    emoji: '✏️' },
+  { id: 'comprehensive', label: '종합',    emoji: '🏆' },
 ]
 
 export default function WordBrowser({ words, cleared, onSelect, onBack, mode, onModeChange, spellingEnabled }) {
