@@ -13,7 +13,7 @@ function getAudioMimeType() {
 // ── SpeechBtn ─────────────────────────────────────────────────────────────────
 // onAnyResult fires when: pronunciation success OR tries >= 2 (fail)
 // This lets the parent know it's safe to show a "계속" button.
-function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5000, onSuccess, onAnyResult }) {
+function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5000, onSuccess, onAnyResult, onAttempt }) {
   const [phase, setPhase] = useState('idle')
   const [msg, setMsg]     = useState('')
   const [myRecUrl, setUrl] = useState(null)
@@ -84,6 +84,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
       console.log('[WordDetail] STEP7 Success or Fail:', nextPhase)
       clearTimeout(hangTimerRef.current)
       try { mrRef.current?.stop?.() } catch {}
+      if (countTry || success) onAttempt?.()
       if (success) { onSuccess?.(); onAnyResult?.() }
       if (countTry) {
         setTries(prev => {
@@ -247,7 +248,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
 }
 
 // ── Step 1: 발음 연습 ──────────────────────────────────────────────────────────
-function PronounceStep({ word, onDone, onMarkPronunciationOk }) {
+function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAttempt }) {
   const [canProceed, setCanProceed] = useState(false)
 
   const playWord = () => {
@@ -273,6 +274,7 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk }) {
           maxMs={5000}
           onSuccess={onMarkPronunciationOk}
           onAnyResult={() => setCanProceed(true)}
+          onAttempt={onPronunciationAttempt}
         />
       </div>
 
@@ -353,7 +355,7 @@ function ExampleStep({ english, korean, memoryTip, audioUrl, onDone, onMarkExamp
 // ── Step 3: 퀴즈 ───────────────────────────────────────────────────────────────
 const FALLBACK_MEANINGS = ['탐험하다','결정하다','변화하다','도착하다','사라지다','만들다','이해하다','중요한','특별한','연습하다']
 
-function QuizStep({ word, classWords, onDone, onMarkQuizSolved }) {
+function QuizStep({ word, classWords, onDone, onMarkQuizSolved, onQuizAnswer }) {
   const options = useMemo(() => {
     const pool = (classWords || []).filter(w => w.id !== word.id && w.meaning && w.meaning !== word.meaning)
     const wrongs = [...pool].sort(() => Math.random() - 0.5).slice(0, 3).map(w => w.meaning)
@@ -374,6 +376,7 @@ function QuizStep({ word, classWords, onDone, onMarkQuizSolved }) {
     if (isAnswered) return
     setSelected(i)
     if (i === correctIdx) onMarkQuizSolved?.()
+    onQuizAnswer?.(word.id, i === correctIdx)
   }
 
   // Auto-advance to the next word a couple seconds after answering, so kids
@@ -442,6 +445,7 @@ function QuizStep({ word, classWords, onDone, onMarkQuizSolved }) {
 export default function WordDetail({
   word, onBack, onNext,
   onMarkViewed, onMarkExampleHeard, onMarkPronunciationOk, onMarkQuizSolved,
+  onQuizAnswer, onPronunciationAttempt,
   classWords,
 }) {
   const [step, setStep] = useState('pronounce')
@@ -497,6 +501,7 @@ export default function WordDetail({
             word={word}
             onDone={handlePronDone}
             onMarkPronunciationOk={onMarkPronunciationOk}
+            onPronunciationAttempt={onPronunciationAttempt}
           />
         )}
         {step === 'example' && exampleEnglish && (
@@ -515,6 +520,7 @@ export default function WordDetail({
             classWords={classWords}
             onDone={handleQuizDone}
             onMarkQuizSolved={onMarkQuizSolved}
+            onQuizAnswer={onQuizAnswer}
           />
         )}
       </div>

@@ -63,6 +63,10 @@ const freshHistoryDay = () => ({
   starsEarned: 0,
   stickersEarned: [],
   gamesPlayed: {},        // gameId -> play count today, e.g. { balloon: 2, fishing: 1 }
+  quizCorrect: 0,         // v1.3 admin analytics — every quiz answer, right or wrong (see recordQuizAnswer)
+  quizTotal: 0,
+  pronunciationAttempts: 0, // every pronunciation recording attempt, success or fail (see markPronunciationAttempt)
+  missedWordIds: [],      // wordIds answered wrong today (duplicates allowed — frequency = how often missed)
 })
 
 function freshRecord(name) {
@@ -105,6 +109,10 @@ function migrateOldData(name) {
     starsEarned: day.starsEarned || 0,
     stickersEarned: day.stickersEarned || [],
     gamesPlayed: {},
+    quizCorrect: 0,
+    quizTotal: 0,
+    pronunciationAttempts: 0,
+    missedWordIds: [],
   }]))
   rec.milestoneStreak = readOld(oldKey(name, 'milestoneStreak'), 0) || 0
   rec.starBadgeThreshold = readOld(oldKey(name, 'starBadgeThreshold'), 0) || 0
@@ -344,6 +352,25 @@ export function useStudent(name) {
       gamesPlayed: { ...(day.gamesPlayed || {}), [gameId]: (day.gamesPlayed?.[gameId] || 0) + 1 },
     }))
   }, [bumpHistory])
+
+  // v1.3 admin-dashboard analytics — deliberately separate from
+  // markQuizSolved (which only fires on a CORRECT answer and drives the
+  // existing mission/round logic, unchanged). This fires on every answer,
+  // right or wrong, purely for the "퀴즈 정답률"/"많이 틀린 단어" admin view.
+  const recordQuizAnswer = useCallback((wordId, correct) => {
+    bumpHistory(day => ({
+      quizTotal: (day.quizTotal || 0) + 1,
+      quizCorrect: (day.quizCorrect || 0) + (correct ? 1 : 0),
+      missedWordIds: correct ? (day.missedWordIds || []) : [...(day.missedWordIds || []), wordId],
+    }))
+  }, [bumpHistory])
+
+  // v1.3 admin-dashboard analytics ("발음 연습 횟수") — every attempted
+  // recording, success or fail. Separate from markPronunciationOk, which
+  // only fires on success and still drives the star/mission logic unchanged.
+  const markPronunciationAttempt = useCallback(() => {
+    bumpHistory(day => ({ pronunciationAttempts: (day.pronunciationAttempts || 0) + 1 }))
+  }, [bumpHistory])
   const setLastWordIndex = useCallback((idx) => patch(() => ({ lastWordIndex: idx })), [patch])
 
   const dailyProgress = {
@@ -367,6 +394,7 @@ export function useStudent(name) {
     missionsCompletedToday, missionFullyDoneToday, giftsToday, todayStars,
     history, streak,
     lastGamePlayed, setLastGamePlayed, recordGamePlayed,
+    recordQuizAnswer, markPronunciationAttempt,
     lastWordIndex, setLastWordIndex,
     pendingGift: giftQueue[0] || null, dismissGift,
     addStars, addMission, answerMission,

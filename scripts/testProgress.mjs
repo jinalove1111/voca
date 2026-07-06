@@ -148,5 +148,45 @@ console.log('\n6. 게임 플레이 기록 (v1.1)')
     Object.values(oldHistoryEntry).every(d => d.gamesPlayed && typeof d.gamesPlayed === 'object'))
 }
 
+console.log('\n7. 퀴즈 정답률/발음 횟수/틀린 단어 (v1.3)')
+{
+  const day = freshHistoryDay()
+  check('새 히스토리 day에 quizCorrect/quizTotal/pronunciationAttempts/missedWordIds 기본값',
+    day.quizCorrect === 0 && day.quizTotal === 0 && day.pronunciationAttempts === 0 &&
+    JSON.stringify(day.missedWordIds) === '[]')
+
+  // Simulate recordQuizAnswer's logic: 2 correct, 1 wrong (word 'apple' missed twice)
+  const simulateAnswer = (d, wordId, correct) => ({
+    ...d,
+    quizTotal: (d.quizTotal || 0) + 1,
+    quizCorrect: (d.quizCorrect || 0) + (correct ? 1 : 0),
+    missedWordIds: correct ? (d.missedWordIds || []) : [...(d.missedWordIds || []), wordId],
+  })
+  let d = day
+  d = simulateAnswer(d, 'banana', true)
+  d = simulateAnswer(d, 'apple', false)
+  d = simulateAnswer(d, 'apple', false)
+  check('3문제 중 1개 정답 -> quizCorrect === 1', d.quizCorrect === 1)
+  check('3문제 시도 -> quizTotal === 3', d.quizTotal === 3)
+  check('apple을 2번 틀림 -> missedWordIds에 apple이 2번 기록됨',
+    d.missedWordIds.filter(w => w === 'apple').length === 2)
+
+  // Simulate markPronunciationAttempt's logic: 2 attempts (success + fail both count)
+  let p = day
+  p = { ...p, pronunciationAttempts: (p.pronunciationAttempts || 0) + 1 }
+  p = { ...p, pronunciationAttempts: (p.pronunciationAttempts || 0) + 1 }
+  check('발음 시도 2번(성공+실패 모두) -> pronunciationAttempts === 2', p.pronunciationAttempts === 2)
+
+  // Migration backfill check, same pattern as gamesPlayed above
+  localStorage.setItem('paulEasyVoca_OldKid2_history', JSON.stringify({
+    'Mon Jan 01 2026': { missionsCompleted: 1, starsEarned: 5, stickersEarned: [] },
+  }))
+  const migrated = migrateOldData('OldKid2').history
+  check('구버전 기록 마이그레이션 시 v1.3 필드도 안전한 기본값으로 채워짐',
+    Object.values(migrated).length > 0 &&
+    Object.values(migrated).every(d => d.quizCorrect === 0 && d.quizTotal === 0 &&
+      d.pronunciationAttempts === 0 && Array.isArray(d.missedWordIds)))
+}
+
 console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n${failures}개 테스트 실패 ❌`)
 process.exit(failures === 0 ? 0 : 1)

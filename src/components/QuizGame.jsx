@@ -29,7 +29,7 @@ function getAudioMimeType() {
 }
 
 // ─── PronStep ───────────────────────────────────────────────────────────────
-function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
+function PronStep({ word, wordAudioUrl, canRecord, onSuccess, onAttempt }) {
   const [phase, setPhase]      = useState('wait')
   // wait | listening | success | fail
   const [msg, setMsg]          = useState('')
@@ -108,6 +108,7 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
         console.log('[QuizGame] recorder stop, blob.size =', blob.size)
         setUrl(URL.createObjectURL(blob))
         setProc(false)
+        onAttempt?.()
         if (blob.size > 0) {
           setPhase('success')
           setMsg('발음 성공! ⭐ 1개 획득!')
@@ -218,7 +219,7 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess }) {
 }
 
 // ─── QuizGame ───────────────────────────────────────────────────────────────
-export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMarkPronunciationOk, onAddStars, initWord, classWords }) {
+export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMarkPronunciationOk, onAddStars, onQuizAnswer, onPronunciationAttempt, initWord, classWords }) {
   const pool = useMemo(() => {
     const all  = classWords && classWords.length > 0 ? classWords : []
     const base = initWord
@@ -263,6 +264,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
     setSelect(optIdx)
     const correct = optIdx === current.correctIdx
     setResults(prev => [...prev, { word: current.word, correct }])
+    onQuizAnswer?.(current.word.id, correct)
 
     if (correct) {
       const msg = KO_PRAISE[Math.floor(Math.random() * KO_PRAISE.length)]
@@ -435,6 +437,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
                 wordAudioUrl={current.word.wordAudioUrl}
                 canRecord={canRecord}
                 onSuccess={handlePronSuccess}
+                onAttempt={onPronunciationAttempt}
               />
             )
           )}

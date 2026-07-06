@@ -197,7 +197,9 @@ function AppInner({ student, onLogout }) {
           onMarkViewed={studentData.markWordViewed}
           onMarkExampleHeard={studentData.markExampleHeard}
           onMarkPronunciationOk={() => { markPronunciationOk(); addStars(1) }}
-          onMarkQuizSolved={studentData.markQuizSolved} />
+          onMarkQuizSolved={studentData.markQuizSolved}
+          onQuizAnswer={studentData.recordQuizAnswer}
+          onPronunciationAttempt={studentData.markPronunciationAttempt} />
       )}
       {screen === 'quiz'          && (
         <QuizGame initWord={selectedWord} classWords={classWords}
@@ -205,7 +207,9 @@ function AppInner({ student, onLogout }) {
           onAddMission={studentData.addMission}
           onMarkQuizSolved={studentData.markQuizSolved}
           onMarkPronunciationOk={markPronunciationOk}
-          onAddStars={addStars} />
+          onAddStars={addStars}
+          onQuizAnswer={studentData.recordQuizAnswer}
+          onPronunciationAttempt={studentData.markPronunciationAttempt} />
       )}
       {screen === 'levelUpMission' && <LevelUpMission missions={missions} words={classWords} onAnswer={handleAnswerMission} onBack={() => setScreen('dashboard')} />}
       {screen === 'diary'         && <DiaryPage studentData={studentData} onBack={() => setScreen('dashboard')} />}
