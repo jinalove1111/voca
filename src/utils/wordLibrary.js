@@ -378,6 +378,42 @@ export async function setStudentsClassBulk(names, className, unitName) {
   await refreshStudents()
 }
 
+// v1.3 admin dashboard — one-way, fire-and-forget sync of a student's
+// progress from their device's localStorage (the source of truth, never
+// touched by this) into Supabase, so the admin can see it from a different
+// device. Every caller already wraps this in .catch(() => {}) — never
+// throw somewhere that would surface as a student-facing error, since
+// missing/offline sync must never block or visibly affect the lesson flow.
+export async function syncStudentProgress(name, { totalStars, clearedCount, streak, stickersCount, daily }) {
+  const s = _students[name]
+  if (!s) return // student not yet known to this device's Supabase cache (e.g. offline at first load) — next sync retries
+  const today = new Date().toISOString().slice(0, 10)
+
+  const { error: progressErr } = await supabase.from('student_progress').upsert({
+    student_id: s.id,
+    total_stars: totalStars,
+    cleared_count: clearedCount,
+    streak,
+    stickers_count: stickersCount,
+    last_studied_date: today,
+    updated_at: new Date().toISOString(),
+  })
+  if (progressErr) throw progressErr
+
+  const { error: dailyErr } = await supabase.from('student_daily_progress').upsert({
+    student_id: s.id,
+    date: today,
+    categories_completed: daily.categoriesCompleted,
+    stars_earned: daily.starsEarned,
+    quiz_correct: daily.quizCorrect,
+    quiz_total: daily.quizTotal,
+    pronunciation_attempts: daily.pronunciationAttempts,
+    missed_word_ids: daily.missedWordIds,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'student_id,date' })
+  if (dailyErr) throw dailyErr
+}
+
 // Returns full word objects for a student, sourced ONLY from Supabase class
 // data — word and meaning always come straight from the DB row, never from
 // the built-in demo bank (data/words.js), even if the text happens to match.

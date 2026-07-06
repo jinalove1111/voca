@@ -9,6 +9,7 @@ import { getRandomSticker, getMilestoneSticker, STICKERS } from '../data/sticker
 // localStorage key, restored fresh from whatever device is used, since the
 // student roster/class itself is already shared via Supabase).
 export { getStudents, addStudent, removeStudent, findStudentByName } from '../utils/wordLibrary'
+import { syncStudentProgress } from '../utils/wordLibrary'
 
 // ── Single unified progress store ───────────────────────────────────────
 // Every per-student value the app tracks (stars, stickers, today's mission
@@ -386,6 +387,33 @@ export function useStudent(name) {
   const giftsToday = todayHistory?.giftsToday || 0 // how many full 4/4 rounds today — for "studied a lot" nudges only, never displayed as "완료한 미션"
   const todayStars = todayHistory?.starsEarned || 0
   const streak = calcStreak(history)
+
+  // v1.3 admin dashboard — fire-and-forget sync to Supabase so the admin can
+  // see a student's progress from a different device, WITHOUT changing how
+  // progress is stored locally (localStorage stays the source of truth for
+  // this student's own device; a sync failure here must never affect it).
+  // Debounced 2s after the record settles so rapid successive updates (e.g.
+  // a quiz streak) don't fire a network write per keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      syncStudentProgress(name, {
+        totalStars: record.totalStars,
+        clearedCount: record.cleared.length,
+        streak,
+        stickersCount: record.stickers.length,
+        daily: {
+          categoriesCompleted: todayHistory?.categoriesCompleted || 0,
+          starsEarned: todayHistory?.starsEarned || 0,
+          quizCorrect: todayHistory?.quizCorrect || 0,
+          quizTotal: todayHistory?.quizTotal || 0,
+          pronunciationAttempts: todayHistory?.pronunciationAttempts || 0,
+          missedWordIds: todayHistory?.missedWordIds || [],
+        },
+      }).catch(() => {})
+    }, 2000)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, record])
 
   return {
     stars, stickerTypes, diaryPlacements, missions,
