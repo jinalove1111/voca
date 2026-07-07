@@ -1,14 +1,17 @@
 import { useEffect, useRef, useMemo, useState } from 'react'
 import { resolveReaction } from '../utils/paulReactions'
 
-// 요청 사양: 기본 표시 크기 180px, 모바일 140~180px, 태블릿 220px,
-// object-fit: contain, width 지정 + height auto. size="sm"/"lg"는 이
-// 기본 크기의 축소/확대 버전(퀴즈/쓰기 등 좁은 피드백 박스에 끼워 넣을
-// 때는 sm, 레벨업 같은 큰 축하 팝업엔 lg).
+// 피드백 캐릭터는 작은 아이콘이 아니라 "메인 캐릭터"로 취급 — 요청
+// 사양대로 모바일 120~160px / 태블릿 160~180px / PC 180~220px 범위.
+// size="sm"이 실제로 거의 모든 화면(퀴즈/쓰기/레벨업미션/미니게임/
+// 단어학습의 정답·오답 피드백)에서 기본으로 쓰이고 있었는데, 예전 값
+// (w-16/w-20 = 64~80px)이 "아이콘처럼 작게 보인다"는 피드백을 받아
+// sm도 md와 동일하게 "메인 캐릭터" 범위로 올림 — 더 이상 작은 티어는
+// 없음. lg만 레벨업 같은 큰 축하 팝업용으로 한 단계 더 큼.
 const SIZE_CLASS = {
-  sm: 'w-16 sm:w-20',
-  md: 'w-[140px] sm:w-[180px] md:w-[220px]',
-  lg: 'w-[200px] sm:w-[240px] md:w-[280px]',
+  sm: 'w-[140px] md:w-[170px] lg:w-[200px]',
+  md: 'w-[140px] md:w-[170px] lg:w-[200px]',
+  lg: 'w-[180px] md:w-[210px] lg:w-[240px]',
 }
 
 // 폴 선생님(Project Paul 공식 마스코트) 리액션 표시 — CTO 설계 변경
@@ -84,7 +87,10 @@ export default function PaulReaction({ reaction: reactionProp, type, message, si
     <img
       src={reaction.image}
       alt=""
-      className={`${sizeClass} h-auto object-contain`}
+      // flex-shrink-0: PaulReaction이 다른 요소와 같은 flex 줄에 놓이는
+      // 곳(예: 홈 화면 추천 배너)에서, 좁은 화면이나 옆 텍스트가 길 때
+      // flexbox의 기본 shrink 동작으로 캐릭터가 찌그러들지 않게 고정.
+      className={`${sizeClass} h-auto object-contain flex-shrink-0`}
       onError={(e) => {
         console.warn(`[Paul] 이미지 로드 실패: ${reaction.id} (${reaction.image})`)
         e.currentTarget.style.display = 'none'
@@ -94,7 +100,7 @@ export default function PaulReaction({ reaction: reactionProp, type, message, si
 
   if (!overlay) {
     return (
-      <div className="flex flex-col items-center gap-1 animate-paul-pop">
+      <div className="flex flex-col items-center gap-1 flex-shrink-0 animate-paul-pop">
         {face}
         {text && <p className="font-black text-current text-center">{text}</p>}
       </div>
