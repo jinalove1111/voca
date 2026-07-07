@@ -8,29 +8,31 @@ import { isSpellingCorrect, spellingHintFor } from '../utils/spelling'
 // 고정 — 이미 이 앱의 "🐢 천천히" 프리셋으로 검증된 값(0.6)을 그대로 재사용.
 const SPELLING_RATE = 0.6
 const SPELLING_GAP_MS = 1000 // 반복 사이 약 1초 대기
+const UNLOCK_AT = 3 // 이 오답 횟수부터 '발음 듣기' 버튼이 활성화됨
 
-// 오답 시 "틀리자마자 발음을 다시 들려주는" 방식은 Active Recall(기억을
-// 스스로 꺼내는 능력)을 기르지 못하고 "듣고 베껴 쓰기"가 되어버림. 그래서
-// 오답 단계별로 다르게 대응함:
-//   1번째 오답: 발음 없이 스스로 다시 시도
-//   2번째 오답: 역시 발음 없이 스스로 다시 시도
-//   3번째 오답: 그제서야 발음을 다시 3번(1초 간격, 느린 속도) 들려줌
-//   4번째(+) 오답: 정답 철자를 보여주고 발음 1번 들려준 뒤, 그 철자를
-//                  그대로 한 번 입력해야 다음 문제로 넘어감(받아쓰기 확인)
+// 쓰기는 받아쓰기가 아니라 "기억 속 철자를 꺼내는 훈련(Active Recall)".
+// 그래서 문제를 시작할 때 발음을 자동 재생하지 않고, 한글 뜻만 보여준
+// 상태에서 학생이 순수하게 기억으로 입력하게 함. 오답 단계별 대응:
+//   1번째 오답: "❌ 다시 한번 생각해보세요!" — 발음/정답 모두 비공개
+//   2번째 오답: "❌ 조금만 더 생각해보세요!" — 여전히 비공개
+//   3번째 오답: 그제서야 '발음 듣기' 버튼이 활성화(자동 재생은 아님 —
+//               학생이 직접 눌러야만 들림)
+//   4번째(+) 오답: 정답 철자 공개 + 발음 1번 자동 재생, 그대로 한 번
+//               입력해야 다음 문제로 넘어감(받아쓰기 확인 단계)
 const WRONG_MSGS = {
   1: '❌ 다시 한번 생각해보세요!',
   2: '❌ 조금만 더 생각해보세요!',
+  3: '❌ 정말 모르겠으면 아래 🔊 버튼을 눌러 들어보세요',
 }
 
 // 쓰기 시험 한 문제 — 영어 단어는 절대 보여주지 않고 한글 뜻만 표시.
 // 학생이 철자를 입력해 제출하면 대소문자/앞뒤 공백을 무시하고 채점.
-// 위 오답 단계 로직을 따라 진행하다가 맞히면 통과. 단어 카드/스피커는
-// 언제 탭해도(자동 재생이 아닌 학생이 스스로 원해서 듣는 경우) 진행
-// 중이던 재생을 멈추고 처음부터 3번 다시 재생 — speech.js의 TTS
-// singleton(claimTtsCall)이 겹쳐 들리는 것을 구조적으로 막아줘서 여기서
-// 따로 잠금 처리할 필요 없음.
+// 위 오답 단계 로직을 따라 진행하다가 맞히면 통과. '발음 듣기'가 활성화된
+// 뒤에는 언제 탭해도 진행 중이던 재생을 멈추고 처음부터 다시 재생 —
+// speech.js의 TTS singleton(claimTtsCall)이 겹쳐 들리는 것을 구조적으로
+// 막아줘서 여기서 따로 잠금 처리할 필요 없음.
 export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnabled, onResult, onDone }) {
-  const [phase, setPhase] = useState('listening') // listening | answer | reveal | correct
+  const [phase, setPhase] = useState('answer') // answer | reveal | correct
   const [wrongCount, setWrongCount] = useState(0)
   const [replaying, setReplaying] = useState(false) // 재생 중 표시만 — 이미 입력한 답은 화면에 그대로 유지됨
   const [input, setInput] = useState('')
@@ -67,29 +69,23 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
 
   const focusInput = () => setTimeout(() => inputRef.current?.focus(), 50)
 
-  // 문제 등장(마운트/단어 변경) — 3번 들려준 뒤 입력창에 자동 포커스.
+  // 문제 등장(마운트/단어 변경) — 발음 자동 재생 없음. 한글 뜻만 보여주고
+  // 바로 입력창에 포커스(모바일 키보드도 바로 뜨도록 — iOS Safari는
+  // 사용자 제스처 밖 focus()를 무시할 수 있어 100% 보장은 어려움).
   useEffect(() => {
-    setPhase('listening')
+    setPhase('answer')
     setWrongCount(0)
     setInput('')
     setShowHint(false)
     reportedRef.current = false
-
-    playSequence(() => {
-      setPhase('answer')
-      // 모바일에서 키보드가 바로 뜨도록 포커스 — 단, iOS Safari는 사용자
-      // 제스처 밖(비동기 콜백)에서 호출된 focus()는 키보드를 안 띄울 수도
-      // 있음(플랫폼 자체 제약이라 100% 보장은 어려움).
-      focusInput()
-    })
+    focusInput()
 
     return () => { cancelRef.current?.(); stopCurrentAudio() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [word, wordAudioUrl])
 
   const playAgain = () => {
-    // phase(입력 상태)는 그대로 유지 — 재생 중이어도 이미 쓴 답이 안 사라짐.
-    // 이건 학생이 스스로 원해서 다시 듣는 경우라 언제나 3번 전체를 들려줌.
+    if (wrongCount < UNLOCK_AT || phase === 'correct') return // 잠금 해제 전엔 무시(버튼도 비활성 상태)
     playSequence(focusInput)
   }
 
@@ -111,33 +107,37 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
     const next = wrongCount + 1
     setWrongCount(next)
 
-    if (next === 3) {
-      // 세 번째 오답에서만 발음을 다시 들려줌(3번, 1초 간격)
-      setPhase('listening')
-      playSequence(() => { setPhase('answer'); focusInput() })
-    } else if (next >= 4) {
-      // 네 번째(이후) 오답 — 정답 공개 + 발음 1번, 그대로 한 번 입력해야 통과
+    if (next >= 4) {
+      // 네 번째(이후) 오답 — 정답 공개 + 발음 1번 자동 재생, 그대로 한 번 입력해야 통과
       setPhase('reveal')
       playOnce('spelling-reveal', focusInput)
     } else {
-      // 1~2번째 오답 — 발음 없이 스스로 다시 떠올려 입력
+      // 1~3번째 오답 — 발음/정답 모두 비공개, 스스로 다시 떠올려 입력
+      // (3번째부터는 '발음 듣기' 버튼만 활성화되고, 자동 재생은 안 됨)
       focusInput()
     }
   }
 
   const hint = spellingHintFor(word)
   const wrongMsg = WRONG_MSGS[wrongCount]
+  const speakerUnlocked = wrongCount >= UNLOCK_AT
 
   return (
     <div className="bg-white rounded-3xl card-shadow p-6 space-y-4">
       <p className="text-center text-gray-500 font-bold text-sm">✏️ 철자 쓰기</p>
 
-      <button onClick={playAgain} disabled={phase === 'correct'}
-        className="w-full bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl p-6 text-center text-white btn-press">
-        <p className={`text-4xl mb-2 ${replaying ? 'animate-pulse' : ''}`}>🔊</p>
-        <p className="text-3xl font-black">{meaning}</p>
-        <p className="text-teal-100 text-xs mt-2">탭하면 발음을 다시 들려줘요 (3번, 천천히)</p>
-      </button>
+      {speakerUnlocked ? (
+        <button onClick={playAgain} disabled={phase === 'correct'}
+          className="w-full bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl p-6 text-center text-white btn-press">
+          <p className={`text-4xl mb-2 ${replaying ? 'animate-pulse' : ''}`}>🔊</p>
+          <p className="text-3xl font-black">{meaning}</p>
+          <p className="text-teal-100 text-xs mt-2">탭하면 발음을 들려줘요 (3번, 천천히)</p>
+        </button>
+      ) : (
+        <div className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-6 text-center">
+          <p className="text-3xl font-black text-gray-700">{meaning}</p>
+        </div>
+      )}
 
       {hintEnabled && phase !== 'correct' && (
         <div className="text-center">
@@ -147,10 +147,6 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
             <button onClick={() => setShowHint(true)} className="text-xs text-teal-500 font-bold btn-press">💡 힌트 보기</button>
           )}
         </div>
-      )}
-
-      {phase === 'listening' && (
-        <p className="text-center text-gray-400 text-sm animate-pulse">🔊 잘 들어보세요... (3번 들려드려요)</p>
       )}
 
       {phase === 'answer' && (
