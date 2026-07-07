@@ -217,11 +217,13 @@ function claimTtsCall(source, word = '') {
 export { claimTtsCall as __claimTtsCallForTest }
 
 export function playAudioUrl(url, opts = {}) {
-  const { times = 1, rate = null, onEnd = null, onError = null } = opts
+  const { times = 1, rate = null, onEnd = null, onError = null, label = '' } = opts
   stopCurrentAudio()
   console.log('[speech] playAudioUrl:', url || '(no url)')
   if (!url) { onError?.('발음 파일이 없습니다.'); return }
   const r = rate ?? getSpeechRate()
+  console.log(`Playing ${label || url}`)
+  console.log(`rate = ${r}`)
   let played = 0
 
   const playOnce = () => {
@@ -298,7 +300,7 @@ export function playWordAudio(url, fallbackText, opts = {}) {
     // claim already happened above for this whole playWordAudio() request,
     // and onEnd/onError are already the guarded versions.
     playAudioUrl(netUrl, {
-      times, rate, onEnd,
+      times, rate, onEnd, label: fallbackText,
       onError: (err) => giveUp(err),
     })
   }
@@ -326,7 +328,7 @@ export function playWordAudio(url, fallbackText, opts = {}) {
   }
 
   if (url) {
-    playAudioUrl(url, { times, rate, onEnd, onError: tryDeviceTts })
+    playAudioUrl(url, { times, rate, onEnd, label: fallbackText, onError: tryDeviceTts })
   } else {
     tryDeviceTts('no stored audio url yet')
   }
@@ -392,6 +394,8 @@ function _rawSpeak(text, opts = {}) {
   // completion, same as before.
   const { onEnd = null, onError = null, rate = null } = opts
   const r = rate ?? getSpeechRate()
+  console.log(`Playing ${text}`)
+  console.log(`rate = ${r}`)
   if (!window.speechSynthesis) { (onError || onEnd)?.('no speechSynthesis'); return }
 
   unlockAudio()
