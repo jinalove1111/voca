@@ -3,6 +3,8 @@ import { playWordAudio, stopCurrentAudio, getMicStream, recordWithAutoStop, spea
 import { requestAudioGeneration } from '../utils/wordLibrary'
 import { isInAppBrowser } from '../utils/browserDetect'
 import InAppBrowserNotice from './InAppBrowserNotice'
+import { pickReaction } from '../utils/paulReactions'
+import PaulReaction from './PaulReaction'
 
 const KO_PRAISE = [
   '야르~ 정답!', '야르! 이건 그냥 맞추네!', '와 대박! 단어 고수인데?',
@@ -236,6 +238,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
   const [pronDone, setPronD]    = useState(false)
   const [praiseMsg, setPraise]  = useState('')
   const [canRecord, setCanRec]  = useState(false)  // unlocks after praise voice ends
+  const [answerPaul, setAnswerPaul] = useState(null) // 이번 문제 정답/오답에 대해 뽑힌 폴 리액션
   const processing              = useRef(false)     // guard against double-select
 
   const current    = pool[idx] || pool[0]
@@ -265,6 +268,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
     const correct = optIdx === current.correctIdx
     setResults(prev => [...prev, { word: current.word, correct }])
     onQuizAnswer?.(current.word.id, correct)
+    setAnswerPaul(pickReaction(correct ? 'success' : 'encourage'))
 
     if (correct) {
       const msg = KO_PRAISE[Math.floor(Math.random() * KO_PRAISE.length)]
@@ -300,6 +304,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
     setPronD(false)
     setPraise('')
     setCanRec(false)
+    setAnswerPaul(null)
   }
 
   // Auto-advance on a WRONG answer only — a correct answer offers a bonus
@@ -318,7 +323,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
     stopCurrentAudio()
     setIdx(0); setSelect(null); setResults([])
     setDone(false); setShowP(false); setPronD(false)
-    setPraise(''); setCanRec(false)
+    setPraise(''); setCanRec(false); setAnswerPaul(null)
   }
 
   if (pool.length === 0) return (
@@ -411,8 +416,9 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
 
           {/* Wrong answer feedback */}
           {isAnswered && !isCorrect && (
-            <div className="mt-4 p-4 rounded-2xl border-2 bg-red-50 border-red-200 text-red-700 animate-slide-up">
-              <p className="font-black">아깝다! 거의 다 왔어! 💪</p>
+            <div className="mt-4 p-4 rounded-2xl border-2 bg-red-50 border-red-200 text-red-700 text-center animate-slide-up">
+              <PaulReaction reaction={answerPaul} message="" size="sm" />
+              <p className="font-black mt-1">아깝다! 거의 다 왔어! 💪</p>
               <p className="text-sm mt-1">정답: <span className="font-black">{current.word.meaning}</span> → 레벨업 미션 추가! ⚔️</p>
             </div>
           )}
@@ -420,8 +426,9 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
           {/* Correct: praise banner */}
           {isCorrect && praiseMsg && (
             <div className="mt-4 p-4 rounded-2xl border-2 bg-yellow-50 border-yellow-300 text-center animate-slide-up">
-              <p className="text-2xl mb-1">🎉</p>
-              <p className="font-black text-yellow-800 text-lg">{praiseMsg}</p>
+              {/* speakPraise()가 이미 음성으로 축하해주므로 효과음 중복 재생 방지 */}
+              <PaulReaction reaction={answerPaul ? { ...answerPaul, sound: null } : null} message="" size="sm" />
+              <p className="font-black text-yellow-800 text-lg mt-1">{praiseMsg}</p>
             </div>
           )}
 

@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { playWordAudio, playRepeating, stopCurrentAudio, playSuccessSound } from '../utils/speech'
 import { isSpellingCorrect, spellingHintFor } from '../utils/spelling'
+import { getReactionById, pickReaction } from '../utils/paulReactions'
+import PaulReaction from './PaulReaction'
+
+// 오답 1~3단계는 폴 선생님 리액션이 정확히 정해져 있음(랜덤 아님) —
+// Project Paul 캐릭터 시스템 스펙의 "1번째=Paul Thinking, 2번째=Paul
+// Almost, 3번째=Paul Retry" 그대로.
+const WRONG_PAUL_ID = { 1: 'thinking', 2: 'almost', 3: 'retry' }
 
 // 초등학생이 발음을 듣고 철자를 떠올릴 수 있을 만큼 천천히, 그러나
 // 로봇처럼 부자연스럽게 들리지 않는 속도. 앱 전체 재생 속도 설정
@@ -39,6 +46,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
   const [replaying, setReplaying] = useState(false) // 재생 중 표시만 — 이미 입력한 답은 화면에 그대로 유지됨
   const [input, setInput] = useState('')
   const [showHint, setShowHint] = useState(false)
+  const [correctPaul, setCorrectPaul] = useState(null)
   const reportedRef = useRef(false)
   const cancelRef = useRef(null)
   const inputRef = useRef(null)
@@ -95,6 +103,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
   // 잘리지 않고 다 들리도록 onDone을 곧바로 부르지 않음.
   const markCorrect = () => {
     setPhase('correct')
+    setCorrectPaul(pickReaction('success'))
     playSuccessSound()
     setTimeout(() => onDone?.(), 700)
   }
@@ -154,7 +163,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
       {phase === 'answer' && (
         <div className="space-y-3 animate-slide-up">
           {wrongMsg && (
-            <p className="text-center text-red-500 font-bold text-sm">{wrongMsg}</p>
+            <PaulReaction reaction={getReactionById(WRONG_PAUL_ID[wrongCount])} message={wrongMsg} size="sm" />
           )}
           <input ref={inputRef} type="text" value={input} onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && submitAnswer()}
@@ -170,7 +179,8 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
       {phase === 'reveal' && (
         <div className="space-y-3 animate-slide-up">
           <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-4 text-center">
-            <p className="text-red-500 font-bold text-sm mb-1">정답은</p>
+            <PaulReaction reaction={getReactionById('sad')} message="" size="sm" />
+            <p className="text-red-500 font-bold text-sm mb-1 mt-1">정답은</p>
             <p className="text-red-600 font-black text-2xl tracking-wide">{word}</p>
             <p className="text-red-500 font-bold text-sm mt-1">입니다</p>
           </div>
@@ -188,8 +198,10 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
 
       {phase === 'correct' && (
         <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-4 text-center animate-slide-up">
-          <p className="text-3xl mb-1">✅</p>
-          <p className="text-green-600 font-black text-lg">정답이에요! &ldquo;{word}&rdquo;</p>
+          {/* playSuccessSound()가 이미 위 markCorrect()에서 재생하므로,
+              같은 소리가 두 번 겹치지 않도록 여기선 sound를 꺼서 넘김. */}
+          <PaulReaction reaction={correctPaul ? { ...correctPaul, sound: null } : null} size="sm" />
+          <p className="text-green-600 font-black text-lg mt-1">정답이에요! &ldquo;{word}&rdquo;</p>
         </div>
       )}
     </div>

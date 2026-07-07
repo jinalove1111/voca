@@ -1,6 +1,8 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { playWordAudio, stopCurrentAudio, playSuccessSound, unlockAudio } from '../utils/speech'
 import { ROUNDS, STAR_PER_CORRECT, PERFECT_BONUS, pickNextTarget, buildOptions, TIER } from '../utils/matchGame'
+import { pickReaction } from '../utils/paulReactions'
+import PaulReaction from './PaulReaction'
 
 // Generic "hear the word, tap the matching meaning" mini-game shell shared
 // by every themed game (balloon/fishing/pizza/train) — only `theme` differs
@@ -20,6 +22,7 @@ export default function MatchGameShell({ theme, words, onBack, onAddStars, onCon
   const [wrongMeanings, setWrongMeanings] = useState([])
   const [firstTryUsed, setFirstTryUsed] = useState(false)
   const [locked, setLocked] = useState(false)
+  const [answerPaul, setAnswerPaul] = useState(null)
   const lastWordRef = useRef(null)
   const advanceTimerRef = useRef(null)
   const shakeTimerRef = useRef(null)
@@ -52,6 +55,7 @@ export default function MatchGameShell({ theme, words, onBack, onAddStars, onCon
     setWrongMeanings([])
     setFirstTryUsed(false)
     setLocked(false)
+    setAnswerPaul(null)
     setRound(roundIdx)
     if (t) {
       stopCurrentAudio()
@@ -71,6 +75,7 @@ export default function MatchGameShell({ theme, words, onBack, onAddStars, onCon
     if (opt.correct) {
       setLocked(true)
       setPicked(opt.meaning)
+      setAnswerPaul(pickReaction('success'))
       playSuccessSound()
       if (!firstTryUsed) { setScore(s => s + 1); onAddStars?.(STAR_PER_CORRECT) }
       advanceTimerRef.current = setTimeout(() => {
@@ -81,6 +86,7 @@ export default function MatchGameShell({ theme, words, onBack, onAddStars, onCon
     } else {
       setFirstTryUsed(true)
       setShakeMeaning(opt.meaning)
+      setAnswerPaul(pickReaction('encourage'))
       setWrongMeanings(prev => [...prev, opt.meaning])
       shakeTimerRef.current = setTimeout(() => setShakeMeaning(null), 500)
     }
@@ -176,6 +182,10 @@ export default function MatchGameShell({ theme, words, onBack, onAddStars, onCon
 
         {picked && (
           <div className="mt-8 text-center animate-slide-up">
+            {/* playSuccessSound()가 이미 재생하므로 효과음 중복 방지. 게임
+                고유의 테마 연출(풍선 터짐 등)은 그대로 유지하고 폴은 그
+                위에 함께 보여줌. */}
+            <PaulReaction reaction={answerPaul ? { ...answerPaul, sound: null } : null} message="" size="sm" />
             <p className="text-4xl mb-1">{theme.correctFx.emoji}</p>
             <p className="text-2xl font-black text-yellow-300">{theme.correctFx.label}</p>
             {!firstTryUsed && <p className="text-white font-bold">⭐ +{STAR_PER_CORRECT}</p>}
@@ -183,6 +193,7 @@ export default function MatchGameShell({ theme, words, onBack, onAddStars, onCon
         )}
         {shakeMeaning && !picked && (
           <div className="mt-8 text-center animate-slide-up">
+            <PaulReaction reaction={answerPaul} message="" size="sm" />
             <p className="text-3xl mb-1">{theme.wrongFx.emoji}</p>
             <p className="text-xl font-black text-white">{theme.wrongFx.label}</p>
           </div>

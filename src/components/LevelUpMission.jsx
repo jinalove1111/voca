@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { playSuccessSound } from '../utils/speech'
+import { pickReaction } from '../utils/paulReactions'
+import PaulReaction from './PaulReaction'
 
 function makeOptions(w, allWords) {
   const others = allWords.filter(x => x.id !== w.id).sort(() => Math.random() - 0.5).slice(0, 3)
@@ -15,6 +17,8 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
   const [didClear, setDidClear] = useState(false)
   const [opts, setOpts] = useState(null)
   const [correctIdx, setCorrectIdx] = useState(null)
+  const [answerPaul, setAnswerPaul] = useState(null)
+  const [clearPaul, setClearPaul] = useState(null)
 
   const activeMissions = missions.filter(m => !m.done)
   const doneMissions   = missions.filter(m => m.done)
@@ -33,13 +37,15 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
   const handleSelect = (i) => {
     if (selected !== null) return
     setSelected(i)
-    if (i === correctIdx) {
+    const correct = i === correctIdx
+    setAnswerPaul(pickReaction(correct ? 'success' : 'encourage'))
+    if (correct) {
       // 별 보너스(+3⭐)는 기존 그대로 3번째 정답(클리어)에만 지급 — 매
       // 정답마다 별을 추가로 주는 건 보상 구조를 바꾸는 것이라 요청받은
       // 범위를 넘어서므로 하지 않음. 정답 효과음/축하 연출은 매번.
       playSuccessSound()
       const cleared = onAnswer(practiceId)
-      if (cleared) setDidClear(true)
+      if (cleared) { setDidClear(true); setClearPaul(pickReaction('levelup')) }
     }
   }
 
@@ -47,6 +53,8 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
     setPracticeId(null)
     setSelected(null)
     setDidClear(false)
+    setAnswerPaul(null)
+    setClearPaul(null)
   }
 
   // 정답/오답을 1.5~2초 보여준 뒤 자동으로 다음 문제로 — 클리어(보스 단어
@@ -72,8 +80,9 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
         <div className="w-full max-w-md animate-fade-in">
           {didClear ? (
             <div className="bg-white rounded-3xl card-shadow p-8 text-center animate-slide-up">
-              <div className="text-7xl mb-4">🎉</div>
-              <h2 className="text-3xl font-black text-green-600 mb-2">보스 단어 클리어!</h2>
+              {/* playSuccessSound()가 handleSelect에서 이미 재생하므로 효과음 중복 방지 */}
+              <PaulReaction reaction={clearPaul ? { ...clearPaul, sound: null } : null} message="" size="lg" />
+              <h2 className="text-3xl font-black text-green-600 mb-2 mt-2">보스 단어 클리어!</h2>
               <p className="text-gray-500 mb-4">
                 <span className="font-black text-gray-800">{w?.word}</span>을 완전히 외웠어요!
               </p>
@@ -126,8 +135,9 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
                   X+정답 안내만(효과음 없음, 기존 앱 전체와 동일한 원칙). */}
               {isAnswered && (
                 <div className={`mt-4 p-4 rounded-2xl border-2 text-center animate-slide-up ${isCorrect ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-                  <p className="text-3xl mb-1">{isCorrect ? '✅ 🎉' : '❌'}</p>
-                  <p className="font-black text-lg mb-1">{isCorrect ? 'Correct!' : 'Wrong!'}</p>
+                  {/* isCorrect일 때는 playSuccessSound()가 이미 재생하므로 효과음 중복 방지 */}
+                  <PaulReaction reaction={answerPaul ? (isCorrect ? { ...answerPaul, sound: null } : answerPaul) : null} message="" size="sm" />
+                  <p className="font-black text-lg mb-1 mt-1">{isCorrect ? 'Correct!' : 'Wrong!'}</p>
                   <p className="font-bold">
                     <span className="text-base">{w?.word}</span>
                     <span className="mx-2 opacity-60">=</span>

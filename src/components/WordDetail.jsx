@@ -5,6 +5,8 @@ import { isInAppBrowser } from '../utils/browserDetect'
 import InAppBrowserNotice from './InAppBrowserNotice'
 import SpellingQuestion from './SpellingQuestion'
 import { useMicReady } from '../hooks/useMicReady'
+import { pickReaction } from '../utils/paulReactions'
+import PaulReaction from './PaulReaction'
 
 function getAudioMimeType() {
   if (typeof MediaRecorder === 'undefined') return ''
@@ -23,6 +25,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
   const micReady = useMicReady()
   const [transcript, setTranscript] = useState('')
   const [ungraded, setUngraded] = useState(false) // true = recorded OK but no STT grading available
+  const [paulReaction, setPaulReaction] = useState(null)
   const mrRef              = useRef(null)
   const settledRef         = useRef(true) // true = not currently waiting on a result
   const hangTimerRef       = useRef(null)
@@ -71,6 +74,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
       console.log('[WordDetail] STEP7 Success or Fail:', nextPhase)
       clearTimeout(hangTimerRef.current)
       try { mrRef.current?.stop?.() } catch {}
+      setPaulReaction(pickReaction(success ? 'success' : 'encourage'))
       if (countTry || success) onAttempt?.()
       if (success) { onSuccess?.(); onAnyResult?.() }
       if (countTry) {
@@ -176,6 +180,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
     if (phase === 'speaking' || phase === 'success') return
     unlockAudio()
     setMsg('')
+    setPaulReaction(null)
     setPhase('speaking')
     playWordAudio(wordAudioUrl, target, {
       times: 2,
@@ -206,9 +211,12 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
       </button>
 
       {msg && (
-        <p className={`text-center text-sm font-bold ${phase === 'success' ? 'text-green-600' : 'text-orange-500'}`}>
-          {msg}
-        </p>
+        <div className="text-center">
+          <PaulReaction reaction={paulReaction} message="" size="sm" />
+          <p className={`text-sm font-bold ${phase === 'success' ? 'text-green-600' : 'text-orange-500'}`}>
+            {msg}
+          </p>
+        </div>
       )}
 
       {(phase === 'success' || phase === 'fail') && transcript && (
@@ -357,14 +365,17 @@ function QuizStep({ word, classWords, onDone, onMarkQuizSolved, onQuizAnswer }) 
 
   const correctIdx   = options.indexOf(word.meaning)
   const [selected, setSelected] = useState(null)
+  const [paulReaction, setPaulReaction] = useState(null)
   const isAnswered   = selected !== null
   const isCorrect    = isAnswered && selected === correctIdx
 
   const handleSelect = (i) => {
     if (isAnswered) return
     setSelected(i)
-    if (i === correctIdx) onMarkQuizSolved?.()
-    onQuizAnswer?.(word.id, i === correctIdx)
+    const correct = i === correctIdx
+    setPaulReaction(pickReaction(correct ? 'success' : 'encourage'))
+    if (correct) onMarkQuizSolved?.()
+    onQuizAnswer?.(word.id, correct)
   }
 
   // Auto-advance to the next word a couple seconds after answering, so kids
@@ -412,7 +423,8 @@ function QuizStep({ word, classWords, onDone, onMarkQuizSolved, onQuizAnswer }) 
           <div className={`mt-4 p-3 rounded-2xl text-center animate-slide-up border-2 ${
             isCorrect ? 'bg-green-50 border-green-200 text-green-700' : 'bg-orange-50 border-orange-200 text-orange-700'
           }`}>
-            <p className="font-black">
+            <PaulReaction reaction={paulReaction} message="" size="sm" />
+            <p className="font-black mt-1">
               {isCorrect ? '🎉 정답! 잘했어요!' : `정답은 "${word.meaning}"이에요 💪`}
             </p>
           </div>
