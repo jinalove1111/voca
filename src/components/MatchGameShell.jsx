@@ -55,14 +55,14 @@ export default function MatchGameShell({ theme, words, onBack, onAddStars, onCon
     setRound(roundIdx)
     if (t) {
       stopCurrentAudio()
-      playWordAudio(t.wordAudioUrl, t.word, { times: 1 })
+      playWordAudio(t.wordAudioUrl, t.word, { times: 1, source: 'matchgame-round' })
     }
   }
 
   const replay = () => {
     if (!target) return
     stopCurrentAudio()
-    playWordAudio(target.wordAudioUrl, target.word, { times: 1 })
+    playWordAudio(target.wordAudioUrl, target.word, { times: 1, source: 'matchgame-replay' })
   }
 
   const handleTap = (opt) => {

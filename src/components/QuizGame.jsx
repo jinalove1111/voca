@@ -198,7 +198,7 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess, onAttempt }) {
 
       {(phase === 'success' || phase === 'fail') && (
         <div className="flex gap-2">
-          <button onClick={() => playWordAudio(wordAudioUrl, word)}
+          <button onClick={() => playWordAudio(wordAudioUrl, word, { source: 'quiz-pronstep-replay' })}
             className="flex-1 bg-blue-100 text-blue-700 font-bold py-2 rounded-xl text-xs btn-press">
             🔊 원어민
           </button>
@@ -273,7 +273,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
       onMarkQuizSolved()
       setShowP(true)
       // Play praise — activate record button AFTER it finishes
-      speakPraise('Yar! Correct!', () => setCanRec(true))
+      speakPraise('Yar! Correct!', () => setCanRec(true), 'quiz-praise')
     } else {
       setPraise('')
       onAddMission(current.word.id)
@@ -379,7 +379,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
           <p className="text-center text-gray-400 text-sm font-bold mb-4">이 단어의 뜻은? 🤔</p>
 
           <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-6 text-center text-white mb-6 word-card">
-            <button onClick={() => playWordAudio(current.word.wordAudioUrl, current.word.word)} className="btn-press max-w-full">
+            <button onClick={() => playWordAudio(current.word.wordAudioUrl, current.word.word, { source: 'quiz-word' })} className="btn-press max-w-full">
               <p className="word-text font-black hover:scale-110 transition-transform">{current.word.word}</p>
             </button>
             <p className="text-purple-200 text-xs mt-1">탭하면 발음 🔊</p>

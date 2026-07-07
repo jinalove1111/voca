@@ -155,6 +155,67 @@ export function stopCurrentAudio() {
   }
 }
 
+// ── TTS/audio singleton guard ────────────────────────────────────────────────
+// Root-cause fix for an intermittent (not every time — a real race, not a
+// deterministic StrictMode double-invoke) "echo" where two playbacks
+// overlapped: playWordAudio() and speak() are the only two public entry
+// points student screens use to make sound, but each had its own notion of
+// "stop the previous thing" (playAudioUrl only stopped the <audio> element;
+// speak() only cancelled speechSynthesis) — neither stopped the OTHER
+// backend, so a stored-mp3 playback (tier 1) and a live TTS utterance
+// (tier 2, or an unrelated speak() call like the quiz's praise voice) could
+// end up audible at the same time if their timing happened to overlap.
+//
+// Every call now gets a unique, logged id. Starting ANY new call immediately
+// stops BOTH backends (stopAllPlayback), then claims _activeTtsCallId — so
+// even if an OLDER call's async chain (a network fetch, a queued
+// speechSynthesis utterance, a setTimeout repeat step) eventually fires its
+// completion callback, that callback is a no-op once a newer call has
+// started. Two audible sounds at once is now structurally impossible: there
+// is exactly one "active" id at any moment, and only its own callbacks can
+// still do anything.
+let _ttsCallSeq = 0
+let _activeTtsCallId = 0
+
+function stopAllPlayback() {
+  stopCurrentAudio()
+  try {
+    if (window.speechSynthesis?.speaking || window.speechSynthesis?.pending) {
+      window.speechSynthesis.cancel()
+    }
+  } catch {}
+}
+
+// Called once at the top of playWordAudio()/speak() (the only two public
+// sound-producing entry points). Returns { callId, guard(fn) } — guard()
+// wraps a completion callback so it silently no-ops if a newer call has
+// since taken over, logging exactly that so the echo's actual origin shows
+// up in the console instead of being invisible. Log format is intentionally
+// grep-able: [TTS START]/[TTS CANCEL]/[TTS END]/[TTS SUPPRESSED-STALE], each
+// with requestId=N so a real device session's console can be scanned for
+// which two requestIds actually overlapped.
+function claimTtsCall(source, word = '') {
+  const callId = ++_ttsCallSeq
+  if (_activeTtsCallId) {
+    console.log(`[TTS CANCEL] requestId=${_activeTtsCallId} (superseded by requestId=${callId})`)
+  }
+  console.log(`[TTS START] requestId=${callId} source=${source} word=${word}`)
+  stopAllPlayback()
+  _activeTtsCallId = callId
+  const isStale = () => callId !== _activeTtsCallId
+  const guard = (fn) => (...args) => {
+    if (isStale()) { console.log(`[TTS SUPPRESSED-STALE] requestId=${callId} source=${source}`); return }
+    console.log(`[TTS END] requestId=${callId} source=${source}`)
+    fn?.(...args)
+  }
+  return { callId, guard }
+}
+
+// Exported for scripts/testTtsSingleton.mjs only — mirrors the pattern
+// useStudent.js already uses (exporting internal pure helpers so tests can
+// exercise the exact logic under test without duplicating it).
+export { claimTtsCall as __claimTtsCallForTest }
+
 export function playAudioUrl(url, opts = {}) {
   const { times = 1, rate = null, onEnd = null, onError = null } = opts
   stopCurrentAudio()
@@ -216,7 +277,10 @@ function networkTtsUrl(text) {
 // fails, onEnd still fires so the caller (e.g. "따라 말하기" → listening)
 // proceeds. Failures are logged to the console, not shown to the student.
 export function playWordAudio(url, fallbackText, opts = {}) {
-  const { times = 1, rate = null, onEnd = null, onError = null } = opts
+  const { times = 1, rate = null, onEnd: rawOnEnd = null, onError: rawOnError = null, source = 'unknown' } = opts
+  const { guard } = claimTtsCall(source, fallbackText)
+  const onEnd = guard(rawOnEnd)
+  const onError = guard(rawOnError)
   console.log('[speech] playWordAudio — word/text:', fallbackText, '| stored url:', url || '(none)')
 
   const giveUp = (reason) => {
@@ -230,6 +294,9 @@ export function playWordAudio(url, fallbackText, opts = {}) {
     if (!fallbackText) { giveUp('no text to speak'); return }
     const netUrl = networkTtsUrl(fallbackText)
     console.log('[speech] network TTS url:', netUrl)
+    // playAudioUrl is a plain helper here, not a new claimed call — the
+    // claim already happened above for this whole playWordAudio() request,
+    // and onEnd/onError are already the guarded versions.
     playAudioUrl(netUrl, {
       times, rate, onEnd,
       onError: (err) => giveUp(err),
@@ -241,7 +308,11 @@ export function playWordAudio(url, fallbackText, opts = {}) {
     if (!fallbackText || !window.speechSynthesis) { tryNetworkTts('no speechSynthesis on this device'); return }
     let played = 0
     const playOnce = () => {
-      speak(fallbackText, {
+      // _rawSpeak, not the public speak() — this is a step INSIDE the call
+      // already claimed above, not a new independent request. Calling the
+      // public speak() here would claim again and immediately mark this
+      // playWordAudio call stale against itself.
+      _rawSpeak(fallbackText, {
         rate,
         onEnd: () => {
           played += 1
@@ -274,7 +345,7 @@ export function playWordAudio(url, fallbackText, opts = {}) {
 // before doing anything, so calling the returned cancel() function — e.g.
 // from the effect's cleanup — guarantees no further audio from that call,
 // no matter how many are in flight.
-export function playRepeating(url, fallbackText, { times = 1, rate = null, onEachEnd, onAllDone, onError } = {}) {
+export function playRepeating(url, fallbackText, { times = 1, rate = null, onEachEnd, onAllDone, onError, source = 'repeating' } = {}) {
   let cancelled = false
   let played = 0
   const playOnce = () => {
@@ -282,6 +353,7 @@ export function playRepeating(url, fallbackText, { times = 1, rate = null, onEac
     playWordAudio(url, fallbackText, {
       times: 1,
       rate,
+      source,
       onEnd: () => {
         if (cancelled) return
         played += 1
@@ -306,7 +378,15 @@ export function playRepeating(url, fallbackText, { times = 1, rate = null, onEac
 // IMPORTANT: Must be called synchronously inside a user-gesture handler on iOS.
 // Do NOT wrap speechSynthesis.speak() in setTimeout or async callbacks —
 // iOS Safari silently blocks TTS that starts outside a user gesture context.
-export function speak(text, opts = {}) {
+//
+// _rawSpeak does the actual speechSynthesis work with NO call-claiming of
+// its own — used both by the public speak() below AND internally by
+// playWordAudio's device-TTS tier, which already claimed the call itself.
+// If _rawSpeak claimed again here, it would immediately mark playWordAudio's
+// own call stale (a nested "new call invalidates the call it's a step of"
+// bug) — so claiming happens exactly once, at whichever public entry point
+// (speak() or playWordAudio()) started the request.
+function _rawSpeak(text, opts = {}) {
   // onError is optional — callers that don't care whether the utterance
   // actually succeeded (e.g. speakPraise) can omit it and errors behave like
   // completion, same as before.
@@ -332,8 +412,14 @@ export function speak(text, opts = {}) {
   window.speechSynthesis.speak(u)
 }
 
-export function speakPraise(text, onEnd) {
-  speak(text, { rate: 0.95, onEnd })
+export function speak(text, opts = {}) {
+  const { onEnd = null, onError = null, rate = null, source = 'speak' } = opts
+  const { guard } = claimTtsCall(source, text)
+  _rawSpeak(text, { rate, onEnd: guard(onEnd), onError: guard(onError) })
+}
+
+export function speakPraise(text, onEnd, source = 'praise') {
+  speak(text, { rate: 0.95, onEnd, source })
 }
 
 export function hasSpeechRecognition() {

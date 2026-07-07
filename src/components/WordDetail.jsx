@@ -179,6 +179,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
     setPhase('speaking')
     playWordAudio(wordAudioUrl, target, {
       times: 2,
+      source: 'speechbtn-prompt',
       onEnd: () => startListen(),
       onError: () => startListen(),
     })
@@ -218,7 +219,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
 
       {(phase === 'success' || (phase === 'fail' && tries >= 2)) && (
         <div className="flex gap-2">
-          <button onClick={() => { unlockAudio(); playWordAudio(wordAudioUrl, target) }}
+          <button onClick={() => { unlockAudio(); playWordAudio(wordAudioUrl, target, { source: 'speechbtn-replay' }) }}
             className="flex-1 bg-blue-100 text-blue-700 font-bold py-2 rounded-xl text-xs btn-press">
             🔊 원어민
           </button>
@@ -239,7 +240,7 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
   const [canProceed, setCanProceed] = useState(false)
 
   const playWord = () => {
-    playWordAudio(word.wordAudioUrl, word.word, { times: 3 })
+    playWordAudio(word.wordAudioUrl, word.word, { times: 3, source: 'pronounce-word' })
   }
 
   return (
@@ -291,7 +292,7 @@ function ExampleStep({ english, korean, memoryTip, audioUrl, onDone, onMarkExamp
 
   const handlePlay = () => {
     unlockAudio()
-    playWordAudio(audioUrl, english, { times: 2 })
+    playWordAudio(audioUrl, english, { times: 2, source: 'example' })
     onMarkExampleHeard?.()
   }
 

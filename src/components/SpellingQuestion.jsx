@@ -31,6 +31,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
 
     const cancel = playRepeating(wordAudioUrl, word, {
       times: 3,
+      source: 'spelling-intro',
       onAllDone: () => setPhase('answer'),
       onError: () => setPhase('answer'), // 재생이 계속 실패해도 학생이 입력 자체는 할 수 있게
     })
@@ -43,6 +44,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
     setManualPlaying(true)
     playWordAudio(wordAudioUrl, word, {
       times: 1,
+      source: 'spelling-replay',
       onEnd: () => setManualPlaying(false),
       onError: () => setManualPlaying(false),
     })
