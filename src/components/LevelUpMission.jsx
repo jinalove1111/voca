@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { playSuccessSound } from '../utils/speech'
 
 function makeOptions(w, allWords) {
@@ -34,8 +34,12 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
     if (selected !== null) return
     setSelected(i)
     if (i === correctIdx) {
+      // 별 보너스(+3⭐)는 기존 그대로 3번째 정답(클리어)에만 지급 — 매
+      // 정답마다 별을 추가로 주는 건 보상 구조를 바꾸는 것이라 요청받은
+      // 범위를 넘어서므로 하지 않음. 정답 효과음/축하 연출은 매번.
+      playSuccessSound()
       const cleared = onAnswer(practiceId)
-      if (cleared) { setDidClear(true); playSuccessSound() }
+      if (cleared) setDidClear(true)
     }
   }
 
@@ -44,6 +48,17 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
     setSelected(null)
     setDidClear(false)
   }
+
+  // 정답/오답을 1.5~2초 보여준 뒤 자동으로 다음 문제로 — 클리어(보스 단어
+  // 완전 정복) 화면은 별도 축하 순간이라 자동 넘김 대상에서 제외, 계속
+  // "계속하기" 버튼으로 직접 넘어가게 둠(기존 동작 유지).
+  useEffect(() => {
+    if (selected === null || didClear) return
+    const isCorrect = selected === correctIdx
+    const t = setTimeout(handleNext, isCorrect ? 1500 : 2000)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, didClear])
 
   if (practiceId) {
     const w = words.find(x => x.id === practiceId)
@@ -80,9 +95,11 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
                 </div>
               </div>
 
+              {/* 문제를 푸는 동안에는 영어 단어만 — 뜻은 정답을 고르기
+                  전까지 절대 보여주지 않음(보기에 이미 뜻이 있으므로,
+                  같이 보이면 문제를 읽지 않고도 답이 보이는 버그였음). */}
               <div className="bg-gradient-to-br from-red-500 to-rose-600 rounded-2xl p-5 text-white text-center mb-5 word-card">
                 <p className="word-text font-black">{w?.word}</p>
-                <p className="text-red-200 text-sm mt-1">{w?.meaning}</p>
               </div>
 
               <div className="space-y-3">
@@ -104,11 +121,21 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
                 })}
               </div>
 
+              {/* 정답을 고른 뒤에만 뜻을 공개(word = meaning) — 여기서부터가
+                  "학습/복습" 구간. 정답은 초록 체크+축하, 오답은 빨간
+                  X+정답 안내만(효과음 없음, 기존 앱 전체와 동일한 원칙). */}
               {isAnswered && (
-                <div className={`mt-4 p-3 rounded-2xl border-2 text-sm animate-slide-up ${isCorrect ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-                  {isCorrect
-                    ? `정답! — ${Math.max(0, 3 - (count + 1))}번 더 맞히면 클리어! (+3⭐)`
-                    : `틀렸어요! 정답: ${w?.meaning}`}
+                <div className={`mt-4 p-4 rounded-2xl border-2 text-center animate-slide-up ${isCorrect ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+                  <p className="text-3xl mb-1">{isCorrect ? '✅ 🎉' : '❌'}</p>
+                  <p className="font-black text-lg mb-1">{isCorrect ? 'Correct!' : 'Wrong!'}</p>
+                  <p className="font-bold">
+                    <span className="text-base">{w?.word}</span>
+                    <span className="mx-2 opacity-60">=</span>
+                    <span className="text-base">{w?.meaning}</span>
+                  </p>
+                  {isCorrect && (
+                    <p className="text-xs mt-2 opacity-80">{Math.max(0, 3 - (count + 1))}번 더 맞히면 클리어! (+3⭐)</p>
+                  )}
                 </div>
               )}
 
