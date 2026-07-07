@@ -149,12 +149,13 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 
   return (
     <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl p-5 text-white card-shadow">
-      <div className="flex items-start gap-3">
+      <div className="flex flex-col items-center text-center gap-2 md:flex-row md:items-center md:text-left md:gap-4">
         <PaulReaction type="hello" message="" size="sm" />
-        <span className="text-4xl">{rec.emoji}</span>
-        <div className="flex-1">
-          <p className="font-black text-lg">{rec.title}</p>
-          <p className="text-indigo-100 text-sm mt-0.5">{rec.desc}</p>
+        <div className="w-full md:flex-1">
+          <p className="font-black text-lg leading-snug">
+            <span className="mr-1">{rec.emoji}</span>{rec.title}
+          </p>
+          <p className="text-indigo-100 text-sm mt-1 w-full">{rec.desc}</p>
         </div>
       </div>
       {rec.label && (
