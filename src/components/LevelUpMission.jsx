@@ -186,7 +186,9 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
                     <div className="flex items-center gap-2 mb-2">
                       <span className="font-black text-xl text-gray-800">{w.word}</span>
                     </div>
-                    <p className="text-gray-500 text-sm mb-2">{w.meaning}</p>
+                    {/* 뜻은 여기서도 절대 노출 안 함 — "도전!" 누르기 전에
+                        정답을 미리 보고 들어갈 수 있었던 것도 같은 버그의
+                        연장선. 목록에는 단어와 진행도만. */}
                     <div className="flex items-center gap-1">
                       {[0,1,2].map(i => (
                         <div key={i} className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black ${i < m.correctCount ? 'bg-green-400 text-white' : 'bg-gray-200 text-gray-400'}`}>
