@@ -1,87 +1,64 @@
-# 폴 선생님(Project Paul 마스코트) 아이콘 자리
+# Paul Character Assets
 
-여기에 아래 파일명 그대로 **투명 배경 PNG**를 넣으면, 코드 수정 없이 앱 전체에 바로 반영됩니다
-(`src/utils/paulReactions.js`가 이 경로들을 이미 참조하고 있고,
-`PaulReaction.jsx`가 로드 실패 시에만 이모지로 대체 표시하기 때문).
+이 폴더의 PNG 파일들은 Project Paul 앱에서 사용할 폴 선생님 캐릭터 에셋입니다.
 
-## 필요한 파일 28개 (기획안의 Success/Retry/Etc 폴더 구성 그대로)
+## 사용 방법
 
-### Success (정답/레벨업/축하)
+1. 프로젝트 안에 `public/assets/paul/` 또는 `src/assets/paul/` 폴더를 만듭니다.
+2. 이 PNG 파일들을 모두 복사합니다.
+3. `PaulReaction` 컴포넌트에서 아래 파일명을 사용합니다.
 
-| 파일명 | 쓰이는 상황 |
+## 추천 매핑
+
+### Success
+- paul_happy.png
+- paul_best.png
+- paul_perfect.png
+- paul_great.png
+- paul_excellent.png
+- paul_levelup.png
+
+### Retry / Wrong
+- paul_thinking.png
+- paul_almost.png
+- paul_sad.png
+- paul_cry.png
+- paul_sorry.png
+- paul_one_more.png
+
+### Etc
+- paul_hello.png
+- paul_lets_learn.png
+- paul_study.png
+- paul_reading.png
+- paul_love.png
+- paul_brand.png
+
+## Claude 적용 지시 핵심
+
+이모지 placeholder 대신 위 PNG를 사용하세요.
+이미지 경로 예시: `/assets/paul/paul_happy.png`
+
+## 실제 적용 현황 (자동 기록 — Claude가 앱에 붙인 위치)
+
+18개 파일 중 17개(`paul_brand.png` 제외)가 실제로 확인됨 — `src/utils/
+paulReactions.js`가 이 18개를 정확히 참조하고, `paul_brand.png`만 아직
+없어서 그 자리만 emoji(🐾)로 보임(파일 추가 시 자동 전환).
+
+| 파일 | 적용 화면 |
 |---|---|
-| `paul_happy.png` | 정답(랜덤) |
-| `paul_best.png` | 정답(랜덤) |
-| `paul_perfect.png` | 정답(랜덤) |
-| `paul_great.png` | 정답(랜덤) |
-| `paul_excellent.png` | 정답(랜덤) |
-| `paul_levelup.png` | 레벨업/보스 단어 클리어(고정 지정) |
-| `paul_celebrate.png` | 미션 완료 계열(랜덤) |
-| `paul_star.png` | 정답(랜덤) |
+| paul_happy/best/perfect/great/excellent/levelup | 퀴즈·쓰기·레벨업미션·미니게임·단어학습 정답 시 랜덤(레벨업만 보스 단어 클리어에 고정) |
+| paul_thinking/almost/one_more | 쓰기 시험 오답 1~3단계(순서대로 고정) + 퀴즈·레벨업미션·미니게임·단어학습 오답 시 랜덤 |
+| paul_sad/cry/sorry | 쓰기 시험 오답 4단계(정답 공개, sad 고정) + 위 화면들의 오답 랜덤 풀 |
+| paul_hello | 홈 화면 추천 배너("학습 시작") |
+| paul_lets_learn | 단어 공부 목록 화면 상단 |
+| paul_study | 단어학습 발음연습(1단계) 카드 |
+| paul_reading | 단어학습 예문(2단계) 카드 |
+| paul_love | 레벨업 미션 목록 상단 배너 |
+| paul_brand | 로그인 화면(StudentSelect) — 파일 없어 현재 🐾로 표시 |
+| (success 계열 재사용) | 미션 완료(선물상자 오픈 화면, GiftReveal) |
 
-### Retry (오답이지만 혼내지 않음)
-
-| 파일명 | 쓰이는 상황 |
-|---|---|
-| `paul_thinking.png` | 쓰기 시험 1번째 오답(고정 지정) |
-| `paul_almost.png` | 쓰기 시험 2번째 오답(고정 지정) |
-| `paul_retry.png` | 쓰기 시험 3번째 오답 — '발음 듣기' 버튼 안내(고정 지정) |
-| `paul_cheerup.png` | 격려 계열(랜덤) |
-| `paul_its_ok.png` | 실패 인정 계열(랜덤) |
-| `paul_sad.png` | 쓰기 시험 4번째 오답 — 정답 공개(고정 지정) |
-| `paul_cry.png` | 실패 인정 계열(랜덤) |
-| `paul_sorry.png` | 실패 인정 계열(랜덤) |
-| `paul_one_more.png` | 격려 계열(랜덤) |
-| `paul_fight.png` | 격려 계열(랜덤) |
-
-### Etc (인사/모드 안내/특별한 날)
-
-| 파일명 | 쓰이는 상황 |
-|---|---|
-| `paul_hello.png` | 인사 |
-| `paul_lets_learn.png` | 학습 시작 |
-| `paul_study.png` | 공부 중 |
-| `paul_love.png` | 응원 |
-| `paul_good_job.png` | 미션 완료 계열 |
-| `paul_birthday.png` | 생일 등 특별한 날 |
-| `paul_reading.png` | 듣기 모드 |
-| `paul_writing.png` | 쓰기 모드 |
-| `paul_speaking.png` | 말하기 모드 |
-| `paul_mission.png` | 미션 완료 계열 |
-
-## 사용 방법 (개발자용)
-
-```jsx
-import PaulReaction from './components/PaulReaction'
-
-// 방법 1: 폴더/카테고리 또는 정확한 id를 type으로 바로 지정 — 마운트 시 자동 랜덤
-<PaulReaction type="success" />   {/* success 폴더 8개 중 랜덤 */}
-<PaulReaction type="retry" />     {/* retry 폴더 10개 중 랜덤 */}
-<PaulReaction type="thinking" />  {/* 정확히 paul_thinking 고정 */}
-<PaulReaction type="levelup" />   {/* 정확히 paul_levelup 고정 */}
-<PaulReaction type="fail" />      {/* retry 폴더 중 실패 인정 계열(its_ok/sad/cry/sorry)만 */}
-<PaulReaction type="encourage" /> {/* retry 폴더 중 격려 계열만 */}
-<PaulReaction type="complete" />  {/* 미션완료 계열(celebrate/good_job/mission) */}
-
-// 방법 2: 직접 뽑아서 상태로 들고 있기(정답/오답이 나온 그 순간에만 한 번 뽑고,
-// 리렌더링돼도 안 바뀌어야 하는 기존 화면들 — 퀴즈/쓰기/레벨업미션 등)
-import { pickReaction } from './utils/paulReactions'
-const reaction = pickReaction('success')
-<PaulReaction reaction={reaction} />
-```
-
-같은 캐릭터·같은 메시지가 연속으로 반복되지 않도록 이미지와 메시지 모두
-각자 독립적으로 "직전과 다른 것" 규칙을 따릅니다.
-
-## 권장 사양
-
-- 정사각형, 최소 256×256px 이상(더 크면 자동으로 축소돼서 화질 저하 없음)
-- 배경은 반드시 투명 PNG (알파 채널 포함)
-- 얼굴/모자/스타일은 공식 캐릭터 그대로 — 새 캐릭터를 만들지 않음
-
-## 파일이 아직 없을 때
-
-`PaulReaction.jsx`는 이미지 로드에 실패하면 자동으로 큰 이모지로 대체
-표시합니다(예: `paul_thinking.png`가 없으면 🤔). 그래서 이 폴더가 비어
-있어도 앱은 정상 동작합니다 — 실제 PNG가 준비되는 대로 여기 넣기만
-하면 됩니다.
+효과음은 `success.wav` 하나만 존재 — 정답/레벨업은 이 소리를 쓰고,
+오답은 무음(혼내는 느낌을 주지 않기 위한 기존 설계 원칙). 오답 전용
+효과음이 필요하면 파일을 추가로 넣어주세요(`src/utils/paulReactions.js`
+의 각 항목 `sound` 필드에 경로만 채우면 됨).

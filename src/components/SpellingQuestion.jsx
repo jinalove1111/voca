@@ -6,8 +6,10 @@ import PaulReaction from './PaulReaction'
 
 // 오답 1~3단계는 폴 선생님 리액션이 정확히 정해져 있음(랜덤 아님) —
 // Project Paul 캐릭터 시스템 스펙의 "1번째=Paul Thinking, 2번째=Paul
-// Almost, 3번째=Paul Retry" 그대로.
-const WRONG_PAUL_ID = { 1: 'thinking', 2: 'almost', 3: 'retry' }
+// Almost, 3번째=Paul Retry" 그대로. 다만 실제 PNG 세트에는 paul_retry.png가
+// 없어서(public/assets/paul/ 실제 파일 기준), 3번째는 의미가 가장 가까운
+// one_more(paul_one_more.png, "한 번 더 해볼까요?")로 대체함.
+const WRONG_PAUL_ID = { 1: 'thinking', 2: 'almost', 3: 'one_more' }
 
 // 초등학생이 발음을 듣고 철자를 떠올릴 수 있을 만큼 천천히, 그러나
 // 로봇처럼 부자연스럽게 들리지 않는 속도. 앱 전체 재생 속도 설정

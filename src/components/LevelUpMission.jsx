@@ -184,7 +184,8 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
         ) : (
           <div className="space-y-3 animate-fade-in">
             <div className="bg-red-50 rounded-2xl p-3 border-2 border-red-100 text-center mb-4">
-              <p className="text-red-600 font-bold text-sm">💡 3번 맞히면 클리어! (+3⭐)</p>
+              <PaulReaction type="love" message="" size="sm" />
+              <p className="text-red-600 font-bold text-sm mt-1">💡 3번 맞히면 클리어! (+3⭐)</p>
             </div>
 
             {activeMissions.map((m) => {

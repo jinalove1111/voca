@@ -5,6 +5,7 @@ import { useMicReady } from '../hooks/useMicReady'
 import { isInAppBrowser } from '../utils/browserDetect'
 import { STICKERS } from '../data/stickers'
 import InAppBrowserNotice from './InAppBrowserNotice'
+import PaulReaction from './PaulReaction'
 
 const GOAL = 5
 const stickerById = (id) => STICKERS.find(s => s.id === id)
@@ -149,6 +150,7 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
   return (
     <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl p-5 text-white card-shadow">
       <div className="flex items-start gap-3">
+        <PaulReaction type="hello" message="" size="sm" />
         <span className="text-4xl">{rec.emoji}</span>
         <div className="flex-1">
           <p className="font-black text-lg">{rec.title}</p>

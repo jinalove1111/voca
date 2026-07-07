@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { addStudent, findStudentByName } from '../hooks/useStudent'
 import { getClassNames, getClassUnitNames, getStudentClass, getStudentUnit, setStudentUnit } from '../utils/wordLibrary'
+import PaulReaction from './PaulReaction'
 
 // Students only ever see a name/class entry form here — never a roster of
 // other students. Typing an EXISTING name logs back in as that student
@@ -93,7 +94,8 @@ export default function StudentSelect({ onSelect, onAdmin, removedNotice }) {
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-purple-50 to-pink-50">
       <div className="text-center mb-8 animate-fade-in min-w-0 max-w-full px-2">
         <img src={`${import.meta.env.BASE_URL}image/KakaoTalk_20260620_210208708.png`} alt="Paul Easy Voca" className="mx-auto mb-3 w-[180px] sm:w-[250px] h-auto rounded-[20px] shadow-lg object-cover" />
-        <h1 className="text-3xl sm:text-4xl font-black text-purple-700">Paul Easy Voca</h1>
+        <PaulReaction type="brand" message="" size="sm" />
+        <h1 className="text-3xl sm:text-4xl font-black text-purple-700 mt-1">Paul Easy Voca</h1>
         <p className="text-purple-400 font-medium mt-1">이름을 입력하고 시작해요 ✨</p>
       </div>
 

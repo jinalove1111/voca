@@ -30,7 +30,7 @@ const SIZE_PX = { sm: 56, md: 96, lg: 144 }
 //     자체 타이머가 없음 — 각 화면이 이미 갖고 있는 "몇 초 후 다음 문제로"
 //     타이밍을 그대로 따르고, 폴은 그 안에 얹히는 시각 요소일 뿐임(같은
 //     피드백에 대해 화면마다 서로 다른 두 개의 타이머가 경쟁하는 걸 피함).
-export default function PaulReaction({ reaction: reactionProp, type, message, size = 'md', overlay = false, onDone, durationMs = 2000 }) {
+export default function PaulReaction({ reaction: reactionProp, type, message, size = 'md', overlay = false, onDone, durationMs = 2000, muted = false }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const resolvedFromType = useMemo(() => (type ? resolveReaction(type) : null), [type])
   const reaction = reactionProp ?? resolvedFromType
@@ -43,7 +43,7 @@ export default function PaulReaction({ reaction: reactionProp, type, message, si
     doneRef.current = false
     setImgFailed(false)
     setHidden(false)
-    if (reaction.sound) {
+    if (reaction.sound && !muted) {
       const a = new Audio(reaction.sound)
       a.volume = 0.75
       a.play()?.catch(() => {})

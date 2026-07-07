@@ -255,6 +255,7 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
     <div className="space-y-4">
       <div className="bg-gradient-to-br from-blue-500 to-purple-500 rounded-3xl p-6 text-white card-shadow word-card">
         <div className="text-center mb-4">
+          <PaulReaction type="study" message="" size="sm" />
           <button onClick={playWord} className="btn-press max-w-full">
             <h1 className="word-text font-black hover:scale-110 transition-transform">{word.word}</h1>
           </button>
@@ -307,7 +308,10 @@ function ExampleStep({ english, korean, memoryTip, audioUrl, onDone, onMarkExamp
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-3xl card-shadow p-6">
-        <p className="font-black text-gray-500 text-sm mb-3">📝 예문</p>
+        <div className="flex items-center gap-2 mb-3">
+          <PaulReaction type="reading" message="" size="sm" />
+          <p className="font-black text-gray-500 text-sm">📝 예문</p>
+        </div>
         <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5">
           <p className="font-bold text-gray-800 text-lg leading-snug">{english}</p>
           {korean && <p className="text-gray-500 text-sm mt-2">→ {korean}</p>}
