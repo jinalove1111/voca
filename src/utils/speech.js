@@ -345,7 +345,7 @@ export function playWordAudio(url, fallbackText, opts = {}) {
 // before doing anything, so calling the returned cancel() function — e.g.
 // from the effect's cleanup — guarantees no further audio from that call,
 // no matter how many are in flight.
-export function playRepeating(url, fallbackText, { times = 1, rate = null, onEachEnd, onAllDone, onError, source = 'repeating' } = {}) {
+export function playRepeating(url, fallbackText, { times = 1, rate = null, gapMs = 400, onEachEnd, onAllDone, onError, source = 'repeating' } = {}) {
   let cancelled = false
   let played = 0
   const playOnce = () => {
@@ -358,7 +358,7 @@ export function playRepeating(url, fallbackText, { times = 1, rate = null, onEac
         if (cancelled) return
         played += 1
         onEachEnd?.(played)
-        if (played < times) setTimeout(() => { if (!cancelled) playOnce() }, 400)
+        if (played < times) setTimeout(() => { if (!cancelled) playOnce() }, gapMs)
         else onAllDone?.()
       },
       onError: (err) => {
