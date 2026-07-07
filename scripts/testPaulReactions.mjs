@@ -2,7 +2,7 @@
 // 순수 모듈이라 esbuild 번들 없이 바로 import 가능(testTtsSingleton.mjs와
 // 달리 window를 건드리지 않음).
 import assert from 'node:assert/strict'
-import { PAUL_REACTIONS, pickReaction, getReactionById } from '../src/utils/paulReactions.js'
+import { PAUL_REACTIONS, pickReaction, getReactionById, resolveReaction, pickMessage } from '../src/utils/paulReactions.js'
 
 let failures = 0
 function check(label, cond) {
@@ -66,6 +66,47 @@ console.log('\n5. pickReaction — 카테고리에 1개뿐이면(levelup) 그냥
 console.log('\n6. pickReaction — 존재하지 않는 카테고리는 null(화면이 죽지 않고 조용히 무시)')
 {
   check('없는 카테고리는 null', pickReaction('no-such-category') === null)
+}
+
+console.log('\n7. 3개 폴더(success/retry/etc) 구조와 28개 파일명이 기획안과 정확히 일치')
+{
+  const byFolder = { success: 8, retry: 10, etc: 10 }
+  for (const [folder, count] of Object.entries(byFolder)) {
+    check(`${folder} 폴더 ${count}개`, PAUL_REACTIONS.filter(r => r.category === folder).length === count)
+  }
+  check('총 28개', PAUL_REACTIONS.length === 28)
+}
+
+console.log('\n8. 이전 호출부 하위호환 — pickReaction("encourage")/pickReaction("levelup")이 여전히 정상 동작(폴더명이 success/retry/etc로 바뀌어도 기존 화면 안 깨짐)')
+{
+  let ok = true
+  for (let i = 0; i < 30; i++) {
+    const r = pickReaction('encourage')
+    if (!r || !['thinking','almost','retry','cheerup','one_more','fight'].includes(r.id)) { ok = false; break }
+  }
+  check('pickReaction("encourage")가 격려 계열 이미지 중 하나를 계속 정상 반환', ok)
+  check('pickReaction("levelup")은 항상 levelup 이미지', pickReaction('levelup')?.id === 'levelup')
+}
+
+console.log('\n9. resolveReaction — type prop 하나로 id/폴더/메시지별칭을 전부 처리(요청사항 5)')
+{
+  check('type="thinking"(정확한 id)', resolveReaction('thinking')?.id === 'thinking')
+  check('type="success"(폴더)', resolveReaction('success')?.category === 'success')
+  check('type="retry"(폴더)', resolveReaction('retry')?.category === 'retry')
+  check('type="levelup"(정확한 id)', resolveReaction('levelup')?.id === 'levelup')
+  check('type="fail"(메시지별칭) -> retry 폴더의 실패계열 이미지', ['its_ok','sad','cry','sorry'].includes(resolveReaction('fail')?.id))
+}
+
+console.log('\n10. 메시지 랜덤 — 이미지와 별개로 5개 카테고리에서 반복 없이 뽑힘(요청사항 7)')
+{
+  let sawRepeat = false, last = null
+  for (let i = 0; i < 50; i++) {
+    const m = pickMessage('encourage')
+    if (last && m === last) sawRepeat = true
+    last = m
+  }
+  check('encourage 메시지 50번 연속 뽑아도 직전과 동일한 문구 없음', !sawRepeat)
+  check('없는 메시지 카테고리는 null', pickMessage('no-such') === null)
 }
 
 console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n${failures}개 테스트 실패 ❌`)

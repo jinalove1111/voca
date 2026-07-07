@@ -4,54 +4,135 @@
 // 없는 동안에는 PaulReaction.jsx가 image 로드 실패 시 자동으로 emoji로
 // 대체 표시함(onError fallback) — 이 파일은 그 스왑 대상 목록.
 //
-// category는 두 용도로 쓰임:
-//   1. pickReaction(category)로 "그 상황에 맞는 랜덤 리액션" 하나를 뽑을 때
-//   2. 같은 카테고리 안에서는 직전에 보여준 것과 다른 것이 나오도록(연속
-//      반복 방지) 추적하는 단위
-// id는 SpellingQuestion의 오답 4단계처럼 "이 상황엔 반드시 이 리액션"이
-// 정해진 곳에서 getReactionById()로 직접 지정할 때 씀.
+// 28개 아이콘은 기획안의 3개 폴더(Success/Retry/Etc)를 그대로 category로
+// 씀 — 나중에 실제 PNG를 넣을 때 폴더 구조와 코드가 1:1로 맞도록.
 export const PAUL_REACTIONS = [
-  // ── 성공(정답을 맞혔을 때) — 랜덤 순환 ──────────────────────────────────
+  // ── Success ─────────────────────────────────────────────────────────────
   { id: 'happy',     category: 'success', image: '/assets/paul/paul_happy.png',     emoji: '😊', message: '잘했어요!',   sound: '/success.wav', rarity: 'common' },
   { id: 'best',      category: 'success', image: '/assets/paul/paul_best.png',      emoji: '👍', message: '최고예요!',   sound: '/success.wav', rarity: 'common' },
   { id: 'perfect',   category: 'success', image: '/assets/paul/paul_perfect.png',   emoji: '🤩', message: 'Perfect!',   sound: '/success.wav', rarity: 'common' },
   { id: 'great',     category: 'success', image: '/assets/paul/paul_great.png',     emoji: '👏', message: 'Great!',     sound: '/success.wav', rarity: 'common' },
   { id: 'excellent', category: 'success', image: '/assets/paul/paul_excellent.png', emoji: '😎', message: 'Excellent!', sound: '/success.wav', rarity: 'common' },
+  { id: 'levelup',   category: 'success', image: '/assets/paul/paul_levelup.png',   emoji: '🏆', message: '레벨업!',     sound: '/success.wav', rarity: 'rare' },
+  { id: 'celebrate', category: 'success', image: '/assets/paul/paul_celebrate.png', emoji: '🎉', message: '축하해요!',   sound: '/success.wav', rarity: 'rare' },
+  { id: 'star',      category: 'success', image: '/assets/paul/paul_star.png',      emoji: '⭐', message: '별 획득!',    sound: '/success.wav', rarity: 'common' },
 
-  // ── 레벨업/별/XP/트로피/연속정답/미션완료 — 큰 축하 순간 ────────────────
-  { id: 'levelup',   category: 'levelup', image: '/assets/paul/paul_levelup.png',   emoji: '🏆', message: '레벨업!',     sound: '/success.wav', rarity: 'rare' },
+  // ── Retry (오답이지만 절대 혼내지 않음) ─────────────────────────────────
+  { id: 'thinking',  category: 'retry', image: '/assets/paul/paul_thinking.png', emoji: '🤔', message: '다시 한번 생각해보세요!', sound: null, rarity: 'common' },
+  { id: 'almost',    category: 'retry', image: '/assets/paul/paul_almost.png',   emoji: '💪', message: '거의 다 왔어요!',         sound: null, rarity: 'common' },
+  { id: 'retry',     category: 'retry', image: '/assets/paul/paul_retry.png',    emoji: '🔊', message: '발음을 들어볼까요?',      sound: null, rarity: 'common' },
+  { id: 'cheerup',   category: 'retry', image: '/assets/paul/paul_cheerup.png',  emoji: '😄', message: '할 수 있어요!',           sound: null, rarity: 'common' },
+  { id: 'its_ok',    category: 'retry', image: '/assets/paul/paul_its_ok.png',   emoji: '🙂', message: '괜찮아요!',               sound: null, rarity: 'common' },
+  { id: 'sad',       category: 'retry', image: '/assets/paul/paul_sad.png',      emoji: '😢', message: '괜찮아요, 정답을 확인해봐요', sound: null, rarity: 'common' },
+  { id: 'cry',       category: 'retry', image: '/assets/paul/paul_cry.png',      emoji: '🥲', message: '한 번 더 해볼까요?',       sound: null, rarity: 'common' },
+  { id: 'sorry',     category: 'retry', image: '/assets/paul/paul_sorry.png',    emoji: '🙏', message: '아쉬워요!',               sound: null, rarity: 'common' },
+  { id: 'one_more',  category: 'retry', image: '/assets/paul/paul_one_more.png', emoji: '❤️', message: '한 번 더 해볼까요?',       sound: null, rarity: 'common' },
+  { id: 'fight',     category: 'retry', image: '/assets/paul/paul_fight.png',    emoji: '✊', message: '다시 도전!',              sound: null, rarity: 'common' },
 
-  // ── 격려(오답이지만 혼내지 않음) — 랜덤 순환 + 쓰기 4단계는 id로 직접 지정
-  { id: 'thinking',  category: 'encourage', image: '/assets/paul/paul_thinking.png', emoji: '🤔', message: '다시 한번 생각해보세요!', sound: null, rarity: 'common' },
-  { id: 'almost',    category: 'encourage', image: '/assets/paul/paul_almost.png',   emoji: '💪', message: '거의 다 왔어요!',         sound: null, rarity: 'common' },
-  { id: 'retry',     category: 'encourage', image: '/assets/paul/paul_retry.png',    emoji: '🔊', message: '발음을 들어볼까요?',      sound: null, rarity: 'common' },
-  { id: 'sad',       category: 'encourage', image: '/assets/paul/paul_sad.png',      emoji: '😢', message: '괜찮아요, 정답을 확인해봐요', sound: null, rarity: 'common' },
-  { id: 'cry',       category: 'encourage', image: '/assets/paul/paul_cry.png',      emoji: '🥲', message: '한 번 더 해볼까요?',       sound: null, rarity: 'common' },
-
-  // ── 인사/응원/시작 — 화면 진입 등 가벼운 순간 ───────────────────────────
-  { id: 'welcome', category: 'greeting', image: '/assets/paul/paul_welcome.png', emoji: '👋', message: '안녕하세요!',   sound: null, rarity: 'common' },
-  { id: 'study',   category: 'greeting', image: '/assets/paul/paul_study.png',   emoji: '📖', message: "Let's learn!", sound: null, rarity: 'common' },
-  { id: 'cheer',   category: 'greeting', image: '/assets/paul/paul_cheer.png',   emoji: '❤️', message: '응원해요!',     sound: null, rarity: 'common' },
-  { id: 'love',    category: 'greeting', image: '/assets/paul/paul_love.png',    emoji: '💜', message: '폴이지보카!',   sound: null, rarity: 'common' },
+  // ── Etc (인사/모드 안내/특별한 날) ──────────────────────────────────────
+  { id: 'hello',       category: 'etc', image: '/assets/paul/paul_hello.png',       emoji: '👋', message: '안녕하세요!',     sound: null, rarity: 'common' },
+  { id: 'lets_learn',  category: 'etc', image: '/assets/paul/paul_lets_learn.png',  emoji: '📖', message: "Let's learn!",  sound: null, rarity: 'common' },
+  { id: 'study',       category: 'etc', image: '/assets/paul/paul_study.png',       emoji: '✏️', message: '공부 시작!',      sound: null, rarity: 'common' },
+  { id: 'love',        category: 'etc', image: '/assets/paul/paul_love.png',        emoji: '💜', message: '응원해요!',       sound: null, rarity: 'common' },
+  { id: 'good_job',    category: 'etc', image: '/assets/paul/paul_good_job.png',    emoji: '👍', message: '수고했어요!',     sound: '/success.wav', rarity: 'common' },
+  { id: 'birthday',    category: 'etc', image: '/assets/paul/paul_birthday.png',    emoji: '🎂', message: '생일 축하해요!',  sound: '/success.wav', rarity: 'rare' },
+  { id: 'reading',     category: 'etc', image: '/assets/paul/paul_reading.png',     emoji: '👂', message: '듣기 시간이에요!', sound: null, rarity: 'common' },
+  { id: 'writing',     category: 'etc', image: '/assets/paul/paul_writing.png',     emoji: '✍️', message: '쓰기 시간이에요!', sound: null, rarity: 'common' },
+  { id: 'speaking',    category: 'etc', image: '/assets/paul/paul_speaking.png',    emoji: '🗣️', message: '말하기 시간이에요!', sound: null, rarity: 'common' },
+  { id: 'mission',     category: 'etc', image: '/assets/paul/paul_mission.png',     emoji: '🎯', message: '미션 완료!',      sound: '/success.wav', rarity: 'rare' },
 ]
 
 export function getReactionById(id) {
   return PAUL_REACTIONS.find(r => r.id === id) || null
 }
 
-// 카테고리별 "마지막으로 보여준 id" — 모듈 전역(speech.js의 _currentAudio
-// 같은 기존 싱글톤 패턴과 동일)이라 화면이 바뀌어도 "같은 캐릭터 연속
-// 반복 방지"가 계속 유지됨.
-const _lastShownByCategory = {}
-
-// 해당 카테고리 안에서 직전과 다른 것을 무작위로 고름. 카테고리에 1개뿐
-// 이면(levelup처럼) 그냥 그걸 반환 — 반복 방지는 2개 이상일 때만 의미있음.
-export function pickReaction(category) {
-  const pool = PAUL_REACTIONS.filter(r => r.category === category)
-  if (pool.length === 0) return null
-  const last = _lastShownByCategory[category]
-  const candidates = pool.length > 1 ? pool.filter(r => r.id !== last) : pool
+// 카테고리/메시지 풀마다 "마지막으로 뽑힌 것"을 따로 추적하는 공용
+// no-repeat 랜덤 선택기 — 모듈 전역(speech.js의 _currentAudio 같은 기존
+// 싱글톤 패턴과 동일)이라 화면이 바뀌어도 "연속 반복 방지"가 유지됨.
+const _lastShown = {}
+function pickNoRepeat(items, poolKey, getKey) {
+  if (!items || items.length === 0) return null
+  const last = _lastShown[poolKey]
+  const candidates = items.length > 1 ? items.filter(x => getKey(x) !== last) : items
   const picked = candidates[Math.floor(Math.random() * candidates.length)]
-  _lastShownByCategory[category] = picked.id
+  _lastShown[poolKey] = getKey(picked)
   return picked
+}
+
+// 이미지가 속한 3개 폴더(success/retry/etc) 안에서 랜덤 하나 — 직전과
+// 같은 캐릭터는 연속으로 안 나옴. resolveReaction() 내부에서만 쓰는
+// 하위 헬퍼(폴더 매칭만 함, id·별칭 폴백은 안 함) — 바깥에서 폴더 랜덤이
+// 필요하면 pickReaction()(아래, resolveReaction의 별칭)을 쓸 것.
+function pickByFolder(category) {
+  const pool = PAUL_REACTIONS.filter(r => r.category === category)
+  return pickNoRepeat(pool, `img:${category}`, r => r.id)
+}
+
+// 메시지는 이미지와 완전히 독립적으로 5개 카테고리(성공/실패/레벨업/
+// 격려/미션완료)에서 따로 랜덤 뽑음 — 같은 캐릭터가 나와도 문구는 매번
+// 달라질 수 있음.
+const MESSAGE_POOLS = {
+  success:   ['잘했어요!', '최고예요!', 'Perfect!', 'Great!', 'Excellent!', '완벽해요!'],
+  fail:      ['괜찮아요!', '아쉬워요, 정답을 확인해봐요', '미안해하지 않아도 돼요!', '다음엔 꼭 맞힐 거예요!'],
+  levelup:   ['레벨업!', '한 단계 성장했어요!', '축하해요, 레벨업!'],
+  encourage: ['거의 다 왔어요!', '다시 한번 생각해보세요!', '조금만 더 힘내요!', '할 수 있어요, 파이팅!', '한 번 더 도전!'],
+  complete:  ['미션 완료!', '오늘도 해냈어요!', '수고했어요!'],
+}
+
+export function pickMessage(msgCategory) {
+  const pool = MESSAGE_POOLS[msgCategory]
+  if (!pool) return null
+  return pickNoRepeat(pool, `msg:${msgCategory}`, m => m)
+}
+
+// 각 id가 어떤 "메시지 카테고리"에 속하는지 — 이미지(3개 폴더)와 메시지
+// (5개 카테고리)가 서로 다른 분류라서 필요한 매핑. 여기 없는 id(hello,
+// lets_learn, study, love, reading, writing, speaking, birthday)는 상황이
+// 고유해서 랜덤 메시지 풀 없이 자기 자신의 고정 message를 그대로 씀.
+const ID_TO_MSG_CATEGORY = {
+  happy: 'success', best: 'success', perfect: 'success', great: 'success', excellent: 'success', star: 'success',
+  levelup: 'levelup',
+  celebrate: 'complete', good_job: 'complete', mission: 'complete',
+  thinking: 'encourage', almost: 'encourage', retry: 'encourage', cheerup: 'encourage', one_more: 'encourage', fight: 'encourage',
+  its_ok: 'fail', sad: 'fail', cry: 'fail', sorry: 'fail',
+}
+
+// 메시지 카테고리 이름(fail/encourage/complete — levelup·success는 이미
+// 폴더/id 이름과 겹침)을 type으로 직접 불렀을 때 어떤 이미지 후보들 중에서
+// 뽑을지 — ID_TO_MSG_CATEGORY의 역인덱스.
+const MSG_CATEGORY_TO_IDS = Object.entries(ID_TO_MSG_CATEGORY).reduce((acc, [id, cat]) => {
+  (acc[cat] ||= []).push(id)
+  return acc
+}, {})
+
+// PaulReaction의 `type` prop 하나로 아래 세 가지를 전부 커버하는 통합
+// 리졸버 — 요청사항 5의 예시(type="success"/"retry"/"thinking"/"levelup")가
+// 전부 이 한 함수로 처리됨:
+//   1. type이 정확한 id면(예: "thinking") 그 이미지를 그대로 씀
+//   2. type이 폴더 이름이면("success"/"retry"/"etc") 그 폴더 안에서 랜덤
+//   3. type이 메시지 카테고리 별칭이면("fail"/"encourage"/"complete") 그
+//      카테고리에 속한 이미지들 중 랜덤
+// 이미지가 정해지면, 그 id가 메시지 카테고리를 갖고 있을 때만 메시지도
+// 별도로 랜덤 교체(요청사항 7) — 없으면 그 리액션 고유의 기본 문구 사용.
+export function resolveReaction(type) {
+  if (!type) return null
+  let base = getReactionById(type) || pickByFolder(type)
+  if (!base && MSG_CATEGORY_TO_IDS[type]) {
+    const candidates = PAUL_REACTIONS.filter(r => MSG_CATEGORY_TO_IDS[type].includes(r.id))
+    base = pickNoRepeat(candidates, `img-alias:${type}`, r => r.id)
+  }
+  if (!base) return null
+  const msgCategory = ID_TO_MSG_CATEGORY[base.id]
+  const message = msgCategory ? (pickMessage(msgCategory) || base.message) : base.message
+  return { ...base, message }
+}
+
+// 이전 버전(퀴즈/쓰기/레벨업미션/미니게임/단어학습에 이미 붙여놓은 호출부)
+// 이 쓰던 이름을 그대로 유지 — resolveReaction()의 별칭. 예전엔 category
+// 이름만 받았지만(success/encourage/levelup 등) resolveReaction이 id·
+// 폴더·메시지별칭을 모두 처리하므로 기존 호출부(pickReaction('encourage'),
+// pickReaction('levelup') 등)가 하나도 안 깨짐 — 오히려 메시지까지
+// 랜덤화되는 효과를 덤으로 얻음.
+export function pickReaction(type) {
+  return resolveReaction(type)
 }

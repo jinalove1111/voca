@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
+import { resolveReaction } from '../utils/paulReactions'
 
 const SIZE_PX = { sm: 56, md: 96, lg: 144 }
 
@@ -8,7 +9,19 @@ const SIZE_PX = { sm: 56, md: 96, lg: 144 }
 // PNG만 /public/assets/paul/에 추가해도 이 컴포넌트는 코드 수정 없이
 // 바로 반영됨.
 //
-// 두 가지 사용 모드:
+// 리액션 지정 방법 두 가지(둘 중 하나만 주면 됨):
+//   - reaction={객체}: 부모가 이미 pickReaction()/resolveReaction()으로
+//     직접 뽑아서 자기 상태에 들고 있는 경우(정답/오답 시점마다 정확히
+//     한 번만 뽑혀야 하는 기존 화면들 — 퀴즈/쓰기/레벨업미션/미니게임/
+//     단어학습이 전부 이 방식). 리렌더링돼도 절대 안 바뀜.
+//   - type="success"(또는 "retry"/"thinking"/"levelup" 등): 이 컴포넌트가
+//     마운트되는 시점에 한 번 resolveReaction(type)으로 알아서 랜덤(또는
+//     정확한 id) 리액션을 고름 — <PaulReaction type="success" /> 처럼
+//     바로 쓸 수 있는 간단한 방식. 주의: type 문자열이 같은 채로 계속
+//     떠 있으면(리마운트 없이) 다시 안 뽑힘 — 매번 새로 뽑히게 하려면
+//     호출부에서 key를 바꿔 새로 마운트시킬 것(예: key={answerId}).
+//
+// 두 가지 표시 모드:
 //   - overlay(기본 false): 레벨업/별 획득/트로피처럼 화면 전체를 잠깐
 //     덮는 큰 축하 팝업. 2초 후 자동으로 사라지고(onDone), 탭하면 바로
 //     사라짐(즉시 onDone).
@@ -17,7 +30,10 @@ const SIZE_PX = { sm: 56, md: 96, lg: 144 }
 //     자체 타이머가 없음 — 각 화면이 이미 갖고 있는 "몇 초 후 다음 문제로"
 //     타이밍을 그대로 따르고, 폴은 그 안에 얹히는 시각 요소일 뿐임(같은
 //     피드백에 대해 화면마다 서로 다른 두 개의 타이머가 경쟁하는 걸 피함).
-export default function PaulReaction({ reaction, message, size = 'md', overlay = false, onDone, durationMs = 2000 }) {
+export default function PaulReaction({ reaction: reactionProp, type, message, size = 'md', overlay = false, onDone, durationMs = 2000 }) {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const resolvedFromType = useMemo(() => (type ? resolveReaction(type) : null), [type])
+  const reaction = reactionProp ?? resolvedFromType
   const [imgFailed, setImgFailed] = useState(false)
   const [hidden, setHidden] = useState(false)
   const doneRef = useRef(false)
