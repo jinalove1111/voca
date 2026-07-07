@@ -59,10 +59,12 @@ class AppErrorBoundary extends React.Component {
   }
 }
 
+// 0.6/0.8/1.0(40% 구간)에서는 체감 속도차가 잘 안 느껴진다는 피드백 —
+// 구간을 넓혀서(0.5~1.2, 140%) 세 단계가 확실히 다르게 들리도록 조정.
 const RATE_OPTIONS = [
-  { label: '🐢 천천히', value: 0.6 },
-  { label: '🙂 보통',   value: 0.8 },
-  { label: '🚀 빠르게', value: 1.0 },
+  { label: '🐢 천천히', value: 0.5 },
+  { label: '🙂 보통',   value: 0.85 },
+  { label: '🚀 빠르게', value: 1.2 },
 ]
 
 function SpeedBtn() {

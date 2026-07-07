@@ -29,7 +29,10 @@ export const FAIL_MSGS = [
 export const rndMsg = (arr) => arr[Math.floor(Math.random() * arr.length)]
 
 const RATE_KEY = 'paulEasyVoca_speechRate'
-export const getSpeechRate = () => parseFloat(localStorage.getItem(RATE_KEY) || '0.6')
+// 기본값은 App.jsx의 RATE_OPTIONS 중 "🙂 보통"과 반드시 같은 값이어야
+// 함 — 다르면 처음 앱을 켠 학생에게는 버튼 라벨과 실제 재생 속도가
+// 어긋나 보임(버튼을 한 번 눌러야만 맞아떨어짐).
+export const getSpeechRate = () => parseFloat(localStorage.getItem(RATE_KEY) || '0.85')
 export const setSpeechRate = (r) => localStorage.setItem(RATE_KEY, String(r))
 
 // ── Success sound effect ────────────────────────────────────────────────────
