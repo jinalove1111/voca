@@ -5,8 +5,9 @@ import { isSpellingCorrect, spellingHintFor } from '../utils/spelling'
 // 초등학생이 발음을 듣고 철자를 떠올릴 수 있을 만큼 천천히, 그러나
 // 로봇처럼 부자연스럽게 들리지 않는 속도. 앱 전체 재생 속도 설정
 // (SpeedBtn, 학생이 바꿀 수 있음)과 무관하게 쓰기 시험은 항상 이 속도로
-// 고정 — 이미 이 앱의 "🐢 천천히" 프리셋으로 검증된 값(0.6)을 그대로 재사용.
-const SPELLING_RATE = 0.6
+// 고정. 기존 0.6(이 앱의 "🐢 천천히" 프리셋)이 답답하다는 피드백을 받아
+// 약 15~20% 올림 — 영국 원어민 선생님이 또박또박 읽어주는 속도를 목표.
+const SPELLING_RATE = 0.7
 const SPELLING_GAP_MS = 1000 // 반복 사이 약 1초 대기
 const UNLOCK_AT = 3 // 이 오답 횟수부터 '발음 듣기' 버튼이 활성화됨
 
