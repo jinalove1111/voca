@@ -5,8 +5,8 @@ import { isInAppBrowser } from '../utils/browserDetect'
 import InAppBrowserNotice from './InAppBrowserNotice'
 import SpellingQuestion from './SpellingQuestion'
 import { useMicReady } from '../hooks/useMicReady'
-import { pickReaction } from '../utils/paulReactions'
-import PaulReaction from './PaulReaction'
+import { pickReaction, playReactionSound, getReactionById } from '../utils/paulReactions'
+import HeroReaction from './HeroReaction'
 
 function getAudioMimeType() {
   if (typeof MediaRecorder === 'undefined') return ''
@@ -74,7 +74,9 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
       console.log('[WordDetail] STEP7 Success or Fail:', nextPhase)
       clearTimeout(hangTimerRef.current)
       try { mrRef.current?.stop?.() } catch {}
-      setPaulReaction(pickReaction(success ? 'success' : 'encourage'))
+      const reaction = pickReaction(success ? 'success' : 'encourage')
+      setPaulReaction(reaction)
+      playReactionSound(reaction)
       if (countTry || success) onAttempt?.()
       if (success) { onSuccess?.(); onAnyResult?.() }
       if (countTry) {
@@ -191,9 +193,9 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
       <button onClick={handleClick} disabled={phase === 'speaking' || phase === 'success'}
-        className={`w-full py-3 rounded-xl font-black text-sm btn-press transition-colors ${
+        className={`w-[90%] mx-auto min-h-[60px] flex items-center justify-center rounded-2xl font-black text-base btn-press transition-colors ${
           phase === 'success'   ? 'bg-green-500 text-white' :
           phase === 'fail'      ? 'bg-orange-400 text-white' :
           // 'listening' is the ACTIVE recording state — the student should be
@@ -201,7 +203,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
           // like a disabled/broken button (that was being misread as "stuck").
           phase === 'listening' ? 'bg-yellow-400 text-white animate-pulse cursor-not-allowed' :
           phase === 'speaking'  ? 'bg-gray-200 text-gray-400 cursor-not-allowed' :
-                                  'bg-purple-500 hover:bg-purple-600 text-white'
+                                  'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white'
         }`}>
         {phase === 'idle'      ? `🎤 ${label}` :
          phase === 'speaking'  ? '🔊 잘 들어봐요...' :
@@ -211,12 +213,12 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
       </button>
 
       {msg && (
-        <div className="text-center">
-          <PaulReaction reaction={paulReaction} message="" size="sm" />
-          <p className={`text-sm font-bold ${phase === 'success' ? 'text-green-600' : 'text-orange-500'}`}>
-            {msg}
-          </p>
-        </div>
+        <HeroReaction
+          image={paulReaction?.image}
+          title={msg}
+          theme={phase === 'success' ? 'success' : 'fail'}
+          size="md"
+        />
       )}
 
       {(phase === 'success' || phase === 'fail') && transcript && (
@@ -253,26 +255,46 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
 
   return (
     <div className="space-y-4">
-      <div className="bg-gradient-to-br from-blue-500 to-purple-500 rounded-3xl p-6 text-white card-shadow word-card">
-        <div className="text-center mb-4">
-          <PaulReaction type="study" message="" size="sm" />
-          <button onClick={playWord} className="btn-press max-w-full">
-            <h1 className="word-text font-black hover:scale-110 transition-transform">{word.word}</h1>
-          </button>
-          <p className="text-blue-200 text-xs mt-1">탭하면 발음이 나와요 👆</p>
-          <div className="bg-white/20 rounded-2xl px-4 py-3 mt-3 inline-block">
-            <p className="text-3xl font-black">{word.meaning}</p>
-          </div>
+      <div
+        onClick={playWord}
+        className="bg-gradient-to-br from-indigo-500 via-blue-600 to-purple-600 rounded-3xl pt-4 px-5 pb-6 text-white card-shadow word-card cursor-pointer"
+      >
+        {/* 단어 학습 카드에서는 예외 — Paul은 "히어로"가 아니라 작은
+            마스코트로만(48~64px). 우선순위는 항상 1)영어 단어 2)한글 뜻
+            3)따라 말하기 버튼 4)Paul이므로, 여기서만 HeroReaction의
+            xs 사이즈를 쓴다. */}
+        <div className="flex justify-center">
+          <HeroReaction image={getReactionById('study')?.image} size="xs" />
         </div>
-        <SpeechBtn
-          target={word.word}
-          wordAudioUrl={word.wordAudioUrl}
-          label="따라 말하기"
-          maxMs={5000}
-          onSuccess={onMarkPronunciationOk}
-          onAnyResult={() => setCanProceed(true)}
-          onAttempt={onPronunciationAttempt}
-        />
+
+        <h1 className="word-text-hero font-black -mt-1 hover:scale-105 transition-transform">
+          {word.word}
+        </h1>
+
+        <div className="flex justify-center mt-2">
+          <span className="inline-flex items-center gap-2 bg-white/15 rounded-full pl-2 pr-4 py-1.5">
+            <span className="w-7 h-7 rounded-full bg-white/25 flex items-center justify-center text-sm">🔊</span>
+            {word.pronunciation && (
+              <span className="text-sm font-bold text-white/90">[{word.pronunciation}]</span>
+            )}
+          </span>
+        </div>
+
+        <div className="bg-white/20 rounded-2xl px-5 py-4 mt-4">
+          <p className="meaning-box-text font-bold">{word.meaning}</p>
+        </div>
+
+        <div className="mt-4">
+          <SpeechBtn
+            target={word.word}
+            wordAudioUrl={word.wordAudioUrl}
+            label="따라 말하기"
+            maxMs={5000}
+            onSuccess={onMarkPronunciationOk}
+            onAnyResult={() => setCanProceed(true)}
+            onAttempt={onPronunciationAttempt}
+          />
+        </div>
       </div>
 
       {word.memoryTip && (
@@ -309,7 +331,7 @@ function ExampleStep({ english, korean, memoryTip, audioUrl, onDone, onMarkExamp
     <div className="space-y-4">
       <div className="bg-white rounded-3xl card-shadow p-6">
         <div className="flex items-center gap-2 mb-3">
-          <PaulReaction type="reading" message="" size="sm" />
+          <HeroReaction image={getReactionById('reading')?.image} size="sm" />
           <p className="font-black text-gray-500 text-sm">📝 예문</p>
         </div>
         <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5">
@@ -377,7 +399,9 @@ function QuizStep({ word, classWords, onDone, onMarkQuizSolved, onQuizAnswer }) 
     if (isAnswered) return
     setSelected(i)
     const correct = i === correctIdx
-    setPaulReaction(pickReaction(correct ? 'success' : 'encourage'))
+    const reaction = pickReaction(correct ? 'success' : 'encourage')
+    setPaulReaction(reaction)
+    playReactionSound(reaction)
     if (correct) onMarkQuizSolved?.()
     onQuizAnswer?.(word.id, correct)
   }
@@ -427,10 +451,12 @@ function QuizStep({ word, classWords, onDone, onMarkQuizSolved, onQuizAnswer }) 
           <div className={`mt-4 p-3 rounded-2xl text-center animate-slide-up border-2 ${
             isCorrect ? 'bg-green-50 border-green-200 text-green-700' : 'bg-orange-50 border-orange-200 text-orange-700'
           }`}>
-            <PaulReaction reaction={paulReaction} message="" size="sm" />
-            <p className="font-black mt-1">
-              {isCorrect ? '🎉 정답! 잘했어요!' : `정답은 "${word.meaning}"이에요 💪`}
-            </p>
+            <HeroReaction
+              image={paulReaction?.image}
+              title={isCorrect ? '🎉 정답! 잘했어요!' : `정답은 "${word.meaning}"이에요 💪`}
+              theme={isCorrect ? 'success' : 'fail'}
+              size="md"
+            />
           </div>
         )}
       </div>

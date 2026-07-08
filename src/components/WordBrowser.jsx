@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
-import PaulReaction from './PaulReaction'
+import { getReactionById } from '../utils/paulReactions'
+import HeroReaction from './HeroReaction'
 
 const MODES = [
   { id: 'study',         label: '공부하기', emoji: '📖' },
@@ -25,7 +26,7 @@ export default function WordBrowser({ words, cleared, onSelect, onBack, mode, on
           <h1 className="text-2xl font-black text-blue-600">📖 단어 공부</h1>
           <p className="text-gray-400 text-xs">{words.length}개 단어 · {cleared.length}개 클리어</p>
         </div>
-        <PaulReaction type="lets_learn" message="" size="sm" />
+        <HeroReaction image={getReactionById('lets_learn')?.image} size="sm" />
       </div>
 
       <div className="max-w-lg mx-auto">

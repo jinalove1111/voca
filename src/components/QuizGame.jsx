@@ -4,7 +4,7 @@ import { requestAudioGeneration } from '../utils/wordLibrary'
 import { isInAppBrowser } from '../utils/browserDetect'
 import InAppBrowserNotice from './InAppBrowserNotice'
 import { pickReaction } from '../utils/paulReactions'
-import PaulReaction from './PaulReaction'
+import HeroReaction from './HeroReaction'
 
 const KO_PRAISE = [
   '야르~ 정답!', '야르! 이건 그냥 맞추네!', '와 대박! 단어 고수인데?',
@@ -417,8 +417,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
           {/* Wrong answer feedback */}
           {isAnswered && !isCorrect && (
             <div className="mt-4 p-4 rounded-2xl border-2 bg-red-50 border-red-200 text-red-700 text-center animate-slide-up">
-              <PaulReaction reaction={answerPaul} message="" size="sm" />
-              <p className="font-black mt-1">아깝다! 거의 다 왔어! 💪</p>
+              <HeroReaction image={answerPaul?.image} title="아깝다! 거의 다 왔어! 💪" theme="inherit" size="md" />
               <p className="text-sm mt-1">정답: <span className="font-black">{current.word.meaning}</span> → 레벨업 미션 추가! ⚔️</p>
             </div>
           )}
@@ -426,8 +425,9 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
           {/* Correct: praise banner */}
           {isCorrect && praiseMsg && (
             <div className="mt-4 p-4 rounded-2xl border-2 bg-yellow-50 border-yellow-300 text-center animate-slide-up">
-              {/* speakPraise()가 이미 음성으로 축하해주므로 효과음 중복 재생 방지 */}
-              <PaulReaction reaction={answerPaul ? { ...answerPaul, sound: null } : null} message="" size="sm" />
+              {/* speakPraise()가 이미 음성으로 축하해줌 — HeroReaction은 효과음을
+                  재생하지 않으므로 중복 걱정 없음 */}
+              <HeroReaction image={answerPaul?.image} size="md" />
               <p className="font-black text-yellow-800 text-lg mt-1">{praiseMsg}</p>
             </div>
           )}

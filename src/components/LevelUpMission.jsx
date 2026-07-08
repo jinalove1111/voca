@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { playSuccessSound } from '../utils/speech'
-import { pickReaction } from '../utils/paulReactions'
-import PaulReaction from './PaulReaction'
+import { pickReaction, getReactionById } from '../utils/paulReactions'
+import HeroReaction from './HeroReaction'
 
 function makeOptions(w, allWords) {
   const others = allWords.filter(x => x.id !== w.id).sort(() => Math.random() - 0.5).slice(0, 3)
@@ -80,13 +80,16 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
         <div className="w-full max-w-md animate-fade-in">
           {didClear ? (
             <div className="bg-white rounded-3xl card-shadow p-8 text-center animate-slide-up">
-              {/* playSuccessSound()가 handleSelect에서 이미 재생하므로 효과음 중복 방지 */}
-              <PaulReaction reaction={clearPaul ? { ...clearPaul, sound: null } : null} message="" size="lg" />
-              <h2 className="text-3xl font-black text-green-600 mb-2 mt-2">보스 단어 클리어!</h2>
-              <p className="text-gray-500 mb-4">
-                <span className="font-black text-gray-800">{w?.word}</span>을 완전히 외웠어요!
-              </p>
-              <p className="text-yellow-600 font-bold text-lg mb-6">+3⭐ 보너스 획득!</p>
+              {/* playSuccessSound()가 handleSelect에서 이미 재생함 —
+                  HeroReaction은 효과음을 직접 재생하지 않으므로 중복 걱정 없음 */}
+              <HeroReaction
+                image={clearPaul?.image}
+                title="보스 단어 클리어!"
+                message={`"${w?.word}"을 완전히 외웠어요!`}
+                theme="success"
+                size="lg"
+              />
+              <p className="text-yellow-600 font-bold text-lg mt-2 mb-6">+3⭐ 보너스 획득!</p>
               <button onClick={handleNext} className="w-full bg-green-500 text-white font-black py-4 rounded-2xl btn-press">
                 계속하기 →
               </button>
@@ -135,10 +138,11 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
                   X+정답 안내만(효과음 없음, 기존 앱 전체와 동일한 원칙). */}
               {isAnswered && (
                 <div className={`mt-4 p-4 rounded-2xl border-2 text-center animate-slide-up ${isCorrect ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-                  {/* isCorrect일 때는 playSuccessSound()가 이미 재생하므로 효과음 중복 방지 */}
-                  <PaulReaction reaction={answerPaul ? (isCorrect ? { ...answerPaul, sound: null } : answerPaul) : null} message="" size="sm" />
-                  <p className="font-black text-lg mb-1 mt-1">{isCorrect ? 'Correct!' : 'Wrong!'}</p>
-                  <p className="font-bold">
+                  {/* isCorrect일 때는 playSuccessSound()가 이미 재생함 — HeroReaction은
+                      효과음을 재생하지 않으므로 중복 걱정 없음. 이 박스는 이미
+                      빨강/초록으로 색이 정해져 있어 theme="inherit"으로 그 색을 그대로 씀. */}
+                  <HeroReaction image={answerPaul?.image} title={isCorrect ? 'Correct!' : 'Wrong!'} theme="inherit" size="md" />
+                  <p className="font-bold mt-1">
                     <span className="text-base">{w?.word}</span>
                     <span className="mx-2 opacity-60">=</span>
                     <span className="text-base">{w?.meaning}</span>
@@ -184,7 +188,7 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
         ) : (
           <div className="space-y-3 animate-fade-in">
             <div className="bg-red-50 rounded-2xl p-3 border-2 border-red-100 text-center mb-4">
-              <PaulReaction type="love" message="" size="sm" />
+              <HeroReaction image={getReactionById('love')?.image} size="sm" />
               <p className="text-red-600 font-bold text-sm mt-1">💡 3번 맞히면 클리어! (+3⭐)</p>
             </div>
 

@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { playWordAudio, stopCurrentAudio, playSuccessSound, unlockAudio } from '../utils/speech'
 import { ROUNDS, STAR_PER_CORRECT, PERFECT_BONUS, pickNextTarget, buildOptions, TIER } from '../utils/matchGame'
 import { pickReaction } from '../utils/paulReactions'
-import PaulReaction from './PaulReaction'
+import HeroReaction from './HeroReaction'
 
 // Generic "hear the word, tap the matching meaning" mini-game shell shared
 // by every themed game (balloon/fishing/pizza/train) — only `theme` differs
@@ -182,10 +182,10 @@ export default function MatchGameShell({ theme, words, onBack, onAddStars, onCon
 
         {picked && (
           <div className="mt-8 text-center animate-slide-up">
-            {/* playSuccessSound()가 이미 재생하므로 효과음 중복 방지. 게임
-                고유의 테마 연출(풍선 터짐 등)은 그대로 유지하고 폴은 그
-                위에 함께 보여줌. */}
-            <PaulReaction reaction={answerPaul ? { ...answerPaul, sound: null } : null} message="" size="sm" />
+            {/* playSuccessSound()가 이미 재생함 — HeroReaction은 효과음을
+                재생하지 않으므로 중복 걱정 없음. 게임 고유의 테마 연출
+                (풍선 터짐 등)은 그대로 유지하고 폴은 그 위에 함께 보여줌. */}
+            <HeroReaction image={answerPaul?.image} size="md" />
             <p className="text-4xl mb-1">{theme.correctFx.emoji}</p>
             <p className="text-2xl font-black text-yellow-300">{theme.correctFx.label}</p>
             {!firstTryUsed && <p className="text-white font-bold">⭐ +{STAR_PER_CORRECT}</p>}
@@ -193,7 +193,7 @@ export default function MatchGameShell({ theme, words, onBack, onAddStars, onCon
         )}
         {shakeMeaning && !picked && (
           <div className="mt-8 text-center animate-slide-up">
-            <PaulReaction reaction={answerPaul} message="" size="sm" />
+            <HeroReaction image={answerPaul?.image} size="md" />
             <p className="text-3xl mb-1">{theme.wrongFx.emoji}</p>
             <p className="text-xl font-black text-white">{theme.wrongFx.label}</p>
           </div>

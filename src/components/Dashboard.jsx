@@ -5,7 +5,8 @@ import { useMicReady } from '../hooks/useMicReady'
 import { isInAppBrowser } from '../utils/browserDetect'
 import { STICKERS } from '../data/stickers'
 import InAppBrowserNotice from './InAppBrowserNotice'
-import PaulReaction from './PaulReaction'
+import HeroReaction from './HeroReaction'
+import { getReactionById } from '../utils/paulReactions'
 
 const GOAL = 5
 const stickerById = (id) => STICKERS.find(s => s.id === id)
@@ -149,15 +150,13 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 
   return (
     <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl p-5 text-white card-shadow">
-      <div className="flex flex-col items-center text-center gap-2 md:flex-row md:items-center md:text-left md:gap-4">
-        <PaulReaction type="hello" message="" size="sm" />
-        <div className="w-full md:flex-1">
-          <p className="font-black text-lg leading-snug">
-            <span className="mr-1">{rec.emoji}</span>{rec.title}
-          </p>
-          <p className="text-indigo-100 text-sm mt-1 w-full">{rec.desc}</p>
-        </div>
-      </div>
+      <HeroReaction
+        image={getReactionById('hello')?.image}
+        title={`${rec.emoji} ${rec.title}`}
+        message={rec.desc}
+        theme="banner"
+        size="md"
+      />
       {rec.label && (
         <button onClick={rec.onClick}
           className="w-full mt-4 bg-white text-indigo-600 font-black py-3 rounded-2xl btn-press">

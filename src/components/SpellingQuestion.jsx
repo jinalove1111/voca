@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { playWordAudio, playRepeating, stopCurrentAudio, playSuccessSound } from '../utils/speech'
 import { isSpellingCorrect, spellingHintFor } from '../utils/spelling'
 import { getReactionById, pickReaction } from '../utils/paulReactions'
-import PaulReaction from './PaulReaction'
+import HeroReaction from './HeroReaction'
 
 // 오답 1~3단계는 폴 선생님 리액션이 정확히 정해져 있음(랜덤 아님) —
 // Project Paul 캐릭터 시스템 스펙의 "1번째=Paul Thinking, 2번째=Paul
@@ -165,7 +165,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
       {phase === 'answer' && (
         <div className="space-y-3 animate-slide-up">
           {wrongMsg && (
-            <PaulReaction reaction={getReactionById(WRONG_PAUL_ID[wrongCount])} message={wrongMsg} size="sm" />
+            <HeroReaction image={getReactionById(WRONG_PAUL_ID[wrongCount])?.image} title={wrongMsg} theme="fail" size="md" />
           )}
           <input ref={inputRef} type="text" value={input} onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && submitAnswer()}
@@ -181,7 +181,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
       {phase === 'reveal' && (
         <div className="space-y-3 animate-slide-up">
           <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-4 text-center">
-            <PaulReaction reaction={getReactionById('sad')} message="" size="sm" />
+            <HeroReaction image={getReactionById('sad')?.image} size="md" />
             <p className="text-red-500 font-bold text-sm mb-1 mt-1">정답은</p>
             <p className="text-red-600 font-black text-2xl tracking-wide">{word}</p>
             <p className="text-red-500 font-bold text-sm mt-1">입니다</p>
@@ -200,10 +200,15 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
 
       {phase === 'correct' && (
         <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-4 text-center animate-slide-up">
-          {/* playSuccessSound()가 이미 위 markCorrect()에서 재생하므로,
-              같은 소리가 두 번 겹치지 않도록 여기선 sound를 꺼서 넘김. */}
-          <PaulReaction reaction={correctPaul ? { ...correctPaul, sound: null } : null} size="sm" />
-          <p className="text-green-600 font-black text-lg mt-1">정답이에요! &ldquo;{word}&rdquo;</p>
+          {/* playSuccessSound()가 이미 위 markCorrect()에서 재생함 — HeroReaction은
+              효과음을 재생하지 않으므로 중복 걱정 없음. */}
+          <HeroReaction
+            image={correctPaul?.image}
+            title={correctPaul?.message}
+            message={`정답이에요! "${word}"`}
+            theme="success"
+            size="md"
+          />
         </div>
       )}
     </div>

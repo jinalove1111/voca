@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { RARITY_COLORS } from '../data/stickers'
 import { playSuccessSound } from '../utils/speech'
-import PaulReaction from './PaulReaction'
+import { pickReaction } from '../utils/paulReactions'
+import HeroReaction from './HeroReaction'
 
 // Gift-box reveal — replaces the old egg-crack animation. Fires
 // automatically whenever a mission round completes (see useStudent.js's
@@ -9,6 +10,9 @@ import PaulReaction from './PaulReaction'
 // all day instead of once.
 export default function GiftReveal({ sticker, isDuplicate, isMilestone, streakDays, isBadge, badgeThreshold, onClose }) {
   const [stage, setStage] = useState('box') // box → shake → open
+  // 컴포넌트가 마운트될 때 한 번만 뽑음(예전 PaulReaction의 type prop이
+  // 컴포넌트 생애주기 동안 하나로 고정되던 것과 동일한 동작).
+  const completePaul = useMemo(() => pickReaction('complete'), [])
 
   useEffect(() => {
     const t1 = setTimeout(() => setStage('shake'), 900)
@@ -42,8 +46,8 @@ export default function GiftReveal({ sticker, isDuplicate, isMilestone, streakDa
 
         {stage === 'open' && (
           <div className="animate-slide-up">
-            {/* playSuccessSound()가 이미 위에서 재생하므로 효과음 중복 방지 */}
-            <PaulReaction type="complete" message="" size="sm" muted />
+            {/* playSuccessSound()가 이미 위에서 재생하므로 playReactionSound() 호출 생략(중복 방지) */}
+            <HeroReaction image={completePaul?.image} size="lg" />
             <div className="text-9xl mb-4">{sticker.emoji}</div>
             <div className={`inline-block ${rc.bg} ${rc.text} font-black text-xs px-3 py-1 rounded-full mb-3 border-2 ${rc.ring}`}>
               {rc.dot} {rc.label}

@@ -11,8 +11,9 @@
 // index.js에 한 줄 추가 + 아래 PAUL_REACTIONS에 항목 추가하면 끝.
 import {
   paulHappy, paulBest, paulPerfect, paulGreat, paulExcellent, paulLevelup,
-  paulThinking, paulAlmost, paulSad, paulCry, paulSorry, paulOneMore,
-  paulHello, paulLetsLearn, paulStudy, paulReading, paulLove,
+  paulThinking, paulAlmost, paulSad, paulCry, paulSorry, paulOneMore, paulRetry,
+  paulHello, paulLetsLearn, paulStudy, paulReading, paulLove, paulPonder,
+  paulBrand, paulBrandLove,
 } from '../assets/paul'
 
 export const PAUL_REACTIONS = [
@@ -31,6 +32,7 @@ export const PAUL_REACTIONS = [
   { id: 'cry',       category: 'fail', image: paulCry,      message: '한 번 더 해볼까요?',       sound: null, rarity: 'common' },
   { id: 'sorry',     category: 'fail', image: paulSorry,    message: '아쉬워요!',               sound: null, rarity: 'common' },
   { id: 'one_more',  category: 'fail', image: paulOneMore,  message: '한 번 더 해볼까요?',       sound: null, rarity: 'common' },
+  { id: 'retry',     category: 'fail', image: paulRetry,    message: '다시 해봐요!',             sound: null, rarity: 'common' },
 
   // ── Study (인사/모드 안내) ───────────────────────────────────────────────
   { id: 'hello',      category: 'study', image: paulHello,     message: '안녕하세요!',   sound: null, rarity: 'common' },
@@ -38,14 +40,18 @@ export const PAUL_REACTIONS = [
   { id: 'study',      category: 'study', image: paulStudy,     message: '공부 시작!',    sound: null, rarity: 'common' },
   { id: 'reading',    category: 'study', image: paulReading,   message: '함께 읽어봐요!', sound: null, rarity: 'common' },
   { id: 'love',       category: 'study', image: paulLove,      message: '응원해요!',     sound: null, rarity: 'common' },
+  { id: 'ponder',     category: 'study', image: paulPonder,    message: '생각해 보세요!', sound: null, rarity: 'common' },
+  { id: 'brand',      category: 'study', image: paulBrand,     message: '폴이지 보카!',   sound: null, rarity: 'common' },
+  { id: 'brand_love', category: 'study', image: paulBrandLove, message: '폴이지 보카!',   sound: null, rarity: 'common' },
 ]
 
 // 원래 요청받은 전체 캐릭터 목록 중, 아직 개별 PNG가 없어서 위에 등록되지
 // 못한 것들 — 콘솔에 한 번만 경고. src/assets/paul/index.js에 실제 PNG를
 // import 추가하고 위 PAUL_REACTIONS에 항목을 넣으면 이 경고가 사라짐.
+// (retry/brand는 2026-07-08 18개 아이콘 시트로 채워져 이 목록에서 제거됨)
 const REQUESTED_BUT_MISSING = [
-  'retry', 'celebrate', 'star', 'cheerup', 'its_ok', 'fight',
-  'writing', 'speaking', 'mission', 'good_job', 'brand', 'birthday',
+  'celebrate', 'star', 'cheerup', 'its_ok', 'fight',
+  'writing', 'speaking', 'mission', 'good_job', 'birthday',
   'super', 'astronaut', 'detective', 'magician', 'professor', 'sports',
   'artist', 'chef', 'musician', 'ninja',
 ]
@@ -105,12 +111,12 @@ export function pickMessage(msgCategory) {
 
 // 각 id가 어떤 "메시지 카테고리"에 속하는지 — 이미지(3개 카테고리)와
 // 메시지(5개 카테고리)가 서로 다른 분류라서 필요한 매핑. 여기 없는 id
-// (hello, lets_learn, study, reading, love)는 상황이 고유해서 랜덤 메시지
-// 풀 없이 자기 자신의 고정 message를 그대로 씀.
+// (hello, lets_learn, study, reading, love, ponder, brand, brand_love)는
+// 상황이 고유해서 랜덤 메시지 풀 없이 자기 자신의 고정 message를 그대로 씀.
 const ID_TO_MSG_CATEGORY = {
   happy: 'success', best: 'success', perfect: 'success', great: 'success', excellent: 'success',
   levelup: 'levelup',
-  thinking: 'encourage', almost: 'encourage', one_more: 'encourage',
+  thinking: 'encourage', almost: 'encourage', one_more: 'encourage', retry: 'encourage',
   sad: 'fail', cry: 'fail', sorry: 'fail',
 }
 
@@ -157,4 +163,15 @@ export function resolveReaction(type) {
 // 이 쓰던 이름을 그대로 유지 — resolveReaction()의 별칭.
 export function pickReaction(type) {
   return resolveReaction(type)
+}
+
+// HeroReaction은 순수 프레젠테이션 컴포넌트라 효과음을 재생하지 않는다
+// (예전 PaulReaction은 자기 안에서 재생했음) — 리액션을 고르는 시점에
+// 호출부가 이 함수를 직접 불러 재생한다. 화면이 이미 자기 효과음을
+// 재생했으면(예: playSuccessSound() 중복 방지) 그냥 호출을 생략하면 됨.
+export function playReactionSound(reaction) {
+  if (!reaction?.sound) return
+  const audio = new Audio(reaction.sound)
+  audio.volume = 0.75
+  audio.play()?.catch(() => {})
 }

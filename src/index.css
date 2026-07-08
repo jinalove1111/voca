@@ -68,6 +68,28 @@ h1, h2 {
   font-size: clamp(28px, 9vw, 48px);
 }
 
+/* Main pronounce-step hero card only — bigger than the shared .word-text
+   tier used by quiz/mission cards, per the redesign spec (48~56px on
+   mobile, the single biggest thing on screen). */
+.word-text-hero {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: keep-all;
+  text-align: center;
+  line-height: 1.05;
+  font-size: clamp(42px, 13vw, 56px);
+}
+
+.meaning-box-text {
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-break: keep-all;
+  text-align: center;
+  line-height: 1.3;
+  font-size: clamp(30px, 8vw, 36px);
+}
+
 .btn-press {
   transition: all 0.1s ease;
 }
