@@ -77,15 +77,17 @@ export default function HeroReaction({
 
   const body = (
     <div className="flex flex-col items-center text-center gap-0.5">
-      {/* src/assets/paul/의 모든 PNG는 tools/normalize_paul_assets.py로
-          내용(캐릭터+텍스트) 바운딩박스에 맞춰 미리 트리밍돼 있다 — 그래서
-          여기서는 단순히 object-fit:contain만으로 박스를 꽉 채운다. 새
-          캐릭터 PNG를 추가할 때도 이 정규화 스크립트를 먼저 돌릴 것
-          (트리밍 안 된 이미지를 넣으면 다시 여백투성이로 작아 보인다). */}
+      {/* 원본 이미지 크기를 그대로 유지 — CSS로 무리하게 확대(scale)하지
+          않는다. object-fit:contain으로 박스 안에 비율 유지해서 맞추고,
+          image-rendering:auto로 브라우저 기본 리샘플링만 쓴다(저해상도를
+          인위적으로 커 보이게 하는 트릭 없음). 저해상도 원본을 큰 사이즈로
+          늘려서 깨져 보이는 게 이 파일의 문제가 아니라 원본 자산 해상도
+          문제라, 진짜 해법은 assets를 고해상도로 교체하는 것뿐이다. */}
       <div className={`${sizeClass} aspect-square overflow-hidden relative flex-shrink-0`}>
         <img
           src={image}
           alt=""
+          style={{ imageRendering: 'auto' }}
           className="w-full h-full object-contain"
           onError={(e) => { e.currentTarget.style.display = 'none' }}
         />
