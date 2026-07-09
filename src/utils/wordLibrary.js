@@ -451,11 +451,17 @@ export async function setStudentsClassBulk(names, className, unitName) {
 //
 // v1.4: also upserts `fullRecord` (the ENTIRE useStudent.js record object —
 // streak/calendar history/missions/stickers/diary, not just the summary
-// numbers above) into student_progress.full_record. This is a real cloud
-// BACKUP, not just admin-dashboard analytics — see fetchFullProgress()
-// below, which useStudent.js calls to restore a student's progress if their
-// device's localStorage is ever empty/wiped. fullRecord is optional so
-// existing callers (and the sync test) that don't pass it keep working.
+// numbers above) into student_progress.progress_data (+ denormalized
+// streak_count/total_xp/calendar_data/mission_data/review_data columns for
+// quick SQL access — see supabase_v1_4_full_progress_backup.sql). This is a
+// real cloud BACKUP, not just admin-dashboard analytics — see
+// fetchFullProgress() below, which useStudent.js calls to restore a
+// student's progress if their device's localStorage is ever empty/wiped.
+// fullRecord is optional so existing callers (and the sync test) that don't
+// pass it keep working. `onConflict: 'student_id'` matters here: the v1.4
+// table uses a separate `id` primary key (not student_id), so without it
+// upsert() would always INSERT a new row instead of updating the existing
+// one.
 export async function syncStudentProgress(name, { totalStars, clearedCount, streak, stickersCount, daily, fullRecord }) {
   const s = _students[name]
   if (!s) return // student not yet known to this device's Supabase cache (e.g. offline at first load) — next sync retries
@@ -470,9 +476,16 @@ export async function syncStudentProgress(name, { totalStars, clearedCount, stre
     last_studied_date: today,
     updated_at: new Date().toISOString(),
   }
-  if (fullRecord) progressRow.full_record = fullRecord
+  if (fullRecord) {
+    progressRow.progress_data = fullRecord
+    progressRow.streak_count = streak
+    progressRow.total_xp = totalStars
+    progressRow.calendar_data = fullRecord.history || {}
+    progressRow.mission_data = { missions: fullRecord.missions || [], cleared: fullRecord.cleared || [] }
+    progressRow.review_data = { spellingWrongToday: fullRecord.round?.spellingWrongToday || [] }
+  }
 
-  const { error: progressErr } = await supabase.from('student_progress').upsert(progressRow)
+  const { error: progressErr } = await supabase.from('student_progress').upsert(progressRow, { onConflict: 'student_id' })
   if (progressErr) throw progressErr
 
   const { error: dailyErr } = await supabase.from('student_daily_progress').upsert({
@@ -491,21 +504,21 @@ export async function syncStudentProgress(name, { totalStars, clearedCount, stre
 
 // v1.4 — reads back the full progress backup for a student (see
 // syncStudentProgress's fullRecord above). Returns null if the student is
-// unknown, has never synced, the `full_record` column doesn't exist yet
-// (migration not run — see supabase_v1_4_full_progress_backup.sql) or the
-// backup itself is empty. Callers must treat null as "no backup available",
-// not as an error — never used to overwrite existing local data, only to
-// restore when local is missing.
+// unknown, has never synced, the `progress_data` column/table doesn't exist
+// yet (migration not run — see supabase_v1_4_full_progress_backup.sql) or
+// the backup itself is empty. Callers must treat null as "no backup
+// available", not as an error — never used to overwrite existing local
+// data, only to restore when local is missing.
 export async function fetchFullProgress(name) {
   const s = _students[name]
   if (!s) return null
   const { data, error } = await supabase
     .from('student_progress')
-    .select('full_record')
+    .select('progress_data')
     .eq('student_id', s.id)
     .maybeSingle()
-  if (error || !data?.full_record) return null
-  return data.full_record
+  if (error || !data?.progress_data || Object.keys(data.progress_data).length === 0) return null
+  return data.progress_data
 }
 
 // Returns full word objects for a student, sourced ONLY from Supabase class
