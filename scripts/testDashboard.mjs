@@ -46,6 +46,25 @@ check('학생 A의 missed_word_ids에 apple이 2번', rowA?.dailyRows?.[0]?.miss
 check('동기화 기록 없는 학생 B도 크래시 없이 포함됨 (progress는 null)', rowB && rowB.progress === null)
 check('학생 B의 dailyRows는 빈 배열', Array.isArray(rowB?.dailyRows) && rowB.dailyRows.length === 0)
 
+// 2026-07-10 회귀 테스트 — AdminScreen.jsx의 "오늘 공부함" 배지가
+// categories_completed > 0을 기준으로 삼던 시절엔, 학생이 단어를 몇 개
+// 보기만 하고 어느 카테고리도 다 못 채운 날 관리자 화면에 "⬜ 오늘 아직
+// 안 함"으로 잘못 보였다(캘린더에서 이미 고친 것과 같은 버그 클래스).
+// 수정 후 기준은 "오늘 날짜 row 존재 여부"(!!today)뿐이므로, 여기서는
+// categories_completed=0인 row도 dailyRows에 정상적으로 반영되는지만
+// 확인 — 실제 "오늘 공부함" 판정 로직 자체는 AdminScreen.jsx에 있음.
+console.log('\n2.5. "단어만 보고 카테고리는 못 채운 날" (categoriesCompleted=0) 도 오늘자 row가 생기는지')
+const C = 'QA_DashKidC'
+await addStudent(C, CLASS, 'Unit 1')
+await syncStudentProgress(C, {
+  totalStars: 0, clearedCount: 0, streak: 0, stickersCount: 0,
+  daily: { categoriesCompleted: 0, starsEarned: 0, quizCorrect: 0, quizTotal: 0, pronunciationAttempts: 0, missedWordIds: [] },
+})
+const [rowC] = await fetchDashboardData([C])
+check('categoriesCompleted=0이어도 오늘자 row는 생김 (AdminScreen의 !!today 판정이 여기 의존)', rowC?.dailyRows?.length === 1)
+check('그 row의 categories_completed 값은 정확히 0으로 반영됨', rowC?.dailyRows?.[0]?.categories_completed === 0)
+await removeStudent(C)
+
 console.log('\n3. 정리')
 await removeStudent(A)
 await removeStudent(B)

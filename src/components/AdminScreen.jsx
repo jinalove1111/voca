@@ -425,7 +425,16 @@ function AdminDashboard() {
 
       {!loading && rows.map(r => {
         const today = r.dailyRows.find(d => d.date === todayIsoStr())
-        const studiedToday = !!today && today.categories_completed > 0
+        // 2026-07-10 수정: 예전엔 categories_completed > 0(카테고리 하나를
+        // 완전히 채워야만)을 "오늘 공부함" 기준으로 썼는데, 이러면 학생이
+        // 앱을 열어 단어를 1~4개 봤지만 아직 어느 카테고리도 다 못 채운
+        // 날은 관리자 화면에 "⬜ 오늘 아직 안 함"으로 보였다 — 캘린더에서
+        // 이미 고친 것과 정확히 같은 버그(단어 첫 조회 시점에 오늘 기록
+        // 자체는 생기지만 categories_completed는 여전히 0일 수 있음, 아래
+        // useStudent.js의 markWordViewed 참고). 오늘 날짜 row가 존재한다는
+        // 것 자체가 이미 "동기화된 활동이 있었다"는 뜻이므로, row 존재
+        // 여부만으로 판단 — 스키마 변경 없이 학생 쪽과 동일한 기준이 됨.
+        const studiedToday = !!today
         const homeworkDone = (today?.categories_completed || 0) >= 4
         const last7 = r.dailyRows.slice(0, 7)
         const quizCorrect = r.dailyRows.reduce((s, d) => s + (d.quiz_correct || 0), 0)
