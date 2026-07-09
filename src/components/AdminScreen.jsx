@@ -4,6 +4,7 @@ import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, 
 import { getStudents, removeStudent } from '../hooks/useStudent'
 import { buildWeeklyReport } from '../utils/weeklyReport'
 import FeatureManagementPanel from './FeatureManagementPanel'
+import TestPaperGenerator from './TestPaperGenerator'
 
 const wordSlug = (word) => word.toLowerCase().replace(/\s+/g, '_')
 
@@ -854,7 +855,7 @@ export default function AdminScreen({ onBack }) {
   const [pin, setPin]         = useState('')
   const [authed, setAuthed]   = useState(false)
   const [checkingPin, setCheckingPin] = useState(false)
-  const [tab, setTab]         = useState('classes') // classes | excel | pdf | features
+  const [tab, setTab]         = useState('classes') // classes | excel | pdf | features | testpaper
   const [classes, setClasses] = useState(() => getClassNames())
   const [viewClass, setView]  = useState(null)
   const [viewUnit, setViewUnit] = useState('Unit 1')
@@ -930,14 +931,14 @@ export default function AdminScreen({ onBack }) {
     <ErrorBoundary>
     <div className="min-h-screen p-4 pb-8 bg-gray-50">
       <div className="max-w-lg mx-auto">
-        <div className="flex items-center gap-3 pt-2 mb-6">
+        <div className="no-print flex items-center gap-3 pt-2 mb-6">
           <button onClick={onBack} className="text-gray-500 font-bold btn-press">← 나가기</button>
           <h1 className="text-2xl font-black text-gray-800">⚙️ 관리자</h1>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6 overflow-x-auto">
-          {[['classes','📚 반 관리'],['students','👦 학생 관리'],['dashboard','📊 대시보드'],['excel','📊 Excel'],['pdf','📄 PDF'],['features','🎯 기능']].map(([k,l]) => (
+        <div className="no-print flex gap-2 mb-6 overflow-x-auto">
+          {[['classes','📚 반 관리'],['students','👦 학생 관리'],['dashboard','📊 대시보드'],['excel','📊 Excel'],['pdf','📄 PDF'],['testpaper','📝 시험지'],['features','🎯 기능']].map(([k,l]) => (
             <button key={k} onClick={() => setTab(k)}
               className={`py-2 px-3 rounded-xl font-black text-sm btn-press transition-colors whitespace-nowrap ${tab === k ? 'bg-purple-500 text-white' : 'bg-white text-gray-500 border-2 border-gray-200'}`}>
               {l}
@@ -1167,6 +1168,7 @@ export default function AdminScreen({ onBack }) {
         {tab === 'dashboard' && <AdminDashboard />}
         {tab === 'excel' && <ExcelUpload onDone={() => { refresh(); setTab('classes') }} />}
         {tab === 'pdf'   && <PdfUpload   onDone={() => { refresh(); setTab('classes') }} />}
+        {tab === 'testpaper' && <TestPaperGenerator />}
         {tab === 'features' && <FeatureManagementPanel />}
       </div>
     </div>
