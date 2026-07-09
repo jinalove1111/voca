@@ -8,3 +8,4 @@ export const addStudent = () => {}
 export const removeStudent = () => {}
 export const findStudentByName = () => null
 export const syncStudentProgress = async () => {}
+export const fetchFullProgress = async () => null

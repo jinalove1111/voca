@@ -448,12 +448,20 @@ export async function setStudentsClassBulk(names, className, unitName) {
 // device. Every caller already wraps this in .catch(() => {}) — never
 // throw somewhere that would surface as a student-facing error, since
 // missing/offline sync must never block or visibly affect the lesson flow.
-export async function syncStudentProgress(name, { totalStars, clearedCount, streak, stickersCount, daily }) {
+//
+// v1.4: also upserts `fullRecord` (the ENTIRE useStudent.js record object —
+// streak/calendar history/missions/stickers/diary, not just the summary
+// numbers above) into student_progress.full_record. This is a real cloud
+// BACKUP, not just admin-dashboard analytics — see fetchFullProgress()
+// below, which useStudent.js calls to restore a student's progress if their
+// device's localStorage is ever empty/wiped. fullRecord is optional so
+// existing callers (and the sync test) that don't pass it keep working.
+export async function syncStudentProgress(name, { totalStars, clearedCount, streak, stickersCount, daily, fullRecord }) {
   const s = _students[name]
   if (!s) return // student not yet known to this device's Supabase cache (e.g. offline at first load) — next sync retries
   const today = new Date().toISOString().slice(0, 10)
 
-  const { error: progressErr } = await supabase.from('student_progress').upsert({
+  const progressRow = {
     student_id: s.id,
     total_stars: totalStars,
     cleared_count: clearedCount,
@@ -461,7 +469,10 @@ export async function syncStudentProgress(name, { totalStars, clearedCount, stre
     stickers_count: stickersCount,
     last_studied_date: today,
     updated_at: new Date().toISOString(),
-  })
+  }
+  if (fullRecord) progressRow.full_record = fullRecord
+
+  const { error: progressErr } = await supabase.from('student_progress').upsert(progressRow)
   if (progressErr) throw progressErr
 
   const { error: dailyErr } = await supabase.from('student_daily_progress').upsert({
@@ -476,6 +487,25 @@ export async function syncStudentProgress(name, { totalStars, clearedCount, stre
     updated_at: new Date().toISOString(),
   }, { onConflict: 'student_id,date' })
   if (dailyErr) throw dailyErr
+}
+
+// v1.4 — reads back the full progress backup for a student (see
+// syncStudentProgress's fullRecord above). Returns null if the student is
+// unknown, has never synced, the `full_record` column doesn't exist yet
+// (migration not run — see supabase_v1_4_full_progress_backup.sql) or the
+// backup itself is empty. Callers must treat null as "no backup available",
+// not as an error — never used to overwrite existing local data, only to
+// restore when local is missing.
+export async function fetchFullProgress(name) {
+  const s = _students[name]
+  if (!s) return null
+  const { data, error } = await supabase
+    .from('student_progress')
+    .select('full_record')
+    .eq('student_id', s.id)
+    .maybeSingle()
+  if (error || !data?.full_record) return null
+  return data.full_record
 }
 
 // Returns full word objects for a student, sourced ONLY from Supabase class

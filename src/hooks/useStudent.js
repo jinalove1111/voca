@@ -2,14 +2,23 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { getRandomSticker, getMilestoneSticker, STICKERS } from '../data/stickers'
 
 // Student roster + class assignment live in Supabase (shared across every
-// device) — see utils/wordLibrary.js. Only per-student progress (stars,
-// stickers, diary, missions, daily history) stays device-local below, keyed
-// by student NAME — every value here is 100% private per student and never
-// shared, and survives logging in from a different phone (same name = same
-// localStorage key, restored fresh from whatever device is used, since the
-// student roster/class itself is already shared via Supabase).
+// device) — see utils/wordLibrary.js. Per-student progress (stars, stickers,
+// diary, missions, daily history) is keyed by student NAME and stored
+// device-local (localStorage) as the fast/primary copy — every value here is
+// 100% private per student and never shared with other students.
+//
+// 2026-07-09: localStorage does NOT travel with the student (a new phone, a
+// cleared browser, or a wiped app has none of it) — an earlier version of
+// this comment claimed re-logging in "restores fresh from whatever device is
+// used," which was never actually true and was the root cause of reports of
+// progress "disappearing." Every change is now ALSO backed up to Supabase
+// (student_progress.full_record, fire-and-forget, see syncStudentProgress),
+// and if a login's local record ever comes up empty, restoreFromCloudBackup()
+// below tries that backup before assuming this is a genuinely brand-new
+// student. Local storage stays authoritative whenever it actually has data —
+// the cloud copy is a safety net, never a silent overwrite.
 export { getStudents, addStudent, removeStudent, findStudentByName } from '../utils/wordLibrary'
-import { syncStudentProgress } from '../utils/wordLibrary'
+import { syncStudentProgress, fetchFullProgress } from '../utils/wordLibrary'
 
 // ── Single unified progress store ───────────────────────────────────────
 // Every per-student value the app tracks (stars, stickers, today's mission
@@ -162,9 +171,22 @@ function countCategoriesCompleted(round) {
   ].filter(Boolean).length
 }
 
+// "이 기기에 실제로 진행도가 있는가?" — 진짜 신규 학생과 "로컬스토리지가
+// 비워져서 신규처럼 보이는" 학생을 구분할 수는 없지만(둘 다 이 함수 기준
+// true), 어느 쪽이든 클라우드 백업을 확인해보는 게 안전하다 — 진짜
+// 신규라면 백업도 없을 테니 조회만 하고 아무 일도 안 일어난다.
+function isEmptyRecord(rec) {
+  return rec.totalStars === 0 &&
+    rec.stickers.length === 0 &&
+    rec.missions.length === 0 &&
+    rec.cleared.length === 0 &&
+    rec.diaryPlacements.length === 0 &&
+    Object.keys(rec.history).length === 0
+}
+
 // Pure helpers exported for testing (see scripts/testProgress.mjs) — no
 // behavior change, just visibility into the same logic the hook uses.
-export { freshRecord, freshRound, freshHistoryDay, migrateOldData, calcStreak, countCategoriesCompleted, todayStr, GOAL }
+export { freshRecord, freshRound, freshHistoryDay, migrateOldData, calcStreak, countCategoriesCompleted, todayStr, GOAL, isEmptyRecord }
 
 export function useStudent(name) {
   const [record, _setRecord] = useState(() => loadRecord(name))
@@ -181,6 +203,23 @@ export function useStudent(name) {
       saveStore(store)
       return next
     })
+  }, [name])
+
+  // 이 로그인(마운트) 시점에 로컬 기록이 비어있으면(진짜 신규이거나,
+  // 기기가 초기화/교체됐거나) 딱 한 번 클라우드 백업을 확인해서 복구를
+  // 시도한다 — 로컬에 이미 데이터가 있으면 절대 건드리지 않음(덮어쓰기
+  // 위험 없음). AppInner는 학생이 바뀔 때마다 통째로 마운트/언마운트되므로
+  // (App.jsx의 `!student` 분기 참고) 이 useEffect는 로그인마다 정확히
+  // 한 번씩 실행된다.
+  useEffect(() => {
+    if (!isEmptyRecord(record)) return
+    let cancelled = false
+    fetchFullProgress(name).then((backup) => {
+      if (cancelled || !backup) return
+      patch((prev) => (isEmptyRecord(prev) ? backup : {}))
+    }).catch(() => {})
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name])
 
   const { round, history, stickers: stickerTypes, diaryPlacements, missions, cleared, milestoneStreak, starBadgeThreshold, lastGamePlayed, lastWordIndex, totalStars: stars } = record
@@ -425,6 +464,9 @@ export function useStudent(name) {
   // this student's own device; a sync failure here must never affect it).
   // Debounced 2s after the record settles so rapid successive updates (e.g.
   // a quiz streak) don't fire a network write per keystroke.
+  // v1.4: also sends the full record as a cloud backup (fullRecord) — see
+  // the restore-on-mount effect above and fetchFullProgress() in
+  // wordLibrary.js. Same fire-and-forget/never-blocks guarantee.
   useEffect(() => {
     const t = setTimeout(() => {
       syncStudentProgress(name, {
@@ -432,6 +474,7 @@ export function useStudent(name) {
         clearedCount: record.cleared.length,
         streak,
         stickersCount: record.stickers.length,
+        fullRecord: record,
         daily: {
           categoriesCompleted: todayHistory?.categoriesCompleted || 0,
           starsEarned: todayHistory?.starsEarned || 0,

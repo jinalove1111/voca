@@ -17,14 +17,13 @@ import {
 } from '../assets/paul'
 
 // 2026-07-09: 아래 21개는 전부 원본이 스프라이트 시트에서 잘라낸 저해상도
-// 소스(natural size 111~191px — 512px 문턱값 미달)라, HeroReaction의 큰
-// 사이즈(120~220px)로 보여주면 화질이 깨져 보인다("작게라도 선명해야
-// 하며 깨진 이미지를 크게 보여주지 않는다" 요청사항). 고해상도(512px+)
-// 공식 PNG가 준비될 때까지 전부 비활성화 — import(자산 구조)는 그대로
-// 두고, 활성 배열 PAUL_REACTIONS에서만 뺐다. 실제 서비스 재개 방법은
-// 이 배열 안의 항목들을 그대로 export const PAUL_REACTIONS = [...] 로
-// 옮기기만 하면 됨(다른 코드는 손댈 필요 없음).
-const PAUL_REACTIONS_PENDING_HIRES = [
+// 소스(natural size 111~191px — 512px 문턱값 미달)라, 정식 고해상도 PNG로
+// 교체되기 전까지는 큰 사이즈(md/lg)에서 화질이 다소 흐릿하게 보일 수
+// 있다. 한 차례 전체 비활성화했었으나(운영자 지시), "캐릭터가 안 보이는
+// 것보다 저해상도라도 보이는 게 낫다"는 판단으로 다시 활성화함 — 화질
+// 개선은 고해상도 공식 PNG가 준비되는 대로 이 배열의 image만 교체하면
+// 됨(구조 변경 불필요).
+export const PAUL_REACTIONS = [
   // ── Success ─────────────────────────────────────────────────────────────
   { id: 'happy',     category: 'success', image: paulHappy,     message: '잘했어요!',   sound: '/success.wav', rarity: 'common' },
   { id: 'best',      category: 'success', image: paulBest,      message: '최고예요!',   sound: '/success.wav', rarity: 'common' },
@@ -53,16 +52,9 @@ const PAUL_REACTIONS_PENDING_HIRES = [
   { id: 'brand_love', category: 'study', image: paulBrandLove, message: '폴이지 보카!',   sound: null, rarity: 'common' },
 ]
 
-// 위 21개가 전부 비활성화된 동안, 실제 활성 레지스트리는 비어있다 —
-// getReactionById/pickReaction 등 전부 null을 반환하고, HeroReaction은
-// image가 없으면 조용히 아무것도 그리지 않는(이모지 대체 없음) 기존
-// 규칙을 그대로 따른다. 즉 지금은 앱 전체에서 Paul 캐릭터가 안 보이는
-// 게 정상 상태다 — 고해상도 PNG로 교체되기 전까지의 의도된 동작.
-export const PAUL_REACTIONS = []
-
 // 원래 요청받은 전체 캐릭터 목록 중, 아직 개별 PNG가 없어서 위에 등록되지
 // 못한 것들 — 콘솔에 한 번만 경고. src/assets/paul/index.js에 실제 PNG를
-// import 추가하고 위 PAUL_REACTIONS_PENDING_HIRES에 항목을 추가하면 됨.
+// import 추가하고 위 PAUL_REACTIONS에 항목을 추가하면 됨.
 const REQUESTED_BUT_MISSING = [
   'celebrate', 'star', 'cheerup', 'its_ok', 'fight',
   'writing', 'speaking', 'mission', 'good_job', 'birthday',
@@ -75,10 +67,6 @@ if (REQUESTED_BUT_MISSING.length > 0) {
     REQUESTED_BUT_MISSING.join(', ')
   )
 }
-console.warn(
-  `[Paul] 저해상도 원본(natural size 111~191px, 512px 문턱값 미달)이라 ${PAUL_REACTIONS_PENDING_HIRES.length}개 캐릭터를 임시로 전부 비활성화했습니다 (화질 깨짐 방지). 고해상도 공식 PNG로 교체되면 utils/paulReactions.js의 PAUL_REACTIONS_PENDING_HIRES를 PAUL_REACTIONS로 옮기세요:`,
-  PAUL_REACTIONS_PENDING_HIRES.map(r => r.id).join(', ')
-)
 
 export function getReactionById(id) {
   const found = PAUL_REACTIONS.find(r => r.id === id) || null

@@ -24,6 +24,7 @@ if (!BUNDLE) throw new Error('Set PROGRESS_BUNDLE to the esbuild output path (se
 const { pathToFileURL } = await import('node:url')
 const {
   freshRecord, freshRound, freshHistoryDay, calcStreak, countCategoriesCompleted, GOAL, migrateOldData,
+  isEmptyRecord,
 } = await import(pathToFileURL(BUNDLE).href)
 
 const STORE_KEY = 'paul_easy_progress'
@@ -212,6 +213,23 @@ console.log('\n8. 쓰기 시험 오답노트 (spellingWrongToday)')
 
   const day = freshHistoryDay()
   check('새 히스토리 day에 spellingCorrect/spellingTotal 기본값 0', day.spellingCorrect === 0 && day.spellingTotal === 0)
+}
+
+console.log('\n9. isEmptyRecord — 클라우드 백업 복구 여부를 판단하는 기준 (v1.4)')
+{
+  check('갓 생성한 freshRecord는 비어있다고 판단', isEmptyRecord(freshRecord('NewKid')))
+
+  const withStars = { ...freshRecord('K'), totalStars: 1 }
+  check('별이 하나라도 있으면 비어있지 않음', !isEmptyRecord(withStars))
+
+  const withHistory = { ...freshRecord('K'), history: { 'Wed Jul 01 2026': freshHistoryDay() } }
+  check('캘린더 기록이 하나라도 있으면 비어있지 않음', !isEmptyRecord(withHistory))
+
+  const withStickers = { ...freshRecord('K'), stickers: ['ukflag1'] }
+  check('스티커가 하나라도 있으면 비어있지 않음', !isEmptyRecord(withStickers))
+
+  const withMissions = { ...freshRecord('K'), missions: [{ wordId: 'apple', correctCount: 1, done: false }] }
+  check('레벨업 미션이 하나라도 있으면 비어있지 않음', !isEmptyRecord(withMissions))
 }
 
 console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n${failures}개 테스트 실패 ❌`)
