@@ -17,7 +17,7 @@ import SpellingReview from './components/SpellingReview'
 import AdminScreen from './components/AdminScreen'
 import { useStudent } from './hooks/useStudent'
 import { pickNextGame } from './utils/matchGame'
-import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, findStudentByName, getStudentClass, getStudentUnit, getClassSettings } from './utils/wordLibrary'
+import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, findStudentByName, getStudentClass, getStudentUnit, getClassSettings, filterWordsByScope } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech, getMicStream } from './utils/speech'
 
 class AppErrorBoundary extends React.Component {
@@ -101,8 +101,12 @@ function AppInner({ student, onLogout }) {
   // 학습 모드(듣기/말하기/쓰기/종합) — 세션 동안만 유지, 매번 앱을 새로
   // 열면 종합으로 돌아옴(기존 기본 동작과 가장 가까운 모드).
   const [studyMode, setStudyMode] = useState('comprehensive')
+  // v1.5 "학습 범위"(Skip 기능) — 전체/모르는 단어만/안 본 단어만/복습
+  // 단어만. studyMode(HOW: 듣기/말하기/쓰기/종합)와는 완전히 별개 축이라
+  // 별도 상태로 관리 — 마찬가지로 세션 동안만 유지.
+  const [studyScope, setStudyScope] = useState('all')
   const studentData                 = useStudent(student)
-  const { cleared, answerMission, missions, addStars, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord } = studentData
+  const { cleared, answerMission, missions, addStars, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord, wordStatus, setWordKnown, setWordUnknown } = studentData
 
   // 선물상자를 닫은 직후, 오늘 틀린 스펠링 단어가 남아있으면 자동으로
   // "오늘 틀린 단어 복습"을 시작 — 맞을 때까지 반복(SpellingReview 참고).
@@ -126,6 +130,20 @@ function AppInner({ student, onLogout }) {
   const classWords                  = useMemo(() => {
     try { return getStudentWords(student) || [] } catch { return [] }
   }, [student, refreshTick])
+  // v1.5 이번 세션에서 실제로 공부할 단어 목록 — studyScope에 따라
+  // classWords(반 전체 단어, 퀴즈 오답 보기 생성 등에는 항상 이 전체
+  // 목록을 그대로 씀)를 걸러낸 서브셋. "복습 단어만"은 이 Skip 기능의
+  // '모르겠어요' 표시뿐 아니라 기존 레벨업 미션 대기 단어 + 오늘 오답노트
+  // 단어까지 합쳐서 보여줌(기존 복습 신호를 그대로 재사용, 새로 안 만듦).
+  const reviewWordIds = useMemo(() => {
+    const ids = new Set(missions.filter(m => !m.done).map(m => m.wordId))
+    spellingWrongToday.forEach(id => ids.add(id))
+    return ids
+  }, [missions, spellingWrongToday])
+  const sessionWords = useMemo(
+    () => filterWordsByScope(classWords, studyScope, wordStatus, reviewWordIds),
+    [classWords, studyScope, wordStatus, reviewWordIds]
+  )
   // 쓰기 시험 반별 설정 — 관리자가 켜지 않았으면 항상 안전한 기본값(전부
   // 꺼짐)이 돌아오므로, 스키마 SQL을 아직 안 돌렸어도 이 값은 절대
   // 에러나지 않음 (getClassSettings 참고).
@@ -158,8 +176,12 @@ function AppInner({ student, onLogout }) {
     }
   }, [])
 
+  // v1.5: 단어 목록에서 클릭한 단어와 "다음 단어" 진행은 지금 활성화된
+  // 학습 범위(sessionWords — 전체일 땐 classWords와 동일)를 기준으로
+  // 인덱싱한다. 그래야 "모르는 단어만" 등에서 다음으로 넘어갈 때 필터링
+  // 안 된 단어를 건너뛰지 않고, 정확히 그 범위 안에서만 순환한다.
   const handleWordSelect = (w) => {
-    const idx = classWords.findIndex(cw => cw.id === w.id)
+    const idx = sessionWords.findIndex(cw => cw.id === w.id)
     const safeIdx = idx >= 0 ? idx : 0
     setWord(w)
     setWordIdx(safeIdx)
@@ -170,6 +192,8 @@ function AppInner({ student, onLogout }) {
   // Jumps straight into word study at a specific index — used by the
   // Dashboard's "이어서 학습하기" recommendation, which reads
   // studentData.lastWordIndex instead of always restarting from word 1.
+  // 항상 반 전체 단어 기준(scope와 무관) — "이어서 학습하기"는 필터링과
+  // 상관없이 지난번에 멈춘 그 자리부터 이어가는 게 맞는 의미라서.
   const goToWordIndex = (idx) => {
     if (idx < 0 || idx >= classWords.length) return
     setWord(classWords[idx])
@@ -178,20 +202,20 @@ function AppInner({ student, onLogout }) {
     setScreen('wordDetail')
   }
 
-  // Advance to next word in classWords; go back to browser after last word.
+  // Advance to next word in sessionWords; go back to browser after last word.
   // Every 5th completed word (and only if there's a next word to continue
   // to), offer the balloon-game bonus screen instead of jumping straight to
   // the next word — the student picks whether to play or keep going.
   const handleNextWord = () => {
     const nextIdx = selectedWordIdx + 1
     const completedCount = selectedWordIdx + 1
-    if (completedCount % 5 === 0 && nextIdx < classWords.length) {
+    if (completedCount % 5 === 0 && nextIdx < sessionWords.length) {
       setPendingNextIdx(nextIdx)
       setScreen('bonusChoice')
       return
     }
-    if (nextIdx < classWords.length) {
-      setWord(classWords[nextIdx])
+    if (nextIdx < sessionWords.length) {
+      setWord(sessionWords[nextIdx])
       setWordIdx(nextIdx)
       studentData.setLastWordIndex(nextIdx)
     } else {
@@ -200,7 +224,7 @@ function AppInner({ student, onLogout }) {
   }
 
   const goToPendingWord = () => {
-    setWord(classWords[pendingNextIdx])
+    setWord(sessionWords[pendingNextIdx])
     setWordIdx(pendingNextIdx)
     studentData.setLastWordIndex(pendingNextIdx)
     setScreen('wordDetail')
@@ -217,7 +241,8 @@ function AppInner({ student, onLogout }) {
       )}
       {screen === 'wordBrowser'   && (
         <WordBrowser words={classWords} cleared={cleared} onSelect={handleWordSelect} onBack={() => setScreen('dashboard')}
-          mode={studyMode} onModeChange={setStudyMode} />
+          mode={studyMode} onModeChange={setStudyMode}
+          scope={studyScope} onScopeChange={setStudyScope} wordStatus={wordStatus} reviewWordIds={reviewWordIds} />
       )}
       {screen === 'wordDetail'    && selectedWord && (
         <WordDetail word={selectedWord}
@@ -232,7 +257,8 @@ function AppInner({ student, onLogout }) {
           onMarkPronunciationOk={() => { markPronunciationOk(); addStars(1) }}
           onMarkQuizSolved={studentData.markQuizSolved}
           onQuizAnswer={studentData.recordQuizAnswer}
-          onPronunciationAttempt={studentData.markPronunciationAttempt} />
+          onPronunciationAttempt={studentData.markPronunciationAttempt}
+          wordStatus={wordStatus} onWordKnown={setWordKnown} onWordUnknown={setWordUnknown} />
       )}
       {screen === 'quiz'          && (
         <QuizGame initWord={selectedWord} classWords={classWords}
@@ -250,7 +276,7 @@ function AppInner({ student, onLogout }) {
       {screen === 'bonusChoice'   && (
         <BonusChoiceScreen
           completedCount={pendingNextIdx}
-          wordCount={classWords.length}
+          wordCount={sessionWords.length}
           onPlayGame={() => { setBalloonFromLesson(true); startRandomGame() }}
           onContinue={goToPendingWord}
         />

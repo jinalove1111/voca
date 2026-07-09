@@ -246,7 +246,13 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
 }
 
 // ── Step 1: 발음 연습 ──────────────────────────────────────────────────────────
-function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAttempt }) {
+// wordStatus/onWordKnown/onWordUnknown/onSkip: v1.5 "알아요/모르겠어요"
+// (Skip 기능). "알아요"는 상태 저장 + 이번 세션에서 바로 다음 단어로
+// 건너뜀(onSkip = 부모의 onNext를 그대로 호출 — 이 단어의 나머지 단계는
+// 진행하지 않음). "모르겠어요"는 상태만 저장하고 원래 흐름(발음→예문→퀴즈)
+// 그대로 계속 — 오히려 더 연습이 필요한 단어라 건너뛰면 안 됨. "다시 공부"는
+// 상태를 바꾸지 않고 발음만 다시 들려줌.
+function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAttempt, wordStatus, onWordKnown, onWordUnknown, onSkip }) {
   const [canProceed, setCanProceed] = useState(false)
 
   const playWord = () => {
@@ -294,6 +300,29 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
             onAnyResult={() => setCanProceed(true)}
             onAttempt={onPronunciationAttempt}
           />
+        </div>
+
+        {/* v1.5 Skip 기능 — 알아요/다시 공부/모르겠어요 */}
+        <div className="mt-3 grid grid-cols-3 gap-2" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => onWordUnknown?.(word.dbId)}
+            className={`py-2.5 rounded-xl font-bold text-xs btn-press transition-colors ${
+              wordStatus === 'unknown' ? 'bg-orange-400 text-white' : 'bg-white/15 text-white hover:bg-white/25'
+            }`}>
+            😅 모르겠어요
+          </button>
+          <button
+            onClick={playWord}
+            className="py-2.5 rounded-xl font-bold text-xs btn-press bg-white/15 text-white hover:bg-white/25 transition-colors">
+            🔁 다시 공부
+          </button>
+          <button
+            onClick={() => { onWordKnown?.(word.dbId); onSkip?.() }}
+            className={`py-2.5 rounded-xl font-bold text-xs btn-press transition-colors ${
+              wordStatus === 'known' ? 'bg-green-400 text-white' : 'bg-white/15 text-white hover:bg-white/25'
+            }`}>
+            ✅ 알아요
+          </button>
         </div>
       </div>
 
@@ -490,6 +519,7 @@ export default function WordDetail({
   classWords,
   mode = 'comprehensive',
   spellingSettings,
+  wordStatus, onWordKnown, onWordUnknown,
 }) {
   const exampleEnglish = word.easyExample || word.funnyExample || word.realExample
   const exampleKorean  = word.exampleTranslation
@@ -550,6 +580,10 @@ export default function WordDetail({
             onDone={goNext}
             onMarkPronunciationOk={onMarkPronunciationOk}
             onPronunciationAttempt={onPronunciationAttempt}
+            wordStatus={wordStatus?.[word.dbId]}
+            onWordKnown={onWordKnown}
+            onWordUnknown={onWordUnknown}
+            onSkip={() => (onNext ? onNext() : onBack?.())}
           />
         )}
         {step === 'example' && exampleEnglish && (

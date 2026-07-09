@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus } from '../utils/wordLibrary'
 import { getStudents, removeStudent } from '../hooks/useStudent'
 import { buildWeeklyReport } from '../utils/weeklyReport'
 import FeatureManagementPanel from './FeatureManagementPanel'
@@ -353,6 +353,8 @@ function AdminDashboard() {
   const [expanded, setExpanded] = useState(null)
   const [reportFor, setReportFor] = useState(null) // student name currently showing a generated report
   const [copied, setCopied] = useState(false)
+  const [wordStatusSummary, setWordStatusSummary] = useState({}) // v1.5 — studentId -> {known,unknown,skipped,mastered}
+  const [resettingName, setResettingName] = useState(null)
 
   const wordLookup = useMemo(() => {
     if (!selectedClass) return {}
@@ -367,11 +369,34 @@ function AdminDashboard() {
     setLoading(true)
     try {
       const names = getStudentsInClass(className).map(s => s.name)
-      setRows(await fetchDashboardData(names))
+      const [dashboardRows, wsSummary] = await Promise.all([
+        fetchDashboardData(names),
+        // v1.5 — word_status 마이그레이션(supabase_v1_5_word_status.sql) 전에도
+        // 안전하게 빈 객체를 반환하도록 wordLibrary.js에서 이미 처리함.
+        fetchWordStatusSummary(names).catch(() => ({})),
+      ])
+      setRows(dashboardRows)
+      setWordStatusSummary(wsSummary)
     } catch (err) {
       alert('반 현황을 불러오는 중 오류가 발생했어요: ' + (err.message || err))
     } finally {
       setLoading(false)
+    }
+  }
+
+  // v1.5 — 학생의 단어 숙지 상태를 전부 초기화("다시 전체 복습 대상으로
+  // 포함"). 관리자가 명시적으로 요청한 학생 한 명만 지워지고, 나머지
+  // 진행 기록(별/스티커/캘린더 등)은 전혀 안 건드림.
+  const handleResetWordStatus = async (name) => {
+    if (!confirm(`${name} 학생의 "알아요/모르겠어요" 표시를 전부 초기화할까요?\n(별/스티커/캘린더 등 다른 기록은 그대로 유지됩니다)`)) return
+    setResettingName(name)
+    try {
+      await resetWordStatus(name)
+      await load(selectedClass)
+    } catch (err) {
+      alert('초기화 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setResettingName(null)
     }
   }
 
@@ -410,6 +435,12 @@ function AdminDashboard() {
         r.dailyRows.forEach(d => (d.missed_word_ids || []).forEach(id => { missCount[id] = (missCount[id] || 0) + 1 }))
         const topMissed = Object.entries(missCount).sort((a, b) => b[1] - a[1]).slice(0, 5)
         const isOpen = expanded === r.name
+        // v1.5 — 아는/모르는/복습 필요 단어 수. "복습 필요"는 word_status가
+        // unknown인 것만(레벨업 미션 대기/오답노트까지 합친 앱 전체 복습
+        // 범위는 학생 쪽 "복습 단어만" 모드와 동일 소스지만, 관리자 화면은
+        // 이 Skip 기능 자체가 무엇을 기록했는지를 그대로 보여주는 게
+        // 목적이라 word_status만 집계함).
+        const ws = (r.studentId && wordStatusSummary[r.studentId]) || { known: 0, unknown: 0, skipped: 0, mastered: 0 }
 
         return (
           <div key={r.name} className="bg-white rounded-2xl card-shadow p-4">
@@ -418,6 +449,9 @@ function AdminDashboard() {
                 <p className="font-black text-gray-800">{r.name}</p>
                 <p className="text-xs text-gray-400 mt-0.5">
                   {studiedToday ? '✅ 오늘 공부함' : '⬜ 오늘 아직 안 함'} · {homeworkDone ? '✅ 숙제 완료' : '⬜ 숙제 미완료'}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  😀 아는 단어 {ws.known}개 · 😅 모르는 단어 {ws.unknown}개
                 </p>
               </div>
               <div className="text-right flex-shrink-0">
@@ -452,6 +486,18 @@ function AdminDashboard() {
                 <p>퀴즈 정답률: <span className="font-black">{quizAccuracy !== null ? `${quizAccuracy}% (${quizCorrect}/${quizTotal})` : '기록 없음'}</span></p>
                 <p>발음 연습 횟수: <span className="font-black">{pronAttempts}회</span></p>
                 <p>스티커 <span className="font-black">{r.progress?.stickers_count ?? 0}개</span> · 클리어한 단어 <span className="font-black">{r.progress?.cleared_count ?? 0}개</span></p>
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs font-black text-gray-500 mb-1">단어 숙지 상태 (Skip 기능)</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs">
+                      😀 아는 단어 <span className="font-black">{ws.known}</span> · 😅 복습 필요 <span className="font-black text-orange-500">{ws.unknown}</span>
+                    </p>
+                    <button onClick={() => handleResetWordStatus(r.name)} disabled={resettingName === r.name}
+                      className="text-xs text-gray-400 font-bold btn-press hover:text-red-500 disabled:opacity-50">
+                      {resettingName === r.name ? '⏳ 초기화 중...' : '🔄 전체 초기화'}
+                    </button>
+                  </div>
+                </div>
                 <div>
                   <p className="text-xs font-black text-gray-500 mb-1">많이 틀린 단어</p>
                   {topMissed.length === 0 ? <p className="text-gray-400 text-xs">없음</p> : (

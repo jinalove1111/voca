@@ -18,7 +18,7 @@ import { getRandomSticker, getMilestoneSticker, STICKERS } from '../data/sticker
 // student. Local storage stays authoritative whenever it actually has data —
 // the cloud copy is a safety net, never a silent overwrite.
 export { getStudents, addStudent, removeStudent, findStudentByName } from '../utils/wordLibrary'
-import { syncStudentProgress, fetchFullProgress } from '../utils/wordLibrary'
+import { syncStudentProgress, fetchFullProgress, setWordStatus as syncWordStatus } from '../utils/wordLibrary'
 
 // ── Single unified progress store ───────────────────────────────────────
 // Every per-student value the app tracks (stars, stickers, today's mission
@@ -96,6 +96,7 @@ function freshRecord(name) {
     starBadgeThreshold: 0,   // highest star badge already granted
     lastGamePlayed: null,
     lastWordIndex: 0,
+    wordStatus: {},          // v1.5 Skip 기능 — word.dbId -> 'known' | 'unknown' | 'skipped' | 'mastered'
   }
 }
 
@@ -181,7 +182,8 @@ function isEmptyRecord(rec) {
     rec.missions.length === 0 &&
     rec.cleared.length === 0 &&
     rec.diaryPlacements.length === 0 &&
-    Object.keys(rec.history).length === 0
+    Object.keys(rec.history).length === 0 &&
+    Object.keys(rec.wordStatus || {}).length === 0
 }
 
 // Pure helpers exported for testing (see scripts/testProgress.mjs) — no
@@ -222,7 +224,7 @@ export function useStudent(name) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name])
 
-  const { round, history, stickers: stickerTypes, diaryPlacements, missions, cleared, milestoneStreak, starBadgeThreshold, lastGamePlayed, lastWordIndex, totalStars: stars } = record
+  const { round, history, stickers: stickerTypes, diaryPlacements, missions, cleared, milestoneStreak, starBadgeThreshold, lastGamePlayed, lastWordIndex, totalStars: stars, wordStatus } = record
 
   const [giftQueue, setGiftQueue] = useState([])
 
@@ -444,6 +446,20 @@ export function useStudent(name) {
 
   const setLastWordIndex = useCallback((idx) => patch(() => ({ lastWordIndex: idx })), [patch])
 
+  // v1.5 "알아요"/"모르겠어요" (Skip 기능) — 로컬(즉시, 새로고침에도 안전)
+  // 과 Supabase word_status 테이블(관리자 조회용) 둘 다에 반영한다. 로컬
+  // 기록은 patch()가 항상 하던 대로 즉시 저장되고, Supabase 쪽은 기존
+  // syncStudentProgress와 동일하게 실패해도 학습 흐름을 막지 않도록
+  // fire-and-forget으로 던진다. wordDbId가 없으면(아직 감사/생성 중인
+  // 단어 등) 조용히 무시 — 로컬 상태도 안 바뀜.
+  const setWordKnownState = useCallback((wordDbId, status) => {
+    if (!wordDbId) return
+    patch((prev) => ({ wordStatus: { ...prev.wordStatus, [wordDbId]: status } }))
+    syncWordStatus(name, wordDbId, status).catch(() => {})
+  }, [patch, name])
+  const setWordKnown = useCallback((wordDbId) => setWordKnownState(wordDbId, 'known'), [setWordKnownState])
+  const setWordUnknown = useCallback((wordDbId) => setWordKnownState(wordDbId, 'unknown'), [setWordKnownState])
+
   const dailyProgress = {
     words:          Math.min(round.wordsViewed.length, GOAL),
     examples:       Math.min(round.examplesHeard, GOAL),
@@ -503,5 +519,6 @@ export function useStudent(name) {
     addStars, addMission, answerMission,
     markWordViewed, markExampleHeard, markQuizSolved, markPronunciationOk,
     placeSticker, updatePlacement, removePlacement,
+    wordStatus, setWordKnown, setWordUnknown,
   }
 }

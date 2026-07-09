@@ -534,6 +534,61 @@ export async function fetchFullProgress(name) {
   return data.progress_data
 }
 
+// v1.5 "알아요/모르겠어요" (Skip) 기능 — 단어별 숙지 상태를 word_status
+// 테이블에 저장한다. 학생 이름이 아니라 words.id(UUID, word.dbId)로 저장
+// 하므로 word_status.sql(v1.5) 마이그레이션이 먼저 반영돼 있어야 한다 —
+// 반영 전이면(테이블/컬럼 없음) 에러를 조용히 삼키고 로컬 저장만 유지
+// (기존 progress_data 백업과 동일한 안전 원칙: 클라우드 동기화 실패가
+// 학생의 학습 흐름을 절대 막지 않음).
+export async function setWordStatus(name, wordDbId, status) {
+  const s = _students[name]
+  if (!s || !wordDbId) return
+  const { error } = await supabase.from('word_status').upsert({
+    student_id: s.id,
+    word_id: wordDbId,
+    status,
+    last_seen_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'student_id,word_id' })
+  if (error) throw error
+}
+
+// 로그인 시 로컬에 저장된 단어 상태가 없으면(다른 기기 등) 이걸로 복구.
+// { [wordDbId]: status } 형태의 맵을 반환, 에러/빈 결과는 빈 객체.
+export async function fetchWordStatusMap(name) {
+  const s = _students[name]
+  if (!s) return {}
+  const { data, error } = await supabase.from('word_status').select('word_id,status').eq('student_id', s.id)
+  if (error || !data) return {}
+  return Object.fromEntries(data.map((r) => [r.word_id, r.status]))
+}
+
+// v1.5 관리자 대시보드 — 반 학생들의 "아는/모르는/복습 필요 단어 수"를
+// 한 번에 배치 조회(학생별 N번 조회 안 함, fetchDashboardData와 동일 패턴).
+export async function fetchWordStatusSummary(studentNames) {
+  const ids = studentNames.map((n) => _students[n]?.id).filter(Boolean)
+  if (ids.length === 0) return {}
+  const { data, error } = await supabase.from('word_status').select('student_id,status').in('student_id', ids)
+  if (error || !data) return {}
+  const byStudent = {}
+  data.forEach((r) => {
+    const bucket = (byStudent[r.student_id] ||= { known: 0, unknown: 0, skipped: 0, mastered: 0 })
+    if (bucket[r.status] !== undefined) bucket[r.status]++
+  })
+  return byStudent
+}
+
+// v1.5 관리자 — 특정 학생의 단어 숙지 상태를 전부 초기화("다시 전체
+// 복습 대상으로 포함") — word_status 행을 지우면 그 학생에게는 해당
+// 단어들이 다시 "아직 상태 없음"으로 보여 어떤 학습 모드에서도 다시
+// 나타난다. 다른 학생/다른 데이터는 전혀 건드리지 않음.
+export async function resetWordStatus(name) {
+  const s = _students[name]
+  if (!s) return
+  const { error } = await supabase.from('word_status').delete().eq('student_id', s.id)
+  if (error) throw error
+}
+
 // Returns full word objects for a student, sourced ONLY from Supabase class
 // data — word and meaning always come straight from the DB row, never from
 // the built-in demo bank (data/words.js), even if the text happens to match.
@@ -625,6 +680,24 @@ export const getStudentWords = (name) => {
       queryError: err?.message || String(err),
     })
     return []
+  }
+}
+
+// v1.5 Skip 기능 — "학습 모드"(scope)에 따라 이번 세션에 보여줄 단어만
+// 골라낸다. wordStatus는 useStudent.js의 record.wordStatus({ [dbId]:
+// status }), reviewWordIds는 기존 복습 소스(레벨업 미션 대기 단어 +
+// 오늘 오답노트)의 word id(슬러그) Set — "복습 단어만"은 이 Skip 기능
+// 하나만이 아니라 앱에 이미 있던 복습 신호까지 합쳐서 보여준다.
+export function filterWordsByScope(words, scope, wordStatus = {}, reviewWordIds = new Set()) {
+  switch (scope) {
+    case 'unknown':
+      return words.filter((w) => wordStatus[w.dbId] === 'unknown')
+    case 'unseen':
+      return words.filter((w) => !wordStatus[w.dbId])
+    case 'review':
+      return words.filter((w) => wordStatus[w.dbId] === 'unknown' || reviewWordIds.has(w.id))
+    default:
+      return words
   }
 }
 
