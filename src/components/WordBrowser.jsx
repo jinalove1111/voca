@@ -116,8 +116,8 @@ export default function WordBrowser({ words, cleared, onSelect, onBack, mode, on
                   {isCleared ? '✓' : i + 1}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-black text-lg text-gray-800">{w.word}</p>
-                  <p className="text-gray-500 text-sm">{w.meaning}</p>
+                  <p className="font-black text-lg text-gray-800 break-words">{w.word}</p>
+                  <p className="text-gray-500 text-sm break-words">{w.meaning}</p>
                 </div>
                 {status === 'known' && <span className="text-xs font-bold text-green-600 flex-shrink-0">✅ 알아요</span>}
                 {status === 'unknown' && <span className="text-xs font-bold text-orange-500 flex-shrink-0">😅 복습필요</span>}

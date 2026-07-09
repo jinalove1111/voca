@@ -199,7 +199,7 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
                 <div key={m.wordId} className="bg-white rounded-2xl card-shadow p-4 flex items-center gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="font-black text-xl text-gray-800">{w.word}</span>
+                      <span className="font-black text-xl text-gray-800 break-words">{w.word}</span>
                     </div>
                     {/* 뜻은 여기서도 절대 노출 안 함 — "도전!" 누르기 전에
                         정답을 미리 보고 들어갈 수 있었던 것도 같은 버그의
