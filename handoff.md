@@ -1,6 +1,50 @@
 # Paul Easy Voca — Handoff
 _최종 갱신: 2026-07-10_
 
+## 2026-07-10 밤 — CTO 지시("제품 완성 단계") 대응: 안정성 우선순위 1~6 점검 (커밋 `61809b1`, `1ab754b`, `bb39d11`)
+
+CTO 지시대로 새 기능은 전혀 손대지 않고(v1.2 학부모 화면은 착수 직전 중단, 코드 변경 없음), "데이터 유실 0% → 동기화 안정성 → 모바일 UX → 에코 사운드 → 홈/캘린더/관리자 일치 → Skip 검증 → 성능" 순서로 코드 리뷰 기반 점검을 진행했습니다. 실제 신고된 버그가 아니라 **코드 리뷰로 먼저 찾아서 먼저 고친 것**들입니다 — 아직 아무도 이 증상을 겪은 적은 없을 가능성이 높지만, 조건이 맞으면 조용히 발생할 수 있는 종류라 우선순위표 그대로 먼저 처리했습니다.
+
+### 1. [가장 위험] 신규기기 복구 vs 자동동기화 레이스 컨디션 — 커밋 `61809b1`
+
+- **증상 조건**: 로컬스토리지가 비어있는 상태(신규 기기/캐시 삭제/앱 재설치)로 로그인 + 클라우드 백업 복구(`fetchFullProgress`)가 2초(자동 동기화 디바운스)보다 느리게 끝날 때(느린 네트워크, Supabase 콜드스타트 등).
+- **실제 위험**: 동기화 타이머가 먼저 발동해서 "아직 비어있는" 로컬 기록으로 그 학생의 클라우드 백업(`progress_data`) 자체를 덮어씀. 이 기기의 로컬 복구 자체는 그 후 정상 성공하지만, **클라우드 백업이 조용히 파괴**되어 이 학생이 나중에 정말로 기기를 잃어버리면 별/스트릭/캘린더 전체가 영구 복구 불가능.
+- **수정**: `restoreChecked` 플래그로 동기화 effect를 게이팅 — 로컬에 이미 데이터 있으면 대기 없음(대부분의 경우), 복구가 필요한 경우만 복구 시도가 끝날 때까지(성공/실패/5초 타임아웃 무관) 동기화를 미룸.
+- **덤으로 같이 고침**: 탭이 숨겨지는 순간(`visibilitychange`, 모바일 앱 전환/화면 꺼짐 포함, `beforeunload`보다 훨씬 안정적) 대기 중인 동기화를 2초를 기다리지 않고 즉시 flush — "학생이 답 하나 맞추고 바로 앱을 나가면 그 변경이 영영 동기화 안 될 수 있던" 위험 축소.
+- **검증**: 손으로 옮겨적은 로직이 아니라 **실제 번들된 useStudent.js를 직접 렌더링**해서 검증 — 최소 hooks 런타임(`scripts/fakeReact.mjs`) + 수동 제어 가능한 fake clock을 새로 만듦(`scripts/testRestoreSyncRace.mjs`, 10개 assertion 전부 통과). 기존 `testProgress.mjs`(48개 체크) 회귀 없음.
+
+### 2. 에코 사운드 감사 — 새 버그 없음, 기존 방어 재확인만
+
+`speech.js`의 `claimTtsCall`/`stopAllPlayback` 싱글턴 가드(새 호출 시작 시 이전 호출을 무조건 stale 처리)와 `playRepeating()`이 이미 이 문제 클래스를 구조적으로 막고 있음을 재확인. 모든 효과음(`playSuccessSound`/`playReactionSound`) 호출부가 `useEffect`(마운트 시 실행, StrictMode 이중실행 위험군)가 아니라 이벤트 핸들러 안에서만 호출되는 것도 전체 grep으로 재확인. `scripts/testTtsSingleton.mjs` 재실행 통과. **새로 고칠 것을 못 찾았습니다** — 이전 세션에 이미 잘 고쳐져 있었습니다.
+
+### 3. 홈/캘린더/관리자 데이터 불일치 — 관리자 대시보드에 남아있던 재발 — 커밋 `1ab754b`
+
+- **증상**: 오늘 새벽 고친 "단어만 보고 카테고리를 못 채운 날 캘린더가 비어 보이던 버그"(커밋 `f29f53e`)와 **정확히 같은 버그 클래스**가 관리자 대시보드의 "오늘 공부함" 배지에는 그대로 남아있었음. 배지가 `categories_completed > 0`을 기준으로 삼아서, 학생이 오늘 단어를 열어봤지만 아직 카테고리를 하나도 못 채우면 관리자 화면엔 "⬜ 오늘 아직 안 함"으로 계속 보임.
+- **수정**: 학생 쪽 캘린더와 같은 기준(오늘 날짜 row 존재 여부)으로 통일 — 스키마 변경 없는 순수 표시 로직 수정.
+- **검증**: 라이브 Supabase에 QA 학생으로 "단어만 보고 카테고리 못 채움" 상태를 재현, 구버전 기준이면 오탐했을 상황에서 신버전이 정확한지 확인. `testDashboard.mjs`에 회귀 테스트 추가.
+
+### 4. Skip(알아요/모르겠어요) 검증 — 관리자 "전체 초기화"가 클라우드 백업은 안 지우던 문제 — 커밋 `bb39d11`
+
+- **증상**: `resetWordStatus`(관리자 "🔄 전체 초기화")가 `word_status` 테이블만 지우고, 같은 값이 별도로 저장된 전체 기록 백업(`student_progress.progress_data.wordStatus`)은 안 건드림 — 이 학생이 나중에 기기를 잃어버려 새 기기에서 복구하면 방금 초기화한 값이 백업에서 그대로 되살아남.
+- **수정**: `resetWordStatus`가 백업 blob의 `wordStatus`도 함께 비움(다른 백업 필드는 그대로 유지).
+- **알아냈지만 오늘 밤 손대지 않은 것**: 이 초기화는 **학생이 지금 로그인해 있는 기기의 로컬 localStorage**까지는 못 건드립니다(서버가 클라이언트 저장소를 직접 지울 방법이 구조적으로 없음). `fetchWordStatusMap()`이 "다른 기기 word_status 복구용"으로 이미 만들어져 있는데 **실제로는 어디서도 호출되지 않는 죽은 코드**였습니다 — 로그인 중인 기기에도 관리자 초기화를 실제로 반영하려면 이 함수를 로그인/포커스 시점에 연결해야 하는데, "학생이 방금 직접 바꾼 값과 충돌 안 나게" 병합 전략을 신중히 설계해야 해서 범위 밖으로 남겨뒀습니다. **다음 우선순위 후보**로 아래 기록.
+- **검증**: 라이브 Supabase로 재현 — 초기화 전 백업에 값 있음 확인 → 초기화 후 wordStatus만 비워지고 다른 필드는 유지되는지 확인. `scripts/testResetWordStatusBackup.mjs`로 회귀 테스트 추가.
+
+### 모바일 UX / 성능 — 오늘 밤 범위에서 제외
+
+우선순위 1~2(데이터 유실/동기화)를 예상보다 깊게 파느라(레이스 컨디션이 진짜 위험한 버그였음) 3번(모바일 UX)과 7번(성능 최적화)까지는 도달하지 못했습니다. 성능 관련해서는 `npm run build` 경고로 계속 나오는 "메인 청크 879KB" 코드 스플리팅(`pdf.worker`/`xlsx` 등 관리자 전용 무거운 라이브러리를 학생 화면 번들에서 분리)이 눈에 띄는 후보입니다 — 아직 손대지 않았습니다.
+
+### 종합 결과
+
+- **수정한 파일**: `src/hooks/useStudent.js`(레이스 컨디션+flush), `src/components/AdminScreen.jsx`(오늘 공부함 배지), `src/utils/wordLibrary.js`(resetWordStatus 백업), `scripts/testDashboard.mjs`(회귀 테스트 추가) + 신규: `scripts/fakeReact.mjs`, `scripts/fakeReactModule.mjs`, `scripts/wordLibraryRaceStub.mjs`, `scripts/buildRaceBundle.mjs`, `scripts/testRestoreSyncRace.mjs`, `scripts/testResetWordStatusBackup.mjs`.
+- **테스트 결과**: `npm run build` 매 커밋마다 통과. `testProgress.mjs`(48개), `testRestoreSyncRace.mjs`(10개, 신규), `testSyncProgress.mjs`, `testDashboard.mjs`(신규 케이스 포함), `testResetWordStatusBackup.mjs`(신규), `testDailyAssignment.mjs`, `testStudentLogin.mjs`, `testUnitPersistence.mjs` 전부 라이브 Supabase 대상 종단 테스트 통과. `testMultiClass.mjs`는 예전부터 알려진 대로 외부 QA 픽스처 없이는 실패(회귀 아님, `handoff.md` 2026-07-07 항목 참고).
+- **Commit ID**: `61809b1`(레이스 컨디션), `1ab754b`(관리자 대시보드 일치), `bb39d11`(Skip 초기화 백업).
+- **배포 여부**: 3개 커밋 전부 push → Vercel 자동배포 → 라이브 번들 해시 직접 대조로 배포 확인 → headless Chrome 콘솔 에러 없음 확인.
+- **남은 버그**: 위 "알아냈지만 손대지 않은 것"(관리자 초기화가 로그인 중인 기기의 로컬 상태까지는 반영 못 함) — 설계가 필요해서 의도적으로 보류. 그 외 새로 발견한 미해결 버그 없음.
+- **다음 우선순위**: (1) 오늘 밤 다 못 본 모바일 UX/성능(코드 스플리팅) 점검, (2) 위 Skip 초기화의 "로그인 중인 기기 반영" 설계, (3) CTO 브리핑에 언급된 순서대로 그 다음은 Writing/Speaking/AI Feedback/Parent Dashboard.
+
+---
+
 ## 2026-07-10 — v1.5 안정화: 숨김 관리자 Debug 페이지 + 동기화 상태 추적 (커밋 `97910d9`)
 
 - **배경**: 이전 세션에서 학생 진행 기록(별/스트릭/캘린더 등)이 클라우드에 실제로 잘 백업되고 있는지 확인할 방법이 없었음 — `useStudent.js`의 Supabase 동기화가 실패해도 `.catch(() => {})`로 조용히 삼켜져서 실패 흔적이 어디에도 안 남았음.
