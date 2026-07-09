@@ -16,6 +16,23 @@ const {
 } = await import(pathToFileURL(BUNDLE).href)
 await initWordLibrary()
 
+// JSONB round-trips through Postgres normalize/reorder object keys — a
+// string-equality check on JSON.stringify() output can spuriously fail
+// even when the actual data is identical, since key order differs. Deep-
+// equal (order-independent for object keys, order-sensitive for arrays)
+// is the correct comparison.
+function deepEqual(a, b) {
+  if (a === b) return true
+  if (typeof a !== typeof b || a === null || b === null) return false
+  if (Array.isArray(a) !== Array.isArray(b)) return false
+  if (Array.isArray(a)) return a.length === b.length && a.every((v, i) => deepEqual(v, b[i]))
+  if (typeof a === 'object') {
+    const ka = Object.keys(a), kb = Object.keys(b)
+    return ka.length === kb.length && ka.every((k) => deepEqual(a[k], b[k]))
+  }
+  return false
+}
+
 let failures = 0
 function check(label, cond) {
   if (cond) console.log(`  PASS  ${label}`)
@@ -80,10 +97,10 @@ if (migrationApplied) {
   check('백업이 null이 아님', restored !== null)
   if (restored) {
     check('totalStars 일치', restored.totalStars === fakeRecord.totalStars)
-    check('stickers 배열 일치', JSON.stringify(restored.stickers) === JSON.stringify(fakeRecord.stickers))
-    check('missions 일치', JSON.stringify(restored.missions) === JSON.stringify(fakeRecord.missions))
-    check('history(캘린더) 일치', JSON.stringify(restored.history) === JSON.stringify(fakeRecord.history))
-    check('diaryPlacements 일치', JSON.stringify(restored.diaryPlacements) === JSON.stringify(fakeRecord.diaryPlacements))
+    check('stickers 배열 일치', deepEqual(restored.stickers, fakeRecord.stickers))
+    check('missions 일치', deepEqual(restored.missions, fakeRecord.missions))
+    check('history(캘린더) 일치', deepEqual(restored.history, fakeRecord.history))
+    check('diaryPlacements 일치', deepEqual(restored.diaryPlacements, fakeRecord.diaryPlacements))
     check('milestoneStreak 일치', restored.milestoneStreak === fakeRecord.milestoneStreak)
   }
 } else {
