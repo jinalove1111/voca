@@ -263,6 +263,9 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
     <div className="space-y-4">
       <div
         onClick={playWord}
+        role="button" tabIndex={0}
+        aria-label={`${word.word} 발음 다시 듣기`}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); playWord() } }}
         className="bg-gradient-to-br from-indigo-500 via-blue-600 to-purple-600 rounded-3xl pt-4 px-5 pb-6 text-white card-shadow word-card cursor-pointer"
       >
         {/* 단어 학습 카드에서는 예외 — Paul은 "히어로"가 아니라 작은
