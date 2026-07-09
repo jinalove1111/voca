@@ -189,6 +189,36 @@ console.log('\n7. 퀴즈 정답률/발음 횟수/틀린 단어 (v1.3)')
       d.pronunciationAttempts === 0 && Array.isArray(d.missedWordIds)))
 }
 
+console.log('\n8.5. 카테고리 0개 완료 상태에서도 history 기록 생김 (v1.5 버그 수정 — 홈엔 기록 있는데 캘린더는 비어보이던 버그)')
+{
+  // Reproduces the reported bug: student opens a word (studied today) but
+  // hasn't finished any of the 4 categories yet (categoriesCompleted 0/4).
+  // Before the fix, bumpHistory was only called once a category hit GOAL,
+  // so history[today] never existed at all on a 0/4 day — the calendar
+  // grid/streak looked completely empty even though the home screen showed
+  // live in-progress round data. markWordViewed now also calls
+  // bumpHistory(() => ({})), which creates the entry (via freshHistoryDay())
+  // the moment a word is first viewed, regardless of category completion.
+  const name = 'PartialKid'
+  const store = { [name]: freshRecord(name) }
+  saveStore(store)
+  const rec = store[name]
+  const today = rec.round.date
+
+  check('활동 전에는 history 비어있음', Object.keys(rec.history).length === 0)
+
+  // Simulate markWordViewed's bumpHistory(() => ({})) call on first word view
+  rec.round.wordsViewed.push('w0')
+  rec.history[today] = { ...(rec.history[today] || freshHistoryDay()) }
+  saveStore(store)
+
+  check('단어 1개만 봐도(카테고리 미완료) history[오늘] 엔트리가 생김', !!rec.history[today])
+  check('studied: true로 기록됨 (캘린더 팝업의 "공부했어요!" 근거)', rec.history[today].studied === true)
+  check('아직 카테고리는 0개 완료 상태', countCategoriesCompleted(rec.round) === 0)
+  check('categoriesCompleted도 0으로 정확히 반영 (아직 조작 안 했으므로)', rec.history[today].categoriesCompleted === 0)
+  check('0/4 상태는 스트릭에 포함되지 않음 (4/4 필요, 정상 동작)', calcStreak(rec.history) === 0)
+}
+
 console.log('\n8. 쓰기 시험 오답노트 (spellingWrongToday)')
 {
   const round = freshRound()

@@ -276,11 +276,19 @@ export function useStudent(name) {
     return didClear
   }, [patch, addStars])
 
+  // v1.5 버그 수정: 예전엔 오늘 카테고리 하나(5개)를 다 채워야만
+  // history[오늘]이 생겨서, 단어를 1~4개만 본 날은 대시보드도 캘린더도
+  // "공부 기록 없음"으로 조용히 일치했다 — 사용자에겐 "홈엔 진행률이
+  // 보이는데 캘린더는 비어있다"는 불일치처럼 보였다. 실제 학습 흐름에서
+  // 가장 먼저 일어나는 이 액션(단어 화면 진입)에서 오늘 기록을 만들어두면
+  // (studied:true, categoriesCompleted는 그대로 0) 캘린더 팝업이 정확한
+  // "공부했어요! 0/4"를 보여주고, streak 계산(4/4 필요)에는 전혀 영향 없음.
   const markWordViewed = useCallback((wordId) => {
     patch(prev => prev.round.wordsViewed.includes(wordId)
       ? {}
       : { round: { ...prev.round, wordsViewed: [...prev.round.wordsViewed, wordId] } })
-  }, [patch])
+    bumpHistory(() => ({}))
+  }, [patch, bumpHistory])
 
   const markExampleHeard = useCallback(() => {
     patch(prev => ({ round: { ...prev.round, examplesHeard: prev.round.examplesHeard + 1 } }))

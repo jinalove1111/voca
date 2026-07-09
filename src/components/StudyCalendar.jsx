@@ -9,8 +9,14 @@ const stickerEmoji = (id) => STICKERS.find(s => s.id === id)?.emoji
 // happened to be a duplicate (converted to stars, so nothing new to show).
 const FALLBACK_MARKERS = ['🌸', '⭐', '🎀', '🧋', '🌈', '💖']
 
+// v1.5 버그 수정: 카테고리를 하나도 못 채운 날(단어 몇 개만 보고 끝난 날)도
+// history 엔트리는 생기도록 바뀌었다(useStudent.js의 markWordViewed 참고) —
+// 예전엔 categoriesCompleted<=0이면 마커 자체가 없어서 "홈엔 기록이 있는데
+// 캘린더는 비어보인다"는 불일치로 보였다. 완료 전 활동도 연필 마커로
+// 표시하고, 실제 카테고리 완료(스티커 등장 이후)부터 기존 마커 로직을 쓴다.
 function markerFor(day, dateKey) {
-  if (!day || day.categoriesCompleted <= 0) return null
+  if (!day) return null
+  if (day.categoriesCompleted <= 0) return '✏️'
   if (day.stickersEarned?.length) return stickerEmoji(day.stickersEarned[day.stickersEarned.length - 1]) || '⭐'
   const idx = Math.abs([...dateKey].reduce((a, c) => a + c.charCodeAt(0), 0)) % FALLBACK_MARKERS.length
   return FALLBACK_MARKERS[idx]
