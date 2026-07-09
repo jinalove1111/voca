@@ -255,14 +255,31 @@ export function useStudent(name) {
   // 위험 없음). AppInner는 학생이 바뀔 때마다 통째로 마운트/언마운트되므로
   // (App.jsx의 `!student` 분기 참고) 이 useEffect는 로그인마다 정확히
   // 한 번씩 실행된다.
+  //
+  // 2026-07-10 안정성 버그 수정: 아래 sync effect는 record가 바뀔 때마다
+  // 2초 후 클라우드에 fullRecord를 업로드한다. 복구 대상 학생(로컬 비어
+  // 있음)이 로그인한 순간에도 record는 여전히 "비어있는" freshRecord라서,
+  // fetchFullProgress()가 (느린 네트워크/Supabase 콜드스타트 등으로) 2초
+  // 보다 늦게 끝나면 sync effect가 먼저 발동해 "빈 기록"으로 그 학생의
+  // 진짜 클라우드 백업을 덮어써버린다 — 이 기기의 로컬 복구는 그 후
+  // 정상적으로 성공하지만, 클라우드 백업 자체가 조용히 파괴되어 이
+  // 학생이 나중에 정말로 기기를 잃어버리면 복구가 불가능해진다.
+  // restoreChecked로 sync effect를 게이팅해서, 복구가 필요 없는 학생은
+  // (이미 로컬에 데이터 있음) 전혀 기다리지 않고, 복구가 필요한 학생은
+  // "복구 시도가 끝날 때까지"(성공/실패/타임아웃 무관) sync를 미룬다.
+  const [restoreChecked, setRestoreChecked] = useState(() => !isEmptyRecord(record))
   useEffect(() => {
-    if (!isEmptyRecord(record)) return
+    if (!isEmptyRecord(record)) { setRestoreChecked(true); return }
     let cancelled = false
+    // 네트워크가 완전히 죽어도 동기화가 영구히 막히지 않도록 상한선.
+    const timeout = setTimeout(() => { if (!cancelled) setRestoreChecked(true) }, 5000)
     fetchFullProgress(name).then((backup) => {
       if (cancelled || !backup) return
       patch((prev) => (isEmptyRecord(prev) ? backup : {}))
-    }).catch(() => {})
-    return () => { cancelled = true }
+    }).catch(() => {}).finally(() => {
+      if (!cancelled) { clearTimeout(timeout); setRestoreChecked(true) }
+    })
+    return () => { cancelled = true; clearTimeout(timeout) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name])
 
@@ -536,8 +553,14 @@ export function useStudent(name) {
   // v1.4: also sends the full record as a cloud backup (fullRecord) — see
   // the restore-on-mount effect above and fetchFullProgress() in
   // wordLibrary.js. Same fire-and-forget/never-blocks guarantee.
+  //
+  // doSyncRef holds the LATEST sync closure (updated every render) so both
+  // the debounce timer below and the visibility-flush effect always send
+  // the current record, never a stale one from whichever render scheduled
+  // them.
+  const doSyncRef = useRef(null)
   useEffect(() => {
-    const t = setTimeout(() => {
+    doSyncRef.current = () => {
       markSyncAttempt(name, 'progress')
       syncStudentProgress(name, {
         totalStars: record.totalStars,
@@ -555,10 +578,30 @@ export function useStudent(name) {
         },
       }).then(() => markSyncSuccess(name, 'progress'))
         .catch((err) => markSyncFailure(name, 'progress', err))
-    }, 2000)
+    }
+  })
+
+  // restoreChecked가 false인 동안은 절대 동기화하지 않는다 — 위 복구
+  // effect의 레이스 컨디션 수정 참고.
+  useEffect(() => {
+    if (!restoreChecked) return
+    const t = setTimeout(() => doSyncRef.current?.(), 2000)
     return () => clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, record])
+  }, [name, record, restoreChecked])
+
+  // 2026-07-10 안정성 보강: 지금까지는 2초 디바운스 타이머가 끝나기 전에
+  // 학생이 탭을 닫거나 다른 앱으로 전환하면 그 마지막 변경분이 영영
+  // 동기화되지 않을 수 있었다. visibilitychange(hidden)는 모바일에서
+  // beforeunload보다 훨씬 안정적으로 발생하므로(홈 버튼/앱 전환/화면
+  // 꺼짐 전부 포함), 탭이 숨겨지는 순간 대기 중인 동기화를 기다리지
+  // 않고 즉시 flush한다.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden' && restoreChecked) doSyncRef.current?.()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [restoreChecked])
 
   return {
     stars, stickerTypes, diaryPlacements, missions,

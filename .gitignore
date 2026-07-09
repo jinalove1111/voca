@@ -6,3 +6,5 @@ dist
 .env.vercel*.local
 
 .env*
+
+scripts/.tmp
