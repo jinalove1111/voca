@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData, getClassSettings, setClassSettings } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr } from '../utils/wordLibrary'
 import { getStudents, removeStudent } from '../hooks/useStudent'
 import { buildWeeklyReport } from '../utils/weeklyReport'
 import FeatureManagementPanel from './FeatureManagementPanel'
@@ -25,7 +25,11 @@ function downloadCsv(filename, rows) {
   URL.revokeObjectURL(url)
 }
 
-const tomorrowIsoStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10) }
+// 2026-07-09: UTC 기준(toISOString)이던 걸 로컬(한국) 날짜 기준으로 수정 —
+// wordLibrary.js의 localIsoDateStr 주석 참고. 자정~오전 9시 사이에 UTC로
+// 계산하면 "내일"이 실제 로컬 기준보다 하루씩 밀려서 오늘의 단어 배정이
+// 엉뚱한 날짜에 붙는 버그가 있었다.
+const tomorrowIsoStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return localIsoDateStr(d) }
 
 // 쓰기 시험(Spelling Test) 반별 설정 — 쓰기시험 사용 여부/철자 힌트 사용
 // 여부/오답 반복 횟수. 기본값이 전부 꺼짐/3회라, 관리자가 여기서 직접
@@ -330,7 +334,10 @@ function StudentManagement() {
   )
 }
 
-const todayIsoStr = () => new Date().toISOString().slice(0, 10)
+// 2026-07-09 버그 수정: UTC 기준(toISOString)이던 걸 로컬(한국) 날짜
+// 기준으로 수정 — 이게 "방금 공부했는데 오늘 공부함이 안 뜬다" 버그의
+// 직접 원인이었다. 자세한 설명은 wordLibrary.js의 localIsoDateStr 주석 참고.
+const todayIsoStr = () => localIsoDateStr()
 
 // v1.3 관리자 대시보드 — 반 선택 시 그 반 학생들의 누적 진행도(별/스티커/
 // 클리어 단어 수/스트릭) + 최근 60일 일별 기록(오늘 공부 여부, 숙제=오늘의

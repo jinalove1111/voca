@@ -38,7 +38,20 @@ export function isWordLibraryReady() {
 // Absent/empty for a class = no assignment set = fall back to showing the
 // full unit (existing v1.0/v1.1/v1.2 behavior, never broken by this).
 let _dailyAssignments = {}
-const todayDateStr = () => new Date().toISOString().slice(0, 10)
+// 2026-07-09 버그 수정: toISOString()은 UTC 기준이라, 한국(UTC+9)에서는
+// 자정~오전 9시 사이에 실제 로컬 날짜보다 하루 전 날짜를 반환한다. 학생이
+// 아침 일찍 공부한 기록이 UTC 기준 "어제" 날짜로 DB에 저장되고, 관리자가
+// 같은 날 오전 9시 이후(이미 UTC도 날짜가 넘어간 뒤)에 확인하면 "오늘"
+// 조회 날짜와 어긋나 "오늘 공부함"이 체크되지 않는 원인이었다. getFullYear/
+// getMonth/getDate는 전부 로컬 타임존 기준이라 이걸로 YYYY-MM-DD를 직접
+// 조립하면 학생 쪽(useStudent.js의 todayStr())과 항상 같은 날짜가 된다.
+export function localIsoDateStr(d = new Date()) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+const todayDateStr = () => localIsoDateStr()
 
 export async function refreshWordLibrary() {
   const [classesRes, unitsRes, wordsRes, assignmentsRes] = await Promise.all([
@@ -465,7 +478,7 @@ export async function setStudentsClassBulk(names, className, unitName) {
 export async function syncStudentProgress(name, { totalStars, clearedCount, streak, stickersCount, daily, fullRecord }) {
   const s = _students[name]
   if (!s) return // student not yet known to this device's Supabase cache (e.g. offline at first load) — next sync retries
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localIsoDateStr() // 로컬(한국) 날짜 — UTC 쓰면 안 됨(위 localIsoDateStr 주석 참고)
 
   const progressRow = {
     student_id: s.id,
@@ -625,7 +638,7 @@ export async function fetchDashboardData(studentNames) {
 
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - 60)
-  const cutoffStr = cutoff.toISOString().slice(0, 10)
+  const cutoffStr = localIsoDateStr(cutoff)
 
   const [progressRes, dailyRes] = await Promise.all([
     supabase.from('student_progress').select('*').in('student_id', ids),
