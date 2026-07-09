@@ -582,11 +582,30 @@ export async function fetchWordStatusSummary(studentNames) {
 // 복습 대상으로 포함") — word_status 행을 지우면 그 학생에게는 해당
 // 단어들이 다시 "아직 상태 없음"으로 보여 어떤 학습 모드에서도 다시
 // 나타난다. 다른 학생/다른 데이터는 전혀 건드리지 않음.
+//
+// 2026-07-10 데이터 정합성 수정: word_status 테이블만 지우고 끝내면,
+// student_progress.progress_data(전체 기록 클라우드 백업, fullRecord)
+// 안에는 예전 wordStatus 값이 그대로 남아있었다 — 이 학생이 나중에
+// 정말로 기기를 잃어버려 새 기기에서 복구하면(fetchFullProgress),
+// 방금 관리자가 초기화한 값이 그대로 되살아나는 조용한 재발 버그가
+// 있었다. 백업 blob의 wordStatus만 함께 비워서 막는다. (주의: 이
+// 학생이 지금 로그인해 있는 기기의 로컬 localStorage는 서버가 직접
+// 건드릴 수 없으므로 별개 — 그 기기는 다음에 스스로 뭔가 동기화할 때
+// 자기 로컬 값을 그대로 다시 올려보낸다. 이건 이 함수의 책임 범위 밖.)
 export async function resetWordStatus(name) {
   const s = _students[name]
   if (!s) return
   const { error } = await supabase.from('word_status').delete().eq('student_id', s.id)
   if (error) throw error
+  const { data: existing, error: fetchErr } = await supabase
+    .from('student_progress').select('progress_data').eq('student_id', s.id).maybeSingle()
+  if (fetchErr) throw fetchErr
+  if (existing?.progress_data && Object.keys(existing.progress_data).length > 0) {
+    const nextProgressData = { ...existing.progress_data, wordStatus: {} }
+    const { error: updateErr } = await supabase
+      .from('student_progress').update({ progress_data: nextProgressData }).eq('student_id', s.id)
+    if (updateErr) throw updateErr
+  }
 }
 
 // v1.5 Stability Milestone — hidden admin Debug page support. Pulls every
