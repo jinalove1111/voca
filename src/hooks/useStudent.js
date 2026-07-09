@@ -45,6 +45,48 @@ function readOld(key, def) {
   try { return JSON.parse(localStorage.getItem(key)) ?? def } catch { return def }
 }
 
+// v1.5 Stability Milestone — per-device, per-student sync health, so the
+// hidden admin Debug page can show "did this device's last cloud sync
+// actually succeed" instead of the previous silent .catch(() => {}) that
+// left no trace of failures anywhere. Deliberately NOT part of the main
+// progress record (STORE_KEY) — this is telemetry about the sync
+// mechanism itself, not student progress data, and must never be backed up
+// / restored / compared as if it were.
+const SYNC_META_KEY = 'paul_easy_sync_meta'
+function loadSyncMetaStore() {
+  try {
+    const v = JSON.parse(localStorage.getItem(SYNC_META_KEY))
+    return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}
+  } catch { return {} }
+}
+function saveSyncMetaStore(store) {
+  localStorage.setItem(SYNC_META_KEY, JSON.stringify(store))
+}
+function freshSyncMeta() {
+  return { status: 'idle', lastType: null, lastAttemptAt: null, lastSuccessAt: null, failedCount: 0, lastError: null }
+}
+function patchSyncMeta(name, patchFn) {
+  const store = loadSyncMetaStore()
+  const cur = store[name] || freshSyncMeta()
+  store[name] = { ...cur, ...patchFn(cur) }
+  saveSyncMetaStore(store)
+}
+const markSyncAttempt = (name, type) =>
+  patchSyncMeta(name, () => ({ status: 'syncing', lastType: type, lastAttemptAt: new Date().toISOString() }))
+const markSyncSuccess = (name, type) =>
+  patchSyncMeta(name, () => ({ status: 'success', lastType: type, lastSuccessAt: new Date().toISOString(), failedCount: 0, lastError: null }))
+const markSyncFailure = (name, type, err) =>
+  patchSyncMeta(name, (cur) => ({ status: 'error', lastType: type, failedCount: (cur.failedCount || 0) + 1, lastError: (err && err.message) || String(err) }))
+
+// Read-only accessors for the Debug page (DebugPage.jsx) — never mutate
+// state, safe to call outside a component/hook.
+export function getSyncMeta(name) {
+  return loadSyncMetaStore()[name] || freshSyncMeta()
+}
+export function getLocalRecordRaw(name) {
+  return loadStore()[name] || null
+}
+
 const GOAL = 5
 const MISSION_BONUS_STARS = 10
 const DUPLICATE_BONUS_STARS = 20
@@ -463,7 +505,10 @@ export function useStudent(name) {
   const setWordKnownState = useCallback((wordDbId, status) => {
     if (!wordDbId) return
     patch((prev) => ({ wordStatus: { ...prev.wordStatus, [wordDbId]: status } }))
-    syncWordStatus(name, wordDbId, status).catch(() => {})
+    markSyncAttempt(name, 'wordStatus')
+    syncWordStatus(name, wordDbId, status)
+      .then(() => markSyncSuccess(name, 'wordStatus'))
+      .catch((err) => markSyncFailure(name, 'wordStatus', err))
   }, [patch, name])
   const setWordKnown = useCallback((wordDbId) => setWordKnownState(wordDbId, 'known'), [setWordKnownState])
   const setWordUnknown = useCallback((wordDbId) => setWordKnownState(wordDbId, 'unknown'), [setWordKnownState])
@@ -493,6 +538,7 @@ export function useStudent(name) {
   // wordLibrary.js. Same fire-and-forget/never-blocks guarantee.
   useEffect(() => {
     const t = setTimeout(() => {
+      markSyncAttempt(name, 'progress')
       syncStudentProgress(name, {
         totalStars: record.totalStars,
         clearedCount: record.cleared.length,
@@ -507,7 +553,8 @@ export function useStudent(name) {
           pronunciationAttempts: todayHistory?.pronunciationAttempts || 0,
           missedWordIds: todayHistory?.missedWordIds || [],
         },
-      }).catch(() => {})
+      }).then(() => markSyncSuccess(name, 'progress'))
+        .catch((err) => markSyncFailure(name, 'progress', err))
     }, 2000)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps

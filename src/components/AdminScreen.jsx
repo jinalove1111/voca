@@ -5,6 +5,7 @@ import { getStudents, removeStudent } from '../hooks/useStudent'
 import { buildWeeklyReport } from '../utils/weeklyReport'
 import FeatureManagementPanel from './FeatureManagementPanel'
 import TestPaperGenerator from './TestPaperGenerator'
+import DebugPage from './DebugPage'
 
 const wordSlug = (word) => word.toLowerCase().replace(/\s+/g, '_')
 
@@ -908,7 +909,19 @@ export default function AdminScreen({ onBack }) {
   const [pin, setPin]         = useState('')
   const [authed, setAuthed]   = useState(false)
   const [checkingPin, setCheckingPin] = useState(false)
-  const [tab, setTab]         = useState('classes') // classes | excel | pdf | features | testpaper
+  const [tab, setTab]         = useState('classes') // classes | excel | pdf | features | testpaper | debug (debug is hidden — not in the visible tab bar, reached via 5x tap on the title)
+  const [titleTapCount, setTitleTapCount] = useState(0)
+  const titleTapTimer = useRef(null)
+
+  const handleTitleTap = () => {
+    setTitleTapCount((c) => {
+      const next = c + 1
+      if (titleTapTimer.current) clearTimeout(titleTapTimer.current)
+      if (next >= 5) { setTab('debug'); titleTapTimer.current = null; return 0 }
+      titleTapTimer.current = setTimeout(() => setTitleTapCount(0), 1500)
+      return next
+    })
+  }
   const [classes, setClasses] = useState(() => getClassNames())
   const [viewClass, setView]  = useState(null)
   const [viewUnit, setViewUnit] = useState('Unit 1')
@@ -986,8 +999,15 @@ export default function AdminScreen({ onBack }) {
       <div className="max-w-lg mx-auto">
         <div className="no-print flex items-center gap-3 pt-2 mb-6">
           <button onClick={onBack} className="text-gray-500 font-bold btn-press">← 나가기</button>
-          <h1 className="text-2xl font-black text-gray-800">⚙️ 관리자</h1>
+          <h1 className="text-2xl font-black text-gray-800 select-none" onClick={handleTitleTap}>⚙️ 관리자</h1>
         </div>
+
+        {tab === 'debug' && (
+          <div className="no-print mb-3 flex items-center gap-2 bg-yellow-100 rounded-xl px-3 py-2">
+            <span className="text-xs font-black text-yellow-800">🔧 숨김 디버그 탭</span>
+            <button onClick={() => setTab('classes')} className="text-xs font-bold text-yellow-700 underline btn-press">탭 목록으로</button>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="no-print flex gap-2 mb-6 overflow-x-auto">
@@ -1223,6 +1243,7 @@ export default function AdminScreen({ onBack }) {
         {tab === 'pdf'   && <PdfUpload   onDone={() => { refresh(); setTab('classes') }} />}
         {tab === 'testpaper' && <TestPaperGenerator />}
         {tab === 'features' && <FeatureManagementPanel />}
+        {tab === 'debug' && <DebugPage />}
       </div>
     </div>
 

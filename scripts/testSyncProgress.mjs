@@ -24,6 +24,17 @@ for (const line of envText.split('\n')) {
 }
 const supabaseForTest = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY)
 
+// Local-timezone date, matching wordLibrary.js's localIsoDateStr() (KST on
+// the deployed app). `toISOString()` is UTC and gives the wrong calendar
+// date between midnight and 9am KST — this bit the test itself once
+// already (2026-07-09 fix was in app code only, not here).
+function localIsoDateStr(d = new Date()) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 let failures = 0
 function check(label, cond) {
   if (cond) console.log(`  PASS  ${label}`)
@@ -62,9 +73,9 @@ check('student_progress.total_stars === 42', prog.total_stars === 42)
 check('student_progress.cleared_count === 7', prog.cleared_count === 7)
 check('student_progress.streak === 3', prog.streak === 3)
 check('student_progress.stickers_count === 2', prog.stickers_count === 2)
-check('student_progress.last_studied_date가 오늘 날짜', prog.last_studied_date === new Date().toISOString().slice(0, 10))
+check('student_progress.last_studied_date가 오늘 날짜', prog.last_studied_date === localIsoDateStr())
 
-const today = new Date().toISOString().slice(0, 10)
+const today = localIsoDateStr()
 const { data: daily } = await supabaseForTest.from('student_daily_progress').select('*').eq('student_id', studentId).eq('date', today).single()
 check('student_daily_progress.categories_completed === 4', daily.categories_completed === 4)
 check('student_daily_progress.quiz_correct === 3 / quiz_total === 5', daily.quiz_correct === 3 && daily.quiz_total === 5)

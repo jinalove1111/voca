@@ -589,6 +589,33 @@ export async function resetWordStatus(name) {
   if (error) throw error
 }
 
+// v1.5 Stability Milestone — hidden admin Debug page support. Pulls every
+// Supabase-side row for one student in one shot (student_progress single
+// row, last 14 days of student_daily_progress, all word_status rows) so the
+// Debug page can show "what's actually in the DB right now" next to
+// whatever's in this device's localStorage, without needing N separate
+// round-trips. word_status errors (e.g. v1.5 migration not run yet on this
+// project) are swallowed to an empty array + error string rather than
+// thrown, since the rest of the snapshot is still useful on its own.
+export async function fetchDebugSnapshot(name) {
+  const s = _students[name]
+  if (!s) return { student: null, progress: null, daily: [], wordStatusRows: [], wordStatusError: null }
+  const [progressRes, dailyRes, wsRes] = await Promise.all([
+    supabase.from('student_progress').select('*').eq('student_id', s.id).maybeSingle(),
+    supabase.from('student_daily_progress').select('*').eq('student_id', s.id).order('date', { ascending: false }).limit(14),
+    supabase.from('word_status').select('*').eq('student_id', s.id),
+  ])
+  if (progressRes.error) throw progressRes.error
+  if (dailyRes.error) throw dailyRes.error
+  return {
+    student: { id: s.id, name, className: s.className, unitName: s.unitName },
+    progress: progressRes.data || null,
+    daily: dailyRes.data || [],
+    wordStatusRows: wsRes.error ? [] : (wsRes.data || []),
+    wordStatusError: wsRes.error ? wsRes.error.message : null,
+  }
+}
+
 // Returns full word objects for a student, sourced ONLY from Supabase class
 // data — word and meaning always come straight from the DB row, never from
 // the built-in demo bank (data/words.js), even if the text happens to match.

@@ -3,3 +3,6 @@ dist
 .env
 
 .vercel
+.env.vercel*.local
+
+.env*
