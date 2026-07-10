@@ -168,11 +168,22 @@ function AppInner({ student, onLogout }) {
   // which is exactly what let a student's re-assigned unit silently revert
   // to whatever it was when the tab first loaded.
   useEffect(() => {
+    // 2026-07-10 성능 최적화: visibilitychange와 focus는 같은 "앱으로
+    // 돌아옴" 순간에 거의 동시에(모바일에서는 둘 다) 발생하는 경우가
+    // 많아서, 이 핸들러가 두 번 연달아 불리며 6개 Supabase 쿼리
+    // (refreshWordLibrary 4개 + refreshStudents 1개 + refreshClassSettings
+    // 1개)를 두 번, 총 12개를 쏘고 있었다. 이미 진행 중인 새로고침이
+    // 있으면 겹쳐 시작하지 않도록 가드 — 실제 새로고침 자체(최초 트리거
+    // 시점, 어떤 데이터를 가져오는지)는 전혀 안 바뀜, 근접 중복 호출만
+    // 제거.
+    let inFlight = false
     const onVisible = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && !inFlight) {
+        inFlight = true
         Promise.all([refreshWordLibrary(), refreshStudents(), refreshClassSettings()])
           .then(() => setRefreshTick((t) => t + 1))
           .catch(() => {})
+          .finally(() => { inFlight = false })
       }
     }
     document.addEventListener('visibilitychange', onVisible)
