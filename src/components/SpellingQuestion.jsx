@@ -183,7 +183,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
           <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-4 text-center">
             <HeroReaction image={getReactionById('sad')?.image} size="md" />
             <p className="text-red-500 font-bold text-sm mb-1 mt-1">정답은</p>
-            <p className="text-red-600 font-black text-2xl tracking-wide">{word}</p>
+            <p className="text-red-600 font-black text-2xl tracking-wide break-words">{word}</p>
             <p className="text-red-500 font-bold text-sm mt-1">입니다</p>
           </div>
           <p className="text-center text-xs text-gray-400">정답을 보고 똑같이 한 번 입력해봐요</p>
