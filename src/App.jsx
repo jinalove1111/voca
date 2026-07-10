@@ -14,11 +14,18 @@ import TrainGame from './components/TrainGame'
 import BonusChoiceScreen from './components/BonusChoiceScreen'
 import GiftReveal from './components/GiftReveal'
 import SpellingReview from './components/SpellingReview'
-import AdminScreen from './components/AdminScreen'
 import { useStudent } from './hooks/useStudent'
 import { pickNextGame } from './utils/matchGame'
 import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, findStudentByName, getStudentClass, getStudentUnit, getClassSettings, filterWordsByScope } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech, getMicStream } from './utils/speech'
+
+// 2026-07-10 성능 최적화: AdminScreen은 xlsx(엑셀 업로드)를 포함해 학생은
+// 절대 안 쓰는 무거운 라이브러리를 물고 있는데, 정적 import라 학생용
+// 메인 번들에도 항상 같이 딸려가고 있었다(매일 앱을 여는 학생 전원이
+// 한 번도 안 쓸 관리자 코드를 매번 다운로드). React.lazy로 바꿔서
+// "⚙️ 관리자" 버튼을 실제로 눌렀을 때만 그 코드가 로드되게 분리 —
+// AdminScreen 자체의 동작/로직은 전혀 안 바뀜, 로딩 시점만 바뀜.
+const AdminScreen = React.lazy(() => import('./components/AdminScreen'))
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -410,7 +417,20 @@ export default function App() {
     )
   }
 
-  if (showAdmin) return <AppErrorBoundary><AdminScreen onBack={() => setAdmin(false)} /></AppErrorBoundary>
+  if (showAdmin) return (
+    <AppErrorBoundary>
+      <React.Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="text-center">
+            <div className="text-5xl mb-3 animate-bounce">⚙️</div>
+            <p className="text-gray-400 font-bold">관리자 화면을 불러오는 중...</p>
+          </div>
+        </div>
+      }>
+        <AdminScreen onBack={() => setAdmin(false)} />
+      </React.Suspense>
+    </AppErrorBoundary>
+  )
   if (!student)  return <AppErrorBoundary><StudentSelect onSelect={handleSelect} onAdmin={() => setAdmin(true)} removedNotice={removedNotice} /></AppErrorBoundary>
   return <AppErrorBoundary><AppInner student={student} onLogout={handleLogout} /></AppErrorBoundary>
 }
