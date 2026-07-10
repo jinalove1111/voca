@@ -24,7 +24,7 @@ import HeroReaction from './HeroReaction'
 // out of scope for self-service), pre-filled with their CURRENT unit from
 // Supabase, and actually call setStudentUnit() before logging in if they
 // pick a different one.
-export default function StudentSelect({ onSelect, onAdmin, removedNotice }) {
+export default function StudentSelect({ onSelect, onAdmin, onParent, removedNotice }) {
   const [input, setInput]           = useState('')
   const [selectedClass, setClass]   = useState('')
   const [selectedUnit, setUnit]     = useState('')
@@ -156,10 +156,18 @@ export default function StudentSelect({ onSelect, onAdmin, removedNotice }) {
         </button>
       </div>
 
-      <button onClick={onAdmin}
-        className="mt-6 text-gray-400 text-xs font-bold btn-press hover:text-gray-600 transition-colors">
-        ⚙️ 관리자
-      </button>
+      <div className="mt-6 flex items-center gap-4">
+        {onParent && (
+          <button onClick={onParent}
+            className="text-gray-400 text-xs font-bold btn-press hover:text-gray-600 transition-colors">
+            👨‍👩‍👧 학부모용
+          </button>
+        )}
+        <button onClick={onAdmin}
+          className="text-gray-400 text-xs font-bold btn-press hover:text-gray-600 transition-colors">
+          ⚙️ 관리자
+        </button>
+      </div>
     </div>
   )
 }

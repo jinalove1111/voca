@@ -26,6 +26,9 @@ import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech, getMicStream } 
 // "⚙️ 관리자" 버튼을 실제로 눌렀을 때만 그 코드가 로드되게 분리 —
 // AdminScreen 자체의 동작/로직은 전혀 안 바뀜, 로딩 시점만 바뀜.
 const AdminScreen = React.lazy(() => import('./components/AdminScreen'))
+// 학부모 화면도 같은 이유로 lazy — 학생/관리자 어느 쪽도 매일 안 쓰는
+// 코드를 학생 메인 번들에 얹지 않는다.
+const ParentScreen = React.lazy(() => import('./components/ParentScreen'))
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -336,6 +339,7 @@ function AppInner({ student, onLogout }) {
 export default function App() {
   const [student, setStudent] = useState(() => localStorage.getItem('paulEasyVoca_currentStudent') || '')
   const [showAdmin, setAdmin] = useState(false)
+  const [showParent, setParent] = useState(false)
   const [ready, setReady]     = useState(false)
   const [loadError, setLoadError] = useState(null)
   const [removedNotice, setRemovedNotice] = useState(false)
@@ -442,6 +446,20 @@ export default function App() {
       </React.Suspense>
     </AppErrorBoundary>
   )
-  if (!student)  return <AppErrorBoundary><StudentSelect onSelect={handleSelect} onAdmin={() => setAdmin(true)} removedNotice={removedNotice} /></AppErrorBoundary>
+  if (showParent) return (
+    <AppErrorBoundary>
+      <React.Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="text-center">
+            <div className="text-5xl mb-3 animate-bounce">👨‍👩‍👧</div>
+            <p className="text-gray-400 font-bold">학부모 화면을 불러오는 중...</p>
+          </div>
+        </div>
+      }>
+        <ParentScreen onBack={() => setParent(false)} />
+      </React.Suspense>
+    </AppErrorBoundary>
+  )
+  if (!student)  return <AppErrorBoundary><StudentSelect onSelect={handleSelect} onAdmin={() => setAdmin(true)} onParent={() => setParent(true)} removedNotice={removedNotice} /></AppErrorBoundary>
   return <AppErrorBoundary><AppInner student={student} onLogout={handleLogout} /></AppErrorBoundary>
 }

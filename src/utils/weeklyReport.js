@@ -1,3 +1,34 @@
+import { localIsoDateStr } from './wordLibrary'
+
+// 2026-07-10 — AdminScreen.jsx(관리자 대시보드)와 ParentScreen.jsx(학부모
+// 화면) 둘 다 fetchDashboardData()가 반환한 원본 row(progress + dailyRows)
+// 에서 정확히 같은 파생값(오늘 공부 여부/숙제완료/퀴즈정답률/많이틀린단어
+// 등)을 계산해야 한다. 예전엔 이 계산이 AdminScreen.jsx 안에만 있었는데,
+// 화면이 하나 더 생기면서 그대로 복붙하면 나중에 한쪽만 고치고 다른 쪽은
+// 안 고쳐서 "관리자 화면과 학부모 화면 숫자가 다르다" 같은 버그가 생길
+// 위험이 있다(오늘 밤 이미 캘린더/관리자 화면 사이에서 겪은 것과 같은
+// 클래스). 그래서 공용 utils로 옮겨 두 화면이 항상 같은 함수를 쓰게 함.
+// 순수 함수 — 새 Supabase 조회 없음, 이미 받아온 데이터만 가공.
+export function computeStudentStats(r, wordStatusSummary = {}) {
+  const today = r.dailyRows.find(d => d.date === localIsoDateStr())
+  // "오늘 공부함" 기준은 categories_completed > 0이 아니라 오늘 날짜 row
+  // 존재 여부다 — 단어 하나만 봐도(카테고리 미완료) 로컬 history는 이미
+  // 오늘 기록을 만들고 그게 그대로 동기화되므로, row가 있다는 것 자체가
+  // "동기화된 활동이 있었다"는 뜻이다(2026-07-10 관리자 대시보드 버그 수정 참고).
+  const studiedToday = !!today
+  const homeworkDone = (today?.categories_completed || 0) >= 4
+  const last7 = r.dailyRows.slice(0, 7)
+  const quizCorrect = r.dailyRows.reduce((s, d) => s + (d.quiz_correct || 0), 0)
+  const quizTotal = r.dailyRows.reduce((s, d) => s + (d.quiz_total || 0), 0)
+  const quizAccuracy = quizTotal > 0 ? Math.round((quizCorrect / quizTotal) * 100) : null
+  const pronAttempts = r.dailyRows.reduce((s, d) => s + (d.pronunciation_attempts || 0), 0)
+  const missCount = {}
+  r.dailyRows.forEach(d => (d.missed_word_ids || []).forEach(id => { missCount[id] = (missCount[id] || 0) + 1 }))
+  const topMissed = Object.entries(missCount).sort((a, b) => b[1] - a[1]).slice(0, 5)
+  const ws = (r.studentId && wordStatusSummary[r.studentId]) || { known: 0, unknown: 0, skipped: 0, mastered: 0 }
+  return { today, studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws }
+}
+
 // v1.3 "학부모에게 보낼 수 있는 요약 문구" — 규칙 기반 템플릿으로만 생성
 // (AI API 비용 없음, 프로젝트 표준 원칙: 무료로 가능한 방법을 우선 사용).
 // AdminScreen.jsx의 대시보드가 이미 계산해둔 최근 7일치 수치를 그대로

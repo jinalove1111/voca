@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
 import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus } from '../utils/wordLibrary'
 import { getStudents, removeStudent } from '../hooks/useStudent'
-import { buildWeeklyReport } from '../utils/weeklyReport'
+import { buildWeeklyReport, computeStudentStats } from '../utils/weeklyReport'
 import FeatureManagementPanel from './FeatureManagementPanel'
 import TestPaperGenerator from './TestPaperGenerator'
 import DebugPage from './DebugPage'
@@ -346,26 +346,6 @@ const todayIsoStr = () => localIsoDateStr()
 // fetchDashboardData()로 한 번에 배치 조회해서 보여줌. Supabase 동기화가
 // 아직 안 된 학생(방금 가입해서 첫 동기화 전 등)은 "기록 없음"으로 표시될
 // 뿐 에러가 나지 않음.
-// 2026-07-10 — 대시보드 렌더 루프와 반 전체 CSV 내보내기가 정확히 같은
-// 계산을 쓰도록 공용 함수로 추출(중복 로직 두 벌 유지하다 하나만 고쳐서
-// 어긋나는 위험을 원천 차단). 순수 함수 — Supabase 재조회 없이 이미
-// fetchDashboardData/fetchWordStatusSummary로 받아온 데이터만 가공함.
-function computeStudentStats(r, wordStatusSummary) {
-  const today = r.dailyRows.find(d => d.date === todayIsoStr())
-  const studiedToday = !!today
-  const homeworkDone = (today?.categories_completed || 0) >= 4
-  const last7 = r.dailyRows.slice(0, 7)
-  const quizCorrect = r.dailyRows.reduce((s, d) => s + (d.quiz_correct || 0), 0)
-  const quizTotal = r.dailyRows.reduce((s, d) => s + (d.quiz_total || 0), 0)
-  const quizAccuracy = quizTotal > 0 ? Math.round((quizCorrect / quizTotal) * 100) : null
-  const pronAttempts = r.dailyRows.reduce((s, d) => s + (d.pronunciation_attempts || 0), 0)
-  const missCount = {}
-  r.dailyRows.forEach(d => (d.missed_word_ids || []).forEach(id => { missCount[id] = (missCount[id] || 0) + 1 }))
-  const topMissed = Object.entries(missCount).sort((a, b) => b[1] - a[1]).slice(0, 5)
-  const ws = (r.studentId && wordStatusSummary[r.studentId]) || { known: 0, unknown: 0, skipped: 0, mastered: 0 }
-  return { today, studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws }
-}
-
 function AdminDashboard() {
   const classList = getClassNames()
   const [selectedClass, setSelectedClass] = useState(classList[0] || '')
