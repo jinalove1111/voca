@@ -1,4 +1,18 @@
-import { localIsoDateStr } from './wordLibrary'
+// wordLibrary.js의 localIsoDateStr()과 완전히 동일한 로직을 여기 그대로
+// 복제(공용 함수로 import하지 않음) — 이 파일은 원래 "의존성 0개, 어떤
+// 번들링도 없이 바로 node로 실행 가능"이 불변조건이었다
+// (scripts/testWeeklyReport.mjs 헤더 참고). wordLibrary.js는
+// import.meta.env/Supabase를 물고 있어서 plain Node가 못 읽는데, 여기서
+// import 한 줄만 추가해도 그 불변조건이 깨져서 테스트가 번들링 없이는
+// 아예 못 돌게 된다(2026-07-10 밤에 실제로 이걸로 회귀 한 번 만들었다가
+// 바로 잡음). 로직 자체가 4줄짜리 순수 함수라 복제 비용이 낮음 — DRY보다
+// "테스트를 계속 가장 단순하게 실행 가능한 상태로 유지" 쪽을 택함.
+function localIsoDateStr(d = new Date()) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
 // 2026-07-10 — AdminScreen.jsx(관리자 대시보드)와 ParentScreen.jsx(학부모
 // 화면) 둘 다 fetchDashboardData()가 반환한 원본 row(progress + dailyRows)
