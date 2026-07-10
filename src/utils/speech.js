@@ -1,3 +1,5 @@
+import { stopReactionSound } from './paulReactions'
+
 export const SUCCESS_MSGS = [
   '와 폼 미쳤다! 🔥',
   '발음 레전드인데? 👑',
@@ -182,6 +184,7 @@ let _activeTtsCallId = 0
 
 function stopAllPlayback() {
   stopCurrentAudio()
+  stopReactionSound()
   try {
     if (window.speechSynthesis?.speaking || window.speechSynthesis?.pending) {
       window.speechSynthesis.cancel()

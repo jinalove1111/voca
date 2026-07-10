@@ -175,9 +175,19 @@ export function pickReaction(type) {
 // (예전 PaulReaction은 자기 안에서 재생했음) — 리액션을 고르는 시점에
 // 호출부가 이 함수를 직접 불러 재생한다. 화면이 이미 자기 효과음을
 // 재생했으면(예: playSuccessSound() 중복 방지) 그냥 호출을 생략하면 됨.
+let _reactionAudio = null
+export function stopReactionSound() {
+  if (_reactionAudio) {
+    try { _reactionAudio.pause() } catch {}
+    _reactionAudio = null
+  }
+}
+
 export function playReactionSound(reaction) {
   if (!reaction?.sound) return
+  stopReactionSound()
   const audio = new Audio(reaction.sound)
   audio.volume = 0.75
+  _reactionAudio = audio
   audio.play()?.catch(() => {})
 }

@@ -89,6 +89,7 @@ function PlacedSticker({ placement, selected, onSelect, canvasRef, onMove, onRot
             className="absolute -bottom-2 -right-2 bg-indigo-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs btn-press"
           >⤡</button>
           <button
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(ev) => { ev.stopPropagation(); onDelete(placement.placementId) }}
             className="absolute -top-2 -right-7 bg-red-400 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs btn-press"
           >✕</button>
