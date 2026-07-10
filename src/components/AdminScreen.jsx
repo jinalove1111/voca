@@ -346,6 +346,26 @@ const todayIsoStr = () => localIsoDateStr()
 // fetchDashboardData()로 한 번에 배치 조회해서 보여줌. Supabase 동기화가
 // 아직 안 된 학생(방금 가입해서 첫 동기화 전 등)은 "기록 없음"으로 표시될
 // 뿐 에러가 나지 않음.
+// 2026-07-10 — 대시보드 렌더 루프와 반 전체 CSV 내보내기가 정확히 같은
+// 계산을 쓰도록 공용 함수로 추출(중복 로직 두 벌 유지하다 하나만 고쳐서
+// 어긋나는 위험을 원천 차단). 순수 함수 — Supabase 재조회 없이 이미
+// fetchDashboardData/fetchWordStatusSummary로 받아온 데이터만 가공함.
+function computeStudentStats(r, wordStatusSummary) {
+  const today = r.dailyRows.find(d => d.date === todayIsoStr())
+  const studiedToday = !!today
+  const homeworkDone = (today?.categories_completed || 0) >= 4
+  const last7 = r.dailyRows.slice(0, 7)
+  const quizCorrect = r.dailyRows.reduce((s, d) => s + (d.quiz_correct || 0), 0)
+  const quizTotal = r.dailyRows.reduce((s, d) => s + (d.quiz_total || 0), 0)
+  const quizAccuracy = quizTotal > 0 ? Math.round((quizCorrect / quizTotal) * 100) : null
+  const pronAttempts = r.dailyRows.reduce((s, d) => s + (d.pronunciation_attempts || 0), 0)
+  const missCount = {}
+  r.dailyRows.forEach(d => (d.missed_word_ids || []).forEach(id => { missCount[id] = (missCount[id] || 0) + 1 }))
+  const topMissed = Object.entries(missCount).sort((a, b) => b[1] - a[1]).slice(0, 5)
+  const ws = (r.studentId && wordStatusSummary[r.studentId]) || { known: 0, unknown: 0, skipped: 0, mastered: 0 }
+  return { today, studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws }
+}
+
 function AdminDashboard() {
   const classList = getClassNames()
   const [selectedClass, setSelectedClass] = useState(classList[0] || '')
@@ -385,6 +405,37 @@ function AdminDashboard() {
     }
   }
 
+  // v1.5.1 — "반별 진도 통계를 관리자 화면 밖으로도 볼 수 있게"(ROADMAP.md
+  // 백로그). 지금까지는 학생 한 명씩 "자세히 보기"를 눌러야만 보이던 값들을
+  // (오늘 공부 여부/숙제완료/퀴즈정답률/발음횟수/단어숙지현황) 반 전체
+  // 한 번에 CSV로. 새 Supabase 조회 없음 — 이미 로드된 rows/wordStatusSummary
+  // 를 computeStudentStats()로 가공만 함(렌더 루프와 완전히 같은 계산).
+  const exportClassStatsCsv = () => {
+    const header = ['이름', '오늘 공부함', '숙제 완료', '퀴즈 정답률(%)', '퀴즈 정답/전체', '발음 연습 횟수', '별', '연속학습일', '스티커', '클리어 단어', '아는 단어', '복습 필요 단어', '많이 틀린 단어(상위5)']
+      .concat(['최근 7일 완료 카테고리(0~4, 오늘부터 과거순)'])
+    const body = rows.map(r => {
+      const { studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws } =
+        computeStudentStats(r, wordStatusSummary)
+      return [
+        r.name,
+        studiedToday ? 'O' : 'X',
+        homeworkDone ? 'O' : 'X',
+        quizAccuracy ?? '',
+        `${quizCorrect}/${quizTotal}`,
+        pronAttempts,
+        r.progress?.total_stars ?? 0,
+        r.progress?.streak ?? 0,
+        r.progress?.stickers_count ?? 0,
+        r.progress?.cleared_count ?? 0,
+        ws.known,
+        ws.unknown,
+        topMissed.map(([slug, count]) => `${wordLookup[slug]?.word || slug}×${count}`).join(' '),
+        last7.map(d => d.categories_completed).join(' '),
+      ]
+    })
+    downloadCsv(`${selectedClass}_통계_${todayIsoStr()}.csv`, [header, ...body])
+  }
+
   // v1.5 — 학생의 단어 숙지 상태를 전부 초기화("다시 전체 복습 대상으로
   // 포함"). 관리자가 명시적으로 요청한 학생 한 명만 지워지고, 나머지
   // 진행 기록(별/스티커/캘린더 등)은 전혀 안 건드림.
@@ -416,6 +467,12 @@ function AdminDashboard() {
           <button onClick={() => load(selectedClass)}
             className="bg-purple-100 text-purple-600 font-bold px-3 rounded-xl btn-press">🔄</button>
         </div>
+        {selectedClass && rows.length > 0 && (
+          <button onClick={exportClassStatsCsv}
+            className="w-full mt-2 bg-green-100 text-green-700 font-bold py-2 rounded-xl text-xs btn-press">
+            ⬇️ 반 전체 통계 CSV로 내보내기 ({rows.length}명)
+          </button>
+        )}
       </div>
 
       {loading && <p className="text-center text-gray-400 text-sm py-6">불러오는 중...</p>}
@@ -424,33 +481,9 @@ function AdminDashboard() {
       )}
 
       {!loading && rows.map(r => {
-        const today = r.dailyRows.find(d => d.date === todayIsoStr())
-        // 2026-07-10 수정: 예전엔 categories_completed > 0(카테고리 하나를
-        // 완전히 채워야만)을 "오늘 공부함" 기준으로 썼는데, 이러면 학생이
-        // 앱을 열어 단어를 1~4개 봤지만 아직 어느 카테고리도 다 못 채운
-        // 날은 관리자 화면에 "⬜ 오늘 아직 안 함"으로 보였다 — 캘린더에서
-        // 이미 고친 것과 정확히 같은 버그(단어 첫 조회 시점에 오늘 기록
-        // 자체는 생기지만 categories_completed는 여전히 0일 수 있음, 아래
-        // useStudent.js의 markWordViewed 참고). 오늘 날짜 row가 존재한다는
-        // 것 자체가 이미 "동기화된 활동이 있었다"는 뜻이므로, row 존재
-        // 여부만으로 판단 — 스키마 변경 없이 학생 쪽과 동일한 기준이 됨.
-        const studiedToday = !!today
-        const homeworkDone = (today?.categories_completed || 0) >= 4
-        const last7 = r.dailyRows.slice(0, 7)
-        const quizCorrect = r.dailyRows.reduce((s, d) => s + (d.quiz_correct || 0), 0)
-        const quizTotal = r.dailyRows.reduce((s, d) => s + (d.quiz_total || 0), 0)
-        const quizAccuracy = quizTotal > 0 ? Math.round((quizCorrect / quizTotal) * 100) : null
-        const pronAttempts = r.dailyRows.reduce((s, d) => s + (d.pronunciation_attempts || 0), 0)
-        const missCount = {}
-        r.dailyRows.forEach(d => (d.missed_word_ids || []).forEach(id => { missCount[id] = (missCount[id] || 0) + 1 }))
-        const topMissed = Object.entries(missCount).sort((a, b) => b[1] - a[1]).slice(0, 5)
+        const { studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws } =
+          computeStudentStats(r, wordStatusSummary)
         const isOpen = expanded === r.name
-        // v1.5 — 아는/모르는/복습 필요 단어 수. "복습 필요"는 word_status가
-        // unknown인 것만(레벨업 미션 대기/오답노트까지 합친 앱 전체 복습
-        // 범위는 학생 쪽 "복습 단어만" 모드와 동일 소스지만, 관리자 화면은
-        // 이 Skip 기능 자체가 무엇을 기록했는지를 그대로 보여주는 게
-        // 목적이라 word_status만 집계함).
-        const ws = (r.studentId && wordStatusSummary[r.studentId]) || { known: 0, unknown: 0, skipped: 0, mastered: 0 }
 
         return (
           <div key={r.name} className="bg-white rounded-2xl card-shadow p-4">
