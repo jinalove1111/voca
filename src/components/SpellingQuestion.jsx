@@ -22,13 +22,13 @@ const SPELLING_GAP_MS = 1000 // 반복 사이 약 1초 대기
 const UNLOCK_AT = 3 // 이 오답 횟수부터 '발음 듣기' 버튼이 활성화됨
 
 // 쓰기는 받아쓰기가 아니라 "기억 속 철자를 꺼내는 훈련(Active Recall)".
-// 그래서 문제를 시작할 때 발음을 자동 재생하지 않고, 한글 뜻만 보여준
+// 그래서 문제를 시작할 때 발음을 자동 재생하지 않고, 문제 텍스트만 보여준
 // 상태에서 학생이 순수하게 기억으로 입력하게 함. 오답 단계별 대응:
 //   1번째 오답: "❌ 다시 한번 생각해보세요!" — 발음/정답 모두 비공개
 //   2번째 오답: "❌ 조금만 더 생각해보세요!" — 여전히 비공개
 //   3번째 오답: 그제서야 '발음 듣기' 버튼이 활성화(자동 재생은 아님 —
 //               학생이 직접 눌러야만 들림)
-//   4번째(+) 오답: 정답 철자 공개 + 발음 1번 자동 재생, 그대로 한 번
+//   4번째(+) 오답: 정답 공개 + 발음 1번 자동 재생, 그대로 한 번
 //               입력해야 다음 문제로 넘어감(받아쓰기 확인 단계)
 const WRONG_MSGS = {
   1: '❌ 다시 한번 생각해보세요!',
@@ -36,22 +36,43 @@ const WRONG_MSGS = {
   3: '❌ 정말 모르겠으면 아래 🔊 버튼을 눌러 들어보세요',
 }
 
-// 쓰기 시험 한 문제 — 영어 단어는 절대 보여주지 않고 한글 뜻만 표시.
-// 학생이 철자를 입력해 제출하면 대소문자/앞뒤 공백을 무시하고 채점.
-// 위 오답 단계 로직을 따라 진행하다가 맞히면 통과. '발음 듣기'가 활성화된
-// 뒤에는 언제 탭해도 진행 중이던 재생을 멈추고 처음부터 다시 재생 —
-// speech.js의 TTS singleton(claimTtsCall)이 겹쳐 들리는 것을 구조적으로
-// 막아줘서 여기서 따로 잠금 처리할 필요 없음.
-export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnabled, onResult, onDone }) {
+// 쓰기 시험 한 문제 — direction으로 어느 방향을 묻는지 결정하는 재사용
+// 가능한 컴포넌트(향후 Smart Test도 같은 props 계약으로 재사용할 예정이라
+// 방향을 하드코딩하지 않음):
+//   'kr2en' (기본값, 기존 v1.5 동작과 100% 동일) — 한글 뜻을 보여주고
+//            영어 철자를 입력받음.
+//   'en2kr' — 대칭적으로 뒤집음: 영어 단어를 보여주고 한글 뜻을 입력받음.
+//   'random' — 문제(=단어)가 바뀔 때마다 이 컴포넌트 내부에서 kr2en/en2kr
+//              중 하나를 무작위로 골라 그 문제 동안 고정(아래 useEffect
+//              [word, wordAudioUrl] 시점에만 다시 뽑음 — 문제 도중엔 불변).
+// 어느 방향이든 오답 단계별 진행(3번까지 발음 잠김 -> 4번째부터 정답
+// 공개+발음 자동재생), 힌트 버튼, 오답 리액션 메시지는 완전히 동일하게
+// 대칭 적용 — 방향별로 새 UX를 만들지 않는다. 발음(TTS)은 항상 영어 단어
+// (word/wordAudioUrl) 기준으로 재생 — en2kr이어도 학생이 듣는 소리는 항상
+// 영어 발음(연습 목적 자체가 영어 발음 강화이므로).
+//
+// '발음 듣기'가 활성화된 뒤에는 언제 탭해도 진행 중이던 재생을 멈추고
+// 처음부터 다시 재생 — speech.js의 TTS singleton(claimTtsCall)이 겹쳐
+// 들리는 것을 구조적으로 막아줘서 여기서 따로 잠금 처리할 필요 없음.
+export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnabled, direction = 'kr2en', onResult, onDone }) {
+  const pickDirection = () => (direction === 'random' ? (Math.random() < 0.5 ? 'kr2en' : 'en2kr') : direction)
+
   const [phase, setPhase] = useState('answer') // answer | reveal | correct
   const [wrongCount, setWrongCount] = useState(0)
   const [replaying, setReplaying] = useState(false) // 재생 중 표시만 — 이미 입력한 답은 화면에 그대로 유지됨
   const [input, setInput] = useState('')
   const [showHint, setShowHint] = useState(false)
   const [correctPaul, setCorrectPaul] = useState(null)
+  // 'random'일 때 이 문제(단어) 동안 고정할 실제 방향.
+  const [resolvedDirection, setResolvedDirection] = useState(pickDirection)
   const reportedRef = useRef(false)
   const cancelRef = useRef(null)
   const inputRef = useRef(null)
+
+  const isEn2Kr = resolvedDirection === 'en2kr'
+  const promptText = isEn2Kr ? word : meaning // 문제로 보여주는 텍스트
+  const targetAnswer = isEn2Kr ? meaning : word // 학생이 입력해서 맞혀야 하는 값
+  const inputPlaceholder = isEn2Kr ? '한글로 뜻을 입력하세요' : '영어로 철자를 입력하세요'
 
   const playSequence = (onAllDone) => {
     cancelRef.current?.() // 재생 중 다시 터치 -> 기존 재생을 먼저 멈추고 처음부터 다시
@@ -81,15 +102,18 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
 
   const focusInput = () => setTimeout(() => inputRef.current?.focus(), 50)
 
-  // 문제 등장(마운트/단어 변경) — 발음 자동 재생 없음. 한글 뜻만 보여주고
-  // 바로 입력창에 포커스(모바일 키보드도 바로 뜨도록 — iOS Safari는
-  // 사용자 제스처 밖 focus()를 무시할 수 있어 100% 보장은 어려움).
+  // 문제 등장(마운트/단어 변경) — 발음 자동 재생 없음. 문제 텍스트만
+  // 보여주고 바로 입력창에 포커스(모바일 키보드도 바로 뜨도록 — iOS
+  // Safari는 사용자 제스처 밖 focus()를 무시할 수 있어 100% 보장은
+  // 어려움). direction==='random'이면 이 시점에 이 문제 한정으로 방향을
+  // 새로 뽑아 고정한다.
   useEffect(() => {
     setPhase('answer')
     setWrongCount(0)
     setInput('')
     setShowHint(false)
     reportedRef.current = false
+    setResolvedDirection(pickDirection())
     focusInput()
 
     return () => { cancelRef.current?.(); stopCurrentAudio() }
@@ -112,7 +136,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
 
   const submitAnswer = () => {
     if (!input.trim()) return
-    const correct = isSpellingCorrect(input, word)
+    const correct = isSpellingCorrect(input, targetAnswer)
     if (!reportedRef.current) { reportedRef.current = true; onResult?.(correct) }
     if (correct) { markCorrect(); return }
 
@@ -131,7 +155,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
     }
   }
 
-  const hint = spellingHintFor(word)
+  const hint = spellingHintFor(targetAnswer)
   const wrongMsg = WRONG_MSGS[wrongCount]
   const speakerUnlocked = wrongCount >= UNLOCK_AT
 
@@ -143,12 +167,12 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
         <button onClick={playAgain} disabled={phase === 'correct'}
           className="w-full bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl p-6 text-center text-white btn-press">
           <p className={`text-4xl mb-2 ${replaying ? 'animate-pulse' : ''}`}>🔊</p>
-          <p className="text-3xl font-black">{meaning}</p>
+          <p className="text-3xl font-black">{promptText}</p>
           <p className="text-teal-100 text-xs mt-2">탭하면 발음을 들려줘요 (3번, 천천히)</p>
         </button>
       ) : (
         <div className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-6 text-center">
-          <p className="text-3xl font-black text-gray-700">{meaning}</p>
+          <p className="text-3xl font-black text-gray-700">{promptText}</p>
         </div>
       )}
 
@@ -169,7 +193,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
           )}
           <input ref={inputRef} type="text" value={input} onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && submitAnswer()}
-            placeholder="영어로 철자를 입력하세요" autoFocus autoCapitalize="off" autoCorrect="off" spellCheck="false"
+            placeholder={inputPlaceholder} autoFocus autoCapitalize="off" autoCorrect="off" spellCheck="false"
             className="w-full border-2 border-teal-200 rounded-xl px-4 py-4 text-xl font-black text-center focus:outline-none focus:border-teal-500" />
           <button onClick={submitAnswer}
             className="w-full bg-teal-500 hover:bg-teal-600 text-white font-black py-4 rounded-2xl btn-press text-lg">
@@ -183,7 +207,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
           <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-4 text-center">
             <HeroReaction image={getReactionById('sad')?.image} size="md" />
             <p className="text-red-500 font-bold text-sm mb-1 mt-1">정답은</p>
-            <p className="text-red-600 font-black text-2xl tracking-wide break-words">{word}</p>
+            <p className="text-red-600 font-black text-2xl tracking-wide break-words">{targetAnswer}</p>
             <p className="text-red-500 font-bold text-sm mt-1">입니다</p>
           </div>
           <p className="text-center text-xs text-gray-400">정답을 보고 똑같이 한 번 입력해봐요</p>
@@ -205,7 +229,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
           <HeroReaction
             image={correctPaul?.image}
             title={correctPaul?.message}
-            message={`정답이에요! "${word}"`}
+            message={`정답이에요! "${targetAnswer}"`}
             theme="success"
             size="md"
           />
