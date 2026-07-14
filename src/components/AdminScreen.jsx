@@ -75,6 +75,16 @@ function SpellingSettingsPanel({ targetClass, onSaved }) {
           onChange={e => save({ ...settings, wrongAnswerRepeatCount: e.target.value })}
           className="w-16 border-2 border-purple-200 rounded-lg px-2 py-1 text-center font-bold bg-white" />
       </label>
+      <label className="flex items-center justify-between text-xs font-bold text-gray-700 gap-2">
+        출제 방향
+        <select value={settings.spellingDirection || 'kr2en'} disabled={saving}
+          onChange={e => save({ ...settings, spellingDirection: e.target.value })}
+          className="border-2 border-purple-200 rounded-lg px-2 py-1 font-bold bg-white">
+          <option value="kr2en">한글→영어 (기존)</option>
+          <option value="en2kr">영어→한글</option>
+          <option value="random">랜덤</option>
+        </select>
+      </label>
     </div>
   )
 }

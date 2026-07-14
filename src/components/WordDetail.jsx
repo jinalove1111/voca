@@ -614,6 +614,7 @@ export default function WordDetail({
             meaning={word.meaning}
             wordAudioUrl={word.wordAudioUrl}
             hintEnabled={!!spellingSettings?.spellingHintEnabled}
+            direction={spellingSettings?.spellingDirection || 'kr2en'}
             onResult={(correct) => onSpellingAnswer?.(word.id, correct)}
             onDone={goNext}
           />

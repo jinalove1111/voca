@@ -172,17 +172,34 @@ export function initWordLibrary() {
 // 완전히 분리해서 실패해도 그냥 "전부 꺼짐"으로 안전하게 기본값 처리 —
 // SQL을 실행하기 전에 이 코드가 먼저 배포돼도 앱이 절대 깨지지 않음.
 let _classSettings = {}
-const DEFAULT_CLASS_SETTINGS = { spellingTestEnabled: false, spellingHintEnabled: false, wrongAnswerRepeatCount: 3 }
+const DEFAULT_CLASS_SETTINGS = { spellingTestEnabled: false, spellingHintEnabled: false, wrongAnswerRepeatCount: 3, spellingDirection: 'kr2en' }
+const VALID_SPELLING_DIRECTIONS = new Set(['kr2en', 'en2kr', 'random'])
 
 export async function refreshClassSettings() {
   try {
-    const { data, error } = await supabase
-      .from('classes').select('name,spelling_test_enabled,spelling_hint_enabled,wrong_answer_repeat_count')
+    // spelling_direction 컬럼은 별도 마이그레이션(supabase_spelling_direction_
+    // schema.sql)이라, 기존 spelling_test_enabled 등은 이미 실행돼 있는데
+    // 이 컬럼만 아직 없는 "부분 마이그레이션" 상태가 있을 수 있음. select에
+    // 없는 컬럼이 섞이면 쿼리 전체가 에러나서 이미 켜둔 다른 설정까지
+    // 몽땅 꺼짐으로 되돌아가 버리므로, 먼저 컬럼 포함해서 시도하고 실패하면
+    // 그 컬럼만 빼고 재시도해서 기존 설정은 그대로 유지되게 한다.
+    let data
+    let error
+    ;({ data, error } = await supabase
+      .from('classes').select('name,spelling_test_enabled,spelling_hint_enabled,wrong_answer_repeat_count,spelling_direction'))
+    if (error) {
+      ;({ data, error } = await supabase
+        .from('classes').select('name,spelling_test_enabled,spelling_hint_enabled,wrong_answer_repeat_count'))
+    }
     if (error) throw error
     _classSettings = Object.fromEntries((data || []).map((c) => [c.name, {
       spellingTestEnabled: !!c.spelling_test_enabled,
       spellingHintEnabled: !!c.spelling_hint_enabled,
       wrongAnswerRepeatCount: c.wrong_answer_repeat_count ?? 3,
+      // supabase_spelling_direction_schema.sql이 아직 실행 안 됐거나(컬럼
+      // null) 값이 이상하면 무조건 'kr2en'으로 폴백 — 기존에 이미 쓰기
+      // 시험을 켜둔 반들이 아무것도 안 바꿨는데 동작이 달라지면 안 됨.
+      spellingDirection: VALID_SPELLING_DIRECTIONS.has(c.spelling_direction) ? c.spelling_direction : 'kr2en',
     }]))
   } catch (err) {
     console.warn('[wordLibrary] class settings fetch failed (spelling_test_schema.sql이 아직 실행 안 됐을 수 있음, 전부 꺼짐으로 처리):', err.message)
@@ -201,7 +218,18 @@ export async function setClassSettings(className, settings) {
   if ('spellingTestEnabled' in settings) payload.spelling_test_enabled = !!settings.spellingTestEnabled
   if ('spellingHintEnabled' in settings) payload.spelling_hint_enabled = !!settings.spellingHintEnabled
   if ('wrongAnswerRepeatCount' in settings) payload.wrong_answer_repeat_count = Number(settings.wrongAnswerRepeatCount) || 3
-  const { error } = await supabase.from('classes').update(payload).eq('id', classId)
+  if ('spellingDirection' in settings) {
+    payload.spelling_direction = VALID_SPELLING_DIRECTIONS.has(settings.spellingDirection) ? settings.spellingDirection : 'kr2en'
+  }
+  let { error } = await supabase.from('classes').update(payload).eq('id', classId)
+  if (error && 'spelling_direction' in payload) {
+    // spelling_direction 컬럼이 아직 없을 수 있음(마이그레이션 미실행) —
+    // 그 필드만 빼고 재시도해서 나머지 설정(쓰기 시험 on/off 등)은 계속
+    // 정상 저장되게 한다. 이거 없으면 방향 select UI가 추가된 것만으로
+    // 기존 체크박스 저장까지 깨질 수 있음(회귀 금지 원칙).
+    const { spelling_direction, ...rest } = payload
+    ;({ error } = await supabase.from('classes').update(rest).eq('id', classId))
+  }
   if (error) throw error
   await refreshClassSettings()
 }

@@ -329,6 +329,7 @@ function AppInner({ student, onLogout }) {
           onClearWord={clearSpellingReviewWord}
           onDone={() => setScreen('dashboard')}
           hintEnabled={spellingSettings.spellingHintEnabled}
+          direction={spellingSettings.spellingDirection}
         />
       )}
       <SpeedBtn />
