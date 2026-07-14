@@ -53,6 +53,44 @@ export function localIsoDateStr(d = new Date()) {
 }
 const todayDateStr = () => localIsoDateStr()
 
+// Phase 1 (2026-07-15) 유닛 자연 정렬 — Supabase `units.position` 컬럼이
+// 실제로는 새 유닛 추가 시(addClassUnit) 채워지지 않고 전부 0으로 저장돼
+// 있어서(라이브 DB 확인 완료), order('position')이 사실상 아무 순서도
+// 보장하지 못했다 — 그래서 "Unit1, Unit2, Unit6, Unit3, Unit5"처럼 Supabase가
+// 반환한 순서 그대로 뒤섞여 보였다. position을 고치는 대신(기존 저장된
+// 값을 잘못 재해석할 위험), 유닛 "이름"에서 숫자를 뽑아 자연 정렬한다 —
+// "Unit 1, Unit 2, Unit 3, Unit 5, Unit 6" 순서가 나오고, 숫자가 없는
+// 이름(그냥 "Unit")은 문자열 비교로 자연스럽게 뒤쪽에 놓인다. DB 값은 전혀
+// 안 바꿈 — 표시 순서만 정렬.
+function naturalCompare(a, b) {
+  const re = /(\d+)|(\D+)/g
+  // 라이브 데이터에 "Unit 1"(공백 있음)과 "Unit8"(공백 없음)이 섞여 있어
+  // (진단 스크립트로 확인) 공백을 먼저 제거하지 않으면 " " 문자 하나
+  // 때문에 숫자 비교까지 가지도 못하고 문자열 청크에서 순서가 어긋난다
+  // (예: "Unit " > "Unit"이 "1" vs "8" 숫자 비교보다 먼저 이겨버림).
+  // 공백만 제거해 비교하고, 실제 표시 이름(a/b 원본)은 전혀 안 바꿈.
+  const norm = (s) => String(s).replace(/\s+/g, '')
+  const partsA = norm(a).match(re) || []
+  const partsB = norm(b).match(re) || []
+  const len = Math.max(partsA.length, partsB.length)
+  for (let i = 0; i < len; i++) {
+    const pa = partsA[i]
+    const pb = partsB[i]
+    if (pa === undefined) return -1
+    if (pb === undefined) return 1
+    const na = /^\d+$/.test(pa) ? Number(pa) : null
+    const nb = /^\d+$/.test(pb) ? Number(pb) : null
+    if (na !== null && nb !== null) {
+      if (na !== nb) return na - nb
+    } else {
+      const cmp = pa.localeCompare(pb)
+      if (cmp !== 0) return cmp
+    }
+  }
+  return 0
+}
+const sortUnitsByName = (units) => [...units].sort((a, b) => naturalCompare(a.name, b.name))
+
 export async function refreshWordLibrary() {
   const [classesRes, unitsRes, wordsRes, assignmentsRes] = await Promise.all([
     supabase.from('classes').select('id,name,class_type').order('created_at'),
@@ -98,6 +136,8 @@ export async function refreshWordLibrary() {
       })
     }
   })
+  // 유닛을 이름 기준 자연 정렬 — position 컬럼이 신뢰 불가(위 설명 참고).
+  Object.values(tree).forEach((cls) => { cls.units = sortUnitsByName(cls.units) })
   _cache = tree
   return tree
 }
