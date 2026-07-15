@@ -1,5 +1,61 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-10_
+_최종 갱신: 2026-07-16_
+
+## 2026-07-15~16 — P0 학생 identity 리팩터링(이름→id) + 이름+PIN 로그인 (커밋 `e492e29`~`2d6df5f`, **push 안 됨**)
+
+CTO 지시 최우선순위(P0): 동명이인 학생이 이름을 전역 유일 키로 써서 서로의 별/포인트/캘린더/학습기록을 덮어쓸 수 있던 데이터 무결성 이슈. 작업 도중 운영자가 로그인 UX를 "반 선택 2단계"에서 "이름+PIN(4자리)"으로 바꾸도록 중간 지시를 추가해 그대로 반영했다.
+
+### 1. Root cause
+`src/utils/wordLibrary.js`의 `_students` 캐시가 `{ [name]: {...} }`(이름을 전역 유일 키로 사용)였다. `addStudent`가 동명이인을 조용히 차단(`if (findStudentByName(name)) return`)했고, 라이브 Supabase `students.name`에도 `UNIQUE` 제약(`students_name_key`)이 걸려 있어 DB 레벨에서도 막혀 있었다(Phase 0 진단으로 실측 확인 — 진단 시점 실제 동명이인 데이터는 0건). `useStudent.js`의 로컬스토리지(`paul_easy_progress`)도 이름을 키로 썼다. 부가로 `units.position` 컬럼이 신규 유닛 추가 시 항상 0으로 저장돼 유닛 표시 순서가 뒤섞이는 별개 버그도 발견해 함께 수정.
+
+### 2. 수정한 파일
+- `src/utils/wordLibrary.js` — `_students`를 `Map<id,{...}>`로 전환, 학생 관련 함수 전부(id 기준으로 시그니처 변경): `getStudentClass/getStudentUnit/setStudentClass/setStudentUnit/setStudentsClassBulk/removeStudent/syncStudentProgress/fetchFullProgress/setWordStatus/fetchWordStatusMap/fetchWordStatusSummary/resetWordStatus/fetchDebugSnapshot/getStudentWords/fetchDashboardData`. `addStudent`는 이제 새 학생 `id`를 반환, 동명이인 차단 제거. `findStudentByName`은 배열 반환(관리자 도구용, 더 이상 인증 수단 아님). 유닛 자연 정렬(`naturalCompare`) 추가.
+- `src/hooks/useStudent.js` — `STORE_KEY(paul_easy_progress)`를 이름 키 → `studentId` 키로 전환. `useStudent(studentId, legacyName)`. `loadRecord`가 로그인 성공 시점의 정확한 학생 id로만 이름 키 레코드를 lazy 복사(기존 `migrateOldData` 선례 패턴 재사용, 원본 절대 안 지움, 전역 자동 매칭 없음).
+- `src/App.jsx` — 세션을 이름 문자열 대신 `{id,name}` JSON으로 저장. UUID 형식 아니면 legacy로 간주해 안전하게 로그아웃(크래시 없음, 안내 배너 표시).
+- `src/components/StudentSelect.jsx` — (운영자 중간 지시) 반 선택 2단계 로그인 대신 **이름+PIN(4자리)** 로그인/등록 탭으로 전면 교체. Enter 키 포커스 이동, 제출 중 입력 잠금 등 UX 다듬기 완료.
+- `src/components/ParentScreen.jsx` — 학부모 화면도 이름+PIN(학생 PIN 재사용)으로 강화.
+- `src/components/Dashboard.jsx`, `src/components/AdminScreen.jsx`, `src/components/DebugPage.jsx` — `studentId`/`studentName` 분리, 학생 목록/선택/편집 상태를 id 기준으로 전환. AdminScreen에 "PIN 재설정"(학생별) + "PIN 없는 학생 전원 임시 PIN 일괄생성 + CSV" 버튼 신규 추가.
+- `api/_pinAuth.js`(신규, 공용 헬퍼) — Node 내장 `crypto.scrypt` 해시(외부 의존성 0개). `api/verify-student-pin.js`(신규) — 이름으로 후보(동명이인 가능) 조회 후 PIN으로 정확히 1명 확인, 5회 실패 시 5분 잠금(서버사이드 전용, `admin-verify-pin.js`와 동일한 "PIN은 서버에서만" 패턴). `api/set-student-pin.js`(신규) — PIN 설정/재설정. `api/bulk-generate-temp-pins.js`(신규) — 기존 학생 임시 PIN 일괄 발급.
+- `supabase_v1_6_student_identity.sql`(신규) — `students.name` UNIQUE 제약 제거 + `pin_hash/pin_fail_count/pin_locked_until` 컬럼 추가. **아직 Supabase SQL Editor에서 미실행** (아래 5번 참고).
+- 회귀 스크립트 12개 id 기준으로 갱신(`testStudentLogin/testMultiClass/testUnitPersistence/testDashboard/testSyncProgress/testRenameClass/testResetWordStatusBackup/testFullProgressBackup/testStudentSelectUnitSwitch/testFutureAssignment/testDailyAssignment/testSpellingSettings.mjs`) + 신규 3개(`testUnitNaturalSort.mjs`, `testStudentPinAuth.mjs`, `testIdentityMigration.mjs`) + 빌드 헬퍼 2개(`buildWordLibBundle.mjs`, `buildProgressBundle.mjs`).
+
+### 3. Migration 방식
+**로컬스토리지(Phase 2)**: `useStudent.js`의 기존 `migrateOldData` 선례(예전 `paulEasyVoca_{name}_{field}` 흩어진 키 → 통합 `paul_easy_progress`)와 정확히 같은 패턴 — 로그인 성공 시점(그 기기가 실제로 로그인하려는 정확한 학생이 명확한 유일한 시점)에만 그 학생의 이름 키 레코드를 새 id 키로 **복사**(원본은 절대 안 지움). 전역적으로 모든 이름 키를 훑어 자동 매칭하지 않음(동명이인 상황에서 위험) — 이 lazy/on-demand 방식이 CLAUDE.md 지시와 정확히 일치.
+**DB(SQL)**: `supabase_v1_6_student_identity.sql` 1개 파일 — `ALTER TABLE ... DROP CONSTRAINT IF EXISTS` + `ADD COLUMN IF NOT EXISTS` (멱등, 기존 행 데이터 전혀 안 건드림). **DDL 실행 권한이 없어(anon key로는 ALTER TABLE 불가) 이 세션에서 직접 적용 불가 — Supabase SQL Editor에서 운영자가 실행해야 함.**
+
+### 4. Recovery strategy
+로컬스토리지 원본(이름 키)은 절대 삭제하지 않으므로, 마이그레이션이 잘못돼도 원본 데이터로 항상 복구 가능. Supabase 쪽은 기존 v1.4 전체 백업(`student_progress.progress_data`)이 그대로 유지되며, `fetchFullProgress`가 `studentId` 기준으로 여전히 정상 동작(이 P0 작업으로 백업/복구 경로 자체는 안 건드림 — id를 직접 FK로 쓰도록만 단순화).
+
+### 5. 동명이인 테스트 결과 — **차단됨(운영자 액션 대기)**
+`scripts/testStudentPinAuth.mjs`의 11번 케이스(같은 이름 "QA_PinKid"를 서로 다른 반 QA_PinAuthTest/QA_PinAuthTest2에 등록 → 서로 다른 PIN으로 각자 정확히 자기 id로 로그인되는지, 안 섞이는지)를 **이미 작성 완료**했으나, `supabase_v1_6_student_identity.sql`이 아직 적용되지 않아 `students.name` UNIQUE 제약 때문에 두 번째 동명이인 INSERT 자체가 DB에서 거부됨(정상적으로 예상된 상태, 크래시 아님 — 스크립트가 자동 감지 후 안전하게 skip). **SQL을 Supabase SQL Editor에서 실행한 뒤 `node scripts/testStudentPinAuth.mjs` 재실행하면 이 케이스까지 포함해 전부 검증됩니다.**
+
+### 6. 포인트/별 보존 테스트 결과 — ✅ 완료 (SQL 마이그레이션과 무관, 순수 localStorage 로직)
+`scripts/testIdentityMigration.mjs` — 별 250개짜리 실전형 레거시 레코드로 로그인 마이그레이션을 실제 `useStudent.js` 코드로 직접 검증. **20/20 체크 전부 PASS**: 마이그레이션 전후 `totalStars` 정확히 동일, 재로그인해도 중복/초기화 없음(멱등).
+
+### 7. 캘린더 보존 테스트 결과 — ✅ 완료 (6번과 같은 스크립트)
+같은 `testIdentityMigration.mjs`에서 이틀치 `history`(캘린더) 레코드가 `categoriesCompleted`/`quizCorrect`/`quizTotal`/`missedWordIds`까지 필드 단위로 정확히 보존됨을 확인. 스티커 3개(뱃지 2개 포함)/레벨업 미션/다이어리 배치/`wordStatus`(Skip 기능)도 모두 함께 검증(운영자 지시 5번 항목, 4번과 겹쳐 함께 확인됨).
+
+### 8. Unit 정렬 검증 결과 — ✅ 완료
+`scripts/testUnitNaturalSort.mjs` — Unit 1/4/5/6/8/(숫자없음) 뒤섞어 추가해도 항상 숫자 오름차순으로 정렬됨 확인(공백 유무 혼재 케이스도 라이브 데이터에서 실측 확인 후 반영).
+
+### 9. Build 결과
+매 커밋마다 `npm run build` 통과 확인(마지막 확인 커밋 `2d6df5f` 기준도 통과). 헤드리스 Chrome 시각 확인은 이번 세션의 샌드박스 환경에서 브라우저 프로세스 실행 자체가 권한 훅에 막혀 실행 불가(앱 로직 문제 아님) — 코드 리뷰 + 빌드 성공(문법/렌더 오류 없음)으로 대체 확인.
+
+### 10. Commit 목록 (전부 로컬 커밋, 아래 11번 참고)
+`e492e29`(Phase1 유닛정렬) → `e1d1f36`(Phase2/3/4-a 핵심 리팩터링+PIN서버) → `cbbc0ee`(회귀스크립트 7개 갱신) → `54fe075`(AdminScreen/DebugPage id전환+PIN UI) → `4a192f8`(PIN 서버로직 테스트, 마이그레이션 대기 확인) → `42f6813`(로그인 UX 다듬기) → `2d6df5f`(별/스티커/캘린더 보존 테스트).
+
+### 11. Push 여부 — **안 함**
+지시대로 전체 Phase 0~5가 다 끝나고 회귀 테스트가 전부 통과하기 전까지는 push 보류. 위 5번(동명이인 실제 DB 테스트) 항목이 SQL 마이그레이션 적용 전까지 완료 불가능한 구조적 제약이라, **이 세션에서는 여기서 멈춘다** — 운영자 확인 후 진행 여부 판단 요청.
+
+### 12. Deploy 확인 여부 — 해당 없음 (push 자체를 안 했으므로 Vercel 배포도 안 됨)
+
+### ⚠️ 다음 세션/운영자가 가장 먼저 해야 할 일
+1. **`supabase_v1_6_student_identity.sql`을 Supabase SQL Editor에서 실행** (유일한 남은 블로커 — 이거 하나면 동명이인 실제 DB 테스트 + PIN 5회 실패 잠금 + 관리자 임시PIN 발급까지 전부 라이브로 검증 가능해짐).
+2. SQL 실행 후 `node scripts/buildWordLibBundle.mjs && WORDLIB_BUNDLE=scripts/.tmp/wordLibrary.bundle.mjs node scripts/testStudentPinAuth.mjs`로 동명이인 로그인 시나리오까지 재검증.
+3. 기존 학생들은 `pin_hash`가 없는 상태이므로, 배포 전 AdminScreen의 "PIN 없는 학생 전원 임시 PIN 일괄생성 + CSV" 버튼으로 임시 PIN을 발급해 학생들에게 배포해야 실제 로그인 전환이 가능함(운영 이관 절차, 운영자 확인 필요).
+4. 전부 통과 확인되면 그때 push → Vercel 배포 → 라이브 확인.
+
+---
 
 ## 2026-07-10 밤 (6차) — 회귀 스위트 전체 재검증 + 발견한 버그 2개 수정 (커밋 `25e5967`)
 
