@@ -21,11 +21,15 @@
 import { createClient } from '@supabase/supabase-js'
 import fs from 'node:fs'
 
+// 셸에서 직접 넘긴 env가 파일 값보다 우선한다 — Vercel 프로덕션의
+// ADMIN_PIN은 Sensitive로 저장돼 있어 env pull로도 못 받아오므로(빈 값),
+// --live 전체 루프는 운영자가 실제 관리자 PIN을 직접 넘겨 실행한다:
+//   ADMIN_PIN=<실제 관리자 PIN> node scripts/testClearStudentPin.mjs --live
 for (const file of ['.env', '.env.local']) {
   if (!fs.existsSync(file)) continue
   for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
     const m = line.match(/^([^#=][^=]*)=(.*)$/)
-    if (m) process.env[m[1].trim()] = m[2].trim()
+    if (m && process.env[m[1].trim()] === undefined) process.env[m[1].trim()] = m[2].trim()
   }
 }
 
