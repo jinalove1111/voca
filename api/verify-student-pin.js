@@ -90,15 +90,22 @@ export default async function handler(req, res) {
   // 실패 카운트를 각각 증가시키고, 5회 도달한 계정은 잠근다. 공격자가
   // 어느 후보가 진짜인지 모르는 상태이므로 전부 증가시키는 게 안전하다.
   let anyLocked = false
+  let latestLockedUntil = null
   await Promise.all(unlocked.map(async (c) => {
     const nextFailCount = (c.pin_fail_count || 0) + 1
     const payload = { pin_fail_count: nextFailCount }
     if (nextFailCount >= MAX_FAILS) {
-      payload.pin_locked_until = new Date(now + LOCK_MINUTES * 60 * 1000).toISOString()
+      const lockedUntilIso = new Date(now + LOCK_MINUTES * 60 * 1000).toISOString()
+      payload.pin_locked_until = lockedUntilIso
       anyLocked = true
+      // 여러 후보가 동시에 잠기는 드문 경우에도(전부 같은 now 기준으로
+      // 계산하므로 사실상 항상 동일한 시각) 응답에 실을 값을 안전하게 기록.
+      if (!latestLockedUntil || lockedUntilIso > latestLockedUntil) latestLockedUntil = lockedUntilIso
     }
     await supabase.from('students').update(payload).eq('id', c.id)
   }))
 
-  res.status(200).json({ ok: false, reason: anyLocked ? 'locked' : 'wrong_pin' })
+  res.status(200).json(anyLocked
+    ? { ok: false, reason: 'locked', lockedUntil: latestLockedUntil }
+    : { ok: false, reason: 'wrong_pin' })
 }
