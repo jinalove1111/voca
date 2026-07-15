@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { addStudent } from '../hooks/useStudent'
-import { getClassNames, getClassUnitNames } from '../utils/wordLibrary'
+import { getClassNames, getClassUnitNames, getStudentsInClass } from '../utils/wordLibrary'
 import { getReactionById } from '../utils/paulReactions'
 import HeroReaction from './HeroReaction'
 
@@ -94,10 +94,89 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
     }
   }
 
-  const busy = loggingIn || registering
+  // ── PIN 만들기(2026-07-16, 운영자 지시 — 관리자가 학생 등록 후 "설정
+  // 허용"을 누른 학생만 자기 PIN을 1회 직접 만들 수 있는 플로우) ──────────
+  // 이름을 자유 입력하지 않고 "반 선택 → 이름 선택"으로 정확히 한 학생을
+  // 고른다 — PIN이 아직 없는 학생을 자유 이름 입력+PIN 로그인으로는 애초에
+  // 식별할 수 없기 때문(로그인은 PIN이 있어야 성립). 반/학생 목록은 이미
+  // 앱 전체가 로그인 전에도 들고 있는 캐시(getClassNames/
+  // getStudentsInClass, initWordLibrary가 항상 먼저 불러옴)라 새로 노출되는
+  // 정보는 없다 — PIN 상태(허용 여부/이미 설정됐는지)만 서버에 확인한다.
+  const [setupClass, setSetupClass] = useState('')
+  const [setupStudentId, setSetupStudentId] = useState('')
+  const [setupStatus, setSetupStatus] = useState(null) // { hasPinHash, pinSetupAllowed } | null(조회 전)
+  const [setupChecking, setSetupChecking] = useState(false)
+  const [setupPin, setSetupPin] = useState('')
+  const [setupPinConfirm, setSetupPinConfirm] = useState('')
+  const [setupError, setSetupError] = useState('')
+  const [settingUp, setSettingUp] = useState(false)
+  const [setupDone, setSetupDone] = useState(false)
+  const setupPinConfirmRef = useRef(null)
+  const setupRoster = setupClass ? getStudentsInClass(setupClass) : []
+  const setupPicked = setupRoster.find(s => s.id === setupStudentId) || null
+
+  const pickSetupStudent = async (id) => {
+    setSetupStudentId(id)
+    setSetupStatus(null)
+    setSetupError('')
+    setSetupDone(false)
+    setSetupPin(''); setSetupPinConfirm('')
+    setSetupChecking(true)
+    try {
+      const res = await fetch('/api/student-pin-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentIds: [id] }),
+      })
+      const data = await res.json()
+      const status = data.results?.[0]
+      if (!status) throw new Error(data.error || '조회에 실패했어요.')
+      setSetupStatus(status)
+    } catch (err) {
+      setSetupError('상태를 확인하는 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setSetupChecking(false)
+    }
+  }
+
+  const handleSetupPin = async () => {
+    if (!/^\d{4}$/.test(setupPin)) { setSetupError('PIN은 숫자 4자리로 만들어주세요.'); return }
+    if (setupPin !== setupPinConfirm) { setSetupError('PIN이 서로 달라요. 다시 확인해주세요.'); return }
+    setSettingUp(true)
+    setSetupError('')
+    try {
+      const res = await fetch('/api/self-set-student-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: setupStudentId, pin: setupPin, pinConfirm: setupPinConfirm }),
+      })
+      const data = await res.json()
+      if (data.ok) { setSetupDone(true); return }
+      const MESSAGES = {
+        invalid_format: 'PIN은 숫자 4자리예요.',
+        mismatch: 'PIN이 서로 달라요. 다시 확인해주세요.',
+        weak_pin: '너무 쉬운 PIN이에요(0000, 1234 같은 값). 다른 숫자로 만들어주세요.',
+        already_set: '이미 PIN이 설정된 계정이에요 — "로그인" 탭을 이용해주세요.',
+        not_allowed: '선생님이 아직 PIN 설정을 허용하지 않았어요. 선생님께 요청해주세요.',
+        not_found: '학생 정보를 찾을 수 없어요. 다시 선택해주세요.',
+      }
+      setSetupError(MESSAGES[data.reason] || 'PIN 설정에 실패했어요. 다시 시도해주세요.')
+    } catch (err) {
+      setSetupError('PIN 설정 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setSettingUp(false)
+    }
+  }
+
+  const handleSetupStart = () => {
+    if (!setupPicked) return
+    onSelect({ id: setupPicked.id, name: setupPicked.name, className: setupClass, unitName: setupPicked.unitName })
+  }
+
+  const busy = loggingIn || registering || settingUp
   const tabBtn = (key, label) => (
-    <button onClick={() => { setMode(key); setLoginError(''); setRegError('') }} disabled={busy}
-      className={`flex-1 py-2.5 rounded-xl font-black text-sm btn-press transition-colors disabled:opacity-50 ${
+    <button onClick={() => { setMode(key); setLoginError(''); setRegError(''); setSetupError('') }} disabled={busy}
+      className={`flex-1 py-2.5 rounded-xl font-black text-xs sm:text-sm btn-press transition-colors disabled:opacity-50 ${
         mode === key ? 'bg-purple-500 text-white' : 'bg-purple-50 text-purple-400'}`}>
       {label}
     </button>
@@ -121,10 +200,81 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
 
         <div className="flex gap-2">
           {tabBtn('login', '로그인')}
+          {tabBtn('setup', 'PIN 만들기')}
           {tabBtn('register', '처음이에요')}
         </div>
 
-        {mode === 'login' ? (
+        {mode === 'setup' ? (
+          <>
+            <select value={setupClass} disabled={settingUp} onChange={e => {
+                setSetupClass(e.target.value); setSetupStudentId(''); setSetupStatus(null); setSetupError(''); setSetupDone(false)
+              }}
+              className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-purple-500 bg-white disabled:opacity-50">
+              <option value="">반 선택</option>
+              {classNames.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+
+            {setupClass && (
+              setupRoster.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-2">이 반에는 아직 등록된 학생이 없어요. 선생님께 등록을 요청해주세요.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {setupRoster.map(s => (
+                    <button key={s.id} onClick={() => pickSetupStudent(s.id)} disabled={settingUp}
+                      className={`px-3 py-2 rounded-xl text-sm font-bold btn-press disabled:opacity-50 ${
+                        setupStudentId === s.id ? 'bg-purple-500 text-white' : 'bg-purple-50 text-purple-600'}`}>
+                      {s.name} <span className="opacity-60 font-normal">· {s.unitName}</span>
+                    </button>
+                  ))}
+                </div>
+              )
+            )}
+
+            {setupChecking && <p className="text-xs text-gray-400 text-center">⏳ 확인하는 중...</p>}
+
+            {setupPicked && setupStatus && !setupChecking && (
+              setupDone ? (
+                <div className="bg-green-50 border-2 border-green-200 rounded-xl p-3 space-y-2">
+                  <p className="text-sm font-bold text-green-700 text-center">🎉 PIN이 만들어졌어요!<br />다음부터 "로그인" 탭에서 이름과 PIN으로 시작하세요.</p>
+                  <button onClick={handleSetupStart}
+                    className="w-full bg-purple-500 text-white font-black py-3 rounded-xl btn-press hover:bg-purple-600">
+                    바로 시작하기!
+                  </button>
+                </div>
+              ) : setupStatus.hasPinHash ? (
+                <p className="bg-blue-50 border-2 border-blue-200 text-blue-600 text-xs font-bold text-center rounded-xl p-3">
+                  이미 PIN이 설정되어 있어요! "로그인" 탭에서 이름과 PIN으로 시작해주세요.
+                </p>
+              ) : !setupStatus.pinSetupAllowed ? (
+                <p className="bg-yellow-50 border-2 border-yellow-200 text-yellow-700 text-xs font-bold text-center rounded-xl p-3">
+                  😊 아직 PIN을 만들 수 없어요. 선생님께 "PIN 설정 허용"을 요청해주세요.
+                </p>
+              ) : (
+                <>
+                  <input type="password" inputMode="numeric" pattern="[0-9]*" value={setupPin}
+                    onChange={e => { setSetupPin(e.target.value.replace(/\D/g, '').slice(0, 4)); setSetupError('') }}
+                    onKeyDown={e => e.key === 'Enter' && setupPinConfirmRef.current?.focus()}
+                    placeholder="사용할 PIN 4자리 만들기" disabled={settingUp}
+                    className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold text-center tracking-[0.5em] focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:bg-gray-50" />
+                  <input ref={setupPinConfirmRef} type="password" inputMode="numeric" pattern="[0-9]*" value={setupPinConfirm}
+                    onChange={e => { setSetupPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 4)); setSetupError('') }}
+                    onKeyDown={e => e.key === 'Enter' && handleSetupPin()}
+                    placeholder="PIN 다시 입력" disabled={settingUp}
+                    className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold text-center tracking-[0.5em] focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:bg-gray-50" />
+                  <p className="text-[11px] text-purple-400 px-1">PIN은 다음에 로그인할 때 필요해요. 잊지 않게 잘 기억해두세요!</p>
+                  {setupError && <p className="text-red-500 text-xs text-center" role="alert">⚠️ {setupError}</p>}
+                  <button onClick={handleSetupPin} disabled={settingUp}
+                    className="w-full bg-purple-500 text-white font-black py-3 rounded-xl btn-press hover:bg-purple-600 disabled:opacity-50">
+                    {settingUp ? '⏳ 만드는 중...' : 'PIN 만들기'}
+                  </button>
+                </>
+              )
+            )}
+            {setupError && !setupChecking && (!setupPicked || !setupStatus) && (
+              <p className="text-red-500 text-xs text-center" role="alert">⚠️ {setupError}</p>
+            )}
+          </>
+        ) : mode === 'login' ? (
           <>
             <input type="text" value={loginName} onChange={e => { setLoginName(e.target.value); setLoginError('') }}
               onKeyDown={e => e.key === 'Enter' && loginPinRef.current?.focus()}
