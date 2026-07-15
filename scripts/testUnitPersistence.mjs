@@ -28,13 +28,14 @@ function check(label, cond) {
 }
 
 const CLASS = 'QA_UnitPersistTest'
-const STUDENT = 'QA_UnitPersistStudent'
+const STUDENT_NAME = 'QA_UnitPersistStudent'
 
 console.log('\n1. 준비 — Unit4, Unit5가 있는 반 + 학생을 Unit4로 등록')
 await createClass(CLASS)
 await addClassUnit(CLASS, 'Unit4')
 await addClassUnit(CLASS, 'Unit5')
-await addStudent(STUDENT, CLASS, 'Unit4')
+// P0(2026-07-15): addStudent가 id(UUID)를 반환 — 이후 전부 id 기준.
+const STUDENT = await addStudent(STUDENT_NAME, CLASS, 'Unit4')
 check('처음 등록 시 Unit4', getStudentUnit(STUDENT) === 'Unit4')
 
 console.log('\n2. Unit5로 변경 (관리자 반 배정 액션과 동일한 setStudentUnit 호출)')

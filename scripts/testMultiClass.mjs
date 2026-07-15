@@ -34,13 +34,15 @@ await createClass('QA_TestClassA')
 await createClass('QA_TestClassB')
 await setClassWords('QA_TestClassA', [{ word: 'apple', meaning: '사과' }, { word: 'banana', meaning: '바나나' }], 'Unit 1')
 await setClassWords('QA_TestClassB', [{ word: 'tiger', meaning: '호랑이' }, { word: 'lion', meaning: '사자' }], 'Unit 1')
-await addStudent('QA_StudentA', 'QA_TestClassA', 'Unit 1')
-await addStudent('QA_StudentB', 'QA_TestClassB', 'Unit 1')
+// P0(2026-07-15): addStudent가 이제 id(UUID)를 반환 — 모든 조회 함수가
+// 이름이 아니라 id 기준이므로 반환값을 저장해서 써야 한다.
+const studentIdA = await addStudent('QA_StudentA', 'QA_TestClassA', 'Unit 1')
+const studentIdB = await addStudent('QA_StudentB', 'QA_TestClassB', 'Unit 1')
 
 console.log('\n1. classId 기준 반 분리')
 {
-  const wordsA = getStudentWords('QA_StudentA')
-  const wordsB = getStudentWords('QA_StudentB')
+  const wordsA = getStudentWords(studentIdA)
+  const wordsB = getStudentWords(studentIdB)
   const wordsATexts = wordsA.map(w => w.word).sort()
   const wordsBTexts = wordsB.map(w => w.word).sort()
 
@@ -50,8 +52,8 @@ console.log('\n1. classId 기준 반 분리')
   check('B반 단어에 A반 단어(apple/banana) 섞이지 않음', !wordsBTexts.includes('apple') && !wordsBTexts.includes('banana'))
   check('각 단어에 classId가 서로 다르게 붙어있음', wordsA[0]?.classId !== wordsB[0]?.classId && wordsA[0]?.classId && wordsB[0]?.classId)
 
-  const classIdA = getStudentClassId('QA_StudentA')
-  const classIdB = getStudentClassId('QA_StudentB')
+  const classIdA = getStudentClassId(studentIdA)
+  const classIdB = getStudentClassId(studentIdB)
   check('두 학생의 classId가 실제로 다름 (문자열 className이 아니라 id로 구분)', classIdA !== classIdB)
 }
 
@@ -61,6 +63,7 @@ console.log('\n2. 반별 학생 목록')
   const inB = getStudentsInClass('QA_TestClassB').map(s => s.name)
   check('QA_TestClassA에는 QA_StudentA만 있음', JSON.stringify(inA) === JSON.stringify(['QA_StudentA']))
   check('QA_TestClassB에는 QA_StudentB만 있음', JSON.stringify(inB) === JSON.stringify(['QA_StudentB']))
+  check('반별 학생 목록에도 id가 포함됨', getStudentsInClass('QA_TestClassA')[0]?.id === studentIdA)
 }
 
 console.log('\n3. 반 목록에 두 반 모두 존재')
@@ -71,8 +74,8 @@ console.log('\n3. 반 목록에 두 반 모두 존재')
 }
 
 console.log('\n4. 정리')
-await removeStudent('QA_StudentA')
-await removeStudent('QA_StudentB')
+await removeStudent(studentIdA)
+await removeStudent(studentIdB)
 await deleteClass('QA_TestClassA')
 await deleteClass('QA_TestClassB')
 check('테스트 반/학생 정리 완료', true)

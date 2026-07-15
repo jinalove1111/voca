@@ -1,45 +1,48 @@
 import { useState, useMemo } from 'react'
-import { findStudentByName, getStudentClass, getStudentUnit, getClassUnits, fetchDashboardData, fetchWordStatusSummary } from '../utils/wordLibrary'
+import { getStudentClass, getClassUnits, fetchDashboardData, fetchWordStatusSummary } from '../utils/wordLibrary'
 import { computeStudentStats, buildWeeklyReport } from '../utils/weeklyReport'
 import HeroReaction from './HeroReaction'
 import { getReactionById } from '../utils/paulReactions'
 
-// v1.5.1 학부모 화면 — 자녀 이름만 입력하면 보이는 읽기 전용 조회 화면.
-// 접근 방식은 기존 학생 로그인과 동일한 신뢰 모델(비밀번호 없음, 이름
-// 하나로 식별) — 이 앱은 처음부터 소규모 공부방 대상이라 학생 본인도
-// 이름만으로 자기 기록에 들어갈 수 있고, 이미 "학부모 리포트"를 관리자가
-// 복사해서 그대로 전달하는 기능도 있었으므로 노출 범위가 새로 넓어지는
-// 게 아니다. 쓰기 동작은 전혀 없음(진행 기록을 절대 바꿀 수 없음) —
-// fetchDashboardData/fetchWordStatusSummary/computeStudentStats 전부
-// AdminScreen의 관리자 대시보드가 이미 쓰던 것을 그대로 재사용해서, 관리자
-// 화면과 학부모 화면이 절대 다른 숫자를 보여주지 않는다.
+// v1.5.1 학부모 화면 — P0(2026-07-15) 운영자 지시로 "자녀 이름만 입력"에서
+// "이름 + PIN"(학생 본인 PIN 그대로 재사용, 별도 학부모 전용 PIN은 과도한
+// 설계라 판단해 만들지 않음)으로 강화. student_id가 데이터 식별자라는 점은
+// 학생 화면과 동일 — 이름만으론 더 이상 동명이인을 구분할 수 없으므로
+// PIN으로 정확히 한 학생을 확인한다(api/verify-student-pin.js, 학생
+// 로그인과 완전히 같은 서버 엔드포인트 재사용). 쓰기 동작은 전혀 없음
+// (진행 기록을 절대 바꿀 수 없음) — fetchDashboardData/
+// fetchWordStatusSummary/computeStudentStats 전부 AdminScreen의 관리자
+// 대시보드가 이미 쓰던 것을 그대로 재사용해서, 관리자 화면과 학부모
+// 화면이 절대 다른 숫자를 보여주지 않는다.
 export default function ParentScreen({ onBack }) {
   const [input, setInput] = useState('')
+  const [pinInput, setPinInput] = useState('')
+  const [resolvedId, setResolvedId] = useState(null)
   const [resolvedName, setResolvedName] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [data, setData] = useState(null) // { row, wordStatusSummary, wordLookup }
+  const [data, setData] = useState(null) // { row, wordLookup }
   const [showReport, setShowReport] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const load = async (name) => {
+  const load = async (studentId, name, className) => {
     setLoading(true)
     setError('')
     setShowReport(false)
     setCopied(false)
     try {
       const [rows, wsSummary] = await Promise.all([
-        fetchDashboardData([name]),
-        fetchWordStatusSummary([name]).catch(() => ({})),
+        fetchDashboardData([studentId]),
+        fetchWordStatusSummary([studentId]).catch(() => ({})),
       ])
       const row = rows[0]
-      const className = getStudentClass(name)
       const units = className ? getClassUnits(className) : []
       const wordLookup = {}
       units.forEach(u => (u.words || []).forEach(w => {
         wordLookup[w.word.toLowerCase().replace(/\s+/g, '_')] = w
       }))
       setData({ row, wordLookup })
+      setResolvedId(studentId)
       setResolvedName(name)
     } catch (err) {
       setError('조회 중 오류가 발생했어요: ' + (err.message || err))
@@ -48,18 +51,44 @@ export default function ParentScreen({ onBack }) {
     }
   }
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
     const name = input.trim()
-    if (!name) { setError('이름을 입력해주세요!'); return }
-    const existing = findStudentByName(name)
-    if (!existing) { setError('해당 이름의 학생을 찾을 수 없어요. 이름을 다시 확인해주세요.'); return }
-    load(existing)
+    if (!name) { setError('자녀 이름을 입력해주세요!'); return }
+    if (!/^\d{4}$/.test(pinInput)) { setError('PIN은 숫자 4자리예요. (자녀가 로그인할 때 쓰는 PIN과 같아요)'); return }
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/verify-student-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, pin: pinInput }),
+      })
+      const resData = await res.json()
+      if (!resData.ok) {
+        const MESSAGES = {
+          not_found: '해당 이름의 학생을 찾을 수 없어요. 이름을 다시 확인해주세요.',
+          invalid_format: 'PIN은 숫자 4자리예요.',
+          wrong_pin: '이름 또는 PIN이 올바르지 않아요.',
+          locked: '⚠️ PIN을 여러 번 틀려서 잠시 조회할 수 없어요. 5분 후 다시 시도해주세요.',
+          no_pin_setup: '아직 PIN이 설정되지 않은 계정이에요. 선생님(관리자)에게 문의해주세요.',
+        }
+        setError(MESSAGES[resData.reason] || '조회에 실패했어요. 다시 시도해주세요.')
+        setLoading(false)
+        return
+      }
+      await load(resData.studentId, resData.name, resData.className)
+    } catch (err) {
+      setError('조회 중 오류가 발생했어요: ' + (err.message || err))
+      setLoading(false)
+    }
   }
 
   const handleReset = () => {
+    setResolvedId(null)
     setResolvedName(null)
     setData(null)
     setInput('')
+    setPinInput('')
     setError('')
   }
 
@@ -68,20 +97,24 @@ export default function ParentScreen({ onBack }) {
     return computeStudentStats(data.row, {})
   }, [data])
 
-  if (!resolvedName) {
+  if (!resolvedId) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-pink-50 to-purple-50">
         <div className="text-center mb-6">
           <HeroReaction image={getReactionById('love')?.image} size="sm" />
           <h1 className="text-2xl font-black text-purple-700 mt-1">학부모 화면</h1>
-          <p className="text-purple-400 font-medium mt-1 text-sm">자녀 이름을 입력하면 오늘 학습 현황을 볼 수 있어요</p>
+          <p className="text-purple-400 font-medium mt-1 text-sm">자녀 이름과 PIN(자녀 로그인 PIN과 동일)을 입력하면 오늘 학습 현황을 볼 수 있어요</p>
         </div>
         <div className="w-[calc(100vw-2rem)] max-w-sm bg-white rounded-3xl card-shadow p-6 space-y-3">
           <input type="text" value={input} onChange={e => { setInput(e.target.value); setError('') }}
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
             placeholder="자녀 이름 입력..." maxLength={10}
             className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold text-center focus:outline-none focus:border-purple-500"
             autoFocus />
+          <input type="password" inputMode="numeric" pattern="[0-9]*" value={pinInput}
+            onChange={e => { setPinInput(e.target.value.replace(/\D/g, '').slice(0, 4)); setError('') }}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            placeholder="PIN 4자리"
+            className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold text-center tracking-[0.5em] focus:outline-none focus:border-purple-500" />
           {error && <p className="text-red-500 text-xs text-center font-bold">⚠️ {error}</p>}
           <button onClick={handleSearch} disabled={loading}
             className="w-full bg-purple-500 text-white font-black py-3 rounded-xl btn-press hover:bg-purple-600 disabled:opacity-50">

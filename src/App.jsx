@@ -16,7 +16,7 @@ import GiftReveal from './components/GiftReveal'
 import SpellingReview from './components/SpellingReview'
 import { useStudent } from './hooks/useStudent'
 import { pickNextGame } from './utils/matchGame'
-import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, findStudentByName, getStudentClass, getStudentUnit, getClassSettings, filterWordsByScope } from './utils/wordLibrary'
+import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, getStudentById, getStudentClass, getStudentUnit, getClassSettings, filterWordsByScope } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech, getMicStream } from './utils/speech'
 
 // 2026-07-10 성능 최적화: AdminScreen은 xlsx(엑셀 업로드)를 포함해 학생은
@@ -94,7 +94,10 @@ function SpeedBtn() {
   )
 }
 
-function AppInner({ student, onLogout }) {
+// P0(2026-07-15): studentId(식별자, Supabase students.id)와 studentName
+// (표시/legacy 마이그레이션용)을 따로 받는다 — 이름만으로는 더 이상 학생을
+// 유일하게 식별할 수 없다(동명이인 허용).
+function AppInner({ studentId, studentName, onLogout }) {
   const [screen, setScreen]         = useState('dashboard')
   const [selectedWord, setWord]     = useState(null)
   const [selectedWordIdx, setWordIdx] = useState(0)
@@ -115,7 +118,7 @@ function AppInner({ student, onLogout }) {
   // 단어만. studyMode(HOW: 듣기/말하기/쓰기/종합)와는 완전히 별개 축이라
   // 별도 상태로 관리 — 마찬가지로 세션 동안만 유지.
   const [studyScope, setStudyScope] = useState('all')
-  const studentData                 = useStudent(student)
+  const studentData                 = useStudent(studentId, studentName)
   const { cleared, answerMission, missions, addStars, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord, wordStatus, setWordKnown, setWordUnknown } = studentData
 
   // 선물상자를 닫은 직후, 오늘 틀린 스펠링 단어가 남아있으면 자동으로
@@ -138,8 +141,8 @@ function AppInner({ student, onLogout }) {
   const GAME_COMPONENTS = { balloon: BalloonGame, fishing: FishingGame, pizza: PizzaGame, train: TrainGame }
   const CurrentGame = GAME_COMPONENTS[currentGameId] || BalloonGame
   const classWords                  = useMemo(() => {
-    try { return getStudentWords(student) || [] } catch { return [] }
-  }, [student, refreshTick])
+    try { return getStudentWords(studentId) || [] } catch { return [] }
+  }, [studentId, refreshTick])
   // v1.5 이번 세션에서 실제로 공부할 단어 목록 — studyScope에 따라
   // classWords(반 전체 단어, 퀴즈 오답 보기 생성 등에는 항상 이 전체
   // 목록을 그대로 씀)를 걸러낸 서브셋. "복습 단어만"은 이 Skip 기능의
@@ -158,8 +161,8 @@ function AppInner({ student, onLogout }) {
   // 꺼짐)이 돌아오므로, 스키마 SQL을 아직 안 돌렸어도 이 값은 절대
   // 에러나지 않음 (getClassSettings 참고).
   const spellingSettings            = useMemo(() => {
-    try { return getClassSettings(getStudentClass(student)) } catch { return { spellingTestEnabled: false, spellingHintEnabled: false, wrongAnswerRepeatCount: 3 } }
-  }, [student, refreshTick])
+    try { return getClassSettings(getStudentClass(studentId)) } catch { return { spellingTestEnabled: false, spellingHintEnabled: false, wrongAnswerRepeatCount: 3 } }
+  }, [studentId, refreshTick])
 
   // Re-pull the latest word AND student data from Supabase whenever the app
   // regains focus (e.g. switching back from another app on mobile) so a word
@@ -256,7 +259,7 @@ function AppInner({ student, onLogout }) {
   return (
     <>
       {screen === 'dashboard'     && (
-        <Dashboard student={student} studentData={studentData} classWords={classWords}
+        <Dashboard studentId={studentId} studentName={studentName} studentData={studentData} classWords={classWords}
           onGo={setScreen} onLogout={onLogout} onPlayGame={startRandomGame}
           onResumeWord={goToWordIndex} />
       )}
@@ -337,25 +340,57 @@ function AppInner({ student, onLogout }) {
   )
 }
 
+const SESSION_KEY = 'paulEasyVoca_currentStudent'
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// P0(2026-07-15) identity 리팩터링 — 세션은 이제 { id, name } JSON을
+// 저장한다(예전엔 이름 문자열 그대로). 예전 형식(순수 이름 문자열, 또는
+// UUID가 아닌 값)이 남아있는 기기는 "레거시 세션"으로 간주해 안전하게
+// 로그아웃 처리한다 — PIN 없이는 그 세션을 어느 학생 것인지 확인할 방법이
+// 없으므로(동명이인 가능), 자동으로 아무 계정에나 로그인시키지 않는다.
+// 크래시 없이 그냥 로그인 화면으로 돌려보내는 게 유일하게 안전한 선택.
+function readSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object' && UUID_RE.test(parsed.id || '')) return parsed
+    return null // 형식이 안 맞음 — legacy 취급
+  } catch {
+    return null // JSON.parse 실패 = 예전의 순수 이름 문자열이었던 경우 포함 — legacy 취급
+  }
+}
+
 export default function App() {
-  const [student, setStudent] = useState(() => localStorage.getItem('paulEasyVoca_currentStudent') || '')
+  const [student, setStudent] = useState(() => readSession()) // null | { id, name, className, unitName }
   const [showAdmin, setAdmin] = useState(false)
   const [showParent, setParent] = useState(false)
   const [ready, setReady]     = useState(false)
   const [loadError, setLoadError] = useState(null)
   const [removedNotice, setRemovedNotice] = useState(false)
+  // 로그인 방식이 이름 전용 → 이름+PIN으로 바뀌면서, 예전 형식(이름 문자열
+  // 또는 구버전 세션)이 저장돼 있던 기기는 최초 로드 시 한 번 여기로 걸린다.
+  const [legacySessionNotice, setLegacySessionNotice] = useState(() => {
+    try {
+      const raw = localStorage.getItem(SESSION_KEY)
+      return !!raw && !readSession()
+    } catch { return false }
+  })
 
   // Load class/word data from Supabase before rendering anything that needs
   // it — guarantees every screen starts from the current DB state, not a
-  // stale local cache.
+  // stale local cache. Legacy(형식 안 맞는) 세션은 여기서 정리.
   useEffect(() => {
     initWordLibrary().then(() => {
       setReady(true)
+      if (!readSession() && localStorage.getItem(SESSION_KEY)) {
+        localStorage.removeItem(SESSION_KEY)
+      }
       // [진단 로그 4-b] 캐시된 로그인(페이지 새로고침으로 재입장)의 경우도
       // 여기서 Home 진입 직전 상태를 확인할 수 있음.
       if (student) {
         console.log('[App] initWordLibrary 완료 — 캐시된 currentStudent:', {
-          name: student, class: getStudentClass(student), unit: getStudentUnit(student),
+          id: student.id, name: student.name, class: getStudentClass(student.id), unit: getStudentUnit(student.id),
         })
       }
     }).catch((err) => setLoadError(err))
@@ -364,12 +399,12 @@ export default function App() {
 
   // If an admin deleted this student's account from another device while
   // this one was still logged in, don't silently fall through to an empty
-  // "0 words" dashboard under a name that no longer exists — log out with a
+  // "0 words" dashboard under an id that no longer exists — log out with a
   // clear explanation instead.
   useEffect(() => {
-    if (ready && student && !findStudentByName(student)) {
-      localStorage.removeItem('paulEasyVoca_currentStudent')
-      setStudent('')
+    if (ready && student && !getStudentById(student.id)) {
+      localStorage.removeItem(SESSION_KEY)
+      setStudent(null)
       setRemovedNotice(true)
     }
   }, [ready, student])
@@ -395,17 +430,21 @@ export default function App() {
   // (no page reload), so without this, a unit reassignment an admin made
   // earlier in the same tab's lifetime would keep being invisible, since
   // _students was otherwise only ever loaded once when the tab first opened.
-  const handleSelect = async (name) => {
+  // `sel`은 StudentSelect.jsx가 로그인/등록 성공 시 넘기는 { id, name,
+  // className, unitName } — PIN 서버 검증(로그인) 또는 addStudent+set-
+  // student-pin(등록) 둘 다 이 모양으로 통일해서 넘긴다.
+  const handleSelect = async (sel) => {
     try { await refreshStudents() } catch {}
     // [진단 로그 4] Home(Dashboard) 진입 직전 currentStudent + 그 시점의 반/유닛
     console.log('[App] handleSelect — Home 진입 직전 currentStudent:', {
-      name, class: getStudentClass(name), unit: getStudentUnit(name),
+      id: sel.id, name: sel.name, class: getStudentClass(sel.id), unit: getStudentUnit(sel.id),
     })
-    localStorage.setItem('paulEasyVoca_currentStudent', name)
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ id: sel.id, name: sel.name }))
     setRemovedNotice(false)
-    setStudent(name)
+    setLegacySessionNotice(false)
+    setStudent(sel)
   }
-  const handleLogout = () => { localStorage.removeItem('paulEasyVoca_currentStudent'); setStudent('') }
+  const handleLogout = () => { localStorage.removeItem(SESSION_KEY); setStudent(null) }
 
   if (loadError) {
     return (
@@ -461,6 +500,11 @@ export default function App() {
       </React.Suspense>
     </AppErrorBoundary>
   )
-  if (!student)  return <AppErrorBoundary><StudentSelect onSelect={handleSelect} onAdmin={() => setAdmin(true)} onParent={() => setParent(true)} removedNotice={removedNotice} /></AppErrorBoundary>
-  return <AppErrorBoundary><AppInner student={student} onLogout={handleLogout} /></AppErrorBoundary>
+  if (!student)  return (
+    <AppErrorBoundary>
+      <StudentSelect onSelect={handleSelect} onAdmin={() => setAdmin(true)} onParent={() => setParent(true)}
+        removedNotice={removedNotice || legacySessionNotice} />
+    </AppErrorBoundary>
+  )
+  return <AppErrorBoundary><AppInner studentId={student.id} studentName={student.name} onLogout={handleLogout} /></AppErrorBoundary>
 }

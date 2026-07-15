@@ -151,8 +151,17 @@ export const exampleTextFor = (word) => `I can see ${VOWEL_SOUND.test(word) ? 'a
 // Default memory tip shown before the real AI-generated one is ready.
 export const memoryTipFor = (word, meaning) => `${word} = ${meaning}! 소리 내어 3번 읽어보면 금방 외워져요.`
 
-// ── Students cache: { [name]: { id, className, unitName } } ───────────────
-let _students = {}
+// ── Students cache ──────────────────────────────────────────────────────
+// P0 (2026-07-15) identity 리팩터링: 예전엔 이 캐시가 `{ [name]: {...} }`
+// 였다 — 학생을 이름으로 전역 유일 식별한다는 잘못된 전제였고, 그래서
+// 동명이인 학생(다른 반이라도)이 서로의 별/포인트/캘린더/학습기록을
+// 덮어쓰는 실사고가 있었다(진단: 라이브 Supabase students.name에 UNIQUE
+// 제약까지 걸려 있어 동명이인 자체가 DB 레벨에서 막혀 있었음 — 별도
+// 마이그레이션 SQL로 제거 필요, supabase_v1_6_student_identity.sql 참고).
+// 지금은 Map<studentId, {...}> — 학생의 유일한 식별자는 항상
+// students.id(UUID)이고, 이름은 표시용일 뿐이다. 반별 로그인 후보 목록이
+// 필요하면 getStudentsInClass()를 쓴다(이름은 여전히 그 안에서 표시 라벨).
+let _students = new Map()
 
 export async function refreshStudents() {
   const { data, error } = await supabase
@@ -160,14 +169,15 @@ export async function refreshStudents() {
     .select('id,name,class_id,unit_name,classes(name)')
     .order('created_at')
   if (error) throw error
-  const map = {}
+  const map = new Map()
   data.forEach((s) => {
-    map[s.name] = {
+    map.set(s.id, {
       id: s.id,
+      name: s.name,
       classId: s.class_id || null,
       className: s.classes?.name || '',
       unitName: s.unit_name || DEFAULT_UNIT_NAME,
-    }
+    })
   })
   _students = map
   return map
@@ -424,19 +434,22 @@ export async function renameClass(oldName, newName) {
 }
 
 // ── Students: roster + class/unit assignment, shared across every device ──
-export const getStudents = () => Object.keys(_students)
+// getStudents()는 이제 이름 문자열 배열이 아니라 학생 객체 배열을
+// 반환한다({id,name,className,classId,unitName}) — 호출부(AdminScreen/
+// DebugPage)는 항상 s.id를 키로, s.name을 표시로 써야 한다.
+export const getStudents = () => Array.from(_students.values())
 
-// Case-insensitive lookup — returns the student's name exactly as stored in
-// the DB (the "canonical" casing), or null if no student matches. A young
-// student retyping their name with different capitalization (e.g. "heeja"
-// vs "Heeja") must resolve back to the SAME account: progress is keyed by
-// exact name string (see useStudent.js), so logging in under a differently-
-// cased spelling would silently fork into a brand-new, empty progress
-// record and look like all their stars/stickers vanished.
+export const getStudentById = (id) => _students.get(id) || null
+export const getStudentName = (id) => _students.get(id)?.name || ''
+
+// 이름으로 후보를 찾는 함수 — 이제 유일 식별이 불가능하므로(동명이인
+// 허용) 단일 값이 아니라 배열을 반환한다. PIN 로그인은 서버(api/
+// verify-student-pin.js)가 이 클라이언트 캐시와 무관하게 라이브 DB를
+// 직접 조회해서 처리하므로, 이 함수는 관리자 도구/디버깅용으로만 남긴다.
 export function findStudentByName(name) {
-  const target = name.trim().toLowerCase()
-  if (!target) return null
-  return Object.keys(_students).find(n => n.toLowerCase() === target) || null
+  const target = (name || '').trim().toLowerCase()
+  if (!target) return []
+  return Array.from(_students.values()).filter(s => s.name.trim().toLowerCase() === target)
 }
 
 // Students linked by class_id (the DB foreign key), never by matching the
@@ -445,34 +458,46 @@ export function findStudentByName(name) {
 export function getStudentsInClass(className) {
   const classId = _cache[className]?.id
   if (!classId) return []
-  return Object.entries(_students)
-    .filter(([, s]) => s.classId === classId)
-    .map(([name, s]) => ({ name, unitName: s.unitName }))
+  return Array.from(_students.values())
+    .filter(s => s.classId === classId)
+    .map(s => ({ id: s.id, name: s.name, unitName: s.unitName }))
 }
 
+// 반환값: 새로 생성된 학생의 id(UUID). 호출부(StudentSelect.jsx 자기등록,
+// AdminScreen.jsx)가 이 id로 곧바로 PIN 설정(api/set-student-pin.js) 및
+// 로그인 세션을 이어간다. 동명이인 차단 로직은 의도적으로 제거했다 —
+// 학생은 이제 이름이 아니라 id(PIN 로그인으로 찾아낸 id)로 식별되므로
+// 같은 반이든 다른 반이든 이름이 겹쳐도 안전하다. DB에 남아있던
+// students.name UNIQUE 제약은 별도 SQL 마이그레이션으로 제거 대상 —
+// 아직 적용 전이면 Supabase가 23505(duplicate key)로 거부하는데, 그 경우
+// 에러 메시지를 마이그레이션 필요성을 알 수 있게 보강해서 던진다.
 export async function addStudent(name, className = '', unitName = DEFAULT_UNIT_NAME) {
-  // Defense in depth: never create a second account that only differs by
-  // capitalization — see findStudentByName for why that's dangerous.
-  if (findStudentByName(name)) return
   let classId = null
   if (className) classId = (await ensureClass(className)).id
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('students').insert({ name, class_id: classId, unit_name: unitName || DEFAULT_UNIT_NAME })
-  if (error) throw error
+    .select('id').single()
+  if (error) {
+    if (error.code === '23505') {
+      throw new Error('같은 이름의 학생이 이미 있어요. (관리자: supabase_v1_6_student_identity.sql의 UNIQUE 제약 제거 마이그레이션이 아직 적용 안 됐을 수 있어요)')
+    }
+    throw error
+  }
   await refreshStudents()
+  return data.id
 }
 
-export async function removeStudent(name) {
-  const s = _students[name]
+export async function removeStudent(id) {
+  const s = _students.get(id)
   if (!s) return
-  const { error } = await supabase.from('students').delete().eq('id', s.id)
+  const { error } = await supabase.from('students').delete().eq('id', id)
   if (error) throw error
   await refreshStudents()
 }
 
-export const getStudentClass = (name) => _students[name]?.className || ''
-export const getStudentClassId = (name) => _students[name]?.classId || null
-export const getStudentUnit = (name) => _students[name]?.unitName || DEFAULT_UNIT_NAME
+export const getStudentClass = (id) => _students.get(id)?.className || ''
+export const getStudentClassId = (id) => _students.get(id)?.classId || null
+export const getStudentUnit = (id) => _students.get(id)?.unitName || DEFAULT_UNIT_NAME
 
 // _cache is keyed by class NAME (see refreshWordLibrary), but a student is
 // linked to a class by class_id (the DB foreign key) — this resolves a
@@ -487,25 +512,21 @@ const getClassNameById = (classId) => {
   return ''
 }
 
-export async function setStudentClass(name, className) {
-  const s = _students[name]
+export async function setStudentClass(id, className) {
+  const s = _students.get(id)
   if (!s) return
   const classId = className ? (await ensureClass(className)).id : null
   const payload = { class_id: classId }
-  console.log('[wordLibrary] setStudentClass — Supabase update payload:', { studentId: s.id, name, ...payload })
-  const { data, error } = await supabase.from('students').update(payload).eq('id', s.id).select()
-  console.log('[wordLibrary] setStudentClass — Supabase update result:', { data, error })
+  const { error } = await supabase.from('students').update(payload).eq('id', id).select()
   if (error) throw error
   await refreshStudents()
 }
 
-export async function setStudentUnit(name, unitName) {
-  const s = _students[name]
+export async function setStudentUnit(id, unitName) {
+  const s = _students.get(id)
   if (!s) return
   const payload = { unit_name: unitName }
-  console.log('[wordLibrary] setStudentUnit — Supabase update payload:', { studentId: s.id, name, ...payload })
-  const { data, error } = await supabase.from('students').update(payload).eq('id', s.id).select()
-  console.log('[wordLibrary] setStudentUnit — Supabase update result:', { data, error })
+  const { error } = await supabase.from('students').update(payload).eq('id', id).select()
   if (error) throw error
   await refreshStudents()
 }
@@ -514,11 +535,11 @@ export async function setStudentUnit(name, unitName) {
 // N students, instead of N sequential setStudentClass/setStudentUnit calls
 // (which would be 2N round-trips and could leave the roster in a
 // half-moved state if one call in the middle failed).
-export async function setStudentsClassBulk(names, className, unitName) {
-  const ids = names.map(n => _students[n]?.id).filter(Boolean)
-  if (ids.length === 0) return
+export async function setStudentsClassBulk(ids, className, unitName) {
+  const validIds = ids.filter(id => _students.has(id))
+  if (validIds.length === 0) return
   const classId = className ? (await ensureClass(className)).id : null
-  const { error } = await supabase.from('students').update({ class_id: classId, unit_name: unitName }).in('id', ids)
+  const { error } = await supabase.from('students').update({ class_id: classId, unit_name: unitName }).in('id', validIds)
   if (error) throw error
   await refreshStudents()
 }
@@ -543,13 +564,16 @@ export async function setStudentsClassBulk(names, className, unitName) {
 // table uses a separate `id` primary key (not student_id), so without it
 // upsert() would always INSERT a new row instead of updating the existing
 // one.
-export async function syncStudentProgress(name, { totalStars, clearedCount, streak, stickersCount, daily, fullRecord }) {
-  const s = _students[name]
-  if (!s) return // student not yet known to this device's Supabase cache (e.g. offline at first load) — next sync retries
+// studentId(UUID)를 직접 FK로 쓴다 — 예전엔 이름으로 _students 캐시를
+// 조회해 id를 얻어야 했지만(캐시가 아직 안 채워졌으면 "student not yet
+// known" 상태로 조용히 스킵되는 취약점이 있었다), 이제 호출부가 이미
+// id를 들고 있으므로 캐시 의존 없이 항상 정확한 FK로 쓴다.
+export async function syncStudentProgress(studentId, { totalStars, clearedCount, streak, stickersCount, daily, fullRecord }) {
+  if (!studentId) return
   const today = localIsoDateStr() // 로컬(한국) 날짜 — UTC 쓰면 안 됨(위 localIsoDateStr 주석 참고)
 
   const progressRow = {
-    student_id: s.id,
+    student_id: studentId,
     total_stars: totalStars,
     cleared_count: clearedCount,
     streak,
@@ -570,7 +594,7 @@ export async function syncStudentProgress(name, { totalStars, clearedCount, stre
   if (progressErr) throw progressErr
 
   const { error: dailyErr } = await supabase.from('student_daily_progress').upsert({
-    student_id: s.id,
+    student_id: studentId,
     date: today,
     categories_completed: daily.categoriesCompleted,
     stars_earned: daily.starsEarned,
@@ -590,13 +614,12 @@ export async function syncStudentProgress(name, { totalStars, clearedCount, stre
 // the backup itself is empty. Callers must treat null as "no backup
 // available", not as an error — never used to overwrite existing local
 // data, only to restore when local is missing.
-export async function fetchFullProgress(name) {
-  const s = _students[name]
-  if (!s) return null
+export async function fetchFullProgress(studentId) {
+  if (!studentId) return null
   const { data, error } = await supabase
     .from('student_progress')
     .select('progress_data')
-    .eq('student_id', s.id)
+    .eq('student_id', studentId)
     .maybeSingle()
   if (error || !data?.progress_data || Object.keys(data.progress_data).length === 0) return null
   return data.progress_data
@@ -608,11 +631,10 @@ export async function fetchFullProgress(name) {
 // 반영 전이면(테이블/컬럼 없음) 에러를 조용히 삼키고 로컬 저장만 유지
 // (기존 progress_data 백업과 동일한 안전 원칙: 클라우드 동기화 실패가
 // 학생의 학습 흐름을 절대 막지 않음).
-export async function setWordStatus(name, wordDbId, status) {
-  const s = _students[name]
-  if (!s || !wordDbId) return
+export async function setWordStatus(studentId, wordDbId, status) {
+  if (!studentId || !wordDbId) return
   const { error } = await supabase.from('word_status').upsert({
-    student_id: s.id,
+    student_id: studentId,
     word_id: wordDbId,
     status,
     last_seen_at: new Date().toISOString(),
@@ -623,18 +645,19 @@ export async function setWordStatus(name, wordDbId, status) {
 
 // 로그인 시 로컬에 저장된 단어 상태가 없으면(다른 기기 등) 이걸로 복구.
 // { [wordDbId]: status } 형태의 맵을 반환, 에러/빈 결과는 빈 객체.
-export async function fetchWordStatusMap(name) {
-  const s = _students[name]
-  if (!s) return {}
-  const { data, error } = await supabase.from('word_status').select('word_id,status').eq('student_id', s.id)
+export async function fetchWordStatusMap(studentId) {
+  if (!studentId) return {}
+  const { data, error } = await supabase.from('word_status').select('word_id,status').eq('student_id', studentId)
   if (error || !data) return {}
   return Object.fromEntries(data.map((r) => [r.word_id, r.status]))
 }
 
 // v1.5 관리자 대시보드 — 반 학생들의 "아는/모르는/복습 필요 단어 수"를
 // 한 번에 배치 조회(학생별 N번 조회 안 함, fetchDashboardData와 동일 패턴).
-export async function fetchWordStatusSummary(studentNames) {
-  const ids = studentNames.map((n) => _students[n]?.id).filter(Boolean)
+// P0(2026-07-15): studentIds를 직접 받는다 — 예전엔 이름 배열을 받아
+// _students 캐시로 id를 재조회했지만, 이제 호출부가 이미 id를 들고 있다.
+export async function fetchWordStatusSummary(studentIds) {
+  const ids = (studentIds || []).filter(Boolean)
   if (ids.length === 0) return {}
   const { data, error } = await supabase.from('word_status').select('student_id,status').in('student_id', ids)
   if (error || !data) return {}
@@ -660,18 +683,17 @@ export async function fetchWordStatusSummary(studentNames) {
 // 학생이 지금 로그인해 있는 기기의 로컬 localStorage는 서버가 직접
 // 건드릴 수 없으므로 별개 — 그 기기는 다음에 스스로 뭔가 동기화할 때
 // 자기 로컬 값을 그대로 다시 올려보낸다. 이건 이 함수의 책임 범위 밖.)
-export async function resetWordStatus(name) {
-  const s = _students[name]
-  if (!s) return
-  const { error } = await supabase.from('word_status').delete().eq('student_id', s.id)
+export async function resetWordStatus(studentId) {
+  if (!studentId) return
+  const { error } = await supabase.from('word_status').delete().eq('student_id', studentId)
   if (error) throw error
   const { data: existing, error: fetchErr } = await supabase
-    .from('student_progress').select('progress_data').eq('student_id', s.id).maybeSingle()
+    .from('student_progress').select('progress_data').eq('student_id', studentId).maybeSingle()
   if (fetchErr) throw fetchErr
   if (existing?.progress_data && Object.keys(existing.progress_data).length > 0) {
     const nextProgressData = { ...existing.progress_data, wordStatus: {} }
     const { error: updateErr } = await supabase
-      .from('student_progress').update({ progress_data: nextProgressData }).eq('student_id', s.id)
+      .from('student_progress').update({ progress_data: nextProgressData }).eq('student_id', studentId)
     if (updateErr) throw updateErr
   }
 }
@@ -684,18 +706,18 @@ export async function resetWordStatus(name) {
 // round-trips. word_status errors (e.g. v1.5 migration not run yet on this
 // project) are swallowed to an empty array + error string rather than
 // thrown, since the rest of the snapshot is still useful on its own.
-export async function fetchDebugSnapshot(name) {
-  const s = _students[name]
+export async function fetchDebugSnapshot(studentId) {
+  const s = _students.get(studentId)
   if (!s) return { student: null, progress: null, daily: [], wordStatusRows: [], wordStatusError: null }
   const [progressRes, dailyRes, wsRes] = await Promise.all([
-    supabase.from('student_progress').select('*').eq('student_id', s.id).maybeSingle(),
-    supabase.from('student_daily_progress').select('*').eq('student_id', s.id).order('date', { ascending: false }).limit(14),
-    supabase.from('word_status').select('*').eq('student_id', s.id),
+    supabase.from('student_progress').select('*').eq('student_id', studentId).maybeSingle(),
+    supabase.from('student_daily_progress').select('*').eq('student_id', studentId).order('date', { ascending: false }).limit(14),
+    supabase.from('word_status').select('*').eq('student_id', studentId),
   ])
   if (progressRes.error) throw progressRes.error
   if (dailyRes.error) throw dailyRes.error
   return {
-    student: { id: s.id, name, className: s.className, unitName: s.unitName },
+    student: { id: s.id, name: s.name, className: s.className, unitName: s.unitName },
     progress: progressRes.data || null,
     daily: dailyRes.data || [],
     wordStatusRows: wsRes.error ? [] : (wsRes.data || []),
@@ -708,17 +730,17 @@ export async function fetchDebugSnapshot(name) {
 // the built-in demo bank (data/words.js), even if the text happens to match.
 // No class assigned (on this device) or an empty unit both mean "no words
 // yet"; the screen shows nothing rather than substituting sample content.
-export const getStudentWords = (name) => {
-  const classId = getStudentClassId(name)
-  const unitName = getStudentUnit(name)
+export const getStudentWords = (studentId) => {
+  const classId = getStudentClassId(studentId)
+  const unitName = getStudentUnit(studentId)
   // Resolve the class by id first (robust to renames) — the joined
   // className is only a fallback for legacy rows with no class_id at all.
-  const cls = getClassNameById(classId) || getStudentClass(name)
+  const cls = getClassNameById(classId) || getStudentClass(studentId)
   try {
     if (!cls) {
       console.log('[wordLibrary] getStudentWords: no class resolved', {
-        selectedStudent: name,
-        selectedClass: getStudentClass(name),
+        selectedStudentId: studentId,
+        selectedClass: getStudentClass(studentId),
         selectedClassId: classId,
         selectedUnit: unitName,
         queryResult: null,
@@ -729,7 +751,7 @@ export const getStudentWords = (name) => {
     const raw = getClassWords(cls, unitName)
     if (!Array.isArray(raw) || !raw.length) {
       console.log('[wordLibrary] getStudentWords: empty result', {
-        selectedStudent: name,
+        selectedStudentId: studentId,
         selectedClass: cls,
         selectedClassId: classId,
         selectedUnit: unitName,
@@ -786,7 +808,7 @@ export const getStudentWords = (name) => {
     return mapped
   } catch (err) {
     console.log('[wordLibrary] getStudentWords: query error', {
-      selectedStudent: name,
+      selectedStudentId: studentId,
       selectedClass: cls,
       selectedClassId: classId,
       selectedUnit: unitName,
@@ -819,8 +841,12 @@ export function filterWordsByScope(words, scope, wordStatus = {}, reviewWordIds 
 // 번에 배치 조회 (학생별로 N번 조회하지 않음). 최근 60일로 제한해 계정이
 // 오래될수록 쿼리가 무한정 커지지 않게 함 — "최근 7일"/최근 정답률·발음
 // 횟수·많이 틀린 단어 전부 이 정도 기간이면 충분히 의미 있는 표본.
-export async function fetchDashboardData(studentNames) {
-  const ids = studentNames.map(n => _students[n]?.id).filter(Boolean)
+// P0(2026-07-15): studentIds를 직접 받는다(예전엔 이름 배열 → _students
+// 캐시로 id 재조회). name은 여전히 결과에 포함하되(표시용, AdminScreen/
+// ParentScreen/CSV/weeklyReport가 그대로 씀), 캐시에서 조회해 채운다 —
+// 캐시가 아직 그 학생을 모르면(드묾) '(알 수 없음)'으로 안전하게 표시.
+export async function fetchDashboardData(studentIds) {
+  const ids = (studentIds || []).filter(Boolean)
   if (ids.length === 0) return []
 
   const cutoff = new Date()
@@ -841,15 +867,13 @@ export async function fetchDashboardData(studentNames) {
     dailyByStudent[d.student_id].push(d)
   })
 
-  return studentNames.map(name => {
-    const id = _students[name]?.id
-    return {
-      name,
-      studentId: id || null,
-      progress: id ? (progressByStudent[id] || null) : null,
-      dailyRows: id ? (dailyByStudent[id] || []) : [],
-    }
-  })
+  return ids.map(id => ({
+    id,
+    studentId: id,
+    name: _students.get(id)?.name || '(알 수 없음)',
+    progress: progressByStudent[id] || null,
+    dailyRows: dailyByStudent[id] || [],
+  }))
 }
 
 // v1.3 관리자용 — 오늘 이 반에 배정된 단어 slug 목록 (없으면 빈 배열 =

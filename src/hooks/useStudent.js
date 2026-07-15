@@ -3,9 +3,20 @@ import { getRandomSticker, getMilestoneSticker, STICKERS } from '../data/sticker
 
 // Student roster + class assignment live in Supabase (shared across every
 // device) — see utils/wordLibrary.js. Per-student progress (stars, stickers,
-// diary, missions, daily history) is keyed by student NAME and stored
-// device-local (localStorage) as the fast/primary copy — every value here is
-// 100% private per student and never shared with other students.
+// diary, missions, daily history) is stored device-local (localStorage) as
+// the fast/primary copy — every value here is 100% private per student and
+// never shared with other students.
+//
+// P0 (2026-07-15) identity 리팩터링 — 이 파일의 로컬 저장은 원래 학생
+// "이름"을 키로 썼다(STORE_KEY 아래 `{ [name]: record }`). 동명이인 학생이
+// (다른 반이라도) 서로의 별/포인트/캘린더/학습기록을 덮어쓰는 실사고의
+// 직접 원인이었다 — 지금은 studentId(UUID, Supabase students.id)를 키로
+// 쓴다. 기존 이름 키 레코드는 **절대 삭제하지 않고** 그대로 둔 채(다른
+// 학생이 그 이름으로 여전히 접근할 수 있으므로), 로그인 성공 시점에
+// "이 기기가 지금 로그인하는 그 학생"의 정확한 id로만 lazy(온디맨드)
+// 복사한다 — 전역 자동 매칭은 동명이인 상황에서 위험해서 하지 않는다
+// (아래 loadRecord/migrateOldData 참고, 이미 있던 paulEasyVoca_{name}_
+// {field} → 통합 STORE_KEY 마이그레이션과 정확히 같은 패턴을 재사용).
 //
 // 2026-07-09: localStorage does NOT travel with the student (a new phone, a
 // cleared browser, or a wiped app has none of it) — an earlier version of
@@ -23,11 +34,12 @@ import { syncStudentProgress, fetchFullProgress, setWordStatus as syncWordStatus
 // ── Single unified progress store ───────────────────────────────────────
 // Every per-student value the app tracks (stars, stickers, today's mission
 // progress, permanent calendar history, streak bookkeeping, diary, level-up
-// missions...) lives under ONE localStorage key, keyed by student name. This
-// replaces the old scattered paulEasyVoca_{name}_{field} keys — the bug
-// where the Dashboard, calendar, and reward popup could show different
-// numbers for "today" came from those being read/written independently;
-// one record read by every screen makes that impossible by construction.
+// missions...) lives under ONE localStorage key, keyed by studentId (was:
+// student name — see P0 identity note above). This replaces the old
+// scattered paulEasyVoca_{name}_{field} keys — the bug where the Dashboard,
+// calendar, and reward popup could show different numbers for "today" came
+// from those being read/written independently; one record read by every
+// screen makes that impossible by construction.
 const STORE_KEY = 'paul_easy_progress'
 const OLD_PREFIX = 'paulEasyVoca'
 const oldKey = (name, type) => `${OLD_PREFIX}_${name}_${type}`
@@ -79,12 +91,14 @@ const markSyncFailure = (name, type, err) =>
   patchSyncMeta(name, (cur) => ({ status: 'error', lastType: type, failedCount: (cur.failedCount || 0) + 1, lastError: (err && err.message) || String(err) }))
 
 // Read-only accessors for the Debug page (DebugPage.jsx) — never mutate
-// state, safe to call outside a component/hook.
-export function getSyncMeta(name) {
-  return loadSyncMetaStore()[name] || freshSyncMeta()
+// state, safe to call outside a component/hook. Both now take studentId
+// (see P0 identity note above) — DebugPage.jsx passes the id it got from
+// getStudents().
+export function getSyncMeta(studentId) {
+  return loadSyncMetaStore()[studentId] || freshSyncMeta()
 }
-export function getLocalRecordRaw(name) {
-  return loadStore()[name] || null
+export function getLocalRecordRaw(studentId) {
+  return loadStore()[studentId] || null
 }
 
 const GOAL = 5
@@ -124,9 +138,12 @@ const freshHistoryDay = () => ({
   spellingTotal: 0,       // spelling test analytics — total first attempts
 })
 
-function freshRecord(name) {
+// id는 이제 실제 Supabase students.id(UUID) — 예전엔 이름 문자열이 그대로
+// 들어가서 필드 이름(studentId)과 실제 값(이름)이 어긋나 있었다(P0 진단
+// 기록 참고). 지금은 이름 그대로 정확하다.
+function freshRecord(id) {
   return {
-    studentId: name,
+    studentId: id,
     totalStars: 0,
     stickers: [],          // owned sticker ids — badges (star/streak milestones) are just specific sticker ids granted via a guaranteed (non-gacha) path, tracked in this same collection rather than a separate list
     diaryPlacements: [],
@@ -145,8 +162,12 @@ function freshRecord(name) {
 // One-time migration from the old scattered paulEasyVoca_{name}_{field} keys
 // into the unified record, so existing students' progress isn't lost. Old
 // keys are left in place untouched (harmless, just unused going forward).
-function migrateOldData(name) {
-  const rec = freshRecord(name)
+// P0(2026-07-15): the ancient scattered keys were always named by the login
+// NAME (never changed), but the record we build now is stored under the
+// resolved studentId — so this takes both: `name` to read the old keys,
+// `id` for the new record's identity.
+function migrateOldData(name, id) {
+  const rec = freshRecord(id)
   rec.totalStars = readOld(oldKey(name, 'stars'), 0) || 0
   rec.stickers = readOld(oldKey(name, 'stickerTypes'), [])
   rec.diaryPlacements = readOld(oldKey(name, 'diaryPlacements'), [])
@@ -179,11 +200,33 @@ function migrateOldData(name) {
   return rec
 }
 
-function loadRecord(name) {
+// P0(2026-07-15) Phase 2 identity 마이그레이션 — lazy/on-demand, 로그인
+// 시점에만 실행. 우선순위:
+//   1) 이미 studentId 키로 저장된 레코드가 있으면 그대로 사용(이미 마이그
+//      레이션됐거나, 애초에 새 방식으로 시작한 기기).
+//   2) legacyName이 주어졌고(=이번 로그인이 실제로 그 이름으로 성공했다는
+//      뜻, 모호함 없음) STORE_KEY 아래 그 이름 키로 저장된 통합 레코드가
+//      있으면 studentId로 "복사"한다 — 원본 이름 키는 절대 지우지 않음
+//      (다른 기기/다른 세션이 아직 그 키를 참조 중일 수 있고, 안전 원칙상
+//      기존 데이터 삭제는 금지).
+//   3) 그것도 없으면 더 오래된 흩어진 paulEasyVoca_{name}_{field} 키에서
+//      마이그레이션(기존 migrateOldData 경로, id 부여만 다름).
+//   4) legacyName조차 없으면(순수 신규 등록 — 처음부터 id로 로그인) 완전히
+//      새 레코드.
+// 전역적으로 모든 이름 키를 훑어 자동 매칭하지 않는다 — 동명이인 상황에서
+// "어느 이름 키가 이 학생 것인지" 알 방법이 없어 위험하기 때문(로그인
+// 시점에 정확히 어느 학생인지 알고 있는 지금이 유일하게 안전한 시점).
+function loadRecord(id, legacyName) {
   const store = loadStore()
-  if (store[name]) return store[name]
-  const migrated = migrateOldData(name)
-  store[name] = migrated
+  if (store[id]) return store[id]
+  if (legacyName && store[legacyName]) {
+    const migrated = { ...store[legacyName], studentId: id }
+    store[id] = migrated
+    saveStore(store)
+    return migrated
+  }
+  const migrated = legacyName ? migrateOldData(legacyName, id) : freshRecord(id)
+  store[id] = migrated
   saveStore(store)
   return migrated
 }
@@ -232,8 +275,13 @@ function isEmptyRecord(rec) {
 // behavior change, just visibility into the same logic the hook uses.
 export { freshRecord, freshRound, freshHistoryDay, migrateOldData, calcStreak, countCategoriesCompleted, todayStr, GOAL, isEmptyRecord }
 
-export function useStudent(name) {
-  const [record, _setRecord] = useState(() => loadRecord(name))
+// studentId: Supabase students.id(UUID) — 이 학생의 유일한 식별자, 모든
+// 저장/동기화가 이걸로 이뤄진다. legacyName: 이번 로그인이 실제로 성공한
+// "이름"(선택) — 이 기기에 그 이름 키로 저장된 예전 레코드가 있으면 딱
+// 한 번 studentId로 복사해온다(loadRecord 참고). 새 계정으로 처음부터
+// 로그인하는 경우 등 없어도 무방.
+export function useStudent(studentId, legacyName) {
+  const [record, _setRecord] = useState(() => loadRecord(studentId, legacyName))
   const handledRoundRef = useRef(null)
 
   // Every mutation goes through here — one place that both updates React
@@ -243,11 +291,11 @@ export function useStudent(name) {
     _setRecord(prev => {
       const next = { ...prev, ...patchFn(prev) }
       const store = loadStore()
-      store[name] = next
+      store[studentId] = next
       saveStore(store)
       return next
     })
-  }, [name])
+  }, [studentId])
 
   // 이 로그인(마운트) 시점에 로컬 기록이 비어있으면(진짜 신규이거나,
   // 기기가 초기화/교체됐거나) 딱 한 번 클라우드 백업을 확인해서 복구를
@@ -273,7 +321,7 @@ export function useStudent(name) {
     let cancelled = false
     // 네트워크가 완전히 죽어도 동기화가 영구히 막히지 않도록 상한선.
     const timeout = setTimeout(() => { if (!cancelled) setRestoreChecked(true) }, 5000)
-    fetchFullProgress(name).then((backup) => {
+    fetchFullProgress(studentId).then((backup) => {
       if (cancelled || !backup) return
       patch((prev) => (isEmptyRecord(prev) ? backup : {}))
     }).catch(() => {}).finally(() => {
@@ -281,7 +329,7 @@ export function useStudent(name) {
     })
     return () => { cancelled = true; clearTimeout(timeout) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name])
+  }, [studentId])
 
   const { round, history, stickers: stickerTypes, diaryPlacements, missions, cleared, milestoneStreak, starBadgeThreshold, lastGamePlayed, lastWordIndex, totalStars: stars, wordStatus } = record
 
@@ -522,11 +570,11 @@ export function useStudent(name) {
   const setWordKnownState = useCallback((wordDbId, status) => {
     if (!wordDbId) return
     patch((prev) => ({ wordStatus: { ...prev.wordStatus, [wordDbId]: status } }))
-    markSyncAttempt(name, 'wordStatus')
-    syncWordStatus(name, wordDbId, status)
-      .then(() => markSyncSuccess(name, 'wordStatus'))
-      .catch((err) => markSyncFailure(name, 'wordStatus', err))
-  }, [patch, name])
+    markSyncAttempt(studentId, 'wordStatus')
+    syncWordStatus(studentId, wordDbId, status)
+      .then(() => markSyncSuccess(studentId, 'wordStatus'))
+      .catch((err) => markSyncFailure(studentId, 'wordStatus', err))
+  }, [patch, studentId])
   const setWordKnown = useCallback((wordDbId) => setWordKnownState(wordDbId, 'known'), [setWordKnownState])
   const setWordUnknown = useCallback((wordDbId) => setWordKnownState(wordDbId, 'unknown'), [setWordKnownState])
 
@@ -561,8 +609,8 @@ export function useStudent(name) {
   const doSyncRef = useRef(null)
   useEffect(() => {
     doSyncRef.current = () => {
-      markSyncAttempt(name, 'progress')
-      syncStudentProgress(name, {
+      markSyncAttempt(studentId, 'progress')
+      syncStudentProgress(studentId, {
         totalStars: record.totalStars,
         clearedCount: record.cleared.length,
         streak,
@@ -576,8 +624,8 @@ export function useStudent(name) {
           pronunciationAttempts: todayHistory?.pronunciationAttempts || 0,
           missedWordIds: todayHistory?.missedWordIds || [],
         },
-      }).then(() => markSyncSuccess(name, 'progress'))
-        .catch((err) => markSyncFailure(name, 'progress', err))
+      }).then(() => markSyncSuccess(studentId, 'progress'))
+        .catch((err) => markSyncFailure(studentId, 'progress', err))
     }
   })
 
@@ -587,7 +635,7 @@ export function useStudent(name) {
     if (!restoreChecked) return
     const t = setTimeout(() => doSyncRef.current?.(), 2000)
     return () => clearTimeout(t)
-  }, [name, record, restoreChecked])
+  }, [studentId, record, restoreChecked])
 
   // 2026-07-10 안정성 보강: 지금까지는 2초 디바운스 타이머가 끝나기 전에
   // 학생이 탭을 닫거나 다른 앱으로 전환하면 그 마지막 변경분이 영영

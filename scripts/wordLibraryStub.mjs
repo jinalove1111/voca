@@ -6,7 +6,7 @@
 export const getStudents = () => []
 export const addStudent = () => {}
 export const removeStudent = () => {}
-export const findStudentByName = () => null
+export const findStudentByName = () => []
 export const syncStudentProgress = async () => {}
 export const fetchFullProgress = async () => null
 export const setWordStatus = async () => {}

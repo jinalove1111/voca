@@ -143,7 +143,7 @@ console.log('\n6. 게임 플레이 기록 (v1.1)')
   localStorage.setItem('paulEasyVoca_OldKid_history', JSON.stringify({
     'Mon Jan 01 2026': { missionsCompleted: 1, starsEarned: 10, stickersEarned: [] },
   }))
-  const oldHistoryEntry = migrateOldData('OldKid').history
+  const oldHistoryEntry = migrateOldData('OldKid', 'OldKid-id').history
   check('구버전 기록 마이그레이션 시 gamesPlayed는 빈 객체로 채워짐 (undefined 아님)',
     Object.values(oldHistoryEntry).length > 0 &&
     Object.values(oldHistoryEntry).every(d => d.gamesPlayed && typeof d.gamesPlayed === 'object'))
@@ -182,7 +182,7 @@ console.log('\n7. 퀴즈 정답률/발음 횟수/틀린 단어 (v1.3)')
   localStorage.setItem('paulEasyVoca_OldKid2_history', JSON.stringify({
     'Mon Jan 01 2026': { missionsCompleted: 1, starsEarned: 5, stickersEarned: [] },
   }))
-  const migrated = migrateOldData('OldKid2').history
+  const migrated = migrateOldData('OldKid2', 'OldKid2-id').history
   check('구버전 기록 마이그레이션 시 v1.3 필드도 안전한 기본값으로 채워짐',
     Object.values(migrated).length > 0 &&
     Object.values(migrated).every(d => d.quizCorrect === 0 && d.quizTotal === 0 &&
@@ -271,7 +271,7 @@ console.log('\n10. wordStatus (v1.5 Skip 기능) — 새 필드가 기존 로직
   const withKnown = { ...freshRecord('K'), wordStatus: { 'word-uuid-1': 'known' } }
   check('알아요 표시한 단어가 하나라도 있으면 isEmptyRecord = false (클라우드 복구 대상에서 제외 안 됨)', !isEmptyRecord(withKnown))
 
-  const migrated = migrateOldData('OldKid3')
+  const migrated = migrateOldData('OldKid3', 'OldKid3-id')
   check('구버전 기록 마이그레이션 시 wordStatus도 안전한 기본값({})으로 채워짐', JSON.stringify(migrated.wordStatus) === '{}')
 }
 

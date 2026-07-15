@@ -167,13 +167,15 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
   )
 }
 
-export default function Dashboard({ student, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord }) {
+// P0(2026-07-15): student(이름 문자열) 대신 studentId(식별자)+studentName
+// (표시용)을 따로 받는다 — getStudentClass/getStudentUnit은 이제 id 기반.
+export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord }) {
   const { stars, stickerTypes, activeMissions, dailyProgress, missionsCompletedToday, streak, cleared } = studentData
 
-  const className = getStudentClass(student)
-  const unitName = getStudentUnit(student)
+  const className = getStudentClass(studentId)
+  const unitName = getStudentUnit(studentId)
   // [진단 로그 5] Home(Dashboard)에서 실제로 표시하는 unit 값 — 렌더될 때마다 확인
-  console.log('[Dashboard] 표시하는 unit 값:', { student, className, unitName })
+  console.log('[Dashboard] 표시하는 unit 값:', { studentId, studentName, className, unitName })
   const classDeleted = className && !getClassNames().includes(className)
   const recentStickers = [...stickerTypes].reverse().slice(0, 8).map(stickerById).filter(Boolean)
 
@@ -200,7 +202,7 @@ export default function Dashboard({ student, studentData, classWords, onGo, onLo
         {/* Profile */}
         <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl p-6 text-white text-center card-shadow">
           <div className="text-5xl mb-2">👑</div>
-          <h1 className="text-3xl font-black">{student}</h1>
+          <h1 className="text-3xl font-black">{studentName}</h1>
           {className && (
             <p className="text-sm text-purple-200 mt-1">반: {className} · 유닛: {unitName}</p>
           )}
