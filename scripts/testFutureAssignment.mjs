@@ -21,7 +21,18 @@ function check(label, cond) {
 
 const CLASS = 'QA_FutureAssignTest'
 const STUDENT = 'QA_FutureAssignStudent'
-const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10) }
+// 2026-07-16 회귀 수정(정기 재검증 중 실제로 발견): toISOString()은 UTC
+// 기준이라 한국(UTC+9) 자정~오전 9시 사이엔 로컬 "내일"이 UTC로는 아직
+// "오늘"이라 wordLibrary.js의 localIsoDateStr()(로컬 기준 "오늘")과 값이
+// 같아져버린다 — 이 테스트의 "내일 배정"이 실제로는 "오늘 배정"으로
+// 등록되며 3번 체크가 요일에 따라 간헐적으로 실패하던 원인. wordLibrary.js
+// 의 localIsoDateStr()/AdminScreen.jsx의 tomorrowIsoStr()와 동일한 로컬
+// 날짜 조립 방식으로 통일 — 테스트 로직 자체는 그대로, 날짜 계산만 수정.
+const tomorrow = () => {
+  const d = new Date(); d.setDate(d.getDate() + 1)
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
 console.log('\n1. 준비')
 await createClass(CLASS)
