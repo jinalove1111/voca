@@ -188,9 +188,40 @@ function StudentManagement() {
   const [pinResetId, setPinResetId] = useState(null)
   const [pinResetResult, setPinResetResult] = useState(null) // { id, name, pin } — 관리자에게 1회만 보여줌
   const [bulkPinBusy, setBulkPinBusy] = useState(false)
+  // 2026-07-16 — 학생 최초 PIN 자기설정. pinStatus: id -> {hasPinHash,
+  // pinSetupAllowed, locked}(api/student-pin-status.js 배치 조회, pin_hash
+  // 원문은 절대 안 내려옴). supabase_v1_7 SQL 미실행 상태에서도(컬럼 없음
+  // 에러) 크래시 없이 "상태 알 수 없음"으로 안전하게 표시.
+  const [pinStatus, setPinStatus] = useState({})
+  const [allowBusyId, setAllowBusyId] = useState(null)
+  const [unlockBusyId, setUnlockBusyId] = useState(null)
   const classList = getClassNames()
 
-  const refresh = () => setStudents(getStudents())
+  const loadPinStatus = async (list) => {
+    if (!list.length) { setPinStatus({}); return }
+    try {
+      const res = await fetch('/api/student-pin-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentIds: list.map(s => s.id) }),
+      })
+      const data = await res.json()
+      if (data.results) setPinStatus(Object.fromEntries(data.results.map(r => [r.id, r])))
+      // supabase_v1_7_student_pin_selfsetup.sql이 아직 안 돌았으면(컬럼
+      // 없음) data.error가 오는데, 이 경우 조용히 무시 — 배지가 그냥
+      // "상태 알 수 없음"으로 남을 뿐 화면이 깨지지 않음.
+    } catch {
+      // 네트워크 실패도 동일하게 무시 — PIN 상태 배지는 부가 정보일 뿐,
+      // 학생 관리 화면의 핵심 기능(반 배정/삭제 등)을 막으면 안 됨.
+    }
+  }
+
+  const refresh = () => {
+    const list = getStudents()
+    setStudents(list)
+    loadPinStatus(list)
+  }
+  useEffect(() => { loadPinStatus(students) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRemove = async (id, name) => {
     if (!window.confirm(`"${name}" 학생을 삭제할까요? 학습 기록도 함께 삭제됩니다.`)) return
@@ -278,6 +309,69 @@ function StudentManagement() {
     }
   }
 
+  // 2026-07-16 — "PIN 설정 허용" 토글. 학생이 직접 자기 PIN을 만들 수
+  // 있게 1회성으로 허용한다(api/self-set-student-pin.js가 성공 시 다시
+  // false로 원복). allowed:false로 다시 누르면 허용 취소(학생이 아직
+  // 설정 전이면).
+  const handleTogglePinSetupAllowed = async (id, name, nextAllowed) => {
+    setAllowBusyId(id)
+    try {
+      const res = await fetch('/api/set-pin-setup-allowed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentIds: [id], allowed: nextAllowed }),
+      })
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error || '요청에 실패했어요.')
+      await loadPinStatus(students)
+    } catch (err) {
+      alert(`PIN 설정 ${nextAllowed ? '허용' : '허용 취소'} 중 오류가 발생했어요: ` + (err.message || err))
+    } finally {
+      setAllowBusyId(null)
+    }
+  }
+
+  // 반별 일괄 "설정 허용" — PIN 미설정 학생이 많은 반에서 한 명씩
+  // 누르지 않아도 되게. 이미 PIN이 있는 학생은 서버(set-pin-setup-
+  // allowed.js)가 자동으로 걸러내므로 안전.
+  const handleBulkAllowPinSetup = async (className) => {
+    const targets = students.filter(s => s.className === className && !pinStatus[s.id]?.hasPinHash)
+    if (targets.length === 0) { alert('이 반에는 PIN 설정이 필요한 학생이 없어요.'); return }
+    if (!window.confirm(`"${className}" 반의 PIN 미설정 학생 ${targets.length}명 전원에게 PIN 설정을 허용할까요?`)) return
+    try {
+      const res = await fetch('/api/set-pin-setup-allowed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentIds: targets.map(s => s.id), allowed: true }),
+      })
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error || '요청에 실패했어요.')
+      await loadPinStatus(students)
+    } catch (err) {
+      alert('일괄 허용 중 오류가 발생했어요: ' + (err.message || err))
+    }
+  }
+
+  // 관리자 "잠금 해제" — pin_hash는 안 건드리고 실패카운트/잠금만 해제.
+  const handleUnlockPin = async (id, name) => {
+    setUnlockBusyId(id)
+    try {
+      const res = await fetch('/api/unlock-student-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: id }),
+      })
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error || '잠금 해제에 실패했어요.')
+      await loadPinStatus(students)
+      alert(`"${name}" 학생의 잠금을 해제했어요.`)
+    } catch (err) {
+      alert('잠금 해제 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setUnlockBusyId(null)
+    }
+  }
+
   // 반별로 묶어 보여주기 — 관리자가 여러 반을 한눈에 비교할 수 있게. 미배정
   // 학생은 별도 그룹으로 맨 위에 표시해 눈에 잘 띄게 함. classList에 없는
   // (반 삭제 직후 등으로 이름이 어긋난) 학생도 별도 그룹으로 반드시 표시해
@@ -356,9 +450,19 @@ function StudentManagement() {
           <div className="space-y-4 max-h-[60vh] overflow-y-auto">
             {groups.map(group => (
               <div key={group.name}>
-                <p className="text-xs font-black text-gray-500 mb-1.5 px-1">{group.name} ({group.students.length}명)</p>
+                <div className="flex items-center justify-between mb-1.5 px-1">
+                  <p className="text-xs font-black text-gray-500">{group.name} ({group.students.length}명)</p>
+                  {classList.includes(group.name) && (
+                    <button onClick={() => handleBulkAllowPinSetup(group.name)}
+                      className="text-[11px] text-yellow-700 font-bold btn-press hover:underline">
+                      🔓 이 반 전체 PIN 설정 허용
+                    </button>
+                  )}
+                </div>
                 <div className="space-y-2">
-                  {group.students.map((s) => (
+                  {group.students.map((s) => {
+                    const status = pinStatus[s.id] // undefined면 아직 로딩 전이거나 v1.7 SQL 미적용
+                    return (
                     <div key={s.id} className="bg-gray-50 rounded-xl px-4 py-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -369,12 +473,35 @@ function StudentManagement() {
                             <p className={`text-xs ${s.className ? 'text-gray-400' : 'text-red-500 font-bold'}`}>
                               {[s.className, s.unitName].filter(Boolean).join(' · ') || '⚠️ 반 미배정'}
                             </p>
+                            {status && (
+                              <p className="text-[11px] font-bold mt-0.5">
+                                {status.locked && <span className="text-red-500">🔒 잠김 · </span>}
+                                {status.hasPinHash
+                                  ? <span className="text-green-600">✅ PIN 설정됨</span>
+                                  : status.pinSetupAllowed
+                                    ? <span className="text-yellow-600">🔓 학생 설정 대기중</span>
+                                    : <span className="text-gray-400">⬜ PIN 미설정</span>}
+                              </p>
+                            )}
                           </div>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap justify-end">
+                          {status && !status.hasPinHash && (
+                            <button onClick={() => handleTogglePinSetupAllowed(s.id, s.name, !status.pinSetupAllowed)}
+                              disabled={allowBusyId === s.id}
+                              className="bg-yellow-100 text-yellow-700 font-bold px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-50">
+                              {allowBusyId === s.id ? '⏳' : status.pinSetupAllowed ? '🔓 허용 취소' : '🔓 설정 허용'}
+                            </button>
+                          )}
+                          {status?.locked && (
+                            <button onClick={() => handleUnlockPin(s.id, s.name)} disabled={unlockBusyId === s.id}
+                              className="bg-red-100 text-red-600 font-bold px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-50">
+                              {unlockBusyId === s.id ? '⏳' : '🔒 잠금 해제'}
+                            </button>
+                          )}
                           <button onClick={() => handleResetPin(s.id, s.name)} disabled={pinResetId === s.id}
                             className="bg-yellow-100 text-yellow-700 font-bold px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-50">
-                            {pinResetId === s.id ? '⏳' : '🔑 PIN'}
+                            {pinResetId === s.id ? '⏳' : '🔑 PIN 초기화'}
                           </button>
                           <button onClick={() => startEdit(s.id)}
                             className="bg-blue-100 text-blue-600 font-bold px-3 py-2 rounded-xl text-xs btn-press">반 배정</button>
@@ -407,7 +534,7 @@ function StudentManagement() {
                         </div>
                       )}
                     </div>
-                  ))}
+                  )})}
                 </div>
               </div>
             ))}
