@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { addStudent } from '../hooks/useStudent'
 import { getClassNames, getClassUnitNames, getStudentsInClass } from '../utils/wordLibrary'
 import { getReactionById } from '../utils/paulReactions'
@@ -101,21 +101,61 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
   // 식별할 수 없기 때문(로그인은 PIN이 있어야 성립). 반/학생 목록은 이미
   // 앱 전체가 로그인 전에도 들고 있는 캐시(getClassNames/
   // getStudentsInClass, initWordLibrary가 항상 먼저 불러옴)라 새로 노출되는
-  // 정보는 없다 — PIN 상태(허용 여부/이미 설정됐는지)만 서버에 확인한다.
+  // 정보는 없다 — PIN 상태(허용 여부/이미 설정됐는지)는 항상 서버(api/
+  // student-pin-status.js)에서 실제로 조회해서 판단한다(더미/캐시값 절대
+  // 사용 안 함) — 반 선택 시 목록 전체 배지용으로 1번 배치 조회, 학생
+  // 선택 시 그 학생만 다시 1번 더 조회(둘 다 실제 DB 기준).
+  //
+  // 2026-07-16 실사용 버그 수정: pickSetupStudent가 비동기 fetch 응답을
+  // "지금 선택된 학생"인지 확인 안 하고 그대로 반영해서, 학생을 빠르게
+  // 연달아 선택하면(또는 네트워크 지연으로 응답 순서가 뒤바뀌면) 이전에
+  // 선택했던(그리고 PIN이 있었던) 학생의 응답이 나중에 도착해 지금 선택된
+  // (PIN 없는) 학생 화면에 "이미 설정됨"으로 잘못 덮어써지는 레이스
+  // 컨디션이 있었다 — setupRequestIdRef로 "이 요청이 아직도 최신 선택에
+  // 해당하는지" 확인한 뒤에만 상태를 반영하도록 수정.
   const [setupClass, setSetupClass] = useState('')
   const [setupStudentId, setSetupStudentId] = useState('')
-  const [setupStatus, setSetupStatus] = useState(null) // { hasPinHash, pinSetupAllowed } | null(조회 전)
+  const [setupStatus, setSetupStatus] = useState(null) // { hasPinHash, pinSetupAllowed } | null(조회 전/조회 중)
   const [setupChecking, setSetupChecking] = useState(false)
   const [setupPin, setSetupPin] = useState('')
   const [setupPinConfirm, setSetupPinConfirm] = useState('')
   const [setupError, setSetupError] = useState('')
   const [settingUp, setSettingUp] = useState(false)
   const [setupDone, setSetupDone] = useState(false)
+  // 반 선택 시 그 반 학생 전원의 PIN 상태를 한 번에 배치 조회(목록 배지용
+  // — 학생 수만큼 개별 요청하지 않음). id -> {hasPinHash,pinSetupAllowed,locked}.
+  const [setupRosterStatus, setSetupRosterStatus] = useState({})
+  const [setupRosterStatusLoading, setSetupRosterStatusLoading] = useState(false)
   const setupPinConfirmRef = useRef(null)
+  const setupRequestIdRef = useRef(0) // 마지막으로 시작된 "학생 선택" 요청 번호 — 응답이 여전히 최신 선택에 대한 것인지 확인용
   const setupRoster = setupClass ? getStudentsInClass(setupClass) : []
   const setupPicked = setupRoster.find(s => s.id === setupStudentId) || null
 
+  // 반을 고르면 그 반 학생 전원의 PIN 상태를 배치로 실제 DB에서 조회 —
+  // 목록에 배지(🟢 PIN 완료 / 🔴 PIN 없음)를 보여주기 위함.
+  useEffect(() => {
+    if (!setupClass) { setSetupRosterStatus({}); return }
+    const roster = getStudentsInClass(setupClass)
+    if (roster.length === 0) { setSetupRosterStatus({}); return }
+    let cancelled = false
+    setSetupRosterStatusLoading(true)
+    fetch('/api/student-pin-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ studentIds: roster.map(s => s.id) }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (cancelled) return
+        if (data.results) setSetupRosterStatus(Object.fromEntries(data.results.map(r => [r.id, r])))
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setSetupRosterStatusLoading(false) })
+    return () => { cancelled = true }
+  }, [setupClass])
+
   const pickSetupStudent = async (id) => {
+    const requestId = ++setupRequestIdRef.current // 이 픽의 고유 번호 — 응답 도착 시 아직 최신 선택인지 확인
     setSetupStudentId(id)
     setSetupStatus(null)
     setSetupError('')
@@ -123,6 +163,10 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
     setSetupPin(''); setSetupPinConfirm('')
     setSetupChecking(true)
     try {
+      // 매번 학생을 선택할 때마다 실제 DB를 다시 조회한다(배치 조회 결과를
+      // 재사용하지 않음) — 반 목록을 불러온 이후 관리자가 방금 "설정
+      // 허용"을 눌렀거나 다른 기기에서 이미 PIN을 설정했을 수 있으므로,
+      // 항상 최신 상태를 확인해야 안전하다.
       const res = await fetch('/api/student-pin-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -131,11 +175,16 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
       const data = await res.json()
       const status = data.results?.[0]
       if (!status) throw new Error(data.error || '조회에 실패했어요.')
+      // 이 응답이 도착한 시점에 사용자가 이미 다른 학생을 선택했다면(더
+      // 최신 요청이 시작됐다면) 이 응답은 버린다 — 화면에 반영하면 방금
+      // 고친 레이스 컨디션 버그가 재발한다.
+      if (setupRequestIdRef.current !== requestId) return
       setSetupStatus(status)
     } catch (err) {
+      if (setupRequestIdRef.current !== requestId) return
       setSetupError('상태를 확인하는 중 오류가 발생했어요: ' + (err.message || err))
     } finally {
-      setSetupChecking(false)
+      if (setupRequestIdRef.current === requestId) setSetupChecking(false)
     }
   }
 
@@ -151,7 +200,13 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
         body: JSON.stringify({ studentId: setupStudentId, pin: setupPin, pinConfirm: setupPinConfirm }),
       })
       const data = await res.json()
-      if (data.ok) { setSetupDone(true); return }
+      if (data.ok) {
+        setSetupDone(true)
+        // 방금 PIN을 설정했으니 그 학생의 목록 배지(🔴 PIN 없음)도 즉시
+        // 🟢로 갱신 — 다시 반을 고르지 않아도 최신 상태로 보이게.
+        setSetupRosterStatus(prev => ({ ...prev, [setupStudentId]: { ...(prev[setupStudentId] || {}), hasPinHash: true, pinSetupAllowed: false } }))
+        return
+      }
       const MESSAGES = {
         invalid_format: 'PIN은 숫자 4자리예요.',
         mismatch: 'PIN이 서로 달라요. 다시 확인해주세요.',
@@ -219,15 +274,30 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
                 <p className="text-xs text-gray-400 text-center py-2">이 반에는 아직 등록된 학생이 없어요. 선생님께 등록을 요청해주세요.</p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
-                  {setupRoster.map(s => (
-                    <button key={s.id} onClick={() => pickSetupStudent(s.id)} disabled={settingUp}
-                      className={`px-3 py-2 rounded-xl text-sm font-bold btn-press disabled:opacity-50 ${
-                        setupStudentId === s.id ? 'bg-purple-500 text-white' : 'bg-purple-50 text-purple-600'}`}>
-                      {s.name} <span className="opacity-60 font-normal">· {s.unitName}</span>
-                    </button>
-                  ))}
+                  {setupRosterStatusLoading && <p className="text-xs text-gray-400 w-full text-center">⏳ 학생별 PIN 상태 확인 중...</p>}
+                  {setupRoster.map(s => {
+                    // 목록 배지는 반 선택 시 배치 조회한 setupRosterStatus 기준(학생 수만큼
+                    // 개별 요청 안 함) — 아직 로딩 전이면 배지 없이 이름만 표시.
+                    const rs = setupRosterStatus[s.id]
+                    return (
+                      <button key={s.id} onClick={() => pickSetupStudent(s.id)} disabled={settingUp}
+                        className={`px-3 py-2 rounded-xl text-sm font-bold btn-press disabled:opacity-50 text-left ${
+                          setupStudentId === s.id ? 'bg-purple-500 text-white' : 'bg-purple-50 text-purple-600'}`}>
+                        {rs && (
+                          <div className={`text-[10px] font-black ${setupStudentId === s.id ? 'text-white' : rs.hasPinHash ? 'text-green-600' : 'text-red-500'}`}>
+                            {rs.hasPinHash ? '🟢 PIN 완료' : '🔴 PIN 없음'}
+                          </div>
+                        )}
+                        <div>{s.name} <span className="opacity-60 font-normal">· {s.unitName}</span></div>
+                      </button>
+                    )
+                  })}
                 </div>
               )
+            )}
+
+            {setupClass && setupRoster.length > 0 && !setupPicked && !setupChecking && (
+              <p className="text-xs text-gray-400 text-center py-1">학생을 선택해주세요.</p>
             )}
 
             {setupChecking && <p className="text-xs text-gray-400 text-center">⏳ 확인하는 중...</p>}
@@ -243,14 +313,15 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
                 </div>
               ) : setupStatus.hasPinHash ? (
                 <p className="bg-blue-50 border-2 border-blue-200 text-blue-600 text-xs font-bold text-center rounded-xl p-3">
-                  이미 PIN이 설정되어 있어요! "로그인" 탭에서 이름과 PIN으로 시작해주세요.
+                  이미 PIN이 설정되어 있습니다. "로그인" 탭에서 이름과 PIN으로 로그인하세요.
                 </p>
               ) : !setupStatus.pinSetupAllowed ? (
                 <p className="bg-yellow-50 border-2 border-yellow-200 text-yellow-700 text-xs font-bold text-center rounded-xl p-3">
-                  😊 아직 PIN을 만들 수 없어요. 선생님께 "PIN 설정 허용"을 요청해주세요.
+                  이 학생은 아직 PIN이 없습니다. 하지만 선생님이 아직 PIN 설정을 허용하지 않았어요 — 선생님께 "PIN 설정 허용"을 요청해주세요.
                 </p>
               ) : (
                 <>
+                  <p className="text-xs text-gray-500 text-center">이 학생은 아직 PIN이 없습니다. 아래에서 4자리 PIN을 만들어주세요.</p>
                   <input type="password" inputMode="numeric" pattern="[0-9]*" value={setupPin}
                     onChange={e => { setSetupPin(e.target.value.replace(/\D/g, '').slice(0, 4)); setSetupError('') }}
                     onKeyDown={e => e.key === 'Enter' && setupPinConfirmRef.current?.focus()}
