@@ -46,10 +46,12 @@ if (!anyClass) throw new Error('No class exists to test against — aborting')
 
 const NAME = 'QA_SyncTest'
 console.log('\n1. 동기화 대상 학생 생성')
-await addStudent(NAME, anyClass, 'Unit 1')
+// P0(2026-07-15): addStudent가 id(UUID)를 반환 — syncStudentProgress는
+// 이제 그 id를 직접 FK로 쓴다(캐시 조회 없이).
+const STUDENT_ID = await addStudent(NAME, anyClass, 'Unit 1')
 
 console.log('\n2. syncStudentProgress 호출 (누적 + 오늘자 기록)')
-await syncStudentProgress(NAME, {
+await syncStudentProgress(STUDENT_ID, {
   totalStars: 42,
   clearedCount: 7,
   streak: 3,
@@ -65,8 +67,8 @@ await syncStudentProgress(NAME, {
 })
 
 console.log('\n3. 실제 Supabase에 반영됐는지 조회로 확인')
-const { data: students } = await supabaseForTest.from('students').select('id').eq('name', NAME).single()
-const studentId = students.id
+const studentId = STUDENT_ID
+check('addStudent가 반환한 id가 실제 DB row와 일치', (await supabaseForTest.from('students').select('id').eq('id', studentId).single()).data?.id === studentId)
 
 const { data: prog } = await supabaseForTest.from('student_progress').select('*').eq('student_id', studentId).single()
 check('student_progress.total_stars === 42', prog.total_stars === 42)
@@ -84,7 +86,7 @@ check('student_daily_progress.missed_word_ids에 apple이 2번 기록됨',
   daily.missed_word_ids.filter(w => w === 'apple').length === 2)
 
 console.log('\n4. 같은 날 두 번째 동기화 -> upsert로 갱신되는지 (새 row 안 생기는지)')
-await syncStudentProgress(NAME, {
+await syncStudentProgress(STUDENT_ID, {
   totalStars: 50, clearedCount: 8, streak: 4, stickersCount: 2,
   daily: { categoriesCompleted: 4, starsEarned: 15, quizCorrect: 4, quizTotal: 6, pronunciationAttempts: 7, missedWordIds: ['banana'] },
 })
@@ -93,7 +95,7 @@ check('같은 날 재동기화해도 row가 1개로 유지됨 (upsert)', dailyRo
 check('재동기화 값으로 갱신됨 (quiz_total === 6)', dailyRows[0].quiz_total === 6)
 
 console.log('\n5. 정리 — 학생 삭제 시 진행도 row도 cascade 삭제되는지')
-await removeStudent(NAME)
+await removeStudent(STUDENT_ID)
 const { data: progAfter } = await supabaseForTest.from('student_progress').select('*').eq('student_id', studentId)
 const { data: dailyAfter } = await supabaseForTest.from('student_daily_progress').select('*').eq('student_id', studentId)
 check('학생 삭제 후 student_progress row도 함께 삭제됨', progAfter.length === 0)

@@ -27,34 +27,35 @@ const NAME = 'QA_ResetWordStatusKid'
 console.log('\n1. 테스트 반/학생/단어 준비')
 await createClass(CLASS)
 await setClassWords(CLASS, [{ word: 'dog', meaning: '개' }, { word: 'cat', meaning: '고양이' }], 'Unit 1')
-await addStudent(NAME, CLASS, 'Unit 1')
-const words = getStudentWords(NAME)
+// P0(2026-07-15): addStudent가 id(UUID)를 반환 — 이하 전부 id 기준.
+const studentId = await addStudent(NAME, CLASS, 'Unit 1')
+const words = getStudentWords(studentId)
 const dogId = words.find(w => w.word === 'dog').dbId
 
 console.log('\n2. word_status 표시 + 전체 기록 백업(progress_data.wordStatus)에도 반영')
-await setWordStatus(NAME, dogId, 'known')
-await syncStudentProgress(NAME, {
+await setWordStatus(studentId, dogId, 'known')
+await syncStudentProgress(studentId, {
   totalStars: 5, clearedCount: 1, streak: 0, stickersCount: 0,
-  fullRecord: { studentId: NAME, totalStars: 5, stickers: [], diaryPlacements: [], missions: [], cleared: ['dog'],
+  fullRecord: { studentId, totalStars: 5, stickers: [], diaryPlacements: [], missions: [], cleared: ['dog'],
     round: {}, history: {}, milestoneStreak: 0, starBadgeThreshold: 0, lastGamePlayed: null, lastWordIndex: 0,
     wordStatus: { [dogId]: 'known' } },
   daily: { categoriesCompleted: 0, starsEarned: 0, quizCorrect: 0, quizTotal: 0, pronunciationAttempts: 0, missedWordIds: [] },
 })
 
-const beforeBackup = await fetchFullProgress(NAME)
+const beforeBackup = await fetchFullProgress(studentId)
 check('초기화 전: 백업(progress_data)에 wordStatus.dog === known이 저장됨', beforeBackup?.wordStatus?.[dogId] === 'known')
 
 console.log('\n3. 관리자 "전체 초기화" 실행')
-await resetWordStatus(NAME)
+await resetWordStatus(studentId)
 
-const afterBackup = await fetchFullProgress(NAME)
+const afterBackup = await fetchFullProgress(studentId)
 check('초기화 후: 백업(progress_data)의 wordStatus도 함께 비워짐 (재발 방지 확인 대상)',
   !afterBackup?.wordStatus || Object.keys(afterBackup.wordStatus).length === 0)
 check('초기화 후: 백업의 다른 필드(totalStars 등)는 그대로 유지됨 — wordStatus만 비움',
   afterBackup?.totalStars === 5 && Array.isArray(afterBackup?.cleared) && afterBackup.cleared.includes('dog'))
 
 console.log('\n4. 정리')
-await removeStudent(NAME)
+await removeStudent(studentId)
 await deleteClass(CLASS)
 
 console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n${failures}개 실패 ❌`)

@@ -44,15 +44,17 @@ if (!anyClass) throw new Error('No class exists to test against — aborting')
 
 const NAME = 'QA_FullBackupTest'
 console.log('\n1. 백업 대상 학생 생성')
-await addStudent(NAME, anyClass, 'Unit 1')
+// P0(2026-07-15): addStudent가 id(UUID)를 반환 — fetchFullProgress/
+// syncStudentProgress 전부 id 기준.
+const studentId = await addStudent(NAME, anyClass, 'Unit 1')
 
 console.log('\n2. 신규 학생은 아직 백업이 없음')
-const before = await fetchFullProgress(NAME)
+const before = await fetchFullProgress(studentId)
 check('동기화 전에는 fetchFullProgress가 null 반환', before === null)
 
 console.log('\n3. 실제 progress record 모양으로 fullRecord와 함께 동기화')
 const fakeRecord = {
-  studentId: NAME,
+  studentId,
   totalStars: 87,
   stickers: ['ukflag1', 'crown1'],
   diaryPlacements: [{ placementId: 'p1', stickerId: 'ukflag1', x: 10, y: 20, rotation: 0, scale: 1 }],
@@ -74,7 +76,7 @@ const fakeRecord = {
 }
 let migrationApplied = true
 try {
-  await syncStudentProgress(NAME, {
+  await syncStudentProgress(studentId, {
     totalStars: fakeRecord.totalStars,
     clearedCount: fakeRecord.cleared.length,
     streak: 3,
@@ -93,7 +95,7 @@ check('supabase_v1_4_full_progress_backup.sql이 적용되어 있음 (full_recor
 
 if (migrationApplied) {
   console.log('\n4. 백업이 그대로 다시 읽히는지 (복구 시나리오)')
-  const restored = await fetchFullProgress(NAME)
+  const restored = await fetchFullProgress(studentId)
   check('백업이 null이 아님', restored !== null)
   if (restored) {
     check('totalStars 일치', restored.totalStars === fakeRecord.totalStars)
@@ -108,9 +110,9 @@ if (migrationApplied) {
 }
 
 console.log('\n5. 정리 — 테스트 학생 삭제 (백업 적용됐다면 cascade로 함께 삭제되는지도 확인)')
-await removeStudent(NAME)
+await removeStudent(studentId)
 if (migrationApplied) {
-  const afterDelete = await fetchFullProgress(NAME)
+  const afterDelete = await fetchFullProgress(studentId)
   check('학생 삭제 후 fetchFullProgress는 null (학생 자체가 없으므로)', afterDelete === null)
 }
 

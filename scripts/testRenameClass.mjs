@@ -29,9 +29,10 @@ function check(label, cond) {
 console.log('\n0. 픽스처 준비')
 await createClass('QA_RenameTestClass')
 await setClassWords('QA_RenameTestClass', [{ word: 'apple', meaning: '사과' }, { word: 'banana', meaning: '바나나' }], 'Unit 1')
-await addStudent('QA_RenameStudent', 'QA_RenameTestClass', 'Unit 1')
+// P0(2026-07-15): addStudent가 id(UUID)를 반환 — getStudentWords는 id 기준.
+const studentId = await addStudent('QA_RenameStudent', 'QA_RenameTestClass', 'Unit 1')
 
-const before = getStudentWords('QA_RenameStudent').map(w => w.word).sort()
+const before = getStudentWords(studentId).map(w => w.word).sort()
 check('개명 전 학생 단어 확인', JSON.stringify(before) === JSON.stringify(['apple', 'banana']))
 
 await renameClass('QA_RenameTestClass', 'QA_RenameTestClass_Renamed')
@@ -39,11 +40,11 @@ await renameClass('QA_RenameTestClass', 'QA_RenameTestClass_Renamed')
 const names = getClassNames()
 check('반 목록에 새 이름 반영됨', names.includes('QA_RenameTestClass_Renamed') && !names.includes('QA_RenameTestClass'))
 
-const after = getStudentWords('QA_RenameStudent').map(w => w.word).sort()
+const after = getStudentWords(studentId).map(w => w.word).sort()
 check('개명 후에도 같은 학생이 같은 단어(apple/banana)를 그대로 봄', JSON.stringify(after) === JSON.stringify(['apple', 'banana']))
 
 console.log('\n정리')
-await removeStudent('QA_RenameStudent')
+await removeStudent(studentId)
 await deleteClass('QA_RenameTestClass_Renamed')
 check('테스트 반/학생 정리 완료', true)
 

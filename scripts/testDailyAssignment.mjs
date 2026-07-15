@@ -29,32 +29,34 @@ await setClassWords(CLASS, [
   { word: 'banana', meaning: '바나나' },
   { word: 'cherry', meaning: '체리' },
 ], 'Unit 1')
-await addStudent(STUDENT, CLASS, 'Unit 1')
+// P0(2026-07-15): addStudent가 id(UUID)를 반환 — getStudentWords/
+// removeStudent는 id 기준.
+const studentId = await addStudent(STUDENT, CLASS, 'Unit 1')
 
 console.log('\n2. 배정 없음 -> 유닛 전체 단어 폴백')
-let words = getStudentWords(STUDENT)
+let words = getStudentWords(studentId)
 check('배정 안 했을 때 3개 단어(전체) 반환', words.length === 3)
 check('오늘의 배정 목록이 비어있음', getTodaysAssignmentWordIds(CLASS).length === 0)
 
 console.log('\n3. apple, cherry만 오늘의 단어로 배정')
 await setTodaysAssignment(CLASS, ['apple', 'cherry'])
-words = getStudentWords(STUDENT)
+words = getStudentWords(studentId)
 check('배정 후 2개 단어만 반환', words.length === 2)
 check('반환된 단어가 정확히 apple/cherry', words.every(w => w.id === 'apple' || w.id === 'cherry'))
 check('banana는 제외됨', !words.some(w => w.id === 'banana'))
 
 console.log('\n4. 다른 esbuild 프로세스에서도(=새로고침 이후) 동일하게 보이는지')
 await refreshWordLibrary()
-words = getStudentWords(STUDENT)
+words = getStudentWords(studentId)
 check('refreshWordLibrary 이후에도 배정이 유지됨', words.length === 2)
 
 console.log('\n5. 배정 해제 -> 다시 전체 단어 폴백')
 await setTodaysAssignment(CLASS, [])
-words = getStudentWords(STUDENT)
+words = getStudentWords(studentId)
 check('배정 해제 후 다시 3개 전체 반환', words.length === 3)
 
 console.log('\n6. 정리 — 반 삭제 시 daily_assignments도 cascade 삭제되는지 확인 (에러 없이 삭제되면 통과)')
-await removeStudent(STUDENT)
+await removeStudent(studentId)
 try {
   await deleteClass(CLASS)
   check('반 삭제 성공 (daily_assignments FK 문제 없음)', true)

@@ -29,7 +29,8 @@ await setClassWords(CLASS, [
   { word: 'dog', meaning: '개' },
   { word: 'cat', meaning: '고양이' },
 ], 'Unit 1')
-await addStudent(STUDENT, CLASS, 'Unit 1')
+// P0(2026-07-15): addStudent가 id(UUID)를 반환 — getStudentWords는 id 기준.
+const studentId = await addStudent(STUDENT, CLASS, 'Unit 1')
 
 console.log('\n2. 내일 날짜에 dog만 미리 배정')
 check('배정 전에는 내일 배정이 비어있음', (await getAssignmentForDate(CLASS, tomorrow())).length === 0)
@@ -39,11 +40,11 @@ check('내일 배정 조회 시 dog가 저장됨', tomorrowAssignment.length ===
 
 console.log('\n3. 오늘 배정에는 전혀 영향 없음 (미래 배정과 완전히 분리)')
 check('오늘 배정은 여전히 비어있음(전체 단어 폴백 유지)', getTodaysAssignmentWordIds(CLASS).length === 0)
-const words = getStudentWords(STUDENT)
+const words = getStudentWords(studentId)
 check('내일 배정을 걸어놔도 오늘 학생은 여전히 전체 단어(2개)를 봄', words.length === 2)
 
 console.log('\n4. 정리')
-await removeStudent(STUDENT)
+await removeStudent(studentId)
 await deleteClass(CLASS)
 check('테스트 반/학생 정리 완료', true)
 
