@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { addStudent } from '../hooks/useStudent'
 import { getClassNames, getClassUnitNames } from '../utils/wordLibrary'
 import { getReactionById } from '../utils/paulReactions'
@@ -20,6 +20,7 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
   const [loginPin, setLoginPin] = useState('')
   const [loginError, setLoginError] = useState('')
   const [loggingIn, setLoggingIn] = useState(false)
+  const loginPinRef = useRef(null)
 
   const handleLogin = async () => {
     const name = loginName.trim()
@@ -62,6 +63,8 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
   const [regError, setRegError] = useState('')
   const [registering, setRegistering] = useState(false)
   const classNames = getClassNames()
+  const regPinRef = useRef(null)
+  const regPinConfirmRef = useRef(null)
 
   const handleRegister = async () => {
     const name = regName.trim()
@@ -91,9 +94,10 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
     }
   }
 
+  const busy = loggingIn || registering
   const tabBtn = (key, label) => (
-    <button onClick={() => { setMode(key); setLoginError(''); setRegError('') }}
-      className={`flex-1 py-2.5 rounded-xl font-black text-sm btn-press transition-colors ${
+    <button onClick={() => { setMode(key); setLoginError(''); setRegError('') }} disabled={busy}
+      className={`flex-1 py-2.5 rounded-xl font-black text-sm btn-press transition-colors disabled:opacity-50 ${
         mode === key ? 'bg-purple-500 text-white' : 'bg-purple-50 text-purple-400'}`}>
       {label}
     </button>
@@ -123,15 +127,16 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
         {mode === 'login' ? (
           <>
             <input type="text" value={loginName} onChange={e => { setLoginName(e.target.value); setLoginError('') }}
-              placeholder="이름 입력..." maxLength={10}
-              className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold focus:outline-none focus:border-purple-500 transition-colors"
+              onKeyDown={e => e.key === 'Enter' && loginPinRef.current?.focus()}
+              placeholder="이름 입력..." maxLength={10} disabled={loggingIn}
+              className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:bg-gray-50"
               autoFocus />
-            <input type="password" inputMode="numeric" pattern="[0-9]*" value={loginPin}
+            <input ref={loginPinRef} type="password" inputMode="numeric" pattern="[0-9]*" value={loginPin}
               onChange={e => { setLoginPin(e.target.value.replace(/\D/g, '').slice(0, 4)); setLoginError('') }}
               onKeyDown={e => e.key === 'Enter' && handleLogin()}
-              placeholder="PIN 4자리"
-              className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold text-center tracking-[0.5em] focus:outline-none focus:border-purple-500 transition-colors" />
-            {loginError && <p className="text-red-500 text-xs text-center">⚠️ {loginError}</p>}
+              placeholder="PIN 4자리" disabled={loggingIn}
+              className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold text-center tracking-[0.5em] focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:bg-gray-50" />
+            {loginError && <p className="text-red-500 text-xs text-center" role="alert">⚠️ {loginError}</p>}
             <button onClick={handleLogin} disabled={loggingIn}
               className="w-full bg-purple-500 text-white font-black py-3 rounded-xl btn-press hover:bg-purple-600 disabled:opacity-50">
               {loggingIn ? '⏳ 확인하는 중...' : '시작하기!'}
@@ -140,37 +145,40 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
         ) : (
           <>
             <input type="text" value={regName} onChange={e => { setRegName(e.target.value); setRegError('') }}
-              placeholder="이름 입력..." maxLength={10}
-              className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold focus:outline-none focus:border-purple-500 transition-colors" />
+              onKeyDown={e => e.key === 'Enter' && (regClass ? regPinRef.current?.focus() : setRegError('반을 선택해주세요!'))}
+              placeholder="이름 입력..." maxLength={10} disabled={registering}
+              className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:bg-gray-50" />
             {classNames.length > 0 && (
-              <select value={regClass} onChange={e => {
+              <select value={regClass} disabled={registering} onChange={e => {
                   const nextClass = e.target.value
                   setRegClass(nextClass)
                   setRegUnit(getClassUnitNames(nextClass)[0] || 'Unit 1')
+                  setRegError('')
                 }}
-                className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-purple-500 bg-white">
+                className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-purple-500 bg-white disabled:opacity-50">
                 <option value="">반 선택</option>
                 {classNames.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             )}
             {regClass && (
-              <select value={regUnit} onChange={e => setRegUnit(e.target.value)}
-                className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-purple-500 bg-white">
+              <select value={regUnit} disabled={registering} onChange={e => setRegUnit(e.target.value)}
+                className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-purple-500 bg-white disabled:opacity-50">
                 <option value="">유닛 선택</option>
                 {getClassUnitNames(regClass).map(u => <option key={u} value={u}>{u}</option>)}
               </select>
             )}
-            <input type="password" inputMode="numeric" pattern="[0-9]*" value={regPin}
+            <input ref={regPinRef} type="password" inputMode="numeric" pattern="[0-9]*" value={regPin}
               onChange={e => { setRegPin(e.target.value.replace(/\D/g, '').slice(0, 4)); setRegError('') }}
-              placeholder="사용할 PIN 4자리 만들기"
-              className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold text-center tracking-[0.5em] focus:outline-none focus:border-purple-500 transition-colors" />
-            <input type="password" inputMode="numeric" pattern="[0-9]*" value={regPinConfirm}
+              onKeyDown={e => e.key === 'Enter' && regPinConfirmRef.current?.focus()}
+              placeholder="사용할 PIN 4자리 만들기" disabled={registering}
+              className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold text-center tracking-[0.5em] focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:bg-gray-50" />
+            <input ref={regPinConfirmRef} type="password" inputMode="numeric" pattern="[0-9]*" value={regPinConfirm}
               onChange={e => { setRegPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 4)); setRegError('') }}
               onKeyDown={e => e.key === 'Enter' && handleRegister()}
-              placeholder="PIN 다시 입력"
-              className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold text-center tracking-[0.5em] focus:outline-none focus:border-purple-500 transition-colors" />
+              placeholder="PIN 다시 입력" disabled={registering}
+              className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold text-center tracking-[0.5em] focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:bg-gray-50" />
             <p className="text-[11px] text-purple-400 px-1">PIN은 다음에 로그인할 때 필요해요. 잊지 않게 잘 기억해두세요!</p>
-            {regError && <p className="text-red-500 text-xs text-center">⚠️ {regError}</p>}
+            {regError && <p className="text-red-500 text-xs text-center" role="alert">⚠️ {regError}</p>}
             <button onClick={handleRegister} disabled={registering}
               className="w-full bg-purple-500 text-white font-black py-3 rounded-xl btn-press hover:bg-purple-600 disabled:opacity-50">
               {registering ? '⏳ 등록하는 중...' : '등록하고 시작하기!'}
