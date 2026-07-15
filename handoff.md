@@ -1,6 +1,22 @@
 # Paul Easy Voca — Handoff
 _최종 갱신: 2026-07-16_
 
+## 2026-07-16 — PIN 운영방식 변경: 학생 최초 PIN 자기설정 (커밋 `99d862d`~`e97eb2a`, **push 안 됨**)
+
+v1.6(이름+PIN 로그인) 인프라는 그대로 유지한 채, 운영자 지시로 "학생이 직접 자기 PIN을 만드는" 플로우를 추가했다 — 관리자가 학생 등록(PIN 미설정 상태) → 관리자가 그 학생에게 "PIN 설정 허용" → 학생이 반 선택→이름 선택→PIN 직접 생성. 기존 "관리자 PIN 초기화"/"임시PIN 일괄생성" 기능은 폴백 수단으로 그대로 유지(삭제 안 함).
+
+**신규**: `supabase_v1_7_student_pin_selfsetup.sql`(`pin_setup_allowed` 컬럼, 운영자가 Supabase SQL Editor에서 실행 완료 확인됨) / `api/self-set-student-pin.js`(서버에서 `pin_setup_allowed`+`pin_hash IS NULL` 이중 재확인, 취약PIN·재입력불일치 거부, 성공 시 플래그 1회성 원복) / `api/student-pin-status.js`(배치 조회, 해시 원문 절대 미노출) / `api/set-pin-setup-allowed.js`(관리자 허용 토글) / `api/unlock-student-pin.js`(pin_hash 안 건드리고 잠금만 해제) / `isWeakPin()`(전부같은숫자 10개+연속숫자 14개 거부). AdminScreen에 PIN 상태 배지+허용/잠금해제 버튼(개별+반 단위 일괄), StudentSelect.jsx에 "PIN 만들기" 탭(반→이름→상태별 분기) 추가.
+
+**최종 라이브 검증 결과** (`supabase_v1_7` 적용 확인 후 재실행):
+- `scripts/testStudentPinSelfSetup.mjs` — **24/24 PASS**. 운영자 지시 시나리오 1~9번 전부 확인: PIN없는 신규학생 생성 → 관리자 허용 → 학생 자기설정 성공 → 재로그인 성공 → 동명이인 2명 독립 설정(안 섞임) → **5번(가장 중요한 보안 테스트) "허용 안 된 계정 PIN 설정 시도 → 반드시 차단" 확인** → 취약PIN(1234 등) 거부 → 5회 실패 잠금 회귀 없음 → 관리자 잠금해제(신규) 동작 확인.
+- `scripts/testStudentPinAuth.mjs`(v1.6) — **27/27 PASS**, 컬럼 추가로 인한 회귀 없음(동명이인 다른반 로그인 분리 포함).
+- `scripts/testIdentityMigration.mjs`(포인트/캘린더 보존) — **20/20 PASS**, 회귀 없음.
+- `npm run build` 통과.
+
+**push 여부**: 지시대로 보류 — 운영자 최종 확인 후 push/배포 여부 결정.
+
+---
+
 ## 2026-07-15~16 — P0 학생 identity 리팩터링(이름→id) + 이름+PIN 로그인 (커밋 `e492e29`~`2d6df5f`, **push 안 됨**)
 
 CTO 지시 최우선순위(P0): 동명이인 학생이 이름을 전역 유일 키로 써서 서로의 별/포인트/캘린더/학습기록을 덮어쓸 수 있던 데이터 무결성 이슈. 작업 도중 운영자가 로그인 UX를 "반 선택 2단계"에서 "이름+PIN(4자리)"으로 바꾸도록 중간 지시를 추가해 그대로 반영했다.
