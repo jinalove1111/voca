@@ -170,40 +170,49 @@ function FutureAssignmentPlanner({ targetClass, words }) {
 }
 
 // 학생 관리 — admin-only. Students themselves never see this roster (see
-// StudentSelect.jsx, which only ever shows a name/class entry form).
+// StudentSelect.jsx, which only ever shows a name+PIN 로그인/등록 화면).
+// P0(2026-07-15): getStudents()가 이제 {id,name,className,classId,
+// unitName} 객체 배열을 반환한다(예전엔 이름 문자열 배열) — 이 컴포넌트의
+// 모든 selection/edit 상태 키를 이름 대신 id로 바꿨다. 동명이인이 허용된
+// 지금, 이름만으로는 어느 학생을 편집/삭제/선택 중인지 더 이상 구분할 수
+// 없기 때문(선택 키가 이름이면 동명이인 학생을 동시에 잘못 선택하는
+// 버그가 생김).
 function StudentManagement() {
   const [students, setStudents] = useState(() => getStudents())
-  const [editing, setEditing] = useState(null) // student name currently being reassigned
+  const [editing, setEditing] = useState(null) // student id currently being reassigned
   const [editClass, setEditClass] = useState('')
   const [editUnit, setEditUnit] = useState('')
-  const [selected, setSelected] = useState(() => new Set()) // bulk-move checkbox selection
+  const [selected, setSelected] = useState(() => new Set()) // bulk-move checkbox selection (ids)
   const [bulkTargetClass, setBulkTargetClass] = useState('')
   const [bulkBusy, setBulkBusy] = useState(false)
+  const [pinResetId, setPinResetId] = useState(null)
+  const [pinResetResult, setPinResetResult] = useState(null) // { id, name, pin } — 관리자에게 1회만 보여줌
+  const [bulkPinBusy, setBulkPinBusy] = useState(false)
   const classList = getClassNames()
 
   const refresh = () => setStudents(getStudents())
 
-  const handleRemove = async (name) => {
+  const handleRemove = async (id, name) => {
     if (!window.confirm(`"${name}" 학생을 삭제할까요? 학습 기록도 함께 삭제됩니다.`)) return
     try {
-      await removeStudent(name)
-      setSelected(prev => { const next = new Set(prev); next.delete(name); return next })
+      await removeStudent(id)
+      setSelected(prev => { const next = new Set(prev); next.delete(id); return next })
       refresh()
     } catch (err) {
       alert('삭제 중 오류가 발생했어요: ' + (err.message || err))
     }
   }
 
-  const startEdit = (name) => {
-    setEditing(name)
-    setEditClass(getStudentClass(name))
-    setEditUnit(getStudentUnit(name))
+  const startEdit = (id) => {
+    setEditing(id)
+    setEditClass(getStudentClass(id))
+    setEditUnit(getStudentUnit(id))
   }
 
   const saveEdit = async () => {
     if (!editClass) { alert('반을 선택해주세요!'); return }
     // [진단 로그 1] 관리자가 선택한 unit 값
-    console.log('[AdminScreen] saveEdit — 선택한 unit 값:', { student: editing, editClass, editUnit })
+    console.log('[AdminScreen] saveEdit — 선택한 unit 값:', { studentId: editing, editClass, editUnit })
     try {
       await setStudentClass(editing, editClass)
       await setStudentUnit(editing, editUnit || 'Unit 1')
@@ -214,12 +223,59 @@ function StudentManagement() {
     }
   }
 
-  const toggleSelected = (name) => {
+  const toggleSelected = (id) => {
     setSelected(prev => {
       const next = new Set(prev)
-      if (next.has(name)) next.delete(name); else next.add(name)
+      if (next.has(id)) next.delete(id); else next.add(id)
       return next
     })
+  }
+
+  // PIN 재설정 — 새 4자리 PIN을 서버가 생성해서 반환, 관리자에게 딱 1번
+  // 화면에 보여준다(다시 조회 불가, 해시만 저장됨 — api/set-student-pin.js).
+  const handleResetPin = async (id, name) => {
+    if (!window.confirm(`"${name}" 학생의 PIN을 재설정할까요? 기존 PIN은 더 이상 쓸 수 없게 돼요.`)) return
+    setPinResetId(id)
+    setPinResetResult(null)
+    try {
+      const res = await fetch('/api/set-student-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: id }),
+      })
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error || 'PIN 재설정에 실패했어요.')
+      setPinResetResult({ id, name, pin: data.pin })
+    } catch (err) {
+      alert('PIN 재설정 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setPinResetId(null)
+    }
+  }
+
+  // 임시 PIN 일괄 생성 — PIN 로그인 도입 전에 등록됐던 기존 학생들
+  // (pin_hash가 아직 없는 학생) 전원에게 무작위 4자리 PIN을 부여하고,
+  // 평문 목록을 CSV로 1회 다운로드한다 — 관리자 인증 뒤(이 화면)에서만
+  // 접근 가능, 서버에도 평문으로 남지 않음(api/bulk-generate-temp-pins.js).
+  const handleBulkGeneratePins = async () => {
+    if (!window.confirm('PIN이 아직 없는 모든 학생에게 임시 PIN을 새로 발급할까요?')) return
+    setBulkPinBusy(true)
+    try {
+      const res = await fetch('/api/bulk-generate-temp-pins', { method: 'POST' })
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      if (!data.results || data.results.length === 0) {
+        alert('PIN이 없는 학생이 없어요 — 전부 이미 PIN이 설정돼 있어요.')
+        return
+      }
+      const rows = [['반', '유닛', '이름', '임시 PIN'], ...data.results.map(r => [r.className || '미배정', r.unitName || '', r.name, r.pin || `(실패: ${r.error})`])]
+      downloadCsv(`임시PIN_${new Date().toISOString().slice(0, 10)}.csv`, rows)
+      alert(`${data.count}명에게 임시 PIN을 발급하고 CSV로 저장했어요.`)
+    } catch (err) {
+      alert('임시 PIN 발급 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setBulkPinBusy(false)
+    }
   }
 
   // 반별로 묶어 보여주기 — 관리자가 여러 반을 한눈에 비교할 수 있게. 미배정
@@ -228,9 +284,9 @@ function StudentManagement() {
   // 전체 학생 수(헤더)·CSV에는 있는데 목록에서만 조용히 사라지는 일이 없게 함.
   const knownClassNames = new Set(classList)
   const groups = [
-    { name: '⚠️ 반 미배정', students: students.filter(s => !getStudentClass(s)) },
-    ...classList.map(c => ({ name: c, students: students.filter(s => getStudentClass(s) === c) })),
-    { name: '❓ 알 수 없는 반 (새로고침 필요)', students: students.filter(s => { const c = getStudentClass(s); return c && !knownClassNames.has(c) }) },
+    { name: '⚠️ 반 미배정', students: students.filter(s => !s.className) },
+    ...classList.map(c => ({ name: c, students: students.filter(s => s.className === c) })),
+    { name: '❓ 알 수 없는 반 (새로고침 필요)', students: students.filter(s => s.className && !knownClassNames.has(s.className)) },
   ].filter(g => g.students.length > 0)
 
   const handleBulkMove = async () => {
@@ -249,12 +305,21 @@ function StudentManagement() {
   }
 
   const exportCsv = () => {
-    const rows = [['반', '유닛', '이름'], ...students.map(s => [getStudentClass(s) || '미배정', getStudentUnit(s) || '', s])]
+    const rows = [['반', '유닛', '이름'], ...students.map(s => [s.className || '미배정', s.unitName || '', s.name])]
     downloadCsv(`학생명단_${new Date().toISOString().slice(0, 10)}.csv`, rows)
   }
 
   return (
     <div className="space-y-3">
+      {pinResetResult && (
+        <div className="bg-yellow-50 border-2 border-yellow-300 rounded-2xl p-4 flex items-center justify-between gap-3">
+          <p className="text-sm font-bold text-yellow-800">
+            🔑 <span className="font-black">{pinResetResult.name}</span>의 새 PIN: <span className="font-black text-lg tracking-widest">{pinResetResult.pin}</span>
+            <br /><span className="text-xs font-normal">이 화면을 닫으면 다시 볼 수 없어요 — 학생에게 지금 알려주세요.</span>
+          </p>
+          <button onClick={() => setPinResetResult(null)} className="text-yellow-600 font-bold text-xs btn-press flex-shrink-0">닫기</button>
+        </div>
+      )}
       <div className="bg-white rounded-3xl card-shadow p-5">
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-black text-gray-700">👦 전체 학생 ({students.length}명)</p>
@@ -263,6 +328,10 @@ function StudentManagement() {
             <button onClick={refresh} className="text-xs text-purple-500 font-bold btn-press">🔄 새로고침</button>
           </div>
         </div>
+        <button onClick={handleBulkGeneratePins} disabled={bulkPinBusy}
+          className="w-full mb-3 bg-yellow-100 text-yellow-700 font-bold py-2 rounded-xl text-xs btn-press disabled:opacity-50">
+          {bulkPinBusy ? '⏳ 발급 중...' : '🔑 PIN 없는 학생 전원 임시 PIN 일괄 생성 + CSV'}
+        </button>
 
         {selected.size > 0 && (
           <div className="bg-blue-50 rounded-2xl p-3 mb-3 flex items-center gap-2 flex-wrap">
@@ -290,26 +359,30 @@ function StudentManagement() {
                 <p className="text-xs font-black text-gray-500 mb-1.5 px-1">{group.name} ({group.students.length}명)</p>
                 <div className="space-y-2">
                   {group.students.map((s) => (
-                    <div key={s} className="bg-gray-50 rounded-xl px-4 py-3">
+                    <div key={s.id} className="bg-gray-50 rounded-xl px-4 py-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <input type="checkbox" checked={selected.has(s)} onChange={() => toggleSelected(s)}
+                          <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSelected(s.id)}
                             className="w-4 h-4 accent-blue-500" />
                           <div>
-                            <p className="font-black text-gray-800">{s}</p>
-                            <p className={`text-xs ${getStudentClass(s) ? 'text-gray-400' : 'text-red-500 font-bold'}`}>
-                              {[getStudentClass(s), getStudentUnit(s)].filter(Boolean).join(' · ') || '⚠️ 반 미배정'}
+                            <p className="font-black text-gray-800">{s.name}</p>
+                            <p className={`text-xs ${s.className ? 'text-gray-400' : 'text-red-500 font-bold'}`}>
+                              {[s.className, s.unitName].filter(Boolean).join(' · ') || '⚠️ 반 미배정'}
                             </p>
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <button onClick={() => startEdit(s)}
+                          <button onClick={() => handleResetPin(s.id, s.name)} disabled={pinResetId === s.id}
+                            className="bg-yellow-100 text-yellow-700 font-bold px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-50">
+                            {pinResetId === s.id ? '⏳' : '🔑 PIN'}
+                          </button>
+                          <button onClick={() => startEdit(s.id)}
                             className="bg-blue-100 text-blue-600 font-bold px-3 py-2 rounded-xl text-xs btn-press">반 배정</button>
-                          <button onClick={() => handleRemove(s)}
+                          <button onClick={() => handleRemove(s.id, s.name)}
                             className="bg-red-100 text-red-500 font-bold px-3 py-2 rounded-xl text-xs btn-press">삭제</button>
                         </div>
                       </div>
-                      {editing === s && (
+                      {editing === s.id && (
                         <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
                           <select value={editClass} onChange={e => {
                               setEditClass(e.target.value)
@@ -365,7 +438,7 @@ function AdminDashboard() {
   const [reportFor, setReportFor] = useState(null) // student name currently showing a generated report
   const [copied, setCopied] = useState(false)
   const [wordStatusSummary, setWordStatusSummary] = useState({}) // v1.5 — studentId -> {known,unknown,skipped,mastered}
-  const [resettingName, setResettingName] = useState(null)
+  const [resettingId, setResettingId] = useState(null)
 
   const wordLookup = useMemo(() => {
     if (!selectedClass) return {}
@@ -379,12 +452,15 @@ function AdminDashboard() {
     if (!className) { setRows([]); return }
     setLoading(true)
     try {
-      const names = getStudentsInClass(className).map(s => s.name)
+      // P0(2026-07-15): fetchDashboardData/fetchWordStatusSummary가 이제
+      // id 배열을 받는다(예전엔 이름 배열) — 동명이인이 같은 반에 있어도
+      // 서로 섞이지 않는다.
+      const ids = getStudentsInClass(className).map(s => s.id)
       const [dashboardRows, wsSummary] = await Promise.all([
-        fetchDashboardData(names),
+        fetchDashboardData(ids),
         // v1.5 — word_status 마이그레이션(supabase_v1_5_word_status.sql) 전에도
         // 안전하게 빈 객체를 반환하도록 wordLibrary.js에서 이미 처리함.
-        fetchWordStatusSummary(names).catch(() => ({})),
+        fetchWordStatusSummary(ids).catch(() => ({})),
       ])
       setRows(dashboardRows)
       setWordStatusSummary(wsSummary)
@@ -429,16 +505,16 @@ function AdminDashboard() {
   // v1.5 — 학생의 단어 숙지 상태를 전부 초기화("다시 전체 복습 대상으로
   // 포함"). 관리자가 명시적으로 요청한 학생 한 명만 지워지고, 나머지
   // 진행 기록(별/스티커/캘린더 등)은 전혀 안 건드림.
-  const handleResetWordStatus = async (name) => {
+  const handleResetWordStatus = async (id, name) => {
     if (!confirm(`${name} 학생의 "알아요/모르겠어요" 표시를 전부 초기화할까요?\n(별/스티커/캘린더 등 다른 기록은 그대로 유지됩니다)`)) return
-    setResettingName(name)
+    setResettingId(id)
     try {
-      await resetWordStatus(name)
+      await resetWordStatus(id)
       await load(selectedClass)
     } catch (err) {
       alert('초기화 중 오류가 발생했어요: ' + (err.message || err))
     } finally {
-      setResettingName(null)
+      setResettingId(null)
     }
   }
 
@@ -473,10 +549,10 @@ function AdminDashboard() {
       {!loading && rows.map(r => {
         const { studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws } =
           computeStudentStats(r, wordStatusSummary)
-        const isOpen = expanded === r.name
+        const isOpen = expanded === r.id
 
         return (
-          <div key={r.name} className="bg-white rounded-2xl card-shadow p-4">
+          <div key={r.id} className="bg-white rounded-2xl card-shadow p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-black text-gray-800">{r.name}</p>
@@ -492,7 +568,7 @@ function AdminDashboard() {
                 <p className="text-xs text-orange-400">🔥 {r.progress?.streak ?? 0}일 연속</p>
               </div>
             </div>
-            <button onClick={() => setExpanded(isOpen ? null : r.name)}
+            <button onClick={() => setExpanded(isOpen ? null : r.id)}
               className="mt-2 text-xs text-blue-500 font-bold btn-press">
               {isOpen ? '접기 ▲' : '자세히 보기 ▼'}
             </button>
@@ -525,9 +601,9 @@ function AdminDashboard() {
                     <p className="text-xs">
                       😀 아는 단어 <span className="font-black">{ws.known}</span> · 😅 복습 필요 <span className="font-black text-orange-500">{ws.unknown}</span>
                     </p>
-                    <button onClick={() => handleResetWordStatus(r.name)} disabled={resettingName === r.name}
+                    <button onClick={() => handleResetWordStatus(r.id, r.name)} disabled={resettingId === r.id}
                       className="text-xs text-gray-400 font-bold btn-press hover:text-red-500 disabled:opacity-50">
-                      {resettingName === r.name ? '⏳ 초기화 중...' : '🔄 전체 초기화'}
+                      {resettingId === r.id ? '⏳ 초기화 중...' : '🔄 전체 초기화'}
                     </button>
                   </div>
                 </div>
@@ -544,11 +620,11 @@ function AdminDashboard() {
                   )}
                 </div>
 
-                <button onClick={() => { setReportFor(reportFor === r.name ? null : r.name); setCopied(false) }}
+                <button onClick={() => { setReportFor(reportFor === r.id ? null : r.id); setCopied(false) }}
                   className="w-full bg-pink-100 text-pink-600 font-bold py-2 rounded-xl text-xs btn-press">
-                  📝 {reportFor === r.name ? '리포트 닫기' : '학부모 리포트 만들기'}
+                  📝 {reportFor === r.id ? '리포트 닫기' : '학부모 리포트 만들기'}
                 </button>
-                {reportFor === r.name && (() => {
+                {reportFor === r.id && (() => {
                   const report = buildWeeklyReport({
                     name: r.name, last7, quizAccuracy, quizCorrect, quizTotal, pronAttempts,
                     progress: r.progress, topMissed, wordLookup,
@@ -1224,7 +1300,7 @@ export default function AdminScreen({ onBack }) {
                           ) : (
                             <div className="flex flex-wrap gap-2">
                               {studentsInClass.map(s => (
-                                <span key={s.name} className="bg-white border-2 border-gray-200 rounded-xl px-3 py-1 text-sm font-bold text-gray-700">
+                                <span key={s.id} className="bg-white border-2 border-gray-200 rounded-xl px-3 py-1 text-sm font-bold text-gray-700">
                                   {s.name} <span className="text-gray-400 font-normal">· {s.unitName}</span>
                                 </span>
                               ))}

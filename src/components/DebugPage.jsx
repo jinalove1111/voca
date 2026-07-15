@@ -59,9 +59,12 @@ function computeMismatches(local, cloud) {
   return mismatches
 }
 
+// P0(2026-07-15): getStudents()가 이제 {id,name,...} 객체 배열을 반환한다
+// (예전엔 이름 문자열 배열) — 선택값/조회를 전부 id 기준으로 바꿨다.
+// getLocalRecordRaw/getSyncMeta/fetchDebugSnapshot 전부 studentId를 받는다.
 export default function DebugPage() {
   const [students] = useState(() => getStudents())
-  const [selected, setSelected] = useState(students[0] || '')
+  const [selected, setSelected] = useState(students[0]?.id || '')
   const [cloud, setCloud] = useState(null)
   const [local, setLocal] = useState(null)
   const [syncMeta, setSyncMeta] = useState(null)
@@ -98,7 +101,7 @@ export default function DebugPage() {
       <div className="flex gap-2 items-center">
         <select value={selected} onChange={(e) => setSelected(e.target.value)}
           className="flex-1 border-2 border-gray-200 rounded-xl px-3 py-2 font-bold text-sm bg-white">
-          {students.map((n) => <option key={n} value={n}>{n}</option>)}
+          {students.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
         <button onClick={load} disabled={loading}
           className="bg-purple-500 text-white font-black px-4 py-2 rounded-xl btn-press disabled:opacity-50 text-sm whitespace-nowrap">
