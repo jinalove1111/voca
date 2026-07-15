@@ -177,7 +177,7 @@ function FutureAssignmentPlanner({ targetClass, words }) {
 // 지금, 이름만으로는 어느 학생을 편집/삭제/선택 중인지 더 이상 구분할 수
 // 없기 때문(선택 키가 이름이면 동명이인 학생을 동시에 잘못 선택하는
 // 버그가 생김).
-function StudentManagement() {
+function StudentManagement({ adminPin }) {
   const [students, setStudents] = useState(() => getStudents())
   const [editing, setEditing] = useState(null) // student id currently being reassigned
   const [editClass, setEditClass] = useState('')
@@ -188,6 +188,7 @@ function StudentManagement() {
   const [pinResetId, setPinResetId] = useState(null)
   const [pinResetResult, setPinResetResult] = useState(null) // { id, name, pin } — 관리자에게 1회만 보여줌
   const [bulkPinBusy, setBulkPinBusy] = useState(false)
+  const [pinClearId, setPinClearId] = useState(null) // "PIN 초기화(삭제)" 진행 중인 학생 id
   // 2026-07-16 — 학생 최초 PIN 자기설정. pinStatus: id -> {hasPinHash,
   // pinSetupAllowed, locked}(api/student-pin-status.js 배치 조회, pin_hash
   // 원문은 절대 안 내려옴). supabase_v1_7 SQL 미실행 상태에서도(컬럼 없음
@@ -281,6 +282,35 @@ function StudentManagement() {
       alert('PIN 재설정 중 오류가 발생했어요: ' + (err.message || err))
     } finally {
       setPinResetId(null)
+    }
+  }
+
+  // PIN 초기화(삭제) — 위 "PIN 재설정"(handleResetPin, 새 랜덤 PIN을 즉시
+  // 채워 넣음)과는 완전히 별개 기능. 이건 pin_hash를 실제로 null로 지워서
+  // 학생을 진짜 "PIN 없음" 상태로 되돌린다 — "PIN 만들기" 탭에서 그 학생을
+  // 다시 자기설정할 수 있게(api/clear-student-pin.js). 기존 PIN은 그
+  // 즉시 로그인에 쓸 수 없게 된다(api/verify-student-pin.js가 pin_hash
+  // 없는 후보는 no_pin_setup으로 거부).
+  const handleClearPin = async (id, name) => {
+    if (!window.confirm(`"${name}" 학생의 PIN을 삭제할까요?\n\n기존 PIN은 즉시 로그인할 수 없게 되고, "PIN 만들기" 탭에서 새로 만들어야 해요.`)) return
+    setPinClearId(id)
+    try {
+      const res = await fetch('/api/clear-student-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: id, adminPin }),
+      })
+      const data = await res.json()
+      if (!data.ok) {
+        if (data.reason === 'not_authorized') throw new Error('관리자 인증에 실패했어요. 관리자 화면을 다시 로그인해주세요.')
+        throw new Error(data.error || 'PIN 삭제에 실패했어요.')
+      }
+      await loadPinStatus(students)
+      alert(`"${name}" 학생의 PIN을 삭제했어요. 이제 "PIN 만들기" 탭에서 새로 설정할 수 있어요.`)
+    } catch (err) {
+      alert('PIN 삭제 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setPinClearId(null)
     }
   }
 
@@ -503,6 +533,12 @@ function StudentManagement() {
                             className="bg-yellow-100 text-yellow-700 font-bold px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-50">
                             {pinResetId === s.id ? '⏳' : '🔑 PIN 초기화'}
                           </button>
+                          {status?.hasPinHash && (
+                            <button onClick={() => handleClearPin(s.id, s.name)} disabled={pinClearId === s.id}
+                              className="bg-red-50 text-red-500 font-bold px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-50">
+                              {pinClearId === s.id ? '⏳' : '🗑 PIN 초기화(삭제)'}
+                            </button>
+                          )}
                           <button onClick={() => startEdit(s.id)}
                             className="bg-blue-100 text-blue-600 font-bold px-3 py-2 rounded-xl text-xs btn-press">반 배정</button>
                           <button onClick={() => handleRemove(s.id, s.name)}
@@ -1472,7 +1508,7 @@ export default function AdminScreen({ onBack }) {
           </div>
         )}
 
-        {tab === 'students' && <StudentManagement />}
+        {tab === 'students' && <StudentManagement adminPin={pin} />}
         {tab === 'dashboard' && <AdminDashboard />}
         {tab === 'excel' && <ExcelUpload onDone={() => { refresh(); setTab('classes') }} />}
         {tab === 'pdf'   && <PdfUpload   onDone={() => { refresh(); setTab('classes') }} />}
