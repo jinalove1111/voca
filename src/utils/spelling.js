@@ -28,6 +28,13 @@ const stripParenthetical = (s) => s.replace(/\([^)]*\)/g, '').trim()
 export const isSpellingCorrect = (input, target) => {
   const normInput = normalizeSpelling(input)
   if (!normInput) return false
+  // 2026-07-16 수정: target에 쉼표/세미콜론이 있으면 대안들로 쪼개서만
+  // 비교했기 때문에, 학생이 뜻 "전체"를 그대로 정확히 입력한 경우
+  // ("휘젓다, 섞다"를 통째로 입력) 오히려 오답 처리되는 구멍이 있었다 —
+  // 입실시험 로직 테스트 작성 중 발견. 전체 문자열 일치를 먼저 허용한다.
+  // 정답 인정 범위가 넓어지기만 하는 변경이라 기존 채점 결과에 회귀 없음
+  // (scripts/testSpelling.mjs 전체 재통과로 확인).
+  if (normalizeSpelling(target) === normInput) return true
   return splitAnswerAlternatives(target).some((alt) => {
     if (normalizeSpelling(alt) === normInput) return true
     const stripped = stripParenthetical(alt)
