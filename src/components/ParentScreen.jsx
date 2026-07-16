@@ -121,7 +121,7 @@ export default function ParentScreen({ onBack }) {
             {loading ? '⏳ 조회하는 중...' : '조회하기'}
           </button>
         </div>
-        <button onClick={onBack} className="mt-6 text-gray-400 text-xs font-bold btn-press hover:text-gray-600">
+        <button onClick={onBack} className="mt-6 py-3 px-4 text-gray-400 text-xs font-bold btn-press hover:text-gray-600">
           ← 처음 화면으로
         </button>
       </div>
@@ -135,17 +135,17 @@ export default function ParentScreen({ onBack }) {
     <div className="min-h-screen p-4 pb-8 bg-gray-50">
       <div className="max-w-lg mx-auto">
         <div className="flex items-center gap-3 pt-2 mb-4">
-          <button onClick={handleReset} className="text-purple-500 font-bold btn-press flex-shrink-0 whitespace-nowrap">← 다른 학생</button>
+          <button onClick={handleReset} className="py-3 px-2 -my-3 -mx-2 text-purple-500 font-bold btn-press flex-shrink-0 whitespace-nowrap">← 다른 학생</button>
           <h1 className="text-xl font-black text-gray-800 min-w-0 break-words">👨‍👩‍👧 {resolvedName} 학생 학습 현황</h1>
         </div>
 
         {!row.progress ? (
-          <div className="bg-white rounded-2xl card-shadow p-6 text-center text-gray-400 text-sm">
+          <div className="bg-white rounded-3xl card-shadow p-6 text-center text-gray-400 text-sm">
             아직 학습 기록이 동기화되지 않았어요. 아이가 앱에서 공부를 시작하면 여기에 기록이 보여요.
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="bg-white rounded-2xl card-shadow p-4">
+            <div className="bg-white rounded-3xl card-shadow p-4">
               <p className="text-xs font-black text-gray-500 mb-2">📅 오늘 학습</p>
               <div className="flex gap-2">
                 <span className={`flex-1 text-center py-2 rounded-xl text-sm font-bold ${studiedToday ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
@@ -157,7 +157,7 @@ export default function ParentScreen({ onBack }) {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl card-shadow p-4 grid grid-cols-3 gap-2 text-center">
+            <div className="bg-white rounded-3xl card-shadow p-4 grid grid-cols-3 gap-2 text-center">
               <div>
                 <p className="text-xl font-black text-yellow-600">⭐ {row.progress.total_stars ?? 0}</p>
                 <p className="text-[10px] text-gray-400 font-bold">누적 별</p>
@@ -172,7 +172,7 @@ export default function ParentScreen({ onBack }) {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl card-shadow p-4">
+            <div className="bg-white rounded-3xl card-shadow p-4">
               <p className="text-xs font-black text-gray-500 mb-2">📈 최근 7일 학습 그래프 (미션 0~4개 완료)</p>
               {last7.length === 0 ? (
                 <p className="text-gray-400 text-xs">아직 기록이 없어요.</p>
@@ -194,21 +194,21 @@ export default function ParentScreen({ onBack }) {
               )}
             </div>
 
-            <div className="bg-white rounded-2xl card-shadow p-4">
+            <div className="bg-white rounded-3xl card-shadow p-4">
               <p className="text-xs font-black text-gray-500 mb-1">📝 퀴즈 정답률</p>
               <p className="font-bold text-gray-800">{quizAccuracy !== null ? `${quizAccuracy}% (${quizCorrect}/${quizTotal})` : '최근 기록 없음'}</p>
               <p className="text-xs font-black text-gray-500 mb-1 mt-3">🗣️ 발음 연습 횟수</p>
               <p className="font-bold text-gray-800">{pronAttempts}회</p>
             </div>
 
-            <div className="bg-red-50 rounded-2xl p-4 border-2 border-red-100">
+            <div className="bg-red-50 rounded-3xl p-4 border-2 border-red-100">
               <p className="text-xs font-black text-red-600 mb-2">😅 취약 단어 (자주 틀린 단어)</p>
               {topMissed.length === 0 ? (
                 <p className="text-gray-400 text-xs">최근 자주 틀린 단어가 없어요. 아주 잘하고 있어요!</p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {topMissed.map(([slug, count]) => (
-                    <span key={slug} className="bg-white text-red-600 rounded-lg px-2 py-1 text-xs font-bold border border-red-200">
+                    <span key={slug} className="bg-white text-red-600 rounded-xl px-2 py-1 text-xs font-bold border border-red-200">
                       {wordLookup[slug]?.word || slug} ×{count}
                     </span>
                   ))}
@@ -217,7 +217,7 @@ export default function ParentScreen({ onBack }) {
             </div>
 
             <button onClick={() => { setShowReport(v => !v); setCopied(false) }}
-              className="w-full bg-pink-100 text-pink-600 font-bold py-2.5 rounded-xl text-sm btn-press">
+              className="w-full bg-pink-100 text-pink-600 font-bold py-3 rounded-xl text-sm btn-press">
               📝 {showReport ? '주간 리포트 닫기' : '주간 리포트 전체 보기'}
             </button>
             {showReport && (() => {
@@ -229,7 +229,7 @@ export default function ParentScreen({ onBack }) {
                 <div className="bg-pink-50 rounded-xl p-3">
                   <pre className="whitespace-pre-wrap text-xs text-gray-700 font-sans mb-2">{report}</pre>
                   <button onClick={() => navigator.clipboard?.writeText(report).then(() => setCopied(true)).catch(() => {})}
-                    className="w-full bg-pink-500 text-white font-bold py-2 rounded-xl text-xs btn-press">
+                    className="w-full bg-pink-500 text-white font-bold py-3 rounded-xl text-xs btn-press">
                     {copied ? '✅ 복사됨!' : '📋 복사하기'}
                   </button>
                 </div>
@@ -238,7 +238,7 @@ export default function ParentScreen({ onBack }) {
           </div>
         )}
 
-        <button onClick={onBack} className="w-full mt-4 text-gray-400 text-xs font-bold btn-press hover:text-gray-600">
+        <button onClick={onBack} className="w-full mt-4 py-3 text-gray-400 text-xs font-bold btn-press hover:text-gray-600">
           ← 처음 화면으로
         </button>
       </div>
