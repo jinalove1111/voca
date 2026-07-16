@@ -39,6 +39,23 @@ class AppErrorBoundary extends React.Component {
   static getDerivedStateFromError(error) {
     return { hasError: true, error }
   }
+  // P0(2026-07-17) — 프로덕션에서는 내부 에러 문구를 학생에게 그대로
+  // 노출하지 않는다(아래 render). 대신 진단에 필요한 정보는 전부 콘솔에
+  // 남긴다. 주의: PIN/pin_hash는 어떤 형태로도 절대 로그 금지 — 여기서
+  // 읽는 것은 세션의 student id뿐.
+  componentDidCatch(error, info) {
+    let studentId = null
+    try { studentId = JSON.parse(localStorage.getItem(SESSION_KEY))?.id || null } catch { /* 세션 파싱 실패는 무시 */ }
+    console.error('[AppErrorBoundary] 앱 크래시', {
+      message: error?.message || String(error),
+      stack: error?.stack || null,
+      componentStack: info?.componentStack || null,
+      studentId,
+      href: typeof location !== 'undefined' ? location.href : null,
+      mode: import.meta.env.MODE,
+      timestamp: new Date().toISOString(),
+    })
+  }
   render() {
     if (this.state.hasError) {
       return (
@@ -46,11 +63,19 @@ class AppErrorBoundary extends React.Component {
           <div className="bg-white rounded-3xl p-8 text-center max-w-sm w-full shadow-lg">
             <div className="text-5xl mb-4">😵</div>
             <h2 className="font-black text-xl text-gray-800 mb-2">앱 오류가 발생했어요</h2>
-            <p className="text-xs text-red-400 mb-6 break-all bg-red-50 p-3 rounded-xl">{String(this.state.error)}</p>
+            <p className="text-sm text-gray-500 mb-6">
+              데이터를 불러오는 중 문제가 발생했어요.<br />다시 시도하거나 로그아웃 후 로그인해주세요.
+            </p>
+            {import.meta.env.DEV && (
+              <p className="text-xs text-red-400 mb-6 break-all bg-red-50 p-3 rounded-xl">{String(this.state.error)}</p>
+            )}
             <button
               onClick={() => {
-                localStorage.removeItem('paulEasyVoca_currentStudent')
-                this.setState({ hasError: false, error: null })
+                // 세션 정리 후 전체 리로드 — setState만으로 복귀하면 App의
+                // student 상태가 그대로 남아 같은 크래시를 즉시 반복할 수
+                // 있다. 리로드가 유일하게 확실한 초기화.
+                try { localStorage.removeItem('paulEasyVoca_currentStudent') } catch { /* noop */ }
+                window.location.reload()
               }}
               className="w-full bg-purple-500 text-white font-black py-3 rounded-2xl mb-2"
             >
@@ -256,6 +281,24 @@ function AppInner({ studentId, studentName, onLogout }) {
   }
 
   const handleAnswerMission = (wordId) => answerMission(wordId)
+
+  // P0(2026-07-17) 로그인 직후 로딩 게이트 — 이 기기에 로컬 기록이 없는
+  // 학생(신규/기기 교체/PIN 초기화 후 재로그인)은 클라우드 백업 복원
+  // 확인이 끝날 때까지(성공/실패/5s 타임아웃 무관) Dashboard를 렌더하지
+  // 않는다. 복원 전의 빈 record로 화면이 먼저 그려졌다가 데이터가 뒤늦게
+  // 갈아끼워지는 깜빡임/불일치 방지. 로컬에 기록이 있는 학생은
+  // restoreChecked가 처음부터 true라 이 화면을 전혀 거치지 않는다.
+  // (반드시 위의 모든 훅 호출 뒤에 있어야 함 — 훅 순서 규칙.)
+  if (!studentData.restoreChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50">
+        <div className="text-center">
+          <div className="text-5xl mb-3 animate-bounce">📖</div>
+          <p className="text-purple-400 font-bold">학습 기록을 불러오는 중...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <>
