@@ -369,7 +369,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
   return (
     <div className="min-h-screen p-4 pb-8">
       <div className="flex items-center justify-between max-w-lg mx-auto mb-4 pt-2">
-        <button onClick={onBack} className="text-purple-600 font-bold btn-press">← 홈</button>
+        <button onClick={onBack} className="py-3 px-2 -my-3 -mx-2 text-purple-600 font-bold btn-press">← 홈</button>
         <div className="flex gap-1">
           {pool.map((_, i) => (
             <div key={i} className={`w-7 h-7 rounded-full text-xs flex items-center justify-center font-black transition-all ${

@@ -186,7 +186,7 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
     <div className="min-h-screen p-4 pb-8">
       {/* Header */}
       <div className="max-w-lg mx-auto pt-2 mb-4 flex items-center justify-between">
-        <button onClick={onLogout} className="text-purple-400 text-sm font-bold btn-press hover:text-purple-600">← 나가기</button>
+        <button onClick={onLogout} className="py-3 px-2 -my-3 -mx-2 text-purple-400 text-sm font-bold btn-press hover:text-purple-600">← 나가기</button>
         <div className="flex items-center gap-2">
           {streak > 0 && (
             <div className="flex items-center gap-1 bg-orange-100 px-3 py-2 rounded-2xl">

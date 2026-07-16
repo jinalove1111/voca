@@ -229,7 +229,7 @@ export default function EntranceTest({ studentId, studentName, onBack }) {
 
   const header = (
     <div className="max-w-lg mx-auto pt-2 mb-4 flex items-center gap-3">
-      <button onClick={onBack} className="text-purple-400 text-sm font-bold btn-press hover:text-purple-600">← 홈으로</button>
+      <button onClick={onBack} className="py-3 px-2 -my-3 -mx-2 text-purple-400 text-sm font-bold btn-press hover:text-purple-600">← 홈으로</button>
       <h1 className="text-xl font-black text-gray-800">🏁 입실 단어시험</h1>
     </div>
   )
@@ -333,7 +333,7 @@ export default function EntranceTest({ studentId, studentName, onBack }) {
                   확인
                 </button>
                 <button onClick={() => advance('')}
-                  className="w-full text-gray-400 font-bold text-sm btn-press py-1">
+                  className="w-full text-gray-400 font-bold text-sm btn-press py-3">
                   모르겠어요, 다음 문제 →
                 </button>
               </div>

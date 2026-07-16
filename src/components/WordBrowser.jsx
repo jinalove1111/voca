@@ -42,7 +42,7 @@ export default function WordBrowser({ words, cleared, onSelect, onBack, mode, on
   return (
     <div className="min-h-screen p-4 pb-8">
       <div className="flex items-center gap-3 max-w-lg mx-auto mb-4 pt-2">
-        <button onClick={onBack} className="text-purple-600 font-bold btn-press">← 홈</button>
+        <button onClick={onBack} className="py-3 px-2 -my-3 -mx-2 text-purple-600 font-bold btn-press">← 홈</button>
         <div className="flex-1">
           <h1 className="text-2xl font-black text-blue-600">📖 단어 공부</h1>
           <p className="text-gray-400 text-xs">{scoped.length}개 단어 · {cleared.length}개 클리어</p>
@@ -87,7 +87,7 @@ export default function WordBrowser({ words, cleared, onSelect, onBack, mode, on
           <input type="text" value={query} onChange={e => setQuery(e.target.value)}
             placeholder="단어 또는 뜻 검색..."
             className="w-full border-2 border-blue-200 rounded-2xl pl-12 pr-4 py-3 font-bold focus:outline-none focus:border-blue-400 transition-colors" />
-          {query && <button onClick={() => setQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">✕</button>}
+          {query && <button onClick={() => setQuery('')} className="absolute right-1 top-1/2 -translate-y-1/2 p-3 text-gray-400 hover:text-gray-600 btn-press">✕</button>}
         </div>
 
         <div className="bg-white rounded-2xl card-shadow p-3 mb-4 flex items-center gap-3">

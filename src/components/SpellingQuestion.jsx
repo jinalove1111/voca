@@ -233,7 +233,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
           {showHint ? (
             <p className="text-gray-400 font-black tracking-widest text-lg">{hint}</p>
           ) : (
-            <button onClick={() => setShowHint(true)} className="text-xs text-teal-500 font-bold btn-press">💡 힌트 보기</button>
+            <button onClick={() => setShowHint(true)} className="py-3 px-4 -my-3 text-xs text-teal-500 font-bold btn-press">💡 힌트 보기</button>
           )}
         </div>
       )}

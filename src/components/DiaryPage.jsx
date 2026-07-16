@@ -134,7 +134,7 @@ export default function DiaryPage({ studentData, onBack }) {
   return (
     <div className="min-h-screen p-4 pb-8 bg-gradient-to-br from-pink-50 to-purple-50">
       <div className="flex items-center justify-between max-w-lg mx-auto pt-2 mb-4">
-        <button onClick={onBack} className="text-purple-500 font-bold btn-press">← 홈</button>
+        <button onClick={onBack} className="py-3 px-2 -my-3 -mx-2 text-purple-500 font-bold btn-press">← 홈</button>
         <h1 className="text-xl font-black text-purple-700">📔 My English Diary</h1>
       </div>
 

@@ -54,7 +54,7 @@ export default function StudyCalendar({ studentData, onBack }) {
   return (
     <div className="min-h-screen p-4 pb-8 bg-gradient-to-br from-amber-50 to-pink-50">
       <div className="flex items-center justify-between max-w-lg mx-auto pt-2 mb-4">
-        <button onClick={onBack} className="text-amber-600 font-bold btn-press">← 홈</button>
+        <button onClick={onBack} className="py-3 px-2 -my-3 -mx-2 text-amber-600 font-bold btn-press">← 홈</button>
         <h1 className="text-xl font-black text-amber-700">📅 공부 캘린더</h1>
       </div>
 
@@ -67,9 +67,9 @@ export default function StudyCalendar({ studentData, onBack }) {
 
         <div className="bg-white rounded-3xl card-shadow p-4">
           <div className="flex items-center justify-between mb-3">
-            <button onClick={() => changeMonth(-1)} className="text-gray-400 font-black px-2 btn-press">◀</button>
+            <button onClick={() => changeMonth(-1)} className="text-gray-400 font-black px-4 -mx-2 py-3 -my-3 btn-press">◀</button>
             <p className="font-black text-gray-700">{year}년 {month + 1}월</p>
-            <button onClick={() => changeMonth(1)} className="text-gray-400 font-black px-2 btn-press">▶</button>
+            <button onClick={() => changeMonth(1)} className="text-gray-400 font-black px-4 -mx-2 py-3 -my-3 btn-press">▶</button>
           </div>
 
           <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-gray-400 mb-1">
