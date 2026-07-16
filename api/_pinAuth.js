@@ -64,6 +64,28 @@ export function isWeakPin(pin) {
   return WEAK_PINS.has(String(pin))
 }
 
+// 2026-07-16 P7 감사 후속 — 관리자 전용 API의 요청당 재인증(clear-student-
+// pin.js가 처음 도입한 패턴의 공용화). 클라이언트 사이드 게이트(AdminScreen
+// 의 authed=true)만 믿으면 누구나 /api/* 를 직접 fetch해서 관리자 액션을
+// 실행할 수 있으므로, 파괴적/유출성 액션은 요청마다 서버에서 ADMIN_PIN을
+// 다시 확인한다. 반환값: 통과하면 true, 아니면 응답을 이미 써놓고 false
+// (호출부는 `if (!checkAdminReauth(req, res)) return` 한 줄).
+// 응답 형식은 clear-student-pin.js와 동일: { ok:false, reason:'not_authorized' }
+// — AdminScreen의 각 핸들러가 이 reason으로 "다시 로그인해주세요" 안내를 띄운다.
+export function checkAdminReauth(req, res) {
+  const adminPin = process.env.ADMIN_PIN
+  if (!adminPin) {
+    res.status(500).json({ error: 'Server not configured: ADMIN_PIN missing' })
+    return false
+  }
+  const supplied = req.body?.adminPin
+  if (typeof supplied !== 'string' || supplied !== adminPin) {
+    res.status(200).json({ ok: false, reason: 'not_authorized' })
+    return false
+  }
+  return true
+}
+
 // 서버리스 함수가 Supabase에 접근할 때 쓰는 URL/키. 서비스 롤 키가
 // 설정돼 있으면 그걸 우선 쓰고(RLS 우회, 더 안전), 아직 설정 전이면
 // (이 프로젝트는 로컬에 서비스 롤 키가 없음 — Vercel 프로덕션에만 있을

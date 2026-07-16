@@ -9,12 +9,19 @@ import fs from 'node:fs'
 
 // api/_pinAuth.js가 process.env.VITE_SUPABASE_URL 등을 읽으므로, .env
 // 내용을 미리 process.env에 로드해준다(Vite는 빌드타임에만 이걸 하고,
-// 순수 Node 실행에서는 안 해주므로 직접 해야 함).
-const envText = fs.readFileSync('.env', 'utf8')
-for (const line of envText.split(/\r?\n/)) {
-  const m = line.match(/^([^=]+)=(.*)$/)
-  if (m) process.env[m[1].trim()] = m[2].trim()
+// 순수 Node 실행에서는 안 해주므로 직접 해야 함). ADMIN_PIN은 .env.local
+// (서버 전용, git 미추적)에 있다 — P7 감사 후속으로 set-student-pin(무작위
+// 재설정)/bulk-generate-temp-pins가 요청마다 adminPin 재검증을 요구하게
+// 되어 필요해졌다.
+for (const file of ['.env', '.env.local']) {
+  if (!fs.existsSync(file)) continue
+  for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const m = line.match(/^([^#=][^=]*)=(.*)$/)
+    if (m && process.env[m[1].trim()] === undefined) process.env[m[1].trim()] = m[2].trim()
+  }
 }
+const ADMIN_PIN = process.env.ADMIN_PIN
+if (!ADMIN_PIN) { console.error('ADMIN_PIN missing in .env.local — abort'); process.exit(1) }
 
 const { default: verifyStudentPin } = await import('../api/verify-student-pin.js')
 const { default: setStudentPin } = await import('../api/set-student-pin.js')
@@ -59,9 +66,13 @@ console.log('\n=== 1. 준비 — QA 반/학생 생성 (PIN 없이) ===')
 const CLASS_NAME = 'QA_PinAuthTest'
 let { data: cls } = await supabase.from('classes').select('id').eq('name', CLASS_NAME).maybeSingle()
 if (!cls) { ({ data: cls } = await supabase.from('classes').insert({ name: CLASS_NAME }).select().single()) }
-const { data: student } = await supabase.from('students').insert({ name: 'QA_PinKid', class_id: cls.id, unit_name: 'Unit 1' }).select().single()
+// P7 후속: RETURNING 컬럼을 명시(select('id')) — supabase_v1_9_security_rls.sql
+// 적용 후에는 anon의 select=*가 pin 컬럼 차단 때문에 거부되므로, 이 스크립트가
+// SQL 적용 전/후 어느 상태에서든 그대로 돌게 유지한다. "pin_hash 아직 null"은
+// 아래 2-1(already_set이 아닌 정상 설정 성공)로 간접 검증된다.
+const { data: student } = await supabase.from('students').insert({ name: 'QA_PinKid', class_id: cls.id, unit_name: 'Unit 1' }).select('id').single()
 const studentId = student.id
-check('학생 생성됨 (pin_hash는 아직 null)', student.pin_hash === undefined || student.pin_hash === null)
+check('학생 생성됨', !!studentId)
 
 console.log('\n=== 2. set-student-pin.js — PIN 설정 (학생이 직접 고른 PIN) ===')
 // supabase_v1_6_student_identity.sql이 아직 Supabase SQL Editor에서
@@ -78,6 +89,17 @@ let migrationApplied = true
   } else {
     check('설정 성공', res.body.ok === true)
     check('요청한 PIN 그대로 반환됨(자기등록 확인용, 이 응답 1회뿐)', res.body.pin === '4321')
+  }
+}
+if (migrationApplied) {
+  console.log('\n=== 2-1. [보안/P7 후속] 이미 PIN 있는 학생을 인증 없이 덮어쓰기 시도 → 거부 ===')
+  {
+    const takeover = await callHandler(setStudentPin, { studentId, pin: '9999' })
+    check('adminPin 없이 기존 PIN 덮어쓰기 → ok:false, reason:already_set', takeover.body.ok === false && takeover.body.reason === 'already_set')
+    const randomNoAuth = await callHandler(setStudentPin, { studentId })
+    check('adminPin 없이 무작위 재설정 요청 → ok:false, reason:not_authorized', randomNoAuth.body.ok === false && randomNoAuth.body.reason === 'not_authorized')
+    const stillOld = await callHandler(verifyStudentPin, { name: 'QA_PinKid', pin: '4321' })
+    check('거부된 시도 후에도 원래 PIN(4321)으로 여전히 로그인 성공(DB 무변화)', stillOld.body.ok === true && stillOld.body.studentId === studentId)
   }
 }
 check('supabase_v1_6_student_identity.sql이 적용되어 있음 (pin_hash 등 컬럼 존재)', migrationApplied)
@@ -134,7 +156,7 @@ if (migrationApplied) {
 
   console.log('\n=== 9. set-student-pin.js — 관리자 PIN 재설정 시 잠금/실패카운트 초기화 ===')
   {
-    const resetRes = await callHandler(setStudentPin, { studentId }) // pin 생략 -> 서버가 무작위 생성
+    const resetRes = await callHandler(setStudentPin, { studentId, adminPin: ADMIN_PIN }) // pin 생략 -> 서버가 무작위 생성(P7 후속: adminPin 재검증 필수)
     check('PIN 재설정 성공', resetRes.body.ok === true)
     check('무작위 PIN이 4자리 숫자로 반환됨', /^\d{4}$/.test(resetRes.body.pin))
     const newPin = resetRes.body.pin
@@ -145,8 +167,10 @@ if (migrationApplied) {
 
   console.log('\n=== 10. bulk-generate-temp-pins.js — PIN 없는 학생 일괄 생성 ===')
   {
-    const { data: noPinStudent } = await supabase.from('students').insert({ name: 'QA_PinKid_NoPin', class_id: cls.id, unit_name: 'Unit 1' }).select().single()
-    const res = await callHandler(bulkGenerateTempPins, {})
+    const { data: noPinStudent } = await supabase.from('students').insert({ name: 'QA_PinKid_NoPin', class_id: cls.id, unit_name: 'Unit 1' }).select('id').single()
+    const noAuth = await callHandler(bulkGenerateTempPins, {})
+    check('[보안/P7 후속] adminPin 없이 일괄 생성 → not_authorized 거부', noAuth.body.ok === false && noAuth.body.reason === 'not_authorized')
+    const res = await callHandler(bulkGenerateTempPins, { adminPin: ADMIN_PIN })
     check('응답에 방금 만든 PIN 없는 학생이 포함됨', res.body.results.some(r => r.id === noPinStudent.id && /^\d{4}$/.test(r.pin)))
     const loginRes = await callHandler(verifyStudentPin, { name: 'QA_PinKid_NoPin', pin: res.body.results.find(r => r.id === noPinStudent.id).pin })
     check('일괄 생성된 PIN으로 실제 로그인 성공', loginRes.body.ok === true && loginRes.body.studentId === noPinStudent.id)
@@ -159,7 +183,7 @@ if (migrationApplied) {
     const CLASS_NAME_2 = 'QA_PinAuthTest2'
     let { data: cls2 } = await supabase.from('classes').select('id').eq('name', CLASS_NAME_2).maybeSingle()
     if (!cls2) { ({ data: cls2 } = await supabase.from('classes').insert({ name: CLASS_NAME_2 }).select().single()) }
-    const dupInsert = await supabase.from('students').insert({ name: 'QA_PinKid', class_id: cls2.id, unit_name: 'Unit 1' }).select().single()
+    const dupInsert = await supabase.from('students').insert({ name: 'QA_PinKid', class_id: cls2.id, unit_name: 'Unit 1' }).select('id').single()
     if (dupInsert.error) {
       check(`동명이인(다른 반) 등록 성공 — UNIQUE 제약 DROP 필요: ${dupInsert.error.message}`, false)
     } else {

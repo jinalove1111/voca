@@ -46,13 +46,16 @@ const CLASS_NAME = 'QA_SelectPinStatusTest'
 let { data: cls } = await supabase.from('classes').select('id').eq('name', CLASS_NAME).maybeSingle()
 if (!cls) { ({ data: cls } = await supabase.from('classes').insert({ name: CLASS_NAME }).select().single()) }
 
+// P7 후속: RETURNING 컬럼 명시(select('id')) — supabase_v1_9_security_rls.sql
+// 적용 후 anon의 select=*는 pin 컬럼 차단으로 거부되므로. (pin_hash 값을
+// insert하는 것 자체는 v1_9 이후에도 허용 — 자기가 만드는 새 row에만 영향.)
 // 시나리오1: 신규 학생(PIN 없음)
-const { data: freshStudent } = await supabase.from('students').insert({ name: 'QA_FreshNoPin', class_id: cls.id, unit_name: 'Unit 1' }).select().single()
+const { data: freshStudent } = await supabase.from('students').insert({ name: 'QA_FreshNoPin', class_id: cls.id, unit_name: 'Unit 1' }).select('id').single()
 // 시나리오2: 기존 학생 PIN 있음
-const { data: withPinStudent } = await supabase.from('students').insert({ name: 'QA_HasPin', class_id: cls.id, unit_name: 'Unit 1', pin_hash: 'deadbeef:deadbeef' }).select().single()
+const { data: withPinStudent } = await supabase.from('students').insert({ name: 'QA_HasPin', class_id: cls.id, unit_name: 'Unit 1', pin_hash: 'deadbeef:deadbeef' }).select('id').single()
 // 시나리오4: 동명이인 — 하나는 PIN 있음, 하나는 없음
-const { data: dupA } = await supabase.from('students').insert({ name: 'QA_DupKid', class_id: cls.id, unit_name: 'Unit 1', pin_hash: 'deadbeef:deadbeef' }).select().single()
-const { data: dupB } = await supabase.from('students').insert({ name: 'QA_DupKid', class_id: cls.id, unit_name: 'Unit 2' }).select().single()
+const { data: dupA } = await supabase.from('students').insert({ name: 'QA_DupKid', class_id: cls.id, unit_name: 'Unit 1', pin_hash: 'deadbeef:deadbeef' }).select('id').single()
+const { data: dupB } = await supabase.from('students').insert({ name: 'QA_DupKid', class_id: cls.id, unit_name: 'Unit 2' }).select('id').single()
 
 console.log('\n=== 2. 항목1 — 신규 학생(PIN 없음) 개별 조회 시 정확히 "PIN 없음" ===')
 {

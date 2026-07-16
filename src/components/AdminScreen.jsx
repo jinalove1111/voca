@@ -283,10 +283,15 @@ function StudentManagement({ adminPin }) {
       const res = await fetch('/api/set-student-pin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId: id }),
+        // P7 감사 후속 — 무작위 재설정은 서버가 요청마다 adminPin을 재검증
+        // (기존 PIN 덮어쓰기 = 계정 탈취 가능 경로라 clear-student-pin과 동일 급).
+        body: JSON.stringify({ studentId: id, adminPin }),
       })
       const data = await res.json()
-      if (!data.ok) throw new Error(data.error || 'PIN 재설정에 실패했어요.')
+      if (!data.ok) {
+        if (data.reason === 'not_authorized') throw new Error('관리자 인증에 실패했어요. 관리자 화면을 다시 로그인해주세요.')
+        throw new Error(data.error || 'PIN 재설정에 실패했어요.')
+      }
       setPinResetResult({ id, name, pin: data.pin })
     } catch (err) {
       alert('PIN 재설정 중 오류가 발생했어요: ' + (err.message || err))
@@ -332,8 +337,15 @@ function StudentManagement({ adminPin }) {
     if (!window.confirm('PIN이 아직 없는 모든 학생에게 임시 PIN을 새로 발급할까요?')) return
     setBulkPinBusy(true)
     try {
-      const res = await fetch('/api/bulk-generate-temp-pins', { method: 'POST' })
+      const res = await fetch('/api/bulk-generate-temp-pins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // P7 감사 후속 — 평문 PIN 목록을 받는 가장 민감한 응답이라 요청마다
+        // 서버에서 adminPin 재검증.
+        body: JSON.stringify({ adminPin }),
+      })
       const data = await res.json()
+      if (data.reason === 'not_authorized') throw new Error('관리자 인증에 실패했어요. 관리자 화면을 다시 로그인해주세요.')
       if (data.error) throw new Error(data.error)
       if (!data.results || data.results.length === 0) {
         alert('PIN이 없는 학생이 없어요 — 전부 이미 PIN이 설정돼 있어요.')
@@ -359,10 +371,13 @@ function StudentManagement({ adminPin }) {
       const res = await fetch('/api/set-pin-setup-allowed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentIds: [id], allowed: nextAllowed }),
+        body: JSON.stringify({ studentIds: [id], allowed: nextAllowed, adminPin }),
       })
       const data = await res.json()
-      if (!data.ok) throw new Error(data.error || '요청에 실패했어요.')
+      if (!data.ok) {
+        if (data.reason === 'not_authorized') throw new Error('관리자 인증에 실패했어요. 관리자 화면을 다시 로그인해주세요.')
+        throw new Error(data.error || '요청에 실패했어요.')
+      }
       await loadPinStatus(students)
     } catch (err) {
       alert(`PIN 설정 ${nextAllowed ? '허용' : '허용 취소'} 중 오류가 발생했어요: ` + (err.message || err))
@@ -382,10 +397,13 @@ function StudentManagement({ adminPin }) {
       const res = await fetch('/api/set-pin-setup-allowed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentIds: targets.map(s => s.id), allowed: true }),
+        body: JSON.stringify({ studentIds: targets.map(s => s.id), allowed: true, adminPin }),
       })
       const data = await res.json()
-      if (!data.ok) throw new Error(data.error || '요청에 실패했어요.')
+      if (!data.ok) {
+        if (data.reason === 'not_authorized') throw new Error('관리자 인증에 실패했어요. 관리자 화면을 다시 로그인해주세요.')
+        throw new Error(data.error || '요청에 실패했어요.')
+      }
       await loadPinStatus(students)
     } catch (err) {
       alert('일괄 허용 중 오류가 발생했어요: ' + (err.message || err))
@@ -399,10 +417,13 @@ function StudentManagement({ adminPin }) {
       const res = await fetch('/api/unlock-student-pin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId: id }),
+        body: JSON.stringify({ studentId: id, adminPin }),
       })
       const data = await res.json()
-      if (!data.ok) throw new Error(data.error || '잠금 해제에 실패했어요.')
+      if (!data.ok) {
+        if (data.reason === 'not_authorized') throw new Error('관리자 인증에 실패했어요. 관리자 화면을 다시 로그인해주세요.')
+        throw new Error(data.error || '잠금 해제에 실패했어요.')
+      }
       await loadPinStatus(students)
       alert(`"${name}" 학생의 잠금을 해제했어요.`)
     } catch (err) {

@@ -6,11 +6,18 @@
 import { createClient } from '@supabase/supabase-js'
 import fs from 'node:fs'
 
-const envText = fs.readFileSync('.env', 'utf8')
-for (const line of envText.split(/\r?\n/)) {
-  const m = line.match(/^([^=]+)=(.*)$/)
-  if (m) process.env[m[1].trim()] = m[2].trim()
+// ADMIN_PIN은 .env.local(서버 전용, git 미추적)에 있다 — P7 감사 후속으로
+// set-pin-setup-allowed/unlock-student-pin이 요청마다 adminPin 재검증을
+// 요구하게 되어 필요해졌다.
+for (const file of ['.env', '.env.local']) {
+  if (!fs.existsSync(file)) continue
+  for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const m = line.match(/^([^#=][^=]*)=(.*)$/)
+    if (m && process.env[m[1].trim()] === undefined) process.env[m[1].trim()] = m[2].trim()
+  }
 }
+const ADMIN_PIN = process.env.ADMIN_PIN
+if (!ADMIN_PIN) { console.error('ADMIN_PIN missing in .env.local — abort'); process.exit(1) }
 
 const { default: selfSetStudentPin } = await import('../api/self-set-student-pin.js')
 const { default: setPinSetupAllowed } = await import('../api/set-pin-setup-allowed.js')
@@ -52,9 +59,11 @@ const CLASS_NAME_2 = 'QA_SelfSetupTest2'
 let { data: cls2 } = await supabase.from('classes').select('id').eq('name', CLASS_NAME_2).maybeSingle()
 if (!cls2) { ({ data: cls2 } = await supabase.from('classes').insert({ name: CLASS_NAME_2 }).select().single()) }
 
-const { data: studentA } = await supabase.from('students').insert({ name: 'QA_SelfSetupKid', class_id: cls.id, unit_name: 'Unit 1' }).select().single()
-const { data: studentB } = await supabase.from('students').insert({ name: 'QA_SelfSetupKid', class_id: cls2.id, unit_name: 'Unit 1' }).select().single()
-const { data: studentC } = await supabase.from('students').insert({ name: 'QA_SelfSetupNotAllowed', class_id: cls.id, unit_name: 'Unit 1' }).select().single()
+// P7 후속: RETURNING 컬럼 명시(select('id')) — supabase_v1_9_security_rls.sql
+// 적용 후 anon의 select=*는 pin 컬럼 차단으로 거부되므로.
+const { data: studentA } = await supabase.from('students').insert({ name: 'QA_SelfSetupKid', class_id: cls.id, unit_name: 'Unit 1' }).select('id').single()
+const { data: studentB } = await supabase.from('students').insert({ name: 'QA_SelfSetupKid', class_id: cls2.id, unit_name: 'Unit 1' }).select('id').single()
+const { data: studentC } = await supabase.from('students').insert({ name: 'QA_SelfSetupNotAllowed', class_id: cls.id, unit_name: 'Unit 1' }).select('id').single()
 
 let migrationApplied = true
 {
@@ -79,7 +88,9 @@ if (migrationApplied) {
 
   console.log('\n=== 3. 관리자 "설정 허용" -> 학생 A 자기 PIN 설정 성공 ===')
   {
-    const allowRes = await callHandler(setPinSetupAllowed, { studentIds: [studentA.id], allowed: true })
+    const noAuthAllow = await callHandler(setPinSetupAllowed, { studentIds: [studentA.id], allowed: true })
+    check('[보안/P7 후속] adminPin 없이 설정 허용 → not_authorized 거부', noAuthAllow.body.ok === false && noAuthAllow.body.reason === 'not_authorized')
+    const allowRes = await callHandler(setPinSetupAllowed, { studentIds: [studentA.id], allowed: true, adminPin: ADMIN_PIN })
     check('설정 허용 성공', allowRes.body.ok === true)
     const statusRes = await callHandler(studentPinStatus, { studentIds: [studentA.id] })
     check('허용 후 pinSetupAllowed === true로 반영됨', statusRes.body.results[0]?.pinSetupAllowed === true)
@@ -106,7 +117,7 @@ if (migrationApplied) {
     // set-pin-setup-allowed.js는 pin_hash가 이미 있으면 allowed:true 요청을
     // 아예 걸러낸다(방어적 이중 체크) — 그래도 만에 하나를 대비해
     // self-set-student-pin.js 자체도 pin_hash 존재를 최우선으로 거부한다.
-    const allowAgain = await callHandler(setPinSetupAllowed, { studentIds: [studentA.id], allowed: true })
+    const allowAgain = await callHandler(setPinSetupAllowed, { studentIds: [studentA.id], allowed: true, adminPin: ADMIN_PIN })
     check('이미 PIN 있는 계정은 재허용 요청을 걸러냄(.is(pin_hash,null) 필터)', allowAgain.body.ok === true)
     const statusRes = await callHandler(studentPinStatus, { studentIds: [studentA.id] })
     check('필터링됐으므로 pinSetupAllowed는 여전히 false', statusRes.body.results[0]?.pinSetupAllowed === false)
@@ -123,7 +134,7 @@ if (migrationApplied) {
 
   console.log('\n=== 7. 항목4 — 동명이인 학생 B도 독립적으로 자기 PIN 설정, 서로 안 섞임 ===')
   {
-    await callHandler(setPinSetupAllowed, { studentIds: [studentB.id], allowed: true })
+    await callHandler(setPinSetupAllowed, { studentIds: [studentB.id], allowed: true, adminPin: ADMIN_PIN })
     const setBRes = await callHandler(selfSetStudentPin, { studentId: studentB.id, pin: '1379', pinConfirm: '1379' })
     check('학생 B(동명이인)도 자기 PIN 설정 성공', setBRes.body.ok === true)
 
@@ -147,7 +158,9 @@ if (migrationApplied) {
   {
     // 위 8번에서 학생 A/B 둘 다 시도했으므로 최소 하나는 잠겼을 수 있음 —
     // 학생 A 기준으로 확인.
-    const unlockRes = await callHandler(unlockStudentPin, { studentId: studentA.id })
+    const noAuthUnlock = await callHandler(unlockStudentPin, { studentId: studentA.id })
+    check('[보안/P7 후속] adminPin 없이 잠금 해제 → not_authorized 거부', noAuthUnlock.body.ok === false && noAuthUnlock.body.reason === 'not_authorized')
+    const unlockRes = await callHandler(unlockStudentPin, { studentId: studentA.id, adminPin: ADMIN_PIN })
     check('잠금 해제 API 성공', unlockRes.body.ok === true)
     const loginAfterUnlock = await callHandler(verifyStudentPin, { name: 'QA_SelfSetupKid', pin: '2468' })
     check('잠금 해제 후 원래 PIN으로 다시 로그인 가능(pin_hash는 안 건드림)', loginAfterUnlock.body.ok === true && loginAfterUnlock.body.studentId === studentA.id)

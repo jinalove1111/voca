@@ -4,14 +4,20 @@
 // api/set-student-pin.js, which also generates/replaces the PIN itself —
 // this is for the case where the admin just wants to lift a lockout and let
 // the student keep using the PIN they already know).
+//
+// 2026-07-16 P7 감사 후속: 잠금 해제는 브루트포스 방어(5회 잠금)를 무력화
+// 하는 액션이므로 clear-student-pin.js와 동일하게 요청마다 ADMIN_PIN을
+// 재검증한다(checkAdminReauth). 호출자는 AdminScreen.jsx뿐.
 import { createClient } from '@supabase/supabase-js'
-import { supabaseAdminUrl, supabaseAdminKey } from './_pinAuth.js'
+import { checkAdminReauth, supabaseAdminUrl, supabaseAdminKey } from './_pinAuth.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
     return
   }
+
+  if (!checkAdminReauth(req, res)) return
 
   const url = supabaseAdminUrl()
   const key = supabaseAdminKey()
