@@ -6,6 +6,7 @@ import { buildWeeklyReport, computeStudentStats } from '../utils/weeklyReport'
 import FeatureManagementPanel from './FeatureManagementPanel'
 import TestPaperGenerator from './TestPaperGenerator'
 import DebugPage from './DebugPage'
+import EntranceTestAdmin from './EntranceTestAdmin'
 
 const wordSlug = (word) => word.toLowerCase().replace(/\s+/g, '_')
 
@@ -1282,7 +1283,7 @@ export default function AdminScreen({ onBack }) {
 
         {/* Tabs */}
         <div className="no-print flex gap-2 mb-6 overflow-x-auto">
-          {[['classes','📚 반 관리'],['students','👦 학생 관리'],['dashboard','📊 대시보드'],['excel','📊 Excel'],['pdf','📄 PDF'],['testpaper','📝 시험지'],['features','🎯 기능']].map(([k,l]) => (
+          {[['classes','📚 반 관리'],['students','👦 학생 관리'],['dashboard','📊 대시보드'],['entrance','🏁 입실시험'],['excel','📊 Excel'],['pdf','📄 PDF'],['testpaper','📝 시험지'],['features','🎯 기능']].map(([k,l]) => (
             <button key={k} onClick={() => setTab(k)}
               className={`py-2 px-3 rounded-xl font-black text-sm btn-press transition-colors whitespace-nowrap ${tab === k ? 'bg-purple-500 text-white' : 'bg-white text-gray-500 border-2 border-gray-200'}`}>
               {l}
@@ -1510,6 +1511,7 @@ export default function AdminScreen({ onBack }) {
 
         {tab === 'students' && <StudentManagement adminPin={pin} />}
         {tab === 'dashboard' && <AdminDashboard />}
+        {tab === 'entrance' && <EntranceTestAdmin />}
         {tab === 'excel' && <ExcelUpload onDone={() => { refresh(); setTab('classes') }} />}
         {tab === 'pdf'   && <PdfUpload   onDone={() => { refresh(); setTab('classes') }} />}
         {tab === 'testpaper' && <TestPaperGenerator />}

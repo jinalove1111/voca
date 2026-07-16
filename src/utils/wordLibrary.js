@@ -512,6 +512,13 @@ const getClassNameById = (classId) => {
   return ''
 }
 
+// v1.8 입실시험 — 반 이름으로 classes.id 조회(관리자 화면은 반을 이름으로
+// 다루지만 entrance_tests는 class_id FK로 저장하므로 변환이 필요).
+// getClassNameById의 역방향. 없으면 null — 호출부가 안내 처리.
+export function getClassIdByName(className) {
+  return _cache[className]?.id || null
+}
+
 export async function setStudentClass(id, className) {
   const s = _students.get(id)
   if (!s) return
