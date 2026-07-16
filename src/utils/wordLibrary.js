@@ -91,11 +91,23 @@ function naturalCompare(a, b) {
 }
 const sortUnitsByName = (units) => [...units].sort((a, b) => naturalCompare(a.name, b.name))
 
+// words 조회 — accepted_meanings(v2.0, 단어별 추가 인정 뜻) 컬럼은 아직
+// SQL 마이그레이션(supabase_v2_0_spelling_mixed.sql)이 실행 안 됐을 수
+// 있어서, 컬럼 포함으로 먼저 시도하고 실패하면 그 컬럼만 빼고 재시도한다
+// (refreshClassSettings의 spelling_direction과 동일한 부분 마이그레이션
+// 안전 패턴 — SQL보다 코드가 먼저 배포돼도 앱이 절대 깨지지 않음).
+const WORDS_SELECT_BASE = 'id,unit_id,word,meaning,position,word_audio_url,example_audio_url,example_text,example_translation,memory_tip'
+async function fetchWordsRows() {
+  let res = await supabase.from('words').select(`${WORDS_SELECT_BASE},accepted_meanings`).order('position')
+  if (res.error) res = await supabase.from('words').select(WORDS_SELECT_BASE).order('position')
+  return res
+}
+
 export async function refreshWordLibrary() {
   const [classesRes, unitsRes, wordsRes, assignmentsRes] = await Promise.all([
     supabase.from('classes').select('id,name,class_type').order('created_at'),
     supabase.from('units').select('id,class_id,name,position').order('position'),
-    supabase.from('words').select('id,unit_id,word,meaning,position,word_audio_url,example_audio_url,example_text,example_translation,memory_tip').order('position'),
+    fetchWordsRows(),
     supabase.from('daily_assignments').select('class_id,word_ids').eq('date', todayDateStr()),
   ])
   if (classesRes.error) throw classesRes.error
@@ -133,6 +145,9 @@ export async function refreshWordLibrary() {
         exampleText: w.example_text || null,
         exampleTranslation: w.example_translation || null,
         memoryTip: w.memory_tip || null,
+        // v2.0 단어별 추가 인정 뜻 — 컬럼 미존재(마이그레이션 전)/null이면
+        // 빈 목록(기존 채점과 완전 동일 동작).
+        acceptedMeanings: Array.isArray(w.accepted_meanings) ? w.accepted_meanings.filter((m) => typeof m === 'string' && m.trim()) : [],
       })
     }
   })
@@ -223,7 +238,9 @@ export function initWordLibrary() {
 // SQL을 실행하기 전에 이 코드가 먼저 배포돼도 앱이 절대 깨지지 않음.
 let _classSettings = {}
 const DEFAULT_CLASS_SETTINGS = { spellingTestEnabled: false, spellingHintEnabled: false, wrongAnswerRepeatCount: 3, spellingDirection: 'kr2en' }
-const VALID_SPELLING_DIRECTIONS = new Set(['kr2en', 'en2kr', 'random'])
+// v2.0: 'mixed'(세션 단위 정확 50:50 배분) 추가 — 배정 로직 자체는
+// entranceTest.js의 assignDirections(입실시험과 공용)가 담당.
+const VALID_SPELLING_DIRECTIONS = new Set(['kr2en', 'en2kr', 'random', 'mixed'])
 
 export async function refreshClassSettings() {
   try {
@@ -282,6 +299,27 @@ export async function setClassSettings(className, settings) {
   }
   if (error) throw error
   await refreshClassSettings()
+}
+
+// v2.0 단어별 추가 인정 뜻 저장 — 관리자 화면(단어별 편집 + 교사 검토 큐의
+// "이 답 인정")만 호출. 컬럼 미존재(마이그레이션 전)면 에러를 그대로 던져
+// 호출부가 alert로 안내(조용히 삼키면 관리자가 저장된 줄 착각함).
+export async function setWordAcceptedMeanings(wordDbId, meanings) {
+  const list = (Array.isArray(meanings) ? meanings : [])
+    .map((m) => String(m ?? '').trim())
+    .filter(Boolean)
+  // 중복 제거(대소문자/공백 무시 기준) — 같은 뜻이 큐에서 두 번 인정돼도 1개만
+  const seen = new Set()
+  const deduped = list.filter((m) => {
+    const key = m.toLowerCase().replace(/\s+/g, '')
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  const { error } = await supabase.from('words').update({ accepted_meanings: deduped }).eq('id', wordDbId)
+  if (error) throw error
+  await refreshWordLibrary()
+  return deduped
 }
 
 // ── DB write helpers (do not touch the class_type of an existing class) ───
@@ -799,6 +837,8 @@ export const getStudentWords = (studentId) => {
         // quiz option de-dup) and must not change.
         dbId:            cw.id || null,
         exampleText:     cw.exampleText || null,
+        // v2.0 단어별 추가 인정 뜻 — en2kr 채점 시 정답 후보에 합류.
+        acceptedMeanings: Array.isArray(cw.acceptedMeanings) ? cw.acceptedMeanings : [],
         // classId/unitId: the real DB foreign keys this word belongs to —
         // words are looked up via unit_id -> class_id in Supabase (never by
         // matching a className string), these are exposed for callers that
