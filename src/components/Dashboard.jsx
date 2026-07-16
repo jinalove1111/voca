@@ -7,6 +7,9 @@ import { STICKERS } from '../data/stickers'
 import InAppBrowserNotice from './InAppBrowserNotice'
 import HeroReaction from './HeroReaction'
 import { getReactionById } from '../utils/paulReactions'
+// 입실 단어시험 진입 배너 — 오늘 이 반의 시험이 없으면(또는 v1.8 테이블이
+// 아직 없으면) 아무것도 렌더하지 않아 기존 대시보드에 영향 0.
+import { EntranceTestBanner } from './EntranceTest'
 
 const GOAL = 5
 const stickerById = (id) => STICKERS.find(s => s.id === id)
@@ -221,6 +224,9 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
             </div>
           </div>
         </div>
+
+        {/* 입실시험이 시작되면 다른 무엇보다 먼저 보여야 하는 배너 */}
+        <EntranceTestBanner studentId={studentId} onGo={onGo} />
 
         <RecommendationBanner studentData={studentData} classWords={classWords} onGo={onGo} onResumeWord={onResumeWord} onPlayGame={onPlayGame} />
 

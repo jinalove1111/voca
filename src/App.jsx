@@ -14,6 +14,7 @@ import TrainGame from './components/TrainGame'
 import BonusChoiceScreen from './components/BonusChoiceScreen'
 import GiftReveal from './components/GiftReveal'
 import SpellingReview from './components/SpellingReview'
+import EntranceTest from './components/EntranceTest'
 import { useStudent } from './hooks/useStudent'
 import { pickNextGame } from './utils/matchGame'
 import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, getStudentById, getStudentClass, getStudentUnit, getClassSettings, filterWordsByScope } from './utils/wordLibrary'
@@ -324,6 +325,9 @@ function AppInner({ studentId, studentName, onLogout }) {
           badgeThreshold={pendingGift.badgeThreshold}
           onClose={handleDismissGift}
         />
+      )}
+      {screen === 'entranceTest' && (
+        <EntranceTest studentId={studentId} studentName={studentName} onBack={() => setScreen('dashboard')} />
       )}
       {screen === 'spellingReview' && (
         <SpellingReview
