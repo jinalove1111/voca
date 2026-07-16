@@ -1,5 +1,66 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-16 (저녁, P7 코드 감사 + P6 성능 측정)_
+_최종 갱신: 2026-07-16 (밤, P7 감사 보안 remediation)_
+
+## 2026-07-16 밤 — P7 감사 보안 remediation (커밋 `61ab5c8`→`e1e47da`→`6dcfb98`, **push+배포**)
+
+P7 감사(3ad7f5c)에서 나온 미수정 보안 항목 처리. 이미 수정된 것(stale 가드 4곳,
+pin_hash 응답 노출, localStorage 방어)은 건드리지 않음.
+
+### ⚠️ 운영자가 해야 할 일 — v1.9 SQL (이번 작업의 핵심)
+1. **`supabase_v1_9_security_rls.sql`을 Supabase SQL Editor에서 실행** (멱등, 몇 번 실행해도 안전).
+   무엇을 막나: 브라우저 anon key로 students의 `pin_hash`/`pin_fail_count`/`pin_locked_until`/`pin_setup_allowed`를
+   직접 SELECT(→4자리 PIN 오프라인 브루트포스)/UPDATE(→계정 탈취·잠금 무력화)하던 구멍.
+2. 실행 직후 검증: `node scripts/testRlsSecurity.mjs`
+   → "✅ 기능 + 보안 전부 통과"가 나와야 함. (지금 미적용 상태에서 돌리면 기능 9/9 PASS +
+   보안 6건 FAIL로 "미적용" 안내가 나옴 — 사전 실행으로 확인 완료. 이 FAIL들이 곧 현재 취약점의 실증.)
+3. 실기기 스팟체크(1분): 학생 로그인(이름+PIN) → 홈 진입, 관리자 → 학생 목록/반 변경 1회.
+4. **만약** 뭔가 이상하면 즉시 롤백(원상 복구, SQL Editor에서):
+   ```sql
+   grant select, update on table public.students to anon, authenticated;
+   notify pgrst, 'reload schema';
+   ```
+
+### 1. v1.9 SQL 설계 결정과 근거
+- **컬럼 단위 권한(GRANT/REVOKE), RLS 행 정책 아님.** 이 앱은 Supabase Auth를 안 쓰므로
+  (학생/관리자 전원이 같은 anon key) 행 단위 정책으로는 "누구인지" 구분 불가 — 잘못 걸면
+  로그인 화면 학생 목록부터 전멸. 진짜 위협은 PIN 자격증명 4컬럼뿐이라 딱 그것만 차단.
+- **클라이언트 전수 조사(설계 근거, src/ 전체)**: anon이 students에 하는 일은 wordLibrary.js 6곳이 전부 —
+  SELECT(id,name,class_id,unit_name,classes(name)+created_at 정렬), INSERT(name,class_id,unit_name RETURNING id),
+  UPDATE(class_id/unit_name), DELETE(id). → SQL은 이 전부를 그대로 허용(컬럼 목록은 information_schema에서
+  동적 생성이라 컬럼 빠뜨림 사고 없음). INSERT/DELETE는 테이블 단위 유지(자기등록/관리자 삭제가 anon 경유).
+- **서버리스는 무영향**: 라이브 프로브로 Vercel에 `SUPABASE_SERVICE_ROLE_KEY` 설정돼 있음을 확인
+  (generate-audio가 이 키를 강제 요구하는데 env 에러가 아닌 body 검증 에러를 반환 → 키 존재 증명).
+  service_role은 컬럼 권한 회수의 영향을 받지 않음.
+- **배포 순서 무관 안전**: 코드가 먼저든 SQL이 먼저든 안 깨짐 — 코드 변경은 students 접근을 안 바꿨고,
+  SQL은 클라이언트가 원래 안 쓰는 컬럼만 차단.
+- **알려진 영향(앱 아님)**: v1.9 적용 후 anon의 `select=*`(bare select)가 거부됨 — 앱 코드엔 없음(P7에서 제거 완료),
+  QA 스크립트들은 이번에 `select('id')` 명시로 정비 완료. testClearStudentPin.mjs의 직접 DB 검증은
+  적용 후 자동으로 student-pin-status 부울 검증으로 대체되게 수정해둠(전/후 어느 상태든 PASS).
+  이후 마이그레이션에서 students에 클라이언트가 읽을 새 컬럼을 추가하면 `grant select (새컬럼)`을 같이 실행해야 함(fail-closed).
+
+### 2. API 수정 내역 (커밋 `61ab5c8`, `e1e47da` — 코드만으로 즉시 적용)
+- **관리자 재인증 (clear-student-pin 패턴 공용화 → `_pinAuth.checkAdminReauth`)**:
+  `bulk-generate-temp-pins`(평문 PIN 목록 응답 — 가장 민감), `set-pin-setup-allowed`, `unlock-student-pin`
+  이제 요청마다 body.adminPin을 서버에서 재검증. AdminScreen 4개 핸들러가 adminPin 동봉 + not_authorized 시 재로그인 안내.
+- **`set-student-pin` 이중 신뢰 모델**(호출자가 둘이라 일괄 게이트 불가): ①무작위 재설정(pin 생략)= 관리자 전용,
+  adminPin 필수. ②학생 자기등록(명시 pin)= 인증 없이 허용하되 **대상 row의 pin_hash IS NULL을 서버에서 확인** —
+  기존 학생 PIN을 익명 fetch로 덮어쓰는 계정 탈취 차단, 등록 플로우("처음이에요" 탭)는 동작 불변.
+- **`verify-admin-pin`**: 실패 시 1.5초 지연만 추가(운영자 지시대로 과설계 없음 — 서버리스 인메모리 카운터는 무의미,
+  학생 PIN은 이미 DB 5회 잠금). 성공 응답은 지연 없음.
+- **`generate-audio`**: 학생 화면(WordDetail/QuizGame 지연 백필)이 자동 호출하므로 인증 요구 불가 판단.
+  최소 방어만 — wordId 실존 검증(없으면 404), 생성 소스(word/meaning/example)를 클라이언트 body 대신 DB row로 고정
+  (임의 텍스트로 Anthropic/TTS 비용 태우기 차단), 오디오+예문 완비 단어는 no-op(정상 클라이언트는 그 경우 호출 안 함 — 동작 불변).
+- **안 건드린 것**: `student-pin-status` boolean 노출(기능상 필요 — 운영자 지시), 자기등록 경로의 weak-PIN 허용
+  (self-set은 거부하지만 등록 탭은 기존대로 — UI 메시지 설계 없이 서버만 막으면 등록 플로우 혼란, 다음 세션 후보).
+
+### 3. 테스트 / 배포
+- PIN 스위트 4종 전부 PASS(라이브 DB, 핸들러 직접 호출): testStudentPinAuth(+탈취 시도 거부 3케이스 신규) ·
+  testStudentPinSelfSetup(+무인증 거부 2케이스 신규) · testClearStudentPin(+무인증 재설정 거부 신규) · testStudentSelectPinStatus.
+- testRlsSecurity.mjs 사전 실행: 기능 9/9 PASS, 보안 6건 "미적용" 정확 감지(위 1번 참고).
+- 매 커밋 `npm run build` 통과. push → Vercel 배포 + 라이브 프로브 검증(아래 4).
+
+### 4. 낮은 우선순위 (이번에 안 함)
+- pin-status fetch 중복 3곳 공용 헬퍼 정리(시간 캡) · 자기등록 weak-PIN 서버 거부 + UI 메시지 · P5 UI 리디자인.
 
 ## 2026-07-16 저녁 — P7 전체 코드 감사 + P6 성능 측정 (커밋 `529ff9e`, **push+배포 완료**)
 
