@@ -1,5 +1,47 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-16 (밤, P7 감사 보안 remediation)_
+_최종 갱신: 2026-07-17 (P5 UI 통일성 — 보수적 1차)_
+
+## 2026-07-17 — P5 UI 전체 통일성 (커밋 `3ca02fc`, `525ff6c`, **push+배포**)
+
+헤드리스 브라우저 불가 환경 → 시각 확인이 필요 없는 "기계적 클래스 교체" 수준만 수행.
+대규모 리디자인은 실기기 확인 가능할 때로 보류. 아래 인벤토리가 그때의 기초 자료.
+
+### 1. 디자인 토큰 인벤토리 (2026-07-17 기준, src 전수 grep)
+사실상 이미 존재하는 디자인 시스템(다수 패턴):
+- **Tier 1 페이지 카드**: `bg-white rounded-3xl card-shadow` + p-4~p-8 — Dashboard/WordDetail/QuizGame/SpellingQuestion/StudentSelect/DiaryPage/StudyCalendar/EntranceTest(Admin)/LevelUpMission/MatchGameShell 전부 일치.
+- **Tier 2 내부 박스·옵션/보조 버튼**: `rounded-2xl` (틴트 배경 + border-2, 옵션 버튼 p-4) — 일관.
+- **Tier 3 입력/칩/배지**: `rounded-xl` 또는 `rounded-full`.
+- **그림자**: 커스텀 `.card-shadow`가 표준(71곳). Tailwind `shadow-lg`는 5곳뿐 — 모달 3곳(App.jsx 46/458, AdminScreen 867: `rounded-3xl p-8 shadow-lg` 모달끼리는 서로 일관), MatchGameShell 게임 타일, StudentSelect 로고 이미지.
+- **버튼**: `btn-press`(index.css, active scale 0.96) 표준. 전면 CTA는 `w-full py-4~5 rounded-2xl/3xl font-black`.
+- **애니메이션**: `animate-slide-up`(26) / `animate-fade-in`(10) 표준, bounce/pulse/wiggle은 포인트용 — 일관.
+- **색**: 화면별 테마 컬러가 의도적으로 다름(Dashboard 인디고/퍼플, WordBrowser 블루, Spelling 틸, EntranceTest 로즈, StudyCalendar 앰버). 의미색(성공 green/실패 red)은 전 화면 일치 — 건드리지 않음.
+
+발견한 불일치(이번에 수정한 것):
+- ParentScreen 섹션 카드 6곳이 유일하게 `rounded-2xl card-shadow`(페이지 카드인데 Tier 2 radius) → 3xl로 통일. 취약 단어 칩 `rounded-lg`(앱 유일) → xl.
+- 터치 타깃: 헤더 "← 홈" 계열 백버튼 7화면(패딩 0, 실높이 ~20px), StudyCalendar 월 이동 ◀▶, SpellingQuestion 힌트 버튼, EntranceTest "모르겠어요" 스킵(py-1), WordBrowser 검색 ✕, ParentScreen 하단 버튼들 — 전부 44px 상당으로 확대.
+
+### 2. 수정 내역 (전부 클래스 문자열 교체, DOM/레이아웃/로직 불변)
+- `3ca02fc` ParentScreen: 카드 2xl→3xl 6곳, 칩 lg→xl, py-2/2.5 버튼→py-3, 백버튼 3곳 패딩.
+- `525ff6c` 8개 학생 화면 터치 타깃: **`py-3 px-2 -my-3 -mx-2` 패턴(패딩+음수 마진)이라 시각 위치·레이아웃 완전 불변, 히트 영역만 확대.** EntranceTest 스킵 py-1→py-3, WordBrowser ✕는 right-4→right-1+p-3(글리프 위치 동일: 4+12=16px)+btn-press 추가.
+
+### 3. 검증
+- 매 커밋 `npm run build` 통과. dist CSS에 `.-my-3/.-mx-2/.p-3/.py-3/.rounded-3xl` 규칙 존재 확인.
+- 스모크: `scripts/testProgress.mjs` 전체 PASS (esbuild 번들: react/wordLibrary 스텁 — PROGRESS_BUNDLE 환경변수 필요).
+- 로컬 최종 번들 `index-BN4SEG2Y.js` — push 직후 라이브 프로브로 배포 확인(아래 실기기 목록 참고).
+
+### 4. 실기기 확인 권장 화면 (Android Chrome, 1~2분)
+1. **ParentScreen(학부모)** — 유일하게 시각적 radius가 커진 화면(카드 6곳 16→24px). 카드 모서리 어색한지.
+2. WordBrowser — 검색어 입력 후 ✕ 위치/탭 반응.
+3. StudyCalendar — ◀▶ 월 이동 탭 (히트만 커짐, 위치 불변이어야 정상).
+4. EntranceTest 응시 중 "모르겠어요, 다음 문제 →" (py-1→py-3, 살짝 도톰해짐 — 의도).
+5. 각 화면 헤더 "← 홈" 류 — 보이는 건 이전과 동일해야 함.
+
+### 5. 의도적으로 안 건드린 것 (다음 리디자인 후보)
+- WordBrowser 검색바 카드 `rounded-2xl card-shadow` — 화면 내부가 전부 2xl(탭/검색/리스트 행)로 자체 일관이라 유지. LevelUpMission 리스트 행 2xl+card-shadow도 동일한 "리스트 행" 패턴이라 유지.
+- 모달 3곳 `shadow-lg`(card-shadow보다 강함) — 오버레이 위 모달은 강한 그림자가 맞을 수 있어 시각 확인 전 보류.
+- StudentSelect 로고 `rounded-[20px]`+shadow-lg, DiaryPage 스티커 삭제 버튼 28px(최근 실기기 튜닝 완료분), AdminScreen/DebugPage/FeatureManagementPanel/HiddenFeatures의 rounded-lg·plain shadow(관리자/숨김 화면 — 학생 우선 원칙), 화면별 테마 컬러 차이.
+
+## 2026-07-16 밤 — P7 감사 보안 remediation (커밋 `61ab5c8`→`e1e47da`→`6dcfb98`, **push+배포**)
 
 ## 2026-07-16 밤 — P7 감사 보안 remediation (커밋 `61ab5c8`→`e1e47da`→`6dcfb98`, **push+배포**)
 
