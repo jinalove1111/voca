@@ -281,6 +281,22 @@ function isEmptyRecord(rec) {
     Object.keys(rec.wordStatus || {}).length === 0
 }
 
+// P4 다이어리 레이어 순서(2026-07-16) — placement 배열의 순서 자체가 그리기
+// 순서(뒤에 있을수록 위에 그려짐, DiaryPage가 배열 순서대로 렌더 + 동일
+// z-index)라서, 새 필드 없이 배열 재정렬만으로 "앞으로/뒤로 보내기"를
+// 구현한다. 저장 스키마가 기존과 완전히 동일하므로 기존 학생들의 다꾸
+// 배치 데이터·클라우드 백업과 100% 하위호환. 한 번에 한 칸씩만 이동
+// (dir: 'front' = 한 칸 앞으로/위로, 'back' = 한 칸 뒤로/아래로).
+// 이동할 수 없으면(끝에 있거나 id 없음) 원본 배열을 그대로 반환.
+export function movePlacementInList(list, placementId, dir) {
+  const i = list.findIndex(p => p.placementId === placementId)
+  const j = dir === 'front' ? i + 1 : i - 1
+  if (i < 0 || j < 0 || j >= list.length) return list
+  const arr = [...list]
+  ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  return arr
+}
+
 // Pure helpers exported for testing (see scripts/testProgress.mjs) — no
 // behavior change, just visibility into the same logic the hook uses.
 export { freshRecord, freshRound, freshHistoryDay, migrateOldData, calcStreak, countCategoriesCompleted, todayStr, GOAL, isEmptyRecord }
@@ -514,6 +530,15 @@ export function useStudent(studentId, legacyName) {
     patch(prev => ({ diaryPlacements: prev.diaryPlacements.filter(p => p.placementId !== placementId) }))
   }, [patch])
 
+  // P4 레이어 순서 — movePlacementInList(위 pure helper) 참고. 이동 불가
+  // 상황이면 아무 것도 저장하지 않음(불필요한 re-render/sync 방지).
+  const movePlacementLayer = useCallback((placementId, dir) => {
+    patch(prev => {
+      const next = movePlacementInList(prev.diaryPlacements, placementId, dir)
+      return next === prev.diaryPlacements ? {} : { diaryPlacements: next }
+    })
+  }, [patch])
+
   const setLastGamePlayed = useCallback((gameId) => patch(() => ({ lastGamePlayed: gameId })), [patch])
 
   // Logs one play of a mini-game into today's history (calendar "게임 결과
@@ -696,7 +721,7 @@ export function useStudent(studentId, legacyName) {
     pendingGift: giftQueue[0] || null, dismissGift,
     addStars, addMission, answerMission,
     markWordViewed, markExampleHeard, markQuizSolved, markPronunciationOk,
-    placeSticker, updatePlacement, removePlacement,
+    placeSticker, updatePlacement, removePlacement, movePlacementLayer,
     wordStatus, setWordKnown, setWordUnknown,
   }
 }
