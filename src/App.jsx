@@ -14,9 +14,12 @@ import TrainGame from './components/TrainGame'
 import BonusChoiceScreen from './components/BonusChoiceScreen'
 import GiftReveal from './components/GiftReveal'
 import SpellingReview from './components/SpellingReview'
+import SpellingSessionResult from './components/SpellingSessionResult'
 import EntranceTest from './components/EntranceTest'
 import { useStudent } from './hooks/useStudent'
 import { pickNextGame } from './utils/matchGame'
+import { assignDirections } from './utils/entranceTest'
+import { logSpellingReview } from './utils/spellingReviewApi'
 import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, getStudentById, getStudentClass, getStudentUnit, getClassSettings, filterWordsByScope } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech, getMicStream } from './utils/speech'
 
@@ -190,6 +193,44 @@ function AppInner({ studentId, studentName, onLogout }) {
     try { return getClassSettings(getStudentClass(studentId)) } catch { return { spellingTestEnabled: false, spellingHintEnabled: false, wrongAnswerRepeatCount: 3 } }
   }, [studentId, refreshTick])
 
+  // v2.0 혼합(mixed) 방향 — 반 설정이 'mixed'일 때만, 이번 세션 단어
+  // 목록(sessionWords) 전체에 kr2en/en2kr을 정확히 50:50으로 미리 배정
+  // (입실시험과 같은 assignDirections — 중복 구현 금지). 단어별 방향은
+  // 인덱스로 조회. 다른 방향(kr2en/en2kr/random)은 null — 기존 흐름
+  // (SpellingQuestion이 direction prop을 그대로 해석) 완전 동일.
+  // 주의: scope가 'review'면 오답이 쌓이며 sessionWords가 세션 도중 자랄
+  // 수 있어 그때 재배정되지만, 방향은 문제 시작 시점에만 읽으므로 이미
+  // 푼 문제에는 영향 없음(50:50 균형이 약간 흔들리는 정도 — 허용).
+  const mixedDirections = useMemo(() => {
+    if (spellingSettings.spellingDirection !== 'mixed') return null
+    return assignDirections(sessionWords.length, 'mixed')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spellingSettings, sessionWords.length])
+
+  // v2.0 쓰기 모드 세션 성적 집계(방향별) — 첫 시도 기준. 쓰기 모드로
+  // 단어 목록에서 세션을 시작할 때 비우고, 마지막 단어까지 끝나면 결과
+  // 화면(spellingResult)에서 요약해 보여준다. 저장은 안 함(요약 표시 전용
+  // — 영구 기록은 기존 recordSpellingAnswer가 이미 담당).
+  const [writeSessionStats, setWriteSessionStats] = useState([])
+
+  // 쓰기 채점 1건 처리 — ①기존 영구 기록 ②세션 집계(쓰기 모드만)
+  // ③애매한 오답(영→한인데 한글로 답함)은 교사 검토 큐에 기록
+  // (fire-and-forget, 테이블 없으면 조용히 스킵 — spellingReviewApi 참고).
+  const handleSpellingAnswer = (wordId, correct, direction, submitted) => {
+    studentData.recordSpellingAnswer(wordId, correct)
+    const w = classWords.find((cw) => cw.id === wordId)
+    if (studyMode === 'write') {
+      setWriteSessionStats((prev) => [...prev, {
+        wordId, correct,
+        direction: direction === 'en2kr' ? 'en2kr' : 'kr2en',
+        word: w?.word || wordId, meaning: w?.meaning || '',
+      }])
+    }
+    if (!correct && direction === 'en2kr' && w?.dbId && /[ㄱ-ㆎ가-힣]/.test(submitted || '')) {
+      logSpellingReview(w.dbId, studentId, submitted, 'en2kr')
+    }
+  }
+
   // Re-pull the latest word AND student data from Supabase whenever the app
   // regains focus (e.g. switching back from another app on mobile) so a word
   // added on another device — or a class/unit reassignment an admin made on
@@ -236,6 +277,7 @@ function AppInner({ studentId, studentName, onLogout }) {
     setWord(w)
     setWordIdx(safeIdx)
     studentData.setLastWordIndex(safeIdx)
+    setWriteSessionStats([]) // 새 세션 시작 — 쓰기 성적 집계 초기화
     setScreen('wordDetail')
   }
 
@@ -249,6 +291,7 @@ function AppInner({ studentId, studentName, onLogout }) {
     setWord(classWords[idx])
     setWordIdx(idx)
     studentData.setLastWordIndex(idx)
+    setWriteSessionStats([]) // 새 세션 시작 — 쓰기 성적 집계 초기화
     setScreen('wordDetail')
   }
 
@@ -268,6 +311,10 @@ function AppInner({ studentId, studentName, onLogout }) {
       setWord(sessionWords[nextIdx])
       setWordIdx(nextIdx)
       studentData.setLastWordIndex(nextIdx)
+    } else if (studyMode === 'write' && writeSessionStats.length > 0) {
+      // v2.0 쓰기 모드 — 마지막 단어까지 끝나면 목록 대신 방향별 성적
+      // 요약("한→영 8/10 · 영→한 9/10 · 총점 17/20")을 먼저 보여줌.
+      setScreen('spellingResult')
     } else {
       setScreen('wordBrowser')
     }
@@ -317,7 +364,8 @@ function AppInner({ studentId, studentName, onLogout }) {
           classWords={classWords}
           mode={studyMode}
           spellingSettings={spellingSettings}
-          onSpellingAnswer={studentData.recordSpellingAnswer}
+          onSpellingAnswer={handleSpellingAnswer}
+          spellingDirectionOverride={mixedDirections ? mixedDirections[selectedWordIdx] || 'kr2en' : null}
           spellingCombo={studentData.spellingCombo}
           sessionProgress={{ current: selectedWordIdx + 1, total: sessionWords.length }}
           onBack={() => setScreen('wordBrowser')}
@@ -373,6 +421,12 @@ function AppInner({ studentId, studentName, onLogout }) {
       )}
       {screen === 'entranceTest' && (
         <EntranceTest studentId={studentId} studentName={studentName} onBack={() => setScreen('dashboard')} />
+      )}
+      {screen === 'spellingResult' && (
+        <SpellingSessionResult
+          stats={writeSessionStats}
+          onDone={() => { setWriteSessionStats([]); setScreen('wordBrowser') }}
+        />
       )}
       {screen === 'spellingReview' && (
         <SpellingReview

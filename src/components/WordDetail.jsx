@@ -527,6 +527,10 @@ export default function WordDetail({
   // 정답 수(useStudent.round.spellingCombo), sessionProgress: { current,
   // total } 이번 학습 범위(sessionWords) 안에서 몇 번째 단어인지.
   spellingCombo = 0, sessionProgress = null,
+  // v2.0 혼합(mixed) 방향 — 반 설정이 'mixed'면 App이 세션 단어 목록에
+  // 미리 50:50으로 배정한 "이 단어의 방향"('kr2en'|'en2kr')을 내려보냄.
+  // null이면(기존 모든 방향) 반 설정의 direction을 그대로 사용 — 하위호환.
+  spellingDirectionOverride = null,
 }) {
   const exampleEnglish = word.easyExample || word.funnyExample || word.realExample
   const exampleKorean  = word.exampleTranslation
@@ -618,8 +622,9 @@ export default function WordDetail({
             meaning={word.meaning}
             wordAudioUrl={word.wordAudioUrl}
             hintEnabled={!!spellingSettings?.spellingHintEnabled}
-            direction={spellingSettings?.spellingDirection || 'kr2en'}
-            onResult={(correct) => onSpellingAnswer?.(word.id, correct)}
+            direction={spellingDirectionOverride || spellingSettings?.spellingDirection || 'kr2en'}
+            acceptedMeanings={word.acceptedMeanings}
+            onResult={(correct, dir, submitted) => onSpellingAnswer?.(word.id, correct, dir, submitted)}
             onDone={goNext}
             combo={spellingCombo}
             comboStarsEnabled

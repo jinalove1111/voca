@@ -67,8 +67,19 @@ const WRONG_MSGS = {
 //              보너스 별을 지급하는 흐름에서만 true(WordDetail 경유).
 //              SpellingReview처럼 별을 안 주는 화면은 끔 — 화면이
 //              거짓말로 "+별"을 보여주는 일이 없도록.
-export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnabled, direction = 'kr2en', onResult, onDone, combo = 0, progress = null, comboStarsEnabled = false }) {
-  const pickDirection = () => (direction === 'random' ? (Math.random() < 0.5 ? 'kr2en' : 'en2kr') : direction)
+// v2.0(2026-07-17) 추가 props:
+//   acceptedMeanings — 이 단어의 "추가 인정 뜻" 목록(words.accepted_meanings).
+//              en2kr 채점에서만 정답 후보에 합류(영어 철자 채점에는 무관).
+//   direction='mixed' — 세션 단위 50:50 배분은 부모(App.jsx)가 assignDirections로
+//              단어별 'kr2en'/'en2kr'을 미리 정해 내려보내는 구조라, 이
+//              컴포넌트에 'mixed'가 직접 오는 일은 정상 흐름엔 없음. 혹시
+//              오면(방어) 문제마다 랜덤과 동일하게 처리.
+//   onResult(correct, direction, submitted) — 기존 correct 외에 이 문제의
+//              실제 방향과 첫 시도 제출 원문을 추가로 전달(하위호환 —
+//              기존 호출부는 첫 인자만 써도 동작 동일). App이 방향별 세션
+//              집계와 교사 검토 큐 기록에 사용.
+export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnabled, direction = 'kr2en', onResult, onDone, combo = 0, progress = null, comboStarsEnabled = false, acceptedMeanings = [] }) {
+  const pickDirection = () => ((direction === 'random' || direction === 'mixed') ? (Math.random() < 0.5 ? 'kr2en' : 'en2kr') : direction)
 
   const [phase, setPhase] = useState('answer') // answer | reveal | correct
   const [wrongCount, setWrongCount] = useState(0)
@@ -164,9 +175,11 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
 
   const submitAnswer = () => {
     if (!input.trim()) return
-    const correct = isSpellingCorrect(input, targetAnswer)
+    // acceptedMeanings는 "뜻(한글)"의 추가 표기 목록이므로 정답이 뜻인
+    // en2kr에서만 후보에 합류 — 영어 철자(kr2en) 채점은 기존과 완전 동일.
+    const correct = isSpellingCorrect(input, targetAnswer, { acceptedMeanings: isEn2Kr ? acceptedMeanings : [] })
     const firstAttempt = !reportedRef.current
-    if (firstAttempt) { reportedRef.current = true; onResult?.(correct) }
+    if (firstAttempt) { reportedRef.current = true; onResult?.(correct, resolvedDirection, input.trim()) }
     if (correct) { markCorrect(firstAttempt ? combo + 1 : 0); return }
 
     setInput('')

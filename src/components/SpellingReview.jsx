@@ -54,7 +54,11 @@ export default function SpellingReview({ wrongWordIds, classWords, onClearWord, 
           meaning={current.meaning}
           wordAudioUrl={current.wordAudioUrl}
           hintEnabled={hintEnabled}
+          // v2.0: 반 설정이 'mixed'(세션 단위 50:50)여도 복습은 "맞을 때까지
+          // 반복"이라 문제 수가 고정이 아니어서 정확 배분이 무의미 — mixed는
+          // SpellingQuestion이 문제마다 랜덤과 동일하게 처리(방어 내장).
           direction={direction || 'kr2en'}
+          acceptedMeanings={current.acceptedMeanings}
           onResult={(correct) => setCombo(c => (correct ? c + 1 : 0))}
           onDone={() => onClearWord(current.id)}
           combo={combo}
