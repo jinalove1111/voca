@@ -81,6 +81,10 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
   const reportedRef = useRef(false)
   const cancelRef = useRef(null)
   const inputRef = useRef(null)
+  // 브라우저 자동완성 프로필 매칭을 깨기 위한 무작위 비표준 name — 마운트당
+  // 1회 고정(리렌더마다 바뀌면 일부 브라우저가 필드를 새 필드로 취급해
+  // 포커스/IME 조합이 끊길 수 있음).
+  const antiFillNameRef = useRef(`sq-${Math.random().toString(36).slice(2, 10)}`)
 
   const isEn2Kr = resolvedDirection === 'en2kr'
   const promptText = isEn2Kr ? word : meaning // 문제로 보여주는 텍스트
@@ -184,6 +188,42 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
   const wrongMsg = WRONG_MSGS[wrongCount]
   const speakerUnlocked = wrongCount >= UNLOCK_AT
 
+  // ── 시험용 입력창 공통 속성 ─────────────────────────────────────────────
+  // 실사용 리포트: 삼성 키보드/Gboard에서 "orde"까지 치면 "order"가 추천어로
+  // 떠서 시험이 무의미해짐. 웹 속성으로 막을 수 있는 최대치를 조합:
+  //  - autoComplete="off": 표준. 단 Android Chrome/삼성 인터넷이 자주 무시.
+  //  - name=무작위 비표준 값: 브라우저 자동완성 프로필(저장된 폼 데이터)
+  //    매칭을 차단하는 실전 보강책 — autocomplete=off 무시 케이스 대부분이
+  //    "필드 이름 기반 프로필 자동완성"이라 이 조합이 실효가 큼.
+  //  - autoCapitalize/autoCorrect/spellCheck: 기존 유지(키보드 자동교정 억제).
+  //  - onPaste/onDrop 차단: 정답을 복사해 붙여넣는 우회 차단. onCopy도 입력창
+  //    한정 차단(문제 텍스트 복사는 그대로 가능). onContextMenu는 안 막음 —
+  //    롱프레스 커서 이동/선택까지 막혀 초등학생 UX를 해침. 붙여넣기는
+  //    메뉴 경유라도 onPaste가 잡으므로 차단에 구멍 없음.
+  // 한계(속성으로 불가능한 영역): 키보드 앱 자체의 "예측 텍스트"(OS 설정)는
+  // 웹 속성으로 100% 차단 불가 — handoff에 기록, 운영자 실기기 확인 필요.
+  //
+  // 방향별 세트 분리: 정답 언어가 한글(en2kr)인 문제는 한글 IME 조합이
+  // 정상 동작해야 하므로 IME에 영향 줄 수 있는 힌트(lang)만 다르게 주고,
+  // 자동완성/붙여넣기 차단은 동일 적용. type="text" 유지(다른 type은
+  // IME/키보드 레이아웃을 깨는 주범이라 금지).
+  const blockClipboard = {
+    onPaste: (e) => e.preventDefault(),
+    onDrop: (e) => e.preventDefault(),
+    onCopy: (e) => e.preventDefault(),
+  }
+  const examInputProps = {
+    type: 'text',
+    name: antiFillNameRef.current,
+    autoComplete: 'off',
+    autoCapitalize: 'off',
+    autoCorrect: 'off',
+    spellCheck: 'false',
+    inputMode: 'text',
+    lang: isEn2Kr ? 'ko' : 'en',
+    ...blockClipboard,
+  }
+
   // P3 게임화 표시값 — 진행 바는 "완료한 문제 수" 기준이라 풀고 있는 동안은
   // current-1, 정답을 맞힌 순간(correct phase) current로 차오름(맞히는
   // 순간 바가 한 칸 전진하는 게임식 피드백).
@@ -248,9 +288,9 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
           {wrongMsg && (
             <HeroReaction image={getReactionById(WRONG_PAUL_ID[wrongCount])?.image} title={wrongMsg} theme="fail" size="md" />
           )}
-          <input ref={inputRef} type="text" value={input} onChange={e => setInput(e.target.value)}
+          <input ref={inputRef} {...examInputProps} value={input} onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && submitAnswer()}
-            placeholder={inputPlaceholder} autoFocus autoCapitalize="off" autoCorrect="off" spellCheck="false"
+            placeholder={inputPlaceholder} autoFocus
             className="w-full border-2 border-teal-200 rounded-xl px-4 py-4 text-xl font-black text-center focus:outline-none focus:border-teal-500" />
           <button onClick={submitAnswer}
             className="w-full bg-teal-500 hover:bg-teal-600 text-white font-black py-4 rounded-2xl btn-press text-lg">
@@ -271,9 +311,9 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
             <p className="text-gray-500 font-bold text-sm mt-1 break-words">{pairedText}</p>
           </div>
           <p className="text-center text-xs text-gray-400">정답을 보고 똑같이 한 번 입력해봐요</p>
-          <input ref={inputRef} type="text" value={input} onChange={e => setInput(e.target.value)}
+          <input ref={inputRef} {...examInputProps} value={input} onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && submitAnswer()}
-            placeholder="다시 입력하세요" autoFocus autoCapitalize="off" autoCorrect="off" spellCheck="false"
+            placeholder="다시 입력하세요" autoFocus
             className="w-full border-2 border-red-200 rounded-xl px-4 py-4 text-xl font-black text-center focus:outline-none focus:border-red-500" />
           <button onClick={submitAnswer}
             className="w-full bg-red-400 hover:bg-red-500 text-white font-black py-4 rounded-2xl btn-press text-lg">
