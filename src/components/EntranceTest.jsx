@@ -102,6 +102,10 @@ export default function EntranceTest({ studentId, studentName, onBack }) {
   const startedAtRef = useRef(0)
   const finishedRef = useRef(false)
   const inputRef = useRef(null)
+  // 시험용 입력창 자동완성 차단용 무작위 비표준 name(마운트당 1회 고정) —
+  // SpellingQuestion과 동일한 조합(autoComplete=off는 Android 키보드가
+  // 자주 무시해서, 저장된 폼 프로필 매칭을 깨는 무작위 name을 함께 씀).
+  const antiFillNameRef = useRef(`et-${Math.random().toString(36).slice(2, 10)}`)
 
   // P7 감사(2026-07-16): 5초 폴링과 제출 직후 load()가 겹치면 응답 순서
   // 역전으로 더 오래된 랭킹이 최신 상태를 덮을 수 있었다(다음 폴링에서
@@ -326,7 +330,9 @@ export default function EntranceTest({ studentId, studentName, onBack }) {
                 <input ref={inputRef} type="text" value={input} onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && input.trim()) advance(input) }}
                   placeholder={q.direction === 'en2kr' ? '한글로 뜻 입력' : '영어로 입력'}
-                  autoFocus autoCapitalize="off" autoCorrect="off" spellCheck="false"
+                  autoFocus autoCapitalize="off" autoCorrect="off" spellCheck="false" autoComplete="off"
+                  name={antiFillNameRef.current} inputMode="text" lang={q.direction === 'en2kr' ? 'ko' : 'en'}
+                  onPaste={(e) => e.preventDefault()} onDrop={(e) => e.preventDefault()} onCopy={(e) => e.preventDefault()}
                   className="w-full border-2 border-rose-200 rounded-xl px-4 py-4 text-xl font-black text-center focus:outline-none focus:border-rose-500" />
                 <button onClick={() => input.trim() && advance(input)} disabled={!input.trim()}
                   className="w-full bg-rose-500 hover:bg-rose-600 disabled:opacity-40 text-white font-black py-4 rounded-2xl btn-press text-lg">
