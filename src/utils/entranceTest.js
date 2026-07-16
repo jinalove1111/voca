@@ -13,7 +13,7 @@
 // 스크립트의 직접 import)는 확장자가 없으면 모듈을 못 찾는다.
 import { isSpellingCorrect } from './spelling.js'
 
-export const ENTRANCE_DIRECTIONS = new Set(['kr2en', 'en2kr', 'random'])
+export const ENTRANCE_DIRECTIONS = new Set(['kr2en', 'en2kr', 'random', 'mixed'])
 
 // Fisher–Yates — rng 주입 가능(테스트에서 결정적으로 돌리기 위함).
 function shuffle(arr, rng = Math.random) {
@@ -25,17 +25,42 @@ function shuffle(arr, rng = Math.random) {
   return a
 }
 
+// ── 방향 배정 공용 함수 (2026-07-17) ─────────────────────────────────────
+// 입실시험과 쓰기 모드 세션(App.jsx)이 함께 쓰는 단일 배정기 — 두 화면이
+// 각자 방향 배정을 중복 구현하지 않는다(운영자 명시 지시). count개 문제
+// 각각에 'kr2en'|'en2kr'을 배정한 배열을 돌려준다.
+//   'kr2en' | 'en2kr' — 전부 그 방향.
+//   'random' — 문제마다 독립적으로 50% 확률(기존 random 의미 그대로 —
+//              총 개수의 균형은 보장 안 됨).
+//   'mixed'  — 정확히 반반(홀수면 남는 1개는 rng로 어느 쪽인지 결정) 후
+//              순서 셔플. 20문제면 정확히 각 10개.
+// 알 수 없는 값은 fallback(기본 'kr2en')으로 전부 배정 — 절대 throw 안 함.
+export function assignDirections(count, direction, { rng = Math.random, fallback = 'kr2en' } = {}) {
+  const n = Math.max(0, Math.floor(count) || 0)
+  if (direction === 'kr2en' || direction === 'en2kr') return Array(n).fill(direction)
+  if (direction === 'random') return Array.from({ length: n }, () => (rng() < 0.5 ? 'kr2en' : 'en2kr'))
+  if (direction === 'mixed') {
+    const half = Math.floor(n / 2)
+    const dirs = [...Array(half).fill('kr2en'), ...Array(half).fill('en2kr')]
+    if (dirs.length < n) dirs.push(rng() < 0.5 ? 'kr2en' : 'en2kr') // 홀수 개수의 남는 1개
+    return shuffle(dirs, rng)
+  }
+  return Array(n).fill(fallback)
+}
+
 // 출제 — words([{word, meaning}])에서 count개를 무작위로 뽑아 문제 배열을
 // 만든다. direction이 'random'이면 문제마다 kr2en/en2kr을 따로 뽑아 그
-// 문제에 고정한다(SpellingQuestion.jsx의 direction='random' 의미와 동일).
+// 문제에 고정하고(SpellingQuestion.jsx의 direction='random' 의미와 동일),
+// 'mixed'면 정확히 반반 배정 후 셔플(assignDirections 참고).
 // 반환: [{ word, meaning, direction, prompt, answer }]
 //   prompt — 학생에게 보여주는 텍스트, answer — 채점 target.
 export function buildEntranceQuestions(words, { count = 10, direction = 'en2kr', rng = Math.random } = {}) {
   const dir = ENTRANCE_DIRECTIONS.has(direction) ? direction : 'en2kr'
   const pool = (words || []).filter((w) => w && w.word && w.meaning)
   const picked = shuffle(pool, rng).slice(0, Math.max(0, Math.min(count, pool.length)))
-  return picked.map((w) => {
-    const d = dir === 'random' ? (rng() < 0.5 ? 'kr2en' : 'en2kr') : dir
+  const dirs = assignDirections(picked.length, dir, { rng, fallback: 'en2kr' })
+  return picked.map((w, i) => {
+    const d = dirs[i]
     return {
       word: w.word,
       meaning: w.meaning,
