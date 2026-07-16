@@ -229,6 +229,49 @@ function migrateOldData(name, id) {
   return rec
 }
 
+// P0(2026-07-17) 로그인 직후 크래시 수정 — 외부에서 들어오는 record는
+// 전부 이 함수를 통과시켜 freshRecord() 기본형과 merge한다. "외부"란:
+//   1) 클라우드 백업 blob(student_progress.progress_data) — 옛 앱 버전이
+//      업로드한 blob에는 나중에 추가된 필드가 없다. 실사고: 2026-07-07
+//      쓰기시험 기능 이전 스키마의 round(spellingWrongToday 없음)가 blob에
+//      남아 있으면, 복원 직후 App.jsx의 `spellingWrongToday.forEach(...)`가
+//      TypeError로 앱 전체를 크래시시켰다. 크래시가 재동기화(2s 디바운스
+//      sync)마저 막아서 blob이 영영 옛 스키마로 남는 악순환 — PIN 초기화/
+//      재설정 후 재로그인하는 학생이 정확히 이 복원 경로를 탄다.
+//   2) localStorage 파싱 결과 — 이름 키 시절(v1.6 이전) 저장된 레코드,
+//      또는 옛 앱 버전이 저장한 id 키 레코드. 같은 이유로 필드가 빠져
+//      있을 수 있다(v1.6 마이그레이션은 이름 키 레코드를 그대로 복사했다).
+// round는 날짜가 오늘이 아니면 통째로 리셋한다 — 자정 롤오버 인터벌
+// (30s 주기)과 정확히 같은 의미인데, 이걸 로드 시점에 하면 "지난 날짜
+// round가 첫 30초 동안 오늘 진행도로 잘못 계산되는" 부수 버그도 함께
+// 사라진다. 오늘 날짜 round는 진행값을 전부 보존하고 누락 필드만 채운다.
+const asArray = (v) => (Array.isArray(v) ? v : [])
+const asObject = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {})
+function normalizeRecord(raw, id) {
+  const rec = { ...freshRecord(id), ...asObject(raw), studentId: id }
+  rec.totalStars = Number(rec.totalStars) || 0
+  rec.stickers = asArray(rec.stickers)
+  rec.diaryPlacements = asArray(rec.diaryPlacements)
+  rec.missions = asArray(rec.missions)
+  rec.cleared = asArray(rec.cleared)
+  rec.milestoneStreak = Number(rec.milestoneStreak) || 0
+  rec.starBadgeThreshold = Number(rec.starBadgeThreshold) || 0
+  rec.lastWordIndex = Number(rec.lastWordIndex) || 0
+  rec.wordStatus = asObject(rec.wordStatus)
+  const r = asObject(rec.round)
+  rec.round = r.date === todayStr()
+    ? { ...freshRound(), ...r, wordsViewed: asArray(r.wordsViewed), spellingWrongToday: asArray(r.spellingWrongToday) }
+    : freshRound()
+  rec.history = Object.fromEntries(Object.entries(asObject(rec.history)).map(([date, day]) => {
+    const d = { ...freshHistoryDay(), ...asObject(day) }
+    d.stickersEarned = asArray(d.stickersEarned)
+    d.missedWordIds = asArray(d.missedWordIds)
+    d.gamesPlayed = asObject(d.gamesPlayed)
+    return [date, d]
+  }))
+  return rec
+}
+
 // P0(2026-07-15) Phase 2 identity 마이그레이션 — lazy/on-demand, 로그인
 // 시점에만 실행. 우선순위:
 //   1) 이미 studentId 키로 저장된 레코드가 있으면 그대로 사용(이미 마이그
@@ -247,14 +290,15 @@ function migrateOldData(name, id) {
 // 시점에 정확히 어느 학생인지 알고 있는 지금이 유일하게 안전한 시점).
 function loadRecord(id, legacyName) {
   const store = loadStore()
-  if (store[id]) return store[id]
-  if (legacyName && store[legacyName]) {
-    const migrated = { ...store[legacyName], studentId: id }
-    store[id] = migrated
-    saveStore(store)
-    return migrated
-  }
-  const migrated = legacyName ? migrateOldData(legacyName, id) : freshRecord(id)
+  // 모든 경로가 normalizeRecord를 통과한다(위 주석 참고) — 이미 id 키로
+  // 저장된 레코드도 예외 없음: 옛 앱 버전이 저장했거나 과거 마이그레이션이
+  // 그대로 복사해둔 옛 스키마 레코드가 지금도 남아있을 수 있다.
+  const source = store[id]
+    ? store[id]
+    : legacyName && store[legacyName]
+      ? store[legacyName] // 이름 키 → id 키 복사(원본 이름 키는 절대 삭제 안 함)
+      : legacyName ? migrateOldData(legacyName, id) : freshRecord(id)
+  const migrated = normalizeRecord(source, id)
   store[id] = migrated
   saveStore(store)
   return migrated
@@ -318,7 +362,7 @@ export function movePlacementInList(list, placementId, dir) {
 
 // Pure helpers exported for testing (see scripts/testProgress.mjs) — no
 // behavior change, just visibility into the same logic the hook uses.
-export { freshRecord, freshRound, freshHistoryDay, migrateOldData, calcStreak, countCategoriesCompleted, todayStr, GOAL, isEmptyRecord }
+export { freshRecord, freshRound, freshHistoryDay, migrateOldData, calcStreak, countCategoriesCompleted, todayStr, GOAL, isEmptyRecord, normalizeRecord }
 
 // studentId: Supabase students.id(UUID) — 이 학생의 유일한 식별자, 모든
 // 저장/동기화가 이걸로 이뤄진다. legacyName: 이번 로그인이 실제로 성공한
@@ -368,7 +412,10 @@ export function useStudent(studentId, legacyName) {
     const timeout = setTimeout(() => { if (!cancelled) setRestoreChecked(true) }, 5000)
     fetchFullProgress(studentId).then((backup) => {
       if (cancelled || !backup) return
-      patch((prev) => (isEmptyRecord(prev) ? backup : {}))
+      // 백업 blob은 반드시 정규화 후 반영 — 옛 스키마 blob(필드 누락)이
+      // 그대로 record가 되면 로그인 직후 렌더에서 크래시(normalizeRecord
+      // 주석의 실사고 참고).
+      patch((prev) => (isEmptyRecord(prev) ? normalizeRecord(backup, studentId) : {}))
     }).catch(() => {}).finally(() => {
       if (!cancelled) { clearTimeout(timeout); setRestoreChecked(true) }
     })
@@ -727,6 +774,10 @@ export function useStudent(studentId, legacyName) {
   }, [restoreChecked])
 
   return {
+    // 로그인 직후 로딩 게이트(App.jsx) — 복원 확인이 끝나기 전에 Dashboard가
+    // 복원 전 빈 record로 렌더되지 않도록. 로컬에 데이터가 있으면 처음부터
+    // true(대기 0), 없으면 복원 성공/실패/5s 타임아웃 어느 쪽이든 끝나면 true.
+    restoreChecked,
     stars, stickerTypes, diaryPlacements, missions,
     activeMissions: missions.filter(m => !m.done),
     cleared, round, dailyProgress,
