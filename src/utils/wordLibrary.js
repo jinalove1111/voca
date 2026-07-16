@@ -524,7 +524,10 @@ export async function setStudentClass(id, className) {
   if (!s) return
   const classId = className ? (await ensureClass(className)).id : null
   const payload = { class_id: classId }
-  const { error } = await supabase.from('students').update(payload).eq('id', id).select()
+  // P7 감사(2026-07-16): 예전엔 뒤에 bare .select()가 붙어 있었는데, 반환
+  // 데이터를 아무도 안 쓰는데도 업데이트된 행의 "모든" 컬럼(pin_hash 포함)이
+  // 네트워크 응답에 실려 내려왔다 — 제거(동작 불변, 응답에서 해시 노출만 차단).
+  const { error } = await supabase.from('students').update(payload).eq('id', id)
   if (error) throw error
   await refreshStudents()
 }
@@ -533,7 +536,8 @@ export async function setStudentUnit(id, unitName) {
   const s = _students.get(id)
   if (!s) return
   const payload = { unit_name: unitName }
-  const { error } = await supabase.from('students').update(payload).eq('id', id).select()
+  // P7 감사: bare .select() 제거 — setStudentClass와 동일한 pin_hash 응답 노출 차단.
+  const { error } = await supabase.from('students').update(payload).eq('id', id)
   if (error) throw error
   await refreshStudents()
 }

@@ -50,8 +50,23 @@ function loadStore() {
     return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}
   } catch { return {} }
 }
+// P7 감사(2026-07-16): setItem은 저장 공간 부족(QuotaExceededError)이나
+// 일부 프라이빗 브라우징 모드에서 throw할 수 있다. saveStore는 patch()의
+// setState updater "안"에서 불리므로, 여기서 throw하면 렌더 중 예외가 돼
+// 앱 전체가 크래시했다. 쓰기 실패는 삼키고 경고만 남긴다 — in-memory
+// 상태(React state)는 정상 갱신되고 클라우드 동기화(doSync)도 그 state를
+// 읽으므로, 학습 세션과 서버 백업은 계속 동작한다(이 기기 로컬 영속화만
+// 실패). 동작 불변: 정상 경로는 완전히 동일.
+let _storeWriteWarned = false
 function saveStore(store) {
-  localStorage.setItem(STORE_KEY, JSON.stringify(store))
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(store))
+  } catch (err) {
+    if (!_storeWriteWarned) {
+      _storeWriteWarned = true
+      console.warn('[useStudent] 로컬 저장 실패(저장 공간 부족?) — 화면/클라우드 동기화는 계속 동작:', err?.message || err)
+    }
+  }
 }
 function readOld(key, def) {
   try { return JSON.parse(localStorage.getItem(key)) ?? def } catch { return def }
@@ -72,7 +87,11 @@ function loadSyncMetaStore() {
   } catch { return {} }
 }
 function saveSyncMetaStore(store) {
-  localStorage.setItem(SYNC_META_KEY, JSON.stringify(store))
+  // saveStore와 같은 이유의 방어 — 동기화 텔레메트리 기록 실패가 동기화
+  // 자체(마킹을 호출한 .then/.catch 체인)를 깨뜨리면 안 된다.
+  try {
+    localStorage.setItem(SYNC_META_KEY, JSON.stringify(store))
+  } catch { /* 텔레메트리 기록 실패는 무시 — 학습 데이터 아님 */ }
 }
 function freshSyncMeta() {
   return { status: 'idle', lastType: null, lastAttemptAt: null, lastSuccessAt: null, failedCount: 0, lastError: null }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   getClassNames, getClassIdByName, getClassUnitNames, getClassWords,
   getTodaysAssignmentWordIds, getStudentsInClass,
@@ -59,10 +59,18 @@ export default function EntranceTestAdmin() {
   }, [cls, unit])
 
   // 반 선택 시 오늘의 시험 현황 로드 + 5초 폴링(탭이 보일 때만).
+  // P7 감사(2026-07-16): 반을 빠르게 바꾸면 이전 반의 느린 응답이 나중에
+  // 도착해 새 반의 현황(tests/results)을 덮어쓸 수 있었다 — 그 stale
+  // tests에서 나온 activeTest로 "시험 종료"를 누르면 다른 반의 시험을
+  // 닫는 사고까지 가능. 요청 번호 가드로 최신 요청의 응답만 반영한다
+  // (같은 반 폴링끼리의 순서 역전도 함께 방어됨).
+  const statusReqIdRef = useRef(0)
   const loadStatus = async (targetClassId) => {
+    const reqId = ++statusReqIdRef.current
     if (!targetClassId) { setTests([]); setResults([]); return }
     const t = await fetchTodayTests(targetClassId)
     const r = await fetchResultsForTests(t.map((x) => x.id))
+    if (statusReqIdRef.current !== reqId) return // 더 최신 요청이 시작됨 — 버림
     setTests(t)
     setResults(r)
   }

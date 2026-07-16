@@ -103,9 +103,16 @@ export default function EntranceTest({ studentId, studentName, onBack }) {
   const finishedRef = useRef(false)
   const inputRef = useRef(null)
 
+  // P7 감사(2026-07-16): 5초 폴링과 제출 직후 load()가 겹치면 응답 순서
+  // 역전으로 더 오래된 랭킹이 최신 상태를 덮을 수 있었다(다음 폴링에서
+  // 자가 수정되긴 하지만, 방금 제출한 내 점수가 잠깐 사라져 보일 수 있음).
+  // 요청 번호 가드로 최신 요청의 응답만 반영.
+  const loadReqIdRef = useRef(0)
   const load = async () => {
+    const reqId = ++loadReqIdRef.current
     const t = await fetchTodayTests(classId)
     const r = await fetchResultsForTests(t.map((x) => x.id))
+    if (loadReqIdRef.current !== reqId) return // 더 최신 load가 시작됨 — 버림
     setRows(r)
     const active = findActiveTest(t)
     setActiveTest(active)

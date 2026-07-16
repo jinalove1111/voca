@@ -100,17 +100,26 @@ function FutureAssignmentPlanner({ targetClass, words }) {
   const [selected, setSelected] = useState(new Set())
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
+  // P7 감사(2026-07-16): 날짜/반을 빠르게 바꾸면 먼저 시작된 조회의 응답이
+  // "나중에" 도착해 방금 바꾼 날짜의 선택 상태를 덮어쓸 수 있었다(6dd6c7a
+  // PIN 버그와 같은 stale 응답 레이스). 이 상태로 저장을 누르면 엉뚱한
+  // 날짜의 단어 목록이 그 날짜 배정으로 저장될 수 있음 — 요청 번호로 최신
+  // 요청의 응답만 반영한다.
+  const loadReqIdRef = useRef(0)
 
   const load = async (d) => {
+    const reqId = ++loadReqIdRef.current
     setLoading(true)
     setSaved(false)
     try {
       const ids = await getAssignmentForDate(targetClass, d)
+      if (loadReqIdRef.current !== reqId) return // 더 최신 조회가 시작됨 — 이 응답은 버림
       setSelected(new Set(ids))
     } catch (err) {
+      if (loadReqIdRef.current !== reqId) return
       alert('불러오는 중 오류가 발생했어요: ' + (err.message || err))
     } finally {
-      setLoading(false)
+      if (loadReqIdRef.current === reqId) setLoading(false)
     }
   }
 
@@ -612,7 +621,13 @@ function AdminDashboard() {
     return map
   }, [selectedClass])
 
+  // P7 감사(2026-07-16): 반 선택을 빠르게 바꾸면 이전 반의 느린 응답이
+  // 나중에 도착해 새 반의 현황을 덮어쓸 수 있었다(stale 응답 레이스) —
+  // 요청 번호 가드로 최신 선택의 응답만 반영.
+  const dashLoadReqIdRef = useRef(0)
+
   const load = async (className) => {
+    const reqId = ++dashLoadReqIdRef.current
     if (!className) { setRows([]); return }
     setLoading(true)
     try {
@@ -626,12 +641,14 @@ function AdminDashboard() {
         // 안전하게 빈 객체를 반환하도록 wordLibrary.js에서 이미 처리함.
         fetchWordStatusSummary(ids).catch(() => ({})),
       ])
+      if (dashLoadReqIdRef.current !== reqId) return // 더 최신 반 선택이 있음 — 버림
       setRows(dashboardRows)
       setWordStatusSummary(wsSummary)
     } catch (err) {
+      if (dashLoadReqIdRef.current !== reqId) return
       alert('반 현황을 불러오는 중 오류가 발생했어요: ' + (err.message || err))
     } finally {
-      setLoading(false)
+      if (dashLoadReqIdRef.current === reqId) setLoading(false)
     }
   }
 
