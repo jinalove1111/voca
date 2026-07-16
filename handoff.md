@@ -1,5 +1,29 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-17 (P5 UI 통일성 — 보수적 1차)_
+_최종 갱신: 2026-07-17 (P0 로그인 크래시 수정)_
+
+## 2026-07-17 — P0 프로덕션 크래시: PIN 초기화/재설정 후 재로그인 직후 forEach TypeError (커밋 `bc49775`, `6b5e0f9`, **push+배포 완료** `index-vRV4evrc.js` 라이브 일치 확인)
+
+### 원인 (스택으로 확정, 추측 아님 — scripts/testLoginRestoreCrash.mjs로 수정 전 코드에서 동일 TypeError 재현)
+- **크래시 라인**: `src/App.jsx:154` `spellingWrongToday.forEach(...)` (reviewWordIds useMemo).
+- **undefined였던 데이터**: `record.round.spellingWrongToday` — 2026-07-07 쓰기시험 기능(a7f7b04)에서 추가된 필드라, 그 이전 스키마의 round 객체에는 없음.
+- **유입 경로 3곳** (전부 재현·수정):
+  1. 클라우드 백업 blob 복원(`fetchFullProgress` → useStudent 복원 effect) — 옛 앱 버전이 올린 blob이 정규화 없이 그대로 record가 됨. **크래시가 2s 디바운스 재동기화까지 막아 blob이 영영 옛 스키마로 남는 악순환** — 그래서 "그 학생은 로그인할 때마다 매번" 크래시.
+  2. v1.6 이름 키→id 키 lazy 마이그레이션(loadRecord 경로 2) — 이름 키 레코드를 스키마 정규화 없이 verbatim 복사.
+  3. 과거 복사로 이미 id 키에 남아있던 옛 스키마 레코드.
+- **PIN 초기화와의 연결**: PIN 초기화/재설정 = 강제 재로그인 = 정확히 경로 1(새 기기/빈 로컬 → 백업 복원)·2(옛 기기 → 마이그레이션)를 타는 학생. PIN API 자체는 progress를 안 건드림(확인).
+
+### 수정 (2커밋, src 2파일 +107/-13)
+- `bc49775` `src/hooks/useStudent.js`: **`normalizeRecord(raw, id)` 단일 정규화 함수** — freshRecord 기본형과 merge, 모든 배열/객체 필드 `Array.isArray`/typeof 검사, round는 오늘 날짜면 진행값 보존+누락 필드만 채움 / 지난 날짜면 자정 롤오버와 동일 리셋(지난 round가 마운트 후 첫 30초 동안 오늘 진행도로 계산되던 부수 버그도 함께 해결). loadRecord 전 경로 + 클라우드 복원 patch 적용. `restoreChecked` 훅 반환값으로 노출. **기존 값은 절대 삭제/변경 안 함 — 누락 필드만 기본값.**
+- `6b5e0f9` `src/App.jsx`: ① 로그인 로딩 게이트 — 로컬 기록 없는 학생은 복원 확인 끝날 때까지(성공/실패/5s 타임아웃) Dashboard 렌더 보류, 로컬 기록 있으면 대기 0. ② ErrorBoundary — 프로덕션은 친절한 안내문("데이터를 불러오는 중 문제가...")+재시도/로그아웃 버튼, 에러 원문은 DEV만. componentDidCatch로 message/stack/componentStack/세션 studentId/href/mode/timestamp 콘솔 기록(**PIN/pin_hash 로그 금지 준수**). 로그아웃 버튼은 세션 정리 후 전체 리로드(비리로드 복귀는 같은 크래시 반복 위험).
+
+### 세션/캐시 점검 결과 (3번 지시 — 감사 결과 추가 정리 불필요 판단)
+- 클라이언트 캐시는 전부 **불변 student UUID 키**(`paul_easy_progress`, `paul_easy_sync_meta`, word_status, `_students`) — PIN 초기화/재설정은 UUID를 안 바꾸므로 캐시 혼입 자체가 구조적으로 불가. 이번 크래시도 혼입이 아니라 스키마 문제였음.
+- 로그인 시점 검증은 기존에 이미 존재: 세션 UUID 형식 검증(readSession), `handleSelect`의 `refreshStudents()`, 삭제된 학생 감지(getStudentById → 강제 로그아웃). 다른 기기 localStorage를 서버가 못 지우는 한계는 기존 문서화 그대로 — Supabase 학습 데이터는 아무것도 삭제하지 않음.
+
+### 테스트
+- **신규 `scripts/testLoginRestoreCrash.mjs`** (buildRaceBundle 필요): 8시나리오 34체크 전부 PASS — ①옛 스키마 blob 복원 ②이름 키 마이그레이션 ③신규 학생(백업 null) ④배열 전부 누락 blob ⑤기록 많은 학생 값 보존 ⑥stale 날짜 round ⑦restoreChecked 게이트 ⑧id 키 옛 스키마. 수정 전 코드에서는 ①②⑥이 프로덕션과 동일한 `TypeError: Cannot read properties of undefined (reading 'forEach')`로 FAIL(재현 확정).
+- 기존 회귀: testRestoreSyncRace(11) · testIdentityMigration · testProgress(전체) · **testFullProgressBackup(라이브 Supabase 왕복)** 전부 PASS. `npm run build` 통과.
+- **실기기(Samsung Internet/모바일 Chrome)는 이 환경에서 불가 — 운영자 확인 필요**: 관리자에서 PIN 초기화→임시 PIN 재로그인 1회(크래시 없이 홈 진입 + 별/스티커/캘린더 유지), PIN 재설정→새 PIN 로그인 1회.
 
 ## 2026-07-17 — P5 UI 전체 통일성 (커밋 `3ca02fc`, `525ff6c`, **push+배포**)
 
