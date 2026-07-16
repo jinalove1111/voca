@@ -275,6 +275,8 @@ function AppInner({ studentId, studentName, onLogout }) {
           mode={studyMode}
           spellingSettings={spellingSettings}
           onSpellingAnswer={studentData.recordSpellingAnswer}
+          spellingCombo={studentData.spellingCombo}
+          sessionProgress={{ current: selectedWordIdx + 1, total: sessionWords.length }}
           onBack={() => setScreen('wordBrowser')}
           onNext={handleNextWord}
           onMarkViewed={studentData.markWordViewed}

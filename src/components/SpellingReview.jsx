@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import SpellingQuestion from './SpellingQuestion'
 
 // 오늘 틀린 단어 복습 — 오답노트 큐(spellingWrongToday)를 순회하며 맞을
@@ -12,11 +12,24 @@ import SpellingQuestion from './SpellingQuestion'
 // 재사용한다 — 원 학습 흐름(WordDetail의 SpellingQuestion)과 항상 같은
 // 방향 정책을 쓰게 되어 학생 입장에서 혼란이 없고, direction prop을 안
 // 넘기면(호출부 미변경) 기존과 완전히 동일하게 'kr2en' 기본값으로 동작한다.
+//
+// P3 게임화(2026-07-16) — 이 화면 안에서만 유효한 로컬 콤보(연속 첫 시도
+// 정답)와 진행 바를 추가. 복습은 "맞을 때까지 반복" 구조라 여기서 별을
+// 주면 무한정 벌 수 있으므로 별 지급은 없음(comboStarsEnabled를 안 켬 —
+// 배지/진행 바 같은 시각 피드백만). 학습 기록(recordSpellingAnswer)도
+// 기존과 동일하게 복습에서는 호출하지 않음.
 export default function SpellingReview({ wrongWordIds, classWords, onClearWord, onDone, hintEnabled, direction }) {
   const words = useMemo(
     () => wrongWordIds.map(id => classWords.find(w => w.id === id)).filter(Boolean),
     [wrongWordIds, classWords]
   )
+  const [combo, setCombo] = useState(0)
+  // 진행 바의 분모 = 이 복습 세션이 시작될 때의 큐 길이. 복습 중 큐는
+  // 줄어들기만 하지만(clear만 있음), 혹시 모를 상황에 대비해 최대값으로
+  // 안전하게 고정.
+  const initialTotalRef = useRef(wrongWordIds.length)
+  if (wrongWordIds.length > initialTotalRef.current) initialTotalRef.current = wrongWordIds.length
+  const total = initialTotalRef.current
 
   useEffect(() => {
     if (words.length === 0) onDone()
@@ -25,6 +38,7 @@ export default function SpellingReview({ wrongWordIds, classWords, onClearWord, 
   if (words.length === 0) return null
 
   const current = words[0]
+  const currentNo = Math.min(total, total - words.length + 1) // 지금 몇 번째 문제인지 (1-base)
 
   return (
     <div className="min-h-screen p-4 pb-8 bg-gradient-to-br from-orange-50 to-red-50">
@@ -41,8 +55,10 @@ export default function SpellingReview({ wrongWordIds, classWords, onClearWord, 
           wordAudioUrl={current.wordAudioUrl}
           hintEnabled={hintEnabled}
           direction={direction || 'kr2en'}
-          onResult={() => {}}
+          onResult={(correct) => setCombo(c => (correct ? c + 1 : 0))}
           onDone={() => onClearWord(current.id)}
+          combo={combo}
+          progress={{ current: currentNo, total }}
         />
       </div>
     </div>

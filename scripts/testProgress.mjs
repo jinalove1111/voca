@@ -24,7 +24,7 @@ if (!BUNDLE) throw new Error('Set PROGRESS_BUNDLE to the esbuild output path (se
 const { pathToFileURL } = await import('node:url')
 const {
   freshRecord, freshRound, freshHistoryDay, calcStreak, countCategoriesCompleted, GOAL, migrateOldData,
-  isEmptyRecord,
+  isEmptyRecord, spellingComboBonus, SPELLING_COMBO_BONUS,
 } = await import(pathToFileURL(BUNDLE).href)
 
 const STORE_KEY = 'paul_easy_progress'
@@ -243,6 +243,72 @@ console.log('\n8. 쓰기 시험 오답노트 (spellingWrongToday)')
 
   const day = freshHistoryDay()
   check('새 히스토리 day에 spellingCorrect/spellingTotal 기본값 0', day.spellingCorrect === 0 && day.spellingTotal === 0)
+}
+
+console.log('\n8.7. 쓰기시험 콤보 보너스 (P3 게임화) — 보수적 지급 + 하위호환')
+{
+  check('새 round에 spellingCombo 기본값 0', freshRound().spellingCombo === 0)
+
+  // 마일스톤 정의 자체가 보수적인지 — 기존 별 경제 기준(미션 보너스 10,
+  // 중복 스티커 20)보다 항상 작아야 하고, 한 콤보 런에서 최대 +6.
+  check('콤보 보너스는 3/5/10 세 마일스톤뿐', JSON.stringify(Object.keys(SPELLING_COMBO_BONUS).sort((a, b) => a - b)) === JSON.stringify(['3', '5', '10']))
+  check('각 보너스가 미션 보너스(10)보다 훨씬 작음 (최대 3)', Object.values(SPELLING_COMBO_BONUS).every(v => v >= 1 && v <= 3))
+  check('한 콤보 런 최대 누적 보너스 = 6 (인플레이션 방지)', Object.values(SPELLING_COMBO_BONUS).reduce((a, b) => a + b, 0) === 6)
+
+  // spellingComboBonus는 "정확히 그 콤보에 도달한 순간"에만 지급
+  check('콤보 1~2는 보너스 없음', spellingComboBonus(1) === 0 && spellingComboBonus(2) === 0)
+  check('콤보 3 도달 -> +1', spellingComboBonus(3) === 1)
+  check('콤보 4는 추가 지급 없음(3에서 이미 지급)', spellingComboBonus(4) === 0)
+  check('콤보 5 도달 -> +2', spellingComboBonus(5) === 2)
+  check('콤보 10 도달 -> +3', spellingComboBonus(10) === 3)
+  check('콤보 10 초과는 끊기기 전까지 추가 지급 없음', spellingComboBonus(11) === 0 && spellingComboBonus(20) === 0)
+  check('콤보 0/음수/이상값에도 안전하게 0', spellingComboBonus(0) === 0 && spellingComboBonus(-1) === 0 && spellingComboBonus(undefined) === 0)
+
+  // recordSpellingAnswer의 콤보 로직 시뮬레이션(같은 (||0)+1 / 리셋 규칙):
+  // 정답 3연속 -> 오답 -> 다시 정답. 오답노트 로직은 콤보와 독립적으로 기존
+  // 그대로인지도 함께 확인.
+  const step = (r, wordId, correct) => correct
+    ? { round: { ...r.round, spellingCombo: (r.round.spellingCombo || 0) + 1 } }
+    : {
+        round: {
+          ...r.round,
+          spellingCombo: 0,
+          spellingWrongToday: r.round.spellingWrongToday.includes(wordId)
+            ? r.round.spellingWrongToday
+            : [...r.round.spellingWrongToday, wordId],
+        },
+      }
+  let rec = { round: freshRound() }
+  let starsAwarded = 0
+  const answer = (wordId, correct) => {
+    rec = { ...rec, ...step(rec, wordId, correct) }
+    if (correct) starsAwarded += spellingComboBonus(rec.round.spellingCombo)
+  }
+  answer('a', true); answer('b', true); answer('c', true)
+  check('3연속 정답 -> 콤보 3, 별 +1', rec.round.spellingCombo === 3 && starsAwarded === 1)
+  answer('d', false)
+  check('오답 -> 콤보 0으로 리셋', rec.round.spellingCombo === 0)
+  check('오답노트에는 기존 로직대로 추가됨(콤보와 무관)', rec.round.spellingWrongToday.includes('d'))
+  answer('e', true)
+  check('리셋 후 다시 1부터 (별 추가 지급 없음)', rec.round.spellingCombo === 1 && starsAwarded === 1)
+  answer('f', true); answer('g', true)
+  check('다시 3연속 도달 -> 또 +1 (런마다 한 번씩)', rec.round.spellingCombo === 3 && starsAwarded === 2)
+
+  // 하위호환 — 기존 학생의 저장된 round에는 spellingCombo 필드가 없음.
+  // (||0) 방어로 첫 정답에 1이 되어야 하고, 크래시 없어야 함.
+  const legacyRound = freshRound()
+  delete legacyRound.spellingCombo
+  let legacy = { round: legacyRound }
+  legacy = { ...legacy, ...step(legacy, 'x', true) }
+  check('spellingCombo 없는 기존 레코드 -> 첫 정답에 콤보 1 (크래시/NaN 없음)', legacy.round.spellingCombo === 1)
+  const legacyWrong = { round: (() => { const r = freshRound(); delete r.spellingCombo; return r })() }
+  const afterWrong = { ...legacyWrong, ...step(legacyWrong, 'y', false) }
+  check('spellingCombo 없는 기존 레코드 -> 오답 시 0으로 세팅 + 오답노트 정상', afterWrong.round.spellingCombo === 0 && afterWrong.round.spellingWrongToday.includes('y'))
+
+  // 구버전(흩어진 키) 마이그레이션 라운드에도 spellingCombo 기본값 채워짐
+  localStorage.setItem('paulEasyVoca_ComboOldKid_round', JSON.stringify({ date: new Date().toDateString(), wordsViewed: [], examplesHeard: 0, quizSolved: 0, pronunciationOk: 0 }))
+  const migratedRec = migrateOldData('ComboOldKid', 'ComboOldKid-id')
+  check('구버전 round 마이그레이션 시 spellingCombo 0으로 채워짐', migratedRec.round.spellingCombo === 0)
 }
 
 console.log('\n9. isEmptyRecord — 클라우드 백업 복구 여부를 판단하는 기준 (v1.4)')

@@ -523,6 +523,10 @@ export default function WordDetail({
   mode = 'comprehensive',
   spellingSettings,
   wordStatus, onWordKnown, onWordUnknown,
+  // P3 쓰기시험 게임화(표시 전용) — spellingCombo: 오늘의 연속 첫 시도
+  // 정답 수(useStudent.round.spellingCombo), sessionProgress: { current,
+  // total } 이번 학습 범위(sessionWords) 안에서 몇 번째 단어인지.
+  spellingCombo = 0, sessionProgress = null,
 }) {
   const exampleEnglish = word.easyExample || word.funnyExample || word.realExample
   const exampleKorean  = word.exampleTranslation
@@ -617,6 +621,13 @@ export default function WordDetail({
             direction={spellingSettings?.spellingDirection || 'kr2en'}
             onResult={(correct) => onSpellingAnswer?.(word.id, correct)}
             onDone={goNext}
+            combo={spellingCombo}
+            comboStarsEnabled
+            // 진행 바는 "쓰기" 전용 모드에서만 — 종합 모드는 단계 점
+            // 표시가 이미 있고, 단어 진행률을 스펠링 카드에 겹쳐 보여주면
+            // 헷갈림. 콤보는 두 모드 모두 표시(둘 다 실제로 별이 지급되는
+            // recordSpellingAnswer 경로라서).
+            progress={mode === 'write' ? sessionProgress : null}
           />
         )}
       </div>

@@ -104,6 +104,15 @@ export function getLocalRecordRaw(studentId) {
 const GOAL = 5
 const MISSION_BONUS_STARS = 10
 const DUPLICATE_BONUS_STARS = 20
+// P3 쓰기시험 게임화 — 연속 "첫 시도 정답"(콤보)이 아래 마일스톤에 처음
+// 도달하는 순간 한 번씩만 주는 보너스 별. 기존 별 경제를 인플레이션시키지
+// 않도록 의도적으로 보수적(미션 보너스 10 / 중복 스티커 20 대비 1~3개
+// 수준, 콤보가 한 번 끊기기 전까지 최대 +6). 10을 넘긴 뒤에는 콤보가
+// 끊겨 다시 올라올 때까지 추가 보너스 없음.
+export const SPELLING_COMBO_BONUS = { 3: 1, 5: 2, 10: 3 }
+export function spellingComboBonus(combo) {
+  return SPELLING_COMBO_BONUS[combo] || 0
+}
 const STREAK_MILESTONES = [3, 7, 14, 30]
 // Star-count badges — guaranteed special stickers awarded once per
 // threshold, independent of the gacha/streak systems (never duplicated).
@@ -122,6 +131,7 @@ const freshRound = () => ({
   quizSolved: 0,
   pronunciationOk: 0,
   spellingWrongToday: [], // wordIds missed at least once in a spelling test today (deduped) — the "오답노트" queue the end-of-day review cycles through
+  spellingCombo: 0,       // P3 게임화 — 오늘 쓰기시험 연속 "첫 시도 정답" 수. 첫 시도 오답이면 0으로 리셋, 자정에 round와 함께 리셋. 기존 저장 레코드엔 없을 수 있으므로 읽을 땐 항상 (|| 0)로 방어
 })
 const freshHistoryDay = () => ({
   studied: true,
@@ -174,7 +184,7 @@ function migrateOldData(name, id) {
   rec.missions = readOld(oldKey(name, 'missions'), [])
   rec.cleared = readOld(oldKey(name, 'cleared'), [])
   const oldRound = readOld(oldKey(name, 'round'), null)
-  if (oldRound && oldRound.date === todayStr()) rec.round = { spellingWrongToday: [], ...oldRound }
+  if (oldRound && oldRound.date === todayStr()) rec.round = { spellingWrongToday: [], spellingCombo: 0, ...oldRound }
   const oldHistory = readOld(oldKey(name, 'history'), {})
   // Old history used `missionsCompleted` as a repeat counter — map it onto
   // the new fields as a best-effort guess (>=1 repeat implies all 4
@@ -539,17 +549,38 @@ export function useStudent(studentId, legacyName) {
   // "오늘 학습이 끝나면 자동 복습" 화면이 그대로 순회할 목록이라 굳이
   // history에 겹쳐 넣지 않고 round 쪽에만 둠 — 두 값 모두 자정 리셋
   // 타이밍이 같아서 항상 같은 날짜 범위를 가리킴.
+  // P3 게임화 추가(2026-07-16): 위 통계/오답노트 로직은 그대로 두고,
+  // 연속 "첫 시도 정답" 콤보만 얹었다 — 이 함수는 SpellingQuestion의
+  // reportedRef 덕에 문제당 정확히 첫 시도에만 불리므로, 호출 횟수 =
+  // 첫 시도 수라는 성질을 그대로 콤보 카운트에 쓴다. 콤보가 마일스톤
+  // (3/5/10)에 도달하는 그 순간에만 addStars(기존 별 지급 단일 경로)로
+  // 보너스를 준다. round.spellingCombo는 기존 저장 데이터에 없을 수
+  // 있어 항상 (|| 0)로 읽는다(하위호환 — freshRound 주석 참고).
   const recordSpellingAnswer = useCallback((wordId, correct) => {
     bumpHistory(day => ({
       spellingTotal: (day.spellingTotal || 0) + 1,
       spellingCorrect: (day.spellingCorrect || 0) + (correct ? 1 : 0),
     }))
-    if (!correct) {
-      patch(prev => prev.round.spellingWrongToday.includes(wordId)
-        ? {}
-        : { round: { ...prev.round, spellingWrongToday: [...prev.round.spellingWrongToday, wordId] } })
+    if (correct) {
+      // 콤보/보너스를 같은 클로저 값에서 계산 — 표시되는 콤보 수와 실제
+      // 지급된 보너스가 절대 어긋나지 않게. (쓰기 답안은 사람이 타이핑하는
+      // 속도로만 들어오므로 stale closure가 실제로 문제될 간격이 아님.)
+      const combo = (round.spellingCombo || 0) + 1
+      patch(prev => ({ round: { ...prev.round, spellingCombo: combo } }))
+      const bonus = spellingComboBonus(combo)
+      if (bonus > 0) addStars(bonus)
+    } else {
+      patch(prev => ({
+        round: {
+          ...prev.round,
+          spellingCombo: 0,
+          spellingWrongToday: prev.round.spellingWrongToday.includes(wordId)
+            ? prev.round.spellingWrongToday
+            : [...prev.round.spellingWrongToday, wordId],
+        },
+      }))
     }
-  }, [bumpHistory, patch])
+  }, [bumpHistory, patch, addStars, round.spellingCombo])
 
   // 복습 화면에서 한 단어를 맞히면 오답노트 큐에서 제거 — 큐가 비면
   // "오늘 틀린 단어 복습"이 끝난 것.
@@ -660,6 +691,7 @@ export function useStudent(studentId, legacyName) {
     lastGamePlayed, setLastGamePlayed, recordGamePlayed,
     recordQuizAnswer, markPronunciationAttempt,
     recordSpellingAnswer, clearSpellingReviewWord, spellingWrongToday: round.spellingWrongToday,
+    spellingCombo: round.spellingCombo || 0,
     lastWordIndex, setLastWordIndex,
     pendingGift: giftQueue[0] || null, dismissGift,
     addStars, addMission, answerMission,
