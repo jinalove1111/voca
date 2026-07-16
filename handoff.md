@@ -1,5 +1,43 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-16 (밤, 입실시험 자율 작업)_
+_최종 갱신: 2026-07-16 (오후, P3/P4 + v1.8 활성화 검증)_
+
+## 2026-07-16 오후 — P3 쓰기시험 게임화 + P4 다꾸 개선 + v1.8 SQL 적용 후 입실시험 e2e 전체 검증 (커밋 `f886b56`→`15b6cf6`→`50274c7`, **push+배포 완료**)
+
+### P3 — 쓰기시험 게임화 (`f886b56`)
+표시/피드백 레이어만 추가 — 채점(spelling.js)/오답 4단계/오답노트(spellingWrongToday)/direction(kr2en·en2kr·random) 로직은 한 줄도 안 바뀜.
+- **진행 바 + 남은 문제 수**: 쓰기 전용 모드에서 SpellingQuestion 카드 상단에 "문제 n/전체 · 남은 문제 k개" + 정답 순간 차오르는 바(종합 모드는 기존 단계 점 표시와 중복이라 미표시). SpellingReview(오답 복습)에도 동일 진행 바.
+- **콤보**: `round.spellingCombo`(연속 "첫 시도 정답" 수, useStudent) — 2연속부터 "🔥 n연속 정답!" 배지(기존 animate-paul-pop 재사용), 첫 시도 오답이면 리셋, 자정에 round와 함께 리셋. 기존 저장 레코드엔 없는 필드라 전부 `(||0)` 방어(하위호환).
+- **보너스 별(보수적)**: 콤보 3/5/10 도달 순간에만 +1/+2/+3 (`SPELLING_COMBO_BONUS`, 기존 addStars 단일 경로 재사용). 런당 최대 +6 — 미션 보너스 10/중복 스티커 20 대비 인플레이션 없음. 10 초과는 끊기기 전까지 추가 지급 없음. 마일스톤 정답 순간엔 폴 'levelup' 리액션 + "⭐ n콤보 달성! 보너스 별 +N개" 표시. **복습 화면은 콤보 배지만 있고 별 지급 없음**(맞을 때까지 반복 구조라 무한 파밍 방지, comboStarsEnabled=false).
+- 효과음은 기존 playSuccessSound를 이벤트 핸들러 안에서만(에코 싱글턴 가드 유지).
+
+### P4 — 다꾸(Diary) 개선 (`15b6cf6`)
+- **X 버튼 재점검 결과(운영자 "완벽 수정" 요구)**: c3a3800의 stopPropagation은 유효했으나, 삭제/회전/크기 버튼이 transform(rotate+scale)된 부모 div 안에 있어 **스티커를 축소(scale 0.4)하면 버튼도 ~10px로 같이 줄어 터치 불가** — 이게 잔존 원인. ✕는 counter-scale(항상 28px)로 고정.
+- **버튼식 툴바 신규**(스티커 선택 시 캔버스 아래 표시, 초등학생 기준 버튼식 선택): ↺↻ 회전 15°씩 / ➖➕ 크기 0.2씩(기존 한계 0.4~3 유지) / ⬆⬇ 앞으로·뒤로(레이어) / 🗑 삭제. 예전 스티커 위 미니 드래그 핸들(↻/⤡)은 위 축소 버그의 당사자라 제거(몸체 드래그 이동은 유지). 캔버스 밖 고정 위치 큰 버튼이라 스티커 크기/회전/겹침과 무관하게 터치 안 씹힘.
+- **레이어 순서 = 배열 재정렬 방식**(`movePlacementLayer`/`movePlacementInList`): diaryPlacements 배열 순서가 곧 그리기 순서(뒤=위) — **새 필드 0개, 저장 스키마 완전 동일 = 기존 학생 다꾸 배치/클라우드 백업 100% 하위호환**.
+- 하위호환 방어: rotation/scale 없는 레거시 배치가 transform 문자열을 통째로 무효화해(undefined 삽입) 위치가 틀어지던 잠재 버그도 수정(`||0`/`||1`).
+
+### v1.8 활성화 검증 (`50274c7`) — 운영자가 SQL 적용 완료한 직후 실행
+- **스키마 검증 PASS**: entrance_tests(9컬럼)/entrance_test_results(8컬럼) 라이브 존재 + supabase_v1_8_entrance_test.sql과 일치(REST 명시 select, "없는 컬럼은 에러" 대조군으로 검증 방식 유효성도 확인). unique(test_id,student_id)는 upsert 동작(6절)으로 검증.
+- **입실시험 DB e2e 첫 전체 실행 — 33체크 전부 PASS**: 시험 생성→반당 active 1개(자동 close)→3명 응시→공동 1등/VIP/요약→재제출 upsert(새로고침 후 점수 유지=DB 왕복 증명)→종료 후 랭킹 유지→cascade 정리.
+- **운영자 지정 시나리오**: ①점수 새로고침 유지(fetchOwnResult/fetchResultsForTests는 매번 DB 신규 조회 — 5·6절) ②학생별 격리(신규 케이스: C 재제출 후 A/B 점수 불변) ③반별 격리(신규 6.5절: 두 번째 반의 fetchTodayTests에 시험 미노출 → 배너/랭킹 원천 격리) ④랭킹/공동1등/VIP 정확성(5절 + 순수 로직 47체크).
+- **발견/수정한 문제 1건(앱 버그 아님)**: 5절 "많이 틀린 단어 count===2" 기대값은 오답 학생이 1명뿐인 시나리오에서 구조적으로 불가능 — 테이블 부재로 SKIP만 되던 시절 한 번도 실행 안 된 테스트 작성 오류. 단어별 1회 집계로 정정(교차 학생 집계는 testEntranceTest.mjs 10절이 커버).
+
+### 수정 파일
+- P3: `src/hooks/useStudent.js`(spellingCombo+보너스), `src/components/SpellingQuestion.jsx`(HUD/배지/보너스 표시), `src/components/SpellingReview.jsx`(진행 바+로컬 콤보), `src/components/WordDetail.jsx`·`src/App.jsx`(배선), `scripts/testProgress.mjs`(8.7절 19케이스)
+- P4: `src/components/DiaryPage.jsx`(툴바/X 수정/하위호환), `src/hooks/useStudent.js`(movePlacementLayer), `scripts/testProgress.mjs`(8.8절 11케이스)
+- v1.8: `scripts/testEntranceTestDb.mjs`(격리 케이스+기대값 정정)
+
+### 테스트 결과
+- `testProgress.mjs` **전체 PASS**(신규 콤보 19 + 레이어 11 케이스 포함) · `testSpelling.mjs` PASS · `testRestoreSyncRace.mjs` PASS · `testIdentityMigration.mjs` PASS · `testPaulReactions.mjs` PASS · `testTtsSingleton.mjs` PASS · `testSpellingSettings.mjs` PASS · `testEntranceTest.mjs`(순수 로직 47체크) PASS · `testEntranceTestDb.mjs`(라이브 DB e2e) **첫 전체 실행 PASS** · 매 커밋 `npm run build` 통과.
+- **검증 못 한 것**: 실기기 터치 UX(다꾸 툴바/콤보 애니메이션 체감, 헤드리스 브라우저 실행 불가 환경) — 코드 리뷰+빌드+라이브 번들 문자열 검증으로 대체. 운영자 실기기 확인 권장: ①쓰기 모드에서 3연속 정답 시 콤보 배지/보너스 별 ②다꾸 스티커 선택→툴바 7버튼 동작 ③축소한 스티커의 X 터치.
+
+### Push / 배포
+- P3/P4 push 완료 → Vercel 자동배포 확인: 라이브 `index-DXqferk8.js` 해시 로컬 빌드와 일치 + 핵심 문자열(spellingCombo/연속 정답/콤보 달성/남은 문제/스티커 꾸미기) 전부 포함 확인. v1.8 커밋(50274c7)은 scripts만이라 번들 불변.
+
+### 다음 작업 (백로그)
+- P5: UI 다듬기 · P6: 성능 · P7: 접근성/코드 감사. 입실시험 실기기 UX(모바일 키보드/IME/타이머 체감)는 여전히 라이브 미검증 — 운영자 실사용 피드백 대기.
+
+---
 
 ## 2026-07-16 밤 — 입실 단어시험(Entrance Word Test) + 실시간 반별 랭킹/오늘의 VIP (커밋 `9744590`→`bc3ec1e`→`ace04e7`→`28f44d9`, **push+배포 완료**)
 
