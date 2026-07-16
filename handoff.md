@@ -1,5 +1,43 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-16 (오후, P3/P4 + v1.8 활성화 검증)_
+_최종 갱신: 2026-07-16 (저녁, P7 코드 감사 + P6 성능 측정)_
+
+## 2026-07-16 저녁 — P7 전체 코드 감사 + P6 성능 측정 (커밋 `529ff9e`, **push+배포 완료**)
+
+src/ 전체 + api/ 11개 서버리스 함수 + hooks/utils를 읽기 전용으로 훑고, "동작 불변 + 안전" 기준을 충족하는 것만 수정. 라이브 번들 해시 `index-DxZmNl0i.js` 로컬과 일치 확인.
+
+### 수정한 것 (커밋 `529ff9e`, 5파일 +62/-7)
+- **[보안/중간] pin_hash 네트워크 응답 노출**: `wordLibrary.js` setStudentClass/setStudentUnit의 미사용 bare `.select()`가 업데이트된 학생 행 전체 컬럼(pin_hash 포함)을 응답에 실어 내려보냄 → 제거(결과 미사용이라 동작 불변).
+- **[안정/중간] localStorage 쓰기 실패 = 앱 전체 크래시**: `useStudent.js` saveStore가 patch()의 setState updater 안에서 불리는데 setItem이 throw(quota 초과/프라이빗 모드)하면 렌더 중 예외 → 전체 크래시. try/catch 방어(in-memory 상태·클라우드 동기화는 계속 동작, 콘솔 warn 1회). saveSyncMetaStore 동일.
+- **[레이스/중간] stale 응답 덮어쓰기 — 6dd6c7a PIN 버그와 같은 클래스, fetch→setState 전수 확인 결과 4곳**:
+  - `AdminScreen` FutureAssignmentPlanner: 날짜/반 빠른 전환 시 이전 조회의 늦은 응답이 선택 상태를 덮어씀 → **그대로 저장하면 엉뚱한 날짜 배정이 저장되는 데이터 사고 가능** → 요청 번호 가드.
+  - `AdminScreen` 반별 현황 load: 반 전환 시 이전 반 데이터 덮어쓰기 → 가드.
+  - `EntranceTestAdmin` loadStatus: stale tests의 activeTest로 "시험 종료" 누르면 **다른 반 시험을 닫을 수 있음** → 가드.
+  - `EntranceTest`(학생) load: 5초 폴링 vs 제출 직후 load 순서 역전 → 가드.
+- 이미 가드돼 있어 수정 불필요 확인: StudentSelect(6dd6c7a에서 수정 완료), EntranceTestBanner(alive 플래그), useStudent 복구 effect(cancelled), App.jsx visible 새로고침(inFlight 가드).
+
+### 발견했지만 수정 안 한 것 (다음 세션용, 심각도순)
+- **[구조적 — 중간~치명, 운영자 액션 필요]** 클라이언트 anon key로 students 테이블 직접 SELECT/UPDATE 가능(RLS 미적용 전제) — 이론상 pin_hash를 직접 읽어 4자리 PIN을 오프라인 브루트포스하거나 직접 덮어쓸 수 있음. 서버리스 함수들은 booleans만 내려주도록 잘 설계돼 있지만 진짜 경계는 DB 권한. **권장: Supabase에서 students RLS(또는 컬럼 권한 분리) + Vercel에 SUPABASE_SERVICE_ROLE_KEY 설정** — SQL/대시보드 작업이라 코드만으로 수정 불가, 이번 회차 미수정. (기존 문서화된 신뢰 모델이라 신규 구멍은 아님)
+- **[중간]** `api/verify-admin-pin.js` rate limit/잠금 없음 — 학생 PIN은 5회 잠금이 있는데 관리자 PIN은 1만회 무제한 시도 가능. 실패 지연/잠금 추가 권장(동작 변화라 미수정).
+- **[중간]** `api/bulk-generate-temp-pins.js` 요청당 관리자 재인증 없음 + 응답에 평문 PIN 목록 — clear-student-pin.js처럼 adminPin 재검증 추가 권장. set-student-pin/set-pin-setup-allowed/unlock-student-pin도 동일(기존 신뢰 모델과 동일해서 보류).
+- **[중간]** `api/generate-audio.js` 무인증 — 반복 호출로 Anthropic/TTS 비용 소모 가능. wordId의 REST URL 보간은 eq. 필터 안이라 쿼리 탈출 불가 확인(인젝션 아님). adminPin 게이트 권장.
+- **[낮음]** `api/student-pin-status.js` 무인증으로 임의 studentId(UUID를 알아야 함)의 PIN 상태 booleans 조회 가능 — 정보 노출 미미.
+- **[낮음]** EntranceTest advance()의 setTimeout(900ms)이 unmount 시 clear 안 됨 — React 18 no-op setState라 실해 없음(finishedRef 가드도 있음).
+- **[낮음/중복]** /api/student-pin-status fetch 패턴이 3곳(StudentSelect×2, AdminScreen) — 테스트 보호가 없어 리팩터링 보류.
+- **메모리 누수 전수 점검 결과: 없음** — 모든 setInterval/addEventListener에 cleanup 확인(App.jsx, EntranceTest 3곳, EntranceTestAdmin, useMicReady, FeatureManagementPanel 1초 폴링, useStudent 30초+visibility). speech.js 모듈 전역 리스너는 의도적 영구(싱글턴).
+
+### P6 성능 측정 (측정만, 무근거 최적화 안 함)
+- 번들: index **515.89KB**(gzip 150.46) → 가드 추가 후 **516.09KB**(gzip 150.65). 500KB 경고는 이번 밤 기능들(P0~P4)로 484→516 성장한 결과 — 치명 아님(gzip 150KB). 코드 스플리팅 후보(EntranceTest/QuizGame 등 화면 lazy)는 **P5 UI 리디자인과 함께** 검토 권장. AdminScreen 408KB(lazy 분리 완료)·pdf 472KB·pdf.worker 1245KB(보류 항목, 손 안 댐)는 변화 없음.
+- 입실시험 폴링 합리성 확인: 배너 20초(마운트+visible), 학생 랭킹 5초(result phase+visible만), 관리자 5초(반 선택+테이블 존재+visible만), active 시험 없으면 배너 조회 1개뿐 — 과다 호출 없음.
+- 리렌더: 큰 목록 key 전수 확인(RankingList=studentId, 로스터=id, 단어목록 정적 index) — 문제 없음. memo 추가는 측정 근거 없어 안 함.
+
+### 테스트/배포
+- 스모크: `testProgress.mjs` PASS · `testEntranceTest.mjs` PASS. 커밋 전 전체 확인분: testStudentLogin/testMultiClass/testSyncProgress/testDashboard/testDailyAssignment/testFutureAssignment/testRestoreSyncRace/testIdentityMigration 전부 PASS. `npm run build` 통과.
+- push → Vercel 자동배포 → 라이브 `index-DxZmNl0i.js` 해시 로컬 일치 확인.
+
+### 다음 작업
+- **P5 UI 리디자인이 다음 예정**. 그때 함께: 화면 lazy 분리(번들), /api/student-pin-status 중복 정리. 별도 트랙(운영자 결정 필요): students RLS + service role key, admin PIN rate limit.
+
+---
 
 ## 2026-07-16 오후 — P3 쓰기시험 게임화 + P4 다꾸 개선 + v1.8 SQL 적용 후 입실시험 e2e 전체 검증 (커밋 `f886b56`→`15b6cf6`→`50274c7`, **push+배포 완료**)
 
