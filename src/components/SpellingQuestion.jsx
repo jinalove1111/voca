@@ -85,6 +85,11 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
   const isEn2Kr = resolvedDirection === 'en2kr'
   const promptText = isEn2Kr ? word : meaning // 문제로 보여주는 텍스트
   const targetAnswer = isEn2Kr ? meaning : word // 학생이 입력해서 맞혀야 하는 값
+  // 정답이 화면에 "노출되는 순간"(correct/reveal)에만 정답과 함께 병기하는
+  // 반대 언어 텍스트 — 단어-뜻 연결을 강화하기 위한 순수 표시용.
+  // kr2en이면 영어 정답 밑에 한글 뜻, en2kr이면 한글 정답 밑에 영어 단어.
+  // 문제(answer) 화면에는 절대 쓰지 않는다 — 시험이 무의미해짐.
+  const pairedText = isEn2Kr ? word : meaning
   const inputPlaceholder = isEn2Kr ? '한글로 뜻을 입력하세요' : '영어로 철자를 입력하세요'
 
   const playSequence = (onAllDone) => {
@@ -261,6 +266,9 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
             <p className="text-red-500 font-bold text-sm mb-1 mt-1">정답은</p>
             <p className="text-red-600 font-black text-2xl tracking-wide break-words">{targetAnswer}</p>
             <p className="text-red-500 font-bold text-sm mt-1">입니다</p>
+            {/* 정답 노출 시점의 반대 언어 병기(표시 전용) — 단어 목록과 같은
+                위계: 정답 굵게/크게 위, 반대 언어 작게 회색 아래. */}
+            <p className="text-gray-500 font-bold text-sm mt-1 break-words">{pairedText}</p>
           </div>
           <p className="text-center text-xs text-gray-400">정답을 보고 똑같이 한 번 입력해봐요</p>
           <input ref={inputRef} type="text" value={input} onChange={e => setInput(e.target.value)}
@@ -281,10 +289,15 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
           <HeroReaction
             image={correctPaul?.image}
             title={correctPaul?.message}
-            message={`정답이에요! "${targetAnswer}"`}
+            message="정답이에요!"
             theme="success"
             size="md"
-          />
+          >
+            {/* 정답 노출 시점의 반대 언어 병기(표시 전용) — 단어 목록과 같은
+                위계: 정답 굵게/크게, 바로 아래 반대 언어 작게 회색. */}
+            <p className="text-gray-800 font-black text-2xl break-words">{targetAnswer}</p>
+            <p className="text-gray-500 font-bold text-sm break-words">{pairedText}</p>
+          </HeroReaction>
           {comboBonus > 0 && (
             <p className="mt-2 animate-paul-pop">
               <span className="inline-block bg-yellow-100 border-2 border-yellow-300 text-yellow-700 text-sm font-black px-4 py-1.5 rounded-full">
