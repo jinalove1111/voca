@@ -109,13 +109,44 @@ export default async function handler(req, res) {
     return
   }
 
-  const { wordId, word, meaning, example } = req.body || {}
-  if (!wordId || !word) {
-    res.status(400).json({ error: 'wordId and word are required' })
+  // 2026-07-16 P7 감사 후속 — 이 라우트는 학생 화면(WordDetail/QuizGame의
+  // 지연 백필)에서도 자동 호출되므로 관리자 인증을 요구할 수 없다. 대신
+  // 최소 방어로: (1) wordId가 실제 words 테이블에 존재해야만 진행(없으면
+  // 404 — 임의 텍스트로 Anthropic/TTS 비용을 태우는 것 차단), (2) 생성에
+  // 쓰는 word/meaning/example은 클라이언트 body가 아니라 DB row 값을 쓴다
+  // (익명 fetch로 body를 조작해도 실제 단어 데이터로만 생성됨), (3) 이미
+  // 오디오+예문이 모두 있는 단어는 no-op(반복 호출 비용 차단 — 정상
+  // 클라이언트는 word_audio_url과 example_text가 모두 있으면 애초에 호출
+  // 안 하므로 동작 불변).
+  const { wordId } = req.body || {}
+  if (!wordId) {
+    res.status(400).json({ error: 'wordId is required' })
     return
   }
 
   try {
+    const lookupRes = await fetch(
+      `${supabaseUrl}/rest/v1/words?id=eq.${encodeURIComponent(wordId)}&select=id,word,meaning,example_text,word_audio_url`,
+      { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } },
+    )
+    if (!lookupRes.ok) {
+      const body = await lookupRes.text().catch(() => '')
+      throw new Error(`word lookup failed (${lookupRes.status}): ${body}`)
+    }
+    const rows = await lookupRes.json()
+    const row = Array.isArray(rows) ? rows[0] : null
+    if (!row) {
+      res.status(404).json({ error: 'word not found' })
+      return
+    }
+    if (row.word_audio_url && row.example_text) {
+      res.status(200).json({ alreadyComplete: true, wordAudioUrl: row.word_audio_url, exampleText: row.example_text })
+      return
+    }
+    const word = row.word
+    const meaning = row.meaning
+    const example = row.example_text
+
     const wordMp3 = await fetchTtsMp3(word)
     const wordAudioUrl = await uploadToStorage(supabaseUrl, serviceKey, `${wordId}-word.mp3`, wordMp3)
 
