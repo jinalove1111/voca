@@ -1,5 +1,47 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-16_
+_최종 갱신: 2026-07-16 (밤, 입실시험 자율 작업)_
+
+## 2026-07-16 밤 — 입실 단어시험(Entrance Word Test) + 실시간 반별 랭킹/오늘의 VIP (커밋 `9744590`→`bc3ec1e`→`ace04e7`→`28f44d9`, **push+배포 완료**)
+
+수업 시작과 동시에 반 학생들이 각자 폰으로 참여하는 단어시험(종이 시험 대체) — P1(시험) + P2(랭킹/VIP/교사 결과 페이지) 전체 구현. 학생 식별은 전부 student_id(UUID), 기존 학생 데이터(별/스티커/캘린더/학습기록)는 일절 안 건드리는 순수 추가 기능.
+
+### ⚠️ 아침에 운영자가 해야 할 일 (이것만 하면 기능이 켜짐)
+1. **`supabase_v1_8_entrance_test.sql`을 Supabase SQL Editor에서 실행** (entrance_tests + entrance_test_results 테이블, 멱등 DDL). **실행 전까지 학생/관리자 화면에 아무 변화 없음** — 배너 자체가 안 뜨고 관리자 탭은 "준비 중" 안내만 표시(크래시/콘솔 에러 없음, 라이브 실측 확인 완료).
+2. SQL 실행 후 DB 통합 테스트 재실행(현재는 테이블 없어서 안전 SKIP 상태):
+   `node scripts/buildWordLibBundle.mjs && node scripts/buildEntranceBundle.mjs && node scripts/testEntranceTestDb.mjs`
+   (QA_EntranceTest 반을 임시 생성해 시험 생성→3명 응시→공동1등 랭킹→재제출 upsert→종료→정리까지 검증 후 스스로 삭제)
+3. 관리자 화면 → "🏁 입실시험" 탭에서 실기기로 한 번 시험을 돌려보고 UX 확인.
+
+### 구현 내용
+- **교사 플로우**: 관리자 "🏁 입실시험" 탭 — 반 선택 → 출제 범위 자동 결정(오늘의 단어 배정 있으면 그것, 없으면 유닛 전체 — v1.3 getStudentWords 폴백 규칙 그대로) → 문항 수/방향(영→한·한→영·랜덤)/제한시간(1~5분) → 시험 시작. 진행 중: 제출 n/반 전체 m명, 실시간 랭킹+VIP, 평균 정답률, 많이 틀린 단어 TOP5, 시험 종료 버튼(5초 폴링, 탭 보일 때만). 같은 반에 새 시험 시작 시 기존 active는 자동 close(반당 동시 1개).
+- **학생 플로우**: 로그인 → 홈 최상단 배너("오늘의 입실시험이 시작됐어요!" / 종료 후엔 "오늘의 랭킹 보기", 20초 폴링) → 안내 → 응시(전체 제한시간 타이머, 진행률 바, 문제당 즉시 채점 피드백, "모르겠어요" 패스, 시간 초과 시 미응답=오답으로 자동 제출) → 즉시 결과(내 점수/틀린 단어/반 랭킹+VIP, 5초 폴링) → 결과 자동 저장(student_id upsert, 실패 시 재시도 버튼 — 점수는 로컬에 안전).
+- **랭킹**: 정확도 기준 공동 순위(1,1,3 방식), 오늘의 VIP=1등 전원(공동이면 모두 👑), 학생당 오늘 최고 기록 1개만, date 컬럼 조회 조건으로 "오늘만 표시/다음날 자동 리셋"이 구조적으로 보장.
+- **시험 단어는 생성 시점 스냅샷(jsonb)** — 같은 반 학생들이 서로 다른 유닛이거나 시험 도중 단어를 수정해도 전원 동일 문제 풀.
+- **실시간성은 폴링 채택** — Supabase Realtime은 대시보드 publication 활성화(운영자 액션)가 필요해 "코드 먼저 배포" 제약과 충돌. 테이블 없으면 첫 실패 후 `_available=false` 캐시로 네트워크 재시도조차 안 함.
+- **채점 엔진 재사용 + 구멍 수정**: 기존 쓰기시험 엔진(spelling.js isSpellingCorrect) 그대로 재사용(새 엔진 발명 안 함, 향후 Smart Check-in 재사용 가능하게 화면 비종속 모듈로 분리). 작성 중 발견한 실버그 수정 — 뜻 전체("휘젓다, 섞다")를 그대로 정확히 입력하면 오히려 오답 처리되던 문제(대안 분해 비교만 하고 전체 문자열 일치 누락). 정답 인정 범위가 넓어지기만 하는 안전한 수정, 기존 쓰기시험에도 적용됨.
+
+### 신규/수정 파일
+- 신규: `supabase_v1_8_entrance_test.sql`, `src/utils/entranceTest.js`(순수 로직), `src/utils/entranceTestApi.js`(DB 레이어), `src/components/EntranceTest.jsx`(학생 화면+배너), `src/components/EntranceTestAdmin.jsx`(교사 패널), `scripts/testEntranceTest.mjs`, `scripts/testEntranceTestDb.mjs`, `scripts/buildEntranceBundle.mjs`
+- 수정: `src/utils/spelling.js`(전체 문자열 일치 허용), `src/utils/wordLibrary.js`(getClassIdByName export만 추가), `src/App.jsx`(screen 배선), `src/components/Dashboard.jsx`(배너), `src/components/AdminScreen.jsx`(탭), `scripts/testSpelling.mjs`(+2케이스)
+
+### 테스트 결과 — 로컬 완전 검증 vs DB 대기 구분
+- **로컬 완전 검증(PASS)**: `testEntranceTest.mjs` 47 checks(출제/방향/random/채점/시간초과=오답/공동순위 1,1,3/VIP 공동/학생당 최고기록/반별 요약/타이머) · `testSpelling.mjs` 32 checks · **회귀 스위트 18종 전부 재실행 PASS**(wordLibrary 계열 10종: dailyAssignment/futureAssignment/multiClass/renameClass/studentLogin/unitPersistence/spellingSettings/unitNaturalSort/dashboard/syncProgress+fullProgressBackup+resetWordStatusBackup+studentSelectUnitSwitch, progress/restoreSyncRace, identityMigration, studentPinAuth 27/27, ttsSingleton, paulReactions, weeklyReport) · 매 커밋 `npm run build` 통과.
+- **테이블 부재 폴백 라이브 실측(PASS)**: fetchTodayTests→[] / fetchOwnResult→null / fetchResultsForTests→[] / warn 1회만, throw 없음 — 배너 미표시·관리자 탭 "준비 중" 경로 확인.
+- **DB 대기(SKIP — 검증 못 함)**: `testEntranceTestDb.mjs` 전체 흐름(시험 생성/제출/랭킹 DB 왕복/upsert/종료) — 테이블이 없어 실행 불가, SQL 실행 후 재실행 필요. **학생 실기기 응시 UX(모바일 키보드/IME/타이머 체감)도 라이브에서 미검증** — 코드 리뷰+빌드로만 확인(헤드리스 브라우저는 이 샌드박스에서 실행 불가).
+
+### 알려진 이슈 / 의도적 보류
+- 시험 문제는 학생별로 셔플되고 방향(random)도 학생별로 다르게 뽑힘 — 부정행위 방지에 유리하다고 판단해 의도적으로 그대로 둠(전원 동일 순서를 원하시면 seed 고정으로 바꿀 수 있음, 운영자 결정 필요).
+- 랭킹 동점 기준은 "정확도"(문항 수 다른 시험이 섞여도 공정) — 풀이 시간 tie-breaker는 운영자 요구("공동 1등 허용")에 따라 넣지 않음.
+- 학생이 시험 도중 앱을 나가면(새로고침 등) 답안이 사라지고 재입장 시 처음부터 — active 시험에 결과 미제출 상태면 재응시 가능. 시험 시간이 1~5분으로 짧아 실용상 문제 없다고 판단.
+
+### Push / 배포 상태 (오늘 밤 전체)
+- 입실시험 4커밋(`9744590`/`bc3ec1e`/`ace04e7`/`28f44d9`) **push 완료** → Vercel 자동배포 완료 → **라이브 번들 실측 검증 완료**: `index-DpieIwD6.js` 해시 로컬 빌드와 일치 + entrance_tests/배너 문자열/오늘의 VIP 포함 확인, `AdminScreen-CogxCW5F.js`에 입실시험 탭 + v1.8 SQL 안내 포함 확인.
+- 참고: 아래 v1.6/v1.7 섹션의 "push 안 됨" 표기는 이제 **옛 정보** — PIN 자기설정/PIN 초기화(삭제)/레이스 수정 포함 오늘 밤 이전 커밋(`e492e29`~`764b4af`)까지 전부 push+배포된 상태에서 이번 작업을 시작했다.
+
+### 다음 작업 (우선순위 백로그, 운영자 확인 후 착수)
+- P3: 쓰기시험 게임화 · P4: 다이어리 꾸미기 확장 · P5: UI 다듬기 · P6: 성능 · P7: 접근성/코드 감사.
+
+---
 
 ## 2026-07-16 — PIN 운영방식 변경: 학생 최초 PIN 자기설정 (커밋 `99d862d`~`e97eb2a`, **push 안 됨**)
 
