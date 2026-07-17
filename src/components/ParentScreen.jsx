@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { getStudentClass, getClassUnits, fetchDashboardData, fetchWordStatusSummary } from '../utils/wordLibrary'
+import { getStudentClass, getClassUnits, fetchDashboardData } from '../utils/wordLibrary'
 import { computeStudentStats, buildWeeklyReport } from '../utils/weeklyReport'
 import HeroReaction from './HeroReaction'
 import { getReactionById } from '../utils/paulReactions'
@@ -31,10 +31,12 @@ export default function ParentScreen({ onBack }) {
     setShowReport(false)
     setCopied(false)
     try {
-      const [rows, wsSummary] = await Promise.all([
-        fetchDashboardData([studentId]),
-        fetchWordStatusSummary([studentId]).catch(() => ({})),
-      ])
+      // 2026-07-17 정리: fetchWordStatusSummary도 함께 조회했었지만 결과를
+      // 어디에도 안 쓰고 버리고 있었다(이 화면은 아는/모르는 단어 수를
+      // 표시하지 않고, computeStudentStats에도 빈 맵을 넘김) — 죽은
+      // 네트워크 호출이라 제거. 표시가 필요해지면 AdminScreen처럼
+      // fetchWordStatusSummary 결과를 computeStudentStats 2번째 인자로.
+      const rows = await fetchDashboardData([studentId])
       const row = rows[0]
       const units = className ? getClassUnits(className) : []
       const wordLookup = {}

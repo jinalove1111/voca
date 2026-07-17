@@ -27,10 +27,6 @@ const SPECIAL_CLASS_NAMES = new Set(['MS 중1', 'MS 중2', 'MS 중3'])
 let _cache = {}
 let _initPromise = null
 
-export function isWordLibraryReady() {
-  return _initPromise !== null
-}
-
 // Rebuilds the entire in-memory cache from Supabase. Call this any time you
 // need guaranteed-fresh data (app start, tab refocus, after a write).
 // classId -> today's assigned word-slug array (v1.3 "오늘의 단어 배정") —
@@ -499,7 +495,6 @@ export const getStudents = () =>
   Array.from(_students.values()).map((s) => ({ ...s, unitName: getStudentUnit(s.id) }))
 
 export const getStudentById = (id) => _students.get(id) || null
-export const getStudentName = (id) => _students.get(id)?.name || ''
 
 // 이름으로 후보를 찾는 함수 — 이제 유일 식별이 불가능하므로(동명이인
 // 허용) 단일 값이 아니라 배열을 반환한다. PIN 로그인은 서버(api/
