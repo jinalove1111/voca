@@ -1,5 +1,111 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-18 (전체 워크플로우 QA 파괴 테스트 스윕 — Critical/High 0건, Medium 2건 기록만, 회귀 0건)_
+_최종 갱신: 2026-07-18 (Production Readiness Phase 4 보안 감사 — Critical/High 0건, 신규 Medium 1건 기록만, 코드 수정 없음)_
+
+## 2026-07-18 — Production Readiness Phase 4 보안 감사 (재점검 — 재구현 없음, 신규 Medium 1건 발견·기록만)
+
+`api/*.js` 11개 서버리스 함수 + `_pinAuth.js` + Supabase 컬럼권한(v1.9)/RLS +
+`entranceTestApi.js` 클라이언트 신뢰 지점을 대상으로 인증/인가 감사 수행.
+동시 작업 중인 영속성/성능 담당 agent와 겹치지 않도록 `useStudent.js`/
+`wordLibrary.js`/컴포넌트는 읽기만 하고 수정 안 함.
+
+### 방법
+- `api/` 디렉터리 11개 파일 전수 코드 리뷰 — 관리자 전용 액션이 실제로
+  `checkAdminReauth`(또는 동등한 인라인 adminPin 재검증)를 요구하는지 확인.
+- anon key로 Supabase REST에 직접 curl 실측(읽기 전용 + 0행 매칭 PATCH만,
+  실제 데이터 변경 없음): `pin_hash`/`pin_fail_count` SELECT 거부(42501)
+  확인, `select=*` bare select 거부 확인, `current_unit_id`(v2.1 신규 컬럼)
+  SELECT/UPDATE 정상 허용 확인, `entrance_test_results` UPDATE가
+  permission 오류 없이 통과(204)함을 확인.
+- `entranceTestApi.js`/`entranceTest.js`/`supabase_v1_8_entrance_test.sql`
+  교차 검토로 클라이언트가 보낸 점수가 서버 재검증 없이 그대로 저장되는지
+  확인.
+- `HiddenFeatures.jsx`/`src/api/hiddenFeatures.js` 등 미참조 파일이 실제로
+  어떤 라우트에서도 도달 불가능함을 grep으로 재확인(App.jsx에 admin 화면
+  진입은 컴포넌트 state(`showAdmin`)뿐 — URL 라우팅 없는 SPA라 우회 경로
+  자체가 없음).
+
+### 재확인만(이미 완료된 항목, 재구현 안 함) — 전부 그대로 정상 동작 확인
+- v1.9 컬럼권한: `pin_hash`/`pin_fail_count`/`pin_locked_until`/
+  `pin_setup_allowed` anon SELECT/UPDATE 전부 42501 거부 — 라이브 실측 확인.
+- v2.1 `current_unit_id` GRANT(select+update, 그 컬럼만) — 과다 노출도
+  과소 차단도 아님, 라이브 실측으로 적절함 확인.
+- 관리자 재인증(bulk-generate-temp-pins/set-pin-setup-allowed/
+  unlock-student-pin/clear-student-pin) — `checkAdminReauth` 또는 동등
+  인라인 검증 전부 존재 확인, 예외 없음(api/ 11개 파일 전수 grep).
+- `set-student-pin` 이중 신뢰 모델(관리자 무작위 재설정 vs 학생 자기등록
+  `pin_hash IS NULL` 서버 확인) — 계정탈취 차단 로직 그대로 확인.
+- `verify-admin-pin` 실패 시 1.5초 지연 — 그대로, 정식 rate limit은
+  여전히 없음(아래 재확인).
+- `generate-audio` wordId 실존 검증 + DB row 값 사용(body 무시) — 그대로.
+
+### 신규 발견 — Medium 1건 (기록만, 수정 안 함)
+**입실시험 결과 제출 — 클라이언트 계산 점수를 서버 재검증 없이 그대로 저장
++ RLS가 완전 개방(anon 전체 CRUD)** —
+`src/utils/entranceTestApi.js:126`(`submitEntranceResult`),
+`supabase_v1_8_entrance_test.sql:63-64`(`entrance_test_results`에
+`for all using (true) with check (true)`).
+- 재현(실측, 데이터 변경 없이 확인): anon publishable key로
+  `PATCH .../entrance_test_results?test_id=eq.<임의 uuid>` 호출 시
+  permission 오류 없이 204 반환 — 즉 브라우저 devtools/스크립트로 임의
+  `student_id`/`test_id`를 지정해 `score`/`total`/`missed_words`를 조작
+  가능(자기 점수 조작뿐 아니라 다른 학생의 결과를 덮어쓰는 것도 unique
+  제약(`test_id,student_id`)상 가능).
+- 채점 자체(`computeTestResult`)는 클라이언트에서만 계산되고, 서버(anon
+  직접 upsert 경유, 별도 서버리스 함수 없음)는 값을 재검증하지 않음.
+- **판정 근거(위협 모델 기준)**: 결제/PII/계정탈취가 아니라 학원 내부
+  "오늘의 랭킹/VIP" 경쟁 기능의 점수 조작 — 금전적 피해나 데이터 유실
+  없음, 다른 학생 계정에 로그인하지 않고는 studentId를 알아내기 다소
+  번거로움(UUID). 다만 아이들의 경쟁 배지(VIP)라는 기능 의도를 무력화할
+  수 있어 완전 무해는 아님 → **Medium**(Critical/High 기준인 데이터
+  유실/계정탈취/PII 유출에 해당 안 함).
+- 근본 수정안(참고용, 미적용 — 이번 세션 범위 외 + 동시 작업 중인 다른
+  agent와 충돌 방지 위해 코드 변경 보류): 결과 제출을
+  `api/submit-entrance-result.js` 서버리스 함수로 옮겨 서버가 저장된
+  `entrance_tests.words`/`direction`과 클라이언트가 보낸 `answers` 원본으로
+  직접 재채점(`entranceTest.js`의 `computeTestResult`는 이미 순수 함수라
+  서버에서도 그대로 재사용 가능) 후 결과만 저장 — 클라이언트는 표시용
+  score만 받음. 또는 최소선으로 `entrance_test_results`에
+  `student_id`별 RLS(anon 전체 대신 upsert 시 self만) — 단 이 앱은
+  Supabase Auth가 없어 "self" 식별 수단이 없다는 v1.9 설계 근거와 동일한
+  제약이 있음(구조적으로 어려움, 서버리스 재채점이 더 현실적).
+
+### 재확인 — 기존에 알려진 Medium/Low (변경 없음, 여전히 유효)
+- **[Medium]** `api/verify-admin-pin.js` 정식 rate limit/잠금 없음(1.5초
+  지연만) — 이전 판정 그대로, 운영자 지시로 서버리스 인메모리 카운터 등
+  과설계 안 함 유지. 학생 PIN(5회 DB 잠금)과 비대칭이나, 관리자는 원장
+  1인이라 위협 모델상 낮은 우선순위 유지.
+- **[Low]** `api/student-pin-status.js` 무인증 — booleans만 노출, 정보
+  노출 미미. 그대로.
+- **[Low]** `checkAdminReauth`/`verify-admin-pin`의 PIN 비교가
+  `timingSafeEqual`이 아닌 단순 `!==` — 4자리 관리자 PIN + 실패 시 1.5초
+  네트워크 지연이 이미 있어 원격 타이밍 공격의 실효성 극히 낮음(신규
+  관찰, 과잉대응 판단 — 조치 불필요).
+- **[Low]** pin-status fetch 중복 3곳 — 그대로(리팩터링 보류, 기존 판정
+  유지).
+
+### 판정
+Critical/High: **0건** — 근본 수정 대상 없음, 코드 변경 없음(문서만 갱신).
+동시 작업 중인 다른 agent 영역(`useStudent.js`/`wordLibrary.js`/컴포넌트
+대규모 수정)은 손대지 않음.
+
+### Security Score: 90/100
+근거: PIN 자격증명(가장 민감한 자산)이 해시 저장 + 서버 전용 검증 + DB
+컬럼권한 이중 방어(v1.9, 라이브 실측 확인)로 견고하게 막혀 있고, 모든
+관리자 파괴적 액션이 요청당 재인증을 거침(전수 확인, 예외 없음). 감점
+요인: 관리자 PIN 정식 rate limit 부재(-4, 기존 인지된 트레이드오프),
+신규 발견한 입실시험 결과 클라이언트 신뢰 갭(-4, 학원 내부 경쟁 기능
+한정이라 상한선 있는 감점), 기타 Low 항목들(-2).
+
+### 수정 파일
+없음(코드 변경 없음) — `handoff.md`만 갱신.
+
+### 남은 Medium/Low (다음 세션 후보, 우선순위순)
+1. 입실시험 결과 서버 재채점(`api/submit-entrance-result.js` 신설) — 신규
+   발견, Medium.
+2. `verify-admin-pin` 정식 rate limit — 기존 인지, Medium(운영자 결정
+   대기 중, 여러 세션째 보류).
+3. `student-pin-status` 인증 없음 — Low, 낮은 우선순위 유지.
+4. pin-status fetch 중복 헬퍼 정리 — Low, 코스메틱.
 
 ## 2026-07-18 — 전체 워크플로우 QA 파괴 테스트 스윕 (시니어 QA — 신규 버그 수정 없음, 발견만)
 
