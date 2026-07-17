@@ -1,5 +1,95 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-17 (v2.1 — 학생-Unit 아키텍처 분리 구현+검증 완료)_
+_최종 갱신: 2026-07-17 (v2.2 — 다중 기기 진행도 병합, last-writer-wins 유실 제거. push+배포 완료)_
+
+## 2026-07-17 밤 2차 — v2.2 다중 기기 진행도 병합 (구현+검증+배포 완료)
+
+### 문제 (유실 시나리오 — 라이브 e2e 대조군으로 실재 확인)
+동기화가 로컬 레코드로 클라우드 blob(`student_progress.progress_data`)을
+통째로 덮어쓰는 last-writer-wins였다. 기기 A(별 50) → 기기 B(복원+10, 백업
+60) → 다시 A: A의 아무 활동이 백업 60을 52로 덮어써 **B의 진행분 영구
+유실**. restoreChecked(2026-07-10)는 "빈 로컬" 레이스만 막았고 "양쪽 다
+데이터 있는" 교차 사용은 못 막았다. testMultiDeviceMerge 4절이 구버전
+방식으로 이 파괴를 실DB에서 재현해 확인했다(추측 아님).
+
+### 변경 (커밋 3개: `d42c005` → `7f1658a` → `445da0b`)
+1. **`mergeProgressRecords(local, cloud, id)` 순수 함수** (useStudent.js,
+   normalizeRecord 재사용으로 구스키마 blob 하위호환). 병합 규칙:
+   - 합집합: stickers/cleared/history 날짜/round.wordsViewed·
+     spellingWrongToday/diaryPlacements(placementId 기준, 충돌 시 로컬)
+   - 더 진전된 쪽: missions(done > correctCount, 동률 로컬),
+     wordStatus(mastered>known>unknown>skipped, 동률 로컬)
+   - max: totalStars/starBadgeThreshold/milestoneStreak(중복 축하 방지 겸)/
+     lastWordIndex(전역+유닛별)/같은 날짜 history 필드별/오늘 round 숫자
+     필드. 근거: 공통 조상이 없어 정확한 합산 불가 — max는 과소 지급
+     (진행분 증발)을 막고, 이론상 과다는 학생에게 유리한 방향이라 수용.
+   - round: normalizeRecord가 오늘 아닌 round를 이미 리셋 → 도달 시 양쪽
+     다 "오늘" — 같은 날 기기 교차 시 미션 진행이 이어짐.
+   - missedWordIds(중복 허용 빈도 목록): 더 긴 쪽(합치면 공통 조상 이중
+     계산).
+2. **다이어리 삭제 tombstone** — 레코드에서 유일하게 "삭제"가 존재하는
+   영속 필드가 diaryPlacements라 순수 합집합이면 삭제한 다꾸 스티커가
+   병합마다 부활한다. `diaryRemovedIds`(cap 300) 신규 필드 +
+   removePlacement가 기록, 병합이 합집합에서 뺌. 구레코드/백업엔 없음 —
+   normalizeRecord가 빈 배열로 채움(완전 하위호환).
+3. **업로드 경로** (doSync): 업로드 직전 `fetchProgressBackupStrict`
+   (wordLibrary.js 신규 — "백업 확실히 없음(null)"과 "읽기 실패(throw)"를
+   구분, 42703/42P01만 null)로 blob을 읽어 병합본만 업로드. **읽기 실패
+   시 업로드 포기** + sync_meta error 기록(로컬 무영향, 다음 디바운스/
+   flush/재로그인에서 자연 재시도) — "클라우드 상태를 모르는 채 덮어쓰기"가
+   정확히 기존 유실 경로라서. 관리자 요약 컬럼/daily도 병합본 기준(백업과
+   대시보드 숫자가 같은 레코드에서 나옴). 로컬 레코드는 업로드 병합의
+   영향을 받지 않음.
+4. **로컬 반영 범위(운영자 위임 판단)**: 업로드 blob 병합 + **로그인 시
+   병합 복원**까지만. 로컬이 비어있으면 기존 복원 그대로, 로컬에 데이터가
+   있으면 백그라운드 fire-and-forget으로 백업을 받아 병합 patch(B에서 얻은
+   별이 A 화면에도 보임, 결과가 동일하면 no-op으로 재동기화 안 만듦).
+   매 동기화마다 로컬을 병합·치환하는 방식은 세션 중 레코드가 외부 데이터로
+   바뀌는 회귀 표면(진행 중 round/이펙트 재발화)이 커서 채택 안 함 —
+   로그인 시점은 이미 복원 patch가 존재하던 검증된 경로라 가장 보수적.
+   병합으로 별이 배지 임계값을 넘으면 축하가 뜨는 건 정당한 동작이고,
+   임계값 자체를 max로 병합해 "이미 축하한 배지 재발급"은 구조적으로 차단.
+
+### 성능/안전
+- 동기화당 read 1회 추가(2초 디바운스라 부하 미미). 실패는 기존처럼 조용히
+  + sync_meta. 프로덕션 데이터 삭제 0(QA_ 학생만 생성/정리).
+
+### 테스트 (전부 PASS)
+- 신규 `testMergeProgress.mjs`(순수 51체크 — A/B 교차/대칭성/빈쪽/구스키마/
+  히스토리·round·다이어리·wordStatus 규칙/tombstone 상한/멱등성/"유실 없음"
+  총괄), `testRestoreSyncRace.mjs` 시나리오 4~6 추가(병합 업로드/읽기 실패
+  시 업로드 포기/로그인 병합 복원 — 실제 훅 번들), 신규
+  `testMultiDeviceMerge.mjs`(라이브 15체크 — A/B 교차 + **구버전 유실
+  대조군 재현** + 병합 동기화의 자가 복원 + tombstone JSONB 왕복).
+- 회귀: testProgress · testRestoreSyncRace(1~3) · testLoginRestoreCrash ·
+  testUnitResumeIndex · testSyncProgress(라이브) · testFullProgressBackup
+  (라이브) · testIdentityMigration(라이브) · `npm run build` 통과.
+- 배포: push → Vercel 자동배포, 라이브 번들 `index-CrCw6LYF.js`에서 v2.2
+  마커(diaryRemovedIds) 확인.
+
+### 알려진 한계 (의도된 트레이드오프)
+- totalStars max는 교차 divergence 시 정확 합산이 아님(과소 방지 우선).
+- spellingWrongToday는 tombstone 없음 — 복습으로 뺀 단어가 같은 날 재로그인
+  시 큐에 되살아날 수 있음(한 번 더 복습할 뿐, 무해. 자정 리셋).
+- 다이어리 위치/회전 수정 충돌은 로컬 우선(데이터 유실 아님).
+- 동시 in-flight 동기화(수 초 창)는 여전히 경합 가능하나, 모든 기기가
+  병합-후-쓰기라 다음 동기화에서 수렴(라이브 4절에서 자가 복원 실증).
+- visibility flush가 read+write 2왕복이 됨 — 탭 강제 종료 시 마지막 수 초
+  변경분의 백업이 다음 세션으로 밀릴 수 있음(로컬엔 남아 유실 아님).
+
+### 작업 2 스팟 점검 (수정 없이 기록만)
+- 관리자/학부모 정합성: computeStudentStats(weeklyReport.js) 공유 유지
+  확인(AdminScreen 2곳 + ParentScreen). 학생 화면은 로컬 레코드 직접 —
+  병합 복원으로 관리자 blob과의 숫자 차이는 로그인 시점에 수렴.
+- 데드코드: `fetchWordStatusMap`(wordLibrary.js:804) 여전히 미호출 —
+  blob wordStatus 병합·복원이 실질 대체. 확신 100% 아니라 제거 보류.
+- pin-status fetch 중복: 여전히 3곳(AdminScreen 1 + StudentSelect 2)
+  개별 fetch — 공용 헬퍼 미정리. 다음 회차 후보.
+
+### 다음 추천
+1. pin-status 조회 공용 헬퍼 + fetchWordStatusMap 제거(운영자 승인 후).
+2. spellingWrongToday tombstone(원하면 — 현 한계 무해 판단).
+3. 운영자 실기기 확인(3분): 두 기기 교차 로그인 → 별/스티커 양쪽 합쳐
+   보이는지, 다꾸 스티커 삭제가 재로그인에도 유지되는지.
 
 ## 2026-07-17 밤 — v2.1 학생-Unit 아키텍처 분리 (구현+검증 완료)
 
