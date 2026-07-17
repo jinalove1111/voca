@@ -1,5 +1,82 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-17 (P0 로그인 크래시 수정)_
+_최종 갱신: 2026-07-17 (v2.0 쓰기시험 양방향 혼합형 — SQL 적용+라이브 검증 완료)_
+
+## 2026-07-17 — v2.0 쓰기시험 양방향 혼합형 + 채점 관대화 + 교사 검토 큐 (커밋 `ae1863f`~`8f2da25`+관리자 커밋, **push+배포+SQL 적용+라이브 e2e 검증 완료**)
+
+### 상태: ✅ v2.0 SQL 적용 완료 (운영자 실행 확인 2026-07-17 낮)
+`supabase_v2_0_spelling_mixed.sql` 실행 완료 — 라이브 실측으로 3요소 전부 확인:
+`classes.spelling_direction` / `words.accepted_meanings` / `spelling_review_queue` 테이블.
+활성화 e2e `scripts/testSpellingV2Db.mjs` **14체크 전부 PASS**(아래 테스트 절 참고).
+
+### 1. 선행 작업 — 쓰기/입실시험 입력창 시험용 속성 + 정답 병기 (커밋 3개)
+- `ae1863f` 정답 노출 시점(정답 화면/4회 오답 공개 화면)에 반대 언어 병기 —
+  kr2en이면 영어 정답 크게+한글 뜻 작게 회색, en2kr이면 대칭. 문제 화면에는
+  정답 언어 절대 미노출(시험 무의미화 방지). 채점 로직 불변. SpellingReview는
+  SpellingQuestion 재사용이라 자동 적용.
+- `bc60497` 쓰기시험 입력창(answer/reveal 둘 다): `autoComplete="off"` +
+  **무작위 비표준 name**(브라우저 저장 폼 프로필 매칭 차단 — autocomplete=off
+  무시 케이스의 실전 보강책) + `inputMode="text"` + 방향별 `lang`(ko/en) +
+  onPaste/onDrop/onCopy 차단(붙여넣기 우회 봉쇄). onContextMenu는 안 막음
+  (롱프레스 커서 이동까지 막혀 초등학생 UX 훼손 — 붙여넣기는 메뉴 경유라도
+  onPaste가 잡으므로 구멍 없음).
+  **한계(정직 기록): 키보드 앱 자체 예측 텍스트(삼성 키보드/Gboard의 OS 설정
+  영역)는 웹 속성으로 100% 차단 불가** — 위 조합이 속성으로 가능한 최대치.
+  완전 차단이 필요하면 학생 기기에서 키보드 설정(예측 텍스트 끄기) 안내 필요.
+- `da249db` 입실시험(EntranceTest) 입력창에도 동일 속성 세트 적용(별도 커밋).
+
+### 2. v2.0 본작업 — 양방향 혼합형(mixed) (커밋 4개)
+- **채점기(`spelling.js`) 관대화** (`44cc01a`) — 정답 인정 범위가 넓어지기만 하는 변경:
+  - 한글 정답 후보 한정 **띄어쓰기 무시**("주문 하다"=="주문하다"). 영어 답에는
+    미적용("icecream"!="ice cream" 유지 — 철자 시험 본질 보호).
+  - **괄호 합침형** 인정: "영향(을 미치다)" → "영향"(기존)+"영향을 미치다"(신규).
+  - **`opts.acceptedMeanings`** — 단어별 추가 인정 뜻이 target과 동일 규칙으로
+    후보 합류. 말단 조사 차이("주문을 하다" vs "주문하다")는 **보수적으로 오답**
+    → 검토 큐로(AI 자동 판정 금지 — 운영자 방침).
+- **방향 배정 공용화** (`44cc01a`) — `entranceTest.js`의 `assignDirections(count, dir)`
+  단일 배정기: 입실시험 buildEntranceQuestions와 쓰기 모드 세션(App.jsx)이 공용.
+  `'mixed'` = 정확히 반반(홀수면 1개 rng) 후 셔플 — 20문제면 각 10문제 보장.
+  'random'(문제마다 50%)은 기존 의미 그대로 유지.
+- **데이터 레이어** (`fd59f38`): wordLibrary에 mixed 허용/accepted_meanings
+  폴백 조회(컬럼 부재 시 재시도 — SQL 전 배포 안전)/`setWordAcceptedMeanings`
+  (중복 제거). `spellingReviewApi.js` 신설 — 학생 기록은 fire-and-forget(테이블
+  부재 조용히 스킵), 관리자 조회 null 폴백, 인정/무시는 status 전환(행 보존).
+- **앱 배선** (`8f2da25`): 반 설정 'mixed'면 App이 세션 단어 목록에 사전 50:50
+  배정 → WordDetail `spellingDirectionOverride`. 쓰기 모드 첫 시도 성적을 방향별
+  집계, 마지막 단어 후 **`SpellingSessionResult` 결과 화면**("한→영 8/10 ·
+  영→한 9/10 · 총점 17/20" + 틀린 단어 목록). 영→한 오답 중 한글 답은
+  `spelling_review_queue`에 기록(첫 시도만, upsert 중복 무시). 복습(SpellingReview)
+  은 mixed를 문제마다 랜덤으로 처리(맞을 때까지 반복 구조라 정확 배분 무의미).
+- **관리자**: 출제 방향 4택(혼합 추가 — 쓰기 설정+입실시험 패널 둘 다),
+  classes 탭 최상단 **"📝 쓰기 답안 검토" 패널**(인정 원클릭 = accepted_meanings
+  추가+큐 해소 / 무시), 단어 행 "인정뜻 n" prompt 편집.
+
+### 3. 테스트 (전부 PASS)
+- `testSpelling.mjs` — 10~13절 신규 31케이스(띄어쓰기/괄호 합침/acceptedMeanings/
+  mixed 50:50 배분) 포함 전체 PASS. 영어 답 회귀 케이스("ap ple"!="apple",
+  "icecream"!="ice cream") 명시 확인.
+- `testEntranceTest.mjs` 47체크 회귀 PASS(mixed 추가 후 재실행).
+- **신규 `testSpellingV2Db.mjs`(라이브 DB e2e, SQL 적용 후) 14체크 전부 PASS**:
+  ①mixed 저장/조회 라운드트립 ②accepted_meanings 저장(중복 제거)→채점 반영
+  ③검토 큐 기록/중복 무시/words embed 조회/원클릭 인정→재채점 정답 ④반 삭제
+  cascade 고아 행 0. 실행법: buildWordLibBundle 후 WORDLIB_BUNDLE 지정(파일 상단).
+- 회귀: testProgress(전체)/testSpellingSettings(라이브) PASS. 매 커밋 `npm run build` 통과.
+
+### 4. Push/배포
+- 전 커밋 push → Vercel 자동배포 → 라이브 번들 `index-BbseIAa2.js` 로컬 일치 +
+  핵심 문자열(쓰기 시험 결과/spelling_review_queue/accepted_meanings/영어 보고
+  한글 뜻 쓰기) 확인. 관리자 청크 `AdminScreen-R_Zs9LjM.js`에 검토 패널/인정뜻/
+  혼합 옵션 문자열 확인.
+
+### 5. 운영자 실기기 확인 목록 (Android Chrome/삼성 인터넷, 5분)
+1. 쓰기시험 정답/공개 화면에 **한글 뜻 병기**가 보이는지(영어 굵게+한글 회색).
+2. 입력창에 "orde"까지 쳤을 때 **추천어 억제** 여부 — 안 되면 키보드 예측
+   텍스트(OS 설정)가 원인(위 1절 한계 참고), 속성으로는 최대치 적용된 상태.
+3. 입력창 **붙여넣기 차단**(길게 눌러 붙여넣기 시도 → 입력 안 됨).
+4. 관리자 → 반 → 출제 방향 **"혼합"** 저장 → 학생 쓰기 모드에서 영↔한이
+   섞여 나오고 마지막에 **방향별 결과 화면**이 뜨는지.
+5. 영→한 문제에서 그럴듯한 다른 한글 뜻 입력(오답) → 관리자 classes 탭
+   "쓰기 답안 검토"에 올라오는지 → **인정** → 같은 답이 다음부터 정답인지.
+6. 한글 답 띄어쓰기 차이가 정답 처리되는지(예: 등록 뜻 "주문하다"에 "주문 하다").
 
 ## 2026-07-17 — P0 프로덕션 크래시: PIN 초기화/재설정 후 재로그인 직후 forEach TypeError (커밋 `bc49775`, `6b5e0f9`, **push+배포 완료** `index-vRV4evrc.js` 라이브 일치 확인)
 
