@@ -1,5 +1,173 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-18 (Production Readiness Phase 3 성능 + Phase 5 유지보수성 — measurable 개선만 적용)_
+_최종 갱신: 2026-07-18 (Production Readiness Phase 1 영속성 + Phase 2 DB 무결성 — Critical 1건 즉시 수정, Medium 2건 기록)_
+
+## 2026-07-18 — Production Readiness Phase 1(영속성) + Phase 2(DB 무결성)
+
+담당: 영속성/DB 레이어(`src/hooks/useStudent.js`, `src/utils/wordLibrary.js`,
+SQL 파일). 동시에 다른 agent가 Phase 3(성능)+Phase 5(유지보수성)를, 또 다른
+agent가 Phase 4(보안)를 진행 — 커밋 전 `git log`로 확인, 겹침 없음(Phase 3/5는
+`useStudent.js`/`wordLibrary.js`를 읽기만 하고 손 안 댔다고 명시). `handoff.md`
+상단 v2.1/v2.2/QA스윕 기록 확인 후 **이미 검증된 항목(last-writer-wins 유실
+수정, PIN anon 차단, 30개 스위트 회귀 0건)은 재작업하지 않고**, 지시받은 신규
+시나리오(다중 탭/중복 요청)와 DB 무결성 라이브 조회에 집중.
+
+### Phase 1 — 영속성 감사
+
+기존 데이터 저장/로드 경로(학생 프로필/PIN/반/유닛/숙제/진행도/별/스티커/
+스트릭/다꾸/설정)는 v2.1/v2.2에서 이미 코드로 추적·검증됨(위 섹션들 참고) —
+재추적하지 않음. 이번 회차는 지시받은 2개 신규 시나리오만 실제 번들된
+`useStudent.js` 코드로(추측 아님) 검증:
+
+1. **다중 탭(같은 기기, 같은 학생, 두 탭 동시 사용)** — `scripts/testMultiTabRace.mjs`
+   시나리오 1. **발견(Medium, 수정 안 함)**: `useStudent.js`에 `storage` 이벤트
+   리스너가 없어, 두 탭이 각자의 React state를 기준으로 `localStorage`에
+   즉시 write-through한다. 탭 A가 별+5 저장 후 탭 B가 (탭 A의 변경을 모른 채)
+   자기 메모리 기준으로 별+3 저장하면, `localStorage`는 탭 B의 값(원래+3)으로
+   덮여 탭 A의 +5는 **로컬에서** 사라진다. **자기 힐링 확인**: 그래도 각 탭은
+   자기 메모리 기준으로 독립적으로 2초 디바운스 클라우드 동기화를 하므로(로컬
+   덮어쓰기와 무관), 두 탭이 각자 최소 1회 동기화를 마치면 클라우드
+   `student_progress.progress_data`에는 결국 양쪽 진행분이 다 반영되고, 다음
+   로그인의 병합 복원(v2.2 `mergeProgressRecords`)이 로컬도 max값으로 수렴시킨다
+   (테스트로 확인 — PASS). **진짜 유실 위험은 좁은 잔여 창**: 두 탭 모두 자기
+   몫의 동기화를 단 한 번도 완료하기 전에(2초 디바운스 + visibilitychange
+   flush 둘 다) 동시에 닫히는 경우만 영구 유실 가능 — 이 앱은 초등 영어
+   공부방 태블릿/폰 단일 기기 단일 탭 사용이 절대다수라 실사용 재현 가능성은
+   낮다고 판단, `storage` 이벤트 기반 탭 간 실시간 동기화는 설계 변경 폭이
+   커서(어느 탭이 "최신"인지 판정 로직 필요) 이번 30분 캡 안에서 안전하게
+   구현하지 않음 — Medium 기록만.
+2. **중복 요청(2초 디바운스 동기화 연타/중첩)** — `scripts/testMultiTabRace.mjs`
+   시나리오 2, 3. 시나리오 2(한 탭 안에서 2초 내 연타): 디바운스 타이머가
+   매번 리셋되어 중첩 스케줄 없음 확인(기존 설계 그대로 안전, PASS). 시나리오
+   3에서 **Critical 발견 + 즉시 수정**: 디바운스가 두 번 연속 발동해 `doSync`
+   호출 두 개가 겹칠 때(빠른 연속 조작), 먼저 시작한(오래된) 호출의 네트워크
+   읽기(`fetchProgressBackupStrict`) 응답이 나중에 시작한 호출보다 **늦게**
+   도착하면(순서 보장 없음 — 실제 네트워크에서 흔한 상황) 오래된 호출이 자신의
+   stale 로컬 스냅샷으로 병합한 결과를 뒤늦게 `upsert`해 방금 성공한 최신
+   업로드를 **덮어썼다**. `syncStudentProgress`가 `student_id` 단일 행을
+   조건 없이 통째로 교체(`upsert`)하는 구조라 낙관적 동시성 체크가 없었던 게
+   원인. **재현**: 수정 전 코드로 되돌려 같은 테스트를 돌리면 정확히 이
+   덮어쓰기가 재현됨(FAIL) — 수정 후 재확인(PASS), 테스트 자체가 진짜 이
+   회귀를 잡아낸다는 것도 확인. **수정**: `src/hooks/useStudent.js`에
+   `syncGenRef`(세대 카운터) 추가 — 각 `doSync` 호출이 시작 시 세대 번호를
+   증가시켜 자기 것으로 기록해두고, 네트워크 읽기가 끝난 직후 "내가 여전히
+   최신 세대인가"를 확인해 아니면(더 새 호출이 이미 시작됨) 업로드를 포기한다.
+   더 새 호출의 로컬 스냅샷은 같은 탭의 연속 렌더라 이전 호출의 로컬보다
+   항상 같거나 더 진행된 상태이므로(patch는 누적만) 그 호출이 알아서 이전
+   변경분까지 포함해 업로드 — 데이터 유실 없음. 새 호출이 실패해도 기존
+   동작과 동일(다음 patch/visibility/재로그인에서 자연 재시도).
+
+**테스트**: `scripts/testMultiTabRace.mjs`(신규, 13 checks) 전부 PASS +
+가드를 임시로 무력화하면 정확히 그 회귀가 재현되는 것까지 확인(테스트의
+유효성 자체를 검증). 기존 회귀 스위트 전부 재실행 — `testRestoreSyncRace.mjs`
+(19 checks)·`testProgress.mjs`·`testMergeProgress.mjs`·`testMultiDeviceMerge.mjs`
+(라이브 Supabase e2e, QA_ 데이터만)·`testLoginRestoreCrash.mjs`·
+`testMultiClass.mjs` 전부 PASS(회귀 0건). `npm run build` 통과.
+
+### Phase 2 — DB 무결성 감사
+
+`supabase_*.sql`(총 11개 마이그레이션 파일, 743줄) 전체를 읽고 실제 라이브
+DB와 대조.
+
+**발견 1 (기존에 이미 알려진 구조적 한계, 재확인만)**: `students`/`classes`/
+`words`/`units` 4개 핵심 테이블의 원본 `CREATE TABLE`이 저장소의 어떤
+`supabase_*.sql` 파일에도 없다 — 초기에 Supabase 대시보드에서 직접 만들어진
+뒤 한 번도 파일로 백필되지 않았다(이후 마이그레이션 전부는 `ALTER TABLE`/
+`ADD COLUMN IF NOT EXISTS`로 이 4개 위에 얹는 방식). 컬럼 타입(uuid 등)은
+각 마이그레이션이 `information_schema`로 런타임에 조회해 맞추는 방어적
+패턴이라 실사고로 이어지진 않았지만(v1.4/v1.5 주석 참고), **새 Supabase
+프로젝트에서 이 저장소만으로 스키마를 처음부터 재현할 수 없다**(핵심 4테이블
+DDL 없이는 어떤 마이그레이션도 실행 불가) — 재해복구/신규 환경 구축 시
+청구서가 될 수 있는 Medium 기술부채로 기록. 근본 수정(4테이블 DDL을
+`information_schema`로 라이브 덤프해 `supabase_v0_core_schema.sql`로 백필)은
+스키마를 "쓰는" 게 아니라 "읽어서 문서화"만 하는 작업이라 위험은 낮지만,
+service role key 없이는 라이브 컬럼 전체 목록(pin 4컬럼 등 anon 차단 컬럼
+포함)을 정확히 못 얻어(anon 컬럼권한 우회 불가, 의도된 보안) 이번 회차
+로컬 환경에서는 완전한 덤프가 불가능 — 운영자가 Supabase 대시보드 SQL
+Editor에서 `information_schema.columns`를 직접 조회해 채워 넣는 걸 권장.
+
+**발견 2 (실측 확인, 위험 아님 — 안전성 확정)**: 관리자 "반 삭제"
+(`AdminScreen.jsx` 확인 다이얼로그 → `deleteClass()`)는 `classes` 행을
+조건 없이 raw `DELETE`하고, 확인 문구는 "단어/Unit/학습기록이 함께
+삭제됩니다"라고만 경고할 뿐 **그 반 학생 계정 자체의 운명은 코드/문서
+어디에도 명시돼 있지 않았다** — `students.class_id → classes.id` FK의
+`ON DELETE` 동작이 CASCADE(학생 행까지 연쇄 삭제 → `student_progress`도
+FK cascade로 그 반 전원의 진행도 영구 파괴)인지 SET NULL(학생은 생존,
+`class_id`만 비워짐)인지 저장소 어디에도 정의돼 있지 않아 확인 없이는
+"반 삭제"가 관리자에게 정확히 얼마나 위험한 작업인지 알 수 없었다.
+**라이브 실측**(`scripts/testClassDeleteCascade.mjs`, QA_ 접두 데이터만
+생성→삭제→정리, 프로덕션 데이터 불변): QA 반 생성 → QA 학생(그 반 소속)
+생성 → `student_progress`(별 42) 생성 → `deleteClass()`와 동일한 raw
+DELETE로 반 삭제 → **학생 행 생존 확인 + `class_id`가 정확히 `null`로
+정리됨(SET NULL) + `student_progress`(별 42) 그대로 보존 확인** — 전부
+PASS. `AdminScreen.jsx`의 "⚠️ 반 미배정" 로스터 그룹이 정확히 이 상태를
+잡아내도록 이미 설계돼 있음(코드 리뷰로 재확인)도 일치. **결론: 반 삭제는
+학생 계정/진행도에 안전하다(SET NULL, 데이터 유실 없음)** — 이전까지는
+코드로 확인되지 않은 가정이었던 걸 라이브 실측으로 확정. 확인 다이얼로그
+문구에 "학생 계정은 유지되고 반 배정만 해제됩니다"를 추가하면 관리자
+불안감을 줄일 수 있음(Low, UI 문구 개선 — 이번 회차 범위 외, 기록만).
+
+**발견 3 (0건, 확인 완료)**: 라이브 DB 조회(`scripts/dbIntegrityAudit.mjs`,
+읽기 전용, anon key)로 아래 7개 카테고리 전수 점검 — **고아/불일치 레코드
+0건**(students=111, classes=8, units=16, words=470 규모에서):
+학생→반 고아 참조, 학생→유닛(`current_unit_id`) 고아 참조 + 반 불일치(v2.1
+정합성 불변식), 단어→유닛 고아 참조, 유닛→반 고아 참조, `student_progress`/
+`student_daily_progress`/`word_status`의 고아 `student_id` + 중복 행,
+`daily_assignments`→반 고아 참조, 입실시험(`entrance_tests`/
+`entrance_test_results`) 고아 참조. v2.1의 `current_unit_id` 백필도
+깨끗하게 반영돼 있음을 재확인(반 불일치 0건).
+
+**발견 4 (재확인, 문제 없음)**: v1.9(컬럼 단위 권한 — anon의 `students`
+테이블 단위 SELECT/UPDATE 회수 후 PIN 4컬럼만 제외하고 명시 재부여)가
+만드는 "새 컬럼 추가 시 GRANT 누락 함정"을 v1.9 이후 추가된 유일한
+`students` 컬럼(`current_unit_id`, v2.1)이 실제로 올바르게 피했는지
+파일 대조로 확인 — v2.1 SQL에 `grant select (current_unit_id)`/
+`grant update (current_unit_id)`가 명시돼 있고, 위 발견 3의 라이브
+학생→유닛 조회가 정상 동작한 것으로 실측 확인도 됨. 문제 없음.
+
+**제약조건/인덱스/RLS**: 각 마이그레이션이 자체적으로 unique 제약(예:
+`student_progress(student_id)`, `student_daily_progress(student_id,date)`,
+`entrance_test_results(test_id,student_id)`, `word_status(student_id,word_id)`,
+`daily_assignments(class_id,date)`)과 인덱스를 갖추고 있고, 발견 3의 라이브
+중복 조회에서도 실제 위반 0건 — 설계와 실데이터가 일치.
+
+### 수정 파일
+- `src/hooks/useStudent.js` — syncGenRef 가드 추가(Critical 수정, 위 참고).
+
+### 신규 파일 (테스트/도구, 프로덕션 코드 아님)
+- `scripts/testMultiTabRace.mjs` / `scripts/wordLibraryMultiTabStub.mjs` /
+  `scripts/buildMultiTabBundle.mjs` — 다중 탭 + 중복 업로드 순서뒤바뀜 회귀
+  테스트(기존 `testRestoreSyncRace.mjs` 패턴 재사용, 별도 스텁이라 기존
+  테스트와 상태 공유 없음).
+- `scripts/dbIntegrityAudit.mjs` — Phase 2 라이브 고아 레코드 점검(읽기
+  전용, 재실행 가능 — 향후 회귀 게이트로 재사용 권장).
+- `scripts/testClassDeleteCascade.mjs` — 반 삭제 cascade 실측(QA_ 데이터만
+  생성/삭제, 재실행 가능).
+
+### Persistence Score: 88/100
+근거: 핵심 저장/복원/병합 경로(v2.1/v2.2)는 이미 검증돼 있고 이번 회차
+Critical 1건(중복 업로드 순서뒤바뀜으로 인한 클라우드 백업 stale 덮어쓰기)을
+근본 수정 + 회귀 테스트로 확정. 감점 요인: 다중 탭 로컬 스토리지 레이어의
+last-writer-wins(Medium, 좁은 잔여 유실 창 — 두 탭 모두 첫 동기화 전 동시
+종료 시에만), 큰 컴포넌트/폴링 등 Phase 3/5 영역 감점은 제외.
+
+### Database Score: 92/100
+근거: 라이브 무결성 0건(전 카테고리), 제약조건/인덱스/RLS 설계 일관성 확인,
+v1.9 GRANT 함정도 이후 마이그레이션이 올바르게 준수. 감점 요인: 핵심 4테이블
+DDL이 저장소에 없어 재해복구/신규 환경 재현 불가(Medium), 반 삭제 SET NULL
+동작이 실측 전까지 문서화돼 있지 않았던 점(이번에 확정, 문구 개선은 Low로
+남음).
+
+### 남은 Medium/Low (기록만, 수정 안 함)
+- **Medium**: 다중 탭 로컬 스토리지 last-writer-wins(위 발견 1) — `storage`
+  이벤트 기반 탭 간 동기화는 설계 변경 필요, 후속 회차 권장.
+- **Medium**: 핵심 4테이블(`students`/`classes`/`words`/`units`) DDL이
+  저장소에 없음(위 발견 1) — 운영자가 Supabase 대시보드에서
+  `information_schema.columns` 조회해 `supabase_v0_core_schema.sql`로
+  백필 권장(service role 필요, 이번 회차 로컬 환경에서 불가).
+- **Low**: 반 삭제 확인 다이얼로그에 "학생 계정은 유지됨" 문구 추가 권장
+  (위 발견 2, 안전성은 이미 실측 확정 — UX 개선일 뿐).
+- 기존 문서화된 Medium(학생 자기등록 부분 실패 고아 상태, 엑셀 업로드 빈
+  파일 방어 없음)은 2026-07-18 앞 QA 스윕 섹션 그대로 유효, 재작업 없음.
 
 ## 2026-07-18 — Production Readiness Phase 3(성능) + Phase 5(유지보수성)
 

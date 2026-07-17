@@ -935,12 +935,32 @@ export function useStudent(studentId, legacyName) {
   // 디바운스/visibility flush/재로그인에서 자연 재시도된다. 관리자 요약
   // 컬럼(total_stars 등)과 daily 값도 병합본 기준 — 백업 blob과 관리자
   // 대시보드 숫자가 항상 같은 레코드에서 나오도록.
+  //
+  // P1(2026-07-18) 영속성 감사 — "중복 요청" 시나리오에서 발견한 실유실
+  // 경로 수정: 2초 디바운스 타이머가 연속으로 두 번(빠른 연타) 발동하면
+  // doSync 호출 두 개가 동시에 진행 중일 수 있다. 각자 fetchProgressBackupStrict
+  // (네트워크 read)를 기다리는데, 먼저 시작한 호출의 응답이 나중에 시작한
+  // 호출의 응답보다 "늦게" 도착하면(느린 커넥션/재시도 등, 순서 보장 없음)
+  // 오래된 호출이 자신의 stale local 스냅샷으로 병합한 결과를 나중에
+  // upsert해 방금 성공한 최신 업로드를 덮어썼다 — Supabase upsert가
+  // student_id 단일 row를 조건 없이 통째로 교체하기 때문에 낙관적 동시성
+  // 체크가 없었음(재현: scripts/testMultiTabRace.mjs 시나리오 "중복
+  // 업로드"). syncGenRef로 세대를 매겨, 자신이 네트워크 read를 마쳤을 때
+  // 이미 더 새 doSync 호출이 시작돼 있으면(자신은 추월당함) 업로드를
+  // 포기한다 — 더 새 호출의 local 스냅샷은 이 호출의 local보다 항상
+  // 같거나 더 진행된 상태이므로(같은 탭의 연속 렌더, record는 patch로만
+  // 누적) 그 호출이 알아서 이 변경분까지 포함해 업로드한다. 그 호출이
+  // 실패하더라도 기존 동작과 동일(다음 patch/visibility/재로그인에서
+  // 자연 재시도) — 새로 나빠지는 경로 없음.
   const doSyncRef = useRef(null)
+  const syncGenRef = useRef(0)
   useEffect(() => {
     doSyncRef.current = async () => {
+      const myGen = ++syncGenRef.current
       markSyncAttempt(studentId, 'progress')
       try {
         const backup = await fetchProgressBackupStrict(studentId)
+        if (myGen !== syncGenRef.current) return // 추월당함 — 더 새 호출이 이어서 업로드
         const merged = mergeProgressRecords(record, backup, studentId)
         const day = merged.history[todayStr()]
         await syncStudentProgress(studentId, {
