@@ -799,15 +799,6 @@ export async function setWordStatus(studentId, wordDbId, status) {
   if (error) throw error
 }
 
-// 로그인 시 로컬에 저장된 단어 상태가 없으면(다른 기기 등) 이걸로 복구.
-// { [wordDbId]: status } 형태의 맵을 반환, 에러/빈 결과는 빈 객체.
-export async function fetchWordStatusMap(studentId) {
-  if (!studentId) return {}
-  const { data, error } = await supabase.from('word_status').select('word_id,status').eq('student_id', studentId)
-  if (error || !data) return {}
-  return Object.fromEntries(data.map((r) => [r.word_id, r.status]))
-}
-
 // v1.5 관리자 대시보드 — 반 학생들의 "아는/모르는/복습 필요 단어 수"를
 // 한 번에 배치 조회(학생별 N번 조회 안 함, fetchDashboardData와 동일 패턴).
 // P0(2026-07-15): studentIds를 직접 받는다 — 예전엔 이름 배열을 받아
