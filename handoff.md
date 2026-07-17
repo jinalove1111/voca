@@ -1,5 +1,102 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-18 (Student Account ↔ Unit 아키텍처 9개 목표 대조 — 갭 1건 보완. push+배포 완료)_
+_최종 갱신: 2026-07-18 (전체 워크플로우 QA 파괴 테스트 스윕 — Critical/High 0건, Medium 2건 기록만, 회귀 0건)_
+
+## 2026-07-18 — 전체 워크플로우 QA 파괴 테스트 스윕 (시니어 QA — 신규 버그 수정 없음, 발견만)
+
+동시에 다른 agent가 Student-Unit 아키텍처(afc8a77/ac6c24b)를 작업 중이라
+`wordLibrary.js`/`Dashboard.jsx`/`AdminScreen.jsx`의 유닛·숙제 관련 부분은
+건드리지 않고 마지막 순서로 미룸 — 해당 영역도 기존 테스트로 회귀만 확인
+(전부 PASS, 코드 직접 수정 0건).
+
+### 방법
+1. 기존 자동 테스트 스위트(scripts/test*.mjs, 34개 스크립트) 전수 재실행 —
+   대부분 `esbuild`로 실제 소스(`src/utils/wordLibrary.js`,
+   `src/hooks/useStudent.js`, `src/utils/speech.js`,
+   `src/components/WordDetail.jsx` 등)를 번들해 실제 코드 경로를 실행하는
+   기존 확립 패턴 그대로 사용(추측 판정 없음). `SPEECH_BUNDLE`이 필요한
+   `testTtsSingleton.mjs`은 전용 빌드 스크립트가 없어
+   `scripts/.tmp/buildSpeechBundle.mjs`(paulReactions PNG import 스텁)를
+   즉석 작성해 해결.
+2. 나머지(관리자 CSV/엑셀 업로드, 로그인/PIN 등록 레이스, 학부모 화면,
+   미니게임, 오답노트 복습, 다꾸 등)는 컴포넌트 소스 직접 코드 리뷰로
+   크래시/레이스/오버플로우 패턴 스캔.
+3. 모바일 실기기 터치/오프라인 네트워크 단절은 이 환경(헤드리스 브라우저
+   불가)에서 실행 검증 불가 — **코드 리뷰 결과만**이며 실기기 확인 필요로
+   별도 표기(아래).
+
+### 테스트 결과 — 30/30 실행 가능 테스트 전부 PASS(회귀 0건)
+로그인/PIN(testStudentLogin·testRlsSecurity) · 퀴즈 상태 리셋
+(testQuizStepReset) · 쓰기시험 방향 배선(testSpellingDirectionWiring) ·
+쓰기시험 정답 로직(testSpelling·testSpellingSettings) · 오답노트/진행도
+저장(testProgress·testMergeProgress·testRestoreSyncRace·
+testLoginRestoreCrash·testIdentityMigration) · 다중 기기 병합
+(testMultiDeviceMerge) · 입실시험(testEntranceTest·testEntranceTestDb) ·
+반/학생 관리(testMultiClass·testRenameClass·testDashboard) · 날짜별
+숙제(testDailyAssignment·testFutureAssignment) · 유닛 전환/이어하기
+(testUnitPersistence·testStudentUnitDecouple·testStudentSelectUnitSwitch·
+testUnitResumeIndex·testUnitNaturalSort — 다른 agent 작업 영역, 회귀만
+확인) · 초기화/백업(testResetWordStatusBackup·testFullProgressBackup·
+testSyncProgress) · TTS 에코 방지(testTtsSingleton) · 폴 리액션
+(testPaulReactions) · 주간 리포트(testWeeklyReport).
+
+**차단된 4개**(코드 회귀 아님, 이 로컬 환경의 기존 제약 — handoff.md
+2026-07-18 앞 섹션에 이미 기록됨): testStudentPinAuth·
+testStudentPinSelfSetup·testClearStudentPin·testStudentSelectPinStatus —
+로컬 `.env`에 `SUPABASE_SERVICE_ROLE_KEY`가 없어 서버 핸들러가 anon key로
+폴백, v1.9 RLS가 anon의 PIN 컬럼 접근을 차단해 "permission denied for
+table students"로 실패. 프로덕션은 Vercel 환경변수로 정상 동작(무관한
+사전 제약, 이번 스윕에서 재확인만 함).
+
+`npm run build` 통과(경고는 기존 번들 크기 경고 하나뿐, 이번 스윕과 무관).
+
+### 발견 — Critical/High: 0건
+집중적으로 찾아봤으나 크래시/데이터유실/보안 등급 버그를 발견하지 못함.
+기존 코드가 이미 레이스 컨디션(StudentSelect.jsx pickSetupStudent의
+setupRequestIdRef, FutureAssignmentPlanner의 loadReqIdRef)과 상태이월
+버그(WordDetail.jsx/QuizGame.jsx의 key={word.id})를 선제적으로 방어해둔
+상태였음.
+
+### 발견 — Medium: 2건 (기록만, 수정 안 함)
+1. **학생 자기등록 부분 실패 시 계정 고아 상태** —
+   `src/components/StudentSelect.jsx:82-89`(`handleRegister`).
+   `addStudent()`(DB에 학생 row 생성) 성공 후 `/api/set-student-pin` 호출이
+   네트워크 실패 등으로 실패하면, 학생은 이미 DB에 존재하지만 PIN이 없고
+   `pin_setup_allowed` 기본값(false)이라 "로그인" 탭도 "PIN 만들기" 탭도
+   모두 막힘 — 관리자가 로스터에서 발견해 "PIN 설정 허용"을 수동으로
+   눌러줘야 해제됨. 재현: 등록 중 두 번째 fetch만 실패하도록 네트워크를
+   끊어야 하는 좁은 타이밍 창 + 크래시/유실 없음 + 관리자 액션으로 복구
+   가능이라 Medium 판정. 근본 수정안(참고용, 미적용): 실패 시
+   `pinSetupAllowed: true`로 즉시 셋업 재시도 경로를 열어주거나, PIN
+   저장까지 성공해야 등록 완료로 간주하고 실패 시 학생 row도 롤백.
+2. **엑셀 업로드 — 빈 파일/시트 없는 파일에 대한 방어 없음** —
+   `src/components/AdminScreen.jsx:1028-1037`(`ExcelUpload.handleFile`).
+   `wb.SheetNames[0]`가 없는(빈/손상된) 파일을 선택하면
+   `XLSX.utils.sheet_to_json(undefined, ...)` 호출 경로에서 사용자에게
+   의미있는 에러 메시지 없이 실패할 수 있음(현재 try/catch 없음). 관리자
+   전용 화면 + 정상적인 학원 엑셀이면 발생하지 않는 입력이라 Low~Medium.
+
+### 코드 리뷰 결과만(실기기 미확인 — 운영자 실기기 확인 권장)
+- 모바일 뷰포트(390px 등): `.word-text`/`.word-card`/`meaning-box-text`
+  (index.css)가 이미 긴 단어/뜻 오버플로우 방어(wrap+clip)를 갖추고 있고
+  최근 커밋(1fd0f3a)이 쓰기시험 정답 공개 텍스트에도 동일 패턴 적용함 —
+  코드상 안전해 보이나 실기기 렌더 확인은 못 함.
+  MatchGameShell.jsx의 뜻 옵션도 `break-words [word-break:keep-all]`로
+  방어돼 있음.
+- 다꾸 스티커 삭제 버튼(DiaryPage.jsx `PlacedSticker`): scale 역보정
+  transform으로 항상 28px 터치 영역 유지 — 코드상 c3a3800에서 이미 고쳐진
+  상태, 실기기 재확인 권장.
+- 오프라인/네트워크 실패: 학생 쪽 동기화(useStudent.js doSync)는 실패를
+  삼키고 sync_meta에만 기록(화면 안 막음), 등록/PIN 계열 API 호출은 대부분
+  try/catch + 에러 메시지 표시가 있으나 위 Medium #1처럼 "성공/실패가
+  섞인 다단계 흐름"의 중간 실패 처리는 개별 검토가 더 필요함.
+
+### 종합 판정
+이번 스윕에서 자동 수정한 항목 없음(Critical/High 0건이라 수정 대상
+없음). 기존 테스트 30개 전부 PASS로 최근 3개 커밋(퀴즈 리셋 수정 +
+다이어리 스티커 수정 + 마스코트 이미지 수정 + 유닛 숙제배정 버튼 추가)이
+다른 워크플로우를 깨뜨리지 않았음을 확인. **production-ready 판정: 예**
+(발견된 2건은 Medium — 좁은 타이밍/입력 조건에서만 발생, 차단성 아님,
+현재 운영에 영향 없음).
 
 ## 2026-07-18 — Student Account ↔ Unit 아키텍처 9개 목표 대조 (재구현 금지 — v2.1 검증+갭 보완만)
 
