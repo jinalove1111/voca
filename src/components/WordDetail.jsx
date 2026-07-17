@@ -441,9 +441,12 @@ function QuizStep({ word, classWords, onDone, onMarkQuizSolved, onQuizAnswer }) 
   // Auto-advance to the next word a couple seconds after answering, so kids
   // don't have to tap through every single word — the "다음 단어" button
   // stays as a manual override for anyone who wants to move on immediately.
-  // QuizStep only ever mounts fresh per word (WordDetail resets `step` back
-  // to 'pronounce' on word change before 'quiz' is reachable again), so this
-  // timer can never fire for a word other than the one it was set up for.
+  // QuizStep mounts fresh per word because WordDetail renders it with
+  // key={word.id} — do NOT remove that key. In quiz-only mode STEPS is
+  // ['quiz'], so `step` never changes across words; without the key this
+  // instance (and its `selected` state) would be reused for the next word,
+  // showing it as already answered. The unmount cleanup below also guarantees
+  // this timer can never fire for a word other than the one it was set up for.
   useEffect(() => {
     if (!isAnswered) return
     const t = setTimeout(() => onDone(), 1800)
@@ -585,8 +588,16 @@ export default function WordDetail({
       </div>
 
       <div className="max-w-lg mx-auto animate-fade-in">
+        {/* key={word.id} on every step component: forces a full remount per
+            word. Required because single-step modes (quiz → ['quiz'], study
+            without example → ['pronounce']) keep `step` constant across word
+            changes, so React reuses the same component instance and its local
+            state (selected answer, SpeechBtn phase, timers) leaks into the
+            next word — the "second quiz question already answered" bug.
+            Regressed in 6dcd521 when quiz-only mode was introduced. */}
         {step === 'pronounce' && (
           <PronounceStep
+            key={word.id}
             word={word}
             onDone={goNext}
             onMarkPronunciationOk={onMarkPronunciationOk}
@@ -599,6 +610,7 @@ export default function WordDetail({
         )}
         {step === 'example' && exampleEnglish && (
           <ExampleStep
+            key={word.id}
             english={exampleEnglish}
             korean={exampleKorean}
             memoryTip={word.memoryTip}
@@ -609,6 +621,7 @@ export default function WordDetail({
         )}
         {step === 'quiz' && (
           <QuizStep
+            key={word.id}
             word={word}
             classWords={classWords}
             onDone={goNext}
@@ -618,6 +631,7 @@ export default function WordDetail({
         )}
         {step === 'spelling' && (
           <SpellingQuestion
+            key={word.id}
             word={word.word}
             meaning={word.meaning}
             wordAudioUrl={word.wordAudioUrl}
