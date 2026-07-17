@@ -184,6 +184,12 @@ function freshRecord(id) {
     starBadgeThreshold: 0,   // highest star badge already granted
     lastGamePlayed: null,
     lastWordIndex: 0,
+    // v2.1 학생-Unit 분리 — 유닛별 "이어서 학습" 위치(unitId(UUID) -> index).
+    // lastWordIndex(전역, 하위호환)는 계속 병행 기록: 구버전 레코드/백업과
+    // 양방향 호환되고, 유닛 id를 모르는 상황의 폴백으로도 쓰인다. 진행도
+    // (별/스티커/cleared/미션)는 원래 유닛 독립(word 슬러그/dbId 기준)이라
+    // 여기 말고는 유닛 종속 필드가 없다 — 전환 시 아무것도 리셋되지 않는 근거.
+    lastWordIndexByUnit: {},
     wordStatus: {},          // v1.5 Skip 기능 — word.dbId -> 'known' | 'unknown' | 'skipped' | 'mastered'
   }
 }
@@ -257,6 +263,7 @@ function normalizeRecord(raw, id) {
   rec.milestoneStreak = Number(rec.milestoneStreak) || 0
   rec.starBadgeThreshold = Number(rec.starBadgeThreshold) || 0
   rec.lastWordIndex = Number(rec.lastWordIndex) || 0
+  rec.lastWordIndexByUnit = asObject(rec.lastWordIndexByUnit) // v2.1 이전 레코드/백업엔 없음 — 빈 객체로 채움
   rec.wordStatus = asObject(rec.wordStatus)
   const r = asObject(rec.round)
   rec.round = r.date === todayStr()
@@ -358,6 +365,19 @@ export function movePlacementInList(list, placementId, dir) {
   const arr = [...list]
   ;[arr[i], arr[j]] = [arr[j], arr[i]]
   return arr
+}
+
+// v2.1 — 현재 유닛의 이어서-학습 위치(pure, 테스트 가능). 우선순위:
+//   ① 그 유닛의 저장 지점(lastWordIndexByUnit[unitId])
+//   ② 유닛별 기록이 하나라도 있으면(=v2.1 이후 데이터) 처음 가보는 유닛은 0
+//   ③ 아무 유닛별 기록이 없으면(구버전 데이터) 기존 전역 lastWordIndex 폴백
+//      — 배포 직후 기존 학생의 "이어서 학습하기"가 끊기지 않는 하위호환.
+// unitId를 모르면(캐시 미비/마이그레이션 전) 항상 ③.
+export function resumeIndexForUnit(record, unitId) {
+  const map = asObject(record?.lastWordIndexByUnit) // 배열 등 오염 값도 빈 객체 취급
+  if (unitId && map[unitId] !== undefined) return Number(map[unitId]) || 0
+  if (unitId && Object.keys(map).length > 0) return 0
+  return Number(record?.lastWordIndex) || 0
 }
 
 // Pure helpers exported for testing (see scripts/testProgress.mjs) — no
@@ -681,7 +701,18 @@ export function useStudent(studentId, legacyName) {
     }))
   }, [patch])
 
-  const setLastWordIndex = useCallback((idx) => patch(() => ({ lastWordIndex: idx })), [patch])
+  // v2.1: unitId(현재 유닛 UUID)를 같이 주면 유닛별 위치도 기록 — 다른
+  // 유닛에 다녀와도 각 유닛의 "이어서 학습" 지점이 따로 보존된다. unitId가
+  // 없으면(캐시 미비 등) 기존 전역 필드만 갱신(완전 하위호환).
+  const setLastWordIndex = useCallback((idx, unitId) => patch((prev) => ({
+    lastWordIndex: idx,
+    ...(unitId ? { lastWordIndexByUnit: { ...prev.lastWordIndexByUnit, [unitId]: idx } } : {}),
+  })), [patch])
+
+  const getResumeIndexForUnit = useCallback(
+    (unitId) => resumeIndexForUnit(record, unitId),
+    [record]
+  )
 
   // v1.5 "알아요"/"모르겠어요" (Skip 기능) — 로컬(즉시, 새로고침에도 안전)
   // 과 Supabase word_status 테이블(관리자 조회용) 둘 다에 반영한다. 로컬
@@ -787,7 +818,7 @@ export function useStudent(studentId, legacyName) {
     recordQuizAnswer, markPronunciationAttempt,
     recordSpellingAnswer, clearSpellingReviewWord, spellingWrongToday: round.spellingWrongToday,
     spellingCombo: round.spellingCombo || 0,
-    lastWordIndex, setLastWordIndex,
+    lastWordIndex, setLastWordIndex, getResumeIndexForUnit,
     pendingGift: giftQueue[0] || null, dismissGift,
     addStars, addMission, answerMission,
     markWordViewed, markExampleHeard, markQuizSolved, markPronunciationOk,
