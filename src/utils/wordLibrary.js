@@ -178,11 +178,21 @@ export const memoryTipFor = (word, meaning) => `${word} = ${meaning}! 소리 내
 // 필요하면 getStudentsInClass()를 쓴다(이름은 여전히 그 안에서 표시 라벨).
 let _students = new Map()
 
+// v2.1 학생-Unit 분리 — current_unit_id(uuid FK)가 학생 현재 유닛의 1차
+// 저장소, unit_name(문자열)은 하위호환 폴백. 컬럼이 아직 없으면(마이그레이션
+// supabase_v2_1_student_unit_decouple.sql 실행 전) 그 컬럼만 빼고 재시도 —
+// refreshClassSettings/fetchWordsRows와 동일한 부분 마이그레이션 안전 패턴
+// (SQL보다 코드가 먼저 배포돼도 앱이 절대 깨지지 않음).
+const STUDENTS_SELECT_BASE = 'id,name,class_id,unit_name,classes(name)'
 export async function refreshStudents() {
-  const { data, error } = await supabase
+  let res = await supabase
     .from('students')
-    .select('id,name,class_id,unit_name,classes(name)')
+    .select(`${STUDENTS_SELECT_BASE},current_unit_id`)
     .order('created_at')
+  if (res.error) {
+    res = await supabase.from('students').select(STUDENTS_SELECT_BASE).order('created_at')
+  }
+  const { data, error } = res
   if (error) throw error
   const map = new Map()
   data.forEach((s) => {
@@ -192,6 +202,8 @@ export async function refreshStudents() {
       classId: s.class_id || null,
       className: s.classes?.name || '',
       unitName: s.unit_name || DEFAULT_UNIT_NAME,
+      // 컬럼 부재/백필 전 null — 이름 폴백 경로가 기존 동작 그대로 커버.
+      unitId: s.current_unit_id || null,
     })
   })
   _students = map
@@ -481,7 +493,10 @@ export async function renameClass(oldName, newName) {
 // getStudents()는 이제 이름 문자열 배열이 아니라 학생 객체 배열을
 // 반환한다({id,name,className,classId,unitName}) — 호출부(AdminScreen/
 // DebugPage)는 항상 s.id를 키로, s.name을 표시로 써야 한다.
-export const getStudents = () => Array.from(_students.values())
+// unitName은 항상 "해석된" 값(resolveStudentUnitObj — id 우선)으로 내보낸다 —
+// 관리자 로스터/CSV가 학생이 실제로 보고 있는 유닛과 절대 어긋나지 않게.
+export const getStudents = () =>
+  Array.from(_students.values()).map((s) => ({ ...s, unitName: getStudentUnit(s.id) }))
 
 export const getStudentById = (id) => _students.get(id) || null
 export const getStudentName = (id) => _students.get(id)?.name || ''
@@ -504,7 +519,7 @@ export function getStudentsInClass(className) {
   if (!classId) return []
   return Array.from(_students.values())
     .filter(s => s.classId === classId)
-    .map(s => ({ id: s.id, name: s.name, unitName: s.unitName }))
+    .map(s => ({ id: s.id, name: s.name, unitName: getStudentUnit(s.id) }))
 }
 
 // 반환값: 새로 생성된 학생의 id(UUID). 호출부(StudentSelect.jsx 자기등록,
@@ -518,9 +533,20 @@ export function getStudentsInClass(className) {
 export async function addStudent(name, className = '', unitName = DEFAULT_UNIT_NAME) {
   let classId = null
   if (className) classId = (await ensureClass(className)).id
-  const { data, error } = await supabase
-    .from('students').insert({ name, class_id: classId, unit_name: unitName || DEFAULT_UNIT_NAME })
+  const baseRow = { name, class_id: classId, unit_name: unitName || DEFAULT_UNIT_NAME }
+  // v2.1: 첫 유닛 id를 함께 기록(반의 유닛 중 이름 일치 — 없으면 null,
+  // 폴백이 커버). 컬럼 부재(마이그레이션 전) 에러면 기존 row로 재시도 —
+  // 단, 23505(동명 UNIQUE 제약)는 컬럼 문제가 아니므로 재시도 없이 기존
+  // 안내 에러 경로로 바로 보낸다.
+  const unitId = className
+    ? (_cache[className]?.units.find((u) => u.name === baseRow.unit_name)?.id || null)
+    : null
+  let { data, error } = await supabase
+    .from('students').insert({ ...baseRow, current_unit_id: unitId })
     .select('id').single()
+  if (error && error.code !== '23505') {
+    ;({ data, error } = await supabase.from('students').insert(baseRow).select('id').single())
+  }
   if (error) {
     if (error.code === '23505') {
       throw new Error('같은 이름의 학생이 이미 있어요. (관리자: supabase_v1_6_student_identity.sql의 UNIQUE 제약 제거 마이그레이션이 아직 적용 안 됐을 수 있어요)')
@@ -541,7 +567,35 @@ export async function removeStudent(id) {
 
 export const getStudentClass = (id) => _students.get(id)?.className || ''
 export const getStudentClassId = (id) => _students.get(id)?.classId || null
-export const getStudentUnit = (id) => _students.get(id)?.unitName || DEFAULT_UNIT_NAME
+
+// ── v2.1 학생 현재 유닛 해석 (단일 진실 공급원) ──────────────────────────
+// 우선순위: ① current_unit_id(UUID — 유닛 이름이 바뀌거나 표기가 달라도
+// 절대 안 끊어짐) ② unit_name 문자열 매칭(마이그레이션 전/백필 실패 행
+// 하위호환) ③ 반의 첫 유닛(기존 getClassWords 폴백과 동일 — 조용히 첫
+// 유닛으로 떨어지던 기존 동작을 "최후 폴백"으로만 남김).
+// 화면 표시(getStudentUnit)와 단어 로딩(getStudentWords)이 반드시 같은
+// 함수를 거친다 — 표시되는 유닛과 실제 보이는 단어가 어긋날 수 없게.
+function resolveStudentUnitObj(id) {
+  const s = _students.get(id)
+  if (!s) return null
+  const clsName = getClassNameById(s.classId) || s.className
+  const units = _cache[clsName]?.units || []
+  if (units.length === 0) return null
+  if (s.unitId) {
+    const byId = units.find((u) => u.id === s.unitId)
+    if (byId) return byId
+  }
+  return units.find((u) => u.name === s.unitName) || units[0]
+}
+
+// 표시용 유닛 이름 — 항상 해석된 값. 반/유닛 캐시가 아직 없으면(반 삭제
+// 등) 저장된 문자열 그대로.
+export const getStudentUnit = (id) =>
+  resolveStudentUnitObj(id)?.name || _students.get(id)?.unitName || DEFAULT_UNIT_NAME
+
+// 해석된 유닛의 실제 DB id — 유닛별 이어서-학습 위치(useStudent
+// lastWordIndexByUnit) 등 id 기반 소비자용. 캐시 미비 시 null.
+export const getStudentUnitId = (id) => resolveStudentUnitObj(id)?.id || null
 
 // _cache is keyed by class NAME (see refreshWordLibrary), but a student is
 // linked to a class by class_id (the DB foreign key) — this resolves a
@@ -563,25 +617,42 @@ export function getClassIdByName(className) {
   return _cache[className]?.id || null
 }
 
+// v2.1 — 반이 바뀌면 current_unit_id도 함께 정리한다: 예전 반의 유닛 id가
+// 그대로 남으면 "학생의 유닛이 자기 반 소속이 아닌" 불일치 행이 생긴다.
+// 새 반에서 같은 이름의 유닛이 있으면 그 id로, 없으면 null(이름/첫 유닛
+// 폴백이 커버). 컬럼 부재(마이그레이션 전)면 기존 payload로 재시도.
 export async function setStudentClass(id, className) {
   const s = _students.get(id)
   if (!s) return
   const classId = className ? (await ensureClass(className)).id : null
-  const payload = { class_id: classId }
+  const base = { class_id: classId }
   // P7 감사(2026-07-16): 예전엔 뒤에 bare .select()가 붙어 있었는데, 반환
   // 데이터를 아무도 안 쓰는데도 업데이트된 행의 "모든" 컬럼(pin_hash 포함)이
   // 네트워크 응답에 실려 내려왔다 — 제거(동작 불변, 응답에서 해시 노출만 차단).
-  const { error } = await supabase.from('students').update(payload).eq('id', id)
+  const unitIdInNewClass = className
+    ? (_cache[className]?.units.find((u) => u.name === s.unitName)?.id || null)
+    : null
+  let { error } = await supabase.from('students')
+    .update({ ...base, current_unit_id: unitIdInNewClass }).eq('id', id)
+  if (error) ({ error } = await supabase.from('students').update(base).eq('id', id))
   if (error) throw error
   await refreshStudents()
 }
 
+// v2.1 — 호출부 시그니처(유닛 "이름")는 그대로 두되(관리자/대시보드 셀렉트
+// 전부 반 내 유닛 이름 목록에서 고른다 — 반 안에서 이름은 유일, ensureUnit
+// 보장), 저장은 id를 1차로 기록한다. unit_name도 병행 기록(하위호환 —
+// 구버전 클라이언트/마이그레이션 전 폴백 경로가 계속 읽음). 컬럼 부재면
+// 기존 payload(unit_name만)로 재시도 — SQL 실행 전에도 완전 동작.
 export async function setStudentUnit(id, unitName) {
   const s = _students.get(id)
   if (!s) return
-  const payload = { unit_name: unitName }
+  const clsName = getClassNameById(s.classId) || s.className
+  const unitId = _cache[clsName]?.units.find((u) => u.name === unitName)?.id || null
   // P7 감사: bare .select() 제거 — setStudentClass와 동일한 pin_hash 응답 노출 차단.
-  const { error } = await supabase.from('students').update(payload).eq('id', id)
+  let { error } = await supabase.from('students')
+    .update({ unit_name: unitName, current_unit_id: unitId }).eq('id', id)
+  if (error) ({ error } = await supabase.from('students').update({ unit_name: unitName }).eq('id', id))
   if (error) throw error
   await refreshStudents()
 }
@@ -594,7 +665,15 @@ export async function setStudentsClassBulk(ids, className, unitName) {
   const validIds = ids.filter(id => _students.has(id))
   if (validIds.length === 0) return
   const classId = className ? (await ensureClass(className)).id : null
-  const { error } = await supabase.from('students').update({ class_id: classId, unit_name: unitName }).in('id', validIds)
+  // v2.1: 목적지 반에서 unitName과 일치하는 유닛 id를 함께 기록(전원 같은
+  // 반·같은 유닛으로 이동하므로 단일 값). 없으면 null — 이름/첫 유닛 폴백.
+  const unitId = className
+    ? (_cache[className]?.units.find((u) => u.name === unitName)?.id || null)
+    : null
+  const base = { class_id: classId, unit_name: unitName }
+  let { error } = await supabase.from('students')
+    .update({ ...base, current_unit_id: unitId }).in('id', validIds)
+  if (error) ({ error } = await supabase.from('students').update(base).in('id', validIds))
   if (error) throw error
   await refreshStudents()
 }
@@ -772,7 +851,7 @@ export async function fetchDebugSnapshot(studentId) {
   if (progressRes.error) throw progressRes.error
   if (dailyRes.error) throw dailyRes.error
   return {
-    student: { id: s.id, name: s.name, className: s.className, unitName: s.unitName },
+    student: { id: s.id, name: s.name, className: s.className, unitName: getStudentUnit(studentId) },
     progress: progressRes.data || null,
     daily: dailyRes.data || [],
     wordStatusRows: wsRes.error ? [] : (wsRes.data || []),
@@ -785,6 +864,50 @@ export async function fetchDebugSnapshot(studentId) {
 // the built-in demo bank (data/words.js), even if the text happens to match.
 // No class assigned (on this device) or an empty unit both mean "no words
 // yet"; the screen shows nothing rather than substituting sample content.
+// 단어 슬러그 — 앱 전역 표시용 id(미션/퀴즈 중복 제거/오답노트가 전부 이
+// 값 기준이라 유닛을 오가도 진행도가 끊기지 않는 근거). 절대 바꾸지 말 것.
+const wordSlug = (word) => word.toLowerCase().replace(/\s+/g, '_')
+
+// DB 단어 행 -> 앱 단어 객체 매핑 (getStudentWords 전용 — 현재 유닛 경로와
+// v2.1 숙제 교차 유닛 경로가 정확히 같은 모양을 반환하도록 공용화).
+const mapWordRow = (cw, classId) => {
+  if (!cw || !cw.word) return null
+  return {
+    id:              wordSlug(cw.word),
+    word:            cw.word,
+    meaning:         cw.meaning || '',
+    // Real example/tip are admin-provided (example only) or AI-generated
+    // server-side (see api/generate-audio.js) and stored per word. Until
+    // that finishes (brand-new word, generation still in flight), fall
+    // back to a per-word placeholder rather than showing nothing.
+    memoryTip:          cw.memoryTip || memoryTipFor(cw.word, cw.meaning),
+    easyExample:        cw.exampleText || exampleTextFor(cw.word),
+    // Translation of the example SENTENCE (not the word's meaning) —
+    // only real, AI-generated translations are shown; null until that
+    // finishes, rather than substituting the word's meaning, which was
+    // confusingly wrong for a full-sentence example.
+    exampleTranslation: cw.exampleTranslation || null,
+    quiz:            `${cw.word} means ____.`,
+    answer:          cw.meaning || '',
+    wordAudioUrl:    cw.wordAudioUrl || null,
+    exampleAudioUrl: cw.exampleAudioUrl || null,
+    // Raw DB id + example (nullable) — used to lazily (re)trigger server
+    // audio/example generation when a word is opened without it. The
+    // display `id` above is a word-text slug used elsewhere (missions,
+    // quiz option de-dup) and must not change.
+    dbId:            cw.id || null,
+    exampleText:     cw.exampleText || null,
+    // v2.0 단어별 추가 인정 뜻 — en2kr 채점 시 정답 후보에 합류.
+    acceptedMeanings: Array.isArray(cw.acceptedMeanings) ? cw.acceptedMeanings : [],
+    // classId/unitId: the real DB foreign keys this word belongs to —
+    // words are looked up via unit_id -> class_id in Supabase (never by
+    // matching a className string), these are exposed for callers that
+    // need to confirm/display which class+unit a word belongs to.
+    classId:         cw.classId || classId,
+    unitId:          cw.unitId || null,
+  }
+}
+
 export const getStudentWords = (studentId) => {
   const classId = getStudentClassId(studentId)
   const unitName = getStudentUnit(studentId)
@@ -803,8 +926,11 @@ export const getStudentWords = (studentId) => {
       })
       return []
     }
-    const raw = getClassWords(cls, unitName)
-    if (!Array.isArray(raw) || !raw.length) {
+    // v2.1: 유닛 해석은 resolveStudentUnitObj 단일 경로(id 우선 → 이름 →
+    // 첫 유닛) — Dashboard가 표시하는 유닛 이름(getStudentUnit)과 여기서
+    // 로드하는 단어 목록이 구조적으로 항상 같은 유닛을 가리킨다.
+    const raw = resolveStudentUnitObj(studentId)?.words || []
+    if (!raw.length) {
       console.log('[wordLibrary] getStudentWords: empty result', {
         selectedStudentId: studentId,
         selectedClass: cls,
@@ -816,43 +942,7 @@ export const getStudentWords = (studentId) => {
       return []
     }
     const todaysAssignment = _dailyAssignments[classId]
-    const mapped = raw.map((cw) => {
-      if (!cw || !cw.word) return null
-      return {
-        id:              cw.word.toLowerCase().replace(/\s+/g, '_'),
-        word:            cw.word,
-        meaning:         cw.meaning || '',
-        // Real example/tip are admin-provided (example only) or AI-generated
-        // server-side (see api/generate-audio.js) and stored per word. Until
-        // that finishes (brand-new word, generation still in flight), fall
-        // back to a per-word placeholder rather than showing nothing.
-        memoryTip:          cw.memoryTip || memoryTipFor(cw.word, cw.meaning),
-        easyExample:        cw.exampleText || exampleTextFor(cw.word),
-        // Translation of the example SENTENCE (not the word's meaning) —
-        // only real, AI-generated translations are shown; null until that
-        // finishes, rather than substituting the word's meaning, which was
-        // confusingly wrong for a full-sentence example.
-        exampleTranslation: cw.exampleTranslation || null,
-        quiz:            `${cw.word} means ____.`,
-        answer:          cw.meaning || '',
-        wordAudioUrl:    cw.wordAudioUrl || null,
-        exampleAudioUrl: cw.exampleAudioUrl || null,
-        // Raw DB id + example (nullable) — used to lazily (re)trigger server
-        // audio/example generation when a word is opened without it. The
-        // display `id` above is a word-text slug used elsewhere (missions,
-        // quiz option de-dup) and must not change.
-        dbId:            cw.id || null,
-        exampleText:     cw.exampleText || null,
-        // v2.0 단어별 추가 인정 뜻 — en2kr 채점 시 정답 후보에 합류.
-        acceptedMeanings: Array.isArray(cw.acceptedMeanings) ? cw.acceptedMeanings : [],
-        // classId/unitId: the real DB foreign keys this word belongs to —
-        // words are looked up via unit_id -> class_id in Supabase (never by
-        // matching a className string), these are exposed for callers that
-        // need to confirm/display which class+unit a word belongs to.
-        classId:         cw.classId || classId,
-        unitId:          cw.unitId || null,
-      }
-    }).filter(Boolean)
+    const mapped = raw.map((cw) => mapWordRow(cw, classId)).filter(Boolean)
 
     // v1.3 날짜별 단어 배정: 오늘 지정된 단어가 있으면 그 서브셋만, 없으면
     // (배정 안 함/전부 삭제됨 등) 기존처럼 유닛 전체 단어를 그대로 보여줌 —
@@ -861,6 +951,23 @@ export const getStudentWords = (studentId) => {
       const assignedSet = new Set(todaysAssignment)
       const filtered = mapped.filter((w) => assignedSet.has(w.id))
       if (filtered.length > 0) return filtered
+      // v2.1 숙제-유닛 독립: 배정 단어가 지금 보고 있는 유닛에 하나도 없으면
+      // (학생이 복습용으로 다른 유닛에 가 있는 경우) 반 전체 유닛에서 찾아
+      // 숙제를 우선 표시한다 — 숙제는 반+날짜 축이지 유닛 축이 아니다.
+      // 배정 목록 순서 유지, 같은 슬러그가 여러 유닛에 있으면 첫 매치만.
+      const bySlug = new Map()
+      for (const u of _cache[cls]?.units || []) {
+        for (const cw of u.words) {
+          if (cw?.word) {
+            const slug = wordSlug(cw.word)
+            if (!bySlug.has(slug)) bySlug.set(slug, cw)
+          }
+        }
+      }
+      const fromWholeClass = todaysAssignment
+        .map((slug) => mapWordRow(bySlug.get(slug), classId))
+        .filter(Boolean)
+      if (fromWholeClass.length > 0) return fromWholeClass
     }
     return mapped
   } catch (err) {
