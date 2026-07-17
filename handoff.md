@@ -1,5 +1,85 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-17 (v2.0.1 — 출제 방향 기본값 mixed 확정 + 기존 반 일괄 전환)_
+_최종 갱신: 2026-07-17 (v2.1 — 학생-Unit 아키텍처 분리 구현+검증 완료)_
+
+## 2026-07-17 밤 — v2.1 학생-Unit 아키텍처 분리 (구현+검증 완료)
+
+### Root cause (조사 확정, 추측 아님)
+1. `students.unit_name`(문자열)이 학생 현재 유닛의 유일한 저장소 — 표시용 이름을
+   식별자로 사용. `getClassWords()`의 `units.find(u => u.name === unitName) ||
+   units[0]` 폴백 때문에 이름 불일치(유닛 삭제, "Unit 1" vs "Unit8" 표기 차이,
+   기본값 'Unit 1'이 실제 유닛명과 다름) 시 **조용히 첫 유닛으로 떨어짐** —
+   "학생이 첫 유닛에 묶인다/되돌아간다"의 정확한 메커니즘. (라이브에서 실제로
+   unit_name 문자열이 해석 결과와 어긋난 학생 1명 실측 — id가 진실이라 무해해짐.)
+2. PIN 로그인 전환(v1.7) 이후 학생 화면에 유닛 전환 UI가 전무 — 학생이 유닛을
+   바꿀 방법 자체가 없었음(관리자 반 배정만 가능).
+3. 진행도는 이미 유닛 독립: cleared/missions/round.wordsViewed(word 슬러그),
+   wordStatus(words.id UUID), 별/스티커/스트릭(유닛 무관). 유닛 종속은
+   `lastWordIndex`(이어서 학습 위치) 단 하나 — 유닛별 맵으로 분리함.
+
+### 전후 아키텍처
+- 전: 학생→유닛 = unit_name 문자열 매칭(깨지면 조용히 첫 유닛). 학생은 유닛
+  변경 불가.
+- 후: `students.current_unit_id`(uuid FK) 1차 + unit_name 폴백 + 첫 유닛 최후
+  폴백 — 해석은 wordLibrary.js `resolveStudentUnitObj()` **단일 경로**(표시
+  getStudentUnit / 단어 로딩 getStudentWords / 로스터 getStudents(InClass) 전부
+  이 경로 → 표시 유닛과 실제 단어가 구조적으로 항상 일치). 학생은 Dashboard
+  프로필 카드의 유닛 셀렉트로 자기 반 유닛만 전환(즉시 단어 갱신 + Supabase
+  영속). 진행도 레코드는 전환 시 일절 안 건드림(리셋 불가능이 구조적 보장).
+  별도 student_units 권한 테이블은 만들지 않음(자기 반 유닛 전체 = 접근 범위,
+  스키마 최소화).
+- 이어서 학습: `lastWordIndexByUnit`(unitId→index, useStudent 레코드 신규 필드,
+  normalizeRecord로 구버전/클라우드 blob 완전 하위호환) — 유닛 복귀 시 그
+  유닛의 마지막 위치에서 재개. 순수 함수 `resumeIndexForUnit()`.
+- 숙제-유닛 독립: daily_assignments 단어가 현재 유닛에 없으면(복습용으로 다른
+  유닛에 가 있는 경우) getStudentWords가 반 전체 유닛에서 찾아 숙제를 우선
+  표시. Dashboard에 "오늘의 숙제 준비됨" 안내 라인.
+- 관리자: 기존 반 배정 UI 그대로(내부 setStudentClass/setStudentUnit이 id 병행
+  기록으로 전환, 반 이동 시 이전 반 유닛 id 잔존 불일치도 정리).
+
+### ⚠️ 라이브 DB 실측 (2026-07-17 밤) — DB 마이그레이션이 이미 적용돼 있었음
+`supabase_v2_1_student_unit_decouple.sql`을 준비했으나, 라이브 실측 결과
+**current_unit_id 컬럼 + anon select/update GRANT + 백필(98/98 학생, 반 불일치
+0)이 이미 적용된 상태**였다(누가/언제 실행했는지 repo 기록엔 없음 — 운영자
+확인 요망). 따라서 코드가 처음부터 id 1차 경로로 동작한다. SQL 파일은 멱등이며
+**FK/인덱스 보증 블록 포함** — 컬럼이 FK 없이 수동 생성됐을 가능성이 있으니
+운영자 복귀 후 한 번 실행 권장(있으면 전부 no-op, 없던 FK/인덱스만 채움).
+실행 후 재검증: `node scripts/buildWordLibBundle.mjs` →
+`WORDLIB_BUNDLE=scripts/.tmp/wordLibrary.bundle.mjs node scripts/testStudentUnitDecouple.mjs`
+(컬럼 존재를 자동 감지해 id 모드 19체크 실행 — 이미 오늘 밤 라이브에서 전부 PASS).
+
+### 파일
+- 신규: `supabase_v2_1_student_unit_decouple.sql`(멱등, 검증 쿼리 포함),
+  `scripts/testStudentUnitDecouple.mjs`(라이브 e2e 19체크, SQL 전/후 겸용),
+  `scripts/testUnitResumeIndex.mjs`(pure 12체크)
+- 수정: `src/utils/wordLibrary.js`(refreshStudents current_unit_id+폴백,
+  resolveStudentUnitObj, getStudentUnit(Id), setStudentUnit/Class/Bulk/addStudent
+  id 병행 기록+컬럼 부재 재시도, getStudentWords 해석기+숙제 교차 유닛,
+  mapWordRow 공용화), `src/hooks/useStudent.js`(lastWordIndexByUnit,
+  resumeIndexForUnit, setLastWordIndex(idx, unitId)), `src/App.jsx`(currentUnitId,
+  handleUnitSwitch, resume 전달), `src/components/Dashboard.jsx`(유닛 셀렉트/
+  숙제 안내/resumeIndex), `src/components/StudentSelect.jsx`(등록 유닛 라벨
+  "처음 공부할 유닛" — 로그인과 완전 분리 명시)
+
+### 테스트 (전부 PASS)
+- 신규: testStudentUnitDecouple(라이브, id 모드 19체크 — 전환/영속/재로그인/
+  복귀/동명 유닛 비충돌/로스터 일관성/숙제 교차 유닛/유닛 삭제 폴백/정리),
+  testUnitResumeIndex(pure 12체크 — 하위호환/오염 방어/isEmptyRecord 불변).
+- 회귀: testUnitPersistence · testStudentSelectUnitSwitch · testStudentLogin ·
+  testProgress · testMultiClass · testDailyAssignment · testRenameClass ·
+  testUnitNaturalSort · testDashboard · testSyncProgress · testRestoreSyncRace ·
+  testLoginRestoreCrash · testIdentityMigration · testRlsSecurity(v1.9 상태
+  확인 겸) 전부 PASS. `npm run build` 통과.
+- 프로덕션 데이터: 삭제/리셋 0 — QA_ 접두 테스트 데이터만 생성/정리.
+
+### 잔여 리스크 / 다음
+- FK/인덱스 존재 여부 미확인(anon으로 조회 불가) — 위 SQL 1회 실행으로 해소.
+  FK가 없어도 클라이언트는 허상 id를 이름→첫 유닛 폴백으로 처리(테스트 8절).
+- 운영자 실기기 확인 권장(5분): ①학생 홈 프로필 카드에서 유닛 셀렉트로 전환 →
+  단어 목록 즉시 변경 + 별/스트릭/오늘 미션 그대로 ②새로고침/재로그인 후 그
+  유닛 유지 ③Unit 복귀 시 "이어서 학습하기" 위치 그 유닛 기준 ④오늘 숙제 배정
+  상태에서 다른 유닛으로 가도 단어 공부가 숙제 단어로 열림.
+- 다음 아키텍처 우선순위(운영자 지정): 세션 영속성/진행도 구조/관리자-학생
+  정합성/데드코드 정리 — 별도 에이전트 예정.
 
 ## 2026-07-17 오후 — "여전히 한→영만 나온다" 원인 격리 + 기본값 mixed 전환 (커밋 `e02249f`, **push+배포 완료** `index-BjV6lXr5.js` 라이브 일치)
 
