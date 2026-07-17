@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings } from '../utils/wordLibrary'
+import { fetchPendingSpellingReviews, resolveSpellingReview } from '../utils/spellingReviewApi'
 import { getStudents, removeStudent } from '../hooks/useStudent'
 import { buildWeeklyReport, computeStudentStats } from '../utils/weeklyReport'
 import FeatureManagementPanel from './FeatureManagementPanel'
@@ -83,9 +84,93 @@ function SpellingSettingsPanel({ targetClass, onSaved }) {
           className="border-2 border-purple-200 rounded-lg px-2 py-1 font-bold bg-white">
           <option value="kr2en">한글→영어 (기존)</option>
           <option value="en2kr">영어→한글</option>
-          <option value="random">랜덤</option>
+          <option value="random">랜덤 (문제마다 50% 확률)</option>
+          <option value="mixed">혼합 (세션 안에서 정확히 반반)</option>
         </select>
       </label>
+    </div>
+  )
+}
+
+// v2.0(2026-07-17) 쓰기 답안 교사 검토 큐 — 영→한 문제에서 학생이 한글로
+// 답했는데 오답 처리된 제출("뜻은 아는데 등록된 표기가 아닌" 후보)을
+// 교사가 직접 판정하는 패널. "이 답 인정" 원클릭 = 그 단어의
+// accepted_meanings에 추가(다음부터 전 반에서 정답 처리) + 큐에서 제거.
+// AI 자동 판정은 없음(운영자 방침 — 최종 판정은 항상 교사).
+// 테이블 미존재(supabase_v2_0_spelling_mixed.sql 미실행)면 안내만 표시.
+function SpellingReviewQueuePanel({ onChanged }) {
+  const [rows, setRows] = useState([]) // null = 테이블 없음
+  const [loading, setLoading] = useState(true)
+  const [busyId, setBusyId] = useState(null)
+
+  const load = async () => {
+    setLoading(true)
+    setRows(await fetchPendingSpellingReviews())
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  const accept = async (r) => {
+    setBusyId(r.id)
+    try {
+      await setWordAcceptedMeanings(r.wordId, [...r.acceptedMeanings, r.submittedAnswer])
+      await resolveSpellingReview(r.id, 'accepted')
+      await load()
+      onChanged?.()
+    } catch (err) {
+      alert('인정 처리 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setBusyId(null)
+    }
+  }
+  const dismiss = async (r) => {
+    setBusyId(r.id)
+    try {
+      await resolveSpellingReview(r.id, 'dismissed')
+      await load()
+    } catch (err) {
+      alert('무시 처리 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-3xl card-shadow p-5">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm font-black text-gray-700">📝 쓰기 답안 검토 {rows && rows.length > 0 && <span className="text-orange-500">({rows.length}건 대기)</span>}</p>
+        <button onClick={load} disabled={loading} className="text-xs font-bold text-purple-500 btn-press py-2 px-2 -my-2">새로고침</button>
+      </div>
+      <p className="text-[11px] text-gray-400 mb-3">영→한 시험에서 등록된 뜻과 달라 오답 처리된 한글 답이에요. 맞는 표현이면 "인정"을 눌러주세요 — 그 단어의 인정 뜻에 추가되어 다음부터 정답 처리됩니다.</p>
+      {loading ? (
+        <p className="text-gray-400 text-sm">불러오는 중...</p>
+      ) : rows === null ? (
+        <p className="text-xs text-orange-500 font-bold bg-orange-50 rounded-xl p-3">⚠️ 준비 중 — supabase_v2_0_spelling_mixed.sql을 Supabase SQL Editor에서 실행하면 이 기능이 켜져요.</p>
+      ) : rows.length === 0 ? (
+        <p className="text-gray-400 text-sm">검토할 답안이 없어요. 👍</p>
+      ) : (
+        <div className="space-y-2 max-h-72 overflow-y-auto">
+          {rows.map((r) => (
+            <div key={r.id} className="bg-gray-50 rounded-xl p-3 flex items-center gap-3 text-sm">
+              <div className="min-w-0 flex-1">
+                <p className="font-black text-gray-800">{r.word} <span className="text-gray-400 font-bold text-xs">등록 뜻: {r.meaning}</span></p>
+                <p className="text-gray-600">학생 답: <span className="font-black text-orange-600">{r.submittedAnswer}</span></p>
+                {r.acceptedMeanings.length > 0 && (
+                  <p className="text-[11px] text-gray-400">현재 인정 뜻: {r.acceptedMeanings.join(', ')}</p>
+                )}
+              </div>
+              <button onClick={() => accept(r)} disabled={busyId === r.id}
+                className="flex-shrink-0 bg-green-500 hover:bg-green-600 text-white font-black px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-40">
+                ✅ 인정
+              </button>
+              <button onClick={() => dismiss(r)} disabled={busyId === r.id}
+                className="flex-shrink-0 bg-white border-2 border-gray-200 text-gray-500 font-bold px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-40">
+                무시
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -1332,6 +1417,8 @@ export default function AdminScreen({ onBack }) {
         {/* Classes tab */}
         {tab === 'classes' && (
           <div className="space-y-3">
+            <SpellingReviewQueuePanel onChanged={refresh} />
+
             <div className="bg-white rounded-3xl card-shadow p-5">
               <p className="text-sm font-black text-gray-700 mb-3">새 반 추가하기</p>
               <div className="flex gap-2">
@@ -1469,7 +1556,31 @@ export default function AdminScreen({ onBack }) {
                                   ✓
                                 </button>
                                 <span className="font-bold text-gray-800 min-w-0">{w.word}</span>
-                                <span className="text-gray-500">{w.meaning}</span>
+                                <span className="text-gray-500 min-w-0 flex-1">{w.meaning}</span>
+                                {/* v2.0 단어별 "추가 인정 뜻" 편집 — 등록된 뜻(meaning)
+                                    외에 채점에서 정답으로 인정할 표기를 쉼표로 구분해
+                                    관리. prompt 기반 최소 UI(관리자 전용, 사용 빈도 낮음
+                                    — 주 경로는 위 "쓰기 답안 검토" 패널의 원클릭 인정). */}
+                                <button onClick={async () => {
+                                    const cur = Array.isArray(w.acceptedMeanings) ? w.acceptedMeanings : []
+                                    const raw = window.prompt(
+                                      `"${w.word}"의 추가 인정 뜻 (쉼표로 구분, 비우면 전부 삭제)\n등록 뜻: ${w.meaning}`,
+                                      cur.join(', '))
+                                    if (raw === null) return // 취소
+                                    try {
+                                      await setWordAcceptedMeanings(w.id, raw.split(',').map(s => s.trim()).filter(Boolean))
+                                      refresh()
+                                    } catch (err) {
+                                      alert('저장 중 오류가 발생했어요 (v2.0 SQL 미실행일 수 있음): ' + (err.message || err))
+                                    }
+                                  }}
+                                  className={`flex-shrink-0 text-[11px] font-bold px-2 py-1.5 rounded-lg btn-press border-2 ${
+                                    (w.acceptedMeanings || []).length > 0
+                                      ? 'bg-green-50 border-green-200 text-green-600'
+                                      : 'bg-white border-gray-200 text-gray-400'
+                                  }`}>
+                                  인정뜻 {(w.acceptedMeanings || []).length > 0 ? (w.acceptedMeanings || []).length : '+'}
+                                </button>
                               </div>
                             )
                           })}

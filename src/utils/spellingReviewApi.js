@@ -48,10 +48,12 @@ export async function logSpellingReview(wordDbId, studentId, submittedAnswer, di
 
 // 관리자 패널용 — 대기 중(pending) 항목 전부. 에러 -> null(테이블 없음 =
 // 패널이 "SQL 실행 필요" 안내), 성공 -> 배열(빈 배열 = "검토할 답 없음").
+// words(word_id FK) embed로 단어 원문/등록 뜻/현재 인정 목록까지 한 번에 —
+// 패널이 단어별 재조회 없이 바로 "이 답 인정" 처리 가능.
 export async function fetchPendingSpellingReviews() {
   const { data, error } = await supabase
     .from('spelling_review_queue')
-    .select('id,word_id,student_id,submitted_answer,direction,date,created_at')
+    .select('id,word_id,student_id,submitted_answer,direction,date,created_at,words(word,meaning,accepted_meanings)')
     .eq('status', 'pending')
     .order('created_at', { ascending: false })
     .limit(200)
@@ -64,6 +66,9 @@ export async function fetchPendingSpellingReviews() {
     direction: r.direction,
     date: r.date,
     createdAt: r.created_at,
+    word: r.words?.word || '(삭제된 단어)',
+    meaning: r.words?.meaning || '',
+    acceptedMeanings: Array.isArray(r.words?.accepted_meanings) ? r.words.accepted_meanings : [],
   }))
 }
 
