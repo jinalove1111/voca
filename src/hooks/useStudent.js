@@ -29,7 +29,7 @@ import { getRandomSticker, getMilestoneSticker, STICKERS } from '../data/sticker
 // student. Local storage stays authoritative whenever it actually has data —
 // the cloud copy is a safety net, never a silent overwrite.
 export { getStudents, addStudent, removeStudent, findStudentByName } from '../utils/wordLibrary'
-import { syncStudentProgress, fetchFullProgress, setWordStatus as syncWordStatus } from '../utils/wordLibrary'
+import { syncStudentProgress, fetchFullProgress, fetchProgressBackupStrict, setWordStatus as syncWordStatus } from '../utils/wordLibrary'
 
 // ── Single unified progress store ───────────────────────────────────────
 // Every per-student value the app tracks (stars, stickers, today's mission
@@ -176,6 +176,13 @@ function freshRecord(id) {
     totalStars: 0,
     stickers: [],          // owned sticker ids — badges (star/streak milestones) are just specific sticker ids granted via a guaranteed (non-gacha) path, tracked in this same collection rather than a separate list
     diaryPlacements: [],
+    // v2.2 다중 기기 병합 — 삭제된 다이어리 배치 id의 tombstone. 이 레코드에서
+    // 유일하게 "삭제"가 일어나는 영속 데이터가 diaryPlacements라서(스티커/
+    // cleared/미션/히스토리는 전부 추가만 됨), 합집합 병합이 다른 기기/백업에
+    // 남아있던 삭제된 스티커를 계속 부활시키는 걸 막으려면 삭제 사실 자체를
+    // 기록해야 한다. removePlacement가 추가하고 mergeProgressRecords가 양쪽
+    // 합집합에서 빼는 데만 쓴다. 상한(DIARY_TOMBSTONE_CAP)으로 무한 성장 방지.
+    diaryRemovedIds: [],
     missions: [],          // level-up boss missions
     cleared: [],
     round: freshRound(),
@@ -258,6 +265,7 @@ function normalizeRecord(raw, id) {
   rec.totalStars = Number(rec.totalStars) || 0
   rec.stickers = asArray(rec.stickers)
   rec.diaryPlacements = asArray(rec.diaryPlacements)
+  rec.diaryRemovedIds = asArray(rec.diaryRemovedIds) // v2.2 이전 레코드/백업엔 없음 — 빈 배열로 채움
   rec.missions = asArray(rec.missions)
   rec.cleared = asArray(rec.cleared)
   rec.milestoneStreak = Number(rec.milestoneStreak) || 0
@@ -277,6 +285,139 @@ function normalizeRecord(raw, id) {
     return [date, d]
   }))
   return rec
+}
+
+// ── v2.2 (2026-07-17) 다중 기기 진행도 병합 ─────────────────────────────
+// 문제(실유실 시나리오): 기존 동기화는 로컬 레코드로 클라우드 blob을 통째로
+// 덮어썼다(last-writer-wins). 학생이 기기 A(별 50)→기기 B(복원 후 +10, 백업
+// 60)→다시 A로 돌아오면, A의 레코드(별 50, B의 진행분 없음)가 백업 60을
+// 덮어써 B의 진행분이 영구 유실됐다. restoreChecked(2026-07-10)는 "빈 로컬"
+// 레이스만 막았고, "양쪽 다 데이터가 있는" 교차 사용은 못 막았다.
+//
+// 해결: 업로드 직전 클라우드 blob을 읽어(fetchProgressBackupStrict) 이
+// 순수 함수로 병합한 결과만 업로드한다. 병합 원칙 = "파괴적 축소 방지":
+// 어느 쪽에만 있는 데이터도 절대 사라지지 않는다. 필드 성질별 규칙:
+//   · 집합(stickers/cleared/미션/다이어리 배치/히스토리 날짜/오늘 round의
+//     wordsViewed·spellingWrongToday): 합집합. 같은 키 충돌 시 "더 진전된
+//     쪽"(미션 done>correctCount, 히스토리 필드별 max), 동률이면 로컬 우선.
+//   · 카운터(totalStars/starBadgeThreshold/milestoneStreak/lastWordIndex류):
+//     공통 조상이 없어 정확한 합산이 불가능하므로 max(local, cloud) — 과소
+//     지급(학생 진행분 증발)을 막는 게 1순위고, 이론상 가능한 약간의 과다
+//     집계는 학생에게 유리한 방향이라 수용(교차 사용 자체가 드묾).
+//   · wordStatus: 단어별 "더 진전된 상태" 우선(mastered>known>unknown>
+//     skipped), 동률/판단불가 시 로컬 우선. 관리자용 정밀 데이터는 어차피
+//     word_status 테이블(단어별 즉시 upsert)이 담당 — blob은 복원용 백업.
+//   · round(오늘 세션): normalizeRecord가 오늘 아닌 round를 이미 리셋하므로
+//     여기 도달하면 양쪽 다 "오늘" — 필드별 max/합집합(같은 날 기기를
+//     바꿔도 오늘 미션 진행이 이어짐).
+//   · diaryPlacements 삭제: tombstone(diaryRemovedIds) 합집합을 배치
+//     합집합에서 뺀다 — 순수 합집합이면 삭제한 스티커가 병합 때마다
+//     부활한다(이 레코드에서 유일하게 삭제가 존재하는 영속 필드).
+// 알려진 한계(의도된 트레이드오프, handoff 참고): spellingWrongToday는
+// tombstone이 없어 "복습 완료로 큐에서 뺀 단어"가 같은 날 재로그인 시
+// 되살아날 수 있다(한 번 더 복습하게 될 뿐 — 무해). diaryPlacements의
+// 위치/회전 수정 충돌은 로컬 우선(데이터 유실 아님, 위치만).
+const WORD_STATUS_RANK = { mastered: 3, known: 2, unknown: 1, skipped: 0 }
+const DIARY_TOMBSTONE_CAP = 300
+const unionList = (a, b) => {
+  const seen = new Set(a)
+  const out = [...a]
+  for (const v of b) if (!seen.has(v)) { seen.add(v); out.push(v) }
+  return out
+}
+const maxNum = (a, b) => Math.max(Number(a) || 0, Number(b) || 0)
+
+function mergeHistoryDay(a, b) {
+  const games = {}
+  for (const k of new Set([...Object.keys(a.gamesPlayed), ...Object.keys(b.gamesPlayed)]))
+    games[k] = maxNum(a.gamesPlayed[k], b.gamesPlayed[k])
+  return {
+    ...a,
+    studied: Boolean(a.studied || b.studied),
+    categoriesCompleted: maxNum(a.categoriesCompleted, b.categoriesCompleted),
+    giftsToday: maxNum(a.giftsToday, b.giftsToday),
+    starsEarned: maxNum(a.starsEarned, b.starsEarned),
+    stickersEarned: unionList(a.stickersEarned, b.stickersEarned),
+    gamesPlayed: games,
+    quizCorrect: maxNum(a.quizCorrect, b.quizCorrect),
+    quizTotal: maxNum(a.quizTotal, b.quizTotal),
+    pronunciationAttempts: maxNum(a.pronunciationAttempts, b.pronunciationAttempts),
+    // 빈도 목록(중복 허용) — 합치면 공통 조상 항목이 이중 계산되므로 더 긴 쪽
+    missedWordIds: b.missedWordIds.length > a.missedWordIds.length ? b.missedWordIds : a.missedWordIds,
+    spellingCorrect: maxNum(a.spellingCorrect, b.spellingCorrect),
+    spellingTotal: maxNum(a.spellingTotal, b.spellingTotal),
+  }
+}
+
+export function mergeProgressRecords(localRaw, cloudRaw, id) {
+  const local = normalizeRecord(localRaw, id)
+  if (!cloudRaw) return local
+  const cloud = normalizeRecord(cloudRaw, id)
+
+  // 다이어리: tombstone 합집합을 배치 합집합에서 제거(위 주석 참고).
+  // 같은 placementId 충돌은 로컬 우선(placementId는 timestamp+random이라
+  // 기기 간 충돌은 사실상 자기 자신 — 위치 수정은 로컬이 최신).
+  const removed = unionList(local.diaryRemovedIds, cloud.diaryRemovedIds).slice(-DIARY_TOMBSTONE_CAP)
+  const removedSet = new Set(removed)
+  const localPlacementIds = new Set(local.diaryPlacements.map((p) => p.placementId))
+  const diaryPlacements = [
+    ...local.diaryPlacements,
+    ...cloud.diaryPlacements.filter((p) => !localPlacementIds.has(p.placementId)),
+  ].filter((p) => !removedSet.has(p.placementId))
+
+  // 미션: wordId별 합집합, 더 진전된 쪽(done > correctCount, 동률 로컬)
+  const missionsById = new Map()
+  for (const m of [...cloud.missions, ...local.missions]) {
+    const prev = missionsById.get(m.wordId)
+    if (!prev) { missionsById.set(m.wordId, m); continue }
+    const better = (m.done && !prev.done) ||
+      (!!m.done === !!prev.done && (Number(m.correctCount) || 0) >= (Number(prev.correctCount) || 0))
+    if (better) missionsById.set(m.wordId, m)
+  }
+
+  // 히스토리: 없는 날짜는 합치고, 같은 날짜는 필드별 max/합집합
+  const history = {}
+  for (const date of new Set([...Object.keys(local.history), ...Object.keys(cloud.history)])) {
+    const a = local.history[date], b = cloud.history[date]
+    history[date] = a && b ? mergeHistoryDay(a, b) : (a || b)
+  }
+
+  // wordStatus: 단어별 더 진전된 상태, 동률/알 수 없는 상태값은 로컬 우선
+  const wordStatus = { ...cloud.wordStatus }
+  for (const [wid, st] of Object.entries(local.wordStatus)) {
+    const other = wordStatus[wid]
+    if (other === undefined || (WORD_STATUS_RANK[st] ?? -1) >= (WORD_STATUS_RANK[other] ?? -1)) wordStatus[wid] = st
+  }
+
+  const lastWordIndexByUnit = {}
+  for (const k of new Set([...Object.keys(local.lastWordIndexByUnit), ...Object.keys(cloud.lastWordIndexByUnit)]))
+    lastWordIndexByUnit[k] = maxNum(local.lastWordIndexByUnit[k], cloud.lastWordIndexByUnit[k])
+
+  return {
+    ...local,
+    totalStars: maxNum(local.totalStars, cloud.totalStars),
+    stickers: unionList(local.stickers, cloud.stickers),
+    diaryPlacements,
+    diaryRemovedIds: removed,
+    missions: [...missionsById.values()],
+    cleared: unionList(local.cleared, cloud.cleared),
+    round: {
+      ...local.round,
+      wordsViewed: unionList(local.round.wordsViewed, cloud.round.wordsViewed),
+      examplesHeard: maxNum(local.round.examplesHeard, cloud.round.examplesHeard),
+      quizSolved: maxNum(local.round.quizSolved, cloud.round.quizSolved),
+      pronunciationOk: maxNum(local.round.pronunciationOk, cloud.round.pronunciationOk),
+      spellingWrongToday: unionList(local.round.spellingWrongToday, cloud.round.spellingWrongToday),
+      spellingCombo: maxNum(local.round.spellingCombo, cloud.round.spellingCombo),
+    },
+    history,
+    milestoneStreak: maxNum(local.milestoneStreak, cloud.milestoneStreak),
+    starBadgeThreshold: maxNum(local.starBadgeThreshold, cloud.starBadgeThreshold),
+    lastGamePlayed: local.lastGamePlayed ?? cloud.lastGamePlayed,
+    lastWordIndex: maxNum(local.lastWordIndex, cloud.lastWordIndex),
+    lastWordIndexByUnit,
+    wordStatus,
+  }
 }
 
 // P0(2026-07-15) Phase 2 identity 마이그레이션 — lazy/on-demand, 로그인
@@ -382,7 +523,7 @@ export function resumeIndexForUnit(record, unitId) {
 
 // Pure helpers exported for testing (see scripts/testProgress.mjs) — no
 // behavior change, just visibility into the same logic the hook uses.
-export { freshRecord, freshRound, freshHistoryDay, migrateOldData, calcStreak, countCategoriesCompleted, todayStr, GOAL, isEmptyRecord, normalizeRecord }
+export { freshRecord, freshRound, freshHistoryDay, migrateOldData, calcStreak, countCategoriesCompleted, todayStr, GOAL, isEmptyRecord, normalizeRecord, DIARY_TOMBSTONE_CAP }
 
 // studentId: Supabase students.id(UUID) — 이 학생의 유일한 식별자, 모든
 // 저장/동기화가 이걸로 이뤄진다. legacyName: 이번 로그인이 실제로 성공한
@@ -426,7 +567,24 @@ export function useStudent(studentId, legacyName) {
   // "복구 시도가 끝날 때까지"(성공/실패/타임아웃 무관) sync를 미룬다.
   const [restoreChecked, setRestoreChecked] = useState(() => !isEmptyRecord(record))
   useEffect(() => {
-    if (!isEmptyRecord(record)) { setRestoreChecked(true); return }
+    if (!isEmptyRecord(record)) {
+      setRestoreChecked(true)
+      // v2.2 병합 복원 — 로컬에 데이터가 있어도 클라우드 백업에 다른
+      // 기기에서 쌓인 진행분이 더 있으면 병합해 로컬에도 반영한다(B에서
+      // 얻은 별이 A 화면에도 보이도록). 화면을 막지 않는 백그라운드
+      // fire-and-forget: 실패해도 로컬 무영향, 업로드 경로의 병합(doSync)이
+      // 백업 유실은 별도로 이미 막고 있다. 병합 결과가 로컬과 완전히
+      // 같으면 patch를 건너뛰어(no-op) 불필요한 재동기화를 만들지 않는다.
+      let cancelledMergeRestore = false
+      fetchFullProgress(studentId).then((backup) => {
+        if (cancelledMergeRestore || !backup) return
+        patch((prev) => {
+          const merged = mergeProgressRecords(prev, backup, studentId)
+          return JSON.stringify(merged) === JSON.stringify(prev) ? {} : merged
+        })
+      }).catch(() => {})
+      return () => { cancelledMergeRestore = true }
+    }
     let cancelled = false
     // 네트워크가 완전히 죽어도 동기화가 영구히 막히지 않도록 상한선.
     const timeout = setTimeout(() => { if (!cancelled) setRestoreChecked(true) }, 5000)
@@ -612,8 +770,14 @@ export function useStudent(studentId, legacyName) {
     }))
   }, [patch])
 
+  // v2.2: 삭제 시 tombstone(diaryRemovedIds)도 함께 기록 — 클라우드 백업/
+  // 다른 기기와의 합집합 병합에서 삭제한 스티커가 부활하지 않도록
+  // (mergeProgressRecords 주석 참고). 상한 초과 시 가장 오래된 것부터 버림.
   const removePlacement = useCallback((placementId) => {
-    patch(prev => ({ diaryPlacements: prev.diaryPlacements.filter(p => p.placementId !== placementId) }))
+    patch(prev => ({
+      diaryPlacements: prev.diaryPlacements.filter(p => p.placementId !== placementId),
+      diaryRemovedIds: [...(prev.diaryRemovedIds || []), placementId].slice(-DIARY_TOMBSTONE_CAP),
+    }))
   }, [patch])
 
   // P4 레이어 순서 — movePlacementInList(위 pure helper) 참고. 이동 불가
@@ -759,26 +923,45 @@ export function useStudent(studentId, legacyName) {
   // the debounce timer below and the visibility-flush effect always send
   // the current record, never a stale one from whichever render scheduled
   // them.
+  //
+  // v2.2 (2026-07-17) 다중 기기 병합 업로드 — last-writer-wins 유실 수정.
+  // 업로드 직전 클라우드 blob을 읽어(fetchProgressBackupStrict, 쿼리 1회
+  // 추가 — 2초 디바운스라 부하 미미) mergeProgressRecords로 병합한 결과만
+  // 올린다. 로컬 레코드(localStorage/React state)는 여기서 절대 건드리지
+  // 않는다 — 병합은 업로드 blob에만 적용(로컬 반영은 로그인 시 병합 복원
+  // 경로가 담당, 위 restore effect 참고). 읽기 실패 시 업로드 자체를
+  // 포기하고 markSyncFailure만 기록 — "클라우드 상태를 모르는 채로
+  // 덮어쓰기"가 정확히 기존 유실 경로였고, 로컬 데이터는 그대로라 다음
+  // 디바운스/visibility flush/재로그인에서 자연 재시도된다. 관리자 요약
+  // 컬럼(total_stars 등)과 daily 값도 병합본 기준 — 백업 blob과 관리자
+  // 대시보드 숫자가 항상 같은 레코드에서 나오도록.
   const doSyncRef = useRef(null)
   useEffect(() => {
-    doSyncRef.current = () => {
+    doSyncRef.current = async () => {
       markSyncAttempt(studentId, 'progress')
-      syncStudentProgress(studentId, {
-        totalStars: record.totalStars,
-        clearedCount: record.cleared.length,
-        streak,
-        stickersCount: record.stickers.length,
-        fullRecord: record,
-        daily: {
-          categoriesCompleted: todayHistory?.categoriesCompleted || 0,
-          starsEarned: todayHistory?.starsEarned || 0,
-          quizCorrect: todayHistory?.quizCorrect || 0,
-          quizTotal: todayHistory?.quizTotal || 0,
-          pronunciationAttempts: todayHistory?.pronunciationAttempts || 0,
-          missedWordIds: todayHistory?.missedWordIds || [],
-        },
-      }).then(() => markSyncSuccess(studentId, 'progress'))
-        .catch((err) => markSyncFailure(studentId, 'progress', err))
+      try {
+        const backup = await fetchProgressBackupStrict(studentId)
+        const merged = mergeProgressRecords(record, backup, studentId)
+        const day = merged.history[todayStr()]
+        await syncStudentProgress(studentId, {
+          totalStars: merged.totalStars,
+          clearedCount: merged.cleared.length,
+          streak: calcStreak(merged.history),
+          stickersCount: merged.stickers.length,
+          fullRecord: merged,
+          daily: {
+            categoriesCompleted: day?.categoriesCompleted || 0,
+            starsEarned: day?.starsEarned || 0,
+            quizCorrect: day?.quizCorrect || 0,
+            quizTotal: day?.quizTotal || 0,
+            pronunciationAttempts: day?.pronunciationAttempts || 0,
+            missedWordIds: day?.missedWordIds || [],
+          },
+        })
+        markSyncSuccess(studentId, 'progress')
+      } catch (err) {
+        markSyncFailure(studentId, 'progress', err)
+      }
     }
   })
 

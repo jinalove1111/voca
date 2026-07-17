@@ -9,4 +9,5 @@ export const removeStudent = () => {}
 export const findStudentByName = () => []
 export const syncStudentProgress = async () => {}
 export const fetchFullProgress = async () => null
+export const fetchProgressBackupStrict = async () => null
 export const setWordStatus = async () => {}

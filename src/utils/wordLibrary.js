@@ -759,6 +759,28 @@ export async function fetchFullProgress(studentId) {
   return data.progress_data
 }
 
+// v2.2(2026-07-17) 다중 기기 병합 업로드용 — fetchFullProgress와 달리
+// "백업이 확실히 없음(null)"과 "읽기 실패(throw)"를 구분한다. 업로드 직전
+// 병합(useStudent.js doSync)은 이 구분이 필수다: 읽기 실패를 null로
+// 뭉개면 "클라우드 상태를 모르는 채로 로컬 단독 blob을 덮어쓰는" 경로가
+// 되는데, 그게 정확히 이 병합이 없애려는 데이터 유실 시나리오이기 때문.
+// 컬럼/테이블 미존재(42703/42P01 — v1.4 마이그레이션 전 환경)만은 "백업
+// 기능 자체가 없는 환경"이므로 null(=병합 없이 기존 동작)로 취급한다.
+export async function fetchProgressBackupStrict(studentId) {
+  if (!studentId) return null
+  const { data, error } = await supabase
+    .from('student_progress')
+    .select('progress_data')
+    .eq('student_id', studentId)
+    .maybeSingle()
+  if (error) {
+    if (error.code === '42703' || error.code === '42P01') return null
+    throw error
+  }
+  const blob = data?.progress_data
+  return blob && Object.keys(blob).length > 0 ? blob : null
+}
+
 // v1.5 "알아요/모르겠어요" (Skip) 기능 — 단어별 숙지 상태를 word_status
 // 테이블에 저장한다. 학생 이름이 아니라 words.id(UUID, word.dbId)로 저장
 // 하므로 word_status.sql(v1.5) 마이그레이션이 먼저 반영돼 있어야 한다 —
