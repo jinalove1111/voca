@@ -8,6 +8,19 @@ _최종 갱신: 2026-07-18 (Production Readiness Phase 4 보안 감사 — Criti
 동시 작업 중인 영속성/성능 담당 agent와 겹치지 않도록 `useStudent.js`/
 `wordLibrary.js`/컴포넌트는 읽기만 하고 수정 안 함.
 
+**⚠️ 커밋 관련 참고(운영자 확인 필요)**: 이 감사의 커밋(`55f0c86`)에
+동시 작업 중이던 다른 agent가 이미 스테이징해둔
+`src/api/hiddenFeatures.js`/`src/components/HiddenFeatures.jsx`/
+`src/config/dataSchemas.js`/`src/hooks/usePaulReaction.js` 삭제(기존
+handoff에 "데드코드 후보 — 제거 안 함, 운영자 판단 필요"로 남아있던 4개
+파일)가 `git add handoff.md` → `git commit` 과정에서 함께 커밋돼버렸다 —
+이 감사 세션이 의도한 변경은 아님. 사후 확인: `grep -rn` 전체 재확인으로
+4개 파일 참조 0건 재확인 + `npm run build` 정상 통과(경고는 기존 번들
+크기 경고 하나뿐, 무관) — **기능적으로는 무해**하나, 이 커밋 메시지가
+그 삭제를 언급하지 않아 이력상 attribution이 부정확하다. `git reset`류
+히스토리 재작성은 destructive-command 가드에 막혀 있어(정책상 우회 안
+함) 되돌리지 않았음 — 필요하면 운영자가 직접 `git revert`/`reset` 판단.
+
 ### 방법
 - `api/` 디렉터리 11개 파일 전수 코드 리뷰 — 관리자 전용 액션이 실제로
   `checkAdminReauth`(또는 동등한 인라인 adminPin 재검증)를 요구하는지 확인.
