@@ -1,5 +1,87 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-17 (v2.2 — 다중 기기 진행도 병합, last-writer-wins 유실 제거. push+배포 완료)_
+_최종 갱신: 2026-07-18 (밤 3차 — 소규모 정리 3커밋 + 2시간 자율 세션 종합 요약. push+배포 완료)_
+
+## 2026-07-18 — 2시간 자율 세션 종합 요약 (운영자 복귀 시 이것만 읽으면 됨)
+
+이 세션은 3부로 진행: **v2.1 학생-Unit 아키텍처 분리** → **v2.2 다중 기기
+진행도 병합** → **마무리 소규모 정리**(이 절). 앞 두 개의 풀 상세는 아래
+각 섹션 참조 — 여기는 최종 보고 형식 요약.
+
+### 1) 변경 내역
+- **v2.1** (커밋 `98da563`~`7c99924`): 학생→유닛 연결을 unit_name 문자열
+  매칭에서 `students.current_unit_id`(uuid) 1차 해석으로 교체
+  (`resolveStudentUnitObj()` 단일 경로). 학생 홈에 유닛 셀렉트 추가(자기 반
+  유닛만, 진행도 무손실). 유닛별 이어서-학습 위치(`lastWordIndexByUnit`).
+- **v2.2** (커밋 `d42c005`~`445da0b`): 동기화 last-writer-wins 제거 —
+  업로드 직전 클라우드 blob을 읽어 `mergeProgressRecords()`로 병합 후
+  업로드(읽기 실패 시 업로드 포기), 로그인 시 병합 복원, 다이어리 삭제
+  tombstone(`diaryRemovedIds`).
+- **정리 3커밋** (`df9adc3`, `39f20cf`, `efd312c`):
+  1. `src/utils/pinStatusApi.js` 신규 — `/api/student-pin-status` 개별
+     fetch 복붙 3곳(AdminScreen 배지 1 + StudentSelect PIN만들기 2)을
+     `fetchPinStatuses`/`fetchPinStatusMap`으로 통합. 동작 불변(에러 정책은
+     호출부 유지).
+  2. `fetchWordStatusMap`(wordLibrary.js) 데드코드 제거 — src/scripts/api
+     전수 grep으로 호출처 0 재확정. 원래 용도(관리자 초기화를 로그인 중
+     기기에 반영/타 기기 복구)는 v2.2 blob wordStatus 병합·복원이 실질
+     대체. **필요해지면 git history에서 복원**: `git show 39f20cf^:src/utils/wordLibrary.js`.
+  3. 데드코드 소거 — ParentScreen이 `fetchWordStatusSummary`를 조회만 하고
+     결과를 안 쓰던 죽은 네트워크 호출 제거(표시 동작 불변),
+     `isWordLibraryReady`/`getStudentName`(전수 스캔 참조 0) 제거.
+
+### 2) 필요성
+- v2.1: "학생이 첫 유닛으로 되돌아간다" 실버그의 구조적 원인(이름 매칭
+  폴백) 제거 + 학생이 유닛을 바꿀 수단 자체가 없던 문제 해결.
+- v2.2: 두 기기 교차 사용 시 진행분 영구 유실(라이브 대조군으로 재현·확인)
+  차단 — 데이터 유실은 이 앱에서 최우선 결함 클래스.
+- 정리: 다음 작업자(사람/agent)가 손대기 전 중복·죽은 코드 표면 축소.
+
+### 3) 테스트 (이번 정리분 — v2.1/v2.2 상세는 각 섹션)
+- 각 커밋마다 `npm run build` 통과(총 3회).
+- 헬퍼: fetch 스텁 스모크 7체크(요청 형태/results/맵 변환/에러 메시지 계약).
+- 데드코드 제거 후: testProgress(번들 52체크) · testWeeklyReport 통과.
+- 정합성 스팟 점검(작업 지시 3번): `computeStudentStats`(weeklyReport.js)
+  공유 **유지 확인됨** — AdminScreen 렌더 루프 + CSV 내보내기 +
+  ParentScreen 전부 같은 함수·같은 `fetchDashboardData` row. v2.1/v2.2로
+  깨진 곳 없음. 학생 화면은 로컬 레코드 직접(로그인 병합 복원으로 수렴 —
+  v2.2 설계 그대로).
+- 배포: push → Vercel 자동배포, 라이브 번들 `index-Dz71cDc9.js` 확인.
+  마커: `word_id,status`(fetchWordStatusMap 고유 쿼리) 0회,
+  `student-pin-status` 문자열 1회(단일화), `diaryRemovedIds` 유지(v2.2 무손상).
+
+### 4) 남은 이슈 / 발견
+- **[환경] pin 계열 라이브 테스트가 이 기기에서 실행 불가**:
+  testStudentSelectPinStatus.mjs가 "permission denied for table students"로
+  실패 — 로컬 `.env`에 `SUPABASE_SERVICE_ROLE_KEY`가 없어 서버 핸들러가
+  anon key로 폴백하는데, v1.9 RLS가 anon의 pin 컬럼 SELECT를 차단하기 때문
+  (사전 존재 환경 제약, 이번 변경과 무관 — 프로덕션은 Vercel 환경변수로
+  정상). 운영자가 로컬 .env에 service role key를 넣으면 재실행 가능.
+  실패로 남았던 QA 잔재(QA_SelectPinStatusTest 반 + 학생 4명)는 정리 완료.
+- **데드코드 후보 — 목록만 남김(제거 안 함, 운영자 판단 필요)**:
+  - 파일 단위 미참조(어디서도 import 안 됨, 초기 스캐폴딩으로 추정):
+    `src/components/HiddenFeatures.jsx`, `src/api/hiddenFeatures.js`,
+    `src/config/dataSchemas.js`, `src/hooks/usePaulReaction.js`.
+    (FeatureManagementPanel은 AdminScreen에서 실사용 중 — 별개.)
+  - speech.js `listenFor`/`hasSpeechRecognition` — 구 Web Speech 인식
+    경로, 참조 0이지만 오디오는 이 프로젝트 최민감 영역이라 보류.
+  - 내부에서만 쓰여 export 키워드만 불필요한 것들(코스메틱이라 불변경):
+    speech.js `playAudioUrl`/`speak`, entranceTest.js `ENTRANCE_DIRECTIONS`,
+    matchGame.js `FILLER_MEANINGS`, wordLibrary.js `memoryTipFor`.
+  - feature-flag 서브시스템의 미사용 헬퍼(사용 중인 API의 일부라 보류):
+    features.js `areAllFeaturesEnabled`/`resetFeatures`, rbac.js
+    `hasAllPermissions`/`hasAnyPermission`, useFeatureAccess.js
+    `canRenderAnyFeature`/`debugFeatureAccess`.
+- v2.2 알려진 한계(의도된 트레이드오프)는 아래 v2.2 섹션 그대로 유효.
+
+### 5) 다음 추천 작업
+1. **운영자 실기기 확인(3분)**: 두 기기 교차 로그인 → 별/스티커 양쪽 합쳐
+   보이는지, 다꾸 스티커 삭제가 재로그인에도 유지되는지(v2.2 검증 마무리).
+2. 로컬 `.env`에 `SUPABASE_SERVICE_ROLE_KEY` 추가 → pin 계열 라이브
+   테스트 4종 로컬 재활성화.
+3. 위 데드코드 후보(특히 hidden-features 파일 4개) 제거 여부 결정.
+4. spellingWrongToday tombstone(원하면 — 현 한계 무해 판단).
+5. 기존 백로그: 화면 lazy 분리(번들 531KB 경고), students RLS + service
+   role key 전환, admin PIN rate limit.
 
 ## 2026-07-17 밤 2차 — v2.2 다중 기기 진행도 병합 (구현+검증+배포 완료)
 
