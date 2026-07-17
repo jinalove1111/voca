@@ -79,6 +79,11 @@ export function toRanked(rows) {
   return rankResults(withNames)
 }
 
+// 참고: 대시보드 진입 배너(EntranceTestBanner)는 성능(Phase 3, 2026-07-18)
+// 상 이유로 별도 파일(./EntranceTestBanner.jsx)로 분리됐다 — Dashboard.jsx가
+// 이 무거운 파일(응시/채점/랭킹 전체 로직)을 정적으로 안 끌고 오게 하기
+// 위함. App.jsx는 이 컴포넌트를 React.lazy로 로드한다.
+
 export default function EntranceTest({ studentId, studentName, onBack }) {
   const classId = getStudentClassId(studentId)
 
@@ -402,62 +407,5 @@ export default function EntranceTest({ studentId, studentName, onBack }) {
         </button>
       </div>
     </div>
-  )
-}
-
-// ── Dashboard 진입 배너 ──────────────────────────────────────────────────
-// 오늘 이 반의 시험이 하나라도 있으면 표시: active면 "참여하기"(빨강 강조),
-// 종료됐으면 "오늘의 랭킹 보기"(차분한 톤). 테이블이 없거나 시험이 없으면
-// 아무것도 렌더하지 않음(기존 대시보드에 영향 0). 20초 간격 폴링은 이
-// 배너가 마운트된 동안(=대시보드에 있는 동안)만, 탭이 보일 때만 돈다.
-const BANNER_POLL_MS = 20000
-
-export function EntranceTestBanner({ studentId, onGo }) {
-  const classId = getStudentClassId(studentId)
-  const [tests, setTests] = useState([])
-
-  useEffect(() => {
-    if (!classId) return undefined
-    let alive = true
-    const check = async () => {
-      if (document.visibilityState !== 'visible') return
-      const t = await fetchTodayTests(classId)
-      if (alive) setTests(t)
-    }
-    check()
-    const iv = setInterval(check, BANNER_POLL_MS)
-    return () => { alive = false; clearInterval(iv) }
-  }, [classId])
-
-  if (tests.length === 0) return null
-  const active = findActiveTest(tests)
-
-  if (active) {
-    return (
-      <button onClick={() => onGo('entranceTest')}
-        className="w-full bg-gradient-to-r from-rose-500 to-orange-500 rounded-3xl p-5 text-white text-left card-shadow btn-press animate-pulse">
-        <div className="flex items-center gap-3">
-          <span className="text-4xl">🚨</span>
-          <div className="flex-1">
-            <p className="font-black text-lg leading-tight">오늘의 입실시험이 시작됐어요!</p>
-            <p className="text-rose-100 text-xs mt-0.5">지금 바로 참여하세요</p>
-          </div>
-          <span className="font-black text-xl">→</span>
-        </div>
-      </button>
-    )
-  }
-  return (
-    <button onClick={() => onGo('entranceTest')}
-      className="w-full bg-white border-2 border-amber-200 rounded-3xl p-4 text-left card-shadow btn-press">
-      <div className="flex items-center gap-3">
-        <span className="text-3xl">🏆</span>
-        <div className="flex-1">
-          <p className="font-black text-gray-800 text-sm">오늘의 입실시험 랭킹</p>
-          <p className="text-gray-400 text-xs">우리 반 VIP는 누구일까요?</p>
-        </div>
-        <span className="font-black text-amber-500">보기 →</span>
-      </div>
-    </button>
   )
 }

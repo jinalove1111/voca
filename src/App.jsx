@@ -15,7 +15,6 @@ import BonusChoiceScreen from './components/BonusChoiceScreen'
 import GiftReveal from './components/GiftReveal'
 import SpellingReview from './components/SpellingReview'
 import SpellingSessionResult from './components/SpellingSessionResult'
-import EntranceTest from './components/EntranceTest'
 import { useStudent } from './hooks/useStudent'
 import { pickNextGame } from './utils/matchGame'
 import { assignDirections } from './utils/entranceTest'
@@ -33,6 +32,12 @@ const AdminScreen = React.lazy(() => import('./components/AdminScreen'))
 // 학부모 화면도 같은 이유로 lazy — 학생/관리자 어느 쪽도 매일 안 쓰는
 // 코드를 학생 메인 번들에 얹지 않는다.
 const ParentScreen = React.lazy(() => import('./components/ParentScreen'))
+// 입실시험 응시 화면도 같은 이유로 lazy — 학생이 홈 화면 배너를 보는 것과
+// 별개로, "참여하기"를 눌러 실제로 들어갈 때만 로드(Phase 3 성능,
+// 2026-07-18). 배너는 이제 별도 파일(EntranceTestBanner.jsx)이라 이 lazy
+// 전환이 실제로 메인 번들에서 코드를 빼낸다(전엔 Dashboard의 정적 import가
+// 같은 파일을 끌고 와서 lazy로 감싸도 효과가 없었음).
+const EntranceTest = React.lazy(() => import('./components/EntranceTest'))
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -437,7 +442,16 @@ function AppInner({ studentId, studentName, onLogout }) {
         />
       )}
       {screen === 'entranceTest' && (
-        <EntranceTest studentId={studentId} studentName={studentName} onBack={() => setScreen('dashboard')} />
+        <React.Suspense fallback={
+          <div className="min-h-screen flex items-center justify-center bg-gray-50">
+            <div className="text-center">
+              <div className="text-5xl mb-3 animate-bounce">📝</div>
+              <p className="text-gray-400 font-bold">시험 화면을 불러오는 중...</p>
+            </div>
+          </div>
+        }>
+          <EntranceTest studentId={studentId} studentName={studentName} onBack={() => setScreen('dashboard')} />
+        </React.Suspense>
       )}
       {screen === 'spellingResult' && (
         <SpellingSessionResult

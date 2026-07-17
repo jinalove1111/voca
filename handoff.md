@@ -1,5 +1,79 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-18 (Production Readiness Phase 4 보안 감사 — Critical/High 0건, 신규 Medium 1건 기록만, 코드 수정 없음)_
+_최종 갱신: 2026-07-18 (Production Readiness Phase 3 성능 + Phase 5 유지보수성 — measurable 개선만 적용)_
+
+## 2026-07-18 — Production Readiness Phase 3(성능) + Phase 5(유지보수성)
+
+Engineering Head 담당. 동시에 다른 agent가 Phase 1+2(영속성/DB)를 진행 중이라
+`useStudent.js`/`wordLibrary.js`는 읽기만 하고 손 안 댐(커밋에도 안 실음).
+신기능/UI 재설계 없음 — 측정 기반 최적화 + 확실한 데드코드 제거만.
+
+### Phase 3 — 성능 (측정: 전/후)
+- **번들 재측정**: 이전 기록(516KB)에서 최근 기능(입실시험/유닛 배정 버튼 등)으로
+  **531.53KB**(gzip 155.66)까지 성장해 있었음(500KB 경고 발생 중) — 최신값 확인.
+- **수정**: `Dashboard.jsx`가 `EntranceTestBanner`를 무거운 `EntranceTest.jsx`
+  (응시/채점/랭킹 로직 포함 ~460줄) 파일에서 정적 import하고 있어서, App.jsx가
+  `EntranceTest`를 `React.lazy`로 감싸도 Dashboard의 정적 import 체인 때문에
+  Rollup이 여전히 메인 청크에 그 코드를 전부 넣고 있었음(lazy가 무효화되던
+  구조적 원인). 배너만 `src/components/EntranceTestBanner.jsx`(신규, 작은 파일 —
+  `fetchTodayTests`/`findActiveTest`/`getStudentClassId`만 의존)로 분리하고
+  `App.jsx`에서 `EntranceTest`를 실제로 `React.lazy(() => import(...))` +
+  `<Suspense>`로 전환(진입 화면 렌더 지점만 감쌈, 로직/동작 변경 없음 — 로딩
+  시점만 바뀜, AdminScreen/ParentScreen과 동일한 기존 패턴 재사용).
+- **결과**: 메인 번들 **531.53KB → 520.86KB**(gzip 155.66→152.92), `EntranceTest`
+  전용 청크 11.36KB(gzip 4.08KB)로 분리. 500KB 경고는 AdminScreen(412.78KB,
+  기존 lazy 유지)/pdf(472.12KB, 기존 보류 항목) 대비 여전히 남아있으나 이번
+  변경으로 실측 감소 확인(측정 근거 있는 최적화만 적용 원칙 준수).
+- **재확인(재작업 안 함)**: 퀴즈 `key={word.id}` 수정(어제)은 렌더 성능에 영향
+  없음(remount 범위가 문제당 국소적) — 코드 리뷰로 확인만.
+- **중복 쿼리**: Dashboard가 `screen==='dashboard'`일 때만 마운트되므로
+  `EntranceTestBanner`의 20초 폴링과 `EntranceTest` 화면의 5초 폴링이 겹칠
+  수 없음(화면 전환 시 배너 언마운트로 인터벌 정리) — 신규 중복 발견 없음.
+- **메모리 누수**: 2026-07-18 앞 섹션(QA 스윕)에서 이미 전수 점검 완료(Critical/
+  High 0건) — 오늘 추가로 `GiftReveal.jsx`/`HeroReaction.jsx`의 setTimeout도
+  전부 cleanup(`clearTimeout`) 확인, 새로 생긴 누수 없음.
+
+### Phase 5 — 유지보수성
+- **데드코드 제거(확실히 미확인 4개 파일)** — 어제 handoff "판단 보류" 목록 중
+  파일 단위 미참조 4개를 전수 재확인(src/api·src/components 전체 grep, import
+  경로 0건) 후 제거: `src/components/HiddenFeatures.jsx`,
+  `src/api/hiddenFeatures.js`, `src/config/dataSchemas.js`,
+  `src/hooks/usePaulReaction.js`. (참고: 같은 회차 동안 Security Head도 같은
+  파일들을 독립적으로 동일 판단해 커밋 `55f0c86`에서 이미 제거 — 병합 시
+  파일 상태 동일해 충돌 없음, 중복 작업 아님 확인.)
+- **보류 유지(판단: 애매함, 손 안 댐)** — speech.js `listenFor`/
+  `hasSpeechRecognition`(오디오 최민감 영역), speech.js `playAudioUrl`/`speak`·
+  entranceTest.js `ENTRANCE_DIRECTIONS`·matchGame.js `FILLER_MEANINGS`·
+  wordLibrary.js `memoryTipFor`(export만 불필요, 코스메틱), feature-flag 헬퍼
+  6개(`areAllFeaturesEnabled`/`resetFeatures`/`hasAllPermissions`/
+  `hasAnyPermission`/`canRenderAnyFeature`/`debugFeatureAccess` — 사용 중인
+  API 표면의 일부).
+- **큰 컴포넌트 확인**: `AdminScreen.jsx` 1714줄로 여전히 최대 — 이미 lazy
+  분리로 번들 영향은 없음(관리자 전용 청크). 내부 분해는 다수 state/effect가
+  얽혀 있어 30분 캡 안에서 안전하게 못 함 — Medium 기록만, 착수 안 함.
+
+### 테스트/검증
+- `npm run build` 매 단계 통과(최종: 메인 520.86KB). `scripts/testEntranceTest.mjs`
+  (순수 로직, 47 checks) 재실행 PASS — EntranceTest 분리가 판정 로직에 영향
+  없음 확인. `useStudent.js`/`wordLibrary.js`를 안 건드려서 라이브 DB
+  회귀 테스트는 이번 변경 범위 밖(실행 생략, 다른 agent 작업과 충돌 방지).
+
+### 수정/신규/삭제 파일
+- 수정: `src/App.jsx`(EntranceTest lazy+Suspense), `src/components/Dashboard.jsx`
+  (import 경로 변경만)
+- 신규: `src/components/EntranceTestBanner.jsx`(배너만 분리)
+- 정리: `src/components/EntranceTest.jsx`(배너 컴포넌트 제거, 로직 불변)
+- 삭제(데드코드): `src/components/HiddenFeatures.jsx`, `src/api/hiddenFeatures.js`,
+  `src/config/dataSchemas.js`, `src/hooks/usePaulReaction.js`
+
+### 남은 Medium/Low (기록만)
+- AdminScreen.jsx 1714줄 — 안전한 분해 방법 다음 세션에 검토 권장(회귀 위험
+  때문에 훅 단위로 조심스럽게).
+- pdf.worker.min.mjs(1.2MB)/pdf-*.js(472KB) — 기존에도 보류된 항목, 이번에도
+  손 안 댐(사용 빈도 대비 실효성 재검토 필요).
+- feature-flag 미사용 헬퍼 6개 + speech.js 코스메틱 export 4개 — 위 "보류
+  유지" 목록 그대로 유효.
+
+---
 
 ## 2026-07-18 — Production Readiness Phase 4 보안 감사 (재점검 — 재구현 없음, 신규 Medium 1건 발견·기록만)
 

@@ -9,7 +9,10 @@ import HeroReaction from './HeroReaction'
 import { getReactionById } from '../utils/paulReactions'
 // 입실 단어시험 진입 배너 — 오늘 이 반의 시험이 없으면(또는 v1.8 테이블이
 // 아직 없으면) 아무것도 렌더하지 않아 기존 대시보드에 영향 0.
-import { EntranceTestBanner } from './EntranceTest'
+// 성능(Phase 3, 2026-07-18): 무거운 EntranceTest.jsx(응시/채점/랭킹 전체
+// 로직) 대신 이 배너만 담은 작은 파일에서 import — 정적 import 체인이
+// 학생 메인 번들에 EntranceTest.jsx 전체를 끌고 오는 것을 막는다.
+import { EntranceTestBanner } from './EntranceTestBanner'
 
 const GOAL = 5
 const stickerById = (id) => STICKERS.find(s => s.id === id)
