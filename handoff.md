@@ -1,5 +1,41 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-17 (v2.0 쓰기시험 양방향 혼합형 — SQL 적용+라이브 검증 완료)_
+_최종 갱신: 2026-07-17 (v2.0.1 — 출제 방향 기본값 mixed 확정 + 기존 반 일괄 전환)_
+
+## 2026-07-17 오후 — "여전히 한→영만 나온다" 원인 격리 + 기본값 mixed 전환 (커밋 `e02249f`, **push+배포 완료** `index-BjV6lXr5.js` 라이브 일치)
+
+### 원인 판정: 배선 버그 아님 — 기본값 문제 (실증 완료)
+- **신규 `scripts/testSpellingDirectionWiring.mjs`** — 실제 SpellingQuestion/
+  WordDetail 컴포넌트를 SSR로 렌더해 검증(스텁은 오디오/캐릭터 등 렌더 무관
+  모듈만). 11체크 전부 PASS: direction prop이 문제 프롬프트/입력 placeholder를
+  정확히 가르고, override가 반 설정을 이기고, **mixed 20문제가 정확히 10:10으로
+  렌더됨**. 즉 mixed로 설정만 하면 처음부터 정상 동작했음.
+- 실측 원인: 운영자 실반 4개 전부 `spelling_direction='kr2en'`(v2.0 SQL의 컬럼
+  default — 기존 동작 보존용 설계) 상태였고 아무도 mixed로 바꾼 적 없음.
+
+### 조치 — 기본값 'mixed' 확정 (운영자 지시: "혼합 50:50이 기본값")
+1. **기존 반 일괄 전환(DML, 실행 완료)**: `scripts/opsSetAllClassesMixed.mjs` —
+   kr2en인 반만 대상. 결과: **4/4 반 전환**(중2 능률 김기택/Presentation 6 -2026/
+   중2 천재 이상기/고1 6월 학평), kr2en 잔여 0, 전/후 스냅샷 로그 확보.
+   ⚠️ 이 스크립트는 재실행 금지(이후 의도적으로 kr2en으로 돌린 반을 다시 덮음).
+2. **클라이언트 기본값**: wordLibrary.js DEFAULT/폴백/검증 폴백 전부 'mixed'.
+   컬럼 부재 상태에서도 mixed 완전 동작(배정은 App.jsx 로컬 계산 — DB 불필요).
+3. **관리자 UI**: 셀렉트 기본 표시 mixed, "혼합 50:50 (기본값)" 최상단.
+4. **DB 컬럼 default(DDL)**: `supabase_v2_0_1_spelling_default_mixed.sql` 준비만 —
+   **운영자 실행 대기. 실행 안 해도 동작 지장 없음**(새 반이 DB default kr2en을
+   받아도 클라이언트 기본값·관리자 저장이 우선). 기본값 정합성 마무리용 권장.
+- **특정 반만 한→영(기존 방식)으로 되돌리려면**: 관리자 → 반 → 쓰기 시험 설정 →
+  출제 방향에서 "한글→영어만" 선택하면 됨(반별 독립).
+
+### 재검증 (기본값 변경 후 전부 재실행, 전부 PASS)
+testSpelling(신규 31케이스 포함) · testEntranceTest(47) · testSpellingDirectionWiring(11)
+· testSpellingSettings(라이브) · testSpellingV2Db(라이브 14체크) · `npm run build`.
+라이브 번들 검증: 학생 `index-BjV6lXr5.js`에 `spellingDirection:"mixed"` 기본값,
+관리자 `AdminScreen-C4FYLJaN.js`에 "혼합 50:50 (기본값)" 확인.
+
+### 운영자 실기기 확인 (기본값 전환 후)
+1. 아무 설정도 안 바꾸고 학생 쓰기 모드 진입 → **영↔한이 섞여 나오는지**(이제 기본).
+2. 마지막 단어 후 방향별 결과 화면("한→영 x/n · 영→한 y/m").
+3. (선택) 관리자에서 특정 반을 "한글→영어만"으로 바꾸면 그 반만 예전처럼 나오는지.
 
 ## 2026-07-17 — v2.0 쓰기시험 양방향 혼합형 + 채점 관대화 + 교사 검토 큐 (커밋 `ae1863f`~`8f2da25`+관리자 커밋, **push+배포+SQL 적용+라이브 e2e 검증 완료**)
 
