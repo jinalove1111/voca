@@ -1,5 +1,77 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-18 (밤 3차 — 소규모 정리 3커밋 + 2시간 자율 세션 종합 요약. push+배포 완료)_
+_최종 갱신: 2026-07-18 (Student Account ↔ Unit 아키텍처 9개 목표 대조 — 갭 1건 보완. push+배포 완료)_
+
+## 2026-07-18 — Student Account ↔ Unit 아키텍처 9개 목표 대조 (재구현 금지 — v2.1 검증+갭 보완만)
+
+운영자 지시: "Student Account ↔ Unit 아키텍처 완성" 목표 9개를 라이브 코드/DB와
+대조해 각각 충족/갭 판정하고, 갭만 최소 보완. 대부분은 어제 v2.1(커밋
+`98da563`~`7c99924`, 아래 섹션)에서 이미 구현·배포·검증 완료 — **재구현
+없음**, 코드 리뷰 + 회귀 재실행으로 확인만 하고 갭 1건만 보완.
+
+### 판정표 (9개 전수)
+
+| # | 목표 | 판정 | 증거 |
+|---|------|------|------|
+| 1 | 학생 1명 = 영구 계정 1개(student_id UUID) | 충족(기확인) | `src/utils/wordLibrary.js` 학생 캐시가 `students.id` UUID 키. v1.6부터 유지. |
+| 2 | 로그인은 이름+PIN만 | 충족(기확인) | `src/components/StudentSelect.jsx` login 탭 — 이름+PIN만 입력, `api/verify-student-pin.js` 호출. 등록("처음이에요") 탭은 완전히 분리된 별도 플로우, 로그인 탭에는 유닛 선택 UI 자체가 없음. |
+| 3 | Unit이 정체성에 미포함 | 충족(기확인) | `resolveStudentUnitObj()`(wordLibrary.js:573) 단일 해석 경로 — `current_unit_id` 1차 → `unit_name` 폴백 → 반의 첫 유닛. 표시(`getStudentUnit`)/단어 로딩(`getStudentWords`)/로스터가 전부 이 경로 하나만 거쳐 구조적으로 항상 일치. |
+| 4 | 계정 재생성 없이 유닛 전환 | 충족(기확인) | `Dashboard.jsx` 프로필 카드 유닛 셀렉트 → `App.jsx handleUnitSwitch` → `setStudentUnit` (id 1차 기록). `testStudentUnitDecouple.mjs` **19/19 PASS** 재실행 확인(전환/영속/재로그인/복귀). |
+| 5 | 이전 유닛 복습 가능 + 이어서-학습 위치 복원 | 충족(기확인) | 유닛 셀렉트가 반의 유닛 전체 목록(`getClassUnitNames`) 노출 — 이전 유닛 포함. `lastWordIndexByUnit` + `resumeIndexForUnit()`(useStudent.js) 유닛별 이어서-학습 위치. `testUnitResumeIndex.mjs` **12/12 PASS** 재실행 확인(하위호환/오염 방어 포함). |
+| 6 | 숙제 배정 유닛 자동으로 열림 | 충족(기확인, 표현만 다름) | `getStudentWords()`(wordLibrary.js:919)가 오늘 배정(`daily_assignments`) 존재 시 그 단어들을 최우선 반환 — 배정 단어가 현재 보고 있는 유닛에 없어도 반 전체에서 찾아 표시(줄 962~978). 학생이 "단어 공부" 들어가면 항상 숙제 단어가 기본 목록. Dashboard에 "📌 오늘의 숙제 단어가 준비돼 있어요" 안내 배너도 있음. `testDailyAssignment.mjs` 재실행 PASS. |
+| 7 | 진행도 student_id+unit별 분리 저장 | 충족(기확인) | word-UUID(`wordStatus`) + `lastWordIndexByUnit`(unitId 키)로 자연 분리. `testUnitResumeIndex.mjs` 5절 "유닛 전환은 진행도 판정과 무관" PASS. |
+| 8 | 별/스트릭/스티커 계정 레벨 유지 | 충족(기확인) | `setStudentUnit`은 `useStudent` 레코드(별/스트릭/스티커 저장소)를 전혀 건드리지 않음 — 구조적으로 리셋 불가. `testStudentSelectUnitSwitch.mjs` 재실행 PASS(전환 전후 진행도 무손실 시나리오 포함). |
+| 9 | 관리자: 기본 유닛 변경 + **유닛 단위 숙제 배정** | **① 충족 / ② 갭 → 보완 완료** | ① `AdminScreen.jsx saveEdit()` → `setStudentUnit(editing, editUnit)` — 학생별 유닛 변경 기존 동작. ② 기존엔 단어 체크박스 개별 배정(`daily_assignments`)만 가능 — "유닛 전체를 오늘 숙제로" 원클릭이 없었음. **보완**: "이 유닛 전체 배정" 버튼 추가(아래). |
+
+### 갭 보완 — "이 유닛 전체 배정" 원클릭 (커밋 `afc8a77`)
+
+- **변경**: `src/components/AdminScreen.jsx` 반 관리 패널의 "오늘의 단어" 영역에
+  버튼 추가. 클릭 시 지금 보고 있는 유닛(`viewUnit`/`words`)의 전체 단어를
+  slug 배열로 만들어 **기존** `setTodaysAssignment(className, wordIds)`를
+  그대로 호출 — 체크박스로 단어를 하나씩 눌러 전부 선택한 것과 완전히 같은
+  저장 경로(새 컬럼/새 함수 없음). "전체 해제" 버튼과 나란히 배치.
+- **과잉 설계 금지 준수**: 새 스키마/새 API/새 상태관리 없음 — 순수 UI
+  버튼 하나 + 기존 함수 재사용.
+- **검증**: `npm run build` 통과. 라이브 DB 대상 1회성 검증 스크립트(upsert →
+  저장값이 유닛 전체 slug와 정확히 일치 → 해제, 전부 QA_ 데이터로 생성 후
+  삭제)로 실제 Supabase 왕복 확인 — PASS 3/3. 기존 `testDailyAssignment.mjs`
+  (체크박스 배정 경로) 재실행 PASS로 회귀 없음 확인.
+
+### 회귀 재실행 결과 (전부 PASS, 라이브 DB)
+
+- `testStudentUnitDecouple.mjs` — 19/19 PASS (id 모드: 전환/영속/재로그인/
+  복귀/동명 유닛 비충돌/로스터 일관성/숙제 교차 유닛/유닛 삭제 폴백)
+- `testUnitResumeIndex.mjs` — 12/12 PASS (pure, 하위호환/오염 방어)
+- `testStudentSelectUnitSwitch.mjs` — 5/5 PASS
+- `testMultiClass.mjs` — PASS
+- `testDashboard.mjs` — PASS
+- `testDailyAssignment.mjs` — PASS
+- `npm run build` — 통과
+
+### 로컬 검증 한계 (기존 문서화된 사안 — 이번 회차 신규 아님)
+
+`testStudentPinAuth.mjs`(로그인/PIN 서버 로직)는 로컬 `.env.local`에
+`SUPABASE_SERVICE_ROLE_KEY`가 없어(ADMIN_PIN만 있음) 서버 핸들러가
+anon key로 떨어져 "permission denied for table students"로 대부분 FAIL —
+**7/18 밤 세션에서 이미 같은 원인으로 문서화됨**(handoff.md 아래 "2026-07-17
+밤 P0" 섹션, 55/79/468줄 — Vercel 프로덕션에는 이 키가 설정돼 있음을 라이브
+프로브로 확인 완료). 이번 회차에서 새로 발생한 문제 아님, 항목 2(로그인
+방식) 판정은 **소스 코드 리뷰**(StudentSelect.jsx 로그인 탭 이름+PIN만,
+등록 플로우 분리)로 대체 확인 — 로직 자체는 어제 이미 라이브에서
+검증됨(v2.1 회귀 목록의 testStudentLogin 포함).
+
+### Push/배포
+
+커밋 `afc8a77` push 완료. 라이브 번들 `index-ChRHCjVG.js`(로컬 빌드와
+해시 일치) → `AdminScreen-DLZ2XmLO.js`(로컬과 해시 일치)에서 "이 유닛 전체
+배정" 텍스트 마커 확인 완료.
+
+### 아키텍처 완결 선언
+
+**Student Account ↔ Unit 아키텍처는 완결로 선언 가능.** 9개 목표 전부
+충족 — 8개는 어제 v2.1에서, 나머지 1개(유닛 단위 숙제 배정 편의 기능)는
+이번 회차 최소 보완으로 채워짐. 프로덕션 데이터 변경 없음(QA_ 접두
+테스트 데이터만 생성/삭제). persistence 개선 등 다른 작업은 착수하지
+않음(범위 외 — 지시 준수).
 
 ## 2026-07-18 — 2시간 자율 세션 종합 요약 (운영자 복귀 시 이것만 읽으면 됨)
 
