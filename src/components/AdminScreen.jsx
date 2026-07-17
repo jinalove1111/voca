@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
 import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings } from '../utils/wordLibrary'
 import { fetchPendingSpellingReviews, resolveSpellingReview } from '../utils/spellingReviewApi'
+import { fetchPinStatusMap } from '../utils/pinStatusApi'
 import { getStudents, removeStudent } from '../hooks/useStudent'
 import { buildWeeklyReport, computeStudentStats } from '../utils/weeklyReport'
 import FeatureManagementPanel from './FeatureManagementPanel'
@@ -296,15 +297,9 @@ function StudentManagement({ adminPin }) {
   const loadPinStatus = async (list) => {
     if (!list.length) { setPinStatus({}); return }
     try {
-      const res = await fetch('/api/student-pin-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentIds: list.map(s => s.id) }),
-      })
-      const data = await res.json()
-      if (data.results) setPinStatus(Object.fromEntries(data.results.map(r => [r.id, r])))
+      setPinStatus(await fetchPinStatusMap(list.map(s => s.id)))
       // supabase_v1_7_student_pin_selfsetup.sql이 아직 안 돌았으면(컬럼
-      // 없음) data.error가 오는데, 이 경우 조용히 무시 — 배지가 그냥
+      // 없음) 헬퍼가 throw하는데, 아래 catch가 조용히 무시 — 배지가 그냥
       // "상태 알 수 없음"으로 남을 뿐 화면이 깨지지 않음.
     } catch {
       // 네트워크 실패도 동일하게 무시 — PIN 상태 배지는 부가 정보일 뿐,

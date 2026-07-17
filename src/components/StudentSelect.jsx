@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { addStudent } from '../hooks/useStudent'
 import { getClassNames, getClassUnitNames, getStudentsInClass } from '../utils/wordLibrary'
+import { fetchPinStatuses, fetchPinStatusMap } from '../utils/pinStatusApi'
 import { getReactionById } from '../utils/paulReactions'
 import HeroReaction from './HeroReaction'
 
@@ -139,16 +140,8 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
     if (roster.length === 0) { setSetupRosterStatus({}); return }
     let cancelled = false
     setSetupRosterStatusLoading(true)
-    fetch('/api/student-pin-status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ studentIds: roster.map(s => s.id) }),
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (cancelled) return
-        if (data.results) setSetupRosterStatus(Object.fromEntries(data.results.map(r => [r.id, r])))
-      })
+    fetchPinStatusMap(roster.map(s => s.id))
+      .then(map => { if (!cancelled) setSetupRosterStatus(map) })
       .catch(() => {})
       .finally(() => { if (!cancelled) setSetupRosterStatusLoading(false) })
     return () => { cancelled = true }
@@ -167,14 +160,9 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
       // 재사용하지 않음) — 반 목록을 불러온 이후 관리자가 방금 "설정
       // 허용"을 눌렀거나 다른 기기에서 이미 PIN을 설정했을 수 있으므로,
       // 항상 최신 상태를 확인해야 안전하다.
-      const res = await fetch('/api/student-pin-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentIds: [id] }),
-      })
-      const data = await res.json()
-      const status = data.results?.[0]
-      if (!status) throw new Error(data.error || '조회에 실패했어요.')
+      const results = await fetchPinStatuses([id])
+      const status = results[0]
+      if (!status) throw new Error('조회에 실패했어요.')
       // 이 응답이 도착한 시점에 사용자가 이미 다른 학생을 선택했다면(더
       // 최신 요청이 시작됐다면) 이 응답은 버린다 — 화면에 반영하면 방금
       // 고친 레이스 컨디션 버그가 재발한다.
