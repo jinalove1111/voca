@@ -1581,20 +1581,35 @@ export default function AdminScreen({ onBack }) {
                           })}
                         </div>
 
-                        <div className="bg-teal-50 rounded-xl p-3 flex items-center justify-between gap-2">
+                        <div className="bg-teal-50 rounded-xl p-3 flex items-center justify-between gap-2 flex-wrap">
                           <p className="text-xs text-teal-700">
                             <span className="font-black">📌 오늘의 단어:</span>{' '}
                             {todaysAssigned.size > 0 ? `${todaysAssigned.size}개 지정됨 (체크박스로 선택)` : '지정 안 함 (학생은 유닛 전체 단어를 봐요)'}
                           </p>
-                          {todaysAssigned.size > 0 && (
-                            <button onClick={async () => {
-                                try { await setTodaysAssignment(c, []); refresh() }
-                                catch (err) { alert('해제 중 오류가 발생했어요: ' + (err.message || err)) }
-                              }}
-                              className="flex-shrink-0 bg-white border-2 border-teal-300 text-teal-600 font-bold px-2 py-1 rounded-lg text-xs btn-press">
-                              전체 해제
-                            </button>
-                          )}
+                          <div className="flex gap-2 flex-shrink-0">
+                            {/* 운영자 목표 9 — "유닛 전체를 오늘 숙제로" 원클릭. 기존
+                                setTodaysAssignment 그대로 재사용(체크박스와 같은 저장
+                                경로) — 지금 보고 있는 유닛(viewUnit/words)의 단어 전체를
+                                slug 배열로 바꿔서 한 번에 넘길 뿐, 새 배정 개념 없음. */}
+                            {words.length > 0 && (
+                              <button onClick={async () => {
+                                  try { await setTodaysAssignment(c, words.map(w => wordSlug(w.word))); refresh() }
+                                  catch (err) { alert('배정 중 오류가 발생했어요: ' + (err.message || err)) }
+                                }}
+                                className="bg-teal-500 text-white font-bold px-2 py-1 rounded-lg text-xs btn-press hover:bg-teal-600">
+                                이 유닛 전체 배정
+                              </button>
+                            )}
+                            {todaysAssigned.size > 0 && (
+                              <button onClick={async () => {
+                                  try { await setTodaysAssignment(c, []); refresh() }
+                                  catch (err) { alert('해제 중 오류가 발생했어요: ' + (err.message || err)) }
+                                }}
+                                className="bg-white border-2 border-teal-300 text-teal-600 font-bold px-2 py-1 rounded-lg text-xs btn-press">
+                                전체 해제
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                         <FutureAssignmentPlanner targetClass={c} words={words} />
