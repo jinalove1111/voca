@@ -20,7 +20,7 @@ import { useStudent } from './hooks/useStudent'
 import { pickNextGame } from './utils/matchGame'
 import { assignDirections } from './utils/entranceTest'
 import { logSpellingReview } from './utils/spellingReviewApi'
-import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, getStudentById, getStudentClass, getStudentUnit, getClassSettings, filterWordsByScope } from './utils/wordLibrary'
+import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getClassSettings, filterWordsByScope } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech, getMicStream } from './utils/speech'
 
 // 2026-07-10 성능 최적화: AdminScreen은 xlsx(엑셀 업로드)를 포함해 학생은
@@ -172,6 +172,21 @@ function AppInner({ studentId, studentName, onLogout }) {
   const classWords                  = useMemo(() => {
     try { return getStudentWords(studentId) || [] } catch { return [] }
   }, [studentId, refreshTick])
+  // v2.1 — 지금 보고 있는 유닛의 실제 DB id(해석 결과). 유닛별 "이어서
+  // 학습" 위치의 키로만 쓰며, null이어도(캐시 미비/마이그레이션 전) 전부
+  // 기존 전역 lastWordIndex 동작으로 폴백된다.
+  const currentUnitId = useMemo(() => {
+    try { return getStudentUnitId(studentId) } catch { return null }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentId, refreshTick])
+  // v2.1 — Dashboard 유닛 선택기: 전환은 setStudentUnit(id 우선 저장) →
+  // refreshTick으로 단어 목록/설정 재계산. 진행도 레코드(useStudent)는
+  // 아무것도 건드리지 않는다 — 별/스트릭/스티커/오늘 미션이 유닛 전환으로
+  // 리셋되지 않는 구조적 보장.
+  const handleUnitSwitch = async (unitName) => {
+    await setStudentUnit(studentId, unitName)
+    setRefreshTick((t) => t + 1)
+  }
   // v1.5 이번 세션에서 실제로 공부할 단어 목록 — studyScope에 따라
   // classWords(반 전체 단어, 퀴즈 오답 보기 생성 등에는 항상 이 전체
   // 목록을 그대로 씀)를 걸러낸 서브셋. "복습 단어만"은 이 Skip 기능의
@@ -276,7 +291,7 @@ function AppInner({ studentId, studentName, onLogout }) {
     const safeIdx = idx >= 0 ? idx : 0
     setWord(w)
     setWordIdx(safeIdx)
-    studentData.setLastWordIndex(safeIdx)
+    studentData.setLastWordIndex(safeIdx, currentUnitId)
     setWriteSessionStats([]) // 새 세션 시작 — 쓰기 성적 집계 초기화
     setScreen('wordDetail')
   }
@@ -290,7 +305,7 @@ function AppInner({ studentId, studentName, onLogout }) {
     if (idx < 0 || idx >= classWords.length) return
     setWord(classWords[idx])
     setWordIdx(idx)
-    studentData.setLastWordIndex(idx)
+    studentData.setLastWordIndex(idx, currentUnitId)
     setWriteSessionStats([]) // 새 세션 시작 — 쓰기 성적 집계 초기화
     setScreen('wordDetail')
   }
@@ -310,7 +325,7 @@ function AppInner({ studentId, studentName, onLogout }) {
     if (nextIdx < sessionWords.length) {
       setWord(sessionWords[nextIdx])
       setWordIdx(nextIdx)
-      studentData.setLastWordIndex(nextIdx)
+      studentData.setLastWordIndex(nextIdx, currentUnitId)
     } else if (studyMode === 'write' && writeSessionStats.length > 0) {
       // v2.0 쓰기 모드 — 마지막 단어까지 끝나면 목록 대신 방향별 성적
       // 요약("한→영 8/10 · 영→한 9/10 · 총점 17/20")을 먼저 보여줌.
@@ -323,7 +338,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   const goToPendingWord = () => {
     setWord(sessionWords[pendingNextIdx])
     setWordIdx(pendingNextIdx)
-    studentData.setLastWordIndex(pendingNextIdx)
+    studentData.setLastWordIndex(pendingNextIdx, currentUnitId)
     setScreen('wordDetail')
   }
 
@@ -352,7 +367,9 @@ function AppInner({ studentId, studentName, onLogout }) {
       {screen === 'dashboard'     && (
         <Dashboard studentId={studentId} studentName={studentName} studentData={studentData} classWords={classWords}
           onGo={setScreen} onLogout={onLogout} onPlayGame={startRandomGame}
-          onResumeWord={goToWordIndex} />
+          onResumeWord={goToWordIndex}
+          resumeIndex={studentData.getResumeIndexForUnit(currentUnitId)}
+          onUnitSwitch={handleUnitSwitch} />
       )}
       {screen === 'wordBrowser'   && (
         <WordBrowser words={classWords} cleared={cleared} onSelect={handleWordSelect} onBack={() => setScreen('dashboard')}

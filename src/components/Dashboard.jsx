@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getStudentClass, getStudentUnit, getClassNames } from '../utils/wordLibrary'
+import { getStudentClass, getStudentUnit, getClassNames, getClassUnitNames, getTodaysAssignmentWordIds } from '../utils/wordLibrary'
 import { getMicStreamOnce, hasMicStream } from '../utils/speech'
 import { useMicReady } from '../hooks/useMicReady'
 import { isInAppBrowser } from '../utils/browserDetect'
@@ -113,8 +113,12 @@ function MissionBar({ label, current, goal, emoji }) {
 //      of pushing more drilling.
 //   3. Mid-unit — offer to resume exactly where they left off.
 //   4. Otherwise — plain "start studying" default.
-function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onPlayGame }) {
-  const { activeMissions, giftsToday, lastWordIndex } = studentData
+function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onPlayGame, resumeIndex }) {
+  const { activeMissions, giftsToday } = studentData
+  // v2.1 — 이어서-학습 위치는 "현재 유닛"의 저장 지점(App.jsx가
+  // getResumeIndexForUnit으로 계산해서 내려줌). 구버전 경로(prop 미전달)는
+  // 기존 전역 lastWordIndex 그대로.
+  const lastWordIndex = resumeIndex !== undefined ? resumeIndex : studentData.lastWordIndex
   const hasWords = classWords.length > 0
   const canResume = hasWords && lastWordIndex > 0 && lastWordIndex < classWords.length
 
@@ -172,7 +176,7 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 
 // P0(2026-07-15): student(이름 문자열) 대신 studentId(식별자)+studentName
 // (표시용)을 따로 받는다 — getStudentClass/getStudentUnit은 이제 id 기반.
-export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord }) {
+export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch }) {
   const { stars, stickerTypes, activeMissions, dailyProgress, missionsCompletedToday, streak, cleared } = studentData
 
   const className = getStudentClass(studentId)
@@ -181,6 +185,30 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
   console.log('[Dashboard] 표시하는 unit 값:', { studentId, studentName, className, unitName })
   const classDeleted = className && !getClassNames().includes(className)
   const recentStickers = [...stickerTypes].reverse().slice(0, 8).map(stickerById).filter(Boolean)
+
+  // v2.1 유닛 선택기 — 자기 반의 유닛 목록만. 전환은 App.jsx의
+  // handleUnitSwitch(setStudentUnit → 단어 목록 즉시 갱신 + Supabase 영속,
+  // 다음 로그인/새로고침에도 유지)로 위임. 전환 중에는 셀렉트를 잠가
+  // 연타로 인한 중복 쓰기를 막는다. 진행도(별/스트릭/스티커/오늘 미션)는
+  // 어떤 것도 리셋되지 않는다 — useStudent 레코드는 전혀 안 건드림.
+  const unitNames = className && !classDeleted ? getClassUnitNames(className) : []
+  const [unitSwitching, setUnitSwitching] = useState(false)
+  const [unitSwitchError, setUnitSwitchError] = useState('')
+  const handleUnitChange = async (nextUnit) => {
+    if (!onUnitSwitch || nextUnit === unitName) return
+    setUnitSwitching(true)
+    setUnitSwitchError('')
+    try {
+      await onUnitSwitch(nextUnit)
+    } catch (err) {
+      setUnitSwitchError('유닛 변경에 실패했어요. 잠시 후 다시 시도해주세요. (' + (err?.message || err) + ')')
+    } finally {
+      setUnitSwitching(false)
+    }
+  }
+  // 오늘의 숙제(반+날짜 축 — 유닛과 독립) 배정 여부 — 있으면 단어 공부가
+  // 그 단어들로 열린다는 안내만(기존 getStudentWords 동작을 표시로 강화).
+  const hasTodaysHomework = className && getTodaysAssignmentWordIds(className).length > 0
 
   return (
     <div className="min-h-screen p-4 pb-8">
@@ -207,7 +235,30 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
           <div className="text-5xl mb-2">👑</div>
           <h1 className="text-3xl font-black">{studentName}</h1>
           {className && (
-            <p className="text-sm text-purple-200 mt-1">반: {className} · 유닛: {unitName}</p>
+            <div className="text-sm text-purple-200 mt-1 flex items-center justify-center gap-1.5 flex-wrap">
+              <span>반: {className} ·</span>
+              {unitNames.length > 0 && onUnitSwitch ? (
+                <label className="inline-flex items-center gap-1">
+                  <span className="sr-only">현재 유닛 선택</span>
+                  <select value={unitName} disabled={unitSwitching}
+                    onChange={(e) => handleUnitChange(e.target.value)}
+                    className="bg-white/20 text-white font-bold rounded-xl px-2 py-1.5 text-sm border-2 border-white/30 focus:outline-none focus:border-white/70 disabled:opacity-60 appearance-auto">
+                    {/* 저장된 유닛이 목록에 없는 예외(방금 삭제됨 등)에도 셀렉트가 빈 값이 되지 않게 */}
+                    {!unitNames.includes(unitName) && <option value={unitName}>{unitName}</option>}
+                    {unitNames.map((u) => <option key={u} value={u} className="text-gray-800">{u}</option>)}
+                  </select>
+                  {unitSwitching && <span className="text-xs">⏳</span>}
+                </label>
+              ) : (
+                <span>유닛: {unitName}</span>
+              )}
+            </div>
+          )}
+          {unitSwitchError && (
+            <p className="text-xs font-bold text-yellow-200 mt-1">⚠️ {unitSwitchError}</p>
+          )}
+          {hasTodaysHomework && (
+            <p className="text-xs font-bold text-yellow-200 mt-2">📌 오늘의 숙제 단어가 준비돼 있어요 — 단어 공부에서 바로 시작!</p>
           )}
           <div className="flex justify-center gap-4 mt-3">
             <div className="bg-white/20 rounded-xl px-3 py-2 text-center">
@@ -228,7 +279,7 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
         {/* 입실시험이 시작되면 다른 무엇보다 먼저 보여야 하는 배너 */}
         <EntranceTestBanner studentId={studentId} onGo={onGo} />
 
-        <RecommendationBanner studentData={studentData} classWords={classWords} onGo={onGo} onResumeWord={onResumeWord} onPlayGame={onPlayGame} />
+        <RecommendationBanner studentData={studentData} classWords={classWords} onGo={onGo} onResumeWord={onResumeWord} onPlayGame={onPlayGame} resumeIndex={resumeIndex} />
 
         <MicPrimeBtn />
 

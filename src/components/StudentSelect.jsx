@@ -382,11 +382,16 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
               </select>
             )}
             {regClass && (
-              <select value={regUnit} disabled={registering} onChange={e => setRegUnit(e.target.value)}
-                className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-purple-500 bg-white disabled:opacity-50">
-                <option value="">유닛 선택</option>
-                {getClassUnitNames(regClass).map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
+              <>
+                {/* v2.1 — 유닛은 로그인/계정과 무관한 "학습 시작 지점"일 뿐.
+                    여기서는 첫 유닛만 고르고, 이후엔 홈 화면에서 언제든 전환. */}
+                <select value={regUnit} disabled={registering} onChange={e => setRegUnit(e.target.value)}
+                  className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-purple-500 bg-white disabled:opacity-50">
+                  <option value="">처음 공부할 유닛 고르기</option>
+                  {getClassUnitNames(regClass).map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+                <p className="text-[11px] text-purple-400 px-1">유닛은 나중에 홈 화면에서 언제든지 바꿀 수 있어요.</p>
+              </>
             )}
             <input ref={regPinRef} type="password" inputMode="numeric" pattern="[0-9]*" value={regPin}
               onChange={e => { setRegPin(e.target.value.replace(/\D/g, '').slice(0, 4)); setRegError('') }}
