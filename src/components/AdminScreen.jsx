@@ -79,13 +79,13 @@ function SpellingSettingsPanel({ targetClass, onSaved }) {
       </label>
       <label className="flex items-center justify-between text-xs font-bold text-gray-700 gap-2">
         출제 방향
-        <select value={settings.spellingDirection || 'kr2en'} disabled={saving}
+        <select value={settings.spellingDirection || 'mixed'} disabled={saving}
           onChange={e => save({ ...settings, spellingDirection: e.target.value })}
           className="border-2 border-purple-200 rounded-lg px-2 py-1 font-bold bg-white">
-          <option value="kr2en">한글→영어 (기존)</option>
-          <option value="en2kr">영어→한글</option>
+          <option value="mixed">혼합 50:50 (기본값)</option>
+          <option value="kr2en">한글→영어만</option>
+          <option value="en2kr">영어→한글만</option>
           <option value="random">랜덤 (문제마다 50% 확률)</option>
-          <option value="mixed">혼합 (세션 안에서 정확히 반반)</option>
         </select>
       </label>
     </div>

@@ -237,7 +237,13 @@ export function initWordLibrary() {
 // 완전히 분리해서 실패해도 그냥 "전부 꺼짐"으로 안전하게 기본값 처리 —
 // SQL을 실행하기 전에 이 코드가 먼저 배포돼도 앱이 절대 깨지지 않음.
 let _classSettings = {}
-const DEFAULT_CLASS_SETTINGS = { spellingTestEnabled: false, spellingHintEnabled: false, wrongAnswerRepeatCount: 3, spellingDirection: 'kr2en' }
+// spellingDirection 기본값 'mixed'(2026-07-17 운영자 지시: "혼합 50:50이
+// 기본") — 예전 기본은 'kr2en'(기존 동작 보존)이었으나, 방향 기능이 나오자
+// 마자 운영자가 혼합을 기본으로 확정. 기존 반들도 일괄 'mixed'로 전환됨
+// (scripts/opsSetAllClassesMixed.mjs). 특정 반만 한→영으로 돌리려면 관리자
+// 화면 출제 방향에서 바꾸면 됨. mixed는 클라이언트만으로 완전 동작
+// (App.jsx assignDirections — DB 컬럼이 없어도 배정 자체는 로컬 계산).
+const DEFAULT_CLASS_SETTINGS = { spellingTestEnabled: false, spellingHintEnabled: false, wrongAnswerRepeatCount: 3, spellingDirection: 'mixed' }
 // v2.0: 'mixed'(세션 단위 정확 50:50 배분) 추가 — 배정 로직 자체는
 // entranceTest.js의 assignDirections(입실시험과 공용)가 담당.
 const VALID_SPELLING_DIRECTIONS = new Set(['kr2en', 'en2kr', 'random', 'mixed'])
@@ -263,10 +269,10 @@ export async function refreshClassSettings() {
       spellingTestEnabled: !!c.spelling_test_enabled,
       spellingHintEnabled: !!c.spelling_hint_enabled,
       wrongAnswerRepeatCount: c.wrong_answer_repeat_count ?? 3,
-      // supabase_spelling_direction_schema.sql이 아직 실행 안 됐거나(컬럼
-      // null) 값이 이상하면 무조건 'kr2en'으로 폴백 — 기존에 이미 쓰기
-      // 시험을 켜둔 반들이 아무것도 안 바꿨는데 동작이 달라지면 안 됨.
-      spellingDirection: VALID_SPELLING_DIRECTIONS.has(c.spelling_direction) ? c.spelling_direction : 'kr2en',
+      // 컬럼이 아직 없거나(부분 마이그레이션) 값이 이상하면 'mixed' 폴백
+      // (2026-07-17 기본값 변경 — DEFAULT_CLASS_SETTINGS 주석 참고).
+      // mixed 배정은 App.jsx의 로컬 계산이라 컬럼 부재 상태에서도 완전 동작.
+      spellingDirection: VALID_SPELLING_DIRECTIONS.has(c.spelling_direction) ? c.spelling_direction : 'mixed',
     }]))
   } catch (err) {
     console.warn('[wordLibrary] class settings fetch failed (spelling_test_schema.sql이 아직 실행 안 됐을 수 있음, 전부 꺼짐으로 처리):', err.message)
@@ -286,7 +292,7 @@ export async function setClassSettings(className, settings) {
   if ('spellingHintEnabled' in settings) payload.spelling_hint_enabled = !!settings.spellingHintEnabled
   if ('wrongAnswerRepeatCount' in settings) payload.wrong_answer_repeat_count = Number(settings.wrongAnswerRepeatCount) || 3
   if ('spellingDirection' in settings) {
-    payload.spelling_direction = VALID_SPELLING_DIRECTIONS.has(settings.spellingDirection) ? settings.spellingDirection : 'kr2en'
+    payload.spelling_direction = VALID_SPELLING_DIRECTIONS.has(settings.spellingDirection) ? settings.spellingDirection : 'mixed'
   }
   let { error } = await supabase.from('classes').update(payload).eq('id', classId)
   if (error && 'spelling_direction' in payload) {
