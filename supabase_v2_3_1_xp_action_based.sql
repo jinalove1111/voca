@@ -1,0 +1,128 @@
+-- ============================================================================
+-- supabase_v2_3_1_xp_action_based.sql — Paul Rank System, XP 행동(Action)
+-- 단위 리팩터링(2026-07-19). Supabase SQL Editor에서 1회 실행. 멱등 — 여러
+-- 번 실행해도 안전. `supabase_v2_3_paul_rank.sql`을 대체하지 않는다 — 그
+-- 파일이 만든 `xp_ledger`/`xp_totals`는 그대로 두고, 이 파일은 순수
+-- 증분(additive) 변경만 담는다(CLAUDE.md 부록: 완료로 선언된 작업 재구현
+-- 금지 원칙 — 테이블/뷰를 다시 만들지 않고 덧붙인다).
+--
+-- ── 배경: 운영자가 실제 프로덕션에서 발견한 문제 ────────────────────────
+-- v2.3의 `mission-clear`(레벨업 미션 클리어) XP 지급이 `source_event_id`
+-- 에 `wordId`를 그대로 써서(`` `mission-clear:${wordId}` ``, 구
+-- `src/hooks/useStudent.js`), 학생이 단어를 계속 넘길 때마다 XP가
+-- 무한정 쌓이는 파밍 경로였다. 애플리케이션(클라이언트/서버) 레벨
+-- 리팩터링으로 이 문제를 고쳤다 — 상세는 `src/utils/paulRankShared.js`의
+-- `XP_EVENT_TABLE` 헤더 주석과 `wiki/decisions.md` #10 참고. **이 SQL
+-- 파일은 그 리팩터링에 필요한 스키마 변경분만 담는다.**
+--
+-- ── 이 SQL이 실제로 바꾸는 것 (매우 적음 — 대부분은 코드 레벨 변경) ──────
+-- `xp_ledger` 테이블 정의를 다시 확인한 결과, 운영자가 검토를 요청한
+-- "event_type 컬럼 추가" 요구사항은 **이미 v2.3에서 충족돼 있었다**
+-- (`supabase_v2_3_paul_rank.sql`: `event_type text not null` — Hat/House/
+-- Ticket/Word King/Season/Daily Mission 등 미래 시스템이 `source_event_id`
+-- 문자열을 매번 파싱하지 않고 `event_type`으로 바로 집계할 수 있는 조건이
+-- 이미 만족됨). 그래서 이 파일이 실제로 추가하는 건 딱 하나 —
+-- `event_type` 집계 조회(위 "미래 시스템" 용도)를 위한 인덱스뿐이다.
+--
+-- 1) `idx_xp_ledger_event_type` — Word King/House 등 향후 시스템이
+--    "이 학생의 이 이벤트 타입 행 전부"(예: 이번 주 word-view-complete
+--    횟수)를 조회할 때 쓸 인덱스. 111명 규모에서 지금 당장 필요하진
+--    않지만(테이블이 아직 작음), 다음 착수 예정 기능(PROJECT_BOARD.md
+--    "[P3] 게임화" 7번 Word King)이 이 컬럼으로 바로 집계할 걸 이미 알고
+--    있어 미리 준비 — 생성 비용이 거의 없고(단일 컬럼 btree), 나중에
+--    데이터가 쌓인 뒤 인덱스 생성이 훨씬 무거워지는 걸 피한다.
+--
+-- ── event_type 값 화이트리스트 CHECK 제약을 "일부러" 추가하지 않는 이유 ──
+-- 새 8개 이벤트 이름(`src/utils/paulRankShared.js`의 XP_EVENT_TABLE)만
+-- 허용하는 `check (event_type in (...))`을 DB 레벨에도 걸고 싶을 수
+-- 있지만, **의도적으로 하지 않는다** — 운영자가 실제 프로덕션에서 이미
+-- 만든 구 word-unit 이벤트 행(`mission-clear`/`duplicate-sticker-bonus`/
+-- `spelling-combo-3`/`spelling-combo-5`/`spelling-combo-10`)이 `xp_ledger`
+-- 에 실존한다. Postgres의 `alter table ... add constraint ... check (...)`
+-- 는 기본적으로 **기존 행 전체를 검증**하므로, 화이트리스트 CHECK를 걸면
+-- 이 기존 행들 때문에 마이그레이션 자체가 실패하거나(NOT VALID 없이 걸면
+-- 즉시 에러), NOT VALID로 우회하더라도 나중에 그 행을 삭제하고 싶은
+-- 유혹을 만든다 — 실제 학생 데이터를 삭제하는 건 절대 금지(CLAUDE.md
+-- 규칙 5). 화이트리스트는 애플리케이션 레벨(서버 `api/grant-xp.js`의
+-- `isValidEventType`/`isValidSourceEventIdForEvent`, 클라이언트 사전
+-- 체크)에서만 강제하고, DB는 계속 `event_type text not null`(자유
+-- 문자열)로 남겨 과거/미래 이벤트 이름 어느 쪽도 스키마 변경 없이
+-- 수용한다.
+--
+-- ── 기존(word-unit) `xp_ledger` 행 처리 방침 — 삭제/리셋 없음 ───────────
+-- 운영자가 실제 테스트하며 만든 `mission-clear`/`duplicate-sticker-bonus`/
+-- `spelling-combo-N` 행은 그대로 둔다(실제 학생 데이터 삭제 금지,
+-- CLAUDE.md 규칙 5). `xp_totals` VIEW는 `event_type`을 구분하지 않고
+-- `student_id`별 `sum(amount)`로 전부 합산하므로(`supabase_v2_3_paul_rank.sql`
+-- 정의 그대로, 이 파일이 재정의하지 않음), 이 과거 행들은 **계속 학생의
+-- 누적 XP 합계에 포함된다** — "리셋"하지 않는다. 이렇게 하는 이유:
+--   · 이미 지급된 XP를 조용히 회수하면 학생 입장에서 눈에 보이는 숫자가
+--     줄어드는 것과 같아, v2.3 SQL이 "백필 안 함(전원 XP=0 시작)"을
+--     정할 때 세웠던 원칙(감사 가능한 이벤트만 원장에 남긴다)과 반대
+--     방향의 "조용한 조작"이 된다.
+--   · 앞으로는 새 행동 단위 이벤트로만 XP가 새로 쌓이므로(애플리케이션
+--     레벨에서 이미 봉쇄), 과거 행이 만든 왜곡은 "이미 지급된 유한한
+--     금액"으로 고정되고 더 커지지 않는다 — 파밍 구멍은 닫혔고, 과거
+--     결과만 남아있는 상태.
+--   · 그래도 운영자가 명시적으로 "과거 word-unit 행을 무효화하고 싶다"고
+--     판단하면, 아래 "(선택, 기본 비활성)" 블록으로 안전하게 실행할 수
+--     있게 옵션만 남겨둔다(운영자 승인 없이는 절대 실행하지 않음 — v2.3
+--     SQL의 "선택적 1회성 런칭 보너스" 블록과 같은 패턴).
+--
+-- ── 실행 순서 안전성 (CLAUDE.md 규칙 9) ─────────────────────────────────
+-- 이 파일이 코드보다 먼저 실행돼도 안전: 인덱스 추가는 어떤 기존 쿼리도
+-- 깨지 않는다(순수 성능 보조 구조물). 코드가 이 파일보다 먼저 배포돼도
+-- 안전: 애플리케이션 코드는 이 인덱스의 존재 여부와 무관하게 정상 동작
+-- 한다(쿼리 결과가 아니라 오직 조회 속도에만 영향).
+-- ============================================================================
+
+-- 1) event_type 조회용 인덱스(멱등) — 위 설명 참고. student_id 인덱스는
+--    이미 v2.3에 있음(idx_xp_ledger_student) — 그대로 재사용, 재생성 안 함.
+create index if not exists idx_xp_ledger_event_type on xp_ledger (event_type);
+
+-- PostgREST 스키마 캐시 갱신(컬럼 변경은 없지만, 인덱스 변경 후에도
+-- 관례상 실행 — v2.3 SQL과 동일 패턴).
+notify pgrst, 'reload schema';
+
+-- ============================================================================
+-- (선택, 기본 비활성) 과거 word-unit XP 행 무효화 — 운영자가 명시적으로
+-- 결정할 때만 아래 블록의 주석을 풀어 별도로 실행하세요. 위 "기존(word-unit)
+-- xp_ledger 행 처리 방침" 절 참고. **실제 학생 데이터를 삭제하는 게 아니라
+-- 별도 원장 항목으로 상쇄(offset)하는 방식** — v2.3 SQL의 백필 판단과 같은
+-- 정신: 삭제 대신 "감사 가능한 새 이벤트"로 남긴다.
+--
+-- 아래 예시는 각 학생의 구 word-unit 이벤트 합계만큼을 음수 상쇄 행으로
+-- 넣어 xp_totals 합계에서 정확히 상쇄한다(원본 행은 삭제하지 않음 — 감사
+-- 기록 보존). 주의: xp_ledger.amount는 `check (amount > 0 ...)` 제약이
+-- 있어 음수를 못 넣는다 — 상쇄가 필요하다고 판단되면 이 CHECK 제약도
+-- 함께 조정해야 하므로, 실행 전 반드시 별도로 설계/검토할 것(지금은
+-- 실행하지 않는 게 원칙 — CLAUDE.md 규칙 5, 운영자 승인 없이 이 블록의
+-- 주석을 풀지 말 것).
+--
+-- -- (설계만, 실행 금지 — amount CHECK 제약과 충돌하므로 그대로 실행하면 에러):
+-- -- select student_id, event_type, sum(amount) as legacy_word_unit_xp
+-- -- from xp_ledger
+-- -- where event_type in ('mission-clear', 'duplicate-sticker-bonus', 'spelling-combo-3', 'spelling-combo-5', 'spelling-combo-10')
+-- -- group by student_id, event_type;
+-- ============================================================================
+
+-- ============================================================================
+-- 실행 후 검증 (같은 SQL Editor에서 바로 실행)
+--
+-- ① 인덱스 생성 확인:
+--   select indexname from pg_indexes where tablename = 'xp_ledger';
+--   -- idx_xp_ledger_student / idx_xp_ledger_event_type 둘 다 있어야 정상.
+--
+-- ② 과거 word-unit 행이 여전히 존재하고 합계에 포함되는지 확인(삭제
+--    안 됐는지 확인 목적):
+--   select event_type, count(*), sum(amount)
+--   from xp_ledger
+--   where event_type in ('mission-clear', 'duplicate-sticker-bonus', 'spelling-combo-3', 'spelling-combo-5', 'spelling-combo-10')
+--   group by event_type;
+--
+-- ③ 새 이벤트가 정상 화이트리스트로 거부/허용되는지는 애플리케이션
+--    레벨에서 검증(DB에는 화이트리스트 CHECK가 없음 — 위 설명 참고):
+--   node scripts/testPaulRank.mjs        (순수 함수, 항상 실행 가능)
+--   node scripts/testXpLedgerDb.mjs      (라이브 e2e, SUPABASE_SERVICE_ROLE_KEY
+--                                          로컬에 없으면 SKIP — 정상)
+-- ============================================================================
