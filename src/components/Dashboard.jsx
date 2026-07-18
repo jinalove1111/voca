@@ -13,6 +13,10 @@ import { getReactionById } from '../utils/paulReactions'
 // 로직) 대신 이 배너만 담은 작은 파일에서 import — 정적 import 체인이
 // 학생 메인 번들에 EntranceTest.jsx 전체를 끌고 오는 것을 막는다.
 import { EntranceTestBanner } from './EntranceTestBanner'
+// Paul Rank System(2026-07-19) — 최소 통합: 예쁜 모자 그래픽 없이 텍스트/
+// 숫자로만 현재 Rank/모자단계/다음 단계까지 진행률을 표시(운영자 지시:
+// 큰 UI 리디자인 금지, 시각/애니메이션은 이번 범위 밖).
+import { usePaulRank } from '../hooks/usePaulRank'
 
 const GOAL = 5
 const stickerById = (id) => STICKERS.find(s => s.id === id)
@@ -181,6 +185,7 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 // (표시용)을 따로 받는다 — getStudentClass/getStudentUnit은 이제 id 기반.
 export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch }) {
   const { stars, stickerTypes, activeMissions, dailyProgress, missionsCompletedToday, streak, cleared } = studentData
+  const { rankState, loading: rankLoading } = usePaulRank(studentId)
 
   const className = getStudentClass(studentId)
   const unitName = getStudentUnit(studentId)
@@ -277,6 +282,17 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
               <p className="text-purple-200 text-xs">레벨업 미션</p>
             </div>
           </div>
+          {/* Paul Rank — 텍스트/숫자만(모자 그래픽 없음, DESIGN DIRECTION은
+              PAUL_BIBLE.md §8 참고). totalStars와 무관한 별도 원장(XP)에서
+              계산 — 별을 XP로 변환하지 않는다는 판단, paulRankShared.js 참고. */}
+          {!rankLoading && (
+            <p className="text-purple-100 text-xs mt-3">
+              🎩 {rankState.rank.name} · {rankState.hatStage.name} 단계
+              {rankState.isMaxRank
+                ? ' · 최고 단계!'
+                : ` · 다음 Rank까지 XP ${rankState.xpRemainingToNextRank}`}
+            </p>
+          )}
         </div>
 
         {/* 입실시험이 시작되면 다른 무엇보다 먼저 보여야 하는 배너 */}

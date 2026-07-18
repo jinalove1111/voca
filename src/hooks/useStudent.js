@@ -29,7 +29,12 @@ import { getRandomSticker, getMilestoneSticker, STICKERS } from '../data/sticker
 // student. Local storage stays authoritative whenever it actually has data —
 // the cloud copy is a safety net, never a silent overwrite.
 export { getStudents, addStudent, removeStudent, findStudentByName } from '../utils/wordLibrary'
-import { syncStudentProgress, fetchFullProgress, fetchProgressBackupStrict, setWordStatus as syncWordStatus } from '../utils/wordLibrary'
+import { syncStudentProgress, fetchFullProgress, fetchProgressBackupStrict, setWordStatus as syncWordStatus, postXpEvent } from '../utils/wordLibrary'
+// Paul Rank System(2026-07-19) — XP는 totalStars에서 파생시키지 않는다
+// (판단 근거: src/utils/paulRankShared.js 헤더). addStars()가 불리는 같은
+// 4개 학습 이벤트를 트리거로 재사용해 별개의 원장(xp_ledger, 서버 검증)에
+// 독립적으로 쌓는다 — 아래 grantXp() 참고.
+import { XP_EVENT_TABLE } from '../utils/paulRankShared'
 
 // ── Single unified progress store ───────────────────────────────────────
 // Every per-student value the app tracks (stars, stickers, today's mission
@@ -143,6 +148,15 @@ const STAR_BADGES = [
 ]
 
 const todayStr = () => new Date().toDateString()
+// Paul Rank XP 이벤트 idempotency 키 생성 — diaryPlacements의 placementId
+// 생성 패턴(Date.now() + 랜덤 suffix)을 그대로 재사용. 안정적인 자연 키가
+// 없는 이벤트(예: 중복 스티커 환전 — 같은 날 같은 스티커가 여러 번 중복될
+// 수 있어 날짜+스티커id만으로는 정당한 반복을 잘못 막을 위험)에 한해 이
+// 랜덤 id를 쓴다 — 그 경우 이 함수가 보장하는 건 "이 한 번의 fetch 호출이
+// 네트워크 레벨에서 재전송돼도 서버가 두 번 지급하지 않는다"이지, "같은
+// UI 액션이 코드 버그로 두 번 호출되는 것"까지는 막지 못한다(다른 세 이벤트
+// 타입은 자연 키를 써서 이 경우도 막는다 — 아래 grantXp 호출부 참고).
+const randEventId = () => `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
 const freshRound = () => ({
   date: todayStr(),
   wordsViewed: [],
@@ -628,6 +642,17 @@ export function useStudent(studentId, legacyName) {
     bumpHistory(day => ({ starsEarned: day.starsEarned + n }))
   }, [patch, bumpHistory])
 
+  // Paul Rank System(2026-07-19) XP 지급 — totalStars와 완전히 분리된
+  // 원장(xp_ledger, 서버 전용 쓰기)에 독립적으로 쌓는다. eventType은
+  // XP_EVENT_TABLE의 키와 정확히 일치해야 하고, 금액은 여기서 절대 계산/
+  // 전송하지 않는다(서버 api/grant-xp.js가 XP_EVENT_TABLE에서 조회하는
+  // 유일한 권위). fire-and-forget — postXpEvent가 이미 네트워크 실패를
+  // 삼키므로 학습 흐름에 절대 영향 없음.
+  const grantXp = useCallback((eventType, sourceEventId) => {
+    if (!XP_EVENT_TABLE[eventType]) return // 방어적 — 서버도 동일 테이블로 거부함
+    postXpEvent(studentId, eventType, sourceEventId)
+  }, [studentId])
+
   const addMission = useCallback((wordId) => {
     patch(prev => ({
       missions: prev.missions.some(m => m.wordId === wordId)
@@ -649,9 +674,13 @@ export function useStudent(studentId, legacyName) {
     if (didClear) {
       patch(prev => ({ cleared: prev.cleared.includes(wordId) ? prev.cleared : [...prev.cleared, wordId] }))
       addStars(3)
+      // 자연 키(wordId) — 같은 단어의 레벨업 미션은 한 번만 클리어되므로
+      // (done 플래그가 재클리어를 막음, 위 참고) 이 이벤트는 학생당 정확히
+      // 한 번만 존재한다 — 중복 호출/재시도돼도 서버 unique 제약이 막음.
+      grantXp('mission-clear', `mission-clear:${wordId}`)
     }
     return didClear
-  }, [patch, addStars])
+  }, [patch, addStars, grantXp])
 
   // v1.5 버그 수정: 예전엔 오늘 카테고리 하나(5개)를 다 채워야만
   // history[오늘]이 생겨서, 단어를 1~4개만 본 날은 대시보드도 캘린더도
@@ -684,14 +713,20 @@ export function useStudent(studentId, legacyName) {
   // stars so a guaranteed pull is never wasted either.
   const grantSticker = useCallback((sticker) => {
     const isDuplicate = stickerTypes.includes(sticker.id)
-    if (isDuplicate) addStars(DUPLICATE_BONUS_STARS)
-    else {
+    if (isDuplicate) {
+      addStars(DUPLICATE_BONUS_STARS)
+      // 같은 스티커가 같은 날 여러 번 중복될 수 있어(가챠는 하루 여러 번
+      // 발동 가능) 날짜+스티커id만으로는 안전한 자연 키가 못 된다 — 이
+      // 이벤트만 랜덤 키를 쓴다(randEventId 주석 참고: 네트워크 재시도는
+      // 막지만, 같은 UI 액션의 코드 버그성 중복 호출까지는 못 막음).
+      grantXp('duplicate-sticker-bonus', `duplicate-sticker-bonus:${randEventId()}`)
+    } else {
       patch(prev => ({ stickers: [...prev.stickers, sticker.id] }))
       bumpHistory(day => ({ stickersEarned: [...day.stickersEarned, sticker.id] }))
     }
     return isDuplicate
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stickerTypes, addStars, patch, bumpHistory])
+  }, [stickerTypes, addStars, patch, bumpHistory, grantXp])
 
   // Keeps today's "완료한 미션" (0-4 categories) as a running high-water
   // mark, independent of the round auto-resetting after a full completion —
@@ -718,6 +753,12 @@ export function useStudent(studentId, legacyName) {
     handledRoundRef.current = signature
 
     addStars(MISSION_BONUS_STARS)
+    // 자연 키(signature) — 오늘의 미션은 하루 여러 번 반복 완료될 수
+    // 있지만(위 주석 "missions repeat all day"), 매 반복의 round 상태값
+    // 조합(signature)은 그 반복 고유의 값이라 정직하게 "이 완료 인스턴스"
+    // 하나를 식별한다 — 같은 signature가 코드 버그로 두 번 처리되려 해도
+    // 서버 unique 제약이 막는다.
+    grantXp('mission-bonus-4of4', `mission-bonus-4of4:${signature}`)
     bumpHistory(day => ({ giftsToday: day.giftsToday + 1 }))
     const sticker = getRandomSticker()
     const isDuplicate = grantSticker(sticker)
@@ -843,7 +884,14 @@ export function useStudent(studentId, legacyName) {
       const combo = (round.spellingCombo || 0) + 1
       patch(prev => ({ round: { ...prev.round, spellingCombo: combo } }))
       const bonus = spellingComboBonus(combo)
-      if (bonus > 0) addStars(bonus)
+      if (bonus > 0) {
+        addStars(bonus)
+        // 자연 키(오늘 날짜+wordId+콤보 마일스톤) — 콤보는 하루에 여러 번
+        // 끊기고 다시 쌓일 수 있어(하루 한 번만 도달 가능한 이벤트가
+        // 아님), 같은 단어에서 같은 마일스톤에 다시 도달하는 경우까지
+        // 막지 않으면서도 같은 순간의 코드 버그성 중복 호출은 막는다.
+        grantXp(`spelling-combo-${combo}`, `spelling-combo-${combo}:${todayStr()}:${wordId}`)
+      }
     } else {
       patch(prev => ({
         round: {
@@ -855,7 +903,7 @@ export function useStudent(studentId, legacyName) {
         },
       }))
     }
-  }, [bumpHistory, patch, addStars, round.spellingCombo])
+  }, [bumpHistory, patch, addStars, round.spellingCombo, grantXp])
 
   // 복습 화면에서 한 단어를 맞히면 오답노트 큐에서 제거 — 큐가 비면
   // "오늘 틀린 단어 복습"이 끝난 것.

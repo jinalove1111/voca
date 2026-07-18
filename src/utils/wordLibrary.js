@@ -776,6 +776,62 @@ export async function fetchProgressBackupStrict(studentId) {
   return blob && Object.keys(blob).length > 0 ? blob : null
 }
 
+// ── Paul Rank System (2026-07-19) — XP 지급/조회 ────────────────────────
+// "별을 조용히 XP로 변환하지 말라" 판단 근거는 src/utils/paulRankShared.js
+// 헤더 참고. 여기 두 함수는 그 판단의 클라이언트측 구현:
+//   · postXpEvent — 유일한 "쓰기" 경로. 학생 화면이 xp_ledger에 직접
+//     insert/update하지 않는다 — 서버(api/grant-xp.js, service_role)만
+//     쓴다. syncStudentProgress와 동일한 fire-and-forget 원칙: 네트워크
+//     실패/테이블 미존재가 학습 흐름을 절대 막지 않는다(호출부는 절대
+//     await하지 않고 그냥 던져 놓는다 — useStudent.js addStars 호출
+//     지점들 참고). 실패해도 별(star) 지급 자체는 이미 로컬에서 끝난
+//     뒤이므로 학생 경험에 영향 없음 — 이 함수가 실패하면 그 XP 이벤트
+//     하나만 원장에 안 남을 뿐이다(다음 학습 이벤트는 정상 지급됨).
+//   · fetchXpTotal/fetchXpTotals — 유일한 "읽기" 경로. xp_ledger는 anon
+//     SELECT가 허용돼 있으므로(공개 표시값, 민감정보 아님) 직접
+//     xp_totals 뷰를 읽는다 — 이 뷰는 저장된 사본이 아니라 매 조회 시
+//     xp_ledger를 합산하는 순수 파생값(SQL 파일 주석 참고) — "저장된
+//     중복값보다 파생값을 우선한다" 원칙을 스키마 레벨에서 강제.
+//   테이블/뷰가 아직 없으면(supabase_v2_3_paul_rank.sql 미실행) 조용히
+//   xp=0으로 폴백 — 코드가 스키마보다 먼저 배포돼도 절대 안 깨짐.
+export async function postXpEvent(studentId, eventType, sourceEventId) {
+  if (!studentId || !eventType || !sourceEventId) return
+  try {
+    await fetch('/api/grant-xp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ studentId, eventType, sourceEventId }),
+    })
+  } catch {
+    // 네트워크 실패 — 조용히 무시(위 주석 참고, 학습 흐름 비차단 원칙).
+  }
+}
+
+export async function fetchXpTotal(studentId) {
+  if (!studentId) return 0
+  const { data, error } = await supabase
+    .from('xp_totals')
+    .select('total_xp')
+    .eq('student_id', studentId)
+    .maybeSingle()
+  if (error) return 0 // 뷰/테이블 미존재(42P01) 등 — 폴백 0
+  return Number(data?.total_xp) || 0
+}
+
+// 관리자 대시보드용 배치 조회(fetchDashboardData와 동일 패턴 — 학생별 N번
+// 조회하지 않음). 반환: { [studentId]: totalXp }. 조회 실패/테이블 미존재
+// 시 빈 객체(=전원 0으로 표시, 크래시 없음).
+export async function fetchXpTotals(studentIds) {
+  const ids = (studentIds || []).filter(Boolean)
+  if (ids.length === 0) return {}
+  const { data, error } = await supabase
+    .from('xp_totals')
+    .select('student_id, total_xp')
+    .in('student_id', ids)
+  if (error) return {}
+  return Object.fromEntries((data || []).map((r) => [r.student_id, Number(r.total_xp) || 0]))
+}
+
 // v1.5 "알아요/모르겠어요" (Skip) 기능 — 단어별 숙지 상태를 word_status
 // 테이블에 저장한다. 학생 이름이 아니라 words.id(UUID, word.dbId)로 저장
 // 하므로 word_status.sql(v1.5) 마이그레이션이 먼저 반영돼 있어야 한다 —

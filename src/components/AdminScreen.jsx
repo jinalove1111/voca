@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals } from '../utils/wordLibrary'
+// Paul Rank System(2026-07-19) — 최소 관리자 통합: 학생별 XP/Rank 조회만
+// (관리자 UI 전면 개편 아님, 기존 학생 카드에 텍스트 한 줄 추가).
+import { computeRankState } from '../utils/paulRankShared'
 import { fetchPendingSpellingReviews, resolveSpellingReview } from '../utils/spellingReviewApi'
 import { fetchPinStatusMap } from '../utils/pinStatusApi'
 import { getStudents, removeStudent } from '../hooks/useStudent'
@@ -713,6 +716,7 @@ function AdminDashboard() {
   const [copied, setCopied] = useState(false)
   const [wordStatusSummary, setWordStatusSummary] = useState({}) // v1.5 — studentId -> {known,unknown,skipped,mastered}
   const [resettingId, setResettingId] = useState(null)
+  const [xpTotals, setXpTotals] = useState({}) // Paul Rank System — studentId -> total_xp (xp_ledger 미존재 시 빈 객체, 전원 0 취급)
 
   const wordLookup = useMemo(() => {
     if (!selectedClass) return {}
@@ -736,15 +740,19 @@ function AdminDashboard() {
       // id 배열을 받는다(예전엔 이름 배열) — 동명이인이 같은 반에 있어도
       // 서로 섞이지 않는다.
       const ids = getStudentsInClass(className).map(s => s.id)
-      const [dashboardRows, wsSummary] = await Promise.all([
+      const [dashboardRows, wsSummary, xpMap] = await Promise.all([
         fetchDashboardData(ids),
         // v1.5 — word_status 마이그레이션(supabase_v1_5_word_status.sql) 전에도
         // 안전하게 빈 객체를 반환하도록 wordLibrary.js에서 이미 처리함.
         fetchWordStatusSummary(ids).catch(() => ({})),
+        // Paul Rank System — supabase_v2_3_paul_rank.sql 미실행이어도
+        // fetchXpTotals 자체가 빈 객체로 폴백(크래시 없음).
+        fetchXpTotals(ids).catch(() => ({})),
       ])
       if (dashLoadReqIdRef.current !== reqId) return // 더 최신 반 선택이 있음 — 버림
       setRows(dashboardRows)
       setWordStatusSummary(wsSummary)
+      setXpTotals(xpMap)
     } catch (err) {
       if (dashLoadReqIdRef.current !== reqId) return
       alert('반 현황을 불러오는 중 오류가 발생했어요: ' + (err.message || err))
@@ -848,6 +856,9 @@ function AdminDashboard() {
               <div className="text-right flex-shrink-0">
                 <p className="font-black text-yellow-600">⭐ {r.progress?.total_stars ?? 0}</p>
                 <p className="text-xs text-orange-400">🔥 {r.progress?.streak ?? 0}일 연속</p>
+                {/* Paul Rank System(2026-07-19) — XP는 별과 별개 원장(파생 아님).
+                    xp_ledger 미실행 환경이면 xpTotals[r.id]가 undefined → 0으로 표시. */}
+                <p className="text-xs text-indigo-400">🎩 {computeRankState(xpTotals[r.id] || 0).rank.name} (XP {xpTotals[r.id] || 0})</p>
               </div>
             </div>
             <button onClick={() => setExpanded(isOpen ? null : r.id)}
