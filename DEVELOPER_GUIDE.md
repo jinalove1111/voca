@@ -329,3 +329,33 @@ attribution 혼선 사고가 실제 근거).
   에 명시).
 - `PROJECT_BOARD.md` 카드 이동은 수동이다 — verify 통과가 자동으로
   카드를 `VERIFY`→`DONE`으로 옮겨주지 않는다.
+
+---
+
+## 로컬 Wiki 검색 (`wiki:search`, 2026-07-18 신규)
+
+_추가: 2026-07-18(Engineering Head, 경량 로컬 LLM Wiki 구축). `wiki/`
+디렉터리(색인 `wiki/HOME.md`)가 기존 6개 문서(`PROJECT_GUIDE.md`/
+`ARCHITECTURE.md`/`DATABASE.md`/`DEVELOPER_GUIDE.md`(이 문서)/
+`TESTING.md`/`ROADMAP.md`) + `handoff.md`를 주제별로 요약/색인한
+레이어로 신설됨 — 각 위키 페이지는 원본을 복제하지 않고 요약 + 링크만
+담는다(`wiki/HOME.md` 상단 경고 참고)._
+
+`npm run wiki:search -- "키워드"`(`scripts/wikiSearch.mjs`, Node 내장
+`fs`만 사용 — 외부 검색 라이브러리/벡터DB/네트워크 호출 없음)로
+`wiki/` 전체 + 위 6개 문서 + `handoff.md`를 대상으로 로컬 키워드 검색을
+할 수 있다:
+
+```bash
+npm run wiki:search -- "current_unit_id"
+npm run wiki:search -- "PIN 해시" --limit 5
+node scripts/wikiSearch.mjs "entrance test 서버 재검증" --context 3
+```
+
+매칭 라인을 인접 라인끼리 묶어 발췌(excerpt)로 보여주고, 검색어 등장
+횟수(+ 헤딩 라인 보너스)로 관련도 순 랭킹한다. "이거 이미 결정했던
+거 아닌가?"(규칙 3 재구현 금지 확인), "이 버그 예전에 고친 적
+있나?" 같은 질문을 `handoff.md` 1800줄+ 전체를 열지 않고 먼저 훑어볼
+때 사용을 권장 — 단, 검색 결과는 발췌일 뿐이라 실제 판단 전 반드시
+원본 파일을 열어 확인할 것(`wiki/RETRIEVAL_RULES.md` 참고, 위 AI 세션
+표준 워크플로우 4번 단계와 동일 원칙).
