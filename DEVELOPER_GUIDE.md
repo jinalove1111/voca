@@ -359,3 +359,70 @@ node scripts/wikiSearch.mjs "entrance test 서버 재검증" --context 3
 때 사용을 권장 — 단, 검색 결과는 발췌일 뿐이라 실제 판단 전 반드시
 원본 파일을 열어 확인할 것(`wiki/RETRIEVAL_RULES.md` 참고, 위 AI 세션
 표준 워크플로우 4번 단계와 동일 원칙).
+
+---
+
+## 개발자 대시보드 (`npm run dashboard`, 2026-07-18 신규)
+
+_추가: 2026-07-18(Engineering Head). PROJECT_BOARD.md/Health Check/Verify
+결과/`.ai-status`/Git 상태/로컬 Wiki 검색 안내, 6개를 **하나의 정적 HTML**로
+통합해 보여주는 개발자 전용 로컬 도구. 학생 앱(`src/`, Vite/Vercel
+빌드 대상)과 완전히 분리돼 있고, `App.jsx` 라우팅 어디에도 연결되지
+않는다 — 학생이 보는 번들에 이 코드가 한 바이트도 섞이지 않는다._
+
+> 참고: 2026-07-18 위키 구축 세션(`handoff.md` 같은 날짜 상단 섹션)에서
+> "대시보드 기능은 운영자 명시 금지 범위"로 기록된 적이 있다. 이번
+> 대시보드는 그 이후 **운영자가 별도로 새로 명시 요청한 작업**이라
+> 그 기록과 모순되지 않는다(범위가 명확히 다른 신규 지시) — 다음 세션이
+> 혼란스러워하지 않도록 이 문서에 정직하게 남겨둔다.
+
+### 실행
+
+```bash
+npm run dashboard                    # 기본 — verify는 마지막 캐시만 표시
+npm run dashboard -- --with-verify   # tests/harness 전체 도메인 재실행(느림) 후 캐시 갱신
+```
+
+생성 결과: `dashboard/index.html` (self-contained, 외부 CDN/이미지/API
+호출 0 — 오프라인에서도 그대로 열림). 자동으로 브라우저를 열지 않는다 —
+콘솔에 안내된 경로를 직접 열 것. `dashboard/`는 산출물 디렉터리라
+`.gitignore`에 등록돼 있고(`scripts/generateDashboard.mjs`만 커밋 대상),
+`dashboard/.last-verify.json`이 verify 캐시(마지막 실행 시각 + 도메인별
+PASS/FAIL/SKIP)다.
+
+### 통합하는 6개 데이터 소스
+
+1. **PROJECT_BOARD.md** — 컬럼(`BACKLOG`/`NEXT`/`IN_PROGRESS`/`VERIFY`/
+   `DONE`/`BLOCKED`)별 카드 개수 + 제목을 파싱해서 그대로 보여준다.
+   **읽기 전용** — 이 대시보드에서 카드를 수정/추가하는 기능은 의도적으로
+   만들지 않았다(두 번째 진실원천을 만들지 않기 위해, `CLAUDE.md`
+   규칙 13과 동일 원칙). 태스크의 진실은 항상 `PROJECT_BOARD.md` 파일
+   자체.
+2. **Health Check** — `scripts/healthCheck.mjs`를 매번 새로 실행해
+   stdout을 파싱, 9개 영역 점수를 막대(meter)로 표시.
+3. **Verify 결과** — 기본은 `dashboard/.last-verify.json` 캐시(+ 마지막
+   실행 시각)만 표시. `--with-verify`를 줘야 `tests/harness/registry.mjs`
+   + `runDomain.mjs`를 그대로 import해서 실제로 전체 도메인을 재실행한다
+   (로직 재구현 없음 — 기존 오케스트레이션 레이어 재사용). 캐시가 없으면
+   "아직 실행 안 됨" 안내만 하고 가짜 데이터를 보여주지 않는다.
+4. **`.ai-status/*.json`** — `TEMPLATE.json`을 제외한 모든 상태 파일을
+   읽어 agent/status/task/updated_at 표로 표시(`EXAMPLE-` 접두 파일은
+   "example" 태그로 구분 표시 — 실제 작업 기록이 아님을 숨기지 않는다).
+5. **Git 상태** — `git status --porcelain`/`git log -5 --oneline`/현재
+   브랜치/`origin` 대비 ahead-behind를 `child_process`로 조회.
+6. **로컬 Wiki 검색** — 정적 HTML이라 실시간 검색은 실행 불가(솔직하게
+   인정, `CLAUDE.md` 규칙 18과 동일 원칙) — `npm run wiki:search --
+   "키워드"` 사용법 안내 + `wiki/HOME.md` 상대 링크만 제공.
+
+### 설계 제약 (지켜진 것)
+
+- 새 npm 패키지 0개 — Node 내장 `fs`/`path`/`child_process`만 사용.
+- `src/`, `App.jsx`, Vercel 배포 대상에 코드 0줄 추가.
+- 외부 CDN/이미지/API 호출 없음 — 인라인 CSS/JS만, 오프라인 동작.
+
+### 관련 파일
+
+`C:\voca\scripts\generateDashboard.mjs`, `C:\voca\tests\harness\
+registry.mjs`, `C:\voca\tests\harness\runDomain.mjs`,
+`C:\voca\scripts\healthCheck.mjs`, `C:\voca\PROJECT_BOARD.md`,
+`C:\voca\.ai-status\`, `C:\voca\.gitignore`

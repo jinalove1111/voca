@@ -173,6 +173,18 @@ _(현재 없음 — implementer 완료 후 qa-reviewer/security-reviewer 검수 
 
 ## DONE (최근 완료, 참고용 — 전체 이력은 `ROADMAP.md`/`handoff.md`)
 
+- 개발자 대시보드(`scripts/generateDashboard.mjs`, `npm run dashboard`)
+  신설(Engineering Head, 2026-07-18) — PROJECT_BOARD.md(읽기 전용 파싱)/
+  Health Check/Verify 결과(`--with-verify` 옵션, 기본은 캐시)/
+  `.ai-status`/git 상태/wiki 검색 안내 6개를 self-contained 단일
+  HTML(`dashboard/index.html`, 산출물은 `.gitignore`)로 통합. 새 npm
+  패키지 0개(Node 내장 fs/child_process만), `src/`/`App.jsx`/Vercel
+  배포 대상 변경 0건(학생 앱과 완전 분리), `npm run build` 번들 해시
+  불변 확인. PROJECT_BOARD 카드 수(16개) 대시보드 표시와 정확히 일치
+  확인, `--with-verify`로 13개 도메인 실 재실행 캐시 생성 확인(login
+  도메인은 기존에 이미 BLOCKED로 기록된 로컬 service-role-key 부재로
+  FAIL — 신규 회귀 아님). 근거: 이 handoff.md 최상단 세션 기록,
+  `DEVELOPER_GUIDE.md` "개발자 대시보드" 섹션.
 - 경량 로컬 Wiki(`wiki/HOME.md` + 하위 7페이지) + `npm run wiki:search`
   신설(Engineering Head, 2026-07-18) — 기존 6개 문서/`handoff.md`를
   복제하지 않고 요약/색인만 하는 레이어. 벡터DB/유료 API/대시보드/모바일

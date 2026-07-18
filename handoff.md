@@ -1,5 +1,88 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-18 (경량 로컬 Wiki 구축 — Engineering Head)_
+_최종 갱신: 2026-07-18 (개발자 대시보드 구축 — Engineering Head)_
+
+## 2026-07-18 — 개발자 대시보드 구축 (Engineering Head)
+
+운영자 지시: PROJECT_BOARD + Health Check + Verify 결과 + `.ai-status` +
+Git 상태 + 로컬 Wiki 검색을 **하나의 대시보드**로 통합. 학생 앱(`src/`)
+절대 수정 금지, `PROJECT_BOARD.md`를 대체/경쟁하는 두 번째 진실원천을
+만들지 않을 것, 새 npm 패키지 금지(정적 생성 HTML 방식 채택).
+
+> 참고: 바로 아래 세션(경량 로컬 Wiki 구축)의 handoff 기록에 "대시보드
+> 기능... 전부 금지(운영자 명시)"라는 문구가 있다 — 이번 작업은 그 이후
+> 운영자가 **별도로 새로 명시 요청한 작업**이라 모순되지 않는다(그
+> 세션의 금지 범위는 그 세션 지시 범위 안에서의 것). 다음 세션이
+> 혼란스러워하지 않도록 정직하게 남긴다(`DEVELOPER_GUIDE.md`에도 같은
+> 참고 남김).
+
+### 신규 파일
+
+- `scripts/generateDashboard.mjs` — 6개 데이터소스를 파싱/조회해
+  self-contained 단일 HTML(`dashboard/index.html`)로 렌더링. Node 내장
+  `fs`/`path`/`child_process`만 사용(새 패키지 0개). 외부 CDN/이미지/API
+  호출 없음(오프라인 동작). `--with-verify` 플래그로만 `tests/harness/
+  registry.mjs` + `runDomain.mjs`를 import해 전체 도메인 실제
+  재실행(로직 재구현 없음 — 오케스트레이션 재사용) — 기본은
+  `dashboard/.last-verify.json` 캐시만 표시.
+- `dashboard/` — 산출물 디렉터리. `.gitignore`에 등록(생성 스크립트만
+  커밋, HTML/캐시는 커밋 안 함).
+
+### 갱신 파일
+
+- `package.json` — `"dashboard": "node scripts/generateDashboard.mjs"`
+  스크립트 추가.
+- `.gitignore` — `dashboard/` 추가.
+- `DEVELOPER_GUIDE.md` — "개발자 대시보드" 섹션 append(사용법, 6개
+  데이터소스 매핑, 설계 제약, 위 대시보드 금지 이력 참고 포함).
+- `PROJECT_GUIDE.md` — 문서 지도 표에 `scripts/generateDashboard.mjs`
+  행 추가.
+- `PROJECT_BOARD.md` — DONE 카드 추가(검증 결과 요약 포함).
+
+### 검증 (운영자 인수 기준 3개 — 전부 실측 확인)
+
+1. **6개 섹션 실데이터 확인**: `npm run dashboard` 실행 → `dashboard/
+   index.html` 생성 확인. (1) PROJECT_BOARD 카드 파싱 정상(아래 항목),
+   (2) `healthCheck.mjs` 매 실행마다 재실행해 9개 영역(+ 참고 1개)
+   점수/근거 파싱, 9개 영역 평균 81.4/100 표시, (3) `--with-verify`로
+   실제 재실행해 `dashboard/.last-verify.json` 캐시 생성 확인(아래
+   상세), (4) `.ai-status/*.json`(TEMPLATE 제외) 2개 파일 실제 표시,
+   (5) `git status --porcelain`/`git log -5 --oneline`/브랜치/
+   ahead-behind 실측 표시, (6) wiki 검색 사용법 카드 + `wiki/HOME.md`
+   상대 링크(실시간 검색은 정적 HTML 특성상 불가능함을 정직하게 표시,
+   흉내내지 않음).
+2. **PROJECT_BOARD 동기화 대조**: `PROJECT_BOARD.md`의 `### ` 카드
+   헤딩을 `grep -c "^### "`로 직접 카운트한 결과 16개, 대시보드가 파싱해
+   표시한 컬럼별 합계(BACKLOG 12 + NEXT 3 + IN_PROGRESS 0 + VERIFY 0 +
+   DONE 0 + BLOCKED 1)도 16개로 정확히 일치 확인.
+3. **build/verify 불변**: `npm run build` 작업 전후 메인 번들 해시
+   `index-CSVjLjA9.js` 520.89KB로 동일(당연히 `src/` 미변경이라 동일해야
+   함, 실측으로 재확인). `npm run dashboard -- --with-verify`로 `tests/
+   harness/` 13개 도메인 전체 재실행 — `login` 도메인만 FAIL했는데,
+   이는 `PROJECT_BOARD.md`의 기존 `BLOCKED` 카드(`SUPABASE_SERVICE_ROLE_
+   KEY` 로컬 환경변수 부재로 PIN 라이브 e2e 4개 FAIL)와 정확히 동일한
+   원인 — 이번 작업이 만든 신규 회귀가 아님(회귀 여부는 수정 전 상태로
+   되돌리지 않고도, 이 실패가 기존에 이미 문서화된 원인임을 대조해
+   확인). 나머지 12개 도메인(`speaking`/`listening` SKIP 포함)은
+   전부 기존과 동일하게 PASS/SKIP.
+
+### 학생 앱(`src/`) diff 0건
+
+`git status --porcelain` / `git diff --stat`로 이번 세션 전체에서
+`src/`, `api/`, `App.jsx`, `supabase_*.sql` 어디에도 변경이 없음을
+확인(대시보드 작업은 `scripts/`, 최상위 문서, `.ai-status/`,
+`package.json`, `.gitignore`만 건드림).
+
+### 알려진 한계 (정직하게 기록)
+
+- Verify 섹션은 기본적으로 캐시 기반이라, `--with-verify` 없이
+  `npm run dashboard`만 반복 실행하면 verify 결과가 갱신되지 않는다
+  (의도된 설계 — 전체 재실행이 느려 매번 자동 트리거하지 않음).
+- Health Check 점수 중 `Persistence`/`Database`/`Performance`/`Security`
+  4개는 `healthCheck.mjs` 자체가 CITED(과거 감사 인용)로 표시한 값을
+  그대로 파싱한 것 — 대시보드가 새로 채점하지 않는다(기존 스크립트
+  설계 그대로).
+- 대시보드는 정적 스냅샷이라 열어둔 브라우저 탭이 자동 새로고침되지
+  않는다 — 최신 상태를 보려면 `npm run dashboard`를 다시 실행해야 한다.
 
 ## 2026-07-18 — 경량 로컬 LLM Wiki 구축 (Engineering Head, 코드 변경 0건, 순수 문서/스크립트)
 

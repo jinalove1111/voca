@@ -1,0 +1,41 @@
+{
+  "agent_name": "implementer",
+  "role": "코드/문서 구현 (개발자 대시보드 구축, Engineering Head 직접 수행)",
+  "task_id": "dev-dashboard",
+  "task": "PROJECT_BOARD/Health Check/Verify결과/.ai-status/Git상태/wiki검색 안내 6개 데이터소스를 self-contained 정적 HTML(scripts/generateDashboard.mjs -> dashboard/index.html)로 통합. 학생 앱(src/) 완전 분리, 새 npm 패키지 없음.",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-18T13:15:00Z",
+  "updated_at": "2026-07-18T13:40:00Z",
+  "files_owned": [
+    "scripts/generateDashboard.mjs",
+    "package.json",
+    ".gitignore",
+    "DEVELOPER_GUIDE.md",
+    "PROJECT_GUIDE.md",
+    "PROJECT_BOARD.md",
+    "handoff.md",
+    ".ai-status/implementer-dev-dashboard.json"
+  ],
+  "files_read": [
+    "CLAUDE.md",
+    "PROJECT_GUIDE.md",
+    "DEVELOPER_GUIDE.md",
+    "PROJECT_BOARD.md",
+    "handoff.md",
+    "package.json",
+    "scripts/healthCheck.mjs",
+    "tests/harness/registry.mjs",
+    "tests/harness/runAll.mjs",
+    "tests/harness/runDomain.mjs",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json",
+    ".ai-status/EXAMPLE-implementer-doc-os-setup.json",
+    ".ai-status/implementer-wiki-setup.json",
+    "wiki/HOME.md",
+    "scripts/testDashboard.mjs (무관 확인 — 관리자 대시보드 데이터 테스트, 이번 작업과 이름만 유사)"
+  ],
+  "summary": "scripts/generateDashboard.mjs 신규 작성(Node 내장 fs/path/child_process만 사용, 새 npm 패키지 0개). npm run dashboard [-- --with-verify] 스크립트 추가. dashboard/ 산출물 디렉터리 .gitignore 등록(생성 스크립트만 커밋). PROJECT_BOARD.md는 읽기전용 파싱만(카드 수정 기능 없음 — 두 번째 진실원천 방지). 6개 섹션 전부 실데이터로 채워짐을 직접 확인: (1) PROJECT_BOARD 카드 16개, 대시보드 표시 16개 일치, (2) healthCheck.mjs 매번 재실행 파싱(9개 영역 평균 81.4/100), (3) --with-verify로 tests/harness 13개 도메인 실제 재실행 후 캐시(dashboard/.last-verify.json) 생성 확인(login FAIL은 기존 BLOCKED 카드와 동일 원인, 신규 회귀 아님), (4) .ai-status 2개 파일(TEMPLATE 제외) 실제 표시, (5) git status/log/ahead-behind 실측 표시, (6) wiki:search 사용법 안내 + wiki/HOME.md 상대링크. npm run build 실행해 번들 해시 index-CSVjLjA9.js 520.89KB로 작업 전후 동일 확인(src/ 변경 0건). DEVELOPER_GUIDE.md/PROJECT_GUIDE.md append, PROJECT_BOARD.md DONE 카드 추가, handoff.md 최상단 세션 기록 추가. 위키 구축 세션에서 '대시보드는 운영자 명시 금지'로 기록됐던 이력을 확인했고, 이번은 운영자가 별도로 새로 명시 요청한 작업이라 모순이 아님을 DEVELOPER_GUIDE.md에 정직하게 남김.",
+  "blocker": null,
+  "next_action": "완료 — CTO/운영자 보고. 산출물 커밋/푸시 진행."
+}
