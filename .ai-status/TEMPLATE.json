@@ -1,0 +1,15 @@
+{
+  "agent_name": "",
+  "role": "",
+  "task_id": "",
+  "task": "",
+  "status": "idle",
+  "progress": 0,
+  "started_at": "",
+  "updated_at": "",
+  "files_owned": [],
+  "files_read": [],
+  "summary": "",
+  "blocker": null,
+  "next_action": ""
+}
