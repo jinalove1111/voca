@@ -20,7 +20,8 @@
     "verify:daily-study": "node tests/harness/runDailyStudy.mjs",
     "verify:word-assignment": "node tests/harness/runWordAssignment.mjs",
     "verify:audio-tts": "node tests/harness/runAudioTts.mjs",
-    "verify:all": "node tests/harness/runAll.mjs"
+    "verify:all": "node tests/harness/runAll.mjs",
+    "wiki:search": "node scripts/wikiSearch.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
