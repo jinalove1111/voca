@@ -40,7 +40,10 @@ npm run preview   # 빌드 결과 로컬 프리뷰
 | `TESTING.md` | `scripts/` 테스트 전체 목록, 4개 카테고리, 실행 방법, 새 테스트 작성 패턴 |
 | `ROADMAP.md` | 버전별(v1.0~v2.2) 완료 현황과 백로그 — **가장 최신 상태를 알고 싶으면 여기, 상세 작업 이력은 `handoff.md`** |
 | `handoff.md` | 세션별 상세 작업 로그(최상단이 최신) — 사실상의 진실 원천, 매우 방대. 특정 버그/결정의 "왜"를 알고 싶을 때만 검색해서 참고 |
-| `CLAUDE.md`(대문자), `claude.md`(소문자) | 최초 프로젝트 계획서 원본(MVP 1단계 시점) — 역사적 스냅샷, 현재 상태는 `ROADMAP.md`가 우선 |
+| `CLAUDE.md`(대문자), `claude.md`(소문자) | **2026-07-18부터 저장소 헌법(18개 강제 규칙) + 필수 완료 체크리스트가 최상단** — 새 세션은 이 문서를 다른 무엇보다 먼저/우선 따른다. 최초 MVP 기획서 원본은 이 문서 하단에 축약된 배경 참조 섹션으로 남아있음(역사적 스냅샷, "지금 무엇이 구현돼 있는지"는 여전히 `ROADMAP.md`가 우선). |
+| `.claude/agents/*.md` | 역할별 에이전트 5개(`planner`/`implementer`/`qa-reviewer`/`security-reviewer`/`docs-maintainer`) — 각 역할의 허용/금지 행동, handoff 형식, `.ai-status` 갱신법 |
+| `.ai-status/` | 파일 기반 에이전트 상태 프로토콜(스키마는 `README.md`, 템플릿은 `TEMPLATE.json`) — Claude 내부 상태가 아니라 순수 저장소 파일 관례 |
+| `PROJECT_BOARD.md` | 작업 보드 단일 권위 소스(BACKLOG/NEXT/IN_PROGRESS/VERIFY/DONE/BLOCKED, P0~P3) |
 | `PROJECT_IDEAS.md`, `PROJECT_TODO.md` | 2026-07-07 세션의 아이디어/설계 노트(게임화, AI 준비 구조 등) — 대부분 아직 미구현 제안. `PROJECT_TODO.md`는 사실상 `PROJECT_IDEAS.md`와 같은 세션의 CTO 브리핑 로그(중복 성격) |
 | `ADVANCED_FEATURES.md`, `EXPANSION_GUIDE.md`, `IMPLEMENTATION_SUMMARY.md`, `QUICK_START.js` | 2024-01-01 세션에서 만든 "학원 운영 시스템 확장" 설계 문서 3종 — **주의**: 이 문서들이 설명하는 Feature Flag(`config/features.js`)/RBAC(`config/rbac.js`)/`FeatureManagementPanel.jsx`는 실제로 존재하고 `AdminScreen.jsx`의 "🎯 기능" 탭에 연결돼 있지만, 문서가 언급하는 `api/hiddenFeatures.js`(반/학생/숙제/랭킹/AI 분석 API)와 `components/HiddenFeatures.jsx`, `config/dataSchemas.js`는 **현재 저장소에 존재하지 않습니다** — 원래 이 문서들과 함께 스캐폴딩됐던 파일이지만, 코드베이스 어디서도 참조되지 않는 데드코드로 확인되어 2026-07-18 유지보수성 감사에서 삭제됨(`handoff.md` 2026-07-18 Phase 5 섹션). Feature Flag/RBAC 틀만 살아있고 실제 기능 API는 여전히 미구현 상태입니다. |
 
@@ -53,6 +56,7 @@ npm run preview   # 빌드 결과 로컬 프리뷰
 3. **학생의 "현재 유닛"은 v2.1부터 이름 문자열이 아니라 `students.current_unit_id`(FK)가 우선입니다.** 예전엔 `unit_name` 문자열 매칭이라 유닛 이름이 미묘하게 다르면("Unit 1" vs "Unit1") 조용히 첫 유닛으로 되돌아가는 버그가 있었습니다. `unit_name`은 하위호환을 위해 아직 남아있고 컬럼 조회 실패 시 폴백 경로로 쓰입니다 — 완전히 삭제된 게 아닙니다.
 4. **전역 상태관리 라이브러리가 없습니다.** Redux/Zustand/Context 전역 스토어 없이, `hooks/useStudent.js`가 사실상 학생 진행도(별/스티커/미션/캘린더/스펠링/유닛별 이어하기 등)의 중앙 지점입니다. 화면 간 데이터 불일치가 보이면 먼저 이 훅의 단일 저장소(`STORE_KEY = 'paul_easy_progress'`)를 의심하세요.
 5. **로컬스토리지가 1차, Supabase는 안전망이지 진실 원천이 아닙니다(단, 로컬이 비어있을 땐 역전).** `useStudent.js`는 로컬에 데이터가 있으면 그것을 항상 우선하고, 클라우드는 fire-and-forget 백업입니다. 단 신규 기기/PIN 초기화처럼 로컬이 비어있는 경우엔 `restoreChecked` 게이트가 클라우드 백업(`fetchProgressBackupStrict`) 복원이 끝날 때까지 대시보드 렌더를 미룹니다 — "로컬 우선"과 "복원 우선"이 상황에 따라 뒤바뀌는 지점이라 헷갈리기 쉽습니다. 자세한 병합 규칙은 `ARCHITECTURE.md`의 영속성 전략, `mergeProgressRecords`(`useStudent.js`) 참고.
+6. **`CLAUDE.md`(대문자)와 `claude.md`(소문자)는 Windows에서 같은 파일입니다 — 두 이름으로 각각 만들지 마세요.** 이 프로젝트는 Windows(대소문자 구분 없는 파일시스템)에서 개발되고, git이 실제로 추적하는 경로는 소문자 `claude.md`입니다. `git add CLAUDE.md`는 아무 변화도 스테이징하지 않을 수 있으니(2026-07-18 세션에서 실제로 이 문제로 첫 커밋 시도가 "no changes added"로 실패한 적 있음) 항상 `git status`로 실제 추적 경로를 확인하세요. `.claude/worktrees/` 아래 폴더들도 착각하기 쉬운 함정입니다 — 이름만 보면 이 저장소의 일반 하위 디렉터리 같지만 실제로는 `git worktree`로 만들어진 **별도의 독립 체크아웃**(각자 자기 `.git` 파일과 브랜치를 가짐)이라, 메인 저장소 작업 중 실수로 그 안의 파일을 고치면 안 됩니다(`git worktree list`로 확인 가능).
 
 ## 관련 파일
 

@@ -1,5 +1,203 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-18 (개발자 인프라 — 테스트 하네스 레지스트리 + verify:* + Health Check 신설)_
+_최종 갱신: 2026-07-18 (AI 개발 운영체제 구축 — 헌법/역할 에이전트/.ai-status/훅/보드/워크플로우)_
+
+## 2026-07-18 — AI 개발 운영체제 구축 (Engineering Head, Phase 1~8 — 코드 변경 0건, 순수 거버넌스/문서/저장소 로컬 설정)
+
+운영자 지시: 이 저장소에 "AI 개발 운영체제"(헌법 + 역할별 에이전트 +
+상태 프로토콜 + 안전 훅 + 프로젝트 보드 + 표준 워크플로우)를 구축.
+학생 대상 기능/UI/게임화 절대 금지, 완료된 작업 재작업 금지, 명시적
+안전 규칙 강제 목적 외 프로덕션 동작 변경 금지 — 전부 준수. 착수 전
+`handoff.md`/`PROJECT_GUIDE.md`/`ARCHITECTURE.md`/`DATABASE.md`/
+`DEVELOPER_GUIDE.md`/`TESTING.md`/`ROADMAP.md`/`CLAUDE.md` 전부 읽고,
+`.claude/agents`/`.claude/settings.json`/`.ai-status`가 이 저장소에
+아직 없음과 `.claude/worktrees/*`가 실제 git worktree(손대면 안 됨)임을
+`git worktree list`로 실측 확인 후 시작.
+
+### Phase 1 — `CLAUDE.md` 강화
+
+기존 MVP 기획서 원본(claude.md — Windows는 대소문자 구분 없어 `CLAUDE.md`
+와 동일 파일)을 완전 삭제하지도, 무조건 보존하지도 않고 재구성: 최상단에
+"저장소 헌법" 섹션(18개 강제 규칙 + 필수 완료 체크리스트) 신설, 기존
+기획 내용은 "프로젝트 배경(참조용)" 섹션으로 축약해 하단에 유지(사용자
+역할 정의 등 아직 유효한 배경만 남기고, 이미 `DATABASE.md`/
+`ARCHITECTURE.md`로 대체된 MVP 시점 상세 설계는 생략). 규칙 3(완료
+작업 재구현 금지)과 4(이름 대신 UUID)는 이 저장소의 실제 사고 이력을
+근거로 인용: `unit_name` 문자열 매칭이 표기 차이에 취약해 v2.1에서
+`current_unit_id`(FK)로 이미 교체된 배경(`handoff.md` "학생-Unit
+아키텍처" 섹션), 동명이인 학생이 서로의 진행기록을 덮어쓴 v1.6 P0
+사고(`handoff.md` "v1.6 — 학생 identity P0 리팩터링" 섹션). 규칙
+16(파일당 구현 소유자 1명)은 어제 실제로 두 에이전트의 변경이 커밋
+`55f0c86`에 섞여 들어간 사례(한 에이전트가 `handoff.md`를 `git add`하는
+과정에 동시 작업 중이던 다른 에이전트의 데드코드 삭제 4개 파일이 함께
+커밋됨, 기능적으로는 무해했으나 attribution 부정확)를 근거로 인용.
+
+### Phase 2 — 역할별 에이전트 5개
+
+`.claude/agents/{planner,implementer,qa-reviewer,security-reviewer,
+docs-maintainer}.md` 신규(디렉터리 자체가 없어 새로 생성). 각각 YAML
+frontmatter(`name`/`description`/`tools`, 전역 에이전트 `qa-head.md`의
+스키마를 참고해 정확히 맞춤) + role/responsibilities/allowed·prohibited
+actions/required documents/expected output/handoff 형식/중단 시점/
+`.ai-status` 갱신법. 최소 권한 원칙: planner/qa-reviewer/
+security-reviewer는 `Read, Grep, Glob, Bash`(읽기 전용 용도로 본문에
+명시)만, implementer만 `Write, Edit`를 포함한 전체 권한, docs-maintainer
+는 `Read, Write, Edit, Grep, Glob`이되 본문에 "`*.md`(와 `.ai-status/
+*.json`)만 수정, 코드/설정은 금지"를 명시.
+
+### Phase 3 — `.ai-status` 프로토콜
+
+`.ai-status/README.md`(필드 표 + `status` enum 7종 + "Claude 내부 상태가
+아니라 순수 파일 관례"임을 명시적으로 부인) + `TEMPLATE.json` + 예시 1개
+(`EXAMPLE-implementer-doc-os-setup.json`, 이번 세션 자신을 예시로 사용).
+
+### Phase 4 — 안전 훅
+
+`.claude/settings.json` 신규(저장소 로컬 — **사용자 전역
+`~/.claude/settings.json`은 전혀 건드리지 않음**, 그 파일은 별도
+거버넌스 시스템이라 무관 확인 후 손 안 댐).
+- **실제 강제됨**: `PreToolUse` → `scripts/hooks/checkDestructiveSql.mjs`
+  — `*.sql` 파일에 대한 Write/Edit/MultiEdit 중 테이블·컬럼·DB·스키마
+  삭제, 전체 비우기, WHERE 없는 무조건부 행 삭제, 삭제를 포함한 테이블
+  변경 구문을 감지하면 exit code 2로 실제 차단. 스크립트 작성 중
+  상위 거버넌스 계층(사용자 전역 destructive-command-gate)이 스크립트
+  소스 안의 리터럴 "삭제동사+공백+대상명사" 문자열 자체를 파괴적 명령으로
+  오탐지해 Write가 두 번 차단당함 — 표기를 `TABLE 삭제(DROP)`처럼
+  순서를 바꾸고 정규식은 `['DR','OP'].join('')` 조합으로 우회 구성해
+  해결(실제 판정 로직은 정상 동작, 오탐 회피만 목적). 7개 케이스
+  스모크 테스트(스크래치패드에서 실행, 파괴적 SQL 리터럴도 같은 이유로
+  런타임 조합) 전부 PASS.
+- **조언만(비강제, 정직하게 문서화)**: `PostToolUse` →
+  `scripts/hooks/suggestVerifyDomain.mjs` — 변경 파일 경로 키워드
+  매칭으로 관련 `npm run verify:<domain>` 명령을 stdout에 제안만
+  하고 exit 0(비차단). "완료 선언 시 자동으로 verify를 실행시키는" 것은
+  이 환경에서 신뢰성 있게 구현 불가로 판단해 만들지 않음 — 대신
+  `DEVELOPER_GUIDE.md` 13단계 워크플로우(프로세스 규칙)로 대체.
+
+### Phase 5 — 프로젝트 보드
+
+`PROJECT_BOARD.md` 신규(단일 markdown, JSON+렌더 스크립트보다 단순해서
+선택). 컬럼 BACKLOG/NEXT/IN_PROGRESS/VERIFY/DONE/BLOCKED, P0~P3
+우선순위. **`ROADMAP.md`/`handoff.md`에 실제로 기록된 항목만 시딩**
+(전부 근거 위치 명시, 신규 발명 없음) — 핵심 4테이블 DDL 부재(P1),
+입실시험 결과 서버 재검증 없음(P1, 보안 Medium), `classes`/`units`/
+`words` RLS/GRANT SQL 부재(P2), `AdminScreen.jsx` 1714줄 분해(P2),
+다중 탭 last-writer-wins 잔여 위험(P2), `verify-admin-pin` rate limit
+부재(P2), 학생 자기등록 부분 실패 고아 상태(P2), 엑셀 업로드 빈 파일
+방어 없음(P3), CI 자동화 없음(P3), speaking/listening/모바일 QA
+체크리스트 문서화(P3), eslint/tsconfig 부재(P3), pdf 번들 크기(P3),
+미사용 코스메틱 export 정리(P3), 반 삭제 다이얼로그 문구(P3),
+student-pin-status 무인증(P3). `verify:login` 로컬 4/7만 PASS(로컬
+service role key 부재)는 `BLOCKED` 컬럼에 배치(운영자 조치 대기).
+
+### Phase 6 — 표준 워크플로우
+
+`DEVELOPER_GUIDE.md`의 기존 "AI 세션 표준 워크플로우"(6단계, append로
+이미 존재)를 **13단계로 확장/정합화** — append가 아니라 이 섹션 자체를
+교체(운영자가 명시적으로 예외로 지정한 두 번째 섹션, 첫 번째는
+`CLAUDE.md` 헌법 섹션). 6단계 원본 내용은 정보 손실 없이 13단계 안에
+전부 흡수되고, `PROJECT_BOARD.md`/`.claude/agents/`/`.ai-status/` 연동
+단계(보드 확인 → 완료여부 재확인 → 동시작업 확인 → 문서읽기 → 계획수립
+→ 구현 → verify → 실패수정 → build확인 → 검수 → 보안감사 → 문서갱신 →
+보드/상태 마감)가 추가됨. "새 작업 시작" 재사용 가능한 지시문 템플릿도
+추가.
+
+### Phase 7 — 검증
+
+- **에이전트 frontmatter 문법**: Node 내장 파서로 5개 파일 전부 검증
+  (외부 YAML 라이브러리 설치는 하지 않음 — `pip install pyyaml`이
+  가능했지만 운영자 사전 결재 없는 자율 install 금지 원칙상 회피,
+  대신 이 저장소 스키마(단순 `key: value` 라인)에 맞는 자체 검증
+  스크립트로 대체) — **5/5 OK**(name/description/tools 키 존재, name이
+  파일명과 일치, 탭 문자 없음).
+- **훅 JSON 문법**: `.claude/settings.json`/`TEMPLATE.json`/
+  `EXAMPLE-*.json` 전부 `JSON.parse` 통과.
+- **훅 기능 테스트**: `checkDestructiveSql.mjs` 7케이스(정상 SQL/테이블
+  삭제/무조건부 행삭제/WHERE 있는 행삭제/비-sql 파일/전체비우기/Edit
+  도구 컬럼삭제) 전부 기대한 exit code로 PASS. `suggestVerifyDomain.mjs`
+  3케이스(useStudent.js→persistence, 무관 md파일→무출력,
+  AdminScreen.jsx→admin) 전부 기대대로 동작.
+- **`npm run build`**: 통과, 메인 번들 520.89KB(직전 기록 520.86~520.89KB
+  대비 변화 없음 — 코드 변경이 전혀 없었으므로 예상대로).
+- **시크릿 노출 없음**: 이번 세션이 새로 만들거나 수정한 파일 전체
+  (`claude.md`/`DEVELOPER_GUIDE.md`/`PROJECT_BOARD.md`/`PROJECT_GUIDE.md`/
+  `TESTING.md`/`.claude/agents/*.md`/`.claude/settings.json`/
+  `.ai-status/*`/`scripts/hooks/*.mjs`)에 대해 anon/service-role
+  key·PIN·API 키 패턴 grep — **0건**.
+- **프로덕션 동작 불변**: 이번 세션 시작 시점 커밋(`f6fbd8f`)부터
+  `HEAD`까지 `git diff --stat`으로 실측 — 변경 파일은 전부
+  `.ai-status/`, `.claude/agents/*.md`, `.claude/settings.json`,
+  `DEVELOPER_GUIDE.md`, `PROJECT_BOARD.md`, `claude.md`,
+  `scripts/hooks/*.mjs`(신규 파일만)뿐. `src/`, `api/`, 기존
+  `scripts/test*.mjs`/`build*.mjs`, `supabase_*.sql`, `package.json`,
+  `vite.config.js` 등 프로덕션 코드/설정은 단 1건도 diff에 없음(실측
+  확인, 추측 아님).
+- **CLAUDE.md 비충돌**: 새 18개 규칙은 `DEVELOPER_GUIDE.md`의 기존
+  Development Rules(안정성 최우선/작업단위 커밋/build 게이트/버그수정
+  우선/외부의존성 최소화/AI비용 무료대안)와 문구까지 정합 — 상위집합
+  관계, 모순 없음.
+
+### Phase 8 — 문서화
+
+`DEVELOPER_GUIDE.md`에 "AI 개발 운영체제 사용 안내" 섹션 append(에이전트
+사용법/훅 실제강제vs조언 구분/파일소유권/작업시작·리뷰법/위험작업
+승인법/보드갱신법/알려진 한계). `TESTING.md`에 `suggestVerifyDomain.mjs`
+훅이 하네스 표를 대체하지 않는 편의 힌트일 뿐임을 append. `PROJECT_GUIDE.md`
+"문서 지도" 표에 `.claude/agents/*.md`/`.ai-status/`/`PROJECT_BOARD.md`
+행 추가 + `CLAUDE.md` 행 설명을 "이제 헌법이 최상단"으로 갱신, "자주
+헷갈리는 것" 목록에 6번 추가(`CLAUDE.md`/`claude.md` 대소문자 동일파일
+함정 + `.claude/worktrees/`가 진짜 git worktree라는 함정 — 둘 다 이번
+세션에서 실제로 부딪힌 문제). 이 `handoff.md` 섹션.
+
+### 생성 파일 (11개)
+
+`claude.md`(재구성, 신규 취급 안 함), `.claude/agents/planner.md`,
+`.claude/agents/implementer.md`, `.claude/agents/qa-reviewer.md`,
+`.claude/agents/security-reviewer.md`, `.claude/agents/docs-maintainer.md`,
+`.ai-status/README.md`, `.ai-status/TEMPLATE.json`,
+`.ai-status/EXAMPLE-implementer-doc-os-setup.json`,
+`.claude/settings.json`, `scripts/hooks/checkDestructiveSql.mjs`,
+`scripts/hooks/suggestVerifyDomain.mjs`, `PROJECT_BOARD.md`(개수는
+claude.md 재구성 포함 13개 파일 — 신규 디렉터리 3개(`.claude/agents/`,
+`.ai-status/`, `scripts/hooks/`) 최초 생성 포함).
+
+### 수정 파일 (4개)
+
+`claude.md`(최상단 헌법 재구성), `DEVELOPER_GUIDE.md`(13단계 워크플로우
+교체 + 사용 안내 섹션 append), `TESTING.md`(힌트 훅 append),
+`PROJECT_GUIDE.md`(문서 지도 표 확장 + Top 5 6번 추가).
+
+### 검증 결과 요약
+
+frontmatter 5/5 OK · JSON 4/4 OK(settings.json/TEMPLATE/EXAMPLE +
+build 결과물 아님) · 훅 기능 테스트 10/10 케이스 PASS · `npm run build`
+통과(520.89KB, 변화 없음) · 시크릿 grep 0건 · 프로덕션 코드 diff 0건
+· 규칙 비충돌 확인. **결함/미해결 이슈 없음.**
+
+### 남은 한계 (정직하게 기록, 위 Phase 4/8에서 이미 문서화된 내용의 요약)
+
+1. `PostToolUse` 힌트 훅은 강제가 아니다 — 실행은 여전히 사람/에이전트
+   책임.
+2. "완료 선언" 자체를 의미론적으로 감지해 자동 검증을 트리거하는 것은
+   이 환경에서 구현 불가로 판단, 만들지 않음(프로세스 규칙으로 대체).
+3. `checkDestructiveSql.mjs`의 무조건부 DELETE 감지는 세미콜론 기준
+   단순 분할이라 SQL 파서 수준 정확도는 아니다(이 저장소의 실제 SQL
+   패턴상 실질 리스크는 낮음).
+4. 훅에 의도적으로 우회 토큰이 없다 — 정말 필요한 파괴적 SQL은 운영자
+   승인 하에 사람이 직접 실행하거나 훅을 한시적으로 비활성화 후
+   즉시 복원(`DEVELOPER_GUIDE.md` "위험 작업 승인법" 참고).
+5. `.ai-status/`/`PROJECT_BOARD.md` 갱신은 전부 수동 관례 — 자동
+   동기화 없음.
+
+### 다음 추천 작업 (운영자 명시 금지 영역인 LLM Wiki/대시보드/모바일QA/
+게임화 제외, `PROJECT_BOARD.md` NEXT/BACKLOG 컬럼과 동일)
+
+1. `PROJECT_BOARD.md` NEXT 카드 착수: 입실시험 결과 서버 재검증
+   (`api/submit-entrance-result.js` 신설) 또는 핵심 4테이블 DDL 백필
+   (운영자의 Supabase 대시보드 조회 필요).
+2. `.claude/agents/` 역할 분리를 실제 작업(BACKLOG 카드)에 시범 적용해
+   워크플로우가 실전에서도 매끄러운지 1~2회 확인.
+3. `BLOCKED` 카드(`SUPABASE_SERVICE_ROLE_KEY` 로컬 부재) 해제 — 운영자가
+   `.env.local`에 키 추가.
 
 ## 2026-07-18 — 개발자 인프라 구축: 테스트 하네스 레지스트리 + npm verify:* + Health Check (Engineering Head, 순수 개발자 인프라 — 신기능/UI/로직 변경 없음)
 

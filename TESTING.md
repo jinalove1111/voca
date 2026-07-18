@@ -147,3 +147,18 @@ npm run verify:audio-tts        npm run verify:all        (전체 순차, 하나
 | 영속성 | persistence | PASS | 진행도 항목과 동일(위 참고) |
 
 **요약**: 13항목 중 완전 PASS 8개(학생/숙제/유닛/퀴즈/쓰기/진행도/관리자/영속성), 부분 2개(로그인 — 스크립트는 다 있으나 로컬 `SUPABASE_SERVICE_ROLE_KEY` 미설정으로 4/7만 실행; 새로고침 — 간접 커버만), SKIP 2개(말하기/듣기, headless 구조적 한계), GAP 1개(모바일 — 하네스 대상 밖, 기존에도 실기기 수동 QA 영역). 가짜 PASS 없음 — 전부 실측 결과 그대로 기록.
+
+---
+
+## 관련 항목: `verify:xxx` 실행 힌트 훅 (2026-07-18, AI 개발 운영체제 구축 세션)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+`.claude/settings.json`(저장소 로컬)의 `PostToolUse` 훅
+(`scripts/hooks/suggestVerifyDomain.mjs`)이 `src/`/`api/`/`scripts/`
+파일 변경 시 관련 있을 법한 `npm run verify:<domain>` 명령을 파일 경로
+키워드 매칭으로 제안한다. **이 하네스 문서가 원본이고 그 훅은 이 표를
+사람이 매번 대조하는 수고를 줄여주는 편의 힌트일 뿐** — 실행 자체는
+여전히 사람/에이전트가 수동으로 한다(강제 실행 아님, 상세 근거는
+`DEVELOPER_GUIDE.md`의 "AI 개발 운영체제 사용 안내" 참고). 매핑이
+없는 파일은 조용히 아무 것도 출력하지 않는다.

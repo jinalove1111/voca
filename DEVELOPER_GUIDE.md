@@ -223,3 +223,109 @@ IN_PROGRESS로 옮긴 뒤, CLAUDE.md 18개 규칙 + DEVELOPER_GUIDE.md의
 | 헷갈리기 쉬운 새 함정 발견 | `PROJECT_GUIDE.md`("자주 헷갈리는 것" 목록에 append, Top 5 번호를 새로 매기지 않고 6번부터 이어감) | |
 
 세션 종료 시 `handoff.md` 최상단에 한 섹션 추가(기존 세션들 위에, 아래로 밀어내지 않고 새로 삽입)하는 것이 이 저장소의 표준 마감 절차 — 위 표의 각 문서 갱신도 이 handoff 기록에서 링크/요약된다.
+
+---
+
+## AI 개발 운영체제 사용 안내
+
+_추가: 2026-07-18(AI 개발 운영체제 구축 세션, Phase 8). `CLAUDE.md`(18개
+규칙) + `.claude/agents/*.md`(역할 5개) + `.ai-status/` + `.claude/
+settings.json`(훅) + `PROJECT_BOARD.md`를 실제로 어떻게 쓰는지에 대한
+요약. 각 구성요소의 상세는 해당 파일 자체가 원본이고, 여기는 진입점
+역할만 한다._
+
+### 에이전트 사용법
+
+`.claude/agents/{planner,implementer,qa-reviewer,security-reviewer,
+docs-maintainer}.md` 5개는 역할 정의 문서다. 1인 조직 운영 특성상 한
+세션이 여러 역할을 순서대로 겸해도 되고(예: 조사→구현→자체검수를 한
+세션이 순차 수행), 위험도가 높은 작업(DB/보안 관련)만 역할을 분리해
+독립 세션으로 교차검증하는 것을 권장한다(`qa-reviewer.md`가 명시하듯
+"자기 자신이 만든 코드를 스스로 PASS 판정하지 않는다"는 원칙은 최소한
+보안/DB 변경에는 지킬 것). 각 역할 문서의 "허용 행동"/"금지 행동"/
+"중단 시점" 섹션이 그 역할의 실제 경계다.
+
+### 훅 동작 방식 — 실제 강제 vs 조언
+
+- **실제로 강제됨**: `.claude/settings.json`의 `PreToolUse` 훅
+  (`scripts/hooks/checkDestructiveSql.mjs`)은 `*.sql` 파일에 테이블·
+  컬럼·데이터베이스·스키마 삭제, 전체 비우기, WHERE 절 없는 무조건부
+  행 삭제, 삭제를 포함한 테이블 변경 구문을 쓰려는 Write/Edit/MultiEdit
+  호출을 실제로 **차단**한다(exit code 2, 7개 케이스 스모크 테스트로
+  검증됨). 이건 이 환경에서 실제로 관찰되는 PreToolUse 차단 계약(exit
+  code 2 + stderr → Claude에게 사유 피드백)에 기반한다.
+- **조언만 함(비강제)**: `PostToolUse` 훅(`scripts/hooks/
+  suggestVerifyDomain.mjs`)은 `src/api/scripts` 파일이 바뀌면 관련
+  `npm run verify:<domain>` 명령을 stdout에 제안하지만, 이미 끝난 도구
+  호출에 대한 사후 힌트라 실행을 강제하지 않는다. **"완료 선언 시
+  자동으로 verify를 실행시키는" 것은 이 환경에서 신뢰성 있게 구현할
+  방법이 없어 만들지 않았다** — 그 대신 `DEVELOPER_GUIDE.md`의 13단계
+  워크플로우(7번 단계)가 프로세스 규칙으로 이 역할을 대신한다. 배포 전
+  수동 확인, 유료 API 활성화 승인 등도 마찬가지로 훅이 아니라 프로세스
+  규칙(아래 "위험 작업 승인법")으로만 강제된다.
+
+### 파일 소유권
+
+`CLAUDE.md` 규칙 16 — 파일당 실제 구현 소유자는 한 세션만. 작업 시작
+전 `git log`/`git status`로 동시 작업 흔적을 확인하고, `.ai-status/`의
+다른 활성 상태 파일(`status: working`/`reviewing`)이 겹치는 파일을
+다루고 있지 않은지 확인한다. 커밋 시 `git diff --staged`로 자신이
+의도한 파일만 스테이징됐는지 항상 재확인할 것(`55f0c86` 커밋
+attribution 혼선 사고가 실제 근거).
+
+### 작업 시작법 / 리뷰법
+
+`DEVELOPER_GUIDE.md`의 "AI 세션 표준 워크플로우" 13단계 + "새 작업 시작"
+지시문 템플릿을 그대로 쓴다. 리뷰(검수)는 `qa-reviewer.md`(build/verify
+재실행 + Code Review Checklist 대조, evidence 기반 PASS/NEEDS-WORK
+판정)와, 인증/DB 권한/클라이언트 신뢰 경계를 건드렸다면
+`security-reviewer.md`(Security Checklist 대조 + anon key 읽기 전용
+실측)를 추가로 거친다.
+
+### 위험 작업 승인법
+
+- **DDL 실행**: 에이전트는 Supabase에 DDL을 직접 실행할 수 없다(규칙
+  8) — `supabase_v{n}_*.sql` 파일만 준비하고, 운영자가 Supabase
+  대시보드 SQL Editor에서 수동 실행한다.
+- **파괴적 SQL 파일 작성 자체**: `checkDestructiveSql.mjs`가 차단한다.
+  이 훅에는 우회 토큰/바이패스 메커니즘이 의도적으로 없다 — 정말 필요한
+  파괴적 변경(예: 완전히 폐기된 컬럼 정리)이 있으면, 운영자가 그 필요성
+  을 직접 확인한 뒤 (a) 그 변경만 별도로 사람이 직접 SQL Editor에서
+  실행하거나, (b) 운영자 명시 승인 하에 한시적으로 `.claude/
+  settings.json`의 해당 훅 항목을 주석 처리/삭제했다가 작업 후 즉시
+  복원한다 — 두 경우 모두 `handoff.md`에 승인자/사유/원복 여부를 반드시
+  기록한다. 에이전트가 임의로 이 훅을 약화시키는 것은 금지.
+- **유료 API 활성화**: 이 저장소에 자동 승인 게이트는 없다(만들지
+  않음, 정직한 한계) — `CLAUDE.md` 규칙 7과 `ROADMAP.md`의 v1.3 백로그
+  원칙("비용 발생 기능은 무료 대안을 먼저 찾고, 없을 때만 검토")을
+  프로세스로 지킨다. 실제 활성화 전 운영자의 명시적 텍스트 승인을 받고
+  그 사실을 handoff.md에 남긴다.
+
+### 보드 갱신법
+
+`PROJECT_BOARD.md`는 "현재 상태" 스냅샷이라 append 원칙의 예외로
+직접 덮어써서(카드를 다른 컬럼으로 이동) 갱신한다. 카드를 옮길 때마다
+그 근거(어떤 커밋/verify 결과로 완료됐는지)를 카드 설명에 남기고,
+`.ai-status/`도 함께 갱신한다.
+
+### 알려진 한계 (정직하게 기록)
+
+- 훅은 파일 시스템 이벤트(Write/Edit/MultiEdit) 기준으로만 동작한다 —
+  에이전트가 텍스트로만 "완료했다"고 선언하는 것을 의미론적으로
+  검증/차단하는 장치는 없다(이 환경에서 신뢰성 있게 불가능 — 거짓으로
+  구현했다고 하지 않는다).
+  `checkDestructiveSql.mjs`의 무조건부 DELETE 감지는 세미콜론 기준
+  단순 분할 휴리스틱이라, 문자열 리터럴 안에 세미콜론이 들어있는 등
+  희귀한 SQL 형태에서는 오탐/미탐 가능성이 이론상 있다(이 저장소의
+  실제 `supabase_*.sql` 11개는 전부 단순 DDL/GRANT 위주라 실질적
+  리스크는 낮음).
+- `PostToolUse` 훅의 제안은 파일 경로 키워드 매칭 휴리스틱이라 모든
+  도메인 매핑을 커버하지 않는다(`scripts/hooks/suggestVerifyDomain.mjs`
+  의 `HINTS` 목록 참고) — 매칭되지 않으면 조용히 아무 것도 출력하지
+  않는다(안전한 실패, 하지만 완전한 커버리지는 아님).
+- `.ai-status/`는 아무도 강제로 갱신시키지 않는다 — 에이전트가 자기
+  역할 문서의 지시를 따르지 않으면 상태 파일이 stale로 남을 수 있다
+  (파일 기반 관례의 근본적 한계, 자동 강제 아님을 `.ai-status/README.md`
+  에 명시).
+- `PROJECT_BOARD.md` 카드 이동은 수동이다 — verify 통과가 자동으로
+  카드를 `VERIFY`→`DONE`으로 옮겨주지 않는다.
