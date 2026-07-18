@@ -164,6 +164,17 @@ Lv.20 마법모자 → Lv.30+1000별뱃지 왕관모자)가 이 원칙의 구현
 컬럼, 레벨의 100% 파생값, 병합은 기존 `maxNum` 재사용) 제안 —
 `GAME_DESIGN.md` 3번 섹션.
 
+> **최소 갱신(2026-07-19, Engineering Head)**: 위 표기("⚠️ DESIGN
+> DIRECTION — 미구현")는 **여전히 유효합니다** — 모자 시각/애니메이션은
+> 이 세션에서도 구현하지 않았습니다. 다만 계산 로직 자체(Rank 판정/Hat
+> Stage 5단계/다음 단계까지 진행률)는 이제 실제로 존재하고 테스트로
+> 검증됩니다(`src/utils/paulRankShared.js`, `scripts/testPaulRank.mjs`)
+> — 저장 방식도 원문 제안(`student_progress.hat_stage` 컬럼)과 달리
+> 저장 컬럼 없이 매번 파생 계산하는 방식으로 구현됐습니다. 정확성을
+> 위한 최소 정정이며, 원문 문단은 수정하지 않고 그대로 둡니다. 상세는
+> `GAME_DESIGN.md` "3.x 구현 갱신" 항목과 `handoff.md`
+> 2026-07-19(2차) 참고.
+
 <a id="sec-9"></a>
 ## 9. Ticket Economy
 

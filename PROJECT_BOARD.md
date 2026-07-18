@@ -211,6 +211,24 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
   발표(16.2), 8번(House) 착수 시 최소인원 배정+시즌 재조정 규칙
   명문화(16.5) 반영 권장. 전부 설계 단계 제안이며 착수는 여전히
   운영자 승인 후.
+- **1단계 구현 완료(2026-07-19, "Paul Rank System 기반" 운영자 지시,
+  Engineering Head)** — 위 하위 카드 중 **2번(XP 표준화)과 4번(Hat
+  Evolution)의 계산/설정 아키텍처만** 구현됨(실제 시각/미니게임/티켓/
+  Word King/House는 여전히 미구현, 아래 항목 계속 BACKLOG):
+  - 2번은 원문 계획(`total_xp` 재사용)과 다르게 구현됨 — 운영자가 "별을
+    조용히 XP로 변환하지 말라"고 명시 지시해 원문 전제가 정정됨. XP는
+    독립 원장(`xp_ledger`, 신규 SQL `supabase_v2_3_paul_rank.sql`, 운영자
+    실행 대기)에 서버(`api/grant-xp.js`)만 쓴다. 상세는 `GAME_DESIGN.md`
+    "3.x 구현 갱신" 항목과 `wiki/decisions.md` 항목 9.
+  - 4번(Hat Evolution)도 원문 계획(`student_progress.hat_stage` 사본
+    컬럼)과 다르게 구현 — 컬럼을 두지 않고 `computeRankState(xp)` 순수
+    함수로 매번 파생 계산(`src/utils/paulRankShared.js`).
+  - **1번(Anti-cheat 선행, `api/submit-entrance-result.js`)은 여전히
+    미구현** — 이번 카드는 Word King에 착수하지 않았으므로 이 선행조건이
+    막는 대상이 아직 없다(그대로 BACKLOG 유지, 7번 착수 전 필수).
+  - 3번(Teacher Controls 마스터 스위치)도 미구현 — 이번 세션 범위 아님.
+  - 신규 관련 문서: `TESTING.md`(`testPaulRank.mjs`/`testXpLedgerDb.mjs`),
+    `DATABASE.md`(`xp_ledger`/`xp_totals`), `handoff.md` 2026-07-19 항목.
 
 ---
 

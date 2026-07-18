@@ -169,6 +169,49 @@ level = 기존 STAR_BADGES 곡선을 확장한 XP 임계값 테이블에서
 - SQL 미실행 상태에서도 앱이 깨지지 않아야 한다(CLAUDE.md 규칙 9) —
   컬럼 부재 시 `hatStage=0`(기본 모자, 지금과 동일한 화면) 폴백.
 
+<a id="sec-3-impl"></a>
+### 3.x 구현 갱신(2026-07-19, Engineering Head — "Paul Rank System 기반" 세션)
+
+_이 항목은 append입니다 — 위 1~3번 섹션 원문은 전혀 수정하지 않았습니다.
+운영자가 이번 세션에서 위 설계안(총 별=`total_xp` 그대로 재사용) 대비
+**명시적으로 다른 지시**("별을 조용히 XP로 변환하지 말라")를 내려, 실제
+구현은 아래처럼 위 설계 초안과 다른 방향으로 진행됐습니다 — 이 문서는
+설계 "역사"를 보존하기 위해 원문을 그대로 두고, 실제로 무엇이 왜 다르게
+구현됐는지만 덧붙입니다._
+
+- **기반(계산 로직 + 설정 아키텍처) 구현 완료.** 실제 게임/Word King/
+  House/티켓/미니게임/시각·애니메이션은 여전히 미구현 — 이 섹션들
+  (§4~11)은 여전히 "⚠️ DESIGN DIRECTION"입니다(아래 표 참고).
+- **원문과 달라진 핵심 판단**: §1~2 원문은 "새 XP 소스를 만들지 않고
+  `total_xp`(=`totalStars` 사본)를 그대로 재사용"을 전제했지만, 운영자의
+  이번 지시가 이 전제를 정정했습니다 — XP는 `totalStars`의 산술 파생값이
+  아니라, **`addStars()` 호출 4곳(레벨업 미션 클리어/오늘의 미션 4/4
+  보너스/중복 스티커 환전/쓰기시험 콤보)을 트리거로 재사용하되, 완전히
+  독립된 감사 가능한 원장(`xp_ledger`)에 별도로 누적**됩니다. "같은 학습
+  신호를 재사용하되 별 총합에서 산수로 뽑아내지 않는다"는 원칙 — 판단
+  근거 전문은 `src/utils/paulRankShared.js` 헤더 주석과
+  `wiki/decisions.md` 항목 9 참고.
+- **실제 구현 파일**: `src/utils/paulRankShared.js`(RANKS/HAT_STAGES/
+  EXPERIENCE_UNLOCKS/XP_EVENT_TABLE 설정 + `computeRankState()` 등 순수
+  함수, 브라우저·서버 공유), `api/grant-xp.js`(유일한 쓰기 경로,
+  service_role, 클라이언트 amount 불신), `supabase_v2_3_paul_rank.sql`
+  (`xp_ledger` + `xp_totals` 뷰), `src/hooks/usePaulRank.js`(조회 훅),
+  `src/hooks/useStudent.js`(addStars 4곳에 XP 이벤트 트리거 병행),
+  `src/components/Dashboard.jsx`/`AdminScreen.jsx`(텍스트 전용 최소 표시).
+- **§3 Hat Evolution 원문과의 차이**: 원문은 `student_progress.hat_stage`
+  컬럼(레벨의 파생값, `maxNum` 병합)을 제안했지만, 실제 구현은 저장
+  컬럼을 두지 않고 **매 조회 시 `computeRankState(xp)`로 다시 계산**합니다
+  (`xp_totals` 뷰도 저장이 아니라 파생 집계) — "저장된 중복값보다
+  파생값을 우선한다"는 이번 지시가 원문의 "사본 컬럼" 전략보다 우선
+  적용된 결과입니다.
+- **여전히 미구현(⚠️ DESIGN DIRECTION 유지)**: 모자 시각/애니메이션,
+  Ticket Economy(§4), Word King(§5), House(§6), Daily Missions 확장(§7의
+  "추가 선택 목표" 부분 — 4/4 후킹 자체도 없음, 순수 XP 지급만 추가됨),
+  Weekly Events(§8), Seasonal(§9), Rewards 상점(§10), Word King
+  Anti-cheat(§11), 경험 언락(§Hat 관련)이 실제로 무언가를 잠그거나 여는
+  동작 — 전부 설정 스키마만 존재(`EXPERIENCE_UNLOCKS`, 전부
+  `status:'planned'`, 아무 코드도 아직 읽지 않음).
+
 <a id="sec-4"></a>
 ## 4. Ticket Economy
 

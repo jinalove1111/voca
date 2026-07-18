@@ -96,7 +96,31 @@ _이 저장소가 실제로 내린 설계 결정과 그 근거를 `handoff.md`/`
   `@anthropic-ai/sdk` 실사용처는 이 원칙의 예외가 아니라 "무료 대안이
   없는 다른 기능"에 한정 적용된 사례 — 상세는 해당 페이지 참고.)
 
+## 9. Paul Rank System의 XP를 `totalStars`의 파생값이 아닌 독립 원장으로 설계
+
+- **무엇을**: 신규 `xp_ledger` 테이블(학생별+이벤트별 `unique` 제약)에
+  기존 별 지급 트리거(`useStudent.js`의 `addStars()` 호출 4곳)를
+  재사용해 XP를 별도로 누적. 이미 존재하던
+  `student_progress.total_xp`(=`totalStars` 사본, `wordLibrary.js`의
+  `syncStudentProgress`가 매 동기화마다 덮어씀)는 그대로 두고 전혀
+  참조하지 않음 — 완전히 새로운 독립 축.
+- **왜**: 운영자가 "별을 조용히 XP로 변환하지 말라"고 명시 지시 — 어제
+  세션(`GAME_DESIGN.md`)이 "이미 `total_xp`가 별 사본으로 존재하니
+  재사용하자"고 제안했던 전제를 정정하는 지시로 판단했다. XP를
+  `totalStars * N` 같은 산술 파생값으로 만들면 "재사용"이 아니라
+  "미러링"이 되어, XP가 별과 별개의 감사 가능한 신호라는 원장의 존재
+  이유 자체가 무의미해진다. 대신 "같은 학습 이벤트를 트리거로 재사용
+  하되 원장에는 독립적으로 기록"하는 절충으로, 별 시스템을 건드리지
+  않으면서도(기존 111명 데이터/로직 100% 보존) XP가 진짜 감사 가능한
+  이벤트 기록이 되게 했다. 중복 지급 방지도 이 원장의 `unique` 제약
+  하나로 해결(클라이언트가 직접 쓰지 않고 `api/grant-xp.js`만 씀 —
+  PIN 신뢰 경계 원칙의 일반화).
+- **언제**: v2.3(2026-07-19), Engineering Head. 근거:
+  `src/utils/paulRankShared.js` 헤더, `supabase_v2_3_paul_rank.sql`
+  "백필 판단" 절, `handoff.md` 2026-07-19(2차) 섹션.
+
 ## 관련 파일
 
 `C:\voca\ROADMAP.md`, `C:\voca\handoff.md`, `C:\voca\CLAUDE.md`,
-`C:\voca\DATABASE.md`
+`C:\voca\DATABASE.md`, `C:\voca\src\utils\paulRankShared.js`,
+`C:\voca\supabase_v2_3_paul_rank.sql`

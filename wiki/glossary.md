@@ -36,6 +36,33 @@ _이 저장소 전용 용어를 코드/`DATABASE.md`에서 추출해 1줄씩 정
   오답을 교사가 검토해 `accepted_meanings`에 반영할지 결정하는 큐.
 - **`progress_data`** — `student_progress`의 jsonb 컬럼. `useStudent.js`
   record(별/스티커/미션/캘린더 등 진행도 전체)를 통째로 백업.
+- **`xp_ledger`** — Paul Rank System(v2.3, 2026-07-19) XP 지급 원장.
+  `student_id`+`source_event_id` unique 제약이 중복 지급 방지
+  메커니즘. anon read-only, 쓰기는 `api/grant-xp.js`(service_role)만.
+  `total_xp`(레거시, `totalStars` 사본)와 무관한 완전히 별도의 값.
+- **`xp_totals`** — `xp_ledger`를 학생별 `sum(amount)`로 집계한 VIEW
+  (저장 컬럼 아님, 매 조회 재계산 — "파생값 우선" 원칙의 실례).
+
+## Paul Rank System(v2.3, 2026-07-19) 개념
+
+- **Rank(모자 색)** — 메이저 축. 누적 XP 임계값으로 결정되는 5단계
+  (새싹모자/비니/탐험모자/마법모자/왕관모자, `RANKS` 배열,
+  `src/utils/paulRankShared.js`).
+- **Hat Stage(모자 크기)** — 현재 Rank 안에서 다음 Rank까지의 진행률을
+  나타내는 5단계(Tiny 0.88/Small 0.94/Growing 1.00/Big 1.07/Max 1.14,
+  `HAT_STAGES` 배열). 모자 색과 별개 축 — 색은 "어느 Rank인지", 크기는
+  "그 Rank 안에서 얼마나 왔는지".
+- **`computeRankState(xp)`** — Rank/Hat Stage/다음 단계까지 진행률을
+  전부 계산하는 단일 순수 함수(입력은 xp 숫자 하나뿐 — Unit/반 등
+  어떤 것도 입력에 없음, 그래서 Unit 전환이 Rank에 영향을 줄 수 없다는
+  게 시그니처 자체로 보장됨).
+- **경험 언락(Experience Unlock)** — `EXPERIENCE_UNLOCKS` 설정.
+  Hat Stage별로 미래에 무엇이 열릴지의 매핑(forward-compatible 스키마).
+  지금은 Tiny(핵심 학습)만 `status:'active'`이고 나머지 4단계는 전부
+  `status:'planned'`(실제로 아무 기능도 이 설정을 소비하지 않음).
+- **`XP_EVENT_TABLE`** — 서버(`api/grant-xp.js`)가 신뢰하는 유일한 XP
+  금액 원천. 클라이언트는 이벤트 종류만 알리고, 금액은 항상 이
+  테이블에서 서버가 조회(클라이언트가 보낸 amount는 절대 읽지 않음).
 
 ## 코드 개념/함수
 

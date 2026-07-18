@@ -1,5 +1,81 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-19 (제품 비전 문서 3종 + GAME_DESIGN.md 리뷰 — Engineering Head)_
+_최종 갱신: 2026-07-19 (Paul Rank System 기반 구현 — Engineering Head, 첫 실제 코드 세션)_
+
+## 2026-07-19 (2차) — Paul Rank System 기반(Word King 이전 단계) — XP/모자5단계/언락 아키텍처 구현 — Engineering Head
+
+운영자 지시: `GAME_DESIGN.md`/`PAUL_BIBLE.md` §8(Hat System, "DESIGN
+DIRECTION" 표기 문서)의 계산 로직/설정 아키텍처만 실제 구현. 어제까지의
+순수 문서 세션(위 항목) 이후 **첫 실제 코드 변경**. Word King/House/
+티켓/미니게임/모자 시각·애니메이션은 전부 이번 범위 밖(그대로 미구현).
+
+- **가장 중요한 판단 — "별을 조용히 XP로 변환하지 말라"**: 사전조사에서
+  `student_progress.total_xp` 컬럼이 이미 존재하고
+  `wordLibrary.js:716`(`syncStudentProgress`)에서 `total_xp =
+  totalStars`로 매 동기화마다 그대로 덮어써지는 걸 확인했다(어제
+  `GAME_DESIGN.md` 설계안이 이 기존 사실을 "재사용 전제"로 명시했었음).
+  운영자의 이번 지시가 이 전제를 명시적으로 정정 — XP를 `totalStars`의
+  산술 파생값으로 만들지 않고, 기존 별 지급과 같은 학습 이벤트
+  (`useStudent.js`의 `addStars()` 호출 4곳: 레벨업 미션 클리어/오늘의
+  미션 4/4 보너스/중복 스티커 환전/쓰기시험 콤보)를 트리거로 재사용하되
+  **완전히 독립된 감사 가능한 원장(`xp_ledger`, 이벤트별 unique 제약)에
+  별도로 누적**하는 구조로 구현했다. `total_xp` 컬럼 자체는 건드리지
+  않음(DebugPage.jsx가 참조하는 레거시 표시값, 삭제/의미변경 금지).
+  판단 근거 전문: `src/utils/paulRankShared.js` 헤더 주석.
+- **중복 지급 방지(이번 임무의 보안 핵심)**: `xp_ledger`에
+  `unique(student_id, source_event_id)` 제약 — 같은 이벤트가 두 번
+  들어와도 DB 레벨에서 자연스럽게 막힘(TOCTOU 레이스 없음). 클라이언트가
+  Supabase에 직접 쓰는 경로 없음 — `api/grant-xp.js`(service_role)만
+  쓰고, 이 API는 클라이언트가 보낸 `amount`를 절대 신뢰하지 않고
+  `XP_EVENT_TABLE`(서버 전용 결정)에서 금액을 조회한다. `xp_ledger`는
+  RLS로 anon read-only(SELECT만), INSERT/UPDATE/DELETE는 GRANT 자체가
+  없음 — PIN 처리와 같은 신뢰 경계 원칙(서버만 쓴다)의 일반화. 라이브
+  e2e(`scripts/testXpLedgerDb.mjs`)로 같은 요청 두 번 전송 → 두 번째는
+  `duplicate:true`, 원장 1행/합계 불변을 실측(로컬은
+  `SUPABASE_SERVICE_ROLE_KEY` 부재로 SKIP — 기존 알려진 로컬 제약,
+  `PROJECT_BOARD.md` BLOCKED 카드와 동일 원인).
+- **구현 파일**: `src/utils/paulRankShared.js`(RANKS 5단계/HAT_STAGES
+  정확히 5단계 scale 0.88/0.94/1.00/1.07/1.14/EXPERIENCE_UNLOCKS
+  forward-compatible 설정/XP_EVENT_TABLE/`computeRankState()` 등 순수
+  함수, 브라우저·서버 완전 공유 — React/import.meta.env 없음),
+  `api/grant-xp.js`(유일한 쓰기 경로), `supabase_v2_3_paul_rank.sql`
+  (`xp_ledger` 신규 테이블 + `xp_totals` 파생 뷰, **미실행 — 운영자
+  실행 대기**, 백필 안 함 — 근거는 SQL 파일 주석), `src/hooks/
+  usePaulRank.js`(조회 훅), `src/hooks/useStudent.js`(addStars 4곳에
+  `grantXp()` 병행 호출), `src/utils/wordLibrary.js`(`postXpEvent`/
+  `fetchXpTotal`/`fetchXpTotals`), `src/components/Dashboard.jsx`/
+  `AdminScreen.jsx`(텍스트 전용 최소 표시 — 모자 그래픽 없음).
+- **Rank는 Unit 전환과 무관 — 실측 증명**: `computeRankState(xp)`의
+  시그니처가 xp 숫자 하나뿐(Unit 개념이 계산 경로 어디에도 없음,
+  `testPaulRank.mjs` 4번 항목이 구조적으로 증명) + 라이브 e2e에서 XP를
+  지급한 QA 학생의 Unit을 실제로 전환한 뒤에도 XP 총합이 그대로임을
+  확인(`testXpLedgerDb.mjs` 6번 항목, 서비스롤 키 있는 환경에서 실행).
+- **테스트**: `scripts/testPaulRank.mjs`(순수 함수, 30개 체크, 전부
+  PASS) + `scripts/testXpLedgerDb.mjs`(라이브 e2e, 테이블 미적용이라
+  SKIP 확인 — SQL 실행 후 재실행하면 전체 검증). `tests/harness/
+  registry.mjs`에 `paulRank` 도메인 신규 등록(extra, 13개 필수 도메인
+  밖). 기존 `useStudent.js`/`wordLibrary.js` bundling 테스트 스텁 3개
+  (`wordLibraryStub.mjs`/`wordLibraryRaceStub.mjs`/
+  `wordLibraryMultiTabStub.mjs`)에 `postXpEvent` no-op export 추가
+  필요했음(신규 import 때문에 번들 로드가 깨졌던 걸 발견/수정 —
+  회귀 아님, 같은 세션 내 자체 발견/자체 수정).
+- **회귀 게이트**: `npm run build` PASS. `npm run verify:all` 전체
+  재실행 — `login` 도메인 4개 스크립트만 FAIL, `git stash`로 재현해
+  **내 변경과 무관한 기존 상태**임을 확인(원인은 이미
+  `PROJECT_BOARD.md` BLOCKED 카드에 기록된 로컬 `SUPABASE_SERVICE_
+  ROLE_KEY` 부재 — 신규 회귀 아님). 나머지 12개 도메인(신규 `paulRank`
+  포함) 전부 PASS/정상 SKIP.
+- **문서 갱신**: `GAME_DESIGN.md`(§3 뒤 "3.x 구현 갱신" append —
+  원문 설계와 실제 구현이 달라진 지점 명시), `DATABASE.md`(`xp_ledger`/
+  `xp_totals` 항목 + 마이그레이션 순서 13번), `TESTING.md`(신규 테스트
+  2개 항목), `PROJECT_BOARD.md`(게임화 카드에 2/4번 하위단계 완료
+  append, 1/3번은 여전히 BACKLOG), `wiki/decisions.md`(결정 #9),
+  `wiki/glossary.md`(신규 용어 6개), `PAUL_BIBLE.md` §8(최소
+  갱신 — 계산 로직 구현됨을 반영, DESIGN DIRECTION 표기 자체는 유지 —
+  시각/애니메이션 미구현이므로).
+- **커밋/push**: 아직 안 함 — 이 handoff 항목까지 포함해 운영자 최종
+  확인 후 커밋 예정(회차 규칙: "전부 검증되면 push, SQL 미실행 상태에서도
+  안전함을 확인한 뒤" — 위 회귀 게이트로 확인 완료, 커밋은 이 세션의
+  마지막 단계로 진행).
 
 ## 2026-07-19 — 제품 비전 문서 3종(`PAUL_BIBLE.md`/`AI_WORKFLOW.md`/`PAUL_PRINCIPLES.md`) + `GAME_DESIGN.md` 리뷰(순수 문서) — Engineering Head
 

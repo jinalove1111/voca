@@ -64,6 +64,9 @@ _작성: 2026-07-18. 저장소의 `supabase_*.sql` 11개 파일 전체를 읽고
 | `entrance_tests` | v1.8 | `class_id`, `date`, `status`(`active`\|`closed`), `direction`(`en2kr`\|`kr2en`\|`random`), `question_count`, `time_limit_seconds`, `words` jsonb(출제 스냅샷) | `class_id → classes(id)` cascade | 입실 단어시험 세션(교사가 시작) |
 | `entrance_test_results` | v1.8 | `test_id`, `student_id`, `score`, `total`, `missed_words` jsonb, `duration_seconds`, `submitted_at`, unique(`test_id`,`student_id`) | `test_id → entrance_tests(id)`, `student_id → students(id)` 둘 다 cascade | 학생별 응시 결과 — 반별 랭킹/오늘의 VIP 계산 원천 |
 | `spelling_review_queue` | v2.0 | `word_id`, `student_id`(nullable, `on delete set null`), `submitted_answer`, `direction`, `status`(`pending`\|`accepted`\|`dismissed`), `date`, unique(`word_id`,`submitted_answer`) | `word_id → words(id)` cascade | 영→한 쓰기시험에서 한글로 답한 애매한 오답의 교사 검토 큐 |
+| `xp_ledger` | v2.3(2026-07-19, Paul Rank System) | `student_id`, `event_type`, `amount`(smallint, CHECK 0<amount≤100), `source_event_id`, `created_at`, **unique(`student_id`,`source_event_id`)** | `student_id → students(id)` cascade | XP 지급 원장 — Rank/Hat Stage 계산의 유일한 원천. `total_xp`(위 `student_progress`)와 무관한 완전히 별도의 값(설계 판단은 `src/utils/paulRankShared.js` 헤더 참고) — 서버(`api/grant-xp.js`, service_role)만 쓰고 anon은 SELECT만 가능(아래 RLS 절 참고). unique 제약이 곧 idempotency 메커니즘 |
+
+**`xp_totals`(VIEW, 테이블 아님)** — `xp_ledger`를 `student_id`별로 `sum(amount)` 집계한 파생 뷰(저장 컬럼 아님, 매 조회 시 재계산). "저장된 중복값보다 파생값을 우선한다"는 이번 지시를 스키마 레벨에서 강제하기 위해 `student_progress.hat_stage` 같은 "빠른 조회용 사본 컬럼" 패턴 대신 VIEW를 선택했다(`supabase_v2_3_paul_rank.sql` 주석 참고). anon/authenticated에 SELECT GRANT됨.
 
 ## 관계도 (FK, 텍스트)
 
@@ -97,6 +100,7 @@ words   1──N spelling_review_queue (student_id nullable)
 10. `supabase_v2_0_spelling_mixed.sql` — `classes.spelling_direction`(`spelling_direction_schema.sql` 내용 통합)+`words.accepted_meanings`+`spelling_review_queue`. **[적용됨, 2026-07-17]**
 11. `supabase_v2_0_1_spelling_default_mixed.sql` — `classes.spelling_direction` 컬럼 기본값을 `'mixed'`로 변경(신규 반 대비, DML은 별도 `scripts/opsSetAllClassesMixed.mjs`로 이미 완료). **[권장, 실행 안 해도 무방]**
 12. `supabase_v2_1_student_unit_decouple.sql` — `students.current_unit_id` 추가 + FK + 백필 + GRANT. **[상태 재확인 필요 — ROADMAP.md v1.6 섹션은 이보다 이전 시점 기준으로 "미실행 SQL 있음"을 마지막으로 기록했고, handoff.md 2026-07-17/18 기록은 이미 적용된 상태를 전제로 진행됨. 다음 세션에서 라이브 확인 권장.]**
+13. `supabase_v2_3_paul_rank.sql`(2026-07-19) — `xp_ledger` 신규 테이블 + `xp_totals` 뷰. 기존 4테이블 어떤 컬럼도 건드리지 않는 순수 추가. 백필 없음(전 학생 XP=0에서 시작 — 판단 근거는 SQL 파일 주석). **[미실행 — 운영자 실행 대기, `node scripts/testXpLedgerDb.mjs`가 미실행 상태를 자동 감지해 안전하게 SKIP함을 확인함]**
 
 `supabase_v1_1_progress_sync.sql`(더 이전 버전)은 `v1_3` 파일 주석에 "대체됨, 실행 불필요"로 명시돼 있으며 저장소에 파일 자체가 없습니다(이미 정리된 것으로 보임).
 
