@@ -160,6 +160,48 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
 - 근거: `handoff.md` 2026-07-18 Phase 4 보안 감사 재확인 목록 #2.
 - 내용: booleans만 노출, 정보 노출 미미 — 낮은 우선순위 유지.
 
+### [P3] 게임화(Gamification) — `GAME_DESIGN.md` 설계 완료, 착수는 운영자 승인 필요
+- 근거: `GAME_DESIGN.md`(신규, 2026-07-18, Engineering Head 순수 설계
+  세션 — 코드/스키마 변경 0건). CLAUDE.md 규칙 12("학생 대상 신규
+  기능/UI/게임화는 이번 'AI 개발 운영체제' 구축 범위에서 절대 금지")에
+  따라 이 카드들은 **설계 문서화 단계일 뿐** — 실제 구현 착수는 운영자
+  승인 후 아래 순서대로 BACKLOG → NEXT로 개별 이동.
+- 하위 카드(의존성 순서, `GAME_DESIGN.md` "구현 순서 제안" 섹션 그대로):
+  1. **Anti-cheat 인프라 선행** — `api/submit-entrance-result.js` 신설
+     (기존 `[P1] 입실시험 결과 서버 재검증 없음` NEXT 카드와 동일 항목,
+     Word King의 필수 선행조건으로 재확인). `GAME_DESIGN.md` 11번 섹션.
+  2. Player Progression/XP 표준화 — 새 저장 필드 없이 기존
+     `student_progress.total_xp`(=`totalStars` 사본)를 그대로 재사용해
+     레벨 공식만 정의. `GAME_DESIGN.md` 1·2번 섹션.
+  3. Teacher Controls 마스터 스위치 — `classes.gamification_enabled`
+     등 신규 컬럼(기본 false, `spelling_test_enabled` opt-in 관례
+     재사용). `GAME_DESIGN.md` 13번 섹션.
+  4. Hat Evolution — `student_progress.hat_stage` 신규 컬럼(레벨의
+     순수 파생값, 병합은 기존 `maxNum` 재사용). `GAME_DESIGN.md` 3번
+     섹션.
+  5. Ticket Economy — `progress_data.ticketLedger`(append-only,
+     `diaryPlacements`/`diaryRemovedIds` tombstone 패턴 재사용, 원시
+     잔액 저장 금지 — `mergeProgressRecords`의 `maxNum` 단조증가
+     가정과 충돌하기 때문). `GAME_DESIGN.md` 4번 섹션.
+  6. Daily Missions 후킹(기존 4/4 완료 `useEffect`에 티켓 지급만 추가,
+     새 트래킹 없음) + Rewards 티켓 상점(비확률형, 실결제 0건) — 소스/
+     싱크 동시 배포. `GAME_DESIGN.md` 7·10번 섹션.
+  7. Word King — 신규 `word_king_history` 테이블(anon read-only +
+     service_role 전용 write, 기존 게임화 테이블과 달리 `"allow anon
+     all"` RLS 쓰지 않음). **1번 선행 필수.** `GAME_DESIGN.md` 5번 섹션.
+  8. House System(`students.house_id` 신규 컬럼 — GRANT 필수, CLAUDE.md
+     규칙 10) + Weekly Events(`classes.weekly_event_enabled`).
+     `GAME_DESIGN.md` 6·8번 섹션.
+  9. Seasonal Progression — Ticket/House 리셋 경계만 신규(레벨/뱃지/
+     스트릭은 영구 유지, 절대 리셋 안 함). `GAME_DESIGN.md` 9번 섹션.
+  10. Parent Motivation 노출 — `computeStudentStats()`/
+      `buildWeeklyReport()` 확장만(새 Supabase 쿼리·새 AI 호출 없음).
+      `GAME_DESIGN.md` 14번 섹션.
+- 명시적 비-대상(재확인만, 이번 카드 범위 아님): `config/features.js`의
+  `ranking`/`pointSystem`/`leaderboard`/`rewardSystem` 플래그는 죽은
+  코드(`useFeatureAccess.js` 무사용 확인) — 재사용하지 않고 건드리지도
+  않음(append-only 원칙, 삭제는 별도 CTO 판단 필요 시에만).
+
 ---
 
 ## IN_PROGRESS

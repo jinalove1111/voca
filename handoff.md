@@ -1,5 +1,55 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-18 (개발자 대시보드 구축 — Engineering Head)_
+_최종 갱신: 2026-07-18 (게임화 아키텍처 설계 문서 — Engineering Head)_
+
+## 2026-07-18 — 게임화 아키텍처 설계 문서(`GAME_DESIGN.md`, 순수 설계) — Engineering Head
+
+운영자 지시: "Word King" 등 게임화 아키텍처를 **코드/UI 구현 없이 설계
+문서로만** 작성. `src/`/`api/`/`*.sql`/`package.json` 전부 수정 금지 —
+`GAME_DESIGN.md`(신규) + `PROJECT_BOARD.md`(구현 순서 BACKLOG 카드
+추가) 딱 두 파일만.
+
+- **사전조사**: `wiki/api-costs.md`/`wiki/security-notes.md`/
+  `wiki/glossary.md`/`wiki/HOME.md`, `ARCHITECTURE.md`/`DATABASE.md`/
+  `ROADMAP.md`, `src/hooks/useStudent.js`(별/스티커/스트릭/뱃지 전체),
+  `src/components/AdminScreen.jsx`(`SpellingSettingsPanel` 반별 on/off
+  관례), `src/components/ParentScreen.jsx`, `src/utils/weeklyReport.js`,
+  `src/utils/entranceTest*.js`(v1.8 VIP/랭킹), `src/data/stickers.js`,
+  `src/config/features.js`/`useFeatureAccess.js`를 전부 읽고 확인.
+- **Word King 재확인**: `ARCHITECTURE.md`가 이미 "코드/스키마/계획
+  문서 어디에도 존재한 적 없음"으로 기록해둔 상태를 그대로 재확인(추가
+  grep 불필요, 기존 기록 신뢰) — 이번 문서가 이 기능의 **최초 설계
+  기록**.
+- **핵심 설계 판단 5가지**(전부 실제 코드 근거 위): ① `total_xp` 컬럼이
+  이미 `totalStars`의 사본으로 존재(`wordLibrary.js:716`) → 별도 XP
+  자원을 새로 만들지 않고 레벨을 별의 파생 공식으로만 정의. ② 별은
+  한 번도 소비된 적 없음(grep 확인) → 소비되는 신규 통화(티켓)는
+  `mergeProgressRecords()`의 `maxNum` 단조증가 병합과 충돌하므로
+  잔액을 저장하지 않고 `diaryPlacements`/`diaryRemovedIds` tombstone과
+  같은 append-only 이벤트 로그 패턴으로 설계. ③ 입실시험 VIP(일별,
+  서버 재검증 없음, 기존 P1 보안 갭)와 Word King(주간, 서버 전용 계산)을
+  명확히 분리 — Word King은 VIP의 재포장이 아니라 그 위협모델을
+  반복하지 않는 상위 경쟁. ④ `config/features.js`의
+  `ranking`/`pointSystem`/`leaderboard`/`rewardSystem` 플래그는
+  `useFeatureAccess.js`가 저장소 어디서도 import 안 되는 죽은 코드임을
+  grep으로 재확인 → Teacher Controls는 이 죽은 스캐폴딩을 되살리지
+  않고, 실사용 검증된 `classes` 반별 컬럼 관례(`spelling_test_enabled`
+  등)를 재사용. ⑤ Anti-cheat 섹션이 `api/submit-entrance-result.js`
+  (기존 NEXT 카드의 근본 수정안, `computeTestResult()` 재사용 제안)를
+  Word King의 필수 선행조건으로 명시 — 게임화가 보상을 키우면서 기존
+  미검증 취약점의 악용 유인만 키우는 걸 막기 위함.
+- **`PROJECT_BOARD.md`**: BACKLOG에 게임화 카드 1건(하위 10단계 의존성
+  순서 포함, `GAME_DESIGN.md` "구현 순서 제안" 섹션과 1:1 대응) 추가.
+  NEXT로 옮기지 않음 — 실제 착수는 운영자 승인 필요(CLAUDE.md 규칙 12).
+- **검증**: `git diff --stat` — `PROJECT_BOARD.md`(.md, 42줄 추가)만
+  tracked 변경, 신규 파일도 `GAME_DESIGN.md`+`.ai-status/*.json`뿐 —
+  `src`/`api`/`*.sql`/`package.json` 변경 **0건** 확인. `npm run build`
+  통과, 메인 번들 해시(`index-CSVjLjA9.js`, 520.89 kB) 직전 세션
+  기록(ROADMAP.md "520.86KB")과 사실상 동일 — 코드 영향 없음 재확인.
+  `GAME_DESIGN.md` 내 14개 섹션 + "구현 순서 제안" 전부 `<a id="sec-N">`
+  앵커로 상호참조(총 60여 회 링크, 15개 앵커 전부 정의 확인 완료).
+- 다음 세션 후보: 운영자 승인 시 `PROJECT_BOARD.md` 게임화 카드의
+  1단계(Anti-cheat 인프라, `api/submit-entrance-result.js`)부터 순서대로
+  BACKLOG → NEXT 이동.
 
 ## 2026-07-18 — 개발자 대시보드 구축 (Engineering Head)
 
