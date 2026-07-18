@@ -97,13 +97,16 @@ try {
   const studentId = await wordlib.addStudent('QA_RankKid', QA_CLASS, 'Unit 1')
   check('학생 생성됨', !!studentId)
 
-  console.log('\n2. 정상 지급 — 서버가 XP_EVENT_TABLE에서 금액을 결정(클라이언트 입력 무시)')
+  const today = new Date().toDateString() // useStudent.js의 todayStr()와 동일 포맷
+
+  console.log('\n2. 정상 지급 — 서버가 XP_EVENT_TABLE에서 금액을 결정(클라이언트 입력 무시), v2.3.1 행동 단위 이벤트')
   {
     // amount:9999를 같이 보내도 서버는 절대 읽지 않는다 — "클라이언트가
-    // 보낸 XP 총합을 신뢰하지 마라" 요구사항의 직접 증명.
-    const r1 = await callHandler(grantXpHandler, { studentId, eventType: 'mission-clear', sourceEventId: 'e2e:mission-clear:word1', amount: 9999 })
+    // 보낸 XP 총합을 신뢰하지 마라" 요구사항의 직접 증명. source_event_id는
+    // wordId 없이 날짜만(v2.3.1 행동 단위 패턴).
+    const r1 = await callHandler(grantXpHandler, { studentId, eventType: 'word-view-complete', sourceEventId: `word-view-complete:${today}`, amount: 9999 })
     check('첫 지급 성공', r1.body.ok === true && r1.body.duplicate === false)
-    check('서버가 결정한 금액(3) — 클라이언트가 보낸 9999는 완전히 무시됨', r1.body.amount === 3)
+    check('서버가 결정한 금액(2) — 클라이언트가 보낸 9999는 완전히 무시됨', r1.body.amount === 2)
   }
 
   console.log('\n3. 중복 지급 방지 — 같은 sourceEventId로 정확히 같은 요청을 두 번 전송')
@@ -111,34 +114,65 @@ try {
     const { data: rowsBefore } = await supabase.from('xp_ledger').select('amount').eq('student_id', studentId)
     const sumBefore = (rowsBefore || []).reduce((s, r) => s + r.amount, 0)
 
-    const dup = await callHandler(grantXpHandler, { studentId, eventType: 'mission-clear', sourceEventId: 'e2e:mission-clear:word1' })
+    const dup = await callHandler(grantXpHandler, { studentId, eventType: 'word-view-complete', sourceEventId: `word-view-complete:${today}` })
     check('두 번째(중복) 요청도 ok:true, duplicate:true로 응답(학생 경험엔 무해)', dup.body.ok === true && dup.body.duplicate === true)
 
     const { data: rowsAfter } = await supabase.from('xp_ledger').select('amount').eq('student_id', studentId)
     const sumAfter = (rowsAfter || []).reduce((s, r) => s + r.amount, 0)
     check('원장에 새 행이 추가되지 않음(정확히 1행 유지)', rowsAfter.length === 1)
-    check('합계가 두 배로 지급되지 않음(sumBefore === sumAfter)', sumBefore === sumAfter && sumAfter === 3)
+    check('합계가 두 배로 지급되지 않음(sumBefore === sumAfter)', sumBefore === sumAfter && sumAfter === 2)
 
     const { data: totalRow } = await supabase.from('xp_totals').select('total_xp').eq('student_id', studentId).maybeSingle()
-    check('xp_totals VIEW(파생값)도 3으로 정확히 일치', totalRow?.total_xp === 3)
+    check('xp_totals VIEW(파생값)도 2로 정확히 일치', totalRow?.total_xp === 2)
   }
 
-  console.log('\n4. 서로 다른 sourceEventId는 정상적으로 별도 지급(중복 방지가 과잉 차단하지 않음)')
+  console.log('\n3b. 행동 단위 파밍 방지 — "여러 단어에 걸쳐 반복해도 하루에 카테고리당 XP 1회만" (이번 리팩터링의 핵심 회귀 방지 포인트, 실측)')
   {
-    const r = await callHandler(grantXpHandler, { studentId, eventType: 'spelling-combo-3', sourceEventId: 'e2e:spelling-combo-3:day1:wordA' })
-    check('다른 이벤트는 정상 지급', r.body.ok === true && r.body.duplicate === false && r.body.amount === 1)
+    // useStudent.js의 실제 트리거(word-view-complete)는 학생이 몇 번째
+    // 단어를 보든 항상 같은 `word-view-complete:${todayStr()}` 키만
+    // 생성한다 — "서로 다른 단어를 5개, 10개, 50개 봤다"를 서버 호출
+    // 횟수로 시뮬레이션(실제 UI 재현 없이 동일 API 호출을 반복해 같은
+    // 효과를 실측). 예전 mission-clear는 이 자리에 wordId가 들어가서
+    // 매번 새 행이 생겼었다 — 지금은 전부 같은 키라 원장에 단 1행만 남아야
+    // 정상.
+    for (let i = 0; i < 8; i++) {
+      await callHandler(grantXpHandler, { studentId, eventType: 'word-view-complete', sourceEventId: `word-view-complete:${today}` })
+    }
+    const { data: rows } = await supabase.from('xp_ledger').select('amount').eq('student_id', studentId).eq('event_type', 'word-view-complete')
+    check('8번 더 반복 요청해도(=8개 다른 단어를 봤다고 가정) 원장 행은 여전히 정확히 1개', (rows || []).length === 1)
     const { data: totalRow } = await supabase.from('xp_totals').select('total_xp').eq('student_id', studentId).maybeSingle()
-    check('누적 XP = 3 + 1 = 4', totalRow?.total_xp === 4)
+    check('누적 XP도 여전히 2(무한 파밍 안 됨)', totalRow?.total_xp === 2)
   }
 
-  console.log('\n5. 입력 검증 — 알 수 없는 eventType/잘못된 studentId 거부')
+  console.log('\n4. 서로 다른 sourceEventId(다른 이벤트 타입)는 정상적으로 별도 지급(중복 방지가 과잉 차단하지 않음)')
+  {
+    const r = await callHandler(grantXpHandler, { studentId, eventType: 'listening-complete', sourceEventId: `listening-complete:${today}` })
+    check('다른 이벤트는 정상 지급', r.body.ok === true && r.body.duplicate === false && r.body.amount === 2)
+    const { data: totalRow } = await supabase.from('xp_totals').select('total_xp').eq('student_id', studentId).maybeSingle()
+    check('누적 XP = 2 + 2 = 4', totalRow?.total_xp === 4)
+  }
+
+  console.log('\n5. 입력 검증 — 알 수 없는 eventType/잘못된 studentId/조작된 기간키/예약(planned) 이벤트 거부')
   {
     const bad1 = await callHandler(grantXpHandler, { studentId, eventType: 'made-up-event', sourceEventId: 'e2e:bad1' })
     check('알 수 없는 eventType -> ok:false, unknown_event_type', bad1.body.ok === false && bad1.body.reason === 'unknown_event_type')
-    const bad2 = await callHandler(grantXpHandler, { studentId: 'not-a-uuid', eventType: 'mission-clear', sourceEventId: 'e2e:bad2' })
+    const bad2 = await callHandler(grantXpHandler, { studentId: 'not-a-uuid', eventType: 'word-view-complete', sourceEventId: `word-view-complete:${today}` })
     check('잘못된 studentId -> ok:false, invalid_student_id', bad2.body.ok === false && bad2.body.reason === 'invalid_student_id')
+    // v2.3.1 신규 — 예약(planned) 이벤트는 서버가 아직 지급하지 않는다
+    // (Word King을 실제로 구현하지 않았으므로 이 요청도 어떤 형태든 거부돼야 함).
+    const bad3 = await callHandler(grantXpHandler, { studentId, eventType: 'word-king-complete', sourceEventId: 'word-king-complete:season1' })
+    check('예약(planned) 이벤트(word-king-complete) -> ok:false, unknown_event_type(아직 미구현)', bad3.body.ok === false && bad3.body.reason === 'unknown_event_type')
+    // v2.3.1 신규 — 예전 mission-clear 사고 재발 방지 실측: 같은 eventType에
+    // wordId를 억지로 끼워넣은 기간키는 날짜로 파싱되지 않아 거부돼야 함.
+    const bad4 = await callHandler(grantXpHandler, { studentId, eventType: 'word-view-complete', sourceEventId: `word-view-complete:${today}:word-99` })
+    check('기간키에 wordId를 끼워넣은 조작된 sourceEventId -> ok:false, invalid_source_event_id(파밍 우회 시도 차단)', bad4.body.ok === false && bad4.body.reason === 'invalid_source_event_id')
+    // v2.3.1 신규 — 가짜 미래 날짜로 매번 새 키를 만들어내는 우회 파밍 시도 차단.
+    const farFuture = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toDateString()
+    const bad5 = await callHandler(grantXpHandler, { studentId, eventType: 'word-view-complete', sourceEventId: `word-view-complete:${farFuture}` })
+    check('30일 후 가짜 미래 날짜 기간키 -> ok:false, invalid_source_event_id(선지급 파밍 시도 차단)', bad5.body.ok === false && bad5.body.reason === 'invalid_source_event_id')
+
     const { data: totalRow } = await supabase.from('xp_totals').select('total_xp').eq('student_id', studentId).maybeSingle()
-    check('거부된 요청은 원장에 아무 영향 없음(여전히 4)', totalRow?.total_xp === 4)
+    check('거부된 요청들은 전부 원장에 아무 영향 없음(여전히 4)', totalRow?.total_xp === 4)
   }
 
   console.log('\n6. Unit 전환이 XP/Rank에 전혀 영향 없음 (라이브 실측 — GAME_DESIGN.md 원칙과 동일)')
