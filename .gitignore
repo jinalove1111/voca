@@ -8,3 +8,6 @@ dist
 .env*
 
 scripts/.tmp
+
+# 개발자 대시보드 산출물(scripts/generateDashboard.mjs가 매번 재생성) — 생성 스크립트만 커밋
+dashboard/

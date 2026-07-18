@@ -21,7 +21,8 @@
     "verify:word-assignment": "node tests/harness/runWordAssignment.mjs",
     "verify:audio-tts": "node tests/harness/runAudioTts.mjs",
     "verify:all": "node tests/harness/runAll.mjs",
-    "wiki:search": "node scripts/wikiSearch.mjs"
+    "wiki:search": "node scripts/wikiSearch.mjs",
+    "dashboard": "node scripts/generateDashboard.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
