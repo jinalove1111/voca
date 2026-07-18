@@ -1,5 +1,56 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-19 (Paul Rank System 기반 구현 — Engineering Head, 첫 실제 코드 세션)_
+_최종 갱신: 2026-07-19 (Paul Rank System v2.3 SQL 적용 후 라이브 검증 — Engineering Head)_
+
+## 2026-07-19 (3차) — Paul Rank System — v2.3 SQL 적용 후 라이브 검증(부분) — Engineering Head
+
+운영자가 `supabase_v2_3_paul_rank.sql`을 실행 완료. 이어서 라이브 검증
+진행 — **정직하게 보고**: 일부는 실측 완료, 일부는 여전히 로컬
+환경 제약으로 SKIP(추측/가짜 PASS 없음).
+
+- **1) 테이블/뷰 존재 확인(실측 완료)**: anon key로 직접 쿼리 —
+  `xp_ledger`/`xp_totals` 둘 다 에러 없이 빈 결과(`[]`) 반환 확인. SQL이
+  정상 적용됐음을 라이브로 확인.
+- **2) `SUPABASE_SERVICE_ROLE_KEY` 재확인 — 여전히 없음(추측 아님,
+  직접 확인)**: `.env.local` 실제 키 목록을 확인한 결과 `ADMIN_PIN`/
+  `VERCEL_OIDC_TOKEN`뿐, `SUPABASE_SERVICE_ROLE_KEY`는 어떤 이름으로도
+  존재하지 않음. `PROJECT_BOARD.md` BLOCKED 카드("`verify:login` 로컬
+  4/7만 PASS — `SUPABASE_SERVICE_ROLE_KEY` 로컬 부재")와 정확히 같은
+  근본 원인이 Paul Rank System에도 동일하게 적용됨.
+- **3) `testXpLedgerDb.mjs` 재실행 — 여전히 SKIP(§2~3 중복지급방지,
+  §6 Unit무관성 라이브 실측 미완료)**: 이번엔 "테이블 확인됨" 단계까지는
+  통과(SQL 적용 확인)했지만, 서비스롤 키 부재로 그다음 단계(실제 지급)
+  에서 안전하게 SKIP — 스크립트 자체 로직은 정상(이전 세션에 발견한
+  PGRST205 감지 버그가 재발하지 않음을 재확인).
+- **4) `api/grant-xp.js` 직접 호출(QA 학생 대상, 실측 완료 — 예상과
+  다르게 "정상 성공"이 아니라 "RLS가 올바르게 차단"함을 확인)**: QA
+  반/학생을 만들어 핸들러를 fake(req,res)로 직접 호출한 결과:
+  `{"status":500,"body":{"error":"new row violates row-level security
+  policy for table \"xp_ledger\""}}`. `supabaseAdminKey()`가 서비스롤
+  키 부재 시 anon key로 폴백하는데, `xp_ledger`는 anon INSERT GRANT가
+  없어(설계 의도) 폴백 자체가 거부됨 — `table_missing` 폴백이 아니라
+  **RLS가 설계대로 정확히 작동해 쓰기를 막은 것**(보안 설계 검증 성공,
+  다만 "정상 지급 성공" 경로 자체는 로컬에서 증명 못 함). 테스트 학생/반은
+  즉시 정리 완료(고아 데이터 없음).
+- **5) 회귀 재확인(전부 PASS, 신규 회귀 없음)**: `npm run
+  verify:persistence`(8개 스크립트) / `npm run verify:admin`(5개) /
+  `npm run verify:unit`(5개) / `paulRank` 도메인(2개, `testXpLedgerDb.mjs`
+  는 정상 SKIP) 전부 재실행 — SQL 적용 후에도 기존 기능 전부 정상.
+- **인수기준 갱신 상태(6개 중 이번에 명확히 실측된 것과 여전히 남은 것)**:
+  1(모자 5단계)/2(결정적 계산)/3(새로고침 복원, persistence 스위트)/
+  6(기존 데이터 보존+build+verify)은 이전 세션에 이미 실측 완료 상태
+  유지. **4(Unit 전환 무영향)와 5(중복 지급 차단)의 "라이브 실측"은
+  이번 라운드에도 완료되지 못함** — 원인은 SQL 미적용이 아니라(이번에
+  해소됨) `SUPABASE_SERVICE_ROLE_KEY`가 로컬에 없다는, 별개의 이미
+  알려진 환경 제약. 4/5의 "메커니즘 자체가 설계대로 동작함"은 이번
+  라운드에서 오히려 더 강하게 확인됨(RLS가 실제로 anon 쓰기를 막는 걸
+  직접 목격) — 다만 "성공 경로 + 중복 요청 실측"은 서비스롤 키가 있는
+  환경(로컬 `.env.local` 추가 또는 Vercel 프로덕션)에서만 완결 가능.
+- **다음 필요 조치**: 운영자가 (a) 로컬 `.env.local`에
+  `SUPABASE_SERVICE_ROLE_KEY` 추가 후 `node scripts/testXpLedgerDb.mjs`
+  재실행, 또는 (b) Vercel 프로덕션 배포 후 실제 학생 계정으로 미션
+  클리어 등 XP 트리거를 1회 발생시켜 Vercel 함수 로그에서 grant-xp
+  200 응답 + Supabase 대시보드에서 `xp_ledger` 행 생성을 직접 확인 —
+  둘 중 하나가 이번에 못 채운 라이브 실측의 마지막 조각.
 
 ## 2026-07-19 (2차) — Paul Rank System 기반(Word King 이전 단계) — XP/모자5단계/언락 아키텍처 구현 — Engineering Head
 

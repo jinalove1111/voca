@@ -6,7 +6,7 @@
   "status": "completed",
   "progress": 100,
   "started_at": "2026-07-19T10:00:00Z",
-  "updated_at": "2026-07-19T13:30:00Z",
+  "updated_at": "2026-07-19T15:00:00Z",
   "files_owned": [
     "src/utils/paulRankShared.js",
     "api/grant-xp.js",
@@ -59,6 +59,6 @@
     "wiki/glossary.md"
   ],
   "summary": "XP를 totalStars/total_xp의 산술 파생값으로 만들지 않고(운영자 명시 지시), 기존 addStars() 4개 트리거를 재사용하되 독립 원장(xp_ledger, student_id+source_event_id unique)에 서버(api/grant-xp.js, service_role)만 쓰는 구조로 구현. 모자 크기 정확히 5단계(Tiny 0.88/Small 0.94/Growing 1.00/Big 1.07/Max 1.14) configurable 단일 파일. computeRankState(xp)가 결정적 순수 함수(입력 xp 하나뿐 — Unit 무관 구조적 증명). 경험 언락은 forward-compatible 설정 스키마만(아무 기능도 미소비). npm run build PASS. npm run verify:all 전체 재실행 — login 도메인 4개만 FAIL, git stash로 재현해 본 세션 변경과 무관한 기존 BLOCKED 상태(PROJECT_BOARD.md 기존 카드, SUPABASE_SERVICE_ROLE_KEY 로컬 부재)임을 확인. scripts/testPaulRank.mjs 30개 체크 전부 PASS. scripts/testXpLedgerDb.mjs는 xp_ledger 테이블/서비스롤 키 로컬 부재로 정상 SKIP(가짜 PASS 아님, PostgREST가 테이블 미존재를 42P01이 아닌 PGRST205로 반환한다는 걸 실측 확인해 감지 로직을 entranceTestApi.js의 기존 관례(에러면 미가용)로 맞춤). 중복지급방지/Unit무관성의 '라이브 실측' 자체는 SQL 미실행+서비스롤키 부재로 이번 세션에서 실제로 실행되지 못함(스크립트는 준비·검증됨, SQL 실행 후 재실행하면 전체 통과 예상) — 이 갭은 최종 보고에 정직하게 명시.",
-  "blocker": null,
-  "next_action": "운영자가 supabase_v2_3_paul_rank.sql을 Supabase SQL Editor에서 실행(+ 가능하면 로컬 .env.local에 SUPABASE_SERVICE_ROLE_KEY 추가) 후 node scripts/testXpLedgerDb.mjs 재실행해 중복지급방지/Unit무관성 라이브 실측 완료. 이후 커밋+push."
+  "blocker": "v2.3 SQL은 운영자가 실행 완료(xp_ledger/xp_totals 라이브 확인됨, anon read 정상). 그러나 로컬 .env.local에 SUPABASE_SERVICE_ROLE_KEY가 여전히 없어(직접 재확인, ADMIN_PIN/VERCEL_OIDC_TOKEN뿐) 인수기준 4(Unit 전환 무영향)/5(중복 지급 차단)의 '실제 지급 성공 경로 + 중복요청 실측'을 로컬에서 끝까지 못 채움 — api/grant-xp.js를 QA 학생 대상 직접 호출해 RLS가 anon 쓰기를 정확히 차단하는 것까지는 실측 확인(보안 설계 검증은 성공), 다만 '정상 성공' 응답 자체는 서비스롤 키 없이 로컬에서 관측 불가. PROJECT_BOARD.md 기존 BLOCKED 카드와 동일 근본원인(신규 이슈 아님).",
+  "next_action": "운영자가 (a) 로컬 .env.local에 SUPABASE_SERVICE_ROLE_KEY 추가 후 node scripts/testXpLedgerDb.mjs 재실행, 또는 (b) Vercel 프로덕션에서 실제 학생 계정으로 XP 트리거 1회 발생 후 Supabase 대시보드에서 xp_ledger 행 생성 확인 — 둘 중 하나로 인수기준 4/5 최종 완결."
 }

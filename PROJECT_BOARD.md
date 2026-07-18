@@ -34,6 +34,14 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
   정상** — 이번 라운드 신규 회귀 아님.
 - 차단 해제 조건: 운영자가 로컬 `.env.local`에
   `SUPABASE_SERVICE_ROLE_KEY` 추가.
+- **2026-07-19 추가 확인**: `supabase_v2_3_paul_rank.sql`(Paul Rank
+  System) 실행 후 `scripts/testXpLedgerDb.mjs`도 정확히 같은 근본
+  원인으로 SKIP됨(`xp_ledger` 테이블 자체는 라이브로 존재 확인됨 —
+  `api/grant-xp.js`를 QA 학생 대상 직접 호출한 결과 anon key 폴백이
+  RLS로 정확히 차단되는 것까지 실측, "정상 지급 성공" 경로만 서비스롤
+  키 부재로 로컬 미검증). 신규 이슈 아님 — 이 카드가 막는 범위가
+  로그인/PIN 4개 스크립트에서 XP 원장 1개 스크립트로 확장된 것뿐.
+  상세: `handoff.md` 2026-07-19(3차).
 
 ---
 
