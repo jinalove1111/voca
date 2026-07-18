@@ -1,5 +1,67 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-18 (게임화 아키텍처 설계 문서 — Engineering Head)_
+_최종 갱신: 2026-07-19 (제품 비전 문서 3종 + GAME_DESIGN.md 리뷰 — Engineering Head)_
+
+## 2026-07-19 — 제품 비전 문서 3종(`PAUL_BIBLE.md`/`AI_WORKFLOW.md`/`PAUL_PRINCIPLES.md`) + `GAME_DESIGN.md` 리뷰(순수 문서) — Engineering Head
+
+운영자 지시: 제품 비전 문서 3종 신설 + `GAME_DESIGN.md`(2026-07-18
+게임화 설계) 리뷰. **코드 한 줄도 건드리지 않음** — `src/`/`api/`/
+`*.sql`/`package.json` 전부 미변경, `.md` 파일만.
+
+- **사전조사**: `GAME_DESIGN.md`(전문 재독), `PROJECT_GUIDE.md`,
+  `PROJECT_BOARD.md`, `CLAUDE.md`(18개 규칙), `DEVELOPER_GUIDE.md`
+  (기존 "AI 세션 표준 워크플로우" 13단계 확인), `ARCHITECTURE.md`
+  "주요 플로우"/"Word King 관련 확인 결과", `wiki/HOME.md`+`glossary.md`
+  +`decisions.md`+`lessons-learned.md`+`security-notes.md`+
+  `api-costs.md`, `src/assets/paul/`+`src/utils/paulReactions.js`
+  (폴 마스코트 리액션이 이미 구현·사용 중임을 grep으로 확인 — World
+  Building 섹션에서 "구현됨"과 "미구현"을 정확히 구분하는 근거).
+- **`PAUL_BIBLE.md`(신규)**: 15개 섹션. **가장 중요한 안전장치** —
+  Hat System(§8)/Ticket Economy(§9)/House System(§10)/Word King(§11)
+  4개 섹션 전부 상단에 "⚠️ DESIGN DIRECTION — 미구현, 설계 방향일
+  뿐" 표기(grep으로 실측 확인, 총 9곳에 표기 — 4개 필수 + Parent/World
+  Building/Reward System의 확장 부분도 동일 표기). 반대로 Student(§4)/
+  Teacher(§5)/Parent(§6) Experience는 실사용 중인 기능임을 명확히
+  구분. 운영자 지정 10개 제품 원칙(모자 정체성/성장/의미있는 학습,
+  하우스 소속감, 티켓=경험, Word King=대표 교실게임, 보상은 학습 후행,
+  학부모 즉시이해, 교사 최소노력, 폴의 영어세계 몰입감)을 별도 목록이
+  아니라 §3/§5/§6/§7/§8/§9/§10/§11/§13에 설계 근거로 통합. Psychology
+  (§12)는 `GAME_DESIGN.md` 12번 섹션을 재작성하지 않고 인용/링크만.
+- **`AI_WORKFLOW.md`(신규)**: 제품/기능 개발 전용 11단계. 서두에
+  `DEVELOPER_GUIDE.md` 13단계와의 차이를 표로 명시(범용 엔지니어링
+  vs 제품/기능 개발 특화) — 겹치는 절차(문서 읽기/구현규칙/verify/
+  build)는 재작성하지 않고 링크만. 핵심 원칙 3개(시스템 중복 금지/
+  기존 아키텍처 확장 우선/기능 발명 금지)를 `handoff.md`의 실제
+  사례(Word King 미실존 확인, `ADVANCED_FEATURES.md`류 데드코드 참조,
+  `config/features.js` 죽은 플래그)로 근거.
+- **`PAUL_PRINCIPLES.md`(신규)**: 7개 "왜" 항목. 각각 `PAUL_BIBLE.md`
+  해당 섹션 + `GAME_DESIGN.md` 구체 설계를 근거로 듦 — 예: "학습이
+  오락보다 우선하는 이유"는 Word King이 Anti-cheat(`api/
+  submit-entrance-result.js`) 없이는 착수 불가하다는 협상 불가 선행
+  조건을 근거로 "보상 체인의 신뢰성이 학습 신호의 정확성에 의존한다"는
+  구조적 설명으로 연결.
+- **`GAME_DESIGN.md` 16번 섹션(append) — 리뷰 및 개선 제안 6건**: (1)
+  가챠 하루 다회 발동 시 파밍 유인(일일 체감 로직 제안), (2) Word King
+  주간 갱신이 상시 패자 좌절 누적 위험(성장상 병행 제안), (3) Word King
+  점수의 쓰기시험 정답률 항목이 소표본 왜곡에 취약(최소 응시수/베이지안
+  평균 제안), (4) 티켓 초기 획득 속도가 느려 콜드스타트 이탈 위험
+  (입문가 상점 아이템 제안), (5) House "자동 균등배정"의 재조정 규칙
+  미정의(최소인원 배정+시즌 경계 재조정 제안), (6) Anti-cheat 부차
+  갭(word_status 등)의 유예 판단은 유지하되 Word King 배포 직후
+  이상치 관측 뷰 제안. 전부 이 설계 문서의 구체적 수치/규칙에 대한
+  리뷰(일반론 아님), 코드 구현 없음.
+- **`PROJECT_BOARD.md`**: 기존 "[P3] 게임화" BACKLOG 카드에 위 리뷰
+  후속 조정 사항만 append(신규 카드 생성 없음) — 7번 단계(Word King)
+  착수 시 16.3/16.6을 같은 라운드에 포함 권장 등 우선순위 조정만 기록.
+- **검증**: `git diff --stat` — 변경/신규 파일 전부 `.md`
+  (`GAME_DESIGN.md`/`PROJECT_BOARD.md` append 수정, `PAUL_BIBLE.md`/
+  `AI_WORKFLOW.md`/`PAUL_PRINCIPLES.md` 신규) — `src`/`api`/`*.sql`/
+  `package.json` 변경 0건. `npm run build` PASS(기존 chunk-size 경고
+  외 신규 경고/에러 없음, 번들 산출물 자체는 무관 확인 목적으로만
+  실행).
+- **다음 추천 작업**: 게임화 착수는 여전히 운영자 승인 필요
+  (`CLAUDE.md` 규칙 12) — 승인 시 `AI_WORKFLOW.md` 11단계를 따라
+  `PROJECT_BOARD.md` "[P3] 게임화" 카드 1번(Anti-cheat)부터 BACKLOG→
+  NEXT 이동.
 
 ## 2026-07-18 — 게임화 아키텍처 설계 문서(`GAME_DESIGN.md`, 순수 설계) — Engineering Head
 
