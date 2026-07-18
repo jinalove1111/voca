@@ -21,7 +21,7 @@
 // 클라이언트가 또 재시도하는 악순환을 막기 위함).
 import { createClient } from '@supabase/supabase-js'
 import { supabaseAdminUrl, supabaseAdminKey } from './_pinAuth.js'
-import { resolveXpAmount, isValidStudentId, isValidSourceEventId, isValidEventType } from '../src/utils/paulRankShared.js'
+import { resolveXpAmount, isValidStudentId, isValidSourceEventIdForEvent, isValidEventType } from '../src/utils/paulRankShared.js'
 
 const DUPLICATE_KEY_VIOLATION = '23505'
 
@@ -45,13 +45,22 @@ export default async function handler(req, res) {
     return
   }
   if (!isValidEventType(eventType)) {
-    // 알 수 없는 eventType — 클라이언트가 임의 문자열로 새 지급 경로를
-    // 만들어내는 걸 서버가 원천 거부(XP_EVENT_TABLE에 없는 값은 존재하지
-    // 않는 이벤트).
+    // 알 수 없는 eventType이거나, XP_EVENT_TABLE에는 있지만 아직
+    // status:'planned'(예약만 된 미구현 이벤트 — word-king-complete/
+    // weekly-streak/special-event)인 경우도 여기서 함께 거부된다
+    // (resolveXpAmount가 'active'가 아니면 null을 반환 — paulRankShared.js
+    // 참고). 클라이언트가 임의 문자열/아직 열리지 않은 이벤트로 새 지급
+    // 경로를 만들어내는 걸 서버가 원천 거부.
     res.status(200).json({ ok: false, reason: 'unknown_event_type' })
     return
   }
-  if (!isValidSourceEventId(sourceEventId)) {
+  // v2.3.1(행동 단위 리팩터링) — eventType 화이트리스트뿐 아니라
+  // source_event_id의 기간키(period key)까지 서버가 검증한다. 예전
+  // mission-clear/duplicate-sticker-bonus/spelling-combo-N이 wordId나
+  // 무작위값을 기간키 자리에 써서 사실상 무제한 반복 지급이 가능했던
+  // 사고(paulRankShared.js XP_EVENT_TABLE 헤더 주석 참고)가, 이번엔
+  // "가짜 날짜"를 계속 바꿔가며 보내는 형태로 재발하지 않도록 막는다.
+  if (!isValidSourceEventIdForEvent(eventType, sourceEventId)) {
     res.status(200).json({ ok: false, reason: 'invalid_source_event_id' })
     return
   }

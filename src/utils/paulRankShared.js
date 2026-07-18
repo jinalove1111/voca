@@ -32,6 +32,16 @@
 // 기존 total_xp 컬럼은 건드리지 않는다(레거시 표시값, DebugPage.jsx가
 // 그대로 참조 — 삭제/의미변경 금지, CLAUDE.md 부록: 기존 데이터/필드
 // 보존 원칙).
+//
+// ── v2.3.1(2026-07-19) 갱신 — "addStars() 호출 4곳과 XP 트리거가 1:1"은
+// 더 이상 사실이 아니다 ────────────────────────────────────────────────
+// 위 2)번 문단은 v2.3 최초 설계 당시 판단이었다. 운영자가 실제 프로덕션
+// 테스트에서 "XP가 단어 단위로 지급된다"(레벨업 미션 클리어가 wordId를
+// source_event_id에 그대로 씀 — 무한 파밍 가능)를 발견해 행동(Action)
+// 단위로 재설계했다. 지금은 addStars() 4곳 중 레벨업 미션 클리어/중복
+// 스티커 환전 2곳은 XP를 전혀 지급하지 않고(별만 그대로 지급), 나머지
+// (오늘의 미션 4/4/쓰기시험)는 트리거 자체가 "일별 카테고리 완료" 신호로
+// 대체됐다 — 상세는 아래 4)번 XP_EVENT_TABLE 헤더 주석 참고.
 
 // ── 1) Hat Stage(모자 크기) — 정확히 5단계, 운영자 지정 scale 그대로.
 // "순수 설정 데이터"만 — 시각/애니메이션 구현은 이번 범위 밖(PAUL_BIBLE.md
@@ -103,25 +113,84 @@ export const EXPERIENCE_UNLOCKS = {
 }
 
 // ── 4) XP 이벤트 테이블(서버가 신뢰하는 유일한 금액 원천) ───────────────
-// 클라이언트는 "이 이벤트가 일어났다"만 알리고, 금액은 여기서만 결정된다
-// (api/grant-xp.js가 그대로 import해서 씀 — 클라이언트가 보낸 amount는
-// 절대 신뢰하지 않는다는 운영자 지시의 직접 구현).
-// 기존 addStars() 호출 4곳과 정확히 1:1 대응(useStudent.js 참고).
+// v2.3.1(2026-07-19, 행동 단위 리팩터링) — **운영자가 실제 프로덕션에서
+// 발견**: v2.3의 `mission-clear`(레벨업 미션 클리어, `useStudent.js`
+// `answerMission()`)가 `source_event_id`에 `wordId`를 그대로 썼다
+// (구 코드: `` `mission-clear:${wordId}` ``) — 학생이 (특히 오답으로
+// 미션 큐에 들어간) 단어를 계속 넘기며 미션을 깨면 **단어 개수만큼** XP가
+// 무한히 쌓이는 파밍 경로였다. `duplicate-sticker-bonus`(중복 스티커
+// 환전)도 같은 성격의 구멍이었다 — 무작위 키(`randEventId()`)를 써서
+// "네트워크 재시도 중복"은 막았지만, 오늘의 미션(4/4)이 하루 여러 번
+// 반복 완료될 때마다(설계상 의도된 동작, 아래 `daily-mission-complete`
+// 주석 참고) 매번 새 무작위 키로 별개 지급이 일어나 사실상 무제한이었다.
+// `spelling-combo-N`도 `source_event_id`가 `날짜:wordId` 조합이라 같은
+// 날 서로 다른 단어에서 콤보 마일스톤에 반복 도달할 때마다 별개 지급이
+// 가능했다(운영자가 함께 의심 지목).
+//
+// 새 설계 원칙: **XP는 "단어"가 아니라 "행동(그날의 학습 카테고리 완료)"
+// 단위로만 지급한다.** 아래 4개 일별(day) 이벤트는 기존
+// `useStudent.js`의 `categoriesCompleted`(그날 단어보기/예문/퀴즈/발음
+// 4개 카테고리 중 몇 개를 채웠는지, 0~4) 개념을 그대로 재사용한다 —
+// "카테고리 완료"는 이미 "여러 단어를 거쳐야 도달하는 일별 1회성
+// 이벤트"라 구조적으로 파밍 방지가 된다(운영자 설계 힌트). 단, 4번째
+// 카테고리는 그대로 재사용하지 않았다 — 실측 재확인 결과
+// `categoriesCompleted`의 실제 4개 카테고리는 단어보기/예문/퀴즈/**발음**
+// (`countCategoriesCompleted()`, `useStudent.js`)이고 "쓰기(spelling
+// test)"는 그 4개에 포함되지 않는다(별도의 `history.spellingCorrect`
+// 일별 카운터로 이미 추적 중). 운영자가 8개 이벤트 이름에 "발음"이 아니라
+// "writing-complete"를 지정했으므로, 발음은 기존처럼 `daily-mission-
+// complete`(4/4 게이트)에만 계속 기여하게 두고(그 자체는 그대로 유지),
+// `writing-complete`는 발음이 아니라 **쓰기시험**의 같은 "오늘 처음 GOAL
+// 도달" 신호로 새로 정의했다(`useStudent.js` `recordSpellingAnswer()`
+// 참고) — 근거는 이 판단 자체를 결정 문서(`wiki/decisions.md` #10)에
+// 남긴다.
+//
+// `source_event_id` 패턴은 전부 `{eventType}:{기간키}` — 일별 이벤트는
+// 날짜 문자열(이 저장소 기존 `todayStr()` 포맷, `toDateString()`을 그대로
+// 재사용 — 새 포맷 발명 금지, `history`/`round.date`가 이미 이 포맷으로
+// 키잉되어 있어 원장과 진행기록을 사람이 대조하기도 쉽다). `student_id`는
+// `xp_ledger`의 별도 컬럼이라 문자열에 중복으로 넣지 않는다(unique 제약이
+// `(student_id, source_event_id)` 조합이라 학생 안에서만 유일하면 충분).
+//
+// `status: 'active'`(지금 실제로 클라이언트가 트리거) | `'planned'`(스키마
+// 슬롯만 예약, 아직 아무 코드도 이 이벤트를 만들지 않음 — EXPERIENCE_UNLOCKS
+// 의 status 패턴을 그대로 재사용, 운영자 지시: "Word King을 실제로
+// 구현하지 마라, 이벤트 타입 이름만 예약"). `resolveXpAmount()`가
+// `status !== 'active'`이면 null을 반환하므로, `api/grant-xp.js`가 이
+// 3개 이벤트를 **지금은 어떤 요청이 와도 전부 거부**한다(엔드포인트
+// 자체는 공개돼 있으므로, "스키마에 슬롯만 있고 서버는 아직 지급하지
+// 않는다"까지 구현해야 진짜로 안전 — 슬롯만 두고 서버가 받아주면 그
+// 자체가 새 파밍 구멍이 된다).
+// `period`: `'day'`(날짜 문자열 기간키, 아래 `isValidDayPeriodKey()`로
+// 서버가 "오늘 근방"인지까지 검증) | `'week'`(ISO 주차 등 — `weekly-
+// streak`가 실제 구현될 때 정의) | `'admin-event'`(관리자가 지정하는
+// 이벤트 ID — `word-king-complete`/`special-event`가 실제 구현될 때
+// 정의). `'day'` 외 나머지는 지금 `status:'planned'`라 이 필드가 실제로
+// 검증에 쓰이는 코드 경로에 도달하지 않는다(아래 `isValidSourceEventIdForEvent`
+// 주석 참고) — 미래 세션이 하나씩 `'active'`로 전환할 때 그 이벤트 성격에
+// 맞는 기간키 검증을 채워 넣으면 된다(스키마/API 변경 없이).
 export const XP_EVENT_TABLE = {
-  'mission-clear': 3, // answerMission — 레벨업 보스미션 클리어(기존 addStars(3)과 동일 트리거)
-  'mission-bonus-4of4': 10, // 오늘의 미션 4/4 완료 보너스(기존 MISSION_BONUS_STARS)
-  'duplicate-sticker-bonus': 20, // 중복 스티커 환전(기존 DUPLICATE_BONUS_STARS)
-  'spelling-combo-3': 1, // 쓰기시험 콤보 3 도달(기존 SPELLING_COMBO_BONUS[3])
-  'spelling-combo-5': 2, // 콤보 5 도달(기존 SPELLING_COMBO_BONUS[5])
-  'spelling-combo-10': 3, // 콤보 10 도달(기존 SPELLING_COMBO_BONUS[10])
+  'word-view-complete': { amount: 2, period: 'day', status: 'active' }, // 오늘 단어보기(round.wordsViewed) 카테고리 첫 GOAL 도달
+  'listening-complete': { amount: 2, period: 'day', status: 'active' }, // 오늘 예문 청취(round.examplesHeard) 카테고리 첫 GOAL 도달
+  'writing-complete': { amount: 2, period: 'day', status: 'active' }, // 오늘 쓰기시험 정답(history.spellingCorrect) 카테고리 첫 GOAL 도달
+  'quiz-complete': { amount: 2, period: 'day', status: 'active' }, // 오늘 퀴즈(round.quizSolved) 카테고리 첫 GOAL 도달
+  'daily-mission-complete': { amount: 10, period: 'day', status: 'active' }, // 기존 mission-bonus-4of4 재명명/표준화 — 오늘의 미션(4/4)은 하루 여러 번 반복 완료 가능(별/스티커는 매번 지급, 기존 동작 유지)하지만 XP는 날짜 기간키라 오늘 첫 완료 1회만
+  // ↓ 예약 슬롯만 — 실제로 트리거하는 코드 없음(운영자 지시). amount는
+  // 잠정값(실제 기능 설계 시 재산정), status가 'planned'인 한 서버가
+  // 무조건 거부하므로 지금은 어떤 값이어도 지급되지 않는다.
+  'word-king-complete': { amount: 15, period: 'admin-event', status: 'planned' }, // Word King(주간 대표) — 미구현, 이벤트 타입만 예약
+  'weekly-streak': { amount: 5, period: 'week', status: 'planned' }, // 주간 스트릭 보너스 — 미구현, 이벤트 타입만 예약
+  'special-event': { amount: 10, period: 'admin-event', status: 'planned' }, // 관리자 특별 이벤트(시즌 등) — 미구현, 이벤트 타입만 예약
 }
 
 // 서버(api/grant-xp.js)와 클라이언트(usePaulRank.js pre-check)가 공유하는
-// 순수 조회 함수 — 알 수 없는 eventType은 null(거부).
+// 순수 조회 함수 — 알 수 없는 eventType이거나 아직 'active'가 아닌
+// (planned) 이벤트는 null(거부).
 export function resolveXpAmount(eventType) {
-  return Object.prototype.hasOwnProperty.call(XP_EVENT_TABLE, eventType)
+  const config = Object.prototype.hasOwnProperty.call(XP_EVENT_TABLE, eventType)
     ? XP_EVENT_TABLE[eventType]
     : null
+  return (config && config.status === 'active') ? config.amount : null
 }
 
 // ── 5) 순수 계산 — Rank / Hat Stage / 다음 단계까지 진행률 ─────────────
@@ -187,4 +256,50 @@ export function isValidSourceEventId(id) {
 }
 export function isValidEventType(eventType) {
   return resolveXpAmount(eventType) !== null
+}
+
+// v2.3.1 — "행동 단위" 기간키 검증. 서버(api/grant-xp.js)가 클라이언트가
+// 보낸 sourceEventId를 eventType 화이트리스트뿐 아니라 **기간키 형식/범위**
+// 까지 확인해야, "같은 eventType에 매번 다른 무작위/조작된 기간키를 붙여
+// 무한히 재요청"하는 우회 파밍이 막힌다(XP_EVENT_TABLE 헤더 주석의
+// mission-clear/duplicate-sticker-bonus 사고 재발 방지 — 이번엔 wordId
+// 대신 "가짜 날짜"로 같은 구멍이 재발하지 않도록 서버가 직접 검증).
+//
+// "오늘과 리터럴 일치"가 아니라 관대한 허용 폭(±2일)만 확인한다 — 서버
+// (Vercel, UTC 근방)와 학생 클라이언트(한국시간 KST, UTC+9)의 타임존이
+// 달라 자정 근처 정상 요청까지 오탐 차단할 위험이 있기 때문(안정성
+// 최우선, CLAUDE.md 규칙 1). 이 폭 안에서는 여전히 서로 다른 날짜 키를
+// 몇 개 만들어낼 수 있어 "완전히 0"은 아니지만, 하루 기준 이벤트당
+// 최대 2~3일치(수 XP)로 유계(bounded)된다 — "단어를 계속 넘기면 무한정
+// 쌓이는" 이전 사고와는 질적으로 다른, 실용적 절충(문서화된 판단).
+const DAY_KEY_TOLERANCE_MS = 2 * 24 * 60 * 60 * 1000
+export function isValidDayPeriodKey(periodKey, now = new Date()) {
+  if (typeof periodKey !== 'string' || periodKey.length === 0) return false
+  const parsed = new Date(periodKey)
+  if (Number.isNaN(parsed.getTime())) return false
+  return Math.abs(now.getTime() - parsed.getTime()) <= DAY_KEY_TOLERANCE_MS
+}
+
+// eventType별로 source_event_id가 "{eventType}:{그 이벤트 성격에 맞는
+// 기간키}" 형태인지 전체 확인 — api/grant-xp.js가 유일하게 쓰는 진입점.
+// status:'planned'인 이벤트(word-king-complete/weekly-streak/special-event)
+// 는 resolveXpAmount()가 이미 null을 반환해 api/grant-xp.js가 이 함수까지
+// 오기 전에 거부하므로, 아래 'week'/'admin-event' 분기는 지금은 실행되지
+// 않는 전방호환 스캐폴딩이다(각 이벤트가 실제 구현되어 status:'active'로
+// 전환되는 시점에, 그 이벤트 성격에 맞는 검증(ISO 주차 형식/관리자 이벤트ID
+// 화이트리스트 등)으로 채워야 한다 — 지금 값을 대충 채우면 나중에 그
+// 이벤트가 활성화되는 순간 조용히 취약해지므로, 최소한(빈 문자열만 거부)만
+// 두고 TODO로 명시).
+export function isValidSourceEventIdForEvent(eventType, sourceEventId, now = new Date()) {
+  if (!isValidSourceEventId(sourceEventId)) return false
+  const config = XP_EVENT_TABLE[eventType]
+  if (!config) return false
+  const prefix = `${eventType}:`
+  if (!sourceEventId.startsWith(prefix)) return false
+  const periodKey = sourceEventId.slice(prefix.length)
+  if (config.period === 'day') return isValidDayPeriodKey(periodKey, now)
+  // TODO(week/admin-event 실제 구현 시): ISO 주차 형식 검증 / 관리자
+  // 이벤트ID 화이트리스트 검증으로 교체. 지금은 도달 불가능(status가
+  // 'planned'인 한 resolveXpAmount가 먼저 거부) — 최소 방어만.
+  return periodKey.length > 0
 }
