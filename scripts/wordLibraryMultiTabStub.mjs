@@ -11,6 +11,8 @@ export const addStudent = () => {}
 export const removeStudent = () => {}
 export const findStudentByName = () => null
 export const setWordStatus = async () => {}
+// Paul Rank System(2026-07-19) — no-op stub, XP 지급은 별도 테스트가 담당.
+export const postXpEvent = async () => {}
 
 export const syncCalls = []
 
