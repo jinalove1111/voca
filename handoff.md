@@ -1,5 +1,114 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-18 (문서화 체계 구축 완료 — PROJECT_GUIDE/ARCHITECTURE/DATABASE/DEVELOPER_GUIDE/TESTING 신규 + ROADMAP append)_
+_최종 갱신: 2026-07-18 (개발자 인프라 — 테스트 하네스 레지스트리 + verify:* + Health Check 신설)_
+
+## 2026-07-18 — 개발자 인프라 구축: 테스트 하네스 레지스트리 + npm verify:* + Health Check (Engineering Head, 순수 개발자 인프라 — 신기능/UI/로직 변경 없음)
+
+운영자 지시: 기존 `scripts/` 40개 이상 테스트 스크립트(어제 `TESTING.md`로 4개
+카테고리 분류 완료)를 대체하지 않고, 그 위에 얇은 오케스트레이션 레이어만
+씌워 도메인별 회귀 게이트를 만드는 순수 개발자 인프라 작업. 신기능/UI/게임화
+일체 금지, 코드 로직 변경도 원칙적으로 금지(하네스/npm 스크립트/문서만).
+
+### Phase 1 — 하네스 레지스트리 (`tests/harness/`)
+- `scripts/` 51개 파일 전수를 grep으로 `process.env.*_BUNDLE` 요구사항과
+  `import(...)` 경로를 실측 확인(추측 없음) 후, CLAUDE.md 지시의 13개
+  도메인(login/student/admin/homework/quiz/writing/speaking/listening/
+  unitSwitching/persistence/dailyStudy/wordAssignment/audioTts)에 매핑.
+- `tests/harness/registry.mjs` — 단일 진실 원천. `BUILDERS`(6개 —
+  wordlib/entrance/progress/race/multitab/speech, 각각 기존
+  `buildXBundle.mjs`가 만드는 산출물 1개)와 `DOMAINS`(13개, 각 도메인이
+  실행할 기존 `scripts/testX.mjs` 목록 + 필요한 builders)를 선언만 함 —
+  검증 로직 재구현 없음.
+- `tests/harness/runDomain.mjs` — 공용 러너 엔진(child_process로 실제
+  스크립트 실행, 표준 PASS/FAIL/SKIP 헤더로 재포맷). `tests/harness/run
+  <Domain>.mjs` 13개 — 도메인별 얇은 진입점(`runLogin.mjs` 등, 운영자
+  지시 형식 그대로).
+- **speaking/listening은 정직한 SKIP**: 51개 스크립트 전수 확인 결과 이
+  두 도메인을 커버하는 기존 스크립트가 실제로 없음(getUserMedia/
+  MediaRecorder/실제 스피커 출력은 headless Node에서 구조적으로 검증
+  불가) — 가짜 PASS 대신 SKIP 사유를 코드에 명시.
+- **신규 발견 2건(테스트 인프라 갭, 이번에 메꿈)**: ①`testTtsSingleton.mjs`
+  가 요구하는 `SPEECH_BUNDLE`을 만드는 정식 빌드 스크립트가 없어서 어제
+  QA 스윕 때 즉석으로 만든 `scripts/.tmp/buildSpeechBundle.mjs`(gitignored
+  임시본)만 있었음 — `scripts/buildSpeechBundle.mjs`로 정식 승격(기존
+  명명 규칙 그대로). ②`testPaulReactions.mjs`가 PNG 정적 import 때문에
+  plain `node`로 직행 불가능한데(파일 헤더 주석에 이미 esbuild 번들 방법이
+  적혀 있었음) 이를 실행하는 스크립트가 없었음 —
+  `scripts/buildPaulReactionsBundle.mjs` 신규 작성.
+
+### Phase 2 — npm 스크립트
+`package.json`에 `verify:login/student/admin/homework/quiz/writing/
+speaking/listening/unit/persistence/daily-study/word-assignment/audio-tts`
+13개 + `verify:all`(전체 순차, 하나라도 FAIL이면 non-zero exit) 추가.
+`npm run verify:xxx` 한 줄로 빌드+테스트가 순차 실행되어, 사람이 매번
+`buildXBundle.mjs`를 먼저 수동 실행해야 하던 번거로움 제거.
+
+### Phase 3+4 — `DEVELOPER_GUIDE.md` append
+"AI 세션 표준 워크플로우" 6단계(문서읽기→구현→verify 하네스→실패수정→
+문서갱신→git요약, `npm run verify:xxx` 명령 포함)와 "아키텍처 변경 시
+문서 갱신 규칙" 매핑표(변경 종류별로 어떤 문서에 append해야 하는지,
+"덮어쓰기 금지 append만" 원칙 재확인) 추가. 기존 섹션 전부 원본 보존.
+
+### Phase 5 — `scripts/healthCheck.mjs`
+9개 영역(Architecture/Security/Performance/Database/Testing/
+Maintainability/Scalability/Documentation/Code Quality) 점수 리포트.
+Database(92)/Performance(78)/Security(90) 3개는 2026-07-18 Production
+Readiness 감사 점수를 그대로 인용(CITED, 점수 재발명 없음). 그 감사가
+다루지 않은 6개(Testing/Maintainability/Scalability/Documentation/
+Code Quality/Architecture)는 이번에 fs/grep으로 실측한 근거로 채점
+(SCORED) — 하네스 도메인 커버리지 비율(11/13 실행 가능), 문서 파일
+존재+최신성(7종 전부 확인), eslint/tsconfig 부재(루트에 설정 파일 없음,
+실측), AdminScreen.jsx(1715줄)/useStudent.js(1032줄) 줄수 등. 결과:
+Testing 80, Maintainability 75, Scalability 70, Documentation 92,
+Code Quality 76, Architecture 80 — 9개 영역 평균 81.4/100. Persistence(88)
+는 운영자가 나열한 "9개 영역" 목록 밖이라 참고 인용으로만 표시하고 평균
+집계에서 제외(지시 문구를 문자 그대로 따름 — 임의로 10개로 늘리지 않음).
+`node scripts/healthCheck.mjs`로 실행 가능(리포트 전용, exit 0 고정).
+
+### Phase 6 — 최종 검증
+- `npm run build` 통과(메인 번들 520.89KB, 기존 500KB 경고 외 신규 경고
+  없음 — 어제 기록된 520.86KB와 사실상 동일, 코드 변경 없었으므로 예상대로).
+- `npm run verify:all` 실측 실행 — 13도메인 중 11 PASS, 2 SKIP(speaking/
+  listening, 의도된 것), **1 FAIL(login)**: 7개 스크립트 중 3개는 PASS
+  (testStudentLogin/testRlsSecurity/testLoginRestoreCrash), 4개는
+  `permission denied for table students` 등으로 FAIL — 원인은 로컬
+  `.env`/`.env.local`에 `SUPABASE_SERVICE_ROLE_KEY`가 없어서(PIN 서버리스
+  함수가 service_role key를 요구). **이번에 새로 생긴 회귀가 아님** —
+  2026-07-18 QA 스윕 섹션(위 참고)에 이미 "4개는 로컬 환경 제약으로 PIN
+  관련 라이브 테스트만 차단, 프로덕션은 정상"으로 동일하게 기록돼 있던
+  기존 갭을 하네스가 정직하게 그대로 재현한 것. service role key가 있는
+  환경(운영자 로컬 터미널 등)에서 재실행하면 전부 PASS로 알려짐.
+- `TESTING.md`에 "Phase 6 최종 검증 매트릭스" append — 운영자 체크리스트
+  13항목(로그인/학생/숙제/유닛/퀴즈/쓰기/말하기/듣기/진행도/관리자/모바일/
+  새로고침/영속성) 대조: 완전 PASS 8개, 부분 2개(로그인/새로고침), SKIP 2개
+  (말하기/듣기), GAP 1개(모바일 — 하네스 대상 밖, 실기기 수동 QA 영역).
+
+### 신규 파일
+`tests/harness/`(registry.mjs, runDomain.mjs, runOne.mjs, run{Login,
+Student,Admin,Homework,Quiz,Writing,Speaking,Listening,UnitSwitching,
+Persistence,DailyStudy,WordAssignment,AudioTts}.mjs, runAll.mjs — 16개),
+`scripts/buildSpeechBundle.mjs`, `scripts/buildPaulReactionsBundle.mjs`,
+`scripts/healthCheck.mjs`.
+
+### 수정 파일
+`package.json`(verify:* 14개 스크립트 추가), `DEVELOPER_GUIDE.md`(AI
+워크플로우 + 문서갱신규칙 append), `TESTING.md`(하네스 레이어 + Phase 6
+매트릭스 append).
+
+### 남은 기술부채 / 다음 단계 (신규 발견만, 수정 안 함 — 범위 이탈 방지)
+- **로컬 개발환경에 `SUPABASE_SERVICE_ROLE_KEY` 부재**: PIN 관련 라이브
+  e2e 4개가 로컬에서 항상 FAIL로 나옴(위 참고) — CI/로컬 `.env.local`에
+  운영자가 이 키를 추가하면 `verify:login`이 완전 PASS로 전환될 것으로
+  예상(코드 문제 아님, 순수 환경 설정 문제).
+- **CI 자동화 없음**: 지금은 `npm run verify:xxx`를 사람이 수동 실행하는
+  전제 — GitHub Actions 등으로 push/PR 시 자동 실행하면 Testing 점수
+  상승 여지(healthCheck.mjs 감점 요인에 기록).
+- **speaking/listening/모바일**: 구조적으로 headless 자동화가 불가능한
+  영역 — 실기기 수동 QA 체크리스트를 별도로 문서화하면(예: `MOBILE_QA.md`
+  신설) 이 갭을 최소한 "절차로는" 커버 가능(다음 세션 후보).
+- **eslint/tsconfig 부재**(healthCheck.mjs Code Quality 감점 근거): 도입
+  여부는 운영자 판단 필요(외부 의존성 추가 최소화 원칙과 트레이드오프).
+
+---
 
 ## 2026-07-18 — 문서화 체계 구축 완료 (Engineering Head, 코드 변경 없음 — 순수 문서 작업)
 
