@@ -1,5 +1,96 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-18 (AI 개발 운영체제 구축 — 헌법/역할 에이전트/.ai-status/훅/보드/워크플로우)_
+_최종 갱신: 2026-07-18 (경량 로컬 Wiki 구축 — Engineering Head)_
+
+## 2026-07-18 — 경량 로컬 LLM Wiki 구축 (Engineering Head, 코드 변경 0건, 순수 문서/스크립트)
+
+운영자 지시: 기존 마크다운 문서(`PROJECT_GUIDE.md`/`ARCHITECTURE.md`/
+`DATABASE.md`/`DEVELOPER_GUIDE.md`/`TESTING.md`/`ROADMAP.md`/
+`handoff.md`)를 진실 원천으로 삼아, 그 위에 얹는 경량 로컬 Wiki(`wiki/`)
+와 API 불필요 로컬 검색 명령을 구축. 벡터DB/유료 API/대시보드
+기능/모바일QA/학생 대상 기능 전부 금지(운영자 명시) — 전부 준수, 코드
+(`src/`/`api/`/`scripts/test*.mjs`/`supabase_*.sql`) 변경 0건.
+
+### 신규 파일
+
+- `wiki/HOME.md` — 중앙 색인. 최상단에 "이 위키는 기존 문서의 사본이
+  아니라 색인/요약"이라는 경고 + 하위 페이지 링크 표 + 검색 명령 사용법.
+- `wiki/product-flows.md` — `ARCHITECTURE.md` "주요 플로우" 섹션을
+  요약 목록화(로그인/학습/발음/퀴즈/쓰기시험/듣기/미니게임/미션/입실시험/
+  관리자 업로드·관리·숙제·대시보드/학부모 조회), 항목별 1~3줄 + 원본
+  앵커 링크.
+- `wiki/decisions.md` — 실제 설계 결정 8건을 "무엇을/왜/언제(커밋)"
+  3줄 형식으로: RLS 대신 컬럼권한(v1.9), 이름→UUID 식별자 전환(v1.6),
+  반선택→이름+PIN 로그인 전환(v1.6 중간지시), PIN 자기설정 게이트 방식
+  (v1.7), unit_name→current_unit_id 전환(v2.1), last-writer-wins→필드별
+  병합(v2.2), PIN 해시를 Node crypto로 자체구현(외부의존성 최소화),
+  학부모 리포트를 AI 대신 템플릿으로(비용 회피).
+- `wiki/lessons-learned.md` — `CLAUDE.md` 18개 규칙 중 실제 사고
+  근거가 있는 규칙(3/4/15/16/18)을 표로 재인덱싱(본문 복제 아님, 링크)
+  + `handoff.md`에서 18개 규칙에 직접 포함 안 된 추가 교훈 6건(훅 순서,
+  cleanup, localStorage 실패 처리, stale 응답 레이스, 번들 해시 대조,
+  손으로 베끼지 않는 테스트).
+- `wiki/bug-history.md` — 실제 커밋 해시로 검증 가능한 프로덕션 버그
+  6건 표(증상/원인/커밋/날짜): unit_name 폴백 버그(`98da563`~`7c99924`),
+  PIN 재로그인 forEach 크래시(`bc49775`/`6b5e0f9`), PIN 만들기 stale
+  응답 레이스(`6dd6c7a`/`529ff9e`), 퀴즈 상태 잔존(`6fe21b1`), 다중 탭
+  stale 덮어쓰기(`69564d2`), 캘린더 빈 기록 버그(`f29f53e`).
+- `wiki/security-notes.md` — v1.9 컬럼권한, PIN 해시 방식(scrypt),
+  관리자 재인증, 알려진 보안 갭 5건(입실시험 서버 재검증 없음 등,
+  `PROJECT_BOARD.md`와 동기화된 내용).
+- `wiki/api-costs.md` — 실사용 API/서비스 표(Supabase 요금제는
+  "확인 필요"로 정직 표기, TTS 재생은 브라우저 `speechSynthesis` 무료,
+  `api/generate-audio.js`의 Google Translate TTS 엔드포인트 무료) +
+  **`@anthropic-ai/sdk` 실사용처 확인**: `api/generate-audio.js`가
+  유일한 호출부, 신규 단어 등록 시 예문/번역/메모리팁 생성(최대 단어당
+  1회, 학생은 절대 트리거 안 함), 비용 방어 장치(wordId 존재 확인/DB
+  값만 사용/no-op 가드/격리된 try-catch) 코드에서 실제 확인.
+- `wiki/glossary.md` — 저장소 전용 용어 20여 개(DB 컬럼 + 코드
+  함수/개념) 1줄 정의.
+- `wiki/RETRIEVAL_RULES.md` — "위키의 어떤 사실도 코드보다 우선하지
+  않는다, `파일:줄` 참조를 찾으면 직접 열어 확인 후에만 신뢰" 규칙 +
+  `CLAUDE.md` 규칙 3(재구현 금지)과의 연계 설명.
+- `scripts/wikiSearch.mjs` — Node 내장 `fs`만 사용(외부 라이브러리/
+  벡터DB/네트워크 호출 없음)한 로컬 키워드 검색. `wiki/` + 6개 최상위
+  문서 + `handoff.md` 대상. 매칭 라인을 인접 라인끼리 블록으로 묶어
+  발췌, 검색어 등장 횟수(+헤딩 보너스)로 관련도 순 랭킹.
+  `npm run wiki:search -- "키워드"` 또는
+  `node scripts/wikiSearch.mjs "키워드" --limit N --context N`.
+
+### 수정 파일 (append만)
+
+- `package.json` — `"wiki:search": "node scripts/wikiSearch.mjs"` 추가.
+- `PROJECT_GUIDE.md` — 문서 지도 표에 `wiki/HOME.md` 행 추가.
+- `DEVELOPER_GUIDE.md` — "로컬 Wiki 검색(`wiki:search`)" 섹션 append(
+  사용 예시 + 검증 전 원본 확인 원칙).
+- `PROJECT_BOARD.md` — DONE 컬럼에 이번 작업 카드 추가.
+
+### 링크 무결성 검증
+
+전용 검증 스크립트(스크래치패드, 저장소에는 커밋 안 함 — 검증 전용
+1회성 도구)로 `wiki/*.md`의 상대 마크다운 링크 25개(파일 경로 + `#앵커`
+포함)를 전수 검사: 대상 파일이 실제 존재하는지, `#앵커`가 있으면
+GitHub 스타일 슬러그 알고리즘(백틱/굵게/이모지/구두점 제거, 소문자화,
+공백→하이픈, 중복 시 `-1/-2` 접미사)으로 대상 파일의 실제 헤딩과
+대조. 최초 실행 시 `DATABASE.md`/`ROADMAP.md` 앵커 6개가 예상과 달라
+FAIL(`—`(em dash)가 슬러그에서 완전히 제거되는 것을 감안 안 한 최초
+추정 오류) — 실제 계산된 슬러그로 6곳 수정 후 **재실행 결과: 25/25
+PASS(FAIL 0)**.
+
+### 빌드/회귀 확인
+
+이번 작업은 `src/`/`api/`/`scripts/test*.mjs`/`supabase_*.sql` 등
+프로덕션 코드를 전혀 건드리지 않음(신규 `scripts/wikiSearch.mjs`는
+빌드 대상(`vite build`)에 포함되지 않는 Node 전용 CLI 스크립트,
+`package.json`의 `scripts` 필드 추가는 빌드 설정과 무관) — `npm run
+build`만 통과 확인하면 충분하다고 판단, 특정 `npm run verify:<domain>`
+도메인은 해당 없음(코드 로직 변경이 없으므로).
+
+### 문서 갱신 규칙 준수
+
+`CLAUDE.md` 규칙 13(append-only)에 따라 `PROJECT_GUIDE.md`/
+`DEVELOPER_GUIDE.md`/이 `handoff.md` 전부 append만 수행 — 기존 섹션
+삭제/재작성 없음. `PROJECT_BOARD.md`는 "현재 상태" 스냅샷 예외 규칙에
+따라 DONE 카드 직접 추가.
 
 ## 2026-07-18 — AI 개발 운영체제 구축 (Engineering Head, Phase 1~8 — 코드 변경 0건, 순수 거버넌스/문서/저장소 로컬 설정)
 
