@@ -6,7 +6,21 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verify:login": "node tests/harness/runLogin.mjs",
+    "verify:student": "node tests/harness/runStudent.mjs",
+    "verify:admin": "node tests/harness/runAdmin.mjs",
+    "verify:homework": "node tests/harness/runHomework.mjs",
+    "verify:quiz": "node tests/harness/runQuiz.mjs",
+    "verify:writing": "node tests/harness/runWriting.mjs",
+    "verify:speaking": "node tests/harness/runSpeaking.mjs",
+    "verify:listening": "node tests/harness/runListening.mjs",
+    "verify:unit": "node tests/harness/runUnitSwitching.mjs",
+    "verify:persistence": "node tests/harness/runPersistence.mjs",
+    "verify:daily-study": "node tests/harness/runDailyStudy.mjs",
+    "verify:word-assignment": "node tests/harness/runWordAssignment.mjs",
+    "verify:audio-tts": "node tests/harness/runAudioTts.mjs",
+    "verify:all": "node tests/harness/runAll.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
