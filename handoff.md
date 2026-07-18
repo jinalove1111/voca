@@ -1,5 +1,97 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-19 (Paul Rank System v2.3 SQL 적용 후 라이브 검증 — Engineering Head)_
+_최종 갱신: 2026-07-19 (Paul Rank System v2.3.1 — XP 행동 단위 리팩터링, 운영자 실측 버그 수정 — Engineering Head)_
+
+## 2026-07-19 (4차) — Paul Rank System v2.3.1 — XP "단어 단위" → "행동(Action) 단위" 리팩터링 — Engineering Head
+
+운영자 지시: 실제 프로덕션 테스트에서 XP가 **단어(word) 단위**로 지급되는
+걸 발견(무한 파밍 위험). 정확한 원인을 코드로 확정 후 행동 단위로
+재설계. **결과만 보고 — 완료까지 중간 보고 없음(운영자 지시대로 진행)**.
+
+- **정확한 원인(파일:줄, 추측 아니라 코드 확인)**: `src/hooks/
+  useStudent.js`의 `answerMission(wordId)` — 레벨업 미션 클리어 시
+  `` grantXp('mission-clear', `mission-clear:${wordId}`) `` 호출(구
+  680번 줄 부근). `source_event_id`에 `wordId`가 그대로 들어가 있어,
+  학생이 (특히 오답으로 미션 큐에 들어간) 단어를 계속 넘길 때마다 XP가
+  단어 개수만큼 무한히 쌓였다. 함께 확인된 부차 구멍 2개: `grantSticker()`
+  의 `duplicate-sticker-bonus`(무작위 키 — 오늘의 미션이 하루 여러 번
+  반복 완료될 때마다 별개 지급 가능, "미션은 하루 여러 번 반복 가능"이
+  기존 설계 의도라 더 심각), `recordSpellingAnswer()`의 `spelling-
+  combo-N`(운영자가 함께 의심 지목한 대로 `날짜:wordId` 조합이라 같은 날
+  다른 단어에서 콤보 반복 도달 시 별개 지급).
+- **8개 이벤트로 재설계**: `word-view-complete`/`listening-complete`/
+  `quiz-complete`는 기존 `categoriesCompleted`(단어보기/예문/퀴즈/발음)
+  개념의 개별 카운터(`round.wordsViewed`/`examplesHeard`/`quizSolved`)가
+  GOAL(5)에 **오늘 처음** 도달하는 순간으로 재배선(day 기간키만 사용,
+  `useStudent.js`에 새 `useEffect` 추가, ref 기반 1차 방어 +
+  `dailyCategoryXpFiredRef`). `writing-complete`는 예외적으로 새로
+  정의 — `categoriesCompleted`의 실제 4번째 카테고리는 발음이지 "쓰기"가
+  아니어서(코드 재확인 결과), 운영자가 8개 이름에 "발음"이 아니라
+  "writing"을 지정했으므로 `history.spellingCorrect`(쓰기시험 정답
+  카운터)가 오늘 처음 GOAL에 도달하는 순간으로 새로 정의했다(판단 근거는
+  `src/utils/paulRankShared.js` XP_EVENT_TABLE 헤더에 상세 기록). 발음은
+  그대로 `daily-mission-complete`(구 `mission-bonus-4of4` 재명명)의
+  4/4 게이트에만 계속 기여 — 개별 XP 이벤트는 없음(8개 목록에 없으므로).
+  `mission-clear`/`duplicate-sticker-bonus`/`spelling-combo-N`은
+  `XP_EVENT_TABLE`에서 완전히 제거(별 `addStars()` 지급은 그대로 유지).
+  `word-king-complete`/`weekly-streak`/`special-event`는 예약 슬롯만
+  (`status:'planned'`) — `EXPERIENCE_UNLOCKS`의 기존 status 패턴을 재사용,
+  실제 트리거 코드 없음(Word King 미구현, 운영자 지시 그대로).
+- **`source_event_id` 새 패턴**: `{eventType}:{기간키}` 전부 통일.
+  일별 이벤트는 기존 `todayStr()`(`toDateString()`) 포맷 그대로 재사용
+  (새 포맷 발명 안 함 — `history`/`round.date`와 같은 포맷이라 원장과
+  진행기록 대조가 쉬움). `student_id`는 `xp_ledger`의 별도 컬럼이라
+  문자열에 중복으로 안 넣음(기존 unique 제약이 이미 `(student_id,
+  source_event_id)` 조합 — 재확인 완료, 그대로 활용). **서버 방어 신규
+  추가**: `api/grant-xp.js`가 eventType 화이트리스트뿐 아니라
+  `isValidSourceEventIdForEvent()`로 기간키의 접두사/형식/범위(day는
+  ±2일 관용, 서버·클라이언트 타임존 차이 고려)까지 검증 — "가짜 날짜를
+  계속 바꿔가며 보내는" 또는 "기간키에 wordId를 다시 끼워넣는" 우회
+  파밍을 막는다(같은 사고 재발 방지, 완전히 0은 아니지만 유계).
+- **SQL/기존 데이터**: `supabase_v2_3_paul_rank.sql`을 갈아엎지 않고
+  신규 증분 `supabase_v2_3_1_xp_action_based.sql` 준비(운영자 실행
+  대기, 미실행). 재확인 결과 `event_type` 컬럼은 **이미 v2.3에 존재**
+  (운영자가 검토 요청한 "미래 시스템 event_type 집계" 요구사항이 이미
+  충족돼 있었음) — 새 SQL은 조회용 인덱스(`idx_xp_ledger_event_type`)
+  1개만 추가. 화이트리스트 CHECK 제약은 **의도적으로 DB에 걸지 않음**
+  (프로덕션에 이미 쌓인 word-unit 이벤트 행이 있어 CHECK 추가 시
+  마이그레이션 자체가 깨짐 — 화이트리스트는 애플리케이션 레벨에서만
+  강제). **기존 word-unit 행은 삭제하지 않는다** — 실제 학생 데이터
+  삭제 금지(CLAUDE.md 규칙 5) — `xp_totals` 합계에 계속 포함(리셋 없음).
+  운영자가 나중에 명시적으로 원하면 실행할 수 있게 "선택 무효화" 설계
+  방침만 SQL 주석에 남기고 실제 SQL은 작성하지 않음(amount CHECK
+  제약과 충돌해 별도 설계가 필요하다는 경고 포함).
+- **"반복해도 XP 무한 획득 불가" 검증 증거**: `scripts/testPaulRank.mjs`
+  6b번 섹션(순수, 구조적 증명 — 10개 서로 다른 단어를 시뮬레이션해도
+  생성되는 `source_event_id`가 정확히 1종류(날짜만)임을 확인) + 8b번
+  섹션(기간키 위장/조작 거부, 예약 이벤트 거부) 신규 30+개 체크 전부
+  PASS. `scripts/testXpLedgerDb.mjs` 3b번 섹션(라이브 e2e — 같은 day
+  키로 8번 반복 요청해도 `xp_ledger` 행이 정확히 1개 유지되고 누적 XP도
+  불변임을 실측하도록 작성) + 5번 섹션(조작된 기간키/예약 이벤트 거부
+  실측) — **로컬은 이전 세션과 동일한 이유(`SUPABASE_SERVICE_ROLE_KEY`
+  로컬 부재)로 정직하게 SKIP**(가짜 PASS 없음, 스크립트 로직 자체는
+  테이블 존재 확인 단계까지 정상 통과 확인). Vercel 프로덕션(서비스롤
+  키 설정됨)에서 실행하면 전체 검증됨.
+- **기존 `xp_ledger`/`xp_totals` 구조 유지**: 테이블/뷰 재정의 없음,
+  컬럼 변경 없음(인덱스 1개만 추가) — "스키마 갈아엎지 말고 확장" 지시
+  그대로 준수.
+- **회귀 게이트**: `npm run build` PASS(기존 chunk-size 경고 외 신규
+  경고/에러 없음). `node scripts/testPaulRank.mjs`(38개 체크 전부 PASS),
+  `node scripts/testXpLedgerDb.mjs`(정상 SKIP, exit 0). `node
+  tests/harness/runAll.mjs`(=`npm run verify:all`) 전체 재실행 —
+  `login` 도메인 4개 스크립트만 FAIL(이번 세션이 건드리지 않은
+  PIN/로그인 코드, `git status`로 미변경 확인 — 2026-07-19(2차) 세션이
+  이미 같은 원인(`SUPABASE_SERVICE_ROLE_KEY` 로컬 부재)으로 문서화한
+  기존 상태, 신규 회귀 아님). 나머지 12개 도메인(`paulRank` 포함) 전부
+  PASS/정상 SKIP.
+- **문서 갱신**: `DATABASE.md`(`xp_ledger` 행 설명 갱신 + 마이그레이션
+  순서 14번 추가, 13번을 "적용됨"으로 갱신 — 3차 세션 실측 반영),
+  `GAME_DESIGN.md`(§3 뒤 "3.y" 신규 append), `wiki/decisions.md`(결정
+  #10), `TESTING.md`(두 테스트 항목 갱신), `PROJECT_BOARD.md`(게임화
+  카드에 v2.3.1 버그 수정 append). `PAUL_BIBLE.md`/`PAUL_PRINCIPLES.md`/
+  `AI_WORKFLOW.md`/`CLAUDE.md`는 지시대로 건드리지 않음.
+- **커밋/push**: 이 handoff 항목 포함해 파일/기능 단위로 소커밋 예정
+  (CLAUDE.md 규칙 14) — 커밋 로그는 다음 세션/운영자 확인 시 `git log`
+  참고.
 
 ## 2026-07-19 (3차) — Paul Rank System — v2.3 SQL 적용 후 라이브 검증(부분) — Engineering Head
 

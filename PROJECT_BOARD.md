@@ -237,6 +237,19 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
   - 3번(Teacher Controls 마스터 스위치)도 미구현 — 이번 세션 범위 아님.
   - 신규 관련 문서: `TESTING.md`(`testPaulRank.mjs`/`testXpLedgerDb.mjs`),
     `DATABASE.md`(`xp_ledger`/`xp_totals`), `handoff.md` 2026-07-19 항목.
+- **v2.3.1 버그 수정(2026-07-19, XP 행동 단위 리팩터링, Engineering
+  Head)** — 운영자가 실제 프로덕션에서 "XP가 단어 단위로 지급된다"(무한
+  파밍 위험)를 발견, 위 2번(XP 표준화)의 트리거를 "단어"에서 "행동(그날의
+  학습 카테고리 완료)"으로 재배선. `mission-clear`/`duplicate-sticker-
+  bonus`/`spelling-combo-N` 3개 이벤트를 XP 트리거에서 제거(별 지급은
+  유지)하고, 운영자 지정 8개 행동 단위 이벤트로 `XP_EVENT_TABLE` 재정의.
+  Word King/Hat 시각/House/티켓은 여전히 미구현(그대로 BACKLOG) —
+  `word-king-complete`/`weekly-streak`/`special-event`는 이번에 이벤트
+  타입 슬롯만 예약(`status:'planned'`, 서버가 실제 지급 거부, 실제
+  기능 구현 아님). 스키마는 `xp_ledger`/`xp_totals` 그대로 유지(신규
+  `supabase_v2_3_1_xp_action_based.sql`은 조회 인덱스 1개만 추가) — 상세는
+  `wiki/decisions.md` #10, `GAME_DESIGN.md` "3.y" 항목, `handoff.md`
+  2026-07-19 항목.
 
 ---
 

@@ -119,8 +119,46 @@ _이 저장소가 실제로 내린 설계 결정과 그 근거를 `handoff.md`/`
   `src/utils/paulRankShared.js` 헤더, `supabase_v2_3_paul_rank.sql`
   "백필 판단" 절, `handoff.md` 2026-07-19(2차) 섹션.
 
+## 10. Paul Rank System의 XP를 "단어" 단위에서 "행동(Action)" 단위로 리팩터링
+
+- **무엇을**: v2.3의 `mission-clear`(레벨업 미션 클리어)가
+  `source_event_id`에 `wordId`를 그대로 써서(`useStudent.js`
+  `answerMission()`), 학생이 단어를 계속 넘길 때마다 XP가 무한히 쌓이는
+  파밍 경로였다(운영자가 실제 프로덕션 테스트에서 발견). `duplicate-
+  sticker-bonus`(무작위 키)와 `spelling-combo-N`(날짜+wordId 조합)도 같은
+  성격의 구멍으로 함께 확인돼 셋 다 XP 지급 트리거에서 제거했다(별 지급은
+  유지). 대신 운영자 지정 8개 행동 단위 이벤트(`word-view-complete`/
+  `listening-complete`/`writing-complete`/`quiz-complete`/`daily-
+  mission-complete`/`word-king-complete`/`weekly-streak`/`special-event`)
+  로 `XP_EVENT_TABLE`을 재정의 — 앞 4개는 "그날 그 카테고리를 처음
+  완료한 순간"(day 기간키만 사용), 뒤 3개는 `status:'planned'` 예약
+  슬롯만(서버가 아직 지급 거부).
+- **왜**: "카테고리 완료"는 이미 기존 `categoriesCompleted` 개념이
+  "여러 단어를 거쳐야 도달하는 일별 1회성 이벤트"로 설계돼 있어(운영자
+  설계 힌트), 그 신호를 그대로 재사용하면 구조적으로 단어 단위 파밍이
+  불가능해진다. `writing-complete`만 예외적으로 새로 정의했다 —
+  `categoriesCompleted`의 실제 4번째 카테고리는 발음(pronunciation)이지
+  "쓰기"가 아닌데, 운영자가 8개 이벤트 이름에 "발음"이 아니라 "writing"
+  을 지정했기 때문에(기존 `history.spellingCorrect` 일별 카운터를 같은
+  "처음 GOAL 도달" 패턴으로 재사용, 발음은 그대로 `daily-mission-
+  complete`의 4/4 게이트에만 계속 기여). 서버(`api/grant-xp.js`)도
+  eventType 화이트리스트뿐 아니라 `source_event_id`의 기간키(기간 형식/
+  범위)까지 검증하도록 강화했다 — "가짜 날짜를 계속 바꿔가며 보내는"
+  형태로 같은 파밍 구멍이 재발하지 않도록.
+- **스키마**: `xp_ledger`/`xp_totals`(v2.3)는 갈아엎지 않았다 —
+  `event_type` 컬럼이 이미 v2.3에 존재해 운영자가 검토 요청한 "미래
+  시스템이 event_type으로 바로 집계" 요구사항이 이미 충족돼 있었고,
+  새 마이그레이션(`supabase_v2_3_1_xp_action_based.sql`)은 조회용 인덱스
+  1개만 추가했다. 프로덕션에 이미 쌓인 word-unit 이벤트 행은 삭제하지
+  않고 그대로 두며 `xp_totals` 합계에 계속 포함된다(리셋 없음 — 실제
+  학생 데이터 삭제 금지 원칙, CLAUDE.md 규칙 5).
+- **언제**: v2.3.1(2026-07-19), Engineering Head. 근거:
+  `src/utils/paulRankShared.js` XP_EVENT_TABLE 헤더,
+  `supabase_v2_3_1_xp_action_based.sql`, `GAME_DESIGN.md` "3.y" 항목,
+  `handoff.md` 2026-07-19 항목.
+
 ## 관련 파일
 
 `C:\voca\ROADMAP.md`, `C:\voca\handoff.md`, `C:\voca\CLAUDE.md`,
 `C:\voca\DATABASE.md`, `C:\voca\src\utils\paulRankShared.js`,
-`C:\voca\supabase_v2_3_paul_rank.sql`
+`C:\voca\supabase_v2_3_paul_rank.sql`, `C:\voca\supabase_v2_3_1_xp_action_based.sql`
