@@ -85,3 +85,65 @@ _작성: 2026-07-18. `scripts/` 전체(69개 파일)를 ls + 각 파일의 impor
 ## 관련 파일
 
 `C:\voca\scripts\fakeReact.mjs`, `C:\voca\scripts\fakeReactModule.mjs`, `C:\voca\scripts\buildWordLibBundle.mjs`, `C:\voca\scripts\buildProgressBundle.mjs`, `C:\voca\scripts\buildMultiTabBundle.mjs`, `C:\voca\scripts\buildRaceBundle.mjs`, `C:\voca\scripts\buildEntranceBundle.mjs`, `C:\voca\scripts\testSpellingDirectionWiring.mjs`(SSR 템플릿), `C:\voca\scripts\wordLibraryStub.mjs` / `wordLibraryRaceStub.mjs` / `wordLibraryMultiTabStub.mjs`(스텁 예시)
+
+---
+
+## 하네스 오케스트레이션 레이어 (`tests/harness/`, 2026-07-18 신규)
+
+_이 섹션부터는 append — 위 내용(4개 카테고리/작성 패턴)은 원본 그대로 보존. 아래는 그 위에 얇게 얹은 실행 편의 레이어일 뿐, 검증 로직을 대체하지 않는다._
+
+기존에는 새 테스트를 돌리려면 `node scripts/buildXxxBundle.mjs && WORDLIB_BUNDLE=... node scripts/testXxx.mjs`처럼 사람이 매번 번들 경로를 손으로 맞춰야 했다. `tests/harness/`는 이 절차를 `npm run verify:도메인` 한 줄로 자동화하는 것 **뿐**이다 — child_process로 기존 `scripts/*.mjs`를 그대로 실행하고 표준 PASS/FAIL 헤더로 재포맷할 뿐, 로직을 손으로 재구현하지 않는다(`tests/harness/registry.mjs`가 어떤 도메인이 어떤 기존 스크립트+빌드 스크립트를 쓰는지 선언).
+
+### 명령어
+
+```
+npm run verify:login            npm run verify:writing
+npm run verify:student          npm run verify:speaking   (SKIP 고정 — 아래 참고)
+npm run verify:admin            npm run verify:listening  (SKIP 고정 — 아래 참고)
+npm run verify:homework         npm run verify:unit
+npm run verify:quiz             npm run verify:persistence
+npm run verify:daily-study      npm run verify:word-assignment
+npm run verify:audio-tts        npm run verify:all        (전체 순차, 하나라도 FAIL이면 non-zero exit)
+```
+
+### 도메인 ↔ 기존 스크립트 매핑
+
+상세는 `tests/harness/registry.mjs`(단일 진실 원천)를 직접 열어보는 것을 권장 — 아래는 요약.
+
+| 도메인 | 커버 | 실제 실행되는 기존 스크립트 |
+|---|---|---|
+| login | O | testStudentLogin/testStudentSelectPinStatus/testStudentPinAuth/testStudentPinSelfSetup/testClearStudentPin/testRlsSecurity/testLoginRestoreCrash |
+| student | O | testIdentityMigration/testMultiClass/testRenameClass/testClassDeleteCascade |
+| admin | O | testDashboard/testSpellingSettings/testSpellingV2Db (+extra: testEntranceTest/testEntranceTestDb) |
+| homework | O | testDailyAssignment/testFutureAssignment/testSyncProgress |
+| quiz | O | testQuizStepReset (+extra: testPaulReactions) |
+| writing | O | testSpelling/testSpellingDirectionWiring |
+| speaking | **SKIP** | 없음 — getUserMedia/MediaRecorder는 headless Node에서 실행 불가, 이 도메인을 커버하는 test*.mjs 자체가 저장소에 없음(가짜 PASS 대신 정직한 SKIP) |
+| listening | **SKIP** | 없음 — 실제 스피커 출력/청취 인지는 headless 환경에서 관측 불가(audioTts의 testTtsSingleton은 로직만 검증, 실제 소리 검증 아님) |
+| unitSwitching | O | testUnitPersistence/testUnitNaturalSort/testUnitResumeIndex/testStudentUnitDecouple/testStudentSelectUnitSwitch |
+| persistence | O | testProgress/testMergeProgress/testRestoreSyncRace/testMultiTabRace/testMultiDeviceMerge/testFullProgressBackup/testResetWordStatusBackup (+extra: dbIntegrityAudit) |
+| dailyStudy | O | testWeeklyReport |
+| wordAssignment | O | testDailyAssignment/testFutureAssignment(homework와 스크립트 공유, 관점만 다름) |
+| audioTts | O | testTtsSingleton(로직 전용 — 실제 오디오 재생 아님, listening 참고) |
+
+### Phase 6 최종 검증 매트릭스 (운영자 체크리스트 13항목 대조, 2026-07-18)
+
+`npm run verify:all` 실측 실행 결과(로컬 환경) 기준. SKIP/GAP은 숨기지 않고 그대로 기록.
+
+| 체크리스트 항목 | 하네스 도메인 | 결과(로컬) | 비고 |
+|---|---|---|---|
+| 로그인 | login | **부분 PASS** — 7개 중 3개 PASS(testStudentLogin/testRlsSecurity/testLoginRestoreCrash), 4개 FAIL | FAIL 4개(testStudentSelectPinStatus/testStudentPinAuth/testStudentPinSelfSetup/testClearStudentPin)는 전부 `SUPABASE_SERVICE_ROLE_KEY`가 로컬 `.env`/`.env.local`에 없어서(`permission denied for table students` 등) — 이번에 새로 생긴 회귀가 아니라 `handoff.md` 2026-07-18 QA 스윕에 이미 "4개는 로컬 환경 제약, 프로덕션은 정상"으로 기록된 기존 갭. service role key가 있는 환경(운영자 로컬 터미널 등)에서 재실행 권장. |
+| 학생 | student | PASS | 4/4 |
+| 숙제 | homework | PASS | 3/3 |
+| 유닛 | unitSwitching | PASS | 5/5 |
+| 퀴즈 | quiz | PASS | 1/1(+extra 1) |
+| 쓰기 | writing | PASS | 2/2 |
+| 말하기 | speaking | **SKIP(GAP)** | headless 환경 구조적 한계, 커버 스크립트 없음 — 실기기 수동 QA 필요 |
+| 듣기 | listening | **SKIP(GAP)** | headless 환경 구조적 한계, 커버 스크립트 없음(TTS 중복방지 로직만 audioTts로 별도 검증) — 실기기 수동 QA 필요 |
+| 진행도 | persistence | PASS | 7/7(+extra 1) — "영속성"과 동일 도메인으로 통합 |
+| 관리자 | admin | PASS | 3/3(+extra 2) |
+| 모바일 | (도메인 없음) | **GAP** | Android Chrome 실기기 터치/오디오unlock/권한흐름은 headless Node로 관측 불가 — 기존 QA 스윕(handoff.md)도 "코드 리뷰 결과만, 실기기 확인 필요"로 동일하게 기록. 최근 모바일 터치/에코 버그 수정(git log)은 코드 리뷰+실기기 확인으로 처리된 것이지 자동 하네스 대상 아님. |
+| 새로고침 | (login/persistence가 부분 커버) | **부분** | `testLoginRestoreCrash.mjs`(로그인 직후 크래시 없음 + 별/스티커/캘린더 보존)와 `testRestoreSyncRace.mjs`/`testMultiTabRace.mjs`(재동기화 레이스)가 "새로고침 후 상태" 관련 로직을 간접 검증하지만, 실제 브라우저 F5/탭 재로드 자체를 시뮬레이션하지는 않음 — 완전 커버 아님, 정직하게 부분으로 표기. |
+| 영속성 | persistence | PASS | 진행도 항목과 동일(위 참고) |
+
+**요약**: 13항목 중 완전 PASS 8개(학생/숙제/유닛/퀴즈/쓰기/진행도/관리자/영속성), 부분 2개(로그인 — 스크립트는 다 있으나 로컬 `SUPABASE_SERVICE_ROLE_KEY` 미설정으로 4/7만 실행; 새로고침 — 간접 커버만), SKIP 2개(말하기/듣기, headless 구조적 한계), GAP 1개(모바일 — 하네스 대상 밖, 기존에도 실기기 수동 QA 영역). 가짜 PASS 없음 — 전부 실측 결과 그대로 기록.
