@@ -42,7 +42,7 @@ npm run preview   # 빌드 결과 로컬 프리뷰
 | `handoff.md` | 세션별 상세 작업 로그(최상단이 최신) — 사실상의 진실 원천, 매우 방대. 특정 버그/결정의 "왜"를 알고 싶을 때만 검색해서 참고 |
 | `CLAUDE.md`(대문자), `claude.md`(소문자) | 최초 프로젝트 계획서 원본(MVP 1단계 시점) — 역사적 스냅샷, 현재 상태는 `ROADMAP.md`가 우선 |
 | `PROJECT_IDEAS.md`, `PROJECT_TODO.md` | 2026-07-07 세션의 아이디어/설계 노트(게임화, AI 준비 구조 등) — 대부분 아직 미구현 제안. `PROJECT_TODO.md`는 사실상 `PROJECT_IDEAS.md`와 같은 세션의 CTO 브리핑 로그(중복 성격) |
-| `ADVANCED_FEATURES.md`, `EXPANSION_GUIDE.md`, `IMPLEMENTATION_SUMMARY.md`, `QUICK_START.js` | 2024-01-01 세션에서 만든 "학원 운영 시스템 확장" 설계 문서 3종 — **주의**: 이 문서들이 설명하는 Feature Flag(`config/features.js`)/RBAC(`config/rbac.js`)/`FeatureManagementPanel.jsx`는 실제로 존재하고 `AdminScreen.jsx`의 "🎯 기능" 탭에 연결돼 있지만, 문서가 언급하는 `api/hiddenFeatures.js`(반/학생/숙제/랭킹/AI 분석 API)와 `components/HiddenFeatures.jsx`는 **저장소에 존재하지 않습니다** — 스캐폴딩(Flag/권한 틀)만 살아있고 실제 기능 API는 미구현 상태입니다. |
+| `ADVANCED_FEATURES.md`, `EXPANSION_GUIDE.md`, `IMPLEMENTATION_SUMMARY.md`, `QUICK_START.js` | 2024-01-01 세션에서 만든 "학원 운영 시스템 확장" 설계 문서 3종 — **주의**: 이 문서들이 설명하는 Feature Flag(`config/features.js`)/RBAC(`config/rbac.js`)/`FeatureManagementPanel.jsx`는 실제로 존재하고 `AdminScreen.jsx`의 "🎯 기능" 탭에 연결돼 있지만, 문서가 언급하는 `api/hiddenFeatures.js`(반/학생/숙제/랭킹/AI 분석 API)와 `components/HiddenFeatures.jsx`, `config/dataSchemas.js`는 **현재 저장소에 존재하지 않습니다** — 원래 이 문서들과 함께 스캐폴딩됐던 파일이지만, 코드베이스 어디서도 참조되지 않는 데드코드로 확인되어 2026-07-18 유지보수성 감사에서 삭제됨(`handoff.md` 2026-07-18 Phase 5 섹션). Feature Flag/RBAC 틀만 살아있고 실제 기능 API는 여전히 미구현 상태입니다. |
 
 ## 이 프로젝트에서 자주 헷갈리는 것 Top 5
 
