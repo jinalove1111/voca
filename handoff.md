@@ -1,5 +1,14 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-18 (Production Readiness Phase 1 영속성 + Phase 2 DB 무결성 — Critical 1건 즉시 수정, Medium 2건 기록)_
+_최종 갱신: 2026-07-18 (문서화 체계 구축 완료 — PROJECT_GUIDE/ARCHITECTURE/DATABASE/DEVELOPER_GUIDE/TESTING 신규 + ROADMAP append)_
+
+## 2026-07-18 — 문서화 체계 구축 완료 (Engineering Head, 코드 변경 없음 — 순수 문서 작업)
+
+운영자 지시: "미래 개발을 압도적으로 빠르게 만드는" 문서 체계 구축. 기존 8개 문서(`CLAUDE.md`/`README.md`/`ROADMAP.md`/`handoff.md`/`PROJECT_TODO.md`/`PROJECT_IDEAS.md`/`ADVANCED_FEATURES.md`/`EXPANSION_GUIDE.md`/`IMPLEMENTATION_SUMMARY.md`)를 전부 읽고, `src/`/`api/`/`scripts/`/`supabase_*.sql` 11개를 grep/read로 직접 확인한 뒤에만 작성 — 추측/발명 금지 원칙 준수.
+
+- **신규 파일 6개(루트)**: `PROJECT_GUIDE.md`(진입점+빠른시작+헷갈리는 것 Top 5), `ARCHITECTURE.md`(전체 구조/폴더/인증/상태관리/캐싱/영속성/Supabase 아키텍처/배포 프로세스/주요 플로우 12종), `DATABASE.md`(테이블/FK/마이그레이션 순서/RLS 현황), `DEVELOPER_GUIDE.md`(코드에서 역추출한 개발 규칙 + 7종 체크리스트), `TESTING.md`(`scripts/` 테스트 4개 카테고리 + 실행법 + 작성 패턴). `ROADMAP.md`는 기존 파일에 v1.7~v2.2 + 2026-07-18 Production Readiness 감사/QA 스윕 섹션을 **append**(기존 v1.6 이하 섹션은 원본 그대로 보존, 덮어쓰기 없음).
+- **"Word King" 존재 여부 확인**: 저장소 전체(`src/`/`api/`/`scripts/`/모든 `.sql`/모든 `.md`)를 대소문자 무관 grep — **전혀 존재하지 않음**. `ROADMAP.md`/`PROJECT_IDEAS.md`/`ADVANCED_FEATURES.md` 등 계획 문서에도 언급 없음(미구현이 아니라 애초에 문서화된 적도 없는 기능). `ARCHITECTURE.md` 최하단에 확인 결과 기록.
+- **기존 문서와의 관계**: 내용이 겹치는 부분은 요약 후 원본 문서를 참조(링크)하는 방식으로 처리 — `handoff.md`의 방대한 세션별 이력은 옮기지 않고 그대로 둠(신규 문서는 "현재 상태 스냅샷"이지 이력이 아님). `ADVANCED_FEATURES.md`/`EXPANSION_GUIDE.md`가 설명하는 Feature Flag/RBAC 스캐폴딩 중 `api/hiddenFeatures.js`/`components/HiddenFeatures.jsx`/`config/dataSchemas.js`는 2026-07-18 Phase 5 유지보수성 감사에서 데드코드로 이미 삭제된 상태임을 확인해 `PROJECT_GUIDE.md`에 명시.
+- **커밋**: 파일 단위 소커밋 6회(각 문서 완성마다) + 이 handoff 기록. 코드 변경 0건.
 
 ## 2026-07-18 — Production Readiness Phase 1(영속성) + Phase 2(DB 무결성)
 
