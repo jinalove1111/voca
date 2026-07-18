@@ -173,6 +173,13 @@ _(현재 없음 — implementer 완료 후 qa-reviewer/security-reviewer 검수 
 
 ## DONE (최근 완료, 참고용 — 전체 이력은 `ROADMAP.md`/`handoff.md`)
 
+- 경량 로컬 Wiki(`wiki/HOME.md` + 하위 7페이지) + `npm run wiki:search`
+  신설(Engineering Head, 2026-07-18) — 기존 6개 문서/`handoff.md`를
+  복제하지 않고 요약/색인만 하는 레이어. 벡터DB/유료 API/대시보드/모바일
+  QA/학생 기능 없음(운영자 명시 금지 범위 준수). 링크 25개 전수 검증
+  PASS(파일+앵커 둘 다), `npm run build` 통과, 코드 변경 없음(순수
+  문서/스크립트). 근거: 이 handoff.md 최상단 세션 기록,
+  `wiki/HOME.md`.
 - v2.2 — 다중 기기 진행도 병합(last-writer-wins 제거), `syncGenRef` 세대
   카운터로 동기화 중첩 레이스 수정 (`ROADMAP.md` v2.2, `handoff.md`
   2026-07-18 Phase 1)
