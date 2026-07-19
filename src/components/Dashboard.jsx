@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getStudentClass, getStudentUnit, getClassNames, getClassUnitNames, getTodaysAssignmentWordIds, getClassSettings, getClassIdByName, getStudentById, fetchHouseWeeklyScore } from '../utils/wordLibrary'
+import { getStudentClass, getStudentUnit, getClassNames, getClassUnitNames, getTodaysAssignmentWordIds, getClassSettings, getClassIdByName, getStudentById, fetchHouseWeeklyScore, fetchHouseSeasonScore } from '../utils/wordLibrary'
 // House System(2026-07-19, 게임화 하위카드 8번) — 학생 화면 최소 표시
 // ("우리 하우스: OO · 이번 주 팀 점수"). 개인 순위/타 하우스 비교 없음
 // (PAUL_PRINCIPLES.md 3번 원칙 그대로 — 소속감이지 경쟁 연출이 아님).
@@ -30,6 +30,13 @@ import { REWARD_CATALOG } from '../utils/ticketEconomy'
 // ("이번 주 챔피언: OOO"). 시각/발표 연출은 이번 범위 밖(PAUL_BIBLE.md
 // §11 DESIGN DIRECTION 참고).
 import { fetchWeeklyChampion } from '../utils/wordKingApi'
+// Seasonal Progression(2026-07-19, 게임화 하위카드 9번, GAME_DESIGN.md 9번
+// 섹션) — 시즌이 실제로 시작된 뒤에만("관리자가 새 시즌 시작 버튼을
+// 누른 적 있음") 나타나는 추가 텍스트 한 줄("이번 시즌 누적 점수"). 시즌이
+// 아직 없으면(SQL 미실행 포함) fetchCurrentSeason()이 null을 반환해 이
+// 블록 전체가 조용히 안 보인다 — 기존 "이번 주 팀 점수" 표시는 전혀
+// 바뀌지 않는다(레벨/뱃지/스트릭과 마찬가지로 이 라운드의 변경과 무관).
+import { fetchCurrentSeason } from '../utils/seasonApi'
 
 const GOAL = 5
 const stickerById = (id) => STICKERS.find(s => s.id === id)
@@ -238,6 +245,25 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
     fetchHouseWeeklyScore(myHouse.id).then((score) => { if (!cancelled) setHouseWeeklyScore(score) })
     return () => { cancelled = true }
   }, [gamificationEnabled, myHouse?.id, studentId])
+
+  // Seasonal Progression(2026-07-19, 게임화 하위카드 9번) — "이번 시즌 누적
+  // 점수" 추가 텍스트. 위 houseWeeklyScore(그 주 월~일)와는 완전히 다른
+  // 축(시즌 시작~지금 누적)이라 별도 state로 관리 — 기존 주간 표시 로직은
+  // 손대지 않는다. currentSeason이 null이면(아직 시즌 시작 전) 이 블록
+  // 전체가 렌더되지 않는다.
+  const [currentSeason, setCurrentSeason] = useState(null)
+  const [houseSeasonScore, setHouseSeasonScore] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    if (!gamificationEnabled || !myHouse) { setCurrentSeason(null); setHouseSeasonScore(null); return }
+    fetchCurrentSeason().then((season) => {
+      if (cancelled) return
+      setCurrentSeason(season)
+      if (!season) { setHouseSeasonScore(null); return }
+      fetchHouseSeasonScore(myHouse.id, season.startedAt).then((score) => { if (!cancelled) setHouseSeasonScore(score) })
+    })
+    return () => { cancelled = true }
+  }, [gamificationEnabled, myHouse?.id, studentId])
   // [진단 로그 5] Home(Dashboard)에서 실제로 표시하는 unit 값 — 렌더될 때마다 확인
   console.log('[Dashboard] 표시하는 unit 값:', { studentId, studentName, className, unitName })
   const classDeleted = className && !getClassNames().includes(className)
@@ -357,6 +383,15 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
           {gamificationEnabled && myHouse && houseWeeklyScore != null && (
             <p className="text-purple-100 text-xs mt-1">
               {myHouse.emoji} 우리 하우스: {myHouse.name} · 이번 주 팀 점수 {houseWeeklyScore}
+            </p>
+          )}
+          {/* Seasonal Progression(2026-07-19, 게임화 하위카드 9번) — 시즌이
+              실제로 시작된 뒤에만 나타나는 추가 텍스트. 레벨/뱃지/스트릭은
+              이 화면 어디에도 "리셋"이라는 개념으로 노출되지 않는다(영구
+              유지 — 이 라운드에서 절대 안 바뀜을 지키는 설계). */}
+          {gamificationEnabled && myHouse && currentSeason && houseSeasonScore != null && (
+            <p className="text-purple-100 text-xs mt-1">
+              🌱 이번 시즌 누적 점수 {houseSeasonScore}
             </p>
           )}
         </div>
