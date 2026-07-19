@@ -186,6 +186,7 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
   7. Word King — 신규 `word_king_history` 테이블(anon read-only +
      service_role 전용 write, 기존 게임화 테이블과 달리 `"allow anon
      all"` RLS 쓰지 않음). **1번 선행 필수.** `GAME_DESIGN.md` 5번 섹션.
+     **2026-07-19 구현 완료 — 위 VERIFY 섹션 참고.**
   8. House System(`students.house_id` 신규 컬럼 — GRANT 필수, CLAUDE.md
      규칙 10) + Weekly Events(`classes.weekly_event_enabled`).
      `GAME_DESIGN.md` 6·8번 섹션.
@@ -277,9 +278,10 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
   신규), `npm run build` PASS, `npm run verify:all` 재실행 — `login`
   도메인만 기존 BLOCKED 카드(로컬 서비스롤 키 부재)로 FAIL, 나머지 전부
   PASS/SKIP(무회귀 확인, `persistence`/`student`/`admin`/`paulRank` 재실행
-  포함). 7번(Word King)/8번(House)/9번(Seasonal)/10번의 나머지(Weekly
-  Events)는 여전히 미구현(그대로 BACKLOG) — `TICKET_GRANT_TABLE`에
-  `status:'planned'` 슬롯만 예약. 상세: `handoff.md` 2026-07-19(7차),
+  포함). 8번(House)/9번(Seasonal)/10번의 나머지(Weekly Events)는 여전히
+  미구현(그대로 BACKLOG) — `TICKET_GRANT_TABLE`에 `status:'planned'`
+  슬롯만 예약. **7번(Word King)은 이후 별도 세션(2026-07-19(8차))에서
+  구현 완료 — 위 VERIFY 섹션 참고.** 상세: `handoff.md` 2026-07-19(7차),
   `GAME_DESIGN.md` "4.x·7.x·10.x 구현 완료" 항목.
 
 ---
@@ -289,6 +291,42 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
 _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` 상태 파일 생성)_
 
 ## VERIFY
+
+### [P3] 게임화 하위카드 7번(Word King) — 구현 완료, 검수 대기
+- 근거: BACKLOG "[P3] 게임화" 하위 카드 7번, `GAME_DESIGN.md` 5번 섹션,
+  `PAUL_BIBLE.md` §11. 선행조건(1번 Anti-cheat,
+  `api/submit-entrance-result.js`)이 이번 세션 앞부분에 이미 완료돼
+  착수 가능해졌고, 이번 세션에서 구현까지 완료.
+- 범위(운영자 지시 그대로): 주간·서버 전용 계산 + 저장 + 관리자 수동
+  트리거 버튼 + 최소 텍스트 표시 — 실제 미니게임/시상식 연출은 이번
+  범위 아님.
+- 점수 산정 입력을 원문(`GAME_DESIGN.md` 5번 섹션 3신호)에서 의도적으로
+  축소 — ①입실시험 정확도(`entrance_test_results`, 서버 재검증됨) +
+  ②XP 합계(`xp_ledger`, 서버 전용 쓰기) 2개만 사용. ③쓰기시험 정답률/
+  ④mastered 단어 수는 둘 다 anon `"allow anon all"`로 클라이언트가
+  직접 쓰는 값이라(§11 Anti-cheat이 이미 지목한 부차 갭과 동일) "새로운
+  클라이언트-신뢰 지점을 만들지 마라"는 운영자 지시에 따라 제외 — 갭이
+  해소되면 공식만 조정해 추가 가능.
+- 16.3(소표본 왜곡 보정)/16.6(이상치 표) 리뷰를 같은 라운드에 반영 —
+  회귀 테스트로 베이지안 블렌딩이 아니라 "학급 평균(leave-one-out)
+  완전 대체"가 실제로 왜곡을 막는지 확인 후 그 방식으로 최종 구현
+  (`src/utils/wordKing.js` 헤더 주석 전문).
+- 신규 파일: `supabase_v2_6_word_king.sql`(anon read-only + service_role
+  write, 멱등, **운영자 실행 대기**), `src/utils/wordKing.js`(순수 계산),
+  `src/utils/wordKingApi.js`, `api/compute-word-king.js`(관리자 재인증),
+  `AdminScreen.jsx` `WordKingPanel`, `Dashboard.jsx` "이번 주 챔피언"
+  텍스트(`gamificationEnabled` 게이팅), `scripts/testWordKing.mjs`(순수
+  로직 33개 체크 PASS)/`scripts/testComputeWordKingApi.mjs`(라이브 e2e,
+  3단계 SKIP — 로컬은 `word_king_history` 테이블 미실행으로 SKIP,
+  Vercel 프로덕션에서는 전체 검증).
+- 검증: `npm run build` PASS, `npm run verify:admin`(6개 스크립트 전부
+  PASS, 무회귀), harness `wordKing`/`ticketEconomy`/`paulRank` 도메인
+  재실행 PASS, `npm run verify:all` 재실행 — `login` 도메인만 기존
+  BLOCKED 카드(로컬 서비스롤 키 부재)로 FAIL, 나머지 전부 PASS/SKIP
+  (신규 회귀 없음).
+- 검수 대기 사항: qa-reviewer/security-reviewer 코드 리뷰, 운영자의
+  `supabase_v2_6_word_king.sql` 실행 여부 판단. 상세: `handoff.md`
+  2026-07-19(8차).
 
 ### [P1] 입실시험 결과 서버 재검증 없음 (보안 Medium) — 구현 완료, 검수 대기
 - 근거: `handoff.md` 2026-07-18 "Production Readiness Phase 4 보안 감사"

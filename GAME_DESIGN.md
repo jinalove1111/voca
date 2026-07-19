@@ -341,6 +341,69 @@ _이 항목도 append입니다 — 위 3.x 항목을 재작성하지 않고 그 
   service_role 서버 함수 전용. Word King이 정확히 "보상이 걸리면
   조작 유인이 커지는" 케이스이기 때문입니다([섹션11](#sec-11)).
 
+### 5.x 구현 완료(2026-07-19, 게임화 하위카드 7번, Engineering Head)
+
+_이 항목도 append입니다 — 위 5번 섹션 원문은 수정하지 않았습니다._
+
+- **점수 산정 입력을 원문에서 의도적으로 축소**: 원문(위)은 ①입실시험
+  정확도 ②쓰기시험 첫시도 정답률(`spellingCorrect`/`spellingTotal`)
+  ③`word_status` mastered 개수 3개 신호의 가중합을 제안했습니다. 실제
+  구현은 ①과 xp_ledger 합계(행동 단위 XP, 이미 서버 전용 쓰기) 2개만
+  씁니다 — ②③은 둘 다 anon `"allow anon all"`로 학생 브라우저가 직접
+  쓰는 값(`student_progress.calendar_data`/`word_status`, [섹션11](#sec-11)이
+  스스로 "부차적 갭"으로 지목한 값과 동일)이라, "서버 전용 계산"이라는
+  이 기능의 핵심 전제를 갭 그대로 상속하지 않기 위해 운영자 지시("서버
+  검증된 데이터만 사용, 새로운 클라이언트-신뢰 지점을 만들지 마라")에
+  따라 제외했습니다. [섹션11](#sec-11)의 부차 갭이 해소되면 그때 ②③을
+  가중치로 추가하는 건 `src/utils/wordKing.js`의 공식만 바꾸면 되므로
+  스키마 변경 없이 가능합니다.
+- **16.3(소표본 왜곡 보정) 반영 — 베이지안 블렌딩이 아니라 "학급 평균
+  완전 대체"로 최종 구현**: 16.3이 제안한 두 방법("① 최소 임계값 미달
+  시 0/학급 평균으로 대체" vs "② 베이지안 가중 평균") 중 ②를 먼저
+  구현해 회귀 테스트(`scripts/testWordKing.mjs` 6번 섹션 — "1문제 100%"
+  vs "50문제 90%" 시나리오)로 검증한 결과, 응시 수가 극소(1~2문항)일
+  때는 블렌딩 가중치가 아무리 작아도 원본 극단값이 조금이라도 섞이면
+  "소표본 학생이 학급 평균보다 낮거나 같아야 한다"는 보정의 목적 자체가
+  흔들릴 수 있음을 실측 확인했습니다(90% 성실 학생을 91%로 여전히
+  앞서는 결과). 그래서 ①(완전 대체)로 전환했습니다 — 응시 수가
+  `MIN_ACCURACY_SAMPLE`(10문항) 미만이면 원본 비율을 아예 쓰지 않고
+  "본인을 제외한(leave-one-out)" 학급 평균 정확도로 완전히 대체합니다.
+  leave-one-out을 쓰는 이유는 본인의 극단값이 본인의 보정 기준 자체를
+  오염시키는 걸 막기 위함입니다(학생 수가 적은 반일수록 자기오염
+  효과가 커짐 — 위 6번 섹션 테스트로 실측).
+- **16.6(이상치 표) 반영**: `detectWordKingOutliers()` — 신규 쿼리 없이
+  이미 집계한 XP/응시량을 leave-one-out 평균과 대조해 그 주 유난히
+  튄 학생을 지표별로 표시. 서버 검증을 추가하지 않고도 관리자가 계산
+  결과 화면에서 수동으로 훑어볼 수 있는 저비용 완화책이라는 16.6
+  원문 취지 그대로 구현했습니다(현재는 API 응답에만 포함, 관리자 화면
+  전용 별도 뷰는 아직 없음 — 다음 세션 후보).
+- **주기(period)**: 월요일~일요일(ISO 주 관례), 서버(Vercel, UTC 근방)
+  기준 날짜 단위 계산(`getWeekPeriod()`) — paulRankShared.js의 day
+  기간키(±2일 허용)와 같은 이유로 초 단위 경계 다툼은 이 기능의
+  위협모델 밖으로 판단했습니다.
+- **저장/집계 서버**: `api/compute-word-king.js` — 이 저장소엔
+  스케줄러(cron)가 없어(Infra Head 영역, 발명하지 않음) 관리자가
+  반별로 "이번 주 Word King 계산" 버튼을 눌러 수동 트리거하는 방식으로
+  구현했습니다(원문이 이미 제안한 방식 그대로). 관리자 재인증
+  (`checkAdminReauth`, PIN 재검증)을 요구합니다. `entrance_tests`/
+  `entrance_test_results`/`xp_ledger`를 서버가 직접 재집계 후
+  `src/utils/wordKing.js`의 순수 함수(`computeWeeklyWordKing`)로만
+  계산 — 클라이언트가 보낸 값은 `classId` 하나뿐입니다.
+- **표시**: 관리자 화면(`AdminScreen.jsx` `WordKingPanel`) — 계산 버튼
+  + 순위 텍스트 목록(실제 미니게임/시상식 연출 없음, 원문 범위 그대로).
+  학생 화면(`Dashboard.jsx`) — "이번 주 챔피언: OOO" 최소 텍스트 한 줄
+  (`gamificationEnabled` 마스터 스위치로 게이팅, [섹션13](#sec-13)과
+  동일 원칙). 활동이 전혀 없는(입실시험 미응시 + XP 0) 학생은 그 주
+  랭킹 자체에서 제외되어(순위 없음) "그 주 활동이 거의 없는 학생이
+  우연히 1등이 되는" 왜곡을 방지합니다.
+- **신규 파일**: `supabase_v2_6_word_king.sql`(멱등, 미실행 대기),
+  `src/utils/wordKing.js`(순수 계산), `src/utils/wordKingApi.js`
+  (클라이언트 읽기/트리거), `api/compute-word-king.js`,
+  `scripts/testWordKing.mjs`(순수 로직 33개 체크)/
+  `scripts/testComputeWordKingApi.mjs`(라이브 e2e, 3단계 SKIP).
+  `npm run build`/`verify:admin`/`verify:ticketEconomy` 재실행 무회귀
+  확인. 상세: `handoff.md` 2026-07-19(8차).
+
 <a id="sec-6"></a>
 ## 6. House System
 

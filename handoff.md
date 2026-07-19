@@ -1,5 +1,132 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-19 (7차, 게임화 하위카드 5+6번 — Ticket Economy + Daily Missions 후킹/Rewards 상점, 소스/싱크 동시 배포 — Engineering Head)_
+_최종 갱신: 2026-07-19 (8차, 게임화 하위카드 7번 — Word King, 주간·서버 전용 계산 — Engineering Head)_
+
+## 2026-07-19 (8차) — 게임화 하위카드 7번(Word King) — 주간·서버 전용 계산 — Engineering Head
+
+PROJECT_BOARD.md "[P3] 게임화(Gamification)" 하위 카드 7번 착수(선행조건인
+1번 Anti-cheat, `api/submit-entrance-result.js`가 이번 세션 앞부분(5차)에
+이미 완료돼 착수 가능해짐 — `GAME_DESIGN.md` 5번 섹션, `PAUL_BIBLE.md`
+§11, `GAME_DESIGN.md` 16.3/16.6 리뷰 반영을 같은 라운드에 포함하라는 지시
+그대로 따름).
+
+- **점수 산정 입력을 원문에서 의도적으로 축소**: `GAME_DESIGN.md` §5
+  원안은 ①입실시험 정확도 ②쓰기시험 첫시도 정답률
+  (`spellingCorrect`/`spellingTotal`) ③`word_status` mastered 개수 3개
+  신호의 가중합을 제안했다. 실제 구현은 ①과 xp_ledger 합계(행동 단위
+  XP, 이미 서버 전용 쓰기) 2개만 쓴다 — 운영자 지시("점수 산정은 반드시
+  이미 서버에서 검증된 데이터만 사용, 새로운 클라이언트-신뢰 지점을
+  만들지 마라")에 따른 것. ②③은 실제로는 `student_progress.
+  calendar_data`/`word_status`로 둘 다 anon `"allow anon all"` RLS라
+  클라이언트가 직접 쓰는 값이다(§11 Anti-cheat이 스스로 "부차적 갭"으로
+  지목한 값과 동일) — 이 갭 위에 Word King 점수를 얹으면 "서버 전용
+  계산"이라는 이 기능의 핵심 전제가 갭을 그대로 상속해 깨진다. XP
+  시스템이 `total_xp` 재사용안을 버리고 독립 원장으로 새로 설계했던 것과
+  같은 종류의 판단(선례 재사용, `src/utils/paulRankShared.js` 헤더
+  참고). 갭이 해소되면 그때 ②③을 가중치로 추가하는 건 `wordKing.js`의
+  공식만 바꾸면 되므로 스키마 변경 없이 가능.
+- **`src/utils/wordKing.js` 신규(완전 순수, paulRankShared.js와 동일
+  원칙)**: `getWeekPeriod()`(월요일~일요일, 날짜 단위 정밀도),
+  `computeCorrectedAccuracy()`(16.3 소표본 왜곡 보정),
+  `computeStudentWordKingScore()`(가중합 + eligible 판정),
+  `computeWeeklyWordKing()`(반 전체 랭킹, leave-one-out 학급 평균,
+  결정적 tie-break), `detectWordKingOutliers()`(16.6 이상치 표).
+  - **16.3 반영 — 베이지안 블렌딩(원래 최초 설계)이 아니라 "학급 평균
+    완전 대체"로 최종 구현**: `computeCorrectedAccuracy()`를 먼저
+    베이지안 가중 평균(사전확률=학급 평균, 표본 크기에 비례해 원본
+    비율과 블렌딩)으로 구현했으나, 회귀 테스트(`scripts/testWordKing.mjs`
+    6번 섹션 — "1문제 풀어 100%" 학생 vs "50문제 풀어 90%" 성실한 학생
+    시나리오)로 실측한 결과 응시 수가 극소(1~2문항)일 때는 블렌딩
+    가중치가 아무리 작아도 원본 극단값이 조금이라도 섞이면 "소표본
+    학생이 학급 평균보다 낮거나 같아야 한다"는 보정의 목적 자체가
+    흔들릴 수 있음을 직접 확인했다(90% 성실 학생을 91%로 여전히 앞서는
+    결과가 나왔음 — 심지어 이 90%가 정확히 학급의 유일한 다른 학생의
+    점수였던 2인반 특수 케이스에서도). 그래서 GAME_DESIGN.md 16.3이
+    제안한 다른 옵션("최소 임계값 미달 시 학급 평균으로 완전 대체")으로
+    전환 — `MIN_ACCURACY_SAMPLE`(10문항) 미만이면 원본 비율을 아예 쓰지
+    않고 학급 평균으로 완전히 대체한다.
+  - **leave-one-out 자기오염 방지**: `computeWeeklyWordKing()`이 각
+    학생의 보정 기준(prior)을 "본인을 제외한" pooled 평균으로 계산한다
+    — 그렇지 않으면 학생 수가 적은 반에서 소표본 학생 본인의 극단값이
+    자기 자신의 보정 기준을 오염시켜(예: 2인반에서 평균의 절반을 본인이
+    차지) 보정이 사실상 무력화되는 것을 실측으로 확인했다(같은 테스트
+    시나리오). `detectWordKingOutliers()`도 같은 이유로 leave-one-out
+    평균을 쓴다.
+  - **16.6 반영**: `detectWordKingOutliers()` — 신규 쿼리 없이 이미
+    집계한 XP/응시량을 leave-one-out 평균의 multiplier배(기본 5배)와
+    대조해 그 주 유난히 튄 학생을 지표별로 표시. API 응답에 포함되지만
+    관리자 화면 전용 뷰는 아직 없음(다음 세션 후보로 남김).
+- **`supabase_v2_6_word_king.sql` 신규(멱등, 미실행 대기)**:
+  `word_king_history(class_id, period_start, period_end, student_id,
+  student_name, score, score_breakdown jsonb, rank_position,
+  computed_at, unique(class_id,period_start,period_end,student_id))`.
+  `xp_ledger`(v2.3)와 완전히 동일한 RLS 패턴 — anon read-only(SELECT만)
+  + INSERT/UPDATE/DELETE GRANT 자체를 하지 않아(service_role만
+  RLS 우회로 씀) 기존 게임화 테이블의 `"allow anon all"` 관례를
+  의도적으로 반복하지 않음.
+- **`api/compute-word-king.js` 신규**: 이 저장소엔 스케줄러(cron)가
+  없어(Infra Head 영역, 발명하지 않음) 관리자가 반별로 "이번 주 Word
+  King 계산" 버튼을 눌러 수동 트리거하는 방식(원문이 이미 제안한 방식
+  그대로). `checkAdminReauth`(다른 관리자 파괴적 액션과 같은 PIN
+  재검증 패턴) 요구. 클라이언트는 `classId` 하나만 보내고, 서버가
+  `entrance_tests`(이번 기간 시험 id) → `entrance_test_results`(서버
+  재채점된 점수/총점 합산) → `xp_ledger`(이번 기간 합계)를 직접 조회해
+  `computeWeeklyWordKing()`으로만 계산 — 계산 결과는 활동이 있었던
+  (eligible) 학생만 `word_king_history`에 upsert(활동 전혀 없는 학생은
+  행 자체를 만들지 않음 — "0등"으로 낙인찍지 않음, `GAME_DESIGN.md`
+  §12 Retention Psychology 원칙과 같은 방향).
+- **`src/utils/wordKingApi.js` 신규**: `fetchLatestWordKingPeriod()`
+  (가장 최근 계산된 기간의 전체 순위 — 관리자 화면과 학생 화면이 이
+  함수 하나를 공유), `fetchWeeklyChampion()`(그 위에서 rank===1만 추출),
+  `triggerComputeWordKing()`(관리자 트리거 fetch 래퍼). 조회 계열은
+  entranceTestApi.js와 같은 안전 원칙 — 테이블 미존재/에러를 절대 던지지
+  않고 빈 결과로 폴백.
+- **`AdminScreen.jsx` `WordKingPanel` 신규**: `GameSettingsPanel` 바로
+  아래 슬롯(같은 반별 설정 카드 그룹). "이번 주 Word King 계산" 버튼 +
+  순위 텍스트 목록(👑 강조, 실제 미니게임/시상식 연출 없음 — 운영자
+  지시 범위 그대로). 로드 시 `fetchLatestWordKingPeriod()`로 최근 계산
+  결과를 자동 표시.
+- **`Dashboard.jsx`**: "이번 주 챔피언: OOO" 최소 텍스트 한 줄 —
+  기존 Paul Rank 텍스트 바로 아래, 같은 `gamificationEnabled` 마스터
+  스위치로 게이팅. 본인이 챔피언이면 "(나예요!)" 추가.
+- **`scripts/testWordKing.mjs` 신규(순수 로직, 33개 체크 전부 PASS)**:
+  주간 기간 계산 결정성, 소표본 보정(16.3 회귀 케이스 — "1문제 100%"가
+  "50문제 90%"를 이기지 못함을 직접 증명), leave-one-out 학급 평균,
+  이상치 표(16.6), 결정적 tie-break(Math.random 등 비결정적 요소 전혀
+  없음), 빈 반/전원 무활동 반의 안전한 처리(champion null, 크래시 없음)
+  까지 커버.
+- **`scripts/testComputeWordKingApi.mjs` 신규(라이브 e2e, 3단계 SKIP)**:
+  `testXpLedgerDb.mjs`/`testEntranceTestDb.mjs`와 같은 fake `(req,res)`
+  직접 호출 패턴. ① `ADMIN_PIN` 로컬 부재 시 재인증/입력검증만 SKIP
+  (메서드 거부는 인증 이전이라 항상 검증 — 로컬에 `ADMIN_PIN`이 있어
+  실제로 재인증/입력검증 5개 체크까지는 로컬에서 실행/PASS 확인됨),
+  ② `word_king_history` 테이블 미존재 시(SQL 미실행, 로컬 실측 상태)
+  라이브 계산 e2e SKIP, ③ 테이블은 있어도 `SUPABASE_SERVICE_ROLE_KEY`
+  부재 시 SKIP. **로컬 실행 결과**: ①②는 통과, ③(라이브 계산 e2e)은
+  ②단계에서 이미 SKIP(테이블 미실행) — 로그인 도메인과 같은 이유로
+  Vercel 프로덕션에서만 전체 검증 가능. 이 과정에서 Windows + Node
+  환경의 기존 알려진 libuv 조기종료 크래시(`testEntranceTestDb.mjs`가
+  이미 문서화한 것과 동일 — Supabase 클라이언트 생성 직후 곧바로
+  `process.exit()`하면 undici 소켓 핸들이 닫히는 중에 assertion으로
+  죽음)를 그대로 재현·확인했고, 같은 워크어라운드(SKIP 직전 300ms 대기)
+  를 적용해 해결.
+- **`tests/harness/registry.mjs`**: `wordKing` 도메인 신규 등록
+  (`testWordKing.mjs`/`testComputeWordKingApi.mjs`, 둘 다 `extra: true`
+  — 13개 필수 도메인 밖, `paulRank`/`ticketEconomy`와 같은 취급).
+- **검증**: `npm run build` PASS(청크 해시 불변 확인), `npm run
+  verify:admin`(6개 스크립트 전부 PASS, 무회귀), `node tests/harness/
+  runOne.mjs wordKing`/`ticketEconomy`/`paulRank` 재실행 전부 PASS,
+  `npm run verify:all` 전체 재실행 — `login` 도메인만 기존 BLOCKED
+  카드(로컬 서비스롤 키 부재)로 FAIL(신규 아님), 나머지 15개 도메인
+  전부 PASS/SKIP(무회귀 확인).
+- **운영자 실행 대기**: `supabase_v2_6_word_king.sql` 실행 필요 —
+  미실행이어도 `api/compute-word-king.js`/`wordKingApi.js`가 안전하게
+  `table_missing`/빈 결과로 폴백해 앱이 깨지지 않음. 실행 후 관리자가
+  반별로 "이번 주 Word King 계산" 버튼을 눌러야 학생 화면에 챔피언
+  텍스트가 나타남(수동 트리거, cron 없음 — 원문 지시 그대로).
+- 상세: `GAME_DESIGN.md` 5번 섹션 "5.x 구현 완료" 항목, `PAUL_BIBLE.md`
+  §11 갱신 배너, `DATABASE.md` `word_king_history` 행 + 마이그레이션
+  17번, `TESTING.md` 카테고리 1/4 신규 행, `PROJECT_BOARD.md` VERIFY
+  섹션.
 
 ## 2026-07-19 (7차) — 게임화 하위카드 5번(Ticket Economy) + 6번(Daily Missions 후킹 + Rewards 티켓 상점) 소스/싱크 동시 배포 — Engineering Head
 

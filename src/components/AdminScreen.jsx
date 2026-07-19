@@ -1,9 +1,12 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, getClassIdByName } from '../utils/wordLibrary'
 // Paul Rank System(2026-07-19) — 최소 관리자 통합: 학생별 XP/Rank 조회만
 // (관리자 UI 전면 개편 아님, 기존 학생 카드에 텍스트 한 줄 추가).
 import { computeRankState } from '../utils/paulRankShared'
+// Word King(2026-07-19, 게임화 하위카드 7번) — 관리자 수동 트리거 +
+// 결과 확인 최소 UI(GameSettingsPanel 바로 아래에 슬롯).
+import { triggerComputeWordKing, fetchLatestWordKingPeriod } from '../utils/wordKingApi'
 import { fetchPendingSpellingReviews, resolveSpellingReview } from '../utils/spellingReviewApi'
 import { fetchPinStatusMap } from '../utils/pinStatusApi'
 import { getStudents, removeStudent } from '../hooks/useStudent'
@@ -129,6 +132,78 @@ function GameSettingsPanel({ targetClass, onSaved }) {
           onChange={e => save({ ...settings, gamificationEnabled: e.target.checked })}
           className="w-5 h-5 accent-purple-500" />
       </label>
+    </div>
+  )
+}
+
+// Word King(2026-07-19, 게임화 하위카드 7번, GAME_DESIGN.md 5번 섹션) —
+// "이번 주 Word King 계산" 수동 트리거(이 저장소엔 cron이 없어 관리자가
+// 주 1회 버튼을 누르는 방식, api/compute-word-king.js 헤더 참고) + 결과
+// 확인. 실제 미니게임/시상식 연출은 이번 범위 밖(텍스트 목록만).
+// 점수 계산 자체는 전부 서버(service_role)가 entrance_test_results/
+// xp_ledger를 재집계해서 수행 — 이 컴포넌트는 트리거 버튼과 결과 렌더링만.
+function WordKingPanel({ targetClass, adminPin }) {
+  const classId = getClassIdByName(targetClass)
+  const [computing, setComputing] = useState(false)
+  const [result, setResult] = useState(null) // 최근 계산 응답 또는 불러온 기록
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    if (!classId) return
+    fetchLatestWordKingPeriod(classId).then((r) => {
+      if (!cancelled && r.scores.length > 0) setResult(r)
+    })
+    return () => { cancelled = true }
+  }, [classId])
+
+  if (!classId) return null
+
+  const handleCompute = async () => {
+    setComputing(true)
+    setError('')
+    try {
+      const res = await triggerComputeWordKing({ classId, adminPin })
+      if (res.reason === 'no_students') {
+        setError('이 반에 학생이 없어 계산할 수 없어요.')
+      } else {
+        setResult({ periodStart: res.periodStart, periodEnd: res.periodEnd, scores: res.scores })
+      }
+    } catch (err) {
+      setError('계산 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setComputing(false)
+    }
+  }
+
+  return (
+    <div className="bg-amber-50 rounded-xl p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <p className="text-xs font-black text-amber-700">👑 Word King (주간, 서버 계산)</p>
+        <button onClick={handleCompute} disabled={computing}
+          className="bg-amber-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs btn-press hover:bg-amber-600 disabled:opacity-60">
+          {computing ? '계산 중...' : '이번 주 Word King 계산'}
+        </button>
+      </div>
+      {error && <p className="text-xs font-bold text-red-500">{error}</p>}
+      {result && result.scores.length > 0 && (
+        <div className="bg-white rounded-lg p-2">
+          <p className="text-xs text-gray-400 mb-1">{result.periodStart} ~ {result.periodEnd} (활동 있는 학생만 표시)</p>
+          <div className="space-y-1">
+            {result.scores.map((s) => (
+              <div key={s.studentId} className="flex items-center justify-between text-xs">
+                <span className={s.rank === 1 ? 'font-black text-amber-600' : 'text-gray-600'}>
+                  {s.rank === 1 ? '👑 ' : `${s.rank}. `}{s.studentName}
+                </span>
+                <span className="font-bold text-gray-500">{s.score}점</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {(!result || result.scores.length === 0) && !error && (
+        <p className="text-xs text-gray-400">아직 계산된 기록이 없어요 — 버튼을 눌러 이번 주 점수를 계산하세요.</p>
+      )}
     </div>
   )
 }
@@ -1665,6 +1740,8 @@ export default function AdminScreen({ onBack }) {
                         <SpellingSettingsPanel targetClass={c} onSaved={refresh} />
 
                         <GameSettingsPanel targetClass={c} onSaved={refresh} />
+
+                        <WordKingPanel targetClass={c} adminPin={pin} />
 
                         <div className="bg-gray-50 rounded-xl p-3">
                           <p className="text-xs font-black text-gray-500 mb-2">👦 이 반 학생 ({studentsInClass.length}명)</p>

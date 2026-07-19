@@ -20,6 +20,7 @@ _작성: 2026-07-18. `scripts/` 전체(69개 파일)를 ls + 각 파일의 impor
 | `testEntranceTest.mjs` | `utils/entranceTest.js`만(주석: "DB/네트워크/번들 불필요") |
 | `testPaulRank.mjs`(2026-07-19, Paul Rank System; 2026-07-19 v2.3.1 갱신 — 행동 단위 리팩터링) | `utils/paulRankShared.js`(Rank/Hat Stage 계산, XP 이벤트 테이블, 입력검증/기간키 헬퍼) — 이 모듈은 브라우저/서버 양쪽에서 그대로 import되도록 처음부터 완전 순수하게 설계되어 esbuild 번들 없이 직접 import 가능(`api/grant-xp.js`도 같은 소스를 그대로 import). v2.3.1 추가분: 운영자 지정 8개 행동 단위 이벤트(구 word-unit 이벤트는 테이블에서 완전히 제거됐음을 확인) + `isValidDayPeriodKey`/`isValidSourceEventIdForEvent`(기간키 위장/조작 거부) + "여러 단어에 걸쳐 반복해도 하루 1행만" 구조적 증명(6b번 섹션) |
 | `testTicketEconomy.mjs`(2026-07-19, Ticket Economy — GAME_DESIGN.md 4·7·10번 섹션) | `utils/ticketEconomy.js`(원장 append/합산/병합, `daily-mission-complete` 하루 1회 지급 가드, `REWARD_CATALOG` 결정론적 구매) — `paulRankShared.js`와 같은 이유로 완전 순수(React/네트워크 없음), esbuild 번들 불필요. "소비(음수 delta)가 옛 클라우드 스냅샷과 병합돼도 부활하지 않음"(3번 섹션)과 "missions repeat all day에도 티켓은 하루 1장만"(5번 섹션)이 이 파일의 핵심 회귀 방지 포인트 |
+| `testWordKing.mjs`(2026-07-19, Word King — 게임화 하위카드 7번, GAME_DESIGN.md 5번 섹션) | `utils/wordKing.js`(주간 기간 계산, 소표본 왜곡 보정 16.3, leave-one-out 학급 평균, 이상치 표 16.6, 결정적 tie-break) — `paulRankShared.js`와 같은 이유로 완전 순수, esbuild 번들 불필요. 6번 섹션이 GAME_DESIGN.md 16.3이 지목한 정확한 왜곡 시나리오("1문제 100%" vs "50문제 90%")를 3명 반으로 재현해 소표본 학생이 챔피언이 되지 않음을 실측 — 이 파일의 핵심 회귀 방지 포인트. 베이지안 블렌딩(원래 설계)이 아니라 "학급 평균 완전 대체"로 최종 구현한 이유도 이 테스트로 실측 확인된 것(파일 헤더 주석 참고) |
 
 실행: `node scripts/testXxx.mjs` — 별도 준비 단계 없음.
 
@@ -72,6 +73,7 @@ _작성: 2026-07-18. `scripts/` 전체(69개 파일)를 ls + 각 파일의 impor
 | `testRlsSecurity.mjs` | v1.9 컬럼권한(anon의 PIN 컬럼 접근 차단) 실측 |
 | `dbIntegrityAudit.mjs` | 읽기 전용 — 고아 FK/중복 행 전수 감사(쓰기 없음, `QA_` 데이터 생성 안 함) |
 | `testXpLedgerDb.mjs`(2026-07-19, Paul Rank System; 2026-07-19 v2.3.1 갱신) | `xp_ledger`/`xp_totals` — `api/grant-xp.js`를 `testStudentPinAuth.mjs`와 같은 방식(fake `(req,res)` 직접 호출, HTTP 서버 불필요)으로 실행해 중복 지급 방지(같은 `sourceEventId` 두 번 요청 → 두 번째는 `duplicate:true`, 원장 행 1개 유지)와 Unit 전환이 XP에 영향 없음을 실측. v2.3.1 추가분(3b번 섹션): 같은 day 기간키로 8번 반복 요청해도 원장 행이 정확히 1개 유지됨을 실측(여러 단어에 걸친 반복 시뮬레이션) + 조작된 기간키(wordId 끼워넣기/가짜 미래 날짜)와 예약(planned) 이벤트(`word-king-complete`) 거부 실측(5번 섹션). `SUPABASE_SERVICE_ROLE_KEY`가 로컬에 없으면(이 저장소의 알려진 상태) 실제 쓰기 경로 검증은 SKIP — `xp_ledger`가 anon INSERT 권한을 아예 갖지 않도록 설계돼 있어 서비스롤 키 없이는 검증 불가능한 것 자체가 설계 의도(Vercel 프로덕션에서는 서비스롤 키가 설정돼 있어 전체 검증됨) |
+| `testComputeWordKingApi.mjs`(2026-07-19, Word King) | `word_king_history` — `api/compute-word-king.js`를 `testXpLedgerDb.mjs`와 같은 fake `(req,res)` 직접 호출 방식으로 실행. **3단계 SKIP**: ① `ADMIN_PIN`이 로컬에 없으면 재인증/입력검증만 스킵(메서드 거부는 인증 이전 단계라 항상 검증), ② `word_king_history` 테이블이 아직 없으면(SQL 미실행) 라이브 계산 e2e 스킵, ③ 테이블은 있어도 `SUPABASE_SERVICE_ROLE_KEY`가 없으면 QA 시드 데이터를 정확히 못 넣어 스킵. 전체 조건이 갖춰지면 3명 QA 학생(diligent/lucky/mediocre)으로 실제 `entrance_tests`/`entrance_test_results`를 만들고 서버가 재집계한 결과가 `word_king_history`에 정확히 저장되는지, 재계산 시 upsert로 행 개수가 늘지 않는지, 학생 0명 반은 안전하게 거부되는지까지 실측. Windows + Node의 알려진 libuv 조기종료 크래시(`testEntranceTestDb.mjs` 워크어라운드와 동일 — SKIP 직후 `process.exit()` 전 300ms 대기)도 동일 패턴으로 처리 |
 
 **QA 데이터 규칙**: 전부 `QA_` 접두 학생/반만 생성하고 테스트 종료 시 정리합니다. 프로덕션 데이터(111명 학생 등)는 절대 건드리지 않습니다.
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getStudentClass, getStudentUnit, getClassNames, getClassUnitNames, getTodaysAssignmentWordIds, getClassSettings } from '../utils/wordLibrary'
+import { getStudentClass, getStudentUnit, getClassNames, getClassUnitNames, getTodaysAssignmentWordIds, getClassSettings, getClassIdByName } from '../utils/wordLibrary'
 import { getMicStreamOnce, hasMicStream } from '../utils/speech'
 import { useMicReady } from '../hooks/useMicReady'
 import { isInAppBrowser } from '../utils/browserDetect'
@@ -22,6 +22,10 @@ import { usePaulRank } from '../hooks/usePaulRank'
 // useStudent.js(studentData)에서 그대로 내려온다 — 이 파일은 카탈로그
 // 표시/구매 버튼만 담당.
 import { REWARD_CATALOG } from '../utils/ticketEconomy'
+// Word King(2026-07-19, 게임화 하위카드 7번) — 최소 통합: 텍스트 한 줄만
+// ("이번 주 챔피언: OOO"). 시각/발표 연출은 이번 범위 밖(PAUL_BIBLE.md
+// §11 DESIGN DIRECTION 참고).
+import { fetchWeeklyChampion } from '../utils/wordKingApi'
 
 const GOAL = 5
 const stickerById = (id) => STICKERS.find(s => s.id === id)
@@ -199,6 +203,20 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
   // (getClassSettings의 안전한 기본값, wordLibrary.js 참고). Paul Rank
   // 표시는 이 값이 true인 반에서만 렌더된다(아래 JSX).
   const gamificationEnabled = !!getClassSettings(className).gamificationEnabled
+
+  // Word King(2026-07-19) — 이번 주 챔피언 텍스트. gamificationEnabled과
+  // 같은 마스터 스위치로 게이팅(Paul Rank/Ticket과 동일 원칙). 조회 실패
+  // (테이블 미생성 등)는 wordKingApi.js가 조용히 빈 결과로 폴백하므로
+  // 이 텍스트는 그냥 안 보일 뿐 크래시 없음.
+  const [weeklyChampion, setWeeklyChampion] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    if (!gamificationEnabled || !className) { setWeeklyChampion(null); return }
+    const classId = getClassIdByName(className)
+    if (!classId) return
+    fetchWeeklyChampion(classId).then((c) => { if (!cancelled) setWeeklyChampion(c) })
+    return () => { cancelled = true }
+  }, [gamificationEnabled, className])
   // [진단 로그 5] Home(Dashboard)에서 실제로 표시하는 unit 값 — 렌더될 때마다 확인
   console.log('[Dashboard] 표시하는 unit 값:', { studentId, studentName, className, unitName })
   const classDeleted = className && !getClassNames().includes(className)
@@ -301,6 +319,15 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
               {rankState.isMaxRank
                 ? ' · 최고 단계!'
                 : ` · 다음 Rank까지 XP ${rankState.xpRemainingToNextRank}`}
+            </p>
+          )}
+          {/* Word King(2026-07-19) — "이번 주 챔피언" 최소 텍스트(교실
+              발표용). 계산 기록이 아직 없으면(관리자 미실행) 아무것도
+              렌더하지 않음. */}
+          {gamificationEnabled && weeklyChampion && (
+            <p className="text-purple-100 text-xs mt-1">
+              👑 이번 주 챔피언: {weeklyChampion.studentName}
+              {weeklyChampion.studentId === studentId ? ' (나예요!)' : ''}
             </p>
           )}
         </div>
