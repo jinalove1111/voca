@@ -40,6 +40,12 @@ import { syncStudentProgress, fetchFullProgress, fetchProgressBackupStrict, setW
 // 제거/추가 사유는 src/utils/paulRankShared.js의 XP_EVENT_TABLE 헤더
 // 주석과 wiki/decisions.md #10 참고.
 import { resolveXpAmount } from '../utils/paulRankShared'
+// Ticket Economy(2026-07-19, GAME_DESIGN.md 4·7·10번 섹션) — 별(XP)과
+// 완전히 분리된, 소비 가능한(감소하는) 화폐라 append-only 원장 +
+// 순수 합산(sumTicketBalance)만 쓴다(원시 잔액 저장 금지 — 판단 근거는
+// ticketEconomy.js 헤더 주석). 서버 없이 로컬 우선(progress_data 백업)
+// 관례를 따르는 판단 근거도 같은 파일에 문서화.
+import { grantTicket, sumTicketBalance, mergeTicketLedgers, redeemReward } from '../utils/ticketEconomy'
 
 // ── Single unified progress store ───────────────────────────────────────
 // Every per-student value the app tracks (stars, stickers, today's mission
@@ -199,6 +205,11 @@ function freshRecord(id) {
     // 기록해야 한다. removePlacement가 추가하고 mergeProgressRecords가 양쪽
     // 합집합에서 빼는 데만 쓴다. 상한(DIARY_TOMBSTONE_CAP)으로 무한 성장 방지.
     diaryRemovedIds: [],
+    // Ticket Economy(2026-07-19) — append-only 원장(diaryPlacements와 같은
+    // 패턴, tombstone은 불필요 — 소비도 새 항목 추가로 표현되므로 삭제가
+    // 없음). 잔액은 저장하지 않고 항상 sumTicketBalance(ticketLedger)로
+    // 파생시킨다(ticketEconomy.js 참고).
+    ticketLedger: [],
     missions: [],          // level-up boss missions
     cleared: [],
     round: freshRound(),
@@ -282,6 +293,7 @@ function normalizeRecord(raw, id) {
   rec.stickers = asArray(rec.stickers)
   rec.diaryPlacements = asArray(rec.diaryPlacements)
   rec.diaryRemovedIds = asArray(rec.diaryRemovedIds) // v2.2 이전 레코드/백업엔 없음 — 빈 배열로 채움
+  rec.ticketLedger = asArray(rec.ticketLedger) // Ticket Economy 이전 레코드/백업엔 없음 — 빈 배열로 채움
   rec.missions = asArray(rec.missions)
   rec.cleared = asArray(rec.cleared)
   rec.milestoneStreak = Number(rec.milestoneStreak) || 0
@@ -415,6 +427,9 @@ export function mergeProgressRecords(localRaw, cloudRaw, id) {
     stickers: unionList(local.stickers, cloud.stickers),
     diaryPlacements,
     diaryRemovedIds: removed,
+    // Ticket Economy — id 기준 합집합(mergeTicketLedgers, diaryPlacements와
+    // 같은 정신이지만 tombstone 불필요, ticketEconomy.js 헤더 참고).
+    ticketLedger: mergeTicketLedgers(local.ticketLedger, cloud.ticketLedger),
     missions: [...missionsById.values()],
     cleared: unionList(local.cleared, cloud.cleared),
     round: {
@@ -624,7 +639,10 @@ export function useStudent(studentId, legacyName) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId])
 
-  const { round, history, stickers: stickerTypes, diaryPlacements, missions, cleared, milestoneStreak, starBadgeThreshold, lastGamePlayed, lastWordIndex, totalStars: stars, wordStatus } = record
+  const { round, history, stickers: stickerTypes, diaryPlacements, missions, cleared, milestoneStreak, starBadgeThreshold, lastGamePlayed, lastWordIndex, totalStars: stars, wordStatus, ticketLedger } = record
+  // Ticket Economy — 화면은 항상 이 파생값만 읽는다(원시 잔액을 저장하지
+  // 않는 이유는 ticketEconomy.js 헤더 참고).
+  const ticketBalance = sumTicketBalance(ticketLedger)
 
   const [giftQueue, setGiftQueue] = useState([])
 
@@ -665,6 +683,25 @@ export function useStudent(studentId, legacyName) {
     if (resolveXpAmount(eventType) === null) return
     postXpEvent(studentId, eventType, sourceEventId)
   }, [studentId])
+
+  // Ticket Economy — Rewards 티켓 상점 구매(GAME_DESIGN.md 10번). 순수
+  // redeemReward()가 잔액/소유 여부를 전부 확인하므로 여기서는 결과를
+  // 그대로 record에 반영만 한다(answerMission/grantSticker와 같은 "patch
+  // 안에서 결과를 만들고 클로저 변수로 즉시 반환"패턴 재사용). 실패해도
+  // ledger/stickers 어느 쪽도 바뀌지 않는다(redeemReward가 ok:false일 때
+  // 원본 ledger를 그대로 반환).
+  const redeemTicketReward = useCallback((rewardId) => {
+    let outcome = { ok: false, reason: 'unknown-reward' }
+    patch(prev => {
+      outcome = redeemReward(prev.ticketLedger, prev.stickers, rewardId)
+      if (!outcome.ok) return {}
+      return {
+        ticketLedger: outcome.ledger,
+        stickers: [...prev.stickers, outcome.reward.stickerId],
+      }
+    })
+    return outcome
+  }, [patch])
 
   const addMission = useCallback((wordId) => {
     patch(prev => ({
@@ -812,6 +849,13 @@ export function useStudent(studentId, legacyName) {
     // 완료마다 XP가 계속 쌓였는데, 이것도 "같은 행동 반복 시 XP 무한 획득"
     // 이 되므로 이번 리팩터링 범위에 포함해 함께 정리했다).
     grantXp('daily-mission-complete', `daily-mission-complete:${todayStr()}`)
+    // Ticket Economy(GAME_DESIGN.md 7번) — 같은 트리거에 병행 후킹만, 새
+    // 트래킹 로직 없음. grantTicket이 `daily-mission-complete:${날짜}`를
+    // id로 써서(위 grantXp와 동일한 day 기간키) idempotent하게 append하므로,
+    // 이 useEffect가 하루 중 몇 번을 더 반복(missions repeat all day)해도
+    // 오늘 첫 4/4 완료 1회만 티켓이 지급된다(XP 쪽 "오늘 이미 지급했는지"
+    // 가드와 동일한 원리 재사용, ticketEconomy.js 참고).
+    patch(prev => ({ ticketLedger: grantTicket(prev.ticketLedger, 'daily-mission-complete', todayStr()) }))
     bumpHistory(day => ({ giftsToday: day.giftsToday + 1 }))
     const sticker = getRandomSticker()
     const isDuplicate = grantSticker(sticker)
@@ -1140,5 +1184,8 @@ export function useStudent(studentId, legacyName) {
     markWordViewed, markExampleHeard, markQuizSolved, markPronunciationOk,
     placeSticker, updatePlacement, removePlacement, movePlacementLayer,
     wordStatus, setWordKnown, setWordUnknown,
+    // Ticket Economy(2026-07-19) — ticketBalance는 항상 ticketLedger에서
+    // 파생된 값(sumTicketBalance), 절대 별도 저장하지 않는다.
+    ticketBalance, ticketLedger, redeemTicketReward,
   }
 }
