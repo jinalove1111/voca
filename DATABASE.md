@@ -19,6 +19,7 @@ _작성: 2026-07-18. 저장소의 `supabase_*.sql` 11개 파일 전체를 읽고
 | `class_id` | uuid, FK → `classes(id)` | (원본) | anon UPDATE 허용 컬럼(v1.9) |
 | `unit_name` | text | (원본) | 유닛 이름 문자열. v2.1 이후 하위호환 폴백 전용, `current_unit_id` 우선 |
 | `current_unit_id` | uuid, FK → `units(id)`, `on delete set null` | v2.1 | 학생의 진짜 현재 유닛(FK). anon SELECT/UPDATE 명시 GRANT됨 |
+| `house_id` | smallint, CHECK(1~4) | `supabase_v2_7_house_system.sql`(2026-07-19, 게임화 하위카드 8번) | House System 팀 소속. **FK 아님** — 참조할 `houses` 테이블을 의도적으로 만들지 않고 `src/utils/houseSystem.js`의 `HOUSES` 코드 상수(id 1~4)로 대체(근거는 그 SQL/JS 파일 헤더 "설계 판단 1/2" 참고). anon SELECT/UPDATE 명시 GRANT됨(규칙 10) |
 | `pin_hash` | text | v1.6 | scrypt `salt:hash`. **anon/authenticated SELECT/UPDATE 차단(v1.9)** — 서버리스 함수(service_role)만 접근 |
 | `pin_fail_count` | integer, default 0 | v1.6 | 5회 도달 시 잠금. anon 접근 차단(v1.9) |
 | `pin_locked_until` | timestamptz | v1.6 | 브루트포스 방지 잠금 해제 시각. anon 접근 차단(v1.9) |
@@ -36,6 +37,7 @@ _작성: 2026-07-18. 저장소의 `supabase_*.sql` 11개 파일 전체를 읽고
 | `wrong_answer_repeat_count` | integer, default 3 | 〃 | |
 | `spelling_direction` | text, default `'kr2en'`→`'mixed'`(v2.0.1) | `supabase_spelling_direction_schema.sql`(→ v2.0으로 통합) | `'kr2en'\|'en2kr'\|'random'\|'mixed'`. 값 검증은 DB CHECK가 아니라 애플리케이션 레벨(`wordLibrary.js`) |
 | `gamification_enabled` | boolean, default false | `supabase_v2_5_gamification_master_switch.sql`(2026-07-19) | Teacher Controls 마스터 스위치(`GAME_DESIGN.md` 13번 섹션) — `spelling_test_enabled`와 동일한 opt-in 관례. 학생 화면의 Paul Rank/XP UI(`Dashboard.jsx`)는 이 값이 true인 반에서만 렌더됨. XP 적립(`api/grant-xp.js`) 자체는 이 스위치와 무관하게 계속 기록됨(판단 근거는 `api/grant-xp.js` 헤더 주석) |
+| `weekly_event_enabled` | boolean, default false | `supabase_v2_7_house_system.sql`(2026-07-19, 게임화 하위카드 8번) | Weekly Events **설정 슬롯만**(`GAME_DESIGN.md` 8번 섹션) — 실제 이벤트 정의/트리거는 이번 라운드 범위 아님(`src/utils/houseSystem.js`의 `WEEKLY_EVENT_TYPES`가 빈 배열). 이번 라운드는 이 컬럼을 읽는 코드가 없다(의도된 죽은 슬롯 — 향후 실제 이벤트가 붙는 라운드에서 배선). House System 자체는 이 컬럼이 아니라 기존 `gamification_enabled` 마스터 스위치로 게이팅됨(Word King 선례와 일관성 — 판단 근거는 SQL 파일 "설계 판단 3" 참고) |
 
 ### `units` (역추적)
 
@@ -112,6 +114,7 @@ classes 1──N word_king_history N──1 students
 15. `supabase_v2_4_entrance_result_rls.sql`(2026-07-19, P1 보안 감사 후속 — 입실시험 결과 서버 재검증) — `entrance_test_results`의 기존 `"allow anon all"`(using(true) with check(true)) 정책을 제거하고 `select`만 anon 허용하는 정책으로 교체(INSERT/UPDATE/DELETE는 정책을 아예 안 만들어 anon/authenticated 전면 차단, service_role만 BYPASSRLS로 계속 쓰기 가능). 새 쓰기 경로는 `api/submit-entrance-result.js`(서버가 `entrance_tests.words`로 직접 재채점 후 저장) 하나뿐 — 기존 `entranceTestApi.js`의 anon 직접 upsert 경로는 제거됨. 스키마 자체(컬럼/테이블)는 변경 없음, RLS 정책 교체만. **[미실행 — 운영자 실행 대기, 실행 전에도 이 API는 기존 v1.8 permissive 정책 하에서 정상 동작(서버가 재검증하므로 이중 방어)]**
 16. `supabase_v2_5_gamification_master_switch.sql`(2026-07-19, 게임화 하위 카드 3번 — Teacher Controls 마스터 스위치) — `classes.gamification_enabled boolean not null default false` 컬럼 1개만 추가(`add column if not exists`, 멱등). GRANT 불필요(위 RLS 절 참고 — `classes`는 v1.9 컬럼단위 GRANT 대상이 아니라 테이블 단위 정책을 그대로 씀, `spelling_test_enabled` 등 기존 반별 설정 컬럼도 GRANT 없이 정상 동작 중임을 확인 후 결정). **[미실행 — 운영자 실행 대기. 실행 전에는 `wordLibrary.js`의 select 폴백 체인이 이 컬럼 없이 조회하고, `getClassSettings().gamificationEnabled`은 항상 false로 안전 폴백 — Dashboard.jsx의 Paul Rank UI는 이 SQL 실행 여부와 무관하게 계속 숨김 상태 유지]**
 17. `supabase_v2_6_word_king.sql`(2026-07-19, 게임화 하위카드 7번 — Word King) — `word_king_history` 신규 테이블(순수 추가, 기존 테이블 컬럼 0개 변경) + anon read-only RLS + service_role 전용 write. `xp_ledger`(v2.3)와 완전히 동일한 RLS 패턴 재사용. **[미실행 — 운영자 실행 대기. 실행 전에는 `api/compute-word-king.js`가 upsert 실패(테이블 없음)를 감지해 `ok:false, reason:'table_missing'`로 응답하고, `src/utils/wordKingApi.js`의 조회 함수들은 조용히 빈 결과로 폴백 — Dashboard.jsx의 "이번 주 챔피언" 텍스트는 이 SQL 실행 여부와 무관하게 안 보일 뿐 크래시 없음]**
+18. `supabase_v2_7_house_system.sql`(2026-07-19, 게임화 하위카드 8번 — House System + Weekly Events 설정 슬롯) — `students.house_id`(smallint, CHECK 1~4, GRANT select/update — houses 테이블 없이 `houseSystem.js`의 코드 상수로 대체, 설계 판단은 SQL/JS 파일 헤더 참고) + 기존 학생 라운드로빈 백필(`row_number() % 4`) + `classes.weekly_event_enabled`(boolean, default false — 아직 아무 코드도 읽지 않는 설정 슬롯). **[미실행 — 운영자 실행 대기. 실행 전에는 `wordLibrary.js`의 select 폴백 체인(3단계 cascading — current_unit_id+house_id 둘 다 → current_unit_id만 → 둘 다 없음)이 이 컬럼 없이 조회하고, `addStudent()`의 자동 하우스 배정은 insert 실패 시 house_id 없는 payload로 재시도해 신규 학생 등록 자체는 막히지 않음. AdminScreen 로스터의 하우스 select는 항상 "미배정"으로 보이고, Dashboard.jsx의 팀 점수 텍스트는 `myHouse`가 null이라 렌더되지 않음(크래시 없음)]**
 
 `supabase_v1_1_progress_sync.sql`(더 이전 버전)은 `v1_3` 파일 주석에 "대체됨, 실행 불필요"로 명시돼 있으며 저장소에 파일 자체가 없습니다(이미 정리된 것으로 보임).
 
@@ -127,7 +130,7 @@ classes 1──N word_king_history N──1 students
 **`students` — RLS 대신 컬럼 단위 GRANT (v1.9, 유일하게 다른 전략)**:
 - 테이블 단위 `SELECT`/`UPDATE`를 anon/authenticated에서 회수(`revoke`).
 - `SELECT`는 PIN 4컬럼(`pin_hash`/`pin_fail_count`/`pin_locked_until`/`pin_setup_allowed`)을 제외한 전체 컬럼에 명시 재부여.
-- `UPDATE`는 클라이언트가 실제 쓰는 컬럼만: `class_id`, `unit_name`(v1.9), `current_unit_id`(v2.1 추가 GRANT).
+- `UPDATE`는 클라이언트가 실제 쓰는 컬럼만: `class_id`, `unit_name`(v1.9), `current_unit_id`(v2.1 추가 GRANT), `house_id`(v2.7 추가 GRANT).
 - `INSERT`/`DELETE`는 테이블 단위로 유지(회수 안 됨) — 학생 자기등록(`addStudent`), 관리자 삭제(`removeStudent`)가 이 경로를 씀.
 - **운영 함정(반드시 지킬 것)**: `students`에 새 컬럼을 추가하는 모든 향후 마이그레이션은 `grant select (새컬럼) on public.students to anon, authenticated;`(필요시 `update`도)를 **반드시 같이** 실행해야 합니다 — 안 하면 그 컬럼만 못 읽는 게 아니라 클라이언트가 원래 읽던 컬럼까지 한 번에 깨질 수 있는 fail-closed 구조입니다(v2.1이 이 절차를 올바르게 준수한 사례로 확인됨, `handoff.md` 2026-07-18 Phase 4).
 

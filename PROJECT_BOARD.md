@@ -189,7 +189,8 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
      **2026-07-19 구현 완료 — 위 VERIFY 섹션 참고.**
   8. House System(`students.house_id` 신규 컬럼 — GRANT 필수, CLAUDE.md
      규칙 10) + Weekly Events(`classes.weekly_event_enabled`).
-     `GAME_DESIGN.md` 6·8번 섹션.
+     `GAME_DESIGN.md` 6·8번 섹션. **2026-07-19 구현 완료 — 위 VERIFY
+     섹션 참고.**
   9. Seasonal Progression — Ticket/House 리셋 경계만 신규(레벨/뱃지/
      스트릭은 영구 유지, 절대 리셋 안 함). `GAME_DESIGN.md` 9번 섹션.
   10. Parent Motivation 노출 — `computeStudentStats()`/
@@ -281,7 +282,10 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
   포함). 8번(House)/9번(Seasonal)/10번의 나머지(Weekly Events)는 여전히
   미구현(그대로 BACKLOG) — `TICKET_GRANT_TABLE`에 `status:'planned'`
   슬롯만 예약. **7번(Word King)은 이후 별도 세션(2026-07-19(8차))에서
-  구현 완료 — 위 VERIFY 섹션 참고.** 상세: `handoff.md` 2026-07-19(7차),
+  구현 완료 — 위 VERIFY 섹션 참고. 8번(House System + Weekly Events
+  설정 슬롯)도 이후 별도 세션(2026-07-19(9차))에서 구현 완료 — 위 VERIFY
+  섹션 참고(9번 Seasonal, 10번의 실제 이벤트 콘텐츠는 여전히 BACKLOG).**
+  상세: `handoff.md` 2026-07-19(7차),
   `GAME_DESIGN.md` "4.x·7.x·10.x 구현 완료" 항목.
 
 ---
@@ -291,6 +295,42 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
 _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` 상태 파일 생성)_
 
 ## VERIFY
+
+### [P3] 게임화 하위카드 8번(House System + Weekly Events 설정 슬롯) — 구현 완료, 검수 대기
+- 근거: BACKLOG "[P3] 게임화" 하위 카드 8번, `GAME_DESIGN.md` 6·8번 섹션,
+  `PAUL_BIBLE.md` §10, `PAUL_PRINCIPLES.md` 3번("하우스가 소속감을 만드는
+  이유").
+- 범위(운영자 지시 그대로): 하우스 소속 데이터 + 팀 점수 집계 + 최소
+  표시까지만 — 실제 게임/미니게임 없음.
+- **`houses` 테이블 대신 코드 상수로 대체(PAUL_BIBLE.md §10 원문과 다른
+  점)**: `src/utils/houseSystem.js`의 `HOUSES`(4개 고정) — 근거는
+  `GAME_DESIGN.md` "6.x 구현 완료" 항목. `students.house_id`는 FK가
+  아니라 CHECK(1~4) 제약 smallint.
+- 팀 점수는 티켓 원장의 양수 delta(획득)만 그 주(월~일) 범위로 합산 —
+  소비/구매(delta<0)는 제외(의도치 않은 벌칙 방지 판단).
+- 별도 `house_enabled` 스위치는 만들지 않고 기존 `gamification_enabled`
+  마스터 스위치를 재사용(Word King 선례와 일관). `classes.weekly_event_
+  enabled`는 이번에 추가했으나 아직 아무 코드도 읽지 않는 설정 슬롯(향후
+  실제 이벤트가 붙는 라운드에서 배선).
+- 신규 파일: `supabase_v2_7_house_system.sql`(GRANT 포함, 멱등, **운영자
+  실행 대기**), `src/utils/houseSystem.js`(순수 배정/집계),
+  `scripts/testHouseSystem.mjs`(순수 로직 33개 체크 PASS). `wordLibrary.js`
+  (`setStudentHouse`/`getStudentsInHouse`/`fetchHouseWeeklyScore` 신규,
+  `refreshStudents`/`addStudent` 컬럼 폴백 확장), `AdminScreen.jsx` 로스터
+  하우스 배지/재배정 select, `Dashboard.jsx` 최소 텍스트.
+- **구현 중 회귀 발견 + 즉시 수정**: `addStudent()`의 최초 구현이 단일
+  폴백이라 `house_id` 컬럼 미실행 상태에서 이미 적용된 `current_unit_id`
+  까지 함께 못 쓰게 되는 회귀를 `testStudentUnitDecouple.mjs` FAIL로
+  재현·확인 후 3단계 cascading 폴백으로 수정(`handoff.md` 2026-07-19(9차)
+  상세).
+- 검증: `npm run build` PASS, `npm run verify:admin`(6개 스크립트 전부
+  PASS)/`npm run verify:student`(4개 스크립트 전부 PASS), harness
+  `houseSystem` 도메인 신규 등록 PASS, `npm run verify:all` 재실행 —
+  `login` 도메인만 기존 BLOCKED 카드(로컬 서비스롤 키 부재)로 FAIL,
+  나머지 전부 PASS/SKIP(회귀 수정 후 무회귀 재확인).
+- 검수 대기 사항: qa-reviewer/security-reviewer 코드 리뷰, 운영자의
+  `supabase_v2_7_house_system.sql` 실행 여부 판단. 상세: `handoff.md`
+  2026-07-19(9차).
 
 ### [P3] 게임화 하위카드 7번(Word King) — 구현 완료, 검수 대기
 - 근거: BACKLOG "[P3] 게임화" 하위 카드 7번, `GAME_DESIGN.md` 5번 섹션,

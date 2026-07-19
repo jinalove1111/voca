@@ -1,5 +1,99 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-19 (8차, 게임화 하위카드 7번 — Word King, 주간·서버 전용 계산 — Engineering Head)_
+_최종 갱신: 2026-07-19 (9차, 게임화 하위카드 8번 — House System + Weekly Events 설정 슬롯 — Engineering Head)_
+
+## 2026-07-19 (9차) — 게임화 하위카드 8번(House System + Weekly Events 설정 슬롯) — Engineering Head
+
+PROJECT_BOARD.md "[P3] 게임화(Gamification)" 하위 카드 8번 착수. `GAME_DESIGN.md`
+6·8번 섹션(House System/Weekly Events), `PAUL_BIBLE.md` §10(DESIGN
+DIRECTION), `PAUL_PRINCIPLES.md` 3번("하우스가 소속감을 만드는 이유") 정독
+후 구현. 운영자 지시("실제 게임/미니게임 만들지 마라 — 하우스 소속 데이터 +
+팀 점수 집계 + 최소 표시까지만") 범위 그대로.
+
+- **`houses` 테이블을 만들지 않음 — PAUL_BIBLE.md §10 원문에서 의도적으로
+  벗어난 판단**: 신규 `houses` 테이블 대신 `src/utils/houseSystem.js`의
+  `HOUSES`(4개 고정 — 레드/블루/그린/옐로우, id 1~4/emoji/colorHex) 코드
+  상수로 대체했다. 근거: 이 저장소가 이미 확립한 "자주 안 바뀌는 소규모
+  목록은 정적 JS 객체" 관례(`TICKET_GRANT_TABLE`/`REWARD_CATALOG`,
+  `GAME_DESIGN.md` 8번 섹션 자신도 Weekly Events에 신규 정의 테이블을
+  안 만들겠다고 이미 명시)를 하우스 정의에도 그대로 적용 — 관리자가 웹
+  UI로 하우스를 추가/삭제할 요구가 실제로 생기기 전까지 테이블+CRUD를
+  미리 만들면 과설계(YAGNI). 그래서 `students.house_id`는 FK가 아니라
+  `smallint` + CHECK(1~4) 제약이다.
+- **`supabase_v2_7_house_system.sql`(신규, 멱등, 운영자 실행 대기)** —
+  `students.house_id`(smallint, CHECK, **GRANT select/update 포함 —
+  CLAUDE.md 규칙 10, `supabase_v2_1_student_unit_decouple.sql`의
+  `current_unit_id` GRANT 선례 그대로 따름**) + 기존 학생 라운드로빈
+  백필(`row_number() over (order by created_at, id) % 4`, 이미 house_id가
+  있는 행은 절대 덮어쓰지 않음) + `classes.weekly_event_enabled`(boolean,
+  기본 false — Weekly Events 설정 슬롯, `supabase_spelling_test_schema.sql`
+  opt-in 관례 재사용, classes는 v1.9 컬럼단위 GRANT 대상이 아니라 별도
+  GRANT 불필요).
+- **`src/utils/houseSystem.js`(신규, 완전 순수)** — `HOUSES`/`getHouseById`,
+  `assignBalancedHouseId`(결정론적 라운드로빈 — 동률이면 항상 id가 가장
+  작은 하우스, 난수 없음), `computeHouseCounts`, `getWeekPeriod`(wordKing.js
+  와 동일한 월요일~일요일 ISO 주 규칙 — 다른 게임화 순수 모듈처럼
+  cross-file import 없이 재구현), `computeHouseWeeklyScores`(**양수
+  delta(획득)만 그 주 범위로 합산, 소비/구매 delta<0은 제외** — "내가
+  스티커를 사면 우리 팀 점수가 내려간다"는 의도치 않은 벌칙을 막기 위한
+  판단, 파일 헤더에 근거 전문), `getOwnHouseWeeklyDisplay`(학생 화면
+  전용 — 본인 하우스 정보만 반환, 다른 하우스 비교 불가능한 shape),
+  `WEEKLY_EVENT_TYPES`(빈 배열 — Weekly Events 콘텐츠 슬롯, `TICKET_GRANT_
+  TABLE`의 `status:'planned'`와 같은 예약 패턴).
+- **자동 배정 배선(`wordLibrary.js` `addStudent`)** — 이미 메모리에 있는
+  전체 학생 캐시(`_students`, 반 무관 전원 로드)로 하우스별 인원을 계산해
+  가장 적은 하우스에 배정, 별도 DB 집계 쿼리 없음. **버그 발견 + 수정**:
+  최초 구현은 `current_unit_id`+`house_id`를 한 insert에 같이 넣고
+  실패하면 단일 폴백(house_id 없는 baseRow, current_unit_id까지 함께
+  탈락)으로 재시도했는데, 이러면 v2.1(current_unit_id)은 이미 적용됐지만
+  v2.7(house_id)은 아직 미적용인 상태(지금 라이브 DB가 정확히 이 상태)
+  에서 **신규 학생의 current_unit_id가 회귀로 안 채워지는** 문제가
+  `scripts/testStudentUnitDecouple.mjs`(unitSwitching 도메인) FAIL로 실제
+  재현됐다. `refreshStudents()`와 같은 3단계 cascading 폴백(둘 다 →
+  current_unit_id만 → 둘 다 없음)으로 수정해 해결(재현→수정→재검증
+  전 과정 확인 — CLAUDE.md 규칙 15 "회귀는 수정 전 코드로 되돌려 실제
+  FAIL 확인" 정신 그대로, 이번엔 수정 전 코드가 방금 만든 코드라 되돌릴
+  필요 없이 바로 원인 확인).
+- **관리자 최소 UI(`AdminScreen.jsx` `StudentManagement`)** — 학생 로스터
+  각 행에 현재 하우스 배지(이모지+이름 또는 "하우스 미배정") + 재배정
+  select(값 변경 즉시 저장, 반/유닛처럼 별도 "편집 모드" 없음). 컬럼
+  부재(SQL 미실행)면 항상 "미배정"으로만 보임(크래시 없음).
+- **학생 최소 표시(`Dashboard.jsx`)** — "🔴 우리 하우스: 레드 하우스 ·
+  이번 주 팀 점수 N" 한 줄. `gamificationEnabled` 마스터 스위치로 게이팅
+  (Word King/Ticket Economy와 동일 원칙). **별도 `house_enabled` 스위치는
+  만들지 않음** — `supabase_v2_5_...` SQL이 애초에 "각 기능 착수 시
+  전용 스위치 추가"로 계획했었지만, Word King 착수 때 이미 `word_king_
+  enabled`를 안 만들고 마스터 스위치만 재사용한 선례(코드 실측
+  확인)를 그대로 따른 것 — 일관성 + YAGNI. 반면 `classes.weekly_event_
+  enabled`는 이번에 실제로 추가했는데(House와 다른 판단), Weekly
+  Events가 "이번 주만" 켜고 끄는 시간 제한적 성격이라 향후 마스터
+  스위치와 독립적인 축의 on/off가 필요해질 가능성이 높다고 판단했기
+  때문(SQL 파일 "설계 판단 4" 참고) — 지금은 이 컬럼을 읽는 코드가
+  없다(의도된 죽은 슬롯, 실제 이벤트가 붙는 라운드에서 배선).
+- **`fetchHouseWeeklyScore(houseId)`(`wordLibrary.js`)** — `fetchDashboardData`
+  /`fetchXpTotals`와 같은 배치 조회 패턴. `student_progress`의 기존
+  `"allow anon all"` RLS를 그대로 활용(새 anon 쓰기 경로 0개, 읽기만
+  추가) — Word King이 같은 데이터를 서버 전용으로 격리한 이유(경쟁
+  랭킹의 신뢰성)와 이 함수가 다른 이유: 팀 점수는 개인 경쟁이 아니라
+  이미 anon 전체 읽기 가능한 데이터의 집계 표시일 뿐이고, 조작해도
+  실질적 이득이 없는 저가치 정보라는 판단(`ticketEconomy.js` 헤더가
+  이미 확립한 "저빈도·저가치는 anon 관례 유지" 기준과 동일).
+- **신규 테스트**: `scripts/testHouseSystem.mjs`(순수 로직 33개 체크 —
+  HOUSES/getHouseById, assignBalancedHouseId 균형 배정(20명 완전균형/
+  21명 최대-최소차 1 이내), computeHouseCounts, getWeekPeriod, 
+  computeHouseWeeklyScores(양수만 합산 실측), getOwnHouseWeeklyDisplay,
+  WEEKLY_EVENT_TYPES), `tests/harness/registry.mjs`에 `houseSystem` 도메인
+  신규 등록(wordKing/ticketEconomy/paulRank와 동일 패턴 — extra:true).
+- **검증**: `npm run build` PASS, `npm run verify:admin`(6개 스크립트
+  전부 PASS, 라이브 e2e 무회귀) PASS, `npm run verify:student`(4개
+  스크립트 전부 PASS) PASS, `npm run verify:all` 재실행 — 위 버그 수정
+  전에는 `unitSwitching` 도메인이 FAIL(회귀 실측)이었으나 수정 후
+  PASS로 전환 확인. 최종적으로 `login` 도메인만 기존 BLOCKED 카드(로컬
+  서비스롤 키 부재)로 FAIL, 나머지 전부 PASS/SKIP(무회귀 확인,
+  `paulRank`/`ticketEconomy`/`wordKing` 재실행 포함).
+- **검수 대기 사항**: qa-reviewer/security-reviewer 코드 리뷰, 운영자의
+  `supabase_v2_7_house_system.sql` 실행 여부 판단(실행 전에도 앱은
+  기존과 동일하게 동작 — 하우스 관련 UI는 전부 안전한 기본값 "미배정"
+  으로 표시될 뿐).
 
 ## 2026-07-19 (8차) — 게임화 하위카드 7번(Word King) — 주간·서버 전용 계산 — Engineering Head
 

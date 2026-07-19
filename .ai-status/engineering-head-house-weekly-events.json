@@ -1,0 +1,37 @@
+{
+  "agent_name": "engineering-head",
+  "role": "코드 구현",
+  "task_id": "house-weekly-events",
+  "task": "게임화 하위카드 8번 — House System(students.house_id) + Weekly Events 설정 슬롯",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-19T00:00:00Z",
+  "updated_at": "2026-07-19T01:30:00Z",
+  "files_owned": [
+    "supabase_v2_7_house_system.sql",
+    "src/utils/houseSystem.js",
+    "src/utils/wordLibrary.js",
+    "src/components/AdminScreen.jsx",
+    "src/components/Dashboard.jsx",
+    "scripts/testHouseSystem.mjs",
+    "tests/harness/registry.mjs",
+    "PROJECT_BOARD.md",
+    "GAME_DESIGN.md",
+    "PAUL_BIBLE.md",
+    "DATABASE.md",
+    "TESTING.md",
+    "handoff.md"
+  ],
+  "files_read": [
+    "CLAUDE.md",
+    "PAUL_PRINCIPLES.md",
+    "supabase_v2_1_student_unit_decouple.sql",
+    "supabase_v2_5_gamification_master_switch.sql",
+    "src/utils/ticketEconomy.js",
+    "src/utils/wordKing.js",
+    "src/utils/paulRankShared.js"
+  ],
+  "summary": "구현 완료. houses 테이블 대신 코드 상수(HOUSES, houseSystem.js)로 4개 하우스 정의, students.house_id는 FK 대신 CHECK(1~4) smallint + GRANT(규칙 10). 자동배정(assignBalancedHouseId, 결정론적 라운드로빈) + 팀 점수 집계(computeHouseWeeklyScores, 양수 delta만 그 주 범위 합산, 소비 제외) 순수 함수. wordLibrary.js에 setStudentHouse/getStudentsInHouse/fetchHouseWeeklyScore 신규, refreshStudents/addStudent 컬럼 폴백 확장. AdminScreen 로스터에 하우스 배지+재배정 select, Dashboard.jsx에 '우리 하우스 · 이번 주 팀 점수' 최소 텍스트(gamificationEnabled 게이팅, 별도 house_enabled 스위치는 Word King 선례 따라 만들지 않음). classes.weekly_event_enabled는 설정 슬롯만 추가(아직 아무 코드도 읽지 않음), WEEKLY_EVENT_TYPES 빈 배열. 구현 중 addStudent()의 단일 폴백이 house_id 컬럼 미실행 시 current_unit_id까지 함께 못 쓰게 되는 회귀를 testStudentUnitDecouple.mjs FAIL로 발견 → 3단계 cascading 폴백으로 즉시 수정, 재검증 PASS. npm run build/verify:admin/verify:student/verify:all(login만 기존 BLOCKED, 나머지 전부 PASS/SKIP) 전부 확인. 문서 6종(handoff/DATABASE/TESTING/PROJECT_BOARD/GAME_DESIGN/PAUL_BIBLE) append 완료.",
+  "blocker": null,
+  "next_action": "CTO 보고 완료 대기. 운영자가 supabase_v2_7_house_system.sql 실행 후 qa-reviewer/security-reviewer 검수 필요(PROJECT_BOARD.md VERIFY 섹션 참고)."
+}

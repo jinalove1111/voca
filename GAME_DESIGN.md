@@ -427,6 +427,68 @@ _이 항목도 append입니다 — 위 5번 섹션 원문은 수정하지 않았
   Psychology](#sec-12)에서 말하는 "하위권 개인 공개 망신 방지" 설계
   목표와 직접 연결됩니다.
 
+### 6.x 구현 완료(2026-07-19, 게임화 하위카드 8번, Engineering Head)
+
+_이 항목도 append입니다 — 위 6번 섹션 원문은 수정하지 않았습니다._
+
+- **`houses` 테이블을 만들지 않고 코드 상수로 대체 — 원문에서 의도적으로
+  벗어난 점**: 원문은 "신규 `houses` 테이블"을 제안했지만, 실제 구현은
+  `src/utils/houseSystem.js`의 `HOUSES`(4개, id/name/emoji/colorHex 고정
+  객체 배열)로 대체했습니다. 근거: 이 저장소가 이미 반복 확립한 "자주 안
+  바뀌는 소규모 목록은 정적 JS 객체, DB 테이블 아님" 관례
+  (`TICKET_GRANT_TABLE`/`REWARD_CATALOG`, [섹션8](#sec-8) 원문 자신도
+  Weekly Events 콘텐츠에 신규 정의 테이블을 만들지 않겠다고 이미 명시) —
+  관리자가 웹 UI로 하우스를 추가/삭제하는 요구가 실제로 생기기 전까지
+  테이블+CRUD API를 만드는 건 과설계(YAGNI)라고 판단했습니다. `students.
+  house_id`는 그래서 FK가 아니라 `smallint` + CHECK(1~4) 제약입니다 —
+  CLAUDE.md 규칙 10(GRANT)은 원문대로 그대로 적용됩니다
+  (`supabase_v2_7_house_system.sql`). 하우스 목록이 실제로 바뀌면
+  `houseSystem.js`의 `HOUSES` 배열 + 그 SQL의 CHECK 제약을 함께 수정해야
+  합니다(두 파일이 유일한 커플링 지점, 각 파일 헤더에 서로 명시).
+- **자동 배정 = 결정론적 라운드로빈**: `assignBalancedHouseId(counts)`가
+  가장 인원이 적은 하우스를 고르고, 동률이면 항상 id가 가장 작은
+  하우스로 배정합니다(난수 없음 — "왜 이 학생이 이 하우스인지" 항상
+  재현 가능해야 한다는 판단). `addStudent()`가 신규 학생 등록 시 이미
+  메모리에 있는 전체 학생 캐시로 인원을 계산해 넘기므로 별도 DB 집계
+  쿼리가 없습니다. 관리자는 `AdminScreen.jsx` 로스터의 하우스 select로
+  언제든 수동 재배정할 수 있습니다(`setStudentHouse`).
+- **팀 점수 = 티켓 "획득"만 그 주 범위로 합산, 소비는 제외 — 원문의
+  "티켓 합산"을 한 단계 더 구체화한 판단**: `ticketEconomy.js`의
+  `appendTicketEntry`가 만드는 원장 항목(`delta`/`at`)을 그대로 읽어,
+  양수 delta(획득 이벤트)만 [섹션8](#sec-8)과 같은 월요일~일요일 ISO 주
+  범위로 합산합니다. 상점에서 개인이 코스메틱을 사는 소비(`delta<0`)를
+  포함하면 "내가 스티커를 사면 우리 팀 점수가 내려간다"는 의도치 않은
+  벌칙이 생기기 때문에 의도적으로 제외했습니다(`houseSystem.js` 헤더
+  "설계 판단 3" 참고).
+- **표시는 원문("팀 단위 비교")보다 더 좁게 — 다른 하우스 점수를 아예
+  노출하지 않습니다**: 학생 화면(`Dashboard.jsx`)은 "우리 하우스: OO ·
+  이번 주 팀 점수 N" 한 줄만 보여주고, 다른 하우스의 점수/순위는 어디에도
+  표시하지 않습니다 — PAUL_PRINCIPLES.md 3번("하위권 개인 공개 망신
+  없음")을 팀 단위에도 그대로 적용한 결과, 애초에 "우리 팀 vs 저 팀"
+  비교 UI 자체를 만들지 않았습니다. 관리자 화면(`AdminScreen.jsx`)도
+  학생별 하우스 확인/재배정만 있고 팀 순위 대시보드는 없습니다(운영자
+  지시 "최소 표시" 그대로).
+- **`house_enabled` 별도 스위치를 만들지 않음**: `supabase_v2_5_
+  gamification_master_switch.sql`이 애초에 "word_king_enabled/
+  house_enabled/weekly_event_enabled는 각 기능 착수 시 추가"로 계획했지만,
+  실제로 Word King(하위카드 7번) 착수 시점에 `word_king_enabled`를
+  추가하지 않고 기존 `gamification_enabled` 마스터 스위치 하나로
+  게이팅했습니다([섹션13](#sec-13) "구현 완료" 항목 참고). House System도
+  같은 이유로 `gamification_enabled`를 재사용합니다 — 텍스트 한 줄에
+  별도 on/off 축을 추가하면 교사의 스위치 관리 부담만 늘고 실익이
+  적습니다(YAGNI + 선례 일관성).
+- **신규 파일**: `supabase_v2_7_house_system.sql`(멱등, 미실행 대기 —
+  `students.house_id` GRANT 포함 + 기존 학생 라운드로빈 백필 +
+  `classes.weekly_event_enabled`), `src/utils/houseSystem.js`(순수
+  배정/집계, 다른 게임화 순수 모듈처럼 무의존), `wordLibrary.js`
+  확장(`refreshStudents`/`addStudent`의 3단계 cascading 컬럼 폴백,
+  `setStudentHouse`/`getStudentsInHouse`/`fetchHouseWeeklyScore`),
+  `AdminScreen.jsx` 로스터 하우스 select, `Dashboard.jsx` 최소 텍스트,
+  `scripts/testHouseSystem.mjs`(순수 로직 33개 체크 PASS). `npm run
+  build`/`verify:admin`/`verify:student` 전부 PASS, `verify:all` 재실행 —
+  `login` 도메인만 기존 BLOCKED 카드(로컬 서비스롤 키 부재)로 FAIL, 나머지
+  전부 PASS/SKIP(무회귀 확인). 상세: `handoff.md` 2026-07-19(9차).
+
 <a id="sec-7"></a>
 ## 7. Daily Missions
 
@@ -458,6 +520,33 @@ _이 항목도 append입니다 — 위 5번 섹션 원문은 수정하지 않았
   이벤트 에디터를 과설계하지 않습니다.
 - 보상은 [Ticket Economy](#sec-4)를 통해서만 지급 — 별을 추가로 찍지
   않는다는 [섹션2](#sec-2) 원칙 유지.
+
+### 8.x 구현 완료(2026-07-19, 게임화 하위카드 8번, Engineering Head) — 설정 슬롯만
+
+_이 항목도 append입니다 — 위 8번 섹션 원문은 수정하지 않았습니다._
+
+- **이번 라운드는 콘텐츠 0개, 설정 슬롯만**: 운영자 지시("실제 이벤트
+  정의/트리거는 이번 범위 아님, 확장 가능한 구조로 자리만") 그대로,
+  실제 이벤트 유형/트리거/보상 로직은 전혀 구현하지 않았습니다.
+- **`classes.weekly_event_enabled`(boolean, 기본 false)는 이번 라운드에
+  추가했지만 아무 코드도 읽지 않습니다** — [섹션6](#sec-6) "6.x 구현
+  완료"가 `house_enabled`를 만들지 않기로 한 것과 다른 판단인 이유:
+  House는 상시 소속 정보(팀이 매주 바뀌지 않음)라 마스터 스위치 하나로
+  충분하지만, Weekly Events는 "이번 주만" 켜고 끄는 시간 제한적 성격이라
+  나중에 실제 이벤트가 붙으면 "시험 주간이라 이벤트만 끄고 싶다"처럼
+  `gamification_enabled`와는 독립적인 축의 on/off가 실제로 필요해질
+  가능성이 높다고 판단했습니다(`supabase_v2_7_house_system.sql` "설계
+  판단 4" 참고). 지금은 이 컬럼을 읽는 화면이 없으므로 값을 켜도 아무
+  변화가 없습니다 — 실제 이벤트가 붙는 라운드에서 배선합니다.
+- **콘텐츠 슬롯**: `src/utils/houseSystem.js`의 `WEEKLY_EVENT_TYPES`
+  (현재 빈 배열, `Object.freeze([])`) — `TICKET_GRANT_TABLE`의
+  `'weekly-event-complete'`(`status:'planned'`)와 같은 예약 패턴입니다.
+  실제 착수 시 `{ id, label, checkFn }` 형태 항목만 이 배열에 추가하면
+  되는 구조로 설계했습니다(Word King이 이미 증명한 "확장은 파일의 공식/
+  상수만 바꾸면 되고 스키마 변경은 필요 없다" 패턴 재사용).
+- **신규 파일**: 위 6.x 항목과 동일(`supabase_v2_7_house_system.sql`,
+  `src/utils/houseSystem.js`) — House System과 같은 라운드에서 함께
+  구현했습니다. 상세: `handoff.md` 2026-07-19(9차).
 
 <a id="sec-9"></a>
 ## 9. Seasonal Progression
