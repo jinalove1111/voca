@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react'
-import { getStudentClass, getStudentUnit, getClassNames, getClassUnitNames, getTodaysAssignmentWordIds, getClassSettings, getClassIdByName } from '../utils/wordLibrary'
+import { getStudentClass, getStudentUnit, getClassNames, getClassUnitNames, getTodaysAssignmentWordIds, getClassSettings, getClassIdByName, getStudentById, fetchHouseWeeklyScore } from '../utils/wordLibrary'
+// House System(2026-07-19, 게임화 하위카드 8번) — 학생 화면 최소 표시
+// ("우리 하우스: OO · 이번 주 팀 점수"). 개인 순위/타 하우스 비교 없음
+// (PAUL_PRINCIPLES.md 3번 원칙 그대로 — 소속감이지 경쟁 연출이 아님).
+import { getHouseById } from '../utils/houseSystem'
 import { getMicStreamOnce, hasMicStream } from '../utils/speech'
 import { useMicReady } from '../hooks/useMicReady'
 import { isInAppBrowser } from '../utils/browserDetect'
@@ -217,6 +221,23 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
     fetchWeeklyChampion(classId).then((c) => { if (!cancelled) setWeeklyChampion(c) })
     return () => { cancelled = true }
   }, [gamificationEnabled, className])
+
+  // House System(2026-07-19, 게임화 하위카드 8번) — "우리 하우스: OO ·
+  // 이번 주 팀 점수" 최소 텍스트. Word King과 같은 gamificationEnabled
+  // 마스터 스위치로 게이팅(별도 house_enabled 스위치를 만들지 않은 이유는
+  // supabase_v2_7_house_system.sql 헤더 "설계 판단 3" 참고 — Word King
+  // 선례와 일관성). house_id가 아직 없으면(컬럼 미실행/미배정)
+  // getHouseById가 null을 반환해 이 블록 자체가 조용히 안 보인다(크래시
+  // 없음). 팀 점수는 다른 학생 목록을 화면에 노출하지 않고 숫자 하나만
+  // 보여준다 — 개인 순위/타 하우스 비교 없음(PAUL_PRINCIPLES.md 3번).
+  const myHouse = getHouseById(getStudentById(studentId)?.houseId)
+  const [houseWeeklyScore, setHouseWeeklyScore] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    if (!gamificationEnabled || !myHouse) { setHouseWeeklyScore(null); return }
+    fetchHouseWeeklyScore(myHouse.id).then((score) => { if (!cancelled) setHouseWeeklyScore(score) })
+    return () => { cancelled = true }
+  }, [gamificationEnabled, myHouse?.id, studentId])
   // [진단 로그 5] Home(Dashboard)에서 실제로 표시하는 unit 값 — 렌더될 때마다 확인
   console.log('[Dashboard] 표시하는 unit 값:', { studentId, studentName, className, unitName })
   const classDeleted = className && !getClassNames().includes(className)
@@ -328,6 +349,14 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
             <p className="text-purple-100 text-xs mt-1">
               👑 이번 주 챔피언: {weeklyChampion.studentName}
               {weeklyChampion.studentId === studentId ? ' (나예요!)' : ''}
+            </p>
+          )}
+          {/* House System(2026-07-19, 게임화 하위카드 8번) — 최소 텍스트.
+              개인/타 하우스 비교 없이 "우리 팀" 소속감만 전달
+              (PAUL_PRINCIPLES.md 3번 원칙). */}
+          {gamificationEnabled && myHouse && houseWeeklyScore != null && (
+            <p className="text-purple-100 text-xs mt-1">
+              {myHouse.emoji} 우리 하우스: {myHouse.name} · 이번 주 팀 점수 {houseWeeklyScore}
             </p>
           )}
         </div>
