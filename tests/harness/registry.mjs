@@ -86,6 +86,7 @@ export const DOMAINS = {
       { script: 'scripts/testDashboard.mjs', builders: ['wordlib'] },
       { script: 'scripts/testSpellingSettings.mjs', builders: ['wordlib'] },
       { script: 'scripts/testSpellingV2Db.mjs', builders: ['wordlib'] },
+      { script: 'scripts/testGamificationSettings.mjs', builders: ['wordlib'], extra: true, note: 'Teacher Controls 마스터 스위치(classes.gamification_enabled) — 13개 필수 도메인 밖, 신규 보너스 커버리지' },
       { script: 'scripts/testEntranceTest.mjs', builders: [], extra: true, note: '입실시험 순수 로직 — 13개 필수 도메인 밖, 보너스 커버리지' },
       { script: 'scripts/testEntranceTestDb.mjs', builders: ['wordlib', 'entrance'], extra: true, note: '입실시험 라이브 e2e — 보너스 커버리지, 테이블 미적용 시 스크립트 자체가 안전하게 SKIP(exit 0)' },
     ],
