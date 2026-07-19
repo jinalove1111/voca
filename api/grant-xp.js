@@ -23,6 +23,31 @@ import { createClient } from '@supabase/supabase-js'
 import { supabaseAdminUrl, supabaseAdminKey } from './_pinAuth.js'
 import { resolveXpAmount, isValidStudentId, isValidSourceEventIdForEvent, isValidEventType } from '../src/utils/paulRankShared.js'
 
+// Teacher Controls 마스터 스위치(2026-07-19, classes.gamification_enabled,
+// GAME_DESIGN.md 13번 섹션) 판단 — 이 핸들러는 반의 스위치 상태를 조회해서
+// 지급을 거부하지 않는다(의도적 결정, 아래 근거).
+//   1) xp_ledger는 "감사 가능한 이벤트 원장"으로 설계됐다(supabase_v2_3_
+//      paul_rank.sql 헤더 주석). 스위치가 꺼져 있다고 실제 발생한 학습
+//      이벤트의 지급을 조용히 스킵하면, 그 학생이 "그 행동을 안 한 것"과
+//      "했지만 꺼져 있어서 기록 안 됨"을 나중에 원장만 보고 구분할 수 없게
+//      된다 — 원장의 감사 가능성이 깨진다.
+//   2) source_event_id는 기간키(day 등) 기반 idempotency 키라(v2.3.1),
+//      클라이언트는 트리거가 발생한 그 시점에 딱 한 번만 호출을 시도하고
+//      실패는 이미 조용히 삼킨다(postXpEvent). 서버가 스위치 off를 이유로
+//      거부하면, 나중에 교사가 스위치를 켜도 그날 그 행동에 대한 XP는
+//      클라이언트가 다시 보내주지 않는 한 영구 손실된다 — 스위치를
+//      껐다 켰다 하는 정상적인 교사 사용 패턴에서 데이터가 복구 불가능하게
+//      사라지는 결과.
+//   3) 이 요청은 이미 고빈도 경로(word-view/listening/quiz-complete 등
+//      여러 트리거 지점)라, 반마다 classes.gamification_enabled를 추가
+//      조회하면 매 호출마다 DB 왕복 하나·실패 모드 하나가 늘어난다 —
+//      효과는 순수 UX(학생은 스위치가 꺼진 반에서는 Rank UI 자체를 절대
+//      보지 못한다, Dashboard.jsx 게이팅)뿐인데 안정성 비용만 커진다.
+// 결론: 마스터 스위치는 "노출(exposure) 게이트"로만 쓴다 — Dashboard.jsx가
+// 학생에게 보여줄지 말지만 결정하고, XP 적립 자체는 스위치와 무관하게
+// 계속 정확히 기록한다. 나중에 교사가 스위치를 켜면 그동안 실제로 쌓인
+// XP가 그대로(정확하게) 드러난다 — 이건 "별을 조용히 XP로 변환"하는 것과
+// 다르다(진짜 발생한 이벤트의 진짜 기록일 뿐, 합성값이 아님).
 const DUPLICATE_KEY_VIOLATION = '23505'
 
 export default async function handler(req, res) {
