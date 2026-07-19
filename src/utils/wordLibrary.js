@@ -5,7 +5,7 @@ import { supabase } from './supabaseClient'
 // import하지 않는다(순수 모듈 무의존 원칙, houseSystem.js 헤더 참고) —
 // 여기(브라우저 측 데이터 계층)에서 순수 함수를 소비하는 것은
 // ticketEconomy.js를 useStudent.js가 소비하는 것과 같은 방향의 의존이다.
-import { HOUSES, assignBalancedHouseId, computeHouseCounts, computeHouseWeeklyScores } from './houseSystem'
+import { HOUSES, assignBalancedHouseId, computeHouseCounts, computeHouseWeeklyScores, computeHouseSeasonScores } from './houseSystem'
 
 const DEFAULT_UNIT_NAME = 'Unit 1'
 
@@ -746,6 +746,35 @@ export async function fetchHouseWeeklyScore(houseId) {
   data.forEach((r) => { ledgerByStudentId[r.student_id] = r.progress_data?.ticketLedger || [] })
   const studentsForCalc = members.map((s) => ({ id: s.id, houseId: s.houseId }))
   const scores = computeHouseWeeklyScores(studentsForCalc, ledgerByStudentId)
+  return scores[id] || 0
+}
+
+// Seasonal Progression(2026-07-19, 게임화 하위카드 9번) — "시즌 누적" 팀
+// 점수. fetchHouseWeeklyScore와 완전히 같은 구조(학생별 N번 조회 안 함,
+// SQL 미실행/미배정이면 조용히 0)이고 유일한 차이는 집계 함수(houseSystem.js
+// computeHouseWeeklyScores의 "그 주" 고정 창 대신 computeHouseSeasonScores의
+// "시즌 시작 이후 전부" 창)뿐이다. seasonStartedAt은 호출부(Dashboard.jsx)
+// 가 src/utils/seasonApi.js fetchCurrentSeason()으로 먼저 조회해 넘긴다 —
+// 이 파일이 seasonApi.js를 직접 import하지 않는 이유는 이미 이 파일이
+// 다루는 것("학생 캐시 + 티켓 원장 DB 조회")과 시즌 경계 조회(다른 테이블)
+// 를 분리해 각 함수가 "무엇을 위한 시즌 경계인지" 호출부가 명시적으로
+// 결정하게 하기 위함(fetchDashboardData가 xpTotals를 직접 안 가져오고
+// 호출부가 fetchXpTotals를 따로 부르는 것과 같은 조합 원칙).
+export async function fetchHouseSeasonScore(houseId, seasonStartedAt) {
+  const id = Number(houseId)
+  if (!Number.isFinite(id) || typeof seasonStartedAt !== 'string' || seasonStartedAt.length < 10) return 0
+  const members = getStudentsInHouse(id)
+  if (members.length === 0) return 0
+  const ids = members.map((s) => s.id)
+  const { data, error } = await supabase
+    .from('student_progress')
+    .select('student_id, progress_data')
+    .in('student_id', ids)
+  if (error || !data) return 0
+  const ledgerByStudentId = {}
+  data.forEach((r) => { ledgerByStudentId[r.student_id] = r.progress_data?.ticketLedger || [] })
+  const studentsForCalc = members.map((s) => ({ id: s.id, houseId: s.houseId }))
+  const scores = computeHouseSeasonScores(studentsForCalc, ledgerByStudentId, seasonStartedAt)
   return scores[id] || 0
 }
 
