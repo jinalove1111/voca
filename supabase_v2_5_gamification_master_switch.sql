@@ -1,0 +1,38 @@
+-- ============================================================================
+-- supabase_v2_5_gamification_master_switch.sql — Teacher Controls 마스터
+-- 스위치. 2026-07-19. Supabase 대시보드 SQL Editor에서 1회 실행. 멱등 —
+-- 여러 번 실행해도 안전(`add column if not exists`).
+--
+-- 근거: PROJECT_BOARD.md "[P3] 게임화(Gamification)" 하위 카드 3번,
+-- GAME_DESIGN.md 13번 섹션(Teacher Controls) — "이후 모든 학생 노출
+-- 기능이 이 스위치 뒤에서만 켜져야 111명 실사용자에게 미검증 기능이
+-- 갑자기 노출되지 않는다".
+--
+-- ── 관례 재사용 ────────────────────────────────────────────────────────
+-- supabase_spelling_test_schema.sql이 이미 확립한 "classes 테이블에
+-- 반별 관리자 설정 boolean 컬럼을 opt-in(기본 false)으로 추가" 관례를
+-- 그대로 재사용한다. spelling_test_enabled/spelling_hint_enabled와
+-- 마찬가지로 GRANT 문이 없다 — CLAUDE.md 규칙 10의 컬럼 단위 GRANT
+-- 요구는 v1.9에서 `students` 테이블에만 적용된 것으로 확인했다
+-- (supabase_v1_9_security_rls.sql은 students만 다루고, classes는 계속
+-- 테이블 단위 "allow anon all" RLS 정책을 유지 — spelling_test_enabled
+-- 등 기존 반별 설정 컬럼들도 실제로 GRANT 없이 정상 동작 중임을
+-- supabase_spelling_test_schema.sql/supabase_spelling_direction_schema.sql
+-- 에서 확인). 따라서 이 컬럼도 별도 GRANT가 필요 없다.
+--
+-- ── 기본값이 false인 이유 ─────────────────────────────────────────────
+-- spelling_test_enabled 도입 선례와 동일 — 111명 실사용 학생에게
+-- 미검증 기능(Paul Rank/XP 관련 UI)이 갑자기 노출되지 않도록, 교사가
+-- 반별로 명시적으로 켜야만 보인다. 클라이언트(src/utils/wordLibrary.js
+-- getClassSettings)도 이 컬럼이 아직 없거나(이 SQL 미실행) 값이
+-- null/false면 항상 false로 안전 폴백한다 — 이 SQL을 실행하기 전에
+-- 코드가 먼저 배포돼도 앱이 절대 깨지지 않는다(CLAUDE.md 규칙 9).
+--
+-- 이 카드 범위에서는 마스터 스위치 하나만 추가한다. GAME_DESIGN.md
+-- 13번 섹션이 함께 제안한 word_king_enabled/house_enabled/
+-- weekly_event_enabled는 각 기능(하위 카드 7/8번)이 실제로 착수될 때
+-- 그 카드의 SQL에서 추가한다 — 아직 구현되지 않은 기능의 스위치를
+-- 미리 만들지 않는다(죽은 컬럼 방지, YAGNI).
+
+alter table classes
+  add column if not exists gamification_enabled boolean not null default false;
