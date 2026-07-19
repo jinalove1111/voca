@@ -565,6 +565,84 @@ _이 항목도 append입니다 — 위 8번 섹션 원문은 수정하지 않았
   리셋되지만 **받은 타이틀은 영구 보존**(별 뱃지가 영구적인 것과 같은
   원칙, 동기 일관성 유지).
 
+### 9.x 구현 완료(2026-07-19, 게임화 하위카드 9번, Engineering Head)
+
+_이 항목도 append — 위 9번 섹션 원문은 수정하지 않았습니다. 운영자 지시
+("레벨/뱃지/스트릭은 절대 리셋하지 않는다 — 재발명 금지", "시즌 전환도
+관리자 수동 트리거로", "원장 자체를 삭제하지 말고 시즌 경계 마커만
+저장") 그대로 "시즌 경계 데이터 모델 + 관리자 트리거 + 최소 표시"까지만
+구현했습니다(실제 시즌 테마/장식 등 콘텐츠는 이번 범위 아님)._
+
+- **데이터 모델 — `classes` 컬럼이 아니라 전역 `seasons` 테이블**: 원문은
+  두 방식(전용 `seasons` 테이블 / `classes.current_season_started_at`
+  컬럼) 중 판단을 이 세션에 위임했습니다. House 팀 점수가 이미 반(class)
+  경계를 넘어 학생 전원을 대상으로 전역 집계되므로(House 선례,
+  `fetchHouseWeeklyScore`가 반 필터 없이 그 하우스 전체 학생을 조회)
+  시즌 경계도 전역 단일 값이어야 여러 반에 걸친 하우스 팀 점수 집계가
+  일관됩니다 — 그래서 `seasons`(id/`started_at`/`note`, append-only, 항상
+  최신 행 1개가 "현재 시즌") 테이블을 신설했습니다(`supabase_v2_8_
+  seasonal_progression.sql`, 멱등, 운영자 실행 대기). `word_king_history`
+  와 동일하게 anon read-only + service_role 전용 write(그리핑 방지 —
+  anon 쓰기 허용 시 학생 누구나 가짜 경계로 전교생의 시즌 표시를 리셋시킬
+  수 있음).
+- **"리셋"의 실제 구현 — 원장 삭제 없이 파생 계산만**: `progress_data.
+  ticketLedger`/House 팀 점수 소스(같은 티켓 원장)는 물리적으로 전혀
+  잘리지 않습니다. `src/utils/ticketEconomy.js`에 `sumTicketBalanceSince
+  (ledger, seasonStartedAt)`(경계 이후 항목만 합산, 경계 없으면
+  `sumTicketBalance()`와 동일하게 전체 누적으로 안전 폴백), `src/utils/
+  houseSystem.js`에 `computeHouseSeasonScores(students, ledgerByStudentId,
+  seasonStartedAt, now)`(House의 기존 "그 주 범위로 합산" 패턴을 그대로
+  확장해 하한만 시즌 경계로 고정, 양수 delta만 합산하는 원칙도 그대로
+  재사용)를 각각 추가했습니다 — 새 원장/새 저장 형태는 0개.
+- **관리자 트리거**: `api/start-new-season.js`(Word King과 동일한
+  `checkAdminReauth` 패턴) — `seasons` 테이블에 새 경계 행 하나만 insert.
+  `AdminScreen.jsx`의 `SeasonPanel`(반 목록 루프 밖, `classes` 탭
+  최상단 — 전역 액션이므로 반별 패널과 다른 위치)이 유일한 호출자.
+  "새 시즌 시작" 버튼은 `window.confirm`으로 "✅ 유지돼요: 레벨/뱃지/
+  연속학습일 — 절대 리셋되지 않아요 / 🔄 새로 시작해요: 티켓 잔액과
+  하우스 팀 점수만" 두 줄로 명확히 구분해 안내(반 삭제 확인 다이얼로그가
+  "학생 계정은 유지되고 반 배정만 해제됩니다"를 안내하는 것과 같은
+  방향의 불안감 완화 문구).
+- **최소 표시**: 학생 화면(`Dashboard.jsx`)은 시즌이 실제로 시작된
+  뒤에만(`fetchCurrentSeason()`이 null이 아닐 때만) "🌱 이번 시즌 누적
+  점수 N" 한 줄이 기존 "이번 주 팀 점수" 텍스트 아래에 추가로 나타납니다
+  — 기존 주간 표시는 전혀 바뀌지 않고, 시즌이 없으면(SQL 미실행 포함)
+  이 블록 자체가 조용히 안 보입니다.
+- **Ticket 잔액(개인 구매 가능액)/`redeemReward` 판정 로직은 이번
+  라운드에 시즌 스코프로 재배선하지 않음(의도적 범위 축소)** — 원문(§9)
+  은 Ticket 잔액도 리셋 대상으로 명시하지만, `useStudent.js`의 실제
+  구매(`redeemTicketReward`) 흐름은 111명 실사용 학생의 살아있는
+  "화폐"이자 이미 배포된 상점 로직이라, 화면 표시(Dashboard.jsx)만
+  시즌 스코프로 바꾸고 실제 구매 가능 여부 판정은 그대로 두면 "화면엔
+  부족하다고 뜨는데 실제로는 구매가 되는" 표시/로직 불일치가 생깁니다.
+  이 불일치를 없애려면 `useStudent.js`의 핵심 redeem 경로까지 함께
+  바꿔야 하는데, 이는 이번 지시("실제 게임 콘텐츠는 만들지 마라 —
+  시즌 경계 데이터 모델 + 관리자 트리거 + 최소 표시까지만")의 "최소"
+  범위를 넘고 CLAUDE.md 규칙 1(안정성 최우선)과 충돌할 위험이 커
+  이번 라운드에서 의도적으로 보류했습니다. `sumTicketBalanceSince()`는
+  이미 완성/테스트돼 있어 다음 라운드에 `useStudent.js`를 배선하기만
+  하면 됩니다(House 선례와 같은 "구조는 다 만들고 실제 연결은 다음
+  라운드" 패턴).
+- 신규 파일: `supabase_v2_8_seasonal_progression.sql`(`seasons` 테이블,
+  멱등, **운영자 실행 대기**), `api/start-new-season.js`, `src/utils/
+  seasonApi.js`(클라이언트 접근 레이어, `wordKingApi.js`와 동일 구조),
+  `scripts/testSeasonalProgression.mjs`(순수 로직 20개 체크 PASS —
+  시즌 경계 전/후 분리, 원장 불변, 레벨/뱃지/스트릭 필드 무영향 실측).
+  `src/utils/ticketEconomy.js`/`src/utils/houseSystem.js`에 함수 추가
+  (새 파일 아님), `src/utils/wordLibrary.js`에 `fetchHouseSeasonScore`
+  신규, `AdminScreen.jsx`(`SeasonPanel`)/`Dashboard.jsx`(시즌 누적 점수
+  텍스트) 최소 통합.
+- 검증: `npm run build` PASS, `npm run verify:admin`/`npm run
+  verify:student` 전부 PASS(무회귀), `node scripts/testHouseSystem.mjs`/
+  `node scripts/testTicketEconomy.mjs` 재실행 PASS(기존 함수 무회귀),
+  harness `seasonalProgression` 도메인 신규 등록 PASS, `npm run
+  verify:all` 재실행 — `login` 도메인만 기존 BLOCKED 카드(로컬
+  서비스롤 키 부재)로 FAIL, 나머지 전부 PASS/SKIP(신규 회귀 없음).
+- 검수 대기 사항: qa-reviewer/security-reviewer 코드 리뷰, 운영자의
+  `supabase_v2_8_seasonal_progression.sql` 실행 여부 판단, 다음 라운드
+  후보(Ticket 잔액 실제 구매 로직의 시즌 스코프 재배선 — 위 "의도적
+  범위 축소" 문단 참고).
+
 <a id="sec-10"></a>
 ## 10. Rewards
 
