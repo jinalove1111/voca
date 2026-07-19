@@ -66,6 +66,7 @@ _작성: 2026-07-18. `scripts/` 전체(69개 파일)를 ls + 각 파일의 impor
 | `testUnitPersistence.mjs` / `testUnitNaturalSort.mjs` | 유닛 재배정 영속/자연 정렬 |
 | `testStudentLogin.mjs` / `testStudentSelectPinStatus.mjs` | 로그인 흐름 |
 | `testSpellingSettings.mjs` | 반별 쓰기시험 설정 저장/조회 |
+| `testGamificationSettings.mjs`(2026-07-19, Teacher Controls 마스터 스위치) | `classes.gamification_enabled` 저장/조회 — `testSpellingSettings.mjs`와 완전히 같은 패턴이지만, 이 컬럼은 `spelling_direction`처럼 "컬럼 없으면 그 필드만 빼고 재시도"(graceful degradation, `setClassSettings`)라 예외가 아니라 round-trip 값으로 SQL 실행 여부를 판단하는 차이가 있음(파일 헤더 주석 참고). 존재하지 않는 반/신규 반 모두 기본값이 false(opt-in)임을 검증 — Dashboard.jsx의 Paul Rank UI 게이팅과 같은 boundary에서의 등가 테스트(React 렌더 테스트 인프라가 이 저장소에 없어 wordLibrary.js 레벨에서 검증) |
 | `testStudentPinAuth.mjs` / `testStudentPinSelfSetup.mjs` / `testClearStudentPin.mjs` | PIN 인증/자기설정/초기화(서버리스 함수 경로, anon 폴백 시 v1.9 컬럼권한에 막히는 케이스 별도 처리) |
 | `testRlsSecurity.mjs` | v1.9 컬럼권한(anon의 PIN 컬럼 접근 차단) 실측 |
 | `dbIntegrityAudit.mjs` | 읽기 전용 — 고아 FK/중복 행 전수 감사(쓰기 없음, `QA_` 데이터 생성 안 함) |
@@ -116,7 +117,7 @@ npm run verify:audio-tts        npm run verify:all        (전체 순차, 하나
 |---|---|---|
 | login | O | testStudentLogin/testStudentSelectPinStatus/testStudentPinAuth/testStudentPinSelfSetup/testClearStudentPin/testRlsSecurity/testLoginRestoreCrash |
 | student | O | testIdentityMigration/testMultiClass/testRenameClass/testClassDeleteCascade |
-| admin | O | testDashboard/testSpellingSettings/testSpellingV2Db (+extra: testEntranceTest/testEntranceTestDb) |
+| admin | O | testDashboard/testSpellingSettings/testSpellingV2Db (+extra: testGamificationSettings/testEntranceTest/testEntranceTestDb) |
 | homework | O | testDailyAssignment/testFutureAssignment/testSyncProgress |
 | quiz | O | testQuizStepReset (+extra: testPaulReactions) |
 | writing | O | testSpelling/testSpellingDirectionWiring |

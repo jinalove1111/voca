@@ -1,0 +1,32 @@
+{
+  "agent_name": "engineering-head",
+  "role": "게임화(Gamification) 하위 카드 3번 — Teacher Controls 마스터 스위치 구현",
+  "task_id": "gamification-teacher-controls",
+  "task": "classes.gamification_enabled(기본 false) 신규 컬럼 + wordLibrary.js getClassSettings/setClassSettings 확장 + AdminScreen.jsx GameSettingsPanel 신규 + Dashboard.jsx Paul Rank 표시 게이팅 + api/grant-xp.js 반별 스위치 정책 판단",
+  "status": "working",
+  "progress": 10,
+  "started_at": "2026-07-19T00:00:00Z",
+  "updated_at": "2026-07-19T00:00:00Z",
+  "files_owned": [],
+  "files_read": [
+    "CLAUDE.md",
+    "PROJECT_BOARD.md",
+    "GAME_DESIGN.md",
+    "src/utils/wordLibrary.js",
+    "src/components/AdminScreen.jsx",
+    "src/components/Dashboard.jsx",
+    "src/hooks/usePaulRank.js",
+    "api/grant-xp.js",
+    "supabase_spelling_test_schema.sql",
+    "supabase_v2_4_entrance_result_rls.sql",
+    "supabase_v1_9_security_rls.sql",
+    "scripts/testSpellingSettings.mjs",
+    "scripts/testPaulRank.mjs",
+    "tests/harness/runAdmin.mjs",
+    "tests/harness/runDomain.mjs",
+    "src/App.jsx"
+  ],
+  "summary": "착수 — PROJECT_BOARD.md 게임화 하위카드 3번, GAME_DESIGN.md 13번 섹션(Teacher Controls) 확인 완료. spelling_test_enabled opt-in 관례(기본 false, classes 테이블은 v1.9 컬럼단위 GRANT 대상이 아님 — students만 해당) 그대로 재사용 결정.",
+  "blocker": null,
+  "next_action": "SQL 파일 작성 -> wordLibrary.js 확장 -> AdminScreen.jsx 패널 추가 -> Dashboard.jsx 게이팅 -> grant-xp.js 정책 판단 -> build/verify"
+}

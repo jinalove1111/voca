@@ -35,6 +35,7 @@ _작성: 2026-07-18. 저장소의 `supabase_*.sql` 11개 파일 전체를 읽고
 | `spelling_hint_enabled` | boolean, default false | 〃 | |
 | `wrong_answer_repeat_count` | integer, default 3 | 〃 | |
 | `spelling_direction` | text, default `'kr2en'`→`'mixed'`(v2.0.1) | `supabase_spelling_direction_schema.sql`(→ v2.0으로 통합) | `'kr2en'\|'en2kr'\|'random'\|'mixed'`. 값 검증은 DB CHECK가 아니라 애플리케이션 레벨(`wordLibrary.js`) |
+| `gamification_enabled` | boolean, default false | `supabase_v2_5_gamification_master_switch.sql`(2026-07-19) | Teacher Controls 마스터 스위치(`GAME_DESIGN.md` 13번 섹션) — `spelling_test_enabled`와 동일한 opt-in 관례. 학생 화면의 Paul Rank/XP UI(`Dashboard.jsx`)는 이 값이 true인 반에서만 렌더됨. XP 적립(`api/grant-xp.js`) 자체는 이 스위치와 무관하게 계속 기록됨(판단 근거는 `api/grant-xp.js` 헤더 주석) |
 
 ### `units` (역추적)
 
@@ -103,6 +104,7 @@ words   1──N spelling_review_queue (student_id nullable)
 13. `supabase_v2_3_paul_rank.sql`(2026-07-19) — `xp_ledger` 신규 테이블 + `xp_totals` 뷰. 기존 4테이블 어떤 컬럼도 건드리지 않는 순수 추가. 백필 없음(전 학생 XP=0에서 시작 — 판단 근거는 SQL 파일 주석). **[적용됨(2026-07-19, 운영자 실행 확인 — `handoff.md` 2026-07-19(3차) 섹션, `xp_ledger`/`xp_totals` 라이브 anon 쿼리로 실측). 실제 지급 경로(service_role)는 로컬 `SUPABASE_SERVICE_ROLE_KEY` 부재로 여전히 SKIP — `node scripts/testXpLedgerDb.mjs`]**
 14. `supabase_v2_3_1_xp_action_based.sql`(2026-07-19, XP 행동 단위 리팩터링) — `xp_ledger`에 `idx_xp_ledger_event_type` 인덱스만 추가(컬럼/뷰 변경 없음, `event_type` 컬럼은 v2.3에 이미 존재). 스키마 변경은 이 인덱스가 전부이고, 실제 리팩터링은 대부분 애플리케이션 레벨(`src/utils/paulRankShared.js`/`src/hooks/useStudent.js`/`api/grant-xp.js`). **[미실행 — 운영자 실행 대기]**
 15. `supabase_v2_4_entrance_result_rls.sql`(2026-07-19, P1 보안 감사 후속 — 입실시험 결과 서버 재검증) — `entrance_test_results`의 기존 `"allow anon all"`(using(true) with check(true)) 정책을 제거하고 `select`만 anon 허용하는 정책으로 교체(INSERT/UPDATE/DELETE는 정책을 아예 안 만들어 anon/authenticated 전면 차단, service_role만 BYPASSRLS로 계속 쓰기 가능). 새 쓰기 경로는 `api/submit-entrance-result.js`(서버가 `entrance_tests.words`로 직접 재채점 후 저장) 하나뿐 — 기존 `entranceTestApi.js`의 anon 직접 upsert 경로는 제거됨. 스키마 자체(컬럼/테이블)는 변경 없음, RLS 정책 교체만. **[미실행 — 운영자 실행 대기, 실행 전에도 이 API는 기존 v1.8 permissive 정책 하에서 정상 동작(서버가 재검증하므로 이중 방어)]**
+16. `supabase_v2_5_gamification_master_switch.sql`(2026-07-19, 게임화 하위 카드 3번 — Teacher Controls 마스터 스위치) — `classes.gamification_enabled boolean not null default false` 컬럼 1개만 추가(`add column if not exists`, 멱등). GRANT 불필요(위 RLS 절 참고 — `classes`는 v1.9 컬럼단위 GRANT 대상이 아니라 테이블 단위 정책을 그대로 씀, `spelling_test_enabled` 등 기존 반별 설정 컬럼도 GRANT 없이 정상 동작 중임을 확인 후 결정). **[미실행 — 운영자 실행 대기. 실행 전에는 `wordLibrary.js`의 select 폴백 체인이 이 컬럼 없이 조회하고, `getClassSettings().gamificationEnabled`은 항상 false로 안전 폴백 — Dashboard.jsx의 Paul Rank UI는 이 SQL 실행 여부와 무관하게 계속 숨김 상태 유지]**
 
 `supabase_v1_1_progress_sync.sql`(더 이전 버전)은 `v1_3` 파일 주석에 "대체됨, 실행 불필요"로 명시돼 있으며 저장소에 파일 자체가 없습니다(이미 정리된 것으로 보임).
 
@@ -126,4 +128,4 @@ words   1──N spelling_review_queue (student_id nullable)
 
 ## 관련 파일
 
-`C:\voca\supabase_v1_3_schema.sql` ~ `C:\voca\supabase_v2_4_entrance_result_rls.sql`(15개 전체), `C:\voca\src\utils\wordLibrary.js`(컬럼 부재 폴백 로직), `C:\voca\api\_pinAuth.js`(service_role 접근), `C:\voca\api\submit-entrance-result.js`(입실시험 결과 서버 재검증, 2026-07-19), `C:\voca\scripts\dbIntegrityAudit.mjs`, `C:\voca\scripts\testRlsSecurity.mjs`, `C:\voca\scripts\testClassDeleteCascade.mjs`, `C:\voca\scripts\testEntranceTestDb.mjs`
+`C:\voca\supabase_v1_3_schema.sql` ~ `C:\voca\supabase_v2_5_gamification_master_switch.sql`(16개 전체), `C:\voca\src\utils\wordLibrary.js`(컬럼 부재 폴백 로직), `C:\voca\api\_pinAuth.js`(service_role 접근), `C:\voca\api\submit-entrance-result.js`(입실시험 결과 서버 재검증, 2026-07-19), `C:\voca\api\grant-xp.js`(XP 지급, 반별 스위치와 무관하게 항상 기록 — 판단 근거는 파일 헤더), `C:\voca\scripts\dbIntegrityAudit.mjs`, `C:\voca\scripts\testRlsSecurity.mjs`, `C:\voca\scripts\testClassDeleteCascade.mjs`, `C:\voca\scripts\testEntranceTestDb.mjs`, `C:\voca\scripts\testGamificationSettings.mjs`(신규, 2026-07-19)

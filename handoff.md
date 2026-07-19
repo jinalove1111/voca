@@ -1,5 +1,81 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-19 (5차, 입실시험 결과 서버 재검증 — P1 보안 감사 후속, Word King 필수 선행조건 — Engineering Head)_
+_최종 갱신: 2026-07-19 (6차, 게임화 하위카드 3번 — Teacher Controls 마스터 스위치 — Engineering Head)_
+
+## 2026-07-19 (6차) — 게임화 하위카드 3번: Teacher Controls 마스터 스위치 (`classes.gamification_enabled`) — Engineering Head
+
+PROJECT_BOARD.md "[P3] 게임화(Gamification)" 하위 카드 3번(GAME_DESIGN.md 13번
+섹션 Teacher Controls) 착수. `spelling_test_enabled` opt-in 관례를 그대로
+재사용해 반별 게임화 마스터 스위치를 추가 — Paul Rank/XP 관련 UI가 이
+스위치로만 노출되게 게이팅한다.
+
+- **`supabase_v2_5_gamification_master_switch.sql` 신규(멱등, 운영자 실행
+  대기)**: `classes.gamification_enabled boolean not null default false`
+  1컬럼만 추가. GRANT 불필요 — `students`(v1.9 컬럼단위 GRANT)와 달리
+  `classes`는 테이블 단위 정책을 그대로 쓰고 있어 `spelling_test_enabled`
+  등 기존 반별 설정 컬럼들도 GRANT 없이 정상 동작 중임을 확인 후 결정
+  (`DATABASE.md` RLS/컬럼권한 절 참고).
+- **`wordLibrary.js` 확장**: `getClassSettings()`/`setClassSettings()`에
+  `gamificationEnabled` 필드 추가(새 함수 만들지 않고 기존 함수 확장 —
+  운영자 지시대로). `refreshClassSettings()`의 select 폴백 체인에
+  `gamification_enabled`를 가장 넓은 시도에 추가하고, 실패 시 최근 추가된
+  컬럼부터 하나씩 제거하며 재시도(기존 `spelling_direction` 폴백 패턴을
+  그대로 확장). `setClassSettings()`도 같은 방식 — 컬럼이 아직 없어도
+  나머지 설정 저장은 계속 정상 동작(회귀 금지).
+- **`AdminScreen.jsx`에 `GameSettingsPanel` 신규**: `SpellingSettingsPanel`
+  과 완전히 같은 패턴(같은 스타일, `targetClass`/`onSaved` props), 체크박스
+  하나("게임화(Paul Rank) 사용")만 — `SpellingSettingsPanel` 바로 아래
+  나란히 배치.
+- **`Dashboard.jsx` Paul Rank 표시 게이팅**: 기존
+  `!rankLoading && (...)` 조건에 `gamificationEnabled &&`를 추가 —
+  `getClassSettings(getStudentClass(studentId)).gamificationEnabled`가
+  false면(컬럼 미존재/미실행 SQL 포함 항상 false) Rank/모자단계 텍스트가
+  전혀 렌더되지 않는다. 이 SQL을 실행하기 전까지는 모든 반에서 이 UI가
+  숨겨진 상태로 배포된다(안전한 기본값).
+- **`api/grant-xp.js`는 반별 스위치를 조회해 지급을 거부하지 않기로
+  판단(운영자 지시 — 판단 근거 문서화)**: 서버 핸들러 헤더에 3가지 근거를
+  기록 — (1) `xp_ledger`는 감사 가능한 이벤트 원장이라 스위치 off를
+  이유로 조용히 스킵하면 "행동 안 함"과 "기록 안 됨"을 나중에 구분할 수
+  없음, (2) source_event_id가 기간키 기반 idempotency라 서버가 거부하면
+  클라이언트가 이미 실패를 삼키도록 설계돼 있어(`postXpEvent`) 스위치를
+  나중에 켜도 그 기간의 XP가 영구 손실됨(교사가 스위치를 껐다 켰다 하는
+  정상 사용 패턴에서 데이터가 복구 불가능하게 사라짐), (3) 고빈도 경로에
+  반별 조회를 추가하면 안정성 비용(DB 왕복/실패 모드 추가)만 커지고
+  효과는 순수 UX(학생은 스위치 꺼진 반에서 UI 자체를 못 봄)뿐. 결론:
+  마스터 스위치는 "노출 게이트"로만 쓰고, XP 적립은 스위치와 무관하게
+  계속 정확히 기록 — 나중에 스위치를 켜면 그동안 실제로 쌓인 진짜 XP가
+  그대로 드러난다(합성값 아님, "별을 조용히 XP로 변환"하는 것과 다름).
+- **`scripts/testGamificationSettings.mjs` 신규** + `tests/harness/
+  registry.mjs`의 admin 도메인에 등록(extra 커버리지). `testSpellingSettings
+  .mjs`와 같은 "SQL 실행 전/후 2단계" 패턴이지만, `gamification_enabled`는
+  `spelling_direction`처럼 컬럼 없으면 그 필드만 빼고 재시도하는 graceful
+  degradation 경로라 예외가 아니라 저장 후 round-trip 값으로 SQL 실행
+  여부를 판단하도록 구성(처음엔 exception 기반으로 짰다가 실제 라이브
+  DB에서 FAIL 2건 확인 후 원인 파악해 수정 — 아래 검증 기록).
+- **왜 `testPaulRank.mjs`가 아니라 새 스크립트인가**: `paulRankShared.js`의
+  `computeRankState(xp)`는 시그니처가 xp 하나뿐인 게 구조적 불변식으로
+  이미 테스트돼 있음(Unit 무관 증명, `testPaulRank.mjs` 3번 섹션) —
+  여기에 게임화 스위치 입력을 끼워 넣으면 그 불변식 자체를 깨야 해서
+  범위 밖. 스위치는 렌더 게이팅(`Dashboard.jsx`)이자 반별 설정
+  (`wordLibrary.js`) 문제라 `testSpellingSettings.mjs`와 같은 층위에
+  새 스크립트로 검증하는 게 맞는 경계라고 판단.
+- **검증**: `npm run build` PASS(에러/경고 없음). `npm run verify:admin`
+  (6개 스크립트, `testGamificationSettings.mjs` 포함) 전부 PASS — 라이브
+  DB에 아직 이 SQL이 실행 안 돼 있어 "SQL 실행 후 다시 돌리면 나머지
+  체크까지 검증됩니다" 안내로 정상 SKIP됨(가짜 PASS 아님, 실제로 컬럼
+  없는 상태에서의 안전한 폴백 동작을 확인한 것). `npm run verify:student`
+  (4개 스크립트) 전부 PASS — 무관 도메인 회귀 없음 확인. `node tests/
+  harness/runOne.mjs paulRank`도 재실행해 기존 Paul Rank 하네스 무회귀
+  확인(2개 스크립트 PASS/정상 SKIP). `testXpLedgerDb.mjs`가 "xp_ledger
+  테이블 확인됨"을 다시 출력 — `supabase_v2_3_paul_rank.sql`이 이미
+  라이브에 적용돼 있고, 그 결과 Paul Rank 텍스트가 이 세션 이전까지는
+  **스위치 없이 전체 111명에게 이미 노출되고 있었다는 뜻** — 이번 세션의
+  게이팅이 실제로 닫는 갭이 진짜였음을 재확인.
+- **운영자 액션 필요**: (a) `supabase_v2_5_gamification_master_switch.sql`을
+  Supabase 대시보드 SQL Editor에서 실행 — 실행 전까지는 모든 반에서 Paul
+  Rank UI가 숨김 상태(안전), 실행 후에도 각 반은 여전히 false로 시작하므로
+  교사가 관리자 화면에서 반별로 직접 켜야 학생에게 보임. (b) SQL 실행 후
+  `node scripts/testGamificationSettings.mjs`(또는 `npm run verify:admin`)
+  재실행하면 3~5번 나머지 round-trip 체크까지 전부 검증됨.
 
 ## 2026-07-19 (5차) — 입실시험 결과 서버 재검증 (`api/submit-entrance-result.js` 신설) — P1 보안 감사 후속 — Engineering Head
 

@@ -240,6 +240,27 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
   `supabase_v2_3_1_xp_action_based.sql`은 조회 인덱스 1개만 추가) — 상세는
   `wiki/decisions.md` #10, `GAME_DESIGN.md` "3.y" 항목, `handoff.md`
   2026-07-19 항목.
+- **3번(Teacher Controls 마스터 스위치) 구현 완료(2026-07-19, Engineering
+  Head)** — `classes.gamification_enabled`(기본 false, 신규
+  `supabase_v2_5_gamification_master_switch.sql`, 멱등, GRANT 불필요,
+  운영자 실행 대기) 추가. `wordLibrary.js` `getClassSettings`/
+  `setClassSettings` 확장(새 함수 없이 기존 함수에 필드 추가),
+  `AdminScreen.jsx`에 `GameSettingsPanel`(체크박스 1개, `SpellingSettings
+  Panel`과 동일 패턴) 신규. **Dashboard.jsx의 Paul Rank 표시가 이제 이
+  스위치로 게이팅됨** — SQL 미실행/false인 반은 학생 화면에 Rank/모자
+  단계 텍스트가 전혀 렌더되지 않음(안전한 기본값). `api/grant-xp.js`는
+  반별 스위치를 조회해 지급을 거부하지 않기로 판단(판단 근거 3가지를
+  파일 헤더에 문서화 — 감사 가능성/데이터 영구손실 방지/고빈도 경로 안정성
+  비용, `handoff.md` 2026-07-19(6차) 참고) — 마스터 스위치는 "노출
+  게이트"로만 동작, XP 적립 자체는 스위치와 무관하게 계속 정확히 기록됨.
+  `scripts/testGamificationSettings.mjs` 신규(`tests/harness/registry.mjs`
+  admin 도메인 등록) — `npm run build`/`verify:admin`/`verify:student`
+  전부 PASS, `paulRank` 도메인 재실행으로 무회귀 확인. **운영자 실행
+  대기**: `supabase_v2_5_gamification_master_switch.sql` 실행 후 각 반은
+  여전히 false로 시작 — 교사가 관리자 화면에서 반별로 직접 켜야 학생에게
+  Paul Rank UI가 보임. 4~10번(Hat Evolution 실제 시각/Ticket/Daily
+  Missions 후킹/Word King/House/Weekly Events/Seasonal/Parent Motivation
+  노출)은 여전히 미구현(그대로 BACKLOG).
 
 ---
 
