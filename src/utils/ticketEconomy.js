@@ -72,6 +72,29 @@ export function sumTicketBalance(ledger) {
   return ledger.reduce((sum, e) => sum + (Number(e?.delta) || 0), 0)
 }
 
+// ── Seasonal Progression(GAME_DESIGN.md 9번 섹션, 2026-07-19) ─────────────
+// 시즌 경계(seasonStartedAt, ISO 문자열 — src/utils/seasonApi.js
+// fetchCurrentSeason()의 startedAt) 이후에 발생한 항목만 합산한 "이번 시즌
+// 잔액". sumTicketBalance()(전체 누적)는 그대로 두고 이 함수를 별도로
+// 추가한 이유: 원장(ledger)은 절대 자르거나 지우지 않는다는 append-only
+// 원칙(파일 헤더 참고, supabase_v2_8_seasonal_progression.sql 헤더의 "리셋의
+// 실제 의미"와 동일 판단)을 지키면서도, "시즌이 바뀌면 잔액이 새로
+// 시작된 것처럼 보인다"를 파생 계산만으로 구현하기 위함 — 저장 형태
+// 변경 없음.
+//
+// seasonStartedAt이 없으면(시즌이 아직 시작 안 됐거나 SQL 미실행)
+// sumTicketBalance()와 동일하게 전체 누적을 반환한다 — "시즌 개념이 아직
+// 없을 때는 기존 동작 그대로"라는 이 저장소의 확립된 안전한 기본값 관례
+// (CLAUDE.md 규칙 9)를 그대로 따른다.
+export function sumTicketBalanceSince(ledger, seasonStartedAt) {
+  if (!Array.isArray(ledger)) return 0
+  if (typeof seasonStartedAt !== 'string' || seasonStartedAt.length < 10) return sumTicketBalance(ledger)
+  return ledger.reduce((sum, e) => {
+    if (!e || typeof e.at !== 'string' || e.at < seasonStartedAt) return sum
+    return sum + (Number(e.delta) || 0)
+  }, 0)
+}
+
 // 두 기기의 원장을 id 기준 합집합(local 우선, cloud에만 있는 항목 추가) —
 // diaryPlacements 병합과 같은 정신이지만 tombstone이 필요 없다(삭제가
 // 없으므로).

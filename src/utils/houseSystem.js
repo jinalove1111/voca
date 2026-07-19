@@ -132,6 +132,43 @@ export function computeHouseWeeklyScores(students, ledgerByStudentId, now = new 
   return scores
 }
 
+// ── Seasonal Progression(GAME_DESIGN.md 9번 섹션, 2026-07-19) ─────────────
+// House "누적" 팀 점수 — computeHouseWeeklyScores(월~일 고정 창)와 달리
+// 하한만 시즌 경계(seasonStartedAt)로 고정하고 상한은 지금(now)까지 전부
+// 합산한다. 시즌이 끝나고 새 시즌이 시작되면(관리자가 seasons 테이블에
+// 새 경계 행을 추가) 이 함수가 자동으로 새 경계부터 다시 0에서 쌓기
+// 시작한다 — 원장은 그대로 두고 필터링 창만 바뀌는 것뿐(위 3번 팀 점수
+// 집계 원칙 문단과 동일한 "양수 delta만" 규칙도 그대로 재사용, 소비/구매가
+// 팀 점수를 깎는 의도치 않은 벌칙을 만들지 않기 위함).
+//
+// seasonStartedAt이 없으면(시즌이 아직 시작 안 됐거나
+// supabase_v2_8_seasonal_progression.sql 미실행) 항상 0으로 채운 scores를
+// 반환한다 — "시즌 없음" 상태에서는 이 함수를 호출하는 화면(Dashboard.jsx)
+// 자체가 season != null일 때만 렌더하도록 설계돼 있어(호출부 판단) 크래시
+// 없이 조용히 무의미한 값(0)만 나간다.
+//
+// students: [{id, houseId}], ledgerByStudentId: {studentId: ticketLedger}.
+// 반환: {houseId: score}(HOUSES의 모든 id 키 포함, 항상 정수 >= 0).
+export function computeHouseSeasonScores(students, ledgerByStudentId, seasonStartedAt, now = new Date()) {
+  const scores = {}
+  for (const h of HOUSES) scores[h.id] = 0
+  if (typeof seasonStartedAt !== 'string' || seasonStartedAt.length < 10) return scores
+  const nowIso = now.toISOString()
+  for (const s of (students || [])) {
+    const houseId = s && s.houseId != null ? Number(s.houseId) : null
+    if (houseId == null || !Object.prototype.hasOwnProperty.call(scores, houseId)) continue
+    const ledger = (ledgerByStudentId && ledgerByStudentId[s.id]) || []
+    if (!Array.isArray(ledger)) continue
+    for (const entry of ledger) {
+      if (!entry || typeof entry.at !== 'string' || entry.at.length < 10) continue
+      const delta = Number(entry.delta) || 0
+      if (delta <= 0) continue // 소비/구매는 팀 점수에서 제외(위 3번 원칙 근거와 동일)
+      if (entry.at >= seasonStartedAt && entry.at <= nowIso) scores[houseId] += delta
+    }
+  }
+  return scores
+}
+
 // 학생 화면의 "우리 하우스: OO · 이번 주 팀 점수: N" 최소 표시 전용 헬퍼 —
 // 개인 순위/타 하우스 비교를 절대 넣지 않는다(PAUL_PRINCIPLES.md 3번
 // "하위권 개인 공개 망신 없음" + "House는 팀 단위로만 비교" 원칙 그대로).
