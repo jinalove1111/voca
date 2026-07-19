@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getStudentClass, getStudentUnit, getClassNames, getClassUnitNames, getTodaysAssignmentWordIds } from '../utils/wordLibrary'
+import { getStudentClass, getStudentUnit, getClassNames, getClassUnitNames, getTodaysAssignmentWordIds, getClassSettings } from '../utils/wordLibrary'
 import { getMicStreamOnce, hasMicStream } from '../utils/speech'
 import { useMicReady } from '../hooks/useMicReady'
 import { isInAppBrowser } from '../utils/browserDetect'
@@ -189,6 +189,11 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
 
   const className = getStudentClass(studentId)
   const unitName = getStudentUnit(studentId)
+  // Teacher Controls 마스터 스위치(2026-07-19, GAME_DESIGN.md 13번 섹션) —
+  // 컬럼이 아직 없거나(SQL 미실행) 관리자가 이 반에서 꺼뒀으면 항상 false
+  // (getClassSettings의 안전한 기본값, wordLibrary.js 참고). Paul Rank
+  // 표시는 이 값이 true인 반에서만 렌더된다(아래 JSX).
+  const gamificationEnabled = !!getClassSettings(className).gamificationEnabled
   // [진단 로그 5] Home(Dashboard)에서 실제로 표시하는 unit 값 — 렌더될 때마다 확인
   console.log('[Dashboard] 표시하는 unit 값:', { studentId, studentName, className, unitName })
   const classDeleted = className && !getClassNames().includes(className)
@@ -285,7 +290,7 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
           {/* Paul Rank — 텍스트/숫자만(모자 그래픽 없음, DESIGN DIRECTION은
               PAUL_BIBLE.md §8 참고). totalStars와 무관한 별도 원장(XP)에서
               계산 — 별을 XP로 변환하지 않는다는 판단, paulRankShared.js 참고. */}
-          {!rankLoading && (
+          {gamificationEnabled && !rankLoading && (
             <p className="text-purple-100 text-xs mt-3">
               🎩 {rankState.rank.name} · {rankState.hatStage.name} 단계
               {rankState.isMaxRank

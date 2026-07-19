@@ -96,6 +96,43 @@ function SpellingSettingsPanel({ targetClass, onSaved }) {
   )
 }
 
+// Teacher Controls 마스터 스위치(2026-07-19, GAME_DESIGN.md 13번 섹션) —
+// SpellingSettingsPanel과 완전히 같은 패턴(같은 classes 테이블 반별 boolean
+// 설정 관례, getClassSettings/setClassSettings 그대로 재사용, 기본 false
+// opt-in). 이 스위치가 꺼진 반의 학생 화면에서는 Paul Rank/XP 관련 UI가
+// 전혀 보이지 않는다(Dashboard.jsx 게이팅 참고) — 111명 실사용 학생에게
+// 미검증 게임화 기능이 갑자기 노출되지 않도록 교사가 반별로 직접 켜야 한다.
+function GameSettingsPanel({ targetClass, onSaved }) {
+  const [settings, setSettings] = useState(() => getClassSettings(targetClass))
+  const [saving, setSaving] = useState(false)
+
+  const save = async (next) => {
+    setSettings(next) // 즉시 반영 (낙관적 업데이트) — 실패하면 아래서 되돌림
+    setSaving(true)
+    try {
+      await setClassSettings(targetClass, next)
+      onSaved?.()
+    } catch (err) {
+      alert('설정 저장 중 오류가 발생했어요: ' + (err.message || err))
+      setSettings(getClassSettings(targetClass)) // 실패 시 이전 값으로 복구
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-purple-50 rounded-xl p-3 space-y-2">
+      <p className="text-xs font-black text-purple-700">🎩 게임화 설정</p>
+      <label className="flex items-center justify-between text-xs font-bold text-gray-700">
+        게임화(Paul Rank) 사용
+        <input type="checkbox" checked={settings.gamificationEnabled} disabled={saving}
+          onChange={e => save({ ...settings, gamificationEnabled: e.target.checked })}
+          className="w-5 h-5 accent-purple-500" />
+      </label>
+    </div>
+  )
+}
+
 // v2.0(2026-07-17) 쓰기 답안 교사 검토 큐 — 영→한 문제에서 학생이 한글로
 // 답했는데 오답 처리된 제출("뜻은 아는데 등록된 표기가 아닌" 후보)을
 // 교사가 직접 판정하는 패널. "이 답 인정" 원클릭 = 그 단어의
@@ -1626,6 +1663,8 @@ export default function AdminScreen({ onBack }) {
                         <FutureAssignmentPlanner targetClass={c} words={words} />
 
                         <SpellingSettingsPanel targetClass={c} onSaved={refresh} />
+
+                        <GameSettingsPanel targetClass={c} onSaved={refresh} />
 
                         <div className="bg-gray-50 rounded-xl p-3">
                           <p className="text-xs font-black text-gray-500 mb-2">👦 이 반 학생 ({studentsInClass.length}명)</p>
