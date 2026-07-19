@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { getStudentClass, getClassUnits, fetchDashboardData } from '../utils/wordLibrary'
+import { getStudentClass, getClassUnits, fetchDashboardData, getClassSettings, getStudentById } from '../utils/wordLibrary'
 import { computeStudentStats, buildWeeklyReport } from '../utils/weeklyReport'
 import HeroReaction from './HeroReaction'
 import { getReactionById } from '../utils/paulReactions'
@@ -19,6 +19,10 @@ export default function ParentScreen({ onBack }) {
   const [pinInput, setPinInput] = useState('')
   const [resolvedId, setResolvedId] = useState(null)
   const [resolvedName, setResolvedName] = useState(null)
+  // Parent Motivation(2026-07-19, 게임화 하위카드 10번) — 마스터 스위치
+  // (gamification_enabled) 조회에 className이 필요해서 별도로 보관한다
+  // (기존엔 load()가 인자로만 받고 버렸음).
+  const [resolvedClassName, setResolvedClassName] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [data, setData] = useState(null) // { row, wordLookup }
@@ -46,6 +50,7 @@ export default function ParentScreen({ onBack }) {
       setData({ row, wordLookup })
       setResolvedId(studentId)
       setResolvedName(name)
+      setResolvedClassName(className || null)
     } catch (err) {
       setError('조회 중 오류가 발생했어요: ' + (err.message || err))
     } finally {
@@ -88,16 +93,24 @@ export default function ParentScreen({ onBack }) {
   const handleReset = () => {
     setResolvedId(null)
     setResolvedName(null)
+    setResolvedClassName(null)
     setData(null)
     setInput('')
     setPinInput('')
     setError('')
   }
 
+  // Parent Motivation(2026-07-19) — houseId는 새 쿼리가 아니라 앱 시작 시
+  // 이미 로드된 학생 캐시(getStudentById, initWordLibrary가 App.jsx 마운트
+  // 시점에 refreshStudents()로 채워둠)에서 동기 조회. gamificationEnabled도
+  // 같은 이유로 동기 캐시 조회(getClassSettings) — Dashboard.jsx의 기존
+  // 패턴(`getClassSettings(className).gamificationEnabled`)과 동일.
+  const gamificationEnabled = !!getClassSettings(resolvedClassName || '').gamificationEnabled
   const stats = useMemo(() => {
     if (!data?.row) return null
-    return computeStudentStats(data.row, {})
-  }, [data])
+    const houseId = resolvedId ? getStudentById(resolvedId)?.houseId : null
+    return computeStudentStats(data.row, {}, houseId)
+  }, [data, resolvedId])
 
   if (!resolvedId) {
     return (
@@ -131,7 +144,7 @@ export default function ParentScreen({ onBack }) {
   }
 
   const { row, wordLookup } = data
-  const { studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed } = stats
+  const { studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ticketBalance, house } = stats
 
   return (
     <div className="min-h-screen p-4 pb-8 bg-gray-50">
@@ -173,6 +186,24 @@ export default function ParentScreen({ onBack }) {
                 <p className="text-[10px] text-gray-400 font-bold">클리어 단어</p>
               </div>
             </div>
+
+            {/* Parent Motivation(2026-07-19, 게임화 하위카드 10번) — 마스터
+                스위치(gamification_enabled)가 꺼진 반이면 이 섹션 전체가
+                안 보인다(Dashboard.jsx와 동일한 게이팅 변수 재사용). 순위/
+                경쟁 요소(하우스 팀 점수·등수, Word King 등)는 의도적으로
+                넣지 않음 — 소속감/누적만 문장으로 보여준다
+                (PAUL_PRINCIPLES.md 7번 "학부모가 압박 대신 성장을 보는 이유"). */}
+            {gamificationEnabled && (house || ticketBalance > 0) && (
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-3xl p-4 border-2 border-indigo-100">
+                <p className="text-xs font-black text-indigo-500 mb-1">🌱 {resolvedName}의 성장</p>
+                <p className="text-sm font-bold text-gray-700">
+                  {[
+                    house ? `${house.emoji} ${house.name} 소속이에요` : null,
+                    ticketBalance > 0 ? `지금까지 모은 티켓 ${ticketBalance}개` : null,
+                  ].filter(Boolean).join(' · ')}
+                </p>
+              </div>
+            )}
 
             <div className="bg-white rounded-3xl card-shadow p-4">
               <p className="text-xs font-black text-gray-500 mb-2">📈 최근 7일 학습 그래프 (미션 0~4개 완료)</p>
@@ -226,6 +257,11 @@ export default function ParentScreen({ onBack }) {
               const report = buildWeeklyReport({
                 name: resolvedName, last7, quizAccuracy, quizCorrect, quizTotal, pronAttempts,
                 progress: row.progress, topMissed, wordLookup,
+                // Parent Motivation(2026-07-19) — 마스터 스위치가 꺼진 반이면
+                // undefined/null로 넘겨 buildWeeklyReport의 조건부 성장 섹션이
+                // 아예 안 생기게 한다(위 화면 섹션과 동일한 게이팅).
+                ticketBalance: gamificationEnabled ? ticketBalance : undefined,
+                house: gamificationEnabled ? house : null,
               })
               return (
                 <div className="bg-pink-50 rounded-xl p-3">
