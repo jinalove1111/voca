@@ -43,6 +43,16 @@ export const STICKERS = [
   l('unicorn_gold', '🦄✨', '황금 유니콘'), l('crown_gem', '👑💎', '보석 왕관'),
   l('rainbow_star', '🌈⭐', '무지개 별'), l('phoenix1', '🔥🐦', '불사조'),
   l('castle_gold', '🏰✨', '반짝이는 성'), l('heart_diamond', '💖💎', '다이아 하트'),
+
+  // ── Ticket Shop 전용(2026-07-19, GAME_DESIGN.md 10번 섹션) ──
+  // shopExclusive:true는 아래 getRandomSticker/getMilestoneSticker의 뽑기
+  // 풀에서 제외된다는 표시 — 이 두 스티커는 오직 src/utils/ticketEconomy.js
+  // REWARD_CATALOG의 결정론적(비확률) 티켓 구매로만 얻는다("결정론적 구매만"
+  // 원칙, 확률형 요소 없음). id/emoji/name 구조는 다른 스티커와 동일해
+  // stickerById(STICKERS.find) 조회가 Dashboard/DiaryPage/StudyCalendar
+  // 어디서든 그대로 동작한다.
+  { ...e('ticket_medal1', '🏅', '폴 선생님 메달 스티커'), shopExclusive: true },
+  { ...l('ticket_hat1', '🎩✨', '황금 모자 스티커'), shopExclusive: true },
 ]
 
 export function getRandomSticker() {
@@ -54,12 +64,14 @@ export function getRandomSticker() {
     acc += w
     if (roll < acc) { rarity = rk; break }
   }
-  const pool = STICKERS.filter(s => s.rarity === rarity)
+  // shopExclusive 스티커(Ticket Shop 전용)는 가챠 풀에서 제외 — "결정론적
+  // 구매만" 원칙(GAME_DESIGN.md 10번), 확률형으로 얻을 수 있으면 안 됨.
+  const pool = STICKERS.filter(s => s.rarity === rarity && !s.shopExclusive)
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
 // Guaranteed-legendary pull for streak milestones (3/7/14/30 days).
 export function getMilestoneSticker() {
-  const pool = STICKERS.filter(s => s.rarity === 'legendary')
+  const pool = STICKERS.filter(s => s.rarity === 'legendary' && !s.shopExclusive)
   return pool[Math.floor(Math.random() * pool.length)]
 }
