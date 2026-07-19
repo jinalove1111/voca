@@ -19,6 +19,7 @@ _작성: 2026-07-18. `scripts/` 전체(69개 파일)를 ls + 각 파일의 impor
 | `testPaulReactions.mjs` | `utils/paulReactions.js`(리액션 선택/메시지 로직) |
 | `testEntranceTest.mjs` | `utils/entranceTest.js`만(주석: "DB/네트워크/번들 불필요") |
 | `testPaulRank.mjs`(2026-07-19, Paul Rank System; 2026-07-19 v2.3.1 갱신 — 행동 단위 리팩터링) | `utils/paulRankShared.js`(Rank/Hat Stage 계산, XP 이벤트 테이블, 입력검증/기간키 헬퍼) — 이 모듈은 브라우저/서버 양쪽에서 그대로 import되도록 처음부터 완전 순수하게 설계되어 esbuild 번들 없이 직접 import 가능(`api/grant-xp.js`도 같은 소스를 그대로 import). v2.3.1 추가분: 운영자 지정 8개 행동 단위 이벤트(구 word-unit 이벤트는 테이블에서 완전히 제거됐음을 확인) + `isValidDayPeriodKey`/`isValidSourceEventIdForEvent`(기간키 위장/조작 거부) + "여러 단어에 걸쳐 반복해도 하루 1행만" 구조적 증명(6b번 섹션) |
+| `testTicketEconomy.mjs`(2026-07-19, Ticket Economy — GAME_DESIGN.md 4·7·10번 섹션) | `utils/ticketEconomy.js`(원장 append/합산/병합, `daily-mission-complete` 하루 1회 지급 가드, `REWARD_CATALOG` 결정론적 구매) — `paulRankShared.js`와 같은 이유로 완전 순수(React/네트워크 없음), esbuild 번들 불필요. "소비(음수 delta)가 옛 클라우드 스냅샷과 병합돼도 부활하지 않음"(3번 섹션)과 "missions repeat all day에도 티켓은 하루 1장만"(5번 섹션)이 이 파일의 핵심 회귀 방지 포인트 |
 
 실행: `node scripts/testXxx.mjs` — 별도 준비 단계 없음.
 

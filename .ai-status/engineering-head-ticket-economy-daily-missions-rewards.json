@@ -1,0 +1,43 @@
+{
+  "agent_name": "engineering-head",
+  "role": "게임화(Gamification) 하위 카드 5번(Ticket Economy)+6번(Daily Missions 후킹+Rewards) — 소스/싱크 동시 배포",
+  "task_id": "ticket-economy-daily-missions-rewards",
+  "task": "progress_data.ticketLedger(append-only 원장) 신규 + 오늘의 미션 4/4 완료 훅에 티켓 지급 병행 + Dashboard.jsx TicketShopCard(결정론적 구매만) + Teacher Controls 마스터 스위치 게이팅",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-19T02:00:00Z",
+  "updated_at": "2026-07-19T03:00:00Z",
+  "files_owned": [
+    "src/utils/ticketEconomy.js",
+    "src/data/stickers.js",
+    "src/hooks/useStudent.js",
+    "src/components/Dashboard.jsx",
+    "scripts/testTicketEconomy.mjs",
+    "tests/harness/registry.mjs",
+    "DATABASE.md",
+    "TESTING.md",
+    "PROJECT_BOARD.md",
+    "GAME_DESIGN.md",
+    "handoff.md"
+  ],
+  "files_read": [
+    "CLAUDE.md",
+    "PROJECT_BOARD.md",
+    "GAME_DESIGN.md",
+    "PAUL_PRINCIPLES.md",
+    "src/utils/paulRankShared.js",
+    "src/hooks/useStudent.js",
+    "src/data/stickers.js",
+    "src/components/Dashboard.jsx",
+    "src/utils/wordLibrary.js",
+    "tests/harness/registry.mjs",
+    "scripts/testPaulRank.mjs",
+    "TESTING.md",
+    "DATABASE.md",
+    ".ai-status/README.md",
+    ".ai-status/engineering-head-gamification-teacher-controls.json"
+  ],
+  "summary": "완료. src/utils/ticketEconomy.js 신규(완전 순수) — appendTicketEntry(append-only/id 기준 idempotent)/sumTicketBalance(파생 계산, 원시 잔액 저장 금지)/mergeTicketLedgers(diaryPlacements와 같은 id 합집합, tombstone 불필요)/TICKET_GRANT_TABLE·grantTicket(daily-mission-complete만 active, 나머지 planned 슬롯)/REWARD_CATALOG·canRedeemReward·redeemReward(결정론적 구매만, 확률/실결제 요소 0). data/stickers.js에 상점 전용 스티커 2종(shopExclusive:true) 추가 + 가챠 풀에서 제외하는 필터. useStudent.js: freshRecord/normalizeRecord/mergeProgressRecords에 ticketLedger 필드 추가, 기존 4/4 완료 useEffect에 grantTicket 병행 호출만 추가(XP와 같은 day 기간키 idempotent 가드로 missions-repeat-all-day에도 하루 1장만), redeemTicketReward 콜백 신규(answerMission/grantSticker와 같은 patch 클로저 패턴). Dashboard.jsx: TicketShopCard 신규(기존 카드 스타일 재사용, 큰 리디자인 없음), Teacher Controls 마스터 스위치(gamificationEnabled)로 게이팅. 서버 검증 불필요 판단(GAME_DESIGN.md 11번 Anti-cheat 섹션 기준 적용) — 새 api/*.js 없음, 새 Supabase 테이블/컬럼 없음(SQL 파일 0개), 판단 근거는 ticketEconomy.js 헤더에 문서화. scripts/testTicketEconomy.mjs 신규(39개 체크 전부 PASS — append-only idempotent/합산/병합 부활방지 실증/하루1회 방지/카탈로그 확률·결제 필드 없음 실증/구매 검증) + registry.mjs ticketEconomy 도메인 등록. npm run build PASS. npm run verify:all 전체 재실행 — login 도메인만 기존 BLOCKED 카드(로컬 서비스롤 키 부재)로 FAIL(신규 회귀 아님), speaking/listening은 기존과 동일 구조적 SKIP, 나머지 12개 도메인(student/admin/homework/quiz/writing/unitSwitching/persistence/dailyStudy/wordAssignment/audioTts/paulRank/ticketEconomy) 전부 PASS — 특히 persistence(8개 스크립트, mergeProgressRecords 변경 직접 검증)와 student/admin/paulRank 재실행으로 무회귀 확인. 문서 5종(DATABASE/TESTING/PROJECT_BOARD/GAME_DESIGN/handoff) append 갱신 + .ai-status 체크포인트. 파일 단위 소커밋으로 분리 완료.",
+  "blocker": null,
+  "next_action": "운영자 액션 불필요(신규 SQL 없음, 새 컬럼/GRANT 없음). 다음 게임화 카드(Word King §5/House §6/Seasonal §9)는 GAME_DESIGN.md 11번 Anti-cheat 선행조건(서버 재검증)을 이번 소스/싱크와 다르게 다시 요구하므로, 착수 시 서버 검증 설계부터 별도 세션으로 필요."
+}

@@ -428,6 +428,52 @@ _이 항목도 append입니다 — 위 3.x 항목을 재작성하지 않고 그 
   저장소에 결제 연동이 아예 없고([섹션12](#sec-12) 참고), 학원 도구라는
   프로젝트 성격상 앞으로도 추가하지 않는 것을 원칙으로 못박습니다.
 
+### 4.x·7.x·10.x 구현 완료(2026-07-19, Engineering Head — "소스/싱크 동시 배포" 세션)
+
+_이 항목도 append입니다 — 위 4/7/10번 섹션 원문은 수정하지 않았습니다.
+PROJECT_BOARD.md 하위 카드 5번(Ticket Economy)+6번(Daily Missions 후킹+
+Rewards)을 "소스/싱크 동시 배포" 지시대로 같은 라운드에 구현했습니다._
+
+- **원장 구조는 원문 그대로 구현**: `progress_data.ticketLedger`
+  (append-only, `{id, delta, reason, at}`) — `diaryPlacements`가 쓰는
+  "append-only + id 기준 합집합" 패턴을 그대로 재사용했습니다. 원문과
+  다른 점 하나: `diaryRemovedIds` 같은 별도 tombstone은 만들지
+  않았습니다 — 티켓 원장은 "삭제"가 없고(획득도 소비도 전부 새 항목
+  추가), 소비는 음수 `delta` 항목으로 표현되므로 tombstone이 구조적으로
+  불필요했습니다. 잔액은 저장하지 않고 `sumTicketBalance()`로 항상
+  파생 계산.
+- **소스(§7)**: 기존 "오늘의 미션 4/4 완료" `useEffect`(`useStudent.js`)
+  에 `grantTicket()` 호출만 추가 — 새 트래킹 로직 없음. 이 `useEffect`는
+  실제로는 "missions repeat all day" 설계상 하루에도 여러 번 실행될 수
+  있어서(원문의 "4/4는 하루 1회 도달 이벤트"라는 표현은 정확히는
+  "**XP/티켓 지급이** 하루 1회"라는 뜻으로 재해석해 구현) `grantTicket`이
+  XP(`daily-mission-complete:${날짜}`)와 똑같은 day 기간키를 id로 써서
+  idempotent하게 append하도록 만들었습니다 — 그래서 몇 번을 더 완료해도
+  티켓은 하루 1장만 쌓입니다(별/스티커는 기존 동작 그대로 매번 지급).
+- **싱크(§10)**: House/Word King/Hat 재스킨은 여전히 미구현이라 원문
+  카탈로그(재스킨/기부/타이틀 플레어)를 쓸 수 없었습니다 — 대신 운영자
+  지시대로 `data/stickers.js`에 상점 전용 스티커 2종
+  (`ticket_medal1`/`ticket_hat1`, `shopExclusive:true`)을 추가해 가챠
+  풀에서 제외하고, `REWARD_CATALOG`(비확률/결정론적 구매만, 실결제 0)로
+  언락하는 최소 카탈로그로 구현했습니다. House/Word King이 실제로 붙는
+  시점에 카탈로그 항목만 추가하면 되는 구조(UI/구매 로직 변경 불필요).
+- **서버 검증 판단**(운영자 지시 4번 항목에 대한 답, [섹션11](#sec-11)
+  원칙 적용): 소스도 싱크도 저빈도·저가치·코스메틱 전용이라 기존
+  `student_progress` anon-write 관례(별/스티커와 동일)를 그대로 따르기로
+  판단 — 새 `api/*.js` 없음, 새 Supabase 테이블/컬럼 없음(SQL 파일 없음).
+  판단 근거 전문은 `src/utils/ticketEconomy.js` 헤더 주석.
+- **실제 구현 파일**: `src/utils/ticketEconomy.js`(원장 append/합산/병합/
+  카탈로그/구매, 순수 함수), `src/data/stickers.js`(상점 전용 스티커 2종
+  + 가챠 풀 제외 필터), `src/hooks/useStudent.js`(원장 필드 추가 +
+  4/4 후킹 + `redeemTicketReward`), `src/components/Dashboard.jsx`
+  (`TicketShopCard`, Teacher Controls 마스터 스위치로 게이팅, 기존 카드
+  스타일 재사용 — 큰 UI 리디자인 없음), `scripts/testTicketEconomy.mjs`
+  + `tests/harness/registry.mjs`(`ticketEconomy` 도메인).
+- **여전히 미구현**: Weekly Events(§8)/Word King(§5)/House(§6) 소스,
+  Hat 재스킨/House 기부/Word King 타이틀 플레어 싱크 — 카탈로그·
+  `TICKET_GRANT_TABLE` 양쪽에 `status:'planned'` 슬롯만 예약됨
+  (paulRankShared.js와 동일한 forward-compatible 패턴).
+
 <a id="sec-11"></a>
 ## 11. Anti-cheat
 

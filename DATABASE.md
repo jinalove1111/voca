@@ -69,6 +69,8 @@ _작성: 2026-07-18. 저장소의 `supabase_*.sql` 11개 파일 전체를 읽고
 
 **`xp_totals`(VIEW, 테이블 아님)** — `xp_ledger`를 `student_id`별로 `sum(amount)` 집계한 파생 뷰(저장 컬럼 아님, 매 조회 시 재계산). "저장된 중복값보다 파생값을 우선한다"는 이번 지시를 스키마 레벨에서 강제하기 위해 `student_progress.hat_stage` 같은 "빠른 조회용 사본 컬럼" 패턴 대신 VIEW를 선택했다(`supabase_v2_3_paul_rank.sql` 주석 참고). anon/authenticated에 SELECT GRANT됨.
 
+**Ticket Economy(2026-07-19, GAME_DESIGN.md 4번 섹션) — 신규 테이블/컬럼 없음.** `student_progress.progress_data`(위 표) 안의 `useStudent.js` record에 `ticketLedger`(append-only 배열, `{id, delta, reason, at}`)가 다른 필드(`diaryPlacements` 등)와 똑같이 얹혀 그대로 백업/복원된다 — XP(`xp_ledger`)와 달리 서버 전용 원장이 아니라 기존 `stars`/`stickers`와 동일한 로컬 우선 관례를 따르기로 판단했다(판단 근거는 `src/utils/ticketEconomy.js` 헤더 주석 — 저빈도·저가치·코스메틱 소비처뿐이라 클라이언트 조작의 실질적 이득이 없음). 잔액은 저장하지 않고 `sumTicketBalance()`로 항상 파생 계산(`xp_totals`와 같은 정신). SQL 마이그레이션 파일 없음 — GRANT 대상 컬럼도 없음.
+
 ## 관계도 (FK, 텍스트)
 
 ```

@@ -261,6 +261,26 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
   Paul Rank UI가 보임. 4~10번(Hat Evolution 실제 시각/Ticket/Daily
   Missions 후킹/Word King/House/Weekly Events/Seasonal/Parent Motivation
   노출)은 여전히 미구현(그대로 BACKLOG).
+- **5번(Ticket Economy)+6번(Daily Missions 후킹+Rewards) 구현 완료
+  (2026-07-19, "소스/싱크 동시 배포" 운영자 지시, Engineering Head)** —
+  `progress_data.ticketLedger`(append-only 원장, `diaryPlacements` 패턴
+  재사용, tombstone 불필요) 신규 + 오늘의 미션 4/4 완료 `useEffect`에
+  티켓 지급 병행 후킹(하루 1회, XP와 같은 day 기간키 idempotent 가드) +
+  `Dashboard.jsx` `TicketShopCard`(상점 전용 스티커 2종 언락, 비확률/
+  결정론적 구매만, 실결제 0) + Teacher Controls 마스터 스위치로 게이팅.
+  **신규 Supabase 마이그레이션 없음**(SQL 파일 0개) — 티켓은 서버 원장이
+  아니라 기존 `stars`/`stickers`와 동일한 로컬 우선(progress_data 백업)
+  관례를 따르기로 판단(저빈도·저가치·코스메틱 전용이라 서버 검증
+  불필요, 판단 근거는 `src/utils/ticketEconomy.js` 헤더). 순수 함수
+  테스트 39개 전부 PASS(원장 append/idempotent/합산/병합/구매 검증,
+  `scripts/testTicketEconomy.mjs` + `registry.mjs` `ticketEconomy` 도메인
+  신규), `npm run build` PASS, `npm run verify:all` 재실행 — `login`
+  도메인만 기존 BLOCKED 카드(로컬 서비스롤 키 부재)로 FAIL, 나머지 전부
+  PASS/SKIP(무회귀 확인, `persistence`/`student`/`admin`/`paulRank` 재실행
+  포함). 7번(Word King)/8번(House)/9번(Seasonal)/10번의 나머지(Weekly
+  Events)는 여전히 미구현(그대로 BACKLOG) — `TICKET_GRANT_TABLE`에
+  `status:'planned'` 슬롯만 예약. 상세: `handoff.md` 2026-07-19(7차),
+  `GAME_DESIGN.md` "4.x·7.x·10.x 구현 완료" 항목.
 
 ---
 

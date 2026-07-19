@@ -1,5 +1,83 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-19 (6차, 게임화 하위카드 3번 — Teacher Controls 마스터 스위치 — Engineering Head)_
+_최종 갱신: 2026-07-19 (7차, 게임화 하위카드 5+6번 — Ticket Economy + Daily Missions 후킹/Rewards 상점, 소스/싱크 동시 배포 — Engineering Head)_
+
+## 2026-07-19 (7차) — 게임화 하위카드 5번(Ticket Economy) + 6번(Daily Missions 후킹 + Rewards 티켓 상점) 소스/싱크 동시 배포 — Engineering Head
+
+PROJECT_BOARD.md "[P3] 게임화(Gamification)" 하위 카드 5번+6번 착수(운영자
+지시: "원장만 만들고 못 벌거나, 벌 수만 있고 못 쓰면 반쪽짜리"라 소스/싱크를
+같은 라운드에 함께 구현). `GAME_DESIGN.md` 4·7·10번 섹션 설계를 그대로
+따름(재발명 없이 원문 재확인만) — 상세는 `GAME_DESIGN.md` "4.x·7.x·10.x
+구현 완료" 항목.
+
+- **`src/utils/ticketEconomy.js` 신규(완전 순수, paulRankShared.js와 동일
+  원칙)**: `appendTicketEntry`(append-only, id 기준 idempotent — 중복
+  지급 방지), `sumTicketBalance`(원시 잔액 저장 금지, 항상 파생 계산),
+  `mergeTicketLedgers`(diaryPlacements와 같은 id 기준 합집합, tombstone은
+  불필요 — 티켓 원장엔 삭제가 없고 소비도 음수 delta 항목 추가로 표현),
+  `TICKET_GRANT_TABLE`/`grantTicket`(XP_EVENT_TABLE과 같은 status
+  active/planned 패턴, 지금은 `daily-mission-complete`만 active),
+  `REWARD_CATALOG`/`canRedeemReward`/`redeemReward`(결정론적 구매만,
+  확률형 요소 0, 실결제 요소 0).
+- **`src/data/stickers.js`**: 상점 전용 스티커 2종(`ticket_medal1` 🏅
+  /`ticket_hat1` 🎩✨, `shopExclusive:true`) 추가 + `getRandomSticker`/
+  `getMilestoneSticker`의 뽑기 풀에서 `shopExclusive` 스티커 제외(가챠로는
+  절대 못 얻음 — "결정론적 구매만" 원칙을 코드로 강제). id/emoji/name
+  구조가 기존과 동일해 `STICKERS.find(id)` 기반 조회(Dashboard/DiaryPage/
+  StudyCalendar) 어디서든 추가 변경 없이 그대로 렌더됨.
+- **`src/hooks/useStudent.js`**: `freshRecord`/`normalizeRecord`/
+  `mergeProgressRecords`에 `ticketLedger` 필드 추가(diaryRemovedIds와
+  같은 위치에 병행 — v2.2 이전 레코드/백업엔 없으므로 `asArray` 기본값).
+  기존 "오늘의 미션 4/4 완료" `useEffect`(`grantXp('daily-mission-
+  complete', ...)` 바로 다음 줄)에 `grantTicket(prev.ticketLedger,
+  'daily-mission-complete', todayStr())` 병행 호출만 추가 — 새
+  트래킹 로직 없음. 이 `useEffect`는 "missions repeat all day" 설계상
+  하루 여러 번 실행되지만, XP와 정확히 같은 day 기간키를 id로 쓰는
+  idempotent append 덕분에 티켓은 하루 1장만 쌓인다(테스트 5번 섹션에서
+  구조적으로 증명). 신규 `redeemTicketReward(rewardId)` 콜백 —
+  `answerMission`/`grantSticker`와 같은 "patch 안에서 결과를 만들고
+  클로저 변수로 즉시 반환" 기존 패턴 재사용, 순수 `redeemReward()`가
+  잔액/소유 여부를 전부 확인하므로 실패 시 ledger/stickers 어느 쪽도
+  바뀌지 않음. 반환 객체에 `ticketBalance`(`sumTicketBalance`에서 파생,
+  절대 별도 저장 안 함)/`ticketLedger`/`redeemTicketReward` 추가.
+- **`src/components/Dashboard.jsx`**: `TicketShopCard`(신규, 기존
+  "오늘의 미션"/"최근 스티커" 카드와 같은 스타일만 재사용 — 큰 UI
+  리디자인 없음) — 보유 티켓 수 + 카탈로그 2개(가격/보유여부 표시) +
+  구매 버튼. Teacher Controls 마스터 스위치(`gamificationEnabled`, Paul
+  Rank 표시와 같은 변수)로 게이팅 — 스위치 꺼진 반은 티켓 UI 전부 안 보임
+  (지급 로직 자체는 XP처럼 스위치와 무관하게 계속 동작, 노출만 게이트).
+- **서버 검증 필요 여부 판단(운영자 지시 4번 항목)**: `GAME_DESIGN.md`
+  11번(Anti-cheat) 섹션이 이미 내린 기준 — "저빈도·저가치·소비처가
+  코스메틱뿐인 경로는 기존 `student_progress` anon-write 관례를 그대로
+  유지해도 무방"을 그대로 적용. 소스(daily-mission-complete)도
+  싱크(스티커 언락)도 정확히 이 카테고리라 **새 `api/*.js` 없음, 새
+  Supabase 테이블/컬럼 없음(SQL 마이그레이션 파일 0개)**. Paul Rank XP가
+  서버 전용인 이유(다른 학생과 비교되는 랭크)와 티켓이 로컬 우선이어도
+  안전한 이유(이 학생 개인의 다이어리 스티커 언락에만 쓰이고 비교/경쟁에
+  전혀 개입 안 함)가 서로 다름을 `ticketEconomy.js` 헤더에 문서화. House/
+  Word King이 실제로 티켓을 소스/싱크로 쓰게 되는 시점엔 이 판단을
+  재검토해야 함(그때는 "보상이 걸린 신규 쓰기 경로는 서버 재계산" 원칙이
+  다시 적용됨) — `TICKET_GRANT_TABLE`에 `status:'planned'` 슬롯만 예약.
+- **검증**: `scripts/testTicketEconomy.mjs` 신규(순수 함수 39개 체크 —
+  append-only idempotent, sumTicketBalance 파생 계산, mergeTicketLedgers
+  id 합집합(소비 항목이 옛 클라우드 스냅샷과 병합해도 부활 안 함 실증),
+  grantTicket 하루 1회 방지, REWARD_CATALOG 카탈로그에 확률/결제 필드
+  없음 실증, canRedeemReward/redeemReward 잔액·소유 검증) 전부 PASS +
+  `tests/harness/registry.mjs`에 `ticketEconomy` 도메인 신규 등록. `npm
+  run build` PASS. `npm run verify:all` 전체 재실행 — `login` 도메인만
+  기존에 이미 BLOCKED로 기록된 로컬 `SUPABASE_SERVICE_ROLE_KEY` 부재로
+  FAIL(신규 회귀 아님, PROJECT_BOARD.md BLOCKED 카드 참고), `speaking`/
+  `listening`은 기존과 동일하게 구조적 SKIP, 나머지 전 도메인(`student`/
+  `admin`/`homework`/`quiz`/`writing`/`unitSwitching`/`persistence`/
+  `dailyStudy`/`wordAssignment`/`audioTts`/`paulRank`/`ticketEconomy`)
+  전부 PASS — `mergeProgressRecords`/`useStudent.js` 변경이 기존
+  다중기기 병합/복원 회귀 스위트(`persistence` 8개 스크립트)를 깨지
+  않았음을 직접 확인.
+- **SQL**: 이번 라운드에 신규 `supabase_*.sql` 없음(위 서버 검증 판단
+  근거) — 운영자 실행 대기 항목 없음.
+- **남은 범위(그대로 BACKLOG)**: Word King(7번)/House(8번)/Seasonal(9번)
+  /Parent Motivation(10번 후속)은 여전히 미구현. `TICKET_GRANT_TABLE`/
+  `REWARD_CATALOG` 양쪽 다 그 기능들이 실제로 붙을 때 항목만 추가하면
+  되는 forward-compatible 구조로 준비됨.
 
 ## 2026-07-19 (6차) — 게임화 하위카드 3번: Teacher Controls 마스터 스위치 (`classes.gamification_enabled`) — Engineering Head
 
