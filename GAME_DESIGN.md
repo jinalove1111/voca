@@ -854,6 +854,75 @@ XP로 변환하지 말라"는 원칙과 다른 축의 질문이다 — 후자는
   N개를 기여했어요", "모자가 다음 단계까지 별 N개 남았어요") — 새 AI
   호출을 추가하지 않고 기존 패턴을 그대로 확장합니다(CLAUDE.md 규칙 7).
 
+### 14.x 구현 완료(2026-07-19, 게임화 하위카드 10번 — 게임화 로드맵
+마지막 카드, Engineering Head)
+
+_이 항목도 append — 위 14번 섹션 원문은 수정하지 않았습니다. 운영자 지시
+("`computeStudentStats()`/`buildWeeklyReport()` 확장만 — 새 Supabase
+쿼리·새 AI 호출 절대 금지", "압박이 아니라 성장 — 순위/등수 노출 금지")
+그대로 구현했고, 구현 중 발견한 원문 전제 하나와 정면충돌해 의도적으로
+범위를 축소한 부분이 있어 아래에 그대로 기록합니다._
+
+- **구현**: `src/utils/weeklyReport.js` `computeStudentStats(r,
+  wordStatusSummary, houseId)`에 3번째 선택 인자를 추가하고 반환값에
+  `ticketBalance`(`ticketEconomy.js` `sumTicketBalance()` 재사용,
+  `r.progress.progress_data.ticketLedger`에서 파생 — `fetchDashboardData`가
+  이미 `student_progress`를 `select('*')`로 가져오므로 새 쿼리 0)와
+  `house`(`houseSystem.js` `getHouseById(houseId)` 재사용)를 추가했습니다.
+  `buildWeeklyReport()`에도 같은 두 값을 선택 인자로 받아 값이 있을 때만
+  "🌱 성장 현황" 1~2줄을 조건부로 덧붙입니다. `ParentScreen.jsx`에
+  `gamification_enabled` 마스터 스위치로 게이팅되는 최소 카드
+  ("🌱 OO의 성장" — 하우스 소속 + 누적 티켓 문장형 표시)를 신설했습니다.
+  두 함수 모두 기존 호출부(`AdminScreen.jsx`, 신규 인자를 넘기지 않는
+  기존 코드)는 반환값/출력 문자열이 1바이트도 안 바뀝니다(`scripts/
+  testWeeklyReport.mjs` 신규 6개 시나리오 20개 체크로 증명).
+- **의도적 범위 축소 1 — Rank/모자단계 제외**: 원문은 "전부
+  `fetchDashboardData`가 이미 가져오는 `student_progress` 컬럼에서
+  파생되므로 새 쿼리가 없다"고 전제했지만, 이 전제는 이 섹션이 쓰인
+  시점(2026-07-18) 이후 실제 구현(하위카드 2번, 2026-07-19)이 "별을
+  조용히 XP로 변환하지 말라"는 운영자 지시로 원문과 다르게 확정되면서
+  깨졌습니다 — Paul Rank XP는 `student_progress.total_xp`(레거시 사본,
+  `totalStars`와 동일값)가 아니라 독립 원장 `xp_ledger`/`xp_totals`
+  VIEW에만 있고, `AdminScreen.jsx`도 실제로는 `computeStudentStats()`
+  안이 아니라 별도 배치 쿼리(`fetchXpTotals`)로 Rank를 조회합니다(선례
+  확인). 조회하려면 `fetchXpTotal()` 네트워크 호출이 필요한데, 이번
+  작업 지시가 "새 Supabase 쿼리 절대 금지"를 명시적으로 못박았습니다.
+  `total_xp`로 대체 계산하면 관리자/학생 화면이 실제로 보여주는 진짜
+  Rank와 다른 값을 학부모에게 보여줄 위험이 있고, 이는 이 섹션 14 자체가
+  막으려는 "화면마다 다른 숫자" 사고와 정확히 같은 종류라 — 잘못된 값을
+  보여주는 대신 이번 라운드는 Rank를 뺐습니다. `fetchXpTotal()`을
+  1회 예외로 재사용할지는 운영자/CTO 판단이 필요합니다(같은 함수를
+  `AdminScreen.jsx`/`usePaulRank.js`가 이미 두 곳에서 쓰고 있어 "새 쿼리
+  타입"은 아니지만, 이번 지시의 "절대 금지" 문구를 문자 그대로 지키는
+  쪽을 택했습니다).
+- **의도적 범위 축소 2 — "이번 시즌" 티켓 잔액이 아니라 전체 누적**:
+  같은 이유(새 쿼리 금지)로 `sumTicketBalanceSince()`(시즌 경계 필요,
+  `seasons` 테이블 조회 필요)가 아니라 `sumTicketBalance()`(전체 누적)를
+  썼습니다. 화면 문구도 "이번 시즌 티켓"이 아니라 "지금까지 모은 티켓"
+  으로 정직하게 표기해 실제로 보여주는 값과 문구가 어긋나지 않게
+  했습니다.
+- **의도적 범위 축소 3(원문 자체와는 별개, PAUL_PRINCIPLES.md 원칙에
+  따른 사전 배제) — House 팀 점수/등수, Word King 수상 이력 제외**:
+  원문 14번 섹션은 "이번 주 하우스 순위"/"최근 Word King 수상 이력"도
+  파생 필드 후보로 들었지만, `PAUL_PRINCIPLES.md` 3번("하우스가 소속감을
+  만드는 이유" — 개인 순위 비공개, 팀 단위로만)과 이번 작업 지시("Rank나
+  House의 '등수'를 학부모에게 직접 보여주는 건 지양")에 따라 하우스는
+  **소속 이름만** 표시하고 팀 점수/등수/Word King 수상 이력은 처음부터
+  포함하지 않았습니다.
+- 신규 테스트: `scripts/testWeeklyReport.mjs`에 4~9번 시나리오 신규(총
+  20개 체크) — `computeStudentStats` 신규 인자/필드(기존 호출부 무회귀,
+  `progress_data` 없음/houseId 미지정/알 수 없는 houseId 크래시 없음),
+  `buildWeeklyReport` 조건부 성장 섹션(값 없으면 섹션 자체가 안 생김,
+  등수/순위/경쟁 단어 미포함 확인).
+- 검증: `npm run build` PASS, `node scripts/testWeeklyReport.mjs`
+  20/20 PASS, `npm run verify:daily-study` PASS, `npm run verify:admin`
+  (6개 스크립트) PASS 무회귀, `node scripts/testTicketEconomy.mjs`/
+  `node scripts/testHouseSystem.mjs` 재실행 PASS(재사용한 기존 함수
+  무회귀).
+- 검수 대기 사항: qa-reviewer/security-reviewer 코드 리뷰, 운영자/CTO의
+  Rank 필드 추가 여부 판단(위 "의도적 범위 축소 1" 참고 — 새 SQL/신규
+  스키마는 없음, 순수 프런트엔드 판단 사항).
+
 ---
 
 <a id="sec-15"></a>

@@ -1,5 +1,146 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-19 (10차, 게임화 하위카드 9번 — Seasonal Progression — Engineering Head)_
+_최종 갱신: 2026-07-19 (11차, 게임화 하위카드 10번 — Parent Motivation — 게임화 로드맵 마지막 카드 — Engineering Head)_
+
+## 2026-07-19 (11차) — 게임화 하위카드 10번(Parent Motivation, 게임화 로드맵 마지막 카드) — Engineering Head
+
+`git log -35`로 최근 완료 6단계(입실시험 서버재검증/Teacher Controls/
+Ticket Economy+Daily Missions/Word King/House System/Seasonal
+Progression) 확인, `PROJECT_BOARD.md` 게임화 하위카드 10번, `GAME_DESIGN.md`
+14번 섹션, `PAUL_PRINCIPLES.md`(학부모가 압박 대신 성장을 보는 이유) 정독
+후 구현. 운영자 지시 핵심: "`computeStudentStats()`/`buildWeeklyReport()`
+확장만 — 새 Supabase 쿼리·새 AI 호출 절대 금지", "압박이 아니라 성장 —
+순위/등수 노출 금지".
+
+- **구현**: `src/utils/weeklyReport.js`의 `computeStudentStats(r,
+  wordStatusSummary, houseId)`에 3번째 선택 인자 + 반환값에
+  `ticketBalance`(`ticketEconomy.js sumTicketBalance()` 재사용,
+  `r.progress.progress_data.ticketLedger`에서 파생 — `fetchDashboardData`가
+  이미 `student_progress`를 `select('*')`로 가져오므로 새 쿼리 0)/
+  `house`(`houseSystem.js getHouseById(houseId)` 재사용) 추가.
+  `buildWeeklyReport()`에도 `ticketBalance`/`house` 선택 인자를 추가해
+  값이 있을 때만 "🌱 성장 현황" 1~2줄을 조건부로 덧붙인다. 둘 다 로직
+  복붙 없이 기존 export 재사용(운영자 지시 그대로). `ParentScreen.jsx`에
+  `gamification_enabled` 마스터 스위치로 게이팅되는 "🌱 OO의 성장" 카드
+  신설(하우스 소속 + 누적 티켓 문장형 표시만, 등수/팀 점수 없음) +
+  `buildWeeklyReport` 호출에도 동일 게이팅으로 전달.
+- **회귀 없음 증명**: 두 함수 모두 기존 호출부(`AdminScreen.jsx`, 신규
+  인자를 넘기지 않는 기존 코드)는 반환값/출력 문자열이 1바이트도 안
+  바뀐다 — `scripts/testWeeklyReport.mjs` 신규 4~9번 시나리오(20개 체크)
+  로 명시적으로 증명(기존 1~3번 시나리오 문자열도 그대로 PASS).
+- **의도적 범위 축소 1(운영자/CTO 판단 필요) — Rank/모자단계 제외**:
+  `GAME_DESIGN.md` 14번 섹션 원문은 "Rank도 `fetchDashboardData`가 이미
+  가져오는 `student_progress` 컬럼에서 새 쿼리 없이 파생 가능"이라고
+  전제했는데, 이 전제는 그 섹션이 쓰인 시점(2026-07-18) 이후 실제 구현
+  (하위카드 2번, 2026-07-19)이 "별을 조용히 XP로 변환하지 말라"는 운영자
+  지시로 원문과 다르게 확정되면서 깨졌다 — 실제 Paul Rank XP는
+  `student_progress.total_xp`(레거시 사본=`totalStars`)가 아니라 독립
+  원장 `xp_ledger`/`xp_totals` VIEW에만 있다. 실제로 `AdminScreen.jsx`도
+  Rank를 `computeStudentStats()` 안이 아니라 별도 배치 쿼리
+  (`fetchXpTotals`)로 조회하고 있음을 코드로 확인했다(선례가 이미 원문
+  계획과 다르게 구현돼 있었다는 뜻). 조회하려면 `fetchXpTotal()`(신규
+  네트워크 호출)이 필요한데, 이번 작업 지시가 "새 Supabase 쿼리 절대
+  금지"를 명시적으로 못박았다. `total_xp`로 대체 계산하면 관리자/학생
+  화면이 실제로 보여주는 Rank와 다른 값을 학부모에게 보여줄 위험이 있고
+  (이 섹션 14 자체가 막으려는 "화면마다 다른 숫자" 사고와 동종) — 잘못된
+  값을 보여주는 대신 정확히 계산할 수 없는 필드는 빼는 쪽을 택했다
+  (CLAUDE.md 규칙 1 안정성 최우선, 범위 축소). `fetchXpTotal()`을 1회
+  예외로 재사용할지(같은 함수를 `AdminScreen.jsx`/`usePaulRank.js`가 이미
+  두 곳에서 쓰고 있어 "새 쿼리 타입"은 아니지만 이번 지시의 "절대 금지"
+  문구를 문자 그대로 지키는 판단을 우선했다)는 운영자/CTO 결정 필요.
+- **의도적 범위 축소 2 — "이번 시즌" 티켓 잔액이 아니라 전체 누적**:
+  같은 새 쿼리 금지 제약으로 `sumTicketBalanceSince()`(시즌 경계
+  `seasons` 테이블 조회 필요)가 아니라 `sumTicketBalance()`(전체 누적)를
+  썼다. 화면 문구도 "이번 시즌 티켓"이 아니라 "지금까지 모은 티켓"으로
+  정직하게 표기해 실제 계산값과 문구가 어긋나지 않게 했다.
+- **의도적 범위 축소 3 — House 팀 순위/등수, Word King 수상 이력 제외**:
+  원문 14번 섹션은 이 두 필드도 후보로 들었지만, `PAUL_PRINCIPLES.md`
+  3번(개인 순위 비공개, 팀 단위로만 비교)과 이번 작업 지시("Rank/House의
+  '등수'를 학부모에게 직접 보여주는 건 지양")에 따라 하우스는 소속 이름만
+  표시하고 처음부터 팀 점수/등수/Word King 수상 이력은 후보에서 뺐다.
+- 신규 파일 없음(스키마 변경 0건) — `src/utils/weeklyReport.js`,
+  `src/components/ParentScreen.jsx`, `scripts/testWeeklyReport.mjs` 3개
+  파일만 수정.
+- 검증: `npm run build` PASS(경고 없음, 기존 청크 크기 경고만 그대로),
+  `node scripts/testWeeklyReport.mjs` 20/20 PASS, `npm run
+  verify:daily-study` PASS, `npm run verify:admin`(6개 스크립트) PASS
+  무회귀, `node scripts/testTicketEconomy.mjs`/`node scripts/
+  testHouseSystem.mjs` 재실행 PASS(재사용한 기존 함수 무회귀 확인).
+- 검수 대기 사항: qa-reviewer/security-reviewer 코드 리뷰, 운영자/CTO의
+  Rank 필드 추가 여부 판단(새 SQL 없음, 순수 프런트엔드 판단 사항).
+
+### 8시간 자율 게임화 빌드아웃 세션 종합 요약(2026-07-19, Engineering Head)
+
+이 카드로 `GAME_DESIGN.md` "구현 순서 제안" 10개 카드가 전부 최소 기반
+단계까지 구현 완료됐다(실제 시각/미니게임/최종 애니메이션 등 폴리시는
+전부 별도 BACKLOG로 남음). 아래는 이번 8시간 자율 세션 동안 완료된 7개
+작업 전체 목록 + 커밋 범위 + 운영자가 실행해야 할 SQL 전체 목록이다.
+
+**전체 7개 작업 목록(시간순)**:
+1. 입실시험 결과 서버 재검증(Anti-cheat 선행, `api/
+   submit-entrance-result.js`) — `[P1]` VERIFY 카드, `219b2ab` 근방 이후
+   세션에서 구현.
+2. Teacher Controls 마스터 스위치(`classes.gamification_enabled`) —
+   `4c8bc49`(schema)~`07f6b65`(체크포인트).
+3. Ticket Economy + Daily Missions 후킹 + Rewards 상점 — `c63272a`~
+   `718d1a9`("소스/싱크 동시 배포").
+4. Word King(주간·서버 전용 계산) — `fc449a1`.
+5. House System + Weekly Events 설정 슬롯 — `3394bf0`(schema)~
+   `19360bf`(docs).
+6. Seasonal Progression(시즌 경계 데이터 모델) — `ae07688`~`b6b15c9`.
+7. **Parent Motivation 노출(이 카드, 게임화 로드맵 마지막)** — 이번
+   커밋 범위(아래).
+
+**이번(7번) 커밋 범위**: `src/utils/weeklyReport.js`(computeStudentStats/
+buildWeeklyReport 확장) + `scripts/testWeeklyReport.mjs`(신규 6개
+시나리오) → 1커밋, `src/components/ParentScreen.jsx`(성장 카드 UI) →
+1커밋, 문서(`PROJECT_BOARD.md`/`GAME_DESIGN.md`/`handoff.md`/
+`.ai-status/engineering-head-parent-motivation.json`) → 1커밋(규칙 14
+파일/기능 단위 소커밋).
+
+**운영자가 실행해야 할 SQL 목록 전체(v2.4~v2.8, 전부 멱등 — 실행
+순서는 번호 순서 그대로 권장, 서로 다른 테이블이라 실제로는 순서 무관
+하지만 카드 번호와 맞춰 추적하기 쉽게 정렬)**:
+| 파일 | 하위카드 | 내용 | GRANT 필요 | 비고 |
+|---|---|---|---|---|
+| `supabase_v2_4_entrance_result_rls.sql` | 1(Anti-cheat) | `entrance_test_results` RLS 강화(anon 임의 조작 차단) | 불필요 | 서버 재검증 자체는 이미 1차 방어로 동작 중(미실행이어도 안전) |
+| `supabase_v2_5_gamification_master_switch.sql` | 3(Teacher Controls) | `classes.gamification_enabled` 컬럼(기본 false) | 불필요 | 실행 후에도 각 반은 false로 시작 — 교사가 반별로 직접 켜야 함 |
+| `supabase_v2_6_word_king.sql` | 7(Word King) | `word_king_history` 테이블(anon read-only + service_role write) | 불필요(신규 테이블 자체 RLS로 커버) | 관리자 "이번 주 챔피언 계산" 버튼이 이 테이블 필요 |
+| `supabase_v2_7_house_system.sql` | 8(House System) | `students.house_id` 컬럼(CHECK 1~4) | **필요(포함됨)** — CLAUDE.md 규칙 10 | 미실행 시 하우스 배정/표시 전부 조용히 비활성(크래시 없음) |
+| `supabase_v2_8_seasonal_progression.sql` | 9(Seasonal Progression) | `seasons` 테이블(전역, anon read-only + service_role write) | 불필요 | 관리자 "새 시즌 시작" 버튼이 이 테이블 필요 |
+
+(참고: `supabase_v2_3_paul_rank.sql`/`supabase_v2_3_1_xp_action_based.sql`
+— Paul Rank XP 원장 — 는 `PROJECT_BOARD.md` BLOCKED 카드 기록상 이미
+프로덕션에 실행 완료된 것으로 확인됨, 이번 v2.4~v2.8 목록에는 포함하지
+않음. 10번 카드(Parent Motivation, 이번 세션)는 신규 SQL 없음.)
+
+**qa-reviewer/security-reviewer 검수 필요 항목**: `PROJECT_BOARD.md`
+VERIFY 섹션의 하위카드 7(Word King)/8(House System)/9(Seasonal
+Progression)/10(Parent Motivation) + `[P1]` 입실시험 서버 재검증 카드,
+총 5개 — 전부 코드 리뷰 미착수 상태(운영자가 리뷰 일정을 별도로 잡아야
+함). 특히 10번(이번 카드)은 신규 SQL이 없어 리뷰 범위가 프런트엔드
+로직(computeStudentStats/buildWeeklyReport/ParentScreen.jsx)에 한정된다.
+
+**여전히 BACKLOG인 것(실제 시각/미니게임/최종 애니메이션 등, 전 카드
+공통으로 운영자 원문이 애초에 "이번 범위 아님"으로 표기한 것)**:
+- 모자 승급 시각 효과/애니메이션(Hat Evolution의 실제 그래픽).
+- 실제 미니게임(첫 미니게임 접근/추가 게임 선택/도전 모드 —
+  `paulRankShared.js EXPERIENCE_UNLOCKS`에 자리만 예약, 전부
+  `status:'planned'`).
+- Word King 시상식 연출/실제 경쟁 UI(지금은 관리자 수동 트리거 + 학생
+  화면 텍스트 1줄뿐).
+- House 실제 미니게임, Weekly Events 콘텐츠(`WEEKLY_EVENT_TYPES`는
+  현재 빈 배열 — 설정 슬롯만 있고 실제 이벤트 정의/트리거는 0개).
+- 시즌 테마/장식 등 실제 시즌 콘텐츠(Seasonal Progression은 경계
+  데이터 모델 + 관리자 트리거 + 최소 텍스트뿐).
+- Ticket 잔액 실제 구매(`redeemTicketReward`) 판정 로직의 시즌 스코프
+  재배선(Seasonal Progression 카드의 의도적 범위 축소, `sumTicketBalanceSince()`
+  는 이미 완성/테스트됨 — 다음 라운드에 배선만 하면 됨).
+- Parent Motivation의 Rank/모자단계 필드(이번 카드의 의도적 범위 축소
+  1 — 위 참고, 운영자/CTO 판단 대기).
+- `GAME_DESIGN.md` 16번 섹션(리뷰 및 개선 제안) 중 16.1(가챠 일일 체감
+  로직)/16.4(티켓 상점 입문가 아이템)/16.5(House 최소인원 배정+시즌
+  재조정 규칙 명문화)는 여전히 제안 단계(착수 안 됨) — 16.2/16.3/16.6은
+  Word King 구현에 이미 반영됨.
 
 ## 2026-07-19 (10차) — 게임화 하위카드 9번(Seasonal Progression) — Engineering Head
 
