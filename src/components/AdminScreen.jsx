@@ -11,6 +11,10 @@ import { computeRankState } from '../utils/paulRankShared'
 // Word King(2026-07-19, 게임화 하위카드 7번) — 관리자 수동 트리거 +
 // 결과 확인 최소 UI(GameSettingsPanel 바로 아래에 슬롯).
 import { triggerComputeWordKing, fetchLatestWordKingPeriod } from '../utils/wordKingApi'
+// Seasonal Progression(2026-07-19, 게임화 하위카드 9번, GAME_DESIGN.md 9번
+// 섹션) — 관리자 수동 "새 시즌 시작" 트리거 + 현재 시즌 표시(SeasonPanel,
+// classes 탭 최상단 — 반과 무관한 전역 액션이라 반 목록 루프 밖에 둔다).
+import { fetchCurrentSeason, triggerStartNewSeason } from '../utils/seasonApi'
 import { fetchPendingSpellingReviews, resolveSpellingReview } from '../utils/spellingReviewApi'
 import { fetchPinStatusMap } from '../utils/pinStatusApi'
 import { getStudents, removeStudent } from '../hooks/useStudent'
@@ -208,6 +212,85 @@ function WordKingPanel({ targetClass, adminPin }) {
       {(!result || result.scores.length === 0) && !error && (
         <p className="text-xs text-gray-400">아직 계산된 기록이 없어요 — 버튼을 눌러 이번 주 점수를 계산하세요.</p>
       )}
+    </div>
+  )
+}
+
+// Seasonal Progression(2026-07-19, 게임화 하위카드 9번, GAME_DESIGN.md 9번
+// 섹션) — "새 시즌 시작" 수동 트리거(이 저장소엔 cron이 없어 관리자가
+// 학기/방학 경계에서 버튼을 누르는 방식, api/start-new-season.js 헤더
+// 참고) + 현재 시즌 시작일 표시. House 팀 점수가 반(class) 경계를 넘어
+// 전역 집계되므로(supabase_v2_8_seasonal_progression.sql "classes 컬럼
+// 대신 별도 테이블을 쓴 이유" 참고) 이 패널도 반별 루프 안이 아니라
+// 'classes' 탭 최상단에 한 번만 렌더된다(SpellingReviewQueuePanel과 같은
+// 위치 — 반 무관 전역 패널 관례).
+//
+// 레벨/뱃지/스트릭은 이 액션으로 절대 바뀌지 않는다 — 이 컴포넌트는
+// seasons 테이블에 새 경계 마커 행을 추가할 뿐, students/xp_ledger 등
+// 어떤 영구 기록 테이블도 건드리지 않는다(api/start-new-season.js가
+// seasons 테이블 하나만 insert). 확인 다이얼로그에 이 사실을 명확히 적어
+// 관리자 불안감을 줄인다(반 삭제 확인 다이얼로그가 "학생 계정은 유지되고
+// 반 배정만 해제됩니다"를 안내하는 것과 같은 방향).
+function SeasonPanel({ adminPin }) {
+  const [season, setSeason] = useState(null) // {id, startedAt, note} | null(시즌 없음/SQL 미실행)
+  const [loading, setLoading] = useState(true)
+  const [starting, setStarting] = useState(false)
+  const [error, setError] = useState('')
+
+  const load = async () => {
+    setLoading(true)
+    setSeason(await fetchCurrentSeason())
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  const handleStart = async () => {
+    const ok = window.confirm(
+      '새 시즌을 시작할까요?\n\n' +
+      '✅ 유지돼요: 레벨/뱃지/연속학습일(스트릭) — 절대 리셋되지 않아요.\n' +
+      '🔄 새로 시작해요: 티켓 잔액과 하우스 팀 점수만 이 시점부터 새로 쌓여요.\n\n' +
+      '기존 기록은 지워지지 않고 그대로 보존돼요 — 이전 시즌 기록으로 남습니다.'
+    )
+    if (!ok) return
+    setStarting(true)
+    setError('')
+    try {
+      const res = await triggerStartNewSeason({ adminPin })
+      setSeason(res.season)
+    } catch (err) {
+      const msg = String(err?.message || err)
+      if (msg.includes('table_missing')) {
+        setError('아직 준비 중이에요 — supabase_v2_8_seasonal_progression.sql을 Supabase SQL Editor에서 실행해주세요.')
+      } else {
+        setError('시즌 시작 중 오류가 발생했어요: ' + msg)
+      }
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-3xl card-shadow p-5">
+      <p className="text-sm font-black text-gray-700 mb-2">🗓️ 시즌 (Ticket · House 리셋 경계)</p>
+      <p className="text-xs text-gray-400 mb-3">
+        레벨/뱃지/연속학습일은 절대 리셋되지 않아요. 새 시즌을 시작하면 티켓
+        잔액과 하우스 팀 점수만 이 시점부터 새로 쌓여요(기존 기록은 삭제되지
+        않고 그대로 보존됩니다).
+      </p>
+      {loading ? (
+        <p className="text-gray-400 text-sm">불러오는 중...</p>
+      ) : (
+        <p className="text-xs text-gray-500 mb-3">
+          {season
+            ? `현재 시즌 시작일: ${new Date(season.startedAt).toLocaleDateString('ko-KR')}${season.note ? ` (${season.note})` : ''}`
+            : '아직 시즌이 시작되지 않았어요 — 티켓/하우스 점수가 전체 누적 값으로 표시되고 있어요.'}
+        </p>
+      )}
+      {error && <p className="text-xs font-bold text-red-500 mb-2">{error}</p>}
+      <button onClick={handleStart} disabled={starting}
+        className="bg-indigo-500 text-white font-bold px-4 py-2 rounded-xl text-xs btn-press hover:bg-indigo-600 disabled:opacity-60">
+        {starting ? '시작 중...' : '새 시즌 시작'}
+      </button>
     </div>
   )
 }
@@ -1572,6 +1655,8 @@ export default function AdminScreen({ onBack }) {
         {/* Classes tab */}
         {tab === 'classes' && (
           <div className="space-y-3">
+            <SeasonPanel adminPin={pin} />
+
             <SpellingReviewQueuePanel onChanged={refresh} />
 
             <div className="bg-white rounded-3xl card-shadow p-5">
