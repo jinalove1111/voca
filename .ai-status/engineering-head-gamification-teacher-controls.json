@@ -3,11 +3,24 @@
   "role": "게임화(Gamification) 하위 카드 3번 — Teacher Controls 마스터 스위치 구현",
   "task_id": "gamification-teacher-controls",
   "task": "classes.gamification_enabled(기본 false) 신규 컬럼 + wordLibrary.js getClassSettings/setClassSettings 확장 + AdminScreen.jsx GameSettingsPanel 신규 + Dashboard.jsx Paul Rank 표시 게이팅 + api/grant-xp.js 반별 스위치 정책 판단",
-  "status": "working",
-  "progress": 10,
+  "status": "completed",
+  "progress": 100,
   "started_at": "2026-07-19T00:00:00Z",
-  "updated_at": "2026-07-19T00:00:00Z",
-  "files_owned": [],
+  "updated_at": "2026-07-19T01:00:00Z",
+  "files_owned": [
+    "supabase_v2_5_gamification_master_switch.sql",
+    "src/utils/wordLibrary.js",
+    "src/components/AdminScreen.jsx",
+    "src/components/Dashboard.jsx",
+    "api/grant-xp.js",
+    "scripts/testGamificationSettings.mjs",
+    "tests/harness/registry.mjs",
+    "DATABASE.md",
+    "TESTING.md",
+    "PROJECT_BOARD.md",
+    "GAME_DESIGN.md",
+    "handoff.md"
+  ],
   "files_read": [
     "CLAUDE.md",
     "PROJECT_BOARD.md",
@@ -26,7 +39,7 @@
     "tests/harness/runDomain.mjs",
     "src/App.jsx"
   ],
-  "summary": "착수 — PROJECT_BOARD.md 게임화 하위카드 3번, GAME_DESIGN.md 13번 섹션(Teacher Controls) 확인 완료. spelling_test_enabled opt-in 관례(기본 false, classes 테이블은 v1.9 컬럼단위 GRANT 대상이 아님 — students만 해당) 그대로 재사용 결정.",
+  "summary": "완료. classes.gamification_enabled(기본 false) 신규 SQL(멱등, GRANT 불필요, 운영자 실행 대기). wordLibrary.js getClassSettings/setClassSettings에 gamificationEnabled 필드 추가(새 함수 없음, spelling_direction과 동일한 graceful degradation 폴백). AdminScreen.jsx에 GameSettingsPanel(SpellingSettingsPanel과 동일 패턴) 신규. Dashboard.jsx의 Paul Rank 표시를 이 스위치로 게이팅(false/컬럼 미존재 시 항상 숨김) — testXpLedgerDb.mjs 라이브 재확인 결과 xp_ledger 테이블이 이미 적용돼 있어 이 세션 이전엔 전 반에 스위치 없이 노출 중이었음(진짜 갭이었음을 재확인). api/grant-xp.js는 반별 스위치를 조회해 지급을 거부하지 않기로 판단(감사가능성/idempotency 기간키 영구손실 위험/고빈도 경로 안정성 비용 3가지 근거 헤더 주석 문서화) — 마스터 스위치는 노출 게이트로만 동작. scripts/testGamificationSettings.mjs 신규(testSpellingSettings.mjs와 동일 패턴이나 graceful-degradation 컬럼 특성상 round-trip 값으로 SQL 실행 여부 판단하도록 구성, 최초 exception 기반 버전은 실제 verify:admin 실행에서 FAIL 2건 나와 원인 파악 후 수정) + registry.mjs admin 도메인 등록. npm run build PASS. npm run verify:admin(6개 스크립트, 신규 스크립트 포함) PASS. npm run verify:student(4개 스크립트) PASS(무관 도메인 무회귀). node tests/harness/runOne.mjs paulRank 재실행 PASS(무회귀). 문서 6종(DATABASE/TESTING/PROJECT_BOARD/GAME_DESIGN/handoff/.ai-status) 갱신. 6개 소커밋으로 분리 완료.",
   "blocker": null,
-  "next_action": "SQL 파일 작성 -> wordLibrary.js 확장 -> AdminScreen.jsx 패널 추가 -> Dashboard.jsx 게이팅 -> grant-xp.js 정책 판단 -> build/verify"
+  "next_action": "운영자가 supabase_v2_5_gamification_master_switch.sql을 Supabase 대시보드 SQL Editor에서 실행. 실행 후에도 각 반은 gamification_enabled=false로 시작하므로, 교사가 관리자 화면(반별 설정 > 게임화 설정)에서 반별로 직접 켜야 학생에게 Paul Rank UI가 보임. SQL 실행 후 node scripts/testGamificationSettings.mjs(또는 npm run verify:admin) 재실행하면 3~5번 나머지 round-trip 체크까지 전부 검증됨."
 }
