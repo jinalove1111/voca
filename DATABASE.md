@@ -102,6 +102,7 @@ words   1──N spelling_review_queue (student_id nullable)
 12. `supabase_v2_1_student_unit_decouple.sql` — `students.current_unit_id` 추가 + FK + 백필 + GRANT. **[상태 재확인 필요 — ROADMAP.md v1.6 섹션은 이보다 이전 시점 기준으로 "미실행 SQL 있음"을 마지막으로 기록했고, handoff.md 2026-07-17/18 기록은 이미 적용된 상태를 전제로 진행됨. 다음 세션에서 라이브 확인 권장.]**
 13. `supabase_v2_3_paul_rank.sql`(2026-07-19) — `xp_ledger` 신규 테이블 + `xp_totals` 뷰. 기존 4테이블 어떤 컬럼도 건드리지 않는 순수 추가. 백필 없음(전 학생 XP=0에서 시작 — 판단 근거는 SQL 파일 주석). **[적용됨(2026-07-19, 운영자 실행 확인 — `handoff.md` 2026-07-19(3차) 섹션, `xp_ledger`/`xp_totals` 라이브 anon 쿼리로 실측). 실제 지급 경로(service_role)는 로컬 `SUPABASE_SERVICE_ROLE_KEY` 부재로 여전히 SKIP — `node scripts/testXpLedgerDb.mjs`]**
 14. `supabase_v2_3_1_xp_action_based.sql`(2026-07-19, XP 행동 단위 리팩터링) — `xp_ledger`에 `idx_xp_ledger_event_type` 인덱스만 추가(컬럼/뷰 변경 없음, `event_type` 컬럼은 v2.3에 이미 존재). 스키마 변경은 이 인덱스가 전부이고, 실제 리팩터링은 대부분 애플리케이션 레벨(`src/utils/paulRankShared.js`/`src/hooks/useStudent.js`/`api/grant-xp.js`). **[미실행 — 운영자 실행 대기]**
+15. `supabase_v2_4_entrance_result_rls.sql`(2026-07-19, P1 보안 감사 후속 — 입실시험 결과 서버 재검증) — `entrance_test_results`의 기존 `"allow anon all"`(using(true) with check(true)) 정책을 제거하고 `select`만 anon 허용하는 정책으로 교체(INSERT/UPDATE/DELETE는 정책을 아예 안 만들어 anon/authenticated 전면 차단, service_role만 BYPASSRLS로 계속 쓰기 가능). 새 쓰기 경로는 `api/submit-entrance-result.js`(서버가 `entrance_tests.words`로 직접 재채점 후 저장) 하나뿐 — 기존 `entranceTestApi.js`의 anon 직접 upsert 경로는 제거됨. 스키마 자체(컬럼/테이블)는 변경 없음, RLS 정책 교체만. **[미실행 — 운영자 실행 대기, 실행 전에도 이 API는 기존 v1.8 permissive 정책 하에서 정상 동작(서버가 재검증하므로 이중 방어)]**
 
 `supabase_v1_1_progress_sync.sql`(더 이전 버전)은 `v1_3` 파일 주석에 "대체됨, 실행 불필요"로 명시돼 있으며 저장소에 파일 자체가 없습니다(이미 정리된 것으로 보임).
 
@@ -110,7 +111,9 @@ words   1──N spelling_review_queue (student_id nullable)
 이 앱은 Supabase Auth를 쓰지 않아 행 단위로 "누구인지" 구분할 방법이 없습니다. 그래서 두 가지 다른 전략이 섞여 있습니다.
 
 **RLS "anon 전체 허용" 정책 적용된 테이블** (행 단위 보안 없음 — 표에 없는 위협은 막지 못함, 의도된 설계):
-`student_progress`, `student_daily_progress`, `daily_assignments`, `word_status`, `entrance_tests`, `entrance_test_results`, `spelling_review_queue` — 전부 `enable row level security` + `create policy "allow anon all" ... using (true) with check (true)`.
+`student_progress`, `student_daily_progress`, `daily_assignments`, `word_status`, `entrance_tests`, `spelling_review_queue` — 전부 `enable row level security` + `create policy "allow anon all" ... using (true) with check (true)`.
+
+**`entrance_test_results` — 2026-07-19부터 위 "anon 전체 허용" 그룹에서 제외 (P1 보안 감사 후속)**: `supabase_v2_4_entrance_result_rls.sql`(미실행 대기)이 적용되면 anon은 SELECT만 가능하고 INSERT/UPDATE/DELETE는 service_role 전용으로 좁혀진다. 근거: 기존 permissive 정책(using(true) with check(true))에서는 anon key로 임의 student_id/test_id의 점수를 조작 저장할 수 있었다(재현 실측). 쓰기는 이제 `api/submit-entrance-result.js`(서버가 `entrance_tests.words` 스냅샷으로 직접 재채점 후 저장, 클라이언트가 보낸 score/total은 아예 읽지 않음) 경유만 가능 — `entrance_tests`(시험 생성/종료, 관리자 전용 화면)는 이번 범위가 아니라 여전히 anon 전체 허용 그룹에 남아있다.
 
 **`students` — RLS 대신 컬럼 단위 GRANT (v1.9, 유일하게 다른 전략)**:
 - 테이블 단위 `SELECT`/`UPDATE`를 anon/authenticated에서 회수(`revoke`).
@@ -123,4 +126,4 @@ words   1──N spelling_review_queue (student_id nullable)
 
 ## 관련 파일
 
-`C:\voca\supabase_v1_3_schema.sql` ~ `C:\voca\supabase_v2_1_student_unit_decouple.sql`(11개 전체), `C:\voca\src\utils\wordLibrary.js`(컬럼 부재 폴백 로직), `C:\voca\api\_pinAuth.js`(service_role 접근), `C:\voca\scripts\dbIntegrityAudit.mjs`, `C:\voca\scripts\testRlsSecurity.mjs`, `C:\voca\scripts\testClassDeleteCascade.mjs`
+`C:\voca\supabase_v1_3_schema.sql` ~ `C:\voca\supabase_v2_4_entrance_result_rls.sql`(15개 전체), `C:\voca\src\utils\wordLibrary.js`(컬럼 부재 폴백 로직), `C:\voca\api\_pinAuth.js`(service_role 접근), `C:\voca\api\submit-entrance-result.js`(입실시험 결과 서버 재검증, 2026-07-19), `C:\voca\scripts\dbIntegrityAudit.mjs`, `C:\voca\scripts\testRlsSecurity.mjs`, `C:\voca\scripts\testClassDeleteCascade.mjs`, `C:\voca\scripts\testEntranceTestDb.mjs`

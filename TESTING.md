@@ -57,7 +57,7 @@ _작성: 2026-07-18. `scripts/` 전체(69개 파일)를 ls + 각 파일의 impor
 | `testMultiDeviceMerge.mjs` | v2.2 다중 기기 진행도 병합(교차 동기화 시 양쪽 진행분 보존) |
 | `testStudentUnitDecouple.mjs` | v2.1 `current_unit_id` 백필/폴백 |
 | `testSpellingV2Db.mjs` | v2.0 `spelling_direction`/`accepted_meanings`/`spelling_review_queue` |
-| `testEntranceTestDb.mjs` | v1.8 입실시험 테이블 round-trip |
+| `testEntranceTestDb.mjs` | v1.8 입실시험 테이블 round-trip. **2026-07-19 갱신**: 결과 제출은 이제 anon 직접 upsert가 아니라 `api/submit-entrance-result.js`를 (testStudentPinAuth.mjs/testXpLedgerDb.mjs와 동일한) `callHandler(handler, body)` 패턴으로 실 (req,res) 핸들러 직접 호출로 검증 — "7.5. 조작 시도 거부" 섹션이 가짜 score 전송/문제 개수 축소/단어 중복/가짜 단어/방향 위장 5종 조작 시도가 실제로 거부되는지(reason 코드까지) 실측하고, DB에 저장된 값이 조작대로가 아니라 서버 재채점값인지까지 확인 |
 | `testFutureAssignment.mjs` / `testDailyAssignment.mjs` | `daily_assignments` 배정/폴백 |
 | `testStudentSelectUnitSwitch.mjs` | 로그인 화면에서 기존 학생 유닛 전환 |
 | `testFullProgressBackup.mjs` / `testResetWordStatusBackup.mjs` / `testSyncProgress.mjs` | `student_progress` 백업/복원/초기화 |

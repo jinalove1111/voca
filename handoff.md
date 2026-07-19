@@ -1,5 +1,67 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-19 (Paul Rank System v2.3.1 — XP 행동 단위 리팩터링, 운영자 실측 버그 수정 — Engineering Head)_
+_최종 갱신: 2026-07-19 (5차, 입실시험 결과 서버 재검증 — P1 보안 감사 후속, Word King 필수 선행조건 — Engineering Head)_
+
+## 2026-07-19 (5차) — 입실시험 결과 서버 재검증 (`api/submit-entrance-result.js` 신설) — P1 보안 감사 후속 — Engineering Head
+
+PROJECT_BOARD.md NEXT 카드 "[P1] 입실시험 결과 서버 재검증 없음"(게임화
+로드맵 Anti-cheat 선행조건, Word King 필수 선행) 착수. 문제: 클라이언트가
+계산한 점수를 서버 재검증 없이 그대로 저장 + `entrance_test_results` RLS가
+`using(true) with check(true)`라 anon key로 임의 student_id/test_id 점수
+조작 가능(재현 실측 완료, `wiki/security-notes.md` 기존 기록).
+
+- **신규 `api/submit-entrance-result.js`**: 클라이언트가 원본 답안
+  (`answers: [{word, direction, input}]` — 선택한 옵션들/문제, `testId`)만
+  보내면, 서버가 `entrance_tests.words`/`direction`을 DB에서 직접 조회해
+  이미 있는 순수 함수 `computeTestResult()`(`src/utils/entranceTest.js`)로
+  재채점 후 그 결과만 저장(service_role key). 클라이언트는 이제 이 요청
+  스키마에 `score`/`total` 필드 자체가 없다 — "보내도 서버가 안 읽는다"가
+  아니라 애초에 페이로드에 존재하지 않는 구조로 신뢰 경계를 강제.
+- **4종 조작 방어(전부 명시 검증, reason 코드로 거부)**: 문제 개수 축소
+  (`answer_count_mismatch` — expected는 `min(question_count, words.length)`
+  와 정확히 일치해야 함), 같은 단어 중복 제출(`duplicate_word`), 시험
+  스냅샷에 없는 가짜 단어(`unknown_word`), 고정 방향 시험에서 방향 위장
+  (`direction_mismatch`). 형식 검증(`invalid_test_id`/`invalid_student_id`/
+  `invalid_answers`/`test_not_found`)도 `api/grant-xp.js`와 동일한 응답
+  패턴(200 + `{ok:false, reason}`, 서버 설정 오류만 500)으로 통일.
+- **`entranceTestApi.js` 갱신**: `submitEntranceResult(testId, studentId,
+  {questions, answers, durationSeconds})`로 시그니처 변경 — 더 이상
+  score/total/missedWords를 받지 않고 `fetch('/api/submit-entrance-
+  result')`로 위임. 기존 anon 직접 upsert 코드는 제거.
+- **`EntranceTest.jsx` UX 불변**: `finishTest()`가 여전히 로컬
+  `computeTestResult`로 즉시 결과를 화면에 채운 뒤(응시 → 즉시 결과 그대로),
+  `submitResultToServer()`가 `questionsRef.current`/`answersRef.current`
+  (원본)를 그대로 서버에 넘긴다 — 저장 실패 시 기존 "다시 저장하기" 재시도
+  버튼도 그대로 유지.
+- **`supabase_v2_4_entrance_result_rls.sql` 신규(멱등, 운영자 실행 대기)**:
+  `entrance_test_results`의 `"allow anon all"` 정책 제거 → SELECT만 anon
+  허용, INSERT/UPDATE/DELETE는 정책 자체를 안 만들어 service_role
+  (BYPASSRLS) 전용으로 좁힘. `entrance_tests`(시험 생성/종료, 관리자 anon
+  CRUD)는 이번 범위 아님 — 건드리지 않음.
+- **`scripts/testEntranceTestDb.mjs` 갱신**: 제출 검증을
+  `api.submitEntranceResult`(구 anon 번들 upsert) 대신
+  `api/submit-entrance-result.js`를 `callHandler(handler, body)` 패턴으로
+  실 핸들러 직접 호출(`testStudentPinAuth.mjs`/`testXpLedgerDb.mjs`와 동일
+  방식, vercel dev 등 새 도구 불필요)로 교체. 신규 "7.5. 조작 시도 거부"
+  섹션 — 가짜 score(999) 전송이 실제로 무시되고 서버 재채점값(0)만 저장됨,
+  문제 개수 축소/단어 중복/가짜 단어/방향 위장 4종 전부 reason 코드까지
+  일치 확인, 거부된 시도들이 다른 학생 점수에 전혀 영향 없음까지 실측.
+- **검증**: `node scripts/testEntranceTest.mjs`(순수 로직, 55개 체크 전부
+  PASS — 이번 수정과 무관, 회귀 없음 확인), `node scripts/
+  testEntranceTestDb.mjs`(라이브 e2e, 조작 시도 거부 신규 섹션 포함 전부
+  PASS — 로컬에 SUPABASE_SERVICE_ROLE_KEY가 없어도 v2.4 SQL 미실행 상태의
+  기존 anon 폴백으로 전부 통과, v2.4 SQL 실행 후에는 로그인/xp_ledger
+  스크립트와 동일한 이유로 로컬 service-role-key 부재 시 제출 단계가
+  막힐 수 있음 — 기존 BLOCKED 카드와 같은 근본원인, 신규 이슈 아님),
+  `npm run build` PASS(번들 크기/청크 구성 불변, `EntranceTest.jsx`
+  청크만 11.35kB로 소폭 변경), `npm run verify:admin`(testEntranceTest.mjs
+  + testEntranceTestDb.mjs 포함 5개 스크립트 전부 PASS).
+- **문서**: `DATABASE.md`(v2.4 마이그레이션 항목 + RLS 현황 갱신),
+  `TESTING.md`(testEntranceTestDb.mjs 갱신 내용), `wiki/security-
+  notes.md`(P1 갭 항목을 "수정 완료"로 갱신), `PROJECT_BOARD.md`(카드
+  NEXT → VERIFY, 게임화 로드맵 Anti-cheat 선행조건 하위 항목도 함께 갱신).
+- **다음 단계**: 운영자가 `supabase_v2_4_entrance_result_rls.sql` 실행 →
+  이중 방어(서버 재검증 + RLS)까지 완결. Word King(게임화 로드맵 7번)
+  착수 시 이 카드가 더 이상 막지 않음.
 
 ## 2026-07-19 (4차) — Paul Rank System v2.3.1 — XP "단어 단위" → "행동(Action) 단위" 리팩터링 — Engineering Head
 

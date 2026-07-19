@@ -1,24 +1,78 @@
 // 입실 단어시험 DB 통합 테스트 — 라이브 Supabase에 QA_ 전용 반/학생을 만들어
 // 시험 생성 -> 응시(결과 제출) -> 랭킹 -> 재제출(upsert) -> 종료 -> 정리까지
-// 전체 흐름을 실제 코드(entranceTestApi.js 번들)로 검증한다.
+// 전체 흐름을 실제 코드(entranceTestApi.js 번들 + api/submit-entrance-
+// result.js 실 핸들러)로 검증한다.
+//
+// (2026-07-19, P1 보안 감사 후속) 결과 제출은 더 이상 entranceTestApi.js
+// 번들의 anon 직접 upsert가 아니라 api/submit-entrance-result.js를 실제
+// (req,res) 핸들러로 직접 호출한다(testStudentPinAuth.mjs/testXpLedgerDb.mjs
+// 와 동일 패턴 — vercel dev 등 새 도구 없이 실제 서버 로직 그대로 검증).
+// 조회 계열(fetchTodayTests/fetchResultsForTests/fetchOwnResult)은 여전히
+// anon key 기반 번들을 그대로 쓴다(안 바뀐 경로).
 //
 // ⚠️ supabase_v1_8_entrance_test.sql이 아직 실행 안 된 상태면 테이블이 없어
 // 진행이 불가능한데, 이는 예상된 상태다(크래시 아님) — 그 경우 전체를
 // 안전하게 SKIP하고 exit 0 (testStudentPinAuth.mjs의 마이그레이션 대기
 // 패턴과 동일). SQL 실행 후 재실행하면 전부 검증된다.
 //
+// ⚠️ supabase_v2_4_entrance_result_rls.sql(이 세션 신규, 미실행 대기)이
+// 실행되기 전까지는 entrance_test_results가 여전히 anon 전체 쓰기 허용
+// 상태라, 로컬에 SUPABASE_SERVICE_ROLE_KEY가 없어도(api/_pinAuth.js의 anon
+// key 폴백) 이 스크립트의 제출 검증은 그대로 전부 통과한다. v2.4 SQL 실행
+// 후에는 로컬 실행 시 이 스크립트도 로그인/PIN/xp_ledger 스크립트와 같은
+// 이유로 SUPABASE_SERVICE_ROLE_KEY 부재 시 제출 단계가 막힐 수 있다
+// (PROJECT_BOARD.md BLOCKED 카드와 동일 근본 원인 — 신규 이슈 아님, Vercel
+// 프로덕션은 서비스롤 키가 있어 정상 동작).
+//
 // 실행:
 //   node scripts/buildWordLibBundle.mjs
 //   node scripts/buildEntranceBundle.mjs
 //   node scripts/testEntranceTestDb.mjs
+import fs from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { buildEntranceQuestions, computeTestResult, rankResults, pickMvps, summarizeClassResults } from '../src/utils/entranceTest.js'
+
+// api/_pinAuth.js가 process.env.SUPABASE_URL/VITE_SUPABASE_URL 등을 읽으므로
+// (testStudentPinAuth.mjs/testXpLedgerDb.mjs와 동일 이유), .env/.env.local
+// 내용을 미리 process.env에 로드한다.
+for (const file of ['.env', '.env.local']) {
+  if (!fs.existsSync(file)) continue
+  for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const m = line.match(/^([^#=][^=]*)=(.*)$/)
+    if (m && process.env[m[1].trim()] === undefined) process.env[m[1].trim()] = m[2].trim()
+  }
+}
 
 const wordlibPath = process.env.WORDLIB_BUNDLE || 'scripts/.tmp/wordLibrary.bundle.mjs'
 const apiPath = process.env.ENTRANCE_BUNDLE || 'scripts/.tmp/entranceTestApi.bundle.mjs'
 const wordlib = await import(pathToFileURL(resolve(wordlibPath)))
 const api = await import(pathToFileURL(resolve(apiPath)))
+const { default: submitHandler } = await import('../api/submit-entrance-result.js')
+
+// fake Vercel (req,res) — testStudentPinAuth.mjs/testXpLedgerDb.mjs와 동일.
+function callHandler(handler, body) {
+  return new Promise((resolve) => {
+    const res = {
+      _status: 200,
+      status(code) { this._status = code; return this },
+      json(payload) { resolve({ status: this._status, body: payload }) },
+    }
+    handler({ method: 'POST', body }, res)
+  })
+}
+
+// 서버 재검증 API는 questions([{word,direction}])+answers(문자열 배열)를
+// 받는다(더 이상 score/total을 직접 안 받음) — entranceTestApi.js의
+// submitEntranceResult와 동일한 페이로드 모양을 여기서도 그대로 구성한다.
+async function submitViaApi(testId, studentId, questions, answers, durationSeconds) {
+  return callHandler(submitHandler, {
+    testId,
+    studentId,
+    answers: questions.map((q, i) => ({ word: q.word, direction: q.direction, input: answers[i] ?? '' })),
+    durationSeconds,
+  })
+}
 
 const QA_CLASS = 'QA_EntranceTest'
 const QA_CLASS_2 = 'QA_EntranceTest2' // 반별 격리 검증용 두 번째 반
@@ -93,22 +147,22 @@ try {
   check('기존 시험이 closed로 바뀜', oldRow?.status === 'closed')
   check('active는 새 시험 하나뿐', api.findActiveTest(after2)?.id === test2.id)
 
-  // ── 4. 응시 — 학생 3명이 문제 생성/채점/제출 (A,B 만점 동점, C 1/3) ──
-  console.log('\n4. 학생 3명 응시 — 순수 로직으로 채점 후 결과 제출')
+  // ── 4. 응시 — 학생 3명이 문제 생성 후 실제 입력 답만 서버로 전송, 서버가
+  //    entrance_tests.words로 재채점 (A,B 만점 동점, C 1/3) ────────────
+  console.log('\n4. 학생 3명 응시 — 답만 전송, 서버(api/submit-entrance-result.js)가 재채점')
   const submitFor = async (studentId, answerFn, duration) => {
     const qs = buildEntranceQuestions(test2.words, { count: test2.questionCount, direction: 'en2kr' })
-    const result = computeTestResult(qs, qs.map(answerFn))
-    await api.submitEntranceResult(test2.id, studentId, {
-      score: result.score, total: result.total, missedWords: result.missed, durationSeconds: duration,
-    })
-    return result
+    const answers = qs.map(answerFn)
+    const localExpected = computeTestResult(qs, answers) // 순수 로직 기대값(비교용)
+    const r = await submitViaApi(test2.id, studentId, qs, answers, duration)
+    return { r, localExpected }
   }
-  const rA = await submitFor(idA, (q) => q.answer, 30)          // 만점
-  const rB = await submitFor(idB, (q) => q.answer, 45)          // 만점 (동점)
-  const rC = await submitFor(idC, (q, i) => (i === 0 ? q.answer : '틀림'), 50) // 1/3
-  check('A 만점(3/3)', rA.score === 3 && rA.total === 3)
-  check('B 만점(3/3)', rB.score === 3)
-  check('C는 1/3 + 오답 2개 기록', rC.score === 1 && rC.missed.length === 2)
+  const { r: rA, localExpected: eA } = await submitFor(idA, (q) => q.answer, 30)          // 만점
+  const { r: rB, localExpected: eB } = await submitFor(idB, (q) => q.answer, 45)          // 만점 (동점)
+  const { r: rC, localExpected: eC } = await submitFor(idC, (q, i) => (i === 0 ? q.answer : '틀림'), 50) // 1/3
+  check('A 제출 성공, 서버 재채점이 로컬 채점과 일치(만점 3/3)', rA.body.ok === true && rA.body.score === 3 && rA.body.score === eA.score)
+  check('B 제출 성공, 서버 재채점 만점(3/3)', rB.body.ok === true && rB.body.score === 3)
+  check('C 제출 성공, 서버 재채점이 로컬 채점과 일치(1/3 + 오답 2개)', rC.body.ok === true && rC.body.score === 1 && rC.body.missed.length === 2 && rC.body.score === eC.score)
 
   // ── 5. 결과 조회 + 랭킹(공동 1등) + VIP ──────────────────────────────
   console.log('\n5. 결과 조회 + 랭킹 계산(DB 왕복 후에도 공동 순위 정확)')
@@ -133,7 +187,14 @@ try {
 
   // ── 6. 재제출은 upsert — 행이 늘지 않고 점수만 갱신 ──────────────────
   console.log('\n6. 같은 학생 재제출 -> upsert(1행 유지)')
-  await api.submitEntranceResult(test2.id, idC, { score: 2, total: 3, missedWords: [{ word: 'cat', meaning: '고양이' }], durationSeconds: 55 })
+  {
+    // C가 이번엔 2문제 맞음(재응시 시나리오) — 클라이언트가 어떤 score를
+    // 주장하든 서버는 여전히 답만 보고 재채점한다.
+    const qs2 = buildEntranceQuestions(test2.words, { count: test2.questionCount, direction: 'en2kr' })
+    const answers2 = qs2.map((q, i) => (i < 2 ? q.answer : '틀림'))
+    const r = await submitViaApi(test2.id, idC, qs2, answers2, 55)
+    check('재제출도 정상 처리(서버가 2/3로 재채점)', r.body.ok === true && r.body.score === 2 && r.body.total === 3)
+  }
   const rows2 = await api.fetchResultsForTests([test2.id])
   check('여전히 3행 (중복 INSERT 없음)', rows2.length === 3)
   check('C 점수가 2로 갱신됨', rows2.find((r) => r.studentId === idC)?.score === 2)
@@ -167,6 +228,99 @@ try {
   const afterClose = await api.fetchTodayTests(classId)
   check('active 시험 없음', api.findActiveTest(afterClose) === null)
   check('결과는 종료 후에도 그대로 조회됨(오늘의 랭킹 유지)', (await api.fetchResultsForTests([test2.id])).length === 3)
+
+  // ── 7.5 조작 시도 거부 — 서버 재검증(P1 보안 감사 후속) 핵심 검증 ─────
+  console.log('\n7.5. 조작 시도 거부 — 서버가 클라이언트 주장을 신뢰하지 않고 실제로 거부하는지 실측')
+  {
+    const qsFull = buildEntranceQuestions(test2.words, { count: test2.questionCount, direction: 'en2kr' })
+    check('전제 조건: 3문제 출제됨', qsFull.length === 3)
+
+    // (a) 가짜 점수 전송 — score/total 필드를 직접 끼워넣어도 서버는 그
+    //     필드 자체를 읽지 않는다(요청 스키마에 score가 없다 — 여기선 전부
+    //     오답으로 답하면서 score:999를 함께 보내 "혹시 어딘가에서 그대로
+    //     신뢰되어 저장되지 않는지"를 실측한다).
+    const allWrong = qsFull.map(() => '완전히틀린답')
+    const fake = await callHandler(submitHandler, {
+      testId: test2.id,
+      studentId: idA,
+      answers: qsFull.map((q, i) => ({ word: q.word, direction: q.direction, input: allWrong[i] })),
+      durationSeconds: 10,
+      score: 999, total: 3, missedWords: [], // 클라이언트가 조작 시도 — 서버가 무시해야 함
+    })
+    check('전부 오답으로 제출해도 서버가 재채점: score=0 (클라이언트가 보낸 999 무시)', fake.body.ok === true && fake.body.score === 0)
+    const afterFake = await api.fetchOwnResult(test2.id, idA)
+    check('DB에 저장된 값도 0/3 (999가 아님 — 조작 반영 안 됨)', afterFake?.score === 0 && afterFake?.total === 3)
+    // A를 원래 만점 상태로 복구 — 이후 랭킹 관련 가정에 영향 없게(이 시점
+    // 이후 랭킹을 다시 확인하는 체크는 없지만, 정리 전 상태를 명확히 함).
+    await submitViaApi(test2.id, idA, qsFull, qsFull.map((q) => q.answer), 30)
+
+    // (b) 문제 개수 축소 — 10문제 중 1문제만 "만점"으로 제출해 정확도를
+    //     왜곡하는 시도 -> answer_count_mismatch로 거부.
+    const shrunk = await callHandler(submitHandler, {
+      testId: test2.id,
+      studentId: idB,
+      answers: [{ word: qsFull[0].word, direction: qsFull[0].direction, input: qsFull[0].answer }],
+      durationSeconds: 5,
+    })
+    check('문제 개수를 줄여 제출 -> 거부(answer_count_mismatch)', shrunk.body.ok === false && shrunk.body.reason === 'answer_count_mismatch')
+
+    // (c) 같은 단어 중복 제출(중복 farm) -> duplicate_word로 거부.
+    const dup = await callHandler(submitHandler, {
+      testId: test2.id,
+      studentId: idB,
+      answers: [
+        { word: qsFull[0].word, direction: qsFull[0].direction, input: qsFull[0].answer },
+        { word: qsFull[0].word, direction: qsFull[0].direction, input: qsFull[0].answer },
+        { word: qsFull[0].word, direction: qsFull[0].direction, input: qsFull[0].answer },
+      ],
+      durationSeconds: 5,
+    })
+    check('같은 단어 3번 중복 제출 -> 거부(duplicate_word)', dup.body.ok === false && dup.body.reason === 'duplicate_word')
+
+    // (d) 시험 스냅샷에 없는 가짜 단어 끼워넣기 -> unknown_word로 거부.
+    const fakeWord = await callHandler(submitHandler, {
+      testId: test2.id,
+      studentId: idB,
+      answers: [
+        { word: 'not-a-real-word-in-this-test', direction: 'en2kr', input: '아무거나' },
+        { word: qsFull[1].word, direction: qsFull[1].direction, input: qsFull[1].answer },
+        { word: qsFull[2].word, direction: qsFull[2].direction, input: qsFull[2].answer },
+      ],
+      durationSeconds: 5,
+    })
+    check('스냅샷에 없는 단어 포함 -> 거부(unknown_word)', fakeWord.body.ok === false && fakeWord.body.reason === 'unknown_word')
+
+    // (e) 고정 방향 시험(첫 번째 시험 test, direction='en2kr', 이미 closed
+    //     상태지만 스냅샷은 여전히 조회 가능)에서 방향을 kr2en으로 속여
+    //     제출 -> direction_mismatch로 거부.
+    const wrongDir = await callHandler(submitHandler, {
+      testId: test.id,
+      studentId: idB,
+      answers: test.words.map((w) => ({ word: w.word, direction: 'kr2en', input: w.word })),
+      durationSeconds: 5,
+    })
+    check('고정 방향(en2kr) 시험에 kr2en으로 위장 제출 -> 거부(direction_mismatch)', wrongDir.body.ok === false && wrongDir.body.reason === 'direction_mismatch')
+
+    // (f) 형식 검증 — 잘못된 testId/studentId/answers 형태도 거부.
+    const badTestId = await callHandler(submitHandler, { testId: 'not-a-uuid', studentId: idB, answers: [{ word: 'x', direction: 'en2kr', input: 'y' }] })
+    check('잘못된 testId 형식 -> 거부(invalid_test_id)', badTestId.body.ok === false && badTestId.body.reason === 'invalid_test_id')
+    const badStudentId = await callHandler(submitHandler, { testId: test2.id, studentId: 'not-a-uuid', answers: [{ word: 'x', direction: 'en2kr', input: 'y' }] })
+    check('잘못된 studentId 형식 -> 거부(invalid_student_id)', badStudentId.body.ok === false && badStudentId.body.reason === 'invalid_student_id')
+    const badAnswers = await callHandler(submitHandler, { testId: test2.id, studentId: idB, answers: 'not-an-array' })
+    check('answers가 배열이 아님 -> 거부(invalid_answers)', badAnswers.body.ok === false && badAnswers.body.reason === 'invalid_answers')
+    const notFound = await callHandler(submitHandler, {
+      testId: '00000000-0000-0000-0000-000000000000',
+      studentId: idB,
+      answers: [{ word: 'x', direction: 'en2kr', input: 'y' }],
+    })
+    check('존재하지 않는 testId -> 거부(test_not_found)', notFound.body.ok === false && notFound.body.reason === 'test_not_found')
+
+    // 위 거부 시도들이 B/C의 실제 저장된 점수에 전혀 영향을 주지 않았는지
+    // 최종 확인(조작 시도가 전부 no-op이었음을 실측으로 증명).
+    const finalRows = await api.fetchResultsForTests([test2.id])
+    check('B는 여전히 3/3 (조작 시도들이 전혀 반영 안 됨)', finalRows.find((r) => r.studentId === idB)?.score === 3)
+    check('C는 여전히 2/3 (6단계 재제출 값 그대로)', finalRows.find((r) => r.studentId === idC)?.score === 2)
+  }
 
   exitCode = failures === 0 ? 0 : 1
 } catch (err) {

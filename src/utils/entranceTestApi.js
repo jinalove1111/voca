@@ -119,22 +119,42 @@ export async function closeEntranceTest(testId) {
   if (error) throw error
 }
 
-// 결과 제출 — 반드시 student_id(UUID) 기준(이름 금지). 같은 시험 재제출은
-// upsert로 1행 유지(unique(test_id, student_id)). 에러는 던짐 — 학생 결과
-// 화면이 "저장 재시도" 버튼을 보여준다(점수 자체는 로컬 state에 이미 있어
-// 학생이 결과를 못 보는 일은 없음).
-export async function submitEntranceResult(testId, studentId, { score, total, missedWords, durationSeconds }) {
+// 결과 제출 — /api/submit-entrance-result 경유(2026-07-19, P1 보안 감사 후속).
+// 반드시 student_id(UUID) 기준(이름 금지). 같은 시험 재제출은 서버가 upsert로
+// 1행 유지(unique(test_id, student_id)). 에러는 던짐 — 학생 결과 화면이
+// "저장 재시도" 버튼을 보여준다(점수 자체는 로컬 state에 이미 있어 학생이
+// 결과를 못 보는 일은 없음).
+//
+// 중요: score/total/missedWords는 더 이상 이 함수의 입력이 아니다(클라이언트
+// 계산값을 신뢰하지 않는다는 게 이번 수정의 핵심). 대신 학생이 실제로 푼
+// 문제(questions: [{word, direction}, ...])와 입력한 답(answers: 같은
+// 인덱스로 정렬된 문자열 배열)만 보낸다 — 서버가 entrance_tests.words를
+// 직접 조회해 정답을 재조립하고 재채점한 뒤 그 결과만 저장한다
+// (api/submit-entrance-result.js 참고). 학생 화면(EntranceTest.jsx)은 이미
+// 로컬에서 computeTestResult로 즉시 결과를 표시한 뒤 이 함수를 호출하므로,
+// "응시 -> 즉시 결과" UX 자체는 바뀌지 않는다.
+export async function submitEntranceResult(testId, studentId, { questions, answers, durationSeconds }) {
   if (!testId || !studentId) throw new Error('testId/studentId 누락')
-  const { error } = await supabase.from('entrance_test_results').upsert({
-    test_id: testId,
-    student_id: studentId,
-    score,
-    total,
-    missed_words: missedWords || [],
-    duration_seconds: durationSeconds ?? null,
-    submitted_at: new Date().toISOString(),
-  }, { onConflict: 'test_id,student_id' })
-  if (error) throw error
+  const res = await fetch('/api/submit-entrance-result', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      testId,
+      studentId,
+      answers: (questions || []).map((q, i) => ({
+        word: q.word,
+        direction: q.direction,
+        input: (answers || [])[i] ?? '',
+      })),
+      durationSeconds: durationSeconds ?? null,
+    }),
+  })
+  let body = null
+  try { body = await res.json() } catch { /* 응답 본문이 JSON이 아니어도 아래에서 처리 */ }
+  if (!res.ok || !body || body.ok === false) {
+    throw new Error(body?.reason || body?.error || `저장 실패 (HTTP ${res.status})`)
+  }
+  return body // { ok:true, score, total, missed } — 서버 재채점 결과(참고용, 화면은 이미 로컬 결과를 표시 중)
 }
 
 // 특정 시험들의 결과 전부 — 랭킹/교사 결과 페이지 폴링용. 에러 -> 빈 배열.

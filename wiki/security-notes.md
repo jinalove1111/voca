@@ -43,12 +43,26 @@ PIN을 직접 검증하지 않음.
 
 ## 알려진 보안 갭 (미수정, 기록만 — `PROJECT_BOARD.md`와 동기화)
 
-- **[P1, Medium] 입실시험 결과 서버 재검증 없음.** 클라이언트가 계산한
+- **[P1, Medium] 입실시험 결과 서버 재검증 없음 — 2026-07-19 수정 완료
+  (VERIFY, `PROJECT_BOARD.md` 참고).** 원래 문제: 클라이언트가 계산한
   점수를 서버 재검증 없이 그대로 저장 + `entrance_test_results`의 RLS가
   `using (true) with check (true)`라 anon key로 임의 `student_id`/
   `test_id`의 점수 조작 가능(재현 실측 완료). 위협 모델: 결제/PII/계정탈취
-  아님 — 학원 내부 "오늘의 VIP" 경쟁 배지 조작 한정. 근본 수정안(문서화만,
-  미구현): `api/submit-entrance-result.js` 신설.
+  아님 — 학원 내부 "오늘의 VIP" 경쟁 배지 조작 한정.
+  **수정 내용**: `api/submit-entrance-result.js` 신설 — 클라이언트는
+  이제 `score`/`total`을 아예 보낼 수 없고, 실제로 푼 문제(word+direction)
+  와 입력한 답만 보낸다. 서버가 `entrance_tests.words`(DB 스냅샷)로 정답을
+  직접 조립해 기존 순수 함수 `computeTestResult()`로 재채점한 결과만
+  저장한다. 개수 축소/단어 중복/가짜 단어/방향 위장 등 4종 조작 시도를
+  전부 명시적으로 거부(`answer_count_mismatch`/`duplicate_word`/
+  `unknown_word`/`direction_mismatch`) — `scripts/testEntranceTestDb.mjs`
+  "7.5. 조작 시도 거부" 섹션에서 실측 확인(클라이언트가 `score:999`를
+  같이 보내도 서버가 무시하고 실제 입력을 재채점해 0점으로 저장하는
+  것까지 증명). `entranceTestApi.js`의 기존 anon 직접 upsert 경로는
+  제거됨(이제 이 API 경유만). RLS 강화 SQL(`supabase_v2_4_entrance_
+  result_rls.sql` — `entrance_test_results` anon 쓰기 전면 차단, SELECT만
+  유지)도 함께 작성했으나 **운영자 실행 대기**(멱등, 미실행이어도 이
+  API 자체가 이미 재검증하므로 이중 방어 중 하나만 아직 안 걸린 상태).
 - **[P2, Medium] `api/verify-admin-pin.js` 정식 rate limit 부재.**
   실패 시 1.5초 지연만 있고 정식 rate limit/잠금 없음(학생 PIN은 5회 DB
   잠금과 비대칭). 관리자가 원장 1인이라 위협 모델상 우선순위 낮게 유지.
@@ -69,4 +83,7 @@ PIN을 직접 검증하지 않음.
 
 `C:\voca\supabase_v1_9_security_rls.sql`, `C:\voca\api\_pinAuth.js`,
 `C:\voca\DATABASE.md`, `C:\voca\PROJECT_BOARD.md`,
-`C:\voca\scripts\testRlsSecurity.mjs`
+`C:\voca\scripts\testRlsSecurity.mjs`,
+`C:\voca\api\submit-entrance-result.js`,
+`C:\voca\supabase_v2_4_entrance_result_rls.sql`,
+`C:\voca\scripts\testEntranceTestDb.mjs`

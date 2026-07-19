@@ -187,13 +187,18 @@ export default function EntranceTest({ studentId, studentName, onBack }) {
     focusInput()
   }
 
+  // (2026-07-19, P1 보안 감사 후속) 서버 재검증 도입 — score/total/missedWords
+  // 대신 실제로 푼 문제(word+direction)와 입력한 답(answers)만 보낸다. 화면에
+  // 이미 표시 중인 result(로컬 계산)는 그대로 두고(즉시 결과 UX 불변), 저장은
+  // questionsRef/answersRef(시험 시작 시 고정된 원본)를 그대로 서버에 넘겨
+  // 서버가 entrance_tests.words로 재채점하게 한다 — 클라이언트 점수를
+  // 신뢰하지 않는다.
   const submitResultToServer = async (result) => {
     setSaveError(null)
     try {
       await submitEntranceResult(activeTest.id, studentId, {
-        score: result.score,
-        total: result.total,
-        missedWords: result.missed,
+        questions: questionsRef.current,
+        answers: answersRef.current,
         durationSeconds: Math.round((Date.now() - startedAtRef.current) / 1000),
       })
       load() // 저장 성공 -> 랭킹 즉시 갱신
