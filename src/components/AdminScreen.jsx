@@ -1,6 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, getClassIdByName } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentClass, getStudentUnit, setStudentClass, setStudentUnit, setStudentsClassBulk, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, getClassIdByName, setStudentHouse } from '../utils/wordLibrary'
+// House System(2026-07-19, 게임화 하위카드 8번) — 학생 로스터에 최소
+// 하우스 확인/재배정 UI(HOUSES 상수만 필요, 순수 함수는 wordLibrary.js가
+// 대신 소비).
+import { HOUSES, getHouseById } from '../utils/houseSystem'
 // Paul Rank System(2026-07-19) — 최소 관리자 통합: 학생별 XP/Rank 조회만
 // (관리자 UI 전면 개편 아님, 기존 학생 카드에 텍스트 한 줄 추가).
 import { computeRankState } from '../utils/paulRankShared'
@@ -440,6 +444,23 @@ function StudentManagement({ adminPin }) {
     }
   }
 
+  // House System(2026-07-19) — 재배정. select onChange가 바로 저장(반/유닛
+  // 배정처럼 "편집 모드 진입 → 저장" 2단계가 아니라, 값 하나만 바꾸는
+  // 최소 UI라 즉시 반영이 더 간단하다). 컬럼 부재(v2.7 SQL 미실행)면
+  // setStudentHouse가 DB 에러를 던지므로 alert로 안내만 하고 크래시 없음.
+  const [houseBusyId, setHouseBusyId] = useState(null)
+  const handleHouseChange = async (id, value) => {
+    setHouseBusyId(id)
+    try {
+      await setStudentHouse(id, value === '' ? null : Number(value))
+      refresh()
+    } catch (err) {
+      alert('하우스 배정 중 오류가 발생했어요: ' + (err.message || err) + ' (supabase_v2_7_house_system.sql 실행 여부를 확인해주세요)')
+    } finally {
+      setHouseBusyId(null)
+    }
+  }
+
   const startEdit = (id) => {
     setEditing(id)
     setEditClass(getStudentClass(id))
@@ -739,6 +760,22 @@ function StudentManagement({ adminPin }) {
                                     : <span className="text-gray-400">⬜ PIN 미설정</span>}
                               </p>
                             )}
+                            {/* House System(2026-07-19, 게임화 하위카드 8번) —
+                                최소 확인/재배정. select 값이 바뀌면 즉시 저장
+                                (반/유닛처럼 "편집 모드" 없이 값 하나만 바꾸는
+                                최소 UI). 컬럼 부재/미실행 SQL이면 house_id가
+                                항상 null이라 "미배정"으로만 보임(크래시 없음). */}
+                            <label className="inline-flex items-center gap-1 mt-0.5">
+                              <span className="text-[11px] text-gray-400 font-bold">
+                                {getHouseById(s.houseId) ? `${getHouseById(s.houseId).emoji} ${getHouseById(s.houseId).name}` : '하우스 미배정'}
+                              </span>
+                              <select value={s.houseId ?? ''} disabled={houseBusyId === s.id}
+                                onChange={(e) => handleHouseChange(s.id, e.target.value)}
+                                className="text-[11px] font-bold border border-gray-200 rounded-lg px-1 py-0.5 bg-white disabled:opacity-50">
+                                <option value="">미배정</option>
+                                {HOUSES.map((h) => <option key={h.id} value={h.id}>{h.emoji} {h.name}</option>)}
+                              </select>
+                            </label>
                           </div>
                         </div>
                         <div className="flex gap-2 flex-wrap justify-end">
