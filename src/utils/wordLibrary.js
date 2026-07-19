@@ -251,7 +251,12 @@ let _classSettings = {}
 // (scripts/opsSetAllClassesMixed.mjs). 특정 반만 한→영으로 돌리려면 관리자
 // 화면 출제 방향에서 바꾸면 됨. mixed는 클라이언트만으로 완전 동작
 // (App.jsx assignDirections — DB 컬럼이 없어도 배정 자체는 로컬 계산).
-const DEFAULT_CLASS_SETTINGS = { spellingTestEnabled: false, spellingHintEnabled: false, wrongAnswerRepeatCount: 3, spellingDirection: 'mixed' }
+// gamificationEnabled(2026-07-19, Teacher Controls 마스터 스위치,
+// GAME_DESIGN.md 13번 섹션) — spelling_test_enabled와 동일한 opt-in 관례,
+// 기본 false. 컬럼이 아직 없거나(supabase_v2_5_gamification_master_switch.sql
+// 미실행) 값이 없으면 항상 false로 폴백(Rank/XP UI가 절대 갑자기 노출되지
+// 않게 하는 안전한 기본값 — Dashboard.jsx 게이팅이 이 값을 그대로 씀).
+const DEFAULT_CLASS_SETTINGS = { spellingTestEnabled: false, spellingHintEnabled: false, wrongAnswerRepeatCount: 3, spellingDirection: 'mixed', gamificationEnabled: false }
 // v2.0: 'mixed'(세션 단위 정확 50:50 배분) 추가 — 배정 로직 자체는
 // entranceTest.js의 assignDirections(입실시험과 공용)가 담당.
 const VALID_SPELLING_DIRECTIONS = new Set(['kr2en', 'en2kr', 'random', 'mixed'])
@@ -264,10 +269,18 @@ export async function refreshClassSettings() {
     // 없는 컬럼이 섞이면 쿼리 전체가 에러나서 이미 켜둔 다른 설정까지
     // 몽땅 꺼짐으로 되돌아가 버리므로, 먼저 컬럼 포함해서 시도하고 실패하면
     // 그 컬럼만 빼고 재시도해서 기존 설정은 그대로 유지되게 한다.
+    // gamification_enabled(v2.5)도 spelling_direction과 같은 이유로 별도
+    // 마이그레이션이라 부분 실행 상태가 있을 수 있다 — 가장 넓은 select부터
+    // 시도하고, 실패하면 최근에 추가된 컬럼부터 하나씩 빼며 재시도해서 이미
+    // 켜둔 다른 설정이 이 컬럼 하나 때문에 몽땅 꺼짐으로 되돌아가지 않게 한다.
     let data
     let error
     ;({ data, error } = await supabase
-      .from('classes').select('name,spelling_test_enabled,spelling_hint_enabled,wrong_answer_repeat_count,spelling_direction'))
+      .from('classes').select('name,spelling_test_enabled,spelling_hint_enabled,wrong_answer_repeat_count,spelling_direction,gamification_enabled'))
+    if (error) {
+      ;({ data, error } = await supabase
+        .from('classes').select('name,spelling_test_enabled,spelling_hint_enabled,wrong_answer_repeat_count,spelling_direction'))
+    }
     if (error) {
       ;({ data, error } = await supabase
         .from('classes').select('name,spelling_test_enabled,spelling_hint_enabled,wrong_answer_repeat_count'))
@@ -281,6 +294,9 @@ export async function refreshClassSettings() {
       // (2026-07-17 기본값 변경 — DEFAULT_CLASS_SETTINGS 주석 참고).
       // mixed 배정은 App.jsx의 로컬 계산이라 컬럼 부재 상태에서도 완전 동작.
       spellingDirection: VALID_SPELLING_DIRECTIONS.has(c.spelling_direction) ? c.spelling_direction : 'mixed',
+      // Teacher Controls 마스터 스위치(2026-07-19) — 컬럼 부재/null/false
+      // 전부 false로 수렴(opt-in, DEFAULT_CLASS_SETTINGS 주석 참고).
+      gamificationEnabled: !!c.gamification_enabled,
     }]))
   } catch (err) {
     console.warn('[wordLibrary] class settings fetch failed (spelling_test_schema.sql이 아직 실행 안 됐을 수 있음, 전부 꺼짐으로 처리):', err.message)
@@ -302,14 +318,26 @@ export async function setClassSettings(className, settings) {
   if ('spellingDirection' in settings) {
     payload.spelling_direction = VALID_SPELLING_DIRECTIONS.has(settings.spellingDirection) ? settings.spellingDirection : 'mixed'
   }
-  let { error } = await supabase.from('classes').update(payload).eq('id', classId)
-  if (error && 'spelling_direction' in payload) {
+  // Teacher Controls 마스터 스위치(2026-07-19, GAME_DESIGN.md 13번 섹션).
+  if ('gamificationEnabled' in settings) payload.gamification_enabled = !!settings.gamificationEnabled
+  let payloadToSend = payload
+  let { error } = await supabase.from('classes').update(payloadToSend).eq('id', classId)
+  if (error && 'spelling_direction' in payloadToSend) {
     // spelling_direction 컬럼이 아직 없을 수 있음(마이그레이션 미실행) —
     // 그 필드만 빼고 재시도해서 나머지 설정(쓰기 시험 on/off 등)은 계속
     // 정상 저장되게 한다. 이거 없으면 방향 select UI가 추가된 것만으로
     // 기존 체크박스 저장까지 깨질 수 있음(회귀 금지 원칙).
-    const { spelling_direction, ...rest } = payload
-    ;({ error } = await supabase.from('classes').update(rest).eq('id', classId))
+    const { spelling_direction, ...rest } = payloadToSend
+    payloadToSend = rest
+    ;({ error } = await supabase.from('classes').update(payloadToSend).eq('id', classId))
+  }
+  if (error && 'gamification_enabled' in payloadToSend) {
+    // gamification_enabled 컬럼이 아직 없을 수 있음
+    // (supabase_v2_5_gamification_master_switch.sql 미실행) — 그 필드만
+    // 빼고 재시도해서 나머지 설정 저장은 계속 정상 동작하게 한다.
+    const { gamification_enabled, ...rest } = payloadToSend
+    payloadToSend = rest
+    ;({ error } = await supabase.from('classes').update(payloadToSend).eq('id', classId))
   }
   if (error) throw error
   await refreshClassSettings()
