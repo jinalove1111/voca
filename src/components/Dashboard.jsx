@@ -17,6 +17,11 @@ import { EntranceTestBanner } from './EntranceTestBanner'
 // 숫자로만 현재 Rank/모자단계/다음 단계까지 진행률을 표시(운영자 지시:
 // 큰 UI 리디자인 금지, 시각/애니메이션은 이번 범위 밖).
 import { usePaulRank } from '../hooks/usePaulRank'
+// Ticket Economy(2026-07-19, GAME_DESIGN.md 4·7·10번 섹션) — 최소 상점
+// UI(카탈로그 2개, 결정론적 구매만). ticketBalance/redeemTicketReward는
+// useStudent.js(studentData)에서 그대로 내려온다 — 이 파일은 카탈로그
+// 표시/구매 버튼만 담당.
+import { REWARD_CATALOG } from '../utils/ticketEconomy'
 
 const GOAL = 5
 const stickerById = (id) => STICKERS.find(s => s.id === id)
@@ -184,7 +189,7 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 // P0(2026-07-15): student(이름 문자열) 대신 studentId(식별자)+studentName
 // (표시용)을 따로 받는다 — getStudentClass/getStudentUnit은 이제 id 기반.
 export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch }) {
-  const { stars, stickerTypes, activeMissions, dailyProgress, missionsCompletedToday, streak, cleared } = studentData
+  const { stars, stickerTypes, activeMissions, dailyProgress, missionsCompletedToday, streak, cleared, ticketBalance, redeemTicketReward } = studentData
   const { rankState, loading: rankLoading } = usePaulRank(studentId)
 
   const className = getStudentClass(studentId)
@@ -339,6 +344,15 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
           <p className="text-center text-xs text-gray-400 mt-3">4개를 모두 완료하면 🎁 선물상자! 완료 즉시 새 미션이 또 시작돼요</p>
         </div>
 
+        {/* Ticket Economy(2026-07-19) — Teacher Controls 마스터 스위치로
+            게이팅(Paul Rank와 동일한 gamificationEnabled 변수 재사용).
+            스위치 꺼진 반은 티켓 UI/지급 전부 안 보임(useStudent.js의
+            grantTicket 자체는 계속 호출되지만, 노출만 막는 게이트라는
+            점도 Paul Rank의 기존 판단(handoff.md 2026-07-19(6차))과 동일). */}
+        {gamificationEnabled && (
+          <TicketShopCard ticketBalance={ticketBalance} ownedStickerIds={stickerTypes} onRedeem={redeemTicketReward} />
+        )}
+
         {/* Nav Grid */}
         <div className="grid grid-cols-2 gap-3">
           <NavBtn emoji="📖" label="단어 공부"    sub="100개 단어"                          color="from-blue-400 to-blue-600"     onClick={() => onGo('wordBrowser')} />
@@ -370,6 +384,56 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// Ticket Economy 최소 상점(2026-07-19) — 큰 UI 리디자인 없이 기존 카드
+// (오늘의 미션/최근 스티커)와 같은 스타일만 재사용. 확률형 요소 없음 —
+// 카탈로그(REWARD_CATALOG)가 정한 고정 가격을 그대로 보여주고, 구매 버튼
+// 하나가 redeemTicketReward(순수 함수 결과를 그대로 반영)를 부른다.
+function TicketShopCard({ ticketBalance, ownedStickerIds, onRedeem }) {
+  const [message, setMessage] = useState('')
+
+  const handleBuy = (rewardId) => {
+    const outcome = onRedeem(rewardId)
+    if (outcome.ok) setMessage(`${outcome.reward.label} 획득! 🎉`)
+    else if (outcome.reason === 'already-owned') setMessage('이미 가지고 있는 스티커예요!')
+    else if (outcome.reason === 'insufficient-balance') setMessage('티켓이 부족해요 — 오늘의 미션을 완료해보세요!')
+  }
+
+  return (
+    <div className="bg-white rounded-3xl card-shadow p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-2xl">🎫</span>
+        <h2 className="font-black text-gray-800 text-lg">티켓 상점</h2>
+        <span className="ml-auto font-black text-sm bg-cyan-100 text-cyan-700 px-3 py-1 rounded-full">🎫 {ticketBalance}장</span>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {REWARD_CATALOG.map((reward) => {
+          const owned = ownedStickerIds.includes(reward.stickerId)
+          const canAfford = ticketBalance >= reward.cost
+          const sticker = stickerById(reward.stickerId)
+          return (
+            <button
+              key={reward.id}
+              disabled={owned || !canAfford}
+              onClick={() => handleBuy(reward.id)}
+              className={`rounded-2xl p-3 text-center border-2 btn-press ${
+                owned ? 'bg-green-50 border-green-200' : canAfford ? 'bg-cyan-50 border-cyan-200 hover:opacity-90' : 'bg-gray-50 border-gray-200 opacity-60'
+              }`}
+            >
+              <div className="text-3xl mb-1">{sticker?.emoji || '🎁'}</div>
+              <p className="text-xs font-black text-gray-700">{reward.label}</p>
+              <p className={`text-xs font-bold mt-1 ${owned ? 'text-green-600' : 'text-cyan-600'}`}>
+                {owned ? '보유중 ✅' : `🎫 ${reward.cost}장`}
+              </p>
+            </button>
+          )
+        })}
+      </div>
+      {message && <p className="text-center text-xs text-gray-500 mt-3">{message}</p>}
+      <p className="text-center text-xs text-gray-400 mt-2">오늘의 미션(4/4)을 완료할 때마다 티켓 1장이 쌓여요</p>
     </div>
   )
 }
