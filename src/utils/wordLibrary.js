@@ -1,4 +1,11 @@
 import { supabase } from './supabaseClient'
+// House System(2026-07-19, 게임화 하위카드 8번) — 순수 배정/집계 함수만
+// import한다(HOUSES 상수/assignBalancedHouseId/computeHouseCounts/
+// computeHouseWeeklyScores). houseSystem.js 자신은 이 파일을 거꾸로
+// import하지 않는다(순수 모듈 무의존 원칙, houseSystem.js 헤더 참고) —
+// 여기(브라우저 측 데이터 계층)에서 순수 함수를 소비하는 것은
+// ticketEconomy.js를 useStudent.js가 소비하는 것과 같은 방향의 의존이다.
+import { HOUSES, assignBalancedHouseId, computeHouseCounts, computeHouseWeeklyScores } from './houseSystem'
 
 const DEFAULT_UNIT_NAME = 'Unit 1'
 
@@ -181,10 +188,21 @@ let _students = new Map()
 // (SQL보다 코드가 먼저 배포돼도 앱이 절대 깨지지 않음).
 const STUDENTS_SELECT_BASE = 'id,name,class_id,unit_name,classes(name)'
 export async function refreshStudents() {
+  // House System(2026-07-19) — house_id도 current_unit_id와 같은 컬럼
+  // 부재 폴백이 필요(supabase_v2_7_house_system.sql 미실행 대비). 두 신규
+  // 컬럼이 서로 다른 마이그레이션(v2.1/v2.7)에 속해 독립적으로 실행될 수
+  // 있으므로, 어느 한쪽만 있어도 안전하게 동작해야 한다 — 3단계로
+  // cascading 폴백한다(둘 다 있음 → current_unit_id만 있음 → 둘 다 없음).
   let res = await supabase
     .from('students')
-    .select(`${STUDENTS_SELECT_BASE},current_unit_id`)
+    .select(`${STUDENTS_SELECT_BASE},current_unit_id,house_id`)
     .order('created_at')
+  if (res.error) {
+    res = await supabase
+      .from('students')
+      .select(`${STUDENTS_SELECT_BASE},current_unit_id`)
+      .order('created_at')
+  }
   if (res.error) {
     res = await supabase.from('students').select(STUDENTS_SELECT_BASE).order('created_at')
   }
@@ -200,6 +218,10 @@ export async function refreshStudents() {
       unitName: s.unit_name || DEFAULT_UNIT_NAME,
       // 컬럼 부재/백필 전 null — 이름 폴백 경로가 기존 동작 그대로 커버.
       unitId: s.current_unit_id || null,
+      // 컬럼 부재(v2.7 SQL 미실행)/미배정이면 null — 화면은 "하우스
+      // 미배정"으로 안전하게 처리(houseSystem.js getOwnHouseWeeklyDisplay
+      // 가 null 반환).
+      houseId: s.house_id != null ? Number(s.house_id) : null,
     })
   })
   _students = map
@@ -564,9 +586,25 @@ export async function addStudent(name, className = '', unitName = DEFAULT_UNIT_N
   const unitId = className
     ? (_cache[className]?.units.find((u) => u.name === baseRow.unit_name)?.id || null)
     : null
+  // House System(2026-07-19) — 자동 배정: 이미 메모리에 있는 전체 학생
+  // 캐시(_students, refreshStudents가 앱 시작 시 반 무관하게 전원 로드)로
+  // 현재 하우스별 인원을 계산해 가장 적은 하우스에 배정한다(별도 DB 집계
+  // 쿼리 없음, 결정론적 라운드로빈 — houseSystem.js assignBalancedHouseId
+  // 참고).
+  const houseId = assignBalancedHouseId(computeHouseCounts(Array.from(_students.values())))
+  // v2.1(current_unit_id)과 v2.7(house_id)은 서로 다른 마이그레이션이라
+  // 어느 한쪽만 실행된 상태가 있을 수 있다 — 단일 폴백(전부 아니면 bare
+  // baseRow)이면 house_id 컬럼만 없어도 이미 실행된 current_unit_id까지
+  // 함께 못 쓰게 되는 회귀가 생긴다(실측 확인, testStudentUnitDecouple.mjs
+  // FAIL로 재현됨). refreshStudents()와 같은 3단계 cascading 폴백으로 수정.
   let { data, error } = await supabase
-    .from('students').insert({ ...baseRow, current_unit_id: unitId })
+    .from('students').insert({ ...baseRow, current_unit_id: unitId, house_id: houseId })
     .select('id').single()
+  if (error && error.code !== '23505') {
+    ;({ data, error } = await supabase
+      .from('students').insert({ ...baseRow, current_unit_id: unitId })
+      .select('id').single())
+  }
   if (error && error.code !== '23505') {
     ;({ data, error } = await supabase.from('students').insert(baseRow).select('id').single())
   }
@@ -660,6 +698,55 @@ export async function setStudentClass(id, className) {
   if (error) ({ error } = await supabase.from('students').update(base).eq('id', id))
   if (error) throw error
   await refreshStudents()
+}
+
+// House System(2026-07-19) — 관리자 수동 재배정. houseId는 houseSystem.js
+// HOUSES의 id(1~4) 또는 null(하우스 미배정으로 되돌리기). 자동배정
+// (addStudent)과 달리 관리자가 명시적으로 고른 값이므로 균형 로직을
+// 거치지 않고 그대로 저장한다 — 반/유닛과 달리 하우스는 학사 데이터가
+// 아니라 CHECK 제약(1~4)만 지키면 되므로 별도 조회/변환이 필요 없다.
+export async function setStudentHouse(id, houseId) {
+  const s = _students.get(id)
+  if (!s) return
+  const value = houseId == null ? null : Number(houseId)
+  if (value != null && !HOUSES.some((h) => h.id === value)) {
+    throw new Error(`알 수 없는 하우스 id: ${houseId}`)
+  }
+  const { error } = await supabase.from('students').update({ house_id: value }).eq('id', id)
+  if (error) throw error
+  await refreshStudents()
+}
+
+// 특정 하우스 소속 학생 목록(반 무관, 전체 학생 캐시 기준) — 관리자 화면/
+// 팀 점수 집계 양쪽에서 재사용.
+export function getStudentsInHouse(houseId) {
+  const id = Number(houseId)
+  return Array.from(_students.values()).filter((s) => s.houseId === id)
+}
+
+// 학생 화면의 "우리 하우스: OO · 이번 주 팀 점수" 표시용 배치 조회 —
+// fetchDashboardData/fetchXpTotals와 같은 패턴(학생별 N번 조회 안 함,
+// house_id CHECK 제약 SQL/GRANT 미실행이면 getStudentsInHouse가 빈 배열을
+// 반환해 이 함수도 조용히 null을 반환한다 — 크래시 없음).
+//
+// 팀 점수는 houseSystem.js computeHouseWeeklyScores(양수 delta만 그 주
+// 범위로 합산 — 소비/구매 제외, 파일 헤더 원칙 근거)를 그대로 재사용한다.
+export async function fetchHouseWeeklyScore(houseId) {
+  const id = Number(houseId)
+  if (!Number.isFinite(id)) return null
+  const members = getStudentsInHouse(id)
+  if (members.length === 0) return 0
+  const ids = members.map((s) => s.id)
+  const { data, error } = await supabase
+    .from('student_progress')
+    .select('student_id, progress_data')
+    .in('student_id', ids)
+  if (error || !data) return 0
+  const ledgerByStudentId = {}
+  data.forEach((r) => { ledgerByStudentId[r.student_id] = r.progress_data?.ticketLedger || [] })
+  const studentsForCalc = members.map((s) => ({ id: s.id, houseId: s.houseId }))
+  const scores = computeHouseWeeklyScores(studentsForCalc, ledgerByStudentId)
+  return scores[id] || 0
 }
 
 // v2.1 — 호출부 시그니처(유닛 "이름")는 그대로 두되(관리자/대시보드 셀렉트
