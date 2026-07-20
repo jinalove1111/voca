@@ -1,0 +1,24 @@
+{
+  "agent_name": "implementer",
+  "role": "관리자 UI 구현",
+  "task_id": "admin-multi-textbook-ui",
+  "task": "decision 0004 승인 설계 + 백엔드(commit fe1cdf6, src/utils/wordLibrary.js) 기반 관리자 전용 다중 교재 배정/해제/유닛 변경 UI",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-21T00:00:00+09:00",
+  "updated_at": "2026-07-21T00:00:00+09:00",
+  "files_owned": [
+    "src/components/AdminScreen.jsx",
+    "src/components/admin/TextbookAssignmentPanel.jsx"
+  ],
+  "files_read": [
+    "docs/agent-decisions/0004-multi-textbook-architecture.md",
+    "src/utils/wordLibrary.js",
+    ".ai-status/backend-multi-textbook-assignments.json",
+    "TESTING.md",
+    "package.json"
+  ],
+  "summary": "StudentManagement(AdminScreen.jsx) 학생 카드에 기존 '반 배정' 버튼 옆 '📚 교재 관리' 토글 버튼(반이 이미 배정된 학생에게만 노출)을 추가하고, 새 하위 컴포넌트 TextbookAssignmentPanel(src/components/admin/)이 그 안에서 학생의 전체 배정 교재를 [반 이름: 유닛 ▾] 한 줄씩 보여주고 '+ 교재 추가' 드롭다운으로 새 교재를 배정한다 — primary/secondary 구분을 교사가 몰라도 되도록 UI 표면은 단일 목록+드롭다운(모달/페이지 분리 없음)이지만, 내부적으로 주 교재(⭐ 표시) 유닛 변경은 기존 검증된 setStudentUnit()(students.current_unit_id 갱신, 학생 실제 학습 화면이 읽는 값)을 그대로 재사용하고 추가 교재만 신규 setAssignmentUnit()(student_class_assignments 행)을 쓴다 — 이 분기는 파일 헤더에 근거와 함께 문서화, UI에는 노출 안 함. assignTextbook/removeTextbookAssignment/setAssignmentUnit이 테이블 부재(supabase_v2_9_student_class_assignments.sql 미실행, 현재 프로덕션 실제 상태) 시 던지는 에러를 isTableMissingError()로 잡아 '다중 교재 기능은 아직 활성화되지 않았어요' 안내 문구로 표시(크래시/raw 에러 없음). npm run build 통과, npm run verify:admin 전체 PASS, npm run verify:all 실행 결과 login 도메인만 FAIL이나 원인은 로컬 환경의 'permission denied for table students'(SUPABASE_SERVICE_ROLE_KEY 로컬 미설정 등 환경 문제, PIN 인증 도메인 — 이번 변경이 손대지 않은 영역)로 이번 변경과 무관.",
+  "blocker": null,
+  "next_action": "운영자가 supabase_v2_9_student_class_assignments.sql을 Supabase 대시보드에서 수동 실행하면 이 UI가 실사용 가능해짐(그 전까지는 '+ 교재 추가'/유닛 변경 시도 시 안내 문구만 표시, 크래시 없음). 학생 대상 교재 선택기(App.jsx/Dashboard.jsx)는 별도 동시 세션이 진행 중이라 이번 작업 범위에서 의도적으로 제외."
+}

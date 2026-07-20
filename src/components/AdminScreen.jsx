@@ -23,6 +23,11 @@ import FeatureManagementPanel from './FeatureManagementPanel'
 import TestPaperGenerator from './TestPaperGenerator'
 import DebugPage from './DebugPage'
 import EntranceTestAdmin from './EntranceTestAdmin'
+// v2.9 다중 교재(Multi-Textbook) 동시 배정(2026-07-21, decision 0004) —
+// 반별 학생 목록 안에서 학생별 추가 교재 배정/해제/유닛 변경. 학생 대상
+// 화면(App.jsx/Dashboard.jsx)의 교재 선택기와는 완전히 별개 — 이 파일은
+// 관리자 전용 UI만 다룬다.
+import TextbookAssignmentPanel from './admin/TextbookAssignmentPanel'
 
 const wordSlug = (word) => word.toLowerCase().replace(/\s+/g, '_')
 
@@ -484,6 +489,9 @@ function StudentManagement({ adminPin }) {
   const [editing, setEditing] = useState(null) // student id currently being reassigned
   const [editClass, setEditClass] = useState('')
   const [editUnit, setEditUnit] = useState('')
+  // v2.9 다중 교재 — 교재 관리 패널을 펼쳐서 보고 있는 학생 id(한 번에 한
+  // 명만, editing과 같은 패턴).
+  const [textbookManaging, setTextbookManaging] = useState(null)
   const [selected, setSelected] = useState(() => new Set()) // bulk-move checkbox selection (ids)
   const [bulkTargetClass, setBulkTargetClass] = useState('')
   const [bulkBusy, setBulkBusy] = useState(false)
@@ -893,10 +901,24 @@ function StudentManagement({ adminPin }) {
                           )}
                           <button onClick={() => startEdit(s.id)}
                             className="bg-blue-100 text-blue-600 font-bold px-3 py-2 rounded-xl text-xs btn-press">반 배정</button>
+                          {/* v2.9 다중 교재 — 기본 반이 있어야 의미가 있으므로
+                              (반 미배정 학생은 "반 배정"부터 먼저) 이 학생이
+                              이미 어떤 반에 속해 있을 때만 노출. */}
+                          {s.className && (
+                            <button onClick={() => setTextbookManaging(textbookManaging === s.id ? null : s.id)}
+                              className="bg-purple-100 text-purple-600 font-bold px-3 py-2 rounded-xl text-xs btn-press">
+                              📚 교재 관리
+                            </button>
+                          )}
                           <button onClick={() => handleRemove(s.id, s.name)}
                             className="bg-red-100 text-red-500 font-bold px-3 py-2 rounded-xl text-xs btn-press">삭제</button>
                         </div>
                       </div>
+                      {textbookManaging === s.id && (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <TextbookAssignmentPanel studentId={s.id} onChanged={refresh} />
+                        </div>
+                      )}
                       {editing === s.id && (
                         <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
                           <select value={editClass} onChange={e => {

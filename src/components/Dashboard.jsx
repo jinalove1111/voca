@@ -1,5 +1,10 @@
 import { useState, useEffect } from 'react'
-import { getStudentClass, getStudentUnit, getClassNames, getClassUnitNames, getTodaysAssignmentWordIds, getClassSettings, getClassIdByName, getStudentById, fetchHouseWeeklyScore, fetchHouseSeasonScore } from '../utils/wordLibrary'
+import { getStudentClass, getStudentClassId, getStudentUnit, getClassNames, getClassUnitNames, getTodaysAssignmentWordIds, getClassSettings, getClassIdByName, getStudentById, fetchHouseWeeklyScore, fetchHouseSeasonScore } from '../utils/wordLibrary'
+// v2.9(2026-07-21, decision 0004 다중 교재) — 2개 이상 교재가 배정된
+// 학생에게만 나타나는 선택기. 0/1개면 컴포넌트 자체가 아무것도 렌더하지
+// 않는다(TextbookSelector.jsx 참고) — 기존 294명 단일-반 학생 화면은
+// 이 import 한 줄 말고는 전혀 바뀌지 않는다.
+import TextbookSelector from './TextbookSelector'
 // House System(2026-07-19, 게임화 하위카드 8번) — 학생 화면 최소 표시
 // ("우리 하우스: OO · 이번 주 팀 점수"). 개인 순위/타 하우스 비교 없음
 // (PAUL_PRINCIPLES.md 3번 원칙 그대로 — 소속감이지 경쟁 연출이 아님).
@@ -203,7 +208,7 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 
 // P0(2026-07-15): student(이름 문자열) 대신 studentId(식별자)+studentName
 // (표시용)을 따로 받는다 — getStudentClass/getStudentUnit은 이제 id 기반.
-export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch }) {
+export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, textbookAssignments, onTextbookSwitch }) {
   const { stars, stickerTypes, activeMissions, dailyProgress, liveMissionsCompleted, streak, cleared, ticketBalance, redeemTicketReward } = studentData
   const { rankState, loading: rankLoading } = usePaulRank(studentId)
 
@@ -289,6 +294,26 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
       setUnitSwitching(false)
     }
   }
+
+  // v2.9(2026-07-21, decision 0004 다중 교재) — 위 유닛 전환과 정확히 같은
+  // 상호작용 패턴(전환 중 disabled, 실패 시 인라인 에러). textbookAssignments
+  // 가 없거나(구버전 App.jsx) 1개 이하면 TextbookSelector 자체가 아무것도
+  // 렌더하지 않으므로 이 핸들러는 그 경우 절대 호출되지 않는다.
+  const [textbookSwitching, setTextbookSwitching] = useState(false)
+  const [textbookSwitchError, setTextbookSwitchError] = useState('')
+  const currentClassId = getStudentClassId(studentId)
+  const handleTextbookChange = async (nextClassId) => {
+    if (!onTextbookSwitch || nextClassId === currentClassId) return
+    setTextbookSwitching(true)
+    setTextbookSwitchError('')
+    try {
+      await onTextbookSwitch(nextClassId)
+    } catch (err) {
+      setTextbookSwitchError('교재 전환에 실패했어요. 잠시 후 다시 시도해주세요. (' + (err?.message || err) + ')')
+    } finally {
+      setTextbookSwitching(false)
+    }
+  }
   // 오늘의 숙제(반+날짜 축 — 유닛과 독립) 배정 여부 — 있으면 단어 공부가
   // 그 단어들로 열린다는 안내만(기존 getStudentWords 동작을 표시로 강화).
   const hasTodaysHomework = className && getTodaysAssignmentWordIds(className).length > 0
@@ -317,6 +342,13 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
         <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl p-6 text-white text-center card-shadow">
           <div className="text-5xl mb-2">👑</div>
           <h1 className="text-3xl font-black">{studentName}</h1>
+          <TextbookSelector
+            assignments={textbookAssignments}
+            currentClassId={currentClassId}
+            switching={textbookSwitching}
+            error={textbookSwitchError}
+            onSwitch={handleTextbookChange}
+          />
           {className && (
             <div className="text-sm text-purple-200 mt-1 flex items-center justify-center gap-1.5 flex-wrap">
               <span>반: {className} ·</span>

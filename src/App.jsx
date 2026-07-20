@@ -19,7 +19,7 @@ import { useStudent } from './hooks/useStudent'
 import { pickNextGame } from './utils/matchGame'
 import { assignDirections } from './utils/entranceTest'
 import { logSpellingReview } from './utils/spellingReviewApi'
-import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getClassSettings, filterWordsByScope } from './utils/wordLibrary'
+import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getClassSettings, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech, getMicStream } from './utils/speech'
 
 // 2026-07-10 성능 최적화: AdminScreen은 xlsx(엑셀 업로드)를 포함해 학생은
@@ -153,7 +153,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 별도 상태로 관리 — 마찬가지로 세션 동안만 유지.
   const [studyScope, setStudyScope] = useState('all')
   const studentData                 = useStudent(studentId, studentName)
-  const { cleared, answerMission, missions, addStars, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord, wordStatus, setWordKnown, setWordUnknown, spellingReviewQueue } = studentData
+  const { cleared, answerMission, missions, addStars, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord, wordStatus, setWordKnown, setWordUnknown, spellingReviewQueue, setLastTextbookClassId } = studentData
 
   // 선물상자를 닫은 직후, 오늘 틀린 스펠링 단어나 영구 복습 대기열
   // (Writing MVP, 2026-07-20 — 적어도 하루 전에 놓친 단어)이 남아있으면
@@ -191,6 +191,52 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 리셋되지 않는 구조적 보장.
   const handleUnitSwitch = async (unitName) => {
     await setStudentUnit(studentId, unitName)
+    setRefreshTick((t) => t + 1)
+  }
+  // v2.9(2026-07-21, decision 0004 다중 교재) — 학생의 전체 교재 배정
+  // 목록. getStudentClassAssignments는 테이블 부재/배정 0~1건 모두 "합성
+  // 단일 배정" 1개로 안전하게 폴백하므로(wordLibrary.js 주석 참고), 이
+  // state는 오늘 마이그레이션 실행 전(그리고 실행 후에도 아직 두 번째
+  // 교재를 안 받은) 학생 전원에게 항상 length===1로 남는다 —
+  // TextbookSelector는 length<=1이면 스스로 아무것도 렌더하지 않는다
+  // (요구사항 2, 7 — 기존 학생 화면 변화 0). 로그인 직후(studentId 변경
+  // 시) 1회 fetch하며, 이 호출이 getStudentWords의 classId override
+  // 검증용 캐시도 함께 채운다(현재는 override를 쓰지 않지만 — 아래
+  // handleTextbookSwitch 주석 참고 — wordLibrary.js의 명시된 계약이라
+  // 그대로 지킨다).
+  const [textbookAssignments, setTextbookAssignments] = useState([])
+  useEffect(() => {
+    let cancelled = false
+    getStudentClassAssignments(studentId).then((list) => {
+      if (!cancelled) setTextbookAssignments(list)
+    }).catch(() => { /* 조회 실패는 조용히 무시 — 선택기가 안 보일 뿐 학습 화면엔 영향 없음(이 파일 전체의 fail-open 원칙) */ })
+    return () => { cancelled = true }
+  }, [studentId])
+  // 교재 선택기(TextbookSelector, Dashboard.jsx) → setPrimaryAssignment(주
+  // 교재를 서버에 영구 전환) → 배정 목록/단어 목록 재조회.
+  //
+  // 설계 선택(구현 세션, docs/agent-decisions/0004-multi-textbook-
+  // architecture.md 근거): getStudentWords의 classId override(임시 조회,
+  // students.class_id는 안 바뀜)가 아니라 setPrimaryAssignment(영구 전환)를
+  // 쓴다 — Current Unit/숙제/게임화 스위치/입실시험 배너/쓰기시험 설정 등
+  // classWords/currentUnitId 말고도 15개 이상의 기존 호출부가 전부
+  // students.class_id(주 반) 하나만 읽는다. override만 쓰면 단어 목록만
+  // 선택한 교재를 따라가고 나머지 화면은 계속 이전 교재를 가리켜(요구사항
+  // 6 위반) 반쪽짜리로 일관성이 깨진다. setPrimaryAssignment는 단 한 번의
+  // 쓰기로 이 모든 기존 호출부를 자동으로 같은 교재에 맞춰준다(코드 변경
+  // 0 — wordLibrary.js "5) 쓰기 — 주 교재 전환" 주석에 명시된 설계 의도
+  // 그대로). handleUnitSwitch와 마찬가지로 진행도 레코드(별/스트릭/스티커/
+  // 오늘 미션/XP/코인/티켓)는 전혀 건드리지 않는다 — 그 자산들은 계정
+  // 전역이라 교재 전환으로 리셋되지 않는다(요구사항 6).
+  const handleTextbookSwitch = async (classId) => {
+    await setPrimaryAssignment(studentId, classId)
+    // 요구사항 5 — "마지막으로 쓴 교재"를 로컬 진행도 블롭에 기억
+    // (ticketLedger와 동일 패턴, 새 DB 컬럼 없음). 서버(students.class_id/
+    // is_primary)가 이미 권위 있는 값이므로 이 호출이 실패해도(예: 저장
+    // 공간 부족) 기능은 전혀 깨지지 않는다 — 다음 로그인 첫 렌더 힌트용.
+    setLastTextbookClassId(classId)
+    const list = await getStudentClassAssignments(studentId)
+    setTextbookAssignments(list)
     setRefreshTick((t) => t + 1)
   }
   // v1.5 이번 세션에서 실제로 공부할 단어 목록 — studyScope에 따라
@@ -378,7 +424,8 @@ function AppInner({ studentId, studentName, onLogout }) {
           onGo={setScreen} onLogout={onLogout} onPlayGame={startRandomGame}
           onResumeWord={goToWordIndex}
           resumeIndex={studentData.getResumeIndexForUnit(currentUnitId)}
-          onUnitSwitch={handleUnitSwitch} />
+          onUnitSwitch={handleUnitSwitch}
+          textbookAssignments={textbookAssignments} onTextbookSwitch={handleTextbookSwitch} />
       )}
       {screen === 'wordBrowser'   && (
         <WordBrowser words={classWords} cleared={cleared} onSelect={handleWordSelect} onBack={() => setScreen('dashboard')}

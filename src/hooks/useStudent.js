@@ -217,6 +217,16 @@ function freshRecord(id) {
     milestoneStreak: 0,      // highest streak milestone already celebrated
     starBadgeThreshold: 0,   // highest star badge already granted
     lastGamePlayed: null,
+    // v2.9(2026-07-21, decision 0004 다중 교재) — 2개 이상 교재가 배정된
+    // 학생이 마지막으로 선택했던 교재의 classId. 서버(students.class_id,
+    // student_class_assignments.is_primary)가 이미 "주 교재"를 권위 있게
+    // 기억하므로 이 값은 그 서버 값을 대체하지 않는다 — App.jsx의 교재
+    // 선택기가 배정 목록이 아직 로드되지 않은 첫 렌더 순간에도 즉시 올바른
+    // 값을 하이라이트할 수 있도록 하는 클라이언트 측 UX 캐시일 뿐(디자인
+    // 요구사항: ticketLedger와 동일하게 로컬 진행도 블롭에 저장, 새 DB
+    // 컬럼 없음). 배정이 1개뿐인 기존 111명 학생에게는 항상 null로 남고
+    // 어떤 화면에도 영향 없음.
+    lastTextbookClassId: null,
     lastWordIndex: 0,
     // v2.1 학생-Unit 분리 — 유닛별 "이어서 학습" 위치(unitId(UUID) -> index).
     // lastWordIndex(전역, 하위호환)는 계속 병행 기록: 구버전 레코드/백업과
@@ -314,6 +324,10 @@ function normalizeRecord(raw, id) {
   rec.lastWordIndexByUnit = asObject(rec.lastWordIndexByUnit) // v2.1 이전 레코드/백업엔 없음 — 빈 객체로 채움
   rec.wordStatus = asObject(rec.wordStatus)
   rec.spellingReviewQueue = asArray(rec.spellingReviewQueue) // 기존 레코드/백업엔 없음 — 빈 배열로 채움
+  // v2.9 다중 교재 — 문자열이 아니면(옛 레코드에 필드 자체가 없어 undefined인
+  // 경우 포함) null로 정규화. 서버 권위 값이 아니므로 잘못된 타입이 남아도
+  // 위험하지 않지만(단순 UX 힌트), 다른 필드와 같은 방어 관례를 따른다.
+  rec.lastTextbookClassId = typeof rec.lastTextbookClassId === 'string' ? rec.lastTextbookClassId : null
   const r = asObject(rec.round)
   if (r.date === todayStr()) {
     rec.round = { ...freshRound(), ...r, wordsViewed: asArray(r.wordsViewed), spellingWrongToday: asArray(r.spellingWrongToday) }
@@ -464,6 +478,10 @@ export function mergeProgressRecords(localRaw, cloudRaw, id) {
     milestoneStreak: maxNum(local.milestoneStreak, cloud.milestoneStreak),
     starBadgeThreshold: maxNum(local.starBadgeThreshold, cloud.starBadgeThreshold),
     lastGamePlayed: local.lastGamePlayed ?? cloud.lastGamePlayed,
+    // v2.9 다중 교재 — lastGamePlayed와 같은 정신(단순 최신값 선호, 로컬
+    // 우선 — 이 기기에서 방금 고른 교재가 다른 기기 백업보다 최신일 가능성이
+    // 높다는 동일한 가정).
+    lastTextbookClassId: local.lastTextbookClassId ?? cloud.lastTextbookClassId,
     lastWordIndex: maxNum(local.lastWordIndex, cloud.lastWordIndex),
     lastWordIndexByUnit,
     wordStatus,
@@ -659,7 +677,7 @@ export function useStudent(studentId, legacyName) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId])
 
-  const { round, history, stickers: stickerTypes, diaryPlacements, missions, cleared, milestoneStreak, starBadgeThreshold, lastGamePlayed, lastWordIndex, totalStars: stars, wordStatus, ticketLedger, spellingReviewQueue } = record
+  const { round, history, stickers: stickerTypes, diaryPlacements, missions, cleared, milestoneStreak, starBadgeThreshold, lastGamePlayed, lastTextbookClassId, lastWordIndex, totalStars: stars, wordStatus, ticketLedger, spellingReviewQueue } = record
   // Ticket Economy — 화면은 항상 이 파생값만 읽는다(원시 잔액을 저장하지
   // 않는 이유는 ticketEconomy.js 헤더 참고).
   const ticketBalance = sumTicketBalance(ticketLedger)
@@ -959,6 +977,13 @@ export function useStudent(studentId, legacyName) {
 
   const setLastGamePlayed = useCallback((gameId) => patch(() => ({ lastGamePlayed: gameId })), [patch])
 
+  // v2.9(decision 0004) — App.jsx의 교재 선택기가 setPrimaryAssignment 성공
+  // 직후 호출해 "마지막으로 쓴 교재"를 로컬에 기억(요구사항 5, 새 DB 컬럼
+  // 없음). 서버(students.class_id/is_primary)가 이미 권위 있는 값이라
+  // 이 setter 실패/미호출이 기능을 깨뜨리지 않는다 — 다음 로그인 시 첫
+  // 렌더 하이라이트용 힌트일 뿐.
+  const setLastTextbookClassId = useCallback((classId) => patch(() => ({ lastTextbookClassId: classId })), [patch])
+
   // Logs one play of a mini-game into today's history (calendar "게임 결과
   // 히스토리") — separate from setLastGamePlayed, which only tracks the most
   // recent game for the no-repeat rotation, not a per-day count.
@@ -1228,6 +1253,7 @@ export function useStudent(studentId, legacyName) {
     missionsCompletedToday, missionFullyDoneToday, liveMissionsCompleted, giftsToday, todayStars,
     history, streak,
     lastGamePlayed, setLastGamePlayed, recordGamePlayed,
+    lastTextbookClassId, setLastTextbookClassId,
     recordQuizAnswer, markPronunciationAttempt,
     recordSpellingAnswer, clearSpellingReviewWord, spellingWrongToday: round.spellingWrongToday,
     spellingCombo: round.spellingCombo || 0,
