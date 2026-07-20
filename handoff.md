@@ -1,5 +1,77 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-20 (3차, Project Paul Multi-Agent Development Framework 신설 — Orchestrator)_
+_최종 갱신: 2026-07-20 (4차, Writing(Spelling) 복습 큐 MVP 구현 + QA — Docs Maintainer 기록)_
+
+## 2026-07-20 (4차) — Writing(Spelling) 복습 큐 MVP 구현 + 2단계 QA 리뷰 완료 (배포 대기)
+
+### Writing MVP implemented
+
+`docs/agent-decisions/0002-writing-feature-design-review.md`에서 진단된
+근본 원인("자정 리셋으로 인한 익일 복습 단절")을 해소하기 위해,
+`progress_data` jsonb 안에 자정 라운드 리셋에서 살아남는 영구 필드
+`spellingReviewQueue`를 추가해 놓친 철자 단어가 익일 복습으로 이어지도록
+구현했다 — `src/hooks/useStudent.js`, `src/App.jsx`,
+`src/components/SpellingQuestion.jsx`, `src/components/SpellingReview.jsx`,
+`src/components/WordDetail.jsx`, `scripts/testMergeProgress.mjs` 6개
+파일(작성 시점 uncommitted), 이월된 단어를 다시 완전히 맞혔을 때 보여주는
+"컴백" 배지 UI 포함. 설계 기록은 `0002-writing-feature-design-review.md`
+— 최초에는 "권장 MVP는 아래" 식의 승인 대기 스텁이었으나, 이번 세션에
+승인된 MVP 전체 내용(범위 In/Out, 파일별 변경, QA 결과)이 실제로 그
+문서에 채워져 완료 상태로 갱신됐다.
+
+### QA review completed
+
+2단계 QA 진행.
+
+1. **1차 — 초기 코드 리뷰**(구현을 설계 의도와 대조): `npm run build`
+   PASS, `npm run verify:writing` PASS, `npm run verify:persistence`
+   PASS(8/8, 신규 롤오버/병합 케이스 포함), `npm run verify:student`
+   PASS, 저장소 헌법 위반 없음(학생 식별 UUID 일관, 스키마/GRANT 갭 없음,
+   PIN/관리자 노출 없음, 소유하지 않은 파일 미변경).
+2. **2차 — 수동 스모크 테스트**: 위 하네스 전부 재실행(동일 PASS 결과
+   재확인), 6개 파일 전체의 prop/데이터 흐름을 추적해 깨진
+   import·undefined 참조·prop 이름 불일치가 없음을 확인, `submitAnswer()`의
+   정답/오답 경로가 큐 클리어 추가분을 제외하면 기존과 동일함을 확인,
+   빈 입력 제출 시 refocus 처리가 early-return이라 정상 제출 흐름에
+   영향을 줄 수 없고 그 ref 대상이 입력 방향 두 분기 모두에 존재함을
+   확인, 신규 필드/prop마다 안전한 기본값이 코드로 확인됨을 확인
+   (`spellingReviewQueue: []`, `SpellingReview.jsx`의
+   `comebackWordIds: []`, `SpellingQuestion.jsx`의
+   `isComebackWord: false`) — 기존 호출부는 변경 전과 동일하게 동작.
+
+### Remaining risks
+
+1. 이 환경에는 실제 브라우저/기기가 없어 검증 불가능한 항목 3가지 —
+   컴백 배지의 실제 시각 렌더링, 빈 제출 refocus의 실제 DOM `focus()`
+   동작, iOS Safari의 사용자 제스처 밖 `focus()` 제한(코드 자체의 기존
+   주석이 "100% 보장 아님"이라고 이미 명시). 실기기 수동 확인 권장.
+2. `normalizeRecord()`는 writing 기능 사용 여부와 무관하게 모든 학생의
+   모든 진행도 로드 시 실행되는 공유 hot path다 — writing 기능과 무관한
+   (당일 로드) 경로가 diff 전과 바이트 단위로 동일함을 확인했지만, 이번
+   변경 중 파급 범위가 가장 넓은 지점으로 향후 장애 triage 시 우선
+   플래그.
+3. 30초 주기 세션 내(in-session) 자정 롤오버 `useEffect` 경로는 자동
+   테스트가 없다(`testMergeProgress.mjs`는 로드 시점 `normalizeRecord`
+   롤오버 경로만 커버).
+
+### Deployment result
+
+대기(pending) — 커밋/push/Vercel 배포 검증이 이 기록 시점까지 아직
+실행되지 않았다. 실제 결과는 후속 세션에서 별도 섹션으로 기록 예정
+(추측으로 채우지 않음).
+
+### Lessons learned (brief)
+
+1. 원 설계 리뷰 문서(`0002-...md`)가 "권장 MVP는 아래"라고만 언급하고
+   실제 내용은 채팅 대화로만 결정된 채 문서에는 한 번도 붙여넣어지지
+   않은 스텁 상태로 남아 있었다 — 이 때문에 이번 세션 리뷰어가 작성된
+   스펙 문서 대신 코드 주석과 diff를 역추적해 승인 범위를 재구성해야
+   했다. 프로세스 개선: 설계 결정이 승인되는 시점에 승인된 내용을 결정
+   문서에 즉시 기록해야 하며, 구현이 먼저 진행되고 문서는 대기 placeholder
+   상태로 남겨두면 안 된다.
+2. "결정을 먼저 pending으로 기록하고, 이후 구현" 패턴에는 명시적인
+   "루프 닫기" 단계가 필요하다 — 결정 문서 헤더 자체가 "아직 코드 변경
+   없음"이라고 선언한 채로 구현이 시작되면서 조용히 stale해졌고, 이걸
+   놓치면 이후 읽는 사람을 오도할 수 있다.
 
 ## 2026-07-20 (3차) — Project Paul Multi-Agent Development Framework 신설 — Orchestrator
 
