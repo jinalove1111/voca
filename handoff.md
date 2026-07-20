@@ -1,5 +1,100 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-20 (4차, Writing(Spelling) 복습 큐 MVP 구현 + QA — Docs Maintainer 기록)_
+_최종 갱신: 2026-07-21 (1차, 학생 다중 교재 동시 배정 아키텍처 구현+배포 — DB 마이그레이션 대기 — Docs Maintainer 기록)_
+
+## 2026-07-21 (1차) — 학생 다중 교재(Multi-Textbook) 동시 배정 아키텍처 구현 + 배포 — DB 마이그레이션 대기
+
+### 무엇을 만들었나
+
+`docs/agent-decisions/0004-multi-textbook-architecture.md`에서 승인된
+설계(핵심: 새 `textbooks` 엔티티를 신설하지 않고 이미 `class_id`로
+스코핑된 `classes`를 교재 컨테이너로 재사용, 신규 조인 테이블
+`student_class_assignments`로 학생↔반 다대다 배정을 표현)를 그대로
+구현했다.
+
+- **마이그레이션 SQL 준비**: `supabase_v2_9_student_class_assignments.sql`
+  — `student_class_assignments` 테이블(멱등 `create table if not
+  exists`) + 역방향 조회용 인덱스 2개(`student_id`/`class_id`) + v1.3
+  "allow anon all" RLS 패턴(`using(true) with check(true)`) + 기존 294명
+  학생 백필(`is_primary=true` 행 1개씩, `students.class_id`/
+  `current_unit_id` 값을 그대로 복제, `on conflict do nothing`으로
+  재실행 안전) + 실행 후 검증 쿼리 5종(백필 건수/원본 일치/미배정
+  학생 목록/`is_primary` 중복 여부/anon 권한). **이 SQL 자체는 아직
+  Supabase에 실행되지 않았다**(아래 "남은 위험" 참고).
+- **백엔드**: `src/utils/wordLibrary.js`에 `getStudentClassAssignments()`
+  (신규 테이블 조회, 부재 시 `syntheticPrimaryAssignment()`로 오늘의
+  단일 반 동작을 합성해 폴백) + `isMissingTableError()`(테이블 부재
+  감지 공용 헬퍼) + 배정 결과 캐시(`_studentAssignmentsCache`) 추가.
+  커밋 `fe1cdf6`.
+- **프론트엔드**: 학생 측 `src/components/TextbookSelector.jsx`(배정이
+  2개 이상일 때만 노출, 1개 이하면 화면 변화 0) + 관리자 측
+  `src/components/admin/TextbookAssignmentPanel.jsx`(반 안에서 학생별로
+  추가 교재를 배정/해제하고, 배정된 교재별 현재 유닛을 변경). 커밋
+  `3a75f8a`.
+
+### QA 요약
+
+3라운드 독립 리뷰 전부 통과.
+
+1. **구현자 자체 점검**: `npm run build` clean.
+2. **QA 리뷰어 — diff + 사용처 감사**: `verify:student`/`verify:unit`/
+   `verify:daily-study`/`verify:word-assignment`/`verify:homework`/
+   `verify:admin`/`verify:persistence` 전부 PASS. `verify:login` 1건
+   FAIL이 있었으나, 이번 변경과 무관하게 기존부터 있던 환경 요인
+   (pre-existing/environmental)임을 독립적으로 재확인 — 이번 기능과는
+   무관.
+3. **게임화 분리 감사**(별도 라운드): XP/레벨/코인/티켓/스트리크/뱃지/
+   데일리 리워드가 이번 변경으로 교재 수만큼 중복 적립되거나 유실되지
+   않는지 별도 감사 — 누수 0건 확인(전부 계속 계정 전역 스키마 그대로).
+
+### 배포
+
+`origin/main`에 push(`c08f648..3a75f8a`), 라이브 번들 해시가 로컬
+`npm run build` 산출물과 바이트 단위로 일치함을 확인해 신규 코드가 실제로
+서빙 중임을 실측 확인(이 저장소의 표준 "번들 해시 대조" 배포 검증 패턴,
+`ARCHITECTURE.md` 8번 섹션).
+
+**마이그레이션 이전 배포의 안전성 근거(코드 인용)** — 신규 코드는
+`supabase_v2_9_student_class_assignments.sql` 미실행 상태에서도 완전히
+비활성/무해함을 코드 추적으로 확인:
+
+- `wordLibrary.js`의 `getStudentClassAssignments()`가
+  `isMissingTableError()`로 테이블 부재를 감지하면
+  `syntheticPrimaryAssignment(studentId)`로 오늘의 `students.class_id`/
+  `current_unit_id`를 그대로 합성한 단일 배정 1개를 반환 — 기존 294명
+  학생 전원이 오늘과 행동상 완전히 동일하게 동작.
+- `TextbookSelector.jsx`/`TextbookAssignmentPanel.jsx` 둘 다 배정이
+  1개 이하면 렌더 자체를 건너뛰는 가드가 있어, 마이그레이션 미실행
+  상태에서는 두 컴포넌트 모두 화면에 전혀 나타나지 않는다.
+
+### 남은 위험
+
+1. **차단 항목(유일)**: `supabase_v2_9_student_class_assignments.sql`이
+   아직 Supabase에 실행되지 않았다 — CLAUDE.md 규칙 8에 따라 어떤
+   에이전트도 직접 실행할 수 없고, 운영자가 Supabase 대시보드 SQL
+   Editor에서 수동 실행해야 기능이 활성화된다. 실행 후에도 관리자가
+   실제로 학생에게 두 번째 교재를 배정하기 전까지는 기존 화면에 변화가
+   없다.
+2. **이번 단계에서 의도적으로 보류(버그 아님)**: 숙제/미션 진행 상태
+   (`student_daily_progress`, 메모리상 `round` 카운터)는 계속 학생
+   단위 전역으로 남고 교재별로 분리되지 않는다 — 실사용 다중 교재
+   사례가 아직 없는 상태에서 파급 범위가 훨씬 큰 이 변경을 선제적으로
+   하지 않기로 한 명시적 설계 결정(`0004` 문서 "대안 D" 참고), 후속
+   단계로 연기하며 별도 문서로 추적 예정.
+
+### 배운 점 (간단히)
+
+1. `classes`를 교재 컨테이너로 재사용하기로 한 결정 덕분에 새로운 병렬
+   콘텐츠 계층(`textbooks`/`textbook_id`)을 전혀 만들지 않고도
+   `units`/`daily_assignments`/`entrance_tests`/`word_king_history`/
+   반별 설정이 코드 변경 없이 그대로 교재별로 스코핑됐다 — 이미 존재하는
+   스코핑 메커니즘을 재조사해 찾아낸 것이 신규 스키마를 새로 설계하는
+   것보다 더 큰 절감이었다.
+2. 학생 측(`TextbookSelector.jsx`)과 관리자 측
+   (`TextbookAssignmentPanel.jsx`) 프론트엔드를 서로 겹치지 않는 파일
+   집합으로 나눠 여러 에이전트가 동시에 작업했는데도 병합 충돌이 전혀
+   없었다 — 화면/역할 경계가 파일 경계와 이미 일치하는 저장소 구조
+   (`src/components/` vs `src/components/admin/`)가 병렬 작업을 자연스럽게
+   가능하게 한 사례.
 
 ## 2026-07-20 (4차) — Writing(Spelling) 복습 큐 MVP 구현 + 2단계 QA 리뷰 완료
 

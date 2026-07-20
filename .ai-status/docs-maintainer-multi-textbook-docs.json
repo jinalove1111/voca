@@ -1,0 +1,28 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "문서 갱신 — 학생 다중 교재(Multi-Textbook) 동시 배정 아키텍처 세션 기록",
+  "task_id": "docs-multi-textbook-architecture",
+  "task": "커밋 fe1cdf6(backend)+3a75f8a(frontend), push c08f648..3a75f8a — 학생 다중 교재 동시 배정(0004 결정 기록 구현, DB 마이그레이션 supabase_v2_9_student_class_assignments.sql은 미실행) — 를 ROADMAP.md/handoff.md/DATABASE.md/ARCHITECTURE.md에 반영",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-21T00:00:00Z",
+  "updated_at": "2026-07-21T00:40:00Z",
+  "files_owned": [
+    "ROADMAP.md",
+    "handoff.md",
+    "DATABASE.md",
+    "ARCHITECTURE.md"
+  ],
+  "files_read": [
+    "docs/agent-decisions/0004-multi-textbook-architecture.md",
+    "supabase_v2_9_student_class_assignments.sql",
+    "src/utils/wordLibrary.js (grep: isMissingTableError/getStudentClassAssignments/syntheticPrimaryAssignment)",
+    "src/components/TextbookSelector.jsx (경로 확인)",
+    "src/components/admin/TextbookAssignmentPanel.jsx (경로 확인)",
+    "ROADMAP.md / handoff.md / DATABASE.md / ARCHITECTURE.md (기존 전문, 중복 섹션 방지)",
+    "package.json (verify:* 스크립트 실재 확인)"
+  ],
+  "summary": "ROADMAP.md 최상단에 2026-07-21 신규 섹션 추가(완료 표시 안 함 — SQL 미실행 상태 명시, 코드 기준 학생 수는 지시받은 295가 아니라 SQL/컴포넌트 주석에 실측 기재된 294로 정정해 채택). handoff.md 최상단에 2026-07-21(1차) 세션 전체 기록(구현 내용/3라운드 QA/배포/마이그레이션 이전 배포 안전성 코드 근거/남은 위험/교훈). DATABASE.md: 마이그레이션 순서 목록에 20번 항목 추가 + student_class_assignments 신규 섹션(컬럼/FK/RLS/NOT YET LIVE 상태 + students.class_id/current_unit_id를 is_primary 캐시로 재해석하는 노트) + 관련 파일 목록에 신규 3개 파일 추가. ARCHITECTURE.md: 7번 섹션 관계 골격 뒤에 짧은 갱신 노트만 추가(0004/DATABASE.md로 위임, 상세 중복 기술 없음) — 이 파일은 실제로 영향받는 지점(1—N 학생-반 가정)이 있어 '해당 없음' 판단 없이 최소 노트를 append함. 소스/설정/SQL 파일은 전혀 건드리지 않음(*.md + 이 .ai-status 파일만).",
+  "blocker": null,
+  "next_action": "운영자가 Supabase 대시보드 SQL Editor에서 supabase_v2_9_student_class_assignments.sql 실행 — 이 SQL 실행이 이 기능의 유일한 남은 차단 단계."
+}

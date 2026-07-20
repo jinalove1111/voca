@@ -1,6 +1,41 @@
 # Paul Easy Voca — 로드맵
 
-_최종 갱신: 2026-07-20 (Project Paul Multi-Agent Development Framework 신설 추가 — 기존 섹션은 원본 그대로 유지, 아래에 이어서 추가함)_
+_최종 갱신: 2026-07-21 (학생 다중 교재 동시 배정 아키텍처 — 코드 배포 완료/DB 마이그레이션 대기 항목 추가 — 기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+
+## 2026-07-21 — 학생 다중 교재(Multi-Textbook) 동시 배정 아키텍처 — 코드 배포 완료, DB 마이그레이션 대기 (운영자 액션 필요)
+
+한 학생 계정이 여러 교재(반)를 동시에 진행할 수 있도록(예: YBM Unit 6 +
+미래엔 Unit 3을 계정 재등록 없이 병행) 하는 아키텍처. 설계·구현·배포는
+완료됐으나, 신규 조인 테이블 `student_class_assignments`를 만드는
+마이그레이션이 아직 Supabase에 **실행되지 않아** 기능 자체는 아직
+비활성(dormant) 상태다 — 코드 배포와 DB 마이그레이션 실행을 분리하는 이
+저장소의 표준 관례(CLAUDE.md 규칙 8/9)를 그대로 따른 의도된 중간 상태이며,
+아직 "완료"로 표시하지 않는다.
+
+- 설계 근거(승인된 결정 기록): `docs/agent-decisions/0004-multi-textbook-architecture.md`
+  — 핵심 결정은 새 `textbooks` 엔티티를 만들지 않고 이미 `class_id`로
+  스코핑돼 있는 `classes`를 교재 컨테이너로 재사용, 학생↔반 다대다
+  관계를 표현하는 신규 조인 테이블 `student_class_assignments`(컬럼:
+  `student_id`, `class_id`, `current_unit_id`, `is_primary`,
+  `unique(student_id, class_id)`) 도입.
+- 배포: 백엔드 커밋 `fe1cdf6`, 프론트엔드 커밋 `3a75f8a`, `origin/main`에
+  `c08f648..3a75f8a` push, 라이브 번들 해시 대조로 신규 코드 서빙 확인됨
+  (상세: `handoff.md` 2026-07-21(1차)).
+- **미실행 마이그레이션**: `supabase_v2_9_student_class_assignments.sql`
+  — Supabase 대시보드 SQL Editor에서 운영자가 수동 실행해야 함(CLAUDE.md
+  규칙 8). 실행 전에는 기존 학생 294명(2026-07-21 라이브 실측,
+  `supabase_v2_9_student_class_assignments.sql` 헤더 주석) 전원이 오늘과
+  완전히 동일한 단일 반 동작으로 폴백한다(코드 추적으로 안전성 확인
+  완료 — `src/utils/wordLibrary.js`의 `isMissingTableError`/
+  `getStudentClassAssignments`/`syntheticPrimaryAssignment`, 상세는
+  `handoff.md` 참고) — 실행 후에도 관리자가 실제로 두 번째 교재를
+  배정하지 않는 한 기존 학생 화면에는 아무 변화가 없다.
+- **이번 라운드에서 명시적으로 보류(버그 아님)**: 숙제/미션 진행 상태
+  (`student_daily_progress`, 메모리상 `round` 카운터)는 이번 단계에서는
+  계속 학생 단위 전역으로 유지되고 교재별로 분리되지 않는다 — 현재
+  유닛/숙제 목록/단어별 듣기·퀴즈·발음·쓰기 진행도/완료 유닛만 교재별로
+  분리됐다. XP/레벨/코인/티켓/스트리크/뱃지/데일리 리워드는 계속 계정
+  전역(제품 결정, 0004 문서 "게임화 자산 분리" 섹션 참고).
 
 ## 2026-07-20 — Writing(Spelling) 복습 큐 MVP — 완료 ✅ (4차)
 
