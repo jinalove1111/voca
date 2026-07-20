@@ -2,6 +2,22 @@
 
 _최종 갱신: 2026-07-20 (Project Paul Multi-Agent Development Framework 신설 추가 — 기존 섹션은 원본 그대로 유지, 아래에 이어서 추가함)_
 
+## 2026-07-20 — Writing(Spelling) 복습 큐 MVP — 완료 ✅ (4차)
+
+스펠링(쓰기) 문제에서 "자정 리셋으로 인한 익일 복습 단절"(당일 오답이
+자정 진행도 리셋과 함께 사라져 다음날 다시 복습되지 못하던 근본 원인)을
+해소.
+
+- ✅ `progress_data` jsonb 안에 자정 라운드 리셋에서 살아남는 영구 필드
+  `spellingReviewQueue` 추가(스키마 변경 없음) — 자정을 넘긴 교차일
+  롤오버, 기기간(cross-device) 병합, 다시 완전히 맞혔을 때 보여주는
+  "컴백" 배지 UI 포함
+- 설계 근거: `docs/agent-decisions/0002-writing-feature-design-review.md`
+- 구현/2단계 QA 리뷰/배포 검증 상세: `handoff.md` 2026-07-20(4차) 섹션
+- 배포: 커밋 `21d78a1`(feat: 스펠링 리뷰큐 MVP) + `bc17e5d`(docs: 설계검토
+  문서 완료 + handoff append), origin/main push 후 Vercel 프로덕션
+  라이브 반영 실측 확인 완료
+
 ## 2026-07-20 — Project Paul Multi-Agent Development Framework 신설
 
 기존 `.claude/agents/`(5개, preserve)를 흡수해 하나의 조직으로 재구성.
