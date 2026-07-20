@@ -248,7 +248,8 @@ function SeasonPanel({ adminPin }) {
     const ok = window.confirm(
       '새 시즌을 시작할까요?\n\n' +
       '✅ 유지돼요: 레벨/뱃지/연속학습일(스트릭) — 절대 리셋되지 않아요.\n' +
-      '🔄 새로 시작해요: 티켓 잔액과 하우스 팀 점수만 이 시점부터 새로 쌓여요.\n\n' +
+      '🔄 새로 시작해요: 하우스 팀 점수 화면이 이 시점부터 새로 쌓이는 값으로 바뀌어요.\n' +
+      'ℹ️ 티켓 잔액/상점은 이번 라운드에는 시즌과 연동되지 않아 계속 전체 누적 값 그대로예요.\n\n' +
       '기존 기록은 지워지지 않고 그대로 보존돼요 — 이전 시즌 기록으로 남습니다.'
     )
     if (!ok) return
@@ -271,11 +272,14 @@ function SeasonPanel({ adminPin }) {
 
   return (
     <div className="bg-white rounded-3xl card-shadow p-5">
-      <p className="text-sm font-black text-gray-700 mb-2">🗓️ 시즌 (Ticket · House 리셋 경계)</p>
+      <p className="text-sm font-black text-gray-700 mb-2">🗓️ 시즌 (House 리셋 경계)</p>
       <p className="text-xs text-gray-400 mb-3">
-        레벨/뱃지/연속학습일은 절대 리셋되지 않아요. 새 시즌을 시작하면 티켓
-        잔액과 하우스 팀 점수만 이 시점부터 새로 쌓여요(기존 기록은 삭제되지
-        않고 그대로 보존됩니다).
+        레벨/뱃지/연속학습일은 절대 리셋되지 않아요. 새 시즌을 시작하면 하우스
+        팀 점수 화면이 이 시점부터 새로 쌓이는 값으로 바뀌어요(기존 기록은
+        삭제되지 않고 그대로 보존됩니다). 티켓 잔액/상점은 이번 라운드에는
+        시즌과 연동되지 않아 계속 전체 누적 값 그대로 표시돼요(다음 라운드
+        확장 예정 — `src/utils/ticketEconomy.js` `sumTicketBalanceSince`
+        참고).
       </p>
       {loading ? (
         <p className="text-gray-400 text-sm">불러오는 중...</p>
@@ -283,7 +287,7 @@ function SeasonPanel({ adminPin }) {
         <p className="text-xs text-gray-500 mb-3">
           {season
             ? `현재 시즌 시작일: ${new Date(season.startedAt).toLocaleDateString('ko-KR')}${season.note ? ` (${season.note})` : ''}`
-            : '아직 시즌이 시작되지 않았어요 — 티켓/하우스 점수가 전체 누적 값으로 표시되고 있어요.'}
+            : '아직 시즌이 시작되지 않았어요 — 하우스 팀 점수가 전체 누적 값으로 표시되고 있어요.'}
         </p>
       )}
       {error && <p className="text-xs font-bold text-red-500 mb-2">{error}</p>}
