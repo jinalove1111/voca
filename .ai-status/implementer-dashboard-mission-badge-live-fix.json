@@ -1,0 +1,24 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "dashboard-mission-badge-live-fix",
+  "task": "Dashboard '오늘 미션 N/4 완료' 배지가 all-day high-water mark(missionsCompletedToday)를 써서 첫 완료 이후 하루 종일 4/4로 고정되던 문제 — round 기반 live 값(liveMissionsCompleted)을 새로 만들어 이 배지만 교체",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-21T00:00:00+09:00",
+  "updated_at": "2026-07-21T00:00:00+09:00",
+  "files_owned": [
+    "src/hooks/useStudent.js",
+    "src/components/Dashboard.jsx"
+  ],
+  "files_read": [
+    "tests/harness/runDailyStudy.mjs",
+    "tests/harness/runPersistence.mjs",
+    "tests/harness/runStudent.mjs",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "useStudent.js: countCategoriesCompleted(round)를 그대로 재사용해 liveMissionsCompleted(0-4, live round 기준, high-water mark 아님)를 새로 계산해 return 객체에 추가. 기존 missionsCompletedToday/missionFullyDoneToday(history[today].categoriesCompleted 기반 all-day ratchet)는 값·시맨틱 변경 없이 그대로 유지 — streak/숙제완료 판정용으로 계속 사용됨을 grep으로 확인(다른 소비자 없음, Dashboard.jsx가 유일한 destructure 지점). Dashboard.jsx는 missionsCompletedToday 대신 liveMissionsCompleted를 destructure해 '오늘 미션 N/4' 배지에만 사용하도록 교체. UI 레이아웃/스타일/다른 로직 변경 없음.",
+  "blocker": null,
+  "next_action": "qa-reviewer: build PASS, verify:daily-study/verify:persistence/verify:student 전부 PASS 확인됨. 커밋은 별도 단계에서 진행 예정(본 작업에서는 git add/commit 안 함)."
+}
