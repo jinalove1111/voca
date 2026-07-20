@@ -1105,8 +1105,16 @@ export function useStudent(studentId, legacyName) {
   }
   const today = todayStr()
   const todayHistory = history[today]
-  const missionsCompletedToday = todayHistory?.categoriesCompleted || 0 // 0-4, THE "완료한 미션" number
+  const missionsCompletedToday = todayHistory?.categoriesCompleted || 0 // 0-4, all-day high-water mark — never decreases once hit, used for streak/homework-done semantics. Do NOT use this for a "is the CURRENT round done" display (see liveMissionsCompleted below).
   const missionFullyDoneToday = missionsCompletedToday >= 4
+  // 0-4, live count for the round in progress right now (resets to 0 when the
+  // round auto-resets) — unlike missionsCompletedToday above, this is NOT a
+  // high-water mark, so it correctly reflects "not done yet" after a fresh
+  // round starts following an earlier full completion today. Only for
+  // display of the CURRENT cycle's progress (e.g. Dashboard's "오늘 미션 N/4"
+  // badge); do not use this for streak/homework-done logic, which must keep
+  // using missionsCompletedToday.
+  const liveMissionsCompleted = countCategoriesCompleted(round)
   const giftsToday = todayHistory?.giftsToday || 0 // how many full 4/4 rounds today — for "studied a lot" nudges only, never displayed as "완료한 미션"
   const todayStars = todayHistory?.starsEarned || 0
   const streak = calcStreak(history)
@@ -1217,7 +1225,7 @@ export function useStudent(studentId, legacyName) {
     stars, stickerTypes, diaryPlacements, missions,
     activeMissions: missions.filter(m => !m.done),
     cleared, round, dailyProgress,
-    missionsCompletedToday, missionFullyDoneToday, giftsToday, todayStars,
+    missionsCompletedToday, missionFullyDoneToday, liveMissionsCompleted, giftsToday, todayStars,
     history, streak,
     lastGamePlayed, setLastGamePlayed, recordGamePlayed,
     recordQuizAnswer, markPronunciationAttempt,

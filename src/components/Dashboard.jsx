@@ -204,7 +204,7 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 // P0(2026-07-15): student(이름 문자열) 대신 studentId(식별자)+studentName
 // (표시용)을 따로 받는다 — getStudentClass/getStudentUnit은 이제 id 기반.
 export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch }) {
-  const { stars, stickerTypes, activeMissions, dailyProgress, missionsCompletedToday, streak, cleared, ticketBalance, redeemTicketReward } = studentData
+  const { stars, stickerTypes, activeMissions, dailyProgress, liveMissionsCompleted, streak, cleared, ticketBalance, redeemTicketReward } = studentData
   const { rankState, loading: rankLoading } = usePaulRank(studentId)
 
   const className = getStudentClass(studentId)
@@ -420,9 +420,9 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
           <div className="flex items-center gap-2 mb-4">
             <span className="text-2xl">🎯</span>
             <h2 className="font-black text-gray-800 text-lg">오늘의 미션</h2>
-            {missionsCompletedToday > 0 && (
-              <span className={`ml-auto font-black text-xs px-3 py-1 rounded-full ${missionsCompletedToday >= 4 ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-700'}`}>
-                오늘 미션 {missionsCompletedToday}/4 완료{missionsCompletedToday >= 4 ? '! 🎉' : ''}
+            {liveMissionsCompleted > 0 && (
+              <span className={`ml-auto font-black text-xs px-3 py-1 rounded-full ${liveMissionsCompleted >= 4 ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-700'}`}>
+                오늘 미션 {liveMissionsCompleted}/4 완료{liveMissionsCompleted >= 4 ? '! 🎉' : ''}
               </span>
             )}
           </div>
