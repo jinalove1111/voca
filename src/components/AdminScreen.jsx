@@ -1941,7 +1941,9 @@ export default function AdminScreen({ onBack }) {
           <div className="text-4xl text-center mb-3">🗑️</div>
           <h3 className="font-black text-gray-800 text-lg text-center mb-2">반 삭제</h3>
           <p className="text-gray-600 text-sm text-center mb-1"><span className="font-black text-red-500">"{confirmDelete}"</span></p>
-          <p className="text-gray-500 text-sm text-center mb-5">이 반과 연결된 단어/Unit/학습기록이 함께 삭제됩니다. 정말 삭제하시겠습니까?</p>
+          <p className="text-gray-500 text-sm text-center mb-1">이 반과 연결된 단어/Unit/학습기록이 함께 삭제됩니다.</p>
+          <p className="text-gray-400 text-xs text-center mb-3">✅ 학생 계정과 학생별 진행도는 그대로 유지되고, 반 배정만 해제돼요.</p>
+          <p className="text-gray-500 text-sm text-center mb-5">정말 삭제하시겠습니까?</p>
           <div className="flex gap-2">
             <button onClick={() => setConfirmDelete(null)}
               className="flex-1 border-2 border-gray-200 text-gray-600 font-bold py-3 rounded-2xl btn-press">
