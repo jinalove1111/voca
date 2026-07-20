@@ -1,5 +1,79 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-19 (11차, 게임화 하위카드 10번 — Parent Motivation — 게임화 로드맵 마지막 카드 — Engineering Head)_
+_최종 갱신: 2026-07-20 (1차, 시즌 경계 타임스탬프 비교 버그 수정 + 시즌 패널 안내 문구 정정 — Engineering Head)_
+
+## 2026-07-20 (1차) — 시즌 경계 타임스탬프 비교 버그 수정(PostgREST timestamptz vs JS toISOString) + 시즌 패널 안내 문구 정정 — Engineering Head
+
+`git log -2`로 확인된 커밋 `4510305`(버그 수정)와 `5da2533`(안내 문구
+정정) 두 건. 둘 다 2026-07-19(10차) Seasonal Progression 카드
+(`ae07688`~`b6b15c9`)의 후속 수정이며, 신규 기능 추가 없이 기존 구현의
+정확성만 교정한다.
+
+### 1. `sumTicketBalanceSince()`/`computeHouseSeasonScores()` 시즌 경계 비교 버그 (`4510305`)
+
+- **배경**: `src/utils/ticketEconomy.js`의 `sumTicketBalanceSince()`와
+  `src/utils/houseSystem.js`의 `computeHouseSeasonScores()`가 시즌 경계
+  (`seasons.started_at`)와 원장 항목(`entry.at`)을 문자열로 직접 `>=`/`<`
+  비교하고 있었다. `seasons.started_at`은 Postgres `timestamptz`를
+  PostgREST가 직렬화한 값이라 `+00:00` 오프셋 + 마이크로초 정밀도(예:
+  `2026-07-19T10:00:00.500000+00:00`)로 오는 반면, 원장의 `entry.at`은
+  클라이언트가 `new Date().toISOString()`으로 만든 `Z` 접미사 + 밀리초
+  정밀도(예: `2026-07-19T10:01:00.000Z`)라, 같은 순간이라도 사전식
+  (lexical) 문자열 비교가 실제 시각과 어긋날 수 있었다(`entry.at`의 `Z`
+  접미사 문자코드가 시즌 시각 문자열의 숫자 접미사보다 커서, 실제로는
+  시즌 시작 "이전"에 적립된 항목이 "이후"로 잘못 포함될 위험이 있었다).
+- **수정**: 두 함수 모두 `new Date(seasonStartedAt).getTime()` /
+  `new Date(entry.at).getTime()`으로 실제 epoch ms 비교로 교체
+  (`src/utils/ticketEconomy.js` `sumTicketBalanceSince()`,
+  `src/utils/houseSystem.js` `computeHouseSeasonScores()`).
+- **검증**: `scripts/testSeasonalProgression.mjs`에 PostgREST 형식 경계
+  재현 케이스 추가 — "1.5. 회귀 방지 — PostgREST timestamptz 형식(+00:00,
+  마이크로초) vs JS toISOString(Z, 밀리초) 문자열 비교 버그" 절(2개
+  체크: 실제 회귀 재현 + 밀리초 미만 정밀도 한계에서도 크래시 없이
+  결정적으로 처리되는지)과, 2번 섹션 말미 "2.5. 회귀 방지" 절(1개 체크:
+  House 팀 점수 쪽도 같은 클래스 버그였음을 별도 실측)로 신규 3개 체크
+  추가. 하네스 총 체크 수 20개(2026-07-19 10차 시점) → **22개**로 증가
+  (`grep -c "check("` 실측 확인). `node scripts/testSeasonalProgression.mjs`
+  22/22 PASS, `npm run build` 통과 확인.
+- **영향 범위 판단**: 이 버그는 아직 실행되지 않았을 가능성이 있는 시즌
+  기능(`ae07688` "미실행" 커밋 참고, `seasons` 테이블 자체가 운영자에
+  의해 Supabase에 아직 실행되지 않았을 수 있음)에 대한 사전 수정으로
+  보인다 — 실사용 데이터 영향 여부는 `seasons` 테이블 실행 여부를
+  운영자에게 확인이 필요하다(미확인 상태 — 이 세션에서 별도 조사는
+  하지 않았음).
+
+### 2. 시즌 패널 안내 문구 — 티켓 잔액 시즌 미연동 명시 (`5da2533`)
+
+- **배경**: `src/components/AdminScreen.jsx`의 `SeasonPanel` 컴포넌트가
+  "새 시즌을 시작하면 티켓 잔액과 하우스 팀 점수만 새로 쌓인다"는 취지로
+  안내해, 관리자가 티켓도 시즌 리셋 대상으로 오해할 수 있는 문구였다.
+  실제 구현(2026-07-19 10차 Seasonal Progression 세션 기준)은 하우스
+  팀 점수만 시즌 경계(`computeHouseSeasonScores`)가 적용되고, 티켓
+  잔액/상점은 `sumTicketBalance()`(전체 누적)를 그대로 쓰고 있어 시즌과
+  무관하게 계속 누적 값으로 표시된다(`sumTicketBalanceSince()`는 이미
+  구현/테스트됐지만 실제 잔액 표시 경로에는 아직 배선되지 않음 — 11차
+  handoff의 "여전히 BACKLOG인 것" 목록에도 이미 기록돼 있던 사실).
+- **수정**: `handleStart()`의 `window.confirm()` 다이얼로그 문구와 패널
+  하단 설명 텍스트를 실제 동작에 맞게 정정 — "티켓 잔액/상점은 이번
+  라운드에는 시즌과 연동되지 않아 계속 전체 누적 값 그대로예요(다음
+  라운드 확장 예정)"로 명시(`src/components/AdminScreen.jsx`
+  `SeasonPanel` 컴포넌트 내 확인 다이얼로그 및 하단 설명 문단).
+- **검증**: 텍스트 전용 수정(로직 변경 없음) — `npm run build` 통과
+  확인. 별도 테스트 하네스 대상 아님(문구 텍스트는 자동 검증 범위 밖).
+
+### 종합
+
+- 코드 변경 파일: `src/utils/houseSystem.js`, `src/utils/ticketEconomy.js`,
+  `scripts/testSeasonalProgression.mjs`, `src/components/AdminScreen.jsx`
+  — 4개 파일, 2커밋(규칙 14 파일/기능 단위 소커밋 준수 — 버그 수정과
+  문구 정정을 분리).
+- 신규 SQL 없음, 신규 Supabase 컬럼/테이블 없음 — `DATABASE.md` 갱신
+  대상 아님.
+- `TESTING.md`의 `testSeasonalProgression.mjs` 설명(카테고리 1 표)은
+  체크 개수를 명시하지 않는 서술형이라 별도 갱신 불필요(개수는 이 문서와
+  `scripts/testSeasonalProgression.mjs` 파일 자체가 최신 진실 원천).
+- 검수 대기: qa-reviewer/security-reviewer 코드 리뷰(10차 Seasonal
+  Progression 카드 자체가 이미 리뷰 대기 상태였던 것과 동일 큐, 이번
+  두 커밋도 같은 큐에 추가).
 
 ## 2026-07-19 (11차) — 게임화 하위카드 10번(Parent Motivation, 게임화 로드맵 마지막 카드) — Engineering Head
 
