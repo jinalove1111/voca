@@ -86,11 +86,30 @@ export function sumTicketBalance(ledger) {
 // sumTicketBalance()와 동일하게 전체 누적을 반환한다 — "시즌 개념이 아직
 // 없을 때는 기존 동작 그대로"라는 이 저장소의 확립된 안전한 기본값 관례
 // (CLAUDE.md 규칙 9)를 그대로 따른다.
+//
+// ── 2026-07-20 회귀 수정: 문자열 비교 대신 실제 시각(epoch ms) 비교 ──────
+// seasonStartedAt은 `seasons.started_at`(Postgres timestamptz)을
+// PostgREST가 직렬화한 문자열이라 "+00:00" 오프셋 + 마이크로초 정밀도로
+// 온다(예: `2026-07-19T09:15:22.123456+00:00`). 반면 원장의 `entry.at`은
+// 클라이언트가 `new Date().toISOString()`으로 만든 "Z" 접미사 + 밀리초
+// 정밀도 문자열이다(예: `2026-07-19T09:15:22.123Z`). 두 형식은 같은 순간을
+// 가리켜도 문자열 표현이 달라 사전식(lexical) 비교가 틀릴 수 있다 —
+// 예를 들어 위 두 예시는 실제로는 entry가 456마이크로초 "이전"인데
+// 문자열 비교로는 `'Z'`(문자코드 90)가 `'4'`(문자코드 52)보다 커서 entry가
+// "이후"로 잘못 판정된다(실측 재현 확인, scripts/testSeasonalProgression.mjs
+// "PostgREST 타임스탬프 형식 회귀" 섹션). `new Date(...).getTime()`으로
+// 실제 순간(ms) 비교하면 두 형식 모두 표준적으로 파싱되어 이 문제가 없다
+// (KST 자정 근처 문자열 비교 오탐이 있었던 2026-07-10 `testSyncProgress.mjs`
+// 사고와 같은 종류의 판단 — "문자열 비교보다 실제 Date 비교").
 export function sumTicketBalanceSince(ledger, seasonStartedAt) {
   if (!Array.isArray(ledger)) return 0
   if (typeof seasonStartedAt !== 'string' || seasonStartedAt.length < 10) return sumTicketBalance(ledger)
+  const boundaryMs = new Date(seasonStartedAt).getTime()
+  if (!Number.isFinite(boundaryMs)) return sumTicketBalance(ledger)
   return ledger.reduce((sum, e) => {
-    if (!e || typeof e.at !== 'string' || e.at < seasonStartedAt) return sum
+    if (!e || typeof e.at !== 'string') return sum
+    const atMs = new Date(e.at).getTime()
+    if (!Number.isFinite(atMs) || atMs < boundaryMs) return sum
     return sum + (Number(e.delta) || 0)
   }, 0)
 }

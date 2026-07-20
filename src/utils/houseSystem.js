@@ -149,11 +149,21 @@ export function computeHouseWeeklyScores(students, ledgerByStudentId, now = new 
 //
 // students: [{id, houseId}], ledgerByStudentId: {studentId: ticketLedger}.
 // 반환: {houseId: score}(HOUSES의 모든 id 키 포함, 항상 정수 >= 0).
+//
+// ── 2026-07-20 회귀 수정: 문자열 비교 대신 실제 시각(epoch ms) 비교 ──────
+// ticketEconomy.js sumTicketBalanceSince()와 완전히 같은 버그/같은 수정
+// (헤더 주석에 상세 근거 — 이 함수는 순수 모듈 간 무의존 원칙 때문에
+// import 대신 자체 재구현). seasonStartedAt(Postgres timestamptz 문자열,
+// "+00:00" + 마이크로초)과 entry.at(JS toISOString, "Z" + 밀리초)의 형식
+// 차이 때문에 문자열 비교가 같은 순간을 다르게 판정할 수 있어 실제 Date
+// 비교로 교체(실측 재현: scripts/testSeasonalProgression.mjs).
 export function computeHouseSeasonScores(students, ledgerByStudentId, seasonStartedAt, now = new Date()) {
   const scores = {}
   for (const h of HOUSES) scores[h.id] = 0
   if (typeof seasonStartedAt !== 'string' || seasonStartedAt.length < 10) return scores
-  const nowIso = now.toISOString()
+  const boundaryMs = new Date(seasonStartedAt).getTime()
+  if (!Number.isFinite(boundaryMs)) return scores
+  const nowMs = now.getTime()
   for (const s of (students || [])) {
     const houseId = s && s.houseId != null ? Number(s.houseId) : null
     if (houseId == null || !Object.prototype.hasOwnProperty.call(scores, houseId)) continue
@@ -163,7 +173,9 @@ export function computeHouseSeasonScores(students, ledgerByStudentId, seasonStar
       if (!entry || typeof entry.at !== 'string' || entry.at.length < 10) continue
       const delta = Number(entry.delta) || 0
       if (delta <= 0) continue // 소비/구매는 팀 점수에서 제외(위 3번 원칙 근거와 동일)
-      if (entry.at >= seasonStartedAt && entry.at <= nowIso) scores[houseId] += delta
+      const atMs = new Date(entry.at).getTime()
+      if (!Number.isFinite(atMs)) continue
+      if (atMs >= boundaryMs && atMs <= nowMs) scores[houseId] += delta
     }
   }
   return scores
