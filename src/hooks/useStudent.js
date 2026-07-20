@@ -225,6 +225,18 @@ function freshRecord(id) {
     // 여기 말고는 유닛 종속 필드가 없다 — 전환 시 아무것도 리셋되지 않는 근거.
     lastWordIndexByUnit: {},
     wordStatus: {},          // v1.5 Skip 기능 — word.dbId -> 'known' | 'unknown' | 'skipped' | 'mastered'
+    // Writing MVP(2026-07-20, Project Paul Multi-Agent Framework 첫 구현) —
+    // round.spellingWrongToday(오늘 하루치, 자정에 사라짐)와 별개로, 자정을
+    // 넘겨도 안 지워지는 영구 복습 대기열. 새 항목은 실시간으로 안 쌓이고
+    // "하루가 바뀌는 순간"(normalizeRecord 로드 시점 또는 30초 롤오버
+    // interval)에 그날 못 끝낸 spellingWrongToday만 이월된다 — 그래서 이
+    // 큐에 있는 단어는 전부 "적어도 하루 이상 전에 놓친" 단어라는 성질이
+    // 보장된다(오늘 막 틀린 단어와 섞이지 않음, SpellingQuestion의
+    // isComebackWord 배지가 이 성질에 기대어 판단함). 정답을 다시 맞히면
+    // (일반 학습이든 복습화면이든) recordSpellingAnswer/clearSpellingReviewWord
+    // 양쪽에서 제거. 스키마 변경 없음 — 기존 progress_data blob 안의 새
+    // 최상위 필드일 뿐(stickers/ticketLedger와 동일 패턴).
+    spellingReviewQueue: [],
   }
 }
 
@@ -301,10 +313,17 @@ function normalizeRecord(raw, id) {
   rec.lastWordIndex = Number(rec.lastWordIndex) || 0
   rec.lastWordIndexByUnit = asObject(rec.lastWordIndexByUnit) // v2.1 이전 레코드/백업엔 없음 — 빈 객체로 채움
   rec.wordStatus = asObject(rec.wordStatus)
+  rec.spellingReviewQueue = asArray(rec.spellingReviewQueue) // 기존 레코드/백업엔 없음 — 빈 배열로 채움
   const r = asObject(rec.round)
-  rec.round = r.date === todayStr()
-    ? { ...freshRound(), ...r, wordsViewed: asArray(r.wordsViewed), spellingWrongToday: asArray(r.spellingWrongToday) }
-    : freshRound()
+  if (r.date === todayStr()) {
+    rec.round = { ...freshRound(), ...r, wordsViewed: asArray(r.wordsViewed), spellingWrongToday: asArray(r.spellingWrongToday) }
+  } else {
+    // 하루가 바뀌어 round가 리셋되기 직전 — 어제(또는 그 전) 못 끝낸
+    // spellingWrongToday를 영구 복습 대기열로 이월(유실 방지, freshRecord()
+    // 헤더 주석 참고).
+    rec.spellingReviewQueue = unionList(rec.spellingReviewQueue, asArray(r.spellingWrongToday))
+    rec.round = freshRound()
+  }
   rec.history = Object.fromEntries(Object.entries(asObject(rec.history)).map(([date, day]) => {
     const d = { ...freshHistoryDay(), ...asObject(day) }
     d.stickersEarned = asArray(d.stickersEarned)
@@ -448,6 +467,7 @@ export function mergeProgressRecords(localRaw, cloudRaw, id) {
     lastWordIndex: maxNum(local.lastWordIndex, cloud.lastWordIndex),
     lastWordIndexByUnit,
     wordStatus,
+    spellingReviewQueue: unionList(local.spellingReviewQueue, cloud.spellingReviewQueue),
   }
 }
 
@@ -639,7 +659,7 @@ export function useStudent(studentId, legacyName) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId])
 
-  const { round, history, stickers: stickerTypes, diaryPlacements, missions, cleared, milestoneStreak, starBadgeThreshold, lastGamePlayed, lastWordIndex, totalStars: stars, wordStatus, ticketLedger } = record
+  const { round, history, stickers: stickerTypes, diaryPlacements, missions, cleared, milestoneStreak, starBadgeThreshold, lastGamePlayed, lastWordIndex, totalStars: stars, wordStatus, ticketLedger, spellingReviewQueue } = record
   // Ticket Economy — 화면은 항상 이 파생값만 읽는다(원시 잔액을 저장하지
   // 않는 이유는 ticketEconomy.js 헤더 참고).
   const ticketBalance = sumTicketBalance(ticketLedger)
@@ -647,8 +667,18 @@ export function useStudent(studentId, legacyName) {
   const [giftQueue, setGiftQueue] = useState([])
 
   // Mission round resets at midnight even mid-session (not just on reopen).
+  // Writing MVP: 리셋 직전 그날 못 끝낸 spellingWrongToday를 spellingReviewQueue로
+  // 이월(normalizeRecord의 로드 시점 롤오버와 동일 규칙 — 세션이 자정을
+  // 넘겨 켜져 있는 드문 경우까지 커버).
   useEffect(() => {
-    const check = () => { if (round.date !== todayStr()) patch(() => ({ round: freshRound() })) }
+    const check = () => {
+      if (round.date !== todayStr()) {
+        patch(prev => ({
+          spellingReviewQueue: unionList(prev.spellingReviewQueue || [], prev.round.spellingWrongToday || []),
+          round: freshRound(),
+        }))
+      }
+    }
     const t = setInterval(check, 30000)
     return () => clearInterval(t)
   }, [round.date, patch])
@@ -996,7 +1026,16 @@ export function useStudent(studentId, legacyName) {
       // 지급된 보너스가 절대 어긋나지 않게. (쓰기 답안은 사람이 타이핑하는
       // 속도로만 들어오므로 stale closure가 실제로 문제될 간격이 아님.)
       const combo = (round.spellingCombo || 0) + 1
-      patch(prev => ({ round: { ...prev.round, spellingCombo: combo } }))
+      patch(prev => ({
+        round: { ...prev.round, spellingCombo: combo },
+        // Writing MVP — 이 단어가 영구 복습 대기열에 있었다면(=적어도
+        // 하루 전에 놓쳤던 단어) 이번 정답으로 해소됐으니 큐에서 뺀다.
+        // isComebackWord 배지는 App.jsx가 렌더 시점에 미리 계산해서
+        // 보여주므로(스냅샷), 여기서 별도 반환값을 만들 필요는 없다.
+        spellingReviewQueue: prev.spellingReviewQueue.includes(wordId)
+          ? prev.spellingReviewQueue.filter(id => id !== wordId)
+          : prev.spellingReviewQueue,
+      }))
       const bonus = spellingComboBonus(combo)
       if (bonus > 0) {
         addStars(bonus)
@@ -1015,10 +1054,16 @@ export function useStudent(studentId, legacyName) {
   }, [bumpHistory, patch, addStars, round.spellingCombo, grantXp])
 
   // 복습 화면에서 한 단어를 맞히면 오답노트 큐에서 제거 — 큐가 비면
-  // "오늘 틀린 단어 복습"이 끝난 것.
+  // "틀린 단어 복습"이 끝난 것. Writing MVP: 영구 복습 대기열
+  // (spellingReviewQueue)에서도 함께 제거 — 복습 화면은 오늘치 큐와
+  // 영구 큐를 합쳐서 보여주므로(App.jsx), 어느 쪽에서 온 단어든 여기서
+  // 한 번에 정리된다.
   const clearSpellingReviewWord = useCallback((wordId) => {
     patch(prev => ({
       round: { ...prev.round, spellingWrongToday: prev.round.spellingWrongToday.filter(id => id !== wordId) },
+      spellingReviewQueue: prev.spellingReviewQueue.includes(wordId)
+        ? prev.spellingReviewQueue.filter(id => id !== wordId)
+        : prev.spellingReviewQueue,
     }))
   }, [patch])
 
@@ -1178,6 +1223,7 @@ export function useStudent(studentId, legacyName) {
     recordQuizAnswer, markPronunciationAttempt,
     recordSpellingAnswer, clearSpellingReviewWord, spellingWrongToday: round.spellingWrongToday,
     spellingCombo: round.spellingCombo || 0,
+    spellingReviewQueue, // Writing MVP(2026-07-20) — 자정을 넘겨도 유지되는 복습 대기열
     lastWordIndex, setLastWordIndex, getResumeIndexForUnit,
     pendingGift: giftQueue[0] || null, dismissGift,
     addStars, addMission, answerMission,

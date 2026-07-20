@@ -153,13 +153,14 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 별도 상태로 관리 — 마찬가지로 세션 동안만 유지.
   const [studyScope, setStudyScope] = useState('all')
   const studentData                 = useStudent(studentId, studentName)
-  const { cleared, answerMission, missions, addStars, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord, wordStatus, setWordKnown, setWordUnknown } = studentData
+  const { cleared, answerMission, missions, addStars, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord, wordStatus, setWordKnown, setWordUnknown, spellingReviewQueue } = studentData
 
-  // 선물상자를 닫은 직후, 오늘 틀린 스펠링 단어가 남아있으면 자동으로
-  // "오늘 틀린 단어 복습"을 시작 — 맞을 때까지 반복(SpellingReview 참고).
+  // 선물상자를 닫은 직후, 오늘 틀린 스펠링 단어나 영구 복습 대기열
+  // (Writing MVP, 2026-07-20 — 적어도 하루 전에 놓친 단어)이 남아있으면
+  // 자동으로 "틀린 단어 복습"을 시작 — 맞을 때까지 반복(SpellingReview 참고).
   const handleDismissGift = () => {
     dismissGift()
-    if (spellingWrongToday.length > 0) setScreen('spellingReview')
+    if (spellingWrongToday.length > 0 || spellingReviewQueue.length > 0) setScreen('spellingReview')
   }
 
   // Rotates through the 4 mini-games, never repeating whichever was played
@@ -200,8 +201,11 @@ function AppInner({ studentId, studentName, onLogout }) {
   const reviewWordIds = useMemo(() => {
     const ids = new Set(missions.filter(m => !m.done).map(m => m.wordId))
     spellingWrongToday.forEach(id => ids.add(id))
+    // Writing MVP(2026-07-20) — 영구 복습 대기열도 "복습 단어만" 스코프에
+    // 자동으로 포함(기존 스코프 선택 UI 그대로 재사용, 새 화면 없음).
+    spellingReviewQueue.forEach(id => ids.add(id))
     return ids
-  }, [missions, spellingWrongToday])
+  }, [missions, spellingWrongToday, spellingReviewQueue])
   const sessionWords = useMemo(
     () => filterWordsByScope(classWords, studyScope, wordStatus, reviewWordIds),
     [classWords, studyScope, wordStatus, reviewWordIds]
@@ -389,6 +393,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           onSpellingAnswer={handleSpellingAnswer}
           spellingDirectionOverride={mixedDirections ? mixedDirections[selectedWordIdx] || 'kr2en' : null}
           spellingCombo={studentData.spellingCombo}
+          spellingReviewQueue={spellingReviewQueue}
           sessionProgress={{ current: selectedWordIdx + 1, total: sessionWords.length }}
           onBack={() => setScreen('wordBrowser')}
           onNext={handleNextWord}
@@ -461,7 +466,11 @@ function AppInner({ studentId, studentName, onLogout }) {
       )}
       {screen === 'spellingReview' && (
         <SpellingReview
-          wrongWordIds={spellingWrongToday}
+          // Writing MVP(2026-07-20) — 오늘치 오답노트 + 영구 복습 대기열을
+          // 합쳐서(중복 제거) 한 번에 순회. SpellingReview 자체는 이 구분을
+          // 몰라도 되고, comebackWordIds만 별도로 받아 배지 판단에 쓴다.
+          wrongWordIds={Array.from(new Set([...spellingWrongToday, ...spellingReviewQueue]))}
+          comebackWordIds={spellingReviewQueue}
           classWords={classWords}
           onClearWord={clearSpellingReviewWord}
           onDone={() => setScreen('dashboard')}

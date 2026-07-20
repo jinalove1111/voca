@@ -226,5 +226,38 @@ console.log('\n10. 필드별 "유실 없음" 총괄 — 병합 결과 ⊇ 양쪽
   check('totalStars ≥ 양쪽 모두', m.totalStars >= nA.totalStars && m.totalStars >= nB.totalStars)
 }
 
+console.log('\n11. Writing MVP(2026-07-20) — spellingReviewQueue 이월(rollover)/병합')
+{
+  // 어제 round에 spellingWrongToday가 남아있던 채로 로드되면(normalizeRecord),
+  // round는 freshRound()로 리셋되지만 그 안의 단어들은 영구 큐로 이월돼야 한다.
+  const yesterday = 'Sat Jul 18 2026'
+  const stale = { ...freshRecord(ID), round: { ...freshRound(), date: yesterday, spellingWrongToday: ['w1', 'w2'] } }
+  const n1 = normalizeRecord(stale, ID)
+  check('이월: round는 오늘로 리셋(빈 spellingWrongToday)', n1.round.date === today && n1.round.spellingWrongToday.length === 0)
+  check('이월: 어제 spellingWrongToday가 spellingReviewQueue로 이동', n1.spellingReviewQueue.includes('w1') && n1.spellingReviewQueue.includes('w2'))
+
+  // 기존에 이미 큐에 있던 단어(w0)는 이번 이월로 사라지지 않고 합집합됨
+  const staleWithExisting = { ...freshRecord(ID), spellingReviewQueue: ['w0'], round: { ...freshRound(), date: yesterday, spellingWrongToday: ['w1'] } }
+  const n2 = normalizeRecord(staleWithExisting, ID)
+  check('이월: 기존 큐(w0) + 새로 이월된(w1) 합집합, 유실 없음', n2.spellingReviewQueue.includes('w0') && n2.spellingReviewQueue.includes('w1'))
+
+  // 오늘 날짜 round는 이월 대상이 아님(그대로 유지, 큐 불변)
+  const fresh = { ...freshRecord(ID), spellingReviewQueue: ['persisted1'], round: { ...freshRound(), date: today, spellingWrongToday: ['todayWrong'] } }
+  const n3 = normalizeRecord(fresh, ID)
+  check('오늘 round는 이월 없음 — spellingWrongToday 그대로', n3.round.spellingWrongToday.includes('todayWrong'))
+  check('오늘 round는 이월 없음 — spellingReviewQueue 불변(todayWrong 안 섞임)', n3.spellingReviewQueue.length === 1 && n3.spellingReviewQueue[0] === 'persisted1')
+
+  // 구버전 레코드(필드 자체가 없음)도 크래시 없이 빈 배열로 정규화
+  const noField = { studentId: ID, totalStars: 5 }
+  const n4 = normalizeRecord(noField, ID)
+  check('spellingReviewQueue 필드 없는 구버전 레코드 → 빈 배열로 안전 정규화', Array.isArray(n4.spellingReviewQueue) && n4.spellingReviewQueue.length === 0)
+
+  // 기기 간 병합 — 합집합, 유실 없음(다른 필드들과 동일 원칙)
+  const A = { ...ancestor(), spellingReviewQueue: ['qa1', 'qShared'] }
+  const B = { ...ancestor(), spellingReviewQueue: ['qb1', 'qShared'] }
+  const m = mergeProgressRecords(A, B, ID)
+  check('병합: spellingReviewQueue 합집합(양쪽 유실 없음)', ['qa1', 'qb1', 'qShared'].every((w) => m.spellingReviewQueue.includes(w)) && m.spellingReviewQueue.length === 3)
+}
+
 console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n${failures}개 실패 ❌`)
 process.exit(failures > 0 ? 1 : 0)

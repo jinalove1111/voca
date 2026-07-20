@@ -78,7 +78,14 @@ const WRONG_MSGS = {
 //              실제 방향과 첫 시도 제출 원문을 추가로 전달(하위호환 —
 //              기존 호출부는 첫 인자만 써도 동작 동일). App이 방향별 세션
 //              집계와 교사 검토 큐 기록에 사용.
-export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnabled, direction = 'kr2en', onResult, onDone, combo = 0, progress = null, comboStarsEnabled = false, acceptedMeanings = [] }) {
+//   isComebackWord — Writing MVP(2026-07-20). 이 단어가 영구 복습
+//              대기열(useStudent.spellingReviewQueue — 적어도 하루 전에
+//              놓쳤던 단어만 들어있음)에 있는 상태로 이 문제가 시작됐는지를
+//              부모가 렌더 시점에 미리 계산해서 넘겨준다. true면 정답
+//              화면에서 일반 성공 리액션 대신 "예전에 놓쳤던 단어를 다시
+//              맞혔다"는 걸 강조하는 배지를 보여준다(콤보 마일스톤 배지와
+//              동일한 시각 언어 재사용 — 새 애셋 없음).
+export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnabled, direction = 'kr2en', onResult, onDone, combo = 0, progress = null, comboStarsEnabled = false, acceptedMeanings = [], isComebackWord = false }) {
   const pickDirection = () => ((direction === 'random' || direction === 'mixed') ? (Math.random() < 0.5 ? 'kr2en' : 'en2kr') : direction)
 
   const [phase, setPhase] = useState('answer') // answer | reveal | correct
@@ -168,13 +175,19 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
   const markCorrect = (achievedCombo = 0) => {
     setPhase('correct')
     const isMilestone = achievedCombo >= 2 && spellingComboBonus(achievedCombo) > 0
-    setCorrectPaul((isMilestone && getReactionById('levelup')) || pickReaction('success'))
+    // isComebackWord도 콤보 마일스톤과 같은 'levelup' 리액션을 재사용 —
+    // 둘 다 "평소보다 특별한 순간"이라는 같은 톤이라 새 애셋 불필요.
+    setCorrectPaul(((isComebackWord || isMilestone) && getReactionById('levelup')) || pickReaction('success'))
     playSuccessSound()
     setTimeout(() => onDone?.(), 700)
   }
 
   const submitAnswer = () => {
-    if (!input.trim()) return
+    // Writing MVP(2026-07-20) — 빈 입력으로 확인을 눌렀을 때 예전엔 아무
+    // 반응 없이 무시됐다(CED 리뷰 발견: 왜 안 되는지 피드백 없음). 새
+    // UI/애니메이션 추가 없이 입력창에 포커스만 다시 줘서 "여기 입력하세요"
+    // 신호를 준다.
+    if (!input.trim()) { focusInput(); return }
     // acceptedMeanings는 "뜻(한글)"의 추가 표기 목록이므로 정답이 뜻인
     // en2kr에서만 후보에 합류 — 영어 철자(kr2en) 채점은 기존과 완전 동일.
     const correct = isSpellingCorrect(input, targetAnswer, { acceptedMeanings: isEn2Kr ? acceptedMeanings : [] })
@@ -355,6 +368,13 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
             <p className="mt-2 animate-paul-pop">
               <span className="inline-block bg-yellow-100 border-2 border-yellow-300 text-yellow-700 text-sm font-black px-4 py-1.5 rounded-full">
                 ⭐ {combo}콤보 달성! 보너스 별 +{comboBonus}개
+              </span>
+            </p>
+          )}
+          {isComebackWord && (
+            <p className="mt-2 animate-paul-pop">
+              <span className="inline-block bg-teal-100 border-2 border-teal-300 text-teal-700 text-sm font-black px-4 py-1.5 rounded-full">
+                🎉 예전에 틀렸던 단어를 완전히 익혔어요!
               </span>
             </p>
           )}

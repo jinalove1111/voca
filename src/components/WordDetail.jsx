@@ -530,6 +530,10 @@ export default function WordDetail({
   // 정답 수(useStudent.round.spellingCombo), sessionProgress: { current,
   // total } 이번 학습 범위(sessionWords) 안에서 몇 번째 단어인지.
   spellingCombo = 0, sessionProgress = null,
+  // Writing MVP(2026-07-20) — 영구 복습 대기열(useStudent.spellingReviewQueue).
+  // 지금 보고 있는 단어가 이 안에 있으면(=적어도 하루 전에 놓친 단어)
+  // SpellingQuestion에 isComebackWord로 전달해 정답 시 특별 배지를 보여준다.
+  spellingReviewQueue = [],
   // v2.0 혼합(mixed) 방향 — 반 설정이 'mixed'면 App이 세션 단어 목록에
   // 미리 50:50으로 배정한 "이 단어의 방향"('kr2en'|'en2kr')을 내려보냄.
   // null이면(기존 모든 방향) 반 설정의 direction을 그대로 사용 — 하위호환.
@@ -638,6 +642,7 @@ export default function WordDetail({
             hintEnabled={!!spellingSettings?.spellingHintEnabled}
             direction={spellingDirectionOverride || spellingSettings?.spellingDirection || 'kr2en'}
             acceptedMeanings={word.acceptedMeanings}
+            isComebackWord={spellingReviewQueue.includes(word.id)}
             onResult={(correct, dir, submitted) => onSpellingAnswer?.(word.id, correct, dir, submitted)}
             onDone={goNext}
             combo={spellingCombo}
