@@ -1,6 +1,18 @@
 # Paul Easy Voca — 로드맵
 
-_최종 갱신: 2026-07-20 (Vercel 프로덕션 배포 정체 P0 사고 + 해소 추가 — 기존 섹션은 원본 그대로 유지, 아래에 이어서 추가함)_
+_최종 갱신: 2026-07-20 (Project Paul Multi-Agent Development Framework 신설 추가 — 기존 섹션은 원본 그대로 유지, 아래에 이어서 추가함)_
+
+## 2026-07-20 — Project Paul Multi-Agent Development Framework 신설
+
+기존 `.claude/agents/`(5개, preserve)를 흡수해 하나의 조직으로 재구성.
+신규 7개 역할(Mission Guardian/Orchestrator/Product Guardian/Learning
+Designer/Child Experience Designer/Deployment Engineer/Student
+Analytics) — 전부 평가/조정/검증 전담, 코드 미작성, CEO 없음. 기준 문서
+`PROJECT_PAUL_GOAL.md`(미션 6개 축 + 가드레일), 절차 문서
+`MULTI_AGENT_WORKFLOW.md`(토큰효율, 작업당 최대 4명, 사람 승인 필수
+정지조건). 첫 파일럿(반 삭제 다이얼로그 안심 문구) 완료 — 상세는
+`handoff.md` 2026-07-20(3차), `docs/agent-architecture.md`,
+`docs/agent-decisions/0001-class-delete-dialog-copy.md`.
 
 ## 2026-07-20 — Vercel 프로덕션 배포 정체 P0 사고 + 해소 (약 1일간 모든 배포 조용히 실패)
 

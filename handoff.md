@@ -1,5 +1,38 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-20 (2차, Vercel 프로덕션 배포 정체 P0 해소 — 관리자 PIN 액션 3개 통합으로 서버리스 함수 14→12개 — Engineering Head)_
+_최종 갱신: 2026-07-20 (3차, Project Paul Multi-Agent Development Framework 신설 — Orchestrator)_
+
+## 2026-07-20 (3차) — Project Paul Multi-Agent Development Framework 신설 — Orchestrator
+
+운영자 지시: 기존 `.claude/agents/`(5개)를 흡수해 하나의 조직으로 재구성,
+병렬 조직 금지, CEO 미생성. 산출물:
+
+- `docs/agent-architecture.md` — 기존 5개 agent(`planner`/`implementer`/
+  `qa-reviewer`/`security-reviewer`/`docs-maintainer`) 전부 preserve(폐기
+  없음). **중요 발견**: 세션에 "사용 가능"으로 뜨는 `engineering-head`/
+  `qa-head`/`security-head`/`planning-agent` 등은 이 저장소에 커밋된
+  파일이 아님(버전관리 밖, 전역/플러그인 레벨) — 목표 계층도의 해당
+  라벨은 실재 파일 4개의 동의어로 매핑, 중복 파일 생성 안 함.
+- 신규 7개 agent(`.claude/agents/`): `mission-guardian`/`orchestrator`/
+  `product-guardian`/`learning-designer`/`child-experience-designer`/
+  `deployment-engineer`/`student-analytics`. 전부 코드 미작성(평가/조정/
+  검증 전담), CEO 없음.
+- `PROJECT_PAUL_GOAL.md` — 미션 + 6개 축(Joy/Challenge/Real Learning/
+  Visible Growth/Achievement/Continuation) + 가드레일(조작적 몰입/수치심
+  동기부여/가짜 진행도/기능우선개발 금지 등).
+- `MULTI_AGENT_WORKFLOW.md` — 토큰효율 12단계 워크플로우, 작업당 최대
+  4명(Orchestrator 제외), 정지조건(파괴적 DB/시크릿변경/유료서비스/
+  락아웃위험 인증변경/크리티컬 테스트 실패).
+- **파일럿 1건 완료**: `PROJECT_BOARD.md` "[P3] 반 삭제 확인 다이얼로그
+  문구 개선" — `AdminScreen.jsx` 반 삭제 다이얼로그에 "학생 계정/진행도는
+  유지되고 반 배정만 해제됨" 안심 문구 추가(`DATABASE.md:96`의 `ON DELETE
+  SET NULL` 실측 사실 근거). 소집: Implementer(본 세션)+QA
+  Reviewer(서브에이전트, PASS)+Deployment Engineer(본 세션) — Product
+  Guardian 등 학생경험 전문가는 관리자 전용 화면이라 불필요 판단해
+  미소집(워크플로우의 "필요한 경우만 소집" 원칙 실증). 결정 기록:
+  `docs/agent-decisions/0001-class-delete-dialog-copy.md`.
+- 검증: `npm run build` PASS(2회, 프레임워크 구축 전/파일럿 후), 신규
+  agent 7개 파일이 세션에 "사용 가능"으로 뜸을 확인(discoverable 검증).
+  배포 검증은 아래 별도 기록.
 
 ## 2026-07-20 (2차) — Vercel 프로덕션 배포 정체(Hobby 12개 함수 한도 초과) P0 해소 — 관리자 PIN 액션 3개를 `api/admin-pin-actions.js`로 통합 — Engineering Head
 
