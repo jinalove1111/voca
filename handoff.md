@@ -1,5 +1,173 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-20 (1차, 시즌 경계 타임스탬프 비교 버그 수정 + 시즌 패널 안내 문구 정정 — Engineering Head)_
+_최종 갱신: 2026-07-20 (2차, Vercel 프로덕션 배포 정체 P0 해소 — 관리자 PIN 액션 3개 통합으로 서버리스 함수 14→12개 — Engineering Head)_
+
+## 2026-07-20 (2차) — Vercel 프로덕션 배포 정체(Hobby 12개 함수 한도 초과) P0 해소 — 관리자 PIN 액션 3개를 `api/admin-pin-actions.js`로 통합 — Engineering Head
+
+`git log`로 확인된 커밋 5개(이번 세션 전체): `cf491f0`(배포 정체 체크포인트
+기록) → `284bb75`(원인 조사 체크포인트 갱신, Hobby 함수 한도 초과 가설) →
+`101a7c2`(원인 실측 확정) → `819a731`(구현 — 관리자 PIN 액션 3개 통합) →
+`6cfe30a`(구현 나머지 절반 — 호출부/테스트/문서 참조 갱신, push 전 발견된
+`819a731` 누락분 보완). 앞 3개 커밋은 `.ai-status/
+engineering-head-vercel-deploy-verify.json`에만 체크포인트로 기록돼 있고
+`handoff.md`에는 아직 기록되지 않았던 상태라, 이번 문서화 세션에서 배경
+조사부터 구현·배포·검증까지 전체를 처음으로 handoff.md에 정리한다.
+
+### 배경 — 원인 실측 확정 (`cf491f0`/`284bb75`/`101a7c2`)
+
+- 2026-07-19 세션 9차(House System, `dbda442`) 이후 모든 Vercel 배포가
+  조용히 실패해온 사실이 확정됐다. 근거 3가지가 정확히 일치(추측 아님,
+  `.ai-status/engineering-head-vercel-deploy-verify.json` 원문):
+  1. `git ls-tree`로 `api/` 라우트 파일(밑줄 헬퍼 제외) 개수 실측 — 마지막
+     성공 배포 커밋(`718d1a9`)은 12개, 조사 시점 HEAD는 14개.
+  2. Vercel 공식 문서(functions/runtimes, 2026-07-01 갱신) 원문 인용:
+     "For Hobby, this approach is limited to 12 Vercel Functions per
+     deployment"(Vite 등 non-Next 프레임워크는 `api/` 파일 1개=함수 1개
+     직접 매핑).
+  3. 라이브 사이트 직접 curl 실측 — `718d1a9` 시점 12개 파일 전부 HTTP
+     405(GET 거부 = 함수가 실제로 살아있다는 증거), House System 이후
+     신규 2개(`compute-word-king.js`/`start-new-season.js`)는 HTTP
+     404(한 번도 배포된 적 없음), `api/_pinAuth.js`는 HTTP 404(밑줄 제외
+     관례가 실제 배포에서도 작동 중임을 실측 확인 — 문서만으로 판단하지
+     않음).
+- 이 조사는 이전 세션이 이미 완료해 `.ai-status`에 체크포인트로 남겼으나
+  (규칙 17), 사람이 읽는 `handoff.md`에는 반영되지 않은 상태였다 — 이번
+  세션에서 이 배경 조사 자체가 처음 handoff.md에 기록된다(재조사 아님,
+  기록 누락 보완).
+
+### Phase 1 — 보안 리뷰 먼저 (구현 착수 전 security-reviewer dispatch)
+
+- 함수 개수 14→12 감축을 위해 통합 후보 3개 파일을 골랐다:
+  `api/bulk-generate-temp-pins.js`/`api/set-pin-setup-allowed.js`/
+  `api/unlock-student-pin.js` — 셋 다 정확히 같은 인가 게이트
+  (`_pinAuth.js`의 `checkAdminReauth()`)를 요청마다 재검증하는 공통점이
+  있어 통합 후보로 선정.
+- security-reviewer 서브에이전트가 코드 재검증(비교군으로
+  `clear-student-pin.js`/`set-student-pin.js`/`self-set-student-pin.js`/
+  `student-pin-status.js`/`verify-admin-pin.js`/`verify-student-pin.js`도
+  전부 다시 읽음) 후 **PASS** 판정 — 숨은 신뢰 경계 차이 없음, 권한
+  상승 위험 없음. 필수 조건 2가지 명시:
+  1. 각 액션의 요청 필드명(`studentIds` 배열 vs `studentId` 단수 vs
+     bulk는 대상 필드 없음)과 응답 바디 형태(특히
+     `bulk_generate_temp_pins`는 `ok` 필드 없이 `{count,results}`만)를
+     통일하지 않고 원본 그대로 보존할 것.
+  2. `scripts/testStudentPinAuth.mjs`/`scripts/testStudentPinSelfSetup.mjs`
+     가 이 3개 파일을 `import()`로 직접 로드하므로 같은 작업 단위로
+     갱신하지 않으면 `verify:login`이 `ERR_MODULE_NOT_FOUND`로 깨짐.
+
+### Phase 2 — 구현 (`819a731` + `6cfe30a`)
+
+- `api/admin-pin-actions.js` 신설 — `req.body.action`(허용값
+  `bulk_generate_temp_pins`/`set_pin_setup_allowed`/`unlock_student_pin`,
+  `Set`으로 명시적 allowlist) 기반 dispatch. `checkAdminReauth()`가 action
+  분기보다 항상 먼저 실행돼, 미인증 요청이 action 값으로 어떤 액션이
+  존재하는지 탐지할 수 없다. 각 액션 블록은 원본 3개 파일의 로직을 그대로
+  복사(필드명/응답 형태 무변경, security-reviewer 조건 1 준수). 미인증/
+  미지정 action은 400, 알 수 없는 action도 400.
+- `src/components/AdminScreen.jsx`의 3개 호출 지점
+  (`handleBulkGeneratePins`/`handleTogglePinSetupAllowed`+
+  `handleBulkAllowPinSetup`/`handleUnlockPin`)을 `/api/admin-pin-actions`
+  + `action` 필드로 갱신, 응답 파싱 로직(`data.ok`/`data.reason`/
+  `data.results` 등)은 무변경.
+- `scripts/testStudentPinAuth.mjs`/`scripts/testStudentPinSelfSetup.mjs`의
+  `import()` 경로를 `admin-pin-actions.js`로 갱신(security-reviewer 조건
+  2 준수).
+- 원본 3개 파일 삭제. 부수적으로 `api/_pinAuth.js`/
+  `api/clear-student-pin.js`/`scripts/hooks/suggestVerifyDomain.mjs`의
+  삭제된 파일명 참조 주석/정규식도 갱신(기능 무변경).
+- `819a731`이 staging 실수로 새 파일 생성+3개 파일 삭제만 담고 호출부
+  갱신을 누락한 것을 push 전에 발견(원격에는 반영된 적 없음) —
+  `6cfe30a`가 누락분(호출부/테스트/registry.mjs 등록)을 보완해 두 커밋을
+  합쳐야 완전한 원자적 변경이 된다(규칙 14 파일/기능 단위 소커밋과는
+  별개로, 이 경우는 같은 논리적 변경을 두 커밋으로 분할한 것 — 커밋
+  메시지에 이유 명시).
+- **api 파일 수 실측**: 통합 전 14개 → 통합 후 **12개**(밑줄 헬퍼
+  `_pinAuth.js` 제외) — `git ls-tree -r --name-only HEAD -- api/ | grep
+  -v '^api/_'`로 확인.
+
+### Phase 3 — 테스트
+
+- 신규 `scripts/testAdminPinActionsDispatch.mjs` — DB 쓰기 없이 항상
+  결정적으로 도는 순수 라우팅/인가순서/필드검증 테스트 10개(method 체크,
+  인가가 action 분기보다 먼저인지, action 누락·미지정 400, 각 액션 필드
+  검증, DB 단계 도달 확인). `tests/harness/registry.mjs`의 `login`
+  도메인에 등록.
+- **로컬 실행 결과**: `node scripts/testAdminPinActionsDispatch.mjs`
+  10/10 PASS, `npm run build` PASS.
+- `testStudentPinAuth.mjs`/`testStudentPinSelfSetup.mjs`는 로컬에
+  `SUPABASE_SERVICE_ROLE_KEY`가 없어(`ARCHITECTURE.md` 기존 문서화된
+  제약) anon key 폴백이 v1.9 RLS 컬럼권한에 막혀 `permission denied for
+  table students`로 DB 단계부터 실패 — 이 세션이 전혀 손대지 않은
+  `api/clear-student-pin.js`를 테스트하는 `scripts/testClearStudentPin.mjs`
+  도 동일 에러로 실패하는 것을 실측 확인해 **회귀가 아니라 사전 존재
+  환경 제약**임을 확정(규칙 15 패턴 — 수정 전 코드 동치물로 재현 확인).
+- `npm run verify:login` 전체 실행 결과: `testAdminPinActionsDispatch.mjs`
+  만 신규로 PASS 추가, 나머지 로그인 도메인 FAIL 목록
+  (`testStudentSelectPinStatus.mjs`/`testStudentPinAuth.mjs`/
+  `testStudentPinSelfSetup.mjs`/`testClearStudentPin.mjs`)은 이번 세션
+  이전부터 있던 동일한 로컬 서비스롤 키 부재 문제 그대로(신규 회귀
+  없음, `PROJECT_BOARD.md` BLOCKED 카드와 동일 근본 원인).
+
+### Phase 4 — 배포 + 라이브 검증
+
+- push 후 Vercel이 새로 배포됨(라이브 `index.html`의 `Last-Modified`가
+  정체돼 있던 `2026-07-19T04:40:13Z`에서 새로운 타임스탬프로 갱신됨,
+  라이브 번들 해시 `index-B3NOr6tz.js`가 로컬 `npm run build` 산출물과
+  정확히 일치 — 동일 소스 확인).
+- 라이브 실측:
+  - `/api/admin-pin-actions` GET → 405(존재 확인)
+  - `/api/bulk-generate-temp-pins`, `/api/set-pin-setup-allowed`,
+    `/api/unlock-student-pin` → 전부 404(삭제 확인)
+  - `/api/compute-word-king`, `/api/start-new-season`(세션 9~11차부터
+    배포 안 되고 있던 것들) → 이제 405(존재 확인 — **이번 수정으로 배포
+    정체 전체가 풀렸다는 결정적 증거**, House System/Seasonal
+    Progression 카드가 이미 여러 세션 전에 구현·커밋됐음에도 실제로는
+    한 번도 라이브에 반영되지 않고 있었다는 뜻이기도 하다).
+
+### 라이브 스모크 테스트 — 부분 완료, 운영자 확인 1건 필요
+
+- 라우팅/인가 경로는 라이브에서 직접 HTTPS로 실측 확인 완료: GET→405,
+  미인증/틀린 adminPin→전부 `not_authorized`, 알 수 없는 action→틀린
+  adminPin과 겹쳐 `not_authorized`로 먼저 걸러짐(설계대로 정상 — 인가가
+  action 분기보다 항상 먼저라는 Phase 2 설계가 프로덕션에서도 그대로
+  동작).
+- QA 디스포저블 학생을 만들어 실제 성공 경로(`set_pin_setup_allowed`/
+  `unlock_student_pin`)까지 라이브로 찌르려 했으나, 로컬 `.env.local`의
+  `ADMIN_PIN` 값이 Vercel 프로덕션에 설정된 `ADMIN_PIN`과 다른 값이라
+  (별도 환경변수라 당연히 정상 — 로컬/프로덕션 시크릿을 동일하게 두지
+  않는 게 맞다) `not_authorized`로 거부됨 — 이 자체가 인가 게이트가
+  프로덕션에서 정확히 작동한다는 증거이기도 하다. 에이전트가 프로덕션
+  `ADMIN_PIN`을 알아내거나 추측 시도하는 건 절대 하지 않았다(보안 원칙).
+- 이 때문에 3개 액션의 "성공 경로"(실제 DB에 반영되는지)는 이 세션에서
+  라이브로 끝까지 확인하지 못했다 — **운영자가 실제 AdminScreen 관리자
+  화면에서 PIN 재설정 허용 토글 1번 + 잠금 해제 버튼 1번(테스트용 아무
+  학생이나, 되돌리기 쉬운 액션들) 눌러서 정상 동작하는지 30초 확인
+  필요**. 이게 이 작업의 유일한 미확인 항목.
+
+### 롤백 계획
+
+문제 발생 시 이 두 커밋(`819a731`+`6cfe30a`)을 `git revert`하면 기존
+3-파일 구조로 즉시 복귀 가능하나, 그 순간 api 함수 수가 다시 14개로
+늘어 원래 배포 정체 문제가 재발한다(운영자 인지 필요 — 롤백을 고려할
+정도의 문제라면 함수 수 재감축 없이는 롤백해선 안 됨).
+
+### 종합
+
+- 코드 변경 파일: `api/admin-pin-actions.js`(신규), `api/
+  bulk-generate-temp-pins.js`/`api/set-pin-setup-allowed.js`/`api/
+  unlock-student-pin.js`(삭제), `api/_pinAuth.js`, `api/
+  clear-student-pin.js`, `src/components/AdminScreen.jsx`, `scripts/
+  testStudentPinAuth.mjs`, `scripts/testStudentPinSelfSetup.mjs`,
+  `scripts/testAdminPinActionsDispatch.mjs`(신규), `scripts/hooks/
+  suggestVerifyDomain.mjs`, `tests/harness/registry.mjs`.
+- 신규 SQL 없음, 신규 Supabase 컬럼/테이블 없음 — `DATABASE.md` 갱신
+  대상 아님.
+- 신규 아키텍처 제약(향후 세션 재발 방지용): Vercel Hobby 플랜은 배포당
+  서버리스 함수 12개 한도 — `api/*.js`(밑줄 헬퍼 제외) 신규 파일 추가
+  전 반드시 현재 개수를 확인할 것. 상세는 `ARCHITECTURE.md` "8. 배포
+  프로세스"/`DEVELOPER_GUIDE.md` "Deployment Checklist" 신규 항목.
+- 검수 대기: security-reviewer는 이미 Phase 1에서 PASS 판정 완료(이
+  세션 자체 내 수행) — 남은 것은 qa-reviewer의 별도 코드 리뷰(미착수)와
+  위 "라이브 스모크 테스트" 섹션의 운영자 확인 1건.
 
 ## 2026-07-20 (1차) — 시즌 경계 타임스탬프 비교 버그 수정(PostgREST timestamptz vs JS toISOString) + 시즌 패널 안내 문구 정정 — Engineering Head
 

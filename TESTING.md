@@ -72,6 +72,7 @@ _작성: 2026-07-18. `scripts/` 전체(69개 파일)를 ls + 각 파일의 impor
 | `testSpellingSettings.mjs` | 반별 쓰기시험 설정 저장/조회 |
 | `testGamificationSettings.mjs`(2026-07-19, Teacher Controls 마스터 스위치) | `classes.gamification_enabled` 저장/조회 — `testSpellingSettings.mjs`와 완전히 같은 패턴이지만, 이 컬럼은 `spelling_direction`처럼 "컬럼 없으면 그 필드만 빼고 재시도"(graceful degradation, `setClassSettings`)라 예외가 아니라 round-trip 값으로 SQL 실행 여부를 판단하는 차이가 있음(파일 헤더 주석 참고). 존재하지 않는 반/신규 반 모두 기본값이 false(opt-in)임을 검증 — Dashboard.jsx의 Paul Rank UI 게이팅과 같은 boundary에서의 등가 테스트(React 렌더 테스트 인프라가 이 저장소에 없어 wordLibrary.js 레벨에서 검증) |
 | `testStudentPinAuth.mjs` / `testStudentPinSelfSetup.mjs` / `testClearStudentPin.mjs` | PIN 인증/자기설정/초기화(서버리스 함수 경로, anon 폴백 시 v1.9 컬럼권한에 막히는 케이스 별도 처리) |
+| `testAdminPinActionsDispatch.mjs`(2026-07-20, `api/admin-pin-actions.js` 신설 — 관리자 PIN 액션 3개 통합) | DB에 전혀 쓰지 않는(로컬/CI 어디서든 항상 결정적) 순수 라우팅/인가순서/필드검증 10개(method 체크, 인가가 action 분기보다 항상 먼저인지, action 누락·미지정 400, 각 액션 필드 검증) — `testStudentPinAuth.mjs`/`testStudentPinSelfSetup.mjs`와 같은 `callHandler(handler, body)` 직접 호출 패턴이지만, 실제 DB write 경로 검증은 그 두 스크립트가 이미 덮으므로 이 스크립트는 중복하지 않음(빌드 불필요, `builders: []`) |
 | `testRlsSecurity.mjs` | v1.9 컬럼권한(anon의 PIN 컬럼 접근 차단) 실측 |
 | `dbIntegrityAudit.mjs` | 읽기 전용 — 고아 FK/중복 행 전수 감사(쓰기 없음, `QA_` 데이터 생성 안 함) |
 | `testXpLedgerDb.mjs`(2026-07-19, Paul Rank System; 2026-07-19 v2.3.1 갱신) | `xp_ledger`/`xp_totals` — `api/grant-xp.js`를 `testStudentPinAuth.mjs`와 같은 방식(fake `(req,res)` 직접 호출, HTTP 서버 불필요)으로 실행해 중복 지급 방지(같은 `sourceEventId` 두 번 요청 → 두 번째는 `duplicate:true`, 원장 행 1개 유지)와 Unit 전환이 XP에 영향 없음을 실측. v2.3.1 추가분(3b번 섹션): 같은 day 기간키로 8번 반복 요청해도 원장 행이 정확히 1개 유지됨을 실측(여러 단어에 걸친 반복 시뮬레이션) + 조작된 기간키(wordId 끼워넣기/가짜 미래 날짜)와 예약(planned) 이벤트(`word-king-complete`) 거부 실측(5번 섹션). `SUPABASE_SERVICE_ROLE_KEY`가 로컬에 없으면(이 저장소의 알려진 상태) 실제 쓰기 경로 검증은 SKIP — `xp_ledger`가 anon INSERT 권한을 아예 갖지 않도록 설계돼 있어 서비스롤 키 없이는 검증 불가능한 것 자체가 설계 의도(Vercel 프로덕션에서는 서비스롤 키가 설정돼 있어 전체 검증됨) |
@@ -120,7 +121,7 @@ npm run verify:audio-tts        npm run verify:all        (전체 순차, 하나
 
 | 도메인 | 커버 | 실제 실행되는 기존 스크립트 |
 |---|---|---|
-| login | O | testStudentLogin/testStudentSelectPinStatus/testStudentPinAuth/testStudentPinSelfSetup/testClearStudentPin/testRlsSecurity/testLoginRestoreCrash |
+| login | O | testStudentLogin/testStudentSelectPinStatus/testStudentPinAuth/testStudentPinSelfSetup/testAdminPinActionsDispatch(2026-07-20 신규)/testClearStudentPin/testRlsSecurity/testLoginRestoreCrash |
 | student | O | testIdentityMigration/testMultiClass/testRenameClass/testClassDeleteCascade |
 | admin | O | testDashboard/testSpellingSettings/testSpellingV2Db (+extra: testGamificationSettings/testEntranceTest/testEntranceTestDb) |
 | homework | O | testDailyAssignment/testFutureAssignment/testSyncProgress |

@@ -1,6 +1,36 @@
 # Paul Easy Voca — 로드맵
 
-_최종 갱신: 2026-07-18 (v1.7~v2.2 + 2026-07-18 Production Readiness 감사/QA 스윕 추가 — 기존 v1.6 이하 섹션은 원본 그대로 유지, 아래에 이어서 추가함)_
+_최종 갱신: 2026-07-20 (Vercel 프로덕션 배포 정체 P0 사고 + 해소 추가 — 기존 섹션은 원본 그대로 유지, 아래에 이어서 추가함)_
+
+## 2026-07-20 — Vercel 프로덕션 배포 정체 P0 사고 + 해소 (약 1일간 모든 배포 조용히 실패)
+
+2026-07-19 세션 9차(House System, `dbda442`) 이후 Vercel Hobby 플랜의
+배포당 서버리스 함수 12개 한도(`api/` 파일 1개=함수 1개 직접 매핑,
+Vite/non-Next 프레임워크 특성)를 `api/` 파일 14개로 초과해, 그 이후의
+모든 `git push`가 HTTP 에러 없이 **조용히** 배포 실패하는 상태였다 —
+2026-07-19 세션 10~11차(Seasonal Progression, Parent Motivation)가 코드
+레벨에서는 완료·커밋됐지만 실제 라이브 사이트에는 전혀 반영되지 않고
+있었다는 뜻이다.
+
+- **원인 실측 확정**(추측 아님, 3가지 독립 증거 일치): ① `git ls-tree`로
+  마지막 성공 배포 커밋(`718d1a9`, 12개) vs 조사 시점 HEAD(14개) 파일 수
+  차이, ② Vercel 공식 문서의 Hobby 12개 함수 한도 명시, ③ 라이브 curl
+  실측 — 12개는 405(살아있음), House System 이후 신규 2개는 404(배포된
+  적 없음).
+- **해소**: 정확히 같은 인가 게이트(`checkAdminReauth()`)를 공유하는
+  관리자 PIN 액션 3개(`bulk-generate-temp-pins.js`/
+  `set-pin-setup-allowed.js`/`unlock-student-pin.js`)를
+  `api/admin-pin-actions.js` 하나로 통합(`action` 필드 dispatch) —
+  구현 전 security-reviewer PASS 판정 확보. 함수 수 14→12개로 감축,
+  배포 정체 해소를 라이브에서 실측 확인(House System/Seasonal
+  Progression이 배선한 신규 함수들이 이제 정상 배포돼 405 응답).
+- 라이브 스모크 테스트는 라우팅/인가 경로까지만 이 세션에서 확인 —
+  3개 액션의 실제 DB 반영(성공 경로)은 로컬/프로덕션 `ADMIN_PIN`이
+  서로 다른 값이라(정상 설계) 운영자 확인 1건이 남아있다.
+- 신규 아키텍처 제약으로 명문화: 이후 `api/*.js` 신규 파일을 추가하기
+  전 반드시 현재 함수 개수를 먼저 확인할 것(`ARCHITECTURE.md` "8. 배포
+  프로세스" 4번, `DEVELOPER_GUIDE.md` "Deployment Checklist" 6번).
+- 상세: `handoff.md` 2026-07-20(2차), `PROJECT_BOARD.md` VERIFY 카드.
 
 ## 2026-07-18 — Production Readiness 5개 영역 종합 감사 + 전체 워크플로우 QA 파괴 테스트 스윕 (production-ready 판정)
 
