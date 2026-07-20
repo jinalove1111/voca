@@ -1,0 +1,23 @@
+{
+  "agent_name": "backend",
+  "role": "서버 로직 구현",
+  "task_id": "multi-textbook-assignments",
+  "task": "decision 0004 승인 설계에 따른 다중 교재 동시 배정 백엔드 지원 (src/utils/wordLibrary.js additive)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-21T00:00:00+09:00",
+  "updated_at": "2026-07-21T00:00:00+09:00",
+  "files_owned": [
+    "src/utils/wordLibrary.js"
+  ],
+  "files_read": [
+    "docs/agent-decisions/0004-multi-textbook-architecture.md",
+    "supabase_v2_9_student_class_assignments.sql",
+    "TESTING.md",
+    "package.json",
+    "src/App.jsx"
+  ],
+  "summary": "getStudentClassAssignments/assignTextbook/removeTextbookAssignment/setAssignmentUnit/setPrimaryAssignment 5개 신규 함수 + getStudentWords(studentId, { classId })의 선택적 override 파라미터를 wordLibrary.js에 추가(순수 additive, 기존 시그니처/호출부 무변경). 테이블 부재(supabase_v2_9_student_class_assignments.sql 미실행) 감지는 isMissingTableError() 헬퍼(PGRST205/42P01 + 메시지 텍스트 이중 체크) — 라이브 쿼리로 실제 에러 코드가 PGRST205임을 실측 확인. 테이블 부재/학생 배정 0건 시 students.class_id/current_unit_id 기반 synthetic 단일 배정으로 폴백(모든 읽기 함수, 절대 throw 안 함). 쓰기 함수(assignTextbook/removeTextbookAssignment/setAssignmentUnit/setPrimaryAssignment)는 테이블 부재 시 명확한 catchable 에러를 던짐(관리자 UI가 마이그레이션 실행 전까지 옵션 자체를 숨겨야 하는 계약). getStudentWords override 검증은 _studentAssignmentsCache(동기 캐시, getStudentClassAssignments가 채움)를 통해 이뤄지며, 캐시 미스/검증 실패 시 override를 조용히 무시하고 기존 primary 경로로 폴백. npm run build 통과, verify:student/unit/daily-study/word-assignment/homework/admin 전부 PASS.",
+  "blocker": null,
+  "next_action": "관리자 UI(교재 배정/해제/전환 화면) 구현은 범위 밖 — 별도 세션. supabase_v2_9_student_class_assignments.sql은 운영자가 Supabase 대시보드에서 수동 실행 필요(CLAUDE.md 규칙 8). 새 함수들에 대한 자동 테스트(scripts/testXxx.mjs)는 아직 작성 안 함 — 요청 범위에서 명시적으로 later step으로 제외됨."
+}

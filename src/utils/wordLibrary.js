@@ -817,6 +817,225 @@ export async function setStudentsClassBulk(ids, className, unitName) {
   await refreshStudents()
 }
 
+// ════════════════════════════════════════════════════════════════════════
+// v2.9 다중 교재(Multi-Textbook) 동시 배정 — decision 0004
+// (docs/agent-decisions/0004-multi-textbook-architecture.md)
+//
+// student_class_assignments 조인 테이블은 supabase_v2_9_student_class_
+// assignments.sql이 아직 실행 안 됐을 수 있다(CLAUDE.md 규칙 8 — 에이전트가
+// DDL을 직접 실행하지 않음, 운영자가 Supabase 대시보드에서 수동 실행 예정).
+// 아래 함수들은 그 SQL이 실행되기 전/후 어느 쪽이든 앱을 절대 깨뜨리지
+// 않아야 한다(규칙 9) — "테이블 없음" 감지 방식은 isMissingTableError 참고.
+//
+// students.class_id/current_unit_id는 계속 "권위 있는 필드"로 남는다(삭제
+// 없음) — is_primary=true 행의 캐시(sync)일 뿐이다. 그래서 이 섹션 아래
+// 함수들을 전혀 호출하지 않는 기존 15개 이상의 호출부(getStudentClassId/
+// resolveStudentUnitObj/getStudentWords의 기존 무-override 경로 등)는 이
+// 섹션이 통째로 존재하지 않는 것처럼 계속 동작한다 — 순수 추가(additive).
+// ════════════════════════════════════════════════════════════════════════
+
+// PostgREST가 스키마 캐시에 없는 테이블(= DB에 아예 없는 테이블, 이 SQL
+// 미실행 상태)을 조회하면 보통 PGRST205("Could not find the table ... in
+// the schema cache")로 응답한다 — raw Postgres 42P01("relation ... does not
+// exist")과는 다른 레이어의 에러 코드다. 이 파일의 기존 관례
+// (fetchProgressBackupStrict의 42703/42P01 이중 체크, 위 906행 인근)에
+// PGRST205를 추가하고, code 필드가 없는 예외적인 에러 모양까지 방어적으로
+// 커버하기 위해 메시지 텍스트도 보조로 확인한다.
+function isMissingTableError(error) {
+  if (!error) return false
+  if (error.code === '42P01' || error.code === 'PGRST205') return true
+  const msg = String(error.message || '').toLowerCase()
+  return msg.includes('does not exist') || msg.includes('schema cache')
+}
+
+// getStudentWords(studentId, { classId })의 override 검증을 "동기"로 하기
+// 위한 캐시(아래 getStudentWords 주석 참고) — getStudentClassAssignments가
+// 호출될 때마다 최신 결과로 채워진다. _cache/_students/_dailyAssignments와
+// 같은 "한 번 비동기로 채우고 이후 동기로 읽는다" 관례를 그대로 재사용.
+const _studentAssignmentsCache = new Map()
+
+// 테이블이 없거나(마이그레이션 전) 학생에게 배정 행이 0개(신규 학생 등
+// 백필 이후 시점에 앱 계층 insert 없이 생성된 경우)이면, students.class_id/
+// current_unit_id/unit_name으로부터 합성(synthetic) 단일 배정 1개를
+// 만들어 반환한다 — 오늘의 단일 반 동작과 100% 동일. resolveStudentUnitObj
+// 기반 getStudentUnitId를 그대로 재사용해 "표시되는 유닛과 실제 로드되는
+// 단어가 항상 같은 유닛" 불변식을 여기서도 그대로 유지한다.
+function syntheticPrimaryAssignment(studentId) {
+  const s = _students.get(studentId)
+  if (!s || !s.classId) return []
+  return [{
+    id: null, // 합성 행 — 실제 student_class_assignments.id 없음
+    studentId,
+    classId: s.classId,
+    unitId: getStudentUnitId(studentId),
+    isPrimary: true,
+  }]
+}
+
+// 1) 읽기 전용 — 학생의 전체 교재 배정 목록. 테이블 부재/학생 배정 0건 모두
+// syntheticPrimaryAssignment로 폴백하므로, 호출부는 "테이블이 있는지"를
+// 절대 스스로 분기할 필요가 없다(이 함수가 그 분기를 흡수하는 게 핵심
+// 계약). getStudentWords의 classId override 검증용 캐시도 여기서 채운다.
+export async function getStudentClassAssignments(studentId) {
+  if (!studentId) return []
+  const { data, error } = await supabase
+    .from('student_class_assignments')
+    .select('id,student_id,class_id,current_unit_id,is_primary')
+    .eq('student_id', studentId)
+    .order('is_primary', { ascending: false })
+  let result
+  if (error) {
+    if (!isMissingTableError(error)) {
+      // 테이블은 있는데 다른 이유(네트워크 등)로 실패 — 이 파일 전역 원칙
+      // (읽기 함수는 학생 화면을 절대 깨뜨리지 않음, fetchXpTotal과 동일
+      // 정신)대로 조용히 단일 반 폴백으로 처리하되 콘솔에는 남긴다.
+      console.warn('[wordLibrary] getStudentClassAssignments failed (non-fatal, falling back to single-class):', error.message)
+    }
+    result = syntheticPrimaryAssignment(studentId)
+  } else if (!data || data.length === 0) {
+    result = syntheticPrimaryAssignment(studentId)
+  } else {
+    result = data.map((r) => ({
+      id: r.id,
+      studentId: r.student_id,
+      classId: r.class_id,
+      unitId: r.current_unit_id,
+      isPrimary: !!r.is_primary,
+    }))
+  }
+  _studentAssignmentsCache.set(studentId, result)
+  return result
+}
+
+// 2) 쓰기 — 두 번째 이상 교재 배정. is_primary는 항상 false로 insert한다
+// (주 교재를 바꾸는 건 setPrimaryAssignment의 책임, 이 함수의 책임 아님).
+// current_unit_id는 의도적으로 null로 시작한다(설계 선택, 문서화: 이 반의
+// "첫 유닛"으로 자동 지정하지 않는 이유는 관리자가 setAssignmentUnit으로
+// 명시적으로 진도를 고르게 하기 위함 — 자동으로 유닛을 고르면 관리자가
+// 확인 없이 잘못된 유닛에서 시작하는 상태를 조용히 만들 수 있음). 호출부가
+// 필요하면 assignTextbook 직후 setAssignmentUnit을 이어서 호출한다.
+// unique(student_id, class_id) 충돌(23505)은 "이미 배정됨" 상태이므로
+// 에러 없이 조용히 no-op(멱등 계약).
+// 테이블 미존재(마이그레이션 전)면 명확히 catchable한 에러를 던진다 — 이건
+// "아직 안 된 기능"을 위한 쓰기 작업이라, 호출부(관리자 UI)는 테이블이
+// 생기기 전까지 "교재 추가" 옵션 자체를 노출하면 안 된다(계약).
+export async function assignTextbook(studentId, classId) {
+  if (!studentId || !classId) throw new Error('assignTextbook: studentId/classId가 필요합니다.')
+  const { error } = await supabase.from('student_class_assignments').insert({
+    student_id: studentId,
+    class_id: classId,
+    current_unit_id: null,
+    is_primary: false,
+  })
+  if (error) {
+    if (isMissingTableError(error)) {
+      throw new Error('student_class_assignments 테이블이 아직 없습니다 (supabase_v2_9_student_class_assignments.sql 미실행) — 관리자 UI는 이 마이그레이션이 실행되기 전까지 "교재 추가" 옵션을 노출하면 안 됩니다.')
+    }
+    if (error.code === '23505') return // unique(student_id, class_id) 충돌 — 이미 배정됨, no-op(멱등)
+    throw error
+  }
+  _studentAssignmentsCache.delete(studentId) // 캐시 무효화 — 다음 getStudentClassAssignments가 새로 채움
+}
+
+// 3) 쓰기 — 교재 배정 해제. is_primary=true 행(=학생의 유일한 진실 원천,
+// students.class_id/current_unit_id와 동기화돼 있는 행)은 이 함수로 절대
+// 지울 수 없다 — "주 교재를 바꾼다"는 다른 연산(setPrimaryAssignment)이고,
+// 이 함수는 그걸 대신하지 않는다. 이 불변식 덕분에 이 함수를 통해서는
+// 학생이 배정 0개 상태가 될 수 없다(주 배정은 항상 최소 1개 남음).
+export async function removeTextbookAssignment(studentId, classId) {
+  if (!studentId || !classId) throw new Error('removeTextbookAssignment: studentId/classId가 필요합니다.')
+  const { data: existing, error: selErr } = await supabase
+    .from('student_class_assignments')
+    .select('id,is_primary')
+    .eq('student_id', studentId).eq('class_id', classId).maybeSingle()
+  if (selErr) {
+    if (isMissingTableError(selErr)) {
+      throw new Error('student_class_assignments 테이블이 아직 없습니다 (supabase_v2_9_student_class_assignments.sql 미실행) — 제거할 배정 자체가 존재할 수 없습니다.')
+    }
+    throw selErr
+  }
+  if (!existing) return // 이미 없음 — no-op(멱등)
+  if (existing.is_primary) {
+    throw new Error('주 교재(is_primary) 배정은 removeTextbookAssignment로 제거할 수 없습니다 — 먼저 setPrimaryAssignment로 다른 교재를 주 교재로 바꾼 뒤 다시 시도하세요.')
+  }
+  const { error: delErr } = await supabase.from('student_class_assignments').delete().eq('id', existing.id)
+  if (delErr) throw delErr
+  _studentAssignmentsCache.delete(studentId)
+}
+
+// 4) 쓰기 — 특정 (학생, 반) 배정의 현재 유닛 변경. setStudentUnit(786행
+// 인근)과 같은 검증 패턴을 재사용한다 — _cache는 반 "이름"으로 키잉되므로
+// getClassNameById로 이름을 구한 뒤 그 반의 units 배열 안에서만 unitId를
+// 찾는다. 다른 반 소속 unitId/존재하지 않는 id를 넘기면(호출부 버그) 저장
+// 하지 않고 명확히 던진다 — decision 0004가 못박은 불변식("현재 유닛은
+// 반드시 그 반 소속", supabase_v2_1_student_unit_decouple.sql:129-133과
+// 동일 불변식을 조인 테이블에서도 유지)을 재확인하는 것.
+export async function setAssignmentUnit(studentId, classId, unitId) {
+  if (!studentId || !classId) throw new Error('setAssignmentUnit: studentId/classId가 필요합니다.')
+  const clsName = getClassNameById(classId)
+  const units = _cache[clsName]?.units || []
+  if (unitId != null && !units.some((u) => u.id === unitId)) {
+    throw new Error(`setAssignmentUnit: 유닛(${unitId})이 반(${classId}) 소속이 아닙니다.`)
+  }
+  const { error } = await supabase.from('student_class_assignments')
+    .update({ current_unit_id: unitId })
+    .eq('student_id', studentId).eq('class_id', classId)
+  if (error) {
+    if (isMissingTableError(error)) {
+      throw new Error('student_class_assignments 테이블이 아직 없습니다 (supabase_v2_9_student_class_assignments.sql 미실행).')
+    }
+    throw error
+  }
+  _studentAssignmentsCache.delete(studentId)
+}
+
+// 5) 쓰기 — 주 교재 전환. 대상 (학생, 반) 행의 is_primary를 true로, 그
+// 학생의 다른 모든 배정 행은 false로 플립하고, students.class_id/
+// current_unit_id를 그 배정 행과 동기화한다 — 이 동기화 덕분에
+// getStudentClassId/resolveStudentUnitObj/getStudentWords의 기존
+// "override 없는" 경로를 포함한 모든 기존 단일-반 호출부가 이 함수
+// 호출만으로 정확히 유지된다(코드 변경 0).
+//
+// 동기화 payload는 setStudentClass(685행 인근)가 오늘 쓰는 것과 정확히
+// 같은 모양이다(base { class_id } + current_unit_id) — 값의 "출처"만
+// 다르다: setStudentClass는 유닛 "이름" 재매칭으로 unitId를 구하고, 여기는
+// 그 배정 행 자체의 current_unit_id를 그대로 신뢰한다(이 시점엔 이미 그
+// 교재 전용 진도가 배정 행에 있으므로 이름 재매칭이 필요 없고, 오히려
+// 재매칭하면 다른 교재의 같은 이름 유닛으로 잘못 튈 위험이 있다). unit_name
+// 컬럼은 setStudentClass와 마찬가지로 여기서도 갱신하지 않는다 — 현재
+// 유닛 해석은 이미 current_unit_id 우선(resolveStudentUnitObj)이라
+// unit_name은 항상 최후 폴백일 뿐이며, 두 함수의 동기화 범위를 동일하게
+// 맞추는 것이 이 함수 헤더가 요구하는 "정확히 같은 sync 로직" 요건이다.
+export async function setPrimaryAssignment(studentId, classId) {
+  if (!studentId || !classId) throw new Error('setPrimaryAssignment: studentId/classId가 필요합니다.')
+  const { data: target, error: selErr } = await supabase
+    .from('student_class_assignments')
+    .select('id,current_unit_id')
+    .eq('student_id', studentId).eq('class_id', classId).maybeSingle()
+  if (selErr) {
+    if (isMissingTableError(selErr)) {
+      throw new Error('student_class_assignments 테이블이 아직 없습니다 (supabase_v2_9_student_class_assignments.sql 미실행).')
+    }
+    throw selErr
+  }
+  if (!target) throw new Error(`setPrimaryAssignment: 학생이 반(${classId})에 배정돼 있지 않습니다 — 먼저 assignTextbook으로 배정하세요.`)
+
+  // 대상을 먼저 true로(그 다음 나머지를 false로) — 두 단계 사이에 실패해도
+  // "주 교재가 0개"가 되는 순간이 없도록(반대 순서면 그 순간이 생김).
+  const { error: trueErr } = await supabase.from('student_class_assignments')
+    .update({ is_primary: true }).eq('id', target.id)
+  if (trueErr) throw trueErr
+  const { error: falseErr } = await supabase.from('student_class_assignments')
+    .update({ is_primary: false }).eq('student_id', studentId).neq('id', target.id)
+  if (falseErr) throw falseErr
+
+  const { error: syncErr } = await supabase.from('students')
+    .update({ class_id: classId, current_unit_id: target.current_unit_id }).eq('id', studentId)
+  if (syncErr) throw syncErr
+  _studentAssignmentsCache.delete(studentId)
+  await refreshStudents()
+}
+
 // v1.3 admin dashboard — one-way, fire-and-forget sync of a student's
 // progress from their device's localStorage (the source of truth, never
 // touched by this) into Supabase, so the admin can see it from a different
@@ -1116,12 +1335,46 @@ const mapWordRow = (cw, classId) => {
   }
 }
 
-export const getStudentWords = (studentId) => {
-  const classId = getStudentClassId(studentId)
-  const unitName = getStudentUnit(studentId)
+// v2.9(decision 0004) — 두 번째 인자는 선택(optional)이다. 생략하면(기존
+// 모든 호출부, 예: App.jsx:179) 아래 로직은 v2.8까지와 100% 동일하게
+// 동작한다(override 관련 코드는 전부 무조건 false 분기로 스킵됨) — 이게
+// 이 확장의 핵심 하위호환 계약이다.
+//
+// { classId } override가 주어지면(그리고 그 값이 실제로 이 학생의 배정
+// 중 하나로 "검증"되면) 학생의 주 반이 아니라 그 반의 단어/유닛/오늘의
+// 배정을 조회한다. 검증은 반드시 getStudentClassAssignments(studentId)가
+// 미리 채워둔 _studentAssignmentsCache를 "동기"로 조회하는 방식이다 — 이
+// 함수 자체는 (App.jsx 등 15개 이상 호출부가 동기로 기대하므로) async로
+// 바꿀 수 없는데, 실제 배정 목록은 DB 조회가 필요한 비동기 정보이기
+// 때문에, 이 파일의 기존 관례(_cache/_students/_dailyAssignments — 앱
+// 시작/새로고침 시 한 번 비동기로 채우고 이후 모든 읽기는 동기)를 그대로
+// 재사용한 것. 계약: classId override를 쓰려는 호출부(교재 선택기 UI 등)는
+// 그 UI가 뜰 때 먼저 `await getStudentClassAssignments(studentId)`를 한 번
+// 호출해 캐시를 채워야 한다. 캐시가 아직 없거나(콜드 스타트) 검증에
+// 실패하면(다른 학생의 반 등) override를 조용히 무시하고 학생의 주 반으로
+// 폴백한다 — 절대 throw하지 않는다(학생 학습 화면을 절대 깨뜨리지 않는다는
+// 이 파일 전체 원칙, fetchXpTotal의 에러 시 0 폴백과 동일한 정신).
+export const getStudentWords = (studentId, { classId: classIdOverride } = {}) => {
+  const primaryClassId = getStudentClassId(studentId)
+  let classId = primaryClassId
+  let usingOverride = false
+
+  if (classIdOverride != null && classIdOverride !== primaryClassId) {
+    const cachedAssignments = _studentAssignmentsCache.get(studentId)
+    const validated = cachedAssignments?.some((a) => a.classId === classIdOverride)
+    if (validated) {
+      classId = classIdOverride
+      usingOverride = true
+    } else {
+      console.warn('[wordLibrary] getStudentWords: classId override ignored (배정 캐시 미검증 — 먼저 await getStudentClassAssignments(studentId)를 호출하세요)', { studentId, classIdOverride })
+    }
+  }
+
+  const unitName = usingOverride ? null : getStudentUnit(studentId)
   // Resolve the class by id first (robust to renames) — the joined
   // className is only a fallback for legacy rows with no class_id at all.
-  const cls = getClassNameById(classId) || getStudentClass(studentId)
+  const cls = usingOverride ? getClassNameById(classId) : (getClassNameById(classId) || getStudentClass(studentId))
+  let unitObj = null
   try {
     if (!cls) {
       console.log('[wordLibrary] getStudentWords: no class resolved', {
@@ -1134,16 +1387,26 @@ export const getStudentWords = (studentId) => {
       })
       return []
     }
-    // v2.1: 유닛 해석은 resolveStudentUnitObj 단일 경로(id 우선 → 이름 →
-    // 첫 유닛) — Dashboard가 표시하는 유닛 이름(getStudentUnit)과 여기서
-    // 로드하는 단어 목록이 구조적으로 항상 같은 유닛을 가리킨다.
-    const raw = resolveStudentUnitObj(studentId)?.words || []
+    if (usingOverride) {
+      // 학생의 주 반이 아니라 override된 반의 유닛을 해석한다 — 그 배정
+      // 행 자체의 current_unit_id를 우선(있으면), 없으면 그 반의 첫 유닛
+      // (resolveStudentUnitObj의 "반의 첫 유닛" 최후 폴백과 동일한 정신).
+      const targetUnitId = _studentAssignmentsCache.get(studentId)?.find((a) => a.classId === classId)?.unitId
+      const units = _cache[cls]?.units || []
+      unitObj = (targetUnitId && units.find((u) => u.id === targetUnitId)) || units[0] || null
+    } else {
+      // v2.1: 유닛 해석은 resolveStudentUnitObj 단일 경로(id 우선 → 이름 →
+      // 첫 유닛) — Dashboard가 표시하는 유닛 이름(getStudentUnit)과 여기서
+      // 로드하는 단어 목록이 구조적으로 항상 같은 유닛을 가리킨다.
+      unitObj = resolveStudentUnitObj(studentId)
+    }
+    const raw = unitObj?.words || []
     if (!raw.length) {
       console.log('[wordLibrary] getStudentWords: empty result', {
         selectedStudentId: studentId,
         selectedClass: cls,
         selectedClassId: classId,
-        selectedUnit: unitName,
+        selectedUnit: unitObj?.name || unitName,
         queryResult: raw,
         queryError: null,
       })
@@ -1183,7 +1446,7 @@ export const getStudentWords = (studentId) => {
       selectedStudentId: studentId,
       selectedClass: cls,
       selectedClassId: classId,
-      selectedUnit: unitName,
+      selectedUnit: unitObj?.name || unitName,
       queryResult: null,
       queryError: err?.message || String(err),
     })
