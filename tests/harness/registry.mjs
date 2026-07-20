@@ -66,6 +66,7 @@ export const DOMAINS = {
       { script: 'scripts/testStudentSelectPinStatus.mjs', builders: [] },
       { script: 'scripts/testStudentPinAuth.mjs', builders: [] },
       { script: 'scripts/testStudentPinSelfSetup.mjs', builders: [] },
+      { script: 'scripts/testAdminPinActionsDispatch.mjs', builders: [] },
       { script: 'scripts/testClearStudentPin.mjs', builders: [] },
       { script: 'scripts/testRlsSecurity.mjs', builders: [] },
       { script: 'scripts/testLoginRestoreCrash.mjs', builders: ['race'] },

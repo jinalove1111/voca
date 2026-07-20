@@ -1,8 +1,10 @@
 // 2026-07-16 운영자 지시 — 학생 "최초 PIN 자기설정" 플로우 회귀 테스트.
-// api/self-set-student-pin.js, api/set-pin-setup-allowed.js,
-// api/student-pin-status.js, api/unlock-student-pin.js를 실제 handler
-// 그대로 fake req/res로 직접 호출(testStudentPinAuth.mjs와 동일한 방식,
-// 새 도구 설치 없음). 라이브 Supabase에 디스포저블 QA 학생으로 검증.
+// api/self-set-student-pin.js, api/student-pin-status.js, 그리고
+// api/admin-pin-actions.js의 set_pin_setup_allowed/unlock_student_pin
+// 액션(2026-07-20 통합, 원래는 별도 파일 api/set-pin-setup-allowed.js/
+// api/unlock-student-pin.js였음)을 실제 handler 그대로 fake req/res로
+// 직접 호출(testStudentPinAuth.mjs와 동일한 방식, 새 도구 설치 없음).
+// 라이브 Supabase에 디스포저블 QA 학생으로 검증.
 import { createClient } from '@supabase/supabase-js'
 import fs from 'node:fs'
 
@@ -20,9 +22,8 @@ const ADMIN_PIN = process.env.ADMIN_PIN
 if (!ADMIN_PIN) { console.error('ADMIN_PIN missing in .env.local — abort'); process.exit(1) }
 
 const { default: selfSetStudentPin } = await import('../api/self-set-student-pin.js')
-const { default: setPinSetupAllowed } = await import('../api/set-pin-setup-allowed.js')
+const { default: adminPinActions } = await import('../api/admin-pin-actions.js')
 const { default: studentPinStatus } = await import('../api/student-pin-status.js')
-const { default: unlockStudentPin } = await import('../api/unlock-student-pin.js')
 const { default: verifyStudentPin } = await import('../api/verify-student-pin.js')
 const { isWeakPin } = await import('../api/_pinAuth.js')
 
@@ -88,9 +89,9 @@ if (migrationApplied) {
 
   console.log('\n=== 3. 관리자 "설정 허용" -> 학생 A 자기 PIN 설정 성공 ===')
   {
-    const noAuthAllow = await callHandler(setPinSetupAllowed, { studentIds: [studentA.id], allowed: true })
+    const noAuthAllow = await callHandler(adminPinActions, { action: 'set_pin_setup_allowed', studentIds: [studentA.id], allowed: true })
     check('[보안/P7 후속] adminPin 없이 설정 허용 → not_authorized 거부', noAuthAllow.body.ok === false && noAuthAllow.body.reason === 'not_authorized')
-    const allowRes = await callHandler(setPinSetupAllowed, { studentIds: [studentA.id], allowed: true, adminPin: ADMIN_PIN })
+    const allowRes = await callHandler(adminPinActions, { action: 'set_pin_setup_allowed', studentIds: [studentA.id], allowed: true, adminPin: ADMIN_PIN })
     check('설정 허용 성공', allowRes.body.ok === true)
     const statusRes = await callHandler(studentPinStatus, { studentIds: [studentA.id] })
     check('허용 후 pinSetupAllowed === true로 반영됨', statusRes.body.results[0]?.pinSetupAllowed === true)
@@ -117,7 +118,7 @@ if (migrationApplied) {
     // set-pin-setup-allowed.js는 pin_hash가 이미 있으면 allowed:true 요청을
     // 아예 걸러낸다(방어적 이중 체크) — 그래도 만에 하나를 대비해
     // self-set-student-pin.js 자체도 pin_hash 존재를 최우선으로 거부한다.
-    const allowAgain = await callHandler(setPinSetupAllowed, { studentIds: [studentA.id], allowed: true, adminPin: ADMIN_PIN })
+    const allowAgain = await callHandler(adminPinActions, { action: 'set_pin_setup_allowed', studentIds: [studentA.id], allowed: true, adminPin: ADMIN_PIN })
     check('이미 PIN 있는 계정은 재허용 요청을 걸러냄(.is(pin_hash,null) 필터)', allowAgain.body.ok === true)
     const statusRes = await callHandler(studentPinStatus, { studentIds: [studentA.id] })
     check('필터링됐으므로 pinSetupAllowed는 여전히 false', statusRes.body.results[0]?.pinSetupAllowed === false)
@@ -134,7 +135,7 @@ if (migrationApplied) {
 
   console.log('\n=== 7. 항목4 — 동명이인 학생 B도 독립적으로 자기 PIN 설정, 서로 안 섞임 ===')
   {
-    await callHandler(setPinSetupAllowed, { studentIds: [studentB.id], allowed: true, adminPin: ADMIN_PIN })
+    await callHandler(adminPinActions, { action: 'set_pin_setup_allowed', studentIds: [studentB.id], allowed: true, adminPin: ADMIN_PIN })
     const setBRes = await callHandler(selfSetStudentPin, { studentId: studentB.id, pin: '1379', pinConfirm: '1379' })
     check('학생 B(동명이인)도 자기 PIN 설정 성공', setBRes.body.ok === true)
 
@@ -158,9 +159,9 @@ if (migrationApplied) {
   {
     // 위 8번에서 학생 A/B 둘 다 시도했으므로 최소 하나는 잠겼을 수 있음 —
     // 학생 A 기준으로 확인.
-    const noAuthUnlock = await callHandler(unlockStudentPin, { studentId: studentA.id })
+    const noAuthUnlock = await callHandler(adminPinActions, { action: 'unlock_student_pin', studentId: studentA.id })
     check('[보안/P7 후속] adminPin 없이 잠금 해제 → not_authorized 거부', noAuthUnlock.body.ok === false && noAuthUnlock.body.reason === 'not_authorized')
-    const unlockRes = await callHandler(unlockStudentPin, { studentId: studentA.id, adminPin: ADMIN_PIN })
+    const unlockRes = await callHandler(adminPinActions, { action: 'unlock_student_pin', studentId: studentA.id, adminPin: ADMIN_PIN })
     check('잠금 해제 API 성공', unlockRes.body.ok === true)
     const loginAfterUnlock = await callHandler(verifyStudentPin, { name: 'QA_SelfSetupKid', pin: '2468' })
     check('잠금 해제 후 원래 PIN으로 다시 로그인 가능(pin_hash는 안 건드림)', loginAfterUnlock.body.ok === true && loginAfterUnlock.body.studentId === studentA.id)

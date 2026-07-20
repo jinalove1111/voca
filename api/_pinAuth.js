@@ -1,5 +1,5 @@
 // Shared helper for student PIN hashing/verification — used by
-// verify-student-pin.js, set-student-pin.js, bulk-generate-temp-pins.js.
+// verify-student-pin.js, set-student-pin.js, admin-pin-actions.js.
 // Filename starts with `_` so Vercel does NOT turn it into its own route
 // (matches Vercel's convention of ignoring underscore-prefixed files under
 // /api — this is a plain importable module, never called directly by URL).

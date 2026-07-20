@@ -635,17 +635,19 @@ function StudentManagement({ adminPin }) {
   // 임시 PIN 일괄 생성 — PIN 로그인 도입 전에 등록됐던 기존 학생들
   // (pin_hash가 아직 없는 학생) 전원에게 무작위 4자리 PIN을 부여하고,
   // 평문 목록을 CSV로 1회 다운로드한다 — 관리자 인증 뒤(이 화면)에서만
-  // 접근 가능, 서버에도 평문으로 남지 않음(api/bulk-generate-temp-pins.js).
+  // 접근 가능, 서버에도 평문으로 남지 않음(api/admin-pin-actions.js의
+  // bulk_generate_temp_pins 액션).
   const handleBulkGeneratePins = async () => {
     if (!window.confirm('PIN이 아직 없는 모든 학생에게 임시 PIN을 새로 발급할까요?')) return
     setBulkPinBusy(true)
     try {
-      const res = await fetch('/api/bulk-generate-temp-pins', {
+      const res = await fetch('/api/admin-pin-actions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // P7 감사 후속 — 평문 PIN 목록을 받는 가장 민감한 응답이라 요청마다
-        // 서버에서 adminPin 재검증.
-        body: JSON.stringify({ adminPin }),
+        // 서버에서 adminPin 재검증. 2026-07-20: admin-pin-actions.js로 통합
+        // (Vercel Hobby 함수 개수 한도 대응, handoff.md 참고).
+        body: JSON.stringify({ action: 'bulk_generate_temp_pins', adminPin }),
       })
       const data = await res.json()
       if (data.reason === 'not_authorized') throw new Error('관리자 인증에 실패했어요. 관리자 화면을 다시 로그인해주세요.')
@@ -671,10 +673,10 @@ function StudentManagement({ adminPin }) {
   const handleTogglePinSetupAllowed = async (id, name, nextAllowed) => {
     setAllowBusyId(id)
     try {
-      const res = await fetch('/api/set-pin-setup-allowed', {
+      const res = await fetch('/api/admin-pin-actions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentIds: [id], allowed: nextAllowed, adminPin }),
+        body: JSON.stringify({ action: 'set_pin_setup_allowed', studentIds: [id], allowed: nextAllowed, adminPin }),
       })
       const data = await res.json()
       if (!data.ok) {
@@ -697,10 +699,10 @@ function StudentManagement({ adminPin }) {
     if (targets.length === 0) { alert('이 반에는 PIN 설정이 필요한 학생이 없어요.'); return }
     if (!window.confirm(`"${className}" 반의 PIN 미설정 학생 ${targets.length}명 전원에게 PIN 설정을 허용할까요?`)) return
     try {
-      const res = await fetch('/api/set-pin-setup-allowed', {
+      const res = await fetch('/api/admin-pin-actions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentIds: targets.map(s => s.id), allowed: true, adminPin }),
+        body: JSON.stringify({ action: 'set_pin_setup_allowed', studentIds: targets.map(s => s.id), allowed: true, adminPin }),
       })
       const data = await res.json()
       if (!data.ok) {
@@ -717,10 +719,10 @@ function StudentManagement({ adminPin }) {
   const handleUnlockPin = async (id, name) => {
     setUnlockBusyId(id)
     try {
-      const res = await fetch('/api/unlock-student-pin', {
+      const res = await fetch('/api/admin-pin-actions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId: id, adminPin }),
+        body: JSON.stringify({ action: 'unlock_student_pin', studentId: id, adminPin }),
       })
       const data = await res.json()
       if (!data.ok) {

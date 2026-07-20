@@ -29,7 +29,7 @@ killTimer.unref?.();
 // 매핑표 + ARCHITECTURE.md의 주요 플로우를 근거로 작성 — 완전한 매핑이
 // 아니라 "가장 흔한 경우"만 다루는 휴리스틱.
 const HINTS = [
-  { match: /verify-student-pin|verify-admin-pin|_pinAuth|StudentSelect|self-set-student-pin|set-student-pin|bulk-generate-temp-pins|clear-student-pin|unlock-student-pin/i, domain: 'login' },
+  { match: /verify-student-pin|verify-admin-pin|_pinAuth|StudentSelect|self-set-student-pin|set-student-pin|admin-pin-actions|clear-student-pin/i, domain: 'login' },
   { match: /useStudent\.js|mergeProgress|syncStudentProgress/i, domain: 'persistence' },
   { match: /AdminScreen|Dashboard\.jsx|weeklyReport/i, domain: 'admin' },
   { match: /daily_assignments|FutureAssignmentPlanner|getStudentWords/i, domain: 'homework' },

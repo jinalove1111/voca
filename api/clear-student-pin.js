@@ -13,8 +13,9 @@
 // 기존 PIN으로 로그인 시도하면 api/verify-student-pin.js가 pin_hash 없는
 // 후보를 걸러내므로(withPin 필터) 'no_pin_setup'으로 정확히 거부된다.
 //
-// 인증: 이 프로젝트의 다른 관리자 전용 API들(set-pin-setup-allowed.js,
-// unlock-student-pin.js, bulk-generate-temp-pins.js, set-student-pin.js)은
+// 인증: 이 프로젝트의 다른 관리자 전용 API들(admin-pin-actions.js —
+// 2026-07-20 이전엔 set-pin-setup-allowed.js/unlock-student-pin.js/
+// bulk-generate-temp-pins.js로 분리돼 있었음, set-student-pin.js)은
 // AdminScreen.jsx의 클라이언트 사이드 PIN 게이트(verify-admin-pin 1회
 // 통과 후 authed=true)만 신뢰하고 요청마다 재검증하지 않는다 — 이 함수는
 // "기존 PIN 자격증명을 실제로 삭제"하는, 이 앱에서 가장 파괴적인 관리자

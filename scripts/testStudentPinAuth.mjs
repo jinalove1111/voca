@@ -1,5 +1,6 @@
 // P0 Phase 4/5 회귀 테스트 — 이름+PIN 로그인 서버 로직(api/verify-student-
-// pin.js, api/set-student-pin.js, api/bulk-generate-temp-pins.js)을 실제
+// pin.js, api/set-student-pin.js, api/admin-pin-actions.js의
+// bulk_generate_temp_pins 액션)을 실제
 // 소스 그대로 직접 호출해서 검증한다(HTTP 서버 없이 — Vercel serverless
 // handler는 그냥 (req,res) => {} 함수라 fake req/res로 직접 호출 가능,
 // vercel dev 등 새 도구 설치 없이 실제 로직을 그대로 검증). 라이브
@@ -25,7 +26,7 @@ if (!ADMIN_PIN) { console.error('ADMIN_PIN missing in .env.local — abort'); pr
 
 const { default: verifyStudentPin } = await import('../api/verify-student-pin.js')
 const { default: setStudentPin } = await import('../api/set-student-pin.js')
-const { default: bulkGenerateTempPins } = await import('../api/bulk-generate-temp-pins.js')
+const { default: adminPinActions } = await import('../api/admin-pin-actions.js')
 const { hashPin, verifyPin, isValidPinFormat, randomFourDigitPin } = await import('../api/_pinAuth.js')
 
 let failures = 0
@@ -168,9 +169,9 @@ if (migrationApplied) {
   console.log('\n=== 10. bulk-generate-temp-pins.js — PIN 없는 학생 일괄 생성 ===')
   {
     const { data: noPinStudent } = await supabase.from('students').insert({ name: 'QA_PinKid_NoPin', class_id: cls.id, unit_name: 'Unit 1' }).select('id').single()
-    const noAuth = await callHandler(bulkGenerateTempPins, {})
+    const noAuth = await callHandler(adminPinActions, { action: 'bulk_generate_temp_pins' })
     check('[보안/P7 후속] adminPin 없이 일괄 생성 → not_authorized 거부', noAuth.body.ok === false && noAuth.body.reason === 'not_authorized')
-    const res = await callHandler(bulkGenerateTempPins, { adminPin: ADMIN_PIN })
+    const res = await callHandler(adminPinActions, { action: 'bulk_generate_temp_pins', adminPin: ADMIN_PIN })
     check('응답에 방금 만든 PIN 없는 학생이 포함됨', res.body.results.some(r => r.id === noPinStudent.id && /^\d{4}$/.test(r.pin)))
     const loginRes = await callHandler(verifyStudentPin, { name: 'QA_PinKid_NoPin', pin: res.body.results.find(r => r.id === noPinStudent.id).pin })
     check('일괄 생성된 PIN으로 실제 로그인 성공', loginRes.body.ok === true && loginRes.body.studentId === noPinStudent.id)
