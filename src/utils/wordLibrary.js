@@ -615,6 +615,35 @@ export async function addStudent(name, className = '', unitName = DEFAULT_UNIT_N
     throw error
   }
   await refreshStudents()
+  // v2.9(다중 교재, 2026-07-21 라이브 e2e로 발견된 gap 수정) — 새로 생성된
+  // 학생에게도 student_class_assignments의 is_primary=true 행을 함께 만든다.
+  // 이걸 빼먹으면(백필 이후 시점에 생성된 학생) 이후 두 번째 교재가
+  // assignTextbook으로 배정될 때 이 테이블엔 non-primary 행만 남아
+  // getStudentClassAssignments가 "primary 없음" 상태를 반환하게 되고, 원래
+  // 교재가 목록에서 사라지며 setPrimaryAssignment로도 되돌아갈 수 없게 되는
+  // 실제 회귀가 확인됐다. 컬럼 구성은 supabase_v2_9_student_class_assignments.sql의
+  // 백필 INSERT(115~120행)와 정확히 동일(student_id, class_id, current_unit_id,
+  // is_primary). class_id가 없으면(className 미지정 생성) 이 테이블도
+  // class_id not null 제약이라 insert할 게 없어 스킵 — 그런 학생은 오늘도
+  // syntheticPrimaryAssignment가 계속 커버(그 폴백은 classId 없으면 빈 배열을
+  // 반환하도록 이미 설계돼 있음, 863행 인근). 테이블 자체가 없으면
+  // (마이그레이션 미실행) isMissingTableError로 감지해 조용히 스킵 —
+  // CLAUDE.md 규칙 9(실행 순서 무관 안전성)대로 학생 생성 자체는 이 보조
+  // 테이블 때문에 절대 실패하면 안 된다.
+  if (classId) {
+    const { error: assignErr } = await supabase.from('student_class_assignments').insert({
+      student_id: data.id,
+      class_id: classId,
+      current_unit_id: unitId,
+      is_primary: true,
+    })
+    if (assignErr && !isMissingTableError(assignErr) && assignErr.code !== '23505') {
+      // 네트워크 등 그 외 사유 — 학생 생성 자체는 이미 성공했으므로 여기서
+      // throw하지 않는다(계약: 이 보조 테이블 실패가 학생 생성 실패로 번지면
+      // 안 됨). 콘솔에는 남겨 후속 진단이 가능하게 한다.
+      console.warn('[wordLibrary] addStudent: student_class_assignments primary row insert failed (non-fatal):', assignErr.message)
+    }
+  }
   return data.id
 }
 
@@ -895,13 +924,25 @@ export async function getStudentClassAssignments(studentId) {
   } else if (!data || data.length === 0) {
     result = syntheticPrimaryAssignment(studentId)
   } else {
-    result = data.map((r) => ({
+    const mapped = data.map((r) => ({
       id: r.id,
       studentId: r.student_id,
       classId: r.class_id,
       unitId: r.current_unit_id,
       isPrimary: !!r.is_primary,
     }))
+    // 방어적 self-heal(2026-07-21, 라이브 e2e로 발견) — 행이 1개 이상
+    // 있더라도 그중 is_primary=true인 행이 하나도 없는 손상된 상태가 실제로
+    // 발생했다(addStudent가 아직 이 테이블에 primary 행을 만들지 않던
+    // 시기에 생성된 학생에게 두 번째 교재가 assignTextbook으로 배정되면,
+    // 이 테이블엔 non-primary 행 1개만 존재 — 원래 교재가 목록에서 조용히
+    // 사라지고 setPrimaryAssignment로 되돌아갈 수도 없게 됨). addStudent
+    // 쪽 수정(아래, 이제 학생 생성 시 primary 행을 함께 만듦)이 근본 원인을
+    // 막지만, 이미 손상된 기존 데이터/향후 다른 경로로 같은 상태가 재발할
+    // 가능성까지 대비해 읽기 시점에도 자가 치유한다 — 실제로 반환된
+    // non-primary 행은 버리지 않고 합성 primary와 병합한다.
+    const hasPrimary = mapped.some((r) => r.isPrimary)
+    result = hasPrimary ? mapped : [...syntheticPrimaryAssignment(studentId), ...mapped]
     // 읽기 시점 보정(2026-07-21, 라이브 드리프트 수정) — decision 0004가
     // 명시한 대로 `students.class_id`/`current_unit_id`가 "is_primary=true
     // 행의 캐시"가 아니라 그 반대(권위 있는 값)다: 학생이 정상적으로

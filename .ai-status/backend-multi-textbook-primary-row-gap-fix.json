@@ -1,0 +1,22 @@
+{
+  "agent_name": "backend",
+  "role": "서버 로직 구현",
+  "task_id": "multi-textbook-primary-row-gap-fix",
+  "task": "라이브 e2e로 발견된 gap 수정 — addStudent()가 student_class_assignments에 is_primary:true 행을 만들지 않아, 마이그레이션 백필 이후 생성된 학생에게 두 번째 교재를 배정하면 원래 교재가 목록에서 사라지고 setPrimaryAssignment 복귀가 실패하던 회귀",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-21T00:00:00+09:00",
+  "updated_at": "2026-07-21T00:00:00+09:00",
+  "files_owned": [
+    "src/utils/wordLibrary.js",
+    "scripts/testMultiTextbookLiveFixed.mjs"
+  ],
+  "files_read": [
+    "supabase_v2_9_student_class_assignments.sql",
+    "scripts/testMultiTextbookLive.mjs",
+    ".ai-status/backend-multi-textbook-assignments.json"
+  ],
+  "summary": "1) addStudent(): 학생 insert 성공 + refreshStudents() 이후, classId가 있으면 student_class_assignments에 {student_id, class_id, current_unit_id, is_primary:true} 행을 함께 insert(마이그레이션 백필 INSERT와 동일 컬럼 셋). isMissingTableError/23505/기타 에러 모두 non-fatal(콘솔 warn만, throw 안 함) — 학생 생성 자체는 이 보조 테이블 실패로 절대 안 깨짐. 2) getStudentClassAssignments(studentId): 기존엔 data.length===0일 때만 synthetic 폴백이 발동했는데, data가 1건 이상이어도 그중 is_primary:true 행이 하나도 없는 손상 상태(정확히 라이브에서 재현된 버그)면 syntheticPrimaryAssignment(studentId)를 실제 non-primary 행들과 병합해 반환하도록 방어적 self-heal 추가 — 실제로 반환된 행은 버리지 않음. 기존 read-time drift-heal(primary.unitId/classId를 live student 캐시로 덮어쓰는 로직, b37bf36)은 그대로 유지되고 병합된 result에도 동일하게 적용됨. setPrimaryAssignment/assignTextbook/removeTextbookAssignment/setAssignmentUnit은 요청대로 손대지 않음. npm run build 통과(신규 에러/경고 없음). verify:student/unit/word-assignment/admin 전부 PASS. 라이브 e2e(scripts/testMultiTextbookLiveFixed.mjs, 신규 학생 0010f504-4d7d-4129-9b0b-2c771a65c819 / _QA_MultiTextbook_Test2_20260721)로 addStudent 직후 즉시 primary 행 1건 존재 확인 → assignTextbook 후에도 primary 유지(2건) → setPrimaryAssignment 왕복(2차 반 전환 → 원래 반 복귀) 모두 에러 없이 성공 — 워크어라운드 불필요함을 실측 증명. 기존 scripts/testMultiTextbookLive.mjs(워크어라운드 포함 원본)는 삭제하지 않고 legacy 표시만 상단에 추가.",
+  "blocker": null,
+  "next_action": "테스트 학생 두 명(af03826f-80d2-4dd5-99e0-76b99e1905bc / _QA_MultiTextbook_Test_20260721, 0010f504-4d7d-4129-9b0b-2c771a65c819 / _QA_MultiTextbook_Test2_20260721)이 QA 데이터로 DB에 남아있음 — 지시대로 정리하지 않음, 운영자가 필요시 수동 정리."
+}
