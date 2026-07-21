@@ -145,7 +145,12 @@ function MissionBar({ label, current, goal, emoji }) {
 //      of pushing more drilling.
 //   3. Mid-unit — offer to resume exactly where they left off.
 //   4. Otherwise — plain "start studying" default.
-function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onPlayGame, resumeIndex }) {
+// 3분 데일리 리추얼(2026-07-22) — 이 배너가 화면에서 가장 크고 지배적인
+// 히어로 CTA다. 스마트 브랜칭(우선순위 1~4)은 그대로 유지하되, canResume/
+// hasWords 두 가지(3·4번)만 목적지가 가이드 세션(onStartGuided)으로 바뀐다
+// — 복습(1번 → levelUpMission)/보너스게임(2번) 브랜치는 기존 목적지 그대로.
+// onStartGuided가 없으면(구버전 App.jsx) 기존 onResumeWord 경로로 폴백.
+function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onPlayGame, resumeIndex, onStartGuided }) {
   const { activeMissions, giftsToday } = studentData
   // v2.1 — 이어서-학습 위치는 "현재 유닛"의 저장 지점(App.jsx가
   // getResumeIndexForUnit으로 계산해서 내려줌). 구버전 경로(prop 미전달)는
@@ -170,14 +175,16 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
   } else if (canResume) {
     rec = {
       emoji: '📖', title: '이어서 학습할까요?',
-      desc: `${lastWordIndex + 1}번째 단어부터 이어서 공부해요.`,
-      label: '이어서 학습하기', onClick: () => onResumeWord(lastWordIndex),
+      desc: `${lastWordIndex + 1}번째 단어부터 3분 세션으로 이어가요.`,
+      label: '▶ 오늘의 학습 계속하기',
+      onClick: () => (onStartGuided ? onStartGuided() : onResumeWord(lastWordIndex)),
     }
   } else if (hasWords) {
     rec = {
       emoji: '✨', title: '오늘도 시작해볼까요?',
-      desc: '단어 학습부터 차근차근 시작해요!',
-      label: '단어 공부 시작', onClick: () => onResumeWord(0),
+      desc: '딱 3분씩, 짧은 세션으로 차근차근 시작해요!',
+      label: '▶ 오늘의 학습 시작',
+      onClick: () => (onStartGuided ? onStartGuided() : onResumeWord(0)),
     }
   } else {
     rec = {
@@ -188,18 +195,18 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
   }
 
   return (
-    <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl p-5 text-white card-shadow">
+    <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl p-6 text-white card-shadow">
       <HeroReaction
         image={getReactionById('hello')?.image}
         title={`${rec.emoji} ${rec.title}`}
         message={rec.desc}
         theme="banner"
-        size="md"
+        size="lg"
       />
       {rec.label && (
         <button onClick={rec.onClick}
-          className="w-full mt-4 bg-white text-indigo-600 font-black py-3 rounded-2xl btn-press">
-          {rec.label} →
+          className="w-full mt-5 bg-white text-indigo-600 font-black text-xl py-5 rounded-2xl btn-press shadow-lg">
+          {rec.label}
         </button>
       )}
     </div>
@@ -208,7 +215,7 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 
 // P0(2026-07-15): student(이름 문자열) 대신 studentId(식별자)+studentName
 // (표시용)을 따로 받는다 — getStudentClass/getStudentUnit은 이제 id 기반.
-export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, textbookAssignments, onTextbookSwitch }) {
+export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, textbookAssignments, onTextbookSwitch }) {
   const { stars, stickerTypes, activeMissions, dailyProgress, liveMissionsCompleted, streak, cleared, ticketBalance, redeemTicketReward } = studentData
   const { rankState, loading: rankLoading } = usePaulRank(studentId)
 
@@ -431,7 +438,7 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
         {/* 입실시험이 시작되면 다른 무엇보다 먼저 보여야 하는 배너 */}
         <EntranceTestBanner studentId={studentId} onGo={onGo} />
 
-        <RecommendationBanner studentData={studentData} classWords={classWords} onGo={onGo} onResumeWord={onResumeWord} onPlayGame={onPlayGame} resumeIndex={resumeIndex} />
+        <RecommendationBanner studentData={studentData} classWords={classWords} onGo={onGo} onResumeWord={onResumeWord} onPlayGame={onPlayGame} resumeIndex={resumeIndex} onStartGuided={onStartGuided} />
 
         <MicPrimeBtn />
 
