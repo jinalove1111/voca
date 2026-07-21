@@ -902,6 +902,27 @@ export async function getStudentClassAssignments(studentId) {
       unitId: r.current_unit_id,
       isPrimary: !!r.is_primary,
     }))
+    // 읽기 시점 보정(2026-07-21, 라이브 드리프트 수정) — decision 0004가
+    // 명시한 대로 `students.class_id`/`current_unit_id`가 "is_primary=true
+    // 행의 캐시"가 아니라 그 반대(권위 있는 값)다: 학생이 정상적으로
+    // 진도를 나가면(setStudentUnit 등, 786행 인근) students 테이블만
+    // 갱신되고 이 조인 테이블 행은 건드리지 않으므로, primary 행의 저장된
+    // current_unit_id/class_id는 시간이 지날수록 조용히 stale해진다(백필
+    // 시점 스냅샷에 고정). primary 행에 한해 _students 캐시(앱 시작
+    // 시(refreshStudents) 이미 로드되어 있고, 이 파일의 모든 학생 쓰기
+    // 함수가 끝날 때 다시 채워지는 "권위 있는 최신 값" — resolveStudentUnitObj
+    // 등 기존 다수 함수와 동일한 재사용 패턴)로 덮어써서, primary 행이
+    // 항상 학생의 실제 현재 진도를 정확히 보고하게 한다. non-primary 행은
+    // 손대지 않는다(그 저장값은 setAssignmentUnit이 유일한 writer이고
+    // 정확하다).
+    const live = _students.get(studentId)
+    if (live) {
+      const primary = result.find((r) => r.isPrimary)
+      if (primary) {
+        if (live.unitId != null) primary.unitId = live.unitId
+        if (live.classId != null) primary.classId = live.classId
+      }
+    }
   }
   _studentAssignmentsCache.set(studentId, result)
   return result
@@ -1019,6 +1040,32 @@ export async function setPrimaryAssignment(studentId, classId) {
     throw selErr
   }
   if (!target) throw new Error(`setPrimaryAssignment: 학생이 반(${classId})에 배정돼 있지 않습니다 — 먼저 assignTextbook으로 배정하세요.`)
+
+  // 쓰기 시점 self-heal(2026-07-21, 라이브 드리프트 수정) — 위
+  // getStudentClassAssignments의 read-time 보정은 "현재" primary 행에만
+  // 적용되므로, 여기서 primary 지위를 잃는 순간의 outgoing 행을 미리
+  // 못박아 두지 않으면 나중에 이 교재로 되돌아왔을 때 훨씬 오래된(전환
+  // 시점보다도 이전, 최악의 경우 백필 스냅샷 그대로인) stale
+  // current_unit_id가 남는다. is_primary 플립 전에, target과 다른 반의
+  // 기존 primary 행이 있으면 그 행의 current_unit_id를 지금 이 순간의
+  // 라이브 students.current_unit_id로 갱신해 "전환 직전 실제 진도"를
+  // 스냅샷으로 남긴다. 테이블 부재(마이그레이션 전)는 이미 위 target
+  // select에서 걸러지므로 여기서도 동일하게 감지해 조용히 스킵(새로운
+  // 실패 모드 없음).
+  const { data: outgoingRows, error: outSelErr } = await supabase
+    .from('student_class_assignments')
+    .select('id,class_id')
+    .eq('student_id', studentId).eq('is_primary', true)
+  if (outSelErr && !isMissingTableError(outSelErr)) throw outSelErr
+  const outgoing = (outgoingRows || []).find((r) => r.class_id !== classId)
+  if (outgoing) {
+    const live = _students.get(studentId)
+    if (live && live.unitId != null) {
+      const { error: healErr } = await supabase.from('student_class_assignments')
+        .update({ current_unit_id: live.unitId }).eq('id', outgoing.id)
+      if (healErr) throw healErr
+    }
+  }
 
   // 대상을 먼저 true로(그 다음 나머지를 false로) — 두 단계 사이에 실패해도
   // "주 교재가 0개"가 되는 순간이 없도록(반대 순서면 그 순간이 생김).
