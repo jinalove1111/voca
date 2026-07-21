@@ -94,13 +94,10 @@ function MicPrimeBtn() {
     }
   }
 
-  if (state === 'ready') {
-    return (
-      <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-3 text-center">
-        <p className="font-black text-green-700 text-sm">✅ 마이크 준비 완료 — 이제 녹음할 때 권한을 다시 묻지 않아요</p>
-      </div>
-    )
-  }
+  // 3분 데일리 리추얼(2026-07-22) — 준비가 끝났으면 아무것도 렌더하지
+  // 않는다(상시 초록 배너 제거, 표시만 바뀜). 권한 요청/상태 머신 로직은
+  // 전혀 안 바뀜 — 준비 전에는 기존 버튼이 그대로 보인다.
+  if (state === 'ready') return null
 
   return (
     <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-3 text-center">
@@ -498,21 +495,29 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
           </div>
         </details>
 
-        {/* Nav Grid */}
-        <div className="grid grid-cols-2 gap-3">
-          <NavBtn emoji="📖" label="단어 공부"    sub="100개 단어"                          color="from-blue-400 to-blue-600"     onClick={() => onGo('wordBrowser')} />
-          <NavBtn emoji="🎮" label="퀴즈"          sub="단어 맞히기"                         color="from-yellow-400 to-orange-500" onClick={() => onGo('quiz')} />
-          <NavBtn
-            emoji="⚔️" label="레벨업 미션"
-            sub={activeMissions.length > 0 ? `${activeMissions.length}개 도전 중!` : '없음'}
-            color="from-red-400 to-rose-600"
-            onClick={() => onGo('levelUpMission')}
-            badge={activeMissions.length > 0 ? activeMissions.length : null}
-          />
-          <NavBtn emoji="📔" label="내 다이어리" sub={`스티커 ${stickerTypes.length}개`}    color="from-pink-400 to-purple-500"    onClick={() => onGo('diary')} />
-          <NavBtn emoji="📅" label="공부 캘린더" sub={`🔥 ${streak}일 연속`}                color="from-amber-400 to-orange-500"   onClick={() => onGo('studyCalendar')} />
-          <NavBtn emoji="🎮" label="미니 게임"    sub="풍선/낚시/피자/기차 중 랜덤"          color="from-sky-400 to-indigo-500"    onClick={onPlayGame} />
-        </div>
+        {/* Nav Grid — 3분 데일리 리추얼(2026-07-22): 히어로 CTA에 집중을
+            빼앗지 않도록 기본으로 접힌 <details> 뒤로 이동. 버튼 6개와
+            목적지/뱃지 전부 원래 그대로(순수 JSX 재배치, state 추가 없음). */}
+        <details className="bg-white rounded-3xl card-shadow">
+          <summary className="cursor-pointer select-none list-none p-5 flex items-center justify-between">
+            <span className="font-black text-gray-700 text-base">🧭 더 많은 메뉴</span>
+            <span className="text-gray-400 text-sm font-bold">열기 ▾</span>
+          </summary>
+          <div className="px-5 pb-5 grid grid-cols-2 gap-3">
+            <NavBtn emoji="📖" label="단어 공부"    sub="100개 단어"                          color="from-blue-400 to-blue-600"     onClick={() => onGo('wordBrowser')} />
+            <NavBtn emoji="🎮" label="퀴즈"          sub="단어 맞히기"                         color="from-yellow-400 to-orange-500" onClick={() => onGo('quiz')} />
+            <NavBtn
+              emoji="⚔️" label="레벨업 미션"
+              sub={activeMissions.length > 0 ? `${activeMissions.length}개 도전 중!` : '없음'}
+              color="from-red-400 to-rose-600"
+              onClick={() => onGo('levelUpMission')}
+              badge={activeMissions.length > 0 ? activeMissions.length : null}
+            />
+            <NavBtn emoji="📔" label="내 다이어리" sub={`스티커 ${stickerTypes.length}개`}    color="from-pink-400 to-purple-500"    onClick={() => onGo('diary')} />
+            <NavBtn emoji="📅" label="공부 캘린더" sub={`🔥 ${streak}일 연속`}                color="from-amber-400 to-orange-500"   onClick={() => onGo('studyCalendar')} />
+            <NavBtn emoji="🎮" label="미니 게임"    sub="풍선/낚시/피자/기차 중 랜덤"          color="from-sky-400 to-indigo-500"    onClick={onPlayGame} />
+          </div>
+        </details>
 
         {/* Recent stickers */}
         {recentStickers.length > 0 && (
