@@ -1,0 +1,23 @@
+{
+  "agent_name": "backend",
+  "role": "서버 로직 구현",
+  "task_id": "admin-ui-verification-2026-07-21",
+  "task": "TextbookAssignmentPanel.jsx가 호출하는 wordLibrary.js 함수(getStudentClassAssignments/assignTextbook/removeTextbookAssignment/setAssignmentUnit/setStudentUnit) 배선 재확인 + REMOVE 경로(정상 + primary 거부) 라이브 e2e 재검증 — student_class_assignments 테이블이 production에 실제로 live인 상태에서(오늘 두 fix, b37bf36/ff0835e 배포 이후)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-21T00:00:00+09:00",
+  "updated_at": "2026-07-21T00:00:00+09:00",
+  "files_owned": [],
+  "files_read": [
+    "src/components/admin/TextbookAssignmentPanel.jsx",
+    "src/utils/wordLibrary.js",
+    "src/components/AdminScreen.jsx",
+    "scripts/testMultiTextbookLiveFixed.mjs",
+    "tests/harness/runAdmin.mjs",
+    ".ai-status/backend-multi-textbook-primary-row-gap-fix.json",
+    ".ai-status/backend-multi-textbook-assignments.json"
+  ],
+  "summary": "코드 트레이스(1): TextbookAssignmentPanel.jsx는 목록에 getStudentClassAssignments, 추가에 assignTextbook, 해제에 removeTextbookAssignment, 유닛 변경은 a.isPrimary 분기로 primary=setStudentUnit / non-primary=setAssignmentUnit을 호출 — 오늘 두 fix(addStudent primary-row 생성, getStudentClassAssignments read-time drift-heal) 이후에도 이 배선은 그대로이며 fix들이 손대지 않은 부분(diff 확인 완료). 라이브 e2e(2): 스크래치패드 스크립트로 실제 WORDLIB_BUNDLE을 통해 학생 af03826f-80d2-4dd5-99e0-76b99e1905bc에 대해 removeTextbookAssignment(non-primary) 성공→1건 확인, removeTextbookAssignment(primary) throw 확인('주 교재(is_primary) 배정은... 제거할 수 없습니다')하고 부작용 없음(여전히 1건) 확인, assignTextbook으로 2건 상태 복원(3) — 두 QA 테스트 학생 모두 최종 2-assignment 상태로 남김(0010f504...는 손대지 않아 원래 유닛 유지, af03826f...는 재배정 후 non-primary unitId가 null로 초기화됨 — assignTextbook의 의도된 설계, 자동 유닛 지정 안 함). isTableMissingError 경로(4)는 이번 라이브 호출 전부에서 트리거되지 않음(테이블이 실제로 live이므로 dead code 확인, 에러 메시지에 '테이블이 아직 없습니다' 없음). AdminScreen.jsx의 반별 필터/그룹핑(5)은 getStudents()가 반환하는 s.className(= students.class_id 기반, in-memory _students 캐시)만 사용하며 student_class_assignments 테이블과 완전히 무관 — 오늘 diff(addStudent/getStudentClassAssignments/setPrimaryAssignment 3개 함수만 변경)가 getStudents()를 전혀 건드리지 않았으므로 코드 트레이스로 영향 없음 확인(라이브 클릭 테스트는 브라우저 자동화 도구 부재로 미실시, 명시). npm run build는 이번 세션에서 파일을 수정하지 않았으므로 재실행 불필요(수정 파일 없음). npm run verify:admin 재실행 — 6개 스크립트 전부 PASS.",
+  "blocker": null,
+  "next_action": "없음 — 검증 완료 보고. 브라우저 자동화 도구가 없어 관리자 화면의 실제 클릭 흐름 자체는 미실시(함수 호출 레벨 라이브 e2e + 컴포넌트 배선 코드 트레이스로 대체) — 운영자가 필요 시 실제 브라우저에서 마지막 확인 가능."
+}
