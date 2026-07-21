@@ -382,57 +382,6 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
           {hasTodaysHomework && (
             <p className="text-xs font-bold text-yellow-200 mt-2">📌 오늘의 숙제 단어가 준비돼 있어요 — 단어 공부에서 바로 시작!</p>
           )}
-          <div className="flex justify-center gap-4 mt-3">
-            <div className="bg-white/20 rounded-xl px-3 py-2 text-center">
-              <p className="text-white font-black text-xl">{cleared.length}</p>
-              <p className="text-purple-200 text-xs">단어 클리어</p>
-            </div>
-            <div className="bg-white/20 rounded-xl px-3 py-2 text-center">
-              <p className="text-white font-black text-xl">{stickerTypes.length}</p>
-              <p className="text-purple-200 text-xs">스티커</p>
-            </div>
-            <div className="bg-white/20 rounded-xl px-3 py-2 text-center">
-              <p className="text-white font-black text-xl">{activeMissions.length}</p>
-              <p className="text-purple-200 text-xs">레벨업 미션</p>
-            </div>
-          </div>
-          {/* Paul Rank — 텍스트/숫자만(모자 그래픽 없음, DESIGN DIRECTION은
-              PAUL_BIBLE.md §8 참고). totalStars와 무관한 별도 원장(XP)에서
-              계산 — 별을 XP로 변환하지 않는다는 판단, paulRankShared.js 참고. */}
-          {gamificationEnabled && !rankLoading && (
-            <p className="text-purple-100 text-xs mt-3">
-              🎩 {rankState.rank.name} · {rankState.hatStage.name} 단계
-              {rankState.isMaxRank
-                ? ' · 최고 단계!'
-                : ` · 다음 Rank까지 XP ${rankState.xpRemainingToNextRank}`}
-            </p>
-          )}
-          {/* Word King(2026-07-19) — "이번 주 챔피언" 최소 텍스트(교실
-              발표용). 계산 기록이 아직 없으면(관리자 미실행) 아무것도
-              렌더하지 않음. */}
-          {gamificationEnabled && weeklyChampion && (
-            <p className="text-purple-100 text-xs mt-1">
-              👑 이번 주 챔피언: {weeklyChampion.studentName}
-              {weeklyChampion.studentId === studentId ? ' (나예요!)' : ''}
-            </p>
-          )}
-          {/* House System(2026-07-19, 게임화 하위카드 8번) — 최소 텍스트.
-              개인/타 하우스 비교 없이 "우리 팀" 소속감만 전달
-              (PAUL_PRINCIPLES.md 3번 원칙). */}
-          {gamificationEnabled && myHouse && houseWeeklyScore != null && (
-            <p className="text-purple-100 text-xs mt-1">
-              {myHouse.emoji} 우리 하우스: {myHouse.name} · 이번 주 팀 점수 {houseWeeklyScore}
-            </p>
-          )}
-          {/* Seasonal Progression(2026-07-19, 게임화 하위카드 9번) — 시즌이
-              실제로 시작된 뒤에만 나타나는 추가 텍스트. 레벨/뱃지/스트릭은
-              이 화면 어디에도 "리셋"이라는 개념으로 노출되지 않는다(영구
-              유지 — 이 라운드에서 절대 안 바뀜을 지키는 설계). */}
-          {gamificationEnabled && myHouse && currentSeason && houseSeasonScore != null && (
-            <p className="text-purple-100 text-xs mt-1">
-              🌱 이번 시즌 누적 점수 {houseSeasonScore}
-            </p>
-          )}
         </div>
 
         {/* 입실시험이 시작되면 다른 무엇보다 먼저 보여야 하는 배너 */}
@@ -474,14 +423,80 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
           <p className="text-center text-xs text-gray-400 mt-3">4개를 모두 완료하면 🎁 선물상자! 완료 즉시 새 미션이 또 시작돼요</p>
         </div>
 
-        {/* Ticket Economy(2026-07-19) — Teacher Controls 마스터 스위치로
-            게이팅(Paul Rank와 동일한 gamificationEnabled 변수 재사용).
-            스위치 꺼진 반은 티켓 UI/지급 전부 안 보임(useStudent.js의
-            grantTicket 자체는 계속 호출되지만, 노출만 막는 게이트라는
-            점도 Paul Rank의 기존 판단(handoff.md 2026-07-19(6차))과 동일). */}
-        {gamificationEnabled && (
-          <TicketShopCard ticketBalance={ticketBalance} ownedStickerIds={stickerTypes} onRedeem={redeemTicketReward} />
-        )}
+        {/* 3분 데일리 리추얼(2026-07-22) 정보 공개 축소 — 평생 기록 타일
+            3개 + Paul Rank/Word King/House/Season 텍스트 + 티켓 상점을
+            기본으로 접힌 <details> 하나 뒤로 이동. 순수 JSX 재배치 —
+            렌더 조건(gamificationEnabled 등)/state/fetch는 전부 원래 그대로
+            (native <details>라 열림/닫힘 state도 새로 만들지 않음). */}
+        <details className="bg-white rounded-3xl card-shadow">
+          <summary className="cursor-pointer select-none list-none p-5 flex items-center justify-between">
+            <span className="font-black text-gray-700 text-base">🎖️ 내 기록 더보기</span>
+            <span className="text-gray-400 text-sm font-bold">열기 ▾</span>
+          </summary>
+          <div className="px-5 pb-5 space-y-4">
+            <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-4 text-white text-center">
+              <div className="flex justify-center gap-4">
+                <div className="bg-white/20 rounded-xl px-3 py-2 text-center">
+                  <p className="text-white font-black text-xl">{cleared.length}</p>
+                  <p className="text-purple-200 text-xs">단어 클리어</p>
+                </div>
+                <div className="bg-white/20 rounded-xl px-3 py-2 text-center">
+                  <p className="text-white font-black text-xl">{stickerTypes.length}</p>
+                  <p className="text-purple-200 text-xs">스티커</p>
+                </div>
+                <div className="bg-white/20 rounded-xl px-3 py-2 text-center">
+                  <p className="text-white font-black text-xl">{activeMissions.length}</p>
+                  <p className="text-purple-200 text-xs">레벨업 미션</p>
+                </div>
+              </div>
+              {/* Paul Rank — 텍스트/숫자만(모자 그래픽 없음, DESIGN DIRECTION은
+                  PAUL_BIBLE.md §8 참고). totalStars와 무관한 별도 원장(XP)에서
+                  계산 — 별을 XP로 변환하지 않는다는 판단, paulRankShared.js 참고. */}
+              {gamificationEnabled && !rankLoading && (
+                <p className="text-purple-100 text-xs mt-3">
+                  🎩 {rankState.rank.name} · {rankState.hatStage.name} 단계
+                  {rankState.isMaxRank
+                    ? ' · 최고 단계!'
+                    : ` · 다음 Rank까지 XP ${rankState.xpRemainingToNextRank}`}
+                </p>
+              )}
+              {/* Word King(2026-07-19) — "이번 주 챔피언" 최소 텍스트(교실
+                  발표용). 계산 기록이 아직 없으면(관리자 미실행) 아무것도
+                  렌더하지 않음. */}
+              {gamificationEnabled && weeklyChampion && (
+                <p className="text-purple-100 text-xs mt-1">
+                  👑 이번 주 챔피언: {weeklyChampion.studentName}
+                  {weeklyChampion.studentId === studentId ? ' (나예요!)' : ''}
+                </p>
+              )}
+              {/* House System(2026-07-19, 게임화 하위카드 8번) — 최소 텍스트.
+                  개인/타 하우스 비교 없이 "우리 팀" 소속감만 전달
+                  (PAUL_PRINCIPLES.md 3번 원칙). */}
+              {gamificationEnabled && myHouse && houseWeeklyScore != null && (
+                <p className="text-purple-100 text-xs mt-1">
+                  {myHouse.emoji} 우리 하우스: {myHouse.name} · 이번 주 팀 점수 {houseWeeklyScore}
+                </p>
+              )}
+              {/* Seasonal Progression(2026-07-19, 게임화 하위카드 9번) — 시즌이
+                  실제로 시작된 뒤에만 나타나는 추가 텍스트. 레벨/뱃지/스트릭은
+                  이 화면 어디에도 "리셋"이라는 개념으로 노출되지 않는다(영구
+                  유지 — 이 라운드에서 절대 안 바뀜을 지키는 설계). */}
+              {gamificationEnabled && myHouse && currentSeason && houseSeasonScore != null && (
+                <p className="text-purple-100 text-xs mt-1">
+                  🌱 이번 시즌 누적 점수 {houseSeasonScore}
+                </p>
+              )}
+            </div>
+            {/* Ticket Economy(2026-07-19) — Teacher Controls 마스터 스위치로
+                게이팅(Paul Rank와 동일한 gamificationEnabled 변수 재사용).
+                스위치 꺼진 반은 티켓 UI/지급 전부 안 보임(useStudent.js의
+                grantTicket 자체는 계속 호출되지만, 노출만 막는 게이트라는
+                점도 Paul Rank의 기존 판단(handoff.md 2026-07-19(6차))과 동일). */}
+            {gamificationEnabled && (
+              <TicketShopCard ticketBalance={ticketBalance} ownedStickerIds={stickerTypes} onRedeem={redeemTicketReward} />
+            )}
+          </div>
+        </details>
 
         {/* Nav Grid */}
         <div className="grid grid-cols-2 gap-3">
