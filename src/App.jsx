@@ -15,6 +15,7 @@ import BonusChoiceScreen from './components/BonusChoiceScreen'
 import GiftReveal from './components/GiftReveal'
 import SpellingReview from './components/SpellingReview'
 import SpellingSessionResult from './components/SpellingSessionResult'
+import GuidedSession from './components/GuidedSession'
 import { useStudent } from './hooks/useStudent'
 import { pickNextGame } from './utils/matchGame'
 import { assignDirections } from './utils/entranceTest'
@@ -277,6 +278,19 @@ function AppInner({ studentId, studentName, onLogout }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spellingSettings, sessionWords.length])
 
+  // 3분 데일리 리추얼(2026-07-22) — 가이드 세션 전용 mixed 방향 배정.
+  // 위 mixedDirections는 sessionWords(studyScope 필터 반영) 기준이라,
+  // 항상 classWords 전체를 도는 가이드 세션과는 인덱스 축이 다르다 —
+  // 재사용하지 않고 classWords 길이로 따로 배정(승인된 스펙 그대로).
+  const guidedMixedDirections = useMemo(() => {
+    if (spellingSettings.spellingDirection !== 'mixed') return null
+    return assignDirections(classWords.length, 'mixed')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spellingSettings, classWords.length])
+
+  // 3분 데일리 리추얼 진입 — Dashboard의 히어로 CTA가 호출.
+  const startGuidedSession = () => setScreen('guidedSession')
+
   // v2.0 쓰기 모드 세션 성적 집계(방향별) — 첫 시도 기준. 쓰기 모드로
   // 단어 목록에서 세션을 시작할 때 비우고, 마지막 단어까지 끝나면 결과
   // 화면(spellingResult)에서 요약해 보여준다. 저장은 안 함(요약 표시 전용
@@ -425,7 +439,37 @@ function AppInner({ studentId, studentName, onLogout }) {
           onResumeWord={goToWordIndex}
           resumeIndex={studentData.getResumeIndexForUnit(currentUnitId)}
           onUnitSwitch={handleUnitSwitch}
+          onStartGuided={startGuidedSession}
           textbookAssignments={textbookAssignments} onTextbookSwitch={handleTextbookSwitch} />
+      )}
+      {screen === 'guidedSession' && (
+        // 3분 데일리 리추얼(2026-07-22) — 가이드 학습은 항상 classWords
+        // (반 전체 단어)를 기준으로 한다. sessionWords가 아니다 — 이전에
+        // WordBrowser에서 고른 studyScope('unknown' 등)가 세션에 남아
+        // 오늘의 목록을 몰래 줄이면 안 되기 때문. 콜백은 wordDetail 화면과
+        // 정확히 동일한 useStudent 경로(점수/진행도 로직 재구현 없음).
+        // GiftReveal 오버레이(아래 pendingGift 블록)는 screen 값과 무관하게
+        // 렌더되므로 이 화면도 자동으로 덮는다.
+        <GuidedSession
+          classWords={classWords}
+          resumeIndex={studentData.getResumeIndexForUnit(currentUnitId)}
+          spellingSettings={spellingSettings}
+          mixedDirections={guidedMixedDirections}
+          spellingCombo={studentData.spellingCombo}
+          spellingReviewQueue={spellingReviewQueue}
+          wordStatus={wordStatus}
+          onSpellingAnswer={handleSpellingAnswer}
+          onMarkViewed={studentData.markWordViewed}
+          onMarkExampleHeard={studentData.markExampleHeard}
+          onMarkPronunciationOk={() => { markPronunciationOk(); addStars(1) }}
+          onMarkQuizSolved={studentData.markQuizSolved}
+          onQuizAnswer={studentData.recordQuizAnswer}
+          onPronunciationAttempt={studentData.markPronunciationAttempt}
+          onWordKnown={setWordKnown}
+          onWordUnknown={setWordUnknown}
+          onSetLastWordIndex={(idx) => studentData.setLastWordIndex(idx, currentUnitId)}
+          onDone={() => setScreen('dashboard')}
+        />
       )}
       {screen === 'wordBrowser'   && (
         <WordBrowser words={classWords} cleared={cleared} onSelect={handleWordSelect} onBack={() => setScreen('dashboard')}
