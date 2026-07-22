@@ -1032,6 +1032,33 @@ const _studentAssignmentsCache = new Map()
 async function maintainPrimaryAssignmentForClassChange(studentId, classId, unitId) {
   try {
     if (!studentId || !classId) return
+    // v3.1 교재 모드 — 다른 행은 "교재별 진도 상태"라 절대 삭제하지 않는다
+    // (유령 개념은 반=교재이던 레거시 모델의 것). 전부 demote만 하고, 새
+    // 반의 자동 교재 행을 primary로 보장(textbook_id 포함).
+    if (_textbookMode) {
+      const { error: demErr } = await supabase.from('student_class_assignments')
+        .update({ is_primary: false }).eq('student_id', studentId).eq('is_primary', true).neq('class_id', classId)
+      if (demErr) {
+        if (isMissingTableError(demErr)) return
+        throw demErr
+      }
+      const own = getOwnTextbookOfClass(classId)
+      const { error: insErr } = await supabase.from('student_class_assignments').insert({
+        student_id: studentId, class_id: classId, textbook_id: own?.id ?? null,
+        current_unit_id: unitId ?? null, is_primary: true,
+      })
+      if (insErr) {
+        if (insErr.code === '23505') {
+          const { error: updErr } = await supabase.from('student_class_assignments')
+            .update({ is_primary: true }).eq('student_id', studentId).eq('class_id', classId)
+          if (updErr) throw updErr
+        } else if (!isMissingTableError(insErr)) {
+          throw insErr
+        }
+      }
+      _studentAssignmentsCache.delete(studentId)
+      return
+    }
     // 1) 다른 반의 primary(유령/이전 반) 행 삭제 — 조건부(이 학생 + primary
     //    + 대상 반이 아닌 것만). 테이블 부재면 여기서 바로 조용히 끝.
     const { error: delErr } = await supabase.from('student_class_assignments')
@@ -1457,6 +1484,12 @@ export async function setPrimaryTextbook(studentId, textbookId) {
   if (syncErr) throw syncErr
   _studentAssignmentsCache.delete(studentId)
   await refreshStudents()
+  // 캐시 즉시 재예열 — 동기 소비자(resolveStudentUnitObj →
+  // getStudentPrimaryTextbook)가 다음 fetch 전까지 "사람 반의 자동 교재"
+  // 폴백으로 잘못 해석하는 창을 없앤다(전환 직후 유닛/단어가 잠깐 이전
+  // 교재로 보이는 라이브 검증 FAIL의 원인이었음). refreshStudents 이후에
+  // 호출해야 read-heal이 방금 동기화된 current_unit_id를 본다.
+  await getStudentClassAssignments(studentId)
 }
 
 // v3.1 관리자 — 반↔교재 연결 관리(연결/해제/순서). 해제는 연결만 끊고

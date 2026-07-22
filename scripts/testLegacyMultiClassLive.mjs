@@ -25,6 +25,15 @@ const {
 } = lib
 await initWordLibrary()
 
+// v3.1(2026-07-22) — 이 테스트의 시나리오(반=교재이던 시절의 유령 primary
+// 행 수리)는 레거시 모드 전용이다. 교재 도메인 모델이 활성화되면
+// (supabase_v3_1_textbooks.sql 실행 후) 반≠컨테이너가 정상이라 "유령"
+// 개념 자체가 없다 — 교재 모드 검증은 testTextbookModelLive.mjs가 담당.
+if (lib.isTextbookMode?.()) {
+  console.log('SKIP — 교재 모드 활성(v3.1). 이 시나리오는 레거시 모드 전용 — testTextbookModelLive.mjs를 사용하세요.')
+  process.exit(0)
+}
+
 let failures = 0
 const check = (label, cond, extra) => {
   if (cond) console.log(`  PASS  ${label}`)
