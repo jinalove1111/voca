@@ -1,4 +1,32 @@
 # Paul Easy Voca — Handoff
+_최종 갱신: 2026-07-23 (3차, Sentence Learning v3.4 — 엔진+관리자+학생 UI 완료, readingStudentUI=false 배포)_
+
+## 2026-07-23 (3차) — Sentence Learning v3.4 (Phase A 엔진/스키마/관리자 + Phase B 학생 UI)
+
+커밋 `a60fa47..e222f32`(7개), push·배포 SHA-256 검증 완료. SQL(v3_4)은
+운영자가 실행 완료 — 라이브 스키마 실측(3테이블/4컬럼/RLS 200) 확인됨.
+
+- **스키마**: passage_sentences 학습 메타 4컬럼(핵심/중요도 1..5 CHECK/
+  문법/chunks jsonb) + sentence_progress(unique student+sentence, 6단계
+  CHECK, v1.3 RLS 관례) + sentence_words(수동 연결). 멱등·비파괴.
+- **순수 엔진** sentenceLearning.js(import-0, 49단언): 6단계 상태기계
+  (비핵심 문장은 단계 진입 불가 — 보기/듣기만), 결정론 빈칸(유닛 단어→
+  동사→마지막 내용어, 관사/1글자 제외, naive 정직 기록), 시드 셔플(원본
+  순서 불가), 정규화 채점, 적응(2회=문장 재표시/3회=공개+재시도 1회),
+  격려 문구만.
+- **관리자**: PassageEditor에 [핵심 문장]/[중요도 ★1-5+라벨]/[문법 포인트]/
+  [문장 끊기(한 줄=청크)] — 기존 동작 100% 보존.
+- **학생 UI**(readingStudentUI=false — 프로덕션 시각 변화 0, 탭 바 자체
+  비렌더·fetch 0회·grep으로 소비처 단일 확인): WordBrowser [단어]/[문장]
+  탭, SentencesTab(지문 아코디언/★중요도/뜻 토글/듣기/오늘 배운 단어 칩),
+  SentenceLearningFlow 6단계(한 화면 한 활동, 진행 점 6개, 단계 통과마다
+  Paul 성공 리액션 재사용 격려, 44px+ 터치, "지금 문장 하나만!" 프레임,
+  TTS는 기존 speak() 단일 재생 구조 재사용).
+- 검증: sentence-learning 49 · reading 21 · attachment 123 · student 4 ·
+  persistence 8 · admin 6 · daily-ritual 118 · analytics 12 — 전부 PASS.
+- **운영자 액션: 없음(필수)**. readingStudentUI ON 전환은 교사 지문/핵심
+  문장 입력 + 실기기(iOS/Android TTS·터치) 스모크 후 별도 결정.
+
 _최종 갱신: 2026-07-23 (2차, Reading Foundation v3.3 — 지문/문장 스키마 + 관리자 편집기, SQL 실행 대기)_
 
 ## 2026-07-23 (2차) — Reading Foundation v3.3 (학습 UI 제외 — 파운데이션만)
