@@ -57,6 +57,18 @@ const DEFAULT_FEATURES = {
   attachmentWorldFull: false,  // 정원 이후 구역(집/다리/도서관/마을/왕국) UI — 파운데이션만, 미완성
   attachmentBookshelf: false,  // 개인 책장 — 파운데이션만, 미완성
   attachmentStory: false,      // 이어지는 이야기 — 파운데이션만, 미완성
+
+  // Paul Town v2.0 (2026-07-22) — 애착 시스템 v1 확장(재설계 아님). 모든
+  // 데이터는 기존 진행 레코드에서 파생 — 새 Supabase 테이블/컬럼/화폐 없음.
+  // (단어 박물관/성장 앨범은 위의 attachmentMuseum/attachmentAlbum이 그대로
+  // Paul Town의 해당 기능 — 중복 플래그를 만들지 않는다.)
+  paulMemoryV2: true,          // 폴의 기억 v2 — 템플릿 ≥15종 확장(실데이터만)
+  todaysDiscovery: true,       // 오늘의 발견 — 하루 1개 결정론 메시지
+  starToSeed: true,            // 별→씨앗 — 어제 별이 오늘 새싹(history 파생)
+  hatCeremony: true,           // 모자 수여식 — 새 모자 획득 연출
+  paulTownHomeBand: true,      // 홈 밴드 — Paul Town 한 줄 요약 띠
+  paulTownGarden: true,        // Paul Town 정원(기존 정원 엔진 재사용)
+  paulTownBuildings: false,    // 도서관/박물관/시계탑 건물 — 파운데이션만, 미완성
 }
 
 // localStorage에서 저장된 features 불러오기.
@@ -148,7 +160,7 @@ export const getFeaturesByCategory = (category) => {
     ranking: ['ranking', 'pointSystem', 'leaderboard', 'rewardSystem'],
     aiAnalysis: ['aiAnalysis', 'wrongAnswerNote', 'weakWordAnalysis', 'reviewRecommendation'],
     schoolManagement: ['classGroupManagement', 'semesterManagement', 'parentPortal', 'schoolDashboard', 'attendanceTracking', 'advancedAnalytics'],
-    attachment: ['attachmentHats', 'attachmentMuseum', 'attachmentAlbum', 'attachmentPaulMemory', 'attachmentWorldGarden', 'attachmentWorldFull', 'attachmentBookshelf', 'attachmentStory'],
+    attachment: ['attachmentHats', 'attachmentMuseum', 'attachmentAlbum', 'attachmentPaulMemory', 'attachmentWorldGarden', 'attachmentWorldFull', 'attachmentBookshelf', 'attachmentStory', 'paulMemoryV2', 'todaysDiscovery', 'starToSeed', 'hatCeremony', 'paulTownHomeBand', 'paulTownGarden', 'paulTownBuildings'],
   }
   return categories[category] || []
 }
