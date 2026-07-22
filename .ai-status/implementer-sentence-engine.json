@@ -1,0 +1,31 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "sentence-engine",
+  "task": "Sentence Learning v3.4 Phase A — 스키마(SQL)+순수 엔진+진행도 API+관리자 편집기 확장 (학생 UI 제외)",
+  "status": "working",
+  "progress": 5,
+  "started_at": "2026-07-23T00:00:00+09:00",
+  "updated_at": "2026-07-23T00:00:00+09:00",
+  "files_owned": [
+    ".ai-status/implementer-sentence-engine.json"
+  ],
+  "files_read": [
+    "CLAUDE.md",
+    "handoff.md",
+    "DATABASE.md",
+    "src/utils/readingApi.js",
+    "src/utils/readingModel.js",
+    "src/utils/spellingReviewApi.js",
+    "src/utils/wordLibrary.js",
+    "src/utils/attachment/paulTown.js",
+    "src/components/admin/PassageEditor.jsx",
+    "tests/harness/runReading.mjs",
+    "supabase_v3_3_reading.sql",
+    "scripts/hooks/checkDestructiveSql.mjs",
+    ".ai-status/README.md"
+  ],
+  "summary": "선행 조사 완료(v3.3 Reading Foundation 코드/SQL/하네스/훅 확인). 커밋 계획: (1) SQL+sentenceLearning.js+하네스, (2) readingApi 확장+sentenceProgressApi, (3) PassageEditor 확장.",
+  "blocker": null,
+  "next_action": "supabase_v3_4_sentence_learning.sql 작성부터 시작"
+}
