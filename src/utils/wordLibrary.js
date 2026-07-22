@@ -726,6 +726,11 @@ export async function setStudentClass(id, className) {
     .update({ ...base, current_unit_id: unitIdInNewClass }).eq('id', id)
   if (error) ({ error } = await supabase.from('students').update(base).eq('id', id))
   if (error) throw error
+  // 2026-07-22 레거시 다중 교재 버그 수정 — 반 배정이 assignment 테이블을
+  // 유지보수하지 않아 유령 primary 행이 남고, 그 행이 이후 "원래 반을 두
+  // 번째 교재로 추가"(assignTextbook)를 unique 충돌로 조용히 차단하던
+  // 문제의 근원. 이제 반 배정도 조인 테이블을 함께 동기화한다(non-fatal).
+  await maintainPrimaryAssignmentForClassChange(id, classId, unitIdInNewClass)
   await refreshStudents()
 }
 
@@ -843,6 +848,11 @@ export async function setStudentsClassBulk(ids, className, unitName) {
     .update({ ...base, current_unit_id: unitId }).in('id', validIds)
   if (error) ({ error } = await supabase.from('students').update(base).in('id', validIds))
   if (error) throw error
+  // 2026-07-22 — setStudentClass와 동일한 assignment 유지보수(위 주석 참고).
+  // 순차 실행(학생 수는 반 단위 이동이라 수십 명 수준, 각 호출은 non-fatal).
+  for (const sid of validIds) {
+    await maintainPrimaryAssignmentForClassChange(sid, classId, unitId)
+  }
   await refreshStudents()
 }
 
@@ -882,6 +892,48 @@ function isMissingTableError(error) {
 // 호출될 때마다 최신 결과로 채워진다. _cache/_students/_dailyAssignments와
 // 같은 "한 번 비동기로 채우고 이후 동기로 읽는다" 관례를 그대로 재사용.
 const _studentAssignmentsCache = new Map()
+
+// 내부(2026-07-22, 레거시 다중 교재 버그 수정) — "반 배정"(단일 반 전환)
+// 의미론으로 student_class_assignments를 유지보수한다: 대상 반 행을
+// primary로 보장(insert, 이미 있으면 primary 승격)하고, 다른 반의 기존
+// primary 행은 삭제한다(반 배정 = "이동"이므로 — 남겨두면 이동한 모든
+// 학생에게 교재 선택기가 나타나는 의도치 않은 동작이 되고, 지우지 않으면
+// 유령 행이 unique(student_id,class_id)로 이후 assignTextbook(그 반 재추가)
+// 을 조용히 차단한다 — 2026-07-22 재현으로 확정된 실제 버그의 근원).
+// assignTextbook으로 만든 진짜 secondary 배정(is_primary=false)은 절대
+// 건드리지 않는다. 전 과정 non-fatal(콘솔 warn만) — 반 배정 자체는 이
+// 보조 테이블 때문에 절대 실패하면 안 된다(addStudent와 동일 계약).
+async function maintainPrimaryAssignmentForClassChange(studentId, classId, unitId) {
+  try {
+    if (!studentId || !classId) return
+    // 1) 다른 반의 primary(유령/이전 반) 행 삭제 — 조건부(이 학생 + primary
+    //    + 대상 반이 아닌 것만). 테이블 부재면 여기서 바로 조용히 끝.
+    const { error: delErr } = await supabase.from('student_class_assignments')
+      .delete().eq('student_id', studentId).eq('is_primary', true).neq('class_id', classId)
+    if (delErr) {
+      if (isMissingTableError(delErr)) return
+      throw delErr
+    }
+    // 2) 대상 반 행을 primary로 보장 — 없으면 insert, 이미 있으면(교사가
+    //    전에 secondary로 배정해 둔 반으로 이동하는 경우) primary 승격만
+    //    하고 그 행의 current_unit_id(그 반 전용 진도)는 보존한다.
+    const { error: insErr } = await supabase.from('student_class_assignments').insert({
+      student_id: studentId, class_id: classId, current_unit_id: unitId ?? null, is_primary: true,
+    })
+    if (insErr) {
+      if (insErr.code === '23505') {
+        const { error: updErr } = await supabase.from('student_class_assignments')
+          .update({ is_primary: true }).eq('student_id', studentId).eq('class_id', classId)
+        if (updErr) throw updErr
+      } else if (!isMissingTableError(insErr)) {
+        throw insErr
+      }
+    }
+    _studentAssignmentsCache.delete(studentId)
+  } catch (err) {
+    console.warn('[wordLibrary] 반 배정 assignment 행 유지보수 실패 (non-fatal):', err?.message || err)
+  }
+}
 
 // 테이블이 없거나(마이그레이션 전) 학생에게 배정 행이 0개(신규 학생 등
 // 백필 이후 시점에 앱 계층 insert 없이 생성된 경우)이면, students.class_id/
@@ -960,7 +1012,30 @@ export async function getStudentClassAssignments(studentId) {
     if (live) {
       const primary = result.find((r) => r.isPrimary)
       if (primary) {
-        if (live.unitId != null) primary.unitId = live.unitId
+        // 2026-07-22 레거시 다중 교재 버그 수정 — 반 불일치는 "마스킹"만
+        // 하던 기존 동작이 유령 행을 DB에 그대로 남겨, 이후 그 반을 두
+        // 번째 교재로 재추가하는 assignTextbook을 unique 충돌로 조용히
+        // 차단했다(재현: scripts/reproLegacyMultiClass.mjs). 이제 불일치를
+        // 감지하면 표시용 마스킹은 유지하되 DB도 실제로 고친다(fire-and-
+        // forget — 읽기 경로를 절대 막지 않고, 실패해도 다음 읽기가 재시도).
+        if (live.classId != null && primary.classId !== live.classId) {
+          // 수리 행의 유닛은 "그 반 소속이 확실한 id"만 신뢰한다 —
+          // getStudentUnitId의 unit_name 폴백은 이전 반의 유닛 이름이
+          // 새 반의 같은 이름 유닛(빈 유닛일 수도)에 잘못 매칭될 수 있어
+          // (교재들이 전부 "Unit 1..N" 작명이라 실제로 발생) 여기서는
+          // 쓰지 않는다. 확신이 없으면 NULL로 두면 setPrimaryAssignment의
+          // "단어 있는 첫 유닛" 확정 로직이 전환 시점에 올바르게 채운다.
+          const clsName = getClassNameById(live.classId)
+          const strictUnitId = (live.unitId != null &&
+            (_cache[clsName]?.units || []).some((u) => u.id === live.unitId))
+            ? live.unitId : null
+          maintainPrimaryAssignmentForClassChange(studentId, live.classId, strictUnitId)
+        }
+        // 유닛 보정 — 레거시 학생(current_unit_id NULL, unit_name 문자열
+        // 의존)은 live.unitId가 null이라 기존 코드가 보정을 건너뛰었다.
+        // getStudentUnitId(이름→id→첫 유닛 해석)로 항상 구체적인 id를 준다.
+        const resolvedUnitId = live.unitId ?? getStudentUnitId(studentId)
+        if (resolvedUnitId != null) primary.unitId = resolvedUnitId
         if (live.classId != null) primary.classId = live.classId
       }
     }
@@ -1100,10 +1175,25 @@ export async function setPrimaryAssignment(studentId, classId) {
   if (outSelErr && !isMissingTableError(outSelErr)) throw outSelErr
   const outgoing = (outgoingRows || []).find((r) => r.class_id !== classId)
   if (outgoing) {
+    // 2026-07-22 레거시 수정 — live.unitId가 null인 레거시 학생(current_
+    // unit_id 미백필, unit_name 문자열 의존)은 기존 코드가 캡처를 통째로
+    // 건너뛰어 "전환 직전 진도"가 영영 스냅샷되지 않았다. getStudentUnitId
+    // (이름→id→첫 유닛 해석, resolveStudentUnitObj 단일 경로)로 항상
+    // 구체적인 유닛 id를 캡처한다 — 학습 이력을 잃지 않는 핵심 장치.
     const live = _students.get(studentId)
-    if (live && live.unitId != null) {
+    let capturedUnitId = (live && live.unitId != null) ? live.unitId : null
+    if (capturedUnitId == null) {
+      // 이름 폴백은 "실제 진도"일 때만 신뢰한다: 레거시 학생의 stale
+      // unit_name이 지금 반의 같은 이름 빈 유닛에 매칭되면(교재들이 전부
+      // "Unit 1..N" 작명이라 실제 발생) 그건 진도가 아니라 잡음이다 —
+      // 단어가 있는 유닛으로 해석될 때만 캡처하고, 아니면 캡처를 건너뛴다
+      // (행이 NULL로 남으면 다음 전환의 "단어 있는 첫 유닛" 확정이 처리).
+      const resolved = resolveStudentUnitObj(studentId)
+      if (resolved && (resolved.words || []).length > 0) capturedUnitId = resolved.id
+    }
+    if (capturedUnitId != null) {
       const { error: healErr } = await supabase.from('student_class_assignments')
-        .update({ current_unit_id: live.unitId }).eq('id', outgoing.id)
+        .update({ current_unit_id: capturedUnitId }).eq('id', outgoing.id)
       if (healErr) throw healErr
     }
   }
@@ -1117,8 +1207,29 @@ export async function setPrimaryAssignment(studentId, classId) {
     .update({ is_primary: false }).eq('student_id', studentId).neq('id', target.id)
   if (falseErr) throw falseErr
 
+  // 2026-07-22 레거시 수정 — 대상 배정 행의 unit이 NULL이면(교사가 아직
+  // setAssignmentUnit으로 안 정했거나 레거시 백필 산출물) 그대로 NULL을
+  // students에 쓰지 않는다: NULL이면 이후 유닛 해석이 stale unit_name
+  // 문자열(이전 교재의 유닛 이름!)로 폴백해 다른 교재의 같은 이름 유닛에
+  // 잘못 매칭될 수 있다(교재별 유닛 진도 분리 위반). 대상 반의 첫 유닛으로
+  // 결정론적으로 확정하고, 배정 행에도 같은 값을 되써서 이후 전환이 항상
+  // 구체적 id 기반이 되게 한다.
+  let syncUnitId = target.current_unit_id
+  if (syncUnitId == null) {
+    const clsName = getClassNameById(classId)
+    const units = _cache[clsName]?.units || []
+    // 단어가 실제로 있는 첫 유닛 우선(첫 유닛이 빈 껍데기인 반이 실존 —
+    // 라이브 테스트에서 확인) — 전부 비었으면 첫 유닛이라도(유닛 선택기로
+    // 학생/교사가 이동 가능, 기존 resolveStudentUnitObj 최후 폴백과 동일).
+    syncUnitId = (units.find((u) => (u.words || []).length > 0) || units[0])?.id ?? null
+    if (syncUnitId != null) {
+      const { error: fillErr } = await supabase.from('student_class_assignments')
+        .update({ current_unit_id: syncUnitId }).eq('id', target.id)
+      if (fillErr) throw fillErr
+    }
+  }
   const { error: syncErr } = await supabase.from('students')
-    .update({ class_id: classId, current_unit_id: target.current_unit_id }).eq('id', studentId)
+    .update({ class_id: classId, current_unit_id: syncUnitId }).eq('id', studentId)
   if (syncErr) throw syncErr
   _studentAssignmentsCache.delete(studentId)
   await refreshStudents()
