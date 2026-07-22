@@ -1,0 +1,36 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현 — Paul Town 월드 완성(마을=내비게이션, 도서관/시계탑 화면)",
+  "task_id": "paultown-world",
+  "task": "Paul Town 월드 완성: paulTown.js 헬퍼(timeWindows/paulHomeDeco) + storyFoundation 교재 책 헬퍼 + Bookshelf/TimeMachine 신규 화면(lazy) + PaulTown 마을 내비 재구성 + paulTownBuildings/attachmentBookshelf 플래그 ON + 하네스 확장(기존 100 유지)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-22T00:00:00+09:00",
+  "updated_at": "2026-07-22T00:00:00+09:00",
+  "files_owned": [
+    ".ai-status/implementer-paultown-world.json",
+    "src/utils/attachment/paulTown.js",
+    "src/utils/attachment/storyFoundation.js",
+    "src/components/PaulTown.jsx",
+    "src/components/Bookshelf.jsx",
+    "src/components/TimeMachine.jsx",
+    "src/components/GrowthAlbum.jsx",
+    "src/config/features.js",
+    "src/App.jsx",
+    "tests/harness/runAttachment.mjs"
+  ],
+  "files_read": [
+    "CLAUDE.md",
+    "handoff.md",
+    "src/components/WordMuseum.jsx",
+    "src/components/EnglishGarden.jsx",
+    "src/components/Dashboard.jsx",
+    "src/utils/attachment/attachmentCore.js",
+    "src/utils/attachment/worldProgress.js",
+    "src/hooks/useAttachment.js",
+    "src/utils/wordLibrary.js"
+  ],
+  "summary": "3커밋 완료: eb3e379(엔진 헬퍼 timeWindows/paulHomeDeco/getTextbookBooks + 하네스 100→123), 49298b8(Bookshelf/TimeMachine lazy 화면 + App 라우트 + GrowthAlbum 일 년 전 오늘 한 줄), 2209e18(PaulTown 마을=내비게이션 재구성 + paulTownBuildings/attachmentBookshelf ON). 새 영속 상태 0, 스키마 0, 새 패키지 0, 폴 검은 모자 불변, 홈(Dashboard) 변경 0. build 3회 clean, verify:attachment 123/123 · verify:student 4/4 · verify:persistence 8/8 PASS. 박물관(WordMuseum)은 소유 범위 밖이라 무변경 — 파생 '열심히 연습한 단어' 섹션은 갭으로 기록.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 + docs-maintainer의 handoff.md/ROADMAP.md append(문서는 소유 범위 밖). 실기기 스모크 권장(마을 건물 카드 이동/책등 세로 글자 writing-mode/시계탑 빈 창). 알려진 한계: 기기 로컬 플래그 스냅샷이 있는 기기는 새 기본값 ON이 안 먹음(관리자 패널에서 수동 ON 필요), 책장은 현재 교재 범위(다른 교재의 완주 책은 그 교재로 전환 중일 때 표시), dbIntegrityAudit의 v2.1 불변식 4건은 v3.1 교재 모델의 정상 상태(감사 스크립트가 구모델 기준 — 선행 이슈, 본 작업과 무관)."
+}
