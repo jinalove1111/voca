@@ -14,15 +14,10 @@
 //
 // 학생 식별은 항상 students.id(UUID) — 이름 문자열 미사용(CLAUDE.md 규칙 4).
 import { supabase } from './supabaseClient'
-
-// readingApi.js와 동일 로직의 로컬 사본(42P01/PGRST205/메시지 패턴) —
-// wordLibrary.isMissingTableError가 export되어 있지 않은 관례를 따른다.
-function isMissingTableError(error) {
-  if (!error) return false
-  if (error.code === '42P01' || error.code === 'PGRST205') return true
-  const msg = String(error.message || '').toLowerCase()
-  return msg.includes('does not exist') || msg.includes('schema cache')
-}
+// 2026-07-23 — wordLibrary.js가 isMissingTableError를 export하게 되어
+// (감사 문서 09 §1-1 재복제 중단), 문자 단위 동일했던 로컬 사본을 제거하고
+// 단일 원본을 import한다. 동작 변화 0.
+import { isMissingTableError } from './wordLibrary'
 
 let _warned = false
 function warnOnce(err) {

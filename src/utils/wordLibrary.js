@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { fmtDay } from './analyticsMath'
 // House System(2026-07-19, 게임화 하위카드 8번) — 순수 배정/집계 함수만
 // import한다(HOUSES 상수/assignBalancedHouseId/computeHouseCounts/
 // computeHouseWeeklyScores). houseSystem.js 자신은 이 파일을 거꾸로
@@ -48,11 +49,13 @@ let _dailyAssignments = {}
 // 조회 날짜와 어긋나 "오늘 공부함"이 체크되지 않는 원인이었다. getFullYear/
 // getMonth/getDate는 전부 로컬 타임존 기준이라 이걸로 YYYY-MM-DD를 직접
 // 조립하면 학생 쪽(useStudent.js의 todayStr())과 항상 같은 날짜가 된다.
+// 2026-07-23 — 구현을 analyticsMath.js fmtDay(import-0 순수 모듈, 동일
+// 로직)로 위임해 재구현 중복을 제거(감사 문서 09 §1-6 X↔X' 통합). 이
+// export와 모든 호출부 시그니처는 그대로 — 동작 변화 0. 주의: useStudent.js
+// todayStr()(toDateString() 포맷, 진행도 영속 키)는 별개 축이며 여기로
+// 통일하면 전 학생 키 마이그레이션이 필요한 고위험 작업이라 손대지 않는다.
 export function localIsoDateStr(d = new Date()) {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+  return fmtDay(d)
 }
 const todayDateStr = () => localIsoDateStr()
 
@@ -1006,7 +1009,11 @@ export async function setStudentsClassBulk(ids, className, unitName) {
 // (fetchProgressBackupStrict의 42703/42P01 이중 체크, 위 906행 인근)에
 // PGRST205를 추가하고, code 필드가 없는 예외적인 에러 모양까지 방어적으로
 // 커버하기 위해 메시지 텍스트도 보조로 확인한다.
-function isMissingTableError(error) {
+// 2026-07-23 export — 미export 상태가 readingApi.js/sentenceProgressApi.js의
+// 파일별 사본 재복제를 유발했어서(감사 문서 09 §1-1) 이쪽을 src/ 계층의
+// 단일 원본으로 공개한다. api/*(Node 서버리스)는 번들 경계가 달라 별도
+// 사본 유지(같은 감사 문서의 판단 그대로 — 억지 공유 금지).
+export function isMissingTableError(error) {
   if (!error) return false
   if (error.code === '42P01' || error.code === 'PGRST205') return true
   const msg = String(error.message || '').toLowerCase()

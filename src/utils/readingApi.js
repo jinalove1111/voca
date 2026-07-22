@@ -13,16 +13,10 @@
 //   진입하지 않는다(PassageEditor.jsx).
 import { supabase } from './supabaseClient'
 import { normalizeSentences } from './readingModel'
-
-// wordLibrary.js isMissingTableError와 동일 로직의 로컬 사본 —
-// wordLibrary는 이 작업 범위에서 수정 금지 파일이고 해당 함수가 export
-// 되어 있지 않아, import 대신 관례(42P01/PGRST205/메시지 패턴)를 복사한다.
-function isMissingTableError(error) {
-  if (!error) return false
-  if (error.code === '42P01' || error.code === 'PGRST205') return true
-  const msg = String(error.message || '').toLowerCase()
-  return msg.includes('does not exist') || msg.includes('schema cache')
-}
+// 2026-07-23 — wordLibrary.js가 isMissingTableError를 export하게 되어
+// (감사 문서 09 §1-1 재복제 중단), 문자 단위 동일했던 로컬 사본을 제거하고
+// 단일 원본을 import한다. 동작 변화 0.
+import { isMissingTableError } from './wordLibrary'
 
 // 유닛의 지문 목록(+각 지문의 문장, position 정규화 완료 상태)을 반환.
 // 절대 던지지 않음 — 테이블 부재/네트워크 실패 등 모든 에러는 [] 폴백.

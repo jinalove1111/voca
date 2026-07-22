@@ -22,7 +22,11 @@ const dayMs = 24 * 60 * 60 * 1000
 const parseDay = (d) => new Date(`${d}T00:00:00`)
 // 로컬 달력 기준 YYYY-MM-DD — toISOString(UTC 변환)을 쓰면 KST에서 하루
 // 밀리는 시간대 버그가 생긴다(하네스로 실측 확인).
-const fmtDay = (t) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+// 2026-07-23 export — wordLibrary.js localIsoDateStr()가 같은 로직의 재구현
+// 이었어서(감사 문서 09 §1-6 X↔X') 이쪽(import-0 순수 모듈)을 단일 원본으로
+// 삼는다. 반대 방향(analyticsMath가 wordLibrary를 import)은 이 모듈의
+// import-0 순수 계약(runAnalytics.mjs가 단언)을 깨므로 불가.
+export const fmtDay = (t) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 // 학생별 활동일 집합(아무 이벤트나 있으면 그 날은 "왔다")
 function activityDays(rows) {
