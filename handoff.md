@@ -1,4 +1,45 @@
 # Paul Easy Voca — Handoff
+_최종 갱신: 2026-07-23 (4차, Lesson 5 완결 여정 — GuidedSession→핵심 문장 글루 + 라이브 시드/검증, readingStudentUI=false 유지)_
+
+## 2026-07-23 (4차) — 완결된 레슨 1개(Lesson 5): 단어 학습 → 오늘의 핵심 문장 여정 글루
+
+커밋 `2e725a1`(스크립트) + `f6685b9`(글루). 스키마 변경 0, 신규 기능 0 —
+기존 GuidedSession과 SentenceLearningFlow(v3.4)를 잇는 글루만. 전부
+`readingStudentUI` 플래그(기본 **false** 그대로) 뒤.
+
+- **여정**: 유닛 열기 → 오늘의 단어(GuidedSession, 기존 그대로) → 세션
+  완료 카드에서 "⭐ 오늘의 핵심 문장 도전!"(플래그 ON + 이 유닛에 아직
+  마스터 안 한 핵심 문장이 있을 때만 — 카드 렌더 시 1회 지연 조회,
+  fire-safe) → SentenceLearningFlow 6단계 → 마스터 카드("🏠 미션 완료!
+  홈으로") → 대시보드.
+- **글루**: GuidedSession(오퍼 조회+버튼), App(`pendingKeySentence` +
+  `sentenceFlow` 화면 분기 — SentencesTab과 동일 props로
+  SentenceLearningFlow 재사용), SentenceLearningFlow(backLabel/doneLabel
+  옵션 prop — 기본값이 기존 문구와 동일해 SentencesTab 경로 변화 0).
+  플래그 OFF 증거: GuidedSession effect가 `isFeatureEnabled` 체크로 즉시
+  반환(fetch 0회) → keyOffer 항상 null → 추가 JSX(`{keyOffer && …}`)
+  비렌더, `sentenceFlow` 화면은 오퍼 버튼으로만 도달 가능.
+- **콘텐츠 시드**(라이브 DB, 지문 0개 상태였음): `scripts/seedLesson5.mjs`
+  — 중2 YMB 박준원 "Unit 5"(`b35c9bfd…`, 단어 40개)에 지문 "Lesson 5 —
+  오늘의 핵심 문장" + 문장 3개(유닛 실제 단어 2~3개씩 조합, 1번만 핵심:
+  중요도 5·수동 청크 4·문법 포인트). **파일럿 시드 콘텐츠 — 교사가
+  PassageEditor에서 검토/교체 전제.** 같은 제목 존재 시 멱등 스킵(실측).
+  능률 김기택에도 "Unit 5"(40단어)가 있으나 컨테이너 나열 순서상 YMB 선택.
+- **라이브 여정 검증**: `scripts/testLesson5Journey.mjs` — 실배포 코드
+  번들(readingApi/sentenceProgressApi) + 순수 엔진 직접 import, 전용 QA
+  학생 `_QA_Lesson5_20260723`(UUID `cf34238b…`)으로 오퍼 판정→6단계
+  워크(단계마다 upsert, puzzle 오답 1회 포함)→mastered/mastered_at→재조회
+  resume→비핵심 단계 진입 불가까지 **24/24 PASS**(재실행 멱등 — 시작 시
+  QA 학생 소유 sentence_progress만 리셋, 종료 시 검토용으로 남김).
+- 검증: build clean · daily-ritual 118 · sentence-learning 49 · reading 21
+  · student 4 전부 PASS.
+- 아동 문구 감사: 여정 화면 전수 확인 — v3.4 승인 문구 유지, 실수정은
+  진입 맥락과 어긋나던 이탈 문구 2건뿐(위 backLabel/doneLabel).
+- **운영자 액션: 없음(필수).** 학생에게 보이려면 `readingStudentUI` ON
+  전환 결정 필요(시드 문장 교사 검토 + 실기기 스모크 후). 알려진 갭:
+  `src/config/features.js`의 readingStudentUI 주석("아무 코드도 소비하지
+  않는다")은 Phase B 이후로 낡은 설명 — 코드 아닌 주석 정비 후속.
+
 _최종 갱신: 2026-07-23 (3차, Sentence Learning v3.4 — 엔진+관리자+학생 UI 완료, readingStudentUI=false 배포)_
 
 ## 2026-07-23 (3차) — Sentence Learning v3.4 (Phase A 엔진/스키마/관리자 + Phase B 학생 UI)

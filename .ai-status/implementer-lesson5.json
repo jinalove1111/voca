@@ -1,0 +1,33 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "lesson5",
+  "task": "완결된 레슨 1개(Lesson 5) — GuidedSession 완료 카드 → 오늘의 핵심 문장(SentenceLearningFlow) 전환 글루 + 시드/라이브 여정 검증 스크립트 (readingStudentUI 플래그 게이팅, 기본 false 유지)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-23T00:00:00+09:00",
+  "updated_at": "2026-07-23T00:00:00+09:00",
+  "files_owned": [
+    ".ai-status/implementer-lesson5.json",
+    "scripts/seedLesson5.mjs",
+    "scripts/testLesson5Journey.mjs",
+    "src/components/GuidedSession.jsx",
+    "src/App.jsx",
+    "src/components/SentenceLearningFlow.jsx",
+    "handoff.md"
+  ],
+  "files_read": [
+    "src/components/SentencesTab.jsx",
+    "src/utils/readingApi.js",
+    "src/utils/sentenceProgressApi.js",
+    "src/utils/sentenceLearning.js",
+    "src/utils/wordLibrary.js",
+    "src/config/features.js",
+    "scripts/testReadingLive.mjs",
+    "scripts/testMultiTextbookLive.mjs",
+    "scripts/hooks/checkDestructiveSql.mjs"
+  ],
+  "summary": "커밋 2e725a1(시드+여정 검증 스크립트), f6685b9(글루: GuidedSession 오퍼 버튼 + App sentenceFlow 분기 + SentenceLearningFlow backLabel/doneLabel). 라이브 시드 완료: 중2 YMB 박준원 Unit 5(b35c9bfd)에 지문 'Lesson 5 — 오늘의 핵심 문장'(passage a9d5eb29, 문장 3개/핵심 1개, 파일럿 콘텐츠 — 교사 검토 전제). 여정 검증 24/24 PASS(QA 학생 _QA_Lesson5_20260723 = cf34238b-34af-4205-92a1-0880608f90ac). build clean, daily-ritual 118/sentence-learning 49/reading 21/student 4 PASS. 플래그 OFF = fetch 0회/화면 변화 0(코드 근거는 handoff 4차 섹션). 동시 작업 특이사항: 최초 커밋 시도가 polish-sweep 에이전트의 registry 커밋(446dac9)에 휩쓸렸으나 그 에이전트가 스스로 히스토리를 정리(9ca62c2)해 최종 이력은 파일 소유 경계대로 분리됨 — 이후 커밋은 전부 pathspec 한정으로 수행.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 권장. 운영자: 시드 문장 검토/교체(PassageEditor) + 실기기 스모크 후 readingStudentUI ON 여부 결정. push는 지시 없어 안 함."
+}
