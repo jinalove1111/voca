@@ -196,6 +196,45 @@ export const DOMAINS = {
       { script: 'scripts/testSeasonalProgression.mjs', builders: [], extra: true, note: '순수 함수(ticketEconomy.js sumTicketBalanceSince, houseSystem.js computeHouseSeasonScores) — 시즌 경계 전/후 데이터 분리, 원장 append-only 불변, 레벨/뱃지/스트릭류 필드는 이 계산 경로가 애초에 참조하지 않음을 확인 — 13개 필수 도메인 밖, 신규 보너스 커버리지. 두 함수 모두 완전 순수(React/import.meta.env 없음)라 번들 불필요.' },
     ],
   },
+  // ── 2026-07-23 등록: standalone 하네스 5종 verify:all 편입 ──
+  // 아래 5개 도메인의 검증 로직은 scripts/testX.mjs가 아니라 자기완결형
+  // 하네스 파일(tests/harness/run*.mjs — 순수 모듈 직접 import + 자체 단언)에
+  // 있다. registry의 기존 관례(checks = scripts/* child-process 실행)에 맞춰
+  // 그 하네스 파일 자체를 child-process로 spawn한다 — 각 파일이 이미
+  // runDomain.mjs와 동일한 출력 포맷(PASS/FAIL/summary/exit code)을 지키므로
+  // 러너 수정 없이 그대로 편입 가능(감사 문서 09 R1). extra 표시를 하지 않는
+  // 이유: 이 5개는 각자 npm run verify:<domain> 스크립트를 가진 정식 도메인
+  // 하네스라, FAIL이 verify:all의 exit code에 실제로 반영돼야 한다(가짜 PASS 금지).
+  dailyRitual: {
+    label: '3분 데일리 리추얼 — 적응형 마이크로 세션 플래너 (verify:daily-ritual과 동일 실행)',
+    checks: [
+      { script: 'tests/harness/runDailyRitual.mjs', builders: [], note: '자기완결형 하네스(src/utils/dailyRitual.js 순수 모듈 직접 import, 번들 불필요) — 118단언.' },
+    ],
+  },
+  attachment: {
+    label: '애착 시스템(Attachment & Growth) — 파생 통계/모자/밀스톤/기억/월드/이야기 (verify:attachment와 동일 실행)',
+    checks: [
+      { script: 'tests/harness/runAttachment.mjs', builders: [], note: '자기완결형 하네스(src/utils/attachment/* 순수 모듈 직접 import, 번들 불필요) — 123단언.' },
+    ],
+  },
+  analytics: {
+    label: '익명 관찰 레이어 — 순수 집계(analyticsMath) (verify:analytics와 동일 실행)',
+    checks: [
+      { script: 'tests/harness/runAnalytics.mjs', builders: [], note: '자기완결형 하네스(src/utils/analyticsMath.js import-0 순수 모듈 직접 import) — 12단언 + 프라이버시 코드 레벨 검사.' },
+    ],
+  },
+  reading: {
+    label: 'Reading Foundation(v3.3) — 순수 모델(readingModel) (verify:reading과 동일 실행)',
+    checks: [
+      { script: 'tests/harness/runReading.mjs', builders: [], note: '자기완결형 하네스(src/utils/readingModel.js import-0 순수 모듈 직접 import) — 21단언.' },
+    ],
+  },
+  sentenceLearning: {
+    label: 'Sentence Learning(v3.4) — 순수 엔진(sentenceLearning) (verify:sentence-learning과 동일 실행)',
+    checks: [
+      { script: 'tests/harness/runSentenceLearning.mjs', builders: [], note: '자기완결형 하네스(src/utils/sentenceLearning.js import-0 순수 모듈 직접 import) — 49단언.' },
+    ],
+  },
 }
 
 // Phase 6 최종 검증 매트릭스가 참조하는 "운영자 체크리스트 13항목" ↔ 위 도메인
