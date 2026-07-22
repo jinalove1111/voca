@@ -26,7 +26,15 @@ function isMissingTableError(error) {
 
 // 유닛의 지문 목록(+각 지문의 문장, position 정규화 완료 상태)을 반환.
 // 절대 던지지 않음 — 테이블 부재/네트워크 실패 등 모든 에러는 [] 폴백.
-// 반환: [{ id, title, position, sentences: [{ id, position, english, korean }] }]
+// 반환: [{ id, title, position, sentences: [{ id, position, english, korean,
+//          isKeySentence, importanceLevel, grammarPoint, chunks }] }]
+// v3.4 학습 메타 4필드는 supabase_v3_4_sentence_learning.sql 미실행이면
+// 42703(undefined column)이 나므로 기존 컬럼 셋으로 재시도 후 안전
+// 기본값으로 채운다(getStudentClassAssignments의 textbook_id cascading
+// 폴백과 동일 관례 — CLAUDE.md 규칙 9).
+const SENTENCE_BASE_COLS = 'id,passage_id,position,english,korean'
+const SENTENCE_V34_COLS = SENTENCE_BASE_COLS + ',is_key_sentence,importance_level,grammar_point,chunks'
+
 export async function fetchPassagesForUnit(unitId) {
   if (!unitId) return []
   try {
@@ -42,11 +50,19 @@ export async function fetchPassagesForUnit(unitId) {
       return []
     }
     const ids = passages.map((p) => p.id)
-    const { data: sentences, error: sErr } = await supabase
+    let { data: sentences, error: sErr } = await supabase
       .from('passage_sentences')
-      .select('id,passage_id,position,english,korean')
+      .select(SENTENCE_V34_COLS)
       .in('passage_id', ids)
       .order('position')
+    if (sErr && sErr.code === '42703') {
+      // v3.4 컬럼 미존재(마이그레이션 전) — 기존 컬럼 셋으로 재시도.
+      ;({ data: sentences, error: sErr } = await supabase
+        .from('passage_sentences')
+        .select(SENTENCE_BASE_COLS)
+        .in('passage_id', ids)
+        .order('position'))
+    }
     if (sErr) {
       // 지문 메타는 있는데 문장 조회만 실패 — 빈 문장으로라도 목록은 보여줌.
       console.warn('[readingApi] passage_sentences fetch failed (non-fatal):', sErr.message)
@@ -54,7 +70,17 @@ export async function fetchPassagesForUnit(unitId) {
     const byPassage = {}
     ;(sentences || []).forEach((s) => {
       if (!byPassage[s.passage_id]) byPassage[s.passage_id] = []
-      byPassage[s.passage_id].push({ id: s.id, position: s.position, english: s.english, korean: s.korean || '' })
+      byPassage[s.passage_id].push({
+        id: s.id,
+        position: s.position,
+        english: s.english,
+        korean: s.korean || '',
+        // v3.4 학습 메타 — 컬럼 부재(폴백 조회) 시 안전 기본값.
+        isKeySentence: s.is_key_sentence === true,
+        importanceLevel: Number(s.importance_level) || 1,
+        grammarPoint: s.grammar_point || '',
+        chunks: Array.isArray(s.chunks) ? s.chunks : null,
+      })
     })
     return passages.map((p) => ({
       id: p.id,
@@ -96,19 +122,53 @@ export async function deletePassage(passageId) {
 // upsert+삭제분 추적보다 단순하고, 단어 저장(wordLibrary setClassWords의
 // unit_id 범위 delete-then-insert)과 같은 검증된 관례라 이 방식을 택했다.
 // position은 배열 순서(0..n-1)로 부여 — 호출부의 화면 순서가 곧 저장 순서.
+// v3.4 학습 메타(isKeySentence/importanceLevel/grammarPoint/chunks)도 함께
+// 저장한다. 마이그레이션 전(컬럼 부재 42703)이면 기존 컬럼 셋으로 재시도
+// — 프로덕션이 SQL 실행 전이어도 v3.3 저장은 계속 동작한다(규칙 9).
 export async function saveSentences(passageId, sentences) {
-  const rows = (sentences || []).map((s, i) => ({
+  const baseRows = (sentences || []).map((s, i) => ({
     passage_id: passageId,
     position: i,
     english: String(s.english ?? '').trim(),
     korean: String(s.korean ?? '').trim(),
   }))
+  const fullRows = (sentences || []).map((s, i) => ({
+    ...baseRows[i],
+    is_key_sentence: s.isKeySentence === true,
+    importance_level: Math.min(5, Math.max(1, Number(s.importanceLevel) || 1)),
+    grammar_point: String(s.grammarPoint ?? '').trim() || null,
+    chunks: Array.isArray(s.chunks) && s.chunks.length >= 2 ? s.chunks : null,
+  }))
   const { error: delErr } = await supabase
     .from('passage_sentences').delete().eq('passage_id', passageId)
   if (delErr) throw delErr
-  if (rows.length === 0) return
-  const { error: insErr } = await supabase.from('passage_sentences').insert(rows)
+  if (fullRows.length === 0) return
+  let { error: insErr } = await supabase.from('passage_sentences').insert(fullRows)
+  if (insErr && insErr.code === '42703') {
+    // v3.4 컬럼 미존재 — 학습 메타를 뺀 기존 필드만으로 재시도(메타는
+    // 컬럼이 생긴 뒤 다시 저장하면 됨 — 편집기가 컨트롤 비활성으로 안내).
+    ;({ error: insErr } = await supabase.from('passage_sentences').insert(baseRows))
+  }
   if (insErr) throw insErr
+}
+
+// v3.4 학습 메타 컬럼 존재 여부 — 편집기가 신규 컨트롤(핵심 문장/중요도/
+// 문법 포인트/청크)을 활성화할지 판단(head 조회 1회).
+// true = 사용 가능, false = supabase_v3_4_sentence_learning.sql 미실행.
+// 기타 에러(네트워크 등)는 true 취급 — 오탐으로 컨트롤을 숨기지 않기
+// 위해(checkReadingTablesExist와 동일 관례, 실제 저장 실패는 42703
+// 폴백이 흡수).
+export async function checkSentenceColumnsExist() {
+  try {
+    const { error } = await supabase
+      .from('passage_sentences')
+      .select('is_key_sentence', { head: true, count: 'exact' })
+      .limit(1)
+    if (!error) return true
+    return error.code !== '42703'
+  } catch {
+    return true
+  }
 }
 
 // 지문 순서 변경 — 호출부(PassageEditor)가 재정렬된 전체 목록을 알고
