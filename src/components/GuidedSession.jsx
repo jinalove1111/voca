@@ -1,8 +1,11 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import WordDetail from './WordDetail'
 import HeroReaction from './HeroReaction'
 import { getReactionById, pickReaction } from '../utils/paulReactions'
 import { planSessionSize, sessionProgressDisplay } from '../utils/dailyRitual'
+import { isFeatureEnabled } from '../config/features'
+import { fetchPassagesForUnit } from '../utils/readingApi'
+import { fetchSentenceProgress } from '../utils/sentenceProgressApi'
 
 // GuidedSession — "3분 데일리 리추얼" 가이드 학습 플로우 (v1, 2026-07-22)
 //
@@ -24,9 +27,18 @@ import { planSessionSize, sessionProgressDisplay } from '../utils/dailyRitual'
 // 퀴즈만(mode="quiz") 다시 풀린다. 재시도에서 또 틀려도 다시 큐에 넣지
 // 않고, addMission(레벨업 미션 — 장기 복습 시스템)도 여기서 부르지
 // 않는다(그 시스템은 별도 유지 — 운영자 승인 결정).
+// Lesson 5 여정 글루(2026-07-23) — studentId/unitId/onStartKeySentence는
+// readingStudentUI 플래그(기본 false)가 켜졌을 때만 의미가 있다: 세션 완료
+// 카드에서 "이 유닛의 아직 마스터 안 한 핵심 문장"이 있으면 "⭐ 오늘의
+// 핵심 문장 도전!" 버튼을 띄우고, 탭하면 App이 SentenceLearningFlow로
+// 라우팅한다. 플래그가 꺼져 있으면 조회 자체를 안 하며(fetch 0회) 완료
+// 카드는 기존과 픽셀 단위로 동일하다.
 export default function GuidedSession({
   classWords,
   resumeIndex,
+  studentId,
+  unitId,
+  onStartKeySentence,
   spellingSettings,
   mixedDirections,
   spellingCombo,
@@ -78,6 +90,34 @@ export default function GuidedSession({
   const statsRef = useRef({ answered: 0, correct: 0, startedAt: Date.now() })
   // 방금 끝난 세션의 측정값 — 완료 카드 표시 + planSessionSize 입력.
   const [lastStats, setLastStats] = useState(null)
+
+  // ── 오늘의 핵심 문장 오퍼(readingStudentUI 플래그 게이팅) ──
+  // 완료 카드가 처음 뜰 때 1회만 지연 조회(fire-safe — 두 fetch 모두 절대
+  // 던지지 않는 계약이고, 실패/빈 결과면 버튼이 안 뜰 뿐 카드는 그대로).
+  // 아직 마스터하지 않은 첫 핵심 문장을 찾으면 버튼을 띄운다.
+  const [keyOffer, setKeyOffer] = useState(null) // { sentence, passageTitle, progress }
+  const keyFetchedRef = useRef(false)
+  useEffect(() => {
+    if (phase !== 'done') return undefined
+    if (!isFeatureEnabled('readingStudentUI')) return undefined // 플래그 OFF = 조회 0회, 화면 변화 0
+    if (!onStartKeySentence || !studentId || !unitId) return undefined
+    if (keyFetchedRef.current) return undefined // 세션당 여러 완료 카드가 떠도 조회는 1회
+    keyFetchedRef.current = true
+    let cancelled = false
+    ;(async () => {
+      try {
+        const passages = await fetchPassagesForUnit(unitId)
+        const candidates = passages.flatMap((p) =>
+          p.sentences.filter((s) => s.isKeySentence).map((s) => ({ sentence: s, passageTitle: p.title })))
+        if (candidates.length === 0 || cancelled) return
+        const prog = await fetchSentenceProgress(studentId, candidates.map((c) => c.sentence.id))
+        if (cancelled) return
+        const target = candidates.find((c) => !prog[c.sentence.id]?.masteredAt)
+        if (target) setKeyOffer({ ...target, progress: prog[target.sentence.id] || null })
+      } catch { /* fire-safe — 오퍼 없이 기존 완료 카드 그대로 */ }
+    })()
+    return () => { cancelled = true }
+  }, [phase, studentId, unitId, onStartKeySentence])
 
   const sessionEndAbs = session.startAbs + session.words.length
   // 재시도 단어는 (실시간 갱신될 수 있는 classWords가 아니라) 세션 계획
@@ -204,6 +244,15 @@ export default function GuidedSession({
             오늘 {display.wordsCompleted} <span className="text-gray-300">/</span> {display.totalWords} 단어
           </p>
           <div className="space-y-3">
+            {/* 오늘의 핵심 문장 오퍼 — readingStudentUI 플래그 ON + 아직
+                마스터 안 한 핵심 문장이 있을 때만(위 effect). 이 여정의
+                주 행동이라 기존 두 버튼보다 위에, 가장 눈에 띄는 스타일로. */}
+            {keyOffer && (
+              <button onClick={() => onStartKeySentence?.(keyOffer)}
+                className="w-full bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-white font-black py-4 rounded-2xl btn-press text-lg animate-fade-in">
+                ⭐ 오늘의 핵심 문장 도전!
+              </button>
+            )}
             <button onClick={onDone}
               className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-black py-4 rounded-2xl btn-press text-lg">
               🏠 오늘은 여기까지

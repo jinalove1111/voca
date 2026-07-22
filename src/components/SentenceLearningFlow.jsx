@@ -130,7 +130,11 @@ function ChunkPuzzle({ chunks, seed, onCorrect, onWrong, onListen }) {
   )
 }
 
-export default function SentenceLearningFlow({ studentId, sentence, unitWordSlugs = [], initialProgress = null, onClose }) {
+// backLabel/doneLabel(2026-07-23 Lesson 5 글루) — 이 플로우는 두 진입점을
+// 갖는다: SentencesTab(목록으로 복귀 — 기본값 그대로)과 GuidedSession 완료
+// 카드의 "오늘의 핵심 문장 도전"(홈으로 복귀 — App이 컨텍스트에 맞는
+// 문구를 내려줌). 기본값이 기존 문구와 동일해 SentencesTab 쪽 화면 변화 0.
+export default function SentenceLearningFlow({ studentId, sentence, unitWordSlugs = [], initialProgress = null, onClose, backLabel = '← 목록', doneLabel = '📚 문장 목록으로' }) {
   // 진행도 행(DB 필드 형태) — 매 시도마다 applyStageResult(순수)로 갱신,
   // fire-safe upsert. 이어하기: 마운트 시 current_stage에서 재개.
   const [row, setRow] = useState(() => toRow(initialProgress))
@@ -237,7 +241,7 @@ export default function SentenceLearningFlow({ studentId, sentence, unitWordSlug
           <div className="flex items-center gap-2 mb-1 pt-2">
             <button onClick={() => onClose?.(row)}
               className="py-3 px-2 -my-3 -mx-2 text-purple-600 font-bold btn-press whitespace-nowrap">
-              ← 목록
+              {backLabel}
             </button>
             <div className="flex-1 flex items-center justify-center gap-1.5">
               {STAGES.map((s, i) => (
@@ -433,7 +437,7 @@ export default function SentenceLearningFlow({ studentId, sentence, unitWordSlug
                 {sentence.korean && <p className="text-gray-500 text-sm font-bold break-words">{sentence.korean}</p>}
                 <button onClick={() => onClose?.(row)}
                   className="w-full min-h-[52px] py-4 rounded-2xl font-black text-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white btn-press">
-                  📚 문장 목록으로
+                  {doneLabel}
                 </button>
               </div>
             )}

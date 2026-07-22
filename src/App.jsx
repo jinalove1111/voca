@@ -16,6 +16,7 @@ import GiftReveal from './components/GiftReveal'
 import SpellingReview from './components/SpellingReview'
 import SpellingSessionResult from './components/SpellingSessionResult'
 import GuidedSession from './components/GuidedSession'
+import SentenceLearningFlow from './components/SentenceLearningFlow'
 import { useStudent } from './hooks/useStudent'
 import { useAttachment } from './hooks/useAttachment'
 import { pickNextGame } from './utils/matchGame'
@@ -337,6 +338,17 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 3분 데일리 리추얼 진입 — Dashboard의 히어로 CTA가 호출.
   const startGuidedSession = () => setScreen('guidedSession')
 
+  // Lesson 5 여정 글루(2026-07-23, readingStudentUI 플래그 게이팅) —
+  // GuidedSession 완료 카드의 "⭐ 오늘의 핵심 문장 도전!"이 넘겨주는
+  // { sentence, passageTitle, progress }를 들고 SentenceLearningFlow로 직행.
+  // 플래그가 꺼져 있으면 GuidedSession이 이 콜백을 절대 부르지 않는다
+  // (오퍼 조회/버튼 자체가 없음 — GuidedSession.jsx 참고).
+  const [pendingKeySentence, setPendingKeySentence] = useState(null)
+  const startKeySentence = (offer) => { setPendingKeySentence(offer); setScreen('sentenceFlow') }
+  // SentenceLearningFlow의 unitWordSlugs — SentencesTab과 동일하게 유닛
+  // 단어 원문 문자열 배열(빈칸 선택 엔진 pickBlank 입력).
+  const unitWordSlugs = useMemo(() => classWords.map((w) => w?.word).filter(Boolean), [classWords])
+
   // v2.0 쓰기 모드 세션 성적 집계(방향별) — 첫 시도 기준. 쓰기 모드로
   // 단어 목록에서 세션을 시작할 때 비우고, 마지막 단어까지 끝나면 결과
   // 화면(spellingResult)에서 요약해 보여준다. 저장은 안 함(요약 표시 전용
@@ -503,6 +515,9 @@ function AppInner({ studentId, studentName, onLogout }) {
         <GuidedSession
           classWords={classWords}
           resumeIndex={studentData.getResumeIndexForUnit(currentUnitId)}
+          studentId={studentId}
+          unitId={currentUnitId}
+          onStartKeySentence={startKeySentence}
           spellingSettings={spellingSettings}
           mixedDirections={guidedMixedDirections}
           spellingCombo={studentData.spellingCombo}
@@ -519,6 +534,23 @@ function AppInner({ studentId, studentName, onLogout }) {
           onWordUnknown={setWordUnknown}
           onSetLastWordIndex={(idx) => studentData.setLastWordIndex(idx, currentUnitId)}
           onDone={() => setScreen('dashboard')}
+        />
+      )}
+      {screen === 'sentenceFlow' && pendingKeySentence && (
+        // Lesson 5 여정 — 오늘의 핵심 문장 학습(6단계). SentencesTab이
+        // SentenceLearningFlow를 부르는 방식과 동일한 props에, 진입 맥락에
+        // 맞는 문구만 다르다(목록이 아니라 홈으로 복귀 — 마스터 화면이
+        // 미션 완료 순간). readingStudentUI 플래그가 꺼져 있으면 이 화면에
+        // 도달할 경로 자체가 없다(pendingKeySentence는 GuidedSession 오퍼
+        // 버튼으로만 채워짐).
+        <SentenceLearningFlow
+          studentId={studentId}
+          sentence={pendingKeySentence.sentence}
+          unitWordSlugs={unitWordSlugs}
+          initialProgress={pendingKeySentence.progress || null}
+          backLabel="← 홈"
+          doneLabel="🏠 미션 완료! 홈으로"
+          onClose={() => { setPendingKeySentence(null); setScreen('dashboard') }}
         />
       )}
       {screen === 'wordBrowser'   && (
