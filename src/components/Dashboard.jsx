@@ -48,8 +48,9 @@ import { fetchCurrentSeason } from '../utils/seasonApi'
 import { hatById } from '../utils/attachment/hatSystem'
 import { pickPaulMemory } from '../utils/attachment/paulMemory'
 // Paul Town v2.0(2026-07-22) — 오늘의 발견(하루 1개 결정론 메시지, 폴의
-// 기억 카드 안의 한 줄). 순수 파생 함수 — Dashboard 상태 추가 없음.
-import { pickTodaysDiscovery } from '../utils/attachment/paulTown'
+// 기억 카드 안의 한 줄) + 홈 밴드 요약/별→씨앗(전부 history 파생 — 새
+// 저장 상태 0). 순수 파생 함수 — Dashboard 상태 추가 없음.
+import { pickTodaysDiscovery, gardenBandSummary, starSeedState } from '../utils/attachment/paulTown'
 // 모자 수여식(hatCeremony 플래그) — 새 모자 획득 순간의 전면 오버레이.
 // 표시 여부는 useAttachment의 세션 로컬 큐(pendingCeremonyHat)가 전담.
 import HatCeremony from './HatCeremony'
@@ -597,6 +598,13 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
           </div>
         </details>
 
+        {/* Paul Town 홈 밴드(v2.0, paulTownHomeBand 플래그) — 정원 한 줄
+            요약 + 별→씨앗. 스티커 띠 위의 작은 흰 카드 하나(추가만 —
+            기존 블록 순서/내용 불변, 홈 화면 ≥80% 불변 원칙). */}
+        {isFeatureEnabled('paulTownHomeBand') && attachmentStats && (
+          <PaulTownHomeBand stats={attachmentStats} onGo={onGo} />
+        )}
+
         {/* Recent stickers */}
         {recentStickers.length > 0 && (
           <div className="bg-white rounded-3xl card-shadow p-4">
@@ -619,6 +627,40 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
       {isFeatureEnabled('hatCeremony') && pendingCeremonyHat && (
         <HatCeremony hat={pendingCeremonyHat} onEquip={studentData.equipHat} onDismiss={onDismissCeremony} />
       )}
+    </div>
+  )
+}
+
+// Paul Town 홈 밴드(Paul Town v2.0, 2026-07-22) — 정원 요약 한 줄 +
+// 별→씨앗 + [구경가기]. gardenBandSummary/starSeedState는 순수 파생
+// (history에서 매번 계산 — "심었는지" 저장 필드 없음, paulTown.js 참고).
+// 시각 언어는 기존 흰 카드/보라 타이틀 문법 그대로, 애니메이션은 기존
+// tailwind animate-bounce-slow 재사용(라이브러리/새 keyframe 없음).
+function PaulTownHomeBand({ stats, onGo }) {
+  const band = gardenBandSummary(stats)
+  const seed = starSeedState(stats)
+  return (
+    <div className="bg-white rounded-3xl card-shadow p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-black text-purple-400">🏡 Paul Town 정원</p>
+          <p className="text-sm font-bold text-gray-600">{band.text}</p>
+          {seed.yesterdaySprouted && (
+            <p className="text-xs font-bold text-green-600 mt-1">🌱 어제 심은 별에서 새싹이 났어요 — {seed.sproutLabel}</p>
+          )}
+          {isFeatureEnabled('starToSeed') && seed.todayPlanted && (
+            <p className="text-xs font-bold text-amber-600 mt-1">
+              <span className="inline-block animate-bounce-slow">⭐→🌰</span> 오늘 별 {band.seedsToday}개를 심었어요 — 내일 새싹이 나요!
+            </p>
+          )}
+        </div>
+        <button
+          onClick={() => onGo('paulTown')}
+          className="flex-shrink-0 bg-purple-500 hover:bg-purple-600 text-white font-black text-sm px-4 py-3 rounded-2xl btn-press"
+        >
+          구경가기
+        </button>
+      </div>
     </div>
   )
 }
