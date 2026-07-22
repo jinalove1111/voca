@@ -15,7 +15,10 @@
 import { deriveAttachmentStats, completedUnits, masteryTierFor } from '../../src/utils/attachment/attachmentCore.js'
 import { HAT_CATALOG, HAT_THRESHOLDS, HAT_COLOR_STYLE, evaluateHatUnlocks, hatById } from '../../src/utils/attachment/hatSystem.js'
 import { detectNewMilestones, sortMilestonesForAlbum } from '../../src/utils/attachment/milestones.js'
-import { pickPaulMemory } from '../../src/utils/attachment/paulMemory.js'
+import { pickPaulMemory, PAUL_MEMORY_TEMPLATE_IDS } from '../../src/utils/attachment/paulMemory.js'
+import { pickTodaysDiscovery, starSeedState, gardenBandSummary, retroWelcome, TOWN_PLACES, townPlacesState, TODAYS_DISCOVERY_TEMPLATE_IDS } from '../../src/utils/attachment/paulTown.js'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { WORLD_STAGES, computeWorldState, gardenPlots } from '../../src/utils/attachment/worldProgress.js'
 import { buildStoryChapter, getBookshelf, STORY_TEMPLATES } from '../../src/utils/attachment/storyFoundation.js'
 
@@ -211,6 +214,95 @@ check('단어 부족 시 정직한 안내(빈 이야기 지어내지 않음)', b
 check('템플릿 수 ≥ 3(순환 구조)', STORY_TEMPLATES.length >= 3)
 const shelf = getBookshelf([{ unitId: 'u1', unitName: 'Unit 1', words: [{ id: 'w' }] }], done)
 check('책장 책 = 완료 유닛에서 파생(중복 저장 없음)', shelf.length === 1 && shelf[0].unitId === 'u1')
+
+// ── 8) Paul Town — 오늘의 발견 / 별→씨앗 / 홈 밴드 / 소급 환영 ──
+console.log('\n-- 8) Paul Town — 순수 파생 엔진(오늘의 발견/별→씨앗/홈 밴드/소급 환영)')
+// 순수성(운영자 아키텍처 규칙): paulTown.js는 DB 클라이언트/브라우저
+// 저장소를 import하지 않는 순수 모듈 — 파일 텍스트 부재로 회귀 방지.
+const paulTownSrc = readFileSync(fileURLToPath(new URL('../../src/utils/attachment/paulTown.js', import.meta.url)), 'utf8')
+check('paulTown.js는 supabase/localStorage 문자열 자체가 없는 순수 모듈', !/supabase/i.test(paulTownSrc) && !paulTownSrc.includes('localStorage'))
+check('paulTown.js의 import는 worldProgress(순수 모듈)뿐', [...paulTownSrc.matchAll(/^import .*from '(.+)'/gm)].every(m => m[1] === './worldProgress.js'))
+check('paulTown.js에 Math.random 없음(결정론)', !paulTownSrc.includes('Math.random'))
+
+const discCtx = { wordTextById }
+const disc1 = pickTodaysDiscovery(stats, discCtx, NOW)
+const disc2 = pickTodaysDiscovery(stats, discCtx, NOW)
+check('오늘의 발견 — 같은 날 + 같은 데이터 → 같은 메시지(결정론)', JSON.stringify(disc1) === JSON.stringify(disc2))
+// 날이 바뀌면 바뀔 수 있음 — 후보군이 있는 픽스처로 10일 창에서 2종 이상
+const discIds = new Set()
+for (let i = 0; i < 10; i++) {
+  const d = new Date(2026, 6, 22 + i, 12, 0, 0)
+  discIds.add(pickTodaysDiscovery(stats, discCtx, d).id)
+}
+check('오늘의 발견 — 날짜가 바뀌면 다른 발견이 나옴(10일 창에서 2종 이상)', discIds.size >= 2)
+check('발견 템플릿 수 ≥ 8(+폴백)', TODAYS_DISCOVERY_TEMPLATE_IDS.length >= 9)
+check('데이터 전무 → 정직한 환영 폴백(없는 발견을 지어내지 않음)', pickTodaysDiscovery(emptyStats, {}, NOW).id === 'discovery-welcome')
+check('발견 텍스트에 undefined/null 누출 없음', !disc1.text.includes('undefined') && !disc1.text.includes('null'))
+// "어제 심은 별" 주장은 history[어제].starsEarned>0일 때만 후보가 된다 —
+// 어제 기록이 없는 픽스처에선 10일 창 전체에서 한 번도 안 나와야 한다
+const noYestStats = deriveAttachmentStats({ cleared: ['w1'], history: { [dayKey(0)]: day({ starsEarned: 0 }) } }, NOW)
+let sproutClaimed = false
+for (let i = 0; i < 10; i++) {
+  if (pickTodaysDiscovery(noYestStats, {}, new Date(2026, 6, 22 + i)).id === 'discovery-star-sprout') sproutClaimed = true
+}
+check('어제 별 기록 없음 → "어제 심은 별" 주장 절대 안 함', !sproutClaimed)
+
+// 별→씨앗 — history 파생(새 영속 상태 없음)
+const seed = starSeedState(stats, NOW)
+check('오늘 별 획득 → todayPlanted', seed.todayPlanted === true)
+check('어제 별 획득 → yesterdaySprouted + 라벨', seed.yesterdaySprouted === true && seed.sproutLabel === '어제 네 별이야.')
+check('빈 history → 심은 것도 새싹도 없음', starSeedState(emptyStats, NOW).todayPlanted === false && starSeedState(emptyStats, NOW).yesterdaySprouted === false)
+check('별→씨앗 결정론(같은 날 같은 history → 같은 상태)', JSON.stringify(starSeedState(stats, NOW)) === JSON.stringify(seed))
+
+// 홈 밴드 요약 — computeWorldState 재사용, 꽃 수 = masteredCount
+const band = gardenBandSummary(stats, {}, NOW)
+check('홈 밴드 꽃 수 = masteredCount', band.flowerCount === stats.masteredCount)
+check('홈 밴드 오늘 심은 별 = history[오늘].starsEarned', band.seedsToday === 2)
+check('홈 밴드 growthPoints = clearedCount(월드 엔진 재사용)', band.growthPoints === stats.clearedCount && band.text.length > 0)
+
+// 소급 환영 — 정직한 숫자, 신규 학생은 null
+check('신규 학생(클리어 0) → 소급 환영 null', retroWelcome(emptyStats) === null)
+const retro = retroWelcome(stats)
+check('기존 학생 → 실제 클리어 수로 정직한 환영', retro.text.includes('12개') && retro.growthLevel >= 1)
+// growthLevel 단조성 — clearedCount가 늘면 절대 줄지 않음
+let prevLevel = 0
+let retroMonotonic = true
+for (const n of [1, 30, 100, 250]) {
+  const lv = retroWelcome(deriveAttachmentStats({ cleared: Array.from({ length: n }, (_, i) => `w${i}`) }, NOW)).growthLevel
+  if (lv < prevLevel) retroMonotonic = false
+  prevLevel = lv
+}
+check('소급 환영 growthLevel 단조 증가', retroMonotonic)
+
+// ── 9) Paul Town 장소 데이터 모델 ──
+console.log('\n-- 9) TOWN_PLACES — 데이터 모델(UI 없음)')
+check('정원/폴의 집은 열려 있음', TOWN_PLACES.find(p => p.id === 'garden').open && TOWN_PLACES.find(p => p.id === 'paulHome').open)
+check('폴의 집에 모자걸이(hatRack)', TOWN_PLACES.find(p => p.id === 'paulHome').features.includes('hatRack'))
+check('건물(박물관/도서관/시계탑)은 paulTownBuildings 플래그 뒤', ['museum', 'library', 'clockTower'].every(id => TOWN_PLACES.find(p => p.id === id).requiresFlag === 'paulTownBuildings'))
+const flagOff = townPlacesState(stats, () => false)
+check('플래그 OFF → 건물 미발견(열린 곳만)', flagOff.filter(p => p.discovered).every(p => p.open))
+const bigStats = deriveAttachmentStats({ cleared: Array.from({ length: 120 }, (_, i) => `w${i}`) }, NOW)
+const flagOn = townPlacesState(bigStats, () => true)
+check('플래그 ON + 진행 충족 → 점진 발견(120클리어: 박물관/도서관 O, 시계탑 X)', flagOn.find(p => p.id === 'museum').discovered && flagOn.find(p => p.id === 'library').discovered && !flagOn.find(p => p.id === 'clockTower').discovered)
+
+// ── 10) 폴의 기억 v2 — 템플릿 확장 검증 ──
+console.log('\n-- 10) 폴의 기억 v2 — 템플릿 ≥15 + 신규 원천 데이터 가드')
+check('기억 템플릿 id ≥ 15종', PAUL_MEMORY_TEMPLATE_IDS.length >= 15)
+check('새 모자 획득 순간(ctx.recentHatName) → new-hat 기억', pickPaulMemory(emptyStats, { recentHatName: '분홍색 폴 모자' }, NOW).id === 'new-hat')
+check('교재 완주 ctx → textbook-complete 기억(교재명 포함)', pickPaulMemory(stats, { completedTextbooks: [{ classId: 'c1', className: '초등 필수' }] }, NOW).text.includes('초등 필수'))
+check('유닛 완주 ctx → unit-complete 기억', pickPaulMemory(stats, { completedUnits: [{ unitId: 'u1', unitName: 'Unit 1' }] }, NOW).id === 'unit-complete')
+const bigGardenMem = pickPaulMemory(bigStats, {}, NOW)
+check('정원 성장(클리어 파생) 기억 — 120클리어 → garden 계열', bigGardenMem.id === 'garden-tree' || bigGardenMem.id === 'garden-flower')
+const fiveDayFix = { history: Object.fromEntries([0, 1, 2, 3, 4].map(i => [dayKey(i), day()])) }
+check('이번 달 학습일 5일 이상(history 월 창 지원) → month-days', pickPaulMemory(deriveAttachmentStats(fiveDayFix, NOW), {}, NOW).id === 'month-days')
+const spellingFix = {
+  ...fixture,
+  spellingReviewQueue: [{ wordId: 'hardword' }],
+  history: { [dayKey(0)]: day({ starsEarned: 0 }) }, // 어제 기록 제거(우선순위 상위 차단)
+}
+check('받아쓰기 큐에 있던 단어 극복 → spelling-improved(실단어)', pickPaulMemory(deriveAttachmentStats(spellingFix, NOW), { wordTextById }, NOW).text.includes('banana'))
+check('스트릭 기억에 죄책감 언어 없음', PAUL_MEMORY_TEMPLATE_IDS.includes('streak-going') && !pickPaulMemory(deriveAttachmentStats({ streak: 5, cleared: ['a'], history: { [dayKey(0)]: day({ starsEarned: 0 }) } }, NOW), {}, NOW).text.includes('왜'))
+check('기억 ctx 없는 기존 호출(하위 호환) — 시그니처 그대로 동작', pickPaulMemory(stats, { wordTextById }, NOW).id === 'yesterday-hard-word')
 
 // ── summary ──
 console.log('\n=== summary ===')
