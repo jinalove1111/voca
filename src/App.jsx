@@ -46,6 +46,9 @@ const HatCollection = React.lazy(() => import('./components/HatCollection'))
 const WordMuseum = React.lazy(() => import('./components/WordMuseum'))
 const GrowthAlbum = React.lazy(() => import('./components/GrowthAlbum'))
 const EnglishGarden = React.lazy(() => import('./components/EnglishGarden'))
+// Paul Town v2.0(2026-07-22) — 마을 화면도 같은 이유로 lazy(진입은 홈
+// 밴드의 [구경가기] 버튼 — 매일 여는 메인 화면이 아니다).
+const PaulTown = React.lazy(() => import('./components/PaulTown'))
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -547,7 +550,7 @@ function AppInner({ studentId, studentName, onLogout }) {
       {screen === 'studyCalendar' && <StudyCalendar studentData={studentData} onBack={() => setScreen('dashboard')} />}
       {/* 애착 시스템(2026-07-22) — 4개 화면 전부 lazy(공유 fallback), 진입은
           Dashboard "더 많은 메뉴"의 feature flag 게이트를 거친다. */}
-      {(screen === 'hatCollection' || screen === 'wordMuseum' || screen === 'growthAlbum' || screen === 'englishGarden') && (
+      {(screen === 'hatCollection' || screen === 'wordMuseum' || screen === 'growthAlbum' || screen === 'englishGarden' || screen === 'paulTown') && (
         <React.Suspense fallback={
           <div className="min-h-screen flex items-center justify-center bg-gray-50">
             <div className="text-center">
@@ -571,6 +574,14 @@ function AppInner({ studentId, studentName, onLogout }) {
           )}
           {screen === 'englishGarden' && (
             <EnglishGarden stats={attachment.stats} onBack={() => setScreen('dashboard')} />
+          )}
+          {/* Paul Town v2.0 — 순수 파생 마을 화면. 읽는 영속 상태는 기존
+              사실 2가지(hatInventory/equippedHatId)뿐, 장착은 기존 equipHat
+              그대로(새 저장 경로 없음). */}
+          {screen === 'paulTown' && (
+            <PaulTown stats={attachment.stats} hatInventory={studentData.hatInventory}
+              equippedHatId={studentData.equippedHatId} onEquip={studentData.equipHat}
+              onBack={() => setScreen('dashboard')} />
           )}
         </React.Suspense>
       )}
