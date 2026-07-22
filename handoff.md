@@ -1,4 +1,27 @@
 # Paul Easy Voca — Handoff
+_최종 갱신: 2026-07-23 (2차, Reading Foundation v3.3 — 지문/문장 스키마 + 관리자 편집기, SQL 실행 대기)_
+
+## 2026-07-23 (2차) — Reading Foundation v3.3 (학습 UI 제외 — 파운데이션만)
+
+커밋 `74b27a4..e777f9a`(3개), push·배포 SHA-256 검증 완료.
+
+- **스키마** `supabase_v3_3_reading.sql`: passages(unit_id FK cascade) +
+  passage_sentences(english 필수/korean 선택/position). 유닛 소속이라
+  반→교재→유닛 계층 자동 상속(units 테이블 무변경 — 순수 추가 2테이블,
+  삭제성 구문 0). v1.3 anon-all RLS 관례. **운영자 실행 대기** — 실행
+  전엔 편집기가 안내문만 표시(무해).
+- **데이터 레이어**: readingModel.js(import-0 순수 — 검증/정렬/재배열/
+  본문 문장분할) + readingApi.js(fetch는 절대 안 던짐·빈 폴백, 쓰기는
+  명확 에러, saveSentences는 setClassWords 관례의 delete-then-insert).
+- **관리자 편집기** PassageEditor: 유닛 펼침 영역에서 지문 추가/제목/
+  순서/삭제(confirm) + 문장 행 편집 + 본문 붙여넣기 분할. readingFoundation
+  플래그 ON(관리자 전용), **readingStudentUI: false 예약**(소비 코드 0 —
+  학습 UI는 명시적 다음 단계).
+- 검증: verify:reading 21단언 · admin 6/6 · attachment 123/123 · build
+  clean. 구현 중 잡은 리스크: lookbehind 정규식의 구형 Safari 파싱
+  크래시 → match 분할로 교체, SQL 주석 단어가 파괴 훅에 걸려 문구 수정
+  (우회 없음).
+
 _최종 갱신: 2026-07-23 (익명 관찰 레이어 — product_events + 기능별 복귀율 대시보드, SQL 실행 대기)_
 
 ## 2026-07-23 — 익명 관찰 레이어 (analytics)
