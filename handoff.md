@@ -1,5 +1,84 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-22 (3분 데일리 리추얼 v1 — 적응형 마이크로 세션 구현 + QA PASS + 배포 검증 완료)_
+_최종 갱신: 2026-07-22 (2차, 애착 시스템(Attachment & Growth) v1 — 모자/박물관/앨범/폴의기억/정원 구현 + 파운데이션 + 배포 검증 완료)_
+
+## 2026-07-22 (2차) — 애착 시스템(Attachment & Growth) v1 — 장기 성장/애착 통합 시스템
+
+### 목표 / 브랜드 원칙
+
+운영자 지시: 폴이지보카의 통합 애착·장기 성장 시스템을 기존 제품/브랜드를
+보존하며 구축("새 앱이 아니라 폴이지보카의 진화"). 기존 인터페이스 80%+
+보존, 대시보드/학습 경험 비대체, 폴은 항상 자기 검은 모자(모자 수집은
+"학생 아바타"의 것). 커밋 `384142b..743204d`(5개), push·배포 검증 완료.
+
+### 아키텍처 핵심 결정 — 새 DB 테이블 0개
+
+7개 기능(폴의 기억/모자/박물관/앨범/월드/책장/이야기)이 전부
+`src/utils/attachment/attachmentCore.js`의 `deriveAttachmentStats()` 하나를
+공유 입력으로 쓰는 단일 시스템(서로 무관한 미니 기능 금지 요구 충족).
+영속이 필요한 것은 모자 인벤토리/장착/밀스톤 이벤트 3필드뿐이고, 이는
+`student_progress.progress_data` 블롭의 새 최상위 필드로 저장한다 —
+ticketLedger/spellingReviewQueue와 동일한 확립된 관례(코스메틱·저가치
+데이터는 블롭, 근거: ticketEconomy.js 헤더 + DATABASE.md Ticket Economy
+절). 따라서 **마이그레이션 SQL 0개, GRANT 0개, RLS 변경 0개, 운영자 DDL
+실행 대기 없음** — 배포 즉시 전 학생에게 활성. 병합은 mergeByKeyEarliest
+(키 합집합 + 같은 키는 더 이른 획득 시각 보존 — 앨범 날짜 정직성),
+구버전 레코드/백업은 normalizeRecord가 빈 배열/null로 채워 하위호환.
+롤백 = 코드 리버트만으로 완결(블롭의 미사용 필드는 무해하게 남고, 기존
+스키마/데이터는 아무것도 안 바뀌었음).
+
+### 구현 내용 (커밋 순)
+
+1. `384142b` — feature flag 8종(`attachment*`) + 저장본-기본값 병합 로더
+   수정(구버전 localStorage 스냅샷 기기에서 새 플래그가 전부 꺼지던 기존
+   버그). v1 완성 기능(모자/박물관/앨범/기억/정원)은 기본 ON, 파운데이션
+   (월드 확장/책장/이야기)은 기본 OFF. 플래그는 기존 시스템 그대로 기기
+   로컬(localStorage) — 전역 서버 플래그 아님(한계로 명시).
+2. `5118017` — 순수 엔진 6모듈 + `verify:attachment` 하네스(58단언):
+   attachmentCore(파생 레이어), hatSystem(모자 7종 결정론 규칙 — 무작위/
+   뽑기/화폐/결제/스트릭징벌 없음, 획득 후 회수 없음), milestones(중복
+   방지 키 + 소급 감지는 backfilled=true로 정직 표시), paulMemory(실존
+   데이터만 말하는 템플릿, 부족하면 정직 폴백 — AI 호출 없음),
+   worldProgress(정원→집→다리→도서관→마을→왕국 잠금해제 엔진 + 정원
+   3x3 텃밭, 전부 clearedCount 파생·저장 없음), storyFoundation(결정론
+   템플릿 이야기 + 완료 유닛 파생 책장 — 유료 API 없음).
+3. `935fd25` — useStudent 영속 3필드(hatInventory/equippedHatId/milestones)
+   + 멱등 반영 API(grantHats/addMilestones/equipHat). verify:persistence 8/8.
+4. `67dc9b1` — 화면 4종(HatCollection/WordMuseum/GrowthAlbum/EnglishGarden,
+   전부 React.lazy — 학생 메인 번들 비영향) + useAttachment 글루 훅
+   (restoreChecked 후 학생당 1회 판정 — 복원 전 빈 record로 판정 안 함).
+   박물관 날짜는 word_status 실측 타임스탬프만 표시(없으면 생략).
+5. `743204d` — 대시보드 통합: 장착 모자가 아바타(미장착이면 기존 👑 그대로
+   — 변화 0), "폴의 기억" 카드 1장, 접힌 "더 많은 메뉴" 안에 진입 버튼
+   4종(플래그 게이트). 상태/fetch 로직 추가 0.
+
+### 검증 (전부 foreground, 타임아웃 내)
+
+- `verify:attachment` 58/58 PASS(파생 정확성/모자 결정론·멱등/밀스톤 중복
+  방지·backfilled 정직성/기억 진실성(없는 데이터 주장 금지 4케이스)/유닛
+  완료/월드 단조성/이야기 결정론).
+- `verify:persistence` 8/8(DB 무결성 0건) · `verify:student` 4/4 ·
+  `verify:quiz` · `verify:unit` 5/5 · `verify:daily-study` ·
+  `verify:daily-ritual` 118/118 — 전부 PASS. 매 커밋 build clean.
+  (`verify:login`은 기존 환경 FAIL로 제외 — 로컬 service-role key 부재.)
+- 배포: 라이브 `index-BlkHpLY_.js` SHA-256 로컬 빌드와 바이트 일치, lazy
+  청크 4종 전부 HTTP 200, "폴의 기억" 문자열 라이브 번들 확인. `api/`
+  변경 0 → Vercel Hobby 함수 12/12 유지.
+
+### 알려진 갭 / 명시적 보류
+
+- 모자 획득 순간의 축하 연출(토스트/애니메이션) 없음 — 앨범/컬렉션 화면
+  에서 확인하는 방식. 폴리시 백로그.
+- 판정 시점은 대시보드 마운트 시(학생당 1회/마운트) — 세션 도중 실시간
+  획득 알림 없음(다음 홈 복귀 때 반영).
+- 잉글리시 월드 정원 이후 구역 상세 UI(attachmentWorldFull), 책장/이야기
+  UI(attachmentBookshelf/attachmentStory)는 엔진·데이터 모델만 있고 화면은
+  플래그 OFF — 파운데이션으로 명시적 보류.
+- feature flag가 기기 로컬(localStorage)이라는 기존 한계 그대로 — 전역
+  원격 킬스위치 아님.
+- 밀스톤 소급(backfilled) 이벤트는 정확한 과거 달성일을 모름 — "이미
+  달성!"으로만 표시(의도된 정직성, 버그 아님).
+- `verify:attachment`도 daily-ritual과 같이 registry 미등록 standalone —
+  `verify:all`에 포함 안 됨. src/utils/attachment/ 수정 시 명시 실행 필요.
 
 ## 2026-07-22 — 3분 데일리 리추얼(3-Minute Daily Learning Ritual) v1 — 구현 + QA + 배포 검증 완료
 

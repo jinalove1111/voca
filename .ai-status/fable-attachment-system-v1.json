@@ -1,0 +1,32 @@
+{
+  "agent_name": "fable-main-session",
+  "role": "아키텍처 설계 + 전체 구현 (운영자 지시: Fable로 대형 아키텍처 작업)",
+  "task_id": "attachment-system-v1",
+  "task": "폴이지보카 통합 애착·장기 성장 시스템 v1 — 폴의 기억/모자 컬렉션/단어 박물관/성장 앨범/잉글리시 월드(정원 MVP)/책장·이야기 파운데이션",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-22T00:00:00+09:00",
+  "updated_at": "2026-07-22T00:00:00+09:00",
+  "files_owned": [
+    "src/utils/attachment/*",
+    "src/hooks/useAttachment.js",
+    "src/components/HatCollection.jsx",
+    "src/components/WordMuseum.jsx",
+    "src/components/GrowthAlbum.jsx",
+    "src/components/EnglishGarden.jsx",
+    "src/config/features.js",
+    "src/components/FeatureManagementPanel.jsx",
+    "src/hooks/useStudent.js (surgical: 3필드+3API+병합규칙)",
+    "src/App.jsx (라우팅)",
+    "src/components/Dashboard.jsx (아바타 모자/폴의 기억/메뉴 4종)",
+    "tests/harness/runAttachment.mjs",
+    "package.json (verify:attachment 1줄)"
+  ],
+  "files_read": [
+    "DATABASE.md", "src/hooks/useStudent.js", "src/utils/wordLibrary.js",
+    "src/utils/paulRankShared.js", "src/config/features.js", "handoff.md"
+  ],
+  "summary": "커밋 384142b(플래그)→5118017(순수 엔진 6모듈+하네스 58단언)→935fd25(useStudent 영속 3필드)→67dc9b1(화면 4종+글루 훅)→743204d(대시보드 통합). 새 DB 테이블/마이그레이션 0 — 전부 기존 진행 데이터 파생 + progress_data 블롭 3필드(ticketLedger 관례). 프로덕션 SHA-256 일치 + lazy 청크 4종 200 확인. verify:attachment/persistence/student/quiz/unit/daily-study/daily-ritual 전부 PASS.",
+  "blocker": null,
+  "next_action": "백로그: 모자 획득 축하 연출, 월드 확장/책장/이야기 화면(플래그 ON 전환 시), 하네스 registry 등록. 운영자 액션 불필요(DDL 없음)."
+}
