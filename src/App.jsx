@@ -17,6 +17,7 @@ import SpellingReview from './components/SpellingReview'
 import SpellingSessionResult from './components/SpellingSessionResult'
 import GuidedSession from './components/GuidedSession'
 import { useStudent } from './hooks/useStudent'
+import { useAttachment } from './hooks/useAttachment'
 import { pickNextGame } from './utils/matchGame'
 import { assignDirections } from './utils/entranceTest'
 import { logSpellingReview } from './utils/spellingReviewApi'
@@ -39,6 +40,12 @@ const ParentScreen = React.lazy(() => import('./components/ParentScreen'))
 // 전환이 실제로 메인 번들에서 코드를 빼낸다(전엔 Dashboard의 정적 import가
 // 같은 파일을 끌고 와서 lazy로 감싸도 효과가 없었음).
 const EntranceTest = React.lazy(() => import('./components/EntranceTest'))
+// 애착 시스템(2026-07-22) — 매일 여는 화면이 아니므로 전부 lazy(위
+// AdminScreen과 같은 이유 — 학생 메인 번들을 불리지 않는다).
+const HatCollection = React.lazy(() => import('./components/HatCollection'))
+const WordMuseum = React.lazy(() => import('./components/WordMuseum'))
+const GrowthAlbum = React.lazy(() => import('./components/GrowthAlbum'))
+const EnglishGarden = React.lazy(() => import('./components/EnglishGarden'))
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -155,6 +162,9 @@ function AppInner({ studentId, studentName, onLogout }) {
   const [studyScope, setStudyScope] = useState('all')
   const studentData                 = useStudent(studentId, studentName)
   const { cleared, answerMission, missions, addStars, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord, wordStatus, setWordKnown, setWordUnknown, spellingReviewQueue, setLastTextbookClassId } = studentData
+  // 애착 시스템(2026-07-22) — 파생 통계 + 모자/밀스톤 자동 판정(복원 확인
+  // 후 학생당 1회). 판정 로직은 src/utils/attachment/ 순수 함수.
+  const attachment = useAttachment(studentId, studentData)
 
   // 선물상자를 닫은 직후, 오늘 틀린 스펠링 단어나 영구 복습 대기열
   // (Writing MVP, 2026-07-20 — 적어도 하루 전에 놓친 단어)이 남아있으면
@@ -440,6 +450,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           resumeIndex={studentData.getResumeIndexForUnit(currentUnitId)}
           onUnitSwitch={handleUnitSwitch}
           onStartGuided={startGuidedSession}
+          attachmentStats={attachment.stats} wordTextById={attachment.wordTextById}
           textbookAssignments={textbookAssignments} onTextbookSwitch={handleTextbookSwitch} />
       )}
       {screen === 'guidedSession' && (
@@ -509,6 +520,35 @@ function AppInner({ studentId, studentName, onLogout }) {
       {screen === 'levelUpMission' && <LevelUpMission missions={missions} words={classWords} onAnswer={handleAnswerMission} onBack={() => setScreen('dashboard')} />}
       {screen === 'diary'         && <DiaryPage studentData={studentData} onBack={() => setScreen('dashboard')} />}
       {screen === 'studyCalendar' && <StudyCalendar studentData={studentData} onBack={() => setScreen('dashboard')} />}
+      {/* 애착 시스템(2026-07-22) — 4개 화면 전부 lazy(공유 fallback), 진입은
+          Dashboard "더 많은 메뉴"의 feature flag 게이트를 거친다. */}
+      {(screen === 'hatCollection' || screen === 'wordMuseum' || screen === 'growthAlbum' || screen === 'englishGarden') && (
+        <React.Suspense fallback={
+          <div className="min-h-screen flex items-center justify-center bg-gray-50">
+            <div className="text-center">
+              <div className="text-5xl mb-3 animate-bounce">🎁</div>
+              <p className="text-gray-400 font-bold">화면을 불러오는 중...</p>
+            </div>
+          </div>
+        }>
+          {screen === 'hatCollection' && (
+            <HatCollection studentName={studentName} hatInventory={studentData.hatInventory}
+              equippedHatId={studentData.equippedHatId} onEquip={studentData.equipHat}
+              onBack={() => setScreen('dashboard')} />
+          )}
+          {screen === 'wordMuseum' && (
+            <WordMuseum studentId={studentId} stats={attachment.stats} lib={attachment.lib}
+              onBack={() => setScreen('dashboard')} />
+          )}
+          {screen === 'growthAlbum' && (
+            <GrowthAlbum milestones={studentData.milestones} stats={attachment.stats}
+              onBack={() => setScreen('dashboard')} />
+          )}
+          {screen === 'englishGarden' && (
+            <EnglishGarden stats={attachment.stats} onBack={() => setScreen('dashboard')} />
+          )}
+        </React.Suspense>
+      )}
       {screen === 'bonusChoice'   && (
         <BonusChoiceScreen
           completedCount={pendingNextIdx}
