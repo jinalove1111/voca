@@ -22,6 +22,9 @@ import EntranceTestAdmin from './EntranceTestAdmin'
 // 아코디언/검색/퀵필터 구조로 재구성한 것(파일 헤더 주석 참고). v2.9
 // 다중 교재 TextbookAssignmentPanel도 그 안에서 그대로 쓰인다.
 import StudentDirectory from './admin/StudentDirectory'
+// v3.1 반↔교재 연결 관리(2026-07-22) — 반 관리 탭에서 반을 펼쳤을 때
+// 그 반에 연결된 교재를 연결/해제하는 패널(교재 모드 꺼짐이면 안내만).
+import ClassTextbookLinks from './admin/ClassTextbookLinks'
 
 const wordSlug = (word) => word.toLowerCase().replace(/\s+/g, '_')
 
@@ -1401,6 +1404,8 @@ export default function AdminScreen({ onBack }) {
                         </div>
 
                         <FutureAssignmentPlanner targetClass={c} words={words} />
+
+                        <ClassTextbookLinks targetClass={c} onChanged={refresh} />
 
                         <SpellingSettingsPanel targetClass={c} onSaved={refresh} />
 
