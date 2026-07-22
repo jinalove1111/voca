@@ -524,7 +524,11 @@ function AppInner({ studentId, studentName, onLogout }) {
       {screen === 'wordBrowser'   && (
         <WordBrowser words={classWords} cleared={cleared} onSelect={handleWordSelect} onBack={() => setScreen('dashboard')}
           mode={studyMode} onModeChange={setStudyMode}
-          scope={studyScope} onScopeChange={setStudyScope} wordStatus={wordStatus} reviewWordIds={reviewWordIds} />
+          scope={studyScope} onScopeChange={setStudyScope} wordStatus={wordStatus} reviewWordIds={reviewWordIds}
+          // v3.4 Phase B — [문장] 탭(SentencesTab) 전용. readingStudentUI
+          // 플래그(기본 false)가 꺼져 있으면 WordBrowser는 이 두 prop을
+          // 어디에도 쓰지 않는다(탭 바 비렌더 — 화면 변화 0).
+          studentId={studentId} unitId={currentUnitId} />
       )}
       {screen === 'wordDetail'    && selectedWord && (
         <WordDetail word={selectedWord}

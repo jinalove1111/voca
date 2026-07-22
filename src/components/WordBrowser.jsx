@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react'
 import { getReactionById } from '../utils/paulReactions'
 import HeroReaction from './HeroReaction'
 import { filterWordsByScope } from '../utils/wordLibrary'
+import { isFeatureEnabled } from '../config/features'
+import SentencesTab from './SentencesTab'
 
 const MODES = [
   { id: 'study',         label: '공부하기', emoji: '📖' },
@@ -19,8 +21,22 @@ const SCOPES = [
   { id: 'review',  label: '복습 단어만', emoji: '🔁' },
 ]
 
-export default function WordBrowser({ words, cleared, onSelect, onBack, mode, onModeChange, scope, onScopeChange, wordStatus = {}, reviewWordIds = new Set() }) {
+// v3.4 Sentence Learning Phase B — [단어]/[문장] 탭. studentId/unitId는
+// 문장 탭(SentencesTab)에만 쓰인다(진행도 조회는 UUID — 규칙 4). 탭 바
+// 자체가 readingStudentUI 플래그(기본 false) 뒤에 있어, 플래그가 꺼진
+// 프로덕션에서는 탭 바도 문장 탭도 렌더되지 않고 기존 단어 화면이 픽셀
+// 단위로 동일하게 유지된다.
+const TABS = [
+  { id: 'words', label: '📖 단어' },
+  { id: 'sentences', label: '📜 문장' },
+]
+
+export default function WordBrowser({ words, cleared, onSelect, onBack, mode, onModeChange, scope, onScopeChange, wordStatus = {}, reviewWordIds = new Set(), studentId = null, unitId = null }) {
   const [query, setQuery] = useState('')
+  // 기본 탭은 항상 '단어' — 플래그가 꺼져 있으면 이 상태는 바뀔 방법
+  // 자체가 없다(탭 바 비렌더).
+  const sentencesEnabled = isFeatureEnabled('readingStudentUI')
+  const [tab, setTab] = useState('words')
 
   // 범위별 개수 — selector에 "(3)" 같은 뱃지로 보여줘서 몇 개가 걸리는지
   // 미리 알 수 있게 함.
@@ -51,6 +67,22 @@ export default function WordBrowser({ words, cleared, onSelect, onBack, mode, on
       </div>
 
       <div className="max-w-lg mx-auto">
+        {sentencesEnabled && (
+          <div className="grid grid-cols-2 gap-1.5 mb-4 bg-white rounded-2xl p-1.5 card-shadow">
+            {TABS.map((t) => (
+              <button key={t.id} onClick={() => setTab(t.id)}
+                className={`min-h-[44px] py-2.5 rounded-xl font-black text-sm btn-press transition-all ${
+                  tab === t.id ? 'bg-purple-500 text-white' : 'text-gray-400'}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {sentencesEnabled && tab === 'sentences' ? (
+          <SentencesTab studentId={studentId} unitId={unitId} words={words} />
+        ) : (
+        <>
         {onScopeChange && (
           <div className="overflow-x-auto mb-3 -mx-1 px-1">
             <div className="grid grid-cols-4 gap-2 min-w-[280px]">
@@ -126,6 +158,8 @@ export default function WordBrowser({ words, cleared, onSelect, onBack, mode, on
             )
           })}
         </div>
+        </>
+        )}
       </div>
     </div>
   )
