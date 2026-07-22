@@ -255,8 +255,108 @@ export function initWordLibrary() {
       await seedDefaultClasses()
       await refreshWordLibrary()
     }
+    // v3.1 교재 레이어 — 반/유닛 캐시가 준비된 뒤 로드(합성 폴백이 _cache에
+    // 의존). 실패해도 앱은 "반=교재 1개" 폴백으로 오늘과 동일 동작.
+    await refreshTextbooks()
   })()
   return _initPromise
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// v3.1 교재(Textbook) 레이어 — 도메인 모델 교정(2026-07-22, 운영자 지시):
+//   반(사람 그룹) → 교재(출판사/저자) → 유닛 → 단어.
+// supabase_v3_1_textbooks.sql 실행 전에는 테이블 부재를 감지해 "유닛 보유
+// 반 = 자동 교재 1개(자기 반에 연결)" 합성으로 폴백 — 오늘과 100% 동일
+// 동작(규칙 9). 실행 후에는 class_textbooks 연결로 한 반이 여러 교재를,
+// 한 교재가 여러 반을 가질 수 있다(단어 중복 없음).
+//
+// 학생별 교재 상태는 v2.9 student_class_assignments를 그대로 재사용 —
+// 행의 class_id는 "교재의 소유 컨테이너"(units.class_id의 반)라 기존
+// unique(student_id, class_id)와 호환. 의미론 교정 한 가지: 교재 전환이
+// students.class_id(사람 반)를 더 이상 바꾸지 않는다(setPrimaryTextbook).
+// ════════════════════════════════════════════════════════════════════════
+let _textbooks = new Map()        // textbookId -> {id, name, publisherName, ownerClassId}
+let _classTextbooks = new Map()   // classId -> [textbookId...] (sort_order 순)
+let _textbookMode = false         // true = 실제 테이블 로드됨(합성 아님)
+
+const SYNTH_TB_PREFIX = 'synthetic-tb:'
+function synthesizeTextbooks() {
+  _textbooks = new Map()
+  _classTextbooks = new Map()
+  for (const [name, cls] of Object.entries(_cache)) {
+    if (!cls.id || (cls.units || []).length === 0) continue
+    const tbId = SYNTH_TB_PREFIX + cls.id
+    _textbooks.set(tbId, { id: tbId, name, publisherName: null, ownerClassId: cls.id })
+    _classTextbooks.set(cls.id, [tbId])
+  }
+  _textbookMode = false
+}
+
+export async function refreshTextbooks() {
+  try {
+    const [tbRes, ctRes] = await Promise.all([
+      supabase.from('textbooks').select('id,name,publisher_name,owner_class_id'),
+      supabase.from('class_textbooks').select('class_id,textbook_id,enabled,sort_order').order('sort_order'),
+    ])
+    if (tbRes.error || ctRes.error) {
+      synthesizeTextbooks() // 테이블 부재(SQL 미실행)/일시 실패 — 합성 폴백
+      return
+    }
+    _textbooks = new Map((tbRes.data || []).map((t) => [t.id, {
+      id: t.id, name: t.name, publisherName: t.publisher_name || null, ownerClassId: t.owner_class_id || null,
+    }]))
+    _classTextbooks = new Map()
+    for (const r of ctRes.data || []) {
+      if (r.enabled === false) continue
+      if (!_classTextbooks.has(r.class_id)) _classTextbooks.set(r.class_id, [])
+      _classTextbooks.get(r.class_id).push(r.textbook_id)
+    }
+    _textbookMode = _textbooks.size > 0
+    if (!_textbookMode) synthesizeTextbooks() // 테이블은 있는데 백필 전 — 합성 유지
+  } catch {
+    synthesizeTextbooks()
+  }
+}
+
+export const isTextbookMode = () => _textbookMode
+export const getTextbookById = (id) => _textbooks.get(id) || null
+
+// 반에 연결된 교재 목록(정렬 순) — 교재 선택기의 원천. 합성 모드에서는
+// 항상 자기 반의 자동 교재 1개뿐이라 선택기가 렌더되지 않는다(기존 화면
+// 변화 0).
+export function getClassTextbooks(classId) {
+  if (!classId) return []
+  return (_classTextbooks.get(classId) || []).map((id) => _textbooks.get(id)).filter(Boolean)
+}
+
+// 교재의 유닛 목록 — 소유 컨테이너 반의 유닛(= 그 교재의 전체 콘텐츠).
+export function getTextbookUnits(textbookId) {
+  const tb = _textbooks.get(textbookId)
+  if (!tb || !tb.ownerClassId) return []
+  const clsName = getClassNameById(tb.ownerClassId)
+  return _cache[clsName]?.units || []
+}
+
+// 반 소속 자동 교재(그 반이 소유 컨테이너인 교재) — 상태 행의 textbook_id
+// 폴백 해석(백필 전 NULL 행)에 쓰인다.
+export function getOwnTextbookOfClass(classId) {
+  if (!classId) return null
+  for (const tb of _textbooks.values()) if (tb.ownerClassId === classId) return tb
+  return null
+}
+
+// 학생의 현재(primary) 교재 — 상태 행 캐시(_studentAssignmentsCache)에서
+// 동기 해석. 캐시가 아직 차기 전(콜드 스타트)엔 학생 반의 자동 교재로
+// 폴백 — 기존 단일 반 동작과 동일한 결과라 화면이 절대 깨지지 않는다.
+export function getStudentPrimaryTextbook(studentId) {
+  const cached = _studentAssignmentsCache.get(studentId)
+  const primary = cached?.find((a) => a.isPrimary)
+  if (primary?.textbookId && _textbooks.has(primary.textbookId)) return _textbooks.get(primary.textbookId)
+  if (primary?.classId) {
+    const own = getOwnTextbookOfClass(primary.classId)
+    if (own) return own
+  }
+  return getOwnTextbookOfClass(getStudentClassId(studentId))
 }
 
 // ── 쓰기 시험(Spelling Test) 반별 관리자 설정 ──────────────────────────────
@@ -668,6 +768,23 @@ export const getStudentClassId = (id) => _students.get(id)?.classId || null
 function resolveStudentUnitObj(id) {
   const s = _students.get(id)
   if (!s) return null
+  // v3.1 교재 모드 — 현재 교재의 유닛에서 해석한다(학생의 사람 반이 아닌
+  // 교재 소유 컨테이너의 유닛). 사람 반=박준원, 교재=김기택인 학생의
+  // current_unit_id는 김기택 컨테이너의 유닛이라 반 유닛에선 못 찾는다.
+  // 교재 정보가 없거나 합성 모드면 기존 반 기반 경로 그대로(변화 0).
+  if (_textbookMode) {
+    const tb = getStudentPrimaryTextbook(id)
+    if (tb) {
+      const tbUnits = getTextbookUnits(tb.id)
+      if (tbUnits.length > 0) {
+        if (s.unitId) {
+          const byId = tbUnits.find((u) => u.id === s.unitId)
+          if (byId) return byId
+        }
+        return tbUnits.find((u) => u.name === s.unitName) || tbUnits[0]
+      }
+    }
+  }
   const clsName = getClassNameById(s.classId) || s.className
   const units = _cache[clsName]?.units || []
   if (units.length === 0) return null
@@ -820,8 +937,17 @@ export async function fetchHouseSeasonScore(houseId, seasonStartedAt) {
 export async function setStudentUnit(id, unitName) {
   const s = _students.get(id)
   if (!s) return
-  const clsName = getClassNameById(s.classId) || s.className
-  const unitId = _cache[clsName]?.units.find((u) => u.name === unitName)?.id || null
+  // v3.1 교재 모드 — 유닛은 현재 교재의 유닛에서 찾는다(사람 반이 아니라).
+  // 합성/레거시 모드에서는 기존 반 기반 검색 그대로.
+  let unitId = null
+  if (_textbookMode) {
+    const tb = getStudentPrimaryTextbook(id)
+    if (tb) unitId = getTextbookUnits(tb.id).find((u) => u.name === unitName)?.id || null
+  }
+  if (unitId == null) {
+    const clsName = getClassNameById(s.classId) || s.className
+    unitId = _cache[clsName]?.units.find((u) => u.name === unitName)?.id || null
+  }
   // P7 감사: bare .select() 제거 — setStudentClass와 동일한 pin_hash 응답 노출 차단.
   let { error } = await supabase.from('students')
     .update({ unit_name: unitName, current_unit_id: unitId }).eq('id', id)
@@ -959,11 +1085,21 @@ function syntheticPrimaryAssignment(studentId) {
 // 계약). getStudentWords의 classId override 검증용 캐시도 여기서 채운다.
 export async function getStudentClassAssignments(studentId) {
   if (!studentId) return []
-  const { data, error } = await supabase
+  // v3.1 — textbook_id 컬럼은 마이그레이션 전이면 없다: 컬럼 포함 조회를
+  // 먼저 시도하고 42703(undefined column)이면 기존 컬럼 셋으로 재시도
+  // (refreshStudents의 current_unit_id/house_id cascading 폴백과 동일 관례).
+  let { data, error } = await supabase
     .from('student_class_assignments')
-    .select('id,student_id,class_id,current_unit_id,is_primary')
+    .select('id,student_id,class_id,current_unit_id,is_primary,textbook_id')
     .eq('student_id', studentId)
     .order('is_primary', { ascending: false })
+  if (error && error.code === '42703') {
+    ;({ data, error } = await supabase
+      .from('student_class_assignments')
+      .select('id,student_id,class_id,current_unit_id,is_primary')
+      .eq('student_id', studentId)
+      .order('is_primary', { ascending: false }))
+  }
   let result
   if (error) {
     if (!isMissingTableError(error)) {
@@ -982,6 +1118,8 @@ export async function getStudentClassAssignments(studentId) {
       classId: r.class_id,
       unitId: r.current_unit_id,
       isPrimary: !!r.is_primary,
+      // v3.1 — 백필 전 NULL은 그 행의 반(컨테이너) 소속 자동 교재로 해석
+      textbookId: r.textbook_id || getOwnTextbookOfClass(r.class_id)?.id || null,
     }))
     // 방어적 self-heal(2026-07-21, 라이브 e2e로 발견) — 행이 1개 이상
     // 있더라도 그중 is_primary=true인 행이 하나도 없는 손상된 상태가 실제로
@@ -1018,7 +1156,12 @@ export async function getStudentClassAssignments(studentId) {
         // 차단했다(재현: scripts/reproLegacyMultiClass.mjs). 이제 불일치를
         // 감지하면 표시용 마스킹은 유지하되 DB도 실제로 고친다(fire-and-
         // forget — 읽기 경로를 절대 막지 않고, 실패해도 다음 읽기가 재시도).
-        if (live.classId != null && primary.classId !== live.classId) {
+        // v3.1 교재 모드에서는 primary 행의 class_id(교재 소유 컨테이너)가
+        // students.class_id(사람 반)와 다른 것이 정상이다(예: 박준원 반
+        // 학생이 김기택 교재 학습 중) — 반 불일치 수리/마스킹은 교재
+        // 레이어가 없는 레거시 모드에서만 수행한다(2026-07-22 버그 수정의
+        // 유령 행 수리 로직, 그 시나리오는 여전히 레거시 모드에서 유효).
+        if (!_textbookMode && live.classId != null && primary.classId !== live.classId) {
           // 수리 행의 유닛은 "그 반 소속이 확실한 id"만 신뢰한다 —
           // getStudentUnitId의 unit_name 폴백은 이전 반의 유닛 이름이
           // 새 반의 같은 이름 유닛(빈 유닛일 수도)에 잘못 매칭될 수 있어
@@ -1031,12 +1174,10 @@ export async function getStudentClassAssignments(studentId) {
             ? live.unitId : null
           maintainPrimaryAssignmentForClassChange(studentId, live.classId, strictUnitId)
         }
-        // 유닛 보정 — 레거시 학생(current_unit_id NULL, unit_name 문자열
-        // 의존)은 live.unitId가 null이라 기존 코드가 보정을 건너뛰었다.
-        // getStudentUnitId(이름→id→첫 유닛 해석)로 항상 구체적인 id를 준다.
+        // 유닛 보정 — students.current_unit_id는 두 모드 모두 권위 값.
         const resolvedUnitId = live.unitId ?? getStudentUnitId(studentId)
         if (resolvedUnitId != null) primary.unitId = resolvedUnitId
-        if (live.classId != null) primary.classId = live.classId
+        if (!_textbookMode && live.classId != null) primary.classId = live.classId
       }
     }
   }
@@ -1234,6 +1375,106 @@ export async function setPrimaryAssignment(studentId, classId) {
   _studentAssignmentsCache.delete(studentId)
   await refreshStudents()
 }
+
+// ── v3.1 교재 전환(setPrimaryTextbook) — 사람 반은 절대 안 바꾼다 ──
+// v2.9 setPrimaryAssignment(반 축 전환, students.class_id 동기화 포함)의
+// 교재 축 버전. 차이: ① 상태 행이 없으면 즉시 만들어준다(반에 연결된
+// 교재는 학생이 자유롭게 고를 수 있어야 하므로 — 연결 자체(class_textbooks)
+// 는 관리자만 관리), ② students.class_id는 건드리지 않는다(사람 반 유지 —
+// 숙제/입실시험/게임화 설정은 계속 사람 반을 따른다), ③ students.
+// current_unit_id만 대상 교재의 유닛으로 동기화(기존 권위 관계 유지).
+// 나가는 교재의 진도 캡처는 setPrimaryAssignment과 동일 로직 재사용.
+export async function setPrimaryTextbook(studentId, textbookId) {
+  if (!studentId || !textbookId) throw new Error('setPrimaryTextbook: studentId/textbookId가 필요합니다.')
+  const tb = _textbooks.get(textbookId)
+  if (!tb || !tb.ownerClassId) throw new Error(`setPrimaryTextbook: 알 수 없는 교재(${textbookId})`)
+  if (String(textbookId).startsWith(SYNTH_TB_PREFIX)) {
+    // 합성 모드(SQL 미실행) — 교재가 1개뿐이라 전환할 것이 없다. 명확히 던짐.
+    throw new Error('교재 기능이 아직 활성화되지 않았습니다 (supabase_v3_1_textbooks.sql 미실행).')
+  }
+
+  // 1) 대상 상태 행 확보(없으면 생성 — class_id는 교재의 소유 컨테이너)
+  let { data: target, error: selErr } = await supabase
+    .from('student_class_assignments')
+    .select('id,current_unit_id')
+    .eq('student_id', studentId).eq('textbook_id', textbookId).maybeSingle()
+  if (selErr) throw selErr
+  if (!target) {
+    const { error: insErr } = await supabase.from('student_class_assignments').insert({
+      student_id: studentId, class_id: tb.ownerClassId, textbook_id: textbookId,
+      current_unit_id: null, is_primary: false,
+    })
+    if (insErr && insErr.code !== '23505') throw insErr
+    ;({ data: target, error: selErr } = await supabase
+      .from('student_class_assignments')
+      .select('id,current_unit_id')
+      .eq('student_id', studentId).eq('textbook_id', textbookId).maybeSingle())
+    if (selErr || !target) throw selErr || new Error('setPrimaryTextbook: 상태 행 생성 실패')
+  }
+
+  // 2) 나가는 primary의 진도 캡처(setPrimaryAssignment의 검증된 로직 그대로)
+  const { data: outgoingRows, error: outErr } = await supabase
+    .from('student_class_assignments')
+    .select('id').eq('student_id', studentId).eq('is_primary', true).neq('id', target.id)
+  if (outErr) throw outErr
+  if ((outgoingRows || []).length > 0) {
+    const live = _students.get(studentId)
+    let capturedUnitId = (live && live.unitId != null) ? live.unitId : null
+    if (capturedUnitId == null) {
+      const resolved = resolveStudentUnitObj(studentId)
+      if (resolved && (resolved.words || []).length > 0) capturedUnitId = resolved.id
+    }
+    if (capturedUnitId != null) {
+      for (const row of outgoingRows) {
+        const { error: healErr } = await supabase.from('student_class_assignments')
+          .update({ current_unit_id: capturedUnitId }).eq('id', row.id)
+        if (healErr) throw healErr
+      }
+    }
+  }
+
+  // 3) primary 플립(대상 먼저 true — "primary 0개" 순간 없음)
+  const { error: trueErr } = await supabase.from('student_class_assignments')
+    .update({ is_primary: true }).eq('id', target.id)
+  if (trueErr) throw trueErr
+  const { error: falseErr } = await supabase.from('student_class_assignments')
+    .update({ is_primary: false }).eq('student_id', studentId).neq('id', target.id)
+  if (falseErr) throw falseErr
+
+  // 4) 유닛 동기화 — 대상 교재 진도(없으면 단어 있는 첫 유닛). class_id는 안 바꿈!
+  let syncUnitId = target.current_unit_id
+  if (syncUnitId == null) {
+    const units = getTextbookUnits(textbookId)
+    syncUnitId = (units.find((u) => (u.words || []).length > 0) || units[0])?.id ?? null
+    if (syncUnitId != null) {
+      const { error: fillErr } = await supabase.from('student_class_assignments')
+        .update({ current_unit_id: syncUnitId }).eq('id', target.id)
+      if (fillErr) throw fillErr
+    }
+  }
+  const { error: syncErr } = await supabase.from('students')
+    .update({ current_unit_id: syncUnitId }).eq('id', studentId)
+  if (syncErr) throw syncErr
+  _studentAssignmentsCache.delete(studentId)
+  await refreshStudents()
+}
+
+// v3.1 관리자 — 반↔교재 연결 관리(연결/해제/순서). 해제는 연결만 끊고
+// 교재/유닛/단어 데이터는 절대 삭제하지 않는다(운영자 요구사항).
+export async function linkTextbookToClass(classId, textbookId, sortOrder = 0) {
+  if (!classId || !textbookId) throw new Error('linkTextbookToClass: classId/textbookId 필요')
+  const { error } = await supabase.from('class_textbooks')
+    .insert({ class_id: classId, textbook_id: textbookId, sort_order: sortOrder })
+  if (error && error.code !== '23505') throw error
+  await refreshTextbooks()
+}
+export async function unlinkTextbookFromClass(classId, textbookId) {
+  const { error } = await supabase.from('class_textbooks')
+    .delete().eq('class_id', classId).eq('textbook_id', textbookId)
+  if (error) throw error
+  await refreshTextbooks()
+}
+export const getAllTextbooks = () => [..._textbooks.values()]
 
 // v1.3 admin dashboard — one-way, fire-and-forget sync of a student's
 // progress from their device's localStorage (the source of truth, never
@@ -1572,7 +1813,18 @@ export const getStudentWords = (studentId, { classId: classIdOverride } = {}) =>
   const unitName = usingOverride ? null : getStudentUnit(studentId)
   // Resolve the class by id first (robust to renames) — the joined
   // className is only a fallback for legacy rows with no class_id at all.
-  const cls = usingOverride ? getClassNameById(classId) : (getClassNameById(classId) || getStudentClass(studentId))
+  // v3.1 교재 모드(no-override 경로): 단어/유닛의 "콘텐츠 반"은 현재 교재의
+  // 소유 컨테이너다(사람 반과 다를 수 있음 — 박준원 반 학생이 김기택 교재
+  // 학습 중). 숙제(_dailyAssignments) 조회는 아래에서 계속 사람 반 기준.
+  let cls = usingOverride ? getClassNameById(classId) : (getClassNameById(classId) || getStudentClass(studentId))
+  const humanClassId = classId
+  if (!usingOverride && _textbookMode) {
+    const tb = getStudentPrimaryTextbook(studentId)
+    if (tb?.ownerClassId) {
+      const contentCls = getClassNameById(tb.ownerClassId)
+      if (contentCls) { cls = contentCls; classId = tb.ownerClassId }
+    }
+  }
   let unitObj = null
   try {
     if (!cls) {
@@ -1611,7 +1863,8 @@ export const getStudentWords = (studentId, { classId: classIdOverride } = {}) =>
       })
       return []
     }
-    const todaysAssignment = _dailyAssignments[classId]
+    // 숙제는 사람 반 축(반+날짜) — 교재 모드에서도 학생의 실제 반 기준.
+    const todaysAssignment = _dailyAssignments[humanClassId]
     const mapped = raw.map((cw) => mapWordRow(cw, classId)).filter(Boolean)
 
     // v1.3 날짜별 단어 배정: 오늘 지정된 단어가 있으면 그 서브셋만, 없으면
