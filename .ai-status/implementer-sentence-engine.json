@@ -3,29 +3,34 @@
   "role": "코드 구현",
   "task_id": "sentence-engine",
   "task": "Sentence Learning v3.4 Phase A — 스키마(SQL)+순수 엔진+진행도 API+관리자 편집기 확장 (학생 UI 제외)",
-  "status": "working",
-  "progress": 5,
+  "status": "completed",
+  "progress": 100,
   "started_at": "2026-07-23T00:00:00+09:00",
   "updated_at": "2026-07-23T00:00:00+09:00",
   "files_owned": [
-    ".ai-status/implementer-sentence-engine.json"
+    ".ai-status/implementer-sentence-engine.json",
+    "supabase_v3_4_sentence_learning.sql",
+    "src/utils/sentenceLearning.js",
+    "src/utils/sentenceProgressApi.js",
+    "src/utils/readingApi.js",
+    "src/components/admin/PassageEditor.jsx",
+    "tests/harness/runSentenceLearning.mjs",
+    "package.json"
   ],
   "files_read": [
     "CLAUDE.md",
     "handoff.md",
     "DATABASE.md",
-    "src/utils/readingApi.js",
     "src/utils/readingModel.js",
     "src/utils/spellingReviewApi.js",
     "src/utils/wordLibrary.js",
     "src/utils/attachment/paulTown.js",
-    "src/components/admin/PassageEditor.jsx",
     "tests/harness/runReading.mjs",
     "supabase_v3_3_reading.sql",
     "scripts/hooks/checkDestructiveSql.mjs",
     ".ai-status/README.md"
   ],
-  "summary": "선행 조사 완료(v3.3 Reading Foundation 코드/SQL/하네스/훅 확인). 커밋 계획: (1) SQL+sentenceLearning.js+하네스, (2) readingApi 확장+sentenceProgressApi, (3) PassageEditor 확장.",
+  "summary": "커밋 3개 완료: a60fa47(SQL 멱등·순수추가 + sentenceLearning 순수 엔진 + verify:sentence-learning 49단언), 9a64bd7(sentenceProgressApi + readingApi v3.4 확장·42703 cascading 폴백), 137bb9d(PassageEditor 메타 컨트롤 — 컬럼 부재 시 비활성 안내). build clean, verify:sentence-learning 49/49 · reading 21/21 · admin 6/6 PASS. 운영자 액션: supabase_v3_4_sentence_learning.sql 수동 실행(실행 전에도 무해). 학생 UI 없음(Phase B 별도 세션). 주의: scripts/checkV34Schema.mjs 미추적 파일은 이 세션 소유 아님(미접촉).",
   "blocker": null,
-  "next_action": "supabase_v3_4_sentence_learning.sql 작성부터 시작"
+  "next_action": "qa-reviewer 검수 → 운영자 SQL 실행 → Phase B(학생 UI, 별도 세션)가 sentenceLearning/sentenceProgressApi 소비"
 }
