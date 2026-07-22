@@ -58,6 +58,12 @@ const FEATURE_CATEGORIES = [
     description: '대시보드, 출석, 학부모 포털 등',
     color: 'red',
   },
+  {
+    id: 'attachment',
+    name: '애착 시스템 (Attachment & Growth)',
+    description: '모자 컬렉션, 단어 박물관, 성장 앨범, 폴의 기억, 잉글리시 월드',
+    color: 'purple',
+  },
 ]
 
 function FeatureCategoryToggle({ category, features }) {

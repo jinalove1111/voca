@@ -43,16 +43,35 @@ const DEFAULT_FEATURES = {
   schoolDashboard: false,
   attendanceTracking: false,
   advancedAnalytics: false,
+
+  // 애착 시스템 (Attachment & Growth, 2026-07-22) — 폴이지보카 장기
+  // 성장/애착 시스템. 다른 플래그와 달리 학생 화면을 게이팅하므로 "완성된
+  // v1 기능"은 기본 ON, 미완성 파운데이션은 기본 OFF. 이 플래그는 기기
+  // 로컬(localStorage)이라는 기존 시스템 성질을 그대로 따른다 — 전역
+  // 서버 플래그가 아님(끄면 그 기기에서만 꺼짐).
+  attachmentHats: true,        // 모자 컬렉션(수집/장착) — v1 완성
+  attachmentMuseum: true,      // 단어 박물관 — v1 완성
+  attachmentAlbum: true,       // 성장 앨범/타임머신 — v1 완성
+  attachmentPaulMemory: true,  // 폴의 기억(템플릿 기반, 실데이터만) — v1 완성
+  attachmentWorldGarden: true, // 잉글리시 월드 1구역(정원) MVP — v1 완성
+  attachmentWorldFull: false,  // 정원 이후 구역(집/다리/도서관/마을/왕국) UI — 파운데이션만, 미완성
+  attachmentBookshelf: false,  // 개인 책장 — 파운데이션만, 미완성
+  attachmentStory: false,      // 이어지는 이야기 — 파운데이션만, 미완성
 }
 
-// localStorage에서 저장된 features 불러오기
+// localStorage에서 저장된 features 불러오기.
+// 2026-07-22: 저장본에 없는 새 플래그는 DEFAULT_FEATURES 값으로 채운다 —
+// 예전 코드는 저장본을 통째로 반환해서, 플래그가 나중에 추가된 기기
+// (localStorage에 구버전 스냅샷이 있는 기기)에서는 새 플래그가 전부
+// undefined(=꺼짐)가 되는 문제가 있었다. 관리자가 명시적으로 바꾼 값은
+// 저장본이 이기고, 새로 생긴 키만 기본값을 받는다.
 const loadFeaturesFromStorage = () => {
   try {
     const stored = localStorage.getItem('paulEasyVoca_features')
-    return stored ? JSON.parse(stored) : DEFAULT_FEATURES
+    return stored ? { ...DEFAULT_FEATURES, ...JSON.parse(stored) } : { ...DEFAULT_FEATURES }
   } catch (e) {
     console.warn('Failed to load features from storage:', e)
-    return DEFAULT_FEATURES
+    return { ...DEFAULT_FEATURES }
   }
 }
 
@@ -129,6 +148,7 @@ export const getFeaturesByCategory = (category) => {
     ranking: ['ranking', 'pointSystem', 'leaderboard', 'rewardSystem'],
     aiAnalysis: ['aiAnalysis', 'wrongAnswerNote', 'weakWordAnalysis', 'reviewRecommendation'],
     schoolManagement: ['classGroupManagement', 'semesterManagement', 'parentPortal', 'schoolDashboard', 'attendanceTracking', 'advancedAnalytics'],
+    attachment: ['attachmentHats', 'attachmentMuseum', 'attachmentAlbum', 'attachmentPaulMemory', 'attachmentWorldGarden', 'attachmentWorldFull', 'attachmentBookshelf', 'attachmentStory'],
   }
   return categories[category] || []
 }
