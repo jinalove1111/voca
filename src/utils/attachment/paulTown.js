@@ -184,16 +184,114 @@ export function retroWelcome(stats) {
   }
 }
 
-// ── 마을 데이터 모델 — 데이터만 export, UI 없음(이후 세션) ──
-// open: 지금 열려 있는 곳. requiresFlag: 'paulTownBuildings'가 켜져야
-// 노출되는 파운데이션 건물(기본 OFF). minCleared: 점진 발견 임계
-// (clearedCount 파생 — worldProgress 구역 임계와 정합).
+// ── 시계탑(타임머신) — 실제 이력만 다시 보는 창(window) 파생 ──
+// 창 4개: 어제 / 지난주 / 한 달 전 / 일 년 전 오늘. 각 창은 history에
+// 실제로 있는 것만 집계하고, 없으면 present=false — UI는 정직한 빈 상태
+// ("이때의 기록은 아직 없어요")를 그리거나(앞 3개), 아예 그리지 않는다
+// (일 년 전 오늘 — hideWhenAbsent). 없는 창을 지어내지 않는다.
+const TIME_WINDOW_DEFS = [
+  { id: 'yesterday', label: '어제', emoji: '🌙', fromOffset: 1, toOffset: 1, hideWhenAbsent: false },
+  { id: 'lastWeek', label: '지난주', emoji: '📅', fromOffset: 7, toOffset: 13, hideWhenAbsent: false },
+  { id: 'monthAgo', label: '한 달 전', emoji: '🗓️', fromOffset: 28, toOffset: 34, hideWhenAbsent: false },
+]
+
+/**
+ * 타임머신 창 — 순수 파생(저장 0, 무작위 0). 같은 stats + 같은 now →
+ * 항상 같은 결과. overcomeWordIds = 그 창에서 틀렸지만 지금은 이겨낸
+ * 단어(미션 완료 또는 클리어) — "틀린 적 있음"을 극복 서사로만 쓴다
+ * (죄책감 언어 없음, 표시는 호출자가 실단어 해석 가능할 때만).
+ * @returns [{ id, label, emoji, present, daysStudied, starsEarned,
+ *             quizCorrect, quizTotal, accuracy, missedWordIds,
+ *             overcomeWordIds, hideWhenAbsent }]
+ */
+export function timeWindows(stats, now = new Date()) {
+  const history = stats.history || {}
+  const isOvercome = (wid) =>
+    (stats.missionByWordId?.get?.(wid)?.done === true) || (stats.clearedSet?.has?.(wid) === true)
+
+  const aggregate = (keys) => {
+    let daysStudied = 0
+    let starsEarned = 0
+    let quizCorrect = 0
+    let quizTotal = 0
+    const missed = []
+    for (const key of keys) {
+      const d = history[key]
+      if (!d) continue
+      if (d.studied) daysStudied += 1
+      starsEarned += Number(d.starsEarned) || 0
+      quizCorrect += Number(d.quizCorrect) || 0
+      quizTotal += Number(d.quizTotal) || 0
+      for (const wid of Array.isArray(d.missedWordIds) ? d.missedWordIds : []) {
+        if (!missed.includes(wid)) missed.push(wid)
+      }
+    }
+    return {
+      present: daysStudied > 0,
+      daysStudied,
+      starsEarned,
+      quizCorrect,
+      quizTotal,
+      accuracy: quizTotal > 0 ? Math.round((quizCorrect / quizTotal) * 100) : null,
+      missedWordIds: missed,
+      overcomeWordIds: missed.filter(isOvercome),
+    }
+  }
+
+  const windows = TIME_WINDOW_DEFS.map((def) => {
+    const keys = []
+    for (let off = def.fromOffset; off <= def.toOffset; off++) keys.push(keyFor(now, off))
+    return { id: def.id, label: def.label, emoji: def.emoji, hideWhenAbsent: def.hideWhenAbsent, ...aggregate(keys) }
+  })
+
+  // 일 년 전 오늘 — 정확히 같은 달력 날짜(작년)만. 그 날짜의 기록이
+  // 실존할 때만 present — 없으면 UI가 창 자체를 그리지 않는다.
+  const yearAgoDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
+  const yearAgoKey = yearAgoDate.toDateString()
+  windows.push({
+    id: 'yearAgo',
+    label: '일 년 전 오늘',
+    emoji: '🕰️',
+    hideWhenAbsent: true,
+    dateLabel: `${yearAgoDate.getFullYear()}년 ${yearAgoDate.getMonth() + 1}월 ${yearAgoDate.getDate()}일`,
+    ...aggregate([yearAgoKey]),
+  })
+  return windows
+}
+
+// ── 폴의 집 방 꾸미기 — 진행에서만 파생되는 소품(저장 0) ──
+// 전부 단조 증가 지표(clearedCount/masteredCount/studiedDayCount/
+// totalStarsEarned)만 쓴다 — 한 번 나타난 소품은 절대 사라지지 않는다.
+// 잠긴 소품 체크리스트는 없다 — 열린 것만 보여준다(점진 발견).
+export const HOME_DECO_ITEMS = [
+  { id: 'deco-pot', emoji: '🪴', name: '창가 화분', when: (s) => (s.clearedCount || 0) >= 5 },
+  { id: 'deco-frame', emoji: '🖼️', name: '벽 그림', when: (s) => (s.masteredCount || 0) >= 3 },
+  { id: 'deco-shelf-books', emoji: '📚', name: '선반의 책들', when: (s) => (s.masteredCount || 0) >= 10 },
+  { id: 'deco-clock', emoji: '🕰️', name: '벽시계', when: (s) => (s.studiedDayCount || 0) >= 10 },
+  { id: 'deco-trophy', emoji: '🏆', name: '작은 트로피', when: (s) => (s.totalStarsEarned || 0) >= 50 },
+  { id: 'deco-teddy', emoji: '🧸', name: '곰인형', when: (s) => (s.studiedDayCount || 0) >= 30 },
+]
+
+/**
+ * 폴의 집에 나타난 소품 — 순수 파생. 같은 stats → 같은 소품 목록.
+ * 반환은 열린 소품만(잠긴 것 목록/개수 없음 — 방은 그냥 조금씩 차 있다).
+ */
+export function paulHomeDeco(stats) {
+  return HOME_DECO_ITEMS.filter((d) => d.when(stats)).map(({ id, emoji, name }) => ({ id, emoji, name }))
+}
+
+// ── 마을 데이터 모델 — PaulTown.jsx(마을=내비게이션)가 소비 ──
+// open: 처음부터 열려 있는 곳(마을 안 섹션). requiresFlag:
+// 'paulTownBuildings'가 켜져야 노출되는 건물(도서관/박물관/시계탑 —
+// 별도 화면으로 이동). minCleared: 점진 발견 임계(clearedCount 파생 —
+// worldProgress 구역 임계와 정합). screen: 건물 카드가 이동할 화면 id
+// (App.jsx setScreen 값 — null이면 마을 안 섹션).
 export const TOWN_PLACES = [
-  { id: 'garden', emoji: '🌷', name: '정원', open: true, requiresFlag: null, minCleared: 0, features: [], desc: '단어를 배울 때마다 자라는 나의 정원' },
-  { id: 'paulHome', emoji: '🏡', name: '폴의 집', open: true, requiresFlag: null, minCleared: 0, features: ['hatRack'], desc: '폴이 사는 집 — 모자걸이에 내 모자들이 걸려 있어요' },
-  { id: 'museum', emoji: '🏛️', name: '박물관', open: false, requiresFlag: 'paulTownBuildings', minCleared: 30, features: [], desc: '내가 수집한 단어들이 전시되는 곳' },
-  { id: 'library', emoji: '📚', name: '도서관', open: false, requiresFlag: 'paulTownBuildings', minCleared: 100, features: [], desc: '완주한 유닛이 책이 되어 꽂히는 곳' },
-  { id: 'clockTower', emoji: '🕰️', name: '시계탑', open: false, requiresFlag: 'paulTownBuildings', minCleared: 150, features: [], desc: '나의 학습 시간이 흐르는 마을의 중심' },
+  { id: 'garden', emoji: '🌷', name: '정원', open: true, requiresFlag: null, minCleared: 0, features: [], screen: null, desc: '단어를 배울 때마다 자라는 나의 정원' },
+  { id: 'paulHome', emoji: '🏡', name: '폴의 집', open: true, requiresFlag: null, minCleared: 0, features: ['hatRack'], screen: null, desc: '폴이 사는 집 — 모자걸이에 내 모자들이 걸려 있어요' },
+  { id: 'museum', emoji: '🏛️', name: '박물관', open: false, requiresFlag: 'paulTownBuildings', minCleared: 30, features: [], screen: 'wordMuseum', desc: '내가 수집한 단어들이 전시되는 곳' },
+  { id: 'library', emoji: '📚', name: '도서관', open: false, requiresFlag: 'paulTownBuildings', minCleared: 100, features: [], screen: 'bookshelf', desc: '완주한 유닛이 책이 되어 꽂히는 곳' },
+  { id: 'clockTower', emoji: '🕰️', name: '시계탑', open: false, requiresFlag: 'paulTownBuildings', minCleared: 150, features: [], screen: 'timeMachine', desc: '나의 학습 시간이 흐르는 마을의 중심' },
 ]
 
 /**

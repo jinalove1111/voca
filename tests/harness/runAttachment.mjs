@@ -16,11 +16,11 @@ import { deriveAttachmentStats, completedUnits, masteryTierFor } from '../../src
 import { HAT_CATALOG, HAT_THRESHOLDS, HAT_COLOR_STYLE, evaluateHatUnlocks, hatById } from '../../src/utils/attachment/hatSystem.js'
 import { detectNewMilestones, sortMilestonesForAlbum } from '../../src/utils/attachment/milestones.js'
 import { pickPaulMemory, PAUL_MEMORY_TEMPLATE_IDS } from '../../src/utils/attachment/paulMemory.js'
-import { pickTodaysDiscovery, starSeedState, gardenBandSummary, retroWelcome, TOWN_PLACES, townPlacesState, TODAYS_DISCOVERY_TEMPLATE_IDS } from '../../src/utils/attachment/paulTown.js'
+import { pickTodaysDiscovery, starSeedState, gardenBandSummary, retroWelcome, TOWN_PLACES, townPlacesState, TODAYS_DISCOVERY_TEMPLATE_IDS, timeWindows, paulHomeDeco, HOME_DECO_ITEMS } from '../../src/utils/attachment/paulTown.js'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { WORLD_STAGES, computeWorldState, gardenPlots } from '../../src/utils/attachment/worldProgress.js'
-import { buildStoryChapter, getBookshelf, STORY_TEMPLATES } from '../../src/utils/attachment/storyFoundation.js'
+import { buildStoryChapter, getBookshelf, STORY_TEMPLATES, formatTextbookTitle, getTextbookBooks } from '../../src/utils/attachment/storyFoundation.js'
 
 let passed = 0
 let failed = 0
@@ -303,6 +303,83 @@ const spellingFix = {
 check('받아쓰기 큐에 있던 단어 극복 → spelling-improved(실단어)', pickPaulMemory(deriveAttachmentStats(spellingFix, NOW), { wordTextById }, NOW).text.includes('banana'))
 check('스트릭 기억에 죄책감 언어 없음', PAUL_MEMORY_TEMPLATE_IDS.includes('streak-going') && !pickPaulMemory(deriveAttachmentStats({ streak: 5, cleared: ['a'], history: { [dayKey(0)]: day({ starsEarned: 0 }) } }, NOW), {}, NOW).text.includes('왜'))
 check('기억 ctx 없는 기존 호출(하위 호환) — 시그니처 그대로 동작', pickPaulMemory(stats, { wordTextById }, NOW).id === 'yesterday-hard-word')
+
+// ── 11) Paul Town 월드 — 시계탑(timeWindows) / 방 꾸미기 / 도서관 책 ──
+console.log('\n-- 11) Paul Town 월드 — 타임머신 창/방 소품/책장 확장(전부 파생·단조)')
+
+// timeWindows — 결정론 + 실제 이력만(없는 창을 지어내지 않음)
+const tw1 = timeWindows(stats, NOW)
+const tw2 = timeWindows(stats, NOW)
+check('timeWindows 결정론(같은 stats+now → 같은 결과)', JSON.stringify(tw1) === JSON.stringify(tw2))
+check('창 4개(어제/지난주/한 달 전/일 년 전 오늘) 순서 고정', JSON.stringify(tw1.map(w => w.id)) === JSON.stringify(['yesterday', 'lastWeek', 'monthAgo', 'yearAgo']))
+const wYest = tw1.find(w => w.id === 'yesterday')
+check('어제 창 — 실측 집계(1일·⭐5·정답률 90%)', wYest.present && wYest.daysStudied === 1 && wYest.starsEarned === 5 && wYest.accuracy === 90)
+check('어제 창 — 틀렸다가 이겨낸 단어(word3: 어제 오답→클리어됨)', wYest.overcomeWordIds.includes('word3'))
+const wLast = tw1.find(w => w.id === 'lastWeek')
+check('지난주 창 — 7~13일 전 집계(2일·⭐7·9/18=50%)', wLast.present && wLast.daysStudied === 2 && wLast.starsEarned === 7 && wLast.accuracy === 50)
+check('지난주 창 — hardword(2회 오답→미션 완료) 극복 목록 포함', wLast.overcomeWordIds.includes('hardword'))
+const wMonth = tw1.find(w => w.id === 'monthAgo')
+check('한 달 전 기록 없음 → present=false(정직한 빈 창 — 숫자 지어내지 않음)', wMonth.present === false && wMonth.daysStudied === 0 && wMonth.accuracy === null)
+const wYear = tw1.find(w => w.id === 'yearAgo')
+check('일 년 전 오늘 — 그 날짜 기록 없으면 present=false + hideWhenAbsent', wYear.present === false && wYear.hideWhenAbsent === true)
+// 일 년 전 정확히 같은 달력 날짜(2025-07-22)에 기록이 실존하면 present
+const yearFix = { ...fixture, history: { ...fixture.history, [new Date(2025, 6, 22).toDateString()]: day({ starsEarned: 3, quizCorrect: 4, quizTotal: 5 }) } }
+const twYear = timeWindows(deriveAttachmentStats(yearFix, NOW), NOW).find(w => w.id === 'yearAgo')
+check('일 년 전 오늘 기록 실존 → present + 실측 값 + 날짜 라벨', twYear.present === true && twYear.starsEarned === 3 && twYear.dateLabel.includes('2025'))
+check('빈 레코드 → 모든 창 present=false(창을 지어내지 않음)', timeWindows(emptyStats, NOW).every(w => w.present === false))
+
+// paulHomeDeco — 방 소품 파생(결정론·단조·잠긴 목록 없음)
+check('방 소품 결정론(같은 stats → 같은 소품)', JSON.stringify(paulHomeDeco(stats)) === JSON.stringify(paulHomeDeco(stats)))
+check('빈 레코드 → 소품 없음(지어내지 않음)', paulHomeDeco(emptyStats).length === 0)
+check('픽스처(클리어 12, 마스터 2, 학습 4일) → 화분 하나만', JSON.stringify(paulHomeDeco(stats).map(d => d.id)) === JSON.stringify(['deco-pot']))
+check('소품 카탈로그 ≥ 5종 + id 유일', HOME_DECO_ITEMS.length >= 5 && new Set(HOME_DECO_ITEMS.map(d => d.id)).size === HOME_DECO_ITEMS.length)
+let prevDeco = -1
+let decoMonotonic = true
+for (const n of [0, 5, 20, 60, 200]) {
+  const s = deriveAttachmentStats({
+    cleared: Array.from({ length: n }, (_, i) => `w${i}`),
+    wordStatus: Object.fromEntries(Array.from({ length: Math.floor(n / 4) }, (_, i) => [`db${i}`, 'mastered'])),
+    history: Object.fromEntries(Array.from({ length: Math.min(n, 40) }, (_, i) => [dayKey(i), day({ starsEarned: 2 })])),
+  }, NOW)
+  const cnt = paulHomeDeco(s).length
+  if (cnt < prevDeco) decoMonotonic = false
+  prevDeco = cnt
+}
+check('진행이 늘수록 소품이 절대 줄지 않음(단조)', decoMonotonic)
+
+// 책장 단조성 — 클리어가 늘수록 책이 절대 줄지 않는다
+let prevBooks = -1
+let shelfMonotonic = true
+for (const clearedList of [[], ['word0'], ['word0', 'word1'], ['word0', 'word1', 'notyet']]) {
+  const cs = new Set(clearedList)
+  const books = getBookshelf(units, completedUnits(units, cs)).length
+  if (books < prevBooks) shelfMonotonic = false
+  prevBooks = books
+}
+check('클리어 증가 → 책이 절대 줄지 않음(단조)', shelfMonotonic && prevBooks === 2)
+
+// 교재 책 — 실명 제목만(지어내지 않음)
+check('formatTextbookTitle — 출판사 있으면 "YBM(박준원)" 꼴', formatTextbookTitle({ name: '박준원', publisherName: 'YBM' }) === 'YBM(박준원)')
+check('formatTextbookTitle — 출판사 없으면 이름 그대로/폴백은 실명', formatTextbookTitle({ name: '박준원' }) === '박준원' && formatTextbookTitle(null, '중2 반') === '중2 반')
+const tbBooks = getTextbookBooks([{ classId: 'c1', className: '중2 YMB 박준원' }], units, new Map([['c1', 'YBM(박준원)']]))
+check('완주 교재 → 두꺼운 책(주입 제목 + 단어 수 합산)', tbBooks.length === 1 && tbBooks[0].title === 'YBM(박준원)' && tbBooks[0].wordCount === 4)
+check('제목 맵 없으면 실제 반 이름 폴백 / 완주 없으면 책 없음', getTextbookBooks([{ classId: 'c1', className: '중2 YMB 박준원' }], units)[0].title === '중2 YMB 박준원' && getTextbookBooks([], units).length === 0)
+
+// townPlacesState — 발견 단조성(진행이 늘면 발견된 곳이 절대 줄지 않음)
+let prevPlaces = -1
+let placesMonotonic = true
+for (const n of [0, 30, 100, 150, 300]) {
+  const s = deriveAttachmentStats({ cleared: Array.from({ length: n }, (_, i) => `w${i}`) }, NOW)
+  const cnt = townPlacesState(s, () => true).filter(p => p.discovered).length
+  if (cnt < prevPlaces) placesMonotonic = false
+  prevPlaces = cnt
+}
+check('마을 발견 단조성(클리어 증가 → 발견 감소 없음, 300이면 전부)', placesMonotonic && prevPlaces === TOWN_PLACES.length)
+check('건물 카드의 이동 화면 id — 박물관/도서관/시계탑', TOWN_PLACES.find(p => p.id === 'museum').screen === 'wordMuseum' && TOWN_PLACES.find(p => p.id === 'library').screen === 'bookshelf' && TOWN_PLACES.find(p => p.id === 'clockTower').screen === 'timeMachine')
+
+// storyFoundation.js 순수성 — import 0(부수효과/저장소 접근 자체가 불가)
+const storySrc = readFileSync(fileURLToPath(new URL('../../src/utils/attachment/storyFoundation.js', import.meta.url)), 'utf8')
+check('storyFoundation.js는 import 0의 순수 모듈(supabase/localStorage/random 없음)', ![...storySrc.matchAll(/^import /gm)].length && !/supabase/i.test(storySrc) && !storySrc.includes('localStorage') && !storySrc.includes('Math.random'))
 
 // ── summary ──
 console.log('\n=== summary ===')

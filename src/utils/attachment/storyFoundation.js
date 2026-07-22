@@ -92,3 +92,36 @@ export function getBookshelf(wordsByUnit, completed) {
       coverEmoji: BOOK_COVERS[i % BOOK_COVERS.length],
     }))
 }
+
+// ── 도서관(Bookshelf) 확장(Paul Town 월드, 2026-07-22) ──
+// 책 = 완주한 것에서만 파생(클리어는 늘기만 하므로 책도 늘기만 한다 —
+// 단조). 저장 없음: 완주 판정(unitsDone/textbooksDone)은 호출자
+// (useAttachment)가 기존 파생으로 계산해 넘긴다.
+
+/**
+ * 교재 표시 제목 — 실제 교재/반 이름만 사용(지어내지 않음).
+ * 출판사가 있으면 "YBM(박준원)" 꼴, 없으면 이름 그대로.
+ * @param tb { name, publisherName } (wordLibrary textbook 모양) — null 허용
+ * @param fallbackName 교재 정보가 없을 때 쓸 실명(반 이름 등)
+ */
+export function formatTextbookTitle(tb, fallbackName = '') {
+  if (!tb || !tb.name) return fallbackName || ''
+  return tb.publisherName ? `${tb.publisherName}(${tb.name})` : tb.name
+}
+
+/**
+ * 완주한 교재 → 두꺼운 책. titleByClassId(Map classId→표시 제목)는
+ * 호출자가 wordLibrary 캐시에서 만들어 주입 — 이 모듈은 I/O 0 순수 유지.
+ * 제목이 없으면 실제 반 이름(className)으로 폴백(실명만, 지어내지 않음).
+ * @param textbooksDone [{classId, className}] (useAttachment 파생)
+ * @param wordsByUnit 그 교재의 유닛들 — wordCount 합산용
+ */
+export function getTextbookBooks(textbooksDone, wordsByUnit, titleByClassId = null) {
+  const totalWords = (wordsByUnit || []).reduce((n, u) => n + (u.words || []).length, 0)
+  return (textbooksDone || []).map((t) => ({
+    classId: t.classId,
+    title: (titleByClassId && titleByClassId.get && titleByClassId.get(t.classId)) || t.className || '',
+    wordCount: totalWords,
+    coverEmoji: '📖',
+  }))
+}
