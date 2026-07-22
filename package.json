@@ -21,6 +21,7 @@
     "verify:word-assignment": "node tests/harness/runWordAssignment.mjs",
     "verify:audio-tts": "node tests/harness/runAudioTts.mjs",
     "verify:daily-ritual": "node tests/harness/runDailyRitual.mjs",
+    "verify:attachment": "node tests/harness/runAttachment.mjs",
     "verify:all": "node tests/harness/runAll.mjs",
     "wiki:search": "node scripts/wikiSearch.mjs",
     "dashboard": "node scripts/generateDashboard.mjs"
