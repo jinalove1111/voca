@@ -1,0 +1,28 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현 — 관리자 학생 관리 디렉터리(아코디언/검색/필터) + 반↔교재 연결 패널",
+  "task_id": "admin-directory-v1",
+  "task": "학생 관리 섹션을 반 그룹 아코디언+검색+퀵필터 구조로 재구성(StudentDirectory.jsx 추출), 학생 카드 컴팩트화+⋯ 오버플로 메뉴, ClassTextbookLinks 패널 신설 — 동작(핸들러)은 전부 그대로, 렌더링만 재구성",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-22T00:00:00+09:00",
+  "updated_at": "2026-07-22T01:00:00+09:00",
+  "files_owned": [
+    ".ai-status/implementer-admin-directory-v1.json",
+    "src/components/AdminScreen.jsx",
+    "src/components/admin/StudentDirectory.jsx",
+    "src/components/admin/ClassTextbookLinks.jsx"
+  ],
+  "files_read": [
+    "CLAUDE.md",
+    "src/utils/wordLibrary.js",
+    "src/hooks/useStudent.js",
+    "src/components/admin/TextbookAssignmentPanel.jsx",
+    "package.json",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "완료. 커밋 3건: (1) 59fb869 StudentDirectory 추출 — 반 그룹 아코디언(단일 펼침, 학생 카드는 펼친 반만 렌더)+검색(학생/반/교재/출판사, getClassTextbooks 동기 캐시)+퀵필터(전체/PIN완료/PIN미설정/반미배정/최근등록)+sessionStorage 세션 기억, 핸들러는 전부 기존 코드 verbatim 이동. (2) 8ab43c3 카드 컴팩트화(whitespace-nowrap/break-keep, 40px 터치 타겟)+파괴적 액션(학생 삭제/PIN 삭제) ⋯ 오버플로 메뉴 이동(핸들러 동일). (3) 10d43f4 ClassTextbookLinks — 반 관리 탭 펼침 영역에 반↔교재 연결/해제 패널(자체 교재는 해제 불가 배지, 교재 모드 꺼짐이면 안내만, wordLibrary 기존 export만 소비). '최근 등록' 필터는 학생 캐시에 created_at이 없어(refreshStudents select에 미포함, wordLibrary.js 수정 금지) 등록순(order created_at) 최신 20명 폴백으로 구현 — 파일 주석+UI 문구에 명시. npm run build 3회 전부 통과, verify:admin(6 스크립트) PASS, verify:student(4 스크립트) PASS. 시각/모바일 확인은 브라우저 자동화가 없어 코드 레벨(className 감사)만 수행. handoff.md append는 소유 파일이 아니라 미수행 — docs-maintainer에 위임.",
+  "blocker": null,
+  "next_action": "qa-reviewer: 관리자 화면 실기기(모바일 폭) 확인 — 아코디언/검색/필터/⋯ 메뉴/교재 연결 패널. docs-maintainer: handoff.md/ROADMAP.md append."
+}
