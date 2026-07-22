@@ -93,6 +93,10 @@ export default function StudentDirectory({ adminPin }) {
   const [pinStatus, setPinStatus] = useState({})
   const [allowBusyId, setAllowBusyId] = useState(null)
   const [unlockBusyId, setUnlockBusyId] = useState(null)
+  // 파괴적 액션(학생 삭제/PIN 삭제)을 담는 카드별 "⋯" 오버플로 메뉴 —
+  // 열려 있는 카드 id(한 번에 하나). 핸들러는 기존 handleRemove/
+  // handleClearPin 그대로, 버튼 위치만 메뉴 안으로 이동(오터치 방지).
+  const [menuOpenId, setMenuOpenId] = useState(null)
   const classList = getClassNames()
 
   // ── 디렉터리 렌더링 상태(2026-07-22 신규 — 동작 아님, 표시만) ──────────
@@ -439,22 +443,27 @@ export default function StudentDirectory({ adminPin }) {
   const pinLoaded = Object.keys(pinStatus).length > 0
   const pinDoneCount = (list) => list.filter(s => pinStatus[s.id]?.hasPinHash).length
 
-  // ── 학생 카드 (기존 카드 JSX 그대로 — 아코디언/검색 양쪽에서 재사용) ──
+  // ── 학생 카드 (아코디언/검색 양쪽에서 재사용) ────────────────────────
+  // 2026-07-22 컴팩트화: 세로 간격 축소(px-3 py-2.5), 한국어 라벨 세로
+  // 줄바꿈 방지(whitespace-nowrap/break-keep), 터치 타겟 최소 40px
+  // (min-h-[40px]/w-10 h-10). 파괴적 액션 2개(학생 삭제/PIN 삭제)는 "⋯"
+  // 오버플로 메뉴 뒤로 이동 — 핸들러(handleRemove/handleClearPin)는 그대로.
   const renderStudentCard = (s) => {
     const status = pinStatus[s.id] // undefined면 아직 로딩 전이거나 v1.7 SQL 미적용
+    const menuOpen = menuOpenId === s.id
     return (
-      <div key={s.id} className="bg-gray-50 rounded-xl px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+      <div key={s.id} className="bg-gray-50 rounded-xl px-3 py-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-2 min-w-0">
             <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSelected(s.id)}
-              className="w-4 h-4 accent-blue-500" />
-            <div>
-              <p className="font-black text-gray-800">{s.name}</p>
-              <p className={`text-xs ${s.className ? 'text-gray-400' : 'text-red-500 font-bold'}`}>
+              className="w-4 h-4 mt-1 accent-blue-500 flex-shrink-0" />
+            <div className="min-w-0">
+              <p className="font-black text-gray-800 break-keep">{s.name}</p>
+              <p className={`text-xs break-keep ${s.className ? 'text-gray-400' : 'text-red-500 font-bold'}`}>
                 {[s.className, s.unitName].filter(Boolean).join(' · ') || '⚠️ 반 미배정'}
               </p>
               {status && (
-                <p className="text-[11px] font-bold mt-0.5">
+                <p className="text-[11px] font-bold mt-0.5 whitespace-nowrap">
                   {status.locked && <span className="text-red-500">🔒 잠김 · </span>}
                   {status.hasPinHash
                     ? <span className="text-green-600">✅ PIN 설정됨</span>
@@ -469,7 +478,7 @@ export default function StudentDirectory({ adminPin }) {
                   최소 UI). 컬럼 부재/미실행 SQL이면 house_id가
                   항상 null이라 "미배정"으로만 보임(크래시 없음). */}
               <label className="inline-flex items-center gap-1 mt-0.5">
-                <span className="text-[11px] text-gray-400 font-bold">
+                <span className="text-[11px] text-gray-400 font-bold whitespace-nowrap">
                   {getHouseById(s.houseId) ? `${getHouseById(s.houseId).emoji} ${getHouseById(s.houseId).name}` : '하우스 미배정'}
                 </span>
                 <select value={s.houseId ?? ''} disabled={houseBusyId === s.id}
@@ -481,43 +490,63 @@ export default function StudentDirectory({ adminPin }) {
               </label>
             </div>
           </div>
-          <div className="flex gap-2 flex-wrap justify-end">
+          <div className="flex gap-1.5 flex-wrap justify-end items-center flex-shrink-0">
             {status && !status.hasPinHash && (
               <button onClick={() => handleTogglePinSetupAllowed(s.id, s.name, !status.pinSetupAllowed)}
                 disabled={allowBusyId === s.id}
-                className="bg-yellow-100 text-yellow-700 font-bold px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-50">
+                className="bg-yellow-100 text-yellow-700 font-bold px-2.5 min-h-[40px] rounded-xl text-xs btn-press disabled:opacity-50 whitespace-nowrap">
                 {allowBusyId === s.id ? '⏳' : status.pinSetupAllowed ? '🔓 허용 취소' : '🔓 설정 허용'}
               </button>
             )}
             {status?.locked && (
               <button onClick={() => handleUnlockPin(s.id, s.name)} disabled={unlockBusyId === s.id}
-                className="bg-red-100 text-red-600 font-bold px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-50">
+                className="bg-red-100 text-red-600 font-bold px-2.5 min-h-[40px] rounded-xl text-xs btn-press disabled:opacity-50 whitespace-nowrap">
                 {unlockBusyId === s.id ? '⏳' : '🔒 잠금 해제'}
               </button>
             )}
             <button onClick={() => handleResetPin(s.id, s.name)} disabled={pinResetId === s.id}
-              className="bg-yellow-100 text-yellow-700 font-bold px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-50">
+              className="bg-yellow-100 text-yellow-700 font-bold px-2.5 min-h-[40px] rounded-xl text-xs btn-press disabled:opacity-50 whitespace-nowrap">
               {pinResetId === s.id ? '⏳' : '🔑 PIN 초기화'}
             </button>
-            {status?.hasPinHash && (
-              <button onClick={() => handleClearPin(s.id, s.name)} disabled={pinClearId === s.id}
-                className="bg-red-50 text-red-500 font-bold px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-50">
-                {pinClearId === s.id ? '⏳' : '🗑 PIN 초기화(삭제)'}
-              </button>
-            )}
             <button onClick={() => startEdit(s.id)}
-              className="bg-blue-100 text-blue-600 font-bold px-3 py-2 rounded-xl text-xs btn-press">반 배정</button>
+              className="bg-blue-100 text-blue-600 font-bold px-2.5 min-h-[40px] rounded-xl text-xs btn-press whitespace-nowrap">반 배정</button>
             {/* v2.9 다중 교재 — 기본 반이 있어야 의미가 있으므로
                 (반 미배정 학생은 "반 배정"부터 먼저) 이 학생이
                 이미 어떤 반에 속해 있을 때만 노출. */}
             {s.className && (
               <button onClick={() => setTextbookManaging(textbookManaging === s.id ? null : s.id)}
-                className="bg-purple-100 text-purple-600 font-bold px-3 py-2 rounded-xl text-xs btn-press">
+                className="bg-purple-100 text-purple-600 font-bold px-2.5 min-h-[40px] rounded-xl text-xs btn-press whitespace-nowrap">
                 📚 교재 관리
               </button>
             )}
-            <button onClick={() => handleRemove(s.id, s.name)}
-              className="bg-red-100 text-red-500 font-bold px-3 py-2 rounded-xl text-xs btn-press">삭제</button>
+            {/* "⋯" 오버플로 메뉴 — 파괴적 액션(학생 삭제 handleRemove /
+                PIN 삭제 handleClearPin)만 이 안에. 핸들러·확인 다이얼로그는
+                기존 그대로, 버튼 위치만 이동(실수 터치로 즉시 confirm이
+                뜨는 것 자체를 줄이기 위해). 바깥 클릭 시 닫힘(투명 배경). */}
+            <div className="relative">
+              <button type="button" aria-label="더보기 (삭제 등)" aria-expanded={menuOpen}
+                onClick={() => setMenuOpenId(menuOpen ? null : s.id)}
+                className={`w-10 h-10 flex items-center justify-center rounded-xl font-black text-gray-500 btn-press ${menuOpen ? 'bg-gray-200' : 'bg-gray-100'}`}>
+                ⋯
+              </button>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setMenuOpenId(null)} />
+                  <div className="absolute right-0 top-full mt-1 z-20 min-w-[11rem] bg-white border-2 border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                    {status?.hasPinHash && (
+                      <button onClick={() => { setMenuOpenId(null); handleClearPin(s.id, s.name) }} disabled={pinClearId === s.id}
+                        className="w-full min-h-[40px] px-3 py-2 text-left text-xs font-bold text-red-500 hover:bg-red-50 disabled:opacity-50 whitespace-nowrap btn-press">
+                        {pinClearId === s.id ? '⏳ 처리 중...' : '🗑 PIN 초기화(삭제)'}
+                      </button>
+                    )}
+                    <button onClick={() => { setMenuOpenId(null); handleRemove(s.id, s.name) }}
+                      className="w-full min-h-[40px] px-3 py-2 text-left text-xs font-bold text-red-500 hover:bg-red-50 whitespace-nowrap btn-press">
+                      🗑 학생 삭제
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
         {textbookManaging === s.id && (
