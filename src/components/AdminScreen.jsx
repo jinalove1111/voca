@@ -25,6 +25,7 @@ import StudentDirectory from './admin/StudentDirectory'
 // v3.1 반↔교재 연결 관리(2026-07-22) — 반 관리 탭에서 반을 펼쳤을 때
 // 그 반에 연결된 교재를 연결/해제하는 패널(교재 모드 꺼짐이면 안내만).
 import ClassTextbookLinks from './admin/ClassTextbookLinks'
+import AnalyticsPanel from './admin/AnalyticsPanel'
 
 const wordSlug = (word) => word.toLowerCase().replace(/\s+/g, '_')
 
@@ -1202,6 +1203,12 @@ export default function AdminScreen({ onBack }) {
         {tab === 'classes' && (
           <div className="space-y-3">
             <SeasonPanel adminPin={pin} />
+
+            {/* 익명 관찰(2026-07-23) — 접힌 섹션, 열 때만 조회 */}
+            <details className="bg-white rounded-3xl card-shadow">
+              <summary className="cursor-pointer select-none list-none p-5 font-black text-gray-700">📊 관찰 (어떤 기능이 아이를 돌아오게 하나)</summary>
+              <div className="px-5 pb-5"><AnalyticsPanel /></div>
+            </details>
 
             <SpellingReviewQueuePanel onChanged={refresh} />
 
