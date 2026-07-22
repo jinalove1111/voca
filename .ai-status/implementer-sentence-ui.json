@@ -1,0 +1,35 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "sentence-ui",
+  "task": "Sentence Learning v3.4 Phase B — 학생 UI(SentencesTab/SentenceLearningFlow, WordBrowser 탭) — readingStudentUI 플래그(기본 false) 게이팅, 프로덕션 화면 변화 0",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-23T00:00:00+09:00",
+  "updated_at": "2026-07-23T00:00:00+09:00",
+  "files_owned": [
+    ".ai-status/implementer-sentence-ui.json",
+    "src/components/SentencesTab.jsx",
+    "src/components/SentenceLearningFlow.jsx",
+    "src/components/WordBrowser.jsx",
+    "src/App.jsx"
+  ],
+  "files_read": [
+    "CLAUDE.md",
+    "src/utils/sentenceLearning.js",
+    "src/utils/sentenceProgressApi.js",
+    "src/utils/readingApi.js",
+    "src/utils/readingModel.js",
+    "src/utils/speech.js",
+    "src/utils/wordLibrary.js",
+    "src/utils/paulReactions.js",
+    "src/config/features.js",
+    "src/components/GuidedSession.jsx",
+    "src/components/HeroReaction.jsx",
+    ".ai-status/implementer-sentence-engine.json",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "커밋 2개 완료: 92213d9(SentenceLearningFlow — 6단계 풀스크린 플로우, 엔진 소비만·재구현 0, 아동 UX 6요건 반영), 594e74a(SentencesTab + WordBrowser [단어]/[문장] 탭 + App studentId/unitId 스레딩 — 전부 readingStudentUI 기본 false 게이팅, 플래그 꺼짐이면 탭 바 비렌더 + 기존 단어 화면 원본 JSX 프래그먼트 래핑만으로 DOM 변화 0). build clean, verify: sentence-learning 49 PASS · reading 21 PASS · student PASS · persistence PASS · attachment 123 PASS. 하네스 신규 추가 없음(새 순수 헬퍼 0 — 전부 엔진 소비). 커밋 순서는 지시(탭 먼저)와 반대인 플로우 먼저 — SentencesTab이 플로우를 import하므로 커밋별 build clean을 지키기 위한 의도적 순서 변경. scripts/checkV34Schema.mjs 미추적 파일은 이 세션 소유 아님(미접촉). push 안 함(지시).",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 → 운영자가 supabase_v3_4_sentence_learning.sql 실행 + 테스트 기기에서 readingStudentUI 플래그 ON으로 실기기 확인 후 롤아웃 판단"
+}
