@@ -1,5 +1,56 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-22 (3차, 기존 학생 다중 교재 전환 불가 버그 — 근본 원인 확정 + 수정 + 라이브 검증 + 배포)_
+_최종 갱신: 2026-07-22 (4차, 도메인 모델 교정: 반→교재→유닛→단어 — v3.1 교재 레이어 구현 + 배포, SQL 실행 대기)_
+
+## 2026-07-22 (4차) — 도메인 모델 교정: 반(사람) → 교재(출판사) → 유닛 → 단어
+
+### 배경 (운영자 교정 지시 — 이전 해석의 정정)
+
+다중 교재의 진짜 요구는 "학생이 여러 반"이 아니라 "반 하나 안에 여러
+교재"였다. 실측: 교재 정체성이 반 이름에 박혀 있었음("중2 능률 김기택"/
+"중2 천재 이상기"는 교재, "중2 YMB 박준원"이 사람 반). 목표: 박준원 반의
+송 학생이 반 변경/계정 중복 없이 김기택↔천재를 전환 학습.
+
+### 설계 (무파괴 — 훅이 DROP을 차단한 것이 더 나은 설계로 이어짐)
+
+- 신규 `textbooks`(name/publisher_name/owner_class_id) + `class_textbooks`
+  (반↔교재 다대다, enabled/sort_order) + `units.textbook_id` +
+  `student_class_assignments.textbook_id` — 전부 추가·멱등, DROP 0.
+- **유닛 보유 반 = 교재의 소유 컨테이너**로 재해석 → 학생별 교재 상태는
+  검증된 v2.9 테이블을 행의 class_id=컨테이너로 그대로 재사용(기존
+  unique(student_id,class_id) 제약 제거 불필요). 알려진 한계(정직 기록):
+  한 컨테이너가 직접 소유하는 교재는 1개 — 새 교재는 오늘처럼 새
+  컨테이너로 만들고 사람 반에 연결(제약 제거는 필요 시 운영자 승인 하에
+  별도 마이그레이션).
+- **의미론 교정 핵심**: `setPrimaryTextbook`은 students.class_id(사람 반)를
+  절대 바꾸지 않는다 — 숙제/입실시험/게임화 설정은 계속 사람 반을 따른다.
+  students.current_unit_id(권위 유닛)만 동기화. 나가는 교재 진도 캡처는
+  v2.9 검증 로직 재사용.
+- 클라이언트 폴백(규칙 9): 테이블 부재 시 "유닛 보유 반=자동 교재 1개"
+  합성 — 오늘과 100% 동일 동작(선택기 비렌더). 유령 행 수리(3차)는
+  레거시 모드 전용으로 게이트(교재 모드에선 반≠컨테이너가 정상).
+
+### 커밋 (12685c1..9987d38, push·배포 SHA-256 검증 완료 — index-DfxCrmvz.js)
+
+`12685c1` SQL / `5434bcc` wordLibrary 교재 레이어 / `e474180` 선택기 UI
+계층(반 라벨 불변) / `9987d38` LIVE 검증 스크립트(10개 테스트 매핑).
+
+### 검증 상태
+
+- SQL 실행 전 회귀: 레거시 v2.9 라이브 e2e 23/23 PASS, verify:student/
+  unit/persistence/word-assignment PASS, 교재 테스트는 의도대로 SKIP.
+- **운영자 액션 필요**: ① `supabase_v3_1_textbooks.sql` 실행(리뷰 쿼리
+  a~c 확인 — 출판사 NULL 교재는 수동 분류 대상 보고) ② 박준원 반에
+  김기택/천재 교재 연결(SQL 파일 하단 (d) 스니펫 또는 추후 관리자 UI)
+  ③ `node scripts/buildWordLibBundle.mjs && WORDLIB_BUNDLE=scripts/.tmp/wordLibrary.bundle.mjs node scripts/testTextbookModelLive.mjs`
+  로 송 시나리오 전체(전환/유닛 분리/누수 없음/무손실) 자동 검증.
+
+### 명시적 보류(후속)
+
+- 관리자 "교재 연결" UI(함수 linkTextbookToClass/unlinkTextbookFromClass는
+  구현·export됨 — 화면만 미구현, 당장은 SQL 스니펫으로 연결).
+- 업로드 UI의 교재 명시 표시(현재는 컨테이너 반 업로드 = 교재 업로드).
+- 사람 반 숙제에 연결 교재 단어를 섞는 배정(현재 숙제는 사람 반 유닛 축).
+- 한 컨테이너 다(多)교재 직접 소유(unique 제약 제거 필요 — 운영자 승인 건).
 
 ## 2026-07-22 (3차) — 기존 학생 다중 교재 전환 불가 버그 수정 (유령 primary 행 + 레거시 유닛)
 
