@@ -47,6 +47,12 @@ import { fetchCurrentSeason } from '../utils/seasonApi'
 // 아무것도 추가하지 않는다.
 import { hatById } from '../utils/attachment/hatSystem'
 import { pickPaulMemory } from '../utils/attachment/paulMemory'
+// Paul Town v2.0(2026-07-22) — 오늘의 발견(하루 1개 결정론 메시지, 폴의
+// 기억 카드 안의 한 줄). 순수 파생 함수 — Dashboard 상태 추가 없음.
+import { pickTodaysDiscovery } from '../utils/attachment/paulTown'
+// 모자 수여식(hatCeremony 플래그) — 새 모자 획득 순간의 전면 오버레이.
+// 표시 여부는 useAttachment의 세션 로컬 큐(pendingCeremonyHat)가 전담.
+import HatCeremony from './HatCeremony'
 import { isFeatureEnabled } from '../config/features'
 
 const GOAL = 5
@@ -218,7 +224,7 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 
 // P0(2026-07-15): student(이름 문자열) 대신 studentId(식별자)+studentName
 // (표시용)을 따로 받는다 — getStudentClass/getStudentUnit은 이제 id 기반.
-export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, textbookOptions, currentTextbookId, onTextbookSwitch }) {
+export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, completedUnits, completedTextbooks, pendingCeremonyHat, onDismissCeremony, textbookOptions, currentTextbookId, onTextbookSwitch }) {
   const { stars, stickerTypes, activeMissions, dailyProgress, liveMissionsCompleted, streak, cleared, ticketBalance, redeemTicketReward, equippedHatId } = studentData
   // 애착 시스템(2026-07-22) — 학생 아바타의 장착 모자. 미장착이면 기존
   // 기본 아바타(👑) 그대로 — 아무것도 안 얻은/안 고른 학생 화면은 변화 0.
@@ -226,8 +232,19 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
   const equippedHat = equippedHatId ? hatById(equippedHatId) : null
   // 폴의 기억 — 실데이터 기반 템플릿 한 줄(순수 함수, AI/무작위 없음).
   // attachmentStats가 아직 없으면(구버전 App.jsx 경로) 렌더 생략.
+  // Paul Town v2.0(paulMemoryV2 플래그) — 같은 pickPaulMemory에 더 풍부한
+  // ctx(유닛/교재 완주 + 수여식 대기 중인 새 모자 이름)만 추가로 넘긴다.
+  // 플래그 OFF면 기존 v1 ctx 그대로(같은 함수, ctx만 적게 — v1 동작 폴백).
+  const memoryCtx = isFeatureEnabled('paulMemoryV2')
+    ? { wordTextById, studentName, completedUnits, completedTextbooks, recentHatName: pendingCeremonyHat?.name }
+    : { wordTextById }
   const paulMemory = isFeatureEnabled('attachmentPaulMemory') && attachmentStats
-    ? pickPaulMemory(attachmentStats, { wordTextById })
+    ? pickPaulMemory(attachmentStats, memoryCtx)
+    : null
+  // 오늘의 발견(todaysDiscovery 플래그) — 하루 1개, dayKey 해시 결정론
+  // 메시지. 별도 위젯이 아니라 폴의 기억 카드 안의 작은 한 줄(<5초 읽기).
+  const todaysDiscovery = isFeatureEnabled('todaysDiscovery') && attachmentStats
+    ? pickTodaysDiscovery(attachmentStats, memoryCtx)
     : null
   const { rankState, loading: rankLoading } = usePaulRank(studentId)
 
@@ -411,13 +428,24 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
 
         {/* 폴의 기억(애착 시스템) — 실존 데이터만 말하는 템플릿 한 줄.
             폴이 학생의 어제/성장을 기억하는 애착 고리. 데이터가 없으면
-            pickPaulMemory가 정직한 인사 폴백을 반환(지어내기 없음). */}
-        {paulMemory && (
+            pickPaulMemory가 정직한 인사 폴백을 반환(지어내기 없음).
+            오늘의 발견(Paul Town v2.0)도 이 같은 카드 안의 한 줄 — 별도
+            위젯을 추가하지 않는다(홈 화면 ≥80% 불변 원칙). */}
+        {(paulMemory || todaysDiscovery) && (
           <div className="bg-white rounded-3xl card-shadow p-4 flex items-center gap-3">
-            <span className="text-2xl flex-shrink-0">{paulMemory.emoji}</span>
+            <span className="text-2xl flex-shrink-0">{(paulMemory || todaysDiscovery).emoji}</span>
             <div className="min-w-0">
-              <p className="text-xs font-black text-purple-400">🎩 폴의 기억</p>
-              <p className="text-sm font-bold text-gray-600">{paulMemory.text}</p>
+              {paulMemory && (
+                <>
+                  <p className="text-xs font-black text-purple-400">🎩 폴의 기억</p>
+                  <p className="text-sm font-bold text-gray-600">{paulMemory.text}</p>
+                </>
+              )}
+              {todaysDiscovery && (
+                <p className={`text-xs font-bold text-amber-600 ${paulMemory ? 'mt-1' : ''}`}>
+                  💡 오늘의 발견: {todaysDiscovery.emoji} {todaysDiscovery.text}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -584,6 +612,13 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
           </div>
         )}
       </div>
+
+      {/* 모자 수여식(Paul Town v2.0, hatCeremony 플래그) — 새 모자 획득
+          순간의 전면 오버레이(GiftReveal 시각 패턴). 큐(useAttachment
+          세션 로컬)가 빌 때까지 한 번에 하나씩. */}
+      {isFeatureEnabled('hatCeremony') && pendingCeremonyHat && (
+        <HatCeremony hat={pendingCeremonyHat} onEquip={studentData.equipHat} onDismiss={onDismissCeremony} />
+      )}
     </div>
   )
 }

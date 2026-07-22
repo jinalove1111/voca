@@ -473,6 +473,8 @@ function AppInner({ studentId, studentName, onLogout }) {
           onUnitSwitch={handleUnitSwitch}
           onStartGuided={startGuidedSession}
           attachmentStats={attachment.stats} wordTextById={attachment.wordTextById}
+          completedUnits={attachment.unitsDone} completedTextbooks={attachment.textbooksDone}
+          pendingCeremonyHat={attachment.pendingCeremonyHat} onDismissCeremony={attachment.dismissCeremony}
           textbookOptions={textbookOptions} currentTextbookId={currentTextbookOptionId}
           onTextbookSwitch={handleTextbookSwitch} />
       )}

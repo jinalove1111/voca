@@ -8,7 +8,7 @@
 //
 // 판정은 전부 순수 함수(hatSystem/milestones) — 이 훅은 배선만 한다.
 // 반영 API는 멱등(useStudent가 키 중복을 무시)이라 몇 번 불려도 안전.
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { deriveAttachmentStats, completedUnits } from '../utils/attachment/attachmentCore'
 import { evaluateHatUnlocks, hatById } from '../utils/attachment/hatSystem'
 import { detectNewMilestones } from '../utils/attachment/milestones'
@@ -51,6 +51,14 @@ export function useAttachment(studentId, studentData) {
       : []
   }, [lib, unitsDone])
 
+  // 모자 수여식 큐(Paul Town v2.0, 2026-07-22) — 세션 로컬 state만
+  // (영속 없음 — 새 레코드 필드 금지 규칙 그대로). "무한 재생 안 됨"은
+  // 별도 '봤는지' 플래그가 아니라 구조로 보장된다: grantHats는 멱등이고
+  // evaluateHatUnlocks의 newHats는 실제 획득 순간(인벤토리에 아직 없는데
+  // 규칙 충족)에만 비지 않으므로, 큐는 그 순간에만 채워진다. 여러 개면
+  // 한 번에 하나씩(dismissCeremony로 shift).
+  const [ceremonyQueue, setCeremonyQueue] = useState([])
+
   // 판정 → 반영: 학생당·마운트당 1회(StrictMode 이중 실행은 반영 API의
   // 멱등성이 흡수). restoreChecked 전에는 판정하지 않는다 — 클라우드 복원
   // 전의 빈 record로 판정하면 "얻을 게 없다"는 결론이 나올 뿐 오지급은
@@ -62,7 +70,12 @@ export function useAttachment(studentId, studentData) {
     const ctx = { completedUnits: unitsDone, completedTextbooks: textbooksDone }
     const ownedIds = hatInventory.map((h) => h.hatId)
     const newHats = evaluateHatUnlocks(stats, ctx, ownedIds)
-    if (newHats.length > 0) grantHats(newHats)
+    if (newHats.length > 0) {
+      grantHats(newHats)
+      // 수여식 큐 적재 — 카탈로그 엔트리(색/이름/출처 라벨 포함)로 변환.
+      // 표시 여부(hatCeremony 플래그)는 Dashboard가 게이트한다.
+      setCeremonyQueue(newHats.map((e) => hatById(e.hatId)).filter(Boolean))
+    }
     const newHatMeta = newHats.map((e) => {
       const h = hatById(e.hatId)
       return { hatId: e.hatId, name: h?.name || e.hatId, emoji: h?.emoji || '🎩' }
@@ -80,5 +93,9 @@ export function useAttachment(studentId, studentData) {
     return m
   }, [lib])
 
-  return { stats, lib, unitsDone, textbooksDone, wordTextById }
+  // 수여식 — 큐의 첫 모자 하나만 노출, 닫으면 다음 모자로(한 번에 하나씩).
+  const pendingCeremonyHat = ceremonyQueue[0] || null
+  const dismissCeremony = useCallback(() => setCeremonyQueue((q) => q.slice(1)), [])
+
+  return { stats, lib, unitsDone, textbooksDone, wordTextById, pendingCeremonyHat, dismissCeremony }
 }
