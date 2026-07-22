@@ -23,6 +23,7 @@
     "verify:daily-ritual": "node tests/harness/runDailyRitual.mjs",
     "verify:attachment": "node tests/harness/runAttachment.mjs",
     "verify:analytics": "node tests/harness/runAnalytics.mjs",
+    "verify:reading": "node tests/harness/runReading.mjs",
     "verify:all": "node tests/harness/runAll.mjs",
     "wiki:search": "node scripts/wikiSearch.mjs",
     "dashboard": "node scripts/generateDashboard.mjs"

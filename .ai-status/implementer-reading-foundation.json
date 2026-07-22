@@ -1,0 +1,33 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "reading-foundation",
+  "task": "Reading Foundation v3.3 — 지문(passages/passage_sentences) 스키마 + 데이터 레이어 + 관리자 지문 편집기 (학생 학습 UI는 의도적으로 범위 밖, readingStudentUI=false 플래그만)",
+  "status": "working",
+  "progress": 10,
+  "started_at": "2026-07-23T00:00:00+09:00",
+  "updated_at": "2026-07-23T00:00:00+09:00",
+  "files_owned": [
+    "supabase_v3_3_reading.sql",
+    "src/utils/readingModel.js",
+    "src/utils/readingApi.js",
+    "src/components/admin/PassageEditor.jsx",
+    "src/components/AdminScreen.jsx",
+    "src/config/features.js",
+    "tests/harness/runReading.mjs",
+    "package.json",
+    ".ai-status/implementer-reading-foundation.json"
+  ],
+  "files_read": [
+    "CLAUDE.md",
+    "supabase_v3_1_textbooks.sql",
+    "src/utils/seasonApi.js",
+    "src/utils/wordLibrary.js",
+    "src/components/admin/ClassTextbookLinks.jsx",
+    "tests/harness/runAnalytics.mjs",
+    ".ai-status/README.md"
+  ],
+  "summary": "패턴 조사 완료(v3.1 SQL RLS 관례, isMissingTableError, ClassTextbookLinks 패널 스타일, runAnalytics 하네스 구조). 커밋 1(SQL+순수모델+하네스)부터 착수.",
+  "blocker": null,
+  "next_action": "커밋 1: supabase_v3_3_reading.sql + readingModel.js + runReading.mjs + verify:reading 스크립트"
+}
