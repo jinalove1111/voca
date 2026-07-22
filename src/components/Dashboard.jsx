@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getStudentClass, getStudentClassId, getStudentUnit, getClassNames, getClassUnitNames, getTodaysAssignmentWordIds, getClassSettings, getClassIdByName, getStudentById, fetchHouseWeeklyScore, fetchHouseSeasonScore } from '../utils/wordLibrary'
+import { getStudentClass, getStudentClassId, getStudentUnit, getClassNames, getClassUnitNames, getTodaysAssignmentWordIds, getClassSettings, getClassIdByName, getStudentById, fetchHouseWeeklyScore, fetchHouseSeasonScore, isTextbookMode, getStudentPrimaryTextbook, getTextbookUnits } from '../utils/wordLibrary'
 // v2.9(2026-07-21, decision 0004 다중 교재) — 2개 이상 교재가 배정된
 // 학생에게만 나타나는 선택기. 0/1개면 컴포넌트 자체가 아무것도 렌더하지
 // 않는다(TextbookSelector.jsx 참고) — 기존 294명 단일-반 학생 화면은
@@ -218,7 +218,7 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 
 // P0(2026-07-15): student(이름 문자열) 대신 studentId(식별자)+studentName
 // (표시용)을 따로 받는다 — getStudentClass/getStudentUnit은 이제 id 기반.
-export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, textbookAssignments, onTextbookSwitch }) {
+export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, textbookOptions, currentTextbookId, onTextbookSwitch }) {
   const { stars, stickerTypes, activeMissions, dailyProgress, liveMissionsCompleted, streak, cleared, ticketBalance, redeemTicketReward, equippedHatId } = studentData
   // 애착 시스템(2026-07-22) — 학생 아바타의 장착 모자. 미장착이면 기존
   // 기본 아바타(👑) 그대로 — 아무것도 안 얻은/안 고른 학생 화면은 변화 0.
@@ -298,7 +298,12 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
   // 다음 로그인/새로고침에도 유지)로 위임. 전환 중에는 셀렉트를 잠가
   // 연타로 인한 중복 쓰기를 막는다. 진행도(별/스트릭/스티커/오늘 미션)는
   // 어떤 것도 리셋되지 않는다 — useStudent 레코드는 전혀 안 건드림.
-  const unitNames = className && !classDeleted ? getClassUnitNames(className) : []
+  // v3.1 교재 모드 — 유닛 목록은 현재 교재의 유닛(반이 아니라). 합성/레거시
+  // 모드에서는 기존 반 기반 목록 그대로(변화 0). 계층: 반 → 교재 → 유닛.
+  const primaryTb = isTextbookMode() ? getStudentPrimaryTextbook(studentId) : null
+  const unitNames = primaryTb
+    ? getTextbookUnits(primaryTb.id).map((u) => u.name)
+    : (className && !classDeleted ? getClassUnitNames(className) : [])
   const [unitSwitching, setUnitSwitching] = useState(false)
   const [unitSwitchError, setUnitSwitchError] = useState('')
   const handleUnitChange = async (nextUnit) => {
@@ -320,13 +325,12 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
   // 렌더하지 않으므로 이 핸들러는 그 경우 절대 호출되지 않는다.
   const [textbookSwitching, setTextbookSwitching] = useState(false)
   const [textbookSwitchError, setTextbookSwitchError] = useState('')
-  const currentClassId = getStudentClassId(studentId)
-  const handleTextbookChange = async (nextClassId) => {
-    if (!onTextbookSwitch || nextClassId === currentClassId) return
+  const handleTextbookChange = async (nextId) => {
+    if (!onTextbookSwitch || nextId === currentTextbookId) return
     setTextbookSwitching(true)
     setTextbookSwitchError('')
     try {
-      await onTextbookSwitch(nextClassId)
+      await onTextbookSwitch(nextId)
     } catch (err) {
       setTextbookSwitchError('교재 전환에 실패했어요. 잠시 후 다시 시도해주세요. (' + (err?.message || err) + ')')
     } finally {
@@ -366,8 +370,8 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
             <p className="text-purple-200 text-xs mt-0.5">{equippedHat.emoji} {equippedHat.name} 착용 중</p>
           )}
           <TextbookSelector
-            assignments={textbookAssignments}
-            currentClassId={currentClassId}
+            options={textbookOptions}
+            currentId={currentTextbookId}
             switching={textbookSwitching}
             error={textbookSwitchError}
             onSwitch={handleTextbookChange}

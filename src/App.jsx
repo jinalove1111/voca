@@ -21,7 +21,7 @@ import { useAttachment } from './hooks/useAttachment'
 import { pickNextGame } from './utils/matchGame'
 import { assignDirections } from './utils/entranceTest'
 import { logSpellingReview } from './utils/spellingReviewApi'
-import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getClassSettings, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment } from './utils/wordLibrary'
+import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getClassSettings, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentPrimaryTextbook, getStudentClassId, getClassNames, getClassIdByName } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech, getMicStream } from './utils/speech'
 
 // 2026-07-10 성능 최적화: AdminScreen은 xlsx(엑셀 업로드)를 포함해 학생은
@@ -239,17 +239,39 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 그대로). handleUnitSwitch와 마찬가지로 진행도 레코드(별/스트릭/스티커/
   // 오늘 미션/XP/코인/티켓)는 전혀 건드리지 않는다 — 그 자산들은 계정
   // 전역이라 교재 전환으로 리셋되지 않는다(요구사항 6).
-  const handleTextbookSwitch = async (classId) => {
-    await setPrimaryAssignment(studentId, classId)
-    // 요구사항 5 — "마지막으로 쓴 교재"를 로컬 진행도 블롭에 기억
-    // (ticketLedger와 동일 패턴, 새 DB 컬럼 없음). 서버(students.class_id/
-    // is_primary)가 이미 권위 있는 값이므로 이 호출이 실패해도(예: 저장
-    // 공간 부족) 기능은 전혀 깨지지 않는다 — 다음 로그인 첫 렌더 힌트용.
-    setLastTextbookClassId(classId)
+  const handleTextbookSwitch = async (optionId) => {
+    // v3.1 — 교재 모드면 optionId는 textbookId(사람 반 불변 전환), 레거시
+    // 모드면 v2.9 그대로 classId(반 축 전환). 선택기 옵션을 만든 쪽(아래
+    // textbookOptions)과 항상 같은 모드로 짝이 맞는다.
+    if (isTextbookMode()) {
+      await setPrimaryTextbook(studentId, optionId)
+    } else {
+      await setPrimaryAssignment(studentId, optionId)
+      setLastTextbookClassId(optionId)
+    }
     const list = await getStudentClassAssignments(studentId)
     setTextbookAssignments(list)
     setRefreshTick((t) => t + 1)
   }
+  // v3.1 — 교재 선택기 옵션. 교재 모드: 사람 반에 연결된 교재들
+  // (class_textbooks — 반은 그대로, 교재만 전환). 레거시 모드: v2.9 다중
+  // 반 배정 그대로. 어느 쪽이든 1개 이하면 선택기 비렌더(화면 변화 0).
+  const textbookOptions = useMemo(() => {
+    if (isTextbookMode()) {
+      return getClassTextbooks(getStudentClassId(studentId)).map((tb) => ({
+        id: tb.id,
+        label: tb.publisherName ? `${tb.name} (${tb.publisherName})` : tb.name,
+      }))
+    }
+    return textbookAssignments.map((a) => {
+      const name = getClassNames().find((n) => getClassIdByName(n) === a.classId)
+      return name ? { id: a.classId, label: name } : null
+    }).filter(Boolean)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentId, textbookAssignments, refreshTick])
+  const currentTextbookOptionId = isTextbookMode()
+    ? (getStudentPrimaryTextbook(studentId)?.id || null)
+    : (getStudentById(studentId)?.classId || null)
   // v1.5 이번 세션에서 실제로 공부할 단어 목록 — studyScope에 따라
   // classWords(반 전체 단어, 퀴즈 오답 보기 생성 등에는 항상 이 전체
   // 목록을 그대로 씀)를 걸러낸 서브셋. "복습 단어만"은 이 Skip 기능의
@@ -451,7 +473,8 @@ function AppInner({ studentId, studentName, onLogout }) {
           onUnitSwitch={handleUnitSwitch}
           onStartGuided={startGuidedSession}
           attachmentStats={attachment.stats} wordTextById={attachment.wordTextById}
-          textbookAssignments={textbookAssignments} onTextbookSwitch={handleTextbookSwitch} />
+          textbookOptions={textbookOptions} currentTextbookId={currentTextbookOptionId}
+          onTextbookSwitch={handleTextbookSwitch} />
       )}
       {screen === 'guidedSession' && (
         // 3분 데일리 리추얼(2026-07-22) — 가이드 학습은 항상 classWords
