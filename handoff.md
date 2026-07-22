@@ -1,5 +1,40 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-22 (6차, 관리자 학생 디렉터리 재구성 + 반↔교재 연결 패널 — 300~1000명 규모 대응)_
+_최종 갱신: 2026-07-22 (7차, Paul Town v2.0 — 감정 레이어 출시: 수여식/오늘의 발견/별→씨앗/홈 밴드/마을 화면)_
+
+## 2026-07-22 (7차) — Paul Town v2.0 버전 마일스톤
+
+커밋 `c723054..0bf028b`(엔진 5 + UI 4), push·배포 검증 완료
+(`index-gnSPm4LI.js` SHA-256 일치, PaulTown lazy 청크 200).
+
+### 아키텍처 규칙(운영자 확정, 코드로 강제)
+
+**DB에는 사실만, 감정은 파생** — Paul Town 전부가 학습 이력에서 결정론
+생성. 저장 상태는 기존 3종 사실뿐(hatInventory/equippedHatId/milestones),
+새 영속 필드/테이블/마이그레이션 0. 하네스가 paulTown.js의 순수성을 단언
+(supabase/localStorage/Math.random 부재 — 회귀 방지).
+
+### 완료(플래그 ON): paulMemoryV2(템플릿 18종, 죄책감 언어 금지·월 창
+불가 값은 누적으로만 정직 표현), todaysDiscovery(dayKey 해시 결정론
+하루 1개, 기억 카드 안 한 줄), starToSeed(홈 밴드 — "오늘 별 심음/어제 네
+별이야" 전부 history 파생), hatCeremony(수여식 오버레이 — GiftReveal
+패턴, 세션 큐, 멱등 구조로 무한 재생 불가), paulTownHomeBand([구경가기]),
+paulTownGarden + PaulTown 화면(정원/폴의 집 모자걸이(탭 장착)/기존 학생
+소급 환영 retroWelcome — 정직 파생, 잠긴 요소는 체크리스트 없이 개수만).
+모자 8종 전부 동일 톱햇(🎩)+색상 라인업(레거시 7 id 불변 — 프로덕션
+인벤토리 보존, hat_rose 분홍=한 주 5일 학습 신규). 폴 본인 검은 모자 불변.
+
+### 플래그 OFF(파운데이션): paulTownBuildings(도서관/박물관/시계탑 —
+TOWN_PLACES 데이터 모델만), attachmentWorldFull/Bookshelf/Story(v1 그대로).
+
+### 검증: verify:attachment 100/100 · daily-ritual 118/118 · student 4/4 ·
+persistence 8/8 · unit 5/5 · 교재 모델 라이브 16/16 전부 PASS. 마이그레이션
+0 — 운영자 액션 불필요. 롤백 = 코드 리버트 또는 플래그 OFF(기기 로컬).
+
+### 알려진 갭: 이모지 틴트(text-shadow 기법) 브라우저별 차이 가능(실기기
+스모크 권장 — 실패해도 원본 🎩 표시, 기능 무손상). 수여식은 앱 진입
+시점 판정(학습 도중 획득분은 다음 진입 시 — 엔진 기존 동작). 다음 버전
+후보: 수여식 실시간화(세션 중 판정), paulTownBuildings 화면, 별→씨앗
+착지 애니메이션 고도화.
 
 ## 2026-07-22 (6차) — 관리자 학생 관리 재구성(아코디언/검색/필터) + 반↔교재 연결 UI
 
