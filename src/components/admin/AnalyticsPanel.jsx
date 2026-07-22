@@ -4,7 +4,7 @@
 // 숫자 라벨은 전부 "실제로 측정하는 것"을 그대로 말한다(근사는 근사라고).
 import { useEffect, useState } from 'react'
 import { supabase } from '../../utils/supabaseClient'
-import { EV, computeReturnRates, computeGardenRevisits, computeAvgSessionMinutes, computeFeatureCounts } from '../../utils/analyticsMath'
+import { EV, fmtDay, computeReturnRates, computeGardenRevisits, computeAvgSessionMinutes, computeFeatureCounts } from '../../utils/analyticsMath'
 
 const EV_LABEL = {
   [EV.appOpened]: '앱 열람', [EV.paulMemoryViewed]: '폴의 기억', [EV.todaysDiscoveryViewed]: '오늘의 발견',
@@ -18,7 +18,11 @@ export default function AnalyticsPanel() {
   useEffect(() => {
     let gone = false
     ;(async () => {
-      const since = new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString().slice(0, 10)
+      // 2026-07-23 KST 버그 수정(감사 문서 09 §1-6 Z계열) — toISOString()은
+      // UTC 기준이라 KST 자정~오전 9시 사이엔 로컬보다 하루 전 날짜가 나와
+      // 60일 창 경계가 하루 밀렸다. product_events.day는 로컬 달력 키
+      // (analyticsMath fmtDay와 동일 규칙)이므로 같은 규칙으로 조립한다.
+      const since = fmtDay(Date.now() - 60 * 24 * 3600 * 1000)
       const { data, error } = await supabase.from('product_events')
         .select('anon_id,event,day,created_at').gte('day', since).limit(20000)
       if (gone) return
