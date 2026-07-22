@@ -370,7 +370,17 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
     <div className="min-h-screen p-4 pb-8">
       {/* Header */}
       <div className="max-w-lg mx-auto pt-2 mb-4 flex items-center justify-between">
-        <button onClick={onLogout} className="py-3 px-2 -my-3 -mx-2 text-purple-400 text-sm font-bold btn-press hover:text-purple-600">← 나가기</button>
+        {/* 제품 리뷰(문서 10) S티어 #1 — 다른 모든 화면의 "←"는 화면 이동인데
+            홈의 이 버튼만 세션 삭제(로그아웃)였다. 뒤로가기로 착각한 아이가
+            이름+PIN 재입력 벽에 부딪히는 유일한 구멍이라, 라벨을 실제 동작
+            그대로 "로그아웃"으로 바꾸고 확인 1탭을 추가한다. */}
+        <button
+          onClick={() => {
+            if (window.confirm('정말 로그아웃할까요?\n다시 들어오려면 이름과 PIN이 필요해요.')) onLogout()
+          }}
+          className="py-3 px-2 -my-3 -mx-2 text-purple-400 text-sm font-bold btn-press hover:text-purple-600">
+          🚪 로그아웃
+        </button>
         <div className="flex items-center gap-2">
           {streak > 0 && (
             <div className="flex items-center gap-1 bg-orange-100 px-3 py-2 rounded-2xl">
