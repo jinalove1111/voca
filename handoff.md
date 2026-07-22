@@ -1,5 +1,68 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-22 (2차, 애착 시스템(Attachment & Growth) v1 — 모자/박물관/앨범/폴의기억/정원 구현 + 파운데이션 + 배포 검증 완료)_
+_최종 갱신: 2026-07-22 (3차, 기존 학생 다중 교재 전환 불가 버그 — 근본 원인 확정 + 수정 + 라이브 검증 + 배포)_
+
+## 2026-07-22 (3차) — 기존 학생 다중 교재 전환 불가 버그 수정 (유령 primary 행 + 레거시 유닛)
+
+### 근본 원인 (재현으로 확정 — scripts/reproLegacyMultiClass.mjs, 규칙 15)
+
+1. **유령 primary 행**: 구 "반 배정"(`setStudentClass`/`setStudentsClassBulk`)
+   이 v2_9 조인 테이블(`student_class_assignments`)을 유지보수하지 않았다.
+   반을 옮긴 기존 학생에게 이전 반의 primary 행이 유령으로 남고, 그 행이
+   `unique(student_id,class_id)`로 "원래 반을 두 번째 교재로 추가"
+   (`assignTextbook`)를 조용히 차단했다(23505 → 멱등 no-op으로 오분류).
+   read-heal은 반환 목록만 마스킹(메모리에서 classId 덮어쓰기)해 DB의
+   유령을 가렸다 — 신규 학생이 정상이었던 이유는 반 배정 이력이 없어
+   유령이 없었기 때문.
+2. **레거시 유닛 NULL**: v2_1 백필이 완결되지 않아 203/333명(실측)의
+   `students.current_unit_id`가 NULL(unit_name 문자열 의존). 전환 시
+   유닛 캡처(`live.unitId != null` 조건)가 통째로 스킵돼 교재별 진도
+   스냅샷이 안 남고, stale unit_name이 다른 교재의 같은 이름 유닛(빈
+   유닛 포함 — 교재들이 전부 "Unit 1..N" 작명)에 오염 매칭됐다.
+
+### 수정 (커밋 `1e9d40a`+`5fff965` — src/utils/wordLibrary.js)
+
+- `maintainPrimaryAssignmentForClassChange()` 신설: 반 배정 의미론("이동")
+  으로 조인 테이블 동기화 — 다른 반 primary(유령) 삭제 + 대상 반 primary
+  보장(기존 행이면 승격만, 반별 유닛 보존). 전 과정 non-fatal.
+- `setStudentClass`/`setStudentsClassBulk`가 위 함수를 호출(신규 유령 방지).
+- `getStudentClassAssignments` read-heal이 불일치 감지 시 마스킹만 하지 않고
+  DB도 실제 수리(fire-and-forget lazy self-heal — 학생 로그인/관리자 조회
+  시점마다 자동, SQL 실행 없이도 전 학생이 점진 수리됨).
+- `setPrimaryAssignment`: 나가는 유닛 캡처를 이름 해석으로 보강하되
+  **단어 있는 유닛만 신뢰**(빈 유닛 오염 캡처 차단), 전환 대상 유닛이
+  NULL이면 **단어 있는 첫 유닛**으로 결정론 확정 + 행에 기록.
+- 수리 경로의 유닛은 "그 반 소속이 확실한 id"만(교차 교재 이름 폴백 금지).
+
+### 데이터 수리 SQL (선택 실행 — `supabase_v3_0_legacy_multiclass_repair.sql`)
+
+멱등 4단계: v2_1 백필 완결(NULL만 채움) → 유령 primary 조건부 삭제 →
+현재 반 primary 보장(`on conflict`로 반별 유닛 coalesce 보존) → primary
+행 NULL 유닛 채움(반 소속 검증 포함) + 검증 쿼리 3종. **실행 안 해도
+클라이언트 lazy self-heal이 동일 수리를 학생별로 수행**(규칙 9). 실행
+시 전 학생 일괄 완료. 롤백 노트 파일 헤더에 포함.
+
+### 검증 (전부 foreground)
+
+- 재현: 수정 전 코드로 4개 증상 전부 PASS-재현(목록에서 원래 반 소실/
+  B 마스킹/DB 유령 행/재추가 조용한 차단).
+- 수정 후: `scripts/testLegacyMultiClassLive.mjs` **23/23 PASS, 재실행
+  멱등** — 운영자 요구 a~g 전부: (a)신규 다중 반 (b)레거시 데스싱크
+  학생 자동 수리(실제 레거시 모양 픽스처) (c)A→B→A 왕복 (d)반별 유닛
+  분리(구체적 id 확정) (e)반별 단어 서로소 (f)재조회 영속 (g)무손실
+  (계정/unit_name/progress 불변).
+- 회귀: `verify:student` 4/4·`verify:unit` 5/5·`verify:word-assignment`·
+  `verify:persistence` 8/8·`verify:admin` 6/6 전부 PASS, build clean.
+- 배포: 라이브 번들 SHA-256 로컬 일치(`index-Bx2ukoHY.js`) — 프로덕션
+  서빙 확인. `api/` 변경 0 → 함수 12/12.
+
+### 운영자 참고
+
+- QA 픽스처 2명 프로덕션에 남김(관례): `_QA_LegacyMultiClass_Repro_20260722`,
+  `_QA_LegacyFix_NewStudent_20260722` — 검토 후 삭제 판단.
+- 과거에 "교재 추가"를 시도했다가 조용히 무시된 학생이 있으면, 수리 후
+  관리자 패널에서 한 번만 다시 추가하면 된다(이제 즉시 성공).
+- SQL 실행은 선택(가속용) — Supabase 대시보드 SQL Editor에서 수동 실행,
+  실행 후 파일 하단 검증 쿼리 3종 확인 권장.
 
 ## 2026-07-22 (2차) — 애착 시스템(Attachment & Growth) v1 — 장기 성장/애착 통합 시스템
 
