@@ -55,7 +55,7 @@ const DEFAULT_FEATURES = {
   attachmentPaulMemory: true,  // 폴의 기억(템플릿 기반, 실데이터만) — v1 완성
   attachmentWorldGarden: true, // 잉글리시 월드 1구역(정원) MVP — v1 완성
   attachmentWorldFull: false,  // 정원 이후 구역(집/다리/도서관/마을/왕국) UI — 파운데이션만, 미완성
-  attachmentBookshelf: false,  // 개인 책장 — 파운데이션만, 미완성
+  attachmentBookshelf: true,   // 개인 책장(Paul Town 도서관 화면) — 2026-07-22 월드 완성으로 ON
   attachmentStory: false,      // 이어지는 이야기 — 파운데이션만, 미완성
 
   // Paul Town v2.0 (2026-07-22) — 애착 시스템 v1 확장(재설계 아님). 모든
@@ -68,7 +68,7 @@ const DEFAULT_FEATURES = {
   hatCeremony: true,           // 모자 수여식 — 새 모자 획득 연출
   paulTownHomeBand: true,      // 홈 밴드 — Paul Town 한 줄 요약 띠
   paulTownGarden: true,        // Paul Town 정원(기존 정원 엔진 재사용)
-  paulTownBuildings: false,    // 도서관/박물관/시계탑 건물 — 파운데이션만, 미완성
+  paulTownBuildings: true,     // 도서관/박물관/시계탑 건물(마을=내비게이션) — 2026-07-22 월드 완성으로 ON. 주의: 관리자가 플래그를 저장한 적 있는 기기는 localStorage 스냅샷(false)이 이겨서 그 기기에선 여전히 꺼져 있을 수 있음(기기 로컬 플래그의 기존 한계)
 }
 
 // localStorage에서 저장된 features 불러오기.

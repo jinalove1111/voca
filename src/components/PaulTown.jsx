@@ -10,14 +10,16 @@
 // 정원 3x3 격자는 EnglishGarden.jsx와 시각적으로 동일한 렌더링 패턴을
 // 자체 포함(컴포넌트 import 없이 — 이 화면은 자기완결)한다.
 //
-// 건물(박물관/도서관/시계탑)은 paulTownBuildings 플래그(기본 OFF) 뒤 —
-// OFF면 아무것도 렌더하지 않는다(점진 발견 — 체크리스트 금지).
+// 마을 = 내비게이션(Paul Town 월드, 2026-07-22): 정원/폴의 집은 마을 안
+// 섹션이고, 건물(박물관→wordMuseum/도서관→bookshelf/시계탑→timeMachine)은
+// 카드를 누르면 해당 화면으로 이동한다(onGo). 잠긴 건물은 목록/개수 없이
+// 부드러운 힌트 한 줄만 — 체크리스트 금지(점진 발견).
 import { computeWorldState, gardenPlots } from '../utils/attachment/worldProgress'
-import { retroWelcome, townPlacesState } from '../utils/attachment/paulTown'
+import { retroWelcome, townPlacesState, paulHomeDeco } from '../utils/attachment/paulTown'
 import { HAT_CATALOG, HAT_COLOR_STYLE, hatById } from '../utils/attachment/hatSystem'
 import { isFeatureEnabled } from '../config/features'
 
-export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, onBack }) {
+export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, onGo, onBack }) {
   const welcome = retroWelcome(stats)
   const world = computeWorldState(stats)
   const plots = gardenPlots(stats)
@@ -25,11 +27,16 @@ export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, 
   const showBuildings = isFeatureEnabled('paulTownBuildings')
   // 아직 발견 못 한 모자 수 — 큰 잠금 체크리스트 대신 한 줄만(점진 발견).
   const undiscoveredHats = Math.max(0, HAT_CATALOG.length - hatInventory.length)
+  // 폴의 집 소품 — 진행에서만 파생(paulHomeDeco, 저장 0·단조).
+  const deco = paulHomeDeco(stats)
   // 플래그 게이트 건물들 — townPlacesState(플래그 조회는 주입, 엔진은
-  // 저장소를 직접 안 읽음). 발견된 곳만 카드로, 나머지는 개수 한 줄만.
+  // 저장소를 직접 안 읽음). 발견된 곳만 이동 카드로. 도서관은 화면 플래그
+  // (attachmentBookshelf)도 켜져 있어야 입장 가능 — 꺼져 있으면 아직
+  // 안개 속(힌트 한 줄)으로 남는다.
+  const canEnter = (p) => p.id !== 'library' || isFeatureEnabled('attachmentBookshelf')
   const flaggedPlaces = townPlacesState(stats, isFeatureEnabled).filter((p) => p.requiresFlag)
-  const discoveredPlaces = flaggedPlaces.filter((p) => p.discovered)
-  const hiddenPlaceCount = flaggedPlaces.length - discoveredPlaces.length
+  const discoveredPlaces = flaggedPlaces.filter((p) => p.discovered && canEnter(p))
+  const anyHidden = flaggedPlaces.some((p) => !(p.discovered && canEnter(p)))
 
   return (
     <div className="min-h-screen p-4 pb-8">
@@ -96,6 +103,12 @@ export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, 
             <span className="text-2xl">🏡</span>
             <h2 className="font-black text-gray-800 text-lg">폴의 집</h2>
           </div>
+          {/* 폴의 인사 — 폴은 항상 자기 검은 모자(🎩 원색). 일반 인사만 —
+              없는 기억을 말하지 않는다(구체적 회상은 홈의 '폴의 기억' 담당). */}
+          <div className="flex items-center gap-3 rounded-2xl bg-purple-50 p-3 mb-3">
+            <span className="text-3xl flex-shrink-0">🎩</span>
+            <p className="text-sm font-bold text-gray-600">"어서 와! 우리 집 구경하고 갈래?"</p>
+          </div>
           <p className="text-xs text-gray-400 mb-3">모자걸이에 네 모자들이 걸려 있어 — 눌러서 바꿔 쓸 수 있어!</p>
           {hatInventory.length > 0 ? (
             <div className="flex gap-2 flex-wrap">
@@ -127,32 +140,51 @@ export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, 
           {undiscoveredHats > 0 && (
             <p className="text-xs text-gray-400 mt-2">아직 발견하지 못한 모자 {undiscoveredHats}개</p>
           )}
+          {/* 방 소품 — 진행에서만 파생(단조: 한 번 생긴 소품은 안 사라짐).
+              열린 소품만 보여준다 — 잠긴 소품 목록/개수 없음(점진 발견). */}
+          {deco.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <div className="flex gap-2 flex-wrap">
+                {deco.map((d) => (
+                  <span key={d.id} title={d.name} className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-xl">
+                    {d.emoji}
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-2">네가 공부할수록 방에 물건이 하나씩 늘어나</p>
+            </div>
+          )}
         </div>
 
-        {/* 건물들 — paulTownBuildings 플래그(기본 OFF)일 때만. 발견된 곳만
-            카드로 나타나고, 숨은 곳은 개수 힌트 한 줄 — 잠금 체크리스트를
-            그리지 않는다(점진 발견). 플래그 OFF면 이 블록 전체가 없음. */}
-        {showBuildings && (discoveredPlaces.length > 0 || hiddenPlaceCount > 0) && (
+        {/* 건물들 — 마을이 곧 내비게이션: 발견된 건물 카드를 누르면 해당
+            화면(박물관/도서관/시계탑)으로 들어간다. 잠긴 곳은 목록/개수
+            없이 부드러운 힌트 한 줄만(점진 발견 — 체크리스트 금지). */}
+        {showBuildings && (discoveredPlaces.length > 0 || anyHidden) && (
           <div className="bg-white rounded-3xl card-shadow p-5">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-2xl">🗺️</span>
               <h2 className="font-black text-gray-800 text-lg">마을 곳곳</h2>
             </div>
-            <div className="space-y-2">
-              {discoveredPlaces.map((p) => (
-                <div key={p.id} className="flex items-center gap-3 rounded-2xl p-3 bg-purple-50">
-                  <span className="text-2xl">{p.emoji}</span>
-                  <div className="min-w-0">
-                    <p className="font-black text-sm text-gray-800">{p.name}</p>
-                    <p className="text-xs text-gray-400">{p.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {hiddenPlaceCount > 0 && (
-              <p className="text-xs text-gray-400 mt-3">
-                🔍 아직 발견하지 못한 곳이 {hiddenPlaceCount}군데 숨어 있어 — 단어를 배우면 하나씩 나타나요!
-              </p>
+            {discoveredPlaces.length > 0 && (
+              <div className="space-y-2">
+                {discoveredPlaces.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => p.screen && onGo && onGo(p.screen)}
+                    className="w-full flex items-center gap-3 rounded-2xl p-3 bg-purple-50 btn-press hover:bg-purple-100 text-left"
+                  >
+                    <span className="text-2xl flex-shrink-0">{p.emoji}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-black text-sm text-gray-800">{p.name}</p>
+                      <p className="text-xs text-gray-400">{p.desc}</p>
+                    </div>
+                    <span className="text-purple-300 font-black text-lg flex-shrink-0">›</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {anyHidden && (
+              <p className="text-xs text-gray-400 mt-3">🌫️ 아직 안개 속에 있는 곳이 있어요…</p>
             )}
           </div>
         )}
