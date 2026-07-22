@@ -45,7 +45,7 @@ import { fetchCurrentSeason } from '../utils/seasonApi'
 // 애착 시스템(2026-07-22) — 장착 모자 카탈로그 조회 + 폴의 기억(실데이터
 // 템플릿) + 플래그 게이트. 전부 순수 조회 — Dashboard의 상태/fetch 로직에
 // 아무것도 추가하지 않는다.
-import { hatById } from '../utils/attachment/hatSystem'
+import { hatById, HAT_CATALOG } from '../utils/attachment/hatSystem'
 import { pickPaulMemory } from '../utils/attachment/paulMemory'
 // Paul Town v2.0(2026-07-22) — 오늘의 발견(하루 1개 결정론 메시지, 폴의
 // 기억 카드 안의 한 줄) + 홈 밴드 요약/별→씨앗(전부 history 파생 — 새
@@ -586,7 +586,9 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
             <span className="text-gray-400 text-sm font-bold">열기 ▾</span>
           </summary>
           <div className="px-5 pb-5 grid grid-cols-2 gap-3">
-            <NavBtn emoji="📖" label="단어 공부"    sub="100개 단어"                          color="from-blue-400 to-blue-600"     onClick={() => onGo('wordBrowser')} />
+            {/* 제품 리뷰(문서 10) S티어 #4 — "100개 단어" 하드코딩은 거짓
+                정보(실제 단어 수와 무관). 실측 단어 수로 교체. */}
+            <NavBtn emoji="📖" label="단어 공부"    sub={classWords.length > 0 ? `${classWords.length}개 단어` : '단어 준비 중'} color="from-blue-400 to-blue-600"     onClick={() => onGo('wordBrowser')} />
             <NavBtn emoji="🎮" label="퀴즈"          sub="단어 맞히기"                         color="from-yellow-400 to-orange-500" onClick={() => onGo('quiz')} />
             <NavBtn
               emoji="⚔️" label="레벨업 미션"
@@ -599,7 +601,9 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
             {/* 애착 시스템(2026-07-22) — 플래그별 게이트. 꺼진 기능은 버튼
                 자체가 없다(자리 차지 없음). 기존 6버튼은 위에서 그대로. */}
             {isFeatureEnabled('attachmentHats') && (
-              <NavBtn emoji="🎩" label="모자 컬렉션" sub={`${studentData.hatInventory.length}/7 수집`} color="from-violet-400 to-purple-600" onClick={() => onGo('hatCollection')} />
+              {/* "/7" 하드코딩도 같은 계열의 거짓 정보였다 — 카탈로그는
+                  hat_rose 추가로 8종(HAT_CATALOG 실측, 하네스 단언 동일). */}
+              <NavBtn emoji="🎩" label="모자 컬렉션" sub={`${studentData.hatInventory.length}/${HAT_CATALOG.length} 수집`} color="from-violet-400 to-purple-600" onClick={() => onGo('hatCollection')} />
             )}
             {isFeatureEnabled('attachmentMuseum') && (
               <NavBtn emoji="🏛️" label="단어 박물관" sub="내가 모은 단어들" color="from-amber-400 to-orange-600" onClick={() => onGo('wordMuseum')} />
