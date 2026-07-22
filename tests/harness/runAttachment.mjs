@@ -13,7 +13,7 @@
 //   6) 월드 진행 엔진 단조성(진행이 늘면 잠금해제가 절대 줄지 않음)
 //   7) 이야기 파운데이션 결정론(같은 단어 → 같은 이야기)
 import { deriveAttachmentStats, completedUnits, masteryTierFor } from '../../src/utils/attachment/attachmentCore.js'
-import { HAT_CATALOG, HAT_THRESHOLDS, evaluateHatUnlocks, hatById } from '../../src/utils/attachment/hatSystem.js'
+import { HAT_CATALOG, HAT_THRESHOLDS, HAT_COLOR_STYLE, evaluateHatUnlocks, hatById } from '../../src/utils/attachment/hatSystem.js'
 import { detectNewMilestones, sortMilestonesForAlbum } from '../../src/utils/attachment/milestones.js'
 import { pickPaulMemory } from '../../src/utils/attachment/paulMemory.js'
 import { WORLD_STAGES, computeWorldState, gardenPlots } from '../../src/utils/attachment/worldProgress.js'
@@ -81,8 +81,15 @@ check('빈 레코드도 크래시 없이 0 통계', emptyStats.clearedCount === 
 
 // ── 2) 모자 규칙 ──
 console.log('\n-- 2) 모자 컬렉션 — 결정론·멱등')
-check('카탈로그는 정확히 7종', HAT_CATALOG.length === 7)
-check('7종 id 유일', new Set(HAT_CATALOG.map(h => h.id)).size === 7)
+// Paul Town v2.0 리컬러: 8종(레거시 7종 id 불변 + hat_rose). id가 바뀌면
+// 프로덕션 인벤토리의 획득 모자가 고아가 되므로 정확한 id 집합을 고정한다.
+const EXPECTED_HAT_IDS = ['hat_starter', 'hat_explorer', 'hat_chef', 'hat_scientist', 'hat_wizard', 'hat_graduation', 'hat_crown', 'hat_rose']
+check('카탈로그는 정확히 8종(레거시 7 + hat_rose)', HAT_CATALOG.length === 8)
+check('8종 id 유일', new Set(HAT_CATALOG.map(h => h.id)).size === 8)
+check('레거시 7종 id 정확히 보존 + hat_rose 추가', JSON.stringify(HAT_CATALOG.map(h => h.id)) === JSON.stringify(EXPECTED_HAT_IDS))
+check('전 모자가 동일 톱햇 디자인(🎩) + colorName/colorHex 보유', HAT_CATALOG.every(h => h.emoji === '🎩' && h.colorName && /^#[0-9a-fA-F]{6}$/.test(h.colorHex)))
+check('색상 hex 스펙 일치(rose=#F48FB1, wizard=#9575CD)', hatById('hat_rose').colorHex === '#F48FB1' && hatById('hat_wizard').colorHex === '#9575CD')
+check('HAT_COLOR_STYLE 헬퍼 = 카탈로그에서 파생(id별 색 정보)', HAT_COLOR_STYLE.hat_crown.colorHex === '#FFD54F' && Object.keys(HAT_COLOR_STYLE).length === 8)
 const unlocks1 = evaluateHatUnlocks(stats, { completedUnits: [] }, [], NOW)
 const unlocks2 = evaluateHatUnlocks(stats, { completedUnits: [] }, [], NOW)
 check('같은 입력 → 같은 획득 목록(결정론, 무작위 없음)', JSON.stringify(unlocks1) === JSON.stringify(unlocks2))
@@ -97,7 +104,26 @@ check('이미 가진 모자는 다시 안 나옴(멱등)', evaluateHatUnlocks(st
 // no-revoke: 스트릭이 끊겨도(streak 0) 획득 "평가"는 줄어들 뿐, 인벤토리 회수 API 자체가 없다 — 여기선 평가가 소유목록을 절대 안 건드리는지로 확인
 const statsNoStreak = deriveAttachmentStats({ ...fixture, streak: 0 }, NOW)
 check('스트릭이 끊겨도 기존 소유 모자에 영향 없음(평가는 미소유분만)', evaluateHatUnlocks(statsNoStreak, {}, ['hat_chef'], NOW).every(u => u.hatId !== 'hat_chef'))
-check('임계값 상수 노출(조정 가능한 설정)', HAT_THRESHOLDS.explorerCleared === 10 && hatById('hat_wizard').name === '마법사 모자')
+check('임계값 상수 노출(조정 가능한 설정)', HAT_THRESHOLDS.explorerCleared === 10 && hatById('hat_wizard').name === '보라색 폴 모자')
+// hat_rose — 한 주 5일 학습 규칙: 결정론 + 멱등(evaluateHatUnlocks 경유).
+// NOW(수요일)로는 이번 주가 최대 3일이라, 같은 주 금요일 시점을 쓴다
+// (주간 버킷은 월요일 시작 — Jul 20(월)~24(금) 5일 학습).
+const ROSE_NOW = new Date(2026, 6, 24, 12, 0, 0) // 2026-07-24 금요일
+const roseFix = {
+  ...fixture,
+  history: {
+    ...fixture.history,
+    [dayKey(2)]: day(),  // Jul 20 (월)
+    [dayKey(-1)]: day(), // Jul 23 (목)
+    [dayKey(-2)]: day(), // Jul 24 (금)
+  },
+}
+const roseStats = deriveAttachmentStats(roseFix, ROSE_NOW)
+check('이번 주 5일 학습 → hat_rose 획득', evaluateHatUnlocks(roseStats, {}, [], ROSE_NOW).some(u => u.hatId === 'hat_rose'))
+check('hat_rose 결정론(같은 입력 → 같은 결과)', JSON.stringify(evaluateHatUnlocks(roseStats, {}, [], ROSE_NOW)) === JSON.stringify(evaluateHatUnlocks(roseStats, {}, [], ROSE_NOW)))
+check('hat_rose 멱등(이미 소유 → 재지급 없음)', !evaluateHatUnlocks(roseStats, {}, ['hat_rose'], ROSE_NOW).some(u => u.hatId === 'hat_rose'))
+check('이번 주 4일 이하 → hat_rose 미획득', !evaluateHatUnlocks(stats, {}, [], NOW).some(u => u.hatId === 'hat_rose'))
+check('주가 리셋돼도 소유 모자는 평가가 안 건드림(회수 없음)', evaluateHatUnlocks(stats, {}, ['hat_rose'], NOW).every(u => u.hatId !== 'hat_rose'))
 
 // ── 3) 밀스톤 ──
 console.log('\n-- 3) 밀스톤 — 중복 방지·backfilled 정직성')
