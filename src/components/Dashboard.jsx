@@ -42,6 +42,12 @@ import { fetchWeeklyChampion } from '../utils/wordKingApi'
 // 블록 전체가 조용히 안 보인다 — 기존 "이번 주 팀 점수" 표시는 전혀
 // 바뀌지 않는다(레벨/뱃지/스트릭과 마찬가지로 이 라운드의 변경과 무관).
 import { fetchCurrentSeason } from '../utils/seasonApi'
+// 애착 시스템(2026-07-22) — 장착 모자 카탈로그 조회 + 폴의 기억(실데이터
+// 템플릿) + 플래그 게이트. 전부 순수 조회 — Dashboard의 상태/fetch 로직에
+// 아무것도 추가하지 않는다.
+import { hatById } from '../utils/attachment/hatSystem'
+import { pickPaulMemory } from '../utils/attachment/paulMemory'
+import { isFeatureEnabled } from '../config/features'
 
 const GOAL = 5
 const stickerById = (id) => STICKERS.find(s => s.id === id)
@@ -212,8 +218,17 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 
 // P0(2026-07-15): student(이름 문자열) 대신 studentId(식별자)+studentName
 // (표시용)을 따로 받는다 — getStudentClass/getStudentUnit은 이제 id 기반.
-export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, textbookAssignments, onTextbookSwitch }) {
-  const { stars, stickerTypes, activeMissions, dailyProgress, liveMissionsCompleted, streak, cleared, ticketBalance, redeemTicketReward } = studentData
+export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, textbookAssignments, onTextbookSwitch }) {
+  const { stars, stickerTypes, activeMissions, dailyProgress, liveMissionsCompleted, streak, cleared, ticketBalance, redeemTicketReward, equippedHatId } = studentData
+  // 애착 시스템(2026-07-22) — 학생 아바타의 장착 모자. 미장착이면 기존
+  // 기본 아바타(👑) 그대로 — 아무것도 안 얻은/안 고른 학생 화면은 변화 0.
+  // 폴(Paul) 캐릭터의 검은 모자와 무관(폴 이미지는 어디서도 안 바뀜).
+  const equippedHat = equippedHatId ? hatById(equippedHatId) : null
+  // 폴의 기억 — 실데이터 기반 템플릿 한 줄(순수 함수, AI/무작위 없음).
+  // attachmentStats가 아직 없으면(구버전 App.jsx 경로) 렌더 생략.
+  const paulMemory = isFeatureEnabled('attachmentPaulMemory') && attachmentStats
+    ? pickPaulMemory(attachmentStats, { wordTextById })
+    : null
   const { rankState, loading: rankLoading } = usePaulRank(studentId)
 
   const className = getStudentClass(studentId)
@@ -344,8 +359,12 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
       <div className="max-w-lg mx-auto space-y-4 animate-fade-in">
         {/* Profile */}
         <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl p-6 text-white text-center card-shadow">
-          <div className="text-5xl mb-2">👑</div>
+          {/* 애착 시스템 — 장착한 모자가 아바타가 된다(미장착이면 기존 👑) */}
+          <div className="text-5xl mb-2">{equippedHat ? equippedHat.emoji : '👑'}</div>
           <h1 className="text-3xl font-black">{studentName}</h1>
+          {equippedHat && (
+            <p className="text-purple-200 text-xs mt-0.5">{equippedHat.emoji} {equippedHat.name} 착용 중</p>
+          )}
           <TextbookSelector
             assignments={textbookAssignments}
             currentClassId={currentClassId}
@@ -385,6 +404,19 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
         <EntranceTestBanner studentId={studentId} onGo={onGo} />
 
         <RecommendationBanner studentData={studentData} classWords={classWords} onGo={onGo} onResumeWord={onResumeWord} onPlayGame={onPlayGame} resumeIndex={resumeIndex} onStartGuided={onStartGuided} />
+
+        {/* 폴의 기억(애착 시스템) — 실존 데이터만 말하는 템플릿 한 줄.
+            폴이 학생의 어제/성장을 기억하는 애착 고리. 데이터가 없으면
+            pickPaulMemory가 정직한 인사 폴백을 반환(지어내기 없음). */}
+        {paulMemory && (
+          <div className="bg-white rounded-3xl card-shadow p-4 flex items-center gap-3">
+            <span className="text-2xl flex-shrink-0">{paulMemory.emoji}</span>
+            <div className="min-w-0">
+              <p className="text-xs font-black text-purple-400">🎩 폴의 기억</p>
+              <p className="text-sm font-bold text-gray-600">{paulMemory.text}</p>
+            </div>
+          </div>
+        )}
 
         <MicPrimeBtn />
 
@@ -514,6 +546,20 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
               badge={activeMissions.length > 0 ? activeMissions.length : null}
             />
             <NavBtn emoji="📔" label="내 다이어리" sub={`스티커 ${stickerTypes.length}개`}    color="from-pink-400 to-purple-500"    onClick={() => onGo('diary')} />
+            {/* 애착 시스템(2026-07-22) — 플래그별 게이트. 꺼진 기능은 버튼
+                자체가 없다(자리 차지 없음). 기존 6버튼은 위에서 그대로. */}
+            {isFeatureEnabled('attachmentHats') && (
+              <NavBtn emoji="🎩" label="모자 컬렉션" sub={`${studentData.hatInventory.length}/7 수집`} color="from-violet-400 to-purple-600" onClick={() => onGo('hatCollection')} />
+            )}
+            {isFeatureEnabled('attachmentMuseum') && (
+              <NavBtn emoji="🏛️" label="단어 박물관" sub="내가 모은 단어들" color="from-amber-400 to-orange-600" onClick={() => onGo('wordMuseum')} />
+            )}
+            {isFeatureEnabled('attachmentAlbum') && (
+              <NavBtn emoji="📸" label="성장 앨범" sub="나의 이정표" color="from-sky-400 to-blue-600" onClick={() => onGo('growthAlbum')} />
+            )}
+            {isFeatureEnabled('attachmentWorldGarden') && (
+              <NavBtn emoji="🌱" label="나의 정원" sub="단어가 키우는 세계" color="from-green-400 to-emerald-600" onClick={() => onGo('englishGarden')} />
+            )}
             <NavBtn emoji="📅" label="공부 캘린더" sub={`🔥 ${streak}일 연속`}                color="from-amber-400 to-orange-500"   onClick={() => onGo('studyCalendar')} />
             <NavBtn emoji="🎮" label="미니 게임"    sub="풍선/낚시/피자/기차 중 랜덤"          color="from-sky-400 to-indigo-500"    onClick={onPlayGame} />
           </div>
