@@ -1,5 +1,99 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-21 (2차, 다중 교재 마이그레이션 실행 후 검증 + 버그 2건 발견·수정·재검증 — Docs Maintainer 기록)_
+_최종 갱신: 2026-07-22 (3분 데일리 리추얼 v1 — 적응형 마이크로 세션 구현 + QA PASS + 배포 검증 완료)_
+
+## 2026-07-22 — 3분 데일리 리추얼(3-Minute Daily Learning Ritual) v1 — 구현 + QA + 배포 검증 완료
+
+### 배경 / 목표
+
+운영자 최우선 지시: 기능 추가가 아니라 **일일 리텐션**("아이가 내일 또 열고
+싶은가")을 위한 학생 홈 화면 리디자인 + 원탭 가이드 학습 플로우. planner
+에이전트의 코드베이스 전수 조사 → 운영자 승인(적응형 마이크로 세션 설계로
+수정 승인) → implementer 구현(5커밋) → qa-reviewer 독립 검수 PASS → push →
+프로덕션 번들 해시 검증까지 완료.
+
+### 핵심 설계 — 적응형 마이크로 세션
+
+교사 배정량이 반마다 10~100단어로 크게 달라(저학년 ~10-40, 고학년 ~50-100)
+고정 세션 크기를 쓰지 않는다. `src/utils/dailyRitual.js`(순수 함수 모듈)가
+배정 총량 밴드(10-20→5-10 / 21-40→8-12 / 41-70→10-15 / 71-100→12-20,
+<10→한 세션, >100→최상위 밴드 클램프; 전부 데이터 상수로 조정 가능)에서
+시작해 직전 세션의 정답률(<70% 축소, >90% 확대)과 페이스(>45초/단어 축소)로
+밴드 범위 안에서만 다음 세션 크기를 조정한다. **학년 컬럼을 새로 만들지
+않았다** — 배정량 자체가 학년 프록시(규칙 9/10 미발동, 스키마 변경 0).
+불변 조건: 세션은 배정 단어의 연속 슬라이스로 전체를 빠짐없이 커버(단어
+누락/축소 불가), 교사 배정 총량 불변, 진행 표시 K/N·M/T 오버플로 불가 —
+전부 `tests/harness/runDailyRitual.mjs`(118개 단언, `verify:daily-ritual`)가
+단언한다.
+
+### 커밋 (f0ef55c..4d259b3, 전부 push됨)
+
+1. `b0af0d6` — dailyRitual.js 세션 플래너 + verify:daily-ritual 하네스.
+2. `b7b8306` — GuidedSession.jsx(신규) + App.jsx 배선. 얇은 오케스트레이터:
+   기존 `WordDetail mode="comprehensive"`에 App.jsx의 기존 콜백을 그대로
+   전달(채점/진행도/보상 로직 중복 0 — 별/XP/스트릭/티켓/GiftReveal 전부
+   기존 `useStudent` 경로). 퀴즈 오답은 세션 끝에 `mode="quiz"`로 정확히
+   1회 재시도(재시도 오답 재적재 없음, 레벨업미션과 의도적 분리). 상시
+   진행 헤더 "세션 K/N · 오늘 M/T 단어". 완료 카드: "🏠 오늘은 여기까지"
+   (완결감 있는 종료) vs "▶ 다음 세션 계속하기"(자발적 연속, 다음 크기는
+   실측 정답률/페이스로 적응). 가이드 목록은 `classWords` 직결 —
+   `sessionWords`(free-nav `studyScope` 필터)와 의도적으로 분리해 스코프
+   잔존 상태가 목록을 축소하지 못하게 함.
+3. `392fb55` — 대시보드 히어로 CTA. RecommendationBanner의 스마트 브랜칭
+   유지(복습→레벨업미션, 보너스게임 목적지 무변경) — canResume/hasWords
+   브랜치만 가이드 세션으로.
+4. `36be865` — 기록 타일 3개 + Rank/WordKing/House/Season/티켓상점을 접힌
+   네이티브 `<details>` "🎖️ 내 기록 더보기"로 이동 — 순수 JSX 재배치,
+   `gamificationEnabled` 조건 전부 원문 보존, state/effect/fetch 무변경.
+5. `4d259b3` — 네비 6버튼을 접힌 "🧭 더 많은 메뉴"로(목적지/뱃지 보존) +
+   MicPrimeBtn ready 시 렌더 생략.
+
+### QA (독립 qa-reviewer, PASS)
+
+build 0에러 재확인 + verify:daily-ritual 118/118, verify:student 4/4,
+daily-study, quiz 2/2, unit 5/5, persistence 8/8(DB 무결성 0건) 재실행.
+20개 항목 체크리스트 전부 PASS(세션 수학 불변조건/콜백 pass-through 순수성/
+스마트 브랜칭/게임화 토글 양쪽 렌더 경로/free-nav 경로 무변경/규칙 4·16).
+verify:login은 기존부터 있던 환경 FAIL(로컬 service-role key 부재)로 제외,
+speaking/listening은 설계상 고정 SKIP. 최종 게이트로 메인 세션이 foreground
+재실행: verify:daily-ritual PASS, verify:persistence PASS(무결성 0건),
+build clean — 전부 재확인.
+
+### 배포 검증 (2026-07-22)
+
+프로덕션(`https://voca-drab.vercel.app`)이 `4d259b3` 빌드를 서빙 중 —
+로컬 빌드 `dist/assets/index-CHKDWrFR.js`와 라이브 번들의 SHA-256이
+바이트 단위 일치(`85b2617a...`), 신규 기능 문자열("오늘의 학습 시작",
+"다음 세션 계속하기") 라이브 번들에 존재 확인. 이번 push에 `api/` 변경
+없음 → Vercel Hobby 함수 12/12 유지.
+
+### 알려진 수용 갭 (v1, QA 판정 수용 가능 — 정직 기록)
+
+1. 가이드 세션 도중 GiftReveal을 닫으면 당일 스펠링 오답 존재 시 기존
+   `handleDismissGift`가 spellingReview로 전환해 세션이 언마운트됨 —
+   단어별 진행/이어하기 위치는 기존 콜백으로 이미 저장, 세션 카운터
+   표시만 소실(기존 App 동작, 이번에 손대지 않음).
+2. WordDetail 뒤로가기 라벨이 "← 단어 목록" 하드코딩 — 가이드 모드에선
+   실제로 홈으로 나감(WordDetail은 무수정 파일). 백로그 UX 폴리시.
+3. **`verify:all`이 verify:daily-ritual을 실행하지 않음** — 하네스가
+   registry 미등록 standalone 스크립트(구현 시 파일 소유 범위 때문).
+   `dailyRitual.js`를 건드리면 반드시 명시적으로 실행할 것. 후속: registry
+   등록 권장.
+4. Cosmetic: 하네스 라벨 1건이 실제 단언(더 강한 속성)과 문구 불일치,
+   `<details>` summary "열기 ▾" 텍스트가 열림 상태에서 안 바뀜, 재시도
+   답안이 다음 세션 정답률 집계에 포함(보수 편향, 무해).
+
+### 명시적 보류 (조용히 떨어뜨린 것 아님)
+
+- 가이드 세션 내 5단어마다 미니게임 체크포인트(free-nav 경로 전용 유지).
+- 가이드 오답의 레벨업미션 공급(두 복습 체계 분리 결정).
+- 세션 내 재시도 큐의 앱 종료 간 영속화.
+- 네비 그리드의 시각적 접기를 넘어서는 IA 재설계.
+
+### 프로세스 기록
+
+qa-reviewer 백그라운드 실행이 약 6.9시간 소요(결과는 PASS로 정상 완료) —
+운영자 지시로 이후 검증·배포확인·문서 갱신은 메인 세션 foreground로 전환.
+`.ai-status/implementer-daily-ritual-v1.json` 체크포인트 이 커밋에 포함.
 
 ## 2026-07-21 (2차) — 다중 교재(Multi-Textbook) 마이그레이션 실행 후 검증 + 2건 버그 발견·수정·재검증
 

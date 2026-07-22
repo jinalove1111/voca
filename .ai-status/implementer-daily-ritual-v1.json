@@ -1,0 +1,37 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "daily-ritual-v1",
+  "task": "3분 데일리 리추얼 v1 — 적응형 마이크로 세션 플래너(dailyRitual.js) + GuidedSession 컴포넌트 + 대시보드 CTA/공개축소 리디자인",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-22T00:00:00+09:00",
+  "updated_at": "2026-07-22T01:30:00+09:00",
+  "files_owned": [
+    "src/utils/dailyRitual.js",
+    "tests/harness/runDailyRitual.mjs",
+    "package.json",
+    "src/components/GuidedSession.jsx",
+    "src/App.jsx",
+    "src/components/Dashboard.jsx",
+    ".ai-status/implementer-daily-ritual-v1.json"
+  ],
+  "files_read": [
+    "CLAUDE.md",
+    "PROJECT_GUIDE.md",
+    "TESTING.md",
+    "tests/harness/registry.mjs",
+    "tests/harness/runDomain.mjs",
+    "tests/harness/runQuiz.mjs",
+    "src/components/WordDetail.jsx",
+    "src/components/SpellingSessionResult.jsx",
+    "src/components/BonusChoiceScreen.jsx",
+    "src/components/HeroReaction.jsx",
+    "src/hooks/useStudent.js",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "5개 소커밋 완료: (1) b0af0d6 dailyRitual 순수 플래너 + verify:daily-ritual 하네스(118 단언 PASS), (2) b7b8306 GuidedSession + App.jsx guidedSession 화면 배선(classWords 직결, 기존 useStudent 콜백 그대로, 오답 1회 재시도), (3) 392fb55 대시보드 히어로 CTA(스마트 브랜칭 유지, canResume/hasWords만 가이드 세션으로), (4) 36be865 기록/랭크/티켓 접힌 더보기(<details>, 로직 무변경), (5) 4d259b3 네비 그리드 접기 + 마이크 준비완료 배너 숨김. 매 커밋 build 통과. verify: daily-ritual/quiz/writing/daily-study/student/unit/persistence 전부 PASS, speaking/listening 설계상 SKIP, login은 알려진 환경 FAIL(로컬 service-role key 부재)로 제외. 푸시 안 함 — 메인 세션이 QA 후 푸시.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 → 메인 세션이 handoff.md/ROADMAP.md append 및 push"
+}
