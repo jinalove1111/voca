@@ -247,6 +247,15 @@ function freshRecord(id) {
     // 양쪽에서 제거. 스키마 변경 없음 — 기존 progress_data blob 안의 새
     // 최상위 필드일 뿐(stickers/ticketLedger와 동일 패턴).
     spellingReviewQueue: [],
+    // 애착 시스템(2026-07-22) — 아래 3필드도 위와 동일 판단(새 DB 테이블/
+    // 컬럼 없음, 진행도 블롭의 새 최상위 필드 — 티켓 원장과 같은 "코스메틱/
+    // 저가치라 클라이언트 로컬 우선" 관례, 근거는 ticketEconomy.js 헤더와
+    // DATABASE.md Ticket Economy 절 참고). 획득/달성 "판정"은 여기 없다 —
+    // 전부 src/utils/attachment/의 순수 함수가 기존 필드에서 파생하고,
+    // 여기는 판정 결과(이벤트)만 append-only로 보관한다.
+    hatInventory: [],    // [{hatId, earnedAt(ISO), source}] — 모자는 한 번 얻으면 회수 없음
+    equippedHatId: null, // 학생 아바타가 장착 중인 모자(코스메틱 표시 전용)
+    milestones: [],      // [{id, type, at, backfilled, emoji, title, desc, data}] — 성장 앨범 이벤트
   }
 }
 
@@ -324,6 +333,10 @@ function normalizeRecord(raw, id) {
   rec.lastWordIndexByUnit = asObject(rec.lastWordIndexByUnit) // v2.1 이전 레코드/백업엔 없음 — 빈 객체로 채움
   rec.wordStatus = asObject(rec.wordStatus)
   rec.spellingReviewQueue = asArray(rec.spellingReviewQueue) // 기존 레코드/백업엔 없음 — 빈 배열로 채움
+  // 애착 시스템(2026-07-22) — 이전 레코드/백업엔 없음. 배열/스칼라 방어 정규화.
+  rec.hatInventory = asArray(rec.hatInventory)
+  rec.milestones = asArray(rec.milestones)
+  rec.equippedHatId = typeof rec.equippedHatId === 'string' ? rec.equippedHatId : null
   // v2.9 다중 교재 — 문자열이 아니면(옛 레코드에 필드 자체가 없어 undefined인
   // 경우 포함) null로 정규화. 서버 권위 값이 아니므로 잘못된 타입이 남아도
   // 위험하지 않지만(단순 UX 힌트), 다른 필드와 같은 방어 관례를 따른다.
@@ -486,7 +499,32 @@ export function mergeProgressRecords(localRaw, cloudRaw, id) {
     lastWordIndexByUnit,
     wordStatus,
     spellingReviewQueue: unionList(local.spellingReviewQueue, cloud.spellingReviewQueue),
+    // 애착 시스템(2026-07-22) — 두 컬렉션 모두 append-only라 tombstone 불필요
+    // (diaryPlacements와 달리 삭제가 없음). 키 기준 합집합, 같은 키면 더
+    // 이른 획득/달성 시각을 보존한다(늦게 동기화된 기기가 "처음 얻은 날"을
+    // 덮어쓰지 않게 — 성장 앨범의 날짜 정직성).
+    hatInventory: mergeByKeyEarliest(local.hatInventory, cloud.hatInventory, (h) => h.hatId, (h) => h.earnedAt),
+    milestones: mergeByKeyEarliest(local.milestones, cloud.milestones, (m) => m.id, (m) => m.at),
+    // 장착 모자는 lastGamePlayed와 같은 정신(단순 최신 선호, 로컬 우선) —
+    // 이 기기에서 방금 장착한 모자가 다른 기기 백업보다 최신일 가능성이 높다.
+    equippedHatId: local.equippedHatId ?? cloud.equippedHatId,
   }
+}
+
+// 애착 시스템(2026-07-22) — 키 기준 합집합 + 같은 키는 더 이른 시각 우선.
+// hatInventory/milestones 전용(위 mergeProgressRecords 참고).
+function mergeByKeyEarliest(localArr, cloudArr, keyOf, atOf) {
+  const byKey = new Map()
+  for (const item of [...asArray(cloudArr), ...asArray(localArr)]) {
+    const k = keyOf(item)
+    if (!k) continue
+    const prev = byKey.get(k)
+    if (!prev) { byKey.set(k, item); continue }
+    const a = new Date(atOf(item) || 0).getTime()
+    const b = new Date(atOf(prev) || 0).getTime()
+    if (a && (!b || a < b)) byKey.set(k, item)
+  }
+  return [...byKey.values()]
 }
 
 // P0(2026-07-15) Phase 2 identity 마이그레이션 — lazy/on-demand, 로그인
@@ -677,7 +715,7 @@ export function useStudent(studentId, legacyName) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId])
 
-  const { round, history, stickers: stickerTypes, diaryPlacements, missions, cleared, milestoneStreak, starBadgeThreshold, lastGamePlayed, lastTextbookClassId, lastWordIndex, totalStars: stars, wordStatus, ticketLedger, spellingReviewQueue } = record
+  const { round, history, stickers: stickerTypes, diaryPlacements, missions, cleared, milestoneStreak, starBadgeThreshold, lastGamePlayed, lastTextbookClassId, lastWordIndex, totalStars: stars, wordStatus, ticketLedger, spellingReviewQueue, hatInventory, equippedHatId, milestones } = record
   // Ticket Economy — 화면은 항상 이 파생값만 읽는다(원시 잔액을 저장하지
   // 않는 이유는 ticketEconomy.js 헤더 참고).
   const ticketBalance = sumTicketBalance(ticketLedger)
@@ -749,6 +787,38 @@ export function useStudent(studentId, legacyName) {
       }
     })
     return outcome
+  }, [patch])
+
+  // ── 애착 시스템(2026-07-22) — 모자/밀스톤 append-only 반영 API ──
+  // 판정(어떤 모자를 얻는가)은 전부 src/utils/attachment/의 순수 함수가
+  // 하고, 여기 세 함수는 그 결과 이벤트를 record에 멱등하게 붙이기만
+  // 한다(redeemTicketReward와 같은 patch 패턴). 이미 있는 키는 무시 —
+  // 어떤 경로로 중복 호출돼도 인벤토리/앨범이 부풀지 않는다.
+  const grantHats = useCallback((events) => {
+    patch(prev => {
+      const owned = new Set(prev.hatInventory.map((h) => h.hatId))
+      const fresh = (Array.isArray(events) ? events : []).filter((e) => e?.hatId && !owned.has(e.hatId))
+      if (fresh.length === 0) return {}
+      return { hatInventory: [...prev.hatInventory, ...fresh] }
+    })
+  }, [patch])
+
+  const addMilestones = useCallback((events) => {
+    patch(prev => {
+      const seen = new Set(prev.milestones.map((m) => m.id))
+      const fresh = (Array.isArray(events) ? events : []).filter((e) => e?.id && !seen.has(e.id))
+      if (fresh.length === 0) return {}
+      return { milestones: [...prev.milestones, ...fresh] }
+    })
+  }, [patch])
+
+  // 장착: 인벤토리에 있는 모자만(코스메틱 표시 전용 — 검증은 UI 신뢰가
+  // 아니라 여기서 최종). null이면 기본 아바타(👑)로 해제.
+  const equipHat = useCallback((hatId) => {
+    patch(prev => {
+      if (hatId !== null && !prev.hatInventory.some((h) => h.hatId === hatId)) return {}
+      return { equippedHatId: hatId }
+    })
   }, [patch])
 
   const addMission = useCallback((wordId) => {
@@ -1267,5 +1337,9 @@ export function useStudent(studentId, legacyName) {
     // Ticket Economy(2026-07-19) — ticketBalance는 항상 ticketLedger에서
     // 파생된 값(sumTicketBalance), 절대 별도 저장하지 않는다.
     ticketBalance, ticketLedger, redeemTicketReward,
+    // 애착 시스템(2026-07-22) — 모자 인벤토리/장착/성장 앨범. 판정은
+    // src/utils/attachment/ 순수 함수, 여기는 append-only 반영만.
+    hatInventory, equippedHatId, milestones,
+    grantHats, addMilestones, equipHat,
   }
 }
