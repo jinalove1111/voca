@@ -26,6 +26,11 @@ import StudentDirectory from './admin/StudentDirectory'
 // 그 반에 연결된 교재를 연결/해제하는 패널(교재 모드 꺼짐이면 안내만).
 import ClassTextbookLinks from './admin/ClassTextbookLinks'
 import AnalyticsPanel from './admin/AnalyticsPanel'
+// Reading Foundation v3.3(2026-07-23) — 유닛별 읽기 지문 편집기(관리자
+// 전용, readingFoundation 플래그 게이팅). 학생용 읽기 화면은 이번 범위
+// 밖(features.js readingStudentUI 예약 플래그 참고).
+import PassageEditor from './admin/PassageEditor'
+import { isFeatureEnabled } from '../config/features'
 
 const wordSlug = (word) => word.toLowerCase().replace(/\s+/g, '_')
 
@@ -1411,6 +1416,18 @@ export default function AdminScreen({ onBack }) {
                         </div>
 
                         <FutureAssignmentPlanner targetClass={c} words={words} />
+
+                        {/* Reading Foundation v3.3 — 지금 보고 있는 유닛(activeUnit)의
+                            읽기 지문 편집. 합성 폴백 유닛(id 없음 — 유닛 0개 반의
+                            DEFAULT_UNIT_NAME 표시용 가짜 유닛)은 DB에 실체가 없어
+                            지문을 매달 수 없으므로 렌더하지 않는다. key=unitId로
+                            유닛 전환 시 편집 상태를 초기화한다. */}
+                        {isFeatureEnabled('readingFoundation') && (() => {
+                          const activeUnitObj = units.find(u => u.name === activeUnit)
+                          return activeUnitObj?.id
+                            ? <PassageEditor key={activeUnitObj.id} unitId={activeUnitObj.id} unitName={activeUnit} />
+                            : null
+                        })()}
 
                         <ClassTextbookLinks targetClass={c} onChanged={refresh} />
 

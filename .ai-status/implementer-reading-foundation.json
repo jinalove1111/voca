@@ -3,10 +3,10 @@
   "role": "코드 구현",
   "task_id": "reading-foundation",
   "task": "Reading Foundation v3.3 — 지문(passages/passage_sentences) 스키마 + 데이터 레이어 + 관리자 지문 편집기 (학생 학습 UI는 의도적으로 범위 밖, readingStudentUI=false 플래그만)",
-  "status": "working",
-  "progress": 10,
+  "status": "completed",
+  "progress": 100,
   "started_at": "2026-07-23T00:00:00+09:00",
-  "updated_at": "2026-07-23T00:00:00+09:00",
+  "updated_at": "2026-07-23T01:00:00+09:00",
   "files_owned": [
     "supabase_v3_3_reading.sql",
     "src/utils/readingModel.js",
@@ -24,10 +24,12 @@
     "src/utils/seasonApi.js",
     "src/utils/wordLibrary.js",
     "src/components/admin/ClassTextbookLinks.jsx",
+    "src/components/FeatureManagementPanel.jsx",
     "tests/harness/runAnalytics.mjs",
+    "tests/harness/runAll.mjs",
     ".ai-status/README.md"
   ],
-  "summary": "패턴 조사 완료(v3.1 SQL RLS 관례, isMissingTableError, ClassTextbookLinks 패널 스타일, runAnalytics 하네스 구조). 커밋 1(SQL+순수모델+하네스)부터 착수.",
+  "summary": "3커밋 완료: (1) supabase_v3_3_reading.sql(멱등·순수 추가, 유닛 소속으로 v3.1 교재 계층 상속) + readingModel.js(import 0 순수) + runReading.mjs(21단언) + verify:reading. (2) readingApi.js(fetch는 [] 폴백·절대 안 던짐, 쓰기는 명확 에러, saveSentences=passage 범위 delete-then-insert). (3) PassageEditor.jsx(접힌 details, 열 때만 조회, 테이블 미존재 안내) + AdminScreen 유닛 펼침 영역 표면화(readingFoundation 플래그 게이팅, 합성 유닛 제외) + features.js 플래그 2개. build/verify:reading/verify:admin/verify:attachment(123) 전부 PASS. DDL은 미실행 — 운영자가 supabase_v3_3_reading.sql을 SQL Editor에서 수동 실행해야 편집기가 활성화됨(미실행 상태에서도 무해).",
   "blocker": null,
-  "next_action": "커밋 1: supabase_v3_3_reading.sql + readingModel.js + runReading.mjs + verify:reading 스크립트"
+  "next_action": "qa-reviewer 검수 → 운영자 supabase_v3_3_reading.sql 수동 실행 → (후속 라운드, 운영자 승인 시) readingStudentUI 플래그로 학생용 읽기 학습 화면 구현"
 }

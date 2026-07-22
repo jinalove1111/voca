@@ -70,6 +70,10 @@ const DEFAULT_FEATURES = {
   paulTownGarden: true,
   productAnalytics: true,      // 익명 관찰 레이어 — 이벤트 수집(개인정보 0, SQL 미실행 시 무해 no-op)        // Paul Town 정원(기존 정원 엔진 재사용)
   paulTownBuildings: true,     // 도서관/박물관/시계탑 건물(마을=내비게이션) — 2026-07-22 월드 완성으로 ON. 주의: 관리자가 플래그를 저장한 적 있는 기기는 localStorage 스냅샷(false)이 이겨서 그 기기에선 여전히 꺼져 있을 수 있음(기기 로컬 플래그의 기존 한계)
+
+  // Reading Foundation (2026-07-23, v3.3) — 유닛별 읽기 지문(passage).
+  readingFoundation: true,     // 관리자 지문 편집기(AdminScreen 반 관리 → 유닛 펼침) — 관리자 전용 화면이라 기본 ON이 안전(학생 화면에 아무 영향 없음)
+  readingStudentUI: false,     // 학생용 읽기 학습 화면 — 미구현 예약 플래그. 아직 아무 코드도 이 플래그를 소비하지 않는다(학생 대상 신규 기능은 이번 범위에서 금지 — 이후 운영자 승인 라운드에서 이 플래그로 게이팅해 구현할 자리 표시)
 }
 
 // localStorage에서 저장된 features 불러오기.
@@ -161,7 +165,11 @@ export const getFeaturesByCategory = (category) => {
     ranking: ['ranking', 'pointSystem', 'leaderboard', 'rewardSystem'],
     aiAnalysis: ['aiAnalysis', 'wrongAnswerNote', 'weakWordAnalysis', 'reviewRecommendation'],
     schoolManagement: ['classGroupManagement', 'semesterManagement', 'parentPortal', 'schoolDashboard', 'attendanceTracking', 'advancedAnalytics'],
-    attachment: ['attachmentHats', 'attachmentMuseum', 'attachmentAlbum', 'attachmentPaulMemory', 'attachmentWorldGarden', 'attachmentWorldFull', 'attachmentBookshelf', 'attachmentStory', 'paulMemoryV2', 'todaysDiscovery', 'starToSeed', 'hatCeremony', 'paulTownHomeBand', 'paulTownGarden', 'paulTownBuildings', 'productAnalytics'],
+    // reading* 두 플래그는 의미상 별개 도메인이지만, 새 카테고리를 추가하려면
+    // FeatureManagementPanel.jsx의 FEATURE_CATEGORIES도 함께 고쳐야 해서
+    // (이번 작업 소유 파일이 아님 — 규칙 16) 기존 attachment 목록에 얹는다.
+    // 별도 'reading' 카테고리 분리는 FeatureManagementPanel 소유 세션의 후속.
+    attachment: ['attachmentHats', 'attachmentMuseum', 'attachmentAlbum', 'attachmentPaulMemory', 'attachmentWorldGarden', 'attachmentWorldFull', 'attachmentBookshelf', 'attachmentStory', 'paulMemoryV2', 'todaysDiscovery', 'starToSeed', 'hatCeremony', 'paulTownHomeBand', 'paulTownGarden', 'paulTownBuildings', 'productAnalytics', 'readingFoundation', 'readingStudentUI'],
   }
   return categories[category] || []
 }
