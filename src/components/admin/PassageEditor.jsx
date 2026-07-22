@@ -2,8 +2,9 @@ import React, { useState } from 'react'
 import { validatePassage, movePosition, splitPassageText } from '../../utils/readingModel'
 import {
   fetchPassagesForUnit, createPassage, updatePassageTitle, deletePassage,
-  saveSentences, movePassage, checkReadingTablesExist,
+  saveSentences, movePassage, checkReadingTablesExist, checkSentenceColumnsExist,
 } from '../../utils/readingApi'
+import { IMPORTANCE_LABELS } from '../../utils/sentenceLearning'
 
 // Reading Foundation(v3.3) 관리자 지문 편집기 — AdminScreen 반 관리 탭의
 // 유닛 펼침 영역에 렌더된다(readingFoundation 플래그 게이팅은 호출부).
@@ -26,6 +27,10 @@ export default function PassageEditor({ unitId, unitName }) {
   const [loaded, setLoaded] = useState(false)      // details 첫 open 시 1회 조회
   const [loading, setLoading] = useState(false)
   const [tablesExist, setTablesExist] = useState(true)
+  // v3.4 학습 메타 컬럼(핵심 문장/중요도/문법 포인트/청크) 존재 여부 —
+  // supabase_v3_4_sentence_learning.sql 미실행이면 신규 컨트롤만 비활성
+  // (기존 v3.3 문장 편집은 100% 그대로 동작).
+  const [metaCols, setMetaCols] = useState(true)
   const [passages, setPassages] = useState([])
   const [newTitle, setNewTitle] = useState('')
   const [busy, setBusy] = useState(false)
@@ -37,11 +42,13 @@ export default function PassageEditor({ unitId, unitName }) {
 
   const load = async () => {
     setLoading(true)
-    const [exists, list] = await Promise.all([
+    const [exists, cols, list] = await Promise.all([
       checkReadingTablesExist(),
+      checkSentenceColumnsExist(),
       fetchPassagesForUnit(unitId),
     ])
     setTablesExist(exists)
+    setMetaCols(cols)
     setPassages(list)
     setLoading(false)
   }
@@ -117,9 +124,28 @@ export default function PassageEditor({ unitId, unitName }) {
   }
 
   // ── 문장 편집 ──────────────────────────────────────────────────────
+  // v3.4 — chunks(jsonb 배열) ↔ 편집용 텍스트(한 줄에 청크 하나) 변환.
+  // 수동 입력 전용(AI 자동 분할 없음). 2줄 미만이면 저장 시 null(청크
+  // 미지정 = 학습 화면이 단일 청크 폴백, sentenceLearning.chunksOf).
+  const chunksToText = (chunks) => (Array.isArray(chunks) ? chunks.join('\n') : '')
+  const textToChunks = (text) => {
+    const lines = String(text ?? '').split('\n').map((l) => l.trim()).filter(Boolean)
+    return lines.length >= 2 ? lines : null
+  }
+
+  const newDraftMeta = () => ({ isKeySentence: false, importanceLevel: 1, grammarPoint: '', chunksText: '' })
+
   const openSentenceEditor = (p) => {
     setExpandedId(p.id)
-    setDraft(p.sentences.map((s) => ({ key: s.id || nextKey(), english: s.english, korean: s.korean || '' })))
+    setDraft(p.sentences.map((s) => ({
+      key: s.id || nextKey(),
+      english: s.english,
+      korean: s.korean || '',
+      isKeySentence: s.isKeySentence === true,
+      importanceLevel: Number(s.importanceLevel) || 1,
+      grammarPoint: s.grammarPoint || '',
+      chunksText: chunksToText(s.chunks),
+    })))
     setDraftErrors([])
     setPasteText('')
     setShowPaste(false)
@@ -128,7 +154,7 @@ export default function PassageEditor({ unitId, unitName }) {
   const setDraftRow = (key, field, value) =>
     setDraft((prev) => prev.map((r) => (r.key === key ? { ...r, [field]: value } : r)))
 
-  const addDraftRow = () => setDraft((prev) => [...prev, { key: nextKey(), english: '', korean: '' }])
+  const addDraftRow = () => setDraft((prev) => [...prev, { key: nextKey(), english: '', korean: '', ...newDraftMeta() }])
 
   const deleteDraftRow = (key) => setDraft((prev) => prev.filter((r) => r.key !== key))
 
@@ -137,7 +163,7 @@ export default function PassageEditor({ unitId, unitName }) {
   const applyPaste = () => {
     const parts = splitPassageText(pasteText)
     if (parts.length === 0) return alert('붙여넣은 본문에서 문장을 찾지 못했어요.')
-    setDraft((prev) => [...prev, ...parts.map((en) => ({ key: nextKey(), english: en, korean: '' }))])
+    setDraft((prev) => [...prev, ...parts.map((en) => ({ key: nextKey(), english: en, korean: '', ...newDraftMeta() }))])
     setPasteText('')
     setShowPaste(false)
   }
@@ -148,7 +174,8 @@ export default function PassageEditor({ unitId, unitName }) {
     if (!ok) return
     setBusy(true)
     try {
-      await saveSentences(p.id, draft)
+      // chunksText(한 줄=청크 하나)를 저장 형식(배열 또는 null)으로 변환.
+      await saveSentences(p.id, draft.map((r) => ({ ...r, chunks: textToChunks(r.chunksText) })))
       setExpandedId(null)
       await load()
     } catch (err) {
@@ -197,6 +224,11 @@ export default function PassageEditor({ unitId, unitName }) {
 
                 {expandedId === p.id && (
                   <div className="border-t border-gray-100 pt-2 space-y-2">
+                    {!metaCols && (
+                      <p className="text-[11px] text-orange-500 font-bold bg-orange-50 rounded-lg p-2">
+                        ⚠️ 문장 학습 설정(핵심 문장/중요도/문법/끊기)은 supabase_v3_4_sentence_learning.sql 실행 후 사용 가능해요. (문장 편집·저장은 지금도 돼요)
+                      </p>
+                    )}
                     {draft.length === 0 && (
                       <p className="text-xs text-gray-400">문장이 없어요 — 아래에서 추가하거나 본문을 붙여넣으세요.</p>
                     )}
@@ -221,6 +253,38 @@ export default function PassageEditor({ unitId, unitName }) {
                           onChange={(e) => setDraftRow(row.key, 'korean', e.target.value)}
                           placeholder="한글 번역 (선택)"
                           className="text-xs border-2 border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-sky-400 bg-white" style={{ width: 'calc(100% - 1.6rem)', marginLeft: '1.6rem' }} />
+
+                        {/* v3.4 문장 학습 메타 — 컬럼 미존재(metaCols=false)면 비활성 */}
+                        <div className="space-y-1" style={{ width: 'calc(100% - 1.6rem)', marginLeft: '1.6rem' }}>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <label className={`flex items-center gap-1 text-[11px] font-bold ${row.isKeySentence ? 'text-amber-600' : 'text-gray-500'} ${!metaCols ? 'opacity-40' : ''}`}>
+                              <input type="checkbox" checked={row.isKeySentence} disabled={busy || !metaCols}
+                                onChange={(e) => setDraftRow(row.key, 'isKeySentence', e.target.checked)} />
+                              핵심 문장
+                            </label>
+                            <label className={`flex items-center gap-1 text-[11px] font-bold text-gray-500 ${!metaCols ? 'opacity-40' : ''}`}>
+                              시험 중요도
+                              <select value={row.importanceLevel} disabled={busy || !metaCols}
+                                onChange={(e) => setDraftRow(row.key, 'importanceLevel', Number(e.target.value))}
+                                className="text-[11px] border-2 border-gray-200 rounded-lg px-1 py-0.5 bg-white focus:outline-none focus:border-sky-400">
+                                {[5, 4, 3, 2, 1].map((n) => (
+                                  <option key={n} value={n}>{n} — {IMPORTANCE_LABELS[n]}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <span className="text-[11px] text-amber-400 font-bold" title={`중요도 ${row.importanceLevel} — ${IMPORTANCE_LABELS[row.importanceLevel] || ''}`}>
+                              {'★'.repeat(Number(row.importanceLevel) || 1)}
+                            </span>
+                          </div>
+                          <input type="text" value={row.grammarPoint} disabled={busy || !metaCols}
+                            onChange={(e) => setDraftRow(row.key, 'grammarPoint', e.target.value)}
+                            placeholder="문법 포인트 (선택, 예: 과거형 went)"
+                            className="w-full text-[11px] border-2 border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-sky-400 bg-white disabled:opacity-40" />
+                          <textarea value={row.chunksText} rows={2} disabled={busy || !metaCols}
+                            onChange={(e) => setDraftRow(row.key, 'chunksText', e.target.value)}
+                            placeholder={'문장 끊기 (선택) — 한 줄에 한 덩어리씩, 2줄 이상\n예: I went (줄바꿈) to school'}
+                            className="w-full text-[11px] border-2 border-gray-200 rounded-lg px-2 py-1 resize-none focus:outline-none focus:border-sky-400 bg-white disabled:opacity-40" />
+                        </div>
                       </div>
                     ))}
 
