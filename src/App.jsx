@@ -49,6 +49,10 @@ const EnglishGarden = React.lazy(() => import('./components/EnglishGarden'))
 // Paul Town v2.0(2026-07-22) — 마을 화면도 같은 이유로 lazy(진입은 홈
 // 밴드의 [구경가기] 버튼 — 매일 여는 메인 화면이 아니다).
 const PaulTown = React.lazy(() => import('./components/PaulTown'))
+// Paul Town 월드(2026-07-22) — 도서관/시계탑. 마을(PaulTown)의 건물 카드
+// 로만 진입하므로 역시 lazy — 학생 메인 번들 비영향.
+const Bookshelf = React.lazy(() => import('./components/Bookshelf'))
+const TimeMachine = React.lazy(() => import('./components/TimeMachine'))
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -550,7 +554,7 @@ function AppInner({ studentId, studentName, onLogout }) {
       {screen === 'studyCalendar' && <StudyCalendar studentData={studentData} onBack={() => setScreen('dashboard')} />}
       {/* 애착 시스템(2026-07-22) — 4개 화면 전부 lazy(공유 fallback), 진입은
           Dashboard "더 많은 메뉴"의 feature flag 게이트를 거친다. */}
-      {(screen === 'hatCollection' || screen === 'wordMuseum' || screen === 'growthAlbum' || screen === 'englishGarden' || screen === 'paulTown') && (
+      {(screen === 'hatCollection' || screen === 'wordMuseum' || screen === 'growthAlbum' || screen === 'englishGarden' || screen === 'paulTown' || screen === 'bookshelf' || screen === 'timeMachine') && (
         <React.Suspense fallback={
           <div className="min-h-screen flex items-center justify-center bg-gray-50">
             <div className="text-center">
@@ -581,7 +585,18 @@ function AppInner({ studentId, studentName, onLogout }) {
           {screen === 'paulTown' && (
             <PaulTown stats={attachment.stats} hatInventory={studentData.hatInventory}
               equippedHatId={studentData.equippedHatId} onEquip={studentData.equipHat}
-              onBack={() => setScreen('dashboard')} />
+              onGo={setScreen} onBack={() => setScreen('dashboard')} />
+          )}
+          {/* Paul Town 월드 — 도서관/시계탑. 마을 건물 카드로만 진입하므로
+              뒤로 가기는 마을(paulTown)로. 전부 파생 화면 — 저장 0. */}
+          {screen === 'bookshelf' && (
+            <Bookshelf lib={attachment.lib} unitsDone={attachment.unitsDone}
+              textbooksDone={attachment.textbooksDone}
+              onBack={() => setScreen('paulTown')} />
+          )}
+          {screen === 'timeMachine' && (
+            <TimeMachine stats={attachment.stats} wordTextById={attachment.wordTextById}
+              onBack={() => setScreen('paulTown')} />
           )}
         </React.Suspense>
       )}

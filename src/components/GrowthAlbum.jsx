@@ -5,9 +5,13 @@
 // backfilled(소급 감지) 이벤트는 달성 날짜를 주장하지 않고 "이미 달성!"
 // 으로만 보여준다 — milestones.js 헤더의 원칙 그대로.
 import { sortMilestonesForAlbum } from '../utils/attachment/milestones'
+import { timeWindows } from '../utils/attachment/paulTown'
 
 export default function GrowthAlbum({ milestones, stats, onBack }) {
   const sorted = sortMilestonesForAlbum(milestones)
+  // "일 년 전 오늘"(Paul Town 월드) — 그 달력 날짜의 기록이 실존할 때만
+  // 한 줄. 없으면 아무것도 그리지 않는다(없는 기억을 지어내지 않음).
+  const yearAgo = timeWindows(stats).find((w) => w.id === 'yearAgo')
   const tw = stats.thisWeek
   const lw = stats.lastWeek
   const bothWeeksHaveData = tw.quizTotal >= 5 && lw.quizTotal >= 5
@@ -56,6 +60,11 @@ export default function GrowthAlbum({ milestones, stats, onBack }) {
           )}
           {bothWeeksHaveData && twAcc > lwAcc && (
             <p className="text-center text-xs font-bold text-green-600 mt-2">지난주의 나보다 실력이 늘었어요! 📈</p>
+          )}
+          {yearAgo?.present && (
+            <p className="text-center text-xs font-bold text-indigo-500 mt-2">
+              🕰️ 일 년 전 오늘({yearAgo.dateLabel})도 공부했어요 — ⭐{yearAgo.starsEarned}
+            </p>
           )}
         </div>
 
