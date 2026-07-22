@@ -1,0 +1,33 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "문서 갱신",
+  "task_id": "reading-spec-docs",
+  "task": "docs/reading/ 스펙 문서 6종 작성(임포트/문장분리/청킹/빈칸/문법분류/시험중요도)",
+  "status": "completed",
+  "progress": 95,
+  "started_at": "2026-07-23T00:00:00+09:00",
+  "updated_at": "2026-07-23T00:00:00+09:00",
+  "files_owned": [
+    "docs/reading/01-textbook-import-spec.md",
+    "docs/reading/02-sentence-splitting-rules.md",
+    "docs/reading/03-chunking-guidelines.md",
+    "docs/reading/04-blank-generation-rules.md",
+    "docs/reading/05-grammar-taxonomy.md",
+    "docs/reading/06-exam-importance-standards.md",
+    ".ai-status/docs-maintainer-reading-spec-docs.json"
+  ],
+  "files_read": [
+    "src/utils/sentenceLearning.js",
+    "src/utils/readingModel.js",
+    "supabase_v3_1_textbooks.sql",
+    "supabase_v3_3_reading.sql",
+    "supabase_v3_4_sentence_learning.sql",
+    "docs/agent-decisions/0001-class-delete-dialog-copy.md",
+    "docs/agent-decisions/0004-multi-textbook-architecture.md",
+    "DATABASE.md",
+    ".ai-status/README.md"
+  ],
+  "summary": "docs/reading/ 6개 문서 작성 완료. 전부 실제 구현(pickBlank/normalizeAnswer/IMPORTANCE_LABELS/splitPassageText/chunksOf)과 v3.1/v3.3/v3.4 스키마 실측 기반. 코드/설정 파일 변경 0.",
+  "blocker": "이 세션 도구 목록에 Bash가 없어 git add/commit을 직접 실행할 수 없음. 커밋할 파일 6개(docs/reading/*.md)만 스테이징하는 커밋 1개를 호출측(부모 세션)이 실행 필요.",
+  "next_action": "부모 세션이 실행: git add docs/reading/01-textbook-import-spec.md docs/reading/02-sentence-splitting-rules.md docs/reading/03-chunking-guidelines.md docs/reading/04-blank-generation-rules.md docs/reading/05-grammar-taxonomy.md docs/reading/06-exam-importance-standards.md && git commit -m \"docs(reading): 임포트/분리/청킹/빈칸/문법/중요도 스펙 문서 6종\""
+}

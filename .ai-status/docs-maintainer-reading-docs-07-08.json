@@ -1,0 +1,28 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "문서 작성 (docs/reading 시리즈 07·08)",
+  "task_id": "reading-docs-07-08",
+  "task": "docs/reading/07-encouragement-messages.md(격려 문구 500) + 08-daily-mission-ux.md(문장 학습 데일리 미션 UX 설계) 작성",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-23T00:00:00+09:00",
+  "updated_at": "2026-07-23T00:30:00+09:00",
+  "files_owned": [
+    "docs/reading/07-encouragement-messages.md",
+    "docs/reading/08-daily-mission-ux.md",
+    ".ai-status/docs-maintainer-reading-docs-07-08.json"
+  ],
+  "files_read": [
+    "src/utils/sentenceLearning.js",
+    "src/utils/paulReactions.js",
+    "src/utils/attachment/paulMemory.js",
+    "src/components/GuidedSession.jsx",
+    "src/components/SentenceLearningFlow.jsx",
+    "src/components/SentencesTab.jsx",
+    "src/components/Dashboard.jsx",
+    ".ai-status/README.md"
+  ],
+  "summary": "격려 문구 500개(정답 120/재도전 100/거의 다 왔어 80/훌륭해 100/미션 완료 100, 전부 서로 다른 문장, 징벌·압박·죄책감 언어 0) + 문장 학습 데일리 미션 UX 설계(ASCII 와이어프레임 5종, 상태 전이, 오늘의 미션 4칸·GuidedSession과의 비중복 경계, 스트릭 징벌 금지 규정, sentence_progress 파생 설계) 작성 완료. 코드/설정/SQL 무변경(docs-only).",
+  "blocker": "이 에이전트 세션에는 셸(Bash) 도구가 없어 git add/commit을 직접 실행하지 못함",
+  "next_action": "부모 세션이 docs/reading/07-encouragement-messages.md, docs/reading/08-daily-mission-ux.md 2개 파일만 git add 후 커밋 1개: docs(reading): 격려 문구 500 + 데일리 미션 UX 설계 (push 금지)"
+}
