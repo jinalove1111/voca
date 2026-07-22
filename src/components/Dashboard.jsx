@@ -55,6 +55,7 @@ import { pickTodaysDiscovery, gardenBandSummary, starSeedState } from '../utils/
 // 표시 여부는 useAttachment의 세션 로컬 큐(pendingCeremonyHat)가 전담.
 import HatCeremony from './HatCeremony'
 import { isFeatureEnabled } from '../config/features'
+import { trackEvent, EV } from '../utils/productEvents'
 
 const GOAL = 5
 const stickerById = (id) => STICKERS.find(s => s.id === id)
@@ -261,6 +262,12 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
   // 같은 마스터 스위치로 게이팅(Paul Rank/Ticket과 동일 원칙). 조회 실패
   // (테이블 미생성 등)는 wordKingApi.js가 조용히 빈 결과로 폴백하므로
   // 이 텍스트는 그냥 안 보일 뿐 크래시 없음.
+  // 익명 관찰 — 폴의 기억/오늘의 발견이 실제로 렌더된 날만 기록(dedupe는 trackEvent가)
+  useEffect(() => {
+    if (paulMemory) trackEvent(studentId, EV.paulMemoryViewed)
+    if (isFeatureEnabled('todaysDiscovery')) trackEvent(studentId, EV.todaysDiscoveryViewed)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentId])
   const [weeklyChampion, setWeeklyChampion] = useState(null)
   useEffect(() => {
     let cancelled = false
@@ -625,7 +632,7 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
           순간의 전면 오버레이(GiftReveal 시각 패턴). 큐(useAttachment
           세션 로컬)가 빌 때까지 한 번에 하나씩. */}
       {isFeatureEnabled('hatCeremony') && pendingCeremonyHat && (
-        <HatCeremony hat={pendingCeremonyHat} onEquip={studentData.equipHat} onDismiss={onDismissCeremony} />
+        <HatCeremony hat={pendingCeremonyHat} onEquip={(id) => { studentData.equipHat(id); trackEvent(studentId, EV.hatEquipped) }} onDismiss={onDismissCeremony} />
       )}
     </div>
   )

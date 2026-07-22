@@ -13,6 +13,7 @@ import { deriveAttachmentStats, completedUnits } from '../utils/attachment/attac
 import { evaluateHatUnlocks, hatById } from '../utils/attachment/hatSystem'
 import { detectNewMilestones } from '../utils/attachment/milestones'
 import { getStudentClass, getClassUnits, getClassWords, getClassIdByName } from '../utils/wordLibrary'
+import { trackEvent, EV } from '../utils/productEvents'
 
 // 반의 유닛별 단어 목록 — 유닛 완료/박물관/책장이 공유하는 형태.
 // wordLibrary 캐시는 동기 조회라 여기서 바로 구성한다.
@@ -72,6 +73,7 @@ export function useAttachment(studentId, studentData) {
     const newHats = evaluateHatUnlocks(stats, ctx, ownedIds)
     if (newHats.length > 0) {
       grantHats(newHats)
+      trackEvent(studentId, EV.hatEarned) // 익명 관찰 — 획득 사실만(모자 종류/개인정보 없음)
       // 수여식 큐 적재 — 카탈로그 엔트리(색/이름/출처 라벨 포함)로 변환.
       // 표시 여부(hatCeremony 플래그)는 Dashboard가 게이트한다.
       setCeremonyQueue(newHats.map((e) => hatById(e.hatId)).filter(Boolean))

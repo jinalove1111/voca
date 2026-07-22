@@ -19,6 +19,7 @@ import GuidedSession from './components/GuidedSession'
 import { useStudent } from './hooks/useStudent'
 import { useAttachment } from './hooks/useAttachment'
 import { pickNextGame } from './utils/matchGame'
+import { trackEvent, EV } from './utils/productEvents'
 import { assignDirections } from './utils/entranceTest'
 import { logSpellingReview } from './utils/spellingReviewApi'
 import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getClassSettings, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentPrimaryTextbook, getStudentClassId, getClassNames, getClassIdByName } from './utils/wordLibrary'
@@ -158,6 +159,12 @@ function AppInner({ studentId, studentName, onLogout }) {
   // play never inherits a stale lesson context.
   const [balloonFromLesson, setBalloonFromLesson] = useState(false)
   useEffect(() => { if (screen === 'dashboard') setBalloonFromLesson(false) }, [screen])
+  // 익명 관찰(2026-07-23) — 화면 열람 이벤트. trackEvent는 (이벤트,날짜)당
+  // 1회 dedupe + fire-and-forget이라 이 effect가 몇 번 돌아도 무해.
+  useEffect(() => {
+    const m = { dashboard: EV.appOpened, paulTown: EV.paulTownOpened, englishGarden: EV.gardenOpened, bookshelf: EV.bookshelfOpened, timeMachine: EV.timeMachineOpened, wordMuseum: EV.museumOpened }
+    if (m[screen]) trackEvent(studentId, m[screen])
+  }, [screen, studentId])
   const [currentGameId, setCurrentGameId] = useState('balloon')
   const [refreshTick, setRefreshTick] = useState(0)
   // 학습 모드(듣기/말하기/쓰기/종합) — 세션 동안만 유지, 매번 앱을 새로
@@ -565,7 +572,7 @@ function AppInner({ studentId, studentName, onLogout }) {
         }>
           {screen === 'hatCollection' && (
             <HatCollection studentName={studentName} hatInventory={studentData.hatInventory}
-              equippedHatId={studentData.equippedHatId} onEquip={studentData.equipHat}
+              equippedHatId={studentData.equippedHatId} onEquip={(id) => { studentData.equipHat(id); trackEvent(studentId, EV.hatEquipped) }}
               onBack={() => setScreen('dashboard')} />
           )}
           {screen === 'wordMuseum' && (

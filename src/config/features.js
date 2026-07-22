@@ -67,7 +67,8 @@ const DEFAULT_FEATURES = {
   starToSeed: true,            // 별→씨앗 — 어제 별이 오늘 새싹(history 파생)
   hatCeremony: true,           // 모자 수여식 — 새 모자 획득 연출
   paulTownHomeBand: true,      // 홈 밴드 — Paul Town 한 줄 요약 띠
-  paulTownGarden: true,        // Paul Town 정원(기존 정원 엔진 재사용)
+  paulTownGarden: true,
+  productAnalytics: true,      // 익명 관찰 레이어 — 이벤트 수집(개인정보 0, SQL 미실행 시 무해 no-op)        // Paul Town 정원(기존 정원 엔진 재사용)
   paulTownBuildings: true,     // 도서관/박물관/시계탑 건물(마을=내비게이션) — 2026-07-22 월드 완성으로 ON. 주의: 관리자가 플래그를 저장한 적 있는 기기는 localStorage 스냅샷(false)이 이겨서 그 기기에선 여전히 꺼져 있을 수 있음(기기 로컬 플래그의 기존 한계)
 }
 
@@ -160,7 +161,7 @@ export const getFeaturesByCategory = (category) => {
     ranking: ['ranking', 'pointSystem', 'leaderboard', 'rewardSystem'],
     aiAnalysis: ['aiAnalysis', 'wrongAnswerNote', 'weakWordAnalysis', 'reviewRecommendation'],
     schoolManagement: ['classGroupManagement', 'semesterManagement', 'parentPortal', 'schoolDashboard', 'attendanceTracking', 'advancedAnalytics'],
-    attachment: ['attachmentHats', 'attachmentMuseum', 'attachmentAlbum', 'attachmentPaulMemory', 'attachmentWorldGarden', 'attachmentWorldFull', 'attachmentBookshelf', 'attachmentStory', 'paulMemoryV2', 'todaysDiscovery', 'starToSeed', 'hatCeremony', 'paulTownHomeBand', 'paulTownGarden', 'paulTownBuildings'],
+    attachment: ['attachmentHats', 'attachmentMuseum', 'attachmentAlbum', 'attachmentPaulMemory', 'attachmentWorldGarden', 'attachmentWorldFull', 'attachmentBookshelf', 'attachmentStory', 'paulMemoryV2', 'todaysDiscovery', 'starToSeed', 'hatCeremony', 'paulTownHomeBand', 'paulTownGarden', 'paulTownBuildings', 'productAnalytics'],
   }
   return categories[category] || []
 }
