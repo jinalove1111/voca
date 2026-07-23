@@ -1,0 +1,23 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "writing-ai-tests-v13",
+  "task": "쓰기 검수 AI 보조 v1.3 스펙(AI_BATCH_SIZE 25->20, MAX_REQUESTS_PER_RUN=10 신설, budget.exceeded 계약) 반영 — scripts/testWritingReviewAiPipeline.mjs 섹션 43 갱신 + v1.3 신규 계약(ai_deferred/ai_budget_exceeded 이월) 스팟체크 추가",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-24T00:00:00+09:00",
+  "updated_at": "2026-07-24T00:00:00+09:00",
+  "files_owned": [
+    "scripts/testWritingReviewAiPipeline.mjs",
+    ".ai-status/implementer-writing-ai-tests-v13.json"
+  ],
+  "files_read": [
+    "src/utils/spellingReviewAiApi.js",
+    "supabase/functions/grade-writing-answers/pipeline.js",
+    ".ai-status/implementer-writing-ai-client-bands.json",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "src/utils/spellingReviewAiApi.js는 읽기만 함(수정 금지 지시 준수) — AI_BATCH_SIZE(=20)/MAX_REQUESTS_PER_RUN(=10)이 이미 export돼 있어 테스트 esbuild 번들 destructuring에 두 상수를 추가로 뽑아 하드코딩 대신 상수 기반으로 기대값을 계산하도록 갱신(향후 드리프트 방지). 섹션 43 제목의 '(25청크)'를 '(${AI_BATCH_SIZE}청크, v1.3 운영자 비용 최소화 스펙)'으로 갱신하고, fetch 호출 수 기대값을 'ceil(123/25)=5'에서 'ceil(123/AI_BATCH_SIZE)=7(20*6+3)'로 수정 + '요청 수(7)가 호출 한도(10) 이내라 이월 없음(deferredCount===0)' 단언 1건 추가. 신규 섹션 43b(MAX_REQUESTS_PER_RUN 초과분 이월) — AI_BATCH_SIZE*MAX_REQUESTS_PER_RUN(=200)건 + 오버플로 15건으로 구성한 픽스처에서 fetch 호출이 정확히 MAX_REQUESTS_PER_RUN(10)회까지만 발생하고, 넘친 15건이 decision='review'/confidence=0/decision_source='ai_deferred'로 이월되며 deferredCount와 일치하는지 검증. 신규 섹션 43c(서버 budget.exceeded 계약) — 첫 청크 응답에 budget:{exceeded:true}를 실어 반환하는 mock fetch로, runAiPhase가 이후 청크를 전송하지 않고(fetch 1회만) budgetExceeded=true/budgetInfo 보존, 못 보낸 나머지가 decision_source='ai_budget_exceeded'로 review/confidence 0 이월되는지 검증. 두 신규 블록 모두 mock 응답에 decision_source:'ai' 필드를 명시(최초 시도에서 이 필드 누락으로 FAIL 2건 발생 → 원인 파악 후 재실행하여 PASS로 해결). 실제 구현 파일(spellingReviewAiApi.js, pipeline.js, index.ts)은 전혀 수정하지 않음.",
+  "blocker": null,
+  "next_action": "완료. node scripts/testWritingReviewAiPipeline.mjs 전체 재실행 결과 PASS=212건/FAIL=0건/SKIP=5건(섹션 36의 배포 의존 4건 + 섹션 48의 배포 의존 1건, 기존과 동일한 정직 SKIP — 계획서의 '기존 SKIP 6건'과 실측이 5건으로 다르지만 이 세션에서 SKIP 라인을 건드리지 않았으므로 사전부터 5건이었던 것으로 판단, 별도 조치 불필요). npm run build 통과(신규 에러/경고 없음, 기존 500kB+ 청크 경고만 그대로). npm run verify:writing 통과(3개 스크립트: testSpelling.mjs/testSpellingDirectionWiring.mjs/testWritingReviewAiPipeline.mjs 전부 PASS). qa-reviewer가 커밋 처리."
+}

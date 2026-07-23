@@ -637,7 +637,7 @@ await esbuild.build({
   }],
 })
 const spellingReviewAiApi = await import(pathToFileURL('scripts/.tmp/spellingReviewAiApi.bundle.mjs').href)
-const { runRulesPhase, runAiPhase, estimateAiCostUsd, evaluateCostGate } = spellingReviewAiApi
+const { runRulesPhase, runAiPhase, estimateAiCostUsd, evaluateCostGate, AI_BATCH_SIZE, MAX_REQUESTS_PER_RUN } = spellingReviewAiApi
 
 console.log('\n37. 미션 지정 픽스처 쌍(explicitly/constant/adopt) — 정확한 문자열로 재확인')
 {
@@ -795,7 +795,7 @@ console.log('\n42. 잘못된 JSON 응답(Edge Function 바디 파싱 불가) —
   // HTTP 응답 바디를 못 읽는 경우)의 계약을 추가로 확인하는 것뿐이다.
 }
 
-console.log('\n43. 143건 배치 — runRulesPhase+runAiPhase(25청크) 경유 fetch 호출 수/전건 커버/미리보기 순수성(0건 mutation)')
+console.log(`\n43. 143건 배치 — runRulesPhase+runAiPhase(${AI_BATCH_SIZE}청크, v1.3 운영자 비용 최소화 스펙) 경유 fetch 호출 수/전건 커버/미리보기 순수성(0건 mutation)`)
 {
   const originalFetch = globalThis.fetch
   let fetchCallCount = 0
@@ -823,9 +823,95 @@ console.log('\n43. 143건 배치 — runRulesPhase+runAiPhase(25청크) 경유 f
     check('규칙 단계에서 20건 해결, 123건 미해결', resolved.length === 20 && unresolved.length === 123)
 
     const aiRes = await runAiPhase({ adminPin: '1234', unresolvedRows: unresolved })
-    check('fetch 호출 수 = ceil(123/25) = 5(25*4+23)', fetchCallCount === Math.ceil(123 / 25) && fetchCallCount === 5)
+    // v1.3: 기본 배치 크기가 25 -> AI_BATCH_SIZE(20)로 하향(구현 상수를 그대로
+    // import해 드리프트 방지, § spellingReviewAiApi.js AI_BATCH_SIZE 주석).
+    // 123건 미해결 -> ceil(123/20)=7배치(20*6+3), 요청 수(7)가
+    // MAX_REQUESTS_PER_RUN(10) 이내라 호출 한도 이월(ai_deferred)은 발생 안 함.
+    check(`fetch 호출 수 = ceil(123/${AI_BATCH_SIZE}) = 7(${AI_BATCH_SIZE}*6+3)`, fetchCallCount === Math.ceil(123 / AI_BATCH_SIZE) && fetchCallCount === 7)
     check('143건 전부 제안을 받음(20 규칙 + 123 AI, 누락 없음)', resolved.length + aiRes.proposals.length === 143)
     check('미리보기 중 setWordAcceptedMeanings/resolveSpellingReview 호출 0건(순수 미리보기, § 섹션 12와 동일 원칙)', globalThis.__aiApiSpy.calls.length === 0)
+    check('요청 수(7)가 호출 한도(10) 이내라 이월(deferredCount) 없음', aiRes.deferredCount === 0)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+}
+
+console.log('\n43b. 호출 한도(MAX_REQUESTS_PER_RUN) 초과분 이월 — 초과 항목은 전송 자체가 안 되고 ai_deferred로 정직하게 표시(v1.3 신규 계약)')
+{
+  const originalFetch = globalThis.fetch
+  let fetchCallCount = 0
+  globalThis.fetch = async (_url, opts) => {
+    fetchCallCount++
+    const body = JSON.parse(opts.body)
+    const ids = body.pendingIds
+    return {
+      ok: true, status: 200,
+      json: async () => ({
+        ok: true,
+        proposals: ids.map((id) => ({ pending_answer_id: id, decision: 'review', confidence: 0.5, reason: 'mock', suggested_synonym: null, part_of_speech_warning: null, meaning_scope_warning: null, decision_source: 'ai' })),
+        usage: { inputTokens: 100, outputTokens: 50 },
+        budget: { exceeded: false, todayUsd: 0.1, capUsd: 2.0 },
+      }),
+    }
+  }
+  try {
+    // 정확히 MAX_REQUESTS_PER_RUN개 배치(=AI_BATCH_SIZE*MAX_REQUESTS_PER_RUN건)를
+    // 채우고, 거기에 15건을 더 얹어 "호출 한도를 넘는 마지막 부분 배치"가
+    // 생기도록 구성(향후 두 상수가 바뀌어도 이 비율로 재현됨).
+    const capacity = AI_BATCH_SIZE * MAX_REQUESTS_PER_RUN
+    const overflowCount = 15
+    const rows = Array.from({ length: capacity + overflowCount }, (_, i) => ({
+      id: `cap-${i}`, wordId: 'capw', word: 'diff', meaning: `등록뜻${i}`, acceptedMeanings: [], submittedAnswer: `전혀다른답${i}`,
+    }))
+    const res = await runAiPhase({ adminPin: '1234', unresolvedRows: rows })
+    check(`fetch 호출 수는 딱 MAX_REQUESTS_PER_RUN(${MAX_REQUESTS_PER_RUN})까지만 — 그 이상은 전송 자체가 안 됨`, fetchCallCount === MAX_REQUESTS_PER_RUN)
+    check(`전송된 ${capacity}건은 정상 응답 그대로(decision_source=ai)`, res.proposals.filter((p) => p.decision_source === 'ai').length === capacity)
+    const deferred = res.proposals.filter((p) => p.decision_source === 'ai_deferred')
+    check(`이월된 ${overflowCount}건은 decision_source=ai_deferred`, deferred.length === overflowCount)
+    check('이월 항목은 decision=review/confidence=0으로 안전하게 강등(자동 거부/자동 인정 아님)', deferred.every((p) => p.decision === 'review' && p.confidence === 0))
+    check('제안 총 개수는 입력 행 수와 동일(누락 없음)', res.proposals.length === capacity + overflowCount)
+    check('runAiPhase가 보고하는 deferredCount도 이월분과 일치', res.deferredCount === overflowCount)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+}
+
+console.log('\n43c. 서버 예산 초과 신호(budget.exceeded/decision_source=ai_budget_exceeded) — 이후 청크 전송 중단 + 나머지 ai_budget_exceeded로 이월')
+{
+  const originalFetch = globalThis.fetch
+  let fetchCallCount = 0
+  globalThis.fetch = async (_url, opts) => {
+    fetchCallCount++
+    const body = JSON.parse(opts.body)
+    const ids = body.pendingIds
+    // 첫 번째 청크부터 서버가 예산 초과를 알림 — 이후 청크는 절대 전송되면
+    // 안 된다(§ runAiPhase "thisBatchHitBudget이면 break").
+    return {
+      ok: true, status: 200,
+      json: async () => ({
+        ok: true,
+        proposals: ids.map((id) => ({ pending_answer_id: id, decision: 'review', confidence: 0.5, reason: 'mock', suggested_synonym: null, part_of_speech_warning: null, meaning_scope_warning: null, decision_source: 'ai' })),
+        usage: { inputTokens: 100, outputTokens: 50 },
+        budget: { exceeded: true, todayUsd: 2.1, capUsd: 2.0 },
+      }),
+    }
+  }
+  try {
+    // AI_BATCH_SIZE의 3배 -> 3청크가 필요한 규모(호출 한도 10 미만이라
+    // 한도 이월과는 섞이지 않음, 순수하게 예산 초과 계약만 검증).
+    const rows = Array.from({ length: AI_BATCH_SIZE * 3 }, (_, i) => ({
+      id: `bud-${i}`, wordId: 'budw', word: 'diff', meaning: `등록뜻${i}`, acceptedMeanings: [], submittedAnswer: `전혀다른답${i}`,
+    }))
+    const res = await runAiPhase({ adminPin: '1234', unresolvedRows: rows })
+    check('첫 청크가 budget.exceeded=true를 반환하면 fetch는 딱 1번만 호출됨(이후 청크 전송 안 함)', fetchCallCount === 1)
+    check('budgetExceeded=true로 호출부가 인지 가능', res.budgetExceeded === true)
+    check('budgetInfo에 서버가 준 값 그대로 보존', res.budgetInfo?.todayUsd === 2.1 && res.budgetInfo?.capUsd === 2.0)
+    const sentBatch = res.proposals.filter((p) => p.decision_source === 'ai')
+    check(`전송된 첫 배치(${AI_BATCH_SIZE}건)는 정상 ai 응답 그대로`, sentBatch.length === AI_BATCH_SIZE)
+    const deferredByBudget = res.proposals.filter((p) => p.decision_source === 'ai_budget_exceeded')
+    check(`못 보낸 나머지 ${AI_BATCH_SIZE * 2}건은 decision_source=ai_budget_exceeded로 이월`, deferredByBudget.length === AI_BATCH_SIZE * 2)
+    check('예산 초과 이월 항목도 decision=review/confidence=0(자동 거부 아님)', deferredByBudget.every((p) => p.decision === 'review' && p.confidence === 0))
+    check('제안 총 개수는 입력 행 수와 동일(누락 없음)', res.proposals.length === AI_BATCH_SIZE * 3)
   } finally {
     globalThis.fetch = originalFetch
   }
