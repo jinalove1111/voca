@@ -1079,7 +1079,18 @@ console.log('\n47. 수동 폴백 경로 실체 확인 — resolveSpellingReview/
   const spellingReviewApiReal = await import(pathToFileURL('scripts/.tmp/manualPaths/spellingReviewApi.js').href)
 
   check('setWordAcceptedMeanings 존재(함수)', typeof wordLibraryReal.setWordAcceptedMeanings === 'function')
-  check('setWordAcceptedMeanings 인자 2개(wordDbId, meanings) — 시그니처 불변', wordLibraryReal.setWordAcceptedMeanings.length === 2)
+  // 2026-07-24 보안 락다운으로 3번째 인자 adminPin(하위호환 옵셔널)이
+  // 추가돼 arity가 2→3이 됐다(wordLibrary.js:556 주석 참고). 여기서는
+  // (a) 새 arity 자체를 확인하고, (b) 앞 2개 인자(wordDbId, meanings)의
+  // 이름/순서가 그대로인지 소스 파싱으로 확인하고, (c) adminPin 미전달
+  // (기존 2-인자 호출부) 시 여전히 레거시 anon 직접 update 경로를 타는
+  // 옵셔널 분기가 소스에 남아있는지 확인한다(§ 두 함수 모두 절대 invoke
+  // 안 함 원칙 유지 — 아래도 함수를 호출하지 않고 toString()으로만 검사).
+  check('setWordAcceptedMeanings 인자 3개(wordDbId, meanings, adminPin) — 2026-07-24 보안 락다운으로 하위호환 옵셔널 3번째 인자 추가', wordLibraryReal.setWordAcceptedMeanings.length === 3)
+  const setWordAcceptedMeaningsSrc = wordLibraryReal.setWordAcceptedMeanings.toString()
+  const setWordAcceptedMeaningsParams = setWordAcceptedMeaningsSrc.match(/\(([^)]*)\)/)?.[1] ?? ''
+  check('setWordAcceptedMeanings 앞 2개 인자(wordDbId, meanings) 이름/순서 불변 — 기존 호출부 호환', /^\s*wordDbId\s*,\s*meanings\s*,\s*adminPin\s*$/.test(setWordAcceptedMeaningsParams))
+  check('setWordAcceptedMeanings — adminPin 미전달(2-인자 호출) 시 레거시 anon 직접 update 경로로 폴백하는 옵셔널 분기가 소스에 존재', /if\s*\(\s*adminPin\s*\)/.test(setWordAcceptedMeaningsSrc))
   check('resolveSpellingReview 존재(함수)', typeof spellingReviewApiReal.resolveSpellingReview === 'function')
   check('resolveSpellingReview 인자 2개(id, status) — 시그니처 불변', spellingReviewApiReal.resolveSpellingReview.length === 2)
 }
@@ -1957,6 +1968,163 @@ console.log('\n61. statsSkips 전파(runAiPhase) — 서버 summary.statsSkips �
     } finally {
       globalThis.fetch = originalFetch
     }
+  }
+}
+
+console.log('\n62. classifyBatch 캐시 미스 중복 제거(2026-07-24, AI 비용 낭비 감사 후속) — 같은 캐시 키를 가진 미해결 항목은 AI/statsLookup을 대표 1건에만 호출하고 나머지는 결과 복제')
+{
+  // 같은 (word_id, meaning, normalized_answer)이지만 pending_answer_id는
+  // 서로 다른 5건 — "5명이 같은 오답을 낸" 시나리오를 재현.
+  const dupGroup = Array.from({ length: 5 }, (_, i) => ({
+    id: `dup-${i}`, wordId: 'wdup', word: 'harm', meaning: '해치다', acceptedMeanings: [], submittedAnswer: '농부',
+  }))
+
+  // (a) aiClassify는 정확히 1회 호출되고, 배치에는 대표 1건만 담긴다 —
+  // 5건 전부 동일한 decision/confidence/reason을 받는다.
+  {
+    let aiCalls = 0
+    let lastBatch = null
+    const aiClassify = async (batch) => {
+      aiCalls++
+      lastBatch = batch
+      const m = new Map()
+      for (const it of batch) m.set(it.id, { pending_answer_id: it.id, decision: 'reject_candidate', confidence: 0.77, reason: 'dedup-mock', suggested_synonym: null, part_of_speech_warning: null, meaning_scope_warning: null })
+      return m
+    }
+    const proposals = await classifyBatch(dupGroup, { aiClassify })
+    check('중복 5건이어도 aiClassify는 정확히 1회만 호출됨', aiCalls === 1)
+    check('AI로 보내는 배치에는 그룹 대표 1건만 담김(중복 4건 미포함)', lastBatch.length === 1 && lastBatch[0].id === 'dup-0')
+    check('결과 제안도 5건 그대로 반환됨(각자 pending_answer_id 유지)', proposals.length === 5)
+    check('5건 전부 동일한 decision을 받음(reject_candidate)', proposals.every((p) => p.decision === 'reject_candidate'))
+    check('5건 전부 동일한 confidence를 받음(0.77)', proposals.every((p) => p.confidence === 0.77))
+    check('5건 전부 동일한 reason을 받음(dedup-mock)', proposals.every((p) => p.reason === 'dedup-mock'))
+    check('5건 전부 decision_source=ai(캐시 히트 아님)', proposals.every((p) => p.decision_source === 'ai' && p.cache_hit === false))
+    check('5건 각자의 pending_answer_id는 그대로 보존됨', new Set(proposals.map((p) => p.pending_answer_id)).size === 5)
+  }
+
+  // (b) cacheStore는 그룹당 1회만 호출됨(대표 처리분만 upsert) — 5회가
+  // 아니라 1회.
+  {
+    let cacheStoreCalls = 0
+    let storedKey = null
+    const aiClassify = async (batch) => {
+      const m = new Map()
+      for (const it of batch) m.set(it.id, { pending_answer_id: it.id, decision: 'accept', confidence: 0.9, reason: 'ok', suggested_synonym: null, part_of_speech_warning: null })
+      return m
+    }
+    const cacheStore = async (key) => { cacheStoreCalls++; storedKey = key }
+    await classifyBatch(dupGroup, { aiClassify, cacheStore })
+    check('cacheStore는 그룹당 1회만 호출됨(5건이 아니라 1건 upsert)', cacheStoreCalls === 1)
+    const expectedKey = buildCacheKey({ wordId: 'wdup', meaningSnapshot: '해치다', normalizedAnswer: normalizeForCompare('농부') })
+    check('cacheStore에 전달된 키는 buildCacheKey 5필드 형식 그대로(대표 항목 기준)', storedKey === expectedKey)
+  }
+
+  // (c) 배치 크기(batchSize)는 대표 개수 기준 — 대표 21명 분량(각 3중복,
+  // 총 63건)을 batchSize=20으로 넣으면 대표 21명은 2개 배치(20+1)로
+  // 나뉘어야 한다(중복까지 합친 63건 기준으로 나뉘면 4개 배치가 됨 — 그건
+  // 이 최적화의 목적을 무력화하므로 실패로 간주).
+  {
+    // meaning/submittedAnswer는 편집거리 1(짧은 길이)로 로컬 규칙(9단계,
+    // bestDist===1 && compareLen>=2)에 우연히 자동 accept되지 않도록 서로
+    // 충분히 다른 문자열로 구성한다(로컬 확정 없이 항상 unresolved -> AI로
+    // 넘어가야 이 배치 크기 테스트가 유효).
+    const manyReps = Array.from({ length: 21 }, (_, g) =>
+      Array.from({ length: 3 }, (_, i) => ({
+        id: `g${g}-${i}`, wordId: `wbatch${g}`, word: 'x', meaning: `그룹뜻모음${g}`, acceptedMeanings: [], submittedAnswer: `전혀다른답변${g}`,
+      }))
+    ).flat()
+    let batchCount = 0
+    const batchSizes = []
+    const aiClassify = async (batch) => {
+      batchCount++
+      batchSizes.push(batch.length)
+      const m = new Map()
+      for (const it of batch) m.set(it.id, { pending_answer_id: it.id, decision: 'review', confidence: 0.5, reason: 'r', suggested_synonym: null, part_of_speech_warning: null })
+      return m
+    }
+    const proposals = await classifyBatch(manyReps, { aiClassify, batchSize: 20 })
+    check('배치 크기는 그룹 대표(21명) 기준으로 나뉨 — 2개 배치(20+1)', batchCount === 2 && batchSizes[0] === 20 && batchSizes[1] === 1)
+    check('최종 제안 수는 원본 63건 그대로(중복 포함 전원)', proposals.length === 63)
+  }
+
+  // (d) statsLookup은 그룹 대표에게만 호출됨(중복 4건은 재호출 안 함) —
+  // skip 결과는 5건 전원에 복제.
+  {
+    let statsCalls = 0
+    const statsLookup = async () => { statsCalls++; return { skip: true, decision: 'reject_candidate', confidence: 0.6, reason: '통계 재사용(모의)' } }
+    let aiCalls = 0
+    const proposals = await classifyBatch(dupGroup, { statsLookup, aiClassify: async () => { aiCalls++; return new Map() } })
+    check('statsLookup은 그룹당 1회만 호출됨(중복 4건 재호출 안 함)', statsCalls === 1)
+    check('statsLookup 스킵 시 aiClassify는 호출되지 않음', aiCalls === 0)
+    check('5건 전부 decision_source=stats_repeat', proposals.every((p) => p.decision_source === 'stats_repeat'))
+    check('5건 전부 동일한 decision(reject_candidate)/reason을 받음', proposals.every((p) => p.decision === 'reject_candidate' && p.reason === '통계 재사용(모의)'))
+  }
+
+  // (e) budgetExceeded여도 그룹 대표만 강등 계산하고, 결과는 5건 전원에 복제.
+  {
+    const proposals = await classifyBatch(dupGroup, { budgetExceeded: true })
+    check('budgetExceeded 강등도 5건 전원에 복제됨', proposals.length === 5 && proposals.every((p) => p.decision_source === 'ai_budget_exceeded'))
+  }
+
+  // (f) aiClassify가 throw하면 그룹 대표만 호출됐어도 에러 강등은 그룹원
+  // 전원에 복제됨(review, decision_source=ai_error).
+  {
+    let aiCalls = 0
+    const aiClassify = async () => { aiCalls++; throw new Error('모의 AI 실패') }
+    const proposals = await classifyBatch(dupGroup, { aiClassify })
+    check('AI 호출 실패 시에도 aiClassify는 1회만 호출됨(대표 1건 배치)', aiCalls === 1)
+    check('실패 강등이 5건 전원에 복제됨(decision_source=ai_error)', proposals.length === 5 && proposals.every((p) => p.decision_source === 'ai_error' && p.decision === 'review'))
+  }
+
+  // (g) AI 응답 스키마 검증 실패(대표 항목에 대한 응답 누락)도 그룹원
+  // 전원에 parse_error로 복제됨.
+  {
+    const aiClassify = async () => new Map() // 대표 id에 대한 응답이 아예 없음
+    const proposals = await classifyBatch(dupGroup, { aiClassify })
+    check('AI 응답 누락(스키마 검증 실패)도 5건 전원에 parse_error로 복제됨', proposals.length === 5 && proposals.every((p) => p.decision_source === 'parse_error' && p.decision === 'review'))
+  }
+
+  // (h) 중복이 전혀 없는 기존 사용 패턴 — 회귀 없음 재확인(각자 다른
+  // wordId/answer라 그룹 크기 전부 1, 기존 동작과 100% 동일해야 함).
+  {
+    let aiCalls = 0
+    const aiClassify = async (batch) => {
+      aiCalls++
+      const m = new Map()
+      for (const it of batch) m.set(it.id, { pending_answer_id: it.id, decision: 'review', confidence: 0.5, reason: 'no-dup', suggested_synonym: null, part_of_speech_warning: null })
+      return m
+    }
+    const proposals = await classifyBatch([F.closeButWrongMeaning, F.trueSynonymDifferentString, F.completelyWrong], { aiClassify })
+    check('중복 없는 3건은 배치에 3건 전부 그대로 담김(그룹핑이 회귀를 만들지 않음)', aiCalls === 1)
+    check('중복 없는 3건 각자 독립적인 결과를 받음', proposals.length === 3 && proposals.every((p) => p.decision_source === 'ai'))
+  }
+
+  // (i) 부분 중복 — 그룹 2개(중복 3건 + 유니크 1건) 섞인 경우 대표 2건만
+  // 배치에 담김.
+  {
+    // m1~m3/m4 둘 다 1글자 비교(compareLen<2)라 편집거리 1이어도 로컬
+    // 규칙(9단계)이 자동 accept하지 않는다(bestDist===1 && compareLen>=2
+    // 조건 불충족) — 로컬 확정 없이 항상 unresolved로 남아야 배치 구성
+    // 검증이 유효하다.
+    const mixed = [
+      { id: 'm1', wordId: 'wmix', word: 'x', meaning: 'y', acceptedMeanings: [], submittedAnswer: 'z' },
+      { id: 'm2', wordId: 'wmix', word: 'x', meaning: 'y', acceptedMeanings: [], submittedAnswer: 'z' },
+      { id: 'm3', wordId: 'wmix', word: 'x', meaning: 'y', acceptedMeanings: [], submittedAnswer: 'z' },
+      { id: 'm4', wordId: 'wother', word: 'x', meaning: 'q', acceptedMeanings: [], submittedAnswer: 'w' },
+    ]
+    let lastBatch = null
+    const aiClassify = async (batch) => {
+      lastBatch = batch
+      const m = new Map()
+      for (const it of batch) m.set(it.id, { pending_answer_id: it.id, decision: 'accept', confidence: 0.8, reason: it.id, suggested_synonym: null, part_of_speech_warning: null })
+      return m
+    }
+    const proposals = await classifyBatch(mixed, { aiClassify })
+    check('부분 중복(3+1) — 배치에는 대표 2건만 담김', lastBatch.length === 2)
+    check('부분 중복 — 최종 제안은 4건 전부 반환', proposals.length === 4)
+    const byId = new Map(proposals.map((p) => [p.pending_answer_id, p]))
+    check('중복 그룹(m1/m2/m3)은 대표(m1)와 동일한 reason을 공유', byId.get('m1').reason === 'm1' && byId.get('m2').reason === 'm1' && byId.get('m3').reason === 'm1')
+    check('유니크 그룹(m4)은 자신만의 결과를 받음', byId.get('m4').reason === 'm4')
   }
 }
 

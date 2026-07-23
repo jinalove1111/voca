@@ -1,0 +1,22 @@
+{
+  "agent_name": "implementer",
+  "role": "implementer",
+  "task_id": "ai-dedup-optimization",
+  "task": "classifyBatch(pipeline.js) 내부: 같은 배치 실행 안에서 여러 항목이 같은 (word_id, meaning, normalized_answer, partOfSpeech, promptVersion) 캐시 키를 가질 때 대표 1건만 AI/statsLookup으로 보내고 나머지는 결과 복제 — 캐시 조회가 배치 완료 후에나 반영돼 동일 배치 내 중복이 각각 개별 AI 호출로 새던 낭비 제거",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-24T00:00:00+09:00",
+  "updated_at": "2026-07-24T00:00:00+09:00",
+  "files_owned": [
+    "supabase/functions/grade-writing-answers/pipeline.js",
+    "scripts/testWritingReviewAiPipeline.mjs"
+  ],
+  "files_read": [
+    "supabase/functions/grade-writing-answers/index.ts",
+    ".ai-status/implementer-learning-server.json",
+    "package.json"
+  ],
+  "summary": "pipeline.js classifyBatch: 캐시 미스 후(stillUnresolved) buildCacheKey(이미 부착된 item.cacheKey, 5필드 형식 무변경)로 Map 그룹핑 -> 그룹 대표(각 그룹 첫 항목)만 statsLookup/aiClassify에 전달, batchSize도 대표 개수 기준(buildBatches(afterStats,...))으로 나눔. 대표의 결과(decision/confidence/reason/suggested_synonym/part_of_speech_warning/meaning_scope_warning/decision_source)를 그룹원 전원에 복제하되 각자의 pending_answer_id/word/meaning/submittedAnswer는 유지. cacheStore는 대표 1건만 호출(그룹원 공유 캐시 키라 1건 upsert로 충분). budgetExceeded/ai_unavailable/ai_error/parse_error 강등 경로도 전부 동일하게 대표 계산 -> 그룹원 복제로 통일. 중복이 없는 요청(그룹 크기 항상 1)은 모든 루프가 기존 코드와 완전히 동일하게 동작 -> 회귀 없음(기존 347 PASS 100% 무변경 유지, 신규 26건 추가로 373 PASS/0 FAIL). index.ts는 수정하지 않음 — 이유: (1) index.ts의 사전 비용 추정(unresolvedByRulesCount/estimatedBatchCount/preflightEstimatedCostUsd)은 애초에 '캐시 미스 전부'를 가정하는 의도적 최악-경우 상한이라는 주석이 이미 있고, 이번 그룹핑은 실제 AI 호출/배치 수를 그 추정치보다 더 낮추기만 하므로 상한 판정의 안전성(과소추정 위험 없음)에 영향 없음. (2) index.ts가 pipeline.js에 주입하는 aiClassify(batch)/statsLookup(item) 콜백은 그룹핑 후에도 시그니처 그대로(배치 배열/단일 item)만 받으므로 index.ts 쪽 코드 변경이 전혀 필요 없음 — 그룹핑 로직 전체가 pipeline.js 내부에 캡슐화됨. git status로 index.ts 동시 작업 세션 없음 확인함(현재 modified 파일은 Dashboard.jsx 등 무관 파일들뿐).",
+  "blocker": null,
+  "next_action": "qa-reviewer 검토 대기 — 커밋은 하지 않음(작업 지시에 따라 커밋 금지, 운영자/조정자가 검토 후 커밋 결정)"
+}

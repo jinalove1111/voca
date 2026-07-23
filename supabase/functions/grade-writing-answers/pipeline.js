@@ -404,6 +404,28 @@ export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiC
 
   if (stillUnresolved.length === 0) return proposals
 
+  // ── 캐시 미스 항목 중복 제거(2026-07-24, implementer — AI 비용 낭비 감사
+  // 후속) ────────────────────────────────────────────────────────────────
+  // 배경: 같은 배치 실행 "안"에서 여러 학생이 같은 (word_id, meaning,
+  // normalized_answer, partOfSpeech, promptVersion) 조합으로 오답을 낸 경우,
+  // cacheStore는 각 항목이 AI 응답을 받은 "이후"에나 반영되므로(위 aiClassify
+  // 루프 참고) 동시에 도착한 중복 항목들은 서로의 캐시를 못 타고 각자 개별
+  // AI 호출로 나갔다(감사 발견). 이미 buildCacheKey로 만든 5필드 캐시 키
+  // 그대로(형식 변경 없음) 재사용해, 캐시 조회 이후·통계/AI 호출 이전
+  // 단계에서 한 번 더 묶는다 — 그룹당 "대표" 1건만 statsLookup/AI로 보내고,
+  // 나머지 그룹원은 대표의 결과를 그대로 복제한다(각자의 pending_answer_id는
+  // 유지). Map은 삽입 순서를 보존하므로 대표 목록(representatives)의 순서는
+  // 기존 stillUnresolved 순서에서 "각 키의 첫 등장 순서" 그대로다 — 중복이
+  // 전혀 없는 요청(가장 흔한 경우)에서는 그룹마다 멤버가 1명뿐이라 아래 모든
+  // 루프가 기존 코드와 정확히 동일하게 동작한다(관측 가능한 차이 0).
+  const groupsByKey = new Map()
+  for (const item of stillUnresolved) {
+    const group = groupsByKey.get(item.cacheKey)
+    if (group) group.push(item)
+    else groupsByKey.set(item.cacheKey, [item])
+  }
+  const representatives = [...groupsByKey.values()].map((group) => group[0])
+
   // 통계 기반 반복 오답 스킵(요구사항 5, 캐시 조회 다음/AI 호출 전) — 자동
   // 거부가 아니다: decision_source='stats_repeat'로 표시된 제안도 review와
   // 동급으로 여전히 관리자가 최종 확인해야 하는 상태이지, spelling_review_
@@ -411,19 +433,27 @@ export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiC
   // 하지 않는 순수 계산). cacheStore는 이 경로에서 호출하지 않는다(통계
   // 판정은 "AI가 새로 내린 판정"이 아니라 과거 AI 판정의 재사용 신호일
   // 뿐이라 새 AI 캐시 행을 만들 근거가 없다).
+  //
+  // statsLookup은 이제 그룹 대표에게만 호출한다 — 같은 캐시 키를 가진
+  // 항목들은 wordId와 normalizedAnswer(둘 다 캐시 키 구성 요소)가 이미
+  // 동일하므로 statsLookup의 조회 키(wordId::normalizedAnswer, index.ts
+  // statsKeyOf)도 항상 동일한 결과를 낸다 — 그룹원마다 다시 호출해도 같은
+  // 답을 받을 뿐이라 대표 1회 호출 후 결과를 복제해도 계약 위반이 아니다.
   const afterStats = []
-  for (const item of stillUnresolved) {
-    const statsResult = statsLookup ? await statsLookup(item) : null
+  for (const rep of representatives) {
+    const statsResult = statsLookup ? await statsLookup(rep) : null
     if (statsResult && statsResult.skip && isValidStatsSkipDecision(statsResult.decision)) {
-      proposals.push(buildProposal({
-        pendingId: item.id, word: item.word, meaning: item.meaning, submittedAnswer: item.submittedAnswer,
-        decision: statsResult.decision, confidence: statsResult.confidence ?? null,
-        reason: statsResult.reason || '통계 기반 반복 오답 — 과거 판정 재사용',
-        partOfSpeechWarning: item.hint?.posWarning ? '품사/활용형 차이 가능성' : null,
-        decisionSource: 'stats_repeat', cacheHit: false,
-      }))
+      for (const member of groupsByKey.get(rep.cacheKey)) {
+        proposals.push(buildProposal({
+          pendingId: member.id, word: member.word, meaning: member.meaning, submittedAnswer: member.submittedAnswer,
+          decision: statsResult.decision, confidence: statsResult.confidence ?? null,
+          reason: statsResult.reason || '통계 기반 반복 오답 — 과거 판정 재사용',
+          partOfSpeechWarning: member.hint?.posWarning ? '품사/활용형 차이 가능성' : null,
+          decisionSource: 'stats_repeat', cacheHit: false,
+        }))
+      }
     } else {
-      afterStats.push(item)
+      afterStats.push(rep)
     }
   }
 
@@ -431,71 +461,95 @@ export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiC
 
   if (budgetExceeded) {
     // 일일 비용 상한 초과(§ 위 옵션 주석) — 캐시/통계로 못 채운 항목만 여기
-    // 도달하고, 실제 AI(유료) 호출은 단 한 번도 일어나지 않는다.
-    for (const item of afterStats) {
-      proposals.push(buildProposal({
-        pendingId: item.id, word: item.word, meaning: item.meaning, submittedAnswer: item.submittedAnswer,
-        decision: 'review', confidence: 0, reason: '오늘 일일 AI 비용 상한 초과 — AI 호출을 건너뛰고 관리자 확인 필요로 표시(자동 거부 아님)',
-        partOfSpeechWarning: item.hint?.posWarning ? '품사/활용형 차이 가능성' : null,
-        decisionSource: 'ai_budget_exceeded', cacheHit: false,
-      }))
+    // 도달하고, 실제 AI(유료) 호출은 단 한 번도 일어나지 않는다. afterStats는
+    // 그룹 대표만 담고 있으므로, 각 대표의 그룹원 전원에게 동일하게 강등
+    // 처리를 복제한다(각자의 pending_answer_id는 유지).
+    for (const rep of afterStats) {
+      for (const member of groupsByKey.get(rep.cacheKey)) {
+        proposals.push(buildProposal({
+          pendingId: member.id, word: member.word, meaning: member.meaning, submittedAnswer: member.submittedAnswer,
+          decision: 'review', confidence: 0, reason: '오늘 일일 AI 비용 상한 초과 — AI 호출을 건너뛰고 관리자 확인 필요로 표시(자동 거부 아님)',
+          partOfSpeechWarning: member.hint?.posWarning ? '품사/활용형 차이 가능성' : null,
+          decisionSource: 'ai_budget_exceeded', cacheHit: false,
+        }))
+      }
     }
     return proposals
   }
 
   if (!aiClassify) {
     // AI 분류기가 주입되지 않으면(예: ANTHROPIC_API_KEY 미설정) 전부 review로
-    // 강등 — "AI 실패" 폴백과 동일 경로, auto-reject 아님.
-    for (const item of afterStats) {
-      proposals.push(buildProposal({
-        pendingId: item.id, word: item.word, meaning: item.meaning, submittedAnswer: item.submittedAnswer,
-        decision: 'review', confidence: null, reason: 'AI 분류기 미사용(설정 없음) — 관리자 확인 필요',
-        partOfSpeechWarning: item.hint?.posWarning ? '품사/활용형 차이 가능성' : null,
-        decisionSource: 'ai_unavailable', cacheHit: false,
-      }))
+    // 강등 — "AI 실패" 폴백과 동일 경로, auto-reject 아님. 마찬가지로 대표별
+    // 그룹원 전원에게 복제.
+    for (const rep of afterStats) {
+      for (const member of groupsByKey.get(rep.cacheKey)) {
+        proposals.push(buildProposal({
+          pendingId: member.id, word: member.word, meaning: member.meaning, submittedAnswer: member.submittedAnswer,
+          decision: 'review', confidence: null, reason: 'AI 분류기 미사용(설정 없음) — 관리자 확인 필요',
+          partOfSpeechWarning: member.hint?.posWarning ? '품사/활용형 차이 가능성' : null,
+          decisionSource: 'ai_unavailable', cacheHit: false,
+        }))
+      }
     }
     return proposals
   }
 
+  // 배치 크기 계산은 그룹 "대표" 개수 기준이다(afterStats) — 중복 항목까지
+  // 포함해서 배치를 나누면 이 최적화의 목적(배치/호출 수 절감)이 그대로
+  // 사라진다. buildBatches 자체(20~30 설계 제약)는 손대지 않는다.
   const batches = buildBatches(afterStats, batchSize)
   for (const batch of batches) {
     let aiResults
     try {
       aiResults = await aiClassify(batch)
     } catch (err) {
-      for (const item of batch) {
-        proposals.push(buildProposal({
-          pendingId: item.id, word: item.word, meaning: item.meaning, submittedAnswer: item.submittedAnswer,
-          decision: 'review', confidence: null, reason: `AI 호출 실패: ${err?.message || err}`,
-          partOfSpeechWarning: item.hint?.posWarning ? '품사/활용형 차이 가능성' : null,
-          decisionSource: 'ai_error', cacheHit: false,
-        }))
+      for (const rep of batch) {
+        for (const member of groupsByKey.get(rep.cacheKey)) {
+          proposals.push(buildProposal({
+            pendingId: member.id, word: member.word, meaning: member.meaning, submittedAnswer: member.submittedAnswer,
+            decision: 'review', confidence: null, reason: `AI 호출 실패: ${err?.message || err}`,
+            partOfSpeechWarning: member.hint?.posWarning ? '품사/활용형 차이 가능성' : null,
+            decisionSource: 'ai_error', cacheHit: false,
+          }))
+        }
       }
       continue
     }
 
-    for (const item of batch) {
-      const res = aiResults instanceof Map ? aiResults.get(item.id) : aiResults?.[item.id]
+    for (const rep of batch) {
+      const res = aiResults instanceof Map ? aiResults.get(rep.id) : aiResults?.[rep.id]
+      const members = groupsByKey.get(rep.cacheKey)
       if (!res || !isValidAiDecision(res)) {
-        proposals.push(buildProposal({
-          pendingId: item.id, word: item.word, meaning: item.meaning, submittedAnswer: item.submittedAnswer,
-          decision: 'review', confidence: null,
-          reason: '설계 제약(잘못된 JSON): AI 응답 스키마 검증 실패 — 안전하게 review로 강등',
-          partOfSpeechWarning: item.hint?.posWarning ? '품사/활용형 차이 가능성' : null,
-          decisionSource: 'parse_error', cacheHit: false,
-        }))
+        for (const member of members) {
+          proposals.push(buildProposal({
+            pendingId: member.id, word: member.word, meaning: member.meaning, submittedAnswer: member.submittedAnswer,
+            decision: 'review', confidence: null,
+            reason: '설계 제약(잘못된 JSON): AI 응답 스키마 검증 실패 — 안전하게 review로 강등',
+            partOfSpeechWarning: member.hint?.posWarning ? '품사/활용형 차이 가능성' : null,
+            decisionSource: 'parse_error', cacheHit: false,
+          }))
+        }
         continue
       }
-      proposals.push(buildProposal({
-        pendingId: item.id, word: item.word, meaning: item.meaning, submittedAnswer: item.submittedAnswer,
-        decision: res.decision, confidence: res.confidence ?? null, reason: res.reason || '',
-        suggestedSynonym: res.suggested_synonym ?? null,
-        partOfSpeechWarning: res.part_of_speech_warning ?? (item.hint?.posWarning ? '품사/활용형 차이 가능성' : null),
-        meaningScopeWarning: res.meaning_scope_warning ?? null,
-        decisionSource: 'ai', cacheHit: false,
-      }))
+      // 그룹원 전원(대표 포함)에게 동일한 AI 판정을 복제 — 각자의
+      // pending_answer_id/word/meaning/submittedAnswer는 자기 것 그대로,
+      // decision/confidence/reason/suggested_synonym/*_warning/
+      // decision_source만 대표와 동일하게 맞춘다.
+      for (const member of members) {
+        proposals.push(buildProposal({
+          pendingId: member.id, word: member.word, meaning: member.meaning, submittedAnswer: member.submittedAnswer,
+          decision: res.decision, confidence: res.confidence ?? null, reason: res.reason || '',
+          suggestedSynonym: res.suggested_synonym ?? null,
+          partOfSpeechWarning: res.part_of_speech_warning ?? (member.hint?.posWarning ? '품사/활용형 차이 가능성' : null),
+          meaningScopeWarning: res.meaning_scope_warning ?? null,
+          decisionSource: 'ai', cacheHit: false,
+        }))
+      }
       if (cacheStore) {
-        await cacheStore(item.cacheKey, {
+        // 캐시에는 대표 처리분만 1건 upsert — 그룹원 전체가 같은 cacheKey를
+        // 공유하므로(캐시 키 유니크 제약과 1:1) 중복 upsert는 불필요한 DB
+        // 왕복만 늘릴 뿐 필요하지 않다.
+        await cacheStore(rep.cacheKey, {
           decision: res.decision, confidence: res.confidence ?? null, reason: res.reason || '',
           suggestedSynonym: res.suggested_synonym ?? null, partOfSpeechWarning: res.part_of_speech_warning ?? null,
           meaningScopeWarning: res.meaning_scope_warning ?? null,
