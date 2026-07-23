@@ -1,0 +1,25 @@
+{
+  "agent_name": "implementer-ai-provider-tests",
+  "role": "implementer",
+  "task_id": "ai-provider-tests",
+  "task": "쓰기 검수 AI 서버 provider 추상화(supabase/functions/grade-writing-answers/providers.js 신규 + pipeline.js 캐시 키 5필드 재설계)에 맞춰 scripts/testWritingReviewAiPipeline.mjs 하네스 갱신/확장",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-23T16:40:00Z",
+  "updated_at": "2026-07-23T17:05:30Z",
+  "files_owned": [
+    "scripts/testWritingReviewAiPipeline.mjs",
+    ".ai-status/implementer-ai-provider-tests.json"
+  ],
+  "files_read": [
+    "supabase/functions/grade-writing-answers/pipeline.js",
+    "supabase/functions/grade-writing-answers/providers.js",
+    "tests/harness/runWriting.mjs",
+    "tests/harness/runDomain.mjs",
+    "package.json",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "섹션 39를 6필드(모델 포함) 가정에서 pipeline.js의 새 5필드 캐시 키 스펙(model 제외, provider 무관 캐시 — 운영자 요구사항 11)에 맞춰 갱신하고, provider가 달라도 캐시 키가 동일함을 명시적으로 단언하는 케이스를 추가했다. 신규 섹션 50~55를 추가해 providers.js(createAIProvider 팩토리/healthCheck/normalizeResponse/gradeWritingAnswers end-to-end/estimateCost/캐시 provider 무관성 통합)를 mock fetchImpl로 계약 검증했다. classifyBatch의 modelId 옵션 제거에 따른 잔여 참조는 하네스에 없었음(확인만, 수정 불필요). node scripts/testWritingReviewAiPipeline.mjs 실행 결과 275 PASS / 0 FAIL / 5 SKIP(정직한 배포 의존 SKIP 유지, 섹션 36 4건 + 섹션 48 1건). npm run verify:writing PASS(testSpelling.mjs/testSpellingDirectionWiring.mjs/testWritingReviewAiPipeline.mjs 3개 스크립트 전부 PASS). npm run build는 지시에 따라 실행하지 않음(다른 에이전트와 dist 충돌 방지). 커밋은 하지 않음(지시 준수).",
+  "blocker": null,
+  "next_action": "다른 에이전트(AdminScreen.jsx/spellingReviewAiApi.js 편집 중)의 작업 완료 후, 전체 스위트 재실행으로 회귀 없음 재확인 권장. 커밋은 운영자 또는 담당 에이전트가 진행."
+}
