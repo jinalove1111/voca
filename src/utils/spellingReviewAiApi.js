@@ -133,8 +133,13 @@ const AI_CALL_TIMEOUT_MS = 30_000
 // 대신 반환한다 — 규칙 기반 결과(resolved)는 이 함수가 아예 건드리지
 // 않으므로 호출부가 안전하게 이어붙이면 된다. 30초 타임아웃(AbortController)
 // 도 이 fallback 경로를 그대로 탄다.
-async function callEdgeFunctionForUnresolved({ adminPin, unresolvedRows }) {
-  if (unresolvedRows.length === 0) return { proposals: [], usage: null, callFailed: false, callError: null, budget: null }
+// clientStats(선택, additive — 2026-07-24 "선생님이 같은 검토를 두 번
+// 하지 않는" 자동 학습 시스템) — 지금까지 규칙 단계로 확정된 건수를
+// 서버에 참고로 알려준다(서버가 일일 절약 집계 로그에 반영, § 서버 계약).
+// 이 값이 없거나 서버가 아직 이 필드를 모르는 버전이어도 요청/응답 모두
+// 정상 동작한다(순수 additive 필드).
+async function callEdgeFunctionForUnresolved({ adminPin, unresolvedRows, clientStats }) {
+  if (unresolvedRows.length === 0) return { proposals: [], usage: null, callFailed: false, callError: null, budget: null, statsSkips: 0 }
 
   const fallback = (reason) => ({
     proposals: unresolvedRows.map((row) => buildProposal({
@@ -149,6 +154,7 @@ async function callEdgeFunctionForUnresolved({ adminPin, unresolvedRows }) {
     // 알려줄 기회조차 없었다는 뜻 — budget은 항상 null(모른다는 뜻, false
     // 아님. false로 두면 "확인해봤는데 초과 아님"으로 오독될 수 있음).
     budget: null,
+    statsSkips: 0,
   })
 
   const endpoint = functionsBaseUrl()
@@ -165,7 +171,10 @@ async function callEdgeFunctionForUnresolved({ adminPin, unresolvedRows }) {
         'Content-Type': 'application/json',
         ...(anonKey ? { apikey: anonKey, Authorization: `Bearer ${anonKey}` } : {}),
       },
-      body: JSON.stringify({ adminPin, pendingIds: unresolvedRows.map((r) => r.id) }),
+      body: JSON.stringify({
+        adminPin, pendingIds: unresolvedRows.map((r) => r.id),
+        ...(clientStats ? { clientStats } : {}),
+      }),
       signal: controller.signal,
     })
   } catch (err) {
@@ -204,7 +213,10 @@ async function callEdgeFunctionForUnresolved({ adminPin, unresolvedRows }) {
       decisionSource: 'ai_unavailable', cacheHit: false,
     }))
   }
-  return { proposals, usage: body.usage || null, callFailed: false, callError: null, budget: body.budget || null }
+  // 서버가 아직 summary.statsSkips를 모르는 버전이면(구 배포) undefined ->
+  // 0으로 안전하게 폴백(§ additive 필드, 절대 throw 안 함 원칙과 동일 취지).
+  const statsSkips = typeof body.summary?.statsSkips === 'number' ? body.summary.statsSkips : 0
+  return { proposals, usage: body.usage || null, callFailed: false, callError: null, budget: body.budget || null, statsSkips }
 }
 
 // AI 확인 단계에서 한 번에 보낼 최대 항목 수 — Edge Function(index.ts)의
@@ -245,9 +257,12 @@ function deferredProposal(row, decisionSource, reason) {
 // budget.exceeded===true 또는 그 배치 proposals에 decision_source=
 // 'ai_budget_exceeded'가 하나라도 있으면) 그 즉시 이후 청크 전송을 중단한다
 // — 이미 보낸 요청의 결과는 그대로 쓰고, 못 보낸 나머지만 이월 처리한다.
-export async function runAiPhase({ adminPin, unresolvedRows, batchSize = AI_BATCH_SIZE, maxRequestsPerRun = MAX_REQUESTS_PER_RUN, onProgress } = {}) {
+// rulesResolvedCount(선택, additive) — 이번 실행에서 규칙 단계가 이미
+// 확정한 건수(runRulesPhase 결과의 resolved.length). 서버에 clientStats로
+// 그대로 전달돼 일일 절약 집계 로그에 참고 반영된다(§ callEdgeFunctionForUnresolved).
+export async function runAiPhase({ adminPin, unresolvedRows, batchSize = AI_BATCH_SIZE, maxRequestsPerRun = MAX_REQUESTS_PER_RUN, onProgress, rulesResolvedCount = 0 } = {}) {
   if (!unresolvedRows || unresolvedRows.length === 0) {
-    return { proposals: [], usage: null, callFailed: false, callError: null, budgetExceeded: false, budgetInfo: null, deferredCount: 0 }
+    return { proposals: [], usage: null, callFailed: false, callError: null, budgetExceeded: false, budgetInfo: null, deferredCount: 0, statsSkips: 0 }
   }
 
   const allChunks = []
@@ -279,11 +294,14 @@ export async function runAiPhase({ adminPin, unresolvedRows, batchSize = AI_BATC
   let budgetExceeded = false
   let budgetInfo = null
   let sentBatchCount = 0
+  let totalStatsSkips = 0
+  const clientStats = rulesResolvedCount > 0 ? { rulesResolvedCount } : undefined
 
   for (let i = 0; i < chunksToSend.length; i++) {
     const chunk = chunksToSend[i]
-    const { proposals, usage, callFailed, callError, budget } = await callEdgeFunctionForUnresolved({ adminPin, unresolvedRows: chunk })
+    const { proposals, usage, callFailed, callError, budget, statsSkips } = await callEdgeFunctionForUnresolved({ adminPin, unresolvedRows: chunk, clientStats })
     allProposals.push(...proposals)
+    totalStatsSkips += statsSkips || 0
     if (usage) {
       totalInputTokens += usage.inputTokens || 0
       totalOutputTokens += usage.outputTokens || 0
@@ -340,6 +358,7 @@ export async function runAiPhase({ adminPin, unresolvedRows, batchSize = AI_BATC
     proposals: allProposals, usage, callFailed: anyCallFailed, callError: lastCallError,
     budgetExceeded, budgetInfo,
     deferredCount: deferredByCapCount + chunksNotSentDueToBudget.reduce((s, c) => s + c.length, 0),
+    statsSkips: totalStatsSkips,
   }
 }
 

@@ -28,6 +28,14 @@ import {
   filterRowsByStudent, distinctStudentIds, sortDisplayItems,
   summarizeBulkResults, summarizeProposals, normalizeForCompare, buildConfirmSummary,
 } from '../utils/spellingReviewBulkPlan'
+// "선생님이 같은 검토를 두 번 하지 않는" 자동 학습 시스템(2026-07-24) —
+// writing_answer_statistics 기반 AI 추천 학습/절약/학습률 카드. 이 셋은
+// SpellingReviewQueuePanel(위 기존 검토 큐 패널)과 완전히 별개 데이터
+// 소스라 각자 자체 로딩/폴백을 갖는 독립 컴포넌트로 아래에 정의한다.
+import {
+  fetchLearningRecommendations, registerRecommendation, dismissRecommendation,
+  fetchLearningRateMetrics, accumulateSavingsCounters, readTodaySavings,
+} from '../utils/writingAnswerStatsApi'
 import { buildWeeklyReport, computeStudentStats } from '../utils/weeklyReport'
 import FeatureManagementPanel from './FeatureManagementPanel'
 import TestPaperGenerator from './TestPaperGenerator'
@@ -49,6 +57,23 @@ import PassageEditor from './admin/PassageEditor'
 import { isFeatureEnabled } from '../config/features'
 
 const wordSlug = (word) => word.toLowerCase().replace(/\s+/g, '_')
+
+// "오늘 AI 절약 카드"(2026-07-24) 집계 헬퍼 — 완료된 proposal 배열에서
+// rules(정확일치/레벤슈타인)/cache(캐시 히트)/variants(동의어 규칙 히트)/
+// ai(실제 AI 처리)를 센다. statsSkips는 서버 응답(runAiPhase 결과)에서
+// 별도로 오므로 이 함수 몫이 아니다. 실패/이월(ai_unavailable/ai_error/
+// parse_error/ai_deferred/ai_budget_exceeded)은 "아꼈다"도 "AI를 썼다"도
+// 아닌 애매한 상태라 어느 카운터에도 넣지 않는다(과대 계상 방지).
+function computeSavingsFromProposals(proposals) {
+  let rules = 0, cache = 0, variants = 0, ai = 0
+  for (const p of proposals || []) {
+    if (p.cache_hit) { cache++; continue }
+    if (p.decision_source === 'synonym') { variants++; continue }
+    if (p.decision_source === 'exact_match' || p.decision_source === 'levenshtein') { rules++; continue }
+    if (p.decision_source === 'ai') { ai++; continue }
+  }
+  return { rules, cache, variants, ai }
+}
 
 // CSV 셀 안전 이스케이프 — 이름/반/유닛에 쉼표·따옴표·줄바꿈이 섞여도 깨지지 않게.
 function csvCell(v) {
@@ -370,7 +395,7 @@ function SeasonPanel({ adminPin }) {
 // accepted_meanings에 추가(다음부터 전 반에서 정답 처리) + 큐에서 제거.
 // AI 자동 판정은 없음(운영자 방침 — 최종 판정은 항상 교사).
 // 테이블 미존재(supabase_v2_0_spelling_mixed.sql 미실행)면 안내만 표시.
-function SpellingReviewQueuePanel({ onChanged, adminPin }) {
+function SpellingReviewQueuePanel({ onChanged, adminPin, onSavingsUpdate }) {
   const [rows, setRows] = useState([]) // null = 테이블 없음
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState(null)
@@ -532,6 +557,14 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
     setRulesResult({ resolved, unresolved })
     setAiProposals(resolved) // 미해결 0건이면 이 시점에 이미 "분석 완료" 상태가 된다
     setSelectedIds(new Set())
+    // 오늘 AI 절약 카드(요구사항 7) — 미해결 0건이면 AI 확인 단계 자체가
+    // 필요 없어 이 시점이 곧 "이번 실행의 완료" 지점이다(ai/statsSkips는
+    // 0, AI를 한 번도 호출하지 않았으므로). 미해결이 남아 있으면 runAiConfirm
+    // 쪽에서 최종(규칙+AI 합산) 집계를 담당한다 — 여기선 중복 집계하지 않음.
+    if (unresolved.length === 0) {
+      accumulateSavingsCounters({ ...computeSavingsFromProposals(resolved), statsSkips: 0 })
+      onSavingsUpdate?.()
+    }
   }
 
   // 2단계 — 관리자가 "AI 확인 진행" 버튼을 눌렀을 때만 실행. 실행 직전에
@@ -559,13 +592,15 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
     setAiDeferredCount(0)
     setAiProgress({ batchIndex: 0, batchCount: Math.min(Math.ceil(rulesResult.unresolved.length / AI_BATCH_SIZE), MAX_REQUESTS_PER_RUN), completed: 0, total: rulesResult.unresolved.length, cacheHits: 0, failures: 0, deferredByCap: 0 })
     try {
-      const { proposals, usage, callFailed, callError, budgetExceeded, budgetInfo, deferredCount } = await runAiPhase({
+      const { proposals, usage, callFailed, callError, budgetExceeded, budgetInfo, deferredCount, statsSkips } = await runAiPhase({
         adminPin,
         unresolvedRows: rulesResult.unresolved,
         batchSize: AI_BATCH_SIZE,
         onProgress: (p) => setAiProgress(p),
+        rulesResolvedCount: rulesResult.resolved.length,
       })
-      setAiProposals([...rulesResult.resolved, ...proposals])
+      const finalProposals = [...rulesResult.resolved, ...proposals]
+      setAiProposals(finalProposals)
       setAiUsage(usage)
       setAiCallFailed(callFailed)
       setAiCallError(callError || '')
@@ -573,6 +608,9 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
       setAiBudgetInfo(budgetInfo || null)
       setAiDeferredCount(deferredCount || 0)
       setTodaySpent(recordEstimatedSpendUsd(usage?.estimatedCostUsd ?? estCost))
+      // 오늘 AI 절약 카드(요구사항 7) — 이 실행(규칙+AI 전체)의 최종 집계.
+      accumulateSavingsCounters({ ...computeSavingsFromProposals(finalProposals), statsSkips: statsSkips || 0 })
+      onSavingsUpdate?.()
     } catch (err) {
       // runAiPhase/callEdgeFunctionForUnresolved는 설계상 던지지 않지만
       // (§ 절대 미리보기 실패로 전체가 죽지 않게), 방어적으로 남겨둔다.
@@ -1025,6 +1063,186 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
                 실행({confirmAction.count}건)
               </button>
             </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── "선생님이 같은 검토를 두 번 하지 않는" 자동 학습 시스템(2026-07-24) ───
+//
+// 아래 세 카드는 writing_answer_statistics(다른 세션이 준비 중인
+// supabase_v3_9_*.sql로 생성)를 쓴다 — SQL 미실행이면 조회 함수가 null을
+// 반환하고, 각 카드는 "SQL 실행 필요" 안내로 폴백한다(콘솔 에러 없음,
+// 헌법 규칙 9). SpellingReviewQueuePanel(위)과 데이터 소스가 완전히
+// 달라 독립 컴포넌트로 분리했다.
+
+// AI 추천 학습 카드(요구사항 2·4) — 반복 제출된 대기 답안 패턴 Top N을
+// 보여주고, 한 번의 클릭으로 인정/무시할 수 있게 한다.
+function LearningRecommendationsCard() {
+  const [rows, setRows] = useState(undefined) // undefined=로딩 중, null=테이블 없음, []=없음
+  const [minCount, setMinCountState] = useState(() => {
+    try { return Math.max(1, parseInt(localStorage.getItem('voca_learning_reco_min_count') || '3', 10) || 3) } catch { return 3 }
+  })
+  const [busyId, setBusyId] = useState(null)
+  const [toast, setToast] = useState('')
+
+  const load = async (mc = minCount) => {
+    setRows(undefined)
+    setRows(await fetchLearningRecommendations({ minCount: mc }))
+  }
+  useEffect(() => { load(minCount) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const updateMinCount = (raw) => {
+    const n = parseInt(raw, 10)
+    if (!Number.isFinite(n) || n < 1) return
+    setMinCountState(n)
+    try { localStorage.setItem('voca_learning_reco_min_count', String(n)) } catch { /* 조용히 무시 */ }
+    load(n)
+  }
+
+  const accept = async (row) => {
+    setBusyId(row.id)
+    try {
+      await registerRecommendation(row)
+      setRows((prev) => (Array.isArray(prev) ? prev.filter((r) => r.id !== row.id) : prev))
+      setToast(`"${row.word}" 답안 등록 완료`)
+    } catch (err) {
+      alert('등록 처리 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setBusyId(null)
+    }
+  }
+  const dismiss = async (row) => {
+    setBusyId(row.id)
+    try {
+      await dismissRecommendation(row.id)
+      setRows((prev) => (Array.isArray(prev) ? prev.filter((r) => r.id !== row.id) : prev))
+    } catch (err) {
+      alert('무시 처리 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-3xl card-shadow p-5">
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+        <p className="text-sm font-black text-gray-700">🎓 AI 추천 학습 {Array.isArray(rows) && rows.length > 0 && <span className="text-orange-500">({rows.length}건)</span>}</p>
+        <div className="flex items-center gap-2 text-xs">
+          <label className="flex items-center gap-1 text-gray-500 font-bold">
+            최소 반복 횟수
+            <input type="number" min={1} value={minCount} onChange={(e) => updateMinCount(e.target.value)}
+              className="w-14 border-2 border-gray-200 rounded-lg px-1.5 py-0.5" />
+          </label>
+          <button onClick={() => load(minCount)} className="text-purple-500 font-bold btn-press py-1 px-1">새로고침</button>
+        </div>
+      </div>
+      <p className="text-[11px] text-gray-400 mb-3">여러 학생이 반복해서 낸 같은 오답 패턴이에요 — 한 번 등록하면 그 다음부터 자동으로 정답 처리돼요(같은 검토를 두 번 하지 않기).</p>
+
+      {toast && <p className="text-xs font-bold text-green-600 bg-green-50 rounded-xl p-2 mb-2">✅ {toast}</p>}
+
+      {rows === undefined ? (
+        <p className="text-gray-400 text-sm">불러오는 중...</p>
+      ) : rows === null ? (
+        <p className="text-xs text-orange-500 font-bold bg-orange-50 rounded-xl p-3">⚠️ 준비 중 — supabase_v3_9 SQL 실행 필요(Supabase SQL Editor).</p>
+      ) : rows.length === 0 ? (
+        <p className="text-gray-400 text-sm">아직 추천할 만큼 반복된 답안이 없어요.</p>
+      ) : (
+        <div className="space-y-2">
+          {rows.map((r) => (
+            <div key={r.id} className="border-2 border-gray-100 rounded-xl p-3 flex items-center justify-between gap-2 flex-wrap">
+              <div className="text-xs text-gray-700">
+                <p className="font-black text-sm text-gray-800">{r.word} <span className="text-gray-400 font-normal">→</span> "{r.submittedAnswer}"</p>
+                <p className="text-gray-500 mt-0.5">
+                  {r.count}회 · {r.distinctStudentCount}명
+                  {typeof r.lastConfidence === 'number' && <> · 최근 신뢰도 {Math.round(r.lastConfidence * 100)}%</>}
+                </p>
+              </div>
+              <div className="flex gap-1.5 shrink-0">
+                <button onClick={() => accept(r)} disabled={busyId === r.id}
+                  className="bg-green-500 hover:bg-green-600 text-white font-black px-3 py-1.5 rounded-lg text-xs btn-press disabled:opacity-50">등록</button>
+                <button onClick={() => dismiss(r)} disabled={busyId === r.id}
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-600 font-bold px-3 py-1.5 rounded-lg text-xs btn-press disabled:opacity-50">무시</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 오늘 AI 절약 카드(요구사항 7) — SpellingReviewQueuePanel의 미리보기/AI
+// 확인 실행이 끝날 때마다 accumulateSavingsCounters가 localStorage에 쌓은
+// 값을 읽어 보여준다. refreshTick prop이 바뀔 때마다 다시 읽는다(부모
+// AdminScreen이 SpellingReviewQueuePanel의 onSavingsUpdate로 tick을 올림).
+function AiSavingsCard({ refreshTick }) {
+  const [savings, setSavings] = useState(() => readTodaySavings())
+  useEffect(() => { setSavings(readTodaySavings()) }, [refreshTick])
+
+  const total = savings.rules + savings.cache + savings.variants + savings.statsSkips + savings.ai
+  const savedCount = savings.rules + savings.cache + savings.variants + savings.statsSkips
+  const savingsRate = total > 0 ? Math.round((savedCount / total) * 100) : null
+
+  return (
+    <div className="bg-white rounded-3xl card-shadow p-5">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm font-black text-gray-700">💰 오늘 AI 절약</p>
+        <button onClick={() => setSavings(readTodaySavings())} className="text-xs font-bold text-purple-500 btn-press py-1 px-1">새로고침</button>
+      </div>
+      <p className="text-[11px] text-gray-400 mb-3">이 브라우저에서 오늘 실행한 쓰기 답안 검토 미리보기 기준(§ per-browser 집계 — 다른 관리자/기기 실행분은 포함 안 됨).</p>
+      {total === 0 ? (
+        <p className="text-gray-400 text-sm">오늘 실행 없음.</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="bg-gray-50 rounded-xl p-2"><p className="text-gray-500">규칙 기반</p><p className="font-black text-gray-800">{savings.rules}건</p></div>
+          <div className="bg-gray-50 rounded-xl p-2"><p className="text-gray-500">캐시</p><p className="font-black text-gray-800">{savings.cache}건</p></div>
+          <div className="bg-gray-50 rounded-xl p-2"><p className="text-gray-500">동의어 규칙</p><p className="font-black text-gray-800">{savings.variants}건</p></div>
+          <div className="bg-gray-50 rounded-xl p-2"><p className="text-gray-500">통계 스킵</p><p className="font-black text-gray-800">{savings.statsSkips}건</p></div>
+          <div className="bg-indigo-50 rounded-xl p-2 col-span-2"><p className="text-indigo-500">AI 호출</p><p className="font-black text-indigo-700">{savings.ai}건 / 전체 {total}건{savingsRate !== null && ` — 절약률 ${savingsRate}%`}</p></div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 학습률 카드(요구사항 8) — 이번 주/지난 주 자동 등록(accepted) 수 + 동의어
+// 증가수. 각 지표는 number(0 포함) 또는 null("데이터 수집 중")을 정직하게
+// 구분해 표시한다(§ 지어내지 않기).
+function LearningRateCard() {
+  const [metrics, setMetrics] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const load = async () => {
+    setLoading(true)
+    setMetrics(await fetchLearningRateMetrics())
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  const fmt = (v) => (typeof v === 'number' ? `${v}건` : '데이터 수집 중')
+
+  return (
+    <div className="bg-white rounded-3xl card-shadow p-5">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm font-black text-gray-700">📈 학습률</p>
+        <button onClick={load} disabled={loading} className="text-xs font-bold text-purple-500 btn-press py-1 px-1">새로고침</button>
+      </div>
+      <p className="text-[11px] text-gray-400 mb-3">월요일(Asia/Seoul) 시작 기준 — 자동 등록은 반복 답안이 "AI 추천 학습"으로 등록된 수, 동의어 증가는 "이 단어 허용 답안으로 저장" 감사 이력 기준.</p>
+      {loading ? (
+        <p className="text-gray-400 text-sm">불러오는 중...</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="bg-gray-50 rounded-xl p-3">
+            <p className="text-gray-500 font-bold mb-1">이번 주</p>
+            <p className="text-gray-700">자동 등록 {fmt(metrics?.thisWeek?.autoAcceptedCount)}</p>
+            <p className="text-gray-700">동의어 증가 {fmt(metrics?.thisWeek?.synonymCount)}</p>
+          </div>
+          <div className="bg-gray-50 rounded-xl p-3">
+            <p className="text-gray-500 font-bold mb-1">지난 주</p>
+            <p className="text-gray-700">자동 등록 {fmt(metrics?.lastWeek?.autoAcceptedCount)}</p>
+            <p className="text-gray-700">동의어 증가 {fmt(metrics?.lastWeek?.synonymCount)}</p>
           </div>
         </div>
       )}
@@ -1760,6 +1978,11 @@ export default function AdminScreen({ onBack }) {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [renamingClass, setRenamingClass] = useState(null)
   const [renameValue, setRenameValue] = useState('')
+  // "오늘 AI 절약 카드"(2026-07-24) — SpellingReviewQueuePanel의 미리보기/
+  // AI 확인 실행이 끝날 때마다 이 값을 올려 AiSavingsCard가 localStorage를
+  // 다시 읽게 한다(두 컴포넌트가 상태를 공유하지 않으므로 최소한의 prop
+  // 신호만 전달, 헌법 규칙 12와 무관한 순수 관리자 UI 배선).
+  const [aiSavingsTick, setAiSavingsTick] = useState(0)
 
   const refresh = () => {
     setClasses(getClassNames())
@@ -1857,7 +2080,15 @@ export default function AdminScreen({ onBack }) {
               <div className="px-5 pb-5"><AnalyticsPanel /></div>
             </details>
 
-            <SpellingReviewQueuePanel onChanged={refresh} adminPin={pin} />
+            <SpellingReviewQueuePanel onChanged={refresh} adminPin={pin} onSavingsUpdate={() => setAiSavingsTick((t) => t + 1)} />
+
+            {/* "선생님이 같은 검토를 두 번 하지 않는" 자동 학습 시스템
+                (2026-07-24) — writing_answer_statistics 기반 3개 카드.
+                SQL 미실행이면 각 카드가 자체적으로 "SQL 실행 필요" 안내로
+                폴백한다(위 SpellingReviewQueuePanel과 동일 관례). */}
+            <LearningRecommendationsCard />
+            <AiSavingsCard refreshTick={aiSavingsTick} />
+            <LearningRateCard />
 
             <div className="bg-white rounded-3xl card-shadow p-5">
               <p className="text-sm font-black text-gray-700 mb-3">새 반 추가하기</p>

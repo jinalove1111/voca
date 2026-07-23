@@ -1,0 +1,27 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "learning-client",
+  "task": "\"선생님이 같은 검토를 두 번 하지 않는\" 자동 학습 시스템 — 클라이언트측(학생 제출 통계 기록 + 관리자 조회/액션/절약/학습률 카드)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-24T00:00:00+09:00",
+  "updated_at": "2026-07-24T00:00:00+09:00",
+  "files_owned": [
+    "src/utils/spellingReviewApi.js",
+    "src/utils/writingAnswerStatsApi.js",
+    "src/utils/spellingReviewAiApi.js",
+    "src/components/AdminScreen.jsx",
+    "src/App.jsx"
+  ],
+  "files_read": [
+    "src/utils/spellingReviewBulkPlan.js",
+    "src/utils/wordLibrary.js",
+    "supabase/functions/grade-writing-answers/index.ts",
+    "supabase_v3_7_word_accepted_variants.sql",
+    ".ai-status/README.md"
+  ],
+  "summary": "1) spellingReviewApi.js: logSpellingReview에 5번째 옵션 인자 meaning='' 추가(기존 4-인자 호출부 무변경 동작). 함수 내부에서 기존 spelling_review_queue upsert와 완전히 독립적으로 supabase.rpc('record_writing_answer_stat', {p_word_id,p_registered_meaning,p_student_answer,p_normalized_answer,p_student_id}) 호출을 await 없이(.then/.catch로 fire-and-forget) 추가 — 학생 채점 경로에 지연 0 추가. normalized_answer는 spellingReviewBulkPlan.js가 재수출하는 pipeline.js 원본 normalizeForCompare 재사용(재복제 없음). 함수 미존재(42883/PGRST202)면 세션 내 재시도를 끄는 별도 플래그 _statsAvailable(기존 _available과 독립) 사용, 다른 오류는 콘솔 경고만 남기고 재시도 유지. 2) src/utils/writingAnswerStatsApi.js(신규): fetchLearningRecommendations({minCount=3,limit=50}) — status=pending AND count>=minCount, count desc Top N, words embed 포함, planAccept 호환 필드명(id/wordId/acceptedMeanings/submittedAnswer)으로 매핑, 테이블 없음(42P01/PGRST205)이면 null. registerRecommendation(row) — ①planAccept로 병합 목록 계산 후 setWordAcceptedMeanings(실패 시 throw, ②③ 진행 안 함) ②word_accepted_variants insert(created_by='stats_learning', best-effort try/catch) ③writing_answer_statistics status='accepted'+status_changed_at 갱신(실패 시 throw). dismissRecommendation(id) — status='dismissed'. fetchLearningRateMetrics() — Asia/Seoul 월요일 00:00 기준(UTC+9 고정 오프셋 계산, DST 없음 전제) 이번주/지난주 writing_answer_statistics accepted count + word_accepted_variants created count를 head:true count 쿼리로 병렬 조회, 각 지표는 number(0 포함)|null(수집 중) 구분. accumulateSavingsCounters(runSummary)/readTodaySavings() — localStorage 키 'voca_writing_ai_savings_YYYY-MM-DD'(Seoul 날짜)에 {rules,cache,variants,statsSkips,ai} 누적, per-browser 한계 JSDoc 명시. 3) spellingReviewAiApi.js: callEdgeFunctionForUnresolved에 clientStats 파라미터 추가 -> 요청 바디에 {clientStats:{rulesResolvedCount}} additive 포함, 응답 body.summary?.statsSkips를 statsSkips로 반환(없으면 0, 구버전 서버 호환). runAiPhase에 rulesResolvedCount=0 파라미터 추가(클라이언트 전달), 청크 루프에서 statsSkips 누적해 최종 반환 객체에 statsSkips 필드 추가. 두 함수 모두 기존 필드/동작 무변경(순수 additive). 4) AdminScreen.jsx: writingAnswerStatsApi.js 신규 import. 모듈 레벨 헬퍼 computeSavingsFromProposals(proposals) 추가(rules/cache/variants/ai 집계, 실패/이월 계열은 미집계). SpellingReviewQueuePanel에 onSavingsUpdate prop 추가, runRulesPreview(미해결 0건 즉시완료 시)와 runAiConfirm(AI 단계 완료 시, rulesResolvedCount:rulesResult.resolved.length 전달) 양쪽에서 accumulateSavingsCounters 호출 + onSavingsUpdate?.() 배선(중복 집계 없음 — 미해결 0건 경로와 AI 완료 경로는 상호 배타적). 신규 컴포넌트 3개(SpellingReviewQueuePanel 함수 종료 직후 삽입): LearningRecommendationsCard(최소 반복 횟수 localStorage 조정 가능, 등록/무시 버튼, 테이블 없음 시 'supabase_v3_9 SQL 실행 필요' 안내), AiSavingsCard({refreshTick}, 절약률=(전체-AI)/전체, 전체 0이면 '오늘 실행 없음'), LearningRateCard(이번주/지난주 자동등록/동의어증가, null은 '데이터 수집 중'으로 정직 표기). AdminScreen 최상위에 aiSavingsTick state 추가, classes 탭에서 <SpellingReviewQueuePanel onSavingsUpdate=.../> 바로 아래에 세 카드 렌더링. 학생 화면 컴포넌트는 전혀 건드리지 않음(규칙 12 준수). 검증: npm run build PASS(신규 경고 없음, 기존 chunk-size 경고만 재출력), npm run verify:admin PASS(6개 스크립트 전부), npm run verify:writing PASS(3개 스크립트 전부, testWritingReviewAiPipeline.mjs가 runAiPhase 계약 재검증 — clientStats/statsSkips additive 변경으로 인한 회귀 없음 실측 확인). 테이블/RPC(writing_answer_statistics, record_writing_answer_stat)는 라이브에 아직 없음 — 코드 리뷰로 모든 폴백 경로(콘솔 에러 없이 null/기본값 반환)를 확인함(supabase_v3_9_writing_answer_statistics.sql은 다른 세션이 동시에 준비 중이라 읽지 않고 작업 지시서에 명시된 확정 스키마 계약만 그대로 따름).",
+  "blocker": null,
+  "next_action": "후속 항목 (1) 해소됨(코디네이터 소유권 확장 승인 후 처리) — src/App.jsx:372 handleSpellingAnswer의 logSpellingReview 호출에 5번째 인자 w?.meaning || '' 추가 완료, 이 한 줄만 수정(다른 부분 무변경), npm run build PASS 재확인(verify 재실행은 코디네이터 지시로 생략 — 시그니처 additive라 무해 판단). 남은 후속 항목: (2) supabase_v3_9_writing_answer_statistics.sql(다른 세션이 준비 중으로 보임, 저장소 루트에 이미 존재 확인)을 운영자가 Supabase SQL Editor에서 수동 실행해야 이번 클라이언트 코드가 실제로 데이터를 보여주기 시작함 — 실행 전까지는 3개 신규 카드가 전부 'SQL 실행 필요'/'데이터 수집 중' 폴백만 표시(설계대로, 에러 없음). (3) 서버 측(grade-writing-answers Edge Function)이 clientStats를 받아 실제로 활용하고 summary.statsSkips를 채우는 로직은 이 작업 범위 밖(index.ts/pipeline.js는 다른 에이전트가 동시 편집 중이라 읽기만 하고 수정 안 함) — 그 서버측 구현이 아직 없다면 클라이언트는 statsSkips=0으로 안전하게 폴백해 동작(확인됨)."
+}

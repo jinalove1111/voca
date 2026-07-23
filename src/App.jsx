@@ -369,7 +369,7 @@ function AppInner({ studentId, studentName, onLogout }) {
       }])
     }
     if (!correct && direction === 'en2kr' && w?.dbId && /[ㄱ-ㆎ가-힣]/.test(submitted || '')) {
-      logSpellingReview(w.dbId, studentId, submitted, 'en2kr')
+      logSpellingReview(w.dbId, studentId, submitted, 'en2kr', w?.meaning || '')
     }
   }
 
