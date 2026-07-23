@@ -1,0 +1,39 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "문서 갱신",
+  "task_id": "ai-providers",
+  "task": "쓰기 검수 AI Provider 추상화(OpenAI/Gemini/Anthropic) 리팩터링 문서화 — docs/AI_PROVIDERS.md 신규 + handoff.md 10차 append + ROADMAP.md 한 줄 append",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-24T00:00:00+09:00",
+  "updated_at": "2026-07-24T00:00:00+09:00",
+  "files_owned": [
+    "docs/AI_PROVIDERS.md",
+    "handoff.md",
+    "ROADMAP.md",
+    ".ai-status/docs-maintainer-ai-providers.json"
+  ],
+  "files_read": [
+    "supabase/functions/grade-writing-answers/providers.js",
+    "supabase/functions/grade-writing-answers/index.ts",
+    "supabase/functions/grade-writing-answers/pipeline.js",
+    "supabase_v3_6_writing_review_ai_cache.sql",
+    "supabase_v3_8_ai_usage_daily.sql",
+    "src/utils/spellingReviewAiApi.js",
+    ".ai-status/implementer-ai-provider-server.json",
+    ".ai-status/implementer-ai-provider-client.json",
+    ".ai-status/implementer-ai-provider-tests.json",
+    ".ai-status/implementer-writing-ai-client-bands.json",
+    ".ai-status/implementer-polish-sweep.json",
+    ".ai-status/TEMPLATE.json",
+    ".ai-status/README.md",
+    "handoff.md",
+    "ROADMAP.md",
+    "DEVELOPER_GUIDE.md",
+    "TESTING.md",
+    "DATABASE.md"
+  ],
+  "summary": "신규 docs/AI_PROVIDERS.md 작성 — 아키텍처 개요(providers.js 공통 인터페이스 4메서드 + createAIProvider 팩토리, index.ts는 Provider만 호출), 환경변수 표(AI_PROVIDER 기본 openai/OPENAI_MODEL 기본 gpt-5-nano/GEMINI_MODEL 기본 gemini-2.5-flash/ANTHROPIC_MODEL 기본 claude-haiku-4-5/AI_FALLBACK_PROVIDER 기본 빈문자열=폴백없음/MAX_ITEMS_PER_REQUEST 200/MAX_EST_COST_USD_PER_REQUEST 2.0/MAX_DAILY_COST 2.0/MAX_BATCH_SIZE 20, clamp 20~30 — 전부 실제 소스 상수/readXxxEnv 기본값 실측), Gemini/OpenAI 설정 절차(secrets set + functions deploy), 비용 비교 표(MODEL_PRICING_PER_MTOK 실측값 + index.ts의 EST_INPUT/OUTPUT_TOKENS_PER_ITEM/EST_SYSTEM_PROMPT_TOKENS_PER_BATCH 상수를 그대로 적용해 200건 처리 시 배치수 10/입력 52,600/출력 24,000 토큰 계산 과정 명시 후 4개 모델 추정 비용), 새 Provider 추가 5단계(providers.js 클래스+4메서드 → KNOWN_PROVIDERS/팩토리 분기 → MODEL_PRICING_PER_MTOK 단가 → TESTING.md 섹션 50~55 갱신 → 선택 formatProviderDisplay), 캐시 정책(5필드 키 provider 무관, PROMPT_VERSION이 유일 무효화 레버, model 컬럼은 audit 메타데이터로만 유지 — 코드 주석의 '의도적 설계 반전' 근거 인용). handoff.md 최상단에 10차 섹션 삽입(9차 이하 원본 보존, append-only) — 세션 성격/구현 3분업(서버·클라이언트·테스트, 각 .ai-status 요약 그대로 인용)/핵심 변경 5줄 요약/릴리스 게이트(서버 build PASS, 테스트 275 PASS 0 FAIL 5 SKIP + verify:writing PASS, 클라이언트는 최초 작성 시점엔 자체 build/verify 기록 없음을 정직하게 결측 표기했다가 — 이후 조정자 후속 지시로 갱신: 조정자가 3개 에이전트 작업 완료 후 결합 워킹트리에서 직접 실측한 npm run build PASS(기존 500kB 청크 경고만)/testWritingReviewAiPipeline.mjs 275 PASS 0 FAIL 5 SKIP(exit 0)/verify:admin 6/6 PASS/verify:writing 3/3 PASS를 해당 문구에 append 형태로 추가 기록, 클라이언트 에이전트도 자체적으로 build+verify:admin PASS를 실행했으나 .ai-status 기록만 누락됐던 것으로 정정)/운영자 대기 액션 4건. ROADMAP.md는 지시대로 최소 1줄(새 최종갱신 마커 + 한 줄 heading, 9차 이하 섹션은 그대로 아래 보존)만 추가. 코드/SQL 파일은 전혀 수정하지 않음(Read만).",
+  "blocker": null,
+  "next_action": "TESTING.md 섹션 50~55(providers.js 계약 검증, 275 PASS 결과) 표 반영은 이번 작업 지시 범위 밖이라 미착수 — 다음 docs 세션에서 처리 권장. 클라이언트 build/verify:admin 갭은 조정자 결합 실측(build PASS/verify:admin 6/6 PASS/verify:writing 3/3 PASS/275 PASS 0 FAIL 5 SKIP)으로 해소 완료, handoff.md 10차 릴리스 게이트 절에 append 반영함."
+}

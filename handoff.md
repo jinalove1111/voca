@@ -1,5 +1,144 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-24 (9차, 쓰기 답안 검토 AI 보조 v1.3 — resume 세션, 서버 모델 gpt-5-nano 전환+일일 비용 상한+클라이언트 이월, ec0b7e6/cdcbe19/f95f025/91e2b1c, 운영자 액션 대기)_
+_최종 갱신: 2026-07-24 (10차, 쓰기 검수 AI 보조 — Provider 추상화(OpenAI/Gemini/Anthropic), 코드 완료·커밋 대기)_
+
+## 2026-07-24 (10차) — 쓰기 검수 AI 보조: Provider 추상화(OpenAI/Gemini/Anthropic) — 코드 완료(커밋 대기)
+
+### 세션 성격
+
+운영자 명시 요구사항(총 15개 중 코드 주석에서 직접 확인되는 항목: 요구사항
+8 "프롬프트는 전 provider 공통", 9 "일일 사용량 provider/model별 집계",
+10 "폴백 provider", 11 "캐시 키 provider/모델 무관화", 13 "클라이언트
+provider 표시") — 9차(`ec0b7e6` 등)에서 OpenAI(`gpt-5-nano`)로 전환한 뒤,
+`index.ts`가 직접 하던 OpenAI/Anthropic `fetch` 호출을 전부 걷어내고
+Provider 팩토리 추상화(`providers.js` 신규)로 재구성한 세션. 서버/
+클라이언트/테스트 3개 에이전트가 파일 소유권을 분리해 병렬 작업
+(`implementer-ai-provider-server`/`-client`/`-tests`, 규칙 16 준수 —
+동시 편집 파일 겹침 없음). **커밋은 아직 없음**(작업 시작 시점 `git
+status`에 관련 파일 다수가 미스테이징/미커밋 상태로 남아 있었음) — 이
+handoff 항목은 "코드 완료, 커밋 대기" 시점 기록이며, 실제 커밋/푸시는
+조정자가 검수 후 진행 예정.
+
+### 구현 분업
+
+- **서버(`implementer-ai-provider-server`)**: 신규
+  `supabase/functions/grade-writing-answers/providers.js` — 순수 ESM
+  (Deno 전역 API 미사용, fetch/apiKey/model/timeout 전부 팩토리 인자
+  주입). `OpenAIProvider`(구 `index.ts` 로직 이동, 동작 무변경)/
+  `GeminiProvider`(신규, Google AI Studio `generateContent` +
+  `responseSchema`로 최상위 배열 강제)/`AnthropicProvider`(구 v2 로직
+  그대로 이동) 3개 클래스, 각각 `gradeWritingAnswers`/`healthCheck`/
+  `estimateCost`/`normalizeResponse` 4개 메서드로 동일 인터페이스.
+  `createAIProvider` 팩토리 — 미지 provider 문자열은 throw 대신
+  `openai`로 조용히 폴백(+ `onUnknownProvider` 콜백 + `fallbackApplied`/
+  `requestedProvider` 플래그). `index.ts`는 이제 OpenAI/Anthropic fetch를
+  직접 호출하지 않고 `createAIProvider()`가 만든 인스턴스만 호출한다.
+  `pipeline.js` — `DEFAULT_GEMINI_MODEL='gemini-2.5-flash'` export 추가,
+  `MODEL_PRICING_PER_MTOK`에 `gemini-2.5-flash`($0.30/$2.50 per MTok,
+  Google AI Studio 공식가) 추가. `buildCacheKey`를 6필드(`...::model`
+  포함)에서 5필드(`wordId::meaningSnapshot::normalizedAnswer::
+  partOfSpeech::PROMPT_VERSION`)로 **의도적으로** 축소 — 운영자
+  요구사항 11에 따라 "모델 전환 시 캐시 무효화" 설계를 뒤집어 provider/
+  모델을 바꿔도 기존 AI 판정을 재사용(비용 절약 우선, 무효화가
+  필요하면 `PROMPT_VERSION` 상수 승격이 유일한 레버). `classifyBatch`의
+  `modelId` 옵션 완전 제거(캐시 저장 audit용 `model` 컬럼은 이제
+  호출부가 직접 채움). 신규 env: `AI_PROVIDER`(기본 `openai`)/
+  `OPENAI_MODEL`(기본 `gpt-5-nano`)/`GEMINI_API_KEY`+`GEMINI_MODEL`
+  (기본 `gemini-2.5-flash`)/`ANTHROPIC_API_KEY`+`ANTHROPIC_MODEL`(기본
+  `claude-haiku-4-5`)/`AI_FALLBACK_PROVIDER`(기본 `''`=폴백 없음, 설정
+  시 주 provider 배치 실패를 폴백 provider로 1회 재시도, 재시도도
+  실패하면 기존 review 강등 경로 그대로). 사용량은 `(provider, model)`
+  버킷으로 나눠 누적(폴백으로 배치마다 실제 호출 provider가 달라져도
+  정확히 귀속). `ai_usage_daily`: `readTodayUsage`가 오늘 전 provider/
+  model 행을 합산(상한은 총액), `accumulateUsageRow`가 `(usage_date,
+  provider, model)` 단위 upsert(`prompt_tokens`/`response_tokens`
+  포함) — 구 스키마(42703, 컬럼 없음)면 단일 행 폴백 1회 재시도.
+  응답에 `usage.provider` 신규 필드(단일 provider면 그 값, 폴백 등으로
+  2개 이상 섞이면 `'mixed'`로 정직 표시). SQL: `supabase_v3_6`(유니크
+  인덱스 5컬럼으로 개명 `uq_spelling_ai_cache_key_v2`, `model` 컬럼은
+  audit 메타데이터로 유지) / `supabase_v3_8`(`(usage_date, provider,
+  model)` 복합 PK + `prompt_tokens`/`response_tokens` bigint 컬럼) 둘 다
+  아직 운영자 미실행 상태라 create-table 본문 자체를 in-place 갱신
+  (신규 마이그레이션 파일 불필요, 안전 — 헌법 규칙 8/9). 검증:
+  `npm run build` PASS(신규 경고 없음).
+- **클라이언트(`implementer-ai-provider-client`)**: `spellingReviewAiApi.js`
+  — `DEFAULT_AI_PROVIDER` 재수출, `runAiPhase`가 각 청크 응답의
+  `usage.provider`/`usage.model`을 모아 여러 provider가 섞이면
+  `'mixed'`, 1개면 그 값, 0개(AI 호출 없이 캐시/규칙만)면 `null`로
+  반환 `usage`에 additive 추가. 순수함수 `formatProviderDisplay(provider,
+  model)` 신규 export — `gpt-5-nano`→"GPT-5 nano",
+  `gemini-2.5-flash`→"Gemini 2.5 Flash", `claude-haiku-4-5`→"Claude
+  Haiku 4.5", 미지 모델은 원문 그대로, `mixed`면 "혼합(폴백 발생)".
+  `AdminScreen.jsx` — 기존 "모델: {AI_MODEL_ID}" 표시 2곳을 provider
+  배지(🟢 표시명, 실행 전엔 "(기본값 — 실제 값은 실행 후 서버 응답
+  기준)" 문구)로 교체. **이 에이전트의 `.ai-status` 파일에는 자체
+  `npm run build`/`npm run verify:admin` 실행 기록이 없음** — 다음
+  세션/qa-reviewer가 클라이언트 변경분 기준으로 재확인 필요(정직
+  표기, 규칙 18 — 없는 걸 있다고 쓰지 않음).
+- **테스트(`implementer-ai-provider-tests`)**:
+  `scripts/testWritingReviewAiPipeline.mjs` 섹션 39를 5필드(모델 제외)
+  캐시 키 스펙에 맞춰 갱신 + provider가 달라도 캐시 키가 동일함을
+  명시적으로 단언하는 케이스 추가. 신규 섹션 50~55 — `providers.js`
+  (`createAIProvider` 팩토리/`healthCheck`/`normalizeResponse`/
+  `gradeWritingAnswers` end-to-end/`estimateCost`/캐시 provider
+  무관성)를 mock `fetchImpl`로 계약 검증. 실행 결과 **275 PASS / 0 FAIL
+  / 5 SKIP**(정직한 배포 의존 SKIP, 섹션 36 4건 + 섹션 48 1건 — 기존과
+  동일). `npm run verify:writing` **PASS**(`testSpelling.mjs`/
+  `testSpellingDirectionWiring.mjs`/`testWritingReviewAiPipeline.mjs` 3개
+  전부). `npm run build`는 다른 에이전트와 dist 산출물 충돌을 피하려고
+  의도적으로 미실행(§ 지시 준수, 이 항목은 서버 에이전트가 이미 확인
+  완료). `TESTING.md` 표는 섹션 50~55 추가분이 아직 미반영 — 다음 docs
+  세션에서 별도 처리 필요(이번 세션은 지시 범위상 handoff.md/ROADMAP.md/
+  `docs/AI_PROVIDERS.md`만 처리).
+
+### 핵심 변경 요약
+
+- `providers.js` 신규 — OpenAI/Gemini/Anthropic 공통 인터페이스
+  (4메서드) + `createAIProvider` 팩토리. `index.ts`는 이제 Provider만
+  호출(직접 fetch 없음).
+- 캐시 키 5필드로 provider/모델 무관화 — 기존 "모델 포함 키(6필드)"
+  설계의 **의도적 반전**(운영자 요구사항 11, 비용 절약 우선 판단).
+- `ai_usage_daily` — `(usage_date, provider, model)` 복합 PK +
+  `prompt_tokens`/`response_tokens` 신규 컬럼. `v3_6`/`v3_8` SQL은
+  운영자 미실행 상태라 in-place 갱신(안전, 마이그레이션 파일 불필요).
+- 관리자 화면에 provider 배지(🟢 표시명) 추가.
+- 신규 `docs/AI_PROVIDERS.md` — provider 추상화 아키텍처/env 표/
+  Gemini·OpenAI 설정 절차/비용 비교/새 provider 추가 절차/캐시 정책
+  문서화(docs-maintainer, 이 세션).
+
+### 릴리스 게이트(각 에이전트 자체 보고 그대로 — 조정자 결합 재실행 전, 정직 표기)
+
+- 서버: `npm run build` PASS.
+- 테스트: `node scripts/testWritingReviewAiPipeline.mjs` 275 PASS / 0
+  FAIL / 5 SKIP, `npm run verify:writing` PASS(3/3). `npm run build`는
+  의도적 미실행.
+- 클라이언트: 자체 build/verify 실행 기록 없음 — 결합 검증 필요.
+  **[추가 갱신] 조정자가 3개 에이전트 작업 완료 후 결합 워킹트리에서
+  직접 실측**: 클라이언트 에이전트도 자체적으로 `npm run build` +
+  `npm run verify:admin` PASS를 실행했었으나 `.ai-status` 파일에 그
+  결과를 남기지 않았던 것으로 확인(정정 — 규칙 17 위반 사례로 기록,
+  실행 자체가 없었던 게 아니라 상태 파일 기록 누락).
+- 최종 결합 게이트(조정자 실측, 커밋 전) — **`npm run build` PASS**
+  (기존 500kB+ 청크 경고만, 신규 경고 없음), `node scripts/
+  testWritingReviewAiPipeline.mjs` **전 섹션 PASS(275 PASS / 0 FAIL /
+  5 SKIP, "모든 테스트 통과 ✅" exit 0)**, `npm run verify:admin`
+  **6/6 PASS**, `npm run verify:writing` **3/3 PASS**. 이 결합 실측이
+  최종 근거(서버/테스트 에이전트 개별 보고와 일치, 클라이언트 몫까지
+  포함해 조정자가 재확인).
+
+### 운영자 대기 액션(8/9차 항목과 동일 SQL 파일, 내용만 갱신됨)
+
+1. `supabase_v3_6`(캐시, 5필드 유니크 인덱스로 갱신됨) +
+   `supabase_v3_8`(`ai_usage_daily`, provider/model 복합 PK로 갱신됨)
+   SQL 실행(신규 설치면 그대로, 이미 구 스키마로 실행돼 있다면 SQL
+   파일 헤더의 수동 인덱스/기본키 교체 안내 참고).
+2. `supabase functions deploy grade-writing-answers`
+3. `supabase secrets set OPENAI_API_KEY=... AI_PROVIDER=openai
+   OPENAI_MODEL=gpt-5-nano MAX_DAILY_COST=2.0`(기존 값 그대로면 재설정
+   불필요) — Gemini/Anthropic으로 전환하거나 폴백을 쓰려면
+   `GEMINI_API_KEY`/`GEMINI_MODEL`/`ANTHROPIC_API_KEY`/
+   `ANTHROPIC_MODEL`/`AI_FALLBACK_PROVIDER` 추가(§ `docs/AI_PROVIDERS.md`
+   참고).
+4. 관리자 화면 "기능" 탭에서 `writingReviewAiAssist` 토글 ON(원할 때).
 
 ## 2026-07-24 (9차) — 쓰기 답안 검토 AI 보조 v1.3: 모델 전환 + 일일 비용 상한 + 클라이언트 이월 (커밋 ec0b7e6, cdcbe19, f95f025, 91e2b1c; 기준점 eace230)
 
