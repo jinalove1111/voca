@@ -1,0 +1,33 @@
+{
+  "agent_name": "researcher",
+  "role": "문서 전용 조사/설계",
+  "task_id": "content-pipeline",
+  "task": "확장 가능한 교과서 임포트 워크플로우(붙여넣기 → 자동 처리 → 사용 준비 완료) 설계 문서 작성",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-23T00:00:00+09:00",
+  "updated_at": "2026-07-23T00:00:00+09:00",
+  "files_owned": [
+    "docs/research/content-pipeline.md"
+  ],
+  "files_read": [
+    "CLAUDE.md",
+    "PROJECT_GUIDE.md",
+    "ROADMAP.md",
+    "supabase_v3_1_textbooks.sql",
+    "supabase_v3_3_reading.sql",
+    "supabase_v3_4_sentence_learning.sql",
+    "docs/reading/01-textbook-import-spec.md",
+    "docs/reading/02-sentence-splitting-rules.md",
+    "DATABASE.md",
+    "src/components/AdminScreen.jsx",
+    "src/components/admin/PassageEditor.jsx",
+    "src/utils/wordLibrary.js",
+    "src/utils/readingApi.js",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "선행 조사 결과 docs/reading/01-textbook-import-spec.md가 교재 임포트 JSON 스펙(필드 매핑/검증/멱등 upsert 전략)을 이미 v1.0으로 정의해 둔 것을 발견 — 신규 테이블/DDL이 원칙적으로 불필요하다는 것이 이 설계의 핵심 결론. content-pipeline.md는 그 스펙을 목표 산출물로 채택하고, (1) 붙여넣기 입력 UX(AdminScreen 엑셀업로드 + PassageEditor 붙여넣기 패턴 재사용), (2) 자동확정 vs 사람확인 검수 정책 표(lesson-analyzer-design.md는 참조 포인터로만 언급, 상세 분석 규칙 미정의), (3) 저장 순서(01번 스펙 §6 인용) + words 축은 기존 setClassWords의 delete-then-insert를 그대로 쓰기로 한 정직한 스펙 불일치 기록(§4.4), (4) 실패/부분성공 처리(all-or-nothing 검증 + 재시도 안전한 저장 순서), (5) api 12/12 한도 반영 — 신규 api 파일 없이 anon key 직접 쓰기 + 기존 generate-audio.js 재사용으로 충분함을 확인, (6) 기능 플래그 뒤 6단계 무중단 도입 순서까지 작성 완료.",
+  "blocker": null,
+  "next_action": "완료. 후속 세션은 docs/research/lesson-analyzer-design.md(동시 작성 중)와 docs/reading/01-textbook-import-spec.md §4.4에서 언급한 words 축 upsert 불일치 각주를 그 문서 소유 세션이 append할지 판단."
+}

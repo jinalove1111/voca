@@ -1,0 +1,38 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현 — reliability/polish sweep",
+  "task_id": "polish-sweep",
+  "task": "하네스 registry 5종 등록, dbIntegrityAudit v3.1 인지, isMissingTableError/fmtDay 통합, AnalyticsPanel KST 수정, Top10 마찰 수정(소유 파일 한정), 접근성 스팟 패스, safeCancelSpeech export",
+  "status": "paused",
+  "progress": 15,
+  "started_at": "2026-07-23T00:00:00+09:00",
+  "updated_at": "2026-07-23T00:00:00+09:00",
+  "files_owned": [
+    ".ai-status/implementer-polish-sweep.json",
+    "tests/harness/registry.mjs"
+  ],
+  "files_read": [
+    "docs/reading/09-codebase-audit.md",
+    "docs/reading/10-product-review-top100.md",
+    "tests/harness/runAll.mjs",
+    "tests/harness/runDomain.mjs",
+    "tests/harness/runDailyRitual.mjs",
+    "tests/harness/runAttachment.mjs",
+    "tests/harness/runAnalytics.mjs",
+    "tests/harness/runReading.mjs",
+    "tests/harness/runSentenceLearning.mjs",
+    "scripts/dbIntegrityAudit.mjs",
+    "supabase_v3_1_textbooks.sql",
+    "src/components/Dashboard.jsx",
+    "src/components/SpellingReview.jsx",
+    "src/components/QuizGame.jsx",
+    "src/components/WordDetail.jsx",
+    "src/utils/speech.js",
+    "src/utils/analyticsMath.js",
+    "src/components/admin/AnalyticsPanel.jsx",
+    "package.json"
+  ],
+  "summary": "task1(registry 5종 등록)은 9ca62c2로 커밋 완료. task2 이후(dbIntegrityAudit v3.1 인지, isMissingTableError/fmtDay 통합, AnalyticsPanel KST, 접근성 스팟 패스, safeCancelSpeech export)는 착수 전 세션 중단 — 워킹트리에 관련 코드 변경 0건임을 2026-07-24 resume 조정자가 git status/log로 실측 확인(규칙 18 정직 표기). 원래 summary의 DO NOT TOUCH 목록(GuidedSession.jsx 등)은 당시 동시 작업 에이전트 기준이라 현재는 무효.",
+  "blocker": null,
+  "next_action": "task2 이후 항목은 백로그로 이관 — 재개 시 새 상태 파일 대신 이 파일의 status를 working으로 되돌리고 진행"
+}

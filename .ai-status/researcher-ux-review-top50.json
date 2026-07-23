@@ -1,0 +1,31 @@
+{
+  "agent_name": "researcher",
+  "role": "4개 페르소나 제품 리뷰 + ROI Top50 UX 개선 목록 작성",
+  "task_id": "ux-review-top50",
+  "task": "9세 아동/중학생/학부모/원장 4개 페르소나 관점으로 docs/reading/10-product-review-top100.md를 정독하고, App.jsx/Dashboard.jsx/GuidedSession.jsx/QuizGame.jsx/SpellingReview.jsx/WordDetail.jsx/StudentSelect.jsx/ParentScreen.jsx/AdminScreen.jsx/PaulTown.jsx 실제 코드를 읽어 승계(문서10 미해결 항목)+신규 발견을 ROI 내림차순 Top50으로 정리",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-23T00:00:00Z",
+  "updated_at": "2026-07-23T00:00:00Z",
+  "files_owned": ["docs/research/product-review-top50-ux.md"],
+  "files_read": [
+    "docs/reading/10-product-review-top100.md",
+    "ROADMAP.md",
+    "src/App.jsx",
+    "src/components/Dashboard.jsx",
+    "src/components/GuidedSession.jsx",
+    "src/components/QuizGame.jsx",
+    "src/components/SpellingReview.jsx",
+    "src/components/WordDetail.jsx",
+    "src/components/StudentSelect.jsx",
+    "src/components/ParentScreen.jsx",
+    "src/components/PaulTown.jsx",
+    "src/components/AdminScreen.jsx",
+    "src/config/features.js",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "git log(8c5dc6c, f559984)와 ROADMAP.md 대조 결과 문서10 100개 항목 중 실제 배포된 건 S티어 #1(로그아웃 오터치)·#4(하드코딩 카운트) 단 2개뿐임을 확인. 나머지 98개 중 ROI 상위를 추려 문서10 참조번호로 승계하고, 실제 코드 정독으로 신규 9건 발견(최대 발견: StudentSelect.jsx PIN 만들기 탭이 로그인 없이 반 전체 학생 명단+PIN 상태를 노출) + 정정 2건(문서10 #65는 이미 구현됨, #69는 절반만 완료)을 확인해 docs/research/product-review-top50-ux.md에 4개 페르소나 균형 배분된 Top50 표로 정리 완료. 코드/SQL/설정 수정 없음(연구 전용 임무 범위 준수).",
+  "blocker": null,
+  "next_action": "없음 — 운영자가 Top50 중 우선순위를 골라 별도 구현 세션(implementer)에 배정하는 것이 다음 단계. 특히 #1(PIN 만들기 탭 학생명단 노출)은 보안/개인정보 성격이라 우선 검토 권장."
+}

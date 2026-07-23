@@ -1,0 +1,22 @@
+{
+  "agent_name": "researcher",
+  "role": "문서 전용 연구 (중학 내신 영어 시험 패턴)",
+  "task_id": "exam-patterns",
+  "task": "한국 중학교 영어 내신 시험 패턴 연구 문서 작성 (docs/research/exam-patterns.md)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-23T00:00:00+09:00",
+  "updated_at": "2026-07-23T00:10:00+09:00",
+  "files_owned": [
+    "docs/research/exam-patterns.md"
+  ],
+  "files_read": [
+    "ROADMAP.md",
+    "handoff.md",
+    "docs/reading/05-grammar-taxonomy.md",
+    "docs/reading/06-exam-importance-standards.md"
+  ],
+  "summary": "WebSearch로 중학 내신 영어 시험 패턴(본문 통암기, 서술형 유형, 학년별 문법 단골 포인트, 서술형 채점/수행평가 비중/자유학기제, 2022 개정 교육과정 적용 시기)을 조사하고 docs/research/exam-patterns.md에 정리. 확실한 사실(교육청 공식 지침 등)과 통념(학원가·근거 약함)을 구분 표기, 출처 URL 전부 명시. 기존 docs/reading/05,06 문서(v3.4 문법 분류/중요도 기준)와 교차 검증 — 외부 근거가 기존 내부 기준을 반박하지 않고 뒷받침함을 확인. 마지막 섹션에 v3.4 콘텐츠 우선순위 시사점 6개 항목 작성. WebFetch는 훅에 의해 거부되어 WebSearch만 사용(원문 전수 확인 못한 한계는 문서 서두에 명시). 코드/SQL/설정 미변경, git 명령 미실행.",
+  "blocker": null,
+  "next_action": "없음 (완료). 필요 시 다음 세션이 exam-patterns.md §4 시사점을 06-exam-importance-standards.md 개정 제안에 참고 가능."
+}

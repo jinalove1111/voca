@@ -1,0 +1,24 @@
+{
+  "agent_name": "researcher-parent-dashboard",
+  "role": "researcher",
+  "task_id": "parent-dashboard-report-design",
+  "task": "학부모가 실제로 원하는 리포트 설계 문서 작성 (docs/research/parent-dashboard.md)",
+  "status": "done",
+  "progress": 100,
+  "started_at": "2026-07-23T00:00:00+09:00",
+  "updated_at": "2026-07-23T00:10:00+09:00",
+  "files_owned": [
+    "docs/research/parent-dashboard.md",
+    ".ai-status/researcher-parent-dashboard.json"
+  ],
+  "files_read": [
+    "src/components/ParentScreen.jsx",
+    "src/utils/weeklyReport.js",
+    "DATABASE.md",
+    "PAUL_PRINCIPLES.md (7번 섹션)",
+    "ROADMAP.md (v1.1/v1.2 학부모 리포트 항목)"
+  ],
+  "summary": "docs/research/parent-dashboard.md 작성 완료. ParentScreen.jsx/weeklyReport.js/DATABASE.md/PAUL_PRINCIPLES.md §7 조사 기반으로 4축(학습습관/자신감/약한영역/꾸준함) 총 19개 리포트 항목 설계 — 각각 계산근거(테이블.컬럼), 데이터 상태(🟢지금가능/🟡수집추가/🔴장기), 낙인 없는 한국어 문구 예시, 학부모 다음 행동 제안 포함. 핵심 발견: fetchDashboardData가 이미 60일치 student_daily_progress를 가져오는데 ParentScreen은 7일만 씀 — 다수 항목이 새 쿼리 없이 바로 가능.",
+  "blocker": null,
+  "next_action": "없음 — 조사 완료. 채택 여부는 운영자/구현 세션 판단 대상"
+}

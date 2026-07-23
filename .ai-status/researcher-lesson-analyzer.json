@@ -1,0 +1,32 @@
+{
+  "agent_name": "researcher",
+  "role": "설계 문서 조사/작성 (코드 변경 없음)",
+  "task_id": "lesson-analyzer",
+  "task": "Lesson Analyzer(영어 지문+한국어 번역 → 문장분리/핵심문장/중요도/문법태그/청크/어휘연결/퍼즐데이터/빈칸후보 자동 제안) 완전 설계 문서 작성",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-23T00:00:00Z",
+  "updated_at": "2026-07-23T00:10:00Z",
+  "files_owned": [
+    "docs/research/lesson-analyzer-design.md"
+  ],
+  "files_read": [
+    "PROJECT_GUIDE.md",
+    "PAUL_PRINCIPLES.md",
+    "DATABASE.md",
+    "ROADMAP.md",
+    "handoff.md",
+    "src/utils/sentenceLearning.js",
+    "src/utils/readingModel.js",
+    "src/utils/readingApi.js",
+    "src/components/admin/PassageEditor.jsx",
+    "src/components/SentenceLearningFlow.jsx",
+    "src/utils/wordLibrary.js",
+    "supabase_v3_4_sentence_learning.sql",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "docs/research/lesson-analyzer-design.md 작성 완료(17개 섹션). 기존 스키마(passages/passage_sentences/sentence_progress/sentence_words)와 순수 엔진(sentenceLearning.js/readingModel.js)에 정합하는 규칙 기반(무료) 설계 — 문장분리/핵심문장/중요도/문법태그/청크/어휘연결/퍼즐데이터/빈칸후보 8개 항목마다 JSON 스키마+규칙+워크드 예제(Mr. Kim/hanami 지문)+규칙기반 vs 사람검수 표 포함. 코드/SQL 변경 0건, git 명령 0건.",
+  "blocker": null,
+  "next_action": "구현 착수 세션이 있다면 §16 열린 질문(구조화 grammar_tags 컬럼 신설 여부 등)부터 운영자 승인 필요 — 이 세션 범위 아님"
+}

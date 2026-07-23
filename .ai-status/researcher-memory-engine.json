@@ -1,0 +1,24 @@
+{
+  "agent_name": "researcher",
+  "role": "간격 반복 시스템 비교 조사 및 아키텍처 추천 문서 작성",
+  "task_id": "memory-engine",
+  "task": "SM-2/FSRS/Leitner/Duolingo HLR/Anki 비교 후 8~15세 아동에게 적합한 간격반복 아키텍처 1개 추천 문서 작성",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-23T00:00:00+09:00",
+  "updated_at": "2026-07-23T00:20:00+09:00",
+  "files_owned": [
+    "docs/research/memory-engine.md"
+  ],
+  "files_read": [
+    "PROJECT_GUIDE.md",
+    "DATABASE.md",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json",
+    "src/utils/wordLibrary.js (grep only)",
+    "src/hooks/useStudent.js (grep only)"
+  ],
+  "summary": "WebSearch로 SM-2/Anki변형/FSRS(v4~v5)/Leitner/Duolingo HLR·Birdbrain 및 아동 대상 간격반복 문헌을 조사(WebFetch는 훅에 의해 차단되어 WebSearch 스니펫만 사용, 문서에 명시). 5축 비교표 + 프로젝트 제약(유료API 금지/외부의존성 최소화/React+Supabase/기존 스키마 패턴) 정합성 표 작성. 최종 추천: 완화형 레벨 라이트너(6단계 박스, 오답 시 1단계만 강등) — FSRS/HLR은 데이터량·인프라·아동 정서 적합성에서 배제 사유 명시. 신규 테이블 word_review_schedule DDL 스케치(실행 금지, 설계 참고용) 포함 — 기존 word_status(자기신고 플래그)와 의미 충돌 피하려 별도 테이블로 분리한 근거 기재. 출처 URL 전부 문서 9절에 명시. 소스코드/SQL/설정 파일 수정 없음, git 명령 미사용.",
+  "blocker": null,
+  "next_action": "구현은 이 세션 범위 밖 — 별도 planner/implementer 세션이 이 문서를 근거로 진행 필요(SQL 실행은 운영자 전담, 규칙 8)"
+}
