@@ -1,0 +1,28 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "security-adminpin-wiring",
+  "task": "classes/units/words anon 전체쓰기 취약점 수정의 마지막 단계 — AdminScreen.jsx(+admin/SpellingReviewQueuePanel.jsx) 호출부 11곳에 관리자 PIN(pin state)을 wordLibrary.js 8개 함수의 신규 마지막 인자로 배선",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-24T00:00:00+09:00",
+  "updated_at": "2026-07-24T00:30:00+09:00",
+  "files_owned": [
+    "src/components/AdminScreen.jsx",
+    "src/components/admin/SpellingReviewQueuePanel.jsx"
+  ],
+  "files_read": [
+    "src/utils/wordLibrary.js",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json",
+    ".ai-status/implementer-security-lockdown-curriculum.json",
+    ".ai-status/implementer-adminscreen-split.json",
+    "src/components/admin/AiSavingsCard.jsx",
+    "src/components/admin/LearningRateCard.jsx",
+    "src/components/admin/LearningRecommendationsCard.jsx",
+    "src/utils/spellingReviewAiApi.js"
+  ],
+  "summary": "wordLibrary.js(다른 세션 소유, 열지 않고 읽기만 — 수정 안 함)에서 8개 함수의 확정된 신규 시그니처를 확인: createClass(name, classType='regular', adminPin) / setClassWords(className, words, unitName, adminPin) / addClassUnit(className, unitName, adminPin) / deleteClassUnit(className, unitName, adminPin) / deleteClass(className, adminPin) / renameClass(oldName, newName, adminPin) / setClassSettings(className, settings, adminPin) / setWordAcceptedMeanings(wordDbId, meanings, adminPin) — 전부 adminPin이 각 함수의 진짜 마지막 위치. AdminScreen.jsx는 export default function AdminScreen 안(1065행)에 실제 관리자 PIN 문자열을 담는 `const [pin, setPin] = useState('')`을 이미 갖고 있었다(로그인 시 /api/verify-admin-pin으로 검증에 쓰는 바로 그 값, SeasonPanel/WordKingPanel/StudentDirectory/SpellingReviewQueuePanel에 이미 adminPin={pin}으로 전달 중이던 기존 패턴을 그대로 재사용) — 별도 조사/대안 불필요. 배선한 11개 호출부: (1) AdminScreen.jsx 1112행 renameClass(renamingClass, next, pin) — AdminScreen 클로저 직접 참조. (2) 1215행 createClass(name, undefined, pin) — classType 자리는 기존처럼 생략 동작을 보존하려 undefined로 채움(기본값 'regular' 그대로 적용). (3) 1310행 addClassUnit(c, name, pin). (4) 1353행 setWordAcceptedMeanings(w.id, ..., pin). (5) 1454행 setClassWords(c, [...], viewUnit, pin) — 단어 추가 인라인. (6) 1504행 deleteClass(confirmDelete, pin). 이상 6곳은 AdminScreen 함수 본문 안이라 pin을 그대로 클로저 참조. (7)(8) SpellingSettingsPanel(71행)/GameSettingsPanel(131행) — 이 둘은 별도 함수 컴포넌트라 pin에 클로저 접근 불가, 시그니처에 adminPin prop 추가({ targetClass, onSaved, adminPin }) 후 setClassSettings(targetClass, next, adminPin) 배선, 렌더 지점(1418/1420행)에 adminPin={pin} 추가. (9)(10) ExcelUpload(787행)/PdfUpload(916행) — 마찬가지로 별도 컴포넌트, 시그니처에 adminPin prop 추가, setClassWords(..., adminPin) 배선, 렌더 지점(1479/1480행)에 adminPin={pin} 추가. (11) src/components/admin/SpellingReviewQueuePanel.jsx 123행 setWordAcceptedMeanings(r.wordId, [...], adminPin) — 이 컴포넌트는 implementer-adminscreen-split 세션이 이미 adminPin prop(59행 시그니처)을 받고 있었으므로(AdminScreen이 adminPin={pin}으로 렌더 시 전달 중) 그 prop을 그대로 재사용, 새 prop 추가 불필요. 미배선/알려진 갭 2건(둘 다 이번 작업 범위 밖, 코드 미수정): (a) deleteClassUnit은 wordLibrary.js에서 export/import는 되어 있으나 AdminScreen.jsx 전체에서 실제 호출부가 0개(grep 확인, 죽은 import 또는 UI 미배선 기능) — 배선할 호출부 자체가 없음. (b) src/utils/spellingReviewAiApi.js 505행 executeAccept() 내부의 setWordAcceptedMeanings(plan.wordId, plan.mergedAcceptedMeanings) 호출은 adminPin 없이 호출 중(SpellingReviewQueuePanel.jsx 358/378행이 이 함수를 부름) — 이 파일은 (i) 이번 작업 지시가 명시한 대상 파일 목록(AdminScreen.jsx + admin/*.jsx)에 포함되지 않고, (ii) git status 스냅샷에서 세션 시작 전부터 이미 M(다른 세션이 uncommitted로 작업 중)이라 규칙 16(파일당 소유자 1명)에 따라 절대 손대지 않음 — 이 경로(관리자 화면의 '한 번에 인정' 버튼)는 SQL 락다운(supabase_v3_11) 실행 후 여전히 레거시 anon 경로로 42501 실패할 것으로 예상, qa-reviewer/후속 세션이 spellingReviewAiApi.js 소유 세션과 조율해 executeAccept/executeBulkAccept에 adminPin 파라미터를 추가하고 그 파일을 통해 setWordAcceptedMeanings에 threading해야 함. 검증: npm run build PASS(에러 0, 기존 chunk-size 경고만 동일). npm run verify:admin PASS(6/6 스크립트: testDashboard/testSpellingSettings/testSpellingV2Db/testGamificationSettings/testEntranceTest/testEntranceTestDb — 이 스크립트들은 wordLibrary.js를 adminPin 없이 직접 호출하므로 여전히 레거시 anon 경로를 실측 검증, 오늘 코드 배포가 기존 동작을 전혀 안 바꿨음을 재확인). git status로 자신이 수정한 2개 파일(AdminScreen.jsx, admin/SpellingReviewQueuePanel.jsx) 외 아무것도 손대지 않았음을 확인(wordLibrary.js 등 나머지 M 파일은 전부 세션 시작 전부터 이미 다른 세션이 uncommitted로 작업 중이던 것). 커밋하지 않음(지시에 따름).",
+  "blocker": null,
+  "next_action": "★★★ 정확한 배포/SQL 실행 순서(반드시 이 순서로, 건너뛰면 관리자 반/유닛/단어 CRUD가 전부 깨짐): ① 이번 코드(src/utils/wordLibrary.js + src/components/AdminScreen.jsx + src/components/admin/SpellingReviewQueuePanel.jsx) 배포(Vercel 프론트 재배포). ② `supabase functions deploy admin-content-write` (ADMIN_PIN/SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY 시크릿이 이미 프로젝트에 있는지 `supabase secrets list`로 먼저 확인 — grade-writing-answers가 이미 쓰고 있다면 공유되어 있을 가능성 높음, 없으면 set). ③ [운영자] 관리자 화면에 실제로 로그인(PIN 입력)한 뒤 반 생성/이름변경/유닛 추가/단어 저장/삭제를 한 번씩 눌러 새 admin-content-write Edge Function 경로가 정상 동작하는지(네트워크 탭에서 admin-content-write 호출 확인) 실제로 테스트. ④ ③이 전부 정상 동작을 확인한 뒤에만 `supabase_v3_11_lockdown_curriculum_write.sql`을 Supabase 대시보드 SQL Editor에서 실행 — 이 시점부터 adminPin 없는 레거시 경로는 42501로 막히므로, 이번 배선이 실제로 모든 실사용 호출부를 커버했는지가 결정적이다. 후속 조치 권장 2건(이번 세션 범위 밖): (1) qa-reviewer가 supabase_v3_11 실행 전, staging/로컬에서 admin-content-write를 실제로 배포해 8개 action(class.create/class.rename/class.delete/unit.create/unit.delete/words.bulk_replace/word.accepted_meanings.update/class.update_settings) 각각을 관리자 화면 UI로 왕복 테스트해 SQL 실행 전 마지막 안전망으로 확인 권장. (2) src/utils/spellingReviewAiApi.js(현재 다른 세션 소유, uncommitted M) 소유 세션과 조율해 executeAccept/executeBulkAccept의 setWordAcceptedMeanings 호출에도 adminPin을 threading — 이거 없으면 SQL 실행 후 '쓰기 답안 검토' 패널의 AI 확인 수락(원클릭 인정) 버튼이 42501로 깨짐(SpellingReviewQueuePanel.jsx의 accept()가 직접 부르는 123행은 이번에 고쳤지만, executeAccept()를 통하는 AI 보조 경로는 미배선 상태로 남음)."
+}

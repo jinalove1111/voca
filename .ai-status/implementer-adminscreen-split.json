@@ -1,0 +1,23 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "adminscreen-split",
+  "task": "AdminScreen.jsx에서 SpellingReviewQueuePanel/LearningRecommendationsCard/AiSavingsCard/LearningRateCard 4개 컴포넌트를 src/components/admin/으로 순수 이동(StudentDirectory.jsx 2026-07-22 선례 재사용)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-23T20:00:00Z",
+  "updated_at": "2026-07-23T20:21:21Z",
+  "files_owned": [
+    "src/components/AdminScreen.jsx",
+    "src/components/admin/SpellingReviewQueuePanel.jsx",
+    "src/components/admin/LearningRecommendationsCard.jsx",
+    "src/components/admin/AiSavingsCard.jsx",
+    "src/components/admin/LearningRateCard.jsx"
+  ],
+  "files_read": [
+    "src/components/admin/StudentDirectory.jsx"
+  ],
+  "summary": "AdminScreen.jsx 2410줄 -> 1521줄(37% 감소, 889줄 이동). 4개 컴포넌트를 각자 신규 파일로 완전 이동(코드 변경 없음, import 경로만 상대경로 '../../utils/...'로 수정). 경계 재확인 결과: 코드 품질 감사 보고대로 4개 모두 props만 받는 독립 함수였음(SpellingReviewQueuePanel={onChanged,adminPin,onSavingsUpdate}, AiSavingsCard={refreshTick}, LearningRecommendationsCard/LearningRateCard는 props 없음) — AdminScreen 로컬 React state를 closure로 참조하는 부분은 없었음. 단, 감사가 언급 안 한 모듈 스코프 의존성 1건 발견: computeSavingsFromProposals() 헬퍼(순수 함수, React state 아님)가 AdminScreen.jsx 상단(구 67행)에 정의돼 SpellingReviewQueuePanel 안에서만 쓰이고 있었음 — 이것도 SpellingReviewQueuePanel.jsx로 함께 옮기고 AdminScreen.jsx에서는 삭제(다른 곳에서 미사용 확인, grep으로 검증). 렌더링 위치/props 전달 방식은 AdminScreen.jsx의 tab==='classes' 블록에서 기존과 100% 동일하게 유지(<SpellingReviewQueuePanel onChanged={refresh} adminPin={pin} onSavingsUpdate={...}/>, <LearningRecommendationsCard/>, <AiSavingsCard refreshTick={aiSavingsTick}/>, <LearningRateCard/> 순서 그대로). wordLibrary.js는 전혀 열지 않음(다른 세션 소유 확인, git status로 동시 편집 중임을 재확인 — 실제로 그 파일이 이번 세션 중 다른 diff로 M 상태였음). npm run build PASS(신규 에러/경고 없음, 기존 chunk-size 경고만 동일하게 존재), npm run verify:admin PASS(6/6 스크립트: testDashboard, testSpellingSettings, testSpellingV2Db, testGamificationSettings, testEntranceTest, testEntranceTestDb). git diff --stat 확인: AdminScreen.jsx는 13 insertions(+) / 902 deletions(-)만 발생(다른 파일 무변경).",
+  "blocker": null,
+  "next_action": "커밋 금지 지시에 따라 커밋하지 않음 — 운영자/planner가 리뷰 후 소커밋 진행 요청 시 AdminScreen.jsx 1개 커밋 + 4개 신규 파일 1개 커밋(또는 파일당 1커밋)으로 분리 권장. qa-reviewer가 개발 서버로 관리자 화면 쓰기 검수 AI 탭 육안 확인을 원하면 npm run dev 후 확인 가능."
+}
