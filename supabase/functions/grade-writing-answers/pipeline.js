@@ -185,11 +185,23 @@ export function buildBatches(items, size = 25) {
 // 그대로 반영돼야 한다"는 요구사항). 이 상수만 올리면(값 비교, 문자열 자체
 // 의미 없음) 기존 캐시 행은 새 키와 안 맞아 자동으로 미스 처리되고 새로
 // AI를 호출한다 — 별도 캐시 무효화 로직/마이그레이션이 필요 없다.
-// AI_MODEL_ID: index.ts의 Anthropic 호출 model 파라미터와 반드시 동일한
+// AI_MODEL_ID: index.ts의 실제 AI 호출 model 파라미터와 반드시 동일한
 // 값을 써야 한다(드리프트 방지 — index.ts는 이 상수를 그대로 import해서
 // 쓰고, 자체 하드코딩 상수를 두지 않는다).
+//
+// 2026-07-24(implementer P) — 운영자 명시 비용 결정으로 provider/model을
+// OpenAI gpt-5-nano로 전환한다. AI_MODEL_ID를 여기서 repoint하는 것만으로
+// 클라이언트(spellingReviewAiApi.js)가 import하는 비용 추정치가 자동으로
+// 새 모델 기준을 따라간다(그 파일이 이 상수를 재선언하지 않고 그대로
+// import하기 때문 — 드리프트 방지 원칙 동일). DEFAULT_AI_PROVIDER도 함께
+// 내보내 index.ts의 기본 분기 근거로 쓴다. 단, index.ts는 배포 환경에서
+// AI_PROVIDER/OPENAI_MODEL 환경변수로 이 기본값을 런타임에 오버라이드할
+// 수 있다(운영자가 나중에 다시 Anthropic으로 되돌리거나 다른 OpenAI 모델로
+// 바꾸고 싶을 때 코드 재배포 없이 시크릿만 바꾸면 되게 하기 위함) — 즉
+// 이 두 상수는 "코드 기본값"이지 "항상 강제되는 값"이 아니다.
 export const PROMPT_VERSION = 'v2'
-export const AI_MODEL_ID = 'claude-haiku-4-5'
+export const AI_MODEL_ID = 'gpt-5-nano'
+export const DEFAULT_AI_PROVIDER = 'openai'
 
 // 동일 (단어, 등록뜻 스냅샷, 정규화 답안, 품사, 프롬프트 버전, 모델) 조합
 // 캐시 키 — supabase_v3_6_writing_review_ai_cache.sql의
@@ -208,8 +220,16 @@ export const AI_MODEL_ID = 'claude-haiku-4-5'
 // 순서 주의: 기존 3필드(wordId/meaningSnapshot/normalizedAnswer)를 맨
 // 앞자리 그대로 유지 — parseCacheKey를 배열 구조분해로 앞 3개만 꺼내 쓰는
 // 기존 호출부(index.ts)가 있어도 값이 밀리지 않는다(하위 호환).
-export function buildCacheKey({ wordId, meaningSnapshot, normalizedAnswer, partOfSpeech = '' }) {
-  return `${wordId}::${meaningSnapshot}::${normalizedAnswer}::${partOfSpeech}::${PROMPT_VERSION}::${AI_MODEL_ID}`
+//
+// modelId(2026-07-24 추가, implementer P): index.ts가 AI_PROVIDER/
+// OPENAI_MODEL 환경변수로 런타임에 실제 사용 모델을 결정하므로, 캐시 키의
+// 마지막 필드도 그 "런타임에 실제로 호출한 모델"과 일치해야 한다(그래야
+// 모델을 바꿨을 때 이전 모델의 캐시 판정을 새 모델 기준으로 잘못 재사용하지
+// 않는다는 원 설계 목적이 provider 전환 이후에도 유지된다). 기본값은 여전히
+// AI_MODEL_ID라서 이 파라미터를 넘기지 않는 기존 호출부(테스트 등)는 동작이
+// 전혀 안 바뀐다 — 키 형식(6필드, model 마지막)도 그대로.
+export function buildCacheKey({ wordId, meaningSnapshot, normalizedAnswer, partOfSpeech = '', modelId = AI_MODEL_ID }) {
+  return `${wordId}::${meaningSnapshot}::${normalizedAnswer}::${partOfSpeech}::${PROMPT_VERSION}::${modelId}`
 }
 
 export function parseCacheKey(key) {
@@ -300,7 +320,21 @@ export function parseAiBatchResponse(rawText) {
 // cacheStore가 쓰는 대상은 오직 "AI 판정 캐시" 테이블이지 spelling_review_
 // queue.status나 words.accepted_meanings가 아니다 — 그 둘은 여전히 관리자가
 // 기존 인정/무시 버튼을 눌러야만 바뀐다.
-export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiClassify, batchSize = 25 } = {}) {
+//
+// modelId(2026-07-24 추가, implementer P): index.ts가 AI_PROVIDER/
+// OPENAI_MODEL 환경변수로 런타임에 실제 호출 모델을 결정하므로, 이 함수가
+// 내부에서 만드는 캐시 키도 그 실제 모델을 반영해야 한다(기본값은 여전히
+// AI_MODEL_ID라서 이 옵션을 안 넘기는 기존 호출부/테스트는 동작이 전혀
+// 안 바뀐다).
+//
+// budgetExceeded(2026-07-24 추가, implementer P): 일일 비용 상한 초과 시
+// index.ts가 true를 넘기면, 캐시로도 못 채운(=실제 AI 호출이 필요했을)
+// 항목들을 aiClassify를 아예 호출하지 않고 decision='review'/confidence=0/
+// decision_source='ai_budget_exceeded'로 안전하게 강등한다(자동 거부 아님,
+// 기존 ai_unavailable/ai_error 경로와 동일한 "실패는 항상 review" 원칙).
+// 캐시 히트는 이 분기 이전에 이미 처리되므로(비용 발생 없음) 그대로 살아
+// 있다 — "AI 호출만" 건너뛴다는 요구사항과 정확히 일치.
+export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiClassify, batchSize = 25, modelId = AI_MODEL_ID, budgetExceeded = false } = {}) {
   const proposals = []
   const unresolved = []
 
@@ -327,6 +361,7 @@ export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiC
       // undefined -> '' (§ buildCacheKey 주석). 나중에 상류에서 품사를
       // 채워 넘기기 시작해도 이 호출부는 수정할 필요 없다.
       partOfSpeech: item.partOfSpeech || '',
+      modelId,
     })
     const cached = cacheLookup ? await cacheLookup(key) : null
     if (cached) {
@@ -343,6 +378,20 @@ export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiC
   }
 
   if (stillUnresolved.length === 0) return proposals
+
+  if (budgetExceeded) {
+    // 일일 비용 상한 초과(§ 위 옵션 주석) — 캐시로 못 채운 항목만 여기
+    // 도달하고, 실제 AI(유료) 호출은 단 한 번도 일어나지 않는다.
+    for (const item of stillUnresolved) {
+      proposals.push(buildProposal({
+        pendingId: item.id, word: item.word, meaning: item.meaning, submittedAnswer: item.submittedAnswer,
+        decision: 'review', confidence: 0, reason: '오늘 일일 AI 비용 상한 초과 — AI 호출을 건너뛰고 관리자 확인 필요로 표시(자동 거부 아님)',
+        partOfSpeechWarning: item.hint?.posWarning ? '품사/활용형 차이 가능성' : null,
+        decisionSource: 'ai_budget_exceeded', cacheHit: false,
+      }))
+    }
+    return proposals
+  }
 
   if (!aiClassify) {
     // AI 분류기가 주입되지 않으면(예: ANTHROPIC_API_KEY 미설정) 전부 review로
@@ -411,10 +460,19 @@ export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiC
 
 // 2026-07-23 claude-api 스킬(claude-sonnet-5/claude-haiku-4-5 최신 가격표)
 // 확인 기준 — $/1M 토큰. 가격이 바뀌면 claude-api 스킬로 재확인 후 이 상수만
-// 갱신할 것(코드 다른 곳은 안 건드림).
+// 갱신할 것(코드 다른 곳은 안 건드림). claude-haiku-4-5 항목은 provider를
+// OpenAI로 전환한 뒤에도 하위호환(과거 캐시 행의 model 필드/롤백 대비)을
+// 위해 그대로 유지한다 — 절대 제거하지 않는다.
+//
+// gpt-5-nano: 2026-07-24 확인, 출처 pricepertoken.com/cloudzero(운영자
+// 실측 확인 — Anthropic 유료 스킬 대신 무료 공개 가격 비교 사이트로 확인,
+// 헌법 규칙 7의 "비용 드는 확인은 무료 대안 우선"과 같은 맥락). 운영자가
+// 명시적으로 선택한 OpenAI 최저가 모델 — 이 저장소가 실제 AI 호출에 쓰는
+// 기본 모델(AI_MODEL_ID 참고).
 export const MODEL_PRICING_PER_MTOK = {
   'claude-haiku-4-5': { input: 1.0, output: 5.0 },
   'claude-sonnet-5': { input: 3.0, output: 15.0 },
+  'gpt-5-nano': { input: 0.05, output: 0.40 },
 }
 
 export function estimateCostUsd({ inputTokens = 0, outputTokens = 0 }, model = AI_MODEL_ID) {
