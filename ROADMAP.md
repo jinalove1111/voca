@@ -1,6 +1,25 @@
 # Paul Easy Voca — 로드맵
 
-_최종 갱신: 2026-07-24 (10차, 쓰기 검수 AI 보조 — Provider 추상화(OpenAI/Gemini/Anthropic) — 기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+_최종 갱신: 2026-07-24 (12차, Production Readiness 감사 + Phase 1 안전수정 완료(Critical 보안 취약점 포함) — 기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+
+## 2026-07-24 (12차) — Production Readiness 감사(100명×20학원 기준) + Phase 1 안전수정 완료(Critical 보안 취약점 포함) — 코드 완료 ✅(운영자 배포/SQL 액션 대기)
+
+`docs/audit/2026-07-24-*.md` 5개(보안/성능DB/모바일UX/코드품질/AI비용)
+병렬 감사. **최우선 발견**: `classes`/`units`/`words`(교육과정 전체)
+anon key 인증 없이 전체 CRUD 가능한 Critical 취약점을 라이브 curl
+실측으로 발견, 감사 대기 없이 같은 세션에서 즉시 수정 완결(신규
+Edge Function `admin-content-write` + `wordLibrary.js` 8개 함수 하위호환
+adminPin 배선 + `AdminScreen.jsx`/`spellingReviewAiApi.js` 전 호출부
+연결) — 단 `supabase_v3_11_lockdown_curriculum_write.sql`이 **아직
+미실행**이라 라이브 취약점은 이 문서 작성 시점 기준 여전히 열려 있음.
+부수적으로 AdminScreen.jsx 2,410→1,521줄(37%↓) 컴포넌트 분리, AI 배치
+채점 동일 실행 내 중복 캐시미스 최적화(대표 1건만 AI 호출), 모바일 UX
+CSS 6건 수정도 같은 날 완결. 성능/DB 스케일링(전교생 무필터 전체조회,
+N+1)은 위험도 높아 이번 세션 미착수, 인덱스 초안만
+(`supabase_v3_10_perf_indexes.sql`, 미실행). "배포확장성" 전용 감사
+문서는 저장소에서 확인 안 됨. build PASS + `testWritingReviewAiPipeline.mjs`
+375 PASS/0 FAIL + verify:admin 6/6 + verify:writing 3/3. 상세:
+`handoff.md` 2026-07-24(12차).
 
 ## 2026-07-24 (10차) — 쓰기 검수 AI 보조: Provider 추상화(OpenAI/Gemini/Anthropic 팩토리, 캐시 키 provider 무관화, 일일 사용량 provider/model별 집계) — 코드 완료 ✅(커밋 대기, 운영자 SQL/배포/시크릿 액션 대기). 상세: `handoff.md` 2026-07-24(10차), `docs/AI_PROVIDERS.md` 신규.
 

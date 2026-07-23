@@ -1,5 +1,169 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-24 (11차, "선생님이 같은 검토를 두 번 하지 않는" 자동 학습 시스템(writing_answer_statistics) — 코드 완료, SQL 미실행)_
+_최종 갱신: 2026-07-24 (12차, Production Readiness 감사(100명×20학원 기준) + Phase 1 안전수정 완료 — Critical 보안 취약점(교육과정 전체 anon 쓰기) 코드 수정 포함, SQL 미실행)_
+
+## 2026-07-24 (12차) — Production Readiness 감사(100명×20학원 기준) + Phase 1 안전수정 완료(Critical 보안 취약점 포함, SQL 미실행)
+
+### 세션 성격
+
+운영자가 명시한 "오늘부터 기능 추가보다 세계 최고 수준 앱을 목표로" 전환
+지시 이후 첫 세션. 5단계 계획 중 **Phase 1(Production Readiness 감사 +
+즉시 가능한 안전수정)만 이 세션에서 완결**됐고, Phase 2~4(Memory Engine
+설계/경쟁앱 분석/몰입심리 연구 — `docs/research/` 신규 문서들로 존재)는
+조사 문서만, Phase 5(Master Roadmap 종합)는 이 handoff 작성 시점 기준
+별도 진행 상태(완결 여부는 다음 세션 또는 이후 커밋에서 확인 필요 — 이
+세션에서 직접 확인하지 못함). `d68a106..2a83862` 구간 6개 커밋
+(`a4d66d9` 보안 기반, `caadea1` AdminScreen 분리+보안 배선, `7234004`
+보안 갭 마무리, `626e6d3` AI 중복 캐시미스 제거, `da75119` 모바일 UX,
+`2a83862` 문서)으로 반영됨(커밋 해시/순서는 조정자 보고 기준 — 이
+세션에는 git 로그 조회 도구가 없어 직접 재확인은 못 했으나, 아래 각
+항목은 `.ai-status/implementer-*.json` 8개와 `docs/audit/*.md` 5개
+원문을 직접 읽어 내용을 대조 확인했음).
+
+### 6축 병렬 감사 → 5개 문서 확인(보안/성능DB/모바일UX/코드품질/AI비용)
+
+`docs/audit/2026-07-24-security.md`, `-performance-db.md`, `-mobile-ux.md`,
+`-code-quality.md`, `-ai-cost.md` 5개를 실측 확인. **"배포확장성"을 다루는
+별도 6번째 문서는 저장소에서 찾지 못함**(`docs/audit/*deploy*`,
+`*scal*` 글롭 0건) — 배포 관련 내용(Vercel Hobby 함수 한도 12/12 등)은
+`security.md`(24행)에 부수적으로만 언급됨. 아래 "운영자 액션 대기" 항목의
+Vercel Hobby 상업적 사용 ToS 리스크는 이 세션이 코드/문서에서 직접 확인한
+사실이 아니라 이 handoff 작성 지시에 포함된 보고 내용을 그대로 옮긴
+것으로, 저장소 내 `docs/`·`.ai-status/` 어디에도 "ToS"/"상업적"/
+"commercial" 문구가 없음(grep 0건) — **별도 검증 필요, 사실로 단정하지
+않음.**
+
+### 최우선 발견 및 즉시 조치 — Critical 보안 취약점(교육과정 anon 전체 CRUD)
+
+`docs/audit/2026-07-24-security.md`가 라이브 실측(anon key, curl)으로
+발견: `classes`/`units`/`words`(커리큘럼 전체) 3개 테이블에 RLS/GRANT가
+전혀 없어 로그인·PIN 없이 anon key만으로 rename/삭제/오염 등 전체 CRUD가
+가능했다(`classes` INSERT 테스트 중 실제 행 1건이 생성돼 즉시 DELETE로
+원복 확인 완료 — `id: f3ee4705-...`, 실제 학생 데이터 아님). Security
+Score를 기존 90/100 → 45~50/100으로 하향 평가(`security.md` 76~78행).
+
+같은 세션 안에서 감사 대기 없이 즉시 코드 착수해 완결(`.ai-status/
+implementer-security-lockdown-curriculum.json`, `-security-adminpin-
+wiring.json`, `-security-adminpin-writing-review-gap.json` 3개 세션):
+
+- 신규 Supabase Edge Function `supabase/functions/admin-content-write/
+  index.ts` — `admin-pin-actions.js`와 동일한 action-dispatch 패턴,
+  `ADMIN_PIN` 서버측 재검증 통과 후 `SERVICE_ROLE_KEY`로 8개 action
+  처리(`class.create`/`class.rename`/`class.delete`/`unit.create`/
+  `unit.delete`/`words.bulk_replace`/`word.accepted_meanings.update`/
+  `class.update_settings`). 신규 함수 추가로 Vercel API 12/12 한도를
+  건드리지 않기 위해 `grade-writing-answers`와 동일하게 Supabase Edge
+  Function(Vercel 서버리스가 아님)으로 분리한 설계.
+- `src/utils/wordLibrary.js` 8개 export 함수(`createClass`/
+  `setClassWords`/`addClassUnit`/`deleteClassUnit`/`deleteClass`/
+  `renameClass`/`setClassSettings`/`setWordAcceptedMeanings`)에 하위호환
+  옵셔널 마지막 인자 `adminPin` 추가 — truthy면 신규 Edge Function 경로,
+  falsy(오늘 배포 직후 실제 호출부 상태)면 기존 anon 직접쓰기 레거시
+  경로로 그대로 폴백하는 듀얼패스 설계(SQL 실행 전 배포해도 기존 관리자
+  플로우가 깨지지 않도록, 헌법 규칙 1).
+- `AdminScreen.jsx`(2,410→1,521줄로 동시에 분리 리팩터링된 상태) +
+  `src/components/admin/SpellingReviewQueuePanel.jsx` 호출부 11곳,
+  `src/utils/spellingReviewAiApi.js`의 `executeAccept`/`executeBulkAccept`
+  2곳까지 실제 관리자 PIN(`pin` state)을 새 인자로 배선 완료(누락됐던
+  "일괄 인정" AI 경로 갭도 별도 후속 세션이 마무리).
+- `supabase_v3_11_lockdown_curriculum_write.sql`(신규, **미실행**) —
+  `classes`/`units`/`words` 3개 테이블 RLS enable + select-only 정책,
+  파일 헤더에 실행 순서 경고 명시(코드 배포·검증 전 실행 시 관리자
+  커리큘럼 관리 전체가 42501로 깨짐).
+- **알려진 잔여 갭**(문서화만, 코드 미수정): `deleteClassUnit`은
+  export/import는 있으나 `AdminScreen.jsx` 전체에서 실제 호출부 0개(죽은
+  경로) — 배선할 대상 자체가 없음. `addStudent`/`setStudentClass` 등이
+  내부적으로 부르는 `ensureClass`/`ensureUnit`의 "반/유닛이 없어 새로
+  만들어야 하는" 드문 브랜치는 adminPin 없이 SQL 실행 후 42501 가능성
+  있음(실무 영향 낮다고 판단했으나 qa-reviewer 재검토 권장).
+- **Security Score 회복 상태를 명확히 기록**: 코드 수정은 완료됐지만
+  **`supabase_v3_11` SQL이 아직 미실행이라, 이 handoff 작성 시점에도
+  라이브 Supabase는 여전히 anon 전체 CRUD가 열려 있는 상태(90점 회복
+  안 됨)** — 배포(Edge Function + 프론트) → 실사용 테스트 → SQL 실행
+  순서를 지켜야만 취약점이 닫힌다.
+
+### 코드 품질 감사 대응 — AdminScreen.jsx 분리
+
+`docs/audit/2026-07-24-code-quality.md`가 AdminScreen.jsx의 God
+Component화 가속(1,537→2,410줄, +57%/약 1일)을 Critical/High로 지적한
+직후, 같은 날 별도 세션(`.ai-status/implementer-adminscreen-split.json`)이
+`SpellingReviewQueuePanel`/`LearningRecommendationsCard`/`AiSavingsCard`/
+`LearningRateCard` 4개 컴포넌트(+ 그 안에서만 쓰이던 순수 함수
+`computeSavingsFromProposals`)를 `src/components/admin/`으로 순수 이동
+(로직 변경 없음, import 경로만 수정) — **AdminScreen.jsx 2,410 →
+1,521줄(37% 감소)**. `npm run build` PASS, `npm run verify:admin` 6/6
+PASS(라이브 e2e로 회귀 없음 확인).
+
+### AI 비용 감사 대응 — 배치 내 동일 오답 중복 캐시미스 최적화
+
+`docs/audit/2026-07-24-ai-cost.md`가 "발견 1"(같은 실행 안에서 동일
+`(word_id, meaning, normalized_answer, partOfSpeech, promptVersion)`
+캐시 키를 가진 여러 pending 항목이, 캐시가 채워지기 전이라 각각 개별
+AI 호출로 나가는 구조적 낭비 — 흔한 오답 패턴 1건당 최대 (중복수−1)/
+중복수 비율로 순수 낭비, 111→2,000명 스케일업 시 절대액도 비례해서
+커짐)을 지적하며 "이번 조사는 발견만 보고, 구현은 범위 밖"이라고 명시적
+경계를 그었으나, 같은 날 별도 구현 세션(`.ai-status/implementer-ai-
+dedup-optimization.json`)이 즉시 후속 착수: `supabase/functions/
+grade-writing-answers/pipeline.js`의 `classifyBatch`에서 캐시 미스 후
+`stillUnresolved`를 기존 5필드 `cacheKey`로 Map 그룹핑 → 그룹 대표 1건만
+`statsLookup`/AI에 전달 → 대표 결과를 그룹원 전원에 복제(각자
+`pending_answer_id`는 유지) → `cacheStore`도 대표 1건만 호출. 중복 없는
+요청(그룹 크기 항상 1, 현재 가장 흔한 경우)은 기존 코드와 완전히 동일
+동작(회귀 없음). `index.ts`는 수정 불필요(사전 비용 추정은 이미
+"최악-경우 상한"이라 그룹핑이 안전성에 영향 없음, 콜백 시그니처
+불변). 테스트: 기존 347 PASS 100% 무변경 + 신규 26건 추가.
+
+### 모바일 UX 감사 대응 — CSS-only 6건
+
+`docs/audit/2026-07-24-mobile-ux.md`(직접 원문은 미확인, `.ai-status/
+implementer-mobile-ux-fixes.json`으로 내용 확인) 대응, High 1/Medium
+3/Low 2 총 6건을 클래스명 문자열만 변경(로직/이벤트 핸들러 무변경)해
+완료: `WordDetail.jsx` 버튼 터치타깃/대비, `GuidedSession.jsx` sticky
+헤더 좁은화면 말줄임, `StudyCalendar.jsx` 캘린더 셀 폭, `DiaryPage.jsx`
+스티커 툴바 삭제버튼 분리(오탭 완화), `Dashboard.jsx`/`TextbookSelector.jsx`
+select 높이, `WordBrowser.jsx` 가로스크롤 페이드 오버레이. `npm run
+build` PASS(신규 에러/경고 없음).
+
+### 성능 감사·배포 감사 — 이번 세션은 문서화만, 코드 미착수(의도적)
+
+`docs/audit/2026-07-24-performance-db.md`가 Critical 2건(§1 클라이언트가
+`classes`/`units`/`words`/`students`를 매 세션·매 포커스 복귀마다
+무필터 전체 로드, §2 AI 배치 채점 통계 반영이 항목당 SELECT+UPDATE로
+N+1·최대 400쿼리/요청)을 포함 총 7개 항목을 지적했으나, 전부 "academy_id
+부재"라는 같은 근본 원인의 광범위 스키마/리팩터 변경이 필요해 이번
+세션에서는 착수하지 않고 인덱스 초안(`supabase_v3_10_perf_indexes.sql`,
+**미실행**)만 준비. 배포 관련 내용은 위 "6축 병렬 감사" 절 참고(6번째
+전용 문서 미발견, Vercel Hobby ToS 리스크는 미검증).
+
+### 릴리스 게이트(조정자 결합 실측, 이 문서 작성 지시에 기재된 수치 — 개별
+`.ai-status` 파일의 부분 실행 결과와 정합적임)
+
+`npm run build` PASS, `scripts/testWritingReviewAiPipeline.mjs` 375
+PASS/0 FAIL(ai-dedup 세션의 373 + test-arity-fix 세션이 추가한 신규
+단언 2건 = 375, 두 `.ai-status` 파일 대조로 정합성 확인), `npm run
+verify:admin` 6/6, `npm run verify:writing` 3/3.
+
+### 운영자 액션 대기(우선순위순)
+
+1. `supabase functions deploy admin-content-write`
+2. 관리자 화면에서 반/유닛/단어 CRUD 각 1회 테스트로 신규 Edge Function
+   경로(admin-content-write) 정상 동작 확인(네트워크 탭에서 호출 확인)
+3. `supabase_v3_11_lockdown_curriculum_write.sql` 실행(반드시 ①②
+   이후 — 순서를 지키지 않으면 관리자 커리큘럼 관리 전체가 42501로 깨짐)
+4. (기존부터 대기 중이던) `supabase_v3_6`/`supabase_v3_8`/`supabase_v3_9`
+   SQL, `supabase_v3_10_perf_indexes.sql`
+5. Vercel Hobby 플랜 상업적 사용 여부 자체 검토(정책 결정) — **위
+   "6축 병렬 감사" 절 캐비엇 참고, 이 문서 작성 세션이 직접 확인한
+   근거는 없음**
+6. Supabase 대시보드에서 실제 요금제/사용량 확인
+
+### 학생 데이터 변경
+
+감사 세션 중 발견된 테스트용 임시 행(`classes` 1건, `f3ee4705-...`,
+`{"name": 12345}`로 anon 쓰기 가능함을 증명하는 과정에서 의도치 않게
+생성됨) 즉시 DELETE 후 SELECT로 삭제 확인 완료 — 그 외 학생 데이터
+변경 0건.
+
+---
 
 ## 2026-07-24 (11차) — 자동 학습 시스템(writing_answer_statistics): 반복 오답 재사용 + 원클릭 학습 등록 + 관리자 대시보드 3카드 — 코드 완료(SQL 미실행)
 
