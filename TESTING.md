@@ -228,3 +228,74 @@ append했다. 이미 `tests/harness/registry.mjs`의 `writing` 도메인이 이
 198 PASS / 0 FAIL / 5 SKIP(전부 배포 의존, § 섹션 36/48). `npm run build`
 PASS(신규 경고 없음). `npm run verify:writing`/`npm run verify:all` 실측
 결과는 `handoff.md`의 해당 세션 기록 참고.
+
+---
+
+## 관련 항목: Provider 추상화 테스트 확장 — 섹션 50~55 (2026-07-24, implementer-ai-provider-tests)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존. 10차 handoff(`git log`
+`eace230` 이전)가 "TESTING.md 표는 섹션 50~55 추가분이 아직 미반영"으로
+남긴 갭을 이번 세션(docs-maintainer, 11차)에서 채운다._
+
+`providers.js`(OpenAI/Gemini/Anthropic 공통 인터페이스 + `createAIProvider`
+팩토리, § `handoff.md` 2026-07-24 10차)를 검증하기 위해
+`scripts/testWritingReviewAiPipeline.mjs`에 6개 섹션(50~55)이 추가됐다.
+mock `fetchImpl`로 실제 네트워크 요청 0건, 캐시 키가 5필드(모델 제외)로
+축소된 스펙에 맞춘 갱신도 기존 섹션(39)에 포함됐다.
+
+| 섹션 | 검증 대상 |
+|---|---|
+| 39(갱신) | 캐시 키 5필드(모델 제외) 스펙 재확인 — provider가 달라도 캐시 키가 동일함을 명시적으로 단언 |
+| 50 | `createAIProvider` 팩토리 — provider 문자열별 올바른 클래스 인스턴스 생성, 미지 provider는 throw 대신 `openai`로 조용히 폴백(`fallbackApplied`/`requestedProvider` 플래그 + `onUnknownProvider` 콜백) |
+| 51 | `healthCheck` — 3개 provider(OpenAI/Gemini/Anthropic) 각각의 헬스체크 요청 형태와 성공/실패 응답 처리 |
+| 52 | `normalizeResponse` — 3개 provider의 서로 다른 원시 API 응답 형태를 공통 스키마로 정규화하는 로직 |
+| 53 | `gradeWritingAnswers` end-to-end — mock `fetchImpl`로 요청 payload 형태(프롬프트 공통성 포함, 운영자 요구사항 8) + 응답 파싱까지 배관 전체 실측 |
+| 54 | `estimateCost` — provider/model별 요금표(`MODEL_PRICING_PER_MTOK`, `gemini-2.5-flash` 포함)에 따른 비용 계산 정확성 |
+| 55 | 캐시 provider 무관성 — 서로 다른 provider/model로 판정해도 5필드 캐시 키가 동일해 캐시를 공유함을 실측(운영자 요구사항 11, 비용 절약 우선 설계의 직접 증거) |
+
+**실행 결과(implementer-ai-provider-tests 자체 보고)**: `node scripts/
+testWritingReviewAiPipeline.mjs` **275 PASS / 0 FAIL / 5 SKIP**(정직한
+배포 의존 SKIP, 섹션 36 4건 + 섹션 48 1건 — 기존과 동일). `npm run
+verify:writing` PASS(3/3). `npm run build`는 다른 에이전트와의 산출물
+충돌을 피하려 의도적으로 미실행(서버 에이전트가 별도로 확인).
+
+---
+
+## 관련 항목: 자동 학습 시스템 테스트 확장 — 섹션 56~61 (2026-07-24, implementer-learning-tests)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+"선생님이 같은 검토를 두 번 하지 않는" 자동 학습 시스템
+(`writing_answer_statistics`, § `handoff.md` 2026-07-24 11차)의 서버
+(`pipeline.js`의 `statsLookup` 훅/`index.ts`)·클라이언트
+(`writingAnswerStatsApi.js`/`spellingReviewApi.js`/`spellingReviewAiApi.js`)
+구현이 완료된 뒤, `scripts/testWritingReviewAiPipeline.mjs`에 6개 섹션
+(56~61)·72개 신규 단언이 추가됐다. 구현 파일은 이 작업에서 전혀 수정되지
+않고 읽기만 됐다(실제 계약을 그대로 재현).
+
+| 섹션 | 검증 대상 |
+|---|---|
+| 56 | `statsLookup` 훅(요구사항 5, 오답 학습) — 캐시 조회 다음/AI 호출 전 실행 위치, `skip:true`+유효 `decision`이면 `decision_source='stats_repeat'` 확정 + `aiClassify`/`cacheStore` 0회 호출, `decision:'accept'` 반환은 무시(이중 인정 경로 금지), 캐시 히트 항목은 `statsLookup` 자체 미호출, `budgetExceeded` 강등 우선순위(`stats_repeat` 유지 vs 나머지만 강등), `posWarning` 힌트 보존, 옵션 미전달 시 기존 호출부 무영향 |
+| 57 | `registerRecommendation`/`dismissRecommendation`(원클릭 학습) — `writingAnswerStatsApi.js`를 esbuild로 번들해 실행. ① `setWordAcceptedMeanings` 실패 시 ②③ 절대 미실행 + throw, 성공 경로의 정확한 호출 순서·인자(`mergedAcceptedMeanings`/`created_by=stats_learning`/`status=accepted`+`status_changed_at`), ②(감사 insert) 실패는 best-effort 무시하고 ③은 진행, ③(status 갱신) 실패는 throw, `dismissRecommendation`은 `status=dismissed` 업데이트만 |
+| 58 | `fetchLearningRecommendations`(Top50 쿼리) — 기본(`minCount=3`/`limit=50`)·커스텀 파라미터가 실제 쿼리 체인(`eq status=pending`/`gte count`/`order count desc`/`limit`)에 반영, `words` embed → `planAccept` 호환 필드 매핑, 테이블 미존재(42P01/PGRST205) 시 `null` 폴백 |
+| 59 | Dashboard 절약 카운터 + 주간 학습률(요구사항 7·8) — `accumulateSavingsCounters`/`readTodaySavings`(fake localStorage로 같은 날 2회 누적, 다른 날짜 키 미혼입, 전체 0일 때 NaN/Infinity 없이 0), `fetchLearningRateMetrics`(Asia/Seoul 월요일 00:00 경계를 UTC+9 시프트로 직접 검증, 지난주 끝==이번주 시작 경계 이어짐, 지난주 시작이 정확히 7일 전, 테이블 없음은 `null`과 정상 0을 구분) |
+| 60 | Performance(요구사항 9, `logSpellingReview` fire-and-forget) — 소스 텍스트로 await 없음 확인 + esbuild 번들 실행 스파이로 mock RPC가 영원히 pending이어도 `logSpellingReview`가 300ms 내 resolve(`Promise.race` 실측), RPC 42883/네트워크 오류 모두 학생 채점 경로로 전파 안 됨 |
+| 61 | `statsSkips` 전파(`runAiPhase`) — `rulesResolvedCount>0`이면 모든 청크 요청 바디에 `clientStats.rulesResolvedCount` 동일 포함, 서버 응답 `summary.statsSkips` 청크별 합산(2청크×3=6), 기본값(0)이면 `clientStats` 필드 자체가 요청 바디에서 빠짐, 구버전 응답(필드 없음)도 0으로 안전 폴백 |
+
+**새 esbuild 스텁 필터 버그 발견(테스트 파일 내부, 구현 파일 아님)**:
+섹션 56~61 작성 중, 기존 섹션 36/43/47이 재사용해온 `onResolve` 필터
+(`/utils[\\/]wordLibrary$/` 등)가 esbuild `args.path`의 실제 원문
+상대경로("./wordLibrary")와 매치되지 않아 스텁이 적용되지 않는 잠재
+버그가 발견됐다(기존 섹션들은 그 함수를 실제로 호출하지 않는 경로만
+테스트해 우연히 통과해왔을 뿐). 이번 신규 섹션(56~61)의 스텁만 정확한
+원문 상대경로 필터(`/^\.\/wordLibrary$/`, `/^\.\/supabaseClient$/`)로
+고쳐 적용했고, 기존 섹션 36/43/47은 소유 범위 밖이라 손대지 않았다(향후
+그 섹션들이 실제 호출을 검증하는 방향으로 확장될 경우 같은 필터 수정이
+필요할 수 있음 — qa-reviewer 인계 사항).
+
+**실행 결과(implementer-learning-tests 자체 보고)**: `node scripts/
+testWritingReviewAiPipeline.mjs` **347 PASS / 0 FAIL / 5 SKIP**(275
+PASS에서 72개 신규 단언 추가, 기존 SKIP 5건은 배포 의존이라 그대로
+유지). 결합 재검증(`npm run build`/`npm run verify:writing` 등 전체
+워크트리 기준)은 조정자가 후속으로 진행 예정 — `handoff.md` 2026-07-24
+11차 "릴리스 게이트" 참고.

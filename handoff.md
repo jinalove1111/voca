@@ -1,5 +1,274 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-24 (10차, 쓰기 검수 AI 보조 — Provider 추상화(OpenAI/Gemini/Anthropic), 코드 완료·커밋 대기)_
+_최종 갱신: 2026-07-24 (11차, "선생님이 같은 검토를 두 번 하지 않는" 자동 학습 시스템(writing_answer_statistics) — 코드 완료, SQL 미실행)_
+
+## 2026-07-24 (11차) — 자동 학습 시스템(writing_answer_statistics): 반복 오답 재사용 + 원클릭 학습 등록 + 관리자 대시보드 3카드 — 코드 완료(SQL 미실행)
+
+### 세션 성격
+
+운영자가 명시한 요구사항("선생님이 같은 검토를 두 번 하지 않는" 자동 학습
+시스템, 총 10개 항목 중 코드 주석에서 직접 확인되는 항목) — ① Auto
+Learning Queue, ② 반복 답안 감지, ③ One Click Learning(원클릭 학습
+등록), ④ 관리자 추천, ⑤ 오답 학습(반복 reject_candidate 재사용), ⑥
+Batch Learning은 새벽 pg_cron 배치가 아니라 **라이브 쿼리로 대체**(111명
+규모에서 별도 배치 인프라가 불필요, 헌법 규칙 7 — 무료/최소 인프라
+우선), ⑦ Dashboard(오늘 AI 절약 카드), ⑧ Learning Rate(주간 학습률
+카드), ⑨ 성능(fire-and-forget, 학생 채점 경로 지연 0 추가), ⑩ 테스트 —
+를 구현한 세션. 서버(SQL + Edge Function 훅)/클라이언트(학생 제출 통계
+기록 + 관리자 UI 3카드)/테스트(섹션 56~61) 3개 에이전트가 파일 소유권을
+분리해 병렬 작업(`implementer-learning-server`/`-client`/`-tests`, 규칙
+16 준수 — 서버 에이전트는 `src/**`를 전혀 건드리지 않았고 클라이언트
+에이전트는 `supabase/functions/**`를 전혀 건드리지 않음, 상호 계약은
+읽기 전용으로만 확인). 여기에 조정자의 SQL 검토(v3_9 실행 순서 버그
+발견 및 DO 블록 가드로 수정)와 `App.jsx` 후속 배선(`logSpellingReview`
+호출부에 `meaning` 인자 추가, 코디네이터 소유권 확장 승인 후 처리)이
+더해졌다.
+
+### 구현 분업
+
+- **서버(`implementer-learning-server`)** — 3개 소유 파일만 수정(`src/**`
+  미접촉): `supabase_v3_9_writing_answer_statistics.sql`(신규),
+  `supabase/functions/grade-writing-answers/pipeline.js`,
+  `supabase/functions/grade-writing-answers/index.ts`.
+  - `writing_answer_statistics` 테이블 신규 정의(스키마는 아래 §
+    DATABASE.md 요약 참고) + `record_writing_answer_stat` RPC(SECURITY
+    DEFINER, 원자적 upsert)를 SQL 파일에 작성.
+  - `pipeline.js`의 `classifyBatch`에 `statsLookup` 옵션(기본 `null`,
+    순수 주입식 훅) 추가 — 실행 순서는 로컬 규칙 → 캐시 조회 →
+    `statsLookup` → AI. `statsLookup(item)`은
+    `Promise<{skip:true, decision, confidence, reason} | null>`을
+    반환해야 하고, `decision`은 `'review'` 또는 `'reject_candidate'`만
+    허용(`isValidStatsSkipDecision` — `accept`는 이 경로로 절대 못
+    만듦, 이중 인정 경로 금지). 스킵되면
+    `decision_source='stats_repeat'`로 proposal이 만들어지고
+    `aiClassify`/`cacheStore` 모두 호출되지 않는다. 옵션을 안 넘긴
+    기존 호출부는 100% 무영향.
+  - `index.ts`: `STATS_REJECT_THRESHOLD` env(기본 5) 도입. 배치 시작
+    전 `ruleUnresolvedItems`의 `word_id`를 모아
+    `writing_answer_statistics`를 `.in()` 한 번으로 조회, 조건
+    `status != 'accepted' AND accepted_count = 0 AND rejected_count >=
+    threshold`인 행만 `statsSkipMap`에 적재(과거 accept를 한 번이라도
+    받은 조합은 절대 스킵 대상에 안 넣음 — 자동 승인 위험 원천 차단).
+    이 조건에서 만들어지는 스킵은 항상 `decision='reject_candidate'`만
+    생성(`pipeline.js` 계약상 `review`도 허용되지만 이 구현은 안 씀).
+    테이블 미존재(42P01/PGRST205)면 `statsTableUnavailable=true`로
+    조용히 비활성(`statsLookup=null`, 기존 캐시→AI 흐름과 100% 동일).
+    AI 판정 후에는 `decision_source==='ai' && !cache_hit`인 proposal만
+    `bumpWritingAnswerStatAfterAiJudgment`로 `last_decision`/
+    `last_confidence` 갱신 + `accept`면 `accepted_count+1`,
+    `reject_candidate`면 `rejected_count+1`(`review`는 카운터 없음) —
+    이 함수는 행이 이미 있을 때만 update하는 update 전용(insert는 오직
+    RPC 몫). 요청 바디 `clientStats.rulesResolvedCount`를 받아 검증(0
+    폴백, 상한 10000) 후 `ai_usage_daily`의 신규 절약 컬럼 3종
+    (`rules_resolved_count`/`cache_hit_count`/`stats_skip_count`)에
+    delta로 누적(v3.9 컬럼 없으면 42703 감지 후 v3.8 컬럼만 기록하는
+    폴백, 그마저 없으면 기존 legacy 폴백으로 한 단계 더 폴백).
+    `AI 호출 0건`이어도(전부 규칙/캐시/통계로 끝난 요청) 절약값이
+    있으면 `primaryProvider` 행에 비용 0으로 별도 기록(이 케이스가
+    없으면 절약이 전혀 안 남는 버그였을 것). 응답
+    `summary.statsSkips`/로그 필드 추가(전부 additive). `budgetExceeded`
+    경로에도 `statsLookup`/절약 집계 동일 적용.
+  - 클라이언트 계약(셀렉트 컬럼명/RPC 파라미터명/요청 바디
+    `clientStats.rulesResolvedCount`/응답 `summary.statsSkips`)을 다른
+    에이전트가 이미 완료한 `src/utils/writingAnswerStatsApi.js`/
+    `spellingReviewAiApi.js`/`spellingReviewApi.js`를 읽어 1:1로 상호
+    검증 완료(수정 없이 읽기만).
+- **클라이언트(`implementer-learning-client`)** — 소유 파일:
+  `src/utils/spellingReviewApi.js`, `src/utils/writingAnswerStatsApi.js`
+  (신규), `src/utils/spellingReviewAiApi.js`, `src/components/
+  AdminScreen.jsx`, `src/App.jsx`.
+  - `spellingReviewApi.js`: `logSpellingReview`에 5번째 옵션 인자
+    `meaning=''` 추가(기존 4-인자 호출부 무변경 동작). 내부에서 기존
+    `spelling_review_queue` upsert와 완전히 독립적으로
+    `supabase.rpc('record_writing_answer_stat', {...})`를 **await 없이
+    `.then/.catch`로 fire-and-forget** 호출 — 학생 채점 경로에 지연 0
+    추가(요구사항 9). `normalized_answer`는 `spellingReviewBulkPlan.js`가
+    재수출하는 `pipeline.js` 원본 `normalizeForCompare` 재사용(재복제
+    없음). 함수 미존재(42883/PGRST202)면 세션 내 재시도를 끄는
+    `_statsAvailable` 플래그(기존 `_available`과 완전히 독립) 사용,
+    다른 오류는 콘솔 경고만 남기고 재시도 유지. 실패는 어떤 형태로도
+    학생에게 노출되지 않음.
+  - `src/utils/writingAnswerStatsApi.js`(신규):
+    `fetchLearningRecommendations({minCount=3, limit=50})` — `status
+    ='pending' AND count>=minCount`, `count desc` Top N, `words` embed
+    포함, `planAccept` 호환 필드명(`id`/`wordId`/`acceptedMeanings`/
+    `submittedAnswer`)으로 매핑, 테이블 없음(42P01/PGRST205)이면 `null`
+    폴백. `registerRecommendation(row)` — 원클릭 학습 3단계: ①
+    `planAccept`로 병합 목록 계산 후 `setWordAcceptedMeanings`(실패 시
+    throw, ②③ 진행 안 함 — 부분 상태 방지) ② `word_accepted_variants`
+    insert(`created_by='stats_learning'`, best-effort try/catch — v3_7
+    SQL 미실행이어도 무방) ③ `writing_answer_statistics.status
+    ='accepted'` 갱신(실패 시 throw, 조용히 숨기지 않음). `dismiss
+    Recommendation(id)` — `status='dismissed'` 업데이트만.
+    `fetchLearningRateMetrics()` — Asia/Seoul 월요일 00:00 기준(UTC+9
+    고정 오프셋, DST 없음 전제)으로 이번주/지난주 `writing_answer_
+    statistics accepted` count + `word_accepted_variants created` count를
+    `head:true` count 쿼리로 병렬 조회, 각 지표는 `number(0 포함)` 또는
+    `null`(수집 중)로 정직하게 구분. `accumulateSavingsCounters`/
+    `readTodaySavings()` — `localStorage` 키
+    `voca_writing_ai_savings_YYYY-MM-DD`(Seoul 날짜)에 `{rules, cache,
+    variants, statsSkips, ai}` 누적, per-browser 집계 한계를 JSDoc으로
+    명시(다른 관리자/기기 실행분 미반영, 과금/감사 근거 아님).
+  - `spellingReviewAiApi.js`: `callEdgeFunctionForUnresolved`에
+    `clientStats` 파라미터 추가(요청 바디에 additive 포함), 응답
+    `summary?.statsSkips`를 반환(없으면 0, 구버전 서버 호환).
+    `runAiPhase`가 청크 루프에서 `statsSkips`를 누적해 최종 반환
+    객체에 포함.
+  - `AdminScreen.jsx`: 신규 컴포넌트 3개 — `LearningRecommendationsCard`
+    (반복 제출 답안 Top N, 최소 반복 횟수 조정, 등록/무시 버튼, 테이블
+    없으면 "supabase_v3_9 SQL 실행 필요" 안내), `AiSavingsCard`(오늘
+    절약 카운터, 절약률=(전체-AI)/전체), `LearningRateCard`(이번주/
+    지난주 자동등록/동의어증가, `null`은 "데이터 수집 중"으로 정직
+    표기) — `classes` 탭에서 `SpellingReviewQueuePanel` 바로 아래
+    렌더링. `SpellingReviewQueuePanel`에 `onSavingsUpdate` prop 추가,
+    미리보기/AI 확인 실행이 끝날 때마다 `accumulateSavingsCounters` 호출
+    + tick 배선(두 경로는 상호 배타적이라 중복 집계 없음). 학생 화면
+    컴포넌트는 전혀 건드리지 않음(규칙 12 준수).
+  - `App.jsx`: `handleSpellingAnswer`의 `logSpellingReview` 호출에
+    5번째 인자 `w?.meaning || ''` 추가(한 줄만 수정) — 코디네이터가
+    소유권 확장을 승인한 후 클라이언트 에이전트가 처리.
+  - 검증(클라이언트 에이전트 자체 보고): `npm run build` PASS(신규
+    경고 없음), `npm run verify:admin` PASS(6/6), `npm run verify:writing`
+    PASS(3/3, `testWritingReviewAiPipeline.mjs`가 `runAiPhase` 계약
+    재검증 — additive 변경 회귀 없음 실측 확인).
+- **테스트(`implementer-learning-tests`)** — 소유 파일:
+  `scripts/testWritingReviewAiPipeline.mjs`. 구현 파일(pipeline.js/
+  index.ts/writingAnswerStatsApi.js/spellingReviewApi.js/
+  spellingReviewAiApi.js/SQL)은 전혀 수정하지 않고 전부 읽기만 함.
+  섹션 56~61(6개) 추가, 72개 신규 단언 — **275 PASS/0 FAIL/5 SKIP →
+  347 PASS/0 FAIL/5 SKIP**(기존 SKIP 5건은 배포 의존이라 그대로 유지).
+  - 섹션 56: `statsLookup` 훅 — 캐시 조회 다음/AI 호출 전 실행,
+    `skip:true`+유효 `decision`이면 `decision_source='stats_repeat'`
+    확정 + `aiClassify`/`cacheStore` 0회 호출 실측. `decision:'accept'`
+    반환은 무시되고 정상 AI 경로로 계속 진행(이중 인정 경로 금지
+    실증). 캐시 히트 항목은 `statsLookup` 자체가 호출 안 됨.
+    `budgetExceeded=true`일 때 `statsLookup`이 먼저 스킵한 항목은
+    강등 영향을 안 받고, 스킵 안 된 나머지만 `ai_budget_exceeded`로
+    강등되는 우선순위 실측. `statsLookup` 옵션 자체를 안 넘긴 기존
+    호출부는 완전히 무영향(회귀 없음).
+  - 섹션 57: `registerRecommendation`/`dismissRecommendation` — 실패
+    시 후속 단계(②③) 절대 미실행 + throw 확인, 성공 경로 정확한
+    호출 순서·인자 실측, ②(감사 insert) 실패는 best-effort 무시,
+    ③(status 갱신) 실패는 throw.
+  - 섹션 58: `fetchLearningRecommendations` — 기본/커스텀 파라미터가
+    실제 쿼리 체인(`eq status=pending`/`gte count`/`order count desc`/
+    `limit`)에 정확히 반영, `words` embed → planAccept 호환 필드 매핑,
+    테이블 미존재 시 `null` 폴백(throw 안 함).
+  - 섹션 59: `accumulateSavingsCounters`/`readTodaySavings`(같은 날 2회
+    누적, 다른 날짜 키 미혼입, 전체 0일 때 NaN/Infinity 없이 0)
+    +`fetchLearningRateMetrics`(Asia/Seoul 월요일 00:00 경계 실측,
+    지난주 끝==이번주 시작 경계 이어짐, 테이블 없음은 `null`과 정상
+    0을 구분 — 요구사항 8).
+  - 섹션 60: 성능(요구사항 9) — 소스 텍스트로 `recordAnswerStatBest
+    Effort`/내부 `supabase.rpc` 호출 모두 await 없음 확인 + esbuild
+    번들 실행 스파이로 mock RPC가 영원히 pending이어도 `logSpellingReview`
+    가 300ms 내 resolve됨을 `Promise.race`로 실측, RPC 실패(42883/
+    네트워크 오류)가 학생 채점 경로로 전파 안 됨 확인.
+  - 섹션 61: `statsSkips` 전파 — `rulesResolvedCount>0`이면 모든 청크
+    요청 바디에 `clientStats.rulesResolvedCount` 동일 포함, 서버 응답
+    `summary.statsSkips`가 청크별 합산(2청크×3=6). 기본값(0)이면
+    필드 자체가 요청 바디에서 빠짐(구버전 서버 호환). 구버전 응답
+    (statsSkips 없음)도 0으로 안전 폴백.
+  - 부수 발견(테스트 파일 내부, 구현 파일 아님): 신규 esbuild 스텁
+    작성 중 기존 섹션 36/43/47이 쓰는 `onResolve` 필터 패턴이 실제
+    esbuild `args.path` 원문 상대경로와 매치되지 않는 잠재 버그를
+    발견(그 섹션들은 스텁 대상 함수를 실제로 호출하지 않아 현재는
+    무해). 이번 신규 섹션(56~61)의 스텁만 정확한 필터로 고쳐 적용,
+    기존 섹션은 소유 범위 밖이라 손대지 않음(qa-reviewer에게 참고용
+    후속 항목으로 인계).
+
+### 핵심 변경 요약
+
+- `writing_answer_statistics` 테이블(신규, `supabase_v3_9_*.sql`) —
+  `(word_id, registered_meaning, normalized_answer)` 유니크,
+  `count`/`accepted_count`/`rejected_count`/`distinct_student_ids
+  uuid[]`(상한 200, 이름 절대 저장 안 함 — 헌법 규칙 4)/`status`
+  (`pending`|`accepted`|`dismissed`). 상세 스키마는 아래 § DATABASE.md
+  갱신 참고.
+- `record_writing_answer_stat` RPC(SECURITY DEFINER) — 원자적 upsert로
+  count 증가. anon/authenticated는 테이블 자체에 INSERT/UPDATE(count 등)
+  권한이 없고 이 RPC로만 씀(남용 면적 최소화, 유일한 쓰기 경로).
+- `statsLookup` 훅(pipeline.js) — `rejected_count>=STATS_REJECT_
+  THRESHOLD`(기본 5) `AND accepted_count=0`인 조합은 AI 호출 없이
+  과거 `reject_candidate` 판정을 재사용(`decision_source='stats_repeat'`)
+  — **자동 거부가 아니라 review와 동급으로 관리자가 여전히 확인 가능한
+  상태**로 표시될 뿐.
+- 원클릭 학습 등록(`registerRecommendation`) — ①
+  `accepted_meanings`(기존 인정 경로 재사용) → ② `word_accepted_variants`
+  감사 이력(v3_7, best-effort) → ③ `writing_answer_statistics.status`
+  갱신, 3단계 순차·실패 시 후속 중단.
+- 관리자 화면(`AdminScreen.jsx`) 신규 카드 3개 — 🎓 AI 추천 학습(원클릭
+  등록/무시), 💰 오늘 AI 절약(규칙/캐시/동의어/통계스킵/AI 호출 건수·
+  절약률, per-browser 한계 명시), 📈 학습률(이번주/지난주 자동등록·
+  동의어증가, Asia/Seoul 월요일 기준).
+- `ai_usage_daily` 절약 컬럼 3종(`rules_resolved_count`/`cache_hit_
+  count`/`stats_skip_count`) — `alter table if exists ... add column
+  if not exists`로 v3.8 미실행 상태에서도 안전(no-op).
+- Batch Learning(요구사항 6)은 pg_cron 새벽 배치를 신설하지 않고
+  `writing_answer_statistics`/`ai_usage_daily`를 라이브로 직접 쿼리하는
+  것으로 대체 — 111명 규모에서 별도 배치 인프라가 비용 대비 이득이
+  없다고 판단(헌법 규칙 7, SQL 파일 헤더에 명시).
+
+### 조정자 SQL 검토 반영
+
+SQL 190~192행의 `comment on column ai_usage_daily.*` 3문장이 `IF
+EXISTS` 가드가 불가능한 구문이라, `ai_usage_daily` 테이블 자체가 아직
+없는 상태(v3_8 미실행 — 현재 라이브 실제 상태)에서 이 파일을 단독
+실행하면 `42P01`로 스크립트 전체가 중단돼 SQL 헤더의 "실행 순서 무관"
+보장을 깨는 문제가 발견됨. 수정: 이 3문장을 `do $$ begin if
+to_regclass('public.ai_usage_daily') is not null then ... end if; end
+$$;` DO 블록으로 감쌈(`comment on`은 정적 구문이라 `EXECUTE` 불필요,
+그대로 실행 가능). 나머지(테이블/RPC/정책/`alter table if exists`)는
+변경 없음 — 재검토(육안 + 멱등성) 완료, 반복 실행/실행 순서 무관 모두
+안전.
+
+### 릴리스 게이트(각 에이전트 자체 보고 그대로 인용 — 결합 재검증은 조정자가 진행 예정, 지어내지 않음)
+
+- 서버(`implementer-learning-server`): `.ai-status/implementer-learning-
+  server.json` 기준 — SQL 파일 재검토(멱등성) 완료, `index.ts`/
+  `pipeline.js` 변경 자체의 `npm run build`/verify 실행 기록은 이
+  상태 파일에 명시적으로 없음(다음 세션/qa-reviewer가 `index.ts`/
+  `pipeline.js` 로직 검토 + SQL 파일 GRANT 재확인 권장으로 `next_action`
+  에 명시됨).
+- 클라이언트(`implementer-learning-client`): `npm run build` PASS(신규
+  경고 없음), `npm run verify:admin` PASS(6/6), `npm run verify:writing`
+  PASS(3/3).
+- 테스트(`implementer-learning-tests`): `node scripts/
+  testWritingReviewAiPipeline.mjs` **347 PASS / 0 FAIL / 5 SKIP**(기존
+  배포 의존 SKIP 5건 그대로 유지, 신규 FAIL 없음).
+- **결합 재검증(전체 워크트리 기준 `npm run build`/`npm run verify:writing`/
+  `npm run verify:admin` 동시 실행)은 이 handoff 항목 작성 시점 기준
+  아직 조정자가 진행하지 않음** — 9차/10차 관례와 동일하게 각 에이전트가
+  자체 보고한 수치만 정직하게 인용했고, 결합 수치는 다음 세션/조정자가
+  실측해 이 문서에 후속 기록해야 한다.
+- **[추가 갱신] 조정자가 3개 구현 에이전트(서버/클라이언트/테스트)
+  완료 후 결합 워킹트리에서 직접 실측**: `npm run build` **PASS**(기존
+  500kB 청크 경고만, 신규 경고 없음). `node scripts/
+  testWritingReviewAiPipeline.mjs` 전 섹션 **PASS**(**347 PASS / 0 FAIL
+  / 5 SKIP**, "모든 테스트 통과 ✅" exit 0 — 이전 세션 275건 대비 신규
+  섹션 56~61 반영). `npm run verify:admin` **6/6 PASS**. `npm run
+  verify:writing` **3/3 PASS**. 위 각 에이전트 자체 보고 수치와 결합
+  실측 수치가 일치함을 조정자가 재확인.
+
+### 학생 데이터 영향
+
+**0건.** `record_writing_answer_stat` RPC는 신규 `writing_answer_
+statistics` 통계 테이블만 건드리고(학생별이 아니라 답안 패턴별 집계,
+`distinct_student_ids`도 UUID만 저장 — 헌법 규칙 4), 기존
+`spelling_review_queue`/`accepted_meanings` 채점·검토 워크플로우는
+전혀 변경되지 않았다. `supabase_v3_9_writing_answer_statistics.sql`은
+아직 미실행 상태이므로, 실행 전까지는 이번 세션의 모든 신규 코드가
+"테이블/함수 없음" 폴백 경로로만 동작하며 기존 동작과 100% 동일하다
+(헌법 규칙 9).
+
+### 운영자 대기 액션
+
+1. `supabase_v3_9_writing_answer_statistics.sql` 실행(Supabase 대시보드
+   SQL Editor) — `v3_6`/`v3_8`과 실행 순서 무관(전부 `if exists`/
+   `if not exists` 가드, 조정자 검토로 실행 순서 무관성 재확인됨).
+2. (선택) `STATS_REJECT_THRESHOLD` 시크릿 조정(기본 5 — 반복 오답을
+   몇 번 봐야 재사용 스킵을 시작할지).
+3. `supabase functions deploy grade-writing-answers`로 Edge Function
+   재배포(SQL 실행과 별개 — 둘 다 돼야 실제 반영).
 
 ## 2026-07-24 (10차) — 쓰기 검수 AI 보조: Provider 추상화(OpenAI/Gemini/Anthropic) — 코드 완료(커밋 대기)
 
