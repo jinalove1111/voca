@@ -1,0 +1,24 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "문서 갱신",
+  "task_id": "writing-ai-v13",
+  "task": "쓰기 답안 검토 AI 보조 v1.3(gpt-5-nano 전환+일일 비용 상한+클라이언트 이월) 세션 기록을 handoff.md/ROADMAP.md에 append",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-24T00:00:00+09:00",
+  "updated_at": "2026-07-24T00:00:00+09:00",
+  "files_owned": [
+    "handoff.md",
+    "ROADMAP.md",
+    ".ai-status/docs-maintainer-writing-ai-v13.json"
+  ],
+  "files_read": [
+    "handoff.md",
+    "ROADMAP.md",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "커밋 ec0b7e6/cdcbe19/f95f025/91e2b1c(기준점 eace230)로 완료된 쓰기 검수 AI 보조 v1.3(서버 모델 claude-haiku-4-5→gpt-5-nano 전환, AI_PROVIDER/OPENAI_MODEL/ANTHROPIC_MODEL env 오버라이드, ai_usage_daily 기반 일일 비용 상한, 클라이언트 MAX_REQUESTS_PER_RUN 이월+confidence 밴드 필터, 테스트 212 PASS/0 FAIL/5 SKIP) 세션 내용을 handoff.md 최상단(8차 위, 규칙 13 append-only)에 '2026-07-24 (9차)' 섹션으로 추가하고 최종 갱신 라인을 9차로 갱신. ROADMAP.md에도 동일 관례(날짜+차수 헤더)로 요약 섹션 추가. 커밋은 하지 않음(조정자 담당).",
+  "blocker": null,
+  "next_action": "조정자가 handoff.md/ROADMAP.md 변경분을 커밋(코드 변경 4건과 별도 또는 함께)"
+}

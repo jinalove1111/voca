@@ -1,6 +1,23 @@
 # Paul Easy Voca — 로드맵
 
-_최종 갱신: 2026-07-23 (8차, 쓰기 검수 AI 보조 v2 실운영화 — 기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+_최종 갱신: 2026-07-24 (9차, 쓰기 검수 AI 보조 v1.3 — 서버 모델 gpt-5-nano 전환+일일 비용 상한+클라이언트 이월 — 기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+
+## 2026-07-24 (9차) — 쓰기 답안 검토 AI 보조 v1.3 — 모델 전환 + 일일 비용 상한 완료 ✅ (운영자 액션 대기)
+
+전날 밤 중단된 미커밋 작업을 조정자가 재구성·검증·커밋(`ec0b7e6`
+서버·`cdcbe19`클라이언트·`f95f025`테스트·`91e2b1c`연구문서). 서버
+`AI_MODEL_ID`를 `claude-haiku-4-5`→`gpt-5-nano`로 전환(운영자 명시 비용
+결정)하고 `AI_PROVIDER`/`OPENAI_MODEL`/`ANTHROPIC_MODEL` env로 재배포
+없이 모델 회귀 가능. 신규 `ai_usage_daily` 테이블(Asia/Seoul 날짜 경계)
+기반 서버측 `MAX_DAILY_COST`(기본 $2.0) 일일 비용 상한, 테이블 미존재
+시 경고 후 상한 없이 진행하는 안전 폴백. 클라이언트는 실행당 최대
+200건(`MAX_REQUESTS_PER_RUN=10`) 상한 + 초과분
+`decision_source='ai_deferred'` 이월, 예산 초과 시 청크 중단+이월,
+confidence 밴드 필터/배지 신설. 테스트 섹션 43/43b/43c 추가 총 212
+PASS/0 FAIL/5 정직 SKIP. build PASS + verify:admin 6/6 + verify:writing
+3/3 PASS. 운영자 액션 대기: `supabase_v3_6`/`supabase_v3_8` SQL 실행,
+Edge Function 재배포+시크릿(`OPENAI_API_KEY` 등), flag ON. 상세:
+`handoff.md` 2026-07-24(9차).
 
 ## 2026-07-23 (8차) — 쓰기 답안 검토 AI 보조 v2 — 실운영화 완료 ✅ (운영자 액션 대기)
 

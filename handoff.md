@@ -1,5 +1,84 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-23 (8차, 쓰기 답안 검토 AI 보조 v2 — 실운영화 805c5d9/458e51a/1bf0fbc, 라이브 E2E 1건 검증, 운영자 액션 대기)_
+_최종 갱신: 2026-07-24 (9차, 쓰기 답안 검토 AI 보조 v1.3 — resume 세션, 서버 모델 gpt-5-nano 전환+일일 비용 상한+클라이언트 이월, ec0b7e6/cdcbe19/f95f025/91e2b1c, 운영자 액션 대기)_
+
+## 2026-07-24 (9차) — 쓰기 답안 검토 AI 보조 v1.3: 모델 전환 + 일일 비용 상한 + 클라이언트 이월 (커밋 ec0b7e6, cdcbe19, f95f025, 91e2b1c; 기준점 eace230)
+
+### 세션 성격
+
+"resume" 세션 — 전날 밤 중단된 쓰기 검수 AI 보조 v1.3 작업(미커밋
+워킹트리)을 조정자가 재구성·검증·커밋 완료. 기준점 `eace230`, 결과 커밋
+4건: `ec0b7e6`(서버) → `cdcbe19`(클라이언트) → `f95f025`(테스트) →
+`91e2b1c`(연구 문서).
+
+### ec0b7e6 — feat(writing-review) 서버 v1.3 (원 세션 "에이전트 P" 작업, 상태 파일 누락돼 조정자가 사후 재구성)
+
+- `pipeline.js`: `AI_MODEL_ID` `'claude-haiku-4-5'`→`'gpt-5-nano'`(운영자
+  명시 비용 결정), `DEFAULT_AI_PROVIDER='openai'` export.
+  `buildCacheKey`/`classifyBatch`에 `modelId` 파라미터(기본값 유지,
+  하위호환). `classifyBatch` `budgetExceeded` 옵션: 캐시 미스 항목 AI
+  호출 생략 → review/confidence 0/`decision_source='ai_budget_exceeded'`
+  (자동 거부 없음, 캐시 히트는 그대로).
+- `index.ts`: `AI_PROVIDER`/`OPENAI_MODEL`/`ANTHROPIC_MODEL` env 런타임
+  오버라이드(재배포 없이 시크릿만으로 모델 회귀 가능), `RUNTIME_MODEL`이
+  캐시 키에 반영. `MAX_DAILY_COST` 기본 $2.0 일일 상한 —
+  `ai_usage_daily` 테이블(Asia/Seoul 날짜 경계, `getSeoulDateString`)
+  누계, 테이블 미존재(42P01/PGRST205) 시 경고 로그 후 일일 상한 없이
+  진행(규칙 9 폴백, 요청당 상한 `MAX_ITEMS_PER_REQUEST`/
+  `MAX_EST_COST_USD_PER_REQUEST`는 별개로 유지). `BATCH_SIZE` 25→20
+  (`MAX_BATCH_SIZE` env). `safeEstimateCostUsd`(미지 모델은
+  claude-sonnet-5 가격 과대추정 폴백). OpenAI structured-output JSON
+  스키마 경로. 응답에 `budget.exceeded` 플래그.
+- `supabase_v3_8_ai_usage_daily.sql` 신규: 멱등, RLS enable/무정책
+  (fail-closed, service_role 전용, anon GRANT 없음 — 클라이언트
+  미참조). **운영자 수동 실행 대기.**
+
+### cdcbe19 — feat(admin) 클라이언트 v1.3
+
+- `spellingReviewAiApi.js`: `AI_BATCH_SIZE` 25→20,
+  `MAX_REQUESTS_PER_RUN=10`(실행당 최대 200건, 초과분
+  `decision_source='ai_deferred'` 이월 — additive). `runAiPhase`가
+  `budget.exceeded`/`ai_budget_exceeded` 감지 시 이후 청크 중단+이월.
+  `DEFAULT_DAILY_CEILING_USD` $5.0→$2.0(localStorage 기존 값 우선).
+  `AI_MODEL_ID`를 `pipeline.js`에서 import/재수출(하드코딩 제거 — 서버
+  모델 변경 시 재수정 불필요), 비용 상수 `AI_MODEL_ID` 기준 동적 계산
+  (미지 모델 0/0 안전 폴백).
+- `spellingReviewBulkPlan.js`: `confidenceBand`(high>=0.95/mid>=0.70/
+  low), `filterProposalsByBand`, `summarizeConfidenceBands` 신규
+  (`selectCertainAccepts` 게이트는 별개, 무변경).
+- `AdminScreen.jsx`: 예산 초과 배너, "AI 호출 x/y, 이월 N건" 진행률,
+  밴드 필터/배지/카운트, 모델명 동적 표시.
+- 수동 인정/무시 무변경, flag `writingReviewAiAssist` 기본 false 유지,
+  세션 내 Edge Function 실호출/DB write 0회.
+
+### f95f025 — test(writing-review) v1.3
+
+- 섹션 43 기대 fetch 수를 구현 상수(`AI_BATCH_SIZE`) 기반으로 갱신
+  (`ceil(123/20)=7`), 43b(`MAX_REQUESTS_PER_RUN` 초과 이월), 43c
+  (`budget.exceeded` 중단+이월) 신규. 결과 212 PASS / 0 FAIL / 5 SKIP
+  (기존 배포 의존 정직 SKIP).
+
+### 91e2b1c — docs(research)
+
+- 2026-07-23 연구 스윕 7건(`docs/research/`) + researcher/analyst 상태
+  파일 8건 커밋 편입. `implementer-polish-sweep.json`은 실상 반영
+  정정(task1은 `9ca62c2` 기커밋, task2 이후 착수 전 중단 →
+  paused/백로그, 규칙 18).
+
+### 릴리스 게이트 (실측)
+
+`npm run build` PASS(기존 500kB 청크 경고만), `npm run verify:admin`
+6/6 PASS, `npm run verify:writing` 3/3 PASS,
+`node scripts/testWritingReviewAiPipeline.mjs` 212 PASS/0 FAIL/5 SKIP.
+push는 조정자가 커밋 후 진행(이 handoff.md append 커밋과 함께).
+
+### 운영자 대기 액션 (8차 항목에 추가·갱신)
+
+1. `supabase_v3_6`(캐시 테이블, `part_of_speech`/`prompt_version`
+   포함) + `supabase_v3_8`(`ai_usage_daily`) SQL 실행
+2. `supabase functions deploy grade-writing-answers`
+3. `supabase secrets set OPENAI_API_KEY=... AI_PROVIDER=openai
+   OPENAI_MODEL=gpt-5-nano MAX_DAILY_COST=2.0`
+4. 관리자 화면 "기능" 탭에서 `writingReviewAiAssist` 토글 ON(원할 때)
 
 ## 2026-07-23 (8차) — 쓰기 답안 검토 AI 보조 v2: 실운영화 (커밋 805c5d9, 458e51a, 1bf0fbc; 기준점 36c42b5)
 
