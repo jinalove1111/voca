@@ -1,0 +1,24 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "ai-provider-client",
+  "task": "쓰기 검수 AI 보조 관리자 화면에 현재 AI Provider 표시 추가(운영자 요구사항 13, 클라이언트 전용)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-23T17:00:00Z",
+  "updated_at": "2026-07-23T17:04:52Z",
+  "files_owned": [
+    "src/utils/spellingReviewAiApi.js",
+    "src/components/AdminScreen.jsx",
+    ".ai-status/implementer-ai-provider-client.json"
+  ],
+  "files_read": [
+    "supabase/functions/grade-writing-answers/pipeline.js",
+    "supabase/functions/grade-writing-answers/index.ts",
+    ".ai-status/TEMPLATE.json",
+    ".ai-status/README.md"
+  ],
+  "summary": "spellingReviewAiApi.js: DEFAULT_AI_PROVIDER를 pipeline.js에서 재수출 추가. runAiPhase가 각 청크(Edge Function 호출)의 usage.provider/usage.model을 모아, 여러 청크에 걸쳐 provider가 2개 이상 관측되면 'mixed'로, 1개면 그 값으로, 0개(AI 호출 없이 캐시/규칙만으로 끝남)면 null로 집계해 반환 usage 객체에 provider/model을 additive로 추가(기존 필드는 무변경). 순수함수 formatProviderDisplay(provider, model) 신규 export — 'gpt-5-nano'->'GPT-5 nano', 'gemini-2.5-flash'->'Gemini 2.5 Flash', 'claude-haiku-4-5'->'Claude Haiku 4.5', 미지 모델은 원문 그대로, provider 또는 model이 'mixed'면 '혼합(폴백 발생)'. AdminScreen.jsx: 기존 '모델: {AI_MODEL_ID}' 표시 2곳(미리보기 버튼 위/AI 확인 버튼 위)을 aiProviderBadgeLabel(🟢 표시명)로 교체 — AI 확인을 아직 실행 안 했으면 DEFAULT_AI_PROVIDER/AI_MODEL_ID 기준 '(기본값 — 실제 값은 실행 후 서버 응답 기준)' 문구 포함, 실행 후엔 aiUsage.provider/model(실측) 기준으로 자동 갱신. 기존 UI 구조/스타일 관례는 그대로 유지(최소 변경).",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 대기 — 커밋은 조정자가 수행."
+}

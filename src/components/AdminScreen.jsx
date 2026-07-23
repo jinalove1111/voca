@@ -18,6 +18,7 @@ import { fetchPendingSpellingReviews, resolveSpellingReview } from '../utils/spe
 import {
   runRulesPhase, runAiPhase, executeAccept, executeBulkAccept, executeBulkDismiss,
   estimateAiCostUsd, AI_BATCH_SIZE, MAX_REQUESTS_PER_RUN, evaluateCostGate, AI_MODEL_ID,
+  DEFAULT_AI_PROVIDER, formatProviderDisplay,
   getCostCeilingUsd, setCostCeilingUsd, getDailyCeilingUsd, setDailyCeilingUsd,
   getTodaySpentUsd, recordEstimatedSpendUsd,
 } from '../utils/spellingReviewAiApi'
@@ -466,6 +467,18 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
   // 순수 표시용, "확실한 답안 모두 인정" 게이트(selectCertainAccepts)와 무관.
   const aiBandSummary = useMemo(() => (aiProposals ? summarizeConfidenceBands(aiProposals) : null), [aiProposals])
 
+  // 운영자 요구사항 13 — 현재 AI provider 표시 배지. AI 확인을 아직 한 번도
+  // 실행하지 않았으면(aiUsage===null) 정직하게 "기본값" 문구를 붙이고
+  // 코드 기본 상수(DEFAULT_AI_PROVIDER/AI_MODEL_ID)로 보여준다 — 실제로
+  // 실행 중인 provider는 서버 env(AI_PROVIDER 등)에 따라 다를 수 있으므로
+  // 여기 표시가 "그 실행이 진짜 이 provider였다"는 보장이 아니라는 점을
+  // 문구로 명시한다(§ 정직한 표기). AI 확인을 실행한 뒤에는 그 실행의
+  // 실측 usage.provider/model로 갱신되고, 폴백이 섞였으면(provider='mixed')
+  // formatProviderDisplay가 그 사실을 짧게 알려준다.
+  const aiProviderBadgeLabel = aiUsage
+    ? `🟢 ${formatProviderDisplay(aiUsage.provider, aiUsage.model)}`
+    : `🟢 ${formatProviderDisplay(DEFAULT_AI_PROVIDER, AI_MODEL_ID)} (기본값 — 실제 값은 실행 후 서버 응답 기준)`
+
   // 학생 표시 이름 — wordLibrary.js의 getStudents() 캐시(이미 이 화면
   // 최상단에서 동기로 로드돼 있음, 이 패널이 새로 fetch하지 않는다)에서
   // id -> name을 찾는다. 못 찾으면(캐시 미로드/삭제된 학생) UUID를 앞
@@ -753,7 +766,7 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
                   누르기 전이라 실제 규칙 해결 건수를 모르므로 "대상 전량이
                   AI로 넘어간다"는 가장 비관적인 가정. */}
               <p className="text-indigo-400 mb-2">
-                모델: {AI_MODEL_ID} · 예상 상한(최악의 경우, 대상 {preRunScopeCount}건 전량 AI 처리 가정): 약 ${preRunWorstCostUsd.toFixed(4)} —
+                {aiProviderBadgeLabel} · 예상 상한(최악의 경우, 대상 {preRunScopeCount}건 전량 AI 처리 가정): 약 ${preRunWorstCostUsd.toFixed(4)} —
                 미리보기를 누르면 규칙으로 먼저 걸러진 뒤 정확한 AI 대상 건수/비용이 나와요.
               </p>
 
@@ -775,7 +788,7 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
                   {unresolvedCount > 0 && !analysisComplete && (
                     <>
                       <p className="text-indigo-500 mt-1">
-                        모델: {AI_MODEL_ID} · AI 확인 예상 비용: 약 ${aiPhaseEstimatedCostUsd.toFixed(4)}(오늘 누적 추정 지출 ${todaySpent.toFixed(4)}, 이 브라우저 기준 best-effort 집계)
+                        {aiProviderBadgeLabel} · AI 확인 예상 비용: 약 ${aiPhaseEstimatedCostUsd.toFixed(4)}(오늘 누적 추정 지출 ${todaySpent.toFixed(4)}, 이 브라우저 기준 best-effort 집계)
                       </p>
                       {unresolvedCount > AI_BATCH_SIZE * MAX_REQUESTS_PER_RUN && (
                         <p className="text-purple-500 font-bold mt-1">

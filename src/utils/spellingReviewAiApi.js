@@ -57,12 +57,32 @@ import { setWordAcceptedMeanings } from './wordLibrary'
 import { resolveSpellingReview } from './spellingReviewApi'
 import { planAccept, buildAcceptedVariantRecord } from './spellingReviewBulkPlan'
 import { supabase } from './supabaseClient'
-import { classifyLocally, buildProposal, estimateCostUsd, AI_MODEL_ID, MODEL_PRICING_PER_MTOK } from '../../supabase/functions/grade-writing-answers/pipeline.js'
+import { classifyLocally, buildProposal, estimateCostUsd, AI_MODEL_ID, DEFAULT_AI_PROVIDER, MODEL_PRICING_PER_MTOK } from '../../supabase/functions/grade-writing-answers/pipeline.js'
 
 // AdminScreen.jsx가 "모델: {AI_MODEL_ID}" 표시에 쓸 수 있게 그대로 재수출
 // (pipeline.js를 클라이언트 코드 여러 곳에서 직접 import하지 않고 이 파일을
 // 단일 경유지로 삼는다 — 기존 import 구조와 동일한 원칙).
-export { AI_MODEL_ID }
+export { AI_MODEL_ID, DEFAULT_AI_PROVIDER }
+
+// ── Provider 표시명(운영자 요구사항 13) ─────────────────────────────────────
+//
+// 서버(pipeline.js/index.ts)가 돌려주는 provider/model 원문 문자열은 관리자가
+// 읽기엔 불친절하다("gpt-5-nano" 등) — 이 순수함수는 그 원문을 사람이 읽는
+// 표시명으로만 바꾼다(그 이상 아무 로직 없음, I/O 없음). 알려진 모델이
+// 아니면(가격표/매핑에 아직 없는 새 모델 등) 원문 문자열을 그대로 보여준다
+// — throw로 관리자 화면을 죽이지 않는다(§ 이 파일 전반의 "절대 throw 안
+// 함" 원칙과 동일 맥락).
+const PROVIDER_MODEL_DISPLAY_NAMES = {
+  'gpt-5-nano': 'GPT-5 nano',
+  'gemini-2.5-flash': 'Gemini 2.5 Flash',
+  'claude-haiku-4-5': 'Claude Haiku 4.5',
+}
+
+export function formatProviderDisplay(provider = DEFAULT_AI_PROVIDER, model = AI_MODEL_ID) {
+  if (provider === 'mixed' || model === 'mixed') return '혼합(폴백 발생)'
+  if (!model) return provider || DEFAULT_AI_PROVIDER
+  return PROVIDER_MODEL_DISPLAY_NAMES[model] || model
+}
 
 function functionsBaseUrl() {
   const url = import.meta.env.VITE_SUPABASE_URL
@@ -242,6 +262,15 @@ export async function runAiPhase({ adminPin, unresolvedRows, batchSize = AI_BATC
   const allProposals = []
   let totalInputTokens = 0
   let totalOutputTokens = 0
+  // 요구사항 13 — 청크(=Edge Function 호출 1회)마다 서버가 알려주는
+  // usage.provider/usage.model을 모은다. 서버는 한 요청 "안에서" 폴백이
+  // 섞이면 이미 'mixed'로 응답하므로(§ index.ts responseProvider 계산), 여기선
+  // "여러 청크에 걸쳐" provider/model이 달라진 경우까지 추가로 합산한다 —
+  // 서로 다른 값이 2개 이상 관측되면 'mixed', 1개면 그 값 그대로, 0개(AI
+  // 호출이 한 번도 없었음, 즉 캐시/규칙만으로 끝남)면 null(호출부가 기본값
+  // 표시로 폴백).
+  const seenProviders = new Set()
+  const seenModels = new Set()
   let anyCallFailed = false
   let lastCallError = ''
   let cacheHits = 0
@@ -258,6 +287,8 @@ export async function runAiPhase({ adminPin, unresolvedRows, batchSize = AI_BATC
     if (usage) {
       totalInputTokens += usage.inputTokens || 0
       totalOutputTokens += usage.outputTokens || 0
+      if (usage.provider) seenProviders.add(usage.provider)
+      if (usage.model) seenModels.add(usage.model)
     }
     if (callFailed) {
       anyCallFailed = true
@@ -291,8 +322,18 @@ export async function runAiPhase({ adminPin, unresolvedRows, batchSize = AI_BATC
     allProposals.push(deferredProposal(row, 'ai_budget_exceeded', '일일 AI 비용 한도 도달 — 이번 실행에서 처리되지 않고 관리자 검토 필요 상태로 유지됩니다'))
   }
 
+  // 요구사항 13 — provider/model은 실측 응답 기준(서버가 안 알려준 값,
+  // 즉 AI 호출이 한 번도 없었던 경우엔 여기서 억지로 채우지 않고 null로
+  // 남긴다 — 호출부(AdminScreen)가 "기본값 표시"로 폴백할지 결정).
+  const responseProvider = seenProviders.size === 0 ? null : seenProviders.size === 1 ? [...seenProviders][0] : 'mixed'
+  const responseModel = seenModels.size === 0 ? null : seenModels.size === 1 ? [...seenModels][0] : 'mixed'
+
   const usage = (totalInputTokens > 0 || totalOutputTokens > 0)
-    ? { inputTokens: totalInputTokens, outputTokens: totalOutputTokens, estimatedCostUsd: estimateCostUsd({ inputTokens: totalInputTokens, outputTokens: totalOutputTokens }, AI_MODEL_ID), model: AI_MODEL_ID }
+    ? {
+        inputTokens: totalInputTokens, outputTokens: totalOutputTokens,
+        estimatedCostUsd: estimateCostUsd({ inputTokens: totalInputTokens, outputTokens: totalOutputTokens }, AI_MODEL_ID),
+        model: responseModel || AI_MODEL_ID, provider: responseProvider || DEFAULT_AI_PROVIDER,
+      }
     : null
 
   return {
