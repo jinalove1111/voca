@@ -1,6 +1,19 @@
 # Paul Easy Voca — 로드맵
 
-_최종 갱신: 2026-07-24 (12차, Production Readiness 감사 + Phase 1 안전수정 완료(Critical 보안 취약점 포함) — 기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+_최종 갱신: 2026-07-24 (13차, Phase 5 Master Roadmap 작성 완료 — 기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+
+## 2026-07-24 (13차) — Phase 5 Master Roadmap 작성 완료 — `docs/MASTER_ROADMAP.md` 참고
+
+Phase 1(Production Readiness 감사 5종+안전수정, 12차)과 Phase 2~4(Memory
+Engine 설계, 경쟁앱 분석 2부, 학생 몰입 심리학 연구) 산출물을 종합한
+최종 전략 문서. 12차 항목이 "'배포확장성' 전용 감사 문서는 저장소에서
+확인 안 됨"이라 기록한 뒤, `docs/audit/2026-07-24-deployment-scale.md`가
+별도 세션에서 추가로 작성돼(서버리스 함수 12/12 재확인, Vercel Hobby
+ToS 비상업적 조항 위반 가능성[추정], 학원별 인프라 격리 부재, 모니터링
+전무 — 4개 HIGH) 이번 Master Roadmap에 함께 반영됨(6종 감사 전부 커버).
+현재기능/삭제후보/절대금지/ROI Top3/Priority 1~5 전체표(28항목+2 사실확인
+항목)/6개월·1년·지속루프 로드맵/출처 9절 구성. 상세: `docs/MASTER_
+ROADMAP.md`.
 
 ## 2026-07-24 (12차) — Production Readiness 감사(100명×20학원 기준) + Phase 1 안전수정 완료(Critical 보안 취약점 포함) — 코드 완료 ✅(운영자 배포/SQL 액션 대기)
 
