@@ -74,6 +74,16 @@ const DEFAULT_FEATURES = {
   // Reading Foundation (2026-07-23, v3.3) — 유닛별 읽기 지문(passage).
   readingFoundation: true,     // 관리자 지문 편집기(AdminScreen 반 관리 → 유닛 펼침) — 관리자 전용 화면이라 기본 ON이 안전(학생 화면에 아무 영향 없음)
   readingStudentUI: false,     // 학생용 읽기 학습 화면 — 미구현 예약 플래그. 아직 아무 코드도 이 플래그를 소비하지 않는다(학생 대상 신규 기능은 이번 범위에서 금지 — 이후 운영자 승인 라운드에서 이 플래그로 게이팅해 구현할 자리 표시)
+
+  // 쓰기 답안 검토 AI 보조(Task 2, 2026-07-23, docs/operations/task2-writing-
+  // analysis.md + task2-writing-report.md) — SpellingReviewQueuePanel(관리자
+  // 전용)의 "AI 자동분류 미리보기" 버튼을 게이팅. 기본 OFF: (1) supabase_v3_6_
+  // writing_review_ai_cache.sql과 Edge Function(supabase/functions/
+  // grade-writing-answers) 배포 전에도 버튼 자체가 안 보여 안전, (2) 학생
+  // 화면 무관(헌법 규칙 12), (3) 켜져 있어도 미리보기는 어떤 라이브 답안
+  // status도 바꾸지 않고(preview-only), 실제 인정/무시는 여전히 기존 수동
+  // 버튼(accept/dismiss)이 담당 — AI는 "제안"만 얹는다.
+  writingReviewAiAssist: false,
 }
 
 // localStorage에서 저장된 features 불러오기.

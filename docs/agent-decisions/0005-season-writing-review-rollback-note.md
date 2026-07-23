@@ -34,12 +34,26 @@
   안전 폴백(규칙 9 실측 검증됨). 롤백: 이 SQL은 실행 후에도 기존 데이터를
   변경하지 않으므로(프로덕션 seasons 0행) 코드 커밋 revert만으로 충분.
 
+- **`supabase_v3_6_writing_review_ai_cache.sql`** (Task 2, 2026-07-23) —
+  신규 `spelling_ai_grading_cache` 테이블(AI 판정 캐시, words FK cascade).
+  멱등(create table/index if not exists, drop policy if exists는 정책 재생성
+  관례 — 데이터 파괴 아님). RLS: anon SELECT만, 쓰기는 service_role(Edge
+  Function) 전용. **실행 상태: 운영자 수동 실행 대기** — 미실행 시에도
+  Edge Function이 캐시 없이 동작하고, 클라이언트 기존 워크플로우는 이
+  테이블과 완전 무관(안전 폴백 실측 검증).
+- **Supabase Edge Function `grade-writing-answers`** (Task 2) — 코드만
+  저장소에 존재(supabase/functions/). **배포는 운영자 수동**:
+  `supabase functions deploy grade-writing-answers` + 시크릿
+  `supabase secrets set ANTHROPIC_API_KEY=... ADMIN_PIN=...`.
+  배포 전에는 feature flag OFF라 버튼 자체가 안 보임.
+
 ## 사용 Feature Flag (사용 시 여기에 추가)
 
 - Task 1: 사용 안 함 — 기존 SeasonPanel 개선이라 별도 플래그 없음(SQL
   미실행 시 자동 레거시 폴백이 사실상의 게이트).
-- Task 2: `writingReviewAiAssist` (src/config/features.js, 기본 OFF) 예정
-  — 분석 문서(task2-writing-analysis.md) 권고안. 구현 시 확정 기록.
+- Task 2: **`writingReviewAiAssist` (src/config/features.js, 기본 OFF) 확정**
+  — SpellingReviewQueuePanel의 AI 미리보기 버튼 게이트. preview-only,
+  자동 거부 없음, 실제 인정/무시는 기존 수동 버튼만 수행.
 
 ## 파일 소유권 (헌법 규칙 16 — 동시 쓰기 금지 경계)
 

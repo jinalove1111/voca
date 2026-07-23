@@ -1,0 +1,38 @@
+{
+  "agent_name": "writing-review-analyst",
+  "role": "쓰기 답안 검토 유사 답안 일괄 처리 — 읽기 전용 분석",
+  "task_id": "writing-review",
+  "task": "spelling_review_queue(라이브 99건 실측) 기반 AI 보조 일괄 판정 파이프라인의 설계 분석 — 기존 채점/검토 워크플로우 실측, Vercel 12/12 제약 하 서버 아키텍처 대안 평가, 처리 순서/판정 체계/AI 스키마/비용 설계, 구현 계획(파일별 변경 목록, DDL 초안, feature flag) 문서화. 구현은 미착수.",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-23T00:00:00+09:00",
+  "updated_at": "2026-07-23T00:00:00+09:00",
+  "files_owned": [
+    "docs/operations/task2-writing-analysis.md",
+    ".ai-status/analyst-writing-review.json"
+  ],
+  "files_read": [
+    "src/utils/spellingReviewApi.js",
+    "src/utils/spelling.js",
+    "src/utils/entranceTest.js",
+    "src/utils/wordLibrary.js",
+    "src/components/AdminScreen.jsx",
+    "src/config/features.js",
+    "api/admin-pin-actions.js",
+    "api/verify-admin-pin.js",
+    "api/_pinAuth.js",
+    "supabase_v2_0_spelling_mixed.sql",
+    "supabase_v2_0_1_spelling_default_mixed.sql",
+    "supabase_v1_9_security_rls.sql",
+    "supabase_v1_3_schema.sql",
+    "DATABASE.md",
+    "docs/agent-decisions/0005-season-writing-review-rollback-note.md",
+    "tests/harness/runWriting.mjs",
+    "scripts/testSpellingV2Db.mjs",
+    "package.json",
+    ".env (VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY only, 읽기 전용)"
+  ],
+  "summary": "라이브 pending 답안 99건을 anon key REST(읽기 전용)로 실측 확인(Content-Range 0-0/99, 운영자 언급과 일치) 후 전량 읽고 손으로 분류: 완전일치/공백/대소문자 정규화 단계는 이 큐 자체가 '기존 채점엔진(spelling.js)을 이미 통과 못한 답만 쌓인 곳'이라 추가 해소력이 사실상 0%이고, 실질 해소력은 편집거리(오타, ~19%)와 lemma/품사 비교(~10%)에서 나오며 나머지 ~55~60%는 AI로 넘어간다는 게 핵심 발견. Vercel api/*.js가 정확히 12/12(여유 0)임을 재확인했고, admin-pin-actions.js가 자기 파일 헤더에서 '다른 신뢰 경로 섞지 말 것'을 명시적으로 금지하고 있어 그 파일에 AI 액션을 얹는 안은 배제하고 Supabase Edge Function을 권장(신규 SaaS 벤더 추가는 아니지만 Deno 런타임/별도 배포·시크릿/CORS/_pinAuth.js 로직 중복이라는 진짜 비용은 위험 목록에 정직히 기록). claude-api 스킬로 최신 가격 확인: Haiku 4.5($1/$5 per MTok) 권장, 99건 전량을 매번 AI로 보내도 캐시/배치 미적용 시에도 10센트 미만 — 캐시 테이블은 비용보다 판정 일관성 확보 목적. 신규 테이블은 spelling_ai_grading_cache 1개만 설계(AI '제안' 자체는 DB에 영속화하지 않고 서버 응답으로만 미리보기 — preview-only 원칙을 가장 보수적으로 만족). 산출물은 docs/operations/task2-writing-analysis.md 1개, 코드는 전혀 작성/수정하지 않음(라이브 DB도 SELECT만, 쓰기 없음).",
+  "blocker": null,
+  "next_action": "코디네이터가 Task 1(시즌) 완료를 확인한 뒤, 이 문서 §15(구현 계획)를 implementer 세션에 넘겨 supabase_v3_5_writing_review_ai_cache.sql 초안 검토→운영자 수동 실행, supabase/functions/grade-writing-answers Edge Function 구현(1단계: AI 호출 없이 1~9단계 로직만 먼저 배포/검증), src/config/features.js에 writingReviewAiAssist 플래그(기본 OFF) 추가, AdminScreen.jsx의 SpellingReviewQueuePanel에 미리보기 버튼만 추가(기존 accept/dismiss 로직 무변경)."
+}

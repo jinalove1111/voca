@@ -112,6 +112,7 @@ export const DOMAINS = {
     checks: [
       { script: 'scripts/testSpelling.mjs', builders: [] },
       { script: 'scripts/testSpellingDirectionWiring.mjs', builders: [] },
+      { script: 'scripts/testWritingReviewAiPipeline.mjs', builders: [], extra: true, note: 'Task 2(쓰기 답안 검토 AI 보조, 2026-07-23) 규칙 기반 파이프라인/캐시/배치/AI 오류처리/일괄 액션 계획 — 전부 픽스처, AI는 mock(실제 Anthropic 호출 없음). 13개 필수 도메인 밖, 신규 보너스 커버리지.' },
     ],
   },
   speaking: {
