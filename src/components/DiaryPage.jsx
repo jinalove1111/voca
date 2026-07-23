@@ -190,13 +190,16 @@ export default function DiaryPage({ studentData, onBack }) {
             <p className="text-center text-[11px] font-bold text-gray-400 mb-2">
               {stickerById(selectedPlacement.stickerId)?.emoji} 스티커 꾸미기 — 스티커를 손가락으로 끌면 움직여요
             </p>
-            <div className="grid grid-cols-7 gap-1.5">
+            <div className="grid grid-cols-4 gap-1.5">
               <ToolBtn icon="↺" label="왼쪽" onClick={() => rotateBy(-ROTATE_STEP)} />
               <ToolBtn icon="↻" label="오른쪽" onClick={() => rotateBy(ROTATE_STEP)} />
               <ToolBtn icon="➖" label="작게" onClick={() => scaleBy(-SCALE_STEP)} disabled={selScale <= SCALE_MIN + 0.001} />
               <ToolBtn icon="➕" label="크게" onClick={() => scaleBy(SCALE_STEP)} disabled={selScale >= SCALE_MAX - 0.001} />
               <ToolBtn icon="⬆️" label="앞으로" onClick={() => movePlacementLayer(selectedId, 'front')} disabled={selectedIdx >= diaryPlacements.length - 1} />
               <ToolBtn icon="⬇️" label="뒤로" onClick={() => movePlacementLayer(selectedId, 'back')} disabled={selectedIdx <= 0} />
+            </div>
+            <div className="grid grid-cols-4 gap-1.5 mt-2 pt-2 border-t border-gray-100">
+              <div className="col-span-3" />
               <ToolBtn icon="🗑️" label="삭제" onClick={() => { removePlacement(selectedId); setSelectedId(null) }} danger />
             </div>
           </div>

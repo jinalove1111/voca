@@ -84,33 +84,39 @@ export default function WordBrowser({ words, cleared, onSelect, onBack, mode, on
         ) : (
         <>
         {onScopeChange && (
-          <div className="overflow-x-auto mb-3 -mx-1 px-1">
-            <div className="grid grid-cols-4 gap-2 min-w-[280px]">
-              {SCOPES.map(s => (
-                <button key={s.id} onClick={() => onScopeChange(s.id)}
-                  className={`rounded-2xl py-2.5 text-center btn-press transition-all ${
-                    scope === s.id ? 'bg-orange-500 text-white card-shadow' : 'bg-white text-gray-500 border-2 border-gray-200'}`}>
-                  <div className="text-lg">{s.emoji}</div>
-                  <div className="text-[10px] font-black mt-0.5 leading-tight whitespace-nowrap">{s.label}</div>
-                  <div className={`text-[10px] font-bold ${scope === s.id ? 'text-orange-100' : 'text-gray-400'}`}>{scopeCounts[s.id]}개</div>
-                </button>
-              ))}
+          <div className="relative mb-3">
+            <div className="overflow-x-auto -mx-1 px-1">
+              <div className="grid grid-cols-4 gap-2 min-w-[280px]">
+                {SCOPES.map(s => (
+                  <button key={s.id} onClick={() => onScopeChange(s.id)}
+                    className={`rounded-2xl py-2.5 text-center btn-press transition-all ${
+                      scope === s.id ? 'bg-orange-500 text-white card-shadow' : 'bg-white text-gray-500 border-2 border-gray-200'}`}>
+                    <div className="text-lg">{s.emoji}</div>
+                    <div className="text-[10px] font-black mt-0.5 leading-tight whitespace-nowrap">{s.label}</div>
+                    <div className={`text-[10px] font-bold ${scope === s.id ? 'text-orange-100' : 'text-gray-400'}`}>{scopeCounts[s.id]}개</div>
+                  </button>
+                ))}
+              </div>
             </div>
+            <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-white to-transparent" />
           </div>
         )}
 
         {onModeChange && (
-          <div className="overflow-x-auto mb-4 -mx-1 px-1">
-            <div className="grid grid-cols-4 gap-2 min-w-[280px]">
-              {MODES.map(m => (
-                <button key={m.id} onClick={() => onModeChange(m.id)}
-                  className={`rounded-2xl py-3 text-center btn-press transition-all ${
-                    mode === m.id ? 'bg-blue-500 text-white card-shadow' : 'bg-white text-gray-500 border-2 border-gray-200'}`}>
-                  <div className="text-xl">{m.emoji}</div>
-                  <div className="text-xs font-black mt-0.5 whitespace-nowrap">{m.label}</div>
-                </button>
-              ))}
+          <div className="relative mb-4">
+            <div className="overflow-x-auto -mx-1 px-1">
+              <div className="grid grid-cols-4 gap-2 min-w-[280px]">
+                {MODES.map(m => (
+                  <button key={m.id} onClick={() => onModeChange(m.id)}
+                    className={`rounded-2xl py-3 text-center btn-press transition-all ${
+                      mode === m.id ? 'bg-blue-500 text-white card-shadow' : 'bg-white text-gray-500 border-2 border-gray-200'}`}>
+                    <div className="text-xl">{m.emoji}</div>
+                    <div className="text-xs font-black mt-0.5 whitespace-nowrap">{m.label}</div>
+                  </button>
+                ))}
+              </div>
             </div>
+            <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-white to-transparent" />
           </div>
         )}
 

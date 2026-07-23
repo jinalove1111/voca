@@ -309,20 +309,20 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
         <div className="mt-3 grid grid-cols-3 gap-2" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={() => onWordUnknown?.(word.dbId)}
-            className={`py-2.5 rounded-xl font-bold text-xs btn-press transition-colors ${
-              wordStatus === 'unknown' ? 'bg-orange-400 text-white' : 'bg-white/15 text-white hover:bg-white/25'
+            className={`min-h-[44px] py-3 rounded-xl font-bold text-xs btn-press transition-colors ${
+              wordStatus === 'unknown' ? 'bg-orange-400 text-white' : 'bg-white/25 text-white hover:bg-white/35'
             }`}>
             😅 모르겠어요
           </button>
           <button
             onClick={playWord}
-            className="py-2.5 rounded-xl font-bold text-xs btn-press bg-white/15 text-white hover:bg-white/25 transition-colors">
+            className="min-h-[44px] py-3 rounded-xl font-bold text-xs btn-press bg-white/25 text-white hover:bg-white/35 transition-colors">
             🔁 다시 공부
           </button>
           <button
             onClick={() => { onWordKnown?.(word.dbId); onSkip?.() }}
-            className={`py-2.5 rounded-xl font-bold text-xs btn-press transition-colors ${
-              wordStatus === 'known' ? 'bg-green-400 text-white' : 'bg-white/15 text-white hover:bg-white/25'
+            className={`min-h-[44px] py-3 rounded-xl font-bold text-xs btn-press transition-colors ${
+              wordStatus === 'known' ? 'bg-green-400 text-white' : 'bg-white/25 text-white hover:bg-white/35'
             }`}>
             ✅ 알아요
           </button>

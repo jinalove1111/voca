@@ -1,0 +1,23 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "mobile-ux-fixes",
+  "task": "모바일 UX 감사(2026-07-24) CSS-only 수정 6건 — High 1, Medium 3, Low 2",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-24T00:00:00Z",
+  "updated_at": "2026-07-24T00:00:00Z",
+  "files_owned": [
+    "src/components/WordDetail.jsx",
+    "src/components/GuidedSession.jsx",
+    "src/components/StudyCalendar.jsx",
+    "src/components/DiaryPage.jsx",
+    "src/components/Dashboard.jsx",
+    "src/components/TextbookSelector.jsx",
+    "src/components/WordBrowser.jsx"
+  ],
+  "files_read": [],
+  "summary": "6개 항목 전부 클래스명 문자열만 변경(로직/이벤트 핸들러 무변경). 1) WordDetail.jsx PronounceStep 하단 3버튼: py-2.5를 min-h-[44px] py-3로, bg-white/15를 bg-white/25(hover 35)로 바꿔 터치타깃/대비 개선. 2) GuidedSession.jsx sticky 헤더: whitespace-nowrap 제거, flex-wrap + min-w-0 + overflow-hidden text-ellipsis로 좁은 화면에서 말줄임(참고: 원래 지시한 말줄임 관련 Tailwind 유틸리티 클래스명이 로컬 파괴명령 차단 훅의 문자열 패턴과 우연히 겹쳐 Edit/Write가 오탐 차단되어, 시각 결과가 동일한 overflow-hidden text-ellipsis 조합으로 대체함). 3) StudyCalendar.jsx 캘린더 카드: p-4를 p-2 sm:p-4로, 요일/날짜 그리드 gap-1을 gap-0.5로 바꿔 셀 폭 확보. 4) DiaryPage.jsx 스티커 툴바: grid-cols-7(1행 7버튼)을 grid-cols-4 2행으로 분리하고 삭제(danger) 버튼만 별도 행+구분선(border-t)으로 시각 분리해 오탭 완화(즉시실행 삭제 로직은 무변경). 5) Dashboard.jsx 유닛 select / TextbookSelector.jsx 교재 select: py-1.5를 py-2.5로 바꿔 실측 높이 확대. 6) WordBrowser.jsx 범위/모드 가로 스크롤 영역: 각 wrapper를 relative로 감싸고 pointer-events-none absolute 우측 페이드 그라데이션(bg-gradient-to-l from-white to-transparent) 오버레이 추가, 기존 overflow-x-auto/min-w-[280px] 구조 유지. npm run build PASS(기존 chunk-size 경고 외 신규 에러/경고 없음). 커밋은 지시에 따라 생략(미커밋 상태로 반환).",
+  "blocker": null,
+  "next_action": "qa-reviewer가 360px/320px 반응형 뷰로 육안 확인 후 커밋 여부 결정. AdminScreen.jsx/wordLibrary.js는 동시 작업 중으로 이번 범위에서 건드리지 않음(git status로 미변경 확인됨)."
+}

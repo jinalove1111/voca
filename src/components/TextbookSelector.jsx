@@ -21,7 +21,7 @@ export default function TextbookSelector({ options, currentId, switching, error,
           value={currentId || ''}
           disabled={switching}
           onChange={(e) => onSwitch(e.target.value)}
-          className="bg-white/20 text-white font-bold rounded-xl px-2 py-1.5 text-sm border-2 border-white/30 focus:outline-none focus:border-white/70 disabled:opacity-60 appearance-auto"
+          className="bg-white/20 text-white font-bold rounded-xl px-2 py-2.5 text-sm border-2 border-white/30 focus:outline-none focus:border-white/70 disabled:opacity-60 appearance-auto"
         >
           {/* 현재 교재가 옵션에 아직 없는 예외(캐시 갱신 지연)에도 빈 값 방지 — 유닛 셀렉트의 동일 방어 패턴 */}
           {currentId && !options.some((o) => o.id === currentId) && (

@@ -419,7 +419,7 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
                   <span className="sr-only">현재 유닛 선택</span>
                   <select value={unitName} disabled={unitSwitching}
                     onChange={(e) => handleUnitChange(e.target.value)}
-                    className="bg-white/20 text-white font-bold rounded-xl px-2 py-1.5 text-sm border-2 border-white/30 focus:outline-none focus:border-white/70 disabled:opacity-60 appearance-auto">
+                    className="bg-white/20 text-white font-bold rounded-xl px-2 py-2.5 text-sm border-2 border-white/30 focus:outline-none focus:border-white/70 disabled:opacity-60 appearance-auto">
                     {/* 저장된 유닛이 목록에 없는 예외(방금 삭제됨 등)에도 셀렉트가 빈 값이 되지 않게 */}
                     {!unitNames.includes(unitName) && <option value={unitName}>{unitName}</option>}
                     {unitNames.map((u) => <option key={u} value={u} className="text-gray-800">{u}</option>)}

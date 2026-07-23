@@ -296,10 +296,10 @@ export default function GuidedSession({
   return (
     <div>
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b-2 border-purple-100 px-4 py-2.5">
-        <div className="max-w-lg mx-auto flex items-center justify-between gap-2 text-sm font-black">
-          <span className="text-purple-600 whitespace-nowrap">📖 세션 {display.sessionNumber} / {display.sessionCount}</span>
-          {isRetry && <span className="text-orange-500 text-xs whitespace-nowrap">🔁 틀린 단어 다시 풀기</span>}
-          <span className="text-gray-500 whitespace-nowrap">오늘 {display.wordsCompleted} / {display.totalWords} 단어</span>
+        <div className="max-w-lg mx-auto flex items-center justify-between gap-2 text-sm font-black flex-wrap">
+          <span className="text-purple-600 min-w-0 overflow-hidden text-ellipsis">📖 세션 {display.sessionNumber} / {display.sessionCount}</span>
+          {isRetry && <span className="text-orange-500 text-xs min-w-0 overflow-hidden text-ellipsis">🔁 틀린 단어 다시 풀기</span>}
+          <span className="text-gray-500 min-w-0 overflow-hidden text-ellipsis">오늘 {display.wordsCompleted} / {display.totalWords} 단어</span>
         </div>
       </div>
       <WordDetail

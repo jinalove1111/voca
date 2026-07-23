@@ -65,18 +65,18 @@ export default function StudyCalendar({ studentData, onBack }) {
           <p className="text-gray-400 text-xs mt-1">매일 미션을 완료하면 스트릭이 이어져요</p>
         </div>
 
-        <div className="bg-white rounded-3xl card-shadow p-4">
+        <div className="bg-white rounded-3xl card-shadow p-2 sm:p-4">
           <div className="flex items-center justify-between mb-3">
             <button onClick={() => changeMonth(-1)} className="text-gray-400 font-black px-4 -mx-2 py-3 -my-3 btn-press">◀</button>
             <p className="font-black text-gray-700">{year}년 {month + 1}월</p>
             <button onClick={() => changeMonth(1)} className="text-gray-400 font-black px-4 -mx-2 py-3 -my-3 btn-press">▶</button>
           </div>
 
-          <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-gray-400 mb-1">
+          <div className="grid grid-cols-7 gap-0.5 text-center text-xs font-bold text-gray-400 mb-1">
             {['일', '월', '화', '수', '목', '금', '토'].map(d => <div key={d}>{d}</div>)}
           </div>
 
-          <div className="grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-7 gap-0.5">
             {cells.map((d, i) => {
               if (!d) return <div key={i} />
               const key = dateKeyFor(d)
