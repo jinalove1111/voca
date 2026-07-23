@@ -14,6 +14,16 @@
 // 신규 v3.8)을 추가했다 — 서로 다른 남용 시나리오(한 번에 큰 요청 vs 여러
 // 번의 작은 요청 누적)를 막는 것이라 하나가 다른 하나를 대체하지 않는다.
 //
+// 2026-07-24(implementer, provider 추상화 작업) — 운영자 명시 요구사항으로
+// OpenAI/Anthropic fetch 호출 코드를 이 파일에서 전부 제거하고
+// providers.js의 createAIProvider()가 만드는 Provider 인스턴스만 호출하도록
+// 리팩터링했다. 신규 Gemini provider가 추가됐고, AI_PROVIDER/모델 env는
+// provider별로 분리됐다(§ 아래 env 목록). 캐시 키도 이 리팩터링과 별개로
+// 운영자 요구사항 11에 따라 "모델 무관"으로 바뀌었다(§ pipeline.js
+// buildCacheKey 주석 — provider/모델을 바꿔도 기존 AI 판정을 재사용해 비용을
+// 아끼는 쪽으로 설계를 의도적으로 뒤집음). 신규 AI_FALLBACK_PROVIDER로 주
+// provider 호출 실패 시 배치 단위 1회 폴백 재시도를 지원한다.
+//
 // ⚠️ 배포는 운영자 수동(에이전트가 실행 불가, DDL과 동일 취급):
 //   supabase functions deploy grade-writing-answers
 // ⚠️ 시크릿도 운영자 수동(Vercel 환경변수와 별개로 Supabase에 따로 설정):
@@ -21,13 +31,17 @@
 //     SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=...
 //   (선택, 기본값 그대로 써도 됨) AI_PROVIDER=openai OPENAI_MODEL=gpt-5-nano \
 //     MAX_DAILY_COST=2.0 MAX_BATCH_SIZE=20
-//   (provider를 되돌리고 싶을 때만) AI_PROVIDER=anthropic ANTHROPIC_API_KEY=... \
-//     ANTHROPIC_MODEL=claude-haiku-4-5
+//   (provider를 되돌리거나 추가하고 싶을 때만)
+//     AI_PROVIDER=anthropic ANTHROPIC_API_KEY=... ANTHROPIC_MODEL=claude-haiku-4-5
+//     AI_PROVIDER=gemini GEMINI_API_KEY=... GEMINI_MODEL=gemini-2.5-flash
+//   (선택, 주 provider 실패 시 1회 폴백 재시도 — 기본 미설정 = 폴백 없음)
+//     AI_FALLBACK_PROVIDER=gemini (폴백 provider의 API 키/모델 env도 함께 설정)
 // (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY는 Supabase가 함수 실행 환경에
 // 자동 주입하는 경우가 많지만, 프로젝트 설정에 따라 다를 수 있어 명시.)
 //
-// 브라우저에 API 키 절대 노출 안 됨 — OPENAI_API_KEY/ANTHROPIC_API_KEY는 이
-// 함수 실행 환경(Deno.env)에만 존재하고 응답 바디에도 포함되지 않는다.
+// 브라우저에 API 키 절대 노출 안 됨 — OPENAI_API_KEY/ANTHROPIC_API_KEY/
+// GEMINI_API_KEY는 이 함수 실행 환경(Deno.env)에만 존재하고 응답 바디에도
+// 포함되지 않는다.
 //
 // preview-only: 이 함수는 spelling_review_queue를 SELECT만 하고, words나
 // spelling_review_queue를 절대 UPDATE/INSERT하지 않는다(캐시 테이블
@@ -39,13 +53,12 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 import {
   classifyBatch,
   classifyLocally,
-  buildAiPrompt,
-  parseAiBatchResponse,
   verifyAdminPin,
-  estimateCostUsd,
   AI_MODEL_ID,
   DEFAULT_AI_PROVIDER,
+  DEFAULT_GEMINI_MODEL,
 } from './pipeline.js'
+import { createAIProvider, safeEstimateCostUsd } from './providers.js'
 
 const CORS_HEADERS = {
   // 관리자 전용 미리보기 API(개인정보 없음, 라이브 쓰기 없음) — Vercel
@@ -85,24 +98,23 @@ function readClampedBatchSizeEnv(name: string, fallback: number): number {
   return Math.min(30, Math.max(20, Math.round(n)))
 }
 
-// ── AI provider/model 선택(구현 지시 2, 2026-07-24 신규) ────────────────
+// ── AI provider/model 선택(2026-07-24, provider 추상화 작업) ───────────────
 // AI_PROVIDER 기본값은 pipeline.js DEFAULT_AI_PROVIDER('openai')를 그대로
-// 따른다(이 파일에 별도 하드코딩 상수를 두지 않음 — buildCacheKey의 model
-// 드리프트 방지와 같은 원칙). 'anthropic'을 넣으면 기존 v2 경로를 그대로
-// 유지한다(코드 삭제 안 함, 운영자가 언제든 되돌릴 수 있게).
+// 따른다(이 파일에 별도 하드코딩 상수를 두지 않음 — 드리프트 방지). 각
+// provider의 모델 기본값도 마찬가지로 pipeline.js/여기 상수를 그대로
+// 따른다. AI_FALLBACK_PROVIDER는 신규(기본 '' = 폴백 없음) — 값이 있으면
+// 주 provider 배치 호출이 throw할 때 그 배치만 1회 폴백 provider로 재시도
+// 한다(폴백 provider의 API 키가 없으면 재시도 자체를 생략).
 const AI_PROVIDER = readStringEnv('AI_PROVIDER', DEFAULT_AI_PROVIDER)
-// OPENAI_MODEL 기본값은 AI_MODEL_ID(pipeline.js에서 'gpt-5-nano'로 repoint된
-// 값)를 그대로 따른다 — 두 파일이 서로 다른 기본 모델 문자열을 하드코딩해
-// 조용히 어긋나는 걸 막기 위함(기존 "MODEL = AI_MODEL_ID" 드리프트 방지
-// 원칙과 동일).
 const OPENAI_MODEL = readStringEnv('OPENAI_MODEL', AI_MODEL_ID)
+const GEMINI_MODEL = readStringEnv('GEMINI_MODEL', DEFAULT_GEMINI_MODEL)
 // ANTHROPIC_MODEL: pipeline.js AI_MODEL_ID가 더 이상 Anthropic 모델을
 // 가리키지 않으므로(이제 'gpt-5-nano'), provider=anthropic 경로가 쓸 기본
 // 모델을 여기 별도로 하드코딩해 유지한다(v2 시절 값 그대로, MODEL_PRICING_
 // PER_MTOK에도 'claude-haiku-4-5' 항목이 하위호환으로 남아있어 가격 조회는
 // 계속 성공한다).
 const ANTHROPIC_MODEL = readStringEnv('ANTHROPIC_MODEL', 'claude-haiku-4-5')
-const RUNTIME_MODEL = AI_PROVIDER === 'anthropic' ? ANTHROPIC_MODEL : OPENAI_MODEL
+const AI_FALLBACK_PROVIDER = readStringEnv('AI_FALLBACK_PROVIDER', '')
 
 // ── 서버 측 비용/남용 상한(구현 지시 3) ─────────────────────────────────
 // 셋 다 Deno.env로 운영자가 배포 환경에서 조정 가능(시크릿과 동일하게
@@ -123,7 +135,8 @@ const BATCH_SIZE = readClampedBatchSizeEnv('MAX_BATCH_SIZE', 20)
 // 배치 하나당 AI 호출 타임아웃(구현 지시 4, v2에서 이미 도입) — 45초.
 // 넘으면 그 배치는 fetch가 AbortError로 reject되고, classifyBatch의 기존
 // catch(err) 경로가 그대로 처리한다(review로 강등, decisionSource='ai_error'
-// — provider가 OpenAI로 바뀌어도 이 실패 처리 경로/타임아웃 값은 그대로).
+// — provider가 무엇이든 이 실패 처리 경로/타임아웃 값은 그대로). providers.js
+// 의 각 Provider가 이 값을 생성 시점에 주입받아 자체적으로 fetch에 적용한다.
 const AI_BATCH_TIMEOUT_MS = 45000
 
 // 프롬프트 구조(buildAiPrompt) 기준 보수적 추정치 — 배치당 system 프롬프트가
@@ -134,7 +147,7 @@ const AI_BATCH_TIMEOUT_MS = 45000
 // 250/120으로 다소 여유 있게 잡는다 — 실제 청구는 이보다 낮을 가능성이
 // 높고(그래서 상한 통과 후 로그에 찍히는 실제 usage가 이 추정보다 항상
 // 작게 나오는 게 정상), 상한을 초과해 거부하는 쪽으로만 보수적이다. 이
-// 추정치 자체는 모델/provider와 무관한 "토큰 개수" 추정이라 OpenAI 전환
+// 추정치 자체는 모델/provider와 무관한 "토큰 개수" 추정이라 provider 전환
 // 이후에도 그대로 재사용한다(달라지는 건 estimateCostUsd에 넘기는 가격표
 // 조회 키뿐).
 const EST_INPUT_TOKENS_PER_ITEM = 250
@@ -146,39 +159,6 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
   })
-}
-
-async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    return await fetch(url, { ...init, signal: controller.signal })
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
-// 알 수 없는(가격표에 없는) 모델이 넘어와도 estimateCostUsd가 그대로
-// throw하게 두면 이 함수 전체가 500으로 죽는다(운영자가 OPENAI_MODEL을
-// 오타로 잘못 설정한 경우 등) — 헌법 규칙 9 "우아한 성능 저하"에 따라
-// 알려진 모델 중 가장 비싼 단가(현재 claude-sonnet-5)로 보수적으로(과소
-// 추정이 아니라 과대 추정 쪽으로 안전하게) 대체하고 경고만 남긴다. 실제
-// MODEL_PRICING_PER_MTOK 조회 자체는 pipeline.js가 소유한 단일 원본이라
-// 여기서 그 표를 복제하지 않는다(가격만 하드코딩된 폴백 상수 하나).
-function safeEstimateCostUsd(tokens: { inputTokens?: number; outputTokens?: number }, model: string): number {
-  try {
-    return estimateCostUsd(tokens, model)
-  } catch (err) {
-    console.warn(JSON.stringify({
-      event: 'grade-writing-answers.unknown_model_price',
-      model,
-      error: String((err as any)?.message || err),
-    }))
-    const FALLBACK_PRICE_PER_MTOK = { input: 3.0, output: 15.0 } // 알려진 모델 중 최고가(claude-sonnet-5) — 안전 쪽 과대추정
-    const inputTokens = tokens.inputTokens ?? 0
-    const outputTokens = tokens.outputTokens ?? 0
-    return (inputTokens / 1e6) * FALLBACK_PRICE_PER_MTOK.input + (outputTokens / 1e6) * FALLBACK_PRICE_PER_MTOK.output
-  }
 }
 
 // ── 일일 비용 상한(구현 지시 3, 신규) ───────────────────────────────────
@@ -202,99 +182,155 @@ function getSeoulDateString(d: Date = new Date()): string {
 // 진행"으로 해석한다(요청당 상한은 이 테이블과 무관하게 계속 적용됨,
 // 헌법 규칙 9). Postgres 테이블 자체가 없으면 42P01, PostgREST가 스키마
 // 캐시를 아직 못 갱신했으면 PGRST205로 오는 경우가 있어 둘 다 "테이블 미존재
-// 취급"으로 처리한다. 그 외 에러(권한 등)도 동일하게 안전한 쪽(상한 없이
-// 진행)으로 처리하고 경고만 남긴다 — 이 테이블 접근 실패가 미리보기 기능
-// 자체를 막으면 안 된다(§ 캐시 테이블과 동일 원칙).
+// 취급"으로 처리한다.
+//
+// 2026-07-24(요구사항 9, provider 추상화 작업) — PK가 (usage_date, provider,
+// model) 복합으로 바뀌어(§ supabase_v3_8_ai_usage_daily.sql) 하루에 여러
+// provider/model 행이 있을 수 있다. 일일 상한 판정은 "오늘 전 provider 행
+// 합산" est_cost_usd 기준(상한은 총액)이라 여기서 여러 행을 읽어 합산한다.
+// 42703(undefined column, 아직 구 스키마 — provider/model 컬럼이 없는
+// 상태)는 별도로 "구 스키마" 취급해 단일 행만 읽는다(§ 헌법 규칙 9 — 코드가
+// 새 스키마 마이그레이션보다 먼저 배포돼도 안 깨지게).
 async function readTodayUsage(supabase: any, dateStr: string): Promise<{ estCostUsd: number } | null> {
   const { data, error } = await supabase
     .from('ai_usage_daily')
-    .select('usage_date,request_count,item_count,est_cost_usd')
+    .select('provider,model,est_cost_usd')
     .eq('usage_date', dateStr)
-    .maybeSingle()
-  if (error) {
-    const missing = error.code === '42P01' || error.code === 'PGRST205'
+  if (!error) {
+    const rows = data || []
+    const estCostUsd = rows.reduce((sum: number, r: any) => sum + (Number(r.est_cost_usd) || 0), 0)
+    return { estCostUsd }
+  }
+
+  const missing = error.code === '42P01' || error.code === 'PGRST205'
+  if (missing) {
     console.warn(JSON.stringify({
-      event: missing ? 'grade-writing-answers.daily_cap_table_missing' : 'grade-writing-answers.daily_cap_read_error',
+      event: 'grade-writing-answers.daily_cap_table_missing',
       error: error.message,
-      hint: missing ? 'supabase_v3_8_ai_usage_daily.sql 미실행 — 일일 상한 없이 진행(요청당 상한은 계속 적용)' : undefined,
+      hint: 'supabase_v3_8_ai_usage_daily.sql 미실행 — 일일 상한 없이 진행(요청당 상한은 계속 적용)',
     }))
     return null
   }
-  return { estCostUsd: data ? Number(data.est_cost_usd) || 0 : 0 }
+
+  const legacySchema = error.code === '42703' // provider/model 컬럼 없음(v3.8 이전 구 스키마)
+  if (legacySchema) {
+    const { data: legacyData, error: legacyErr } = await supabase
+      .from('ai_usage_daily').select('est_cost_usd').eq('usage_date', dateStr).maybeSingle()
+    if (legacyErr) {
+      console.warn(JSON.stringify({
+        event: 'grade-writing-answers.daily_cap_read_error',
+        error: legacyErr.message,
+        hint: '구 스키마(usage_date 단일 PK) 읽기도 실패 — 일일 상한 없이 진행',
+      }))
+      return null
+    }
+    console.warn(JSON.stringify({
+      event: 'grade-writing-answers.daily_cap_legacy_schema_read',
+      hint: 'ai_usage_daily가 구 스키마(provider/model 컬럼 없음) — supabase_v3_8_ai_usage_daily.sql 재실행 권장. 오늘 단일 행만 상한 판정에 사용.',
+    }))
+    return { estCostUsd: legacyData ? Number(legacyData.est_cost_usd) || 0 : 0 }
+  }
+
+  console.warn(JSON.stringify({ event: 'grade-writing-answers.daily_cap_read_error', error: error.message }))
+  return null
 }
 
-// 오늘 행에 이번 실행분(실제 AI 호출이 있었을 때만)을 더해 누적 저장.
-// 읽고-더하고-쓰는 방식이라(원자적 증가 RPC 아님) 동시에 두 관리자가 거의
-// 동시에 실행하면 이론상 카운트가 살짝 어긋날 수 있다 — 이 기능은 관리자
-// 1인이 수동으로 트리거하는 저빈도 미리보기 도구라 실용적으로 무해하다고
-// 판단했다(완벽한 동시성 보장이 필요해지면 Postgres 함수로 원자적 증가를
-// 추가하는 게 다음 개선 지점 — 지금은 헌법 규칙 8 "에이전트는 DDL/함수를
-// 직접 실행 불가"라 이 SQL 파일에 stored procedure까지 넣지 않았다). 실패
-// (테이블 없음 등)해도 조용히 경고만 남기고 응답 자체는 절대 막지 않는다.
-async function accumulateTodayUsage(
+// 오늘 (provider, model) 행에 이번 실행분(실제 AI 호출이 있었을 때만)을
+// 더해 누적 저장. 읽고-더하고-쓰는 방식이라(원자적 증가 RPC 아님) 동시에 두
+// 관리자가 거의 동시에 실행하면 이론상 카운트가 살짝 어긋날 수 있다 — 이
+// 기능은 관리자 1인이 수동으로 트리거하는 저빈도 미리보기 도구라 실용적으로
+// 무해하다고 판단했다(완벽한 동시성 보장이 필요해지면 Postgres 함수로 원자적
+// 증가를 추가하는 게 다음 개선 지점 — 지금은 헌법 규칙 8 "에이전트는
+// DDL/함수를 직접 실행 불가"라 이 SQL 파일에 stored procedure까지 넣지
+// 않았다). 실패(테이블 없음 등)해도 조용히 경고만 남기고 응답 자체는 절대
+// 막지 않는다.
+//
+// 2026-07-24(요구사항 9) — (usage_date, provider, model) 행 단위 upsert로
+// 변경. 구 스키마(단일 PK, provider/model/토큰 컬럼 없음)로 이미 생성된
+// 경우 upsert가 42703(undefined column)으로 실패하면 경고 후 구 스키마
+// 형태(usage_date만 onConflict, 토큰/provider/model 미기록)로 1회 재시도
+// 폴백한다.
+async function accumulateUsageRow(
   supabase: any,
   dateStr: string,
-  deltaRequestCount: number,
-  deltaItemCount: number,
-  deltaCostUsd: number,
+  provider: string,
+  model: string,
+  delta: { requestCount: number; itemCount: number; inputTokens: number; outputTokens: number; costUsd: number },
 ): Promise<void> {
   try {
-    const { data } = await supabase
+    const { data: existing, error: selErr } = await supabase
       .from('ai_usage_daily')
-      .select('request_count,item_count,est_cost_usd')
-      .eq('usage_date', dateStr)
+      .select('request_count,item_count,prompt_tokens,response_tokens,est_cost_usd')
+      .eq('usage_date', dateStr).eq('provider', provider).eq('model', model)
       .maybeSingle()
-    const nextRequestCount = (data?.request_count || 0) + deltaRequestCount
-    const nextItemCount = (data?.item_count || 0) + deltaItemCount
-    const nextCostUsd = (Number(data?.est_cost_usd) || 0) + deltaCostUsd
-    await supabase.from('ai_usage_daily').upsert({
+
+    if (selErr) {
+      const missing = selErr.code === '42P01' || selErr.code === 'PGRST205'
+      if (missing) {
+        console.warn(JSON.stringify({ event: 'grade-writing-answers.daily_cap_table_missing', error: selErr.message }))
+        return
+      }
+      await accumulateUsageRowLegacyFallback(supabase, dateStr, delta, selErr)
+      return
+    }
+
+    const next = {
       usage_date: dateStr,
-      request_count: nextRequestCount,
-      item_count: nextItemCount,
-      est_cost_usd: nextCostUsd,
+      provider,
+      model,
+      request_count: (existing?.request_count || 0) + delta.requestCount,
+      item_count: (existing?.item_count || 0) + delta.itemCount,
+      prompt_tokens: (Number(existing?.prompt_tokens) || 0) + delta.inputTokens,
+      response_tokens: (Number(existing?.response_tokens) || 0) + delta.outputTokens,
+      est_cost_usd: (Number(existing?.est_cost_usd) || 0) + delta.costUsd,
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'usage_date' })
+    }
+    const { error: upsertErr } = await supabase
+      .from('ai_usage_daily')
+      .upsert(next, { onConflict: 'usage_date,provider,model' })
+    if (upsertErr) {
+      const missing = upsertErr.code === '42P01' || upsertErr.code === 'PGRST205'
+      if (missing) {
+        console.warn(JSON.stringify({ event: 'grade-writing-answers.daily_cap_table_missing', error: upsertErr.message }))
+        return
+      }
+      await accumulateUsageRowLegacyFallback(supabase, dateStr, delta, upsertErr)
+    }
   } catch (err) {
     console.warn(JSON.stringify({ event: 'grade-writing-answers.daily_cap_write_error', error: String((err as any)?.message || err) }))
   }
 }
 
-// OpenAI Structured Outputs(response_format: json_schema, strict)용 스키마 —
-// buildAiPrompt/parseAiBatchResponse가 기대하는 "판정 배열"과 정확히 같은
-// 항목 모양을 담되, strict 모드 요구사항(모든 속성을 required에 포함,
-// nullable은 type 배열로 표현, additionalProperties:false)에 맞춰 object로
-// 감싼다. Anthropic 경로는 이미 순수 텍스트로 JSON 배열을 그대로 받으므로
-// 이 스키마가 필요 없다(provider=openai 전용).
-const OPENAI_GRADING_JSON_SCHEMA = {
-  name: 'grading',
-  strict: true,
-  schema: {
-    type: 'object',
-    properties: {
-      decisions: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            pending_answer_id: { type: 'string' },
-            decision: { type: 'string', enum: ['accept', 'review', 'reject_candidate'] },
-            confidence: { type: 'number' },
-            reason: { type: 'string' },
-            suggested_synonym: { type: ['string', 'null'] },
-            part_of_speech_warning: { type: ['string', 'null'] },
-            meaning_scope_warning: { type: ['string', 'null'] },
-          },
-          required: [
-            'pending_answer_id', 'decision', 'confidence', 'reason',
-            'suggested_synonym', 'part_of_speech_warning', 'meaning_scope_warning',
-          ],
-          additionalProperties: false,
-        },
-      },
-    },
-    required: ['decisions'],
-    additionalProperties: false,
-  },
+// 구 스키마(v3.8 이전, usage_date 단일 PK, provider/model/토큰 컬럼 없음)
+// 폴백 — 새 스키마 upsert가 컬럼 부재(42703) 등으로 실패했을 때만 호출.
+async function accumulateUsageRowLegacyFallback(
+  supabase: any,
+  dateStr: string,
+  delta: { requestCount: number; itemCount: number; costUsd: number },
+  origErr: any,
+): Promise<void> {
+  console.warn(JSON.stringify({
+    event: 'grade-writing-answers.daily_cap_write_legacy_schema_fallback',
+    error: String(origErr?.message || origErr),
+    code: origErr?.code,
+    hint: 'supabase_v3_8_ai_usage_daily.sql 재실행 권장(provider/model/토큰 컬럼 추가) — 지금은 구 스키마로 폴백 기록(집계만 유지, provider/model 구분 없음)',
+  }))
+  try {
+    const { data } = await supabase.from('ai_usage_daily').select('request_count,item_count,est_cost_usd').eq('usage_date', dateStr).maybeSingle()
+    const next = {
+      usage_date: dateStr,
+      request_count: (data?.request_count || 0) + delta.requestCount,
+      item_count: (data?.item_count || 0) + delta.itemCount,
+      est_cost_usd: (Number(data?.est_cost_usd) || 0) + delta.costUsd,
+      updated_at: new Date().toISOString(),
+    }
+    const { error } = await supabase.from('ai_usage_daily').upsert(next, { onConflict: 'usage_date' })
+    if (error) {
+      console.warn(JSON.stringify({ event: 'grade-writing-answers.daily_cap_write_error', error: error.message, code: error.code }))
+    }
+  } catch (err2) {
+    console.warn(JSON.stringify({ event: 'grade-writing-answers.daily_cap_write_error', error: String((err2 as any)?.message || err2) }))
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -320,8 +356,9 @@ Deno.serve(async (req: Request) => {
 
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
   const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
   const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
+  const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')
+  const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
     return json({ ok: false, error: 'Server not configured: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing' }, 500)
   }
@@ -337,6 +374,32 @@ Deno.serve(async (req: Request) => {
   }
 
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
+
+  // AI provider 인스턴스 — index.ts는 이제 fetch를 직접 호출하지 않고
+  // providers.js가 만든 인스턴스의 gradeWritingAnswers/healthCheck/
+  // estimateCost만 쓴다(2026-07-24 provider 추상화 작업). 미지 AI_PROVIDER
+  // 문자열(운영자 오타)이면 createAIProvider가 조용히 openai로 폴백한다.
+  const primaryProvider = createAIProvider({
+    provider: AI_PROVIDER,
+    apiKeys: { openai: OPENAI_API_KEY, gemini: GEMINI_API_KEY, anthropic: ANTHROPIC_API_KEY },
+    models: { openai: OPENAI_MODEL, gemini: GEMINI_MODEL, anthropic: ANTHROPIC_MODEL },
+    fetchImpl: fetch,
+    timeoutMs: AI_BATCH_TIMEOUT_MS,
+    onUnknownProvider: ({ requestedProvider, fallbackProvider }) => {
+      console.warn(JSON.stringify({ event: 'grade-writing-answers.unknown_provider_fallback', requestedProvider, fallbackProvider }))
+    },
+  })
+  // 폴백 provider(요구사항 10, 신규) — AI_FALLBACK_PROVIDER가 비어있으면
+  // 생성하지 않는다(기본 동작 = 폴백 없음, 기존 review 강등 경로 그대로).
+  const fallbackProvider = AI_FALLBACK_PROVIDER
+    ? createAIProvider({
+      provider: AI_FALLBACK_PROVIDER,
+      apiKeys: { openai: OPENAI_API_KEY, gemini: GEMINI_API_KEY, anthropic: ANTHROPIC_API_KEY },
+      models: { openai: OPENAI_MODEL, gemini: GEMINI_MODEL, anthropic: ANTHROPIC_MODEL },
+      fetchImpl: fetch,
+      timeoutMs: AI_BATCH_TIMEOUT_MS,
+    })
+    : null
 
   // pending 조회 — SELECT만(§ preview-only). 캐시 테이블 미존재(마이그레이션
   // 미실행) 시에도 500으로 죽지 않고 캐시 없이 진행하도록 아래에서 개별
@@ -380,7 +443,9 @@ Deno.serve(async (req: Request) => {
   // 항상 최악의 경우(캐시 미스 전부)를 가정해야 안전하므로 캐시 조회 전에
   // 미리 계산한다 — "부분 실행 후 중단"이 아니라 "아예 시작 전에 전량 거부".
   // 이 값은 아래 "일일" 상한 판정(구현 지시 3 신규분)에도 그대로 재사용한다
-  // (같은 최악-경우 가정을 두 상한 모두에 일관되게 적용).
+  // (같은 최악-경우 가정을 두 상한 모두에 일관되게 적용). 가격은 주
+  // provider(primaryProvider) 기준으로 추정한다 — 폴백은 예외적 경로라
+  // 사전 점검 단계에서까지 반영하지 않는다(보수적 추정 목적상 무해).
   const unresolvedByRulesCount = items.filter((it) => !classifyLocally(it).decision).length
   const estimatedBatchCount = Math.ceil(unresolvedByRulesCount / BATCH_SIZE)
   const preflightEstimatedCostUsd = unresolvedByRulesCount > 0
@@ -388,7 +453,7 @@ Deno.serve(async (req: Request) => {
       inputTokens: unresolvedByRulesCount * EST_INPUT_TOKENS_PER_ITEM
         + estimatedBatchCount * EST_SYSTEM_PROMPT_TOKENS_PER_BATCH,
       outputTokens: unresolvedByRulesCount * EST_OUTPUT_TOKENS_PER_ITEM,
-    }, RUNTIME_MODEL)
+    }, primaryProvider.model)
     : 0
   if (preflightEstimatedCostUsd > MAX_EST_COST_USD_PER_REQUEST) {
     return json({
@@ -399,28 +464,33 @@ Deno.serve(async (req: Request) => {
     }, 400)
   }
 
-  let totalInputTokens = 0
-  let totalOutputTokens = 0
-  let actualBatchCount = 0
-  let itemsSentToAi = 0
   let cacheTableMissing = false
+  // provider/model별 실사용 누계 버킷(요구사항 9) — 폴백을 쓰면 한 요청
+  // 안에서도 배치별로 실제 호출 provider/model이 달라질 수 있어(주 provider
+  // 실패 -> 폴백 성공), 단일 합계가 아니라 (provider, model) 키로 나눠
+  // 누적한다. ai_usage_daily 기록/응답 usage 계산 둘 다 이 버킷을 쓴다.
+  const usageByProviderModel = new Map<string, { provider: string; model: string; inputTokens: number; outputTokens: number; batchCount: number; itemCount: number }>()
+  let actualBatchCount = 0
+  // cacheStore가 model 컬럼(audit 메타데이터, 캐시 키에는 더 이상 없음)에
+  // 채울 값 — 그 시점 직전에 완료된 배치가 실제로 호출한 provider/model로
+  // aiClassify가 매 배치 시작 시 갱신한다(classifyBatch는 배치를 순차
+  // 처리하므로 cacheStore 호출 시점엔 항상 최신 배치의 값이 맞다).
+  let currentAuditModel = primaryProvider.model
 
-  // 캐시 키 형식(구현 지시 1, v2) — pipeline.js buildCacheKey/parseCacheKey와
-  // 반드시 같은 순서(wordId::meaningSnapshot::normalizedAnswer::
-  // partOfSpeech::promptVersion::model)를 써야 한다. index.ts는 pipeline.js
-  // 의 parseCacheKey를 그대로 쓰지 않고 split만 하는데(원래도 그랬음),
-  // 순서만 지키면 되므로 여기서 재구현하지 않고 배열 위치로 꺼낸다. model
-  // 부분은 이제 RUNTIME_MODEL(런타임에 결정된 실제 provider/model)을 쓰는
-  // classifyBatch({ modelId: RUNTIME_MODEL, ... }) 호출로 채워지므로, 이
-  // 조회/저장 함수 자체는 바뀔 필요가 없다(키 문자열을 그대로 split만 함).
+  // 캐시 키 형식(2026-07-24, 운영자 요구사항 11로 model 필드 제거 — §
+  // pipeline.js buildCacheKey 주석) — pipeline.js buildCacheKey/parseCacheKey
+  // 와 반드시 같은 순서(wordId::meaningSnapshot::normalizedAnswer::
+  // partOfSpeech::promptVersion, 5필드)를 써야 한다. index.ts는 pipeline.js
+  // 의 parseCacheKey를 그대로 쓰지 않고 split만 하는데(원래도 그랬음), 순서만
+  // 지키면 되므로 여기서 재구현하지 않고 배열 위치로 꺼낸다.
   const cacheLookup = async (key: string) => {
     if (cacheTableMissing) return null
-    const [wordId, meaningSnapshot, normalizedAnswer, partOfSpeech, promptVersion, model] = key.split('::')
+    const [wordId, meaningSnapshot, normalizedAnswer, partOfSpeech, promptVersion] = key.split('::')
     const { data: cached, error: cacheErr } = await supabase
       .from('spelling_ai_grading_cache')
       .select('decision,confidence,reason,suggested_synonym,part_of_speech_warning,meaning_scope_warning,decision_source')
       .eq('word_id', wordId).eq('meaning_snapshot', meaningSnapshot).eq('normalized_answer', normalizedAnswer)
-      .eq('part_of_speech', partOfSpeech).eq('prompt_version', promptVersion).eq('model', model)
+      .eq('part_of_speech', partOfSpeech).eq('prompt_version', promptVersion)
       .maybeSingle()
     if (cacheErr) { cacheTableMissing = true; return null } // 마이그레이션 미실행 등 — 조용히 스킵
     if (!cached) return null
@@ -434,15 +504,15 @@ Deno.serve(async (req: Request) => {
 
   const cacheStore = async (key: string, decision: any) => {
     if (cacheTableMissing) return
-    const [wordId, meaningSnapshot, normalizedAnswer, partOfSpeech, promptVersion, model] = key.split('::')
+    const [wordId, meaningSnapshot, normalizedAnswer, partOfSpeech, promptVersion] = key.split('::')
     await supabase.from('spelling_ai_grading_cache').upsert({
       word_id: wordId, meaning_snapshot: meaningSnapshot, normalized_answer: normalizedAnswer,
       part_of_speech: partOfSpeech, prompt_version: promptVersion,
       decision: decision.decision, confidence: decision.confidence, reason: decision.reason,
       suggested_synonym: decision.suggestedSynonym, part_of_speech_warning: decision.partOfSpeechWarning,
       meaning_scope_warning: decision.meaningScopeWarning,
-      decision_source: decision.decisionSource, model: model || RUNTIME_MODEL,
-    }, { onConflict: 'word_id,meaning_snapshot,normalized_answer,part_of_speech,prompt_version,model' })
+      decision_source: decision.decisionSource, model: currentAuditModel,
+    }, { onConflict: 'word_id,meaning_snapshot,normalized_answer,part_of_speech,prompt_version' })
     // 실패해도(테이블 없음 등) 무시 — 캐시는 최적화일 뿐, 미리보기 자체를
     // 막으면 안 된다.
   }
@@ -463,14 +533,14 @@ Deno.serve(async (req: Request) => {
     // 캐시로 확정 가능한 항목은 여전히 캐시를 쓴다(비용 발생 없음) — "AI
     // 호출만" 건너뛴다는 요구사항과 정확히 일치(§ pipeline.js classifyBatch
     // budgetExceeded 옵션 주석 참고). 실제 유료 AI 호출은 단 한 번도 없음.
-    const proposals = await classifyBatch(items, { cacheLookup, cacheStore, batchSize: BATCH_SIZE, modelId: RUNTIME_MODEL, budgetExceeded: true })
+    const proposals = await classifyBatch(items, { cacheLookup, cacheStore, batchSize: BATCH_SIZE, budgetExceeded: true })
     console.log(JSON.stringify({
       event: 'grade-writing-answers.daily_budget_exceeded',
       todayUsd: dailyUsage?.estCostUsd ?? null,
       capUsd: MAX_DAILY_COST,
       unresolvedByRules: unresolvedByRulesCount,
-      model: RUNTIME_MODEL,
-      provider: AI_PROVIDER,
+      model: primaryProvider.model,
+      provider: primaryProvider.name,
     }))
     return json({
       ok: true,
@@ -487,7 +557,8 @@ Deno.serve(async (req: Request) => {
         outputTokens: 0,
         batchCount: 0,
         estimatedCostUsd: 0,
-        model: RUNTIME_MODEL,
+        model: primaryProvider.model,
+        provider: primaryProvider.name,
       },
       // 클라이언트가 정직한 배너를 띄울 수 있도록(§ 구현 지시 3) — todayUsd는
       // 이번 실행 이전(=이번 요청으로는 비용이 추가되지 않았으므로 이후와도
@@ -496,98 +567,67 @@ Deno.serve(async (req: Request) => {
     })
   }
 
-  // provider별 활성 API 키 — 없으면(구현 지시 2 "OPENAI_API_KEY 없으면 기존
-  // ANTHROPIC_API_KEY 없음 경로와 동일하게 동작") aiClassify가 null이 되어
-  // classifyBatch의 기존 "AI 분류기 미설정" 분기(decision_source=
-  // 'ai_unavailable', review로 강등, 자동 거부 아님)가 그대로 적용된다 —
-  // 이 분기를 위해 새 코드를 만들 필요가 전혀 없다(재사용).
-  const activeApiKey = AI_PROVIDER === 'anthropic' ? ANTHROPIC_API_KEY : OPENAI_API_KEY
+  // healthCheck로 apiKeyPresent=false면(예: OPENAI_API_KEY 미설정)
+  // aiClassify가 null이 되어 classifyBatch의 기존 "AI 분류기 미설정" 분기
+  // (decision_source='ai_unavailable', review로 강등, 자동 거부 아님)가
+  // 그대로 적용된다 — 이 분기를 위해 새 코드를 만들 필요가 전혀 없다(재사용).
+  const primaryHealth = primaryProvider.healthCheck()
 
-  const aiClassify = activeApiKey
+  const aiClassify = primaryHealth.apiKeyPresent
     ? async (batch: any[]) => {
       actualBatchCount += 1
-      itemsSentToAi += batch.length
       const batchIndex = actualBatchCount
-      const { system, user } = buildAiPrompt(batch)
-      // 배치당 타임아웃(구현 지시 4) — AI_BATCH_TIMEOUT_MS(45초) 안에 응답이
-      // 안 오면 AbortController가 fetch를 중단시키고, fetch()는 AbortError로
-      // reject된다. 이 함수 안에서 따로 잡지 않고 그대로 위(classifyBatch)로
-      // 전파시킨다 — classifyBatch의 기존 catch(err) 블록이 이미 "그 배치의
-      // 모든 항목을 review로 강등, decisionSource='ai_error'"를 처리하므로
-      // 타임아웃 전용 별도 실패 경로를 새로 만들 필요가 없다(자동 accept
-      // 절대 없음, 기존 실패 처리와 완전히 동일 — provider 무관).
+      let usedProvider = primaryProvider
+      let usedFallback = false
       let batchInputTokens = 0
       let batchOutputTokens = 0
-      let rawDecisionsText = ''
+      let decisionsMap: Map<string, any>
 
-      if (AI_PROVIDER === 'openai') {
-        // OpenAI Chat Completions + Structured Outputs(json_schema, strict).
-        // messages 구성은 기존 Anthropic 경로의 system/user 분리를 그대로
-        // 따른다(같은 buildAiPrompt 결과, 같은 배치 내용) — 프롬프트 내용
-        // 자체는 provider와 무관하게 완전히 동일. temperature는 의도적으로
-        // 생략(구현 지시 2 — 일부 최신 모델은 커스텀 temperature 미지원이라
-        // 기본값을 그대로 둔다).
-        const res = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            'authorization': `Bearer ${OPENAI_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: RUNTIME_MODEL,
-            messages: [
-              { role: 'system', content: system },
-              { role: 'user', content: user },
-            ],
-            response_format: { type: 'json_schema', json_schema: OPENAI_GRADING_JSON_SCHEMA },
-          }),
-        }, AI_BATCH_TIMEOUT_MS)
-        const respJson = await res.json()
-        if (!res.ok) throw new Error(respJson?.error?.message || `OpenAI API ${res.status}`)
-        batchInputTokens = respJson?.usage?.prompt_tokens || 0
-        batchOutputTokens = respJson?.usage?.completion_tokens || 0
-        const content = respJson?.choices?.[0]?.message?.content || ''
-        // strict json_schema 응답은 {"decisions":[...]} 형태의 JSON 문자열 —
-        // parseAiBatchResponse(pipeline.js, provider 무관 공용)는 최상위가
-        // "배열"인 텍스트를 기대하므로(§ 섹션 8/9 테스트가 이미 그 계약을
-        // 고정), 여기서 decisions 배열만 뽑아 다시 문자열로 만들어 넘긴다 —
-        // parseAiBatchResponse 자체의 계약/검증(isValidAiDecision)은 전혀
-        // 안 건드리고 그대로 재사용.
-        try {
-          const parsedContent = JSON.parse(content)
-          const decisionsArray = Array.isArray(parsedContent) ? parsedContent : (parsedContent?.decisions ?? [])
-          rawDecisionsText = JSON.stringify(decisionsArray)
-        } catch {
-          // 파싱 실패 시 원문 그대로 넘겨 parseAiBatchResponse가 빈 Map을
-          // 반환하게 한다(§ 기존 파싱 실패 -> review 강등 계약, 섹션 9와
-          // 동일 경로 — 여기서 별도 처리 안 함).
-          rawDecisionsText = content
+      try {
+        const result = await primaryProvider.gradeWritingAnswers(batch)
+        decisionsMap = result.decisionsMap
+        batchInputTokens = result.inputTokens
+        batchOutputTokens = result.outputTokens
+      } catch (primaryErr) {
+        // 폴백(요구사항 10) — AI_FALLBACK_PROVIDER가 설정돼 있고 그 provider
+        // 의 API 키가 있을 때만 1회 재시도. 폴백도 실패하면 그 에러를 그대로
+        // 위(classifyBatch)로 던져 기존 catch(err) 경로(review 강등,
+        // decisionSource='ai_error')가 처리하게 한다 — 새 실패 처리 경로를
+        // 만들지 않는다.
+        const fallbackHealth = fallbackProvider?.healthCheck()
+        if (fallbackProvider && fallbackHealth?.apiKeyPresent) {
+          console.warn(JSON.stringify({
+            event: 'grade-writing-answers.primary_provider_failed_fallback_retry',
+            batchIndex,
+            primaryProvider: primaryProvider.name,
+            primaryModel: primaryProvider.model,
+            fallbackProvider: fallbackProvider.name,
+            fallbackModel: fallbackProvider.model,
+            error: String((primaryErr as any)?.message || primaryErr),
+          }))
+          const result = await fallbackProvider.gradeWritingAnswers(batch)
+          decisionsMap = result.decisionsMap
+          batchInputTokens = result.inputTokens
+          batchOutputTokens = result.outputTokens
+          usedProvider = fallbackProvider
+          usedFallback = true
+        } else {
+          throw primaryErr
         }
-      } else {
-        // 기존 Anthropic 경로(v2, 무변경) — AI_PROVIDER=anthropic일 때만.
-        const res = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            'x-api-key': ANTHROPIC_API_KEY as string,
-            'anthropic-version': '2023-06-01',
-          },
-          body: JSON.stringify({
-            model: RUNTIME_MODEL,
-            max_tokens: 2000,
-            system,
-            messages: [{ role: 'user', content: user }],
-          }),
-        }, AI_BATCH_TIMEOUT_MS)
-        const respJson = await res.json()
-        if (!res.ok) throw new Error(respJson?.error?.message || `Anthropic API ${res.status}`)
-        batchInputTokens = respJson?.usage?.input_tokens || 0
-        batchOutputTokens = respJson?.usage?.output_tokens || 0
-        rawDecisionsText = (respJson?.content || []).find((b: any) => b.type === 'text')?.text || ''
       }
 
-      totalInputTokens += batchInputTokens
-      totalOutputTokens += batchOutputTokens
+      currentAuditModel = usedProvider.model
+      const bucketKey = `${usedProvider.name}::${usedProvider.model}`
+      const bucket = usageByProviderModel.get(bucketKey) || {
+        provider: usedProvider.name, model: usedProvider.model,
+        inputTokens: 0, outputTokens: 0, batchCount: 0, itemCount: 0,
+      }
+      bucket.inputTokens += batchInputTokens
+      bucket.outputTokens += batchOutputTokens
+      bucket.batchCount += 1
+      bucket.itemCount += batch.length
+      usageByProviderModel.set(bucketKey, bucket)
+
       // 배치별 로깅(구현 지시 3) — 전체 요약 로그와 별개로, 배치마다 실제
       // 응답의 usage(있으면)를 provider 표시와 함께 남긴다.
       console.log(JSON.stringify({
@@ -596,22 +636,58 @@ Deno.serve(async (req: Request) => {
         itemCount: batch.length,
         inputTokens: batchInputTokens,
         outputTokens: batchOutputTokens,
-        model: RUNTIME_MODEL,
-        provider: AI_PROVIDER,
+        model: usedProvider.model,
+        provider: usedProvider.name,
+        usedFallback,
       }))
-      return parseAiBatchResponse(rawDecisionsText)
+      return decisionsMap
     }
     : null
 
-  const proposals = await classifyBatch(items, { cacheLookup, cacheStore, aiClassify, batchSize: BATCH_SIZE, modelId: RUNTIME_MODEL })
-  const estimatedCostUsd = safeEstimateCostUsd({ inputTokens: totalInputTokens, outputTokens: totalOutputTokens }, RUNTIME_MODEL)
+  const proposals = await classifyBatch(items, { cacheLookup, cacheStore, aiClassify, batchSize: BATCH_SIZE })
 
-  // 일일 누계 갱신(구현 지시 3, 신규) — 실제로 AI 배치를 1건 이상 보냈을
-  // 때만 기록한다(캐시 히트/로컬 규칙만으로 끝난 요청은 비용이 0이라 굳이
-  // 테이블에 손댈 필요가 없음 — 불필요한 DB 왕복 최소화). 테이블이 없으면
-  // accumulateTodayUsage가 조용히 경고만 남기고 무시한다.
-  if (actualBatchCount > 0) {
-    await accumulateTodayUsage(supabase, todayDateStr, actualBatchCount, itemsSentToAi, estimatedCostUsd)
+  // 응답/로그용 provider/model 요약 — 이번 요청에서 실제로 AI를 호출한
+  // (provider, model) 조합이 하나면 그걸, 없으면(전부 캐시/규칙으로 끝남)
+  // 구성된 primary provider를, 둘 이상(폴백 등으로 배치마다 달랐던 경우)이면
+  // 'mixed'로 정직하게 표시한다(§ 요구사항 13 — 클라이언트 표시용 계약,
+  // 없는 사실을 하나로 뭉뚱그려 지어내지 않음).
+  const usageBuckets = [...usageByProviderModel.values()]
+  let responseProvider: string
+  let responseModel: string
+  if (usageBuckets.length === 0) {
+    responseProvider = primaryProvider.name
+    responseModel = primaryProvider.model
+  } else if (usageBuckets.length === 1) {
+    responseProvider = usageBuckets[0].provider
+    responseModel = usageBuckets[0].model
+  } else {
+    responseProvider = 'mixed'
+    responseModel = 'mixed'
+  }
+
+  let totalInputTokens = 0
+  let totalOutputTokens = 0
+  let estimatedCostUsd = 0
+  for (const bucket of usageBuckets) {
+    totalInputTokens += bucket.inputTokens
+    totalOutputTokens += bucket.outputTokens
+    estimatedCostUsd += safeEstimateCostUsd({ inputTokens: bucket.inputTokens, outputTokens: bucket.outputTokens }, bucket.model)
+  }
+
+  // 일일 누계 갱신(구현 지시 3, 신규 — 요구사항 9로 provider/model별 행 단위
+  // upsert로 변경) — 실제로 AI 배치를 1건 이상 보냈을 때만 기록한다(캐시
+  // 히트/로컬 규칙만으로 끝난 요청은 비용이 0이라 굳이 테이블에 손댈 필요가
+  // 없음 — 불필요한 DB 왕복 최소화). 테이블이 없으면 accumulateUsageRow가
+  // 조용히 경고만 남기고 무시한다.
+  for (const bucket of usageBuckets) {
+    const bucketCostUsd = safeEstimateCostUsd({ inputTokens: bucket.inputTokens, outputTokens: bucket.outputTokens }, bucket.model)
+    await accumulateUsageRow(supabase, todayDateStr, bucket.provider, bucket.model, {
+      requestCount: bucket.batchCount,
+      itemCount: bucket.itemCount,
+      inputTokens: bucket.inputTokens,
+      outputTokens: bucket.outputTokens,
+      costUsd: bucketCostUsd,
+    })
   }
 
   // 토큰/비용 로깅 — 새 테이블을 추가로 만들지 않고(§ 분석 문서 §8 "제안
@@ -620,11 +696,14 @@ Deno.serve(async (req: Request) => {
   // 가능)와 응답 바디 양쪽에 남긴다. 구현 지시 3 — model/항목 수/배치 수/
   // 입출력 토큰 합계/캐시 히트/추정 비용을 전부 한 요약 로그에 남긴다
   // (배치별 상세는 위 aiClassify 안의 'grade-writing-answers.batch' 로그가
-  // 이미 각각 남김).
+  // 이미 각각 남김). providerBreakdown은 폴백 등으로 여러 provider/model이
+  // 섞였을 때 관찰 가능성을 위해 추가(2026-07-24, provider 추상화 작업).
   console.log(JSON.stringify({
     event: 'grade-writing-answers.run',
-    provider: AI_PROVIDER,
-    model: RUNTIME_MODEL,
+    provider: primaryProvider.name,
+    model: primaryProvider.model,
+    responseProvider,
+    responseModel,
     totalItems: items.length,
     batchCount: actualBatchCount,
     unresolvedByRules: proposals.filter((p: any) => p.decision_source === 'ai' || p.decision_source === 'ai_error' || p.decision_source === 'parse_error' || p.decision_source === 'ai_unavailable' || p.decision_source === 'ai_budget_exceeded').length,
@@ -632,10 +711,11 @@ Deno.serve(async (req: Request) => {
     inputTokens: totalInputTokens,
     outputTokens: totalOutputTokens,
     estimatedCostUsd,
+    providerBreakdown: usageBuckets.map((b) => ({ provider: b.provider, model: b.model, batchCount: b.batchCount, itemCount: b.itemCount, inputTokens: b.inputTokens, outputTokens: b.outputTokens })),
     maxItemsPerRequest: MAX_ITEMS_PER_REQUEST,
     maxEstCostUsdPerRequest: MAX_EST_COST_USD_PER_REQUEST,
     maxDailyCost: MAX_DAILY_COST,
-    todayUsdAfterThisRun: dailyUsage ? dailyUsage.estCostUsd + (actualBatchCount > 0 ? estimatedCostUsd : 0) : null,
+    todayUsdAfterThisRun: dailyUsage ? dailyUsage.estCostUsd + estimatedCostUsd : null,
   }))
 
   return json({
@@ -653,7 +733,10 @@ Deno.serve(async (req: Request) => {
       outputTokens: totalOutputTokens,
       batchCount: actualBatchCount,
       estimatedCostUsd,
-      model: RUNTIME_MODEL,
+      model: responseModel,
+      // 2026-07-24(요구사항 13, provider 추상화 작업) — 클라이언트 표시용
+      // 신규 필드. 기존 필드(model 등)는 전부 무변경 유지.
+      provider: responseProvider,
     },
     // 정상 실행(상한 미초과) 경로에서도 budget 필드를 항상 포함해 클라이언트가
     // 하나의 필드만 보고 배너를 그릴 수 있게 한다(§ 구현 지시 3 — exceeded는
@@ -661,7 +744,7 @@ Deno.serve(async (req: Request) => {
     // 하게 null — "0"으로 거짓 표시하지 않음, 헌법 규칙 9/18 정직한 기록).
     budget: {
       exceeded: false,
-      todayUsd: dailyUsage ? dailyUsage.estCostUsd + (actualBatchCount > 0 ? estimatedCostUsd : 0) : null,
+      todayUsd: dailyUsage ? dailyUsage.estCostUsd + estimatedCostUsd : null,
       capUsd: MAX_DAILY_COST,
     },
   })

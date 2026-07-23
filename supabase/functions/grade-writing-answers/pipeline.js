@@ -202,39 +202,49 @@ export function buildBatches(items, size = 25) {
 export const PROMPT_VERSION = 'v2'
 export const AI_MODEL_ID = 'gpt-5-nano'
 export const DEFAULT_AI_PROVIDER = 'openai'
+// 2026-07-24(implementer, provider 추상화 작업) — Gemini(Google AI Studio)
+// provider 신규 추가에 따른 기본 모델. index.ts가 GEMINI_MODEL 환경변수로
+// 런타임 오버라이드 가능(다른 provider 기본 모델과 동일한 원칙).
+export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash'
 
-// 동일 (단어, 등록뜻 스냅샷, 정규화 답안, 품사, 프롬프트 버전, 모델) 조합
-// 캐시 키 — supabase_v3_6_writing_review_ai_cache.sql의
-// unique(word_id, meaning_snapshot, normalized_answer, part_of_speech,
-// prompt_version, model)와 1:1 대응.
+// 동일 (단어, 등록뜻 스냅샷, 정규화 답안, 품사, 프롬프트 버전) 조합 캐시
+// 키 — supabase_v3_6_writing_review_ai_cache.sql의 unique(word_id,
+// meaning_snapshot, normalized_answer, part_of_speech, prompt_version)와
+// 1:1 대응.
 //
 // partOfSpeech: 현재 words 테이블에 품사 컬럼이 없어(§ DATABASE.md 역추적
 // 목록 확인) 호출부는 사실상 항상 빈 문자열을 넘긴다 — 그래도 필드 자체는
 // 남겨둔다(나중에 품사 데이터가 생기면 같은 단어/뜻/답이라도 품사가 다르면
 // 다른 캐시 행이 되도록 미리 자리를 잡아두는 목적, 지금 당장은 사실상 no-op).
-// promptVersion/model은 호출부가 넘기지 않고 이 함수가 항상 현재 상수값을
-// 자동으로 덧붙인다(호출부마다 값을 맞춰 넘겨야 하는 부담/드리프트 위험을
-// 없애기 위해 — 버전을 올리고 싶으면 위 PROMPT_VERSION/AI_MODEL_ID 상수만
-// 바꾸면 전체 호출부가 자동으로 새 키를 쓴다).
+// promptVersion은 호출부가 넘기지 않고 이 함수가 항상 현재 PROMPT_VERSION
+// 상수값을 자동으로 덧붙인다(호출부마다 값을 맞춰 넘겨야 하는 부담/드리프트
+// 위험을 없애기 위해 — 버전을 올리고 싶으면 위 PROMPT_VERSION 상수만 바꾸면
+// 전체 호출부가 자동으로 새 키를 쓴다).
 //
 // 순서 주의: 기존 3필드(wordId/meaningSnapshot/normalizedAnswer)를 맨
 // 앞자리 그대로 유지 — parseCacheKey를 배열 구조분해로 앞 3개만 꺼내 쓰는
 // 기존 호출부(index.ts)가 있어도 값이 밀리지 않는다(하위 호환).
 //
-// modelId(2026-07-24 추가, implementer P): index.ts가 AI_PROVIDER/
-// OPENAI_MODEL 환경변수로 런타임에 실제 사용 모델을 결정하므로, 캐시 키의
-// 마지막 필드도 그 "런타임에 실제로 호출한 모델"과 일치해야 한다(그래야
-// 모델을 바꿨을 때 이전 모델의 캐시 판정을 새 모델 기준으로 잘못 재사용하지
-// 않는다는 원 설계 목적이 provider 전환 이후에도 유지된다). 기본값은 여전히
-// AI_MODEL_ID라서 이 파라미터를 넘기지 않는 기존 호출부(테스트 등)는 동작이
-// 전혀 안 바뀐다 — 키 형식(6필드, model 마지막)도 그대로.
-export function buildCacheKey({ wordId, meaningSnapshot, normalizedAnswer, partOfSpeech = '', modelId = AI_MODEL_ID }) {
-  return `${wordId}::${meaningSnapshot}::${normalizedAnswer}::${partOfSpeech}::${PROMPT_VERSION}::${modelId}`
+// ⚠️ 2026-07-24(운영자 요구사항 11, implementer — 명시적 설계 뒤집기):
+// 이 키는 2026-07-23까지 마지막 필드로 "모델"을 포함했다(모델을 바꾸면
+// 캐시가 자동 무효화되게 하려는 의도 — 바로 위 옛 주석 참고). 운영자가
+// 2026-07-24에 이 설계를 의도적으로 뒤집었다: provider/모델을 전환해도
+// 기존 AI 판정을 그대로 재사용해 비용을 아끼고 싶다는 명시적 요구(비용
+// 절약이 "모델 전환 시 캐시 안전 무효화"보다 우선순위가 높다는 운영 판단).
+// buildAiPrompt가 모든 provider에서 완전히 동일하므로(요구사항 8) 판정
+// 계약(스키마) 자체는 provider 무관이라 이 재사용이 안전하다고 판단했다.
+// 캐시 무효화가 필요해지면(프롬프트 문구 변경 등) 여전히 PROMPT_VERSION을
+// 올리는 단일 레버로 충분하다 — 모델별 무효화 레버는 이제 없다. model은
+// 캐시 "키"에서는 빠지지만 spelling_ai_grading_cache.model 컬럼 자체는
+// audit 메타데이터로 계속 남아있다(index.ts가 실제 호출한 모델을 기록,
+// 조회/조인에는 안 씀).
+export function buildCacheKey({ wordId, meaningSnapshot, normalizedAnswer, partOfSpeech = '' }) {
+  return `${wordId}::${meaningSnapshot}::${normalizedAnswer}::${partOfSpeech}::${PROMPT_VERSION}`
 }
 
 export function parseCacheKey(key) {
-  const [wordId, meaningSnapshot, normalizedAnswer, partOfSpeech, promptVersion, model] = String(key).split('::')
-  return { wordId, meaningSnapshot, normalizedAnswer, partOfSpeech, promptVersion, model }
+  const [wordId, meaningSnapshot, normalizedAnswer, partOfSpeech, promptVersion] = String(key).split('::')
+  return { wordId, meaningSnapshot, normalizedAnswer, partOfSpeech, promptVersion }
 }
 
 // AI 결과 스키마(§ 분석 문서 §12) 그대로 — 필드명은 snake_case로 고정.
@@ -321,11 +331,11 @@ export function parseAiBatchResponse(rawText) {
 // queue.status나 words.accepted_meanings가 아니다 — 그 둘은 여전히 관리자가
 // 기존 인정/무시 버튼을 눌러야만 바뀐다.
 //
-// modelId(2026-07-24 추가, implementer P): index.ts가 AI_PROVIDER/
-// OPENAI_MODEL 환경변수로 런타임에 실제 호출 모델을 결정하므로, 이 함수가
-// 내부에서 만드는 캐시 키도 그 실제 모델을 반영해야 한다(기본값은 여전히
-// AI_MODEL_ID라서 이 옵션을 안 넘기는 기존 호출부/테스트는 동작이 전혀
-// 안 바뀐다).
+// 2026-07-24(운영자 요구사항 11) — modelId 옵션은 제거했다(§ 위 buildCacheKey
+// 주석의 캐시 키 설계 뒤집기와 동일 이유 — 캐시 키가 더 이상 모델을 포함하지
+// 않으므로 호출부가 모델을 넘길 이유가 없어졌다). 캐시 저장 시 audit용
+// model 컬럼 값은 이 함수가 아니라 호출부(index.ts cacheStore)가 실제
+// 호출한 모델로 직접 채운다.
 //
 // budgetExceeded(2026-07-24 추가, implementer P): 일일 비용 상한 초과 시
 // index.ts가 true를 넘기면, 캐시로도 못 채운(=실제 AI 호출이 필요했을)
@@ -334,7 +344,7 @@ export function parseAiBatchResponse(rawText) {
 // 기존 ai_unavailable/ai_error 경로와 동일한 "실패는 항상 review" 원칙).
 // 캐시 히트는 이 분기 이전에 이미 처리되므로(비용 발생 없음) 그대로 살아
 // 있다 — "AI 호출만" 건너뛴다는 요구사항과 정확히 일치.
-export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiClassify, batchSize = 25, modelId = AI_MODEL_ID, budgetExceeded = false } = {}) {
+export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiClassify, batchSize = 25, budgetExceeded = false } = {}) {
   const proposals = []
   const unresolved = []
 
@@ -361,7 +371,6 @@ export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiC
       // undefined -> '' (§ buildCacheKey 주석). 나중에 상류에서 품사를
       // 채워 넘기기 시작해도 이 호출부는 수정할 필요 없다.
       partOfSpeech: item.partOfSpeech || '',
-      modelId,
     })
     const cached = cacheLookup ? await cacheLookup(key) : null
     if (cached) {
@@ -469,10 +478,17 @@ export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiC
 // 헌법 규칙 7의 "비용 드는 확인은 무료 대안 우선"과 같은 맥락). 운영자가
 // 명시적으로 선택한 OpenAI 최저가 모델 — 이 저장소가 실제 AI 호출에 쓰는
 // 기본 모델(AI_MODEL_ID 참고).
+//
+// gemini-2.5-flash: 2026-07-24 확인, 출처 Google AI Studio(ai.google.dev)
+// 공식 가격표(무료 공개 페이지, 헌법 규칙 7과 동일 맥락) — $0.30/1M 입력,
+// $2.50/1M 출력(텍스트 입출력 기준, 프롬프트 20만 토큰 이하 표준 단가).
+// providers.js GeminiProvider의 기본 모델(DEFAULT_GEMINI_MODEL, pipeline.js
+// 참고).
 export const MODEL_PRICING_PER_MTOK = {
   'claude-haiku-4-5': { input: 1.0, output: 5.0 },
   'claude-sonnet-5': { input: 3.0, output: 15.0 },
   'gpt-5-nano': { input: 0.05, output: 0.40 },
+  'gemini-2.5-flash': { input: 0.30, output: 2.50 },
 }
 
 export function estimateCostUsd({ inputTokens = 0, outputTokens = 0 }, model = AI_MODEL_ID) {
