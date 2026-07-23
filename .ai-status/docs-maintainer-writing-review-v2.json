@@ -1,0 +1,17 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "handoff.md/ROADMAP.md append — 쓰기 답안 검토 AI 보조 v2 실운영화 (8차)",
+  "task_id": "writing-review-v2-docs",
+  "status": "completed",
+  "files_owned": ["handoff.md", "ROADMAP.md"],
+  "started_at": "2026-07-23T23:00:00+09:00",
+  "updated_at": "2026-07-23T23:15:00+09:00",
+  "summary": "handoff.md 최상단에 2026-07-23 (8차) 신규 섹션 삽입(기존 7차 이하 섹션 보존), ROADMAP.md에 8차 항목을 6차 위에 추가(기존 섹션 원본 유지). 코드/설정 파일 미수정, git add/commit 미수행.",
+  "verification_before_write": [
+    "src/config/features.js: aiAnalysis 카테고리에 writingReviewAiAssist 편입 확인 (grep)",
+    "supabase/functions/grade-writing-answers/pipeline.js: PROMPT_VERSION='v2', AI_MODEL_ID='claude-haiku-4-5', 6필드 캐시키 확인 (grep)",
+    "supabase/functions/grade-writing-answers/index.ts: MAX_ITEMS_PER_REQUEST/MAX_EST_COST_USD_PER_REQUEST env 상한 확인 (grep)",
+    "TESTING.md: 섹션 37~49, 198 PASS/0 FAIL/5 SKIP 기록 이미 존재 확인 (grep)",
+    ".ai-status/main-writing-review-v2-rollback-note.json: 커밋 해시/릴리스 증거/E2E 잔존물 교차 확인"
+  ]
+}

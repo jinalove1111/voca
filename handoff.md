@@ -1,5 +1,95 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-23 (7차, 쓰기 답안 검토 AI 보조 v1.1 — 관리자 패널 실운영 가능화 61a2c5a, 배포 검증 완료, 운영자 액션 대기)_
+_최종 갱신: 2026-07-23 (8차, 쓰기 답안 검토 AI 보조 v2 — 실운영화 805c5d9/458e51a/1bf0fbc, 라이브 E2E 1건 검증, 운영자 액션 대기)_
+
+## 2026-07-23 (8차) — 쓰기 답안 검토 AI 보조 v2: 실운영화 (커밋 805c5d9, 458e51a, 1bf0fbc; 기준점 36c42b5)
+
+### STEP 1 검증(병렬 에이전트 2, 라이브 읽기 전용)
+
+미노출 루트 코즈 4중: ① feature flag `writingReviewAiAssist` 기본 OFF(의도)
+② 신규 발견 — flag가 `getFeaturesByCategory` 어느 카테고리에도 미편입이라
+관리자 "기능" 탭에 토글 자체가 없었음(콘솔 없이 켤 방법 부재) ③ Edge
+Function `grade-writing-answers` 미배포(OPTIONS/POST 404 실측) ④ v3_6 캐시
+SQL 미실행(PGRST205 실측). v3_7만 실행돼 있었음(0행). v3_5 시즌 SQL도
+미실행(42703, 범위 외 참고). 라이브: pending 143 / accepted 15 / dismissed
+48. pending 전건 student_id UUID populated.
+
+### 구현(Sonnet 에이전트 A/B/C 분업, 파일 소유권 분리)
+
+- **805c5d9(B, 파이프라인)**: 캐시 키 3→6필드(`wordId::meaning::
+  normalizedAnswer::partOfSpeech::PROMPT_VERSION('v2')::AI_MODEL_ID
+  ('claude-haiku-4-5')`, export로 단일 원본), NFC→NFKC, `index.ts`에
+  `MAX_ITEMS_PER_REQUEST`(기본 200)/`MAX_EST_COST_USD_PER_REQUEST`(기본
+  $2) env 상한(초과 시 AI 호출 전 400, 부분 실행 없음), 배치 45s
+  타임아웃→기존 review 강등, 배치별 실 토큰 로깅. v3_6 SQL에
+  `part_of_speech`/`prompt_version` 컬럼+6필드 유니크 인덱스(미실행이라
+  in-place 안전). v3_7에 append-only 멱등 중복 방지 unique index(word_id,
+  accepted_answer).
+- **458e51a(A, UI)**: flag를 `aiAnalysis` 카테고리 편입(근본 원인 수정,
+  기본값 false 유지), FeatureManagementPanel에 라벨+전제조건 설명.
+  `previewAiClassification`→`runRulesPhase`(무네트워크)/`runAiPhase`(25건
+  청크+onProgress) 분리, 30s AbortController 타임아웃→ai_unavailable.
+  `estimateAiCostUsd`(pipeline `MODEL_PRICING_PER_MTOK` 파생). 회당
+  $1/일일 $5 비용 상한(localStorage, 조정 가능, 클라이언트 best-effort
+  명시). `buildConfirmSummary`(정확 건수/영향 단어 10+N/영향 학생 수 "최초
+  제출자 기준" 정직 표기/변형 저장 여부/비가역 경고). 규칙만/AI만/캐시
+  필터+최초 제출 학생 필터+confidence/단어/판정/학생 정렬. 수동 "이번
+  답안만 인정"/"무시" 무변경.
+- **1bf0fbc(C, 테스트)**: `scripts/testWritingReviewAiPipeline.mjs` 섹션
+  37~49 추가, 총 198 PASS/0 FAIL/5 정직 SKIP. 미션 픽스처(explicitly/명시적으로,
+  constant/끊임없이, constant/끝임없이=levenshtein 거리1 경로이며
+  exact_match 아님 실증, adopt/추천하다 mock reject_candidate+자동 거부
+  미실행, climate/환경), NFKC, 캐시키 버전화, 타임아웃, ID불일치, 깨진
+  JSON, 143건 배치(fetch=ceil(123/25)=5, DB 변경 스파이 0), 비용 게이트,
+  수동 경로 시그니처 불변, §49 accepted_meanings 반영 후 동일 답안 AI 0회
+  synonym accept. 테스트 스크립트는 이미 writing 도메인 등록돼 있어
+  registry 무변경. TESTING.md append됨(C가 직접).
+
+### 릴리스 게이트
+
+build PASS, verify:writing 3/3 PASS, verify:all은 login 도메인만 기지
+로컬 한계(SUPABASE_SERVICE_ROLE_KEY 부재) FAIL, speaking/listening
+하드웨어 SKIP. push `36c42b5..1bf0fbc`. Vercel 프로덕션(voca-drab.vercel.app)
+번들 SHA-256 바이트 일치로 1bf0fbc 서빙 실측(index-dect6xan.js=
+132b7781..., AdminScreen-BcnrZvT2.js=76a0e4b2...). api/ 무변경, 함수
+12/12 유지.
+
+### 라이브 E2E 1건(운영자 명시 승인, 합성 답안+원상복구 설계)
+
+마커 `임시E2E검증-v2-20260723`, word "step"(343e61c3-...) 사용. 합성 큐
+행 삽입→`classifyLocally` 미해결(정상)→미리보기 무변경 실증(pending
+144=baseline+1만, 실제 행 스팟체크 무변경)→accept 플로우(words.
+accepted_meanings+큐 status+감사 insert)→동일 답안 재분류 accept/
+synonym/confidence 1, AI 0회 실증→클린업: words/큐 100% 원상복구+최종
+카운트 143/15/48 일치.
+
+**잔존물 1건**: `word_accepted_variants` 감사 행(id
+`47fde792-02a9-4676-bd72-2842e9d13329`) — append-only 설계(anon DELETE
+grant/정책 없음)라 의도적으로 삭제 불가. 운영자 SQL 1줄로 제거 가능:
+`delete from word_accepted_variants where id =
+'47fde792-02a9-4676-bd72-2842e9d13329';`
+
+학생 결과 소급 반영은 아키텍처상 부재 확인(accept 플로우는 words/큐/감사
+3테이블만 접촉) — dedupe 큐 구조상 소급은 최초 제출자만 가능해 이번
+범위에서 의도적으로 미구현, "향후 제출 즉시 정답"(accepted_meanings
+경로)이 실증된 동작.
+
+### 운영자 대기 액션(활성화 전제조건)
+
+1. `supabase_v3_6_writing_review_ai_cache.sql` 실행(최신본 — 6필드 키)
+2. `supabase_v3_7` 재실행(멱등 — 신규 unique index 반영)
+3. `supabase functions deploy grade-writing-answers` +
+   `secrets`(ANTHROPIC_API_KEY/ADMIN_PIN 등) — CLI 미설치+훅 차단으로
+   세션에서 불가
+4. 운영자 브라우저에서 관리자 "기능" 탭→AI 분석→쓰기 답안 자동 검토
+   체크(localStorage 스코프)
+5. E2E 잔존 감사 행 1건 삭제(위 SQL)
+6. 자동 일괄 승인 기능은 존재하지 않음 — 미리보기+수동 확인 구조 유지.
+
+### 비용 추정(Haiku 4.5 $1/$5 per MTok, 항목당 250in/120out+배치당 260
+오버헤드 가정)
+
+143건 전량 AI 최악: 약 $0.12 / 1,000건: 약 $0.86 / 일일 통상(~40건): 약
+$0.03. 상한: 클라이언트 회당 $1·일일 $5(조정 가능), 서버 회당 $2(env).
 
 ## 2026-07-23 (7차) — 쓰기 답안 검토 AI 보조 v1.1: 관리자 패널 실운영 가능화 (커밋 61a2c5a, 배포 검증 완료)
 
