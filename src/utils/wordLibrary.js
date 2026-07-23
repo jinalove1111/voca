@@ -10,6 +10,72 @@ import { HOUSES, assignBalancedHouseId, computeHouseCounts, computeHouseWeeklySc
 
 const DEFAULT_UNIT_NAME = 'Unit 1'
 
+// ── admin-content-write Edge Function 클라이언트(2026-07-24 보안 락다운) ──
+// classes/units/words의 anon 직접 쓰기(INSERT/UPDATE/DELETE)를 막는 RLS
+// (supabase_v3_11_lockdown_curriculum_write.sql, 운영자 실행 대기 — 그 파일
+// 헤더의 "★ 실행 순서 경고" 반드시 먼저 읽을 것)에 맞춰, 이 세 테이블에
+// 대한 쓰기 함수들은 adminPin이 주어지면 이 Edge Function(SERVICE_ROLE
+// 키로 RLS 우회 + adminPin 재검증)을 거친다. SELECT는 계속 anon으로 직접
+// 조회(변경 없음, 성능 감사가 지적한 전체조회 이슈는 이 작업 범위 밖이라
+// 절대 안 건드림).
+//
+// ★ 중요 — 왜 "adminPin이 없으면 무조건 실패"가 아니라 레거시 폴백인가:
+// 이 시그니처 변경(adminPin 하위호환 옵셔널 마지막 인자)의 실제 호출부인
+// AdminScreen.jsx는 이번 세션에서 의도적으로 "단 한 줄도" 건드리지 않았다
+// (동시 작업 중일 수 있는 다른 세션과의 파일 충돌 방지, 헌법 규칙 16) —
+// 즉 이 코드가 배포된 시점에도 AdminScreen.jsx의 실제 호출은 여전히
+// adminPin 없이 이 함수들을 부른다. 만약 adminPin 부재 시 무조건 에러를
+// 던지면, "이 코드를 배포하는 것 자체"가 SQL 실행 여부와 무관하게 관리자의
+// 반/유닛/단어 CRUD를 즉시 깨뜨린다 — 이는 헌법 규칙 1(안정성 최우선,
+// 새 코드가 기존 플로우를 조금이라도 위험하게 하면 안 됨) 정면 위반이다.
+// 그래서 각 쓰기 함수는 adminPin이 있으면 이 Edge Function 경로(안전한 새
+// 경로)를, 없으면 오늘과 완전히 동일한 레거시 anon 직접 쓰기 경로를 그대로
+// 유지한다 — 코드 배포 자체는 동작을 전혀 바꾸지 않고, supabase_v3_11 SQL이
+// 실행된 뒤에야(그리고 그 시점에 AdminScreen.jsx가 아직 adminPin을 안
+// 넘기고 있다면) 레거시 경로가 42501(permission denied)로 실패하기
+// 시작한다 — 그게 바로 SQL 파일 헤더가 요구하는 "AdminScreen.jsx 후속 배선
+// 먼저" 실행 순서 경고의 근거다.
+//
+// 호출 관례는 spellingReviewAiApi.js의 functionsBaseUrl/grade-writing-answers
+// 호출과 동일(apikey/Authorization 헤더에 anon key, POST body에 adminPin) —
+// 다만 그쪽은 "AI 미리보기 실패해도 절대 throw 안 함"인 반면, 여기는 이
+// 파일의 기존 모든 쓰기 함수가 이미 에러를 throw해 호출부(AdminScreen.jsx)가
+// catch→alert하는 계약이므로 그 계약을 그대로 유지해 명확히 throw한다.
+function adminContentWriteEndpoint() {
+  const url = import.meta.env.VITE_SUPABASE_URL
+  return url ? `${url}/functions/v1/admin-content-write` : null
+}
+
+// 호출부(아래 각 쓰기 함수)가 adminPin이 truthy일 때만 이 함수를 부른다 —
+// adminPin 부재 시의 폴백 분기는 전부 호출부 쪽에 있다(§ 위 헤더 주석).
+async function callAdminContentWrite(action, payload, adminPin) {
+  const endpoint = adminContentWriteEndpoint()
+  if (!endpoint) throw new Error('관리자 쓰기 연결 정보 없음(VITE_SUPABASE_URL 미설정)')
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+  let res
+  try {
+    res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(anonKey ? { apikey: anonKey, Authorization: `Bearer ${anonKey}` } : {}),
+      },
+      body: JSON.stringify({ adminPin, action, payload }),
+    })
+  } catch (err) {
+    throw new Error(`관리자 쓰기 서비스 연결 실패: ${err?.message || err}`)
+  }
+  let body = null
+  try { body = await res.json() } catch { /* JSON 아닌 응답(예: 함수 미배포 시 404 HTML) */ }
+  if (!res.ok || !body || body.ok === false) {
+    if (body?.reason === 'not_authorized') {
+      throw new Error('관리자 인증이 만료됐거나 서버에 전달되지 않았어요. 관리자 화면을 새로고침 후 다시 로그인해주세요.')
+    }
+    throw new Error(body?.error || `관리자 쓰기 서비스 응답 실패(HTTP ${res.status})`)
+  }
+  return body.data
+}
+
 // Real class list provided by user — used only to seed Supabase the very
 // first time the app runs against an empty database.
 const DEFAULT_CLASS_LIST = [
@@ -433,7 +499,12 @@ export function getClassSettings(className) {
   return _classSettings[className] || DEFAULT_CLASS_SETTINGS
 }
 
-export async function setClassSettings(className, settings) {
+// 2026-07-24 보안 락다운 — adminPin(하위호환 옵셔널 마지막 인자)이 있으면
+// admin-content-write Edge Function(class.update_settings, 컬럼 부재 폴백
+// 로직을 서버 쪽에 그대로 복제)을 거치고, 없으면 오늘과 완전히 동일한
+// 레거시 anon 직접 update+폴백 경로를 그대로 유지한다(§ callAdminContentWrite
+// 헤더 주석 — 코드 배포 자체가 관리자 기능을 깨뜨리면 안 됨).
+export async function setClassSettings(className, settings, adminPin) {
   const classId = _cache[className]?.id
   if (!classId) return
   const payload = {}
@@ -445,6 +516,13 @@ export async function setClassSettings(className, settings) {
   }
   // Teacher Controls 마스터 스위치(2026-07-19, GAME_DESIGN.md 13번 섹션).
   if ('gamificationEnabled' in settings) payload.gamification_enabled = !!settings.gamificationEnabled
+
+  if (adminPin) {
+    await callAdminContentWrite('class.update_settings', { classId, settings: payload }, adminPin)
+    await refreshClassSettings()
+    return
+  }
+
   let payloadToSend = payload
   let { error } = await supabase.from('classes').update(payloadToSend).eq('id', classId)
   if (error && 'spelling_direction' in payloadToSend) {
@@ -471,7 +549,11 @@ export async function setClassSettings(className, settings) {
 // v2.0 단어별 추가 인정 뜻 저장 — 관리자 화면(단어별 편집 + 교사 검토 큐의
 // "이 답 인정")만 호출. 컬럼 미존재(마이그레이션 전)면 에러를 그대로 던져
 // 호출부가 alert로 안내(조용히 삼키면 관리자가 저장된 줄 착각함).
-export async function setWordAcceptedMeanings(wordDbId, meanings) {
+// 2026-07-24 보안 락다운 — adminPin(하위호환 옵셔널 마지막 인자)이 있으면
+// admin-content-write Edge Function(word.accepted_meanings.update)을 거치고,
+// 없으면 오늘과 동일한 레거시 anon 직접 update 경로를 유지한다(§
+// callAdminContentWrite 헤더 주석).
+export async function setWordAcceptedMeanings(wordDbId, meanings, adminPin) {
   const list = (Array.isArray(meanings) ? meanings : [])
     .map((m) => String(m ?? '').trim())
     .filter(Boolean)
@@ -483,29 +565,48 @@ export async function setWordAcceptedMeanings(wordDbId, meanings) {
     seen.add(key)
     return true
   })
-  const { error } = await supabase.from('words').update({ accepted_meanings: deduped }).eq('id', wordDbId)
-  if (error) throw error
+  if (adminPin) {
+    await callAdminContentWrite('word.accepted_meanings.update', { wordId: wordDbId, meanings: deduped }, adminPin)
+  } else {
+    const { error } = await supabase.from('words').update({ accepted_meanings: deduped }).eq('id', wordDbId)
+    if (error) throw error
+  }
   await refreshWordLibrary()
   return deduped
 }
 
 // ── DB write helpers (do not touch the class_type of an existing class) ───
-async function ensureClass(name, classType = 'regular') {
+// 2026-07-24 보안 락다운 — 이 두 헬퍼(ensureClass/ensureUnit)는
+// createClass/setClassWords/addClassUnit(관리자 CRUD, adminPin을 이미
+// 옵셔널 마지막 인자로 받음)뿐 아니라 addStudent/setStudentClass/
+// setStudentsClassBulk(학생 로스터 쓰기, adminPin 개념이 없음)에서도
+// 공유된다. 두 그룹 모두에서 압도적으로 흔한 경로는 "이미 존재하는 반/
+// 유닛을 찾기"(SELECT만, 여전히 anon 허용)이므로 adminPin 없이 호출해도
+// 문제가 없다 — adminPin이 필요한 건 "반/유닛이 아직 없어서 새로 만들어야
+// 하는" 드문 브랜치뿐이다. addStudent 등에서 그 드문 브랜치가 실제로
+// 걸리면(학생 자기등록은 항상 기존 드롭다운에서 반을 고르므로 실무상 거의
+// 발생하지 않음) adminPin 없이 레거시 anon insert를 그대로 시도한다 — SQL
+// 락다운 실행 전에는 오늘과 동일하게 성공하고, 실행 후에는 42501로 실패한다
+// (그 경우도 이 두 헬퍼가 아니라 관리자가 먼저 그 반/유닛을 만들어두는 게
+// 정상 운영 흐름이므로 허용 가능한 트레이드오프로 판단 — 상태 파일에 기록).
+async function ensureClass(name, classType = 'regular', adminPin) {
   const { data: existing, error: selErr } = await supabase
     .from('classes').select('id,name,class_type').eq('name', name).maybeSingle()
   if (selErr) throw selErr
   if (existing) return existing
+  if (adminPin) return callAdminContentWrite('class.create', { name, classType }, adminPin)
   const { data, error } = await supabase
     .from('classes').insert({ name, class_type: classType }).select().single()
   if (error) throw error
   return data
 }
 
-async function ensureUnit(classId, unitName) {
+async function ensureUnit(classId, unitName, adminPin) {
   const { data: existing, error: selErr } = await supabase
     .from('units').select('id,name').eq('class_id', classId).eq('name', unitName).maybeSingle()
   if (selErr) throw selErr
   if (existing) return existing
+  if (adminPin) return callAdminContentWrite('unit.create', { classId, unitName }, adminPin)
   const { data, error } = await supabase
     .from('units').insert({ class_id: classId, name: unitName }).select().single()
   if (error) throw error
@@ -529,15 +630,22 @@ export const getClassWords = (className, unitName = DEFAULT_UNIT_NAME) => {
   return unit?.words || []
 }
 
-export async function createClass(name, classType = 'regular') {
-  const cls = await ensureClass(name, classType)
-  await ensureUnit(cls.id, DEFAULT_UNIT_NAME)
+// 2026-07-24 보안 락다운 — adminPin(하위호환 옵셔널 마지막 인자)을 그대로
+// ensureClass/ensureUnit에 threading. 없으면 그 두 헬퍼가 알아서 레거시
+// 경로로 폴백한다(§ 위 두 함수 헤더 주석).
+export async function createClass(name, classType = 'regular', adminPin) {
+  const cls = await ensureClass(name, classType, adminPin)
+  await ensureUnit(cls.id, DEFAULT_UNIT_NAME, adminPin)
   await refreshWordLibrary()
 }
 
-export async function setClassWords(className, words, unitName = DEFAULT_UNIT_NAME) {
-  const cls = await ensureClass(className)
-  const unit = await ensureUnit(cls.id, unitName)
+// 2026-07-24 보안 락다운 — 삭제(delete)+삽입(insert) 두 쓰기 단계만
+// admin-content-write(words.bulk_replace, adminPin 있을 때)로 옮긴다. 앞의
+// "기존 오디오/예문 carry-forward" 조회는 SELECT라 anon으로 계속 남긴다
+// (RLS는 SELECT를 막지 않음, § SQL 파일).
+export async function setClassWords(className, words, unitName = DEFAULT_UNIT_NAME, adminPin) {
+  const cls = await ensureClass(className, 'regular', adminPin)
+  const unit = await ensureUnit(cls.id, unitName, adminPin)
 
   // Carry forward audio + example for words that already had it (matched by
   // word text) so re-saving a unit — e.g. adding one more word to an
@@ -548,30 +656,37 @@ export async function setClassWords(className, words, unitName = DEFAULT_UNIT_NA
   if (selErr) throw selErr
   const priorByWord = new Map((existingRows || []).map((r) => [r.word.toLowerCase(), r]))
 
-  const { error: delErr } = await supabase.from('words').delete().eq('unit_id', unit.id)
-  if (delErr) throw delErr
+  const rows = words.map((w, i) => {
+    const prior = priorByWord.get(w.word.toLowerCase())
+    return {
+      unit_id: unit.id, word: w.word, meaning: w.meaning, position: i,
+      word_audio_url: prior?.word_audio_url || null,
+      example_audio_url: prior?.example_audio_url || null,
+      example_text: prior?.example_text || (w.example || '').trim() || null,
+    }
+  })
 
-  if (words.length > 0) {
-    const rows = words.map((w, i) => {
-      const prior = priorByWord.get(w.word.toLowerCase())
-      return {
-        unit_id: unit.id, word: w.word, meaning: w.meaning, position: i,
-        word_audio_url: prior?.word_audio_url || null,
-        example_audio_url: prior?.example_audio_url || null,
-        example_text: prior?.example_text || (w.example || '').trim() || null,
-      }
-    })
-    const { data: inserted, error: insErr } = await supabase.from('words').insert(rows).select('id,word,meaning,word_audio_url,example_text')
-    if (insErr) throw insErr
-    // Fire-and-forget: ask the server to generate + attach pronunciation
-    // audio (and an AI example sentence, if none was carried forward or
-    // admin-provided) for any word that doesn't already have audio. Never
-    // blocks the save, never throws — if the API route isn't deployed yet
-    // (e.g. local dev) the word just has no audio until this succeeds later.
-    inserted.forEach((row) => {
-      if (!row.word_audio_url) requestAudioGeneration(row.id, row.word, row.meaning, row.example_text)
-    })
+  let inserted
+  if (adminPin) {
+    inserted = await callAdminContentWrite('words.bulk_replace', { unitId: unit.id, rows: words.length > 0 ? rows : [] }, adminPin)
+  } else {
+    const { error: delErr } = await supabase.from('words').delete().eq('unit_id', unit.id)
+    if (delErr) throw delErr
+    inserted = []
+    if (words.length > 0) {
+      const { data, error: insErr } = await supabase.from('words').insert(rows).select('id,word,meaning,word_audio_url,example_text')
+      if (insErr) throw insErr
+      inserted = data
+    }
   }
+  // Fire-and-forget: ask the server to generate + attach pronunciation
+  // audio (and an AI example sentence, if none was carried forward or
+  // admin-provided) for any word that doesn't already have audio. Never
+  // blocks the save, never throws — if the API route isn't deployed yet
+  // (e.g. local dev) the word just has no audio until this succeeds later.
+  ;(inserted || []).forEach((row) => {
+    if (!row.word_audio_url) requestAudioGeneration(row.id, row.word, row.meaning, row.example_text)
+  })
   await refreshWordLibrary()
 }
 
@@ -602,39 +717,59 @@ export function requestAudioGeneration(wordId, word, meaning, example) {
     .finally(() => _pendingAudioRequests.delete(wordId))
 }
 
-export async function addClassUnit(className, unitName) {
-  const cls = await ensureClass(className)
-  await ensureUnit(cls.id, unitName)
+// 2026-07-24 보안 락다운 — adminPin(하위호환 옵셔널 마지막 인자) threading.
+export async function addClassUnit(className, unitName, adminPin) {
+  const cls = await ensureClass(className, 'regular', adminPin)
+  await ensureUnit(cls.id, unitName, adminPin)
   await refreshWordLibrary()
 }
 
-export async function deleteClassUnit(className, unitName) {
+// 2026-07-24 보안 락다운 — adminPin 있으면 admin-content-write(unit.delete),
+// 없으면 레거시 anon delete(§ callAdminContentWrite 헤더 주석).
+export async function deleteClassUnit(className, unitName, adminPin) {
   const unit = _cache[className]?.units.find((u) => u.name === unitName)
   if (!unit) return
-  const { error } = await supabase.from('units').delete().eq('id', unit.id)
-  if (error) throw error
+  if (adminPin) {
+    await callAdminContentWrite('unit.delete', { unitId: unit.id }, adminPin)
+  } else {
+    const { error } = await supabase.from('units').delete().eq('id', unit.id)
+    if (error) throw error
+  }
   await refreshWordLibrary()
 }
 
-export async function deleteClass(className) {
+// 2026-07-24 보안 락다운 — adminPin 있으면 admin-content-write(class.delete),
+// 없으면 레거시 anon delete(§ callAdminContentWrite 헤더 주석).
+export async function deleteClass(className, adminPin) {
   const cls = _cache[className]
   if (!cls) return
-  const { error } = await supabase.from('classes').delete().eq('id', cls.id)
-  if (error) throw error
+  if (adminPin) {
+    await callAdminContentWrite('class.delete', { classId: cls.id }, adminPin)
+  } else {
+    const { error } = await supabase.from('classes').delete().eq('id', cls.id)
+    if (error) throw error
+  }
   await refreshWordLibrary()
 }
 
 // Renaming only ever touches the classes.name column — every student is
 // linked by class_id (see getStudentClassId/getClassNameById below), so a
 // rename never breaks an existing student's class assignment.
-export async function renameClass(oldName, newName) {
+// 2026-07-24 보안 락다운 — adminPin(하위호환 옵셔널 마지막 인자) 있으면
+// admin-content-write(class.rename), 없으면 레거시 anon update(§
+// callAdminContentWrite 헤더 주석).
+export async function renameClass(oldName, newName, adminPin) {
   const cls = _cache[oldName]
   if (!cls) return
   const trimmed = newName.trim()
   if (!trimmed || trimmed === oldName) return
   if (_cache[trimmed]) throw new Error(`"${trimmed}" 반이 이미 있어요.`)
-  const { error } = await supabase.from('classes').update({ name: trimmed }).eq('id', cls.id)
-  if (error) throw error
+  if (adminPin) {
+    await callAdminContentWrite('class.rename', { classId: cls.id, name: trimmed }, adminPin)
+  } else {
+    const { error } = await supabase.from('classes').update({ name: trimmed }).eq('id', cls.id)
+    if (error) throw error
+  }
   await refreshWordLibrary()
 }
 

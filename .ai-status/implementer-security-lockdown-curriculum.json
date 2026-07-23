@@ -1,0 +1,30 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "security-lockdown-curriculum",
+  "task": "classes/units/words anon 전체쓰기 취약점 수정 — admin-content-write Edge Function + wordLibrary.js 이관 + supabase_v3_11 RLS 락다운 SQL(미실행)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-24T00:00:00+09:00",
+  "updated_at": "2026-07-24T00:00:00+09:00",
+  "files_owned": [
+    "src/utils/wordLibrary.js",
+    "supabase/functions/admin-content-write/index.ts",
+    "supabase_v3_11_lockdown_curriculum_write.sql"
+  ],
+  "files_read": [
+    "src/components/AdminScreen.jsx",
+    "api/_pinAuth.js",
+    "api/admin-pin-actions.js",
+    "supabase/functions/grade-writing-answers/index.ts",
+    "supabase/functions/grade-writing-answers/pipeline.js",
+    "src/utils/supabaseClient.js",
+    "src/utils/spellingReviewAiApi.js",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json",
+    "supabase_v3_10_perf_indexes.sql"
+  ],
+  "summary": "라이브 감사에서 확인된 classes/units/words anon 전체 CRUD 취약점 수정. (1) 신규 Supabase Edge Function supabase/functions/admin-content-write/index.ts — admin-pin-actions.js와 동일한 action-dispatch 패턴, ADMIN_PIN 서버측 재검증(실패 시 1.5초 지연 + not_authorized) 통과 후 SERVICE_ROLE_KEY로 8개 action 처리: class.create/class.rename/class.delete/unit.create/unit.delete/words.bulk_replace/word.accepted_meanings.update/class.update_settings(컬럼 부재 폴백 로직 서버측 복제). (2) src/utils/wordLibrary.js — createClass/setClassWords/addClassUnit/deleteClassUnit/deleteClass/renameClass/setClassSettings/setWordAcceptedMeanings 8개 export 함수 + 내부 헬퍼 ensureClass/ensureUnit에 하위호환 옵셔널 마지막 인자 adminPin 추가. **핵심 설계 결정**: adminPin이 truthy면 새 Edge Function 경로, falsy(오늘의 모든 실제 호출부와 동일)면 기존 anon 직접 쓰기 레거시 경로로 그대로 폴백 — AdminScreen.jsx를 단 한 줄도 건드리지 않았으므로(동시 작업 중인 다른 세션 confirmed: implementer-adminscreen-split이 지금 그 파일을 수정 중, git status로 실측 확인) 실제 호출부는 여전히 adminPin을 안 보낸다. 만약 adminPin 부재 시 무조건 실패하게 만들었다면 이 코드를 배포하는 것 자체가(SQL 실행과 무관하게) 관리자 커리큘럼 관리를 즉시 깨뜨렸을 것이므로(헌법 규칙 1 위반) 듀얼패스로 설계했다. (3) supabase_v3_11_lockdown_curriculum_write.sql(신규, 미실행) — classes/units/words 3개 테이블 RLS enable + select-only 정책(기존 xp_ledger/word_king_history/seasons 'anon read only' 패턴과 동일), 헤더에 실행 순서 경고 명시. 검증: npm run build PASS(에러 0, 기존 청크 크기 경고만). npm run verify:admin 전체 PASS(6개 스크립트, testDashboard/testSpellingSettings/testSpellingV2Db/testGamificationSettings/testEntranceTest/testEntranceTestDb 전부 PASS — 라이브 Supabase e2e로 레거시 폴백 경로가 정상 동작함을 실측 확인). npm run verify:all도 추가로 돌림(핵심 파일이라 admin 도메인 밖 회귀도 확인) — login 도메인 4개 스크립트 FAIL은 SUPABASE_SERVICE_ROLE_KEY가 로컬 .env.local에 없어서 나는 사전 존재 결함(students 테이블 PIN 액션 관련, 내가 건드리지 않은 완전히 다른 서브시스템, 프로덕션에서는 정상 동작 예상 — 스크립트 자체 안내 메시지에도 명시됨), writing 도메인의 extra FAIL(testWritingReviewAiPipeline.mjs)은 내가 건드리지 않은 supabase/functions/grade-writing-answers/pipeline.js가 세션 시작 전부터 이미 다른 세션에 의해 uncommitted 상태로 수정 중이었던 것(git status 최초 스냅샷에서 확인)이 원인 — 둘 다 이번 작업과 무관. 라이브 Supabase에 SQL 미실행, 코드도 커밋하지 않음(조정자 몫).",
+  "blocker": null,
+  "next_action": "★★★ 매우 중요, 순서대로: (1) [운영자] Vercel 프론트 재배포(이번 wordLibrary.js 변경 포함) + `supabase functions deploy admin-content-write`. (2) [운영자] `supabase secrets list`로 ADMIN_PIN/SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY가 이미 있는지 확인(grade-writing-answers가 같은 프로젝트 시크릿을 이미 쓰고 있다면 프로젝트 단위 공유라 추가 설정 불필요할 가능성 높음, 없으면 set). (3) [★필수 후속 구현 세션★, 이번 세션 범위 밖 — AdminScreen.jsx가 다른 세션에 의해 지금 동시 수정 중이라 의도적으로 건드리지 않음] AdminScreen.jsx의 createClass/setClassWords/addClassUnit/deleteClassUnit/deleteClass/renameClass/setClassSettings/setWordAcceptedMeanings 호출부 8곳이 화면의 pin state를 각 호출의 새 마지막 인자로 실제로 전달하도록 수정하고 npm run verify:admin 재확인. (4) 3번이 배포된 뒤에만 [운영자] supabase_v3_11_lockdown_curriculum_write.sql을 Supabase 대시보드 SQL Editor에서 실행 — 순서를 지키지 않으면(특히 3번 생략) 관리자의 반/유닛/단어 생성·수정·삭제가 전부 '관리자 인증 실패'로 깨진다(SQL 파일 헤더에 동일 경고 포함). (5) [알려진 트레이드오프, 문서화만 하고 넘어감] addStudent/setStudentClass/setStudentsClassBulk가 내부적으로 부르는 ensureClass/ensureUnit의 '반/유닛이 아직 없어 새로 만들어야 하는' 극히 드문 브랜치는 adminPin이 없어 SQL 실행 후 42501로 실패할 수 있음 — 학생 자기등록은 항상 기존 드롭다운에서 반을 선택하므로 실무 영향은 낮다고 판단했으나, qa-reviewer가 재검토 권장."
+}
