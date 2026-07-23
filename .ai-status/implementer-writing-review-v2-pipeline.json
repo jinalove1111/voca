@@ -1,0 +1,29 @@
+{
+  "agent_name": "implementer",
+  "role": "쓰기 답안 검토 AI 보조 v1.1 서버측 파이프라인 경화 (agent B — pipeline.js/index.ts/v3_6/v3_7 SQL 소유)",
+  "task_id": "writing-review-v2-pipeline",
+  "task": "캐시 키 버전화(POS+PROMPT_VERSION+model), NFKC 정규화, 서버측 요청/비용 상한(MAX_ITEMS_PER_REQUEST/MAX_EST_COST_USD_PER_REQUEST), 배치별 45초 타임아웃, v3_7 중복 변형 unique index",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-23T19:00:00+09:00",
+  "updated_at": "2026-07-23T20:10:00+09:00",
+  "files_owned": [
+    "supabase/functions/grade-writing-answers/pipeline.js",
+    "supabase/functions/grade-writing-answers/index.ts",
+    "supabase_v3_6_writing_review_ai_cache.sql",
+    "supabase_v3_7_word_accepted_variants.sql",
+    ".ai-status/implementer-writing-review-v2-pipeline.json"
+  ],
+  "files_read": [
+    "PROJECT_GUIDE.md",
+    "docs/operations/task2-writing-report.md",
+    "scripts/testWritingReviewAiPipeline.mjs",
+    "src/utils/spellingReviewAiApi.js",
+    "src/utils/spellingReviewBulkPlan.js",
+    "DATABASE.md",
+    ".ai-status/main-writing-review-v2-rollback-note.json"
+  ],
+  "summary": "1) pipeline.js: buildCacheKey/parseCacheKey를 6필드(wordId::meaningSnapshot::normalizedAnswer::partOfSpeech::PROMPT_VERSION::AI_MODEL_ID)로 확장(기존 앞 3필드 순서/의미 그대로 유지해 하위호환), PROMPT_VERSION='v2'/AI_MODEL_ID='claude-haiku-4-5' export, estimateCostUsd 기본 model도 AI_MODEL_ID 참조로 통일(드리프트 제거). normalizeForCompare NFC->NFKC로 변경(순서/그 외 로직 불변). classifyBatch 캐시 키 빌드 시 item.partOfSpeech(현재 항상 undefined->'') 전달. 2) index.ts: pipeline.js의 AI_MODEL_ID를 그대로 import해 자체 MODEL 상수 하드코딩 제거. MAX_ITEMS_PER_REQUEST(기본 200)/MAX_EST_COST_USD_PER_REQUEST(기본 2.0) Deno.env 읽기(비정상값은 안전 기본값 폴백) + pendingIds 사전 검증 400 + .limit()도 같은 상수 사용 + items.length 이중 방어. classifyLocally로 로컬 미해결 건수를 AI 호출 전에 미리 세어(부수효과 없음) 보수적 토큰 추정(항목당 입력250/출력120 + 배치당 system 260)으로 비용 상한 사전 점검 — 초과 시 AI 호출 자체를 시작하지 않고 400(추정치/미해결건수 포함). 배치 fetch에 AbortController 45초 타임아웃(fetchWithTimeout) 적용 — 타임아웃 시 기존 classifyBatch catch(err) 경로(review/ai_error, 자동 accept 없음) 그대로 재사용. 로깅에 batchCount/maxItemsPerRequest/maxEstCostUsdPerRequest 추가, 배치마다 'grade-writing-answers.batch' 이벤트로 실제 usage.input_tokens/output_tokens 개별 로깅. cacheLookup/cacheStore를 6필드 키 분해로 갱신(onConflict도 6컬럼). 3) supabase_v3_6_writing_review_ai_cache.sql(미실행 확인됨, in-place 편집 안전): part_of_speech/prompt_version 컬럼 추가, unique index를 6컬럼으로 확장, 키 구성 설명 주석 추가 — '키 컬럼'은 단일 문자열이 아니라 word_id(uuid)+5개 text 컬럼 분해 저장이라 길이 제한 문제 없음(text는 Postgres에서 사실상 무제한)을 주석으로 확인. 4) supabase_v3_7_word_accepted_variants.sql(라이브 실행됨·0행 확인됨, append-only만 허용): unique index idx_word_accepted_variants_dedupe (word_id, accepted_answer)를 파일 끝에 추가. src/utils/spellingReviewAiApi.js의 recordAcceptedVariantBestEffort를 읽기 전용으로 확인 — insert가 이미 무조건 try/catch로 감싸여 어떤 에러(23505 unique_violation 포함)도 조용히 삼키므로 이 인덱스 추가로 UI에 새 에러가 노출되지 않음을 확인, 코드는 건드리지 않음. 5) 검증: node scripts/testWritingReviewAiPipeline.mjs 전 섹션(1~35) PASS, 섹션36 SKIP 4건 그대로(배포 후 확인 필요, 기존과 동일) — 캐시 키 테스트(섹션22)는 앞 3필드만 destructure해서 확인하는 구조라 무변경으로 통과. npm run build: 최초 시도는 concurrent agent A(spellingReviewAiApi.js/AdminScreen.jsx)의 진행 중 리팩터링 상태 때문에 previewAiClassification export 불일치로 실패했으나(내 파일과 무관, 파일 소유자 확인 완료), 재확인 시 A가 마무리한 뒤 0 에러로 PASS(185 modules). pipeline.js에 Deno API 없음(grep 0건, node --check 통과)으로 브라우저 번들 안전성 재확인. 라이브 DB 접근 0회(SELECT 포함), Edge Function 배포/git add/commit 0회.",
+  "blocker": null,
+  "next_action": "agent A(features.js/FeatureManagementPanel/AdminScreen/spellingReviewAiApi/spellingReviewBulkPlan) 완료 확인 후, agent C(테스트)가 캐시 키가 이제 6필드임을 반영한 신규 단언(예: partOfSpeech/promptVersion/model이 다르면 별도 캐시 키가 되는지, 서버 상한 400 응답 형식, 배치 타임아웃 시뮬레이션)을 scripts/testWritingReviewAiPipeline.mjs에 추가 — 이 파일은 이번 세션이 소유하지 않아 직접 편집하지 않았음. 코디네이터가 diff 리뷰 후 소커밋 분할(pipeline.js / index.ts / v3_6 SQL / v3_7 SQL 각각 별도 권장) + npm run verify:writing 재확인 + Edge Function 재배포(운영자 수동, supabase secrets에 MAX_ITEMS_PER_REQUEST/MAX_EST_COST_USD_PER_REQUEST 선택적 설정 가능함을 안내) 필요."
+}

@@ -15,14 +15,23 @@ import { isSpellingCorrect } from '../../../src/utils/spelling.js'
 
 const HAS_HANGUL = /[ㄱ-ㅎ가-힣]/
 
-// 1~5단계: 공백 trim, 중복 공백 축약, Unicode NFC, 흔한 문장부호 제거.
+// 1~5단계: 공백 trim, 중복 공백 축약, Unicode NFKC, 흔한 문장부호 제거.
 // 대소문자(3단계)는 isSpellingCorrect가 내부적으로 처리하므로 여기선 안 함.
+// v2 파이프라인 경화(2026-07-23): NFC -> NFKC로 변경 — 전각(full-width)/
+// 호환(compatibility) 문자(예: 전각 영문자 "ＡＢＣ", 반각 자모 등)가 학생
+// 답안에 섞여 들어와도 일반 형태로 정규화되게 한다. 이 함수 내부의 연산
+// 순서(normalize -> trim -> 중복공백 축약 -> 문장부호 제거 -> 재trim)와
+// 이 함수 밖에서 일어나는 대소문자 처리(isSpellingCorrect)/한국어 어미
+// 처리(stripKoreanEndings, classifyLocally 8단계)는 전부 그대로 — 이번
+// 변경은 normalize()에 넘기는 유니코드 정규화 형식 딱 하나(NFC->NFKC)뿐이다
+// (§ 구현 지시 2, node scripts/testWritingReviewAiPipeline.mjs로 회귀 없음
+// 재확인).
 // 주의: "~"는 절대 제거 안 함 — "aware of" -> "~을 인식하는"처럼 등록 뜻
 // 자체에 의미 있는 접두로 쓰이는 경우가 실측 샘플에 있었다(분석 문서 §10
 // 5단계 각주 — 오탐 방지).
 export function normalizeForCompare(raw) {
   if (raw == null) return ''
-  let s = String(raw).normalize('NFC')
+  let s = String(raw).normalize('NFKC')
   s = s.trim().replace(/\s+/g, ' ')
   s = s.replace(/^[.,!?"'“”‘’]+|[.,!?"'“”‘’]+$/g, '')
   return s.trim()
@@ -170,16 +179,42 @@ export function buildBatches(items, size = 25) {
   return batches
 }
 
-// 동일 (단어, 등록뜻 스냅샷, 정규화 답안) 조합 캐시 키 — supabase_v3_6_
-// writing_review_ai_cache.sql의 unique(word_id, meaning_snapshot,
-// normalized_answer)와 1:1 대응.
-export function buildCacheKey({ wordId, meaningSnapshot, normalizedAnswer }) {
-  return `${wordId}::${meaningSnapshot}::${normalizedAnswer}`
+// 캐시 키 버저닝(2026-07-23, 구현 지시 1) — 프롬프트(buildAiPrompt) 문구나
+// 채점 모델이 바뀌면 예전 프롬프트/모델로 받은 AI 판정을 새 프롬프트/모델
+// 기준으로 그대로 재사용하면 안 된다("prompt/model 변경이 캐시에 조용히
+// 그대로 반영돼야 한다"는 요구사항). 이 상수만 올리면(값 비교, 문자열 자체
+// 의미 없음) 기존 캐시 행은 새 키와 안 맞아 자동으로 미스 처리되고 새로
+// AI를 호출한다 — 별도 캐시 무효화 로직/마이그레이션이 필요 없다.
+// AI_MODEL_ID: index.ts의 Anthropic 호출 model 파라미터와 반드시 동일한
+// 값을 써야 한다(드리프트 방지 — index.ts는 이 상수를 그대로 import해서
+// 쓰고, 자체 하드코딩 상수를 두지 않는다).
+export const PROMPT_VERSION = 'v2'
+export const AI_MODEL_ID = 'claude-haiku-4-5'
+
+// 동일 (단어, 등록뜻 스냅샷, 정규화 답안, 품사, 프롬프트 버전, 모델) 조합
+// 캐시 키 — supabase_v3_6_writing_review_ai_cache.sql의
+// unique(word_id, meaning_snapshot, normalized_answer, part_of_speech,
+// prompt_version, model)와 1:1 대응.
+//
+// partOfSpeech: 현재 words 테이블에 품사 컬럼이 없어(§ DATABASE.md 역추적
+// 목록 확인) 호출부는 사실상 항상 빈 문자열을 넘긴다 — 그래도 필드 자체는
+// 남겨둔다(나중에 품사 데이터가 생기면 같은 단어/뜻/답이라도 품사가 다르면
+// 다른 캐시 행이 되도록 미리 자리를 잡아두는 목적, 지금 당장은 사실상 no-op).
+// promptVersion/model은 호출부가 넘기지 않고 이 함수가 항상 현재 상수값을
+// 자동으로 덧붙인다(호출부마다 값을 맞춰 넘겨야 하는 부담/드리프트 위험을
+// 없애기 위해 — 버전을 올리고 싶으면 위 PROMPT_VERSION/AI_MODEL_ID 상수만
+// 바꾸면 전체 호출부가 자동으로 새 키를 쓴다).
+//
+// 순서 주의: 기존 3필드(wordId/meaningSnapshot/normalizedAnswer)를 맨
+// 앞자리 그대로 유지 — parseCacheKey를 배열 구조분해로 앞 3개만 꺼내 쓰는
+// 기존 호출부(index.ts)가 있어도 값이 밀리지 않는다(하위 호환).
+export function buildCacheKey({ wordId, meaningSnapshot, normalizedAnswer, partOfSpeech = '' }) {
+  return `${wordId}::${meaningSnapshot}::${normalizedAnswer}::${partOfSpeech}::${PROMPT_VERSION}::${AI_MODEL_ID}`
 }
 
 export function parseCacheKey(key) {
-  const [wordId, meaningSnapshot, normalizedAnswer] = String(key).split('::')
-  return { wordId, meaningSnapshot, normalizedAnswer }
+  const [wordId, meaningSnapshot, normalizedAnswer, partOfSpeech, promptVersion, model] = String(key).split('::')
+  return { wordId, meaningSnapshot, normalizedAnswer, partOfSpeech, promptVersion, model }
 }
 
 // AI 결과 스키마(§ 분석 문서 §12) 그대로 — 필드명은 snake_case로 고정.
@@ -288,6 +323,10 @@ export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiC
       wordId: item.wordId,
       meaningSnapshot: item.meaning,
       normalizedAnswer: normalizeForCompare(item.submittedAnswer),
+      // words 테이블에 품사 컬럼이 아직 없어 item.partOfSpeech는 항상
+      // undefined -> '' (§ buildCacheKey 주석). 나중에 상류에서 품사를
+      // 채워 넘기기 시작해도 이 호출부는 수정할 필요 없다.
+      partOfSpeech: item.partOfSpeech || '',
     })
     const cached = cacheLookup ? await cacheLookup(key) : null
     if (cached) {
@@ -378,7 +417,7 @@ export const MODEL_PRICING_PER_MTOK = {
   'claude-sonnet-5': { input: 3.0, output: 15.0 },
 }
 
-export function estimateCostUsd({ inputTokens = 0, outputTokens = 0 }, model = 'claude-haiku-4-5') {
+export function estimateCostUsd({ inputTokens = 0, outputTokens = 0 }, model = AI_MODEL_ID) {
   const price = MODEL_PRICING_PER_MTOK[model]
   if (!price) throw new Error(`알 수 없는 모델(가격표 없음): ${model}`)
   return (inputTokens / 1e6) * price.input + (outputTokens / 1e6) * price.output

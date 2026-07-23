@@ -59,3 +59,28 @@ create policy "allow anon select" on word_accepted_variants for select using (tr
 
 grant select, insert on table word_accepted_variants to anon, authenticated;
 -- update/delete는 의도적으로 grant하지 않음(append-only 이력).
+
+-- 중복 방지 가드(2026-07-23, 파이프라인 경화 세션 추가) — 이 테이블은 지금
+-- 라이브에 이미 존재하지만 0행(실측 확인됨)이라, 아래 유니크 인덱스 추가는
+-- 기존 데이터와 절대 충돌하지 않아 안전하다(append-only additive라 헌법
+-- 규칙 9 "코드보다 먼저/나중 실행 모두 안전" 원칙 위반 아님 — 인덱스가
+-- 없던 이전 코드도, 있는 새 코드도 이 문장 자체는 몇 번 실행해도 멱등).
+--
+-- 목적: "이 단어 허용 답안으로 저장" 버튼을 같은 (word_id, accepted_answer)
+-- 조합으로 중복 클릭/재실행해도 감사 이력에 완전히 동일한 행이 계속
+-- 쌓이지 않게 한다(품사가 채워지는 시점이 오기 전까지는 registered_meaning/
+-- created_by까지 사실상 항상 같은 값이라 (word_id, accepted_answer)만으로
+-- 충분히 "같은 인정 사실"을 식별할 수 있다).
+--
+-- 클라이언트 영향 확인(src/utils/spellingReviewAiApi.js
+-- recordAcceptedVariantBestEffort, 읽기 전용으로 확인만 하고 그 파일은
+-- 수정하지 않음): 이 함수는 이미 insert를 try/catch로 감싸고 실패를
+-- 조용히 삼킨다(주석 "테이블 미실행 등 — 감사 기록은 최적화일 뿐, 인정
+-- 자체를 막지 않는다") — 그 catch가 "테이블 없음" 에러만 잡도록 좁혀져
+-- 있지 않고 어떤 insert 에러든 무조건 삼키므로, 이 유니크 인덱스로 인한
+-- 23505(unique_violation)도 동일하게 조용히 스킵된다. 즉 이 인덱스를 추가해도
+-- 관리자 UI에 새 에러 배너/경고가 뜨지 않고, "이 단어 허용 답안으로 저장"
+-- 자체(words.accepted_meanings 갱신 + resolveSpellingReview)는 이 감사
+-- 테이블의 성공/실패와 완전히 무관하게 그대로 성공한다.
+create unique index if not exists idx_word_accepted_variants_dedupe
+  on word_accepted_variants (word_id, accepted_answer);
