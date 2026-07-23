@@ -1,0 +1,29 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현(테스트 하네스 확장 — 자동 학습 시스템)",
+  "task_id": "learning-tests",
+  "task": "자동 학습 시스템(writing_answer_statistics) 테스트 하네스 확장 — statsLookup 훅/원클릭 학습 등록/Top50 추천 쿼리/Dashboard 절약 카운터/Performance(fire-and-forget)/statsSkips 전파(운영자 요구사항 10)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-24T00:00:00Z",
+  "updated_at": "2026-07-24T01:00:00Z",
+  "files_owned": [
+    "scripts/testWritingReviewAiPipeline.mjs",
+    ".ai-status/implementer-learning-tests.json"
+  ],
+  "files_read": [
+    "supabase/functions/grade-writing-answers/pipeline.js",
+    "supabase/functions/grade-writing-answers/index.ts",
+    "src/utils/writingAnswerStatsApi.js",
+    "src/utils/spellingReviewApi.js",
+    "src/utils/spellingReviewAiApi.js",
+    "src/utils/spellingReviewBulkPlan.js",
+    "supabase_v3_9_writing_answer_statistics.sql",
+    ".ai-status/implementer-learning-server.json",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "scripts/testWritingReviewAiPipeline.mjs에 섹션 56~61(6개) 추가, 72개 신규 단언(275 PASS/0 FAIL/5 SKIP -> 347 PASS/0 FAIL/5 SKIP, 기존 SKIP 5건은 배포 의존이라 그대로 유지). 구현 파일(pipeline.js/index.ts/writingAnswerStatsApi.js/spellingReviewApi.js/spellingReviewAiApi.js/SQL)은 전혀 수정하지 않음 — 전부 읽기만 하고 실제 계약대로 단언만 작성(구현을 테스트에 맞추는 방향 금지, 헌법 규칙 준수).\n\n### 섹션 56 — statsLookup 훅(반복 답안·오답 누적, 요구사항 5)\nclassifyBatch({statsLookup})가 캐시 조회 다음/AI 호출 전에 실행됨을 실측: skip:true+decision('review'|'reject_candidate')는 decision_source='stats_repeat'로 확정되고 aiClassify/cacheStore가 0회 호출됨. decision:'accept' 반환은 무시되고 정상 AI 경로로 계속 진행(이중 인정 경로 금지 실증). 스키마 밖 임의 문자열도 방어적으로 무시. 캐시 히트 항목은 statsLookup 자체가 호출 안 됨(캐시가 더 먼저). budgetExceeded=true일 때 statsLookup이 먼저 스킵한 항목은 그 강등 영향을 안 받고(stats_repeat 유지), 스킵 안 된 나머지만 ai_budget_exceeded로 강등되는 우선순위를 실측. posWarning 힌트가 stats skip 시에도 part_of_speech_warning에 보존됨. reason 생략 시 기본 문구 폴백. statsLookup 옵션 자체를 안 넘긴 기존 호출부는 완전히 무영향(회귀 없음).\n\n### 섹션 57 — registerRecommendation/dismissRecommendation(원클릭 학습)\nwritingAnswerStatsApi.js를 esbuild로 번들(supabaseClient/wordLibrary만 스텁, spellingReviewBulkPlan은 실제 소스 그대로). ①setWordAcceptedMeanings 실패 시 ②insert(word_accepted_variants)/③update(writing_answer_statistics status) 절대 미실행 + throw 확인. 성공 경로에서 정확한 호출 순서(①->②->③)와 각 인자(mergedAcceptedMeanings/created_by=stats_learning/status=accepted+status_changed_at/eq(id,row.id)) 실측. ②(감사 insert) 실패는 best-effort로 조용히 무시되고 ③은 그대로 실행됨(인정 자체는 이미 완료). ③(status 갱신) 실패는 throw(정직하게 알림). dismissRecommendation은 status=dismissed 업데이트만 하고 다른 호출 없음을 확인.\n\n### 섹션 58 — fetchLearningRecommendations(Top50 쿼리)\n기본 파라미터(minCount=3/limit=50)와 커스텀 값이 실제 쿼리 체인(eq status=pending/gte count/order count desc/limit)에 정확히 반영됨을 mock 체이닝으로 검증. words embed 응답이 planAccept 호환 필드(id/wordId/submittedAnswer/acceptedMeanings/meaning)로 매핑됨을 확인. 테이블 미존재(42P01/PGRST205) 각각 null 폴백(throw 안 함) 확인.\n\n### 섹션 59 — Dashboard 절약 카운터 + 주간 학습률\naccumulateSavingsCounters/readTodaySavings — fake localStorage로 같은 날 2회 누적(rules/cache/statsSkips/variants/ai 전부), 임의의 다른 날짜 키는 오늘 조회에 전혀 섞이지 않음, 전체 0일 때도 NaN/Infinity 없이 정직하게 0 반환을 확인. fetchLearningRateMetrics — 4개 countRows 쿼리(이번주/지난주 x 자동인정/동의어)가 실제로 Asia/Seoul 기준 월요일 00:00 정각 경계를 쓰는지 실측(ISO 문자열을 UTC+9 시프트해 요일/시각 직접 검증), 지난 주 끝(lt)==이번 주 시작(경계 이어짐, 이중집계/누락 없음), 지난 주 시작이 정확히 7일 전임을 확인. 테이블 없음(42P01) 시 그 카운트만 null(\"수집 중\")이고 다른 테이블 정상 0은 구분됨(0과 null 혼동 안 함, 요구사항 8).\n\n### 섹션 60 — Performance(요구사항 9, logSpellingReview fire-and-forget)\n소스 텍스트로 recordAnswerStatBestEffort 호출/내부 supabase.rpc 호출 모두 await 없음을 확인 + spellingReviewApi.js를 esbuild로 번들(supabaseClient만 스텁)해 실행 스파이로 실측: mock supabase.rpc가 영원히 pending인 Promise를 반환해도 logSpellingReview는 300ms 내 resolve(Promise.race로 실측, RPC 자체는 호출됨/큐 upsert는 정상 진행). RPC가 42883(함수 없음) 에러로 resolve되거나 네트워크 오류로 reject돼도 예외가 학생 채점 경로로 전파되지 않음(둘 다 throw 안 함) 확인.\n\n### 섹션 61 — statsSkips 전파(runAiPhase)\nrulesResolvedCount>0이면 모든 청크 요청 바디에 clientStats.rulesResolvedCount가 동일하게 포함되고, 서버 응답 summary.statsSkips가 청크별로 합산됨(2청크 x 3 = 6)을 실측. rulesResolvedCount 기본값(0)이면 clientStats 필드 자체가 요청 바디에서 빠짐(additive, 구버전 서버에도 안전). 서버가 summary.statsSkips를 아예 안 주는 구버전 응답에도 0으로 안전 폴백.\n\n### 버그 발견/수정(테스트 파일 내부, 구현 파일 아님)\n신규 esbuild 스텁 작성 중 기존 섹션 36/43/47이 재사용해온 onResolve 필터 패턴(/utils[\\\\/]wordLibrary$/ 등)이 esbuild args.path의 실제 원문 상대경로(\"./wordLibrary\")와 매치되지 않아(node -e probe로 실측 확인) 스텁이 적용 안 되고 실제 wordLibrary.js/supabaseClient.js(+ 실제 @supabase/supabase-js)가 그대로 번들되는 잠재 버그를 발견 — 기존 섹션들은 그 함수들을 실제로 호출하지 않는 경로만 테스트해서 우연히 통과해왔을 뿐이었다(registerRecommendation처럼 실제로 호출하는 섹션 57 최초 실행에서 실제 네트워크 fetch 시도로 프로세스가 크래시하며 드러남). 이번 섹션(56~61)이 새로 만든 두 스텁 블록(writingAnswerStatsApi.js용/spellingReviewApi.js Performance용)만 정확한 원문 상대경로 필터(/^\\.\\/wordLibrary$/, /^\\.\\/supabaseClient$/)로 고쳐 적용했다 — 기존 섹션 36/43/47/60 이전에 이미 있던 필터는 이번 작업 소유 범위(자기 작성 신규 섹션)만 수정한다는 원칙에 따라 손대지 않았다(그 섹션들은 여전히 기존과 동일하게 PASS, 회귀 없음).",
+  "blocker": null,
+  "next_action": "qa-reviewer가 섹션 56~61 리뷰. 참고: 기존 섹션 36/43/47이 쓰는 onResolve 필터(/utils[\\\\/]wordLibrary$/, /utils[\\\\/]supabaseClient$/)는 실측상 매치되지 않는 잠재 버그이나(§ summary 마지막 단락), 그 섹션들이 스텁 대상 함수를 실제로 호출하지 않아 현재는 무해 — 향후 그 섹션들이 실제 호출을 검증하는 방향으로 확장될 경우 같은 필터 수정이 필요할 수 있음(다른 세션이 그 섹션들의 소유자이므로 이번 작업에서는 직접 고치지 않음)."
+}

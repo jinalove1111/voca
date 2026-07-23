@@ -1376,5 +1376,589 @@ console.log('\n55. 캐시 provider 무관성 통합(classifyBatch + 실제 provi
   check('2차 결과 판정도 1차(OpenAI mock)가 저장한 값 그대로', proposals2[0].decision === 'accept' && proposals2[0].reason === 'openai mock')
 }
 
+// ── v4(2026-07-24, implementer — 학습 시스템 테스트 확장, 운영자 요구사항
+// 10) — "선생님이 같은 검토를 두 번 하지 않는" 자동 학습 시스템
+// (writing_answer_statistics)이 서버/클라이언트에 구현 완료된 뒤의 커버리지
+// 확장. 구현 파일(pipeline.js/index.ts/writingAnswerStatsApi.js/
+// spellingReviewApi.js/spellingReviewAiApi.js)은 이번 작업에서 전혀 수정하지
+// 않았다(§ 미션 지시 — 읽기 전용, 실제 동작 기준으로만 단언 추가) — 아래
+// 섹션들은 전부 그 파일들을 읽고 확인한 실제 계약을 재현한 것이다.
+console.log('\n(준비) writingAnswerStatsApi.js 번들 — supabaseClient/wordLibrary만 스텁(spellingReviewBulkPlan은 실제 소스 그대로, 헌법 규칙 3 재구현 금지)')
+const statsApiStub = (contents) => ({ contents, loader: 'js' })
+await esbuild.build({
+  entryPoints: ['src/utils/writingAnswerStatsApi.js'],
+  bundle: true,
+  format: 'esm',
+  platform: 'node',
+  outfile: 'scripts/.tmp/writingAnswerStatsApi.bundle.mjs',
+  define: {
+    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify('https://fake.supabase.test'),
+    'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('fake-anon-key'),
+  },
+  plugins: [{
+    name: 'stats-api-stubs',
+    setup(build) {
+      // ⚠ 실측 확인(2026-07-24, 이 섹션 작업 중): esbuild onResolve의
+      // args.path는 소스에 적힌 "원문" 상대경로 문자열이다(예: 여기서는
+      // "./wordLibrary") — 이미 resolveDir까지 반영된 절대경로가 아니다.
+      // 기존 섹션 36/43/47/60이 재사용해온 /utils[\\/]wordLibrary$/ 필터는
+      // "utils/wordLibrary" 형태만 매치하므로 같은 디렉터리(src/utils/)
+      // 안에서 쓰인 "./wordLibrary" 상대 import에는 실제로 매치되지 않는다
+      // (node -e probe로 args.path==="./wordLibrary" 직접 확인) — 그 기존
+      // 섹션들은 스텁이 적용 안 된 채로 "실제" wordLibrary.js/spellingReviewApi.js
+      // /supabaseClient.js가 번들에 그대로 포함돼도 그 함수들을 한 번도
+      // 호출하지 않는 경로만 테스트해서 우연히 통과해온 것뿐이다(§ 정직한
+      // 기록). 이 섹션(writingAnswerStatsApi.js)은 registerRecommendation이
+      // 실제로 setWordAcceptedMeanings/supabase를 호출하므로 스텁이 반드시
+      // 적용돼야 해서, 여기서는 실제 관측된 원문 상대경로로 정확히 매치한다.
+      build.onResolve({ filter: /^\.\/wordLibrary$/ }, () => ({ path: 'v:wordlib2', namespace: 'v' }))
+      build.onResolve({ filter: /^\.\/supabaseClient$/ }, () => ({ path: 'v:supa2', namespace: 'v' }))
+      build.onLoad({ filter: /^v:wordlib2$/, namespace: 'v' }, () => statsApiStub(`
+export const setWordAcceptedMeanings = async (...args) => {
+  (globalThis.__statsApiSpy ||= { calls: [] }).calls.push(['setWordAcceptedMeanings', args])
+  if (globalThis.__statsApiFailSetMeanings) throw new Error('setWordAcceptedMeanings 실패(모의)')
+}
+`))
+      build.onLoad({ filter: /^v:supa2$/, namespace: 'v' }, () => statsApiStub(`
+export const supabase = {
+  from(table) {
+    return {
+      select(...selArgs) {
+        const filters = []
+        const chain = {
+          eq(...a) { filters.push(['eq', ...a]); return chain },
+          gte(...a) { filters.push(['gte', ...a]); return chain },
+          lt(...a) { filters.push(['lt', ...a]); return chain },
+          order(...a) { filters.push(['order', ...a]); return chain },
+          limit(...a) { filters.push(['limit', ...a]); return chain },
+          then(resolve, reject) {
+            (globalThis.__statsApiSpy ||= { calls: [] }).calls.push(['select', table, selArgs, filters])
+            const responses = globalThis.__statsApiResponses || {}
+            const resp = responses[table] || { data: [], error: null, count: 0 }
+            return Promise.resolve(resp).then(resolve, reject)
+          },
+        }
+        return chain
+      },
+      insert(record) {
+        (globalThis.__statsApiSpy ||= { calls: [] }).calls.push(['insert', table, record])
+        if (globalThis.__statsApiFailInsert === table) return Promise.reject(new Error('insert 실패(모의)'))
+        return Promise.resolve({ error: null })
+      },
+      update(patch) {
+        return {
+          eq: async (col, val) => {
+            (globalThis.__statsApiSpy ||= { calls: [] }).calls.push(['update', table, patch, col, val])
+            if (globalThis.__statsApiFailUpdate === table) return { error: new Error('update 실패(모의)') }
+            return { error: null }
+          },
+        }
+      },
+    }
+  },
+}
+`))
+    },
+  }],
+})
+const writingAnswerStatsApi = await import(pathToFileURL('scripts/.tmp/writingAnswerStatsApi.bundle.mjs').href)
+function resetStatsApiMockState() {
+  globalThis.__statsApiSpy = { calls: [] }
+  globalThis.__statsApiFailSetMeanings = false
+  globalThis.__statsApiFailInsert = null
+  globalThis.__statsApiFailUpdate = null
+  globalThis.__statsApiResponses = {}
+}
+
+console.log('\n56. statsLookup 훅(반복 답안·오답 누적, 요구사항 5) — classifyBatch 캐시 다음/AI 이전 위치, decision 보존, accept 무시, budgetExceeded와의 우선순위')
+{
+  // (a) statsLookup이 전부 null 반환 — 기존 AI 경로와 100% 동일(회귀 없음)
+  {
+    let aiCalls = 0
+    const aiClassify = async (batch) => {
+      aiCalls++
+      const m = new Map()
+      for (const it of batch) m.set(it.id, { pending_answer_id: it.id, decision: 'review', confidence: 0.5, reason: 'mock', suggested_synonym: null, part_of_speech_warning: null })
+      return m
+    }
+    const statsLookupNull = async () => null
+    const proposals = await classifyBatch([F.closeButWrongMeaning], { aiClassify, statsLookup: statsLookupNull })
+    check('statsLookup이 null 반환 시 기존 AI 경로 그대로(회귀 없음)', aiCalls === 1 && proposals[0].decision_source === 'ai')
+  }
+
+  // (b) skip:true + decision:'reject_candidate' — AI/cacheStore 미호출, decision_source=stats_repeat, 값 보존
+  {
+    let aiCalls = 0
+    let cacheStoreCalls = 0
+    const aiClassify = async () => { aiCalls++; return new Map() }
+    const cacheStore = async () => { cacheStoreCalls++ }
+    const statsLookup = async () => ({ skip: true, decision: 'reject_candidate', confidence: 0.82, reason: '과거 5회 reject_candidate' })
+    const proposals = await classifyBatch([F.trueSynonymDifferentString], { aiClassify, cacheStore, statsLookup })
+    check('stats skip 시 decision_source=stats_repeat', proposals[0].decision_source === 'stats_repeat')
+    check('stats skip 시 decision은 statsLookup이 준 값 그대로(reject_candidate)', proposals[0].decision === 'reject_candidate')
+    check('stats skip 시 confidence도 그대로 보존', proposals[0].confidence === 0.82)
+    check('stats skip 시 reason도 그대로 보존', proposals[0].reason === '과거 5회 reject_candidate')
+    check('stats skip 시 aiClassify 0회 호출', aiCalls === 0)
+    check('stats skip 시 cacheStore 0회 호출(새 AI 캐시 행을 만들 근거 없음)', cacheStoreCalls === 0)
+  }
+
+  // (c) skip:true + decision:'review' — 허용된 값, 마찬가지로 stats_repeat
+  {
+    const statsLookup = async () => ({ skip: true, decision: 'review', confidence: 0.4 })
+    const proposals = await classifyBatch([F.completelyWrong], { statsLookup, aiClassify: async () => new Map() })
+    check('decision:"review" skip도 허용되어 stats_repeat로 확정', proposals[0].decision_source === 'stats_repeat' && proposals[0].decision === 'review')
+  }
+
+  // (d) skip:true + decision:'accept' — 허용 안 됨(이중 인정 경로 금지), 무시하고 정상 AI 경로로 진행
+  {
+    let aiCalls = 0
+    const aiClassify = async (batch) => {
+      aiCalls++
+      const m = new Map()
+      for (const it of batch) m.set(it.id, { pending_answer_id: it.id, decision: 'accept', confidence: 0.99, reason: 'ai-real', suggested_synonym: null, part_of_speech_warning: null })
+      return m
+    }
+    const statsLookup = async () => ({ skip: true, decision: 'accept', confidence: 0.99, reason: '잘못된 자동인정 시도(모의)' })
+    const proposals = await classifyBatch([F.closeButWrongMeaning], { aiClassify, statsLookup })
+    check('decision:"accept" skip은 무시되고 정상 AI 경로로 진행(이중 인정 경로 금지)', aiCalls === 1 && proposals[0].decision_source === 'ai')
+    check('accept 무시 후 실제로는 AI가 낸 판정이 최종 반영됨(statsLookup 값이 아님)', proposals[0].decision === 'accept' && proposals[0].reason === 'ai-real')
+  }
+
+  // (e) 스키마 밖 임의 decision 문자열도 방어적으로 무시
+  {
+    const statsLookup = async () => ({ skip: true, decision: 'delete_forever' })
+    const proposals = await classifyBatch([F.trueSynonymDifferentString], { statsLookup, aiClassify: async () => new Map() })
+    check('스키마 밖 decision 문자열도 무시되고 정상 경로로 진행(stats_repeat 아님)', proposals[0].decision_source !== 'stats_repeat')
+  }
+
+  // (f) 캐시 히트 항목은 statsLookup 자체가 호출되지 않음(캐시 조회가 먼저)
+  {
+    const cacheMap = new Map()
+    const key = buildCacheKey({ wordId: F.trueSynonymDifferentString.wordId, meaningSnapshot: F.trueSynonymDifferentString.meaning, normalizedAnswer: normalizeForCompare(F.trueSynonymDifferentString.submittedAnswer) })
+    cacheMap.set(key, { decision: 'review', confidence: 0.5, reason: 'cached', decisionSource: 'ai' })
+    let statsCalls = 0
+    const statsLookup = async () => { statsCalls++; return null }
+    const proposals = await classifyBatch([F.trueSynonymDifferentString], {
+      cacheLookup: async (k) => cacheMap.get(k) || null,
+      cacheStore: async () => {},
+      statsLookup,
+      aiClassify: async () => new Map(),
+    })
+    check('캐시 히트 항목은 statsLookup이 아예 호출되지 않음(캐시가 먼저)', statsCalls === 0 && proposals[0].cache_hit === true)
+  }
+
+  // (g) budgetExceeded와의 우선순위 — statsLookup이 먼저 처리한 항목은 budgetExceeded 영향을 받지 않음
+  {
+    const statsLookup = async (item) => (item.id === F.trueSynonymDifferentString.id ? { skip: true, decision: 'reject_candidate', confidence: 0.8 } : null)
+    const proposals = await classifyBatch([F.trueSynonymDifferentString, F.completelyWrong], { statsLookup, budgetExceeded: true })
+    const byId = new Map(proposals.map((p) => [p.pending_answer_id, p]))
+    check('statsLookup이 스킵한 항목은 budgetExceeded와 무관하게 stats_repeat 유지', byId.get(F.trueSynonymDifferentString.id).decision_source === 'stats_repeat')
+    check('statsLookup이 스킵하지 않은 나머지는 budgetExceeded로 강등(ai_budget_exceeded)', byId.get(F.completelyWrong.id).decision_source === 'ai_budget_exceeded')
+  }
+
+  // (h) 품사 힌트 보존 — statsLookup 스킵 시에도 로컬 hint 기반 part_of_speech_warning이 세팅됨
+  {
+    const statsLookup = async () => ({ skip: true, decision: 'review', confidence: 0.3 })
+    const proposals = await classifyBatch([F.posVariant], { statsLookup, aiClassify: async () => new Map() })
+    check('statsLookup 스킵이어도 posWarning 힌트가 part_of_speech_warning에 반영됨', proposals[0].part_of_speech_warning === '품사/활용형 차이 가능성')
+  }
+
+  // (i) reason 생략 시 기본 문구로 폴백
+  {
+    const statsLookup = async () => ({ skip: true, decision: 'reject_candidate', confidence: 0.5 })
+    const proposals = await classifyBatch([F.trueSynonymDifferentString], { statsLookup, aiClassify: async () => new Map() })
+    check('reason 생략 시 기본 문구로 폴백', proposals[0].reason === '통계 기반 반복 오답 — 과거 판정 재사용')
+  }
+
+  // (j) statsLookup 옵션 자체를 안 넘긴 기존 호출부 — 기본값(null)과 100% 동일하게 동작(회귀 없음)
+  {
+    let aiCalls = 0
+    const aiClassify = async (batch) => {
+      aiCalls++
+      const m = new Map()
+      for (const it of batch) m.set(it.id, { pending_answer_id: it.id, decision: 'review', confidence: 0.5, reason: 'mock', suggested_synonym: null, part_of_speech_warning: null })
+      return m
+    }
+    const proposals = await classifyBatch([F.closeButWrongMeaning], { aiClassify }) // statsLookup 키 자체 생략
+    check('statsLookup 옵션 자체를 안 넘긴 기존 호출부는 기본값(null)과 동일(AI 경로 그대로)', aiCalls === 1 && proposals[0].decision_source === 'ai')
+  }
+}
+
+console.log('\n57. 동일 답안/동의어 등록(원클릭, registerRecommendation) — 3단계 순서, ①실패 시 ②③ 중단, dismissRecommendation은 status만')
+{
+  const sampleRow = { id: 'rec-1', wordId: 'w-rec-1', meaning: '안다, 포옹하다', submittedAnswer: '포옹', acceptedMeanings: ['안다'] }
+
+  // (a) ①(setWordAcceptedMeanings) 실패 -> ②③ 절대 실행 안 됨
+  {
+    resetStatsApiMockState()
+    globalThis.__statsApiFailSetMeanings = true
+    let threw = false
+    try { await writingAnswerStatsApi.registerRecommendation(sampleRow) } catch { threw = true }
+    check('①실패 시 registerRecommendation이 throw', threw === true)
+    const calls = globalThis.__statsApiSpy.calls
+    check('①실패 시 setWordAcceptedMeanings는 호출됨(실패 지점)', calls.some((c) => c[0] === 'setWordAcceptedMeanings'))
+    check('①실패 시 insert(word_accepted_variants) 절대 호출 안 됨', !calls.some((c) => c[0] === 'insert'))
+    check('①실패 시 update(writing_answer_statistics) 절대 호출 안 됨', !calls.some((c) => c[0] === 'update'))
+  }
+
+  // (b) 성공 경로 — 순서(①setWordAcceptedMeanings ②insert audit ③update status)와 각 호출 인자
+  {
+    resetStatsApiMockState()
+    await writingAnswerStatsApi.registerRecommendation(sampleRow)
+    const calls = globalThis.__statsApiSpy.calls
+    const order = calls.map((c) => c[0])
+    check('호출 순서가 setWordAcceptedMeanings -> insert -> update', order.join(',') === 'setWordAcceptedMeanings,insert,update')
+
+    const setCall = calls.find((c) => c[0] === 'setWordAcceptedMeanings')
+    check('①setWordAcceptedMeanings(wordId, mergedAcceptedMeanings) — planAccept(answer_only) 결과 그대로', setCall[1][0] === sampleRow.wordId && Array.isArray(setCall[1][1]) && setCall[1][1].includes('포옹') && setCall[1][1].includes('안다'))
+
+    const insertCall = calls.find((c) => c[0] === 'insert')
+    check('②insert 대상 테이블은 word_accepted_variants', insertCall[1] === 'word_accepted_variants')
+    check('②감사 레코드 created_by=stats_learning(이 경로 출처 라벨)', insertCall[2].created_by === 'stats_learning')
+    check('②감사 레코드 accepted_answer/word_id가 원본 답안과 일치', insertCall[2].accepted_answer === '포옹' && insertCall[2].word_id === sampleRow.wordId)
+
+    const updateCall = calls.find((c) => c[0] === 'update')
+    check('③update 대상 테이블은 writing_answer_statistics', updateCall[1] === 'writing_answer_statistics')
+    check('③status=accepted + status_changed_at 문자열 포함', updateCall[2].status === 'accepted' && typeof updateCall[2].status_changed_at === 'string')
+    check('③eq(id, row.id)로 정확히 이 행만 대상', updateCall[3] === 'id' && updateCall[4] === sampleRow.id)
+  }
+
+  // (c) ②(감사 insert) 실패는 best-effort — ③은 그대로 실행됨(인정 자체는 이미 완료)
+  {
+    resetStatsApiMockState()
+    globalThis.__statsApiFailInsert = 'word_accepted_variants'
+    let threw = false
+    try { await writingAnswerStatsApi.registerRecommendation(sampleRow) } catch { threw = true }
+    check('②감사 insert 실패는 조용히 무시되고 예외를 던지지 않음', threw === false)
+    const calls = globalThis.__statsApiSpy.calls
+    check('②실패해도 ③update(status)는 정상 실행됨(best-effort)', calls.some((c) => c[0] === 'update'))
+  }
+
+  // (d) ③(status 업데이트) 실패는 던짐(정직하게 알림 — 계속 "대기"로 남으면 안 됨)
+  {
+    resetStatsApiMockState()
+    globalThis.__statsApiFailUpdate = 'writing_answer_statistics'
+    let threw = false
+    try { await writingAnswerStatsApi.registerRecommendation(sampleRow) } catch { threw = true }
+    check('③status 업데이트 실패는 throw(호출부 alert로 이어짐)', threw === true)
+  }
+
+  // (e) dismissRecommendation — status=dismissed만, 다른 호출 없음
+  {
+    resetStatsApiMockState()
+    await writingAnswerStatsApi.dismissRecommendation('rec-99')
+    const calls = globalThis.__statsApiSpy.calls
+    check('dismissRecommendation은 setWordAcceptedMeanings/insert를 전혀 호출 안 함', !calls.some((c) => c[0] === 'setWordAcceptedMeanings') && !calls.some((c) => c[0] === 'insert'))
+    const updateCall = calls.find((c) => c[0] === 'update')
+    check('dismissRecommendation은 update(status=dismissed)만 실행', !!updateCall && updateCall[2].status === 'dismissed' && updateCall[3] === 'id' && updateCall[4] === 'rec-99')
+  }
+}
+
+console.log('\n58. 관리자 추천/Batch(Top50, fetchLearningRecommendations) — 쿼리 파라미터(minCount/count desc/limit) + 테이블 미존재 폴백')
+{
+  // (a) 기본 파라미터(minCount=3, limit=50) — status=pending, count>=3, order count desc, limit 50
+  {
+    resetStatsApiMockState()
+    globalThis.__statsApiResponses = { writing_answer_statistics: { data: [], error: null } }
+    await writingAnswerStatsApi.fetchLearningRecommendations()
+    const call = globalThis.__statsApiSpy.calls.find((c) => c[0] === 'select')
+    check('조회 테이블은 writing_answer_statistics', call[1] === 'writing_answer_statistics')
+    const filters = call[3]
+    check('status=pending 필터 포함', filters.some((f) => f[0] === 'eq' && f[1] === 'status' && f[2] === 'pending'))
+    check('기본 minCount=3 -> gte(count, 3)', filters.some((f) => f[0] === 'gte' && f[1] === 'count' && f[2] === 3))
+    check('count 내림차순 정렬', filters.some((f) => f[0] === 'order' && f[1] === 'count' && f[2]?.ascending === false))
+    check('기본 limit=50', filters.some((f) => f[0] === 'limit' && f[1] === 50))
+  }
+
+  // (b) 커스텀 minCount/limit이 실제로 쿼리에 반영됨
+  {
+    resetStatsApiMockState()
+    globalThis.__statsApiResponses = { writing_answer_statistics: { data: [], error: null } }
+    await writingAnswerStatsApi.fetchLearningRecommendations({ minCount: 10, limit: 5 })
+    const call = globalThis.__statsApiSpy.calls.find((c) => c[0] === 'select')
+    const filters = call[3]
+    check('커스텀 minCount=10 반영', filters.some((f) => f[0] === 'gte' && f[1] === 'count' && f[2] === 10))
+    check('커스텀 limit=5 반영', filters.some((f) => f[0] === 'limit' && f[1] === 5))
+  }
+
+  // (c) 정상 응답 매핑 — words embed/필드명 변환(planAccept 호환 필드 포함)
+  {
+    resetStatsApiMockState()
+    globalThis.__statsApiResponses = {
+      writing_answer_statistics: {
+        error: null,
+        data: [{
+          id: 'rec-a', word_id: 'w-a', registered_meaning: '기후', student_answer: '환경',
+          normalized_answer: '환경', count: 7, accepted_count: 0, rejected_count: 6,
+          distinct_student_ids: ['11111111-1111-1111-1111-111111111111'],
+          first_seen: '2026-07-20T00:00:00Z', last_seen: '2026-07-24T00:00:00Z',
+          last_decision: 'reject_candidate', last_confidence: 0.05, status: 'pending',
+          words: { word: 'climate', meaning: '기후', accepted_meanings: [] },
+        }],
+      },
+    }
+    const rows = await writingAnswerStatsApi.fetchLearningRecommendations()
+    check('반환 1건, planAccept 호환 필드(id/wordId/submittedAnswer/acceptedMeanings/meaning) 포함', rows.length === 1 && rows[0].id === 'rec-a' && rows[0].wordId === 'w-a' && rows[0].submittedAnswer === '환경' && Array.isArray(rows[0].acceptedMeanings) && rows[0].meaning === '기후')
+    check('표시용 추가 필드(count/distinctStudentCount/word) 매핑됨', rows[0].count === 7 && rows[0].distinctStudentCount === 1 && rows[0].word === 'climate')
+  }
+
+  // (d) 테이블 미존재(42P01/PGRST205) -> null 폴백(throw 안 함)
+  {
+    resetStatsApiMockState()
+    globalThis.__statsApiResponses = { writing_answer_statistics: { data: null, error: { code: '42P01', message: 'relation "writing_answer_statistics" does not exist' } } }
+    const result42P01 = await writingAnswerStatsApi.fetchLearningRecommendations()
+    check('42P01(테이블 없음) -> null 폴백', result42P01 === null)
+
+    resetStatsApiMockState()
+    globalThis.__statsApiResponses = { writing_answer_statistics: { data: null, error: { code: 'PGRST205', message: 'schema cache' } } }
+    const resultPGRST205 = await writingAnswerStatsApi.fetchLearningRecommendations()
+    check('PGRST205(스키마 캐시에 없음) -> null 폴백', resultPGRST205 === null)
+  }
+}
+
+console.log('\n59. Dashboard(절약 카운터) — accumulateSavingsCounters/readTodaySavings 누적/분리 + fetchLearningRateMetrics 주 경계(월요일, Asia/Seoul) 실측')
+{
+  class FakeStorage {
+    constructor() { this.store = {} }
+    getItem(k) { return Object.prototype.hasOwnProperty.call(this.store, k) ? this.store[k] : null }
+    setItem(k, v) { this.store[k] = String(v) }
+    removeItem(k) { delete this.store[k] }
+  }
+  const originalLocalStorage = globalThis.localStorage
+  try {
+    globalThis.localStorage = new FakeStorage()
+    const empty = writingAnswerStatsApi.readTodaySavings()
+    check('저장된 값 없으면 전부 0(rules/cache/variants/statsSkips/ai)', empty.rules === 0 && empty.cache === 0 && empty.variants === 0 && empty.statsSkips === 0 && empty.ai === 0)
+
+    writingAnswerStatsApi.accumulateSavingsCounters({ rules: 3, cache: 2, ai: 1 })
+    writingAnswerStatsApi.accumulateSavingsCounters({ rules: 1, statsSkips: 4, variants: 2 })
+    const afterTwoRuns = writingAnswerStatsApi.readTodaySavings()
+    check('같은 날 두 번 실행분이 누적됨(rules 3+1=4, cache 2+0=2, statsSkips 0+4=4, variants 0+2=2, ai 1+0=1)', afterTwoRuns.rules === 4 && afterTwoRuns.cache === 2 && afterTwoRuns.statsSkips === 4 && afterTwoRuns.variants === 2 && afterTwoRuns.ai === 1)
+
+    // "다른 날" 분리 — 오늘과 무관한 임의 날짜 키에 값을 심어도 오늘 조회에
+    // 전혀 섞이지 않는지 확인(seoulDateStr는 비공개 함수라 오늘 키 문자열을
+    // 재계산하지 않고, 절대 오늘일 수 없는 고정 과거 날짜 키로 검증).
+    globalThis.localStorage.setItem('voca_writing_ai_savings_2000-01-01', JSON.stringify({ rules: 999, cache: 999, variants: 999, statsSkips: 999, ai: 999 }))
+    const stillToday = writingAnswerStatsApi.readTodaySavings()
+    check('임의의 다른 날짜 키 값은 오늘 조회에 전혀 섞이지 않음(날짜별로 완전히 분리된 키)', stillToday.rules === 4 && stillToday.ai === 1)
+
+    // 절약률 계산의 "전체 0 처리" — 이 레이어는 비율 자체를 계산하지 않고
+    // 순수 누적치만 반환하므로, 합계가 0이어도 NaN/Infinity가 이 레이어에서
+    // 발생하지 않는다는 계약만 확인한다(비율 계산은 호출부 몫).
+    globalThis.localStorage = new FakeStorage()
+    const allZero = writingAnswerStatsApi.readTodaySavings()
+    const total = allZero.rules + allZero.cache + allZero.variants + allZero.statsSkips + allZero.ai
+    check('전체 0일 때 합계도 정확히 0(비율 0/0 방지는 호출부 책임 — 이 레이어는 정직하게 0만 반환)', total === 0)
+
+    // 주간 학습률(fetchLearningRateMetrics) — 월요일 00:00(Asia/Seoul) 경계 실측.
+    // countRows가 쓰는 select 체인은 위 (준비) 블록의 스텁을 그대로 재사용.
+    resetStatsApiMockState()
+    globalThis.__statsApiResponses = {
+      writing_answer_statistics: { data: null, error: null, count: 3 },
+      word_accepted_variants: { data: null, error: null, count: 1 },
+    }
+    const metrics = await writingAnswerStatsApi.fetchLearningRateMetrics()
+    check('반환값 매핑 — thisWeek/lastWeek 각각 autoAcceptedCount/synonymCount 포함(모의 count 그대로 통과)', metrics.thisWeek.autoAcceptedCount === 3 && metrics.thisWeek.synonymCount === 1 && metrics.lastWeek.autoAcceptedCount === 3 && metrics.lastWeek.synonymCount === 1)
+
+    const selectCalls = globalThis.__statsApiSpy.calls.filter((c) => c[0] === 'select')
+    check('countRows 쿼리 4번(이번주/지난주 x 자동인정/동의어)', selectCalls.length === 4)
+
+    function isoOf(filters, key) {
+      const f = filters.find((x) => x[0] === key)
+      return f ? f[2] : null
+    }
+    function isSeoulMondayMidnightIso(iso) {
+      if (!iso) return false
+      const shifted = new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000)
+      return shifted.getUTCDay() === 1 && shifted.getUTCHours() === 0 && shifted.getUTCMinutes() === 0 && shifted.getUTCSeconds() === 0
+    }
+
+    const statsQueries = selectCalls.filter((c) => c[1] === 'writing_answer_statistics')
+    const variantQueries = selectCalls.filter((c) => c[1] === 'word_accepted_variants')
+    check('writing_answer_statistics/word_accepted_variants 쿼리 각 2번씩', statsQueries.length === 2 && variantQueries.length === 2)
+
+    const thisWeekStatsQuery = statsQueries.find((c) => c[3].length === 2) // eq(status)+gte만(lt 없음 = 이번 주, 끝은 "지금까지")
+    const lastWeekStatsQuery = statsQueries.find((c) => c[3].length === 3) // eq+gte+lt = 지난 주(양끝 경계)
+    check('이번 주 쿼리는 gte만, 지난 주는 gte+lt(양끝 경계)로 구분됨', !!thisWeekStatsQuery && !!lastWeekStatsQuery)
+
+    const thisWeekStartIso = isoOf(thisWeekStatsQuery[3], 'gte')
+    const lastWeekStartIso = isoOf(lastWeekStatsQuery[3], 'gte')
+    const lastWeekEndIso = isoOf(lastWeekStatsQuery[3], 'lt')
+    check('이번 주 시작은 Asia/Seoul 기준 월요일 00:00 정각', isSeoulMondayMidnightIso(thisWeekStartIso))
+    check('지난 주 시작도 Asia/Seoul 기준 월요일 00:00 정각', isSeoulMondayMidnightIso(lastWeekStartIso))
+    check('지난 주 끝(lt)은 이번 주 시작과 정확히 동일(경계가 이어짐, 이중집계/누락 없음)', lastWeekEndIso === thisWeekStartIso)
+    check('지난 주 시작은 이번 주 시작보다 정확히 7일 이전', new Date(thisWeekStartIso).getTime() - new Date(lastWeekStartIso).getTime() === 7 * 24 * 60 * 60 * 1000)
+
+    const thisWeekVariantQuery = variantQueries.find((c) => c[3].length === 1)
+    check('동의어 이번 주 쿼리(word_accepted_variants)도 같은 이번 주 시작 경계를 씀', !!thisWeekVariantQuery && isoOf(thisWeekVariantQuery[3], 'gte') === thisWeekStartIso)
+
+    // 테이블 없음(42P01) -> 그 카운트만 null("수집 중"), 나머지는 정상 0으로
+    // 구분(요구사항 8 "지어내지 않기" — 0과 null을 혼동하지 않음).
+    resetStatsApiMockState()
+    globalThis.__statsApiResponses = {
+      writing_answer_statistics: { data: null, error: { code: '42P01', message: 'missing' } },
+      word_accepted_variants: { data: null, error: null, count: 0 },
+    }
+    const metricsMissing = await writingAnswerStatsApi.fetchLearningRateMetrics()
+    check('writing_answer_statistics 테이블 없음 -> autoAcceptedCount는 null("수집 중"), synonymCount는 정상 0으로 구분', metricsMissing.thisWeek.autoAcceptedCount === null && metricsMissing.thisWeek.synonymCount === 0)
+  } finally {
+    globalThis.localStorage = originalLocalStorage
+  }
+}
+
+console.log('\n60. Performance(요구사항 9) — logSpellingReview의 record_writing_answer_stat RPC가 await되지 않음(fire-and-forget), pending/실패해도 학생 경로 안 막힘')
+{
+  // 소스 텍스트 확인 — fire-and-forget 계약이 실제 소스에 그대로 있는지.
+  const src = fs.readFileSync(new URL('../src/utils/spellingReviewApi.js', import.meta.url), 'utf8')
+  check('recordAnswerStatBestEffort 호출에 await가 없음(fire-and-forget, 소스 텍스트 확인)', /(?<!await )recordAnswerStatBestEffort\(wordDbId, studentId, answer, meaning\)/.test(src))
+  check('내부 supabase.rpc(...) 호출도 await 없이 .then/.catch 체인만 사용', /supabase\.rpc\('record_writing_answer_stat', \{[\s\S]*?\}\)\.then\(/.test(src) && !/await supabase\.rpc/.test(src))
+
+  // 실행 스파이 — 실제 함수를 esbuild로 번들해 supabase.rpc가 영원히 pending인
+  // Promise를 반환해도 logSpellingReview 자체는 빠르게 resolve되는지 실측
+  // (source 확인만으로는 "정말 실행 시점에도 그런지"까지는 검증 안 되므로).
+  const perfStub = (contents) => ({ contents, loader: 'js' })
+  await esbuild.build({
+    entryPoints: ['src/utils/spellingReviewApi.js'],
+    bundle: true,
+    format: 'esm',
+    platform: 'node',
+    outfile: 'scripts/.tmp/spellingReviewApiPerf.bundle.mjs',
+    define: {
+      'import.meta.env.VITE_SUPABASE_URL': JSON.stringify('https://fake.supabase.test'),
+      'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('fake-anon-key'),
+    },
+    plugins: [{
+      name: 'perf-supabase-stub',
+      setup(build) {
+        // § 위 (준비) 블록 주석과 동일한 실측 근거 — 원문 상대경로로 정확히 매치.
+        build.onResolve({ filter: /^\.\/supabaseClient$/ }, () => ({ path: 'v:supa3', namespace: 'v' }))
+        build.onLoad({ filter: /^v:supa3$/, namespace: 'v' }, () => perfStub(`
+export const supabase = {
+  from(table) {
+    return {
+      upsert: async (record, opts) => {
+        (globalThis.__perfSpy ||= { calls: [] }).calls.push(['upsert', table, record, opts])
+        return { error: null }
+      },
+    }
+  },
+  rpc(fnName, params) {
+    (globalThis.__perfSpy ||= { calls: [] }).calls.push(['rpc', fnName, params])
+    return globalThis.__perfRpcFactory ? globalThis.__perfRpcFactory() : Promise.resolve({ error: null })
+  },
+}
+`))
+      },
+    }],
+  })
+  const spellingReviewApiPerf = await import(pathToFileURL('scripts/.tmp/spellingReviewApiPerf.bundle.mjs').href)
+
+  // (a) RPC가 영원히 pending이어도 logSpellingReview는 빠르게 resolve
+  {
+    globalThis.__perfSpy = { calls: [] }
+    globalThis.__perfRpcFactory = () => new Promise(() => {}) // 절대 resolve/reject 안 함(영원히 pending)
+    let resolved = false
+    const p = spellingReviewApiPerf.logSpellingReview('word-1', 'student-1', '답안', 'en2kr', '뜻').then(() => { resolved = true })
+    await Promise.race([p, new Promise((r) => setTimeout(r, 300))])
+    check('RPC가 영원히 pending이어도 logSpellingReview는 300ms 내 resolve(await 안 함 실측)', resolved === true)
+    check('RPC(rpc) 호출 자체는 실제로 일어남(호출을 생략한 게 아니라 결과만 안 기다림)', globalThis.__perfSpy.calls.some((c) => c[0] === 'rpc' && c[1] === 'record_writing_answer_stat'))
+    check('큐 upsert도 정상 실행됨(RPC와 독립된 별도 기록)', globalThis.__perfSpy.calls.some((c) => c[0] === 'upsert'))
+    globalThis.__perfRpcFactory = null
+  }
+
+  // (b) RPC가 함수 없음 에러(42883)로 resolve돼도 예외가 학생 경로로 전파 안 됨
+  {
+    globalThis.__perfSpy = { calls: [] }
+    globalThis.__perfRpcFactory = () => Promise.resolve({ error: { code: '42883', message: 'function record_writing_answer_stat does not exist' } })
+    let threw = false
+    try {
+      await spellingReviewApiPerf.logSpellingReview('word-2', 'student-2', '답안2', 'en2kr', '뜻2')
+    } catch { threw = true }
+    check('RPC 함수 없음(42883) 에러여도 logSpellingReview는 throw하지 않음', threw === false)
+    globalThis.__perfRpcFactory = null
+  }
+
+  // (c) RPC 자체가 reject(네트워크 오류)해도 예외가 학생 경로로 전파 안 됨
+  {
+    globalThis.__perfSpy = { calls: [] }
+    globalThis.__perfRpcFactory = () => Promise.reject(new Error('네트워크 오류(모의)'))
+    let threw = false
+    try {
+      await spellingReviewApiPerf.logSpellingReview('word-3', 'student-3', '답안3', 'en2kr', '뜻3')
+    } catch { threw = true }
+    check('RPC 자체가 reject(네트워크 오류)해도 logSpellingReview는 throw하지 않음(.catch로 흡수)', threw === false)
+    globalThis.__perfRpcFactory = null
+  }
+}
+
+console.log('\n61. statsSkips 전파(runAiPhase) — 서버 summary.statsSkips 청크별 합산 + clientStats.rulesResolvedCount 바디 포함 계약')
+{
+  const originalFetch = globalThis.fetch
+  // (a) rulesResolvedCount>0 — 모든 청크 요청 바디에 clientStats 포함 + statsSkips 누적
+  {
+    const capturedBodies = []
+    globalThis.fetch = async (_url, opts) => {
+      const body = JSON.parse(opts.body)
+      capturedBodies.push(body)
+      const ids = body.pendingIds
+      return {
+        ok: true, status: 200,
+        json: async () => ({
+          ok: true,
+          proposals: ids.map((id) => ({ pending_answer_id: id, decision: 'reject_candidate', confidence: 0.8, reason: 'mock stats repeat', suggested_synonym: null, part_of_speech_warning: null, meaning_scope_warning: null, decision_source: 'stats_repeat' })),
+          usage: { inputTokens: 10, outputTokens: 5 },
+          summary: { statsSkips: 3 },
+        }),
+      }
+    }
+    try {
+      const rows = Array.from({ length: AI_BATCH_SIZE + 5 }, (_, i) => ({ id: `stat-${i}`, wordId: 'sw', word: 'x', meaning: 'y', acceptedMeanings: [], submittedAnswer: 'z' }))
+      const res = await runAiPhase({ adminPin: '1234', unresolvedRows: rows, rulesResolvedCount: 12 })
+      check(`${AI_BATCH_SIZE}+5건 -> 2개 청크(fetch 2회)`, capturedBodies.length === 2)
+      check('각 청크 요청 바디에 clientStats.rulesResolvedCount=12 포함(모든 청크에 동일 값)', capturedBodies.every((b) => b.clientStats?.rulesResolvedCount === 12))
+      check('statsSkips는 청크별 응답(각 3)의 합으로 누적(2*3=6)', res.statsSkips === 6)
+      check('제안에도 decision_source=stats_repeat이 그대로 반영됨(서버 응답 그대로 전달)', res.proposals.every((p) => p.decision_source === 'stats_repeat'))
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  }
+
+  // (b) rulesResolvedCount 생략(기본 0) — clientStats 필드 자체가 요청 바디에 없음
+  {
+    let capturedBody = null
+    globalThis.fetch = async (_url, opts) => {
+      capturedBody = JSON.parse(opts.body)
+      return {
+        ok: true, status: 200,
+        json: async () => ({ ok: true, proposals: [], usage: { inputTokens: 0, outputTokens: 0 }, summary: { statsSkips: 0 } }),
+      }
+    }
+    try {
+      await runAiPhase({ adminPin: '1234', unresolvedRows: [{ id: 'no-rules-1', wordId: 'w1', word: 'a', meaning: 'm', acceptedMeanings: [], submittedAnswer: 's' }] })
+      check('rulesResolvedCount 기본값(0)이면 clientStats 필드 자체가 요청 바디에 없음(additive, 옛 서버도 안전)', !('clientStats' in capturedBody))
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  }
+
+  // (c) 서버가 summary.statsSkips를 아예 안 주는(구버전) 경우 -> statsSkips=0으로 안전 폴백(에러 없음)
+  {
+    globalThis.fetch = async (_url, opts) => {
+      const body = JSON.parse(opts.body)
+      const ids = body.pendingIds
+      return {
+        ok: true, status: 200,
+        json: async () => ({ ok: true, proposals: ids.map((id) => ({ pending_answer_id: id, decision: 'review', confidence: 0.5, reason: 'legacy', suggested_synonym: null, part_of_speech_warning: null })), usage: { inputTokens: 5, outputTokens: 2 } }),
+      }
+    }
+    try {
+      const res = await runAiPhase({ adminPin: '1234', unresolvedRows: [{ id: 'legacy-1', wordId: 'w1', word: 'a', meaning: 'm', acceptedMeanings: [], submittedAnswer: 's' }] })
+      check('구버전 서버 응답(summary 자체 없음)에도 statsSkips=0으로 안전 폴백', res.statsSkips === 0)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  }
+}
+
 console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n${failures}개 테스트 실패 ❌`)
 process.exit(failures === 0 ? 0 : 1)
