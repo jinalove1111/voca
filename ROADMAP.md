@@ -1,5 +1,20 @@
 # Paul Easy Voca — 로드맵
 
+_최종 갱신: 2026-07-23 (6차, 시즌 생애주기 수리 + 쓰기 검수 AI 보조 v1 — 기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+
+## 2026-07-23 (6차) — 시즌 생애주기 수리 + 쓰기 검수 AI 보조 v1 — 코드 완료 ✅ (운영자 액션 4건 대기)
+
+순차 2-Task 게이트 실행. Task 1(시즌 생애주기 수리, `0845d4f`):
+fetchCurrentSeason 에러 삼킴 등 버그 3건 수리 + 원자적 start_new_season
+RPC + SeasonPanel 확인 모달. Task 2(쓰기 답안 검토 AI 보조 v1
+preview-only, `af25b1d`): Edge Function `grade-writing-answers`(Haiku
+4.5, 캐시, Vercel 12/12 한도 회피) + SpellingReviewQueuePanel AI
+미리보기, flag `writingReviewAiAssist` 기본 OFF. 두 Task 모두 verify:all
+20도메인 PASS. 운영자 액션 4건 대기: SQL 2건
+(`supabase_v3_5_season_lifecycle.sql`,
+`supabase_v3_6_writing_review_ai_cache.sql`) + Edge Function 배포 + flag
+ON. 상세: handoff.md 2026-07-23(6차).
+
 _최종 갱신: 2026-07-23 (5차, 릴리스 게이트 프로덕션 배포 b8afc07 — 기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
 
 ## 2026-07-23 (5차) — 프로덕션 배포 b8afc07 (릴리스 게이트) — 완료 ✅

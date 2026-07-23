@@ -1,4 +1,91 @@
 # Paul Easy Voca — Handoff
+_최종 갱신: 2026-07-23 (6차, 순차 2-Task 게이트 실행 — Task 1 시즌 생애주기 수리 0845d4f + Task 2 쓰기 답안 검토 AI 보조 af25b1d, 운영자 액션 4건 대기)_
+
+## 2026-07-23 (6차) — 순차 2-Task 게이트: 시즌 생애주기 수리 → 쓰기 답안 검토 AI 보조
+
+운영자 지시로 코디네이터(메인 세션)가 순차 2-Task를 게이트 방식으로 실행 —
+Task 1(시즌 생애주기 수리)을 완료·검수·커밋한 후에만 Task 2(쓰기 답안 검토
+AI 보조) 구현 시작. 시작 체크포인트는
+`docs/agent-decisions/0005-season-writing-review-rollback-note.md`
+(시작 SHA `6f5d6bd`, 체크포인트 커밋 `09467b6`).
+
+### Task 1 — 시즌 생애주기 수리 (커밋 `0845d4f` feat(season))
+
+- **라이브 실측**: v2_8 이미 실행됨(seasons 테이블 존재·0행),
+  `season_number`/`ended_at`/`is_active` 컬럼 미존재(42703 확인).
+- **발견 버그 3건**: ① `fetchCurrentSeason()`이 모든 에러를 null로 삼켜
+  "조회 실패"를 "시즌 없음"으로 오판정(season-readiness 버그) ② 시즌
+  시작이 단순 insert라 원자성/중복요청 보호/종료 개념 없음 ③ Supabase
+  에러 code/details/hint 미표면화.
+- **수리**:
+  - `supabase_v3_5_season_lifecycle.sql`(멱등): 컬럼 3개 + 활성 시즌 유일
+    partial unique index + 원자적 `start_new_season` RPC(advisory lock,
+    SECURITY DEFINER, anon EXECUTE 회수 — service_role 전용). 파괴 구문
+    0건. **운영자 실행 대기.**
+  - `api/start-new-season.js`: RPC 우선 + v2_8 폴백 — SQL 실행 순서 무관
+    안전.
+  - `seasonApi.fetchCurrentSeasonDetailed` 신설(학생 화면
+    `fetchCurrentSeason` 시그니처 불변).
+  - SeasonPanel 확인 모달(현재·새 시즌 번호/시작일/영향 학생 수/리셋·보존
+    목록/비가역 경고) + `startingRef` 더블클릭 가드 + note 입력 배선.
+- **테스트**: `scripts/testStartNewSeasonApi.mjs` 신규 25단언(fetch mock —
+  라이브 시즌 전환 0회) + 정직 SKIP 3건(SQL 실행 후 검증).
+  seasonalProgression 도메인 2스크립트 PASS.
+- **안전**: 실제 시즌 시작 0회, 프로덕션엔 SELECT만, 학생 누적 데이터
+  무변경.
+
+### Task 2 — 쓰기 답안 검토 AI 보조 v1, preview-only (커밋 `af25b1d` feat(admin))
+
+- **사전 분석(읽기 전용)**: 라이브 `spelling_review_queue` pending 정확히
+  99건 실측. 큐 특성상 규칙 1~7단계는 해소율 ~0%(이미 다중 정답 채점을
+  통과 못한 것만 큐에 들어옴), 편집거리 ~19% + lemma/품사 ~10%, 나머지
+  ~55-60%가 AI 대상. 전체 분석:
+  `docs/operations/task2-writing-analysis.md`.
+- **구현**:
+  - Supabase Edge Function `grade-writing-answers`: 관리자 PIN 재인증 →
+    pending SELECT만 → 캐시 → 미해결만 Claude Haiku 4.5 호출. 브라우저
+    API 키 0, Vercel 12/12 한도 회피(서버리스 파일 추가 없음).
+  - `supabase_v3_6_writing_review_ai_cache.sql`(캐시 테이블, 멱등, anon
+    SELECT만). **운영자 실행 대기.**
+  - `spellingReviewBulkPlan.js`(순수 계획 로직) +
+    `spellingReviewAiApi.js`(기존
+    `setWordAcceptedMeanings`/`resolveSpellingReview`만 재사용 — 새 쓰기
+    경로 0).
+  - SpellingReviewQueuePanel 확장: AI 미리보기·집계·선택/일괄 액션·동일
+    답안 일괄·동의어 저장·필터·완료 요약. 기존 수동 인정/무시 무변경.
+  - feature flag `writingReviewAiAssist` 기본 **OFF**.
+- **안전 설계**: preview-only(미리보기는 어떤 답안 status도 안 바꿈), AI
+  판정은 제안(accept/review/reject_candidate)일 뿐 v1 자동 거부 없음,
+  라이브 99건 자동 처리 없음, AI 실패/잘못된 JSON → review 분류 + 수동
+  폴백 유지.
+- **테스트**: `scripts/testWritingReviewAiPipeline.mjs` 26섹션 전부
+  픽스처 + AI mock(실제 Anthropic 호출 0), 정직 SKIP 3(배포 후 검증).
+  테스트가 실버그 2건을 잡아 수정 — ① 완전일치가 원문 비교하던 것 ②
+  품사 힌트가 쉼표 다중 정답 미분리.
+- **비용**: 99건 전체 AI 처리해도 $0.10 미만(Haiku 4.5). 상세:
+  `docs/operations/task2-writing-report.md`.
+
+### 최종 검증 (코디네이터 독립 재실행)
+
+- 두 Task 각각 커밋 직전 verify:all 20도메인 PASS(speaking/listening
+  SKIP, login FAIL은 기지 로컬 서비스롤 키 부재 — 5차 기록과 동일) +
+  build PASS.
+- 데이터 보존: 학생 데이터 삭제 0, 실제 시즌 시작 0, 라이브 답안 자동
+  인정/거부 0, 무관 기능 변경 0.
+
+### 운영자 액션 (배포 전 체크리스트)
+
+1. `supabase_v3_5_season_lifecycle.sql` 실행(SQL Editor) — 실행 전에도 앱
+   안전 폴백.
+2. `supabase_v3_6_writing_review_ai_cache.sql` 실행 — 실행 전에도 안전.
+3. Edge Function 배포: `supabase functions deploy grade-writing-answers`
+   + `supabase secrets set ANTHROPIC_API_KEY=... ADMIN_PIN=...` — 배포
+   전에는 flag OFF라 버튼 미노출.
+4. 준비되면 관리자 화면에서 `writingReviewAiAssist` flag ON.
+5. 롤백: `docs/agent-decisions/0005-season-writing-review-rollback-note.md`
+   참고(시작 SHA `6f5d6bd`, 커밋 revert로 충분 — 두 SQL 모두 기존 데이터
+   무변경).
+
 _최종 갱신: 2026-07-23 (5차, 릴리스 게이트 — 빌드 핫픽스 b8afc07 커밋 + verify:all + 프로덕션 push/Vercel 배포 검증)_
 
 ## 2026-07-23 (5차) — 릴리스 게이트: 미커밋 핫픽스 커밋 → 전체 검증 → 프로덕션 배포
