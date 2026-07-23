@@ -1,0 +1,32 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현 (client-side UI, agent A)",
+  "task_id": "writing-review-v2-ui",
+  "task": "쓰기 답안 검토 AI 보조(SpellingReviewQueuePanel) 관리자 UI 2차 개편 — 플래그 노출 근본수정, 2단계 미리보기(규칙→AI 확인 분리)+비용 추정/상한+30초 타임아웃+배치 진행률, 확인 모달 요약 강화, 필터(출처/학생)+정렬 추가. 클라이언트 전용, pipeline.js/index.ts/SQL은 agent B 소유(읽기만).",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-23T00:00:00Z",
+  "updated_at": "2026-07-23T00:00:00Z",
+  "files_owned": [
+    "src/config/features.js",
+    "src/components/FeatureManagementPanel.jsx",
+    "src/components/AdminScreen.jsx",
+    "src/utils/spellingReviewAiApi.js",
+    "src/utils/spellingReviewBulkPlan.js",
+    ".ai-status/implementer-writing-review-v2-ui.json"
+  ],
+  "files_read": [
+    "PROJECT_GUIDE.md",
+    "docs/operations/task2-writing-report.md",
+    "src/utils/spellingReviewApi.js",
+    "supabase/functions/grade-writing-answers/pipeline.js",
+    "supabase/functions/grade-writing-answers/index.ts",
+    "scripts/testWritingReviewAiPipeline.mjs",
+    "tests/harness/runWriting.mjs",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "1) features.js: writingReviewAiAssist를 aiAnalysis 카테고리 배열에 추가(FeatureManagementPanel이 이 카테고리를 순회하며 렌더하므로 이게 토글이 안 보이던 근본 원인이었음) — 기본값 false는 그대로. FeatureManagementPanel.jsx: FEATURE_DETAILS 맵을 추가해 이 플래그만 라벨('쓰기 답안 자동 검토 AI 보조 (관리자 전용)')+전제조건 설명을 보여주게 함(다른 플래그 렌더링 무변경). 2) spellingReviewAiApi.js를 전면 재구성: runRulesPhase(순수, 네트워크0)로 규칙 단계만 분리, runAiPhase(신규)가 미해결 행을 AI_BATCH_SIZE(25)씩 순차 청크로 나눠 callEdgeFunctionForUnresolved를 호출하고 onProgress로 배치i/N·완료건수·캐시히트·실패건수를 알려줌. callEdgeFunctionForUnresolved의 fetch에 AbortController 30초 타임아웃 추가(타임아웃도 기존 실패 경로와 동일하게 review/confidence0/ai_unavailable로 안전 강등, throw 없음). estimateAiCostUsd(itemCount) 신규 — CLAUDE_HAIKU_INPUT/OUTPUT_USD_PER_MTOK을 pipeline.js MODEL_PRICING_PER_MTOK에서 파생(드리프트 방지)하고 AI_ESTIMATE_* 고정 근사치(시스템프롬프트/항목당 입출력 토큰)로 사전 상한 추정. getCostCeilingUsd/setCostCeilingUsd/getDailyCeilingUsd/setDailyCeilingUsd/getTodaySpentUsd/recordEstimatedSpendUsd(localStorage 'voca_writing_ai_cost_ceiling_usd'/'voca_writing_ai_daily_ceiling_usd'/'voca_writing_ai_daily_spend', 전부 client-side best-effort로 주석에 명시)+evaluateCostGate(순수) 추가. previewAiClassification(구 단일단계 함수)은 제거하고 runRulesPhase+runAiPhase 2개로 대체(호출부는 AdminScreen뿐이라 안전). executeAccept/executeDismiss/executeBulkAccept/executeBulkDismiss는 무변경. 3) spellingReviewBulkPlan.js에 filterProposalsBySource(규칙만/AI만/캐시), filterRowsByStudent, distinctStudentIds, sortDisplayItems(confidence/단어/판정/학생, proposal 없는 행은 정렬 시 맨 뒤), buildConfirmSummary(rows,{kind}) — count/단어목록(10개 초과시 +N개)/영향학생수(최초 제출자 기준, dedupe 큐 정직 안내)/accepted_meanings 갱신여부/변형감사이력 저장여부/비가역 경고문 계산 — 추가(기존 export 전부 유지, 이름 변경 없음). 4) AdminScreen.jsx SpellingReviewQueuePanel만 재작성: 미리보기 버튼=규칙단계만(무료, 즉시), 결과로 해결/미해결 건수+정확한 AI비용 표시 후 별도 'AI 확인 진행(N건, 약 $X)' 버튼이 있어야 Edge Function 호출 시작. 실행당/일일 비용 상한 입력(관리자 조정, localStorage 영속) + 상한 초과시 AI 버튼 비활성화+사유 표시(규칙 결과는 그대로 유지). AI 단계 중 배치i/N·%·캐시히트·실패건수 진행률 표시. 필터에 출처(규칙만/AI만/캐시)+학생(최초 제출자, 이름은 getStudents() 캐시로 resolve, 없으면 UUID 앞8자)+정렬(신뢰도/단어/판정/학생, 오름/내림) 추가. 확인 모달에 단어 목록/영향학생수/accepted_meanings 갱신여부/변형감사저장여부/비가역 경고 추가. 기존 수동 accept()/dismiss()(setWordAcceptedMeanings+resolveSpellingReview 직접 호출) 버튼/로직은 한 줄도 안 건드림. writingReviewAiAssist 기본값 false 무변경, decision/decision_source 값 이름 무변경(표시만 매핑). season 관련 코드 0건 접촉(git diff 실측 — SeasonPanel 등 미접촉). 5) 검증: npm run build PASS(신규 에러/경고 없음, 기존 500kB+ 청크 경고는 무변경 사전존재 경고). node scripts/testWritingReviewAiPipeline.mjs 전 섹션 PASS(SKIP 4건은 기존과 동일한 정직한 배포-의존 SKIP, 내가 건드린 로직 때문에 새로 생긴 FAIL 없음 — 이 스크립트가 import하는 spellingReviewBulkPlan.js 함수 시그니처 전부 무변경 유지해 안전 확인). npm run verify:writing PASS(3개 스크립트). npm run verify:all 결과: login 도메인만 FAIL(scripts/testStudentPinAuth.mjs 등 4개 — 실측 원인은 이 샌드박스에 라이브 Supabase/vercel dev 네트워크가 없어 학생 PIN api/*.js e2e 호출이 전부 실패하는 환경 제약, PROJECT_GUIDE.md에도 명시된 기존 한계다. 내가 손댄 파일(features.js/FeatureManagementPanel.jsx/AdminScreen.jsx SpellingReviewQueuePanel/spellingReviewAiApi.js/spellingReviewBulkPlan.js) 중 어느 것도 api/*.js·PIN·로그인 코드와 무관 — git status로 login 관련 파일 미접촉 확인). 그 외 19개 도메인 전부 PASS(다른 동시 작업 에이전트의 pipeline.js/index.ts/SQL 동시 편집도 확인 — git diff --stat으로 그 3개 파일 변경은 agent B 소유임을 확인, 나는 읽기만 함). 라이브 DB 변경/AI 호출 0회(테스트는 fixtures+mock, 빌드는 정적 번들링만).",
+  "blocker": null,
+  "next_action": "coordinator/운영자: (1) verify:all의 login 도메인 FAIL은 이번 작업과 무관한 사전 환경 제약(라이브 네트워크 없음)이므로 별도 세션에서 vercel dev/스테이징으로 재확인 필요(이번 작업 범위 아님). (2) agent B의 pipeline.js/index.ts/SQL 변경이 머지되면 npm run build + node scripts/testWritingReviewAiPipeline.mjs + npm run verify:writing 재실행해 두 작업 결과가 함께 정합적인지 한 번 더 확인 권장(이번 세션에서는 그 시점의 파일로 이미 PASS 확인함). (3) 실제 사용 전 운영자가 SQL(v3_6/v3_7) 실행 + Edge Function 배포 + ANTHROPIC_API_KEY 설정 + writingReviewAiAssist 플래그를 관리자 화면 '🎯 기능' 탭에서 켜야 함(기본 false 유지)."
+}

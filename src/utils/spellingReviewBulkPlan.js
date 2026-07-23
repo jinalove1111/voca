@@ -90,6 +90,61 @@ export function filterProposals(proposals, { decision = 'all', wordQuery = '', s
   })
 }
 
+// v2 UI(2026-07-23, 관리자 화면 2차 개편) — 판정 출처 필터("규칙만"/
+// "AI만"/"캐시"). proposal.decision_source/cache_hit 기준(카드에 보이는
+// 출처 배지와 동일 분류 — RULE_SOURCES는 아래에서 재사용).
+export function filterProposalsBySource(proposals, sourceFilter = 'all') {
+  if (sourceFilter === 'all') return proposals
+  return proposals.filter((p) => {
+    if (sourceFilter === 'cache') return p.cache_hit === true
+    if (sourceFilter === 'ai') return !p.cache_hit && p.decision_source === 'ai'
+    if (sourceFilter === 'rule') return RULE_SOURCES.has(p.decision_source)
+    return true
+  })
+}
+
+// "최초 제출 학생" 필터 — row.studentId 기준(proposal에는 학생 정보가
+// 없다). studentId가 'all'이면 전체 통과. § v1-3 정직한 한계(dedupe 큐라
+// 여기 보이는 학생은 항상 "최초 제출자"뿐)는 호출부(UI)가 라벨/안내
+// 문구로 표시한다 — 이 함수는 순수 필터링만.
+export function filterRowsByStudent(rows, studentId = 'all') {
+  if (!studentId || studentId === 'all') return rows
+  return rows.filter((r) => r.studentId === studentId)
+}
+
+// rows에 등장하는 studentId를 처음 등장 순서로 중복 없이 나열(드롭다운
+// 옵션용). studentId가 없는 행(예: 학생 로그인 없이 온 레거시 기록)은
+// 제외한다.
+export function distinctStudentIds(rows) {
+  const seen = new Set()
+  const out = []
+  for (const r of rows) {
+    if (r.studentId && !seen.has(r.studentId)) {
+      seen.add(r.studentId)
+      out.push(r.studentId)
+    }
+  }
+  return out
+}
+
+// 정렬 — confidence는 proposal 필드, 단어/학생은 row 필드, 판정은 proposal
+// 필드라 "행 + 대응 proposal" 짝(items: [{row, proposal}])을 입력받는다.
+// proposal이 아직 없는 행(AI 확인 전 미해결 상태)은 정렬 시 항상 맨 뒤로
+// 밀리도록 confidence/decision 정렬에서 최솟값 취급한다.
+export function sortDisplayItems(items, sortBy = 'none', direction = 'desc') {
+  if (sortBy === 'none') return items
+  const dir = direction === 'asc' ? 1 : -1
+  const comparators = {
+    confidence: (a, b) => (a.proposal?.confidence ?? -1) - (b.proposal?.confidence ?? -1),
+    word: (a, b) => String(a.row?.word || '').localeCompare(String(b.row?.word || '')),
+    decision: (a, b) => String(a.proposal?.decision || '').localeCompare(String(b.proposal?.decision || '')),
+    student: (a, b) => String(a.row?.studentId || '').localeCompare(String(b.row?.studentId || '')),
+  }
+  const cmp = comparators[sortBy]
+  if (!cmp) return items
+  return [...items].sort((a, b) => dir * cmp(a, b))
+}
+
 // 완료 요약 문구 계산(성공/실패 건수) — UI가 그대로 표시.
 export function summarizeBulkResults(results) {
   const ok = results.filter((r) => r.ok).length
@@ -186,4 +241,42 @@ export function summarizeProposals(proposals) {
     else if (FAILURE_SOURCES.has(p.decision_source)) failed++
   }
   return { total, safeAccept, review, rejectCandidate, ruleBased, aiProcessed, cacheHits, failed }
+}
+
+// ── v2 UI(2026-07-23, 관리자 화면 2차 개편) — 확인 모달 요약 ────────────────
+//
+// 일괄 액션 확인 모달에 필요한 모든 숫자/문구를 순수 계산으로 미리 만든다
+// (모달 컴포넌트는 이 결과를 그대로 렌더링만 하면 되게). kind는 기존
+// runBulk()가 쓰는 값 그대로: 'accept'|'dismiss'|'synonym'.
+//   - 'accept'/'synonym' — words.accepted_meanings를 갱신한다(실제 인정).
+//   - 'synonym' — 추가로 word_accepted_variants 감사 이력 저장을 시도한다
+//     (v3_7 SQL 미실행이면 그 호출부가 조용히 스킵 — § recordAcceptedVariantBestEffort).
+//   - 'dismiss' — 검토 상태만 dismissed로 바뀌고 accepted_meanings는 무관.
+// studentCount는 rows에 실려온 studentId(= 이 dedupe 큐에 남은 "최초
+// 제출자") 기준 distinct 수다 — 실제 그 오답을 낸 학생 전체 수가 아니라는
+// 점을 호출부(UI)가 라벨에 명시해야 한다(§ v1-3 정직한 한계).
+export function buildConfirmSummary(rows, { kind = 'accept', wordsDisplayLimit = 10 } = {}) {
+  const count = rows.length
+  const uniqueWords = []
+  const seenWords = new Set()
+  for (const r of rows) {
+    const w = r.word || '(삭제된 단어)'
+    if (!seenWords.has(w)) {
+      seenWords.add(w)
+      uniqueWords.push(w)
+    }
+  }
+  const studentIds = new Set(rows.map((r) => r.studentId).filter(Boolean))
+  const savesAcceptedMeanings = kind === 'accept' || kind === 'synonym'
+  const savesAcceptedVariant = kind === 'synonym'
+  return {
+    count,
+    words: uniqueWords,
+    wordsDisplay: uniqueWords.slice(0, wordsDisplayLimit),
+    wordsTruncatedCount: Math.max(0, uniqueWords.length - wordsDisplayLimit),
+    studentCount: studentIds.size,
+    savesAcceptedMeanings,
+    savesAcceptedVariant,
+    irreversibleWarning: '이 작업은 되돌릴 수 없습니다 — 학생 데이터(인정 답안 목록/검토 상태)가 실제로 바뀝니다.',
+  }
 }

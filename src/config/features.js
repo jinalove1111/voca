@@ -178,7 +178,11 @@ export const getFeaturesByCategory = (category) => {
     studentManagement: ['studentManagement', 'studentManagement_register', 'studentManagement_edit', 'studentManagement_delete', 'studentAssignment'],
     homework: ['homework', 'homework_create', 'homework_submission', 'homework_stats'],
     ranking: ['ranking', 'pointSystem', 'leaderboard', 'rewardSystem'],
-    aiAnalysis: ['aiAnalysis', 'wrongAnswerNote', 'weakWordAnalysis', 'reviewRecommendation'],
+    // writingReviewAiAssist(v1.1, 2026-07-23)는 이 카테고리에 없어서
+    // FeatureManagementPanel에 토글 자체가 안 보이던 문제(2026-07-23 관리자
+    // UI 2차 개편에서 발견 — 근본 원인 수정)를 이 목록 추가로 고친다.
+    // 기본값(false)은 이 파일 위쪽 DEFAULT_FEATURES에서 그대로 유지.
+    aiAnalysis: ['aiAnalysis', 'wrongAnswerNote', 'weakWordAnalysis', 'reviewRecommendation', 'writingReviewAiAssist'],
     schoolManagement: ['classGroupManagement', 'semesterManagement', 'parentPortal', 'schoolDashboard', 'attendanceTracking', 'advancedAnalytics'],
     // reading* 두 플래그는 의미상 별개 도메인이지만, 새 카테고리를 추가하려면
     // FeatureManagementPanel.jsx의 FEATURE_CATEGORIES도 함께 고쳐야 해서

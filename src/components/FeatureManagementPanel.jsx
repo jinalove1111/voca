@@ -66,6 +66,18 @@ const FEATURE_CATEGORIES = [
   },
 ]
 
+// 개별 기능 설명(선택) — 기본은 코드명(<code>)만 표시하던 기존 동작 그대로
+// 두고, 여기 등록된 플래그만 라벨/설명을 추가로 보여준다(2026-07-23 관리자
+// UI 2차 개편 — writingReviewAiAssist가 아이콘 없이 코드명만 보여 관리자가
+// 무슨 기능인지 알기 어렵다는 문제의 근본 수정). 다른 기존 플래그의 렌더링은
+// 전혀 바뀌지 않는다.
+const FEATURE_DETAILS = {
+  writingReviewAiAssist: {
+    label: '쓰기 답안 자동 검토 AI 보조 (관리자 전용)',
+    description: '관리자 화면 "쓰기 답안 검토" 패널에 규칙 기반 + AI 자동분류 미리보기를 추가로 켭니다. 전제조건 미충족 시(SQL supabase_v3_6/v3_7 미실행, Edge Function grade-writing-answers 미배포, ANTHROPIC_API_KEY 미설정) 규칙 기반 분류만 동작하고 AI 확인은 안전하게 "검토 필요"로 표시됩니다 — 학생 화면에는 영향 없고, 실제 인정/무시는 항상 기존 수동 버튼이 처리합니다.',
+  },
+}
+
 function FeatureCategoryToggle({ category, features }) {
   const [expanded, setExpanded] = useState(false)
   const categoryFeatures = getFeaturesByCategory(category.id)
@@ -116,6 +128,11 @@ function FeatureCategoryToggle({ category, features }) {
               />
               <label htmlFor={featureName} className="flex-1 cursor-pointer">
                 <code className="text-sm bg-white px-2 py-1 rounded">{featureName}</code>
+                {FEATURE_DETAILS[featureName] && (
+                  <span className="block text-xs text-gray-600 mt-1">
+                    <strong>{FEATURE_DETAILS[featureName].label}</strong> — {FEATURE_DETAILS[featureName].description}
+                  </span>
+                )}
               </label>
             </div>
           ))}
