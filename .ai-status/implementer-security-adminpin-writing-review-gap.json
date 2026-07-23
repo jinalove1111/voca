@@ -1,0 +1,21 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "security-adminpin-writing-review-gap",
+  "task": "classes/units/words anon 전체쓰기 취약점 수정의 마지막 갭 — src/utils/spellingReviewAiApi.js의 executeAccept()/executeBulkAccept()가 setWordAcceptedMeanings 호출 시 adminPin을 안 넘기던 것을 배선(implementer-security-adminpin-wiring 세션이 남긴 알려진 갭 (b) 해소)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-24T00:40:00+09:00",
+  "updated_at": "2026-07-24T01:00:00+09:00",
+  "files_owned": [
+    "src/utils/spellingReviewAiApi.js",
+    "src/components/admin/SpellingReviewQueuePanel.jsx"
+  ],
+  "files_read": [
+    "src/utils/wordLibrary.js",
+    ".ai-status/implementer-security-adminpin-wiring.json"
+  ],
+  "summary": "executeAccept()는 adminPin을 파라미터로도 클로저로도 갖고 있지 않았다(신규 파라미터 추가가 필요한 케이스) — options 객체의 옵셔널 마지막 필드로 adminPin을 추가: `export async function executeAccept(row, { mode = 'answer_only', duplicateRows = [], adminPin } = {})`, 내부에서 `setWordAcceptedMeanings(plan.wordId, plan.mergedAcceptedMeanings, adminPin)`으로 전달(undefined면 wordLibrary.js 쪽에서 기존 레거시 동작 그대로 유지, 하위호환). executeBulkAccept()도 같은 방식으로 options에 adminPin 옵셔널 필드 추가 후 내부 executeAccept 호출에 그대로 relay. 호출부는 admin/SpellingReviewQueuePanel.jsx 2곳(이미 완료된 다른 세션이 59행에서 adminPin prop을 이미 받고 있어 재사용만 함, 신규 prop 추가 없음, 최소 1줄씩 변경): 358행 acceptWithMode()의 executeAccept(row, { mode, duplicateRows, adminPin }), 378행 runBulk()의 executeBulkAccept(targetRows, { mode: ..., adminPin }). wordLibrary.js는 열기만 하고(556행 setWordAcceptedMeanings(wordDbId, meanings, adminPin) 시그니처 확인용) 전혀 수정하지 않음. 검증: npm run build PASS(에러 0, 기존 chunk-size 경고만). npm run verify:admin PASS(6/6 스크립트 전부 PASS). npm run verify:writing — 필수 2개 스크립트(testSpelling.mjs/testSpellingDirectionWiring.mjs) PASS, 보너스 스크립트 testWritingReviewAiPipeline.mjs가 1건 FAIL(`setWordAcceptedMeanings 인자 2개 — 시그니처 불변` 어서션)했으나 git stash로 이번 변경분(spellingReviewAiApi.js)만 되돌려 재실행해도 동일하게 FAIL함을 확인 — 이 실패는 내 변경과 무관하고, wordLibrary.js에 이미 세션 시작 전부터 adminPin이 3번째 인자로 추가돼 있어(다른 완료 세션) 실함수 arity가 2에서 3으로 바뀐 것을 그 테스트 파일(다른 세션이 uncommitted로 소유 중, 이번 지시로도 열지 말라고 명시된 wordLibrary.js와 결합된 낡은 어서션)이 아직 반영 못 한 pre-existing 갭. 내 소유 파일 2개 외 아무것도 git add/커밋하지 않음(커밋 자체를 안 함, 지시에 따름).",
+  "blocker": null,
+  "next_action": "testWritingReviewAiPipeline.mjs(다른 세션 소유, 현재 uncommitted M)의 1082행 `setWordAcceptedMeanings.length === 2` 어서션을 그 파일 소유 세션이 3으로 갱신해야 함(adminPin 추가가 이미 확정된 시그니처 변경이므로) — qa-reviewer가 해당 세션과 조율 권장. SQL 락다운(supabase_v3_11_lockdown_curriculum_write.sql) 실행 전, 관리자 화면 '쓰기 답안 검토' 패널의 AI 확인 수락(원클릭/일괄 인정) 버튼이 실제로 admin-content-write 경로를 타는지 실사용 테스트 권장(이번 배선으로 executeAccept/executeBulkAccept 모두 adminPin을 setWordAcceptedMeanings까지 전달하게 됐으나, 실제 배포 환경에서 왕복 테스트는 아직 안 함)."
+}

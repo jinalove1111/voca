@@ -500,9 +500,9 @@ async function recordAcceptedVariantBestEffort(row, mode) {
 // 인정 1건 실행 — 기존 SpellingReviewQueuePanel의 accept()와 정확히 같은
 // 두 단계(accepted_meanings read-then-write + resolveSpellingReview)를
 // spellingReviewBulkPlan.planAccept()가 계산한 대로 수행한다.
-export async function executeAccept(row, { mode = 'answer_only', duplicateRows = [] } = {}) {
+export async function executeAccept(row, { mode = 'answer_only', duplicateRows = [], adminPin } = {}) {
   const plan = planAccept(row, { mode, duplicateRows })
-  await setWordAcceptedMeanings(plan.wordId, plan.mergedAcceptedMeanings)
+  await setWordAcceptedMeanings(plan.wordId, plan.mergedAcceptedMeanings, adminPin)
   await resolveSpellingReview(plan.primaryId, 'accepted')
   for (const dupId of plan.additionalResolveIds) {
     await resolveSpellingReview(dupId, 'accepted')
@@ -517,11 +517,11 @@ export async function executeDismiss(row) {
 
 // 여러 행에 대해 순차로 인정/무시를 실행하고 성공/실패를 모아 반환한다.
 // 하나 실패해도 나머지는 계속 진행(부분 성공 허용, alert는 호출부 담당).
-export async function executeBulkAccept(rows, { mode = 'answer_only', duplicatesByRowId = new Map() } = {}) {
+export async function executeBulkAccept(rows, { mode = 'answer_only', duplicatesByRowId = new Map(), adminPin } = {}) {
   const results = []
   for (const row of rows) {
     try {
-      await executeAccept(row, { mode, duplicateRows: duplicatesByRowId.get(row.id) || [] })
+      await executeAccept(row, { mode, duplicateRows: duplicatesByRowId.get(row.id) || [], adminPin })
       results.push({ id: row.id, ok: true })
     } catch (err) {
       results.push({ id: row.id, ok: false, error: err?.message || String(err) })
