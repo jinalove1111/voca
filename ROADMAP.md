@@ -1,5 +1,17 @@
 # Paul Easy Voca — 로드맵
 
+_최종 갱신: 2026-07-23 (5차, 릴리스 게이트 프로덕션 배포 b8afc07 — 기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+
+## 2026-07-23 (5차) — 프로덕션 배포 b8afc07 (릴리스 게이트) — 완료 ✅
+
+제품 리뷰 문서 10 S티어 수정 시리즈(로그아웃 오터치 방지, 거짓 카운트
+2곳) + AnalyticsPanel KST 경계 수정 + 헬퍼 중복 통합 + 빌드 핫픽스
+(8c5dc6c의 JSX 주석 위치 오류 교정)가 프로덕션 반영됨. verify:all 20개
+도메인 PASS(login 4개 FAIL은 로컬 SUPABASE_SERVICE_ROLE_KEY 미설정이라는
+기지 환경 한계 — 회귀 아님, speaking/listening은 기지 headless SKIP).
+**⚠️ api 함수 12/12 — Vercel Hobby 한도 도달(여유 0), 신규 파일 추가 시
+배포 실패.** 상세: handoff.md 2026-07-23(5차).
+
 _최종 갱신: 2026-07-23 (2차, Reading Foundation v3.3 — 기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
 
 ## 2026-07-23 (2차) — Reading Foundation v3.3 — 코드 완료 ✅ (SQL 실행 대기, 학습 UI는 다음 단계)

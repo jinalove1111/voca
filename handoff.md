@@ -1,4 +1,54 @@
 # Paul Easy Voca — Handoff
+_최종 갱신: 2026-07-23 (5차, 릴리스 게이트 — 빌드 핫픽스 b8afc07 커밋 + verify:all + 프로덕션 push/Vercel 배포 검증)_
+
+## 2026-07-23 (5차) — 릴리스 게이트: 미커밋 핫픽스 커밋 → 전체 검증 → 프로덕션 배포
+
+미커밋 핫픽스 커밋 → verify:all → `abb0348..b8afc07` 10커밋 push →
+Vercel 배포 검증까지 수행한 릴리스 게이트 세션.
+
+- **빌드 핫픽스 `b8afc07`**: 직전 커밋 8c5dc6c(모자 컬렉션 '/7' 카운트
+  수정)에서 JSX 주석 `{/* … */}`가 `isFeatureEnabled('attachmentHats')
+  && ( … )` 표현식 괄호 안, `<NavBtn>` 앞에 놓여 vite build가 문법
+  오류로 깨짐. 커밋 메시지에는 "build PASS"라고 적혀 있었으나 실제로는
+  8c5dc6c 단독 빌드 FAIL — 규칙 15에 따라 핫픽스를 stash하고 HEAD 단독
+  빌드 FAIL을 실측으로 재현·확정한 뒤 커밋. 수정 내용은 주석을 표현식
+  바깥(윗줄)으로 이동한 순수 주석 위치 이동 2줄, 기능 변경 없음. 이
+  핫픽스는 세션 시작 시 작업 트리에 미커밋 상태로 존재했음(작성 주체
+  불명 — `.ai-status`의 implementer-polish-sweep은 Dashboard.jsx를 소유
+  목록에 넣지 않음). 운영자 승인 하에 릴리스 게이트 세션이 검증 후 커밋.
+- **verify:all**: 20개 도메인 PASS — student/admin/homework/quiz/writing/
+  unitSwitching/persistence/dailyStudy/wordAssignment/audioTts/paulRank/
+  ticketEconomy/wordKing/houseSystem/seasonalProgression/dailyRitual/
+  attachment/analytics/reading/sentenceLearning. speaking·listening은
+  기존 문서화된 headless 구조적 한계로 SKIP. **login FAIL(4개 스크립트)은
+  회귀 아님** — 로컬에 SUPABASE_SERVICE_ROLE_KEY가 없어(Vercel 프로덕션
+  에만 존재) `api/_pinAuth.js`가 anon key로 폴백하고, v1.9 RLS가 PIN 컬럼
+  anon 접근을 차단하므로 서비스롤 필요 단언이 로컬에서 실패하는 것.
+  TESTING.md에 이미 "로그인 — 로컬 SUPABASE_SERVICE_ROLE_KEY 미설정으로
+  4/7만 실행"으로 문서화된 기지(旣知) 환경 한계.
+- **프로덕션 push + Vercel 배포 검증(deployment-engineer 실측)**:
+  `npm run build` PASS(8.4s) 후 `abb0348..b8afc07` 총 10커밋을
+  origin/main에 push. origin/main HEAD =
+  `b8afc071d35b3fb751c972c21bd6145807b3e2bb`(git ls-remote 실측). Vercel
+  배포 success — GitHub commit status API의 Vercel check가 커밋 b8afc07에
+  대해 success, 완료 2026-07-23T04:27:13Z(UTC). 프로덕션
+  https://voca-drab.vercel.app 이 로컬 dist와 동일한 번들
+  (`assets/index-C3CEvO2x.js`, SHA-256 바이트 단위 일치)을 서빙 중 —
+  b8afc07 정상 반영 확정.
+- **⚠️ 서버리스 함수 한도 경고(운영자/후속 세션 필독)**: `api/` 라우트
+  파일 12개 / Vercel Hobby 한도 12개 = **여유 0**. 다음에 `api/*.js`
+  파일을 1개라도 추가하면 배포 전체가 실패한다. 신규 서버 액션은 파일
+  추가 대신 `api/admin-pin-actions.js` 선례처럼 기존 함수에 action
+  dispatch로 통합할 것.
+- **동시 작업 관찰**: `.ai-status/implementer-polish-sweep.json`은
+  status working / progress 10%였으나 소유 파일
+  (`tests/harness/registry.mjs`)에 미커밋 변경 없음 — 정지(stall) 추정.
+  릴리스 게이트 세션은 해당 소유 파일을 건드리지 않았음. 남은 작업
+  (dbIntegrityAudit v3.1 인지 등)은 보드에 남아 있음.
+  `.ai-status/analyst-codebase-audit-product-review.json`은 completed —
+  docs/reading/09·10 문서는 이미 커밋됨. 상태 파일 2건은 untracked로
+  유지(소유 에이전트 몫).
+
 _최종 갱신: 2026-07-23 (4차, Lesson 5 완결 여정 — GuidedSession→핵심 문장 글루 + 라이브 시드/검증, readingStudentUI=false 유지)_
 
 ## 2026-07-23 (4차) — 완결된 레슨 1개(Lesson 5): 단어 학습 → 오늘의 핵심 문장 여정 글루
