@@ -600,9 +600,9 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
             <NavBtn emoji="📔" label="내 다이어리" sub={`스티커 ${stickerTypes.length}개`}    color="from-pink-400 to-purple-500"    onClick={() => onGo('diary')} />
             {/* 애착 시스템(2026-07-22) — 플래그별 게이트. 꺼진 기능은 버튼
                 자체가 없다(자리 차지 없음). 기존 6버튼은 위에서 그대로. */}
+            {/* "/7" 하드코딩도 같은 계열의 거짓 정보였다 — 카탈로그는
+                hat_rose 추가로 8종(HAT_CATALOG 실측, 하네스 단언 동일). */}
             {isFeatureEnabled('attachmentHats') && (
-              {/* "/7" 하드코딩도 같은 계열의 거짓 정보였다 — 카탈로그는
-                  hat_rose 추가로 8종(HAT_CATALOG 실측, 하네스 단언 동일). */}
               <NavBtn emoji="🎩" label="모자 컬렉션" sub={`${studentData.hatInventory.length}/${HAT_CATALOG.length} 수집`} color="from-violet-400 to-purple-600" onClick={() => onGo('hatCollection')} />
             )}
             {isFeatureEnabled('attachmentMuseum') && (
