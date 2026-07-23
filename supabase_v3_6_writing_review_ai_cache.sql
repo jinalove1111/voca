@@ -37,7 +37,18 @@ create table if not exists spelling_ai_grading_cache (
   reason text,
   suggested_synonym text,
   part_of_speech_warning text,
-  decision_source text not null,      -- 'levenshtein' | 'lemma' | 'ai' | 'exact_match' 등
+  meaning_scope_warning text,         -- v1.1(2026-07-23) 추가 — AI가 accept를
+                                       -- 내리면서도 "등록된 여러 뜻 중 일부만
+                                       -- 커버"/"의미가 인접하지만 완전 동일은
+                                       -- 아님" 같은 경고를 실었을 때만 채워짐.
+                                       -- 이 파일이 아직 실행 전이라(§ 위
+                                       -- "운영자 실행 대기") 새 마이그레이션
+                                       -- 파일을 따로 만들지 않고 이 파일
+                                       -- 자체에 컬럼을 추가했다(멱등 —
+                                       -- create table if not exists 안이라
+                                       -- 처음 실행 시 이 컬럼까지 한 번에
+                                       -- 생성됨).
+  decision_source text not null,      -- 'levenshtein' | 'lemma' | 'ai' | 'exact_match' | 'synonym' 등
   model text,                         -- 'claude-haiku-4-5' 등, decision_source='ai'일 때만
   input_tokens integer,               -- 토큰/비용 로깅(§ 구현 지시 6) — ai 판정 건에만 채움
   output_tokens integer,

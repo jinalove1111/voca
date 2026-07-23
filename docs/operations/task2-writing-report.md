@@ -166,3 +166,103 @@ supabase secrets set \
 - 학생 이름 필터(§3에서 설명한 이유로 이번 범위에서는 UI 로직만 준비, `spellingReviewApi.js`에 student 이름 join 추가는 그 파일 소유 세션 몫).
 - "인정 변형으로 저장" 모드의 실제 표기 정규화(§3-1) — v1은 의도적으로 보류.
 - 실제 배포 후 §7 체크리스트 실행 및 Edge Function 로그 기반 실측 토큰/비용(§9는 추정치 — 실측으로 갱신 필요).
+
+---
+
+# v1.1 — "운영 가능한 상태"로 완성(2026-07-23, writing-review-specialist)
+
+**기준 HEAD(작업 시작)**: `c5641d2`(v1 커밋 `af25b1d` + docs append 커밋 직후)
+**전제(코디네이터 실측, 재검증 안 함)**: 라이브 pending **109건**(계속 증가), v3_6 캐시 테이블 미실행(PGRST205), Edge Function 미배포(404), `ANTHROPIC_API_KEY` 미설정, `writingReviewAiAssist` flag = false.
+**커밋/push**: 하지 않음 — 코디네이터가 `git diff HEAD` 리뷰 후 단독 커밋(작업 트리에만 반영).
+
+## v1-1. v1이 "안 보였던" 3가지 원인(정직한 사후 분석)
+
+v1(af25b1d)은 기능적으로는 완결돼 있었지만, 실제로 관리자가 켜서 써보면 아무 쓸모가 없는 상태였다 — 이유는 세 가지가 겹쳤기 때문이다:
+
+1. **feature flag 기본 OFF** — 의도된 안전장치라 "안 보이는" 게 정상이지만, 운영자가 켜봐도 아래 2번 때문에 여전히 못 썼다.
+2. **아키텍처 자체가 Edge Function 배포에 전부 의존** — v1의 `previewAiClassification`은 규칙 분류(1~9단계)까지 전부 Edge Function(`grade-writing-answers`) 안에서 수행했다. 이 함수가 미배포(404) 상태라 "분석 시작"을 눌러도 `fetch()`가 즉시 실패하고, 화면에는 에러 배너 하나만 뜨고 **아무 결과도 안 보였다** — 정규화/완전일치처럼 AI 없이도 즉시 확정 가능한 항목들(exact_match/levenshtein)조차 단 한 건도 화면에 나타나지 않는 구조였다. "AI가 아직 준비 안 됨"이 아니라 "규칙 기반 결과까지 통째로 인질로 잡힌" 게 실제 문제였다.
+3. **v3_6 SQL 미실행 + 시크릿 미설정이 2번과 겹쳐 완전한 침묵으로 이어짐** — 설령 Edge Function을 배포해도 시크릿이 없으면 500, 캐시 테이블이 없으면 캐시만 조용히 스킵(이건 원래 안전하게 설계됨)이라 이 자체는 큰 문제가 아니었다. 진짜 문제는 2번 — "일부 실패"가 아니라 "전체 실패"였다는 것.
+
+## v1-2. 아키텍처 변경 근거 — 클라이언트가 pipeline.js를 직접 재사용 가능한가?
+
+지시받은 대로 "Vite가 src 밖 상대 import를 허용하는지 build로 실증"했다. `src/utils/spellingReviewAiApi.js`에 `import { classifyLocally, buildProposal } from '../../supabase/functions/grade-writing-answers/pipeline.js'`를 추가하고 `npm run build`를 돌린 결과 **에러 0, 정상 번들링**(청크 크기 경고는 기존에도 있던 것과 동일 카테고리, 이번 변경으로 새로 생긴 경고 없음). 근거: `pipeline.js`는 Deno 전용 API(`Deno.env`, `npm:` import 등)를 전혀 안 쓰는 순수 JS이고, Deno 전용 코드는 전부 `index.ts`에만 있다 — 그래서 Vite/Rollup 입장에서는 그냥 프로젝트 루트 안의 평범한 JS 파일 하나일 뿐이고 `supabase/` 밖 경로 여부는 번들러에 아무 의미가 없다. `vite.config.js`도 `root`를 별도로 좁히지 않아(기본값 = 프로젝트 루트) dev server의 `server.fs` 제약과도 무관하다.
+
+이 실증 결과로 v1에서 `src/utils/spellingReviewBulkPlan.js`에 복제해뒀던 `normalizeForCompare`(당시 "Deno 전용으로 간주해 복제")도 이번 라운드에 제거하고 `pipeline.js`에서 직접 import하도록 고쳤다(헌법 규칙 3, 재복제 금지 원칙 회복) — 기존 "드리프트 가드" 테스트(섹션 25)는 이제 구조적으로 항상 참이 되지만, 회귀 방지용으로 그대로 남겨뒀다.
+
+### 새 아키텍처(v1 → v1.1)
+
+- `src/utils/spellingReviewAiApi.js`의 `runLocalRules(rows)` — `classifyLocally`를 각 행에 돌려 규칙으로 확정된 것(`resolved`)과 미해결(`unresolved`)로 나눈다. **어떤 네트워크 호출도 하지 않음.**
+- `callEdgeFunctionForUnresolved({ adminPin, unresolvedRows })` — **미해결 항목의 id만** Edge Function으로 보낸다(`pendingIds` 파라미터, 기존 `index.ts`가 이미 지원하던 필터링을 그대로 활용). 호출이 어떤 이유로 실패하든(네트워크 예외, `res.ok===false`, 404 HTML이라 JSON 파싱 실패, `not_authorized` 등) **절대 throw하지 않고**, 미해결 항목 전부를 `decision:'review', confidence:0, decision_source:'ai_unavailable'` + 실패 사유 문자열로 대체해 반환한다.
+- `previewAiClassification({ adminPin, rows, scopeIds, onPhase })` — 위 두 함수를 순서대로 실행하고 `resolved + (edge 결과 또는 폴백)`을 합쳐 반환. **미해결이 0건이면 Edge Function을 아예 호출하지 않는다**(호출 자체가 필요 없음 — 이 경로도 실측: 짧은 완전일치/편집거리1 오타로만 채워진 픽스처는 AI 호출 0회로 끝남, 섹션 35).
+
+이 구조로 Edge Function이 여전히 미배포인 지금도 "분석 시작"을 누르면 완전일치/오타(편집거리1)/이미 등록된 동의어처럼 규칙으로 즉시 판단 가능한 항목은 **바로** safe_accept/rule로 보이고, 나머지는 "관리자 확인 필요(AI 서비스 호출 실패, 사유: ...)"로 표시된다 — v1처럼 전체가 침묵하지 않는다.
+
+## v1-3. 스키마 실측 결과 — 학생별 필터
+
+지시대로 `spelling_review_queue` 스키마를 실측했다(`supabase_v2_0_spelling_mixed.sql:35-44`, `src/utils/spellingReviewApi.js:56` select 목록). 결론: **컬럼 자체(`student_id`)는 존재한다.** 하지만 unique 인덱스가 `(word_id, submitted_answer)`이고 upsert가 `{ onConflict: 'word_id,submitted_answer', ignoreDuplicates: true }`(`spellingReviewApi.js:35-42`)라, **같은 단어에 같은 오답을 여러 학생이 제출해도 딱 1행만 남고 그 행의 `student_id`는 최초 제출자 한 명뿐이다.** 즉 "학생별 필터"를 만들어 특정 학생을 골라도, 그 학생이 실제로 제출한 오답 중 "다른 학생이 먼저 같은 오답을 냈던 것"은 전혀 안 보인다 — 필터가 있는데 결과가 불완전한, 겉보기엔 동작하지만 실제로는 오해를 유발하는 UI가 된다. "거짓 UI 금지" 원칙에 따라 **이번 라운드에도 학생별 필터는 구현하지 않았다** — 스키마상 완전히 불가능한 건 아니지만(컬럼은 있음), 이 큐의 dedupe 설계 자체가 "학생별 완전한 제출 이력"을 보장하지 않아 필터로서 신뢰할 수 없다는 게 실측 결론이다. 후속 세션이 이 큐의 dedupe 정책 자체를 바꾸지 않는 한(예: `(word_id, submitted_answer, student_id)`로 유니크 키 변경 — 별도 마이그레이션 + 기존 데이터 마이그레이션 필요, 이번 범위 밖) 이 한계는 유지된다.
+
+## v1-4. UI/기능 변경 요약(대조표)
+
+| 요구 항목 | 상태 |
+|---|---|
+| 규칙 기반 클라이언트 우선 실행 | 완료(§v1-2) |
+| 미해결만 Edge Function 전송 | 완료 |
+| 호출 실패 시 review/confidence0/ai_unavailable + 사유 노출, 규칙 결과 유지 | 완료 |
+| 범위 선택(전체 실측 N건/선택한 답안만) | 완료 |
+| safe_accept/review/reject_candidate 표시명(내부값 유지, 표시만 매핑) | 완료 |
+| 요약(자동인정가능/확인필요/오답후보/규칙처리/AI처리/캐시히트/처리실패) | 완료(`summarizeProposals`) |
+| 결과 행: 단어/뜻/답안/판정/confidence/근거/품사경고/출처(rule\|synonym\|ai\|cache) | 완료 — `meaning_scope_warning`(의미범위 경고)도 행에 추가 표시 |
+| 필터: 전체선택/해제/판정별/단어별/동일답안 묶어보기 | 완료 |
+| 필터: 학생별 | **미구현**(§v1-3, 거짓 UI 금지) |
+| 일괄 액션 5종 + 실행 전 확인 모달(정확한 건수) | 완료 |
+| "확실한 답안 모두 인정" 기준(전부 AND) | 완료(`selectCertainAccepts`) |
+| 인정 시 3옵션 | 완료(기존 2개 + "같은 대기 답안 모두 인정") |
+| ②저장 시 감사 메타데이터(`supabase_v3_7_word_accepted_variants.sql`) | 완료(신규 SQL, 운영자 실행 대기, 미실행이어도 accepted_meanings 저장 정상) |
+
+## v1-5. 새/변경 파일
+
+- `supabase/functions/grade-writing-answers/pipeline.js` — `classifyLocally`가 `exact_match`/`synonym` 출처를 구분, `buildProposal`/`buildAiPrompt`/`classifyBatch`에 `meaning_scope_warning` 필드 추가.
+- `supabase/functions/grade-writing-answers/index.ts` — 캐시 조회/저장에 `meaning_scope_warning` 컬럼 왕복 추가(그 외 로직 무변경).
+- `supabase_v3_6_writing_review_ai_cache.sql` — **아직 운영자가 실행 안 한 파일이라** 새 마이그레이션 파일을 따로 만들지 않고 이 파일 자체에 `meaning_scope_warning text` 컬럼을 추가(멱등 `create table if not exists` 안이라 최초 실행 시 한 번에 반영).
+- `supabase_v3_7_word_accepted_variants.sql`(신규) — 감사 이력 테이블, `select+insert`만 GRANT(update/delete 없음 — append-only), PIN 등 자격증명 미기록.
+- `src/utils/spellingReviewBulkPlan.js` — `normalizeForCompare` 재복제 제거(원본 import), `selectCertainAccepts`/`groupKeyFor`/`groupRowsByAnswer`/`selectAllDuplicateGroupRows`/`buildAcceptedVariantRecord`/`summarizeProposals` 추가.
+- `src/utils/spellingReviewAiApi.js` — `runLocalRules`/`callEdgeFunctionForUnresolved`로 전면 재작성, `previewAiClassification` 시그니처 변경(`{ adminPin, pendingIds }` → `{ adminPin, rows, scopeIds, onPhase }`), `recordAcceptedVariantBestEffort`(mode='synonym' 시 감사 이력 시도, 실패 조용히 무시) 추가.
+- `src/components/AdminScreen.jsx`(`SpellingReviewQueuePanel`만) — 범위 선택/2단계 진행 표시/요약/필터/그룹뷰/5개 일괄 액션+확인 모달/출처·의미범위경고 배지 추가. **season 관련 줄 0건**(Task 1 파일 불가침, `git diff` 실측).
+- `src/config/features.js` — 플래그 값(`false`)은 그대로, 주석만 v1.1 맥락 추가.
+- `scripts/testWritingReviewAiPipeline.mjs` — 섹션 27~36 추가(§v1-6).
+
+## v1-6. 테스트 결과
+
+`node scripts/testWritingReviewAiPipeline.mjs` — 섹션 1~35 전부 PASS, 섹션 36은 정직한 SKIP 4건(실제 Edge Function e2e/실제 RLS/실제 Anthropic 응답 스키마 준수율/실제 미배포 상태의 브라우저 fetch 응답 — 전부 로컬 검증 불가, 배포 후 스테이징 확인 필요). 신규 섹션 요약:
+
+- **27** — `exact_match` vs `synonym` 출처 구분.
+- **28** — `meaning_scope_warning` 필드가 로컬 판정에는 절대 안 생기고(AI 전용), AI 성공/캐시 재사용 경로 양쪽에서 정확히 왕복됨.
+- **29** — 운영자 제공 실제 사례(climate/기후/"환경", evaporation/증발/"완벽하게", stream/흐름/"실시간", constant/끊임없는/"o") — 4건 전부 **로컬 규칙 단계에서 확정 안 됨**(AI로 위임)을 먼저 확인 후, mock AI가 각각 review/reject_candidate를 내도록 시뮬레이션해 최종 결과가 기대와 일치하고 **어떤 DB도 건드리지 않음**을 확인.
+- **30** — "확실한 답안 모두 인정" AND 조건(0.95 미만/품사경고/의미범위경고/review·reject_candidate 전부 제외) 정확성.
+- **31** — 전역 "동일한 답안 모두 인정" 대상 선별(그룹 크기 2 이상만) + 그룹핑 키.
+- **32** — 감사 레코드가 관리자 PIN 등 자격증명을 절대 담지 않음(헌법 규칙 11) 확인.
+- **33** — 요약 집계 7개 지표(총/안전인정/확인필요/오답후보/규칙처리/AI처리/캐시히트/처리실패) 정확성 + 합계 검산.
+- **34** — 130건/109건(코디네이터 실측 라이브 규모) 배치 슬라이싱.
+- **35** — "규칙 먼저, 미해결만 AI" 분리 계약(핵심 아키텍처 변경) 재현 검증 — `spellingReviewAiApi.js` 자체는 브라우저 전용(import.meta.env)이라 Node에서 직접 못 돌리는 정직한 한계는 유지(§ 파일 상단 주석/섹션 36).
+
+### build/verify
+
+- `npm run build` — PASS(에러 0, 클라이언트가 `supabase/functions/grade-writing-answers/pipeline.js`를 정상 번들링하는 것까지 포함해 실측).
+- `npm run verify:writing` — PASS(3개 스크립트).
+- `npm run verify:all` — 20도메인 PASS(login FAIL은 기지 로컬 환경 한계, 이번 세션이 PIN 관련 파일을 전혀 안 건드렸음을 확인 — 회귀 아님), speaking/listening SKIP(하드웨어 필요, 기존과 동일).
+
+## v1-7. 안전 확인
+
+- 이번 세션 동안 라이브 DB에 대한 SELECT/INSERT/UPDATE/DELETE **0회**(전부 픽스처 + `npm run build`/`node scripts/...`만 실행).
+- flag `writingReviewAiAssist`는 여전히 `false`(전제조건 미충족 — §전제 참고).
+- `git add`/`commit`/`push` **하지 않음** — 코디네이터가 `git diff HEAD`로 리뷰 후 단독 커밋 예정.
+- Task 1 파일(`seasonApi.js`/`api/start-new-season.js`/`SeasonPanel` 등), `docs/research/*`, 다른 에이전트의 `.ai-status/*.json`, `handoff.md`/`ROADMAP.md`, 신규 Vercel `api/*.js` — 전부 무변경(git status로 확인, 이번 세션이 건드린 파일은 위 §v1-5 목록이 전부).
+
+## v1-8. 남은 운영자 액션(변경 없음 — §6~7과 동일 순서, v3_6 최신본 반영)
+
+1. `supabase_v3_6_writing_review_ai_cache.sql`(v1.1로 `meaning_scope_warning` 컬럼 추가된 최신본) 실행.
+2. `supabase_v3_7_word_accepted_variants.sql`(신규, 선택 — 미실행이어도 "이 단어 허용 답안으로 저장" 자체는 정상 동작, 감사 이력만 조용히 스킵) 실행.
+3. `supabase functions deploy grade-writing-answers`.
+4. 시크릿 설정(`ANTHROPIC_API_KEY`/`ADMIN_PIN`/`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`).
+5. 배포 후 스테이징에서 실제 라이브 pending(109건+)으로 "분석 시작" 1회 수동 확인 — 이번 라운드부터는 **3~4번을 아직 안 해도** 1~2번만 없어도 규칙 기반 결과(완전일치/오타/이미 등록된 동의어)는 즉시 확인 가능(§v1-2).
+6. 위 전부 확인 후에만 운영자가 `writingReviewAiAssist: true`로 전환 판단.

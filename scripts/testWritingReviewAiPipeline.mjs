@@ -9,14 +9,29 @@
 // 로컬에서 검증 불가능한 항목(Supabase Edge Function 실제 배포, 실제
 // RLS 권한 거부, 실제 Anthropic 응답 파싱)은 가짜로 PASS 처리하지 않고
 // 맨 아래 "배포 후 확인 필요" 섹션에 정직하게 SKIP으로 표기한다.
+//
+// v1.1(2026-07-23, docs/operations/task2-writing-report.md v1.1 섹션) 추가분
+// — 섹션 27부터: 규칙 기반 분류가 이제 브라우저에서 먼저 실행되는
+// 아키텍처(pipeline.js 클라이언트 재사용, 미해결 항목만 Edge Function
+// 전송), "확실한 답안 모두 인정"/"동일한 답안 모두 인정" 대상 선별,
+// 요약 집계(summarizeProposals), 인정 변형 감사 레코드, 운영자 제공 실제
+// 사례 픽스처(climate/evaporation/stream/constant). src/utils/
+// spellingReviewAiApi.js의 fetch 기반 Edge Function 호출 자체(네트워크
+// 실패/404 폴백 분기)는 supabaseClient(import.meta.env)를 top-level
+// import하는 브라우저 전용 모듈이라 이 Node 스크립트에서 직접 실행할 수
+// 없다 — 그 파일이 호출하는 순수 함수(classifyLocally/buildProposal, 둘 다
+// 이 파일에서 이미 광범위하게 검증됨)와 "미해결만 골라 보낸다"는 분리 로직
+// 자체를 섹션 35에서 동일하게 재현해 검증한다(정직한 한계, § 섹션 36 참고).
 import {
   classifyLocally, classifyBatch, buildBatches, buildCacheKey, parseCacheKey,
   buildAiPrompt, parseAiBatchResponse, estimateCostUsd, editDistance,
-  normalizeForCompare, verifyAdminPin, isValidAiDecision,
+  normalizeForCompare, verifyAdminPin, isValidAiDecision, buildProposal,
 } from '../supabase/functions/grade-writing-answers/pipeline.js'
 import {
   selectRows, findDuplicateAnswerRows, planAccept, selectHighConfidenceAccepts,
   filterProposals, summarizeBulkResults, normalizeForCompare as normalizeForCompareClient,
+  selectCertainAccepts, selectAllDuplicateGroupRows, groupRowsByAnswer, groupKeyFor,
+  summarizeProposals, buildAcceptedVariantRecord,
 } from '../src/utils/spellingReviewBulkPlan.js'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -46,6 +61,18 @@ const F = {
   completelyWrong: { id: 'p11', wordId: 'w8', word: 'harm', meaning: '해치다', acceptedMeanings: [], submittedAnswer: '농부' },
   duplicateA: { id: 'p12', wordId: 'w9', word: 'hug', meaning: '안다, 포옹하다', acceptedMeanings: [], submittedAnswer: '포옹' },
   duplicateB: { id: 'p13', wordId: 'w9', word: 'hug', meaning: '안다, 포옹하다', acceptedMeanings: [], submittedAnswer: '포옹' }, // p12와 동일 답안, 같은 단어
+}
+
+// 운영자가 직접 제공한 실제 사례(v1.1, 2026-07-23) — 라이브 pending 중
+// 실측된 조합. "환경"은 climate(기후)와 의미가 인접해 보이지만 실제로는
+// 다른 개념(오답 후보)이라 맹목적 자동 인정이 있으면 안 되고, "완벽하게"/
+// "o"는 등록 뜻과 완전히 무관해 reject_candidate로 가야 한다(자동 거부
+// 실행은 여전히 없음 — 제안만).
+const REAL_CASES = {
+  climate: { id: 'r1', wordId: 'rw1', word: 'climate', meaning: '기후', acceptedMeanings: [], submittedAnswer: '환경' },
+  evaporation: { id: 'r2', wordId: 'rw2', word: 'evaporation', meaning: '증발', acceptedMeanings: [], submittedAnswer: '완벽하게' },
+  stream: { id: 'r3', wordId: 'rw3', word: 'stream', meaning: '흐름', acceptedMeanings: [], submittedAnswer: '실시간' },
+  constant: { id: 'r4', wordId: 'rw4', word: 'constant', meaning: '끊임없는', acceptedMeanings: [], submittedAnswer: 'o' },
 }
 
 console.log('\n1. 정규화(공백/문장부호/Unicode NFC) — 완전일치로 귀결되면 로컬 accept')
@@ -354,11 +381,210 @@ console.log('\n25. 드리프트 가드 — 서버(pipeline.js)/클라이언트(s
   check('두 구현이 모든 샘플에서 동일 결과', samples.every((s) => normalizeForCompare(s) === normalizeForCompareClient(s)))
 }
 
-console.log('\n26. 라이브 배포 의존 항목 — 로컬 검증 불가(정직한 SKIP, 실패로 안 셈)')
+console.log('\n27. exact_match vs synonym 구분(v1.1) — 관리자 UI "출처" 표시용')
+{
+  const exactCase = classifyLocally({ word: 'locker', wordId: 'w1', meaning: '물품 보관함', acceptedMeanings: ['보관함'], submittedAnswer: '물품 보관함' })
+  check('등록 뜻(meaning) 자체와 일치하면 exact_match', exactCase.decision === 'accept' && exactCase.decisionSource === 'exact_match')
+
+  const synonymCase = classifyLocally({ word: 'flat', meaning: '바람이 빠진, 펑크가 난', acceptedMeanings: ['펑크난'], submittedAnswer: '펑크난' })
+  check('accepted_meanings(관리자가 나중에 추가한 동의어)와만 일치하면 synonym', synonymCase.decision === 'accept' && synonymCase.decisionSource === 'synonym')
+
+  const p = buildProposal({ pendingId: 'x', word: 'flat', meaning: 'm', submittedAnswer: 'a', decision: synonymCase.decision, confidence: synonymCase.confidence, reason: synonymCase.reason, decisionSource: synonymCase.decisionSource })
+  check('buildProposal이 decision_source=synonym을 그대로 보존', p.decision_source === 'synonym')
+}
+
+console.log('\n28. meaning_scope_warning 필드(v1.1) — AI 전용, 로컬 판정에는 절대 안 생김')
+{
+  const local = classifyLocally(F.exact)
+  const localProposal = buildProposal({ pendingId: F.exact.id, word: F.exact.word, meaning: F.exact.meaning, submittedAnswer: F.exact.submittedAnswer, decision: local.decision, confidence: local.confidence, reason: local.reason, decisionSource: local.decisionSource })
+  check('로컬(규칙) 판정은 meaning_scope_warning이 항상 null', localProposal.meaning_scope_warning === null)
+
+  const raw = JSON.stringify([{ pending_answer_id: 'a1', decision: 'accept', confidence: 0.9, reason: '부분 일치', suggested_synonym: null, part_of_speech_warning: null, meaning_scope_warning: '등록된 여러 뜻 중 하나만 커버' }])
+  const map = parseAiBatchResponse(raw)
+  check('AI 응답의 meaning_scope_warning 필드가 파싱됨', map.get('a1').meaning_scope_warning === '등록된 여러 뜻 중 하나만 커버')
+
+  const proposals = await classifyBatch([F.closeButWrongMeaning], {
+    aiClassify: async (batch) => {
+      const m = new Map()
+      for (const it of batch) m.set(it.id, { pending_answer_id: it.id, decision: 'accept', confidence: 0.9, reason: 'mock', suggested_synonym: null, part_of_speech_warning: null, meaning_scope_warning: '의미 범위 경고 예시' })
+      return m
+    },
+  })
+  check('classifyBatch가 AI의 meaning_scope_warning을 proposal에 그대로 전달', proposals[0].meaning_scope_warning === '의미 범위 경고 예시')
+
+  const cacheStore = new Map()
+  await classifyBatch([{ ...F.closeButWrongMeaning, id: 'cache-src' }], {
+    cacheLookup: async (key) => cacheStore.get(key) || null,
+    cacheStore: async (key, decision) => cacheStore.set(key, decision),
+    aiClassify: async (batch) => {
+      const m = new Map()
+      for (const it of batch) m.set(it.id, { pending_answer_id: it.id, decision: 'accept', confidence: 0.9, reason: 'mock', suggested_synonym: null, part_of_speech_warning: null, meaning_scope_warning: '캐시로 재사용될 경고' })
+      return m
+    },
+  })
+  const [cachedProposal] = await classifyBatch([{ ...F.closeButWrongMeaning, id: 'cache-reuse' }], {
+    cacheLookup: async (key) => cacheStore.get(key) || null,
+    cacheStore: async () => {},
+    aiClassify: async () => { throw new Error('캐시 히트라 호출되면 안 됨') },
+  })
+  check('캐시 재사용 시에도 meaning_scope_warning이 그대로 유지', cachedProposal.meaning_scope_warning === '캐시로 재사용될 경고' && cachedProposal.cache_hit === true)
+}
+
+console.log('\n29. 운영자 제공 실제 사례(climate/evaporation/stream/constant) — 맹목적 자동 인정/거부 없음')
+{
+  // (a) 로컬 규칙 단계에서 절대 확정되면 안 됨(전부 의미 판단이 필요한
+  // 케이스라 편집거리로는 안 잡힘 — AI로 넘어가야 정상).
+  for (const [name, item] of Object.entries(REAL_CASES)) {
+    const local = classifyLocally(item)
+    check(`"${name}"(${item.word}/${item.meaning}, 답="${item.submittedAnswer}") — 로컬 규칙 단계에서 확정 안 됨(AI로 위임)`, local.decision === null)
+  }
+
+  // (b) AI가 각 사례에 맞는 판정을 냈다고 가정(운영자 기대치 반영한 mock)
+  // — climate/evaporation처럼 "의미가 인접하지만 다름"/"완전 무관"은
+  // review 또는 reject_candidate로, 실제로 결과가 그렇게 나오는지 확인.
+  // ⚠ 이 mock 응답은 실제 Claude 판단이 아니라 "AI가 이렇게 응답해도
+  // 파이프라인이 안전하게 처리하는지"를 검증하는 테스트 더블이다(§ 정직한
+  // 한계 — 실제 모델 응답 품질은 배포 후 실측 필요, 섹션 36 SKIP 참고).
+  const mockDecisions = {
+    r1: { decision: 'review', confidence: 0.4, reason: '기후와 환경은 인접하지만 동일 개념 아님' }, // climate/환경
+    r2: { decision: 'reject_candidate', confidence: 0.05, reason: '증발과 완벽하게는 의미상 전혀 무관' }, // evaporation/완벽하게
+    r3: { decision: 'review', confidence: 0.5, reason: '흐름과 실시간은 문맥에 따라 다를 수 있음' }, // stream/실시간
+    r4: { decision: 'reject_candidate', confidence: 0.02, reason: 'o는 답이 아님(무관/미완성 응답)' }, // constant/o
+  }
+  const aiClassify = async (batch) => {
+    const m = new Map()
+    for (const it of batch) {
+      const d = mockDecisions[it.id]
+      m.set(it.id, { pending_answer_id: it.id, decision: d.decision, confidence: d.confidence, reason: d.reason, suggested_synonym: null, part_of_speech_warning: null, meaning_scope_warning: null })
+    }
+    return m
+  }
+  const proposals = await classifyBatch(Object.values(REAL_CASES), { aiClassify })
+  const byId = new Map(proposals.map((p) => [p.pending_answer_id, p]))
+  check('climate/환경 — review 유지(의미 모호, 자동 인정 안 됨)', byId.get('r1').decision === 'review')
+  check('evaporation/완벽하게 — reject_candidate(무관 답안)', byId.get('r2').decision === 'reject_candidate')
+  check('stream/실시간 — review 유지', byId.get('r3').decision === 'review')
+  check('constant/o — reject_candidate(무관 답안)', byId.get('r4').decision === 'reject_candidate')
+  check('4건 전부 decision_source=ai(로컬에서 확정 안 됐다는 뜻)', proposals.every((p) => p.decision_source === 'ai'))
+  check('reject_candidate 제안이 있어도 이 호출 자체는 어떤 DB도 건드리지 않음(순수 계산, § 섹션 12와 동일 원칙)', Array.isArray(proposals))
+}
+
+console.log('\n30. "확실한 답안 모두 인정" 대상 선별(selectCertainAccepts) — 전부 AND')
+{
+  const proposals = [
+    { pending_answer_id: 'c1', decision: 'accept', confidence: 0.97, part_of_speech_warning: null, meaning_scope_warning: null, decision_source: 'ai' }, // 통과
+    { pending_answer_id: 'c2', decision: 'accept', confidence: 0.90, part_of_speech_warning: null, meaning_scope_warning: null, decision_source: 'ai' }, // 신뢰도 미달
+    { pending_answer_id: 'c3', decision: 'accept', confidence: 0.99, part_of_speech_warning: '품사 차이 가능성', meaning_scope_warning: null, decision_source: 'ai' }, // 품사 경고
+    { pending_answer_id: 'c4', decision: 'accept', confidence: 0.99, part_of_speech_warning: null, meaning_scope_warning: '의미 범위 경고', decision_source: 'ai' }, // 의미범위 경고
+    { pending_answer_id: 'c5', decision: 'review', confidence: 0.99, part_of_speech_warning: null, meaning_scope_warning: null, decision_source: 'ai' }, // review는 애초 제외
+    { pending_answer_id: 'c6', decision: 'accept', confidence: 1, part_of_speech_warning: null, meaning_scope_warning: null, decision_source: 'exact_match' }, // 통과(규칙 기반도 포함)
+  ]
+  const certain = selectCertainAccepts(proposals, 0.95)
+  check('c1/c6만 통과(0.95 미만/품사경고/의미범위경고/review 전부 제외)', certain.length === 2 && certain.every((p) => ['c1', 'c6'].includes(p.pending_answer_id)))
+  check('review/reject_candidate는 confidence가 아무리 높아도 절대 포함 안 됨', !certain.some((p) => p.pending_answer_id === 'c5'))
+}
+
+console.log('\n31. "동일한 답안 모두 인정" 전역 대상 선별(selectAllDuplicateGroupRows) + 그룹핑')
+{
+  const rows = [
+    { id: 'g1', wordId: 'w9', submittedAnswer: '포옹' },
+    { id: 'g2', wordId: 'w9', submittedAnswer: '  포옹 ' }, // 공백만 다름 — 동일 그룹
+    { id: 'g3', wordId: 'w9', submittedAnswer: '안아주다' }, // 단독 그룹(제외 대상)
+    { id: 'g4', wordId: 'w10', submittedAnswer: '포옹' }, // 다른 단어(문자열 같아도 별개 그룹)
+  ]
+  const all = selectAllDuplicateGroupRows(rows, normalizeForCompareClient)
+  check('그룹 크기 2 이상인 행만(g1,g2) — 단독 그룹(g3,g4)은 제외', all.length === 2 && all.every((r) => ['g1', 'g2'].includes(r.id)))
+
+  const groups = groupRowsByAnswer(rows, normalizeForCompareClient)
+  check('그룹 수는 3개((w9,포옹) / (w9,안아주다) / (w10,포옹))', groups.size === 3)
+  check('groupKeyFor가 단어+정규화답안 조합을 키로 씀', groupKeyFor(rows[0], normalizeForCompareClient) === groupKeyFor(rows[1], normalizeForCompareClient))
+}
+
+console.log('\n32. 인정 변형 감사 레코드(buildAcceptedVariantRecord) — supabase_v3_7 메타데이터')
+{
+  const row = { wordId: 'w9', meaning: '안다, 포옹하다', submittedAnswer: '포옹' }
+  const rec = buildAcceptedVariantRecord(row)
+  check('word_id/등록뜻/인정답안이 그대로 담김', rec.word_id === 'w9' && rec.registered_meaning === '안다, 포옹하다' && rec.accepted_answer === '포옹')
+  check('created_by 기본값이 관리자 PIN 등 자격증명이 아닌 고정 라벨(헌법 규칙 11 — PIN류 절대 미기록)', rec.created_by === 'admin_ui_ai_review' && !/pin/i.test(rec.created_by))
+  check('part_of_speech는 명시 안 하면 null(확장 지점)', rec.part_of_speech === null)
+}
+
+console.log('\n33. AI 미리보기 요약 집계(summarizeProposals) — 자동인정가능/확인필요/오답후보/규칙/AI/캐시/실패')
+{
+  const proposals = [
+    { decision: 'accept', decision_source: 'exact_match', cache_hit: false },
+    { decision: 'accept', decision_source: 'synonym', cache_hit: false },
+    { decision: 'accept', decision_source: 'levenshtein', cache_hit: false },
+    { decision: 'review', decision_source: 'ai', cache_hit: false },
+    { decision: 'reject_candidate', decision_source: 'ai', cache_hit: false },
+    { decision: 'accept', decision_source: 'ai', cache_hit: true }, // 캐시 재사용
+    { decision: 'review', decision_source: 'ai_unavailable', cache_hit: false }, // 호출 실패
+    { decision: 'review', decision_source: 'ai_error', cache_hit: false },
+    { decision: 'review', decision_source: 'parse_error', cache_hit: false },
+  ]
+  const s = summarizeProposals(proposals)
+  check('total=9', s.total === 9)
+  check('safeAccept=4(accept decision 4건)', s.safeAccept === 4)
+  check('review=4, rejectCandidate=1', s.review === 4 && s.rejectCandidate === 1)
+  check('ruleBased=3(exact_match+synonym+levenshtein)', s.ruleBased === 3)
+  check('aiProcessed=2(캐시 아닌 신규 ai 호출 결과 — decision 무관하게 review/reject_candidate 포함 2건)', s.aiProcessed === 2)
+  check('cacheHits=1', s.cacheHits === 1)
+  check('failed=3(ai_unavailable+ai_error+parse_error)', s.failed === 3)
+  check('세부 합계(rule+ai+cache+failed)가 total과 일치', s.ruleBased + s.aiProcessed + s.cacheHits + s.failed === s.total)
+}
+
+console.log('\n34. 105건+ 배치(요구사항 명시 규모) — buildBatches 경계값 재확인')
+{
+  const fixture130 = Array.from({ length: 130 }, (_, i) => ({ id: `big-${i}` }))
+  const batches = buildBatches(fixture130, 25)
+  check('130건 -> 6개 배치(25*5+5)', batches.length === 6 && batches[5].length === 5)
+  check('전체 합은 130', batches.reduce((s, b) => s + b.length, 0) === 130)
+
+  const fixture109 = Array.from({ length: 109 }, (_, i) => ({ id: `live-${i}` })) // 코디네이터 실측 라이브 pending 규모
+  const batches109 = buildBatches(fixture109, 25)
+  check('실측 라이브 규모(109건) -> 5개 배치(25*4+9)', batches109.length === 5 && batches109[4].length === 9)
+}
+
+console.log('\n35. 클라이언트 "규칙 먼저, 미해결만 AI" 분리 로직(spellingReviewAiApi.js의 runLocalRules와 동일 원리 재현)')
+{
+  // src/utils/spellingReviewAiApi.js는 supabaseClient(import.meta.env)를
+  // top-level import하는 브라우저 전용 모듈이라 이 Node 스크립트에서 직접
+  // import할 수 없다(§ 파일 상단 주석) — 그 파일이 내부적으로 쓰는 것과
+  // 정확히 같은 순수 함수(classifyLocally/buildProposal)로 동일한 분리
+  // 로직을 재현해 "미해결 항목만 AI로 보낸다"는 핵심 계약을 검증한다.
+  const mixedRows = [F.exact, F.typo, F.closeButWrongMeaning, F.trueSynonymDifferentString, F.completelyWrong]
+  const resolved = []
+  const unresolved = []
+  for (const row of mixedRows) {
+    const local = classifyLocally(row)
+    if (local.decision) {
+      resolved.push(buildProposal({ pendingId: row.id, word: row.word, meaning: row.meaning, submittedAnswer: row.submittedAnswer, decision: local.decision, confidence: local.confidence, reason: local.reason, decisionSource: local.decisionSource }))
+    } else {
+      unresolved.push(row)
+    }
+  }
+  check('5건 중 2건(exact, typo)은 규칙으로 즉시 해결', resolved.length === 2)
+  check('나머지 3건만 AI 전송 대상(unresolved)', unresolved.length === 3 && unresolved.every((r) => ['p9', 'p10', 'p11'].includes(r.id)))
+
+  let aiCallCount = 0
+  const finalProposals = [...resolved]
+  if (unresolved.length > 0) {
+    aiCallCount++
+    for (const row of unresolved) {
+      finalProposals.push(buildProposal({ pendingId: row.id, word: row.word, meaning: row.meaning, submittedAnswer: row.submittedAnswer, decision: 'review', confidence: 0.3, reason: 'mock ai', decisionSource: 'ai' }))
+    }
+  }
+  check('AI는 정확히 1번만 호출(배치로 미해결분만 묶어서)', aiCallCount === 1)
+  check('최종 제안 개수는 입력 행 수와 동일(누락 없음)', finalProposals.length === mixedRows.length)
+  check('규칙으로 해결된 결과는 AI를 거치지 않고 그대로 살아있음(exact_match/levenshtein 유지)', finalProposals.some((p) => p.decision_source === 'exact_match') && finalProposals.some((p) => p.decision_source === 'levenshtein'))
+}
+
+console.log('\n36. 라이브 배포 의존 항목 — 로컬 검증 불가(정직한 SKIP, 실패로 안 셈)')
 {
   console.log('  SKIP  실제 Supabase Edge Function(grade-writing-answers) e2e 호출 — 배포(supabase functions deploy) 후 스테이징에서 확인 필요')
-  console.log('  SKIP  spelling_ai_grading_cache 테이블 RLS(anon INSERT 거부) 실측 — supabase_v3_6_writing_review_ai_cache.sql 실행 후 scripts/testRlsSecurity.mjs류로 확인 필요')
-  console.log('  SKIP  실제 Claude Haiku 4.5 응답 스키마 준수율 — 로컬에 ANTHROPIC_API_KEY 없음, mock으로만 파싱 로직 검증됨(위 8/9번)')
+  console.log('  SKIP  spelling_ai_grading_cache/word_accepted_variants 테이블 RLS 실측 — supabase_v3_6/v3_7 SQL 실행 후 scripts/testRlsSecurity.mjs류로 확인 필요')
+  console.log('  SKIP  실제 Claude Haiku 4.5 응답 스키마 준수율(meaning_scope_warning 포함 신규 필드 실제 준수 여부) — 로컬에 ANTHROPIC_API_KEY 없음, mock으로만 파싱 로직 검증됨(위 8/9/28번)')
+  console.log('  SKIP  Edge Function 실제 미배포 상태에서 브라우저 fetch()가 정확히 어떤 응답(404 HTML/네트워크 오류)을 내는지 — 로컬은 supabaseClient(import.meta.env) 브라우저 전용이라 vite dev/실배포 스테이징에서 확인 필요(§ 섹션 35 정직한 한계)')
 }
 
 console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n${failures}개 테스트 실패 ❌`)

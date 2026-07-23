@@ -1,8 +1,8 @@
 {
   "agent_name": "writing-review-specialist",
-  "role": "쓰기 답안 검토 AI 보조 구현(분석 문서 §16 권고 아키텍처 실행)",
+  "role": "쓰기 답안 검토 AI 보조 v1.1 — 운영 가능 상태로 완성(v1 preview-only의 Edge Function 의존 아키텍처를 클라이언트 규칙 우선 구조로 교체)",
   "task_id": "writing-review",
-  "task": "docs/operations/task2-writing-analysis.md의 권고 아키텍처(Supabase Edge Function grade-writing-answers + spelling_ai_grading_cache 캐시 테이블 + writingReviewAiAssist feature flag 기본 OFF + 기존 SpellingReviewQueuePanel 확장)를 구현. 규칙 기반 파이프라인(1~9단계), 배치(20~30), 판정 캐시, AI 실패/잘못된 JSON 시 review 강등, 토큰/비용 로깅, 관리자 일괄 검수 UI(선택 인정/무시, high-confidence 일괄 인정, 동일 답안 일괄 인정, 인정 3옵션, 필터, 완료 요약)까지 구현. 라이브 DB 쓰기/배포는 하지 않음 — 코드/마이그레이션 초안/Edge Function 소스만 작업 트리에 준비, 실행은 운영자 수동.",
+  "task": "v1(af25b1d)에서 규칙+AI 전부를 미배포 Edge Function이 담당하던 구조를 v1.1로 교체 — 규칙 기반 분류(classifyLocally)를 pipeline.js 원본 그대로 클라이언트에서 먼저 실행하고, 미해결 항목만 Edge Function으로 전송. 호출 실패(404/네트워크/500)해도 규칙 기반 결과는 유지되고 미해결분만 review/confidence 0/decision_source=ai_unavailable로 표시. UI에 범위 선택(전체 N건 실측/선택한 답안만), safe_accept/review/reject_candidate 표시명, 출처(rule|synonym|ai|cache) 표시, 확실한 답안 모두 인정(0.95+무경고 AND), 동일한 답안 모두 인정(전역), 동의어로 저장, 전체선택/선택해제/단어필터/동일답안묶어보기, 모든 일괄 액션에 실행 전 확인 모달(정확한 대상 건수) 추가. 인정 시 3옵션(이번 답안만/이 단어 허용 답안으로 저장/같은 대기 답안 모두 인정) 완성 + ②저장 시 supabase_v3_7_word_accepted_variants.sql(감사 이력, 멱등, 운영자 실행 대기, 미실행이어도 accepted_meanings 저장은 정상). flag는 이번 라운드도 기본 OFF 유지(라이브 pending 109건, v3_6/v3_7 SQL 미실행, Edge Function 미배포, ANTHROPIC_API_KEY 미설정 — 전제조건 미충족).",
   "status": "completed",
   "progress": 100,
   "started_at": "2026-07-23T00:00:00+09:00",
@@ -10,32 +10,25 @@
   "files_owned": [
     "supabase/functions/grade-writing-answers/pipeline.js",
     "supabase/functions/grade-writing-answers/index.ts",
-    "supabase_v3_6_writing_review_ai_cache.sql",
+    "supabase_v3_6_writing_review_ai_cache.sql (in-place 수정 — 미실행 상태라 안전, meaning_scope_warning 컬럼 추가)",
+    "supabase_v3_7_word_accepted_variants.sql (신규)",
     "src/utils/spellingReviewBulkPlan.js",
     "src/utils/spellingReviewAiApi.js",
     "scripts/testWritingReviewAiPipeline.mjs",
-    "src/components/AdminScreen.jsx (SpellingReviewQueuePanel 구간만 — SeasonPanel 등 Task 1 구간 불가침)",
-    "src/config/features.js (writingReviewAiAssist 플래그 추가만)",
-    "tests/harness/registry.mjs (writing 도메인 checks 배열에 1건 추가만)",
-    "docs/operations/task2-writing-report.md",
+    "src/components/AdminScreen.jsx (SpellingReviewQueuePanel 구간만 — SeasonPanel 등 Task 1 구간 불가침, git diff로 확인)",
+    "src/config/features.js (writingReviewAiAssist 주석 v1.1 추가만, 값은 false 그대로)",
     ".ai-status/implementer-writing-review.json"
   ],
   "files_read": [
+    "docs/operations/task2-writing-report.md",
     "docs/operations/task2-writing-analysis.md",
     "src/utils/spelling.js",
     "src/utils/spellingReviewApi.js",
-    "src/utils/wordLibrary.js",
-    "src/utils/seasonApi.js (읽기만 — 인용/호출 패턴 확인용, 수정 없음)",
-    "src/utils/supabaseClient.js",
-    "api/_pinAuth.js",
-    "api/verify-admin-pin.js",
-    "api/admin-pin-actions.js",
-    "tests/harness/registry.mjs",
-    "tests/harness/runDomain.mjs",
-    "scripts/testSpelling.mjs",
-    "package.json"
+    "vite.config.js",
+    "package.json",
+    "supabase_v2_0_spelling_mixed.sql"
   ],
-  "summary": "docs/operations/task2-writing-analysis.md §16 권고 아키텍처를 그대로 구현했다. 핵심: (1) supabase/functions/grade-writing-answers/pipeline.js — Deno/Node 양쪽에서 재사용되는 순수 로직(정규화/편집거리/lemma 힌트/배치청크/캐시키/AI프롬프트+응답파싱/비용추정/adminPin비교), src/utils/spelling.js의 isSpellingCorrect를 재사용(규칙 3). (2) index.ts — Deno Edge Function 본체, admin 재인증 우선, pending SELECT만(쓰기 없음), 캐시 조회 후 미해결분만 Anthropic raw fetch(claude-haiku-4-5), 응답에 토큰/비용 포함, CORS 헤더 포함(이 저장소 최초). (3) supabase_v3_6_writing_review_ai_cache.sql — 멱등 DDL, 미실행(운영자 수동), anon은 SELECT만 GRANT(기존 테이블들보다 보수적). (4) src/utils/spellingReviewBulkPlan.js — 클라이언트 일괄 액션 순수 계획 로직(supabaseClient 의존 없음, Node 직접 테스트 가능). (5) src/utils/spellingReviewAiApi.js — 브라우저 실행 레이어, 기존 setWordAcceptedMeanings/resolveSpellingReview 재사용(새 쓰기 경로 추가 안 함). (6) AdminScreen.jsx의 SpellingReviewQueuePanel에 AI 섹션 추가 — 기존 load/accept/dismiss 로직/두 버튼 100% 보존(git diff 실측: season 관련 줄 0건 변경). (7) features.js에 writingReviewAiAssist:false 추가. 테스트: scripts/testWritingReviewAiPipeline.mjs 26개 섹션(완전일치/공백/문장부호/NFC/동의어/품사힌트/편집거리/애매한뜻/완전오답/중복답안캐시히트/AI실패/잘못된JSON/99건배치/미리보기순수성/선택인정/동의어라운드트립/수동폴백/adminPin인증/비용추정/드리프트가드) 전부 PASS + 3건 정직 SKIP(실배포/RLS실측/실제Anthropic응답 — 로컬 검증 불가 명시, 가짜 PASS 없음). 개발 중 실제 버그 2건 발견·수정: exact-match 체크가 정규화된 입력이 아니라 원본을 검사하던 버그(문장부호/NFD 케이스 실패), 품사 힌트가 콤마로 묶인 다중 대안을 안 쪼개던 버그. npm run build PASS, npm run verify:writing PASS(3개 스크립트), npm run verify:all — login만 FAIL(이번 작업과 무관, 직전 세션(6f5d6bd)이 이미 문서화한 기지 로컬 환경 한계, PIN 관련 파일 미터치 확인), 나머지 전 도메인 PASS. 라이브 DB 쓰기/조회 0회(전부 픽스처). git add/commit/push 안 함.",
+  "summary": "핵심 아키텍처 변경 실증: supabase/functions/grade-writing-answers/pipeline.js는 Deno 전용 API를 전혀 안 쓰는 순수 JS라 Vite/Rollup이 supabase/ 밖 경로여도 문제없이 클라이언트 번들에 포함시킨다(npm run build로 실측 확인 — 이 발견이 v1.1 전체의 전제). 이에 따라 src/utils/spellingReviewAiApi.js가 pipeline.js의 classifyLocally/buildProposal을 원본 그대로 import해 규칙 기반 분류를 브라우저에서 먼저 실행하고(runLocalRules), 미해결 항목만 Edge Function으로 보낸다(callEdgeFunctionForUnresolved) — 호출이 어떤 이유로든 실패해도 절대 throw하지 않고 review/confidence 0/decision_source=ai_unavailable로 대체, 규칙 기반 결과는 그대로 보존. src/utils/spellingReviewBulkPlan.js: 재복제였던 normalizeForCompare를 제거하고 pipeline.js에서 import(단일 원본 원칙 회복) + selectCertainAccepts(0.95+무경고 AND)/groupRowsByAnswer/selectAllDuplicateGroupRows/buildAcceptedVariantRecord/summarizeProposals 추가. pipeline.js: exact_match(등록 뜻 자체)와 synonym(accepted_meanings 매치)을 분리해 '출처' 표시를 가능하게 하고, meaning_scope_warning(AI 전용, 로컬 규칙에는 절대 안 생김) 필드를 스키마/프롬프트/캐시 경로 전체에 추가. AdminScreen.jsx SpellingReviewQueuePanel: 범위 선택(전체 실측 N건/선택한 답안만), 2단계 진행 텍스트(규칙 분류 중 → AI 확인 중 N건), safe_accept 표시명 매핑(내부값 accept는 유지, 표시만 매핑), 출처 배지(rule/synonym/ai/cache), 확실한 답안 모두 인정/동일한 답안 모두 인정/동의어로 저장 3개 버튼 + 기존 선택 인정/무시 전부 확인 모달 경유(정확한 건수 표시, 학생 데이터 실변경 경고), 동일 답안 묶어 보기 토글, 선택 해제 버튼. 학생별 필터는 스키마 실측 결과 구현 안 함(student_id 컬럼 자체는 존재하나 onConflict(word_id,submitted_answer)+ignoreDuplicates 구조라 같은 오답을 여러 학생이 제출해도 1행만 남고 그 student_id는 최초 제출자 1명뿐 — '학생별 필터'가 실제로는 그 학생의 제출 전체를 못 보여줘 오해를 유발하므로 거짓 UI 금지 원칙상 미구현, 보고서에 근거 기록). supabase_v3_7_word_accepted_variants.sql 신규(멱등, GRANT select+insert만·update/delete 없음=append-only 감사, PIN 등 자격증명 미기록). 테스트: scripts/testWritingReviewAiPipeline.mjs에 섹션 27~36 추가(exact_match/synonym 구분, meaning_scope_warning 전 경로, 운영자 제공 실사례 4건(climate/evaporation/stream/constant — 로컬 미확정 실증 + mock AI로 review/reject_candidate 확인, 자동 거부 미실행), selectCertainAccepts AND 로직, 전역 중복 그룹 선별, 감사 레코드, 요약 집계, 130/109건 배치, 클라이언트 규칙-우선 분리 재현) — 전부 PASS + 정직 SKIP 4건(실배포/RLS/실제 Anthropic 응답/실제 fetch 404 응답, 전부 로컬 검증 불가 명시). npm run build PASS, npm run verify:writing PASS(3개 스크립트), npm run verify:all — 20도메인 PASS(login FAIL은 기지 로컬 환경 한계, 이번 세션 무관 확인 — PIN 관련 파일 미터치), speaking/listening SKIP(하드웨어). git add/commit/push 안 함(코디네이터 커밋 예정).",
   "blocker": null,
-  "next_action": "코디네이터가 diff 리뷰(git diff HEAD) 후 단독 커밋. 이후 운영자가 docs/operations/task2-writing-report.md §6~7(SQL 실행 → Edge Function 배포 → 시크릿 설정 → 배포 전 체크리스트)을 순서대로 실행해야 실제로 동작 시작. writingReviewAiAssist 플래그는 그 전까지 false로 유지 권장."
+  "next_action": "코디네이터가 git diff HEAD 리뷰 후 단독 커밋. 이후 운영자가 (1) supabase_v3_6_writing_review_ai_cache.sql(meaning_scope_warning 포함 최신본) 실행, (2) supabase_v3_7_word_accepted_variants.sql 실행(선택 — 미실행이어도 인정 기능은 정상), (3) supabase functions deploy grade-writing-answers, (4) ANTHROPIC_API_KEY/ADMIN_PIN 등 시크릿 설정, (5) 배포 후 스테이징에서 실제 라이브 pending 109건+로 미리보기 1회 수동 확인(§ task2-writing-report.md v1.1 섹션 배포 전 체크리스트) 순서로 진행해야 실제 동작 시작. writingReviewAiAssist 플래그는 그 전까지 false 유지."
 }

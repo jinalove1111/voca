@@ -16,7 +16,7 @@ import { fetchPendingSpellingReviews, resolveSpellingReview } from '../utils/spe
 // 플래그로 게이팅되는 SpellingReviewQueuePanel 확장. 기존 accept()/
 // dismiss() 로직은 위 두 함수 그대로 재사용(새 쓰기 경로 추가 안 함).
 import { previewAiClassification, executeAccept, executeBulkAccept, executeBulkDismiss } from '../utils/spellingReviewAiApi'
-import { selectRows, findDuplicateAnswerRows, selectHighConfidenceAccepts, filterProposals, summarizeBulkResults, normalizeForCompare } from '../utils/spellingReviewBulkPlan'
+import { selectRows, findDuplicateAnswerRows, selectCertainAccepts, selectAllDuplicateGroupRows, groupRowsByAnswer, filterProposals, summarizeBulkResults, summarizeProposals, normalizeForCompare } from '../utils/spellingReviewBulkPlan'
 import { buildWeeklyReport, computeStudentStats } from '../utils/weeklyReport'
 import FeatureManagementPanel from './FeatureManagementPanel'
 import TestPaperGenerator from './TestPaperGenerator'
@@ -364,20 +364,29 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState(null)
 
-  // ── AI 보조(Task 2, 2026-07-23) — writingReviewAiAssist 플래그 뒤에서만
-  // 동작. 꺼져 있으면 아래 상태들은 전부 미사용 상태로 남고, 기존 accept/
-  // dismiss 버튼·로직(위)은 100% 그대로다(§ 폴백 보존).
+  // ── AI 보조(Task 2, 2026-07-23 v1 / 2026-07-23 v1.1) — writingReviewAiAssist
+  // 플래그 뒤에서만 동작. 꺼져 있으면 아래 상태들은 전부 미사용 상태로 남고,
+  // 기존 accept/dismiss 버튼·로직(위)은 100% 그대로다(§ 폴백 보존).
+  // v1.1: 규칙 기반 분류는 이제 브라우저에서 먼저 실행되고(previewAiClassification
+  // 내부, pipeline.js 재사용), 미해결 항목만 Edge Function으로 간다 — Edge
+  // Function이 미배포 상태여도(404) 규칙으로 해결된 결과는 그대로 보인다.
   const aiEnabled = isFeatureEnabled('writingReviewAiAssist')
   const [aiProposals, setAiProposals] = useState(null) // null = 아직 미리보기 안 돌림
-  const [aiSummary, setAiSummary] = useState(null)
   const [aiUsage, setAiUsage] = useState(null)
   const [aiLoading, setAiLoading] = useState(false)
-  const [aiError, setAiError] = useState('')
+  const [aiPhase, setAiPhase] = useState('idle') // 'idle' | 'rule' | 'ai' | 'done'
+  const [aiPhaseCount, setAiPhaseCount] = useState(0) // aiPhase==='ai'일 때 미해결 건수
+  const [aiError, setAiError] = useState('') // 미리보기 자체를 못 돌린 경우만(예: 선택 0건)
+  const [aiCallFailed, setAiCallFailed] = useState(false) // Edge Function 호출 실패 여부(규칙 결과는 살아있음)
+  const [aiCallError, setAiCallError] = useState('')
+  const [scopeMode, setScopeMode] = useState('all') // 'all' | 'selected' — 분석 범위
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [filterDecision, setFilterDecision] = useState('all')
   const [filterWord, setFilterWord] = useState('')
+  const [groupView, setGroupView] = useState(false) // "동일 답안 묶어 보기"
   const [bulkBusy, setBulkBusy] = useState(false)
   const [doneSummary, setDoneSummary] = useState('') // "완료 요약" 배너
+  const [confirmAction, setConfirmAction] = useState(null) // {title, detail, count, run}
 
   const load = async () => {
     setLoading(true)
@@ -417,23 +426,38 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
     return m
   }, [aiProposals])
 
+  const aiSummary = useMemo(() => (aiProposals ? summarizeProposals(aiProposals) : null), [aiProposals])
+
   const runAiPreview = async () => {
+    if (scopeMode === 'selected' && selectedIds.size === 0) {
+      setAiError('분석할 답안을 먼저 선택하거나 "전체"를 선택하세요.')
+      return
+    }
     setAiLoading(true)
     setAiError('')
+    setAiCallFailed(false)
+    setAiCallError('')
     setDoneSummary('')
+    setAiPhase('rule')
     try {
-      // 진행 상황: 서버(Edge Function)가 배치 4~5개를 한 번의 요청/응답
-      // 안에서 순차 처리하므로(스트리밍 아님) 배치별 진행률 표시는 없고
-      // "분석 중..." 단일 로딩 상태만 보여준다(§ 구현 보고서에 정직 표기).
-      const res = await previewAiClassification({ adminPin, pendingIds: (rows || []).map((r) => r.id) })
+      const res = await previewAiClassification({
+        adminPin,
+        rows: rows || [],
+        scopeIds: scopeMode === 'selected' ? selectedIds : null,
+        onPhase: (phase, count) => { setAiPhase(phase); if (phase === 'ai') setAiPhaseCount(count || 0) },
+      })
       setAiProposals(res.proposals)
-      setAiSummary(res.summary)
       setAiUsage(res.usage)
+      setAiCallFailed(res.callFailed)
+      setAiCallError(res.callError || '')
       setSelectedIds(new Set())
     } catch (err) {
-      setAiError(err.reason === 'not_authorized' ? '관리자 인증에 실패했어요.' : ('AI 미리보기 실패: ' + (err.message || err)))
+      // previewAiClassification은 설계상 던지지 않지만(§ 절대 미리보기 실패로
+      // 전체가 죽지 않게), 방어적으로 남겨둔다.
+      setAiError('미리보기 실행 중 예기치 못한 오류: ' + (err.message || err))
     } finally {
       setAiLoading(false)
+      setAiPhase('idle')
     }
   }
 
@@ -444,6 +468,13 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
     return (rows || []).filter((r) => idSet.has(r.id))
   }, [rows, aiProposals, filterDecision, filterWord, aiEnabled])
 
+  // "동일 답안 묶어 보기" — (단어, 정규화 답안) 그룹끼리 인접하게 재정렬만
+  // 한다(필터링 자체는 안 바뀜).
+  const displayRows = useMemo(() => {
+    if (!groupView) return filteredRows
+    return [...groupRowsByAnswer(filteredRows, normalizeForCompare).values()].flat()
+  }, [filteredRows, groupView])
+
   const toggleSelect = (id) => {
     setSelectedIds((prev) => {
       const next = new Set(prev)
@@ -452,8 +483,9 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
     })
   }
   const toggleSelectAll = () => {
-    setSelectedIds((prev) => (prev.size === filteredRows.length ? new Set() : new Set(filteredRows.map((r) => r.id))))
+    setSelectedIds((prev) => (prev.size === displayRows.length ? new Set() : new Set(displayRows.map((r) => r.id))))
   }
+  const clearSelection = () => setSelectedIds(new Set())
 
   const acceptWithMode = async (row, mode) => {
     setBusyId(row.id)
@@ -472,14 +504,17 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
     }
   }
 
-  const runBulk = async (targetRows, action) => {
+  const runBulk = async (targetRows, kind) => {
     if (targetRows.length === 0) return
     setBulkBusy(true)
     setDoneSummary('')
     try {
-      const results = action === 'accept' ? await executeBulkAccept(targetRows) : await executeBulkDismiss(targetRows)
+      const results = kind === 'dismiss'
+        ? await executeBulkDismiss(targetRows)
+        : await executeBulkAccept(targetRows, { mode: kind === 'synonym' ? 'synonym' : 'answer_only' })
       const summary = summarizeBulkResults(results)
-      setDoneSummary(`${action === 'accept' ? '인정' : '무시'} ${summary.ok}건 완료${summary.failed > 0 ? `, 실패 ${summary.failed}건` : ''}`)
+      const label = kind === 'dismiss' ? '무시' : kind === 'synonym' ? '동의어로 저장' : '인정'
+      setDoneSummary(`${label} ${summary.ok}건 완료${summary.failed > 0 ? `, 실패 ${summary.failed}건` : ''}`)
       await load()
       onChanged?.()
       setSelectedIds(new Set())
@@ -490,10 +525,30 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
     }
   }
 
-  const selectedRows = selectRows(filteredRows, [...selectedIds])
-  const highConfidenceRows = aiProposals
-    ? selectRows(rows || [], selectHighConfidenceAccepts(aiProposals, 0.8).map((p) => p.pending_answer_id))
-    : []
+  // 일괄 액션은 전부 실행 전 확인 모달을 거친다(§ 안전 요구사항) — 정확한
+  // 대상 건수를 모달에 먼저 보여주고, 확인해야만 runBulk가 실제로 돈다.
+  const requestBulkConfirm = (title, targetRows, kind) => {
+    if (targetRows.length === 0) return
+    setConfirmAction({ title, count: targetRows.length, run: () => runBulk(targetRows, kind) })
+  }
+
+  const selectedRows = selectRows(displayRows, [...selectedIds])
+  // "확실한 답안 모두 인정" — decision=accept(safe_accept) AND confidence>=0.95
+  // AND 품사 경고 없음 AND 파싱 오류 없음 AND 의미 범위 경고 없음(전부 AND,
+  // selectCertainAccepts가 그대로 구현).
+  const certainRows = aiProposals ? selectRows(rows || [], selectCertainAccepts(aiProposals, 0.95).map((p) => p.pending_answer_id)) : []
+  // "동일한 답안 모두 인정" — 큐 전체(rows)에서 그룹 크기 2 이상인 행 전부.
+  const duplicateGroupRows = aiEnabled && rows ? selectAllDuplicateGroupRows(rows, normalizeForCompare) : []
+
+  const decisionLabel = (d) => (d === 'accept' ? 'safe_accept' : d) // 관리자 확정 전까지 "최종 인정/거부" 표현 금지(§ UI 스펙)
+  const decisionColor = (d) => (d === 'accept' ? 'text-green-600' : d === 'reject_candidate' ? 'text-red-500' : 'text-amber-600')
+  const sourceLabel = (p) => {
+    if (p.cache_hit) return 'cache'
+    if (p.decision_source === 'ai') return 'ai'
+    if (p.decision_source === 'synonym') return 'synonym'
+    if (p.decision_source === 'exact_match' || p.decision_source === 'levenshtein') return 'rule'
+    return 'ai(실패)' // ai_unavailable/ai_error/parse_error — 출처는 AI 경로였지만 실패했다는 뜻
+  }
 
   return (
     <div className="bg-white rounded-3xl card-shadow p-5">
@@ -515,41 +570,75 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
         <>
           {aiEnabled && (
             <div className="bg-indigo-50 rounded-xl p-3 mb-3 text-xs">
-              <div className="flex items-center justify-between mb-2">
-                <p className="font-black text-indigo-700">🤖 AI 자동분류 미리보기</p>
-                <button onClick={runAiPreview} disabled={aiLoading}
-                  className="bg-indigo-500 hover:bg-indigo-600 text-white font-black px-3 py-1.5 rounded-lg text-xs btn-press disabled:opacity-50">
-                  {aiLoading ? '분석 중...(배치 처리 중, 잠시만요)' : '분석 시작'}
-                </button>
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                <p className="font-black text-indigo-700">🤖 자동 검토 미리보기</p>
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-1 font-bold text-indigo-600">
+                    <input type="radio" name="ai-scope" checked={scopeMode === 'all'} onChange={() => setScopeMode('all')} />
+                    전체 {rows.length}건
+                  </label>
+                  <label className="flex items-center gap-1 font-bold text-indigo-600">
+                    <input type="radio" name="ai-scope" checked={scopeMode === 'selected'} onChange={() => setScopeMode('selected')} />
+                    선택한 답안만({selectedIds.size}건)
+                  </label>
+                  <button onClick={runAiPreview} disabled={aiLoading}
+                    className="bg-indigo-500 hover:bg-indigo-600 text-white font-black px-3 py-1.5 rounded-lg text-xs btn-press disabled:opacity-50">
+                    {aiLoading
+                      ? (aiPhase === 'ai' ? `AI 확인 중...(${aiPhaseCount}건, 규칙으로 해결 안 된 것만)` : '규칙 기반 분류 중...')
+                      : '분석 시작'}
+                  </button>
+                </div>
               </div>
               {aiError && <p className="text-red-500 font-bold mb-1">{aiError}</p>}
+              {aiCallFailed && (
+                <p className="text-orange-600 font-bold mb-1 bg-orange-50 rounded-lg p-2">
+                  ⚠ AI 서비스 호출 실패 — 규칙으로 해결 안 된 항목은 "검토 필요"로 표시됐어요(규칙 기반 결과는 정상). 사유: {aiCallError}
+                </p>
+              )}
               {aiSummary && (
                 <>
-                  <p className="text-indigo-600">분석 대상 {aiSummary.total}건 — 인정 제안 {aiSummary.accept} / 검토 필요 {aiSummary.review} / 거부 제안 {aiSummary.rejectCandidate}{aiSummary.cacheHits > 0 && ` (캐시 재사용 ${aiSummary.cacheHits}건)`}</p>
+                  <p className="text-indigo-600">
+                    분석 대상 {aiSummary.total}건 — 자동 인정 가능 {aiSummary.safeAccept} / 관리자 확인 필요 {aiSummary.review} / 오답 후보 {aiSummary.rejectCandidate}
+                  </p>
+                  <p className="text-indigo-400 mt-0.5">
+                    규칙 기반 처리 {aiSummary.ruleBased}건 · AI 처리 {aiSummary.aiProcessed}건 · 캐시 재사용 {aiSummary.cacheHits}건 · 처리 실패 {aiSummary.failed}건
+                  </p>
                   {aiUsage && (
                     <p className="text-indigo-400 mt-1">이번 실행 토큰: 입력 {aiUsage.inputTokens} / 출력 {aiUsage.outputTokens} — 추정 비용 ${aiUsage.estimatedCostUsd.toFixed(4)}({aiUsage.model})</p>
                   )}
                   <div className="flex flex-wrap items-center gap-2 mt-2">
                     <select value={filterDecision} onChange={(e) => setFilterDecision(e.target.value)} className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold">
                       <option value="all">전체 판정</option>
-                      <option value="accept">인정 제안만</option>
-                      <option value="review">검토 필요만</option>
-                      <option value="reject_candidate">거부 제안만</option>
+                      <option value="accept">safe_accept만</option>
+                      <option value="review">review만</option>
+                      <option value="reject_candidate">reject_candidate만</option>
                     </select>
                     <input value={filterWord} onChange={(e) => setFilterWord(e.target.value)} placeholder="단어 검색"
                       className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs w-24" />
+                    <button onClick={() => setGroupView((v) => !v)}
+                      className={`px-2 py-1 rounded-lg font-bold btn-press ${groupView ? 'bg-indigo-500 text-white' : 'bg-white border-2 border-indigo-200 text-indigo-600'}`}>
+                      동일 답안 묶어 보기
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
                     <label className="flex items-center gap-1 font-bold text-indigo-600">
-                      <input type="checkbox" checked={filteredRows.length > 0 && selectedIds.size === filteredRows.length} onChange={toggleSelectAll} />
-                      전체 선택({selectedIds.size}/{filteredRows.length})
+                      <input type="checkbox" checked={displayRows.length > 0 && selectedIds.size === displayRows.length} onChange={toggleSelectAll} />
+                      전체 선택({selectedIds.size}/{displayRows.length})
                     </label>
+                    <button onClick={clearSelection} disabled={selectedIds.size === 0}
+                      className="text-indigo-500 font-bold btn-press disabled:opacity-40">선택 해제</button>
                   </div>
                   <div className="flex flex-wrap gap-2 mt-2">
-                    <button onClick={() => runBulk(selectedRows, 'accept')} disabled={bulkBusy || selectedRows.length === 0}
+                    <button onClick={() => requestBulkConfirm('선택한 답안을 인정합니다', selectedRows, 'accept')} disabled={bulkBusy || selectedRows.length === 0}
                       className="bg-green-500 hover:bg-green-600 text-white font-black px-2 py-1 rounded-lg btn-press disabled:opacity-40">선택 인정({selectedRows.length})</button>
-                    <button onClick={() => runBulk(selectedRows, 'dismiss')} disabled={bulkBusy || selectedRows.length === 0}
+                    <button onClick={() => requestBulkConfirm('선택한 답안을 무시합니다', selectedRows, 'dismiss')} disabled={bulkBusy || selectedRows.length === 0}
                       className="bg-white border-2 border-gray-300 text-gray-600 font-bold px-2 py-1 rounded-lg btn-press disabled:opacity-40">선택 무시({selectedRows.length})</button>
-                    <button onClick={() => runBulk(highConfidenceRows, 'accept')} disabled={bulkBusy || highConfidenceRows.length === 0}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-2 py-1 rounded-lg btn-press disabled:opacity-40">high-confidence 일괄 인정({highConfidenceRows.length})</button>
+                    <button onClick={() => requestBulkConfirm('확실한 답안(safe_accept, 신뢰도 95%↑, 경고 없음)을 모두 인정합니다', certainRows, 'accept')} disabled={bulkBusy || certainRows.length === 0}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-2 py-1 rounded-lg btn-press disabled:opacity-40">확실한 답안 모두 인정({certainRows.length})</button>
+                    <button onClick={() => requestBulkConfirm('동일한 답안이 여러 건 있는 것들을 모두 인정합니다', duplicateGroupRows, 'accept')} disabled={bulkBusy || duplicateGroupRows.length === 0}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-2 py-1 rounded-lg btn-press disabled:opacity-40">동일한 답안 모두 인정({duplicateGroupRows.length})</button>
+                    <button onClick={() => requestBulkConfirm('선택한 답안을 동의어로 저장합니다', selectedRows, 'synonym')} disabled={bulkBusy || selectedRows.length === 0}
+                      className="bg-emerald-100 text-emerald-700 font-bold px-2 py-1 rounded-lg btn-press disabled:opacity-40">동의어로 저장({selectedRows.length})</button>
                   </div>
                 </>
               )}
@@ -557,43 +646,48 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
           )}
 
           <div className="space-y-2 max-h-96 overflow-y-auto">
-            {filteredRows.map((r) => {
+            {displayRows.map((r) => {
               const proposal = proposalsById.get(r.id)
               const duplicates = aiEnabled && rows ? findDuplicateAnswerRows(rows, r, normalizeForCompare) : []
               return (
                 <div key={r.id} className="bg-gray-50 rounded-xl p-3 flex items-start gap-2 text-sm">
-                  {aiEnabled && aiProposals && (
+                  {aiEnabled && (
                     <input type="checkbox" className="mt-1.5" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} />
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="font-black text-gray-800">{r.word} <span className="text-gray-400 font-bold text-xs">등록 뜻: {r.meaning}</span></p>
+                    <p className="font-black text-gray-800">
+                      {r.word} <span className="text-gray-400 font-bold text-xs">등록 뜻: {r.meaning}</span>
+                      {groupView && duplicates.length > 0 && <span className="text-purple-500 font-bold text-xs"> · 동일 답안 그룹 {duplicates.length + 1}건</span>}
+                    </p>
                     <p className="text-gray-600">학생 답: <span className="font-black text-orange-600">{r.submittedAnswer}</span></p>
                     {r.acceptedMeanings.length > 0 && (
                       <p className="text-[11px] text-gray-400">현재 인정 뜻: {r.acceptedMeanings.join(', ')}</p>
                     )}
                     {proposal && (
-                      <p className={`text-[11px] font-bold mt-1 ${proposal.decision === 'accept' ? 'text-green-600' : proposal.decision === 'reject_candidate' ? 'text-red-500' : 'text-amber-600'}`}>
-                        🤖 {proposal.decision === 'accept' ? '인정 제안' : proposal.decision === 'reject_candidate' ? '거부 제안' : '검토 필요'}
+                      <p className={`text-[11px] font-bold mt-1 ${decisionColor(proposal.decision)}`}>
+                        🤖 {decisionLabel(proposal.decision)}
                         {typeof proposal.confidence === 'number' && ` (신뢰도 ${Math.round(proposal.confidence * 100)}%)`}
-                        {proposal.cache_hit && ' · 캐시'} — {proposal.reason}
-                        {proposal.part_of_speech_warning && <span className="text-purple-500"> · ⚠ {proposal.part_of_speech_warning}</span>}
+                        {' · 출처: '}{sourceLabel(proposal)}
+                        {' — '}{proposal.reason}
+                        {proposal.part_of_speech_warning && <span className="text-purple-500"> · ⚠품사 {proposal.part_of_speech_warning}</span>}
+                        {proposal.meaning_scope_warning && <span className="text-purple-500"> · ⚠의미범위 {proposal.meaning_scope_warning}</span>}
                       </p>
                     )}
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       <button onClick={() => accept(r)} disabled={busyId === r.id}
                         className="flex-shrink-0 bg-green-500 hover:bg-green-600 text-white font-black px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-40">
-                        ✅ 이 답안만 인정
+                        ✅ 이번 답안만 인정
                       </button>
                       {aiEnabled && (
                         <button onClick={() => acceptWithMode(r, 'synonym')} disabled={busyId === r.id}
                           className="flex-shrink-0 bg-emerald-100 text-emerald-700 font-bold px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-40">
-                          인정 변형으로 저장
+                          이 단어 허용 답안으로 저장
                         </button>
                       )}
                       {aiEnabled && duplicates.length > 0 && (
                         <button onClick={() => acceptWithMode(r, 'all_duplicates')} disabled={busyId === r.id}
                           className="flex-shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white font-black px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-40">
-                          동일 답안 {duplicates.length + 1}건 전부 인정
+                          같은 대기 답안 {duplicates.length + 1}건 모두 인정
                         </button>
                       )}
                       <button onClick={() => dismiss(r)} disabled={busyId === r.id}
@@ -607,6 +701,23 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
             })}
           </div>
         </>
+      )}
+
+      {confirmAction && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setConfirmAction(null)}>
+          <div className="bg-white rounded-2xl p-5 max-w-xs w-full" onClick={(e) => e.stopPropagation()}>
+            <p className="font-black text-gray-800 mb-2">{confirmAction.title}</p>
+            <p className="text-sm text-gray-600 mb-4">정확히 <span className="font-black text-orange-600">{confirmAction.count}건</span>에 적용됩니다. 학생 데이터가 실제로 바뀌는 동작이니 확인해주세요.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmAction(null)} className="flex-1 bg-white border-2 border-gray-300 text-gray-600 font-bold px-3 py-2 rounded-xl btn-press">취소</button>
+              <button
+                onClick={async () => { const run = confirmAction.run; setConfirmAction(null); await run() }}
+                className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white font-black px-3 py-2 rounded-xl btn-press">
+                실행({confirmAction.count}건)
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

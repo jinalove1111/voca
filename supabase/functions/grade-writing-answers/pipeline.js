@@ -98,12 +98,27 @@ export function classifyLocally({ word, meaning, acceptedMeanings = [], submitte
   // 이걸 통과 못 한 답만 모은 곳이라, 여기서 true가 나오는 건 (a) 이 함수의
   // 추가 정규화(문장부호/NFC)로 새로 잡히는 케이스이거나 (b) 그 사이
   // 관리자가 accepted_meanings를 추가해 이제는 맞게 된 경우.
+  //
+  // v1.1(2026-07-23): 등록 뜻(meaning) 자체와 일치한 경우(decisionSource
+  // 'exact_match')와, 관리자가 나중에 추가한 accepted_meanings 목록의 항목과만
+  // 일치한 경우('synonym')를 구분한다 — 관리자 UI가 "출처(rule|synonym|ai|
+  // cache)"를 표시해야 해서(운영 UI 요구사항) 이 둘을 더 이상 뭉뚱그리지
+  // 않는다. 두 번 비교하는 게 약간 비효율적이지만 항목당 문자열 몇 개
+  // 비교라 성능에 영향 없다.
+  if (isSpellingCorrect(normAnswer, meaning, { acceptedMeanings: [] })) {
+    return {
+      decision: 'accept',
+      confidence: 1,
+      reason: '정규화 후 등록된 뜻과 완전히 일치',
+      decisionSource: 'exact_match',
+    }
+  }
   if (isSpellingCorrect(normAnswer, meaning, { acceptedMeanings })) {
     return {
       decision: 'accept',
       confidence: 1,
-      reason: '정규화 후 등록된 뜻/인정 답안과 완전히 일치',
-      decisionSource: 'exact_match',
+      reason: '정규화 후 관리자가 인정한 동의어 답안과 일치',
+      decisionSource: 'synonym',
     }
   }
 
@@ -168,9 +183,15 @@ export function parseCacheKey(key) {
 }
 
 // AI 결과 스키마(§ 분석 문서 §12) 그대로 — 필드명은 snake_case로 고정.
+// v1.1(2026-07-23): meaning_scope_warning 필드 추가 — AI가 decision=accept를
+// 내리면서도 "학생 답이 등록된 여러 뜻 중 일부만 커버한다"/"의미가 인접하지만
+// 완전히 같지는 않다" 같은 경고를 함께 줄 수 있는 자리(로컬 규칙 판정에는
+// 절대 안 생김 — exact_match/synonym/levenshtein은 문자열 비교라 의미
+// 범위를 판단하지 않는다, AI 전용 필드).
 export function buildProposal({
   pendingId, word, meaning, submittedAnswer, decision, confidence, reason,
-  suggestedSynonym = null, partOfSpeechWarning = null, decisionSource, cacheHit = false,
+  suggestedSynonym = null, partOfSpeechWarning = null, meaningScopeWarning = null,
+  decisionSource, cacheHit = false,
 }) {
   return {
     pending_answer_id: pendingId,
@@ -182,6 +203,7 @@ export function buildProposal({
     reason,
     suggested_synonym: suggestedSynonym,
     part_of_speech_warning: partOfSpeechWarning,
+    meaning_scope_warning: meaningScopeWarning,
     decision_source: decisionSource,
     cache_hit: cacheHit,
   }
@@ -201,9 +223,10 @@ export function buildAiPrompt(batchItems) {
     '학생이 영→한 문제에서 한글로 답했는데 등록된 뜻과 문자열이 달라 오답 처리된 제출을 검토합니다.',
     '이미 단순 오타/완전일치는 규칙 기반으로 걸러졌고, 여기 오는 항목은 의미 판단이 필요한 것들입니다.',
     '학생이 뜻은 맞게 이해했지만 표현/어휘가 다른 경우 accept, 판단이 애매하거나 부분적으로만 맞으면 review, 명백히 다른 뜻이면 reject_candidate로 표시하세요.',
+    'accept로 판단했더라도 등록된 뜻이 여러 개(쉼표로 나열)인데 학생 답이 그 중 일부 의미만 커버하거나, 의미가 인접하지만 완전히 같지는 않은 경우에는 meaning_scope_warning에 그 이유를 짧게 적으세요(문제 없으면 null).',
     '절대 임의로 다른 pending_answer_id를 만들어내지 마세요 — 입력에 있던 값만 정확히 그대로 돌려주세요.',
     '각 항목마다 정확히 아래 필드를 가진 JSON 객체 하나씩, 전체를 JSON 배열 하나로만 응답하세요(배열 앞뒤에 다른 텍스트를 절대 넣지 마세요):',
-    '{"pending_answer_id": string, "decision": "accept"|"review"|"reject_candidate", "confidence": number(0~1), "reason": string(한국어 1문장), "suggested_synonym": string|null, "part_of_speech_warning": string|null}',
+    '{"pending_answer_id": string, "decision": "accept"|"review"|"reject_candidate", "confidence": number(0~1), "reason": string(한국어 1문장), "suggested_synonym": string|null, "part_of_speech_warning": string|null, "meaning_scope_warning": string|null}',
   ].join('\n')
   const user = JSON.stringify(batchItems.map((it) => ({
     pending_answer_id: it.id,
@@ -272,6 +295,7 @@ export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiC
         pendingId: item.id, word: item.word, meaning: item.meaning, submittedAnswer: item.submittedAnswer,
         decision: cached.decision, confidence: cached.confidence, reason: cached.reason,
         suggestedSynonym: cached.suggestedSynonym ?? null, partOfSpeechWarning: cached.partOfSpeechWarning ?? null,
+        meaningScopeWarning: cached.meaningScopeWarning ?? null,
         decisionSource: cached.decisionSource || 'ai', cacheHit: true,
       }))
     } else {
@@ -329,12 +353,14 @@ export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiC
         decision: res.decision, confidence: res.confidence ?? null, reason: res.reason || '',
         suggestedSynonym: res.suggested_synonym ?? null,
         partOfSpeechWarning: res.part_of_speech_warning ?? (item.hint?.posWarning ? '품사/활용형 차이 가능성' : null),
+        meaningScopeWarning: res.meaning_scope_warning ?? null,
         decisionSource: 'ai', cacheHit: false,
       }))
       if (cacheStore) {
         await cacheStore(item.cacheKey, {
           decision: res.decision, confidence: res.confidence ?? null, reason: res.reason || '',
           suggestedSynonym: res.suggested_synonym ?? null, partOfSpeechWarning: res.part_of_speech_warning ?? null,
+          meaningScopeWarning: res.meaning_scope_warning ?? null,
           decisionSource: 'ai',
         })
       }

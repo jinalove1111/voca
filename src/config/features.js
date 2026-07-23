@@ -83,6 +83,11 @@ const DEFAULT_FEATURES = {
   // 화면 무관(헌법 규칙 12), (3) 켜져 있어도 미리보기는 어떤 라이브 답안
   // status도 바꾸지 않고(preview-only), 실제 인정/무시는 여전히 기존 수동
   // 버튼(accept/dismiss)이 담당 — AI는 "제안"만 얹는다.
+  // v1.1(2026-07-23, docs/operations/task2-writing-report.md v1.1 섹션):
+  // 규칙 기반 분류가 이제 브라우저에서 먼저 돌고(Edge Function 미배포여도
+  // 동작), 미해결 항목만 Edge Function으로 간다 — 그래도 기본값은 여전히
+  // false로 유지한다(라이브 pending 100건+ 존재, v3_6/v3_7 SQL 미실행,
+  // Edge Function 미배포, ANTHROPIC_API_KEY 미설정 — 전제조건 미충족).
   writingReviewAiAssist: false,
 }
 

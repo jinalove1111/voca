@@ -115,7 +115,7 @@ Deno.serve(async (req: Request) => {
     const [wordId, meaningSnapshot, normalizedAnswer] = key.split('::')
     const { data: cached, error: cacheErr } = await supabase
       .from('spelling_ai_grading_cache')
-      .select('decision,confidence,reason,suggested_synonym,part_of_speech_warning,decision_source')
+      .select('decision,confidence,reason,suggested_synonym,part_of_speech_warning,meaning_scope_warning,decision_source')
       .eq('word_id', wordId).eq('meaning_snapshot', meaningSnapshot).eq('normalized_answer', normalizedAnswer)
       .maybeSingle()
     if (cacheErr) { cacheTableMissing = true; return null } // 마이그레이션 미실행 등 — 조용히 스킵
@@ -123,6 +123,7 @@ Deno.serve(async (req: Request) => {
     return {
       decision: cached.decision, confidence: cached.confidence, reason: cached.reason,
       suggestedSynonym: cached.suggested_synonym, partOfSpeechWarning: cached.part_of_speech_warning,
+      meaningScopeWarning: cached.meaning_scope_warning,
       decisionSource: cached.decision_source,
     }
   }
@@ -134,6 +135,7 @@ Deno.serve(async (req: Request) => {
       word_id: wordId, meaning_snapshot: meaningSnapshot, normalized_answer: normalizedAnswer,
       decision: decision.decision, confidence: decision.confidence, reason: decision.reason,
       suggested_synonym: decision.suggestedSynonym, part_of_speech_warning: decision.partOfSpeechWarning,
+      meaning_scope_warning: decision.meaningScopeWarning,
       decision_source: decision.decisionSource, model: MODEL,
     }, { onConflict: 'word_id,meaning_snapshot,normalized_answer' })
     // 실패해도(테이블 없음 등) 무시 — 캐시는 최적화일 뿐, 미리보기 자체를
