@@ -1,0 +1,37 @@
+{
+  "agent_name": "implementer",
+  "role": "테스트 확장 (implementer C — 쓰기 답안 검토 AI 보조 v2)",
+  "task_id": "writing-review-v2-tests",
+  "task": "agent A/B가 완료한 쓰기 답안 검토 AI 보조 v2 경화(NFKC 정규화, 6필드 캐시 키 버저닝, runRulesPhase/runAiPhase 25건 청크+30초 타임아웃+비용 상한, 확인 모달/필터/정렬 헬퍼, index.ts 서버 상한/45초 배치 타임아웃)를 검증하는 테스트 섹션 37~49 추가 + 레지스트리/문서 확인",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-23T00:00:00+09:00",
+  "updated_at": "2026-07-23T00:00:00+09:00",
+  "files_owned": [
+    "scripts/testWritingReviewAiPipeline.mjs",
+    "TESTING.md",
+    ".ai-status/implementer-writing-review-v2-tests.json"
+  ],
+  "files_read": [
+    "PROJECT_GUIDE.md",
+    "TESTING.md",
+    "scripts/testWritingReviewAiPipeline.mjs",
+    "tests/harness/registry.mjs",
+    "package.json",
+    "supabase/functions/grade-writing-answers/pipeline.js",
+    "supabase/functions/grade-writing-answers/index.ts",
+    "src/utils/spellingReviewAiApi.js",
+    "src/utils/spellingReviewBulkPlan.js",
+    "src/utils/spelling.js",
+    "src/utils/spellingReviewApi.js",
+    "src/utils/supabaseClient.js",
+    "scripts/testSpellingDirectionWiring.mjs",
+    "scripts/buildProgressBundle.mjs",
+    "scripts/wordLibraryStub.mjs",
+    ".ai-status/README.md",
+    ".ai-status/EXAMPLE-implementer-doc-os-setup.json"
+  ],
+  "summary": "scripts/testWritingReviewAiPipeline.mjs에 섹션 37~49(13개) 추가 — 미션 지정 픽스처(explicitly/constant/adopt/climate), NFKC 전각 정규화, 6필드 캐시 키 버저닝(partOfSpeech 분리), runAiPhase 타임아웃/ID 불일치/malformed JSON(전부 mock fetch, 실네트워크 0회), 143건 배치 fetch 호출 수(ceil(123/25)=5)+미리보기 순수성(스파이로 DB write 0건 실측), estimateAiCostUsd/evaluateCostGate 비용 게이트(Node용 in-memory localStorage 셔임 주입), buildConfirmSummary(단어 10개 넘는 부분은 화면에 숨기고 개수만 집계+학생 수+kind별 플래그), filterProposalsBySource/filterRowsByStudent/distinctStudentIds/sortDisplayItems(안정 정렬 포함), resolveSpellingReview/setWordAcceptedMeanings 실제 함수 레퍼런스로 존재/arity 확인(호출 0회), index.ts 서버 상한 순수 비용 수식 재확인+라이브 400 응답은 SKIP, 미래 제출 정합성(synonym 저장 후 AI 없이 즉시 accept, decisionSource까지 확인). 브라우저 전용 모듈(spellingReviewAiApi.js/wordLibrary.js/spellingReviewApi.js)은 기존 저장소 관례(테스트 파일 내부 esbuild 자체 번들, supabaseClient만 최소 스텁)를 그대로 재사용 — 새 build 스크립트 파일 없음, 로직 재구현 없음. tests/harness/registry.mjs는 이미 이 스크립트를 writing 도메인에 등록해뒀어서(2026-07-23 이전 세션) 레지스트리/package.json 변경 불필요(확인만 함). TESTING.md에 append-only 섹션 추가(추가 섹션 요약 표 + 실행 결과). 실행: node scripts/testWritingReviewAiPipeline.mjs = 198 PASS/0 FAIL/5 SKIP(전부 배포 의존, 정직한 SKIP — 실패로 안 셈). npm run build PASS(신규 경고 없음). npm run verify:writing PASS(3/3 스크립트). npm run verify:all 실측 — writing 도메인은 PASS(3/3), 전체는 login 도메인 4개 스크립트(testStudentSelectPinStatus/testStudentPinAuth/testStudentPinSelfSetup/testClearStudentPin) FAIL로 ALL DOMAINS: FAIL 처리되지만 이는 로컬에 SUPABASE_SERVICE_ROLE_KEY가 없어서 발생하는 기존에 이미 문서화된 환경 제약(TESTING.md Phase 6 매트릭스, 이번 작업과 무관·회귀 아님)이고 speaking/listening은 하드웨어 SKIP(정상). 소스 파일(pipeline.js/index.ts/spellingReviewAiApi.js/spellingReviewBulkPlan.js 등)은 전혀 수정하지 않음 — 테스트 작성 중 발견한 실제 소스 버그 없음(전부 문서화된 계약대로 동작 확인). 자체 테스트 작성 중 산술 실수 1건(섹션 43 fetch 호출 수 기대값을 ceil(123/25)=5인데 6으로 잘못 씀) 발견해 즉시 수정 — 이건 소스 버그가 아니라 내 테스트 코드 저작 실수였음.",
+  "blocker": null,
+  "next_action": "coordinator가 verify:all 결과(login 도메인 FAIL은 기존 로컬 환경 제약, 이번 작업 범위 밖)를 검토 후 마무리. 소스 코드 변경 없음 — 다음 단계는 필요 시 agent A/B의 실제 배포(supabase functions deploy, SQL v3_6/v3_7 실행)만 남음(이 세션 범위 밖)."
+}

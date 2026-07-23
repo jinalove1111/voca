@@ -172,3 +172,59 @@ _이 섹션부터는 append — 위 내용은 원본 그대로 보존._
 여전히 사람/에이전트가 수동으로 한다(강제 실행 아님, 상세 근거는
 `DEVELOPER_GUIDE.md`의 "AI 개발 운영체제 사용 안내" 참고). 매핑이
 없는 파일은 조용히 아무 것도 출력하지 않는다.
+
+---
+
+## 관련 항목: 쓰기 답안 검토 AI 보조 v2 테스트 확장 (2026-07-23, implementer C)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+Agent A/B가 완료한 v2 경화 작업(`supabase/functions/grade-writing-answers/pipeline.js`의
+NFKC 정규화 + 6필드 캐시 키 버저닝, `src/utils/spellingReviewAiApi.js`의
+`runRulesPhase`/`runAiPhase`(25건 청크·30초 타임아웃·비용 상한 헬퍼),
+`src/utils/spellingReviewBulkPlan.js`의 확인 모달/필터/정렬 헬퍼,
+`supabase/functions/grade-writing-answers/index.ts`의 서버 측
+`MAX_ITEMS_PER_REQUEST`/`MAX_EST_COST_USD_PER_REQUEST`/45초 배치 타임아웃)를
+검증하기 위해 `scripts/testWritingReviewAiPipeline.mjs`에 섹션 37~49(13개
+섹션, 단언 약 90개 추가 — 파일 전체 실측 198 PASS/0 FAIL/5 SKIP)를
+append했다. 이미 `tests/harness/registry.mjs`의 `writing` 도메인이 이
+스크립트를 실행하고 있어(§ 위 도메인 매핑 표) **레지스트리/`package.json`
+변경은 없음** — 새 스크립트가 아니라 기존 스크립트 확장이라 등록 자체는
+그대로 유효했다.
+
+새로 추가한 섹션 요약:
+
+| 섹션 | 검증 대상 |
+|---|---|
+| 37 | 미션 지정 픽스처(`explicitly`/`constant`/`adopt`/`climate`) 정확 문자열 재확인 — `constant`/"끝임없이"는 exact_match로 오탐되지 않고 보수적 levenshtein 경로로만 accept됨을 실측(편집거리 1) |
+| 38 | NFKC 정규화 — 전각(full-width) 영문자/전각 공백/전각 마침표가 NFC만으로는 못 잡고 NFKC라야 정규화됨을 대조 실측 |
+| 39 | 캐시 키 버저닝 — `partOfSpeech` 차이로 키 분리, `PROMPT_VERSION`/`AI_MODEL_ID` 포함, 6필드 라운드트립 |
+| 40 | 타임아웃(AbortError) — `runAiPhase`가 절대 throw 안 하고 review/confidence 0/`ai_unavailable`로 강등 |
+| 41 | AI 응답 ID 불일치 — 요청에 없던 id 무시, 누락된 정당 id는 review로 보충 |
+| 42 | Edge Function 바디 파싱 불가 — 전부 review/`ai_unavailable`(§ 섹션 9의 pipeline.js 레벨 `parse_error`와는 다른 계층임을 명시) |
+| 43 | 143건 배치 — `runRulesPhase`+`runAiPhase` 경유 fetch 호출 수 = ceil(미해결/25), 143건 전부 커버, 미리보기 중 DB mutation 0건(스파이로 실측) |
+| 44 | 비용 게이트 — `estimateAiCostUsd` 단조성, `evaluateCostGate` 차단 조건, `localStorage` 상한 헬퍼(Node용 in-memory 셔임 주입) |
+| 45 | `buildConfirmSummary` — 단어 10개 초과 시 표시 개수 제한(`wordsTruncatedCount`), 학생 수, `kind`별 변형저장 플래그, 비가역 경고 문구 |
+| 46 | `filterProposalsBySource`/`filterRowsByStudent`/`distinctStudentIds`/`sortDisplayItems` — 판정 출처 필터, 학생 필터, 4개 축 정렬(안정 정렬·proposal 없는 행 처리 포함) |
+| 47 | 수동 폴백 경로 실체 확인 — `resolveSpellingReview`/`setWordAcceptedMeanings`를 실제 함수 레퍼런스로 얻어 존재/arity(인자 개수) 확인(호출은 0회) |
+| 48 | 서버 측 상한(`index.ts`) 순수 비용 수식 재확인 + 라이브 배포 400 응답 형태는 정직한 SKIP |
+| 49 | 미래 제출 정합성 — 인정 변형 저장 후 재분류 시 AI 호출 없이 즉시 `synonym` accept(§ 섹션 16과 달리 `decisionSource`까지 명시적으로 확인) |
+
+**새 빌드 인프라(파일 추가 없음, 기존 패턴 재사용)**: 섹션 40/41/42/43/44는
+`src/utils/spellingReviewAiApi.js`(브라우저 전용, `supabaseClient`의
+`import.meta.env`를 top-level import)를 검증해야 해서, 별도
+`scripts/buildXxxBundle.mjs` 파일을 새로 만들지 않고
+`testSpellingDirectionWiring.mjs`/`testQuizStepReset.mjs`가 이미 쓰는
+"테스트 파일 안에서 esbuild 자체 번들"(새 테스트 작성 패턴 2, 빌드
+스크립트 분리 없음) 패턴을 그대로 재사용했다 — `wordLibrary`/
+`spellingReviewApi`/`supabaseClient`만 가상 스텁으로 교체하고
+`import.meta.env.VITE_SUPABASE_URL` 등은 esbuild `define`으로 빌드 타임
+고정 문자열 치환(런타임 크래시 방지, 각 테스트가 `fetch`를 직접 mock하므로
+실제 값은 무관). 섹션 47도 같은 원칙으로 `wordLibrary.js`/
+`spellingReviewApi.js`를 `supabaseClient`만 스텁 교체해 번들 — 로직
+재구현 없이 실제 함수 레퍼런스를 얻어 arity만 확인한다(호출 0회).
+
+**실행 결과(로컬 실측)**: `node scripts/testWritingReviewAiPipeline.mjs`
+198 PASS / 0 FAIL / 5 SKIP(전부 배포 의존, § 섹션 36/48). `npm run build`
+PASS(신규 경고 없음). `npm run verify:writing`/`npm run verify:all` 실측
+결과는 `handoff.md`의 해당 세션 기록 참고.
