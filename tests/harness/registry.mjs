@@ -191,9 +191,10 @@ export const DOMAINS = {
     ],
   },
   seasonalProgression: {
-    label: 'Seasonal Progression(2026-07-19) — 시즌 경계 이후만 합산(Ticket 잔액/House 누적 점수), 레벨·뱃지·스트릭 불변 확인',
+    label: 'Seasonal Progression(2026-07-19, 2026-07-23 생애주기 확장) — 시즌 경계 이후만 합산(Ticket 잔액/House 누적 점수), 레벨·뱃지·스트릭 불변 확인 + 시즌 전환 API 계약',
     checks: [
       { script: 'scripts/testSeasonalProgression.mjs', builders: [], extra: true, note: '순수 함수(ticketEconomy.js sumTicketBalanceSince, houseSystem.js computeHouseSeasonScores) — 시즌 경계 전/후 데이터 분리, 원장 append-only 불변, 레벨/뱃지/스트릭류 필드는 이 계산 경로가 애초에 참조하지 않음을 확인 — 13개 필수 도메인 밖, 신규 보너스 커버리지. 두 함수 모두 완전 순수(React/import.meta.env 없음)라 번들 불필요.' },
+      { script: 'scripts/testStartNewSeasonApi.mjs', builders: [], extra: true, note: '2026-07-23 season-system-specialist 신규 — api/start-new-season.js 계약 테스트. `seasons`가 전역 단일 테이블이라(word_king_history와 달리 class_id로 격리 불가) QA 데이터로 실제 insert/RPC를 검증할 수 없다 — 인증/메서드 가드는 실제 핸들러를 안전하게 직접 호출(DB 호출 이전 차단), RPC/레거시 폴백 계약은 globalThis.fetch를 가로채는 순수 mock(실제 네트워크 요청 0건)으로 검증. Postgres 트랜잭션 고유 보장(advisory lock 직렬화, is_active unique index)은 JS mock으로 증명 불가라 정직하게 SKIP 처리(supabase_v3_5_season_lifecycle.sql 실행 후 라이브 검증 필요, CLAUDE.md 규칙 18).' },
     ],
   },
   // ── 2026-07-23 등록: standalone 하네스 5종 verify:all 편입 ──

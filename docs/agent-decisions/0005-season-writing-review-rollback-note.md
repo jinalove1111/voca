@@ -22,13 +22,24 @@
 
 ## 신규 마이그레이션 (생성 시 여기에 추가)
 
-- (아직 없음) — 생성 시 `supabase_v{n}_{설명}.sql` 파일명·멱등 여부·GRANT
-  포함 여부·실행 상태(운영자 수동 실행 전/후)를 기록할 것 (헌법 규칙 8/9/10).
+- **`supabase_v3_5_season_lifecycle.sql`** (Task 1, 2026-07-23) — seasons
+  테이블에 season_number/ended_at/is_active 컬럼 추가 + 활성 시즌 유일성
+  partial unique index + 원자적 `start_new_season(p_note)` RPC(advisory
+  lock, SECURITY DEFINER, anon/authenticated EXECUTE 회수, service_role만
+  허용). 멱등(add column if not exists / create index if not exists /
+  create or replace / 조건부 백필). 파괴적 구문 없음(DROP/TRUNCATE/DELETE
+  0건, UPDATE는 seasons 메타데이터 정합화만). 신규 GRANT 불필요(v2_8의
+  테이블 단위 SELECT가 새 컬럼에 자동 적용).
+  **실행 상태: 운영자 수동 실행 대기** — 실행 전에도 코드가 v2_8 동작으로
+  안전 폴백(규칙 9 실측 검증됨). 롤백: 이 SQL은 실행 후에도 기존 데이터를
+  변경하지 않으므로(프로덕션 seasons 0행) 코드 커밋 revert만으로 충분.
 
 ## 사용 Feature Flag (사용 시 여기에 추가)
 
-- (아직 없음) — Task 2는 `src/config/features.js` 플래그로 게이트 예정
-  (preview-only v1). 플래그명 확정 시 기록.
+- Task 1: 사용 안 함 — 기존 SeasonPanel 개선이라 별도 플래그 없음(SQL
+  미실행 시 자동 레거시 폴백이 사실상의 게이트).
+- Task 2: `writingReviewAiAssist` (src/config/features.js, 기본 OFF) 예정
+  — 분석 문서(task2-writing-analysis.md) 권고안. 구현 시 확정 기록.
 
 ## 파일 소유권 (헌법 규칙 16 — 동시 쓰기 금지 경계)
 

@@ -1,0 +1,37 @@
+{
+  "agent_name": "implementer",
+  "role": "season-system-specialist — Seasonal Progression / House Reset Economy 수리",
+  "task_id": "season-repair",
+  "task": "GAME_DESIGN.md 9번 섹션(Seasonal Progression) 구현 갭 수리 — 시즌 종료+생성/번호증가/시작·종료일/활성 시즌 유일성/원자적 RPC+동시실행보호, 삼켜지는 에러/season-readiness 오판정 수리, 관리자 확인 모달 강화",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-23T00:00:00+09:00",
+  "updated_at": "2026-07-23T00:00:00+09:00",
+  "files_owned": [
+    "supabase_v3_5_season_lifecycle.sql",
+    "api/start-new-season.js",
+    "src/utils/seasonApi.js",
+    "src/components/AdminScreen.jsx",
+    "scripts/testStartNewSeasonApi.mjs",
+    "tests/harness/registry.mjs",
+    "TESTING.md",
+    "docs/operations/task1-season-report.md",
+    ".ai-status/implementer-season-repair.json"
+  ],
+  "files_read": [
+    "PROJECT_GUIDE.md",
+    "GAME_DESIGN.md",
+    "supabase_v2_8_seasonal_progression.sql",
+    "scripts/testSeasonalProgression.mjs",
+    "scripts/testComputeWordKingApi.mjs",
+    "scripts/testStudentPinAuth.mjs",
+    "api/_pinAuth.js",
+    "src/utils/wordLibrary.js",
+    "src/components/Dashboard.jsx",
+    "handoff.md",
+    "tests/harness/registry.mjs"
+  ],
+  "summary": "라이브 DB 읽기 전용 실측(anon key) 결과 supabase_v2_8_seasonal_progression.sql은 이미 실행됨(seasons 테이블, 0행) — season_number/ended_at/is_active 컬럼은 미존재(42703). v2_8 최초 구현(2026-07-19)은 단순 insert 1줄뿐이라 시즌 종료 개념/번호/종료일/활성 유일성 보장/동시실행 보호가 전부 없었다. supabase_v3_5_season_lifecycle.sql(신규, 운영자 실행 대기, 멱등)로 3개 컬럼 + 활성 유일성 partial unique index + season_number unique index + 원자적 전환 RPC(start_new_season, advisory lock 직렬화, SECURITY DEFINER + service_role 전용 EXECUTE) 추가. api/start-new-season.js는 RPC 1순위 + RPC 미존재 시 v2_8 시절 단순 insert로 자동 폴백(회귀 없음) + 에러 code/details/hint 표면화. src/utils/seasonApi.js는 확장 컬럼 폴백 조회 + fetchCurrentSeasonDetailed() 신설(테이블/컬럼 없음=정상 vs 진짜 조회 실패를 구분 — 기존 fetchCurrentSeason()이 전부 null로 삼켜 관리자가 '시즌 없음'과 '조회 실패'를 혼동하던 season-readiness 오판정 버그 수리, Dashboard.jsx용 기존 함수는 시그니처/동작 100% 유지). AdminScreen.jsx의 SeasonPanel만 수정(학생 화면 무접촉) — 확인 모달에 현재/새 시즌 번호·시작일·영향 학생수·보존/리셋 항목·되돌릴 수 없음 경고 추가, useRef 더블클릭 가드, 새 시즌 메모 입력칸(triggerStartNewSeason이 원래 note를 받았지만 한번도 전달 안 됐던 것을 연결), 에러 상세 표시. seasons가 word_king_history와 달리 class_id로 격리되지 않는 전역 단일 테이블이라 QA 데이터로 실제 insert/RPC 검증이 불가능(그 자체가 진짜 프로덕션 시즌 전환이 됨, 절대 금지 행동) — scripts/testStartNewSeasonApi.mjs(신규)는 A) 인증/메서드 가드는 실제 핸들러 직접 호출(DB 호출 이전 차단이라 안전), B) RPC/레거시 폴백 계약은 globalThis.fetch를 가로채는 순수 mock(실네트워크 0건)으로 검증, C) advisory lock 직렬화/unique index 실제 unique_violation/라이브 season_number·ended_at 확정은 Postgres 트랜잭션 고유 보장이라 JS mock으로 증명 불가 — 가짜 PASS 대신 'SQL 실행 후 검증 필요'로 정직하게 SKIP 표기(규칙 18), D) SQL RPC 알고리즘을 그대로 옮긴 순수 JS 시뮬레이션으로 시퀀셜 정합성(번호 증가/활성 1개/이전 시즌 보존)만 참고 검증. tests/harness/registry.mjs의 seasonalProgression 도메인에 신규 스크립트 등록, TESTING.md append. npm run build PASS, npm run verify:all PASS(login 도메인만 기존 known FAIL — 로컬 서비스롤 키 부재, 지시대로 무시). 프로덕션에는 SELECT만 실행 — INSERT/UPDATE/DELETE/실제 시즌 전환 0건. git add/commit 전혀 안 함(전부 작업 트리에만).",
+  "blocker": null,
+  "next_action": "코디네이터/qa-reviewer가 supabase_v3_5_season_lifecycle.sql 검토 후 운영자에게 수동 실행 요청 필요 — 실행 전까지는 v2_8 시절 동작 그대로 안전 유지(회귀 없음). 실행 후 docs/operations/task1-season-report.md §15의 3가지 라이브 재검증(anon RPC 42501 거부, 실제 첫 시즌 시작 시 season_number=1/is_active 1행, 두번째 전환 시 첫 시즌 ended_at 기록) 필요. qa-reviewer/security-reviewer 코드 리뷰 대기 — 특히 이 저장소 최초의 Postgres RPC 함수 도입(SECURITY DEFINER + EXECUTE 권한 회수 설계) 검증 요망."
+}

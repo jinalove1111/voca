@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, getClassIdByName } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, getClassIdByName, getStudents } from '../utils/wordLibrary'
 // Paul Rank System(2026-07-19) — 최소 관리자 통합: 학생별 XP/Rank 조회만
 // (관리자 UI 전면 개편 아님, 기존 학생 카드에 텍스트 한 줄 추가).
 import { computeRankState } from '../utils/paulRankShared'
@@ -10,7 +10,7 @@ import { triggerComputeWordKing, fetchLatestWordKingPeriod } from '../utils/word
 // Seasonal Progression(2026-07-19, 게임화 하위카드 9번, GAME_DESIGN.md 9번
 // 섹션) — 관리자 수동 "새 시즌 시작" 트리거 + 현재 시즌 표시(SeasonPanel,
 // classes 탭 최상단 — 반과 무관한 전역 액션이라 반 목록 루프 밖에 둔다).
-import { fetchCurrentSeason, triggerStartNewSeason } from '../utils/seasonApi'
+import { fetchCurrentSeasonDetailed, triggerStartNewSeason } from '../utils/seasonApi'
 import { fetchPendingSpellingReviews, resolveSpellingReview } from '../utils/spellingReviewApi'
 import { buildWeeklyReport, computeStudentStats } from '../utils/weeklyReport'
 import FeatureManagementPanel from './FeatureManagementPanel'
@@ -236,44 +236,73 @@ function WordKingPanel({ targetClass, adminPin }) {
 // 레벨/뱃지/스트릭은 이 액션으로 절대 바뀌지 않는다 — 이 컴포넌트는
 // seasons 테이블에 새 경계 마커 행을 추가할 뿐, students/xp_ledger 등
 // 어떤 영구 기록 테이블도 건드리지 않는다(api/start-new-season.js가
-// seasons 테이블 하나만 insert). 확인 다이얼로그에 이 사실을 명확히 적어
+// seasons 테이블 하나만 다룬다). 확인 다이얼로그에 이 사실을 명확히 적어
 // 관리자 불안감을 줄인다(반 삭제 확인 다이얼로그가 "학생 계정은 유지되고
 // 반 배정만 해제됩니다"를 안내하는 것과 같은 방향).
+//
+// 2026-07-23(season-system-specialist) — 시즌 생애주기 확장에 맞춰 확인
+// 다이얼로그를 구체화(현재/새 시즌 번호·시작일·영향 학생 수 표시) +
+// fetchCurrentSeasonDetailed()로 "시즌 없음"과 "조회 실패"를 구분해
+// 관리자가 오판하지 않게 함 + 더블클릭/중복 요청 방어(startingRef) +
+// 에러 상세(code/details/hint) 표면화 + 새 시즌 이름/메모 입력칸 추가
+// (triggerStartNewSeason이 이미 note를 받았지만 이 화면이 한 번도 넘긴
+// 적이 없었다 — 원래 설계된 기능을 실제로 연결).
 function SeasonPanel({ adminPin }) {
-  const [season, setSeason] = useState(null) // {id, startedAt, note} | null(시즌 없음/SQL 미실행)
+  const [season, setSeason] = useState(null) // {id, startedAt, note, seasonNumber, endedAt, isActive} | null(시즌 없음/SQL 미실행)
+  const [loadError, setLoadError] = useState(null) // {code,message,details,hint} | null — "시즌 없음"이 아니라 진짜 조회 실패일 때만
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState('')
+  const [noteInput, setNoteInput] = useState('')
+  const startingRef = useRef(false) // React state 배칭 타이밍과 무관하게 더블클릭을 동기적으로 즉시 막는 보강 가드
 
   const load = async () => {
     setLoading(true)
-    setSeason(await fetchCurrentSeason())
+    const { season: s, error: err } = await fetchCurrentSeasonDetailed()
+    setSeason(s)
+    setLoadError(err)
     setLoading(false)
   }
   useEffect(() => { load() }, [])
 
+  const studentCount = getStudents().length
+
   const handleStart = async () => {
+    if (startingRef.current) return
+    const currentLabel = season
+      ? `${season.seasonNumber ? `${season.seasonNumber}번째 시즌` : '(번호 없음 — v3.5 SQL 실행 전)'}${season.note ? ` "${season.note}"` : ''} · 시작일 ${new Date(season.startedAt).toLocaleDateString('ko-KR')}`
+      : '없음(이번이 첫 시즌)'
+    const nextNumber = season?.seasonNumber ? season.seasonNumber + 1 : (season ? '?' : 1)
+    const trimmedNote = noteInput.trim()
+    const nextLabel = `${nextNumber}번째 시즌${trimmedNote ? ` "${trimmedNote}"` : ''}`
     const ok = window.confirm(
       '새 시즌을 시작할까요?\n\n' +
-      '✅ 유지돼요: 레벨/뱃지/연속학습일(스트릭) — 절대 리셋되지 않아요.\n' +
-      '🔄 새로 시작해요: 하우스 팀 점수 화면이 이 시점부터 새로 쌓이는 값으로 바뀌어요.\n' +
-      'ℹ️ 티켓 잔액/상점은 이번 라운드에는 시즌과 연동되지 않아 계속 전체 누적 값 그대로예요.\n\n' +
-      '기존 기록은 지워지지 않고 그대로 보존돼요 — 이전 시즌 기록으로 남습니다.'
+      `현재 시즌: ${currentLabel}\n` +
+      `새 시즌: ${nextLabel}\n` +
+      `영향받는 학생 수: ${studentCount}명\n\n` +
+      '🔄 리셋되는 것: 하우스 팀 점수 화면(이 시점부터 새로 쌓이는 값으로 바뀜)\n' +
+      '✅ 보존되는 것: XP, 누적 포인트, 레벨, 학습 기록, 연속학습일(스트릭), 티켓 잔액/상점 — 하나도 지워지지 않아요.\n\n' +
+      '⚠️ 되돌릴 수 없어요 — 시작 후에는 이전 시즌으로 되돌아갈 수 없습니다(단, 이전 시즌 기록 자체는 삭제되지 않고 그대로 남아있어요).'
     )
     if (!ok) return
+    startingRef.current = true
     setStarting(true)
     setError('')
     try {
-      const res = await triggerStartNewSeason({ adminPin })
+      const res = await triggerStartNewSeason({ adminPin, note: trimmedNote || undefined })
       setSeason(res.season)
+      setLoadError(null)
+      setNoteInput('')
     } catch (err) {
       const msg = String(err?.message || err)
-      if (msg.includes('table_missing')) {
+      if (err?.reason === 'table_missing' || msg.includes('table_missing')) {
         setError('아직 준비 중이에요 — supabase_v2_8_seasonal_progression.sql을 Supabase SQL Editor에서 실행해주세요.')
       } else {
-        setError('시즌 시작 중 오류가 발생했어요: ' + msg)
+        const detail = [err?.code, err?.details, err?.hint].filter(Boolean).join(' / ')
+        setError(`시즌 시작 중 오류가 발생했어요: ${msg}${detail ? ` (${detail})` : ''}`)
       }
     } finally {
+      startingRef.current = false
       setStarting(false)
     }
   }
@@ -282,22 +311,34 @@ function SeasonPanel({ adminPin }) {
     <div className="bg-white rounded-3xl card-shadow p-5">
       <p className="text-sm font-black text-gray-700 mb-2">🗓️ 시즌 (House 리셋 경계)</p>
       <p className="text-xs text-gray-400 mb-3">
-        레벨/뱃지/연속학습일은 절대 리셋되지 않아요. 새 시즌을 시작하면 하우스
-        팀 점수 화면이 이 시점부터 새로 쌓이는 값으로 바뀌어요(기존 기록은
-        삭제되지 않고 그대로 보존됩니다). 티켓 잔액/상점은 이번 라운드에는
-        시즌과 연동되지 않아 계속 전체 누적 값 그대로 표시돼요(다음 라운드
-        확장 예정 — `src/utils/ticketEconomy.js` `sumTicketBalanceSince`
-        참고).
+        레벨/뱃지/연속학습일/XP/티켓 잔액은 절대 리셋되지 않아요. 새 시즌을
+        시작하면 하우스 팀 점수 화면만 이 시점부터 새로 쌓이는 값으로
+        바뀌어요(기존 기록은 삭제되지 않고 이전 시즌 기록으로 그대로
+        보존됩니다).
       </p>
       {loading ? (
         <p className="text-gray-400 text-sm">불러오는 중...</p>
+      ) : loadError ? (
+        <p className="text-xs font-bold text-red-500 mb-3">
+          시즌 정보를 불러오지 못했어요(시즌이 없는 게 아니라 조회 오류예요): {loadError.message}
+          {loadError.code ? ` (code: ${loadError.code})` : ''}
+        </p>
       ) : (
         <p className="text-xs text-gray-500 mb-3">
           {season
-            ? `현재 시즌 시작일: ${new Date(season.startedAt).toLocaleDateString('ko-KR')}${season.note ? ` (${season.note})` : ''}`
-            : '아직 시즌이 시작되지 않았어요 — 하우스 팀 점수가 전체 누적 값으로 표시되고 있어요.'}
+            ? `현재 시즌: ${season.seasonNumber ? `${season.seasonNumber}번째` : '(번호 없음 — v3.5 SQL 실행 전)'} · 시작일 ${new Date(season.startedAt).toLocaleDateString('ko-KR')}${season.note ? ` (${season.note})` : ''} · 대상 학생 ${studentCount}명`
+            : `아직 시즌이 시작되지 않았어요(대상 학생 ${studentCount}명) — 하우스 팀 점수가 전체 누적 값으로 표시되고 있어요.`}
         </p>
       )}
+      <input
+        type="text"
+        value={noteInput}
+        onChange={(e) => setNoteInput(e.target.value)}
+        placeholder="새 시즌 이름/메모(선택, 예: 2026 2학기)"
+        maxLength={200}
+        disabled={starting}
+        className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 mb-3 disabled:opacity-60"
+      />
       {error && <p className="text-xs font-bold text-red-500 mb-2">{error}</p>}
       <button onClick={handleStart} disabled={starting}
         className="bg-indigo-500 text-white font-bold px-4 py-2 rounded-xl text-xs btn-press hover:bg-indigo-600 disabled:opacity-60">
