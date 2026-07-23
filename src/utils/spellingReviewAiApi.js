@@ -35,11 +35,34 @@
 // 안 함) + 클라이언트 측 비용 추정/상한(estimateAiCostUsd, 아래 §비용 추정
 // 섹션 — 서버 측 상한은 agent B/운영자 영역이라 여기는 어디까지나
 // best-effort 참고용).
+//
+// v1.3(2026-07-24, 운영자 비용 최소화 스펙 — implementer U) 변경분:
+//   - AI_BATCH_SIZE 25 -> 20(서버 기본 배치 크기와 정렬, 아래 상수 주석 참고).
+//   - MAX_REQUESTS_PER_RUN(신규) — 미리보기 1회 실행이 보내는 Edge Function
+//     호출 자체를 최대 10회로 제한(=최대 200건). 그 이상 미해결 건은 이번
+//     실행에서 아예 전송하지 않고 정직하게 review/confidence 0/
+//     decision_source='ai_deferred'(신규 additive 값)로 표시 — "다음 실행에서
+//     처리됩니다" 문구와 함께.
+//   - 서버가 일일 비용 상한 초과를 알리면(§ 계약: 배치 응답에
+//     decision_source='ai_budget_exceeded' 항목이 오거나, 응답 바디에
+//     budget:{exceeded,todayUsd,capUsd}가 실리면) 이번 실행은 그 배치 이후
+//     추가 청크를 보내지 않고 멈춘다(§ callEdgeFunctionForUnresolved는 여전히
+//     한 청크의 성공/실패만 판정 — 예산 신호를 보고 "다음 청크를 안 보내는"
+//     결정은 runAiPhase 오케스트레이터 몫). 못 보낸 나머지도 review/
+//     confidence 0/decision_source='ai_budget_exceeded'로 정직하게 이월 표시.
+//   - 모델 표시는 하드코딩 문자열 대신 pipeline.js의 AI_MODEL_ID를 그대로
+//     쓴다(agent P가 이 상수를 'gpt-5-nano'로 바꿔도 이 파일은 재수정 없이
+//     따라간다 — 헌법 규칙 3, 드리프트 방지).
 import { setWordAcceptedMeanings } from './wordLibrary'
 import { resolveSpellingReview } from './spellingReviewApi'
 import { planAccept, buildAcceptedVariantRecord } from './spellingReviewBulkPlan'
 import { supabase } from './supabaseClient'
-import { classifyLocally, buildProposal, estimateCostUsd, MODEL_PRICING_PER_MTOK } from '../../supabase/functions/grade-writing-answers/pipeline.js'
+import { classifyLocally, buildProposal, estimateCostUsd, AI_MODEL_ID, MODEL_PRICING_PER_MTOK } from '../../supabase/functions/grade-writing-answers/pipeline.js'
+
+// AdminScreen.jsx가 "모델: {AI_MODEL_ID}" 표시에 쓸 수 있게 그대로 재수출
+// (pipeline.js를 클라이언트 코드 여러 곳에서 직접 import하지 않고 이 파일을
+// 단일 경유지로 삼는다 — 기존 import 구조와 동일한 원칙).
+export { AI_MODEL_ID }
 
 function functionsBaseUrl() {
   const url = import.meta.env.VITE_SUPABASE_URL
@@ -91,7 +114,7 @@ const AI_CALL_TIMEOUT_MS = 30_000
 // 않으므로 호출부가 안전하게 이어붙이면 된다. 30초 타임아웃(AbortController)
 // 도 이 fallback 경로를 그대로 탄다.
 async function callEdgeFunctionForUnresolved({ adminPin, unresolvedRows }) {
-  if (unresolvedRows.length === 0) return { proposals: [], usage: null, callFailed: false, callError: null }
+  if (unresolvedRows.length === 0) return { proposals: [], usage: null, callFailed: false, callError: null, budget: null }
 
   const fallback = (reason) => ({
     proposals: unresolvedRows.map((row) => buildProposal({
@@ -102,6 +125,10 @@ async function callEdgeFunctionForUnresolved({ adminPin, unresolvedRows }) {
     usage: null,
     callFailed: true,
     callError: reason,
+    // 호출 자체가 실패(네트워크/타임아웃/파싱)한 경우엔 서버가 예산 상태를
+    // 알려줄 기회조차 없었다는 뜻 — budget은 항상 null(모른다는 뜻, false
+    // 아님. false로 두면 "확인해봤는데 초과 아님"으로 오독될 수 있음).
+    budget: null,
   })
 
   const endpoint = functionsBaseUrl()
@@ -157,25 +184,60 @@ async function callEdgeFunctionForUnresolved({ adminPin, unresolvedRows }) {
       decisionSource: 'ai_unavailable', cacheHit: false,
     }))
   }
-  return { proposals, usage: body.usage || null, callFailed: false, callError: null }
+  return { proposals, usage: body.usage || null, callFailed: false, callError: null, budget: body.budget || null }
 }
 
 // AI 확인 단계에서 한 번에 보낼 최대 항목 수 — Edge Function(index.ts)의
-// BATCH_SIZE=25와 반드시 일치시킬 것(다르면 §비용 추정의 "배치당 시스템
-// 프롬프트 오버헤드" 가정이 실제 요청 횟수와 어긋난다).
-export const AI_BATCH_SIZE = 25
+// 배치 크기 기본값(운영자 스펙: env MAX_BATCH_SIZE 기본 20)과 반드시
+// 일치시킬 것(다르면 §비용 추정의 "배치당 시스템 프롬프트 오버헤드" 가정이
+// 실제 요청 횟수와 어긋난다). v1.2에서는 25였다(구 index.ts BATCH_SIZE=25
+// 기준) — v1.3(2026-07-24) 운영자 비용 최소화 스펙으로 20으로 하향.
+export const AI_BATCH_SIZE = 20
+
+// 미리보기 1회 실행이 이번 세션에서 실제로 Edge Function을 호출하는 최대
+// 횟수(§ 운영자 비용 최소화 스펙 — "한 번 누를 때 너무 많은 호출이 한꺼번에
+// 나가지 않게"). AI_BATCH_SIZE(20)와 곱하면 이번 실행이 한 번에 AI로 보내는
+// 최대 항목 수(200건, index.ts의 MAX_ITEMS_PER_REQUEST 기본값과 우연히
+// 같은 자릿수이지만 서로 다른 상한이다 — 저건 "요청 1건당 항목 수", 이건
+// "실행 1회당 요청 횟수"). 이 이상 미해결 건은 이번 실행에서 아예 전송하지
+// 않고 다음 실행으로 이월한다(§ runAiPhase 아래 이월 처리).
+export const MAX_REQUESTS_PER_RUN = 10
+
+// 이월(=이번 실행에서 전송조차 안 됨) 처리 공통 헬퍼 — 호출 한도 초과든
+// 예산 초과로 중단이든, "review/confidence 0"으로 정직하게 강등하는 모양은
+// 같고 이유 문구와 decision_source만 다르다.
+function deferredProposal(row, decisionSource, reason) {
+  return buildProposal({
+    pendingId: row.id, word: row.word, meaning: row.meaning, submittedAnswer: row.submittedAnswer,
+    decision: 'review', confidence: 0, reason, decisionSource, cacheHit: false,
+  })
+}
 
 // 2단계(관리자 "AI 확인 진행 (N건, 약 $X)" 버튼) — 미해결 행을 batchSize개씩
 // 나눠 Edge Function을 순차로 호출한다(한 청크가 타임아웃/실패해도 다른
 // 청크는 독립적으로 진행됨). onProgress(선택)로 매 청크가 끝날 때마다
-// {batchIndex, batchCount, completed, total, cacheHits, failures}를 알려준다.
-export async function runAiPhase({ adminPin, unresolvedRows, batchSize = AI_BATCH_SIZE, onProgress } = {}) {
+// {batchIndex, batchCount, completed, total, cacheHits, failures, deferredByCap}
+// 를 알려준다.
+//
+// v1.3 추가: maxRequestsPerRun(기본 MAX_REQUESTS_PER_RUN=10) — 전체 청크 중
+// 앞 maxRequestsPerRun개만 실제로 전송하고, 나머지는 애초에 호출하지 않는다
+// (§ 비용 최소화). 전송한 청크 중 하나라도 서버가 예산 초과를 알리면(응답
+// budget.exceeded===true 또는 그 배치 proposals에 decision_source=
+// 'ai_budget_exceeded'가 하나라도 있으면) 그 즉시 이후 청크 전송을 중단한다
+// — 이미 보낸 요청의 결과는 그대로 쓰고, 못 보낸 나머지만 이월 처리한다.
+export async function runAiPhase({ adminPin, unresolvedRows, batchSize = AI_BATCH_SIZE, maxRequestsPerRun = MAX_REQUESTS_PER_RUN, onProgress } = {}) {
   if (!unresolvedRows || unresolvedRows.length === 0) {
-    return { proposals: [], usage: null, callFailed: false, callError: null }
+    return { proposals: [], usage: null, callFailed: false, callError: null, budgetExceeded: false, budgetInfo: null, deferredCount: 0 }
   }
 
-  const chunks = []
-  for (let i = 0; i < unresolvedRows.length; i += batchSize) chunks.push(unresolvedRows.slice(i, i + batchSize))
+  const allChunks = []
+  for (let i = 0; i < unresolvedRows.length; i += batchSize) allChunks.push(unresolvedRows.slice(i, i + batchSize))
+
+  // 호출 한도(maxRequestsPerRun) 초과분 — 이번 실행은 아예 이 청크들을
+  // 건드리지 않는다(전송 자체가 안 됨, 서버 예산과 무관하게 항상 이월).
+  const chunksToSend = allChunks.slice(0, maxRequestsPerRun)
+  const chunksBeyondCap = allChunks.slice(maxRequestsPerRun)
+  const deferredByCapCount = chunksBeyondCap.reduce((s, c) => s + c.length, 0)
 
   const allProposals = []
   let totalInputTokens = 0
@@ -185,10 +247,13 @@ export async function runAiPhase({ adminPin, unresolvedRows, batchSize = AI_BATC
   let cacheHits = 0
   let failures = 0
   let completed = 0
+  let budgetExceeded = false
+  let budgetInfo = null
+  let sentBatchCount = 0
 
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i]
-    const { proposals, usage, callFailed, callError } = await callEdgeFunctionForUnresolved({ adminPin, unresolvedRows: chunk })
+  for (let i = 0; i < chunksToSend.length; i++) {
+    const chunk = chunksToSend[i]
+    const { proposals, usage, callFailed, callError, budget } = await callEdgeFunctionForUnresolved({ adminPin, unresolvedRows: chunk })
     allProposals.push(...proposals)
     if (usage) {
       totalInputTokens += usage.inputTokens || 0
@@ -203,14 +268,38 @@ export async function runAiPhase({ adminPin, unresolvedRows, batchSize = AI_BATC
       else if (p.decision_source === 'ai_unavailable' || p.decision_source === 'ai_error' || p.decision_source === 'parse_error') failures++
     }
     completed += chunk.length
-    onProgress?.({ batchIndex: i + 1, batchCount: chunks.length, completed, total: unresolvedRows.length, cacheHits, failures })
+    sentBatchCount = i + 1
+    const thisBatchHitBudget = budget?.exceeded === true || proposals.some((p) => p.decision_source === 'ai_budget_exceeded')
+    if (thisBatchHitBudget) {
+      budgetExceeded = true
+      budgetInfo = budget || budgetInfo
+    }
+    onProgress?.({
+      batchIndex: i + 1, batchCount: chunksToSend.length, completed, total: unresolvedRows.length,
+      cacheHits, failures, deferredByCap: deferredByCapCount,
+    })
+    if (thisBatchHitBudget) break // § 예산 초과 신호 이후 청크는 절대 추가 전송 안 함
+  }
+
+  // 이번 실행에서 실제로 전송을 못 한 청크 전부(호출 한도 초과분 + 예산
+  // 초과로 중단해 못 보낸 나머지) — review/confidence 0으로 정직하게 이월.
+  const chunksNotSentDueToBudget = budgetExceeded ? chunksToSend.slice(sentBatchCount) : []
+  for (const row of chunksBeyondCap.flat()) {
+    allProposals.push(deferredProposal(row, 'ai_deferred', '이번 실행 호출 한도(10회) 초과 — 다음 실행에서 처리됩니다'))
+  }
+  for (const row of chunksNotSentDueToBudget.flat()) {
+    allProposals.push(deferredProposal(row, 'ai_budget_exceeded', '일일 AI 비용 한도 도달 — 이번 실행에서 처리되지 않고 관리자 검토 필요 상태로 유지됩니다'))
   }
 
   const usage = (totalInputTokens > 0 || totalOutputTokens > 0)
-    ? { inputTokens: totalInputTokens, outputTokens: totalOutputTokens, estimatedCostUsd: estimateCostUsd({ inputTokens: totalInputTokens, outputTokens: totalOutputTokens }, 'claude-haiku-4-5'), model: 'claude-haiku-4-5' }
+    ? { inputTokens: totalInputTokens, outputTokens: totalOutputTokens, estimatedCostUsd: estimateCostUsd({ inputTokens: totalInputTokens, outputTokens: totalOutputTokens }, AI_MODEL_ID), model: AI_MODEL_ID }
     : null
 
-  return { proposals: allProposals, usage, callFailed: anyCallFailed, callError: lastCallError }
+  return {
+    proposals: allProposals, usage, callFailed: anyCallFailed, callError: lastCallError,
+    budgetExceeded, budgetInfo,
+    deferredCount: deferredByCapCount + chunksNotSentDueToBudget.reduce((s, c) => s + c.length, 0),
+  }
 }
 
 // ── 비용 추정(사전 상한 판단용 — 클라이언트 best-effort) ───────────────────
@@ -224,8 +313,18 @@ export async function runAiPhase({ adminPin, unresolvedRows, batchSize = AI_BATC
 // 다를 수 있다(의도적으로 여유 있게 잡은 상한 추정). 가격이 바뀌면
 // pipeline.js의 MODEL_PRICING_PER_MTOK만 갱신하면 여기도 자동으로 따라간다
 // (같은 소스에서 파생 — 이 파일에서 값을 복제하지 않음, 헌법 규칙 3).
-export const CLAUDE_HAIKU_INPUT_USD_PER_MTOK = MODEL_PRICING_PER_MTOK['claude-haiku-4-5'].input // === 1.0
-export const CLAUDE_HAIKU_OUTPUT_USD_PER_MTOK = MODEL_PRICING_PER_MTOK['claude-haiku-4-5'].output // === 5.0
+//
+// v1.3(2026-07-24): 예전엔 'claude-haiku-4-5' 키를 하드코딩했었다 — agent P가
+// AI_MODEL_ID를 다른 모델(예: 'gpt-5-nano')로 바꾸면 이 파일도 매번 같이
+// 고쳐야 하는 드리프트 위험이 있었다. 이제 AI_MODEL_ID를 그대로 키로 써서
+// pipeline.js 쪽 상수 변경에 자동으로 따라간다. 만약(빌드 타이밍 문제로)
+// MODEL_PRICING_PER_MTOK에 그 모델 가격표가 아직 없으면 0/0으로 안전하게
+// 폴백한다(예상 비용이 실제보다 낮게 보일 뿐, throw로 관리자 화면 전체가
+// 죽는 것보다 안전 — estimateAiCostUsd/estimateCostUsd 자체는 여전히 모델을
+// 못 찾으면 예외를 던지므로, 이 값들은 어디까지나 "표시용 상수"일 뿐이다).
+const AI_MODEL_PRICING = MODEL_PRICING_PER_MTOK[AI_MODEL_ID] || { input: 0, output: 0 }
+export const AI_INPUT_USD_PER_MTOK = AI_MODEL_PRICING.input
+export const AI_OUTPUT_USD_PER_MTOK = AI_MODEL_PRICING.output
 
 // buildAiPrompt(pipeline.js)의 system 프롬프트(고정 문구, 배치마다 매번
 // 다시 전송됨)를 대략 350토큰으로, user 페이로드 항목 1건을 대략 70토큰
@@ -245,7 +344,12 @@ export function estimateAiCostUsd(itemCount, { batchSize = AI_BATCH_SIZE } = {})
   const batches = Math.max(1, Math.ceil(n / batchSize))
   const inputTokens = batches * AI_ESTIMATE_SYSTEM_PROMPT_TOKENS_PER_BATCH + n * AI_ESTIMATE_INPUT_TOKENS_PER_ITEM
   const outputTokens = n * AI_ESTIMATE_OUTPUT_TOKENS_PER_ITEM
-  return estimateCostUsd({ inputTokens, outputTokens }, 'claude-haiku-4-5')
+  // v1.3: estimateCostUsd(pipeline.js)를 AI_MODEL_ID로 호출하지 않고 위
+  // AI_INPUT_USD_PER_MTOK/AI_OUTPUT_USD_PER_MTOK(이미 안전 폴백 처리됨)로
+  // 직접 계산한다 — estimateCostUsd는 모델을 못 찾으면 throw하는데, 이
+  // 함수는 UI 렌더링 중 자주 호출되는 "실행 전 추정"이라 절대 throw하면
+  // 안 된다(§ 미리보기 화면 자체가 죽지 않게).
+  return (inputTokens / 1e6) * AI_INPUT_USD_PER_MTOK + (outputTokens / 1e6) * AI_OUTPUT_USD_PER_MTOK
 }
 
 // ── 비용 상한(관리자 조정 가능, localStorage 영속) ─────────────────────────
@@ -260,7 +364,11 @@ const DAILY_CEILING_KEY = 'voca_writing_ai_daily_ceiling_usd'
 const DAILY_SPEND_KEY = 'voca_writing_ai_daily_spend'
 
 export const DEFAULT_COST_CEILING_USD = 1.0
-export const DEFAULT_DAILY_CEILING_USD = 5.0
+// v1.3(2026-07-24): $5.0 -> $2.0(운영자 비용 최소화 스펙 — 서버 측
+// MAX_DAILY_COST 기본값과 정렬). localStorage에 이미 값이 저장돼 있는
+// 관리자는(§ readPositiveNumber) 그 값을 그대로 우선 사용하므로 이 상수
+// 변경은 "한 번도 상한을 안 건드린" 새 세션의 기본값에만 영향을 준다.
+export const DEFAULT_DAILY_CEILING_USD = 2.0
 
 function todayLocalDateStr() {
   const d = new Date()

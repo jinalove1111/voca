@@ -243,6 +243,42 @@ export function summarizeProposals(proposals) {
   return { total, safeAccept, review, rejectCandidate, ruleBased, aiProcessed, cacheHits, failed }
 }
 
+// ── v1.3(2026-07-24, 운영자 비용 최소화 스펙 — implementer U) 신뢰도 3-밴드
+// ─────────────────────────────────────────────────────────────────────────
+//
+// 스펙: ≥0.95 자동 인정 후보 / 0.70~0.95 관리자 검토 / <0.70 review(낮은 신뢰).
+// 순수 표시/필터링 전용 — "확실한 답안 모두 인정"(selectCertainAccepts)의
+// 0.95+무경고 AND 게이트는 이 밴딩과 완전히 별개이고 전혀 안 바뀐다(그
+// 함수는 여전히 decision/경고 필드까지 함께 확인). auto-reject는 여전히
+// 존재하지 않는다 — 밴드는 어디까지나 화면 표시/필터 편의 기준일 뿐, 밴드
+// 자체가 어떤 액션도 자동 실행하지 않는다.
+export function confidenceBand(confidence) {
+  if (typeof confidence !== 'number' || Number.isNaN(confidence)) return null // 신뢰도 없음(예: 아직 AI 미확인) — 밴드 대상 아님
+  if (confidence >= 0.95) return 'high'
+  if (confidence >= 0.70) return 'mid'
+  return 'low'
+}
+
+// 밴드 필터 — band: 'all' | 'high' | 'mid' | 'low'.
+export function filterProposalsByBand(proposals, band = 'all') {
+  if (band === 'all') return proposals
+  return proposals.filter((p) => confidenceBand(p.confidence) === band)
+}
+
+// 요약 배지용 밴드별 건수 — none은 confidence가 숫자가 아닌 제안(정상 흐름
+// 에서는 사실상 없어야 하지만, 방어적으로 항상 total과 합이 맞도록 집계).
+export function summarizeConfidenceBands(proposals) {
+  let high = 0, mid = 0, low = 0, none = 0
+  for (const p of proposals) {
+    const b = confidenceBand(p.confidence)
+    if (b === 'high') high++
+    else if (b === 'mid') mid++
+    else if (b === 'low') low++
+    else none++
+  }
+  return { high, mid, low, none }
+}
+
 // ── v2 UI(2026-07-23, 관리자 화면 2차 개편) — 확인 모달 요약 ────────────────
 //
 // 일괄 액션 확인 모달에 필요한 모든 숫자/문구를 순수 계산으로 미리 만든다

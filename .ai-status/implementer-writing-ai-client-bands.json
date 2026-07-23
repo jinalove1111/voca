@@ -1,0 +1,25 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "writing-ai-client-bands",
+  "task": "쓰기 검수 AI 보조 v1.3 — 클라이언트 비용 최소화(배치 20/실행당 호출 10회 상한/신뢰도 3-밴드/일일 예산 초과 배너/모델명·일일상한 $2.0 정렬), agent P의 gpt-5-nano+ai_budget_exceeded 계약 대응",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-24T00:00:00+09:00",
+  "updated_at": "2026-07-24T00:00:00+09:00",
+  "files_owned": [
+    "src/utils/spellingReviewAiApi.js",
+    "src/utils/spellingReviewBulkPlan.js",
+    "src/components/AdminScreen.jsx",
+    ".ai-status/implementer-writing-ai-client-bands.json"
+  ],
+  "files_read": [
+    "supabase/functions/grade-writing-answers/pipeline.js",
+    "supabase/functions/grade-writing-answers/index.ts",
+    "scripts/testWritingReviewAiPipeline.mjs",
+    "src/config/features.js"
+  ],
+  "summary": "AI_BATCH_SIZE 25->20. MAX_REQUESTS_PER_RUN=10 신규(실행당 최대 200건 전송, 초과분은 review/confidence 0/decision_source='ai_deferred' 신규 additive 값으로 이월). runAiPhase가 서버 응답의 budget.exceeded 또는 decision_source='ai_budget_exceeded'를 감지하면 그 배치 이후 추가 청크를 보내지 않고 멈추며, 못 보낸 나머지는 decision_source='ai_budget_exceeded'로 이월(reason 문구 포함) — callFailed/decision/decision_source 기존 값 전부 무변경, 추가만. AdminScreen에 예산 초과 프로미넌트 배너, 진행률 'AI 호출 x/y, 이월 N건' 표시 추가. confidenceBand(spellingReviewBulkPlan.js, 순수함수, high>=0.95/mid>=0.70/low<0.70) + filterProposalsByBand + summarizeConfidenceBands 신규, AdminScreen에 밴드 필터 드롭다운 + 행별 밴드 배지 + 요약 밴드 카운트 추가(selectCertainAccepts의 0.95+무경고 AND 게이트는 완전히 별개, 무변경). DEFAULT_DAILY_CEILING_USD $5.0->$2.0(localStorage 기존 값 우선 유지, readPositiveNumber 그대로). AI_MODEL_ID를 pipeline.js에서 그대로 import/재수출해 '모델: {AI_MODEL_ID}' 표시(하드코딩 'claude-haiku-4-5' 문자열 전부 제거 — agent P가 'gpt-5-nano'로 바꿔도 이 파일들은 재수정 불필요). CLAUDE_HAIKU_INPUT/OUTPUT_USD_PER_MTOK를 AI_INPUT/OUTPUT_USD_PER_MTOK로 이름 변경 후 AI_MODEL_ID 기준 동적 계산(가격표 미존재 시 0/0 안전 폴백, throw 방지). estimateAiCostUsd는 이제 estimateCostUsd(throw 가능)를 호출하지 않고 위 안전 상수로 직접 계산. 수동 인정/무시 경로(accept/dismiss/acceptWithMode) 무변경, flag writingReviewAiAssist 여전히 false, 세션 내 실제 Edge Function 호출/DB write 0회.",
+  "blocker": null,
+  "next_action": "npm run build PASS(신규 경고 없음, 기존 500kB+ 청크 경고만 그대로) + npm run verify:admin(6개 스크립트) PASS 확인 완료. node scripts/testWritingReviewAiPipeline.mjs 결과 49섹션 중 1건만 FAIL: 섹션43 'fetch 호출 수 = ceil(123/25) = 5(25*4+23)' — 이 테스트가 runAiPhase 기본 batchSize(옛 25)를 하드코딩 가정한 것으로, 이번 스펙대로 20으로 낮추면 123건은 ceil(123/20)=7배치가 정상(설계대로 동작, 회귀 아님). 테스트 파일은 지시대로 손대지 않음 — 테스트 담당 에이전트가 섹션43(및 필요 시 39의 AI_MODEL_ID 값 관련 주석)을 새 배치 크기/모델 계약에 맞춰 갱신할 것. 그 외 48섹션 전부 PASS, SKIP 6건은 기존과 동일한 배포 의존 항목."
+}

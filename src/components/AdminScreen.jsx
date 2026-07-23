@@ -17,13 +17,14 @@ import { fetchPendingSpellingReviews, resolveSpellingReview } from '../utils/spe
 // dismiss() 로직은 위 두 함수 그대로 재사용(새 쓰기 경로 추가 안 함).
 import {
   runRulesPhase, runAiPhase, executeAccept, executeBulkAccept, executeBulkDismiss,
-  estimateAiCostUsd, AI_BATCH_SIZE, evaluateCostGate,
+  estimateAiCostUsd, AI_BATCH_SIZE, MAX_REQUESTS_PER_RUN, evaluateCostGate, AI_MODEL_ID,
   getCostCeilingUsd, setCostCeilingUsd, getDailyCeilingUsd, setDailyCeilingUsd,
   getTodaySpentUsd, recordEstimatedSpendUsd,
 } from '../utils/spellingReviewAiApi'
 import {
   selectRows, findDuplicateAnswerRows, selectCertainAccepts, selectAllDuplicateGroupRows, groupRowsByAnswer,
-  filterProposals, filterProposalsBySource, filterRowsByStudent, distinctStudentIds, sortDisplayItems,
+  filterProposals, filterProposalsBySource, filterProposalsByBand, confidenceBand, summarizeConfidenceBands,
+  filterRowsByStudent, distinctStudentIds, sortDisplayItems,
   summarizeBulkResults, summarizeProposals, normalizeForCompare, buildConfirmSummary,
 } from '../utils/spellingReviewBulkPlan'
 import { buildWeeklyReport, computeStudentStats } from '../utils/weeklyReport'
@@ -396,6 +397,11 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
   const [aiError, setAiError] = useState('') // 미리보기/확인 자체를 못 돌린 경우(예: 선택 0건, 비용 상한 초과)
   const [aiCallFailed, setAiCallFailed] = useState(false) // Edge Function 호출 실패 여부(규칙 결과는 살아있음)
   const [aiCallError, setAiCallError] = useState('')
+  // v1.3(2026-07-24, 운영자 비용 최소화 스펙) — 일일 예산 초과 배너 +
+  // 이번 실행에서 아예 못 보낸(호출 한도/예산 초과) 이월 건수.
+  const [aiBudgetExceeded, setAiBudgetExceeded] = useState(false)
+  const [aiBudgetInfo, setAiBudgetInfo] = useState(null) // {exceeded, todayUsd, capUsd} — 서버 응답 그대로(§ agent P 계약)
+  const [aiDeferredCount, setAiDeferredCount] = useState(0)
 
   // 비용 상한(관리자 조정 가능, localStorage 영속) — 전부 클라이언트
   // best-effort다(§ spellingReviewAiApi.js 상단 안내 — 서버 측 진짜 상한은
@@ -407,6 +413,7 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
   // 필터/정렬(v1.2 신규: 출처/학생 필터 + 정렬)
   const [filterDecision, setFilterDecision] = useState('all')
   const [filterSource, setFilterSource] = useState('all') // 'all' | 'rule' | 'ai' | 'cache'
+  const [filterBand, setFilterBand] = useState('all') // v1.3: 'all' | 'high' | 'mid' | 'low' — 신뢰도 3-밴드
   const [filterWord, setFilterWord] = useState('')
   const [filterStudent, setFilterStudent] = useState('all') // 'all' | studentId
   const [sortBy, setSortBy] = useState('none') // 'none' | 'confidence' | 'word' | 'decision' | 'student'
@@ -455,6 +462,9 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
   }, [aiProposals])
 
   const aiSummary = useMemo(() => (aiProposals ? summarizeProposals(aiProposals) : null), [aiProposals])
+  // v1.3 신뢰도 3-밴드 요약(≥95% 자동 인정 후보/70~95% 관리자 검토/<70% review) —
+  // 순수 표시용, "확실한 답안 모두 인정" 게이트(selectCertainAccepts)와 무관.
+  const aiBandSummary = useMemo(() => (aiProposals ? summarizeConfidenceBands(aiProposals) : null), [aiProposals])
 
   // 학생 표시 이름 — wordLibrary.js의 getStudents() 캐시(이미 이 화면
   // 최상단에서 동기로 로드돼 있음, 이 패널이 새로 fetch하지 않는다)에서
@@ -500,6 +510,9 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
     setDoneSummary('')
     setAiProgress(null)
     setAiUsage(null)
+    setAiBudgetExceeded(false)
+    setAiBudgetInfo(null)
+    setAiDeferredCount(0)
     const scopeIds = scopeMode === 'selected' ? selectedIds : null
     const { resolved, unresolved } = runRulesPhase({ rows: rows || [], scopeIds })
     setAnalyzedIds(new Set([...resolved.map((p) => p.pending_answer_id), ...unresolved.map((r) => r.id)]))
@@ -528,9 +541,12 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
     setAiError('')
     setAiCallFailed(false)
     setAiCallError('')
-    setAiProgress({ batchIndex: 0, batchCount: Math.ceil(rulesResult.unresolved.length / AI_BATCH_SIZE), completed: 0, total: rulesResult.unresolved.length, cacheHits: 0, failures: 0 })
+    setAiBudgetExceeded(false)
+    setAiBudgetInfo(null)
+    setAiDeferredCount(0)
+    setAiProgress({ batchIndex: 0, batchCount: Math.min(Math.ceil(rulesResult.unresolved.length / AI_BATCH_SIZE), MAX_REQUESTS_PER_RUN), completed: 0, total: rulesResult.unresolved.length, cacheHits: 0, failures: 0, deferredByCap: 0 })
     try {
-      const { proposals, usage, callFailed, callError } = await runAiPhase({
+      const { proposals, usage, callFailed, callError, budgetExceeded, budgetInfo, deferredCount } = await runAiPhase({
         adminPin,
         unresolvedRows: rulesResult.unresolved,
         batchSize: AI_BATCH_SIZE,
@@ -540,6 +556,9 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
       setAiUsage(usage)
       setAiCallFailed(callFailed)
       setAiCallError(callError || '')
+      setAiBudgetExceeded(!!budgetExceeded)
+      setAiBudgetInfo(budgetInfo || null)
+      setAiDeferredCount(deferredCount || 0)
       setTodaySpent(recordEstimatedSpendUsd(usage?.estimatedCostUsd ?? estCost))
     } catch (err) {
       // runAiPhase/callEdgeFunctionForUnresolved는 설계상 던지지 않지만
@@ -585,11 +604,12 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
     if (analysisComplete) {
       let filteredProposals = filterProposals(aiProposals, { decision: filterDecision })
       filteredProposals = filterProposalsBySource(filteredProposals, filterSource)
+      filteredProposals = filterProposalsByBand(filteredProposals, filterBand)
       const idSet = new Set(filteredProposals.map((p) => p.pending_answer_id))
       list = list.filter((r) => idSet.has(r.id))
     }
     return list
-  }, [aiEnabled, rulesResult, baseRows, filterStudent, filterWord, analysisComplete, aiProposals, filterDecision, filterSource])
+  }, [aiEnabled, rulesResult, baseRows, filterStudent, filterWord, analysisComplete, aiProposals, filterDecision, filterSource, filterBand])
 
   // "동일 답안 묶어 보기" — (단어, 정규화 답안) 그룹끼리 인접하게 재정렬만
   // 한다(필터링 자체는 안 바뀜).
@@ -680,8 +700,16 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
     if (p.decision_source === 'ai') return 'ai'
     if (p.decision_source === 'synonym') return 'synonym'
     if (p.decision_source === 'exact_match' || p.decision_source === 'levenshtein') return 'rule'
+    // v1.3 — 이월(아예 전송 안 됨)은 "실패"가 아니라 "다음 실행 대기"라
+    // ai(실패)와 구분해 정직하게 표시한다(§ 운영자 비용 최소화 스펙).
+    if (p.decision_source === 'ai_deferred') return '이월(호출 한도)'
+    if (p.decision_source === 'ai_budget_exceeded') return '이월(예산 한도)'
     return 'ai(실패)' // ai_unavailable/ai_error/parse_error — 출처는 AI 경로였지만 실패했다는 뜻
   }
+  // v1.3 신뢰도 3-밴드 배지 — 순수 표시용(spellingReviewBulkPlan.confidenceBand
+  // 그대로 재사용, 여기선 라벨/색만 매핑).
+  const bandLabel = (b) => (b === 'high' ? '≥95% 자동인정후보' : b === 'mid' ? '70~95% 검토' : b === 'low' ? '<70% 검토' : '')
+  const bandColor = (b) => (b === 'high' ? 'bg-emerald-100 text-emerald-700' : b === 'mid' ? 'bg-amber-100 text-amber-700' : b === 'low' ? 'bg-gray-200 text-gray-600' : '')
 
   return (
     <div className="bg-white rounded-3xl card-shadow p-5">
@@ -725,7 +753,7 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
                   누르기 전이라 실제 규칙 해결 건수를 모르므로 "대상 전량이
                   AI로 넘어간다"는 가장 비관적인 가정. */}
               <p className="text-indigo-400 mb-2">
-                예상 상한(최악의 경우, 대상 {preRunScopeCount}건 전량 AI 처리 가정): 약 ${preRunWorstCostUsd.toFixed(4)} —
+                모델: {AI_MODEL_ID} · 예상 상한(최악의 경우, 대상 {preRunScopeCount}건 전량 AI 처리 가정): 약 ${preRunWorstCostUsd.toFixed(4)} —
                 미리보기를 누르면 규칙으로 먼저 걸러진 뒤 정확한 AI 대상 건수/비용이 나와요.
               </p>
 
@@ -747,8 +775,14 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
                   {unresolvedCount > 0 && !analysisComplete && (
                     <>
                       <p className="text-indigo-500 mt-1">
-                        AI 확인 예상 비용: 약 ${aiPhaseEstimatedCostUsd.toFixed(4)}(오늘 누적 추정 지출 ${todaySpent.toFixed(4)}, 이 브라우저 기준 best-effort 집계)
+                        모델: {AI_MODEL_ID} · AI 확인 예상 비용: 약 ${aiPhaseEstimatedCostUsd.toFixed(4)}(오늘 누적 추정 지출 ${todaySpent.toFixed(4)}, 이 브라우저 기준 best-effort 집계)
                       </p>
+                      {unresolvedCount > AI_BATCH_SIZE * MAX_REQUESTS_PER_RUN && (
+                        <p className="text-purple-500 font-bold mt-1">
+                          ℹ 이번 실행은 호출 한도({MAX_REQUESTS_PER_RUN}회 = 최대 {AI_BATCH_SIZE * MAX_REQUESTS_PER_RUN}건)까지만 처리하고,
+                          나머지 {unresolvedCount - AI_BATCH_SIZE * MAX_REQUESTS_PER_RUN}건은 "검토 필요"로 이월돼요(다음 실행에서 이어서 처리).
+                        </p>
+                      )}
                       <div className="flex flex-wrap items-center gap-2 mt-1">
                         <label className="flex items-center gap-1 font-bold text-indigo-600">
                           실행당 상한($)
@@ -772,13 +806,20 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
                         className="mt-2 bg-purple-600 hover:bg-purple-700 text-white font-black px-3 py-1.5 rounded-lg text-xs btn-press disabled:opacity-50">
                         {aiRunning
                           ? (aiProgress
-                              ? `AI 확인 중... 배치 ${aiProgress.batchIndex}/${aiProgress.batchCount} (${Math.round((aiProgress.completed / Math.max(1, aiProgress.total)) * 100)}%, 캐시 ${aiProgress.cacheHits}건·실패 ${aiProgress.failures}건)`
+                              ? `AI 호출 ${aiProgress.batchIndex}/${aiProgress.batchCount}${aiProgress.deferredByCap > 0 ? `, 이월 ${aiProgress.deferredByCap}건` : ''} (${Math.round((aiProgress.completed / Math.max(1, aiProgress.total)) * 100)}%, 캐시 ${aiProgress.cacheHits}건·실패 ${aiProgress.failures}건)`
                               : 'AI 확인 준비 중...')
                           : `AI 확인 진행 (${unresolvedCount}건, 약 $${aiPhaseEstimatedCostUsd.toFixed(4)})`}
                       </button>
                     </>
                   )}
                 </div>
+              )}
+
+              {aiBudgetExceeded && (
+                <p className="text-red-600 font-bold mb-2 bg-red-50 rounded-lg p-2">
+                  ⛔ 일일 AI 비용 한도(약 ${(aiBudgetInfo?.capUsd ?? dailyCeiling).toFixed(2)}) 도달 — 오늘 사용 약 ${(aiBudgetInfo?.todayUsd ?? todaySpent).toFixed(4)}.
+                  미해결 답안은 관리자 검토 필요 상태로 유지됩니다{aiDeferredCount > 0 ? `(이월 ${aiDeferredCount}건)` : ''}.
+                </p>
               )}
 
               {aiSummary && (
@@ -789,6 +830,14 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
                   <p className="text-indigo-400 mt-0.5">
                     규칙 기반 처리 {aiSummary.ruleBased}건 · AI 처리 {aiSummary.aiProcessed}건 · 캐시 재사용 {aiSummary.cacheHits}건 · 처리 실패 {aiSummary.failed}건
                   </p>
+                  {aiBandSummary && (
+                    <p className="text-indigo-400 mt-0.5">
+                      신뢰도 밴드 — <span className="font-bold text-emerald-600">≥95% 자동인정후보 {aiBandSummary.high}건</span> ·
+                      <span className="font-bold text-amber-600"> 70~95% 검토 {aiBandSummary.mid}건</span> ·
+                      <span className="font-bold text-gray-500"> &lt;70% 검토 {aiBandSummary.low}건</span>
+                      {aiBandSummary.none > 0 && ` · 신뢰도 없음 ${aiBandSummary.none}건`}
+                    </p>
+                  )}
                   {aiUsage && (
                     <p className="text-indigo-400 mt-1">이번 실행 실측 토큰: 입력 {aiUsage.inputTokens} / 출력 {aiUsage.outputTokens} — 추정 비용 ${aiUsage.estimatedCostUsd.toFixed(4)}({aiUsage.model})</p>
                   )}
@@ -807,6 +856,12 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
                           <option value="rule">규칙만</option>
                           <option value="ai">AI만</option>
                           <option value="cache">캐시</option>
+                        </select>
+                        <select value={filterBand} onChange={(e) => setFilterBand(e.target.value)} className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold">
+                          <option value="all">전체 신뢰도</option>
+                          <option value="high">≥95%(자동인정후보)</option>
+                          <option value="mid">70~95%(검토)</option>
+                          <option value="low">&lt;70%(검토)</option>
                         </select>
                         <input value={filterWord} onChange={(e) => setFilterWord(e.target.value)} placeholder="단어 검색"
                           className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs w-24" />
@@ -887,6 +942,11 @@ function SpellingReviewQueuePanel({ onChanged, adminPin }) {
                       <p className={`text-[11px] font-bold mt-1 ${decisionColor(proposal.decision)}`}>
                         🤖 {decisionLabel(proposal.decision)}
                         {typeof proposal.confidence === 'number' && ` (신뢰도 ${Math.round(proposal.confidence * 100)}%)`}
+                        {confidenceBand(proposal.confidence) && (
+                          <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${bandColor(confidenceBand(proposal.confidence))}`}>
+                            {bandLabel(confidenceBand(proposal.confidence))}
+                          </span>
+                        )}
                         {' · 출처: '}{sourceLabel(proposal)}
                         {' — '}{proposal.reason}
                         {proposal.part_of_speech_warning && <span className="text-purple-500"> · ⚠품사 {proposal.part_of_speech_warning}</span>}
