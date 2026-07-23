@@ -344,7 +344,23 @@ export function parseAiBatchResponse(rawText) {
 // 기존 ai_unavailable/ai_error 경로와 동일한 "실패는 항상 review" 원칙).
 // 캐시 히트는 이 분기 이전에 이미 처리되므로(비용 발생 없음) 그대로 살아
 // 있다 — "AI 호출만" 건너뛴다는 요구사항과 정확히 일치.
-export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiClassify, batchSize = 25, budgetExceeded = false } = {}) {
+// statsLookup(2026-07-24, implementer — 학습 서버 작업): "선생님이 같은
+// 검토를 두 번 하지 않는" 요구사항 5(오답 학습)의 순수 훅. 기본 null이면
+// 기존 동작(캐시 미스 -> AI)과 100% 동일 — 이 옵션을 넘기지 않는 기존
+// 호출부(테스트/과거 코드)는 전혀 영향받지 않는다.
+//
+// 계약: statsLookup(item) -> Promise<{ skip: true, decision, confidence,
+// reason } | null | undefined>. decision은 'review' | 'reject_candidate'만
+// 허용한다 — accept는 이 경로로 절대 만들지 않는다(인정은 항상
+// accepted_meanings 규칙 경로(exact_match/synonym)가 담당, 이중 인정 경로
+// 금지 — 자동 승인을 통계만으로 내리면 오탐이 조용히 누적될 위험이 있다).
+// 허용되지 않은 decision 값이 오면(호출부 버그 방어) 이 훅 결과를 무시하고
+// 정상적으로 캐시/AI 경로로 넘어간다(안전 쪽으로 보수적).
+function isValidStatsSkipDecision(decision) {
+  return decision === 'review' || decision === 'reject_candidate'
+}
+
+export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiClassify, batchSize = 25, budgetExceeded = false, statsLookup = null } = {}) {
   const proposals = []
   const unresolved = []
 
@@ -388,10 +404,35 @@ export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiC
 
   if (stillUnresolved.length === 0) return proposals
 
+  // 통계 기반 반복 오답 스킵(요구사항 5, 캐시 조회 다음/AI 호출 전) — 자동
+  // 거부가 아니다: decision_source='stats_repeat'로 표시된 제안도 review와
+  // 동급으로 여전히 관리자가 최종 확인해야 하는 상태이지, spelling_review_
+  // queue.status를 직접 바꾸지 않는다(§ 이 파일 전체 원칙 — 어떤 write도
+  // 하지 않는 순수 계산). cacheStore는 이 경로에서 호출하지 않는다(통계
+  // 판정은 "AI가 새로 내린 판정"이 아니라 과거 AI 판정의 재사용 신호일
+  // 뿐이라 새 AI 캐시 행을 만들 근거가 없다).
+  const afterStats = []
+  for (const item of stillUnresolved) {
+    const statsResult = statsLookup ? await statsLookup(item) : null
+    if (statsResult && statsResult.skip && isValidStatsSkipDecision(statsResult.decision)) {
+      proposals.push(buildProposal({
+        pendingId: item.id, word: item.word, meaning: item.meaning, submittedAnswer: item.submittedAnswer,
+        decision: statsResult.decision, confidence: statsResult.confidence ?? null,
+        reason: statsResult.reason || '통계 기반 반복 오답 — 과거 판정 재사용',
+        partOfSpeechWarning: item.hint?.posWarning ? '품사/활용형 차이 가능성' : null,
+        decisionSource: 'stats_repeat', cacheHit: false,
+      }))
+    } else {
+      afterStats.push(item)
+    }
+  }
+
+  if (afterStats.length === 0) return proposals
+
   if (budgetExceeded) {
-    // 일일 비용 상한 초과(§ 위 옵션 주석) — 캐시로 못 채운 항목만 여기
+    // 일일 비용 상한 초과(§ 위 옵션 주석) — 캐시/통계로 못 채운 항목만 여기
     // 도달하고, 실제 AI(유료) 호출은 단 한 번도 일어나지 않는다.
-    for (const item of stillUnresolved) {
+    for (const item of afterStats) {
       proposals.push(buildProposal({
         pendingId: item.id, word: item.word, meaning: item.meaning, submittedAnswer: item.submittedAnswer,
         decision: 'review', confidence: 0, reason: '오늘 일일 AI 비용 상한 초과 — AI 호출을 건너뛰고 관리자 확인 필요로 표시(자동 거부 아님)',
@@ -405,7 +446,7 @@ export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiC
   if (!aiClassify) {
     // AI 분류기가 주입되지 않으면(예: ANTHROPIC_API_KEY 미설정) 전부 review로
     // 강등 — "AI 실패" 폴백과 동일 경로, auto-reject 아님.
-    for (const item of stillUnresolved) {
+    for (const item of afterStats) {
       proposals.push(buildProposal({
         pendingId: item.id, word: item.word, meaning: item.meaning, submittedAnswer: item.submittedAnswer,
         decision: 'review', confidence: null, reason: 'AI 분류기 미사용(설정 없음) — 관리자 확인 필요',
@@ -416,7 +457,7 @@ export async function classifyBatch(pendingItems, { cacheLookup, cacheStore, aiC
     return proposals
   }
 
-  const batches = buildBatches(stillUnresolved, batchSize)
+  const batches = buildBatches(afterStats, batchSize)
   for (const batch of batches) {
     let aiResults
     try {

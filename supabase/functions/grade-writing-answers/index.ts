@@ -53,6 +53,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 import {
   classifyBatch,
   classifyLocally,
+  normalizeForCompare,
   verifyAdminPin,
   AI_MODEL_ID,
   DEFAULT_AI_PROVIDER,
@@ -131,6 +132,14 @@ const MAX_DAILY_COST = readPositiveNumberEnv('MAX_DAILY_COST', 2.0)
 // 2026-07-24(구현 지시 2, 신규) — 배치 크기(§ 위 readClampedBatchSizeEnv
 // 주석의 20~30 clamp 이유 참고). 기존엔 25로 하드코딩이었다.
 const BATCH_SIZE = readClampedBatchSizeEnv('MAX_BATCH_SIZE', 20)
+// 2026-07-24(implementer, 학습 서버 작업) — 통계 기반 반복 오답 스킵
+// 임계값(§ pipeline.js statsLookup 훅 계약, "선생님이 같은 검토를 두 번
+// 하지 않는" 요구사항 5). 동일 (word_id, normalized_answer) 조합이 과거
+// 이 값 이상 AI로부터 reject_candidate 판정을 받았고 단 한 번도 accept
+// 판정을 받은 적이 없으면, 이번엔 AI를 다시 호출하지 않고 그 판정을
+// 재사용한다(자동 거부 아님 — 여전히 review와 동급으로 관리자 확인 가능한
+// 상태로 표시될 뿐, spelling_review_queue.status를 직접 바꾸지 않는다).
+const STATS_REJECT_THRESHOLD = readPositiveNumberEnv('STATS_REJECT_THRESHOLD', 5)
 
 // 배치 하나당 AI 호출 타임아웃(구현 지시 4, v2에서 이미 도입) — 45초.
 // 넘으면 그 배치는 fetch가 AbortError로 reject되고, classifyBatch의 기존
@@ -250,17 +259,30 @@ async function readTodayUsage(supabase: any, dateStr: string): Promise<{ estCost
 // 경우 upsert가 42703(undefined column)으로 실패하면 경고 후 구 스키마
 // 형태(usage_date만 onConflict, 토큰/provider/model 미기록)로 1회 재시도
 // 폴백한다.
+//
+// 2026-07-24(implementer, 학습 서버 작업) — rules_resolved_count/
+// cache_hit_count/stats_skip_count(supabase_v3_9_writing_answer_statistics.sql
+// 신규 컬럼, "절약 집계") 세 필드를 delta에 추가. ai_item_count는 기존
+// item_count 컬럼을 그대로 재사용한다(§ 계약 — 신설 안 함). v3.9 SQL을
+// 아직 안 돌려 이 세 컬럼이 없는 상태(테이블 자체는 v3.8로 이미 있는
+// 상태)면 select가 42703으로 실패하는데, 이건 완전한 "구 스키마"(§ 아래
+// accumulateUsageRowLegacyFallback, provider/model 컬럼조차 없는 v3.8 이전)
+// 와는 다른 중간 상태라 별도 폴백(accumulateUsageRowV39ColumnsMissingFallback)
+// 으로 처리한다 — provider/model 분리는 유지하되 절약 컬럼만 생략.
 async function accumulateUsageRow(
   supabase: any,
   dateStr: string,
   provider: string,
   model: string,
-  delta: { requestCount: number; itemCount: number; inputTokens: number; outputTokens: number; costUsd: number },
+  delta: {
+    requestCount: number; itemCount: number; inputTokens: number; outputTokens: number; costUsd: number
+    rulesResolvedCount?: number; cacheHitCount?: number; statsSkipCount?: number
+  },
 ): Promise<void> {
   try {
     const { data: existing, error: selErr } = await supabase
       .from('ai_usage_daily')
-      .select('request_count,item_count,prompt_tokens,response_tokens,est_cost_usd')
+      .select('request_count,item_count,prompt_tokens,response_tokens,est_cost_usd,rules_resolved_count,cache_hit_count,stats_skip_count')
       .eq('usage_date', dateStr).eq('provider', provider).eq('model', model)
       .maybeSingle()
 
@@ -268,6 +290,10 @@ async function accumulateUsageRow(
       const missing = selErr.code === '42P01' || selErr.code === 'PGRST205'
       if (missing) {
         console.warn(JSON.stringify({ event: 'grade-writing-answers.daily_cap_table_missing', error: selErr.message }))
+        return
+      }
+      if (selErr.code === '42703') {
+        await accumulateUsageRowV39ColumnsMissingFallback(supabase, dateStr, provider, model, delta, selErr)
         return
       }
       await accumulateUsageRowLegacyFallback(supabase, dateStr, delta, selErr)
@@ -283,6 +309,9 @@ async function accumulateUsageRow(
       prompt_tokens: (Number(existing?.prompt_tokens) || 0) + delta.inputTokens,
       response_tokens: (Number(existing?.response_tokens) || 0) + delta.outputTokens,
       est_cost_usd: (Number(existing?.est_cost_usd) || 0) + delta.costUsd,
+      rules_resolved_count: (existing?.rules_resolved_count || 0) + (delta.rulesResolvedCount || 0),
+      cache_hit_count: (existing?.cache_hit_count || 0) + (delta.cacheHitCount || 0),
+      stats_skip_count: (existing?.stats_skip_count || 0) + (delta.statsSkipCount || 0),
       updated_at: new Date().toISOString(),
     }
     const { error: upsertErr } = await supabase
@@ -294,7 +323,69 @@ async function accumulateUsageRow(
         console.warn(JSON.stringify({ event: 'grade-writing-answers.daily_cap_table_missing', error: upsertErr.message }))
         return
       }
+      if (upsertErr.code === '42703') {
+        await accumulateUsageRowV39ColumnsMissingFallback(supabase, dateStr, provider, model, delta, upsertErr)
+        return
+      }
       await accumulateUsageRowLegacyFallback(supabase, dateStr, delta, upsertErr)
+    }
+  } catch (err) {
+    console.warn(JSON.stringify({ event: 'grade-writing-answers.daily_cap_write_error', error: String((err as any)?.message || err) }))
+  }
+}
+
+// 중간 폴백(2026-07-24 신규) — ai_usage_daily 테이블 자체와 provider/model
+// 컬럼(v3.8)은 있지만 rules_resolved_count/cache_hit_count/stats_skip_count
+// (v3.9)가 아직 없는 상태. provider/model 단위 분리는 그대로 유지하고,
+// 절약 컬럼만 생략한 채 기존 5개 컬럼(request_count/item_count/
+// prompt_tokens/response_tokens/est_cost_usd)만 기록한다 — 이 폴백마저
+// 42703이면(provider/model 컬럼조차 없음) 진짜 v3.8 이전 구 스키마이므로
+// accumulateUsageRowLegacyFallback으로 한 번 더 내려간다.
+async function accumulateUsageRowV39ColumnsMissingFallback(
+  supabase: any,
+  dateStr: string,
+  provider: string,
+  model: string,
+  delta: { requestCount: number; itemCount: number; inputTokens: number; outputTokens: number; costUsd: number },
+  origErr: any,
+): Promise<void> {
+  console.warn(JSON.stringify({
+    event: 'grade-writing-answers.daily_cap_write_v39_columns_missing_fallback',
+    error: String(origErr?.message || origErr),
+    code: origErr?.code,
+    hint: 'supabase_v3_9_writing_answer_statistics.sql(ai_usage_daily 절약 컬럼 추가분) 미실행 — rules_resolved_count/cache_hit_count/stats_skip_count 기록 없이 기존 v3.8 컬럼(provider/model 분리 유지)만 폴백 기록',
+  }))
+  try {
+    const { data: existing, error: selErr } = await supabase
+      .from('ai_usage_daily')
+      .select('request_count,item_count,prompt_tokens,response_tokens,est_cost_usd')
+      .eq('usage_date', dateStr).eq('provider', provider).eq('model', model)
+      .maybeSingle()
+    if (selErr) {
+      if (selErr.code === '42703') {
+        // provider/model 컬럼조차 없음 — 진짜 v3.8 이전 구 스키마.
+        await accumulateUsageRowLegacyFallback(supabase, dateStr, delta, selErr)
+      } else {
+        console.warn(JSON.stringify({ event: 'grade-writing-answers.daily_cap_write_error', error: selErr.message, code: selErr.code }))
+      }
+      return
+    }
+    const next = {
+      usage_date: dateStr, provider, model,
+      request_count: (existing?.request_count || 0) + delta.requestCount,
+      item_count: (existing?.item_count || 0) + delta.itemCount,
+      prompt_tokens: (Number(existing?.prompt_tokens) || 0) + delta.inputTokens,
+      response_tokens: (Number(existing?.response_tokens) || 0) + delta.outputTokens,
+      est_cost_usd: (Number(existing?.est_cost_usd) || 0) + delta.costUsd,
+      updated_at: new Date().toISOString(),
+    }
+    const { error: upErr } = await supabase.from('ai_usage_daily').upsert(next, { onConflict: 'usage_date,provider,model' })
+    if (upErr) {
+      if (upErr.code === '42703') {
+        await accumulateUsageRowLegacyFallback(supabase, dateStr, delta, upErr)
+      } else {
+        console.warn(JSON.stringify({ event: 'grade-writing-answers.daily_cap_write_error', error: upErr.message, code: upErr.code }))
+      }
     }
   } catch (err) {
     console.warn(JSON.stringify({ event: 'grade-writing-answers.daily_cap_write_error', error: String((err as any)?.message || err) }))
@@ -333,17 +424,78 @@ async function accumulateUsageRowLegacyFallback(
   }
 }
 
+// 2026-07-24(implementer, 학습 서버 작업) — "AI 판정 후 통계 반영"(구현
+// 지시 2). writing_answer_statistics는 오직 record_writing_answer_stat
+// RPC(§ supabase_v3_9_writing_answer_statistics.sql)를 통해서만 새 행이
+// 생기고 count가 늘어난다 — 이 함수는 그 행이 이미 존재할 때만 last_decision
+// /last_confidence와 accepted_count/rejected_count(해당하는 경우만)를
+// 갱신하는 update 전용이다. 행이 없으면(그 (word_id, registered_meaning,
+// normalized_answer) 조합으로 아직 학생이 제출한 적이 없음 — 이론상 이
+// 함수 호출 시점엔 이미 spelling_review_queue에 그 제출이 있었을 것이므로
+// 드문 경우) 조용히 스킵한다. 실패해도(테이블 없음 등) 경고만 남기고
+// 응답 자체를 막지 않는다(§ preview-only 원칙과 동일).
+async function bumpWritingAnswerStatAfterAiJudgment(
+  supabase: any,
+  wordId: string,
+  registeredMeaning: string,
+  normalizedAnswer: string,
+  decision: string,
+  confidence: number | null,
+): Promise<void> {
+  try {
+    const { data: existing, error: selErr } = await supabase
+      .from('writing_answer_statistics')
+      .select('id,accepted_count,rejected_count')
+      .eq('word_id', wordId).eq('registered_meaning', registeredMeaning).eq('normalized_answer', normalizedAnswer)
+      .maybeSingle()
+    if (selErr) {
+      const missing = selErr.code === '42P01' || selErr.code === 'PGRST205'
+      if (!missing) {
+        console.warn(JSON.stringify({ event: 'grade-writing-answers.stats_bump_read_error', error: selErr.message, code: selErr.code }))
+      }
+      return
+    }
+    if (!existing) return // 행 없음 — 생성은 record_writing_answer_stat RPC 몫(§ 위 주석)
+
+    const next: Record<string, unknown> = {
+      last_decision: decision,
+      last_confidence: confidence,
+    }
+    // review는 accepted_count/rejected_count 어느 쪽도 늘리지 않는다(스키마에
+    // review 전용 카운터 컬럼이 없음 — accept/reject_candidate만 셈).
+    if (decision === 'accept') next.accepted_count = (existing.accepted_count || 0) + 1
+    else if (decision === 'reject_candidate') next.rejected_count = (existing.rejected_count || 0) + 1
+
+    const { error: updErr } = await supabase.from('writing_answer_statistics').update(next).eq('id', existing.id)
+    if (updErr) {
+      console.warn(JSON.stringify({ event: 'grade-writing-answers.stats_bump_write_error', error: updErr.message, code: updErr.code }))
+    }
+  } catch (err) {
+    console.warn(JSON.stringify({ event: 'grade-writing-answers.stats_bump_write_error', error: String((err as any)?.message || err) }))
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS_HEADERS })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
 
-  let body: { adminPin?: string; pendingIds?: string[] } | null = null
+  let body: { adminPin?: string; pendingIds?: string[]; clientStats?: { rulesResolvedCount?: number } } | null = null
   try {
     body = await req.json()
   } catch {
     body = null
   }
-  const { adminPin, pendingIds } = body || {}
+  const { adminPin, pendingIds, clientStats } = body || {}
+  // 절약 집계(구현 지시 3, 신규) — 클라이언트가 이미 자체 규칙으로 확정
+  // 처리한 건수를 보고받아 ai_usage_daily에 함께 누적한다(비용이 실제로
+  // 발생하지 않는 값이라 인가 이전에 계산해도 안전 — 단순 숫자 검증뿐).
+  // 숫자가 아니거나 음수/비정상이면 0으로 안전하게 무시(fail-closed 아님 —
+  // 집계값 하나가 이상해도 요청 자체는 절대 막지 않는다).
+  const rulesResolvedCountFromClient = (() => {
+    const raw = clientStats?.rulesResolvedCount
+    if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) return 0
+    return Math.min(10000, Math.floor(raw))
+  })()
 
   // 인가가 항상 먼저 — api/admin-pin-actions.js:45-49행과 동일 원칙(어떤
   // 요청이든 adminPin이 틀리면 항상 같은 not_authorized).
@@ -446,7 +598,8 @@ Deno.serve(async (req: Request) => {
   // (같은 최악-경우 가정을 두 상한 모두에 일관되게 적용). 가격은 주
   // provider(primaryProvider) 기준으로 추정한다 — 폴백은 예외적 경로라
   // 사전 점검 단계에서까지 반영하지 않는다(보수적 추정 목적상 무해).
-  const unresolvedByRulesCount = items.filter((it) => !classifyLocally(it).decision).length
+  const ruleUnresolvedItems = items.filter((it) => !classifyLocally(it).decision)
+  const unresolvedByRulesCount = ruleUnresolvedItems.length
   const estimatedBatchCount = Math.ceil(unresolvedByRulesCount / BATCH_SIZE)
   const preflightEstimatedCostUsd = unresolvedByRulesCount > 0
     ? safeEstimateCostUsd({
@@ -463,6 +616,68 @@ Deno.serve(async (req: Request) => {
       unresolvedByRules: unresolvedByRulesCount,
     }, 400)
   }
+
+  // ── 통계 기반 반복 오답 스킵 사전 조회(구현 지시 1, 신규) ────────────────
+  // 배치 시작 전, 로컬 규칙으로 못 걸러진 항목들의 word_id를 모아
+  // writing_answer_statistics를 한 번에(.in()) 조회한다 — 항목마다 개별
+  // 쿼리를 던지지 않고 여기서 만든 Map을 statsLookup 훅이 재사용한다.
+  // 조건: status != 'accepted' AND accepted_count = 0 AND rejected_count >=
+  // STATS_REJECT_THRESHOLD — 과거 accept를 한 번이라도 받은 조합은 절대
+  // 스킵 대상에 넣지 않는다(자동 승인 위험 원천 차단, § pipeline.js
+  // isValidStatsSkipDecision 주석과 동일 원칙). 테이블 미존재(마이그레이션
+  // 미실행, 42P01/PGRST205)면 조용히 비활성 — 이 훅이 없어도 캐시 조회 이후
+  // 흐름은 기존 그대로다(헌법 규칙 9).
+  const statsKeyOf = (wordId: string, normalizedAnswer: string) => `${wordId}::${normalizedAnswer}`
+  const statsSkipMap = new Map<string, { rejectedCount: number; lastConfidence: number | null }>()
+  let statsTableUnavailable = false
+  if (ruleUnresolvedItems.length > 0) {
+    const uniqueWordIds = [...new Set(ruleUnresolvedItems.map((it: any) => it.wordId))]
+    try {
+      const { data: statsRows, error: statsErr } = await supabase
+        .from('writing_answer_statistics')
+        .select('word_id,normalized_answer,rejected_count,last_confidence')
+        .in('word_id', uniqueWordIds)
+        .neq('status', 'accepted')
+        .eq('accepted_count', 0)
+        .gte('rejected_count', STATS_REJECT_THRESHOLD)
+      if (statsErr) {
+        const missing = statsErr.code === '42P01' || statsErr.code === 'PGRST205'
+        if (!missing) {
+          console.warn(JSON.stringify({ event: 'grade-writing-answers.stats_read_error', error: statsErr.message, code: statsErr.code }))
+        }
+        statsTableUnavailable = true
+      } else {
+        for (const row of statsRows || []) {
+          statsSkipMap.set(statsKeyOf(row.word_id, row.normalized_answer), {
+            rejectedCount: row.rejected_count,
+            lastConfidence: row.last_confidence != null ? Number(row.last_confidence) : null,
+          })
+        }
+      }
+    } catch (err) {
+      statsTableUnavailable = true
+      console.warn(JSON.stringify({ event: 'grade-writing-answers.stats_read_error', error: String((err as any)?.message || err) }))
+    }
+  }
+  let statsSkipCountThisRun = 0
+  // 이 조건에서 만들어지는 skip 결과는 항상 decision='reject_candidate'다
+  // (§ 위 조회 조건 — accepted_count=0, rejected_count>=threshold라는
+  // 사실 자체가 "과거 반복적으로 명백히 거부됐다"는 신호이지 애매한
+  // review 신호가 아니다). pipeline.js statsLookup 훅 계약상 'review'도
+  // 허용되지만, 이 index.ts 구현은 지금은 reject_candidate만 생성한다.
+  const statsLookup = statsTableUnavailable || statsSkipMap.size === 0
+    ? null
+    : async (item: any) => {
+      const hit = statsSkipMap.get(statsKeyOf(item.wordId, normalizeForCompare(item.submittedAnswer)))
+      if (!hit) return null
+      statsSkipCountThisRun += 1
+      return {
+        skip: true,
+        decision: 'reject_candidate',
+        confidence: hit.lastConfidence != null ? Math.min(0.95, hit.lastConfidence) : 0.8,
+        reason: `동일 답안이 과거 ${hit.rejectedCount}회 reject_candidate 판정 — 통계 기반 재사용(관리자 확인 여전히 가능)`,
+      }
+    }
 
   let cacheTableMissing = false
   // provider/model별 실사용 누계 버킷(요구사항 9) — 폴백을 쓰면 한 요청
@@ -533,15 +748,26 @@ Deno.serve(async (req: Request) => {
     // 캐시로 확정 가능한 항목은 여전히 캐시를 쓴다(비용 발생 없음) — "AI
     // 호출만" 건너뛴다는 요구사항과 정확히 일치(§ pipeline.js classifyBatch
     // budgetExceeded 옵션 주석 참고). 실제 유료 AI 호출은 단 한 번도 없음.
-    const proposals = await classifyBatch(items, { cacheLookup, cacheStore, batchSize: BATCH_SIZE, budgetExceeded: true })
+    const proposals = await classifyBatch(items, { cacheLookup, cacheStore, batchSize: BATCH_SIZE, budgetExceeded: true, statsLookup })
     console.log(JSON.stringify({
       event: 'grade-writing-answers.daily_budget_exceeded',
       todayUsd: dailyUsage?.estCostUsd ?? null,
       capUsd: MAX_DAILY_COST,
       unresolvedByRules: unresolvedByRulesCount,
+      statsSkips: statsSkipCountThisRun,
       model: primaryProvider.model,
       provider: primaryProvider.name,
     }))
+    // 절약 집계(구현 지시 3) — 실제 AI 호출은 이 경로에서 단 한 번도 없지만
+    // (예산 초과), 클라이언트 보고 규칙 확정/캐시 히트/통계 스킵은 여전히
+    // "AI를 안 부르고 아낀" 값이라 정확한 절약치를 위해 함께 기록한다.
+    const cacheHitsThisRun = proposals.filter((p: any) => p.cache_hit).length
+    if (rulesResolvedCountFromClient > 0 || cacheHitsThisRun > 0 || statsSkipCountThisRun > 0) {
+      await accumulateUsageRow(supabase, todayDateStr, primaryProvider.name, primaryProvider.model, {
+        requestCount: 0, itemCount: 0, inputTokens: 0, outputTokens: 0, costUsd: 0,
+        rulesResolvedCount: rulesResolvedCountFromClient, cacheHitCount: cacheHitsThisRun, statsSkipCount: statsSkipCountThisRun,
+      })
+    }
     return json({
       ok: true,
       proposals,
@@ -550,7 +776,8 @@ Deno.serve(async (req: Request) => {
         accept: proposals.filter((p: any) => p.decision === 'accept').length,
         review: proposals.filter((p: any) => p.decision === 'review').length,
         rejectCandidate: proposals.filter((p: any) => p.decision === 'reject_candidate').length,
-        cacheHits: proposals.filter((p: any) => p.cache_hit).length,
+        cacheHits: cacheHitsThisRun,
+        statsSkips: statsSkipCountThisRun,
       },
       usage: {
         inputTokens: 0,
@@ -644,7 +871,25 @@ Deno.serve(async (req: Request) => {
     }
     : null
 
-  const proposals = await classifyBatch(items, { cacheLookup, cacheStore, aiClassify, batchSize: BATCH_SIZE })
+  const proposals = await classifyBatch(items, { cacheLookup, cacheStore, aiClassify, batchSize: BATCH_SIZE, statsLookup })
+
+  // AI 판정 후 통계 반영(구현 지시 2, service_role, 실패해도 응답을 절대
+  // 막지 않음) — 이번 실행에서 "실제로 새로 AI가 판정한"(캐시 재사용도
+  // 아니고 통계 스킵도 아닌 진짜 신규 판정) 항목만 대상. 행 생성은 학생
+  // 제출 시 record_writing_answer_stat RPC의 몫이라 여기서는 update만 하고,
+  // 행이 아직 없으면(학생이 아직 그 조합을 제출한 적 없음 등) 조용히
+  // 스킵한다. 배치 처리가 전부 끝난 뒤 한 번에 처리해 응답 지연을 최소화한다.
+  const itemById = new Map(items.map((it: any) => [it.id, it]))
+  const freshAiProposals = proposals.filter((p: any) => p.decision_source === 'ai' && !p.cache_hit)
+  if (freshAiProposals.length > 0) {
+    await Promise.all(freshAiProposals.map((p: any) => {
+      const item = itemById.get(p.pending_answer_id)
+      if (!item) return Promise.resolve()
+      return bumpWritingAnswerStatAfterAiJudgment(
+        supabase, item.wordId, item.meaning, normalizeForCompare(item.submittedAnswer), p.decision, p.confidence ?? null,
+      )
+    }))
+  }
 
   // 응답/로그용 provider/model 요약 — 이번 요청에서 실제로 AI를 호출한
   // (provider, model) 조합이 하나면 그걸, 없으면(전부 캐시/규칙으로 끝남)
@@ -679,14 +924,35 @@ Deno.serve(async (req: Request) => {
   // 히트/로컬 규칙만으로 끝난 요청은 비용이 0이라 굳이 테이블에 손댈 필요가
   // 없음 — 불필요한 DB 왕복 최소화). 테이블이 없으면 accumulateUsageRow가
   // 조용히 경고만 남기고 무시한다.
-  for (const bucket of usageBuckets) {
-    const bucketCostUsd = safeEstimateCostUsd({ inputTokens: bucket.inputTokens, outputTokens: bucket.outputTokens }, bucket.model)
-    await accumulateUsageRow(supabase, todayDateStr, bucket.provider, bucket.model, {
-      requestCount: bucket.batchCount,
-      itemCount: bucket.itemCount,
-      inputTokens: bucket.inputTokens,
-      outputTokens: bucket.outputTokens,
-      costUsd: bucketCostUsd,
+  //
+  // 절약 집계(구현 지시 3, 신규) — rules_resolved_count(클라이언트 보고)/
+  // cache_hit_count/stats_skip_count는 provider/model 구분이 의미 없는
+  // "이번 요청 전체" 값이라, 버킷이 여러 개(폴백 등으로 provider/model이
+  // 섞인 경우)여도 정확히 한 번만(첫 버킷에만) 더한다 — 모든 버킷에
+  // 똑같이 더하면 합계가 실제보다 부풀려진다.
+  const cacheHitsThisRun = proposals.filter((p: any) => p.cache_hit).length
+  if (usageBuckets.length > 0) {
+    for (let i = 0; i < usageBuckets.length; i++) {
+      const bucket = usageBuckets[i]
+      const bucketCostUsd = safeEstimateCostUsd({ inputTokens: bucket.inputTokens, outputTokens: bucket.outputTokens }, bucket.model)
+      await accumulateUsageRow(supabase, todayDateStr, bucket.provider, bucket.model, {
+        requestCount: bucket.batchCount,
+        itemCount: bucket.itemCount,
+        inputTokens: bucket.inputTokens,
+        outputTokens: bucket.outputTokens,
+        costUsd: bucketCostUsd,
+        rulesResolvedCount: i === 0 ? rulesResolvedCountFromClient : 0,
+        cacheHitCount: i === 0 ? cacheHitsThisRun : 0,
+        statsSkipCount: i === 0 ? statsSkipCountThisRun : 0,
+      })
+    }
+  } else if (rulesResolvedCountFromClient > 0 || cacheHitsThisRun > 0 || statsSkipCountThisRun > 0) {
+    // AI를 한 번도 호출하지 않은 요청(전부 규칙/캐시/통계로 끝남)이라도
+    // "얼마나 아꼈는지"는 기록해야 절약 집계가 정확하다 — primaryProvider의
+    // (provider, model) 행에 비용/토큰 0으로 기록.
+    await accumulateUsageRow(supabase, todayDateStr, primaryProvider.name, primaryProvider.model, {
+      requestCount: 0, itemCount: 0, inputTokens: 0, outputTokens: 0, costUsd: 0,
+      rulesResolvedCount: rulesResolvedCountFromClient, cacheHitCount: cacheHitsThisRun, statsSkipCount: statsSkipCountThisRun,
     })
   }
 
@@ -707,7 +973,9 @@ Deno.serve(async (req: Request) => {
     totalItems: items.length,
     batchCount: actualBatchCount,
     unresolvedByRules: proposals.filter((p: any) => p.decision_source === 'ai' || p.decision_source === 'ai_error' || p.decision_source === 'parse_error' || p.decision_source === 'ai_unavailable' || p.decision_source === 'ai_budget_exceeded').length,
-    cacheHits: proposals.filter((p: any) => p.cache_hit).length,
+    cacheHits: cacheHitsThisRun,
+    statsSkips: statsSkipCountThisRun,
+    rulesResolvedCountFromClient,
     inputTokens: totalInputTokens,
     outputTokens: totalOutputTokens,
     estimatedCostUsd,
@@ -726,7 +994,10 @@ Deno.serve(async (req: Request) => {
       accept: proposals.filter((p: any) => p.decision === 'accept').length,
       review: proposals.filter((p: any) => p.decision === 'review').length,
       rejectCandidate: proposals.filter((p: any) => p.decision === 'reject_candidate').length,
-      cacheHits: proposals.filter((p: any) => p.cache_hit).length,
+      cacheHits: cacheHitsThisRun,
+      // 2026-07-24(implementer, 학습 서버 작업) — 신규 additive 필드. 기존
+      // summary 필드는 전부 무변경.
+      statsSkips: statsSkipCountThisRun,
     },
     usage: {
       inputTokens: totalInputTokens,

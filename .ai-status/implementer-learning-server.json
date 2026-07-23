@@ -1,0 +1,30 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현(서버측 — Edge Function + SQL 마이그레이션)",
+  "task_id": "learning-server",
+  "task": "\"선생님이 같은 검토를 두 번 하지 않는\" 자동 학습 시스템 — writing_answer_statistics 테이블/record_writing_answer_stat RPC + grade-writing-answers Edge Function statsLookup 훅 + ai_usage_daily 절약 컬럼",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-23T17:30:00Z",
+  "updated_at": "2026-07-23T18:08:44Z",
+  "files_owned": [
+    "supabase_v3_9_writing_answer_statistics.sql",
+    "supabase/functions/grade-writing-answers/index.ts",
+    "supabase/functions/grade-writing-answers/pipeline.js",
+    ".ai-status/implementer-learning-server.json"
+  ],
+  "files_read": [
+    "supabase_v3_8_ai_usage_daily.sql",
+    "supabase_v3_6_writing_review_ai_cache.sql",
+    "supabase_v3_5_season_lifecycle.sql",
+    "scripts/testWritingReviewAiPipeline.mjs",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json",
+    "src/utils/writingAnswerStatsApi.js (다른 에이전트 소유 — 계약 정합성 확인용 읽기 전용)",
+    "src/utils/spellingReviewAiApi.js (다른 에이전트 소유 — 계약 정합성 확인용 읽기 전용)",
+    "src/utils/spellingReviewApi.js (다른 에이전트 소유 — 계약 정합성 확인용 읽기 전용)"
+  ],
+  "summary": "3개 소유 파일만 수정/생성. src/**는 전혀 건드리지 않음(클라이언트 에이전트가 이미 동일 계약으로 구현 완료 — 상호 검증까지 마침, 아래 참고).\n\n### 1) supabase_v3_9_writing_answer_statistics.sql (신규, 미실행 — 운영자 수동)\n- writing_answer_statistics 테이블: id/word_id(FK words, cascade)/registered_meaning/student_answer/normalized_answer/count/accepted_count/rejected_count/distinct_student_ids(uuid[], 상한 200, 규칙 4 준수 — 이름 저장 안 함)/first_seen/last_seen/last_decision/last_confidence/status('pending'|'accepted'|'dismissed', check 제약)/status_changed_at. unique index (word_id, registered_meaning, normalized_answer).\n- RLS: SELECT는 anon/authenticated 전체 허용(관리자 패널 조회). UPDATE는 컬럼 단위로 (status, status_changed_at)만 grant. INSERT/DELETE는 grant 안 함 — 유일한 쓰기 경로는 아래 RPC.\n- record_writing_answer_stat(p_word_id uuid, p_registered_meaning text, p_student_answer text, p_normalized_answer text, p_student_id uuid default null) RPC: SECURITY DEFINER, search_path=public 고정. 입력 검증(빈 문자열 거부, student_answer<=500자, normalized_answer<=200자). INSERT...ON CONFLICT DO UPDATE 원자적 upsert — count+1, student_answer=최신 원문, last_seen=now(), distinct_student_ids는 중복/null/200개 상한 방어 후 append. PUBLIC revoke 후 anon/authenticated/service_role에만 grant execute. 테이블 자체에는 anon insert/update(count 등) 권한이 없어 이 RPC 하나가 유일한 쓰기 경로(남용 면적 최소화, 주석에 명시).\n- ai_usage_daily에 rules_resolved_count/cache_hit_count/stats_skip_count 3컬럼 추가(alter table if exists ... add column if not exists — v3.8 미실행이어도 안전하게 no-op). ai_item_count는 기존 item_count 재사용(신설 안 함).\n- pg_cron 배치 없음(주석으로 명시 — 111명 규모, 라이브 쿼리로 충분, 헌법 규칙 7). drop policy if exists만 사용(v3_7 선례), 파괴적 DDL(테이블 제거/전체 비우기) 구문이나 무조건부 DELETE는 전혀 포함하지 않음(훅 통과 확인).\n\n### 2) pipeline.js — statsLookup 훅(순수, 주입식)\n- classifyBatch 옵션에 statsLookup(기본 null) 추가. 실행 순서: 로컬 규칙 -> 캐시 조회 -> statsLookup -> budgetExceeded/AI. 캐시 미스 항목에 대해서만 호출.\n- 계약: statsLookup(item) -> Promise<{skip:true, decision, confidence, reason} | null>. decision은 'review'|'reject_candidate'만 허용(accept 절대 금지 — isValidStatsSkipDecision으로 방어, 잘못된 값이 오면 무시하고 정상 AI 경로로 진행). skip이면 decision_source='stats_repeat'로 proposal 생성, aiClassify 미호출, cacheStore도 호출 안 함(새 AI 캐시 행을 만들 근거가 없음).\n- statsLookup을 안 넘기면(undefined/null) 기존 동작과 100% 동일 — 기존 호출부(테스트 등) 전혀 영향 없음.\n\n### 3) index.ts 변경\n- STATS_REJECT_THRESHOLD env(기본 5, readPositiveNumberEnv).\n- 배치 시작 전 일괄 조회(.in('word_id', uniqueWordIds)): writing_answer_statistics에서 status!='accepted' AND accepted_count=0 AND rejected_count>=threshold인 행만 statsSkipMap(word_id::normalized_answer 키)에 적재. 테이블 미존재(42P01/PGRST205)면 statsTableUnavailable=true로 조용히 비활성(statsLookup=null). 이 index.ts 구현은 조건상 항상 decision='reject_candidate'만 생성(review는 안 만듦 — pipeline.js 계약상 허용되지만 이 구현은 안 씀, 주석에 명시).\n- AI 판정 후 통계 반영: classifyBatch 완료 후 decision_source==='ai' && !cache_hit인 proposal만(진짜 신규 AI 판정) bumpWritingAnswerStatAfterAiJudgment로 last_decision/last_confidence 갱신 + accept면 accepted_count+1, reject_candidate면 rejected_count+1(review는 카운터 없음). 행이 없으면(RPC로 아직 안 만들어짐) 조용히 스킵 — update 전용, insert 안 함. Promise.all로 배치 후 일괄 처리(응답 지연 최소화).\n- clientStats:{rulesResolvedCount} 요청 바디 필드 — 숫자 검증(비정상값 0으로 폴백), 상한 10000.\n- accumulateUsageRow에 rulesResolvedCount/cacheHitCount/statsSkipCount delta 필드 추가. 42703(v3.9 컬럼 없음, v3.8은 있음)이면 accumulateUsageRowV39ColumnsMissingFallback으로 provider/model 분리는 유지한 채 절약 컬럼만 생략 기록 — 그마저 42703(provider/model 컬럼도 없음, 진짜 v3.8 이전)이면 기존 accumulateUsageRowLegacyFallback으로 한 단계 더 폴백. usageBuckets가 있으면 첫 버킷에만 절약값을 더함(중복 방지), usageBuckets가 비어있어도(AI 호출 0건, 전부 규칙/캐시/통계로 끝난 요청) 절약값이 있으면 primaryProvider 행에 비용 0으로 별도 기록 — 이 케이스가 없으면 절약이 전혀 안 남는 버그였을 것.\n- 응답 summary.statsSkips, 로그 statsSkips/rulesResolvedCountFromClient 필드 추가(additive, 기존 필드 무변경). budgetExceeded 경로에도 statsLookup 적용 + 절약 집계 동일하게 반영.\n\n### 클라이언트 계약 검증(읽기 전용, 상호 확인)\nsrc/utils/writingAnswerStatsApi.js/spellingReviewAiApi.js/spellingReviewApi.js(다른 에이전트 소유, 이미 완료됨)를 읽어 대조 — 셀렉트 컬럼명, RPC 파라미터명(p_word_id 등), 요청 바디 clientStats.rulesResolvedCount, 응답 summary.statsSkips 전부 이 구현과 정확히 1:1로 일치함을 확인. 수정 없이 그대로 둠(파일 소유권 경계 준수, 규칙 16).\n\n### 조정자 SQL 검토 반영(2026-07-24 추가 수정)\nSQL 190~192행의 `comment on column ai_usage_daily.*` 3문장이 IF EXISTS 가드가 불가능한 구문이라, ai_usage_daily 테이블 자체가 아직 없는 상태(v3_8 미실행 — 현재 라이브 실제 상태)에서 이 파일을 단독 실행하면 42P01로 스크립트 전체가 중단돼 헤더의 \"실행 순서 무관\" 보장을 깨는 문제가 지적됨. 수정: 이 3문장을 `do $$ begin if to_regclass('public.ai_usage_daily') is not null then ... end if; end $$;` DO 블록으로 감쌈(comment on은 정적 구문이라 EXECUTE 불필요, 그대로 실행 가능). 위 alter table if exists ... add column if not exists가 테이블 존재 시 이미 컬럼을 만들어두므로 테이블 존재 확인만으로 충분. 나머지(테이블/RPC/정책/ALTER IF EXISTS)는 변경 없음. 재검토(육안 + 멱등성) 완료 — 반복 실행/실행 순서 무관 모두 안전.",
+  "blocker": null,
+  "next_action": "운영자가 supabase_v3_9_writing_answer_statistics.sql을 Supabase 대시보드 SQL Editor에서 실행하고 `supabase functions deploy grade-writing-answers`로 재배포해야 실제 반영됨. 그 전까지는 헌법 규칙 9에 따라 기존 캐시->AI 흐름과 100% 동일하게 동작(회귀 없음). qa-reviewer가 index.ts/pipeline.js 로직 검토 + SQL 파일 멱등성/GRANT 재확인 권장."
+}
