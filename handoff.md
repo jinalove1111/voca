@@ -1,5 +1,23 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-23 (6차, 순차 2-Task 게이트 실행 — Task 1 시즌 생애주기 수리 0845d4f + Task 2 쓰기 답안 검토 AI 보조 af25b1d, 운영자 액션 4건 대기)_
+_최종 갱신: 2026-07-23 (7차, 쓰기 답안 검토 AI 보조 v1.1 — 관리자 패널 실운영 가능화 61a2c5a, 배포 검증 완료, 운영자 액션 대기)_
+
+## 2026-07-23 (7차) — 쓰기 답안 검토 AI 보조 v1.1: 관리자 패널 실운영 가능화 (커밋 61a2c5a, 배포 검증 완료)
+
+**왜 컨트롤이 안 보였나 (코디네이터 라이브 진단 실측, 추측 0)**: ① feature flag writingReviewAiAssist=false(UI는 AdminScreen에 마운트돼 있었음) ② supabase_v3_6 미실행(PGRST205 실측) ③ Edge Function 미배포(404 실측, 따라서 ANTHROPIC_API_KEY 시크릿도 미설정). 복합 3원인.
+
+**v1→v1.1 아키텍처 변경**: 규칙 기반 분류를 클라이언트로 이동 — supabase/functions/grade-writing-answers/pipeline.js(순수 JS)를 브라우저가 단일 원본 그대로 import(Vite 번들 가능함을 build로 실증). 미해결 항목만 Edge Function 호출, 호출 실패(미배포 404 포함) 시 해당 항목만 review/confidence 0/ai_unavailable로 정직 표시하고 규칙 결과는 유지 — **Edge Function 배포 전에도 규칙 기반 미리보기는 동작**.
+
+**UI(SpellingReviewQueuePanel만, 페이지 재설계 없음, 기존 인정/무시 버튼 보존)**: [자동 검토 미리보기] — 실측 pending 건수 표시(하드코딩 금지), 범위 선택(전체/선택만), 2단계 진행 표시, 요약 7지표(자동 인정 가능/관리자 확인 필요/오답 후보/규칙 처리/AI 처리/cache hit/실패). 결과 행: 단어/등록 뜻/학생 답안/제안 판정(safe_accept·review·reject_candidate 표시명 — 관리자 확정 전 "최종" 표현 금지)/confidence/근거/품사 경고/의미범위 경고/출처(rule·synonym·ai·cache). 필터: 전체 선택/해제, 판정별 3종, 단어별, 동일 답안 묶어 보기. 일괄 액션 5종(선택 인정/선택 무시/확실한 답안 모두 인정/동일 답안 모두 인정/동의어로 저장) 전부 정확한 건수 확인 모달 뒤에서만 실행. "확실한 답안" 기준: safe_accept AND confidence≥0.95 AND 품사·파싱·의미범위 경고 전무. 학생별 필터는 스키마 실측상 불가((word_id,submitted_answer) unique dedupe 큐라 최초 제출자만 잔존 — 거짓 UI 대신 미구현, task2-writing-report.md에 근거).
+
+**동의어 저장**: 3옵션(이번 답안만/이 단어 허용 답안으로 저장/같은 대기 답안 모두). 허용 답안 저장 시 감사 메타(word ID/등록 뜻/품사/답안/생성 주체/생성일) → 신규 supabase_v3_7_word_accepted_variants.sql(멱등, **운영자 실행 대기**, 미실행 시 감사 기록만 조용히 스킵 — 기능 매칭 원본은 words.accepted_meanings라 "같은 조합 다음번 규칙 자동 매칭"은 테이블과 무관하게 성립). supabase_v3_6에는 meaning_scope_warning 컬럼 추가(미실행 파일이라 in-place 수정 안전).
+
+**테스트**: testWritingReviewAiPipeline.mjs 섹션 27~36 추가 — 운영자 실사례 4건(climate/기후/"환경"→review, evaporation/증발/"완벽하게"·stream/흐름/"실시간"→reject_candidate, constant/끊임없는/"o"→reject_candidate; 맹목적 자동 인정 0, 자동 거부 실행 0 단언) + 105건+ 픽스처 배치 + 미리보기 라이브 status 무변경 단언 + 선택 확정 범위 + 수동 폴백 + AI 실패/잘못된 JSON/캐시 재사용 + 확실한 답안 기준 필터. 전부 픽스처+mock, 라이브 쓰기 0.
+
+**검증**: build PASS ×2(에이전트+코디네이터 독립), verify:all 20도메인 PASS 기준선 동일(login FAIL=기지 로컬 키 부재, speaking/listening SKIP). Vercel 배포 실측: 61a2c5a success 18:35 KST, 라이브 번들 SHA-256 로컬 dist와 완전 일치, AdminScreen 청크 바이트 일치, api 12/12 무변경.
+
+**라이브 데이터 보존 증거**: 세션 전 과정 라이브엔 읽기 전용 SELECT만. status별 실측: pending 124 / accepted 15 / dismissed 48 — pending은 오늘 하루 99→109→124로 오히려 증가(학생 신규 제출), accepted/dismissed는 07-20부터 운영된 기존 수동 워크플로우의 이력. 이 세션이 전환시킨 status 0건.
+
+**운영자 액션(활성화 원할 때, 순서대로)**: ① supabase_v3_6_writing_review_ai_cache.sql 실행 ② supabase_v3_7_word_accepted_variants.sql 실행 ③ `supabase functions deploy grade-writing-answers` + `supabase secrets set ANTHROPIC_API_KEY=... ADMIN_PIN=...` ④ 관리자 화면 기능 관리에서 writingReviewAiAssist ON ⑤ 첫 미리보기: 관리자 로그인 → 쓰기 답안 검토 카드 → [자동 검토 미리보기] → 범위 "전체" → 결과 검토 후 일괄 액션은 확인 모달로만. ①~③ 전이라도 flag ON하면 규칙 기반 미리보기만 동작(AI 항목은 ai_unavailable로 표시) — 이것도 유효한 운영 모드.
 
 ## 2026-07-23 (6차) — 순차 2-Task 게이트: 시즌 생애주기 수리 → 쓰기 답안 검토 AI 보조
 
