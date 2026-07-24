@@ -1,0 +1,20 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "github-pages-disable",
+  "task": "GitHub Pages 그림자 배포 워크플로 자동 트리거 비활성화 (push -> workflow_dispatch)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-24T00:00:00+09:00",
+  "updated_at": "2026-07-24T00:10:00+09:00",
+  "files_owned": [
+    ".github/workflows/deploy.yml"
+  ],
+  "files_read": [
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "deploy.yml의 on 트리거를 push(branches: [main])에서 workflow_dispatch로 변경해 main 푸시 시 자동 재배포를 막았다. build/deploy job 정의는 변경 없이 유지, 운영자가 GitHub Actions 탭에서 수동 실행 가능. 파일 상단에 비활성화 사유/날짜/참고 문서 경로를 주석으로 추가. 커밋은 하지 않음(조정자 담당).",
+  "blocker": null,
+  "next_action": "조정자가 커밋. 운영자는 GitHub 저장소 Settings > Pages에서 Source를 None으로 변경해 이미 게시된 Pages 사이트 자체를 내리는 별도 조치가 필요함(이 워크플로 변경은 향후 자동 재배포만 막을 뿐, 기존 게시본은 그대로 유지됨)."
+}

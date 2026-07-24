@@ -1,8 +1,10 @@
+# 자동 배포 비활성화: 2026-07-24, GitHub Pages 그림자 배포(API 라우트 없는
+# 정적호스팅이라 로그인/PIN 검증이 깨짐) 발견에 따라 수동 트리거로 전환.
+# 참고: docs/audit/2026-07-24-deployment-scale.md
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
