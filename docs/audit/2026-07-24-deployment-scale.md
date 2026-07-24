@@ -14,6 +14,8 @@
 확인 필요 항목이 많아 확정 불가하나, 정성적으로 위험 신호 다수.
 
 - **가장 심각한 발견(신규): Vercel Hobby 플랜은 ToS상 비상업적(non-commercial) 용도로 제한됩니다.** 이 앱은 20개 학원(유료 고객)에게 서비스하는 상업적 SaaS입니다 — 이는 기술적 용량 문제가 아니라 **약관 위반 리스크**이며, 규모가 커질수록(20학원=명백한 상업 운영) Vercel이 계정을 정지시킬 가능성이 기술적 장애보다 먼저 현실화될 수 있습니다. 이 판단은 공개적으로 알려진 Vercel Hobby 약관 취지에 기반한 것으로, **정확한 최신 조항은 Vercel 공식 약관 페이지에서 운영자가 재확인 필요**(이 세션은 실시간 웹 접근 불가 — 즉 이 항목은 [추정]이며 1차 출처 재확인 전까지 사실로 단정하지 말 것).
+
+  **[2026-07-24 후속 확정] [추정] 아님 — 확정.** 조정자가 별도 세션에서 WebSearch로 직접 확인했습니다. Vercel 공식 Terms of Service는 Hobby 플랜을 "개인 또는 비상업적 용도"로 명시적으로 제한하며, 실제로 상업적 프로젝트가 Hobby 플랜에서 발견되면 계정을 정지/경고하는 집행 사례가 있습니다(검색 결과 인용): "Vercel's Terms of Service explicitly state that you shall only use the Services under a Hobby plan for your personal or non-commercial use." / "Vercel actively monitors and warns/disables accounts that violate Hobby terms. Additionally, Vercel may suspend commercial projects found on Hobby plans." 출처: https://vercel.com/legal/terms (공식 ToS), 2차 확인 https://www.promptstoproduct.com/vercel-free-tier-limits 등. (직접 원문 열람은 이 확정 작업 세션의 WebFetch가 훅에 의해 차단돼 하지 못했으나, WebSearch 결과로 Vercel 공식 ToS의 취지가 명확히 확정됨.) 20학원(상업 SaaS) 규모로 확장 시 기술적 용량 문제보다 **약관 위반으로 인한 계정 정지**가 먼저 현실화될 실제 리스크임이 확정됐습니다 — 아래 종합 판정 표 및 재확인 문구는 이 확정 사실을 반영해 갱신했습니다.
 - **서버리스 함수 실행시간**: `vercel.json` 부재 = 기본값(짧은 실행시간 한도) 그대로 적용. `generate-audio.js`(Anthropic + Google TTS 순차 호출)처럼 수 초 걸릴 수 있는 함수가 기본 타임아웃에 걸릴 위험 — 다만 관리자 전용 트리거(신규 단어 등록 시)라 2000명 동시접속과는 무관, 로그인류 함수는 매우 가벼워 안전.
 - **동시 실행 한도/대역폭 정확한 수치**: 확인 필요 — Hobby 플랜 대역폭이 매달 수십~100GB 수준으로 알려져 있으나 Vercel이 정책을 자주 바꿔 정확한 현재 수치는 대시보드/공식 페이지 확인 필요.
 - **번들 크기 기반 추정**: 학생용 메인 번들 gzip 약 185KB/방문(첫 로드). 오디오 mp3는 Supabase Storage에서 서빙되므로 별개. 2000명×1일 1회 로드로는 Hobby 무료 대역폭을 단기간에 소진할 정도는 아닐 것으로 보이나 이 추정도 확인 필요.
@@ -53,6 +55,8 @@
 
 **추가 발견 — 별도 리스크(`.github/workflows/deploy.yml`):** GitHub Actions로 **GitHub Pages에 동시 배포**하는 워크플로우가 존재합니다(`main` push마다 build → GitHub Pages 배포). GitHub Pages는 정적 호스팅이라 `api/*.js` 서버리스 함수(PIN 검증 등 전부)가 동작하지 않습니다 — 이 배포 타겟이 실제로 활성화(Pages 설정 On)돼 있고 누군가 그 URL로 접속한다면 로그인부터 깨지는 "그림자 배포"가 될 수 있습니다. 이 세션은 네트워크 호출이 차단돼 있어 Pages 활성 여부를 **확정하지 못했습니다** — 운영자가 리포지토리 Settings → Pages에서 직접 확인 필요.
 
+**[2026-07-24 후속 확정]** 조정자가 별도 세션에서 WebFetch로 `https://jinalove1111.github.io/voca/`를 직접 열람해 확인 — 실제로 활성 상태였습니다("Paul Easy Voca 🌟" 페이지가 실제로 응답, API 라우트 없는 정적호스팅이라 로그인/PIN 검증 전체가 깨지는 상태로 실제 라이브 노출 중이었음). 운영자 승인 하에 즉시 조치: 커밋 `c34a5e3`("fix(deploy): GitHub Pages 그림자 배포 자동 재배포 중단")로 `.github/workflows/deploy.yml`의 트리거를 `on: push` → `on: workflow_dispatch`로 전환해 향후 자동 재배포는 차단됐습니다. **단, 이미 게시된 사이트 자체(확인 시점 기준 여전히 응답 중일 가능성 높음)는 이 커밋만으로는 내려가지 않고, 운영자가 GitHub 저장소 Settings → Pages → Source를 None으로 직접 변경해야 완전히 해소됩니다** — 이 잔여 액션은 여전히 운영자 대기 상태입니다.
+
 **무료 티어 내 권장 조치**: Vercel/Supabase의 기본 제공 알림(배포 실패 이메일 등, 정확한 제공 여부는 대시보드 설정에서 확인)을 켜는 것이 새 유료 도구 도입보다 우선.
 
 ## 종합 판정
@@ -60,10 +64,11 @@
 | 항목 | 등급 | 즉시 무료로 고칠 수 있는가 |
 |---|---|---|
 | 서버리스 함수 12/12 한도 | HIGH | 코드 통합 필요(설계는 가능) — **2026-07-24 보안수정에서 이미 이 원칙 적용됨** |
-| Vercel Hobby 상업적 사용 ToS | HIGH([추정], 신규 발견) | 아님 — 운영자가 Vercel 약관 직접 재확인 후 플랜 판단 필요 |
+| Vercel Hobby 상업적 사용 ToS | HIGH(**확정**, 2026-07-24 후속 WebSearch 확인) | 아님 — 확정, 운영자가 플랜/구조 결정 필요 |
 | 빌드 번들 크기 | LOW~MEDIUM | 이미 대부분 lazy-split 완료, 추가 조치 우선순위 낮음 |
 | 학원별 인프라 격리 부재 | HIGH | 설계 변경 필요(RLS 도입), 무료 티어 내 가능 |
 | Supabase 티어 한계 | 확인 필요 | 아님 — 대시보드 확인 선행 필요 |
 | 모니터링/알림 부재 | HIGH | 부분적으로 무료 옵션 존재, 설정만 필요 |
+| GitHub Pages 그림자 배포 | HIGH(**확정**, 2026-07-24 후속 WebFetch 확인 — 활성이었음) | 부분 — 자동 재배포는 커밋 `c34a5e3`로 이미 차단, 완전 비활성화(Settings→Pages→Source: None)는 여전히 운영자 대기 |
 
-**요약**: 서버리스 함수는 여전히 12/12로 여유 없어 새 기능 추가 시 2026-07-20과 동일한 사고 재발 위험이 가장 시급. 새로 드러난 가장 심각한 구조적 리스크는 (a) 20개 학원이라는 상업적 운영 규모에 Vercel Hobby(비상업 전제) 사용 — 약관 위반으로 인한 서비스 중단 가능성(단 [추정], 재확인 필요), (b) 관리자 PIN·Supabase 키가 전역 단일값이고 RLS가 없어 학원 간 데이터 격리가 애플리케이션 로직에만 의존(같은 날 보안 감사와 교차확인됨). 빌드 번들은 이미 lazy-split으로 심각하지 않음. Supabase 티어 여부와 GitHub Pages 그림자 배포 활성 여부는 운영자 직접 확인 필요.
+**요약**: 서버리스 함수는 여전히 12/12로 여유 없어 새 기능 추가 시 2026-07-20과 동일한 사고 재발 위험이 가장 시급. **[2026-07-24 후속 확정]** 새로 드러난 가장 심각한 구조적 리스크 중 (a) 20개 학원이라는 상업적 운영 규모에 Vercel Hobby(비상업 전제) 사용 — 약관 위반으로 인한 서비스 중단 가능성은 더 이상 [추정]이 아니라 **확정**(WebSearch로 Vercel 공식 ToS 문구·집행 사례 확인, 출처 https://vercel.com/legal/terms), (c) GitHub Pages 그림자 배포도 더 이상 "활성 여부 미확정"이 아니라 **실제로 활성 상태였음이 WebFetch로 확정**됐고 자동 재배포는 조치 완료(커밋 `c34a5e3`)나 기존 게시물 완전 비활성화는 운영자 대기. (b) 관리자 PIN·Supabase 키가 전역 단일값이고 RLS가 없어 학원 간 데이터 격리가 애플리케이션 로직에만 의존(같은 날 보안 감사와 교차확인됨)하는 문제는 그대로 유지. 빌드 번들은 이미 lazy-split으로 심각하지 않음. Supabase 티어 여부만 운영자 직접 확인이 남아 있음.

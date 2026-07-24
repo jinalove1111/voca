@@ -1,0 +1,22 @@
+{
+  "agent_name": "docs-maintainer-tos-pages-confirm",
+  "role": "docs-maintainer",
+  "task_id": "tos-pages-confirm",
+  "task": "Vercel Hobby ToS(비상업적 용도 제한, WebSearch로 확정)와 GitHub Pages 그림자 배포(WebFetch로 활성 확인 + 커밋 c34a5e3로 자동재배포 차단 조치 완료) 두 확정 사실을 docs/audit/2026-07-24-deployment-scale.md와 docs/MASTER_ROADMAP.md에 반영(append/정정)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-24T00:00:00+09:00",
+  "updated_at": "2026-07-24T00:00:00+09:00",
+  "files_owned": [
+    "C:\\voca\\docs\\audit\\2026-07-24-deployment-scale.md",
+    "C:\\voca\\docs\\MASTER_ROADMAP.md"
+  ],
+  "files_read": [
+    "C:\\voca\\docs\\audit\\2026-07-24-deployment-scale.md",
+    "C:\\voca\\docs\\MASTER_ROADMAP.md",
+    "C:\\voca\\.ai-status\\TEMPLATE.json"
+  ],
+  "summary": "deployment-scale.md의 (2) Vercel Hobby ToS [추정] 문단과 (6) GitHub Pages 활성여부 미확정 문단에 각각 '[2026-07-24 후속 확정]' 정정을 추가하고 종합 판정 표/요약을 갱신. MASTER_ROADMAP.md의 §0-5 Vercel ToS 문단, §5 표 항목 3(GitHub Pages)·3b(Vercel ToS)를 완료/확정으로 갱신하고 항목 19(Vercel 유료전환) 재평가 문단을 추가, §9 출처에 WebSearch/WebFetch 근거 2건을 추가. 코드는 읽지도 수정하지도 않음. 기존 섹션은 삭제하지 않고 append 방식으로 정정.",
+  "blocker": null,
+  "next_action": "커밋은 조정자가 수행. GitHub Pages Settings→Pages→Source를 None으로 변경하는 잔여 액션은 운영자 대기 상태로 유지됨."
+}
