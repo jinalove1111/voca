@@ -1,0 +1,29 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "p3-safe-fixes",
+  "task": "MASTER_ROADMAP.md Priority 3 — 보안 하드닝/코드 정리 3건(ADMIN_PIN 약함 진단 경고, isMissingTableError 통합 시도, Seoul-offset 날짜 계산 공용화)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-24T00:00:00+09:00",
+  "updated_at": "2026-07-24T00:00:00+09:00",
+  "files_owned": [
+    "api/_pinAuth.js",
+    "api/verify-admin-pin.js",
+    "src/utils/dateSeoul.js",
+    "src/utils/spellingReviewAiApi.js",
+    "src/utils/writingAnswerStatsApi.js"
+  ],
+  "files_read": [
+    "src/utils/wordLibrary.js",
+    "src/utils/spellingReviewBulkPlan.js",
+    "src/hooks/useStudent.js",
+    "docs/audit/2026-07-24-code-quality.md",
+    "docs/audit/2026-07-24-security.md",
+    "scripts/testWritingReviewAiPipeline.mjs",
+    "package.json"
+  ],
+  "summary": "항목1(완료): api/_pinAuth.js에 isWeakAdminPinFormat()+warnIfWeakAdminPinOnce() 추가 — ADMIN_PIN이 6자 미만/전부 동일 숫자/연속 숫자면 모듈 최초 로드(콜드스타트) 시 console.warn 1회만 남기고 요청/인증 로직은 절대 안 바꿈(검증: node dynamic import로 ADMIN_PIN=1234 주입 시 경고 실제 출력 확인, 강한 PIN은 무경고 확인). api/verify-admin-pin.js는 side-effect import('./_pinAuth.js')만 추가해 로그인 엔드포인트도 같은 진단을 타게 함(로직 중복 없음, handler 자체는 원문 그대로). 항목2(부분 롤백): 처음엔 writingAnswerStatsApi.js의 자체 isMissingRelationError()를 wordLibrary.js의 isMissingTableError()로 통합 시도했으나, scripts/testWritingReviewAiPipeline.mjs가 이 파일을 esbuild로 번들할 때 './wordLibrary' import를 setWordAcceptedMeanings만 export하는 최소 가상 스텁(v:wordlib2)으로 치환해서 새 export를 추가로 import하면 'No matching export' 빌드 에러로 375개 전체 테스트가 실패함을 실측 확인. 테스트 파일 수정 금지 지시에 따라 되돌렸고, 로컬 isMissingRelationError()를 그대로 유지(로직은 동일 — 42P01/PGRST205/메시지 텍스트 판정, 진짜 중복이지만 안전 우선으로 보류) — writingAnswerStatsApi.js 상단 주석에 시도/실패 이유를 기록해둠. 이 항목은 다음 라운드에 테스트 하네스 스텁 갱신과 함께 재시도 필요(조정자 보고 대상). 항목3(완료): 신규 src/utils/dateSeoul.js에 SEOUL_OFFSET_MS/seoulShiftedNow()/getSeoulDateString()/seoulMondayBoundary()를 공용 순수함수로 추출. writingAnswerStatsApi.js는 자체 SEOUL_OFFSET_MS/seoulShiftedNow/seoulMondayBoundary/seoulDateStr() 정의를 전부 제거하고 dateSeoul.js를 import(주간 학습률 월요일 경계 + 오늘 절약 카운터 키 둘 다 교체). spellingReviewAiApi.js는 자체 todayLocalDateStr()(브라우저 로컬 타임존 getter 기반)를 제거하고 dateSeoul.js의 getSeoulDateString()으로 교체(일일 비용 상한 카운터 날짜 경계 — UTC+9 고정 오프셋이라 브라우저 타임존 설정과 무관하게 항상 정확한 '서울 기준 오늘'을 반환하도록 개선됨, 순수 리팩터+부수적 정확도 향상). useStudent.js의 todayStr()는 전혀 건드리지 않음(import/참조 없음, grep으로 확인).",
+  "blocker": null,
+  "next_action": "qa-reviewer/조정자 검토. 항목2(isMissingTableError 통합)는 미완 — 다음 세션이 scripts/testWritingReviewAiPipeline.mjs의 v:wordlib2 스텁에 isMissingTableError export를 추가해준 뒤(테스트 파일 수정은 이번 세션 권한 밖) writingAnswerStatsApi.js에서 다시 import 전환하는 후속 작업 필요."
+}

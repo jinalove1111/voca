@@ -64,6 +64,42 @@ export function isWeakPin(pin) {
   return WEAK_PINS.has(String(pin))
 }
 
+// 2026-07-24 P3 보안 감사 후속(docs/audit/2026-07-24-security.md Medium) —
+// ADMIN_PIN 형식/강도 진단 경고(요청 차단 없음). 학생 PIN은 isWeakPin()으로
+// "약하면 저장 거부"가 가능하지만, ADMIN_PIN은 Vercel 환경변수라 요청
+// 시점에 값을 바꿀 수 없고 "거부"할 가입/설정 API 자체가 없다 — 그래서
+// 이 함수는 절대 응답을 막지 않고, 콜드스타트(모듈 최초 로드) 시 한 번
+// Vercel 함수 로그에 console.warn만 남기는 순수 진단 코드다. 인증 로직/
+// 응답 형식/타이밍은 전혀 바뀌지 않는다.
+function isWeakAdminPinFormat(pin) {
+  if (typeof pin !== 'string' || pin.length === 0) return false
+  if (pin.length < 6) return true
+  const isNumeric = /^\d+$/.test(pin)
+  if (!isNumeric) return false
+  if (/^(\d)\1*$/.test(pin)) return true // 전부 같은 숫자(000000, 111111 등)
+  const digits = pin.split('').map(Number)
+  const ascending = digits.every((d, i) => i === 0 || d === digits[i - 1] + 1)
+  const descending = digits.every((d, i) => i === 0 || d === digits[i - 1] - 1)
+  return ascending || descending // 연속 숫자(123456, 654321 등)
+}
+
+function warnIfWeakAdminPinOnce() {
+  const adminPin = process.env.ADMIN_PIN
+  if (!adminPin) return // 누락은 각 핸들러가 이미 500으로 별도 응답
+  if (isWeakAdminPinFormat(adminPin)) {
+    console.warn(
+      '[security] ADMIN_PIN이 약한 패턴으로 보입니다(6자 미만/전부 동일 숫자/연속 숫자). '
+      + '요청을 막지는 않지만, Vercel 환경변수 설정에서 더 길고 예측 불가능한 값으로 교체를 권장합니다. '
+      + '(진단 전용 경고 — 인증 로직에는 영향 없음)'
+    )
+  }
+}
+// 모듈이 처음 import될 때(콜드스타트) 한 번 실행 — 이 파일을 import하는
+// verify-admin-pin.js/admin-pin-actions.js 등 모든 관리자 API 경로가
+// 자동으로 커버된다. 워밍 상태의 재사용 인스턴스에서는 모듈이 캐시돼
+// 재실행되지 않으므로 로그 스팸도 없다.
+warnIfWeakAdminPinOnce()
+
 // 2026-07-16 P7 감사 후속 — 관리자 전용 API의 요청당 재인증(clear-student-
 // pin.js가 처음 도입한 패턴의 공용화). 클라이언트 사이드 게이트(AdminScreen
 // 의 authed=true)만 믿으면 누구나 /api/* 를 직접 fetch해서 관리자 액션을

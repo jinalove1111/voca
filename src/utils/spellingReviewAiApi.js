@@ -58,6 +58,7 @@ import { resolveSpellingReview } from './spellingReviewApi'
 import { planAccept, buildAcceptedVariantRecord } from './spellingReviewBulkPlan'
 import { supabase } from './supabaseClient'
 import { classifyLocally, buildProposal, estimateCostUsd, AI_MODEL_ID, DEFAULT_AI_PROVIDER, MODEL_PRICING_PER_MTOK } from '../../supabase/functions/grade-writing-answers/pipeline.js'
+import { getSeoulDateString } from './dateSeoul'
 
 // AdminScreen.jsx가 "모델: {AI_MODEL_ID}" 표시에 쓸 수 있게 그대로 재수출
 // (pipeline.js를 클라이언트 코드 여러 곳에서 직접 import하지 않고 이 파일을
@@ -430,10 +431,11 @@ export const DEFAULT_COST_CEILING_USD = 1.0
 // 변경은 "한 번도 상한을 안 건드린" 새 세션의 기본값에만 영향을 준다.
 export const DEFAULT_DAILY_CEILING_USD = 2.0
 
-function todayLocalDateStr() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
+// getSeoulDateString()은 ./dateSeoul.js의 공용 구현(코드품질 감사
+// 2026-07-24 §1-2 통합) — 이 파일이 예전에 자체 정의했던 todayLocalDateStr()
+// (브라우저 로컬 타임존 getter 기반)를 대체한다. UTC+9 고정 오프셋이라
+// 브라우저 타임존 설정과 무관하게 항상 "서울 기준 오늘"을 반환한다는 점만
+// 다르고, 일일 비용 카운터의 날짜 경계 용도로는 완전히 동등하다.
 
 function readPositiveNumber(key, fallback) {
   try {
@@ -462,7 +464,7 @@ export function setDailyCeilingUsd(value) {
 export function getTodaySpentUsd() {
   try {
     const raw = JSON.parse(localStorage.getItem(DAILY_SPEND_KEY) || 'null')
-    if (raw && raw.date === todayLocalDateStr() && typeof raw.spentUsd === 'number') return raw.spentUsd
+    if (raw && raw.date === getSeoulDateString() && typeof raw.spentUsd === 'number') return raw.spentUsd
     return 0
   } catch {
     return 0
@@ -473,7 +475,7 @@ export function recordEstimatedSpendUsd(amountUsd) {
   const amount = Number(amountUsd)
   if (!(amount > 0)) return getTodaySpentUsd()
   const next = getTodaySpentUsd() + amount
-  try { localStorage.setItem(DAILY_SPEND_KEY, JSON.stringify({ date: todayLocalDateStr(), spentUsd: next })) } catch { /* 조용히 무시 */ }
+  try { localStorage.setItem(DAILY_SPEND_KEY, JSON.stringify({ date: getSeoulDateString(), spentUsd: next })) } catch { /* 조용히 무시 */ }
   return next
 }
 

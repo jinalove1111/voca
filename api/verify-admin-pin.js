@@ -3,6 +3,14 @@
 // this server-only env var (ADMIN_PIN), and the client just gets a yes/no
 // answer. This stops a student from finding the PIN by reading the JS
 // bundle, which a client-side `if (pin === '0325')` check cannot prevent.
+//
+// 2026-07-24 P3 감사 후속 — side-effect import만으로 _pinAuth.js의 모듈-
+// 최초-로드(콜드스타트) 시 ADMIN_PIN 약한 패턴 진단 경고를 이 로그인
+// 엔드포인트에도 적용한다(진단 로직은 _pinAuth.js 한 곳에만 존재, 여기서
+// 재정의하지 않음). 요청 처리 자체에는 아무 영향 없음 — 아래 handler는
+// 이 import 전과 동일하게 동작한다.
+import './_pinAuth.js'
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })

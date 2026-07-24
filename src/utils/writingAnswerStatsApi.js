@@ -18,6 +18,7 @@
 import { supabase } from './supabaseClient'
 import { setWordAcceptedMeanings } from './wordLibrary'
 import { planAccept, buildAcceptedVariantRecord } from './spellingReviewBulkPlan'
+import { seoulMondayBoundary, getSeoulDateString } from './dateSeoul'
 
 let _warned = false
 function warnOnce(err) {
@@ -28,6 +29,16 @@ function warnOnce(err) {
 
 // 42P01 = undefined_table(Postgres), PGRST205 = PostgREST 스키마 캐시에
 // 테이블 없음 — 둘 다 "아직 마이그레이션 미실행"과 동일하게 취급한다.
+//
+// 2026-07-24 P3 코드품질 감사 후속 시도: 이 로직은 wordLibrary.js가 export
+// 하는 isMissingTableError()와 논리적으로 동일해 처음엔 그쪽을 import해
+// 통합하려 했으나, scripts/testWritingReviewAiPipeline.mjs가 이 파일을
+// esbuild로 번들할 때 './wordLibrary' import를 setWordAcceptedMeanings만
+// export하는 최소 가상 스텁(v:wordlib2)으로 치환하기 때문에 새 export를
+// 추가로 import하면 "No matching export" 빌드 에러로 375개 기존 테스트가
+// 전부 실패한다(테스트 파일 수정은 금지 지시 — CLAUDE.md 헌법과 무관하게
+// 이번 작업 지시 범위). 그래서 로컬 정의를 그대로 유지한다 — 안전 우선,
+// 통합은 다음 라운드에 테스트 하네스 쪽 스텁 갱신과 함께 재시도할 것.
 function isMissingRelationError(err) {
   const code = err?.code
   return code === '42P01' || code === 'PGRST205' || /schema cache|does not exist|relation .* does not exist/i.test(err?.message || '')
@@ -126,30 +137,9 @@ export async function dismissRecommendation(id) {
 
 // ── 주간 학습률(요구사항 8) ─────────────────────────────────────────────
 //
-// Asia/Seoul 기준 월요일 00:00 시작 주. 서버 타임존 설정과 무관하게 항상
-// 같은 결과가 나오도록 UTC+9 고정 오프셋으로 직접 계산한다(한국은 DST
-// 없음 — 이 저장소 다른 곳의 getSeoulDateString과 동일한 전제).
-const SEOUL_OFFSET_MS = 9 * 60 * 60 * 1000
-
-function seoulShiftedNow() {
-  // 반환값의 UTC 게터(getUTCFullYear 등)를 읽으면 "서울 벽시계 기준" 값이
-  // 나오는 트릭 — 실제 유효한 timestamptz 경계를 만들 때는 다시
-  // SEOUL_OFFSET_MS를 빼서 진짜 UTC 순간으로 되돌린다.
-  return new Date(Date.now() + SEOUL_OFFSET_MS)
-}
-
-// weeksAgo=0 → 이번 주 월요일 00:00(서울 기준)의 실제 UTC Date, weeksAgo=1
-// → 지난 주 월요일 00:00.
-function seoulMondayBoundary(weeksAgo = 0) {
-  const shifted = seoulShiftedNow()
-  const day = shifted.getUTCDay() // 0=일 ~ 6=토(서울 벽시계 기준)
-  const diffToMonday = day === 0 ? 6 : day - 1
-  const mondayShifted = new Date(Date.UTC(
-    shifted.getUTCFullYear(), shifted.getUTCMonth(),
-    shifted.getUTCDate() - diffToMonday - weeksAgo * 7,
-  ))
-  return new Date(mondayShifted.getTime() - SEOUL_OFFSET_MS)
-}
+// Asia/Seoul 기준 월요일 00:00 시작 주 — seoulMondayBoundary()는
+// ./dateSeoul.js의 공용 구현(코드품질 감사 2026-07-24 §1-2, 이 파일이
+// 예전에 자체 정의했던 것과 동일 로직을 공용 유틸로 추출)을 그대로 쓴다.
 
 // count-only 쿼리(head:true — 행 데이터는 안 받아옴). 테이블 없음/기타
 // 오류는 null(= "수집 중" 표시)로, 정상 0건은 실제 숫자 0으로 구분해
@@ -204,10 +194,9 @@ export async function fetchLearningRateMetrics() {
 //     표시일 뿐, 과금/감사 근거로 쓰면 안 된다.
 const SAVINGS_KEY_PREFIX = 'voca_writing_ai_savings_'
 
-function seoulDateStr() {
-  const shifted = seoulShiftedNow()
-  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, '0')}-${String(shifted.getUTCDate()).padStart(2, '0')}`
-}
+// getSeoulDateString()은 ./dateSeoul.js의 공용 구현(코드품질 감사
+// 2026-07-24 §1-2 통합) — 이 파일이 예전에 자체 정의했던 seoulDateStr()와
+// 동일 로직.
 
 function emptySavings() {
   return { rules: 0, cache: 0, variants: 0, statsSkips: 0, ai: 0 }
@@ -215,7 +204,7 @@ function emptySavings() {
 
 function readSavingsRaw() {
   try {
-    const raw = JSON.parse(localStorage.getItem(SAVINGS_KEY_PREFIX + seoulDateStr()) || 'null')
+    const raw = JSON.parse(localStorage.getItem(SAVINGS_KEY_PREFIX + getSeoulDateString()) || 'null')
     if (raw && typeof raw === 'object') {
       return {
         rules: Number(raw.rules) || 0,
@@ -252,7 +241,7 @@ export function accumulateSavingsCounters(runSummary = {}) {
     statsSkips: current.statsSkips + (Number(runSummary.statsSkips) || 0),
     ai: current.ai + (Number(runSummary.ai) || 0),
   }
-  try { localStorage.setItem(SAVINGS_KEY_PREFIX + seoulDateStr(), JSON.stringify(next)) } catch { /* localStorage 불가 환경 — 조용히 무시 */ }
+  try { localStorage.setItem(SAVINGS_KEY_PREFIX + getSeoulDateString(), JSON.stringify(next)) } catch { /* localStorage 불가 환경 — 조용히 무시 */ }
   return next
 }
 
