@@ -1,0 +1,17 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "v311-header-refresh",
+  "task": "supabase_v3_11_lockdown_curriculum_write.sql 헤더(실행 순서 경고 문단, 12~31행)를 최신 사실에 맞게 정정 — 2번(AdminScreen.jsx adminPin 배선)이 caadea1/7234004 커밋으로 코드 레벨에서 이미 완료됐음을 반영, 단 실제 배포(1번)는 여전히 선행 필요함을 유지",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-24T00:00:00+09:00",
+  "updated_at": "2026-07-24T00:00:00+09:00",
+  "files_owned": [
+    "supabase_v3_11_lockdown_curriculum_write.sql"
+  ],
+  "files_read": [],
+  "summary": "헤더의 실행 순서 경고 문단(구 12~31행)이 '2번은 이번 세션 범위 밖, AdminScreen.jsx 미변경'이라고 서술했던 부분을 정정. caadea1(AdminScreen.jsx 8개 CRUD 호출부 adminPin 배선, deleteClassUnit은 호출부 자체가 없어 대상 아님)과 7234004(spellingReviewAiApi.js의 executeAccept/executeBulkAccept 배선)가 같은 날 후속 세션에서 이미 완료했고 build+verify:admin PASS했음을 반영. 다만 '커밋에 준비됨'과 '운영자가 실제 배포함'은 별개이므로 1번(Vercel 배포)이 여전히 선행돼야 한다는 경고는 유지. 29~31행의 배포 후 확인 절차 문단은 유지하되 '코드는 이미 배선돼 있으니 배포 후 통과 예상 — 단 라이브 최종 검증은 아직 안 함'으로 톤 조정. 33행 이하 배경/무엇을 하는가/SQL 본문은 전혀 손대지 않음. SQL 실행/DDL 명령은 실행하지 않았음(텍스트 편집만).",
+  "blocker": null,
+  "next_action": "조정자가 커밋. 이후 운영자가 코드 배포(1번) → 확인 방법 절차(38~43행)로 라이브 검증 → 이 SQL을 Supabase 대시보드에서 수동 실행."
+}
