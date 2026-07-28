@@ -55,8 +55,15 @@ console.log('\n시나리오 1 (다중 탭): 같은 기기 두 탭이 같은 학�
 
   check('두 탭 모두 마운트 시 같은 초기값을 읽음 (10)', tabA.result.stars === 10 && tabB.result.stars === 10)
 
+  // 2026-07-28 별 지급 단일 경로 리팩터링 — raw addStars(가드 없는 단순
+  // 가산)는 useStudent의 공개 API에서 제거되고 grantReward(amount,
+  // dedupKey)로 대체됐다(src/hooks/useStudent.js). 이 시나리오는 addStars
+  // 자체의 dedup 여부를 검증하는 게 아니라 "totalStars 변경이 다중 탭/
+  // 디바운스 동기화에서 어떻게 흐르는지"를 검증하므로, 매 호출마다 서로
+  // 다른 dedupKey를 줘서 예전 addStars(n)과 동일하게 매번 지급되도록 한다.
+
   // 탭 A에서 별 +5 (사용자가 탭 A에서 학습 중)
-  tabA.result.addStars(5)
+  tabA.result.grantReward(5, 'test:multitab:tabA:1')
   const storedAfterA = JSON.parse(shared.getItem('paul_easy_progress'))
   check('탭 A 저장 직후 localStorage에 반영됨 (15)', storedAfterA.QA_MultiTab.totalStars === 15)
 
@@ -64,7 +71,7 @@ console.log('\n시나리오 1 (다중 탭): 같은 기기 두 탭이 같은 학�
   // 상태(10) 기준으로 별 +3 — 실제 두 탭을 빠르게 오가며 조작하는 사용자를
   // 시뮬레이션.
   check('탭 B는 탭 A의 변경을 자기 화면에 반영하지 못함(리스너 없음, 여전히 10)', tabB.result.stars === 10)
-  tabB.result.addStars(3)
+  tabB.result.grantReward(3, 'test:multitab:tabB:1')
   const storedAfterB = JSON.parse(shared.getItem('paul_easy_progress'))
   check(
     '[다중 탭 발견] 탭 B의 저장이 탭 A의 +5를 덮어씀 — localStorage는 13(=10+3)이 되고 탭 A의 +5(15)는 로컬에서 사라짐',
@@ -109,7 +116,7 @@ console.log('\n시나리오 2 (연타/빠른 조작): 한 탭에서 2초 안에 
 
   // 마운트 시 이미 타이머 1개 스케줄됨. 1.9초 뒤(타이머 발동 전) 연타 5회.
   clock.advance(1900)
-  for (let i = 0; i < 5; i++) { tab.result.addStars(1); clock.advance(100) } // 매번 리셋되어 계속 2초 뒤로 밀림
+  for (let i = 0; i < 5; i++) { tab.result.grantReward(1, `test:rapidfire:${i}`); clock.advance(100) } // 매번 리셋되어 계속 2초 뒤로 밀림
   check('연타 중에는 아직 sync가 발동하지 않음(계속 리셋됨)', stub.pendingStrictReadCount() === 0)
   clock.advance(2000) // 마지막 조작 이후 조용해진 뒤 2초
   await flush()
@@ -138,7 +145,7 @@ console.log('\n시나리오 3 (중복 업로드 순서 뒤바뀜 — P1 수정 �
   check('doSync #1이 read를 기다리는 중 (local=5 스냅샷)', stub.pendingStrictReadCount() === 1)
 
   // read #1이 대기하는 동안 사용자가 계속 조작 → record 변경 → 새 타이머 스케줄
-  tab.result.addStars(2) // local = 7
+  tab.result.grantReward(2, 'test:overlap:1') // local = 7
   clock.advance(2000) // 새 타이머(4000ms 시점) 발동 — doSync #2 시작(local=7 스냅샷)
   await flush()
   check('doSync #2도 read를 기다리는 중 (local=7 스냅샷, #1과 동시 진행 중)', stub.pendingStrictReadCount() === 2)

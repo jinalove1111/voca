@@ -299,7 +299,13 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
             wordAudioUrl={word.wordAudioUrl}
             label="따라 말하기"
             maxMs={5000}
-            onSuccess={onMarkPronunciationOk}
+            // 별 중복 지급 방지(2026-07-27, docs/fixes/
+            // star-reward-idempotency-design.md) — word.dbId를 함께 실어
+            // 보내야 useStudent.markPronunciationOk가 "오늘 이 단어로 이미
+            // 별을 받았는지" 판단할 수 있다. word.dbId는 이 컴포넌트
+            // 안에서 wordStatus 조회 등에 이미 쓰는 것과 동일한 id(아래
+            // wordStatus?.[word.dbId] 등 참고) — 새 id 개념 도입 아님.
+            onSuccess={() => onMarkPronunciationOk?.(word.dbId)}
             onAnyResult={() => setCanProceed(true)}
             onAttempt={onPronunciationAttempt}
           />

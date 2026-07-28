@@ -1,5 +1,248 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-24 (12차, Production Readiness 감사(100명×20학원 기준) + Phase 1 안전수정 완료 — Critical 보안 취약점(교육과정 전체 anon 쓰기) 코드 수정 포함, SQL 미실행)_
+_최종 갱신: 2026-07-28 (15차, 별 지급 단일 경로 리팩터링 — 14차 구현이 실제 브라우저에서 발음 별 0개 지급 회귀를 낸 것을 계기로, 전체 별 지급 지점을 전수 조사해 하나의 grantReward()로 통합. useStudent.js/App.jsx/QuizGame.jsx/MatchGameShell.jsx/scripts/testMultiTabRace.mjs 수정, build+verify:persistence+verify:student+추가 도메인 전부 PASS. 커밋/push/배포는 운영자의 별도 회귀 검증 이후)_
+
+## 2026-07-28 (15차) — 별(Stars) 지급 단일 경로(Single Reward Flow)로 전면 리팩터링
+
+### 배경
+
+14차(아래 항목)가 `markPronunciationOk`에 단어별 dedup을 추가했으나,
+`scripts/fakeReact.mjs` 스텁 하네스는 PASS였음에도 **실제 브라우저
+회귀 테스트에서 발음 성공 시 별이 아예 0개 지급되는 회귀**가 확인됐다.
+원인은 `patch(prev => {...})`의 updater 함수 안에서만 설정되는 지역
+변수(`firstTimeForWord`)를 `patch()` 호출 직후 밖에서 읽어 지급 여부를
+판단한 것 — React가 그 updater를 같은 tick 안에서 "이미 실행
+완료했다"고 보장하지 않는다. 운영자 지시로, 이 한 지점만 다시 좁게
+고치지 않고 **앱 전체 별 지급 지점을 전수 조사해 하나의 검증된 공유
+함수로 교체**했다. 상세 설계/근거/dedupKey 스킴 전체는
+`docs/fixes/star-reward-single-flow-design.md` 참고 — 여기서는 요약만.
+
+### 발견한 것 — 두 번째 확정 버그
+
+`useStudent.js`의 `answerMission`(레벨업 미션 클리어)도 **정확히 같은
+클래스의 버그**를 갖고 있었다: `didClear`를 `patch()` updater 안에서만
+설정하고 직후 밖에서 읽어 `addStars(3)` 호출 여부를 판단 — 3번째
+정답에서도 미션 클리어 별이 지급되지 않을 가능성이 구조적으로 있었다
+(별도 실측 없이도 코드 구조가 100% 동일해 수정 대상으로 확정).
+
+### 수정 내용 (파일별)
+
+1. **`src/hooks/useStudent.js`** — `addStars`(가드 없는 raw
+   `totalStars += n`)를 완전히 제거하고 `grantReward(amount, dedupKey)`
+   로 대체(반환 API에서도 `addStars` 제거, `grantReward` 추가).
+   dedupKey는 필수, 판정은 항상 patch() 호출 **전** 클로저에서
+   동기적으로 계산 + patch() updater 안에서 `prev.round.starGrantLog`로
+   재확인하는 2중 방어(설계 문서 3장). `answerMission`/`markPronunciationOk`/
+   `grantSticker`(중복 분기)/4·4 미션 완료 보너스/`recordSpellingAnswer`
+   콤보 보너스 전부 `grantReward`로 마이그레이션, 각각 고유한
+   dedupKey(설계 문서 4장 표). `freshRound()`에 `starGrantLog: []` 추가,
+   `normalizeRecord`/`mergeProgressRecords`에도 기존
+   `pronunciationOkWordIds`와 동일 패턴으로 폴백/합집합 반영.
+2. **`src/App.jsx`** — `QuizGame`에는 star 지급 prop을 더 이상 넘기지
+   않음(발음 성공은 `onMarkPronunciationOk`만으로 충분). `game` 화면에는
+   `onAddStars={addStars}` 대신 `onGrantReward={grantReward}`.
+3. **`src/components/QuizGame.jsx`** — `handlePronSuccess`가
+   `onMarkPronunciationOk?.()`(wordId 없이) + `onAddStars?.(1)`을 둘 다
+   불러 이중 지급 가능했던 것을 `onMarkPronunciationOk?.(current?.word?.dbId)`
+   하나로 통합 — WordDetail 경로와 완전히 같은 dedupKey 스킴을 공유하게
+   되어 "오늘 이 단어 발음 성공"이 어느 화면에서 일어나든 하나의
+   이벤트로 취급됨.
+4. **`src/components/MatchGameShell.jsx`** — prop `onAddStars` →
+   `onGrantReward`, `startGame()`에서 세션별 고유 id(`sessionIdRef`)를
+   발급해 `matchgame:${sessionId}:${round}:${wordId}` dedupKey로 라운드별
+   중복 호출(더블탭 레이스 등)만 차단하고 "한 번 더 하기" 반복 플레이
+   보상은 그대로 유지(설계 문서 4-2).
+5. **`scripts/testMultiTabRace.mjs`**(verify:persistence 필수 스크립트) —
+   `tab.result.addStars(n)` 직접 호출 4곳을
+   `tab.result.grantReward(n, uniqueDedupKey)`로 갱신(검증 대상인 다중
+   탭/디바운스/추월 로직 자체는 무변경).
+
+### 의도적으로 요청 문서와 다르게 결정한 것
+
+"오늘의 미션 4/4 완료 보너스"의 dedupKey를 요청에서 제안한 순수 날짜
+키(`daily-mission-bonus:${today}`) 대신 **`daily-mission-bonus:${signature}`**
+(라운드별 고유값, 기존 `handledRoundRef`가 쓰던 것과 동일 범위)로
+결정했다 — 날짜 키로 하면 기존에 "하루 중 여러 번 완료 가능"하게
+설계된 별 보상 빈도가 하루 1회로 암묵적으로 줄어드는데, 이건 구조
+버그 수정이 아니라 보상 경제 변경이라 저장소 헌법 규칙 1(기존 플로우를
+위험하게 하지 않는다)에 따라 별도 운영자 승인 없이는 하지 않았다.
+상세 근거는 설계 문서 4-1장. 운영자가 실제로 하루 1회로 조이길
+원한다면 `signature` → `todayStr()` 한 줄 교체로 가능.
+
+### 검증
+
+- `npm run build` — PASS(신규 에러/경고 없음).
+- `npm run verify:persistence` — 8개 스크립트 전부 PASS.
+- `npm run verify:student` — 4개 스크립트 전부 PASS.
+- 추가로(요청 범위 밖, 변경 반경이 넓어 보수적으로 함께 확인)
+  `verify:quiz`/`verify:writing`/`verify:daily-ritual`/`verify:analytics`/
+  `verify:admin` 전부 PASS, `verify:speaking`은 기존과 동일하게 정상
+  SKIP(마이크 하드웨어 필요).
+- 불변식 확인: `grep -n "addStars" src/`(남은 결과 전부 주석뿐),
+  `grep -n "totalStars +" src/hooks/useStudent.js`(정확히 1곳,
+  `grantReward` 안).
+
+### 남은 것
+
+- 커밋/push/Vercel 배포는 운영자가 별도로 진행하는 실제 브라우저 회귀
+  검증 이후(이번 세션은 구현만, 커밋은 하지 않음).
+- 상세 설계/dedupKey 스킴/근거 전체: `docs/fixes/star-reward-single-flow-design.md`.
+
+## 2026-07-27 (14차) — 별(Stars) 중복 지급 방지: 발음 성공 보상에 단어별 dedup 적용
+
+### 배경
+
+실사용자 리포트(Liam/Dain): 학습 완료 후 별 획득 → 뒤로가기 → 같은
+학습 화면 재진입 → 별 재획득 가능. 코드 수정 전 2단계 문서화(원인 분석
+`docs/bugs/star-duplicate-reward-analysis.md` → 설계
+`docs/fixes/star-reward-idempotency-design.md`)를 거쳐 구현했다.
+
+### 근본 원인
+
+`App.jsx:529, 579`의 `onMarkPronunciationOk={() => { markPronunciationOk();
+addStars(1) }}`가 발음 연습 성공마다(`WordDetail.jsx`의 `PronounceStep`
+→ `SpeechBtn.onSuccess`) 단어별/일별 중복 방지 없이 무조건 실행됐다.
+같은 마운트 안에서는 성공 후 버튼이 비활성화돼 재시도가 막히지만, 뒤로
+가기 후 같은 단어를 재선택하면 컴포넌트가 완전히 새로 마운트되어
+`phase`가 초기화되고 다시 성공할 때마다 별이 또 지급됐다.
+
+### 수정 내용
+
+1. **`src/hooks/useStudent.js`** — `freshRound()`에
+   `pronunciationOkWordIds: []`(단어 id dedup 배열, `wordsViewed`와
+   동일 패턴) 추가. 기존 `round.pronunciationOk`(raw 카운터)는 그대로
+   유지 — `countCategoriesCompleted`/대시보드 표시가 참조하는 기존
+   의미를 전혀 안 바꿈, 새 배열은 오직 별 재지급을 막는 게이트로만 쓴다.
+   `markPronunciationOk(wordId)`가 인자를 받아 `answerMission`과 동일한
+   기존 패턴(patch 업데이터 안에서 로컬 변수로 "처음인지" 판정 후
+   `addStars` 호출)으로 dedup 게이트 + 별 지급을 한 함수 안으로 통합 —
+   `App.jsx`처럼 콜백 안에서 `addStars`를 따로 붙이는, 이번 버그를 만든
+   취약한 배선 패턴 자체를 제거했다. `wordId`가 없는 기존 호출부
+   (`QuizGame.jsx` 경로, `App.jsx:590`)는 기존 동작(매번 지급) 그대로
+   유지 — 이번 수정 범위 밖. `normalizeRecord`(구버전 레코드 폴백)와
+   멀티기기 병합(`unionList`)에도 새 필드 추가.
+2. **`src/components/WordDetail.jsx`** — `PronounceStep`의 `SpeechBtn`
+   `onSuccess`가 `word.dbId`를 실어 보내도록 배선(`onSuccess={() =>
+   onMarkPronunciationOk?.(word.dbId)}`) — 이 컴포넌트가 이미 다른
+   곳(`wordStatus?.[word.dbId]` 등)에서 쓰는 것과 동일 id.
+3. **`src/App.jsx`** — `onMarkPronunciationOk={() => { markPronunciationOk();
+   addStars(1) }}` 2곳(`529`, `579`)을 `onMarkPronunciationOk={markPronunciationOk}`
+   로 단순화(addStars 별도 호출 제거 — dedup 로직이 이미 훅 내부에 있음).
+   결과적으로 3개 호출부(GuidedSession/WordDetail/QuizGame 경로) 전부
+   같은 단순 전달 형태로 통일됨.
+4. 판정 로직·진행도 저장·단어 이동 등 나머지 학습 흐름은 전혀 변경
+   없음(요청된 "기존 학습 흐름 변경 금지" 준수) — 새 테이블/SQL
+   마이그레이션도 없음(`progress_data` blob 안 필드 추가일 뿐).
+
+### 검증
+
+- `npm run build` — PASS(신규 에러/경고 없음).
+- `npm run verify:persistence` — 8개 스크립트(진행도 저장/복원/병합
+  포함, 이번에 건드린 merge 로직의 직접 회귀 범위) 전부 PASS.
+- `scripts/fakeReact.mjs` 하네스로 실제 번들된 `useStudent.js`에 대해
+  직접 작성한 검증(같은 단어 3회 반복 → 별 1회만, 다른 단어 → 정상
+  추가 지급, `wordId` 없는 레거시 `QuizGame` 경로 → 기존처럼 매번 지급
+  유지 회귀 없음) 5개 어서션 전부 PASS.
+
+### 남은 것
+
+- 예문(`examplesHeard`)/퀴즈(`quizSolved`) 카운터의 같은 종류의
+  미덱업(분석 문서 "원인 후보 2번")은 이번 범위 밖 — 필요시 같은
+  패턴으로 별도 작업.
+- 13차(ELLA Writing)와 함께 커밋/push/Vercel 배포는 운영자 확인 후 진행.
+
+## 2026-07-27 (13차) — ELLA Writing 버그: correct phase SPOF 제거
+
+### 배경
+
+실사용자 리포트: 학생 ELLA(PC 브라우저)가 Writing(철자 쓰기) 문제에서
+정답을 정확히 입력해도 다음 문제로 넘어가지 않아 쓰기 숙제를 완료할 수
+없었음. 코드 수정 전 3단계 분석(원인 TOP 10 → correct phase 심층분석 →
+수정 전 설계검토)을 전부 `docs/bugs/2026-07-26-ella-writing-spelling-stuck.md`
+에 append로 남긴 뒤, 승인된 설계대로 구현했다.
+
+### 근본 원인
+
+`SpellingQuestion.jsx`의 `markCorrect()`가 `setPhase('correct')` →
+`setCorrectPaul(...)` → `playSuccessSound()` → `setTimeout(onDone, 700)`
+순서였다. `playSuccessSound()`가 동기 예외를 던지면(PC Chrome 확장
+프로그램이 `HTMLMediaElement.play()`를 몽키패치해 Promise 대신 즉시
+throw하는 경우 등 — 40% 원인으로 지목) 자바스크립트가 그 함수를 즉시
+빠져나가 그 다음 줄인 `setTimeout`이 아예 등록되지 않았다. 이미
+`setPhase('correct')`는 실행된 뒤라 화면은 "정답이에요!"로 전환돼
+있는데, 다음 문제로 넘어갈 유일한 트리거가 없어져 학생이 그 화면에
+영구적으로 갇히는 구조 — 그리고 그 화면에는 수동으로 빠져나갈 버튼이
+전혀 없었다.
+
+### 수정 내용 (`src/components/SpellingQuestion.jsx` 단일 파일)
+
+1. `markCorrect()` — `setTimeout(() => onDone?.(), 700)`을
+   `playSuccessSound()`보다 **먼저** 무조건 예약하도록 순서 교환.
+   `playSuccessSound()`는 `try { } catch {}`로 감싸 어떤 예외도 다음
+   이동을 막지 못하게 함. 축하음은 여전히 매번 재생 시도(베스트 에포트로
+   격하될 뿐 기능 제거 아님).
+2. `showManualNext` state + `useEffect([phase])` 추가 — `phase==='correct'`
+   진입 1.5초 뒤(자동 이동 700ms보다 여유 있게 늦은 시점)에만 수동
+   "다음 문제 →" 버튼을 노출. 정상 흐름에서는 항상 그 전에 자동 이동이
+   먼저 일어나므로 평소엔 보이지 않고, 오디오 경로 이외의 미지의 원인으로
+   자동 타이머가 실패/지연되는 경우까지 포괄하는 범용 안전망.
+3. 판정 로직(`isSpellingCorrect`)·진행도 저장(`onResult`/
+   `recordSpellingAnswer`)·단어 이동 체인(`goNext`/`handleNextWord`)은
+   전혀 손대지 않음 — Writing 학습 흐름 100% 유지.
+
+### 영향 범위 확인
+
+`SpellingQuestion`을 쓰는 소비자는 `WordDetail.jsx`(원 학습 흐름)와
+`SpellingReview.jsx`(복습 화면) 둘뿐(grep으로 확인) — 둘 다 `onDone`/
+`onResult` prop 계약이 그대로라 이번 수정으로 자동으로 같은 안전망 혜택을
+받으며 별도 변경 불필요. `PronounceStep`(`WordDetail.jsx` 내부, 별도
+컴포넌트)은 파일 자체를 건드리지 않아 영향 없음.
+
+### 검증
+
+- `npm run build` — PASS(신규 에러/경고 없음, 기존 청크 크기 경고만
+  그대로).
+- `npm run verify:writing` — `testSpelling.mjs`/
+  `testSpellingDirectionWiring.mjs`/`testWritingReviewAiPipeline.mjs`
+  3개 스크립트 전부 PASS(이 스크립트들은 채점/방향배선 순수 로직만
+  검증하므로 이번 수정 자체를 직접 재현 테스트하진 않음 — React
+  컴포넌트의 타이머/DOM 동작은 별도 실브라우저 확인이 필요, 아래
+  "남은 일" 참고).
+
+### 남은 일 (다음 세션/운영자 확인)
+
+- ~~로컬/스테이징에서 PC Chrome으로 `playSuccessSound`를 임시로 강제
+  throw하게 만들어 실제로 (a) 다음 문제 자동 이동이 여전히 되는지,
+  (b) 700ms~1.5초 사이에 수동 버튼이 정확히 노출되는지 1회 수동 확인
+  권장.~~ → **같은 날 후속 세션에서 완료, 아래 "검증 결과" 참고.**
+- 이 handoff 작성 시점 기준 커밋/push/Vercel 배포는 아직 진행 전 —
+  운영자 확인 후 진행.
+- `.ai-status/implementer-ella-writing-spelling-stuck-fix.json`에 체크포인트
+  기록.
+
+### 검증 결과 (2026-07-27, 같은 날 후속) — 실브라우저 9시나리오 전부 PASS
+
+`docs/test/ella-writing-regression-test.md`에 전체 방법론/결과 기록.
+요약:
+
+- 로컬 `vite` dev 서버 + `playwright-core`(검증 전용 임시
+  devDependency, `npm install --no-save`로 설치 후 검증 종료 즉시
+  `npm install`로 완전 제거 — `package.json`/lockfile 변경 없음)로
+  시스템 Chrome을 띄워 실제 DOM/타이머 동작을 검증. QA\_ 접두어 임시
+  픽스처(`QA_EllaWr` 반, `cat`/`dog`, `QA_Ella1` 학생)는 검증 직후 삭제.
+- 요청받은 8개 시나리오(①정답 입력 ②축하음 정상 재생 ③축하음 차단
+  ④PC Chrome ⑤모바일 Chrome 에뮬레이션 ⑥마지막 단어 완료 ⑦뒤로가기 후
+  재진입 ⑧새로고침 후 진행) **전부 PASS**.
+- 보충 시나리오(3b, 자동 타이머를 완전히 무력화한 상태에서 수동
+  "다음 문제" 버튼만으로 실제 진행되는지)도 **PASS** — 안전망 버튼
+  자체가 독립적으로 작동함을 직접 확인.
+- 가장 결정적인 결과는 시나리오 3: `HTMLMediaElement.play()`를 동기
+  예외를 던지도록 몽키패치(원인분석 8절의 40% 후보 재현)해도 1.1초 내
+  정상적으로 다음 문제로 이동 — 수정 전 코드였다면 이 시나리오에서
+  100% 멈췄을 상황.
+- 한계: 실기기 Android/iOS Chrome은 아님(뷰포트/UA 에뮬레이션), 로컬
+  dev 환경 기준(Vercel 프로덕션 서버리스 차이는 별도), 오디오는 재생
+  "시도" 여부만 확인(실제 스피커 청취 확인 아님). 상세는 위 문서
+  "한계" 절 참고.
 
 ## 2026-07-24 (12차) — Production Readiness 감사(100명×20학원 기준) + Phase 1 안전수정 완료(Critical 보안 취약점 포함, SQL 미실행)
 

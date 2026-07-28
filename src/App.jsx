@@ -176,7 +176,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 별도 상태로 관리 — 마찬가지로 세션 동안만 유지.
   const [studyScope, setStudyScope] = useState('all')
   const studentData                 = useStudent(studentId, studentName)
-  const { cleared, answerMission, missions, addStars, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord, wordStatus, setWordKnown, setWordUnknown, spellingReviewQueue, setLastTextbookClassId } = studentData
+  const { cleared, answerMission, missions, grantReward, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord, wordStatus, setWordKnown, setWordUnknown, spellingReviewQueue, setLastTextbookClassId } = studentData
   // 애착 시스템(2026-07-22) — 파생 통계 + 모자/밀스톤 자동 판정(복원 확인
   // 후 학생당 1회). 판정 로직은 src/utils/attachment/ 순수 함수.
   const attachment = useAttachment(studentId, studentData)
@@ -526,7 +526,12 @@ function AppInner({ studentId, studentName, onLogout }) {
           onSpellingAnswer={handleSpellingAnswer}
           onMarkViewed={studentData.markWordViewed}
           onMarkExampleHeard={studentData.markExampleHeard}
-          onMarkPronunciationOk={() => { markPronunciationOk(); addStars(1) }}
+          // 별 중복 지급 방지(2026-07-27) — addStars(1)을 여기서 직접
+          // 부르던 것을 없앴다. 이제 markPronunciationOk(wordId) 내부가
+          // "오늘 이 단어로 이미 별을 받았는지"를 확인한 뒤에만 별을
+          // 준다(docs/fixes/star-reward-idempotency-design.md) — wordId는
+          // WordDetail.jsx의 PronounceStep이 onSuccess 호출 시 실어 보낸다.
+          onMarkPronunciationOk={markPronunciationOk}
           onMarkQuizSolved={studentData.markQuizSolved}
           onQuizAnswer={studentData.recordQuizAnswer}
           onPronunciationAttempt={studentData.markPronunciationAttempt}
@@ -576,19 +581,31 @@ function AppInner({ studentId, studentName, onLogout }) {
           onNext={handleNextWord}
           onMarkViewed={studentData.markWordViewed}
           onMarkExampleHeard={studentData.markExampleHeard}
-          onMarkPronunciationOk={() => { markPronunciationOk(); addStars(1) }}
+          // 별 중복 지급 방지(2026-07-27) — addStars(1)을 여기서 직접
+          // 부르던 것을 없앴다. 이제 markPronunciationOk(wordId) 내부가
+          // "오늘 이 단어로 이미 별을 받았는지"를 확인한 뒤에만 별을
+          // 준다(docs/fixes/star-reward-idempotency-design.md) — wordId는
+          // WordDetail.jsx의 PronounceStep이 onSuccess 호출 시 실어 보낸다.
+          onMarkPronunciationOk={markPronunciationOk}
           onMarkQuizSolved={studentData.markQuizSolved}
           onQuizAnswer={studentData.recordQuizAnswer}
           onPronunciationAttempt={studentData.markPronunciationAttempt}
           wordStatus={wordStatus} onWordKnown={setWordKnown} onWordUnknown={setWordUnknown} />
       )}
       {screen === 'quiz'          && (
+        // 별 지급 단일 경로(2026-07-28) — 예전엔 여기서 onAddStars={addStars}
+        // (raw primitive)도 같이 넘겨서 QuizGame이 handlePronSuccess에서
+        // onMarkPronunciationOk?.()와 onAddStars?.(1)을 둘 다 불러 발음
+        // 성공마다 별을 이중 지급할 수 있었다(정적 분석으로 확인, 실측
+        // 전이지만 markPronunciationOk와 별개로 무조건 실행되는 구조라
+        // 실제로 겹칠 여지가 있었음). 이제 QuizGame은 raw star 지급 경로를
+        // 아예 받지 않고, onMarkPronunciationOk(wordId)만으로 발음 성공을
+        // 보고한다 — dedup은 markPronunciationOk 내부(grantReward)가 전담.
         <QuizGame initWord={selectedWord} classWords={classWords}
           onBack={() => setScreen('dashboard')}
           onAddMission={studentData.addMission}
           onMarkQuizSolved={studentData.markQuizSolved}
           onMarkPronunciationOk={markPronunciationOk}
-          onAddStars={addStars}
           onQuizAnswer={studentData.recordQuizAnswer}
           onPronunciationAttempt={studentData.markPronunciationAttempt} />
       )}
@@ -652,10 +669,15 @@ function AppInner({ studentId, studentName, onLogout }) {
         />
       )}
       {screen === 'game'          && (
+        // 별 지급 단일 경로(2026-07-28) — onAddStars={addStars}(raw
+        // primitive, dedup 없음) 대신 onGrantReward={grantReward}(dedupKey
+        // 필수)를 넘긴다. 실제 소비처는 MatchGameShell(BalloonGame/
+        // FishingGame/PizzaGame/TrainGame이 {...props}로 그대로 전달) —
+        // 라운드별 dedupKey는 MatchGameShell이 자체 세션 id로 생성.
         <CurrentGame
           words={classWords}
           onBack={balloonFromLesson ? goToPendingWord : () => setScreen('dashboard')}
-          onAddStars={addStars}
+          onGrantReward={grantReward}
           onContinue={balloonFromLesson ? goToPendingWord : null}
         />
       )}

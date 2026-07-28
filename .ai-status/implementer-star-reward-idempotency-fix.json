@@ -1,0 +1,23 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "star-reward-idempotency-fix",
+  "task": "별 중복 지급 방지 구현 — 발음 성공 별 지급에 markWordViewed와 동일한 단어id dedup 패턴 적용",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-27T04:00:00+09:00",
+  "updated_at": "2026-07-27T04:00:00+09:00",
+  "files_owned": [
+    "src/App.jsx",
+    "src/components/WordDetail.jsx",
+    "src/hooks/useStudent.js",
+    "handoff.md"
+  ],
+  "files_read": [
+    "docs/bugs/star-duplicate-reward-analysis.md",
+    "docs/fixes/star-reward-idempotency-design.md"
+  ],
+  "summary": "설계 문서(docs/fixes/star-reward-idempotency-design.md) Option A를 구현하되, 실제 코드를 보며 더 안전하고 좁은 범위로 조정: round.pronunciationOk(raw 카운터)는 손대지 않고 그대로 유지(countCategoriesCompleted/대시보드 표시 기존 의미 불변), 새 round.pronunciationOkWordIds 배열을 markWordViewed와 동일한 dedup 패턴으로 추가해 addStars(1) 재지급만 차단. markPronunciationOk(wordId)가 wordId 인자를 받아 useStudent.js 내부에서 dedup 체크 후 addStars까지 직접 호출하도록 통합(기존엔 App.jsx 콜백에서 별도로 addStars를 붙이는 취약한 패턴이었음 - 그 패턴 자체를 제거). WordDetail.jsx PronounceStep의 SpeechBtn onSuccess가 word.dbId를 실어 보내도록 배선. App.jsx 3곳 중 wordId 없이 addStars를 직접 부르던 2곳(GuidedSession/WordDetail 경로)을 markPronunciationOk 단순 전달로 교체 - 세번째(QuizGame 경로, App.jsx:590)는 원래도 wordId 없이 markPronunciationOk만 호출하던 기존 코드라 손대지 않음(파일 수정 대상 3곳 밖, 기존 동작 그대로 유지되도록 wordId==null 분기로 하위호환 보장). normalizeRecord 폴백 + 멀티기기 병합(unionList) 추가. npm run build PASS, npm run verify:persistence 8개 스크립트 전부 PASS, scripts/fakeReact.mjs 하네스로 실제 번들된 useStudent.js에 대해 직접 작성한 5개 어서션(같은 단어 3회 반복=별 1회, 다른 단어=별 추가 지급, wordId 없는 레거시 QuizGame 경로=기존처럼 매번 지급 회귀없음) 전부 PASS.",
+  "blocker": null,
+  "next_action": "커밋/push/배포는 운영자 확인 후 진행 (이전 ELLA Writing 수정과 함께 아직 미커밋 상태). 예문(examplesHeard)/퀴즈(quizSolved) 카운터의 동일한 미덱업 이슈(분석 문서 원인 후보 2번)는 이번 범위 밖으로 남겨둠 - 필요시 별도 작업."
+}

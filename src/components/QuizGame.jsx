@@ -221,7 +221,7 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess, onAttempt }) {
 }
 
 // ─── QuizGame ───────────────────────────────────────────────────────────────
-export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMarkPronunciationOk, onAddStars, onQuizAnswer, onPronunciationAttempt, initWord, classWords }) {
+export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMarkPronunciationOk, onQuizAnswer, onPronunciationAttempt, initWord, classWords }) {
   const pool = useMemo(() => {
     const all  = classWords && classWords.length > 0 ? classWords : []
     const base = initWord
@@ -286,11 +286,19 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
     processing.current = false
   }
 
+  // 별 지급 단일 경로(2026-07-28) — 예전엔 onMarkPronunciationOk?.()를
+  // wordId 없이 불러(마니게임 체크포인트라 word.dbId 배선이 없었음)
+  // useStudent의 "레거시 항상 지급" 분기를 타면서, 곧바로 onAddStars?.(1)
+  // 도 별도로 호출해 발음 성공 하나당 별 2개(레거시 지급 1 + 여기서 직접
+  // 1)가 나갈 수 있었다. current.word.dbId를 실어 보내면
+  // markPronunciationOk가 WordDetail 경로와 동일한
+  // `pronunciation:${wordId}:${오늘}` dedupKey로 grantReward를 거치므로,
+  // 이 화면도 "오늘 이 단어 발음 성공"이라는 같은 이벤트를 공유하게 되고
+  // (하루 한 번만 지급), 별도 star 지급 호출 자체가 필요 없어져 제거.
   const handlePronSuccess = () => {
     setPronD(true)
     playSuccessSound()
-    onMarkPronunciationOk?.()
-    onAddStars?.(1)
+    onMarkPronunciationOk?.(current?.word?.dbId)
   }
 
   const handleNext = () => {

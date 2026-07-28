@@ -11,7 +11,7 @@ import HeroReaction from './HeroReaction'
 // checkpoint) — its result screen offers "다음 단어 공부하기" using it, and
 // "그만하기" resumes the lesson too. If omitted (opened from Dashboard or
 // the auto-recommendation banner directly), it behaves standalone.
-export default function MatchGameShell({ theme, words, onBack, onAddStars, onContinue }) {
+export default function MatchGameShell({ theme, words, onBack, onGrantReward, onContinue }) {
   const [phase, setPhase] = useState('intro') // intro | playing | result
   const [round, setRound] = useState(0)
   const [score, setScore] = useState(0) // rounds correct on the first try
@@ -26,6 +26,15 @@ export default function MatchGameShell({ theme, words, onBack, onAddStars, onCon
   const lastWordRef = useRef(null)
   const advanceTimerRef = useRef(null)
   const shakeTimerRef = useRef(null)
+  // 별 지급 단일 경로(2026-07-28) — 이 플레이 세션(시작하기~결과 화면) 전체를
+  // 가리키는 고유 id. startGame()에서 새로 발급(diaryPlacements의
+  // placementId와 동일한 timestamp+random 패턴). round별 star 지급의
+  // dedupKey에 이 id + round 인덱스를 함께 써서, "같은 세션의 같은 라운드
+  // 슬롯"에 대해서만 재지급을 막는다 — "한 번 더 하기"/재입장으로 만드는
+  // 새 세션은 항상 새 sessionId를 받으므로 반복 플레이로 별을 다시 얻는
+  // 기존 게임 설계(의도된 반복 보상)는 그대로 유지되고, 오직 "같은 라운드
+  // 인스턴스에 대한 우발적 중복 호출"(예: 더블탭 레이스)만 차단된다.
+  const sessionIdRef = useRef(null)
 
   // 정답 후 다음 라운드로 넘어가는 setTimeout, 오답 흔들림 표시를 되돌리는
   // setTimeout 둘 다 컴포넌트가 언마운트되면(예: 정답 직후 바로 "그만하기"
@@ -40,6 +49,7 @@ export default function MatchGameShell({ theme, words, onBack, onAddStars, onCon
 
   const startGame = () => {
     unlockAudio()
+    sessionIdRef.current = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     setScore(0)
     nextRound(0)
     setPhase('playing')
@@ -77,7 +87,10 @@ export default function MatchGameShell({ theme, words, onBack, onAddStars, onCon
       setPicked(opt.meaning)
       setAnswerPaul(pickReaction('success'))
       playSuccessSound()
-      if (!firstTryUsed) { setScore(s => s + 1); onAddStars?.(STAR_PER_CORRECT) }
+      if (!firstTryUsed) {
+        setScore(s => s + 1)
+        onGrantReward?.(STAR_PER_CORRECT, `matchgame:${sessionIdRef.current}:${round}:${target?.dbId || target?.word}`)
+      }
       advanceTimerRef.current = setTimeout(() => {
         const next = round + 1
         if (next >= ROUNDS) setPhase('result')

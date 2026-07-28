@@ -1,0 +1,21 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현(이번 작업은 분석 전용, 코드 미수정)",
+  "task_id": "star-duplicate-reward-analysis",
+  "task": "Liam/Dain 제보 — 학습 완료 후 별 획득, 뒤로가기 후 재진입 시 별 중복 획득 원인 분석",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-27T02:00:00+09:00",
+  "updated_at": "2026-07-27T02:00:00+09:00",
+  "files_owned": [
+    "docs/bugs/star-duplicate-reward-analysis.md"
+  ],
+  "files_read": [
+    "src/App.jsx",
+    "src/hooks/useStudent.js",
+    "src/components/WordDetail.jsx"
+  ],
+  "summary": "docs/bugs/star-duplicate-reward-analysis.md 작성 완료. 원인 확정: App.jsx:529,579의 onMarkPronunciationOk 콜백(WordDetail의 발음 성공 콜백)이 addStars(1)을 단어별/일별 중복 방지 없이 매 성공마다 무조건 호출함(useStudent.js addStars()/markPronunciationOk() 둘 다 raw 가산/카운터, 멱등성 가드 없음). WordDetail이 단어 재진입 시 항상 pronounce 단계부터 새로 마운트되므로(정상 UX), SpeechBtn의 phase가 idle로 리셋되어 재녹음-재성공-재지급이 반복 가능. 같은 마운트 내 재시도는 이미 막혀있음(phase==='success'면 버튼 비활성화) - 리마운트(뒤로가기+재진입)에만 무방비. 대조군으로 markWordViewed(wordId)는 이미 wordsViewed 배열로 단어별 dedup을 구현하고 있어 이 패턴을 재사용하는 안(안 A)을 권장안으로 제시. 4개의 다른 addStars() 호출 지점(레벨업미션/중복스티커/오늘의미션4x4/쓰기콤보)은 각각 조사해 안전함을 확인(오해 방지용으로 문서에 근거와 함께 기록). DB(student_progress)에 실제로 영구 저장됨을 확인, 새로고침/재접속으로 자동 교정 안 됨을 확인, 멀티기기 병합(maxNum)도 근본 원인을 해결 못함을 확인.",
+  "blocker": null,
+  "next_action": "구현 착수 전 운영자 승인 필요 — 안 A(pronunciationOk를 카운터에서 단어id Set으로 교체, wordsViewed와 동일 패턴) 채택 여부 확인. 구현 시 App.jsx 콜백 시그니처 변경(word.id 전달) + 멀티디바이스 병합 로직(unionList 패턴) 동시 갱신 필요 - 문서의 '안전한 수정 방법' 7개 항목 참고. 기존에 이미 부풀려진 학생 데이터(Liam/Dain 등) 보정은 별도 사안으로 분리 판단 필요."
+}

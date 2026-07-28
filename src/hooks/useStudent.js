@@ -171,8 +171,26 @@ const freshRound = () => ({
   examplesHeard: 0,
   quizSolved: 0,
   pronunciationOk: 0,
+  // "오늘 이 단어로 이미 발음 별을 받았는가"를 단어 id 기준으로 기억하는
+  // 배열(wordsViewed와 동일한 배열-dedup 패턴, 2026-07-27 도입). 2026-07-28
+  // 별 지급 단일 경로 리팩터링 이후 실제 별 지급 dedup은 아래
+  // starGrantLog(grantReward 전용)가 담당하고, 이 배열은 순수 이력/표시
+  // 용도로 유지(멀티기기 병합에도 그대로 참여, unionList). pronunciationOk
+  // (raw 카운터)는 미션 카테고리 집계/표시용으로 의미가 그대로라 손대지
+  // 않는다 — markPronunciationOk 참고.
+  pronunciationOkWordIds: [],
   spellingWrongToday: [], // wordIds missed at least once in a spelling test today (deduped) — the "오답노트" queue the end-of-day review cycles through
   spellingCombo: 0,       // P3 게임화 — 오늘 쓰기시험 연속 "첫 시도 정답" 수. 첫 시도 오답이면 0으로 리셋, 자정에 round와 함께 리셋. 기존 저장 레코드엔 없을 수 있으므로 읽을 땐 항상 (|| 0)로 방어
+  // 별 지급 단일 경로(Single Reward Flow, 2026-07-28,
+  // docs/fixes/star-reward-single-flow-design.md) — grantReward()가 실제로
+  // totalStars를 늘린 모든 dedupKey를 기록하는 로그. pronunciationOkWordIds와
+  // 같은 정신(문자열 dedup 배열)이지만 발음 하나에 국한되지 않고 grantReward를
+  // 거치는 모든 이벤트(발음/미션클리어/콤보보너스/일일미션보너스/게임정답 등)가
+  // 공유한다. round와 함께 자정에 리셋되므로, "영구히 다시 지급되면 안 되는"
+  // 이벤트(예: 미션 클리어)의 진짜 방어는 이 로그가 아니라 그 이벤트 자체의
+  // 영구 상태(missions[].done/cleared 등)가 맡는다 — 이 로그는 "같은 tick/같은
+  // 세션 안에서의 우발적 중복 호출"을 막는 2차 안전망 역할.
+  starGrantLog: [],
 })
 const freshHistoryDay = () => ({
   studied: true,
@@ -343,7 +361,7 @@ function normalizeRecord(raw, id) {
   rec.lastTextbookClassId = typeof rec.lastTextbookClassId === 'string' ? rec.lastTextbookClassId : null
   const r = asObject(rec.round)
   if (r.date === todayStr()) {
-    rec.round = { ...freshRound(), ...r, wordsViewed: asArray(r.wordsViewed), spellingWrongToday: asArray(r.spellingWrongToday) }
+    rec.round = { ...freshRound(), ...r, wordsViewed: asArray(r.wordsViewed), pronunciationOkWordIds: asArray(r.pronunciationOkWordIds), spellingWrongToday: asArray(r.spellingWrongToday), starGrantLog: asArray(r.starGrantLog) }
   } else {
     // 하루가 바뀌어 round가 리셋되기 직전 — 어제(또는 그 전) 못 끝낸
     // spellingWrongToday를 영구 복습 대기열로 이월(유실 방지, freshRecord()
@@ -484,8 +502,16 @@ export function mergeProgressRecords(localRaw, cloudRaw, id) {
       examplesHeard: maxNum(local.round.examplesHeard, cloud.round.examplesHeard),
       quizSolved: maxNum(local.round.quizSolved, cloud.round.quizSolved),
       pronunciationOk: maxNum(local.round.pronunciationOk, cloud.round.pronunciationOk),
+      // 두 기기 각각에서 서로 다른 단어로 이미 별을 받았을 수 있으므로
+      // wordsViewed와 동일하게 합집합(둘 중 하나에만 있어도 "이미 받음"
+      // 유지 — 병합 후 그 단어로 다시 별을 주면 안 되므로).
+      pronunciationOkWordIds: unionList(local.round.pronunciationOkWordIds, cloud.round.pronunciationOkWordIds),
       spellingWrongToday: unionList(local.round.spellingWrongToday, cloud.round.spellingWrongToday),
       spellingCombo: maxNum(local.round.spellingCombo, cloud.round.spellingCombo),
+      // grantReward dedupKey 로그도 wordsViewed/pronunciationOkWordIds와 동일한
+      // 이유로 합집합 — 두 기기 각각에서 이미 지급된 이벤트가 병합 후 다시
+      // 지급되지 않도록.
+      starGrantLog: unionList(local.round.starGrantLog, cloud.round.starGrantLog),
     },
     history,
     milestoneStreak: maxNum(local.milestoneStreak, cloud.milestoneStreak),
@@ -747,13 +773,59 @@ export function useStudent(studentId, legacyName) {
     })
   }, [patch])
 
-  // Every star gain (quiz, pronunciation, level-up mission, mission bonus,
-  // duplicate sticker) funnels through here, so the daily history's
-  // starsEarned total is always accurate without touching every call site.
-  const addStars = useCallback((n = 1) => {
-    patch(prev => ({ totalStars: prev.totalStars + n }))
-    bumpHistory(day => ({ starsEarned: day.starsEarned + n }))
-  }, [patch, bumpHistory])
+  // ── 별 지급 단일 경로(Single Reward Flow, 2026-07-28) ──────────────────
+  // docs/fixes/star-reward-single-flow-design.md 참고. 이 함수가 이 파일
+  // (그리고 앱 전체)에서 totalStars를 바꾸는 유일한 지점이다 — 예전
+  // addStars() 직접 호출 6곳(내부) + 2곳(QuizGame/MatchGameShell, raw
+  // addStars를 prop으로 그대로 받아 호출)을 전부 이 함수로 대체했다.
+  // dedupKey는 필수 — "왜/언제 이 지급이 일어나는지"를 호출자가 항상
+  // 명시하게 강제해서, 다음에 새 호출부가 추가돼도 dedup을 깜빡할 방법이
+  // 구조적으로 없게 한다.
+  //
+  // 왜 이렇게 짰는가(실사고 두 건의 공통 원인) — markPronunciationOk와
+  // answerMission 둘 다 원래 "patch(prev => {...})의 updater 안에서만
+  // 설정되는 지역 변수를, patch() 호출 직후 밖에서 읽어 별 지급 여부를
+  // 판단"하는 패턴이었다. React는 그 updater를 patch() 호출과 같은 tick
+  // 안에서 "이미 실행 완료했다"고 보장하지 않는다(실측: 실제 브라우저에서
+  // markPronunciationOk가 이 패턴 때문에 발음 성공 시 별을 아예 0개
+  // 지급하는 회귀를 냈다 — scripts/fakeReact.mjs 스텁 하네스는 setState
+  // 업데이터를 더 관대하게(동기적으로 가깝게) 처리해서 이 회귀를 못
+  // 잡았다). 그래서 이 함수는:
+  //   1) "이미 지급했는가"를 이 렌더의 클로저에서 이미 알 수 있는 값
+  //      (round.starGrantLog, 또는 호출자가 patch() 호출 전에 이미
+  //      동기적으로 계산해 넘긴 값)으로만 판단한다 — patch() 호출 뒤에
+  //      그 결과를 다시 읽지 않는다.
+  //   2) patch()의 updater 안에서도 prev.round.starGrantLog를 한 번 더
+  //      확인한다 — React 함수형 updater는 같은 tick에 여러 번 큐잉돼도
+  //      항상 그 시점까지 누적된 최신 prev를 받으므로(이게 React state
+  //      updater의 실제 보장 사항), 이 함수가 같은 tick에 같은 dedupKey로
+  //      여러 번 불려도(예: 더블탭/중복 이벤트) 정확히 한 번만 지급되는
+  //      진짜 안전망은 바로 이 안쪽 확인이다. 바깥(1번)은 흔한 경우(같은
+  //      렌더에서 "이미 지난 날/이전 이벤트로 이미 받았다"는 걸 아는 경우)
+  //      불필요한 patch() 호출을 피하는 최적화일 뿐, 정확성은 여기 담보.
+  // 반환값(true=이번 호출이 실제로 지급을 발생시켰다고 판단)은 호출 시점
+  // 클로저 스냅샷 기준 낙관적 값이라 UI 피드백 등 참고용으로만 쓸 것 —
+  // 위 1번과 같은 이유로 극히 드문 "같은 tick 연속 호출" 상황에서는 실제
+  // 지급 여부와 어긋날 수 있다(지급 자체의 정확성은 2번이 담보하지,
+  // 반환값이 지급 여부를 좌우하는 게이트가 아니다).
+  const grantReward = useCallback((amount, dedupKey) => {
+    if (!dedupKey) {
+      console.warn('[grantReward] dedupKey 없이 호출됨 — 지급 거부(호출부 버그)')
+      return false
+    }
+    if (round.starGrantLog.includes(dedupKey)) return false
+    const today = todayStr()
+    patch(prev => {
+      if (prev.round.starGrantLog.includes(dedupKey)) return {}
+      const day = prev.history[today] || freshHistoryDay()
+      return {
+        totalStars: prev.totalStars + amount,
+        round: { ...prev.round, starGrantLog: [...prev.round.starGrantLog, dedupKey] },
+        history: { ...prev.history, [today]: { ...day, starsEarned: day.starsEarned + amount } },
+      }
+    })
+    return true
+  }, [patch, round.starGrantLog])
 
   // Paul Rank System(2026-07-19) XP 지급 — totalStars와 완전히 분리된
   // 원장(xp_ledger, 서버 전용 쓰기)에 독립적으로 쌓는다. eventType은
@@ -829,33 +901,47 @@ export function useStudent(studentId, legacyName) {
     }))
   }, [patch])
 
+  // 별 지급 단일 경로 마이그레이션(2026-07-28) — 이전엔 markPronunciationOk와
+  // 정확히 같은 클래스의 버그가 있었다: `didClear`를 patch()의 updater
+  // 안에서만 true로 설정하고 그 직후 밖에서 읽어 addStars(3) 호출 여부를
+  // 판단했는데, React가 그 updater를 patch() 호출 시점에 "이미 실행
+  // 완료했다"고 보장하지 않아 3번째 정답에서도 미션 클리어 별이 지급되지
+  // 않을 수 있는 회귀 가능성이 구조적으로 존재했다(markPronunciationOk와
+  // 동일 원인 클래스 — grantReward 헤더 주석 참고). 여기서는 판정
+  // (willClear)을 patch() 호출 "전에" 이 렌더의 클로저(missions, 이미
+  // 최신 record에서 destructure된 값)만으로 동기적으로 계산해서 그 문제를
+  // 원천 차단한다. wordId별 재지급 방지 자체는 원래도(그리고 지금도)
+  // missions[].done(영구, round처럼 자정에 리셋되지 않음)이 담당 —
+  // grantReward의 dedupKey는 "같은 tick 안에서 이 함수가 우발적으로 두 번
+  // 불려도" 대비하는 2차 안전망일 뿐(예: 빠른 연속 정답 제출).
   const answerMission = useCallback((wordId) => {
-    let didClear = false
+    const mission = missions.find(m => m.wordId === wordId)
+    const willClear = !!mission && !mission.done && mission.correctCount + 1 >= 3
     patch(prev => ({
       missions: prev.missions.map(m => {
         if (m.wordId !== wordId || m.done) return m
         const next = m.correctCount + 1
-        if (next >= 3) { didClear = true; return { ...m, correctCount: 3, done: true } }
+        if (next >= 3) return { ...m, correctCount: 3, done: true }
         return { ...m, correctCount: next }
       }),
     }))
-    if (didClear) {
+    if (willClear) {
       patch(prev => ({ cleared: prev.cleared.includes(wordId) ? prev.cleared : [...prev.cleared, wordId] }))
-      addStars(3)
+      grantReward(3, `mission-clear:${wordId}`)
       // v2.3.1 — 여기 있던 grantXp('mission-clear', `mission-clear:${wordId}`)
       // 를 제거했다. 이게 바로 운영자가 실측 발견한 "XP가 단어 단위로
       // 지급되는" 정확한 원인이었다 — wordId를 source_event_id로 써서
       // 학생이 (특히 오답으로 미션 큐에 들어간) 단어를 계속 넘길 때마다
-      // XP가 단어 개수만큼 무한히 쌓였다(별 addStars(3)은 원래도 단어별
-      // 지급이 의도였으므로 그대로 유지 — XP만 이 트리거에서 분리).
+      // XP가 단어 개수만큼 무한히 쌓였다(별 grantReward(3, ...)는 원래도
+      // 단어별 지급이 의도였으므로 그대로 유지 — XP만 이 트리거에서 분리).
       // 레벨업 미션 클리어는 정의상 단어 단위 이벤트라 "행동(일별 카테고리
       // 완료)" 축으로 자연스럽게 변환할 방법이 없고, 운영자 지정 8개 XP
       // 이벤트 목록에도 포함되지 않아 XP 지급 트리거에서 완전히 제거하는
       // 쪽으로 판단했다(상세 근거: src/utils/paulRankShared.js
       // XP_EVENT_TABLE 헤더, wiki/decisions.md #10).
     }
-    return didClear
-  }, [patch, addStars])
+    return willClear
+  }, [patch, missions, grantReward])
 
   // v1.5 버그 수정: 예전엔 오늘 카테고리 하나(5개)를 다 채워야만
   // history[오늘]이 생겨서, 단어를 1~4개만 본 날은 대시보드도 캘린더도
@@ -879,9 +965,40 @@ export function useStudent(studentId, legacyName) {
     patch(prev => ({ round: { ...prev.round, quizSolved: prev.round.quizSolved + 1 } }))
   }, [patch])
 
-  const markPronunciationOk = useCallback(() => {
-    patch(prev => ({ round: { ...prev.round, pronunciationOk: (prev.round.pronunciationOk || 0) + 1 } }))
-  }, [patch])
+  // 별 중복 지급 방지(2026-07-27/28, docs/fixes/star-reward-single-flow-design.md,
+  // Option A → 단일 grantReward 경로로 재마이그레이션) — wordId가
+  // 주어지면(WordDetail/GuidedSession/QuizGame의 발음 연습 경로, 전부
+  // word.dbId를 실어 보냄) "오늘 이 단어로 이미 발음 별을 받았는지"를
+  // dedupKey(`pronunciation:${wordId}:${today}`)로 grantReward에 위임한다
+  // — 뒤로가기 후 같은 단어를 다시 연습해도(연습 자체는 몇 번이든 계속
+  // 가능, 학습 흐름 변경 없음) 별은 오늘 그 단어에 대해 한 번만 지급된다.
+  // pronunciationOkWordIds는 countCategoriesCompleted가 쓰지 않으므로(그
+  // 계산은 round.pronunciationOk 원시 카운터를 그대로 쓴다) 여기서는 순수
+  // 표시/이력 목적으로만 유지 — 실제 지급 dedup은 grantReward의
+  // starGrantLog가 담당(원래 이 배열이 dedup까지 겸했던 걸 단일 경로로
+  // 이전, 배열 자체는 데이터 유실 없이 계속 채워짐 — 멀티기기 병합에도
+  // 그대로 참여).
+  // wordId가 없는 호출(예: word.dbId가 아직 배정되지 않은 단어)은 "이
+  // 단어를 특정할 수 없다"는 뜻이라 dedup 자체가 불가능 — 매번 지급하는
+  // 기존 레거시 동작을 그대로 유지(매번 고유 키를 생성해 grantReward를
+  // 통과시킴, 무제한 반복 지급이 아니라 "이 특정 호출은 항상 새 이벤트로
+  // 취급"이라는 뜻).
+  const markPronunciationOk = useCallback((wordId) => {
+    patch(prev => ({
+      round: {
+        ...prev.round,
+        pronunciationOk: (prev.round.pronunciationOk || 0) + 1,
+        pronunciationOkWordIds: (wordId != null && !prev.round.pronunciationOkWordIds.includes(wordId))
+          ? [...prev.round.pronunciationOkWordIds, wordId]
+          : prev.round.pronunciationOkWordIds,
+      },
+    }))
+    if (wordId == null) {
+      grantReward(1, `pronunciation-unidentified:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`)
+      return
+    }
+    grantReward(1, `pronunciation:${wordId}:${todayStr()}`)
+  }, [patch, grantReward])
 
   // Grants a sticker directly, bypassing the gift-box gacha (used for
   // guaranteed streak/star-badge rewards). Duplicates still convert to
@@ -889,13 +1006,19 @@ export function useStudent(studentId, legacyName) {
   const grantSticker = useCallback((sticker) => {
     const isDuplicate = stickerTypes.includes(sticker.id)
     if (isDuplicate) {
-      addStars(DUPLICATE_BONUS_STARS)
+      // 별 지급 단일 경로(2026-07-28) — 뽑기 하나하나가 그 자체로 별개
+      // 이벤트라(중복=이 뽑기의 결과일 뿐, "같은 이벤트의 재발생"이
+      // 아님) dedupKey를 매 호출마다 새로 만들어(타임스탬프+랜덤,
+      // diaryPlacements의 placementId와 동일한 패턴) grantReward가 항상
+      // 지급하게 한다 — 여전히 단일 경로를 통과하되, 기존처럼 뽑을
+      // 때마다 매번 지급되는 동작은 그대로 유지.
+      grantReward(DUPLICATE_BONUS_STARS, `sticker-duplicate:${sticker.id}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`)
       // v2.3.1 — 여기 있던 grantXp('duplicate-sticker-bonus', ...)를
       // 제거했다. 운영자가 지정한 8개 XP 이벤트 목록에 없을 뿐 아니라,
       // 오늘의 미션(4/4)이 하루 여러 번 반복 완료될 수 있다는 기존 설계
       // (아래 daily-mission-complete 주석 참고) 때문에 이 트리거도
       // 무작위 키(randEventId)로 반복마다 별개 지급되는, mission-clear와
-      // 같은 성격의 무제한 반복 지급 경로였다 — 별(addStars) 지급은
+      // 같은 성격의 무제한 반복 지급 경로였다 — 별(grantReward) 지급은
       // 그대로 유지.
     } else {
       patch(prev => ({ stickers: [...prev.stickers, sticker.id] }))
@@ -903,7 +1026,7 @@ export function useStudent(studentId, legacyName) {
     }
     return isDuplicate
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stickerTypes, addStars, patch, bumpHistory])
+  }, [stickerTypes, grantReward, patch, bumpHistory])
 
   // Keeps today's "완료한 미션" (0-4 categories) as a running high-water
   // mark, independent of the round auto-resetting after a full completion —
@@ -956,10 +1079,23 @@ export function useStudent(studentId, legacyName) {
     if (handledRoundRef.current === signature) return
     handledRoundRef.current = signature
 
-    addStars(MISSION_BONUS_STARS)
+    // 별 지급 단일 경로(2026-07-28) — dedupKey는 의도적으로 signature
+    // (라운드별 고유값, handledRoundRef가 원래 쓰던 것과 동일 granularity)
+    // 를 그대로 쓴다. 아래 grantXp/grantTicket처럼 순수 날짜 키
+    // (`daily-mission-bonus:${todayStr()}`)로 하면 별도 하루 한 번만
+    // 지급되게 바뀌는데, 이 useEffect 헤더 주석과 바로 아래 XP 주석이 이미
+    // 명시하듯 "별/스티커는 라운드가 반복될 때마다(missions repeat all
+    // day) 매번 지급"이 기존에 검증된 의도된 게임 경제다(XP만 하루 1회로
+    // 의도적으로 분리된 것 — v2.3.1 판단 근거는 바로 아래). signature 키는
+    // handledRoundRef가 막던 것과 정확히 같은 범위(같은 라운드 반복 호출만
+    // 차단, 새 라운드는 항상 재지급)라 기존 별 지급 빈도를 전혀 바꾸지
+    // 않으면서 grantReward의 starGrantLog로도 구조적으로 안전해진다(순수
+    // 구조 이전 — 규칙 1 "기존 플로우를 위험하게 하지 않는다"에 따라 날짜
+    // 키로의 변경은 별도 운영자 승인 없이는 하지 않음).
+    grantReward(MISSION_BONUS_STARS, `daily-mission-bonus:${signature}`)
     // v2.3.1 — 이벤트 이름을 운영자 지정 8종 표준 이름(daily-mission-
     // complete)으로 재명명하면서, source_event_id도 signature(라운드별
-    // 고유값) 대신 **날짜만**(day 기간키)으로 바꿨다. 별/스티커(addStars/
+    // 고유값) 대신 **날짜만**(day 기간키)으로 바꿨다. 별/스티커(grantReward/
     // grantSticker)는 여전히 라운드가 반복될 때마다(위 주석 "missions
     // repeat all day") 매번 지급되어 기존 게임 경험이 그대로지만, XP는
     // 오늘 첫 4/4 완료 1회만 지급된다 — 같은 날짜 키로 두 번째 요청부터는
@@ -1091,14 +1227,14 @@ export function useStudent(studentId, legacyName) {
   // 연속 "첫 시도 정답" 콤보만 얹었다 — 이 함수는 SpellingQuestion의
   // reportedRef 덕에 문제당 정확히 첫 시도에만 불리므로, 호출 횟수 =
   // 첫 시도 수라는 성질을 그대로 콤보 카운트에 쓴다. 콤보가 마일스톤
-  // (3/5/10)에 도달하는 그 순간에만 addStars(기존 별 지급 단일 경로)로
+  // (3/5/10)에 도달하는 그 순간에만 grantReward(별 지급 단일 경로)로
   // 보너스를 준다. round.spellingCombo는 기존 저장 데이터에 없을 수
   // 있어 항상 (|| 0)로 읽는다(하위호환 — freshRound 주석 참고).
   // v2.3.1 — 예전엔 여기서 콤보 마일스톤(3/5/10)마다 grantXp('spelling-
   // combo-N', `spelling-combo-N:날짜:wordId`)를 호출했다. source_event_id
   // 에 wordId가 들어가 있어, 같은 날 서로 다른 단어에서 콤보가 반복
   // 도달할 때마다 별개 지급이 가능했다(운영자가 이 지점도 함께 의심
-  // 지목). 콤보 별 보너스(addStars)는 그대로 유지하되, XP는 운영자 지정
+  // 지목). 콤보 별 보너스(grantReward)는 그대로 유지하되, XP는 운영자 지정
   // 'writing-complete' 이벤트로 교체 — "오늘 쓰기시험 카테고리를 처음
   // 완료한 순간"(history.spellingCorrect가 오늘 처음 GOAL에 도달하는
   // 순간, 다른 3개 카테고리(word-view/listening/quiz)와 동일한 day
@@ -1133,7 +1269,14 @@ export function useStudent(studentId, legacyName) {
       }))
       const bonus = spellingComboBonus(combo)
       if (bonus > 0) {
-        addStars(bonus)
+        // 별 지급 단일 경로(2026-07-28) — combo/wordId/날짜 조합 dedupKey:
+        // 같은 날 다른 단어/다른 콤보값에서 마일스톤에 도달하면 각각 별개
+        // 이벤트로 지급되고(의도된 반복 보상), 정확히 같은 wordId+combo+
+        // 날짜 조합이 우발적으로 두 번 들어오는 경우에만(예: 같은 tick
+        // 중복 호출) grantReward가 막는다. combo는 이미 위에서 이 렌더의
+        // 클로저(round.spellingCombo)로부터 patch() 호출 전에 동기적으로
+        // 계산됐으므로 안전.
+        grantReward(bonus, `spelling-combo:${wordId}:${combo}:${todayStr()}`)
       }
     } else {
       patch(prev => ({
@@ -1146,7 +1289,7 @@ export function useStudent(studentId, legacyName) {
         },
       }))
     }
-  }, [bumpHistory, patch, addStars, round.spellingCombo, grantXp])
+  }, [bumpHistory, patch, grantReward, round.spellingCombo, grantXp])
 
   // 복습 화면에서 한 단어를 맞히면 오답노트 큐에서 제거 — 큐가 비면
   // "틀린 단어 복습"이 끝난 것. Writing MVP: 영구 복습 대기열
@@ -1330,7 +1473,13 @@ export function useStudent(studentId, legacyName) {
     spellingReviewQueue, // Writing MVP(2026-07-20) — 자정을 넘겨도 유지되는 복습 대기열
     lastWordIndex, setLastWordIndex, getResumeIndexForUnit,
     pendingGift: giftQueue[0] || null, dismissGift,
-    addStars, addMission, answerMission,
+    // 별 지급 단일 경로(2026-07-28, docs/fixes/star-reward-single-flow-design.md)
+    // — grantReward가 totalStars를 바꾸는 유일한 공개 API. 예전 raw
+    // addStars(가드 없는 단순 가산 primitive)는 더 이상 반환하지 않는다 —
+    // App.jsx/QuizGame.jsx/MatchGameShell.jsx 등 어떤 화면도 이걸 직접
+    // 호출해 dedup 없이 별을 늘릴 방법이 없다(모든 컴포넌트는 반드시
+    // dedupKey를 명시해야 하는 grantReward를 통해서만 별을 지급받는다).
+    grantReward, addMission, answerMission,
     markWordViewed, markExampleHeard, markQuizSolved, markPronunciationOk,
     placeSticker, updatePlacement, removePlacement, movePlacementLayer,
     wordStatus, setWordKnown, setWordUnknown,
