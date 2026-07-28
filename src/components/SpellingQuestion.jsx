@@ -94,6 +94,10 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
   const [input, setInput] = useState('')
   const [showHint, setShowHint] = useState(false)
   const [correctPaul, setCorrectPaul] = useState(null)
+  // 안전망(2026-07-27, docs/bugs/2026-07-26-ella-writing-spelling-stuck.md
+  // 8절) — 정답 화면에서 자동 이동 타이머가 늦어지거나 실패해도 학생이
+  // 갇히지 않도록, 일정 시간 뒤 나타나는 수동 "다음 문제" 버튼 표시 여부.
+  const [showManualNext, setShowManualNext] = useState(false)
   // 'random'일 때 이 문제(단어) 동안 고정할 실제 방향.
   const [resolvedDirection, setResolvedDirection] = useState(pickDirection)
   const reportedRef = useRef(false)
@@ -160,6 +164,16 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [word, wordAudioUrl])
 
+  // 정답 화면 진입 1.5초 뒤(markCorrect의 700ms 자동 이동보다 여유 있게
+  // 늦은 시점)에만 수동 버튼을 노출 — 정상 흐름에서는 그 전에 이미 다음
+  // 문제로 넘어가 있으므로 평소엔 절대 보이지 않는다. phase가 벗어나면
+  // (다음 문제로 실제 이동) 다시 숨김 + 타이머 정리.
+  useEffect(() => {
+    if (phase !== 'correct') { setShowManualNext(false); return }
+    const t = setTimeout(() => setShowManualNext(true), 1500)
+    return () => clearTimeout(t)
+  }, [phase])
+
   const playAgain = () => {
     if (wrongCount < UNLOCK_AT || phase === 'correct') return // 잠금 해제 전엔 무시(버튼도 비활성 상태)
     playSequence(focusInput)
@@ -172,14 +186,22 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
   // 순간엔 일반 success 풀 대신 폴 'levelup' 리액션으로 강조. 효과음은
   // 기존 playSuccessSound 하나만, 반드시 이 이벤트 핸들러 안에서만 재생
   // (speech.js 싱글턴 가드 패턴 — 에코 버그 이력 참고).
+  //
+  // 버그 분석(docs/bugs/2026-07-26-ella-writing-spelling-stuck.md 8절):
+  // 다음 문제로 넘어가는 타이머는 축하음 재생 성공 여부와 완전히
+  // 독립이어야 한다 — 그래서 setTimeout을 playSuccessSound()보다 먼저
+  // "무조건" 예약하고, playSuccessSound()는 실패해도(PC Chrome 확장
+  // 프로그램이 play()를 몽키패치해 동기 예외를 던지는 경우 등) 그 뒤
+  // 문장 실행을 막지 못하도록 try/catch로 감싼다. 효과음은 여전히 매번
+  // 재생을 시도하되(기능 유지), "베스트 에포트"로 격하될 뿐이다.
   const markCorrect = (achievedCombo = 0) => {
     setPhase('correct')
     const isMilestone = achievedCombo >= 2 && spellingComboBonus(achievedCombo) > 0
     // isComebackWord도 콤보 마일스톤과 같은 'levelup' 리액션을 재사용 —
     // 둘 다 "평소보다 특별한 순간"이라는 같은 톤이라 새 애셋 불필요.
     setCorrectPaul(((isComebackWord || isMilestone) && getReactionById('levelup')) || pickReaction('success'))
-    playSuccessSound()
     setTimeout(() => onDone?.(), 700)
+    try { playSuccessSound() } catch {}
   }
 
   const submitAnswer = () => {
@@ -377,6 +399,16 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
                 🎉 예전에 틀렸던 단어를 완전히 익혔어요!
               </span>
             </p>
+          )}
+          {/* 안전망 — 정상 흐름에서는 markCorrect()의 700ms 자동 이동이
+              항상 먼저 일어나므로 이 버튼이 보일 일이 없다. 자동 이동이
+              어떤 이유로 실패/지연될 때만(1.5초 경과) 나타나는 수동
+              탈출구. */}
+          {showManualNext && (
+            <button onClick={() => onDone?.()}
+              className="w-full mt-3 bg-teal-500 hover:bg-teal-600 text-white font-black py-3 rounded-2xl btn-press text-base animate-slide-up">
+              다음 문제 →
+            </button>
           )}
         </div>
       )}
