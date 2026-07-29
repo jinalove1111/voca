@@ -366,7 +366,7 @@ function SeasonPanel({ adminPin }) {
 // 지나간 학습 기록을 실수로 고쳐쓰는 걸 방지. 오늘 배정(체크박스 토글, 위
 // 블록)과 완전히 분리된 별도 컴포넌트라 기존 "오늘의 단어" 동작에는 전혀
 // 영향 없음.
-function FutureAssignmentPlanner({ targetClass, words }) {
+function FutureAssignmentPlanner({ targetClass, words, adminPin }) {
   const [date, setDate] = useState(tomorrowIsoStr())
   const [selected, setSelected] = useState(new Set())
   const [loading, setLoading] = useState(false)
@@ -407,7 +407,7 @@ function FutureAssignmentPlanner({ targetClass, words }) {
 
   const save = async () => {
     try {
-      await setAssignmentForDate(targetClass, date, [...selected])
+      await setAssignmentForDate(targetClass, date, [...selected], adminPin)
       setSaved(true)
     } catch (err) {
       alert('저장 중 오류가 발생했어요: ' + (err.message || err))
@@ -1246,7 +1246,7 @@ export default function AdminScreen({ onBack }) {
                   const current = getTodaysAssignmentWordIds(c)
                   const next = current.includes(slug) ? current.filter(id => id !== slug) : [...current, slug]
                   try {
-                    await setTodaysAssignment(c, next)
+                    await setTodaysAssignment(c, next, pin)
                     refresh()
                   } catch (err) {
                     alert('오늘의 단어 배정 중 오류가 발생했어요: ' + (err.message || err))
@@ -1380,7 +1380,7 @@ export default function AdminScreen({ onBack }) {
                                 slug 배열로 바꿔서 한 번에 넘길 뿐, 새 배정 개념 없음. */}
                             {words.length > 0 && (
                               <button onClick={async () => {
-                                  try { await setTodaysAssignment(c, words.map(w => wordSlug(w.word))); refresh() }
+                                  try { await setTodaysAssignment(c, words.map(w => wordSlug(w.word)), pin); refresh() }
                                   catch (err) { alert('배정 중 오류가 발생했어요: ' + (err.message || err)) }
                                 }}
                                 className="bg-teal-500 text-white font-bold px-2 py-1 rounded-lg text-xs btn-press hover:bg-teal-600">
@@ -1389,7 +1389,7 @@ export default function AdminScreen({ onBack }) {
                             )}
                             {todaysAssigned.size > 0 && (
                               <button onClick={async () => {
-                                  try { await setTodaysAssignment(c, []); refresh() }
+                                  try { await setTodaysAssignment(c, [], pin); refresh() }
                                   catch (err) { alert('해제 중 오류가 발생했어요: ' + (err.message || err)) }
                                 }}
                                 className="bg-white border-2 border-teal-300 text-teal-600 font-bold px-2 py-1 rounded-lg text-xs btn-press">
@@ -1399,7 +1399,7 @@ export default function AdminScreen({ onBack }) {
                           </div>
                         </div>
 
-                        <FutureAssignmentPlanner targetClass={c} words={words} />
+                        <FutureAssignmentPlanner targetClass={c} words={words} adminPin={pin} />
 
                         {/* Reading Foundation v3.3 — 지금 보고 있는 유닛(activeUnit)의
                             읽기 지문 편집. 합성 폴백 유닛(id 없음 — 유닛 0개 반의

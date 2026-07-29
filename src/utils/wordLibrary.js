@@ -2148,8 +2148,8 @@ export function getTodaysAssignmentWordIds(className) {
 
 // 반별 오늘의 단어 배정 저장/해제. wordIds가 빈 배열이면 배정을 지우는
 // 것과 같음 (getStudentWords가 빈 배열은 "배정 없음"으로 취급).
-export async function setTodaysAssignment(className, wordIds) {
-  return setAssignmentForDate(className, todayDateStr(), wordIds)
+export async function setTodaysAssignment(className, wordIds, adminPin) {
+  return setAssignmentForDate(className, todayDateStr(), wordIds, adminPin)
 }
 
 // v1.3 "날짜별 숙제 배정" — 오늘 외의 날짜(주로 내일 이후, 미리 준비) 배정
@@ -2166,14 +2166,21 @@ export async function getAssignmentForDate(className, dateStr) {
   return data?.word_ids || []
 }
 
-export async function setAssignmentForDate(className, dateStr, wordIds) {
+// 2026 v3.12 보안 락다운 — adminPin(하위호환 옵셔널 마지막 인자) 있으면
+// admin-content-write(assignment.set), 없으면 레거시 anon upsert(§
+// callAdminContentWrite 헤더 주석, v3.11 wordLibrary.js dual-path와 동일 패턴).
+export async function setAssignmentForDate(className, dateStr, wordIds, adminPin) {
   const classId = _cache[className]?.id
   if (!classId) return
-  const { error } = await supabase.from('daily_assignments').upsert({
-    class_id: classId,
-    date: dateStr,
-    word_ids: wordIds,
-  }, { onConflict: 'class_id,date' })
-  if (error) throw error
+  if (adminPin) {
+    await callAdminContentWrite('assignment.set', { classId, date: dateStr, wordIds }, adminPin)
+  } else {
+    const { error } = await supabase.from('daily_assignments').upsert({
+      class_id: classId,
+      date: dateStr,
+      word_ids: wordIds,
+    }, { onConflict: 'class_id,date' })
+    if (error) throw error
+  }
   await refreshWordLibrary()
 }

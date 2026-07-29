@@ -252,6 +252,19 @@ async function handleClassUpdateSettings(supabase: any, payload: any) {
   return { ok: true }
 }
 
+// assignment.set — setAssignmentForDate()의 upsert(wordLibrary.js 대응).
+// wordIds가 빈 배열이면 배정 해제(원본과 동일 의미).
+async function handleAssignmentSet(supabase: any, payload: any) {
+  const classId = requireId(payload?.classId, 'classId')
+  const date = requireString(payload?.date, 'date')
+  const wordIds = Array.isArray(payload?.wordIds) ? payload.wordIds : []
+  const { error } = await supabase
+    .from('daily_assignments')
+    .upsert({ class_id: classId, date, word_ids: wordIds }, { onConflict: 'class_id,date' })
+  if (error) throw error
+  return { ok: true }
+}
+
 const ACTION_HANDLERS: Record<string, (supabase: any, payload: any) => Promise<unknown>> = {
   'class.create': handleClassCreate,
   'unit.create': handleUnitCreate,
@@ -261,6 +274,7 @@ const ACTION_HANDLERS: Record<string, (supabase: any, payload: any) => Promise<u
   'words.bulk_replace': handleWordsBulkReplace,
   'word.accepted_meanings.update': handleWordAcceptedMeaningsUpdate,
   'class.update_settings': handleClassUpdateSettings,
+  'assignment.set': handleAssignmentSet,
 }
 
 Deno.serve(async (req: Request) => {
