@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { playWordAudio, stopCurrentAudio, playSuccessSound, unlockAudio } from '../utils/speech'
-import { ROUNDS, STAR_PER_CORRECT, PERFECT_BONUS, pickNextTarget, buildOptions, TIER } from '../utils/matchGame'
+import { ROUNDS, STAR_PER_CORRECT, pickNextTarget, buildOptions, TIER } from '../utils/matchGame'
 import { pickReaction } from '../utils/paulReactions'
 import HeroReaction from './HeroReaction'
 
@@ -130,8 +130,11 @@ export default function MatchGameShell({ theme, words, onBack, onGrantReward, on
 
   if (phase === 'result') {
     const { emoji, msg } = TIER(score)
-    const bonus = score === ROUNDS ? PERFECT_BONUS : 0
-    const totalStars = score * STAR_PER_CORRECT + bonus
+    // 표시되는 별 개수는 실제 지급된 별(onGrantReward로 지급된 라운드별 STAR_PER_CORRECT)만
+    // 반영한다 — 예전엔 올클리어 보너스를 화면에 보여주면서 실제로는 지급하지 않아
+    // 학생에게 실제보다 더 많이 받은 것처럼 오해를 줬다(실제 보너스 지급 여부는
+    // 별도 제품 결정 필요, 여기서는 구현하지 않음).
+    const totalStars = score * STAR_PER_CORRECT
     return (
       <div className={`min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br ${theme.bgGradient}`}>
         <div className="bg-white rounded-3xl card-shadow p-8 max-w-sm w-full text-center animate-slide-up">
@@ -142,7 +145,6 @@ export default function MatchGameShell({ theme, words, onBack, onGrantReward, on
           <p className="text-xl font-black text-gray-700 mb-4">{msg}</p>
           <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-3 mb-6">
             <p className="text-yellow-700 font-black">⭐ +{totalStars}</p>
-            {bonus > 0 && <p className="text-yellow-600 text-xs">(정답 {score * STAR_PER_CORRECT} + 올클리어 보너스 {bonus})</p>}
           </div>
           <div className="flex gap-2">
             <button onClick={startGame}
