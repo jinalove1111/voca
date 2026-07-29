@@ -372,7 +372,7 @@ export default function SentenceLearningFlow({ studentId, sentence, unitWordSlug
                   onChange={(e) => setBlankInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') submitBlank() }}
                   placeholder="빈칸에 들어갈 단어"
-                  autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                  autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="off"
                   className="w-full min-h-[52px] border-2 border-purple-200 rounded-2xl px-4 py-3 text-center text-xl font-black focus:outline-none focus:border-purple-400 transition-colors" />
                 <div className="flex gap-2">
                   <button onClick={listen}
