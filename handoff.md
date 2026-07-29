@@ -1,5 +1,142 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-28 (15차, 별 지급 단일 경로 리팩터링 — 14차 구현이 실제 브라우저에서 발음 별 0개 지급 회귀를 낸 것을 계기로, 전체 별 지급 지점을 전수 조사해 하나의 grantReward()로 통합. useStudent.js/App.jsx/QuizGame.jsx/MatchGameShell.jsx/scripts/testMultiTabRace.mjs 수정, build+verify:persistence+verify:student+추가 도메인 전부 PASS. 커밋/push/배포는 운영자의 별도 회귀 검증 이후)_
+_최종 갱신: 2026-07-30 (17차, v3.11 배포 시도 — 배포/DDL은 이 환경에서 실행
+불가로 확인(Supabase 토큰/링크/service_role 부재 + 규칙 8)해 운영자 turnkey
+커맨드 시트로 준비. v3.12 daily_assignments 듀얼패스는 code-complete 구현
+(assignment.set action + wordLibrary dual-path + AdminScreen 4곳 배선),
+build+verify:writing/persistence/student/quiz/admin 전부 PASS. 배포/SQL은
+여전히 운영자 대기. 커밋/push는 회귀 재검 후)_
+
+## 2026-07-30 (17차) — v3.11 배포 시도 + v3.12 code-complete
+
+### 배포 실행 가능성 — 실측 후 "불가" 확정(정직 기록)
+
+운영자가 "Edge Function 배포 + SQL 적용 + 라이브 검증"을 지시했으나, 이
+개발 환경에서 실행 불가함을 실측으로 확인: `SUPABASE_ACCESS_TOKEN` 부재
+(env/.env 어디에도 없음), 프로젝트 링크 없음(supabase/config.toml·.temp 없음),
+`npx supabase projects list` → LegacyPlatformAuthRequiredError(CLI 미인증),
+service_role 키 없음(anon publishable 키만). 게다가 헌법 규칙 8이 에이전트
+DDL 실행을 금지하고, 런북 게이트 ④(프로덕션 관리자 UI 로그인 후 저장 테스트)
+는 사람만 가능. → 배포/SQL은 **거짓 성공 보고 없이** 운영자 대기로 남기고,
+대신 아래 turnkey 준비 + 실제 구현 가능한 코드 작업(v3.12)을 완료.
+
+### v3.11 배포 turnkey (신규 문서)
+
+`docs/DEPLOY_COMMANDS_V311_V312.md` — 운영자 복붙 커맨드 시트(login/link/
+secrets → functions deploy → 프론트 확인 → 라이브 게이트 → v3.11 SQL →
+v3.12 SQL → 정합성 프로브). 판단 게이트는 기존 런북 참조. **assignment.set이
+같은 admin-content-write 함수에 추가돼 함수 배포 1번으로 v3.11·v3.12 공통 커버.**
+
+### v3.12 daily_assignments 듀얼패스 — code-complete (v3.11과 동일 패턴)
+
+CRITICAL(숙제 배정 무인가 anon 쓰기)의 코드 측 수정을 v3.11과 정확히 같은
+듀얼패스로 완료:
+- `supabase/functions/admin-content-write/index.ts`: `handleAssignmentSet`
+  추가(requireId/requireString 검증 후 daily_assignments upsert onConflict
+  'class_id,date' — v1_3 스키마 unique(class_id,date)와 정합) + ACTION_HANDLERS
+  등록. auth/CORS/기존 8 action 무변경.
+- `src/utils/wordLibrary.js`: setTodaysAssignment/setAssignmentForDate에
+  하위호환 옵셔널 adminPin 추가 — truthy면 callAdminContentWrite('assignment.
+  set'), falsy면 기존 anon upsert 그대로(회귀 없음). refreshWordLibrary 양쪽
+  공통.
+- `src/components/AdminScreen.jsx`: 4개 호출부 배선 — FutureAssignmentPlanner에
+  adminPin prop 추가(정의+렌더 `adminPin={pin}`) + save()에서 사용, 오늘의
+  단어 토글/유닛 전체 배정/전체 해제 3곳은 기존 `pin` state 전달.
+- `supabase_v3_12_lockdown_daily_assignments.sql` 헤더를 "code-complete,
+  배포 대기"로 갱신(선행 코드 1~3단계 완료 표기). `docs/SECURITY_AUDIT_V311.md`
+  CRITICAL-1에 2026-07-30 UPDATE 노트 추가.
+
+diff 리뷰(메인 세션 직접) 통과: 최소·정확·하위호환. 배포 전까지 동작 변화 0
+(adminPin 없는 레거시 경로 검증됨).
+
+### 검증(수정 후 재실행, 전부 PASS)
+
+`npm run build` ✅ (신규 경고 없음) / `verify:writing` 3/3 ✅ /
+`verify:persistence` 8/8 ✅ / `verify:student` 4/4 ✅ / `verify:quiz` 2/2 ✅ /
+`verify:admin` 6/6 ✅.
+
+### 운영자 대기(변함없음, 이제 v3.12도 한 배치)
+
+`docs/DEPLOY_COMMANDS_V311_V312.md` 순서: 함수 배포(v3.11+v3.12 공통) → 프론트
+최신 → 관리자 저장 라이브 게이트(유닛 이름 + 숙제 배정 각 1회) → v3_11 SQL →
+v3_12 SQL → 정합성 프로브(42501 확인). 이번 세션 변경 커밋/push는 회귀 재검 후.
+
+## 2026-07-29 (16차) — 베타 출시 준비 감사(보안/안정성/문서)
+
+### 무엇을 했나
+
+운영자 자율 미션(v3.11 보안 완료 + 프로덕션 안정성 감사 + 베타 문서 +
+SaaS 준비도 분석 + 전체 검증). 코드 구현은 최소화하고 **검증·감사·문서**에
+집중(대부분의 보안 조치가 운영자 배포/DDL 영역이라 자율 세션에서 실행 불가).
+
+### v3.11 보안 상태 — 라이브 실측 결과
+
+- admin-content-write Edge Function **미배포 확정**(OPTIONS/POST 404).
+- classes anon 쓰기 **여전히 열림**(SQL 미실행, 무부작용 프로브 23502).
+- Edge Function **코드·클라이언트 배선은 정확**(ADMIN_PIN 서버 재검증,
+  service_role 인가 후 생성·미노출, 8 action 1:1, 404/ok:false 처리 OK).
+- students PIN 컬럼 클라이언트 미노출(grep 확인), 조회 노출면 최소
+  (`id,name,class_id,unit_name`).
+- **함의(중요)**: 프론트가 pin(truthy)으로 404 함수에 라우팅 → **프로덕션
+  관리자 커리큘럼 쓰기가 현재 깨져 있을 가능성 높음**. 코드 버그가 아니라
+  배포 순서 미완 — 런북대로 배포 시 복구. `docs/SECURITY_AUDIT_V311.md`.
+
+### 신규 발견 — daily_assignments 무인가 쓰기(CRITICAL)
+
+`setTodaysAssignment`/`setAssignmentForDate`가 adminPin 없이 anon 직접
+쓰기, `daily_assignments` RLS는 `allow anon all`. classes/units/words와
+동일 취약점인데 v3.11 범위 누락 → 공개 anon key로 누구나 임의 반/날짜 숙제
+덮어쓰기 가능. **완전 수정은 Edge Function 배포+배선 필요(운영자 영역)이고,
+지금 숙제 배정은 정상 동작 중이라 프론트만 먼저 바꾸면 404로 깨진다(규칙 1)**
+→ 자율 세션에서 코드 미수정, **비활성 SQL `supabase_v3_12_lockdown_daily_
+assignments.sql`(강한 실행금지 헤더, 미적용)만 준비** + 6단계 배선 계획
+문서화.
+
+### 학생 플로우 감사 — 데이터 무결성/크래시 결함 0
+
+로그인/세션/UUID검증/단어·발음/쓰기 SPOF(adf946a 수정 확인)/멀티기기 병합/
+syncGen 레이스/유닛 해석/포커스 재동기화 전부 정상. 발견 항목:
+- **(수정함, 저위험) MatchGameShell 표시 과다약속**: 올클리어 시 "+60(정답
+  50+보너스 10)"로 표시하나 실제 지급 50. 표시를 실제 지급값(50)에 맞춰
+  정정, 지급 로직·경제 무변경. 진짜 보너스 지급 여부는 제품 결정으로 남김.
+- **(문서화, 미변경) 발음 별 dedup 라운드 스코프 불일치**: `starGrantLog`가
+  round에 있어 4/4마다 리셋 → 발음 dedupKey의 "하루 1회" 암시와 상충.
+  다만 코드 주석은 "별은 라운드마다 반복 지급"도 의도로 명시 → 의도가 코드
+  내 상충. 고치면 학생 별이 줄어드는 경제 변경이라 자율 미변경, 제품 판단
+  권장.
+- **(문서화, 미변경 LOW) GiftReveal key 충돌 애니메이션 스킵**: 시각 효과만.
+
+### 관리자 플로우 감사
+
+create class/upload/assign/dashboard 검토. 학생 UUID 일관, dashboard 배치
+쿼리(N+1 아님), 새 컬럼 GRANT/폴백 OK. Edge Function MEDIUM 1건
+(class.update_settings 필드 allowlist 없음 — 함수 배포 시 함께 권장, 미배포라
+편집이 라이브 무영향+Deno 검증 불가로 자율 미수정). deleteClassUnit 죽은 import.
+
+### 작성 문서(신규)
+
+- `docs/BETA_LAUNCH_STATUS.md` — 완료/검증 기능, 한계, 리스크, 수동 테스트,
+  런치 체크리스트.
+- `docs/SECURITY_AUDIT_V311.md` — 현재 보안 상태/RLS/Edge Function/permission
+  risk/향후 개선.
+- `docs/SAAS_READINESS_REVIEW.md` — academy 분리/academy_id/격리/관리자
+  모델/과금/멀티테넌트 리스크(전부 분석, 미구현).
+
+### 검증 결과(수정 후 재실행, 전부 PASS)
+
+`npm run build` ✅ (신규 경고 없음) / `verify:writing` 3/3 ✅ /
+`verify:persistence` 8/8 ✅ / `verify:student` 4/4 ✅ / `verify:quiz` 2/2 ✅ /
+`verify:admin` 6/6 ✅.
+
+### 운영자 대기(우선순위)
+
+1. v3.11 배포(런북 ①~⑤): Edge Function 배포 → 프론트 최신 → 관리자 저장
+   테스트 → v3_11 SQL. (관리자 쓰기 복구 + anon 쓰기 차단)
+2. daily_assignments: v3_12 SQL 헤더 6단계(assignment.set action + 배선 +
+   배포) → v3_12 SQL.
+3. 제품 판단: 미니게임 올클리어 보너스 실지급 여부, 발음 별 dedup 의미.
+4. 이번 세션 변경 커밋/push(회귀 재검 후).
+
+ — 14차 구현이 실제 브라우저에서 발음 별 0개 지급 회귀를 낸 것을 계기로, 전체 별 지급 지점을 전수 조사해 하나의 grantReward()로 통합. useStudent.js/App.jsx/QuizGame.jsx/MatchGameShell.jsx/scripts/testMultiTabRace.mjs 수정, build+verify:persistence+verify:student+추가 도메인 전부 PASS. 커밋/push/배포는 운영자의 별도 회귀 검증 이후)_
 
 ## 2026-07-28 (15차) — 별(Stars) 지급 단일 경로(Single Reward Flow)로 전면 리팩터링
 
