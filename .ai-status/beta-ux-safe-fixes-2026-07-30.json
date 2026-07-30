@@ -1,0 +1,26 @@
+{
+  "agent_name": "coordinator",
+  "role": "베타 UX 안전 수정(학생/모바일 감사) 조정·검증·커밋",
+  "task_id": "beta-ux-safe-fixes-2026-07-30",
+  "task": "학생/모바일 UX 감사 + 저위험 프론트 fix + BETA_FINAL_CHECKLIST + verify:all + 커밋/push",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-30T00:00:00+09:00",
+  "updated_at": "2026-07-30T00:00:00+09:00",
+  "files_owned": [
+    "src/components/QuizGame.jsx",
+    "src/components/WordDetail.jsx",
+    "src/index.css",
+    "docs/BETA_FINAL_CHECKLIST.md",
+    "handoff.md",
+    ".ai-status/beta-ux-safe-fixes-2026-07-30.json"
+  ],
+  "files_read": [
+    "src/App.jsx",
+    "scripts/testStudentPinAuth.mjs",
+    "scripts/testClearStudentPin.mjs"
+  ],
+  "summary": "학생 UX 감사(2 sub-agent) + 모바일 UX 감사 결과를 메인 세션이 직접 코드 확인 후, 저위험만 선별 적용: (1) QuizGame 퀴즈 풀을 useMemo→lazy useState로 마운트 고정(백그라운드 복귀 시 refreshTick→classWords 새 참조로 문항이 재섞이던 HIGH 버그, screen 게이트라 언마운트로 안전), (2) 발음 재생 버튼 44px 터치타깃(WordDetail+QuizGame 각 2개), (3) iOS 100dvh 로그인 접힘 완화(index.css @supports 가드). 학생 Bug2(WordBrowser 범위학습 off-by-one, 2차 경로)·모바일 SpeedBtn/다이어리 삭제·GiftReveal 등은 위험/저가치라 문서화만. build PASS. verify:all은 login 도메인만 FAIL인데 clean tree(stash)에서도 동일 실패 재현→service_role/라이브 엔드포인트 필요한 환경적 제약(이번 변경 무관), 그 외 20+ 도메인 전부 PASS.",
+  "blocker": "verify:login 4개 PIN 스크립트는 이 환경에서 실행 불가(service_role 키/라이브 api 엔드포인트 필요) — 코드 결함 아님, 운영자 라이브/CI 환경에서만 검증 가능.",
+  "next_action": "운영자: 이번 push 자동배포 확인 + docs/DEPLOYMENT_CHECKLIST_V311_V312.md 순서로 admin-content-write 배포→라이브 게이트→v3_11/v3_12 SQL. 베타 오픈은 docs/BETA_FINAL_CHECKLIST.md."
+}

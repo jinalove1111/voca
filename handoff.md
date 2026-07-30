@@ -1,10 +1,54 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-30 (17차, v3.11 배포 시도 — 배포/DDL은 이 환경에서 실행
-불가로 확인(Supabase 토큰/링크/service_role 부재 + 규칙 8)해 운영자 turnkey
-커맨드 시트로 준비. v3.12 daily_assignments 듀얼패스는 code-complete 구현
-(assignment.set action + wordLibrary dual-path + AdminScreen 4곳 배선),
-build+verify:writing/persistence/student/quiz/admin 전부 PASS. 배포/SQL은
-여전히 운영자 대기. 커밋/push는 회귀 재검 후)_
+_최종 갱신: 2026-07-30 (18차, 베타 UX 안전 수정 — 학생/모바일 UX 감사 후
+저위험 프론트 fix 3건: 퀴즈 풀 마운트 고정(백그라운드 복귀 시 재섞임 HIGH
+버그), 발음 재생 버튼 44px 터치타깃, iOS 100dvh 로그인 접힘. build + verify:all
+중 login 도메인 외 전부 PASS(login은 service_role/라이브 엔드포인트 필요 —
+clean tree에서도 동일 실패하는 환경적 제약, 이번 변경과 무관). 커밋·push 완료.
+docs/BETA_FINAL_CHECKLIST.md 작성)_
+
+## 2026-07-30 (18차) — 베타 UX 안전 수정 (학생/모바일 감사)
+
+### 무엇을 했나
+
+운영자 자율 지시(안전 베타 준비: 학생 UX 감사 + 모바일 UX 감사 + 저위험
+프론트 fix만 + BETA_FINAL_CHECKLIST + 전체 검증 + 커밋/push). 배포/DB/보안정책
+무변경(지시 준수).
+
+### 적용한 저위험 프론트 fix (전부 커밋·push)
+
+1. **퀴즈 풀 마운트 시 고정**(`QuizGame.jsx`, useMemo→lazy useState): pool이
+   `classWords` 참조에 의존해, App.jsx의 visibilitychange/focus 복귀 시
+   refreshTick으로 새 참조가 되면 **퀴즈 도중 문항/보기가 몰래 재섞이고**
+   idx/selected/results와 어긋나던 HIGH 버그. QuizGame은 screen==='quiz'
+   게이트라 언마운트되므로 마운트 시 1회 고정이 정답(다음 퀴즈는 새 마운트).
+   verify:quiz PASS.
+2. **발음 재생 버튼 44px 터치타깃**(`WordDetail.jsx`, `QuizGame.jsx` 각 2개):
+   🔊원어민/🎧내발음 버튼이 py-2 text-xs로 ~32px였던 것 → min-h-[44px]+py-3.
+   가장 자주 쓰는 발음 화면. 클래스 문자열만 변경.
+3. **iOS Safari 100vh 로그인 접힘 완화**(`index.css`): `.min-h-screen`을 dvh
+   지원 시 100dvh로(@supports 가드, 미지원은 기존 100vh 폴백 — 무회귀).
+
+### 감사 발견 중 자율 미수정(문서화만 — BETA_FINAL_CHECKLIST §5)
+
+- 학생 Bug: WordBrowser 범위학습("모르는 단어만")+"알아요" off-by-one
+  (MEDIUM, 2차 경로, 기본 GuidedSession 무관 — App.jsx 중앙 네비 수정 위험).
+- 모바일: SpeedBtn 터치타깃/키보드 겹침(전역 :has() 숨김은 광범위/행동변경,
+  겹침은 이론적), 다이어리 삭제(✕) 히트영역 확대(무-undo 인접 오탭↑ 위험).
+- 기존 기록 항목: GiftReveal key 충돌(Low), 발음 별 dedup 라운드 스코프(제품
+  결정), 오디오 볼륨 UI 부재(별도 recommendation 문서).
+
+### 검증
+
+`npm run build` PASS. `npm run verify:all`: login 도메인만 FAIL(4 PIN 스크립트)
+— **clean tree(변경 stash 후)에서도 동일 실패** 재현으로 환경적 제약 확정
+(api PIN 핸들러가 service_role/라이브 엔드포인트 필요, 로컬 anon으로 PIN
+잠금/상태 컬럼 접근 불가 = v1.9 락다운 정상 동작의 부작용). 그 외 20+ 도메인
+(student/admin/homework/quiz/writing/unit/persistence/... ) 전부 PASS.
+
+### 커밋
+
+- 코드 fix 3건(QuizGame/WordDetail/index.css) + 문서(BETA_FINAL_CHECKLIST +
+  handoff + .ai-status) 커밋 후 main push.
 
 ## 2026-07-30 (17차) — v3.11 배포 시도 + v3.12 code-complete
 
