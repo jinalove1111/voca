@@ -110,3 +110,10 @@ h1, h2 {
   background: #c4b5fd;
   border-radius: 10px;
 }
+
+/* iOS Safari 100vh fix — 주소창이 보이는 첫 페인트에서 min-h-screen(100vh)이
+   실제 보이는 높이보다 커 로그인 콘텐츠가 접히는 문제. dvh 지원 브라우저에서만
+   .min-h-screen을 동적 뷰포트 높이로 대체(미지원 시 기존 100vh 폴백 유지). */
+@supports (min-height: 100dvh) {
+  .min-h-screen { min-height: 100dvh; }
+}

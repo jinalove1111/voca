@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { playWordAudio, stopCurrentAudio, getMicStream, recordWithAutoStop, speakPraise, unlockAudio, playSuccessSound } from '../utils/speech'
 import { requestAudioGeneration } from '../utils/wordLibrary'
 import { isInAppBrowser } from '../utils/browserDetect'
@@ -201,12 +201,12 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess, onAttempt }) {
       {(phase === 'success' || phase === 'fail') && (
         <div className="flex gap-2">
           <button onClick={() => playWordAudio(wordAudioUrl, word, { source: 'quiz-pronstep-replay' })}
-            className="flex-1 bg-blue-100 text-blue-700 font-bold py-2 rounded-xl text-xs btn-press">
+            className="flex-1 min-h-[44px] bg-blue-100 text-blue-700 font-bold py-3 rounded-xl text-xs btn-press">
             🔊 원어민
           </button>
           {myRecUrl && (
             <button onClick={() => new Audio(myRecUrl).play()}
-              className="flex-1 bg-purple-100 text-purple-700 font-bold py-2 rounded-xl text-xs btn-press">
+              className="flex-1 min-h-[44px] bg-purple-100 text-purple-700 font-bold py-3 rounded-xl text-xs btn-press">
               🎧 내 발음
             </button>
           )}
@@ -222,13 +222,18 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess, onAttempt }) {
 
 // ─── QuizGame ───────────────────────────────────────────────────────────────
 export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMarkPronunciationOk, onQuizAnswer, onPronunciationAttempt, initWord, classWords }) {
-  const pool = useMemo(() => {
+  // 퀴즈 풀은 마운트 시 1회만 고정 — classWords는 visibilitychange/focus 복귀
+  // 시 App.jsx refreshTick으로 새 참조가 되는데, 이를 의존성으로 두면 퀴즈
+  // 도중 백그라운드→복귀 때 문항/보기가 몰래 재섞여 idx/selected/results와
+  // 어긋난다. screen!=='quiz'가 되면 언마운트되므로 다음 퀴즈는 새 마운트에서
+  // 새 풀을 받는다(정상 재섞임).
+  const [pool] = useState(() => {
     const all  = classWords && classWords.length > 0 ? classWords : []
     const base = initWord
       ? [initWord, ...all.filter(w => w.id !== initWord.id).sort(() => Math.random() - 0.5).slice(0, 9)]
       : all.slice().sort(() => Math.random() - 0.5).slice(0, 10)
     return buildQuiz(base, all)
-  }, [initWord, classWords])
+  })
 
   const [idx, setIdx]           = useState(0)
   const [selected, setSelect]   = useState(null)

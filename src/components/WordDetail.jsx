@@ -230,12 +230,12 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
       {(phase === 'success' || (phase === 'fail' && tries >= 2)) && (
         <div className="flex gap-2">
           <button onClick={() => { unlockAudio(); playWordAudio(wordAudioUrl, target, { source: 'speechbtn-replay' }) }}
-            className="flex-1 bg-blue-100 text-blue-700 font-bold py-2 rounded-xl text-xs btn-press">
+            className="flex-1 min-h-[44px] bg-blue-100 text-blue-700 font-bold py-3 rounded-xl text-xs btn-press">
             🔊 원어민
           </button>
           {myRecUrl && (
             <button onClick={() => new Audio(myRecUrl).play()}
-              className="flex-1 bg-purple-100 text-purple-700 font-bold py-2 rounded-xl text-xs btn-press">
+              className="flex-1 min-h-[44px] bg-purple-100 text-purple-700 font-bold py-3 rounded-xl text-xs btn-press">
               🎧 내 발음
             </button>
           )}
