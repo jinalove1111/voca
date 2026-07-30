@@ -48,8 +48,8 @@ export function computeWorldState(stats) {
 // 칸당 성장 단계: 클리어 단어 수가 칸을 순서대로 채우며 자란다.
 //   empty(0) → seed(1~) → sprout → flower → tree
 // 칸 i의 성장은 growthPoints에서 결정론적으로 파생(무작위/저장 없음).
-const PLOT_COUNT = 9
-const POINTS_PER_STAGE = 3 // 칸 하나가 한 단계 자라는 데 필요한 클리어 수
+export const PLOT_COUNT = 9
+export const POINTS_PER_STAGE = 3 // 칸 하나가 한 단계 자라는 데 필요한 클리어 수
 const PLOT_STAGES = ['empty', 'seed', 'sprout', 'flower', 'tree']
 export const PLOT_STAGE_EMOJI = { empty: '🟫', seed: '🌰', sprout: '🌱', flower: '🌸', tree: '🌳' }
 

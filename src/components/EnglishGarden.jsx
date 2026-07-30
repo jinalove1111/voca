@@ -5,7 +5,7 @@
 // UI는 attachmentWorldFull 플래그(기본 OFF) 뒤 — 여기서는 잠금 목록으로
 // "다음에 열릴 세계"만 살짝 보여준다(별도 게임 인터페이스 없음, 기존
 // 카드 문법 그대로).
-import { computeWorldState, gardenPlots, WORLD_STAGES } from '../utils/attachment/worldProgress'
+import { computeWorldState, gardenPlots, WORLD_STAGES, PLOT_COUNT, POINTS_PER_STAGE } from '../utils/attachment/worldProgress'
 import { isFeatureEnabled } from '../config/features'
 
 export default function EnglishGarden({ stats, onBack }) {
@@ -13,6 +13,11 @@ export default function EnglishGarden({ stats, onBack }) {
   const plots = gardenPlots(stats)
   const showFullWorld = isFeatureEnabled('attachmentWorldFull')
   const next = world.nextStage
+
+  // 정원 카드용 안내 파생값(로직/임계값 변경 없음 — 표시 전용)
+  const filledPlots = plots.filter((p) => p.stage !== 'empty').length
+  const firstSproutAt = POINTS_PER_STAGE
+  const toFirstSprout = Math.max(0, firstSproutAt - world.growthPoints)
 
   return (
     <div className="min-h-screen p-4 pb-8">
@@ -40,6 +45,12 @@ export default function EnglishGarden({ stats, onBack }) {
           <p className="text-center text-xs text-gray-400 mt-3">
             🌰 씨앗 → 🌱 새싹 → 🌸 꽃 → 🌳 나무 — 단어 클리어가 정원을 키워요
           </p>
+          <p className="text-center text-xs font-bold text-green-600 mt-1">🌱 {filledPlots}/{PLOT_COUNT}칸이 자랐어요</p>
+          {filledPlots === 0 && (
+            <p className="text-center text-xs text-gray-500 mt-1">
+              아직 씨앗이 없어요 — 단어를 배우면 새싹이 자라나요!{toFirstSprout > 0 ? ` 첫 새싹까지 ${toFirstSprout}개 🌰` : ''}
+            </p>
+          )}
         </div>
 
         {/* 다음 구역 진행 */}

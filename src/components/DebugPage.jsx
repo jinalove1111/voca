@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { getStudents, fetchDebugSnapshot } from '../utils/wordLibrary'
 import { getSyncMeta, getLocalRecordRaw } from '../hooks/useStudent'
+import EnglishGarden from './EnglishGarden'
 
 // v1.5 Stability Milestone — hidden admin-only page (reachable via a hidden
 // trigger in AdminScreen, not the visible tab bar). Shows, for one student:
@@ -70,6 +71,8 @@ export default function DebugPage() {
   const [syncMeta, setSyncMeta] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [showGardenPreview, setShowGardenPreview] = useState(false)
+  const [mockCleared, setMockCleared] = useState(0)
 
   const load = useCallback(async () => {
     if (!selected) return
@@ -96,6 +99,34 @@ export default function DebugPage() {
     <div className="space-y-4">
       <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-3 text-xs font-bold text-yellow-800">
         🔧 디버그 페이지 — 관리자 전용. 학생에게 보여주지 마세요.
+      </div>
+
+      <div className="bg-white rounded-xl p-3 card-shadow space-y-2">
+        <button onClick={() => setShowGardenPreview((v) => !v)}
+          className="w-full flex items-center justify-between text-left">
+          <span className="text-xs font-black text-gray-700">🌱 정원 미리보기 (개발/관리자 전용 — 실제 학생 데이터 아님)</span>
+          <span className="text-xs font-bold text-purple-500">{showGardenPreview ? '접기 ▲' : '펼치기 ▼'}</span>
+        </button>
+        {showGardenPreview && (
+          <div className="space-y-2">
+            <p className="text-[11px] text-gray-400 font-bold">
+              ⚠ 이 미리보기는 가짜(mock) clearedCount 값으로 정원 화면을 렌더링만 합니다.
+              실제 학생 데이터를 읽거나 쓰지 않으며, 별/보상/저장 로직을 전혀 호출하지 않습니다.
+            </p>
+            <div className="flex items-center gap-2">
+              <input type="range" min={0} max={260} value={mockCleared}
+                onChange={(e) => setMockCleared(Number(e.target.value))}
+                className="flex-1" />
+              <input type="number" min={0} max={260} value={mockCleared}
+                onChange={(e) => setMockCleared(Math.max(0, Math.min(260, Number(e.target.value) || 0)))}
+                className="w-16 border-2 border-gray-200 rounded-lg px-2 py-1 text-xs font-mono" />
+            </div>
+            <p className="text-[11px] text-gray-500 font-bold">mock clearedCount: {mockCleared}</p>
+            <div className="border-2 border-purple-200 rounded-2xl overflow-hidden">
+              <EnglishGarden stats={{ clearedCount: mockCleared }} onBack={() => setShowGardenPreview(false)} />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-2 items-center">
