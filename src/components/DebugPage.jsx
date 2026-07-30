@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { getStudents, fetchDebugSnapshot } from '../utils/wordLibrary'
 import { getSyncMeta, getLocalRecordRaw } from '../hooks/useStudent'
 import EnglishGarden from './EnglishGarden'
+import TextbookExamplePrototype from './prototype/TextbookExamplePrototype'
 
 // v1.5 Stability Milestone — hidden admin-only page (reachable via a hidden
 // trigger in AdminScreen, not the visible tab bar). Shows, for one student:
@@ -73,6 +74,7 @@ export default function DebugPage() {
   const [error, setError] = useState(null)
   const [showGardenPreview, setShowGardenPreview] = useState(false)
   const [mockCleared, setMockCleared] = useState(0)
+  const [showTextbookProto, setShowTextbookProto] = useState(false)
 
   const load = useCallback(async () => {
     if (!selected) return
@@ -127,6 +129,15 @@ export default function DebugPage() {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="bg-white rounded-xl p-3 card-shadow space-y-2">
+        <button onClick={() => setShowTextbookProto((v) => !v)}
+          className="w-full flex items-center justify-between text-left">
+          <span className="text-xs font-black text-gray-700">📚 교과서 예문 프로토타입 (개발/관리자 전용)</span>
+          <span className="text-xs font-bold text-purple-500">{showTextbookProto ? '접기 ▲' : '펼치기 ▼'}</span>
+        </button>
+        {showTextbookProto && <TextbookExamplePrototype />}
       </div>
 
       <div className="flex gap-2 items-center">
