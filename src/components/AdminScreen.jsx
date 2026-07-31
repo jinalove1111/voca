@@ -1,6 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, getClassIdByName, getStudents } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchAssignmentHistory, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, getClassIdByName, getStudents } from '../utils/wordLibrary'
+// 숙제 "자동 생성" 순수 플래너(2026-08-01) — 이 파일은 미리보기(체크박스
+// Set 채우기)에만 쓰고, 실제 저장은 항상 기존 setTodaysAssignment/
+// setAssignmentForDate(adminPin 듀얼패스) 그대로 사용한다.
+import { pickNextAssignment, planBulkDates } from '../utils/assignmentPlanner'
 // Paul Rank System(2026-07-19) — 최소 관리자 통합: 학생별 XP/Rank 조회만
 // (관리자 UI 전면 개편 아님, 기존 학생 카드에 텍스트 한 줄 추가).
 import { computeRankState } from '../utils/paulRankShared'
@@ -45,6 +49,22 @@ import CurriculumHub from './admin/CurriculumHub'
 
 const wordSlug = (word) => word.toLowerCase().replace(/\s+/g, '_')
 
+// v3.12(2026-08-01) — 숙제 배정 저장(setTodaysAssignment/setAssignmentForDate)
+// 실패 메시지를 사람이 바로 행동할 수 있는 한국어로 다듬는다. HTTP 404(
+// admin-content-write 함수 자체가 아직 배포 안 됨 — wordLibrary.js
+// callAdminContentWrite의 `관리자 쓰기 서비스 응답 실패(HTTP ${status})`
+// 메시지)와 "연결 실패"(같은 함수의 fetch 자체가 실패한 경우)만 이 특정
+// 안내로 바꾸고, 그 외 에러(예: 관리자 인증 만료 등 이미 명확한 메시지)는
+// wordLibrary.js가 만든 원본 메시지를 그대로 보여준다 — wordLibrary.js의
+// 에러 계약 자체는 전혀 바꾸지 않음(호출부에서만 표시 문구를 다듬음).
+function assignmentErrorMessage(err) {
+  const msg = err?.message || String(err || '')
+  if (/HTTP 404/.test(msg) || msg.includes('연결 실패')) {
+    return '숙제 저장 서버(admin-content-write)가 아직 배포되지 않았어요. docs/DEPLOY_COMMANDS_V311_V312.md 순서로 배포 후 다시 시도해주세요. (조회/현황은 계속 사용 가능)'
+  }
+  return msg
+}
+
 // CSV 셀 안전 이스케이프 — 이름/반/유닛에 쉼표·따옴표·줄바꿈이 섞여도 깨지지 않게.
 function csvCell(v) {
   const s = String(v ?? '')
@@ -67,6 +87,11 @@ function downloadCsv(filename, rows) {
 // 계산하면 "내일"이 실제 로컬 기준보다 하루씩 밀려서 오늘의 단어 배정이
 // 엉뚱한 날짜에 붙는 버그가 있었다.
 const tomorrowIsoStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return localIsoDateStr(d) }
+
+// 2026-08-01 "자동 생성"/일괄 배정용 — n일 전 로컬 날짜. tomorrowIsoStr과
+// 동일한 조립 방식(wordLibrary.js의 localIsoDateStr, UTC toISOString()
+// 절대 사용 안 함 — 위 버그와 같은 클래스 방지).
+const isoDaysAgoStr = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return localIsoDateStr(d) }
 
 // 쓰기 시험(Spelling Test) 반별 설정 — 쓰기시험 사용 여부/철자 힌트 사용
 // 여부/오답 반복 횟수. 기본값이 전부 꺼짐/3회라, 관리자가 여기서 직접
@@ -370,11 +395,21 @@ function SeasonPanel({ adminPin }) {
 // 지나간 학습 기록을 실수로 고쳐쓰는 걸 방지. 오늘 배정(체크박스 토글, 위
 // 블록)과 완전히 분리된 별도 컴포넌트라 기존 "오늘의 단어" 동작에는 전혀
 // 영향 없음.
-function FutureAssignmentPlanner({ targetClass, words, adminPin }) {
+function FutureAssignmentPlanner({ targetClass, words, adminPin, units, activeUnit }) {
   const [date, setDate] = useState(tomorrowIsoStr())
   const [selected, setSelected] = useState(new Set())
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
+  // 2026-08-01 "자동 생성" — 미리보기 전용 상태(체크박스 Set만 채움).
+  // 실제 저장은 항상 아래 기존 save()/setAssignmentForDate(adminPin
+  // 듀얼패스) 그대로 사용 — 이 기능이 새 쓰기 경로를 만들지 않는다.
+  const [autoCount, setAutoCount] = useState(10)
+  const [autoUnitName, setAutoUnitName] = useState(activeUnit)
+  const [autoGenLoading, setAutoGenLoading] = useState(false)
+  // 지금 보고 있던 유닛이 바뀌면 "자동 생성" 대상 유닛 선택도 그 유닛으로
+  // 맞춘다(관리자가 명시적으로 다른 유닛을 골라도 되지만, 기본값은 항상
+  // 지금 보고 있는 유닛).
+  useEffect(() => { setAutoUnitName(activeUnit) }, [activeUnit, targetClass])
   // P7 감사(2026-07-16): 날짜/반을 빠르게 바꾸면 먼저 시작된 조회의 응답이
   // "나중에" 도착해 방금 바꾼 날짜의 선택 상태를 덮어쓸 수 있었다(6dd6c7a
   // PIN 버그와 같은 stale 응답 레이스). 이 상태로 저장을 누르면 엉뚱한
@@ -414,7 +449,36 @@ function FutureAssignmentPlanner({ targetClass, words, adminPin }) {
       await setAssignmentForDate(targetClass, date, [...selected], adminPin)
       setSaved(true)
     } catch (err) {
-      alert('저장 중 오류가 발생했어요: ' + (err.message || err))
+      alert('저장 중 오류가 발생했어요: ' + assignmentErrorMessage(err))
+    }
+  }
+
+  // 2026-08-01 "자동 생성" — assignmentPlanner.js(순수 함수)로 다음 배정
+  // 후보를 계산해 체크박스 Set만 채운다(미리보기 — 저장은 여전히 위
+  // save() 버튼을 눌러야 함). 최근 배정 이력은 fetchAssignmentHistory로
+  // 최근 14일치를 읽어 "이미 최근에 낸 단어"를 최대한 피하게 한다(조회
+  // 실패해도 fetchAssignmentHistory가 빈 배열로 폴백하므로 이 기능
+  // 자체가 죽지 않음 — 그냥 이력 없이 유닛 처음부터 채움).
+  const autoGenerate = async () => {
+    const unitObj = (units || []).find((u) => u.name === autoUnitName)
+    const unitWords = unitObj?.words || []
+    if (unitWords.length === 0) {
+      alert('선택한 유닛에 단어가 없어요 — 다른 유닛을 골라주세요.')
+      return
+    }
+    setAutoGenLoading(true)
+    try {
+      const toDateStr = localIsoDateStr()
+      const fromDateStr = isoDaysAgoStr(14)
+      const history = await fetchAssignmentHistory(targetClass, fromDateStr, toDateStr)
+      const recentAssignedSlugSets = history.map((h) => new Set(h.wordIds))
+      const picked = pickNextAssignment({ unitWords, recentAssignedSlugSets, count: Math.max(1, Number(autoCount) || 0) })
+      setSelected(new Set(picked))
+      setSaved(false)
+    } catch (err) {
+      alert('자동 생성 중 오류가 발생했어요: ' + assignmentErrorMessage(err))
+    } finally {
+      setAutoGenLoading(false)
     }
   }
 
@@ -425,6 +489,24 @@ function FutureAssignmentPlanner({ targetClass, words, adminPin }) {
         <input type="date" value={date} min={tomorrowIsoStr()} onChange={e => setDate(e.target.value)}
           className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold bg-white" />
       </div>
+      {/* 2026-08-01 "자동 생성" — 아래 체크박스 목록을 자동으로 채우기만
+          함(미리보기). 실제 저장은 여전히 아래 "저장" 버튼을 눌러야 함 —
+          새 저장 경로 없음. */}
+      {(units || []).length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap bg-white rounded-lg p-2 border-2 border-indigo-100">
+          <select value={autoUnitName} onChange={(e) => setAutoUnitName(e.target.value)} disabled={autoGenLoading}
+            className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold bg-white">
+            {(units || []).map((u) => <option key={u.id || u.name} value={u.name}>{u.name}</option>)}
+          </select>
+          <input type="number" min={1} value={autoCount} disabled={autoGenLoading}
+            onChange={(e) => setAutoCount(e.target.value)}
+            className="w-16 border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold text-center bg-white" />
+          <button onClick={autoGenerate} disabled={autoGenLoading}
+            className="bg-indigo-100 text-indigo-700 font-bold px-3 py-1.5 rounded-lg text-xs btn-press disabled:opacity-60">
+            {autoGenLoading ? '생성 중...' : `자동 생성 (${autoCount}개)`}
+          </button>
+        </div>
+      )}
       {loading ? <p className="text-xs text-gray-400">불러오는 중...</p> : (
         <>
           {words.length === 0 ? (
@@ -1256,7 +1338,7 @@ export default function AdminScreen({ onBack }) {
                     await setTodaysAssignment(c, next, pin)
                     refresh()
                   } catch (err) {
-                    alert('오늘의 단어 배정 중 오류가 발생했어요: ' + (err.message || err))
+                    alert('오늘의 단어 배정 중 오류가 발생했어요: ' + assignmentErrorMessage(err))
                   }
                 }
                 return (
@@ -1388,7 +1470,7 @@ export default function AdminScreen({ onBack }) {
                             {words.length > 0 && (
                               <button onClick={async () => {
                                   try { await setTodaysAssignment(c, words.map(w => wordSlug(w.word)), pin); refresh() }
-                                  catch (err) { alert('배정 중 오류가 발생했어요: ' + (err.message || err)) }
+                                  catch (err) { alert('배정 중 오류가 발생했어요: ' + assignmentErrorMessage(err)) }
                                 }}
                                 className="bg-teal-500 text-white font-bold px-2 py-1 rounded-lg text-xs btn-press hover:bg-teal-600">
                                 이 유닛 전체 배정
@@ -1397,7 +1479,7 @@ export default function AdminScreen({ onBack }) {
                             {todaysAssigned.size > 0 && (
                               <button onClick={async () => {
                                   try { await setTodaysAssignment(c, [], pin); refresh() }
-                                  catch (err) { alert('해제 중 오류가 발생했어요: ' + (err.message || err)) }
+                                  catch (err) { alert('해제 중 오류가 발생했어요: ' + assignmentErrorMessage(err)) }
                                 }}
                                 className="bg-white border-2 border-teal-300 text-teal-600 font-bold px-2 py-1 rounded-lg text-xs btn-press">
                                 전체 해제
@@ -1406,7 +1488,7 @@ export default function AdminScreen({ onBack }) {
                           </div>
                         </div>
 
-                        <FutureAssignmentPlanner targetClass={c} words={words} adminPin={pin} />
+                        <FutureAssignmentPlanner targetClass={c} words={words} adminPin={pin} units={units} activeUnit={activeUnit} />
 
                         {/* Reading Foundation v3.3 — 지금 보고 있는 유닛(activeUnit)의
                             읽기 지문 편집. 합성 폴백 유닛(id 없음 — 유닛 0개 반의
