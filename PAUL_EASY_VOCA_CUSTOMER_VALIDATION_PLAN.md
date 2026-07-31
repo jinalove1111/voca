@@ -187,8 +187,8 @@ ARCHITECTURE_PLAN.md`)는 **100개 학원을 받을 때** 필요한 것이지,
 - [ ] 신규 개발 **0건** — 지금 이미 완성된 기능(핵심 학습루프, 쓰기
       AI 보조, 게임화)만으로 파일럿 진행
 - [ ] `v3_11` 보안수정만 선행 배포(파일럿이라도 취약점 있는 상태로
-      외부에 줄 수 없음, `PAUL_EASY_VOCA_EXECUTION_PRIORITY_PLAN.md`
-      P0)
+      외부에 줄 수 없음, `PAUL_EASY_VOCA_FIRST_90_DAYS_EXECUTION.md`
+      병합 P0표, 구 EXECUTION_PRIORITY_PLAN.md는 2026-07-31 병합됨)
 - [ ] Vercel 유료 전환(외부 학원 = 상업적 이용, 선택 아님)
 
 ---
@@ -263,6 +263,8 @@ ARCHITECTURE_PLAN.md`)는 **100개 학원을 받을 때** 필요한 것이지,
 `PAUL_EASY_VOCA_BUSINESS_MODEL_PLAN.md`(§6 경쟁 지형·가격 벤치마크
 원본), `PAUL_EASY_VOCA_MVP_ROADMAP.md`(Phase 2 착수 조건과 연동),
 `PAUL_EASY_VOCA_REAL_ACADEMY_SIMULATION.md`(§2~3 실제 문의/업무
-패턴), `PAUL_EASY_VOCA_SAAS_ARCHITECTURE_PLAN.md`(§5.2 물리적 격리
-옵션 — 이 문서에서 "검증 단계의 정답"으로 재해석), `PAUL_EASY_VOCA_
-EXECUTION_PRIORITY_PLAN.md`(P0 선행조건).
+패턴), `docs/agent-decisions/0006-multitenant-saas-architecture.md`
+(§5.2 물리적 격리 옵션 — 이 문서에서 "검증 단계의 정답"으로 재해석,
+구 SAAS_ARCHITECTURE_PLAN.md는 2026-07-31 병합됨), `PAUL_EASY_VOCA_
+FIRST_90_DAYS_EXECUTION.md`(P0 선행조건, 구 EXECUTION_PRIORITY_
+PLAN.md는 2026-07-31 병합됨).

@@ -5,7 +5,9 @@ _작성: 2026-07-26. **순수 검증 문서 — 코드/SQL/Migration을 이 세�
 /`PAUL_EASY_VOCA_RLS_POLICY_DESIGN.md`/`PAUL_EASY_VOCA_PERMISSION_
 MATRIX.md`를 기반으로 한다. **이 문서 자체는 설계도가 아니라 그 3개
 설계가 실제로 구현된 뒤 무엇을 확인해야 하는지를 정리한 체크리스트**
-다 — `PAUL_EASY_VOCA_AI_AGENT_OS.md`의 QA Agent/Security Agent가 실제
+다 — qa-reviewer/security-reviewer 에이전트(`.claude/agents/`, 구
+`PAUL_EASY_VOCA_AI_AGENT_OS.md`의 QA Agent/Security Agent 개념은
+삭제됨 — CLAUDE.md 헌법/DEVELOPER_GUIDE.md 워크플로우로 대체)가 실제
 구현 단계에서 이 문서를 실행 스크립트처럼 쓰는 것을 전제로 한다._
 
 ---

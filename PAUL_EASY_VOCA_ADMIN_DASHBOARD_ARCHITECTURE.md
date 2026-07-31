@@ -1,9 +1,10 @@
 # PAUL_EASY_VOCA_ADMIN_DASHBOARD_ARCHITECTURE.md — 플랫폼 관리자 대시보드 설계
 
 _작성: 2026-07-26. **순수 설계 문서 — 코드/SQL/Migration을 이 세션에서
-전혀 작성·실행하지 않았다.** `PAUL_EASY_VOCA_SAAS_ARCHITECTURE_PLAN.md`
-(§9.1)/`PAUL_EASY_VOCA_BILLING_ARCHITECTURE_DESIGN.md`(§9)/`PAUL_EASY_
-VOCA_ROLE_PERMISSION_MATRIX.md`/`PAUL_EASY_VOCA_RLS_POLICY_DESIGN.md`
+전혀 작성·실행하지 않았다.** `docs/agent-decisions/0006-multitenant-
+saas-architecture.md`(§9.1, 구 SAAS_ARCHITECTURE_PLAN.md는 2026-07-31
+병합됨)/`PAUL_EASY_VOCA_BILLING_ARCHITECTURE_DESIGN.md`(§9)/`PAUL_EASY_
+VOCA_PERMISSION_MATRIX.md`/`PAUL_EASY_VOCA_RLS_POLICY_DESIGN.md`
 를 기반으로, **Super Admin(플랫폼 운영자)이 100개 학원을 매일 운영할
 때 실제로 쓰는 화면 9종**을 구체화한다._
 
@@ -158,8 +159,9 @@ Phase에서 **실제로 수동 관리가 한계에 부딪히는 순간에만** �
 
 ## 관련 문서
 
-`PAUL_EASY_VOCA_SAAS_ARCHITECTURE_PLAN.md`(§9.1 원본), `PAUL_EASY_
-VOCA_BILLING_ARCHITECTURE_DESIGN.md`(§9), `PAUL_EASY_VOCA_ROLE_
+`docs/agent-decisions/0006-multitenant-saas-architecture.md`(§9.1 원본,
+구 SAAS_ARCHITECTURE_PLAN.md는 2026-07-31 병합됨), `PAUL_EASY_
+VOCA_BILLING_ARCHITECTURE_DESIGN.md`(§9), `PAUL_EASY_VOCA_
 PERMISSION_MATRIX.md`, `PAUL_EASY_VOCA_RLS_POLICY_DESIGN.md`, `PAUL_
 EASY_VOCA_LEARNING_ANALYTICS_PLAN.md`(§5), `PAUL_EASY_VOCA_CUSTOMER_
 OPERATION_PLAN.md`(§5~6 고객지원 Agent 원본), `PAUL_EASY_VOCA_REAL_

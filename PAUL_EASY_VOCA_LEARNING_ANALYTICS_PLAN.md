@@ -76,7 +76,8 @@ GOAL.md`)에 어긋난다.
 ## 4. Academy Owner Dashboard
 
 **목적**: 학원 운영 의사결정(교사 배치, 반 편성, 결제/플랜) —
-`PAUL_EASY_VOCA_SAAS_ARCHITECTURE_PLAN.md` §9.2가 이미 설계한
+`docs/agent-decisions/0006-multitenant-saas-architecture.md` §9.2
+(구 SAAS_ARCHITECTURE_PLAN.md, 2026-07-31 병합됨)가 이미 설계한
 "결제 상태" 탭에 **Analytics 탭을 추가**하는 구조.
 
 | 보여주는 것 | 근거 |
@@ -299,7 +300,9 @@ learning_events(단일 스파인, AI_LEARNING_ENGINE_PLAN §1)
 ## 관련 문서
 
 `PAUL_EASY_VOCA_AI_LEARNING_ENGINE_PLAN.md`(지표 계산법 원본),
-`PAUL_EASY_VOCA_SAAS_ARCHITECTURE_PLAN.md`(§7·§9 Dashboard/결제 원본),
-`PAUL_EASY_VOCA_MASTER_PLAN.md`, `PAUL_EASY_VOCA_AI_AGENT_OS.md`,
+`docs/agent-decisions/0006-multitenant-saas-architecture.md`(§7·§9
+Dashboard/결제 원본, 구 SAAS_ARCHITECTURE_PLAN.md는 2026-07-31 병합됨),
+`PAUL_EASY_VOCA_MASTER_PLAN.md`. (구 `PAUL_EASY_VOCA_AI_AGENT_OS.md`는
+삭제됨 — CLAUDE.md 헌법/DEVELOPER_GUIDE.md 워크플로우로 대체)
 `docs/research/student-engagement-psychology.md`, `PROJECT_PAUL_
 GOAL.md`, `PAUL_PRINCIPLES.md`.

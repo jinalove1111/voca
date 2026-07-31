@@ -141,3 +141,66 @@ _각 단계 상세 명령: `docs/DEPLOYMENT_CHECKLIST_V311_V312.md` §2. 판단 
 
 _판정: 학생 제품은 READY, 코드는 검증 완료. **남은 것은 오직 운영자 배포 1
 시퀀스.** 그 시퀀스가 취약점을 닫고 관리자 쓰기를 복구하면 50명 베타 GO._
+
+---
+
+## [2026-07-31 병합] FINAL_BETA_LAUNCH_REPORT.md 고유 감사 내용 (2026-07-30 시점)
+
+_(2026-07-31 문서 정리: `FINAL_BETA_LAUNCH_REPORT.md`에서 병합. 아래는
+2026-07-30 시점 스냅샷 — 당시 이 보고서가 지적한 "미커밋 파일" 인벤토리는
+이번 2026-07-31 문서 정리로 이미 해소됨(전부 커밋됨). 고라이브 시퀀스는
+위 §8과 중복이라 병합하지 않음, `docs/DEPLOY_COMMANDS_V311_V312.md` 참고.)_
+
+### Check 1 — origin/main 대비 커밋 상태 (2026-07-30 시점)
+
+로컬 main이 origin/main보다 3커밋 앞섬(당시 미push, 지시대로).
+
+| Hash | 유형 | 요약 |
+|---|---|---|
+| `db4e169` | docs | v3.11/v3.12 배포·보안·베타 문서 + handoff |
+| `e88cf54` | fix | 미니게임 결과 별 표시를 실제 지급값에 일치 |
+| `5b49c92` | fix(security) | v3.12 daily_assignments 무인가 쓰기 락다운 dual-path |
+
+전부 검증 완료(build + verify:writing/persistence/student/quiz/admin PASS).
+
+### Check 2 — 프로덕션에 영향 주는 미커밋 파일 (2026-07-30 시점)
+
+**없음 — 프로덕션 코드/SQL은 100% 커밋됨.** 미커밋 잔여는 전부 비-런타임:
+
+| 미커밋 항목(2026-07-30 시점) | 프로덕션 영향 | 비고 |
+|---|---|---|
+| `.ai-status/*.json` (3) | 없음 | 내부 프로세스 체크포인트 |
+| `docs/SAAS_READINESS_REVIEW.md` | 없음 | SaaS 분석(범위 밖, 의도적 제외) |
+| `docs/agent-decisions/0006-*`, `docs/audit/2026-07-26-saas-*` | 없음 | SaaS 문서 |
+| `docs/audit/2026-07-26-v3_11-1hour-runbook.md`, `…-execution-review.md` | 없음(런타임) | v3.11 배포 **참고** 문서. 규칙 16에 따라 미스테이징(작성자가 아님) |
+| `PAUL_EASY_VOCA_*.md` (23) | 없음 | 기존 SaaS 기획 문서 |
+
+→ 배포 가능성 관점의 미커밋 블로커 0(2026-07-30 시점). **이 인벤토리
+전체는 2026-07-31 문서 정리 커밋들로 전부 해소됨** — 위 3커밋도 이후
+push 여부는 운영자 확인 필요.
+
+### Check 3 — 환경 변수 (2026-07-30 시점)
+
+> **한계 명시**: 이 환경에서 Vercel 프로젝트 env / Supabase secrets를 읽을 수
+> 없다. 아래는 "코드가 요구하는 것"의 전수(grep)와 "로컬 .env 존재 여부"이며,
+> 프로덕션 실제 설정 여부는 운영자가 배포 시 확인해야 한다. 단, 당시
+> 프로덕션이 ≈111명에게 정상 서비스 중이라는 사실이 기존 배포 경로의 env는
+> 이미 설정돼 있음을 방증한다.
+
+| 변수 | 사용처 | 로컬 .env | 프로덕션 필요처 | 상태 판단(2026-07-30) |
+|---|---|---|---|---|
+| `VITE_SUPABASE_URL` | 프론트 빌드 | ✅ | Vercel(빌드타임) | 🟢 기존 설정됨(앱 동작) |
+| `VITE_SUPABASE_ANON_KEY` | 프론트 빌드 | ✅ | Vercel(빌드타임) | 🟢 기존 설정됨 |
+| `ADMIN_PIN` | Vercel api/* + Edge Function | ✅(.env.local) | Vercel runtime + Supabase secret | 🟡 Vercel은 기존 설정됨. admin-content-write용 Supabase secret 확인 필요 |
+| `SUPABASE_URL` | Vercel api/* + Edge Function | ❌(VITE_만 있음) | Vercel runtime + Supabase secret | 🟡 Vercel은 기존 설정됨(api 동작). Supabase secret 확인 필요 |
+| `SUPABASE_SERVICE_ROLE_KEY` | Vercel api/* + Edge Function | ❌(민감·미저장) | Vercel runtime + Supabase secret | 🟡 Vercel은 기존 설정됨. Supabase secret 확인 필요 |
+| `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `OPENAI_API_KEY` | Edge Function grade-writing-answers | ❌ | Supabase secret(선택) | ⚪ 베타 선택 — 관리자 쓰기검토 AI 보조 전용, 미설정 시 규칙기반 폴백 |
+
+**핵심 env 발견(당시 신규 요구는 이것뿐)**: v3.11/v3.12의
+admin-content-write Edge Function은 Supabase secrets
+`ADMIN_PIN`/`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`가 필요하다. 이는
+프로젝트 단위 공유 secret이나, 당시 어떤 Edge Function도 배포돼 있지
+않아(admin-content-write·grade-writing-answers 모두 404, 2026-07-29
+실측) secret이 설정돼 있는지 미확인이었다 → 운영자가 배포 전
+`supabase secrets list`로 3개 존재 확인 필요, 없으면
+`supabase secrets set`.

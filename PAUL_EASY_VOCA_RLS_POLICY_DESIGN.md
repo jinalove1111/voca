@@ -2,8 +2,9 @@
 
 _작성: 2026-07-26. **순수 설계 문서 — 코드/SQL/Migration을 이 세션에서
 전혀 작성·실행하지 않았다.** `PAUL_EASY_VOCA_TABLE_OWNERSHIP_MATRIX.md`
-(데이터 성격 분류)와 `PAUL_EASY_VOCA_ROLE_PERMISSION_MATRIX.md`(역할별
-권한)를 그대로 기반으로, 이번엔 **Supabase RLS 정책이라는 실행 레이어**
+(데이터 성격 분류)와 `PAUL_EASY_VOCA_PERMISSION_MATRIX.md`(역할별
+권한, 구 ROLE_PERMISSION_MATRIX.md는 그 5-역할 버전이 이 문서로 대체됨)
+를 그대로 기반으로, 이번엔 **Supabase RLS 정책이라는 실행 레이어**
 로 구체화한다. SQL은 작성하지 않고 정책의 **논리(누가/무엇을/어떤
 조건으로)**만 설계한다._
 
@@ -262,9 +263,10 @@ PIN 관련 전부, 원장/교사 전용 관리 기능, `analytics`(집계 데이
 
 ## 관련 문서
 
-`PAUL_EASY_VOCA_TABLE_OWNERSHIP_MATRIX.md`, `PAUL_EASY_VOCA_ROLE_
-PERMISSION_MATRIX.md`, `PAUL_EASY_VOCA_SAAS_ARCHITECTURE_PLAN.md`
-(§4 RLS 구현 패턴 원본), `PAUL_EASY_VOCA_MULTITENANT_DATABASE_
-DESIGN.md`(§5~7 격리 흐름·마이그레이션 위험), `PAUL_EASY_VOCA_REAL_
+`PAUL_EASY_VOCA_TABLE_OWNERSHIP_MATRIX.md`, `PAUL_EASY_VOCA_
+PERMISSION_MATRIX.md`, `docs/agent-decisions/0006-multitenant-saas-
+architecture.md`(§4 RLS 구현 패턴 원본, §5~7 격리 흐름·마이그레이션
+위험 — 구 SAAS_ARCHITECTURE_PLAN.md/MULTITENANT_DATABASE_DESIGN.md는
+2026-07-31 이 문서로 병합됨), `PAUL_EASY_VOCA_REAL_
 ACADEMY_SIMULATION.md`(§2 학부모 프라이버시 갭 최초 발견),
 `DATABASE.md`(v1.9 컬럼권한 원본).

@@ -151,8 +151,8 @@ history`는 **원본 입력이 개별 학생 데이터**여도, **집계된 결�
 
 ## 관련 문서
 
-`PAUL_EASY_VOCA_MULTITENANT_DATABASE_DESIGN.md`(테이블 전수 조사·
-FK 체인·academy_id 적용 기준 원본), `PAUL_EASY_VOCA_SAAS_
-ARCHITECTURE_PLAN.md`(§3~4 권한 구조·RLS 원본), `DATABASE.md`(현재
-스키마 근거), `docs/agent-decisions/0006-multitenant-saas-
-architecture.md`.
+`docs/agent-decisions/0006-multitenant-saas-architecture.md`(테이블
+전수 조사·FK 체인·academy_id 적용 기준·§3~4 권한 구조·RLS 원본 — 구
+`PAUL_EASY_VOCA_MULTITENANT_DATABASE_DESIGN.md`/`PAUL_EASY_VOCA_SAAS_
+ARCHITECTURE_PLAN.md`는 2026-07-31 이 문서로 병합됨), `DATABASE.md`
+(현재 스키마 근거).

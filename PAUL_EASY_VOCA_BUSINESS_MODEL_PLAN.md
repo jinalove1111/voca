@@ -1,8 +1,9 @@
 # PAUL_EASY_VOCA_BUSINESS_MODEL_PLAN.md — 교육 SaaS 사업 모델 설계
 
 _작성: 2026-07-26. **순수 설계 문서 — 코드/SQL/DB를 이 세션에서 전혀
-변경하지 않았다.** `PAUL_EASY_VOCA_SAAS_ARCHITECTURE_PLAN.md`(§7 결제
-구조), `PAUL_EASY_VOCA_CURRENT_STATUS.md`, `docs/audit/2026-07-24-
+변경하지 않았다.** `docs/agent-decisions/0006-multitenant-saas-
+architecture.md`(§7 결제 구조, 구 SAAS_ARCHITECTURE_PLAN.md는
+2026-07-31 병합됨), `PAUL_EASY_VOCA_CURRENT_STATUS.md`, `docs/audit/2026-07-24-
 ai-cost.md`를 내부 근거로 쓰고, 시장가/인프라 실비용은 WebSearch로
 6건(한국 학원 SaaS 4건 + Vercel/Supabase 최신 요금 2건)을 조사해
 반영했다(출처는 문서 하단). **여기 나오는 모든 금액은 "시장 벤치마크
@@ -22,8 +23,9 @@ ai-cost.md`를 내부 근거로 쓰고, 시장가/인프라 실비용은 WebSear
 
 **진입 순서**: 개인 공부방(이미 검증됨) → 소형 → 중형 → 대형 — 제품
 복잡도(다중 교사, 다지점 격리)가 세그먼트 규모와 함께 커지므로,
-`PAUL_EASY_VOCA_SAAS_ARCHITECTURE_PLAN.md`의 기술 준비 단계와 그대로
-맞물려 순서대로 확장하는 것이 안전하다.
+`docs/agent-decisions/0006-multitenant-saas-architecture.md`(구
+SAAS_ARCHITECTURE_PLAN.md, 2026-07-31 병합됨)의 기술 준비 단계와
+그대로 맞물려 순서대로 확장하는 것이 안전하다.
 
 ---
 
@@ -111,7 +113,8 @@ MRR/ARR은 실제 학원 확보 속도(파일럿 검증 결과, 세그먼트별 
 
 ### 4.2 서버(인프라) 비용 — 신규 조사(WebSearch, 2026-07)
 
-`PAUL_EASY_VOCA_SAAS_ARCHITECTURE_PLAN.md`가 이미 지적한 대로 Vercel
+`docs/agent-decisions/0006-multitenant-saas-architecture.md`(구
+SAAS_ARCHITECTURE_PLAN.md)가 이미 지적한 대로 Vercel
 Hobby(무료)는 비상업 한정이라 상업화 시 유료 전환이 전제조건이다 —
 실제 최신 요금:
 
@@ -192,9 +195,11 @@ AI(§4.1)와 서버(§4.2) 둘 다 매출 대비 낮은 비중으로 확인됐�
 
 ## 관련 문서
 
-`PAUL_EASY_VOCA_SAAS_ARCHITECTURE_PLAN.md`(§7 결제 구조·§5 인프라
-격리 전략 원본), `PAUL_EASY_VOCA_CURRENT_STATUS.md`, `PAUL_EASY_VOCA_
-LEARNING_ANALYTICS_PLAN.md`, `PAUL_EASY_VOCA_AI_AGENT_OS.md`,
+`docs/agent-decisions/0006-multitenant-saas-architecture.md`(§7 결제
+구조·§5 인프라 격리 전략 원본, 구 SAAS_ARCHITECTURE_PLAN.md는
+2026-07-31 병합됨), `PAUL_EASY_VOCA_CURRENT_STATUS.md`, `PAUL_EASY_VOCA_
+LEARNING_ANALYTICS_PLAN.md`. (구 `PAUL_EASY_VOCA_AI_AGENT_OS.md`는
+삭제됨 — CLAUDE.md 헌법/DEVELOPER_GUIDE.md 워크플로우로 대체)
 `docs/audit/2026-07-24-ai-cost.md`, `docs/audit/2026-07-24-deployment-
 scale.md`(Vercel ToS — 상업화 전 유료 전환 필수), `PROJECT_PAUL_
 GOAL.md`.

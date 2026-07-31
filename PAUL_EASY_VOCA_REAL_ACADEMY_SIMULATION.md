@@ -191,8 +191,9 @@ categories_completed>=4`(4개 카테고리 완료=숙제완료). **배정이 없
 
 ## 10. SaaS 판매 전 검증 체크리스트
 
-- [ ] `PAUL_EASY_VOCA_EXECUTION_PRIORITY_PLAN.md`의 P0 전 항목 완료
-      (v3_11 배포 등)
+- [ ] `PAUL_EASY_VOCA_FIRST_90_DAYS_EXECUTION.md`의 병합 P0표 전 항목
+      완료(v3_11 배포 등, 구 EXECUTION_PRIORITY_PLAN.md는 2026-07-31
+      병합됨)
 - [ ] 위 1~6 시나리오를 **내 공부방에서 최소 1~2주 실관찰**하며 실제
       문제가 없었는지 확인(이 문서는 코드 근거의 시뮬레이션이지 실측이
       아니다 — 실측이 이 체크리스트의 핵심)
@@ -217,7 +218,9 @@ categories_completed>=4`(4개 카테고리 완료=숙제완료). **배정이 없
 ## 관련 문서
 
 `ARCHITECTURE.md`(주요 플로우 원본), `PROJECT_GUIDE.md`(헷갈리는 것
-Top 5), `PAUL_EASY_VOCA_CURRENT_STATUS.md`, `PAUL_EASY_VOCA_EXECUTION_
-PRIORITY_PLAN.md`, `PAUL_EASY_VOCA_CUSTOMER_OPERATION_PLAN.md`,
-`PAUL_EASY_VOCA_SAAS_ARCHITECTURE_PLAN.md`, `PAUL_EASY_VOCA_AI_
+Top 5), `PAUL_EASY_VOCA_CURRENT_STATUS.md`, `PAUL_EASY_VOCA_FIRST_
+90_DAYS_EXECUTION.md`(구 EXECUTION_PRIORITY_PLAN.md는 2026-07-31
+병합됨), `PAUL_EASY_VOCA_CUSTOMER_OPERATION_PLAN.md`,
+`docs/agent-decisions/0006-multitenant-saas-architecture.md`(구
+SAAS_ARCHITECTURE_PLAN.md는 2026-07-31 병합됨), `PAUL_EASY_VOCA_AI_
 LEARNING_ENGINE_PLAN.md`(§10.3 발음 신호 문제).

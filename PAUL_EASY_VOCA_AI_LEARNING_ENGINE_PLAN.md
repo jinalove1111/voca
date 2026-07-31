@@ -3,8 +3,9 @@
 _작성: 2026-07-26. **순수 설계 문서 — 코드/SQL을 이 세션에서 전혀
 작성·실행하지 않았다.** `PAUL_EASY_VOCA_MASTER_PLAN.md`(§1 Memory
 Engine 설계 원본), `PAUL_EASY_VOCA_CURRENT_STATUS.md`(§I 쓰기 AI 분석),
+(삭제됨 — CLAUDE.md 헌법/DEVELOPER_GUIDE.md 워크플로우로 대체, 구
 `PAUL_EASY_VOCA_AI_AGENT_OS.md`/`PAUL_EASY_VOCA_AI_DEVELOPMENT_
-PROTOCOL.md`(이 설계를 실제로 만들 때 따를 조직/절차), `docs/research/
+PROTOCOL.md`가 다루던 조직/절차), `docs/research/
 memory-engine.md`/`paul-memory-engine-design.md`/`student-engagement-
 psychology.md`를 종합한다. 겹치는 상세(6-box Leitner 알고리즘 선정
 근거 등)는 반복하지 않고 원본을 인용한다._
@@ -279,9 +280,9 @@ UI는 최근 7일치만 쓴다.** 즉 아래 항목은 **새 쿼리 없이** 바
 
 ## 9. 선생님 Dashboard 활용
 
-`PAUL_EASY_VOCA_AI_AGENT_OS.md`/`SAAS_ARCHITECTURE_PLAN.md`에서 이미
-"Teacher" 역할을 신규 정의했다 — 이 대시보드가 그 역할이 실제로 매일
-쓰는 화면이다.
+`docs/agent-decisions/0006-multitenant-saas-architecture.md`(구
+SAAS_ARCHITECTURE_PLAN.md)에서 이미 "Teacher" 역할을 신규 정의했다 —
+이 대시보드가 그 역할이 실제로 매일 쓰는 화면이다.
 
 | 기능 | 데이터 소스 | 교사가 얻는 가치 |
 |---|---|---|
@@ -365,8 +366,11 @@ STT 불필요)으로라도 개선하는 것이 이 플랫폼의 신뢰도에 발
 ## 관련 문서
 
 `PAUL_EASY_VOCA_MASTER_PLAN.md`(§1 원본), `PAUL_EASY_VOCA_CURRENT_
-STATUS.md`(§I), `PAUL_EASY_VOCA_AI_AGENT_OS.md`, `PAUL_EASY_VOCA_AI_
-DEVELOPMENT_PROTOCOL.md`, `PAUL_EASY_VOCA_SAAS_ARCHITECTURE_PLAN.md`,
+STATUS.md`(§I), `docs/agent-decisions/0006-multitenant-saas-
+architecture.md`(구 SAAS_ARCHITECTURE_PLAN.md, 2026-07-31 병합됨).
+(구 `PAUL_EASY_VOCA_AI_AGENT_OS.md`/`PAUL_EASY_VOCA_AI_DEVELOPMENT_
+PROTOCOL.md`는 삭제됨 — CLAUDE.md 헌법/DEVELOPER_GUIDE.md 워크플로우로
+대체)
 `docs/research/memory-engine.md`, `docs/research/paul-memory-engine-
 design.md`, `docs/research/student-engagement-psychology.md`,
 `docs/research/parent-dashboard.md`, `docs/operations/task2-writing-

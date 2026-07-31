@@ -4,8 +4,10 @@ _작성: 2026-07-26. **순수 설계 문서 — 코드/SQL/DB를 이 세션에�
 변경하지 않았다**(이번 요청에 명시적 제약 문구는 없었지만, 이 대화
 전체가 일관되게 설계 문서만 다뤄왔고 이 요청 자체도 "구조 설계"이므로
 동일하게 처리했다). `PAUL_EASY_VOCA_MVP_ROADMAP.md`(단계별 규모),
-`PAUL_EASY_VOCA_AI_AGENT_OS.md`(9-Agent 개발 조직), `PAUL_EASY_VOCA_
-SAAS_ARCHITECTURE_PLAN.md`(§9 Dashboard), `PAUL_EASY_VOCA_BUSINESS_
+(구 `PAUL_EASY_VOCA_AI_AGENT_OS.md`의 9-Agent 개발 조직 개념 — 삭제됨,
+CLAUDE.md 헌법/DEVELOPER_GUIDE.md 워크플로우로 대체), `docs/agent-
+decisions/0006-multitenant-saas-architecture.md`(§9 Dashboard, 구
+SAAS_ARCHITECTURE_PLAN.md는 2026-07-31 병합됨), `PAUL_EASY_VOCA_BUSINESS_
 MODEL_PLAN.md`(§4.3 "진짜 원가는 사람")를 기반으로 한다._
 
 ## 이 문서와 `AI_AGENT_OS.md`의 관계 — 두 조직은 다른 조직이다
@@ -249,9 +251,10 @@ Agent가 즉시 참고할 수 있도록)
 
 ## 관련 문서
 
-`PAUL_EASY_VOCA_MVP_ROADMAP.md`(Phase별 자동화 페이싱 원본),
-`PAUL_EASY_VOCA_AI_AGENT_OS.md`(개발 조직, QA Agent 원본 정의),
-`PAUL_EASY_VOCA_AI_DEVELOPMENT_PROTOCOL.md`(개발 Workflow, 이 문서의
-§6·§7과 원칙 공유), `PAUL_EASY_VOCA_SAAS_ARCHITECTURE_PLAN.md`(§9
-Dashboard), `PAUL_EASY_VOCA_BUSINESS_MODEL_PLAN.md`(§4.3 "진짜 원가는
+`PAUL_EASY_VOCA_MVP_ROADMAP.md`(Phase별 자동화 페이싱 원본).
+(구 `PAUL_EASY_VOCA_AI_AGENT_OS.md`/`PAUL_EASY_VOCA_AI_DEVELOPMENT_
+PROTOCOL.md`는 삭제됨 — CLAUDE.md 헌법/DEVELOPER_GUIDE.md 워크플로우로
+대체) `docs/agent-decisions/0006-multitenant-saas-architecture.md`(§9
+Dashboard, 구 SAAS_ARCHITECTURE_PLAN.md는 2026-07-31 병합됨),
+`PAUL_EASY_VOCA_BUSINESS_MODEL_PLAN.md`(§4.3 "진짜 원가는
 사람" — 이 문서 전체의 존재 이유).

@@ -116,10 +116,53 @@ OPERATION_PLAN.md`(Day 61~90 온보딩)를 일 단위로 더 세분화한
 
 ## 관련 문서
 
-`PAUL_EASY_VOCA_EXECUTION_PRIORITY_PLAN.md`(30/60/90일 개요 원본),
+`PAUL_EASY_VOCA_EXECUTION_PRIORITY_PLAN.md`(30/60/90일 개요 원본,
+2026-07-31 삭제됨 — 아래 병합 섹션에 핵심 표 보존),
 `docs/audit/2026-07-26-v3_11-1hour-runbook.md`(Day 1 상세),
 `PAUL_EASY_VOCA_REAL_ACADEMY_SIMULATION.md`(Day 8~30 관찰 대상),
-`PAUL_EASY_VOCA_SAAS_ARCHITECTURE_PLAN.md`(Day 31~60 스키마 원본),
+`docs/agent-decisions/0006-multitenant-saas-architecture.md`
+(Day 31~60 스키마 원본, 구 SAAS_ARCHITECTURE_PLAN.md/MULTITENANT_
+DATABASE_DESIGN.md는 2026-07-31 이 문서로 병합됨),
 `PAUL_EASY_VOCA_CUSTOMER_OPERATION_PLAN.md`(Day 61~90 온보딩 원본),
-`PAUL_EASY_VOCA_AI_AGENT_OS.md`, `PAUL_EASY_VOCA_AI_DEVELOPMENT_
-PROTOCOL.md`, `PAUL_EASY_VOCA_MVP_ROADMAP.md`(Phase 1→2 전환 기준).
+`PAUL_EASY_VOCA_MVP_ROADMAP.md`(Phase 1→2 전환 기준). (구
+`PAUL_EASY_VOCA_AI_AGENT_OS.md`/`PAUL_EASY_VOCA_AI_DEVELOPMENT_
+PROTOCOL.md`는 삭제됨 — CLAUDE.md 헌법/DEVELOPER_GUIDE.md 워크플로우로
+대체)
+
+---
+
+## [2026-07-31 병합] P0/P1/P2 우선순위 요약표 (원본: PAUL_EASY_VOCA_EXECUTION_PRIORITY_PLAN.md §2~4)
+
+_(2026-07-31 문서 정리: `PAUL_EASY_VOCA_EXECUTION_PRIORITY_PLAN.md`에서
+병합, 압축형)_
+
+### P0 — 반드시 먼저 해야 하는 것
+
+| 항목 | 난이도 | 위험도 |
+|---|---|---|
+| v3_11 커리큘럼 보안수정 배포 | 낮음(60분 런북 존재) | 낮음(RLS 추가만, 즉시 롤백 가능) |
+| GitHub Pages 완전 차단 | 매우 낮음 | 없음 |
+| 쓰기 AI 보조 실운영화(Edge Function 배포+SQL 2건+flag ON) | 낮음(코드 완료) | 낮음(미리보기+수동승인) |
+| 게임화 SQL 일괄 실행(v2.5~v2.8) | 낮음(SQL만) | 낮음(전부 opt-in 기본 false) |
+| 관리자 PIN 형식/강도 검증 | 매우 낮음 | 낮음 |
+
+### P1 — 중요한 개선
+
+| 항목 | 난이도 | 위험도 |
+|---|---|---|
+| `academy_id` 멀티테넌트 스키마 실제 착수 | 중간(설계는 완료, 마이그레이션·백필만 남음) | 중간(기존 학원 데이터 영향 가능, 멱등 설계 필수) |
+| Vercel 유료 플랜 전환 | 낮음(설정+결제) | 낮음 |
+| Memory Engine(SRS) 최소 구현 | 중간(설계 완료) | 낮음(신규 테이블뿐) |
+| 무필터 전체조회 스코핑 설계 착수 | 높음(15+ 호출부) | 중간(광범위한 코드 변경) |
+| AI 배치 채점 N+1 수정 | 낮음(batch select/upsert) | 낮음(fire-and-forget 경로) |
+
+### P2 — 미래 기능
+
+| 항목 | 난이도 | 위험도 |
+|---|---|---|
+| Teacher 역할(다중 관리자) | 중간 | 중간(인증 모델 변경) |
+| 결제 시스템(subscriptions/billing) | 중간 | 낮음 |
+| Platform Admin Dashboard | 중간 | 낮음 |
+| AI Teacher(문장 첨삭 등 신규 AI 기능) | 높음 | 중간(아동 안전 고려 필요) |
+| 위험학생/이탈 예측(규칙기반) | 낮음~중간 | 낮음(윤리적 사용 원칙 준수 필수) |
+| Enterprise 물리적 격리 인프라 | 높음 | 낮음(선택적 옵션) |

@@ -1,8 +1,9 @@
 # PAUL_EASY_VOCA_BILLING_ARCHITECTURE_DESIGN.md — 결제 아키텍처 설계
 
 _작성: 2026-07-26. **순수 설계 문서 — 코드/SQL/Migration을 이 세션에서
-전혀 작성·실행하지 않았다.** `PAUL_EASY_VOCA_SAAS_ARCHITECTURE_PLAN.md`
-(§7 결제 구조 원본)/`TABLE_OWNERSHIP_MATRIX.md`/`ROLE_PERMISSION_
+전혀 작성·실행하지 않았다.** `docs/agent-decisions/0006-multitenant-
+saas-architecture.md`(§7 결제 구조 원본, 구 SAAS_ARCHITECTURE_PLAN.md는
+2026-07-31 이 문서로 병합됨)/`TABLE_OWNERSHIP_MATRIX.md`/`PERMISSION_
 MATRIX.md`/`RLS_POLICY_DESIGN.md`를 기반으로, 결제 도메인만 상세화한다.
 가격 벤치마크는 `PAUL_EASY_VOCA_BUSINESS_MODEL_PLAN.md`가 WebSearch로
 실측한 원아워(학생당 월 5,000원) 기준선을 그대로 재사용한다._
@@ -224,8 +225,9 @@ PLAN.md`)에서 Professional 학원이 실제로 이 한도에 부딪히는지�
 
 ## 10. 6개월 후 확장 가능한 Billing Architecture
 
-`PAUL_EASY_VOCA_SAAS_ARCHITECTURE_PLAN.md` §10의 페이싱과 맞물린
-결제 도메인 전용 진화 경로:
+`docs/agent-decisions/0006-multitenant-saas-architecture.md` §8(구
+SAAS_ARCHITECTURE_PLAN.md §10)의 페이싱과 맞물린 결제 도메인 전용
+진화 경로:
 
 | 단계 | 상태 |
 |---|---|
@@ -242,9 +244,10 @@ PLAN.md`)에서 Professional 학원이 실제로 이 한도에 부딪히는지�
 
 ## 관련 문서
 
-`PAUL_EASY_VOCA_SAAS_ARCHITECTURE_PLAN.md`(§7 결제 구조 원본),
+`docs/agent-decisions/0006-multitenant-saas-architecture.md`(§7 결제
+구조 원본, 구 SAAS_ARCHITECTURE_PLAN.md는 2026-07-31 병합됨),
 `PAUL_EASY_VOCA_BUSINESS_MODEL_PLAN.md`(가격 벤치마크),
-`PAUL_EASY_VOCA_TABLE_OWNERSHIP_MATRIX.md`, `PAUL_EASY_VOCA_ROLE_
-PERMISSION_MATRIX.md`, `PAUL_EASY_VOCA_RLS_POLICY_DESIGN.md`,
-`PAUL_EASY_VOCA_PERMISSION_MATRIX.md`, `PAUL_EASY_VOCA_CUSTOMER_
+`PAUL_EASY_VOCA_TABLE_OWNERSHIP_MATRIX.md`, `PAUL_EASY_VOCA_RLS_
+POLICY_DESIGN.md`, `PAUL_EASY_VOCA_PERMISSION_MATRIX.md`,
+`PAUL_EASY_VOCA_CUSTOMER_
 VALIDATION_PLAN.md`(착수 전제조건).
