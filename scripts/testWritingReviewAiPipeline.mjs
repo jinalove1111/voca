@@ -40,6 +40,7 @@ import {
   summarizeProposals, buildAcceptedVariantRecord,
   filterProposalsBySource, filterRowsByStudent, distinctStudentIds, sortDisplayItems,
   buildConfirmSummary,
+  classifyMistakeType, selectCertainRejects, groupByMistakeType, MISTAKE_TYPE_ORDER, MISTAKE_TYPE_LABELS,
 } from '../src/utils/spellingReviewBulkPlan.js'
 import fs from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -2126,6 +2127,85 @@ console.log('\n62. classifyBatch 캐시 미스 중복 제거(2026-07-24, AI 비�
     check('중복 그룹(m1/m2/m3)은 대표(m1)와 동일한 reason을 공유', byId.get('m1').reason === 'm1' && byId.get('m2').reason === 'm1' && byId.get('m3').reason === 'm1')
     check('유니크 그룹(m4)은 자신만의 결과를 받음', byId.get('m4').reason === 'm4')
   }
+}
+
+console.log('\n63. classifyMistakeType — 각 유형 판정 + 우선순위(노이즈 최우선)')
+{
+  check('빈 답안(길이 0) — noise', classifyMistakeType({ wordId: 'w1', meaning: '사과', acceptedMeanings: [], submittedAnswer: '' }) === 'noise')
+  check('한 글자 답안(길이 1) — noise(편집거리 우연히 작아도 최우선 noise)', classifyMistakeType({ wordId: 'w1', meaning: '사과', acceptedMeanings: [], submittedAnswer: '사' }) === 'noise')
+  check('자모만으로 이뤄진 답안 — noise', classifyMistakeType({ wordId: 'w1', meaning: '물품 보관함', acceptedMeanings: [], submittedAnswer: 'ㅁㄴㅇㄹ' }) === 'noise')
+  check('완성형 한글 정상 답안은 자모 정규식에 안 걸림(오탐 없음 재확인)', !JSON.parse('true') || classifyMistakeType({ wordId: 'w1', meaning: '가나다', acceptedMeanings: [], submittedAnswer: '가나다' }) !== 'noise')
+
+  check('편집거리 1(오타) — typo', classifyMistakeType({ wordId: 'w1', meaning: '물품 보관함', acceptedMeanings: [], submittedAnswer: '물품 보괌함' }) === 'typo')
+  check('편집거리 1 실측 확인(관->괌 한 글자 치환)', editDistance('물품보괌함', '물품보관함') === 1)
+  check('편집거리 2(오타) — typo', classifyMistakeType({ wordId: 'w2', meaning: '물품 보관함', acceptedMeanings: [], submittedAnswer: '물품 보곽핡' }) === 'typo')
+  check('편집거리 2 실측 확인(구성 문자열)', editDistance('물품보곽핡', '물품보관함') === 2)
+  {
+    // 편집거리 3 이상(경계값 재확인) — typo 밖으로 나가야 한다.
+    const far = classifyMistakeType({ wordId: 'w3', meaning: 'apple', acceptedMeanings: [], submittedAnswer: 'zzzzz' })
+    check('apple vs zzzzz 편집거리 실측 = 5(3 이상)', editDistance('zzzzz', 'apple') >= 3)
+    check('편집거리 3 이상은 typo가 아님(그 외 유형으로 분류)', far !== 'typo')
+  }
+
+  check('품사/활용형 차이(possiblePosVariant 성립) — pos_variant', classifyMistakeType({ wordId: 'w5', word: 'natural', meaning: '자연스러운', acceptedMeanings: [], submittedAnswer: '자연' }) === 'pos_variant')
+
+  // substring이면서도 typo(편집거리 1~2) 범위 밖이어야 partial 경로를
+  // 검증할 수 있다 — 실측: 앞 3글자 제거로 편집거리 3(substring=true).
+  check('부분 문자열(답이 후보의 substring, 편집거리 3) — partial', classifyMistakeType({ wordId: 'w9', meaning: '가나다라마바사아자차', acceptedMeanings: [], submittedAnswer: '라마바사아자차' }) === 'partial')
+  check('부분 문자열 실측 확인(substring=true, 편집거리=3, typo 범위 밖)', '가나다라마바사아자차'.includes('라마바사아자차') && editDistance('라마바사아자차', '가나다라마바사아자차') === 3)
+  check('다의어 중 하나와만 정확히 일치(콤마 나열) — partial', classifyMistakeType({ wordId: 'w9', meaning: '안다, 포옹하다', acceptedMeanings: [], submittedAnswer: '포옹하다' }) === 'partial')
+
+  // 농부/해치다 — 편집거리 3(typo 아님), substring/pos_variant 전부
+  // 미해당(실측 확인) — 로컬 규칙으로는 끝까지 미해당이라 AI 제안
+  // decision 필드만으로 semantic/wrong_word/unknown이 갈리는지 검증.
+  check('농부/해치다 편집거리 실측 = 3(typo 아님)', editDistance('농부', '해치다') === 3)
+  check('AI 제안 decision=accept, 로컬 규칙 전부 미해당 — semantic', classifyMistakeType({ wordId: 'w8', meaning: '해치다', acceptedMeanings: [], submittedAnswer: '농부', decision: 'accept' }) === 'semantic')
+  check('AI 제안 decision=review, 로컬 규칙 전부 미해당 — semantic', classifyMistakeType({ wordId: 'w8', meaning: '해치다', acceptedMeanings: [], submittedAnswer: '농부', decision: 'review' }) === 'semantic')
+  check('AI 제안 decision=reject_candidate — wrong_word', classifyMistakeType({ wordId: 'w8', meaning: '해치다', acceptedMeanings: [], submittedAnswer: '농부', decision: 'reject_candidate' }) === 'wrong_word')
+  check('AI 제안 없음 + 로컬 규칙 전부 미해당 — unknown', classifyMistakeType({ wordId: 'w8', meaning: '해치다', acceptedMeanings: [], submittedAnswer: '농부' }) === 'unknown')
+
+  check('opts.meaning/acceptedMeanings로 row 자체 값 오버라이드 가능', classifyMistakeType({ wordId: 'w1', meaning: '전혀다른뜻', acceptedMeanings: [], submittedAnswer: '오타테스트' }, { meaning: '오타테스타', acceptedMeanings: [] }) === 'typo')
+}
+
+console.log('\n64. selectCertainRejects — AI reject_candidate 고신뢰 OR 통계 반복오답(camelCase/snake_case 둘 다)')
+{
+  const rows = [
+    { id: 'x1', decision: 'reject_candidate', confidence: 0.97 }, // 통과(AI 고신뢰)
+    { id: 'x2', decision: 'reject_candidate', confidence: 0.80 }, // 신뢰도 미달 — 제외
+    { id: 'x3', decision: 'accept', confidence: 0.99 }, // decision 자체가 reject 아님 — 제외
+    { id: 'x4', rejectedCount: 5, acceptedCount: 0 }, // 통과(camelCase 통계)
+    { id: 'x5', rejected_count: 6, accepted_count: 0 }, // 통과(snake_case 통계)
+    { id: 'x6', rejectedCount: 4, acceptedCount: 0 }, // 반려 횟수 미달 — 제외
+    { id: 'x7', rejectedCount: 5, acceptedCount: 1 }, // 인정 이력 있음(순수 반복오답 아님) — 제외
+    { id: 'x8', rejectedCount: 5 }, // acceptedCount 없음(null과 동치) — 통과
+  ]
+  const certain = selectCertainRejects(rows)
+  const ids = certain.map((r) => r.id).sort()
+  check('x1/x4/x5/x8만 통과(신뢰도 미달/decision 불일치/반복 미달/인정 이력 존재 전부 제외)', JSON.stringify(ids) === JSON.stringify(['x1', 'x4', 'x5', 'x8']))
+  check('threshold 인자로 신뢰도 기준 조정 가능(0.99 요구 시 x1도 탈락)', selectCertainRejects(rows, 0.99).some((r) => r.id === 'x1') === false)
+  check('빈 배열/undefined 입력 안전(순수 함수, throw 없음)', selectCertainRejects([]).length === 0 && selectCertainRejects(undefined).length === 0)
+}
+
+console.log('\n65. groupByMistakeType — 순서 고정 + 라벨 + count 0 유형도 포함')
+{
+  const rows = [
+    { id: 't1', wordId: 'w1', meaning: '물품 보관함', acceptedMeanings: [], submittedAnswer: '물품 보괌함' }, // typo
+    { id: 't2', wordId: 'w2', meaning: '물품 보관함', acceptedMeanings: [], submittedAnswer: '물품 보괍함' }, // typo(다른 오타)
+    { id: 'p1', wordId: 'w5', word: 'natural', meaning: '자연스러운', acceptedMeanings: [], submittedAnswer: '자연' }, // pos_variant
+    { id: 'n1', wordId: 'w1', meaning: '사과', acceptedMeanings: [], submittedAnswer: '' }, // noise
+    { id: 'u1', wordId: 'w8', meaning: '해치다', acceptedMeanings: [], submittedAnswer: '농부' }, // unknown(AI 제안 없음)
+  ]
+  const groups = groupByMistakeType(rows)
+  check('그룹 개수는 MISTAKE_TYPE_ORDER 길이(7) 그대로(0건 유형도 포함)', groups.length === MISTAKE_TYPE_ORDER.length)
+  check('그룹 순서가 MISTAKE_TYPE_ORDER와 정확히 일치', groups.every((g, i) => g.type === MISTAKE_TYPE_ORDER[i]))
+  check('typo 그룹에 t1/t2 2건', groups.find((g) => g.type === 'typo').count === 2 && groups.find((g) => g.type === 'typo').rows.map((r) => r.id).sort().join(',') === 't1,t2')
+  check('pos_variant 그룹에 p1 1건', groups.find((g) => g.type === 'pos_variant').count === 1 && groups.find((g) => g.type === 'pos_variant').rows[0].id === 'p1')
+  check('noise 그룹에 n1 1건', groups.find((g) => g.type === 'noise').count === 1 && groups.find((g) => g.type === 'noise').rows[0].id === 'n1')
+  check('unknown 그룹에 u1 1건', groups.find((g) => g.type === 'unknown').count === 1 && groups.find((g) => g.type === 'unknown').rows[0].id === 'u1')
+  check('semantic/wrong_word 그룹은 0건(입력에 AI 제안 있는 행 없음)', groups.find((g) => g.type === 'semantic').count === 0 && groups.find((g) => g.type === 'wrong_word').count === 0)
+  check('각 그룹의 label이 MISTAKE_TYPE_LABELS와 일치(한국어)', groups.every((g) => g.label === MISTAKE_TYPE_LABELS[g.type]))
+  check('전체 rows 합은 입력 건수와 동일(누락/중복 없음)', groups.reduce((s, g) => s + g.count, 0) === rows.length)
+  check('빈 입력 — 7개 유형 전부 count 0', groupByMistakeType([]).every((g) => g.count === 0) && groupByMistakeType([]).length === 7)
 }
 
 console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n${failures}개 테스트 실패 ❌`)

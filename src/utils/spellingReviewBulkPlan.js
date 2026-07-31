@@ -20,8 +20,11 @@
 // pipeline.js는 Deno 전용 API를 전혀 안 쓰는 순수 JS라 Vite/Rollup이
 // supabase/ 밖 경로든 상관없이 정상 번들링한다 — 그래서 이 라운드부터는
 // 복제본을 지우고 원본을 import해 그대로 재수출한다(헌법 규칙 3, 재복제 금지).
-import { normalizeForCompare } from '../../supabase/functions/grade-writing-answers/pipeline.js'
-export { normalizeForCompare }
+// v1.4(2026-08-01) — classifyMistakeType/groupByMistakeType이 editDistance/
+// possiblePosVariant도 재사용한다(재구현 금지, 헌법 규칙 3). 둘 다 이미
+// pipeline.js가 export하는 순수 함수 그대로(9단계/8단계 로직과 동일 원본).
+import { normalizeForCompare, editDistance, possiblePosVariant } from '../../supabase/functions/grade-writing-answers/pipeline.js'
+export { normalizeForCompare, editDistance, possiblePosVariant }
 
 function dedupeAnswers(list) {
   const seen = new Set()
@@ -315,4 +318,146 @@ export function buildConfirmSummary(rows, { kind = 'accept', wordsDisplayLimit =
     savesAcceptedVariant,
     irreversibleWarning: '이 작업은 되돌릴 수 없습니다 — 학생 데이터(인정 답안 목록/검토 상태)가 실제로 바뀝니다.',
   }
+}
+
+// ── v1.4(2026-08-01, 운영자 지시 — 자기학습형 검토 파이프라인) ─────────────
+//
+// 목적: 검수함을 "개별 카드 나열"에서 "실수 유형별 그룹"으로 바꾸는 첫
+// 단계. 전부 순수 계산이고, 이미 있는 헬퍼만 재사용한다(헌법 규칙 3):
+//   - editDistance/normalizeForCompare(pipeline.js, 위에서 재수출) — typo
+//   - possiblePosVariant(pipeline.js, 8단계 힌트와 동일 원본) — pos_variant
+//   - AI 제안 필드(row.decision/decision_source, 있으면) — semantic/wrong_word
+// 이 함수들은 어떤 accept/reject 판정도 내리지 않는다 — 오직 "이미 존재하는
+// pending 행/제안을 어떤 이름의 서랍에 놓을지"만 분류한다. 실제 인정/무시는
+// 여전히 executeAccept/executeBulkAccept/executeBulkDismiss(spellingReviewAiApi.js)
+// 몫이다.
+
+// 자모(단독 초성/중성)만으로 이뤄진 문자열 — 무의미 제출(예: 실수로 자판이
+// 안 눌린 자모만 남은 경우) 판별용. 완성형 한글(가-힣)은 이 정규식에
+// 안 걸린다(정상 한글 답안과 절대 안 섞임).
+const JAMO_ONLY = /^[ㄱ-ㅎㅏ-ㅣ]+$/
+
+// 실수 유형 분류 — 우선순위(결정론적, 위→아래 순으로 첫 매치):
+//   1) noise    — 정규화 후 길이 1 이하, 또는 자모만으로 구성.
+//                 (최우선인 이유: 길이 1 이하 답은 편집거리가 우연히 작아
+//                 typo로 오분류되기 쉽다 — 예: 한 글자 답과 두 글자 후보는
+//                 편집거리가 항상 1. noise를 먼저 걸러야 이 오탐을 막는다.)
+//   2) typo     — 등록 뜻/인정 답안을 콤마·세미콜론으로 펼친 각 대안과
+//                 편집거리 1~2.
+//   3) pos_variant — 대안 중 하나와 possiblePosVariant(어간 일치, 8단계와
+//                 동일 로직)가 성립.
+//   4) partial  — 대안 중 하나와 부분 문자열 관계(둘 중 하나가 다른 하나를
+//                 포함), 또는 대안이 여러 개(콤마 나열)인데 그 중 정확히
+//                 하나와만 일치(다의어 중 한 뜻만 커버).
+//   5) semantic — 위 로컬 규칙 전부 미해당 + AI 제안이 있고 decision이
+//                 accept 또는 review(의미 판단이 필요했던 애매한 사례).
+//   6) wrong_word — AI 제안이 있고 decision이 reject_candidate.
+//   7) unknown  — 그 무엇에도 해당 안 됨(AI 제안 자체가 아직 없는 순수
+//                 규칙 미해결 상태 등).
+// opts.meaning/opts.acceptedMeanings로 row 자체의 값을 오버라이드할 수
+// 있다(기본은 row.meaning/row.acceptedMeanings 그대로 사용).
+export function classifyMistakeType(row, { meaning, acceptedMeanings } = {}) {
+  const effMeaning = meaning !== undefined ? meaning : row?.meaning
+  const effAccepted = acceptedMeanings !== undefined ? acceptedMeanings : row?.acceptedMeanings
+  const answer = String(row?.submittedAnswer ?? '')
+  const normAnswer = normalizeForCompare(answer).replace(/\s+/g, '')
+
+  // 자모 판별은 정규화 "전" 원문(trim만)으로 한다 — normalizeForCompare가
+  // NFKC를 적용하는데, NFKC는 호환 자모(U+3131~318E, 이 정규식이 겨냥하는
+  // 실제 키보드 입력 범위)를 조합용 자모(U+1100대, choseong)로 바꿔버려
+  // 정규화 후에는 이 정규식이 더 이상 매치되지 않는다(실측 확인, 2026-08-01).
+  const rawTrimmed = answer.trim()
+  if (normAnswer.length <= 1 || JAMO_ONLY.test(rawTrimmed)) return 'noise'
+
+  const candidates = [effMeaning, ...(Array.isArray(effAccepted) ? effAccepted : [])]
+    .filter((c) => c != null && String(c).trim() !== '')
+  const allAlternatives = candidates.flatMap((c) => String(c).split(/[,;]/).map((x) => x.trim()).filter(Boolean))
+
+  let bestDist = Infinity
+  for (const alt of allAlternatives) {
+    const normAlt = normalizeForCompare(alt).replace(/\s+/g, '')
+    if (!normAlt) continue
+    const dist = editDistance(normAnswer.toLowerCase(), normAlt.toLowerCase())
+    if (dist < bestDist) bestDist = dist
+  }
+  if (bestDist >= 1 && bestDist <= 2) return 'typo'
+
+  if (allAlternatives.some((alt) => possiblePosVariant(normalizeForCompare(answer), normalizeForCompare(alt)))) {
+    return 'pos_variant'
+  }
+
+  const isSubstringMatch = allAlternatives.some((alt) => {
+    const normAlt = normalizeForCompare(alt).replace(/\s+/g, '')
+    if (!normAlt || !normAnswer || normAlt === normAnswer) return false
+    return normAlt.includes(normAnswer) || normAnswer.includes(normAlt)
+  })
+  const isOneOfManyExactMatch = allAlternatives.length > 1 && allAlternatives.some((alt) => {
+    const normAlt = normalizeForCompare(alt).replace(/\s+/g, '')
+    return normAlt === normAnswer
+  })
+  if (isSubstringMatch || isOneOfManyExactMatch) return 'partial'
+
+  if (row?.decision === 'accept' || row?.decision === 'review') return 'semantic'
+  if (row?.decision === 'reject_candidate') return 'wrong_word'
+
+  return 'unknown'
+}
+
+// "확실한 반려" 대상 선별 — selectCertainAccepts의 거울상(전부 AND 안에서
+// OR 게이트 두 개):
+//   (a) AI decision==='reject_candidate' AND confidence>=threshold(기본 0.95)
+//   (b) 통계 반복 오답(writing_answer_statistics 파생, decision_source가
+//       'stats_repeat'이거나 이 행 자체가 통계 행일 때) — rejectedCount(또는
+//       rejected_count) >= 5 AND acceptedCount(또는 accepted_count) === 0.
+// 두 필드명(camelCase/snake_case)을 모두 허용하는 이유: 이 함수가 받는
+// rows는 (1) fetchLearningRecommendations()가 반환하는 camelCase 통계 행,
+// (2) classifyBatch가 만드는 snake_case 유사 필드를 가진 AI 제안, 두 출처
+// 모두를 대상으로 삼을 수 있어서다(§ 자기학습 파이프라인 — 검수함과 추천
+// 학습 카드 양쪽에서 "확실한 반려" 일괄 무시가 동작해야 함). 반환값은 원본
+// row 그대로(무시 실행은 여전히 executeBulkDismiss/dismissRecommendation
+// 몫 — 이 함수는 대상만 고른다).
+export function selectCertainRejects(rows, threshold = 0.95) {
+  return (rows || []).filter((r) => {
+    if (r.decision === 'reject_candidate' && typeof r.confidence === 'number' && r.confidence >= threshold) return true
+    const rejectedCount = typeof r.rejectedCount === 'number' ? r.rejectedCount : r.rejected_count
+    const acceptedCount = typeof r.acceptedCount === 'number' ? r.acceptedCount : r.accepted_count
+    if (typeof rejectedCount === 'number' && rejectedCount >= 5 && (acceptedCount === 0 || acceptedCount == null)) return true
+    return false
+  })
+}
+
+// 유형 라벨(한국어) — 관리자 화면 그룹 헤더용. UI 소유 파일(SpellingReview
+// QueuePanel.jsx)이 이 매핑을 재정의하지 않고 그대로 재사용한다.
+export const MISTAKE_TYPE_LABELS = {
+  typo: '단순 오타',
+  pos_variant: '품사/활용형 차이',
+  partial: '부분 일치',
+  semantic: '의미상 유사(AI 검토 필요)',
+  unknown: '분류 안 됨',
+  noise: '무의미/자모',
+  wrong_word: '오답 후보',
+}
+
+// 그룹 표시 순서(운영자 지시 그대로) — typo/pos_variant/partial이 "쉬운 것
+// 먼저"로 앞에, semantic/unknown이 다음, noise/wrong_word가 맨 뒤(무의미
+// 또는 이미 오답 확정에 가까운 것들이라 관리자가 굳이 먼저 볼 필요가
+// 적음).
+export const MISTAKE_TYPE_ORDER = ['typo', 'pos_variant', 'partial', 'semantic', 'unknown', 'noise', 'wrong_word']
+
+// rows를 실수 유형별로 묶는다 — 순서 고정(MISTAKE_TYPE_ORDER), count 0인
+// 유형도 항상 포함(관리자가 "이 유형은 지금 0건"임을 그대로 볼 수 있게 —
+// 목록에서 조용히 사라지면 "그 유형 자체가 없다"와 헷갈릴 수 있음). ctx는
+// classifyMistakeType의 2번째 인자로 그대로 전달(기본 {} — 각 row 자신의
+// meaning/acceptedMeanings 사용).
+export function groupByMistakeType(rows, ctx = {}) {
+  const buckets = new Map(MISTAKE_TYPE_ORDER.map((t) => [t, []]))
+  for (const row of rows || []) {
+    const type = classifyMistakeType(row, ctx)
+    if (!buckets.has(type)) buckets.set(type, [])
+    buckets.get(type).push(row)
+  }
+  return MISTAKE_TYPE_ORDER.map((type) => {
+    const rowsForType = buckets.get(type) || []
+    return { type, label: MISTAKE_TYPE_LABELS[type] || type, rows: rowsForType, count: rowsForType.length }
+  })
 }
