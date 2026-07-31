@@ -25,6 +25,8 @@
 //   - ai/memoryPlugPoints.js: import 0, plain Node ESM 로드 가능.
 import { readFileSync } from 'node:fs'
 import * as leitner from '../../src/learning/memory/leitner.js'
+import * as difficulty from '../../src/learning/memory/difficulty.js'
+import * as reviewQueue from '../../src/learning/memory/reviewQueue.js'
 
 let passed = 0, failed = 0
 const failures = []
@@ -86,6 +88,90 @@ const leitnerSrc = readFileSync(new URL('../../src/learning/memory/leitner.js', 
 check('leitner.js는 Date.now() 미사용(결정론 — 오늘 날짜는 항상 인자로 받음)', !leitnerSrc.includes('Date.now('))
 check('leitner.js는 Math.random 미사용', !leitnerSrc.includes('Math.random'))
 check('leitner.js는 import 0(순수 모듈)', !/^import /m.test(leitnerSrc))
+
+// ── C2: difficulty.js — 난이도 점수 / 승급 게이트 튜닝 ─────────────────────
+console.log('\n-- difficulty.js: computeDifficulty / promoteGateFor')
+const weightSum = Object.values(difficulty.DIFFICULTY_WEIGHTS).reduce((a, b) => a + b, 0)
+check('DIFFICULTY_WEIGHTS 합계는 정확히 1.0(점수가 0~1 범위를 벗어나지 않도록)', Math.abs(weightSum - 1) < 1e-9)
+
+check('computeDifficulty: 입력 전부 없음(신규 단어) → 0보다 큼(lowLevel+statusUnknown 가산)',
+  difficulty.computeDifficulty({}) > 0)
+check('computeDifficulty: 항상 0~1 범위', (() => {
+  const cases = [{}, { missedCount: 100, wrongToday: true, inReviewQueue: true, status: 'unknown', level: 0 }, { missedCount: 0, level: 5, status: 'mastered' }]
+  return cases.every((c) => { const d = difficulty.computeDifficulty(c); return d >= 0 && d <= 1 })
+})())
+check('computeDifficulty: missedCount가 늘수록 단조 비감소(다른 입력 고정)', (() => {
+  const base = { wrongToday: false, inReviewQueue: false, status: 'known', level: 3 }
+  const scores = [0, 1, 2, 5, 20, 100].map((missedCount) => difficulty.computeDifficulty({ ...base, missedCount }))
+  return scores.every((s, i) => i === 0 || s >= scores[i - 1])
+})())
+check('computeDifficulty: 같은 입력 → 항상 같은 출력(타이스테이블/결정론)',
+  difficulty.computeDifficulty({ missedCount: 3, level: 2 }) === difficulty.computeDifficulty({ missedCount: 3, level: 2 }))
+check('computeDifficulty: level>=2이고 status가 known이면 lowLevel/statusUnknown 가산 없음(가장 낮은 부류)',
+  difficulty.computeDifficulty({ missedCount: 0, wrongToday: false, inReviewQueue: false, status: 'known', level: 3 }) === 0)
+
+check('PROMOTE_GATE_TUNING은 기본 OFF(enabled:false) — 미래 튜닝 상수만 존재',
+  difficulty.PROMOTE_GATE_TUNING.enabled === false)
+const identityGate = difficulty.promoteGateFor(0.9)
+check('promoteGateFor: 기본(OFF) 상태에서는 difficulty가 높아도 항상 true(identity)',
+  identityGate({ level: 4, correctStreak: 0 }, 5) === true)
+
+const difficultySrc = readFileSync(new URL('../../src/learning/memory/difficulty.js', import.meta.url), 'utf8')
+check('difficulty.js는 import 0(순수 모듈)', !/^import /m.test(difficultySrc))
+check('difficulty.js는 Math.random 미사용', !difficultySrc.includes('Math.random'))
+
+// ── C2: reviewQueue.js — 복습 큐 빌더 + 신호 어댑터 ─────────────────────────
+console.log('\n-- reviewQueue.js: buildReviewQueue / signalsFromX 어댑터')
+const today = '2026-08-01'
+const boxes = {
+  overdue10: { level: 2, nextReviewAt: '2026-07-22' }, // 10일 밀림
+  overdue3: { level: 3, nextReviewAt: '2026-07-29' },   // 3일 밀림
+  overdueTieHigh: { level: 1, nextReviewAt: '2026-07-29' }, // 3일 밀림, 난이도로 타이브레이크
+  overdueTieLow: { level: 1, nextReviewAt: '2026-07-29' },
+  notDueYet: { level: 4, nextReviewAt: '2026-08-10' },
+}
+const difficultyByWord = { overdue10: 0.5, overdue3: 0.5, overdueTieHigh: 0.9, overdueTieLow: 0.1 }
+const wordStatus = { neverSeenSkipped: 'skipped', neverSeenMastered: 'mastered', neverSeenNormal: 'unknown' }
+const allWordIds = ['overdue10', 'overdue3', 'overdueTieHigh', 'overdueTieLow', 'notDueYet', 'neverSeenSkipped', 'neverSeenMastered', 'neverSeenNormal']
+
+const q1 = reviewQueue.buildReviewQueue({ boxes, wordStatus, difficultyByWord, allWordIds, todayStr: today, seed: 's1' })
+check('가장 오래 밀린 단어가 큐 맨 앞(overdue10=10일 밀림)', q1[0] === 'overdue10')
+check('미래 예정(notDueYet)은 due 구간에 없음(never-seen fill 뒤에도 없음 — 아예 큐 밖)', !q1.includes('notDueYet'))
+check('never-seen 중 skipped/mastered는 큐에서 제외', !q1.includes('neverSeenSkipped') && !q1.includes('neverSeenMastered'))
+check('never-seen 중 정상(unknown)은 큐에 포함(due 항목들 뒤에)', q1.includes('neverSeenNormal'))
+const idxTieHigh = q1.indexOf('overdueTieHigh')
+const idxTieLow = q1.indexOf('overdueTieLow')
+check('동일 밀림일수 타이브레이크: 난이도 높은 쪽(overdueTieHigh=0.9)이 낮은 쪽(0.1)보다 먼저',
+  idxTieHigh !== -1 && idxTieLow !== -1 && idxTieHigh < idxTieLow)
+
+const q1Again = reviewQueue.buildReviewQueue({ boxes, wordStatus, difficultyByWord, allWordIds, todayStr: today, seed: 's1' })
+check('buildReviewQueue는 결정론(같은 입력·같은 seed → 바이트 동일 순서)', JSON.stringify(q1) === JSON.stringify(q1Again))
+
+const q1Cap = reviewQueue.buildReviewQueue({ boxes, wordStatus, difficultyByWord, allWordIds, todayStr: today, seed: 's1', cap: 2 })
+check('cap이 있으면 정확히 그 길이로 자름', q1Cap.length === 2 && q1Cap[0] === q1[0] && q1Cap[1] === q1[1])
+
+check('signalsFromSpellingQueue: 매핑 안 되는 slug는 조용히 드롭(추측 금지)',
+  (() => {
+    const out = reviewQueue.signalsFromSpellingQueue(['known-slug', 'unmapped-slug'], { 'known-slug': 'word-uuid-1' })
+    return out['word-uuid-1']?.inReviewQueue === true && Object.keys(out).length === 1
+  })())
+check('signalsFromMissedCounts: slugToId 함수 형태도 지원 + 미매핑 드롭',
+  (() => {
+    const out = reviewQueue.signalsFromMissedCounts({ a: 3, b: 5 }, (slug) => (slug === 'a' ? 'word-a-id' : undefined))
+    return out['word-a-id']?.missedCount === 3 && Object.keys(out).length === 1
+  })())
+check('signalsFromWordStatus: wordId 키를 그대로 status로 매핑(slug 변환 없음)',
+  (() => {
+    const out = reviewQueue.signalsFromWordStatus({ 'word-x': 'known', 'word-y': 'unknown' })
+    return out['word-x'].status === 'known' && out['word-y'].status === 'unknown'
+  })())
+
+const reviewQueueSrc = readFileSync(new URL('../../src/learning/memory/reviewQueue.js', import.meta.url), 'utf8')
+check('reviewQueue.js는 형제 모듈(leitner/difficulty)만 import', (() => {
+  const imports = [...reviewQueueSrc.matchAll(/^import .* from '([^']+)'/gm)].map((m) => m[1])
+  return imports.length > 0 && imports.every((p) => p === './leitner.js' || p === './difficulty.js')
+})())
+check('reviewQueue.js는 Math.random 미사용(타이브레이크는 결정론 해시)', !reviewQueueSrc.includes('Math.random'))
 
 console.log('\n=== summary ===')
 if (failed === 0) { console.log(`  PASS  memory-engine — Memory Engine 순수 코어 (${passed}개 단언)`); process.exit(0) }
