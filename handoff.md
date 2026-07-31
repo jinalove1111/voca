@@ -1,7 +1,166 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-08-01 (20차, Curriculum Engine Phase 0 통합 완료 — 관리자
-커리큘럼 허브 + 학생 조건부 예문 단계(플래그 기본 off) + verify:examples/
-verify:learning-engine 하네스. SQL 미실행, 배포 없음)_
+_최종 갱신: 2026-08-01 (21차, 쓰기 답안 검토 자기학습형 파이프라인 재설계 —
+실수 유형 그룹 뷰 + 유형 단위 일괄 처리 + 오토파일럿 플래그 3종(기본 off)
++ 최근 자동 인정 철회 목록. SQL/Edge Function 신규 없음, 기존 v3_6/v3_7/
+v3_8/v3_9 대기 그대로)_
+
+## 2026-08-01 (21차) — 쓰기 답안 검토 자기학습형 파이프라인 재설계 (implementer)
+
+### 배경
+
+기존 검수 큐(`SpellingReviewQueuePanel`)는 이미 규칙(exact_match/synonym/
+levenshtein) → 캐시 → AI 3단 파이프라인(2026-07-23~24, 8~9차)과 "확실한
+답안 모두 인정"(`selectCertainAccepts`) 게이트, "선생님이 같은 검토를 두
+번 하지 않는" 통계 학습 시스템(`writing_answer_statistics`, 10차 이후)까지
+갖추고 있었다 — 다만 전부 **관리자가 수동으로 미리보기/AI 확인/일괄
+버튼을 눌러야만** 동작했고, 화면도 개별 답안 카드를 그대로 나열해 실수
+유형별로 훑어볼 방법이 없었다. 이번 세션은 운영자 지시(2026-08-01)로
+**새 판정 로직을 만들지 않고** 이 기존 기계 위에 얇은 활성화/그룹화
+레이어만 얹었다(헌법 규칙 3 — 재구현 금지). 실수 유형 taxonomy는
+`docs/operations/task2-writing-analysis.md` §1-3(99건 라이브 pending 전수
+읽기 분석, 2026-07-17)에서 이미 관찰된 오답 패턴(단순 오타/품사·활용형
+차이/부분 일치/의미상 유사/무의미 제출/명백한 오답 등)을 그대로 코드화한
+것 — 새로 분류 체계를 발명하지 않았다.
+
+### 커밋 목록(총 5개)
+
+1. `8ee7302` feat(writing): 실수 유형 분류 + 확실 반려 선별 순수 함수 —
+   `src/utils/spellingReviewBulkPlan.js`에 `classifyMistakeType`/
+   `selectCertainRejects`/`groupByMistakeType` 추가. 기존
+   `editDistance`/`normalizeForCompare`(`pipeline.js`)/`possiblePosVariant`
+   재사용, 신규 accept/reject 판정 로직 없음(어디까지나 "이미 있는 pending
+   행을 어느 서랍에 놓을지"만 분류). `scripts/testWritingReviewAiPipeline.mjs`
+   섹션 63~65로 경계값(편집거리 2 vs 3, 자모 노이즈, 빈 답안, camelCase/
+   snake_case 통계 필드 양쪽)까지 검증.
+2. `b59e7d2` feat(admin): 검수함 실수 유형 그룹 뷰 + 유형 단위 일괄 처리
+   (통계 우선 배치) — `SpellingReviewQueuePanel.jsx` 기본 뷰를 개별 카드
+   나열에서 실수 유형별 그룹(유형명+건수+대표 예시 2~3개)으로 전환. 그룹당
+   "이 유형 모두 인정/무시" 버튼은 기존 `requestBulkConfirm` → `executeBulkAccept`/
+   `executeBulkDismiss` 경로 그대로 재사용. 개별 카드는 그룹 확장 시에만
+   노출(fallback 완전 보존). `AdminScreen.jsx`에서 `LearningRecommendationsCard`/
+   `AiSavingsCard`/`LearningRateCard`를 검수 큐보다 위로 재배치(통계 우선 —
+   관리자가 패턴을 먼저 보고 개별 케이스는 그 다음, 순서만 변경).
+3. `2be4d66` feat(admin): 검수 오토파일럿 플래그 3종(기본 off) + 로드 시
+   자동 실행·요약 배너 — `features.js`에 `writingReviewAutoPilot`/
+   `writingReviewAutoTypo`/`writingReviewAutoDismiss` 추가(전부 기본
+   false). 켜지면 패널 로드 시 1회(`autoPilotRanRef`) 규칙 단계 자동 실행
+   + 티어①②(완전일치/학습된 변형) 자동 인정, `writingReviewAiAssist`도
+   켜져 있으면 AI 단계 자동 실행 + `selectCertainAccepts` 게이트(신뢰도
+   95%↑ + 경고 없음) 통과분(티어④) 자동 인정. `writingReviewAutoTypo`는
+   티어③(편집거리 1)을 자동 인정 대상에 추가(2026-07-17 "사람 최종 판정"
+   결정을 명시적으로 뒤집는 항목), `writingReviewAutoDismiss`는
+   `selectCertainRejects` 대상을 자동 무시. 기존 실행당/일일 비용 상한
+   게이트(`evaluateCostGate`)를 자동 실행에도 그대로 적용(초과 시 AI
+   단계만 건너뜀). 실패는 catch로 흡수해 조용히 수동 그룹 인박스로
+   폴백, 처리 결과는 기존 `doneSummary` 배너에 티어별 건수로 보고.
+4. `d31ea87` feat(admin): 자동 인정 철회 목록(created_by 티어 라벨) —
+   `spellingReviewAiApi.js`의 `executeAccept`/`executeBulkAccept`에 선택적
+   `createdBy` 인자 추가(넘기지 않으면 기존 동작과 byte-identical — 오늘의
+   수동 인정/일괄 인정 경로는 전혀 안 바뀜). 오토파일럿은 티어별로 별도
+   `executeBulkAccept` 호출 + 라벨(`auto_tier1_exact`/`auto_tier2_variant`/
+   `auto_tier3_typo`/`auto_tier4_ai`)을 부여. `fetchRecentAutoAcceptedVariants`
+   (최근 7일, `word_accepted_variants`에서 이 라벨들만 조회, v3_7 SQL
+   미실행이면 빈 배열 폴백)/`revokeAutoAcceptedVariant`(`words.
+   accepted_meanings` full-replace로 해당 답안만 제거, 감사 이력 행 자체는
+   보존 — append-only 원칙) 추가. 패널에 "최근 자동 인정 (7일)" 접힌
+   섹션 + 철회 버튼.
+5. (이 커밋) docs: handoff 21차 + 쓰기 오토파일럿 활성화 런북 포인터 +
+   `.ai-status`.
+
+### 4단 계단(오늘의 실제 파이프라인, 재구현 없음)
+
+1. **규칙**(무료, 네트워크 0회) — `runRulesPhase`(`classifyLocally`
+   재사용): exact_match/synonym/levenshtein.
+2. **AI**(선택, `writingReviewAiAssist` 필요) — `runAiPhase`: 캐시 →
+   통계 반복오답 스킵(`stats_repeat`) → 실제 AI 호출, 실행당/일일 비용
+   상한(`evaluateCostGate`) 적용.
+3. **확실한 답안 게이트** — `selectCertainAccepts`(신뢰도 95%↑ + 경고
+   없음, 기존 그대로) / `selectCertainRejects`(신규, AI 고신뢰 거부 후보
+   또는 통계 반복 오답 5회↑&인정 0회 — 이번 세션 추가).
+4. **오토파일럿**(신규, 3개 플래그로 게이팅) — 위 세 단계를 페이지 로드
+   시 자동으로 돌리고, 확실한 것만 자동 인정/무시. 애매한 건 전부 그대로
+   남아 실수 유형 그룹 뷰(신규)에서 관리자가 확인.
+
+이 중 1~3단계는 전부 기존 코드(8~10차)를 그대로 호출만 한 것이고, 실제
+"자기학습형"으로 만든 부분은 4단계(오토파일럿 오케스트레이션)와 그룹
+뷰/철회 안전밸브뿐이다.
+
+### 운영자 활성화 절차(기존 8/9/10차 SQL 대기 + 신규 플래그 3종)
+
+기존 대기 SQL/배포/시크릿(8~10차와 동일, 이번 세션은 SQL 파일을 하나도
+추가하지 않았다 — 아래는 그 항목들을 "오토파일럿까지 켜려면" 관점으로
+재인용한 것, `handoff.md` 8~10차 원문이 원본):
+
+1. `supabase_v3_6_writing_review_ai_cache.sql`(AI 판정 캐시) +
+   `supabase_v3_7_word_accepted_variants.sql`(인정 변형 감사 이력 —
+   **이번 세션의 "최근 자동 인정 철회" 목록이 실제로 뭔가 보여주려면
+   이 SQL이 필수**, 미실행이어도 인정 자체는 정상 동작하지만 철회 목록은
+   항상 빈 상태로 보임) + `supabase_v3_8_ai_usage_daily.sql`(일일 비용
+   집계) 실행(Supabase 대시보드 SQL Editor, 전부 멱등).
+2. `supabase_v3_9_writing_answer_statistics.sql` 실행(통계 반복오답 스킵/
+   AI 추천 학습 카드용, v3_6/v3_8과 실행 순서 무관).
+3. `supabase functions deploy grade-writing-answers` — 아직 미배포 상태면
+   AI 단계는 항상 `ai_unavailable`로 안전 강등(규칙 단계는 정상).
+4. `supabase secrets set OPENAI_API_KEY=... AI_PROVIDER=openai
+   OPENAI_MODEL=gpt-5-nano MAX_DAILY_COST=2.0`(9차와 동일 — 이미
+   설정돼 있으면 재설정 불필요).
+5. 관리자 화면 "기능" 탭에서 순서대로 토글:
+   a. `writingReviewAiAssist` ON(AI 단계 자체를 켠다 — 이미 켜져 있으면
+      생략).
+   b. `writingReviewAutoPilot` ON(페이지 로드 시 규칙+AI 자동 실행 +
+      티어①②④ 자동 인정을 켠다).
+   c. `writingReviewAutoTypo` ON(선택 — 티어③ 편집거리1 오타까지 자동
+      인정하고 싶으면. 2026-07-17 "사람 최종 판정" 원칙을 명시적으로
+      뒤집는 항목이라 운영자가 신중히 판단할 것).
+   d. `writingReviewAutoDismiss` ON(선택 — 확실한 반려까지 자동 무시하고
+      싶으면. 학생 성적에 영향 없는 액션이라 공정성 리스크는 낮음).
+   전부 기본 false라 1~4를 전혀 안 해도, 5를 하나도 안 눌러도 앱은 오늘과
+   완전히 동일하게 동작한다.
+6. (선택) 그룹 뷰 자체(실수 유형별 그룹, 커밋 2)는 플래그와 무관하게
+   항상 켜져 있다 — 별도 활성화 불필요, 관리자 화면 재배포만 되면 바로
+   보임.
+
+### 워크로드 추정
+
+`docs/operations/task2-writing-analysis.md` §1-3 실측(99건 중 대다수가
+규칙/AI 확실 게이트로 자동 해소 가능한 패턴) + 이번 세션 설계 기준: 규칙
+단계가 exact_match/synonym/(옵션)levenshtein으로 상당수를, AI 단계가
+`selectCertainAccepts`/`selectCertainRejects` 게이트로 그 다음 상당수를
+자동 처리하면, 매일 관리자가 실제로 눈으로 봐야 하는 잔여는 실수 유형
+그룹 기준 **2~6개 그룹(각 그룹은 "예 2~3개 + 인정/무시 버튼 1쌍"으로
+훑을 수 있음)** 정도로 추정된다 — 그룹 단위로 훑으면 개인당 그룹 확인+
+결정이 20~30초 내외라 가정할 때 **하루 총 1~3분** 규모(정확한 수치는
+운영자가 SQL 실행 후 실측 필요 — 이 추정은 §1-3 표본 비율의 외삽일 뿐,
+이 세션이 직접 측정한 실측치가 아님을 정직하게 표기).
+
+### 기존 결정(2026-07-17) 대비 정책 변경 근거
+
+2026-07-17 원 결정(`handoff.md` 해당 섹션, "AI 자동 판정은 절대 안 함 —
+최종 판정은 항상 교사")은 오답 검수 전체에 대한 것이었다. 이번 세션이
+도입한 `writingReviewAutoTypo`(편집거리 1 오타까지 자동 인정)는 그 결정
+중 "편집거리 1 오타"라는 좁은 범위 하나만 명시적으로 뒤집는다 — 근거는
+**운영자 지시 2026-08-01**(이 작업 자체의 발주 지시)이며, 코드 레벨에서도
+기본값 false + 별도 플래그로 격리해 "뒤집혔다"는 사실 자체가 조용히
+묻히지 않게 했다(`features.js` 플래그 주석에도 동일하게 명시). 그 외
+나머지(품사/부분일치/의미상 유사/무의미/명백한 오답 유형)는 여전히
+사람 최종 판정 원칙 그대로다 — 오토파일럿이 자동 처리하는 건 언제나
+"이미 존재하던 확실 게이트"(`selectCertainAccepts`/새로 만든
+`selectCertainRejects`)를 통과한 것뿐, 이 게이트 자체의 기준(신뢰도/경고
+조건)은 이번 세션이 바꾸지 않았다.
+
+### 남은 리스크 / 알려진 갭
+
+- 오토파일럿 자동 실행은 페이지 로드당 1회만 돈다(새로고침 버튼을 눌러도
+  재실행 안 됨, `autoPilotRanRef`) — "관리자가 하루 종일 화면을 안 닫고
+  켜둔 채 새 pending이 계속 쌓이는" 시나리오는 이번 세션에서 커버 안
+  했다(다음 페이지 로드/새로고침에서 다시 채워짐).
+- "최근 자동 인정" 목록은 이 패널이 직접 조회한 `word_accepted_variants`
+  최근 7일 스냅샷일 뿐, 페이지를 새로고침하지 않으면 실시간 갱신 안 됨
+  (오토파일럿 실행 직후에는 자동 갱신).
+- 실제 라이브 오토파일럿 동작(비용 상한 실측 초과 시 정말 AI 단계를
+  건너뛰는지, 실제 AI 응답 분포에서 게이트 통과 비율이 추정과 맞는지)은
+  이번 세션에서 실측 못 함 — v3_6/v3_7/v3_8/v3_9 SQL + Edge Function 배포
+  + 플래그 ON 이후 운영자가 스테이징에서 확인 필요.
 
 ## 2026-08-01 (20차) — Curriculum Engine Phase 0 통합 완료 (implementer)
 

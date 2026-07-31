@@ -323,4 +323,39 @@ wordAssignment/unitSwitching, 전부 이번 세션 이전부터 있던 로컬
 `SUPABASE_SERVICE_ROLE_KEY` 미설정/실데이터 상태 기인) + SKIP 2종
 (speaking/listening, headless 구조적 한계)은 이 작업으로 전혀 변하지
 않았다(신규 회귀 0).
+
+---
+
+## 관련 항목: 쓰기 답안 검토 자기학습형 파이프라인 — 섹션 63~65 (2026-08-01, implementer, `handoff.md` 21차)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+`handoff.md` 21차(실수 유형 그룹 뷰 + 오토파일럿 플래그 3종 + 자동 인정
+철회 목록)의 신규 순수 함수(`src/utils/spellingReviewBulkPlan.js`의
+`classifyMistakeType`/`selectCertainRejects`/`groupByMistakeType`)를
+`scripts/testWritingReviewAiPipeline.mjs`에 3개 섹션(63~65)으로 검증했다
+(기존 62개 섹션은 전혀 수정하지 않고 그 뒤에 추가만 — append).
+
+| 섹션 | 검증 대상 |
+|---|---|
+| 63 | `classifyMistakeType` — 우선순위(noise 최우선 → typo → pos_variant → partial → semantic/wrong_word(AI decision 있을 때만) → unknown) 전체 경로. 경계값: 빈 답안(길이 0)/한 글자 답안(길이 1) noise, 자모만으로 된 답안 noise(NFKC 정규화가 호환 자모를 choseong 블록으로 바꿔버려 정규식이 원문 기준으로만 매치돼야 한다는 실측 버그를 이 섹션 작성 중 발견·수정), 편집거리 1/2는 typo, 편집거리 3 이상은 typo 아님(실측 `editDistance` 값으로 직접 재확인), `possiblePosVariant` 성립 시 pos_variant, substring 관계(편집거리 3 이상으로 typo와 안 겹치게 구성)와 "다의어 중 하나와만 정확히 일치"는 partial, AI 제안 `decision`이 accept/review면 semantic, reject_candidate면 wrong_word, AI 제안 자체가 없으면 unknown, `opts.meaning`/`opts.acceptedMeanings`로 row 자체 값 오버라이드 가능 |
+| 64 | `selectCertainRejects` — AI `reject_candidate`+신뢰도 95%↑ 통과, 신뢰도 미달/decision 불일치는 제외, 통계 반복오답(`rejectedCount>=5 && acceptedCount===0`, camelCase/snake_case 필드명 양쪽 모두 인식) 통과, 반복 횟수 미달/인정 이력 존재(`acceptedCount>0`)는 제외, `threshold` 인자로 신뢰도 기준 조정 가능, 빈 배열/undefined 입력 안전(throw 없음) |
+| 65 | `groupByMistakeType` — 그룹 개수/순서가 `MISTAKE_TYPE_ORDER`(`typo`/`pos_variant`/`partial`/`semantic`/`unknown`/`noise`/`wrong_word`)와 정확히 일치, count 0인 유형도 항상 포함(관리자가 "이 유형은 지금 0건"을 그대로 볼 수 있게), 각 그룹의 `label`이 `MISTAKE_TYPE_LABELS`와 일치, 전체 rows 합이 입력 건수와 동일(누락/중복 없음), 빈 입력이면 7개 유형 전부 count 0 |
+
+이 세 함수는 `editDistance`/`normalizeForCompare`/`possiblePosVariant`
+(전부 `pipeline.js` 기존 export)만 재사용하고 새 판정 로직을 만들지
+않는다 — `selectCertainAccepts`(기존, 8차)와 나란히 있는 거울상
+`selectCertainRejects`가 유일한 신규 "게이트" 로직이고, 그마저도 기존
+`decision`/`confidence`/`decision_source` 필드 계약을 그대로 소비한다.
+
+**실행 결과(implementer 자체 보고)**: `node scripts/
+testWritingReviewAiPipeline.mjs` **모든 테스트 통과 ✅**(exit 0, 신규
+섹션 63~65 포함 전 구간, 기존 5건 SKIP은 배포 의존이라 그대로 유지).
+`npm run build` 통과(신규 경고 없음), `npm run verify:writing`
+**3/3 PASS**, `npm run verify:admin` **6/6 PASS**(둘 다 실제 UI/오토파일럿
+코드가 있는 `SpellingReviewQueuePanel.jsx`/`spellingReviewAiApi.js`/
+`AdminScreen.jsx` 변경 이후 재확인). 오토파일럿의 실제 라이브 동작(비용
+상한 실측 초과 시 AI 단계 스킵, 실제 AI 응답 분포에서의 게이트 통과율)은
+UI 통합 테스트 성격이라 이번 순수 함수 테스트 범위 밖 — `handoff.md`
+21차 "남은 리스크" 참고.
 11차 "릴리스 게이트" 참고.
