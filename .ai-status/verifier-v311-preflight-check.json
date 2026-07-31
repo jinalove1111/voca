@@ -1,0 +1,20 @@
+{
+  "agent_name": "verifier",
+  "role": "v3_11 락다운 적용 선행조건 라이브 실측",
+  "task_id": "v311-preflight-check",
+  "task": "v3_11 커리큘럼 락다운 적용 전 런북 ①~④ 선행조건을 읽기 전용 프로브로 실측",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-29T00:00:00+09:00",
+  "updated_at": "2026-07-29T00:00:00+09:00",
+  "files_owned": [".ai-status/verifier-v311-preflight-check.json"],
+  "files_read": [
+    "supabase_v3_11_lockdown_curriculum_write.sql",
+    "docs/audit/2026-07-26-v3_11-1hour-runbook.md",
+    "src/utils/wordLibrary.js",
+    "handoff.md"
+  ],
+  "summary": "코드/DB 무변경, 라이브 프로브만 수행. 결과: (1) Edge Function admin-content-write 미배포 확정 — OPTIONS/POST 모두 404 NOT_FOUND, 대조군 grade-writing-answers도 404(둘 다 미배포). (2) 프로덕션 Vercel 번들(index-CBvxiBmW.js)에 admin-content-write 배선 포함 확인 + caadea1(AdminScreen adminPin 배선)이 main HEAD 조상임 확인 → 배포된 관리자 화면은 pin(truthy)으로 Edge Function 경로를 타고, wordLibrary.js는 에러 시 레거시 폴백 없이 throw하므로 프로덕션 관리자 커리큘럼 쓰기(반 생성/이름변경/단어 업로드/설정/뜻 인정)가 현재 깨져 있을 가능성이 구조적으로 확정적 — 운영자 화면 1회 저장 테스트로 최종 확인 필요. (3) classes anon 빈 INSERT 프로브 → 23502(not-null) 반환 = RLS 락다운 미적용, anon 쓰기 여전히 열림(행 생성 없는 무부작용 프로브). (4) SQL 실행은 런북 게이트 ②(함수 배포) 실패로 진행 불가 + 헌법 규칙 8상 운영자 수동 실행 영역. (5) 기준선 npm run verify:admin 6/6 PASS(레거시 anon 경로 기준 DB 계층 정상).",
+  "blocker": "supabase CLI 자격증명(SUPABASE_ACCESS_TOKEN/프로젝트 링크) 로컬 부재 → Edge Function 배포 불가. 운영자가 supabase login 후 secrets set + functions deploy admin-content-write 필요. SQL 실행은 그 이후(런북 ④ 게이트 통과 후)에만.",
+  "next_action": "운영자: (1) supabase secrets list로 ADMIN_PIN/SUPABASE_URL/SERVICE_ROLE_KEY 확인, (2) supabase functions deploy admin-content-write — 이것만으로 현재 깨져 있(을 가능성이 높)은 관리자 쓰기가 복구됨, (3) 관리자 화면에서 유닛 이름 저장 1회 테스트, (4) 통과 시 begin/commit으로 감싼 v3_11 SQL을 대시보드에서 실행, (5) 실행 후 런북 4·5번 테스트 목록 수행. 대안(더 빠른 임시 복구): Edge Function 배포가 당장 어려우면 관리자 쓰기가 legacy 경로로 돌아가도록 하는 코드 변경이 필요하나 이는 락다운 후퇴이므로 배포가 우선."
+}

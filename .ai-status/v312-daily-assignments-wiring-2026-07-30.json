@@ -1,0 +1,27 @@
+{
+  "agent_name": "coordinator",
+  "role": "v3.11 배포 시도 + v3.12 daily_assignments 듀얼패스 구현 조정·검증",
+  "task_id": "v312-daily-assignments-wiring-2026-07-30",
+  "task": "v3.11 배포 runbook 완료 시도 + v3.12 daily_assignments 무인가 쓰기 CRITICAL 코드 수정",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-30T00:00:00+09:00",
+  "updated_at": "2026-07-30T00:00:00+09:00",
+  "files_owned": [
+    "supabase/functions/admin-content-write/index.ts",
+    "src/utils/wordLibrary.js",
+    "src/components/AdminScreen.jsx",
+    "supabase_v3_12_lockdown_daily_assignments.sql",
+    "docs/DEPLOY_COMMANDS_V311_V312.md",
+    "docs/SECURITY_AUDIT_V311.md",
+    "handoff.md",
+    ".ai-status/v312-daily-assignments-wiring-2026-07-30.json"
+  ],
+  "files_read": [
+    "supabase_v1_3_schema.sql",
+    "supabase_v3_11_lockdown_curriculum_write.sql"
+  ],
+  "summary": "배포/DDL 실행 가능성 실측→불가 확정(SUPABASE_ACCESS_TOKEN 부재, 프로젝트 링크 없음, CLI 미인증, service_role 키 없음, 규칙 8 금지, 런북 게이트 ④는 사람만). 거짓 성공 보고 없이 운영자 대기로 남김 + turnkey 커맨드 시트(docs/DEPLOY_COMMANDS_V311_V312.md) 준비. v3.12 daily_assignments 듀얼패스 code-complete(Sonnet implementer 구현, 메인 세션 diff 리뷰): admin-content-write assignment.set action(upsert onConflict class_id,date, 스키마 정합) + wordLibrary setTodaysAssignment/setAssignmentForDate 옵셔널 adminPin dual-path(falsy=레거시 anon 무변경) + AdminScreen 4개 호출부 pin 배선(FutureAssignmentPlanner prop 포함). 함수 배포 1번으로 v3.11+v3.12 공통 커버. build+verify:writing/persistence/student/quiz/admin 전부 PASS.",
+  "blocker": "Edge Function 배포 + Supabase DDL 실행은 이 환경에서 불가(자격증명 부재 + 규칙 8) → 운영자 수동. 라이브 관리자 쓰기 검증(게이트 ④)도 사람 필요.",
+  "next_action": "운영자: docs/DEPLOY_COMMANDS_V311_V312.md 순서로 admin-content-write 배포 → 프론트 최신 → 관리자 저장 라이브 게이트 → v3_11 SQL → v3_12 SQL → 42501 정합성 프로브. 이번 세션 6+파일 변경 커밋/push는 회귀 재검 후."
+}

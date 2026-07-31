@@ -1,0 +1,31 @@
+{
+  "agent_name": "coordinator",
+  "role": "베타 출시 준비 감사(보안/안정성/문서) 조정 + 검증",
+  "task_id": "beta-launch-audit-2026-07-29",
+  "task": "v3.11 보안 완료 시도 + 학생/관리자 플로우 감사 + 베타/보안/SaaS 문서 3종 + 전체 검증",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-07-29T00:00:00+09:00",
+  "updated_at": "2026-07-29T00:00:00+09:00",
+  "files_owned": [
+    "src/components/MatchGameShell.jsx",
+    "supabase_v3_12_lockdown_daily_assignments.sql",
+    "docs/BETA_LAUNCH_STATUS.md",
+    "docs/SECURITY_AUDIT_V311.md",
+    "docs/SAAS_READINESS_REVIEW.md",
+    "handoff.md",
+    ".ai-status/beta-launch-audit-2026-07-29.json",
+    ".ai-status/verifier-v311-preflight-check.json"
+  ],
+  "files_read": [
+    "supabase_v3_11_lockdown_curriculum_write.sql",
+    "supabase/functions/admin-content-write/index.ts",
+    "src/utils/wordLibrary.js",
+    "src/hooks/useStudent.js",
+    "src/components/AdminScreen.jsx",
+    "docs/audit/2026-07-26-v3_11-1hour-runbook.md"
+  ],
+  "summary": "라이브 실측: admin-content-write 미배포(404), classes anon 쓰기 열림, Edge Function 코드/배선은 정확 → 프로덕션 관리자 쓰기가 배포 미완으로 깨져 있을 가능성 높음(코드 버그 아님). 신규 CRITICAL: daily_assignments 무인가 쓰기(v3.11 누락) → 비활성 SQL v3_12만 준비(완전 수정은 Edge Function 배포+배선 필요, 자율 세션 불가 + 프론트만 먼저 바꾸면 정상 동작 중인 숙제 배정을 404로 깨뜨려 규칙 1 위반이라 미착수). 학생 플로우: 데이터무결성/크래시 결함 0. 저위험 표시버그 1건 수정(MatchGameShell 올클리어 보너스 표시를 실제 지급값 50에 맞춰 정정, 지급 로직 무변경). 발음 별 dedup 라운드 스코프 불일치 + GiftReveal key 충돌은 의도 상충/저위험이라 문서화만. 관리자: MEDIUM 1건(update_settings allowlist 없음, 함수 배포 시 반영 권장). 문서 3종 작성. build+verify:writing/persistence/student/quiz/admin 전부 PASS.",
+  "blocker": "v3.11/v3.12 보안 락다운 완성은 운영자 배포(Edge Function deploy + Supabase DDL, 규칙 8)에 의존 — 자율 세션에서 실행 불가.",
+  "next_action": "운영자: 런북대로 admin-content-write 배포 → 관리자 저장 테스트 → v3_11 SQL 실행 → daily_assignments 배선 후 v3_12 SQL. 이번 세션 변경(6파일) 커밋/push는 회귀 재검 후. 제품 판단 2건(올클리어 보너스 실지급/발음 별 dedup 의미)."
+}
