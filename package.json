@@ -25,6 +25,8 @@
     "verify:analytics": "node tests/harness/runAnalytics.mjs",
     "verify:reading": "node tests/harness/runReading.mjs",
     "verify:sentence-learning": "node tests/harness/runSentenceLearning.mjs",
+    "verify:examples": "node tests/harness/runExamples.mjs",
+    "verify:learning-engine": "node tests/harness/runLearningEngine.mjs",
     "verify:all": "node tests/harness/runAll.mjs",
     "wiki:search": "node scripts/wikiSearch.mjs",
     "dashboard": "node scripts/generateDashboard.mjs"

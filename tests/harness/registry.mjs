@@ -237,6 +237,25 @@ export const DOMAINS = {
       { script: 'tests/harness/runSentenceLearning.mjs', builders: [], note: '자기완결형 하네스(src/utils/sentenceLearning.js import-0 순수 모듈 직접 import) — 49단언.' },
     ],
   },
+  // ── 2026-08-01 등록: Curriculum Engine Phase 0(docs/CURRICULUM_ENGINE.md)
+  // 통합 커밋 I3 — 위 sentenceLearning과 동일한 "자기완결형 하네스를
+  // child-process로 spawn" 관례. 두 하네스 모두 내부에서 esbuild로
+  // 확장자-없는-상대-import 파일(generatorContract.js/registry.js)만
+  // 인메모리 번들(네트워크/환경변수 의존 없음 — 여전히 pure 섹션, 각 파일
+  // 헤더 주석 참고)하고, examples는 추가로 live 섹션(env 없으면 SKIP,
+  // 있으면 테이블 부재 폴백 확인 또는 전체 CRUD 왕복)을 갖는다.
+  examples: {
+    label: 'Curriculum Engine — examples 모듈(승인 상태머신/검증/필터 계약) (verify:examples와 동일 실행)',
+    checks: [
+      { script: 'tests/harness/runExamples.mjs', builders: [], note: '자기완결형 하네스 — pure 섹션(curriculumModel.js 순수 모듈 직접 import + generatorContract.js는 esbuild 인메모리 번들) 36단언 + live 섹션(env 없으면 SKIP, 있으면 테이블 부재 폴백 확인/CRUD 왕복).' },
+    ],
+  },
+  learningEngine: {
+    label: 'Learning Engine — 모드 레지스트리/어댑터/결정론 (verify:learning-engine과 동일 실행)',
+    checks: [
+      { script: 'tests/harness/runLearningEngine.mjs', builders: [], note: '자기완결형 하네스(learningItem.js 순수 모듈 직접 import + registry.js는 esbuild 인메모리 번들) — 21단언.' },
+    ],
+  },
 }
 
 // Phase 6 최종 검증 매트릭스가 참조하는 "운영자 체크리스트 13항목" ↔ 위 도메인
