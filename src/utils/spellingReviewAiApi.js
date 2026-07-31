@@ -486,13 +486,23 @@ export function evaluateCostGate({ estimatedCostUsd, ceilingUsd, todaySpentUsd =
   return { blocked: overRunCeiling || overDailyCeiling, overRunCeiling, overDailyCeiling }
 }
 
-// 인정 변형 저장(mode='synonym') 감사 이력 — supabase_v3_7_word_accepted_
-// variants.sql 미실행이어도 accepted_meanings 저장 자체는 정상 동작해야
-// 하므로, 이 기록은 실패해도 절대 던지지 않고 조용히 무시한다(§ 설계 제약).
-async function recordAcceptedVariantBestEffort(row, mode) {
-  if (mode !== 'synonym') return
+// 인정 변형 저장 감사 이력 — 원래(2026-07-23)는 mode==='synonym'일 때만
+// 기록했다(그 외 모드는 완전히 스킵 — 오늘까지의 기본 동작, createdBy 인자
+// 없는 호출은 이 분기를 정확히 그대로 유지한다, § byte-identical 보존).
+//
+// 2026-08-01(Commit 4, 자기학습형 검토 파이프라인 — 오토파일럿 철회 안전
+// 밸브) — createdBy(선택, 오토파일럿 티어 라벨)가 있으면 mode와 무관하게
+// 항상 기록한다. 오토파일럿은 answer_only 모드로 인정을 실행하는데(§ 기존
+// "이번 답안만 인정"과 동일 경로), 감사 이력이 없으면 관리자가 "최근 자동
+// 인정" 목록에서 되돌릴 근거가 없기 때문 — 이 추가 분기가 없으면 자동
+// 인정은 흔적을 안 남기고 조용히 words.accepted_meanings만 바꾸게 된다.
+// supabase_v3_7 SQL 미실행이어도 인정 자체(accepted_meanings 저장)는 여전히
+// 정상 동작해야 하므로, 이 기록은 여전히 실패해도 절대 던지지 않는다(§ 설계
+// 제약 그대로 유지).
+async function recordAcceptedVariantBestEffort(row, mode, createdBy) {
+  if (mode !== 'synonym' && !createdBy) return
   try {
-    const record = buildAcceptedVariantRecord(row)
+    const record = createdBy ? buildAcceptedVariantRecord(row, { createdBy }) : buildAcceptedVariantRecord(row)
     await supabase.from('word_accepted_variants').insert(record)
   } catch {
     // 테이블 미실행 등 — 감사 기록은 최적화일 뿐, 인정 자체를 막지 않는다.
@@ -502,14 +512,16 @@ async function recordAcceptedVariantBestEffort(row, mode) {
 // 인정 1건 실행 — 기존 SpellingReviewQueuePanel의 accept()와 정확히 같은
 // 두 단계(accepted_meanings read-then-write + resolveSpellingReview)를
 // spellingReviewBulkPlan.planAccept()가 계산한 대로 수행한다.
-export async function executeAccept(row, { mode = 'answer_only', duplicateRows = [], adminPin } = {}) {
+// createdBy(선택, 2026-08-01 Commit 4) — 오토파일럿 티어 라벨. 넘기지
+// 않으면(기존 모든 호출부) 오늘과 완전히 동일하게 동작한다.
+export async function executeAccept(row, { mode = 'answer_only', duplicateRows = [], adminPin, createdBy } = {}) {
   const plan = planAccept(row, { mode, duplicateRows })
   await setWordAcceptedMeanings(plan.wordId, plan.mergedAcceptedMeanings, adminPin)
   await resolveSpellingReview(plan.primaryId, 'accepted')
   for (const dupId of plan.additionalResolveIds) {
     await resolveSpellingReview(dupId, 'accepted')
   }
-  await recordAcceptedVariantBestEffort(row, mode)
+  await recordAcceptedVariantBestEffort(row, mode, createdBy)
   return plan
 }
 
@@ -519,11 +531,15 @@ export async function executeDismiss(row) {
 
 // 여러 행에 대해 순차로 인정/무시를 실행하고 성공/실패를 모아 반환한다.
 // 하나 실패해도 나머지는 계속 진행(부분 성공 허용, alert는 호출부 담당).
-export async function executeBulkAccept(rows, { mode = 'answer_only', duplicatesByRowId = new Map(), adminPin } = {}) {
+// createdBy(선택, 2026-08-01 Commit 4) — 이 배치 전체에 동일한 티어 라벨을
+// 적용(오토파일럿은 티어별로 별도 executeBulkAccept 호출을 하므로 배치
+// 하나 안에서는 항상 단일 라벨). 기존 호출부(수동 버튼)는 이 인자를 넘기지
+// 않아 동작이 그대로다.
+export async function executeBulkAccept(rows, { mode = 'answer_only', duplicatesByRowId = new Map(), adminPin, createdBy } = {}) {
   const results = []
   for (const row of rows) {
     try {
-      await executeAccept(row, { mode, duplicateRows: duplicatesByRowId.get(row.id) || [], adminPin })
+      await executeAccept(row, { mode, duplicateRows: duplicatesByRowId.get(row.id) || [], adminPin, createdBy })
       results.push({ id: row.id, ok: true })
     } catch (err) {
       results.push({ id: row.id, ok: false, error: err?.message || String(err) })
@@ -543,4 +559,83 @@ export async function executeBulkDismiss(rows) {
     }
   }
   return results
+}
+
+// ── 2026-08-01(Commit 4) — 최근 자동 인정 철회(자기학습 안전밸브) ──────────
+//
+// 오토파일럿이 executeBulkAccept에 티어 라벨(createdBy)을 넘기면 위
+// recordAcceptedVariantBestEffort가 word_accepted_variants에 그 라벨로
+// 감사 행을 남긴다 — 이 섹션은 그 최근 7일 행을 조회해 관리자가 "혹시
+// 잘못 자동 인정된 게 있으면" 되돌릴 수 있게 한다.
+//
+// isMissingRelationError를 wordLibrary.js의 isMissingTableError를 import해
+// 재사용하지 않는 이유: scripts/testWritingReviewAiPipeline.mjs가 이 파일을
+// esbuild로 번들할 때 './wordLibrary' import를 setWordAcceptedMeanings만
+// export하는 최소 가상 스텁으로 치환한다(파일 하단 v2 섹션 참고) — 새
+// export를 추가로 import하면 그 번들이 "No matching export"로 깨진다(§
+// writingAnswerStatsApi.js가 동일 이유로 이미 로컬 사본을 유지 중인 것과
+// 같은 제약, 그 파일 상단 주석 참고). 그래서 이 판정 로직만 로컬로 유지.
+function isMissingRelationError(err) {
+  const code = err?.code
+  return code === '42P01' || code === 'PGRST205' || /schema cache|does not exist|relation .* does not exist/i.test(err?.message || '')
+}
+
+// 오토파일럿이 executeBulkAccept(createdBy: ...)에 실제로 넘기는 티어
+// 라벨 4종과 그 한국어 표시명 — SpellingReviewQueuePanel의 "최근 자동
+// 인정" 목록이 그대로 재사용한다(라벨 문자열을 그 파일에서 재정의하지
+// 않음, 단일 원본).
+export const AUTO_ACCEPT_TIER_LABELS = {
+  auto_tier1_exact: '완전일치',
+  auto_tier2_variant: '학습된 변형',
+  auto_tier3_typo: '오타(편집거리1)',
+  auto_tier4_ai: 'AI 확인',
+}
+
+// 최근 days일(기본 7) 이내 오토파일럿이 남긴 감사 행만 조회 — v3_7 SQL
+// 미실행이면 빈 배열로 폴백(콘솔 경고 없이, 관리자 화면은 "없음"으로만
+// 보임 — § 기존 isMissingTableError 관례와 동일한 정신, PIN/자격증명은
+// 이 쿼리에 전혀 등장하지 않는다, 헌법 규칙 11과 무관하지만 확인차 명시).
+export async function fetchRecentAutoAcceptedVariants({ days = 7 } = {}) {
+  const sinceIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+  try {
+    const { data, error } = await supabase
+      .from('word_accepted_variants')
+      .select('id,word_id,accepted_answer,created_by,created_at,words(word)')
+      .in('created_by', Object.keys(AUTO_ACCEPT_TIER_LABELS))
+      .gte('created_at', sinceIso)
+      .order('created_at', { ascending: false })
+      .limit(200)
+    if (error) {
+      if (!isMissingRelationError(error)) console.warn('[spellingReviewAiApi] 최근 자동 인정 조회 실패:', error.message || error)
+      return []
+    }
+    return (data || []).map((r) => ({
+      id: r.id,
+      wordId: r.word_id,
+      word: r.words?.word || '(삭제된 단어)',
+      acceptedAnswer: r.accepted_answer,
+      createdBy: r.created_by,
+      tierLabel: AUTO_ACCEPT_TIER_LABELS[r.created_by] || r.created_by,
+      createdAt: r.created_at,
+    }))
+  } catch (err) {
+    if (!isMissingRelationError(err)) console.warn('[spellingReviewAiApi] 최근 자동 인정 조회 실패:', err?.message || err)
+    return []
+  }
+}
+
+// 철회 — words.accepted_meanings에서 이 답안만 제거(full-replace 시맨틱,
+// setWordAcceptedMeanings 기존 로직 그대로 재사용). word_accepted_variants
+// 감사 행 자체는 지우지 않는다(의도적 설계 — "이 답이 한때 자동 인정됐다가
+// 철회됐다"는 사실도 이력의 일부, append-only 원칙과 동일 맥락 — 이
+// 함수는 words.accepted_meanings만 되돌리고 이력은 그대로 둔다).
+// 현재 accepted_meanings는 이 함수가 직접 최신 상태로 조회한다(호출부
+// 캐시에 의존하지 않음 — 캐시가 오래됐을 위험을 없앰).
+export async function revokeAutoAcceptedVariant(wordId, answerToRemove, adminPin) {
+  const { data, error } = await supabase.from('words').select('accepted_meanings').eq('id', wordId).single()
+  if (error) throw error
+  const current = Array.isArray(data?.accepted_meanings) ? data.accepted_meanings : []
+  const targetKey = String(answerToRemove ?? '').trim().toLowerCase().replace(/\s+/g, '')
+  const next = current.filter((m) => String(m ?? '').trim().toLowerCase().replace(/\s+/g, '') !== targetKey)
+  await setWordAcceptedMeanings(wordId, next, adminPin)
 }

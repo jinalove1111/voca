@@ -10,6 +10,8 @@ import {
   DEFAULT_AI_PROVIDER, formatProviderDisplay,
   getCostCeilingUsd, setCostCeilingUsd, getDailyCeilingUsd, setDailyCeilingUsd,
   getTodaySpentUsd, recordEstimatedSpendUsd,
+  // 2026-08-01(Commit 4) — 오토파일럿 철회 안전밸브("최근 자동 인정").
+  fetchRecentAutoAcceptedVariants, revokeAutoAcceptedVariant,
 } from '../../utils/spellingReviewAiApi'
 import {
   selectRows, findDuplicateAnswerRows, selectCertainAccepts, selectAllDuplicateGroupRows, groupRowsByAnswer,
@@ -141,6 +143,29 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
   }
   useEffect(() => { load() }, [])
 
+  // 2026-08-01(Commit 4) — "최근 자동 인정 (7일)" 철회 목록. 오토파일럿
+  // 실행 여부/플래그와 무관하게 항상 조회 시도한다(과거에 자동 인정된 게
+  // 있으면 지금 플래그가 꺼져 있어도 여전히 되돌릴 수 있어야 함). v3_7 SQL
+  // 미실행이면 빈 배열로 조용히 폴백(fetchRecentAutoAcceptedVariants 자체가
+  // 처리).
+  const [recentAutoAccepted, setRecentAutoAccepted] = useState([])
+  const [revokeBusyId, setRevokeBusyId] = useState(null)
+  const loadRecentAutoAccepted = async () => setRecentAutoAccepted(await fetchRecentAutoAcceptedVariants({ days: 7 }))
+  useEffect(() => { loadRecentAutoAccepted() }, [])
+
+  const revokeAuto = async (item) => {
+    setRevokeBusyId(item.id)
+    try {
+      await revokeAutoAcceptedVariant(item.wordId, item.acceptedAnswer, adminPin)
+      setRecentAutoAccepted((prev) => prev.filter((x) => x.id !== item.id))
+      onChanged?.()
+    } catch (err) {
+      alert('철회 처리 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setRevokeBusyId(null)
+    }
+  }
+
   // ── 2026-08-01(Commit 3) — 검수 오토파일럿 ───────────────────────────────
   //
   // writingReviewAutoPilot이 켜져 있을 때만 동작. 페이지 로드 후 rows가
@@ -164,10 +189,18 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
       // 자동 인정 대상에 추가(2026-07-17 "사람 최종 판정" 결정을 명시적으로
       // 뒤집는 항목 — 운영자 지시 2026-08-01로 코드화, 기본은 여전히 꺼짐).
       const tier3 = autoTypoEnabled ? resolved.filter((p) => p.decision_source === 'levenshtein') : []
-      const tier123Rows = [...tier1, ...tier2, ...tier3].map((p) => rowById.get(p.pending_answer_id)).filter(Boolean)
-      if (tier123Rows.length > 0) {
-        await executeBulkAccept(tier123Rows, { mode: 'answer_only', adminPin })
-      }
+      // 2026-08-01(Commit 4) — 티어별로 별도 executeBulkAccept 호출 + 각자
+      // 다른 createdBy 라벨('최근 자동 인정' 철회 목록이 이 라벨로 구분해
+      // 보여준다). 한 번의 호출에 여러 라벨을 섞을 수 없어 3번으로 나눈다
+      // (executeBulkAccept 자체는 여전히 executeAccept 루프 그대로, 재구현
+      // 아님).
+      const tier1Rows = tier1.map((p) => rowById.get(p.pending_answer_id)).filter(Boolean)
+      const tier2Rows = tier2.map((p) => rowById.get(p.pending_answer_id)).filter(Boolean)
+      const tier3Rows = tier3.map((p) => rowById.get(p.pending_answer_id)).filter(Boolean)
+      if (tier1Rows.length > 0) await executeBulkAccept(tier1Rows, { mode: 'answer_only', adminPin, createdBy: 'auto_tier1_exact' })
+      if (tier2Rows.length > 0) await executeBulkAccept(tier2Rows, { mode: 'answer_only', adminPin, createdBy: 'auto_tier2_variant' })
+      if (tier3Rows.length > 0) await executeBulkAccept(tier3Rows, { mode: 'answer_only', adminPin, createdBy: 'auto_tier3_typo' })
+      const tier123Rows = [...tier1Rows, ...tier2Rows, ...tier3Rows]
 
       // 2단계 — AI 단계(writingReviewAiAssist가 켜져 있을 때만, § 헌법
       // 규칙 12와 무관하게 이 패널은 관리자 전용). 기존 실행당/일일 비용
@@ -200,7 +233,7 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
       const tier4Proposals = aiProposalsRun.length > 0 ? selectCertainAccepts(aiProposalsRun, 0.95) : []
       const tier4Rows = tier4Proposals.map((p) => rowById.get(p.pending_answer_id)).filter(Boolean)
       if (tier4Rows.length > 0) {
-        await executeBulkAccept(tier4Rows, { mode: 'answer_only', adminPin })
+        await executeBulkAccept(tier4Rows, { mode: 'answer_only', adminPin, createdBy: 'auto_tier4_ai' })
       }
 
       // 확실한 반려 — writingReviewAutoDismiss가 켜져 있을 때만 자동 무시.
@@ -229,6 +262,9 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
       if (tier123Rows.length + tier4Rows.length + dismissRows.length > 0) {
         await load()
         onChanged?.()
+      }
+      if (tier1Rows.length + tier2Rows.length + tier3Rows.length + tier4Rows.length > 0) {
+        await loadRecentAutoAccepted()
       }
     } catch (err) {
       // 오토파일럿은 절대 밖으로 던지지 않는다 — 실패하면 조용히 수동 그룹
@@ -633,6 +669,31 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
         <button onClick={load} disabled={loading} className="text-xs font-bold text-purple-500 btn-press py-2 px-2 -my-2">새로고침</button>
       </div>
       <p className="text-[11px] text-gray-400 mb-3">영→한 시험에서 등록된 뜻과 달라 오답 처리된 한글 답이에요. 맞는 표현이면 "인정"을 눌러주세요 — 그 단어의 인정 뜻에 추가되어 다음부터 정답 처리됩니다.</p>
+
+      {/* 2026-08-01(Commit 4) — 최근 자동 인정 철회(자기학습 안전밸브).
+          오토파일럿 플래그가 지금 꺼져 있어도, 과거에 자동 인정된 게 있으면
+          여기서 보이고 되돌릴 수 있다(§ 항상 조회). 0건이면 조용히 숨김 —
+          평소엔 패널을 복잡하게 만들지 않는다. */}
+      {recentAutoAccepted.length > 0 && (
+        <details className="bg-indigo-50 rounded-xl p-3 mb-3 text-xs">
+          <summary className="cursor-pointer select-none font-black text-indigo-700">🤖 최근 자동 인정 (7일, {recentAutoAccepted.length}건) — 되돌리기</summary>
+          <p className="text-indigo-400 mt-1 mb-2">오토파일럿이 자동으로 인정한 답이에요. 잘못 인정된 게 있으면 철회하세요 — 그 단어의 인정 뜻 목록에서 이 답안만 제거됩니다(기록 자체는 남아요).</p>
+          <div className="space-y-1.5">
+            {recentAutoAccepted.map((item) => (
+              <div key={item.id} className="bg-white rounded-lg p-2 flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-gray-700">
+                  <span className="font-black">{item.word}</span> = "{item.acceptedAnswer}"
+                  <span className="text-gray-400"> · {item.tierLabel}</span>
+                </span>
+                <button onClick={() => revokeAuto(item)} disabled={revokeBusyId === item.id}
+                  className="bg-white border-2 border-red-200 text-red-500 font-bold px-2 py-1 rounded-lg btn-press disabled:opacity-40">
+                  철회
+                </button>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
 
       {doneSummary && <p className="text-xs font-bold text-green-600 bg-green-50 rounded-xl p-2 mb-2">✅ {doneSummary}</p>}
 
