@@ -410,6 +410,83 @@ function FutureAssignmentPlanner({ targetClass, words, adminPin, units, activeUn
   // 맞춘다(관리자가 명시적으로 다른 유닛을 골라도 되지만, 기본값은 항상
   // 지금 보고 있는 유닛).
   useEffect(() => { setAutoUnitName(activeUnit) }, [activeUnit, targetClass])
+
+  // 2026-08-01 "여러 날짜 일괄 배정" — planBulkDates(순수 함수)로 미리보기
+  // 표(날짜→단어)를 만든 다음, 승인하면 날짜별로 순차 저장한다. 각
+  // 저장은 기존 setAssignmentForDate(adminPin 듀얼패스) 그대로 — upsert라
+  // 재시도해도 안전(멱등)하다. bulkPlan이 null이면 아직 미리보기 전.
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkUnitName, setBulkUnitName] = useState(activeUnit)
+  const [bulkStart, setBulkStart] = useState(tomorrowIsoStr())
+  const [bulkDays, setBulkDays] = useState(7)
+  const [bulkCount, setBulkCount] = useState(10)
+  const [bulkPlan, setBulkPlan] = useState(null) // { [dateStr]: string[] } | null
+  const [bulkStates, setBulkStates] = useState([]) // [{ date, status: 'idle'|'pending'|'done'|'error', message }]
+  const [bulkSaving, setBulkSaving] = useState(false)
+  useEffect(() => { setBulkUnitName(activeUnit) }, [activeUnit, targetClass])
+
+  // "YYYY-MM-DD" 문자열을 로컬 자정 Date로 직접 조립(new Date(str) 문자열
+  // 파싱은 UTC로 해석돼 wordLibrary.js의 localIsoDateStr()과 하루씩
+  // 어긋날 수 있다 — tomorrowIsoStr()과 동일한 "직접 조립" 원칙).
+  const parseIsoDateLocal = (s) => {
+    const [y, m, d] = s.split('-').map(Number)
+    return new Date(y, m - 1, d)
+  }
+  const bulkDatesList = () => {
+    const n = Math.min(14, Math.max(1, Number(bulkDays) || 0))
+    const start = parseIsoDateLocal(bulkStart)
+    const out = []
+    for (let i = 0; i < n; i++) {
+      const d = new Date(start)
+      d.setDate(d.getDate() + i)
+      out.push(localIsoDateStr(d))
+    }
+    return out
+  }
+
+  const buildBulkPreview = async () => {
+    const unitObj = (units || []).find((u) => u.name === bulkUnitName)
+    const unitWords = unitObj?.words || []
+    if (unitWords.length === 0) {
+      alert('선택한 유닛에 단어가 없어요 — 다른 유닛을 골라주세요.')
+      return
+    }
+    try {
+      const toDateStr = localIsoDateStr()
+      const fromDateStr = isoDaysAgoStr(14)
+      const history = await fetchAssignmentHistory(targetClass, fromDateStr, toDateStr)
+      const recentAssignedSlugSets = history.map((h) => new Set(h.wordIds))
+      const dates = bulkDatesList()
+      const plan = planBulkDates({ unitWords, recentAssignedSlugSets, dates, count: Math.max(1, Number(bulkCount) || 0) })
+      setBulkPlan(plan)
+      setBulkStates(dates.map((d) => ({ date: d, status: 'idle', message: '' })))
+    } catch (err) {
+      alert('일괄 계획 생성 중 오류가 발생했어요: ' + assignmentErrorMessage(err))
+    }
+  }
+
+  // 날짜별 순차 저장 — 병렬로 쏘지 않고 하나씩(레이스/서버 부하 방지),
+  // 도중 실패해도 나머지 날짜는 계속 진행. upsert 저장이라 재시도해도
+  // 안전(멱등) — "실패한 날짜만 다시 저장" 버튼이 이 함수를 그 목록으로만
+  // 재호출한다.
+  const saveBulkDates = async (datesToSave) => {
+    if (!bulkPlan || datesToSave.length === 0) return
+    setBulkSaving(true)
+    setBulkStates((prev) => prev.map((s) => (datesToSave.includes(s.date) ? { ...s, status: 'pending', message: '' } : s)))
+    for (const d of datesToSave) {
+      const wordIds = bulkPlan[d] || []
+      try {
+        await setAssignmentForDate(targetClass, d, wordIds, adminPin)
+        setBulkStates((prev) => prev.map((s) => (s.date === d ? { ...s, status: 'done', message: '' } : s)))
+      } catch (err) {
+        setBulkStates((prev) => prev.map((s) => (s.date === d ? { ...s, status: 'error', message: assignmentErrorMessage(err) } : s)))
+      }
+    }
+    setBulkSaving(false)
+  }
+  const saveAllBulk = () => saveBulkDates(bulkStates.map((s) => s.date))
+  const retryFailedBulk = () => saveBulkDates(bulkStates.filter((s) => s.status === 'error').map((s) => s.date))
+
   // P7 감사(2026-07-16): 날짜/반을 빠르게 바꾸면 먼저 시작된 조회의 응답이
   // "나중에" 도착해 방금 바꾼 날짜의 선택 상태를 덮어쓸 수 있었다(6dd6c7a
   // PIN 버그와 같은 stale 응답 레이스). 이 상태로 저장을 누르면 엉뚱한
@@ -532,6 +609,86 @@ function FutureAssignmentPlanner({ targetClass, words, adminPin, units, activeUn
           </div>
         </>
       )}
+
+      {/* 2026-08-01 "여러 날짜 일괄 배정" — 위 단일 날짜 배정과 완전히
+          분리된 별도 미리보기/저장 흐름(같은 setAssignmentForDate 저장
+          경로 재사용). 미리보기 승인 전에는 어떤 쓰기도 일어나지 않는다. */}
+      <div className="border-t-2 border-indigo-100 pt-2">
+        <button onClick={() => setBulkOpen((v) => !v)}
+          className="text-xs font-bold text-indigo-600 btn-press">
+          {bulkOpen ? '▲ 여러 날짜 일괄 배정 닫기' : '▼ 여러 날짜 일괄 배정 (여러 날에 나눠서 자동 생성)'}
+        </button>
+        {bulkOpen && (units || []).length > 0 && (
+          <div className="mt-2 space-y-2 bg-white rounded-lg p-2 border-2 border-indigo-100">
+            <div className="flex items-center gap-2 flex-wrap">
+              <select value={bulkUnitName} onChange={(e) => setBulkUnitName(e.target.value)} disabled={bulkSaving}
+                className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold bg-white">
+                {(units || []).map((u) => <option key={u.id || u.name} value={u.name}>{u.name}</option>)}
+              </select>
+              <input type="date" value={bulkStart} min={tomorrowIsoStr()} disabled={bulkSaving}
+                onChange={(e) => setBulkStart(e.target.value)}
+                className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold bg-white" />
+              <label className="text-xs font-bold text-gray-600 flex items-center gap-1">
+                일수
+                <input type="number" min={1} max={14} value={bulkDays} disabled={bulkSaving}
+                  onChange={(e) => setBulkDays(e.target.value)}
+                  className="w-14 border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold text-center bg-white" />
+              </label>
+              <label className="text-xs font-bold text-gray-600 flex items-center gap-1">
+                하루 단어수
+                <input type="number" min={1} value={bulkCount} disabled={bulkSaving}
+                  onChange={(e) => setBulkCount(e.target.value)}
+                  className="w-14 border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold text-center bg-white" />
+              </label>
+              <button onClick={buildBulkPreview} disabled={bulkSaving}
+                className="bg-indigo-100 text-indigo-700 font-bold px-3 py-1.5 rounded-lg text-xs btn-press disabled:opacity-60">
+                미리보기 생성
+              </button>
+            </div>
+            {bulkPlan && (
+              <>
+                <div className="max-h-48 overflow-y-auto border-2 border-gray-100 rounded-lg">
+                  <table className="w-full text-xs">
+                    <tbody>
+                      {bulkStates.map(({ date: d, status, message }) => {
+                        const bulkUnitObj = (units || []).find((u) => u.name === bulkUnitName)
+                        const wordLookupBulk = new Map((bulkUnitObj?.words || []).map((w) => [wordSlug(w.word), w.word]))
+                        const wordTexts = (bulkPlan[d] || []).map((slug) => wordLookupBulk.get(slug) || slug)
+                        const badge = status === 'done' ? '✅ 저장됨'
+                          : status === 'pending' ? '⏳ 저장 중'
+                          : status === 'error' ? '❌ 실패'
+                          : '⬜ 대기'
+                        return (
+                          <tr key={d} className="border-b border-gray-50 last:border-0">
+                            <td className="px-2 py-1 font-bold text-gray-700 whitespace-nowrap">{d}</td>
+                            <td className="px-2 py-1 text-gray-600">{wordTexts.join(', ')}</td>
+                            <td className="px-2 py-1 whitespace-nowrap">
+                              {badge}
+                              {status === 'error' && message && <span className="block text-red-500">{message}</span>}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button onClick={saveAllBulk} disabled={bulkSaving}
+                    className="bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs btn-press disabled:opacity-60">
+                    {bulkSaving ? '저장 중...' : '일괄 저장'}
+                  </button>
+                  {bulkStates.some((s) => s.status === 'error') && (
+                    <button onClick={retryFailedBulk} disabled={bulkSaving}
+                      className="bg-white border-2 border-red-300 text-red-500 font-bold px-3 py-1.5 rounded-lg text-xs btn-press disabled:opacity-60">
+                      실패한 날짜만 다시 저장
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
