@@ -258,6 +258,16 @@ export const DOMAINS = {
       { script: 'tests/harness/runLearningEngine.mjs', builders: [], note: '자기완결형 하네스(learningItem.js 순수 모듈 직접 import + registry.js는 esbuild 인메모리 번들) — 21단언.' },
     ],
   },
+  // ── 2026-08-01 등록: Memory Engine(docs/research/memory-engine.md) —
+  // Leitner 박스 모델(§6.3) + 난이도/복습 큐 + 저장 코덱·백엔드 + 세션
+  // 플래너 + 메트릭/AI 플러그 포인트. 위 learningEngine과 동일한
+  // "자기완결형 하네스를 child-process로 spawn" 관례.
+  memoryEngine: {
+    label: 'Memory Engine — Leitner 박스 모델/난이도/복습 큐/저장 코덱/세션 플래너 (verify:memory-engine과 동일 실행)',
+    checks: [
+      { script: 'tests/harness/runMemoryEngine.mjs', builders: [], note: '자기완결형 하네스 — leitner.js/difficulty.js/reviewQueue.js/reviewDataCodec.js/memoryMetrics.js/memoryPlugPoints.js는 순수 모듈 직접 import(형제 파일은 명시적 .js 확장자라 번들 불필요), reviewDataBackend.js는 mock client/storage 주입으로 실 네트워크 0인 채 전체 로직 검증, sessionPlanner.js는 registry.js와 함께 esbuild 인메모리 번들(sentenceLearning.js 재사용 확인 겸 방출 모드가 Learning Engine 레지스트리에 실재하는지 교차 검증). emit.js(IO 래퍼, productEvents.js 경유)만 소스 레벨 검사(정직한 커버리지 경계 — 모듈 스코프에서 실 Supabase 클라이언트를 생성해 plain Node import 시 크래시하므로 실행하지 않음). 108단언.' },
+    ],
+  },
 }
 
 // Phase 6 최종 검증 매트릭스가 참조하는 "운영자 체크리스트 13항목" ↔ 위 도메인

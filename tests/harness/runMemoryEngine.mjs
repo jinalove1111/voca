@@ -32,6 +32,8 @@ import * as difficulty from '../../src/learning/memory/difficulty.js'
 import * as reviewQueue from '../../src/learning/memory/reviewQueue.js'
 import * as reviewDataCodec from '../../src/learning/memory/storage/reviewDataCodec.js'
 import * as reviewDataBackend from '../../src/learning/memory/storage/reviewDataBackend.js'
+import * as memoryMetrics from '../../src/learning/metrics/memoryMetrics.js'
+import * as memoryPlugPoints from '../../src/learning/ai/memoryPlugPoints.js'
 
 let passed = 0, failed = 0
 const failures = []
@@ -380,6 +382,60 @@ const sessionPlannerSrc = readFileSync(new URL('../../src/learning/planner/sessi
 check('sessionPlanner.js는 Math.random 미사용(결정론 — shuffleDeterministic만 사용)', !sessionPlannerSrc.includes('Math.random'))
 check('sessionPlanner.js는 세션 "크기" 로직을 재구현하지 않음(SESSION_SIZE_BANDS 미포함, dailyRitual.js 책임 유지)',
   !sessionPlannerSrc.includes('SESSION_SIZE_BANDS'))
+
+// ── C5: metrics/memoryMetrics.js — 순수 집계 + MEM_EV 이름 ────────────────
+console.log('\n-- metrics/memoryMetrics.js: computeBoxDistribution / computeDueLoad / computeReviewReturnRate')
+check('MEM_EV는 day-level 이벤트 이름 문자열만(payload 없음, product_events 테이블에 payload 컬럼 없음)',
+  Object.values(memoryMetrics.MEM_EV).every((v) => typeof v === 'string' && v.length > 0))
+
+const distBoxes = { w1: { level: 0 }, w2: { level: 0 }, w3: { level: 3 }, w4: { level: 5 } }
+const dist = memoryMetrics.computeBoxDistribution(distBoxes)
+check('computeBoxDistribution: 0~MAX_BOX(5) 전 구간 키가 존재', Object.keys(dist).length === leitner.MAX_BOX + 1)
+check('computeBoxDistribution: 레벨별 카운트가 정확함(0:2, 3:1, 5:1)', dist[0] === 2 && dist[3] === 1 && dist[5] === 1)
+
+const distWithBad = memoryMetrics.computeBoxDistribution({ w4: { level: 5 }, bad: { level: 99 } })
+check('computeBoxDistribution: 범위 밖 레벨(99)도 클램프되어 5에 합산(크래시 없음, w4+bad=2)', distWithBad[5] === 2)
+
+const dueBoxes = { overdue: { level: 1, nextReviewAt: '2026-07-20' }, future: { level: 1, nextReviewAt: '2026-08-10' }, never: { level: 0, nextReviewAt: null } }
+check('computeDueLoad: due 판정은 leitner.isDue를 그대로 재사용(overdue+never=2, future 제외)',
+  memoryMetrics.computeDueLoad(dueBoxes, '2026-08-01') === 2)
+
+const returnRows = [
+  { anon_id: 'a1', event: memoryMetrics.MEM_EV.memoryReviewSessionCompleted, day: '2026-07-30' },
+  { anon_id: 'a1', event: 'app_opened', day: '2026-07-31' }, // a1이 정확히 1일 뒤 복귀
+  { anon_id: 'a2', event: memoryMetrics.MEM_EV.memoryReviewSessionCompleted, day: '2026-07-30' }, // a2는 복귀 없음
+]
+check('computeReviewReturnRate: 완료 이벤트 2건 중 1건만 익일 복귀 → 0.5', memoryMetrics.computeReviewReturnRate(returnRows) === 0.5)
+check('computeReviewReturnRate: 완료 이벤트가 아예 없으면 0(division-by-zero 없음)', memoryMetrics.computeReviewReturnRate([]) === 0)
+
+const memoryMetricsSrc = readFileSync(new URL('../../src/learning/metrics/memoryMetrics.js', import.meta.url), 'utf8')
+check('memoryMetrics.js는 형제 leitner.js만 import', (() => {
+  const imports = [...memoryMetricsSrc.matchAll(/^import .* from '([^']+)'/gm)].map((m) => m[1])
+  return imports.length === 1 && imports[0] === '../memory/leitner.js'
+})())
+check('memoryMetrics.js는 Math.random/Date.now 미사용', !memoryMetricsSrc.includes('Math.random') && !memoryMetricsSrc.includes('Date.now('))
+
+// ── C5: metrics/emit.js — 소스 레벨 검사만(정직한 경계, 위 import 주석 참고) ──
+console.log('\n-- metrics/emit.js: 소스 레벨 검사(import 시 실 Supabase 클라이언트 생성 크래시 회피)')
+const emitSrc = readFileSync(new URL('../../src/learning/metrics/emit.js', import.meta.url), 'utf8')
+check('emit.js는 trackEvent(productEvents.js)에 위임만 하고 자체 재구현 없음',
+  emitSrc.includes("from '../../utils/productEvents'") && (emitSrc.match(/trackEvent\(/g) || []).length === 4)
+check('emit.js는 MEM_EV 4개 키 각각에 대응하는 emit 함수를 export',
+  ['emitReviewSessionStarted', 'emitReviewSessionCompleted', 'emitBoxPromoted', 'emitBoxDemoted'].every((fn) => emitSrc.includes(`export function ${fn}`)))
+check('emit.js는 supabase를 직접 호출하지 않음(전부 trackEvent 경유)', !/supabase\s*\.\s*(from|auth|rpc|storage|channel)\s*\(|createClient\s*\(/i.test(emitSrc))
+check('emit.js는 Math.random 미사용', !emitSrc.includes('Math.random'))
+
+// ── C5: ai/memoryPlugPoints.js — not_implemented 계약 ──────────────────────
+console.log('\n-- ai/memoryPlugPoints.js: 미래 AI 연결 지점(계약만, 구현 없음)')
+const predictResult = await memoryPlugPoints.predictWordDifficulty({ studentId: 's1', wordId: 'w1' })
+check('predictWordDifficulty: { ok:false, reason:"not_implemented" } 계약', predictResult.ok === false && predictResult.reason === 'not_implemented')
+const scheduleResult = await memoryPlugPoints.optimizeReviewSchedule({ studentId: 's1' })
+check('optimizeReviewSchedule: { ok:false, reason:"not_implemented" } 계약', scheduleResult.ok === false && scheduleResult.reason === 'not_implemented')
+
+const plugPointsSrc = readFileSync(new URL('../../src/learning/ai/memoryPlugPoints.js', import.meta.url), 'utf8')
+check('memoryPlugPoints.js는 import 0(실제 AI 호출 없음)', !/^import /m.test(plugPointsSrc))
+check('memoryPlugPoints.js는 실제 AI SDK/네트워크 호출 문자열이 전혀 없음(anthropic/openai/fetch 미사용)',
+  !/anthropic|openai|fetch\s*\(/i.test(plugPointsSrc))
 
 console.log('\n=== summary ===')
 if (failed === 0) { console.log(`  PASS  memory-engine — Memory Engine 순수 코어 (${passed}개 단언)`); process.exit(0) }
