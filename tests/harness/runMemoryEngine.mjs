@@ -27,6 +27,8 @@ import { readFileSync } from 'node:fs'
 import * as leitner from '../../src/learning/memory/leitner.js'
 import * as difficulty from '../../src/learning/memory/difficulty.js'
 import * as reviewQueue from '../../src/learning/memory/reviewQueue.js'
+import * as reviewDataCodec from '../../src/learning/memory/storage/reviewDataCodec.js'
+import * as reviewDataBackend from '../../src/learning/memory/storage/reviewDataBackend.js'
 
 let passed = 0, failed = 0
 const failures = []
@@ -172,6 +174,134 @@ check('reviewQueue.js는 형제 모듈(leitner/difficulty)만 import', (() => {
   return imports.length > 0 && imports.every((p) => p === './leitner.js' || p === './difficulty.js')
 })())
 check('reviewQueue.js는 Math.random 미사용(타이브레이크는 결정론 해시)', !reviewQueueSrc.includes('Math.random'))
+
+// ── C3: reviewDataCodec.js — schema v1 인코딩/디코딩/병합 ───────────────────
+console.log('\n-- reviewDataCodec.js: decode/encode/merge')
+const empty = reviewDataCodec.emptyState()
+check('emptyState(): spellingWrongToday=[], memoryEngine v1 boxes={}',
+  Array.isArray(empty.spellingWrongToday) && empty.spellingWrongToday.length === 0
+  && empty.memoryEngine.version === 1 && Object.keys(empty.memoryEngine.boxes).length === 0)
+
+check('decodeReviewData(null) → emptyState()과 동일', JSON.stringify(reviewDataCodec.decodeReviewData(null)) === JSON.stringify(empty))
+check('decodeReviewData(undefined) → emptyState()과 동일', JSON.stringify(reviewDataCodec.decodeReviewData(undefined)) === JSON.stringify(empty))
+
+const legacyRaw = { spellingWrongToday: ['w1', 'w2'] } // Writing MVP 시절 형태(memoryEngine 없음)
+const decodedLegacy = reviewDataCodec.decodeReviewData(legacyRaw)
+check('decodeReviewData: legacy 필드(spellingWrongToday만) 있으면 그대로 보존',
+  JSON.stringify(decodedLegacy.spellingWrongToday) === JSON.stringify(['w1', 'w2']))
+check('decodeReviewData: legacy엔 memoryEngine 없음 → emptyState.memoryEngine으로 채움',
+  decodedLegacy.memoryEngine.version === 1 && Object.keys(decodedLegacy.memoryEngine.boxes).length === 0)
+
+const badVersionRaw = { spellingWrongToday: [], memoryEngine: { version: 99, boxes: { w1: { level: 3 } } }, someFutureKey: 'kept' }
+const decodedBadVersion = reviewDataCodec.decodeReviewData(badVersionRaw)
+check('decodeReviewData: 버전 불일치는 memoryEngine을 빈 상태로 취급(손상 데이터로 크래시 안 함)',
+  decodedBadVersion.memoryEngine.version === 1 && Object.keys(decodedBadVersion.memoryEngine.boxes).length === 0)
+check('decodeReviewData: 알 수 없는 키(someFutureKey)는 그대로 보존', decodedBadVersion.someFutureKey === 'kept')
+
+const goodRaw = { spellingWrongToday: ['x'], memoryEngine: { version: 1, updatedAt: '2026-07-30', boxes: { w1: { level: 2, nextReviewAt: '2026-08-05', lastResult: 'correct', lastReviewedAt: '2026-07-30', correctStreak: 2 } } }, otherAppKey: 42 }
+const decodedGood = reviewDataCodec.decodeReviewData(goodRaw)
+check('decodeReviewData: 정상 v1 데이터는 boxes/updatedAt/기타 키 그대로 보존',
+  decodedGood.memoryEngine.boxes.w1.level === 2 && decodedGood.memoryEngine.updatedAt === '2026-07-30' && decodedGood.otherAppKey === 42)
+
+const stateToEncode = { spellingWrongToday: ['y'], memoryEngine: { version: 1, updatedAt: '2026-08-01', boxes: { w2: { level: 1, nextReviewAt: '2026-08-02', lastResult: 'correct', lastReviewedAt: '2026-08-01', correctStreak: 1 } } } }
+const encodedOverExisting = reviewDataCodec.encodeReviewData({ someFutureKey: 'must-survive', memoryEngine: { version: 1, updatedAt: '2026-07-01', boxes: { w1: { level: 5 } } } }, stateToEncode)
+check('encodeReviewData: read-merge-write — 기존의 알 수 없는 키(someFutureKey) 보존', encodedOverExisting.someFutureKey === 'must-survive')
+check('encodeReviewData: memoryEngine.boxes는 state 값으로 완전히 교체(기존 w1 대신 새 w2만)',
+  encodedOverExisting.memoryEngine.boxes.w2.level === 1 && !encodedOverExisting.memoryEngine.boxes.w1)
+check('encodeReviewData: existingRaw가 null이어도 크래시 없이 안전(신규 행)',
+  reviewDataCodec.encodeReviewData(null, stateToEncode).memoryEngine.boxes.w2.level === 1)
+
+const mergeA = { spellingWrongToday: ['a'], memoryEngine: { version: 1, updatedAt: '2026-07-20', boxes: {
+  shared: { level: 3, nextReviewAt: '2026-08-01', lastReviewedAt: '2026-07-25', correctStreak: 1 }, // a가 더 높은 레벨
+  onlyA: { level: 1, nextReviewAt: '2026-08-01', lastReviewedAt: '2026-07-20', correctStreak: 0 },
+  tieNewer: { level: 2, nextReviewAt: '2026-08-01', lastReviewedAt: '2026-07-29', correctStreak: 1 }, // 동률(레벨2) + 더 최근
+} } }
+const mergeB = { spellingWrongToday: ['b'], memoryEngine: { version: 1, updatedAt: '2026-07-28', boxes: {
+  shared: { level: 1, nextReviewAt: '2026-08-01', lastReviewedAt: '2026-07-28', correctStreak: 0 }, // b가 더 낮은 레벨
+  onlyB: { level: 4, nextReviewAt: '2026-08-01', lastReviewedAt: '2026-07-28', correctStreak: 3 },
+  tieNewer: { level: 2, nextReviewAt: '2026-08-01', lastReviewedAt: '2026-07-20', correctStreak: 0 }, // 동률(레벨2) + 더 과거
+} } }
+const merged = reviewDataCodec.mergeStates(mergeA, mergeB)
+check('mergeStates: 레벨 높은 쪽이 이김(shared → a의 level 3)', merged.memoryEngine.boxes.shared.level === 3)
+check('mergeStates: 한쪽에만 있는 단어는 그대로 보존(onlyA/onlyB 둘 다 존재)',
+  merged.memoryEngine.boxes.onlyA.level === 1 && merged.memoryEngine.boxes.onlyB.level === 4)
+check('mergeStates: 레벨 동률이면 더 최근 lastReviewedAt이 이김(tieNewer → a의 07-29)',
+  merged.memoryEngine.boxes.tieNewer.lastReviewedAt === '2026-07-29')
+check('mergeStates: spellingWrongToday는 합집합(파괴적 축소 없음)',
+  merged.spellingWrongToday.includes('a') && merged.spellingWrongToday.includes('b'))
+check('mergeStates: updatedAt은 더 최근 값', merged.memoryEngine.updatedAt === '2026-07-28')
+
+const codecSrc = readFileSync(new URL('../../src/learning/memory/storage/reviewDataCodec.js', import.meta.url), 'utf8')
+check('reviewDataCodec.js는 import 0(순수 모듈)', !/^import /m.test(codecSrc))
+check('reviewDataCodec.js는 Math.random/Date.now 미사용', !codecSrc.includes('Math.random') && !codecSrc.includes('Date.now('))
+
+// ── C3: reviewDataBackend.js — IO(로컬 미러 + 클라우드 자가치유 병합) ──────
+console.log('\n-- reviewDataBackend.js: load/save(주입된 mock client/storage만 사용, 실 네트워크 0)')
+function makeMemoryStorage(initial = {}) {
+  const store = { ...initial }
+  return { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = v }, _dump: () => store }
+}
+function makeMockClient({ row = null, onUpdate = null, selectError = null } = {}) {
+  return {
+    from(table) {
+      void table
+      return {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: row, error: selectError }) }) }),
+        update: (payload) => { if (onUpdate) onUpdate(payload); return { eq: async () => ({ error: null }) } },
+      }
+    },
+  }
+}
+
+const noStorage = makeMemoryStorage()
+const loadedEmpty = await reviewDataBackend.load('student-1', { storage: noStorage })
+check('load: client/로컬 둘 다 없음 → emptyState()', JSON.stringify(loadedEmpty) === JSON.stringify(reviewDataCodec.emptyState()))
+
+const localOnlyStorage = makeMemoryStorage()
+await reviewDataBackend.save('student-2', { spellingWrongToday: [], memoryEngine: { version: 1, updatedAt: '2026-08-01', boxes: { w1: { level: 2, nextReviewAt: '2026-08-05', lastReviewedAt: '2026-08-01', correctStreak: 1 } } } }, '2026-08-01T00:00:00Z', { storage: localOnlyStorage })
+const loadedLocalOnly = await reviewDataBackend.load('student-2', { storage: localOnlyStorage })
+check('save(client 없음) → 로컬에 반영되고 load가 그대로 읽어옴', loadedLocalOnly.memoryEngine.boxes.w1.level === 2)
+
+let updatePayload = null
+const cloudRow = { review_data: { spellingWrongToday: [], memoryEngine: { version: 1, updatedAt: '2026-07-20', boxes: { wCloud: { level: 1, nextReviewAt: '2026-08-01', lastReviewedAt: '2026-07-20', correctStreak: 0 } } } } }
+const client1 = makeMockClient({ row: cloudRow, onUpdate: (p) => { updatePayload = p } })
+const localWithProgress = makeMemoryStorage()
+await reviewDataBackend.save('student-3', { spellingWrongToday: [], memoryEngine: { version: 1, updatedAt: '2026-08-01', boxes: { wCloud: { level: 3, nextReviewAt: '2026-08-10', lastReviewedAt: '2026-08-01', correctStreak: 2 } } } }, '2026-08-01T00:00:00Z', { storage: localWithProgress }) // 먼저 로컬에 기록(진짜 흐름 흉내)
+const savePromise = reviewDataBackend.save('student-3', { spellingWrongToday: [], memoryEngine: { version: 1, updatedAt: '2026-08-01', boxes: { wCloud: { level: 3, nextReviewAt: '2026-08-10', lastReviewedAt: '2026-08-01', correctStreak: 2 } } } }, '2026-08-01T00:00:00Z', { client: client1, storage: localWithProgress })
+await savePromise
+check('save: client 있고 기존 행 있으면 fire-and-forget UPDATE 호출됨', updatePayload !== null && updatePayload.review_data.memoryEngine.boxes.wCloud.level === 3)
+
+let updateCalledForNoRow = false
+const client2 = makeMockClient({ row: null, onUpdate: () => { updateCalledForNoRow = true } })
+await reviewDataBackend.save('student-4', reviewDataCodec.emptyState(), '2026-08-01T00:00:00Z', { client: client2, storage: makeMemoryStorage() })
+check('save: 클라우드에 기존 행이 없으면 UPDATE를 호출하지 않고 조용히 스킵(새 행을 만들지 않음)', updateCalledForNoRow === false)
+
+const localMergeStorage = makeMemoryStorage()
+await reviewDataBackend.save('student-5', { spellingWrongToday: ['local-word'], memoryEngine: { version: 1, updatedAt: '2026-08-01', boxes: { wShared: { level: 4, nextReviewAt: '2026-08-15', lastReviewedAt: '2026-08-01', correctStreak: 3 } } } }, '2026-08-01T00:00:00Z', { storage: localMergeStorage })
+const client3 = makeMockClient({ row: { review_data: { spellingWrongToday: ['cloud-word'], memoryEngine: { version: 1, updatedAt: '2026-07-15', boxes: { wShared: { level: 1, nextReviewAt: '2026-08-01', lastReviewedAt: '2026-07-15', correctStreak: 0 }, wCloudOnly: { level: 2, nextReviewAt: '2026-08-01', lastReviewedAt: '2026-07-15', correctStreak: 1 } } } } } })
+const mergedLoad = await reviewDataBackend.load('student-5', { client: client3, storage: localMergeStorage })
+check('load: 로컬+클라우드 병합 — 로컬이 더 진전(level 4)된 shared 단어가 이김', mergedLoad.memoryEngine.boxes.wShared.level === 4)
+check('load: 클라우드에만 있던 단어(wCloudOnly)도 보존', mergedLoad.memoryEngine.boxes.wCloudOnly?.level === 2)
+check('load: spellingWrongToday도 합집합', mergedLoad.spellingWrongToday.includes('local-word') && mergedLoad.spellingWrongToday.includes('cloud-word'))
+
+const clientNotReady = makeMockClient({ row: null, selectError: { code: '42703', message: 'column review_data does not exist' } })
+const notReadyLoad = await reviewDataBackend.load('student-6', { client: clientNotReady, storage: makeMemoryStorage() })
+check('load: 42703(컬럼 부재) 에러는 크래시 없이 emptyState 수준으로 폴백', JSON.stringify(notReadyLoad) === JSON.stringify(reviewDataCodec.emptyState()))
+
+const throwingClient = { from: () => { throw new Error('network down') } }
+let loadThrew = false
+try { await reviewDataBackend.load('student-7', { client: throwingClient, storage: makeMemoryStorage() }) } catch { loadThrew = true }
+check('load: client 자체가 throw해도 하네스로 전파되지 않음(절대 throw 안 함)', loadThrew === false)
+
+const backendSrc = readFileSync(new URL('../../src/learning/memory/storage/reviewDataBackend.js', import.meta.url), 'utf8')
+check('reviewDataBackend.js는 형제 코덱 모듈만 import(supabaseClient.js 직접 import 없음)', (() => {
+  const imports = [...backendSrc.matchAll(/^import .* from '([^']+)'/gm)].map((m) => m[1])
+  return imports.length > 0 && imports.every((p) => p === './reviewDataCodec.js')
+})())
+check('reviewDataBackend.js 헤더가 wordLibrary.js:1697 클로버 + 플래그온 전제조건을 문서화',
+  backendSrc.includes('wordLibrary.js:1697') && backendSrc.includes('플래그온 전제조건'))
+check('reviewDataBackend.js 헤더가 §7.2 word_review_schedule 대안을 SQL 미작성으로 문서화',
+  backendSrc.includes('word_review_schedule') && backendSrc.includes('의도적으로 작성하지 않는다'))
 
 console.log('\n=== summary ===')
 if (failed === 0) { console.log(`  PASS  memory-engine — Memory Engine 순수 코어 (${passed}개 단언)`); process.exit(0) }

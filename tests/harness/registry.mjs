@@ -98,6 +98,7 @@ export const DOMAINS = {
       { script: 'scripts/testDailyAssignment.mjs', builders: ['wordlib'] },
       { script: 'scripts/testFutureAssignment.mjs', builders: ['wordlib'] },
       { script: 'scripts/testSyncProgress.mjs', builders: ['wordlib'] },
+      { script: 'scripts/testAssignmentPlanner.mjs', builders: [], extra: true, note: '배정 자동 생성 순수 플래너(pickNextAssignment/planBulkDates, 2026-08-01) — 13개 필수 도메인 밖, 신규 보너스 커버리지. assignmentPlanner.js가 완전 순수(Supabase/React 없음)라 번들 불필요.' },
     ],
   },
   quiz: {
@@ -157,6 +158,7 @@ export const DOMAINS = {
     checks: [
       { script: 'scripts/testDailyAssignment.mjs', builders: ['wordlib'] },
       { script: 'scripts/testFutureAssignment.mjs', builders: ['wordlib'] },
+      { script: 'scripts/testAssignmentPlanner.mjs', builders: [], extra: true, note: '배정 자동 생성 순수 플래너(pickNextAssignment/planBulkDates, 2026-08-01) — homework 도메인과 동일 스크립트 공유(테스트 로직 중복 없음).' },
     ],
   },
   audioTts: {
