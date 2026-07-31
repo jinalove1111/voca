@@ -59,6 +59,19 @@
 -- 담당)"로 범위를 축소 지시해 시드 블록을 제거했다. grammar_points
 -- 테이블/컬럼/인덱스/RLS/GRANT 구조는 설계 문서 그대로 유지 — 스키마만
 -- 있고 행은 0개인 상태로 이 파일이 실행된다.
+--
+-- ⚠️ 프로덕션 락다운 재실행 경고(리뷰 반영, 2026-07-31 — 하단 "[락다운 합류
+-- 블록]"과 반드시 함께 읽을 것): 아래 5개 `do $$ ... create policy` 가드는
+-- 전부 "이 테이블에 정책이 하나라도 이미 있으면 건너뛴다"(policyname 특정이
+-- 아니라 `pg_policies`에서 `tablename` 자체의 존재만 확인)로 작성돼 있다.
+-- 즉 **락다운 합류 블록(하단, 현재 주석 처리)을 먼저 실행해 "allow anon
+-- all *" 정책을 "anon read only" 정책으로 이미 교체한 뒤에, 이 파일 위쪽
+-- 절(1~5번)을 실수로 다시 실행해도 개방 정책이 재생성되지 않는다** —
+-- 가드가 정책 *이름*이 아니라 정책 *존재 여부*를 보므로, 락다운으로 만든
+-- "anon read only" 정책이 이미 있으면 위쪽 절은 아무것도 하지 않고
+-- 조용히 스킵한다. (최초 버전은 policyname을 정확히 맞춰야만 스킵하는
+-- 가드여서, 락다운 이후 이 파일을 재실행하면 이론상 개방 정책이 다시
+-- 만들어질 수 있는 리스크가 있었다 — 리뷰 발견 M1, 이번 수정으로 폐기.)
 
 -- ════════════════════════════════════════════════════════════════════════
 -- 1) publishers — 출판사 정규화(승인 사항, 설계 문서 §0)
@@ -70,7 +83,7 @@ create table if not exists publishers (
 );
 alter table publishers enable row level security;
 do $$ begin
-  if not exists (select 1 from pg_policies where tablename = 'publishers' and policyname = 'allow anon all publishers') then
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'publishers') then
     create policy "allow anon all publishers" on publishers for all using (true) with check (true);
   end if;
 end $$;
@@ -87,7 +100,7 @@ create table if not exists grades (
 );
 alter table grades enable row level security;
 do $$ begin
-  if not exists (select 1 from pg_policies where tablename = 'grades' and policyname = 'allow anon all grades') then
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'grades') then
     create policy "allow anon all grades" on grades for all using (true) with check (true);
   end if;
 end $$;
@@ -111,7 +124,7 @@ create table if not exists grammar_points (
 create index if not exists idx_grammar_points_grp on grammar_points(grp);
 alter table grammar_points enable row level security;
 do $$ begin
-  if not exists (select 1 from pg_policies where tablename = 'grammar_points' and policyname = 'allow anon all grammar_points') then
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'grammar_points') then
     create policy "allow anon all grammar_points" on grammar_points for all using (true) with check (true);
   end if;
 end $$;
@@ -138,7 +151,7 @@ create index if not exists idx_ugp_unit on unit_grammar_points(unit_id);
 create index if not exists idx_ugp_grammar_point on unit_grammar_points(grammar_point_id);
 alter table unit_grammar_points enable row level security;
 do $$ begin
-  if not exists (select 1 from pg_policies where tablename = 'unit_grammar_points' and policyname = 'allow anon all unit_grammar_points') then
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'unit_grammar_points') then
     create policy "allow anon all unit_grammar_points" on unit_grammar_points for all using (true) with check (true);
   end if;
 end $$;
@@ -171,8 +184,19 @@ create table if not exists examples (
   updated_at timestamptz not null default now()
 );
 
--- 인덱스(설계 문서 §2 "인덱스(Phase 0)" 그대로)
-create index if not exists idx_examples_target_word_lower on examples (lower(target_word));
+-- 인덱스(설계 문서 §2 "인덱스(Phase 0)" 기반, target_word 인덱스는 리뷰
+-- 반영으로 교체됨 — 아래 주석 참고, docs/CURRICULUM_ENGINE.md 하단
+-- "리뷰 반영 노트"에도 동일 내용 기록):
+--   원안은 `lower(target_word)` 표현식 인덱스였으나, target_word는 이미
+--   createExample/updateExample(exampleLibrary.js, normalizeTargetWord)이
+--   저장 시점에 소문자로 정규화해서 넣으므로 조회 시점에 다시 lower()를
+--   씌워 매칭할 필요가 없다(정규화 안 된 과거 행이 생길 가능성은 이
+--   테이블이 아직 미실행·0행이라 존재하지 않음). 표현식 인덱스 대신 평범한
+--   btree 복합 인덱스 하나로 target_word 단독 조회와
+--   (target_word, approval_status) 복합 조건(fetchApprovedExamplesForWords의
+--   실제 질의 형태) 둘 다를 커버한다 — 이 파일은 아직 실행된 적이 없으므로
+--   DROP INDEX 없이 정의만 교체.
+create index if not exists idx_examples_target_word on examples (target_word, approval_status);
 create index if not exists idx_examples_unit_approval on examples (unit_id, approval_status);
 create index if not exists idx_examples_textbook_approval on examples (textbook_id, approval_status);
 create index if not exists idx_examples_approval_status on examples (approval_status);
@@ -184,7 +208,7 @@ alter table examples enable row level security;
 -- Function에 의존)이라, 즉시 락다운은 dead-end다(설계 문서 §9). 락다운
 -- 배포 완료 후 아래 "락다운 합류 블록"을 별도 마이그레이션으로 실행한다.
 do $$ begin
-  if not exists (select 1 from pg_policies where tablename = 'examples' and policyname = 'allow anon all examples') then
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'examples') then
     create policy "allow anon all examples" on examples for all using (true) with check (true);
   end if;
 end $$;
@@ -194,11 +218,16 @@ grant select, insert, update, delete on examples to anon, authenticated;
 -- v3.11/v3.12 계열(admin-content-write Edge Function 경유 쓰기)이 실제
 -- 배포된 뒤, 아래 블록의 주석을 해제해 별도 마이그레이션으로 실행한다.
 -- 전제조건(반드시 먼저 확인):
---   1) supabase/functions/admin-content-write/index.ts가 배포됐고,
---      exampleLibrary.js의 createExample/updateExample/deleteExample/
---      setApprovalStatus 등 쓰기 함수들이 adminPin 경유 Edge Function
---      호출로 전환돼 실제 배포됐을 것(현재 Phase 0 시점에는 adminPin이
---      예약 인자일 뿐 미사용 — wordLibrary.js 듀얼패스 관례).
+--   1) supabase/functions/admin-content-write/index.ts가 배포됐고, 아래
+--      anon 직접 쓰기 경로들이 전부 adminPin 경유 Edge Function 호출로
+--      전환돼 실제 배포됐을 것(현재 Phase 0 시점에는 adminPin이 예약
+--      인자일 뿐 미사용 — wordLibrary.js 듀얼패스 관례):
+--        · exampleLibrary.js: createExample/updateExample/deleteExample/
+--          setApprovalStatus(및 별칭 approveExample/rejectExample/
+--          publishExample)
+--        · curriculumApi.js: createPublisher (publishers 테이블에 대한
+--          유일한 anon 쓰기 경로 — listPublishers/listGrades/
+--          listGrammarPoints는 조회 전용이라 락다운과 무관)
 --   2) 관리자 화면(ExampleManager/ApprovalQueue)이 adminPin을 실제로
 --      호출부에 넘기도록 배선돼 배포됐을 것.
 --   3) v3.11/v3.12가 이미 실행된 상태일 것(같은 신뢰 모델 전환의 일부).
