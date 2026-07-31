@@ -433,3 +433,41 @@ plan = [
 _승인 시 확인 요청 1건: §9 첫 행 — lessons를 별도 테이블 없이
 `units.lesson_no`로 표현하는 안에 동의하시는지. 나머지는 승인 즉시 Phase 0
 구현 계획(파일·커밋 단위)으로 전개합니다._
+
+---
+
+## 리뷰 반영 노트 (2026-07-31, Phase 0 구현 커밋 F1~F3 — append)
+
+이 섹션은 위 설계 원문을 고치지 않고(append-only, 저장소 헌법 규칙 13)
+구현 중 실제로 갈라진 지점만 사실대로 기록한다.
+
+1. **시드 제거 범위 변경(운영자 지시 2026-07-31)**: §2 ER 다이어그램의
+   "grammar_points ... ← docs/reading/05의 120개 라벨 멱등 시드" 문구와
+   §12-1의 "grammar_points(+120 라벨 시드)"는 **무효**다. 운영자가 구현
+   도중 "콘텐츠/시드/샘플/데모 데이터는 일절 만들지 않는다"로 범위를
+   축소 지시해, `supabase_v3_13_curriculum_engine_phase0.sql`은
+   `grammar_points` **스키마(테이블/컬럼/인덱스/RLS/GRANT)만** 만들고
+   라벨 INSERT는 포함하지 않는다(행 0개 상태로 실행됨). 실제 라벨
+   채우기는 §11 Phase 5(AI Curriculum Generator) 또는 교사 수동 입력으로
+   미룬다. 이 변경 기록은 `supabase_v3_13_...sql` 파일 자체의 "범위 변경
+   기록" 주석과 1:1 대응한다.
+2. **§4 approve/publish 배치 모순 해소**: §4 코드 블록은
+   `generatorContract.js`에 `approveExample(id)`/`publishExample(id)`가
+   있는 것처럼 표기돼 있으나, 실제로는 그 두 함수는
+   `src/utils/curriculum/exampleLibrary.js`(IO 계층, 교사 액션 전용)에만
+   존재하고 `generatorContract.js`(순수 계약)에는 없다. 이는 §4 바로
+   아래 산문("생성기 계약에는 approved로 전이하는 함수가 없어서
+   auto-publish가 구조적으로 불가능")과 정확히 일치하는 **안전한 해석**을
+   채택한 것 — 코드 블록의 표기가 산문과 어긋난 것으로 보고, 더 안전한
+   쪽(승인 함수가 순수 계약에 없어 생성기가 절대 호출할 수 없는 쪽)을
+   실제 구현 기준으로 확정한다. `generatorContract.js` 파일 하단 주석에도
+   동일 근거가 남아 있다.
+3. **M3 인덱스 교체**: §2 "인덱스(Phase 0)" 목록의 `lower(target_word)`
+   표현식 인덱스는 리뷰(M3)로 폐기하고, 평범한 btree 복합 인덱스
+   `(target_word, approval_status)`로 교체했다. 이유: target_word는 이미
+   `exampleLibrary.js`의 `createExample`/`updateExample`이
+   `normalizeTargetWord`로 저장 시점에 소문자 정규화해서 넣으므로, 조회
+   시점에 다시 `lower()`를 씌워 매칭할 이유가 없다(그리고 이 SQL 파일은
+   아직 한 번도 실행된 적이 없어 DROP INDEX 없이 정의만 바꾸는 것으로
+   충분했다). 상세 근거는 `supabase_v3_13_...sql`의 해당 인덱스 정의
+   바로 위 주석 참고.
