@@ -2184,3 +2184,33 @@ export async function setAssignmentForDate(className, dateStr, wordIds, adminPin
   }
   await refreshWordLibrary()
 }
+
+// v3.12+ "자동 생성"/배정 이력 패널용 — 최근 배정 이력 읽기 전용 조회
+// (fromDateStr~toDateStr, class_id 기준). daily_assignments는 v3.12
+// 락다운(supabase_v3_12_lockdown_daily_assignments.sql:57-59) 이후에도
+// SELECT는 계속 anon 그대로 허용하는 정책이라(쓰기만 service_role 전용),
+// 이 조회는 adminPin이 필요 없다 — 위 setAssignmentForDate(쓰기)와 달리
+// 완전한 읽기 전용 함수. 조회 실패(테이블/네트워크 이슈, 반이 아직 캐시에
+// 없음 등)는 화면을 절대 깨뜨리지 않도록 빈 배열로 폴백한다("자동 생성"
+// 미리보기/이력 패널이 빈 이력으로 안전하게 처리 — 헌법 규칙 9와 동일한
+// 정신, 새 조회 함수도 부재/오류에 안전해야 함).
+export async function fetchAssignmentHistory(className, fromDateStr, toDateStr) {
+  const classId = _cache[className]?.id
+  if (!classId) return []
+  try {
+    const { data, error } = await supabase.from('daily_assignments')
+      .select('date, word_ids')
+      .eq('class_id', classId)
+      .gte('date', fromDateStr)
+      .lte('date', toDateStr)
+      .order('date', { ascending: false })
+    if (error) {
+      console.warn('[wordLibrary] fetchAssignmentHistory failed (non-fatal):', error.message)
+      return []
+    }
+    return (data || []).map((r) => ({ date: r.date, wordIds: r.word_ids || [] }))
+  } catch (err) {
+    console.warn('[wordLibrary] fetchAssignmentHistory failed (non-fatal):', err?.message || err)
+    return []
+  }
+}
