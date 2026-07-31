@@ -25,6 +25,12 @@ import { assignDirections } from './utils/entranceTest'
 import { logSpellingReview } from './utils/spellingReviewApi'
 import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getClassSettings, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentPrimaryTextbook, getStudentClassId, getClassNames, getClassIdByName } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech, getMicStream } from './utils/speech'
+// Curriculum Engine Phase 0(2026-08-01, docs/CURRICULUM_ENGINE.md §8) —
+// 교사 opt-in 예문 학습 단계. isFeatureEnabled('curriculumExamplesStudentUI')
+// (기본 false)가 꺼져 있으면 아래 prefetch effect가 조회를 아예 안 한다
+// (readingStudentUI와 동일한 게이팅 메커니즘, GuidedSession.jsx 기존 관례).
+import { isFeatureEnabled } from './config/features'
+import { fetchApprovedExamplesForWords } from './utils/curriculum/exampleLibrary'
 
 // 2026-07-10 성능 최적화: AdminScreen은 xlsx(엑셀 업로드)를 포함해 학생은
 // 절대 안 쓰는 무거운 라이브러리를 물고 있는데, 정적 import라 학생용
@@ -349,6 +355,25 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 단어 원문 문자열 배열(빈칸 선택 엔진 pickBlank 입력).
   const unitWordSlugs = useMemo(() => classWords.map((w) => w?.word).filter(Boolean), [classWords])
 
+  // Curriculum Engine Phase 0(2026-08-01, docs/CURRICULUM_ENGINE.md §8) —
+  // 승인 예문 prefetch. curriculumExamplesStudentUI 플래그(기본 false)가
+  // 꺼져 있으면 이 effect는 조회를 전혀 하지 않는다(fetch 0회) — state는
+  // 항상 초기값 null로 남고, WordDetail/GuidedSession에 내려가는 prop도
+  // 항상 null이라 그 두 컴포넌트의 동작이 오늘과 완전히 동일하다. 켜져
+  // 있을 때만 fire-and-forget 1회 조회(단어 목록이 바뀔 때마다 재조회) —
+  // fetchApprovedExamplesForWords 자체가 절대 throw하지 않는 계약이라
+  // (exampleLibrary.js 헤더 주석) 실패해도 이 화면에 아무 영향이 없다.
+  const [curriculumExamples, setCurriculumExamples] = useState(null)
+  useEffect(() => {
+    if (!isFeatureEnabled('curriculumExamplesStudentUI')) { setCurriculumExamples(null); return undefined }
+    if (unitWordSlugs.length === 0) return undefined
+    let cancelled = false
+    fetchApprovedExamplesForWords(unitWordSlugs, { unitId: currentUnitId })
+      .then((map) => { if (!cancelled) setCurriculumExamples(map) })
+      .catch(() => { /* fire-and-forget — 실패해도 curriculumExamples는 null로 유지, 학습 화면 무영향 */ })
+    return () => { cancelled = true }
+  }, [unitWordSlugs, currentUnitId])
+
   // v2.0 쓰기 모드 세션 성적 집계(방향별) — 첫 시도 기준. 쓰기 모드로
   // 단어 목록에서 세션을 시작할 때 비우고, 마지막 단어까지 끝나면 결과
   // 화면(spellingResult)에서 요약해 보여준다. 저장은 안 함(요약 표시 전용
@@ -539,6 +564,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           onWordUnknown={setWordUnknown}
           onSetLastWordIndex={(idx) => studentData.setLastWordIndex(idx, currentUnitId)}
           onDone={() => setScreen('dashboard')}
+          curriculumExamples={curriculumExamples}
         />
       )}
       {screen === 'sentenceFlow' && pendingKeySentence && (
@@ -590,7 +616,8 @@ function AppInner({ studentId, studentName, onLogout }) {
           onMarkQuizSolved={studentData.markQuizSolved}
           onQuizAnswer={studentData.recordQuizAnswer}
           onPronunciationAttempt={studentData.markPronunciationAttempt}
-          wordStatus={wordStatus} onWordKnown={setWordKnown} onWordUnknown={setWordUnknown} />
+          wordStatus={wordStatus} onWordKnown={setWordKnown} onWordUnknown={setWordUnknown}
+          curriculumExamples={curriculumExamples} />
       )}
       {screen === 'quiz'          && (
         // 별 지급 단일 경로(2026-07-28) — 예전엔 여기서 onAddStars={addStars}

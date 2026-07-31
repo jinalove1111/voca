@@ -75,6 +75,15 @@ const DEFAULT_FEATURES = {
   readingFoundation: true,     // 관리자 지문 편집기(AdminScreen 반 관리 → 유닛 펼침) — 관리자 전용 화면이라 기본 ON이 안전(학생 화면에 아무 영향 없음)
   readingStudentUI: false,     // 학생용 읽기 학습 화면 — 미구현 예약 플래그. 아직 아무 코드도 이 플래그를 소비하지 않는다(학생 대상 신규 기능은 이번 범위에서 금지 — 이후 운영자 승인 라운드에서 이 플래그로 게이팅해 구현할 자리 표시)
 
+  // Curriculum Engine Phase 0(2026-08-01, docs/CURRICULUM_ENGINE.md §8) —
+  // 교사 opt-in 예문 학습 단계(제시→빈칸→듣기→섀도잉→쓰기, Learning Engine
+  // 기반). readingStudentUI와 동일한 소비 메커니즘(isFeatureEnabled)을 쓴다.
+  // 기본 false — 꺼져 있으면 App.jsx가 승인 예문 조회 자체를 안 하고
+  // (fetch 0회), WordDetail.jsx는 curriculumExamples prop이 항상 null이라
+  // STEPS 계산이 오늘과 바이트 단위로 동일하다(설계 §8). 운영자가
+  // supabase_v3_13 실행 + 예문 승인 검토 후 켤 자리.
+  curriculumExamplesStudentUI: false,
+
   // 쓰기 답안 검토 AI 보조(Task 2, 2026-07-23, docs/operations/task2-writing-
   // analysis.md + task2-writing-report.md) — SpellingReviewQueuePanel(관리자
   // 전용)의 "AI 자동분류 미리보기" 버튼을 게이팅. 기본 OFF: (1) supabase_v3_6_
@@ -188,7 +197,11 @@ export const getFeaturesByCategory = (category) => {
     // FeatureManagementPanel.jsx의 FEATURE_CATEGORIES도 함께 고쳐야 해서
     // (이번 작업 소유 파일이 아님 — 규칙 16) 기존 attachment 목록에 얹는다.
     // 별도 'reading' 카테고리 분리는 FeatureManagementPanel 소유 세션의 후속.
-    attachment: ['attachmentHats', 'attachmentMuseum', 'attachmentAlbum', 'attachmentPaulMemory', 'attachmentWorldGarden', 'attachmentWorldFull', 'attachmentBookshelf', 'attachmentStory', 'paulMemoryV2', 'todaysDiscovery', 'starToSeed', 'hatCeremony', 'paulTownHomeBand', 'paulTownGarden', 'paulTownBuildings', 'productAnalytics', 'readingFoundation', 'readingStudentUI'],
+    // curriculumExamplesStudentUI(Curriculum Engine Phase 0, 2026-08-01)도
+    // readingStudentUI와 같은 이유로 여기 얹는다 — 새 카테고리 분리는
+    // FeatureManagementPanel 소유 세션의 후속(이 세션은 그 파일을 건드리지
+    // 않는다, 규칙 16).
+    attachment: ['attachmentHats', 'attachmentMuseum', 'attachmentAlbum', 'attachmentPaulMemory', 'attachmentWorldGarden', 'attachmentWorldFull', 'attachmentBookshelf', 'attachmentStory', 'paulMemoryV2', 'todaysDiscovery', 'starToSeed', 'hatCeremony', 'paulTownHomeBand', 'paulTownGarden', 'paulTownBuildings', 'productAnalytics', 'readingFoundation', 'readingStudentUI', 'curriculumExamplesStudentUI'],
   }
   return categories[category] || []
 }

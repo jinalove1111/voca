@@ -55,6 +55,10 @@ export default function GuidedSession({
   onWordUnknown,
   onSetLastWordIndex,
   onDone,
+  // Curriculum Engine Phase 0(2026-08-01) — App.jsx가 prefetch한 승인
+  // 예문 맵을 그대로 내부 WordDetail에 통과시키기만 한다(1줄 통과, 로직
+  // 없음). 기본값 null → 플래그 OFF/미전달 시 오늘과 완전히 동일.
+  curriculumExamples = null,
 }) {
   const totalWords = classWords.length
 
@@ -327,6 +331,7 @@ export default function GuidedSession({
         wordStatus={wordStatus}
         onWordKnown={onWordKnown}
         onWordUnknown={onWordUnknown}
+        curriculumExamples={curriculumExamples}
       />
     </div>
   )

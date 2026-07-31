@@ -7,6 +7,12 @@ import SpellingQuestion from './SpellingQuestion'
 import { useMicReady } from '../hooks/useMicReady'
 import { pickReaction, playReactionSound, getReactionById } from '../utils/paulReactions'
 import HeroReaction from './HeroReaction'
+// Curriculum Engine Phase 0(2026-08-01, docs/CURRICULUM_ENGINE.md §8/§13.3) —
+// 교사 opt-in 예문 학습 단계(제시→빈칸→듣기→섀도잉→쓰기). 이 두 import는
+// curriculumExamples prop이 null(기본값 — 플래그 꺼짐)이면 전혀 쓰이지
+// 않는다(아래 CurriculumExampleStep은 조건부로만 렌더).
+import LearningEngine from '../learning/engine/LearningEngine'
+import { fromExample } from '../learning/adapters/learningItem'
 
 function getAudioMimeType() {
   if (typeof MediaRecorder === 'undefined') return ''
@@ -512,15 +518,93 @@ function QuizStep({ word, classWords, onDone, onMarkQuizSolved, onQuizAnswer }) 
   )
 }
 
+// ── Step 2.5: 교과서 연계 예문 학습(Curriculum Engine Phase 0, 조건부) ──────
+// docs/CURRICULUM_ENGINE.md §13.3 세션 플랜을 그대로 실행한다(learn →
+// fill_blank → listen → shadowing → write, §13.3 명시 순서). 각 하위 모드는
+// Learning Engine(src/learning)의 제네릭 러너 1개가 레지스트리를 조회해
+// 실행하고, 이 컴포넌트는 그 사이를 진행시키는 얇은 호스트일 뿐이다 —
+// 모드 로직을 재구현하지 않는다(중복 금지 원칙).
+//
+// ⚠️ 보상 격리(설계 §13.4, docs/fixes/star-reward-idempotency-design.md
+// 이력 — 명시적 확인 주석): 이 컴포넌트는 onMarkPronunciationOk/
+// onMarkExampleHeard/onMarkQuizSolved/onQuizAnswer/onSpellingAnswer 등
+// 어떤 보상·기록 콜백도 props로 받지 않는다. onEvent는 로컬 planIdx
+// 진행에만 쓰이고, 완료 시 별/XP/정원/퀴즈 카운터에 관련된 어떤 DB 쓰기도
+// 하지 않는다 — 이 단계를 몇 번을 다시 봐도 이중 지급 사고가 구조적으로
+// 발생할 수 없다.
+const CURRICULUM_EXAMPLE_PLAN = [
+  { mode: 'learn' },
+  { mode: 'fill_blank', options: { retries: 2 } },
+  { mode: 'listen' },
+  { mode: 'shadowing' },
+  { mode: 'write' },
+]
+
+function CurriculumExampleStep({ example, onDone }) {
+  const [planIdx, setPlanIdx] = useState(0)
+  // example.id당 동결 — 늦게 도착한 재조회가 진행 중인 세션 플랜을 바꾸지
+  // 않도록(WordDetail 전체의 "단어당 동결" 원칙과 동일한 방어).
+  const item = useMemo(() => fromExample(example), [example.id])
+  const current = CURRICULUM_EXAMPLE_PLAN[planIdx]
+
+  const advance = () => {
+    if (planIdx + 1 < CURRICULUM_EXAMPLE_PLAN.length) setPlanIdx((i) => i + 1)
+    else onDone()
+  }
+
+  // 엔진이 방출하는 이벤트는 오직 로컬 진행(다음 하위 단계로)에만 쓰인다 —
+  // 위 헤더 주석 참고, DB 기록/보상 콜백 없음.
+  const handleEvent = (evt) => {
+    if (evt.type === 'complete') advance()
+  }
+
+  return (
+    <div className="bg-white rounded-3xl card-shadow p-6 space-y-4">
+      <div className="flex items-center gap-2 mb-1">
+        <HeroReaction image={getReactionById('reading')?.image} size="sm" />
+        <p className="font-black text-gray-500 text-sm">📚 교과서 예문 학습 ({planIdx + 1}/{CURRICULUM_EXAMPLE_PLAN.length})</p>
+      </div>
+      <LearningEngine
+        key={`${item.id}-${current.mode}`}
+        mode={current.mode}
+        item={item}
+        options={current.options || {}}
+        seed={item.id}
+        onEvent={handleEvent}
+        renderRecorder={
+          current.mode === 'shadowing'
+            ? ({ onEvent }) => (
+                // 기존 검증된 SpeechBtn 재사용(설계 §13.6 "기존 화면 재작성
+                // 금지") — 이 컴포넌트가 음성 인식 로직을 재구현하지 않는다.
+                <SpeechBtn
+                  target={item.targetWord || item.text}
+                  wordAudioUrl={null}
+                  label="예문 따라 말하기"
+                  maxMs={15000}
+                  onAnyResult={() => onEvent({ type: 'complete', correct: null })}
+                />
+              )
+            : undefined
+        }
+      />
+    </div>
+  )
+}
+
 // 학습 모드별 단계 구성 — 모드 선택(WordBrowser: 공부하기/퀴즈/쓰기/종합)에
 // 따라 WordDetail이 어떤 단계를 요구할지 결정. "종합"만 스펠링 단계를
 // 조건부로 포함(반 설정에서 쓰기 시험이 켜져 있을 때만) — 나머지는 고정.
-function buildSteps(mode, hasExample, spellingAllowed) {
+// hasCurriculumExample(기본 false — curriculumExamples prop이 null이면 항상
+// false): study/comprehensive 모드에만, 승인 예문이 실제로 있을 때만
+// 'curriculumExample' 단계 1개를 추가한다. quiz/write 모드는 절대 건드리지
+// 않는다(설계 §8 "quiz/write 모드에는 삽입하지 않는다 — 시험 흐름 타이밍
+// 불변"). false(기본값)면 이 함수의 반환값은 오늘과 바이트 단위로 동일하다.
+function buildSteps(mode, hasExample, spellingAllowed, hasCurriculumExample) {
   if (mode === 'quiz') return ['quiz']
   if (mode === 'write') return ['spelling']
-  if (mode === 'study') return ['pronounce', ...(hasExample ? ['example'] : [])]
+  if (mode === 'study') return ['pronounce', ...(hasExample ? ['example'] : []), ...(hasCurriculumExample ? ['curriculumExample'] : [])]
   // comprehensive (기본값이자 모르는 모드에 대한 안전한 폴백 — 기존 v1.0 동작과 동일 + 스펠링만 추가)
-  return ['pronounce', ...(hasExample ? ['example'] : []), 'quiz', ...(spellingAllowed ? ['spelling'] : [])]
+  return ['pronounce', ...(hasExample ? ['example'] : []), ...(hasCurriculumExample ? ['curriculumExample'] : []), 'quiz', ...(spellingAllowed ? ['spelling'] : [])]
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────────
@@ -544,11 +628,28 @@ export default function WordDetail({
   // 미리 50:50으로 배정한 "이 단어의 방향"('kr2en'|'en2kr')을 내려보냄.
   // null이면(기존 모든 방향) 반 설정의 direction을 그대로 사용 — 하위호환.
   spellingDirectionOverride = null,
+  // Curriculum Engine Phase 0(2026-08-01) — 교사 opt-in 예문 학습 단계 입력.
+  // 기본값 null(App.jsx가 curriculumExamplesStudentUI 플래그 OFF면 이 prop을
+  // 아예 조회/전달하지 않음) → 아래 useMemo가 항상 null을 돌려주고,
+  // buildSteps의 hasCurriculumExample 인자가 항상 false라 STEPS는 오늘과
+  // 바이트 단위로 동일하다(설계 §8 명시적 무변경 증명).
+  // shape: { [단어원문.toLowerCase()]: exampleLibrary.js toRow() 형태 }
+  curriculumExamples = null,
 }) {
   const exampleEnglish = word.easyExample || word.funnyExample || word.realExample
   const exampleKorean  = word.exampleTranslation
   const spellingAllowed = !!spellingSettings?.spellingTestEnabled
-  const STEPS = buildSteps(mode, !!exampleEnglish, spellingAllowed)
+  // 단어당 동결(설계 §8) — curriculumExamples 맵이 나중에 갱신돼도(예:
+  // prefetch가 늦게 도착) 이미 진행 중인 이 단어의 STEPS/화면은 바뀌지
+  // 않는다. 의도적으로 deps를 [word.id]로만 제한(과거 STEPS 상태 붕괴
+  // 회귀 이력에 대한 동일한 방어, WordDetail.jsx 파일 헤더의 key={word.id}
+  // 주석과 같은 원칙).
+  const curriculumExample = useMemo(
+    () => curriculumExamples?.[word.word?.toLowerCase()] || null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [word.id],
+  )
+  const STEPS = buildSteps(mode, !!exampleEnglish, spellingAllowed, !!curriculumExample)
 
   const [step, setStep] = useState(STEPS[0])
 
@@ -627,6 +728,13 @@ export default function WordDetail({
             audioUrl={word.exampleAudioUrl}
             onDone={goNext}
             onMarkExampleHeard={onMarkExampleHeard}
+          />
+        )}
+        {step === 'curriculumExample' && curriculumExample && (
+          <CurriculumExampleStep
+            key={word.id}
+            example={curriculumExample}
+            onDone={goNext}
           />
         )}
         {step === 'quiz' && (
