@@ -123,11 +123,27 @@ try {
 
   console.log('\n7. 숙제-유닛 독립 — Unit 1 단어를 오늘 숙제로 배정, 학생은 Unit 2에 있어도 숙제가 열림')
   await setStudentUnit(studentId, 'Unit 2')
-  await setTodaysAssignment(CLASS_A, ['apple'])
-  const hw = getStudentWords(studentId).map((x) => x.word).join(',')
-  check('현재 유닛(Unit 2)에 없는 배정 단어를 반 전체에서 찾아 표시', hw === 'apple', hw)
-  await setTodaysAssignment(CLASS_A, []) // 배정 해제
-  check('배정 해제 후 현재 유닛 전체 복귀', wordsOf(studentId) === 'cherry,durian,elderberry')
+  // v3.12 보안 락다운(supabase_v3_12_lockdown_daily_assignments.sql) 적용
+  // 환경에서는 adminPin 없는 레거시 anon 쓰기가 42501(permission denied)로
+  // 막힌다 — 이 섹션(숙제-유닛 독립)만 쓰기에 의존하므로, 위 1~6번(유닛
+  // 전환/영속/동명 유닛/로스터 표시 — 전부 daily_assignments 쓰기와
+  // 무관)과 아래 8번(유닛 삭제 폴백, 마찬가지로 무관)은 그대로 실제
+  // 검증하고, 이 섹션만 가짜 PASS 대신 정직하게 SKIP한다
+  // (scripts/testXpLedgerDb.mjs "정상적으로 예상된 상태" SKIP 관례와
+  // 동일 — 스크립트 전체를 중단하지 않고 이어서 8번까지 계속 검증한다).
+  try {
+    await setTodaysAssignment(CLASS_A, ['apple'])
+    const hw = getStudentWords(studentId).map((x) => x.word).join(',')
+    check('현재 유닛(Unit 2)에 없는 배정 단어를 반 전체에서 찾아 표시', hw === 'apple', hw)
+    await setTodaysAssignment(CLASS_A, []) // 배정 해제
+    check('배정 해제 후 현재 유닛 전체 복귀', wordsOf(studentId) === 'cherry,durian,elderberry')
+  } catch (err) {
+    if (err?.code === '42501' || /row-level security|permission denied/i.test(err?.message || '')) {
+      console.log(`  SKIP  숙제-유닛 독립 검증(락다운 환경 — daily_assignments anon 쓰기 불가, 예상된 상태, admin-content-write 배포 후 adminPin 경로로 재검증 필요). 원본 에러: ${err.message}`)
+    } else {
+      throw err
+    }
+  }
 
   console.log('\n8. 유닛 삭제 안전 폴백 — 학생이 보던 Unit 2 삭제 → 크래시 없이 첫 유닛')
   await deleteClassUnit(CLASS_A, 'Unit 2')

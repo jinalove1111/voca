@@ -45,7 +45,24 @@ const studentId = await addStudent(STUDENT, CLASS, 'Unit 1')
 
 console.log('\n2. 내일 날짜에 dog만 미리 배정')
 check('배정 전에는 내일 배정이 비어있음', (await getAssignmentForDate(CLASS, tomorrow())).length === 0)
-await setAssignmentForDate(CLASS, tomorrow(), ['dog'])
+// v3.12 보안 락다운(supabase_v3_12_lockdown_daily_assignments.sql) 적용
+// 환경에서는 adminPin 없는 레거시 anon 쓰기가 42501(permission denied)로
+// 막힌다 — 정확히 의도한 보안 동작이지 테스트 실패가 아니다. 위 조회
+// 기반 체크는 쓰기와 무관해 이미 실제로 검증됐으니 유지하고, 이후 쓰기
+// 의존 구간은 가짜 PASS 대신 정직하게 SKIP(scripts/testXpLedgerDb.mjs
+// 관례와 동일).
+try {
+  await setAssignmentForDate(CLASS, tomorrow(), ['dog'])
+} catch (err) {
+  if (err?.code === '42501' || /row-level security|permission denied/i.test(err?.message || '')) {
+    console.log(`\nSKIP(락다운 환경 — anon 쓰기 불가) — daily_assignments 쓰기가 v3.12 RLS로 막혀 있음(예상된 상태, admin-content-write 배포 후 adminPin 경로로 재검증 필요). 원본 에러: ${err.message}`)
+    console.log('   (위 1번 조회 기반 검증은 그대로 통과함)')
+    await removeStudent(studentId).catch(() => {})
+    await deleteClass(CLASS).catch(() => {})
+    process.exit(0)
+  }
+  throw err
+}
 const tomorrowAssignment = await getAssignmentForDate(CLASS, tomorrow())
 check('내일 배정 조회 시 dog가 저장됨', tomorrowAssignment.length === 1 && tomorrowAssignment[0] === 'dog')
 
