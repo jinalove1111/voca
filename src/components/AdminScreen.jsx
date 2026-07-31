@@ -1195,15 +1195,18 @@ export default function AdminScreen({ onBack }) {
               <div className="px-5 pb-5"><AnalyticsPanel /></div>
             </details>
 
-            <SpellingReviewQueuePanel onChanged={refresh} adminPin={pin} onSavingsUpdate={() => setAiSavingsTick((t) => t + 1)} />
-
-            {/* "선생님이 같은 검토를 두 번 하지 않는" 자동 학습 시스템
-                (2026-07-24) — writing_answer_statistics 기반 3개 카드.
+            {/* 2026-08-01(자기학습형 검토 파이프라인, Commit 2) — 통계 우선
+                배치: "선생님이 같은 검토를 두 번 하지 않는" 자동 학습 시스템
+                (2026-07-24) 카드 3개를 검수 큐보다 위로 승격했다(관리자는
+                패턴을 먼저 보고, 개별 케이스는 그 다음에 본다는 순서). 카드
+                내부 로직/렌더는 전혀 안 바꿈(순서만 재배치, 헌법 규칙 3).
                 SQL 미실행이면 각 카드가 자체적으로 "SQL 실행 필요" 안내로
-                폴백한다(위 SpellingReviewQueuePanel과 동일 관례). */}
+                폴백한다(아래 SpellingReviewQueuePanel과 동일 관례). */}
             <LearningRecommendationsCard />
             <AiSavingsCard refreshTick={aiSavingsTick} />
             <LearningRateCard />
+
+            <SpellingReviewQueuePanel onChanged={refresh} adminPin={pin} onSavingsUpdate={() => setAiSavingsTick((t) => t + 1)} />
 
             <div className="bg-white rounded-3xl card-shadow p-5">
               <p className="text-sm font-black text-gray-700 mb-3">새 반 추가하기</p>

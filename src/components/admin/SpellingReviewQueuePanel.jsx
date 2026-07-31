@@ -16,6 +16,8 @@ import {
   filterProposals, filterProposalsBySource, filterProposalsByBand, confidenceBand, summarizeConfidenceBands,
   filterRowsByStudent, distinctStudentIds, sortDisplayItems,
   summarizeBulkResults, summarizeProposals, normalizeForCompare, buildConfirmSummary,
+  // 2026-08-01 자기학습형 검토 파이프라인(Commit 2) — 실수 유형 그룹 뷰.
+  groupByMistakeType,
 } from '../../utils/spellingReviewBulkPlan'
 // "선생님이 같은 검토를 두 번 하지 않는" 자동 학습 시스템(2026-07-24) —
 // SpellingReviewQueuePanel의 미리보기/AI 확인 실행이 끝날 때마다
@@ -109,6 +111,20 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
   const [bulkBusy, setBulkBusy] = useState(false)
   const [doneSummary, setDoneSummary] = useState('') // "완료 요약" 배너
   const [confirmAction, setConfirmAction] = useState(null) // {title, kind, summary, count, run}
+
+  // 2026-08-01(자기학습형 검토 파이프라인, Commit 2) — 기본 뷰를 "개별 카드
+  // 나열"에서 "실수 유형별 그룹"으로 전환. 개별 카드는 그룹을 펼쳤을 때만
+  // 보인다(fallback 경로 — accept()/dismiss()/acceptWithMode 등 기존 로직은
+  // 전혀 안 바뀜, 그대로 재사용). 펼침 상태는 이 패널 로컬 상태일 뿐 영속화
+  // 안 함(새로고침하면 전부 접힘 — 단순함 우선).
+  const [expandedGroups, setExpandedGroups] = useState(() => new Set())
+  const toggleGroupExpanded = (type) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(type)) next.delete(type); else next.add(type)
+      return next
+    })
+  }
 
   const load = async () => {
     setLoading(true)
@@ -339,6 +355,18 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
     return sortDisplayItems(items, sortBy, sortDir).map((it) => it.row)
   }, [groupedRows, sortBy, sortDir, proposalsById])
 
+  // 2026-08-01(Commit 2) — 실수 유형별 그룹(spellingReviewBulkPlan.groupByMistakeType,
+  // 순수 함수 그대로 재사용). AI 제안이 있는 행은 그 decision을 함께 실어
+  // 넘긴다(semantic/wrong_word 판정에 필요) — AI 미실행/미해결 행은 decision이
+  // 없어 로컬 규칙(typo/pos_variant/partial/noise)까지만 적용되고, 그마저
+  // 아니면 unknown으로 떨어진다(§ 정직한 분류, classifyMistakeType 주석 참고).
+  const rowsForMistakeGrouping = useMemo(() => displayRows.map((r) => {
+    const p = proposalsById.get(r.id)
+    return p ? { ...r, decision: p.decision } : r
+  }), [displayRows, proposalsById])
+  const mistakeGroups = useMemo(() => groupByMistakeType(rowsForMistakeGrouping), [rowsForMistakeGrouping])
+  const nonEmptyMistakeGroups = useMemo(() => mistakeGroups.filter((g) => g.count > 0), [mistakeGroups])
+
   const toggleSelect = (id) => {
     setSelectedIds((prev) => {
       const next = new Set(prev)
@@ -422,6 +450,68 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
   // 그대로 재사용, 여기선 라벨/색만 매핑).
   const bandLabel = (b) => (b === 'high' ? '≥95% 자동인정후보' : b === 'mid' ? '70~95% 검토' : b === 'low' ? '<70% 검토' : '')
   const bandColor = (b) => (b === 'high' ? 'bg-emerald-100 text-emerald-700' : b === 'mid' ? 'bg-amber-100 text-amber-700' : b === 'low' ? 'bg-gray-200 text-gray-600' : '')
+
+  // 2026-08-01(Commit 2) — 개별 카드 렌더링을 함수로 추출(순수 이동, 로직
+  // 변경 없음). 그룹 뷰가 펼쳐졌을 때만 이 카드들이 보인다 — accept()/
+  // dismiss()/acceptWithMode() 등 기존 수동 폴백 경로는 완전히 그대로다.
+  const renderRow = (r) => {
+    const proposal = proposalsById.get(r.id)
+    const duplicates = aiEnabled && rows ? findDuplicateAnswerRows(rows, r, normalizeForCompare) : []
+    return (
+      <div key={r.id} className="bg-gray-50 rounded-xl p-3 flex items-start gap-2 text-sm">
+        {aiEnabled && (
+          <input type="checkbox" className="mt-1.5" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="font-black text-gray-800">
+            {r.word} <span className="text-gray-400 font-bold text-xs">등록 뜻: {r.meaning}</span>
+            {groupView && duplicates.length > 0 && <span className="text-purple-500 font-bold text-xs"> · 동일 답안 그룹 {duplicates.length + 1}건</span>}
+          </p>
+          <p className="text-gray-600">학생 답: <span className="font-black text-orange-600">{r.submittedAnswer}</span></p>
+          {r.acceptedMeanings.length > 0 && (
+            <p className="text-[11px] text-gray-400">현재 인정 뜻: {r.acceptedMeanings.join(', ')}</p>
+          )}
+          {proposal && (
+            <p className={`text-[11px] font-bold mt-1 ${decisionColor(proposal.decision)}`}>
+              🤖 {decisionLabel(proposal.decision)}
+              {typeof proposal.confidence === 'number' && ` (신뢰도 ${Math.round(proposal.confidence * 100)}%)`}
+              {confidenceBand(proposal.confidence) && (
+                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${bandColor(confidenceBand(proposal.confidence))}`}>
+                  {bandLabel(confidenceBand(proposal.confidence))}
+                </span>
+              )}
+              {' · 출처: '}{sourceLabel(proposal)}
+              {' — '}{proposal.reason}
+              {proposal.part_of_speech_warning && <span className="text-purple-500"> · ⚠품사 {proposal.part_of_speech_warning}</span>}
+              {proposal.meaning_scope_warning && <span className="text-purple-500"> · ⚠의미범위 {proposal.meaning_scope_warning}</span>}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            <button onClick={() => accept(r)} disabled={busyId === r.id}
+              className="flex-shrink-0 bg-green-500 hover:bg-green-600 text-white font-black px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-40">
+              ✅ 이번 답안만 인정
+            </button>
+            {aiEnabled && (
+              <button onClick={() => acceptWithMode(r, 'synonym')} disabled={busyId === r.id}
+                className="flex-shrink-0 bg-emerald-100 text-emerald-700 font-bold px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-40">
+                이 단어 허용 답안으로 저장
+              </button>
+            )}
+            {aiEnabled && duplicates.length > 0 && (
+              <button onClick={() => acceptWithMode(r, 'all_duplicates')} disabled={busyId === r.id}
+                className="flex-shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white font-black px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-40">
+                같은 대기 답안 {duplicates.length + 1}건 모두 인정
+              </button>
+            )}
+            <button onClick={() => dismiss(r)} disabled={busyId === r.id}
+              className="flex-shrink-0 bg-white border-2 border-gray-200 text-gray-500 font-bold px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-40">
+              무시
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="bg-white rounded-3xl card-shadow p-5">
@@ -632,65 +722,52 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
             </div>
           )}
 
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {displayRows.map((r) => {
-              const proposal = proposalsById.get(r.id)
-              const duplicates = aiEnabled && rows ? findDuplicateAnswerRows(rows, r, normalizeForCompare) : []
-              return (
-                <div key={r.id} className="bg-gray-50 rounded-xl p-3 flex items-start gap-2 text-sm">
-                  {aiEnabled && (
-                    <input type="checkbox" className="mt-1.5" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="font-black text-gray-800">
-                      {r.word} <span className="text-gray-400 font-bold text-xs">등록 뜻: {r.meaning}</span>
-                      {groupView && duplicates.length > 0 && <span className="text-purple-500 font-bold text-xs"> · 동일 답안 그룹 {duplicates.length + 1}건</span>}
-                    </p>
-                    <p className="text-gray-600">학생 답: <span className="font-black text-orange-600">{r.submittedAnswer}</span></p>
-                    {r.acceptedMeanings.length > 0 && (
-                      <p className="text-[11px] text-gray-400">현재 인정 뜻: {r.acceptedMeanings.join(', ')}</p>
-                    )}
-                    {proposal && (
-                      <p className={`text-[11px] font-bold mt-1 ${decisionColor(proposal.decision)}`}>
-                        🤖 {decisionLabel(proposal.decision)}
-                        {typeof proposal.confidence === 'number' && ` (신뢰도 ${Math.round(proposal.confidence * 100)}%)`}
-                        {confidenceBand(proposal.confidence) && (
-                          <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${bandColor(confidenceBand(proposal.confidence))}`}>
-                            {bandLabel(confidenceBand(proposal.confidence))}
-                          </span>
-                        )}
-                        {' · 출처: '}{sourceLabel(proposal)}
-                        {' — '}{proposal.reason}
-                        {proposal.part_of_speech_warning && <span className="text-purple-500"> · ⚠품사 {proposal.part_of_speech_warning}</span>}
-                        {proposal.meaning_scope_warning && <span className="text-purple-500"> · ⚠의미범위 {proposal.meaning_scope_warning}</span>}
+          {/* 2026-08-01(Commit 2) — 기본 뷰: 실수 유형별 그룹(유형명+건수+
+              대표 예시 2~3개). 개별 카드는 그룹을 펼쳤을 때만 보인다.
+              그룹 자체는 groupByMistakeType(순수 함수, spellingReviewBulkPlan.js)
+              결과 순서(typo/pos_variant/partial/semantic/unknown/noise/
+              wrong_word) 그대로 — count 0인 유형은 목록에서 숨긴다(빈
+              서랍까지 펼쳐 보일 필요는 없음, 위 nonEmptyMistakeGroups). */}
+          <div className="space-y-2 max-h-[32rem] overflow-y-auto">
+            {nonEmptyMistakeGroups.length === 0 ? (
+              <p className="text-gray-400 text-sm">표시할 답안이 없어요.</p>
+            ) : (
+              nonEmptyMistakeGroups.map((g) => {
+                const expanded = expandedGroups.has(g.type)
+                const examples = g.rows.slice(0, 3)
+                return (
+                  <div key={g.type} className="bg-gray-50 rounded-xl p-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <button onClick={() => toggleGroupExpanded(g.type)} className="flex items-center gap-1.5 font-black text-gray-700 text-sm btn-press">
+                        <span className="text-gray-400">{expanded ? '▼' : '▶'}</span>
+                        {g.label} <span className="text-orange-500">({g.count}건)</span>
+                      </button>
+                      <div className="flex gap-1.5">
+                        <button onClick={() => requestBulkConfirm(`"${g.label}" 유형 답안을 모두 인정합니다`, g.rows, 'accept')} disabled={bulkBusy}
+                          className="bg-green-500 hover:bg-green-600 text-white font-bold px-2 py-1 rounded-lg text-xs btn-press disabled:opacity-40">
+                          이 유형 모두 인정
+                        </button>
+                        <button onClick={() => requestBulkConfirm(`"${g.label}" 유형 답안을 모두 무시합니다`, g.rows, 'dismiss')} disabled={bulkBusy}
+                          className="bg-white border-2 border-gray-300 text-gray-600 font-bold px-2 py-1 rounded-lg text-xs btn-press disabled:opacity-40">
+                          이 유형 모두 무시
+                        </button>
+                      </div>
+                    </div>
+                    {!expanded && (
+                      <p className="text-[11px] text-gray-400 mt-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                        예: {examples.map((r) => `${r.word}="${r.submittedAnswer}"`).join(', ')}
+                        {g.count > examples.length && ` 외 ${g.count - examples.length}건`}
                       </p>
                     )}
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                      <button onClick={() => accept(r)} disabled={busyId === r.id}
-                        className="flex-shrink-0 bg-green-500 hover:bg-green-600 text-white font-black px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-40">
-                        ✅ 이번 답안만 인정
-                      </button>
-                      {aiEnabled && (
-                        <button onClick={() => acceptWithMode(r, 'synonym')} disabled={busyId === r.id}
-                          className="flex-shrink-0 bg-emerald-100 text-emerald-700 font-bold px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-40">
-                          이 단어 허용 답안으로 저장
-                        </button>
-                      )}
-                      {aiEnabled && duplicates.length > 0 && (
-                        <button onClick={() => acceptWithMode(r, 'all_duplicates')} disabled={busyId === r.id}
-                          className="flex-shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white font-black px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-40">
-                          같은 대기 답안 {duplicates.length + 1}건 모두 인정
-                        </button>
-                      )}
-                      <button onClick={() => dismiss(r)} disabled={busyId === r.id}
-                        className="flex-shrink-0 bg-white border-2 border-gray-200 text-gray-500 font-bold px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-40">
-                        무시
-                      </button>
-                    </div>
+                    {expanded && (
+                      <div className="space-y-2 mt-2">
+                        {g.rows.map((r) => renderRow(r))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              )
-            })}
+                )
+              })
+            )}
           </div>
         </>
       )}
