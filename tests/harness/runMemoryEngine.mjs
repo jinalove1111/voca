@@ -23,7 +23,10 @@
 //     emit.js를 import하지 않고 소스 레벨 검사만 한다(정직한 커버리지
 //     경계, CLAUDE.md 규칙 18).
 //   - ai/memoryPlugPoints.js: import 0, plain Node ESM 로드 가능.
-import { readFileSync } from 'node:fs'
+import { readFileSync, mkdirSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
+import esbuild from 'esbuild'
+import { fromExample } from '../../src/learning/adapters/learningItem.js'
 import * as leitner from '../../src/learning/memory/leitner.js'
 import * as difficulty from '../../src/learning/memory/difficulty.js'
 import * as reviewQueue from '../../src/learning/memory/reviewQueue.js'
@@ -302,6 +305,81 @@ check('reviewDataBackend.js 헤더가 wordLibrary.js:1697 클로버 + 플래그�
   backendSrc.includes('wordLibrary.js:1697') && backendSrc.includes('플래그온 전제조건'))
 check('reviewDataBackend.js 헤더가 §7.2 word_review_schedule 대안을 SQL 미작성으로 문서화',
   backendSrc.includes('word_review_schedule') && backendSrc.includes('의도적으로 작성하지 않는다'))
+
+// ── C4: planner/sessionPlanner.js — (mode,item,options) 플랜 방출 ─────────
+// sentenceLearning.js의 shuffleDeterministic을 확장자 없이 import하므로
+// registry.js와 동일하게 esbuild 인메모리 번들이 필요하다(runLearningEngine
+// .mjs 9-28행과 동일 관례). registry.js도 같이 번들해 "sessionPlanner가
+// 방출하는 모드 이름이 전부 Learning Engine 레지스트리에 실재하는지"까지
+// 교차 검증한다(플랜이 존재하지 않는 모드를 만들어내면 즉시 FAIL).
+console.log('\n-- planner/sessionPlanner.js: planDailySession / planReviewSession')
+mkdirSync('scripts/.tmp', { recursive: true })
+await esbuild.build({
+  entryPoints: ['src/learning/planner/sessionPlanner.js'],
+  bundle: true,
+  format: 'esm',
+  platform: 'node',
+  outfile: 'scripts/.tmp/sessionPlanner.memoryEngine.bundle.mjs',
+})
+const sessionPlanner = await import(pathToFileURL('scripts/.tmp/sessionPlanner.memoryEngine.bundle.mjs').href)
+
+await esbuild.build({
+  entryPoints: ['src/learning/engine/registry.js'],
+  bundle: true,
+  format: 'esm',
+  platform: 'node',
+  outfile: 'scripts/.tmp/registry.memoryEngine.bundle.mjs',
+})
+const { MODES } = await import(pathToFileURL('scripts/.tmp/registry.memoryEngine.bundle.mjs').href)
+const MODE_NAMES = new Set(Object.keys(MODES))
+
+const itemA = fromExample({ id: 'wordA', targetWord: 'apple', englishSentence: 'I eat an apple.', koreanTranslation: '나는 사과를 먹는다' })
+const itemB = fromExample({ id: 'wordB', targetWord: 'banana', englishSentence: 'I eat a banana.', koreanTranslation: '나는 바나나를 먹는다' })
+const itemC = fromExample({ id: 'wordC', targetWord: 'cherry', englishSentence: 'I eat a cherry.', koreanTranslation: '나는 체리를 먹는다' })
+
+const dailyBoxes = { wordA: { level: 0 }, wordB: { level: 4 } } // wordA=신규/저박스, wordB=고박스, wordC=박스 없음(신규 취급)
+const dailyPlan = sessionPlanner.planDailySession({ items: [itemA, itemB, itemC], boxes: dailyBoxes, seed: 'daily-seed' })
+check('planDailySession: 모든 단계의 mode가 Learning Engine 레지스트리에 실재함',
+  dailyPlan.every((step) => MODE_NAMES.has(step.mode)))
+check('planDailySession: 신규/저박스(wordA, level 0) → learn+fill_blank 둘 다 등장',
+  dailyPlan.some((s) => s.item.id === 'wordA' && s.mode === 'learn') && dailyPlan.some((s) => s.item.id === 'wordA' && s.mode === 'fill_blank'))
+check('planDailySession: 고박스(wordB, level 4) → fill_blank만(learn 없음)',
+  dailyPlan.some((s) => s.item.id === 'wordB' && s.mode === 'fill_blank') && !dailyPlan.some((s) => s.item.id === 'wordB' && s.mode === 'learn'))
+check('planDailySession: 박스 없음(wordC, 한 번도 안 봄) → 신규 취급되어 learn 포함',
+  dailyPlan.some((s) => s.item.id === 'wordC' && s.mode === 'learn'))
+check('planDailySession: 각 단계의 item은 LearningItem 정규형 shape 그대로 보존',
+  dailyPlan.every((s) => typeof s.item.id === 'string' && s.item.contentType === 'example' && typeof s.item.text === 'string'))
+check('planDailySession: 기본 options.retries=1이 각 단계에 채워짐', dailyPlan.every((s) => s.options.retries === 1))
+
+const enrichedPlan = sessionPlanner.planDailySession({ items: [itemB], boxes: dailyBoxes, seed: 'x', options: { enrich: true } })
+check('planDailySession: options.enrich=true면 고박스 단어도 listen/write까지 추가',
+  ['fill_blank', 'listen', 'write'].every((m) => enrichedPlan.some((s) => s.mode === m)))
+
+const dailyPlanAgain = sessionPlanner.planDailySession({ items: [itemA, itemB, itemC], boxes: dailyBoxes, seed: 'daily-seed' })
+check('planDailySession: 결정론(같은 입력·같은 seed → 바이트 동일)', JSON.stringify(dailyPlan) === JSON.stringify(dailyPlanAgain))
+
+const itemsById = { wordA: itemA, wordB: itemB, wordC: itemC }
+const reviewBoxes = { wordA: { level: 0 }, wordB: { level: 3 }, wordC: { level: 5 } }
+const reviewPlan = sessionPlanner.planReviewSession({ queueWordIds: ['wordA', 'wordB', 'wordC'], itemsById, boxes: reviewBoxes, seed: 'review-seed', cap: 12 })
+check('planReviewSession: 저박스(wordA) → learn+fill_blank', reviewPlan.some((s) => s.item.id === 'wordA' && s.mode === 'learn'))
+check('planReviewSession: 고박스(wordB/wordC) → fill_blank만', ['wordB', 'wordC'].every((id) => !reviewPlan.some((s) => s.item.id === id && s.mode === 'learn')))
+check('planReviewSession: 카탈로그에 없는 wordId는 조용히 건너뜀(추측 없이 드롭)',
+  sessionPlanner.planReviewSession({ queueWordIds: ['unknownWord'], itemsById, boxes: {}, seed: 's' }).length === 0)
+
+const cappedQueue = ['wordA', 'wordB', 'wordC', 'wordD', 'wordE']
+const cappedItemsById = { ...itemsById, wordD: fromExample({ id: 'wordD', targetWord: 'date', englishSentence: 'x', koreanTranslation: 'y' }), wordE: fromExample({ id: 'wordE', targetWord: 'egg', englishSentence: 'x', koreanTranslation: 'y' }) }
+const cappedPlan = sessionPlanner.planReviewSession({ queueWordIds: cappedQueue, itemsById: cappedItemsById, boxes: reviewBoxes, seed: 's', cap: 2 })
+const cappedWordIds = new Set(cappedPlan.map((s) => s.item.id))
+check('planReviewSession: cap이 단어 수 기준으로 정확히 적용됨(cap=2 → wordD/E는 절대 등장 안 함)',
+  !cappedWordIds.has('wordD') && !cappedWordIds.has('wordE') && cappedWordIds.size === 2)
+
+const reviewPlanAgain = sessionPlanner.planReviewSession({ queueWordIds: ['wordA', 'wordB', 'wordC'], itemsById, boxes: reviewBoxes, seed: 'review-seed', cap: 12 })
+check('planReviewSession: 결정론(같은 입력 → 바이트 동일)', JSON.stringify(reviewPlan) === JSON.stringify(reviewPlanAgain))
+
+const sessionPlannerSrc = readFileSync(new URL('../../src/learning/planner/sessionPlanner.js', import.meta.url), 'utf8')
+check('sessionPlanner.js는 Math.random 미사용(결정론 — shuffleDeterministic만 사용)', !sessionPlannerSrc.includes('Math.random'))
+check('sessionPlanner.js는 세션 "크기" 로직을 재구현하지 않음(SESSION_SIZE_BANDS 미포함, dailyRitual.js 책임 유지)',
+  !sessionPlannerSrc.includes('SESSION_SIZE_BANDS'))
 
 console.log('\n=== summary ===')
 if (failed === 0) { console.log(`  PASS  memory-engine — Memory Engine 순수 코어 (${passed}개 단언)`); process.exit(0) }
