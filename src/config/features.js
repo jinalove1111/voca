@@ -98,6 +98,43 @@ const DEFAULT_FEATURES = {
   // false로 유지한다(라이브 pending 100건+ 존재, v3_6/v3_7 SQL 미실행,
   // Edge Function 미배포, ANTHROPIC_API_KEY 미설정 — 전제조건 미충족).
   writingReviewAiAssist: false,
+
+  // ── 쓰기 검수 오토파일럿(2026-08-01, 자기학습형 검토 파이프라인) ─────────
+  // 전부 기본 false — 운영자가 명시적으로 켜야만 SpellingReviewQueuePanel이
+  // 페이지 로드 시 규칙/AI 단계를 자동 실행하고 일부 티어를 자동 인정/
+  // 무시한다. 셋 다 꺼져 있으면(기본 상태) 이 패널은 오늘과 완전히 동일하게
+  // 동작한다(수동 그룹 인박스만, 자동 실행 0회).
+  //
+  // writingReviewAutoPilot — 패널 로드 시 규칙 단계(runRulesPhase)를 자동
+  // 실행 + 티어①②(완전일치 exact_match/학습된 변형 synonym)를 자동 인정 +
+  // (writingReviewAiAssist도 함께 켜져 있으면) AI 단계(runAiPhase)까지 자동
+  // 실행하고 기존 selectCertainAccepts 게이트(신뢰도 95%↑ + 경고 없음)를
+  // 통과한 건을 자동 인정한다. 비용 상한(실행당/일일)은 기존 게이트
+  // (evaluateCostGate)를 그대로 통과해야만 AI 단계가 실행된다 — 상한
+  // 초과 시 AI 자동 실행만 조용히 건너뛰고 규칙 단계 결과는 그대로 반영.
+  // writingReviewAiAssist가 꺼져 있으면 이 플래그는 규칙 단계(티어①②)까지만
+  // 자동화한다(AI 단계는 애초에 실행 안 됨).
+  writingReviewAutoPilot: false,
+
+  // writingReviewAutoTypo — 티어③(편집거리 1, decisionSource='levenshtein')을
+  // 자동 인정 대상에 추가한다. 이 티어는 2026-07-17 운영자 지시("최종 판정은
+  // 항상 교사")로 지금까지 사람 확인을 거치도록 남겨뒀던 항목이라, 이
+  // 플래그는 그 결정을 명시적으로 뒤집는 것 — 2026-08-01 운영자 지시로
+  // 코드화하되, 활성화 여부(끄고 켬)는 여전히 운영자 판단에 맡긴다(기본
+  // false). writingReviewAutoPilot이 꺼져 있으면 이 플래그는 아무 효과가
+  // 없다(오토파일럿 자체가 안 도니까).
+  writingReviewAutoTypo: false,
+
+  // writingReviewAutoDismiss — "확실한 반려"(spellingReviewBulkPlan.
+  // selectCertainRejects — AI reject_candidate 고신뢰 또는 통계 반복오답
+  // rejected_count>=5 && accepted_count===0)를 자동으로 무시(dismissed) 처리.
+  // 학생 성적에는 원래부터 영향이 없는 액션이라(무시=검토 상태만 변경,
+  // accepted_meanings 갱신 없음) 자동 인정보다 공정성 리스크가 낮다 — 그래도
+  // 기본은 false(운영자가 직접 켜야 함). writingReviewAutoTypo와 마찬가지로
+  // writingReviewAutoPilot이 켜져 있을 때만 의미가 있다(반려 후보 자체가
+  // 오토파일럿이 실행하는 규칙/AI 단계 결과에서 나오므로 — 오토파일럿이
+  // 꺼져 있으면 이 플래그는 아무 효과가 없다).
+  writingReviewAutoDismiss: false,
 }
 
 // localStorage에서 저장된 features 불러오기.
@@ -191,7 +228,10 @@ export const getFeaturesByCategory = (category) => {
     // FeatureManagementPanel에 토글 자체가 안 보이던 문제(2026-07-23 관리자
     // UI 2차 개편에서 발견 — 근본 원인 수정)를 이 목록 추가로 고친다.
     // 기본값(false)은 이 파일 위쪽 DEFAULT_FEATURES에서 그대로 유지.
-    aiAnalysis: ['aiAnalysis', 'wrongAnswerNote', 'weakWordAnalysis', 'reviewRecommendation', 'writingReviewAiAssist'],
+    // writingReviewAutoPilot/AutoTypo/AutoDismiss(2026-08-01)도 같은 이유로
+    // 여기 얹는다 — 새 카테고리 분리는 FeatureManagementPanel 소유 세션의
+    // 후속(이 세션은 그 파일을 건드리지 않는다, 규칙 16).
+    aiAnalysis: ['aiAnalysis', 'wrongAnswerNote', 'weakWordAnalysis', 'reviewRecommendation', 'writingReviewAiAssist', 'writingReviewAutoPilot', 'writingReviewAutoTypo', 'writingReviewAutoDismiss'],
     schoolManagement: ['classGroupManagement', 'semesterManagement', 'parentPortal', 'schoolDashboard', 'attendanceTracking', 'advancedAnalytics'],
     // reading* 두 플래그는 의미상 별개 도메인이지만, 새 카테고리를 추가하려면
     // FeatureManagementPanel.jsx의 FEATURE_CATEGORIES도 함께 고쳐야 해서

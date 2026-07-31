@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { setWordAcceptedMeanings, getStudents } from '../../utils/wordLibrary'
 import { fetchPendingSpellingReviews, resolveSpellingReview } from '../../utils/spellingReviewApi'
 // 쓰기 답안 검토 AI 보조(Task 2, 2026-07-23) — writingReviewAiAssist
@@ -18,6 +18,8 @@ import {
   summarizeBulkResults, summarizeProposals, normalizeForCompare, buildConfirmSummary,
   // 2026-08-01 자기학습형 검토 파이프라인(Commit 2) — 실수 유형 그룹 뷰.
   groupByMistakeType,
+  // 2026-08-01(Commit 3) — 오토파일럿의 "확실한 반려" 자동 무시 대상 선별.
+  selectCertainRejects,
 } from '../../utils/spellingReviewBulkPlan'
 // "선생님이 같은 검토를 두 번 하지 않는" 자동 학습 시스템(2026-07-24) —
 // SpellingReviewQueuePanel의 미리보기/AI 확인 실행이 끝날 때마다
@@ -73,6 +75,12 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
   // 요구사항). AI 단계는 25건씩 순차 청크로 나뉘어 실행되고 배치별 진행률이
   // 표시된다.
   const aiEnabled = isFeatureEnabled('writingReviewAiAssist')
+  // 2026-08-01(Commit 3, 자기학습형 검토 파이프라인) — 오토파일럿 플래그
+  // 3종. 전부 기본 false(src/config/features.js) — 셋 다 꺼져 있으면 이
+  // 패널은 오늘과 완전히 동일하게 동작한다(수동 그룹 인박스만).
+  const autoPilotEnabled = isFeatureEnabled('writingReviewAutoPilot')
+  const autoTypoEnabled = isFeatureEnabled('writingReviewAutoTypo')
+  const autoDismissEnabled = isFeatureEnabled('writingReviewAutoDismiss')
 
   // 2단계 미리보기 상태
   const [scopeMode, setScopeMode] = useState('all') // 'all' | 'selected' — 분석 범위
@@ -132,6 +140,111 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
     setLoading(false)
   }
   useEffect(() => { load() }, [])
+
+  // ── 2026-08-01(Commit 3) — 검수 오토파일럿 ───────────────────────────────
+  //
+  // writingReviewAutoPilot이 켜져 있을 때만 동작. 페이지 로드 후 rows가
+  // 처음으로 채워진 시점에 딱 1번만 실행된다(autoPilotRanRef — 관리자가
+  // "새로고침"을 누를 때마다 매번 다시 AI를 부르지 않게, § 비용 최소화
+  // 원칙과 동일 취지). 실패는 절대 밖으로 던지지 않고 조용히 수동 그룹
+  // 인박스로 폴백한다(관리자가 오류 배너에 놀라지 않게).
+  const autoPilotRanRef = useRef(false)
+
+  const runAutoPilot = async () => {
+    if (!Array.isArray(rows) || rows.length === 0) return
+    try {
+      const rowById = new Map(rows.map((r) => [r.id, r]))
+      // 1단계 — 규칙 기반(무료, 네트워크 0회). 기존 runRulesPhase 그대로.
+      const { resolved, unresolved } = runRulesPhase({ rows })
+
+      // 티어①(완전일치)/②(학습된 변형) — 항상 자동 인정 대상.
+      const tier1 = resolved.filter((p) => p.decision_source === 'exact_match')
+      const tier2 = resolved.filter((p) => p.decision_source === 'synonym')
+      // 티어③(편집거리 1 오타) — writingReviewAutoTypo가 켜져 있을 때만
+      // 자동 인정 대상에 추가(2026-07-17 "사람 최종 판정" 결정을 명시적으로
+      // 뒤집는 항목 — 운영자 지시 2026-08-01로 코드화, 기본은 여전히 꺼짐).
+      const tier3 = autoTypoEnabled ? resolved.filter((p) => p.decision_source === 'levenshtein') : []
+      const tier123Rows = [...tier1, ...tier2, ...tier3].map((p) => rowById.get(p.pending_answer_id)).filter(Boolean)
+      if (tier123Rows.length > 0) {
+        await executeBulkAccept(tier123Rows, { mode: 'answer_only', adminPin })
+      }
+
+      // 2단계 — AI 단계(writingReviewAiAssist가 켜져 있을 때만, § 헌법
+      // 규칙 12와 무관하게 이 패널은 관리자 전용). 기존 실행당/일일 비용
+      // 상한 게이트(evaluateCostGate)를 자동 실행에도 동일하게 적용 —
+      // 초과 시 AI 단계 자체를 건너뛴다(규칙 단계 결과는 그대로 반영됨).
+      let aiProposalsRun = []
+      let aiSkippedByBudget = false
+      if (aiEnabled && unresolved.length > 0) {
+        const estCost = estimateAiCostUsd(unresolved.length)
+        const gate = evaluateCostGate({
+          estimatedCostUsd: estCost, ceilingUsd: getCostCeilingUsd(),
+          todaySpentUsd: getTodaySpentUsd(), dailyCeilingUsd: getDailyCeilingUsd(),
+        })
+        if (!gate.blocked) {
+          const { proposals, usage, statsSkips } = await runAiPhase({
+            adminPin, unresolvedRows: unresolved, batchSize: AI_BATCH_SIZE, rulesResolvedCount: resolved.length,
+          })
+          aiProposalsRun = proposals
+          if (usage?.estimatedCostUsd) setTodaySpent(recordEstimatedSpendUsd(usage.estimatedCostUsd))
+          accumulateSavingsCounters({ ...computeSavingsFromProposals([...resolved, ...proposals]), statsSkips: statsSkips || 0 })
+          onSavingsUpdate?.()
+        } else {
+          aiSkippedByBudget = true
+        }
+      }
+
+      // 티어④ — 기존 selectCertainAccepts 게이트(신뢰도 95%↑ + 경고 없음)를
+      // 통과한 AI 단계 결과만 자동 인정(규칙 단계 결과는 unresolved에 없었기
+      // 때문에 aiProposalsRun에 애초에 안 섞여 tier1~3과 겹칠 일이 없다).
+      const tier4Proposals = aiProposalsRun.length > 0 ? selectCertainAccepts(aiProposalsRun, 0.95) : []
+      const tier4Rows = tier4Proposals.map((p) => rowById.get(p.pending_answer_id)).filter(Boolean)
+      if (tier4Rows.length > 0) {
+        await executeBulkAccept(tier4Rows, { mode: 'answer_only', adminPin })
+      }
+
+      // 확실한 반려 — writingReviewAutoDismiss가 켜져 있을 때만 자동 무시.
+      // 무시는 accepted_meanings를 전혀 건드리지 않는 액션(검토 상태만
+      // 변경)이라 학생 성적에는 영향이 없다(§ 공정성 안전, features.js 주석).
+      let dismissRows = []
+      if (autoDismissEnabled && aiProposalsRun.length > 0) {
+        const dismissProposals = selectCertainRejects(aiProposalsRun)
+        dismissRows = dismissProposals.map((p) => rowById.get(p.pending_answer_id)).filter(Boolean)
+        if (dismissRows.length > 0) {
+          await executeBulkDismiss(dismissRows)
+        }
+      }
+
+      // "완료 요약" 배너 — 기존 doneSummary 상태/렌더 그대로 재사용, 티어별
+      // 정확한 건수만 문구로 담는다(요구사항: "정확히 무엇이 자동 처리됐는지").
+      const parts = []
+      if (tier1.length > 0) parts.push(`완전일치 ${tier1.length}건`)
+      if (tier2.length > 0) parts.push(`학습된 변형 ${tier2.length}건`)
+      if (autoTypoEnabled && tier3.length > 0) parts.push(`오타(편집거리1) ${tier3.length}건`)
+      if (tier4Rows.length > 0) parts.push(`AI 확인 ${tier4Rows.length}건`)
+      if (dismissRows.length > 0) parts.push(`확실한 반려(자동 무시) ${dismissRows.length}건`)
+      if (aiSkippedByBudget) parts.push('AI 단계는 비용 상한 초과로 건너뜀')
+      if (parts.length > 0) setDoneSummary(`🤖 오토파일럿 자동 처리 완료 — ${parts.join(' · ')}`)
+
+      if (tier123Rows.length + tier4Rows.length + dismissRows.length > 0) {
+        await load()
+        onChanged?.()
+      }
+    } catch (err) {
+      // 오토파일럿은 절대 밖으로 던지지 않는다 — 실패하면 조용히 수동 그룹
+      // 인박스로 폴백(관리자 화면이 오류로 죽지 않게, § 설계 제약).
+      console.warn('[SpellingReviewQueuePanel] 오토파일럿 실행 중 오류(수동 그룹 인박스로 폴백):', err?.message || err)
+    }
+  }
+
+  useEffect(() => {
+    if (!autoPilotEnabled) return
+    if (autoPilotRanRef.current) return
+    if (!Array.isArray(rows) || rows.length === 0) return
+    autoPilotRanRef.current = true
+    runAutoPilot()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, autoPilotEnabled])
 
   const accept = async (r) => {
     setBusyId(r.id)
