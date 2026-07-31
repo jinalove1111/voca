@@ -126,6 +126,8 @@ seasons                                    ※ FK 없음, 반/학생과 무관�
 
 21. `supabase_v3_9_writing_answer_statistics.sql`(2026-07-24, "선생님이 같은 검토를 두 번 하지 않는" 자동 학습 시스템 — 반복 오답 재사용) — `writing_answer_statistics` 신규 테이블 + `record_writing_answer_stat` RPC(SECURITY DEFINER) + `ai_usage_daily`에 절약 컬럼 3종(`alter table if exists ... add column if not exists` — `supabase_v3_8_ai_usage_daily.sql` 미실행이어도 안전한 no-op) 추가. **[미실행 — 운영자 실행 대기]**. `v3_6`/`v3_7`/`v3_8`(쓰기 검수 AI 보조 캐시/동의어변형/일일사용량 — 이 문서에 아직 별도 섹션으로 반영 안 된 기존 기술부채, § 아래 신규 서브섹션 참고)과 실행 순서 무관(전부 `if exists`/`if not exists` 가드). 실행 전에는 `pipeline.js`의 `statsLookup` 훅이 `index.ts`에서 테이블 미존재(42P01/PGRST205) 감지 시 `null`로 비활성화되어 기존 캐시→AI 흐름과 100% 동일하게 동작(회귀 없음, 헌법 규칙 9), `src/utils/spellingReviewApi.js`의 `record_writing_answer_stat` RPC 호출은 42883/PGRST202로 실패하고 `_statsAvailable=false`로 세션 내 재시도만 끈 채 조용히 스킵되며 학생 채점 흐름에는 영향 없음(fire-and-forget), 관리자 화면 신규 카드 3개는 "SQL 실행 필요"/"데이터 수집 중" 안내로 폴백. 상세: `handoff.md` 2026-07-24(11차).
 
+22. `supabase_v3_13_curriculum_engine_phase0.sql`(2026-08-01, Curriculum Engine Phase 0 — `docs/CURRICULUM_ENGINE.md`) — 신규 테이블 4개(`publishers`/`grades`/`grammar_points`(스키마만, 시드 없음)/`unit_grammar_points`) + `examples`(신규 콘텐츠 테이블, §"`examples`(v3.13)" 아래 신규 서브섹션 참고) + `textbooks`/`units` additive 컬럼(`publisher_id`/`grade_id`/`level`/`book_order`, `position`/`lesson_no`/`objectives` — `units.position`은 v1.x부터 이미 존재해 `add column if not exists`가 무시하고 기존 값 보존). 전부 순수 추가, 파괴적 구문 0. **[미실행 — 운영자 실행 대기]**. `v3_11`/`v3_12` 락다운(둘 다 이 시점 배포 대기 중)과 무관하게 독립 실행 가능 — 신규 5개 테이블은 현행 anon 개방 RLS(v3.4 관례)로 시작하고, 락다운 배포 후 합류할 주석 처리된 블록을 SQL 파일 자체에 동봉(파일 헤더 "[락다운 합류 블록]" 참고). 실행 전에는 `src/utils/curriculum/*.js`(전부 이번 세션 신규 파일)의 모든 조회가 `isMissingTableError`/42703(undefined_column) 감지로 `{ rows:[], featureDisabled:true }` 또는 `{}`/`null`로 폴백하고, 학생 화면은 예문 학습 단계 자체가 조건부(승인 예문이 있을 때만 삽입, §8)라 이 SQL 미실행 상태에서 아무 단계도 추가되지 않음(기존 플로우 byte-identical). 관리자 "📚 커리큘럼" 탭(`CurriculumHub`/`CurriculumTree`/`ExampleManager`/`ApprovalQueue`, `AdminScreen.jsx`)은 "supabase_v3_13 실행 후 사용 가능" 배너로 폴백. 상세: `handoff.md` 2026-08-01(20차).
+
 ## `student_class_assignments` (v2.9, 2026-07-21 — 코드 배포 완료 / SQL 미실행)
 
 학생 1계정이 여러 반(=교재 컨테이너, "핵심 결정" 참고)을 동시에 진행할 수 있게 하는 신규 다대다 조인 테이블. 설계 전문은 `docs/agent-decisions/0004-multi-textbook-architecture.md`, DDL 원문은 `supabase_v2_9_student_class_assignments.sql`.
@@ -223,6 +225,92 @@ no-op된다.
 카드는 이 테이블을 새벽 배치 없이 라이브 쿼리로 직접 조회한다 — 111명
 규모에서 별도 배치 인프라를 새로 만들 필요가 없다는 판단(무료/최소
 인프라 우선, 헌법 규칙 7). SQL 파일 헤더에 이 판단 근거가 명시돼 있다.
+
+## `examples` + `publishers`/`grades`/`grammar_points`/`unit_grammar_points` (v3.13, 2026-08-01 — 코드 완료 / SQL 미실행)
+
+Curriculum Engine Phase 0(`docs/CURRICULUM_ENGINE.md`)의 콘텐츠 평면
+핵심 신규 테이블 5개. DDL 원문은
+`supabase_v3_13_curriculum_engine_phase0.sql`, 설계 상세는
+`docs/CURRICULUM_ENGINE.md` §2(ER 다이어그램)/§3(승인 워크플로우), 통합
+작업 로그는 `handoff.md` 2026-08-01(20차).
+
+| 컬럼(`examples`) | 타입 | 비고 |
+|---|---|---|
+| `id` | uuid, PK | `gen_random_uuid()` 기본값 |
+| `unit_id` | uuid, FK → `units(id)`, `on delete set null` | **nullable** — 특정 유닛에 정렬되지 않은 범용 예문 풀 허용(§2 각주) |
+| `textbook_id` | uuid, FK → `textbooks(id)`, `on delete set null` | nullable, 위와 동일 이유 |
+| `word_id` | uuid, FK → `words(id)`, `on delete set null` | nullable |
+| `target_word` | text, not null | 저장 시점에 `normalizeTargetWord`(소문자+trim)로 정규화 — `fetchApprovedExamplesForWords`의 조회 키와 항상 일치 |
+| `english_sentence` | text, not null | `target_word`를 whole-word(대소문자 무관)로 포함해야 함(클라이언트 `validateExampleFields`가 DB 왕복 전에 먼저 검증) |
+| `korean_translation` | text | nullable |
+| `grammar_point_id` | uuid, FK → `grammar_points(id)`, `on delete set null` | nullable |
+| `difficulty` | int, not null default 1, CHECK 1..5 | |
+| `source` | text, not null default `'teacher'`, CHECK(`teacher`\|`import`\|`rule`\|`ai`) | 생성기/임포트/AI 경로(`source!=='teacher'`)는 `exampleLibrary.js`의 `createExample`이 `approval_status`를 항상 `'draft'`로 강제(교사 행을 절대 auto-publish 못 하게 하는 구조적 가드) |
+| `approval_status` | text, not null default `'draft'`, CHECK(`draft`\|`pending`\|`approved`\|`rejected`) | 학생 노출 = `approved`만(§3) — 이 하드코딩은 SQL이 아니라 `fetchApprovedExamplesForWords`(데이터 계층)에 있음 |
+| `created_by` / `approved_by` / `approved_at` | text / text / timestamptz | 감사 목적 — 감정/평가 텍스트는 저장하지 않음(제품 불변식) |
+| `ai_model` / `ai_meta` | text / jsonb | 예약 컬럼 — §11 Phase 5(AI Generator) 전까지 미사용 |
+| `created_at` / `updated_at` | timestamptz | |
+
+인덱스: `(target_word, approval_status)`(btree 복합 — `lower(target_word)`
+표현식 인덱스 원안은 저장 시점 정규화로 불필요해져 리뷰 반영으로
+교체됨), `(unit_id, approval_status)`, `(textbook_id, approval_status)`,
+`approval_status` 단독.
+
+**승인 상태 전이(순수 함수 `canTransition`, `src/utils/curriculum/
+curriculumModel.js`가 유일한 판정 원천)**: `draft→pending`,
+`pending→approved|rejected`, `rejected→pending`(재검수),
+`approved→rejected`(회수). 그 외 전이(예: `draft→approved` 직행)는 전부
+거부 — "AI/규칙 초안이 검수 없이 학생에게 노출될 수 없다"는 불변식을
+DB CHECK가 아니라 이 함수 하나가 지킨다(DB는 값이 4개 enum 중 하나인지만
+본다).
+
+**`publishers`(출판사, 승인 사항)** / **`grades`(학년 축, 승인 사항)**:
+각각 `id uuid PK` / `name text not null unique` (+ `grades.sort_order int
+default 0`). `textbooks.publisher_id`/`textbooks.grade_id`가 이 두
+테이블을 FK로 참조(`on delete set null` — 출판사/학년을 지워도 교재
+데이터는 살아남음). 기존 `textbooks.publisher_name`(자유 텍스트)는
+삭제하지 않고 FK와 나란히 유지(호환).
+
+**`grammar_points`(문법 포인트 엔티티, 스키마만 — 시드 데이터 없음)**:
+`id`/`code text unique`/`label text`/`grp text`/`grade_band text`.
+**범위 변경 기록(2026-07-31, 운영자 지시)**: 원 설계는
+`docs/reading/05-grammar-taxonomy.md` 기반 ~120개 라벨 시드 INSERT를
+포함했으나, "콘텐츠/시드/샘플/데모 데이터는 일절 만들지 않는다"는 운영자
+지시로 범위가 축소돼 스키마만 실행되고 라벨 행은 0개로 시작한다(교사
+수동 입력 또는 §11 Phase 5 AI Generator가 후속 채움 — SQL 파일 자체의
+"범위 변경 기록" 주석과 1:1 대응).
+
+**`unit_grammar_points`**: `unit_id`/`grammar_point_id` 다대다 조인,
+`unique(unit_id, grammar_point_id)`.
+
+**`textbooks`/`units` additive 컬럼**: `textbooks`에
+`publisher_id`/`grade_id`/`level text`/`book_order int`, `units`에
+`position int`/`lesson_no int`/`objectives text`(`units.position`은
+v1.x부터 이미 존재 — "별도 `lessons` 테이블 없음, lesson = units 행"
+설계 결정, §9 트레이드오프 표 첫 행).
+
+**RLS(전 5개 테이블 공통, 현행 anon 개방 유지)**: 신규 테이블 5개 모두
+v3.4 관례("allow anon all" — `for all using (true) with check (true)`)로
+시작한다 — v3.11/v3.12 락다운이 이 시점 아직 배포 대기 중이라 즉시
+락다운은 dead-end(미배포 `admin-content-write` Edge Function에 의존,
+설계 §9). SQL 파일에 락다운 합류용 블록이 주석 처리된 채로 동봉돼
+있고(전제조건 3가지 명시), 락다운이 실제 배포된 뒤 별도 마이그레이션으로
+그 블록만 실행하면 합류한다.
+
+**GRANT**: 5개 테이블 전부 `grant select, insert, update, delete on
+<table> to anon, authenticated`(헌법 규칙 10 — 신규 컬럼/테이블은 GRANT
+동반).
+
+**클라이언트 폴백(SQL 미실행 상태, 2026-08-01 시점 실제 프로덕션 상태)**:
+`src/utils/curriculum/exampleLibrary.js`/`curriculumApi.js`의 모든 조회는
+`isMissingTableError`(42P01/PGRST205, `wordLibrary.js`에서 재사용) 또는
+42703(undefined_column — `textbooks`/`units`는 이미 있는 테이블이라
+컬럼만 없는 상태를 별도 감지)을 잡아 `{ rows:[], featureDisabled:true }`
+또는 `{}`로 폴백하고 절대 throw하지 않는다. 쓰기 함수(`createExample`
+등)는 테이블/컬럼 부재 시 명확한 한국어 에러("supabase_v3_13 실행
+필요")를 던진다(관리자가 "저장된 줄 착각"하지 않도록). 학생 화면은
+승인 예문 조회가 실패/빈 결과여도 예문 학습 단계 자체가 조건부 삽입이라
+(WordDetail.jsx §8) 아무 영향이 없다.
 
 ## RLS / 컬럼권한 현황
 

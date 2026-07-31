@@ -1,6 +1,43 @@
 # Paul Easy Voca — 로드맵
 
-_최종 갱신: 2026-07-24 (13차, Phase 5 Master Roadmap 작성 완료 — 기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+_최종 갱신: 2026-08-01 (14차, Curriculum Engine Phase 0 완료 — 기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+
+## 2026-08-01 (14차) — Curriculum Engine Phase 0 완료 ✅ (코드/하네스 완료, SQL 실행 대기 — 운영자 액션 필요)
+
+`docs/CURRICULUM_ENGINE.md`(2026-07-31 승인 설계, §11 로드맵 "Phase 0")
+전체 구현 완료. 총 11개 소커밋(설계 문서 1 + 기반 4 + 리뷰반영 3 +
+통합 4 — implementer 1개 세션이 통합 단계(I1~I4) 전담, 기반/리뷰 7개는
+이전 세션): ①`supabase_v3_13_curriculum_engine_phase0.sql`(publishers/
+grades/grammar_points(스키마만, 시드 없음)/unit_grammar_points/examples
+신규 + textbooks/units additive 컬럼, 전부 파괴 구문 0·멱등) ②순수
+모델(`curriculumModel.js` — 승인 상태머신/검증/필터 계약)
+③데이터 계층(`exampleLibrary.js`/`curriculumApi.js` — 테이블 부재 폴백)
+④**Learning Engine 코어**(`src/learning/` — 제네릭 러너 1개 + 5모드
+레지스트리 + 프리미티브 6종 + 어댑터, "학습 모드 로직도 중복 구현하지
+않는다"는 §13 원칙 실현) ⑤관리자 커리큘럼 허브(`CurriculumHub`/
+`CurriculumTree`/`ExampleManager`/`ApprovalQueue`, `AdminScreen.jsx`에
+탭 1줄+렌더 1줄만 추가) ⑥학생 조건부 예문 학습 단계(`curriculumExamplesStudentUI`
+플래그, 기본 **off** — 교사 opt-in 원칙, `WordDetail.jsx`에 조건부 스텝
+1개 추가 + `App.jsx`가 fire-and-forget prefetch, 보상 콜백 0개 수신)
+⑦`verify:examples`+`verify:learning-engine` 하네스 2종(`verify:all` 편입).
+
+**안전 제약 전부 충족**: 배포 없음, DDL 미실행(파일만 준비, 헌법 규칙
+8), `daily_assignments`/보상/정원/XP 로직 무접촉, 학생 대상 신규 기능는
+플래그 뒤(기본 off — 헌법 규칙 12는 "이번 AI 개발 운영체제 구축 범위"
+한정 금지이나 이 작업은 그 범위 밖의 통상 기능 작업이라 별도로 opt-in
+플래그 뒤 출시 관례 적용), `api/`/`supabase/functions/*`/신규 Vercel
+함수 0개. 플래그 OFF 상태에서 학생 플로우는 오늘과 byte-identical(빌드로
+확인). `npm run build` PASS + `npm run verify:all` 실행 결과 기존
+환경 제약 FAIL 4종(login/homework/wordAssignment/unitSwitching — 전부
+로컬 `SUPABASE_SERVICE_ROLE_KEY` 미설정/v3_12 실행 여파 등 이 작업
+이전부터 있던 갭)만 그대로이고 신규 회귀 0, `examples`/`learningEngine`
+2개 신규 도메인 PASS.
+
+**남은 수동 단계(운영자)**: ① `supabase_v3_13_curriculum_engine_phase0.sql`
+Supabase 대시보드 SQL Editor 실행 ② 관리자 "📚 커리큘럼" 탭에서 예문
+등록·검수 실습 ③ 승인 예문이 충분히 쌓이면 `curriculumExamplesStudentUI`
+플래그 on 검토 ④ v3.11/v3.12 락다운 배포 완료 시 SQL 파일 하단 "락다운
+합류 블록" 별도 실행. 상세: `handoff.md` 2026-08-01(20차).
 
 ## 2026-07-24 (13차) — Phase 5 Master Roadmap 작성 완료 — `docs/MASTER_ROADMAP.md` 참고
 

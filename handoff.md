@@ -1,7 +1,174 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-31 (19차, 문서 전수 정리 — 33건 미커밋 SaaS/기획 문서
-스냅샷 보존 후 삭제 7건/병합 4건/재배치 17건/인덱스 3종/갱신 노트 2건.
-코드/SQL/DB 무변경)_
+_최종 갱신: 2026-08-01 (20차, Curriculum Engine Phase 0 통합 완료 — 관리자
+커리큘럼 허브 + 학생 조건부 예문 단계(플래그 기본 off) + verify:examples/
+verify:learning-engine 하네스. SQL 미실행, 배포 없음)_
+
+## 2026-08-01 (20차) — Curriculum Engine Phase 0 통합 완료 (implementer)
+
+### 배경
+
+`docs/CURRICULUM_ENGINE.md`(2026-07-31 승인 설계, e2d1369)를 기반으로
+Phase 0 구현이 두 단계로 진행됐다: ① 기반 단계(이전 세션, 커밋
+e4edfa9~ee872dc) — SQL 스키마 파일 + 순수 모델/데이터 계층 + Learning
+Engine 코어. ② 통합 단계(이번 세션, 커밋 33ad793~20224b4, I1~I3) —
+관리자 UI 배선 + 학생 화면 조건부 삽입 + verify 하네스 2종. 이 섹션은
+Phase 0 전체(①+②)를 한 번에 정리한다.
+
+### 커밋 목록 (`e2d1369..HEAD`, 총 11개)
+
+**설계(1)**: `e2d1369` docs: Curriculum Engine + Learning Engine
+아키텍처 v1.0 (승인됨)
+
+**기반(4, 이전 세션)**:
+- `e4edfa9` feat(curriculum): supabase_v3_13 Phase 0 스키마 파일
+- `bdcd6bc` feat(curriculum): 순수 모델 계층(승인 상태머신·검증·생성기 계약)
+- `561d9f9` feat(curriculum): exampleLibrary/curriculumApi 데이터 계층(테이블 부재 폴백)
+- `ee872dc` feat(learning): Learning Engine 코어(러너+레지스트리+프리미티브+어댑터)
+
+**리뷰→수정 사이클(3, 이전 세션 — 기반 커밋들에 대한 셀프 리뷰 발견사항 반영)**:
+- `0d55475` fix(curriculum): v3_13 정책 가드 강화 + target_word 인덱스 교체 + 락다운 전제조건 보완
+- `ab901fb` fix(curriculum): updateExample 병합 검증·source 가드·유닛 우선 fetch·filters 계약 정합
+- `c1f9cab` docs(curriculum): 리뷰 반영 — 설계 드리프트 노트 + v3_13 락다운 합류 등재
+
+**통합(3, 이번 세션, I1~I3 — I4는 이 문서 자체)**:
+- `33ad793` feat(curriculum): 관리자 커리큘럼 허브 — 출판사/교재·유닛 메타/예문 CRUD·승인
+- `a85ad61` feat(curriculum): 학생 조건부 예문 단계(교사 opt-in 플래그, 기본 off, 보상 무접촉)
+- `20224b4` test(curriculum): verify:examples + verify:learning-engine 하네스
+
+리뷰→수정 사이클(위 3개)의 실제 발견 사항 요약: M1(락다운 재실행 시
+정책 가드가 policyname이 아니라 존재 여부만 봐서 이론상 개방 정책이
+재생성될 수 있는 리스크) → 가드를 `tablename` 존재 검사로 교체, M3(
+`lower(target_word)` 표현식 인덱스는 저장 시점 정규화로 불필요 → 평범한
+`(target_word, approval_status)` btree로 교체), `updateExample` 부분
+패치 버그(target_word/english_sentence 중 하나만 patch에 있으면 나머지가
+undefined로 검증돼 항상 실패하던 문제 → 현재 저장된 값과 병합 후
+재검증), `matchesFilters` 계약 불일치(snake_case 기대 → listExamples가
+실제로 돌려주는 camelCase로 정정), `fetchApprovedExamplesForWords`에
+유닛 우선순위 정렬 추가(§2 각주 "유닛 정렬 예문이 항상 우선"을 실제로
+지키게 함). 상세 근거는 `docs/CURRICULUM_ENGINE.md` 하단 "리뷰 반영
+노트" 및 각 SQL/JS 파일의 해당 라인 주석 참고.
+
+### 통합 단계(I1~I3) 상세
+
+**I1 — 관리자 CRUD**(`src/components/admin/CurriculumHub.jsx`/
+`CurriculumTree.jsx`/`ExampleManager.jsx`/`ApprovalQueue.jsx` 신규,
+`curriculumApi.js`에 `updatePublisher`/`deletePublisher`/`createGrade`/
+`listTextbooksMeta`/`updateTextbookMeta`/`listUnitsMeta`/`updateUnitMeta`
+추가): `AdminScreen.jsx`는 탭 배열에 `['curriculum','📚 커리큘럼']` 1개
+항목 + 렌더 라인 `{tab === 'curriculum' && <CurriculumHub adminPin={pin} />}`
+1줄만 추가(diff 최소화, 규칙 16). 기존 교재/유닛 **생성** 플로우는
+재구현하지 않고 `wordLibrary.js`/기존 반 관리 탭 그대로 — 이 세션이
+새로 만든 것은 오직 additive 메타(publisher_id/grade_id/level/
+book_order, position/lesson_no/objectives) 편집과 examples CRUD·승인
+뿐이다. `curriculumApi.js`의 신규 조회 함수들은 `textbooks`/`units`가
+이미 존재하는 테이블이라(v3.1) `isMissingTableError`(42P01/PGRST205)로는
+안 잡히는 "컬럼만 없음"(42703, undefined_column) 상태를 별도로 감지해
+id/name만이라도 조회하는 2단 폴백을 쓴다(`wordLibrary.js`의 테이블 부재
+캐스케이딩 폴백 관례를 컬럼 단위로 적용).
+
+**I2 — 학생 조건부 예문 단계**: 신규 플래그
+`curriculumExamplesStudentUI`(`src/config/features.js`, 기본 **false**
+— `readingStudentUI`와 동일한 `isFeatureEnabled` 메커니즘, 교사 opt-in
+원칙). `App.jsx`는 플래그 on일 때만 오늘 단어 목록에 대해
+`fetchApprovedExamplesForWords(wordTexts, { unitId })`를 fire-and-forget
+1회 조회해 `curriculumExamples` state에 담고, `wordDetail`/`guidedSession`
+화면 두 곳에 그 state를 prop으로 통과시킨다(플래그 off면 state는 항상
+null, fetch 자체가 0회). `WordDetail.jsx`는 `curriculumExamples` prop
+(기본 null)을 받아 `useMemo(..., [word.id])`로 단어당 동결하고,
+`buildSteps`에 `hasCurriculumExample` 인자를 추가해 study/comprehensive
+모드에만(quiz/write 모드는 절대 미삽입) 조건부 스텝 `'curriculumExample'`
+1개를 끼워 넣는다 — 인자가 항상 false인 기본 상태에서는 `buildSteps`
+반환값이 오늘과 byte-identical(빌드로 확인, 회귀 없음 증명 방식은
+규칙 15의 "수정 전 코드로 되돌려 실제 FAIL 확인" 정신과 동일하게, 이번엔
+"플래그 off 상태에서의 산출물 불변"을 코드 레벨로 보장). 새 컴포넌트
+`CurriculumExampleStep`(WordDetail.jsx 내부)은 `docs/CURRICULUM_ENGINE.md`
+§13.3의 5-스텝 플랜(learn→fill_blank→listen→shadowing→write)을
+`LearningEngine`(Learning Engine 코어, 기반 단계 산출물) 하나로 순차
+실행하고, shadowing 단계에서만 기존 `SpeechBtn`(WordDetail.jsx 안에 이미
+있던 검증된 발음 인식 컴포넌트)을 `renderRecorder` prop으로 주입한다.
+**보상 격리**: 이 컴포넌트는 `onMarkPronunciationOk`/`onMarkExampleHeard`/
+`onMarkQuizSolved`/`onQuizAnswer`/`onSpellingAnswer` 등 어떤 보상/기록
+콜백도 props로 받지 않는다 — `onEvent`는 로컬 `planIdx` 진행에만 쓰이고
+DB 쓰기가 전혀 없다(`docs/fixes/star-reward-idempotency-design.md` 이력에
+대한 구조적 방어, 파일 내 명시적 주석으로 근거 남김). `GuidedSession.jsx`는
+`curriculumExamples` prop 1개를 받아 내부 `WordDetail`에 그대로
+통과시키는 1줄 변경뿐.
+
+**I3 — verify 하네스 2종**: `tests/harness/runExamples.mjs`(pure 섹션
+36단언 — `canTransition` 4x4 전체 매트릭스+same-state+unknown,
+`validateExampleFields`의 정규식 특수문자 이스케이프 안전성 포함,
+`matchesFilters`/`normalizeTargetWord`/`reviewCandidate`/
+`generateCandidateExamples` 미구현 계약 + live 섹션 — env 없으면 SKIP,
+있으면 examples 테이블 부재 폴백 확인 또는 전체 CRUD 왕복)과
+`tests/harness/runLearningEngine.mjs`(21단언 — MODES 레지스트리
+완결성/fill_blank 왕복/어댑터 shape/결정론/순수성). 둘 다
+`package.json`에 `verify:examples`/`verify:learning-engine` 추가 +
+`tests/harness/registry.mjs` DOMAINS 등록으로 `verify:all`에 자동
+편입. **구현 중 발견·수정한 하네스 자체의 버그 2건**(구현 코드가 아니라
+테스트 인프라 버그): ① `registry.js`/`generatorContract.js`는 내부에
+확장자 없는 상대 import(Vite 전용 표기, 예: `../../utils/
+textbookExampleModel`)를 써서 플레인 Node ESM이 직접 로드 못 함
+(`ERR_MODULE_NOT_FOUND`) — esbuild 인메모리 번들(네트워크/환경변수
+의존 없음, `scripts/buildWordLibBundle.mjs`와 동일 관례)로 우회.
+② "supabase 접근 없음" 순수성 체크를 `toLowerCase().includes('supabase')`
+로 짰더니, 검증 대상 파일들의 헤더 주석 자체가 "왜 Supabase가 없는지"를
+산문으로 설명하며 그 단어를 언급해서 오탐(false positive)이 났다 —
+`from '...supabase...'`/`supabase.from(...)`/`createClient(...)` 같은
+실제 사용 패턴 정규식으로 교체(둘 다 실행 로그로 재현 후 확정 — 규칙
+15와 동일한 "먼저 재현해서 확정" 정신).
+
+### 플래그 상태 / SQL 상태 / featureDisabled 동작
+
+- `curriculumExamplesStudentUI`: **기본 false**(신규 opt-in 플래그).
+  운영자가 명시적으로 켜기 전까지 학생 화면은 이 작업 전체와 무관하게
+  오늘과 동일하다.
+- `supabase_v3_13_curriculum_engine_phase0.sql`: **미실행**(운영자 수동
+  실행 대기, 헌법 규칙 8). 이번 세션 중 `npm run verify:examples`의 live
+  섹션이 실제 프로덕션 Supabase에 대해 `examples` 테이블 부재를 실측
+  확인했다(`Could not find the table 'public.examples' in the schema
+  cache`) — `listExamples`/`fetchApprovedExamplesForWords`가 이 상황에서
+  `{ rows:[], featureDisabled:true }`/`{}`로 정확히 폴백하는 것도 같은
+  실행에서 확인됨(가짜 통과가 아니라 실측).
+- 관리자 "📚 커리큘럼" 탭은 SQL 미실행 상태에서 각 서브탭(구조/예문/
+  검수함)이 독립적으로 "supabase_v3_13 실행 후 사용 가능" 배너를
+  보여준다(크래시 없음).
+
+### 검증 결과(이번 세션 최종)
+
+`npm run build` PASS(경고 0 신규 — pre-existing 청크 크기 경고만 유지).
+`npm run verify:all` 실행 결과: 기존 환경 제약 FAIL 4종 — `login`/
+`homework`/`wordAssignment`/`unitSwitching`(전부 로컬
+`SUPABASE_SERVICE_ROLE_KEY` 미설정 또는 실데이터 상태에 기인, 이 세션
+착수 **이전부터** 있던 갭 — I1(관리자 전용, 학생 플로우 무접촉) 커밋
+직후·I2(학생 화면 변경) 착수 전에 별도로 baseline `verify:all`을 먼저
+돌려 정확히 이 4종+SKIP 2종만 있음을 확인한 뒤 학생 화면 통합을
+시작했다) + SKIP 2종(`speaking`/`listening`, headless 환경 구조적
+한계) — 이 4종/2종은 **이번 작업으로 생긴 신규 회귀가 전혀 아니다**.
+신규 도메인 `examples`/`learningEngine` 둘 다 PASS. `AdminScreen.jsx`
+diff는 탭 배열 1개 항목 + 렌더 1줄 + import 2줄(총 4줄 수준),
+`App.jsx` diff는 import 2줄 + prefetch state/effect 1블록 + prop 전달
+2곳(각 1줄), `WordDetail.jsx`/`GuidedSession.jsx` diff는 전부 additive
+(기존 로직 삭제/수정 0줄).
+
+### 남은 수동 단계(운영자)
+
+1. `supabase_v3_13_curriculum_engine_phase0.sql`을 Supabase 대시보드 SQL
+   Editor에서 실행(파일 자체가 멱등 — 코드보다 먼저/나중 어느 순서로
+   실행돼도 안전).
+2. 관리자 "📚 커리큘럼" 탭에서 출판사/학년/교재·유닛 메타 입력 + 예문
+   등록·검수(승인) 실습.
+3. 승인 예문이 충분히 쌓이면 `curriculumExamplesStudentUI` 플래그를
+   `true`로 켜는 것을 검토(교사 opt-in — 이번 세션은 코드/인프라만
+   준비, 학생 노출 여부는 운영자 결정).
+4. v3.11(`admin-content-write` Edge Function)/v3.12 락다운이 실제
+   배포되면, `supabase_v3_13_...sql` 하단 "[락다운 합류 블록]"(현재
+   주석 처리)을 별도 마이그레이션으로 실행해 신규 5개 테이블도 anon
+   read-only로 합류.
+5. `verify:all`의 환경 제약 FAIL 4종(login/homework/wordAssignment/
+   unitSwitching)은 이 작업과 무관한 별도 안건 — 로컬
+   `SUPABASE_SERVICE_ROLE_KEY` 부재/프로덕션 v3.12(`daily_assignments`
+   락다운) 실행 여파로 이미 알려진 갭이며, 이번 세션이 새로 만든 문제가
+   아니다(위 "검증 결과" 절 baseline 확인 참고).
 
 ## 2026-07-31 (19차) — 문서 전수 정리 (SaaS/기획 문서 33건)
 

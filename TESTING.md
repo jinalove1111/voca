@@ -298,4 +298,29 @@ testWritingReviewAiPipeline.mjs` **347 PASS / 0 FAIL / 5 SKIP**(275
 PASS에서 72개 신규 단언 추가, 기존 SKIP 5건은 배포 의존이라 그대로
 유지). 결합 재검증(`npm run build`/`npm run verify:writing` 등 전체
 워크트리 기준)은 조정자가 후속으로 진행 예정 — `handoff.md` 2026-07-24
+
+---
+
+## 관련 항목: Curriculum Engine Phase 0 — `examples`/Learning Engine 도메인 2종 (2026-08-01, implementer, Phase 0 통합 커밋 I3)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+`docs/CURRICULUM_ENGINE.md` Phase 0 통합(커밋 I1~I3, `handoff.md`
+2026-08-01 20차 참고)이 신규 도메인 2개를 `npm run verify:all`에
+편입했다. 둘 다 `runSentenceLearning.mjs`/`runReading.mjs`와 동일한
+자기완결형 하네스 관례(`tests/harness/run*.mjs` 하나가 PASS/FAIL/summary
+표준 출력을 직접 찍고 exit code로 신호) — `registry.mjs`가 child-process로
+그 파일 자체를 spawn한다(새 오케스트레이션 코드 없음).
+
+| 도메인 | 명령 | 검증 대상 | 특이사항 |
+|---|---|---|---|
+| `examples` | `npm run verify:examples` | `curriculumModel.js`(승인 상태머신 `canTransition` 4x4 전체 매트릭스+same-state+unknown, `validateExampleFields` whole-word 불변식·정규식 특수문자 이스케이프·difficulty/source/approval_status enum, `normalizeTargetWord`, `matchesFilters` camelCase 계약) + `generatorContract.js`(`reviewCandidate` 금칙 톤 힌트, `generateCandidateExamples` 미구현 계약 — throw/네트워크 0) | pure 섹션 36단언(항상 실행) + live 섹션(선택) — `.env`/`.env.local`에 `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`가 없으면 SKIP(exit 0). 있으면 `exampleLibrary.js`를 esbuild로 인메모리 번들(`import.meta.env` 치환, `scripts/buildWordLibBundle.mjs`와 동일 패턴)해 실제 Supabase 조회 — `examples` 테이블 부재(supabase_v3_13 미실행, 2026-08-01 시점 실제 프로덕션 상태)면 `listExamples`/`fetchApprovedExamplesForWords`의 `featureDisabled:true`/`{}` 폴백 자체를 PASS로 확인하고 CRUD 왕복은 건너뜀. 테이블이 생기면 같은 실행이 자동으로 `verify-harness-<timestamp>` 표시 행 생성→전이(draft→pending→approved)→승인 후 조회 확인→cleanup까지 전체 왕복으로 확장된다(코드 변경 없이 환경만 갖추면 커버리지가 늘어나는 구조). |
+| `learningEngine` | `npm run verify:learning-engine` | `src/learning/adapters/learningItem.js`(`fromExample`/`fromWord` shape, 필드 없어도 안전 폴백) + `src/learning/engine/registry.js`(MODES 5종 전부 `primitives`+`prepare` 보유, `fill_blank`의 `makeFillBlank`/`checkAnswer` 왕복 — 대소문자 무관·구두점 무시·정규식 특수문자 단어 안전, `learn`/`listen`/`shadowing`/`write`의 identity prepare, 결정론) | 21단언, 전부 pure(네트워크 0). `learningItem.js`는 import 0 순수 모듈이라 직접 import하지만, `registry.js`는 내부에 확장자 없는 상대 import(`../../utils/textbookExampleModel`, Vite 전용 표기)가 있어 플레인 Node ESM이 직접 못 읽는다 — esbuild로 인메모리 번들해서만 로드(네트워크/환경변수 의존 없음, 여전히 pure). "supabase 접근 없음" 단언은 `.toLowerCase().includes('supabase')` 같은 순진한 substring 검사 대신 실제 사용 패턴(`import ... from '...supabase...'` / `supabase.from(...)` / `createClient(...)`) 정규식으로 정밀 검사한다 — 두 파일의 헤더 주석 자체가 "왜 Supabase가 없는지" 산문으로 설명하며 대문자 `Supabase`/소문자 `supabase`(파일명 `supabase_v3_13` 등)를 언급해 순진한 substring 검사는 오탐(false positive)이 났다(작성 중 실측 발견, 수정). |
+
+두 도메인 모두 `npm run verify:all` 최종 실행에서 PASS 확인(2026-08-01,
+`handoff.md` 20차 참고) — 기존 환경 제약 FAIL 4종(login/homework/
+wordAssignment/unitSwitching, 전부 이번 세션 이전부터 있던 로컬
+`SUPABASE_SERVICE_ROLE_KEY` 미설정/실데이터 상태 기인) + SKIP 2종
+(speaking/listening, headless 구조적 한계)은 이 작업으로 전혀 변하지
+않았다(신규 회귀 0).
 11차 "릴리스 게이트" 참고.
