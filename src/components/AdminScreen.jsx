@@ -38,6 +38,10 @@ import LearningRateCard from './admin/LearningRateCard'
 // 밖(features.js readingStudentUI 예약 플래그 참고).
 import PassageEditor from './admin/PassageEditor'
 import { isFeatureEnabled } from '../config/features'
+// Curriculum Engine Phase 0(2026-08-01) — 관리자 전용 커리큘럼 허브(출판사/
+// 학년/교재·유닛 메타/예문 CRUD·승인). 학생 화면 무관, supabase_v3_13 미실행
+// 상태에서도 각 서브탭이 독립적으로 안전 배너로 폴백한다(docs/CURRICULUM_ENGINE.md).
+import CurriculumHub from './admin/CurriculumHub'
 
 const wordSlug = (word) => word.toLowerCase().replace(/\s+/g, '_')
 
@@ -1172,7 +1176,7 @@ export default function AdminScreen({ onBack }) {
 
         {/* Tabs */}
         <div className="no-print flex gap-2 mb-6 overflow-x-auto">
-          {[['classes','📚 반 관리'],['students','👦 학생 관리'],['dashboard','📊 대시보드'],['entrance','🏁 입실시험'],['excel','📊 Excel'],['pdf','📄 PDF'],['testpaper','📝 시험지'],['features','🎯 기능']].map(([k,l]) => (
+          {[['classes','📚 반 관리'],['students','👦 학생 관리'],['dashboard','📊 대시보드'],['entrance','🏁 입실시험'],['excel','📊 Excel'],['pdf','📄 PDF'],['testpaper','📝 시험지'],['curriculum','📚 커리큘럼'],['features','🎯 기능']].map(([k,l]) => (
             <button key={k} onClick={() => setTab(k)}
               className={`py-2 px-3 rounded-xl font-black text-sm btn-press transition-colors whitespace-nowrap ${tab === k ? 'bg-purple-500 text-white' : 'bg-white text-gray-500 border-2 border-gray-200'}`}>
               {l}
@@ -1479,6 +1483,7 @@ export default function AdminScreen({ onBack }) {
         {tab === 'excel' && <ExcelUpload onDone={() => { refresh(); setTab('classes') }} adminPin={pin} />}
         {tab === 'pdf'   && <PdfUpload   onDone={() => { refresh(); setTab('classes') }} adminPin={pin} />}
         {tab === 'testpaper' && <TestPaperGenerator />}
+        {tab === 'curriculum' && <CurriculumHub adminPin={pin} />}
         {tab === 'features' && <FeatureManagementPanel />}
         {tab === 'debug' && <DebugPage />}
       </div>
