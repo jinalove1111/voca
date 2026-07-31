@@ -1,10 +1,124 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-07-30 (18차, 베타 UX 안전 수정 — 학생/모바일 UX 감사 후
-저위험 프론트 fix 3건: 퀴즈 풀 마운트 고정(백그라운드 복귀 시 재섞임 HIGH
-버그), 발음 재생 버튼 44px 터치타깃, iOS 100dvh 로그인 접힘. build + verify:all
-중 login 도메인 외 전부 PASS(login은 service_role/라이브 엔드포인트 필요 —
-clean tree에서도 동일 실패하는 환경적 제약, 이번 변경과 무관). 커밋·push 완료.
-docs/BETA_FINAL_CHECKLIST.md 작성)_
+_최종 갱신: 2026-07-31 (19차, 문서 전수 정리 — 33건 미커밋 SaaS/기획 문서
+스냅샷 보존 후 삭제 7건/병합 4건/재배치 17건/인덱스 3종/갱신 노트 2건.
+코드/SQL/DB 무변경)_
+
+## 2026-07-31 (19차) — 문서 전수 정리 (SaaS/기획 문서 33건)
+
+### 배경
+
+2026-07-31 정리 전 커밋 `e035a74`에서 이전 세션이 33개 미커밋
+PAUL_EASY_VOCA_*.md/FINAL_BETA_LAUNCH_REPORT.md 등 SaaS/기획 문서를
+원본 그대로 스냅샷 커밋(정리 전 보존, 이 커밋 이후 어떤 삭제/수정이
+있어도 `git show e035a74:<경로>`로 원본 전문 복구 가능). 이번 세션은
+그 스냅샷을 기준으로 문서 4개 병렬 리뷰 관점(중복/재진술 탐지·병합
+대상 식별·재배치 분류·인덱스 설계)으로 전수 검토 후 정리했다. 코드/
+SQL/DB/Supabase 무변경 — `.md`/`.ai-status/*.json`만 다뤘다.
+
+### 삭제 7건 (사유 1줄씩, 원본은 `e035a74`에 보존)
+
+| 삭제 문서 | 사유 |
+|---|---|
+| `PAUL_EASY_VOCA_AI_AGENT_OS.md` | CLAUDE.md 18규칙+DEVELOPER_GUIDE 워크플로우의 70~90% 재진술, 5-역할 전제가 실제 12-에이전트 체계와 불일치 |
+| `PAUL_EASY_VOCA_AI_DEVELOPMENT_PROTOCOL.md` | 위와 동일 근거 |
+| `PAUL_EASY_VOCA_ROLE_PERMISSION_MATRIX.md` | `PAUL_EASY_VOCA_PERMISSION_MATRIX.md`(6-역할)의 부분집합(5-역할) |
+| `PAUL_EASY_VOCA_SAAS_ARCHITECTURE_PLAN.md` | `docs/agent-decisions/0006-multitenant-saas-architecture.md`의 재구성판 — 고유 섹션만 0006에 병합 |
+| `PAUL_EASY_VOCA_MULTITENANT_DATABASE_DESIGN.md` | 위와 동일, 고유 섹션(Q1~Q5 결정트리/migration 위험표/100학원 DB 문제)만 0006에 병합 |
+| `PAUL_EASY_VOCA_EXECUTION_PRIORITY_PLAN.md` | `PAUL_EASY_VOCA_FIRST_90_DAYS_EXECUTION.md`의 90% 부분집합 — P0/P1/P2 압축표만 병합 |
+| `FINAL_BETA_LAUNCH_REPORT.md` | 고유 Check 1~3(커밋/미커밋/env 상태, 2026-07-30 시점)만 `docs/BETA_LAUNCH_READINESS_REPORT.md`에 병합, 고라이브 시퀀스는 DEPLOY_COMMANDS 중복이라 미병합 |
+
+### 병합 4건 (타깃 명시)
+
+- AI 비용전략/Q1~Q5 결정트리/migration 위험표/100학원 DB 문제 →
+  `docs/agent-decisions/0006-multitenant-saas-architecture.md`
+- 실제 학원 운영 시 권한 문제 예측 → `PAUL_EASY_VOCA_PERMISSION_MATRIX.md`
+  (현 `docs/architecture/`)
+- FINAL_BETA_LAUNCH_REPORT Check 1~3 → `docs/BETA_LAUNCH_READINESS_
+  REPORT.md`
+- P0/P1/P2 압축표 → `PAUL_EASY_VOCA_FIRST_90_DAYS_EXECUTION.md`(현
+  `docs/future-ideas/`)
+
+### 재배치 17건 (old → new 경로)
+
+**`docs/architecture/`(7건, 전부 루트 → 이 경로로 이동)**:
+`PAUL_EASY_VOCA_TABLE_OWNERSHIP_MATRIX.md`,
+`PAUL_EASY_VOCA_RLS_POLICY_DESIGN.md`,
+`PAUL_EASY_VOCA_PERMISSION_MATRIX.md`,
+`PAUL_EASY_VOCA_DATA_FLOW_ARCHITECTURE.md`,
+`PAUL_EASY_VOCA_ADMIN_DASHBOARD_ARCHITECTURE.md`,
+`PAUL_EASY_VOCA_BILLING_ARCHITECTURE_DESIGN.md`,
+`PAUL_EASY_VOCA_SAAS_SECURITY_IMPLEMENTATION_CHECKLIST.md`.
+
+**`docs/future-ideas/`(10건, 전부 루트 → 이 경로로 이동)**:
+`PAUL_EASY_VOCA_MASTER_PLAN.md`, `PAUL_EASY_VOCA_BUSINESS_MODEL_PLAN.md`,
+`PAUL_EASY_VOCA_MVP_ROADMAP.md`,
+`PAUL_EASY_VOCA_FIRST_90_DAYS_EXECUTION.md`,
+`PAUL_EASY_VOCA_CUSTOMER_VALIDATION_PLAN.md`,
+`PAUL_EASY_VOCA_CUSTOMER_OPERATION_PLAN.md`,
+`PAUL_EASY_VOCA_REAL_ACADEMY_SIMULATION.md`,
+`PAUL_EASY_VOCA_CURRENT_STATUS.md`,
+`PAUL_EASY_VOCA_AI_LEARNING_ENGINE_PLAN.md`,
+`PAUL_EASY_VOCA_LEARNING_ANALYTICS_PLAN.md`.
+
+파일명은 전부 그대로 유지, 디렉터리만 이동. 이동 중 다른 카테고리로
+이동한 파일을 인용하던 참조(예: architecture 문서가 future-ideas 문서를
+인용하던 경우)는 상대경로를 `docs/architecture/...`/`docs/future-ideas/...`
+전체 경로로 갱신, 같은 디렉터리 내 인용은 파일명만 유지.
+
+### 제자리 유지 5건(+2 하위 카테고리) — 사유
+
+`docs/SAAS_READINESS_REVIEW.md`, `docs/audit/2026-07-26-saas-multi-
+tenant-security-top10.md`, `docs/audit/2026-07-26-v3_11-1hour-
+runbook.md`, `docs/audit/2026-07-26-v3_11-lockdown-execution-
+review.md`, `docs/AUDIO_TTS_VOLUME_RECOMMENDATION.md` — 전부 이미
+추적 중인 운영 문서(`docs/BETA_LAUNCH_READINESS_REPORT.md`,
+`docs/DEPLOYMENT_CHECKLIST_V311_V312.md` 등)가 경로로 직접 인용하고
+있어 이동 시 그쪽 참조도 함께 깨질 위험 — 이번 정리 범위(SaaS/기획
+문서군) 밖으로 판단해 그대로 둠. `docs/agent-decisions/0006-*.md`
+(ADR 규약상 고정 경로), `.ai-status/*.json`(운영 체크포인트, 스키마상
+경로 불변)도 동일 이유로 유지.
+
+### 인덱스 README 3종 (신규)
+
+`docs/README.md`(배포/아키텍처/베타/미래아이디어 4분류 마스터
+인덱스), `docs/architecture/README.md`(설계 전용·구현 0줄 상태 명시 +
+`SAAS_READINESS_REVIEW.md`를 현실 기준 문서로 안내), `docs/future-
+ideas/README.md`(2026-07-25/26 스프린트 산출물·고객검증 피벗으로 보류
+상태 명시 + `CUSTOMER_VALIDATION_PLAN.md`를 다음 행동 문서로 안내).
+
+### 갱신 노트 2건 (append, 기존 본문 무변경)
+
+- `docs/future-ideas/PAUL_EASY_VOCA_CURRENT_STATUS.md`: 2026-07-25
+  스냅샷이며 이후 발견된 v3_12 CRITICAL·베타 UX 결함(16~18차) 미반영
+  경고.
+- `docs/future-ideas/PAUL_EASY_VOCA_FIRST_90_DAYS_EXECUTION.md`: Day 1
+  "v3_11 배포 1주 내 완료" 가정 무효(운영자 수동 배포 대기, v3_12 추가
+  발견) 경고.
+
+### 검증
+
+문서/텍스트 파일만 다뤘으므로 `npm run build`/`verify:*`는 이번
+변경의 영향 범위 밖(sanity check 목적으로만 재실행 권장). `git diff
+e035a74..HEAD --stat`로 `.md`/`.ai-status/*.json` 외 파일 변경 없음을
+확인(코드/SQL/`src/`/`api/`/`supabase/` 전부 0건).
+
+### 커밋
+
+3개 소커밋(B: 삭제+병합, C: 4분류 재배치+인덱스+갱신노트, D: 이 handoff
++ `.ai-status` 체크포인트) — 각 커밋 해시는 이 리포지토리의 git 로그
+참고(문서 작업 특성상 커밋 해시를 이 파일에 미리 박아넣지 않음, 필요
+시 `git log --oneline -5` 확인).
+
+### 남은 리스크
+
+- 문서 본문 내 축약 인용(예: `SAAS_ARCHITECTURE_PLAN.md` 전체경로
+  없이 §번호만 언급하는 부분)은 파일명이 유일해 실제로 안 깨지지만,
+  완전한 상대경로로 전부 통일하지는 못했다(문서량 대비 효율 판단) —
+  차후 세션이 이 클러스터를 다시 만지면 발견하는 대로 정정 권장.
+- `docs/CURRICULUM_ENGINE.md`가 이번 세션 중 untracked 상태로 새로
+  나타남 — 이 세션이 작성하지 않았고(헌법 규칙 16, 동시 작업 파일은
+  건드리지 않음) 커밋 범위에도 포함하지 않았다. 운영자가 그 파일의
+  출처를 확인 필요.
 
 ## 2026-07-30 (18차) — 베타 UX 안전 수정 (학생/모바일 감사)
 
