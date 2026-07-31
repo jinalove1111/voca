@@ -127,10 +127,11 @@ DESIGN.md` §5 재확인).
 
 ## 관련 문서
 
-`PAUL_EASY_VOCA_RLS_POLICY_DESIGN.md`, `PAUL_EASY_VOCA_ROLE_
-PERMISSION_MATRIX.md`, `PAUL_EASY_VOCA_TABLE_OWNERSHIP_MATRIX.md`,
-`PAUL_EASY_VOCA_SAAS_ARCHITECTURE_PLAN.md`, `DATABASE.md`(v1.9 PIN
-컬럼권한 원본).
+`PAUL_EASY_VOCA_RLS_POLICY_DESIGN.md`, `PAUL_EASY_VOCA_TABLE_
+OWNERSHIP_MATRIX.md`, `docs/agent-decisions/0006-multitenant-saas-
+architecture.md`(구 SAAS_ARCHITECTURE_PLAN.md는 2026-07-31 병합됨),
+`DATABASE.md`(v1.9 PIN 컬럼권한 원본). (구 `PAUL_EASY_VOCA_ROLE_
+PERMISSION_MATRIX.md`는 삭제됨 — 5-역할 버전이 이 6-역할 문서로 대체됨)
 
 ---
 
@@ -144,5 +145,5 @@ _(2026-07-31 문서 정리: `PAUL_EASY_VOCA_ROLE_PERMISSION_MATRIX.md`에서
 | 원장이 만들어준 교사 계정이 결제 정보까지 봄 | Teacher 화면에 Owner 전용 UI가 조건 없이 노출 | "Owner 전용 탭 비노출"을 필요 화면에 명시(Teacher 섹션 참고) |
 | 여러 교사가 동시에 같은 반 설정을 수정해 충돌 | 낙관적 동시성 제어 부재(현재 단일 관리자 전제 설계의 잔재) | 반 설정 저장 시 마지막 수정자/시각 표시 정도의 최소 대응(완전한 락 시스템은 과설계, 100학원 규모에서도 동시 교사 수가 많지 않아 실사고 확률 낮음) |
 | **퇴사한 교사 계정이 즉시 비활성화 안 돼서 계속 접근 가능** | `academy_members.status` 변경이 실제 세션 만료로 즉시 이어지지 않을 수 있음(JWT 캐시 등) | 계정 해제 시 해당 사용자의 활성 세션을 강제 무효화하는 절차 필요(Supabase Auth의 세션 revoke 기능 활용) |
-| **학부모가 다른 아이 이름을 알아서 그 아이 정보까지 봄** | `PAUL_EASY_VOCA_REAL_ACADEMY_SIMULATION.md` §2가 이미 실사용 시나리오로 지적 — 지금 학부모 인증이 "이름만으로 조회" | `parent_student_link` 신규 설계(Parent 섹션의 RLS 조건 참고)가 근본 해법 — 다학원 확장 전 반드시 개선 대상으로 표시 |
+| **학부모가 다른 아이 이름을 알아서 그 아이 정보까지 봄** | `docs/future-ideas/PAUL_EASY_VOCA_REAL_ACADEMY_SIMULATION.md` §2가 이미 실사용 시나리오로 지적 — 지금 학부모 인증이 "이름만으로 조회" | `parent_student_link` 신규 설계(Parent 섹션의 RLS 조건 참고)가 근본 해법 — 다학원 확장 전 반드시 개선 대상으로 표시 |
 | Teacher가 실수로 반을 삭제해 Owner가 모르게 데이터 소실(진행도는 보존되지만 반 배정은 풀림) | Teacher에게 파괴적 액션 권한을 과하게 부여 | "반/학생 삭제는 Owner 전용" 원칙 명시(Teacher 섹션 참고) |

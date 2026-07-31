@@ -10,7 +10,10 @@ _작성: 2026-07-29. **분석 전용 문서다 — 이 세션은 SaaS 기능을 
 관련 근거 문서: `docs/audit/2026-07-24-performance-db.md`,
 `docs/audit/2026-07-24-security.md`,
 `docs/audit/2026-07-26-saas-multi-tenant-security-top10.md`,
-`DATABASE.md`, `PAUL_EASY_VOCA_*.md`(루트 설계 문서군),
+`DATABASE.md`, `docs/architecture/PAUL_EASY_VOCA_*.md`(설계 문서군,
+2026-07-31 `docs/architecture/`로 재배치됨) + `docs/future-ideas/
+PAUL_EASY_VOCA_*.md`(사업/전략 문서군, 같은 날 `docs/future-ideas/`로
+재배치됨),
 `docs/agent-decisions/0006-multitenant-saas-architecture.md`.
 
 ---
@@ -52,7 +55,7 @@ academy/tenant 개념은 스키마·쿼리·인증 어디에도 존재하지 않
 
 | 검색어 | 코드/SQL 매치 | 실제 위치 |
 |---|---|---|
-| `academy_id` | **0** | 전부 Markdown 설계/감사 문서(`PAUL_EASY_VOCA_*.md`, `docs/agent-decisions/0006-*`, `docs/audit/2026-07-26-*`, `handoff.md`) + 그 문서를 참조하는 `.ai-status/*.json` 1개 |
+| `academy_id` | **0** | 전부 Markdown 설계/감사 문서(`docs/architecture/PAUL_EASY_VOCA_*.md`, `docs/future-ideas/PAUL_EASY_VOCA_*.md`, `docs/agent-decisions/0006-*`, `docs/audit/2026-07-26-*`, `handoff.md`) + 그 문서를 참조하는 `.ai-status/*.json` 1개 |
 | `tenant` | **0** | 전부 Markdown 문서. 일부 감사 문서는 "코드에 이 개념이 없다"고 명시하려고 언급한 것 |
 | `org_id` | **0** | 저장소 전체 어디에도 없음 |
 
@@ -115,8 +118,9 @@ academy/tenant 개념은 스키마·쿼리·인증 어디에도 존재하지 않
 
 ## 6. 향후 과금 구조(Billing) — DESIGN-DOC-PROPOSAL (미구현)
 
-`PAUL_EASY_VOCA_BILLING_ARCHITECTURE_DESIGN.md` /
-`PAUL_EASY_VOCA_BUSINESS_MODEL_PLAN.md` 요약. 두 문서 모두 상단에
+`docs/architecture/PAUL_EASY_VOCA_BILLING_ARCHITECTURE_DESIGN.md` /
+`docs/future-ideas/PAUL_EASY_VOCA_BUSINESS_MODEL_PLAN.md` 요약. 두
+문서 모두 상단에
 "순수 설계 문서 — 코드/SQL/DB 변경 없음" 명시. **아래는 전부 제안이며
 구현된 것이 하나도 없다.**
 
@@ -137,8 +141,8 @@ academy/tenant 개념은 스키마·쿼리·인증 어디에도 존재하지 않
 - **단계적 시작**: 초기엔 완전 수동 과금(계좌이체/수기 인보이스, `plans`/
   `subscriptions` 테이블 불요), 유료 파일럿 검증 성공 후에만 실제 결제
   게이트웨이 연동 스키마 구축 제안.
-- 세 문서 및 `PAUL_EASY_VOCA_CUSTOMER_VALIDATION_PLAN.md` 모두 동일 전제:
-  **고객 검증(학원장 인터뷰) 선행**이 조건.
+- 세 문서 및 `docs/future-ideas/PAUL_EASY_VOCA_CUSTOMER_VALIDATION_
+  PLAN.md` 모두 동일 전제: **고객 검증(학원장 인터뷰) 선행**이 조건.
 
 ---
 

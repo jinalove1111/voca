@@ -15,8 +15,9 @@ VOCA_PERMISSION_MATRIX.md`/`PAUL_EASY_VOCA_RLS_POLICY_DESIGN.md`
 ## 공통 원칙 (전 화면 적용)
 
 - **`AdminScreen.jsx`(학원 내부용)와 완전히 별도의 라우트/컴포넌트
-  트리** — 탭 하나 추가하는 방식 금지(`SAAS_ARCHITECTURE_PLAN.md`
-  §9.1의 경고 재확인).
+  트리** — 탭 하나 추가하는 방식 금지(`docs/agent-decisions/0006-
+  multitenant-saas-architecture.md` §9.1의 경고 재확인, 구
+  SAAS_ARCHITECTURE_PLAN.md는 2026-07-31 병합됨).
 - **Supabase Auth + 2FA**, 모든 접근이 감사로그에 기록(`RLS_POLICY_
   DESIGN.md` §8).
 - **개별 학생 데이터를 일상적으로 노출하지 않는다** — 이 대시보드
@@ -43,7 +44,7 @@ VOCA_PERMISSION_MATRIX.md`/`PAUL_EASY_VOCA_RLS_POLICY_DESIGN.md`
 | **목적** | 개별 학원 현황 파악 + 상세 화면 진입점 |
 | **주요 데이터**(목록, 요청하신 항목 그대로) | 학원명, 사용자 수(`academy_members` 카운트), 학생 수, 선생님 수, 플랜(`BILLING_ARCHITECTURE_DESIGN.md` §1 티어), 사용량(AI/스토리지, `ai_usage_daily` 집계), 상태(`active`/`trial`/`past_due`/`cancelled`) + 가입일·마지막 활동일(정렬/필터용) |
 | **상세 화면(드릴다운)** | 반/유닛 개수, 결제 이력 링크(§6), 지원 티켓 이력 링크(§8), 최근 감사로그 |
-| **필요한 권한** | Super Admin(조회 전체), 수정은 통제된 절차(플랜 변경/정지/오프보딩)만 — `SAAS_ARCHITECTURE_PLAN.md` §5.4 |
+| **필요한 권한** | Super Admin(조회 전체), 수정은 통제된 절차(플랜 변경/정지/오프보딩)만 — `docs/agent-decisions/0006-multitenant-saas-architecture.md` §5.4 |
 | **자동화 가능 부분** | 목록/집계는 완전 자동. 상태 배지(연체·휴면 학원 자동 하이라이트)도 자동. **학원 정지/오프보딩 실행 자체는 사람 확인 필수**(`CUSTOMER_OPERATION_PLAN.md` §6 원칙 재사용 — 파괴적 액션은 자동화하지 않음) |
 
 ---
@@ -77,7 +78,7 @@ VOCA_PERMISSION_MATRIX.md`/`PAUL_EASY_VOCA_RLS_POLICY_DESIGN.md`
 | **목적** | §4와 다른 관점 — **콘텐츠/AI 품질** 인사이트(학습 효과가 아니라 "무엇이 어려운지/AI가 잘 작동하는지") |
 | **주요 데이터** | 전 플랫폼 단어 난이도 랭킹(`writing_answer_statistics` 집계, 특정 교재/단어가 구조적으로 어려운지 → 콘텐츠 개선 신호, `AI_LEARNING_ENGINE_PLAN.md` §10.1), AI 판정 분포(accept/review/reject_candidate 비율 추세 — 급변 시 프롬프트/모델 이슈 신호), 학습 방식 코호트 비교(`LEARNING_ANALYTICS_PLAN.md`의 AI 활용 3번 — **다학원 규모에서 비로소 통계적으로 의미 있어짐**, 지금은 참고용) |
 | **필요한 권한** | Super Admin |
-| **자동화 가능 부분** | 집계 대부분 자동(정기 배치). 코호트 비교 해석과 "이걸 교재 개선에 어떻게 반영할지"는 사람(Learning Science Agent 협업, `AI_AGENT_OS.md`)의 몫 |
+| **자동화 가능 부분** | 집계 대부분 자동(정기 배치). 코호트 비교 해석과 "이걸 교재 개선에 어떻게 반영할지"는 사람(구 `AI_AGENT_OS.md`의 Learning Science Agent 협업 개념 — 삭제됨, CLAUDE.md 헌법/DEVELOPER_GUIDE.md 워크플로우로 대체)의 몫 |
 
 ---
 
@@ -139,7 +140,8 @@ Phase 3~4에서 직접 재봐야 한다.
 
 ## 10. 6개월 후 확장 가능한 Admin Architecture
 
-`SAAS_ARCHITECTURE_PLAN.md` §10의 페이싱과 맞물린 이 대시보드의
+`docs/agent-decisions/0006-multitenant-saas-architecture.md` §8(구
+SAAS_ARCHITECTURE_PLAN.md §10)의 페이싱과 맞물린 이 대시보드의
 단계별 필요 수준:
 
 | 시기 | 필요 수준 |
@@ -162,8 +164,9 @@ Phase에서 **실제로 수동 관리가 한계에 부딪히는 순간에만** �
 `docs/agent-decisions/0006-multitenant-saas-architecture.md`(§9.1 원본,
 구 SAAS_ARCHITECTURE_PLAN.md는 2026-07-31 병합됨), `PAUL_EASY_
 VOCA_BILLING_ARCHITECTURE_DESIGN.md`(§9), `PAUL_EASY_VOCA_
-PERMISSION_MATRIX.md`, `PAUL_EASY_VOCA_RLS_POLICY_DESIGN.md`, `PAUL_
-EASY_VOCA_LEARNING_ANALYTICS_PLAN.md`(§5), `PAUL_EASY_VOCA_CUSTOMER_
-OPERATION_PLAN.md`(§5~6 고객지원 Agent 원본), `PAUL_EASY_VOCA_REAL_
-ACADEMY_SIMULATION.md`(§7 일일 확인 목록 원형), `PAUL_EASY_VOCA_
-CUSTOMER_VALIDATION_PLAN.md`(착수 전제조건).
+PERMISSION_MATRIX.md`, `PAUL_EASY_VOCA_RLS_POLICY_DESIGN.md`,
+`docs/future-ideas/PAUL_EASY_VOCA_LEARNING_ANALYTICS_PLAN.md`(§5),
+`docs/future-ideas/PAUL_EASY_VOCA_CUSTOMER_OPERATION_PLAN.md`(§5~6
+고객지원 Agent 원본), `docs/future-ideas/PAUL_EASY_VOCA_REAL_
+ACADEMY_SIMULATION.md`(§7 일일 확인 목록 원형), `docs/future-ideas/
+PAUL_EASY_VOCA_CUSTOMER_VALIDATION_PLAN.md`(착수 전제조건).

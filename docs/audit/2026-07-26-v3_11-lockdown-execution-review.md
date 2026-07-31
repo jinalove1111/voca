@@ -6,9 +6,9 @@ _작성: 2026-07-26. `supabase_v3_11_lockdown_curriculum_write.sql`(2026-07-24
 전혀 변경하지 않았다** — 순수 분석 + 문서 작성만 수행. SQL 실행 자체는
 아래 5번 체크리스트를 운영자가 직접 따라야 하는 별도 액션이다._
 
-관련: `docs/audit/2026-07-24-security.md`(원 발견), `PAUL_EASY_VOCA_
-CURRENT_STATUS.md`(E-1 항목), `PAUL_EASY_VOCA_MASTER_PLAN.md`(Week 1-2
-로드맵 최우선 항목).
+관련: `docs/audit/2026-07-24-security.md`(원 발견), `docs/future-ideas/
+PAUL_EASY_VOCA_CURRENT_STATUS.md`(E-1 항목), `docs/future-ideas/
+PAUL_EASY_VOCA_MASTER_PLAN.md`(Week 1-2 로드맵 최우선 항목).
 
 ---
 

@@ -1,5 +1,10 @@
 # PAUL_EASY_VOCA_CURRENT_STATUS.md — 현재 상태 종합 리포트
 
+> **[2026-07-31 갱신 노트]** 2026-07-25 시점 스냅샷. 이후 발견 사항
+> 미반영: v3_12 daily_assignments 무인가 쓰기 CRITICAL(07-30 코드
+> 완료·배포 대기), 베타 UX 결함들(퀴즈 풀 리마운트 등, handoff.md
+> 16~18차 참고). P0/버그 표를 현재 상태로 간주하지 말 것.
+
 _작성: 2026-07-25. CTO/PM/Learning Science/Architect 관점 종합 감사(순수
 조사, 코드/SQL/DB/배포 무변경). 이 문서는 새로 리서치한 것이 아니라
 `PROJECT_GUIDE.md`/`ARCHITECTURE.md`/`DATABASE.md`/`ROADMAP.md`/

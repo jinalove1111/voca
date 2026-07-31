@@ -192,8 +192,9 @@ lockdown-execution-review.md`가 이미 쓴 방법론(anon key로 curl 직접
 - [ ] 위 1~5 섹션 **전 항목 PASS**(하나라도 미확인 상태로 배포하지
       않음)
 - [ ] `npm run build`/`npm run verify:all` PASS(SKIP 도메인 제외)
-- [ ] QA Agent 독립 재검증 완료(`AI_AGENT_OS.md` §7 원칙 — self-report
-      불신)
+- [ ] qa-reviewer 에이전트 독립 재검증 완료(self-report 불신 원칙 —
+      구 `AI_AGENT_OS.md` §7의 QA Agent 원칙과 동일 정신, 그 문서는
+      삭제됨)
 - [ ] Security Agent가 §5 침투 테스트 결과를 **evidence(실행 로그)와
       함께** 별도 보고
 - [ ] 롤백 계획 존재 확인(RLS는 `disable row level security`로,
@@ -217,7 +218,8 @@ lockdown-execution-review.md`가 이미 쓴 방법론(anon key로 curl 직접
 ## 관련 문서
 
 `PAUL_EASY_VOCA_TABLE_OWNERSHIP_MATRIX.md`, `PAUL_EASY_VOCA_RLS_
-POLICY_DESIGN.md`, `PAUL_EASY_VOCA_PERMISSION_MATRIX.md`, `PAUL_
-EASY_VOCA_AI_AGENT_OS.md`(QA/Security Agent 역할 원본), `docs/audit/
+POLICY_DESIGN.md`, `PAUL_EASY_VOCA_PERMISSION_MATRIX.md`. (구
+`PAUL_EASY_VOCA_AI_AGENT_OS.md`의 QA/Security Agent 역할 원본은
+삭제됨 — qa-reviewer/security-reviewer 에이전트로 대체) `docs/audit/
 2026-07-26-v3_11-lockdown-execution-review.md`(침투 테스트 방법론
 원본), `docs/audit/2026-07-24-security.md`.

@@ -3,8 +3,9 @@
 _작성: 2026-07-26. 순수 분석/전략 문서 — 코드/SQL/DB 변경 없음. 지금
 당장 착수를 권장하는 게 아니라(현재는 학원 1곳, 111명 규모에서
 안전하다), **"몇 학원까지 팔 것인가"라는 사업 결정이 실제로 나기 전에
-경영진이 미리 알고 있어야 하는 것**을 정리했다(`PAUL_EASY_VOCA_MASTER_
-PLAN.md` §0 "다학원 확장은 사업적 결정이 먼저 나야 착수" 원칙과 연결).
+경영진이 미리 알고 있어야 하는 것**을 정리했다(`docs/future-ideas/
+PAUL_EASY_VOCA_MASTER_PLAN.md` §0 "다학원 확장은 사업적 결정이 먼저
+나야 착수" 원칙과 연결).
 근거는 전부 기존 감사 문서(`docs/audit/2026-07-24-security.md`,
 `docs/audit/2026-07-24-deployment-scale.md`) 및 이번 세션의 `v3_11`
 코드 검토에서 실측/확인된 사실이다 — 새로 추측하지 않았다._
@@ -154,7 +155,8 @@ rate limit. **이것은 순수 기술 결정이 아니라 "유료 고객에게 �
 | 10 | 모니터링/알림 | 7번과 연동 시 최대 효과 | 무료 내장 알림은 **지금도 즉시 가능** |
 
 **지금 당장(학원 1곳 상태에서도) 착수해도 좋은 것**: 5번(관리자 PIN
-강도 검증, 이미 `PAUL_EASY_VOCA_MASTER_PLAN.md` Week1-2에 포함됨),
+강도 검증, 이미 `docs/future-ideas/PAUL_EASY_VOCA_MASTER_PLAN.md`
+Week1-2에 포함됨),
 10번의 무료 알림 활성화 — 둘 다 다학원 여부와 무관하게 그 자체로
 가치 있고 저비용. 나머지 8개는 "academy_id 스키마"라는 공통 기반 위에
 설계되므로, 상업화 여부가 결정되기 전에 미리 만들면 과설계(YAGNI 위반,
@@ -166,6 +168,8 @@ rate limit. **이것은 순수 기술 결정이 아니라 "유료 고객에게 �
 ## 관련 문서
 
 `docs/audit/2026-07-24-security.md`, `docs/audit/2026-07-24-deployment-
-scale.md`, `PAUL_EASY_VOCA_CURRENT_STATUS.md`(H번 섹션 — 100명 시뮬레이션),
-`PAUL_EASY_VOCA_MASTER_PLAN.md`(§0, §3 Month3), `DATABASE.md`(RLS/
-컬럼권한 현황), `docs/audit/2026-07-26-v3_11-lockdown-execution-review.md`.
+scale.md`, `docs/future-ideas/PAUL_EASY_VOCA_CURRENT_STATUS.md`(H번
+섹션 — 100명 시뮬레이션),
+`docs/future-ideas/PAUL_EASY_VOCA_MASTER_PLAN.md`(§0, §3 Month3),
+`DATABASE.md`(RLS/컬럼권한 현황),
+`docs/audit/2026-07-26-v3_11-lockdown-execution-review.md`.

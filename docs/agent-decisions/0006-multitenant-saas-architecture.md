@@ -8,8 +8,9 @@ security-top10.md`(보안 관점 TOP 10)의 후속으로, 이번엔 데이터 �
 다대다 설계)와 동일한 문서 성격(승인 전 설계 기록)이라 그 번호 체계를
 이어 0006으로 명명했다._
 
-**전제**: 지금 실제로 착수하라는 뜻이 아니다. `PAUL_EASY_VOCA_MASTER_
-PLAN.md`와 SaaS TOP10 문서가 이미 명시했듯 **다학원 확장은 사업적
+**전제**: 지금 실제로 착수하라는 뜻이 아니다. `docs/future-ideas/
+PAUL_EASY_VOCA_MASTER_PLAN.md`와 SaaS TOP10 문서가 이미 명시했듯
+**다학원 확장은 사업적
 결정이 먼저 나야 착수**한다. 이 문서는 그 결정이 실제로 내려졌을 때
 "무엇을 만들어야 하는지"를 미리 정리해 둔 것 — 지금 이 설계대로
 구현하라는 지시가 아니다.
@@ -443,7 +444,7 @@ academies
       감사로그 + 모니터링(SaaS TOP10 7·10번)
 ```
 
-### 8.3 페이싱 (월 단위, `PAUL_EASY_VOCA_MASTER_PLAN.md`의 90일 로드맵 이후를 잇는 관점)
+### 8.3 페이싱 (월 단위, `docs/future-ideas/PAUL_EASY_VOCA_MASTER_PLAN.md`의 90일 로드맵 이후를 잇는 관점)
 
 | 시기 | 내용 |
 |---|---|
@@ -453,9 +454,9 @@ academies
 
 ### 8.4 이 설계가 기존 문서들과 어떻게 이어지는가
 
-- `PAUL_EASY_VOCA_MASTER_PLAN.md`의 "다학원 확장은 사업 결정 이후"
-  원칙 — 이 문서는 그 결정이 내려졌을 때 Month 1로 바로 진입할 수 있게
-  미리 준비해두는 것.
+- `docs/future-ideas/PAUL_EASY_VOCA_MASTER_PLAN.md`의 "다학원 확장은
+  사업 결정 이후" 원칙 — 이 문서는 그 결정이 내려졌을 때 Month 1로
+  바로 진입할 수 있게 미리 준비해두는 것.
 - `docs/audit/2026-07-26-saas-multi-tenant-security-top10.md`의 10개
   항목 — 이 문서의 §2(1,7번 항목 근거) / §3·4(2,3,4번) / §5(8번) /
   §6(9번) / §7(10번)가 각각 그 TOP10을 실제 스키마/화면 단위로 구체화한
@@ -470,7 +471,8 @@ academies
 `docs/audit/2026-07-26-saas-multi-tenant-security-top10.md`,
 `docs/audit/2026-07-26-v3_11-lockdown-execution-review.md`,
 `docs/audit/2026-07-26-v3_11-1hour-runbook.md`,
-`PAUL_EASY_VOCA_CURRENT_STATUS.md`, `PAUL_EASY_VOCA_MASTER_PLAN.md`,
+`docs/future-ideas/PAUL_EASY_VOCA_CURRENT_STATUS.md`,
+`docs/future-ideas/PAUL_EASY_VOCA_MASTER_PLAN.md`,
 `DATABASE.md`, `docs/agent-decisions/0004-multi-textbook-architecture.md`,
 `docs/audit/2026-07-24-performance-db.md`,
 `docs/audit/2026-07-24-deployment-scale.md`.

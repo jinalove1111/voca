@@ -27,7 +27,7 @@ Enterprise)에서 **Premium을 Enterprise로 통합**했다(결제 시스템
 |---|---|---|---|---|
 | **Starter** | 학생당 월 5,000원(50명 예시: 250,000원) | ≤ 50명 | **≤ 1명**(원장 본인만 — 공부방 특성상 다중 교사 불필요) | 핵심 학습루프 + 기본 게임화(Paul Rank/House/Ticket) + 학부모 리포트, AI 사용량 기본(일 $2 상당) |
 | **Professional** | 학생당 월 4,500원(150명 예시: 675,000원) | ≤ 150명 | **≤ 3명**(원장+교사 2인) | Starter 전체 + 다중 교사(Teacher 역할) + 다중 교재 + 입실시험 + Word King/Season, AI 사용량 확대(일 $5~10 상당) |
-| **Enterprise** | 협의(볼륨+격리 반영) | 협의(500명+) | 협의(무제한) | Professional 전체 + Reading Foundation + 물리적 격리 옵션(`SAAS_ARCHITECTURE_PLAN.md` §5.2) + SLA + 커스텀 브랜딩 + 전담 지원 |
+| **Enterprise** | 협의(볼륨+격리 반영) | 협의(500명+) | 협의(무제한) | Professional 전체 + Reading Foundation + 물리적 격리 옵션(`docs/agent-decisions/0006-multitenant-saas-architecture.md` §5.2) + SLA + 커스텀 브랜딩 + 전담 지원 |
 
 **선생님 수 제한을 두는 이유**: `academy_members`(Owner/Admin/
 Teacher) 계정 하나하나가 Supabase Auth 세션을 소비하고 관리 대상이
@@ -51,7 +51,7 @@ academies (1) ────────── (1) subscriptions ─────�
 
 | 테이블(개념) | 핵심 컬럼 | 역할 |
 |---|---|---|
-| `academies` | id, name, ... | 테넌트 루트(기존 `SAAS_ARCHITECTURE_PLAN.md` §3) |
+| `academies` | id, name, ... | 테넌트 루트(기존 `docs/agent-decisions/0006-multitenant-saas-architecture.md` §3) |
 | `plans` | id, name, student_limit, teacher_limit, ai_daily_budget_usd, feature_flags(jsonb), price_per_student_krw | 요금제 정의 — **데이터로 관리**해 요금제 변경이 배포 없이 가능(§1 표가 이 테이블의 초기 시드 데이터) |
 | `subscriptions` | id, academy_id→academies, plan_id→plans, status('trial'\|'active'\|'past_due'\|'cancelled'), trial_ends_at, current_period_start/end, next_billing_date | **academy 1개당 정확히 1개**(동시에 여러 구독 보유 안 함) |
 | `invoices` | id, subscription_id→subscriptions, amount, status('pending'\|'paid'\|'failed'\|'refunded'), period_start/end, issued_at, paid_at | 매 결제 주기(월)마다 1건 생성 — 실제 청구서 단위 |
@@ -150,8 +150,10 @@ PLAN.md`)에서 Professional 학원이 실제로 이 한도에 부딪히는지�
   일반적 관행) — 단, **서비스 장애로 인한 경우**(예: 특정 학원에
   영향을 준 다운타임)는 영향받은 기간만큼 **일할 계산 환불** 또는
   다음 달 청구액 차감.
-- **환불 처리 경로**: 카드 정보 자체가 이 시스템에 없으므로(§`SAAS_
-  ARCHITECTURE_PLAN.md` §7.4 원칙), 실제 환불은 **PG사 API를 경유**
+- **환불 처리 경로**: 카드 정보 자체가 이 시스템에 없으므로(`docs/
+  agent-decisions/0006-multitenant-saas-architecture.md` §7.4 원칙,
+  구 SAAS_ARCHITECTURE_PLAN.md는 2026-07-31 병합됨), 실제 환불은
+  **PG사 API를 경유**
   하고 우리 시스템은 `invoices.status='refunded'`만 기록.
 - **구체 금액/일수는 사업 결정 영역** — 이 문서는 구조(언제/어떻게)만
   제안, 최종 정책은 파일럿 학원과의 실제 계약 논의에서 확정.
@@ -213,7 +215,7 @@ PLAN.md`)에서 Professional 학원이 실제로 이 한도에 부딪히는지�
 - 인보이스 이력(다운로드 가능해야 회계 처리에 도움)
 - 플랜 변경/구독 취소 버튼
 
-### Platform 레벨(Super Admin 전용, `SAAS_ARCHITECTURE_PLAN.md` §9.1 확장)
+### Platform 레벨(Super Admin 전용, `docs/agent-decisions/0006-multitenant-saas-architecture.md` §9.1 확장, 구 SAAS_ARCHITECTURE_PLAN.md는 2026-07-31 병합됨)
 
 - 전 학원 MRR 실시간 집계
 - 연체(`past_due`) 학원 목록(대응 우선순위)
@@ -246,8 +248,8 @@ SAAS_ARCHITECTURE_PLAN.md §10)의 페이싱과 맞물린 결제 도메인 전�
 
 `docs/agent-decisions/0006-multitenant-saas-architecture.md`(§7 결제
 구조 원본, 구 SAAS_ARCHITECTURE_PLAN.md는 2026-07-31 병합됨),
-`PAUL_EASY_VOCA_BUSINESS_MODEL_PLAN.md`(가격 벤치마크),
+`docs/future-ideas/PAUL_EASY_VOCA_BUSINESS_MODEL_PLAN.md`(가격 벤치마크),
 `PAUL_EASY_VOCA_TABLE_OWNERSHIP_MATRIX.md`, `PAUL_EASY_VOCA_RLS_
 POLICY_DESIGN.md`, `PAUL_EASY_VOCA_PERMISSION_MATRIX.md`,
-`PAUL_EASY_VOCA_CUSTOMER_
+`docs/future-ideas/PAUL_EASY_VOCA_CUSTOMER_
 VALIDATION_PLAN.md`(착수 전제조건).
