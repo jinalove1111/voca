@@ -83,21 +83,29 @@ export function validateExampleFields(fields) {
   return { ok: errors.length === 0, errors }
 }
 
-// 예문 행(row)이 필터 조건에 맞는지 — listExamples(IO 계층)의 클라이언트
-// 사이드 보조 필터에도, 관리자 화면의 로컬 재필터링에도 재사용 가능한 순수
-// 판정 함수. filters의 각 키는 optional — 주어진 것만 검사한다.
+// 예문 행(row)이 필터 조건에 맞는지 — listExamples(IO 계층)가 돌려주는 것과
+// 같은 camelCase 형태(exampleLibrary.js의 toRow 출력: unitId/textbookId/
+// targetWord/grammarPointId/approvalStatus)를 그대로 받는다(리뷰 반영 — 이전
+// 버전은 snake_case DB 컬럼명을 기대해서 listExamples 결과에 절대 매치되지
+// 않는 계약 불일치가 있었다). 관리자 화면의 로컬 재필터링에 재사용 가능한
+// 순수 판정 함수. filters의 각 키는 optional — 주어진 것만 검사한다.
+//
+// publisherId/gradeId는 필터 키에 없다 — examples 행에는 publisher_id/
+// grade_id 컬럼이 없고(설계상 textbook을 경유해서만 연결), 이 함수는 순수
+// 판정만 하므로 조인 없이는 그 값을 검증할 수 없다. 출판사/학년으로 예문을
+// 거르고 싶은 관리자 화면은 먼저 curriculumApi(listPublishers/listGrades +
+// textbooks 조회)로 대상 textbookId 목록을 구한 뒤, 이 함수에는 textbookId
+// (또는 unitId)로 넘겨야 한다.
 export function matchesFilters(row, filters) {
   const r = row || {}
   const f = filters || {}
-  if (f.publisherId && r.publisher_id !== f.publisherId) return false
-  if (f.gradeId && r.grade_id !== f.gradeId) return false
-  if (f.textbookId && r.textbook_id !== f.textbookId) return false
-  if (f.unitId && r.unit_id !== f.unitId) return false
-  if (f.grammarPointId && r.grammar_point_id !== f.grammarPointId) return false
-  if (f.approvalStatus && r.approval_status !== f.approvalStatus) return false
+  if (f.textbookId && r.textbookId !== f.textbookId) return false
+  if (f.unitId && r.unitId !== f.unitId) return false
+  if (f.grammarPointId && r.grammarPointId !== f.grammarPointId) return false
+  if (f.approvalStatus && r.approvalStatus !== f.approvalStatus) return false
   if (f.targetWord) {
     const needle = String(f.targetWord).trim().toLowerCase()
-    const haystack = String(r.target_word || '').toLowerCase()
+    const haystack = String(r.targetWord || '').toLowerCase()
     if (needle && !haystack.includes(needle)) return false
   }
   return true
