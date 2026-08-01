@@ -350,7 +350,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
       {phase === 'reveal' && (
         <div className="space-y-3 animate-slide-up">
           <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-4 text-center">
-            <HeroReaction image={getReactionById('sad')?.image} size="md" />
+            <HeroReaction image={getReactionById('one_more')?.image} size="md" />
             <p className="text-red-500 font-bold text-sm mb-1 mt-1">정답은</p>
             <p className="text-red-600 font-black text-2xl tracking-wide break-words">{targetAnswer}</p>
             <p className="text-red-500 font-bold text-sm mt-1">입니다</p>

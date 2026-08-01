@@ -59,6 +59,12 @@ export default function GuidedSession({
   // 예문 맵을 그대로 내부 WordDetail에 통과시키기만 한다(1줄 통과, 로직
   // 없음). 기본값 null → 플래그 OFF/미전달 시 오늘과 완전히 동일.
   curriculumExamples = null,
+  // Wave 3 학생 경험 폴리시(2026-08-02) — 전부 표시/문구 전용, GRANT 로직
+  // 무관. 기본값이 falsy라 App.jsx가 아직 안 넘겨도(unwired) 화면은
+  // 오늘과 동일하게 동작(③ fallback 문구, 재진입 버튼 미표시).
+  todayPlanted = false,
+  reviewQueueCount = 0,
+  onGoReview = null,
 }) {
   const totalWords = classWords.length
 
@@ -232,6 +238,15 @@ export default function GuidedSession({
   if (phase === 'done') {
     const allDone = sessionEndAbs >= totalWords
     const paul = allDone ? getReactionById('levelup') : pickReaction('success')
+    // 2-1: "내일 예고" 1줄 — 순수 표시 파생값, 저장/경고/스트릭 손실 언급
+    // 없음(docs/reading/08 §5 톤 규칙). 우선순위: 오늘 씨앗 심음 >
+    // 내일 복습 대기 > 기본 안내. 두 prop 모두 기본값이 falsy라 App.jsx가
+    // 아직 안 넘겨도 항상 ③으로 자연스럽게 폴백.
+    const tomorrowLine = todayPlanted
+      ? '내일 아침, 새싹이 나 있을 거예요 🌱'
+      : reviewQueueCount > 0
+        ? `내일 복습할 단어 ${reviewQueueCount}개가 기다리고 있어요`
+        : '내일도 3분이면 충분해요'
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-indigo-500 to-purple-600">
         <div className="bg-white rounded-3xl card-shadow p-8 max-w-sm w-full text-center animate-slide-up space-y-4">
@@ -247,6 +262,7 @@ export default function GuidedSession({
           <p className="font-black text-3xl text-gray-800">
             오늘 {display.wordsCompleted} <span className="text-gray-300">/</span> {display.totalWords} 단어
           </p>
+          <p className="text-gray-400 text-xs -mt-2">{tomorrowLine}</p>
           <div className="space-y-3">
             {/* 오늘의 핵심 문장 오퍼 — readingStudentUI 플래그 ON + 아직
                 마스터 안 한 핵심 문장이 있을 때만(위 effect). 이 여정의
@@ -265,6 +281,15 @@ export default function GuidedSession({
               <button onClick={startNextSession}
                 className="w-full border-2 border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-black py-4 rounded-2xl btn-press text-lg">
                 ▶ 다음 세션 계속하기
+              </button>
+            )}
+            {/* 2-2: 재진입(오늘 전부 완료) 카드에서 복습 큐가 있으면 바로
+                진입할 수 있는 보조 버튼. onGoReview 미전달(unwired) 또는
+                복습 큐가 비면 렌더 자체를 안 해 기존 화면과 완전히 동일. */}
+            {allDone && onGoReview && reviewQueueCount > 0 && (
+              <button onClick={onGoReview}
+                className="w-full border-2 border-orange-200 bg-orange-50 hover:bg-orange-100 text-orange-600 font-black py-4 rounded-2xl btn-press text-lg">
+                🔁 틀린 단어만 다시 보기
               </button>
             )}
           </div>
@@ -321,6 +346,7 @@ export default function GuidedSession({
         spellingReviewQueue={spellingReviewQueue}
         sessionProgress={null}
         onBack={onDone}
+        backLabel="← 홈"
         onNext={isRetry ? advanceRetry : advanceMain}
         onMarkViewed={onMarkViewed}
         onMarkExampleHeard={onMarkExampleHeard}

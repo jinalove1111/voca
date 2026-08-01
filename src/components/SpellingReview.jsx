@@ -55,6 +55,14 @@ export default function SpellingReview({ wrongWordIds, classWords, onClearWord, 
             문구를 뺐다(실제로 며칠 전 놓친 단어가 섞여 있을 수 있으므로). */}
         <h1 className="text-xl font-black text-orange-600">틀린 단어 복습</h1>
         <p className="text-gray-400 text-xs mt-1">남은 단어 {words.length}개 — 맞을 때까지 반복해요!</p>
+        {/* 탈출구(4-1) — 이 화면은 "맞을 때까지 반복"이라 나가는 길이 없었음.
+            onClearWord(큐 축소 로직)는 그대로 두고 onDone만 직접 호출 —
+            학습 데이터 손실 없음(지금까지 맞은 단어는 이미 큐에서 빠진 뒤). */}
+        <button onClick={onDone}
+          className="mt-2 text-orange-500 text-xs font-bold underline btn-press">
+          오늘은 여기까지
+        </button>
+        <p className="text-gray-300 text-[11px] mt-0.5">여기서 멈춰도 지금까지 한 건 저장돼 있어요</p>
       </div>
       <div className="max-w-lg mx-auto">
         <SpellingQuestion
