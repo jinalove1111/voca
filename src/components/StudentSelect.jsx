@@ -13,7 +13,7 @@ import HeroReaction from './HeroReaction'
 // 로그인된다 — 서버(api/verify-student-pin.js)가 이름으로 후보를 찾고
 // PIN으로 정확히 하나를 골라낸다(클라이언트는 PIN 해시를 절대 보지
 // 않음). 신규 학생 등록은 이름+반+유닛 선택에 PIN 만들기 단계가 추가됐다.
-export default function StudentSelect({ onSelect, onAdmin, onParent, removedNotice }) {
+export default function StudentSelect({ onSelect, onAdmin, onParent, removedNotice, legacyNotice }) {
   const [mode, setMode] = useState('login') // 'login' | 'register'
 
   // ── 로그인(기존 학생) ──────────────────────────────────────────────────
@@ -217,11 +217,12 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
   }
 
   const busy = loggingIn || registering || settingUp
-  const tabBtn = (key, label) => (
+  const tabBtn = (key, label, sub) => (
     <button onClick={() => { setMode(key); setLoginError(''); setRegError(''); setSetupError('') }} disabled={busy}
-      className={`flex-1 py-2.5 rounded-xl font-black text-xs sm:text-sm btn-press transition-colors disabled:opacity-50 ${
+      className={`flex-1 py-2 rounded-xl font-black text-xs sm:text-sm btn-press transition-colors disabled:opacity-50 ${
         mode === key ? 'bg-purple-500 text-white' : 'bg-purple-50 text-purple-400'}`}>
       {label}
+      {sub && <div className={`text-[10px] font-normal mt-0.5 ${mode === key ? 'text-purple-100' : 'text-purple-300'}`}>{sub}</div>}
     </button>
   )
 
@@ -240,11 +241,16 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
             ⚠️ 계정 정보를 찾을 수 없어요. 선생님께 문의하거나 다시 시작해주세요.
           </p>
         )}
+        {!removedNotice && legacyNotice && (
+          <p className="bg-blue-50 border-2 border-blue-200 text-blue-500 text-xs font-bold text-center rounded-xl p-3">
+            🔄 로그인 방식이 새로워졌어요 — 이름과 PIN으로 다시 로그인해주세요.
+          </p>
+        )}
 
         <div className="flex gap-2">
           {tabBtn('login', '로그인')}
-          {tabBtn('setup', 'PIN 만들기')}
-          {tabBtn('register', '처음이에요')}
+          {tabBtn('setup', 'PIN 만들기', '선생님이 허용해준 경우')}
+          {tabBtn('register', '처음이에요', '우리 공부방이 처음인 경우')}
         </div>
 
         {mode === 'setup' ? (
@@ -305,7 +311,7 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
                 </p>
               ) : !setupStatus.pinSetupAllowed ? (
                 <p className="bg-yellow-50 border-2 border-yellow-200 text-yellow-700 text-xs font-bold text-center rounded-xl p-3">
-                  이 학생은 아직 PIN이 없습니다. 하지만 선생님이 아직 PIN 설정을 허용하지 않았어요 — 선생님께 "PIN 설정 허용"을 요청해주세요.
+                  아직 PIN 설정이 허용되지 않았어요 — 선생님께 요청해주세요.
                 </p>
               ) : (
                 <>

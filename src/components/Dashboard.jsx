@@ -97,13 +97,13 @@ function MicPrimeBtn() {
       if (err.name === 'InsecureContextError' || err.name === 'MediaDevicesUnavailableError') {
         setErrMsg(err.message)
       } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setErrMsg(`마이크 권한이 거부됐어요. 브라우저 설정에서 마이크를 허용해주세요. (${err.name}: ${err.message})`)
+        setErrMsg('마이크 권한이 거부됐어요. 브라우저 설정에서 마이크를 허용해주세요.')
       } else if (err.name === 'NotFoundError') {
-        setErrMsg(`마이크를 찾을 수 없어요. 기기에 마이크가 있는지 확인해주세요. (${err.name}: ${err.message})`)
+        setErrMsg('마이크를 찾을 수 없어요. 기기에 마이크가 있는지 확인해주세요.')
       } else if (err.name === 'NotReadableError') {
-        setErrMsg(`다른 앱이 마이크를 사용 중이에요. (${err.name}: ${err.message})`)
+        setErrMsg('다른 앱이 마이크를 사용 중이에요.')
       } else {
-        setErrMsg(`마이크를 시작할 수 없어요 — ${err.name}: ${err.message}`)
+        setErrMsg('마이크를 시작할 수 없어요.')
       }
     }
   }
@@ -120,7 +120,10 @@ function MicPrimeBtn() {
         {state === 'requesting' ? '⏳ 허용을 눌러주세요...' : '🎤 마이크 준비하기'}
       </button>
       {state === 'error' && (
-        <p className="text-red-500 text-xs font-bold mt-2">{errMsg}</p>
+        <div className="mt-2">
+          <p className="text-red-500 text-xs font-bold">{errMsg}</p>
+          <p className="text-red-400 text-xs mt-1">잘 안 되면 선생님께 이 화면을 보여주세요</p>
+        </div>
       )}
       <p className="text-purple-400 text-xs mt-2">처음 1번만 누르면 계속 유지돼요!</p>
     </div>
@@ -331,8 +334,12 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
     : (className && !classDeleted ? getClassUnitNames(className) : [])
   const [unitSwitching, setUnitSwitching] = useState(false)
   const [unitSwitchError, setUnitSwitchError] = useState('')
-  const handleUnitChange = async (nextUnit) => {
+  const handleUnitChange = async (nextUnit, selectEl) => {
     if (!onUnitSwitch || nextUnit === unitName) return
+    if (!window.confirm(`유닛을 "${nextUnit}"(으)로 바꿀까요? 학습 목록이 바뀌어요. 별과 기록은 그대로예요.`)) {
+      if (selectEl) selectEl.value = unitName
+      return
+    }
     setUnitSwitching(true)
     setUnitSwitchError('')
     try {
@@ -418,7 +425,7 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
                 <label className="inline-flex items-center gap-1">
                   <span className="sr-only">현재 유닛 선택</span>
                   <select value={unitName} disabled={unitSwitching}
-                    onChange={(e) => handleUnitChange(e.target.value)}
+                    onChange={(e) => handleUnitChange(e.target.value, e.target)}
                     className="bg-white/20 text-white font-bold rounded-xl px-2 py-2.5 text-sm border-2 border-white/30 focus:outline-none focus:border-white/70 disabled:opacity-60 appearance-auto">
                     {/* 저장된 유닛이 목록에 없는 예외(방금 삭제됨 등)에도 셀렉트가 빈 값이 되지 않게 */}
                     {!unitNames.includes(unitName) && <option value={unitName}>{unitName}</option>}
@@ -507,10 +514,11 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
             기본으로 접힌 <details> 하나 뒤로 이동. 순수 JSX 재배치 —
             렌더 조건(gamificationEnabled 등)/state/fetch는 전부 원래 그대로
             (native <details>라 열림/닫힘 state도 새로 만들지 않음). */}
-        <details className="bg-white rounded-3xl card-shadow">
+        <details className="group bg-white rounded-3xl card-shadow">
           <summary className="cursor-pointer select-none list-none p-5 flex items-center justify-between">
             <span className="font-black text-gray-700 text-base">🎖️ 내 기록 더보기</span>
-            <span className="text-gray-400 text-sm font-bold">열기 ▾</span>
+            <span className="text-gray-400 text-sm font-bold group-open:hidden">열기 ▾</span>
+            <span className="text-gray-400 text-sm font-bold hidden group-open:inline">닫기 ▴</span>
           </summary>
           <div className="px-5 pb-5 space-y-4">
             <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-4 text-white text-center">
@@ -580,10 +588,11 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
         {/* Nav Grid — 3분 데일리 리추얼(2026-07-22): 히어로 CTA에 집중을
             빼앗지 않도록 기본으로 접힌 <details> 뒤로 이동. 버튼 6개와
             목적지/뱃지 전부 원래 그대로(순수 JSX 재배치, state 추가 없음). */}
-        <details className="bg-white rounded-3xl card-shadow">
+        <details className="group bg-white rounded-3xl card-shadow">
           <summary className="cursor-pointer select-none list-none p-5 flex items-center justify-between">
             <span className="font-black text-gray-700 text-base">🧭 더 많은 메뉴</span>
-            <span className="text-gray-400 text-sm font-bold">열기 ▾</span>
+            <span className="text-gray-400 text-sm font-bold group-open:hidden">열기 ▾</span>
+            <span className="text-gray-400 text-sm font-bold hidden group-open:inline">닫기 ▴</span>
           </summary>
           <div className="px-5 pb-5 grid grid-cols-2 gap-3">
             {/* 제품 리뷰(문서 10) S티어 #4 — "100개 단어" 하드코딩은 거짓
@@ -730,7 +739,13 @@ function TicketShopCard({ ticketBalance, ownedStickerIds, onRedeem }) {
           )
         })}
       </div>
-      {message && <p className="text-center text-xs text-gray-500 mt-3">{message}</p>}
+      {message && (
+        <p className="text-center mt-3 animate-paul-pop">
+          <span className="inline-block bg-cyan-100 border-2 border-cyan-300 text-cyan-700 text-sm font-black px-4 py-1.5 rounded-full">
+            {message}
+          </span>
+        </p>
+      )}
       <p className="text-center text-xs text-gray-400 mt-2">오늘의 미션(4/4)을 완료할 때마다 티켓 1장이 쌓여요</p>
     </div>
   )

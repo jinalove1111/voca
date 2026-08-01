@@ -31,6 +31,10 @@ import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech, getMicStream } 
 // (readingStudentUI와 동일한 게이팅 메커니즘, GuidedSession.jsx 기존 관례).
 import { isFeatureEnabled } from './config/features'
 import { fetchApprovedExamplesForWords } from './utils/curriculum/exampleLibrary'
+// Wave 4 학생 경험 폴리시(2026-08-02) — GuidedSession 완료 카드의 "오늘
+// 씨앗 심음" 안내용. 기존 Paul Town 홈 밴드(Dashboard.jsx)가 쓰는 것과
+// 동일한 순수 파생 함수 재사용(새 계산/저장 없음).
+import { starSeedState } from './utils/attachment/paulTown'
 
 // 2026-07-10 성능 최적화: AdminScreen은 xlsx(엑셀 업로드)를 포함해 학생은
 // 절대 안 쓰는 무거운 라이브러리를 물고 있는데, 정적 import라 학생용
@@ -144,9 +148,9 @@ function SpeedBtn() {
     setRate(n.value)
   }
   return (
-    <button onClick={next}
-      className="fixed bottom-5 right-5 z-40 bg-white border-2 border-purple-200 text-purple-600 font-black text-xs px-3 py-2 rounded-2xl card-shadow btn-press hover:border-purple-400 transition-colors">
-      {cur.label}
+    <button onClick={next} aria-label="발음 재생 속도"
+      className="fixed bottom-5 right-5 z-40 min-h-[44px] bg-white border-2 border-purple-200 text-purple-600 font-black text-xs px-3 py-2 rounded-2xl card-shadow btn-press hover:border-purple-400 transition-colors flex items-center">
+      🔊 {cur.label}
     </button>
   )
 }
@@ -194,6 +198,11 @@ function AppInner({ studentId, studentName, onLogout }) {
     dismissGift()
     if (spellingWrongToday.length > 0 || spellingReviewQueue.length > 0) setScreen('spellingReview')
   }
+
+  // Wave 4(2026-08-02) — GuidedSession 완료 카드 배선. 기존
+  // attachment.stats(useAttachment, 위에서 이미 계산됨) 기반 순수 파생값
+  // 재사용 — 새 계산/저장 없음.
+  const todayPlanted = starSeedState(attachment.stats).todayPlanted
 
   // Rotates through the 4 mini-games, never repeating whichever was played
   // last (across the whole app, not just this checkpoint) — used both by
@@ -565,6 +574,9 @@ function AppInner({ studentId, studentName, onLogout }) {
           onSetLastWordIndex={(idx) => studentData.setLastWordIndex(idx, currentUnitId)}
           onDone={() => setScreen('dashboard')}
           curriculumExamples={curriculumExamples}
+          todayPlanted={todayPlanted}
+          reviewQueueCount={spellingReviewQueue.length}
+          onGoReview={() => setScreen('spellingReview')}
         />
       )}
       {screen === 'sentenceFlow' && pendingKeySentence && (
@@ -920,7 +932,7 @@ export default function App() {
   if (!student)  return (
     <AppErrorBoundary>
       <StudentSelect onSelect={handleSelect} onAdmin={() => setAdmin(true)} onParent={() => setParent(true)}
-        removedNotice={removedNotice || legacySessionNotice} />
+        removedNotice={removedNotice} legacyNotice={legacySessionNotice} />
     </AppErrorBoundary>
   )
   return <AppErrorBoundary><AppInner studentId={student.id} studentName={student.name} onLogout={handleLogout} /></AppErrorBoundary>
