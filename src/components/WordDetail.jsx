@@ -421,16 +421,30 @@ function ExampleStep({ english, korean, memoryTip, audioUrl, onDone, onMarkExamp
 // ── Step 3: 퀴즈 ───────────────────────────────────────────────────────────────
 const FALLBACK_MEANINGS = ['탐험하다','결정하다','변화하다','도착하다','사라지다','만들다','이해하다','중요한','특별한','연습하다']
 
+// Fisher-Yates — Array.prototype.sort(() => Math.random()-0.5)는 정렬
+// 알고리즘 구현에 따라 특정 원소가 앞/뒤에 쏠리는 편향이 생긴다(브라우저마다
+// 다름). 이 셔플은 균등 분포를 보장하며 원본 배열은 변경하지 않는다.
+// (QuizGame.jsx의 동일 헬퍼와 같은 패턴 — 중복이지만 파일당 소유권 원칙상
+// 별도 유틸로 추출하지 않고 이 파일 로컬로 둔다.)
+function shuffle(arr) {
+  const a = arr.slice()
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
 function QuizStep({ word, classWords, onDone, onMarkQuizSolved, onQuizAnswer }) {
   const options = useMemo(() => {
     const pool = (classWords || []).filter(w => w.id !== word.id && w.meaning && w.meaning !== word.meaning)
-    const wrongs = [...pool].sort(() => Math.random() - 0.5).slice(0, 3).map(w => w.meaning)
+    const wrongs = shuffle(pool).slice(0, 3).map(w => w.meaning)
     let fi = 0
     while (wrongs.length < 3 && fi < FALLBACK_MEANINGS.length) {
       const fb = FALLBACK_MEANINGS[fi++]
       if (!wrongs.includes(fb) && fb !== word.meaning) wrongs.push(fb)
     }
-    return [word.meaning, ...wrongs].sort(() => Math.random() - 0.5)
+    return shuffle([word.meaning, ...wrongs])
   }, [word.id])
 
   const correctIdx   = options.indexOf(word.meaning)
@@ -450,9 +464,11 @@ function QuizStep({ word, classWords, onDone, onMarkQuizSolved, onQuizAnswer }) 
     onQuizAnswer?.(word.id, correct)
   }
 
-  // Auto-advance to the next word a couple seconds after answering, so kids
-  // don't have to tap through every single word — the "다음 단어" button
-  // stays as a manual override for anyone who wants to move on immediately.
+  // Auto-advance to the next word a couple seconds after a CORRECT answer,
+  // so kids don't have to tap through every single word. Wrong answers do
+  // NOT auto-advance — the explicit "✅ 완료! 다음 단어 →" button below is
+  // the only way forward, so a student can't get swept past a mistake
+  // without at least seeing/tapping past the correct-answer reveal.
   // QuizStep mounts fresh per word because WordDetail renders it with
   // key={word.id} — do NOT remove that key. In quiz-only mode STEPS is
   // ['quiz'], so `step` never changes across words; without the key this
@@ -460,17 +476,24 @@ function QuizStep({ word, classWords, onDone, onMarkQuizSolved, onQuizAnswer }) 
   // showing it as already answered. The unmount cleanup below also guarantees
   // this timer can never fire for a word other than the one it was set up for.
   useEffect(() => {
-    if (!isAnswered) return
+    if (!isCorrect) return
     const t = setTimeout(() => onDone(), 1800)
     return () => clearTimeout(t)
-  }, [isAnswered])
+  }, [isCorrect])
 
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-3xl card-shadow p-6">
         <p className="text-center text-gray-500 font-bold text-sm mb-4">🎮 뜻 맞히기</p>
-        <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-5 text-center text-white mb-5 word-card">
-          <p className="word-text font-black">{word.word}</p>
+        <div
+          onClick={() => playWordAudio(word.wordAudioUrl, word.word, { source: 'worddetail-quiz-word' })}
+          role="button" tabIndex={0}
+          aria-label={`${word.word} 발음 듣기`}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); playWordAudio(word.wordAudioUrl, word.word, { source: 'worddetail-quiz-word' }) } }}
+          className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-5 text-center text-white mb-5 word-card cursor-pointer btn-press"
+        >
+          <p className="word-text font-black hover:scale-110 transition-transform">{word.word}</p>
+          <p className="text-purple-200 text-xs mt-1">탭하면 발음 🔊</p>
           <p className="text-purple-200 text-sm mt-1">이 단어의 뜻은?</p>
         </div>
         <div className="space-y-2">
@@ -485,7 +508,7 @@ function QuizStep({ word, classWords, onDone, onMarkQuizSolved, onQuizAnswer }) 
               <button key={i} disabled={isAnswered} onClick={() => handleSelect(i)}
                 className={`w-full p-4 rounded-2xl font-bold text-left flex items-center gap-3 btn-press transition-all ${cls}`}>
                 <span className="w-8 h-8 rounded-full bg-purple-100 text-purple-600 font-black text-sm flex items-center justify-center flex-shrink-0">
-                  {['①','②','③','④'][i]}
+                  {String.fromCharCode(65 + i)}
                 </span>
                 <span className="flex-1">{opt}</span>
                 {isAnswered && i === correctIdx && <span>✅</span>}
@@ -635,6 +658,10 @@ export default function WordDetail({
   // 바이트 단위로 동일하다(설계 §8 명시적 무변경 증명).
   // shape: { [단어원문.toLowerCase()]: exampleLibrary.js toRow() 형태 }
   curriculumExamples = null,
+  // 상단 뒤로가기 버튼 라벨(선택) — 기본값은 기존 하드코딩 텍스트와 동일해
+  // 기존 모든 호출부는 이 prop을 넘기지 않아도 바이트 단위로 동일하게
+  // 렌더된다. 아직 아무 호출부도 이 prop을 쓰지 않는다(연결은 별도 작업).
+  backLabel = '← 단어 목록',
 }) {
   const exampleEnglish = word.easyExample || word.funnyExample || word.realExample
   const exampleKorean  = word.exampleTranslation
@@ -688,7 +715,7 @@ export default function WordDetail({
   return (
     <div className="min-h-screen p-4 pb-8">
       <div className="flex items-center justify-between max-w-lg mx-auto mb-4 pt-2">
-        <button onClick={onBack} className="py-3 px-2 -my-3 -mx-2 text-blue-600 font-bold btn-press">← 단어 목록</button>
+        <button onClick={onBack} className="py-3 px-2 -my-3 -mx-2 text-blue-600 font-bold btn-press">{backLabel}</button>
         <div className="flex items-center gap-2">
           {STEPS.map((s, i) => (
             <div key={s}
