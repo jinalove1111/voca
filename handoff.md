@@ -1,9 +1,29 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-08-01 (23차, 쓰기 검수 파이프라인 P3 — 통계 집계 순수
-헬퍼/검수 통계 대시보드 카드/검수함 큐 성능 개선/배치 UX 마감(sticky
-액션바·진행률·마지막 배치 되돌리기·휴지통 복원). SQL/GRANT 신규 없음
-(기존 writing_answer_statistics/spelling_review_queue GRANT 범위 안).
-verify:all 베이스라인 그대로 FAIL {login} + SKIP {speaking, listening})_
+_최종 갱신: 2026-08-02 (24차, Edge Function 2종 배포 + E2E 전 항목 통과 —
+쓰기 오토파일럿 활성화 인프라 완성 + 프로덕션 숙제 저장 복구. 종합 보고:
+`COMPLETE_REPORT.md`)_
+
+## 2026-08-02 (24차) — Edge Function 배포·E2E 검증 완료 (coordinator)
+
+### 결과
+
+- 운영자가 v3_6/v3_7/v3_8/v3_9 SQL 실행(테이블 4종 REST 프로브로 실측
+  확인) + `grade-writing-answers`/`admin-content-write` 배포(404→401 전환
+  실측) + OpenAI 시크릿 설정.
+- `scripts/testEdgeFunctionsE2E.mjs`(신규, 이번 커밋 포함) — 운영자 PIN
+  (환경변수 전용, 값 미저장·미출력)으로 전 항목 통과: 서버측 PIN 게이트,
+  일회용 엔티티 생성, **숙제 배정 저장→반영→해제**(v3.12 락다운 이후 핵심
+  경로 복구 실증), **AI 채점 실호출**(판정/신뢰도/비용), **캐시 재호출
+  방지**(재과금 0), 전체 정리(잔여 엔티티 0 — 코디네이터 독립 프로브 재확인).
+- 무변경 프로브로 v3.11 **미실행** 재확인(classes anon UPDATE 여전히 허용)
+  — 선행 조건이던 함수 배포가 끝났으므로 지금이 실행 적기. 로컬 main은
+  origin 대비 39커밋 앞섬(push = Vercel 배포 트리거, 운영자 결정 사항).
+
+### 다음 단계
+
+`COMPLETE_REPORT.md` §3 참고: ① git push ② v3_11 실행 ③ v3_13 실행
+④ 플래그 4종 결정 ⑤ review_data 병합 수정(메모리 엔진 배선 전) ⑥ (선택)
+로컬 SERVICE_ROLE_KEY로 login 도메인 복구.
 
 ## 2026-08-01 (23차) — 쓰기 검수 파이프라인 P3(통계 대시보드/성능/배치 UX) (implementer)
 

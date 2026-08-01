@@ -1,0 +1,25 @@
+{
+  "agent_name": "coordinator",
+  "role": "Edge Function 배포 지원 + E2E 검증 조정",
+  "task_id": "edge-deploy-e2e-2026-08-02",
+  "task": "쓰기 오토파일럿 활성화(SQL 4종 확인 + 함수 2종 배포 검증) + E2E 전 항목 통과 + COMPLETE_REPORT.md",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-01T00:00:00+09:00",
+  "updated_at": "2026-08-02T00:00:00+09:00",
+  "files_owned": [
+    "scripts/testEdgeFunctionsE2E.mjs",
+    "COMPLETE_REPORT.md",
+    "handoff.md",
+    ".ai-status/edge-deploy-e2e-2026-08-02.json"
+  ],
+  "files_read": [
+    "src/utils/wordLibrary.js",
+    "src/utils/spellingReviewAiApi.js",
+    "supabase/functions/admin-content-write/index.ts",
+    ".env"
+  ],
+  "summary": "운영자 수동 단계(SQL 4종 실행, 함수 2종 배포, OpenAI 시크릿)를 단계별로 안내·실측 검증(테이블 프로브 200/206, 엔드포인트 404→401). E2E 스크립트(scripts/testEdgeFunctionsE2E.mjs, ADMIN_PIN은 process.env 전용·미출력)로 전 항목 통과: PIN 게이트/숙제 배정 저장·반영·해제/AI 채점 실호출/캐시 재과금 방지/정리. 독립 프로브로 잔여 엔티티 0, v3.11 미실행(classes anon 쓰기 열림), 로컬 main이 origin+39커밋 확인. 시크릿은 코드/로그/문서/git 어디에도 미저장.",
+  "blocker": null,
+  "next_action": "운영자: ① git push(Vercel 배포) ② supabase_v3_11 실행(함수 배포로 선행 조건 충족, 런북 참고) ③ supabase_v3_13 실행 ④ 플래그 4종 결정 ⑤ wordLibrary.js:1697 review_data 병합 수정 — 상세는 COMPLETE_REPORT.md §3."
+}
