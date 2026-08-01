@@ -1,8 +1,122 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-08-01 (21차, 쓰기 답안 검토 자기학습형 파이프라인 재설계 —
-실수 유형 그룹 뷰 + 유형 단위 일괄 처리 + 오토파일럿 플래그 3종(기본 off)
-+ 최근 자동 인정 철회 목록. SQL/Edge Function 신규 없음, 기존 v3_6/v3_7/
-v3_8/v3_9 대기 그대로)_
+_최종 갱신: 2026-08-01 (22차, 숙제 배정 자동 생성/일괄 배정/이력·완료
+현황 완성 — SQL/Edge Function 신규 없음, 기존 admin-content-write 배포
+대기(v3.11/v3.12) 그대로. verify:all 베이스라인 FAIL {login} + SKIP
+{speaking, listening}로 축소)_
+
+## 2026-08-01 (22차) — 숙제 배정 자동 생성/일괄 배정/이력·완료 현황 완성 (implementer)
+
+### 배경
+
+`daily_assignments`는 v3.12 보안 락다운(`supabase_v3_12_lockdown_daily_assignments.sql`)
+이 이미 **실측상 라이브에 적용된 상태**였다(SQL 파일 헤더의 "절대 먼저
+실행하지 마세요" 경고는 작성 시점 기준이고, 이 세션 시작 시점엔 이미
+실행돼 있었다 — `testStudentUnitDecouple.mjs` 등에서 42501 RLS 에러를
+실측으로 확인). `setTodaysAssignment`/`setAssignmentForDate`의 adminPin
+듀얼패스(v3.12 코드, 2026-07-30 세션)는 이미 있었으므로, 이번 세션은 그
+위에 관리자가 매일 손으로 체크박스를 클릭하지 않아도 되는 "자동 생성"
+기능과, 배정 이력을 확인할 수 있는 읽기 전용 패널을 추가했다(학생 대상
+기능/게임화 아님 — 헌법 규칙 12 범위 밖 확인 완료, 관리자 전용 UI).
+
+### 커밋 목록(총 6개, 전부 `main`)
+
+1. `ad59e0e` feat(homework): 배정 자동 생성 순수 플래너 — 신규
+   `src/utils/assignmentPlanner.js`: `pickNextAssignment`/`planBulkDates`.
+   유닛 단어를 position 순서로 훑으며 최근 배정 이력(Set 목록)에 없는
+   슬러그부터 채우고, 유닛 전체가 소진되면 처음부터 다시(복습 회차) —
+   `count`가 유닛 크기보다 커도 항상 정확히 `count`개를 반환(첫 통과 후
+   순서대로 wrap, 중복 허용). `weeklyReport.js`와 동일한 순수성 원칙
+   (Supabase/React 의존성 0, 무작위 함수 없음, 새 네트워크 호출 없음) —
+   실제 저장은 이 모듈이 절대 하지 않고 항상 호출부가 기존
+   `setTodaysAssignment`/`setAssignmentForDate`(adminPin 듀얼패스) 그대로
+   사용한다. `scripts/testAssignmentPlanner.mjs`(25단언) 신규 +
+   `tests/harness/registry.mjs`의 `homework`/`wordAssignment` 도메인에
+   extra 체크로 등록.
+   - 이 커밋 직후, 동시 작업 중이던 다른 세션이 `src/learning/memory/
+     storage/`에 스테이징해 둔 파일 2개가 `git add`/`commit` 사이 레이스로
+     함께 실려버려 즉시 `4a29e62`로 `git rm --cached`(작업 디렉터리 파일은
+     안 건드림, git 추적에서만 제거)해 원상 복구했다 — 헌법 규칙 16이
+     경고하는 바로 그 시나리오가 실제로 재현된 사례, 기록으로 남김.
+2. `693457f` feat(homework): 배정 이력 읽기 헬퍼 — `wordLibrary.js`에
+   `fetchAssignmentHistory(className, fromDateStr, toDateStr)` 추가(반의
+   `daily_assignments`를 날짜 범위로 SELECT, date desc). v3.12 락다운
+   이후에도 SELECT는 anon 허용 정책이라 adminPin 불필요, 조회 실패는
+   전부 non-fatal(`[]`) 폴백.
+3. `7eb2d64` chore(harness): 42501 정직한 SKIP — `testDailyAssignment.mjs`/
+   `testFutureAssignment.mjs`/`testStudentUnitDecouple.mjs`(unitSwitching
+   도메인 실행 스크립트)가 daily_assignments 쓰기 시 42501을 감지하면
+   가짜 PASS 대신 SKIP(exit 0)으로 정직하게 보고(`testXpLedgerDb.mjs`의
+   "정상적으로 예상된 상태" SKIP 관례와 동일 패턴). 쓰기와 무관한 조회
+   기반 검증(유닛 전환/영속/동명 유닛/로스터/유닛 삭제 폴백 등)은 전부
+   실제 검증 그대로 유지 — 결과적으로 `verify:homework`/
+   `verify:word-assignment`/`verify:unit` 도메인이 FAIL → PASS로
+   전환(가짜 커버리지 아님, stdout에 SKIP 로그가 정직하게 남음).
+4. `d4d9577` feat(admin): 자동 생성 버튼(미리보기→기존 저장 경로) —
+   `FutureAssignmentPlanner`에 "자동 생성 (N개)" + 유닛 `<select>` 추가.
+   `pickNextAssignment` + `fetchAssignmentHistory`(최근 14일)로 체크박스
+   Set만 채움(미리보기 전용, 실제 저장은 기존 "저장" 버튼 그대로). 선택한
+   유닛에 단어가 없으면 자동 생성 자체를 막아(alert) 빈 배열을 미리보기에
+   채우지 않음(전체 해제 기존 의미는 불변). `assignmentErrorMessage(err)`
+   헬퍼로 admin-content-write 미배포(HTTP 404)/연결 실패를 "배포 후
+   재시도" 안내로 치환(그 외 에러는 원본 메시지 그대로) — 기존 배정
+   관련 catch 4곳에 배선, `wordLibrary.js` 에러 계약은 불변.
+5. `d8dc5cf` feat(admin): 여러 날짜 일괄 배정 + 재시도 안전 저장 상태 —
+   `FutureAssignmentPlanner`에 "여러 날짜 일괄 배정" 접이식 섹션.
+   유닛/시작일/일수(최대 14일)/하루 단어수 → `planBulkDates` +
+   `fetchAssignmentHistory`로 날짜→단어 미리보기 표(승인 전 쓰기 없음).
+   "일괄 저장"은 날짜별 순차 `setAssignmentForDate` 호출 + 날짜별 상태
+   (idle/pending/done/error) 추적, 실패해도 나머지 날짜 계속 진행,
+   "실패한 날짜만 다시 저장" 버튼으로 재시도(upsert라 멱등, 안전).
+6. `bb65c2c` feat(admin): 배정 이력 + 완료 현황 패널/대시보드 헤더 — 신규
+   `src/components/admin/AssignmentHistoryPanel.jsx`(관리자 전용, 완전
+   읽기 전용): 반+날짜 범위 → `fetchAssignmentHistory` 이력 카드(단어
+   칩+현재 소속 유닛 라벨, 사라진 slug는 원문 그대로) + 그 날짜의 완료
+   학생 수(`student_daily_progress.categories_completed >= 4` —
+   `weeklyReport.js`의 `homeworkDone` 규칙과 완전히 동일). `AnalyticsPanel.jsx`
+   와 동일한 관례로 읽기 전용 `supabaseClient` 직접 사용 — `student_daily_progress`
+   는 애초에 락다운 대상이 아니라 admin-content-write 배포 여부와 완전히
+   무관하게 항상 동작. `AdminDashboard`에 새 조회 없는 헤더 한 줄("오늘
+   숙제 완료 N/M명 · 오늘 배정 단어 K개", 이미 로드된 rows +
+   `getTodaysAssignmentWordIds` 캐시만 사용) + 대시보드 탭에 패널 마운트.
+
+### 배포 의존성 — 무엇이 지금 당장 되고, 무엇이 배포를 기다리는가
+
+- **admin-content-write 배포가 필요한 것**(v3.11/v3.12, 2026-07-30 세션부터
+  대기 중, 이번 세션이 새로 만든 의존성 아님): "자동 생성" 미리보기를
+  실제로 **저장**하는 것(기존 저장 버튼들과 완전히 같은 경로 — 새 쓰기
+  경로 없음), 일괄 배정 저장.
+- **배포와 완전히 무관하게 지금 당장 되는 것**: 자동 생성/일괄 배정
+  **미리보기**(순수 계산), `AssignmentHistoryPanel`(이력+완료 현황),
+  대시보드 헤더 요약 — 전부 SELECT뿐이라 v3.12 락다운 이후에도 anon
+  허용되거나(daily_assignments) 애초에 락다운 대상이 아니다
+  (student_daily_progress).
+- 다음 세션이 admin-content-write를 배포하면(`docs/DEPLOY_COMMANDS_V311_V312.md`),
+  "자동 생성 → 저장"까지 별도 코드 변경 없이 바로 라이브로 동작한다.
+
+### verify:all 최종 결과(이 세션 종료 시점)
+
+- FAIL: `login`(테스트 3의 PIN 관련 스크립트 4개 — 이번 세션 범위 밖,
+  손대지 않음, `commit 3` 이전부터 있던 pre-existing FAIL)
+- SKIP: `speaking`, `listening`(도메인 자체가 headless 환경에서 실행
+  불가 — 이번 세션 이전부터의 상태, 변경 없음)
+- 나머지 전체 PASS(homework/wordAssignment/unitSwitching 포함 — commit 3
+  이후 FAIL에서 PASS로 전환, 상세는 위 3번 커밋 설명 참고)
+
+### 남은 리스크/알려진 갭
+
+- admin-content-write 배포가 안 된 환경에서는 여전히 "자동 생성 →
+  저장"을 눌러도 실패한다(기존에 이미 그랬던 것과 동일 — 이번 세션이
+  새로 만든 실패 모드 아님, `assignmentErrorMessage`가 원인을 명확히
+  안내할 뿐).
+- `AssignmentHistoryPanel`의 "완료 학생 수" 분모는 "현재 이 반 소속
+  학생 수"(`getStudentsInClass` 스냅샷) 기준 — 배정 이후 반을 옮긴
+  학생이 있으면 과거 날짜의 분모가 그 학생을 포함/제외하는 방향이 실제
+  당시 반 소속과 다를 수 있다(드문 케이스, 기존 `fetchDashboardData`
+  계열 화면들도 동일한 특성).
+- `pickNextAssignment`가 항상 `count`개를 반환하도록 설계돼 있어(유닛이
+  작아도 복습 회차로 채움), 유닛이 아주 작은 반에서 "자동 생성"을 여러
+  번 누르면 반복 배정이 정상 동작이지만 안내 문구가 없다 — 필요하면
+  다음 세션에서 UI 안내만 추가(로직 변경 불필요).
 
 ## 2026-08-01 (21차) — 쓰기 답안 검토 자기학습형 파이프라인 재설계 (implementer)
 

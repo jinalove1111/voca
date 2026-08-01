@@ -1,0 +1,55 @@
+{
+  "agent_name": "implementer",
+  "role": "숙제 배정 자동 생성/일괄 배정/이력·완료 현황 완성",
+  "task_id": "assignment-system-2026-08-01",
+  "task": "assignmentPlanner.js 순수 플래너 + fetchAssignmentHistory + 42501 정직한 SKIP(harness) + AdminScreen 자동 생성/일괄 배정 UI + AssignmentHistoryPanel + 대시보드 헤더",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-01T08:00:00+09:00",
+  "updated_at": "2026-08-01T09:30:00+09:00",
+  "files_owned": [
+    "src/utils/assignmentPlanner.js",
+    "scripts/testAssignmentPlanner.mjs",
+    "tests/harness/registry.mjs",
+    "src/utils/wordLibrary.js",
+    "scripts/testDailyAssignment.mjs",
+    "scripts/testFutureAssignment.mjs",
+    "scripts/testStudentUnitDecouple.mjs",
+    "src/components/AdminScreen.jsx",
+    "src/components/admin/AssignmentHistoryPanel.jsx",
+    "handoff.md",
+    ".ai-status/assignment-system-2026-08-01.json"
+  ],
+  "files_read": [
+    "CLAUDE.md",
+    "supabase_v3_12_lockdown_daily_assignments.sql",
+    ".ai-status/v312-daily-assignments-wiring-2026-07-30.json",
+    "src/utils/weeklyReport.js",
+    "tests/harness/runDomain.mjs",
+    "tests/harness/runAnalytics.mjs",
+    "tests/harness/runLearningEngine.mjs",
+    "scripts/testXpLedgerDb.mjs",
+    "scripts/testComputeWordKingApi.mjs",
+    "src/components/admin/AnalyticsPanel.jsx",
+    "package.json"
+  ],
+  "summary": "6개 소커밋(ad59e0e, 693457f, 7eb2d64, d4d9577, d8dc5cf, bb65c2c) + 언스테이지 정정 커밋(4a29e62). pickNextAssignment/planBulkDates(순수, Supabase/React 0, 무작위 없음) + fetchAssignmentHistory(anon SELECT, 락다운 이후에도 허용) + 3개 harness 스크립트를 42501 정직한 SKIP으로 전환(homework/wordAssignment/unitSwitching 도메인 FAIL→PASS) + AdminScreen 자동 생성 버튼(미리보기 전용)/여러 날짜 일괄 배정(순차 저장 + 재시도)/assignmentErrorMessage 헬퍼 + AssignmentHistoryPanel(읽기 전용, 배포 무관 항상 동작) + 대시보드 헤더 한 줄(신규 조회 없음). 세션 중 동시 작업 중이던 다른 에이전트의 src/learning/memory/storage/ 파일이 git add/commit 레이스로 커밋에 섞여 즉시 git rm --cached로 정정(작업 디렉터리 파일은 안 건드림).",
+  "blocker": null,
+  "next_action": "운영자: docs/DEPLOY_COMMANDS_V311_V312.md 순서로 admin-content-write 배포하면 '자동 생성 → 저장'/'일괄 저장'이 코드 변경 없이 바로 라이브 동작(현재도 미리보기/이력/완료현황/대시보드 헤더는 배포와 무관하게 정상 동작).",
+  "build_result": "PASS (매 커밋 후 npm run build 확인, 신규 에러/경고 없음)",
+  "verify_results": {
+    "per_commit": {
+      "commit1_assignmentPlanner": "node scripts/testAssignmentPlanner.mjs PASS(25단언) + build PASS",
+      "commit2_fetchAssignmentHistory": "verify:admin PASS, verify:daily-study PASS, build PASS",
+      "commit3_honestSkip": "verify:homework PASS, verify:word-assignment PASS, verify:unit PASS, build PASS",
+      "commit4_autoGenerateButton": "verify:admin PASS, verify:homework PASS, build PASS",
+      "commit5_bulkPlanning": "verify:admin PASS, build PASS",
+      "commit6_historyPanelDashboard": "verify:admin PASS, verify:daily-study PASS, build PASS"
+    },
+    "final_verify_all": {
+      "FAIL": ["login"],
+      "SKIP": ["speaking", "listening"],
+      "PASS": "나머지 전 도메인(homework/wordAssignment/unitSwitching 포함 — commit3 이전 FAIL에서 전환)"
+    }
+  }
+}
