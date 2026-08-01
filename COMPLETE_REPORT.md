@@ -1,5 +1,38 @@
 # COMPLETE REPORT — 쓰기 오토파일럿 활성화 + Edge Function 배포 검증
 
+> **[2026-08-02 갱신] v3_11/v3_13 실행 검증 최종 상태**
+>
+> - **v3_13**: ✅ 완전 적용 — 테이블 5종·컬럼·개방 RLS 전항 일치, 재실행
+>   부작용 0(F1 가드 정상). 라이브 하네스 41단언 PASS(생성→승인→학생용
+>   조회→정리). 관리자 커리큘럼 탭 실동작 가능(로컬 빌드 기준).
+> - **v3_12**: ✅ 유지 — daily_assignments 42501, 충돌 없음.
+> - **v3_11**: ⚠️ **미완성** — 실행은 됐고(read-only 정책 존재 + RLS 4테이블
+>   전부 enabled 확인) 원인도 확정됨: 프로덕션 초기 스키마의 구세대 정책명
+>   `public read/write classes/units/words`(ALL)가 v3_11의 drop 목록에 없어
+>   잔존, permissive-OR 결합으로 락다운 무효화. 처방한 drop 3줄은 아직
+>   프로덕션에 반영되지 않음(실행 후에도 쓰기 통과 실측 — 커밋 안 됐거나
+>   다른 프로젝트 창으로 추정). **운영자 최종 1단계는 아래 통합 블록.**
+> - 기존 기능 회귀 0: build PASS, verify:all 25 PASS/2 SKIP/1 FAIL(login,
+>   기존) + admin/homework/student 도메인 재확인 PASS. 관리자 쓰기 경로
+>   (admin-content-write)는 service_role이라 락다운과 무관하게 정상(게이트
+>   프로브 + 전일 E2E).
+>
+> **운영자 최종 1단계 — SQL Editor에서 아래 블록을 한 번에 실행하고, 마지막
+> SELECT 결과가 0행인지 눈으로 확인** (0행 = 락다운 완성):
+>
+> ```sql
+> drop policy if exists "public read/write classes" on classes;
+> drop policy if exists "public read/write units" on units;
+> drop policy if exists "public read/write words" on words;
+> select tablename, policyname, cmd from pg_policies
+> where tablename in ('classes','units','words') and cmd = 'ALL';
+> ```
+>
+> 실행 후 앱 영향: 학생 읽기 유지(SELECT 정책 잔존), anon 쓰기 42501 차단,
+> 관리자 쓰기는 pin 경로로 계속 정상. 이후 verify의 testMultiClass 등
+> anon-쓰기 스크립트가 42501로 실패하게 되면 정직 SKIP 래퍼 적용이 후속
+> 코드 작업(기존 P1 패턴)으로 필요하다.
+
 _작성: 2026-08-02. 상태: **E2E 전 항목 통과 — 활성화 인프라 완성.**
 이 보고서는 2026-07-31~08-02 연속 세션(문서 정리 → Curriculum Engine
 Phase 0 → 쓰기 오토파일럿 → 4시간 자율 세션 P1/P2/P3 → 배포·E2E)의 최종
