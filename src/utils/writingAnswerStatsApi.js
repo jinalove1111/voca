@@ -92,6 +92,48 @@ export async function fetchLearningRecommendations({ minCount = 3, limit = 50 } 
   }
 }
 
+// ── v1.5(2026-08-01, P3 — 검수 대시보드) ────────────────────────────────
+//
+// fetchLearningRecommendations()는 status='pending' && count>=minCount만
+// 가져오는 "AI 추천 학습" 카드 전용 쿼리라 전체 현황(승인/반려 포함)을
+// 볼 수 없다 — 이 함수는 status 필터/최소 반복 조건 없이 전체 행을
+// count desc로 가져와 WritingStatsDashboard(admin/WritingStatsDashboard.jsx)의
+// aggregateStatsRows(spellingReviewBulkPlan.js)에 그대로 넘길 수 있는
+// camelCase shape으로 반환한다. SELECT 전용(anon 권한 grant select만으로
+// 충분, § supabase_v3_9 위 GRANT 참고) — 쓰기는 이 함수 몫이 아니다.
+export async function fetchStatsOverview({ limit = 500 } = {}) {
+  try {
+    const { data, error } = await supabase
+      .from('writing_answer_statistics')
+      .select('id,word_id,registered_meaning,student_answer,normalized_answer,count,accepted_count,rejected_count,distinct_student_ids,status,status_changed_at,last_decision,last_confidence,words(word,meaning)')
+      .order('count', { ascending: false })
+      .limit(limit)
+    if (error) {
+      if (!isMissingRelationError(error)) warnOnce(error)
+      return null
+    }
+    return (data || []).map((r) => ({
+      id: r.id,
+      wordId: r.word_id,
+      word: r.words?.word || '(삭제된 단어)',
+      meaning: r.registered_meaning || r.words?.meaning || '',
+      normalizedAnswer: r.normalized_answer,
+      submittedAnswer: r.student_answer,
+      count: r.count,
+      acceptedCount: r.accepted_count,
+      rejectedCount: r.rejected_count,
+      distinctStudentCount: Array.isArray(r.distinct_student_ids) ? r.distinct_student_ids.length : 0,
+      status: r.status,
+      statusChangedAt: r.status_changed_at,
+      lastDecision: r.last_decision,
+      lastConfidence: typeof r.last_confidence === 'number' ? r.last_confidence : null,
+    }))
+  } catch (err) {
+    if (!isMissingRelationError(err)) warnOnce(err)
+    return null
+  }
+}
+
 // ── 액션 ────────────────────────────────────────────────────────────────
 
 // 원클릭 학습(요구사항 3) — 세 단계 순차 실행, ①이 실패하면 ②③은 절대

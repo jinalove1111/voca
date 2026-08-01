@@ -37,6 +37,7 @@ import AssignmentHistoryPanel from './admin/AssignmentHistoryPanel'
 // StudentDirectory.jsx(2026-07-22)와 동일한 순수 이동(로직 변경 없음),
 // 각 파일 헤더 주석 참고.
 import SpellingReviewQueuePanel from './admin/SpellingReviewQueuePanel'
+import WritingStatsDashboard from './admin/WritingStatsDashboard'
 import LearningRecommendationsCard from './admin/LearningRecommendationsCard'
 import AiSavingsCard from './admin/AiSavingsCard'
 import LearningRateCard from './admin/LearningRateCard'
@@ -1462,6 +1463,9 @@ export default function AdminScreen({ onBack }) {
                 내부 로직/렌더는 전혀 안 바꿈(순서만 재배치, 헌법 규칙 3).
                 SQL 미실행이면 각 카드가 자체적으로 "SQL 실행 필요" 안내로
                 폴백한다(아래 SpellingReviewQueuePanel과 동일 관례). */}
+            {/* 2026-08-01(P3) — 전체 현황 요약 카드. 개별 패턴 등록/무시는
+                여전히 LearningRecommendationsCard(Top50) 몫 — 중복 없음. */}
+            <WritingStatsDashboard />
             <LearningRecommendationsCard />
             <AiSavingsCard refreshTick={aiSavingsTick} />
             <LearningRateCard />
