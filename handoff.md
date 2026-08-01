@@ -1,8 +1,114 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-08-01 (22차, 숙제 배정 자동 생성/일괄 배정/이력·완료
-현황 완성 — SQL/Edge Function 신규 없음, 기존 admin-content-write 배포
-대기(v3.11/v3.12) 그대로. verify:all 베이스라인 FAIL {login} + SKIP
-{speaking, listening}로 축소)_
+_최종 갱신: 2026-08-01 (23차, 쓰기 검수 파이프라인 P3 — 통계 집계 순수
+헬퍼/검수 통계 대시보드 카드/검수함 큐 성능 개선/배치 UX 마감(sticky
+액션바·진행률·마지막 배치 되돌리기·휴지통 복원). SQL/GRANT 신규 없음
+(기존 writing_answer_statistics/spelling_review_queue GRANT 범위 안).
+verify:all 베이스라인 그대로 FAIL {login} + SKIP {speaking, listening})_
+
+## 2026-08-01 (23차) — 쓰기 검수 파이프라인 P3(통계 대시보드/성능/배치 UX) (implementer)
+
+### 배경
+
+같은 날 앞서 완료된 자기학습형 검토 파이프라인(오토파일럿 티어①~④,
+실수 유형 그룹 인박스, 최근 자동 인정 철회 — 커밋 `8ee7302..d2ed7f1`,
+`SpellingReviewQueuePanel.jsx`/`spellingReviewBulkPlan.js`/
+`spellingReviewAiApi.js`) 위에 P3(운영 마감) 4개 커밋을 추가했다. 새
+테이블/SQL 없음 — `writing_answer_statistics`/`spelling_ai_grading_cache`/
+`ai_usage_daily`/`word_accepted_variants`는 이미 오늘 운영자가 실행한
+상태(`supabase_v3_9_writing_answer_statistics.sql` 등)라 anon SELECT가
+이미 GRANT돼 있어(`writing_answer_statistics`) 읽기 전용 통계 조회를
+그대로 붙였다. 학생 대상 기능/게임화 없음(헌법 규칙 12 범위 밖 확인
+완료, 전부 관리자 전용 UI).
+
+### 커밋 목록(총 4개, 전부 `main`)
+
+1. `8f02320` feat(writing): 통계 집계 순수 헬퍼 — `spellingReviewBulkPlan.js`에
+   `aggregateStatsRows(rows)`(totals: pending/accepted/dismissed/total,
+   topPending: count desc, decisionsByDay: status_changed_at 있는 행만
+   날짜 버킷팅, acceptRatio: 분모 0이면 null로 "지어내지 않기") +
+   `summarizeQueue(rows, ctx)`(기존 `groupByMistakeType` 그대로 재사용,
+   재구현 없음) 추가. `totals`의 세 번째 키는 "rejected"가 아니라
+   `dismissed`다 — `supabase_v3_9_writing_answer_statistics.sql`의 실제
+   status CHECK 제약(pending/accepted/dismissed 3종만 존재, "rejected"
+   상태 자체가 DB에 없음, §69-70행 실측 확인)을 그대로 반영한 정직한
+   표기. `testWritingReviewAiPipeline.mjs` 섹션 66/67(픽스처만, DB 접근
+   없음)로 검증.
+2. `b37ec3e` feat(admin): 쓰기 검수 통계 대시보드 카드 — 신규
+   `src/components/admin/WritingStatsDashboard.jsx`: `writingAnswerStatsApi.js`에
+   추가한 `fetchStatsOverview({limit=500})`(SELECT 전용, `isMissingRelationError`
+   세이프 — 테이블 미실행이면 "SQL 실행 필요" 안내로 폴백)로 전체 현황을
+   읽고 `aggregateStatsRows`로 요약, 실수 유형 분포는 검수 큐(pending)를
+   별도 조회해 `summarizeQueue`로 집계. Top 반복 패턴 등록/무시 액션은
+   기존 `LearningRecommendationsCard`(Top50)에 그대로 위임 — 중복 구현
+   안 함(헌법 규칙 3). `AdminScreen.jsx`의 classes 탭,
+   `LearningRecommendationsCard` 바로 위에 마운트.
+3. `f19a606` perf(admin): 검수함 큐 최적화 — `SpellingReviewQueuePanel.jsx`에서
+   `classifyMistakeType`(편집거리 계산 포함) 결과를 `baseRows`+
+   `proposalsById` 키의 `mistakeTypeByRowId` Map으로 캐싱해, 단어 검색창
+   입력처럼 "표시만" 바꾸는 상태 변경으로는 재분류가 일어나지 않게
+   했다(그룹 순서/라벨은 여전히 `MISTAKE_TYPE_ORDER`/`LABELS` 그대로,
+   `groupByMistakeType` 자체는 안 건드림 — 파이프라인 테스트 섹션 65/67로
+   알고리즘 동등성은 이미 검증됨). 그룹을 펼쳐도 30건 초과분은 "N개 더
+   보기"를 눌러야 렌더(windowing) — 큐 조회 자체는 이미
+   `fetchPendingSpellingReviews`가 200건 상한이라 이번 변경은 렌더링에만
+   적용. 오토파일럿 재실행 방지 ref 가드(`autoPilotRanRef`) 검증 결과도
+   주석으로 남김 — 같은 마운트 내 리렌더/prop 변경에서는 재실행 안 됨을
+   확인, `AdminScreen.jsx`가 tab 조건부 렌더로 이 컴포넌트를 실제
+   마운트/언마운트하는 경우(다른 탭 갔다가 'classes'로 복귀)는 재실행되는데
+   이는 페이지 새로고침과 동등한 기존 동작이라 회귀가 아니고, 세션
+   전역 가드로 억제하면 오토파일럿의 실행 조건 자체가 바뀌어 이번
+   성능 전용 커밋 범위를 벗어나므로 의도적으로 손대지 않았다.
+4. `e6478a6` feat(admin): 배치 UX 마감 —
+   - 선택 항목 sticky 하단 액션바(선택 N건 · 인정/무시/해제, 기존
+     `requestBulkConfirm`/`clearSelection` 핸들러 그대로 재사용).
+   - 배치 진행률(N/전체) — `executeBulkAccept`/`executeBulkDismiss`
+     (`spellingReviewAiApi.js`)에 옵션 `onProgress` 콜백 추가(기존 호출부
+     시그니처/동작 무변경, additive 전용).
+   - "마지막 배치 되돌리기(세션 내)" — accept/synonym 배치 성공 시 그
+     원본 행을 기억해뒀다가, 기존 `revokeAutoAcceptedVariant`(§ "최근
+     자동 인정" 철회와 동일 함수, 재구현 없음)를 각 행에 재적용해
+     `accepted_meanings`에서만 제거. dismiss 배치는 대상 아님(되돌릴
+     `accepted_meanings` 변경 자체가 없음). 컴포넌트 로컬 상태라 새로고침
+     하면 사라짐(세션 내 1단계 undo).
+   - "휴지통 보기"(무시된 답안 복원) — `resolveSpellingReview`
+     (`spellingReviewApi.js`, 이 작업 비소유 파일)의 status 화이트리스트가
+     `['accepted','dismissed']`뿐이라 'pending' 복원에 못 씀 — 그 파일을
+     넓히지 않고 `spellingReviewAiApi.js`(소유 파일)에 별도 함수
+     `restorePendingSpellingReview(id)`를 추가해 `spelling_review_queue`를
+     직접 `update({status:'pending'})`했다. 이 테이블엔 status에 대한 DB
+     CHECK 제약이 없고(`supabase_v2_0_spelling_mixed.sql` 실측 확인) anon/
+     authenticated에 테이블 전체 select/insert/update/delete가 이미
+     GRANT돼 있어(같은 파일) 새 GRANT 불필요. 목록 조회는
+     `fetchRecentDismissedSpellingReviews({limit=50})` — 이 테이블엔
+     "처리 시각" 컬럼이 없어 `created_at`(제출 시각) 기준 최신순으로만
+     정렬한다는 한계를 UI 문구에 정직하게 명시.
+
+### verify 결과(각 커밋 공통 게이트 + 최종 전체)
+
+- `npm run build`: 전 커밋 통과(신규 에러/경고 없음, 기존 청크 크기
+  경고만 — 무관).
+- `npm run verify:writing` / `npm run verify:admin`: 전 커밋 PASS.
+- 최종 `npm run verify:all`: `FAIL login`(`testStudentSelectPinStatus.mjs`/
+  `testStudentPinAuth.mjs`/`testStudentPinSelfSetup.mjs`/
+  `testClearStudentPin.mjs`) + `SKIP speaking` + `SKIP listening`, 나머지
+  25개 도메인 전부 PASS — 22차 종료 시점 베이스라인과 정확히 동일(이번
+  P3 작업이 만든 신규 실패 없음).
+
+### 남은 리스크/알려진 갭
+
+- "마지막 배치 되돌리기"는 `accepted_meanings`만 되돌릴 뿐 검토 큐 행의
+  status는 `accepted`로 남는다(그 행 자체를 다시 대기로 되돌리는 기능은
+  아님) — "최근 자동 인정" 철회와 동일한 기존 설계 한계, 이번에 새로
+  만든 제약 아님.
+- "휴지통 보기"는 `created_at`(제출 시각) 기준 정렬 — "최근에 무시
+  *처리*된 순"이 아니다(`spelling_review_queue`에 처리 시각 컬럼 자체가
+  없음). 필요하면 별도 SQL로 `status_changed_at` 컬럼을 추가하는 후속
+  작업이 있어야 한다(이번 P3 범위 밖, 신규 SQL 준비 안 함).
+- `WritingStatsDashboard.jsx`는 검수 큐(pending)를 별도로 fetch한다(
+  `SpellingReviewQueuePanel`의 내부 상태를 끌어올리지 않음) — 두 컴포넌트가
+  각자 SELECT만 하므로 항상 최신값과 일치하지만, 같은 화면에 리스트를
+  두 번 조회하는 셈이라(비용 낮음, 200건 상한) 완전한 단일 소스는
+  아니다.
 
 ## 2026-08-01 (22차) — 숙제 배정 자동 생성/일괄 배정/이력·완료 현황 완성 (implementer)
 

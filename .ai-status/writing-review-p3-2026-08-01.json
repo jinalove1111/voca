@@ -1,0 +1,36 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "writing-review-p3-2026-08-01",
+  "task": "쓰기 검수 파이프라인 P3 — 통계 집계 순수 헬퍼 / 검수 통계 대시보드 카드 / 검수함 큐 성능 개선 / 배치 UX 마감(sticky 액션바·진행률·마지막 배치 되돌리기·휴지통 복원)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-01T00:00:00+09:00",
+  "updated_at": "2026-08-01T00:00:00+09:00",
+  "files_owned": [
+    "src/utils/spellingReviewBulkPlan.js",
+    "scripts/testWritingReviewAiPipeline.mjs",
+    "src/utils/writingAnswerStatsApi.js",
+    "src/components/admin/WritingStatsDashboard.jsx",
+    "src/components/AdminScreen.jsx",
+    "src/components/admin/SpellingReviewQueuePanel.jsx",
+    "src/utils/spellingReviewAiApi.js",
+    "handoff.md",
+    ".ai-status/writing-review-p3-2026-08-01.json"
+  ],
+  "files_read": [
+    "src/utils/spellingReviewApi.js",
+    "src/components/admin/LearningRecommendationsCard.jsx",
+    "src/components/admin/LearningRateCard.jsx",
+    "src/config/features.js",
+    "supabase_v2_0_spelling_mixed.sql",
+    "supabase_v3_9_writing_answer_statistics.sql",
+    "supabase_v3_7_word_accepted_variants.sql",
+    "tests/harness/registry.mjs",
+    "tests/harness/runWriting.mjs",
+    "package.json"
+  ],
+  "summary": "4개 커밋(8f02320/b37ec3e/f19a606/e6478a6) — (1) aggregateStatsRows/summarizeQueue 순수 헬퍼 + 테스트 섹션 66/67, (2) WritingStatsDashboard 카드(fetchStatsOverview 신규, SELECT 전용) + AdminScreen 마운트, (3) 실수 유형 분류 결과 캐싱(mistakeTypeByRowId)으로 필터 입력 재계산 방지 + 그룹 30건 초과 windowing, (4) sticky 선택 액션바 + executeBulkAccept/Dismiss onProgress(additive) + 마지막 배치 되돌리기(revokeAutoAcceptedVariant 재사용) + 휴지통 보기(restorePendingSpellingReview 신규, resolveSpellingReview 화이트리스트는 안 건드림). 새 SQL/GRANT 없음(기존 v3_9/v2_0 GRANT 범위 안). 학생 대상 기능/게임화 없음. 매 커밋 build+verify:writing+verify:admin PASS, 최종 verify:all은 22차와 동일 베이스라인(FAIL login, SKIP speaking/listening, 나머지 전부 PASS) 그대로 유지 확인.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 요청 — 특히 '휴지통 보기'의 직접 status 업데이트(spelling_review_queue, resolveSpellingReview 우회)가 헌법 규칙 16(파일 소유권)/의도한 API 경계와 충돌 없는지, sticky 액션바가 좁은 화면(iOS 100dvh)에서 다른 sticky 요소와 겹치지 않는지 확인 권장."
+}
