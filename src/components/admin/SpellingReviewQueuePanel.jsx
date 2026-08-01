@@ -19,7 +19,12 @@ import {
   filterRowsByStudent, distinctStudentIds, sortDisplayItems,
   summarizeBulkResults, summarizeProposals, normalizeForCompare, buildConfirmSummary,
   // 2026-08-01 자기학습형 검토 파이프라인(Commit 2) — 실수 유형 그룹 뷰.
-  groupByMistakeType,
+  // Commit 3(성능)부터는 groupByMistakeType 대신 classifyMistakeType +
+  // MISTAKE_TYPE_ORDER/LABELS를 직접 써서 분류 결과를 캐싱한다(아래
+  // mistakeTypeByRowId 참고) — groupByMistakeType 자체는 여전히 순수
+  // 함수로 남아있고 테스트(testWritingReviewAiPipeline.mjs 섹션 65/67)도
+  // 그대로 그 함수를 검증한다, 여기서는 동일 순서/라벨 규칙만 재사용.
+  classifyMistakeType, MISTAKE_TYPE_ORDER, MISTAKE_TYPE_LABELS,
   // 2026-08-01(Commit 3) — 오토파일럿의 "확실한 반려" 자동 무시 대상 선별.
   selectCertainRejects,
 } from '../../utils/spellingReviewBulkPlan'
@@ -135,6 +140,14 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
       return next
     })
   }
+  // 2026-08-01(Commit 3, 성능) — 그룹이 펼쳐져도 30건 넘게 한 번에 렌더링
+  // 하지 않는다(대량 큐에서 개별 카드 렌더 비용 절감). "N개 더 보기"를
+  // 누른 그룹만 이 Set에 담겨 전체를 렌더한다. fetchPendingSpellingReviews
+  // 자체가 이미 200건 상한이라(spellingReviewApi.js:122) 큐 조회 자체는
+  // 무제한이 아니었음 — 여기서는 그 위에 렌더링만 추가로 windowing한다.
+  const [expandedFullGroups, setExpandedFullGroups] = useState(() => new Set())
+  const showAllInGroup = (type) => setExpandedFullGroups((prev) => new Set(prev).add(type))
+  const GROUP_RENDER_LIMIT = 30
 
   const load = async () => {
     setLoading(true)
@@ -173,6 +186,19 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
   // "새로고침"을 누를 때마다 매번 다시 AI를 부르지 않게, § 비용 최소화
   // 원칙과 동일 취지). 실패는 절대 밖으로 던지지 않고 조용히 수동 그룹
   // 인박스로 폴백한다(관리자가 오류 배너에 놀라지 않게).
+  //
+  // 성능 커밋(Commit 3) 검증 메모 — ref는 컴포넌트가 "같은 마운트 인스턴스"
+  // 로 남아있는 한(부모 리렌더/props 변경으로 인한 리렌더 포함) 절대
+  // 초기화되지 않으므로, load() 버튼 클릭이나 adminPin/onChanged 등 prop이
+  // 바뀌는 리렌더에서는 오토파일럿이 재실행되지 않는다(의도한 동작, 검증
+  // 완료). 다만 AdminScreen.jsx가 tab==='classes' 조건부 렌더로 이 컴포넌트
+  // 전체를 마운트/언마운트하므로(다른 탭으로 갔다가 'classes' 탭으로 돌아
+  // 오면 실제 리마운트) 그 시점엔 ref가 새로 생성되어 오토파일럿이 다시
+  // 실행된다 — 이는 페이지 새로고침과 동등한 상황이라 기존에도 있던 동작
+  // (이번 성능 작업이 만든 회귀 아님)이고, 이를 세션 전역(sessionStorage 등)
+  // 가드로 억제하면 "오토파일럿의 실제 실행 조건"이라는 동작 자체가
+  // 바뀌게 되어 이번 커밋의 범위(순수 렌더링/성능, 액션 로직 무변경)를
+  // 벗어난다 — 그래서 의도적으로 손대지 않았다.
   const autoPilotRanRef = useRef(false)
 
   const runAutoPilot = async () => {
@@ -509,12 +535,41 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
   // 넘긴다(semantic/wrong_word 판정에 필요) — AI 미실행/미해결 행은 decision이
   // 없어 로컬 규칙(typo/pos_variant/partial/noise)까지만 적용되고, 그마저
   // 아니면 unknown으로 떨어진다(§ 정직한 분류, classifyMistakeType 주석 참고).
-  const rowsForMistakeGrouping = useMemo(() => displayRows.map((r) => {
-    const p = proposalsById.get(r.id)
-    return p ? { ...r, decision: p.decision } : r
-  }), [displayRows, proposalsById])
-  const mistakeGroups = useMemo(() => groupByMistakeType(rowsForMistakeGrouping), [rowsForMistakeGrouping])
-  const nonEmptyMistakeGroups = useMemo(() => mistakeGroups.filter((g) => g.count > 0), [mistakeGroups])
+  //
+  // 2026-08-01(Commit 3, 성능) — classifyMistakeType은 편집거리(레벤슈타인)
+  // 계산을 포함해 행마다 비용이 있다. 예전에는 displayRows(필터/정렬/그룹뷰
+  // 결과)가 바뀔 때마다(예: 단어 검색창에 한 글자씩 입력할 때마다) 전체를
+  // 다시 분류했다 — filterWord/sortBy/groupView는 "어떤 행을 보여줄지"만
+  // 바꿀 뿐 "그 행의 실수 유형이 무엇인지"와는 무관하므로, 분류 자체는
+  // baseRows(이번 분석 범위 전체, 필터 적용 전)와 proposalsById(AI 제안
+  // 맵)에만 의존하는 별도 Map으로 캐싱한다 — filterWord 등이 바뀌어도 이
+  // Map은 재계산되지 않고, 아래 그룹 만들기 단계에서 재조회만 한다.
+  const mistakeTypeByRowId = useMemo(() => {
+    const m = new Map()
+    for (const r of baseRows) {
+      const p = proposalsById.get(r.id)
+      m.set(r.id, classifyMistakeType(p ? { ...r, decision: p.decision } : r))
+    }
+    return m
+  }, [baseRows, proposalsById])
+
+  // 그룹 만들기(순서/라벨은 spellingReviewBulkPlan.MISTAKE_TYPE_ORDER/LABELS
+  // 그대로) — displayRows(필터/정렬 반영된 표시 목록)만 매번 다시 훑고,
+  // 유형 자체는 위 캐시에서 읽기만 한다(재분류 없음).
+  const nonEmptyMistakeGroups = useMemo(() => {
+    const buckets = new Map(MISTAKE_TYPE_ORDER.map((t) => [t, []]))
+    for (const r of displayRows) {
+      const type = mistakeTypeByRowId.get(r.id) || 'unknown'
+      if (!buckets.has(type)) buckets.set(type, [])
+      buckets.get(type).push(r)
+    }
+    return MISTAKE_TYPE_ORDER
+      .map((type) => {
+        const rowsForType = buckets.get(type) || []
+        return { type, label: MISTAKE_TYPE_LABELS[type] || type, rows: rowsForType, count: rowsForType.length }
+      })
+      .filter((g) => g.count > 0)
+  }, [displayRows, mistakeTypeByRowId])
 
   const toggleSelect = (id) => {
     setSelectedIds((prev) => {
@@ -935,7 +990,13 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
                     )}
                     {expanded && (
                       <div className="space-y-2 mt-2">
-                        {g.rows.map((r) => renderRow(r))}
+                        {(expandedFullGroups.has(g.type) ? g.rows : g.rows.slice(0, GROUP_RENDER_LIMIT)).map((r) => renderRow(r))}
+                        {!expandedFullGroups.has(g.type) && g.rows.length > GROUP_RENDER_LIMIT && (
+                          <button onClick={() => showAllInGroup(g.type)}
+                            className="text-xs font-bold text-indigo-500 btn-press py-1">
+                            {g.rows.length - GROUP_RENDER_LIMIT}개 더 보기
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
