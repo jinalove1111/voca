@@ -461,3 +461,92 @@ export function groupByMistakeType(rows, ctx = {}) {
     return { type, label: MISTAKE_TYPE_LABELS[type] || type, rows: rowsForType, count: rowsForType.length }
   })
 }
+
+// ── v1.5(2026-08-01, P3 — 검수 파이프라인 통계 집계) ─────────────────────
+//
+// 순수 계산만. 실제 I/O(writing_answer_statistics 조회)는
+// writingAnswerStatsApi.js의 fetchStatsOverview()가 담당하고, 여기는 그
+// 결과(또는 fetchLearningRecommendations()와 같은 camelCase 행 모양)를
+// 받아 대시보드가 그대로 렌더링할 수 있는 요약만 계산한다.
+//
+// aggregateStatsRows(rows) — rows는 writing_answer_statistics 한 행당
+// 하나씩(camelCase 필드: status/statusChangedAt/count/wordId/word/meaning/
+// normalizedAnswer/lastDecision/lastConfidence). null/undefined 필드는
+// 안전하게 무시(방어적, throw 금지).
+//
+// totals의 세 번째 키는 "rejected"가 아니라 "dismissed"다 — supabase_v3_9_
+// writing_answer_statistics.sql의 실제 status CHECK 제약(pending/accepted/
+// dismissed 3종, §69-70행 실측 확인)에 'rejected'라는 상태가 존재하지
+// 않기 때문에, 없는 상태를 지어내지 않고 실제 컬럼 값 그대로 쓴다(§ 정직한
+// 표기 원칙).
+export function aggregateStatsRows(rows) {
+  const list = Array.isArray(rows) ? rows : []
+  let pending = 0
+  let accepted = 0
+  let dismissed = 0
+  const decisionsByDayMap = new Map() // 'YYYY-MM-DD' -> {accepted, dismissed}
+
+  for (const r of list) {
+    const status = r?.status
+    if (status === 'pending') pending++
+    else if (status === 'accepted') accepted++
+    else if (status === 'dismissed') dismissed++
+
+    // decisionsByDay — 관리자가 실제로 판정을 내린(accepted/dismissed로
+    // 전이된) 날짜만 버킷팅한다. status_changed_at이 없는 행(예: 아직
+    // 한 번도 안 건드린 pending)은 애초에 판정 시점이 없으므로 제외.
+    if ((status === 'accepted' || status === 'dismissed') && r?.statusChangedAt) {
+      const day = String(r.statusChangedAt).slice(0, 10) // ISO 문자열 앞 10자 = YYYY-MM-DD
+      if (day.length === 10) {
+        if (!decisionsByDayMap.has(day)) decisionsByDayMap.set(day, { accepted: 0, dismissed: 0 })
+        const bucket = decisionsByDayMap.get(day)
+        if (status === 'accepted') bucket.accepted++
+        else bucket.dismissed++
+      }
+    }
+  }
+
+  const total = list.length
+  const decided = accepted + dismissed
+  // acceptRatio — 분모(decided)가 0이면 "0%"로 지어내지 않고 null(=아직
+  // 판정된 건 없음, 호출부가 "데이터 없음"으로 표시).
+  const acceptRatio = decided > 0 ? accepted / decided : null
+
+  const topPending = list
+    .filter((r) => r?.status === 'pending')
+    .slice()
+    .sort((a, b) => (Number(b?.count) || 0) - (Number(a?.count) || 0))
+    .map((r) => ({
+      wordId: r.wordId,
+      word: r.word,
+      meaning: r.meaning,
+      normalizedAnswer: r.normalizedAnswer,
+      count: r.count,
+      lastDecision: r.lastDecision,
+      lastConfidence: typeof r.lastConfidence === 'number' ? r.lastConfidence : null,
+    }))
+
+  const decisionsByDay = [...decisionsByDayMap.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([day, counts]) => ({ day, ...counts }))
+
+  return {
+    totals: { pending, accepted, dismissed, total },
+    topPending,
+    decisionsByDay,
+    acceptRatio,
+  }
+}
+
+// summarizeQueue(rows, ctx) — 검수 큐(spelling_review_queue pending 행,
+// SpellingReviewQueuePanel과 동일한 shape)를 실수 유형별 건수로 요약한다.
+// groupByMistakeType(위, 재구현 금지 — 헌법 규칙 3)을 그대로 재사용하고,
+// 대시보드가 필요로 하는 "유형별 건수 맵 + 전체 대기 건수" 형태로만
+// 다시 포장한다.
+export function summarizeQueue(rows, ctx = {}) {
+  const list = Array.isArray(rows) ? rows : []
+  const groups = groupByMistakeType(list, ctx)
+  const byType = {}
+  for (const g of groups) byType[g.type] = g.count
+  return { totalPending: list.length, byType, groups }
+}

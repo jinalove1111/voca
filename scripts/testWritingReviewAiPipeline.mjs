@@ -41,6 +41,7 @@ import {
   filterProposalsBySource, filterRowsByStudent, distinctStudentIds, sortDisplayItems,
   buildConfirmSummary,
   classifyMistakeType, selectCertainRejects, groupByMistakeType, MISTAKE_TYPE_ORDER, MISTAKE_TYPE_LABELS,
+  aggregateStatsRows, summarizeQueue,
 } from '../src/utils/spellingReviewBulkPlan.js'
 import fs from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -2206,6 +2207,58 @@ console.log('\n65. groupByMistakeType — 순서 고정 + 라벨 + count 0 유�
   check('각 그룹의 label이 MISTAKE_TYPE_LABELS와 일치(한국어)', groups.every((g) => g.label === MISTAKE_TYPE_LABELS[g.type]))
   check('전체 rows 합은 입력 건수와 동일(누락/중복 없음)', groups.reduce((s, g) => s + g.count, 0) === rows.length)
   check('빈 입력 — 7개 유형 전부 count 0', groupByMistakeType([]).every((g) => g.count === 0) && groupByMistakeType([]).length === 7)
+}
+
+console.log('\n66. aggregateStatsRows — 통계 집계(totals/topPending/decisionsByDay/acceptRatio)')
+{
+  const statsRows = [
+    { wordId: 'w1', word: 'locker', meaning: '물품 보관함', normalizedAnswer: '보관함', count: 5, status: 'pending', lastDecision: 'review', lastConfidence: 0.6 },
+    { wordId: 'w2', word: 'apple', meaning: '사과', normalizedAnswer: '사과', count: 12, status: 'pending', lastDecision: 'accept', lastConfidence: 0.9 },
+    { wordId: 'w3', word: 'flat', meaning: '펑크난', normalizedAnswer: '펑크', count: 3, status: 'pending', lastDecision: null, lastConfidence: null },
+    { wordId: 'w4', word: 'stream', meaning: '흐름', normalizedAnswer: '실시간', count: 7, status: 'accepted', statusChangedAt: '2026-07-30T09:00:00.000Z' },
+    { wordId: 'w4', word: 'stream', meaning: '흐름', normalizedAnswer: '흐름세', count: 2, status: 'accepted', statusChangedAt: '2026-07-30T10:30:00.000Z' },
+    { wordId: 'w5', word: 'harm', meaning: '해치다', normalizedAnswer: '농부', count: 4, status: 'dismissed', statusChangedAt: '2026-07-31T08:00:00.000Z' },
+    { wordId: 'w6', word: 'urine', meaning: '소변', normalizedAnswer: '오줌', count: 9, status: 'accepted', statusChangedAt: null }, // status_changed_at 없음 — 버킷 제외
+  ]
+  const agg = aggregateStatsRows(statsRows)
+  check('totals.pending', agg.totals.pending === 3)
+  check('totals.accepted', agg.totals.accepted === 3)
+  check('totals.dismissed(=rejected 상태 없음, 실제 컬럼값 그대로)', agg.totals.dismissed === 1)
+  check('totals.total', agg.totals.total === statsRows.length)
+  check('acceptRatio = accepted/(accepted+dismissed) = 3/4', Math.abs(agg.acceptRatio - 0.75) < 1e-9)
+  check('topPending은 count 내림차순(apple 12 > locker 5 > flat 3)', agg.topPending.map((r) => r.word).join(',') === 'apple,locker,flat')
+  check('topPending에 pending 아닌 행(stream/harm/urine)은 없음', agg.topPending.every((r) => r.word !== 'stream' && r.word !== 'harm' && r.word !== 'urine'))
+  check('topPending 각 항목 필드(wordId/word/meaning/normalizedAnswer/count/lastDecision/lastConfidence)', 'wordId' in agg.topPending[0] && 'lastConfidence' in agg.topPending[0])
+  check('decisionsByDay는 날짜순 2개 버킷(statusChangedAt null인 urine은 제외)', agg.decisionsByDay.length === 2 && agg.decisionsByDay[0].day === '2026-07-30' && agg.decisionsByDay[1].day === '2026-07-31')
+  check('2026-07-30 버킷: accepted 2(stream 두 행)', agg.decisionsByDay[0].accepted === 2 && agg.decisionsByDay[0].dismissed === 0)
+  check('2026-07-31 버킷: dismissed 1(harm)', agg.decisionsByDay[1].dismissed === 1 && agg.decisionsByDay[1].accepted === 0)
+
+  const emptyAgg = aggregateStatsRows([])
+  check('빈 입력 — totals 전부 0, acceptRatio는 null(지어내지 않기)', emptyAgg.totals.total === 0 && emptyAgg.acceptRatio === null && emptyAgg.topPending.length === 0 && emptyAgg.decisionsByDay.length === 0)
+
+  check('null/undefined 입력도 throw 없이 안전 처리', (() => {
+    try { return aggregateStatsRows(null).totals.total === 0 && aggregateStatsRows(undefined).totals.total === 0 } catch { return false }
+  })())
+}
+
+console.log('\n67. summarizeQueue — groupByMistakeType 재사용(재구현 금지) + 전체 대기 건수')
+{
+  const queueRows = [
+    { id: 't1', wordId: 'w1', meaning: '물품 보관함', acceptedMeanings: [], submittedAnswer: '물품 보괌함' }, // typo
+    { id: 't2', wordId: 'w2', meaning: '물품 보관함', acceptedMeanings: [], submittedAnswer: '물품 보괍함' }, // typo
+    { id: 'p1', wordId: 'w5', word: 'natural', meaning: '자연스러운', acceptedMeanings: [], submittedAnswer: '자연' }, // pos_variant
+    { id: 'u1', wordId: 'w8', meaning: '해치다', acceptedMeanings: [], submittedAnswer: '농부' }, // unknown
+  ]
+  const summary = summarizeQueue(queueRows)
+  check('totalPending === 입력 건수', summary.totalPending === queueRows.length)
+  check('byType.typo === 2', summary.byType.typo === 2)
+  check('byType.pos_variant === 1', summary.byType.pos_variant === 1)
+  check('byType.unknown === 1', summary.byType.unknown === 1)
+  check('groups는 groupByMistakeType과 동일 순서/개수(MISTAKE_TYPE_ORDER 길이)', summary.groups.length === MISTAKE_TYPE_ORDER.length && summary.groups.every((g, i) => g.type === MISTAKE_TYPE_ORDER[i]))
+  check('groups 합계 === totalPending', summary.groups.reduce((s, g) => s + g.count, 0) === summary.totalPending)
+
+  const empty = summarizeQueue([])
+  check('빈 입력 — totalPending 0, byType 전부 0', empty.totalPending === 0 && Object.values(empty.byType).every((v) => v === 0))
 }
 
 console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n${failures}개 테스트 실패 ❌`)
