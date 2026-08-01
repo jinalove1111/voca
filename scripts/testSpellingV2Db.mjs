@@ -55,7 +55,19 @@ try { await deleteClass(QA_CLASS) } catch { /* 없으면 무시 */ }
 
 try {
   console.log('\n0. QA 반/단어 준비')
-  await createClass(QA_CLASS)
+  // v3.11 보안 락다운(classes/units/words anon SELECT-only) — 첫 쓰기(반
+  // 생성)에서 42501이 나면 예상된 보안 동작이니 정직하게 SKIP(scripts/
+  // testDailyAssignment.mjs P1 커밋 7eb2d64와 동일 관례). 아직 아무것도
+  // 만들어지지 않았으므로 아래 finally의 deleteClass 정리도 건너뛰어도 안전.
+  try {
+    await createClass(QA_CLASS)
+  } catch (err) {
+    if (err?.code === '42501' || /row-level security|permission denied/i.test(err?.message || '')) {
+      console.log(`\nSKIP(락다운 환경 — anon 쓰기 불가, admin-content-write pin 경로로 재검증 필요). 원본 에러: ${err.message}`)
+      process.exit(0)
+    }
+    throw err
+  }
   await setClassWords(QA_CLASS, [{ word: 'order', meaning: '주문하다' }], QA_UNIT)
   await refreshWordLibrary()
   const qaWord = (getClassWords(QA_CLASS, QA_UNIT) || [])[0]

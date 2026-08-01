@@ -30,7 +30,21 @@ function check(label, cond) {
 }
 
 console.log('\n0. 픽스처 준비 (QA_TestClassA/B, 각각 학생 1명 + 단어 2개)')
-await createClass('QA_TestClassA')
+// v3.11 보안 락다운(classes/units/words anon SELECT-only) 적용 환경에서는
+// anon 쓰기(반 생성)가 42501(permission denied)로 막힌다 — 정확히 의도한
+// 보안 동작이지 테스트 실패가 아니다. 첫 쓰기(픽스처 준비) 단계에서
+// 감지되므로 그 이후 전부(이 스크립트가 검증하려는 반 격리 자체)를 아직
+// 못 검증할 뿐 — 가짜 PASS 대신 정직하게 SKIP한다(scripts/testDailyAssignment.mjs
+// P1 커밋 7eb2d64와 동일 관례).
+try {
+  await createClass('QA_TestClassA')
+} catch (err) {
+  if (err?.code === '42501' || /row-level security|permission denied/i.test(err?.message || '')) {
+    console.log(`\nSKIP(락다운 환경 — anon 쓰기 불가, admin-content-write pin 경로로 재검증 필요). 원본 에러: ${err.message}`)
+    process.exit(0)
+  }
+  throw err
+}
 await createClass('QA_TestClassB')
 await setClassWords('QA_TestClassA', [{ word: 'apple', meaning: '사과' }, { word: 'banana', meaning: '바나나' }], 'Unit 1')
 await setClassWords('QA_TestClassB', [{ word: 'tiger', meaning: '호랑이' }, { word: 'lion', meaning: '사자' }], 'Unit 1')

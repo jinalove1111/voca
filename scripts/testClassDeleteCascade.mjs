@@ -52,7 +52,23 @@ const className = `QA_DeleteCascadeTest_${stamp}`
 let cls, student
 
 try {
-  ;[cls] = await post('classes', { name: className })
+  // v3.11 보안 락다운(classes/units/words anon SELECT-only) — 첫 쓰기(반
+  // 생성)에서 42501이 나면 예상된 보안 동작이니 정직하게 SKIP(scripts/
+  // testDailyAssignment.mjs P1 커밋 7eb2d64와 동일 관례). 아직 아무것도
+  // 만들어지지 않았으므로 아래 finally의 정리도 건너뛰어도 안전.
+  try {
+    ;[cls] = await post('classes', { name: className })
+  } catch (err) {
+    if (/42501|row-level security|permission denied/i.test(err?.message || '')) {
+      console.log(`\nSKIP(락다운 환경 — anon 쓰기 불가, admin-content-write pin 경로로 재검증 필요). 원본 에러: ${err.message}`)
+      // fetch(undici) 소켓이 닫히는 중에 곧바로 process.exit()하면 Windows +
+      // Node 24에서 libuv assertion으로 죽는다(scripts/testEntranceTestDb.mjs의
+      // 기존 SKIP 경로와 동일 원인/해결) — 한 틱 쉬고 종료.
+      await new Promise((r) => setTimeout(r, 300))
+      process.exit(0)
+    }
+    throw err
+  }
   console.log(`반 생성: ${cls.id}`)
 
   // Prefer: return=representation은 삽입된 행 전 컬럼(select *)을 돌려주는데,

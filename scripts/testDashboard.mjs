@@ -22,7 +22,18 @@ function check(label, cond) {
 const CLASS = 'QA_DashboardTest'
 
 console.log('\n1. 테스트용 반/학생 2명 준비 + 서로 다른 진행도 동기화')
-await createClass(CLASS)
+// v3.11 보안 락다운(classes/units/words anon SELECT-only) — 첫 쓰기(반
+// 생성)에서 42501이 나면 예상된 보안 동작이니 정직하게 SKIP(scripts/
+// testDailyAssignment.mjs P1 커밋 7eb2d64와 동일 관례).
+try {
+  await createClass(CLASS)
+} catch (err) {
+  if (err?.code === '42501' || /row-level security|permission denied/i.test(err?.message || '')) {
+    console.log(`\nSKIP(락다운 환경 — anon 쓰기 불가, admin-content-write pin 경로로 재검증 필요). 원본 에러: ${err.message}`)
+    process.exit(0)
+  }
+  throw err
+}
 // P0(2026-07-15): addStudent가 id(UUID)를 반환 — fetchDashboardData 등
 // 전부 id 배열을 받는다(예전엔 이름 배열).
 const A = await addStudent('QA_DashKidA', CLASS, 'Unit 1')

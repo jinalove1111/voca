@@ -29,7 +29,20 @@ check('wrongAnswerRepeatCount === 3 (기본값)', unknown.wrongAnswerRepeatCount
 
 const CLASS = 'QA_SpellingSettingsTest'
 console.log('\n2. 실제 반 생성 후 기본값 확인 (SQL 실행 전이면 여기까지도 전부 꺼짐이어야 함)')
-await createClass(CLASS)
+// v3.11 보안 락다운(classes/units/words anon SELECT-only) — 반 생성에서
+// 42501이 나면 예상된 보안 동작이니 정직하게 SKIP(scripts/
+// testDailyAssignment.mjs P1 커밋 7eb2d64와 동일 관례). 위 1번(존재하지
+// 않는 반의 안전한 기본값)은 쓰기와 무관해 이미 검증됐으므로 유지.
+try {
+  await createClass(CLASS)
+} catch (err) {
+  if (err?.code === '42501' || /row-level security|permission denied/i.test(err?.message || '')) {
+    console.log(`\nSKIP(락다운 환경 — anon 쓰기 불가, admin-content-write pin 경로로 재검증 필요). 원본 에러: ${err.message}`)
+    console.log('   (위 1번 조회 기반 검증은 그대로 통과함)')
+    process.exit(0)
+  }
+  throw err
+}
 const before = getClassSettings(CLASS)
 check('신규 반도 기본값(꺼짐)으로 시작', before.spellingTestEnabled === false && before.spellingHintEnabled === false)
 
