@@ -3,9 +3,21 @@ import { playSuccessSound } from '../utils/speech'
 import { pickReaction, getReactionById } from '../utils/paulReactions'
 import HeroReaction from './HeroReaction'
 
+// Fisher-Yates — Array.prototype.sort(() => Math.random()-0.5)는 정렬
+// 알고리즘 구현에 따라 특정 원소가 앞/뒤에 쏠리는 편향이 생긴다(브라우저마다
+// 다름). 이 셔플은 균등 분포를 보장하며 원본 배열은 변경하지 않는다.
+function shuffle(arr) {
+  const a = arr.slice()
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
 function makeOptions(w, allWords) {
-  const others = allWords.filter(x => x.id !== w.id).sort(() => Math.random() - 0.5).slice(0, 3)
-  const opts = [w.meaning, ...others.map(x => x.meaning)].sort(() => Math.random() - 0.5)
+  const others = shuffle(allWords.filter(x => x.id !== w.id)).slice(0, 3)
+  const opts = shuffle([w.meaning, ...others.map(x => x.meaning)])
   return { opts, correctIdx: opts.indexOf(w.meaning) }
 }
 
@@ -57,13 +69,16 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
     setClearPaul(null)
   }
 
-  // 정답/오답을 1.5~2초 보여준 뒤 자동으로 다음 문제로 — 클리어(보스 단어
-  // 완전 정복) 화면은 별도 축하 순간이라 자동 넘김 대상에서 제외, 계속
-  // "계속하기" 버튼으로 직접 넘어가게 둠(기존 동작 유지).
+  // 정답은 1.5초 후 자동으로 다음 문제로 — 클리어(보스 단어 완전 정복)
+  // 화면은 별도 축하 순간이라 자동 넘김 대상에서 제외, 계속 "계속하기"
+  // 버튼으로 직접 넘어가게 둠(기존 동작 유지). 오답 시 자동 전환 타이머는
+  // 제거(2026-08-02) — 오답 피드백을 다 읽기 전에 넘어가버린다는 지적으로,
+  // 아래 "다음 →" 버튼이 유일한 전진 경로가 되도록 함.
   useEffect(() => {
     if (selected === null || didClear) return
     const isCorrect = selected === correctIdx
-    const t = setTimeout(handleNext, isCorrect ? 1500 : 2000)
+    if (!isCorrect) return
+    const t = setTimeout(handleNext, 1500)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, didClear])

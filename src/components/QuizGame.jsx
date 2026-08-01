@@ -8,14 +8,26 @@ import HeroReaction from './HeroReaction'
 
 const KO_PRAISE = [
   '야르~ 정답!', '야르! 이건 그냥 맞추네!', '와 대박! 단어 고수인데?',
-  '폼 미쳤다!', '레전드! 또 맞췄어!', '이야~ 오늘 컨디션 좋은데?',
-  '와우! 영어 천재 등장!', '개꿀! 정답이야!', '좋아! 경험치 획득!', '최고다! 다음 문제 가자!',
+  '완전 잘했어!', '레전드! 또 맞췄어!', '이야~ 오늘 컨디션 좋은데?',
+  '와우! 영어 천재 등장!', '아주 잘했어! 정답이야!', '좋아! 경험치 획득!', '최고다! 다음 문제 가자!',
 ]
+
+// Fisher-Yates — Array.prototype.sort(() => Math.random()-0.5)는 정렬
+// 알고리즘 구현에 따라 특정 원소가 앞/뒤에 쏠리는 편향이 생긴다(브라우저마다
+// 다름). 이 셔플은 균등 분포를 보장하며 원본 배열은 변경하지 않는다.
+function shuffle(arr) {
+  const a = arr.slice()
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
 
 function makeOptions(correctWord, allWords) {
   const others = allWords.filter(w => w.id !== correctWord.id)
-  const wrong  = others.sort(() => Math.random() - 0.5).slice(0, 3).map(w => w.meaning)
-  const opts   = [correctWord.meaning, ...wrong].sort(() => Math.random() - 0.5)
+  const wrong  = shuffle(others).slice(0, 3).map(w => w.meaning)
+  const opts   = shuffle([correctWord.meaning, ...wrong])
   return { opts, correctIdx: opts.indexOf(correctWord.meaning) }
 }
 
@@ -230,8 +242,8 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
   const [pool] = useState(() => {
     const all  = classWords && classWords.length > 0 ? classWords : []
     const base = initWord
-      ? [initWord, ...all.filter(w => w.id !== initWord.id).sort(() => Math.random() - 0.5).slice(0, 9)]
-      : all.slice().sort(() => Math.random() - 0.5).slice(0, 10)
+      ? [initWord, ...shuffle(all.filter(w => w.id !== initWord.id)).slice(0, 9)]
+      : shuffle(all).slice(0, 10)
     return buildQuiz(base, all)
   })
 
@@ -278,11 +290,14 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
     if (correct) {
       const msg = KO_PRAISE[Math.floor(Math.random() * KO_PRAISE.length)]
       setPraise(msg)
-      setCanRec(false)
       onMarkQuizSolved()
       setShowP(true)
-      // Play praise — activate record button AFTER it finishes
-      speakPraise('Yar! Correct!', () => setCanRec(true), 'quiz-praise')
+      // 칭찬 음성은 배경 재생이므로 녹음 버튼을 기다리게 할 필요 없음 —
+      // 별 지급은 handlePronSuccess -> markPronunciationOk의 dedupKey
+      // (`pronunciation:${wordId}:${오늘}`)가 전담하므로 버튼을 언제
+      // 눌러도 보상 경제에는 영향이 없다.
+      setCanRec(true)
+      speakPraise('Yar! Correct!', undefined, 'quiz-praise')
     } else {
       setPraise('')
       onAddMission(current.word.id)
@@ -320,16 +335,11 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
     setAnswerPaul(null)
   }
 
-  // Auto-advance on a WRONG answer only — a correct answer offers a bonus
-  // pronunciation recording (PronStep) for +1 star, so auto-advancing there
-  // would yank the screen away mid-recording and cost the student that star.
-  // Wrong answers have nothing further to do on this screen, so it's safe.
-  useEffect(() => {
-    if (!isAnswered || isCorrect) return
-    const t = setTimeout(() => handleNext(), 2000)
-    return () => clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAnswered, isCorrect])
+  // 오답 시 자동으로 다음 문제로 넘어가던 2초 타이머 제거(2026-08-02) —
+  // 오답 피드백을 다 읽기 전에 화면이 넘어가버린다는 지적으로, 아래
+  // "다음 문제 →" 버튼(항상 표시됨)이 유일한 전진 경로가 되도록 함.
+  // 정답 시에는 발음 녹음(PronStep)을 위해 원래도 자동 전환이 없었으므로
+  // 그 쪽 동작은 변경 없음.
 
   const handleRestart = () => {
     window.speechSynthesis?.cancel()
