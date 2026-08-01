@@ -1,6 +1,20 @@
 # COMPLETE REPORT — 쓰기 오토파일럿 활성화 + Edge Function 배포 검증
 
-> **[2026-08-02 갱신] v3_11/v3_13 실행 검증 최종 상태**
+> **[2026-08-02 최종] 전 항목 완료 — v3.11 락다운 완성 + 유닛 메타 저장 복구**
+>
+> - **v3.11 락다운 완성**: 구세대 정책 3개(`public read/write classes/units/
+>   words`) drop 완료 — classes/units/words는 anon SELECT-only. RLS 4테이블
+>   enabled, ALL 정책 제거를 운영자가 pg_policies로 직접 확인.
+> - **유닛 메타 저장 버그 해결·재테스트 통과**: 원인은 락다운 부작용(anon
+>   UPDATE 0행 → "찾을 수 없음" 오탐) + 수정 커밋 미푸시 상태에서 프로덕션
+>   테스트. `unit.meta.update` 액션 추가(운영자 재배포 완료) + adminPin
+>   듀얼패스 배선(`7067fbf`) + push 후: ok:true, position/차시/학습목표
+>   저장·재조회 정상 확인(운영자 실측). 임시 디버그 로그는 revert로 제거.
+> - **후속 필요 1건(코드)**: v3.11 활성화로 verify의 anon-쓰기 스크립트
+>   (testMultiClass/testRenameClass/testClassDeleteCascade 등)가 다음
+>   실행부터 42501로 실패 예정 — 정직 SKIP 래퍼 적용(기존 P1 패턴) 대기.
+>
+> **[2026-08-02 갱신] v3_11/v3_13 실행 검증 상태 (경위 기록)**
 >
 > - **v3_13**: ✅ 완전 적용 — 테이블 5종·컬럼·개방 RLS 전항 일치, 재실행
 >   부작용 0(F1 가드 정상). 라이브 하네스 41단언 PASS(생성→승인→학생용
