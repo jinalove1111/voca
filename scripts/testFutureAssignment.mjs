@@ -35,7 +35,19 @@ const tomorrow = () => {
 }
 
 console.log('\n1. 준비')
-await createClass(CLASS)
+// v3.11 보안 락다운(classes/units/words anon SELECT-only)이 v3.12보다 먼저
+// 걸려 createClass 자체가 42501로 막힌다 — 아래 2번의 setAssignmentForDate
+// SKIP 래핑까지 도달하지 못하므로, 락다운이 실제로 막는 첫 쓰기(픽스처
+// 생성)로 SKIP 지점을 당긴다(scripts/testRenameClass.mjs와 동일 관례).
+try {
+  await createClass(CLASS)
+} catch (err) {
+  if (err?.code === '42501' || /row-level security|permission denied/i.test(err?.message || '')) {
+    console.log(`\nSKIP(락다운 환경 — anon 쓰기 불가, admin-content-write pin 경로로 재검증 필요). 원본 에러: ${err.message}`)
+    process.exit(0)
+  }
+  throw err
+}
 await setClassWords(CLASS, [
   { word: 'dog', meaning: '개' },
   { word: 'cat', meaning: '고양이' },
