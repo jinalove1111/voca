@@ -39,5 +39,20 @@ export default defineConfig(({ mode, command }) => {
   return {
     plugins: [react(), ...(command === 'serve' ? [adminPinDevMiddleware(env)] : [])],
     base: '/',
+    build: {
+      rollupOptions: {
+        output: {
+          // Vendor 청크 분리(2026-08-02, 학생 경험 폴리시 Wave 5) — react/
+          // react-dom과 @supabase는 앱 코드가 바뀌어도 거의 안 바뀌는 의존성
+          // 이라, 별도 청크로 빼두면 배포마다 브라우저가 다시 받아야 하는
+          // 캐시 무효화 범위가 앱 코드 청크로만 좁아진다. 청크 분류 기준만
+          // 바꾸는 순수 빌드 설정 — 런타임 동작/기능은 전혀 안 바뀜.
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom'],
+            'vendor-supabase': ['@supabase/supabase-js'],
+          },
+        },
+      },
+    },
   }
 })
