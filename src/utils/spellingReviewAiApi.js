@@ -535,8 +535,15 @@ export async function executeDismiss(row) {
 // 적용(오토파일럿은 티어별로 별도 executeBulkAccept 호출을 하므로 배치
 // 하나 안에서는 항상 단일 라벨). 기존 호출부(수동 버튼)는 이 인자를 넘기지
 // 않아 동작이 그대로다.
-export async function executeBulkAccept(rows, { mode = 'answer_only', duplicatesByRowId = new Map(), adminPin, createdBy } = {}) {
+//
+// onProgress(선택, 2026-08-01 P3 Commit 4, additive) — 매 행 처리 직후
+// {completed, total}로 호출된다(관리자 화면의 "N/전체" 진행률 표시용).
+// 기존 호출부(오토파일럿 등)는 이 인자를 넘기지 않으므로 동작이 완전히
+// 그대로다 — 시그니처 끝에 옵션 하나 추가일 뿐, 순서/개수 의존적인 호출은
+// 없음(전부 named 옵션 객체).
+export async function executeBulkAccept(rows, { mode = 'answer_only', duplicatesByRowId = new Map(), adminPin, createdBy, onProgress } = {}) {
   const results = []
+  const total = rows.length
   for (const row of rows) {
     try {
       await executeAccept(row, { mode, duplicateRows: duplicatesByRowId.get(row.id) || [], adminPin, createdBy })
@@ -544,12 +551,14 @@ export async function executeBulkAccept(rows, { mode = 'answer_only', duplicates
     } catch (err) {
       results.push({ id: row.id, ok: false, error: err?.message || String(err) })
     }
+    onProgress?.({ completed: results.length, total })
   }
   return results
 }
 
-export async function executeBulkDismiss(rows) {
+export async function executeBulkDismiss(rows, { onProgress } = {}) {
   const results = []
+  const total = rows.length
   for (const row of rows) {
     try {
       await executeDismiss(row)
@@ -557,6 +566,7 @@ export async function executeBulkDismiss(rows) {
     } catch (err) {
       results.push({ id: row.id, ok: false, error: err?.message || String(err) })
     }
+    onProgress?.({ completed: results.length, total })
   }
   return results
 }
@@ -638,4 +648,64 @@ export async function revokeAutoAcceptedVariant(wordId, answerToRemove, adminPin
   const targetKey = String(answerToRemove ?? '').trim().toLowerCase().replace(/\s+/g, '')
   const next = current.filter((m) => String(m ?? '').trim().toLowerCase().replace(/\s+/g, '') !== targetKey)
   await setWordAcceptedMeanings(wordId, next, adminPin)
+}
+
+// ── 2026-08-01(P3 Commit 4) — "휴지통 보기"(무시된 답안 복원) ──────────────
+//
+// spellingReviewApi.js의 resolveSpellingReview(id, status)는 status
+// 화이트리스트가 ['accepted', 'dismissed']뿐이라 'pending'으로 되돌리는
+// 용도로 쓸 수 없다(§ spellingReviewApi.js:141) — 그 파일은 이번 작업
+// 소유 파일이 아니라(implementer 파일당 소유 원칙, 헌법 규칙 16) 화이트
+// 리스트를 넓히지 않는다. 대신 spelling_review_queue 테이블 자체에는
+// status에 대한 DB CHECK 제약이 없고(supabase_v2_0_spelling_mixed.sql
+// 실측 확인, §41행 "status text not null default 'pending'"), anon/
+// authenticated에 테이블 전체 select/insert/update/delete가 이미 GRANT돼
+// 있어(같은 파일 §64행) 여기서 직접 업데이트해도 새 GRANT가 필요 없다
+// (헌법 규칙 10과 무관 — students 테이블이 아니라 이 기존 GRANT 범위
+// 안이라 안전).
+function isMissingQueueRelationError(err) {
+  const code = err?.code
+  return code === '42P01' || code === 'PGRST205' || /schema cache|does not exist|relation .* does not exist/i.test(err?.message || '')
+}
+
+// 최근 무시된 답안 목록 — spelling_review_queue에는 status_changed_at 같은
+// "처리 시각" 컬럼이 없어(스키마 실측 확인) created_at(제출 시각) 기준
+// 최신순으로만 정렬한다 — "최근 무시 처리된 순"이 아니라 "최근 제출된 것
+// 중 무시된 것"이라는 점을 호출부(UI)가 정직하게 표기해야 한다.
+export async function fetchRecentDismissedSpellingReviews({ limit = 50 } = {}) {
+  try {
+    const { data, error } = await supabase
+      .from('spelling_review_queue')
+      .select('id,word_id,submitted_answer,created_at,words(word,meaning,accepted_meanings)')
+      .eq('status', 'dismissed')
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    if (error) {
+      if (!isMissingQueueRelationError(error)) console.warn('[spellingReviewAiApi] 최근 무시 목록 조회 실패:', error.message || error)
+      return []
+    }
+    return (data || []).map((r) => ({
+      id: r.id,
+      wordId: r.word_id,
+      word: r.words?.word || '(삭제된 단어)',
+      meaning: r.words?.meaning || '',
+      acceptedMeanings: Array.isArray(r.words?.accepted_meanings) ? r.words.accepted_meanings : [],
+      submittedAnswer: r.submitted_answer,
+      createdAt: r.created_at,
+    }))
+  } catch (err) {
+    if (!isMissingQueueRelationError(err)) console.warn('[spellingReviewAiApi] 최근 무시 목록 조회 실패:', err?.message || err)
+    return []
+  }
+}
+
+// 복원 — status를 'pending'으로 직접 되돌려 검토 큐에 다시 노출시킨다.
+// resolveSpellingReview의 화이트리스트를 우회하는 게 아니라(그 함수는 여전히
+// accepted/dismissed 전용으로 그대로 둔다), 이 파일이 소유한 별도 함수로
+// "pending 복원"이라는 다른 액션을 구현한 것 — 두 함수는 서로 다른 계약을
+// 가진 별개 API다. 에러는 던짐(호출부 alert, § 쓰기 액션은 조용히 실패
+// 금지 원칙).
+export async function restorePendingSpellingReview(id) {
+  const { error } = await supabase.from('spelling_review_queue').update({ status: 'pending' }).eq('id', id)
+  if (error) throw error
 }

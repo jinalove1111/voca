@@ -12,6 +12,8 @@ import {
   getTodaySpentUsd, recordEstimatedSpendUsd,
   // 2026-08-01(Commit 4) — 오토파일럿 철회 안전밸브("최근 자동 인정").
   fetchRecentAutoAcceptedVariants, revokeAutoAcceptedVariant,
+  // 2026-08-01(P3 Commit 4) — "휴지통 보기"(무시된 답안 복원).
+  fetchRecentDismissedSpellingReviews, restorePendingSpellingReview,
 } from '../../utils/spellingReviewAiApi'
 import {
   selectRows, findDuplicateAnswerRows, selectCertainAccepts, selectAllDuplicateGroupRows, groupRowsByAnswer,
@@ -124,6 +126,7 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
   const [sortDir, setSortDir] = useState('desc')
   const [groupView, setGroupView] = useState(false) // "동일 답안 묶어 보기"
   const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState(null) // {completed, total} | null — 2026-08-01 P3 Commit 4
   const [doneSummary, setDoneSummary] = useState('') // "완료 요약" 배너
   const [confirmAction, setConfirmAction] = useState(null) // {title, kind, summary, count, run}
 
@@ -176,6 +179,64 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
       alert('철회 처리 중 오류가 발생했어요: ' + (err.message || err))
     } finally {
       setRevokeBusyId(null)
+    }
+  }
+
+  // 2026-08-01(P3 Commit 4) — "휴지통 보기"(최근 무시된 답안 + 복원). "최근
+  // 자동 인정"과 같은 관례(항상 조회 시도, 0건이면 숨김) — 다만 이건
+  // 오토파일럿과 무관하게 수동 "무시"를 포함한 모든 dismissed 행을 대상.
+  const [recentDismissed, setRecentDismissed] = useState([])
+  const [showTrash, setShowTrash] = useState(false)
+  const [restoreBusyId, setRestoreBusyId] = useState(null)
+  const loadRecentDismissed = async () => setRecentDismissed(await fetchRecentDismissedSpellingReviews({ limit: 50 }))
+  useEffect(() => { loadRecentDismissed() }, [])
+
+  const restoreDismissed = async (item) => {
+    setRestoreBusyId(item.id)
+    try {
+      await restorePendingSpellingReview(item.id)
+      setRecentDismissed((prev) => prev.filter((x) => x.id !== item.id))
+      await load()
+      onChanged?.()
+    } catch (err) {
+      alert('복원 처리 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setRestoreBusyId(null)
+    }
+  }
+
+  // 2026-08-01(P3 Commit 4) — "마지막 배치 되돌리기(세션 내)". accept/synonym
+  // 배치가 성공하면 그 대상 행(원본, executeBulkAccept 호출 "전"의 row 객체
+  // — wordId/submittedAnswer만 있으면 충분)을 여기 담아둔다. 되돌리기는
+  // revokeAutoAcceptedVariant(기존, "최근 자동 인정" 철회와 동일 함수)를
+  // 재사용 — 이 함수는 애초에 "누가 추가했는지"와 무관하게 words.
+  // accepted_meanings에서 특정 답안 문자열만 제거하므로 수동 배치 인정에도
+  // 그대로 쓸 수 있다(재구현 아님, § 폴백 보존). dismiss 배치는 대상이 아님
+  // (accepted_meanings를 건드리지 않는 액션이라 "되돌릴" 대상 자체가 없음).
+  // 이 상태는 컴포넌트 로컬(세션/새로고침 시 사라짐 — "세션 내" 요구사항
+  // 그대로).
+  const [lastAcceptedBatch, setLastAcceptedBatch] = useState(null) // {rows, label, count} | null
+  const [revertingLastBatch, setRevertingLastBatch] = useState(false)
+
+  const revertLastBatch = async () => {
+    if (!lastAcceptedBatch) return
+    setRevertingLastBatch(true)
+    try {
+      for (const row of lastAcceptedBatch.rows) {
+        try {
+          await revokeAutoAcceptedVariant(row.wordId, row.submittedAnswer, adminPin)
+        } catch (err) {
+          // 개별 실패는 계속 진행(부분 성공 허용) — 되돌리기 자체도 "일괄
+          // 액션"이라 하나 실패로 전체를 막지 않는다(§ executeBulkAccept와
+          // 동일 원칙).
+          console.warn('[SpellingReviewQueuePanel] 되돌리기 중 일부 실패:', row.word, err?.message || err)
+        }
+      }
+      setDoneSummary(`마지막 배치(${lastAcceptedBatch.label} ${lastAcceptedBatch.count}건) 되돌리기 완료 — 검토 상태 자체는 그대로예요(인정 답안 목록에서만 제거됨)`)
+      setLastAcceptedBatch(null)
+      onChanged?.()
+    } finally {
+      setRevertingLastBatch(false)
     }
   }
 
@@ -604,13 +665,24 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
     if (targetRows.length === 0) return
     setBulkBusy(true)
     setDoneSummary('')
+    setBulkProgress({ completed: 0, total: targetRows.length })
     try {
+      const onProgress = (p) => setBulkProgress(p)
       const results = kind === 'dismiss'
-        ? await executeBulkDismiss(targetRows)
-        : await executeBulkAccept(targetRows, { mode: kind === 'synonym' ? 'synonym' : 'answer_only', adminPin })
+        ? await executeBulkDismiss(targetRows, { onProgress })
+        : await executeBulkAccept(targetRows, { mode: kind === 'synonym' ? 'synonym' : 'answer_only', adminPin, onProgress })
       const summary = summarizeBulkResults(results)
       const label = kind === 'dismiss' ? '무시' : kind === 'synonym' ? '동의어로 저장' : '인정'
       setDoneSummary(`${label} ${summary.ok}건 완료${summary.failed > 0 ? `, 실패 ${summary.failed}건` : ''}`)
+      // 2026-08-01(P3 Commit 4) — "마지막 배치 되돌리기" 대상 갱신. accept/
+      // synonym이 1건 이상 성공했을 때만 기록(dismiss는 되돌리기 대상 아님
+      // — accepted_meanings를 안 건드리는 액션이라 revokeAutoAcceptedVariant로
+      // 되돌릴 게 없음). 원본 targetRows(호출 "전" row 객체)를 그대로 담아둔다
+      // — executeBulkAccept 이후 load()로 rows가 갱신돼도 이 값은 이미 캡처된
+      // 스냅샷이라 영향 없음.
+      if (kind !== 'dismiss' && summary.ok > 0) {
+        setLastAcceptedBatch({ rows: targetRows.slice(), label, count: summary.ok })
+      }
       await load()
       onChanged?.()
       setSelectedIds(new Set())
@@ -618,6 +690,7 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
       alert('일괄 처리 중 오류가 발생했어요: ' + (err.message || err))
     } finally {
       setBulkBusy(false)
+      setBulkProgress(null)
     }
   }
 
@@ -750,7 +823,52 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
         </details>
       )}
 
+      {/* 2026-08-01(P3 Commit 4) — 마지막 배치(accept/synonym) 되돌리기.
+          세션 내(컴포넌트 로컬 상태) 1단계 undo — 되돌리기를 누르거나 새
+          배치를 실행하면 사라진다. */}
+      {lastAcceptedBatch && (
+        <div className="bg-amber-50 rounded-xl p-3 mb-3 text-xs flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-amber-700 font-bold">
+            방금 "{lastAcceptedBatch.label}" {lastAcceptedBatch.count}건 처리됨 — 실수로 처리했다면 되돌릴 수 있어요.
+          </span>
+          <button onClick={revertLastBatch} disabled={revertingLastBatch}
+            className="bg-white border-2 border-amber-300 text-amber-700 font-bold px-2 py-1 rounded-lg btn-press disabled:opacity-40">
+            {revertingLastBatch ? '되돌리는 중...' : '마지막 배치 되돌리기'}
+          </button>
+        </div>
+      )}
+
+      {/* 2026-08-01(P3 Commit 4) — 휴지통 보기(무시된 답안 복원). "최근 자동
+          인정"과 동일한 관례 — 0건이면 조용히 숨김. */}
+      {recentDismissed.length > 0 && (
+        <details className="bg-gray-50 rounded-xl p-3 mb-3 text-xs" open={showTrash} onToggle={(e) => setShowTrash(e.target.open)}>
+          <summary className="cursor-pointer select-none font-black text-gray-600">🗑️ 휴지통 보기(무시된 답안, {recentDismissed.length}건)</summary>
+          <p className="text-gray-400 mt-1 mb-2">최근 제출 순으로 보여줘요(무시 처리 시각이 아니라 학생 제출 시각 기준). 잘못 무시했다면 복원하세요 — 검토 큐에 다시 대기 상태로 올라와요.</p>
+          <div className="space-y-1.5">
+            {recentDismissed.map((item) => (
+              <div key={item.id} className="bg-white rounded-lg p-2 flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-gray-700">
+                  <span className="font-black">{item.word}</span> · 학생 답: "{item.submittedAnswer}"
+                </span>
+                <button onClick={() => restoreDismissed(item)} disabled={restoreBusyId === item.id}
+                  className="bg-white border-2 border-indigo-200 text-indigo-600 font-bold px-2 py-1 rounded-lg btn-press disabled:opacity-40">
+                  복원
+                </button>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
       {doneSummary && <p className="text-xs font-bold text-green-600 bg-green-50 rounded-xl p-2 mb-2">✅ {doneSummary}</p>}
+      {/* 2026-08-01(P3 Commit 4) — 일괄 처리 진행률(N/전체). executeBulkAccept/
+          executeBulkDismiss의 신규 onProgress 콜백을 그대로 반영(기존
+          루프/시그니처는 안 바뀜, § additive 옵션). */}
+      {bulkBusy && bulkProgress && (
+        <p className="text-xs font-bold text-indigo-600 bg-indigo-50 rounded-xl p-2 mb-2">
+          처리 중... {bulkProgress.completed}/{bulkProgress.total}건
+        </p>
+      )}
 
       {loading ? (
         <p className="text-gray-400 text-sm">불러오는 중...</p>
@@ -1005,6 +1123,34 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
             )}
           </div>
         </>
+      )}
+
+      {/* 2026-08-01(P3 Commit 4) — 선택 항목 sticky 하단 액션바. 체크박스는
+          aiEnabled일 때만 렌더되므로(§ renderRow) 이 바도 같은 조건에서만
+          의미가 있다. 기존 핸들러(requestBulkConfirm/clearSelection) 그대로
+          재사용 — 새 액션/계약 추가 없음. */}
+      {aiEnabled && selectedIds.size > 0 && (
+        <div className="sticky bottom-2 z-40 mt-3">
+          <div className="bg-gray-900/95 text-white rounded-2xl p-3 flex items-center justify-between gap-2 flex-wrap shadow-lg">
+            <span className="text-sm font-black">선택 {selectedIds.size}건</span>
+            <div className="flex gap-1.5 flex-wrap">
+              <button onClick={() => requestBulkConfirm('선택한 답안을 인정합니다', selectedRows, 'accept')}
+                disabled={bulkBusy}
+                className="bg-green-500 hover:bg-green-600 text-white font-black px-3 py-1.5 rounded-lg text-xs btn-press disabled:opacity-40">
+                인정
+              </button>
+              <button onClick={() => requestBulkConfirm('선택한 답안을 무시합니다', selectedRows, 'dismiss')}
+                disabled={bulkBusy}
+                className="bg-white/10 border-2 border-white/30 text-white font-bold px-3 py-1.5 rounded-lg text-xs btn-press disabled:opacity-40">
+                무시
+              </button>
+              <button onClick={clearSelection} disabled={bulkBusy}
+                className="bg-white/10 border-2 border-white/30 text-white font-bold px-3 py-1.5 rounded-lg text-xs btn-press disabled:opacity-40">
+                해제
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {confirmAction && (
