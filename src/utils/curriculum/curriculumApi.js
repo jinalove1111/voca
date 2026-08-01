@@ -259,17 +259,33 @@ export async function updateUnitMeta(id, fields, adminPin) {
   if ('objectives' in f) patch.objectives = f.objectives ? String(f.objectives).trim() : null
   if (Object.keys(patch).length === 0) return null
 
+  // TEMP DEBUG — remove after 유닛 저장 버그 확정 (2026-08-02 유닛 메타 저장
+  // 계층 추적: stale bundle / server not-found / payload-key 버그 판별용)
+  console.log('[unitMeta] branch=', adminPin ? 'pin' : 'anon', 'unitId=', id, 'patchKeys=', Object.keys(patch))
+
   if (adminPin) {
     let data
     try {
       data = await callAdminContentWrite('unit.meta.update', { unitId: id, ...f }, adminPin)
+      // TEMP DEBUG — remove after 유닛 저장 버그 확정
+      console.log('[unitMeta] pin 경로 서버 응답 data=', data)
     } catch (err) {
+      // TEMP DEBUG — remove after 유닛 저장 버그 확정
+      console.log('[unitMeta] pin 경로 서버 오류=', err?.message || err)
       if (/unknown action/i.test(err?.message || '')) {
-        throw new Error('admin-content-write 함수가 구버전이에요 — 재배포 필요: npx supabase@latest functions deploy admin-content-write --project-ref azsjthtdjfpnctffjfsk')
+        throw new Error('[서버] admin-content-write 함수가 구버전이에요 — 재배포 필요: npx supabase@latest functions deploy admin-content-write --project-ref azsjthtdjfpnctffjfsk')
       }
-      throw err
+      // 이 err는 항상 callAdminContentWrite(Edge Function 응답)에서 온
+      // 것이므로 [서버] 태그 — updateUnitMeta 자체가 만든 로컬 메시지가
+      // 아니다(아래 !data 분기와 구분하기 위함, 이번 디버그 작업 지시).
+      throw new Error(`[서버] ${err?.message || err}`)
     }
-    if (!data) throw new Error('해당 유닛을 찾을 수 없어요.')
+    // data가 falsy인데 여기 도달 — 서버가 ok:true를 반환했는데 data가
+    // 없는 경우로, handleUnitMetaUpdate 구현상 정상 성공 시엔 항상 data를
+    // 반환하므로 사실상 도달 불가능한 방어 분기다(서버 쪽 별도 not-found
+    // throw는 위 catch에서 [서버] 태그로 이미 처리됨). 그래도 방어적으로
+    // 남겨두되 [클라이언트] 태그로 출처를 분명히 한다.
+    if (!data) throw new Error('[클라이언트] 해당 유닛을 찾을 수 없어요.')
     return { id: data.id, name: data.name, position: data.position ?? null, lessonNo: data.lesson_no ?? null, objectives: data.objectives || null }
   }
 
@@ -278,7 +294,7 @@ export async function updateUnitMeta(id, fields, adminPin) {
     .select('id,name,position,lesson_no,objectives').maybeSingle()
   if (error) throwIfMetaMissing(error)
   if (!data) {
-    throw new Error('유닛 메타를 저장하지 못했어요 — 락다운 이후 관리자 인증 경로가 필요해요(관리자 화면 새로고침 후 재로그인). 함수가 "unknown action"을 반환하면 admin-content-write 재배포가 필요합니다.')
+    throw new Error('[클라이언트] 유닛 메타를 저장하지 못했어요 — 락다운 이후 관리자 인증 경로가 필요해요(관리자 화면 새로고침 후 재로그인). 함수가 "unknown action"을 반환하면 admin-content-write 재배포가 필요합니다.')
   }
   return { id: data.id, name: data.name, position: data.position ?? null, lessonNo: data.lesson_no ?? null, objectives: data.objectives || null }
 }
