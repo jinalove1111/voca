@@ -344,9 +344,6 @@ function UnitMetaList({ textbookId, busy, setBusy, adminPin }) {
   const handleSave = async (unitId) => {
     const d = drafts[unitId]
     if (!d) return
-    // TEMP DEBUG — remove after 유닛 저장 버그 확정
-    const selectedUnit = units.find((u) => u.id === unitId)
-    console.log('[unitMeta] handleSave 선택된 유닛 id=', unitId, 'name=', selectedUnit?.name)
     setBusy(true)
     try {
       await updateUnitMeta(unitId, {
