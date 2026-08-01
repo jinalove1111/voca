@@ -282,10 +282,15 @@ console.log(`\n1. quiz 모드 ${N}문제 연속 — 매 문제 완전 초기 상
     // (b) 이전 문제의 자동 넘김 타이머가 남아있으면 안 된다
     if (clock.pendingCount() !== 0) { console.log(`  FAIL  문제 ${i + 1}: 잔여 타이머 ${clock.pendingCount()}개`); perWordFail++ }
 
-    // (c) 정답/오답 번갈아 풀기
+    // (c) 정답/오답 번갈아 풀기 — 버튼 텍스트는 "A"+opt(구분자 없음, 실제
+    // 렌더 WordDetail.jsx:513~518과 동일)로 이어붙여지므로, includes()로
+    // 부분일치 검사하면 합성 뜻 '뜻2'/'뜻20'처럼 한쪽이 다른 쪽의 접두어인
+    // 경우 잘못된 버튼을 고를 수 있다(플레이키 원인). 앞 1글자(옵션 라벨
+    // A~D)를 제거한 나머지와 정확히 일치하는지로 판정해 충돌을 없앤다.
     const opts = optionButtons(q.tree)
-    const correctBtn = opts.find(b => textOf(b).includes(w.meaning))
-    const wrongBtn = opts.find(b => !textOf(b).includes(w.meaning))
+    const optText = (b) => textOf(b).slice(1)
+    const correctBtn = opts.find(b => optText(b) === w.meaning)
+    const wrongBtn = opts.find(b => optText(b) !== w.meaning)
     const answerCorrect = i % 2 === 0
     const before = quizAnswerCalls.length
     ;(answerCorrect ? correctBtn : wrongBtn).props.onClick()

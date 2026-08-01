@@ -6,6 +6,11 @@ import InAppBrowserNotice from './InAppBrowserNotice'
 import { pickReaction } from '../utils/paulReactions'
 import HeroReaction from './HeroReaction'
 
+// 개발 중에만 찍히는 진단 로그(녹음 상태 등) — 프로덕션 콘솔을 어지럽히지
+// 않도록 DEV 빌드에서만 활성화. console.error/warn은 그대로 유지(사용자
+// 실기기 문제 진단에 필요).
+const devLog = import.meta.env?.DEV ? console.log : () => {}
+
 const KO_PRAISE = [
   '야르~ 정답!', '야르! 이건 그냥 맞추네!', '와 대박! 단어 고수인데?',
   '완전 잘했어!', '레전드! 또 맞췄어!', '이야~ 오늘 컨디션 좋은데?',
@@ -119,7 +124,7 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess, onAttempt }) {
       .then((blob) => {
         if (settledRef.current) return
         settledRef.current = true
-        console.log('[QuizGame] recorder stop, blob.size =', blob.size)
+        devLog('[QuizGame] recorder stop, blob.size =', blob.size)
         setUrl(URL.createObjectURL(blob))
         setProc(false)
         onAttempt?.()
@@ -161,7 +166,7 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess, onAttempt }) {
   }
 
   const handleClick = () => {
-    console.log('[QuizGame] record button clicked')
+    devLog('[QuizGame] record button clicked')
     if (!canRecord) return   // praise voice still playing
     if (phase === 'listening') { cancelListening(); return }
     if (processing) return

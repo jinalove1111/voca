@@ -20,6 +20,11 @@ function getAudioMimeType() {
   return types.find(t => MediaRecorder.isTypeSupported(t)) || ''
 }
 
+// 개발 중에만 찍히는 진단 로그(STEP1~7 등) — 프로덕션 콘솔을 어지럽히지
+// 않도록 DEV 빌드에서만 활성화. console.error/warn은 그대로 유지(사용자
+// 실기기 문제 진단에 필요).
+const devLog = import.meta.env?.DEV ? console.log : () => {}
+
 // ── SpeechBtn ─────────────────────────────────────────────────────────────────
 // onAnyResult fires when: pronunciation success OR tries >= 2 (fail)
 // This lets the parent know it's safe to show a "계속" button.
@@ -66,7 +71,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
   // successful recording is just recording: no accuracy grading, no
   // pass/fail, just "here's what you sound like, compare it yourself."
   const startListen = () => {
-    console.log('[WordDetail] startRecording called')
+    devLog('[WordDetail] startRecording called')
     setPhase('listening')
     setUrl(null)
     setMsg('')
@@ -77,7 +82,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
     const finish = (nextPhase, message, { countTry = false, success = false } = {}) => {
       if (settledRef.current) return
       settledRef.current = true
-      console.log('[WordDetail] STEP7 Success or Fail:', nextPhase)
+      devLog('[WordDetail] STEP7 Success or Fail:', nextPhase)
       clearTimeout(hangTimerRef.current)
       try { mrRef.current?.stop?.() } catch {}
       const reaction = pickReaction(success ? 'success' : 'encourage')
@@ -113,8 +118,8 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
     const mimeType = getAudioMimeType()
     getMicStream()
       .then(async (stream) => {
-        console.log('[WordDetail] mic stream received')
-        console.log('[WordDetail] STEP1 Recording Started (maxMs:', maxMs, ')')
+        devLog('[WordDetail] mic stream received')
+        devLog('[WordDetail] STEP1 Recording Started (maxMs:', maxMs, ')')
         let blob
         try {
           // Volume-only auto-stop (no STT/AI) — never ends before minMs
@@ -128,8 +133,8 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
           finish('fail', `녹음 오류 (${err.name}: ${err.message})`, { countTry: true })
           return
         }
-        console.log('[WordDetail] STEP2 Recording Stopped')
-        console.log('[WordDetail] STEP3 Blob Created — blob.size =', blob.size)
+        devLog('[WordDetail] STEP2 Recording Stopped')
+        devLog('[WordDetail] STEP3 Blob Created — blob.size =', blob.size)
         setUrl(URL.createObjectURL(blob))
 
         if (blob.size === 0) {
@@ -137,12 +142,12 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
           return
         }
 
-        console.log('[WordDetail] STEP4 Send blob to server STT')
+        devLog('[WordDetail] STEP4 Send blob to server STT')
         try {
           const heard = await transcribeViaServerSTT(blob)
-          console.log('[WordDetail] STEP5 STT Result:', heard)
+          devLog('[WordDetail] STEP5 STT Result:', heard)
           if (heard) {
-            console.log('[WordDetail] STEP6 Compare — heard:', heard, 'target:', target)
+            devLog('[WordDetail] STEP6 Compare — heard:', heard, 'target:', target)
             setTranscript(heard)
             const ok = heard.toLowerCase().includes(target.toLowerCase())
             if (ok) finish('success', rndMsg(SUCCESS_MSGS), { success: true })
@@ -173,7 +178,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
   // it's genuinely stuck (no event ever arrived), let them cancel and retry
   // immediately instead of waiting out the 6s timeout.
   const cancelListen = () => {
-    console.log('[WordDetail] listening cancelled by tap — retrying')
+    devLog('[WordDetail] listening cancelled by tap — retrying')
     if (settledRef.current) return
     settledRef.current = true
     clearTimeout(hangTimerRef.current)
@@ -183,7 +188,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
   }
 
   const handleClick = () => {
-    console.log('[WordDetail] record button clicked')
+    devLog('[WordDetail] record button clicked')
     if (phase === 'listening') { cancelListen(); return }
     if (phase === 'speaking' || phase === 'success') return
     unlockAudio()

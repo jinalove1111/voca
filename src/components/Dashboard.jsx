@@ -59,6 +59,10 @@ import { trackEvent, EV } from '../utils/productEvents'
 
 const GOAL = 5
 const stickerById = (id) => STICKERS.find(s => s.id === id)
+// 개발 중에만 찍히는 진단 로그(마이크 준비, 렌더 시 unit 값 등) — 프로덕션
+// 콘솔을 어지럽히지 않도록 DEV 빌드에서만 활성화. console.error/warn은
+// 그대로 유지(사용자 실기기 문제 진단에 필요).
+const devLog = import.meta.env?.DEV ? console.log : () => {}
 
 // One explicit button to request mic permission up front — a single user
 // gesture, once per app session. After this, every word's "따라 말하기"
@@ -82,9 +86,9 @@ function MicPrimeBtn() {
     setErrMsg('')
     try {
       await getMicStreamOnce()
-      console.log('[Dashboard] mic ready success')
+      devLog('[Dashboard] mic ready success')
       setState('ready')
-      console.log('[Dashboard] micReady state true')
+      devLog('[Dashboard] micReady state true')
     } catch (err) {
       setState('error')
       console.error('[Dashboard] mic prime failed:', err.name, '-', err.message, '\n', err.stack)
@@ -317,7 +321,7 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
     return () => { cancelled = true }
   }, [gamificationEnabled, myHouse?.id, studentId])
   // [진단 로그 5] Home(Dashboard)에서 실제로 표시하는 unit 값 — 렌더될 때마다 확인
-  console.log('[Dashboard] 표시하는 unit 값:', { studentId, studentName, className, unitName })
+  devLog('[Dashboard] 표시하는 unit 값:', { studentId, studentName, className, unitName })
   const classDeleted = className && !getClassNames().includes(className)
   const recentStickers = [...stickerTypes].reverse().slice(0, 8).map(stickerById).filter(Boolean)
 

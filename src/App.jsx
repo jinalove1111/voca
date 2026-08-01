@@ -36,6 +36,11 @@ import { fetchApprovedExamplesForWords } from './utils/curriculum/exampleLibrary
 // 동일한 순수 파생 함수 재사용(새 계산/저장 없음).
 import { starSeedState } from './utils/attachment/paulTown'
 
+// 개발 중에만 찍히는 진단 로그(로그인/Home 진입 시 currentStudent 상태 등)
+// — 프로덕션 콘솔을 어지럽히지 않도록 DEV 빌드에서만 활성화.
+// console.error/warn은 그대로 유지(사용자 실기기 문제 진단에 필요).
+const devLog = import.meta.env?.DEV ? console.log : () => {}
+
 // 2026-07-10 성능 최적화: AdminScreen은 xlsx(엑셀 업로드)를 포함해 학생은
 // 절대 안 쓰는 무거운 라이브러리를 물고 있는데, 정적 import라 학생용
 // 메인 번들에도 항상 같이 딸려가고 있었다(매일 앱을 여는 학생 전원이
@@ -818,7 +823,7 @@ export default function App() {
       // [진단 로그 4-b] 캐시된 로그인(페이지 새로고침으로 재입장)의 경우도
       // 여기서 Home 진입 직전 상태를 확인할 수 있음.
       if (student) {
-        console.log('[App] initWordLibrary 완료 — 캐시된 currentStudent:', {
+        devLog('[App] initWordLibrary 완료 — 캐시된 currentStudent:', {
           id: student.id, name: student.name, class: getStudentClass(student.id), unit: getStudentUnit(student.id),
         })
       }
@@ -865,7 +870,7 @@ export default function App() {
   const handleSelect = async (sel) => {
     try { await refreshStudents() } catch {}
     // [진단 로그 4] Home(Dashboard) 진입 직전 currentStudent + 그 시점의 반/유닛
-    console.log('[App] handleSelect — Home 진입 직전 currentStudent:', {
+    devLog('[App] handleSelect — Home 진입 직전 currentStudent:', {
       id: sel.id, name: sel.name, class: getStudentClass(sel.id), unit: getStudentUnit(sel.id),
     })
     localStorage.setItem(SESSION_KEY, JSON.stringify({ id: sel.id, name: sel.name }))
