@@ -265,6 +265,42 @@ async function handleAssignmentSet(supabase: any, payload: any) {
   return { ok: true }
 }
 
+// unit.meta.update — curriculumApi.js updateUnitMeta()의 anon update
+// (id/position/lesson_no/objectives, curriculumApi.js:244-259 대응) 락다운
+// 이후 경로. why: v3.11 실행으로 units anon 쓰기(UPDATE 포함)가 RLS
+// default-deny로 차단돼, 유닛이 실제로 존재해도 anon UPDATE가 0 rows를
+// 반환해 "해당 유닛을 찾을 수 없어요"로 오탐하던 문제(락다운의 부작용,
+// upsert/insert가 필요한 문제가 아니었음) — 메타 갱신도 다른 쓰기들과
+// 동일하게 service_role 경유가 필요하다. patch는 payload에 실제로 존재하는
+// 키만 반영한다(클라이언트가 부분 필드만 보낼 수 있음, curriculumApi.js의
+// "PRESENT keys only" 시맨틱을 그대로 서버에서 재현).
+async function handleUnitMetaUpdate(supabase: any, payload: any) {
+  const unitId = requireId(payload?.unitId, 'unitId')
+  const patch: Record<string, unknown> = {}
+  if ('position' in (payload || {})) {
+    patch.position = payload.position !== '' && payload.position != null ? Number(payload.position) : null
+  }
+  if ('lessonNo' in (payload || {})) {
+    patch.lesson_no = payload.lessonNo !== '' && payload.lessonNo != null ? Number(payload.lessonNo) : null
+  }
+  if ('objectives' in (payload || {})) {
+    patch.objectives = payload.objectives ? String(payload.objectives).trim() : null
+  }
+  if (Object.keys(patch).length === 0) {
+    const { data, error } = await supabase
+      .from('units').select('id,name,position,lesson_no,objectives').eq('id', unitId).maybeSingle()
+    if (error) throw error
+    if (!data) throw new Error('해당 유닛을 찾을 수 없어요.')
+    return data
+  }
+  const { data, error } = await supabase
+    .from('units').update(patch).eq('id', unitId)
+    .select('id,name,position,lesson_no,objectives').maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('해당 유닛을 찾을 수 없어요.')
+  return data
+}
+
 const ACTION_HANDLERS: Record<string, (supabase: any, payload: any) => Promise<unknown>> = {
   'class.create': handleClassCreate,
   'unit.create': handleUnitCreate,
@@ -275,6 +311,7 @@ const ACTION_HANDLERS: Record<string, (supabase: any, payload: any) => Promise<u
   'word.accepted_meanings.update': handleWordAcceptedMeaningsUpdate,
   'class.update_settings': handleClassUpdateSettings,
   'assignment.set': handleAssignmentSet,
+  'unit.meta.update': handleUnitMetaUpdate,
 }
 
 Deno.serve(async (req: Request) => {

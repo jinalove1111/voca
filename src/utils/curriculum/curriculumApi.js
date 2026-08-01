@@ -5,7 +5,7 @@
 // 이 파일은 관리자 화면(CurriculumTree 등)이 최소로 필요로 하는 것만
 // 담는다 — 예문 CRUD는 exampleLibrary.js의 책임.
 import { supabase } from '../supabaseClient'
-import { isMissingTableError } from '../wordLibrary'
+import { isMissingTableError, callAdminContentWrite } from '../wordLibrary'
 
 let _tableMissingWarned = false
 function warnOnce(err) {
@@ -241,8 +241,16 @@ export async function listUnitsMeta(textbookId) {
 }
 
 // updateUnitMeta(id, {position?, lessonNo?, objectives?}, adminPin?)
+//
+// 2026-08-02 — v3.11 락다운(supabase_v3_11_lockdown_curriculum_write.sql,
+// 프로덕션에 이미 실행됨) 부작용 수정. units가 anon SELECT-only가 되면서
+// 이 함수의 기존 anon `.update()`가 실제 유닛이 존재해도 항상 0 rows를
+// 반환해(RLS가 UPDATE 자체를 필터링) "해당 유닛을 찾을 수 없어요"로
+// 오탐했다 — 유닛이 없는 게 아니라 쓰기가 막힌 것. upsert/insert로
+// 우회하지 않고(그 자체가 없는 유닛을 만들어버려 더 위험함), 다른 쓰기
+// 함수들과 동일한 adminPin 듀얼패스(§ wordLibrary.js callAdminContentWrite
+// 헤더 주석)를 그대로 따른다.
 export async function updateUnitMeta(id, fields, adminPin) {
-  void adminPin
   if (!id) throw new Error('유닛 id가 없어요.')
   const f = fields || {}
   const patch = {}
@@ -250,10 +258,27 @@ export async function updateUnitMeta(id, fields, adminPin) {
   if ('lessonNo' in f) patch.lesson_no = f.lessonNo !== '' && f.lessonNo != null ? Number(f.lessonNo) : null
   if ('objectives' in f) patch.objectives = f.objectives ? String(f.objectives).trim() : null
   if (Object.keys(patch).length === 0) return null
+
+  if (adminPin) {
+    let data
+    try {
+      data = await callAdminContentWrite('unit.meta.update', { unitId: id, ...f }, adminPin)
+    } catch (err) {
+      if (/unknown action/i.test(err?.message || '')) {
+        throw new Error('admin-content-write 함수가 구버전이에요 — 재배포 필요: npx supabase@latest functions deploy admin-content-write --project-ref azsjthtdjfpnctffjfsk')
+      }
+      throw err
+    }
+    if (!data) throw new Error('해당 유닛을 찾을 수 없어요.')
+    return { id: data.id, name: data.name, position: data.position ?? null, lessonNo: data.lesson_no ?? null, objectives: data.objectives || null }
+  }
+
   const { data, error } = await supabase
     .from('units').update(patch).eq('id', id)
     .select('id,name,position,lesson_no,objectives').maybeSingle()
   if (error) throwIfMetaMissing(error)
-  if (!data) throw new Error('해당 유닛을 찾을 수 없어요.')
+  if (!data) {
+    throw new Error('유닛 메타를 저장하지 못했어요 — 락다운 이후 관리자 인증 경로가 필요해요(관리자 화면 새로고침 후 재로그인). 함수가 "unknown action"을 반환하면 admin-content-write 재배포가 필요합니다.')
+  }
   return { id: data.id, name: data.name, position: data.position ?? null, lessonNo: data.lesson_no ?? null, objectives: data.objectives || null }
 }

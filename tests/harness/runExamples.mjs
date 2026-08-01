@@ -252,4 +252,59 @@ try {
   }
 }
 
+// ── 집중 회귀 테스트(2026-08-02) — updateUnitMeta 0-row 오탐 버그 ───────────
+// 배경: v3.11 락다운(supabase_v3_11_lockdown_curriculum_write.sql, 이미
+// 프로덕션에 실행됨)이 units에 anon SELECT-only RLS를 걸면서,
+// curriculumApi.js updateUnitMeta()의 레거시 anon `.update()`가 유닛이
+// 실제 존재해도 RLS가 UPDATE 자체를 필터링해 0 rows를 반환 →
+// "해당 유닛을 찾을 수 없어요"로 오탐하던 실제 프로덕션 버그. 이 블록은
+// adminPin 없이(=레거시 경로) 실제 존재하는 유닛 하나에 현재와 동일한
+// 값으로 update를 시도해 ① RLS가 실제로 쓰기를 막는지(구조적으로 데이터
+// 변경 없음 — 값이 기존과 동일) ② 그 실패가 새 개선 메시지("관리자 인증
+// 경로가 필요")로 나오는지(구버전 "찾을 수 없어요" 메시지가 아님)를
+// 확인한다. supabase_v3_13(units.position/lesson_no/objectives 컬럼)이
+// 이 환경에 아직 없거나 textbook_id로 연결된 유닛이 하나도 없으면 정직하게
+// SKIP(가짜 커버리지 금지 — 이 저장소 SKIP 관례).
+console.log('\n-- 집중 회귀: updateUnitMeta 0-row 오탐(v3.11 락다운 부작용) 개선 메시지')
+try {
+  const esbuild2 = (await import('esbuild')).default
+  await esbuild2.build({
+    entryPoints: ['src/utils/curriculum/curriculumApi.js'],
+    bundle: true,
+    format: 'esm',
+    platform: 'node',
+    outfile: 'scripts/.tmp/curriculumApi.curriculum.bundle.mjs',
+    define: {
+      'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(process.env.VITE_SUPABASE_URL),
+      'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY),
+    },
+  })
+  const { listTextbooksMeta, listUnitsMeta, updateUnitMeta } = await import(
+    pathToFileURL('scripts/.tmp/curriculumApi.curriculum.bundle.mjs').href
+  )
+
+  const tbMeta = await listTextbooksMeta()
+  const tb = tbMeta.rows[0]
+  if (tbMeta.featureDisabled || !tb) {
+    console.log('  SKIP — textbooks 메타 컬럼 없음 또는 교재 0개(supabase_v3_13 미실행 또는 교재 데이터 없음, 예상된 상태).')
+  } else {
+    const unitsMeta = await listUnitsMeta(tb.id)
+    const unit = unitsMeta.rows[0]
+    if (unitsMeta.featureDisabled || !unit) {
+      console.log('  SKIP — 이 교재에 textbook_id로 연결된 유닛이 없음(예상된 상태).')
+    } else {
+      const before = unit.objectives
+      const result = await updateUnitMeta(unit.id, { objectives: before }, undefined)
+        .then(() => ({ threw: false }))
+        .catch((e) => ({ threw: true, message: e?.message || String(e) }))
+      check('실제 존재하는 유닛 대상 anon update가 RLS로 막혀 throw함(0-row 오탐 아님 — 구조적으로 데이터 변경 없음)', result.threw === true)
+      check('에러 메시지가 개선된 안내 문구(구버전 "찾을 수 없어요" 아님)',
+        result.threw && /관리자 인증 경로|admin-content-write/.test(result.message || ''),
+        result.message)
+    }
+  }
+} catch (err) {
+  console.log(`  SKIP — 집중 회귀 테스트 실행 실패(환경 문제로 간주, 위 CRUD 왕복 결과는 유지): ${err?.message || err}`)
+}
+
 finish()

@@ -48,7 +48,10 @@ function adminContentWriteEndpoint() {
 
 // 호출부(아래 각 쓰기 함수)가 adminPin이 truthy일 때만 이 함수를 부른다 —
 // adminPin 부재 시의 폴백 분기는 전부 호출부 쪽에 있다(§ 위 헤더 주석).
-async function callAdminContentWrite(action, payload, adminPin) {
+// export: curriculumApi.js(units.textbook_id 메타 저장, 2026-08-02 v3.11
+// 락다운 부작용 수정)도 이 파일과 동일한 admin-content-write 클라이언트를
+// 재사용한다 — fetch/에러 계약을 다시 구현하면 드리프트가 생기므로 재사용.
+export async function callAdminContentWrite(action, payload, adminPin) {
   const endpoint = adminContentWriteEndpoint()
   if (!endpoint) throw new Error('관리자 쓰기 연결 정보 없음(VITE_SUPABASE_URL 미설정)')
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
