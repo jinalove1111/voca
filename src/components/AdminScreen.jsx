@@ -29,6 +29,9 @@ import StudentDirectory from './admin/StudentDirectory'
 // 그 반에 연결된 교재를 연결/해제하는 패널(교재 모드 꺼짐이면 안내만).
 import ClassTextbookLinks from './admin/ClassTextbookLinks'
 import AnalyticsPanel from './admin/AnalyticsPanel'
+// 배정 이력 + 완료 현황(2026-08-01) — 완전히 읽기 전용, admin-content-write
+// 배포 여부와 무관하게 항상 동작(AssignmentHistoryPanel.jsx 헤더 참고).
+import AssignmentHistoryPanel from './admin/AssignmentHistoryPanel'
 // 쓰기 답안 검토 큐 + "선생님이 같은 검토를 두 번 하지 않는" 자동 학습
 // 시스템 카드 3개(2026-07-24, 코드 품질 감사 대응으로 분리) —
 // StudentDirectory.jsx(2026-07-22)와 동일한 순수 이동(로직 변경 없음),
@@ -808,6 +811,14 @@ function AdminDashboard() {
 
   useEffect(() => { load(selectedClass) }, [selectedClass]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 2026-08-01 — 대시보드 헤더 한 줄 요약("오늘 숙제 완료 N/M명 · 오늘
+  // 배정 단어 K개"). 새 Supabase 조회 없음(헌법 규칙, 이 파일 위쪽 CSV
+  // 내보내기 주석과 동일한 원칙) — 이미 로드된 rows/wordStatusSummary를
+  // computeStudentStats()로, K는 이미 있던 getTodaysAssignmentWordIds
+  // 캐시 조회로만 계산.
+  const todaysAssignedCount = selectedClass ? getTodaysAssignmentWordIds(selectedClass).length : 0
+  const todaysHomeworkDoneCount = rows.filter((r) => computeStudentStats(r, wordStatusSummary).homeworkDone).length
+
   return (
     <div className="space-y-3">
       <div className="bg-white rounded-3xl card-shadow p-5">
@@ -822,6 +833,11 @@ function AdminDashboard() {
             className="bg-purple-100 text-purple-600 font-bold px-3 rounded-xl btn-press">🔄</button>
         </div>
         {selectedClass && rows.length > 0 && (
+          <p className="text-xs font-bold text-teal-700 mt-2">
+            📌 오늘 숙제 완료 {todaysHomeworkDoneCount} / {rows.length}명 · 오늘 배정 단어 {todaysAssignedCount}개
+          </p>
+        )}
+        {selectedClass && rows.length > 0 && (
           <button onClick={exportClassStatsCsv}
             className="w-full mt-2 bg-green-100 text-green-700 font-bold py-2 rounded-xl text-xs btn-press">
             ⬇️ 반 전체 통계 CSV로 내보내기 ({rows.length}명)
@@ -833,6 +849,11 @@ function AdminDashboard() {
       {!loading && selectedClass && rows.length === 0 && (
         <p className="text-center text-gray-400 text-sm py-6">이 반에 학생이 없어요.</p>
       )}
+
+      {/* 2026-08-01 — 배정 이력 + 완료 현황(읽기 전용, admin-content-write
+          배포 여부와 무관하게 항상 동작). 대시보드 탭 어디서든 볼 수 있게
+          반 선택 위젯 아래, 학생 카드 목록 위에 배치. */}
+      <AssignmentHistoryPanel />
 
       {!loading && rows.map(r => {
         const { studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws } =
