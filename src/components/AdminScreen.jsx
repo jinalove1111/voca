@@ -1043,7 +1043,22 @@ function parseExcelRows(rows, selectedClass = '') {
   const hasHeader = headerMap.word !== undefined && headerMap.meaning !== undefined
   const dataRows = hasHeader ? rows.slice(1) : rows
 
-  return dataRows
+  // A6(2026-08-02) — 헤더 없는 파일의 위치 추정 경로에서, 첫 칸이 전부
+  // 숫자(번호 열)면 이전엔 그 번호를 그대로 word로 읽어버렸다(예:
+  // "1, apple, 사과" -> word="1"). 데이터 행 전체의 0번째 칸이 전부
+  // 순수 숫자일 때만 번호 열로 간주해 한 칸씩 밀어 읽는다(오탐 방지 —
+  // 헤더가 이미 감지된 경우엔 적용 안 함).
+  let numberColOffset = 0
+  if (!hasHeader && dataRows.length > 0) {
+    const col0AllNumeric = dataRows.every((r) => {
+      if (!Array.isArray(r) || r.length === 0) return false
+      const v = String(r[0] ?? '').trim()
+      return v !== '' && /^\d+$/.test(v)
+    })
+    if (col0AllNumeric) numberColOffset = 1
+  }
+
+  const result = dataRows
     .map(r => {
       if (!Array.isArray(r) || r.length === 0) return null
       const values = r.map((cell) => (cell == null ? '' : String(cell).trim()))
@@ -1053,17 +1068,24 @@ function parseExcelRows(rows, selectedClass = '') {
         word    = headerMap.word    !== undefined ? values[headerMap.word]    : ''
         meaning = headerMap.meaning !== undefined ? values[headerMap.meaning] : ''
         unit    = headerMap.unit   !== undefined ? values[headerMap.unit]     : ''
-      } else if (values.length >= 3) {
-        const isUnit = /^(unit|유닛)\s*\d*/i.test(values[0])
-        if (isUnit) { unit = values[0]; word = values[1]; meaning = values[2] }
-        else { word = values[0]; meaning = values[1] }
       } else {
-        word = values[0]; meaning = values[1]
+        const v = numberColOffset ? values.slice(numberColOffset) : values
+        if (v.length >= 3) {
+          const isUnit = /^(unit|유닛)\s*\d*/i.test(v[0])
+          if (isUnit) { unit = v[0]; word = v[1]; meaning = v[2] }
+          else { word = v[0]; meaning = v[1] }
+        } else {
+          word = v[0]; meaning = v[1]
+        }
       }
 
       return { className: selectedClass, unit: unit || 'Unit 1', word, meaning }
     })
     .filter(r => r && r.word && r.meaning)
+  // 배열에 메타 정보만 덧붙임(호출부는 여전히 평범한 배열로 취급 가능) —
+  // 미리보기에서 "헤더 미검출 — 위치 추정으로 읽었어요" 경고 배지에 사용.
+  result.headerDetected = hasHeader
+  return result
 }
 
 function ExcelUpload({ onDone, adminPin }) {
@@ -1091,6 +1113,11 @@ function ExcelUpload({ onDone, adminPin }) {
     } catch (err) {
       alert('엑셀 파일을 읽는 중 오류가 발생했어요(손상된 파일이거나 지원하지 않는 형식일 수 있어요): ' + (err.message || err))
       setPreview(null)
+    } finally {
+      // A7(2026-08-02) — input value가 그대로면 같은 파일을 다시 선택해도
+      // change 이벤트가 안 떠서 버튼이 죽은 것처럼 보였다(수정 후 재업로드
+      // 흐름에서 자주 겪는 마찰). 매 선택 후 리셋해 재선택이 항상 먹게 한다.
+      e.target.value = ''
     }
   }
 
@@ -1132,7 +1159,10 @@ function ExcelUpload({ onDone, adminPin }) {
         totalWords += words.length
       }
       alert(`"${targetClass}" 반에 ${totalWords}개 단어 저장 완료!` + (skippedDupes > 0 ? `\n(중복 단어 ${skippedDupes}개는 제외했어요)` : ''))
-      onDone()
+      // A8(2026-08-02) — 업로드 후 반 목록 탭으로만 돌아가고 방금 올린
+      // 반/유닛은 직접 다시 펼쳐 찾아야 했다(확인까지 4단계). 첫 번째
+      // 업로드 유닛을 그대로 넘겨 카드가 바로 열리고 그 유닛이 보이게 한다.
+      onDone(targetClass, Object.keys(byUnit)[0])
     } catch (err) {
       alert('저장 중 오류가 발생했어요: ' + (err.message || err))
     } finally {
@@ -1171,6 +1201,14 @@ function ExcelUpload({ onDone, adminPin }) {
 
       {preview && (
         <div className="space-y-3">
+          {/* A6(2026-08-02) — 헤더를 못 찾아 위치 추정으로 읽은 경우 정직하게
+              경고. 저장이 유닛 전체 delete-then-insert라 잘못 읽혔으면
+              저장 전에 미리보기로 확인할 수 있어야 한다. */}
+          {preview.headerDetected === false && (
+            <div className="bg-amber-50 border-2 border-amber-200 rounded-xl px-4 py-2 text-xs font-bold text-amber-700">
+              ⚠️ 헤더 미검출 — 위치 추정으로 읽었어요. 유닛/단어/뜻이 맞는지 아래 미리보기로 꼭 확인해주세요.
+            </div>
+          )}
           <div className="bg-white rounded-2xl border-2 border-gray-200 overflow-hidden max-h-48 overflow-y-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 sticky top-0">
@@ -1237,6 +1275,9 @@ function PdfUpload({ onDone, adminPin }) {
       setText('PDF 추출 실패: ' + err.message)
     }
     setLoad(false)
+    // A7(2026-08-02) — ExcelUpload.handleFile과 동일하게, 같은 파일을
+    // 다시 선택해도 change 이벤트가 뜨도록 매 선택 후 리셋.
+    e.target.value = ''
   }
 
   const handleParse = () => {
@@ -1274,7 +1315,8 @@ function PdfUpload({ onDone, adminPin }) {
     try {
       await setClassWords(cls, deduped, unit, adminPin)
       alert(`"${cls}" 반 ${unit}에 ${deduped.length}개 단어 저장 완료!` + (skippedDupes > 0 ? `\n(중복 단어 ${skippedDupes}개는 제외했어요)` : ''))
-      onDone()
+      // A8(2026-08-02) — Excel 업로드와 동일하게 방금 저장한 반/유닛을 바로 연다.
+      onDone(cls, unit)
     } catch (err) {
       alert('저장 중 오류가 발생했어요: ' + (err.message || err))
     } finally {
@@ -1781,8 +1823,13 @@ export default function AdminScreen({ onBack }) {
         {tab === 'students' && <StudentDirectory adminPin={pin} />}
         {tab === 'dashboard' && <AdminDashboard />}
         {tab === 'entrance' && <EntranceTestAdmin />}
-        {tab === 'excel' && <ExcelUpload onDone={() => { refresh(); setTab('classes') }} adminPin={pin} />}
-        {tab === 'pdf'   && <PdfUpload   onDone={() => { refresh(); setTab('classes') }} adminPin={pin} />}
+        {/* A8(2026-08-02) — 업로드 완료 시 방금 올린 반/유닛을 바로 열어
+            "확인까지 4단계"였던 마찰을 없앤다(반 목록 탭으로만 보내던 것에서,
+            해당 반 카드 펼침 + 유닛 선택까지). refresh()는 기존 viewClass
+            기준으로도 viewUnit을 보정하지만, 뒤이은 setView/setViewUnit이
+            같은 이벤트 핸들러 안에서 최종값으로 덮어써 새 반/유닛이 반영된다. */}
+        {tab === 'excel' && <ExcelUpload onDone={(targetClass, unitName) => { refresh(); if (targetClass) { setView(targetClass); if (unitName) setViewUnit(unitName) } setTab('classes') }} adminPin={pin} />}
+        {tab === 'pdf'   && <PdfUpload   onDone={(targetClass, unitName) => { refresh(); if (targetClass) { setView(targetClass); if (unitName) setViewUnit(unitName) } setTab('classes') }} adminPin={pin} />}
         {tab === 'testpaper' && <TestPaperGenerator />}
         {tab === 'curriculum' && <CurriculumHub adminPin={pin} />}
         {tab === 'features' && <FeatureManagementPanel />}
