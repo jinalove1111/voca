@@ -224,7 +224,7 @@ function claimTtsCall(source, word = '') {
 // exercise the exact logic under test without duplicating it).
 export { claimTtsCall as __claimTtsCallForTest }
 
-export function playAudioUrl(url, opts = {}) {
+function playAudioUrl(url, opts = {}) {
   const { times = 1, rate = null, onEnd = null, onError = null, label = '' } = opts
   stopCurrentAudio()
   devLog('[speech] playAudioUrl:', url || '(no url)')
