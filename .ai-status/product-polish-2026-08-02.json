@@ -1,0 +1,40 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "product-polish-2026-08-02",
+  "task": "제품 폴리시 세션 마감 — build/verify:all 전체 검증, 오늘 변경된 13개 컴포넌트 렌더 스모크 읽기 점검(adminPin ReferenceError류 재발 확인), CHANGELOG/handoff 28차/NEXT_PRIORITY 문서화",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-02T10:00:00Z",
+  "updated_at": "2026-08-02T10:40:00Z",
+  "files_owned": [
+    "CHANGELOG.md",
+    "handoff.md",
+    "NEXT_PRIORITY.md",
+    ".ai-status/product-polish-2026-08-02.json"
+  ],
+  "files_read": [
+    "src/components/AdminScreen.jsx",
+    "src/components/EntranceTestBanner.jsx",
+    "src/components/FeatureManagementPanel.jsx",
+    "src/components/admin/AssignmentHistoryPanel.jsx",
+    "src/components/admin/SpellingReviewQueuePanel.jsx",
+    "src/components/TestPaperGenerator.jsx",
+    "src/components/SpellingQuestion.jsx",
+    "src/components/WordDetail.jsx",
+    "src/components/QuizGame.jsx",
+    "src/components/Dashboard.jsx",
+    "src/components/LevelUpMission.jsx",
+    "src/components/WordBrowser.jsx",
+    "src/components/GiftReveal.jsx",
+    "src/App.jsx",
+    "src/components/GuidedSession.jsx",
+    "src/utils/paulReactions.js",
+    "docs/reading/07-encouragement-messages.md",
+    ".ai-status/implementer-product-polish-wave-2026-08-02.json",
+    "CLAUDE.md"
+  ],
+  "summary": "npm run build PASS(경고 없음). npm run verify:all — FAIL {login}(로컬 SUPABASE_SERVICE_ROLE_KEY 부재, permission denied for table students — 환경 요인, 오늘 9커밋과 무관 확인), SKIP {speaking, listening} + v3.11 락다운/xp_ledger/word_king_history 등 정직 SKIP 라인 다수, 나머지 전 도메인 PASS — 기대 베이스라인과 정확히 일치, 회귀 0건. 오늘 변경된 13개 컴포넌트(AdminScreen 등)를 diff 단위로 읽어 부모 스코프 미배선 식별자 패턴(adminPin류 ReferenceError 클래스)을 재점검 — 이미 9585acd로 자체 발견·수정된 AdminDashboard adminPin 건 외 신규 발견 0건(sessionProgress/onChange/certainRows 등 전부 올바르게 배선 확인). CHANGELOG.md에 오늘 9커밋(학생 4/교사·성능 5) 절 추가 + xlsx 429kB 청크 분리 기록, handoff.md 28차 prepend(adminPin 버그 자체발견 경위 + build/verify 렌더 오류 미검출 검증 공백 정직 기록, 격려 문구 500개 자산이 오늘에서야 일부 코드 적용됐다는 사실 기록), NEXT_PRIORITY.md에 학생 체감 MEDIUM 보류 항목 5건(발음/예문 녹음 게이트 완화·레벨업 미션 루프·다중 반 동시 배정·검수함 배치 처리·렌더 스모크 테스트 도입) 0번 섹션으로 추가. 기존 섹션 전부 무변경(append-only, 규칙 13).",
+  "blocker": null,
+  "next_action": "문서 커밋(pathspec: CHANGELOG.md handoff.md NEXT_PRIORITY.md .ai-status/product-polish-2026-08-02.json) 후 push, git status/log로 최종 상태 확인"
+}

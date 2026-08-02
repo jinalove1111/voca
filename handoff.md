@@ -1,7 +1,71 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-08-02 (27차, 프로덕션 하드닝 세션 마감 — 4축 감사 →
-리스크 분류(HIGH 4/MEDIUM 11) → 저위험 즉시수정 웨이브 → Phase 2 품질
-웨이브 → 문서 5종 신설 → 보안 브랜치 격리. 상세는 아래 27차 섹션)_
+_최종 갱신: 2026-08-02 (28차, 제품 폴리시 세션 마감 — 2축 감사(아동 경험
+/ 교사·성능) → LOW-FIX 웨이브 9커밋 → 렌더 스모크 읽기 점검(발견 0건)
+→ 보류 목록 갱신. 상세는 아래 28차 섹션)_
+
+## 2026-08-02 (28차) — 제품 폴리시 세션 마감 (implementer, 27차 하드닝 세션과는 별도 세션)
+
+### 배경
+
+27차(프로덕션 하드닝, 4축 감사·보안 중심)가 끝난 뒤 이어진 별도
+세션 — 이번엔 "아동이 실제로 화면에서 느끼는 마찰"과 "교사가 매일
+쓰는 관리자 화면의 생산성·성능"이라는 2개 축으로 다시 감사하고, 저위험
+항목만 즉시 코드로 반영했다. 학생 대상 신규 기능/게임화는 이 세션
+범위에 없음(규칙 12 준수 확인 — 전부 기존 화면의 문구/표시/성능
+보정이며 새 화면·새 보상 로직 없음).
+
+### 1) 2축 감사 → LOW-FIX 14+14건 반영(9커밋)
+
+아동 경험 축에서 A1~A13 중 저위험 항목(A2/A3/A6/A7/A8/A10/A11/A13 등)과
+B 성능 축(B1/B6c/B7/B8/B9/B10 등)을 코드로 반영했다. 상세 커밋별 변경
+내용은 `CHANGELOG.md` "2026-08-02 — 제품 폴리시 웨이브" 절 참고 —
+학생 경험 4커밋(`405209f`/`5d2bf83`/`30aca6e`/`4e016a9`), 교사·성능
+5커밋(`25760a9`/`3839db3`/`d130905`/`9585acd`/`858b015`). 각 커밋마다
+`npm run build` + 관련 `npm run verify:<domain>` PASS 확인 후 진행.
+
+### 2) 정직 기록 — adminPin ReferenceError 자체 발견·수정 경위 + 검증 공백
+
+`d130905`(AssignmentHistoryPanel에 "오늘로 복사" 기능 추가, 저장 시
+`adminPin`을 그 컴포넌트 내부에서 참조)을 커밋한 직후, 그 `adminPin`을
+호출부인 `AdminDashboard()`가 prop으로 받지 않고 있다는 걸 자체
+발견했다 — `AdminDashboard`는 원래 인자 없는 컴포넌트였는데, 새로
+`<AssignmentHistoryPanel adminPin={adminPin} />`로 참조를 추가하면서
+그 상위 스코프에 `adminPin`이라는 이름의 변수/prop이 존재하지 않는
+상태로 남아 있었다. **`npm run build`(vite/esbuild 트랜스파일)와
+`npm run verify:all`(순수 로직·라이브 DB 하네스 위주) 둘 다 이 문제를
+잡지 못했다** — JSX 안에서 정의되지 않은 식별자를 참조해도 그 자체는
+문법 오류가 아니라 런타임에 `ReferenceError`로만 드러나고, 이 저장소의
+verify 하네스는 React 컴포넌트를 실제로 렌더하지 않기 때문이다(정직한
+검증 공백 — CLAUDE.md 규칙 18에 따라 "안 되는 걸 되는 것처럼" 기록하지
+않는다). 실제로는 관리자가 대시보드 탭을 열어야만 크래시가 드러나는
+구조였다. `9585acd`로 `AdminDashboard({ adminPin } = {})` prop을 추가해
+즉시 수정 — 별도 소커밋, build/verify:admin 재확인 완료. 이번 세션
+Step 2에서 같은 클래스(부모 스코프 변수를 prop 없이 참조/선언 전 state
+사용)의 문제가 오늘 변경된 나머지 12개 컴포넌트
+(EntranceTestBanner/FeatureManagementPanel/AssignmentHistoryPanel/
+SpellingReviewQueuePanel/TestPaperGenerator/SpellingQuestion/WordDetail/
+QuizGame/Dashboard/LevelUpMission/WordBrowser/GiftReveal)에 더 있는지
+읽기 전용으로 재점검했고, **추가 발견 0건**이었다(전부 props 구조분해
+디폴트 또는 상위 컴포넌트에서 올바르게 값을 전달받는 구조 확인 —
+`sessionProgress`(WordDetail, `App.jsx`/`GuidedSession.jsx`에서 전달),
+`onChange`(FeatureManagementPanel), `certainRows`/`duplicateGroupRows`
+useMemo(SpellingReviewQueuePanel) 등).
+
+### 3) 정직 기록 — 격려 문구 500개 자산의 실제 코드 적용 시점
+
+`docs/reading/07-encouragement-messages.md`(2026-07-23 작성, "자산(asset)
+— 코드 미적용" 상태로 명시)는 작성된 지 약 열흘이 지난 오늘(`30aca6e`)에
+서야 그 일부가 `paulReactions.js`의 `MESSAGE_POOLS`에 처음 실제로
+반영됐다 — 그 사이 기간 동안 이 문서는 순수 자산으로만 존재했고 학생
+화면에는 전혀 영향을 주지 않고 있었다.
+
+### 4) 보류 목록
+
+`NEXT_PRIORITY.md`에 이번 세션에서 보류한 학생 체감 MEDIUM 항목을
+추가 기록 — 발음/예문 단계 강제 녹음 게이트 완화(학습 흐름 변경이라
+운영자 결정 필요), 레벨업 미션 3탭 루프, 다중 반 동시 배정, 커리큘럼
+검수함 배치 처리, 렌더 스모크 테스트 도입(위 2절 검증 공백에 대한
+구조적 대응).
 
 ## 2026-08-02 (27차) — 프로덕션 하드닝 세션 마감 (implementer + docs-maintainer, 병렬 감사 이후)
 
