@@ -13,13 +13,13 @@
 // 전용 조회 — wordLibrary.js에 새 쓰기 경로를 추가하지 않음).
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { supabase } from '../../utils/supabaseClient'
-import { getClassNames, getClassUnits, getStudentsInClass, fetchAssignmentHistory, localIsoDateStr, wordSlug, isoDaysAgoStr } from '../../utils/wordLibrary'
+import { getClassNames, getClassUnits, getStudentsInClass, fetchAssignmentHistory, setAssignmentForDate, localIsoDateStr, wordSlug, isoDaysAgoStr } from '../../utils/wordLibrary'
 
 // 2026-08-02 — wordSlug/isoDaysAgoStr 로컬 사본(AdminScreen.jsx와 바이트
 // 단위로 동일했던 정의)을 제거하고 wordLibrary.js의 단일 원본을 import한다
 // (배정 매칭의 핵심 규칙이라 드리프트 시 숙제 배정이 깨질 수 있었음).
 
-export default function AssignmentHistoryPanel() {
+export default function AssignmentHistoryPanel({ adminPin } = {}) {
   const classList = getClassNames()
   const [selectedClass, setSelectedClass] = useState(classList[0] || '')
   const [fromDate, setFromDate] = useState(isoDaysAgoStr(14))
@@ -28,6 +28,8 @@ export default function AssignmentHistoryPanel() {
   const [history, setHistory] = useState([]) // [{ date, wordIds }]
   const [completion, setCompletion] = useState({}) // date -> { done, total }
   const [errorMsg, setErrorMsg] = useState('')
+  // A3(2026-08-02) — "이 배정을 오늘로 복사" 진행 상태(날짜별로 독립).
+  const [copying, setCopying] = useState(null) // 복사 중인 date | null
 
   // 2026-08-02 — stale-response 가드. 반/날짜 범위를 빠르게 바꾸면 먼저
   // 시작된 조회의 응답이 나중에 도착해 방금 바꾼 선택의 결과를 덮어쓸 수
@@ -77,6 +79,26 @@ export default function AssignmentHistoryPanel() {
   }
 
   useEffect(() => { load() }, [selectedClass, fromDate, toDate]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A3(2026-08-02) — 이 이력 카드는 이미 fetchAssignmentHistory로 wordIds를
+  // 갖고 있으므로 새 조회 없이 그대로 오늘 날짜에 저장한다(기존
+  // setAssignmentForDate + adminPin 듀얼패스 그대로 — 새 쓰기 경로 없음).
+  // 오늘 이미 배정이 있으면 덮어써지므로 먼저 확인받는다.
+  const copyToToday = async (date, wordIds) => {
+    const today = localIsoDateStr()
+    if (date === today) return // 이미 오늘 배정
+    const ok = window.confirm(`${date} 배정(${wordIds.length}개 단어)을 오늘(${today})로 복사할까요?\n오늘 이미 배정이 있다면 덮어써집니다.`)
+    if (!ok) return
+    setCopying(date)
+    try {
+      await setAssignmentForDate(selectedClass, today, wordIds, adminPin)
+      alert(`오늘(${today}) 배정으로 복사했어요.`)
+    } catch (err) {
+      alert('복사 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setCopying(null)
+    }
+  }
 
   // 단어 슬러그 -> { word, unitName } — 지금 그 단어가 속한 유닛으로 표시
   // (배정 당시 유닛이 아니라 "현재" 유닛 — 단어가 유닛을 옮긴 드문 경우도
@@ -139,7 +161,17 @@ export default function AssignmentHistoryPanel() {
                   <p className="text-xs font-black text-gray-700">
                     {date}{unitNames.length > 0 ? ` · ${unitNames.join(', ')}` : ''}
                   </p>
-                  {comp && <p className="text-xs font-bold text-teal-600">완료 {comp.done} / {comp.total}명</p>}
+                  <div className="flex items-center gap-2">
+                    {comp && <p className="text-xs font-bold text-teal-600">완료 {comp.done} / {comp.total}명</p>}
+                    {/* A3(2026-08-02) — 어제(과거) 배정을 오늘로 재사용하는 마찰
+                        제거. 오늘 날짜 카드에는 표시 안 함(복사할 필요 없음). */}
+                    {date !== localIsoDateStr() && (
+                      <button onClick={() => copyToToday(date, wordIds)} disabled={copying === date}
+                        className="bg-indigo-100 text-indigo-700 font-bold px-2 py-1 rounded-lg text-xs btn-press disabled:opacity-60">
+                        {copying === date ? '복사 중...' : '오늘로 복사'}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {wordIds.length === 0 ? (
                   <p className="text-xs text-gray-400 mt-1">배정 없음(유닛 전체 단어로 폴백)</p>

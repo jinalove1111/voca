@@ -411,13 +411,19 @@ function SeasonPanel({ adminPin }) {
 // src/components/admin/ 아래 별도 파일로 이동했다(StudentDirectory.jsx
 // 2026-07-22와 동일한 순수 이동 — 로직 변경 없음, 위 import 참고).
 
-// v1.3 "날짜별 숙제 배정" — 오늘이 아닌 미래 날짜(내일 이후)에 미리 단어를
-// 배정해두는 UI. 과거 날짜는 min 속성으로 아예 선택 못 하게 막아 이미
-// 지나간 학습 기록을 실수로 고쳐쓰는 걸 방지. 오늘 배정(체크박스 토글, 위
-// 블록)과 완전히 분리된 별도 컴포넌트라 기존 "오늘의 단어" 동작에는 전혀
-// 영향 없음.
+// v1.3 "날짜별 숙제 배정" — 오늘 포함 이후 날짜에 미리 단어를 배정해두는
+// UI. 과거 날짜는 min 속성으로 아예 선택 못 하게 막아 이미 지나간 학습
+// 기록을 실수로 고쳐쓰는 걸 방지. 오늘 배정(체크박스 토글, 위 블록)과
+// 완전히 분리된 별도 컴포넌트라 기존 "오늘의 단어" 동작에는 전혀 영향
+// 없음(같은 setAssignmentForDate 저장 경로를 공유할 뿐 — 실제
+// setTodaysAssignment도 내부적으로 이 함수를 today 날짜로 호출함).
+//
+// A2(2026-08-02) — min이 "내일"이라 "자동 생성"/"여러 날짜 일괄 배정"을
+// 정작 매일 하는 "오늘 숙제"에는 못 썼다. min을 오늘로 완화해 오늘 날짜도
+// 이 패널로 자동 생성/저장할 수 있게 한다(저장 경로는 기존
+// setAssignmentForDate + adminPin 그대로 — 새 쓰기 경로 없음).
 function FutureAssignmentPlanner({ targetClass, words, adminPin, units, activeUnit }) {
-  const [date, setDate] = useState(tomorrowIsoStr())
+  const [date, setDate] = useState(localIsoDateStr())
   const [selected, setSelected] = useState(new Set())
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -438,7 +444,7 @@ function FutureAssignmentPlanner({ targetClass, words, adminPin, units, activeUn
   // 재시도해도 안전(멱등)하다. bulkPlan이 null이면 아직 미리보기 전.
   const [bulkOpen, setBulkOpen] = useState(false)
   const [bulkUnitName, setBulkUnitName] = useState(activeUnit)
-  const [bulkStart, setBulkStart] = useState(tomorrowIsoStr())
+  const [bulkStart, setBulkStart] = useState(localIsoDateStr())
   const [bulkDays, setBulkDays] = useState(7)
   const [bulkCount, setBulkCount] = useState(10)
   const [bulkPlan, setBulkPlan] = useState(null) // { [dateStr]: string[] } | null
@@ -583,8 +589,8 @@ function FutureAssignmentPlanner({ targetClass, words, adminPin, units, activeUn
   return (
     <div className="bg-indigo-50 rounded-xl p-3 space-y-2">
       <div className="flex items-center gap-2 flex-wrap">
-        <p className="text-xs font-black text-indigo-700 flex-shrink-0">📅 다음 날짜 미리 배정</p>
-        <input type="date" value={date} min={tomorrowIsoStr()} onChange={e => setDate(e.target.value)}
+        <p className="text-xs font-black text-indigo-700 flex-shrink-0">📅 날짜 배정 (오늘 포함)</p>
+        <input type="date" value={date} min={localIsoDateStr()} onChange={e => setDate(e.target.value)}
           className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold bg-white" />
       </div>
       {/* 2026-08-01 "자동 생성" — 아래 체크박스 목록을 자동으로 채우기만
@@ -646,7 +652,7 @@ function FutureAssignmentPlanner({ targetClass, words, adminPin, units, activeUn
                 className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold bg-white">
                 {(units || []).map((u) => <option key={u.id || u.name} value={u.name}>{u.name}</option>)}
               </select>
-              <input type="date" value={bulkStart} min={tomorrowIsoStr()} disabled={bulkSaving}
+              <input type="date" value={bulkStart} min={localIsoDateStr()} disabled={bulkSaving}
                 onChange={(e) => setBulkStart(e.target.value)}
                 className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold bg-white" />
               <label className="text-xs font-bold text-gray-600 flex items-center gap-1">
@@ -870,8 +876,11 @@ function AdminDashboard() {
 
       {/* 2026-08-01 — 배정 이력 + 완료 현황(읽기 전용, admin-content-write
           배포 여부와 무관하게 항상 동작). 대시보드 탭 어디서든 볼 수 있게
-          반 선택 위젯 아래, 학생 카드 목록 위에 배치. */}
-      <AssignmentHistoryPanel />
+          반 선택 위젯 아래, 학생 카드 목록 위에 배치.
+          A3(2026-08-02) — "오늘로 복사" 저장 버튼이 setAssignmentForDate를
+          쓰므로 adminPin을 전달(기존 dual-path 그대로, 없으면 레거시 anon
+          upsert로 폴백). */}
+      <AssignmentHistoryPanel adminPin={pin} />
 
       {!loading && rows.map(r => {
         const { studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws } =
