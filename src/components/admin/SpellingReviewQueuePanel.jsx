@@ -719,9 +719,18 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
   // "확실한 답안 모두 인정" — decision=accept(safe_accept) AND confidence>=0.95
   // AND 품사 경고 없음 AND 파싱 오류 없음 AND 의미 범위 경고 없음(전부 AND,
   // selectCertainAccepts가 그대로 구현).
-  const certainRows = aiProposals ? selectRows(rows || [], selectCertainAccepts(aiProposals, 0.95).map((p) => p.pending_answer_id)) : []
+  // B6c(2026-08-02) — 렌더마다 rows/aiProposals 전체를 다시 스캔했다(순수
+  // 계산이라 결과는 rows/aiProposals가 바뀔 때만 달라짐) — useMemo로 감쌈,
+  // 계산 로직/결과는 동일.
+  const certainRows = useMemo(
+    () => (aiProposals ? selectRows(rows || [], selectCertainAccepts(aiProposals, 0.95).map((p) => p.pending_answer_id)) : []),
+    [rows, aiProposals]
+  )
   // "동일한 답안 모두 인정" — 큐 전체(rows)에서 그룹 크기 2 이상인 행 전부.
-  const duplicateGroupRows = aiEnabled && rows ? selectAllDuplicateGroupRows(rows, normalizeForCompare) : []
+  const duplicateGroupRows = useMemo(
+    () => (aiEnabled && rows ? selectAllDuplicateGroupRows(rows, normalizeForCompare) : []),
+    [rows, aiProposals, aiEnabled]
+  )
 
   const decisionLabel = (d) => (d === 'accept' ? 'safe_accept' : d) // 관리자 확정 전까지 "최종 인정/거부" 표현 금지(§ UI 스펙)
   const decisionColor = (d) => (d === 'accept' ? 'text-green-600' : d === 'reject_candidate' ? 'text-red-500' : 'text-amber-600')

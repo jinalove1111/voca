@@ -13,7 +13,13 @@ import { getStudentClassId } from '../utils/wordLibrary'
 // 학생이 시험을 한 번도 안 열어도 그 전체 코드를 메인 번들에 끌고 왔다.
 // 배너만 이 작은 파일로 분리 + App.jsx에서 EntranceTest는 React.lazy로
 // 전환 — 배너 표시/폴링 동작은 완전히 동일(로직 이동만).
-const BANNER_POLL_MS = 20000
+//
+// B10(2026-08-02) — 시험이 없는 날에도 20초마다 폴링해 불필요한 조회가
+// 쌓였다. 주기를 60초로 늘리고, 첫 조회에서 오늘 시험이 0건이면 폴링을
+// 멈춘다(그 세션 동안엔 시험이 새로 생겨도 안 보일 수 있지만, 다음
+// 대시보드 마운트/새로고침에서 다시 조회하므로 완전히 놓치지는 않음 —
+// 입실시험은 원장이 그 시간대에 미리 준비해 두는 흐름이라 실사용 영향 적음).
+const BANNER_POLL_MS = 60000
 
 export function EntranceTestBanner({ studentId, onGo }) {
   const classId = getStudentClassId(studentId)
@@ -22,14 +28,17 @@ export function EntranceTestBanner({ studentId, onGo }) {
   useEffect(() => {
     if (!classId) return undefined
     let alive = true
-    const check = async () => {
+    let iv = null
+    const check = async (isFirst) => {
       if (document.visibilityState !== 'visible') return
       const t = await fetchTodayTests(classId)
-      if (alive) setTests(t)
+      if (!alive) return
+      setTests(t)
+      if (isFirst && t.length === 0 && iv) { clearInterval(iv); iv = null }
     }
-    check()
-    const iv = setInterval(check, BANNER_POLL_MS)
-    return () => { alive = false; clearInterval(iv) }
+    check(true)
+    iv = setInterval(() => check(false), BANNER_POLL_MS)
+    return () => { alive = false; if (iv) clearInterval(iv) }
   }, [classId])
 
   if (tests.length === 0) return null

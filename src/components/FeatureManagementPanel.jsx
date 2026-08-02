@@ -4,7 +4,7 @@
  * 숨김 기능들을 활성화/비활성화할 수 있습니다.
  */
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
   getAllFeatures,
   setFeatureEnabled,
@@ -78,7 +78,7 @@ const FEATURE_DETAILS = {
   },
 }
 
-function FeatureCategoryToggle({ category, features }) {
+function FeatureCategoryToggle({ category, features, onChange }) {
   const [expanded, setExpanded] = useState(false)
   const categoryFeatures = getFeaturesByCategory(category.id)
   const allEnabled = categoryFeatures.every(f => features[f] === true)
@@ -90,6 +90,7 @@ function FeatureCategoryToggle({ category, features }) {
       newState[f] = !allEnabled
     })
     setMultipleFeatures(newState)
+    onChange?.()
   }
 
   return (
@@ -123,7 +124,7 @@ function FeatureCategoryToggle({ category, features }) {
                 type="checkbox"
                 id={featureName}
                 checked={features[featureName] === true}
-                onChange={(e) => setFeatureEnabled(featureName, e.target.checked)}
+                onChange={(e) => { setFeatureEnabled(featureName, e.target.checked); onChange?.() }}
                 className="mr-3"
               />
               <label htmlFor={featureName} className="flex-1 cursor-pointer">
@@ -203,11 +204,10 @@ export default function FeatureManagementPanel() {
     setFeatures(getAllFeatures())
   }
 
-  // Feature 변경이 감지되면 자동 새로고침
-  useEffect(() => {
-    const interval = setInterval(refreshFeatures, 1000)
-    return () => clearInterval(interval)
-  }, [])
+  // B8(2026-08-02) — 1초 폴링으로 매초 무조건 리렌더시키던 것을 제거.
+  // 이 패널이 유일한 쓰기 경로(토글 핸들러)이므로 토글 시 직접 refreshFeatures()를
+  // 호출하는 것으로 충분하다(다른 탭/세션에서의 동시 편집은 기존에도 지원 대상이
+  // 아니었음 — 새로고침하면 반영됨).
 
   if (!hasPermission(PERMS.MANAGE_FEATURES)) {
     return (
@@ -263,6 +263,7 @@ export default function FeatureManagementPanel() {
               key={category.id}
               category={category}
               features={features}
+              onChange={refreshFeatures}
             />
           ))}
 

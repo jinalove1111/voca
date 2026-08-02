@@ -1,5 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
-import * as XLSX from 'xlsx'
+// B7(2026-08-02) — xlsx 정적 import는 관리자 번들에 항상 포함돼 크기를
+// 키웠다(엑셀 업로드는 자주 쓰는 기능이 아님). PdfUpload.handleFile이 이미
+// pdfjs-dist를 동적 import하는 선례가 있어 동일 패턴으로 handleFile 안에서만
+// 로드하도록 바꾼다(정적 import 제거, 동작은 동일).
 import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchAssignmentHistory, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, getClassIdByName, getStudents, wordSlug, isoDaysAgoStr } from '../utils/wordLibrary'
 // 숙제 "자동 생성" 순수 플래너(2026-08-01) — 이 파일은 미리보기(체크박스
 // Set 채우기)에만 쓰고, 실제 저장은 항상 기존 setTodaysAssignment/
@@ -1078,6 +1081,7 @@ function ExcelUpload({ onDone, adminPin }) {
     // 멈춰 원인 파악이 어려웠다 — PdfUpload.handleFile(:1191-1213)과 동일하게
     // 한국어 안내로 정직하게 알린다.
     try {
+      const XLSX = await import('xlsx')
       const data = await file.arrayBuffer()
       const wb   = XLSX.read(data)
       const ws   = wb.Sheets[wb.SheetNames[0]]
@@ -1382,6 +1386,8 @@ export default function AdminScreen({ onBack }) {
   // 다시 읽게 한다(두 컴포넌트가 상태를 공유하지 않으므로 최소한의 prop
   // 신호만 전달, 헌법 규칙 12와 무관한 순수 관리자 UI 배선).
   const [aiSavingsTick, setAiSavingsTick] = useState(0)
+  // B1(2026-08-02) — 관찰 패널 지연 마운트 여부(닫혀 있으면 조회 안 함)
+  const [analyticsOpen, setAnalyticsOpen] = useState(false)
 
   const refresh = () => {
     setClasses(getClassNames())
@@ -1473,10 +1479,15 @@ export default function AdminScreen({ onBack }) {
           <div className="space-y-3">
             <SeasonPanel adminPin={pin} />
 
-            {/* 익명 관찰(2026-07-23) — 접힌 섹션, 열 때만 조회 */}
-            <details className="bg-white rounded-3xl card-shadow">
+            {/* 익명 관찰(2026-07-23) — 접힌 섹션, 열 때만 조회.
+                2026-08-02(B1): <details>는 닫혀 있어도 자식이 계속 마운트돼
+                있어 탭 진입마다 AnalyticsPanel의 대용량 조회(product_events
+                2만행 + student_progress/word_status/student_class_assignments
+                무필터 전체)가 실행됐다 — onToggle로 열림 여부를 추적해
+                열렸을 때만 마운트한다(로직/조회 자체는 변경 없음). */}
+            <details className="bg-white rounded-3xl card-shadow" onToggle={(e) => setAnalyticsOpen(e.target.open)}>
               <summary className="cursor-pointer select-none list-none p-5 font-black text-gray-700">📊 관찰 (어떤 기능이 아이를 돌아오게 하나)</summary>
-              <div className="px-5 pb-5"><AnalyticsPanel /></div>
+              <div className="px-5 pb-5">{analyticsOpen && <AnalyticsPanel />}</div>
             </details>
 
             {/* 2026-08-01(자기학습형 검토 파이프라인, Commit 2) — 통계 우선

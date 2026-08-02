@@ -11,7 +11,7 @@
 // 애초에 락다운 대상이 아니다(supabase_v1_3_schema.sql). AnalyticsPanel.jsx
 // 와 동일한 관례로 이 파일도 supabaseClient를 직접 사용(관리자 전용 읽기
 // 전용 조회 — wordLibrary.js에 새 쓰기 경로를 추가하지 않음).
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { supabase } from '../../utils/supabaseClient'
 import { getClassNames, getClassUnits, getStudentsInClass, fetchAssignmentHistory, localIsoDateStr, wordSlug, isoDaysAgoStr } from '../../utils/wordLibrary'
 
@@ -82,14 +82,20 @@ export default function AssignmentHistoryPanel() {
   // (배정 당시 유닛이 아니라 "현재" 유닛 — 단어가 유닛을 옮긴 드문 경우도
   // 크래시 없이 최신 상태만 보여줌). 이 반에 더 이상 없는 slug(단어 삭제/
   // 이름 변경 등)는 조회에 안 걸려 원문 그대로 표시된다.
-  const wordLookup = new Map()
-  if (selectedClass) {
-    (getClassUnits(selectedClass) || []).forEach((u) => {
-      (u.words || []).forEach((w) => {
-        if (w?.word) wordLookup.set(wordSlug(w.word), { word: w.word, unitName: u.name })
+  // B9(2026-08-02) — 이 Map을 렌더마다 새로 만들었다(선택된 반이 안 바뀌어도
+  // 매 리렌더 재구축). selectedClass가 바뀔 때만 다시 만들도록 메모이제이션
+  // (계산 로직 자체는 동일).
+  const wordLookup = useMemo(() => {
+    const m = new Map()
+    if (selectedClass) {
+      (getClassUnits(selectedClass) || []).forEach((u) => {
+        (u.words || []).forEach((w) => {
+          if (w?.word) m.set(wordSlug(w.word), { word: w.word, unitName: u.name })
+        })
       })
-    })
-  }
+    }
+    return m
+  }, [selectedClass])
 
   return (
     <div className="bg-white rounded-3xl card-shadow p-5 space-y-3">
