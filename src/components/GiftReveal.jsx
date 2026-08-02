@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { RARITY_COLORS } from '../data/stickers'
 import { playSuccessSound } from '../utils/speech'
 import { pickReaction } from '../utils/paulReactions'
@@ -13,18 +13,32 @@ export default function GiftReveal({ sticker, isDuplicate, isMilestone, streakDa
   // 컴포넌트가 마운트될 때 한 번만 뽑음(예전 PaulReaction의 type prop이
   // 컴포넌트 생애주기 동안 하나로 고정되던 것과 동일한 동작).
   const completePaul = useMemo(() => pickReaction('complete'), [])
+  // 지급은 이미 끝난 뒤라(이 컴포넌트는 결과를 "보여주기만" 함) 연출을
+  // 건너뛰어도 안전 — 900ms+2000ms 강제 대기가 지루하다는 지적으로,
+  // box/shake 단계에서 탭하면 즉시 open으로 넘어가게 한다. 타이머를
+  // ref에 저장해 스킵 시 clearTimeout으로 취소해야, 나중에 t1(900ms)이
+  // 뒤늦게 발동해 이미 open인 stage를 다시 shake로 되돌리는 걸 막는다.
+  const timersRef = useRef([])
 
   useEffect(() => {
     const t1 = setTimeout(() => setStage('shake'), 900)
     const t2 = setTimeout(() => { setStage('open'); playSuccessSound() }, 2000)
+    timersRef.current = [t1, t2]
     return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [])
+
+  const skipToOpen = () => {
+    if (stage === 'open') return
+    timersRef.current.forEach(clearTimeout)
+    setStage('open')
+    playSuccessSound()
+  }
 
   const rc = RARITY_COLORS[sticker.rarity]
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={stage === 'open' ? onClose : undefined}>
-      <div className="bg-white rounded-3xl p-8 text-center max-w-sm w-full animate-slide-up" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={stage === 'open' ? onClose : skipToOpen}>
+      <div className="bg-white rounded-3xl p-8 text-center max-w-sm w-full animate-slide-up" onClick={e => { e.stopPropagation(); if (stage !== 'open') skipToOpen() }}>
         <p className="text-indigo-600 font-black text-lg mb-1">
           {isMilestone ? `🔥 ${streakDays}일 연속 달성!` : isBadge ? `⭐ 별 ${badgeThreshold}개 달성!` : '🎁 미션 완료!'}
         </p>

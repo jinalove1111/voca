@@ -34,6 +34,13 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
 
   const activeMissions = missions.filter(m => !m.done)
   const doneMissions   = missions.filter(m => m.done)
+  // 제품 폴리시(2026-08-02) — activeMissions는 있어도(예: 3개) 학생이
+  // 방금 유닛을 바꿔서 그 단어들이 지금 words(현재 유닛 단어 목록)에
+  // 없으면 아래 map이 전부 null을 반환해 "3개 도전 중"이라 써놓고 실제
+  // 목록은 텅 빈 화면이 됐다. 렌더 가능한(=현재 유닛에 실제로 있는)
+  // 미션만 따로 세서 그 개수로 빈 상태를 판단한다 — 미션 자체를
+  // 지우거나 만들지 않는 순수 표시 판단.
+  const renderableActiveMissions = activeMissions.filter(m => words.some(x => x.id === m.wordId))
 
   const startPractice = (wordId) => {
     const w = words.find(x => x.id === wordId)
@@ -191,13 +198,17 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
       </div>
 
       <div className="max-w-lg mx-auto">
-        {activeMissions.length === 0 ? (
+        {renderableActiveMissions.length === 0 ? (
           <div className="bg-white rounded-3xl card-shadow p-10 text-center animate-fade-in">
             <div className="text-6xl mb-4">🏆</div>
-            <h2 className="text-xl font-black text-gray-600 mb-2">미션이 없어요!</h2>
-            <p className="text-gray-400 text-sm mb-6">퀴즈에서 틀린 단어가 여기 나타나요.</p>
+            <h2 className="text-xl font-black text-gray-600 mb-2">
+              {activeMissions.length > 0 ? '지금 유닛에는 복습할 단어가 없어요' : '미션이 없어요!'}
+            </h2>
+            <p className="text-gray-400 text-sm mb-6">
+              {activeMissions.length > 0 ? '유닛을 바꾸면 그 유닛의 복습 단어가 나타나요.' : '퀴즈에서 틀린 단어가 여기 나타나요.'}
+            </p>
             <button onClick={onBack} className="bg-purple-500 text-white font-bold px-6 py-3 rounded-2xl btn-press">
-              퀴즈 하러 가기 🎮
+              {activeMissions.length > 0 ? '← 홈으로' : '퀴즈 하러 가기 🎮'}
             </button>
           </div>
         ) : (
@@ -207,7 +218,7 @@ export default function LevelUpMission({ missions, words, onAnswer, onBack }) {
               <p className="text-red-600 font-bold text-sm mt-1">💡 3번 맞히면 클리어! (+3⭐)</p>
             </div>
 
-            {activeMissions.map((m) => {
+            {renderableActiveMissions.map((m) => {
               const w = words.find(x => x.id === m.wordId)
               if (!w) return null
               return (

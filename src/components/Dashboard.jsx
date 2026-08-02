@@ -193,14 +193,14 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
   } else if (canResume) {
     rec = {
       emoji: '📖', title: '이어서 학습할까요?',
-      desc: `${lastWordIndex + 1}번째 단어부터 3분 세션으로 이어가요.`,
+      desc: `${lastWordIndex + 1}번째 단어부터 짧은 세션으로 이어가요.`,
       label: '▶ 오늘의 학습 계속하기',
       onClick: () => (onStartGuided ? onStartGuided() : onResumeWord(lastWordIndex)),
     }
   } else if (hasWords) {
     rec = {
       emoji: '✨', title: '오늘도 시작해볼까요?',
-      desc: '딱 3분씩, 짧은 세션으로 차근차근 시작해요!',
+      desc: '짧은 세션으로 나눠서 차근차근 시작해요!',
       label: '▶ 오늘의 학습 시작',
       onClick: () => (onStartGuided ? onStartGuided() : onResumeWord(0)),
     }
@@ -446,7 +446,17 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
             <p className="text-xs font-bold text-yellow-200 mt-1">⚠️ {unitSwitchError}</p>
           )}
           {hasTodaysHomework && (
-            <p className="text-xs font-bold text-yellow-200 mt-2">📌 오늘의 숙제 단어가 준비돼 있어요 — 단어 공부에서 바로 시작!</p>
+            <p className="text-xs font-bold text-yellow-200 mt-2">
+              {/* 제품 폴리시(2026-08-02) — "단어 공부" 버튼은 기본 접힌
+                  <details> 안에 있어 실제로는 안 보인다. 오늘의 숙제는
+                  실제로 히어로 CTA(오늘의 학습 시작/이어가기)를 눌러야
+                  받는다 — 그 버튼을 가리키게 문구를 바꾸고, 이미 계산돼
+                  있는 liveMissionsCompleted(오늘 미션 4/4 완료 신호,
+                  기존 로직 그대로)가 꽉 찼으면 완료 문구로 교체. */}
+              {liveMissionsCompleted >= 4
+                ? '📌 오늘 숙제 완료!'
+                : '📌 오늘의 숙제 단어가 준비돼 있어요 — 오늘의 학습을 시작하면 바로 시작돼요!'}
+            </p>
           )}
         </div>
 

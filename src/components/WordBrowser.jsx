@@ -129,11 +129,16 @@ export default function WordBrowser({ words, cleared, onSelect, onBack, mode, on
         </div>
 
         <div className="bg-white rounded-2xl card-shadow p-3 mb-4 flex items-center gap-3">
+          {/* 제품 폴리시(2026-08-02) — 유닛 전환 직후 cleared(누적 클리어
+              id 목록)가 새 words(현재 유닛 단어)보다 잠깐 많아질 수 있어
+              분자>분모가 되면서 바가 100%를 넘겨 렌더됐다. cleared의
+              정의(무엇을 세는지)는 그대로 두고, 표시(바 폭/라벨)만
+              분모를 넘지 않게 클램프. */}
           <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
             <div className="h-full bg-gradient-to-r from-blue-400 to-purple-500 rounded-full transition-all"
-              style={{ width: `${(cleared.length / Math.max(words.length, 1)) * 100}%` }} />
+              style={{ width: `${Math.min(100, (cleared.length / Math.max(words.length, 1)) * 100)}%` }} />
           </div>
-          <span className="text-sm font-black text-purple-600 whitespace-nowrap">{cleared.length}/{words.length}</span>
+          <span className="text-sm font-black text-purple-600 whitespace-nowrap">{Math.min(cleared.length, words.length)}/{words.length}</span>
         </div>
 
         <div className="space-y-2 animate-fade-in">
