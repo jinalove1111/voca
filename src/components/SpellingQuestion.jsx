@@ -34,7 +34,7 @@ const UNLOCK_AT = 3 // 이 오답 횟수부터 '발음 듣기' 버튼이 활성�
 const WRONG_MSGS = {
   1: '❌ 다시 한번 생각해보세요!',
   2: '❌ 조금만 더 생각해보세요!',
-  3: '❌ 정말 모르겠으면 아래 🔊 버튼을 눌러 들어보세요',
+  3: '❌ 정말 모르겠으면 위 🔊 버튼을 눌러 들어보세요',
 }
 
 // 쓰기 시험 한 문제 — direction으로 어느 방향을 묻는지 결정하는 재사용
@@ -94,6 +94,13 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
   const [input, setInput] = useState('')
   const [showHint, setShowHint] = useState(false)
   const [correctPaul, setCorrectPaul] = useState(null)
+  // 오답 직후 입력창을 비우기 직전 값을 보관 — "내가 쓴 것: ___" 표시용
+  // (채점 로직과 무관, 순수 표시). 다음 시도 입력을 시작하면(onChange) 지움.
+  const [lastWrongInput, setLastWrongInput] = useState('')
+  // 이번 정답이 콤보 마일스톤/컴백 단어라 축하 연출을 길게 보여줄지 —
+  // markCorrect에서 정해지고, 안전망 수동 "다음" 버튼 타이머가 같은 값을
+  // 참고해 함께 늦춰짐(자동 이동 700/1700ms에 맞춰 1500/2500ms).
+  const [celebrateLong, setCelebrateLong] = useState(false)
   // 안전망(2026-07-27, docs/bugs/2026-07-26-ella-writing-spelling-stuck.md
   // 8절) — 정답 화면에서 자동 이동 타이머가 늦어지거나 실패해도 학생이
   // 갇히지 않도록, 일정 시간 뒤 나타나는 수동 "다음 문제" 버튼 표시 여부.
@@ -155,6 +162,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
     setPhase('answer')
     setWrongCount(0)
     setInput('')
+    setLastWrongInput('')
     setShowHint(false)
     reportedRef.current = false
     setResolvedDirection(pickDirection())
@@ -170,9 +178,9 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
   // (다음 문제로 실제 이동) 다시 숨김 + 타이머 정리.
   useEffect(() => {
     if (phase !== 'correct') { setShowManualNext(false); return }
-    const t = setTimeout(() => setShowManualNext(true), 1500)
+    const t = setTimeout(() => setShowManualNext(true), celebrateLong ? 2500 : 1500)
     return () => clearTimeout(t)
-  }, [phase])
+  }, [phase, celebrateLong])
 
   const playAgain = () => {
     if (wrongCount < UNLOCK_AT || phase === 'correct') return // 잠금 해제 전엔 무시(버튼도 비활성 상태)
@@ -200,7 +208,11 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
     // isComebackWord도 콤보 마일스톤과 같은 'levelup' 리액션을 재사용 —
     // 둘 다 "평소보다 특별한 순간"이라는 같은 톤이라 새 애셋 불필요.
     setCorrectPaul(((isComebackWord || isMilestone) && getReactionById('levelup')) || pickReaction('success'))
-    setTimeout(() => onDone?.(), 700)
+    // 콤보 마일스톤/컴백 단어 배지가 뜨는 경우만 축하를 조금 더 오래
+    // 보여줌(1700ms) — 일반 정답은 기존 속도감(700ms) 그대로 유지.
+    const extra = isComebackWord || isMilestone
+    setCelebrateLong(extra)
+    setTimeout(() => onDone?.(), extra ? 1700 : 700)
     try { playSuccessSound() } catch {}
   }
 
@@ -217,6 +229,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
     if (firstAttempt) { reportedRef.current = true; onResult?.(correct, resolvedDirection, input.trim()) }
     if (correct) { markCorrect(firstAttempt ? combo + 1 : 0); return }
 
+    setLastWrongInput(input)
     setInput('')
     const next = wrongCount + 1
     setWrongCount(next)
@@ -269,6 +282,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
     spellCheck: 'false',
     inputMode: 'text',
     lang: isEn2Kr ? 'ko' : 'en',
+    enterKeyHint: 'done',
     ...blockClipboard,
   }
 
@@ -336,7 +350,11 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
           {wrongMsg && (
             <HeroReaction image={getReactionById(WRONG_PAUL_ID[wrongCount])?.image} title={wrongMsg} theme="fail" size="md" />
           )}
-          <input ref={inputRef} {...examInputProps} value={input} onChange={e => setInput(e.target.value)}
+          {wrongMsg && lastWrongInput && (
+            <p className="text-center text-gray-400 text-sm lowercase">내가 쓴 것: {lastWrongInput}</p>
+          )}
+          <input ref={inputRef} {...examInputProps} value={input}
+            onChange={e => { setInput(e.target.value); if (lastWrongInput) setLastWrongInput('') }}
             onKeyDown={e => e.key === 'Enter' && submitAnswer()}
             placeholder={inputPlaceholder} autoFocus
             className="w-full border-2 border-teal-200 rounded-xl px-4 py-4 text-xl font-black text-center focus:outline-none focus:border-teal-500" />
