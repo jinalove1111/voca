@@ -731,7 +731,7 @@ const todayIsoStr = () => localIsoDateStr()
 // fetchDashboardData()로 한 번에 배치 조회해서 보여줌. Supabase 동기화가
 // 아직 안 된 학생(방금 가입해서 첫 동기화 전 등)은 "기록 없음"으로 표시될
 // 뿐 에러가 나지 않음.
-function AdminDashboard() {
+function AdminDashboard({ adminPin } = {}) {
   const classList = getClassNames()
   const [selectedClass, setSelectedClass] = useState(classList[0] || '')
   const [loading, setLoading] = useState(false)
@@ -880,7 +880,7 @@ function AdminDashboard() {
           A3(2026-08-02) — "오늘로 복사" 저장 버튼이 setAssignmentForDate를
           쓰므로 adminPin을 전달(기존 dual-path 그대로, 없으면 레거시 anon
           upsert로 폴백). */}
-      <AssignmentHistoryPanel adminPin={pin} />
+      <AssignmentHistoryPanel adminPin={adminPin} />
 
       {!loading && rows.map(r => {
         const { studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws } =
@@ -1830,7 +1830,7 @@ export default function AdminScreen({ onBack }) {
         )}
 
         {tab === 'students' && <StudentDirectory adminPin={pin} />}
-        {tab === 'dashboard' && <AdminDashboard />}
+        {tab === 'dashboard' && <AdminDashboard adminPin={pin} />}
         {tab === 'entrance' && <EntranceTestAdmin />}
         {/* A8(2026-08-02) — 업로드 완료 시 방금 올린 반/유닛을 바로 열어
             "확인까지 4단계"였던 마찰을 없앤다(반 목록 탭으로만 보내던 것에서,
