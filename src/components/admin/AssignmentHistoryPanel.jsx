@@ -11,7 +11,7 @@
 // 애초에 락다운 대상이 아니다(supabase_v1_3_schema.sql). AnalyticsPanel.jsx
 // 와 동일한 관례로 이 파일도 supabaseClient를 직접 사용(관리자 전용 읽기
 // 전용 조회 — wordLibrary.js에 새 쓰기 경로를 추가하지 않음).
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../utils/supabaseClient'
 import { getClassNames, getClassUnits, getStudentsInClass, fetchAssignmentHistory, localIsoDateStr } from '../../utils/wordLibrary'
 
@@ -30,12 +30,20 @@ export default function AssignmentHistoryPanel() {
   const [completion, setCompletion] = useState({}) // date -> { done, total }
   const [errorMsg, setErrorMsg] = useState('')
 
+  // 2026-08-02 — stale-response 가드. 반/날짜 범위를 빠르게 바꾸면 먼저
+  // 시작된 조회의 응답이 나중에 도착해 방금 바꾼 선택의 결과를 덮어쓸 수
+  // 있었다(AdminScreen.jsx:499/734와 동일한 stale 응답 레이스 — P7 감사
+  // 2026-07-16). 요청 번호로 최신 요청의 응답만 반영한다.
+  const loadReqIdRef = useRef(0)
+
   const load = async () => {
+    const reqId = ++loadReqIdRef.current
     if (!selectedClass) { setHistory([]); setCompletion({}); return }
     setLoading(true)
     setErrorMsg('')
     try {
       const rows = await fetchAssignmentHistory(selectedClass, fromDate, toDate)
+      if (loadReqIdRef.current !== reqId) return // 더 최신 조회가 시작됨 — 이 응답은 버림
       setHistory(rows)
       const ids = getStudentsInClass(selectedClass).map((s) => s.id)
       if (ids.length === 0) { setCompletion({}); return }
@@ -44,6 +52,7 @@ export default function AssignmentHistoryPanel() {
         .in('student_id', ids)
         .gte('date', fromDate)
         .lte('date', toDate)
+      if (loadReqIdRef.current !== reqId) return
       if (error) {
         // 완료 현황만 실패해도 배정 이력(rows)은 이미 화면에 표시된 상태라
         // 화면 전체를 깨뜨리지 않는다 — 정직하게 안내만.
@@ -59,11 +68,12 @@ export default function AssignmentHistoryPanel() {
       rows.forEach((r) => { comp[r.date] = { done: doneByDate[r.date] || 0, total: ids.length } })
       setCompletion(comp)
     } catch (err) {
+      if (loadReqIdRef.current !== reqId) return
       setErrorMsg('배정 이력을 불러오는 중 오류가 발생했어요: ' + (err.message || err))
       setHistory([])
       setCompletion({})
     } finally {
-      setLoading(false)
+      if (loadReqIdRef.current === reqId) setLoading(false)
     }
   }
 

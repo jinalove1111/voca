@@ -663,10 +663,12 @@ export async function revokeAutoAcceptedVariant(wordId, answerToRemove, adminPin
 // 있어(같은 파일 §64행) 여기서 직접 업데이트해도 새 GRANT가 필요 없다
 // (헌법 규칙 10과 무관 — students 테이블이 아니라 이 기존 GRANT 범위
 // 안이라 안전).
-function isMissingQueueRelationError(err) {
-  const code = err?.code
-  return code === '42P01' || code === 'PGRST205' || /schema cache|does not exist|relation .* does not exist/i.test(err?.message || '')
-}
+//
+// 2026-08-02 — 이 파일 위쪽의 isMissingRelationError(§588행)와 바이트
+// 단위로 동일한 정의였다(코드품질 감사 지적) — 별도 함수로 유지할 이유가
+// 없어(같은 파일, 같은 esbuild 번들 경계 — §581-587행 "왜 wordLibrary에서
+// import 안 하는지" 설명은 이 파일 자체에는 해당 없음) 위 함수 하나로
+// 통합한다. 아래 호출부는 isMissingRelationError를 그대로 재사용.
 
 // 최근 무시된 답안 목록 — spelling_review_queue에는 status_changed_at 같은
 // "처리 시각" 컬럼이 없어(스키마 실측 확인) created_at(제출 시각) 기준
@@ -681,7 +683,7 @@ export async function fetchRecentDismissedSpellingReviews({ limit = 50 } = {}) {
       .order('created_at', { ascending: false })
       .limit(limit)
     if (error) {
-      if (!isMissingQueueRelationError(error)) console.warn('[spellingReviewAiApi] 최근 무시 목록 조회 실패:', error.message || error)
+      if (!isMissingRelationError(error)) console.warn('[spellingReviewAiApi] 최근 무시 목록 조회 실패:', error.message || error)
       return []
     }
     return (data || []).map((r) => ({
@@ -694,7 +696,7 @@ export async function fetchRecentDismissedSpellingReviews({ limit = 50 } = {}) {
       createdAt: r.created_at,
     }))
   } catch (err) {
-    if (!isMissingQueueRelationError(err)) console.warn('[spellingReviewAiApi] 최근 무시 목록 조회 실패:', err?.message || err)
+    if (!isMissingRelationError(err)) console.warn('[spellingReviewAiApi] 최근 무시 목록 조회 실패:', err?.message || err)
     return []
   }
 }

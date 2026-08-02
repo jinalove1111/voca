@@ -222,6 +222,12 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
     if (!lastAcceptedBatch) return
     setRevertingLastBatch(true)
     try {
+      // 2026-08-02 — 이전엔 개별 실패를 console.warn으로만 삼키고 항상
+      // "완료" 요약을 띄웠다(관리자가 실제로는 일부만 되돌려졌는지 알 방법이
+      // 없었고, lastAcceptedBatch를 무조건 null로 비워 실패한 행은 재시도
+      // 기회조차 없이 소실됐다). 실패 건수를 집계해 요약에 반영하고, 실패한
+      // 행만 lastAcceptedBatch에 남겨 재시도할 수 있게 한다.
+      const failedRows = []
       for (const row of lastAcceptedBatch.rows) {
         try {
           await revokeAutoAcceptedVariant(row.wordId, row.submittedAnswer, adminPin)
@@ -230,10 +236,17 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
           // 액션"이라 하나 실패로 전체를 막지 않는다(§ executeBulkAccept와
           // 동일 원칙).
           console.warn('[SpellingReviewQueuePanel] 되돌리기 중 일부 실패:', row.word, err?.message || err)
+          failedRows.push(row)
         }
       }
-      setDoneSummary(`마지막 배치(${lastAcceptedBatch.label} ${lastAcceptedBatch.count}건) 되돌리기 완료 — 검토 상태 자체는 그대로예요(인정 답안 목록에서만 제거됨)`)
-      setLastAcceptedBatch(null)
+      const succeededCount = lastAcceptedBatch.count - failedRows.length
+      if (failedRows.length === 0) {
+        setDoneSummary(`마지막 배치(${lastAcceptedBatch.label} ${lastAcceptedBatch.count}건) 되돌리기 완료 — 검토 상태 자체는 그대로예요(인정 답안 목록에서만 제거됨)`)
+        setLastAcceptedBatch(null)
+      } else {
+        setDoneSummary(`마지막 배치 되돌리기 일부 실패 — ${succeededCount}/${lastAcceptedBatch.count}건만 되돌렸어요(${failedRows.length}건 실패, 다시 시도할 수 있어요)`)
+        setLastAcceptedBatch({ ...lastAcceptedBatch, rows: failedRows, count: failedRows.length })
+      }
       onChanged?.()
     } finally {
       setRevertingLastBatch(false)

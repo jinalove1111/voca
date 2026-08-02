@@ -1059,12 +1059,21 @@ function ExcelUpload({ onDone, adminPin }) {
   const handleFile = async (e) => {
     const file = e.target.files[0]
     if (!file) return
-    const data = await file.arrayBuffer()
-    const wb   = XLSX.read(data)
-    const ws   = wb.Sheets[wb.SheetNames[0]]
-    const rows = XLSX.utils.sheet_to_json(ws, { header: 1 })
-    // Class always comes from the dropdown above — never from the file.
-    setPreview(parseExcelRows(rows, selectedClass))
+    // 2026-08-02 — 손상된 파일/암호 보호 엑셀 등으로 XLSX.read가 던지면
+    // 이전엔 잡히지 않은 예외로 콘솔에만 남고 화면은 "파일 선택" 상태 그대로
+    // 멈춰 원인 파악이 어려웠다 — PdfUpload.handleFile(:1191-1213)과 동일하게
+    // 한국어 안내로 정직하게 알린다.
+    try {
+      const data = await file.arrayBuffer()
+      const wb   = XLSX.read(data)
+      const ws   = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1 })
+      // Class always comes from the dropdown above — never from the file.
+      setPreview(parseExcelRows(rows, selectedClass))
+    } catch (err) {
+      alert('엑셀 파일을 읽는 중 오류가 발생했어요(손상된 파일이거나 지원하지 않는 형식일 수 있어요): ' + (err.message || err))
+      setPreview(null)
+    }
   }
 
   const handleSave = async () => {

@@ -29,6 +29,22 @@ function warnOnce(err) {
   console.warn('[spellingReview] 검토 큐 접근 실패 — supabase_v2_0_spelling_mixed.sql이 아직 실행 안 됐을 수 있음(기록 자동 스킵, 채점/학습에는 영향 없음):', err?.message || err)
 }
 
+// 2026-08-02 — fetchPendingSpellingReviews가 "테이블 없음"과 "그 외 에러
+// (RLS/네트워크 등)"를 둘 다 null로 뭉뚱그려 패널이 "SQL 실행 필요"로만
+// 안내하던 것을 구분한다. wordLibrary.js가 이미 export하는 isMissingTableError
+// 와 논리적으로 동일하나, 이 파일이 esbuild로 단독 번들되는 테스트가 여럿
+// 있어(scripts/testWritingReviewAiPipeline.mjs 섹션 60의 spellingReviewApi.js
+// 단독 번들 — supabaseClient만 스텁하고 wordLibrary는 스텁 대상이 아님) 새
+// import를 추가하면 그 번들에 wordLibrary.js 전체가 딸려 들어가는 부작용이
+// 생긴다 — writingAnswerStatsApi.js의 동일 이름 로컬 함수와 같은 이유로
+// import 대신 로컬 정의를 유지한다(§ 그 파일 헤더 주석 33-41행).
+function isMissingTableError(err) {
+  if (!err) return false
+  if (err.code === '42P01' || err.code === 'PGRST205') return true
+  const msg = String(err.message || '').toLowerCase()
+  return msg.includes('does not exist') || msg.includes('schema cache')
+}
+
 // ── 학생 제출 통계 기록(2026-07-24, "선생님이 같은 검토를 두 번 하지 않는"
 // 자동 학습 시스템) ──────────────────────────────────────────────────────
 //
@@ -113,6 +129,15 @@ export async function logSpellingReview(wordDbId, studentId, submittedAnswer, di
 // 패널이 "SQL 실행 필요" 안내), 성공 -> 배열(빈 배열 = "검토할 답 없음").
 // words(word_id FK) embed로 단어 원문/등록 뜻/현재 인정 목록까지 한 번에 —
 // 패널이 단어별 재조회 없이 바로 "이 답 인정" 처리 가능.
+//
+// 2026-08-02 — 이전엔 어떤 에러든(테이블 없음/RLS/네트워크 등 전부) null로
+// 수렴해 "SQL 실행 필요" 안내로만 이어졌다 — 마이그레이션 미실행이 아닌
+// 실제 장애(네트워크 등)까지 "SQL 실행하면 된다"로 오도할 수 있었다.
+// isMissingTableError일 때만 null(기존 "SQL 실행 필요" 배선 유지), 그 외
+// 에러는 빈 배열을 반환하되 __fetchError=true 마커를 붙여 "정상적으로 0건"
+// 과는 구분 가능하게 한다(호출부가 아직 이 마커를 안 봐도 rows.length===0
+// 경로로 안전하게 폴백 — 기존 동작 회귀 없음, 후속 세션이 배너 문구를
+// 분기하고 싶으면 이 마커를 쓰면 됨).
 export async function fetchPendingSpellingReviews() {
   const { data, error } = await supabase
     .from('spelling_review_queue')
@@ -120,7 +145,11 @@ export async function fetchPendingSpellingReviews() {
     .eq('status', 'pending')
     .order('created_at', { ascending: false })
     .limit(200)
-  if (error) { warnOnce(error); return null }
+  if (error) {
+    warnOnce(error)
+    if (isMissingTableError(error)) return null
+    return Object.assign([], { __fetchError: true })
+  }
   return (data || []).map((r) => ({
     id: r.id,
     wordId: r.word_id,
