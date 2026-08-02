@@ -1,0 +1,28 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "product-polish-wave-2026-08-02",
+  "task": "교사 생산성 + 성능 웨이브 — 관찰 패널 지연 마운트/xlsx 동적 로딩/인터벌 제거/메모이제이션(커밋1), 업로드 재선택·번호열 방어·업로드후 유닛 오픈(커밋2), 오늘 배정 자동생성·이력 복사(커밋3+긴급 pin 버그 수정), 대시보드 미완료 필터·리포트 라벨 정직화·시험지 출제 범위(커밋4)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-02T09:00:00Z",
+  "updated_at": "2026-08-02T09:57:27Z",
+  "files_owned": [
+    "src/components/AdminScreen.jsx",
+    "src/components/EntranceTestBanner.jsx",
+    "src/components/FeatureManagementPanel.jsx",
+    "src/components/admin/AssignmentHistoryPanel.jsx",
+    "src/components/admin/SpellingReviewQueuePanel.jsx",
+    "src/components/TestPaperGenerator.jsx",
+    "src/utils/weeklyReport.js"
+  ],
+  "files_read": [
+    "src/components/admin/AnalyticsPanel.jsx",
+    "package.json",
+    "CLAUDE.md",
+    ".ai-status/README.md"
+  ],
+  "summary": "5개 소커밋 완료(perf 1건, feat 3건, fix 1건 - AdminDashboard에 adminPin이 전달 안 돼 런타임 ReferenceError 나던 것을 즉시 발견해 별도 수정 커밋으로 처리). 각 커밋마다 build + 관련 verify:<domain> 하네스 PASS 확인 후 push. 보류 항목(A1/A4/A9/B2~B5/B6a-b/B11)은 지시대로 손대지 않음. QuizGame.jsx/WordDetail.jsx/Dashboard.jsx 등 다른 세션이 동시 작업 중인 학생 화면 파일은 전혀 건드리지 않음(git status로 매 커밋 전 확인).",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 대기 — 특히 AdminDashboard adminPin 배선(fix 9585acd)과 A10 대시보드 필터/정렬 useMemo 의존성 재검토 권장"
+}
