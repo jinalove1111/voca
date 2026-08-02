@@ -12,6 +12,8 @@ import { fetchPinStatusMap } from '../../utils/pinStatusApi'
 import { getStudents, removeStudent } from '../../hooks/useStudent'
 import TextbookAssignmentPanel from './TextbookAssignmentPanel'
 
+const devLog = import.meta.env?.DEV ? console.log : () => {}
+
 // 학생 관리 디렉터리 (2026-07-22, 관리자 규모 대응 — 300~1000명) —
 // AdminScreen.jsx의 StudentManagement를 그대로 옮겨온 컴포넌트.
 // 핸들러/데이터 흐름(반 배정/삭제/PIN 4종/하우스/교재 관리/일괄 이동/CSV)은
@@ -173,7 +175,7 @@ export default function StudentDirectory({ adminPin }) {
   const saveEdit = async () => {
     if (!editClass) { alert('반을 선택해주세요!'); return }
     // [진단 로그 1] 관리자가 선택한 unit 값
-    console.log('[AdminScreen] saveEdit — 선택한 unit 값:', { studentId: editing, editClass, editUnit })
+    devLog('[AdminScreen] saveEdit — 선택한 unit 값:', { studentId: editing, editClass, editUnit })
     try {
       await setStudentClass(editing, editClass)
       await setStudentUnit(editing, editUnit || 'Unit 1')

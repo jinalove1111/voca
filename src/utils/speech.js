@@ -1,5 +1,7 @@
 import { stopReactionSound } from './paulReactions'
 
+const devLog = import.meta.env?.DEV ? console.log : () => {}
+
 export const SUCCESS_MSGS = [
   '와 폼 미쳤다! 🔥',
   '발음 레전드인데? 👑',
@@ -203,15 +205,15 @@ function stopAllPlayback() {
 function claimTtsCall(source, word = '') {
   const callId = ++_ttsCallSeq
   if (_activeTtsCallId) {
-    console.log(`[TTS CANCEL] requestId=${_activeTtsCallId} (superseded by requestId=${callId})`)
+    devLog(`[TTS CANCEL] requestId=${_activeTtsCallId} (superseded by requestId=${callId})`)
   }
-  console.log(`[TTS START] requestId=${callId} source=${source} word=${word}`)
+  devLog(`[TTS START] requestId=${callId} source=${source} word=${word}`)
   stopAllPlayback()
   _activeTtsCallId = callId
   const isStale = () => callId !== _activeTtsCallId
   const guard = (fn) => (...args) => {
-    if (isStale()) { console.log(`[TTS SUPPRESSED-STALE] requestId=${callId} source=${source}`); return }
-    console.log(`[TTS END] requestId=${callId} source=${source}`)
+    if (isStale()) { devLog(`[TTS SUPPRESSED-STALE] requestId=${callId} source=${source}`); return }
+    devLog(`[TTS END] requestId=${callId} source=${source}`)
     fn?.(...args)
   }
   return { callId, guard }
@@ -225,11 +227,11 @@ export { claimTtsCall as __claimTtsCallForTest }
 export function playAudioUrl(url, opts = {}) {
   const { times = 1, rate = null, onEnd = null, onError = null, label = '' } = opts
   stopCurrentAudio()
-  console.log('[speech] playAudioUrl:', url || '(no url)')
+  devLog('[speech] playAudioUrl:', url || '(no url)')
   if (!url) { onError?.('발음 파일이 없습니다.'); return }
   const r = rate ?? getSpeechRate()
-  console.log(`Playing ${label || url}`)
-  console.log(`rate = ${r}`)
+  devLog(`Playing ${label || url}`)
+  devLog(`rate = ${r}`)
   let played = 0
 
   const playOnce = () => {
@@ -289,7 +291,7 @@ export function playWordAudio(url, fallbackText, opts = {}) {
   const { guard } = claimTtsCall(source, fallbackText)
   const onEnd = guard(rawOnEnd)
   const onError = guard(rawOnError)
-  console.log('[speech] playWordAudio — word/text:', fallbackText, '| stored url:', url || '(none)')
+  devLog('[speech] playWordAudio — word/text:', fallbackText, '| stored url:', url || '(none)')
 
   const giveUp = (reason) => {
     console.warn('[speech] all playback tiers failed for:', fallbackText, '| reason:', reason)
@@ -301,7 +303,7 @@ export function playWordAudio(url, fallbackText, opts = {}) {
     if (reason) console.warn('[speech] device TTS unavailable, trying network TTS:', reason)
     if (!fallbackText) { giveUp('no text to speak'); return }
     const netUrl = networkTtsUrl(fallbackText)
-    console.log('[speech] network TTS url:', netUrl)
+    devLog('[speech] network TTS url:', netUrl)
     // playAudioUrl is a plain helper here, not a new claimed call — the
     // claim already happened above for this whole playWordAudio() request,
     // and onEnd/onError are already the guarded versions.
@@ -400,8 +402,8 @@ function _rawSpeak(text, opts = {}) {
   // completion, same as before.
   const { onEnd = null, onError = null, rate = null } = opts
   const r = rate ?? getSpeechRate()
-  console.log(`Playing ${text}`)
-  console.log(`rate = ${r}`)
+  devLog(`Playing ${text}`)
+  devLog(`rate = ${r}`)
   if (!window.speechSynthesis) { (onError || onEnd)?.('no speechSynthesis'); return }
 
   unlockAudio()
@@ -478,7 +480,7 @@ function diagnoseMicEnvironment() {
     getUserMediaIsFunction: typeof navigator !== 'undefined' && typeof navigator.mediaDevices?.getUserMedia === 'function',
     hasMediaRecorder: typeof MediaRecorder !== 'undefined',
   }
-  console.log('[speech] mic environment check:', report)
+  devLog('[speech] mic environment check:', report)
   return report
 }
 
@@ -487,12 +489,12 @@ export async function getMicStreamOnce() {
 
   if (navigator.permissions?.query) {
     navigator.permissions.query({ name: 'microphone' })
-      .then((status) => console.log('[speech] permission state (reference only, not used to decide anything):', status.state))
+      .then((status) => devLog('[speech] permission state (reference only, not used to decide anything):', status.state))
       .catch(() => {})
   }
 
   if (globalMicStream && globalMicStream.active) {
-    console.log('[speech] reuse mic stream')
+    devLog('[speech] reuse mic stream')
     return globalMicStream
   }
   if (globalMicStream && !globalMicStream.active) {
@@ -512,7 +514,7 @@ export async function getMicStreamOnce() {
     throw err
   }
 
-  console.log('[speech] getUserMedia trying')
+  devLog('[speech] getUserMedia trying')
   try {
     // Plain `{ audio: true }` — the extra constraints (echoCancellation etc.)
     // some devices reject with OverconstrainedError, which we were mislabeling
@@ -523,7 +525,7 @@ export async function getMicStreamOnce() {
     console.error('[speech] getUserMedia error:', err.name, '-', err.message, '\n', err.stack)
     throw err
   }
-  console.log('[speech] getUserMedia success')
+  devLog('[speech] getUserMedia success')
   globalMicStream.getAudioTracks().forEach((t) => {
     t.onended = () => console.warn('[speech] stream stopped unexpectedly (track ended):', t.label)
   })
@@ -713,15 +715,15 @@ export function listenFor(targetWord, { onStart, onResult, onError } = {}) {
   rec.lang = 'en-US'
   rec.interimResults = false
   rec.maxAlternatives = 5
-  rec.onstart = () => { console.log('[speech] recognition onstart'); onStart?.() }
+  rec.onstart = () => { devLog('[speech] recognition onstart'); onStart?.() }
   rec.onresult = (event) => {
     const transcripts = Array.from(event.results[0]).map(r => r.transcript)
     const success = transcripts.some(t => lenientMatch(t, targetWord))
-    console.log('[speech] recognition onresult:', transcripts, '-> match:', success)
+    devLog('[speech] recognition onresult:', transcripts, '-> match:', success)
     onResult?.(success, transcripts[0] || '')
   }
   rec.onerror = (event) => { console.warn('[speech] recognition onerror:', event.error); onError?.(event.error) }
-  console.log('[speech] recognition.start() attempted for target:', targetWord)
+  devLog('[speech] recognition.start() attempted for target:', targetWord)
   try {
     rec.start()
   } catch (e) {
