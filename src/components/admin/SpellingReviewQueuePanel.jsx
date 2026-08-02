@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { setWordAcceptedMeanings, getStudents } from '../../utils/wordLibrary'
 import { fetchPendingSpellingReviews, resolveSpellingReview } from '../../utils/spellingReviewApi'
 // 쓰기 답안 검토 AI 보조(Task 2, 2026-07-23) — writingReviewAiAssist

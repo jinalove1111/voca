@@ -8,6 +8,8 @@ import { fmtDay } from './analyticsMath'
 // ticketEconomy.js를 useStudent.js가 소비하는 것과 같은 방향의 의존이다.
 import { HOUSES, assignBalancedHouseId, computeHouseCounts, computeHouseWeeklyScores, computeHouseSeasonScores } from './houseSystem'
 
+const devLog = import.meta.env?.DEV ? console.log : () => {}
+
 const DEFAULT_UNIT_NAME = 'Unit 1'
 
 // ── admin-content-write Edge Function 클라이언트(2026-07-24 보안 락다운) ──
@@ -727,7 +729,7 @@ const _pendingAudioRequests = new Set()
 export function requestAudioGeneration(wordId, word, meaning, example) {
   if (!wordId || !word || _pendingAudioRequests.has(wordId)) return
   _pendingAudioRequests.add(wordId)
-  console.log('[wordLibrary] requesting audio generation for', word, wordId)
+  devLog('[wordLibrary] requesting audio generation for', word, wordId)
   fetch('/api/generate-audio', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -739,7 +741,7 @@ export function requestAudioGeneration(wordId, word, meaning, example) {
     keepalive: true,
   })
     .then((res) => {
-      if (res.ok) { console.log('[wordLibrary] audio generation done for', word); refreshWordLibrary().catch(() => {}) }
+      if (res.ok) { devLog('[wordLibrary] audio generation done for', word); refreshWordLibrary().catch(() => {}) }
       else console.warn('[wordLibrary] audio generation failed for', word, res.status)
     })
     .catch((err) => console.warn('[wordLibrary] audio generation request failed (non-fatal):', word, err.message))
@@ -2037,7 +2039,7 @@ export const getStudentWords = (studentId, { classId: classIdOverride } = {}) =>
   let unitObj = null
   try {
     if (!cls) {
-      console.log('[wordLibrary] getStudentWords: no class resolved', {
+      devLog('[wordLibrary] getStudentWords: no class resolved', {
         selectedStudentId: studentId,
         selectedClass: getStudentClass(studentId),
         selectedClassId: classId,
@@ -2062,7 +2064,7 @@ export const getStudentWords = (studentId, { classId: classIdOverride } = {}) =>
     }
     const raw = unitObj?.words || []
     if (!raw.length) {
-      console.log('[wordLibrary] getStudentWords: empty result', {
+      devLog('[wordLibrary] getStudentWords: empty result', {
         selectedStudentId: studentId,
         selectedClass: cls,
         selectedClassId: classId,
@@ -2103,7 +2105,7 @@ export const getStudentWords = (studentId, { classId: classIdOverride } = {}) =>
     }
     return mapped
   } catch (err) {
-    console.log('[wordLibrary] getStudentWords: query error', {
+    devLog('[wordLibrary] getStudentWords: query error', {
       selectedStudentId: studentId,
       selectedClass: cls,
       selectedClassId: classId,
