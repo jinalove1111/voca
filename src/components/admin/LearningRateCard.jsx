@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { fetchLearningRateMetrics } from '../../utils/writingAnswerStatsApi'
 
 // AdminScreen.jsx → src/components/admin/LearningRateCard.jsx로 이동

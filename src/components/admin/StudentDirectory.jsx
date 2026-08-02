@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   getClassNames, getClassUnitNames, getStudentClass, getStudentUnit,
   setStudentClass, setStudentUnit, setStudentsClassBulk, setStudentHouse,

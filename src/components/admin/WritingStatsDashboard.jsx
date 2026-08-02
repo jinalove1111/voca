@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { fetchStatsOverview } from '../../utils/writingAnswerStatsApi'
 import { fetchPendingSpellingReviews } from '../../utils/spellingReviewApi'
 import { aggregateStatsRows, summarizeQueue } from '../../utils/spellingReviewBulkPlan'

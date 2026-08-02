@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { validatePassage, movePosition, splitPassageText } from '../../utils/readingModel'
 import {
   fetchPassagesForUnit, createPassage, updatePassageTitle, deletePassage,

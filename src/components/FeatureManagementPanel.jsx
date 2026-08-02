@@ -4,7 +4,7 @@
  * 숨김 기능들을 활성화/비활성화할 수 있습니다.
  */
 
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import {
   getAllFeatures,
   setFeatureEnabled,

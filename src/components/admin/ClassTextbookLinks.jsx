@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import {
   getClassNames, getClassIdByName, getClassTextbooks, getAllTextbooks,
   isTextbookMode, linkTextbookToClass, unlinkTextbookFromClass,

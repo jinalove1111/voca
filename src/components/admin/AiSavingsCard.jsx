@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { readTodaySavings } from '../../utils/writingAnswerStatsApi'
 
 // AdminScreen.jsx → src/components/admin/AiSavingsCard.jsx로 이동
