@@ -15,7 +15,12 @@ import { fetchLearningRecommendations, registerRecommendation, dismissRecommenda
 //
 // AI 추천 학습 카드(요구사항 2·4) — 반복 제출된 대기 답안 패턴 Top N을
 // 보여주고, 한 번의 클릭으로 인정/무시할 수 있게 한다.
-export default function LearningRecommendationsCard() {
+//
+// 2026-08-02 — adminPin prop 추가(AdminScreen.jsx의 SpellingReviewQueuePanel/
+// SeasonPanel과 동일 배선 관례). registerRecommendation()에 그대로 전달해
+// v3.11 락다운 이후 admin-content-write 경로로 저장되게 한다(§
+// writingAnswerStatsApi.js registerRecommendation 헤더 주석).
+export default function LearningRecommendationsCard({ adminPin }) {
   const [rows, setRows] = useState(undefined) // undefined=로딩 중, null=테이블 없음, []=없음
   const [minCount, setMinCountState] = useState(() => {
     try { return Math.max(1, parseInt(localStorage.getItem('voca_learning_reco_min_count') || '3', 10) || 3) } catch { return 3 }
@@ -40,7 +45,7 @@ export default function LearningRecommendationsCard() {
   const accept = async (row) => {
     setBusyId(row.id)
     try {
-      await registerRecommendation(row)
+      await registerRecommendation(row, adminPin)
       setRows((prev) => (Array.isArray(prev) ? prev.filter((r) => r.id !== row.id) : prev))
       setToast(`"${row.word}" 답안 등록 완료`)
     } catch (err) {

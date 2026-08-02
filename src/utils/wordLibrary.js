@@ -571,8 +571,22 @@ export async function setWordAcceptedMeanings(wordDbId, meanings, adminPin) {
   if (adminPin) {
     await callAdminContentWrite('word.accepted_meanings.update', { wordId: wordDbId, meanings: deduped }, adminPin)
   } else {
-    const { error } = await supabase.from('words').update({ accepted_meanings: deduped }).eq('id', wordDbId)
+    // 2026-08-02 — v3.11 락다운(words anon SELECT-only) 이후 이 레거시
+    // anon update는 대상 단어가 실제로 존재해도 RLS가 UPDATE 자체를
+    // 필터링해 0행을 반환한다. `.select()`가 없으면 error도 없이 조용히
+    // "성공" 반환돼(호출부가 throw를 못 잡음) 화면상으론 저장된 것처럼
+    // 보이지만 실제로는 words.accepted_meanings가 그대로다 — registerRecommendation()이
+    // adminPin 없이 호출됐을 때 이 경로로 빠져 발생한 조용한 데이터 손실
+    // 실사고(handoff.md 2026-08-02 참고). curriculumApi.js:280-282
+    // updateUnitMeta()와 동일한 방식으로 갱신된 행을 `.select()`로 직접
+    // 확인해, 0행이면 명확한 에러를 던진다(조용히 성공 처리하지 않기).
+    const { data, error } = await supabase
+      .from('words').update({ accepted_meanings: deduped }).eq('id', wordDbId)
+      .select('id').maybeSingle()
     if (error) throw error
+    if (!data) {
+      throw new Error('단어 인정 뜻을 저장하지 못했어요 — v3.11 락다운 이후 관리자 인증 경로(adminPin)가 필요해요. 관리자 화면에서 PIN 입력 상태를 확인한 뒤 다시 시도해주세요.')
+    }
   }
   await refreshWordLibrary()
   return deduped

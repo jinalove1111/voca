@@ -143,10 +143,18 @@ export async function fetchStatsOverview({ limit = 500 } = {}) {
 // 중요한 부분(단어 매칭에 실제로 쓰이는 원본, § spellingReviewAiApi.js와
 // 동일 원칙). ②는 감사 이력(word_accepted_variants, v3_7 SQL 미실행이어도
 // 무방 — best-effort)이고 ③은 이 통계 행 자체의 상태 갱신이다.
-export async function registerRecommendation(row) {
+//
+// 2026-08-02 — v3.11 락다운 이후 조용한 저장 실패 수정. adminPin(옵셔널
+// 마지막 인자)이 있으면 setWordAcceptedMeanings가 admin-content-write
+// Edge Function 경로로 words를 갱신한다(§ wordLibrary.js callAdminContentWrite
+// 헤더 주석과 동일 관례, SpellingReviewQueuePanel.jsx의 "이 답 인정"과 동일
+// 배선). pin 없이 호출되면 여전히 레거시 anon update 경로를 타되, 그 경로가
+// v3.11 이후 0행으로 조용히 "성공" 처리되던 문제는 setWordAcceptedMeanings
+// 쪽에서 직접 방어한다(§ 아래 함수 정의, curriculumApi.js:280-282 선례).
+export async function registerRecommendation(row, adminPin) {
   const plan = planAccept(row, { mode: 'answer_only' })
   // ① 실패하면 여기서 throw되어 함수가 즉시 종료 — ②③ 절대 실행 안 됨.
-  await setWordAcceptedMeanings(plan.wordId, plan.mergedAcceptedMeanings)
+  await setWordAcceptedMeanings(plan.wordId, plan.mergedAcceptedMeanings, adminPin)
 
   // ② 감사 이력 — created_by='stats_learning'으로 이 인정이 "AI 추천 학습"
   // 카드 경로에서 왔음을 남긴다(테이블에 별도 source 컬럼은 없음 — created_by가

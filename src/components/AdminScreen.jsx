@@ -1466,7 +1466,7 @@ export default function AdminScreen({ onBack }) {
             {/* 2026-08-01(P3) — 전체 현황 요약 카드. 개별 패턴 등록/무시는
                 여전히 LearningRecommendationsCard(Top50) 몫 — 중복 없음. */}
             <WritingStatsDashboard />
-            <LearningRecommendationsCard />
+            <LearningRecommendationsCard adminPin={pin} />
             <AiSavingsCard refreshTick={aiSavingsTick} />
             <LearningRateCard />
 
