@@ -1,0 +1,29 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현 — 야간 폴리시 세션 최종 단일 소유자 마감",
+  "task_id": "overnight-final-2026-08-02",
+  "task": "v3.11 락다운으로 픽스처 준비(createClass)까지 앞당겨 막힌 하네스 3개(homework/persistence/wordAssignment 도메인 공유)에 기존 정직 SKIP 관례 확장 + 야간 세션 마감 문서(COMPLETE_REPORT.md/handoff.md 26차) + .ai-status 체크포인트",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-02T02:00:00+09:00",
+  "updated_at": "2026-08-02T02:40:00+09:00",
+  "files_owned": [
+    "scripts/testDailyAssignment.mjs",
+    "scripts/testFutureAssignment.mjs",
+    "scripts/testResetWordStatusBackup.mjs",
+    "COMPLETE_REPORT.md",
+    "handoff.md",
+    ".ai-status/implementer-overnight-final-2026-08-02.json"
+  ],
+  "files_read": [
+    "tests/harness/registry.mjs",
+    "scripts/testRenameClass.mjs",
+    ".ai-status/README.md",
+    ".ai-status/implementer-home-polish-wave4.json",
+    ".ai-status/implementer-quiz-polish-wave1.json",
+    ".ai-status/implementer-session-polish-wave3.json"
+  ],
+  "summary": "커밋1(3a3c3fc): npm run verify:homework/persistence/wordAssignment 재현 결과 testDailyAssignment.mjs/testFutureAssignment.mjs/testResetWordStatusBackup.mjs 3개가 v3.11(classes/units/words anon 쓰기 락다운)에 픽스처 준비 단계(createClass)에서 42501로 막혀 실패 확인(기존에 wrapped 돼 있던 daily_assignments 전용 쓰기 지점보다 앞에서 차단). scripts/testRenameClass.mjs의 기존 정직 SKIP 관례(첫 락다운 차단 쓰기에서 try/catch → `SKIP(락다운 환경 — anon 쓰기 불가, admin-content-write pin 경로로 재검증 필요). 원본 에러: ${err.message}` + process.exit(0))를 createClass 호출 지점으로 동일하게 확장. 재검증: verify:homework/persistence/wordAssignment 전부 PASS(SKIP 라인 정상 노출). npm run build PASS. git add는 수정한 3개 스크립트만(파일 소유권 원칙 준수). push 완료(3a3c3fc). 커밋2: COMPLETE_REPORT.md 최상단에 '[2026-08-02 야간] 학생 경험 폴리시 세션' 블록 append(커밋 8개 목록, 영역별 개선 요약, 커밋 96b071e 이중 디스패치 레이스 경위 정직 기록, 의도적 미실행 3항목, 남은 아이디어 3항목, 최종 게이트 결과) + handoff.md 26차 append(기존 섹션 무변경, 위에 새 섹션만 추가) + 이 체크포인트 파일. 최종 게이트 npm run verify:all 실행 결과: FAIL {login}(환경 — 로컬 SUPABASE_SERVICE_ROLE_KEY 미설정으로 인한 기존 클러스터: testStudentSelectPinStatus/testStudentPinAuth/testStudentPinSelfSetup/testClearStudentPin, 이번 세션과 무관) + SKIP {speaking, listening}(하드웨어/청각 관측 불가, 기존 도메인 스킵 사유 불변) + v3.11 락다운 SKIP 다수(정직 SKIP, 이번 커밋1로 3개 스크립트 추가 커버) + 그 외 전 도메인(student/admin/homework/quiz/writing/unitSwitching/persistence/dailyStudy/wordAssignment/audioTts/paulRank/ticketEconomy/wordKing/houseSystem/seasonalProgression/dailyRitual/attachment/analytics/reading/sentenceLearning/examples/learningEngine/memoryEngine) PASS.",
+  "blocker": null,
+  "next_action": "없음 — 야간 세션 마감 완료. login 도메인 FAIL은 로컬 SUPABASE_SERVICE_ROLE_KEY 부재라는 기존 환경 제약(신규 회귀 아님) — 다음 세션에서 로컬 .env.local에 서비스롤 키를 설정하면 재검증 가능(COMPLETE_REPORT.md 24차 '다음 단계' 항목과 동일)."
+}

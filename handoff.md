@@ -1,7 +1,31 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-08-02 (24차, Edge Function 2종 배포 + E2E 전 항목 통과 —
-쓰기 오토파일럿 활성화 인프라 완성 + 프로덕션 숙제 저장 복구. 종합 보고:
-`COMPLETE_REPORT.md`)_
+_최종 갱신: 2026-08-02 (26차, 야간 학생 경험 폴리시 세션 마감 — 퀴즈/
+단어학습/세션/홈 4개 화면 폴리시 웨이브 + 하네스 v3.11 정직 SKIP 확장.
+종합 보고: `COMPLETE_REPORT.md`)_
+
+## 2026-08-02 (26차) — 야간 학생 경험 폴리시 세션 마감 (implementer)
+
+### 결과
+
+- 커밋 8개(시간순): `788e5ac`(하네스 42501 정직 SKIP) → `7e6f733`(W1
+  퀴즈) → `7956c17`(W2 단어학습) → `7398550`(W3 세션·복습) → `8551f4c`
+  (W4 홈·진입) → `b1e907a`(W5-A 로그 게이트+플레이키 수정) → `96b071e`
+  (W5-B vendor 청크 분리) → `3a3c3fc`(v3.11 픽스처 쓰기 정직 SKIP 확장 —
+  homework/persistence 계열). 상세 영역별 요약은 `COMPLETE_REPORT.md`
+  최상단 "[2026-08-02 야간] 학생 경험 폴리시 세션" 섹션 참고.
+- 이번 세션(implementer, 단독 작업)에서 실제로 한 것은 v3.11 락다운이
+  `testDailyAssignment.mjs`/`testFutureAssignment.mjs`/
+  `testResetWordStatusBackup.mjs`의 픽스처 준비(`createClass`)까지
+  앞당겨 막아버린 것을 확인하고, 기존 `testRenameClass.mjs`의 정직 SKIP
+  관례(첫 락다운 차단 쓰기에서 SKIP+exit 0)를 동일하게 확장 — 3개 스크립트
+  전부 재검증 PASS(SKIP 라인 포함). `npm run verify:all` 최종 게이트:
+  FAIL {login}(환경, 기존 클러스터) + SKIP {speaking, listening}(기존) +
+  락다운 SKIP 다수, 그 외 전 도메인 PASS.
+- **교훈(정직 기록)**: 커밋 `96b071e`(vendor 청크 분리)는 오케스트레이터가
+  야간 보류를 결정했으나 이중 디스패치 레이스로 원래 담당 에이전트가 원
+  지시의 선택 조항에 따라 그대로 실행한 사례 — 보류 결정이 실제 지시
+  취소로 전달됐는지까지 확인해야 신뢰할 수 있다는 게 이번 세션의 핵심
+  교훈(상세 경위는 `COMPLETE_REPORT.md` 참고).
 
 ## 2026-08-02 (24차) — Edge Function 배포·E2E 검증 완료 (coordinator)
 

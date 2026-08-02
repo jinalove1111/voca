@@ -1,0 +1,22 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "session-polish-wave3",
+  "task": "GuidedSession.jsx/SpellingReview.jsx/SpellingQuestion.jsx 학생 화면 폴리시(완료 카드 내일 예고, 복습 재진입 버튼, 검수 탈출구, 리액션 순화, 뒤로가기 라벨)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-02T00:00:00+09:00",
+  "updated_at": "2026-08-02T00:40:00+09:00",
+  "files_owned": [
+    "src/components/GuidedSession.jsx",
+    "src/components/SpellingReview.jsx",
+    "src/components/SpellingQuestion.jsx"
+  ],
+  "files_read": [
+    "src/components/WordDetail.jsx",
+    "src/utils/paulReactions.js"
+  ],
+  "summary": "5개 항목 전부 구현(표시/props/문구 전용, GRANT/XP/별 로직 무변경): (1) GuidedSession 완료 카드에 todayPlanted/reviewQueueCount 파생 '내일 예고' 1줄(우선순위: 씨앗 심음 > 복습 대기 개수 > 기본 안내), 두 prop 모두 기본값 falsy라 unwired 시 ③ 폴백. (2) allDone 카드에 onGoReview(기본 null)+reviewQueueCount>0일 때만 보이는 '🔁 틀린 단어만 다시 보기' 보조 버튼, unwired면 렌더 자체 안 함. (3) SpellingReview 헤더에 '오늘은 여기까지' 텍스트 버튼(기존 onDone 직접 호출, onClearWord 큐 축소 로직 무변경) + 저장 안내 서브캡션. (4) SpellingQuestion.jsx:353 getReactionById('sad') → getReactionById('one_more')로 교체(paulReactions.js에 id 존재 확인 후 사용, WRONG_PAUL_ID[3]과 동일 자산이라 신규 리소스 로드 없음). (5) GuidedSession의 WordDetail에 backLabel='← 홈' 전달(WordDetail 기본값 '← 단어 목록'과 달리 명시적 오버라이드, prop 자체는 커밋 7956c17에서 이미 존재). build PASS, verify:daily-ritual PASS(118 단언), verify:writing PASS(3 스크립트), verify:student PASS(4 스크립트, 락다운 SKIP 3건은 기존과 동일한 정상 SKIP). App.jsx 배선은 범위 밖(W4 담당) — 이번 세 파일은 안 건드림.",
+  "blocker": null,
+  "next_action": "없음 — Wave 3 완료. qa-reviewer 검수 대기. App.jsx에서 todayPlanted/reviewQueueCount/onGoReview 실제 배선은 W4 몫."
+}

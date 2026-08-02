@@ -1,0 +1,25 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "home-polish-wave4",
+  "task": "Dashboard.jsx/App.jsx/StudentSelect.jsx 홈 화면 폴리시(마이크 오류 문구, 구버전 세션 안내 분리, 유닛 변경 확인, SpeedBtn 라벨, 상점 구매 피드백, details 토글 상태, GuidedSession props 배선)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-02T00:00:00+09:00",
+  "updated_at": "2026-08-02T01:20:00+09:00",
+  "files_owned": [
+    "src/components/Dashboard.jsx",
+    "src/App.jsx",
+    "src/components/StudentSelect.jsx"
+  ],
+  "files_read": [
+    "src/components/GuidedSession.jsx",
+    "src/hooks/useAttachment.js",
+    "src/hooks/useStudent.js",
+    "src/utils/attachment/paulTown.js",
+    "src/components/SpellingQuestion.jsx"
+  ],
+  "summary": "8개 항목 전부 구현(표시/문구/배선 전용, GRANT/XP/별 로직 무변경): [6-1] Dashboard.jsx 마이크 에러 문구에서 (err.name: err.message) 영어 원문 제거, console.error에만 유지 + '잘 안 되면 선생님께 이 화면을 보여주세요' 안내 추가. [6-2] App.jsx removedNotice/legacySessionNotice를 별도 prop(legacyNotice)으로 분리 → StudentSelect.jsx가 서로 다른 스타일(주황 경고 vs 파랑 안내)로 렌더, removedNotice 동작 무변경. [6-3] Dashboard.jsx handleUnitChange에 window.confirm 추가(기존 로그아웃 확인과 동일 패턴), 취소 시 select DOM value를 이전 unitName으로 즉시 복원. [6-4] App.jsx SpeedBtn에 '🔊 ' 접두사 + aria-label='발음 재생 속도' + min-h-[44px], 위치/가시성 규칙(fixed bottom-5 right-5 z-40) 무변경. [6-5] StudentSelect.jsx 탭 버튼에 상황별 서브텍스트(PIN 만들기/처음이에요) + PIN 미허용 안내 2문장→1문장 축약. [3-4] Dashboard.jsx TicketShopCard 구매 성공 메시지를 기존 animate-paul-pop 칩 스타일(SpellingQuestion.jsx 콤보 배지와 동일 패턴)로 교체, 구매 로직 무변경. [3-5] Dashboard.jsx 두 <details>에 group 클래스 + group-open:hidden/inline variant로 열기▾/닫기▴ 정확 반영(Tailwind 3.4.19 확인, 플러그인 불필요). [W3 배선] App.jsx GuidedSession에 reviewQueueCount={spellingReviewQueue.length}(useStudent 기존 배열, 항상 [] 기본값), onGoReview={() => setScreen('spellingReview')}(handleDismissGift가 이미 쓰는 기존 라우트 재사용), todayPlanted={starSeedState(attachment.stats).todayPlanted}(Dashboard.jsx PaulTownHomeBand가 쓰는 것과 동일한 기존 순수 함수 재사용, 신규 계산/저장 없음) — 모두 배선만, GuidedSession.jsx 자체는 Wave 3에서 이미 완성(기본값 falsy라 unwired여도 기존과 동일했던 상태). build PASS, verify:unit PASS(5개 스크립트, 락다운 SKIP 정상), verify:student PASS(4개 스크립트), verify:daily-ritual PASS(118 단언). verify:login 별도 실행 확인 — 기존과 동일한 환경적 실패 클러스터(service key 필요, testStudentSelectPinStatus/testStudentPinAuth/testStudentPinSelfSetup/testClearStudentPin)만 FAIL, PIN 로직 자체는 이번 작업 범위에서 전혀 안 건드림.",
+  "blocker": null,
+  "next_action": "없음 — Wave 4 완료. qa-reviewer 검수 대기."
+}

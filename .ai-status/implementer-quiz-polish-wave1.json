@@ -1,0 +1,18 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "quiz-polish-wave1",
+  "task": "QuizGame.jsx/LevelUpMission.jsx 학생 화면 폴리시(슬랭 문구 교체, 발음 버튼 즉시 활성, 오답 자동전환 제거, 셔플 편향 제거)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-02T00:00:00+09:00",
+  "updated_at": "2026-08-02T00:20:00+09:00",
+  "files_owned": [
+    "src/components/QuizGame.jsx",
+    "src/components/LevelUpMission.jsx"
+  ],
+  "files_read": [],
+  "summary": "5개 항목 전부 구현: (1) KO_PRAISE 슬랭 2문구 교체(풀 크기 10 유지), (2) speakPraise 콜백 대기 제거하고 setCanRec(true) 즉시 호출(별 지급은 dedupKey 전담 — 주석 명시), (3) QuizGame 오답 2초 auto-advance useEffect 삭제(기존 '다음 문제 →' 버튼이 유일한 전진 경로), (4) QuizGame.jsx/LevelUpMission.jsx 양쪽에 파일-로컬 Fisher-Yates shuffle() 헬퍼 추가하고 모든 sort(()=>Math.random()-0.5) 호출부(makeOptions x2, pool 초기화) 교체, (5) LevelUpMission 오답 2000ms 타이머 제거(정답 1500ms 자동전환은 유지, 오답은 기존 '다음 →' 버튼만). build PASS, verify:quiz PASS, verify:speaking SKIP(정상), verify:student PASS. 커밋 7e6f733, origin/main에 push 완료.",
+  "blocker": null,
+  "next_action": "없음 — Wave 1 완료. qa-reviewer 검수 대기."
+}
