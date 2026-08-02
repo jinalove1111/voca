@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchAssignmentHistory, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, getClassIdByName, getStudents } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchAssignmentHistory, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, getClassIdByName, getStudents, wordSlug, isoDaysAgoStr } from '../utils/wordLibrary'
 // 숙제 "자동 생성" 순수 플래너(2026-08-01) — 이 파일은 미리보기(체크박스
 // Set 채우기)에만 쓰고, 실제 저장은 항상 기존 setTodaysAssignment/
 // setAssignmentForDate(adminPin 듀얼패스) 그대로 사용한다.
@@ -51,8 +51,6 @@ import { isFeatureEnabled } from '../config/features'
 // 상태에서도 각 서브탭이 독립적으로 안전 배너로 폴백한다(docs/CURRICULUM_ENGINE.md).
 import CurriculumHub from './admin/CurriculumHub'
 
-const wordSlug = (word) => word.toLowerCase().replace(/\s+/g, '_')
-
 // v3.12(2026-08-01) — 숙제 배정 저장(setTodaysAssignment/setAssignmentForDate)
 // 실패 메시지를 사람이 바로 행동할 수 있는 한국어로 다듬는다. HTTP 404(
 // admin-content-write 함수 자체가 아직 배포 안 됨 — wordLibrary.js
@@ -95,7 +93,10 @@ const tomorrowIsoStr = () => { const d = new Date(); d.setDate(d.getDate() + 1);
 // 2026-08-01 "자동 생성"/일괄 배정용 — n일 전 로컬 날짜. tomorrowIsoStr과
 // 동일한 조립 방식(wordLibrary.js의 localIsoDateStr, UTC toISOString()
 // 절대 사용 안 함 — 위 버그와 같은 클래스 방지).
-const isoDaysAgoStr = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return localIsoDateStr(d) }
+//
+// 2026-08-02 — 로컬 정의를 제거하고 wordLibrary.js가 export하는 동일 구현을
+// import한다(AssignmentHistoryPanel.jsx와 바이트 단위로 중복돼 있던 것을
+// 단일 원본화, § import 목록 상단).
 
 // 쓰기 시험(Spelling Test) 반별 설정 — 쓰기시험 사용 여부/철자 힌트 사용
 // 여부/오답 반복 횟수. 기본값이 전부 꺼짐/3회라, 관리자가 여기서 직접

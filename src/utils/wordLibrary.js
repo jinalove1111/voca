@@ -128,6 +128,18 @@ export function localIsoDateStr(d = new Date()) {
 }
 const todayDateStr = () => localIsoDateStr()
 
+// n일 전 로컬(한국) 날짜 문자열 — 위 localIsoDateStr()과 동일한 로컬
+// 타임존 기준을 그대로 따른다(UTC 아님, 위 2026-07-09 버그 수정 주석 참고).
+//
+// 2026-08-02 — export 추가(코드품질 감사 지적: AdminScreen.jsx:98/
+// AssignmentHistoryPanel.jsx:21에 바이트 단위로 동일한 정의가 중복돼
+// 있었다). 두 컴포넌트 모두 이 export를 import해서 쓰도록 통합.
+export function isoDaysAgoStr(n) {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return localIsoDateStr(d)
+}
+
 // Phase 1 (2026-07-15) 유닛 자연 정렬 — Supabase `units.position` 컬럼이
 // 실제로는 새 유닛 추가 시(addClassUnit) 채워지지 않고 전부 0으로 저장돼
 // 있어서(라이브 DB 확인 완료), order('position')이 사실상 아무 순서도
@@ -1925,7 +1937,12 @@ export async function fetchDebugSnapshot(studentId) {
 // yet"; the screen shows nothing rather than substituting sample content.
 // 단어 슬러그 — 앱 전역 표시용 id(미션/퀴즈 중복 제거/오답노트가 전부 이
 // 값 기준이라 유닛을 오가도 진행도가 끊기지 않는 근거). 절대 바꾸지 말 것.
-const wordSlug = (word) => word.toLowerCase().replace(/\s+/g, '_')
+//
+// 2026-08-02 — export 추가(코드품질 감사 지적: AdminScreen.jsx:54/
+// AssignmentHistoryPanel.jsx:20에 바이트 단위로 동일한 정의가 중복돼
+// 있었다 — 배정 매칭의 핵심 규칙이라 드리프트 시 숙제 배정이 깨질 위험).
+// 두 컴포넌트 모두 이 export를 import해서 쓰도록 통합, 로컬 사본은 제거.
+export const wordSlug = (word) => word.toLowerCase().replace(/\s+/g, '_')
 
 // DB 단어 행 -> 앱 단어 객체 매핑 (getStudentWords 전용 — 현재 유닛 경로와
 // v2.1 숙제 교차 유닛 경로가 정확히 같은 모양을 반환하도록 공용화).

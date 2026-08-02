@@ -13,12 +13,11 @@
 // 전용 조회 — wordLibrary.js에 새 쓰기 경로를 추가하지 않음).
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../utils/supabaseClient'
-import { getClassNames, getClassUnits, getStudentsInClass, fetchAssignmentHistory, localIsoDateStr } from '../../utils/wordLibrary'
+import { getClassNames, getClassUnits, getStudentsInClass, fetchAssignmentHistory, localIsoDateStr, wordSlug, isoDaysAgoStr } from '../../utils/wordLibrary'
 
-// wordLibrary.js/AdminScreen.jsx의 wordSlug()와 완전히 동일한 규칙 —
-// 절대 바꾸지 말 것(다르면 배정 slug를 못 알아봄).
-const wordSlug = (word) => word.toLowerCase().replace(/\s+/g, '_')
-const isoDaysAgoStr = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return localIsoDateStr(d) }
+// 2026-08-02 — wordSlug/isoDaysAgoStr 로컬 사본(AdminScreen.jsx와 바이트
+// 단위로 동일했던 정의)을 제거하고 wordLibrary.js의 단일 원본을 import한다
+// (배정 매칭의 핵심 규칙이라 드리프트 시 숙제 배정이 깨질 수 있었음).
 
 export default function AssignmentHistoryPanel() {
   const classList = getClassNames()
