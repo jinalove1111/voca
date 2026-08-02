@@ -218,32 +218,38 @@ export default function ExampleManager({ adminPin }) {
         <p className="text-xs font-black text-gray-700">필터</p>
         <div className="grid grid-cols-2 gap-1.5">
           <select value={filters.publisherId} onChange={(e) => setFilters((f) => ({ ...f, publisherId: e.target.value }))}
+            aria-label="출판사 필터"
             className="text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
             <option value="">출판사 전체</option>
             {publishers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <select value={filters.gradeId} onChange={(e) => setFilters((f) => ({ ...f, gradeId: e.target.value }))}
+            aria-label="학년 필터"
             className="text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
             <option value="">학년 전체</option>
             {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
           <select value={filters.textbookId} onChange={(e) => setFilters((f) => ({ ...f, textbookId: e.target.value, unitId: '' }))}
+            aria-label="교재 필터"
             className="text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
             <option value="">교재 전체</option>
             {textbooksMeta.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
           <select value={filters.unitId} onChange={(e) => setFilters((f) => ({ ...f, unitId: e.target.value }))}
             disabled={!filters.textbookId}
+            aria-label="유닛 필터"
             className="text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5 bg-white disabled:opacity-40">
             <option value="">유닛 전체</option>
             {units.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
           <select value={filters.grammarPointId} onChange={(e) => setFilters((f) => ({ ...f, grammarPointId: e.target.value }))}
+            aria-label="문법 포인트 필터"
             className="text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
             <option value="">문법 전체</option>
             {grammarPoints.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
           </select>
           <select value={filters.approvalStatus} onChange={(e) => setFilters((f) => ({ ...f, approvalStatus: e.target.value }))}
+            aria-label="승인 상태 필터"
             className="text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
             <option value="">상태 전체</option>
             {APPROVAL_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -253,6 +259,7 @@ export default function ExampleManager({ adminPin }) {
           value={filters.targetWord}
           onChange={(e) => setFilters((f) => ({ ...f, targetWord: e.target.value }))}
           placeholder="대상 단어 검색"
+          aria-label="대상 단어 검색"
           className="w-full text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5"
         />
       </div>
@@ -309,22 +316,25 @@ export default function ExampleManager({ adminPin }) {
         <div className="bg-white rounded-xl p-3 card-shadow space-y-1.5">
           <p className="text-xs font-black text-gray-700">{form.id ? '예문 수정' : '새 예문'}</p>
           <input value={form.targetWord} onChange={(e) => setForm((f) => ({ ...f, targetWord: e.target.value }))}
-            placeholder="대상 단어(target_word)" className="w-full text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5" />
+            placeholder="대상 단어(target_word)" aria-label="대상 단어" className="w-full text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5" />
           <input value={form.englishSentence} onChange={(e) => setForm((f) => ({ ...f, englishSentence: e.target.value }))}
-            placeholder="영어 문장(대상 단어를 온전한 단어로 포함)" className="w-full text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5" />
+            placeholder="영어 문장(대상 단어를 온전한 단어로 포함)" aria-label="영어 문장" className="w-full text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5" />
           <input value={form.koreanTranslation} onChange={(e) => setForm((f) => ({ ...f, koreanTranslation: e.target.value }))}
-            placeholder="한국어 번역(선택)" className="w-full text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5" />
+            placeholder="한국어 번역(선택)" aria-label="한국어 번역" className="w-full text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5" />
           <select value={form.textbookId} onChange={(e) => setForm((f) => ({ ...f, textbookId: e.target.value }))}
+            aria-label="교재 정렬"
             className="w-full text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
             <option value="">교재 정렬 안 함(범용)</option>
             {textbooksMeta.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
           <select value={form.grammarPointId} onChange={(e) => setForm((f) => ({ ...f, grammarPointId: e.target.value }))}
+            aria-label="문법 포인트"
             className="w-full text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
             <option value="">문법 포인트 선택 안 함</option>
             {grammarPoints.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
           </select>
           <select value={form.difficulty} onChange={(e) => setForm((f) => ({ ...f, difficulty: e.target.value }))}
+            aria-label="난이도"
             className="w-full text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
             {[1, 2, 3, 4, 5].map((d) => <option key={d} value={d}>난이도 {d}</option>)}
           </select>

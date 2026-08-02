@@ -96,16 +96,19 @@ export default function AssignmentHistoryPanel() {
       <p className="text-sm font-black text-gray-700">🗂️ 배정 이력 + 완료 현황</p>
       <div className="flex gap-2 flex-wrap items-center">
         <select value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)}
+          aria-label="반 선택"
           className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs font-bold bg-white">
           <option value="">반 선택</option>
           {classList.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
+          aria-label="조회 시작 날짜"
           className="border-2 border-gray-200 rounded-xl px-2 py-2 text-xs font-bold bg-white" />
         <span className="text-xs text-gray-400">~</span>
         <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
+          aria-label="조회 종료 날짜"
           className="border-2 border-gray-200 rounded-xl px-2 py-2 text-xs font-bold bg-white" />
-        <button onClick={load} disabled={loading}
+        <button onClick={load} disabled={loading} aria-label="새로고침" title="새로고침"
           className="bg-purple-100 text-purple-600 font-bold px-3 py-2 rounded-xl text-xs btn-press disabled:opacity-60">🔄</button>
       </div>
       {errorMsg && <p className="text-xs font-bold text-red-500">{errorMsg}</p>}

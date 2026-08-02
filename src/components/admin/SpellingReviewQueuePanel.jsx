@@ -1007,27 +1007,28 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
                   {analysisComplete && (
                     <>
                       <div className="flex flex-wrap items-center gap-2 mt-2">
-                        <select value={filterDecision} onChange={(e) => setFilterDecision(e.target.value)} className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold">
+                        <select value={filterDecision} onChange={(e) => setFilterDecision(e.target.value)} aria-label="판정 필터" className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold">
                           <option value="all">전체 판정</option>
                           <option value="accept">safe_accept만</option>
                           <option value="review">review만</option>
                           <option value="reject_candidate">reject_candidate만</option>
                         </select>
-                        <select value={filterSource} onChange={(e) => setFilterSource(e.target.value)} className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold">
+                        <select value={filterSource} onChange={(e) => setFilterSource(e.target.value)} aria-label="출처 필터" className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold">
                           <option value="all">전체 출처</option>
                           <option value="rule">규칙만</option>
                           <option value="ai">AI만</option>
                           <option value="cache">캐시</option>
                         </select>
-                        <select value={filterBand} onChange={(e) => setFilterBand(e.target.value)} className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold">
+                        <select value={filterBand} onChange={(e) => setFilterBand(e.target.value)} aria-label="신뢰도 필터" className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold">
                           <option value="all">전체 신뢰도</option>
                           <option value="high">≥95%(자동인정후보)</option>
                           <option value="mid">70~95%(검토)</option>
                           <option value="low">&lt;70%(검토)</option>
                         </select>
                         <input value={filterWord} onChange={(e) => setFilterWord(e.target.value)} placeholder="단어 검색"
+                          aria-label="단어 검색"
                           className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs w-24" />
-                        <select value={filterStudent} onChange={(e) => setFilterStudent(e.target.value)} className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold">
+                        <select value={filterStudent} onChange={(e) => setFilterStudent(e.target.value)} aria-label="학생 필터" className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold">
                           <option value="all">전체 학생(최초 제출)</option>
                           {studentOptions.map((id) => (
                             <option key={id} value={id}>{studentLabel(id)}</option>
@@ -1042,7 +1043,7 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
 
                       <div className="flex flex-wrap items-center gap-2 mt-2">
                         <span className="font-bold text-indigo-600">정렬</span>
-                        <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold">
+                        <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} aria-label="정렬 기준" className="border-2 border-indigo-200 rounded-lg px-2 py-1 text-xs font-bold">
                           <option value="none">기본(변경 없음)</option>
                           <option value="confidence">신뢰도</option>
                           <option value="word">단어</option>
@@ -1050,6 +1051,7 @@ export default function SpellingReviewQueuePanel({ onChanged, adminPin, onSaving
                           <option value="student">학생</option>
                         </select>
                         <button onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))} disabled={sortBy === 'none'}
+                          aria-label={sortDir === 'asc' ? '오름차순 — 눌러서 내림차순으로 전환' : '내림차순 — 눌러서 오름차순으로 전환'}
                           className="px-2 py-1 rounded-lg font-bold btn-press bg-white border-2 border-indigo-200 text-indigo-600 disabled:opacity-40">
                           {sortDir === 'asc' ? '오름차순' : '내림차순'}
                         </button>

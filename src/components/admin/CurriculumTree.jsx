@@ -144,6 +144,7 @@ function PublisherPanel({ publishers, disabled, busy, setBusy, onChanged, adminP
                   <input
                     value={editingName}
                     onChange={(e) => setEditingName(e.target.value)}
+                    aria-label="출판사 이름 수정"
                     className="flex-1 min-w-0 text-xs font-bold border border-gray-300 rounded-lg px-2 py-1"
                   />
                   <button onClick={handleRename} disabled={busy} className="text-blue-500 font-bold text-xs btn-press disabled:opacity-40">저장</button>
@@ -165,6 +166,7 @@ function PublisherPanel({ publishers, disabled, busy, setBusy, onChanged, adminP
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="+ 새 출판사 이름"
+          aria-label="새 출판사 이름"
           disabled={disabled || busy}
           className="flex-1 min-w-0 text-xs font-bold border-2 border-gray-200 rounded-lg px-2 py-1.5 bg-white disabled:opacity-40"
         />
@@ -211,6 +213,7 @@ function GradePanel({ grades, disabled, busy, setBusy, onChanged }) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="+ 새 학년 이름 (예: 중2)"
+          aria-label="새 학년 이름"
           disabled={disabled || busy}
           className="flex-1 min-w-0 text-xs font-bold border-2 border-gray-200 rounded-lg px-2 py-1.5 bg-white disabled:opacity-40"
         />
@@ -267,6 +270,7 @@ function TextbookMetaPanel({ textbooks, publishers, grades, metaDisabled, busy, 
       ) : (
         <>
           <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)}
+            aria-label="메타를 편집할 교재 선택"
             className="w-full text-xs font-bold border-2 border-gray-200 rounded-lg px-2 py-1.5 bg-white">
             {textbooks.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
@@ -281,12 +285,14 @@ function TextbookMetaPanel({ textbooks, publishers, grades, metaDisabled, busy, 
             <div className="space-y-1.5">
               <select value={form.publisherId} onChange={(e) => setForm((f) => ({ ...f, publisherId: e.target.value }))}
                 disabled={metaDisabled || busy}
+                aria-label="교재 출판사"
                 className="w-full text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5 bg-white disabled:opacity-40">
                 <option value="">출판사 선택 안 함</option>
                 {publishers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
               <select value={form.gradeId} onChange={(e) => setForm((f) => ({ ...f, gradeId: e.target.value }))}
                 disabled={metaDisabled || busy}
+                aria-label="교재 학년"
                 className="w-full text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5 bg-white disabled:opacity-40">
                 <option value="">학년 선택 안 함</option>
                 {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
@@ -295,6 +301,7 @@ function TextbookMetaPanel({ textbooks, publishers, grades, metaDisabled, busy, 
                 value={form.level}
                 onChange={(e) => setForm((f) => ({ ...f, level: e.target.value }))}
                 placeholder="레벨(자유 텍스트, 예: 초급)"
+                aria-label="교재 레벨"
                 disabled={metaDisabled || busy}
                 className="w-full text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5 bg-white disabled:opacity-40"
               />
@@ -303,6 +310,7 @@ function TextbookMetaPanel({ textbooks, publishers, grades, metaDisabled, busy, 
                 value={form.bookOrder}
                 onChange={(e) => setForm((f) => ({ ...f, bookOrder: e.target.value }))}
                 placeholder="교재 순서(숫자)"
+                aria-label="교재 순서"
                 disabled={metaDisabled || busy}
                 className="w-full text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5 bg-white disabled:opacity-40"
               />
@@ -374,6 +382,7 @@ function UnitMetaList({ textbookId, busy, setBusy, adminPin }) {
               value={drafts[u.id]?.position ?? ''}
               onChange={(e) => setDrafts((d) => ({ ...d, [u.id]: { ...d[u.id], position: e.target.value } }))}
               placeholder="순서"
+              aria-label={`${u.name} 순서`}
               disabled={busy}
               className="w-16 text-xs border border-gray-200 rounded-lg px-1.5 py-1 disabled:opacity-40"
             />
@@ -382,6 +391,7 @@ function UnitMetaList({ textbookId, busy, setBusy, adminPin }) {
               value={drafts[u.id]?.lessonNo ?? ''}
               onChange={(e) => setDrafts((d) => ({ ...d, [u.id]: { ...d[u.id], lessonNo: e.target.value } }))}
               placeholder="차시"
+              aria-label={`${u.name} 차시`}
               disabled={disabled || busy}
               className="w-16 text-xs border border-gray-200 rounded-lg px-1.5 py-1 disabled:opacity-40"
             />
@@ -389,6 +399,7 @@ function UnitMetaList({ textbookId, busy, setBusy, adminPin }) {
               value={drafts[u.id]?.objectives ?? ''}
               onChange={(e) => setDrafts((d) => ({ ...d, [u.id]: { ...d[u.id], objectives: e.target.value } }))}
               placeholder="학습목표"
+              aria-label={`${u.name} 학습목표`}
               disabled={disabled || busy}
               className="flex-1 min-w-0 text-xs border border-gray-200 rounded-lg px-1.5 py-1 disabled:opacity-40"
             />
