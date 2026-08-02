@@ -80,12 +80,29 @@ export default async function handler(req, res) {
   }
 
   const pin_hash = hashPin(finalPin)
-  const { error } = await supabase
+  let updateQuery = supabase
     .from('students')
     .update({ pin_hash, pin_fail_count: 0, pin_locked_until: null })
     .eq('id', studentId)
+  // [SECURITY FIX] check-then-act 레이스 (자기등록 경로에 한해) — 위에서
+  // pin_hash가 NULL임을 SELECT로 확인한 뒤 아래 UPDATE까지 사이에 두
+  // 자기등록 요청이 거의 동시에 도착하면 둘 다 SELECT를 통과해 둘 다
+  // UPDATE를 실행하고, 나중에 끝난 쪽이 먼저 쪽의 PIN을 조용히 덮어쓴다
+  // (last write wins) — 학생이 성공 응답을 받고 실제 계정 PIN은 다른
+  // 값이 되는 계정 탈취급 오작동. admin-pin-actions.js:117과 동일하게
+  // UPDATE 자체에 pin_hash IS NULL을 다시 걸어 원자적으로 재확인한다.
+  // 관리자 재설정 경로(adminAuthed)는 기존 PIN을 의도적으로 덮어쓰는
+  // 정상 동작이므로 이 가드를 걸지 않는다.
+  if (!adminAuthed) {
+    updateQuery = updateQuery.is('pin_hash', null)
+  }
+  const { data: updatedRows, error } = await updateQuery.select('id')
   if (error) {
     res.status(500).json({ error: error.message })
+    return
+  }
+  if (!adminAuthed && (!updatedRows || updatedRows.length === 0)) {
+    res.status(200).json({ ok: false, reason: 'already_set', error: '이미 PIN이 설정된 학생이에요. 선생님께 PIN 재설정을 요청해주세요.' })
     return
   }
   // pin은 이 응답 한 번에만 실려 나간다 — 서버 로그/DB 어디에도 평문으로

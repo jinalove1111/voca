@@ -73,14 +73,29 @@ export default async function handler(req, res) {
   }
 
   const pin_hash = hashPin(pin)
-  const { error: updErr } = await supabase
+  // [SECURITY FIX] check-then-act 레이스 — 위 SELECT에서 pin_hash가 NULL임을
+  // 확인한 뒤 아래 UPDATE까지 사이에 시간차가 있어, 같은 학생 row를 대상으로
+  // 두 요청이 거의 동시에 도착하면 둘 다 SELECT 통과 → 둘 다 UPDATE 실행 →
+  // 나중에 끝난 요청이 먼저 요청의 PIN을 조용히 덮어쓴다(last write wins).
+  // 그 결과 먼저 설정을 "성공"으로 응답받은 학생의 실제 로그인 PIN이 다른
+  // 학생이 입력한 값으로 바뀌어버릴 수 있다. api/admin-pin-actions.js:117의
+  // set_pin_setup_allowed 액션과 동일하게, UPDATE 자체에 pin_hash IS NULL
+  // 조건을 다시 걸어 원자적으로 재확인한다 — 레이스에서 진 요청은 0 rows
+  // 영향으로 끝나고, 아래에서 이미 있는 already_set 응답을 그대로 준다.
+  const { data: updatedRows, error: updErr } = await supabase
     .from('students')
     // 성공 즉시 pin_setup_allowed를 false로 원복(1회성) + 혹시 모를
     // 이전 실패 카운트/잠금도 함께 초기화(새로 만든 PIN이니 깨끗한 상태로).
     .update({ pin_hash, pin_setup_allowed: false, pin_fail_count: 0, pin_locked_until: null })
     .eq('id', studentId)
+    .is('pin_hash', null)
+    .select('id')
   if (updErr) {
     res.status(500).json({ error: updErr.message })
+    return
+  }
+  if (!updatedRows || updatedRows.length === 0) {
+    res.status(200).json({ ok: false, reason: 'already_set' })
     return
   }
 

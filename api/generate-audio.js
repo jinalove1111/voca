@@ -177,7 +177,14 @@ export default async function handler(req, res) {
       exampleAudioUrl = null
     }
 
-    const patchRes = await fetch(`${supabaseUrl}/rest/v1/words?id=eq.${wordId}`, {
+    // [SECURITY FIX] URL 인코딩 비대칭 — 위 lookupRes(~:129)는
+    // encodeURIComponent(wordId)로 이스케이프하는데 이 PATCH URL은 wordId를
+    // 그대로 문자열에 이어붙였다. wordId가 words 테이블에 실존하는 값이어야
+    // 여기까지 도달하므로(위 lookup에서 404로 이미 걸러짐) 오늘 당장
+    // 악용 가능한 인젝션은 아니지만, 쿼리스트링에 특수문자(&, # 등)가 낄 때
+    // PATCH 대상이 의도와 다르게 해석될 수 있어 lookup과 동일하게
+    // encodeURIComponent로 맞춘다(방어적 일관성).
+    const patchRes = await fetch(`${supabaseUrl}/rest/v1/words?id=eq.${encodeURIComponent(wordId)}`, {
       method: 'PATCH',
       headers: {
         apikey: serviceKey,
