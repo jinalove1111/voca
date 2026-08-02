@@ -7,16 +7,26 @@ file:line/재현/영향), 구조적 배경은 `TECH_DEBT.md`, 감사 범위는
 
 ---
 
-## 1. `verify-student-pin` ilike 이스케이프 수정 (승인 후 즉시)
+## 1. 보안 브랜치 승인·머지 (`fix/verify-student-pin-ilike`, 커밋 `fb65dd7`)
 
-- **근거**: `BUG_REPORT.md` H1.
-- **선행조건**: 운영자 승인(프로덕션 인증 경로, 서버리스 함수).
-- **작업**: `api/verify-student-pin.js:48` 앞에 `trimmedName`의
-  `%`/`_`/`\` 이스케이프 1줄 추가.
-- **예상 리스크**: 낮음(국소 1파일 수정). 승인만 받으면 즉시 진행
-  가능한 가장 작은 단위 수정.
-- **완료 조건**: `npm run build` PASS + `%` 입력으로 candidates가
-  1건 이하(또는 정확 일치)로 좁혀지는지 수동/스크립트 확인.
+- **근거**: `BUG_REPORT.md` H1/M10/M12.
+- **상태**: **코드 작성 완료, 운영자 승인·머지 대기** — 더 이상 "작성할
+  일"이 아니라 "승인 후 머지할 일"로 좁혀짐. 브랜치에 3건이 이미
+  구현돼 있다: (1) `api/verify-student-pin.js` — `trimmedName`의
+  `%`/`_`/`\` 이스케이프(H1), (2) `api/self-set-student-pin.js`/
+  `api/set-student-pin.js` — PIN 설정 check-then-act 레이스 가드,
+  관리자 재설정 경로는 의도적으로 가드 예외(M10), (3)
+  `api/generate-audio.js` — PATCH URL `wordId` 인코딩 비대칭 해소
+  (M12). `npm run build` 통과 확인됨.
+- **선행조건**: 운영자 승인(프로덕션 인증 경로, 서버리스 함수 — Vercel이
+  main을 배포하므로 병합 = 즉시 라이브 반영).
+- **작업**: 운영자가 브랜치 diff 검토 → 승인 시 `main`에 머지(fast-forward
+  또는 PR) → push.
+- **예상 리스크**: 낮음(국소 4파일, 코드는 이미 작성·빌드 검증까지
+  끝난 상태). 승인만 받으면 즉시 반영 가능.
+- **완료 조건**: 머지 후 `npm run build` PASS 재확인 + `%` 입력으로
+  candidates가 1건 이하(또는 정확 일치)로 좁혀지는지, PIN 설정 동시
+  요청 시 레이스가 재현되지 않는지 수동/스크립트 확인.
 
 ## 2. `admin-content-write` 검증 순서 교정 + 입력 캡 + settings allowlist — 한 번의 재배포로 묶어 처리
 

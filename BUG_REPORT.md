@@ -9,7 +9,7 @@ _작성: 2026-08-02, docs-maintainer. 감사 범위/방법은 `PROJECT_AUDIT.md`
 
 ## HIGH (전부 보류 — 운영자 결정 필요, 코드 무변경)
 
-### H1. `api/verify-student-pin.js:48` — ilike 와일드카드 미이스케이프
+### H1. `api/verify-student-pin.js:48` — ilike 와일드카드 미이스케이프 [수정 준비 완료]
 
 - **재현**: `POST /api/verify-student-pin` body `{"name":"%","pin":"0000"}`
   1회 호출. `.ilike('name', trimmedName)`(48행)이 `trimmedName`을
@@ -25,11 +25,16 @@ _작성: 2026-08-02, docs-maintainer. 감사 범위/방법은 `PROJECT_AUDIT.md`
   `ilike`는 `\`를 이스케이프 문자로 지원 — `str.replace(/[%_\\]/g, '\\$&')`
   후 전달) 하거나, 이름 정확 일치(`.eq`, 대소문자는 별도 정규화)로
   전환.
-- **상태**: 보류. **프로덕션 인증 경로(서버리스, service_role key)라
-  운영자 승인 없이 무감독 수정하지 않는다**는 이 저장소의 기존 관례
-  (`docs/SECURITY_AUDIT_V311.md`의 CRITICAL 처리 방식과 동일 원칙).
-- **리스크**: 승인 후 수정은 국소적(1개 파일, 정규식 이스케이프 1줄
-  추가)이라 낮음. 미수정 상태로 방치하는 리스크가 더 큼(현재도 라이브에
+- **상태**: **수정 준비 완료 — 브랜치 `fix/verify-student-pin-ilike`
+  (커밋 `fb65dd7`), 운영자 승인 후 머지 대기.** `trimmedName`을
+  `.replace(/[\\%_]/g, '\\$&')`로 이스케이프한 뒤 `.ilike()`에 전달하도록
+  수정, 정상 이름(한글/공백/어포스트로피) 대소문자 무관 완전일치 동작은
+  그대로 유지 확인(빌드 통과). **프로덕션 인증 경로(서버리스, service_role
+  key)라 운영자 승인 없이 main에 무감독 병합하지 않는다**는 이 저장소의
+  기존 관례(`docs/SECURITY_AUDIT_V311.md`의 CRITICAL 처리 방식과 동일
+  원칙)에 따라 브랜치에만 격리해 두었다.
+- **리스크**: 승인 후 머지는 국소적(1개 파일, 정규식 이스케이프 1줄
+  추가)이라 낮음. 머지 전까지는 방치 리스크가 그대로 유지(현재도 라이브에
   열려 있는 경로).
 
 ### H2. `supabase/functions/admin-content-write/index.ts:193-212` — `words.bulk_replace` 검증 전 delete
@@ -117,7 +122,15 @@ _작성: 2026-08-02, docs-maintainer. 감사 범위/방법은 `PROJECT_AUDIT.md`
 - **상태**: **수정됨**(커밋 `9bbad4a` `fix(writing): 패턴 등록 adminPin
   배선` — 오늘 세션, `PROJECT_AUDIT.md` §4). 실측 확인:
   `LearningRecommendationsCard({ adminPin })` prop 추가 +
-  `registerRecommendation(row, adminPin)` 배선(2026-08-02 주석 포함).
+  `registerRecommendation(row, adminPin)` 배선(2026-08-02 주석 포함). 같은
+  커밋에 데이터 계층 방어도 함께 들어갔다 — `wordLibrary.js:582`
+  `setWordAcceptedMeanings()`의 레거시 anon 경로(`adminPin` 미전달 시)가
+  `.select()` 없이 update만 호출해 RLS가 0행 처리해도 error 없이 "성공"
+  반환하던 조용한 성공(silent-success) 버그를 `.select('id').maybeSingle()`로
+  갱신 행을 직접 확인해 0행이면 명확한 Error를 throw하도록 교정 — 위
+  adminPin 배선과 별개로, 앞으로 다른 호출부가 adminPin 없이 이 함수를
+  호출하는 실수를 해도 조용히 데이터가 사라지는 대신 즉시 눈에 보이는
+  에러로 실패하도록 이중 안전장치를 걸었다.
 - **리스크**: 해소.
 
 ### M2. `StudentSelect` 신규 등록 부분 실패 → 로그인 불가 고아 계정
@@ -194,14 +207,29 @@ _작성: 2026-08-02, docs-maintainer. 감사 범위/방법은 `PROJECT_AUDIT.md`
 - **리스크**: 낮음(blast radius가 단일 학원 내부, 입실시험 결과 조작
   동기가 낮음).
 
-### M10. self-set/set-student-pin check-then-act 레이스
+### M10. self-set/set-student-pin check-then-act 레이스 [수정 준비 완료]
 
 - **위치**: `api/self-set-student-pin.js` / `api/set-student-pin.js`
   계열(PIN 설정 API)
 - **재현**: PIN 설정 가능 여부(`pin_setup_allowed` 등)를 확인(check)한
-  뒤 실제 설정(act)하는 두 단계 사이에 동시 요청이 오면 레이스가 가능.
-- **상태**: 문서화만(보류).
-- **리스크**: 낮음(동시 요청 조건이 좁음, PIN 자체는 서버 검증 유지).
+  뒤 실제 설정(act)하는 두 단계 사이에 동시 요청이 오면 레이스가
+  가능 — 같은 학생 row를 대상으로 자기등록 요청 두 개가 거의 동시에
+  도착하면 둘 다 SELECT의 `pin_hash IS NULL` 확인을 통과해 둘 다 UPDATE를
+  실행하고, 나중에 끝난 쪽이 먼저 쪽의 PIN을 조용히 덮어쓴다(last write
+  wins) — 먼저 요청이 성공 응답을 받았는데 실제 로그인 PIN은 다른 값이
+  되는 오작동.
+- **상태**: **수정 준비 완료 — 브랜치 `fix/verify-student-pin-ilike`
+  (커밋 `fb65dd7`), 운영자 승인 후 머지 대기.** `api/admin-pin-actions.js`의
+  `set_pin_setup_allowed` 액션과 동일한 패턴으로 UPDATE 자체에
+  `.is('pin_hash', null)` 조건을 다시 걸어 원자적으로 재확인 —
+  레이스에서 진 요청은 0 rows 영향으로 끝나고 기존 `already_set` 응답
+  형태를 그대로 받는다. **관리자 PIN 재설정 경로(`adminAuthed`가 참인
+  `api/set-student-pin.js` 호출)는 기존 PIN을 의도적으로 덮어쓰는 것이
+  정상 동작이라 이 가드를 의도적으로 적용하지 않았다** — 자기등록
+  경로(`adminAuthed`가 아닌 경우)에만 `.is('pin_hash', null)`을 건다.
+- **리스크**: 승인 후 머지는 국소적(2개 파일, 조건부 필터 추가)이라
+  낮음. 미머지 상태로는 동시 요청 조건이 좁아(발생 빈도 낮음) 리스크
+  낮음-중간 그대로 유지.
 
 ### M11. `updateTextbookMeta`/`deletePublisher` 듀얼패스 미배선
 
@@ -216,13 +244,92 @@ _작성: 2026-08-02, docs-maintainer. 감사 범위/방법은 `PROJECT_AUDIT.md`
 - **리스크**: 락다운 SQL을 먼저 실행하면 즉시 발현(높음), 지금은 SQL
   미실행이라 발현 안 함(낮음).
 
+### M12. `api/generate-audio.js` — PATCH URL wordId 인코딩 비대칭 [수정 준비 완료]
+
+- **위치**: `api/generate-audio.js`(PATCH 대상 URL 구성부)
+- **재현**: 같은 파일의 조회 경로는 `encodeURIComponent(wordId)`로
+  이스케이프하는데, 뒤쪽 PATCH URL은 `wordId`를 인코딩 없이 그대로
+  문자열에 이어붙인다. `wordId`가 이미 `words` 테이블에 실존하는 값이어야
+  이 지점까지 도달하므로(위 lookup에서 404로 먼저 걸러짐) 오늘 당장
+  악용 가능한 인젝션 경로는 아니지만, 쿼리스트링 특수문자(`&`/`#` 등)가
+  섞일 경우 PATCH 대상이 의도와 다르게 해석될 잠재 위험이 있는
+  비일관성. 이번 4축 감사에서 새로 발견된 항목(기존 `BUG_REPORT.md`에는
+  미등재 상태였음).
+- **상태**: **수정 준비 완료 — 브랜치 `fix/verify-student-pin-ilike`
+  (커밋 `fb65dd7`), 운영자 승인 후 머지 대기.** lookup과 동일하게 PATCH
+  URL에도 `encodeURIComponent(wordId)` 적용(방어적 일관성, 동작 변화
+  없음).
+- **리스크**: 낮음(1줄 방어적 수정, 오늘 재현 가능한 실공격 경로는
+  아님).
+
+---
+
+## 이 세션 중 추가로 발견·즉시 수정된 저위험 항목 (4축 감사 목록 외, 코드 반영 완료)
+
+4축 감사(§HIGH/§MEDIUM)와 별개로, 같은 세션 안에서 컴포넌트를 훑던 중
+발견해 저위험 판단 하에 바로 고친 항목들 — 전부 학생/관리자 화면 리소스
+누수·예외·레이스 계열이고 데이터 무결성/보상 경제와는 무관하다.
+
+### L1. `QuizGame.jsx`/`WordDetail.jsx` — 녹음 blob URL 누수 + 재생 예외 미처리 [수정됨 `307a49a`]
+
+- **재현(과거)**: `PronStep`(QuizGame.jsx)/`SpeechBtn`(WordDetail.jsx)이
+  녹음마다 `URL.createObjectURL(blob)`을 새로 만들면서 이전 URL을
+  `revokeObjectURL`로 해제하지 않아, 같은 단어에서 재녹음을 반복할수록
+  blob URL이 계속 쌓였다(누수). 또한 `new Audio(myRecUrl).play()`가
+  브라우저 자동재생 정책 등으로 reject되면 unhandled promise rejection.
+- **상태**: **수정됨**. 두 컴포넌트 모두 `recUrlRef`로 마지막 blob URL을
+  추적해 "새 URL로 교체되는 시점"(언마운트 시점이 아니라)에만
+  `revokeObjectURL`하도록 교정(재녹음 중에도 이전 "내 발음" 재생이 도중에
+  끊기지 않게 하는 순서 유지) + `.play().catch(() => {})`로 재생 실패를
+  조용히 무시. `QuizGame.jsx`는 추가로 (a) 더 이상 쓰이지 않는 이중
+  가드(`processing` ref, `handleSelect` 자체가 이미 `isAnswered`로
+  막혀 있어 중복 로직) 제거, (b) `PronStep`의 React key를
+  `current.word.word`(문자열, 동철이의어 충돌 가능)에서
+  `current.word.id`(고유 식별자)로 교정.
+- **리스크**: 해소. 데드 훅 `src/hooks/useFeatureAccess.js`(어디서도
+  실사용 안 됨, `WordDetail.jsx`가 유일한 import였는데 이 커밋에서
+  `useMicReady` 사용 제거와 함께 훅 자체도 삭제)도 같은 커밋에서 함께
+  정리.
+
+### L2. 관리자 화면 에러 처리·레이스·중복 헬퍼 5건 [수정됨 `0c10c34`]
+
+- **L2-a `spellingReviewApi.js:fetchPendingSpellingReviews`**: "테이블 없음"과
+  "그 외 에러"를 구분 없이 동일 처리하던 것을 `isMissingTableError`일
+  때만 `null`("SQL 실행 필요"), 그 외는 빈 배열 + `__fetchError` 마커로
+  분리 — 호출부(`WritingStatsDashboard` 등, Phase 2 웨이브에서 이 마커를
+  실제로 소비하도록 연결됨)가 "기능 미설치"와 "일시적 조회 실패"를
+  구분해 안내할 수 있게 됨.
+- **L2-b `AssignmentHistoryPanel.load`**: `AdminScreen.jsx`의
+  `loadReqIdRef` stale-응답 가드 패턴을 동일 적용 — 반/날짜 범위를 빠르게
+  바꿀 때 먼저 시작된 조회의 응답이 나중에 도착해 현재 선택 화면을
+  덮어쓰는 레이스 방지.
+- **L2-c `AdminScreen.jsx ExcelUpload.handleFile`**: 기존 `PdfUpload.handleFile`과
+  동일하게 try/catch + 한국어 안내 메시지 추가 — 손상된 엑셀 파일
+  업로드 시 처리되지 않은 예외로 화면이 멈추던 것을 방지.
+- **L2-d `SpellingReviewQueuePanel.revertLastBatch`**: 부분 실패를
+  `console.warn`으로만 삼키고 무조건 "완료"로 표시하던 것을 고쳐, 실패
+  건수를 요약에 반영하고 실패한 행은 `lastAcceptedBatch`에 남겨 재시도
+  가능하게 함(관리자가 "되돌리기 완료"로 오인해 실패 건을 놓치는 것
+  방지).
+- **L2-e `spellingReviewAiApi.js`**: 바이트 단위로 동일한
+  `isMissingRelationError`/`isMissingQueueRelationError` 두 헬퍼를
+  하나로 통합(중복 코드 제거, 동작 변화 없음).
+- **상태**: 전부 **수정됨**. `npm run build` + 관련 `verify:admin`/
+  `verify:writing` PASS 확인(해당 세션 handoff 기록).
+- **리스크**: 해소.
+
 ---
 
 ## 요약 통계
 
-| 등급 | 건수 | 수정됨 | 보류(운영자 결정 필요) |
-|---|---|---|---|
-| HIGH | 4 | 0 | 4 |
-| MEDIUM | 11 | 1(M1) | 10 |
+| 등급 | 건수 | 수정됨 | 수정 준비 완료(브랜치, 머지 대기) | 보류(운영자 결정 필요) |
+|---|---|---|---|---|
+| HIGH | 4 | 0 | 1(H1) | 3 |
+| MEDIUM | 12 | 1(M1) | 2(M10/M12) | 9 |
+
+수정 준비 완료 3건(H1/M10/M12)은 전부 브랜치 `fix/verify-student-pin-ilike`
+(커밋 `fb65dd7`) 한 곳에 격리돼 있고 main에는 아직 반영되지 않았다 —
+운영자 승인 전까지는 라이브(main/Vercel 배포)에서 여전히 미수정 상태로
+취급한다.
 
 다음 작업 순서는 `NEXT_PRIORITY.md`, 구조적 이월 부채는 `TECH_DEBT.md`.

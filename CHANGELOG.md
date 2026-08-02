@@ -7,6 +7,61 @@ _작성: 2026-08-02. 상세 배경/의도/리스크 판단은 `handoff.md`(세�
 
 ---
 
+## 2026-08-02 — Phase 2 품질 웨이브 + 보안 브랜치 격리 (implementer, 하드닝 세션 이어서)
+
+아래 "프로덕션 하드닝 세션" 5커밋 이후, 같은 날 이어서 진행된 두 갈래
+작업 — (A) 저위험 품질 개선 6커밋(main), (B) `BUG_REPORT.md` H1/M10/
+generate-audio 3건을 다루는 보안 수정 1커밋(별도 브랜치, main 미머지).
+상세: `handoff.md` 27차, `BUG_REPORT.md`.
+
+### (A) Phase 2 품질 웨이브 — main, 6커밋
+
+1. `5f8f45d` `refactor(admin): wordSlug/isoDaysAgoStr 단일 원본화(중복
+   정의 제거)` — `wordSlug`/`isoDaysAgoStr`가 `wordLibrary.js`(미export)/
+   `AdminScreen.jsx`/`AssignmentHistoryPanel.jsx` 3곳에 바이트 단위로
+   중복 정의돼 있던 것을 `wordLibrary.js`에서 export하는 단일 원본으로
+   통합(숙제 배정 매칭 핵심 규칙이라 드리프트 위험 제거, 로직 변경 없는
+   순수 리팩터).
+2. `b6f168a` `chore(cleanup): 이월분 — React 기본 import 2건 + wordLibrary
+   진단 로그 DEV 게이트` — `LearningRecommendationsCard.jsx`/
+   `SpellingReviewQueuePanel.jsx`의 불필요한 React 기본 import 제거(자동
+   JSX 런타임) + `wordLibrary.js` 진단 로그 DEV 빌드 게이팅.
+3. `7fdc33c` `feat(admin): 조회 화면 로딩·빈 상태·에러 상태 보강` —
+   `WritingStatsDashboard`가 `fetchPendingSpellingReviews()`의
+   `__fetchError` 마커를 처음 소비해 실제 조회 실패를 빈 상태와 구분(에러
+   배너 + 재시도 버튼).
+4. `20fc059` `fix(admin): null 안전 감사 + 숫자 입력 표시/저장 일치 +
+   예문 폼 검증 메시지` — 오답 반복 횟수 입력 클램프 이중화(UI+데이터
+   계층), `ExampleManager`가 `validateExampleFields`를 폼 제출 전에
+   재사용해 API 왕복 없이 한국어 검증 메시지 노출.
+5. `c933749` `chore(ai-status): phase2 품질 웨이브 체크포인트 — commit
+   1-3 완료`
+6. `6c13170` `a11y(admin): 아이콘 버튼 aria-label·폼 라벨 연결` —
+   `AssignmentHistoryPanel`/`CurriculumTree`/`ExampleManager`/
+   `SpellingReviewQueuePanel`의 아이콘 전용 버튼 + placeholder만 있던
+   입력에 `aria-label` 연결(레이아웃/포커스 변경 없음).
+7. `ffcf9eb` `chore(ai-status): phase2 품질 웨이브 완료 체크포인트 —
+   commit 1-4 전부 완료`
+
+매 커밋마다 `npm run build` + 관련 `verify:*` PASS 확인, `api/` 파일은
+전혀 건드리지 않음. 상세는 `.ai-status/implementer-phase2-quality-wave.json`.
+
+### (B) 보안 수정 — 별도 브랜치 `fix/verify-student-pin-ilike`, main 미머지
+
+- `fb65dd7` `fix(security): PIN 인증 ilike 와일드카드 이스케이프 + PIN
+  설정 레이스 가드 + URL 인코딩` — `api/verify-student-pin.js`(ilike
+  메타문자 이스케이프, `BUG_REPORT.md` H1) + `api/self-set-student-pin.js`/
+  `api/set-student-pin.js`(check-then-act 레이스 가드, `BUG_REPORT.md`
+  M10) + `api/generate-audio.js`(PATCH URL 인코딩 비대칭 해소,
+  `BUG_REPORT.md` M12) 3건. **프로덕션 인증 경로(서버리스, service_role
+  key) 변경이라 main에 병합하지 않고 브랜치에만 격리** — Vercel이 main을
+  배포하므로 운영자 승인 전 무감독 머지를 하지 않는다는 이 저장소의
+  기존 관례(`docs/SECURITY_AUDIT_V311.md` CRITICAL 처리 방식과 동일
+  원칙)를 그대로 따름. `npm run build` 통과 확인, 운영자 승인 후 머지
+  대기.
+
+---
+
 ## 2026-08-02 — 프로덕션 하드닝 세션 (implementer, 병렬 감사 4종 이후)
 
 야간 폴리시 세션(아래 26차) 마감 커밋(`0661ce6f`) 이후, 같은 날 이어서

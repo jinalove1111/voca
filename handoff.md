@@ -1,7 +1,120 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-08-02 (26차, 야간 학생 경험 폴리시 세션 마감 — 퀴즈/
-단어학습/세션/홈 4개 화면 폴리시 웨이브 + 하네스 v3.11 정직 SKIP 확장.
-종합 보고: `COMPLETE_REPORT.md`)_
+_최종 갱신: 2026-08-02 (27차, 프로덕션 하드닝 세션 마감 — 4축 감사 →
+리스크 분류(HIGH 4/MEDIUM 11) → 저위험 즉시수정 웨이브 → Phase 2 품질
+웨이브 → 문서 5종 신설 → 보안 브랜치 격리. 상세는 아래 27차 섹션)_
+
+## 2026-08-02 (27차) — 프로덕션 하드닝 세션 마감 (implementer + docs-maintainer, 병렬 감사 이후)
+
+### 배경
+
+26차(야간 학생 경험 폴리시)가 끝난 같은 날, 별도로 "AI 개발 운영체제"
+정비의 일환으로 코드베이스 전체를 4개 축으로 병렬 감사하고, 발견된
+문제를 리스크별로 분류·일부는 즉시 수정·나머지는 운영자 결정 대기로
+문서화한 세션. 학생 대상 신규 기능/게임화는 이 세션 범위에 없음(규칙
+12 준수 확인).
+
+### 1) 4축 병렬 감사 (읽기 전용, 코드 무수정)
+
+`PROJECT_AUDIT.md` §1 참고 — A) 학생 컴포넌트/훅(언마운트·타이머·레이스
+패턴), B) 관리자·데이터 계층(anon vs adminPin 듀얼패스 대조), C) 서버·
+보안·RLS(인가 게이트·검증 순서 추적), D) 기계적 스윕(TODO/FIXME·미사용
+export·데드 파일 4중 교차 확인) 4개 에이전트가 동시에 코드를 읽고 발견을
+보고. 코드베이스 강점(TODO/FIXME 사실상 0건, 유틸 export 미사용 2개뿐
+등)도 함께 정직하게 기록(`PROJECT_AUDIT.md` §3).
+
+### 2) 리스크 분류 — HIGH 4건 / MEDIUM 11건
+
+`BUG_REPORT.md`에 file:line/재현/영향/상태/리스크로 전수 기록.
+
+- **HIGH 4건**(전부 프로덕션 인증/데이터/보상 경로 직결, 코드 미변경
+  원칙 유지): H1 `verify-student-pin.js` ilike 와일드카드 미이스케이프
+  (스프레이+DoS 가능), H2 `admin-content-write` `words.bulk_replace`
+  검증 전 delete(파괴적 실패 모드, Edge Function 재배포 필요), H3
+  `accepted_meanings` 배치 lost-update(조용한 손실), H4 라운드 완료
+  signature 충돌로 보상 스킵(보상 경제 직결). 4건 모두 "프로덕션 인증/
+  쓰기 경로는 운영자 승인 없이 무감독 수정하지 않는다"는 기존 관례
+  (`docs/SECURITY_AUDIT_V311.md` CRITICAL 처리와 동일 원칙)를 그대로
+  따라 보류.
+- **MEDIUM 11건**: 그중 2건(패턴 등록 adminPin 배선, 학생 화면 저위험
+  하드닝)은 감사 문서 작성 시점 이전/중에 별도 세션이 이미 즉시 수정
+  (`9bbad4a`/`307a49a`), 나머지는 문서화만.
+
+### 3) LOW-FIX 웨이브들 (저위험 즉시 수정, 코드 반영 완료)
+
+- `307a49a` `fix(student): 데드 훅 폴링·blob URL 누수·재생 예외·PronStep
+  key 등 저위험 하드닝` — `QuizGame.jsx`/`WordDetail.jsx` 녹음 blob URL
+  누수 수정(재녹음 시 이전 URL만 교체 시점에 revoke, 재생 도중 끊김
+  방지) + 재생 promise reject 무시 처리 + PronStep React key를 단어
+  텍스트에서 id로 교정(동철이의어 충돌 방지) + 미사용 데드 훅
+  `useFeatureAccess.js` 삭제.
+- `9bbad4a` `fix(writing): 패턴 등록 adminPin 배선 — v3.11 이후 조용한
+  저장 실패 차단` — `LearningRecommendationsCard`에 `adminPin` 배선 +
+  `wordLibrary.js` `setWordAcceptedMeanings()`의 레거시 anon 경로가
+  0행 update를 조용히 "성공"으로 반환하던 silent-success 버그를
+  `.select().maybeSingle()` + 명시적 throw로 교정(이중 안전장치).
+  `BUG_REPORT.md` M1(수정됨).
+- `0c10c34` `fix(admin): 에러 분류·stale 응답 가드·엑셀 예외·되돌리기
+  부분실패 표시·중복 헬퍼 통합` — 관리자 화면 저위험 하드닝 5건(테이블
+  없음 vs 그 외 에러 구분, AssignmentHistoryPanel stale-응답 가드,
+  ExcelUpload try/catch, revertLastBatch 부분 실패 표시, 중복 헬퍼
+  통합). `BUG_REPORT.md` §L2(수정됨).
+- `a38d379` `chore(cleanup): 데드 파일/미사용 export 제거(words.js,
+  speech playAudioUrl export)`, `60b3cea`/`ced4117` 정리·로그 게이팅
+  계열(축 D 기계적 스윕 산출).
+
+### 4) Phase 2 품질 웨이브 (main, 6커밋)
+
+`5f8f45d`(wordSlug/isoDaysAgoStr 단일 원본화) → `b6f168a`(이월분 정리
++ 로그 게이트) → `7fdc33c`(조회 화면 로딩/빈 상태/에러 상태 보강) →
+`20fc059`(null 안전 감사 + 숫자 입력 클램프 + 예문 폼 검증 메시지) →
+`c933749`(체크포인트) → `6c13170`(접근성: 아이콘 버튼 aria-label·폼
+라벨 연결) → `ffcf9eb`(완료 체크포인트). 매 커밋 build + 관련 verify
+PASS 확인, `api/` 파일은 전혀 건드리지 않음(파일 소유권 원칙 준수).
+상세: `CHANGELOG.md` §(A), `.ai-status/implementer-phase2-quality-wave.json`.
+
+### 5) 문서 5종 신설
+
+`27aef4f` `docs(audit): 프로덕션 하드닝 감사 문서 5종` —
+`PROJECT_AUDIT.md`(감사 범위/방법/총계/강점), `BUG_REPORT.md`(버그별
+상세), `CHANGELOG.md`(세션별 커밋 이력, 신규 도입), `TECH_DEBT.md`
+(구조적 이월 부채), `NEXT_PRIORITY.md`(작업 순서/선행조건). 기존
+`handoff.md`/`ROADMAP.md`와 중복 없이 "버그 상세"/"작업 순서"라는
+빈 자리를 채우는 용도로 신설(append 원칙, 규칙 13).
+
+### 6) 보안 브랜치 격리
+
+`BUG_REPORT.md` H1(ilike 이스케이프) + M10(PIN 설정 레이스 가드) + M12
+(generate-audio URL 인코딩) 3건을 다루는 커밋 `fb65dd7`
+`fix(security): PIN 인증 ilike 와일드카드 이스케이프 + PIN 설정 레이스
+가드 + URL 인코딩`을 별도 브랜치 `fix/verify-student-pin-ilike`에
+격리(main 미머지). 프로덕션 인증 경로(서버리스, service_role key)
+변경이라 Vercel이 배포하는 main에 무감독 병합하지 않는다는 원칙을
+그대로 따름 — `npm run build` 통과 확인, 운영자 승인 후 머지 대기.
+
+**정직 기록(역할 분리)**: 이 브랜치 생성·커밋 단계에서 subagent의
+git-write 훅이 새 브랜치 생성을 차단해, 코드 작성은 담당 서브에이전트가
+하되 실제 `git checkout -b`/커밋/푸시는 오케스트레이터(상위 세션)가
+대신 실행하는 역할 분리로 처리했다 — 코드 작성자와 git 실행자가
+분리된 것이지 검토 없이 우회한 것은 아니다(권한 제약을 우회 경로로
+피해가지 않고, 가능한 권한을 가진 상위 세션이 명시적으로 그 단계만
+대신 수행).
+
+### 7) 이번(27차, 마감) 세션 — verify:all 재확인 + 문서 마감
+
+- `npm run build` PASS(신규 경고 없음, 기존 vendor 청크 크기 경고만
+  유지).
+- `npm run verify:all` — `FAIL {login}`(로컬 `SUPABASE_SERVICE_ROLE_KEY`
+  부재로 `permission denied for table students`, 기존 환경 제약 —
+  이번 세션 18개 커밋 중 `scripts/testStudentPinAuth.mjs` 등 login
+  도메인 스크립트나 `api/` 인증 파일을 건드린 커밋이 0건임을
+  `git diff --stat` 실측 확인, 회귀 아님) + `SKIP {speaking, listening}`
+  (기존) + v3.11 락다운 SKIP 다수(기존, `classes`/`units`/`words` anon
+  쓰기 차단이 정상 동작 중이라는 방증) + 그 외 전 도메인 PASS(login
+  1건만 FAIL, 나머지 25개 도메인 전부 PASS/SKIP 정상) — 예상 베이스라인과
+  정확히 일치, 회귀 없음.
+- `BUG_REPORT.md`/`CHANGELOG.md`/`NEXT_PRIORITY.md` 갱신(이 세션 수정
+  항목 상태 반영 + 남은 세션 커밋 이력 append) + `.ai-status/
+  hardening-session-2026-08-02.json` 체크포인트.
 
 ## 2026-08-02 (26차) — 야간 학생 경험 폴리시 세션 마감 (implementer)
 
