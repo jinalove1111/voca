@@ -275,6 +275,9 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
   const [praiseMsg, setPraise]  = useState('')
   const [canRecord, setCanRec]  = useState(false)  // unlocks after praise voice ends
   const [answerPaul, setAnswerPaul] = useState(null) // 이번 문제 정답/오답에 대해 뽑힌 폴 리액션
+  // 재생 중 표시만(WordDetail/SpellingQuestion과 동일 패턴) — mp3 없으면
+  // TTS 폴백까지 1~3초 걸려 아무 반응이 없어 보이는 문제 보완.
+  const [replaying, setReplaying] = useState(false)
 
   const current    = pool[idx] || pool[0]
   const isAnswered = selected !== null
@@ -408,7 +411,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
     <div className="min-h-screen p-4 pb-8">
       <div className="flex items-center justify-between max-w-lg mx-auto mb-4 pt-2">
         <button onClick={onBack} className="py-3 px-2 -my-3 -mx-2 text-purple-600 font-bold btn-press">← 홈</button>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           {pool.map((_, i) => (
             <div key={i} className={`w-7 h-7 rounded-full text-xs flex items-center justify-center font-black transition-all ${
               i < idx ? 'bg-purple-500 text-white' : i === idx ? 'bg-yellow-400 text-white scale-110' : 'bg-gray-200 text-gray-400'
@@ -421,8 +424,15 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
         <div className="bg-white rounded-3xl card-shadow p-6 mb-4">
           <p className="text-center text-gray-400 text-sm font-bold mb-4">이 단어의 뜻은? 🤔</p>
 
-          <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-6 text-center text-white mb-6 word-card">
-            <button onClick={() => playWordAudio(current.word.wordAudioUrl, current.word.word, { source: 'quiz-word' })} className="btn-press max-w-full">
+          <div className={`bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-6 text-center text-white mb-6 word-card ${replaying ? 'animate-pulse' : ''}`}>
+            <button onClick={() => {
+              setReplaying(true)
+              playWordAudio(current.word.wordAudioUrl, current.word.word, {
+                source: 'quiz-word',
+                onEnd: () => setReplaying(false),
+                onError: () => setReplaying(false),
+              })
+            }} className="btn-press max-w-full">
               <p className="word-text font-black hover:scale-110 transition-transform">{current.word.word}</p>
             </button>
             <p className="text-purple-200 text-xs mt-1">탭하면 발음 🔊</p>

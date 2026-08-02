@@ -35,6 +35,10 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
   const [transcript, setTranscript] = useState('')
   const [ungraded, setUngraded] = useState(false) // true = recorded OK but no STT grading available
   const [paulReaction, setPaulReaction] = useState(null)
+  // 3단 오디오 폴백(mp3 -> 기기 TTS -> 네트워크 TTS)이 전부 실패했을 때만
+  // 표시 — speech.js는 console.warn만 남기고 학생 화면엔 아무 신호가
+  // 없었음(giveUp). 흐름은 막지 않고(바로 startListen 진행) 안내만 추가.
+  const [audioNotice, setAudioNotice] = useState('')
   const mrRef              = useRef(null)
   const settledRef         = useRef(true) // true = not currently waiting on a result
   const hangTimerRef       = useRef(null)
@@ -203,13 +207,17 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
     if (phase === 'speaking' || phase === 'success') return
     unlockAudio()
     setMsg('')
+    setAudioNotice('')
     setPaulReaction(null)
     setPhase('speaking')
     playWordAudio(wordAudioUrl, target, {
       times: 2,
       source: 'speechbtn-prompt',
       onEnd: () => startListen(),
-      onError: () => startListen(),
+      onError: () => {
+        setAudioNotice('지금은 소리를 들려줄 수 없어요 — 화면을 보고 말해봐요')
+        startListen()
+      },
     })
   }
 
@@ -240,6 +248,10 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
           theme={phase === 'success' ? 'success' : 'fail'}
           size="md"
         />
+      )}
+
+      {audioNotice && (
+        <p className="text-center text-xs text-gray-400">{audioNotice}</p>
       )}
 
       {(phase === 'success' || phase === 'fail') && transcript && (
@@ -275,9 +287,18 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
 // 상태를 바꾸지 않고 발음만 다시 들려줌.
 function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAttempt, wordStatus, onWordKnown, onWordUnknown, onSkip }) {
   const [canProceed, setCanProceed] = useState(false)
+  // 재생 중 표시만(SpellingQuestion과 동일 패턴) — mp3 없으면 TTS 폴백까지
+  // 1~3초 걸려 아무 반응이 없어 보이는 문제 보완.
+  const [replaying, setReplaying] = useState(false)
 
   const playWord = () => {
-    playWordAudio(word.wordAudioUrl, word.word, { times: 3, source: 'pronounce-word' })
+    setReplaying(true)
+    playWordAudio(word.wordAudioUrl, word.word, {
+      times: 3,
+      source: 'pronounce-word',
+      onEnd: () => setReplaying(false),
+      onError: () => setReplaying(false),
+    })
   }
 
   return (
@@ -287,7 +308,7 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
         role="button" tabIndex={0}
         aria-label={`${word.word} 발음 다시 듣기`}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); playWord() } }}
-        className="bg-gradient-to-br from-indigo-500 via-blue-600 to-purple-600 rounded-3xl pt-4 px-5 pb-6 text-white card-shadow word-card cursor-pointer"
+        className={`bg-gradient-to-br from-indigo-500 via-blue-600 to-purple-600 rounded-3xl pt-4 px-5 pb-6 text-white card-shadow word-card cursor-pointer ${replaying ? 'animate-pulse' : ''}`}
       >
         {/* 단어 학습 카드에서는 예외 — Paul은 "히어로"가 아니라 작은
             마스코트로만(48~64px). 우선순위는 항상 1)영어 단어 2)한글 뜻
@@ -303,7 +324,7 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
 
         <div className="flex justify-center mt-2">
           <span className="inline-flex items-center gap-2 bg-white/15 rounded-full pl-2 pr-4 py-1.5">
-            <span className="w-7 h-7 rounded-full bg-white/25 flex items-center justify-center text-sm">🔊</span>
+            <span className={`w-7 h-7 rounded-full bg-white/25 flex items-center justify-center text-sm ${replaying ? 'animate-pulse' : ''}`}>🔊</span>
             {word.pronunciation && (
               <span className="text-sm font-bold text-white/90">[{word.pronunciation}]</span>
             )}
@@ -451,6 +472,16 @@ function shuffle(arr) {
 }
 
 function QuizStep({ word, classWords, onDone, onMarkQuizSolved, onQuizAnswer }) {
+  // 재생 중 표시만(PronounceStep/SpellingQuestion과 동일 패턴).
+  const [replaying, setReplaying] = useState(false)
+  const playQuizWord = () => {
+    setReplaying(true)
+    playWordAudio(word.wordAudioUrl, word.word, {
+      source: 'worddetail-quiz-word',
+      onEnd: () => setReplaying(false),
+      onError: () => setReplaying(false),
+    })
+  }
   const options = useMemo(() => {
     const pool = (classWords || []).filter(w => w.id !== word.id && w.meaning && w.meaning !== word.meaning)
     const wrongs = shuffle(pool).slice(0, 3).map(w => w.meaning)
@@ -501,11 +532,11 @@ function QuizStep({ word, classWords, onDone, onMarkQuizSolved, onQuizAnswer }) 
       <div className="bg-white rounded-3xl card-shadow p-6">
         <p className="text-center text-gray-500 font-bold text-sm mb-4">🎮 뜻 맞히기</p>
         <div
-          onClick={() => playWordAudio(word.wordAudioUrl, word.word, { source: 'worddetail-quiz-word' })}
+          onClick={playQuizWord}
           role="button" tabIndex={0}
           aria-label={`${word.word} 발음 듣기`}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); playWordAudio(word.wordAudioUrl, word.word, { source: 'worddetail-quiz-word' }) } }}
-          className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-5 text-center text-white mb-5 word-card cursor-pointer btn-press"
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); playQuizWord() } }}
+          className={`bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-5 text-center text-white mb-5 word-card cursor-pointer btn-press ${replaying ? 'animate-pulse' : ''}`}
         >
           <p className="word-text font-black hover:scale-110 transition-transform">{word.word}</p>
           <p className="text-purple-200 text-xs mt-1">탭하면 발음 🔊</p>
@@ -737,6 +768,11 @@ export default function WordDetail({
               className={`rounded-full transition-all ${i < stepIdx ? 'w-3 h-3 bg-purple-400' : i === stepIdx ? 'w-4 h-4 bg-purple-600' : 'w-3 h-3 bg-gray-200'}`}
             />
           ))}
+          {sessionProgress && sessionProgress.total > 0 && (
+            <span className="text-xs font-bold text-gray-400 ml-1">
+              단어 {Math.min(sessionProgress.current, sessionProgress.total)}/{sessionProgress.total}
+            </span>
+          )}
         </div>
       </div>
 
