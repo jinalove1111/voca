@@ -138,7 +138,20 @@ function SpellingSettingsPanel({ targetClass, onSaved, adminPin }) {
       <label className="flex items-center justify-between text-xs font-bold text-gray-700 gap-2">
         오답 반복 횟수
         <input type="number" min={1} max={10} value={settings.wrongAnswerRepeatCount} disabled={saving}
-          onChange={e => save({ ...settings, wrongAnswerRepeatCount: e.target.value })}
+          onChange={e => {
+            // 2026-08-02 — 저장 직전에 UI가 직접 1~10으로 클램프해 "화면에
+            // 보이는 값 = 실제 저장되는 값"을 보장한다(wordLibrary.js
+            // setClassSettings도 동일한 범위로 방어적 클램프 — 이중 안전).
+            // 빈 입력(지우는 중)은 아직 유효한 숫자가 아니므로 저장을
+            // 건너뛰고 화면 표시만 갱신 — 그대로 save()를 호출하면 지우는
+            // 순간(빈 문자열)에 서버가 이를 1로 해석해 저장해버려, 교사가
+            // 다음 숫자를 마저 입력하기도 전에 원치 않는 값이 저장된다.
+            const raw = e.target.value
+            if (raw === '') { setSettings({ ...settings, wrongAnswerRepeatCount: raw }); return }
+            const n = Number(raw)
+            const clamped = Number.isFinite(n) ? Math.min(10, Math.max(1, Math.round(n))) : settings.wrongAnswerRepeatCount
+            save({ ...settings, wrongAnswerRepeatCount: clamped })
+          }}
           className="w-16 border-2 border-purple-200 rounded-lg px-2 py-1 text-center font-bold bg-white" />
       </label>
       <label className="flex items-center justify-between text-xs font-bold text-gray-700 gap-2">

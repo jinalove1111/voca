@@ -5,7 +5,7 @@ import {
 import {
   listExamples, createExample, updateExample, deleteExample, setApprovalStatus,
 } from '../../utils/curriculum/exampleLibrary'
-import { canTransition, matchesFilters, APPROVAL_STATUSES } from '../../utils/curriculum/curriculumModel'
+import { canTransition, matchesFilters, APPROVAL_STATUSES, validateExampleFields } from '../../utils/curriculum/curriculumModel'
 import { generateCandidateExamples } from '../../utils/curriculum/generatorContract'
 
 const SOURCE_BADGE = { teacher: '👩‍🏫', import: '📥', rule: '⚙️', ai: '🤖' }
@@ -135,19 +135,29 @@ export default function ExampleManager({ adminPin }) {
   }
 
   const handleSubmit = async () => {
+    const fields = {
+      target_word: form.targetWord,
+      english_sentence: form.englishSentence,
+      korean_translation: form.koreanTranslation || null,
+      textbook_id: form.textbookId || null,
+      unit_id: form.unitId || null,
+      grammar_point_id: form.grammarPointId || null,
+      difficulty: Number(form.difficulty) || 1,
+      source: 'teacher',
+      approval_status: form.approveImmediately ? 'approved' : 'draft',
+    }
+    // 2026-08-02 — createExample/updateExample(exampleLibrary.js)이 이미
+    // 저장 직전에 validateExampleFields로 검증해 throw하므로 기능적으로는
+    // 이미 막혀 있었지만, 그 에러가 "예문 저장 중 오류: " 접두어로 감싸져
+    // API 왕복 없이는 못 보던 안내(특히 "영어 문장에 대상 단어가 온전한
+    // 단어 형태로 포함돼 있어야 해요")를 여기서 먼저 같은 순수 검증 함수로
+    // 확인해, 네트워크 호출 전에 그대로(접두어 없이) 보여준다 — 검증 로직
+    // 재구현 없이 재사용(curriculumModel.js 단일 원본).
+    const { ok, errors } = validateExampleFields(fields)
+    if (!ok) { alert(errors.join('\n')); return }
+
     setBusy(true)
     try {
-      const fields = {
-        target_word: form.targetWord,
-        english_sentence: form.englishSentence,
-        korean_translation: form.koreanTranslation || null,
-        textbook_id: form.textbookId || null,
-        unit_id: form.unitId || null,
-        grammar_point_id: form.grammarPointId || null,
-        difficulty: Number(form.difficulty) || 1,
-        source: 'teacher',
-        approval_status: form.approveImmediately ? 'approved' : 'draft',
-      }
       if (form.id) await updateExample(form.id, fields, adminPin)
       else await createExample(fields, adminPin)
       setShowForm(false)

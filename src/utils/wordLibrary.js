@@ -527,7 +527,16 @@ export async function setClassSettings(className, settings, adminPin) {
   const payload = {}
   if ('spellingTestEnabled' in settings) payload.spelling_test_enabled = !!settings.spellingTestEnabled
   if ('spellingHintEnabled' in settings) payload.spelling_hint_enabled = !!settings.spellingHintEnabled
-  if ('wrongAnswerRepeatCount' in settings) payload.wrong_answer_repeat_count = Number(settings.wrongAnswerRepeatCount) || 3
+  if ('wrongAnswerRepeatCount' in settings) {
+    // 2026-08-02 — 이전엔 `Number(x) || 3`라 0을 입력하면(falsy) 무조건 3으로
+    // 튀어(교사가 화면에서 본 값과 실제 저장값이 달라짐), 그 외 범위 밖 값
+    // (예: 15, 음수)은 클램프 없이 그대로 저장됐다(UI의 min={1} max={10}은
+    // HTML 힌트일 뿐 강제되지 않음). 이제 숫자가 아니면 기본값 3, 숫자면
+    // UI와 동일한 1~10 범위로 클램프한다 — SpellingSettingsPanel(AdminScreen.jsx)
+    // 쪽 onChange도 저장 전에 동일하게 클램프해 화면 표시값=저장값을 보장한다.
+    const n = Number(settings.wrongAnswerRepeatCount)
+    payload.wrong_answer_repeat_count = Number.isFinite(n) ? Math.min(10, Math.max(1, Math.round(n))) : 3
+  }
   if ('spellingDirection' in settings) {
     payload.spelling_direction = VALID_SPELLING_DIRECTIONS.has(settings.spellingDirection) ? settings.spellingDirection : 'mixed'
   }
