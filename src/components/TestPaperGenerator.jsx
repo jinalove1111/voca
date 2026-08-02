@@ -206,6 +206,11 @@ export default function TestPaperGenerator() {
   const [unit, setUnit] = useState('')
   const [wordCount, setWordCount] = useState('20')
   const [testType, setTestType] = useState('A')
+  // A13(2026-08-02) — 항상 유닛 앞 N개만 나가서, 이미 앞부분으로 여러 번
+  // 시험을 낸 반은 뒤쪽 단어가 한 번도 출제되지 않았다. 시작 위치(1-based
+  // 화면 표기, 내부는 0-based offset)를 추가해 "11번째 단어부터" 같은
+  // 범위 출제를 가능하게 한다 — 기본값 1(= 기존 동작과 완전히 동일).
+  const [startPos, setStartPos] = useState('1')
   const [error, setError] = useState('')
   const [paper, setPaper] = useState(null) // { className, unitName, questions } | null
 
@@ -218,7 +223,10 @@ export default function TestPaperGenerator() {
     const allWords = getClassWords(cls, unit)
     if (!allWords.length) return setError('이 Unit에는 등록된 단어가 없어요.')
     const count = wordCount === 'all' ? allWords.length : Math.min(Number(wordCount), allWords.length)
-    const selected = allWords.slice(0, count)
+    // 1-based 입력을 0-based offset으로, 범위를 벗어나면 안전하게 clamp.
+    const offset = Math.max(0, Math.min((Number(startPos) || 1) - 1, allWords.length - 1))
+    const selected = allWords.slice(offset, offset + count)
+    if (!selected.length) return setError('시작 위치가 이 Unit의 단어 개수를 벗어났어요.')
     const questions = buildQuestions(selected, testType, allWords)
     setPaper({ className: cls, unitName: unit, questions })
   }
@@ -244,7 +252,7 @@ export default function TestPaperGenerator() {
         {cls && (
           <div>
             <label className="text-xs font-bold text-gray-500 mb-1 block">Unit 선택</label>
-            <select value={unit} onChange={(e) => setUnit(e.target.value)}
+            <select value={unit} onChange={(e) => { setUnit(e.target.value); setStartPos('1') }}
               className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-purple-400 bg-white">
               <option value="">-- Unit을 선택하세요 --</option>
               {units.map((u) => <option key={u} value={u}>{u}</option>)}
@@ -263,6 +271,17 @@ export default function TestPaperGenerator() {
             ))}
           </div>
         </div>
+
+        {/* A13(2026-08-02) — 항상 유닛 앞부분만 출제되던 것을 완화. "전체"를
+            고르면 시작 위치는 의미가 없으므로 숨김. */}
+        {wordCount !== 'all' && (
+          <div>
+            <label className="text-xs font-bold text-gray-500 mb-1 block">시작 위치 (몇 번째 단어부터)</label>
+            <input type="number" min={1} value={startPos} onChange={(e) => setStartPos(e.target.value)}
+              className="w-24 border-2 border-gray-200 rounded-xl px-3 py-2 font-bold text-sm focus:outline-none focus:border-purple-400 bg-white" />
+            <p className="text-xs text-gray-400 mt-1">기본값 1(유닛 맨 앞부터) — 뒤쪽 단어 위주로 시험을 내고 싶을 때 조정하세요.</p>
+          </div>
+        )}
 
         <div>
           <label className="text-xs font-bold text-gray-500 mb-1 block">시험 유형</label>

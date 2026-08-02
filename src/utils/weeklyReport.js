@@ -136,7 +136,14 @@ export function buildWeeklyReport({ name, last7, quizAccuracy, quizCorrect, quiz
   return [
     `${name} 학생 주간 학습 리포트`,
     '',
-    '📚 이번 주 학습 현황',
+    // A11(2026-08-02, 라벨만) — 여기 나열되는 숫자는 last7(최근 활동
+    // 있었던 최대 7개 기록일 — 학생이 뜸하게 공부하면 실제 달력 기준
+    // "이번 주"보다 훨씬 과거까지 걸칠 수 있음)과, quizCorrect/quizTotal/
+    // pronAttempts(fetchDashboardData가 읽어온 최대 60일 전체 누적, last7이
+    // 아님)가 섞여 있다 — 둘 다 "이번 주"라는 표현과 실제 집계 창이 다르다.
+    // 학부모에게 가는 문구라 과장 제거가 핵심(집계 로직/창은 절대 안 바꿈 —
+    // CLAUDE.md 규칙 3, 재구현/재조사 없는 임의 변경 금지).
+    '📚 최근 학습 기록',
     `- 숙제 완료: ${doneDays}/${totalDays}일`,
     `- 연속 학습: ${progress?.streak ?? 0}일째`,
     `- 누적 별: ${progress?.total_stars ?? 0}개 · 클리어한 단어: ${progress?.cleared_count ?? 0}개`,

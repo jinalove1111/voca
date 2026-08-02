@@ -843,6 +843,22 @@ function AdminDashboard({ adminPin } = {}) {
   const todaysAssignedCount = selectedClass ? getTodaysAssignmentWordIds(selectedClass).length : 0
   const todaysHomeworkDoneCount = rows.filter((r) => computeStudentStats(r, wordStatusSummary).homeworkDone).length
 
+  // A10(2026-08-02) — 대시보드에 정렬/필터가 없어 학생 수가 많은 반은
+  // 미완료 학생을 찾으려면 카드를 하나씩 훑어야 했다. 이미 계산 중인
+  // computeStudentStats().homeworkDone만 써서(새 조회 0건) "숙제 미완료만
+  // 보기" 퀵필터 + 미완료 우선 정렬을 추가한다 — 원본 rows/렌더 로직은
+  // 그대로 두고 표시 순서/목록만 파생.
+  const [showIncompleteOnly, setShowIncompleteOnly] = useState(false)
+  const displayRows = useMemo(() => {
+    const withDone = rows.map((r) => ({ r, homeworkDone: computeStudentStats(r, wordStatusSummary).homeworkDone }))
+    const filtered = showIncompleteOnly ? withDone.filter((x) => !x.homeworkDone) : withDone
+    // 미완료 우선(안정 정렬 — 완료/미완료 그룹 내부 순서는 원래 rows 순서 유지)
+    return filtered
+      .map((x, i) => ({ ...x, i }))
+      .sort((a, b) => (a.homeworkDone === b.homeworkDone ? a.i - b.i : a.homeworkDone ? 1 : -1))
+      .map((x) => x.r)
+  }, [rows, wordStatusSummary, showIncompleteOnly])
+
   return (
     <div className="space-y-3">
       <div className="bg-white rounded-3xl card-shadow p-5">
@@ -862,6 +878,13 @@ function AdminDashboard({ adminPin } = {}) {
           </p>
         )}
         {selectedClass && rows.length > 0 && (
+          <button onClick={() => setShowIncompleteOnly((v) => !v)}
+            aria-pressed={showIncompleteOnly}
+            className={`w-full mt-2 font-bold py-2 rounded-xl text-xs btn-press ${showIncompleteOnly ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-700'}`}>
+            {showIncompleteOnly ? `⬜ 숙제 미완료만 보기 중(${todaysHomeworkDoneCount < rows.length ? rows.length - todaysHomeworkDoneCount : 0}명) — 전체 보기로` : '⬜ 숙제 미완료만 보기'}
+          </button>
+        )}
+        {selectedClass && rows.length > 0 && (
           <button onClick={exportClassStatsCsv}
             className="w-full mt-2 bg-green-100 text-green-700 font-bold py-2 rounded-xl text-xs btn-press">
             ⬇️ 반 전체 통계 CSV로 내보내기 ({rows.length}명)
@@ -873,6 +896,9 @@ function AdminDashboard({ adminPin } = {}) {
       {!loading && selectedClass && rows.length === 0 && (
         <p className="text-center text-gray-400 text-sm py-6">이 반에 학생이 없어요.</p>
       )}
+      {!loading && selectedClass && rows.length > 0 && showIncompleteOnly && displayRows.length === 0 && (
+        <p className="text-center text-gray-400 text-sm py-6">🎉 전원 오늘 숙제 완료!</p>
+      )}
 
       {/* 2026-08-01 — 배정 이력 + 완료 현황(읽기 전용, admin-content-write
           배포 여부와 무관하게 항상 동작). 대시보드 탭 어디서든 볼 수 있게
@@ -882,7 +908,9 @@ function AdminDashboard({ adminPin } = {}) {
           upsert로 폴백). */}
       <AssignmentHistoryPanel adminPin={adminPin} />
 
-      {!loading && rows.map(r => {
+      {/* A10(2026-08-02) — displayRows(미완료 우선 정렬 + 선택적 미완료
+          전용 필터)로 렌더. 카드 내부 렌더/로직은 전혀 안 바꿈. */}
+      {!loading && displayRows.map(r => {
         const { studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws } =
           computeStudentStats(r, wordStatusSummary)
         const isOpen = expanded === r.id
