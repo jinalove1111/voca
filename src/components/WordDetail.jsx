@@ -4,7 +4,6 @@ import { requestAudioGeneration } from '../utils/wordLibrary'
 import { isInAppBrowser } from '../utils/browserDetect'
 import InAppBrowserNotice from './InAppBrowserNotice'
 import SpellingQuestion from './SpellingQuestion'
-import { useMicReady } from '../hooks/useMicReady'
 import { pickReaction, playReactionSound, getReactionById } from '../utils/paulReactions'
 import HeroReaction from './HeroReaction'
 // Curriculum Engine Phase 0(2026-08-01, docs/CURRICULUM_ENGINE.md §8/§13.3) —
@@ -33,16 +32,20 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
   const [msg, setMsg]     = useState('')
   const [myRecUrl, setUrl] = useState(null)
   const [tries, setTries]  = useState(0)
-  const micReady = useMicReady()
   const [transcript, setTranscript] = useState('')
   const [ungraded, setUngraded] = useState(false) // true = recorded OK but no STT grading available
   const [paulReaction, setPaulReaction] = useState(null)
   const mrRef              = useRef(null)
   const settledRef         = useRef(true) // true = not currently waiting on a result
   const hangTimerRef       = useRef(null)
+  const recUrlRef          = useRef(null) // last URL.createObjectURL(blob) — revoked when replaced/unmounted
 
   useEffect(() => () => {
     try { mrRef.current?.stop?.() } catch {}
+    if (recUrlRef.current) {
+      try { URL.revokeObjectURL(recUrlRef.current) } catch {}
+      recUrlRef.current = null
+    }
   }, [])
 
   // In-app browsers (KakaoTalk etc.) handle mic permission unreliably — skip
@@ -135,7 +138,14 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
         }
         devLog('[WordDetail] STEP2 Recording Stopped')
         devLog('[WordDetail] STEP3 Blob Created — blob.size =', blob.size)
-        setUrl(URL.createObjectURL(blob))
+        // Revoke the previous recording's blob URL only now that a new one
+        // is replacing it (not earlier, e.g. at setUrl(null) above) — that
+        // way a "내 발음" playback started from the previous attempt isn't
+        // cut off mid-listen just because the student started re-recording.
+        if (recUrlRef.current) { try { URL.revokeObjectURL(recUrlRef.current) } catch {} }
+        const nextUrl = URL.createObjectURL(blob)
+        recUrlRef.current = nextUrl
+        setUrl(nextUrl)
 
         if (blob.size === 0) {
           finish('fail', '소리가 안 들렸어요. 다시 시도해봐요! 🗣️', { countTry: true })
@@ -245,7 +255,7 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
             🔊 원어민
           </button>
           {myRecUrl && (
-            <button onClick={() => new Audio(myRecUrl).play()}
+            <button onClick={() => new Audio(myRecUrl).play().catch(() => {})}
               className="flex-1 min-h-[44px] bg-purple-100 text-purple-700 font-bold py-3 rounded-xl text-xs btn-press">
               🎧 내 발음
             </button>

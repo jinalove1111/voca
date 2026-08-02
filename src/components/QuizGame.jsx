@@ -60,6 +60,7 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess, onAttempt }) {
   const mrRef      = useRef(null)   // { stop } handle from recordWithAutoStop
   const timersRef  = useRef([])     // setTimeout ids
   const settledRef = useRef(true)   // true = not currently waiting on a recording result
+  const recUrlRef  = useRef(null)   // last URL.createObjectURL(blob) — revoked when replaced/unmounted
 
   const clearTimers = () => {
     timersRef.current.forEach(clearTimeout)
@@ -73,7 +74,13 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess, onAttempt }) {
   }
 
   // Cleanup on unmount or word change
-  useEffect(() => () => stopAll(), [word])
+  useEffect(() => () => {
+    stopAll()
+    if (recUrlRef.current) {
+      try { URL.revokeObjectURL(recUrlRef.current) } catch {}
+      recUrlRef.current = null
+    }
+  }, [word])
 
   // Grading is just "did a recording actually happen" — blob.size > 0 = the
   // student practiced the pronunciation, so it counts as success. This app
@@ -125,7 +132,14 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess, onAttempt }) {
         if (settledRef.current) return
         settledRef.current = true
         devLog('[QuizGame] recorder stop, blob.size =', blob.size)
-        setUrl(URL.createObjectURL(blob))
+        // Revoke the previous recording's blob URL only now that a new one
+        // is replacing it (not earlier) — an in-progress "내 발음" playback
+        // from a prior attempt isn't cut off just because the student
+        // started re-recording.
+        if (recUrlRef.current) { try { URL.revokeObjectURL(recUrlRef.current) } catch {} }
+        const nextUrl = URL.createObjectURL(blob)
+        recUrlRef.current = nextUrl
+        setUrl(nextUrl)
         setProc(false)
         onAttempt?.()
         if (blob.size > 0) {
@@ -222,7 +236,7 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess, onAttempt }) {
             🔊 원어민
           </button>
           {myRecUrl && (
-            <button onClick={() => new Audio(myRecUrl).play()}
+            <button onClick={() => new Audio(myRecUrl).play().catch(() => {})}
               className="flex-1 min-h-[44px] bg-purple-100 text-purple-700 font-bold py-3 rounded-xl text-xs btn-press">
               🎧 내 발음
             </button>
@@ -261,7 +275,6 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
   const [praiseMsg, setPraise]  = useState('')
   const [canRecord, setCanRec]  = useState(false)  // unlocks after praise voice ends
   const [answerPaul, setAnswerPaul] = useState(null) // 이번 문제 정답/오답에 대해 뽑힌 폴 리액션
-  const processing              = useRef(false)     // guard against double-select
 
   const current    = pool[idx] || pool[0]
   const isAnswered = selected !== null
@@ -279,8 +292,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
   }, [current?.word?.id])
 
   const handleSelect = (optIdx) => {
-    if (isAnswered || !current || processing.current) return
-    processing.current = true
+    if (isAnswered || !current) return
 
     // Cancel any ongoing speech/recognition immediately
     window.speechSynthesis?.cancel()
@@ -307,8 +319,6 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
       setPraise('')
       onAddMission(current.word.id)
     }
-
-    processing.current = false
   }
 
   // 별 지급 단일 경로(2026-07-28) — 예전엔 onMarkPronunciationOk?.()를
@@ -467,7 +477,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
               <InAppBrowserNotice compact />
             ) : (
               <PronStep
-                key={current.word.word}
+                key={current.word.id}
                 word={current.word.word}
                 wordAudioUrl={current.word.wordAudioUrl}
                 canRecord={canRecord}
