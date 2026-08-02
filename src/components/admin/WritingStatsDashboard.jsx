@@ -45,7 +45,13 @@ export default function WritingStatsDashboard() {
   useEffect(() => { load() }, [])
 
   const agg = Array.isArray(statsRows) ? aggregateStatsRows(statsRows) : null
-  const queueSummary = Array.isArray(queueRows) ? summarizeQueue(queueRows) : null
+  // 2026-08-02 — spellingReviewApi.fetchPendingSpellingReviews()가 이미
+  // 붙여둔 __fetchError 마커(테이블 없음이 아닌 실제 조회 실패 표시, 그
+  // 함수 헤더 주석 "후속 세션이 배너 문구를 분기하고 싶으면 이 마커를
+  // 쓰면 됨" 참고)를 처음으로 소비한다 — 이전엔 실제 네트워크 오류도
+  // "대기 중인 답안이 없어요"(빈 상태)로 오도됐다.
+  const queueFetchFailed = Array.isArray(queueRows) && queueRows.__fetchError === true
+  const queueSummary = Array.isArray(queueRows) && !queueFetchFailed ? summarizeQueue(queueRows) : null
   const nonEmptyTypeGroups = queueSummary ? queueSummary.groups.filter((g) => g.count > 0) : []
 
   return (
@@ -85,7 +91,12 @@ export default function WritingStatsDashboard() {
             <span className="text-gray-400"> · 전체 {agg.totals.total}건</span>
           </p>
 
-          {queueSummary === null ? (
+          {queueFetchFailed ? (
+            <p className="text-red-500 font-bold bg-red-50 rounded-xl p-3">
+              ⚠️ 실수 유형 분포를 불러오지 못했어요(네트워크/서버 오류).{' '}
+              <button onClick={load} className="underline text-red-600">다시 시도</button>
+            </p>
+          ) : queueSummary === null ? (
             <p className="text-gray-400">실수 유형 분포: 검수 큐 준비 중(supabase_v2_0_spelling_mixed.sql 실행 필요).</p>
           ) : (
             <div>
