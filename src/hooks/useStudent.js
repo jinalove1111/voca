@@ -1141,6 +1141,15 @@ export function useStudent(studentId, legacyName) {
   // mission-complete의 4/4 게이트에만 계속 기여(개별 XP 이벤트 없음) —
   // writing-complete는 발음이 아니라 쓰기시험(recordSpellingAnswer)에서
   // 별도로 트리거된다(아래 참고, paulRankShared.js 헤더에 판단 근거).
+  // Phase 2 M4c(2026-08-04) — word-view-complete의 트리거만
+  // round.wordsViewed(단순 열람)에서 round.completedToday(실제 "완료"
+  // 판정, markWordCompleted가 쓰는 필드)로 교체했다. 이벤트 타입 이름
+  // (word-view-complete)·XP 금액·source_event_id 형식(`${eventType}:${날짜}`,
+  // 날짜 기간키)은 전부 동결 — grantXp 호출부/XP_EVENT_TABLE 어느 쪽도
+  // 안 바뀌었으므로 서버(api/grant-xp.js) 재배포가 이 변경의 전제조건이
+  // 아니다(프런트 배포만으로 안전 전환/롤백). 미션 슬롯 판정
+  // (countCategoriesCompleted, 위 useEffect)은 이번 변경 범위 밖 — 여전히
+  // round.wordsViewed 등 기존 필드를 그대로 읽는다.
   useEffect(() => {
     const today = todayStr()
     if (dailyCategoryXpFiredRef.current.date !== today) {
@@ -1152,11 +1161,11 @@ export function useStudent(studentId, legacyName) {
       fired.add(key)
       grantXp(eventType, `${eventType}:${today}`)
     }
-    if (round.wordsViewed.length >= GOAL) tryFire('word-view', 'word-view-complete')
+    if (round.completedToday.length >= GOAL) tryFire('word-view', 'word-view-complete')
     if (round.examplesHeard >= GOAL) tryFire('listening', 'listening-complete')
     if (round.quizSolved >= GOAL) tryFire('quiz', 'quiz-complete')
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [round.wordsViewed.length, round.examplesHeard, round.quizSolved])
+  }, [round.completedToday.length, round.examplesHeard, round.quizSolved])
 
   // Full round completion: all 4 daily categories reached goal → open a
   // gift box (rarity-weighted random sticker, duplicates become bonus stars

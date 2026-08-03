@@ -170,5 +170,27 @@ console.log('\n8. 경험 언락 설정 — forward-compatible 스키마만(아�
   check('Max 단계에 승급 도전 + 특별 티켓 기회 두 항목', EXPERIENCE_UNLOCKS.max.unlocks.map(u => u.id).sort().join(',') === ['promotion-challenge', 'special-ticket-chance'].sort().join(','))
 }
 
+console.log('\n9. M4c(2026-08-04) 회귀 가드 — word-view-complete 트리거 교체가 "새 XP 발생원 금지" 원칙을 지켰는지')
+{
+  // "기존 이벤트의 트리거만 교체, 이벤트 타입/금액/개수는 동결"을 코드로
+  // 고정한다 — 미래 세션이 실수로 새 active 이벤트를 추가하거나 금액을
+  // 바꾸면 이 단언이 가장 먼저 깨진다.
+  const activeEntries = Object.entries(XP_EVENT_TABLE).filter(([, v]) => v.status === 'active')
+  check('active 이벤트가 정확히 5개(새 XP 발생원 없음)', activeEntries.length === 5)
+  check('active 이벤트 amount 합이 정확히 18(하루 최대 XP 불변: 2+2+2+2+10)',
+    activeEntries.reduce((sum, [, v]) => sum + v.amount, 0) === 18)
+  check('active 이벤트 키 집합이 정확히 동결된 5종(이름 변경 없음 — xp_ledger 기존 행과 계속 같은 계열로 집계)',
+    activeEntries.map(([k]) => k).sort().join(',') ===
+    ['word-view-complete', 'listening-complete', 'writing-complete', 'quiz-complete', 'daily-mission-complete'].sort().join(','))
+
+  // 기간키(날짜) 형식은 그대로, 단어 슬러그 기반 키는 여전히 구조적으로
+  // 불가능(트리거만 바뀌었지 source_event_id 생성식은 안 바뀜을 증명).
+  const todayKey = new Date().toDateString()
+  check('word-view-complete:{오늘 날짜} 형식은 여전히 유효(트리거 교체 후에도 기간키 형식 동결)',
+    isValidSourceEventIdForEvent('word-view-complete', `word-view-complete:${todayKey}`) === true)
+  check('word-view-complete:apple(단어 슬러그를 키로 쓴 형태)은 거부(단어 단위 XP 파밍 여전히 구조적으로 차단)',
+    isValidSourceEventIdForEvent('word-view-complete', 'word-view-complete:apple') === false)
+}
+
 console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n${failures}개 테스트 실패 ❌`)
 process.exit(failures === 0 ? 0 : 1)

@@ -170,7 +170,7 @@ export const EXPERIENCE_UNLOCKS = {
 // 주석 참고) — 미래 세션이 하나씩 `'active'`로 전환할 때 그 이벤트 성격에
 // 맞는 기간키 검증을 채워 넣으면 된다(스키마/API 변경 없이).
 export const XP_EVENT_TABLE = {
-  'word-view-complete': { amount: 2, period: 'day', status: 'active' }, // 오늘 단어보기(round.wordsViewed) 카테고리 첫 GOAL 도달
+  'word-view-complete': { amount: 2, period: 'day', status: 'active' }, // Phase 2 M4c(2026-08-04) — 오늘 학습 완료(round.completedToday, markWordCompleted가 쓰는 필드) 카테고리 첫 GOAL 도달로 트리거 교체(이전: round.wordsViewed 단순 열람). 키 이름·amount·period·status·source_event_id 형식은 전부 동결 — xp_ledger에 이미 이 키로 쌓인 과거 행과 계속 같은 계열로 집계된다.
   'listening-complete': { amount: 2, period: 'day', status: 'active' }, // 오늘 예문 청취(round.examplesHeard) 카테고리 첫 GOAL 도달
   'writing-complete': { amount: 2, period: 'day', status: 'active' }, // 오늘 쓰기시험 정답(history.spellingCorrect) 카테고리 첫 GOAL 도달
   'quiz-complete': { amount: 2, period: 'day', status: 'active' }, // 오늘 퀴즈(round.quizSolved) 카테고리 첫 GOAL 도달
