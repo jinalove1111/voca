@@ -1,0 +1,30 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "phase2-m4-progress-dashboard",
+  "task": "Phase 2 M4 — 학생 진행률 표시를 completed 축으로 전환 + 관리자 대시보드 Completed %/Cleared % 노출",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-03T00:00:00+09:00",
+  "updated_at": "2026-08-03T00:00:00+09:00",
+  "files_owned": [
+    "src/components/WordBrowser.jsx",
+    "src/App.jsx",
+    "src/utils/weeklyReport.js",
+    "src/components/AdminScreen.jsx",
+    "scripts/testWeeklyReport.mjs",
+    "handoff.md"
+  ],
+  "files_read": [
+    "src/hooks/useStudent.js",
+    "src/hooks/useAttachment.js",
+    "src/utils/attachment/attachmentCore.js",
+    "src/utils/wordLibrary.js",
+    "tests/harness/registry.mjs",
+    "CLAUDE.md",
+    ".ai-status/README.md"
+  ],
+  "summary": "M3(fa2e019)까지 도입된 completedWords/clearedWords 신호(useStudent.js) + completedSet/clearedWordSet 파생값(attachmentCore.js)을 표시 레이어에 실제로 연결했다. WordBrowser.jsx 진도 바 분자를 completed∩현재유닛으로 전환(라벨: '학습 완료'), 헤더 'N개 클리어'는 clearedWords(실력 판단)∩현재유닛으로 스코프 정정 — 두 숫자가 다른 걸 세므로 라벨로 구분. 보상 판정용 미션 기반 clearedSet(단어 목록 초록 체크)은 안 건드림. weeklyReport.js의 computeStudentStats에 4번째 인자 unitWordSlugs(선택)로 Completed %/Cleared % 계산 추가 — 새 컬럼/새 쿼리 0건(기존 progress_data JSONB 재사용), hasProgressData로 '기록 없음'과 '0%' 구분. AdminScreen.jsx 학생 카드 + 반 평균 + CSV export에 두 지표 노출(분모=학생별 현재 유닛 단어 수, 화면에 명시). testWeeklyReport.mjs에 신규 단언 3세트(회귀 없음/구blob 0%/정상계산) 추가. scripts/.tmp/phase2m4LiveCheck.mjs(커밋 안 함)로 라이브 146행 집계 확인 — 구 blob 133건 전부 크래시 없이 0%, 신규 필드 있는 8건, 미동기화 5건, 크래시 0건.",
+  "blocker": null,
+  "next_action": "완료. 다음 세션 후보: 보상 축(모자/유닛완주/마을/밀스톤)을 completed/cleared 새 정의로 이관할지 여부는 운영자 별도 결정 필요(이번 마일스톤 범위 밖, handoff.md 32차 명시)."
+}

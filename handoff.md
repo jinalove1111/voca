@@ -1,9 +1,123 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-08-03 (31차, Phase 2 M1 — 표시 정직성 5건: 홈 복습 진입점
-추가, 홈 정원 지표를 정원 화면과 일치(정원 칸 수 기준으로 통일), WordBrowser
-진도 바 축 정정(현재 유닛 교집합), useAttachment 주석 정정, 수여식 큐
-append+dedup. cleared 정의/보상 판정 기준/DB 스키마 전부 무변경. 상세는
-아래 31차 섹션)_
+_최종 갱신: 2026-08-03 (32차, Phase 2 M2~M4 — completed(학습 진행률)/
+cleared(실력 판단) 학습 신호 2종 도입 + 학생 화면 진행률을 completed 축으로
+전환 + 관리자 대시보드에 Completed %/Cleared % 노출, 컬럼 추가 0(기존
+progress_data JSONB 재사용). 보상 판정(모자/유닛완주/마을/밀스톤)은 여전히
+기존 미션 기반 clearedSet — 이번에도 옮기지 않음. 상세는 아래 32차 섹션)_
+
+## 2026-08-03 (32차) — Phase 2 M2~M4: completed/cleared 학습 신호 2종 + 진행률
+표시 전환 + 관리자 대시보드 Completed %/Cleared % (implementer, 단독 세션)
+
+M1(`4b69661`, 31차 — 아래 참고)에서 진도 바 분자를 "cleared ∩ 현재 유닛"으로
+1차 정정한 뒤, 운영자가 다음 정의를 확정했다: **completed**(GuidedSession
+필수 단계 전부 통과) = "학습 진행률", **cleared**(퀴즈 1회 이상 정답) =
+"실력 판단". 이번 세션(M2~M4)은 이 정의를 실제 신호로 구현하고, 학생 화면
+진행률을 옳은 축으로 옮기고, 관리자 대시보드에 두 지표를 함께 노출했다.
+
+### M2 — completed/cleared 학습 신호 2종 도입 (커밋 `cf3a7ae`/`cbf686d`)
+
+`src/hooks/useStudent.js`의 record에 병렬 필드 2개를 추가(스키마 변경 0,
+`progress_data` JSONB 안에 함께 저장돼 기존 클라우드 백업/병합 경로를
+그대로 탄다):
+- `completedWords` — GuidedSession 본 코스에서 그 단어의 필수 학습 단계
+  (WordDetail STEPS)를 전부 통과한 순간 기록(`markWordCompleted`, 멱등).
+  중간 이탈(뒤로가기)은 기록 안 됨 — `WordDetail.goNext()`가 마지막 스텝을
+  실제로 넘어갈 때만 `onMarkCompleted` 호출, `App.jsx`가 GuidedSession의
+  본 코스에만 이 prop을 연결(재시도 단계엔 안 넘김).
+- `clearedWords` — 퀴즈를 한 번이라도 맞히면(첫 시도/재시도 무관) 기록
+  (`markWordCleared`, 멱등). `recordQuizAnswer`(퀴즈 정답 경로 3곳 —
+  `WordDetail.QuizStep` 본 코스/`GuidedSession` 오답 재시도/`QuizGame`이
+  전부 공유하는 단일 choke point)가 정답일 때만 호출.
+
+**기존 `record.cleared`(레벨업 미션 3연속 정답 클리어 — 모자/유닛완주/
+마을/성장앨범 밀스톤이 읽는 훨씬 엄격한 값)와 그 쓰기 지점(`answerMission`)
+은 한 줄도 안 바꿨다** — 새 신호는 완전히 별개 필드로만 병행 도입. 세 축
+(`cleared`/`completedWords`/`clearedWords`)이 서로 안 섞이는지 하네스로
+직접 증명(초기값/멱등성/축 독립/다중기기 union 병합/구 blob 하위호환).
+
+### M3 — 파생 통계 노출 (커밋 `fa2e019`)
+
+`src/utils/attachment/attachmentCore.js`의 `deriveAttachmentStats`에 표시
+전용 파생값 `completedSet`/`completedCount`(completedWords 기반)와
+`clearedWordSet`/`clearedWordCount`(clearedWords 기반) 추가. 기존
+`clearedSet`/`clearedCount`(미션 기반, 보상 판정 전용)는 그대로 유지 —
+**이번 마일스톤에서 어떤 보상 판정도 새 축으로 옮기지 않았다**(모자/
+유닛완주/마을/밀스톤 판정 입력은 여전히 미션 기반 `clearedSet`).
+`src/hooks/useAttachment.js`는 두 필드를 studentData에서 그대로 통과시키기만
+함(판정 로직 무변경).
+
+### M4 — 학생 화면 진행률 전환 + 관리자 대시보드 (이번 세션, 커밋은 아래 목록)
+
+**`src/components/WordBrowser.jsx`** — 진도 바 분자를 M1의 "cleared ∩
+현재 유닛"(미션 기반)에서 **"completed ∩ 현재 유닛"**으로 전환(학습
+진행률 축). 진도 바 아래에 "📖 이 유닛 학습 완료 (필수 단계 통과 기준)"
+캡션 추가로 무엇을 세는지 명시. 헤더의 "N개 클리어"(전역 `cleared.length`,
+축·스코프 둘 다 어긋나 있었음)도 "실력 인증(클리어)" 문구로 바꾸고
+**`clearedWords`(새 실력 판단 축) ∩ 현재 유닛**으로 스코프를 맞췄다.
+단어 목록 아이템의 초록 체크(✓) 표시는 기존 미션 기반 `clearedSet` 그대로
+유지(보상 판정과 무관한 기존 표시 배지, 이번에 안 건드림). `src/App.jsx`가
+`completedWords`/`clearedWords`를 studentData에서 destructure해 새 prop으로
+전달.
+
+**`src/utils/weeklyReport.js`의 `computeStudentStats`** — 4번째 인자
+`unitWordSlugs`(선택, 기본 빈 배열)로 Completed %/Cleared % 계산 추가.
+분모는 **"그 학생의 현재 유닛 단어 수"**(호출부가 `wordLibrary.js`의
+`getClassWords(className, unitName)`로 계산해 넘겨줌 — 이 파일 자신은
+여전히 wordLibrary.js를 import하지 않는 순수 함수, houseId 인자와 동일한
+패턴). 새 Supabase 쿼리 0건 — `r.progress.progress_data`는
+`fetchDashboardData`가 이미 `select('*')`로 가져오는 JSONB 컬럼이라 새
+필드가 있으면 추가 조회 없이 그대로 읽힌다(ticketBalance와 동일 원칙).
+반환에 `hasProgressData`/`unitSize`/`completedInUnitCount`/
+`clearedWordInUnitCount`/`completedPct`/`clearedWordPct` 추가 — 기존
+반환 필드는 전혀 안 바뀜(4번째 인자 없이 호출하면 분모 0 → 퍼센트는 항상
+`null`, 회귀 없음).
+
+**정직성**: `hasProgressData`(동기화된 `progress_data` 자체가 있는지)와
+퍼센트 0을 구분한다 — 한 번도 동기화 안 된 학생은 "📖 학습/실력 기록
+없음(아직 동기화 전)"으로 표시하고, 동기화는 됐지만 새 필드가 없는 구
+학생(Phase 2 M2 이전 blob)은 진짜 0%(`completedPct === 0`)로 표시한다.
+
+**`src/components/AdminScreen.jsx`(`AdminDashboard`)** — 학생 카드에 "📖
+학습 완료 N%(x/y) · 🎯 실력 인증 M%(x/y)" 한 줄 추가(분모 y = 그 학생의
+현재 유닛 단어 수, 화면에 그대로 명시). 반 선택 요약 줄에 "📖 반 평균
+학습 완료(Completed) N% (각자 현재 유닛 기준)"도 추가(분모 있는 학생만
+평균에 포함, 전원 분모 0이면 문구 자체를 숨김 — 0%로 오해할 여지 차단).
+학생마다 현재 유닛이 다를 수 있어(`setStudentUnit`) 반 전체가 아니라
+학생별로 `unitNameById`(`getStudentsInClass` 캐시 재사용, 새 쿼리 없음)로
+분모를 계산한다. CSV 내보내기(`exportClassStatsCsv`)에도 같은 두 열 추가
+(hasProgressData가 false면 빈 문자열로 남겨 "0%"와 구분).
+
+### 라이브 읽기 전용 확인 (개인 식별 정보 미출력, `scripts/.tmp/`, 커밋 안 함)
+
+`student_progress` 전체 146행 집계: `progress_data` 자체가 없는 학생
+5명("기록 없음"), `progress_data`는 있지만 `completedWords`/`clearedWords`
+키가 아직 없는 구 blob 133행(전부 크래시 없이 `completedPct`/
+`clearedWordPct` 정확히 0으로 계산됨), M2/M3 배포 이후 이미 새 필드가
+동기화된 행 8개. `computeStudentStats()` 호출 중 크래시 0건.
+
+### 검증 결과
+
+- `npm run build`: PASS(에러/신규 경고 없음)
+- `npm run verify:admin`: PASS(6개 스크립트)
+- `npm run verify:student`: PASS(4개 스크립트)
+- `npm run verify:attachment`: PASS(137개 단언 — M2/M3에서 이미 8개 추가돼
+  있었고 이번 세션은 attachmentCore.js/useAttachment.js를 안 건드려 그대로)
+- `npm run verify:persistence`: PASS(8개 스크립트)
+- `npm run verify:daily-study`: PASS(1개 스크립트 — `scripts/testWeeklyReport.mjs`
+  에 Completed %/Cleared % 신규 단언 3세트 추가: unitWordSlugs 없이 호출한
+  기존 호출부 회귀 없음, 새 필드 없는 구 blob이 크래시 없이 0%로 계산됨,
+  현재 유닛 교집합 정상 계산 + 유닛 밖 슬러그 무시)
+- `npm run verify:all`: `login` 도메인만 FAIL(기존 환경 이슈 —
+  `scripts/testStudentSelectPinStatus.mjs` 등 4개, 이번 세션 변경과 무관),
+  `speaking`/`listening`은 기존과 동일하게 정직한 SKIP, 나머지 전 도메인 PASS
+
+### 변경 파일
+
+`src/components/WordBrowser.jsx`, `src/App.jsx`, `src/utils/weeklyReport.js`,
+`src/components/AdminScreen.jsx`, `scripts/testWeeklyReport.mjs`. DB
+스키마/API/새 영속 필드 변경 없음(M2에서 이미 `completedWords`/
+`clearedWords`가 `progress_data` JSONB 안에 도입됐고, 이번 세션은 그 값을
+읽기만 함).
 
 ## 2026-08-03 (31차) — Phase 2 M1: 표시 정직성 (implementer, 단독 세션)
 
