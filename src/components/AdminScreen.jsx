@@ -952,7 +952,8 @@ function AdminDashboard({ adminPin } = {}) {
           전용 필터)로 렌더. 카드 내부 렌더/로직은 전혀 안 바꿈. */}
       {!loading && displayRows.map(r => {
         const { studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws,
-                hasProgressData, unitSize, completedInUnitCount, clearedWordInUnitCount, completedPct, clearedWordPct } =
+                hasProgressData, unitSize, completedInUnitCount, clearedWordInUnitCount, completedPct, clearedWordPct,
+                todayCompletedCount, todayWordsViewedCount } =
           statsFor(r)
         const isOpen = expanded === r.id
 
@@ -978,6 +979,15 @@ function AdminDashboard({ adminPin } = {}) {
                     : unitSize === 0
                       ? '📖 학습/실력 기록: 현재 유닛에 단어 없음'
                       : `📖 학습 완료 ${completedPct}%(${completedInUnitCount}/${unitSize}) · 🎯 실력 인증 ${clearedWordPct}%(${clearedWordInUnitCount}/${unitSize})`}
+                </p>
+                {/* Phase 2 M4a(2026-08-04, 관측 배선) — round.completedToday
+                    (신규 일별 카운터)/wordsViewed 노출. 새 쿼리 0건(progress_data는
+                    이미 위 통계와 같은 row에서 읽음), 보상 판정과 무관한 순수
+                    관측 지표 — 값이 없거나 아직 동기화 전이면 "-"로 크래시 없이. */}
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {hasProgressData
+                    ? `📚 오늘 학습완료 ${todayCompletedCount}개 / 단어보기 ${todayWordsViewedCount}개`
+                    : '📚 오늘 학습완료 - / 단어보기 -'}
                 </p>
               </div>
               <div className="text-right flex-shrink-0">

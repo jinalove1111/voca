@@ -116,6 +116,19 @@ export function computeStudentStats(r, wordStatusSummary = {}, houseId = null, u
   const hasProgressData = !!(progressData && Object.keys(progressData).length > 0)
   const completedWords = Array.isArray(progressData?.completedWords) ? progressData.completedWords : []
   const clearedWords = Array.isArray(progressData?.clearedWords) ? progressData.clearedWords : []
+  // Phase 2 M4a(2026-08-04, 관측 배선) — round.completedToday(신규, 일별
+  // dedup 카운터, useStudent.js freshRound 헤더 참고)와 기존 wordsViewed를
+  // 그대로 노출한다. 새 Supabase 쿼리 0건(progress_data는 이미 여기 select
+  // 되어 있음, 위 completedWords/ticketBalance와 동일 원칙) — 순수 관측
+  // 지표라 어떤 보상 판정에도 연결하지 않는다. round.date가 "오늘"(useStudent.js
+  // todayStr()과 동일한 `new Date().toDateString()` 포맷)이 아니면 아직
+  // 동기화 안 된 어제 이전 round라서 0으로 표시(마지막 동기화 시점의 값을
+  // "오늘"로 잘못 표기하지 않기 위함) — student_daily_progress에는 이 값이
+  // 없으므로 반드시 progress_data.round에서만 읽는다.
+  const round = progressData?.round
+  const roundIsToday = !!(round && round.date === new Date().toDateString())
+  const todayCompletedCount = roundIsToday && Array.isArray(round.completedToday) ? round.completedToday.length : 0
+  const todayWordsViewedCount = roundIsToday && Array.isArray(round.wordsViewed) ? round.wordsViewed.length : 0
   const unitSlugSet = new Set(Array.isArray(unitWordSlugs) ? unitWordSlugs : [])
   const unitSize = unitSlugSet.size
   const completedInUnitCount = completedWords.filter(w => unitSlugSet.has(w)).length
@@ -128,6 +141,7 @@ export function computeStudentStats(r, wordStatusSummary = {}, houseId = null, u
   return {
     today, studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws, ticketBalance, house,
     hasProgressData, unitSize, completedInUnitCount, clearedWordInUnitCount, completedPct, clearedWordPct,
+    todayCompletedCount, todayWordsViewedCount,
   }
 }
 
