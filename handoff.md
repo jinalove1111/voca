@@ -1,9 +1,83 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-08-03 (32차, Phase 2 M2~M4 — completed(학습 진행률)/
-cleared(실력 판단) 학습 신호 2종 도입 + 학생 화면 진행률을 completed 축으로
-전환 + 관리자 대시보드에 Completed %/Cleared % 노출, 컬럼 추가 0(기존
-progress_data JSONB 재사용). 보상 판정(모자/유닛완주/마을/밀스톤)은 여전히
-기존 미션 기반 clearedSet — 이번에도 옮기지 않음. 상세는 아래 32차 섹션)_
+_최종 갱신: 2026-08-04 (33차, Phase 2 M4a — round.completedToday 일별 카운터
+도입(관측 배선, 보상 변화 0). 영구 completedWords(M3, 멱등)를 그대로 XP/
+미션 판정에 쓰면 복습일에 XP 0이 되는 회귀를 막기 위한 신규 관측 전용
+축 — 어떤 보상 판정도 이번 세션에서 안 바뀜. 관리자 대시보드에 "오늘
+학습완료/단어보기" 1줄 노출, 컬럼 추가 0(기존 progress_data JSONB 재사용).
+상세는 아래 33차 섹션)_
+
+## 2026-08-04 (33차) — Phase 2 M4a: round.completedToday 일별 카운터(관측
+배선, 보상 판정 무변경) (implementer, 단독 세션)
+
+M3(32차)가 도입한 `completedWords`(영구, 멱등 — 이미 완료한 단어는 다시
+append 안 됨)를 XP/미션 판정에 그대로 쓰면 "유닛을 한 바퀴 돈 뒤 복습하는
+날"에는 이미 완료 표시된 단어라서 그날 XP/미션 슬롯이 0이 되는 회귀가
+구조적으로 생긴다(복습일 함정). 이 세션은 `round.completedToday`라는
+**일별(자정 리셋) dedup 카운터**를 `completedWords`와 완전히 별도로 도입해
+이 함정을 원천 차단하되, **이번 마일스톤에서는 어떤 보상 판정도 바꾸지
+않았다** — XP 트리거/미션 슬롯/별 지급 전부 현행 그대로, 순수 관측 배선.
+
+### 구현 (`src/hooks/useStudent.js`)
+
+- `freshRound()`에 `completedToday: []` 추가(`wordsViewed`와 정확히 같은
+  성격 — 자정 리셋, 같은 날 dedup). 헤더 주석에 "왜 영구 `completedWords`와
+  별도인지"(복습일 함정)를 명시.
+- `normalizeRecord`의 오늘 round 분기에 `completedToday: asArray(r.completedToday)`
+  추가(어제 round면 기존처럼 `freshRound()`가 통째 리셋 — 회귀 없음).
+- `mergeProgressRecords`의 round 병합에 `completedToday: unionList(...)`
+  추가 — `wordsViewed`와 동일한 이유(두 기기 각각에서 오늘 이미 기록된
+  단어가 병합 후에도 유실되지 않도록).
+- `markWordCompleted`를 단일 patch로 확장: `completedWords`(영구, 기존
+  로직 한 줄도 안 바꿈)와 `round.completedToday`(일별)를 각각 독립적으로
+  멱등 체크해서 함께 patch(둘 다 이미 있으면 no-op, 어느 한쪽만 없으면
+  그 필드만 append).
+
+### 관측 지표 노출 (`src/components/AdminScreen.jsx` / `src/utils/weeklyReport.js`)
+
+`computeStudentStats`(weeklyReport.js)에 `todayCompletedCount`/
+`todayWordsViewedCount` 파생 필드 추가 — `r.progress.progress_data.round`
+에서만 읽는다(새 Supabase 쿼리 0건, 이미 `select('*')`로 가져오는 JSONB
+컬럼, `ticketBalance`와 동일 원칙). `round.date`가 오늘(`new Date().toDateString()`,
+`useStudent.js`의 `todayStr()`과 동일 포맷)이 아니면 아직 동기화 전의
+어제 이전 round이므로 0으로 안전하게 폴백(마지막 동기화 시점 값을 "오늘"로
+잘못 표기하지 않기 위함). `student_daily_progress` 테이블에는 이 값이
+없으므로 그쪽은 쓰지 않았다. `AdminDashboard` 학생 카드에 "📚 오늘
+학습완료 N개 / 단어보기 M개" 1줄 추가, `hasProgressData`가 false(한 번도
+동기화 안 됨)면 "-"로 표시(정직성 원칙, 32차와 동일 패턴).
+
+### 하네스 (`scripts/testProgress.mjs` 10.6 섹션, 9개 단언 추가)
+
+- 자정 리셋: `normalizeRecord({round:{date:과거, completedToday:[...]}})`
+  → `round.completedToday.length === 0` **AND** `completedWords`는 그대로
+  보존(영구/일별 축 분리 증명)
+- union 병합: `mergeProgressRecords` — local `[a,b]` + cloud `[b,c]` →
+  `[a,b,c]`(중복 b 1개)
+- 멱등: `markWordCompleted` 시뮬레이션 `('apple')` × 3 →
+  `completedToday.length === 1`, `completedWords.length === 1`
+- 복습일 시나리오: 자정 롤오버 후 같은 단어 재완료 →
+  `completedToday.length === 1` **AND** `completedWords.length === 1`
+  (여전히 1, 증가하지 않음 — 향후 이 축으로 보상을 판정해도 무한 파밍이
+  안 된다는 근거)
+
+### 검증 결과
+
+- `npm run build`: PASS(에러/신규 경고 없음)
+- `npm run verify:persistence`: PASS(8개 스크립트, `testProgress.mjs` 신규
+  9개 단언 포함)
+- `npm run verify:student`: PASS(4개 스크립트)
+- `npm run verify:admin`: PASS(6개 스크립트)
+- `npm run verify:daily-ritual`: PASS(118개 단언, 이번 세션 무변경 확인용)
+- `npm run verify:quiz`: PASS(2개 스크립트)
+- `npm run verify:all`: `login` 도메인만 FAIL(기존 환경 이슈 —
+  `scripts/testStudentSelectPinStatus.mjs` 등 4개, 이번 세션 변경과 무관),
+  `speaking`/`listening`은 기존과 동일하게 정직한 SKIP, 나머지 전 도메인 PASS
+
+### 변경 파일
+
+`src/hooks/useStudent.js`, `src/utils/weeklyReport.js`,
+`src/components/AdminScreen.jsx`, `scripts/testProgress.mjs`. DB 스키마/
+API 변경 없음 — `completedToday`는 기존 `progress_data` JSONB(`round` 객체)
+안의 신규 필드일 뿐(새 컬럼/테이블 없음, GRANT 불필요).
 
 ## 2026-08-03 (32차) — Phase 2 M2~M4: completed/cleared 학습 신호 2종 + 진행률
 표시 전환 + 관리자 대시보드 Completed %/Cleared % (implementer, 단독 세션)

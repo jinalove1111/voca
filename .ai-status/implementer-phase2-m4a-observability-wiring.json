@@ -1,0 +1,25 @@
+{
+  "agent_name": "implementer",
+  "role": "implementer",
+  "task_id": "phase2-m4a-observability-wiring",
+  "task": "M4a — round.completedToday 일별 카운터 도입(관측 배선, 보상 변화 0) + 관리자 대시보드 노출",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-04T00:00:00Z",
+  "updated_at": "2026-08-04T00:00:00Z",
+  "files_owned": [
+    "src/hooks/useStudent.js",
+    "src/utils/weeklyReport.js",
+    "src/components/AdminScreen.jsx",
+    "scripts/testProgress.mjs"
+  ],
+  "files_read": [
+    "scripts/buildProgressBundle.mjs",
+    "scripts/testMergeProgress.mjs",
+    "tests/harness/registry.mjs",
+    "tests/harness/runDomain.mjs"
+  ],
+  "summary": "freshRound()에 completedToday(일별, 자정 리셋) 추가 — 영구 completedWords(M3, 멱등)를 그대로 보상 판정에 쓰면 복습일에 XP/미션 슬롯이 0이 되는 회귀를 막기 위한 관측 전용 신규 축. normalizeRecord(오늘 round 분기)/mergeProgressRecords(round 병합, union)에 배선하고, markWordCompleted를 completedWords+round.completedToday 동시 멱등 patch로 확장(completedWords 쓰기 로직 자체는 한 글자도 변경 없음). AdminScreen.jsx 학생 카드에 '오늘 학습완료 N개 / 단어보기 M개' 1줄 추가 — weeklyReport.js computeStudentStats()에 todayCompletedCount/todayWordsViewedCount 파생 필드 추가(새 Supabase 쿼리 0건, 기존 progress_data select('*')에서 파생, round.date가 오늘이 아니면 안전하게 0). scripts/testProgress.mjs에 10.6 섹션(자정 리셋/union 병합/멱등/복습일 시나리오, 9개 단언) 추가, 전부 PASS. 보상 판정(XP 트리거/미션 슬롯/별 지급)은 어디도 건드리지 않음 — 순수 관측 배선.",
+  "blocker": null,
+  "next_action": "verify:persistence/student/admin/daily-ritual/quiz + verify:all 통과 확인 후 커밋/push. login 도메인 FAIL은 기존 환경 이슈(PIN 하네스, 이번 변경과 무관)."
+}
