@@ -55,6 +55,18 @@ export default function WordBrowser({ words, cleared, onSelect, onBack, mode, on
     return scoped.filter(w => w.word.toLowerCase().includes(q) || w.meaning.includes(q))
   }, [query, scoped])
 
+  // Phase 2 M1(c, 2026-08-03) — 진도 바 축 정정. cleared는 전 유닛 누적
+  // id 목록(전역 축)인데 words는 현재 유닛 단어만이라, 분자(cleared.length)와
+  // 분모(words.length)의 집합 자체가 달랐다(설계 검증 실측: 축을 맞추면
+  // 100% 고정 15명 vs 실제 현재 유닛 완주자 13명). M0(2026-08-03, 575b7f8)
+  // 이후 cleared와 words[].id가 같은 슬러그 축을 쓰므로 이제 정확한
+  // 교집합(현재 유닛 단어 중 cleared에 있는 것)을 셀 수 있다.
+  const clearedSet = useMemo(() => new Set(cleared), [cleared])
+  const clearedInUnitCount = useMemo(
+    () => words.reduce((n, w) => n + (clearedSet.has(w.id) ? 1 : 0), 0),
+    [words, clearedSet]
+  )
+
   return (
     <div className="min-h-screen p-4 pb-8">
       <div className="flex items-center gap-3 max-w-lg mx-auto mb-4 pt-2">
@@ -129,16 +141,16 @@ export default function WordBrowser({ words, cleared, onSelect, onBack, mode, on
         </div>
 
         <div className="bg-white rounded-2xl card-shadow p-3 mb-4 flex items-center gap-3">
-          {/* 제품 폴리시(2026-08-02) — 유닛 전환 직후 cleared(누적 클리어
-              id 목록)가 새 words(현재 유닛 단어)보다 잠깐 많아질 수 있어
-              분자>분모가 되면서 바가 100%를 넘겨 렌더됐다. cleared의
-              정의(무엇을 세는지)는 그대로 두고, 표시(바 폭/라벨)만
-              분모를 넘지 않게 클램프. */}
+          {/* Phase 2 M1(c) — 분자는 이제 "cleared ∩ 현재 유닛 단어"
+              (clearedInUnitCount, 위에서 계산)이라 구조적으로 분모(현재
+              유닛 단어 수)를 넘을 수 없다 — 2026-08-02에 넣었던 Math.min
+              클램프(전역 cleared.length 대비 방어용)는 축이 정정되며
+              불필요해져 정리. */}
           <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
             <div className="h-full bg-gradient-to-r from-blue-400 to-purple-500 rounded-full transition-all"
-              style={{ width: `${Math.min(100, (cleared.length / Math.max(words.length, 1)) * 100)}%` }} />
+              style={{ width: `${(clearedInUnitCount / Math.max(words.length, 1)) * 100}%` }} />
           </div>
-          <span className="text-sm font-black text-purple-600 whitespace-nowrap">{Math.min(cleared.length, words.length)}/{words.length}</span>
+          <span className="text-sm font-black text-purple-600 whitespace-nowrap">{clearedInUnitCount}/{words.length}</span>
         </div>
 
         <div className="space-y-2 animate-fade-in">
@@ -150,7 +162,7 @@ export default function WordBrowser({ words, cleared, onSelect, onBack, mode, on
               </p>
             </div>
           ) : filtered.map((w, i) => {
-            const isCleared = cleared.includes(w.id)
+            const isCleared = clearedSet.has(w.id)
             const status = wordStatus[w.dbId]
             return (
               <button key={w.id} onClick={() => onSelect(w)}
