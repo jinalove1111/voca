@@ -191,7 +191,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 별도 상태로 관리 — 마찬가지로 세션 동안만 유지.
   const [studyScope, setStudyScope] = useState('all')
   const studentData                 = useStudent(studentId, studentName)
-  const { cleared, answerMission, missions, grantReward, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord, wordStatus, setWordKnown, setWordUnknown, spellingReviewQueue, setLastTextbookClassId } = studentData
+  const { cleared, completedWords, clearedWords, answerMission, missions, grantReward, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord, wordStatus, setWordKnown, setWordUnknown, spellingReviewQueue, setLastTextbookClassId } = studentData
   // 애착 시스템(2026-07-22) — 파생 통계 + 모자/밀스톤 자동 판정(복원 확인
   // 후 학생당 1회). 판정 로직은 src/utils/attachment/ 순수 함수.
   const attachment = useAttachment(studentId, studentData)
@@ -613,7 +613,7 @@ function AppInner({ studentId, studentName, onLogout }) {
         />
       )}
       {screen === 'wordBrowser'   && (
-        <WordBrowser words={classWords} cleared={cleared} onSelect={handleWordSelect} onBack={() => setScreen('dashboard')}
+        <WordBrowser words={classWords} cleared={cleared} completedWords={completedWords} clearedWords={clearedWords} onSelect={handleWordSelect} onBack={() => setScreen('dashboard')}
           mode={studyMode} onModeChange={setStudyMode}
           scope={studyScope} onScopeChange={setStudyScope} wordStatus={wordStatus} reviewWordIds={reviewWordIds}
           // v3.4 Phase B — [문장] 탭(SentencesTab) 전용. readingStudentUI

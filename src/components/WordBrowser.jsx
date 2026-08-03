@@ -31,7 +31,7 @@ const TABS = [
   { id: 'sentences', label: '📜 문장' },
 ]
 
-export default function WordBrowser({ words, cleared, onSelect, onBack, mode, onModeChange, scope, onScopeChange, wordStatus = {}, reviewWordIds = new Set(), studentId = null, unitId = null }) {
+export default function WordBrowser({ words, cleared, completedWords = [], clearedWords = [], onSelect, onBack, mode, onModeChange, scope, onScopeChange, wordStatus = {}, reviewWordIds = new Set(), studentId = null, unitId = null }) {
   const [query, setQuery] = useState('')
   // 기본 탭은 항상 '단어' — 플래그가 꺼져 있으면 이 상태는 바뀔 방법
   // 자체가 없다(탭 바 비렌더).
@@ -55,16 +55,32 @@ export default function WordBrowser({ words, cleared, onSelect, onBack, mode, on
     return scoped.filter(w => w.word.toLowerCase().includes(q) || w.meaning.includes(q))
   }, [query, scoped])
 
-  // Phase 2 M1(c, 2026-08-03) — 진도 바 축 정정. cleared는 전 유닛 누적
-  // id 목록(전역 축)인데 words는 현재 유닛 단어만이라, 분자(cleared.length)와
-  // 분모(words.length)의 집합 자체가 달랐다(설계 검증 실측: 축을 맞추면
-  // 100% 고정 15명 vs 실제 현재 유닛 완주자 13명). M0(2026-08-03, 575b7f8)
-  // 이후 cleared와 words[].id가 같은 슬러그 축을 쓰므로 이제 정확한
-  // 교집합(현재 유닛 단어 중 cleared에 있는 것)을 셀 수 있다.
+  // Phase 2 M1(c, 2026-08-03) — 진도 바 축을 처음 "cleared ∩ 현재 유닛"으로
+  // 정정했었다(cleared는 레벨업 미션 3연속 정답 기준 — 모자/유닛완주/마을/
+  // 밀스톤 보상 판정 전용 축, useStudent.js freshRecord 참고). 이 clearedSet은
+  // 그 축 그대로 유지 — 아래 단어 목록 아이템의 초록 체크(✓) 표시에만 계속
+  // 쓰인다(보상 판정과 무관한 기존 표시 배지, 이번 마일스톤에서 안 건드림).
   const clearedSet = useMemo(() => new Set(cleared), [cleared])
-  const clearedInUnitCount = useMemo(
-    () => words.reduce((n, w) => n + (clearedSet.has(w.id) ? 1 : 0), 0),
-    [words, clearedSet]
+
+  // Phase 2 M4(2026-08-03) — 운영자 확정 정의: completed(GuidedSession
+  // 필수 단계 전부 통과)는 "학습 진행률", cleared(퀴즈 1회 이상 정답,
+  // clearedWords — 위 미션 기반 cleared와는 완전히 별개 축)는 "실력 판단".
+  // 진도 바 분자를 완전 초록 배지 세기(clearedSet, 미션 기반)에서
+  // completedSet(학습 완료)으로 전환 — 진도 바는 "학습 진행률"을 보여줘야
+  // 하므로. 헤더의 "N개 클리어" 표시도 전역 cleared.length(축 자체가
+  // 다름·현재 유닛 스코프도 아님)였던 걸, 같은 "실력 판단" 새 정의
+  // (clearedWords) + 현재 유닛 스코프로 정합시킨다. 보상 판정(모자/유닛
+  // 완주/마을/밀스톤)은 여전히 위 clearedSet(미션 기반)을 그대로 쓴다 —
+  // 이번에도 그 축을 옮기지 않는다(운영자 지시 범위는 표시 전환만).
+  const completedSet = useMemo(() => new Set(completedWords), [completedWords])
+  const completedInUnitCount = useMemo(
+    () => words.reduce((n, w) => n + (completedSet.has(w.id) ? 1 : 0), 0),
+    [words, completedSet]
+  )
+  const clearedWordSet = useMemo(() => new Set(clearedWords), [clearedWords])
+  const clearedWordInUnitCount = useMemo(
+    () => words.reduce((n, w) => n + (clearedWordSet.has(w.id) ? 1 : 0), 0),
+    [words, clearedWordSet]
   )
 
   return (
@@ -73,7 +89,10 @@ export default function WordBrowser({ words, cleared, onSelect, onBack, mode, on
         <button onClick={onBack} className="py-3 px-2 -my-3 -mx-2 text-purple-600 font-bold btn-press">← 홈</button>
         <div className="flex-1">
           <h1 className="text-2xl font-black text-blue-600">📖 단어 공부</h1>
-          <p className="text-gray-400 text-xs">{scoped.length}개 단어 · {cleared.length}개 클리어</p>
+          {/* Phase 2 M4 — "N개 클리어"가 전역 누적(cleared.length, 축도
+              스코프도 다름)이었던 걸 "실력 판단"(clearedWords, 퀴즈 1회
+              이상 정답) + 현재 유닛 스코프로 정합. */}
+          <p className="text-gray-400 text-xs">{scoped.length}개 단어 · {clearedWordInUnitCount}개 실력 인증(클리어)</p>
         </div>
         <HeroReaction image={getReactionById('lets_learn')?.image} size="sm" />
       </div>
@@ -140,17 +159,19 @@ export default function WordBrowser({ words, cleared, onSelect, onBack, mode, on
           {query && <button onClick={() => setQuery('')} className="absolute right-1 top-1/2 -translate-y-1/2 p-3 text-gray-400 hover:text-gray-600 btn-press">✕</button>}
         </div>
 
-        <div className="bg-white rounded-2xl card-shadow p-3 mb-4 flex items-center gap-3">
-          {/* Phase 2 M1(c) — 분자는 이제 "cleared ∩ 현재 유닛 단어"
-              (clearedInUnitCount, 위에서 계산)이라 구조적으로 분모(현재
-              유닛 단어 수)를 넘을 수 없다 — 2026-08-02에 넣었던 Math.min
-              클램프(전역 cleared.length 대비 방어용)는 축이 정정되며
-              불필요해져 정리. */}
-          <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-blue-400 to-purple-500 rounded-full transition-all"
-              style={{ width: `${(clearedInUnitCount / Math.max(words.length, 1)) * 100}%` }} />
+        <div className="bg-white rounded-2xl card-shadow p-3 mb-4">
+          {/* Phase 2 M4 — 분자를 "completed ∩ 현재 유닛 단어"
+              (completedInUnitCount, 위에서 계산)로 전환(학습 진행률 축).
+              M1(c)에서 이미 분자·분모 집합을 맞춰뒀으므로(둘 다 현재 유닛
+              스코프) 구조적으로 분모를 넘을 수 없어 클램프는 여전히 불필요. */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-blue-400 to-purple-500 rounded-full transition-all"
+                style={{ width: `${(completedInUnitCount / Math.max(words.length, 1)) * 100}%` }} />
+            </div>
+            <span className="text-sm font-black text-purple-600 whitespace-nowrap">{completedInUnitCount}/{words.length}</span>
           </div>
-          <span className="text-sm font-black text-purple-600 whitespace-nowrap">{clearedInUnitCount}/{words.length}</span>
+          <p className="text-[10px] text-gray-400 font-bold mt-1">📖 이 유닛 학습 완료 (필수 단계 통과 기준)</p>
         </div>
 
         <div className="space-y-2 animate-fade-in">
