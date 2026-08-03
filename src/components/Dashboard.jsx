@@ -197,7 +197,14 @@ function MissionBar({ label, current, goal, emoji }) {
 // — 복습(1번 → levelUpMission)/보너스게임(2번) 브랜치는 기존 목적지 그대로.
 // onStartGuided가 없으면(구버전 App.jsx) 기존 onResumeWord 경로로 폴백.
 function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onPlayGame, resumeIndex, onStartGuided }) {
-  const { activeMissions, giftsToday } = studentData
+  const { activeMissions, giftsToday, spellingWrongToday = [], spellingReviewQueue = [] } = studentData
+  // Phase 2 M1(a) — 어제 틀린 단어(spellingReviewQueue) + 오늘 틀린 단어
+  // (spellingWrongToday)는 자정을 넘겨도 유지되는 유일한 간격 반복 자산인데
+  // 홈 어디에도 1탭 진입로가 없었다(선물상자 닫기 자동 이동/세션 완료 카드
+  // 조건부 버튼뿐 — 둘 다 특정 흐름을 타야만 도달). 이 배너의 "메인 CTA"
+  // 선택(rec, 아래)과는 별개로, 큐가 있을 때만 보조 버튼을 추가한다 —
+  // 큐가 없는 학생(쓰기시험 기본 OFF)에겐 이 버튼 자체가 렌더되지 않는다.
+  const reviewTotal = spellingWrongToday.length + spellingReviewQueue.length
   // v2.1 — 이어서-학습 위치는 "현재 유닛"의 저장 지점(App.jsx가
   // getResumeIndexForUnit으로 계산해서 내려줌). 구버전 경로(prop 미전달)는
   // 기존 전역 lastWordIndex 그대로.
@@ -263,6 +270,15 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
         <button onClick={rec.onClick}
           className="w-full mt-5 bg-white text-indigo-600 font-black text-xl py-5 rounded-2xl btn-press shadow-lg">
           {rec.label}
+        </button>
+      )}
+      {/* Phase 2 M1(a) — 큐가 있을 때만 나타나는 1탭 진입로. 위 rec 선택과
+          무관하게 항상 노출되어(레벨업미션 배너가 우선순위를 가져가도)
+          복습 대기가 유실되지 않는다. */}
+      {reviewTotal > 0 && (
+        <button onClick={() => onGo('spellingReview')}
+          className={`w-full ${rec.label ? 'mt-3' : 'mt-5'} bg-white/20 hover:bg-white/30 border-2 border-white/40 text-white font-black text-sm py-3.5 rounded-2xl btn-press`}>
+          🔁 틀린 단어 다시 보기 ({reviewTotal}개)
         </button>
       )}
     </div>
