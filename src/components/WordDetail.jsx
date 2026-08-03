@@ -290,6 +290,12 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
   // 재생 중 표시만(SpellingQuestion과 동일 패턴) — mp3 없으면 TTS 폴백까지
   // 1~3초 걸려 아무 반응이 없어 보이는 문제 보완.
   const [replaying, setReplaying] = useState(false)
+  // "모르겠어요"가 실제로 도와주게(감사 B급 18번) — 예전엔 버튼 색만
+  // 바뀌고 아무 반응이 없었다. 누르면 발음을 자동 재생하고, 이 단어에
+  // 암기 팁이 있으면 카드를 펼쳐 보여준다. 기존 데이터(word.memoryTip)·
+  // 재생 함수만 재사용(새 에셋 0). onWordUnknown 호출(상태 저장)은 원래
+  // 동작 그대로 유지.
+  const [showTip, setShowTip] = useState(false)
 
   const playWord = () => {
     setReplaying(true)
@@ -299,6 +305,12 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
       onEnd: () => setReplaying(false),
       onError: () => setReplaying(false),
     })
+  }
+
+  const handleUnknown = () => {
+    onWordUnknown?.(word.dbId)
+    playWord()
+    if (word.memoryTip) setShowTip(true)
   }
 
   return (
@@ -356,7 +368,7 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
         {/* v1.5 Skip 기능 — 알아요/다시 공부/모르겠어요 */}
         <div className="mt-3 grid grid-cols-3 gap-2" onClick={(e) => e.stopPropagation()}>
           <button
-            onClick={() => onWordUnknown?.(word.dbId)}
+            onClick={handleUnknown}
             className={`min-h-[44px] py-3 rounded-xl font-bold text-xs btn-press transition-colors ${
               wordStatus === 'unknown' ? 'bg-orange-400 text-white' : 'bg-white/25 text-white hover:bg-white/35'
             }`}>
@@ -377,8 +389,8 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
         </div>
       </div>
 
-      {word.memoryTip && (
-        <div className="bg-yellow-50 border-2 border-yellow-200 rounded-3xl p-4 card-shadow">
+      {word.memoryTip && showTip && (
+        <div className="bg-yellow-50 border-2 border-yellow-200 rounded-3xl p-4 card-shadow animate-slide-up">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xl">🧠</span>
             <span className="font-black text-yellow-800 text-sm">이렇게 외워봐요!</span>
