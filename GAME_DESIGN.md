@@ -1122,3 +1122,38 @@ Missions/Rewards)에서 함께 검토 가능한 저비용 조정입니다. 16.2(
 16.5(House 재조정 규칙)는 각각 7번/8번 단계 설계를 구체화할 때 반영
 권장 — 지금 즉시 코드/스키마를 바꿔야 할 항목은 없습니다(이 섹션도
 순수 문서 리뷰).
+
+## 17. 원문 정정(2026-08-04, implementer) — "퀴즈 정답 = addStars 지점"은
+더 이상 사실이 아님
+
+이 문서 최상단 "기존 시스템 요약" 섹션(29번째 줄 부근)의 원문은 그대로
+보존합니다 — 이 섹션은 그 문장을 **삭제/수정하지 않고 정정 사실만
+추가**로 append합니다(append-only 원칙).
+
+- **원문 주장**: "`addStars()`가 퀴즈 정답/발음 성공/레벨업 미션
+  클리어(+3)/미션 완료 보너스/중복 스티커 환전/쓰기시험 콤보 보너스를
+  전부 하나의 카운터로 합칩니다" — 이 문서가 작성된 2026-07-18 시점에는
+  사실이었습니다.
+- **지금(2026-08-04) 코드 기준 사실과의 차이**: `src/hooks/useStudent.js`의
+  `recordQuizAnswer()`(퀴즈 정답 경로 3곳 — WordDetail.QuizStep 본 코스/
+  GuidedSession 오답 재시도/QuizGame 홈 퀴즈 — 의 단일 choke point)는
+  **퀴즈 정답 시 `grantReward`/`addStars`를 전혀 호출하지 않습니다**
+  (`correct`면 `markWordCleared(wordId)`만 호출). `markQuizSolved()`도
+  `round.quizSolved` 카운터만 올릴 뿐 별 지급이 아닙니다 — 즉 **현재
+  퀴즈 정답의 별 지급액은 0**입니다.
+- **그 자리를 대신하는 것**: Phase 2 M3(2026-08-03, `fa2e019`)가 도입한
+  `clearedWords`(퀴즈 1회 이상 정답 시 `markWordCleared`가 append)와,
+  M4b(2026-08-04, `10b38d2`)가 그 위에 얹은 **Cleared Stars**
+  (`clearedStars = clearedWords.length * CLEARED_STAR_PER_WORD`, 저장된
+  지급 상태 없이 매번 파생 재계산 — `handoff.md` 34차 섹션 "핵심 설계"
+  참고)가 사실상 "퀴즈 정답 → 별"의 후계 축입니다. 다만 이 축은 원문의
+  `addStars()`(원시 가산, 지급 이력 없음)와 메커니즘이 다릅니다 — 파생값
+  이라 저장된 "지급됨" 상태 자체가 없고, `totalStars`(원문이 말하는 그
+  카운터)와는 합산하지 않고 화면에 별도로 표시됩니다(`Dashboard.jsx`/
+  `AdminScreen.jsx`).
+- **왜 원문을 고치지 않고 여기 추가만 하는가**: 이 문서는 v0 설계 시점의
+  "무엇을 전제로 설계했는가"를 그대로 남겨야 이후 리뷰 섹션(16번 등)의
+  판단 근거를 그때 기준으로 재현할 수 있습니다 — CLAUDE.md 규칙 13
+  (append-only)과 이 문서 자체의 "원문 보존" 관례를 그대로 따릅니다.
+- **참고**: `wiki/decisions.md` #11~#13(2026-08-04 추가분), `handoff.md`
+  최신 섹션(Phase 2 M4-보상 마감).

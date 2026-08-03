@@ -1,0 +1,38 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "phase2-m4-reward-closeout",
+  "task": "Phase 2 M4-보상 마감 — M4e(대시보드 Completed XP 노출) + M4f(성장 앨범 cleared 밀스톤 축) + 문서(M4c 소급 기록/M4d 게이트 명시/결정 근거 3건/GAME_DESIGN.md 정정)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-04T00:00:00+09:00",
+  "updated_at": "2026-08-04T00:00:00+09:00",
+  "files_owned": [
+    "src/utils/wordLibrary.js",
+    "src/components/AdminScreen.jsx",
+    "scripts/testWeeklyReport.mjs",
+    "src/utils/attachment/milestones.js",
+    "src/utils/wordKing.js",
+    "handoff.md",
+    "wiki/decisions.md",
+    "GAME_DESIGN.md"
+  ],
+  "files_read": [
+    "src/utils/paulRankShared.js",
+    "src/utils/attachment/attachmentCore.js",
+    "src/utils/attachment/hatSystem.js",
+    "src/hooks/useAttachment.js",
+    "src/hooks/useStudent.js",
+    "src/components/GrowthAlbum.jsx",
+    "src/utils/weeklyReport.js",
+    "tests/harness/registry.mjs",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json",
+    ".ai-status/implementer-phase2-m4-progress-dashboard.json",
+    "PROJECT_BOARD.md",
+    "ROADMAP.md"
+  ],
+  "summary": "M4e: wordLibrary.js에 fetchXpByEventType(studentIds, eventTypes) 신규(xp_ledger 단일 쿼리, event_type별 그룹 집계, 새 SQL/API 0건) — AdminScreen.jsx의 load() Promise.all에 추가해 학생 카드 '🎓 Completed XP {n}'(M4b 실력 별 옆) + CSV 열 추가. testWeeklyReport.mjs에 회귀 가드 #13 추가(computeStudentStats가 xp 필드를 여전히 안 가짐 확인 — weeklyReport.js 자체는 무변경, 그 파일 헤더의 기존 보류 판단 유지). M4f: milestones.js에 CLEARED_WORD_MILESTONES=[30,100,300](id cleared-word-{n}, 입력 stats.clearedWordCount, 기존 CLEARED_MILESTONES와 별개 축/별개 id 접두사) 추가 — hatSystem.js는 한 줄도 안 건드림(모자 8종 조건 무변경). useAttachment.js/GrowthAlbum.jsx는 이미 배열 append + 정적 리스트 렌더라 동시 3개 방출도 문제없음을 코드 확인만(수정 불필요). wordKing.js 헤더에 cleared 미반영/completed 간접반영(xp 경로) 근거 추가, WORD_KING_WEIGHTS 값 자체는 무변경. 문서: handoff.md 35차(M4a~M4f 요약, 세 정의, 원칙충돌 3건 해소방식, M4d 게이트 기준 '4/4 달성일의 90% 이상에서 completedToday>=5' 명시) prepend, wiki/decisions.md #11~13 append(트리거 재해석/파생값 설계/랭킹 미반영), GAME_DESIGN.md 17번 섹션 append(원문 보존 + '퀴즈 정답 addStars 지점' 정정 — 현재 퀴즈 정답 별 지급 0, cleared stars가 후계 축). 게이트: build 2회(M4e/M4f 각각) PASS, verify:admin/verify:student/verify:daily-study/verify:persistence/verify:attachment/verify:daily-ritual 전부 PASS. 커밋 3개 전부 push 완료(a24c270/e3a7ed8/미정 3번째).",
+  "blocker": null,
+  "next_action": "커밋 3(문서 마감) push 완료 후 최종 verify:all 실행 결과를 handoff/보고에 반영. 다음 세션 후보: M4d(미션 슬롯 completedToday 전환) 7일 관측 게이트 실측, mastered 축 처리 방향 운영자 결정, weeklyReport.js에 Completed XP 노출 여부 운영자/CTO 판단."
+}

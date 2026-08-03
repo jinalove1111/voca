@@ -157,6 +157,90 @@ _이 저장소가 실제로 내린 설계 결정과 그 근거를 `handoff.md`/`
   `supabase_v2_3_1_xp_action_based.sql`, `GAME_DESIGN.md` "3.y" 항목,
   `handoff.md` 2026-07-19 항목.
 
+## 11. `word-view-complete` XP를 "새 이벤트 타입 추가" 대신 "기존 트리거
+재해석"으로 구현(Phase 2 M4c)
+
+- **무엇을**: 운영자가 XP 지급 기준을 "단어를 그냥 열람"에서 "학습을
+  완료"로 바꿔달라고 요구했을 때, 새 이벤트 타입(예: `word-complete-v2`)을
+  `XP_EVENT_TABLE`에 추가하는 대신 기존 `word-view-complete` 이벤트의
+  트리거 조건식 한 줄만 `round.wordsViewed.length` → `round.completedToday.length`
+  (M4a가 도입한 일별 dedup 카운터)로 교체했다. 이벤트 키 이름/XP
+  금액(2)/`period`/`source_event_id` 형식(`word-view-complete:${날짜}`)은
+  전부 동결했다.
+- **왜**: (1) 서버(`api/grant-xp.js`)와 `XP_EVENT_TABLE`을 안 건드리므로
+  프런트 배포만으로 안전하게 전환/롤백 가능(조건식 1줄 되돌리면 즉시
+  원복) — CLAUDE.md 규칙 1(안정성 최우선)에 부합. (2) `xp_ledger`에 이미
+  쌓인 과거 `word-view-complete` 행이 새 정의 아래에서도 "같은 계열"로
+  계속 집계된다 — 새 이벤트 타입을 만들었다면 과거 행과 신규 행이 서로
+  다른 키로 갈라져 대시보드/랭킹 집계가 이중화됐을 것이다. (3) "새 XP
+  발생원을 만들지 마라"는 기존 원칙(결정 #10)을 그대로 지키는 유일한
+  방법이 트리거 재해석이었다 — 새 이벤트 타입 추가는 사실상 새 발생원
+  하나를 늘리는 것과 같다.
+- **트레이드오프**: 이벤트 이름(`word-view-complete`)이 이제 실제 의미
+  ("완료")와 문자 그대로는 안 맞는다("view"라는 단어가 남음) — 이름을
+  바꾸지 않은 이유는 위 (2)번(과거 행 계열 유지)이 이름 일치보다
+  우선한다고 판단했기 때문. 코드 헤더 주석(`useStudent.js`/
+  `paulRankShared.js`)에 이 불일치를 명시해뒀다.
+- **언제**: Phase 2 M4c(2026-08-04, `974a388`). 근거: `src/hooks/useStudent.js`
+  해당 useEffect 헤더 주석, `scripts/testPaulRank.mjs` 회귀 가드 3종.
+
+## 12. Cleared Stars/Cleared 밀스톤을 "저장 컬럼" 대신 "파생값"으로 설계
+(Phase 2 M4b/M4f)
+
+- **무엇을**: `clearedWords`(영구 append-only, 유일한 기록 지점
+  `markWordCleared`가 멱등 보장)를 입력으로, `clearedStars`(대시보드/홈
+  표시)와 `cleared-word-{30,100,300}`(성장 앨범 밀스톤)를 전부 **저장하지
+  않고 매번 다시 계산**하는 파생값으로만 만들었다 — `clearedStars =
+  clearedWords.length * CLEARED_STAR_PER_WORD`, 밀스톤은
+  `stats.clearedWordCount`(`attachmentCore.js`가 이미 파생)를 임계값과
+  비교만 한다.
+- **왜**: `clearedWords`가 구조적으로 `new
+  Set(clearedWords).size === clearedWords.length`를 만족하므로(멱등 기록 +
+  합집합 병합), 이 값 위에 얹는 파생값은 "저장된 지급 상태"가 아예 없어
+  중복 지급이 **막아야 할 버그가 아니라 애초에 존재할 수 없는 상태**가
+  된다. 롤백도 상수 하나(`CLEARED_STAR_PER_WORD`를 0으로, 또는
+  `CLEARED_WORD_MILESTONES` 배열을 비움)만 바꾸면 완결되고, 데이터
+  마이그레이션이 필요 없다 — `xp_totals` VIEW(저장된 사본 대신 매번
+  `xp_ledger`를 합산)와 정확히 같은 설계 정신이다.
+- **모자(hatSystem.js) 조건과의 관계**: 모자 8종 조건 임계값은 기존 cleared
+  (레벨업 미션 3연속 정답 기준, `CLEARED_MILESTONES`/`stats.clearedCount`)를
+  그대로 쓴다 — 이번 결정에서 **한 줄도 안 건드렸다**. `clearedWords`는
+  퀴즈 1회 정답만으로 쌓여 미션 기반 cleared보다 10~20배 빠르게 누적되므로,
+  기존 모자 임계값을 그대로 재사용하면 몇 주 안에 모자가 전부 소진되는
+  회귀가 생긴다(운영자 지시로 확인된 위험) — 그래서 cleared 밀스톤은 모자
+  판정과 완전히 분리된 새 축(`CLEARED_WORD_MILESTONES = [30, 100, 300]`,
+  id 접두사 `cleared-word-`)으로만 추가했다.
+- **언제**: M4b(2026-08-04, `10b38d2`)/M4f(2026-08-04, `e3a7ed8`). 근거:
+  `src/hooks/useStudent.js` `CLEARED_STAR_PER_WORD` 헤더,
+  `src/utils/attachment/milestones.js` `CLEARED_WORD_MILESTONES` 헤더,
+  `handoff.md` 34차/최신 섹션.
+
+## 13. cleared(성장 앨범 축)를 Word King 랭킹 가중치에 넣지 않음(Phase 2
+M4f)
+
+- **무엇을**: `src/utils/wordKing.js`의 `WORD_KING_WEIGHTS`(`{ accuracy: 0.6,
+  xp: 0.4 }`)에 cleared 관련 가중치를 추가하지 않았다 — M4b/M4f가 도입한
+  `clearedWords`/`clearedStars`/cleared 밀스톤 중 어느 것도 랭킹 점수
+  계산에 들어가지 않는다.
+- **왜**: `clearedWords`는 `useStudent.js` record의 `progress_data`(anon
+  쓰기 허용 blob, `syncStudentProgress`가 그대로 업로드) 안에 저장된다 —
+  이 파일이 애초에 ②쓰기시험 정답률(`spellingCorrect`)/③mastered
+  (`word_status`)를 원안(GAME_DESIGN.md §5)에서 의도적으로 제외한 이유
+  (`wordKing.js` 헤더 "이유" 문단 — "새로운 클라이언트-신뢰 지점을 만들지
+  마라")와 **정확히 같은 위협모델**이다: anon이 직접 쓸 수 있는 값을
+  랭킹(서버 전용 계산이 핵심 전제인 기능)에 넣으면 그 전제가 갭을 그대로
+  상속한다. `accuracy`(entrance_test_results, 서버 재검증됨)와 `xp`
+  (xp_ledger, `api/grant-xp.js`만 씀 — 서버 전용 쓰기)만 남긴 원래 설계
+  판단(결정 #9/#10과 동일 계열)을 그대로 유지했다.
+- **completed는 왜 다른가(간접 반영)**: completed(`word-view-complete`
+  XP 이벤트, 결정 #11 참고)는 `xp_ledger`를 통해 이미 `xp` 가중치(0.4)에
+  들어간다 — 즉 completed는 "랭킹에 아예 없음"이 아니라 "XP 경로를 통한
+  간접 반영"이고, cleared만 완전히 미반영이다. 이 문서가 이 구분을 명시해
+  두는 이유: 다음 세션이 "completed도 안 들어가 있다"고 오판해 중복
+  가중치를 추가하지 않도록.
+- **언제**: M4f(2026-08-04, `e3a7ed8`). 근거: `src/utils/wordKing.js`
+  "Phase 2 M4f" 헤더 주석, `handoff.md` 최신 섹션.
+
 ## 관련 파일
 
 `C:\voca\ROADMAP.md`, `C:\voca\handoff.md`, `C:\voca\CLAUDE.md`,

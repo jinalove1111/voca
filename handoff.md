@@ -1,10 +1,152 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-08-04 (34차, Phase 2 M4b — Cleared Stars(파생 방식) 도입.
-`clearedWords`(M3, 영구 append-only, 단일 기록 지점 `markWordCleared`가
-멱등 보장)에서 `clearedStars = clearedWords.length * CLEARED_STAR_PER_WORD`
-(=1)를 매번 다시 계산하는 순수 파생값만 추가 — 저장된 "지급 상태"가
-존재하지 않으므로 중복 지급이 구조적으로 불가능하다. `totalStars`/
-`grantReward`/`STAR_BADGES` 판정은 전혀 안 건드림. 상세는 아래 34차 섹션)_
+_최종 갱신: 2026-08-04 (35차, Phase 2 M4-보상 마감 — M4c(word-view-complete
+트리거 completed 기준 교체, 이전 세션 974a388 미문서화분 소급 기록)/M4d(미션
+슬롯 교체, 7일 관측 게이트 대기 — 아직 미착수)/M4e(대시보드 Completed XP
+노출, xp_ledger 단일 쿼리)/M4f(성장 앨범 cleared 밀스톤 축 추가, 모자 조건·
+Word King 가중치 전부 무변경) 요약 + 결정 근거 3건(`wiki/decisions.md`
+#11~13) + GAME_DESIGN.md 원문 정정(퀴즈 정답 별 지급 0). 상세는 아래 35차
+섹션)_
+
+## 2026-08-04 (35차) — Phase 2 M4-보상 마감: M4c/M4d 현황 정리 + M4e
+Completed XP 노출 + M4f 성장 앨범 cleared 밀스톤 (implementer, 단독 세션)
+
+### 배경 — M4a~M4f 전체 그림
+
+이번 세션 시작 시점에 이미 M4a(33차, `round.completedToday` 관측 배선)/
+M4b(34차, Cleared Stars)/**M4c**(`974a388`, 이 세션 시작 전 커밋됐으나
+handoff 미기록 — 아래서 소급 기록)까지 진행돼 있었다. 이 세션은 M4e/M4f를
+구현하고, M4c를 문서에 소급 기록하고, M4d의 착수 보류 사유를 명시한다.
+
+**세 가지 정의(용어 고정, 다음 세션 혼동 방지)**:
+- **completed**: `round.completedToday`/`completedWords` 기준 — "학습
+  진행률"(단어를 실제로 학습 완료). M4a/M4c/M4e가 이 축을 다룬다.
+- **cleared**: `clearedWords` 기준(퀴즈 1회 이상 정답) — "실력 인증". M4b/
+  M4f가 이 축을 다룬다.
+- **mastered**: `word_status`의 `'mastered'` 상태(레벨업 미션 3연속 정답
+  등) — 이번 M4 라운드는 이 축을 전혀 건드리지 않았다(보류, 별도 결정 필요
+  — 32차 handoff에서도 이미 범위 밖으로 명시됨).
+
+### M4c 소급 기록 — `word-view-complete` 트리거를 completed 기준으로 교체
+(`974a388`, 이 세션 이전 커밋)
+
+`useStudent.js`의 XP 트리거 조건을 `round.wordsViewed.length`(단순 열람)
+에서 `round.completedToday.length`(M4a가 도입한 실제 "완료" 판정)로
+교체했다. 이벤트 타입 이름(`word-view-complete`)/XP 금액(2)/
+`source_event_id` 형식(`word-view-complete:${날짜}`)은 전부 동결 — 새 XP
+발생원 없음, 하루 최대 XP 18(2+2+2+2+10) 불변, 서버(`api/grant-xp.js`)
+재배포 불필요. `scripts/testPaulRank.mjs`에 회귀 가드 3종(active 이벤트
+5개/합 18/키 집합 동결) 추가됨. 왜 이 방식을 택했는지는 `wiki/decisions.md`
+#11에 결정 근거로 남김(이번 세션에 함께 기록).
+
+### M4d 현황 — 미션 슬롯(daily-mission-complete 4/4 게이트) 교체는 착수
+보류, 7일 관측 게이트 대기
+
+M4c가 XP 트리거만 `completedToday` 기준으로 바꿨을 뿐, **미션 슬롯 판정
+(`countCategoriesCompleted`, `daily-mission-complete` XP의 4/4 게이트)은
+여전히 `round.wordsViewed` 등 기존 필드를 그대로 읽는다**(`974a388` 커밋
+메시지에 "미션 슬롯은 이번 범위 밖"으로 명시). 같은 축(`completedToday`)
+으로 미션 슬롯까지 마저 전환하는 게 M4d인데, 이번 세션은 **착수하지
+않았다** — `wordsViewed`(열람만 해도 카운트)와 `completedToday`(실제 완료
+판정)는 값이 다를 수 있어, 지금 4/4를 채우던 학생 중 상당수가 전환 후
+갑자기 4/4를 못 채우게 되는 회귀 위험이 있다(안정성 최우선, CLAUDE.md
+규칙 1). **진행 기준(다음 세션이 실측 확인 후 착수 여부 판단)**: 최근
+7일 관측 데이터에서 **"오늘 4/4(daily-mission-complete)를 달성한 날" 중
+90% 이상에서 그날의 `completedToday` 카운트가 이미 5 이상**이면(즉 이미
+`wordsViewed` GOAL을 채운 날은 거의 항상 `completedToday`도 충분히
+쌓여있다는 뜻 — 전환해도 대부분 학생이 그대로 4/4를 유지) 전환을
+진행해도 안전하다고 판단한다. 이 기준 미달이면 전환을 보류하고 원인
+(어떤 카테고리에서 completed가 wordsViewed보다 훨씬 적게 쌓이는지)부터
+분석해야 한다.
+
+### M4e — 관리자 대시보드에 Completed XP 노출(요구 7)
+
+- **`src/utils/wordLibrary.js`**: `fetchXpByEventType(studentIds,
+  eventTypes)` 신규 — `xp_ledger`에서
+  `select('student_id, event_type, amount').in(...).in(...)` **쿼리 1회**,
+  클라이언트에서 `{ [studentId]: { [eventType]: amount } }`로 그룹 집계.
+  기존 `fetchXpTotals`(합계만 있는 `xp_totals` VIEW 조회)와 달리 이벤트
+  타입별로 분리해야 해서 `xp_ledger` 원장을 직접 읽는다 — `xp_ledger`도
+  `xp_totals`와 동일하게 anon SELECT 허용(공개 표시값)이라 새 SQL/API 불필요.
+  에러/테이블 부재 시 `{}` 폴백(기존 `fetchXpTotals` 폴백 패턴 그대로).
+- **`src/components/AdminScreen.jsx`**: `AdminDashboard`의 `load()` 안
+  기존 `Promise.all`(dashboardRows/wsSummary/xpMap)에 `fetchXpByEventType(ids,
+  ['word-view-complete']).catch(() => ({}))` 한 항목만 추가(학생별 N회
+  조회 아님, 반 전체 1회). 학생 카드에 M4b의 "✨ 실력 별" 표시 바로 아래
+  "🎓 Completed XP {n}" 한 줄 추가, CSV 내보내기에도 "🎓 Completed XP" 열
+  추가. `COMPLETED_XP_EVENT_TYPE = 'word-view-complete'` 상수로 M4c가
+  재정의한 이벤트 키와 반드시 일치시킴(주석에 명시).
+- **`scripts/testWeeklyReport.mjs`**: 회귀 가드 1개(#13) 추가 —
+  `computeStudentStats()`(weeklyReport.js, admin/parent 화면 공유 순수
+  함수)가 이번 변경으로도 여전히 xp 관련 필드를 전혀 갖지 않음을 확인.
+  이 축을 weeklyReport.js에 섞지 않은 이유: 그 파일 헤더가 이미 "Rank/XP는
+  `fetchXpTotal` 신규 쿼리가 필요한데 이번 라운드는 범위를 축소했다 —
+  운영자/CTO 판단 필요"라고 명시해뒀고, 이번 M4e는 AdminScreen.jsx 카드
+  표시만 요구됐지 학부모 주간 리포트 확장은 요구되지 않았다 — 그 판단이
+  아직 안 내려졌으므로 공유 순수 함수는 그대로 둔다(다음 라운드 후보로
+  남김).
+
+### M4f — 성장 앨범에 cleared 기반 밀스톤 축 추가(요구 2의 Badge 부분)
+
+- **`src/utils/attachment/milestones.js`**: `CLEARED_WORD_MILESTONES =
+  [30, 100, 300]`(id `cleared-word-{n}`), 입력은
+  `stats.clearedWordCount`(`attachmentCore.js`가 이미 파생해둔
+  `clearedWords.length` — 이 파일에서 새로 파생하지 않음). 기존
+  `CLEARED_MILESTONES`(레벨업 미션 기반 `clearedCount`, [10,50,100,200])와
+  완전히 별개 축·별개 id 접두사(`cleared-` vs `cleared-word-`)로 분리해
+  절대 충돌하지 않는다. 임계값 근거(실측, 2026-08-04 라이브 데이터 — 학생별
+  누적 퀴즈 정답 수): 중앙값 7 / 평균 20.7 / 최대 141 → 30은 상위 약 25%만
+  도달, 300은 장기 목표.
+- **`hatSystem.js`는 한 줄도 안 건드렸다** — 모자 8종 조건은 기존
+  `clearedCount`(미션 기반) 그대로. `clearedWords`는 미션 기반 cleared보다
+  10~20배 빨리 쌓여, 그 임계를 그대로 재사용하면 모자가 몇 주 만에 소진되는
+  회귀가 생긴다(운영자 지시 근거) — 그래서 이번 축은 모자와 무관한 "추가"로만
+  둔다.
+- **동시 방출 확인**: `useAttachment.js`의 판정 effect는 학생당 1회만
+  돌지만 그 1회 안에서 여러 밀스톤을 한꺼번에 방출할 수 있다(`detectNewMilestones`가
+  배열 반환, `addMilestones(events)`가 이미 append로 한 번에 반영 — 모자
+  수여식 큐와 별개로 이미 이렇게 구현돼 있었음, 새로 고칠 필요 없었음).
+  `GrowthAlbum.jsx`는 밀스톤을 "한 번에 하나씩 보여주는 모달 큐"가 아니라
+  `sortMilestonesForAlbum()`으로 정렬한 **정적 타임라인 리스트**로 렌더하므로
+  (`sorted.map(...)`), 한 판정에서 cleared-word-30/100/300이 동시에 조건을
+  채워도(예: 소급 감지) 리스트에 3줄이 그냥 추가될 뿐 UI 문제가 없음을 코드
+  확인으로 검증(수정 불필요).
+- **Ranking 미반영 근거**: `src/utils/wordKing.js` 헤더에 append —
+  `clearedWords`는 anon 쓰기 허용 `progress_data`에 있어, 기존
+  ②쓰기시험 정답률/③mastered를 원안에서 배제한 것과 동일한 논리로
+  `WORD_KING_WEIGHTS`(**무변경**, `{ accuracy: 0.6, xp: 0.4 }`)에 넣지
+  않는다. completed는 `word-view-complete` XP를 통해 `xp` 가중치(0.4)에
+  이미 **간접 반영**되어 있다는 점도 함께 기록(cleared만 완전 미반영).
+
+### 원칙 충돌 3건과 해소 방식(요약 — 상세는 `wiki/decisions.md` #11~13)
+
+1. **XP**: "새 XP 발생원 금지" 원칙과 "completed 기준으로 XP를 줘야 한다"는
+   요구가 충돌 — **기존 이벤트 트리거 재해석**(M4c)으로 해소, 새 이벤트
+   타입 추가 없음.
+2. **Badge**: "모자 임계를 건드리지 마라" 원칙과 "cleared도 뱃지에
+   반영해야 한다"는 요구가 충돌 — **완전히 별개 축(성장 앨범 밀스톤)을
+   추가**(M4f)하는 것으로 해소, 모자 조건은 무변경.
+3. **Ranking**: "서버 검증된 데이터만 랭킹에 써라" 원칙과 "cleared도
+   보상 신호다"라는 관점이 충돌 — **cleared는 미반영, completed는 XP
+   경로를 통한 간접 반영**으로 해소(`WORD_KING_WEIGHTS` 무변경).
+
+### 게이트
+
+- **M4e**: `npm run build` PASS. `verify:admin`(6개 스크립트)/
+  `verify:student`(4개)/`verify:daily-study`(1개, `testWeeklyReport.mjs`
+  신규 #13 포함)/`verify:persistence`(9개) 전부 PASS.
+- **M4f**: `npm run build` PASS. `verify:attachment`(137단언)/`verify:student`
+  (4개)/`verify:daily-ritual`(118단언) 전부 PASS.
+- **새 쿼리/SQL/API 개수**: 새 SQL 파일 0개, 새 API 엔드포인트 0개, 새
+  Supabase 쿼리 1개(`fetchXpByEventType`, 반 전체 1회 — 학생별 N회 아님).
+
+### 다음 세션 후보
+
+- M4d(미션 슬롯 `completedToday` 전환) — 위 "M4d 현황" 절의 90% 게이트
+  실측 확인부터.
+- mastered 축의 보상/앨범/랭킹 반영 여부 — 운영자 결정 필요(범위 밖 유지 중).
+- weeklyReport.js(학부모 리포트)에 Completed XP/Rank를 노출할지 —
+  `fetchXpTotal`/`fetchXpByEventType` 신규 쿼리 허용 여부는 운영자/CTO
+  판단 필요(weeklyReport.js 헤더 기존 주석과 동일 보류 상태 유지).
 
 ## 2026-08-04 (34차) — Phase 2 M4b: Cleared Stars(파생 방식) 도입 —
 `clearedWords` 기반, 중복 지급 구조적 불가 (implementer, 단독 세션)
