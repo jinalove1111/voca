@@ -1,10 +1,103 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-08-04 (33차, Phase 2 M4a — round.completedToday 일별 카운터
-도입(관측 배선, 보상 변화 0). 영구 completedWords(M3, 멱등)를 그대로 XP/
-미션 판정에 쓰면 복습일에 XP 0이 되는 회귀를 막기 위한 신규 관측 전용
-축 — 어떤 보상 판정도 이번 세션에서 안 바뀜. 관리자 대시보드에 "오늘
-학습완료/단어보기" 1줄 노출, 컬럼 추가 0(기존 progress_data JSONB 재사용).
-상세는 아래 33차 섹션)_
+_최종 갱신: 2026-08-04 (34차, Phase 2 M4b — Cleared Stars(파생 방식) 도입.
+`clearedWords`(M3, 영구 append-only, 단일 기록 지점 `markWordCleared`가
+멱등 보장)에서 `clearedStars = clearedWords.length * CLEARED_STAR_PER_WORD`
+(=1)를 매번 다시 계산하는 순수 파생값만 추가 — 저장된 "지급 상태"가
+존재하지 않으므로 중복 지급이 구조적으로 불가능하다. `totalStars`/
+`grantReward`/`STAR_BADGES` 판정은 전혀 안 건드림. 상세는 아래 34차 섹션)_
+
+## 2026-08-04 (34차) — Phase 2 M4b: Cleared Stars(파생 방식) 도입 —
+`clearedWords` 기반, 중복 지급 구조적 불가 (implementer, 단독 세션)
+
+### 핵심 설계 — 왜 "파생"인가
+
+`clearedWords`(M3, 32차 도입)는 영구 append-only이고, `new
+Set(clearedWords).size === clearedWords.length`가 구조적 불변식이다 — 유일한
+기록 지점 `markWordCleared`가 `patch` updater 안에서 `includes` 검사 후에만
+`append`하고(멱등), 멀티기기 병합은 `unionList`(순수 합집합, 중복 제거)만
+쓴다. 이 성질 위에서 **저장된 "지급 상태"를 아예 만들지 않고 매번**
+`clearedWords.length * CLEARED_STAR_PER_WORD`**로 다시 계산**하면, 중복
+지급은 "막아야 할 버그"가 아니라 애초에 "존재할 수 없는 상태"가 된다 —
+저장된 지급 기록 자체가 없으므로.
+
+### 구현
+
+- **`src/hooks/useStudent.js`**: `CLEARED_STAR_PER_WORD = 1`을
+  `MISSION_BONUS_STARS` 근처에 export 상수로 정의(헤더 주석에 "발음 성공
+  1별과 같은 급, 미션 클리어 10별보다 낮게 유지해 위계 보존" 명시). 훅
+  본문에 `clearedStars = clearedWords.length * CLEARED_STAR_PER_WORD`,
+  `starsDisplay = stars + clearedStars` 추가, 반환 객체에 둘 다 노출.
+  `totalStars`/`stars` 자체와 뱃지 판정(`STAR_BADGES`)은 한 줄도 안
+  건드림 — 여전히 `stars`(=`totalStars`)만 읽는다.
+- **`src/utils/weeklyReport.js`**: `computeStudentStats`에 `clearedStars`
+  파생 필드 추가(이미 파싱해둔 `clearedWords`에서 한 줄). 이 파일은
+  "bare node 실행 가능" 불변조건 때문에 `useStudent.js`를 import할 수
+  없어(React 훅 파일) `CLEARED_STAR_PER_WORD` 값(1)을 로컬 상수로 복제 —
+  두 파일 헤더 주석에 서로 참조를 남겨 값이 바뀌면 반드시 함께 갱신하도록
+  기록.
+- **`src/components/Dashboard.jsx`**: 홈 헤더의 별 배지 표시를 `stars` →
+  `starsDisplay`로 교체하고, `clearedStars > 0`이면 배지에 title 툴팁
+  ("실력 별 N개 포함")과 배지 아래 작은 부제("(실력 별 N 포함)")를 추가 —
+  새 카드 없이 기존 배지 문구만 확장(홈 80% 불변 원칙).
+- **`src/components/AdminScreen.jsx`**: 학생 카드 우측 별 표시 아래
+  "✨ 실력 별 N" 한 줄 추가(원본 별과 합산하지 않고 별도 표시 — 관리자는
+  구분해서 봐야 함) + CSV 내보내기에 "실력 별(Cleared Stars)" 열 추가
+  (기존 Completed %/Cleared % 열 옆).
+
+### 불변식 테스트(`scripts/testClearedStars.mjs`, 신규, 21개 단언 — 전부
+실제 번들된 `useStudent.js` 소스로 검증, 시뮬레이션 아님)
+
+`scripts/testMultiTabRace.mjs`의 `fakeReact`/`renderHook` 패턴과 기존
+`scripts/buildMultiTabBundle.mjs` 번들을 그대로 재사용:
+
+1. `markWordCleared('apple')` × 5회 같은 tick → `clearedWords.length === 1`
+   **AND** `clearedStars === 1` **AND** `totalStars` 불변.
+2. 퀴즈 3경로(`recordQuizAnswer`가 WordDetail 본 코스 첫 시도/GuidedSession
+   재시도/QuizGame 홈 퀴즈 전부의 단일 choke point라는 사실을 그대로
+   이용 — 오답 1회 포함 4회 호출) 같은 단어 → `clearedWords.length === 1`,
+   `totalStars` 불변.
+3. 2탭(2기기) 동시 진행 후 `mergeProgressRecords`로 병합 — 양쪽이 같은
+   단어를 각자 클리어해도 `length === 유니크 개수`(구조적 불변식 유지).
+4. **핵심**: `markWordCleared`/`recordQuizAnswer`를 뒤섞은 임의 9회 호출
+   시퀀스 후에도 `clearedStars === new Set(clearedWords).size *
+   CLEARED_STAR_PER_WORD` **AND** 그 어떤 호출도 `totalStars`를 바꾸지
+   않음(= 저장된 지급 상태가 존재하지 않는다는 직접 증거).
+5. 구 blob(`clearedWords` 필드 자체 없음) → `normalizeRecord`/훅 레벨 둘 다
+   크래시 없이 `clearedStars === 0`, `starsDisplay === stars`.
+
+`tests/harness/registry.mjs`의 `persistence` 도메인에 `multitab` 빌더로
+등록(새 빌더 불필요 — 기존 번들 그대로 재사용).
+
+### 소급 재측정(배포 전, 읽기 전용 라이브, `scripts/.tmp/`에 두고 커밋 안 함)
+
+`student_progress.progress_data`를 anon key로 전수 조회(`allow anon all`
+RLS, `dbIntegrityAudit.mjs`와 동일 인증 방식)해 `sum(clearedWords.length)`와
+개인 최대를 집계(개인식별 출력 없음):
+
+- 조회된 학생 진행도 행 146개 중 `clearedWords`가 1개 이상인 학생 1명.
+- **총 소급 별 = 10, 개인 최대 = 10** — 직전(2026-08-03 이전) 측정치와
+  동일(이 기능이 아직 배포 전이라 값이 안 늘어난 게 정상).
+- 전체 `total_stars` 합(23,955) 대비 비중 0.04%.
+- 임계(총 240별 또는 개인 50별) 둘 다 **미달** → `CLEARED_STAR_PER_WORD`
+  그대로 진행, baseline 조정 불필요.
+
+### 게이트
+
+`npm run build` PASS. `verify:persistence`(9개 스크립트, `testClearedStars.mjs`
+포함)/`verify:student`(4개)/`verify:admin`(6개)/`verify:attachment`(1개,
+137단언)/`verify:quiz`(2개) 전부 PASS. `verify:all`은 `login` 도메인만
+FAIL — 이번 세션이 건드리지 않은 PIN/students 서버리스 함수 쪽 기존 환경
+이슈(`permission denied for table students`, 로컬 anon-only 환경 제약,
+33차 handoff에서도 이미 동일하게 기존 이슈로 기록됨)이고 이번 변경과 무관.
+
+### totalStars/grantReward/뱃지 무변경 확인
+
+- `grantReward` 함수 본문 한 줄도 안 건드림(호출부도 안 늘림).
+- `STAR_BADGES` 배열/판정 로직 무변경, 여전히 `stars`(=`totalStars`)만 읽음.
+- 기존 별 지급 7경로(발음/미션클리어/콤보보너스/일일미션보너스/게임정답
+  등, `grantReward`를 거치는 모든 지점) 무변경.
+- 롤백은 `CLEARED_STAR_PER_WORD`를 0으로 바꾸는 것만으로 완결(저장 스키마
+  변경이 없어 데이터 마이그레이션 불필요 — 파생 방식의 직접적 이점).
 
 ## 2026-08-04 (33차) — Phase 2 M4a: round.completedToday 일별 카운터(관측
 배선, 보상 판정 무변경) (implementer, 단독 세션)

@@ -1,0 +1,32 @@
+{
+  "agent_name": "implementer",
+  "role": "implementer",
+  "task_id": "phase2-m4b-cleared-stars",
+  "task": "M4b — Cleared Stars(파생 방식) 도입: clearedWords 기반, 중복 지급 구조적 불가 + 불변식 테스트 + 소급 재측정",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-04T00:00:00Z",
+  "updated_at": "2026-08-04T00:00:00Z",
+  "files_owned": [
+    "src/hooks/useStudent.js",
+    "src/utils/weeklyReport.js",
+    "src/components/Dashboard.jsx",
+    "src/components/AdminScreen.jsx",
+    "scripts/testClearedStars.mjs",
+    "tests/harness/registry.mjs"
+  ],
+  "files_read": [
+    "scripts/testMultiTabRace.mjs",
+    "scripts/buildMultiTabBundle.mjs",
+    "scripts/wordLibraryMultiTabStub.mjs",
+    "scripts/fakeReact.mjs",
+    "scripts/testProgress.mjs",
+    "scripts/testMergeProgress.mjs",
+    "scripts/dbIntegrityAudit.mjs",
+    "tests/harness/runDomain.mjs",
+    ".env"
+  ],
+  "summary": "clearedStars/starsDisplay를 clearedWords.length * CLEARED_STAR_PER_WORD(=1, 새 export 상수)로 매번 다시 계산하는 순수 파생값으로 도입 — 저장된 '지급 상태'가 없으므로 중복 지급이 구조적으로 불가능. totalStars/grantReward/STAR_BADGES 판정은 전혀 안 건드림. Dashboard.jsx 홈 별 배지를 starsDisplay로 교체(clearedStars>0이면 툴팁/부제로 '실력 별 N 포함' 정직 표기, 새 카드 없음). AdminScreen.jsx 학생 카드에 '✨ 실력 별 N' 표시 + CSV 열 추가. weeklyReport.js computeStudentStats에 clearedStars 파생 필드 추가(bare-node 불변조건 때문에 CLEARED_STAR_PER_WORD 값을 로컬 복제, 상호 참조 주석 남김). scripts/testClearedStars.mjs(신규, 21단언, 실제 번들 useStudent.js로 검증) — 같은 tick 5회 dedup/퀴즈 3경로 dedup/2탭 병합 dedup/임의 9회 시퀀스 핵심 불변식(clearedStars===new Set(...).size*상수 AND totalStars 불변)/구 blob 크래시 없음 전부 PASS, tests/harness/registry.mjs persistence 도메인에 등록. 소급 재측정(읽기전용, scripts/.tmp/, 커밋 안 함) — 총 10별/개인 최대 10별(직전과 동일, 배포 전이라 정상), 임계(240/50) 미달로 baseline 불필요. build+verify:persistence(9개)/student(4개)/admin(6개)/attachment(137단언)/quiz(2개) 전부 PASS. verify:all은 login 도메인만 기존 환경 이슈(permission denied for table students, 이번 세션과 무관)로 FAIL.",
+  "blocker": null,
+  "next_action": "커밋 2개(feat 본체 + docs handoff/.ai-status) 후 push. 배포 후 실사용자 clearedStars 값이 예상대로 늘어나는지 다음 세션에서 재확인 권장."
+}
