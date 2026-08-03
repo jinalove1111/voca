@@ -323,12 +323,27 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
       )}
 
       {speakerUnlocked ? (
-        <button onClick={playAgain} disabled={phase === 'correct'}
-          className="w-full bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl p-6 text-center text-white btn-press">
-          <p className={`text-4xl mb-2 ${replaying ? 'animate-pulse' : ''}`}>🔊</p>
-          <p className="text-3xl font-black">{promptText}</p>
-          <p className="text-teal-100 text-xs mt-2">탭하면 발음을 들려줘요 (3번, 천천히)</p>
-        </button>
+        // 3회 오답 잠금 해제 보상 — kr2en(영어를 맞혀야 함)은 발음을 들려주는
+        // 게 실제 정보다. en2kr은 promptText가 이미 영어 단어 자체라서
+        // "그 단어 발음 듣기"는 화면에 이미 보이는 걸 다시 읽어줄 뿐 정보가
+        // 0(감사 B급 22번/F2). 그래서 en2kr에서만 같은 잠금 해제 지점에
+        // 첫 글자 힌트(기존 spellingHintFor/hint)를 대신 준다 — 채점 로직
+        // 무관, hintEnabled 설정과도 별개(이 잠금은 원래도 그 설정을
+        // 참조하지 않던 독립 보상 경로).
+        isEn2Kr ? (
+          <div className="w-full bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl p-6 text-center text-white">
+            <p className="text-3xl font-black">{promptText}</p>
+            <p className="text-teal-100 text-xs mt-3 mb-1">💡 뜻 힌트</p>
+            <p className="text-2xl font-black tracking-widest">{hint}</p>
+          </div>
+        ) : (
+          <button onClick={playAgain} disabled={phase === 'correct'}
+            className="w-full bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl p-6 text-center text-white btn-press">
+            <p className={`text-4xl mb-2 ${replaying ? 'animate-pulse' : ''}`}>🔊</p>
+            <p className="text-3xl font-black">{promptText}</p>
+            <p className="text-teal-100 text-xs mt-2">탭하면 발음을 들려줘요 (3번, 천천히)</p>
+          </button>
+        )
       ) : (
         <div className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-6 text-center">
           <p className="text-3xl font-black text-gray-700">{promptText}</p>
