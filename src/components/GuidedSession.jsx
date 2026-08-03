@@ -50,6 +50,14 @@ export default function GuidedSession({
   onMarkPronunciationOk,
   onMarkQuizSolved,
   onQuizAnswer,
+  // Phase 2 M3(2026-08-03, 학습 신호 "completed") — 본 코스 진행 중 한
+  // 단어의 필수 학습 단계를 전부 통과했을 때만 기록(WordDetail.jsx
+  // goNext 참고). 아래 렌더에서 재시도(phase==='retry') 동안은 이 prop을
+  // WordDetail에 전달하지 않는다 — "본 코스"에서만 기록한다는 설계를
+  // 그대로 지키기 위함(그 단어는 이미 본 코스를 거치며 마지막 단계까지
+  // 통과했을 때 한 번 기록됐으므로, 재시도 단계는 완전히 별개의 관심사인
+  // 퀴즈 재응시일 뿐 completed와 무관).
+  onMarkCompleted,
   onPronunciationAttempt,
   onWordKnown,
   onWordUnknown,
@@ -388,6 +396,7 @@ export default function GuidedSession({
         onMarkPronunciationOk={onMarkPronunciationOk}
         onMarkQuizSolved={onMarkQuizSolved}
         onQuizAnswer={handleQuizAnswer}
+        onMarkCompleted={isRetry ? undefined : onMarkCompleted}
         onPronunciationAttempt={onPronunciationAttempt}
         wordStatus={wordStatus}
         onWordKnown={onWordKnown}

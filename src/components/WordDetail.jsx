@@ -698,6 +698,13 @@ export default function WordDetail({
   word, onBack, onNext,
   onMarkViewed, onMarkExampleHeard, onMarkPronunciationOk, onMarkQuizSolved,
   onQuizAnswer, onPronunciationAttempt, onSpellingAnswer,
+  // Phase 2 M3(2026-08-03, 학습 신호 "completed") — 이 단어의 STEPS를 전부
+  // 통과해 goNext()가 다음 단어로 넘어가는 시점(아래 goNext 참고)에만 호출.
+  // 선택 prop(기본 undefined) — 넘기지 않는 호출부(standalone wordDetail
+  // 화면, QuizGame)는 오늘과 완전히 동일하게 동작(completed 기록 없음).
+  // GuidedSession이 본 코스(main phase)에서만 이 prop을 실어 보낸다
+  // (retry phase는 안 보냄 — GuidedSession.jsx 주석 참고).
+  onMarkCompleted,
   classWords,
   mode = 'comprehensive',
   spellingSettings,
@@ -772,7 +779,15 @@ export default function WordDetail({
   const goNext = () => {
     const nextIdx = stepIdx + 1
     if (nextIdx < STEPS.length) setStep(STEPS[nextIdx])
-    else { onNext ? onNext() : onBack?.() }
+    else {
+      // Phase 2 M3 — 여기 도달했다는 것 자체가 "이 단어의 STEPS를 전부
+      // 통과했다"는 뜻(마지막 단계 다음이 없어 다음 단어/뒤로가기로
+      // 넘어가는 분기). 상단 "← 뒤로가기" 버튼은 onBack을 직접 호출하고
+      // goNext를 거치지 않으므로, 중간 이탈은 이 신호가 절대 기록하지
+      // 않는다(설계 확정 그대로).
+      onMarkCompleted?.(word.id)
+      onNext ? onNext() : onBack?.()
+    }
   }
 
   return (

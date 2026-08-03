@@ -582,6 +582,9 @@ function AppInner({ studentId, studentName, onLogout }) {
           onMarkQuizSolved={studentData.markQuizSolved}
           onQuizAnswer={studentData.recordQuizAnswer}
           onPronunciationAttempt={studentData.markPronunciationAttempt}
+          // Phase 2 M3(2026-08-03, 학습 신호 "completed") — GuidedSession
+          // 본 코스에서만 기록(GuidedSession.jsx가 재시도 단계엔 안 넘김).
+          onMarkCompleted={studentData.markWordCompleted}
           onWordKnown={setWordKnown}
           onWordUnknown={setWordUnknown}
           onSetLastWordIndex={(idx) => studentData.setLastWordIndex(idx, currentUnitId)}
