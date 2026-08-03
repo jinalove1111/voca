@@ -360,6 +360,40 @@ console.log('\n9. isEmptyRecord — 클라우드 백업 복구 여부를 판단�
   check('레벨업 미션이 하나라도 있으면 비어있지 않음', !isEmptyRecord(withMissions))
 }
 
+console.log('\n10.5. Phase 2 M3(2026-08-03) — completedWords/clearedWords 학습 신호 초기값 + 멱등성 + 축 독립')
+{
+  const fresh = freshRecord('SignalKid')
+  check('freshRecord에 completedWords 빈 배열 기본값', Array.isArray(fresh.completedWords) && fresh.completedWords.length === 0)
+  check('freshRecord에 clearedWords 빈 배열 기본값', Array.isArray(fresh.clearedWords) && fresh.clearedWords.length === 0)
+  check('completedWords/clearedWords가 비어있으면 여전히 isEmptyRecord 판정에 영향 없음(기존 기준 그대로)', isEmptyRecord(fresh))
+
+  // markWordCompleted/markWordCleared는 hook-internal(patch 경유) 콜백이라
+  // 여기서 직접 import할 수 없다 — 실제 구현과 정확히 같은 "이미 있으면
+  // no-op, 없으면 append" 규칙을 시뮬레이션해 멱등성/독립성을 확인한다
+  // (recordGamePlayed 시뮬레이션과 동일 패턴, 위 6번 참고).
+  const markCompleted = (arr, slug) => arr.includes(slug) ? arr : [...arr, slug]
+  const markCleared = (arr, slug) => arr.includes(slug) ? arr : [...arr, slug]
+
+  let completedWords = fresh.completedWords
+  completedWords = markCompleted(completedWords, 'apple')
+  completedWords = markCompleted(completedWords, 'apple') // 중복 호출 — no-op
+  completedWords = markCompleted(completedWords, 'banana')
+  check('같은 단어를 두 번 완료 처리해도 한 번만 기록(멱등)', completedWords.filter(w => w === 'apple').length === 1)
+  check('서로 다른 단어는 각각 기록됨', completedWords.includes('apple') && completedWords.includes('banana'))
+
+  let clearedWords = fresh.clearedWords
+  clearedWords = markCleared(clearedWords, 'apple') // 첫 시도 정답
+  clearedWords = markCleared(clearedWords, 'apple') // 재시도 정답 — 이미 있으므로 no-op
+  check('같은 단어를 재시도로 다시 맞혀도 clearedWords는 한 번만 기록(멱등)', clearedWords.filter(w => w === 'apple').length === 1)
+
+  // 세 축(cleared/completedWords/clearedWords)의 완전한 독립 — 같은
+  // 슬러그로 하나를 채워도 다른 두 축과 기존 cleared 배열은 절대 안 바뀜.
+  const rec = { ...fresh, cleared: ['apple'], completedWords, clearedWords }
+  check('cleared(레벨업 미션)는 completedWords/clearedWords 갱신과 무관하게 그대로', rec.cleared.length === 1 && rec.cleared[0] === 'apple')
+  check('completedWords 갱신이 clearedWords 배열 참조를 바꾸지 않음(별개 배열)', rec.completedWords !== rec.clearedWords)
+  check('completed 처리된 단어가 cleared(레벨업 미션) 배열엔 자동으로 안 들어감(축 독립)', !rec.cleared.includes('banana'))
+}
+
 console.log('\n10. wordStatus (v1.5 Skip 기능) — 새 필드가 기존 로직을 깨뜨리지 않는지')
 {
   const fresh = freshRecord('SkipKid')

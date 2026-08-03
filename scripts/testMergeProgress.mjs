@@ -259,5 +259,32 @@ console.log('\n11. Writing MVP(2026-07-20) — spellingReviewQueue 이월(rollov
   check('병합: spellingReviewQueue 합집합(양쪽 유실 없음)', ['qa1', 'qb1', 'qShared'].every((w) => m.spellingReviewQueue.includes(w)) && m.spellingReviewQueue.length === 3)
 }
 
+console.log('\n12. Phase 2 M3(2026-08-03) — completedWords/clearedWords 학습 신호 병합/하위호환')
+{
+  // 병합 — wordsViewed/spellingReviewQueue와 동일한 합집합 원칙(유실 없음).
+  const A = ancestor(); A.completedWords = ['a1', 'shared']; A.clearedWords = ['ca1', 'cshared']
+  const B = ancestor(); B.completedWords = ['b1', 'shared']; B.clearedWords = ['cb1', 'cshared']
+  const m = mergeProgressRecords(A, B, ID)
+  check('completedWords 합집합(양쪽 유실 없음, 중복 없음)', ['a1', 'b1', 'shared'].every((w) => m.completedWords.includes(w)) && m.completedWords.length === 3)
+  check('clearedWords 합집합(양쪽 유실 없음, 중복 없음)', ['ca1', 'cb1', 'cshared'].every((w) => m.clearedWords.includes(w)) && m.clearedWords.length === 3)
+  check('멱등 — 같은 병합 반복해도 completedWords/clearedWords 동일', JSON.stringify(mergeProgressRecords(m, B, ID).completedWords.sort()) === JSON.stringify(m.completedWords.sort()))
+
+  // 기존 cleared(레벨업 미션 배열)와 완전히 독립 — 새 필드가 기존 필드 값을
+  // 절대 건드리지 않는다(같은 슬러그가 겹쳐도 서로 다른 배열에 각자 존재).
+  const C = ancestor(); C.cleared = ['a', 'b']; C.completedWords = ['a']; C.clearedWords = ['b']
+  const mc = mergeProgressRecords(C, null, ID)
+  check('completedWords/clearedWords는 기존 cleared 배열과 별개 필드로 공존', mc.cleared.includes('a') && mc.cleared.includes('b') && mc.completedWords.includes('a') && mc.clearedWords.includes('b'))
+
+  // 하위호환 — 구버전 blob(필드 자체 없음)도 크래시 없이 빈 배열로 정규화.
+  const oldBlobNoFields = { studentId: ID, totalStars: 10, cleared: ['z'] }
+  const n = normalizeRecord(oldBlobNoFields, ID)
+  check('구 blob(completedWords/clearedWords 필드 없음) → 크래시 없이 빈 배열로 정규화', Array.isArray(n.completedWords) && n.completedWords.length === 0 && Array.isArray(n.clearedWords) && n.clearedWords.length === 0)
+  check('구 blob 정규화 시 기존 cleared는 그대로 보존', n.cleared.includes('z'))
+
+  // 구버전 blob과의 병합도 안전(한쪽에 필드가 없어도 있는 쪽 데이터 보존)
+  const mixedMerge = mergeProgressRecords({ ...ancestor(), completedWords: ['x1'], clearedWords: ['y1'] }, oldBlobNoFields, ID)
+  check('신규 필드 있는 로컬 + 구 blob(필드 없음) 클라우드 병합 → 로컬 데이터 유실 없음', mixedMerge.completedWords.includes('x1') && mixedMerge.clearedWords.includes('y1'))
+}
+
 console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n${failures}개 실패 ❌`)
 process.exit(failures > 0 ? 1 : 0)

@@ -230,6 +230,26 @@ function freshRecord(id) {
     ticketLedger: [],
     missions: [],          // level-up boss missions
     cleared: [],
+    // Phase 2 M3(2026-08-03, 학습 신호 2종) — 아래 두 필드는 기존
+    // cleared(레벨업 미션 3연속 정답 클리어 — 모자/유닛완주/마을/성장앨범
+    // 밀스톤이 읽는 훨씬 엄격한 의미)와 완전히 별개다. cleared의 의미·쓰기
+    // 지점(answerMission)은 이 마일스톤에서 한 줄도 바꾸지 않는다 — 새 신호는
+    // 병행 도입되는 신규 필드일 뿐(스키마 변경 0, 둘 다 word 텍스트 슬러그
+    // 축, wordLibrary.js mapWordRow의 id: wordSlug(cw.word)와 동일).
+    //   completedWords — GuidedSession 본 코스에서 그 단어의 필수 학습
+    //     단계(WordDetail STEPS)를 전부 통과한 순간 기록. "학습 진행률" 축.
+    //     중간 이탈(홈으로 나가기 등)은 기록하지 않음(goNext가 마지막
+    //     스텝을 실제로 넘어갈 때만 markWordCompleted 호출, 아래 참고).
+    //   clearedWords — 퀴즈를 한 번이라도 맞히면(첫 시도/재시도 무관) 기록.
+    //     "실력 판단" 축. recordQuizAnswer(모든 퀴즈 정답 경로의 단일
+    //     choke point — WordDetail.QuizStep/GuidedSession 재시도/QuizGame이
+    //     전부 이 함수를 거친다)가 정답일 때만 markWordCleared를 부른다.
+    // 둘 다 markWordCompleted/markWordCleared로만 추가되고 멱등(이미 있으면
+    // no-op) — 보상 판정(모자/완주/밀스톤)은 이번 마일스톤에서 이 축을
+    // 전혀 쓰지 않는다(표시 전용 파생값만 attachmentCore.js에 추가, M4에서
+    // 별도 결정).
+    completedWords: [],
+    clearedWords: [],
     round: freshRound(),
     history: {},            // date string -> freshHistoryDay()
     milestoneStreak: 0,      // highest streak milestone already celebrated
@@ -345,6 +365,9 @@ function normalizeRecord(raw, id) {
   rec.ticketLedger = asArray(rec.ticketLedger) // Ticket Economy 이전 레코드/백업엔 없음 — 빈 배열로 채움
   rec.missions = asArray(rec.missions)
   rec.cleared = asArray(rec.cleared)
+  // Phase 2 M3 — 이전 레코드/백업엔 없음(새 필드) — 빈 배열로 채움, 절대 크래시 없음.
+  rec.completedWords = asArray(rec.completedWords)
+  rec.clearedWords = asArray(rec.clearedWords)
   rec.milestoneStreak = Number(rec.milestoneStreak) || 0
   rec.starBadgeThreshold = Number(rec.starBadgeThreshold) || 0
   rec.lastWordIndex = Number(rec.lastWordIndex) || 0
@@ -496,6 +519,11 @@ export function mergeProgressRecords(localRaw, cloudRaw, id) {
     ticketLedger: mergeTicketLedgers(local.ticketLedger, cloud.ticketLedger),
     missions: [...missionsById.values()],
     cleared: unionList(local.cleared, cloud.cleared),
+    // Phase 2 M3 — wordsViewed/spellingReviewQueue와 동일한 이유로 합집합
+    // (append-only, 삭제 없음 — 두 기기 각각에서 이미 기록된 신호가 병합
+    // 후에도 유실되지 않도록).
+    completedWords: unionList(local.completedWords, cloud.completedWords),
+    clearedWords: unionList(local.clearedWords, cloud.clearedWords),
     round: {
       ...local.round,
       wordsViewed: unionList(local.round.wordsViewed, cloud.round.wordsViewed),
@@ -741,7 +769,7 @@ export function useStudent(studentId, legacyName) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId])
 
-  const { round, history, stickers: stickerTypes, diaryPlacements, missions, cleared, milestoneStreak, starBadgeThreshold, lastGamePlayed, lastTextbookClassId, lastWordIndex, totalStars: stars, wordStatus, ticketLedger, spellingReviewQueue, hatInventory, equippedHatId, milestones } = record
+  const { round, history, stickers: stickerTypes, diaryPlacements, missions, cleared, completedWords, clearedWords, milestoneStreak, starBadgeThreshold, lastGamePlayed, lastTextbookClassId, lastWordIndex, totalStars: stars, wordStatus, ticketLedger, spellingReviewQueue, hatInventory, equippedHatId, milestones } = record
   // Ticket Economy — 화면은 항상 이 파생값만 읽는다(원시 잔액을 저장하지
   // 않는 이유는 ticketEconomy.js 헤더 참고).
   const ticketBalance = sumTicketBalance(ticketLedger)
@@ -891,6 +919,21 @@ export function useStudent(studentId, legacyName) {
       if (hatId !== null && !prev.hatInventory.some((h) => h.hatId === hatId)) return {}
       return { equippedHatId: hatId }
     })
+  }, [patch])
+
+  // Phase 2 M3(2026-08-03) — 학습 신호 2종의 유일한 쓰기 지점. 둘 다
+  // 멱등(이미 슬러그가 있으면 patch 자체를 건너뛰어 no-op) — 어떤 경로로
+  // 중복 호출돼도(더블탭, 재시도 등) 배열이 부풀지 않는다. 기존
+  // answerMission/cleared(레벨업 미션)와는 완전히 독립된 필드라 서로의
+  // 쓰기를 절대 건드리지 않는다(freshRecord 헤더 주석 참고).
+  const markWordCompleted = useCallback((slug) => {
+    if (!slug) return
+    patch(prev => prev.completedWords.includes(slug) ? {} : { completedWords: [...prev.completedWords, slug] })
+  }, [patch])
+
+  const markWordCleared = useCallback((slug) => {
+    if (!slug) return
+    patch(prev => prev.clearedWords.includes(slug) ? {} : { clearedWords: [...prev.clearedWords, slug] })
   }, [patch])
 
   const addMission = useCallback((wordId) => {
@@ -1209,7 +1252,14 @@ export function useStudent(studentId, legacyName) {
       quizCorrect: (day.quizCorrect || 0) + (correct ? 1 : 0),
       missedWordIds: correct ? (day.missedWordIds || []) : [...(day.missedWordIds || []), wordId],
     }))
-  }, [bumpHistory])
+    // Phase 2 M3 — recordQuizAnswer는 퀴즈 정답 경로 3곳(WordDetail.QuizStep
+    // 본 코스, GuidedSession 오답 재시도, QuizGame 홈 퀴즈) 전부가 이미
+    // 공유하는 단일 choke point(App.jsx가 세 화면 모두 studentData.
+    // recordQuizAnswer를 그대로 꽂아 쓴다) — clearedWords 기록을 이 안에
+    // 얹으면 세 경로 각각에 별도 배선을 추가할 필요가 없다. 첫 시도든
+    // 재시도든 무관, "한 번이라도 맞히면"이 정의라 correct일 때만 호출.
+    if (correct) markWordCleared(wordId)
+  }, [bumpHistory, markWordCleared])
 
   // v1.3 admin-dashboard analytics ("발음 연습 횟수") — every attempted
   // recording, success or fail. Separate from markPronunciationOk, which
@@ -1481,6 +1531,11 @@ export function useStudent(studentId, legacyName) {
     // dedupKey를 명시해야 하는 grantReward를 통해서만 별을 지급받는다).
     grantReward, addMission, answerMission,
     markWordViewed, markExampleHeard, markQuizSolved, markPronunciationOk,
+    // Phase 2 M3(2026-08-03) — 학습 신호 2종(completed/cleared). 기존
+    // cleared(레벨업 미션, 위)와 완전히 별개 필드 — 표시/파생 전용
+    // (attachmentCore.deriveAttachmentStats의 completedSet/clearedWordSet),
+    // 보상 판정에는 이번 마일스톤에서 쓰이지 않는다.
+    completedWords, clearedWords, markWordCompleted, markWordCleared,
     placeSticker, updatePlacement, removePlacement, movePlacementLayer,
     wordStatus, setWordKnown, setWordUnknown,
     // Ticket Economy(2026-07-19) — ticketBalance는 항상 ticketLedger에서
