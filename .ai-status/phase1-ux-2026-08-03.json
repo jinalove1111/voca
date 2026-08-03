@@ -1,0 +1,32 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "phase1-ux-2026-08-03",
+  "task": "Phase 1 UX 개선 마감 — 암기 팁 상시 노출 회귀 원복 + 전체 재검증 + 완료 기록",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-03T02:00:00Z",
+  "updated_at": "2026-08-03T02:55:00Z",
+  "files_owned": [
+    "src/components/WordDetail.jsx",
+    "PHASE1_CHANGES.md",
+    "handoff.md",
+    ".ai-status/phase1-ux-2026-08-03.json"
+  ],
+  "files_read": [
+    "src/components/StudentSelect.jsx",
+    "src/components/QuizGame.jsx",
+    "src/components/Dashboard.jsx",
+    "src/components/EntranceTestBanner.jsx",
+    "src/utils/attachment/paulTown.js",
+    "src/App.jsx",
+    "src/components/SpellingQuestion.jsx",
+    "src/components/GuidedSession.jsx",
+    "LEARNING_UX_AUDIT.md",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "Phase 1 UX 웨이브(오늘 앞선 8커밋)에서 048d3c1이 만든 회귀 1건(암기 팁 카드가 '모르겠어요' 클릭 후에만 노출되던 것)을 상시 노출로 원복(ad55680, showTip state 제거, handleUnknown의 발음 자동재생은 유지). build + verify:student/quiz/daily-ritual PASS 확인 후 push. 이어서 npm run build + npm run verify:all 전체 재검증 — FAIL은 login 도메인뿐(로컬 SUPABASE_SERVICE_ROLE_KEY 부재, 오늘 커밋과 무관한 환경 요인)이고 SKIP은 speaking/listening + v3.11 락다운 관련 개별 스크립트뿐, 나머지 전 도메인 PASS — 기대 베이스라인과 일치, 회귀 없음. PHASE1_CHANGES.md 신규 작성(before/after 대조표, 변경 파일/커밋, 검증 결과, 의도적 미착수 항목, Phase 2/3 잔여, 운영자 확인 경로) + handoff.md 29차 섹션 prepend, 커밋 후 push.",
+  "blocker": null,
+  "next_action": "완료 — 후속 작업 없음. Phase 2/3 착수는 운영자 승인 후 별도 세션."
+}
