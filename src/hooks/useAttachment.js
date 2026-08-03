@@ -1,10 +1,18 @@
 // useAttachment(2026-07-22, 애착 시스템) — 파생 + 판정 + 반영 글루 훅.
 //
 // 역할: (1) useStudent record에서 deriveAttachmentStats 파생, (2) 반/유닛
-// 단어 목록을 wordLibrary에서 구성, (3) 마운트 시 1회 모자/밀스톤 판정을
-// 돌려 새 이벤트를 grantHats/addMilestones로 반영. Dashboard가 화면 전환
-// 때마다 리마운트되므로 학습 세션이 끝나고 돌아올 때마다 자연히 재판정
-// 된다(별도 폴링/구독 없음).
+// 단어 목록을 wordLibrary에서 구성, (3) 모자/밀스톤 판정을 돌려 새 이벤트를
+// grantHats/addMilestones로 반영.
+//
+// 판정 타이밍 정정(Phase 2 M1(d), 2026-08-03) — 예전 주석은 "Dashboard가
+// 화면 전환마다 리마운트되므로 학습 후 자연히 재판정된다"고 적혀 있었지만
+// 실제와 다르다. 이 훅은 App.jsx 최상단에서 호출되고, App.jsx는 화면
+// 전환(setScreen)마다 리마운트되지 않는다 — 같은 컴포넌트 안에서 조건부
+// 렌더만 바뀌므로 이 훅도 세션 내내 마운트를 유지한다. 실제 판정은 아래
+// effect의 ranRef 가드 때문에 studentId당 딱 1회만 돈다(로그인/복원 완료
+// 직후) — 학습 세션 중간에 모자/밀스톤을 다시 계산하지 않고, 다음
+// 로그인(또는 새로고침으로 App.jsx 자체가 다시 마운트될 때)까지는 그때
+// 계산된 값을 그대로 쓴다.
 //
 // 판정은 전부 순수 함수(hatSystem/milestones) — 이 훅은 배선만 한다.
 // 반영 API는 멱등(useStudent가 키 중복을 무시)이라 몇 번 불려도 안전.
@@ -92,7 +100,19 @@ export function useAttachment(studentId, studentData) {
       trackEvent(studentId, EV.hatEarned) // 익명 관찰 — 획득 사실만(모자 종류/개인정보 없음)
       // 수여식 큐 적재 — 카탈로그 엔트리(색/이름/출처 라벨 포함)로 변환.
       // 표시 여부(hatCeremony 플래그)는 Dashboard가 게이트한다.
-      setCeremonyQueue(newHats.map((e) => hatById(e.hatId)).filter(Boolean))
+      // Phase 2 M1(e, 2026-08-03) — 예전엔 setCeremonyQueue(newHats...)가
+      // 큐를 통째로 덮어썼다. 이 effect는 studentId당 1회만 돌지만(위
+      // ranRef), 그 1회 안에서도 이번 판정으로 여러 모자를 동시에 얻을 수
+      // 있고(예: 유닛 완주 모자 + 졸업 모자가 같은 순간 조건 충족), 이론상
+      // 훗날 판정 지점이 늘어나 같은 세션에 두 번째 적재가 생겨도 대기
+      // 중이던 수여식이 사라지지 않도록 append로 바꾼다. 지급 자체
+      // (grantHats)는 이미 멱등이므로 여기서는 "표시 큐"만 다루고, 같은
+      // hatId가 큐에 두 번 들어가는 것만 막는다(중복 표시 방지).
+      setCeremonyQueue((q) => {
+        const seen = new Set(q.map((h) => h.id))
+        const additions = newHats.map((e) => hatById(e.hatId)).filter((h) => h && !seen.has(h.id))
+        return additions.length > 0 ? [...q, ...additions] : q
+      })
     }
     const newHatMeta = newHats.map((e) => {
       const h = hatById(e.hatId)
