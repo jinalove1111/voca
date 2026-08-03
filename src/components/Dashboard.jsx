@@ -288,7 +288,7 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 // P0(2026-07-15): student(이름 문자열) 대신 studentId(식별자)+studentName
 // (표시용)을 따로 받는다 — getStudentClass/getStudentUnit은 이제 id 기반.
 export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, completedUnits, completedTextbooks, pendingCeremonyHat, onDismissCeremony, textbookOptions, currentTextbookId, onTextbookSwitch }) {
-  const { stars, stickerTypes, activeMissions, dailyProgress, liveMissionsCompleted, streak, cleared, ticketBalance, redeemTicketReward, equippedHatId } = studentData
+  const { stars, starsDisplay, clearedStars, stickerTypes, activeMissions, dailyProgress, liveMissionsCompleted, streak, cleared, ticketBalance, redeemTicketReward, equippedHatId } = studentData
   // 애착 시스템(2026-07-22) — 학생 아바타의 장착 모자. 미장착이면 기존
   // 기본 아바타(👑) 그대로 — 아무것도 안 얻은/안 고른 학생 화면은 변화 0.
   // 폴(Paul) 캐릭터의 검은 모자와 무관(폴 이미지는 어디서도 안 바뀜).
@@ -453,12 +453,23 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
               <span className="font-black text-orange-600 text-sm">{streak}일</span>
             </div>
           )}
-          <div className="flex items-center gap-2 bg-yellow-100 px-4 py-2 rounded-2xl">
+          {/* M4b(2026-08-04) Cleared Stars — 표시값만 stars → starsDisplay로
+              바꾸고(별 지급 자체는 무변경, stars=totalStars는 그대로),
+              실력 별(clearedStars)이 섞여 있음을 title 툴팁으로 정직하게
+              알린다. 홈 80% 불변 원칙 — 새 카드 추가 없이 기존 배지 그대로. */}
+          <div
+            className="flex items-center gap-2 bg-yellow-100 px-4 py-2 rounded-2xl"
+            title={clearedStars > 0 ? `실력 별 ${clearedStars}개 포함` : undefined}>
             <span className="text-xl">⭐</span>
-            <span className="font-black text-yellow-700 text-lg">{stars}</span>
+            <span className="font-black text-yellow-700 text-lg">{starsDisplay}</span>
           </div>
         </div>
       </div>
+      {clearedStars > 0 && (
+        <p className="max-w-lg mx-auto text-right text-[11px] text-yellow-700/70 -mt-3 mb-2 pr-1">
+          (실력 별 {clearedStars} 포함)
+        </p>
+      )}
 
       <div className="max-w-lg mx-auto space-y-4 animate-fade-in">
         {/* Profile */}

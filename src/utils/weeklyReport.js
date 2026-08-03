@@ -21,6 +21,14 @@
 import { sumTicketBalance } from './ticketEconomy.js'
 import { getHouseById } from './houseSystem.js'
 
+// M4b(2026-08-04) Cleared Stars — useStudent.js가 export하는
+// CLEARED_STAR_PER_WORD(=1)의 값만 복제한다(위 localIsoDateStr과 동일한
+// 이유 — useStudent.js는 React 훅 파일이라 import하면 "번들링 없이 bare
+// node 실행 가능" 불변조건이 깨진다). 값을 바꿀 일이 있으면 반드시 두
+// 파일을 함께 갱신해야 한다 — useStudent.js 쪽 헤더 주석에도 동일하게
+// 명시.
+const CLEARED_STAR_PER_WORD = 1
+
 function localIsoDateStr(d = new Date()) {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -137,11 +145,15 @@ export function computeStudentStats(r, wordStatusSummary = {}, houseId = null, u
   // 단어가 아직 없음) 퍼센트는 계산 불가 — null로 남겨 "0%"와 구분한다.
   const completedPct = unitSize > 0 ? Math.round((completedInUnitCount / unitSize) * 100) : null
   const clearedWordPct = unitSize > 0 ? Math.round((clearedWordInUnitCount / unitSize) * 100) : null
+  // M4b(2026-08-04) Cleared Stars — clearedWords는 위에서 이미 파싱했으므로
+  // 한 줄 파생 추가. 구 데이터(progress_data 자체가 없거나 clearedWords
+  // 필드가 없는 학생)는 clearedWords가 빈 배열이라 자연히 0(크래시 없음).
+  const clearedStars = clearedWords.length * CLEARED_STAR_PER_WORD
 
   return {
     today, studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws, ticketBalance, house,
     hasProgressData, unitSize, completedInUnitCount, clearedWordInUnitCount, completedPct, clearedWordPct,
-    todayCompletedCount, todayWordsViewedCount,
+    todayCompletedCount, todayWordsViewedCount, clearedStars,
   }
 }
 

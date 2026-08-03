@@ -139,6 +139,20 @@ export function getLocalRecordRaw(studentId) {
 const GOAL = 5
 const MISSION_BONUS_STARS = 10
 const DUPLICATE_BONUS_STARS = 20
+// M4b(2026-08-04) Cleared Stars — 파생(derived) 전용 상수. clearedWords는
+// 영구 append-only이고(단일 기록 지점 markWordCleared가 patch updater 안에서
+// includes 검사 후에만 append, 멀티기기 병합은 unionList — mergeProgressRecords
+// 참고) `new Set(clearedWords).size === clearedWords.length`가 구조적
+// 불변식이다. 그래서 "지급 상태"를 저장하지 않고 매번
+// `clearedWords.length * CLEARED_STAR_PER_WORD`로 다시 계산하면 중복 지급이
+// 애초에 존재할 수 없다(저장된 지급 기록 자체가 없으므로) — 아래
+// clearedStars/starsDisplay 참고. 발음 성공 1별과 같은 급으로 두고 레벨업
+// 미션 클리어(MISSION_BONUS_STARS=10)보다 낮게 유지해 기존 별 보상 위계를
+// 보존한다. totalStars/stars 자체와 뱃지 판정(STAR_BADGES)은 이 상수와
+// 무관하게 그대로 stars(=totalStars)를 쓴다 — 절대 여기서 파생시키지 않는다.
+// src/utils/weeklyReport.js가 이 값을 복제해서 쓴다(그 파일의 "bare node
+// 실행 가능" 불변조건 때문에 import 불가 — 값을 바꾸면 그 파일도 함께 갱신).
+export const CLEARED_STAR_PER_WORD = 1
 // P3 쓰기시험 게임화 — 연속 "첫 시도 정답"(콤보)이 아래 마일스톤에 처음
 // 도달하는 순간 한 번씩만 주는 보너스 별. 기존 별 경제를 인플레이션시키지
 // 않도록 의도적으로 보수적(미션 보너스 10 / 중복 스티커 20 대비 1~3개
@@ -785,6 +799,13 @@ export function useStudent(studentId, legacyName) {
   // Ticket Economy — 화면은 항상 이 파생값만 읽는다(원시 잔액을 저장하지
   // 않는 이유는 ticketEconomy.js 헤더 참고).
   const ticketBalance = sumTicketBalance(ticketLedger)
+  // M4b Cleared Stars — 순수 파생값(저장하지 않음). clearedWords는 위
+  // CLEARED_STAR_PER_WORD 주석에서 설명한 구조적 불변식(길이 = 유니크 개수)을
+  // 가지므로 이 곱셈이 곧 "지금까지 클리어로 번 별"의 정확한 총합이다.
+  // stars(=totalStars)는 절대 건드리지 않고, 화면 표시용 합산(starsDisplay)만
+  // 새로 제공한다.
+  const clearedStars = clearedWords.length * CLEARED_STAR_PER_WORD
+  const starsDisplay = stars + clearedStars
 
   const [giftQueue, setGiftQueue] = useState([])
 
@@ -1563,6 +1584,9 @@ export function useStudent(studentId, legacyName) {
     // (attachmentCore.deriveAttachmentStats의 completedSet/clearedWordSet),
     // 보상 판정에는 이번 마일스톤에서 쓰이지 않는다.
     completedWords, clearedWords, markWordCompleted, markWordCleared,
+    // M4b(2026-08-04) Cleared Stars — 파생 전용(저장 안 함), 위
+    // CLEARED_STAR_PER_WORD 헤더 주석 참고. stars는 그대로 totalStars.
+    clearedStars, starsDisplay,
     placeSticker, updatePlacement, removePlacement, movePlacementLayer,
     wordStatus, setWordKnown, setWordUnknown,
     // Ticket Economy(2026-07-19) — ticketBalance는 항상 ticketLedger에서

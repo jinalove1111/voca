@@ -823,10 +823,12 @@ function AdminDashboard({ adminPin } = {}) {
     // false면 퍼센트 대신 빈 문자열("")로 남겨 "0%"와 구분(정직성 원칙).
     const header = ['이름', '오늘 공부함', '숙제 완료', '퀴즈 정답률(%)', '퀴즈 정답/전체', '발음 연습 횟수', '별', '연속학습일', '스티커', '클리어 단어', '아는 단어', '복습 필요 단어', '많이 틀린 단어(상위5)']
       .concat(['학습 완료 Completed(%, 현재 유닛 기준)', '실력 인증 Cleared(%, 현재 유닛 기준)'])
+      // M4b(2026-08-04) Cleared Stars — 기존 Completed %/Cleared % 열 옆에 추가.
+      .concat(['실력 별(Cleared Stars)'])
       .concat(['최근 7일 완료 카테고리(0~4, 오늘부터 과거순)'])
     const body = rows.map(r => {
       const { studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws,
-              hasProgressData, completedPct, clearedWordPct } = statsFor(r)
+              hasProgressData, completedPct, clearedWordPct, clearedStars } = statsFor(r)
       return [
         r.name,
         studiedToday ? 'O' : 'X',
@@ -843,6 +845,7 @@ function AdminDashboard({ adminPin } = {}) {
         topMissed.map(([slug, count]) => `${wordLookup[slug]?.word || slug}×${count}`).join(' '),
         hasProgressData && completedPct !== null ? completedPct : '',
         hasProgressData && clearedWordPct !== null ? clearedWordPct : '',
+        clearedStars,
         last7.map(d => d.categories_completed).join(' '),
       ]
     })
@@ -953,7 +956,7 @@ function AdminDashboard({ adminPin } = {}) {
       {!loading && displayRows.map(r => {
         const { studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws,
                 hasProgressData, unitSize, completedInUnitCount, clearedWordInUnitCount, completedPct, clearedWordPct,
-                todayCompletedCount, todayWordsViewedCount } =
+                todayCompletedCount, todayWordsViewedCount, clearedStars } =
           statsFor(r)
         const isOpen = expanded === r.id
 
@@ -992,6 +995,12 @@ function AdminDashboard({ adminPin } = {}) {
               </div>
               <div className="text-right flex-shrink-0">
                 <p className="font-black text-yellow-600">⭐ {r.progress?.total_stars ?? 0}</p>
+                {/* M4b(2026-08-04) Cleared Stars — clearedWords.length에서
+                    파생(useStudent.js CLEARED_STAR_PER_WORD 헤더 참고), total_stars와
+                    합산하지 않고 별도 줄로만 표시(관리자는 원본 별/실력 별을
+                    구분해서 볼 수 있어야 함). clearedStars가 0이면 구 데이터일
+                    수 있으므로 숨기지 않고 0으로 그대로 표시(정직성). */}
+                <p className="text-xs text-yellow-500">✨ 실력 별 {clearedStars}</p>
                 <p className="text-xs text-orange-400">🔥 {r.progress?.streak ?? 0}일 연속</p>
                 {/* Paul Rank System(2026-07-19) — XP는 별과 별개 원장(파생 아님).
                     xp_ledger 미실행 환경이면 xpTotals[r.id]가 undefined → 0으로 표시. */}

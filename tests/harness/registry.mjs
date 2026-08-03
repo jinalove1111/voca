@@ -141,6 +141,7 @@ export const DOMAINS = {
       { script: 'scripts/testMergeProgress.mjs', builders: ['progress'] },
       { script: 'scripts/testRestoreSyncRace.mjs', builders: ['race'] },
       { script: 'scripts/testMultiTabRace.mjs', builders: ['multitab'] },
+      { script: 'scripts/testClearedStars.mjs', builders: ['multitab'], note: 'M4b Cleared Stars — clearedWords 기반 파생 별, 중복 지급 구조적 불가 증명' },
       { script: 'scripts/testMultiDeviceMerge.mjs', builders: ['wordlib', 'progress'] },
       { script: 'scripts/testFullProgressBackup.mjs', builders: ['wordlib'] },
       { script: 'scripts/testResetWordStatusBackup.mjs', builders: ['wordlib'] },
