@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { getStudentClass, getStudentClassId, getStudentUnit, getClassNames, getClassUnitNames, getTodaysAssignmentWordIds, getClassSettings, getClassIdByName, getStudentById, fetchHouseWeeklyScore, fetchHouseSeasonScore, isTextbookMode, getStudentPrimaryTextbook, getTextbookUnits } from '../utils/wordLibrary'
 // v2.9(2026-07-21, decision 0004 다중 교재) — 2개 이상 교재가 배정된
 // 학생에게만 나타나는 선택기. 0/1개면 컴포넌트 자체가 아무것도 렌더하지
@@ -112,13 +112,41 @@ function MicPrimeBtn() {
     }
   }
 
-  // 3분 데일리 리추얼(2026-07-22) — 준비가 끝났으면 아무것도 렌더하지
+  // 3분 데일리 리추얼(2026-07-22) — 준비가 끝나면 결국 아무것도 렌더하지
   // 않는다(상시 초록 배너 제거, 표시만 바뀜). 권한 요청/상태 머신 로직은
   // 전혀 안 바뀜 — 준비 전에는 기존 버튼이 그대로 보인다.
-  if (state === 'ready') return null
+  //
+  // Phase 1 UX(2026-08-03, LEARNING_UX_AUDIT.md B급) — 예전엔 state가
+  // 'ready'가 되는 순간 이 배너가 소리 없이 사라져서, 방금 누른 버튼이
+  // 실제로 뭘 했는지 확인할 틈이 없었다. ready 전환 직후 1.5초 동안만
+  // 같은 자리에 완료 문구를 보여준 뒤 언마운트한다(다른 화면의
+  // getMicStream() 호출로 준비된 경우도 동일하게 짧게 보여줌 — 상태 머신
+  // 자체는 손대지 않고 표시 타이밍만 추가).
+  const prevStateRef = useRef(state)
+  const [showReadyBanner, setShowReadyBanner] = useState(false)
+  useEffect(() => {
+    if (state === 'ready' && prevStateRef.current !== 'ready') {
+      setShowReadyBanner(true)
+      const t = setTimeout(() => setShowReadyBanner(false), 1500)
+      prevStateRef.current = state
+      return () => clearTimeout(t)
+    }
+    prevStateRef.current = state
+    return undefined
+  }, [state])
+
+  if (state === 'ready') {
+    if (!showReadyBanner) return null
+    return (
+      <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-3 text-center animate-paul-pop">
+        <p className="text-green-600 text-sm font-black">✅ 마이크 준비 완료!</p>
+      </div>
+    )
+  }
 
   return (
     <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-3 text-center">
+      <p className="text-purple-400 text-xs mb-2">따라 말하기에서 네 목소리를 듣고 칭찬해주려면 필요해요</p>
       <button onClick={handleClick} disabled={state === 'requesting'}
         className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white font-black py-3 rounded-xl btn-press">
         {state === 'requesting' ? '⏳ 허용을 눌러주세요...' : '🎤 마이크 준비하기'}

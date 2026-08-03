@@ -24,7 +24,7 @@ import { trackEvent, EV } from './utils/productEvents'
 import { assignDirections } from './utils/entranceTest'
 import { logSpellingReview } from './utils/spellingReviewApi'
 import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getClassSettings, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentPrimaryTextbook, getStudentClassId, getClassNames, getClassIdByName } from './utils/wordLibrary'
-import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech, getMicStream } from './utils/speech'
+import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech } from './utils/speech'
 // Curriculum Engine Phase 0(2026-08-01, docs/CURRICULUM_ENGINE.md §8) —
 // 교사 opt-in 예문 학습 단계. isFeatureEnabled('curriculumExamplesStudentUI')
 // (기본 false)가 꺼져 있으면 아래 prefetch effect가 조회를 아예 안 한다
@@ -518,11 +518,19 @@ function AppInner({ studentId, studentName, onLogout }) {
   // restoreChecked가 처음부터 true라 이 화면을 전혀 거치지 않는다.
   // (반드시 위의 모든 훅 호출 뒤에 있어야 함 — 훅 순서 규칙.)
   if (!studentData.restoreChecked) {
+    // 이 게이트가 렌더되는 학생은(restoreChecked 초기값 정의상) 이 기기의
+    // 로컬 기록이 이미 비어 있다 — "학습 기록을 불러오는 중"은 로컬에 뭔가
+    // 있어서 그걸 읽는 중이라는 오해를 준다. 실제로는 클라우드에 복원할
+    // 기록이 있는지 확인 중일 뿐이라, 첫 방문자에게는 더 정직하고 덜
+    // 불안한 문구로 분기한다(복원 로직/타이밍 자체는 무변경).
+    const hasNothingYet = Object.keys(studentData.history || {}).length === 0
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50">
         <div className="text-center">
           <div className="text-5xl mb-3 animate-bounce">📖</div>
-          <p className="text-purple-400 font-bold">학습 기록을 불러오는 중...</p>
+          <p className="text-purple-400 font-bold">{hasNothingYet ? '폴이 네 자리를 준비하고 있어요...' : '학습 기록을 불러오는 중...'}</p>
+          {/* 동명이인 오로그인 확인용 — 지금 로그인된 학생 이름을 대기 화면에도 표시 */}
+          <p className="text-purple-300 text-xs font-bold mt-1">{studentName}(으)로 로그인했어요</p>
         </div>
       </div>
     )
@@ -843,14 +851,25 @@ export default function App() {
     }
   }, [ready, student])
 
-  // Unlock AudioContext + warm up speechSynthesis + ask for microphone
-  // permission, all on the very first user gesture in the whole app
-  // (iOS/Android requirement — must happen inside a gesture handler).
-  // getMicStream() caches the granted stream module-wide, so no later
-  // getUserMedia() call — on any word, on any screen — asks again.
-  // touchstart covers mobile; pointerdown also covers PC mouse clicks.
+  // Unlock AudioContext + warm up speechSynthesis on the very first user
+  // gesture in the whole app (iOS/Android requirement — must happen inside
+  // a gesture handler). touchstart covers mobile; pointerdown also covers
+  // PC mouse clicks.
+  //
+  // Phase 1 UX(2026-08-03, LEARNING_UX_AUDIT.md B급) — this used to also
+  // call getMicStream() here, which meant a student's very first tap on the
+  // *login screen* (before they've even started learning) could trigger the
+  // OS microphone permission popup with zero context. Mic permission is now
+  // requested only from the home mic banner button (MicPrimeBtn in
+  // Dashboard.jsx), which already has an explanatory line next to it.
+  // getMicStream() still caches the granted stream module-wide once it IS
+  // requested there, so this is purely a timing change — no later
+  // getUserMedia() call asks again either way. NOTE: on iOS this pushes the
+  // first mic acquisition later than before (no longer piggybacked on the
+  // login tap); acceptable per the audit since it trades an unexplained
+  // popup for an explained one.
   useEffect(() => {
-    const handler = () => { unlockAudio(); primeSpeech(); getMicStream().catch(() => {}) }
+    const handler = () => { unlockAudio(); primeSpeech() }
     document.addEventListener('touchstart', handler, { once: true, passive: true })
     document.addEventListener('pointerdown', handler, { once: true, passive: true })
     return () => {
