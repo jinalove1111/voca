@@ -254,9 +254,12 @@ check('어제 별 획득 → yesterdaySprouted + 라벨', seed.yesterdaySprouted
 check('빈 history → 심은 것도 새싹도 없음', starSeedState(emptyStats, NOW).todayPlanted === false && starSeedState(emptyStats, NOW).yesterdaySprouted === false)
 check('별→씨앗 결정론(같은 날 같은 history → 같은 상태)', JSON.stringify(starSeedState(stats, NOW)) === JSON.stringify(seed))
 
-// 홈 밴드 요약 — computeWorldState 재사용, 꽃 수 = masteredCount
+// 홈 밴드 요약 — computeWorldState/gardenPlots 재사용, 칸 수 = 정원 화면과 동일
+// (Phase 2 M1(b) — masteredCount 기반은 학생 경로에서 구조적 영구 0이라
+// 정원 화면(EnglishGarden.jsx)이 실제로 쓰는 gardenPlots 칸 수로 정합)
 const band = gardenBandSummary(stats, {}, NOW)
-check('홈 밴드 꽃 수 = masteredCount', band.flowerCount === stats.masteredCount)
+const expectedFilledPlots = gardenPlots(stats).filter((p) => p.stage !== 'empty').length
+check('홈 밴드 칸 수 = gardenPlots(정원 화면과 동일 계산)', band.flowerCount === expectedFilledPlots && band.filledPlots === expectedFilledPlots)
 check('홈 밴드 오늘 심은 별 = history[오늘].starsEarned', band.seedsToday === 2)
 check('홈 밴드 growthPoints = clearedCount(월드 엔진 재사용)', band.growthPoints === stats.clearedCount && band.text.length > 0)
 

@@ -26,7 +26,7 @@
 //
 // 진실성 원칙은 폴의 기억(paulMemory.js)과 동일: 없는 데이터를 주장하지
 // 않고, 죄책감/압박 언어("왜 안 왔어" 류)를 쓰지 않는다.
-import { computeWorldState, gardenPlots } from './worldProgress.js'
+import { computeWorldState, gardenPlots, PLOT_COUNT } from './worldProgress.js'
 
 // ── 결정론 시드 — dayKey 문자열 해시(djb2). 무작위 함수 사용 금지. ──
 function hashString(s) {
@@ -149,24 +149,35 @@ export function starSeedState(stats, now = new Date()) {
 }
 
 /**
- * 홈 밴드 한 줄 요약 — 꽃 수(=masteredCount), 오늘 심은 별, 월드 단계.
- * computeWorldState(worldProgress.js) 재사용 — 별도 계산 중복 없음.
+ * 홈 밴드 한 줄 요약 — 정원 화면(EnglishGarden.jsx)과 같은 칸 수, 오늘
+ * 심은 별, 월드 단계. computeWorldState/gardenPlots(worldProgress.js)
+ * 재사용 — 별도 계산 중복 없음.
+ *
+ * Phase 2 M1(b, 2026-08-03) — 예전엔 flowerCount = stats.masteredCount였는데,
+ * masteredCount를 쓰는 코드가 학생 경로 어디에도 없어(레벨업 미션 3연속
+ * 정답 판정과는 다른 축) 라이브 전 학생이 항상 0이었다(구조적 영구 0 —
+ * "정원이 하나도 안 자란 것처럼" 보이는 표시 버그). 정원 화면은 이미
+ * gardenPlots(stats)의 filledPlots(칸 수)를 보여주고 있었으므로, 홈 밴드도
+ * "같은 함수·같은 숫자"로 바꿔 두 화면의 수치가 항상 일치하게 한다(운영자
+ * 결정 — masteredCount를 고치는 대신 정원 칸 수 기준으로 통일).
  */
 export function gardenBandSummary(stats, ctx = {}, now = new Date()) {
   const world = computeWorldState(stats)
-  const flowerCount = stats.masteredCount || 0
+  const plots = gardenPlots(stats)
+  const filledPlots = plots.filter((p) => p.stage !== 'empty').length
   const seedsToday = Number(stats.history?.[keyFor(now, 0)]?.starsEarned) || 0
   const currentStage = [...world.stages].reverse().find((s) => s.unlocked) || world.stages[0]
-  // flowerCount(masteredCount 기반)는 학생 경로에서 구조적으로 항상 0에
-  // 가깝다 — 판정 로직(cleared/masteredCount)은 건드리지 않고, 둘 다 0일
-  // 때만 "0송이"라는 사실 그대로의 문구 대신 정직한 시작 안내로 대체한다
-  // (Phase 1 UX, LEARNING_UX_AUDIT.md A급 7번). 정원 화면 자체의 성장
-  // 지표 불일치는 범위 밖(Phase 2).
-  const text = (flowerCount === 0 && seedsToday === 0)
+  // 둘 다 0일 때만 "0칸이 자랐어요"라는 사실 그대로의 문구 대신 정직한
+  // 시작 안내로 대체한다(Phase 1 UX, LEARNING_UX_AUDIT.md A급 7번 — 문구는
+  // 그대로 유지, 조건만 masteredCount에서 filledPlots로 정합).
+  const text = (filledPlots === 0 && seedsToday === 0)
     ? '🌱 첫 별을 심으면 정원이 시작돼요'
-    : `🌷 꽃 ${flowerCount}송이 · 오늘 심은 별 ${seedsToday}개 · ${currentStage.name}`
+    : `🌱 정원 ${filledPlots}/${PLOT_COUNT}칸이 자랐어요 · 오늘 심은 별 ${seedsToday}개 · ${currentStage.name}`
   return {
-    flowerCount,
+    // flowerCount 필드명은 하위 호환(기존 호출자/테스트가 참조)을 위해
+    // 유지하되, 값은 이제 filledPlots와 항상 같다.
+    flowerCount: filledPlots,
+    filledPlots,
     seedsToday,
     growthPoints: world.growthPoints,
     stageName: currentStage.name,
