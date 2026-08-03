@@ -1850,6 +1850,37 @@ export async function fetchXpTotals(studentIds) {
   return Object.fromEntries((data || []).map((r) => [r.student_id, Number(r.total_xp) || 0]))
 }
 
+// Phase 2 M4e(2026-08-04) — 대시보드 "Completed XP"(요구 7) 노출용. 위
+// fetchXpTotals와 완전히 같은 패턴(학생별 N번 조회 안 함, 쿼리 1회, 실패/
+// 테이블 미존재 시 빈 객체 폴백)이되, xp_totals VIEW(합계만 있음)가 아니라
+// xp_ledger 원장을 직접 읽어 event_type별로 나눠 합산한다 — Completed XP는
+// XP_EVENT_TABLE(paulRankShared.js)의 'word-view-complete' 이벤트만의
+// 누적값이고, xp_totals VIEW는 전체 이벤트 타입(listening/writing/quiz/
+// daily-mission 포함)을 이미 합쳐놓은 총합이라 그 VIEW에서는 이 값을 분리해낼
+// 수 없다. xp_ledger는 xp_totals VIEW와 마찬가지로 anon SELECT가 허용돼
+// 있으므로(공개 표시값, § fetchXpTotal 헤더 주석) 새 SQL/API 없이 그대로
+// 직접 조회한다.
+// 반환: { [studentId]: { [eventType]: amount } } — 여러 이벤트 타입을 한 번에
+// 물어봐도 쿼리는 여전히 1회(다음 라운드에서 다른 축을 추가할 때도 호출부가
+// eventTypes 배열만 늘리면 됨, 재구현 불필요).
+export async function fetchXpByEventType(studentIds, eventTypes) {
+  const ids = (studentIds || []).filter(Boolean)
+  const types = (eventTypes || []).filter(Boolean)
+  if (ids.length === 0 || types.length === 0) return {}
+  const { data, error } = await supabase
+    .from('xp_ledger')
+    .select('student_id, event_type, amount')
+    .in('student_id', ids)
+    .in('event_type', types)
+  if (error) return {} // 테이블 미존재(supabase_v2_3_paul_rank.sql 미실행)/일시 실패 — 전원 0 취급
+  const byStudent = {}
+  ;(data || []).forEach((r) => {
+    const bucket = (byStudent[r.student_id] ||= {})
+    bucket[r.event_type] = (bucket[r.event_type] || 0) + (Number(r.amount) || 0)
+  })
+  return byStudent
+}
+
 // v1.5 "알아요/모르겠어요" (Skip) 기능 — 단어별 숙지 상태를 word_status
 // 테이블에 저장한다. 학생 이름이 아니라 words.id(UUID, word.dbId)로 저장
 // 하므로 word_status.sql(v1.5) 마이그레이션이 먼저 반영돼 있어야 한다 —

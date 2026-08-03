@@ -175,5 +175,23 @@ console.log('\n12. computeStudentStats() — Completed %/Cleared % 정상 계산
   check('기존 cleared_count/mission 축과 무관 — 반환값에 mission cleared 필드 없음(축 분리 확인)', stats.cleared === undefined)
 }
 
+console.log('\n13. computeStudentStats() — Phase 2 M4e(2026-08-04, Completed XP 대시보드 노출) 회귀 가드: 이 공유 순수 함수는 여전히 XP를 전혀 다루지 않는다')
+{
+  // M4e는 AdminScreen.jsx의 load()에서 fetchXpByEventType(wordLibrary.js)을
+  // 직접 호출해 xp_ledger를 조회하고, 화면 렌더에서 별도 지역 변수
+  // (completedXpMap/completedXpFor)로만 다룬다 — computeStudentStats()에는
+  // 손대지 않았다(weeklyReport.js 파일 헤더의 "다음 라운드에서 fetchXpTotal
+  // 재사용을 허용할지는 운영자/CTO 판단 필요" 판단을 이번 라운드에서도 그대로
+  // 유지, 아직 그 판단이 내려지지 않았으므로 이 공유 모듈에 XP 축을 섞지
+  // 않음). 이 어서션은 "기존 호출부 무영향"의 직접 증거: 새 인자를 안 넘겨도
+  // (기존 시나리오 10~12와 동일 호출) 반환 객체에 xp 관련 키가 여전히 없다는
+  // 걸 확인해, 미래 세션이 이 축을 실수로 여기 섞으면(그 판단 없이) 이 테스트가
+  // 바로 깨지게 한다.
+  const r = { studentId: 's7', dailyRows: [], progress: { total_stars: 5, progress_data: { completedWords: ['apple'] } } }
+  const stats = computeStudentStats(r, {}, null, ['apple', 'banana'])
+  check('반환 객체에 xp/completedXp/totalXp 키 없음(축 분리 유지)', !('xp' in stats) && !('completedXp' in stats) && !('totalXp' in stats))
+  check('기존 필드(completedPct)는 정상 계산됨(회귀 없음)', stats.completedPct === 50)
+}
+
 console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n${failures}개 테스트 실패 ❌`)
 process.exit(failures === 0 ? 0 : 1)

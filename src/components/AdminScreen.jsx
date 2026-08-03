@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react'
 // 키웠다(엑셀 업로드는 자주 쓰는 기능이 아님). PdfUpload.handleFile이 이미
 // pdfjs-dist를 동적 import하는 선례가 있어 동일 패턴으로 handleFile 안에서만
 // 로드하도록 바꾼다(정적 import 제거, 동작은 동일).
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchAssignmentHistory, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, getClassIdByName, getStudents, wordSlug, isoDaysAgoStr } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchAssignmentHistory, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, fetchXpByEventType, getClassIdByName, getStudents, wordSlug, isoDaysAgoStr } from '../utils/wordLibrary'
 // 숙제 "자동 생성" 순수 플래너(2026-08-01) — 이 파일은 미리보기(체크박스
 // Set 채우기)에만 쓰고, 실제 저장은 항상 기존 setTodaysAssignment/
 // setAssignmentForDate(adminPin 듀얼패스) 그대로 사용한다.
@@ -731,6 +731,16 @@ const todayIsoStr = () => localIsoDateStr()
 // fetchDashboardData()로 한 번에 배치 조회해서 보여줌. Supabase 동기화가
 // 아직 안 된 학생(방금 가입해서 첫 동기화 전 등)은 "기록 없음"으로 표시될
 // 뿐 에러가 나지 않음.
+// Phase 2 M4e(2026-08-04) — "Completed XP"(요구 7)가 가리키는 event_type.
+// paulRankShared.js XP_EVENT_TABLE의 'word-view-complete' 키와 반드시
+// 동일해야 한다(M4c에서 이 이벤트가 round.completedToday, 즉 "완료" 신호
+// 기준으로 트리거되도록 재정의됨 — 그 파일 헤더 주석 참고). 문자열을 여기
+// 하드코딩하는 이유: paulRankShared.js는 이벤트 키를 별도 export로 노출하지
+// 않고(XP_EVENT_TABLE 객체 자체만 export), 이 화면은 그 표 전체가 아니라
+// 딱 이 한 축만 필요하다 — 표 전체를 import해 순회하는 것보다 이 쪽이
+// 더 명확하다고 판단(과도한 일반화 지양).
+const COMPLETED_XP_EVENT_TYPE = 'word-view-complete'
+
 function AdminDashboard({ adminPin } = {}) {
   const classList = getClassNames()
   const [selectedClass, setSelectedClass] = useState(classList[0] || '')
@@ -742,6 +752,7 @@ function AdminDashboard({ adminPin } = {}) {
   const [wordStatusSummary, setWordStatusSummary] = useState({}) // v1.5 — studentId -> {known,unknown,skipped,mastered}
   const [resettingId, setResettingId] = useState(null)
   const [xpTotals, setXpTotals] = useState({}) // Paul Rank System — studentId -> total_xp (xp_ledger 미존재 시 빈 객체, 전원 0 취급)
+  const [completedXpMap, setCompletedXpMap] = useState({}) // Phase 2 M4e(2026-08-04) — studentId -> { [eventType]: amount }, fetchXpByEventType 원본 그대로 보관(다음 라운드에 다른 축 추가 시 재사용)
 
   const wordLookup = useMemo(() => {
     if (!selectedClass) return {}
@@ -767,6 +778,11 @@ function AdminDashboard({ adminPin } = {}) {
 
   const statsFor = (r) => computeStudentStats(r, wordStatusSummary, null, getUnitWordSlugs(r.id))
 
+  // Phase 2 M4e(2026-08-04) — Completed XP(요구 7). completedXpMap이
+  // 비어있으면(xp_ledger 미실행/조회 실패) 0으로 안전 폴백(크래시 없음,
+  // fetchXpTotals의 xpTotals[r.id] || 0과 동일한 원칙).
+  const completedXpFor = (studentId) => completedXpMap[studentId]?.[COMPLETED_XP_EVENT_TYPE] || 0
+
   // 반 평균 Completed %(요약 줄용) — unitSize>0(분모 있음)인 학생만 평균에
   // 포함, 전원 분모 0(반에 단어 자체가 없음 등)이면 null로 안전하게 폴백.
   const classAvgCompletedPct = useMemo(() => {
@@ -791,7 +807,7 @@ function AdminDashboard({ adminPin } = {}) {
       // id 배열을 받는다(예전엔 이름 배열) — 동명이인이 같은 반에 있어도
       // 서로 섞이지 않는다.
       const ids = getStudentsInClass(className).map(s => s.id)
-      const [dashboardRows, wsSummary, xpMap] = await Promise.all([
+      const [dashboardRows, wsSummary, xpMap, completedXp] = await Promise.all([
         fetchDashboardData(ids),
         // v1.5 — word_status 마이그레이션(supabase_v1_5_word_status.sql) 전에도
         // 안전하게 빈 객체를 반환하도록 wordLibrary.js에서 이미 처리함.
@@ -799,11 +815,15 @@ function AdminDashboard({ adminPin } = {}) {
         // Paul Rank System — supabase_v2_3_paul_rank.sql 미실행이어도
         // fetchXpTotals 자체가 빈 객체로 폴백(크래시 없음).
         fetchXpTotals(ids).catch(() => ({})),
+        // Phase 2 M4e(2026-08-04) — Completed XP(요구 7). fetchXpTotals와
+        // 나란히 같은 Promise.all에 추가(학생별 N회 조회 금지) — 쿼리 1회 추가.
+        fetchXpByEventType(ids, [COMPLETED_XP_EVENT_TYPE]).catch(() => ({})),
       ])
       if (dashLoadReqIdRef.current !== reqId) return // 더 최신 반 선택이 있음 — 버림
       setRows(dashboardRows)
       setWordStatusSummary(wsSummary)
       setXpTotals(xpMap)
+      setCompletedXpMap(completedXp)
     } catch (err) {
       if (dashLoadReqIdRef.current !== reqId) return
       alert('반 현황을 불러오는 중 오류가 발생했어요: ' + (err.message || err))
@@ -825,6 +845,8 @@ function AdminDashboard({ adminPin } = {}) {
       .concat(['학습 완료 Completed(%, 현재 유닛 기준)', '실력 인증 Cleared(%, 현재 유닛 기준)'])
       // M4b(2026-08-04) Cleared Stars — 기존 Completed %/Cleared % 열 옆에 추가.
       .concat(['실력 별(Cleared Stars)'])
+      // M4e(2026-08-04) — Completed XP(요구 7). xp_ledger 원장 기준(파생 아님).
+      .concat(['🎓 Completed XP'])
       .concat(['최근 7일 완료 카테고리(0~4, 오늘부터 과거순)'])
     const body = rows.map(r => {
       const { studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws,
@@ -846,6 +868,7 @@ function AdminDashboard({ adminPin } = {}) {
         hasProgressData && completedPct !== null ? completedPct : '',
         hasProgressData && clearedWordPct !== null ? clearedWordPct : '',
         clearedStars,
+        completedXpFor(r.id),
         last7.map(d => d.categories_completed).join(' '),
       ]
     })
@@ -1001,6 +1024,12 @@ function AdminDashboard({ adminPin } = {}) {
                     구분해서 볼 수 있어야 함). clearedStars가 0이면 구 데이터일
                     수 있으므로 숨기지 않고 0으로 그대로 표시(정직성). */}
                 <p className="text-xs text-yellow-500">✨ 실력 별 {clearedStars}</p>
+                {/* Phase 2 M4e(2026-08-04, 요구 7) — Completed XP. xp_ledger
+                    원장에서 event_type='word-view-complete'만 골라 합산한
+                    값(파생 아님, xpTotals의 전체 합과는 다른 축) — M4b의 실력
+                    별(clearedStars) 표시 바로 옆에 배치. xp_ledger 미실행/조회
+                    실패 환경은 completedXpFor가 0으로 안전 폴백. */}
+                <p className="text-xs text-emerald-500">🎓 Completed XP {completedXpFor(r.id)}</p>
                 <p className="text-xs text-orange-400">🔥 {r.progress?.streak ?? 0}일 연속</p>
                 {/* Paul Rank System(2026-07-19) — XP는 별과 별개 원장(파생 아님).
                     xp_ledger 미실행 환경이면 xpTotals[r.id]가 undefined → 0으로 표시. */}
