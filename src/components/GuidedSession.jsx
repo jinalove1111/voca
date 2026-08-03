@@ -157,6 +157,12 @@ export default function GuidedSession({
       accuracy: s.answered > 0 ? s.correct / s.answered : null,
       paceMsPerWord: wordCount > 0 ? (Date.now() - s.startedAt) / wordCount : null,
       wordCount,
+      // 완료 카드가 "이번 세션 퀴즈 N/M"을 보여주기 위한 원시 카운트 —
+      // accuracy(비율)는 이미 있었지만 분자/분모가 없어 카드에 실제 성적을
+      // 쓸 수 없었다(감사 ③5). statsRef가 이미 세고 있던 값을 그대로
+      // lastStats에 실어 보낼 뿐, 새 집계/저장 없음(순수 로컬 state).
+      answered: s.answered,
+      correct: s.correct,
     })
     setSessionsCompleted((n) => n + 1)
     setPhase('done')
@@ -242,10 +248,15 @@ export default function GuidedSession({
     // 없음(docs/reading/08 §5 톤 규칙). 우선순위: 오늘 씨앗 심음 >
     // 내일 복습 대기 > 기본 안내. 두 prop 모두 기본값이 falsy라 App.jsx가
     // 아직 안 넘겨도 항상 ③으로 자연스럽게 폴백.
+    // reviewQueueCount는 이월된(적어도 하루 지난) 복습 대기열만 세고
+    // 오늘 이 세션에서 새로 틀린 단어는 포함하지 않는다(감사 A급 12번) —
+    // 정확한 오늘자 합계를 내려면 prop 계약을 바꿔야 해서(SKIP 대상),
+    // 대신 숫자를 아예 주장하지 않는 문구로 낮춘다. "복습 대기가 있다"는
+    // 사실 자체(boolean)만 기존 prop으로 표시.
     const tomorrowLine = todayPlanted
       ? '내일 아침, 새싹이 나 있을 거예요 🌱'
       : reviewQueueCount > 0
-        ? `내일 복습할 단어 ${reviewQueueCount}개가 기다리고 있어요`
+        ? '틀린 단어는 내일 다시 만나요'
         : '내일도 3분이면 충분해요'
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-indigo-500 to-purple-600">
@@ -262,6 +273,20 @@ export default function GuidedSession({
           <p className="font-black text-3xl text-gray-800">
             오늘 {display.wordsCompleted} <span className="text-gray-300">/</span> {display.totalWords} 단어
           </p>
+          {/* 이번 세션 실제 성적 — lastStats는 finishSession이 이미 다음
+              세션 크기 계산용으로 채워뒀던 값(answered/correct)을 그대로
+              보여줄 뿐, 새 집계·저장 없음(감사 ③5). retryWords는 이번
+              세션 본 코스에서 틀려 재시도했던 단어들(이미 useMemo로 계산됨). */}
+          {lastStats && lastStats.answered > 0 && (
+            <p className="text-gray-500 text-sm font-bold -mt-2">
+              이번 세션 퀴즈 {lastStats.correct}/{lastStats.answered}
+              {retryWords.length > 0 && (
+                <span className="block text-gray-400 text-xs font-normal mt-1">
+                  다시 푼 단어: {retryWords.map((w) => w.word).join(', ')}
+                </span>
+              )}
+            </p>
+          )}
           <p className="text-gray-400 text-xs -mt-2">{tomorrowLine}</p>
           <div className="space-y-3">
             {/* 오늘의 핵심 문장 오퍼 — readingStudentUI 플래그 ON + 아직
@@ -273,13 +298,23 @@ export default function GuidedSession({
                 ⭐ 오늘의 핵심 문장 도전!
               </button>
             )}
+            {/* 버튼 위계 반전(감사 B급 + ③5) — allDone이 아니면(=아직 더
+                할 단어가 남았으면) "계속하기"가 실제로 이어가야 할 주
+                행동인데 예전엔 "오늘은 여기까지"가 강조색(그라데이션)을
+                가져가고 있었다. 문구·로직은 그대로, 강조 스타일만
+                allDone 여부에 따라 서로 바꾼다. allDone이면(더 할 단어가
+                없어 "여기까지"가 유일한 실제 행동) 기존처럼 강조 유지. */}
             <button onClick={onDone}
-              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-black py-4 rounded-2xl btn-press text-lg">
+              className={`w-full font-black py-4 rounded-2xl btn-press text-lg ${
+                allDone
+                  ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white'
+                  : 'border-2 border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-500'
+              }`}>
               🏠 오늘은 여기까지
             </button>
             {!allDone && (
               <button onClick={startNextSession}
-                className="w-full border-2 border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-black py-4 rounded-2xl btn-press text-lg">
+                className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-black py-4 rounded-2xl btn-press text-lg">
                 ▶ 다음 세션 계속하기
               </button>
             )}
