@@ -365,7 +365,7 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
           <button
             onClick={playWord}
             className="min-h-[44px] py-3 rounded-xl font-bold text-xs btn-press bg-white/25 text-white hover:bg-white/35 transition-colors">
-            🔁 다시 공부
+            🔁 다시 듣기
           </button>
           <button
             onClick={() => { onWordKnown?.(word.dbId); onSkip?.() }}
@@ -578,9 +578,17 @@ function QuizStep({ word, classWords, onDone, onMarkQuizSolved, onQuizAnswer }) 
       </div>
 
       {isAnswered && (
+        // 오답인데 초록 "완료!" 문구/색은 실패를 성공처럼 보여주는 거짓
+        // 신호였음(감사 A급 11번) — isCorrect일 때만 성공 색·문구를 쓰고,
+        // 오답이면 색·문구를 중립으로 낮춘다. isCorrect 판정 자체(위
+        // handleSelect)는 변경 없음, 이 버튼의 표시만 갈라짐.
         <button onClick={onDone}
-          className="w-full bg-gradient-to-r from-green-400 to-teal-500 text-white font-black py-4 rounded-3xl btn-press card-shadow text-lg animate-slide-up">
-          ✅ 완료! 다음 단어 →
+          className={`w-full font-black py-4 rounded-3xl btn-press card-shadow text-lg animate-slide-up ${
+            isCorrect
+              ? 'bg-gradient-to-r from-green-400 to-teal-500 text-white'
+              : 'bg-gray-100 text-purple-700 border-2 border-purple-200'
+          }`}>
+          {isCorrect ? '✅ 완료! 다음 단어 →' : '다음 단어 →'}
         </button>
       )}
     </div>

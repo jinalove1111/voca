@@ -144,7 +144,11 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess, onAttempt }) {
         onAttempt?.()
         if (blob.size > 0) {
           setPhase('success')
-          setMsg('발음 성공! ⭐ 1개 획득!')
+          // "발음 성공!"은 실제로는 정확도 판정이 아니라 녹음이 됐다는
+          // 뜻일 뿐(blob.size>0 = 성공, 위 주석 참고) — WordDetail.jsx의
+          // SpeechBtn(ungraded 분기, "✅ 녹음 완료!")과 같은 정직한 문구로
+          // 통일. 별 지급 조건(blob.size>0)은 그대로, 문구만 변경.
+          setMsg('녹음 완료! ⭐ 1개 획득!')
           onSuccess()
         } else {
           setTries(prev => {
@@ -199,7 +203,7 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess, onAttempt }) {
   const btnLabel =
     !canRecord            ? '⏳ 잠깐만요...' :
     phase === 'listening' ? '👂 지금 말해보세요!' :
-    phase === 'success'   ? '✅ 발음 성공!' :
+    phase === 'success'   ? '✅ 녹음 완료!' :
     phase === 'fail'      ? '🔄 다시 시도' :
                             '🎤 발음하기 (탭하면 단어 먼저 들려줘요)'
 
@@ -501,7 +505,7 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
           {pronDone && (
             <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-4 mt-4 text-center animate-slide-up">
               <p className="font-black text-green-700 text-lg">⭐ 별 1개 획득!</p>
-              <p className="text-green-600 text-sm">정답 + 발음 성공!</p>
+              <p className="text-green-600 text-sm">정답 + 녹음 완료!</p>
             </div>
           )}
         </div>
