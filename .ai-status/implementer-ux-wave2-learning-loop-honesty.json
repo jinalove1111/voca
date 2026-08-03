@@ -1,0 +1,23 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "ux-wave2-learning-loop-honesty",
+  "task": "Phase 1 UX 개선 웨이브 2 — 학습 루프 정직성/피드백(LEARNING_UX_AUDIT.md 근거, 문구/표시/피드백/탭 수만, 보상·게이트·판정 로직 무변경)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-03T01:00:00Z",
+  "updated_at": "2026-08-03T01:43:19Z",
+  "files_owned": [
+    "src/components/QuizGame.jsx",
+    "src/components/WordDetail.jsx",
+    "src/components/SpellingQuestion.jsx",
+    "src/components/GuidedSession.jsx"
+  ],
+  "files_read": [
+    "src/utils/spelling.js",
+    "package.json"
+  ],
+  "summary": "4개 소커밋 완료·push 완료: (1) QuizGame/WordDetail 발음 판정 문구를 '녹음 완료!' 계열로 통일 + WordDetail '다시 공부'->'다시 듣기' 라벨 일치 + 오답 후 QuizStep 버튼 중립화(isCorrect===false만). (2) WordDetail PronounceStep '모르겠어요' 클릭 시 발음 자동재생 + memoryTip 카드 자동 노출(onWordUnknown 호출은 그대로). (3) SpellingQuestion en2kr 방향의 3회 오답 잠금해제 보상을 발음 대신 첫 글자 힌트(spellingHintFor)로 전환; '2회 오답부터 힌트 자동노출'은 hintEnabled=false로 힌트를 끈 교사 설정과 직접 충돌 위험이 있어 SKIP(사유 커밋 메시지에 명시). (4) GuidedSession 완료 카드에 '이번 세션 퀴즈 N/M' + 재시도 단어 목록 추가(기존 statsRef/retryWords 재사용, 새 집계 없음), !allDone 버튼 강조 스타일 반전(계속하기가 주 버튼), '내일 복습 N개' 문구에서 부정확한 숫자(reviewQueueCount가 오늘 오답 미포함, A급 12번) 제거하고 존재 여부만 표시. 커밋마다 build + verify:quiz/writing/student/daily-ritual 전부 PASS 확인 후 개별 push.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 대기. SpellingQuestion 항목 2(2회 오답부터 강제 힌트)는 SKIP 상태이므로, 운영자가 hintEnabled 설정 의미를 재정의하고 싶다면 별도 작업으로 재검토 필요."
+}
