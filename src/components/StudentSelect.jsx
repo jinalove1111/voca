@@ -41,11 +41,11 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
         return
       }
       const MESSAGES = {
-        not_found: '해당 이름의 학생을 찾을 수 없어요. 처음이면 아래 "처음이에요" 탭에서 등록해주세요.',
+        not_found: '이름 철자를 확인해보고, 선생님이 등록해줬다면 위 "PIN 만들기" 탭을 눌러보세요.',
         invalid_format: 'PIN은 숫자 4자리예요.',
         wrong_pin: '이름 또는 PIN이 올바르지 않아요.',
         locked: '⚠️ PIN을 여러 번 틀려서 잠시 로그인할 수 없어요. 5분 후 다시 시도하거나 선생님께 문의해주세요.',
-        no_pin_setup: '아직 PIN이 설정되지 않은 계정이에요. 선생님(관리자)에게 문의해주세요.',
+        no_pin_setup: '위 "PIN 만들기" 탭에서 네 이름을 찾아 PIN을 만들어봐요.',
       }
       setLoginError(MESSAGES[data.reason] || '로그인에 실패했어요. 다시 시도해주세요.')
     } catch (err) {
@@ -68,6 +68,7 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
   const regPinConfirmRef = useRef(null)
 
   const handleRegister = async () => {
+    if (classNames.length === 0) { setRegError('지금은 등록할 수 없어요 — 선생님께 말해주세요.'); return }
     const name = regName.trim()
     if (!name)            { setRegError('이름을 입력해주세요!'); return }
     if (name.length > 10) { setRegError('이름은 10글자 이하로 해주세요!'); return }
@@ -216,6 +217,16 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
     onSelect({ id: setupPicked.id, name: setupPicked.name, className: setupClass, unitName: setupPicked.unitName })
   }
 
+  // PIN 설정 성공 축하 문구를 잠깐 보여준 뒤 자동으로 진입 — "바로
+  // 시작하기!" 버튼을 또 눌러야 하는 순수 추가 탭 제거(버튼은 자동 진입이
+  // 실패하거나 사용자가 더 빨리 넘어가고 싶을 때를 위한 폴백으로 유지).
+  useEffect(() => {
+    if (!setupDone) return
+    const timer = setTimeout(() => { handleSetupStart() }, 1500)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setupDone])
+
   const busy = loggingIn || registering || settingUp
   const tabBtn = (key, label, sub) => (
     <button onClick={() => { setMode(key); setLoginError(''); setRegError(''); setSetupError('') }} disabled={busy}
@@ -363,7 +374,7 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
               onKeyDown={e => e.key === 'Enter' && (regClass ? regPinRef.current?.focus() : setRegError('반을 선택해주세요!'))}
               placeholder="이름 입력..." maxLength={10} disabled={registering}
               className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:bg-gray-50" />
-            {classNames.length > 0 && (
+            {classNames.length > 0 ? (
               <select value={regClass} disabled={registering} onChange={e => {
                   const nextClass = e.target.value
                   setRegClass(nextClass)
@@ -374,6 +385,8 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
                 <option value="">반 선택</option>
                 {classNames.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
+            ) : (
+              <p className="text-xs text-gray-400 text-center py-2">지금은 등록할 수 없어요 — 선생님께 말해주세요.</p>
             )}
             {regClass && (
               <>
@@ -399,7 +412,7 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
               className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold text-center tracking-[0.5em] focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:bg-gray-50" />
             <p className="text-[11px] text-purple-400 px-1">PIN은 다음에 로그인할 때 필요해요. 잊지 않게 잘 기억해두세요!</p>
             {regError && <p className="text-red-500 text-xs text-center" role="alert">⚠️ {regError}</p>}
-            <button onClick={handleRegister} disabled={registering}
+            <button onClick={handleRegister} disabled={registering || classNames.length === 0}
               className="w-full bg-purple-500 text-white font-black py-3 rounded-xl btn-press hover:bg-purple-600 disabled:opacity-50">
               {registering ? '⏳ 등록하는 중...' : '등록하고 시작하기!'}
             </button>
