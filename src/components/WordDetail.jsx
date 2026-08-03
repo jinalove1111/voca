@@ -291,12 +291,10 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
   // 1~3초 걸려 아무 반응이 없어 보이는 문제 보완.
   const [replaying, setReplaying] = useState(false)
   // "모르겠어요"가 실제로 도와주게(감사 B급 18번) — 예전엔 버튼 색만
-  // 바뀌고 아무 반응이 없었다. 누르면 발음을 자동 재생하고, 이 단어에
-  // 암기 팁이 있으면 카드를 펼쳐 보여준다. 기존 데이터(word.memoryTip)·
-  // 재생 함수만 재사용(새 에셋 0). onWordUnknown 호출(상태 저장)은 원래
-  // 동작 그대로 유지.
-  const [showTip, setShowTip] = useState(false)
-
+  // 바뀌고 아무 반응이 없었다. 누르면 발음을 자동 재생한다(기존
+  // 재생 함수 재사용, 새 에셋 0). onWordUnknown 호출(상태 저장)은 원래
+  // 동작 그대로 유지. 암기 팁 카드는 항상 노출(아래 참고) — "모르겠어요"를
+  // 누르지 않아도 이미 보이던 정보를 가리면 안 된다(2026-08-03 회귀 원복).
   const playWord = () => {
     setReplaying(true)
     playWordAudio(word.wordAudioUrl, word.word, {
@@ -310,7 +308,6 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
   const handleUnknown = () => {
     onWordUnknown?.(word.dbId)
     playWord()
-    if (word.memoryTip) setShowTip(true)
   }
 
   return (
@@ -389,8 +386,8 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
         </div>
       </div>
 
-      {word.memoryTip && showTip && (
-        <div className="bg-yellow-50 border-2 border-yellow-200 rounded-3xl p-4 card-shadow animate-slide-up">
+      {word.memoryTip && (
+        <div className="bg-yellow-50 border-2 border-yellow-200 rounded-3xl p-4 card-shadow">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xl">🧠</span>
             <span className="font-black text-yellow-800 text-sm">이렇게 외워봐요!</span>
