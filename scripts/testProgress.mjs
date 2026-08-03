@@ -25,6 +25,7 @@ const { pathToFileURL } = await import('node:url')
 const {
   freshRecord, freshRound, freshHistoryDay, calcStreak, countCategoriesCompleted, GOAL, migrateOldData,
   isEmptyRecord, spellingComboBonus, SPELLING_COMBO_BONUS, movePlacementInList,
+  normalizeRecord, mergeProgressRecords,
 } = await import(pathToFileURL(BUNDLE).href)
 
 const STORE_KEY = 'paul_easy_progress'
@@ -392,6 +393,61 @@ console.log('\n10.5. Phase 2 M3(2026-08-03) — completedWords/clearedWords 학�
   check('cleared(레벨업 미션)는 completedWords/clearedWords 갱신과 무관하게 그대로', rec.cleared.length === 1 && rec.cleared[0] === 'apple')
   check('completedWords 갱신이 clearedWords 배열 참조를 바꾸지 않음(별개 배열)', rec.completedWords !== rec.clearedWords)
   check('completed 처리된 단어가 cleared(레벨업 미션) 배열엔 자동으로 안 들어감(축 독립)', !rec.cleared.includes('banana'))
+}
+
+console.log('\n10.6. Phase 2 M4a(2026-08-04) — round.completedToday 일별 카운터(관측 배선, 보상 판정 무변경)')
+{
+  // 자정 리셋 — round.date가 오늘이 아니면 normalizeRecord가 round를 통째로
+  // freshRound()로 리셋한다(완전히 기존 wordsViewed와 동일한 경로) — 영구
+  // completedWords는 이 리셋과 무관하게 그대로 보존되는지가 핵심(축 분리 증명).
+  const staleRaw = { completedWords: ['apple'], round: { date: 'Mon Jan 01 2001', completedToday: ['a', 'b', 'c', 'd', 'e'] } }
+  const normalized = normalizeRecord(staleRaw, 'MidnightKid')
+  check('자정 롤오버 — round.completedToday가 0으로 리셋됨', normalized.round.completedToday.length === 0)
+  check('자정 롤오버 — completedWords(영구)는 그대로 보존(영구/일별 축 분리 증명)',
+    normalized.completedWords.length === 1 && normalized.completedWords[0] === 'apple')
+
+  // union 병합 — local[a,b] + cloud[b,c] = [a,b,c](중복 b는 1개만)
+  const localRaw = { round: { ...freshRound(), completedToday: ['a', 'b'] } }
+  const cloudRaw = { round: { ...freshRound(), completedToday: ['b', 'c'] } }
+  const merged = mergeProgressRecords(localRaw, cloudRaw, 'MergeKid')
+  check('union 병합 — local[a,b]+cloud[b,c] = [a,b,c](중복 b 1개)',
+    merged.round.completedToday.length === 3 && ['a', 'b', 'c'].every(w => merged.round.completedToday.includes(w)))
+
+  // markWordCompleted는 hook-internal(patch 경유) 콜백이라 여기서 직접
+  // import할 수 없다 — 실제 구현(src/hooks/useStudent.js)과 정확히 같은
+  // "completedWords/round.completedToday 각각 독립적으로 이미 있으면 no-op"
+  // 규칙을 그대로 시뮬레이션(위 10.5의 markCompleted 시뮬레이션과 동일 패턴).
+  const markWordCompletedSim = (rec, slug) => {
+    const alreadyPermanent = rec.completedWords.includes(slug)
+    const alreadyToday = rec.round.completedToday.includes(slug)
+    return {
+      ...rec,
+      completedWords: alreadyPermanent ? rec.completedWords : [...rec.completedWords, slug],
+      round: { ...rec.round, completedToday: alreadyToday ? rec.round.completedToday : [...rec.round.completedToday, slug] },
+    }
+  }
+
+  // 멱등 — markWordCompleted('apple') x3 -> completedToday.length === 1
+  let idemRec = freshRecord('IdemKid')
+  idemRec = markWordCompletedSim(idemRec, 'apple')
+  idemRec = markWordCompletedSim(idemRec, 'apple')
+  idemRec = markWordCompletedSim(idemRec, 'apple')
+  check('markWordCompleted(apple) x3 — round.completedToday.length === 1(멱등)', idemRec.round.completedToday.length === 1)
+  check('markWordCompleted(apple) x3 — completedWords.length === 1(기존 동작 그대로)', idemRec.completedWords.length === 1)
+
+  // 복습일 시나리오 — 유닛을 한 바퀴 돈 뒤(completedWords에 이미 기록) 자정
+  // 롤오버 후 같은 단어를 다시 완료해도 completedToday는 정상적으로 1로
+  // 기록되고(그날의 관측치는 살아있음), completedWords는 여전히 1(멱등 —
+  // 여기서 XP를 판정한다면 무한 파밍이 안 된다는 근거, 이번 마일스톤에서
+  // 실제 판정 연결은 없음).
+  let reviewRec = freshRecord('ReviewKid')
+  reviewRec = markWordCompletedSim(reviewRec, 'apple') // 1라운드차 완료
+  check('복습일 준비 — 1라운드차 completedWords/completedToday 둘 다 1', reviewRec.completedWords.length === 1 && reviewRec.round.completedToday.length === 1)
+  reviewRec = { ...reviewRec, round: freshRound() } // 자정 롤오버(normalizeRecord와 동일 — round만 리셋)
+  check('자정 롤오버 직후 — completedToday === 0, completedWords는 1 보존', reviewRec.round.completedToday.length === 0 && reviewRec.completedWords.length === 1)
+  reviewRec = markWordCompletedSim(reviewRec, 'apple') // 복습일에 같은 단어 재완료
+  check('복습일 시나리오 — 재완료 후 completedToday.length === 1(오늘 처음이라 정상 기록됨, XP 0 회귀 없음)', reviewRec.round.completedToday.length === 1)
+  check('복습일 시나리오 — completedWords.length는 여전히 1(멱등, 증가하지 않음)', reviewRec.completedWords.length === 1)
 }
 
 console.log('\n10. wordStatus (v1.5 Skip 기능) — 새 필드가 기존 로직을 깨뜨리지 않는지')

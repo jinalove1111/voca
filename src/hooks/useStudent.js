@@ -191,6 +191,14 @@ const freshRound = () => ({
   // 영구 상태(missions[].done/cleared 등)가 맡는다 — 이 로그는 "같은 tick/같은
   // 세션 안에서의 우발적 중복 호출"을 막는 2차 안전망 역할.
   starGrantLog: [],
+  // Phase 2 M4a(2026-08-04, 관측 배선) — 영구 completedWords(M3, 멱등)를
+  // XP/미션 판정에 그대로 쓰면 "유닛을 한 바퀴 돈 뒤 복습하는 날"에는
+  // 이미 완료 표시된 단어라 다시 append되지 않아 그날 XP/미션 슬롯이 0이
+  // 되는 회귀가 생긴다(복습일 함정). wordsViewed와 정확히 같은 성격의
+  // 일별(자정 리셋) dedup 카운터를 completedWords와 별도로 둬서, 향후
+  // "오늘 학습완료 수"를 보상 판정에 연결해야 할 때 이 축을 쓴다 — 이번
+  // 마일스톤에서는 어떤 보상 판정도 이 필드를 읽지 않는다(순수 관측 배선).
+  completedToday: [],
 })
 const freshHistoryDay = () => ({
   studied: true,
@@ -384,7 +392,7 @@ function normalizeRecord(raw, id) {
   rec.lastTextbookClassId = typeof rec.lastTextbookClassId === 'string' ? rec.lastTextbookClassId : null
   const r = asObject(rec.round)
   if (r.date === todayStr()) {
-    rec.round = { ...freshRound(), ...r, wordsViewed: asArray(r.wordsViewed), pronunciationOkWordIds: asArray(r.pronunciationOkWordIds), spellingWrongToday: asArray(r.spellingWrongToday), starGrantLog: asArray(r.starGrantLog) }
+    rec.round = { ...freshRound(), ...r, wordsViewed: asArray(r.wordsViewed), pronunciationOkWordIds: asArray(r.pronunciationOkWordIds), spellingWrongToday: asArray(r.spellingWrongToday), starGrantLog: asArray(r.starGrantLog), completedToday: asArray(r.completedToday) }
   } else {
     // 하루가 바뀌어 round가 리셋되기 직전 — 어제(또는 그 전) 못 끝낸
     // spellingWrongToday를 영구 복습 대기열로 이월(유실 방지, freshRecord()
@@ -540,6 +548,10 @@ export function mergeProgressRecords(localRaw, cloudRaw, id) {
       // 이유로 합집합 — 두 기기 각각에서 이미 지급된 이벤트가 병합 후 다시
       // 지급되지 않도록.
       starGrantLog: unionList(local.round.starGrantLog, cloud.round.starGrantLog),
+      // Phase 2 M4a — completedToday도 wordsViewed와 동일한 이유로 합집합
+      // (두 기기 각각에서 오늘 이미 완료 기록된 단어가 병합 후에도 유실되지
+      // 않도록).
+      completedToday: unionList(local.round.completedToday, cloud.round.completedToday),
     },
     history,
     milestoneStreak: maxNum(local.milestoneStreak, cloud.milestoneStreak),
@@ -926,9 +938,24 @@ export function useStudent(studentId, legacyName) {
   // 중복 호출돼도(더블탭, 재시도 등) 배열이 부풀지 않는다. 기존
   // answerMission/cleared(레벨업 미션)와는 완전히 독립된 필드라 서로의
   // 쓰기를 절대 건드리지 않는다(freshRecord 헤더 주석 참고).
+  // Phase 2 M4a(2026-08-04) — 영구 completedWords(기존 동작, 한 줄도 안
+  // 바뀜)에 더해, round.completedToday(일별, wordsViewed와 동일한 자정
+  // 리셋/dedup 성격)도 같은 patch에서 함께 멱등 append한다. 두 필드는
+  // 서로 다른 배열이라 각자 독립적으로 dedup 판단(완료일에 이미 있어도
+  // 오늘 처음이면 completedToday에는 추가됨 — 복습일 시나리오의 정확한
+  // 의도). 보상 판정은 이번 마일스톤에서 이 필드를 전혀 읽지 않는다(순수
+  // 관측 배선, freshRound 헤더 주석 참고).
   const markWordCompleted = useCallback((slug) => {
     if (!slug) return
-    patch(prev => prev.completedWords.includes(slug) ? {} : { completedWords: [...prev.completedWords, slug] })
+    patch(prev => {
+      const alreadyPermanent = prev.completedWords.includes(slug)
+      const alreadyToday = prev.round.completedToday.includes(slug)
+      if (alreadyPermanent && alreadyToday) return {}
+      return {
+        completedWords: alreadyPermanent ? prev.completedWords : [...prev.completedWords, slug],
+        round: alreadyToday ? prev.round : { ...prev.round, completedToday: [...prev.round.completedToday, slug] },
+      }
+    })
   }, [patch])
 
   const markWordCleared = useCallback((slug) => {
