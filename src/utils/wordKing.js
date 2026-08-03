@@ -41,6 +41,22 @@
 // `detectWordKingOutliers()` — 서버 검증을 추가하지 않고도 관리자가 수동
 // 트리거 결과 화면에서 "이번 주 유난히 튄 학생"을 눈으로 훑어볼 수 있는
 // 저비용 완화책(신규 쿼리 없이 이미 집계한 값을 정렬만 다르게 보여줌).
+//
+// ── Phase 2 M4f(2026-08-04) 추가 판단: cleared(성장 앨범 밀스톤 축)를 이
+// 랭킹 가중치에 넣지 않는 이유 ─────────────────────────────────────────
+// M4b/M4f가 도입한 clearedWords(퀴즈 1회 이상 정답, 성장 앨범 밀스톤/Cleared
+// Stars의 입력)는 useStudent.js record 안 `progress_data`(anon 쓰기 허용
+// blob, syncStudentProgress가 그대로 업로드)에서 파생된 값이다 — 바로 위
+// "이유" 문단이 ②쓰기시험 정답률/③mastered를 배제한 것과 정확히 같은
+// 논리(anon이 직접 쓸 수 있는 값 = 클라이언트-신뢰 지점 = 이 파일이 명시적
+// 으로 배제 대상으로 삼은 갭)다. `WORD_KING_WEIGHTS`는 이번 라운드에서도
+// 무변경(`{ accuracy: 0.6, xp: 0.4 }`) — cleared용 새 가중치 슬롯을 추가하지
+// 않는다. 다만 completed/cleared 학습 신호는 이미 xp 경로를 통해 간접
+// 반영되어 있다는 점은 알아둘 것: XP_EVENT_TABLE(paulRankShared.js)의
+// `word-view-complete`가 M4c에서 completedToday 기준으로 재정의됐고, 그
+// XP는 `xp_ledger`(서버 전용 쓰기, api/grant-xp.js)를 통해 이 파일의 `xp`
+// 가중치(0.4)에 이미 들어간다 — 즉 completed는 "간접 반영", cleared는
+// "미반영"이며 둘 다 이 파일의 코드는 전혀 바뀌지 않는다.
 
 // ── 1) 가중치/상수 — 이 파일 한 곳에서만 정의(GAME_DESIGN.md §2 인플레이션
 // 방지 원칙과 같은 "숫자는 한 곳에만" 관례). 운영자가 실제 데이터를 보고

@@ -15,10 +15,29 @@ export const CLEARED_MILESTONES = [10, 50, 100, 200]
 export const STREAK_MILESTONES = [7, 30]
 export const COMEBACK_GAP_DAYS = 7
 
+// Phase 2 M4f(2026-08-04) — cleared(퀴즈 1회 이상 정답, Phase 2 M3/M4b가
+// 도입한 신규 병렬 축) 기반 성장 앨범 밀스톤. 위 CLEARED_MILESTONES(레벨업
+// 미션 3연속 정답 기준, cleared/clearedCount)와는 완전히 다른 입력 —
+// stats.clearedWordCount(attachmentCore.js가 이미 파생해둔 clearedWords.length,
+// 이 파일에서 새로 파생하지 않음)를 쓴다. 모자(hatSystem.js) 8종 조건은 절대
+// 손대지 않는다 — clearedWords는 mission 기반 cleared보다 10~20배 빨리
+// 쌓여서, 그 임계를 그대로 재사용하면 모자가 몇 주 만에 전부 소진된다(운영자
+// 지시). 이 밀스톤 축은 그 위험이 없는 "추가 축"으로만 둔다.
+//
+// 임계값 근거(실측, 2026-08-04 라이브 데이터 — 학생별 누적 퀴즈 정답 수):
+// 중앙값 7 / 평균 20.7 / 최대 141. 30은 상위 약 25%만 도달하는 "성취
+// 이정표"로, 300은 도달 학생이 사실상 없는 장기 목표로 설정(향후 데이터가
+// 쌓이면 이 배열만 조정하면 됨 — CLEARED_MILESTONES와 동일한 관례).
+export const CLEARED_WORD_MILESTONES = [30, 100, 300]
+
 // 정적 정의(동적 id 계열 — unit/textbook/hat/improved — 는 아래 detect에서 생성)
 const label = {
   firstMission: { emoji: '🌟', title: '첫 데일리 미션 완료!', desc: '처음으로 하루 미션 4개를 모두 완료했어요' },
   cleared: (n) => ({ emoji: '📖', title: `단어 ${n}개 클리어!`, desc: `클리어한 단어가 ${n}개를 넘었어요` }),
+  // Phase 2 M4f — cleared(퀴즈 1회 이상 정답) 축 전용 라벨. 위 cleared(레벨업
+  // 미션 기반) 라벨과 이모지/문구를 의도적으로 다르게 둬서(📚 vs 📖) 앨범
+  // 타임라인에서 두 축이 같은 이벤트처럼 헷갈리지 않게 한다.
+  clearedWord: (n) => ({ emoji: '📚', title: `실력 인증 단어 ${n}개 달성!`, desc: `퀴즈로 실력을 인증한 단어가 ${n}개를 넘었어요` }),
   streak: (n) => ({ emoji: '🔥', title: `${n}일 연속 학습!`, desc: `${n}일 동안 하루도 빠짐없이 공부했어요` }),
   unit: (name) => ({ emoji: '🎓', title: `${name} 완주!`, desc: '유닛의 모든 단어를 클리어했어요' }),
   textbook: (name) => ({ emoji: '🏆', title: `${name} 교재 완주!`, desc: '교재의 모든 유닛을 끝냈어요' }),
@@ -53,6 +72,11 @@ export function detectNewMilestones(stats, ctx, existingIds, now = new Date()) {
   }
   for (const n of CLEARED_MILESTONES) {
     if (stats.clearedCount >= n) push(`cleared-${n}`, 'cleared', label.cleared(n), { threshold: n })
+  }
+  // Phase 2 M4f — 별개 축(clearedWordCount, 위 헤더 주석 참고). id 접두사를
+  // `cleared-word-`로 분리해 위 `cleared-${n}` id와 절대 충돌하지 않는다.
+  for (const n of CLEARED_WORD_MILESTONES) {
+    if (stats.clearedWordCount >= n) push(`cleared-word-${n}`, 'clearedWord', label.clearedWord(n), { threshold: n })
   }
   for (const n of STREAK_MILESTONES) {
     if (stats.streak >= n) push(`streak-${n}`, 'streak', label.streak(n), { threshold: n })
