@@ -1,8 +1,99 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-08-03 (30차, Phase 2 M0 P0 버그 수정 — 애착 시스템 단어 ID
-축 정합. `useAttachment.js`의 `buildWordsByUnit`이 UUID 축 단어를 그대로
-넘겨 유닛완주/졸업모자/박물관/책장/폴의 기억이 전부 죽어 있던 것을 수정.
-상세는 아래 30차 섹션)_
+_최종 갱신: 2026-08-03 (31차, Phase 2 M1 — 표시 정직성 5건: 홈 복습 진입점
+추가, 홈 정원 지표를 정원 화면과 일치(정원 칸 수 기준으로 통일), WordBrowser
+진도 바 축 정정(현재 유닛 교집합), useAttachment 주석 정정, 수여식 큐
+append+dedup. cleared 정의/보상 판정 기준/DB 스키마 전부 무변경. 상세는
+아래 31차 섹션)_
+
+## 2026-08-03 (31차) — Phase 2 M1: 표시 정직성 (implementer, 단독 세션)
+
+M0(`575b7f8`)로 단어 ID 축이 슬러그로 정합된 위에서, 표시/안전장치만
+다루는 마일스톤. `cleared` 정의·쓰기 지점, 보상 판정 기준(모자/밀스톤/완주
+조건), DB 스키마는 전부 무변경.
+
+### (a) 홈에 복습 진입점 — `src/components/Dashboard.jsx`
+
+`spellingWrongToday`(오늘 틀림)와 `spellingReviewQueue`(자정을 넘겨도
+유지되는 이월 대기열)의 합이 0보다 클 때만, `RecommendationBanner` 안에
+보조 버튼("🔁 틀린 단어 다시 보기 (N개)")이 나타나 `onGo('spellingReview')`로
+1탭 이동한다. 기존 `rec`(레벨업 미션/보너스 게임/이어서 학습 등) 선택
+로직·우선순위는 전혀 안 건드리고, 그 아래에 조건부로 추가만 했다 — 새
+카드 없음(홈 화면 ≥80% 불변 원칙), 큐가 비면(쓰기시험 기본 OFF인 학생)
+버튼 자체가 렌더되지 않는다(기존 도달 경로인 선물상자 자동 이동/세션
+완료 카드 조건부 버튼과 별개의 세 번째 경로).
+
+### (b) 홈 정원 지표를 정원 화면과 일치 — `src/utils/attachment/paulTown.js`
+
+**전(버그)**: `gardenBandSummary`의 `flowerCount = stats.masteredCount`.
+`masteredCount`를 실제로 쓰는 코드가 학생 경로 어디에도 없어(레벨업 미션
+3연속 정답 판정과는 다른 축) 라이브 전 학생이 구조적으로 항상 0 — "정원이
+하나도 안 자란 것처럼" 보이는 영구 표시 버그.
+
+**후(정정)**: 정원 화면(`EnglishGarden.jsx`)이 실제로 쓰는 계산과 완전히
+동일한 함수·같은 숫자로 통일 —
+`gardenPlots(stats).filter(p => p.stage !== 'empty').length`
+(`worldProgress.js`의 `gardenPlots`, `PLOT_COUNT` 재사용, 새 계산 재구현
+없음). 반환 필드는 하위 호환을 위해 `flowerCount`(값은 이제 칸 수)를
+유지하고 `filledPlots`를 추가로 노출.
+
+문구도 "🌷 꽃 N송이 · 오늘 심은 별 N개 · {stageName}"에서 채워진 칸을
+정직하게 표현하는 "🌱 정원 N/9칸이 자랐어요 · 오늘 심은 별 N개 ·
+{stageName}"으로 변경. Phase 1에서 넣은 빈 상태 문구("첫 별을 심으면
+정원이 시작돼요", `flowerCount === 0 && seedsToday === 0`일 때)는 조건의
+변수만 `filledPlots` 기준으로 바뀌었을 뿐 텍스트 그대로 유지.
+
+`tests/harness/runAttachment.mjs`의 "홈 밴드 꽃 수 = masteredCount"
+단언은 옛 버그 정의를 그대로 단언하고 있었으므로, 새 정의(정원 화면과
+동일한 `gardenPlots` 기반 칸 수)로 갱신했다(129개 단언 그대로 유지, 내용만
+정정).
+
+### (c) 진도 바 축 정정 — `src/components/WordBrowser.jsx`
+
+**전(버그)**: 분자 `cleared.length`(전 유닛 누적 id 목록, 전역 축) / 분모
+`words.length`(현재 유닛 단어만) — 두 축 자체가 달랐다. 설계 검증 실측:
+집합을 넓히면(전역 축 그대로 쓰면) 100%에 고정되는 학생 15명 vs 실제
+현재 유닛 완주자 13명.
+
+**후(정정)**: M0로 `cleared`와 `words[].id`가 같은 슬러그 축을 쓰게 됐으므로,
+분자를 **"cleared ∩ 현재 유닛 단어"**(`clearedInUnitCount` — `words`를
+순회하며 `clearedSet.has(w.id)`인 것만 카운트)로 바꿨다. 이제 분자가
+구조적으로 분모를 절대 넘을 수 없어, 2026-08-02에 넣었던 `Math.min` 클램프
+(유닛 전환 직후 방어용)를 제거했다 — 새 계산 자체가 그 문제를 구조적으로
+막는다. `isCleared`(단어별 뱃지)도 같은 `clearedSet`을 재사용하도록
+정리(동작 동일, 계산 중복만 제거).
+
+### (d) 잘못된 주석 정정 — `src/hooks/useAttachment.js`
+
+파일 헤더의 "Dashboard가 화면 전환마다 리마운트되므로 학습 후 자연히
+재판정된다"는 실제와 달랐다 — `useAttachment`는 `App.jsx` 최상단에서
+호출되고, `App.jsx`는 화면 전환(`setScreen`)마다 리마운트되지 않는다(같은
+컴포넌트 안 조건부 렌더만 바뀜). 실제로는 훅이 세션 내내 마운트를 유지하고,
+판정은 `ranRef` 가드 때문에 studentId당 딱 1회(로그인/복원 완료 직후)만
+돈다 — 학습 세션 중간 재판정 없음. 코드 동작은 전혀 안 바꾸고 주석만
+정정했다.
+
+### (e) 수여식 큐 유실 방지 — `src/hooks/useAttachment.js`
+
+`setCeremonyQueue(newHats.map(...))`가 덮어쓰기였다 — 대기 중인 수여식이
+있는 상태에서 새 획득이 발생하면 앞의 것이 사라질 수 있는 구조였다. 함수형
+업데이트로 바꿔 기존 큐에 append하되, 같은 `hatId`가 큐에 두 번 들어가지
+않게 이미 있는 id는 걸러낸다(`Set` 기반 dedup). 지급 자체(`grantHats`)는
+이미 멱등이므로 표시 큐만 다뤘다.
+
+### 검증 결과
+
+- `npm run build`: PASS(에러/신규 경고 없음)
+- `npm run verify:attachment`: PASS(129개 단언 — 홈 밴드 칸 수 단언 내용
+  정정 포함, 개수 불변)
+- `npm run verify:student`: PASS(4개 스크립트, 이번 변경과 무관한 도메인)
+- `npm run verify:daily-ritual`: PASS(118개 단언, 무관 도메인 확인 차 실행)
+- `npm run verify:quiz`: PASS(2개 스크립트, 무관 도메인 확인 차 실행)
+
+### 변경 파일
+
+`src/components/Dashboard.jsx`, `src/components/WordBrowser.jsx`,
+`src/hooks/useAttachment.js`, `src/utils/attachment/paulTown.js`,
+`tests/harness/runAttachment.mjs`. DB 스키마/API/새 영속 필드 변경 없음.
 
 ## 2026-08-03 (30차) — Phase 2 M0: 애착 시스템 단어 ID 축 정합 P0 수정 (implementer, 단독 세션)
 
