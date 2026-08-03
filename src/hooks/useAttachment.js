@@ -12,8 +12,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { deriveAttachmentStats, completedUnits } from '../utils/attachment/attachmentCore'
 import { evaluateHatUnlocks, hatById } from '../utils/attachment/hatSystem'
 import { detectNewMilestones } from '../utils/attachment/milestones'
-import { getStudentClass, getClassUnits, getClassWords, getClassIdByName } from '../utils/wordLibrary'
+import { getStudentClass, getClassUnits, getClassWords, getClassIdByName, wordSlug } from '../utils/wordLibrary'
 import { trackEvent, EV } from '../utils/productEvents'
+
+// getClassWords()가 돌려주는 단어 객체의 id는 words.id(UUID) — 애착 시스템의
+// cleared/missions/spellingWrongToday/wordStatus 키는 전부 단어 텍스트
+// 슬러그(mapWordRow의 id: wordSlug(cw.word), wordLibrary.js)다. 두 축이
+// 다르면 completedUnits()의 clearedSet.has(w.id)가 항상 false가 되고
+// masteryTierFor의 word.dbId 조회도 dbId 필드 자체가 없어 항상 비게 된다
+// (2026-08-03 P0 — 유닛완주/졸업모자/박물관/책장/폴의 기억 전부 죽어
+// 있었음, 라이브 증거: unit-complete 밀스톤 0건/hat_graduation 0명).
+//
+// 고치는 자리는 여기(이 훅) 하나뿐이어야 한다 — getClassWords() 자체는
+// 절대 바꾸지 않는다(AdminScreen 등 다른 소비처가 UUID 축을 그대로
+// 전제하고 쓴다). wordSlug는 기존 단일 원본(wordLibrary.js, 2026-08-02
+// 단일화됨)을 그대로 재사용 — 새 슬러그 로직을 만들지 않는다.
+function toAttachmentWord(raw) {
+  return { ...raw, id: wordSlug(raw.word), dbId: raw.id }
+}
 
 // 반의 유닛별 단어 목록 — 유닛 완료/박물관/책장이 공유하는 형태.
 // wordLibrary 캐시는 동기 조회라 여기서 바로 구성한다.
@@ -27,7 +43,7 @@ export function buildWordsByUnit(studentId) {
     wordsByUnit: units.map((u) => ({
       unitId: u.id,
       unitName: u.name,
-      words: getClassWords(className, u.name),
+      words: getClassWords(className, u.name).map(toAttachmentWord),
     })),
   }
 }

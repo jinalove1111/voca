@@ -1,9 +1,133 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-08-03 (29차, Phase 1 UX 개선 마감 — `LEARNING_UX_AUDIT.md`
-1단계("거짓말부터 없앤다") 반영 8커밋 + 회귀 1건 자체 발견·원복 + 전체
-재검증. 상세는 아래 29차 섹션)_
+_최종 갱신: 2026-08-03 (30차, Phase 2 M0 P0 버그 수정 — 애착 시스템 단어 ID
+축 정합. `useAttachment.js`의 `buildWordsByUnit`이 UUID 축 단어를 그대로
+넘겨 유닛완주/졸업모자/박물관/책장/폴의 기억이 전부 죽어 있던 것을 수정.
+상세는 아래 30차 섹션)_
 
-## 2026-08-03 (29차) — Phase 1 UX 개선 마감 (implementer, 단독 세션)
+## 2026-08-03 (30차) — Phase 2 M0: 애착 시스템 단어 ID 축 정합 P0 수정 (implementer, 단독 세션)
+
+### 버그 원인
+
+`useAttachment.js`의 `buildWordsByUnit`이 `wordLibrary.getClassWords()`를
+그대로 썼는데, 이 함수가 돌려주는 단어 객체의 `id`는 `words.id`(UUID,
+`wordLibrary.js:226-241`)다. 반면 `useStudent.js`가 실제로 쌓는
+`cleared`/`missions`/`spellingWrongToday`/`wordStatus`는 전부 단어 텍스트
+**슬러그**(`mapWordRow`의 `id: wordSlug(cw.word)`, `wordLibrary.js:1960
+부근`) 축이다. 두 축이 어긋나 있어:
+
+- `attachmentCore.completedUnits`의 `clearedSet.has(w.id)`가 어떤 학생에게도
+  true가 될 수 없었다(UUID를 슬러그 집합에서 찾으니 항상 없음) →
+  유닛완주/교재완주/졸업모자(`hat_graduation`)/책장이 전부 죽어 있었다.
+- `masteryTierFor`가 `word.dbId ? wordStatus[word.dbId] : undefined`로
+  `word_status`를 조회하는데, 수정 전엔 `word.dbId` 필드 자체가 없어서
+  (`{...raw}` 스프레드만 하고 `dbId`를 안 붙임) 항상 `undefined` → 박물관
+  실버/골드 판정이 `wordStatus`를 절대 못 읽었다(clearedSet 경유 실버만
+  가능, 골드는 미션 경유로만 가능해 실질적으로 반쪽).
+- `wordTextById`(폴의 기억 실단어 언급용)가 `w.id`(UUID)를 키로 저장했는데,
+  소비처(`paulMemory.js`의 `wordText(wid)`)는 `missedWordIds`/
+  `improvedWordIds`(전부 슬러그)로 조회 — 항상 미스 → 실단어 언급 템플릿이
+  전부 카운트-폴백 문구로만 나갔다.
+
+라이브 증거(수정 전, 읽기 전용 집계): `unit-complete-*` 밀스톤 0건(142명
+전수), `hat_graduation` 보유자 0명, `word_status` 1,508행이 있는데 박물관
+골드/실버가 `word_status` 경유로는 절대 부여 안 됨.
+
+### 수정 내용
+
+`src/hooks/useAttachment.js`에 `toAttachmentWord(raw)` 어댑터를 추가 —
+`getClassWords()`가 돌려주는 원본을 `{ ...raw, id: wordSlug(raw.word),
+dbId: raw.id }`로 감싸 `buildWordsByUnit`의 `words` 배열에 적용. 슬러그
+계산은 새로 만들지 않고 `wordLibrary.js`의 기존 단일 원본 `wordSlug`를
+그대로 import해서 재사용(2026-08-02 단일화된 함수, `AdminScreen.jsx`/
+`AssignmentHistoryPanel.jsx`가 쓰는 것과 완전히 동일한 정의).
+
+**하위호환**: `getClassWords()` 자체는 시그니처/반환 전혀 안 건드림 —
+`AdminScreen.jsx` 등 UUID 축을 그대로 전제하는 다른 소비처에 영향 없음.
+`completedUnits`/`masteryTierFor` 등 `attachmentCore.js`의 판정 기준 자체도
+안 건드림(입력 축만 맞췄다).
+
+### 소급 보상 0건 실측 근거 (읽기 전용 라이브 집계)
+
+`scripts/.tmp/`(커밋 안 함, gitignore)의 일회성 스크립트로 확인:
+- 전체 학생 833명 중 `cleared`(student_progress.progress_data) 길이 > 0인
+  학생 15명, `cleared` 최댓값 13.
+- 반별 유닛 단어 수(26~50개) 대비 `cleared` 최댓값(13)이 구조적으로 못
+  미침 — 상한 후보(자기 반 최소 유닛 크기 이상) 6명까지 좁혀도, 실제
+  슬러그 교집합(그 유닛 전 단어가 `cleared`에 포함)으로 재확인하면
+  **완주 학생 0명** — 수정 전/후 동일하게 유지됨(즉 이번 수정이 오지급을
+  유발하지 않음, 기존 학생 진행도로는 애초에 유닛 완주 임계값에 도달하지
+  못하는 구조).
+- 동일 스크립트로 실제 `buildWordsByUnit(studentId)`를 라이브 반/학생
+  데이터로 직접 호출해 확인: 수정 전 `word.id="5d6779ca-…"(UUID)` /
+  `word.dbId=undefined` → 수정 후 `word.id="order"`(슬러그) /
+  `word.dbId="5d6779ca-…"`(UUID 보존) — `git stash`로 수정 전 코드를 잠깐
+  복원해 실제로 버그 모양이 재현되는지 먼저 확인한 뒤(규칙 15) 수정을
+  다시 적용했다.
+- 실제 `word_status`(1,508행, `known`/`unknown`만 존재, `mastered` 행
+  없음) 라이브 데이터로 `masteryTierFor`를 직접 호출: 수정 전 모양
+  (`dbId` 없음)으로는 항상 `'none'`류 판정, 수정 후 모양으로는 `known`
+  행이 정확히 `'silver'`로 판정됨 — 박물관 실버 티어가 실제로 되살아남을
+  확인.
+
+### 하네스 보강
+
+`tests/harness/runAttachment.mjs`에 12번째 섹션("buildWordsByUnit 축 정합
+회귀가드") 추가 — 6단언(총 129개, 기존 123 + 6):
+- "버그 모양"(UUID id, dbId 없음)과 "고친 모양"(슬러그 id + dbId)을 각각
+  실제 소비 함수(`completedUnits`/`masteryTierFor`, 재구현 아님 — 그대로
+  import)에 태워 대비 확인.
+- 소스 텍스트 계약 점검 2건: `buildWordsByUnit`이 `wordLibrary`의 단일
+  원본 `wordSlug`를 재사용하는지(새 슬러그 로직 재구현 금지 확인),
+  `id: wordSlug(...)` + `dbId: raw.id` 패턴이 실제 소스에 있는지.
+- `useAttachment.js` 자체는 `wordLibrary`→`supabaseClient`를 거치는
+  브라우저 전용 훅이라(`import.meta.env.VITE_SUPABASE_URL` 등) 이 순수
+  Node 하네스가 직접 import해서 실행할 수 없다 — 그래서 실제 라이브 실행
+  검증은 위 "소급 보상 0건" 절의 일회성 esbuild 번들 스크립트
+  (`scripts/.tmp/`, 커밋 안 함)로 별도 수행했고, 커밋되는 회귀가드는
+  실제 소비 함수 + 소스 계약 점검으로 구성했다(무엇이 훅으로/하네스로
+  실제 강제되고 무엇이 이번 세션의 일회성 라이브 검증이었는지 정직하게
+  구분 — 규칙 18).
+
+### 검증 결과
+
+- `npm run build`: PASS(에러/신규 경고 없음)
+- `npm run verify:attachment`: PASS(129개 단언, 신규 6개 포함)
+- `npm run verify:student`: PASS(4개 스크립트 — QA 락다운 SKIP 라인은
+  기존과 동일한 환경 요인, 오늘 변경과 무관)
+- `npm run verify:daily-ritual`: PASS(118개 단언, 이번 변경과 무관한
+  도메인이라 영향 없음 확인 차 실행)
+
+### 되살아난 기능 (수정 후 실측 확인)
+
+- **유닛 완주**: `completedUnits`가 이제 슬러그 축 `cleared`와 실제로
+  교집합을 계산 — 유닛의 모든 단어가 `cleared`에 있으면 완료로 인식(라이브
+  집계상 현재 완주자는 0명이지만, 이는 진행도가 임계값에 아직 안 닿아서지
+  판정 로직이 죽어 있어서가 아님 — 앞으로 학생이 실제로 한 유닛을 다 채우면
+  이제는 정확히 인식됨).
+- **졸업모자(`hat_graduation`)**: `evaluateHatUnlocks`가 `completedUnits`
+  결과를 입력으로 쓰므로 위 수정으로 함께 되살아남(전용 하네스 단언은 기존
+  123개 안에 이미 있었고 이번에 안 건드림 — 여기선 입력 축만 고침).
+- **단어 박물관 실버/골드**: `masteryTierFor`가 이제 `word.dbId`로
+  `word_status`를 실제로 조회 — 라이브 `known` 행에 대해 실측으로
+  `'silver'` 반환 확인(수정 전엔 `dbId` 부재로 항상 스킵됐음).
+- **폴의 기억 실단어 언급**: `wordTextById` 맵의 키가 이제 슬러그라
+  `missedWordIds`/`improvedWordIds`(둘 다 슬러그) 조회가 실제로 히트 —
+  "어제 '{실단어}' 단어가 조금 어려웠죠?" 류 템플릿이 이제 진짜 단어를
+  넣을 수 있음(수정 전엔 항상 미스 → 카운트-폴백 문구로만 나갔음).
+- **책장(Bookshelf)**: `getBookshelf`가 `completedUnits` 결과를 그대로
+  쓰므로 동일하게 되살아남.
+
+### 남은 리스크 / 알려진 갭
+
+- 라이브 학생 진행도(`cleared` 최대 13)로는 당장 유닛 완주 보상이 눈에
+  보이게 나가는 학생이 없다 — 회귀 확인은 됐지만 "실제 학생 화면에서 유닛
+  완주 축하 문구가 뜨는지"는 이번 세션 범위 밖(다음 세션에서 학생 진행도가
+  더 쌓인 뒤 재확인 필요).
+- `word_status`에 `mastered` 상태 행이 현재 라이브 데이터에 전혀 없다
+  (`known`/`unknown`만 1,508행) — 골드 티어의 `wordStatus[dbId]==='mastered'`
+  분기는 이번 세션에서 라이브 데이터로 검증 못 함(합성 픽스처로만 검증됨,
+  기존 하네스 5번 섹션). 별도 조사 대상은 아니고, 미션 경유 골드 판정은
+  정상 동작.
 
 ### 배경
 

@@ -381,6 +381,53 @@ check('건물 카드의 이동 화면 id — 박물관/도서관/시계탑', TOW
 const storySrc = readFileSync(fileURLToPath(new URL('../../src/utils/attachment/storyFoundation.js', import.meta.url)), 'utf8')
 check('storyFoundation.js는 import 0의 순수 모듈(supabase/localStorage/random 없음)', ![...storySrc.matchAll(/^import /gm)].length && !/supabase/i.test(storySrc) && !storySrc.includes('localStorage') && !storySrc.includes('Math.random'))
 
+// ── 12) buildWordsByUnit 축 정합 회귀가드 (2026-08-03 P0) ──
+console.log('\n-- 12) useAttachment.buildWordsByUnit — 슬러그 축 정합 회귀가드(2026-08-03 P0)')
+// 배경: wordLibrary.getClassWords()가 돌려주는 원본 단어 객체의 id는
+// words.id(UUID)다. 반면 useStudent.js가 cleared/missions에 쌓는 키는
+// word 텍스트 슬러그(mapWordRow의 id: wordSlug(cw.word))다. useAttachment.js
+// 의 buildWordsByUnit이 이 변환(슬러그 id 재부여 + UUID는 dbId로 보존)을
+// 하지 않으면 completedUnits/masteryTierFor(둘 다 재구현 없이 실제 소비
+// 함수를 그대로 import해서 쓴다)가 절대 true를 못 낸다 — 라이브 증거:
+// unit-complete 밀스톤 0건(142명 전수), hat_graduation 보유자 0명.
+// 아래는 "버그가 났던 모양"과 "고친 모양" 둘 다로 같은 소비 함수를 돌려,
+// 이 축이 안 맞으면 실제로 어떻게 죽는지/맞으면 어떻게 되사는지를 직접
+// 확인한다(하네스가 라이브 DB/번들 없이도 잡아내는 회귀 가드).
+const buggyShapedWord = { id: '5d6779ca-1098-4147-9989-56c1650b3a3b', dbId: undefined, word: 'order' } // 수정 전 실제 관측 모양
+const fixedShapedWord = { id: 'order', dbId: '5d6779ca-1098-4147-9989-56c1650b3a3b', word: 'order' } // 수정 후 모양(wordSlug('order')==='order')
+const clearedAfterStudy = new Set(['order']) // useStudent.js가 실제로 쌓는 축 — 항상 슬러그
+check(
+  '버그 모양(UUID id)이면 completedUnits가 실제 클리어를 절대 못 알아본다(회귀 재현)',
+  completedUnits([{ unitId: 'u', unitName: 'U', words: [buggyShapedWord] }], clearedAfterStudy).length === 0,
+)
+check(
+  '고친 모양(슬러그 id)이면 completedUnits가 정확히 유닛 완료를 인식',
+  completedUnits([{ unitId: 'u', unitName: 'U', words: [fixedShapedWord] }], clearedAfterStudy).length === 1,
+)
+const wordStatusGold = { [fixedShapedWord.dbId]: 'mastered' } // word_status 테이블의 실제 UUID 키 형태
+check(
+  '고친 모양(dbId 실존)이면 masteryTierFor가 word_status를 실제로 조회해 gold 판정',
+  masteryTierFor(fixedShapedWord, { clearedSet: new Set(), wordStatus: wordStatusGold, missionByWordId: new Map() }) === 'gold',
+)
+check(
+  '버그 모양(dbId 부재)이면 같은 word_status로도 절대 gold가 될 수 없다(박물관 티어 회귀 재현)',
+  masteryTierFor(buggyShapedWord, { clearedSet: new Set(), wordStatus: wordStatusGold, missionByWordId: new Map() }) !== 'gold',
+)
+// 실제 구현 소스가 이 계약을 지키는지 — wordSlug 재사용(새 슬러그 로직
+// 재구현 금지, 2026-08-02 단일 원본화) + dbId 보존 여부를 구조로 확인.
+// (useAttachment.js 자체는 wordLibrary→supabaseClient를 거치는 브라우저
+// 전용 훅이라 이 순수 하네스가 직접 import해서 실행할 수 없음 — 그래서
+// 위 단언들은 실제 소비 함수로, 이 단언은 소스 계약으로 나눠 확인한다.)
+const useAttachmentSrc = readFileSync(fileURLToPath(new URL('../../src/hooks/useAttachment.js', import.meta.url)), 'utf8')
+check(
+  'buildWordsByUnit이 wordLibrary의 단일 원본 wordSlug를 재사용(새 슬러그 로직 재구현 없음)',
+  /import\s*\{[^}]*\bwordSlug\b[^}]*\}\s*from\s*['"]\.\.\/utils\/wordLibrary['"]/.test(useAttachmentSrc),
+)
+check(
+  'buildWordsByUnit이 getClassWords 원본을 그대로 반환하지 않고 슬러그 id + dbId를 함께 부여',
+  /id:\s*wordSlug\(/.test(useAttachmentSrc) && /dbId:\s*raw\.id/.test(useAttachmentSrc),
+)
+
 // ── summary ──
 console.log('\n=== summary ===')
 if (failed === 0) {
