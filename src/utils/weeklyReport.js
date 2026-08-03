@@ -69,7 +69,30 @@ function localIsoDateStr(d = new Date()) {
 // 막으려는 바로 그 사고), 정확하지 않은 값을 보여주는 대신 이번 라운드는
 // 범위를 축소했다. 다음 라운드에서 `fetchXpTotal` 1회 재사용을 허용할지는
 // 운영자/CTO 판단이 필요 — `handoff.md` 최신 세션 기록 참고.
-export function computeStudentStats(r, wordStatusSummary = {}, houseId = null) {
+// Phase 2 M4(2026-08-03) — 4번째 인자 `unitWordSlugs`(선택, 기본 빈 배열)로
+// "Completed %"(학습 진행률)/"Cleared %"(실력 판단) 두 지표를 추가한다.
+// 운영자 확정 정의(2026-08-03): completed = GuidedSession 필수 단계 전부
+// 통과(학습 진행률), cleared = 퀴즈 1회 이상 정답(실력 판단) — 둘 다
+// useStudent.js의 신규 병렬 필드(completedWords/clearedWords, 레벨업 미션
+// 기반 기존 cleared/cleared_count와 완전히 별개 축)에서만 파생한다. 새
+// Supabase 쿼리 0건 — `r.progress.progress_data`는 fetchDashboardData가
+// 이미 `select('*')`로 가져오는 JSONB 컬럼이라 새 필드가 그 안에 있으면
+// 추가 조회 없이 그대로 읽힌다(위 ticketBalance와 동일한 원칙).
+//
+// 분모는 "그 학생의 현재 유닛 단어 수"(unitWordSlugs.length) — 호출부
+// (AdminScreen.jsx)가 wordLibrary.js의 getClassWords(className, unitName)로
+// 계산한 슬러그 배열을 넘겨준다(이 파일 자신은 wordLibrary.js를 import하지
+// 않는다 — 파일 헤더의 "번들링 없이 bare node 실행 가능" 불변조건 유지,
+// houseId 인자와 동일한 패턴). unitWordSlugs를 안 넘기면(기존 호출부) 분모가
+// 0이라 completedPct/clearedPct가 항상 null — 기존 반환 필드는 전혀 안
+// 바뀐다(회귀 없음).
+//
+// 정직성 원칙: "새 신호가 아예 없는 구 학생"(progress_data 자체가 없거나
+// 비어있는, 즉 한 번도 동기화 안 된 학생)과 "0%"를 구분해야 한다 —
+// hasProgressData가 false면 화면은 "아직 기록 없음"을 보여줘야 하고,
+// hasProgressData가 true인데 completedWords/clearedWords가 비어있으면
+// 진짜 0%다. 두 경우 다 크래시 없이 안전하게 처리(asArray류 방어와 동일).
+export function computeStudentStats(r, wordStatusSummary = {}, houseId = null, unitWordSlugs = []) {
   const today = r.dailyRows.find(d => d.date === localIsoDateStr())
   // "오늘 공부함" 기준은 categories_completed > 0이 아니라 오늘 날짜 row
   // 존재 여부다 — 단어 하나만 봐도(카테고리 미완료) 로컬 history는 이미
@@ -88,7 +111,24 @@ export function computeStudentStats(r, wordStatusSummary = {}, houseId = null) {
   const ws = (r.studentId && wordStatusSummary[r.studentId]) || { known: 0, unknown: 0, skipped: 0, mastered: 0 }
   const ticketBalance = sumTicketBalance(r.progress?.progress_data?.ticketLedger || [])
   const house = getHouseById(houseId)
-  return { today, studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws, ticketBalance, house }
+
+  const progressData = r.progress?.progress_data
+  const hasProgressData = !!(progressData && Object.keys(progressData).length > 0)
+  const completedWords = Array.isArray(progressData?.completedWords) ? progressData.completedWords : []
+  const clearedWords = Array.isArray(progressData?.clearedWords) ? progressData.clearedWords : []
+  const unitSlugSet = new Set(Array.isArray(unitWordSlugs) ? unitWordSlugs : [])
+  const unitSize = unitSlugSet.size
+  const completedInUnitCount = completedWords.filter(w => unitSlugSet.has(w)).length
+  const clearedWordInUnitCount = clearedWords.filter(w => unitSlugSet.has(w)).length
+  // 분모(unitSize)가 0이면(호출부가 unitWordSlugs를 안 넘겼거나, 반/유닛에
+  // 단어가 아직 없음) 퍼센트는 계산 불가 — null로 남겨 "0%"와 구분한다.
+  const completedPct = unitSize > 0 ? Math.round((completedInUnitCount / unitSize) * 100) : null
+  const clearedWordPct = unitSize > 0 ? Math.round((clearedWordInUnitCount / unitSize) * 100) : null
+
+  return {
+    today, studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws, ticketBalance, house,
+    hasProgressData, unitSize, completedInUnitCount, clearedWordInUnitCount, completedPct, clearedWordPct,
+  }
 }
 
 // v1.3 "학부모에게 보낼 수 있는 요약 문구" — 규칙 기반 템플릿으로만 생성

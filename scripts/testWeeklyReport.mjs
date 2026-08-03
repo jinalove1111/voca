@@ -126,5 +126,54 @@ console.log('\n9. buildWeeklyReport() — ticketBalance가 0이면 티켓 줄은
   check('티켓 0개면 티켓 줄은 안 생김', !report.includes('모은 티켓'))
 }
 
+console.log('\n10. computeStudentStats() — Phase 2 M4: Completed %(학습 진행률)/Cleared %(실력 판단), unitWordSlugs 안 넘기면(기존 호출부) 회귀 없음')
+{
+  const r = { studentId: 's4', dailyRows: [], progress: null }
+  const stats = computeStudentStats(r, {})
+  check('unitWordSlugs 4번째 인자 없이도 크래시 없음', stats.completedPct === null && stats.clearedWordPct === null)
+  check('분모 0(unitSize) → 퍼센트는 null(0%와 구분)', stats.unitSize === 0)
+  check('progress 자체가 없으면 hasProgressData === false', stats.hasProgressData === false)
+}
+
+console.log('\n11. computeStudentStats() — 새 필드(completedWords/clearedWords)가 없는 구 progress_data(회귀가드: 크래시 없이 0으로 처리, "기록 없음"과는 구분)')
+{
+  // 구 레코드 모양 그대로(Phase 2 M3 이전 blob) — completedWords/clearedWords
+  // 키 자체가 없음. progress_data는 있으므로(동기화는 됐음) hasProgressData
+  // 는 true, 다만 두 배열은 asArray류 방어로 빈 배열 취급.
+  const r = {
+    studentId: 's5', dailyRows: [],
+    progress: { total_stars: 20, progress_data: { totalStars: 20, cleared: ['apple', 'banana'] } },
+  }
+  const unitWordSlugs = ['apple', 'banana', 'cherry']
+  const stats = computeStudentStats(r, {}, null, unitWordSlugs)
+  check('구 blob이어도 크래시 없음', typeof stats === 'object')
+  check('hasProgressData === true(동기화는 됐음 — "기록 없음"이 아님)', stats.hasProgressData === true)
+  check('completedWords 없으면 completedInUnitCount === 0', stats.completedInUnitCount === 0)
+  check('completedPct === 0(분모는 있음, "0%"가 맞음 — null과 구분)', stats.completedPct === 0)
+  check('clearedWordPct도 동일하게 0', stats.clearedWordPct === 0)
+}
+
+console.log('\n12. computeStudentStats() — Completed %/Cleared % 정상 계산(현재 유닛 교집합 기준, 유닛 밖 슬러그는 무시)')
+{
+  const r = {
+    studentId: 's6', dailyRows: [],
+    progress: {
+      total_stars: 5,
+      progress_data: {
+        completedWords: ['apple', 'banana', 'zzz-other-unit'], // zzz-other-unit은 현재 유닛 밖
+        clearedWords: ['apple'],
+      },
+    },
+  }
+  const unitWordSlugs = ['apple', 'banana', 'cherry', 'date'] // 현재 유닛 단어 4개
+  const stats = computeStudentStats(r, {}, null, unitWordSlugs)
+  check('unitSize === 4', stats.unitSize === 4)
+  check('completedInUnitCount === 2(유닛 밖 슬러그는 분자에서 제외)', stats.completedInUnitCount === 2)
+  check('completedPct === 50(2/4)', stats.completedPct === 50)
+  check('clearedWordInUnitCount === 1', stats.clearedWordInUnitCount === 1)
+  check('clearedWordPct === 25(1/4)', stats.clearedWordPct === 25)
+  check('기존 cleared_count/mission 축과 무관 — 반환값에 mission cleared 필드 없음(축 분리 확인)', stats.cleared === undefined)
+}
+
 console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n${failures}개 테스트 실패 ❌`)
 process.exit(failures === 0 ? 0 : 1)

@@ -751,6 +751,32 @@ function AdminDashboard({ adminPin } = {}) {
     return map
   }, [selectedClass])
 
+  // Phase 2 M4(2026-08-03) — Completed %/Cleared % 분모("그 학생의 현재
+  // 유닛 단어 수")용. 새 Supabase 조회 0건 — getStudentsInClass/getClassWords
+  // 둘 다 이미 로드된 캐시(wordLibrary.js)에서만 읽는다. 학생마다 현재 유닛이
+  // 다를 수 있어(setStudentUnit) 반 전체가 아니라 학생별로 계산한다.
+  // rows도 deps에 둔 이유: load() 이후(유닛 변경 반영 등) 캐시가 갱신되면
+  // 다시 계산되게.
+  const unitNameById = useMemo(() => {
+    if (!selectedClass) return {}
+    return Object.fromEntries(getStudentsInClass(selectedClass).map(s => [s.id, s.unitName]))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClass, rows])
+
+  const getUnitWordSlugs = (studentId) => getClassWords(selectedClass, unitNameById[studentId]).map(w => w.id)
+
+  const statsFor = (r) => computeStudentStats(r, wordStatusSummary, null, getUnitWordSlugs(r.id))
+
+  // 반 평균 Completed %(요약 줄용) — unitSize>0(분모 있음)인 학생만 평균에
+  // 포함, 전원 분모 0(반에 단어 자체가 없음 등)이면 null로 안전하게 폴백.
+  const classAvgCompletedPct = useMemo(() => {
+    if (!selectedClass || rows.length === 0) return null
+    const pcts = rows.map(r => statsFor(r).completedPct).filter(p => p !== null)
+    if (pcts.length === 0) return null
+    return Math.round(pcts.reduce((s, p) => s + p, 0) / pcts.length)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, wordStatusSummary, unitNameById])
+
   // P7 감사(2026-07-16): 반 선택을 빠르게 바꾸면 이전 반의 느린 응답이
   // 나중에 도착해 새 반의 현황을 덮어쓸 수 있었다(stale 응답 레이스) —
   // 요청 번호 가드로 최신 선택의 응답만 반영.
@@ -792,11 +818,15 @@ function AdminDashboard({ adminPin } = {}) {
   // 한 번에 CSV로. 새 Supabase 조회 없음 — 이미 로드된 rows/wordStatusSummary
   // 를 computeStudentStats()로 가공만 함(렌더 루프와 완전히 같은 계산).
   const exportClassStatsCsv = () => {
+    // Phase 2 M4(2026-08-03) — Completed %/Cleared % 2열 추가(statsFor가
+    // 카드 렌더와 동일 계산을 재사용, 새 조회 없음). hasProgressData가
+    // false면 퍼센트 대신 빈 문자열("")로 남겨 "0%"와 구분(정직성 원칙).
     const header = ['이름', '오늘 공부함', '숙제 완료', '퀴즈 정답률(%)', '퀴즈 정답/전체', '발음 연습 횟수', '별', '연속학습일', '스티커', '클리어 단어', '아는 단어', '복습 필요 단어', '많이 틀린 단어(상위5)']
+      .concat(['학습 완료 Completed(%, 현재 유닛 기준)', '실력 인증 Cleared(%, 현재 유닛 기준)'])
       .concat(['최근 7일 완료 카테고리(0~4, 오늘부터 과거순)'])
     const body = rows.map(r => {
-      const { studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws } =
-        computeStudentStats(r, wordStatusSummary)
+      const { studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws,
+              hasProgressData, completedPct, clearedWordPct } = statsFor(r)
       return [
         r.name,
         studiedToday ? 'O' : 'X',
@@ -811,6 +841,8 @@ function AdminDashboard({ adminPin } = {}) {
         ws.known,
         ws.unknown,
         topMissed.map(([slug, count]) => `${wordLookup[slug]?.word || slug}×${count}`).join(' '),
+        hasProgressData && completedPct !== null ? completedPct : '',
+        hasProgressData && clearedWordPct !== null ? clearedWordPct : '',
         last7.map(d => d.categories_completed).join(' '),
       ]
     })
@@ -877,6 +909,14 @@ function AdminDashboard({ adminPin } = {}) {
             📌 오늘 숙제 완료 {todaysHomeworkDoneCount} / {rows.length}명 · 오늘 배정 단어 {todaysAssignedCount}개
           </p>
         )}
+        {/* Phase 2 M4(2026-08-03) — 반 평균 Completed %(학습 진행률, 각
+            학생 현재 유닛 기준). 분모가 있는 학생이 1명도 없으면(반에 단어가
+            아직 없는 등) 문구 자체를 숨긴다(0%로 오해할 여지 차단). */}
+        {selectedClass && rows.length > 0 && classAvgCompletedPct !== null && (
+          <p className="text-xs font-bold text-blue-600 mt-1">
+            📖 반 평균 학습 완료(Completed) {classAvgCompletedPct}% (각자 현재 유닛 기준)
+          </p>
+        )}
         {selectedClass && rows.length > 0 && (
           <button onClick={() => setShowIncompleteOnly((v) => !v)}
             aria-pressed={showIncompleteOnly}
@@ -911,8 +951,9 @@ function AdminDashboard({ adminPin } = {}) {
       {/* A10(2026-08-02) — displayRows(미완료 우선 정렬 + 선택적 미완료
           전용 필터)로 렌더. 카드 내부 렌더/로직은 전혀 안 바꿈. */}
       {!loading && displayRows.map(r => {
-        const { studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws } =
-          computeStudentStats(r, wordStatusSummary)
+        const { studiedToday, homeworkDone, last7, quizCorrect, quizTotal, quizAccuracy, pronAttempts, topMissed, ws,
+                hasProgressData, unitSize, completedInUnitCount, clearedWordInUnitCount, completedPct, clearedWordPct } =
+          statsFor(r)
         const isOpen = expanded === r.id
 
         return (
@@ -925,6 +966,18 @@ function AdminDashboard({ adminPin } = {}) {
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
                   😀 아는 단어 {ws.known}개 · 😅 모르는 단어 {ws.unknown}개
+                </p>
+                {/* Phase 2 M4(2026-08-03) — 운영자 확정 정의: completed(학습
+                    진행률)/cleared(실력 판단, 퀴즈 1회 이상 정답) 둘 다 표시.
+                    분모는 "현재 유닛 단어 수"(unitSize) — 화면에 그대로 명시.
+                    hasProgressData가 false(한 번도 동기화 안 됨)면 "0%"가
+                    아니라 "아직 기록 없음"으로 정직하게 표시(정의상 구분). */}
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {!hasProgressData
+                    ? '📖 학습/실력 기록 없음(아직 동기화 전)'
+                    : unitSize === 0
+                      ? '📖 학습/실력 기록: 현재 유닛에 단어 없음'
+                      : `📖 학습 완료 ${completedPct}%(${completedInUnitCount}/${unitSize}) · 🎯 실력 인증 ${clearedWordPct}%(${clearedWordInUnitCount}/${unitSize})`}
                 </p>
               </div>
               <div className="text-right flex-shrink-0">
