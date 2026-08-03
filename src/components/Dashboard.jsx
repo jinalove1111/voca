@@ -198,12 +198,22 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
       onClick: () => (onStartGuided ? onStartGuided() : onResumeWord(lastWordIndex)),
     }
   } else if (hasWords) {
-    rec = {
-      emoji: '✨', title: '오늘도 시작해볼까요?',
-      desc: '짧은 세션으로 나눠서 차근차근 시작해요!',
-      label: '▶ 오늘의 학습 시작',
-      onClick: () => (onStartGuided ? onStartGuided() : onResumeWord(0)),
-    }
+    // 첫 방문(학습 기록이 아예 없음)에는 "오늘도"라는 반복 전제를 깔지
+    // 않는다 — 100일차 학생과 같은 문구를 쓰면 첫날 경험이 어색해진다.
+    const isFirstVisit = Object.keys(studentData.history || {}).length === 0
+    rec = isFirstVisit
+      ? {
+          emoji: '🎉', title: '첫 학습을 시작해볼까요?',
+          desc: '폴이 옆에서 같이 할게요!',
+          label: '▶ 오늘의 학습 시작',
+          onClick: () => (onStartGuided ? onStartGuided() : onResumeWord(0)),
+        }
+      : {
+          emoji: '✨', title: '오늘도 시작해볼까요?',
+          desc: '짧은 세션으로 나눠서 차근차근 시작해요!',
+          label: '▶ 오늘의 학습 시작',
+          onClick: () => (onStartGuided ? onStartGuided() : onResumeWord(0)),
+        }
   } else {
     rec = {
       emoji: '📭', title: '단어가 부족해요',
@@ -520,7 +530,8 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
             <MissionBar label="퀴즈 5개 풀기"       current={dailyProgress.quizzes}         goal={GOAL} emoji="🎮" />
             <MissionBar label="발음 5개 성공하기"   current={dailyProgress.pronunciations}  goal={GOAL} emoji="🎤" />
           </div>
-          <p className="text-center text-xs text-gray-400 mt-3">4개를 모두 완료하면 🎁 선물상자! 완료 즉시 새 미션이 또 시작돼요</p>
+          <p className="text-center text-xs text-purple-400 mt-3">👆 위의 &lsquo;오늘의 학습&rsquo;을 시작하면 4개가 같이 채워져요</p>
+          <p className="text-center text-xs text-gray-400 mt-1">4개를 모두 완료하면 🎁 선물상자! 완료 즉시 새 미션이 또 시작돼요</p>
         </div>
 
         {/* 3분 데일리 리추얼(2026-07-22) 정보 공개 축소 — 평생 기록 타일
@@ -530,7 +541,10 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
             (native <details>라 열림/닫힘 state도 새로 만들지 않음). */}
         <details className="group bg-white rounded-3xl card-shadow">
           <summary className="cursor-pointer select-none list-none p-5 flex items-center justify-between">
-            <span className="font-black text-gray-700 text-base">🎖️ 내 기록 더보기</span>
+            <span>
+              <span className="font-black text-gray-700 text-base block">🎖️ 내 기록 더보기</span>
+              <span className="text-gray-400 text-[11px] font-normal">⭐ 랭킹 · 🎫 티켓 상점 · 📊 누적 통계</span>
+            </span>
             <span className="text-gray-400 text-sm font-bold group-open:hidden">열기 ▾</span>
             <span className="text-gray-400 text-sm font-bold hidden group-open:inline">닫기 ▴</span>
           </summary>
@@ -604,7 +618,10 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
             목적지/뱃지 전부 원래 그대로(순수 JSX 재배치, state 추가 없음). */}
         <details className="group bg-white rounded-3xl card-shadow">
           <summary className="cursor-pointer select-none list-none p-5 flex items-center justify-between">
-            <span className="font-black text-gray-700 text-base">🧭 더 많은 메뉴</span>
+            <span>
+              <span className="font-black text-gray-700 text-base block">🧭 더 많은 메뉴</span>
+              <span className="text-gray-400 text-[11px] font-normal">🎮 게임 · 🎩 모자 · 🏛️ 박물관 · 📅 캘린더</span>
+            </span>
             <span className="text-gray-400 text-sm font-bold group-open:hidden">열기 ▾</span>
             <span className="text-gray-400 text-sm font-bold hidden group-open:inline">닫기 ▴</span>
           </summary>

@@ -52,7 +52,12 @@ export function EntranceTestBanner({ studentId, onGo }) {
           <span className="text-4xl">🚨</span>
           <div className="flex-1">
             <p className="font-black text-lg leading-tight">오늘의 입실시험이 시작됐어요!</p>
-            <p className="text-rose-100 text-xs mt-0.5">지금 바로 참여하세요</p>
+            <p className="text-rose-100 text-xs mt-0.5">
+              {active.questionCount ? `${active.questionCount}문제` : ''}
+              {active.questionCount && active.timeLimitSeconds ? ' · ' : ''}
+              {active.timeLimitSeconds ? `약 ${Math.max(1, Math.round(active.timeLimitSeconds / 60))}분이면 끝나요` : ''}
+              {!active.questionCount && !active.timeLimitSeconds ? '지금 바로 참여하세요' : ''}
+            </p>
           </div>
           <span className="font-black text-xl">→</span>
         </div>

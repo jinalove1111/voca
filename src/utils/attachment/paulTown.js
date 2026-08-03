@@ -157,13 +157,21 @@ export function gardenBandSummary(stats, ctx = {}, now = new Date()) {
   const flowerCount = stats.masteredCount || 0
   const seedsToday = Number(stats.history?.[keyFor(now, 0)]?.starsEarned) || 0
   const currentStage = [...world.stages].reverse().find((s) => s.unlocked) || world.stages[0]
+  // flowerCount(masteredCount 기반)는 학생 경로에서 구조적으로 항상 0에
+  // 가깝다 — 판정 로직(cleared/masteredCount)은 건드리지 않고, 둘 다 0일
+  // 때만 "0송이"라는 사실 그대로의 문구 대신 정직한 시작 안내로 대체한다
+  // (Phase 1 UX, LEARNING_UX_AUDIT.md A급 7번). 정원 화면 자체의 성장
+  // 지표 불일치는 범위 밖(Phase 2).
+  const text = (flowerCount === 0 && seedsToday === 0)
+    ? '🌱 첫 별을 심으면 정원이 시작돼요'
+    : `🌷 꽃 ${flowerCount}송이 · 오늘 심은 별 ${seedsToday}개 · ${currentStage.name}`
   return {
     flowerCount,
     seedsToday,
     growthPoints: world.growthPoints,
     stageName: currentStage.name,
     world,
-    text: `🌷 꽃 ${flowerCount}송이 · 오늘 심은 별 ${seedsToday}개 · ${currentStage.name}`,
+    text,
   }
 }
 
