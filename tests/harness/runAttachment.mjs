@@ -51,6 +51,11 @@ const day = (over = {}) => ({
 })
 const fixture = {
   cleared: Array.from({ length: 12 }, (_, i) => `word${i}`),
+  // Phase 2 M3(2026-08-03, 학습 신호 2종) — 기존 cleared(word0..word11,
+  // 레벨업 미션 기준)와 겹치지 않는 슬러그로 일부러 골라 두 축이 서로
+  // 완전히 독립임을 증명한다(아래 1) 섹션 단언).
+  completedWords: ['word1', 'compOnly1', 'compOnly2'],
+  clearedWords: ['clrOnly1', 'clrOnly2'],
   wordStatus: { 'db-1': 'mastered', 'db-2': 'mastered', 'db-3': 'known', 'db-4': 'unknown' },
   missions: [
     { wordId: 'word1', correctCount: 3, done: true },
@@ -81,6 +86,18 @@ check('thisWeek(월~오늘)에 이번 주 학습일만', stats.thisWeek.daysStud
 check('lastWeek에 지난주 학습일만', stats.lastWeek.daysStudied === 2 && stats.lastWeek.quizCorrect === 9)
 const emptyStats = deriveAttachmentStats({}, NOW)
 check('빈 레코드도 크래시 없이 0 통계', emptyStats.clearedCount === 0 && emptyStats.absenceDays === null)
+
+// Phase 2 M3(2026-08-03) — 학습 신호 2종(completed/cleared)의 파생값.
+// 셋(기존 clearedSet, completedSet, clearedWordSet)이 서로 독립된 축임을
+// 직접 증명 — 어느 하나가 다른 하나로 옮겨 쓰이거나 섞이면 안 된다.
+check('completedCount = completedWords.length', stats.completedCount === 3)
+check('completedSet은 completedWords 슬러그만 반영', stats.completedSet.has('word1') && stats.completedSet.has('compOnly1') && stats.completedSet.has('compOnly2'))
+check('completedSet에 clearedWords 전용 슬러그는 없음(축 독립)', !stats.completedSet.has('clrOnly1'))
+check('clearedWordCount = clearedWords.length', stats.clearedWordCount === 2)
+check('clearedWordSet은 clearedWords 슬러그만 반영', stats.clearedWordSet.has('clrOnly1') && stats.clearedWordSet.has('clrOnly2'))
+check('clearedWordSet에 completedWords 전용 슬러그는 없음(축 독립)', !stats.clearedWordSet.has('compOnly1'))
+check('기존 clearedSet(레벨업 미션 기반, cleared 배열)은 그대로 유지 — 새 축과 무관', stats.clearedSet.has('word0') && stats.clearedCount === 12 && !stats.clearedSet.has('compOnly1') && !stats.clearedSet.has('clrOnly1'))
+check('completedWords/clearedWords 없는 구 레코드도 크래시 없이 0으로 파생(하위호환)', emptyStats.completedCount === 0 && emptyStats.clearedWordCount === 0 && emptyStats.completedSet.size === 0 && emptyStats.clearedWordSet.size === 0)
 
 // ── 2) 모자 규칙 ──
 console.log('\n-- 2) 모자 컬렉션 — 결정론·멱등')

@@ -44,6 +44,13 @@ export function masteryTierFor(word, { clearedSet, wordStatus, missionByWordId }
  */
 export function deriveAttachmentStats(rec, now = new Date()) {
   const cleared = Array.isArray(rec.cleared) ? rec.cleared : []
+  // Phase 2 M3(2026-08-03, 학습 신호 2종) — completedWords/clearedWords는
+  // useStudent.js의 신규 병렬 필드(레벨업 미션 기반 cleared와 완전히
+  // 별개, freshRecord 헤더 주석 참고). 구 레코드/백업엔 없을 수 있어
+  // 배열 방어(asArray와 동일 패턴) 후 표시 전용 파생값만 만든다 — 보상
+  // 판정(clearedSet/clearedCount, 아래 그대로 유지)에는 관여하지 않는다.
+  const completedWords = Array.isArray(rec.completedWords) ? rec.completedWords : []
+  const clearedWords = Array.isArray(rec.clearedWords) ? rec.clearedWords : []
   const wordStatus = rec.wordStatus && typeof rec.wordStatus === 'object' ? rec.wordStatus : {}
   const missions = Array.isArray(rec.missions) ? rec.missions : []
   const history = rec.history && typeof rec.history === 'object' ? rec.history : {}
@@ -115,6 +122,14 @@ export function deriveAttachmentStats(rec, now = new Date()) {
   return {
     clearedCount: cleared.length,
     clearedSet,
+    // Phase 2 M3 — 표시 전용 파생값(신규 병렬 축). clearedSet/clearedCount
+    // (바로 위, 레벨업 미션 3연속 정답 기준)는 보상 판정 전용으로 그대로
+    // 유지 — 아래 두 쌍은 이번 마일스톤에서 어떤 보상 판정에도 쓰이지
+    // 않는다(M4에서 별도 결정).
+    completedSet: new Set(completedWords),
+    completedCount: completedWords.length,
+    clearedWordSet: new Set(clearedWords),
+    clearedWordCount: clearedWords.length,
     masteredCount,
     missionByWordId,
     wordStatus,

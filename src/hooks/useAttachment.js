@@ -57,11 +57,17 @@ export function buildWordsByUnit(studentId) {
 }
 
 export function useAttachment(studentId, studentData) {
-  const { cleared, wordStatus, missions, history, streak, spellingReviewQueue, hatInventory, milestones, grantHats, addMilestones, restoreChecked } = studentData
+  // Phase 2 M3(2026-08-03, 학습 신호 2종) — completedWords/clearedWords는
+  // useStudent.js의 신규 병렬 필드(기존 cleared와 별개, useStudent.js
+  // freshRecord 헤더 주석 참고). deriveAttachmentStats에 그대로 통과시켜
+  // completedSet/clearedWordSet 등 표시 전용 파생값을 만들 수 있게 한다 —
+  // 이번 마일스톤에서 어떤 판정(unitsDone/textbooksDone/모자/밀스톤)도
+  // 이 두 축을 입력으로 쓰지 않는다(기존 cleared 기반 그대로 유지).
+  const { cleared, completedWords, clearedWords, wordStatus, missions, history, streak, spellingReviewQueue, hatInventory, milestones, grantHats, addMilestones, restoreChecked } = studentData
 
   const stats = useMemo(
-    () => deriveAttachmentStats({ cleared, wordStatus, missions, history, streak, spellingReviewQueue }),
-    [cleared, wordStatus, missions, history, streak, spellingReviewQueue],
+    () => deriveAttachmentStats({ cleared, completedWords, clearedWords, wordStatus, missions, history, streak, spellingReviewQueue }),
+    [cleared, completedWords, clearedWords, wordStatus, missions, history, streak, spellingReviewQueue],
   )
   const lib = useMemo(() => buildWordsByUnit(studentId), [studentId])
   const unitsDone = useMemo(() => completedUnits(lib.wordsByUnit, stats.clearedSet), [lib, stats])
