@@ -1,0 +1,22 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "m3a-word-data-loss-fix",
+  "task": "setClassWords carry-forward 버그(memory_tip/example_translation 소실) 수정 + admin-content-write에 word_asset.upsert(_bulk) 액션 추가",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-04T12:00:00Z",
+  "updated_at": "2026-08-04T12:23:39Z",
+  "files_owned": [
+    "src/utils/wordLibrary.js",
+    "supabase/functions/admin-content-write/index.ts"
+  ],
+  "files_read": [
+    "api/generate-audio.js",
+    "src/utils/wordAssets.js",
+    "supabase_v3_15_word_assets.sql"
+  ],
+  "summary": "1) setClassWords의 carry-forward SELECT/insert 행에 memory_tip, example_translation 추가(레거시 anon select도 memory_tip 포함) + 재생성 게이트를 !row.word_audio_url || !row.memory_tip 로 확장. 2) admin-content-write의 words.bulk_replace insert 화이트리스트에 memory_tip/example_translation 추가(반환 select에도 memory_tip 추가). 3) admin-content-write에 word_asset.upsert / word_asset.upsert_bulk 액션 신규 추가(순수 upsert, conflict key word_key+sense_key, 독립 서버측 화이트리스트, 상한 200행, 테이블 부재 시 400+명확한 메시지로 폴백, delete 없음). api/generate-audio.js는 소유 파일이 아니라 미수정 — 142-144 조기 no-op 반환과 164 AI 호출 게이트가 memory_tip 단독 결손을 못 미워 게이트 확장만으로는 실제 복구가 안 됨을 확인, 정확한 변경안을 보고서로 별도 작성.",
+  "blocker": null,
+  "next_action": "메인 세션/운영자: (1) api/generate-audio.js의 no-op 게이트·AI 호출 트리거 조건을 memory_tip 기준까지 확장할지 판단(보고서의 두 옵션 참고), (2) supabase functions deploy admin-content-write 수동 배포, (3) 커밋은 메인 세션이 수행."
+}
