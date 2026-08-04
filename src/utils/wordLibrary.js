@@ -679,52 +679,171 @@ export async function createClass(name, classType = 'regular', adminPin) {
   await refreshWordLibrary()
 }
 
-// 2026-07-24 보안 락다운 — 삭제(delete)+삽입(insert) 두 쓰기 단계만
-// admin-content-write(words.bulk_replace, adminPin 있을 때)로 옮긴다. 앞의
-// "기존 오디오/예문 carry-forward" 조회는 SELECT라 anon으로 계속 남긴다
-// (RLS는 SELECT를 막지 않음, § SQL 파일).
-export async function setClassWords(className, words, unitName = DEFAULT_UNIT_NAME, adminPin) {
-  const cls = await ensureClass(className, 'regular', adminPin)
-  const unit = await ensureUnit(cls.id, unitName, adminPin)
+// ── words.bulk_replace diff 계획(2026-08-04 P0 데이터 손실 버그 수정) ──────
+// 왜 필요했나(라이브 실측으로 확정된 버그, 재조사 불필요): word_status.
+// word_id는 슬러그가 아니라 words.id UUID 그 자체를 참조하고 `on delete
+// cascade`가 걸려 있다(supabase_v1_5_word_status.sql:33-35, 이 파일의
+// setWordStatus가 wordDbId로 저장 — 아래 참고). 그런데 예전 setClassWords/
+// handleWordsBulkReplace(admin-content-write/index.ts)는 유닛을 저장할
+// 때마다 그 유닛의 words를 통째로 delete()한 뒤 insert()했다 — 새로
+// insert된 행은 매번 새 gen_random_uuid()를 받으므로, 교사가 유닛에 단어를
+// "하나만 추가"해도 그 유닛 전체 학생의 "알아요/모르겠어요/mastered"
+// 기록이 CASCADE로 통째로 삭제됐다(실측: "중2 YMB 박준원" Unit 5 —
+// 단어 40개에 word_status 174행, 다음 재업로드 시 전부 소실 확인).
+//
+// 이 함수는 그 대신 word 텍스트(소문자 비교, 기존 priorByWord 관례와 동일)
+// 로 기존 행과 새 목록을 매칭해 "겹치는 단어는 UPDATE(id 보존) / 새 단어만
+// INSERT / 목록에서 빠진 단어만 DELETE"로 바꾼다 — 겹치는 단어의
+// word_status는 이제 재저장에도 살아남는다. word_status의 스키마/FK는
+// 전혀 건드리지 않는다(순수 애플리케이션 레벨 수정).
+//
+// carry-forward 대상(word_audio_url/example_audio_url/example_text/
+// memory_tip/example_translation)은 기존과 동일하게 "기존 값이 있으면
+// 유지"(2026-08-04 M3a에서 memory_tip/example_translation을 이 목록에
+// 추가한 계약 — 이번 수정도 그대로 지킨다). meaning/position은 항상 새
+// 목록 값으로 갱신(carry-forward 대상 아님).
+//
+// 순수 함수(네트워크 0, import 0 아님 — 이 파일 안에서 정의) —
+// tests/harness/runWordsBulkReplacePlan.mjs가 esbuild 인메모리 번들로
+// 직접 검증한다(개별 단언은 그 파일 헤더 참고).
+//
+// 중복 처리: 같은 unit 안에 이미 같은 word(대소문자 무시)가 두 번 이상
+// 있을 수 있다(호출부가 새로 올리는 목록은 이미 dedupe하지만, DB에 예전에
+// 남은 중복은 그대로일 수 있음) — 매칭에는 처음 만난 행만 쓰고 나머지
+// 중복은 deleteIds로 보낸다. 반대로 새 목록 쪽에 같은 word가 두 번
+// 나오는 방어적 케이스에서도, 한 기존 행을 두 번 UPDATE하지 않도록 매칭에
+// 쓰인 후보는 즉시 "소비"한다(두 번째부터는 자동으로 INSERT).
+export function planWordsBulkReplace(existingRows, newWords) {
+  const existing = Array.isArray(existingRows) ? existingRows : []
+  const words = Array.isArray(newWords) ? newWords : []
 
-  // Carry forward audio + example for words that already had it (matched by
-  // word text) so re-saving a unit — e.g. adding one more word to an
-  // existing list — doesn't throw away and regenerate content that already
-  // worked.
-  // 2026-08-04 M3a 데이터 손실 버그 수정 — memory_tip/example_translation도
-  // carry-forward 대상에 추가한다. 이 둘이 SELECT/insert 행 어느 쪽에도
-  // 없으면 유닛에 단어 하나만 추가해도(= 이 함수 재호출) 그 유닛 전체
-  // 단어의 암기팁/예문번역이 delete-then-insert로 영구 소실된다(라이브
-  // NULL 40건 실측이 이 경로와 일치) — § handoff.md M3a 섹션.
-  const { data: existingRows, error: selErr } = await supabase
-    .from('words').select('word,word_audio_url,example_audio_url,example_text,memory_tip,example_translation').eq('unit_id', unit.id)
-  if (selErr) throw selErr
-  const priorByWord = new Map((existingRows || []).map((r) => [r.word.toLowerCase(), r]))
+  const candidateByWord = new Map()
+  const deleteIds = []
+  for (const row of existing) {
+    const key = String(row?.word ?? '').toLowerCase()
+    if (candidateByWord.has(key)) deleteIds.push(row.id)
+    else candidateByWord.set(key, row)
+  }
 
-  const rows = words.map((w, i) => {
-    const prior = priorByWord.get(w.word.toLowerCase())
-    return {
-      unit_id: unit.id, word: w.word, meaning: w.meaning, position: i,
+  const updates = []
+  const inserts = []
+  words.forEach((w, i) => {
+    const key = String(w?.word ?? '').toLowerCase()
+    const prior = candidateByWord.get(key)
+    const base = {
+      word: w.word, meaning: w.meaning, position: i,
       word_audio_url: prior?.word_audio_url || null,
       example_audio_url: prior?.example_audio_url || null,
       example_text: prior?.example_text || (w.example || '').trim() || null,
       memory_tip: prior?.memory_tip || null,
       example_translation: prior?.example_translation || null,
     }
+    if (prior) {
+      candidateByWord.delete(key)
+      updates.push({ id: prior.id, ...base })
+    } else {
+      inserts.push(base)
+    }
   })
+
+  for (const row of candidateByWord.values()) deleteIds.push(row.id)
+
+  return { updates, inserts, deleteIds }
+}
+
+// buildAdminBulkReplaceRows — planWordsBulkReplace의 update/insert 계획을
+// admin-content-write words.bulk_replace 페이로드용 "완성된 행" 배열로
+// 펼친다(id 제거). update/insert 순서가 원래 새 목록 순서와 달라져도
+// 무관하다 — 각 행에 이미 정확한 position이 박혀 있고, 옛/새 서버 둘 다
+// `Number.isFinite(r?.position) ? r.position : i`로 명시적 position을
+// 배열 인덱스보다 우선하기 때문(§ admin-content-write/index.ts
+// handleWordsBulkReplace).
+//
+// ⚠️★ 왜 이 함수가 존재하나 — 배포 순서 안전판(2026-08-04, 재발 방지
+// 목적으로 반드시 남겨야 하는 주석): Vercel(클라이언트)과 Supabase Edge
+// Function(admin-content-write)은 서로 독립적으로 배포되고 그 순서/간격은
+// 운영자 손에 달려 있다(CLAUDE.md 규칙 9 "코드보다 먼저 실행되든 나중에
+// 실행되든 앱이 깨지지 않아야 한다"와 동일 원칙 — SQL뿐 아니라 이
+// 클라이언트/서버 배포 경계에도 적용됨). 만약 이 함수가 word_audio_url/
+// example_audio_url/example_text/memory_tip/example_translation 없이
+// { word, meaning, example } 같은 얇은 payload만 만들었다면: 클라이언트가
+// 먼저 배포되고 admin-content-write가 아직 옛 코드(carry-forward SELECT가
+// 없고 word_audio_url/example_audio_url/example_text만 그대로 읽어 insert
+// 하는 버전)인 배포 간격 동안, 교사가 유닛을 저장하는 순간 그 5개 컬럼이
+// 전부 null로 insert되어 그 유닛 전체의 오디오·예문·번역·암기팁이 한 번에
+// 소실된다 — 지금 고치려는 word_status 손실 버그보다 더 나쁜 사고. 그래서
+// 이 함수는 M3a 시점(git d147f1b)과 정확히 같은 모양의 "완성된 행"을 계속
+// 만들어 보낸다 — 옛 서버가 아직 배포돼 있어도 오늘과 완전히 동일하게
+// 동작한다(추가 손실 없음). 새 서버(이번 P0 수정을 반영한
+// handleWordsBulkReplace)는 이 carry-forward 필드들을 전혀 신뢰하지 않고
+// 자체 SELECT로 다시 계산하므로 그냥 무시된다 — 네 조합(옛/옛, 새/옛,
+// 옛/새, 새/새) 전부 안전하다(§ 구현 보고서 표).
+// tests/harness/runWordsBulkReplacePlan.mjs의 "배포 순서 안전판" 섹션이 이
+// 반환 모양(5개 carry-forward 컬럼 + word/meaning/position)을 단언으로
+// 고정한다 — 나중에 누가 다시 payload를 줄이면 그 테스트가 잡아준다.
+export function buildAdminBulkReplaceRows(existingRows, newWords) {
+  const { updates, inserts } = planWordsBulkReplace(existingRows, newWords)
+  return [...updates, ...inserts].map(({ id, ...rest }) => rest)
+}
+
+// 2026-07-24 보안 락다운 — 쓰기 단계만 admin-content-write(words.
+// bulk_replace, adminPin 있을 때)로 옮긴다. 앞의 "기존 오디오/예문
+// carry-forward" 조회는 SELECT라 anon으로 계속 남긴다(RLS는 SELECT를
+// 막지 않음, § SQL 파일) — 이 SELECT는 adminPin 유무와 무관하게 항상
+// 한 번만 실행되고, 두 분기(admin payload 구성 / 레거시 anon diff 계산)가
+// 그 결과를 공유한다(중복 조회/중복 병합 로직 없음).
+// 2026-08-04 P0 수정 — word_status FK 보존을 위해 delete-then-insert를
+// word 텍스트 매칭 기반 UPDATE/INSERT/DELETE로 교체. adminPin 경로는
+// buildAdminBulkReplaceRows(위 헤더 주석의 "배포 순서 안전판" 참고)로
+// 만든 완성된 행을 그대로 보낸다 — 서버가 이 값들을 신뢰하지 않고 자체
+// SELECT로 다시 계산하더라도, 아직 옛 서버가 배포돼 있는 동안에는 이
+// payload 모양 자체가 유일한 방어선이다.
+export async function setClassWords(className, words, unitName = DEFAULT_UNIT_NAME, adminPin) {
+  const cls = await ensureClass(className, 'regular', adminPin)
+  const unit = await ensureUnit(cls.id, unitName, adminPin)
+
+  const { data: existingRows, error: selErr } = await supabase
+    .from('words').select('id,word,word_audio_url,example_audio_url,example_text,memory_tip,example_translation').eq('unit_id', unit.id)
+  if (selErr) throw selErr
 
   let inserted
   if (adminPin) {
+    const rows = buildAdminBulkReplaceRows(existingRows || [], words)
     inserted = await callAdminContentWrite('words.bulk_replace', { unitId: unit.id, rows: words.length > 0 ? rows : [] }, adminPin)
-  } else {
+  } else if (words.length === 0) {
+    // 반 전체 비우기 — 원본 동작 그대로(빠른 경로, diff 계산 불필요).
     const { error: delErr } = await supabase.from('words').delete().eq('unit_id', unit.id)
     if (delErr) throw delErr
     inserted = []
-    if (words.length > 0) {
-      const { data, error: insErr } = await supabase.from('words').insert(rows).select('id,word,meaning,word_audio_url,example_text,memory_tip')
-      if (insErr) throw insErr
-      inserted = data
+  } else {
+    const { updates, inserts, deleteIds } = planWordsBulkReplace(existingRows || [], words)
+    const resultRows = []
+
+    // UPDATE — 유닛당 단어 수는 최대 40개 수준이라 정확성을 우선해 행별
+    // 개별 UPDATE로 처리한다(§ admin-content-write/index.ts 동일 handler의
+    // upsert-vs-개별-UPDATE 판단과 동일 근거).
+    for (const { id, ...patch } of updates) {
+      const { data, error } = await supabase
+        .from('words').update(patch).eq('id', id).eq('unit_id', unit.id)
+        .select('id,word,meaning,word_audio_url,example_text,memory_tip').maybeSingle()
+      if (error) throw error
+      if (data) resultRows.push(data)
     }
+
+    if (inserts.length > 0) {
+      const { data, error: insErr } = await supabase
+        .from('words').insert(inserts.map((r) => ({ unit_id: unit.id, ...r })))
+        .select('id,word,meaning,word_audio_url,example_text,memory_tip')
+      if (insErr) throw insErr
+      resultRows.push(...(data || []))
+    }
+
+    if (deleteIds.length > 0) {
+      const { error: delErr } = await supabase.from('words').delete().in('id', deleteIds).eq('unit_id', unit.id)
+      if (delErr) throw delErr
+    }
+
+    inserted = resultRows
   }
   // Fire-and-forget: ask the server to generate + attach pronunciation
   // audio (and an AI example sentence, if none was carried forward or

@@ -285,6 +285,14 @@ export const DOMAINS = {
       { script: 'tests/harness/runWordAssetRules.mjs', builders: [], extra: true, note: '자기완결형 하네스 — src/utils/wordAssetRules.js는 import 0개(진짜 순수, plain Node 직접 import) 설계. guessPartOfSpeech(접미사 고확신 휴리스틱)·estimateSyllables·estimateDifficulty·defaultReviewIntervalDays·buildImagePrompt·buildRuleBasedAsset(s) 검증 — 특히 difficulty 1~5/base_review_interval_days∈BOX_INTERVALS_DAYS 도메인 전수 확인(DB CHECK 위반 시 백필 전체 실패 방지), AI 전용 컬럼(cefr/pronunciation_uk/gesture/emoji/tags/synonyms/antonyms/image_url/ai_model) 미오염, wordAssets.js의 WORD_ASSET_WRITABLE_COLUMNS 화이트리스트 정합. 아직 AdminScreen.jsx/wordLibrary.js 어디에도 배선되지 않음(M3b는 순수 계층만) — 13개 필수 도메인 밖, 신규 보너스 커버리지.' },
     ],
   },
+
+  // ── words.bulk_replace diff 계획(P0 — word_status FK 보존) ──
+  wordsBulkReplacePlan: {
+    label: 'words.bulk_replace diff 계획(word_status FK 보존, P0) (verify:words-bulk-replace-plan과 동일 실행)',
+    checks: [
+      { script: 'tests/harness/runWordsBulkReplacePlan.mjs', builders: [], extra: true, note: '자기완결형 하네스 — src/utils/wordLibrary.js의 순수 함수 planWordsBulkReplace/buildAdminBulkReplaceRows를 esbuild 인메모리 번들(더미 env, 네트워크 0)로 직접 검증. 옛 delete-then-insert-all 방식과의 대조군을 포함해 회귀를 고정한다(겹치는 단어의 id가 하나도 보존되지 않아 word_status가 CASCADE 삭제되던 P0 버그). 배포 순서 단언(11~13)이 특히 중요 — 클라이언트 payload가 옛 서버가 읽는 5개 컬럼을 계속 포함하는지 고정해, Vercel만 먼저 배포되고 Edge Function이 아직 옛 코드인 창에서 오디오/예문/번역/암기팁이 null로 덮이는 사고를 막는다. 49단언, 13개 필수 도메인 밖 신규 보너스 커버리지.' },
+    ],
+  },
 }
 
 // Phase 6 최종 검증 매트릭스가 참조하는 "운영자 체크리스트 13항목" ↔ 위 도메인

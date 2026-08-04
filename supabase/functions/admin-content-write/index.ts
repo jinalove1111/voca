@@ -184,40 +184,150 @@ async function handleUnitDelete(supabase: any, payload: any) {
   return { ok: true }
 }
 
-// words.bulk_replace — setClassWords()의 delete-then-insert(wordLibrary.js:
-// 551,564 대응, 엑셀/PDF 일괄 업로드 + 단어별 추가가 전부 이 경로). rows는
-// 클라이언트가 이미 계산한 완성된 행(오디오/예문 carry-forward 포함) —
-// 이 핸들러는 그대로 저장만 한다. rows가 빈 배열이면(반 전체 단어 비우기)
-// delete만 하고 insert는 생략 — 원본 setClassWords의 `if (words.length > 0)`
-// 분기와 동일.
+// words.bulk_replace — setClassWords()의 주 경로(wordLibrary.js 대응,
+// 엑셀/PDF 일괄 업로드 + 단어별 추가가 전부 이 경로). rows는 클라이언트가
+// buildAdminBulkReplaceRows로 만든 "완성된 행" 배열([{word, meaning,
+// position, word_audio_url, example_audio_url, example_text, memory_tip,
+// example_translation}], M3a 시점과 동일 모양 — § wordLibrary.js
+// buildAdminBulkReplaceRows 헤더의 "배포 순서 안전판" 주석) — 이 핸들러는
+// 그 중 word/meaning/position/example_text만 읽고, 기존 행 SELECT + word
+// 텍스트 매칭(대소문자 무시) + carry-forward + UPDATE/INSERT/DELETE 계획
+// 수립은 전부 자체적으로 다시 수행한다(서비스 롤 키로 이미 words 테이블
+// 전체 접근 권한이 있음 — 클라이언트가 보낸 carry-forward 값은 신뢰하지
+// 않음, 자세한 이유는 아래 targets 매핑 주석). rows가 빈 배열이면(반 전체
+// 단어 비우기) delete만 하고 insert는 생략 — 원본 동작 그대로, 바뀌지
+// 않음.
 //
-// 2026-08-04 M3a 데이터 손실 버그 수정 — memory_tip/example_translation을
-// 화이트리스트에 추가한다. v3.11 락다운 이후 adminPin 경로(이 핸들러)가
-// 사실상 유일한 쓰기 경로라서, wordLibrary.js가 이 두 컬럼을 carry-forward
-// 해서 보내도 여기서 걸러버리면 클라이언트 수정이 전부 무의미했다 — 이번
-// 수정 전에는 두 컬럼 모두 여기서 조용히 drop되어 매 재저장마다
-// NULL로 덮어써졌다(라이브 실측 NULL 40건의 근본 원인).
+// ── 2026-08-04 P0 데이터 손실 버그 수정(word_status FK 보존) ─────────────
+// 왜 필요했나(라이브 실측으로 확정, 재조사 불필요): word_status.word_id는
+// 슬러그가 아니라 words.id UUID 그 자체를 참조하고 `on delete cascade`가
+// 걸려 있다(supabase_v1_5_word_status.sql:33-35). 이 핸들러가 예전에는
+// 유닛을 저장할 때마다 words를 통째로 delete()한 뒤 insert()했다 — 새로
+// insert된 행은 매번 새 gen_random_uuid()를 받으므로, 교사가 유닛에 단어를
+// "하나만 추가"해도 그 유닛 전체 학생의 "알아요/모르겠어요/mastered" 기록
+// 이 CASCADE로 통째로 삭제됐다(실측: "중2 YMB 박준원" Unit 5 — 단어 40개에
+// word_status 174행, 다음 재업로드 시 전부 소실 확인). 이제는 word 텍스트로
+// 매칭해 겹치는 단어는 UPDATE(id 보존)로 바꾼다 — word_status 스키마/FK는
+// 전혀 건드리지 않는다(순수 애플리케이션 레벨 수정).
+//
+// 이 알고리즘은 src/utils/wordLibrary.js의 순수 함수 planWordsBulkReplace와
+// 동일하다(플랫폼 경계 — Deno Edge Function은 Vite 전용 문법을 쓰는 그
+// 파일을 import할 수 없어 여기 독립 사본을 둔다, 이 파일 상단
+// isMissingWordAssetsTableError 주석과 동일한 "별도 사본 유지" 원칙). 로직을
+// 고치면 반드시 두 파일 모두 확인할 것 — 드리프트 방지.
+//
+// 2026-08-04 M3a 데이터 손실 버그 수정(계승) — memory_tip/example_translation
+// 은 이번에도 carry-forward 대상 화이트리스트에 그대로 남는다(기존 값이
+// 있으면 유지, 새 업로드가 빈 값이어도 덮어쓰지 않음 — M3a가 고친 계약을
+// 이번 구조 변경으로도 절대 되돌리지 않는다).
+//
+// 입력 검증(requireString)은 DB에 손대기 전에 전부 끝낸다(BUG_REPORT.md
+// H2 — "검증 전 delete" 재발 방지: 유효하지 않은 행이 있으면 이 시점에서
+// throw하고 words 테이블은 전혀 건드리지 않는다).
 async function handleWordsBulkReplace(supabase: any, payload: any) {
   const unitId = requireId(payload?.unitId, 'unitId')
-  const rows = Array.isArray(payload?.rows) ? payload.rows : []
-  const { error: delErr } = await supabase.from('words').delete().eq('unit_id', unitId)
-  if (delErr) throw delErr
-  if (rows.length === 0) return []
-  const insertRows = rows.map((r: any, i: number) => ({
-    unit_id: unitId,
+  const rawRows = Array.isArray(payload?.rows) ? payload.rows : []
+
+  if (rawRows.length === 0) {
+    const { error: delErr } = await supabase.from('words').delete().eq('unit_id', unitId)
+    if (delErr) throw delErr
+    return []
+  }
+
+  // ⚠️ 클라이언트(wordLibrary.js buildAdminBulkReplaceRows)는 배포 순서
+  // 안전판 때문에 M3a 시점과 동일한 "완성된 행"(word_audio_url/
+  // example_audio_url/example_text/memory_tip/example_translation
+  // carry-forward 포함)을 보낸다 — 이 서버는 그 값들을 신뢰하지 않고
+  // 아래 existingRows(자체 SELECT)로 다시 계산하므로, 이 targets 매핑은
+  // word/meaning/position/example_text 4개 키만 읽는다(나머지는 존재해도
+  // 아예 참조하지 않아 자동으로 무시됨 — 화이트리스트 자체가 "읽지 않음").
+  // example_text만 예외적으로 읽는 이유: 아래에서 매칭되는 기존 행이 없는
+  // "완전 신규 단어"는 서버 스스로 참고할 과거 값이 전혀 없으므로, meaning과
+  // 마찬가지로 클라이언트가 이미 trim해서 보낸 example_text를 그 신규 단어의
+  // 최초 example_text로 받아들인다(기존 값을 "보호"하는 carry-forward와는
+  // 성격이 다르다 — 매칭되는 기존 행이 있으면 아래 patch 계산에서
+  // prior?.example_text가 항상 이 값보다 우선한다).
+  const targets = rawRows.map((r: any, i: number) => ({
     word: requireString(r?.word, `rows[${i}].word`),
     meaning: requireString(r?.meaning, `rows[${i}].meaning`),
+    example: typeof r?.example_text === 'string' && r.example_text.trim() ? r.example_text.trim() : null,
     position: Number.isFinite(r?.position) ? r.position : i,
-    word_audio_url: r?.word_audio_url ?? null,
-    example_audio_url: r?.example_audio_url ?? null,
-    example_text: r?.example_text ?? null,
-    memory_tip: r?.memory_tip ?? null,
-    example_translation: r?.example_translation ?? null,
   }))
-  const { data, error: insErr } = await supabase
-    .from('words').insert(insertRows).select('id,word,meaning,word_audio_url,example_text,memory_tip')
-  if (insErr) throw insErr
-  return data
+
+  const { data: existingRows, error: selErr } = await supabase
+    .from('words')
+    .select('id,word,word_audio_url,example_audio_url,example_text,memory_tip,example_translation')
+    .eq('unit_id', unitId)
+  if (selErr) throw selErr
+
+  // 같은 unit 안에 이미 같은 word(대소문자 무시) 중복 행이 있을 수 있다 —
+  // 매칭에는 처음 만난 행만 쓰고 나머지 중복은 deleteIds로 보낸다. 반대로
+  // 새 목록(targets) 쪽에 같은 word가 두 번 나오는 방어적 케이스에서도,
+  // 한 기존 행을 두 번 UPDATE하지 않도록 매칭에 쓰인 후보는 즉시
+  // candidateByWord에서 제거한다(두 번째부터는 자동으로 INSERT).
+  const candidateByWord = new Map<string, any>()
+  const deleteIds: string[] = []
+  for (const row of (existingRows || [])) {
+    const key = String(row?.word ?? '').toLowerCase()
+    if (candidateByWord.has(key)) deleteIds.push(row.id)
+    else candidateByWord.set(key, row)
+  }
+
+  const updateOps: Array<{ id: string; patch: Record<string, unknown> }> = []
+  const insertRows: Record<string, unknown>[] = []
+  for (const t of targets) {
+    const key = t.word.toLowerCase()
+    const prior = candidateByWord.get(key)
+    const patch: Record<string, unknown> = {
+      word: t.word,
+      meaning: t.meaning,
+      position: t.position,
+      word_audio_url: prior?.word_audio_url || null,
+      example_audio_url: prior?.example_audio_url || null,
+      example_text: prior?.example_text || t.example || null,
+      memory_tip: prior?.memory_tip || null,
+      example_translation: prior?.example_translation || null,
+    }
+    if (prior) {
+      candidateByWord.delete(key)
+      updateOps.push({ id: prior.id, patch })
+    } else {
+      insertRows.push({ unit_id: unitId, ...patch })
+    }
+  }
+  for (const row of candidateByWord.values()) deleteIds.push(row.id)
+
+  const resultRows: any[] = []
+
+  // UPDATE — 유닛당 단어 수는 최대 40개 수준이라 정확성을 우선해 행별
+  // 개별 UPDATE로 처리한다. upsert(id 포함) + onConflict:'id'도 검토했으나,
+  // words에는 이 화이트리스트 밖 컬럼(예: accepted_meanings)이 있고
+  // Supabase upsert는 payload에 없는 컬럼을 DB 기본값/NULL로 치환하는
+  // "전체 행 치환"이 아니라 명시 안 한 컬럼은 그대로 두는 partial 동작이긴
+  // 하지만, 그 보장이 PostgREST 설정/버전에 따라 달라질 수 있어(문서화된
+  // 전역 불변식이 아님) 정확성을 우선해 개별 UPDATE(명시적으로 지정한
+  // 컬럼만 확실히 바뀜)를 택했다.
+  for (const { id, patch } of updateOps) {
+    const { data, error } = await supabase
+      .from('words').update(patch).eq('id', id).eq('unit_id', unitId)
+      .select('id,word,meaning,word_audio_url,example_text,memory_tip').maybeSingle()
+    if (error) throw error
+    if (data) resultRows.push(data)
+  }
+
+  if (insertRows.length > 0) {
+    const { data, error: insErr } = await supabase
+      .from('words').insert(insertRows).select('id,word,meaning,word_audio_url,example_text,memory_tip')
+    if (insErr) throw insErr
+    resultRows.push(...(data || []))
+  }
+
+  if (deleteIds.length > 0) {
+    const { error: delErr } = await supabase.from('words').delete().in('id', deleteIds).eq('unit_id', unitId)
+    if (delErr) throw delErr
+  }
+
+  return resultRows
 }
 
 // word.accepted_meanings.update — setWordAcceptedMeanings()(wordLibrary.js:

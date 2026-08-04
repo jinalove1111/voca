@@ -1,0 +1,37 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "p0-word-status-fk-preserve",
+  "task": "P0 데이터 손실 수정 — setClassWords/handleWordsBulkReplace의 delete-then-insert를 word 텍스트 매칭 기반 UPDATE/INSERT/DELETE로 교체(word_status.word_id FK CASCADE 보존)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-04T13:00:00Z",
+  "updated_at": "2026-08-04T15:10:00Z",
+  "files_owned": [
+    "src/utils/wordLibrary.js",
+    "supabase/functions/admin-content-write/index.ts",
+    "tests/harness/runWordsBulkReplacePlan.mjs"
+  ],
+  "files_read": [
+    "supabase_v1_5_word_status.sql",
+    "scripts/testEdgeFunctionsE2E.mjs",
+    "tests/harness/registry.mjs",
+    "package.json",
+    "scripts/buildWordLibBundle.mjs",
+    "tests/harness/runExamples.mjs",
+    "tests/harness/runWordAssetRules.mjs",
+    "src/utils/wordAssetRules.js",
+    "src/utils/wordAssets.js",
+    "BUG_REPORT.md",
+    "DATABASE.md"
+  ],
+  "summary": "1) src/utils/wordLibrary.js에 순수 함수 planWordsBulkReplace(existingRows,newWords)를 신규 export — word 텍스트(대소문자 무시) 매칭으로 겹치는 단어는 id 보존 UPDATE, 새 단어는 INSERT, 빠진 단어만 DELETE 계획을 반환(DB 중복 방어: 기존 중복은 첫 행만 매칭 후 나머지 삭제, 새 목록 중복도 같은 id 이중 UPDATE 방지). setClassWords의 레거시 anon 경로(adminPin 없음)가 이 함수를 직접 호출해 update/insert/delete 실행, adminPin 경로는 원본 word 목록만 서버로 전송. 2) supabase/functions/admin-content-write/index.ts의 handleWordsBulkReplace를 동일 알고리즘의 독립 TS 사본으로 재작성 — 서버가 자체 SELECT+diff(서비스 롤 키)를 수행, 입력 검증을 DB 변경 전에 전부 끝내 BUG_REPORT.md H2(검증 전 delete)도 부수적으로 해소. rows:[] 빈 배열 시 전체 delete-only 동작/반환 모양(id,word,meaning,word_audio_url,example_text,memory_tip)/carry-forward(M3a의 memory_tip·example_translation 포함) 계약은 전부 그대로 유지. 3) tests/harness/runWordsBulkReplacePlan.mjs 신규(38단언, esbuild 인메모리 번들로 wordLibrary.js의 planWordsBulkReplace를 네트워크 0으로 직접 검증) — 수정 전 실행 시 'planWordsBulkReplace is not a function'으로 FAIL(회귀 재현 확인, 보고서에 실제 로그 인용), 수정 후 38/38 PASS. word_status 스키마/FK/SQL 파일은 전혀 건드리지 않음(순수 애플리케이션 레벨). build PASS, verify:student/admin/homework/word-assignment/unit/persistence 전부 PASS(레거시 경로는 v3.11 락다운으로 전부 SKIP — 예상된 상태, 내 코드에 도달하지 못함). verify:all 기준 login 도메인만 기존과 동일하게 FAIL(로컬 SUPABASE_SERVICE_ROLE_KEY 권한 문제, students 테이블 관련 — 이번 작업과 무관, 새로 깨진 도메인 없음). deno/tsc 로컬 미설치라 index.ts는 esbuild.transform(loader:'ts')로 전체 파싱 성공 확인(타입체크는 아님, 구문 무결성만).",
+  "blocker": null,
+  "next_action": "메인 세션: (1) tests/harness/registry.mjs에 신규 domain 'wordsBulkReplacePlan'(또는 유사 이름) 등록 + package.json에 verify:words-bulk-replace-plan 스크립트 추가(정확한 줄은 구현 보고서 참고), (2) supabase/functions/admin-content-write/index.ts 변경은 운영자 수동 배포(supabase functions deploy admin-content-write) 필요, (3) 커밋은 메인 세션이 수행.",
+  "addendum_2026_08_04_deploy_order_fix": {
+    "trigger": "코디네이터가 배포 순서 위험 지적 — Vercel(클라이언트)과 Supabase Edge Function은 독립 배포라 클라이언트가 먼저 나가고 서버가 아직 옛 코드인 창에서 얇은 {word,meaning,example} payload를 보내면 word_audio_url/example_audio_url/example_text/memory_tip/example_translation이 전부 null로 insert되는, P0 버그보다 더 나쁜 사고가 남",
+    "fix": "wordLibrary.js에 buildAdminBulkReplaceRows(existingRows,newWords) 신규 export 추가 — planWordsBulkReplace의 updates+inserts를 id 제거 후 펼쳐 M3a 시점(git d147f1b)과 동일한 '완성된 행' payload(word/meaning/position/word_audio_url/example_audio_url/example_text/memory_tip/example_translation)를 복원. setClassWords의 carry-forward SELECT를 다시 상단으로 올려 adminPin/레거시 두 분기가 공유(중복 SELECT/병합 로직 없음). 서버(index.ts handleWordsBulkReplace)는 그 필드들을 여전히 신뢰하지 않고 자체 SELECT로 재계산 — 다만 example_text 필드명은 클라이언트가 이제 그 이름으로 보내므로 targets 매핑을 r.example -> r.example_text로 정정(신규 단어의 최초 예문 소스로만 사용, 매칭되는 기존 행이 있으면 서버 자체 prior가 항상 우선).",
+    "harness": "runWordsBulkReplacePlan.mjs에 11~13번 섹션 추가(총 49단언) — buildAdminBulkReplaceRows가 옛 서버 호환 5개 컬럼을 전부 포함하는지, 빈 words에서도 빈 rows인지, setClassWords 소스가 실제로 buildAdminBulkReplaceRows를 호출하고 얇은 payload로 되돌아가지 않았는지(코드 레벨 정규식 검사) 단언.",
+    "verification": "build PASS, harness 49/49 PASS, verify:student/admin/homework/word-assignment/unit/persistence 전부 PASS(레거시 anon 경로는 v3.11 락다운으로 SKIP, 내 코드 미도달 — 기존과 동일), verify:all 기준 login 도메인만 기존과 동일하게 FAIL(무관, 로컬 service_role 권한 문제)."
+  }
+}
