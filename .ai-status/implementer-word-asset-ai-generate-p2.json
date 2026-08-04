@@ -1,0 +1,29 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "word-asset-ai-generate-p2",
+  "task": "Word Asset Library P2 — AI 단어 자산 생성 신규 Supabase Edge Function(generate-word-assets) 작성(cefr/pronunciation_uk/example_sentence+translation/part_of_speech 4필드, DB 쓰기 없음, ai_usage_daily 예산 공유)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-04T17:20:00Z",
+  "updated_at": "2026-08-04T17:48:01Z",
+  "files_owned": [
+    "supabase/functions/generate-word-assets/index.ts",
+    "supabase/functions/generate-word-assets/pipeline.js",
+    "supabase/functions/generate-word-assets/providers.js"
+  ],
+  "files_read": [
+    "supabase/functions/admin-content-write/index.ts",
+    "supabase/functions/grade-writing-answers/index.ts",
+    "supabase/functions/grade-writing-answers/pipeline.js",
+    "supabase/functions/grade-writing-answers/providers.js",
+    "supabase_v3_15_word_assets.sql",
+    "src/utils/wordAssetRules.js",
+    "src/utils/curriculum/generatorContract.js",
+    "src/utils/wordAssets.js",
+    "package.json"
+  ],
+  "summary": "신규 Edge Function generate-word-assets 작성 완료. index.ts는 admin-content-write의 verifyAdminPin 인증 패턴을 복제하고, grade-writing-answers/index.ts의 readTodayUsage/accumulateUsageRow(폴백 2단계 포함)를 동일 동작으로 복제(export 안 돼 있어 import 불가)했으며, estimateCostUsd/MODEL_PRICING_PER_MTOK/AI_MODEL_ID/DEFAULT_AI_PROVIDER는 grade-writing-answers/pipeline.js에서 그대로 import(단가표 복제 없음). ai_usage_daily를 채점과 공유하는 예산 풀로 그대로 재사용(같은 (usage_date, provider, model) PK, MAX_DAILY_COST 환경변수명도 의도적으로 동일). AI가 채우는 필드는 cefr/pronunciation_uk/example_sentence(+translation)/part_of_speech 4개뿐 — difficulty/base_review_interval_days/image_prompt/image_url은 생성하지 않음(wordAssetRules.js가 이미 규칙 기반으로 채움). 프롬프트는 세미콜론 다의어/괄호 용법힌트/공백=구숙어/한국 초중등 대상 쉬운 문장/불확실시 null/금칙톤(generatorContract.js FORBIDDEN_TONE_HINTS 사본 재사용)을 모두 반영. OpenAI response_format json_schema(strict)로 구조화 출력 강제 + 애플리케이션 레벨 sanitize(CEFR/품사 enum 밖 값, 구/숙어인데 IPA 채움, 금칙톤 예문을 전부 null로 재무력화). DB 쓰기 없음 — 결과는 호출자에게만 반환, 실제 upsert는 admin-content-write의 word_asset.upsert_bulk 몫. AdminScreen.jsx/admin-content-write/index.ts/supabase_v3_15_word_assets.sql은 전혀 건드리지 않음(git status로 확인). deno/tsc 미설치라 esbuild(node_modules에 이미 존재, vite 의존성)로 3개 파일 syntax + bundle(상대경로 cross-function import 포함) 검증 완료 — 전부 OK. npm run build 통과, npm run verify:all 실행 — login/homework/persistence는 기존과 동일하게 FAIL(사전에 이미 실패 상태였고 이번 변경으로 새로 생긴 실패 0건, 어떤 기존 파일도 수정하지 않았으므로 인과관계 없음 확인). api/ 디렉터리 파일 수 13개로 불변 확인(신규 Vercel 함수 0개).",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 대기 — 배포는 운영자 수동(supabase functions deploy generate-word-assets), 시크릿은 grade-writing-answers와 프로젝트 전역 공유(OPENAI_API_KEY/ADMIN_PIN/SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY 재등록 불필요, WORD_ASSET_* 요청당 상한/MAX_DAILY_COST는 선택 오버라이드). 이후 별도 작업으로 AdminScreen.jsx/WordAssetPanel.jsx가 이 함수를 호출해 결과를 admin-content-write word_asset.upsert_bulk로 넘기는 배선이 필요(이번 P2 범위 밖, 다른 세션이 이미 그 파일들 작업 중이라 손대지 않음)."
+}
