@@ -3,7 +3,12 @@ import React, { useState, useRef, useEffect, useMemo } from 'react'
 // 키웠다(엑셀 업로드는 자주 쓰는 기능이 아님). PdfUpload.handleFile이 이미
 // pdfjs-dist를 동적 import하는 선례가 있어 동일 패턴으로 handleFile 안에서만
 // 로드하도록 바꾼다(정적 import 제거, 동작은 동일).
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchAssignmentHistory, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, fetchXpByEventType, getClassIdByName, getStudents, wordSlug, isoDaysAgoStr } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchAssignmentHistory, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, fetchXpByEventType, getClassIdByName, getStudents, wordSlug, isoDaysAgoStr, buildUnitWordAssetPayloads, groupAssetPayloadsByShape } from '../utils/wordLibrary'
+// Word Asset Library(M3c, 2026-08-05) — 엑셀 업로드 저장 "이후" 자산
+// 업서트 배선 전용(조회 배선은 이번 범위 아님, 규칙 12). fetchWordAssetsByWords/
+// upsertWordAssets 둘 다 절대 throw하지 않는 계약(src/utils/wordAssets.js
+// 헤더 주석) — 이 파일에서도 그 계약을 그대로 신뢰한다.
+import { fetchWordAssetsByWords, upsertWordAssets } from '../utils/wordAssets'
 // 숙제 "자동 생성" 순수 플래너(2026-08-01) — 이 파일은 미리보기(체크박스
 // Set 채우기)에만 쓰고, 실제 저장은 항상 기존 setTodaysAssignment/
 // setAssignmentForDate(adminPin 듀얼패스) 그대로 사용한다.
@@ -1158,6 +1163,14 @@ const HEADER_ALIASES = {
   // "no"/"번호" is recognized only so it can be explicitly ignored — it's
   // a row number, never a word/meaning/class.
   no:      ['no', '번호'],
+  // M3c(2026-08-05) — 전부 선택 컬럼(없어도 기존과 100% 동일 동작). 헤더가
+  // 명시적으로 있을 때만 인식된다 — 헤더 미검출 시의 위치 추정 폴백
+  // (parseExcelRows의 "no header" 분기, :1189-1197 근방)은 word/meaning/
+  // unit 3종만 다루고 이 4개는 절대 추정하지 않는다(지어내지 않음).
+  example:            ['example', '예문', '영어예문'],
+  exampleTranslation: ['example_translation', '예문번역', '해석'],
+  partOfSpeech:       ['pos', 'part_of_speech', '품사'],
+  cefr:               ['cefr', '레벨', '난이도등급'],
 }
 
 function detectHeaderMap(row) {
@@ -1196,6 +1209,12 @@ function parseExcelRows(rows, selectedClass = '') {
     if (col0AllNumeric) numberColOffset = 1
   }
 
+  // M3c(2026-08-05) — 빈 셀은 undefined로 남긴다(''가 아니라) — 다운스트림
+  // (buildUnitWordAssetPayloads/buildRuleBasedAssets)이 "값이 없음"과
+  // "빈 문자열이 명시적으로 들어옴"을 구분하지 않고 둘 다 지어내지 않기로
+  // 처리하지만, undefined로 통일해 두면 그 계약이 더 명확해진다.
+  const orUndef = (v) => (v === '' || v === undefined ? undefined : v)
+
   const result = dataRows
     .map(r => {
       if (!Array.isArray(r) || r.length === 0) return null
@@ -1217,7 +1236,15 @@ function parseExcelRows(rows, selectedClass = '') {
         }
       }
 
-      return { className: selectedClass, unit: unit || 'Unit 1', word, meaning }
+      // 선택 컬럼 4종 — 헤더가 명시적으로 감지됐고(hasHeader) 그 헤더가
+      // 실제로 매핑됐을 때만 읽는다. 위치 추정(hasHeader===false) 경로는
+      // 절대 이 4개를 추정하지 않는다 — 항상 undefined.
+      const example            = hasHeader && headerMap.example            !== undefined ? orUndef(values[headerMap.example])            : undefined
+      const exampleTranslation = hasHeader && headerMap.exampleTranslation !== undefined ? orUndef(values[headerMap.exampleTranslation]) : undefined
+      const partOfSpeech       = hasHeader && headerMap.partOfSpeech       !== undefined ? orUndef(values[headerMap.partOfSpeech])       : undefined
+      const cefr                = hasHeader && headerMap.cefr               !== undefined ? orUndef(values[headerMap.cefr])                : undefined
+
+      return { className: selectedClass, unit: unit || 'Unit 1', word, meaning, example, exampleTranslation, partOfSpeech, cefr }
     })
     .filter(r => r && r.word && r.meaning)
   // 배열에 메타 정보만 덧붙임(호출부는 여전히 평범한 배열로 취급 가능) —
@@ -1274,7 +1301,16 @@ function ExcelUpload({ onDone, adminPin }) {
       const key = r.word.toLowerCase()
       if (byUnit[u].seen.has(key)) { skippedDupes++; return }
       byUnit[u].seen.add(key)
-      byUnit[u].words.push({ word: r.word, meaning: r.meaning })
+      // M3c(2026-08-05) — example은 기존과 동일하게 setClassWords가
+      // w.example로 읽어 words.example_text carry-forward 경로에 그대로
+      // 쓴다(planWordsBulkReplace, 변경 없음). exampleTranslation/
+      // partOfSpeech/cefr은 words 테이블에 없는 컬럼이라 setClassWords는
+      // 이 필드들을 전혀 읽지 않는다 — 아래 word_assets 업서트 블록에서만
+      // 쓰인다.
+      byUnit[u].words.push({
+        word: r.word, meaning: r.meaning, example: r.example,
+        exampleTranslation: r.exampleTranslation, partOfSpeech: r.partOfSpeech, cefr: r.cefr,
+      })
     })
 
     // Saving to a unit that already has words REPLACES them entirely
@@ -1295,6 +1331,30 @@ function ExcelUpload({ onDone, adminPin }) {
       for (const [unit, { words }] of Object.entries(byUnit)) {
         await setClassWords(targetClass, words, unit, adminPin)
         totalWords += words.length
+        // M3c(2026-08-05) — Word Asset Library 배선. setClassWords가 이미
+        // 성공한 "뒤에만" 시도하고, 이 블록 전체를 별도 try/catch로 완전히
+        // 격리한다 — 실패해도(테이블 부재/Edge Function 미배포/네트워크
+        // 문제 전부 포함) 단어 저장은 이미 끝난 상태라 교사에게는 절대
+        // "저장 실패"로 보이면 안 된다(위 catch로 떨어지지 않게 함).
+        // fetchWordAssetsByWords/upsertWordAssets 둘 다 자체적으로 throw하지
+        // 않는 계약이지만(wordAssets.js 헤더 주석), 이 블록에서 새로 작성한
+        // buildUnitWordAssetPayloads/groupAssetPayloadsByShape(wordLibrary.js)
+        // 까지 포함해 방어적으로 한 번 더 감싼다.
+        try {
+          const existingAssets = await fetchWordAssetsByWords(words)
+          const payloads = buildUnitWordAssetPayloads(words, existingAssets)
+          for (const group of groupAssetPayloadsByShape(payloads)) {
+            const result = await upsertWordAssets(group, adminPin)
+            // ok:false는 정상 범위(v3_15 SQL 미실행/Edge Function 미배포 등,
+            // upsertWordAssets 헤더 주석 참고) — 관리자에게 alert 없이
+            // 콘솔에만 조용히 남긴다(단어 저장 성공 메시지를 방해하지 않음).
+            if (!result?.ok) {
+              console.warn(`[ExcelUpload] "${unit}" word_assets 업서트 스킵(${result?.reason || 'unknown'}) — 단어 저장에는 영향 없음`)
+            }
+          }
+        } catch (assetErr) {
+          console.warn(`[ExcelUpload] "${unit}" word_assets 자산 업서트 중 예외(단어 저장에는 영향 없음):`, assetErr?.message || assetErr)
+        }
       }
       alert(`"${targetClass}" 반에 ${totalWords}개 단어 저장 완료!` + (skippedDupes > 0 ? `\n(중복 단어 ${skippedDupes}개는 제외했어요)` : ''))
       // A8(2026-08-02) — 업로드 후 반 목록 탭으로만 돌아가고 방금 올린
@@ -1313,6 +1373,8 @@ function ExcelUpload({ onDone, adminPin }) {
       <div className="bg-blue-50 rounded-2xl p-4 text-sm text-blue-700 font-bold">
         <p>📋 지원하는 컬럼 (첫 줄이 헤더일 때):</p>
         <p className="text-xs mt-1 font-normal">No/번호 (무시됨) · Word/단어 · Meaning/뜻 · Unit/유닛 (선택, 없으면 Unit 1)</p>
+        {/* M3c(2026-08-05) — 전부 선택 컬럼, 없어도 기존과 동일하게 동작. */}
+        <p className="text-xs mt-1 font-normal text-blue-500">선택 컬럼: 예문(Example/예문) · 예문번역(해석) · 품사(POS/품사) · 레벨(CEFR/레벨) — 없어도 무방해요.</p>
         <p className="text-xs mt-2 text-blue-500 font-normal">※ 반은 항상 아래에서 선택한 반으로 저장돼요 — 엑셀 안의 어떤 칸도 반 이름으로 쓰지 않습니다.</p>
       </div>
 

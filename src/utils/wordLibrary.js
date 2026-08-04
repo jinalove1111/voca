@@ -1,5 +1,12 @@
 import { supabase } from './supabaseClient'
 import { fmtDay } from './analyticsMath'
+// Word Asset Library(M3c, 2026-08-05) — 엑셀 업로드가 만든 유닛 단어로
+// 규칙 기반 자산(word_assets)을 채우는 데만 쓴다(순수 함수, AI 호출 0건,
+// import 0 모듈이라 정적 import해도 순환/부작용 위험이 없다 —
+// wordAssetRules.js 헤더 주석 참고). 조회/쓰기 네트워크 함수는 여전히
+// AdminScreen.jsx가 src/utils/wordAssets.js에서 직접 가져와 쓴다(이 파일은
+// 그 계층을 감싸지 않는다 — 순수 계획 함수만 이 파일에 둔다).
+import { buildRuleBasedAssets } from './wordAssetRules'
 // House System(2026-07-19, 게임화 하위카드 8번) — 순수 배정/집계 함수만
 // import한다(HOUSES 상수/assignBalancedHouseId/computeHouseCounts/
 // computeHouseWeeklyScores). houseSystem.js 자신은 이 파일을 거꾸로
@@ -860,6 +867,142 @@ export async function setClassWords(className, words, unitName = DEFAULT_UNIT_NA
     if (!row.word_audio_url || !row.memory_tip) requestAudioGeneration(row.id, row.word, row.meaning, row.example_text)
   })
   await refreshWordLibrary()
+}
+
+// ── Word Asset Library 배선 계획 함수(M3c, 2026-08-05) ─────────────────────
+// 엑셀 업로드가 setClassWords로 단어를 저장한 "뒤에" 그 유닛 단어들로
+// word_assets 업서트 payload를 계획한다. 네트워크 호출은 전혀 하지 않는다
+// (호출부가 fetchWordAssetsByWords/upsertWordAssets를 직접 부른다,
+// src/utils/wordAssets.js) — 이 함수는 순수 계획만 담당.
+//
+// unitWords: [{ word, meaning, example, exampleTranslation, partOfSpeech,
+//   cefr }, ...] — AdminScreen.jsx ExcelUpload가 엑셀에서 읽은 값 그대로
+//   (없는 필드는 undefined, 절대 지어내지 않음).
+// existingAssetsByWordKey: fetchWordAssetsByWords()의 반환(Map<word_key,
+//   normalizeWordAssetRow() 결과 — 카멜케이스>). 비어 있어도(테이블 부재
+//   등) 안전(전부 신규 취급).
+//
+// ⚠️★ 정확성 계약(덮어쓰기 방지) — 이 저장소가 carry-forward 소실/
+// word_status CASCADE 두 번의 실제 데이터 손실 사고를 겪은 뒤 세운 원칙과
+// 동일선상: 이미 word_assets에 값이 있는 필드는 payload 자체에 그 키를
+// 절대 만들지 않는다(null로 채우는 것도 안 됨 — 키 부재와 null은 다른
+// 신호다). approval_status가 'approved'인 행은 통째로 건너뛴다(교사가
+// 승인한 콘텐츠, M4 편집기 대상 — 지금은 편집 UI가 없어도 계약을 미리
+// 지킨다). generated_fields는 기존 값과 병합한다(새 payload의
+// generated_fields만 보내면 UPDATE가 JSONB 컬럼 전체를 치환해 이번에
+// 손대지 않은 필드의 provenance 기록이 사라진다 — 부분 키 SET이 아니라
+// 컬럼 전체 치환이라는 Postgres UPSERT 동작 때문에 반드시 머지해야 함).
+//
+// 예외: 엑셀에서 온 partOfSpeech/cefr(교사 입력)은 규칙 추정값보다
+// 우선한다 — 기존 값 유무와 무관하게 항상 채우고, generated_fields의 해당
+// 키를 'teacher'로 표시한다(교사가 방금 이 엑셀에 적어 낸 값이 가장
+// 최신이라는 판단).
+const WORD_ASSET_RULE_FIELD_MAP = {
+  meaning_primary: 'meaningPrimary',
+  part_of_speech: 'partOfSpeech',
+  difficulty: 'difficulty',
+  base_review_interval_days: 'baseReviewIntervalDays',
+  image_prompt: 'imagePrompt',
+  image_status: 'imageStatus',
+  example_sentence: 'exampleSentence',
+  example_translation: 'exampleTranslation',
+  story_memory: 'storyMemory',
+  example_source: 'exampleSource',
+  source: 'source',
+  approval_status: 'approvalStatus',
+  pipeline_status: 'pipelineStatus',
+  generated_fields: 'generatedFields',
+}
+const WORD_ASSET_ALWAYS_KEEP = new Set(['word_key', 'sense_key', 'word'])
+
+export function buildUnitWordAssetPayloads(unitWords, existingAssetsByWordKey) {
+  const list = Array.isArray(unitWords) ? unitWords : []
+  const existingMap = existingAssetsByWordKey instanceof Map ? existingAssetsByWordKey : new Map()
+
+  const ruleInputs = list.map((w) => ({
+    word: w?.word,
+    meaning: w?.meaning,
+    exampleText: w?.example,
+    exampleTranslation: w?.exampleTranslation,
+    // 엑셀에 암기팁 컬럼이 없다 — 항상 undefined(지어내지 않음).
+    memoryTip: undefined,
+  }))
+  const ruleAssets = buildRuleBasedAssets(ruleInputs) // word_key 기준 dedupe 내장
+
+  // 엑셀의 partOfSpeech/cefr(교사 입력) — word_key 기준으로 빠르게 조회.
+  const teacherOverridesByKey = new Map()
+  for (const w of list) {
+    const wk = String(w?.word ?? '').trim().toLowerCase()
+    if (!wk || teacherOverridesByKey.has(wk)) continue
+    const pos = typeof w?.partOfSpeech === 'string' ? w.partOfSpeech.trim() : ''
+    const cefr = typeof w?.cefr === 'string' ? w.cefr.trim() : ''
+    if (pos || cefr) teacherOverridesByKey.set(wk, { pos: pos || null, cefr: cefr || null })
+  }
+
+  const out = []
+  for (const asset of ruleAssets) {
+    const existing = existingMap.get(asset.word_key) || null
+    if (existing && existing.approvalStatus === 'approved') continue // 교사 승인 콘텐츠 — 절대 건드리지 않음
+
+    const row = { word_key: asset.word_key, sense_key: asset.sense_key, word: asset.word }
+    const newGeneratedFields = {}
+
+    const override = teacherOverridesByKey.get(asset.word_key)
+    if (override?.pos) {
+      row.part_of_speech = override.pos
+      newGeneratedFields.part_of_speech = 'teacher'
+    }
+    if (override?.cefr) {
+      row.cefr = override.cefr
+      newGeneratedFields.cefr = 'teacher'
+    }
+
+    for (const [snakeKey, camelKey] of Object.entries(WORD_ASSET_RULE_FIELD_MAP)) {
+      if (snakeKey === 'generated_fields') continue // 아래에서 별도 병합
+      if (row[snakeKey] !== undefined) continue // 이미 교사 override로 채워짐(part_of_speech)
+      const ruleValue = asset[snakeKey]
+      if (ruleValue === undefined) continue
+      const existingValue = existing ? existing[camelKey] : null
+      const hasExisting = existingValue !== null && existingValue !== undefined && existingValue !== ''
+      if (hasExisting) continue // 이미 값이 있음 — payload에서 빼서 덮어쓰지 않음
+      row[snakeKey] = ruleValue
+      if (asset.generated_fields && Object.prototype.hasOwnProperty.call(asset.generated_fields, snakeKey)) {
+        newGeneratedFields[snakeKey] = asset.generated_fields[snakeKey]
+      }
+    }
+
+    if (Object.keys(newGeneratedFields).length > 0) {
+      // 기존 provenance와 병합(컬럼 전체 치환 위험 방지 — 위 헤더 주석).
+      row.generated_fields = { ...(existing?.generatedFields || {}), ...newGeneratedFields }
+    }
+
+    const meaningfulKeys = Object.keys(row).filter((k) => !WORD_ASSET_ALWAYS_KEEP.has(k))
+    if (meaningfulKeys.length === 0) continue // 이미 전부 채워져 있음 — 보낼 게 없음
+
+    out.push(row)
+  }
+  return out
+}
+
+// 같은 업서트 요청 안의 모든 행이 정확히 같은 키 집합을 갖도록 묶는다.
+// 왜 필요한가: PostgREST의 bulk upsert(배열 body)가 요청 전체에서 등장한
+// 키의 합집합으로 컬럼을 구성할 가능성을 배제할 수 없다(라이브 인스턴스로
+// 직접 검증하지 않음 — 검증 안 된 가정에 기대 데이터 손실 위험을 감수하지
+// 않는다, CLAUDE.md 규칙 15와 같은 태도). 만약 그렇다면, 한 행이 "이미
+// 값 있음, 건드리지 않음"으로 특정 필드를 payload에서 뺐어도 같은 요청 안
+// 다른 행이 그 필드를 갖고 있으면 이 행에 그 컬럼이 NULL로 끼어들어 ON
+// CONFLICT UPDATE가 기존 값을 null로 덮어쓸 위험이 있다. 요청을 키
+// 집합별로 쪼개 보내면 이 위험이 구조적으로 사라진다.
+export function groupAssetPayloadsByShape(payloads) {
+  const list = Array.isArray(payloads) ? payloads : []
+  const groups = new Map()
+  for (const row of list) {
+    if (!row || typeof row !== 'object') continue
+    const shapeKey = Object.keys(row).sort().join('|')
+    if (!groups.has(shapeKey)) groups.set(shapeKey, [])
+    groups.get(shapeKey).push(row)
+  }
+  return Array.from(groups.values())
 }
 
 // Tracks in-flight requests so a word is never asked for twice at once (e.g.
