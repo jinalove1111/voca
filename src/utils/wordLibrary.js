@@ -691,8 +691,13 @@ export async function setClassWords(className, words, unitName = DEFAULT_UNIT_NA
   // word text) so re-saving a unit — e.g. adding one more word to an
   // existing list — doesn't throw away and regenerate content that already
   // worked.
+  // 2026-08-04 M3a 데이터 손실 버그 수정 — memory_tip/example_translation도
+  // carry-forward 대상에 추가한다. 이 둘이 SELECT/insert 행 어느 쪽에도
+  // 없으면 유닛에 단어 하나만 추가해도(= 이 함수 재호출) 그 유닛 전체
+  // 단어의 암기팁/예문번역이 delete-then-insert로 영구 소실된다(라이브
+  // NULL 40건 실측이 이 경로와 일치) — § handoff.md M3a 섹션.
   const { data: existingRows, error: selErr } = await supabase
-    .from('words').select('word,word_audio_url,example_audio_url,example_text').eq('unit_id', unit.id)
+    .from('words').select('word,word_audio_url,example_audio_url,example_text,memory_tip,example_translation').eq('unit_id', unit.id)
   if (selErr) throw selErr
   const priorByWord = new Map((existingRows || []).map((r) => [r.word.toLowerCase(), r]))
 
@@ -703,6 +708,8 @@ export async function setClassWords(className, words, unitName = DEFAULT_UNIT_NA
       word_audio_url: prior?.word_audio_url || null,
       example_audio_url: prior?.example_audio_url || null,
       example_text: prior?.example_text || (w.example || '').trim() || null,
+      memory_tip: prior?.memory_tip || null,
+      example_translation: prior?.example_translation || null,
     }
   })
 
@@ -714,7 +721,7 @@ export async function setClassWords(className, words, unitName = DEFAULT_UNIT_NA
     if (delErr) throw delErr
     inserted = []
     if (words.length > 0) {
-      const { data, error: insErr } = await supabase.from('words').insert(rows).select('id,word,meaning,word_audio_url,example_text')
+      const { data, error: insErr } = await supabase.from('words').insert(rows).select('id,word,meaning,word_audio_url,example_text,memory_tip')
       if (insErr) throw insErr
       inserted = data
     }
@@ -724,8 +731,14 @@ export async function setClassWords(className, words, unitName = DEFAULT_UNIT_NA
   // admin-provided) for any word that doesn't already have audio. Never
   // blocks the save, never throws — if the API route isn't deployed yet
   // (e.g. local dev) the word just has no audio until this succeeds later.
+  // 2026-08-04 M3a — 게이트를 오디오 부재뿐 아니라 memory_tip 부재까지
+  // 넓힌다(carry-forward 버그로 이미 memory_tip을 잃어버린 기존 단어의
+  // 자연 복구 경로). ⚠️ api/generate-audio.js:142-144의 조기 no-op 반환이
+  // "오디오+예문만 있으면 즉시 종료"라서, 이 클라이언트 게이트만 넓혀서는
+  // 실제로 memory_tip이 채워지지 않는다 — 그 서버 파일은 이 세션의 소유가
+  // 아니라 여기서 고치지 않았다(보고서에 필요한 변경 내용 기술).
   ;(inserted || []).forEach((row) => {
-    if (!row.word_audio_url) requestAudioGeneration(row.id, row.word, row.meaning, row.example_text)
+    if (!row.word_audio_url || !row.memory_tip) requestAudioGeneration(row.id, row.word, row.meaning, row.example_text)
   })
   await refreshWordLibrary()
 }
