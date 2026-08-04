@@ -1,11 +1,157 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-08-04 (35차, Phase 2 M4-보상 마감 — M4c(word-view-complete
-트리거 completed 기준 교체, 이전 세션 974a388 미문서화분 소급 기록)/M4d(미션
-슬롯 교체, 7일 관측 게이트 대기 — 아직 미착수)/M4e(대시보드 Completed XP
-노출, xp_ledger 단일 쿼리)/M4f(성장 앨범 cleared 밀스톤 축 추가, 모자 조건·
-Word King 가중치 전부 무변경) 요약 + 결정 근거 3건(`wiki/decisions.md`
-#11~13) + GAME_DESIGN.md 원문 정정(퀴즈 정답 별 지급 0). 상세는 아래 35차
-섹션)_
+_최종 갱신: 2026-08-05 (36차, Word Asset Library M1~M3c + P0 데이터 손실
+버그 2건 발견·수정(word_status CASCADE 삭제 / memory_tip·
+example_translation 영구 소실) + 배포 순서 위험 대응 + 측정으로 계획이
+뒤집힌 것 2건(문장부호 정규화 갭 반증, 쓰기 오토파일럿 편집거리1 계단
+보류) 정직 기록. **운영자 필독**: 아래 "운영자 조치 사항" 순서를 지키지
+않으면(특히 admin-content-write 재배포 전 유닛 재저장) 학습기록이
+삭제된다. 상세는 아래 36차 섹션)_
+
+## 2026-08-05 (36차) — Word Asset Library M1~M3c + P0 데이터 손실 버그 2건
+발견·수정 + 측정 기반 계획 정정 2건 (implementer 세션들 + docs-maintainer
+문서화, 커밋 `9ed4e96`/`c8814d3`/`d147f1b`/`0006bc7`/`6e8c882`/`876a0c2`/
+`75beefa`/`2aed528`)
+
+### (1) 발견·수정한 데이터 손실 버그 2건
+
+**① `word_status` CASCADE 삭제(P0, 커밋 `75beefa`)** —
+`word_status.word_id → words(id) on delete cascade`(`supabase_v1_5_word_status.sql:33-35`)
+인데, 유닛 저장(`setClassWords`/`admin-content-write`의
+`handleWordsBulkReplace`)이 그 유닛의 `words` 행을 **통째로 delete한 뒤
+insert**하는 구조였다. 새로 insert된 행은 매번 새 `gen_random_uuid()`를
+받으므로, 교사가 유닛에 단어를 **하나만 추가**해도 그 유닛 전체 학생의
+"알아요/모르겠어요/mastered" 기록(`word_status`)이 CASCADE로 통째로
+삭제됐다. 실측: `word_status` 전체 1,691행, 관측 사례로 학생 1명("중2
+YMB 박준원") Unit 5 — 단어 40개에 `word_status` 174행. 헌법 규칙 15("회귀가
+의심되면 수정 전 코드로 되돌려 테스트가 실제로 FAIL하는지 먼저 확인")에
+따라 **수정 전 코드로 이 174행 삭제를 먼저 대조군 재현**한 뒤 수정했다.
+**⚠️ 정확히 기록할 것**: 증명된 것은 "이 메커니즘이 다음 재저장에서
+재현된다"는 것뿐이다. 이 저장소에는 감사 로그가 없어 **과거 실제 운영
+중에 이 CASCADE가 몇 번 발생했는지, 즉 "이미 학습기록이 실제로 소실된
+적이 있는지"는 증명되지 않았다/미확인** — "이미 데이터가 손실됐다"고
+단정하지 않는다.
+- **수정**: `src/utils/wordLibrary.js`에 순수 함수 `planWordsBulkReplace`
+  신규 — word 텍스트(대소문자 무시) 매칭으로 겹치는 단어는 기존 `id`를
+  보존한 UPDATE, 새 단어는 INSERT, 목록에서 빠진 단어만 DELETE. 겹치는
+  단어의 `word_status`는 이제 재저장에도 살아남는다.
+  `supabase/functions/admin-content-write/index.ts`의
+  `handleWordsBulkReplace`도 동일 알고리즘의 독립 TS 사본으로 재작성
+  (서버가 자체 SELECT+diff 수행). `word_status`의 스키마/FK(CASCADE
+  포함)는 전혀 건드리지 않은 순수 애플리케이션 레벨 수정.
+- **검증**: `tests/harness/runWordsBulkReplacePlan.mjs`(49단언, esbuild
+  인메모리 번들로 `planWordsBulkReplace`/`buildAdminBulkReplaceRows` 직접
+  검증) — 수정 전 실행 시 `planWordsBulkReplace is not a function`으로
+  FAIL(회귀 재현 확인), 수정 후 49/49 PASS.
+
+**② `memory_tip`/`example_translation` 영구 소실(커밋 `d147f1b`+`0006bc7`+`876a0c2`)** —
+`setClassWords`의 carry-forward SELECT가 `word_audio_url`/
+`example_audio_url`/`example_text` 4컬럼만 읽고(memory_tip/
+example_translation 누락), `admin-content-write`의 `words.bulk_replace`
+insert 화이트리스트도 동일하게 7컬럼뿐이었다 — 유닛을 재저장할 때마다
+이 두 필드가 NULL로 덮여 사라졌다. 게다가 오디오 재생성 게이트가
+`!word_audio_url`(오디오 유무만 확인)이라, 오디오는 이미 있지만
+memory_tip만 없는 행은 재생성 파이프라인이 아예 다시 열리지 않는 구조—
+한 번 잃으면 자연 복구가 안 됐다. 실측: NULL 40건이 단일 유닛에 100%
+집중.
+- **수정**: carry-forward SELECT/insert 화이트리스트에 `memory_tip`/
+  `example_translation` 추가, 재생성 게이트를 `!word_audio_url ||
+  !row.memory_tip`으로 확장(`d147f1b`+`0006bc7`). 다만 게이트 확장만으로는
+  `api/generate-audio.js`의 142-144행 조기 no-op 반환(오디오+예문만
+  있으면 즉시 종료)이 memory_tip 단독 결손을 못 잡아 실제 복구가 안
+  되는 것을 확인해, 같은 파일에 "예문은 보존한 채 번역·암기팁만 채우는"
+  좁은 복구 경로(`generateTranslationAndTip`)를 추가했다(`876a0c2`) —
+  TTS/오디오는 전혀 다시 호출하지 않고 기존 example_text만으로 Claude에
+  번역+암기팁만 요청, 자기소멸적(한 번 채워지면 그 조건에 다시 안 걸림).
+
+### (2) 배포 순서 위험과 그 대응
+
+Vercel(클라이언트)과 Supabase Edge Function(`admin-content-write`)은
+서로 독립 배포라 순서/간격이 운영자 손에 달려 있다. **위험**: 만약
+클라이언트가 `{word, meaning, example}` 같은 얇은 payload만 보내도록
+바뀌었다면, 클라이언트가 먼저 배포되고 서버가 아직 옛 코드인 배포 간격
+동안 교사가 유닛을 저장하는 순간 `word_audio_url`/`example_audio_url`/
+`example_text`/`memory_tip`/`example_translation` 5개 컬럼이 전부 null로
+insert되어 그 유닛 전체의 오디오·예문·번역·암기팁이 한 번에 소실된다 —
+지금 고친 `word_status` 손실 버그보다 더 나쁜 사고.
+- **대응**: `buildAdminBulkReplaceRows`가 M3a 시점(`d147f1b`)과 정확히
+  같은 모양의 "완성된 행"(5개 carry-forward 컬럼 전부 포함)을 계속
+  만들어 보내도록 고정 — 새 서버는 이 값을 신뢰하지 않고 자체 SELECT로
+  재계산하므로 옛/새 클라이언트·옛/새 서버 **네 조합 전부 안전**하다.
+  `tests/harness/runWordsBulkReplacePlan.mjs` 11~13번 섹션이 이 반환
+  모양(5개 carry-forward 컬럼 포함)을 단언으로 고정 — 나중에 누가 다시
+  payload를 줄이면 이 테스트가 잡아준다.
+
+### (3) 측정으로 계획이 뒤집힌 것 2건 — 정직하게 기록
+
+- **문장부호/공백 정규화 갭**: 293건을 조사했으나 이 정규화로 해결되는
+  건은 **0건**이었다. 가설이 반증되어 이 방향의 **코드를 바꾸지
+  않았다**.
+- **쓰기 오토파일럿(`writingReviewAutoTypo`) 편집거리1 계단**: 교사
+  판단 88건을 정답지로 재현한 결과, 편집거리1 계단이 발동한 16건이
+  **전부 교사가 반려한 건**이었다(정밀도 0%). 한국어는 1글자 차이가
+  뜻을 바꾼다(바다/비다, 해치다/다치다, 비행/비행기 등) — **이 플래그를
+  켜면 안 된다**는 결론. synonym/exact_match 계단은 오탐 0%지만 감소폭이
+  1건뿐이라 실효성이 낮다. AI 계단 효과는 한 번도 실행된 적이 없어
+  **측정 불가 — 모른다**. 권고: `writingReviewAiAssist`만 먼저 켜서
+  데이터를 쌓고 재측정할 것(`writingReviewAutoTypo`/`AutoDismiss`는
+  계속 off 유지).
+
+### (4) Word Asset 시스템 M1~M3c — 무엇을 했고 무엇을 의도적으로 하지 않았는가
+
+- **M1**(`9ed4e96`) `supabase_v3_15_word_assets.sql` — 신규 테이블
+  `word_assets`(단어 텍스트 키 `word_key = lower(btrim(word))` 기반
+  콘텐츠 자산), `words` 테이블은 한 글자도 안 건드림, anon
+  SELECT-only(`words`/`classes`/`units`와 동일 신뢰 모델, v3.11 락다운이
+  이미 라이브 적용된 것을 실측 확인 후 처음부터 SELECT-only로 설계).
+  **미실행**(운영자 대기, 급하지 않음 — 미실행이어도 앱 정상 동작).
+- **M2**(`c8814d3`) `src/utils/wordAssets.js` — 조회(`fetchWordAssetsByWords`)/
+  병합/쓰기(`upsertWordAssets`) 계약. 핵심 불변식: 어떤 실패에서도
+  throw 없음, 교사 입력값을 asset이 절대 덮어쓰지 않음, `meaning`은
+  어떤 경우에도 asset으로 채우지 않음(`meaning_primary`는 유닛
+  컨텍스트가 없어 채점을 깨뜨릴 수 있음 — `assetMeaningPrimary`로만
+  노출). 이 시점 아직 어떤 화면에도 미배선.
+- **M3a**(`d147f1b`+`0006bc7`) — 위 (1)②의 데이터 손실 수정과 함께,
+  `admin-content-write`에 `word_asset.upsert`/`word_asset.upsert_bulk`
+  액션 신규 추가(순수 upsert, conflict key `word_key`+`sense_key`,
+  독립 서버측 화이트리스트, 상한 200행, 테이블 부재 시 400+명확한
+  메시지, delete 없음).
+- **M3b**(`6e8c882`) `src/utils/wordAssetRules.js` — 규칙 기반(AI 완전
+  미사용, `Math.random`/`Date.now`/`new Date` 미사용, 완전 결정론) 자산
+  생성 순수 함수: 품사 추정(접미사 고확신 휴리스틱), 음절 추정, 난이도
+  추정(1~5), 기본 복습 간격(`leitner.js`의 `BOX_INTERVALS_DAYS`와 도메인
+  일치), 이미지 프롬프트 텍스트(이미지 자체는 생성 안 함). 하네스
+  `tests/harness/runWordAssetRules.mjs`(41단언). 이 시점 아직 어떤
+  화면에도 미배선.
+- **M3c**(`2aed528`) — `AdminScreen.jsx` 엑셀 업로드 경로에 자산 upsert
+  fire-and-forget 배선. `setClassWords`로 단어 저장이 **이미 성공한
+  뒤에만** 시도하고 전체를 별도 try/catch로 격리 — 실패해도(테이블
+  부재/Edge Function 미배포/네트워크 문제 전부 포함) 단어 저장은 이미
+  끝난 상태라 교사에게 "저장 실패"로 보이지 않는다. 엑셀 컬럼(예문/
+  예문번역/품사/CEFR)은 전부 선택 컬럼(없어도 기존과 100% 동일 동작).
+  덮어쓰기 방지 계약: 이미 `word_assets`에 값이 있는 필드는 payload에
+  그 키를 아예 만들지 않음(null로도 안 채움), `approval_status`가
+  `'approved'`인 행은 통째로 스킵.
+- **의도적으로 하지 않은 것**(전부 헌법 규칙 12 — 학생 대상 신규
+  기능/UI 금지 — 및 이번 세션 범위 명시): 학생 화면에 자산(이미지/
+  발음/예문 등) 노출 코드 0개. 이미지 실제 생성/큐잉 0건
+  (`image_status` 기본값 `'none'`). 자산 편집/승인 관리자 UI 없음
+  (`approval_status` 상태머신 컬럼만 존재). `word_assets` 조회 함수가
+  아직 어떤 학생 컴포넌트에서도 import되지 않음(grep 확인 가능).
+
+### (5) 운영자 조치 사항 — 정확한 순서
+
+1. `supabase functions deploy admin-content-write`(P0 수정 + words
+   화이트리스트 2컬럼 + word_asset 액션 전부 포함)
+2. Vercel은 push로 자동 배포(별도 조치 불필요)
+3. `supabase_v3_15_word_assets.sql` 실행(선택, 급하지 않음 — 미실행이어도
+   앱은 정상. 실행 전 SQL 파일 하단 (b-0) 쿼리로 그 시점 정확한 기대
+   백필 행수를 먼저 확인할 것 — 이 문서/SQL 파일에 적힌 599/695 등의
+   숫자는 작성 시점 값이라 계속 달라진다)
+4. **1번 배포 다음에만** Unit 5 재저장(엑셀 재업로드 등) → 학습기록
+   보존 + 암기팁 40건 자연 복구 확인
+   - ⚠️ **1번을 배포하기 전에 어떤 유닛이든 재저장하면 안 된다** — 옛
+     Edge Function이 아직 delete-then-insert 로직이라, 복구는커녕
+     `word_status` 174행(또는 그 유닛의 학습기록)이 삭제된다.
 
 ## 2026-08-04 (35차) — Phase 2 M4-보상 마감: M4c/M4d 현황 정리 + M4e
 Completed XP 노출 + M4f 성장 앨범 cleared 밀스톤 (implementer, 단독 세션)

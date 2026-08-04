@@ -322,10 +322,15 @@ v3.4 관례("allow anon all" — `for all using (true) with check (true)`)로
 원문은 `supabase_v3_15_word_assets.sql`.
 
 **왜 `words`를 안 건드리는가(라이브 실측 근거)**: `words` 총 691행, 고유
-단어(대소문자·공백 무시) 599개, 중복 13.3%(최다 4회 등장). `words` 스키마를
-전혀 바꾸지 않으면 기존 학생·반·숙제·채점 경로에 구조적으로 영향이 0이고,
-백필도 신규 테이블 599행만 채우면 되며, 롤백은 "클라이언트가 조회하지 않는
-것" 하나로 완전 가역이다.
+단어(대소문자·공백 무시) 599개, 중복 13.3%(최다 4회 등장) — 2026-08-04
+실측. **갱신(2026-08-05 재측정)**: 그 사이 교사가 단어를 계속 추가해 총
+811행 / 고유 695개로 늘었다. 이 수치는 단어가 추가될 때마다 계속 달라지므로
+"이 문서의 숫자"가 아니라 SQL 실행 직전 `supabase_v3_15_word_assets.sql`
+하단 (b-0) 쿼리(`select count(distinct lower(btrim(word))) from words ...`)
+결과를 정확한 기대값으로 쓸 것. `words` 스키마를 전혀 바꾸지 않으면 기존
+학생·반·숙제·채점 경로에 구조적으로 영향이 0이고, 백필도 신규 테이블에
+고유 단어 수만큼만 채우면 되며, 롤백은 "클라이언트가 조회하지 않는 것"
+하나로 완전 가역이다 — 이 결론은 행 수와 무관하게 그대로 유효.
 
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
@@ -365,12 +370,16 @@ service_role(RLS 우회, 향후 Edge Function/관리 스크립트) 전용. SQL �
 동봉돼 있다.
 
 **백필(규칙 기반, AI 비용 0원)**: 기존 `words.example_text`(691행 중
-100% 채워짐)와 `words.memory_tip`(94% 채워짐)을 `word_key`별로
-`distinct on`(타이브레이커는 `words.id` — `words.created_at` 컬럼이
-라이브에 존재하는지 이 세션에서 확인되지 않아 원본 DDL 미확보 상태에서
-안전하게 존재가 보장된 `id`를 씀, `DATABASE.md` "핵심 4테이블 — 저장소에
-DDL 없음" 섹션 참고)로 뽑아 `word_assets`로 복사한다. 기대 결과 599행.
-`on conflict (word_key, sense_key) do nothing`이라 재실행해도 안전(멱등).
+100% 채워짐, 2026-08-04 실측)와 `words.memory_tip`(94% 채워짐)을
+`word_key`별로 `distinct on`(타이브레이커는 `words.id` — `words.created_at`
+컬럼이 라이브에 존재하는지 이 세션에서 확인되지 않아 원본 DDL 미확보
+상태에서 안전하게 존재가 보장된 `id`를 씀, `DATABASE.md` "핵심 4테이블 —
+저장소에 DDL 없음" 섹션 참고)로 뽑아 `word_assets`로 복사한다. 기대 결과는
+2026-08-04 시점 599행이었으나 2026-08-05 재측정으로 695행으로 늘었고
+(위 "왜 `words`를 안 건드리는가" 문단 참고), 실행 시점의 정확한 값은
+SQL 파일 (b-0) 쿼리로 직접 구할 것 — 이 문서/SQL 파일의 숫자를 고정값으로
+믿지 말 것. `on conflict (word_key, sense_key) do nothing`이라 재실행해도
+안전(멱등).
 
 **GRANT**: `grant select on table word_assets to anon, authenticated`만
 (헌법 규칙 10 — 신규 테이블 GRANT 동반. INSERT/UPDATE/DELETE는 의도적으로
@@ -381,6 +390,51 @@ GRANT하지 않음, 위 RLS 정정 참고).
 스키마 파일만 준비). 향후 조회 함수를 작성할 때는 `wordLibrary.js`/
 `exampleLibrary.js`의 `isMissingTableError` 폴백 관례를 그대로 재사용해야
 한다(재구현 금지, 헌법 규칙 3).
+
+**갱신(2026-08-05, M1~M3c 세션)** — 위 "클라이언트 폴백" 문단은 SQL
+미실행 시점(2026-08-04) 기준 서술이라 이제 일부 낡았다: `word_assets`를
+읽고/쓰는 코드가 이 세션에서 추가됐다 —
+`src/utils/wordAssets.js`(조회/병합/upsert 계약, 어떤 실패에서도 throw
+없음), `src/utils/wordAssetRules.js`(규칙 기반 자산 생성 순수 함수,
+AI 미사용), `supabase/functions/admin-content-write/index.ts`의
+`word_asset.upsert`/`word_asset.upsert_bulk` 액션(service_role 전용
+쓰기), `src/components/AdminScreen.jsx`의 엑셀 업로드 경로(단어 저장
+"이후" fire-and-forget으로 자산 upsert 시도, 실패해도 단어 저장 자체는
+이미 끝난 상태라 교사에게 "저장 실패"로 보이지 않음). 이 코드들은 전부
+`word_assets` 테이블 부재(42P01/PGRST205)를 감지해 throw 없이 폴백하도록
+작성됐다(SQL 미실행 상태에서도 기존 엑셀 업로드 플로우는 byte-identical).
+**학생 화면 노출은 여전히 0**(헌법 규칙 12, 이번 세션 범위 아님) — 관리자
+쓰기 경로만 배선됐다.
+
+### `word_status` — CASCADE 데이터 손실 위험과 완화(2026-08-05)
+
+`word_status.word_id → words(id) on delete cascade`(`supabase_v1_5_word_status.sql:33-35`)다.
+과거 `setClassWords`(`src/utils/wordLibrary.js`)와
+`handleWordsBulkReplace`(`supabase/functions/admin-content-write/index.ts`)는
+유닛의 단어를 저장할 때마다 그 유닛의 `words` 행을 **통째로 delete한 뒤
+insert**했다 — 새로 insert된 행은 매번 새 `gen_random_uuid()`를 받으므로,
+교사가 유닛에 단어를 하나만 추가해도 그 유닛 전체 학생의
+`word_status`(알아요/모르겠어요/mastered 기록)가 CASCADE로 함께 삭제되는
+구조였다. 회귀 재현(2026-08-04~05 세션, 실측): 학생 1명("중2 YMB
+박준원") 기준 Unit 5 — 단어 40개에 `word_status` 174행이 걸려 있었고,
+그 유닛을 재저장하는 동작이 이 174행을 삭제하는 것으로 확인됐다(수정
+전 코드로 대조군 재현 — 헌법 규칙 15). **주의**: 이는 "메커니즘이 다음
+재저장에서 재현된다"는 것만 확정이며, 이 저장소에 감사 로그가 없어
+과거 실제 운영 중에 이 CASCADE가 몇 번 발생했는지는 **증명되지
+않았다/미확인**이다.
+
+**완화(수정됨, 커밋 `75beefa`)**: `setClassWords`/`handleWordsBulkReplace`
+둘 다 delete-then-insert 대신 word 텍스트(대소문자 무시) 매칭 기반
+diff로 교체됐다 — 겹치는 단어는 기존 `id`를 보존한 UPDATE, 새 단어만
+INSERT, 목록에서 빠진 단어만 DELETE. 겹치는 단어의 `word_status`는 이제
+재저장에도 살아남는다. `word_status`의 스키마/FK(CASCADE 포함)는 전혀
+바꾸지 않았다 — 순수 애플리케이션 레벨 수정(`src/utils/wordLibrary.js`의
+`planWordsBulkReplace`/`buildAdminBulkReplaceRows`, 순수 함수, 하네스
+`tests/harness/runWordsBulkReplacePlan.mjs`로 검증). **운영자 조치
+필요**: 이 수정은 `supabase/functions/admin-content-write` 재배포 없이는
+라이브에 반영되지 않는다 — 배포 전까지는 옛 delete-then-insert 로직이
+그대로 라이브에서 동작 중이므로, **배포 전에 어떤 유닛도 재저장(엑셀
+재업로드 등)하면 안 된다.** 상세: `handoff.md` 이번 세션 섹션.
 
 ## RLS / 컬럼권한 현황
 

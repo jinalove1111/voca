@@ -1,6 +1,69 @@
 # Paul Easy Voca — 로드맵
 
-_최종 갱신: 2026-08-01 (14차, Curriculum Engine Phase 0 완료 — 기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+_최종 갱신: 2026-08-05 (15차, Word Asset Library M1~M3c + P0 데이터 손실
+버그 2건 수정(word_status CASCADE/memory_tip·example_translation 영구
+소실) + 측정 기반 계획 정정 2건(문장부호 정규화 갭 반증, 쓰기 오토파일럿
+편집거리1 자동화 보류) — 기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+
+## 2026-08-05 (15차) — Word Asset Library M1~M3c + P0 데이터 손실 버그 2건 수정 — 코드 완료 ✅(운영자 배포/SQL 액션 대기, 순서 엄수 필요)
+
+총 8개 소커밋(`9ed4e96`/`c8814d3`/`d147f1b`/`0006bc7`/`6e8c882`/`876a0c2`/
+`75beefa`/`2aed528`, implementer 세션들 + docs-maintainer 본 세션). 상세
+근거·재현·운영자 조치 순서는 `handoff.md` 이번 세션 섹션, DB 영향은
+`DATABASE.md`의 `word_assets`/`word_status` 섹션 참고.
+
+**Word Asset Library(신규, 학생 노출 0 — 헌법 규칙 12 준수)**:
+- M1(`9ed4e96`) `supabase_v3_15_word_assets.sql` — 신규 테이블
+  `word_assets`(단어 텍스트 키 기반 콘텐츠 자산), `words` 무변경, anon
+  SELECT-only. **미실행**(운영자 대기, 급하지 않음 — 미실행이어도 앱은
+  정상 동작).
+- M2(`c8814d3`) `src/utils/wordAssets.js` — 조회/병합/upsert 계약(throw
+  없음, meaning은 절대 채점에 안 씀).
+- M3a(`d147f1b`+`0006bc7`) — `word_asset.upsert`/`upsert_bulk` Edge
+  Function 액션 추가 + `words.bulk_replace` 화이트리스트에
+  `memory_tip`/`example_translation` 보강(아래 버그 수정과 동일 커밋
+  묶음).
+- M3b(`6e8c882`) `src/utils/wordAssetRules.js` — 규칙 기반(AI 미사용)
+  자산 생성 순수 함수(품사 추정/난이도/복습 간격/이미지 프롬프트 텍스트).
+- M3c(`2aed528`) — `AdminScreen.jsx` 엑셀 업로드 경로에 자산 upsert
+  fire-and-forget 배선(단어 저장 성공 "이후"만 시도, 실패해도 저장 자체는
+  안전).
+- **의도적으로 하지 않은 것**: 학생 화면 자산 노출(규칙 12), 이미지
+  생성(스키마만 준비, `image_status` 기본값 `'none'`), 자산 편집 관리자
+  UI(승인 워크플로 등).
+
+**P0 데이터 손실 버그 2건 발견·수정**(재조사 없는 재작업 금지 원칙에
+따라 향후 세션은 이 배경을 반드시 `handoff.md`에서 먼저 확인):
+1. `word_status` CASCADE 삭제(`75beefa`) — `word_status.word_id → words(id)
+   on delete cascade`인데 유닛 저장이 delete-then-insert라 교사가 단어
+   하나만 추가해도 그 유닛 전체 학생의 학습 기록이 삭제되는 구조였다.
+   Word 텍스트 매칭 기반 diff(UPDATE로 id 보존)로 교체. 수정 전 코드로
+   회귀 재현 확인(헌법 규칙 15).
+2. `memory_tip`/`example_translation` 영구 소실(`d147f1b`+`876a0c2`) —
+   carry-forward SELECT/화이트리스트 누락으로 재저장마다 NULL 덮어쓰기,
+   재생성 게이트 확장 + `api/generate-audio.js` 좁은 복구 경로 추가.
+
+**측정으로 계획이 뒤집힌 것 2건(정직 기록, 코드 변경 없음)**:
+- 문장부호/공백 정규화 갭 293건 조사 — 해결 0건, 가설 반증되어 코드
+  미변경.
+- 쓰기 오토파일럿 편집거리1 계단(`writingReviewAutoTypo`) — 교사 판단
+  88건 정답지 기준 재현 시 발동 16건 전부 교사 반려(정밀도 0%) — **이
+  플래그를 켜면 안 됨**으로 결론, 코드는 이미 기본 off라 변경 없음.
+  synonym/exact_match 계단은 오탐 0%이나 감소폭 미미. AI 계단은 아직
+  실행된 적이 없어 측정 불가(모름).
+
+**남은 것(운영자/다음 세션)**:
+1. `supabase functions deploy admin-content-write`(P0 수정 반영 —
+   **이 배포 전에는 어떤 유닛도 재저장 금지**, `handoff.md`/`DATABASE.md`
+   참고)
+2. Vercel은 push로 자동 배포
+3. `supabase_v3_15_word_assets.sql` 실행(선택, 급하지 않음)
+4. 1번 배포 **이후에** Unit 5 재저장 → 학습기록 보존 + 암기팁 40건 복구
+   확인
+5. 학생 화면 자산 노출 여부는 운영자 승인 필요(헌법 규칙 12, 미승인)
+6. 이미지 생성 파이프라인은 인프라(컬럼)만 준비, 실제 생성 없음
+7. `writingReviewAiAssist`만 켜서 데이터를 쌓은 뒤 오토파일럿 재측정
+   (`writingReviewAutoTypo`는 계속 off 유지)
 
 ## 2026-08-01 (14차) — Curriculum Engine Phase 0 완료 ✅ (코드/하네스 완료, SQL 실행 대기 — 운영자 액션 필요)
 

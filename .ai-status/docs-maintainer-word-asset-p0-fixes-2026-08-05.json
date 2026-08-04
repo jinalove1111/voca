@@ -1,0 +1,35 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "문서 갱신 + SQL 주석/검증 쿼리 정정",
+  "task_id": "word-asset-p0-fixes-2026-08-05",
+  "task": "supabase_v3_15_word_assets.sql의 낡은 수치(599/691/13.3%) 정정(측정 시점 명시, (b-0) 자기갱신 쿼리 추가) + handoff.md/DATABASE.md/ROADMAP.md에 Word Asset Library M1~M3c와 P0 데이터 손실 버그 2건(word_status CASCADE, memory_tip/example_translation 영구 소실) + 측정 기반 계획 정정 2건 append",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-05T00:00:00+09:00",
+  "updated_at": "2026-08-05T00:30:00+09:00",
+  "files_owned": [
+    "supabase_v3_15_word_assets.sql",
+    "handoff.md",
+    "DATABASE.md",
+    "ROADMAP.md",
+    ".ai-status/docs-maintainer-word-asset-p0-fixes-2026-08-05.json"
+  ],
+  "files_read": [
+    "src/utils/wordLibrary.js",
+    "src/components/AdminScreen.jsx",
+    "api/generate-audio.js",
+    "supabase_v1_5_word_status.sql",
+    "BUG_REPORT.md",
+    ".ai-status/implementer-word-assets-m1.json",
+    ".ai-status/implementer-word-assets-m2.json",
+    ".ai-status/implementer-m3a-word-data-loss-fix.json",
+    ".ai-status/implementer-word-asset-rules-m3b.json",
+    ".ai-status/implementer-p0-word-status-fk-preserve.json",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json",
+    ".git/logs/HEAD"
+  ],
+  "summary": "SQL 파일: DDL 본문(create table/index/policy/grant/insert)은 한 글자도 안 바꾸고 주석·검증 쿼리 섹션만 수정 — 599/691/13.3%를 '2026-08-04 실측 → 2026-08-05 재측정 811행/고유695개'로 갱신하고 측정 시점을 명시, 81종/41종 중복 조사는 '2026-08-04 당시 표본' 값임을 명시(삭제 안 함), 검증 쿼리에 (b-0) 실행 직전 자가 기대값 쿼리 추가 + (b)를 그 결과와 비교하도록 정정(재발 방지, 다시는 낡지 않음). git diff 대상은 주석/쿼리 텍스트뿐임을 라인 단위로 직접 대조 확인(create table/index/RLS/insert 블록 바이트 동일 확인). handoff.md 최상단에 36차 섹션 신규(기존 35차 이하 섹션은 원본 그대로 보존) — commits 9ed4e96/c8814d3/d147f1b/0006bc7/6e8c882/876a0c2/75beefa/2aed528를 .git/logs/HEAD에서 직접 확인해 커밋 메시지 기준으로 매핑, word_status CASCADE는 '메커니즘 재현만 확정, 과거 실손실은 미확인'으로 정직하게 기록. DATABASE.md에 word_assets 수치 갱신 + word_status CASCADE 위험/완화 신규 서브섹션 추가(append). ROADMAP.md에 15차 섹션 추가 + 상단 최종갱신 포인터 갱신. 코드 파일(src/api/scripts/supabase/functions 등)은 전혀 수정하지 않음(Read만 함, 증거 확인용).",
+  "blocker": null,
+  "next_action": "운영자: handoff.md 36차 '(5) 운영자 조치 사항' 순서(admin-content-write 재배포 → Vercel 자동배포 → v3_15 SQL 선택 실행 → 그 다음에만 Unit 5 재저장)를 반드시 지킬 것. 문장부호 정규화 갭 293건/쓰기 오토파일럿 88건·16건 수치는 오케스트레이터가 이번 세션에 직접 제공한 라이브 측정 결과이며, 이 저장소 파일 grep으로 재도출되지 않아(별도 저장된 리포트 파일 없음) 독립 재검증은 못 했다는 점을 다음 세션이 알아야 함 — 필요하면 별도 리포트 파일화 검토."
+}
