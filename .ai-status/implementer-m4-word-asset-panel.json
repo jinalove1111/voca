@@ -1,0 +1,28 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "m4-word-asset-panel",
+  "task": "M4: 관리자 Word Asset 편집기 UI(WordAssetPanel.jsx) — word_assets 목록/검색/편집/승인",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-04T17:00:00Z",
+  "updated_at": "2026-08-04T17:41:58Z",
+  "files_owned": [
+    "src/components/admin/WordAssetPanel.jsx",
+    "src/components/AdminScreen.jsx"
+  ],
+  "files_read": [
+    "src/utils/wordAssets.js",
+    "src/utils/wordAssetRules.js",
+    "src/utils/wordLibrary.js",
+    "supabase_v3_15_word_assets.sql",
+    "src/components/admin/CurriculumHub.jsx",
+    "src/components/admin/ExampleManager.jsx",
+    "src/components/admin/PassageEditor.jsx",
+    "src/utils/curriculum/exampleLibrary.js",
+    "src/utils/supabaseClient.js"
+  ],
+  "summary": "신규 WordAssetPanel.jsx(관리자 전용, word_assets 목록/검색/필터/편집/승인) 작성 + AdminScreen.jsx에 'wordassets' 탭 1개(라벨 '🗂 단어자산') 등록. adminPin은 AdminScreen 최상위 컴포넌트의 const [pin] state에서 pin={pin}으로 전달(다른 탭과 동일 패턴, 변수 존재 직접 확인함). 목록 조회는 wordAssets.js를 수정하지 않고 이 파일 안에서 supabase.from('word_assets').select(...) 직접 호출 + isMissingTableError로 테이블 부재 감지, 빈 배열 폴백(throw 없음). 쓰기는 전부 upsertWordAsset(payload, adminPin) 사용(throw 없이 {ok:false,reason} 처리). 교사 편집 시 diff된 필드만 generated_fields에 'teacher'로 병합(전체 치환 금지). 승인 상태를 'approved'로 바꾸면 엑셀 재업로드가 건드리지 않는다는 안내를 confirm 다이얼로그 + 상시 노출 문구 둘 다로 표시. build 통과(신규 경고 없음), verify:word-assets(34개) / verify:words-bulk-replace-plan(49개) 계속 PASS, verify:all 신규 실패 도메인 0개(기존 login/homework/persistence FAIL은 로컬 service_role 권한 문제로 그대로 유지, 무관).",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 요청. 배포 후(운영자가 supabase_v3_15_word_assets.sql 실행 + admin-content-write Edge Function에 word_asset.upsert(_bulk) 액션 배포) 실제 브라우저에서 목록/편집/승인 왕복 수동 확인 필요(이번 세션은 컴포넌트 트리 렌더링 하네스가 없어 정적 검토+build+verify만 수행)."
+}

@@ -58,6 +58,11 @@ import { isFeatureEnabled } from '../config/features'
 // 학년/교재·유닛 메타/예문 CRUD·승인). 학생 화면 무관, supabase_v3_13 미실행
 // 상태에서도 각 서브탭이 독립적으로 안전 배너로 폴백한다(docs/CURRICULUM_ENGINE.md).
 import CurriculumHub from './admin/CurriculumHub'
+// Word Asset Library 관리자 편집기(M4, 2026-08-05) — word_assets(단어 텍스트
+// 키 기반 콘텐츠 자산) 목록/검색/편집/승인. 학생 화면 무관, supabase_v3_15
+// 미실행이나 admin-content-write의 word_asset.upsert 액션 미배포 상태에서도
+// 크래시 없이 각각 다른 안내 배너로 폴백한다(WordAssetPanel.jsx 헤더 주석).
+import WordAssetPanel from './admin/WordAssetPanel'
 
 // v3.12(2026-08-01) — 숙제 배정 저장(setTodaysAssignment/setAssignmentForDate)
 // 실패 메시지를 사람이 바로 행동할 수 있는 한국어로 다듬는다. HTTP 404(
@@ -1708,7 +1713,7 @@ export default function AdminScreen({ onBack }) {
 
         {/* Tabs */}
         <div className="no-print flex gap-2 mb-6 overflow-x-auto">
-          {[['classes','📚 반 관리'],['students','👦 학생 관리'],['dashboard','📊 대시보드'],['entrance','🏁 입실시험'],['excel','📊 Excel'],['pdf','📄 PDF'],['testpaper','📝 시험지'],['curriculum','📚 커리큘럼'],['features','🎯 기능']].map(([k,l]) => (
+          {[['classes','📚 반 관리'],['students','👦 학생 관리'],['dashboard','📊 대시보드'],['entrance','🏁 입실시험'],['excel','📊 Excel'],['pdf','📄 PDF'],['testpaper','📝 시험지'],['curriculum','📚 커리큘럼'],['wordassets','🗂 단어자산'],['features','🎯 기능']].map(([k,l]) => (
             <button key={k} onClick={() => setTab(k)}
               className={`py-2 px-3 rounded-xl font-black text-sm btn-press transition-colors whitespace-nowrap ${tab === k ? 'bg-purple-500 text-white' : 'bg-white text-gray-500 border-2 border-gray-200'}`}>
               {l}
@@ -2032,6 +2037,7 @@ export default function AdminScreen({ onBack }) {
         {tab === 'pdf'   && <PdfUpload   onDone={(targetClass, unitName) => { refresh(); if (targetClass) { setView(targetClass); if (unitName) setViewUnit(unitName) } setTab('classes') }} adminPin={pin} />}
         {tab === 'testpaper' && <TestPaperGenerator />}
         {tab === 'curriculum' && <CurriculumHub adminPin={pin} />}
+        {tab === 'wordassets' && <WordAssetPanel adminPin={pin} />}
         {tab === 'features' && <FeatureManagementPanel />}
         {tab === 'debug' && <DebugPage />}
       </div>
