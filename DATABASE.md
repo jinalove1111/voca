@@ -128,6 +128,8 @@ seasons                                    ※ FK 없음, 반/학생과 무관�
 
 22. `supabase_v3_13_curriculum_engine_phase0.sql`(2026-08-01, Curriculum Engine Phase 0 — `docs/CURRICULUM_ENGINE.md`) — 신규 테이블 4개(`publishers`/`grades`/`grammar_points`(스키마만, 시드 없음)/`unit_grammar_points`) + `examples`(신규 콘텐츠 테이블, §"`examples`(v3.13)" 아래 신규 서브섹션 참고) + `textbooks`/`units` additive 컬럼(`publisher_id`/`grade_id`/`level`/`book_order`, `position`/`lesson_no`/`objectives` — `units.position`은 v1.x부터 이미 존재해 `add column if not exists`가 무시하고 기존 값 보존). 전부 순수 추가, 파괴적 구문 0. **[미실행 — 운영자 실행 대기]**. `v3_11`/`v3_12` 락다운(둘 다 이 시점 배포 대기 중)과 무관하게 독립 실행 가능 — 신규 5개 테이블은 현행 anon 개방 RLS(v3.4 관례)로 시작하고, 락다운 배포 후 합류할 주석 처리된 블록을 SQL 파일 자체에 동봉(파일 헤더 "[락다운 합류 블록]" 참고). 실행 전에는 `src/utils/curriculum/*.js`(전부 이번 세션 신규 파일)의 모든 조회가 `isMissingTableError`/42703(undefined_column) 감지로 `{ rows:[], featureDisabled:true }` 또는 `{}`/`null`로 폴백하고, 학생 화면은 예문 학습 단계 자체가 조건부(승인 예문이 있을 때만 삽입, §8)라 이 SQL 미실행 상태에서 아무 단계도 추가되지 않음(기존 플로우 byte-identical). 관리자 "📚 커리큘럼" 탭(`CurriculumHub`/`CurriculumTree`/`ExampleManager`/`ApprovalQueue`, `AdminScreen.jsx`)은 "supabase_v3_13 실행 후 사용 가능" 배너로 폴백. 상세: `handoff.md` 2026-08-01(20차).
 
+23. `supabase_v3_15_word_assets.sql`(2026-08-04, Word Asset Library — 단어 텍스트 키 기반 콘텐츠 자산) — `word_assets` 신규 테이블 1개(순수 추가, `words` 테이블 컬럼 0개 변경) + 인덱스 4개 + anon SELECT-only RLS(처음부터 락다운 상태로 시작 — 아래 신규 서브섹션 "RLS 설계 정정" 참고) + 규칙 기반 백필(`words.example_text`/`memory_tip`을 그대로 복사, AI 비용 0원, 기대 결과 599행). 전부 순수 추가, 파괴적 구문 0. **[미실행 — 운영자 실행 대기]**. 상세: 아래 신규 서브섹션 "`word_assets`(v3.15)".
+
 ## `student_class_assignments` (v2.9, 2026-07-21 — 코드 배포 완료 / SQL 미실행)
 
 학생 1계정이 여러 반(=교재 컨테이너, "핵심 결정" 참고)을 동시에 진행할 수 있게 하는 신규 다대다 조인 테이블. 설계 전문은 `docs/agent-decisions/0004-multi-textbook-architecture.md`, DDL 원문은 `supabase_v2_9_student_class_assignments.sql`.
@@ -311,6 +313,74 @@ v3.4 관례("allow anon all" — `for all using (true) with check (true)`)로
 필요")를 던진다(관리자가 "저장된 줄 착각"하지 않도록). 학생 화면은
 승인 예문 조회가 실패/빈 결과여도 예문 학습 단계 자체가 조건부 삽입이라
 (WordDetail.jsx §8) 아무 영향이 없다.
+
+## `word_assets` (v3.15, 2026-08-04 — SQL 미실행)
+
+`words` 테이블은 이 마이그레이션이 한 줄도 건드리지 않는다. 대신 정규화된
+단어 텍스트(`word_key = lower(btrim(word))`)를 키로 하는 별도 테이블을
+만들어, 클라이언트가 필요할 때 단어 텍스트로 조회해 병합하는 구조다. DDL
+원문은 `supabase_v3_15_word_assets.sql`.
+
+**왜 `words`를 안 건드리는가(라이브 실측 근거)**: `words` 총 691행, 고유
+단어(대소문자·공백 무시) 599개, 중복 13.3%(최다 4회 등장). `words` 스키마를
+전혀 바꾸지 않으면 기존 학생·반·숙제·채점 경로에 구조적으로 영향이 0이고,
+백필도 신규 테이블 599행만 채우면 되며, 롤백은 "클라이언트가 조회하지 않는
+것" 하나로 완전 가역이다.
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| `id` | uuid, PK | `gen_random_uuid()` 기본값 |
+| `word_key` / `sense_key` | text not null / text not null default `''` | `unique(word_key, sense_key)`가 조회 키. `sense_key`는 동형이의어 분리용 예약 슬롯(현재 전부 `''`) |
+| `word` | text not null | 원본 표기(대표 표기 1개, `btrim`만 적용) |
+| `meaning_primary` | text | **표시/힌트 전용 — 채점 진실 아님.** 채점 진실은 영구히 `words.meaning` + `words.accepted_meanings`(교사가 유닛별로 입력). 중복 단어 81종 중 41종은 유닛마다 뜻이 다름(예: temperature=체온/기온) — `word_assets`는 유닛 컨텍스트가 없는 word_key 단위라 이 필드로 채점하면 오답 처리 위험 |
+| `part_of_speech` / `cefr` | text / text | `cefr`은 A1~C2 자유 텍스트, DB CHECK 없음 |
+| `pronunciation_uk` | text | 영국식 IPA |
+| `example_sentence` / `example_translation` | text / text | |
+| `example_source` | text not null default `'none'`, CHECK(`none`\|`import`\|`ai`\|`teacher`) | 예문 필드만의 출처(레코드 전체 출처인 `source`와 별개) |
+| `difficulty` | int, CHECK 1..5 | 콘텐츠 정적 난이도(v3.13 `examples.difficulty`와 동일 도메인). **`src/learning/memory/difficulty.js`의 학생별 0~1 행동 점수와 다른 값**(이름만 비슷, 소유자·도메인 다름) |
+| `image_prompt` / `image_url` / `image_status` | text / text / text not null default `'none'` | `image_status` CHECK(`none`\|`prompt_ready`\|`queued`\|`generating`\|`ready`\|`failed`). 이 마이그레이션은 이미지를 생성/큐잉하지 않음 — 스키마만 미래 호환 준비 |
+| `gesture` / `emoji` / `story_memory` | text / text / text | |
+| `base_review_interval_days` | int, CHECK(`0,1,3,7,14,30`) | **학생별 복습 상태가 아니다** — 자산의 "기본" 간격 메타데이터일 뿐. 학생별 실제 간격/박스 상태는 `src/learning/memory/leitner.js`(`BOX_INTERVALS_DAYS`)가 `student_progress.review_data.memoryEngine.boxes`에서 전적으로 소유. 도메인을 `leitner.js`와 정확히 일치시킴 |
+| `tags` / `synonyms` / `antonyms` | text[] / text[] / text[] | |
+| `source` | text not null default `'teacher'`, CHECK(`teacher`\|`import`\|`rule`\|`ai`) | 레코드 전체 출처 |
+| `approval_status` | text not null default `'draft'`, CHECK(`draft`\|`pending`\|`approved`\|`rejected`) | v3.13 `examples`와 동일한 출처·승인 표준 블록 관례 재사용. 학생 노출 강제는 이 SQL 범위 밖(향후 조회 함수가 담당) |
+| `pipeline_status` | text not null default `'pending'`, CHECK(`pending`\|`partial`\|`complete`\|`failed`) | 행 전체의 생성 진행 상태 |
+| `generated_fields` / `ai_model` / `created_by` | jsonb / text / text | 예약 컬럼 |
+| `created_at` / `updated_at` | timestamptz | |
+
+인덱스: `pipeline_status`, `image_status`, `cefr`, `approval_status` 단독
+4개(`unique(word_key, sense_key)` 복합 인덱스가 `word_key` 단독 조회도
+leftmost prefix로 커버해 별도 인덱스 불필요).
+
+**RLS 설계 정정(v3.13 관례를 뒤집음)**: 최초 지시는 v3.13처럼 "개방
+정책으로 시작 + 락다운 합류 블록을 주석으로 동봉"이었으나, 라이브 실측으로
+`supabase_v3_11_lockdown_curriculum_write.sql`이 이미 적용돼 있음이
+확인됐다(anon key로 `words` INSERT 시도 시 42501 반환 — `words`는 이미
+anon SELECT-only). 그래서 `word_assets`는 처음부터 anon SELECT-only로
+시작한다(`words`/`classes`/`units`와 동일 신뢰 모델) — INSERT/UPDATE/DELETE
+정책이 아예 없어 RLS default-deny, GRANT도 `select`만 부여. 쓰기는
+service_role(RLS 우회, 향후 Edge Function/관리 스크립트) 전용. SQL 파일
+하단에는 "락다운 합류용"이 아니라 반대 방향인 "역방향 비상 블록"(주석
+처리, 평시 실행 금지 — 락다운을 임시로 되돌려야 하는 예외 상황 전용)이
+동봉돼 있다.
+
+**백필(규칙 기반, AI 비용 0원)**: 기존 `words.example_text`(691행 중
+100% 채워짐)와 `words.memory_tip`(94% 채워짐)을 `word_key`별로
+`distinct on`(타이브레이커는 `words.id` — `words.created_at` 컬럼이
+라이브에 존재하는지 이 세션에서 확인되지 않아 원본 DDL 미확보 상태에서
+안전하게 존재가 보장된 `id`를 씀, `DATABASE.md` "핵심 4테이블 — 저장소에
+DDL 없음" 섹션 참고)로 뽑아 `word_assets`로 복사한다. 기대 결과 599행.
+`on conflict (word_key, sense_key) do nothing`이라 재실행해도 안전(멱등).
+
+**GRANT**: `grant select on table word_assets to anon, authenticated`만
+(헌법 규칙 10 — 신규 테이블 GRANT 동반. INSERT/UPDATE/DELETE는 의도적으로
+GRANT하지 않음, 위 RLS 정정 참고).
+
+**클라이언트 폴백(SQL 미실행 상태, 이 문서 작성 시점 실제 프로덕션 상태)**:
+이 시점 `word_assets`를 조회하는 코드는 아직 저장소에 없다(이 마이그레이션은
+스키마 파일만 준비). 향후 조회 함수를 작성할 때는 `wordLibrary.js`/
+`exampleLibrary.js`의 `isMissingTableError` 폴백 관례를 그대로 재사용해야
+한다(재구현 금지, 헌법 규칙 3).
 
 ## RLS / 컬럼권한 현황
 
