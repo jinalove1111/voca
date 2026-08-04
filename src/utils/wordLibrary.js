@@ -859,10 +859,17 @@ export async function setClassWords(className, words, unitName = DEFAULT_UNIT_NA
   // (e.g. local dev) the word just has no audio until this succeeds later.
   // 2026-08-04 M3a — 게이트를 오디오 부재뿐 아니라 memory_tip 부재까지
   // 넓힌다(carry-forward 버그로 이미 memory_tip을 잃어버린 기존 단어의
-  // 자연 복구 경로). ⚠️ api/generate-audio.js:142-144의 조기 no-op 반환이
-  // "오디오+예문만 있으면 즉시 종료"라서, 이 클라이언트 게이트만 넓혀서는
-  // 실제로 memory_tip이 채워지지 않는다 — 그 서버 파일은 이 세션의 소유가
-  // 아니라 여기서 고치지 않았다(보고서에 필요한 변경 내용 기술).
+  // 복구 경로). 이 게이트가 실제로 동작하려면 세 가지가 함께 있어야 하고,
+  // 2026-08-05 기준 전부 갖춰져 있다:
+  //   ① 서버가 결과 행에 memory_tip을 포함해 돌려줄 것 —
+  //      admin-content-write/index.ts:313,320의 select에 포함됨.
+  //   ② api/generate-audio.js가 "오디오+예문이 있으면 즉시 종료"하지 말 것 —
+  //      커밋 876a0c2에서 조기 반환 조건에 memory_tip을 추가하고, 기존
+  //      예문은 그대로 둔 채 번역·팁만 채우는 분기를 넣었다.
+  //   ③ 이 게이트(아래)가 memory_tip 부재를 볼 것.
+  // 즉 교사가 유닛을 재저장하면 그 자리에서 복구 요청이 나간다 — 학생이
+  // 그 단어를 열 때까지 기다릴 필요가 없다(학생 쪽 게이트는
+  // WordDetail.jsx:769 / QuizGame.jsx:296으로 오디오·예문 부재만 본다).
   ;(inserted || []).forEach((row) => {
     if (!row.word_audio_url || !row.memory_tip) requestAudioGeneration(row.id, row.word, row.meaning, row.example_text)
   })
