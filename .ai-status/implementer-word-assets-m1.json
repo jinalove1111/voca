@@ -1,0 +1,26 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "word-assets-m1",
+  "task": "M1 — Word Asset 스키마 파일 작성 (supabase_v3_15_word_assets.sql, words 무변경)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-04T00:00:00Z",
+  "updated_at": "2026-08-04T00:00:00Z",
+  "files_owned": [
+    "supabase_v3_15_word_assets.sql",
+    "DATABASE.md"
+  ],
+  "files_read": [
+    "supabase_v3_13_curriculum_engine_phase0.sql",
+    "supabase_v3_11_lockdown_curriculum_write.sql",
+    "src/learning/memory/leitner.js",
+    "src/learning/memory/difficulty.js",
+    "src/utils/wordLibrary.js",
+    "supabase_v1_5_word_status.sql",
+    "scripts/testRlsSecurity.mjs"
+  ],
+  "summary": "word_assets 신규 테이블 SQL 파일만 작성(실행 안 함, 규칙 8). words 테이블 무변경, word_key 기반 별도 테이블로 조회 병합 설계. 오케스트레이터 중간 정정(v3.11 락다운 라이브 확인 → anon SELECT-only로 시작, meaning_primary/base_review_interval_days/difficulty 컬럼 정정, 규칙 기반 백필 포함)을 반영해 최종본 작성. DATABASE.md에 word_assets 섹션 + 마이그레이션 순서 23번 append. build PASS(소스코드 변경 없음, SQL/문서만). 파괴 구문 0 확인(grep). 커밋 9ed4e96, origin/main에 push 완료.",
+  "blocker": null,
+  "next_action": "운영자가 Supabase 대시보드 SQL Editor에서 supabase_v3_15_word_assets.sql 수동 실행. 실행 후 scripts/testRlsSecurity.mjs 패턴으로 anon INSERT 42501 여부 실측 검증 권장. word_assets 조회 클라이언트 코드는 이 작업 범위 밖(미작성)."
+}
