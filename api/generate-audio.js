@@ -49,6 +49,35 @@ TIP: <the two-sentence Korean explanation, on one line>`,
   }
 }
 
+// Repair-only path for rows that already have a good example_text but are
+// missing example_translation/memory_tip (2026-08 carry-forward bug — see
+// handoff.md). Reuses the exact given example sentence instead of asking
+// Claude to invent a new one, so example_audio_url never goes stale.
+async function generateTranslationAndTip(word, meaning, exampleText) {
+  const anthropic = new Anthropic() // reads ANTHROPIC_API_KEY from env
+  const response = await anthropic.messages.create({
+    model: 'claude-haiku-4-5',
+    max_tokens: 200,
+    messages: [{
+      role: 'user',
+      content: `A Korean elementary-school student is learning the English word "${word}" (Korean meaning: "${meaning}"). This example sentence has already been chosen and must NOT be changed: "${exampleText}". Give me two things:
+1. The natural Korean translation of that exact example sentence (translate the whole sentence, not just the word).
+2. A friendly, natural Korean explanation (about 2 sentences) that helps the child understand when/how "${word}" is actually used — like explaining it to a curious kid, not a mechanical "word = meaning" formula. It's fine to reference how the word sounds in Korean if that genuinely helps, but the main point is real-world context and usage, ideally with a short quoted example phrase. Write both sentences on a single line (no line breaks).
+
+Respond in EXACTLY this format, nothing else:
+TRANSLATION: <the Korean translation of the example sentence>
+TIP: <the two-sentence Korean explanation, on one line>`,
+    }],
+  })
+  const text = response.content.find((b) => b.type === 'text')?.text?.trim() || ''
+  const translationMatch = text.match(/TRANSLATION:\s*(.+)/i)
+  const tipMatch = text.match(/TIP:\s*(.+)/i)
+  return {
+    exampleTranslation: stripQuotes(translationMatch?.[1] || ''),
+    memoryTip: stripQuotes(tipMatch?.[1] || ''),
+  }
+}
+
 const TTS_ENDPOINTS = (text) => {
   const q = encodeURIComponent(text.slice(0, 190))
   return [
@@ -126,7 +155,7 @@ export default async function handler(req, res) {
 
   try {
     const lookupRes = await fetch(
-      `${supabaseUrl}/rest/v1/words?id=eq.${encodeURIComponent(wordId)}&select=id,word,meaning,example_text,word_audio_url`,
+      `${supabaseUrl}/rest/v1/words?id=eq.${encodeURIComponent(wordId)}&select=id,word,meaning,example_text,word_audio_url,memory_tip,example_translation`,
       { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } },
     )
     if (!lookupRes.ok) {
@@ -139,10 +168,59 @@ export default async function handler(req, res) {
       res.status(404).json({ error: 'word not found' })
       return
     }
-    if (row.word_audio_url && row.example_text) {
+    if (row.word_audio_url && row.example_text && row.memory_tip) {
       res.status(200).json({ alreadyComplete: true, wordAudioUrl: row.word_audio_url, exampleText: row.example_text })
       return
     }
+
+    // Narrow repair path (2026-08): word audio + example text already exist,
+    // only memory_tip (and usually example_translation alongside it) are
+    // missing — the carry-forward bug that dropped these two text fields on
+    // unit re-save, now fixed at the source. This path never calls TTS and
+    // never touches example_text/word_audio_url/example_audio_url; it only
+    // asks Claude to translate+explain the EXISTING example sentence and
+    // PATCHes the missing text field(s). Self-extinguishing: once a row's
+    // memory_tip is filled, it no longer matches this condition.
+    if (row.word_audio_url && row.example_text && !row.memory_tip) {
+      try {
+        const generated = await generateTranslationAndTip(row.word, row.meaning || '', row.example_text)
+        const patchBody = {}
+        if (generated.exampleTranslation && !row.example_translation) patchBody.example_translation = generated.exampleTranslation
+        if (generated.memoryTip) patchBody.memory_tip = generated.memoryTip
+        if (Object.keys(patchBody).length === 0) {
+          // AI response didn't parse into usable fields — write nothing,
+          // leave the row exactly as it was for a future retry.
+          res.status(200).json({ alreadyComplete: true, wordAudioUrl: row.word_audio_url, exampleText: row.example_text })
+          return
+        }
+        const patchRes = await fetch(`${supabaseUrl}/rest/v1/words?id=eq.${wordId}`, {
+          method: 'PATCH',
+          headers: {
+            apikey: serviceKey,
+            Authorization: `Bearer ${serviceKey}`,
+            'Content-Type': 'application/json',
+            Prefer: 'return=minimal',
+          },
+          body: JSON.stringify(patchBody),
+        })
+        if (!patchRes.ok) {
+          const body = await patchRes.text().catch(() => '')
+          throw new Error(`DB update failed (${patchRes.status}): ${body}`)
+        }
+        res.status(200).json({
+          wordAudioUrl: row.word_audio_url,
+          exampleText: row.example_text,
+          exampleTranslation: patchBody.example_translation || row.example_translation || null,
+          memoryTip: patchBody.memory_tip || null,
+        })
+        return
+      } catch (tipErr) {
+        console.error('[generate-audio] tip-only repair failed (non-fatal):', tipErr.message || tipErr)
+        res.status(500).json({ error: tipErr.message || String(tipErr) })
+        return
+      }
+    }
+
     const word = row.word
     const meaning = row.meaning
     const example = row.example_text
