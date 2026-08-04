@@ -1,0 +1,25 @@
+{
+  "agent_name": "implementer",
+  "role": "Word Asset 시스템 M2 — 클라이언트 읽기/쓰기 계층",
+  "task_id": "word-assets-m2",
+  "task": "src/utils/wordAssets.js(읽기/병합/쓰기 계약) + verify:word-assets 하네스",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-04T00:00:00+09:00",
+  "updated_at": "2026-08-04T00:00:00+09:00",
+  "files_owned": [
+    "src/utils/wordAssets.js",
+    "tests/harness/runWordAssets.mjs",
+    "tests/harness/registry.mjs",
+    "package.json",
+    ".ai-status/implementer-word-assets-m2.json"
+  ],
+  "files_read": [
+    "supabase_v3_15_word_assets.sql",
+    "src/utils/wordLibrary.js",
+    "src/utils/supabaseClient.js"
+  ],
+  "summary": "word_assets 조회/병합/쓰기 계층 신규. 핵심 불변식: (1) 어떤 실패에서도 throw 없음 — 조회는 빈 Map, 쓰기는 {ok:false,reason} 구조화 실패. (2) 교사 입력값(meaning/memoryTip/exampleText/exampleTranslation)을 asset이 덮어쓰지 않음. (3) meaning은 어떤 경우에도 asset으로 채우지 않음 — meaning_primary는 유닛 컨텍스트가 없어 채점을 깨뜨릴 수 있으므로 assetMeaningPrimary로만 노출. (4) assetMap이 비면 입력 배열을 참조 그대로 반환(React 리렌더 방지). 모듈 최상단 static import 0개 — supabaseClient가 import.meta.env를 모듈 평가 시점에 읽어 plain Node에서 크래시하므로 네트워크 함수 내부 동적 import로 지연 로드. 어떤 .jsx/Edge Function도 미수정, 호출부 미배선(M3 범위).",
+  "blocker": null,
+  "next_action": "M3: 엑셀 업로드 배선 + 규칙 기반 자산 생성. 선행 확인 — admin-content-write에 word_asset.* 액션이 아직 없어(M4 범위) 쓰기는 현재 action_not_deployed로만 귀결됨. 액션명 word_asset.upsert / word_asset.upsert_bulk는 M2 추측값이며 M4에서 확정 필요."
+}

@@ -269,6 +269,14 @@ export const DOMAINS = {
       { script: 'tests/harness/runMemoryEngine.mjs', builders: [], note: '자기완결형 하네스 — leitner.js/difficulty.js/reviewQueue.js/reviewDataCodec.js/memoryMetrics.js/memoryPlugPoints.js는 순수 모듈 직접 import(형제 파일은 명시적 .js 확장자라 번들 불필요), reviewDataBackend.js는 mock client/storage 주입으로 실 네트워크 0인 채 전체 로직 검증, sessionPlanner.js는 registry.js와 함께 esbuild 인메모리 번들(sentenceLearning.js 재사용 확인 겸 방출 모드가 Learning Engine 레지스트리에 실재하는지 교차 검증). emit.js(IO 래퍼, productEvents.js 경유)만 소스 레벨 검사(정직한 커버리지 경계 — 모듈 스코프에서 실 Supabase 클라이언트를 생성해 plain Node import 시 크래시하므로 실행하지 않음). 108단언.' },
     ],
   },
+  // ── 2026-08-04 등록: Word Asset Library M2(클라이언트 읽기/쓰기 계층,
+  // supabase_v3_15_word_assets.sql — 아직 운영자 수동 실행 대기) ──
+  wordAssets: {
+    label: 'Word Asset Library — 클라이언트 읽기/쓰기 계층(word_assets, M2) (verify:word-assets와 동일 실행)',
+    checks: [
+      { script: 'tests/harness/runWordAssets.mjs', builders: [], extra: true, note: '자기완결형 하네스 — src/utils/wordAssets.js가 모듈 최상단 static import 0개로 설계돼(supabaseClient/wordLibrary는 함수 내부 동적 import) esbuild 번들 없이 plain Node가 직접 import 가능. mergeWordAsset(교사 입력 비덮어쓰기/meaning 채점 보호/신규 필드 추가/빈 assetMap 참조 동일성)·normalizeWordAssetRow·wordAssetKey·filterWordAssetPayload(쓰기 화이트리스트) 순수 로직 + adminPin 부재 시 네트워크 호출 없이 admin_pin_required 반환하는 계약을 검증. word_asset.upsert(_bulk) 액션은 admin-content-write Edge Function에 아직 미배포(M4 범위)라 실제 왕복은 검증하지 않음 — 13개 필수 도메인 밖, 신규 보너스 커버리지.' },
+    ],
+  },
 }
 
 // Phase 6 최종 검증 매트릭스가 참조하는 "운영자 체크리스트 13항목" ↔ 위 도메인
