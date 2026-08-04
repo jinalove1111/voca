@@ -190,6 +190,13 @@ async function handleUnitDelete(supabase: any, payload: any) {
 // 이 핸들러는 그대로 저장만 한다. rows가 빈 배열이면(반 전체 단어 비우기)
 // delete만 하고 insert는 생략 — 원본 setClassWords의 `if (words.length > 0)`
 // 분기와 동일.
+//
+// 2026-08-04 M3a 데이터 손실 버그 수정 — memory_tip/example_translation을
+// 화이트리스트에 추가한다. v3.11 락다운 이후 adminPin 경로(이 핸들러)가
+// 사실상 유일한 쓰기 경로라서, wordLibrary.js가 이 두 컬럼을 carry-forward
+// 해서 보내도 여기서 걸러버리면 클라이언트 수정이 전부 무의미했다 — 이번
+// 수정 전에는 두 컬럼 모두 여기서 조용히 drop되어 매 재저장마다
+// NULL로 덮어써졌다(라이브 실측 NULL 40건의 근본 원인).
 async function handleWordsBulkReplace(supabase: any, payload: any) {
   const unitId = requireId(payload?.unitId, 'unitId')
   const rows = Array.isArray(payload?.rows) ? payload.rows : []
@@ -204,9 +211,11 @@ async function handleWordsBulkReplace(supabase: any, payload: any) {
     word_audio_url: r?.word_audio_url ?? null,
     example_audio_url: r?.example_audio_url ?? null,
     example_text: r?.example_text ?? null,
+    memory_tip: r?.memory_tip ?? null,
+    example_translation: r?.example_translation ?? null,
   }))
   const { data, error: insErr } = await supabase
-    .from('words').insert(insertRows).select('id,word,meaning,word_audio_url,example_text')
+    .from('words').insert(insertRows).select('id,word,meaning,word_audio_url,example_text,memory_tip')
   if (insErr) throw insErr
   return data
 }
@@ -301,6 +310,118 @@ async function handleUnitMetaUpdate(supabase: any, payload: any) {
   return data
 }
 
+// ── word_asset.upsert / word_asset.upsert_bulk (2026-08-04 M3a/M4) ────────
+// Word Asset Library(word_assets 테이블, supabase_v3_15_word_assets.sql —
+// 운영자 수동 실행 대기, 이 함수 배포 시점에 아직 테이블이 없을 수 있음)
+// 전용 쓰기 액션. src/utils/wordAssets.js(M2)가 이미 이 두 액션명·payload
+// 모양을 전제로 작성돼 있다(upsertWordAsset/upsertWordAssets,
+// WORD_ASSET_WRITABLE_COLUMNS) — 이 핸들러가 그 계약을 구현한다.
+//
+// 순수 upsert 전용 — delete를 절대 쓰지 않는다(이 액션의 유일한 목적이
+// "콘텐츠 자산을 채우고 보정하는 것"이지 삭제가 아님). conflict 키는
+// (word_key, sense_key)로, supabase_v3_15_word_assets.sql:143의
+// `unique (word_key, sense_key)` 제약과 정확히 일치시켰다.
+//
+// 클라이언트 화이트리스트(wordAssets.js WORD_ASSET_WRITABLE_COLUMNS)와
+// 이름·순서를 동일하게 맞췄지만, 이 상수는 독립적으로 유지한다 — "클라이언트
+// 페이로드에 있는 키를 그대로 신뢰하지 않는다"는 이 파일의 기존 원칙
+// (모든 핸들러가 requireString/requireId로 이미 따르는 방향)을 이 액션에도
+// 동일하게 적용하기 위함. 두 목록 중 한쪽만 고치면 필드가 조용히 드롭되는
+// 드리프트가 생기므로, 컬럼을 추가/변경할 때는 반드시 두 파일 모두 확인할 것.
+const WORD_ASSET_WRITABLE_COLUMNS = [
+  'word_key', 'sense_key', 'word',
+  'meaning_primary', 'part_of_speech', 'cefr', 'pronunciation_uk',
+  'example_sentence', 'example_translation', 'example_source',
+  'difficulty',
+  'image_prompt', 'image_url', 'image_status',
+  'gesture', 'emoji', 'story_memory',
+  'base_review_interval_days',
+  'tags', 'synonyms', 'antonyms',
+  'source', 'approval_status', 'pipeline_status',
+  'generated_fields', 'ai_model', 'created_by',
+]
+
+// PostgREST가 스키마 캐시에 없는 테이블(= word_assets 미생성, supabase_v3_15
+// 미실행 상태)을 대상으로 쿼리하면 보통 42P01(raw Postgres) 또는
+// PGRST205(PostgREST)로 응답한다 — src/utils/wordLibrary.js의
+// isMissingTableError와 판단 기준은 동일하지만, 이 파일은 Deno Edge
+// Function 런타임이라 Vite 번들(src/) 모듈을 import할 수 없어 별도 사본을
+// 둔다(api/*.js가 이미 같은 이유로 각자 사본을 유지하는 선례와 동일,
+// wordLibrary.js:1187-1190 주석 참고 — 억지 공유 금지).
+function isMissingWordAssetsTableError(error: any): boolean {
+  if (!error) return false
+  if (error.code === '42P01' || error.code === 'PGRST205') return true
+  const msg = String(error.message || '').toLowerCase()
+  return msg.includes('does not exist') || msg.includes('schema cache')
+}
+
+// 화이트리스트를 통과한 키만 남기고, word_key는 클라이언트 값을 신뢰하지
+// 않고 서버에서 다시 정규화(trim+lowercase, wordAssets.js wordAssetKey와
+// 동일 규칙)한다. sense_key가 없으면 DB 기본값과 동일한 ''로 채워
+// onConflict 대상 컬럼이 항상 명시적으로 존재하게 한다.
+function filterWordAssetRow(input: any, index: number): Record<string, unknown> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new BadRequestError(`rows[${index}] is required`)
+  }
+  if (typeof input.word_key !== 'string' || !input.word_key.trim()) {
+    throw new BadRequestError(`rows[${index}].word_key is required`)
+  }
+  const out: Record<string, unknown> = {}
+  for (const key of WORD_ASSET_WRITABLE_COLUMNS) {
+    if (Object.prototype.hasOwnProperty.call(input, key)) out[key] = input[key]
+  }
+  out.word_key = input.word_key.trim().toLowerCase()
+  if (typeof out.sense_key !== 'string') out.sense_key = ''
+  return out
+}
+
+// word_asset.upsert_bulk와 동일한 상한을 단건 액션에도 방어적으로 적용
+// (단건은 항상 1행이라 사실상 무의미하지만 upsertWordAssetRows 하나로
+// 두 액션을 공유하기 위해 같은 함수를 통과시킨다). 기존 액션들에는 배열
+// 상한 관례가 없어(예: words.bulk_replace/assignment.set 전부 무제한),
+// wordAssets.js 클라이언트의 WRITE_CHUNK_SIZE=50보다 여유 있게 200으로
+// 잡았다 — 청크 크기가 나중에 조정돼도 이 상한에 바로 걸리지 않도록.
+const WORD_ASSET_MAX_ROWS = 200
+
+async function upsertWordAssetRows(supabase: any, rawRows: any[]) {
+  if (rawRows.length === 0) return []
+  if (rawRows.length > WORD_ASSET_MAX_ROWS) {
+    throw new BadRequestError(`rows exceeds max of ${WORD_ASSET_MAX_ROWS}`)
+  }
+  const rows = rawRows.map((r, i) => filterWordAssetRow(r, i))
+  const { data, error } = await supabase
+    .from('word_assets')
+    .upsert(rows, { onConflict: 'word_key,sense_key' })
+    .select('id,word_key,sense_key')
+  if (error) {
+    if (isMissingWordAssetsTableError(error)) {
+      // 500이 아니라 400 + 구분 가능한 메시지 — 클라이언트(wordAssets.js
+      // classifyAdminWriteError)는 not_authorized가 아닌 모든 실패를
+      // action_not_deployed로 묶어 절대 throw하지 않고 { ok:false }로
+      // 폴백하므로, 여기서 500을 던지지만 않으면 이 상태(SQL 미실행)에서도
+      // 관리자 화면이 깨지지 않는다(규칙 9).
+      throw new BadRequestError('word_assets 테이블이 아직 없어요(supabase_v3_15_word_assets.sql 미실행 — 운영자 수동 실행 필요)')
+    }
+    throw error
+  }
+  return data
+}
+
+// word_asset.upsert — 단건. payload = 컬럼 객체 그 자체(wordAssets.js
+// upsertWordAsset의 filterWordAssetPayload 출력과 동일 모양).
+async function handleWordAssetUpsert(supabase: any, payload: any) {
+  const data = await upsertWordAssetRows(supabase, [payload])
+  return Array.isArray(data) && data.length > 0 ? data[0] : null
+}
+
+// word_asset.upsert_bulk — payload = { rows: [...] }(wordAssets.js
+// upsertWordAssets의 50개 청크 호출과 동일 모양, 서버 상한은
+// WORD_ASSET_MAX_ROWS=200으로 청크 크기보다 여유 있게 설정).
+async function handleWordAssetUpsertBulk(supabase: any, payload: any) {
+  const rows = Array.isArray(payload?.rows) ? payload.rows : []
+  return upsertWordAssetRows(supabase, rows)
+}
+
 const ACTION_HANDLERS: Record<string, (supabase: any, payload: any) => Promise<unknown>> = {
   'class.create': handleClassCreate,
   'unit.create': handleUnitCreate,
@@ -312,6 +433,8 @@ const ACTION_HANDLERS: Record<string, (supabase: any, payload: any) => Promise<u
   'class.update_settings': handleClassUpdateSettings,
   'assignment.set': handleAssignmentSet,
   'unit.meta.update': handleUnitMetaUpdate,
+  'word_asset.upsert': handleWordAssetUpsert,
+  'word_asset.upsert_bulk': handleWordAssetUpsertBulk,
 }
 
 Deno.serve(async (req: Request) => {
