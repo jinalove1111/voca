@@ -1,0 +1,25 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "word-asset-rules-m3b",
+  "task": "Word Asset Library M3b — 규칙 기반(AI 미사용) 단어 자산 생성 순수 함수 모듈 신규 작성 + 하네스/verify 배선",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-04T00:00:00Z",
+  "updated_at": "2026-08-04T00:00:00Z",
+  "files_owned": [
+    "src/utils/wordAssetRules.js",
+    "tests/harness/runWordAssetRules.mjs",
+    "tests/harness/registry.mjs",
+    "package.json"
+  ],
+  "files_read": [
+    "supabase_v3_15_word_assets.sql",
+    "src/utils/wordAssets.js",
+    "src/learning/memory/leitner.js",
+    "tests/harness/runWordAssets.mjs"
+  ],
+  "summary": "src/utils/wordAssetRules.js 신규 작성(import 0개, Math.random/Date.now/new Date 미사용, 완전 결정론). guessPartOfSpeech(접미사 고확신 휴리스틱, 애매하면 null), estimateSyllables(모음군+묵음e 근사), estimateDifficulty(길이+음절 기반 1~5 clamp), defaultReviewIntervalDays(difficulty->BOX_INTERVALS_DAYS 매핑, 폴백 7일), buildImagePrompt(프롬프트 문자열만, 이미지 생성 없음), buildRuleBasedAsset(s)(word_key 정규화, AI 전용 슬롯 절대 미채움, generated_fields는 사실만 기록) 구현. tests/harness/runWordAssetRules.mjs(41단언) 신규 작성 — 결정론/도메인 준수(difficulty 1~5, base_review_interval_days∈BOX_INTERVALS_DAYS 전수)/품사 보수성(family/reply 등 adverb 오분류 방지)/AI 슬롯 미오염/WORD_ASSET_WRITABLE_COLUMNS 화이트리스트 정합/빈 word 처리 전부 검증. registry.mjs에 wordAssetRules 도메인 등록 + package.json에 verify:word-asset-rules 추가. 이 모듈은 AdminScreen.jsx/wordLibrary.js 어디에도 아직 배선하지 않음(지시사항 범위 그대로 순수 계층만).",
+  "blocker": null,
+  "next_action": "다음 단계(배선, M4 이후)는 이번 작업 범위 밖 — qa-reviewer 검수 대기. word_assetRules.js를 실제 AdminScreen.jsx/백필 스크립트에 연결하는 것은 별도 작업 단위로 진행할 것."
+}

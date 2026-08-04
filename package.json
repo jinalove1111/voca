@@ -29,6 +29,7 @@
     "verify:learning-engine": "node tests/harness/runLearningEngine.mjs",
     "verify:memory-engine": "node tests/harness/runMemoryEngine.mjs",
     "verify:word-assets": "node tests/harness/runWordAssets.mjs",
+    "verify:word-asset-rules": "node tests/harness/runWordAssetRules.mjs",
     "verify:all": "node tests/harness/runAll.mjs",
     "wiki:search": "node scripts/wikiSearch.mjs",
     "dashboard": "node scripts/generateDashboard.mjs"
