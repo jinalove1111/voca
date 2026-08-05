@@ -1,0 +1,57 @@
+{
+  "agent_name": "measurement-m4d-gate",
+  "role": "M4d 전환 게이트 측정 (읽기 전용)",
+  "task_id": "measurement-m4d-gate-2026-08-05",
+  "task": "daily-mission-complete(4/4) 슬롯 판정을 round.wordsViewed에서 round.completedToday로 전환하기 전 필요한 측정 게이트(최근 7일, 4/4 달성일의 90% 이상이 completedToday>=5) 검증",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-05T00:00:00+09:00",
+  "updated_at": "2026-08-05T00:00:00+09:00",
+  "files_owned": [],
+  "files_read": [
+    "src/hooks/useStudent.js",
+    "src/utils/dateSeoul.js",
+    "DATABASE.md"
+  ],
+  "summary": "handoff.md 35차 M4d 절에서 요구한 측정 게이트를 시도했으나, round.completedToday(그리고 wordsViewed 등 round의 모든 필드)는 자정(로컬 날짜 변경) 롤오버 시 freshRound()로 통째로 리셋되고, 영구 보관되는 history[date] 오브젝트(freshHistoryDay)는 categoriesCompleted(0-4)/giftsToday/starsEarned/quizCorrect·Total/spellingCorrect·Total/pronunciationAttempts/missedWordIds/stickersEarned/gamesPlayed만 저장한다 — completedToday의 '그날 개수'는 어디에도 영구 기록되지 않는다. student_progress 테이블도 student_id당 1행(unique)이며 progress_data를 매 동기화마다 덮어쓰는 구조라 스냅샷 이력이 없다. 따라서 과거 날짜의 completedToday 개수는 원천적으로 재구성 불가능 — NOT_MEASURABLE. 실측으로 이를 직접 확인: xp_ledger에서 최근 7일 daily-mission-complete 이벤트 2건(f8e50877.. Aug 4, 6ac975c7.. Aug 4)을 찾아 해당 학생의 현재 student_progress.progress_data를 조회한 결과, f8e50877(2026-08-05에 재접속해 자정 롤오버가 이미 일어난 학생)은 round.date가 이미 'Wed Aug 05 2026'로 바뀌어 있고 round.completedToday가 []로 리셋되어 Aug 4일치 값이 완전히 소실됨을 실측 확인. 반대로 6ac975c7(2026-08-04 이후 재접속 없어 롤오버가 아직 안 일어난 학생)은 우연히 round.date가 여전히 'Tue Aug 04 2026'로 남아있어 그날의 completedToday=[toward,shining,suit,breathe,shoot](5개, >=5) 값을 볼 수 있었다 — 하지만 이는 '학생이 그 뒤로 앱을 안 열었다'는 우연의 산물일 뿐, 체계적으로 재현 가능한 관측이 아니다.",
+  "blocker": "completedToday의 일별 이력이 어디에도 영구 저장되지 않아(round는 자정 리셋, history[date]는 completedToday 카운트를 저장하는 필드가 없음, student_progress는 student당 1행 upsert로 스냅샷 이력 없음) 과거 7일 데이터로 게이트를 소급 측정할 방법이 없음.",
+  "next_action": "전환을 진행하려면 관측 기간을 새로 시작해야 한다: (1) history[date]에 completedToday의 그날 최종 개수(예: completedTodayCount 또는 유사 필드)를 자정 롤오버 시점에 스냅샷으로 기록하는 순수 관측 배선을 추가(보상 판정 로직은 그대로 유지, M4a와 동일한 '관측만' 원칙)하거나, xp_ledger의 daily-mission-complete 이벤트에 completedToday 개수를 metadata로 함께 남기는 방법을 검토한다. 그 다음 최소 7일(가급적 2주, 현재 방학 시즌이라 표본이 적음 — 14일간 4/4 달성 이벤트 17건 중 최근 7일은 단 2건) 관측 후 이 스크립트와 동일한 방법론으로 재측정한다. 이번 측정 스크립트는 C:\\Users\\jinal\\AppData\\Local\\Temp\\claude\\C--voca\\a53d07b6-ebe7-462b-a86b-78c9a6493405\\scratchpad\\query1.mjs, query2.mjs, query3.mjs (임시 파일, 저장소 밖)에 남아있다.",
+  "measurement": {
+    "methodology": [
+      "1) src/hooks/useStudent.js를 읽어 completedToday(round, 자정 리셋)와 categoriesCompleted(history[date], 영구)의 정의/저장 위치를 확인.",
+      "2) VITE_SUPABASE_URL/ANON_KEY(anon key, GET만)로 xp_ledger 테이블에서 event_type=eq.daily-mission-complete, created_at>=now-7d 조건으로 REST GET.",
+      "3) 발견된 각 (student_id, day) 쌍에 대해 student_progress 테이블을 student_id로 GET하여 progress_data.round(현재 상태)와 progress_data.history[date](영구 기록)를 확인.",
+      "4) round.completedToday는 오늘 날짜가 아니면 이미 리셋되어 있어 과거 값 확인 불가 — 이를 실측으로 검증(아래 raw 참고). history[date]에는애초에 completedToday 카운트 필드 자체가 없음(코드 레벨 확인, src/hooks/useStudent.js freshHistoryDay 정의, line 217-230)."
+    ],
+    "window": "최근 7일 (쿼리 시각 기준 now - 7*24h, UTC), 참고로 14일 창도 함께 조회",
+    "qualifying_day_student_pairs_7d": 2,
+    "qualifying_day_student_pairs_14d": 17,
+    "pairs_7d_detail": [
+      {
+        "student_id": "f8e50877-edad-41d1-b142-c13286d43d1e",
+        "day_key": "Tue Aug 04 2026",
+        "xp_ledger_created_at": "2026-08-04T07:54:28.115564+00:00",
+        "current_round_date": "Wed Aug 05 2026",
+        "completedToday_recoverable": false,
+        "reason": "다음날 재접속으로 round가 이미 freshRound()로 리셋됨 — Aug 4 값 소실"
+      },
+      {
+        "student_id": "6ac975c7-91fa-4ae9-946a-c0a7951783ac",
+        "day_key": "Tue Aug 04 2026",
+        "xp_ledger_created_at": "2026-08-04T01:32:05.401278+00:00",
+        "current_round_date": "Tue Aug 04 2026",
+        "completedToday_recoverable": true,
+        "completedToday_count": 5,
+        "completedToday_words": ["toward", "shining", "suit", "breathe", "shoot"],
+        "reason": "Aug 4 이후 재접속이 없어 round가 우연히 그날 상태로 남아있음(체계적 관측 아님, 우연)"
+      }
+    ],
+    "recoverable_pairs": 1,
+    "recoverable_pairs_with_completedToday_geq_5": 1,
+    "computed_percentage_if_only_recoverable_counted": "1/1 = 100% (표본 1건, 통계적으로 무의미)",
+    "history_schema_gap": "freshHistoryDay()(src/hooks/useStudent.js line 217-230)는 categoriesCompleted/giftsToday/starsEarned/stickersEarned/gamesPlayed/quizCorrect/quizTotal/pronunciationAttempts/missedWordIds/spellingCorrect/spellingTotal만 영구 저장한다. completedToday(또는 그 카운트)를 저장하는 필드가 존재하지 않는다 — M4a(2026-08-04) 도입 시점부터 순수 '배선'으로만 추가되어 history에 스냅샷되지 않았다.",
+    "storage_architecture_gap": "student_progress 테이블은 student_id unique 제약의 단일 행이며 progress_data(jsonb)를 매 동기화마다 통째로 upsert한다(DATABASE.md line 63) — 시계열 스냅샷/감사 로그 테이블이 없어, 설령 history에 필드가 있었어도 '그 시점의 실시간 값'이 아니라 '가장 최근 upsert 시점 값'만 남는 구조다.",
+    "gate_result": "NOT_MEASURABLE",
+    "gate_result_reasoning": "게이트가 요구하는 '최근 7일간 4/4 달성일의 completedToday 카운트'는 시스템 어디에도 영구 저장되지 않는다. round.completedToday는 자정 롤오버로 매일 리셋되고, 영구 저장되는 history[date]에는 completedToday 카운트 필드 자체가 없으며, student_progress는 스냅샷 이력이 없는 단일 행 upsert 구조다. 실제로 최근 7일 4/4 달성 2건 중 1건은 이미 값이 소실되었고, 나머지 1건은 학생이 다음날 앱을 열지 않은 우연 덕에 살아남았을 뿐 — 표본 크기가 1(그마저 우연)이라 90% 기준을 판정할 근거가 되지 못한다. 추정(extrapolation)하지 않고 NOT_MEASURABLE로 판정한다."
+  }
+}
