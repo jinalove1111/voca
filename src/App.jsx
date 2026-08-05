@@ -254,7 +254,14 @@ function AppInner({ studentId, studentName, onLogout }) {
   useEffect(() => {
     let cancelled = false
     getStudentClassAssignments(studentId).then((list) => {
-      if (!cancelled) setTextbookAssignments(list)
+      if (!cancelled) {
+        setTextbookAssignments(list)
+        // 콜드스타트 수정(2026-08-06) — 배정 캐시 예열 완료 후
+        // classWords/currentUnitId(useMemo, refreshTick 의존)를 재계산한다.
+        // 첫 렌더가 캐시 미예열로 사람 반의 자동 교재로 해석된 경우를
+        // 즉시 바로잡는 2차 방어(1차는 App의 로그인/재입장 예열).
+        setRefreshTick((t) => t + 1)
+      }
     }).catch(() => { /* 조회 실패는 조용히 무시 — 선택기가 안 보일 뿐 학습 화면엔 영향 없음(이 파일 전체의 fail-open 원칙) */ })
     return () => { cancelled = true }
   }, [studentId])
@@ -826,7 +833,16 @@ export default function App() {
   // it — guarantees every screen starts from the current DB state, not a
   // stale local cache. Legacy(형식 안 맞는) 세션은 여기서 정리.
   useEffect(() => {
-    initWordLibrary().then(() => {
+    initWordLibrary().then(async () => {
+      // v3.1 교재 콜드스타트 수정(2026-08-06) — 저장된 세션으로 재입장하는
+      // 경우 AppInner 첫 렌더 전에 배정 캐시를 예열한다. 예열 없이는
+      // getStudentPrimaryTextbook이 사람 반의 자동 교재로 폴백해, 교재를
+      // 전환한 학생이 새로고침/재입장 때마다 원래 교재의 유닛·단어로
+      // 시작했다(라이브 재현으로 확정된 P0).
+      const sess = readSession()
+      if (sess?.id) {
+        try { await getStudentClassAssignments(sess.id) } catch { /* 실패해도 진입은 막지 않는다 — 합성 폴백이 흡수 */ }
+      }
       setReady(true)
       if (!readSession() && localStorage.getItem(SESSION_KEY)) {
         localStorage.removeItem(SESSION_KEY)
@@ -891,6 +907,9 @@ export default function App() {
   // student-pin(등록) 둘 다 이 모양으로 통일해서 넘긴다.
   const handleSelect = async (sel) => {
     try { await refreshStudents() } catch {}
+    // 콜드스타트 수정(2026-08-06) — 로그인 직후에도 동일하게 배정 캐시를
+    // 예열해 첫 렌더부터 실제 primary 교재로 해석되게 한다(위 init effect와 동일 이유).
+    try { await getStudentClassAssignments(sel.id) } catch { /* 실패해도 로그인 진행 */ }
     // [진단 로그 4] Home(Dashboard) 진입 직전 currentStudent + 그 시점의 반/유닛
     devLog('[App] handleSelect — Home 진입 직전 currentStudent:', {
       id: sel.id, name: sel.name, class: getStudentClass(sel.id), unit: getStudentUnit(sel.id),
