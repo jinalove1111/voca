@@ -1,0 +1,20 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "remove-self-register-tab-2026-08-06",
+  "task": "StudentSelect.jsx에서 학생 자기등록('처음이에요') 탭 제거 — P0 중복 계정 사고 대응, 신규 학생 등록을 관리자 화면 전용 경로로 일원화",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-06T00:00:00Z",
+  "updated_at": "2026-08-06T00:00:00Z",
+  "files_owned": [
+    "src/components/StudentSelect.jsx"
+  ],
+  "files_read": [
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "src/components/StudentSelect.jsx 단독 수정. 'register' 모드/탭 버튼/폼 JSX 전체 제거, handleRegister/reg* state(regName/regClass/regUnit/regPin/regPinConfirm/regError/registering)/regPinRef/regPinConfirmRef 제거, addStudent import 제거(wordLibrary 쪽 함수 자체는 미변경 — QA 스크립트가 사용). getClassUnitNames는 register 폼 전용이었으므로 import에서 제거(getClassNames는 setup 탭에서 계속 사용해 유지). busy 계산에서 registering 제거. 로그인 폼 하단에 '우리 공부방이 처음이에요? 선생님께 등록을 요청해주세요.' 안내 문구 추가. MESSAGES에 duplicate_accounts 사유 추가('계정 확인이 필요해요. 선생님께 문의해주세요.'). not_found 문구를 자기등록 유도 없는 문구로 교체. 파일 상단 주석에 2026-08-06 P0 배경(3개 사고 클러스터, 관리자 전용 생성 경로) 추가. 로그인/PIN 만들기 탭 기존 동작은 무변경. npm run build 통과(에러/경고 없음), 잔여 미사용 변수/import 없음(grep으로 reg*/addStudent/getClassUnitNames 잔존 여부 확인).",
+  "blocker": null,
+  "next_action": "qa-reviewer가 로그인/PIN 만들기 두 탭 수동 회귀 확인 및 verify:students(있다면) 실행. 다른 에이전트가 진행 중인 관리자 화면 학생 추가 UI(create_student 액션)와의 통합 확인은 별도 작업."
+}
