@@ -280,24 +280,46 @@ let _students = new Map()
 // refreshClassSettings/fetchWordsRows와 동일한 부분 마이그레이션 안전 패턴
 // (SQL보다 코드가 먼저 배포돼도 앱이 절대 깨지지 않음).
 const STUDENTS_SELECT_BASE = 'id,name,class_id,unit_name,classes(name)'
+// P0(2026-08-05) — PostgREST는 .range()가 없는 select를 기본 1000행에서
+// 자른다. 실사용 students 테이블이 1000행을 넘어선 뒤로(신규 학생 +
+// QA_ 테스트 학생 누적), .order('created_at')만 걸고 range가 없던 이
+// 함수는 가장 오래된 1000명만 가져오고 있었다 — 그 이후 가입한 모든
+// 학생이 `_students` 캐시 밖으로 밀려나, removeStudent 등 캐시 조회에
+// 의존하는 모든 경로가 그 학생들에겐 조용히 동작하지 않았다(실사고,
+// removeStudent 주석 참고). 1000행 페이지 단위로 끝까지 반복해서 전체
+// 행을 가져온다. created_at만으로는 동시각 tie가 있으면 페이지 경계에서
+// 행이 누락/중복될 수 있어 id를 2차 정렬 키로 추가한다(표시 순서 자체는
+// created_at이 그대로 1차 기준이라 기존 정렬 체감은 바뀌지 않는다).
+const STUDENTS_PAGE_SIZE = 1000
+async function selectAllStudents(selectStr) {
+  let all = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await supabase
+      .from('students')
+      .select(selectStr)
+      .order('created_at')
+      .order('id')
+      .range(from, from + STUDENTS_PAGE_SIZE - 1)
+    if (error) return { data: null, error }
+    all = all.concat(data)
+    if (!data.length || data.length < STUDENTS_PAGE_SIZE) break
+    from += STUDENTS_PAGE_SIZE
+  }
+  return { data: all, error: null }
+}
 export async function refreshStudents() {
   // House System(2026-07-19) — house_id도 current_unit_id와 같은 컬럼
   // 부재 폴백이 필요(supabase_v2_7_house_system.sql 미실행 대비). 두 신규
   // 컬럼이 서로 다른 마이그레이션(v2.1/v2.7)에 속해 독립적으로 실행될 수
   // 있으므로, 어느 한쪽만 있어도 안전하게 동작해야 한다 — 3단계로
   // cascading 폴백한다(둘 다 있음 → current_unit_id만 있음 → 둘 다 없음).
-  let res = await supabase
-    .from('students')
-    .select(`${STUDENTS_SELECT_BASE},current_unit_id,house_id`)
-    .order('created_at')
+  let res = await selectAllStudents(`${STUDENTS_SELECT_BASE},current_unit_id,house_id`)
   if (res.error) {
-    res = await supabase
-      .from('students')
-      .select(`${STUDENTS_SELECT_BASE},current_unit_id`)
-      .order('created_at')
+    res = await selectAllStudents(`${STUDENTS_SELECT_BASE},current_unit_id`)
   }
   if (res.error) {
-    res = await supabase.from('students').select(STUDENTS_SELECT_BASE).order('created_at')
+    res = await selectAllStudents(STUDENTS_SELECT_BASE)
   }
   const { data, error } = res
   if (error) throw error
@@ -1208,10 +1230,17 @@ export async function addStudent(name, className = '', unitName = DEFAULT_UNIT_N
 }
 
 export async function removeStudent(id) {
-  const s = _students.get(id)
-  if (!s) return
+  // P0(2026-08-05) 캐시 gating 버그 수정 — 예전엔 `_students`(in-memory
+  // 캐시)에 없는 학생이면 DELETE를 아예 시도하지 않고 조용히 return했다.
+  // refreshStudents()가 PostgREST 기본 1000행 상한에 걸려 가장 오래된
+  // 1000명만 캐시에 실렸던 시절엔, 그 이후 가입한 모든 학생(신규 실제
+  // 학생 + QA_ 테스트 학생)이 캐시 밖이라 "삭제"가 아무 것도 안 하는
+  // 실사고였다(관리자 로스터 삭제 버튼이 무반응, 하네스 QA 정리도 실패).
+  // 학생 식별은 규칙 4대로 항상 id(UUID)이므로, 캐시 유무와 무관하게
+  // id로 직접 DELETE한다.
   const { error } = await supabase.from('students').delete().eq('id', id)
   if (error) throw error
+  _students.delete(id)
   await refreshStudents()
 }
 
