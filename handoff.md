@@ -1,11 +1,142 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-08-05 (36차, Word Asset Library M1~M3c + P0 데이터 손실
-버그 2건 발견·수정(word_status CASCADE 삭제 / memory_tip·
-example_translation 영구 소실) + 배포 순서 위험 대응 + 측정으로 계획이
-뒤집힌 것 2건(문장부호 정규화 갭 반증, 쓰기 오토파일럿 편집거리1 계단
-보류) 정직 기록. **운영자 필독**: 아래 "운영자 조치 사항" 순서를 지키지
-않으면(특히 admin-content-write 재배포 전 유닛 재저장) 학습기록이
-삭제된다. 상세는 아래 36차 섹션)_
+_최종 갱신: 2026-08-05 (37차, 36차가 경고한 admin-content-write P0 배포
+공백을 실측·해소(v5 배포로 유닛 재저장이 이제 안전) + generate-word-assets
+최초 배포 + Word Asset AI 생성 배선(P2, 라이브 왕복은 SQL 미실행으로
+미검증) + M4d 게이트 실측 결과 NOT_MEASURABLE(판정 불가) + M4d 관측 배선
+신설 + 운영자 지시("학습 시간 5→10분") 실측 결과 신규 타이머 부재 확인·
+착수 보류 기록. 상세는 아래 37차 섹션)_
+
+## 2026-08-05 (37차) — admin-content-write P0 배포 공백 해소 + generate-word-assets
+최초 배포 + Word Asset AI 생성 배선(P2) + M4d 게이트 실측·관측 배선
+(implementer 세션들 + docs-maintainer 문서화, 커밋 `801e53c`/`dbcdedf`/
+`80101ae`/`8efb8dc` + Edge Function 배포 2건)
+
+### (1) P0 배포 공백 발견·해소 — 36차가 경고한 "재저장 금지" 상태가
+실제로 지속 중이었음을 실측 확인
+
+`supabase` CLI(이미 인증돼 있었음)로 라이브 `admin-content-write`
+배포 버전을 실측한 결과 **v4(2026-08-01T19:20Z 배포)** 였다 — P0 수정
+커밋 `0006bc7`/`75beefa`(둘 다 2026-08-04, word_status CASCADE 삭제 수정)
+를 포함하지 않는다. 즉 36차 handoff가 "1번을 배포하기 전에 어떤 유닛이든
+재저장하면 안 된다"고 경고했던 그 미배포 상태가 이번 세션 시작 시점까지
+그대로였다.
+- **해소**: 이번 세션에서 운영자가 자율 배포를 명시 지시했고 CLI 토큰이
+  이미 로컬에 있어 에이전트가 `supabase functions deploy
+  admin-content-write --use-api`를 직접 실행 — **v5(2026-08-05T03:51Z,
+  해시 `d2225b8f…`)** 배포 완료.
+- **배포 후 검증**: anon key로 라이브 인가 게이트를 재확인해 정상 동작
+  확인(`200 {"ok":false,"reason":"not_authorized"}`).
+- **결론**: 36차 "운영자 조치 1번"이 완료됐고, **이제 유닛 재저장이
+  안전하다**.
+- ⚠️ **정정 기록**: 36차 문서는 "배포는 운영자 수동"으로 적었으나, 이번
+  세션은 운영자가 자율 배포를 명시 지시한 예외 케이스다 — DDL(SQL)은
+  여전히 운영자 전용(헌법 규칙 8)이고 이 예외는 Edge Function 배포에만
+  적용된다.
+
+### (2) `generate-word-assets` 최초 배포(P2, 코드는 `db516dc`, 이전 세션)
+
+동일한 `supabase functions deploy --use-api` 방식으로 최초 배포하고,
+배포 후 라이브 인가 게이트를 확인했다(정상). 이 함수가 쓰는 AI 시크릿은
+`grade-writing-answers`와 전역 공유라 추가 시크릿 등록은 필요 없었다.
+
+### (3) Unit 5 읽기 전용 재검증 — 재저장은 아직 발생하지 않음
+
+36차가 남긴 스냅샷
+(`.ai-status/snapshot-unit5-before-resave-2026-08-05.json`)과 대조:
+- `words` 40/40 `id` 완전 일치(신규 id 0건) — 재저장이 실제로 일어나지
+  않았음을 확인.
+- Unit 5의 `word_status` 174행 그대로 유지.
+- 전체 대조군도 `word_status` 1,691행 / `words` 811행으로 36차와 동일.
+- `memory_tip`/`example_translation` NULL 40/40 여전히 그대로(복구
+  아직 안 됨 — (1)의 배포가 끝나야 재저장으로 복구 시도 가능한 상태였고,
+  이번 세션은 배포까지만 하고 재저장은 운영자 액션으로 남겨둠).
+- 이제 (1)의 v5 배포로 재저장이 안전하므로, 운영자가 Unit 5를 재저장하면
+  학습기록 보존 + 암기팁 복구를 확인할 수 있는 상태다.
+
+### (4) P2 배선 완료 — WordAssetPanel "🤖 AI 생성"(커밋 `801e53c`)
+
+`src/utils/wordAssets.js`에 순수 함수 3종 추가:
+- `selectAiGenerationCandidates` — `approval_status`가 `'approved'`인
+  행 스킵, 빈 필드가 있는 단어만 대상, 50개 상한.
+- `buildAiGeneratedAssetPayload` — 기존 값이 있는 필드는 절대 덮어쓰지
+  않음, 빈 payload는 아예 전송하지 않음, `generated_fields`는 기존 값과
+  병합.
+- `generateWordAssetsViaAi` — 어떤 경우에도 throw 없음, AI 예산 초과 시
+  아무것도 저장하지 않음.
+
+`tests/harness/runWordAssets.mjs`에 30단언 추가(총 64). `npm run build`
++ `npm run verify:admin` PASS.
+- **미검증(정직 기록)**: 라이브 왕복 — `word_assets` 테이블 자체가
+  `supabase_v3_15_word_assets.sql` 미실행 상태라 실제 DB 왕복은 불가능,
+  이번 세션은 하네스로 폴백 경로(테이블 부재 시 무-throw 등)만 검증했다.
+
+### (5) M4d 게이트 실측 — **NOT_MEASURABLE**(커밋 `80101ae`,
+`.ai-status/measurement-m4d-gate-2026-08-05.json`)
+
+35차가 세운 "90% 게이트"를 실측 시도한 결과, 최근 7일간
+`daily-mission-complete` 이벤트가 **2건뿐**이었다. 그마저 1건은 자정
+리셋으로 `completedToday`가 이미 소실된 뒤 관측됐고(`f8e50877`), 나머지
+1건만 우연히 리셋 전에 관측돼 5개 ≥ 5 조건을 만족했다(`6ac975c7`).
+`round.completedToday`는 자정마다 리셋되고 `history[date]`에는 그날의
+카운트 필드가 아예 없어 **소급 측정이 구조적으로 불가능**하다.
+- **결론**: 35차의 90% 게이트는 판정 불가(NOT_MEASURABLE) — 데이터가
+  "게이트 미달"인 것이 아니라 애초에 측정할 방법이 없었다. M4d 전환은
+  계속 보류.
+
+### (6) M4d 관측 배선 신설(커밋 `8efb8dc`) — 다음 측정을 위한 순수 관측
+인프라
+
+(5)의 구조적 측정 불가를 해소하기 위해 `history[date].completedTodayCount`
+를 신설 — M4b가 이미 쓰던 `categoriesCompleted`와 동일한 high-water
+패턴으로, round가 바뀔 때마다 즉시 기록(자정 훅에 의존하지 않음).
+`mergeHistoryDay`는 `maxNum`으로 병합(기존 병합 원칙 재사용). 구버전
+클라이언트/기존 history 항목은 이 필드가 없으면 0으로 폴백.
+- **보상/XP/UI 판정 변경 0건** — 순수 관측 배선이고, 이번 세션은 이
+  필드를 아직 아무 코드도 읽지 않는다(읽는 코드가 생기는 순간이 실제
+  M4d 전환 착수 시점).
+- 신규 테스트: `testProgress.mjs` §10.7, `testMergeProgress.mjs` §5.5.
+  `npm run verify:student` PASS.
+- `npm run verify:persistence`는 `testMultiDeviceMerge`/
+  `testFullProgressBackup` 2건 FAIL — 하지만 헌법 규칙 15에 따라
+  `git stash`로 수정 전 baseline(`80101ae` 직전)에서 대조한 결과
+  **동일하게 재현**됐다(RLS 락다운이 anon key의 삭제를 막는 기존
+  환경 이슈, 이번 커밋의 회귀 아님).
+- **다음 측정 시점**: 최근 14일간 이벤트가 17건뿐인 저활동 구간이라,
+  7~14일 후 이 신규 필드로 M4d 게이트를 재측정할 것.
+
+### (7) 운영자 지시 "학생 학습 시간 5분→10분" — 실측 결과, 해당 없음
+
+`src/`/`api`/`supabase/functions` 전수 검색 결과, 학생 학습 플로우에
+**5분 시간 제한 자체가 존재하지 않는다**. "5분"이 언급되는 곳은 전부
+아래 3가지뿐이고 지시 대상이 아니다:
+1. PIN 잠금 5분(서버 보안 로직) — 지시가 명시적으로 제외.
+2. 입실시험 관리자 설정 옵션(60~300초 범위) — 관리자가 조정하는 제한,
+   지시가 명시적으로 제외.
+3. `dailyRitual`의 "3~5분" 주석 — 실제로는 단어 개수 기반 설계이지
+   시간 제한 코드가 아님.
+- **판단**: 새 타이머를 만드는 것은 학생 대상 신규 기능(헌법 규칙 12)이자
+  제품 결정이라 이번 세션은 착수하지 않았다 — 운영자 판단 대기로 기록.
+
+### (8) 기타
+
+`.gitignore`에 `supabase/.temp/` 추가(커밋 `dbcdedf`, CLI 배포 과정에서
+생기는 임시 디렉터리).
+
+**커밋 목록**: `801e53c`(P2 AI 생성 배선) / `dbcdedf`(gitignore) /
+`80101ae`(M4d 실측 결과 기록) / `8efb8dc`(M4d 관측 배선). Edge Function
+배포 2건(`admin-content-write` v5, `generate-word-assets` 최초)은 코드
+커밋이 아니라 배포 액션 — git 이력에 별도 커밋으로 남지 않는다.
+
+### 운영자 조치 사항(순서 무관, 전부 비긴급)
+
+1. `supabase_v3_15_word_assets.sql` 실행(실행 전 파일 하단 (b-0) 쿼리로
+   기대 백필 행수 확인) — 실행해야 WordAssetPanel/AI 생성 라이브 왕복
+   검증이 가능해짐.
+2. Unit 5 재저장(이제 v5 배포로 안전) → 스냅샷 파일의
+   `verification_procedure`로 학습기록 보존 + 암기팁 40건 복구 확인.
+3. 학생 학습 시간 제한 신설 여부 결정(위 (7)).
+4. Vercel 배포는 push로 자동(커밋 `801e53c` 이후 번들 변경 포함, 별도
+   조치 불필요).
 
 ## 2026-08-05 (36차) — Word Asset Library M1~M3c + P0 데이터 손실 버그 2건
 발견·수정 + 측정 기반 계획 정정 2건 (implementer 세션들 + docs-maintainer

@@ -1,9 +1,58 @@
 # Paul Easy Voca — 로드맵
 
-_최종 갱신: 2026-08-05 (15차, Word Asset Library M1~M3c + P0 데이터 손실
-버그 2건 수정(word_status CASCADE/memory_tip·example_translation 영구
-소실) + 측정 기반 계획 정정 2건(문장부호 정규화 갭 반증, 쓰기 오토파일럿
-편집거리1 자동화 보류) — 기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+_최종 갱신: 2026-08-05 (16차, 15차가 경고한 admin-content-write P0 배포
+공백 실측·해소(v5 배포) + generate-word-assets 최초 배포 + Word Asset AI
+생성 배선(P2) + M4d 게이트 실측 NOT_MEASURABLE + M4d 관측 배선 신설 —
+기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+
+## 2026-08-05 (16차) — admin-content-write P0 배포 공백 해소 + generate-word-assets 최초 배포 + Word Asset AI 생성 배선(P2) + M4d 실측·관측 배선 — 배포/코드 완료 ✅(SQL 실행·재저장은 운영자 액션 대기)
+
+총 4개 소커밋(`801e53c`/`dbcdedf`/`80101ae`/`8efb8dc`) + Edge Function
+배포 2건(`admin-content-write` v5, `generate-word-assets` 최초). 상세
+근거·실측치는 `handoff.md` 2026-08-05(37차) 섹션 참고.
+
+**① 15차가 경고한 P0 배포 공백 해소** — `supabase` CLI 실측으로 라이브
+`admin-content-write`가 여전히 v4(2026-08-01T19:20Z, P0 수정 커밋
+`0006bc7`/`75beefa` 미포함)임을 확인, 운영자 명시 지시로 에이전트가
+`--use-api`로 직접 배포해 v5(2026-08-05T03:51Z)로 갱신·라이브 인가 게이트
+확인. **이제 유닛 재저장이 안전하다** — 15차 "남은 것 1번"이 완료됨.
+`generate-word-assets`(P2, 코드는 14차 이전 `db516dc`)도 이번에 최초
+배포·라이브 확인.
+
+**② Unit 5 읽기 전용 재검증** — 15차 스냅샷과 대조해 `word_status` 174행/
+전체 1,691행, `words` id 전부 유지 확인(재저장 아직 미발생, 이제 안전).
+
+**③ Word Asset AI 생성 배선(P2, `801e53c`)** — `wordAssets.js`에
+`selectAiGenerationCandidates`/`buildAiGeneratedAssetPayload`/
+`generateWordAssetsViaAi` 순수 함수 3종(승인 행 스킵, 기존 값 무덮어쓰기,
+무-throw, 예산 초과 시 미저장), `WordAssetPanel` "🤖 AI 생성" 버튼 배선.
+하네스 30단언 추가(총 64), build/verify:admin PASS. **라이브 왕복은
+`supabase_v3_15_word_assets.sql` 미실행으로 미검증**(하네스 폴백 경로만
+검증).
+
+**④ M4d 게이트 실측 결과 — NOT_MEASURABLE**(`80101ae`) — 35차가 세운
+90% 게이트를 실측한 결과 최근 7일 `daily-mission-complete` 이벤트가
+2건뿐(1건은 자정 리셋으로 소실)이라 판정 자체가 불가능함을 확인.
+`round.completedToday`가 자정마다 리셋되고 history에 카운트 필드가 없어
+소급 측정이 구조적으로 불가능했던 것이 원인.
+
+**⑤ M4d 관측 배선 신설**(`8efb8dc`) — `history[date].completedTodayCount`
+추가(high-water 패턴, 자정 훅 비의존, `maxNum` 병합, 구버전 폴백 0).
+보상/XP/UI 판정 변경 0건, 아직 아무 코드도 이 필드를 읽지 않음.
+`verify:student` PASS, `verify:persistence` 2건 FAIL은 baseline 대조로
+기존 환경 이슈임을 확인(회귀 아님). 7~14일 후 재측정 예정.
+
+**⑥ 운영자 지시 "학습 시간 5분→10분" 조사 결과** — 전수 검색 결과 학생
+학습 플로우에 5분 시간 제한 자체가 존재하지 않음(PIN 잠금/입실시험
+설정/dailyRitual 주석뿐, 전부 지시 대상 아님) — 새 타이머 신설은 학생
+대상 신규 기능(헌법 규칙 12)이라 착수하지 않고 운영자 판단 대기로 기록.
+
+**남은 것(운영자)**:
+1. `supabase_v3_15_word_assets.sql` 실행(실행 전 (b-0) 쿼리로 기대 백필
+   행수 확인) — 실행해야 AI 생성 라이브 왕복 검증 가능.
+2. Unit 5 재저장(이제 안전) → 학습기록 보존 + 암기팁 40건 복구 확인.
+3. 학생 학습 시간 제한 신설 여부 결정.
+4. Vercel은 push로 자동 배포.
 
 ## 2026-08-05 (15차) — Word Asset Library M1~M3c + P0 데이터 손실 버그 2건 수정 — 코드 완료 ✅(운영자 배포/SQL 액션 대기, 순서 엄수 필요)
 

@@ -353,6 +353,25 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
 
 ## VERIFY
 
+### [P2] Word Asset AI 생성 배선(`801e53c`) + M4d 관측 배선(`8efb8dc`) — qa-reviewer 검수 대기
+- 근거: `handoff.md` 2026-08-05(37차) (3)/(4)/(5)/(6), `ROADMAP.md`
+  2026-08-05(16차).
+- 내용: ①`WordAssetPanel` "🤖 AI 생성" 배선 — `wordAssets.js`
+  `selectAiGenerationCandidates`/`buildAiGeneratedAssetPayload`/
+  `generateWordAssetsViaAi` 순수 함수 3종(승인 행 스킵, 기존 값 무덮어쓰기,
+  무-throw, AI 예산 초과 시 미저장), 하네스 30단언 추가(총 64). ②M4d
+  게이트 관측 배선 — `history[date].completedTodayCount` 신설(high-water
+  패턴, 자정 훅 비의존, `maxNum` 병합), 보상/XP/UI 판정 변경 0건.
+- 검증: `npm run build` PASS, `npm run verify:admin`/`npm run
+  verify:student` PASS. `npm run verify:persistence` 2건 FAIL은
+  수정 전 baseline 대조로 기존 환경 이슈(RLS 락다운의 anon 삭제 차단)임을
+  확인, 회귀 아님.
+- **미검증(정직 기록)**: Word Asset AI 생성의 라이브 DB 왕복 —
+  `word_assets` 테이블 자체가 `supabase_v3_15_word_assets.sql` 미실행
+  상태라 이번 세션은 하네스 폴백 경로만 검증했다(운영자가 SQL 실행 후
+  라이브 검증 필요).
+- 검수 대기 사항: qa-reviewer/security-reviewer 코드 리뷰 미착수.
+
 ### [P0] Vercel 프로덕션 배포 정체(Hobby 12개 함수 한도 초과) — 해소 완료, 운영자 확인 1건 대기
 - 근거: `.ai-status/engineering-head-vercel-deploy-verify.json`,
   `.ai-status/engineering-head-admin-pin-actions-consolidation.json`,
