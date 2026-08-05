@@ -30,7 +30,7 @@ const DIRECTION_OPTIONS = [
   ['mixed', '혼합 (정확히 반반)'],
 ]
 const TIME_OPTIONS = [
-  [60, '1분'], [90, '1분 30초'], [120, '2분'], [180, '3분'], [300, '5분'],
+  [60, '1분'], [90, '1분 30초'], [120, '2분'], [180, '3분'], [300, '5분'], [600, '10분'],
 ]
 
 export default function EntranceTestAdmin() {
@@ -39,7 +39,8 @@ export default function EntranceTestAdmin() {
   const [unit, setUnit] = useState('')
   const [questionCount, setQuestionCount] = useState(10)
   const [direction, setDirection] = useState('en2kr')
-  const [timeLimit, setTimeLimit] = useState(120)
+  // 운영자 지시(2026-08-05): 기본 제한시간 5분→10분 상향(120→600). 되돌리지 말 것.
+  const [timeLimit, setTimeLimit] = useState(600)
   const [starting, setStarting] = useState(false)
   const [tests, setTests] = useState([])
   const [results, setResults] = useState([])
