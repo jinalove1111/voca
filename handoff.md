@@ -127,6 +127,19 @@ _최종 갱신: 2026-08-05 (37차, 36차가 경고한 admin-content-write P0 배
 배포 2건(`admin-content-write` v5, `generate-word-assets` 최초)은 코드
 커밋이 아니라 배포 액션 — git 이력에 별도 커밋으로 남지 않는다.
 
+### (9) 같은 날 후속 — 입실시험 제한시간 10분 상향(커밋 `c7eb1b4`)
+
+위 (7)의 "학습 시간 5분→10분" 조사 보고를 받은 운영자가 대상을
+명확화했다 — **입실시험 시간 제한**이 맞다. `EntranceTestAdmin.jsx`
+단일 파일 수정: `TIME_OPTIONS`에 `[600,'10분']` 추가(기존 1~5분 옵션
+유지), 새 시험 기본 선택값 `useState(120)`→`useState(600)`. 학생
+화면(`EntranceTest.jsx`)/배너는 생성된 시험 행의 `timeLimitSeconds`를
+그대로 읽으므로 자동 반영, 이미 생성된 시험의 저장값은 불변(데이터
+마이그레이션 없음). DB 컬럼은 CHECK 제약 없음(`supabase_v1_8` 34행,
+`integer not null default 120`)이고 클라이언트가 항상 명시값을 보내므로
+SQL 변경 불필요. 게이트: `npm run build`/`testEntranceTest.mjs`/
+`verify:admin` 전부 PASS(락다운 SKIP은 기존 환경 패턴).
+
 ### 운영자 조치 사항(순서 무관, 전부 비긴급)
 
 1. `supabase_v3_15_word_assets.sql` 실행(실행 전 파일 하단 (b-0) 쿼리로
