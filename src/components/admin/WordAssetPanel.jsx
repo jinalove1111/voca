@@ -1,7 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../utils/supabaseClient'
-import { isMissingTableError } from '../../utils/wordLibrary'
-import { normalizeWordAssetRow, upsertWordAsset, WORD_ASSET_WRITABLE_COLUMNS } from '../../utils/wordAssets'
+import { isMissingTableError, groupAssetPayloadsByShape } from '../../utils/wordLibrary'
+import {
+  normalizeWordAssetRow, upsertWordAsset, upsertWordAssets, WORD_ASSET_WRITABLE_COLUMNS,
+  selectAiGenerationCandidates, buildAiGeneratedAssetPayload, generateWordAssetsViaAi,
+  AI_GENERATE_MAX_WORDS_PER_RUN,
+} from '../../utils/wordAssets'
 
 // WordAssetPanel.jsx — M4: Word Asset Library 관리자 편집기(word_assets 테이블
 // 목록/검색/편집/승인). AdminScreen.jsx의 새 최상위 탭('wordassets')으로
@@ -27,6 +31,21 @@ import { normalizeWordAssetRow, upsertWordAsset, WORD_ASSET_WRITABLE_COLUMNS } f
 // (M4 시점 예상되는 가장 흔한 실패) reason:'action_not_deployed'로 안전하게
 // 실패한다 — 이 컴포넌트는 그 실패를 안내 배너로만 보여주고 크래시하지
 // 않는다.
+//
+// ── AI 생성 배선(P2, 2026-08-05) ────────────────────────────────────────
+// "🤖 AI 생성" 버튼은 generate-word-assets Edge Function(별도 함수, DB 쓰기
+// 없음 — preview-only)을 호출해 cefr/pronunciation_uk/example_sentence(+
+// translation)/part_of_speech 4~5개 필드를 채운 뒤, 그 결과를 이 화면이
+// upsertWordAssets(word_asset.upsert_bulk)로 저장한다. "어떤 단어를 요청할지"
+// (selectAiGenerationCandidates)와 "AI 결과 중 어떤 필드를 실제로 저장할지"
+// (buildAiGeneratedAssetPayload) 판단은 전부 wordAssets.js의 순수 함수가
+// 하고, 이 컴포넌트는 그 결과를 그대로 호출·표시만 한다(로직을 여기서
+// 재구현하지 않음 — tests/harness/runWordAssets.mjs가 그 순수 함수를
+// 이미 전수 검증). ExcelUpload(AdminScreen.jsx, M3c)의 "이미 채워진 필드는
+// 절대 덮어쓰지 않는다 + approval_status=approved 행은 통째로 건너뛴다"
+// 원칙을 이 흐름도 그대로 물려받는다(buildAiGeneratedAssetPayload가 그
+// 원칙을 구현). 실패(예산 초과/미배포/인증 실패/네트워크 오류 전부)는
+// writeFailureMessage로 통일된 배너 문구로만 보여주고 절대 크래시하지 않는다.
 
 // select 컬럼은 WORD_ASSET_WRITABLE_COLUMNS(단일 원본, wordAssets.js export)
 // + id/created_at/updated_at. select('*') 금지 관례를 그대로 따른다.
@@ -262,6 +281,77 @@ export default function WordAssetPanel({ adminPin }) {
     }
   }
 
+  // ── AI 생성(P2 배선) ─────────────────────────────────────────────────────
+  // rows(현재 목록/필터 결과)가 바뀔 때만 재계산 — 순수 함수라 rows 참조가
+  // 그대로면(필터/검색 안 바뀜) 매 렌더마다 다시 계산하지 않아도 된다.
+  const aiCandidates = useMemo(() => selectAiGenerationCandidates(rows), [rows])
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiBanner, setAiBanner] = useState(null) // { tone: 'error'|'info'|'success', text }
+
+  const handleAiGenerate = async () => {
+    if (aiCandidates.selected.length === 0) return
+    const n = aiCandidates.selected.length
+    const remaining = aiCandidates.remainingCount
+    const confirmMsg =
+      `현재 목록에서 ${n}개 단어의 빈 필드(CEFR/영국식 발음/예문+번역/품사)를 AI로 채울게요.\n` +
+      `이 AI 비용은 쓰기시험 채점(grade-writing-answers)과 같은 하루 예산을 나눠 써요.\n` +
+      (remaining > 0 ? `조건에 맞는 단어가 ${remaining}개 더 있지만, 한 번에 최대 ${AI_GENERATE_MAX_WORDS_PER_RUN}개까지만 처리해요(나머지는 다음 실행에서).\n` : '') +
+      `이미 값이 있는 필드나 '승인' 상태인 단어는 절대 건드리지 않아요. 계속할까요?`
+    const ok = window.confirm(confirmMsg)
+    if (!ok) return
+
+    setAiBusy(true)
+    setAiBanner(null)
+    setWriteBanner(null)
+    try {
+      const targets = aiCandidates.selected
+      const res = await generateWordAssetsViaAi(
+        targets.map((a) => ({ word: a.word, word_key: a.wordKey, meaning: a.meaningPrimary || '' })),
+        adminPin,
+      )
+      if (!res.ok) {
+        setAiBanner({ tone: 'error', text: writeFailureMessage(res) })
+        return
+      }
+      if (res.budget?.exceeded) {
+        setAiBanner({
+          tone: 'error',
+          text: `오늘 AI 비용 예산(하루 상한 $${res.budget.capUsd ?? '?'}, 쓰기시험 채점과 공유)을 이미 넘어서 이번 실행은 생성을 건너뛰었어요. 저장도 시도하지 않았어요 — 내일 다시 시도해주세요.`,
+        })
+        return
+      }
+
+      const aiByWordKey = new Map((res.results || []).map((r) => [r.word_key, r]))
+      const payloads = []
+      for (const asset of targets) {
+        const aiResult = aiByWordKey.get(asset.wordKey)
+        if (!aiResult) continue
+        const payload = buildAiGeneratedAssetPayload(asset, aiResult)
+        if (payload) payloads.push(payload)
+      }
+
+      if (payloads.length === 0) {
+        setAiBanner({ tone: 'info', text: `AI 호출은 완료됐지만 실제로 채워진(그리고 아직 비어있던) 필드가 없어서 저장할 내용이 없었어요(${n}개 단어 확인함).` })
+        await load()
+        return
+      }
+
+      let anyFail = null
+      for (const group of groupAssetPayloadsByShape(payloads)) {
+        const upsertRes = await upsertWordAssets(group, adminPin)
+        if (!upsertRes.ok && !anyFail) anyFail = upsertRes
+      }
+      if (anyFail) {
+        setAiBanner({ tone: 'error', text: `일부 저장에 실패했어요: ${writeFailureMessage(anyFail)}` })
+      } else {
+        setAiBanner({ tone: 'success', text: `${payloads.length}개 단어의 빈 필드를 AI로 채워 저장했어요(확인한 단어 ${n}개 중).` })
+      }
+      await load()
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
   return (
     <div className="space-y-3">
       <div className="bg-indigo-50 border-2 border-indigo-200 rounded-xl p-3 text-xs font-bold text-indigo-800">
@@ -301,8 +391,37 @@ export default function WordAssetPanel({ adminPin }) {
         </div>
       )}
 
+      {aiBanner && (
+        <div className={`rounded-xl p-3 text-xs font-bold flex items-start justify-between gap-2 border-2 ${
+          aiBanner.tone === 'success' ? 'bg-green-50 border-green-200 text-green-700'
+            : aiBanner.tone === 'error' ? 'bg-orange-50 border-orange-200 text-orange-700'
+            : 'bg-gray-50 border-gray-200 text-gray-600'
+        }`}>
+          <span>{aiBanner.tone === 'success' ? '✅' : aiBanner.tone === 'error' ? '⚠️' : 'ℹ️'} {aiBanner.text}</span>
+          <button onClick={() => setAiBanner(null)} className="flex-shrink-0 font-black btn-press opacity-60">✕</button>
+        </div>
+      )}
+
       {!tableMissing && (
         <>
+          <div className="bg-indigo-50 border-2 border-indigo-200 rounded-xl p-3 space-y-1.5">
+            <p className="text-xs font-black text-indigo-800">
+              🤖 AI 생성 — 현재 목록(검색/필터 반영)에서 승인되지 않았고 빈 필드가 있는 단어를 대상으로 해요.
+            </p>
+            <p className="text-[11px] text-indigo-500">
+              대상 {aiCandidates.selected.length}개
+              {aiCandidates.remainingCount > 0 ? ` (조건에 맞는 단어가 ${aiCandidates.remainingCount}개 더 있어요 — 한 번에 최대 ${AI_GENERATE_MAX_WORDS_PER_RUN}개까지)` : ''}
+              . 이미 값이 있는 필드는 절대 덮어쓰지 않고, AI 비용은 쓰기시험 채점과 같은 하루 예산을 공유해요.
+            </p>
+            <button
+              onClick={handleAiGenerate}
+              disabled={aiBusy || busy || aiCandidates.selected.length === 0}
+              className="w-full bg-indigo-500 disabled:bg-gray-300 text-white font-black py-1.5 rounded-lg text-xs btn-press"
+            >
+              {aiBusy ? '⏳ AI 생성 중...' : aiCandidates.selected.length === 0 ? '🤖 AI로 채울 단어 없음' : `🤖 AI 생성 (${aiCandidates.selected.length}개)`}
+            </button>
+          </div>
+
           <div className="bg-white rounded-xl p-3 card-shadow space-y-1.5">
             <p className="text-xs font-black text-gray-700">검색 · 필터</p>
             <input

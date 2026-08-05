@@ -175,6 +175,104 @@ export function filterWordAssetPayload(asset) {
   return out
 }
 
+// ── AI 생성(P2 배선, 2026-08-05) — "어떤 단어를 요청할지 / AI 결과 중 어떤
+// 필드를 저장할지" 순수 결정 함수 ──────────────────────────────────────────
+//
+// generate-word-assets Edge Function(supabase/functions/generate-word-assets/
+// pipeline.js ASSET_FIELDS)이 채우는 4개 필드(cefr/pronunciation_uk/
+// example_sentence/part_of_speech) + example_sentence와 짝을 이루는
+// example_translation까지 총 5개를 이 클라이언트의 "AI로 채울 수 있는 필드"
+// 목록으로 삼는다(서버 스키마와 이름을 그대로 맞춤 — 새로 지어내지 않음).
+export const AI_FILLABLE_FIELDS = ['cefr', 'pronunciation_uk', 'example_sentence', 'example_translation', 'part_of_speech']
+
+// snake_case(서버 응답/DB 컬럼) -> camelCase(normalizeWordAssetRow 결과) 매핑.
+const AI_ASSET_FIELD_MAP = {
+  cefr: 'cefr',
+  part_of_speech: 'partOfSpeech',
+  pronunciation_uk: 'pronunciationUk',
+  example_sentence: 'exampleSentence',
+  example_translation: 'exampleTranslation',
+}
+
+// 관리자가 "AI 생성" 버튼 1회를 누를 때 실제로 요청을 보내는 단어 상한.
+// generate-word-assets의 서버측 상한(MAX_ITEMS_PER_REQUEST, 기본 100)보다
+// 여유 있게 낮게 잡아 요청당 비용/시간을 더 보수적으로 제한한다(관리자
+// UI 전용 값 — 서버 상한 자체를 바꾸지 않음).
+export const AI_GENERATE_MAX_WORDS_PER_RUN = 50
+
+function isEmptyAssetValue(v) {
+  return v === null || v === undefined || v === ''
+}
+
+// asset 목록(normalizeWordAssetRow 결과 배열, WordAssetPanel의 rows 상태와
+// 동일 모양)에서 "AI 생성 후보"를 고른다 — 대상: approval_status가
+// 'approved'가 아니고, AI_FILLABLE_FIELDS 중 하나 이상이 비어 있는 행.
+// 상한(limit, 기본 AI_GENERATE_MAX_WORDS_PER_RUN)을 넘으면 앞에서부터만
+// 선택하고 나머지 개수는 remainingCount로 알려준다(호출부가 "N개는 이번에
+// 처리되지 않았어요" 안내에 사용). 순수 함수 — 네트워크/랜덤/시간 없음.
+export function selectAiGenerationCandidates(assetRows, { limit = AI_GENERATE_MAX_WORDS_PER_RUN } = {}) {
+  const list = Array.isArray(assetRows) ? assetRows : []
+  const eligible = list.filter((row) => {
+    if (!row || typeof row !== 'object') return false
+    if (row.approvalStatus === 'approved') return false // 교사 승인 콘텐츠 — 절대 건드리지 않음(M3c와 동일 원칙)
+    return Object.values(AI_ASSET_FIELD_MAP).some((camelKey) => isEmptyAssetValue(row[camelKey]))
+  })
+  const cap = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : AI_GENERATE_MAX_WORDS_PER_RUN
+  const selected = eligible.slice(0, cap)
+  const remainingCount = Math.max(0, eligible.length - selected.length)
+  return { selected, remainingCount, eligibleCount: eligible.length }
+}
+
+function normalizeAiTextValue(value) {
+  if (value === null || value === undefined) return null
+  const s = String(value).trim()
+  return s === '' ? null : s
+}
+
+// existingAsset(normalizeWordAssetRow 결과, 카멜케이스 — 조회 시점의 최신
+// 값) + aiResult(generate-word-assets 응답의 results[i], snake_case —
+// pipeline.js emptyGeneratedItem/sanitizeGeneratedItem과 동일한 모양:
+// word_key/cefr/part_of_speech/pronunciation_uk/example_sentence/
+// example_translation/warnings) -> upsertWordAssets에 바로 넘길 수 있는
+// payload 행 하나. 어떤 조건에서도 기존 값을 덮어쓰지 않는다(빈 필드만
+// 채움) — buildUnitWordAssetPayloads(wordLibrary.js, M3c)의 "이미 값이
+// 있는 필드는 payload 자체에 키를 만들지 않는다" 원칙을 AI 결과에도 그대로
+// 적용한다. 채울 필드가 하나도 없으면(AI가 전부 null을 반환했거나, AI가
+// 준 값이 전부 이미 채워진 필드거나) null을 반환해 호출부가 빈 upsert를
+// 보내지 않게 한다. approval_status가 'approved'인 행은 통째로 건너뛴다
+// (교사 승인 콘텐츠 보호, M3c와 동일). meaning_primary는 이 함수가 절대
+// 채우지 않는다 — generate-word-assets 자체가 그 필드를 생성하지 않는다
+// (pipeline.js 헤더 "이 함수가 채우는 필드는 4개뿐" 주석 참고).
+export function buildAiGeneratedAssetPayload(existingAsset, aiResult) {
+  if (!existingAsset || typeof existingAsset !== 'object') return null
+  if (!aiResult || typeof aiResult !== 'object') return null
+  if (existingAsset.approvalStatus === 'approved') return null
+
+  const row = { word_key: existingAsset.wordKey, sense_key: existingAsset.senseKey ?? '', word: existingAsset.word }
+  const newGeneratedFields = {}
+
+  for (const [snakeKey, camelKey] of Object.entries(AI_ASSET_FIELD_MAP)) {
+    const aiValue = normalizeAiTextValue(aiResult[snakeKey])
+    if (aiValue === null) continue // AI가 채우지 못함(null/빈 문자열) — 손대지 않음
+    if (!isEmptyAssetValue(existingAsset[camelKey])) continue // 이미 값 있음 — 덮어쓰지 않음
+    row[snakeKey] = aiValue
+    newGeneratedFields[snakeKey] = 'ai'
+  }
+
+  if (Object.keys(newGeneratedFields).length === 0) return null // 채울 게 없음 — 빈 payload를 보내지 않음
+
+  // source도 다른 필드와 동일한 "이미 값 있으면 손대지 않음" 원칙을 따른다
+  // (M3c buildUnitWordAssetPayloads의 source 처리와 동일 — 새로 만들어낸
+  // 컬럼이 아니라 기존 화이트리스트 컬럼을 그 관례 그대로 재사용).
+  if (isEmptyAssetValue(existingAsset.source)) row.source = 'ai'
+
+  // 기존 provenance(generated_fields)와 병합 — 컬럼 전체 치환 위험 방지
+  // (M3c 헤더 주석과 동일 이유).
+  row.generated_fields = { ...(existingAsset.generatedFields || {}), ...newGeneratedFields }
+
+  return row
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // 네트워크 함수 — 아래부터는 실제 Supabase/Edge Function 호출. 위 "import 0
 // 설계" 주석 참고 — supabaseClient/wordLibrary는 함수 내부에서만 동적 로드.
@@ -308,4 +406,84 @@ export async function upsertWordAssets(assets, adminPin) {
     return { ok: false, reason: classifyAdminWriteError(err), detail: err?.message || String(err), partial: results }
   }
   return { ok: true, data: results }
+}
+
+// ── generate-word-assets Edge Function 클라이언트(P2 배선, 2026-08-05) ─────
+//
+// admin-content-write와 달리 이 함수는 별도 Edge Function(supabase/functions/
+// generate-word-assets)을 직접 호출한다 — 그 함수는 DB에 아무 것도 쓰지
+// 않고(index.ts 헤더 "preview-only + no-write") 생성 결과만 돌려준다, 실제
+// 저장은 여전히 이 파일의 upsertWordAssets(word_asset.upsert_bulk)가 맡는다.
+// 호출 관례는 spellingReviewAiApi.js의 callEdgeFunctionForUnresolved와
+// 동일(anon apikey/Authorization 헤더, POST body에 adminPin, AbortController
+// 타임아웃, 어떤 실패든 절대 throw하지 않고 구조화된 { ok:false, reason,
+// detail? }로 강등) — 다만 reason 값은 이 파일의 기존 계약(upsertWordAsset의
+// admin_pin_required/not_authorized/action_not_deployed/invalid_payload)과
+// 맞춰 WordAssetPanel.jsx의 writeFailureMessage()가 그대로 재사용 가능하게
+// 한다(별도 에러 문구 세트를 새로 만들지 않음).
+const GENERATE_WORD_ASSETS_TIMEOUT_MS = 45000
+
+function generateWordAssetsEndpoint() {
+  // import.meta.env는 Vite 전용 문법이라(파일 헤더 "import 0 설계" 주석과
+  // 동일 이유) 이 함수는 실제로 호출될 때만(adminPin이 truthy일 때만) 평가된다
+  // — plain Node 하네스는 adminPin 없이만 이 파일을 테스트하므로 이 줄까지
+  // 도달하지 않는다.
+  const url = import.meta.env.VITE_SUPABASE_URL
+  return url ? `${url}/functions/v1/generate-word-assets` : null
+}
+
+// words: [{ word, word_key?, meaning? }, ...] (selectAiGenerationCandidates가
+// 고른 asset 행을 호출부가 이 모양으로 변환해서 넘긴다). adminPin이 없으면
+// 즉시 admin_pin_required. 성공 시 { ok:true, results, usage, budget }를
+// 그대로 반환(서버 응답 계약, index.ts 헤더 주석 참고) — budget.exceeded가
+// true면 호출부가 upsert를 시도하지 않아야 한다(서버가 이미 전부 null
+// 필드로 채워 보내므로 그대로 upsert해도 실질적 피해는 없지만, 이 함수는
+// 그 판단을 호출부에 위임하고 여기서는 응답을 그대로 전달만 한다).
+export async function generateWordAssetsViaAi(words, adminPin) {
+  if (!adminPin) return { ok: false, reason: 'admin_pin_required' }
+  const list = Array.isArray(words)
+    ? words.filter((w) => w && typeof w === 'object' && typeof w.word === 'string' && w.word.trim())
+    : []
+  if (list.length === 0) return { ok: false, reason: 'invalid_payload', detail: 'AI로 생성할 단어가 없어요' }
+
+  const endpoint = generateWordAssetsEndpoint()
+  if (!endpoint) return { ok: false, reason: 'action_not_deployed', detail: 'AI 생성 연결 정보 없음(VITE_SUPABASE_URL 미설정)' }
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), GENERATE_WORD_ASSETS_TIMEOUT_MS)
+  let res
+  try {
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+    res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(anonKey ? { apikey: anonKey, Authorization: `Bearer ${anonKey}` } : {}),
+      },
+      body: JSON.stringify({
+        adminPin,
+        words: list.map((w) => ({ word: w.word, word_key: w.word_key, meaning: w.meaning || '' })),
+      }),
+      signal: controller.signal,
+    })
+  } catch (err) {
+    clearTimeout(timeoutId)
+    if (err?.name === 'AbortError') {
+      return { ok: false, reason: 'action_not_deployed', detail: `AI 생성 요청 시간 초과(${Math.round(GENERATE_WORD_ASSETS_TIMEOUT_MS / 1000)}초)` }
+    }
+    return { ok: false, reason: 'action_not_deployed', detail: `AI 생성 서비스 연결 실패: ${err?.message || err}` }
+  }
+  clearTimeout(timeoutId)
+
+  let body = null
+  try { body = await res.json() } catch { /* JSON 아닌 응답(예: 함수 미배포 시 404 HTML) */ }
+
+  if (!res.ok || !body || body.ok === false) {
+    if (body?.reason === 'not_authorized') {
+      return { ok: false, reason: 'not_authorized', detail: '관리자 인증이 만료됐거나 서버에 전달되지 않았어요. 관리자 화면을 새로고침 후 다시 로그인해주세요.' }
+    }
+    return { ok: false, reason: 'action_not_deployed', detail: body?.error || `AI 생성 서비스 응답 실패(HTTP ${res.status})` }
+  }
+
+  return { ok: true, results: Array.isArray(body.results) ? body.results : [], usage: body.usage || null, budget: body.budget || null }
 }

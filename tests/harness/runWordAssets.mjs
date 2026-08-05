@@ -16,6 +16,11 @@ import {
   filterWordAssetPayload,
   upsertWordAsset,
   upsertWordAssets,
+  AI_FILLABLE_FIELDS,
+  AI_GENERATE_MAX_WORDS_PER_RUN,
+  selectAiGenerationCandidates,
+  buildAiGeneratedAssetPayload,
+  generateWordAssetsViaAi,
 } from '../../src/utils/wordAssets.js'
 
 let passed = 0, failed = 0
@@ -112,6 +117,109 @@ const bulk = await upsertWordAssets([{ word_key: 'apple' }, { word_key: 'banana'
 check('배열 버전도 adminPin 없으면 동일 계약', bulk.ok === false && bulk.reason === 'admin_pin_required')
 const singleNoKey = await upsertWordAsset({ meaning_primary: '뜻만 있고 word_key 없음' }, 'fake-pin')
 check('adminPin이 있어도 word_key 없으면 invalid_payload(네트워크 호출 전에 거부)', singleNoKey.ok === false && singleNoKey.reason === 'invalid_payload')
+
+console.log('\n-- selectAiGenerationCandidates — P2(AI 생성 배선) "어떤 단어를 요청할지" 결정')
+{
+  const makeRow = (overrides = {}) => ({
+    wordKey: overrides.wordKey || 'apple', senseKey: '', word: overrides.word || 'apple',
+    approvalStatus: 'draft', cefr: null, partOfSpeech: null, pronunciationUk: null,
+    exampleSentence: null, exampleTranslation: null, source: 'rule', generatedFields: {},
+    ...overrides,
+  })
+
+  check('AI_FILLABLE_FIELDS는 서버(generate-word-assets) 4필드 + example_translation 5개',
+    AI_FILLABLE_FIELDS.length === 5 && AI_FILLABLE_FIELDS.includes('cefr') && AI_FILLABLE_FIELDS.includes('pronunciation_uk')
+    && AI_FILLABLE_FIELDS.includes('example_sentence') && AI_FILLABLE_FIELDS.includes('example_translation') && AI_FILLABLE_FIELDS.includes('part_of_speech'))
+
+  const allEmpty = makeRow({ wordKey: 'a1' })
+  const oneFilledStillEligible = makeRow({ wordKey: 'a2', cefr: 'A1' }) // cefr만 채워짐 — 나머지 4개 여전히 비어 있음
+  const fullyFilled = makeRow({
+    wordKey: 'a3', cefr: 'A1', partOfSpeech: 'noun', pronunciationUk: '/x/',
+    exampleSentence: 'ex', exampleTranslation: '번역',
+  })
+  const approvedButEmpty = makeRow({ wordKey: 'a4', approvalStatus: 'approved' })
+
+  const r1 = selectAiGenerationCandidates([allEmpty, oneFilledStillEligible, fullyFilled, approvedButEmpty])
+  check('전부 빈 필드인 행은 후보에 포함됨', r1.selected.some((r) => r.wordKey === 'a1'))
+  check('일부만 채워진 행도 나머지 필드가 비어있으면 후보에 포함됨', r1.selected.some((r) => r.wordKey === 'a2'))
+  check('5개 필드가 모두 채워진 행은 후보에서 제외됨(이미 필드 채움 배제)', !r1.selected.some((r) => r.wordKey === 'a3'))
+  check('approval_status=approved인 행은 빈 필드가 있어도 후보에서 제외됨(승인 콘텐츠 보호)', !r1.selected.some((r) => r.wordKey === 'a4'))
+  check('eligibleCount는 approved/완전채움 제외 실제 후보 수(2)', r1.eligibleCount === 2)
+  check('상한 이하면 remainingCount는 0', r1.remainingCount === 0)
+
+  check('AI_GENERATE_MAX_WORDS_PER_RUN은 50(서버 상한 100보다 보수적으로 낮음)', AI_GENERATE_MAX_WORDS_PER_RUN === 50)
+
+  const manyRows = Array.from({ length: 60 }, (_, i) => makeRow({ wordKey: `w${i}`, word: `w${i}` }))
+  const r2 = selectAiGenerationCandidates(manyRows)
+  check('60개 후보 중 기본 상한 50개만 selected에 포함(cap-at-50)', r2.selected.length === 50)
+  check('나머지 10개는 remainingCount로 정직하게 보고됨', r2.remainingCount === 10)
+  check('eligibleCount는 전체 후보 수(60, cap과 무관)', r2.eligibleCount === 60)
+  check('selected는 입력 순서 앞에서부터 선택됨(w0~w49)', r2.selected[0].wordKey === 'w0' && r2.selected[49].wordKey === 'w49')
+
+  const r3 = selectAiGenerationCandidates(manyRows, { limit: 5 })
+  check('limit 옵션으로 상한을 커스텀 가능', r3.selected.length === 5 && r3.remainingCount === 55)
+
+  check('비배열 입력은 크래시 없이 빈 결과', selectAiGenerationCandidates(null).selected.length === 0 && selectAiGenerationCandidates(undefined).eligibleCount === 0)
+  check('null/비객체 행은 안전하게 스킵', selectAiGenerationCandidates([null, undefined, 'x', allEmpty]).eligibleCount === 1)
+}
+
+console.log('\n-- buildAiGeneratedAssetPayload — P2(AI 생성 배선) "AI 결과 중 어떤 필드를 저장할지" 결정(덮어쓰기 방지 계약)')
+{
+  const existingAllEmpty = {
+    wordKey: 'apple', senseKey: '', word: 'Apple', approvalStatus: 'draft',
+    cefr: null, partOfSpeech: null, pronunciationUk: null, exampleSentence: null, exampleTranslation: null,
+    source: 'rule', generatedFields: { difficulty: 'rule' },
+  }
+  const aiFull = {
+    word_key: 'apple', cefr: 'A1', part_of_speech: 'noun', pronunciation_uk: '/ˈæp.əl/',
+    example_sentence: 'I ate an apple.', example_translation: '나는 사과를 먹었다.', warnings: [],
+  }
+
+  const p1 = buildAiGeneratedAssetPayload(existingAllEmpty, aiFull)
+  check('① 전부 빈 상태 + AI 전부 채움 -> 5개 필드 전부 payload에 포함',
+    p1 && p1.cefr === 'A1' && p1.part_of_speech === 'noun' && p1.pronunciation_uk === '/ˈæp.əl/'
+    && p1.example_sentence === 'I ate an apple.' && p1.example_translation === '나는 사과를 먹었다.')
+  check('word_key/sense_key/word는 항상 포함(충돌 키)', p1.word_key === 'apple' && p1.sense_key === '' && p1.word === 'Apple')
+  check('generated_fields가 기존 provenance(difficulty:rule)와 병합되고 새 필드는 ai로 기록',
+    p1.generated_fields.difficulty === 'rule' && p1.generated_fields.cefr === 'ai' && p1.generated_fields.part_of_speech === 'ai')
+  check('기존 source가 비어있지 않으면(rule) source는 payload에 포함되지 않음(덮어쓰지 않음)', !('source' in p1))
+
+  const existingPartiallyFilled = { ...existingAllEmpty, cefr: 'B1', source: null }
+  const p2 = buildAiGeneratedAssetPayload(existingPartiallyFilled, aiFull)
+  check('② 이미 채워진 필드(cefr)는 AI가 다른 값을 줘도 payload에서 제외됨(덮어쓰기 방지)', !('cefr' in p2))
+  check('빈 필드(part_of_speech 등)는 여전히 채워짐', p2.part_of_speech === 'noun')
+  check('기존 source가 비어있으면(null) source:"ai"로 채워짐', p2.source === 'ai')
+
+  const aiPartialNull = { word_key: 'apple', cefr: null, part_of_speech: null, pronunciation_uk: null, example_sentence: null, example_translation: null, warnings: ['불확실'] }
+  const p3 = buildAiGeneratedAssetPayload(existingAllEmpty, aiPartialNull)
+  check('③ AI가 전부 null 반환 -> 채울 게 없어 payload 자체가 null', p3 === null)
+
+  const existingFullyFilled = {
+    ...existingAllEmpty, cefr: 'A1', partOfSpeech: 'noun', pronunciationUk: '/x/', exampleSentence: 'ex', exampleTranslation: '번역',
+  }
+  const p4 = buildAiGeneratedAssetPayload(existingFullyFilled, aiFull)
+  check('④ 기존에 5개 필드가 이미 전부 채워져 있으면 AI 결과와 무관하게 payload는 null', p4 === null)
+
+  const approvedExisting = { ...existingAllEmpty, approvalStatus: 'approved' }
+  const p5 = buildAiGeneratedAssetPayload(approvedExisting, aiFull)
+  check('⑤ approval_status=approved인 행은 AI 결과가 있어도 통째로 null(승인 콘텐츠 보호)', p5 === null)
+
+  check('⑥ existingAsset/aiResult가 없으면 크래시 없이 null', buildAiGeneratedAssetPayload(null, aiFull) === null && buildAiGeneratedAssetPayload(existingAllEmpty, null) === null)
+
+  const aiWithBlankStrings = { word_key: 'apple', cefr: '  ', part_of_speech: null, pronunciation_uk: null, example_sentence: null, example_translation: null, warnings: [] }
+  const p6 = buildAiGeneratedAssetPayload(existingAllEmpty, aiWithBlankStrings)
+  check('⑦ AI가 공백뿐인 문자열을 주면 빈 값으로 취급(트림 후 제외)', p6 === null)
+}
+
+console.log('\n-- generateWordAssetsViaAi — adminPin 부재/빈 입력 시 네트워크 호출 없이 구조화된 실패(throw 없음)')
+{
+  const noPin = await generateWordAssetsViaAi([{ word: 'apple' }], undefined)
+  check('adminPin 없으면 { ok:false, reason: admin_pin_required }', noPin.ok === false && noPin.reason === 'admin_pin_required')
+  const emptyWords = await generateWordAssetsViaAi([], 'fake-pin')
+  check('adminPin 있어도 words가 비어있으면 invalid_payload(네트워크 호출 전에 거부)', emptyWords.ok === false && emptyWords.reason === 'invalid_payload')
+  const junkWords = await generateWordAssetsViaAi([{ notAWord: true }, null, 'x'], 'fake-pin')
+  check('word 필드가 없는 항목만 있으면 필터 후 빈 목록으로 판정되어 invalid_payload', junkWords.ok === false && junkWords.reason === 'invalid_payload')
+}
 
 console.log('\n-- 코드 레벨(파일 계약)')
 const src = readFileSync(new URL('../../src/utils/wordAssets.js', import.meta.url), 'utf8')
