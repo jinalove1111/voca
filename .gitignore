@@ -11,3 +11,6 @@ scripts/.tmp
 
 # 개발자 대시보드 산출물(scripts/generateDashboard.mjs가 매번 재생성) — 생성 스크립트만 커밋
 dashboard/
+
+# Supabase CLI 로컬 링크 상태(supabase link가 생성, 프로젝트 ref 포함 — 커밋 불필요)
+supabase/.temp/
