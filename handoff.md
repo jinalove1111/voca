@@ -1,10 +1,128 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-08-05 (37차, 36차가 경고한 admin-content-write P0 배포
-공백을 실측·해소(v5 배포로 유닛 재저장이 이제 안전) + generate-word-assets
-최초 배포 + Word Asset AI 생성 배선(P2, 라이브 왕복은 SQL 미실행으로
-미검증) + M4d 게이트 실측 결과 NOT_MEASURABLE(판정 불가) + M4d 관측 배선
-신설 + 운영자 지시("학습 시간 5→10분") 실측 결과 신규 타이머 부재 확인·
-착수 보류 기록. 상세는 아래 37차 섹션)_
+_최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시스템
+전체(이미지/예문/memory tip/distractor/음성/저장/캐시/재생성) 8축 재검증
+지시를 수행 — 검증 과정에서 실버그 2건 발견·수정: ①AI 생성 무저장 침묵
+(패널이 서버 응답을 버리고 뭉뚱그린 배너만 표시, `f19ed56`) ②학생 삭제
+무반응 + 관리자 캐시 1000행 잘림 P0(`removeStudent()` no-op +
+`refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
+틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
+
+## 2026-08-05 (38차) — Word Asset 전체 재검증(8축) + 실버그 2건 수정
+(AI 생성 무저장 침묵 / 학생 삭제 무반응+캐시 1000행 잘림 P0)
+
+운영자가 v3_15 SQL 실행 + Unit 5 재저장 + 관리자 AI 생성 육안 확인 후,
+Word Asset 시스템(이미지/예문/memory tip/distractor/음성/저장/캐시/
+재생성) 전체 재검증을 지시. 하네스 스윕 + 라이브 8축 검증 도중 실버그
+2건을 발견·수정한 세션(커밋 `f19ed56`/`8e15ff7`).
+
+### (1) 검증 지시 배경
+
+운영자가 `supabase_v3_15_word_assets.sql` 실행 + Unit 5 재저장 + 관리자
+화면에서 AI 생성 결과를 육안 확인한 뒤, Word Asset 시스템 전체(이미지/
+예문/memory tip/distractor/음성/저장/캐시/재생성)를 재검증하라고 지시했다.
+
+### (2) 하네스 스윕 — Word Asset 관련 전 도메인 PASS, 무관 도메인 2개 FAIL
+
+`npm run verify:all` 27개 도메인 실행 결과, Word Asset 관련 전 도메인이
+PASS했다: `wordAssets`(64→80단언), `wordAssetRules`(41), `wordsBulkReplacePlan`
+(49), `quiz`, `audioTts`. FAIL은 `homework`(`testSyncProgress`)와
+`persistence`(`testMultiDeviceMerge`/`testFullProgressBackup`) 2개
+도메인이었는데, 아래 (5)의 실버그가 원인이었음이 조사 결과 판명됐다.
+
+### (3) 라이브 8축 검증
+(`.ai-status/verify-word-asset-live-2026-08-05.json`)
+
+① `word_assets` 723행. `meaning_primary` 723/723, `example` 695행,
+`story`(memory tip) 661행, 규칙 생성 필드 80행 채워짐. 분포는 `source`
+`import` 695 / `rule` 28, `approval_status`는 전부 `draft`.
+
+② **AI 흔적 0** — `generated_fields`에 `'ai'`가 들어간 행 0건,
+`ai_model` 전부 null, `ai_usage_daily` 전 기간 0행. 운영자가 "정상 동작"
+으로 봤던 화면은 실제로는 저장 0건이었다 — 서버의 우아한 강등(degraded)
+응답을 성공으로 오인한 것.
+
+③ no-overwrite 계약 위반 0건(단 `approved` 행이 0건이라 검증 강도는 약함).
+
+④ 이미지: `image_url` 0건(설계상 미구현), `image_prompt` 80행(규칙
+생성으로 채워짐).
+
+⑤ 음성/텍스트: `words` 891행 전체에서 `word_audio_url`/
+`example_audio_url`/`example_text`/`memory_tip`/`example_translation`
+null 0건. 표본 오디오 파일을 실제로 HTTP 요청해 200 응답 확인.
+
+⑥ `word_key` 조인 표본 10/10 일치.
+
+### (4) 실버그 #1 — AI 생성 무저장 침묵(커밋 `f19ed56`)
+
+`OPENAI_API_KEY`는 설정돼 있고(secrets list로 확인) 서버 화이트리스트도
+정상이었다 — 실패 사유는 서버가 `results[].warnings`/`usage.batchCount`
+로 반환하는 정보를 관리자 패널이 그냥 버리고 뭉뚱그린 배너만 표시하고
+있었던 것.
+
+- `summarizeAiGenerationOutcome` 순수 함수를 신설하고, 배너에 "AI 미호출
+  여부"/"사유"(중복 제거 최대 3건)/"경고 건수"를 노출하도록 수정.
+- `runWordAssets.mjs`에 17단언 추가(총 80).
+- **근본 원인(AI 호출이 왜 실패했는지)은 이번 세션에서 미확정** — Edge
+  Function 로그 접근이 자격증명 훅으로 차단돼 있다. 이번 수정은 "다음
+  운영자 클릭 시 배너가 정확한 사유를 표시하게 만든 것"까지다.
+- **운영자 액션 필요**: AI 생성 버튼을 다시 눌러 새 배너가 표시하는
+  사유를 확인할 것.
+
+### (5) 실버그 #2 — 학생 삭제 무반응 + 관리자 캐시 1000행 잘림 P0
+(커밋 `8e15ff7`)
+
+최초 진단("하네스 실패는 RLS 락다운 환경 문제이니 SKIP 처리하라")을
+받은 implementer가 헌법 규칙 15(회귀 의심 시 수정 전 코드로 재현)에
+따라 그 진단을 그대로 구현하지 않고 재현·검증한 결과, 진단 자체가
+틀렸음을 증명했다 — `students` 테이블의 INSERT/DELETE는 라이브에서
+락다운된 적이 없다(`DATABASE.md:452`). 이 재검증 과정에서 실버그를
+발견:
+
+- `removeStudent()`가 인메모리 캐시에 없는 id가 전달되면 조용히 no-op
+  하고 있었다.
+- `refreshStudents()`가 PostgREST 기본 1000행 상한에 걸려 잘리고 있었다.
+- 라이브 실측 `students` 1083행(**`QA_` 오염 917행 포함**) — 최신 ~83명
+  학생이 캐시 범위 밖에 있어, 관리자가 그 학생을 삭제하려는 버튼을
+  눌러도 아무 반응이 없었고, 그 결과 QA 데이터 정리 자체가 실패해온
+  악순환이었다.
+- 수정: 캐시 조회 대신 UUID를 직접 DELETE 조건으로 사용(헌법 규칙 4) +
+  `refreshStudents()`에 1000행 페이지네이션(`id` 2차 정렬 포함) 추가.
+- 하네스 `testSyncProgress`/`testMultiDeviceMerge`/`testFullProgressBackup`
+  이 FAIL→PASS로 전환(테스트 코드 자체는 0줄 수정), `testStudentLogin`
+  도 부수적으로 개선됐다. `git stash`로 수정 전 baseline과 대조해
+  무회귀를 확인.
+- **규칙 15의 실전 가치 기록**: 만약 최초의 틀린 진단을 그대로 SKIP으로
+  구현했다면, 이 실버그를 테스트가 오히려 은폐할 뻔한 사례다.
+
+### (6) 축별 판정 요약
+
+예문/memory tip/음성/저장(백필·규칙 배선) — PASS. 이미지 = 설계상
+미구현(스키마만 존재, `image_status` 기본값 `'none'`) — 버그 아님.
+distractor = `word_assets` 밖의 로직(`QuizGame.jsx:34` 런타임 셔플,
+`synonyms`/`antonyms` 배열은 퀴즈가 사용하지 않음) — 이번 시스템과
+무관함을 확인. 캐시 = `generate-word-assets`는 설계상 캐시가 없다(빈
+필드만 요청하는 후보 선정 로직 자체가 비용 중복 방지 역할), 클라이언트
+캐시층은 `wordLibrary._cache`/`_pendingAudioRequests`. 재생성 =
+no-overwrite 계약이 재실행 안전성(멱등)을 보장. **AI 저장 축만 FAIL** →
+(4)의 `f19ed56`로 진단성을 확보한 뒤 운영자 재확인 대기 상태로 남김.
+
+### (7) 알려진 잔여 / 운영자 결정 대기
+
+① `QA_` 917행 일괄 정리 여부 — 대량 삭제는 운영자 결정 사항(이번
+`8e15ff7` 수정으로 개별 삭제는 이제 정상 동작).
+② 52행의 메타데이터 불일치(백필 행에 규칙 필드가 추가돼도
+`source`/`pipeline_status`/`image_status`가 승급되지 않는 현상) —
+no-overwrite 설계의 의도된 결과. `pipeline_status` 자동 승급은 개선
+후보로만 기록.
+③ `fetchDashboardData`의 `.in(ids)` 조회도 1000행 응답 상한의 영향권
+안에 있다(전교생 규모가 커지면) — 별도 triage 필요.
+④ `classes`/`units`/`words`/`textbooks`의 range 없는 전체 조회도 같은
+잠재 패턴이나, 현재 행수 기준으로는 안전.
+
+### (8) 커밋 목록
+
+`f19ed56`(AI 미호출 사유 배너) / `8e15ff7`(학생 삭제 P0 수정). 검증
+스크립트 산출물은 `.ai-status/verify-word-asset-live-2026-08-05.json`.
 
 ## 2026-08-05 (37차) — admin-content-write P0 배포 공백 해소 + generate-word-assets
 최초 배포 + Word Asset AI 생성 배선(P2) + M4d 게이트 실측·관측 배선

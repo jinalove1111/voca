@@ -353,6 +353,32 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
 
 ## VERIFY
 
+### [P0] Word Asset 전체 재검증(8축) + 실버그 2건 수정 — qa-reviewer/security-reviewer 검수 대기
+- 근거: `handoff.md` 2026-08-05(38차), `ROADMAP.md` 2026-08-05(17차).
+- 내용: 운영자 지시로 Word Asset 시스템(이미지/예문/memory tip/
+  distractor/음성/저장/캐시/재생성) 전체 8축 재검증을 수행하는 과정에서
+  실버그 2건 발견·수정. ①AI 생성 무저장 침묵(`f19ed56`) —
+  `summarizeAiGenerationOutcome` 순수 함수 신설, 관리자 패널 배너에 AI
+  미호출 여부/사유(중복 제거 최대 3건)/경고 건수 노출(하네스 17단언
+  추가, 총 80). ②학생 삭제 무반응 + 관리자 캐시 1000행 잘림 P0
+  (`8e15ff7`) — `removeStudent()`를 캐시 조회 대신 UUID 직접 DELETE로
+  교체(헌법 규칙 4), `refreshStudents()`에 1000행 페이지네이션(+id 2차
+  정렬) 추가.
+- 검증: `npm run verify:all` 27개 도메인 스윕. Word Asset 관련 도메인
+  전부 PASS. `testSyncProgress`/`testMultiDeviceMerge`/
+  `testFullProgressBackup`이 실버그 #2 수정으로 FAIL→PASS(테스트 코드
+  0줄 수정), `git stash` baseline 대조로 무회귀 확인. 라이브 8축 검증
+  결과는 `.ai-status/verify-word-asset-live-2026-08-05.json`.
+- 발견 경위 특기: 실버그 #2는 최초 진단("RLS 락다운 환경 문제, SKIP
+  처리")을 받은 implementer가 헌법 규칙 15(수정 전 코드로 재현 확인)에
+  따라 그 진단이 틀렸음을 증명(students INSERT/DELETE는 락다운된 적
+  없음)하는 과정에서 발견됨 — 틀린 진단을 그대로 SKIP 구현했다면 테스트가
+  이 실버그를 은폐했을 사례.
+- **미확정(운영자 액션 필요)**: AI 생성 저장 실패의 근본 원인은 Edge
+  Function 로그 접근 불가로 이번 세션에서 미확정 — 운영자가 AI 생성
+  버튼을 재클릭해 새 배너가 표시하는 사유를 확인해야 함.
+- 검수 대기 사항: qa-reviewer/security-reviewer 코드 리뷰 미착수.
+
 ### [P2] Word Asset AI 생성 배선(`801e53c`) + M4d 관측 배선(`8efb8dc`) — qa-reviewer 검수 대기
 - 근거: `handoff.md` 2026-08-05(37차) (3)/(4)/(5)/(6), `ROADMAP.md`
   2026-08-05(16차).

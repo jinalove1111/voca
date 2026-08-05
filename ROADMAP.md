@@ -1,9 +1,64 @@
 # Paul Easy Voca — 로드맵
 
-_최종 갱신: 2026-08-05 (16차, 15차가 경고한 admin-content-write P0 배포
-공백 실측·해소(v5 배포) + generate-word-assets 최초 배포 + Word Asset AI
-생성 배선(P2) + M4d 게이트 실측 NOT_MEASURABLE + M4d 관측 배선 신설 —
-기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+_최종 갱신: 2026-08-05 (17차, 16차 배포 완료 뒤 운영자 지시로 Word Asset
+시스템 전체 8축 재검증 수행, 그 과정에서 실버그 2건 발견·수정(AI 생성
+무저장 침묵 `f19ed56` / 학생 삭제 무반응+캐시 1000행 잘림 P0 `8e15ff7`)
+— 기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+
+## 2026-08-05 (17차) — Word Asset 전체 재검증(8축) + 실버그 2건 수정(AI 생성 무저장 침묵 / 학생 삭제 무반응+캐시 1000행 잘림 P0) — 검증·수정 완료 ✅(AI 저장 원인은 미확정, 운영자 재확인 대기)
+
+총 2개 커밋(`f19ed56`/`8e15ff7`). 상세 근거·실측치는 `handoff.md`
+2026-08-05(38차) 섹션 참고.
+
+**① 검증 지시 배경** — 운영자가 v3_15 SQL 실행 + Unit 5 재저장 + 관리자
+AI 생성 육안 확인을 마친 뒤, Word Asset 시스템 전체(이미지/예문/memory
+tip/distractor/음성/저장/캐시/재생성) 재검증을 지시.
+
+**② 하네스 스윕** — `npm run verify:all` 27개 도메인, Word Asset 관련
+전 도메인 PASS(`wordAssets` 64→80단언/`wordAssetRules` 41/
+`wordsBulkReplacePlan` 49/`quiz`/`audioTts`). FAIL 2개(`homework`/
+`persistence`)는 조사 결과 아래 ④의 실버그가 원인이었음이 판명.
+
+**③ 라이브 8축 검증**(`.ai-status/verify-word-asset-live-2026-08-05.json`)
+— `word_assets` 723행(단어 수와 정확히 일치), meaning/example/story
+필드 채움 확인, no-overwrite 위반 0건, 이미지는 설계상 미구현(버그
+아님), 음성/텍스트 null 0건(표본 오디오 HTTP 200 실측), word_key 조인
+표본 10/10 일치. **AI 흔적 0**(generated_fields `'ai'` 0행,
+`ai_usage_daily` 0행) — 운영자가 "정상 동작"으로 본 화면이 실제로는
+저장 0건이었음을 확인.
+
+**④ 실버그 #1 — AI 생성 무저장 침묵**(`f19ed56`) — 서버는
+`results[].warnings`/`usage.batchCount`로 실패 사유를 반환하는데 관리자
+패널이 이를 버리고 뭉뚱그린 배너만 표시. `summarizeAiGenerationOutcome`
+순수 함수 신설 + 배너에 AI 미호출 여부/사유/경고 건수 노출(하네스
+17단언 추가, 총 80). 근본 원인(AI 호출 실패 사유 자체)은 Edge Function
+로그 접근 불가로 미확정 — **운영자가 AI 생성 버튼을 재클릭해 새 배너
+사유를 확인해야 함**.
+
+**⑤ 실버그 #2 — 학생 삭제 무반응 + 캐시 1000행 잘림 P0**(`8e15ff7`) —
+최초 진단("RLS 락다운 환경 문제, SKIP 처리")을 받은 implementer가
+헌법 규칙 15에 따라 재현·검증하다 그 진단이 틀렸음을 증명(students
+INSERT/DELETE는 락다운된 적 없음)하고, 실버그를 발견: `removeStudent()`
+가 캐시에 없는 id면 조용히 no-op + `refreshStudents()`가 PostgREST 기본
+1000행 상한에서 잘림. 라이브 실측 `students` 1083행(QA_ 오염 917행
+포함) — 최신 ~83명이 캐시 밖이라 관리자 삭제 버튼이 무반응이었고 QA
+정리 실패가 누적돼온 원인이었다. 수정: UUID 직접 DELETE(헌법 규칙 4) +
+1000행 페이지네이션(+id 2차 정렬). 하네스 3개 스크립트 FAIL→PASS(테스트
+코드 0줄 수정), stash 대조로 무회귀 확인. **틀린 진단을 그대로 SKIP
+구현했다면 이 실버그를 테스트가 은폐했을 사례** — 규칙 15의 실전 가치로
+기록.
+
+**⑥ 축별 판정 요약** — 예문/memory tip/음성/저장 PASS. 이미지=설계상
+미구현, distractor=시스템 무관 확인, 캐시=설계상 무캐시(비용 중복 방지는
+후보 선정 로직이 담당), 재생성=no-overwrite로 멱등 보장. AI 저장 축만
+FAIL → ④로 진단성 확보 후 운영자 재확인 대기.
+
+**남은 것(운영자)**:
+1. AI 생성 버튼 재클릭 → 새 배너가 표시하는 미호출 사유 확인.
+2. `QA_` 917행 일괄 정리 여부 결정(개별 삭제는 이제 정상 동작).
+3. 52행 메타데이터 불일치(no-overwrite 설계의 의도된 결과) — 자동 승급
+   개선 여부는 다음 라운드 판단.
+4. `fetchDashboardData`의 `.in(ids)` 1000행 상한 영향권 별도 triage.
 
 ## 2026-08-05 (16차) — admin-content-write P0 배포 공백 해소 + generate-word-assets 최초 배포 + Word Asset AI 생성 배선(P2) + M4d 실측·관측 배선 — 배포/코드 완료 ✅(SQL 실행·재저장은 운영자 액션 대기)
 
