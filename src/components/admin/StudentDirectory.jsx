@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
-  getClassNames, getClassUnitNames, getStudentClass, getStudentUnit,
+  getClassNames, getClassUnitNames, getClassIdByName, getStudentClass, getStudentUnit,
   setStudentClass, setStudentUnit, setStudentsClassBulk, setStudentHouse,
   getClassTextbooks,
 } from '../../utils/wordLibrary'
@@ -11,6 +11,7 @@ import { HOUSES, getHouseById } from '../../utils/houseSystem'
 import { fetchPinStatusMap } from '../../utils/pinStatusApi'
 import { getStudents, removeStudent } from '../../hooks/useStudent'
 import TextbookAssignmentPanel from './TextbookAssignmentPanel'
+import DuplicateStudentAudit from './DuplicateStudentAudit'
 
 const devLog = import.meta.env?.DEV ? console.log : () => {}
 
@@ -100,6 +101,79 @@ export default function StudentDirectory({ adminPin }) {
   // handleClearPin 그대로, 버튼 위치만 메뉴 안으로 이동(오터치 방지).
   const [menuOpenId, setMenuOpenId] = useState(null)
   const classList = getClassNames()
+
+  // ── 학생 추가(2026-08-06 P0) ─────────────────────────────────────────
+  // 학생 생성은 이 UI(서버 api/admin-pin-actions.js의 create_student 액션,
+  // 관리자 PIN 인가, 클라이언트가 미리 만드는 멱등 studentId)로만 한다 —
+  // 로그인 화면의 자기등록 탭은 같은 날 제거됐다(중복 계정 생성 사고
+  // 대응, .ai-status 2026-08-06 기록 참고). anon insert(옛 wordLibrary.
+  // addStudent 경로)는 더 이상 이 화면에서 쓰지 않는다.
+  const [newName, setNewName] = useState('')
+  const [newClass, setNewClass] = useState('')
+  const [newUnit, setNewUnit] = useState('')
+  const [newAllowPinSetup, setNewAllowPinSetup] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState(null) // { message }
+  const [duplicateInfo, setDuplicateInfo] = useState(null) // { existing: [...] }
+  const [createSuccess, setCreateSuccess] = useState(null) // { name, allowPinSetup }
+  // 멱등성 키 — 같은 제출의 재시도(네트워크 재전송, "그래도 새로 만들기"
+  // force 재요청)는 항상 같은 studentId를 재사용한다. 성공하거나 폼을
+  // 초기화할 때만 다음 제출을 위해 비운다.
+  const newStudentIdRef = useRef(null)
+
+  const resetCreateForm = () => {
+    setNewName(''); setNewClass(''); setNewUnit(''); setNewAllowPinSetup(true)
+    setDuplicateInfo(null); setCreateError(null)
+    newStudentIdRef.current = null
+  }
+
+  // existing(중복 확인 응답)의 반 이름 표시 — getClassIdByName의 역방향이
+  // wordLibrary에 없으므로, 이미 로드된 students 캐시에서 같은 classId를
+  // 가진 학생을 찾아 그 className을 재사용한다(새 쿼리 없음).
+  const classNameForExistingId = (classId) => students.find(s => s.classId === classId)?.className || null
+
+  const submitCreateStudent = async (force = false) => {
+    const trimmed = newName.trim()
+    if (trimmed.length < 1 || trimmed.length > 10) { setCreateError({ message: '이름은 1~10자로 입력해주세요.' }); return }
+    if (!newClass) { setCreateError({ message: '반을 선택해주세요.' }); return }
+    const classId = getClassIdByName(newClass)
+    if (!classId) { setCreateError({ message: '선택한 반을 찾을 수 없어요. 새로고침 후 다시 시도해주세요.' }); return }
+    if (!newStudentIdRef.current) newStudentIdRef.current = crypto.randomUUID()
+    setCreating(true)
+    setCreateError(null)
+    try {
+      const res = await fetch('/api/admin-pin-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create_student',
+          adminPin,
+          studentId: newStudentIdRef.current,
+          name: trimmed,
+          classId,
+          unitName: newUnit || getClassUnitNames(newClass)[0] || 'Unit 1',
+          allowPinSetup: newAllowPinSetup,
+          force,
+        }),
+      })
+      const data = await res.json()
+      if (!data.ok) {
+        if (data.reason === 'not_authorized') { setCreateError({ message: '관리자 인증에 실패했어요. 관리자 화면을 다시 로그인해주세요.' }); return }
+        if (data.reason === 'duplicate_name') { setDuplicateInfo({ existing: data.existing || [] }); return }
+        if (data.reason) { setCreateError({ message: `요청이 거부됐어요 (${data.reason})` }); return }
+        setCreateError({ message: data.error || '학생 생성에 실패했어요.' })
+        return
+      }
+      refresh()
+      const successInfo = { name: trimmed, allowPinSetup: newAllowPinSetup }
+      resetCreateForm()
+      setCreateSuccess(successInfo)
+    } catch (err) {
+      setCreateError({ message: '네트워크 오류가 발생했어요: ' + (err.message || err) })
+    } finally {
+      setCreating(false)
+    }
+  }
 
   // ── 디렉터리 렌더링 상태(2026-07-22 신규 — 동작 아님, 표시만) ──────────
   // sessionStorage에서 복원: 마지막으로 펼친 반 / 퀵필터 / 검색어.
@@ -604,6 +678,88 @@ export default function StudentDirectory({ adminPin }) {
           <button onClick={() => setPinResetResult(null)} className="text-yellow-600 font-bold text-xs btn-press flex-shrink-0">닫기</button>
         </div>
       )}
+
+      {/* ➕ 학생 추가(2026-08-06 P0) — 위 handlers 주석 참고: 학생 생성은
+          이제 이 폼(서버 create_student, 관리자 PIN 인가, 멱등 studentId)
+          으로만. */}
+      <div className="bg-white rounded-3xl card-shadow p-5">
+        <p className="text-sm font-black text-gray-700 mb-3">➕ 학생 추가</p>
+        {createSuccess && (
+          <div className="bg-green-50 border-2 border-green-200 rounded-xl px-3 py-2 mb-3 text-xs font-bold text-green-700 flex items-center justify-between gap-2">
+            <span>
+              &quot;{createSuccess.name}&quot; 학생을 추가했어요.
+              {createSuccess.allowPinSetup && ' PIN 설정 허용됨 — 학생이 로그인 화면 "PIN 만들기" 탭에서 PIN을 만들면 돼요.'}
+            </span>
+            <button onClick={() => setCreateSuccess(null)} className="text-green-600 font-bold flex-shrink-0">닫기</button>
+          </div>
+        )}
+        {createError && (
+          <p className="text-xs font-bold text-red-500 mb-3">{createError.message}</p>
+        )}
+        {duplicateInfo ? (
+          <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-3 space-y-2">
+            <p className="text-xs font-bold text-orange-700">
+              같은 이름의 계정이 {duplicateInfo.existing.length}개 있어요(같은 반 {duplicateInfo.existing.filter(e => e.sameClass).length}개). 그래도 새로 만들까요? 동명이인이 확실할 때만 진행하세요.
+            </p>
+            <ul className="text-[11px] text-orange-600 space-y-0.5">
+              {duplicateInfo.existing.map(e => (
+                <li key={e.id}>
+                  {classNameForExistingId(e.classId) || (e.classId ? `반 id ${e.classId.slice(0, 8)}…` : '반 미배정')}
+                  {' · id '}{e.id.slice(0, 8)}…
+                  {e.createdAt ? ` · ${new Date(e.createdAt).toLocaleDateString('ko-KR')} 가입` : ''}
+                </li>
+              ))}
+            </ul>
+            <div className="flex gap-2">
+              <button onClick={() => setDuplicateInfo(null)} className="flex-1 border-2 border-gray-200 text-gray-500 font-bold py-2 rounded-xl text-xs btn-press">취소</button>
+              <button onClick={() => submitCreateStudent(true)} disabled={creating}
+                className="flex-1 bg-orange-500 disabled:bg-gray-300 text-white font-black py-2 rounded-xl text-xs btn-press">
+                {creating ? '⏳ 생성 중...' : '그래도 새로 만들기'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <input type="text" value={newName} maxLength={10} onChange={e => setNewName(e.target.value)}
+              placeholder="학생 이름 (1~10자)"
+              className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:border-purple-400" />
+            <select value={newClass} onChange={e => {
+                setNewClass(e.target.value)
+                setNewUnit(getClassUnitNames(e.target.value)[0] || '')
+              }}
+              className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-bold bg-white">
+              <option value="">반 선택</option>
+              {classList.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            {newClass && (
+              <select value={newUnit} onChange={e => setNewUnit(e.target.value)}
+                className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-bold bg-white">
+                {getClassUnitNames(newClass).map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            )}
+            <label className="flex items-center gap-2 text-xs font-bold text-gray-600">
+              <input type="checkbox" checked={newAllowPinSetup} onChange={e => setNewAllowPinSetup(e.target.checked)}
+                className="w-4 h-4 accent-purple-500" />
+              PIN 설정 허용 (학생이 &apos;PIN 만들기&apos; 탭에서 스스로 PIN을 만들 수 있게)
+            </label>
+            <button onClick={() => submitCreateStudent(false)} disabled={creating}
+              className="w-full bg-purple-500 disabled:bg-gray-300 text-white font-black py-2.5 rounded-xl text-sm btn-press">
+              {creating ? '⏳ 생성 중...' : '학생 추가'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 🔍 중복 학생 계정 점검(2026-08-06, 읽기 전용) — 실학생 172명 중
+          31개 이름 그룹·96계정 중복 생성 사고 조사용. 접어둔 상태가 기본
+          (details 기본 닫힘) — 관리자가 필요할 때만 펼쳐서 본다. */}
+      <details className="bg-white rounded-3xl card-shadow p-5">
+        <summary className="text-sm font-black text-gray-700 cursor-pointer">🔍 중복 학생 계정 점검 (읽기 전용)</summary>
+        <div className="mt-3">
+          <DuplicateStudentAudit />
+        </div>
+      </details>
+
       <div className="bg-white rounded-3xl card-shadow p-5">
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-black text-gray-700">👦 전체 학생 ({students.length}명)</p>
