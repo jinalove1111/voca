@@ -1,0 +1,67 @@
+{
+  "agent_name": "investigator",
+  "role": "DB 읽기 전용 조사 (anon key REST GET) — 레거시 학생 교재 선택 불가 버그",
+  "task_id": "investigate-legacy-student-unit-select-db",
+  "task": "황성연(및 구 계정 전반)이 로그인 후 교재(Unit/Book)를 선택할 수 없는 버그의 DB 측 원인 조사",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-05T00:00:00Z",
+  "updated_at": "2026-08-05T00:00:00Z",
+  "files_owned": [],
+  "files_read": [
+    "supabase_v3_13_curriculum_engine_phase0.sql",
+    "supabase_v3_1_textbooks.sql",
+    "supabase_v2_1_student_unit_decouple.sql",
+    "supabase_v1_3_schema.sql",
+    "src/components/TextbookSelector.jsx",
+    "src/components/Dashboard.jsx",
+    "src/App.jsx",
+    "src/utils/wordLibrary.js"
+  ],
+  "summary": "ROOT CAUSE FOUND (DB-side, high confidence). 황성연 이름으로 students 테이블에 총 6개 행이 존재한다(동명이인/중복 — CLAUDE.md 규칙 4 경고 그대로 실물 확인). 그 중 가장 오래된 행(id=2a86fc9b-510a-4db1-a18d-598a360e142b, created_at=2026-07-06)이 '레거시 계정'이며, class_id가 9fb1bc3a-4e50-45d6-89ad-81f8b1faf512('중2 능률 김기택')를 직접 가리킨다. 나머지 5개 행(모두 2026-07-22 이후 생성, 그 중 3개는 오늘 2026-08-05 생성 — 재현 테스트로 추정)은 class_id가 9e9ce482-d7c0-4771-8e01-37966ee64d79('중2 YMB 박준원')를 가리킨다.\n\n핵심 발견: supabase_v3_1_textbooks.sql(2026-07-22 실행, textbooks/class_textbooks 테이블 신설)은 '중2 능률 김기택'/'중2 천재 이상기' 같은 반이 실제로는 반이 아니라 교재였다는 도메인 모델 교정을 담고 있다. 이 SQL은 순수 additive라 students.class_id를 절대 바꾸지 않는다(파일 자체 주석에 명시) — 즉 마이그레이션 시점에 이미 그 '교재-반'에 직접 등록돼 있던 학생들의 students.class_id는 교정되지 않고 그대로 남았다.\n\nclass_textbooks 실측(전 5행):\n  9e9ce482(중2 YMB 박준원, 사람 반) -> 3개 링크: 59e0a0b7(자기 교재), 86fdd554(중2 능률 김기택), 80e8d5dd(중2 천재 이상기)\n  9fb1bc3a(중2 능률 김기택) -> 1개 링크: 86fdd554(자기 자신뿐)\n  e09e147b(중2 천재 이상기) -> 1개 링크: 80e8d5dd(자기 자신뿐)\n  dcd497c2(Presentation 6 -2026) -> 1개 링크(자기 자신뿐, 정상 — 원래 단일교재 반으로 보임)\n  0249067d(고1 6월 학평) -> 1개 링크(자기 자신뿐, 정상 — 원래 단일교재 반으로 보임)\n\nTextbookSelector.jsx(src/components/TextbookSelector.jsx:13)는 'options.length <= 1'이면 아무것도 렌더링하지 않는다(교재가 하나뿐이면 선택기 자체를 숨기는 것이 v2.9부터의 의도된 설계). App.jsx의 textbookOptions는 getClassTextbooks(studentClassId)에서 나온다(src/utils/wordLibrary.js:442). 9fb1bc3a/e09e147b에 class_id가 고정된 학생은 class_textbooks에 자기 자신 링크 1개뿐이라 options.length가 구조적으로 항상 1 — 선택기가 영원히 보이지 않는다. 반면 9e9ce482(사람 반)에 등록된 학생은 3개 옵션 -> 선택기가 정상 렌더된다.\n\n등록 패턴 확인: students?class_id=eq.9fb1bc3a 중 가장 최근 created_at은 2026-07-22T05:40(마이그레이션 실행 09:25 이전), students?class_id=eq.9e9ce482 중 가장 이른 created_at은 2026-07-21T23:22. 즉 2026-07-22 마이그레이션 시점 전후로 신규 등록이 9fb1bc3a/e09e147b('교재-반')에서 9e9ce482('사람 반')로 완전히 이동했다 — '오래된 계정만 깨짐 / 새 계정은 정상'이라는 운영자 관찰과 정확히 일치한다.\n\n영향 범위(카운트): 9fb1bc3a(중2 능률 김기택) 소속 학생 40명, e09e147b(중2 천재 이상기) 소속 학생 19명 = 최소 59명이 구조적으로 교재 선택기를 볼 수 없다(단, 이들 다수가 실제로 교재 전환이 필요한 상황인지는 별개 — 학습 자체는 unit 선택기가 별도로 정상 작동하므로 끊기지 않는다, 아래 참고).\n\n기각한 가설들(라이브 데이터로 반증):\n  - current_unit_id NULL 문제 아님: non-QA 학생 중 current_unit_id가 NULL인 행은 전체에서 단 1개뿐(id=af79a8fe-914c-4445-8fc7-a2c33727c0d8, 황성연 아님). 나머지는 전부 채워져 있음 — 레거시 unit_name 문자열 전용 스키마 잔존 문제 아님.\n  - student_progress(진행도 JSON) 스키마 차이 아님: 황성연 구 계정(2a86fc9b)과 신규 학생(a4666b79 박서진)의 progress_data 최상위 키 집합이 완전히 동일(round/cleared/history/missions/stickers/wordStatus/lastWordIndexByUnit 등, 전부 unit UUID 키 기반 — 문자열 유닛명 잔재 없음).\n  - units/textbook_id 컬럼 결측 아님: 9fb1bc3a의 유닛 5개 전부 textbook_id가 정상 채워져 있고(86fdd554), 실제 유닛 셀렉트(Dashboard.jsx의 별도 'Unit' 드롭다운, class_textbooks와 무관하게 그 반의 units 목록을 그대로 보여줌)는 5개 유닛(Unit 1/4/5/Unit(공백)/6)을 정상적으로 보여줄 것으로 코드상 추정됨 — 즉 '유닛(Unit) 자체'는 선택 가능하고, 깨진 것은 정확히 '교재(Textbook, 능률/천재 등 갈아타기)' 선택기다.\n  - student_class_assignments(v2.9) 불일치 아님: 황성연 구 계정의 SCA 행(class_id=9fb1bc3a, textbook_id=86fdd554, is_primary=true)이 students.class_id/current_unit_id와 정합적으로 맞아떨어짐 — 캐시 stale 문제 아니라 순수 class_textbooks 링크 수 문제.\n  - daily_assignments 차이 아님: 두 반(9fb1bc3a, 9e9ce482) 모두 daily_assignments 행이 0개(둘 다 동일하게 미사용) — 이 축은 차이가 없다.\n  - classes 테이블 컬럼 결측 아님: 9fb1bc3a/9e9ce482 두 classes 행 모두 동일한 컬럼 집합(class_type/spelling_test_enabled/spelling_hint_enabled/wrong_answer_repeat_count/spelling_direction)이 채워져 있고 NULL 차이 없음.\n\n확인하지 못한 것(스코프 밖, 정직히 기록): (1) 클라이언트 측 localStorage/캐시 상태는 anon REST 조사 범위 밖이라 확인 못함. (2) 실제 브라우저에서 황성연 구 계정으로 로그인해 '교재를 선택할 수 없다'는 증상이 정확히 어떤 UI(TextbookSelector vs Unit select vs 둘 다)로 나타나는지는 코드 정독 기반 추정이며 실제 조작 재현은 하지 않았다(READ-ONLY 지시 준수). (3) 황성연이라는 이름의 6개 행 중 실제로 운영자가 문의한 '그 학생'이 정확히 어느 id인지는 이름만으로 확정할 수 없음(동명이인 위험, 규칙 4) — created_at=2026-07-06인 2a86fc9b가 가장 유력한 후보라고 추정만 함, 최종 확인은 운영자에게 필요.",
+  "blocker": null,
+  "next_action": "구현 세션(implementer)에게 넘길 것: (a) 근본 수정 옵션 A — students.class_id가 9fb1bc3a/e09e147b(교재-반)를 직접 가리키는 학생들을 9e9ce482(YMB 사람 반) 등 해당 사람 반으로 UPDATE(파괴적 DDL 아니지만 데이터 이관이라 CLAUDE.md 규칙 8에 따라 SQL 파일만 준비, 운영자 수동 실행). (b) 옵션 B — class_textbooks에 9fb1bc3a/e09e147b용 추가 링크를 넣어 그 반 자체에서도 여러 교재를 고를 수 있게(반을 이관하지 않고 옵션만 넓힘, 더 보수적). 어느 쪽이 맞는지는 '이 40+19명이 실제로 다른 교재로 갈아탈 필요가 있는지'를 운영자에게 먼저 확인 필요 — 순수 DB 조사로는 '의도'까지는 알 수 없음. (c) 황성연 6개 중복 행 자체도 별도 이슈로 운영자에게 보고(동명이인 정리 필요할 수 있음, 특히 오늘 2026-08-05 생성된 3개 행은 재현 테스트로 만들어진 것일 가능성이 높음 — 삭제 여부도 운영자 판단).",
+  "raw_evidence": {
+    "hwang_seongyeon_rows": [
+      { "id": "2a86fc9b-510a-4db1-a18d-598a360e142b", "class_id": "9fb1bc3a-4e50-45d6-89ad-81f8b1faf512 (중2 능률 김기택)", "current_unit_id": "a437b6c9-74ff-4ee4-8447-7a9f7ae4f5a7 (Unit 6)", "created_at": "2026-07-06T09:46:47Z", "note": "LEGACY — 가장 유력한 '그 학생' 후보, class_textbooks 링크 1개뿐(교재 선택기 안 뜸)" },
+      { "id": "d6d849c0-6173-4bb9-9c22-84ebb0beb57b", "class_id": "e09e147b-7a01-4e58-8bfd-d7205ee8b856 (중2 천재 이상기)", "current_unit_id": "4fe5a398-7352-415c-b92f-572fc2ecfef9 (Unit6)", "created_at": "2026-07-22T09:04:39Z", "note": "이 역시 '교재-반'에 직접 등록 — 같은 버그 영향권" },
+      { "id": "3f6d6c14-791e-45ae-bd47-31f8a246b85c", "class_id": "9e9ce482-d7c0-4771-8e01-37966ee64d79 (중2 YMB 박준원)", "current_unit_id": "e74c2247-4ee5-42f9-bb9d-575698e8127a (Unit6)", "created_at": "2026-07-22T09:07:14Z", "note": "사람 반 소속 — 정상(교재 선택기 3옵션 뜸)" },
+      { "id": "fdce5252-f9c8-4d5f-9545-194a74a5ae6c", "class_id": "9e9ce482-d7c0-4771-8e01-37966ee64d79", "current_unit_id": "e06226c1-63c8-495c-97d5-c96a3d834d8d (Unit2)", "created_at": "2026-08-05T09:41:40Z", "note": "오늘 생성 — 재현 테스트 추정" },
+      { "id": "cda60219-8130-4475-a51a-b7d2370a879d", "class_id": "9e9ce482-d7c0-4771-8e01-37966ee64d79", "current_unit_id": "e74c2247-4ee5-42f9-bb9d-575698e8127a", "created_at": "2026-08-05T09:42:28Z", "note": "오늘 생성 — 재현 테스트 추정" },
+      { "id": "9a6129c3-1222-49e2-abdf-9d0f83ec1c1b", "class_id": "9e9ce482-d7c0-4771-8e01-37966ee64d79", "current_unit_id": "e74c2247-4ee5-42f9-bb9d-575698e8127a", "created_at": "2026-08-05T09:44:43Z", "note": "오늘 생성 — 재현 테스트 추정" }
+    ],
+    "class_textbooks_full": [
+      { "class_id": "9e9ce482 (중2 YMB 박준원 - 사람 반)", "textbook_ids": ["59e0a0b7 (자기 교재)", "86fdd554 (중2 능률 김기택)", "80e8d5dd (중2 천재 이상기)"], "count": 3, "selector_renders": true },
+      { "class_id": "9fb1bc3a (중2 능률 김기택 - 교재-반)", "textbook_ids": ["86fdd554 (자기 자신)"], "count": 1, "selector_renders": false },
+      { "class_id": "e09e147b (중2 천재 이상기 - 교재-반)", "textbook_ids": ["80e8d5dd (자기 자신)"], "count": 1, "selector_renders": false },
+      { "class_id": "dcd497c2 (Presentation 6 -2026)", "textbook_ids": ["26310f76 (자기 자신)"], "count": 1, "selector_renders": false, "note": "정상 — 원래 단일교재 반으로 추정, 버그 아님" },
+      { "class_id": "0249067d (고1 6월 학평)", "textbook_ids": ["2106b090 (자기 자신)"], "count": 1, "selector_renders": false, "note": "정상 — 원래 단일교재 반으로 추정, 버그 아님" }
+    ],
+    "affected_student_counts_by_class": {
+      "9fb1bc3a (중2 능률 김기택)": 40,
+      "e09e147b (중2 천재 이상기)": 19,
+      "9e9ce482 (중2 YMB 박준원, 정상)": 29,
+      "dcd497c2 (정상 단일교재 반)": 68,
+      "0249067d (정상 단일교재 반)": 48
+    },
+    "registration_cutover_evidence": {
+      "9fb1bc3a_last_student_created_at": "2026-07-22T05:40:17Z",
+      "9e9ce482_first_student_created_at": "2026-07-21T23:22:20Z",
+      "v3_1_textbooks_sql_backfill_timestamp": "2026-07-22T09:25:14Z (textbooks/class_textbooks 행 created_at)",
+      "interpretation": "9fb1bc3a로의 신규 등록은 2026-07-22 05:40 이후 관측되지 않음, 9e9ce482로의 등록은 그 이전부터 이미 진행 중 — '오래된 계정만 깨짐' 관찰과 시점이 정확히 일치"
+    },
+    "null_current_unit_id_check": {
+      "non_qa_students_with_null_current_unit_id": 1,
+      "non_qa_students_with_non_null_current_unit_id": "137+ (샘플링, 사실상 거의 전원)",
+      "conclusion": "current_unit_id NULL 폴백 경로는 이 버그의 원인이 아님(레거시 unit_name 전용 스키마 잔존 학생은 사실상 없음)"
+    },
+    "student_progress_schema_diff": "황성연 구 계정(2a86fc9b) vs 신규 학생(a4666b79) progress_data 최상위 키 완전 동일 — legacy 스키마(unit_name 문자열 키 등) 잔재 없음",
+    "daily_assignments_check": "9fb1bc3a, 9e9ce482 두 반 모두 daily_assignments 0행 — 차이 없음(이 축은 원인 아님)",
+    "classes_row_check": "9fb1bc3a, 9e9ce482 두 classes 행 모두 컬럼 집합/NULL 여부 동일 — classes 테이블 자체는 차이 없음",
+    "access_notes": {
+      "students_select_star_forbidden": "42501 permission denied for wildcard select on students (v1.9 컬럼 단위 GRANT 정책 — 예상된 동작, 명시 컬럼 지정으로 우회)",
+      "house_id_column_not_found": "students.house_id 컬럼 없음(42703) — house 관련 컬럼명이 다르거나 별도 테이블일 가능성, 이번 조사 스코프 밖이라 추가 확인 안 함",
+      "daily_assignments_date_column": "column명은 assignment_date가 아니라 date (supabase_v1_3_schema.sql:45 확인)"
+    }
+  }
+}

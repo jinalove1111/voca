@@ -1,0 +1,151 @@
+{
+  "agent_name": "general-purpose",
+  "role": "읽기 전용 라이브 검증 — Word Asset(word_assets) + words 오디오/텍스트 축 + AI 실행 흔적",
+  "task_id": "verify-word-asset-live-2026-08-05",
+  "task": "supabase_v3_15_word_assets.sql 실행 + Unit 5 재저장 + 관리자 'AI 생성' 버튼 클릭 이후, 라이브 Supabase를 anon key REST GET(읽기 전용)만으로 axis 1~6 실측 검증. 쓰기/AI 호출 없음.",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-05T00:00:00Z",
+  "updated_at": "2026-08-05T04:30:00Z",
+  "files_owned": [
+    ".ai-status/verify-word-asset-live-2026-08-05.json"
+  ],
+  "files_read": [
+    ".env",
+    "supabase_v3_15_word_assets.sql",
+    "supabase_v3_8_ai_usage_daily.sql",
+    "scripts/dbIntegrityAudit.mjs",
+    ".ai-status/snapshot-unit5-before-resave-2026-08-05.json",
+    "handoff.md",
+    "supabase/functions/generate-word-assets/index.ts (존재만 확인)"
+  ],
+  "summary": "6개 축 중 5개는 PASS. axis 2(AI 실행 흔적)는 FAIL — 라이브 word_assets 723행 전체에 generated_fields='ai' 태그가 붙은 행이 0건, ai_model이 채워진 행 0건, created_by가 채워진 행 0건, ai_usage_daily 테이블은 오늘 날짜뿐 아니라 테이블 전체가 0행(사상 누적 0건). 즉 '관리자 AI 생성 버튼이 동작함을 확인'이라는 운영자 확인은 UI 레벨(버튼 클릭·응답 수신)까지만 검증된 것으로 보이며, 실제로 word_assets/ai_usage_daily에 AI 소스 데이터가 저장되는 왕복(round-trip)은 라이브 데이터로 전혀 뒷받침되지 않는다 — 후속 조사 필요. 그 외 no-overwrite 불변식(clean), 이미지 축(설계대로 미생성), words 테이블 오디오/텍스트 전량 충족(0 null), Unit5 40/40 정상, storage 파일 실제 재생 가능(HTTP 200), word_key 조인 10/10 정상 확인.",
+  "blocker": null,
+  "next_action": "운영자에게 axis 2 결과 공유 — '🤖 AI 생성' 버튼을 다시 눌러보고 (a) 네트워크 탭에서 generate-word-assets 응답이 실제로 200/성공인지, (b) 그 응답이 admin-content-write word_asset.upsert_bulk로 실제 전달·저장되는지, (c) 저장 후 이 스크립트로 재검증 시 source='ai' 또는 generated_fields에 'ai' 태그가 나타나는지 확인 요청.",
+
+  "axes": [
+    {
+      "axis": "1_word_assets_overall",
+      "verdict": "PASS_WITH_ANOMALY",
+      "evidence": {
+        "total_rows": 723,
+        "total_rows_confirmed_via": "Content-Range count header: 0-0/723 (fetched row set length 723 matches)",
+        "fill_rate": {
+          "meaning_primary": "723/723 (100%)",
+          "part_of_speech": "80/723 (11.1%)",
+          "cefr": "0/723 (0%)",
+          "pronunciation_uk": "0/723 (0%)",
+          "example_sentence": "695/723 (96.1%)",
+          "example_translation": "661/723 (91.4%)",
+          "story_memory": "661/723 (91.4%)",
+          "emoji": "0/723 (0%)",
+          "gesture": "0/723 (0%)",
+          "difficulty": "80/723 (11.1%)",
+          "base_review_interval_days": "80/723 (11.1%)",
+          "image_prompt": "80/723 (11.1%)",
+          "tags": "0/723 (0%)",
+          "synonyms": "0/723 (0%)",
+          "antonyms": "0/723 (0%)"
+        },
+        "distributions": {
+          "source": { "import": 695, "rule": 28 },
+          "approval_status": { "draft": 723 },
+          "pipeline_status": { "pending": 695, "partial": 28 },
+          "image_status": { "none": 695, "prompt_ready": 28 },
+          "example_source": { "import": 695, "none": 28 }
+        },
+        "anomaly": "part_of_speech/difficulty/base_review_interval_days/image_prompt가 채워진 행은 80개인데, source='rule'/pipeline_status='partial'/image_status='prompt_ready'로 표시된 행은 28개뿐이다. 나머지 52행은 실제로는 규칙 기반 필드가 채워져 있고 generated_fields에도 {difficulty:'rule',image_prompt:'rule',part_of_speech:'teacher',base_review_interval_days:'rule'}가 정확히 기록돼 있는데도, 상위 상태 컬럼(source/pipeline_status/image_status)은 갱신 전 값(import/pending/none)에 머물러 있다. updated_at 타임스탬프로 구분됨: 52행은 2026-08-04T14:54:59Z(1개 배치, 동일 타임스탬프), 28행은 2026-08-05T04:04:40Z(별도 배치, 동일 타임스탬프) — 두 번의 서로 다른 M3c 엑셀 업로드 fire-and-forget 실행 중 앞선 실행만 상태 컬럼 갱신이 누락된 것으로 보인다. 채점/학생 노출에는 영향 없음(meaning_primary/example 필드는 무관), 순수 메타데이터 일관성 문제 — distributions의 source/pipeline_status/image_status 집계가 실제 '규칙 기반 필드 채움' 규모(80)를 28로 과소 반영한다는 점만 유의.",
+        "mismatch_sample": [
+          { "word_key": "gym", "source": "import", "pipeline_status": "pending", "image_status": "none", "part_of_speech": "noun", "generated_fields": {"difficulty":"rule","image_prompt":"rule","part_of_speech":"teacher","base_review_interval_days":"rule"}, "updated_at": "2026-08-04T14:54:59.847397+00:00" },
+          { "word_key": "hope", "source": "import", "part_of_speech": "noun;verb", "generated_fields": {"difficulty":"rule","image_prompt":"rule","part_of_speech":"teacher","base_review_interval_days":"rule"}, "updated_at": "2026-08-04T14:54:59.847397+00:00" }
+        ]
+      }
+    },
+    {
+      "axis": "2_ai_run_traces",
+      "verdict": "FAIL",
+      "evidence": {
+        "rows_with_any_ai_generated_field": 0,
+        "ai_model_nonnull_rows": 0,
+        "created_by_nonnull_rows": 0,
+        "generated_fields_distinct_shapes": 1,
+        "generated_fields_only_shape_observed": "{\"difficulty\":\"rule\",\"image_prompt\":\"rule\",\"part_of_speech\":\"teacher\",\"base_review_interval_days\":\"rule\"}",
+        "samples": "N/A — 0 rows qualify, so no 3-sample list of 'word_key + ai fields + ai_model' could be produced as requested",
+        "updated_at_distribution": { "2026-08-04": 695, "2026-08-05": 28 },
+        "ai_usage_daily_table_total_rows_all_time": 0,
+        "ai_usage_daily_rows_today_seoul_2026-08-05": 0,
+        "ai_usage_daily_query_status": "HTTP 200, anon key has SELECT access (not a permission error) — table is genuinely empty, not access-blocked",
+        "conclusion": "라이브 word_assets/ai_usage_daily 어디에도 실제 AI 호출이 저장/기록된 흔적이 전혀 없다. 723행 전체가 source='import'(695, v3_15 백필) 또는 source='rule'(28, M3c 엑셀 업로드 규칙 기반 배선)뿐이고, source='ai'인 행은 0건이다. generate-word-assets Edge Function은 '37차 handoff'에 따르면 최초 배포는 완료됐고 WordAssetPanel의 '🤖 AI 생성' 버튼 배선(커밋 801e53c)도 존재하나, 실제로 그 버튼을 눌러 word_asset.upsert_bulk(source='ai')까지 왕복 성공한 흔적은 이 라이브 조회로 확인되지 않는다. '운영자가 AI 생성 버튼이 동작함을 확인했다'는 진술은 버튼 클릭/응답 수신 수준일 가능성이 높고, 실제 DB 저장 왕복은 검증되지 않은 상태로 보아야 한다."
+      }
+    },
+    {
+      "axis": "3_no_overwrite_invariant",
+      "verdict": "PASS",
+      "evidence": {
+        "example_source_import_count": 695,
+        "import_rows_with_example_sentence_marked_ai_violations": 0,
+        "approved_rows_count": 0,
+        "approved_rows_with_any_ai_field": 0,
+        "note": "축 3은 현재 라이브 데이터로는 '약하게' 검증됨 — AI 소스 행이 0건(axis 2)이고 approved 행도 0건이라, 불변식이 실제로 시험대에 오른 적이 없다(위반 사례가 없는 이유가 '설계가 잘 지켜져서'가 아니라 '아직 AI 데이터 자체가 없어서'일 수 있음). AI 생성이 실제로 동작하기 시작한 이후 재검증 필요."
+      }
+    },
+    {
+      "axis": "4_image_axis",
+      "verdict": "PASS",
+      "evidence": {
+        "image_url_nonnull_count": 0,
+        "image_status_distribution": { "none": 695, "prompt_ready": 28 },
+        "image_prompt_nonnull_count": 80,
+        "note": "설계대로 image_url은 전량 null(이미지 생성 미구현), image_status는 대부분 'none'. image_prompt가 채워진 80건 중 28건만 image_status='prompt_ready'로 정확히 반영됨 — 나머지 52건은 axis 1 anomaly와 동일 원인(상태 컬럼 갱신 누락)으로 image_status='none'인 채 image_prompt 텍스트만 존재. 학생 노출/채점에는 무관."
+      }
+    },
+    {
+      "axis": "5_audio_text_axis_words_table",
+      "verdict": "PASS",
+      "evidence": {
+        "words_total_count": 891,
+        "word_audio_url_null_count": 0,
+        "example_audio_url_null_count": 0,
+        "example_text_null_count": 0,
+        "memory_tip_null_count": 0,
+        "example_translation_null_count": 0,
+        "unit5_b35c9bfd-3755-478c-b488-77044c39e6e9": {
+          "words_count": 40,
+          "expected": 40,
+          "null_counts": {
+            "word_audio_url": 0,
+            "example_audio_url": 0,
+            "example_text": 0,
+            "memory_tip": 0,
+            "example_translation": 0
+          },
+          "matches_expectation": true
+        },
+        "storage_reachability_check": {
+          "sample_word": "connect",
+          "sample_unit": "b35c9bfd-3755-478c-b488-77044c39e6e9",
+          "word_audio_url": "https://azsjthtdjfpnctffjfsk.supabase.co/storage/v1/object/public/AUDIO/50e28b13-9f3c-47eb-bbbc-f0fa8b162903-word.mp3",
+          "head_request_status": 200,
+          "content_type": "audio/mpeg",
+          "content_length_bytes": 8640
+        },
+        "note": "words_total_count 891은 supabase_v3_15_word_assets.sql 주석의 2026-08-05 재측정치(811)보다도 더 늘어난 값 — 교사가 계속 단어를 추가 중임을 시사. db-wide 5개 필드 전부 null 0건은 놀랍게 완전한 수치이나, count=exact 헤더로 명시 확인했고 anon key 권한 오류(401/403)가 아닌 정상 200 응답이므로 신뢰 가능."
+      }
+    },
+    {
+      "axis": "6_word_key_join_integrity",
+      "verdict": "PASS",
+      "evidence": {
+        "sample_size": 10,
+        "sampled_words": ["headache", "melt", "lonely", "focus on", "spine", "progressively", "spectator", "festival", "amount", "airport"],
+        "found_count": 10,
+        "not_found_count": 0,
+        "details": "10개 표본 전부 lower(btrim(word)) 정규화 키로 word_assets에서 정확히 1건씩 매치됨 — 백필 완전성 스팟 체크 통과."
+      }
+    }
+  ],
+
+  "overall_verdict": "PARTIAL_PASS — 5/6 axis PASS(3번은 약한 PASS, AI 데이터 부재로 인해 미시험), 1/6 axis(2. AI 실행 흔적) FAIL. 백필/오디오/텍스트/join 무결성은 전부 라이브에서 확인됐고 no-overwrite 설계도 지금까지는 위반 0건이다. 다만 이번 검증의 핵심 목적이었던 '오늘 AI 생성 버튼 클릭이 실제로 word_assets/ai_usage_daily에 저장됐는가'는 라이브 데이터상 증거가 전혀 없어 확인되지 않았다(NOT CONFIRMED) — 운영자의 '버튼이 동작함' 체감과 실제 DB 저장 사이에 갭이 있을 가능성을 반드시 재확인해야 한다.",
+
+  "methodology": "REST GET, anon key only(.env VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY), Content-Range count=exact 헤더로 총량 교차검증, generated_fields는 jsonb 파싱 후 Object.values().includes('ai')로 판정, storage 파일 1건 HEAD 요청. 쓰기/AI 호출/edge function 호출 전혀 없음. 스크립트: 임시 스크래치패드(node verify_word_assets.mjs, diag.mjs) — 저장소에는 남기지 않음."
+}
