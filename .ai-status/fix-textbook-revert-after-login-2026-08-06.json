@@ -1,0 +1,15 @@
+{
+  "agent_name": "main-session (planner/verifier) + implementer(sonnet)",
+  "role": "P0 버그 수정 — 교재 전환이 재로그인 후 원래 교재로 되돌아감",
+  "task_id": "fix-textbook-revert-after-login",
+  "task": "교재 전환 후 재입장 시 원래 교재로 보이는 버그의 근본 원인 추적·수정 (운영자 보고: 황성연·Paul 계정 공통)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-06T00:00:00Z",
+  "updated_at": "2026-08-06T00:00:00Z",
+  "files_owned": ["src/App.jsx", "src/utils/wordLibrary.js", "handoff.md", ".ai-status/fix-textbook-revert-after-login-2026-08-06.json"],
+  "summary": "ROOT CAUSE 3건 확정·수정. ① 콜드스타트 경합: 새 로드 시 _studentAssignmentsCache가 비어 getStudentPrimaryTextbook이 사람 반 자동 교재로 폴백, App.jsx classWords/currentUnitId가 콜드 결과를 memoize 후 재계산 없음 (라이브 재현: Paul 콜드=YMB/웜=천재). ② setStudentUnit 교차 교재 폴백이 students.current_unit_id에 다른 교재 유닛을 영구 기록 (실측: Paul SCA primary=천재 vs students.current_unit_id=YMB Unit 1). ③ refreshTextbooks 일시 실패 시 레거시 오인 → read-heal이 교재 전환 primary 행을 DELETE하는 잠복 경로 (황성연 fdce5252 전환 행 실종과 정합). 수정: 로그인/재입장 예열 + 로드 후 refreshTick 재계산 / setStudentUnit 예열+교차 쓰기 throw / _textbookFetchFailed 플래그로 파괴 수리 봉인. 검증: 규칙 15 재현 선행, 3계정(전환/미전환/레거시) PASS, build PASS, verify:unit·student PASS, verify:login 4건 FAIL은 수정 전에도 동일한 기존 환경 제약(로컬 service role key 부재)임을 stash 실측으로 확인.",
+  "blocker": null,
+  "next_action": "운영자: ① Paul 계정은 유닛 선택 1회로 자가 치유(단어 0개 유닛으로 보이면 유닛만 다시 선택). ② 황성연 동명이인 6행 정리(같은 PIN이면 verify-student-pin이 첫 후보로 입장시킴 — 주의). ③ 교재-반 직속 59명의 class_textbooks 링크 옵션 A/B 결정은 여전히 대기(어제 조사 참조).",
+  "commits": ["8db316e fix(app): 로그인·재입장 시 교재 배정 캐시 예열", "34d2994 fix(word-library): setStudentUnit 교차 교재 쓰기 차단 + 파괴 수리 봉인"]
+}

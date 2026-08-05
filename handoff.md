@@ -7,6 +7,79 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-06 (39차) — 교재 전환이 재로그인 후 원래 교재로 되돌아가던 P0 수정
+(콜드스타트 경합 + 교차 교재 오염 + 파괴 수리 봉인)
+
+### (1) 증상 (운영자 보고)
+
+로그인 성공 → 학생이 다른 교재 선택 → 재입장하면 원래 교재만 표시. 황성연·
+Paul 계정 모두 재현(계정 무관).
+
+### (2) 근본 원인 3가지 (전부 라이브 실측으로 확정)
+
+① **콜드스타트 경합(증상 직접 원인)**: 페이지 새 로드 시
+`_studentAssignmentsCache`(wordLibrary.js)가 비어 `getStudentPrimaryTextbook()`이
+사람 반의 자동 교재(=원래 교재)로 폴백. App.jsx의 `classWords`/
+`currentUnitId`는 이 콜드 결과를 `useMemo([studentId, refreshTick])`로
+고정하고 배정 로드 후에도 재계산하지 않았다. 재현: Paul(38717600) 콜드
+해석="중2 YMB 박준원"(원래), 웜 해석="중2 천재 이상기"(실제 SCA
+primary).
+
+② **교차 교재 유닛 오염(DB 드리프트 실측)**: `setStudentUnit`이 현재
+교재에서 유닛 이름을 못 찾으면 사람 반 유닛으로 폴백해
+`students.current_unit_id`에 다른 교재의 유닛을 영구 기록. 실측:
+Paul의 SCA primary=천재(80e8d5dd, 행 저장 유닛 e327efc3)인데
+students.current_unit_id=67c8268e(YMB "Unit 1").
+
+③ **파괴 수리 잠복 경로**: `refreshTextbooks()`가 일시 실패하면
+합성(레거시) 모드로 오인 → `getStudentClassAssignments`의 read-heal이
+레거시 전용 수리 `maintainPrimaryAssignmentForClassChange`를 호출 →
+다른 반 primary 행 DELETE로 v3.1 교재 전환 상태가 영구 삭제될 수
+있었다. 황성연(fdce5252)의 전환 SCA 행 실종과 정합(사후 확증은
+불가 — 정직히 기록).
+
+### (3) 수정 (커밋 `8db316e`, `34d2994`)
+
+- App.jsx: ① init effect(저장 세션 재입장)·handleSelect(로그인)에서 첫
+  렌더 전 `getStudentClassAssignments(id)` 예열 ② AppInner 배정 로드
+  완료 시 `setRefreshTick` 증가(2차 방어).
+- wordLibrary.js: ① `setStudentUnit` — 콜드면 예열 후 현재 교재에서만
+  유닛 해석, 교재에 유닛이 있는데 이름 불일치면 throw(교차 교재 쓰기
+  차단; 호출부 3곳 모두 try/catch 확인) ② `_textbookFetchFailed`
+  플래그로 "테이블 미존재(진짜 레거시)"와 "일시 실패"를 구분 — 일시
+  실패 세션은 read-heal 파괴 수리와 maintain의 DELETE 분기를 봉인,
+  합성 교재 id(`synthetic-tb:`)의 uuid 컬럼 insert 가드 추가.
+
+### (4) 검증
+
+- 헌법 규칙 15 준수: 수정 전 라이브 재현 스크립트로 콜드=원래 교재/
+  웜=전환 교재 불일치를 REPRO CONFIRMED 후 수정.
+- 수정 후: 번들 재빌드 → 3계정 시나리오 전부 PASS — 구 계정(Paul,
+  전환됨: 예열 후 첫 읽기가 천재), 신 계정(황성연 fdce5252, 미전환:
+  YMB 유지), 레거시 계정(황성연 2a86fc9b: 능률 유지, 무회귀).
+- `npm run build` 통과. `verify:unit` PASS, `verify:student` PASS.
+  `verify:login`은 4개 스크립트 FAIL이나 수정 전 코드(stash)에서도
+  동일 실패 — 로컬에 `SUPABASE_SERVICE_ROLE_KEY`가 없어 나는 기존
+  환경 제약("permission denied for table students")으로 이번 변경과
+  무관함을 실측 확인.
+
+### (5) 남은 것 / 운영자 확인 필요
+
+1. Paul(38717600) 데이터 드리프트 잔재: `students.current_unit_id`가
+   여전히 YMB Unit 1 → 표시 유닛이 천재 "Unit 1"(단어 0개)로 해석됨.
+   학생이 유닛 선택기에서 유닛을 하나 고르면 자가 치유(이제 선택기가
+   천재 유닛을 올바르게 나열하고 `setStudentUnit`이 천재 유닛만
+   저장). 별도 SQL 불요 판단.
+2. 황성연 동명이인 6행 정리 필요(어제 조사와 동일 이슈). 추가:
+   verify-student-pin은 동명이인 중 PIN이 일치하는 첫 후보로
+   로그인시키므로, 같은 PIN을 쓰는 중복 계정이 있으면 의도치 않은
+   계정으로 입장 가능 — 중복 계정 정리 전까지 유의.
+3. 어제 DB 조사
+   (`.ai-status/investigate-legacy-student-unit-select-db.json`)의
+   별개 이슈 — 교재-반(9fb1bc3a/e09e147b) 직속 59명은
+   class_textbooks 링크가 1개뿐이라 선택기 자체가 안 뜸(옵션 A/B
+   운영자 결정 대기) — 이번 수정과 별개로 여전히 미해결.
+
 ## 2026-08-05 (38차) — Word Asset 전체 재검증(8축) + 실버그 2건 수정
 (AI 생성 무저장 침묵 / 학생 삭제 무반응+캐시 1000행 잘림 P0)
 
