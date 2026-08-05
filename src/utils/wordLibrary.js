@@ -393,6 +393,12 @@ export function initWordLibrary() {
 let _textbooks = new Map()        // textbookId -> {id, name, publisherName, ownerClassId}
 let _classTextbooks = new Map()   // classId -> [textbookId...] (sort_order 순)
 let _textbookMode = false         // true = 실제 테이블 로드됨(합성 아님)
+// 2026-08-06 — 합성 폴백의 "이유"를 구분한다: 테이블이 정말 없어서(진짜
+// 레거시, SQL 미실행)가 아니라 일시 실패(네트워크 등)로 합성에 빠진
+// 세션이 아래 read-heal의 레거시 전용 파괴 수리(다른 반 primary 행
+// DELETE)를 실행하면, v3.1 학생의 교재 전환 상태 행을 영구 삭제한다 —
+// 이 플래그가 true인 동안은 그 수리를 봉인한다(fail-safe).
+let _textbookFetchFailed = false  // true = 마지막 refreshTextbooks가 "미존재 외 이유"로 실패
 
 const SYNTH_TB_PREFIX = 'synthetic-tb:'
 function synthesizeTextbooks() {
@@ -414,7 +420,10 @@ export async function refreshTextbooks() {
       supabase.from('class_textbooks').select('class_id,textbook_id,enabled,sort_order').order('sort_order'),
     ])
     if (tbRes.error || ctRes.error) {
-      synthesizeTextbooks() // 테이블 부재(SQL 미실행)/일시 실패 — 합성 폴백
+      // 테이블 부재(SQL 미실행)면 진짜 레거시(플래그 false), 그 외(일시
+      // 실패/권한 등)면 상태 불확실(플래그 true — 파괴 수리 봉인).
+      _textbookFetchFailed = !(isMissingTableError(tbRes.error) || isMissingTableError(ctRes.error))
+      synthesizeTextbooks()
       return
     }
     _textbooks = new Map((tbRes.data || []).map((t) => [t.id, {
@@ -426,9 +435,11 @@ export async function refreshTextbooks() {
       if (!_classTextbooks.has(r.class_id)) _classTextbooks.set(r.class_id, [])
       _classTextbooks.get(r.class_id).push(r.textbook_id)
     }
+    _textbookFetchFailed = false
     _textbookMode = _textbooks.size > 0
     if (!_textbookMode) synthesizeTextbooks() // 테이블은 있는데 백필 전 — 합성 유지
   } catch {
+    _textbookFetchFailed = true
     synthesizeTextbooks()
   }
 }
@@ -1430,8 +1441,26 @@ export async function setStudentUnit(id, unitName) {
   // 합성/레거시 모드에서는 기존 반 기반 검색 그대로.
   let unitId = null
   if (_textbookMode) {
+    // 2026-08-06 교차 교재 오염 수정 ① — 캐시가 콜드면 예열부터: 예열 없이
+    // getStudentPrimaryTextbook을 부르면 사람 반의 자동 교재로 폴백해,
+    // 교재를 전환해 둔 학생의 유닛 변경이 이전 교재의 유닛 id를 쓸 수 있다.
+    if (!_studentAssignmentsCache.has(id)) {
+      try { await getStudentClassAssignments(id) } catch { /* 아래 폴백 경로가 처리 */ }
+    }
     const tb = getStudentPrimaryTextbook(id)
-    if (tb) unitId = getTextbookUnits(tb.id).find((u) => u.name === unitName)?.id || null
+    if (tb) {
+      const tbUnits = getTextbookUnits(tb.id)
+      unitId = tbUnits.find((u) => u.name === unitName)?.id || null
+      // 2026-08-06 교차 교재 오염 수정 ② — 현재 교재에 유닛들이 있는데
+      // 이름이 안 맞으면, 아래 사람 반 이름 폴백으로 "다른 교재의 유닛"을
+      // 조용히 저장하는 대신 명확히 거부한다. 실측 드리프트(SCA primary는
+      // 천재인데 students.current_unit_id가 YMB Unit 1을 가리킴 — Paul
+      // 계정)의 생성 경로 차단. 빈 교재(유닛 0개)는 resolveStudentUnitObj의
+      // 읽기 폴백과 동일하게 반 기반 폴백을 유지한다(대칭성).
+      if (unitId == null && tbUnits.length > 0) {
+        throw new Error(`"${unitName}" 유닛이 현재 교재(${tb.name})에 없습니다 — 교재 전환 직후라면 잠시 후 다시 시도해주세요.`)
+      }
+    }
   }
   if (unitId == null) {
     const clsName = getClassNameById(s.classId) || s.className
@@ -1528,7 +1557,10 @@ async function maintainPrimaryAssignmentForClassChange(studentId, classId, unitI
     // v3.1 교재 모드 — 다른 행은 "교재별 진도 상태"라 절대 삭제하지 않는다
     // (유령 개념은 반=교재이던 레거시 모델의 것). 전부 demote만 하고, 새
     // 반의 자동 교재 행을 primary로 보장(textbook_id 포함).
-    if (_textbookMode) {
+    // 2026-08-06 — 일시 실패로 합성 폴백에 빠진 세션(_textbookFetchFailed)
+    // 도 파괴 분기(DELETE) 대신 비파괴 분기(demote)로 보낸다: 교재 상태
+    // 행을 지우는 실수는 되돌릴 수 없다(fail-safe 방향).
+    if (_textbookMode || _textbookFetchFailed) {
       const { error: demErr } = await supabase.from('student_class_assignments')
         .update({ is_primary: false }).eq('student_id', studentId).eq('is_primary', true).neq('class_id', classId)
       if (demErr) {
@@ -1537,7 +1569,11 @@ async function maintainPrimaryAssignmentForClassChange(studentId, classId, unitI
       }
       const own = getOwnTextbookOfClass(classId)
       const { error: insErr } = await supabase.from('student_class_assignments').insert({
-        student_id: studentId, class_id: classId, textbook_id: own?.id ?? null,
+        student_id: studentId, class_id: classId,
+        // 합성 모드에서 getOwnTextbookOfClass는 'synthetic-tb:...' 가짜 id를
+        // 반환한다 — uuid 컬럼에 넣으면 22P02로 전체 유지보수가 실패하므로
+        // 실제 uuid일 때만 기록(null이면 읽기 측이 자동 교재로 해석).
+        textbook_id: own && !String(own.id).startsWith(SYNTH_TB_PREFIX) ? own.id : null,
         current_unit_id: unitId ?? null, is_primary: true,
       })
       if (insErr) {
@@ -1681,7 +1717,7 @@ export async function getStudentClassAssignments(studentId) {
         // 학생이 김기택 교재 학습 중) — 반 불일치 수리/마스킹은 교재
         // 레이어가 없는 레거시 모드에서만 수행한다(2026-07-22 버그 수정의
         // 유령 행 수리 로직, 그 시나리오는 여전히 레거시 모드에서 유효).
-        if (!_textbookMode && live.classId != null && primary.classId !== live.classId) {
+        if (!_textbookMode && !_textbookFetchFailed && live.classId != null && primary.classId !== live.classId) {
           // 수리 행의 유닛은 "그 반 소속이 확실한 id"만 신뢰한다 —
           // getStudentUnitId의 unit_name 폴백은 이전 반의 유닛 이름이
           // 새 반의 같은 이름 유닛(빈 유닛일 수도)에 잘못 매칭될 수 있어
