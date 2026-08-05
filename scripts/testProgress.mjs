@@ -450,6 +450,69 @@ console.log('\n10.6. Phase 2 M4a(2026-08-04) — round.completedToday 일별 카
   check('복습일 시나리오 — completedWords.length는 여전히 1(멱등, 증가하지 않음)', reviewRec.completedWords.length === 1)
 }
 
+console.log('\n10.7. Phase 2 M4d(2026-08-05) — history[date].completedTodayCount (round.completedToday 영구 스냅샷, 관측 배선)')
+{
+  // measurement-m4d-gate-2026-08-05가 실측한 문제: round.completedToday는
+  // 자정 롤오버로 리셋되고, history[date]엔 그 카운트를 저장하는 필드가
+  // 없어 과거 날짜 값이 영구 유실됐다. 아래는 useStudent.js의 실제 훅
+  // (bumpHistory 기반 useEffect)과 정확히 같은 규칙 — "round.completedToday.length가
+  // 기존 기록보다 커졌을 때만" 기록 — 을 시뮬레이션한다(hook-internal이라
+  // 직접 import 불가, 위 markWordCompletedSim과 동일한 근거).
+  const bumpCompletedTodayCountSim = (rec) => {
+    const today = rec.round.date
+    const count = rec.round.completedToday.length
+    const day = rec.history[today] || freshHistoryDay()
+    const existing = day.completedTodayCount || 0
+    if (count <= existing) return rec
+    return { ...rec, history: { ...rec.history, [today]: { ...day, completedTodayCount: count } } }
+  }
+
+  // high-water — 늘어날 때만 기록, 줄어들면(불가능하지만 방어적으로) 유지
+  let hw = freshRecord('HighWaterKid')
+  hw.round.completedToday = ['a']
+  hw = bumpCompletedTodayCountSim(hw)
+  check('completedToday 1개 -> completedTodayCount = 1', hw.history[hw.round.date].completedTodayCount === 1)
+  hw.round.completedToday = ['a', 'b', 'c']
+  hw = bumpCompletedTodayCountSim(hw)
+  check('completedToday 3개로 증가 -> completedTodayCount = 3', hw.history[hw.round.date].completedTodayCount === 3)
+  const beforeDowngrade = hw.history[hw.round.date].completedTodayCount
+  hw.round.completedToday = ['a'] // 실제로는 절대 줄어들지 않지만(dedup append-only) 방어 확인
+  hw = bumpCompletedTodayCountSim(hw)
+  check('completedToday가 줄어도 completedTodayCount는 절대 감소하지 않음(high-water)', hw.history[hw.round.date].completedTodayCount === beforeDowngrade && beforeDowngrade === 3)
+
+  // 자정 롤오버 — 새 history[date] 엔트리가 열려도 어제자 완전한 카운트는
+  // bumpHistory가 건드리지 않으므로 그대로 보존된다(정확히 measurement-m4d-gate가
+  // 실측한 유실 시나리오의 수정판).
+  const yesterday = 'Tue Aug 04 2026'
+  let rollover = freshRecord('RolloverKid')
+  rollover.history[yesterday] = { ...freshHistoryDay(), completedTodayCount: 5 }
+  rollover.round = { ...freshRound(), date: yesterday, completedToday: ['a', 'b', 'c', 'd', 'e'] }
+  // normalizeRecord가 실제 자정 체크(round.date !== todayStr())를 수행 —
+  // round만 오늘로 리셋되고 history[yesterday]는 그대로 남는다.
+  const normalizedRollover = normalizeRecord(rollover, 'RolloverKid')
+  check('자정 롤오버 후 — round는 오늘로 리셋(completedToday 0)', normalizedRollover.round.completedToday.length === 0)
+  check('자정 롤오버 후 — 어제 history[date].completedTodayCount=5 그대로 보존(유실 없음)', normalizedRollover.history[yesterday].completedTodayCount === 5)
+  // 오늘 새로 학습을 시작해도 어제 값과 독립적으로 0에서 다시 쌓인다
+  let today2 = { ...normalizedRollover, round: { ...normalizedRollover.round, completedToday: ['x'] } }
+  today2 = bumpCompletedTodayCountSim(today2)
+  check('오늘 새 엔트리는 0에서 다시 시작(어제 값과 무관)', today2.history[today2.round.date].completedTodayCount === 1)
+  check('오늘 엔트리 갱신이 어제 값을 건드리지 않음', today2.history[yesterday].completedTodayCount === 5)
+
+  // 하위호환 — 구버전 레코드(필드 자체 없음)는 크래시 없이 0으로 정규화
+  const legacyDay = { studentId: 'LegacyKid', history: { [yesterday]: { studied: true, categoriesCompleted: 4 } } }
+  const normalizedLegacy = normalizeRecord(legacyDay, 'LegacyKid')
+  check('구버전 history[date](completedTodayCount 필드 없음) -> 0으로 안전 정규화(NaN 아님)',
+    normalizedLegacy.history[yesterday].completedTodayCount === 0 && !Number.isNaN(normalizedLegacy.history[yesterday].completedTodayCount))
+
+  // 병합 — max (categoriesCompleted와 동일 규칙)
+  const localMerge = { ...freshRecord('MergeCountKid'), history: { [yesterday]: { ...freshHistoryDay(), completedTodayCount: 2 } } }
+  const cloudMerge = { ...freshRecord('MergeCountKid'), history: { [yesterday]: { ...freshHistoryDay(), completedTodayCount: 5 } } }
+  const mergedCount = mergeProgressRecords(localMerge, cloudMerge, 'MergeCountKid')
+  check('병합 — completedTodayCount max(2,5)=5(더 진전된 쪽 유실 없음)', mergedCount.history[yesterday].completedTodayCount === 5)
+  const mergedCountRev = mergeProgressRecords(cloudMerge, localMerge, 'MergeCountKid')
+  check('병합 대칭성 — 방향을 바꿔도 max(5,2)=5로 동일', mergedCountRev.history[yesterday].completedTodayCount === 5)
+}
+
 console.log('\n10. wordStatus (v1.5 Skip 기능) — 새 필드가 기존 로직을 깨뜨리지 않는지')
 {
   const fresh = freshRecord('SkipKid')

@@ -227,6 +227,20 @@ const freshHistoryDay = () => ({
   missedWordIds: [],      // wordIds answered wrong today (duplicates allowed — frequency = how often missed)
   spellingCorrect: 0,     // spelling test analytics — first-try correct count
   spellingTotal: 0,       // spelling test analytics — total first attempts
+  // Phase 2 M4d(2026-08-05, 관측 배선) — measurement-m4d-gate-2026-08-05
+  // 측정에서 round.completedToday(자정 리셋)의 "그날 최종 개수"가 어디에도
+  // 영구 저장되지 않아 daily-mission-complete 전환 게이트를 과거 데이터로
+  // 소급 측정할 수 없다고(NOT_MEASURABLE) 확인됐다 — 이 필드는 그 관측
+  // 공백을 메우는 순수 스냅샷이다. categoriesCompleted와 동일한 패턴(그날
+  // 안에서는 절대 감소하지 않는 high-water mark, 자정마다 새 history[date]
+  // 엔트리와 함께 0에서 다시 시작)으로 유지되며, 자정 롤오버 훅이 아니라
+  // completedToday가 바뀔 때마다(useEffect, 아래 categoriesCompleted
+  // high-water 로직 바로 옆) 즉시 기록한다 — 자정 훅에만 의존하면 그날
+  // 이후로 앱을 다시 열지 않은 학생의 스냅샷이 영영 유실된다(정확히
+  // measurement-m4d-gate가 실측한 f8e50877 사례). 아직 어떤 보상 판정/
+  // XP/UI도 이 필드를 읽지 않는다(다음 측정 세션이 student_progress를 통해
+  // 읽을 예정) — 순수 관측 배선.
+  completedTodayCount: 0,
 })
 
 // id는 이제 실제 Supabase students.id(UUID) — 예전엔 이름 문자열이 그대로
@@ -352,6 +366,7 @@ function migrateOldData(name, id) {
     missedWordIds: [],
     spellingCorrect: 0,
     spellingTotal: 0,
+    completedTodayCount: 0, // M4d — 구버전 기록엔 이 개념 자체가 없었음, 안전한 기본값
   }]))
   rec.milestoneStreak = readOld(oldKey(name, 'milestoneStreak'), 0) || 0
   rec.starBadgeThreshold = readOld(oldKey(name, 'starBadgeThreshold'), 0) || 0
@@ -483,6 +498,10 @@ function mergeHistoryDay(a, b) {
     missedWordIds: b.missedWordIds.length > a.missedWordIds.length ? b.missedWordIds : a.missedWordIds,
     spellingCorrect: maxNum(a.spellingCorrect, b.spellingCorrect),
     spellingTotal: maxNum(a.spellingTotal, b.spellingTotal),
+    // M4d — categoriesCompleted와 동일한 성격(그날 안의 high-water mark)이라
+    // 같은 규칙(max)으로 병합. maxNum 자체가 Number(...)||0 방어를 포함하므로
+    // 구버전 blob(필드 없음, undefined)도 안전하게 0으로 취급된다.
+    completedTodayCount: maxNum(a.completedTodayCount, b.completedTodayCount),
   }
 }
 
@@ -1128,6 +1147,30 @@ export function useStudent(studentId, legacyName) {
     const today = todayStr()
     const existing = history[today]?.categoriesCompleted || 0
     if (count > existing) bumpHistory(() => ({ categoriesCompleted: count }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [round])
+
+  // Phase 2 M4d(2026-08-05, 관측 배선) — round.completedToday(자정 리셋,
+  // M4a)의 "그날 최종 개수"를 history[오늘].completedTodayCount에
+  // high-water mark로 스냅샷한다. 위 categoriesCompleted 효과와 정확히
+  // 같은 패턴(round가 바뀔 때마다 확인, 더 커졌을 때만 기록 — 절대
+  // 줄어들지 않음)을 completedToday 축에 그대로 적용한 것뿐이다. 자정
+  // 롤오버 인터벌(위 round.date 체크 useEffect)에 의존하지 않는 이유:
+  // round는 그 인터벌이 아니라 "다음에 이 학생이 앱을 여는 시점"에 리셋될
+  // 수 있고(30초 주기 setInterval도 결국 세션이 열려 있어야만 동작),
+  // 그러면 자정 시점 값이 아니라 재접속 시점 값을 스냅샷하게 돼 이미 지난
+  // 하루치 값이 아예 사라진다(measurement-m4d-gate-2026-08-05가 실측한
+  // f8e50877 사례 — 다음날 재접속 전 round가 이미 freshRound()로 리셋돼
+  // 있었음). round가 바뀔 때마다(길이가 늘 때마다) 즉시 기록해두면 이
+  // 유실 창이 아예 생기지 않는다 — 자정이 지나 새 history[date] 엔트리가
+  // 열려도 이전 날짜의 엔트리는 bumpHistory가 건드리지 않으므로 그대로
+  // 보존된다. 어떤 보상 판정/XP/UI도 이 필드를 아직 읽지 않는다(순수 관측
+  // 배선 — freshHistoryDay 헤더 주석 참고).
+  useEffect(() => {
+    const count = round.completedToday.length
+    const today = todayStr()
+    const existing = history[today]?.completedTodayCount || 0
+    if (count > existing) bumpHistory(() => ({ completedTodayCount: count }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [round])
 

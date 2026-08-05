@@ -134,6 +134,27 @@ console.log('\n5. 히스토리 — 없는 날짜 합집합 + 같은 날짜 필�
   check('같은 날짜: missedWordIds 더 긴 쪽(이중 계산 방지)', JSON.stringify(d.missedWordIds) === JSON.stringify(['m2', 'm3']))
 }
 
+console.log('\n5.5. Phase 2 M4d(2026-08-05) — history[date].completedTodayCount 병합(categoriesCompleted와 동일 규칙: max)')
+{
+  const A = ancestor()
+  A.history = { [today]: { ...freshHistoryDay(), completedTodayCount: 2 } }
+  const B = ancestor()
+  B.history = { [today]: { ...freshHistoryDay(), completedTodayCount: 5 } }
+  const m = mergeProgressRecords(A, B, ID)
+  check('completedTodayCount max(2,5)=5', m.history[today].completedTodayCount === 5)
+  const rev = mergeProgressRecords(B, A, ID)
+  check('대칭성 — 방향 바꿔도 max(5,2)=5로 동일', rev.history[today].completedTodayCount === 5)
+
+  // 한쪽에만 필드가 있는 구스키마 blob과의 병합도 안전(0으로 취급, NaN 없음)
+  const oldNoField = ancestor()
+  oldNoField.history = { [today]: { studied: true, categoriesCompleted: 4, starsEarned: 30 } } // completedTodayCount 필드 자체 없음
+  const newWithField = ancestor()
+  newWithField.history = { [today]: { ...freshHistoryDay(), completedTodayCount: 3 } }
+  const mixed = mergeProgressRecords(newWithField, oldNoField, ID)
+  check('구스키마(필드 없음) + 신규(3) 병합 -> 3 유실 없이 보존, NaN 아님',
+    mixed.history[today].completedTodayCount === 3 && !Number.isNaN(mixed.history[today].completedTodayCount))
+}
+
 console.log('\n6. round — 같은 날 기기 교차(합집합/max), 오늘 아닌 클라우드 round는 리셋')
 {
   const A = ancestor()
