@@ -1,0 +1,22 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "ai-warning-surface",
+  "task": "WordAssetPanel AI 생성 배너에 서버 warnings/usage.batchCount를 그대로 노출(진단성 개선) — AI 클릭 시 실제로 AI가 호출됐는지/왜 저장할 게 없었는지 화면에서 바로 확인 가능하게",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-05T00:00:00Z",
+  "updated_at": "2026-08-05T00:00:00Z",
+  "files_owned": [
+    "src/utils/wordAssets.js",
+    "src/components/admin/WordAssetPanel.jsx",
+    "tests/harness/runWordAssets.mjs"
+  ],
+  "files_read": [
+    "supabase/functions/generate-word-assets/pipeline.js",
+    "supabase/functions/generate-word-assets/index.ts"
+  ],
+  "summary": "src/utils/wordAssets.js에 순수 함수 summarizeAiGenerationOutcome(results, usage)를 추가(import-0 순수 섹션, buildAiGeneratedAssetPayload 바로 뒤) — total/emptyCount/warningCount/distinctWarnings(dedup, 최초 등장 순서, 최대 3개)/aiCallCount(usage?.batchCount ?? null)를 반환하고 null/undefined/비배열/비객체 원소 등 어떤 입력에도 throw하지 않는다. WordAssetPanel.jsx handleAiGenerate가 이 함수를 사용해 배너를 더 구체화: (1) payloads.length===0일 때 aiCallCount===0이면 '서버가 AI를 실제로 호출하지 않았어요' 문구 추가, distinctWarnings가 있으면 '— 사유: ...'로 그대로 노출, warnings 없이 aiCallCount>0이면 '파싱/검증 단계에서 제외' + Edge Function 로그 확인 안내. (2) 저장 성공 시 warningCount>0이면 ' (경고 N건 — 일부 필드는 채워지지 않았어요)' 접미사 추가. tests/harness/runWordAssets.mjs에 summarizeAiGenerationOutcome 전용 섹션(9개 시나리오, dedup/cap-at-3/null-safety/aiCallCount passthrough/mixed warnings) 추가 — 총 80개 단언 전부 PASS.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 대기 — 커밋은 하지 않음(작업 지시에 따라 보류). git status/diff --staged로 3개 파일만 걸려있는지 재확인 후 운영자가 직접 커밋하거나 후속 세션에 커밋 요청."
+}

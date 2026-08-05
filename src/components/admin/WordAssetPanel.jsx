@@ -4,6 +4,7 @@ import { isMissingTableError, groupAssetPayloadsByShape } from '../../utils/word
 import {
   normalizeWordAssetRow, upsertWordAsset, upsertWordAssets, WORD_ASSET_WRITABLE_COLUMNS,
   selectAiGenerationCandidates, buildAiGeneratedAssetPayload, generateWordAssetsViaAi,
+  summarizeAiGenerationOutcome,
   AI_GENERATE_MAX_WORDS_PER_RUN,
 } from '../../utils/wordAssets'
 
@@ -330,8 +331,24 @@ export default function WordAssetPanel({ adminPin }) {
         if (payload) payloads.push(payload)
       }
 
+      // 진단성 개선(2026-08-05) — 서버가 warnings/usage.batchCount로 이미
+      // 실패 사유를 정직하게 알려주는데도 이전 배너는 그 정보를 버리고
+      // 뭉뚱그린 문구만 보여줬다(운영자가 "AI가 동작했다"고 착각한 실사고
+      // 원인). summarizeAiGenerationOutcome로 서버가 준 원인을 그대로 화면에
+      // 노출한다.
+      const outcome = summarizeAiGenerationOutcome(res.results, res.usage)
+
       if (payloads.length === 0) {
-        setAiBanner({ tone: 'info', text: `AI 호출은 완료됐지만 실제로 채워진(그리고 아직 비어있던) 필드가 없어서 저장할 내용이 없었어요(${n}개 단어 확인함).` })
+        let text = `AI 호출은 완료됐지만 실제로 채워진(그리고 아직 비어있던) 필드가 없어서 저장할 내용이 없었어요(${n}개 단어 확인함).`
+        if (outcome.aiCallCount === 0) {
+          text += ' 서버가 AI를 실제로 호출하지 않았어요(예산 초과이거나 요청이 AI 단계까지 도달하지 못했을 가능성이 커요).'
+        }
+        if (outcome.distinctWarnings.length > 0) {
+          text += ` — 사유: ${outcome.distinctWarnings.join(' / ')}`
+        } else if (outcome.aiCallCount > 0) {
+          text += ' AI는 호출됐지만 응답에서 사용할 수 있는 값이 하나도 없었어요(파싱/검증 단계에서 전부 제외됐을 수 있어요) — Supabase 대시보드에서 generate-word-assets Edge Function 로그를 확인해보세요.'
+        }
+        setAiBanner({ tone: 'info', text })
         await load()
         return
       }
@@ -344,7 +361,11 @@ export default function WordAssetPanel({ adminPin }) {
       if (anyFail) {
         setAiBanner({ tone: 'error', text: `일부 저장에 실패했어요: ${writeFailureMessage(anyFail)}` })
       } else {
-        setAiBanner({ tone: 'success', text: `${payloads.length}개 단어의 빈 필드를 AI로 채워 저장했어요(확인한 단어 ${n}개 중).` })
+        let text = `${payloads.length}개 단어의 빈 필드를 AI로 채워 저장했어요(확인한 단어 ${n}개 중).`
+        if (outcome.warningCount > 0) {
+          text += ` (경고 ${outcome.warningCount}건 — 일부 필드는 채워지지 않았어요)`
+        }
+        setAiBanner({ tone: 'success', text })
       }
       await load()
     } finally {

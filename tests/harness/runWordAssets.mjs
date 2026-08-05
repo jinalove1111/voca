@@ -21,6 +21,7 @@ import {
   selectAiGenerationCandidates,
   buildAiGeneratedAssetPayload,
   generateWordAssetsViaAi,
+  summarizeAiGenerationOutcome,
 } from '../../src/utils/wordAssets.js'
 
 let passed = 0, failed = 0
@@ -209,6 +210,60 @@ console.log('\n-- buildAiGeneratedAssetPayload — P2(AI 생성 배선) "AI 결�
   const aiWithBlankStrings = { word_key: 'apple', cefr: '  ', part_of_speech: null, pronunciation_uk: null, example_sentence: null, example_translation: null, warnings: [] }
   const p6 = buildAiGeneratedAssetPayload(existingAllEmpty, aiWithBlankStrings)
   check('⑦ AI가 공백뿐인 문자열을 주면 빈 값으로 취급(트림 후 제외)', p6 === null)
+}
+
+console.log('\n-- summarizeAiGenerationOutcome — 진단성 개선(2026-08-05): AI 응답 원인을 화면에 그대로 노출')
+{
+  const emptyItem = (wordKey, warnings = []) => ({
+    word_key: wordKey, cefr: null, part_of_speech: null, pronunciation_uk: null,
+    example_sentence: null, example_translation: null, warnings,
+  })
+  const filledItem = (wordKey, overrides = {}) => ({
+    word_key: wordKey, cefr: 'A1', part_of_speech: 'noun', pronunciation_uk: '/x/',
+    example_sentence: 'ex', example_translation: '번역', warnings: [], ...overrides,
+  })
+
+  const s1 = summarizeAiGenerationOutcome(null, null)
+  check('① results/usage가 null이어도 크래시 없이 안전한 기본값', s1.total === 0 && s1.emptyCount === 0 && s1.warningCount === 0 && s1.distinctWarnings.length === 0 && s1.aiCallCount === null)
+
+  const s2 = summarizeAiGenerationOutcome(undefined, undefined)
+  check('undefined 입력도 동일하게 안전', s2.total === 0 && s2.aiCallCount === null)
+
+  const s3 = summarizeAiGenerationOutcome('not-an-array', { batchCount: 'nope' })
+  check('비배열 results, 비숫자 batchCount도 안전(throw 없음)', s3.total === 0 && s3.aiCallCount === null)
+
+  const s4 = summarizeAiGenerationOutcome([emptyItem('a1'), emptyItem('a2'), filledItem('a3')], { batchCount: 0 })
+  check('② aiCallCount는 usage.batchCount를 그대로 전달(0=서버가 AI를 실제로 호출 안 함)', s4.aiCallCount === 0)
+  check('emptyCount는 5개 필드 전부 빈 항목만 셈(전부 빈 2개)', s4.emptyCount === 2 && s4.total === 3)
+  check('warningCount는 emptyCount와 별개로 warnings 배열이 있는 항목 수를 셈(여기선 0)', s4.warningCount === 0)
+
+  const s5 = summarizeAiGenerationOutcome(
+    [
+      emptyItem('b1', ['알 수 없는 cefr 값("X1") — null로 대체']),
+      emptyItem('b2', ['알 수 없는 cefr 값("X1") — null로 대체']), // 중복 — dedup 대상
+      filledItem('b3', { warnings: ['구/숙어 항목에 pronunciation_uk가 채워져 있어 null로 대체'] }),
+    ],
+    { batchCount: 2 },
+  )
+  check('③ 동일 warnings 텍스트는 중복 제거됨(dedup)', s5.distinctWarnings.length === 2)
+  check('dedup된 순서는 최초 등장 순서를 유지', s5.distinctWarnings[0] === '알 수 없는 cefr 값("X1") — null로 대체' && s5.distinctWarnings[1] === '구/숙어 항목에 pronunciation_uk가 채워져 있어 null로 대체')
+  check('warningCount는 warnings가 있는 항목 수(3개 중 3개 — filledItem도 경고가 있으면 포함)', s5.warningCount === 3)
+  check('aiCallCount는 usage.batchCount 통과(2)', s5.aiCallCount === 2)
+
+  const manyWarnings = Array.from({ length: 5 }, (_, i) => emptyItem(`c${i}`, [`사유 ${i}`]))
+  const s6 = summarizeAiGenerationOutcome(manyWarnings, { batchCount: 5 })
+  check('④ distinctWarnings는 서로 다른 5개 사유가 있어도 최대 3개까지만 담김(cap)', s6.distinctWarnings.length === 3)
+  check('cap된 3개는 입력 순서 그대로(사유 0/1/2)', s6.distinctWarnings[0] === '사유 0' && s6.distinctWarnings[1] === '사유 1' && s6.distinctWarnings[2] === '사유 2')
+
+  const s7 = summarizeAiGenerationOutcome([null, undefined, 'x', 123, filledItem('d1')], { batchCount: 1 })
+  check('⑤ 원소가 객체가 아니면 안전하게 emptyCount에 포함되고 크래시 없음', s7.total === 5 && s7.emptyCount === 4)
+
+  const s8 = summarizeAiGenerationOutcome([emptyItem('e1', [null, undefined, '', '  ', '실제 사유'])], { batchCount: 1 })
+  check('⑥ warnings 배열 안의 null/undefined/공백 문자열은 distinctWarnings에서 제외', s8.distinctWarnings.length === 1 && s8.distinctWarnings[0] === '실제 사유')
+  check('warnings 배열이 있으면(빈 문자열만 있어도 배열 자체가 비어있지 않으면) warningCount에 포함', s8.warningCount === 1)
+
+  const s9 = summarizeAiGenerationOutcome([filledItem('f1')], null)
+  check('⑦ usage가 없으면(null) aiCallCount는 null(0과 구분)', s9.aiCallCount === null)
 }
 
 console.log('\n-- generateWordAssetsViaAi — adminPin 부재/빈 입력 시 네트워크 호출 없이 구조화된 실패(throw 없음)')

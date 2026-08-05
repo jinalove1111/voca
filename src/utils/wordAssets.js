@@ -273,6 +273,62 @@ export function buildAiGeneratedAssetPayload(existingAsset, aiResult) {
   return row
 }
 
+// generate-word-assets 응답(results 배열 + usage)을 관리자가 화면에서 바로
+// 읽을 수 있는 요약으로 변환한다(진단성 개선, 2026-08-05 — 운영자가 "AI
+// 생성" 버튼을 눌렀는데 실제로는 라이브 DB에 AI 결과가 한 건도 저장되지
+// 않은 사고를 재발 방지하기 위함, 이 파일 상단 헤더 배경 참고). 이 함수
+// 자체는 저장 여부를 판단하지 않는다 — WordAssetPanel.jsx가 이 요약을
+// 배너 문구 조합에만 쓴다.
+//
+// - total: results 배열 길이(비배열/누락이면 0)
+// - emptyCount: AI_ASSET_FIELD_MAP의 5개 필드가 전부 빈 값(null/undefined/
+//   공백 문자열)인 결과 항목 수(=pipeline.js emptyGeneratedItem과 동일한
+//   "전부 null" 모양이거나, sanitizeGeneratedItem이 전부 null로 대체한 경우)
+// - distinctWarnings: results[i].warnings(문자열 배열)를 전부 모아 중복
+//   제거 후 처음 등장한 순서 그대로 최대 3개까지만 담은 배열(배너에 그대로
+//   붙여 넣을 수 있는 사람이 읽을 수 있는 사유 목록)
+// - warningCount: warnings 배열이 하나 이상 있는 결과 항목 수(emptyCount와는
+//   다름 — 톤 검열 등으로 일부 필드만 null 대체된 항목도 포함, "전부 빈"
+//   항목만 세는 emptyCount보다 넓은 집합)
+// - aiCallCount: usage?.batchCount(서버가 실제로 AI를 호출한 배치 수, 숫자가
+//   아니면 null) — 0이면 서버가 이번 요청에서 AI를 한 번도 호출하지 않았다는
+//   뜻(index.ts의 예산 초과/조기 반환 분기가 batchCount:0을 명시적으로 보냄)
+//
+// 어떤 입력(null/undefined/배열이 아님/원소가 객체가 아님/warnings가
+// 배열이 아님/usage가 없음)에도 절대 throw하지 않는다.
+export function summarizeAiGenerationOutcome(results, usage) {
+  const list = Array.isArray(results) ? results : []
+  const fieldKeys = Object.keys(AI_ASSET_FIELD_MAP)
+  let emptyCount = 0
+  let warningCount = 0
+  const distinctWarnings = []
+
+  for (const item of list) {
+    if (!item || typeof item !== 'object') {
+      emptyCount++
+      continue
+    }
+    const hasAnyValue = fieldKeys.some((snakeKey) => normalizeAiTextValue(item[snakeKey]) !== null)
+    if (!hasAnyValue) emptyCount++
+
+    const warnings = Array.isArray(item.warnings) ? item.warnings : []
+    if (warnings.length > 0) warningCount++
+    for (const w of warnings) {
+      const text = typeof w === 'string' ? w.trim() : (w == null ? '' : String(w).trim())
+      if (!text) continue
+      if (distinctWarnings.includes(text)) continue
+      if (distinctWarnings.length >= 3) continue
+      distinctWarnings.push(text)
+    }
+  }
+
+  const aiCallCount = (usage && typeof usage === 'object' && Number.isFinite(usage.batchCount))
+    ? usage.batchCount
+    : null
+
+  return { total: list.length, emptyCount, warningCount, distinctWarnings, aiCallCount }
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // 네트워크 함수 — 아래부터는 실제 Supabase/Edge Function 호출. 위 "import 0
 // 설계" 주석 참고 — supabaseClient/wordLibrary는 함수 내부에서만 동적 로드.
