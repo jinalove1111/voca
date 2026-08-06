@@ -1,0 +1,15 @@
+{
+  "agent_name": "main-session (planner/verifier) + backend(sonnet)",
+  "role": "P0 — 교과서 변경 무반영(저장·조회 경로) 수정",
+  "task_id": "fix-textbook-layer-gap",
+  "task": "동아 윤정미 등 신설 반으로의 교과서 변경이 이전 교과서로 되돌아 보이는 버그의 저장·조회 경로 추적·수정",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-06T00:00:00Z",
+  "updated_at": "2026-08-06T00:00:00Z",
+  "files_owned": ["src/utils/wordLibrary.js", "src/components/AdminScreen.jsx", "supabase_v3_17_textbook_backfill_new_classes.sql", "handoff.md(42차)", ".ai-status/fix-textbook-layer-gap-2026-08-06.json"],
+  "summary": "원인(실측): v3_1 백필(7/22, 1회성) 이후 신설 반 3개(중2/중1 동아 윤정미, 고1 능률 민병천)는 textbooks/class_textbooks 행이 없어, primary 배정(SCA textbook_id NULL) 조회가 사람 반 자동 교재로 폴백 → 이전 교과서로 되돌아 표시. 추가 발견(라이브 테스트): NULL textbook_id 레거시 SCA 행 때문에 원래 교과서 복귀 전환이 '상태 행 생성 실패'로 영구 불가. 수정: ① refreshTextbooks 미커버 반 합성 병합(읽기 전용) ② ensureTextbookLayerBackfilled 관리자 진입 자동 백필(멱등, 검수에서 합성 포함 no-op 결함 수정) ③ createClass 즉시 등록 ④ setPrimaryTextbook NULL 행 승격 재사용. 라이브 검증: QA_CaseTest 왕복 전환 ALL PASS(id/행수/created_at 불변, unit만 갱신·복원), 동아/민병천 실계정 6명 조회 해석 ALL PASS. 콘텐츠 이슈 발견: 신설 반에 빈 'Unit 1'(0단어)과 'Unit1'(40단어) 공존 — 운영자 정리 필요.",
+  "blocker": null,
+  "next_action": "운영자: 배포 후 관리자 화면 1회 진입(자동 백필) 또는 v3_17 SQL(선택) → ClassTextbookLinks로 반↔교과서 링크 연결 → 신설 반 빈 'Unit 1' 정리.",
+  "commits": ["d3d9734 fix(textbook)! 레이어 갭+NULL 복귀 수정", "c23a97b sql v3_17(선택)"]
+}

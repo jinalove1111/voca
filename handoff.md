@@ -7,6 +7,89 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-06 (42차) — 교과서 변경 무반영 P0: v3.1 이후 신설 반 교재
+레이어 갭 수정 (저장·조회 경로, 커밋 `d3d9734`/`c23a97b`)
+
+### (1) 운영자 보고
+
+교과서 변경 UI는 배포됐지만 "동아 윤정미"로 변경해도 기존 교과서/Unit2로
+되돌아 보임. 로그아웃·재로그인에도 유지 안 됨. UI 재작업 금지, 저장·조회
+경로만 추적 지시.
+
+### (2) 원인 (라이브 실측 확정)
+
+v3_1 백필(7/22, 1회성)이 그 시점의 유닛 보유 반만 textbooks/
+class_textbooks로 등록. 이후 신설된 반 3개(08-04 생성: 중2 동아 윤정미
+`4f7ad20a`, 중1 동아 윤정미 `2b53d4eb`, 고1 능률 민병천 `1693f32b` —
+각 40단어 유닛 보유)는 textbooks 행 0, class_textbooks 링크 0.
+
+신설 반이 학생 primary(SCA, `textbook_id` NULL)로 배정되면
+`getOwnTextbookOfClass`(반)=null → `getStudentPrimaryTextbook`이 사람 반
+자동 교재로 폴백 → 이전 교과서/유닛으로 되돌아 표시. 저장(SCA)은 되는데
+조회가 해석하지 못하는 구조 — "교재로 쓸 반을 새로 만들어주는
+파이프라인"이 백필 1회 이후 존재하지 않았음.
+
+라이브 테스트가 추가 실물 버그도 발견: v3.1 이후 생성 경로(addStudent/
+백필)의 SCA 행은 전부 `textbook_id` NULL이라, `setPrimaryTextbook`의
+`eq(textbook_id)` 조회 실패 → insert `23505`(unique student_id,class_id)
+→ 재조회도 실패 → "상태 행 생성 실패" throw — 다른 교과서로 갔던 학생이
+원래 교과서로 영구 복귀 불가였다.
+
+해당 없음 확인(운영자 점검 목록): localStorage에 교재/유닛 저장 없음,
+Unit2 하드코딩 없음(Unit2는 해당 학생들의 실제 저장 유닛), update 실패를
+숨기는 catch 없음(Dashboard 인라인 에러 표면화), student_id 전달 정상.
+
+### (3) 수정 (커밋 `d3d9734`, `c23a97b` — 저장·조회 경로만, UI 무변경)
+
+- `wordLibrary.js` `refreshTextbooks`: 유닛 있는 미커버 반을 읽기 전용
+  합성 교재로 병합(`mergeSyntheticForUncoveredClasses` — DB 쓰기 0, 실제
+  행 생기면 자동 비활성).
+- `wordLibrary.js` `ensureTextbookLayerBackfilled`(신규 export): 관리자
+  화면 진입(인증 후) 1회 실제 행 자동 백필 — textbooks.name/
+  class_textbooks UNIQUE 기반 멱등. 검수에서 "covered에 합성 항목 포함
+  → 영구 no-op" 결함을 잡아 합성 제외 필터로 수정.
+- `wordLibrary.js` `createClass`: 신설 반 즉시 교재 레이어 등록
+  (non-fatal) — 갭 재발 방지.
+- `wordLibrary.js` `setPrimaryTextbook`: `textbook_id` NULL 레거시 행을
+  대상 교재 행으로 승격(UPDATE) 재사용 — 복귀 전환 실패 해소.
+- `AdminScreen.jsx`: 인증 후 `ensureTextbookLayerBackfilled` fire-and-
+  forget 1회.
+- `supabase_v3_17_textbook_backfill_new_classes.sql`(신규, 선택): 동일
+  백필 SQL(멱등, INSERT/SELECT만) — 관리자 화면 1회 진입으로 대체 가능.
+
+### (4) 라이브 테스트 결과 (QA_CaseTest `b010d8f6`, 학생 행 생성/삭제
+0건)
+
+- 전환 전: student_id `b010d8f6`…, class `dcd497c2`(Presentation 6),
+  unit `be554320`, students 총 1157.
+- 능률→천재 전환: SCA primary 행 정확히 1개·textbook_id=천재(update
+  반영 확인), student_id/이름/class_id/created_at 불변,
+  current_unit_id만 천재 유닛으로 갱신, students 행 수 1157 불변.
+- 새로고침 시뮬레이션(모듈 초기화 후 재조회): primary=천재 유지.
+- 자기 교재 복귀 전환: 수정 전 "상태 행 생성 실패" throw 재현 → 수정 후
+  성공, current_unit_id 원값(`be554320`) 복원, NULL 행 승격으로 중복 행
+  미생성, 최종 students 1157 불변. 재로그인 동등성은 새로고침 시뮬과
+  동일 경로(서버 행 기반, 클라이언트 세션 무관).
+- 조회측: 동아/민병천 반 실계정 6명 읽기 전용 검증 — 전원 자기 반
+  교과서로 해석, 40단어 정상 로드.
+- 잔여: QA_CaseTest에 교재별 진도 기억용 비primary SCA 행 2개(능률
+  `3d1c753e`/천재 `e327efc3`) 남음 — 설계상 정상(교재별 진도), QA 학생
+  한정.
+- 발견된 콘텐츠 이슈(코드 아님): 신설 반 3개에 "Unit 1"(0단어)과
+  "Unit1"(40단어) 유닛이 공존, 일부 학생이 빈 "Unit 1"에 배정돼 있음 —
+  운영자가 유닛 정리 또는 학생 유닛 변경 필요.
+
+### (5) 운영자 체크리스트
+
+1. 배포 후 관리자 화면 1회 진입(자동 백필 실행 — 콘솔에 "교재 레이어
+   자동 백필: N개" 로그) 또는 v3_17 SQL 실행(선택).
+2. 백필 후 ClassTextbookLinks에서 필요한 반↔교과서 링크 연결(예: YMB
+   반에 동아 교과서 추가)하면 학생 홈에서 동아로 전환 가능.
+3. 신설 반의 빈 "Unit 1"(0단어) 정리.
+4. rollback: `git revert d3d9734`(코드), 백필로 생긴 textbooks/
+   class_textbooks 행은 additive라 그대로 둬도 무해(제거 시 그 반 학생
+   해석이 합성 폴백으로 복귀).
+
 ## 2026-08-06 (41차) — "PIN 만들기 = 계정 생성" 오해 검증 + PIN 설정
 안전장치 (교과서 변경과 계정 생성의 구조적 연결 해체 마무리)
 
