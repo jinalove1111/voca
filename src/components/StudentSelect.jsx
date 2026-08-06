@@ -64,11 +64,13 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
   }
 
   const classNames = getClassNames()
-  // 2026-08-07 운영자 정책 6 — PIN 만들기 반 목록은 "실제 소속 반"만:
-  // QA/테스트 이름 반을 숨기고, 재학생이 0명인 반도 숨긴다(고를 이유가
-  // 없고 교재명 반 노이즈만 늘림). 데이터는 무변경 — 표시 필터일 뿐.
-  const TEST_CLASS_RE = /(qa[_ ]?|test|repro|synctest|multidevice|demo|temp)/i
-  const setupClassNames = classNames.filter((c) => !TEST_CLASS_RE.test(c) && getStudentsInClass(c).length > 0)
+  // 2026-08-07 운영자 도메인 확정 — 실제 수업 반은 아래 3개뿐(나머지 반
+  // 이름은 교과서명이 반으로 잘못 생성된 잔재, 데이터 정리는 별도 승인
+  // 진행 중). PIN 만들기 반 목록은 실반만 노출한다. 주의: 교과서명 반에
+  // 아직 소속된 학생(정리 전)은 이 목록에서 찾을 수 없다 — 관리자가
+  // 학생을 실반으로 이동하면 나타난다(운영자 인지 하에 즉시 적용 지시).
+  const REAL_CLASS_NAMES = ['MS Advanced Class', 'Presentation 6', 'Pre-Middle School']
+  const setupClassNames = classNames.filter((c) => REAL_CLASS_NAMES.includes(c))
 
   // ── PIN 만들기(2026-07-16, 운영자 지시 — 관리자가 학생 등록 후 "설정
   // 허용"을 누른 학생만 자기 PIN을 1회 직접 만들 수 있는 플로우) ──────────

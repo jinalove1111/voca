@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   getClassNames, getClassIdByName, getClassUnits, setStudentUnit,
   getStudentClassAssignments, assignTextbook, removeTextbookAssignment, setAssignmentUnit,
+  getAllTextbooks, getOwnTextbookOfClass,
 } from '../../utils/wordLibrary'
 
 // v2.9 다중 교재(Multi-Textbook) 관리자 UI — decision 0004
@@ -53,19 +54,26 @@ export default function TextbookAssignmentPanel({ studentId, onChanged }) {
 
   if (assignments === null) return <p className="text-xs text-gray-400 py-2">불러오는 중...</p>
 
-  const assignedClassIds = new Set(assignments.map((a) => a.classId))
-  const addableClasses = classList.filter((name) => {
-    const id = getClassIdByName(name)
-    return id && !assignedClassIds.has(id)
-  })
+  // 2026-08-07 정책 9 — 관리자 배정 UI는 반 목록이 아니라 textbooks 목록을
+  // 보여준다(반/교과서 도메인 분리). 저장 구조(SCA class_id=소유 컨테이너)는
+  // 무변경 — assignTextbook은 여전히 교재의 소유 컨테이너 반 id를 받는다.
+  // 이미 배정된 교재 판정: 각 행의 textbookId(getStudentClassAssignments가
+  // NULL 레거시 행이면 getOwnTextbookOfClass로 이미 해석해서 준다)와 비교.
+  const assignedTextbookIds = new Set(
+    assignments.map((a) => a.textbookId || getOwnTextbookOfClass(a.classId)?.id).filter(Boolean)
+  )
+  const addableTextbooks = getAllTextbooks()
+    .filter((t) => !String(t.id).startsWith('synthetic-tb:'))
+    .filter((t) => !assignedTextbookIds.has(t.id))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
 
   const handleAdd = async () => {
     if (!addTarget) return
-    const classId = getClassIdByName(addTarget)
-    if (!classId) return
+    const tb = getAllTextbooks().find((t) => t.id === addTarget)
+    if (!tb || !tb.ownerClassId) return
     setBusy(true)
     try {
-      await assignTextbook(studentId, classId)
+      await assignTextbook(studentId, tb.ownerClassId)
       setAddTarget('')
       await load()
     } catch (err) {
@@ -77,7 +85,8 @@ export default function TextbookAssignmentPanel({ studentId, onChanged }) {
   }
 
   const handleRemove = async (a) => {
-    const clsName = classNameById[a.classId] || '(알 수 없는 반)'
+    const tbForRow = a.textbookId ? getAllTextbooks().find((t) => t.id === a.textbookId) : null
+    const clsName = tbForRow?.name || classNameById[a.classId] || '(알 수 없는 반)'
     if (!window.confirm(`"${clsName}" 교과서 배정을 해제할까요?\n(이 교과서에서 쌓은 진행 기록은 지워지지 않고 그대로 남아요)`)) return
     setBusy(true)
     try {
@@ -131,11 +140,14 @@ export default function TextbookAssignmentPanel({ studentId, onChanged }) {
         <div className="space-y-1.5">
           {assignments.map((a) => {
             const clsName = classNameById[a.classId] || '(알 수 없는 반)'
+            // 행 라벨 = 교과서 이름 우선(정책 9), textbookId 해석 불가 시 기존 반 이름 라벨로 폴백.
+            const tbForRow = a.textbookId ? getAllTextbooks().find((t) => t.id === a.textbookId) : null
+            const label = tbForRow?.name || clsName
             const units = classNameById[a.classId] ? getClassUnits(clsName) : []
             return (
               <div key={a.classId} className="flex items-center gap-2 bg-white rounded-lg px-2 py-1.5">
-                <span className="text-xs font-bold text-gray-700 flex-shrink-0 max-w-[7rem] overflow-hidden text-ellipsis whitespace-nowrap" title={clsName}>
-                  {a.isPrimary && '⭐ '}{clsName}
+                <span className="text-xs font-bold text-gray-700 flex-shrink-0 max-w-[7rem] overflow-hidden text-ellipsis whitespace-nowrap" title={label}>
+                  {a.isPrimary && '⭐ '}{label}
                 </span>
                 <select value={a.unitId || ''} disabled={busy}
                   onChange={(e) => { if (e.target.value) handleUnitChange(a, e.target.value) }}
@@ -157,16 +169,16 @@ export default function TextbookAssignmentPanel({ studentId, onChanged }) {
       <div className="flex items-center gap-2">
         <select value={addTarget} onChange={(e) => setAddTarget(e.target.value)} disabled={busy}
           className="flex-1 min-w-0 text-xs font-bold border-2 border-purple-200 rounded-lg px-2 py-1.5 bg-white">
-          <option value="">➕ 교과서 추가 배정할 반 선택</option>
-          {addableClasses.map((name) => <option key={name} value={name}>{name}</option>)}
+          <option value="">➕ 배정할 교과서 선택</option>
+          {addableTextbooks.map((tb) => <option key={tb.id} value={tb.id}>{tb.name}</option>)}
         </select>
         <button onClick={handleAdd} disabled={busy || !addTarget}
           className="flex-shrink-0 bg-purple-500 disabled:bg-gray-300 text-white font-black px-3 py-1.5 rounded-lg text-xs btn-press">
           배정
         </button>
       </div>
-      {addableClasses.length === 0 && !tableMissing && (
-        <p className="text-[11px] text-gray-400">추가로 배정할 수 있는 다른 반이 없어요.</p>
+      {addableTextbooks.length === 0 && !tableMissing && (
+        <p className="text-[11px] text-gray-400">추가로 배정할 수 있는 교과서가 없어요.</p>
       )}
     </div>
   )
