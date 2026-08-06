@@ -7,6 +7,51 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-06 (45차) — 학습 정책 반영: 학년 무필터 확인 + 교과서 노출을
+"배정 합집합"으로 (44차 전체 노출 폐기)
+
+### 운영자 정책
+
+학년(school_grade)과 학습 교재 수준은 무관 — 학년으로 반/교재/Unit 접근
+제한 금지(표시 정보로만). 학생 화면은 등록된 반/배정된 교재만 표시(미배정
+비표시), 반→교재→Unit 순, 학생별 마지막 선택 저장.
+
+### 확인 결과 (전수 검색)
+
+- 학년 기반 필터는 코드에 존재하지 않음: students 스키마에 학년 컬럼
+  자체가 없고(dailyRitual.js 설계 노트에 명시), school_grade/elementary/
+  middle/high 매치는 전부 무관(AI 프롬프트 문구, 프로토타입 픽스처,
+  grade=채점 함수, GRADE_HOMEWORK 권한 상수, 고아 문서 QUICK_START.js —
+  앱에 import 안 됨). 제거할 것 없음 — 정책 7번은 이미 충족.
+- 항목 3(교재의 Unit만)·4(반→교재→Unit 순)·5(학생별 저장, SCA
+  primary+students.current_unit_id 서버 영속)도 현행 구조가 이미 충족.
+
+### 수정 (커밋: fix(student-home) 배정 합집합)
+
+- 같은 날 오전 커밋 3836245의 "전체 교과서 노출"을 최신 정책(미배정
+  비표시)에 맞춰 대체: textbookOptions = 사람 반 배정 교재
+  (class_textbooks) ∪ 학생 개별 배정 교재(student_class_assignments의
+  textbookId, 관리자 TextbookAssignmentPanel 배정), 합성 교재 제외,
+  이름순. `getSelectableTextbooks`는 미사용이 되어 삭제(당일 추가분
+  정리).
+- "학생이 등록된 모든 반 표시"에 대한 해석 기록: 이 스키마의 등록 모델은
+  사람 반 1개(students.class_id) + 교재 컨테이너 배정(SCA)이며, 타 반
+  소속 교재 등록은 교과서 드롭다운으로 노출된다 — 별도 다중 반 셀렉터는
+  스키마에 없는 개념이라 만들지 않음(기능 추가 아님 원칙).
+
+### 실측 (읽기 전용)
+
+Paul(YMB): 3종(반 배정) / QA_CaseTest: 4종(반 1+개별 배정 3) / 황성연
+`fdce5252`: 3종 / 동아 반 leo: 1종(배정 없음 → 정적 표시). build PASS,
+`verify:unit` PASS.
+
+### 운영 참고
+
+학생에게 교과서를 더 열어주려면: 반 전체 → 관리자 "반↔교재 연결"
+(ClassTextbookLinks), 특정 학생만 → 학생 상세의 교재 배정
+(TextbookAssignmentPanel). 이 두 배정만이 노출을 결정한다(오전의 전체
+노출은 폐기).
+
 ## 2026-08-06 (44차) — 학생 홈 교과서 드롭다운 전체 노출 + PIN 만들기
 과잉 차단 정밀화
 
