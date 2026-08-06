@@ -9,45 +9,19 @@
 // 상호작용 패턴(select + 전환 중 disabled + 인라인 에러)은 유닛 셀렉트와
 // 동일(새 패턴 발명 없음 — v2.9 결정 그대로 유지).
 //
-// 2026-08-06 P1(운영자 지시) — 교재가 1개뿐인 반(예: Presentation 6 -2026)
-// 에서 학생 홈에 교재 축 자체가 안 보인다는 보고. 실제 원인은 "옵션 1개
-// 이하면 아무것도 렌더하지 않는다"는 v2.9~v3.1 계약(과거 이 주석에 그렇게
-// 명시돼 있었음) — 그 계약을 여기서 변경한다: 옵션이 정확히 1개면 선택
-// UI(select) 대신 "교재: <이름>" 정적 텍스트로 항상 보여준다(운영자 지시
-// "교재가 하나뿐이면 선택값을 표시하되 불필요한 조작은 최소화한다"). 옵션
-// 0개(교재 미배정)는 기존 그대로 비렌더.
+// 2026-08-06(운영자 mockup 반영) — 화면 라벨을 "교재"에서 "교과서"로 변경
+// (select 경로 sr-only 라벨 포함). 내부 변수명/주석/props 이름(options/
+// currentId 등)은 저장소 관례대로 교재/textbook 그대로 유지 — 바뀐 건
+// 화면에 보이는 문자열뿐이다.
 //
-// 2026-08-06(같은 날 후속, 운영자 mockup 반영) — 화면 라벨을 "교재"에서
-// "교과서"로 변경(정적 표시 경로 + select 경로 sr-only 라벨 둘 다). 내부
-// 변수명/주석/props 이름(options/currentId 등)은 저장소 관례대로 교재/
-// textbook 그대로 유지 — 바뀐 건 화면에 보이는 문자열뿐이다.
-//
-// 2026-08-06 반 드롭다운 후속(운영자 지시, 실기능 구멍 즉시 수정) — 열람
-// 반에 primary가 없을 때(App.jsx currentTextbookOptionId가 currentId=''를
-// 내려보내는 경우) 유일 교과서라도 반드시 select로 선택(=setPrimaryTextbook
-// 확정)할 수 있어야 한다. 컨테이너 반은 대부분 교과서가 1개뿐이라(능률/
-// 천재/동아 등 자기 교재 1개), 이전처럼 currentId=''도 곧바로 정적 표시로
-// 떨어지면 반 전환 후 그 반의 유일 교과서를 "선택"할 수단이 아예 없어
-// 3단 캐스케이드(반→교과서→유닛)의 핵심 시나리오가 막힌다. 정적 표시는
-// 이제 currentId가 그 1개 옵션과 정확히 일치할 때만(이미 그 교과서가
-// primary로 확정된 상태) — currentId=''는 항상 아래 select 경로로 내려가
-// "교과서를 선택하세요" placeholder를 만난다.
+// 2026-08-07 운영자 정책 3(재변경, 이력 명시) — 어제(P1)는 옵션이 정확히
+// 1개면 "교과서: <이름>" 정적 텍스트로 select 자체를 숨겼다. 오늘 정책은
+// 그 정적 표시 분기를 폐기 — 옵션이 1개여도 항상 select를 렌더한다(현재
+// 선택이 select 안에서 명확히 보이고, disabled는 아니다 — 다만 옵션이
+// 실질적으로 1개뿐이면 선택해도 결과가 안 바뀔 뿐). 옵션이 0개(교재
+// 미배정)일 때만 여전히 비렌더.
 export default function TextbookSelector({ options, currentId, switching, error, onSwitch }) {
   if (!Array.isArray(options) || options.length === 0) return null
-
-  // 옵션이 1개뿐이고 currentId가 그 옵션과 정확히 일치할 때만(이미 그
-  // 교과서가 primary로 확정됨) 조작 불필요한 정적 표시. currentId가 비어
-  // 있거나(열람 반에 primary 없음) 그 1개 옵션과 다르면(캐시 갱신 지연 예외)
-  // 아래 select 경로로 내려간다 — 전자는 placeholder, 후자는 "(현재 교재)"
-  // 방어 옵션이 각각 처리.
-  if (options.length === 1 && currentId === options[0].id) {
-    return (
-      <div className="text-sm text-purple-200 mt-1 flex items-center justify-center gap-1.5 flex-wrap">
-        <span>교과서: {options[0].label}</span>
-        {error && <p className="text-xs font-bold text-yellow-200 w-full">⚠️ {error}</p>}
-      </div>
-    )
-  }
 
   return (
     <div className="text-sm text-purple-200 mt-1 flex items-center justify-center gap-1.5 flex-wrap">

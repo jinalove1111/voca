@@ -190,13 +190,6 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 단어만. studyMode(HOW: 듣기/말하기/쓰기/종합)와는 완전히 별개 축이라
   // 별도 상태로 관리 — 마찬가지로 세션 동안만 유지.
   const [studyScope, setStudyScope] = useState('all')
-  // 2026-08-06 반 드롭다운 — 열람 중인 반(UI 전용). null이면 현재 primary
-  // 교과서의 소유 반(없으면 사람 반)을 따라간다. 영속 상태가 아니다 —
-  // 실제 저장은 학생이 교과서를 골라 setPrimaryTextbook이 실행될 때
-  // SCA primary(class_id+textbook_id)+students.current_unit_id로 이뤄지고,
-  // 새로고침/재로그인 시 그 서버 값에서 복원된다(요구 6·7·9 충족 경로).
-  const [viewClassId, setViewClassId] = useState(null)
-  useEffect(() => { setViewClassId(null) }, [studentId])
   const studentData                 = useStudent(studentId, studentName)
   const { cleared, completedWords, clearedWords, answerMission, missions, grantReward, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord, wordStatus, setWordKnown, setWordUnknown, spellingReviewQueue, setLastTextbookClassId } = studentData
   // 애착 시스템(2026-07-22) — 파생 통계 + 모자/밀스톤 자동 판정(복원 확인
@@ -272,47 +265,6 @@ function AppInner({ studentId, studentName, onLogout }) {
     }).catch(() => { /* 조회 실패는 조용히 무시 — 선택기가 안 보일 뿐 학습 화면엔 영향 없음(이 파일 전체의 fail-open 원칙) */ })
     return () => { cancelled = true }
   }, [studentId])
-  // 반 이름 해석용(id→이름): getClassNames/getClassIdByName은 기존 export.
-  const classNameOf = (classId) => getClassNames().find((n) => getClassIdByName(n) === classId) || '(반)'
-
-  // 관리자 배정 기반 반→교과서 트리(2026-08-06 운영자 지시 — 반도 드롭다운):
-  // 반 옵션 = 사람 반 ∪ 개별 배정 교재(SCA 행)의 소유 반. 각 반의 교과서 =
-  // 사람 반이면 class_textbooks 링크 전체, 그 외 반이면 배정 교재만.
-  // 전부 UUID 기준(요구 9), 미배정 반/교과서는 애초에 트리에 없음(요구 10).
-  const classTree = useMemo(() => {
-    if (!isTextbookMode()) return null
-    const tree = new Map() // classId -> Map(textbookId -> tb)
-    const ensure = (cid) => { if (!cid) return null; if (!tree.has(cid)) tree.set(cid, new Map()); return tree.get(cid) }
-    const humanClassId = getStudentClassId(studentId)
-    const humanBucket = ensure(humanClassId)
-    if (humanBucket) for (const tb of getClassTextbooks(humanClassId)) humanBucket.set(tb.id, tb)
-    for (const a of textbookAssignments) {
-      if (!a.textbookId) continue
-      const tb = getTextbookById(a.textbookId)
-      if (!tb || String(tb.id).startsWith('synthetic-tb:') || !tb.ownerClassId) continue
-      ensure(tb.ownerClassId)?.set(tb.id, tb)
-    }
-    return tree
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [studentId, textbookAssignments, refreshTick])
-
-  const currentPrimaryTb = isTextbookMode() ? getStudentPrimaryTextbook(studentId) : null
-  const effectiveClassId = viewClassId
-    || (currentPrimaryTb && !String(currentPrimaryTb.id).startsWith('synthetic-tb:') ? currentPrimaryTb.ownerClassId : null)
-    || getStudentClassId(studentId)
-
-  const classOptions = useMemo(() => {
-    if (!classTree) return []
-    return Array.from(classTree.keys()).map((cid) => ({ id: cid, label: classNameOf(cid) }))
-      .sort((a, b) => a.label.localeCompare(b.label, 'ko'))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classTree, refreshTick])
-
-  // 반 select는 열람 전환일 뿐 저장이 아니다 — 실제 저장은 교과서를 골라
-  // handleTextbookSwitch(setPrimaryTextbook)가 실행될 때 이뤄진다(요구 8:
-  // 반을 바꾸면 교과서를 새로 고르는 흐름). 확인창 없음.
-  const handleClassView = (classId) => setViewClassId(classId)
-
   // 교재 선택기(TextbookSelector, Dashboard.jsx) → setPrimaryAssignment(주
   // 교재를 서버에 영구 전환) → 배정 목록/단어 목록 재조회.
   //
@@ -341,35 +293,38 @@ function AppInner({ studentId, studentName, onLogout }) {
     }
     const list = await getStudentClassAssignments(studentId)
     setTextbookAssignments(list)
-    // 전환 완료 — 열람 반을 새 primary 교재의 소유 반으로 자동 추종시킨다
-    // (viewClassId를 null로 되돌리면 effectiveClassId가 currentPrimaryTb를
-    // 다시 따라간다, 위 effectiveClassId 계산 참고).
-    setViewClassId(null)
     setRefreshTick((t) => t + 1)
   }
-  // v3.1 — 교재 선택기 옵션. 교재 모드: 열람 중인 반(effectiveClassId)의
-  // 교과서 트리(classTree, 관리자 배정 기반 반→교과서 트리 — 반 select와
-  // 같은 데이터 소스). 레거시 모드: v2.9 다중 반 배정 그대로. 어느 쪽이든
-  // 1개 이하면 선택기 비렌더(화면 변화 0).
+  // v3.1 — 교재 선택기 옵션. 교재 모드는 아래 허용 목록(2026-08-07 정책),
+  // 레거시 모드는 v2.9 다중 반 배정 그대로. 0개면 선택기 비렌더(화면 변화 0).
   const textbookOptions = useMemo(() => {
     if (isTextbookMode()) {
-      const bucket = classTree?.get(effectiveClassId)
-      return bucket
-        ? Array.from(bucket.values()).sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-            .map((tb) => ({ id: tb.id, label: tb.publisherName ? `${tb.name} (${tb.publisherName})` : tb.name }))
-        : []
+      // 2026-08-07 운영자 최종 정책 — 교과서 노출 = "허용 목록":
+      // 사람 반에 연결된 교재(class_textbooks) ∪ 이 학생에게 개별 배정된
+      // 교재(student_class_assignments). 학년으로 제한하지 않으며(초등생도
+      // 중등·고등 교재 배정 가능 — 스키마에 학년 컬럼 자체가 없음),
+      // 전체 무제한 노출도 하지 않는다(관리자 배정이 노출을 결정).
+      // 반 드롭다운(어제 46차 캐스케이드)은 폐기 — 반은 표시 전용,
+      // 반 변경은 관리자만(정책 1·4: 교과서 저장은 class_id 무접촉).
+      const byId = new Map()
+      for (const tb of getClassTextbooks(getStudentClassId(studentId))) byId.set(tb.id, tb)
+      for (const a of textbookAssignments) {
+        if (!a.textbookId || byId.has(a.textbookId)) continue
+        const tb = getTextbookById(a.textbookId)
+        if (tb && !String(tb.id).startsWith('synthetic-tb:')) byId.set(tb.id, tb)
+      }
+      return Array.from(byId.values())
+        .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+        .map((tb) => ({ id: tb.id, label: tb.publisherName ? `${tb.name} (${tb.publisherName})` : tb.name }))
     }
     return textbookAssignments.map((a) => {
       const name = getClassNames().find((n) => getClassIdByName(n) === a.classId)
       return name ? { id: a.classId, label: name } : null
     }).filter(Boolean)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [studentId, textbookAssignments, refreshTick, classTree, effectiveClassId])
-  // 2026-08-06 반 드롭다운 — 열람 반이 primary 교과서의 소유 반과 다르면
-  // (예: 다른 배정 반으로 방금 전환) currentTextbookOptionId를 ''(미선택)로
-  // 내려보내 "교과서를 선택하세요" 상태가 되게 한다(요구 8).
+  }, [studentId, textbookAssignments, refreshTick])
   const currentTextbookOptionId = isTextbookMode()
-    ? ((currentPrimaryTb && currentPrimaryTb.ownerClassId === effectiveClassId) ? currentPrimaryTb.id : '')
+    ? (getStudentPrimaryTextbook(studentId)?.id || null)
     : (getStudentById(studentId)?.classId || null)
   // v1.5 이번 세션에서 실제로 공부할 단어 목록 — studyScope에 따라
   // classWords(반 전체 단어, 퀴즈 오답 보기 생성 등에는 항상 이 전체
@@ -613,8 +568,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           completedUnits={attachment.unitsDone} completedTextbooks={attachment.textbooksDone}
           pendingCeremonyHat={attachment.pendingCeremonyHat} onDismissCeremony={attachment.dismissCeremony}
           textbookOptions={textbookOptions} currentTextbookId={currentTextbookOptionId}
-          onTextbookSwitch={handleTextbookSwitch}
-          classOptions={classOptions} currentClassId={effectiveClassId} onClassSelect={handleClassView} />
+          onTextbookSwitch={handleTextbookSwitch} />
       )}
       {screen === 'guidedSession' && (
         // 3분 데일리 리추얼(2026-07-22) — 가이드 학습은 항상 classWords
