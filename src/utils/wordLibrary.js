@@ -1851,12 +1851,31 @@ export async function getStudentClassAssignments(studentId) {
 // 생기기 전까지 "교재 추가" 옵션 자체를 노출하면 안 된다(계약).
 export async function assignTextbook(studentId, classId) {
   if (!studentId || !classId) throw new Error('assignTextbook: studentId/classId가 필요합니다.')
-  const { error } = await supabase.from('student_class_assignments').insert({
+  // 2026-08-06(요구 8: ID 기준 구분) — 배정 시점에 그 반의 실제 교재 id를
+  // 명시 기록한다. v2.9 시절엔 textbook_id 컬럼이 없어 NULL로 남겼고
+  // 읽기 측 폴백(getOwnTextbookOfClass 자동 교재)이 커버해 왔지만, 이제
+  // 백필이 끝나 모든 반이 실제 교재를 가지므로 명시 기록이 맞다. 합성
+  // id(synthetic-tb:)는 uuid 컬럼에 넣을 수 없어 그 경우만 기존처럼
+  // null(읽기 폴백 유지).
+  const own = getOwnTextbookOfClass(classId)
+  const textbookId = own && !String(own.id).startsWith(SYNTH_TB_PREFIX) ? own.id : null
+  let { error } = await supabase.from('student_class_assignments').insert({
     student_id: studentId,
     class_id: classId,
+    textbook_id: textbookId,
     current_unit_id: null,
     is_primary: false,
   })
+  if (error && error.code === '42703') {
+    // textbook_id 컬럼 미존재(v3_1 마이그레이션 전 환경) — 기존 컬럼
+    // 셋으로 1회 재시도(getStudentClassAssignments와 동일 폴백 관례).
+    ;({ error } = await supabase.from('student_class_assignments').insert({
+      student_id: studentId,
+      class_id: classId,
+      current_unit_id: null,
+      is_primary: false,
+    }))
+  }
   if (error) {
     if (isMissingTableError(error)) {
       throw new Error('student_class_assignments 테이블이 아직 없습니다 (supabase_v2_9_student_class_assignments.sql 미실행) — 관리자 UI는 이 마이그레이션이 실행되기 전까지 "교재 추가" 옵션을 노출하면 안 됩니다.')

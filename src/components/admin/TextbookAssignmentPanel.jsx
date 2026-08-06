@@ -70,7 +70,7 @@ export default function TextbookAssignmentPanel({ studentId, onChanged }) {
       await load()
     } catch (err) {
       if (isTableMissingError(err)) setTableMissing(true)
-      else alert('교재 추가 중 오류가 발생했어요: ' + (err.message || err))
+      else alert('교과서 추가 배정 중 오류가 발생했어요: ' + (err.message || err))
     } finally {
       setBusy(false)
     }
@@ -78,14 +78,14 @@ export default function TextbookAssignmentPanel({ studentId, onChanged }) {
 
   const handleRemove = async (a) => {
     const clsName = classNameById[a.classId] || '(알 수 없는 반)'
-    if (!window.confirm(`"${clsName}" 교재 배정을 해제할까요?\n(이 교재에서 쌓은 진행 기록은 지워지지 않고 그대로 남아요)`)) return
+    if (!window.confirm(`"${clsName}" 교과서 배정을 해제할까요?\n(이 교과서에서 쌓은 진행 기록은 지워지지 않고 그대로 남아요)`)) return
     setBusy(true)
     try {
       await removeTextbookAssignment(studentId, a.classId)
       await load()
     } catch (err) {
       if (isTableMissingError(err)) setTableMissing(true)
-      else alert('교재 해제 중 오류가 발생했어요: ' + (err.message || err))
+      else alert('교과서 해제 중 오류가 발생했어요: ' + (err.message || err))
     } finally {
       setBusy(false)
     }
@@ -116,14 +116,17 @@ export default function TextbookAssignmentPanel({ studentId, onChanged }) {
 
   return (
     <div className="bg-purple-50 rounded-xl p-3 space-y-2">
-      <p className="text-xs font-black text-purple-700">📚 배정된 교재</p>
+      <p className="text-xs font-black text-purple-700">📚 배정된 교과서</p>
+      <p className="text-[11px] text-purple-500">
+        다른 출판사 교과서를 주고 싶을 때 여기서 추가 배정하세요 — 새 계정을 만들 필요가 없어요. 배정된 교과서는 학생 홈 드롭다운에 나타나요.
+      </p>
       {tableMissing && (
         <p className="text-xs text-orange-600 font-bold bg-orange-50 rounded-lg p-2">
-          ⚠️ 다중 교재 기능은 아직 활성화되지 않았어요. (관리자: supabase_v2_9_student_class_assignments.sql을 Supabase SQL Editor에서 실행하면 켜져요)
+          ⚠️ 다중 교과서 기능은 아직 활성화되지 않았어요. (관리자: supabase_v2_9_student_class_assignments.sql을 Supabase SQL Editor에서 실행하면 켜져요)
         </p>
       )}
       {assignments.length === 0 ? (
-        <p className="text-xs text-gray-400">아직 배정된 교재가 없어요 — 먼저 "반 배정"으로 기본 반을 정해주세요.</p>
+        <p className="text-xs text-gray-400">아직 배정된 교과서가 없어요 — 먼저 "반 배정"으로 기본 반을 정해주세요.</p>
       ) : (
         <div className="space-y-1.5">
           {assignments.map((a) => {
@@ -154,16 +157,16 @@ export default function TextbookAssignmentPanel({ studentId, onChanged }) {
       <div className="flex items-center gap-2">
         <select value={addTarget} onChange={(e) => setAddTarget(e.target.value)} disabled={busy}
           className="flex-1 min-w-0 text-xs font-bold border-2 border-purple-200 rounded-lg px-2 py-1.5 bg-white">
-          <option value="">+ 교재 추가할 반 선택</option>
+          <option value="">➕ 교과서 추가 배정할 반 선택</option>
           {addableClasses.map((name) => <option key={name} value={name}>{name}</option>)}
         </select>
         <button onClick={handleAdd} disabled={busy || !addTarget}
           className="flex-shrink-0 bg-purple-500 disabled:bg-gray-300 text-white font-black px-3 py-1.5 rounded-lg text-xs btn-press">
-          추가
+          배정
         </button>
       </div>
       {addableClasses.length === 0 && !tableMissing && (
-        <p className="text-[11px] text-gray-400">추가할 수 있는 다른 반이 없어요.</p>
+        <p className="text-[11px] text-gray-400">추가로 배정할 수 있는 다른 반이 없어요.</p>
       )}
     </div>
   )

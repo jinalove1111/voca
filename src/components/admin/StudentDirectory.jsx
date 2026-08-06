@@ -710,6 +710,14 @@ export default function StudentDirectory({ adminPin }) {
                 </li>
               ))}
             </ul>
+            {/* 2026-08-06(재등록 우회 차단 안내) — 다중 교과서 배정 기능
+                (TextbookAssignmentPanel)이 이미 있으므로, 다른 출판사
+                교과서를 주려고 중복 계정을 만드는 걸 여기서 막아 안내한다.
+                "그래도 새로 만들기" 자체는 정당한 동명이인 등록을 위해
+                그대로 둔다(동작 변경 없음). */}
+            <p className="text-[11px] text-orange-600">
+              💡 다른 출판사 교과서를 주려는 것이라면 새 계정을 만들지 마세요 — 학생 목록에서 그 학생을 펼쳐 "교과서 추가 배정"을 쓰면 계정 1개로 여러 교과서를 오갈 수 있어요(별·XP·기록 유지).
+            </p>
             <div className="flex gap-2">
               <button onClick={() => setDuplicateInfo(null)} className="flex-1 border-2 border-gray-200 text-gray-500 font-bold py-2 rounded-xl text-xs btn-press">취소</button>
               <button onClick={() => submitCreateStudent(true)} disabled={creating}
