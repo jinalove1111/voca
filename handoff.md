@@ -7,6 +7,45 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-07 (49차) — PIN 만들기 반 선택 명확화 + 관리자 카드 3축 분리 표시
+
+### 운영자 지시·승인 흐름
+
+PIN 만들기 첫 드롭다운이 교과서로 오해됨 → 조회 기준 선보고 지시 → 보고
+(조회는 students.class_id 소속 반 기준, student_class_assignments
+무참조 — 로직 올바름, wordLibrary.js:1251 getStudentsInClass가 classId
+필터) → 승인 후 표시 계층만 구현.
+
+### 보고 요지 (조회 기준)
+
+PIN 만들기 로스터 = getClassNames() 반 선택 → getStudentsInClass =
+students.class_id 필터. 교과서 다중 배정과 무관하게 소속 반 아래에만
+표시. 오해의 구조적 원인 = classes에 교과서명 반(컨테이너)이 실존(구
+모델 잔재). 관련 주의: 교과서명 반에 직접 소속된 59명(능률 40/천재 19)은
+라벨로도 완전 해소 불가 — 소속 반 이관(옵션 A) 운영자 결정 대기(별개
+건).
+
+### 수정 (커밋: fix(ui) — StudentSelect.jsx/StudentDirectory.jsx, 조회
+로직·DB 무변경)
+
+- PIN 만들기: "학생이 소속된 반 선택" 라벨(htmlFor 연결), 안내 2문장
+  추가("교과서명이 아니라 학생이 등록된 반을 선택하세요" / "여러
+  교과서를 배정받은 학생도 이 목록에는 소속 반 아래에만 나타나요"), 옵션
+  [반] 접두 배지, 로스터 학생 버튼에서 유닛 표기 제거(PIN 배지+동명
+  ⚠️만).
+- 관리자 학생 카드(교재 관리 펼침 시, TextbookAssignmentPanel 위): "소속
+  반 · 현재 선택 Unit" + "배정 교과서: …(현재)" 3축 분리 요약 — 펼칠
+  때만 그 학생 1명 getStudentClassAssignments 조회(fail-open).
+
+### 검증
+
+build PASS, verify:admin PASS, verify:student PASS. 표시 계층만 변경.
+
+### 운영자 확인
+
+PIN 만들기 탭에서 라벨/안내/[반] 배지 확인, 학생 카드 교재 관리 펼쳐 3축
+표시 확인.
+
 ## 2026-08-07 (48차) — 중복 경고창을 기존 계정 조치 허브로 — PIN 설정 경로
 명확화
 
