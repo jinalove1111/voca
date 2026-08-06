@@ -102,10 +102,24 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
   const setupRoster = setupClass ? getStudentsInClass(setupClass) : []
   const setupPicked = setupRoster.find(s => s.id === setupStudentId) || null
 
-  // 2026-08-06 운영자 지시 — 같은 반에 이름이 같은(정규화 기준) 학생이
-  // 2명 이상이면(중복 계정 생성 사고 산출물일 가능성) 학생 스스로 어느
-  // 계정이 자기 것인지 구분할 방법이 없으므로 PIN 설정을 차단하고 관리자
-  // 정리를 유도한다. 다른 반의 동명이인은 로스터가 다르므로 영향 없음.
+  // 2026-08-06 운영자 지시(최초) — 같은 반에 이름이 같은(정규화 기준)
+  // 학생이 2명 이상이면(중복 계정 생성 사고 산출물일 가능성) 학생 스스로
+  // 어느 계정이 자기 것인지 구분할 방법이 없으므로 PIN 설정을 차단하고
+  // 관리자 정리를 유도한다. 다른 반의 동명이인은 로스터가 다르므로 영향
+  // 없음.
+  //
+  // 2026-08-06 정밀화(같은 날 후속 운영자 지시) — 라이브 실측: 같은 반
+  // 동명 그룹 23개의 전원이 이미 PIN을 보유(hasPinHash true)한 상태였다.
+  // 위 "이름만 겹치면 차단" 기준은 PIN 보유 여부와 무관하게 걸려, "이미
+  // 설정됨 → 로그인 탭 이용" 안내를 받아야 할 학생 전원이 "관리자에게
+  // 문의" 차단 문구에 막혔다(현재 로그인 중인 학생조차 자기 이름을 못
+  // 찾는 것처럼 보이는 원인). 차단은 "진짜 모호한 경우"에만 걸어야 한다
+  // — 선택한 학생이 아직 PIN이 없고, 같은 반 동명 그룹 중 PIN 미보유가
+  // 2명 이상일 때만(그래야 "어느 계정인지 고를 수 없음"이 실제로 성립).
+  // PIN을 이미 가진 동명 학생은 애초에 로그인 탭에서 이름+PIN으로 정확히
+  // 식별되므로 모호하지 않다. 서버(api/self-set-student-pin.js)가 항상
+  // 최종 방어(pin_hash IS NULL + pin_setup_allowed) — 여기 클라이언트
+  // 차단은 UX 안내일 뿐 보안 경계가 아니다.
   const normalizeName = (n) => (n || '').trim().toLowerCase().normalize('NFC')
   const dupNamesInRoster = useMemo(() => {
     const counts = new Map()
@@ -118,7 +132,31 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
     return dups
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setupClass, setupRoster.length])
-  const setupPickedIsDup = !!(setupPicked && dupNamesInRoster.has(normalizeName(setupPicked.name)))
+  // 동명 그룹 중 "PIN 미보유" 인원이 2명 이상인 이름만 — setupRosterStatus
+  // (반 선택 시 배치 조회, 아래 useEffect)가 로딩 전이면 해당 학생 항목이
+  // 없어 카운트에서 자연스럽게 빠진다(과소평가만 가능, 절대 과다 차단
+  // 아님).
+  const pinlessDupNames = useMemo(() => {
+    const counts = new Map()
+    for (const s of setupRoster) {
+      const key = normalizeName(s.name)
+      if (!dupNamesInRoster.has(key)) continue
+      const rs = setupRosterStatus[s.id]
+      if (rs && rs.hasPinHash === false) counts.set(key, (counts.get(key) || 0) + 1)
+    }
+    const set = new Set()
+    for (const [key, count] of counts) { if (count >= 2) set.add(key) }
+    return set
+  }, [setupRoster, setupRosterStatus, dupNamesInRoster])
+  // 선택된 학생 본인의 로스터 상태가 아직 로딩 전(해당 id 키 없음)이면
+  // 차단 판정을 보류 — 기존 정상 분기(허용 대기/PIN 생성 폼)로 진행하고
+  // 서버(self-set-student-pin)가 최종 방어한다.
+  const setupPickedStatusLoaded = !!(setupPicked && setupRosterStatus[setupPicked.id] !== undefined)
+  const setupPickedIsDup = !!(
+    setupPicked &&
+    setupPickedStatusLoaded &&
+    pinlessDupNames.has(normalizeName(setupPicked.name))
+  )
 
   // 반을 고르면 그 반 학생 전원의 PIN 상태를 배치로 실제 DB에서 조회 —
   // 목록에 배지(🟢 PIN 완료 / 🔴 PIN 없음)를 보여주기 위함.
@@ -142,14 +180,12 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
     setSetupError('')
     setSetupDone(false)
     setSetupPin(''); setSetupPinConfirm('')
-    // 2026-08-06 운영자 지시 — 선택한 학생이 같은 반 동명 중복이면 PIN
-    // 상태 조회 자체가 무의미하다(어느 계정인지 확정할 수 없음) — 서버
-    // 조회를 생략하고 바로 중복 안내로 넘어간다.
-    const picked = setupRoster.find(s => s.id === id)
-    if (picked && dupNamesInRoster.has(normalizeName(picked.name))) {
-      setSetupChecking(false)
-      return
-    }
+    // 2026-08-06 정밀화 — 예전엔 동명 중복이면 여기서 서버 조회 자체를
+    // 생략했다(위 dupNamesInRoster만으로 차단 판정). 지금은 "PIN 보유
+    // 여부"가 차단 판정에 필요하므로(pinlessDupNames 정의 참고) 동명
+    // 여부와 무관하게 항상 이 학생의 실제 상태를 조회한다 — 렌더 쪽의
+    // setupPickedIsDup(정밀화된 기준)가 이 setupStatus와 pinlessDupNames를
+    // 함께 봐서 최종 분기를 정한다.
     setSetupChecking(true)
     try {
       // 매번 학생을 선택할 때마다 실제 DB를 다시 조회한다(배치 조회 결과를
@@ -282,7 +318,10 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
                     // 목록 배지는 반 선택 시 배치 조회한 setupRosterStatus 기준(학생 수만큼
                     // 개별 요청 안 함) — 아직 로딩 전이면 배지 없이 이름만 표시.
                     const rs = setupRosterStatus[s.id]
-                    const isDup = dupNamesInRoster.has(normalizeName(s.name))
+                    // 2026-08-06 정밀화 — 배지도 "PIN 미보유 동명 2+"
+                    // 기준으로만 표시(PIN을 이미 가진 동명 학생은 로그인
+                    // 탭에서 정확히 식별되므로 경고 대상이 아님).
+                    const isDup = pinlessDupNames.has(normalizeName(s.name))
                     return (
                       <button key={s.id} onClick={() => pickSetupStudent(s.id)} disabled={settingUp}
                         className={`px-3 py-2 rounded-xl text-sm font-bold btn-press disabled:opacity-50 text-left ${
@@ -304,60 +343,59 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
               <p className="text-xs text-gray-400 text-center py-1">학생을 선택해주세요.</p>
             )}
 
-            {/* 2026-08-06 운영자 지시 — 선택한 학생이 같은 반 동명 중복이면
-                PIN 생성 폼/상태 표시(이미 설정됨/허용 안 됨 포함) 전체를
-                가리고 관리자 문의 안내만 보여준다. */}
-            {setupPickedIsDup ? (
-              <p className="bg-yellow-50 border-2 border-yellow-200 text-yellow-700 text-xs font-bold text-center rounded-xl p-3" role="alert">
-                ⚠️ 중복 계정이 확인되었습니다. 관리자(선생님)에게 문의하세요.
-              </p>
-            ) : (
-              <>
-                {setupChecking && <p className="text-xs text-gray-400 text-center">⏳ 확인하는 중...</p>}
+            {/* 2026-08-06 정밀화 — 차단은 "어느 계정인지 고를 수 없는 진짜
+                모호성"(PIN 미보유 동명 2+)에만 건다. PIN을 이미 보유한
+                계정은(동명 여부 무관) 항상 "로그인 탭 이용" 안내가 정답이고
+                (setupStatus.hasPinHash가 최우선), PIN 미보유가 1명뿐이면 그
+                계정이 유일 후보라 모호성이 없다. 서버(self-set-student-pin)
+                가 항상 최종 방어(pin_hash IS NULL + pin_setup_allowed). */}
+            {setupChecking && <p className="text-xs text-gray-400 text-center">⏳ 확인하는 중...</p>}
 
-                {setupPicked && setupStatus && !setupChecking && (
-                  setupDone ? (
-                    <div className="bg-green-50 border-2 border-green-200 rounded-xl p-3 space-y-2">
-                      <p className="text-sm font-bold text-green-700 text-center">🎉 PIN이 만들어졌어요!<br />다음부터 "로그인" 탭에서 이름과 PIN으로 시작하세요.</p>
-                      <button onClick={handleSetupStart}
-                        className="w-full bg-purple-500 text-white font-black py-3 rounded-xl btn-press hover:bg-purple-600">
-                        바로 시작하기!
-                      </button>
-                    </div>
-                  ) : setupStatus.hasPinHash ? (
-                    <p className="bg-blue-50 border-2 border-blue-200 text-blue-600 text-xs font-bold text-center rounded-xl p-3">
-                      이미 PIN이 설정되어 있습니다. "로그인" 탭에서 이름과 PIN으로 로그인하세요.
-                    </p>
-                  ) : !setupStatus.pinSetupAllowed ? (
-                    <p className="bg-yellow-50 border-2 border-yellow-200 text-yellow-700 text-xs font-bold text-center rounded-xl p-3">
-                      아직 PIN 설정이 허용되지 않았어요 — 선생님께 요청해주세요.
-                    </p>
-                  ) : (
-                    <>
-                      <p className="text-xs text-gray-500 text-center">이 학생은 아직 PIN이 없습니다. 아래에서 4자리 PIN을 만들어주세요.</p>
-                      <input type="password" inputMode="numeric" pattern="[0-9]*" value={setupPin}
-                        onChange={e => { setSetupPin(e.target.value.replace(/\D/g, '').slice(0, 4)); setSetupError('') }}
-                        onKeyDown={e => e.key === 'Enter' && setupPinConfirmRef.current?.focus()}
-                        placeholder="사용할 PIN 4자리 만들기" disabled={settingUp}
-                        className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold text-center tracking-[0.5em] focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:bg-gray-50" />
-                      <input ref={setupPinConfirmRef} type="password" inputMode="numeric" pattern="[0-9]*" value={setupPinConfirm}
-                        onChange={e => { setSetupPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 4)); setSetupError('') }}
-                        onKeyDown={e => e.key === 'Enter' && handleSetupPin()}
-                        placeholder="PIN 다시 입력" disabled={settingUp}
-                        className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold text-center tracking-[0.5em] focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:bg-gray-50" />
-                      <p className="text-[11px] text-purple-400 px-1">PIN은 다음에 로그인할 때 필요해요. 잊지 않게 잘 기억해두세요!</p>
-                      {setupError && <p className="text-red-500 text-xs text-center" role="alert">{setupError}</p>}
-                      <button onClick={handleSetupPin} disabled={settingUp}
-                        className="w-full bg-purple-500 text-white font-black py-3 rounded-xl btn-press hover:bg-purple-600 disabled:opacity-50">
-                        {settingUp ? '⏳ 만드는 중...' : 'PIN 만들기'}
-                      </button>
-                    </>
-                  )
-                )}
-                {setupError && !setupChecking && (!setupPicked || !setupStatus) && (
-                  <p className="text-red-500 text-xs text-center" role="alert">{setupError}</p>
-                )}
-              </>
+            {setupPicked && setupStatus && !setupChecking && (
+              setupDone ? (
+                <div className="bg-green-50 border-2 border-green-200 rounded-xl p-3 space-y-2">
+                  <p className="text-sm font-bold text-green-700 text-center">🎉 PIN이 만들어졌어요!<br />다음부터 "로그인" 탭에서 이름과 PIN으로 시작하세요.</p>
+                  <button onClick={handleSetupStart}
+                    className="w-full bg-purple-500 text-white font-black py-3 rounded-xl btn-press hover:bg-purple-600">
+                    바로 시작하기!
+                  </button>
+                </div>
+              ) : setupStatus.hasPinHash ? (
+                <p className="bg-blue-50 border-2 border-blue-200 text-blue-600 text-xs font-bold text-center rounded-xl p-3">
+                  이미 PIN이 설정되어 있습니다. "로그인" 탭에서 이름과 PIN으로 로그인하세요.
+                </p>
+              ) : setupPickedIsDup ? (
+                <p className="bg-yellow-50 border-2 border-yellow-200 text-yellow-700 text-xs font-bold text-center rounded-xl p-3" role="alert">
+                  ⚠️ 중복 계정이 확인되었습니다. 관리자(선생님)에게 문의하세요.
+                </p>
+              ) : !setupStatus.pinSetupAllowed ? (
+                <p className="bg-yellow-50 border-2 border-yellow-200 text-yellow-700 text-xs font-bold text-center rounded-xl p-3">
+                  아직 PIN 설정이 허용되지 않았어요 — 선생님께 요청해주세요.
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs text-gray-500 text-center">이 학생은 아직 PIN이 없습니다. 아래에서 4자리 PIN을 만들어주세요.</p>
+                  <input type="password" inputMode="numeric" pattern="[0-9]*" value={setupPin}
+                    onChange={e => { setSetupPin(e.target.value.replace(/\D/g, '').slice(0, 4)); setSetupError('') }}
+                    onKeyDown={e => e.key === 'Enter' && setupPinConfirmRef.current?.focus()}
+                    placeholder="사용할 PIN 4자리 만들기" disabled={settingUp}
+                    className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold text-center tracking-[0.5em] focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:bg-gray-50" />
+                  <input ref={setupPinConfirmRef} type="password" inputMode="numeric" pattern="[0-9]*" value={setupPinConfirm}
+                    onChange={e => { setSetupPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 4)); setSetupError('') }}
+                    onKeyDown={e => e.key === 'Enter' && handleSetupPin()}
+                    placeholder="PIN 다시 입력" disabled={settingUp}
+                    className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold text-center tracking-[0.5em] focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:bg-gray-50" />
+                  <p className="text-[11px] text-purple-400 px-1">PIN은 다음에 로그인할 때 필요해요. 잊지 않게 잘 기억해두세요!</p>
+                  {setupError && <p className="text-red-500 text-xs text-center" role="alert">{setupError}</p>}
+                  <button onClick={handleSetupPin} disabled={settingUp}
+                    className="w-full bg-purple-500 text-white font-black py-3 rounded-xl btn-press hover:bg-purple-600 disabled:opacity-50">
+                    {settingUp ? '⏳ 만드는 중...' : 'PIN 만들기'}
+                  </button>
+                </>
+              )
+            )}
+            {setupError && !setupChecking && (!setupPicked || !setupStatus) && (
+              <p className="text-red-500 text-xs text-center" role="alert">{setupError}</p>
             )}
           </>
         ) : (

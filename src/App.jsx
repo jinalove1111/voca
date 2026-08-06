@@ -23,7 +23,7 @@ import { pickNextGame } from './utils/matchGame'
 import { trackEvent, EV } from './utils/productEvents'
 import { assignDirections } from './utils/entranceTest'
 import { logSpellingReview } from './utils/spellingReviewApi'
-import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getClassSettings, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentPrimaryTextbook, getStudentClassId, getClassNames, getClassIdByName } from './utils/wordLibrary'
+import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getClassSettings, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getSelectableTextbooks, getStudentPrimaryTextbook, getClassNames, getClassIdByName } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech } from './utils/speech'
 // Curriculum Engine Phase 0(2026-08-01, docs/CURRICULUM_ENGINE.md §8) —
 // 교사 opt-in 예문 학습 단계. isFeatureEnabled('curriculumExamplesStudentUI')
@@ -300,7 +300,11 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 반 배정 그대로. 어느 쪽이든 1개 이하면 선택기 비렌더(화면 변화 0).
   const textbookOptions = useMemo(() => {
     if (isTextbookMode()) {
-      return getClassTextbooks(getStudentClassId(studentId)).map((tb) => ({
+      // 2026-08-06 운영자 결정 — 반 링크(class_textbooks) 게이트 제거,
+      // 전체 교재 노출(wordLibrary.getSelectableTextbooks 주석 참고 —
+      // 이름이 다른 이유도 그 주석에 있음: 기존 getAllTextbooks과 이름
+      // 충돌이라 별도 함수로 분리).
+      return getSelectableTextbooks().map((tb) => ({
         id: tb.id,
         label: tb.publisherName ? `${tb.name} (${tb.publisherName})` : tb.name,
       }))
