@@ -287,7 +287,13 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 
 // P0(2026-07-15): student(이름 문자열) 대신 studentId(식별자)+studentName
 // (표시용)을 따로 받는다 — getStudentClass/getStudentUnit은 이제 id 기반.
-export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, completedUnits, completedTextbooks, pendingCeremonyHat, onDismissCeremony, textbookOptions, currentTextbookId, onTextbookSwitch }) {
+// 2026-08-06 반 드롭다운(운영자 지시) — classOptions/currentClassId/
+// onClassSelect 추가. 반 select는 열람 전환일 뿐 저장이 아니다(App.jsx
+// handleClassView 주석) — 실제 저장은 교과서 선택 시 setPrimaryTextbook
+// 경로(요구 6·7·9)로 이뤄진다. 반을 바꾸면 그 반의 교과서가 아직 primary가
+// 아닐 수 있어 교과서 select가 미선택 상태로 리셋될 수 있다(요구 8).
+// 옵션은 관리자 배정만(요구 10, App.jsx classTree 계산 참고).
+export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, completedUnits, completedTextbooks, pendingCeremonyHat, onDismissCeremony, textbookOptions, currentTextbookId, onTextbookSwitch, classOptions, currentClassId, onClassSelect }) {
   const { stars, starsDisplay, clearedStars, stickerTypes, activeMissions, dailyProgress, liveMissionsCompleted, streak, cleared, ticketBalance, redeemTicketReward, equippedHatId } = studentData
   // 애착 시스템(2026-07-22) — 학생 아바타의 장착 모자. 미장착이면 기존
   // 기본 아바타(👑) 그대로 — 아무것도 안 얻은/안 고른 학생 화면은 변화 0.
@@ -500,9 +506,25 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
                 옵션은 서버 캐시 갱신 지연 같은 예외만 커버하는 것.
               · 선택 상태는 studentId(UUID) 키 기반 서버 행이므로 동명
                 중복 계정과 절대 섞이지 않는다(규칙 4). */}
+          {/* 2026-08-06 반 드롭다운(운영자 지시) — 배정 반이 2개 이상이면
+              select, 아니면 기존 정적 표시("반: X") 그대로(요구 10: 옵션은
+              관리자 배정만). select는 열람 전환일 뿐 저장이 아니다 — 확인창
+              없음(App.jsx handleClassView 주석). */}
           {className && (
             <div className="text-sm text-purple-200 mt-1 flex items-center justify-center gap-1.5 flex-wrap">
-              <span>반: {className}</span>
+              <span>반:</span>
+              {classOptions && classOptions.length >= 2 && onClassSelect ? (
+                <label className="inline-flex items-center gap-1">
+                  <span className="sr-only">반 선택</span>
+                  <select value={currentClassId || ''}
+                    onChange={(e) => onClassSelect(e.target.value)}
+                    className="bg-white/20 text-white font-bold rounded-xl px-2 py-2.5 text-sm border-2 border-white/30 focus:outline-none focus:border-white/70 appearance-auto">
+                    {classOptions.map((c) => <option key={c.id} value={c.id} className="text-gray-800">{c.label}</option>)}
+                  </select>
+                </label>
+              ) : (
+                <span>{classOptions?.find((c) => c.id === currentClassId)?.label || className}</span>
+              )}
             </div>
           )}
           <TextbookSelector
@@ -512,6 +534,13 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
             error={textbookSwitchError}
             onSwitch={handleTextbookChange}
           />
+          {/* 반을 바꿔 아직 이 반의 교과서가 primary가 아닌 상태(요구 8) —
+              TextbookSelector는 currentId=''를 그대로 받아 select를 렌더하지만
+              (options.length>=2일 때) 그 자체로는 "선택 필요"를 설명하지 않아
+              한 줄 안내를 덧붙인다. */}
+          {currentTextbookId === '' && Array.isArray(textbookOptions) && textbookOptions.length > 0 && (
+            <p className="text-[11px] text-purple-200 mt-0.5">이 반의 교과서를 선택하면 학습 목록이 바뀌어요</p>
+          )}
           {/* 유닛 줄도 반 줄과 동일하게 className 존재 여부에 묶는다 — 원래
               이 셀렉트가 "반: X · [유닛]" 한 줄로 className 블록 안에 있었던
               것과 동일한 폴백(반 삭제 등으로 className이 없으면 유닛 줄도
