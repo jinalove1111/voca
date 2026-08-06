@@ -7,6 +7,110 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-06 (40차) — P0 학생 계정 중복 생성 차단 + P1 교재 선택 UI
+(자기등록 제거·관리자 전용 생성·중복 점검 도구)
+
+### (1) 운영자 보고
+
+로그인 여러 번 필요 + 로그인 과정에서 동일 학생 계정 다수 생성. 기존
+데이터 삭제/자동 병합 금지, 배포·SQL 실행 금지(관리자 승인 대기) 조건.
+
+### (2) 원인 분석 (전부 실측 근거)
+
+로그인 자체는 계정을 만들지 않는다: `verify-student-pin`(조회 전용),
+클라이언트 로그인 경로, signUp/upsert/RPC/Edge Function 전수 확인 —
+`students` insert는 `wordLibrary.addStudent` + QA 스크립트뿐.
+
+실제 생성 경로: 로그인 화면 "처음이에요" 자기등록 탭(유일한 UI 생성
+경로). 로그인 실패 상황에서 학생/운영자가 재등록 → 동일 이름 계정 누적.
+
+중복 생성이 몰린 3개 시점 클러스터: ① 7/15-16 PIN 로그인 도입기(기존
+계정에 PIN 없어 로그인 불가 → 재등록) ② 7/20-22 교재 마이그레이션기
+③ 8/4-5 — `students` 1000행 초과 후 `refreshStudents` 캐시 잘림(39차
+이전, `8e15ff7`로 수정됨)이 로그인 성공 직후 "계정 정보를 찾을 수
+없어요" 강제 로그아웃 루프를 만들어 재등록 유발. "여러 번 로그인해야
+했던" 증상의 원인도 이 캐시 잘림.
+
+DB 실측: 전체 1143행 중 QA_ 테스트 계정 971행(85%). 실학생 172명 중
+31개 이름 그룹·96개 계정 중복(황성연 6, 이윤제 6, leo 5, 전하은 5,
+김가윤 5, 박서진 5, 신지율 5 등).
+
+추가 발견: `verify-student-pin`이 동명+동일PIN 후보 2개 이상일 때 첫
+후보로 임의 로그인 — 학생이 남의/과거 계정에 들어가는 경로였음.
+
+해당 없음 확인: Supabase Auth signUp 미사용, React StrictMode는 클릭
+핸들러 생성 경로와 무관, 조회 실패 시 자동 생성 fallback 없음,
+localStorage 세션은 `{id,name}`뿐.
+
+### (3) 수정 (커밋 `46d73bc`, `469f626`, `dc33bce`, `b1ac58f`, `2375baa`,
+`9bf4e38` — 전부 로컬, 운영자 지시로 push/배포 안 함)
+
+- `api/verify-student-pin.js`: PIN 일치 후보 2개 이상 →
+  `duplicate_accounts` 명시 거부(실패 카운트 미증가, 응답에 개인정보
+  없음).
+- `src/components/StudentSelect.jsx`: 자기등록 탭 완전 제거(로그인은
+  이제 어떤 경로로도 계정 생성 불가), `duplicate_accounts` 안내 문구,
+  `not_found` 문구에서 재등록 유도 제거.
+- `api/admin-pin-actions.js`: `create_student` 액션(관리자 PIN 인가
+  선행, 클라이언트 UUID 멱등키 — 응답 유실 재시도 `idempotentReplay`
+  흡수, 중복 이름 사전 점검 + `force` 명시 승인, houseSystem 원본
+  함수로 하우스 배정, SCA primary 행 non-fatal). Vercel 12함수 한도라
+  디스패처 확장.
+- `src/components/admin/StudentDirectory.jsx`: "➕ 학생 추가" 폼(중복
+  확인 UI, 제출 중 잠금, PIN 설정 허용 기본 ON).
+- `src/components/admin/DuplicateStudentAudit.jsx`(신규): 중복 계정
+  점검 패널 — 조회 전용(DB 쓰기 0건), QA_ 제외 이름 그룹핑, 점검 실행
+  시에만 배치 3종(`fetchDashboardData`/`fetchWordStatusSummary`/
+  `fetchXpTotals`), 대표 계정 추천+근거, 병합 미리보기(계산만).
+- `supabase_v3_16_students_insert_lockdown.sql`(신규, 미실행): anon
+  INSERT 회수만 수행, 행 삭제 0. 코드 배포 후 실행 순서 경고 포함.
+  UNIQUE 제약 의도적 미추가(동명이인은 v1.6 지원 사양 — 근거 문서화).
+- `docs/agent-decisions/0007-duplicate-student-merge-design.md`(신규):
+  병합 도구 설계만(원자적 RPC, 감사 로그, 최대/합산/최신 필드 규칙,
+  `merged_into` 아카이브 — 삭제 없음, 롤백 매핑, 관리자 승인 게이트).
+  실행 코드 미구현.
+- P1(커밋 `9bf4e38`): TextbookSelector 옵션 1개면 "교재: 이름" 정적
+  표시(0개 비렌더, 2개 이상 기존 select), Dashboard 반/교재/유닛 3줄
+  분리. 39차 콜드스타트 수정 로직 무접촉.
+
+### (4) 검증
+
+- build PASS(전 단계 반복), `verify:student` PASS, `verify:admin` PASS,
+  `verify:unit` PASS.
+- `verify:login` 4건 FAIL은 39차에서 stash 실측으로 확인된 기존 환경
+  제약(로컬 `SUPABASE_SERVICE_ROLE_KEY` 부재) 그대로 — 이번 변경과
+  무관. `verify-student-pin` 변경분의 배포 동작은 배포 후 스모크로
+  확정 필요(리포 기존 관례).
+- "로그인 10회에도 계정 무증가"는 코드 경로 증명으로 검증: 로그인
+  경로(`verify-student-pin` + `handleLogin` + `handleSelect`)에 insert
+  0건, 학생 UI에서 `students` insert 호출부 grep 0건(자기등록 제거
+  후). 실 PIN 없이 라이브 로그인 반복은 불가해 정직하게 한계 기록.
+
+### (5) 운영자가 직접 해야 할 일 (순서 중요)
+
+1. 로컬 커밋 검토 후 push(→ Vercel 자동 배포).
+2. 배포 완료 후 `supabase_v3_16_students_insert_lockdown.sql` 실행
+   (먼저 실행하면 구버전 화면의 자기등록이 에러로 막힐 뿐 앱은 안
+   깨짐).
+3. 배포 후 스모크: 실계정 로그인 1회 / 관리자 학생 추가 1회 / 같은
+   이름+같은 PIN 중복 계정으로 `duplicate_accounts` 문구 확인.
+4. 관리자 화면 중복 점검 패널로 31그룹 검토 — 병합은 0007 설계 승인
+   후 별도 구현 의뢰.
+5. QA_ 테스트 계정 971행 정리 여부 결정(v3_16 파일의 조회 쿼리로 확인
+   가능, 파일 자체는 아무것도 삭제 안 함).
+6. rollback: 각 커밋 단위 `git revert` 가능. v3_16은
+   `grant insert on table public.students to anon, authenticated;`로
+   원복 가능.
+
+### (6) 잔여/미해결
+
+- 39차 잔여 이슈 그대로: Paul 계정 드리프트(유닛 1회 선택으로 자가
+  치유), 교재-반 직속 59명 `class_textbooks` 링크(옵션 A/B 운영자
+  결정 대기).
+- 이름 Unicode 정규화(NFC/NFD) 차이는 ilike로는 완전히 못 잡는 이론적
+  잔여 위험 — 중복 점검 패널은 NFC 정규화로 그룹핑하므로 발견은
+  가능.
+
 ## 2026-08-06 (39차) — 교재 전환이 재로그인 후 원래 교재로 되돌아가던 P0 수정
 (콜드스타트 경합 + 교차 교재 오염 + 파괴 수리 봉인)
 
