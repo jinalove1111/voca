@@ -64,6 +64,11 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
   }
 
   const classNames = getClassNames()
+  // 2026-08-07 운영자 정책 6 — PIN 만들기 반 목록은 "실제 소속 반"만:
+  // QA/테스트 이름 반을 숨기고, 재학생이 0명인 반도 숨긴다(고를 이유가
+  // 없고 교재명 반 노이즈만 늘림). 데이터는 무변경 — 표시 필터일 뿐.
+  const TEST_CLASS_RE = /(qa[_ ]?|test|repro|synctest|multidevice|demo|temp)/i
+  const setupClassNames = classNames.filter((c) => !TEST_CLASS_RE.test(c) && getStudentsInClass(c).length > 0)
 
   // ── PIN 만들기(2026-07-16, 운영자 지시 — 관리자가 학생 등록 후 "설정
   // 허용"을 누른 학생만 자기 PIN을 1회 직접 만들 수 있는 플로우) ──────────
@@ -313,7 +318,7 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
               <option value="">반 선택</option>
               {/* option 태그 안에는 스타일 요소를 넣을 수 없어 텍스트로 "[반]" 접두 —
                   교과서명과 혼동되지 않게 하기 위함(2026-08-07 운영자 지시). */}
-              {classNames.map(c => <option key={c} value={c}>{'[반] ' + c}</option>)}
+              {setupClassNames.map(c => <option key={c} value={c}>{'[반] ' + c}</option>)}
             </select>
 
             {setupClass && (

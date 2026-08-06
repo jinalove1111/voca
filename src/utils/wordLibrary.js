@@ -2139,6 +2139,13 @@ export async function setPrimaryTextbook(studentId, textbookId) {
 
   // 4) 유닛 동기화 — 대상 교재 진도(없으면 단어 있는 첫 유닛). class_id는 안 바꿈!
   let syncUnitId = target.current_unit_id
+  // 2026-08-07 운영자 정책 5 — 행에 저장된 유닛이 "그 교재의 현재 유닛
+  // 목록"에 실존할 때만 복원한다(유닛 삭제/개편으로 무효해진 저장값이
+  // 그대로 students.current_unit_id에 실리는 것을 차단). 무효면 null로
+  // 떨어뜨려 아래 "단어 있는 첫 유닛" 확정 로직이 처리한다.
+  if (syncUnitId != null && !getTextbookUnits(textbookId).some((u) => u.id === syncUnitId)) {
+    syncUnitId = null
+  }
   if (syncUnitId == null) {
     const units = getTextbookUnits(textbookId)
     syncUnitId = (units.find((u) => (u.words || []).length > 0) || units[0])?.id ?? null
