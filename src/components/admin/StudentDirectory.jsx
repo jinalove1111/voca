@@ -116,14 +116,30 @@ export default function StudentDirectory({ adminPin }) {
   const [createError, setCreateError] = useState(null) // { message }
   const [duplicateInfo, setDuplicateInfo] = useState(null) // { existing: [...] }
   const [createSuccess, setCreateSuccess] = useState(null) // { name, allowPinSetup }
+  // 2026-08-07(중복 경고 강화) — 중복 경고창 전용 부가 상태. 기존 PIN
+  // 상태(pinStatus)는 학생 목록 전체 대상이라 중복 후보 id가 아직 그
+  // 안에 없을 수 있어(스크롤 밖 반 등) 별도로 소규모 조회한다.
+  const [duplicatePinStatus, setDuplicatePinStatus] = useState({}) // id -> {hasPinHash,...}
+  const [duplicateAllowedIds, setDuplicateAllowedIds] = useState(() => new Set()) // "PIN 설정 허용" 성공 표시
+  const [copiedId, setCopiedId] = useState(null) // "ID 전체 복사" 버튼 일시 피드백
   // 멱등성 키 — 같은 제출의 재시도(네트워크 재전송, "그래도 새로 만들기"
   // force 재요청)는 항상 같은 studentId를 재사용한다. 성공하거나 폼을
   // 초기화할 때만 다음 제출을 위해 비운다.
   const newStudentIdRef = useRef(null)
 
+  // 중복 경고창만 닫기(생성 폼 입력값은 유지 — 이름/반을 다시 손볼 수
+  // 있게). resetCreateForm(전체 초기화)도 이 안의 상태 리셋을 재사용한다.
+  const closeDuplicateWarning = () => {
+    setDuplicateInfo(null)
+    setDuplicateAllowedIds(new Set())
+    setDuplicatePinStatus({})
+    setCopiedId(null)
+  }
+
   const resetCreateForm = () => {
     setNewName(''); setNewClass(''); setNewUnit(''); setNewAllowPinSetup(true)
-    setDuplicateInfo(null); setCreateError(null)
+    setCreateError(null)
+    closeDuplicateWarning()
     newStudentIdRef.current = null
   }
 
@@ -131,6 +147,35 @@ export default function StudentDirectory({ adminPin }) {
   // wordLibrary에 없으므로, 이미 로드된 students 캐시에서 같은 classId를
   // 가진 학생을 찾아 그 className을 재사용한다(새 쿼리 없음).
   const classNameForExistingId = (classId) => students.find(s => s.classId === classId)?.className || null
+
+  // 2026-08-07(중복 경고 강화) — 중복 경고창의 "기존 계정 열기"/"교과서
+  // 추가 배정" 액션. 새 상태 개념을 만들지 않고 기존 검색(search)/아코디언
+  // (openGroup, sessionStorage 동기화 포함)/카드 메뉴(menuOpenId)/교재 관리
+  // 패널(textbookManaging) state를 그대로 재사용해 그 학생 카드가 화면에
+  // 보이게 만든다(항목 6 — 검색→상세는 기존 메커니즘 재사용으로 충족).
+  const revealExistingStudent = (existingEntry, { forTextbook = false } = {}) => {
+    const target = students.find(s => s.id === existingEntry.id)
+    const name = target?.name || newName.trim()
+    const groupName = target?.className || classNameForExistingId(existingEntry.classId) || '⚠️ 반 미배정'
+    setSearch(name)
+    setOpenGroup(groupName)
+    ssSet(SS_OPEN, groupName || '')
+    setMenuOpenId(existingEntry.id) // 카드 "⋯" 메뉴를 열어 해당 행을 짚어줌(별도 하이라이트 개념 발명 안 함)
+    if (forTextbook) {
+      setTextbookManaging(existingEntry.id) // 기존 TextbookAssignmentPanel 토글 재사용
+      alert('학생 카드를 펼쳤어요 — "📚 교재 관리" 영역(자동으로 열림)에서 교과서를 추가로 배정하세요.')
+    }
+    closeDuplicateWarning()
+  }
+
+  // PIN 설정 허용 — 항목 7: pin_setup_allowed 컬럼만 갱신하는 기존
+  // handleTogglePinSetupAllowed(action: set_pin_setup_allowed)를 그대로
+  // 재사용. 별/XP/학습·숙제 기록/교재 배정에는 전혀 접근하지 않는다.
+  const handleDuplicateAllowPinSetup = async (existingEntry) => {
+    const target = students.find(s => s.id === existingEntry.id)
+    const ok = await handleTogglePinSetupAllowed(existingEntry.id, target?.name || newName.trim(), true)
+    if (ok) setDuplicateAllowedIds(prev => new Set(prev).add(existingEntry.id))
+  }
 
   const submitCreateStudent = async (force = false) => {
     const trimmed = newName.trim()
@@ -211,6 +256,21 @@ export default function StudentDirectory({ adminPin }) {
     loadPinStatus(list)
   }
   useEffect(() => { loadPinStatus(students) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 2026-08-07(중복 경고 강화, 항목 1) — 중복 경고창이 뜰 때만 그 후보
+  // id들의 PIN 상태를 별도로 조회(fetchPinStatusMap 재사용, 새 API 없음).
+  // pinStatus(학생 목록 전체)와 별개로 두는 이유: 중복 후보가 검색/필터에
+  // 걸리지 않은 반에 있어도(펼치지 않은 반 등) 배지를 정확히 보여주기 위함.
+  useEffect(() => {
+    const ids = duplicateInfo?.existing?.map(e => e.id) || []
+    if (ids.length === 0) { setDuplicatePinStatus({}); return }
+    let cancelled = false
+    fetchPinStatusMap(ids).then(map => { if (!cancelled) setDuplicatePinStatus(map) }).catch(() => {
+      // v1.7 SQL 미실행/네트워크 실패 — loadPinStatus와 동일하게 조용히 무시,
+      // 배지가 "확인 중…"으로 남을 뿐 경고창의 다른 액션은 그대로 동작.
+    })
+    return () => { cancelled = true }
+  }, [duplicateInfo])
 
   const handleRemove = async (id, name) => {
     if (!window.confirm(`"${name}" 학생을 삭제할까요? 학습 기록도 함께 삭제됩니다.`)) return
@@ -376,8 +436,11 @@ export default function StudentDirectory({ adminPin }) {
         throw new Error(data.error || '요청에 실패했어요.')
       }
       await loadPinStatus(students)
+      return true // 2026-08-07 — 중복 경고창의 handleDuplicateAllowPinSetup이 성공 여부로
+      // "허용됨" 인라인 표시 여부를 판단(기존 호출부는 반환값을 쓰지 않아 영향 없음).
     } catch (err) {
       alert(`PIN 설정 ${nextAllowed ? '허용' : '허용 취소'} 중 오류가 발생했어요: ` + (err.message || err))
+      return false
     } finally {
       setAllowBusyId(null)
     }
@@ -701,14 +764,68 @@ export default function StudentDirectory({ adminPin }) {
             <p className="text-xs font-bold text-orange-700">
               같은 이름의 계정이 {duplicateInfo.existing.length}개 있어요(같은 반 {duplicateInfo.existing.filter(e => e.sameClass).length}개). 그래도 새로 만들까요? 동명이인이 확실할 때만 진행하세요.
             </p>
-            <ul className="text-[11px] text-orange-600 space-y-0.5">
-              {duplicateInfo.existing.map(e => (
-                <li key={e.id}>
-                  {classNameForExistingId(e.classId) || (e.classId ? `반 id ${e.classId.slice(0, 8)}…` : '반 미배정')}
-                  {' · id '}{e.id.slice(0, 8)}…
-                  {e.createdAt ? ` · ${new Date(e.createdAt).toLocaleDateString('ko-KR')} 가입` : ''}
-                </li>
-              ))}
+            {/* 2026-08-07(중복 경고 강화) — 항목 1~2: 각 기존 계정에 반/id/
+                가입일(기존)에 더해 PIN 배지 + ID 전체 복사 + 계정별 액션
+                4종. 별/XP/학습·숙제 기록/교재 배정 데이터에는 전혀
+                접근하지 않고, 아래 4개 핸들러 모두 pin_* 컬럼만 갱신하는
+                기존 서버 API(또는 순수 UI state 재사용)만 호출한다(항목 5). */}
+            <ul className="text-[11px] text-orange-600 space-y-1.5">
+              {duplicateInfo.existing.map(e => {
+                const status = duplicatePinStatus[e.id]
+                const target = students.find(s => s.id === e.id)
+                const name = target?.name || newName.trim()
+                const allowBusy = allowBusyId === e.id
+                const resetBusy = pinResetId === e.id
+                const justAllowed = duplicateAllowedIds.has(e.id)
+                return (
+                  <li key={e.id} className="bg-white border border-orange-200 rounded-lg p-2 space-y-1">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span>
+                        {classNameForExistingId(e.classId) || (e.classId ? `반 id ${e.classId.slice(0, 8)}…` : '반 미배정')}
+                        {' · id '}{e.id.slice(0, 8)}…
+                        {e.createdAt ? ` · ${new Date(e.createdAt).toLocaleDateString('ko-KR')} 가입` : ''}
+                      </span>
+                      <button type="button"
+                        onClick={() => {
+                          navigator.clipboard?.writeText(e.id).catch(() => {})
+                          setCopiedId(e.id)
+                          setTimeout(() => setCopiedId(cur => (cur === e.id ? null : cur)), 1500)
+                        }}
+                        className="text-orange-500 font-bold underline btn-press flex-shrink-0">
+                        {copiedId === e.id ? '복사됨' : 'ID 전체 복사'}
+                      </button>
+                    </div>
+                    <p className="font-bold">
+                      {status
+                        ? (status.hasPinHash
+                            ? <span className="text-green-600">🟢 PIN 있음</span>
+                            : <span className="text-red-500">🔴 PIN 없음</span>)
+                        : <span className="text-gray-400">PIN 상태 확인 중…</span>}
+                      {justAllowed && <span className="text-green-600"> · 허용됨 — 학생이 &apos;PIN 만들기&apos; 탭에서 만들면 됨</span>}
+                    </p>
+                    <div className="flex gap-1.5 flex-wrap">
+                      <button type="button" onClick={() => revealExistingStudent(e)}
+                        className="bg-blue-100 text-blue-600 font-bold px-2 py-1 rounded-lg btn-press">
+                        기존 계정 열기
+                      </button>
+                      <button type="button" onClick={() => handleDuplicateAllowPinSetup(e)}
+                        disabled={allowBusy || status?.hasPinHash === true}
+                        className="bg-yellow-100 text-yellow-700 font-bold px-2 py-1 rounded-lg btn-press disabled:opacity-40">
+                        {allowBusy ? '⏳' : 'PIN 설정 허용'}
+                      </button>
+                      <button type="button" onClick={() => handleResetPin(e.id, name)}
+                        disabled={resetBusy || status?.hasPinHash !== true}
+                        className="bg-yellow-100 text-yellow-700 font-bold px-2 py-1 rounded-lg btn-press disabled:opacity-40">
+                        {resetBusy ? '⏳' : 'PIN 재설정'}
+                      </button>
+                      <button type="button" onClick={() => revealExistingStudent(e, { forTextbook: true })}
+                        className="bg-purple-100 text-purple-600 font-bold px-2 py-1 rounded-lg btn-press">
+                        교과서 추가 배정
+                      </button>
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
             {/* 2026-08-06(재등록 우회 차단 안내) — 다중 교과서 배정 기능
                 (TextbookAssignmentPanel)이 이미 있으므로, 다른 출판사
@@ -718,8 +835,13 @@ export default function StudentDirectory({ adminPin }) {
             <p className="text-[11px] text-orange-600">
               💡 다른 출판사 교과서를 주려는 것이라면 새 계정을 만들지 마세요 — 학생 목록에서 그 학생을 펼쳐 "교과서 추가 배정"을 쓰면 계정 1개로 여러 교과서를 오갈 수 있어요(별·XP·기록 유지).
             </p>
+            {/* 2026-08-07(항목 3) — 경고 문구 강화: "그래도 새로 만들기"
+                버튼 바로 위에 재확인 문구. */}
+            <p className="text-[11px] font-bold text-red-500">
+              ⚠️ 정말 다른 학생(동명이인)일 때만 새로 만드세요. 같은 학생이면 위 버튼으로 기존 계정을 쓰세요 — 새로 만들면 별·XP·기록이 두 계정으로 갈라집니다.
+            </p>
             <div className="flex gap-2">
-              <button onClick={() => setDuplicateInfo(null)} className="flex-1 border-2 border-gray-200 text-gray-500 font-bold py-2 rounded-xl text-xs btn-press">취소</button>
+              <button onClick={closeDuplicateWarning} className="flex-1 border-2 border-gray-200 text-gray-500 font-bold py-2 rounded-xl text-xs btn-press">취소</button>
               <button onClick={() => submitCreateStudent(true)} disabled={creating}
                 className="flex-1 bg-orange-500 disabled:bg-gray-300 text-white font-black py-2 rounded-xl text-xs btn-press">
                 {creating ? '⏳ 생성 중...' : '그래도 새로 만들기'}
