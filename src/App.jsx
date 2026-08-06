@@ -23,7 +23,7 @@ import { pickNextGame } from './utils/matchGame'
 import { trackEvent, EV } from './utils/productEvents'
 import { assignDirections } from './utils/entranceTest'
 import { logSpellingReview } from './utils/spellingReviewApi'
-import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getClassSettings, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getSelectableTextbooks, getStudentPrimaryTextbook, getClassNames, getClassIdByName } from './utils/wordLibrary'
+import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getClassSettings, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentClassId, getTextbookById, getStudentPrimaryTextbook, getClassNames, getClassIdByName } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech } from './utils/speech'
 // Curriculum Engine Phase 0(2026-08-01, docs/CURRICULUM_ENGINE.md §8) —
 // 교사 opt-in 예문 학습 단계. isFeatureEnabled('curriculumExamplesStudentUI')
@@ -300,14 +300,28 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 반 배정 그대로. 어느 쪽이든 1개 이하면 선택기 비렌더(화면 변화 0).
   const textbookOptions = useMemo(() => {
     if (isTextbookMode()) {
-      // 2026-08-06 운영자 결정 — 반 링크(class_textbooks) 게이트 제거,
-      // 전체 교재 노출(wordLibrary.getSelectableTextbooks 주석 참고 —
-      // 이름이 다른 이유도 그 주석에 있음: 기존 getAllTextbooks과 이름
-      // 충돌이라 별도 함수로 분리).
-      return getSelectableTextbooks().map((tb) => ({
-        id: tb.id,
-        label: tb.publisherName ? `${tb.name} (${tb.publisherName})` : tb.name,
-      }))
+      // 2026-08-06 오후 학습 정책(운영자) — "관리자에게 배정되지 않은
+      // 반/교재는 표시하지 않음": 같은 날 오전의 전체 노출 결정을 대체한다.
+      // 노출 = 사람 반에 배정된 교재(class_textbooks) ∪ 이 학생에게 개별
+      // 배정된 교재(student_class_assignments의 textbookId — 관리자
+      // TextbookAssignmentPanel 배정). 학년은 어떤 필터에도 쓰지 않는다
+      // (스키마에 학년 컬럼 자체가 없음 — dailyRitual.js 설계 노트 참고).
+      const byId = new Map()
+      for (const tb of getClassTextbooks(getStudentClassId(studentId))) byId.set(tb.id, tb)
+      for (const a of textbookAssignments) {
+        if (!a.textbookId || byId.has(a.textbookId)) continue
+        const tb = getTextbookById(a.textbookId)
+        // 합성 교재(synthetic-tb:, 미백필 반 읽기 보완용)는 전환 대상이
+        // 될 수 없어 제외 — 현재 교재가 합성인 경우는 TextbookSelector의
+        // "(현재 교재)" 방어 옵션이 커버.
+        if (tb && !String(tb.id).startsWith('synthetic-tb:')) byId.set(tb.id, tb)
+      }
+      return Array.from(byId.values())
+        .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+        .map((tb) => ({
+          id: tb.id,
+          label: tb.publisherName ? `${tb.name} (${tb.publisherName})` : tb.name,
+        }))
     }
     return textbookAssignments.map((a) => {
       const name = getClassNames().find((n) => getClassIdByName(n) === a.classId)

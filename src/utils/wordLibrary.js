@@ -476,28 +476,6 @@ export function getClassTextbooks(classId) {
   return (_classTextbooks.get(classId) || []).map((id) => _textbooks.get(id)).filter(Boolean)
 }
 
-// 2026-08-06 운영자 결정 — 학생 홈 교과서 드롭다운은 반↔교재 연결
-// (class_textbooks)로 게이트하지 않고 전체 실제 교재를 노출한다(관리자가
-// 링크를 관리하지 않는 실운영 현실 반영 — "교과서를 드롭다운으로 선택할
-// 수 있게" 지시). 합성 교재(synthetic-tb:, 미백필 반 보완용)는 전환
-// 대상이 될 수 없으므로(setPrimaryTextbook이 거부) 제외 — 학생의 "현재"
-// 교재가 합성인 경우는 TextbookSelector의 "(현재 교재)" 방어 옵션이 커버.
-//
-// 이름을 getAllTextbooks가 아니라 getSelectableTextbooks로 둔 이유: 이
-// 파일에 이미 동일 목적처럼 보이는 `export const getAllTextbooks = () =>
-// [..._textbooks.values()]`(관리자 반↔교재 연결 패널
-// ClassTextbookLinks.jsx·라이브 검증 스크립트 testTextbookModelLive.mjs가
-// 소비 — 둘 다 이번 작업 소유권 밖)가 있다. 그 함수는 합성 교재를 거르지
-// 않고 반환하는데, 그건 그 소비자들의 기존 계약(전체 인벤토리 조회)이라
-// 이번 작업(규칙 16 — 파일당 소유권, 규칙 1 — 안정성 최우선) 범위에서
-// 건드리지 않는다. 대신 신규 필요(합성 제외 + 정렬)에 맞는 별도 이름의
-// export를 추가해 기존 함수/소비자를 전혀 건드리지 않는다.
-export function getSelectableTextbooks() {
-  return Array.from(_textbooks.values())
-    .filter((t) => !String(t.id).startsWith(SYNTH_TB_PREFIX))
-    .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-}
-
 // 교재의 유닛 목록 — 소유 컨테이너 반의 유닛(= 그 교재의 전체 콘텐츠).
 export function getTextbookUnits(textbookId) {
   const tb = _textbooks.get(textbookId)
