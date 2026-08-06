@@ -47,16 +47,17 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
         return
       }
       const MESSAGES = {
-        not_found: '이름 철자를 확인해주세요. 선생님이 등록해줬다면 "PIN 만들기" 탭을, 처음이라면 선생님께 등록을 요청해주세요.',
+        not_found: '등록된 학생을 찾을 수 없어요. 이름 철자를 확인해주세요.',
         invalid_format: 'PIN은 숫자 4자리예요.',
-        wrong_pin: '이름 또는 PIN이 올바르지 않아요.',
-        locked: '⚠️ PIN을 여러 번 틀려서 잠시 로그인할 수 없어요. 5분 후 다시 시도하거나 선생님께 문의해주세요.',
-        no_pin_setup: '위 "PIN 만들기" 탭에서 네 이름을 찾아 PIN을 만들어봐요.',
+        wrong_pin: 'PIN 번호가 맞지 않아요.',
+        locked: 'PIN을 여러 번 틀려서 잠시 로그인할 수 없어요. 5분 후 다시 시도해주세요.',
+        no_pin_setup: '선생님의 승인이 필요합니다. 승인을 받았다면 위 "PIN 만들기" 탭에서 PIN을 만들 수 있어요.',
         duplicate_accounts: '계정 확인이 필요해요. 선생님께 문의해주세요.',
       }
       setLoginError(MESSAGES[data.reason] || '로그인에 실패했어요. 다시 시도해주세요.')
     } catch (err) {
-      setLoginError('로그인 중 오류가 발생했어요: ' + (err.message || err))
+      console.warn('[StudentSelect] 로그인 네트워크 오류:', err)
+      setLoginError('인터넷 연결을 확인해주세요.')
     } finally {
       setLoggingIn(false)
     }
@@ -242,8 +243,8 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
 
       <div className="w-[calc(100vw-2rem)] max-w-sm min-w-0 bg-white rounded-3xl card-shadow p-6 animate-slide-up space-y-3">
         {removedNotice && (
-          <p className="bg-orange-50 border-2 border-orange-200 text-orange-600 text-xs font-bold text-center rounded-xl p-3">
-            ⚠️ 계정 정보를 찾을 수 없어요. 선생님께 문의하거나 다시 시작해주세요.
+          <p className="bg-blue-50 border-2 border-blue-200 text-blue-500 text-xs font-bold text-center rounded-xl p-3">
+            로그인이 풀렸어요 — 이름과 PIN으로 다시 로그인해주세요.
           </p>
         )}
         {!removedNotice && legacyNotice && (
@@ -307,7 +308,7 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
                 PIN 생성 폼/상태 표시(이미 설정됨/허용 안 됨 포함) 전체를
                 가리고 관리자 문의 안내만 보여준다. */}
             {setupPickedIsDup ? (
-              <p className="bg-red-50 border-2 border-red-200 text-red-600 text-xs font-bold text-center rounded-xl p-3" role="alert">
+              <p className="bg-yellow-50 border-2 border-yellow-200 text-yellow-700 text-xs font-bold text-center rounded-xl p-3" role="alert">
                 ⚠️ 중복 계정이 확인되었습니다. 관리자(선생님)에게 문의하세요.
               </p>
             ) : (
@@ -345,7 +346,7 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
                         placeholder="PIN 다시 입력" disabled={settingUp}
                         className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold text-center tracking-[0.5em] focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:bg-gray-50" />
                       <p className="text-[11px] text-purple-400 px-1">PIN은 다음에 로그인할 때 필요해요. 잊지 않게 잘 기억해두세요!</p>
-                      {setupError && <p className="text-red-500 text-xs text-center" role="alert">⚠️ {setupError}</p>}
+                      {setupError && <p className="text-red-500 text-xs text-center" role="alert">{setupError}</p>}
                       <button onClick={handleSetupPin} disabled={settingUp}
                         className="w-full bg-purple-500 text-white font-black py-3 rounded-xl btn-press hover:bg-purple-600 disabled:opacity-50">
                         {settingUp ? '⏳ 만드는 중...' : 'PIN 만들기'}
@@ -354,7 +355,7 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
                   )
                 )}
                 {setupError && !setupChecking && (!setupPicked || !setupStatus) && (
-                  <p className="text-red-500 text-xs text-center" role="alert">⚠️ {setupError}</p>
+                  <p className="text-red-500 text-xs text-center" role="alert">{setupError}</p>
                 )}
               </>
             )}
@@ -371,7 +372,7 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
               onKeyDown={e => e.key === 'Enter' && handleLogin()}
               placeholder="PIN 4자리" disabled={loggingIn}
               className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold text-center tracking-[0.5em] focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:bg-gray-50" />
-            {loginError && <p className="text-red-500 text-xs text-center" role="alert">⚠️ {loginError}</p>}
+            {loginError && <p className="text-rose-500 text-xs text-center" role="alert">{loginError}</p>}
             <button onClick={handleLogin} disabled={loggingIn}
               className="w-full bg-purple-500 text-white font-black py-3 rounded-xl btn-press hover:bg-purple-600 disabled:opacity-50">
               {loggingIn ? '⏳ 확인하는 중...' : '시작하기!'}
