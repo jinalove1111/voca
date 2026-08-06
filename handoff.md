@@ -7,6 +7,55 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-07 (48차) — 중복 경고창을 기존 계정 조치 허브로 — PIN 설정 경로
+명확화
+
+### 운영자 지시
+
+기존 이름 입력 시 중복 경고만 나오고 기존 계정 PIN 설정 방법이 불명확 — 새
+계정 생성 없이 기존 계정에 조치(열기/PIN 허용/PIN 재설정/교과서 배정)할 수
+있게. PIN 저장·권한 구조 선확인, DB 구조 임의 변경 금지.
+
+### 구조 확인 (변경 없음)
+
+PIN 저장: students.pin_hash(scrypt, api/_pinAuth) — v1.9로 클라이언트 접근
+차단. 권한: 무작위 재설정(덮어쓰기)은 ADMIN_PIN 재검증 필수
+(api/set-student-pin), 최초 설정은 서버가 pin_hash IS NULL 재조회 확인
+시에만 무인증 허용(계정 탈취 차단), 학생 자기설정은 pin_setup_allowed+NULL
+이중 확인(api/self-set-student-pin). PIN API들은 pin_* 컬럼만 갱신 —
+별/XP/기록/배정 구조적 무접촉. DB 구조 무변경.
+
+### 수정 (커밋: feat(admin) — StudentDirectory.jsx 단일 파일)
+
+- 중복 경고창 계정별: 반/ID 축약+전체 복사/가입일 + PIN 배지(경고창 전용
+  fetchPinStatusMap 조회 — 목록 전체 상태와 분리, 접힌 반의 후보도 정확).
+- 액션 4종(전부 기존 메커니즘 재사용, 신규 API 0): 기존 계정 열기(검색어+
+  아코디언+카드 메뉴 오픈), PIN 설정 허용(set_pin_setup_allowed — PIN 있으면
+  비활성, 성공 시 인라인 "허용됨"), PIN 재설정(handleResetPin — PIN 없으면
+  비활성, 새 PIN 1회 표시 기존 UX), 교과서 추가 배정(열기+
+  TextbookAssignmentPanel 토글).
+- "그래도 새로 만들기" 경고 강화: 동명이인 전용 명시 + "같은 학생이면
+  별·XP·기록이 두 계정으로 갈라진다".
+
+### 라이브 테스트 (배포 API, 기존 QA 계정 QA_FreshNoPin 9112dd6d, 행 증감 0)
+
+- 최초 PIN 설정 ok:true → 이름+PIN 로그인이 정확히 그 계정(studentId 일치)
+  으로 성공 → 무인증 덮어쓰기 재호출 already_set 거부(기존 PIN 보존 구조
+  증명) → adminPin 없는 무작위 재설정 not_authorized — ALL PASS. build
+  PASS, verify:admin PASS.
+- 정직 기록: "관리자 PIN 재설정"의 양성 경로(실제 새 PIN 발급)는 ADMIN_PIN이
+  서버 env에만 있어 자동 테스트 불가 — 운영자가 관리자 화면에서 1회 확인
+  필요(기존 handleResetPin 기능 자체는 이전부터 실사용 중).
+- 잔여: QA_FreshNoPin(9112dd6d)에 테스트 PIN 남음(QA 픽스처, 무해).
+
+### 운영자 확인 항목
+
+1. 배포 후 학생 추가 폼에 기존 이름 입력 → 중복 경고창에서 PIN 배지·4버튼
+   확인.
+2. 실학생 1명으로 "PIN 설정 허용" → 학생 'PIN 만들기' 탭에서 설정 → 로그인
+   확인(별·XP 유지).
+3. "PIN 재설정" 1회 실행해 새 PIN 발급 확인(자동 테스트 불가 항목).
+
 ## 2026-08-06 (47차) — 교과서 다중 배정 구조 점검 + 추가 배정 UX 정비
 (재등록 우회 차단)
 
