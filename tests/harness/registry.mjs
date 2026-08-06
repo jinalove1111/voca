@@ -106,6 +106,7 @@ export const DOMAINS = {
     checks: [
       { script: 'scripts/testQuizStepReset.mjs', builders: [] },
       { script: 'scripts/testPaulReactions.mjs', builders: ['paulReactions'], execPath: 'scripts/.tmp/testPaulReactions.bundle.mjs', extra: true, note: '13개 필수 도메인 밖, 보너스 커버리지. PNG 정적 import 때문에 스크립트 자체를 esbuild로 번들해서 실행(파일 헤더 주석이 지시하는 방법 그대로).' },
+      { script: 'scripts/testPureUtils.mjs', builders: [], extra: true, note: '2026-08-08 야간 — 순수 유틸 단위 테스트(네트워크/DB 무접촉)' },
     ],
   },
   writing: {
