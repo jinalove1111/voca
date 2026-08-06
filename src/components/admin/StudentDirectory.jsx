@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   getClassNames, getClassUnitNames, getClassIdByName, getStudentClass, getStudentUnit,
   setStudentClass, setStudentUnit, setStudentsClassBulk, setStudentHouse,
-  getClassTextbooks,
+  getClassTextbooks, getStudentClassAssignments, getTextbookById,
 } from '../../utils/wordLibrary'
 // House System(2026-07-19, 게임화 하위카드 8번) — 학생 로스터에 최소
 // 하우스 확인/재배정 UI(HOUSES 상수만 필요, 순수 함수는 wordLibrary.js가
@@ -101,6 +101,35 @@ export default function StudentDirectory({ adminPin }) {
   // handleClearPin 그대로, 버튼 위치만 메뉴 안으로 이동(오터치 방지).
   const [menuOpenId, setMenuOpenId] = useState(null)
   const classList = getClassNames()
+
+  // ── 소속 반/배정 교과서/현재 Unit 3축 요약(2026-08-07 운영자 지시) ─────
+  // PIN 만들기 첫 드롭다운이 "소속 반(students.class_id)"인데 교과서
+  // 선택기로 오해되는 문제의 관리자 화면 쪽 보강 — 학생 카드를 펼칠 때
+  // (📚 교재 관리 패널 토글) 그 학생 1명만 getStudentClassAssignments로
+  // 조회해 배정 교과서 목록을 보여준다(목록 전체 N명 자동 조회 금지).
+  // 표시 전용, 조회 로직·데이터는 무변경.
+  const [assignmentSummary, setAssignmentSummary] = useState({}) // id -> 'loading' | string(요약 텍스트)
+  useEffect(() => {
+    if (!textbookManaging) return
+    const id = textbookManaging
+    let cancelled = false
+    setAssignmentSummary(prev => ({ ...prev, [id]: 'loading' }))
+    getStudentClassAssignments(id).then(list => {
+      if (cancelled) return
+      const parts = (list || [])
+        .map(a => {
+          if (!a.textbookId || a.textbookId.startsWith('synthetic-tb:')) return null // 합성(미커버) 교재는 실제 배정이 아니므로 제외
+          const tb = getTextbookById(a.textbookId)
+          if (!tb) return null
+          return tb.name + (a.isPrimary ? '(현재)' : '')
+        })
+        .filter(Boolean)
+      setAssignmentSummary(prev => ({ ...prev, [id]: parts.length ? parts.join(', ') : '배정 없음(소속 반 교과서만)' }))
+    }).catch(() => {
+      if (!cancelled) setAssignmentSummary(prev => ({ ...prev, [id]: '확인 불가' })) // fail-open — 조회 실패가 화면을 막지 않음
+    })
+    return () => { cancelled = true }
+  }, [textbookManaging])
 
   // ── 학생 추가(2026-08-06 P0) ─────────────────────────────────────────
   // 학생 생성은 이 UI(서버 api/admin-pin-actions.js의 create_student 액션,
@@ -690,6 +719,22 @@ export default function StudentDirectory({ adminPin }) {
         </div>
         {textbookManaging === s.id && (
           <div className="mt-3 pt-3 border-t border-gray-200">
+            {/* 2026-08-07 운영자 지시 — 소속 반(students.class_id)/배정 교과서(SCA)/
+                현재 Unit(students.current_unit_id) 3축을 분리 표시해 혼동 방지.
+                표시 전용, 조회 로직·데이터 무변경. */}
+            <div className="bg-purple-50 border border-purple-100 rounded-xl px-3 py-2 mb-3 text-xs text-purple-700 space-y-0.5">
+              <p>
+                <span className="font-black">소속 반:</span> {s.className || '⚠️ 반 미배정'}
+                <span className="mx-1.5">·</span>
+                <span className="font-black">현재 선택 Unit:</span> {getStudentUnit(s.id) || '—'}
+              </p>
+              <p>
+                <span className="font-black">배정 교과서:</span>{' '}
+                {assignmentSummary[s.id] === 'loading' || assignmentSummary[s.id] === undefined
+                  ? '확인 중…'
+                  : assignmentSummary[s.id]}
+              </p>
+            </div>
             <TextbookAssignmentPanel studentId={s.id} onChanged={refresh} />
           </div>
         )}

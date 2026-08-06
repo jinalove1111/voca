@@ -299,13 +299,21 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
             <p className="bg-purple-50 border-2 border-purple-100 text-purple-500 text-[11px] font-bold rounded-xl p-2.5 text-center">
               이 기능은 선생님이 이미 등록한 학생이 처음 PIN을 설정할 때만 사용해요.
               교과서 변경에는 사용하지 않아요 — 교과서는 로그인 후 홈 화면에서 바꿀 수 있어요.
+              교과서명이 아니라 학생이 등록된 반을 선택하세요.
+              여러 교과서를 배정받은 학생도 이 목록에는 소속 반 아래에만 나타나요.
             </p>
-            <select value={setupClass} disabled={settingUp} onChange={e => {
+            {/* 2026-08-07 운영자 지시 — 이 select는 students.class_id(소속 반) 기준
+                조회로 로직은 항상 올바랐으나, 라벨이 없어 "교과서 선택"으로 오해되는
+                사례가 있었다. 라벨/배지로 "소속 반" 의미를 명확히 한다(표시 전용). */}
+            <label htmlFor="setup-class-select" className="block text-xs font-black text-purple-600 px-1">학생이 소속된 반 선택</label>
+            <select id="setup-class-select" value={setupClass} disabled={settingUp} onChange={e => {
                 setSetupClass(e.target.value); setSetupStudentId(''); setSetupStatus(null); setSetupError(''); setSetupDone(false)
               }}
               className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-purple-500 bg-white disabled:opacity-50">
               <option value="">반 선택</option>
-              {classNames.map(c => <option key={c} value={c}>{c}</option>)}
+              {/* option 태그 안에는 스타일 요소를 넣을 수 없어 텍스트로 "[반]" 접두 —
+                  교과서명과 혼동되지 않게 하기 위함(2026-08-07 운영자 지시). */}
+              {classNames.map(c => <option key={c} value={c}>{'[반] ' + c}</option>)}
             </select>
 
             {setupClass && (
@@ -331,7 +339,10 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
                             {rs.hasPinHash ? '🟢 PIN 완료' : '🔴 PIN 없음'}
                           </div>
                         )}
-                        <div>{isDup && '⚠️ '}{s.name} <span className="opacity-60 font-normal">· {s.unitName}</span></div>
+                        {/* 2026-08-07 운영자 지시로 유닛 표기 제거 — 교과서/Unit 정보가
+                            여기 보이면 "이 목록이 교과서 목록"이라는 오해를 강화한다.
+                            동명이인 구분은 PIN 배지·중복 차단 가드(pinlessDupNames)가 담당. */}
+                        <div>{isDup && '⚠️ '}{s.name}</div>
                       </button>
                     )
                   })}
