@@ -153,3 +153,28 @@ supabase_*.sql  DB 마이그레이션 파일(버전별, 파일명에 순서 내�
 ## Word King 관련 확인 결과
 
 `Word King`(또는 "워드킹"/"단어왕") 관련 코드/컴포넌트/스키마/변수명은 저장소 전체(`src/`, `api/`, `scripts/`, `*.sql`, 모든 `.md`/`.js` 계획 문서 포함)를 대소문자 무관 grep으로 확인한 결과 **전혀 존재하지 않습니다.** `ROADMAP.md`/`PROJECT_IDEAS.md`/`ADVANCED_FEATURES.md`에도 이 이름의 기능에 대한 언급이 없습니다 — 미구현이 아니라 애초에 계획 문서에도 등장한 적 없는 기능입니다. 과거 세션에서 "Word King data if already present" 같은 언급이 있었다면 그건 코드/문서 어디에도 흔적을 남기지 않은 구두 논의였던 것으로 보입니다.
+
+## 학생 홈 반/교과서/유닛 정책(2026-08-07 확정)
+
+_추가: 2026-08-07(44~51차 세션, 커밋 `3836245`/`d3d9734`/`c23a97b`/`d4c4041`/`9bf4e38`/`a94700a`/`c1afeed`). 44~46차가 "반→교과서 캐스케이드"를 시도했다가 45~46차에서 정책이 두 번 뒤집힌 끝에, 51차에서 아래 4개 규칙으로 최종 확정됐다(`handoff.md` 2026-08-07(51차) "최종 정책 구현" 참고). 이 절은 그 확정 상태만 기술하고, 뒤집힌 중간 설계(46차의 반 드롭다운 캐스케이드)는 폐기된 것으로 간주한다._
+
+이 프로젝트의 계층은 **반(사람 그룹) → 교과서(콘텐츠 컨테이너) → 유닛**이며, 학생 홈(`App.jsx`/`Dashboard.jsx`/`TextbookSelector.jsx`)에서 각 축은 서로 다른 규칙을 따른다.
+
+1. **반 = 표시 전용.** 학생 홈에는 `students.class_id`가 가리키는 반 이름만 텍스트로 보여주고, 반을 바꾸는 드롭다운은 없다(46차에서 만들었던 반→교과서 캐스케이드 select는 이 정책으로 폐기됨). 반 변경은 관리자 화면(`StudentDirectory.jsx`)에서만 가능 — `setStudentClass`가 유일한 쓰기 경로.
+2. **교과서 = 허용 목록(배정 합집합), 학년 무제한.** `App.jsx`의 `textbookOptions`(교재 모드)는 ①사람 반에 연결된 교재(`class_textbooks`, `getClassTextbooks(getStudentClassId(studentId))`) ∪ ②이 학생에게 개별 배정된 교재(`student_class_assignments`의 `textbookId`, 관리자 `TextbookAssignmentPanel`이 배정)만 노출한다. `school_grade` 같은 학년 컬럼이 애초에 `students` 스키마에 없어(45차 전수 검색 확인) 학년으로 반/교재/유닛을 제한하는 코드는 존재하지 않는다 — 초등 학생도 배정만 있으면 중·고등 교재를 오갈 수 있다. 반대로 **배정되지 않은 교과서는 절대 전체 노출하지 않는다**(44차 오전에 "전체 노출"로 잠깐 바뀌었던 것을 45차가 당일 폐기 — 미배정 비표시가 최종). 합성(읽기 전용 폴백) 교재 id(`synthetic-tb:` 접두)는 옵션에서 제외.
+3. **드롭다운은 옵션이 1개여도 항상 렌더.** `TextbookSelector.jsx`는 옵션 0개일 때만 비렌더하고, 1개여도(어제 P1이 도입했던 "옵션 1개면 정적 텍스트로 숨김" 분기는 51차에 폐기) 항상 `<select>`를 그린다 — 현재 선택이 select 안에서 보이고, `currentId=''`(반을 방금 옮겨 교과서 primary가 없는 상태)일 때만 "교과서를 선택하세요" placeholder 옵션이 추가된다.
+4. **전환 저장은 `setPrimaryTextbook(studentId, textbookId)` 하나뿐 — `students.class_id`는 절대 건드리지 않는다.** (`src/utils/wordLibrary.js`) 이 함수는 `student_class_assignments`(대상 행의 `is_primary`/`textbook_id`)와 `students.current_unit_id`만 갱신한다. **저장 유닛 유효성 검증(2026-08-07 신규)**: 전환 대상 SCA 행에 저장돼 있던 `current_unit_id`가 "그 교재의 현재 유닛 목록"에 실존할 때만 그대로 복원하고(`getTextbookUnits(textbookId).some(u => u.id === syncUnitId)`), 유닛이 삭제/개편돼 더 이상 없으면 `null`로 떨어뜨려 "단어가 있는 첫 유닛"으로 다시 확정한다 — 유닛 개편으로 무효해진 저장값이 그대로 `students.current_unit_id`에 실려 빈 유닛(단어 0개)을 보여주는 사고를 막는다.
+
+### 교재 레이어 자동 백필(42차 P0 후속, 3~4항의 전제 조건)
+
+v3.1 백필(`supabase_v3_1_textbooks.sql`, 2026-07-22 1회성)은 그 시점에 유닛을 가진 반만 `textbooks`/`class_textbooks`에 등록했다 — 이후 새로 만든 반은 교재 레이어에 자동으로 들어오는 파이프라인이 없어서, 그 반이 학생 primary로 배정되면 조회가 "사람 반의 자동 교재"로 잘못 폴백하는 P0가 있었다(42차, `handoff.md` 2026-08-06(42차)). 재발 방지를 위해 세 지점을 배선했다(전부 `src/utils/wordLibrary.js`):
+
+- **`ensureTextbookLayerBackfilled()`** — 관리자 화면(`AdminScreen.jsx`) 진입(인증 후) 시 1회 fire-and-forget 호출. 유닛은 있지만 아직 `textbooks`에 없는 반만 골라 실제 행을 만든다(`textbooks.name`/`class_textbooks(class_id,textbook_id)` UNIQUE 기반 멱등, 합성 항목은 "커버됨"에서 제외 — 안 그러면 영구 no-op이 되는 결함을 42차 검수에서 잡아 수정).
+- **`createClass()`** — 신설 반은 생성 즉시 `textbooks`/`class_textbooks`에 자기 자신을 등록(non-fatal, 실패해도 반 생성 자체는 성공). 이후 관리자가 화면에 진입하면 위 백필이 놓친 게 있어도 다시 잡아준다.
+- **`mergeSyntheticForUncoveredClasses()`** — 위 두 경로가 아직 실행되지 않은 짧은 창(또는 SQL/백필 지연) 동안, 유닛은 있지만 실제 `textbooks` 행이 없는 반을 DB 쓰기 없이 읽기 전용 합성 교재(`synthetic-tb:{classId}`)로 보완해 학생 화면이 깨지지 않게 한다. 실제 행이 생기면 이 경로는 자동으로 비활성화된다.
+
+동일한 백필을 SQL로도 준비해 뒀다(`supabase_v3_17_textbook_backfill_new_classes.sql`, 선택 — 위 자동 백필과 동시에 실행해도 `on conflict do nothing`이라 중복 없음). 상세 컬럼/실행 상태는 `DATABASE.md`의 마이그레이션 실행 순서 24번 항목 참고.
+
+### 관련 파일
+
+`C:\voca\src\App.jsx`(`textbookOptions`/`handleTextbookSwitch`/`currentTextbookOptionId`), `C:\voca\src\components\TextbookSelector.jsx`, `C:\voca\src\components\Dashboard.jsx`, `C:\voca\src\utils\wordLibrary.js`(`setPrimaryTextbook`/`ensureTextbookLayerBackfilled`/`createClass`/`mergeSyntheticForUncoveredClasses`), `C:\voca\src\components\StudentSelect.jsx`(PIN 만들기 반 목록 — 소속 반만, 45~49차), `C:\voca\src\components\admin\TextbookAssignmentPanel.jsx`, `C:\voca\supabase_v3_17_textbook_backfill_new_classes.sql`, `C:\voca\handoff.md` 2026-08-06(42~46차)/2026-08-07(48~51차) 섹션.

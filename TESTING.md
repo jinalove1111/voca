@@ -359,3 +359,50 @@ testWritingReviewAiPipeline.mjs` **모든 테스트 통과 ✅**(exit 0, 신규
 UI 통합 테스트 성격이라 이번 순수 함수 테스트 범위 밖 — `handoff.md`
 21차 "남은 리스크" 참고.
 11차 "릴리스 게이트" 참고.
+
+## 관련 항목: `verify:login` 로컬 환경 제약 정직 기록 (2026-08-06/07, 39~41차 재확인)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존. 위 "Phase 6 최종 검증
+매트릭스" 표(로그인 행)가 2026-07-18 시점 스냅샷이라, 이후 로그인/PIN
+관련 코드가 세 차례(39·40·41차) 더 바뀐 뒤에도 같은 결과가 재확인됐다는
+것만 이 섹션에 별도로 남긴다 — 표 자체는 원본 그대로 두고 append만 한다._
+
+`npm run verify:login`(`testStudentSelectPinStatus`/`testStudentPinAuth`/
+`testStudentPinSelfSetup`/`testClearStudentPin` 4개 스크립트)이 로컬에서
+FAIL하는 것은 **2026-07-18부터 알려진 기존 환경 제약**이고, 39~41차의
+콜드스타트 P0 수정·41차의 `verify-student-pin.js` 동명이인 거부 로직
+변경과는 무관함이 반복 재확인됐다:
+
+- **원인**: 로컬 `.env`/`.env.local`에 `SUPABASE_SERVICE_ROLE_KEY`가 없어
+  `permission denied for table students`(v1.9 컬럼권한이 anon/authenticated의
+  PIN 컬럼 접근을 막는 것과 동일한 차단이 서비스롤 키 없이는 우회되지
+  않음)로 실패한다 — 코드 버그가 아니라 로컬 개발 환경의 구조적 한계.
+- **39차 실측(헌법 규칙 15 — 회귀 의심 시 수정 전 코드로 롤백해 FAIL을
+  먼저 재현)**: `git stash`로 39차 수정을 되돌린 상태에서도 동일하게
+  4개가 FAIL함을 직접 실행해 확인 — "이번 변경이 새로 깨뜨린 것"이
+  아니라는 것을 추측이 아니라 대조군 실행으로 증명했다.
+- **40~41차**: `verify-student-pin.js`(동명이인 PIN 일치 시 `duplicate_accounts`
+  명시 거부 추가)와 `StudentSelect.jsx`(자기등록 탭 제거) 변경 이후에도
+  같은 4개가 같은 이유로 FAIL — "이번 변경과 무관한 기존 환경 제약"으로
+  각 세션이 반복 기록(`handoff.md` 2026-08-06(40차) "(4) 검증"/
+  (41차) "(5) 검증").
+- **가짜 PASS 금지 원칙 재확인**: Vercel 프로덕션 환경변수에는
+  `SUPABASE_SERVICE_ROLE_KEY`가 설정돼 있어(서버리스 함수 `api/*.js`가
+  실제로 그 키로 동작 중 — 라이브 로그인이 정상 동작한다는 사실 자체가
+  간접 증거) 이 4개 스크립트는 그 환경에서는 전체 통과가 기대된다. 이
+  문서는 "로컬에서 FAIL하는 게 정상"이라는 사실을 숨기지 않고 매 세션
+  반복 기록하는 쪽을 택했다 — 로컬 결과만 보고 로그인 기능이 깨졌다고
+  오판하지 않도록 하기 위함.
+
+**`scripts/testPureUtils.mjs`(2026-08-08 야간 신규, 다른 세션이 같은 시각
+작업 중 — 코드 자체는 implementer 소유, 여기서는 존재만 기록)**: 파일
+헤더 주석 기준 카테고리 1(순수 로직, DB/번들/네트워크 불필요) 패턴으로
+`houseSystem.js`(`assignBalancedHouseId`/`computeHouseCounts` 경계
+케이스)/`matchGame.js`/`dateSeoul.js`/`analyticsMath.js`/`entranceTest.js`
+(`assignDirections` 홀수 mixed) 5개 순수 모듈의 대표 경계 케이스를
+`scripts/testHouseSystem.mjs`/`tests/harness/runAnalytics.mjs`와 중복되지
+않게 골라 검증한다(파일 헤더에 중복 방지 근거 명시). 이 문서 상단 "1)
+순수 로직 테스트" 표(§4개 카테고리)에 정식 행을 추가하는 것과
+`tests/harness/registry.mjs` 도메인 등록 여부는 코드 소유 세션의 몫이라
+여기서는 존재 확인만 기록하고 표 자체는 건드리지 않는다(append-only,
+동시 작업 파일 비접촉 원칙 — `CLAUDE.md` 규칙 16).

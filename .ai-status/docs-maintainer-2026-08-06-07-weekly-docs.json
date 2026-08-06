@@ -1,0 +1,41 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "문서 갱신",
+  "task_id": "2026-08-06-07-weekly-docs",
+  "task": "2026-08-06~07(39~51차) 변경사항을 ARCHITECTURE/DATABASE/TESTING/README/PROJECT_GUIDE에 append 반영",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-08T00:00:00+09:00",
+  "updated_at": "2026-08-08T00:00:00+09:00",
+  "files_owned": [
+    "ARCHITECTURE.md",
+    "DATABASE.md",
+    "TESTING.md",
+    "README.md",
+    "PROJECT_GUIDE.md"
+  ],
+  "files_read": [
+    "handoff.md",
+    "supabase_v3_16_students_insert_lockdown.sql",
+    "supabase_v3_17_textbook_backfill_new_classes.sql",
+    "supabase_v3_18_class_renames.sql",
+    "ops/account-cleanup-2026-08-07/backup_create_and_verify_ONE_SHOT.sql",
+    "ops/account-cleanup-2026-08-07/backup_create_and_verify_PASTE.sql",
+    "ops/account-cleanup-2026-08-07/delete_safe_test_accounts_FINAL_NOT_EXECUTED.sql",
+    "ops/account-cleanup-2026-08-07/backup_safe_delete_candidates.sql",
+    ".ai-status/duplicate-account-audit-2026-08-07.md",
+    "src/utils/wordLibrary.js",
+    "src/App.jsx",
+    "src/components/TextbookSelector.jsx",
+    "DEVELOPER_GUIDE.md",
+    "package.json",
+    "DATABASE.md",
+    "ARCHITECTURE.md",
+    "TESTING.md",
+    "PROJECT_GUIDE.md",
+    "scripts/testPureUtils.mjs"
+  ],
+  "summary": "39~51차 handoff.md 근거로 5개 문서에 append-only 갱신 완료. ARCHITECTURE.md: '학생 홈 반/교과서/유닛 정책(2026-08-07 확정)' 신규 절(반=표시전용/교과서=허용목록/드롭다운 상시/setPrimaryTextbook 저장 유닛 유효성 검증 + 교재 레이어 자동 백필 3경로 요약). DATABASE.md: 마이그레이션 순서에 v3_16(미실행)/v3_17(선택, 자동백필로 사실상 적용)/v3_18(실행됨) 3개 항목 추가 + 'backup_20260807_*' 신규 절(776건 백업, ops/ 스크립트, 삭제 미실행, RLS/GRANT는 저장소 파일에서 확인 불가함을 정직 기록 — 'RLS on·정책 0' 주장은 검증 불가해 미확인으로 처리) + 'classes 도메인 확정' 신규 절(실반 3개 vs 교과서 컨테이너 반, 59명 확인 vs '122명'은 저장소 어디서도 grep 0건이라 미기재/미확인 명시). TESTING.md: verify:login 4스크립트 로컬 SUPABASE_SERVICE_ROLE_KEY 부재 FAIL이 39차 stash 재현으로 확정된 기존 환경 제약임을 재기록 + scripts/testPureUtils.mjs 존재 확인(내용만 기록, 코드/registry 미접촉). README.md: 기존 파일이 비어있어 최소 스택/실행법/문서지도만 신규 작성. PROJECT_GUIDE.md: Top 5(현재 6개)에 7번 '반 이름처럼 보이는 교과서' 항목 추가 + 관련 파일 1줄 추가. 기존 섹션 전부 무손상(삭제/재작성 없음, 전부 Edit old_string 매칭 기반 append). 코드/설정 파일(src/api/scripts/supabase_*.sql/.claude 등)은 전혀 쓰지 않음 — Read/Grep만.",
+  "blocker": null,
+  "next_action": "없음(완료). 운영자 확인 권장: DATABASE.md 신규 backup_20260807_* 절의 RLS/GRANT '미확인' 표시를 Supabase 대시보드에서 직접 확인해 필요 시 후속 세션이 실측값으로 갱신."
+}

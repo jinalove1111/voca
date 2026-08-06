@@ -59,6 +59,7 @@ npm run preview   # 빌드 결과 로컬 프리뷰
 4. **전역 상태관리 라이브러리가 없습니다.** Redux/Zustand/Context 전역 스토어 없이, `hooks/useStudent.js`가 사실상 학생 진행도(별/스티커/미션/캘린더/스펠링/유닛별 이어하기 등)의 중앙 지점입니다. 화면 간 데이터 불일치가 보이면 먼저 이 훅의 단일 저장소(`STORE_KEY = 'paul_easy_progress'`)를 의심하세요.
 5. **로컬스토리지가 1차, Supabase는 안전망이지 진실 원천이 아닙니다(단, 로컬이 비어있을 땐 역전).** `useStudent.js`는 로컬에 데이터가 있으면 그것을 항상 우선하고, 클라우드는 fire-and-forget 백업입니다. 단 신규 기기/PIN 초기화처럼 로컬이 비어있는 경우엔 `restoreChecked` 게이트가 클라우드 백업(`fetchProgressBackupStrict`) 복원이 끝날 때까지 대시보드 렌더를 미룹니다 — "로컬 우선"과 "복원 우선"이 상황에 따라 뒤바뀌는 지점이라 헷갈리기 쉽습니다. 자세한 병합 규칙은 `ARCHITECTURE.md`의 영속성 전략, `mergeProgressRecords`(`useStudent.js`) 참고.
 6. **`CLAUDE.md`(대문자)와 `claude.md`(소문자)는 Windows에서 같은 파일입니다 — 두 이름으로 각각 만들지 마세요.** 이 프로젝트는 Windows(대소문자 구분 없는 파일시스템)에서 개발되고, git이 실제로 추적하는 경로는 소문자 `claude.md`입니다. `git add CLAUDE.md`는 아무 변화도 스테이징하지 않을 수 있으니(2026-07-18 세션에서 실제로 이 문제로 첫 커밋 시도가 "no changes added"로 실패한 적 있음) 항상 `git status`로 실제 추적 경로를 확인하세요. `.claude/worktrees/` 아래 폴더들도 착각하기 쉬운 함정입니다 — 이름만 보면 이 저장소의 일반 하위 디렉터리 같지만 실제로는 `git worktree`로 만들어진 **별도의 독립 체크아웃**(각자 자기 `.git` 파일과 브랜치를 가짐)이라, 메인 저장소 작업 중 실수로 그 안의 파일을 고치면 안 됩니다(`git worktree list`로 확인 가능).
+7. **`classes` 테이블의 반 이름이 전부 "진짜 반"은 아닙니다 — 교과서 이름을 그대로 딴 "반"도 섞여 있습니다.** v3.1(다중 교재) 이전에는 "교과서를 바꾸려면 다른 반으로 재등록"하는 구조였던 흔적으로, `중2 능률 김기택`/`중2 천재 이상기`/`중2 YMB 박준원`/`중2 동아 윤정미` 같은 반은 학생이 물리적으로 소속된 그룹이 아니라 콘텐츠(교과서) 컨테이너입니다(2026-08-07 도메인 확정, `DATABASE.md` "`classes` 도메인 확정" 절 참고). 이 확정 시점에 실제 반(사람 그룹)으로 인정된 것은 `MS Advanced Class`/`Presentation 6`/`Pre-Middle School`(운영자 지시 3건 중 세 번째는 아직 미생성) 3개뿐입니다. 관리자 화면에서 반 목록을 볼 때, PIN 만들기 로스터를 채울 때, 학생을 새 "반"으로 옮기려 할 때 이 구분을 헷갈리면 안 됩니다 — 교과서명 반에 직접 소속된 학생을 발견하면(2026-08-07 조사 기준 일부만 확인, 59명) 그건 정상 배정이 아니라 이관 대상 후보입니다(운영자 결정 대기, 별도 소속 반 이관 없이 방치 가능).
 
 ## 관련 파일
 
@@ -66,3 +67,4 @@ npm run preview   # 빌드 결과 로컬 프리뷰
 - `C:\voca\src\App.jsx`, `C:\voca\src\hooks\useStudent.js` — Top 5의 1/4/5번 근거
 - `C:\voca\api\_pinAuth.js`, `C:\voca\supabase_v1_9_security_rls.sql` — Top 5의 2번 근거
 - `C:\voca\supabase_v2_1_student_unit_decouple.sql` — Top 5의 3번 근거
+- `C:\voca\DATABASE.md`(`classes` 도메인 확정 절), `C:\voca\.ai-status\duplicate-account-audit-2026-08-07.md` — 7번 근거
