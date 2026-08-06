@@ -1,0 +1,15 @@
+{
+  "agent_name": "main-session (planner/verifier) + implementer(sonnet)",
+  "role": "P0 검증 — 'PIN 만들기가 새 계정을 만든다' 보고의 사실 확인 + 안전장치 보강",
+  "task_id": "verify-pin-setup-no-insert",
+  "task": "교과서 변경↔PIN 만들기↔계정 생성 연결 구조 추적, PIN 설정 안전장치·안내 문구·라벨 보강",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-06T00:00:00Z",
+  "updated_at": "2026-08-06T00:00:00Z",
+  "files_owned": ["src/components/StudentSelect.jsx", "src/components/TextbookSelector.jsx", "handoff.md(41차)", ".ai-status/verify-pin-setup-no-insert-2026-08-06.json"],
+  "summary": "검증 결과: PIN 생성 API 2종(self-set-student-pin/set-student-pin) 모두 기존 student_id에 UPDATE만 수행, INSERT 전무. 'PIN 만들기' 탭은 기존 로스터에서 고르는 구조라 계정 생성 불가. 새 계정 생성 경로는 40차에서 제거된 '처음이에요' 자기등록 탭이 유일했음. 교과서 변경이 계정 생성으로 이어진 이유는 구 도메인 모델(교과서=반)+선택기 비렌더(39~40차 수정)로 인해 '다른 교과서-반 재등록'이 유일한 전환 수단이었기 때문. setPrimaryTextbook의 students UPDATE는 current_unit_id 단일 컬럼 — id/PIN/XP/진행도 무접촉(코드 증명 + Paul 실데이터: SCA 3행 오가며 전환해도 students 1행·created_at 불변). 긴급: 오늘 08-06 오전에도 실학생 중복 4건 생성 실측(전하은×2, leo, 권교빈) — 40차 수정 미배포 상태라 지속 발생 중, 배포 시급. 보강(d4c4041): setup 탭 용도 안내, 같은 반 동명 중복 시 PIN 설정 차단, 빈 로스터 문구, 홈 라벨 교과서. 쓰기 e2e는 훅이 차단(정직 기록) — 코드 증명+실데이터 증거로 대체, 배포 후 스모크 항목에 편입.",
+  "blocker": null,
+  "next_action": "운영자: push(배포) 최우선 — 매일 중복이 늘고 있음. 이후 v3_16 SQL 실행, 스모크(로그인/학생 추가/교과서 전환/동명 중복 차단 문구), 중복 31+그룹(오늘 4건 추가) 점검 패널 검토.",
+  "commits": ["d4c4041 fix(pin-setup): 안전장치+안내+라벨"]
+}
