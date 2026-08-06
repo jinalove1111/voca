@@ -7,6 +7,55 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-06 (46차) — 학생 홈 반→교과서→유닛 3단 캐스케이드 드롭다운
+(배정 기반)
+
+### 운영자 지시
+
+반이 텍스트 고정이라 배정된 다른 반으로 이동 불가 — 반도 드롭다운으로,
+반→교과서→유닛 순 선택, ID 기준 저장, 새로고침/재로그인 유지, 반 변경 시
+교과서·유닛 리셋, 관리자 배정 반만 노출.
+
+### 구현 (커밋: feat(student-home) 3단 캐스케이드 — App.jsx/Dashboard.jsx/
+TextbookSelector.jsx, 스키마·저장 경로 무변경)
+
+- classTree(반→교과서 Map): 반 옵션 = 사람 반(students.class_id) ∪ 개별
+  배정 교재(student_class_assignments)의 소유 반. 각 반의 교과서 = 사람
+  반이면 class_textbooks 링크, 그 외 반이면 배정 교재만. 전부 UUID 기준.
+- 반 select = 열람 전환(UI 전용 state viewClassId) — 저장은 교과서 선택
+  시 setPrimaryTextbook(SCA primary + students.current_unit_id)으로
+  확정. 새로고침/재로그인 복원은 기존 서버 영속(39차 예열 경로) 그대로.
+- 반 변경 시 currentTextbookOptionId='' → TextbookSelector에 "교과서를
+  선택하세요" placeholder 신설. 검수에서 실기능 구멍 발견·수정: 정적 표시
+  조건이 currentId=''까지 흡수해 "옮긴 반의 유일 교과서"를 선택할 수단이
+  없었음 → 정적 표시는 currentId가 유일 옵션과 정확히 일치할 때만.
+- 반 옵션 1개인 학생은 기존 정적 표시 그대로(화면 변화 0). 유닛 목록은
+  primary 교과서 소속만(기존 로직).
+
+### 사용 테이블·컬럼 (신규 없음)
+
+- 읽기: students(class_id,current_unit_id),
+  student_class_assignments(class_id,textbook_id,is_primary,
+  current_unit_id), class_textbooks, textbooks, units.
+- 쓰기: 기존 setPrimaryTextbook 경로만(SCA is_primary/textbook_id/
+  current_unit_id + students.current_unit_id).
+
+### 실측·검증
+
+- 데이터 도출(직전 실측 기반): Paul = 반 3개(YMB: 교과서 3종 / 능률:
+  1종 / 천재: 1종) — 반 select 표시. 황성연 `fdce5252` = 반 1개(교과서
+  3종) — 반 정적+교과서 select. 동아 leo = 반 1개·교과서 1개 — 전부
+  정적(변화 0).
+- 새로고침/재로그인 유지는 42차 라이브 테스트(QA_CaseTest 전환→새로고침
+  시뮬 유지)와 동일 경로라 재검증 생략(정직 기록).
+- build PASS, `verify:unit` PASS, `verify:student` PASS.
+
+### 운영 참고
+
+학생에게 다른 반을 열어주는 방법 = 관리자 학생 상세의 교재 배정
+(TextbookAssignmentPanel — 그 교재의 소유 반이 반 옵션에 나타남) 또는
+반↔교재 연결(ClassTextbookLinks — 사람 반의 교과서 옵션 확장).
+
 ## 2026-08-06 (45차) — 학습 정책 반영: 학년 무필터 확인 + 교과서 노출을
 "배정 합집합"으로 (44차 전체 노출 폐기)
 
