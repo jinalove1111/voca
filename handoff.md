@@ -7,6 +7,50 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-06 (47차) — 교과서 다중 배정 구조 점검 + 추가 배정 UX 정비
+(재등록 우회 차단)
+
+### 운영자 지시
+
+다른 출판사 교과서는 계정 재등록("그래도 새로 만들기")이 아니라 기존 학생
+계정 1개에 추가 배정으로. 새 테이블/컬럼 필요 시 생성 전 계획 보고.
+
+### 구조 점검 결과 (변경 계획: 신규 스키마 불필요)
+
+student_class_assignments가 이미 다중 교과서 배정 테이블
+(unique(student_id,class_id) + unique(student_id,textbook_id), 실례: Paul
+계정 1개에 3개 배정). 요구 3~10(배정만 노출/ID 기준/서버 영속/전환 시
+유닛 복원)은 39·42·45·46차 작업으로 이미 동작 — 재구현하지 않음(규칙 3).
+실제 갭 3개만 수정: ① assignTextbook의 textbook_id NULL 잔재(v2.9)
+② 배정 패널 명칭·안내 부족(운영자가 기능을 못 찾고 재등록으로 우회)
+③ 중복 확인 화면에 우회 차단 안내 부재.
+
+### 수정 (커밋: fix(admin) — wordLibrary.js/TextbookAssignmentPanel.jsx/
+StudentDirectory.jsx)
+
+- assignTextbook: 배정 시점에 그 반의 실제 textbook_id 명시 기록(합성
+  id는 null 유지, 42703 폴백 유지).
+- TextbookAssignmentPanel: "배정된 교과서"/"➕ 교과서 추가 배정" 명칭
+  정비 + "새 계정을 만들 필요가 없어요" 안내 문단(화면 문자열만, 코드
+  주석·변수명은 관례 유지).
+- StudentDirectory 중복 확인 박스: "교과서가 목적이면 새 계정 대신
+  교과서 추가 배정 사용(별·XP·기록 유지)" 안내 추가 — "그래도 새로
+  만들기" 동작 자체는 유지(정당한 동명이인 등록용).
+
+### 라이브 e2e (QA_CaseTest, 원상 복구, 학생 행 증감 0)
+
+assignTextbook(고1 학평) → SCA 행 textbook_id 명시 기록 PASS → 학생 홈
+반/교과서 옵션(classTree)에 즉시 등장 PASS → removeTextbookAssignment
+원복 PASS → students 행 수 불변 PASS. build PASS, verify:student PASS,
+verify:admin PASS.
+
+### 운영 안내 (재등록 금지 흐름)
+
+다른 출판사 교과서 주기: 관리자 → 학생 목록에서 학생 펼침 → "교과서
+추가 배정"에서 반 선택 → 배정. 학생 홈 반/교과서 드롭다운에 즉시
+나타나고, 학생이 선택하면 계정 1개로 교과서를 오가며 별·XP·기록이
+유지된다.
+
 ## 2026-08-06 (46차) — 학생 홈 반→교과서→유닛 3단 캐스케이드 드롭다운
 (배정 기반)
 
