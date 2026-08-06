@@ -480,6 +480,31 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
           {equippedHat && (
             <p className="text-purple-200 text-xs mt-0.5">{equippedHat.emoji} {equippedHat.name} 착용 중</p>
           )}
+          {/* 2026-08-06 P1(운영자 지시) — 반/교재/유닛 3줄 분리. 예전엔
+              TextbookSelector(교재가 2개 이상일 때만 렌더) 다음에 "반: X ·
+              [유닛 select]"가 한 줄로 붙어 있어, 교재가 1개뿐인 반에서는
+              교재 축 자체가 안 보이고 유닛 라벨도 "반:" 줄에 숨어 있었다.
+              운영자 mockup 순서(반 → 교재 → 유닛)대로 3개 줄로 분리한다.
+              unitNames 산출 로직(교재 모드면 getTextbookUnits(primaryTb),
+              아니면 반 유닛)과 핸들러는 전혀 변경하지 않음 — 이미 "교재
+              먼저, 그 교재의 유닛만" 요구를 충족하고 있었다.
+
+              우선순위/영속성 규칙(운영자 요구 9·10번):
+              · 관리자 배정(TextbookAssignmentPanel/setPrimaryAssignment)과
+                학생 선택(setPrimaryTextbook)은 같은 SCA primary 행을 쓰는
+                last-write-wins — 더 최근에 조작한 쪽이 우선한다.
+              · 교재/유닛 선택값은 서버에 영속된다(SCA primary 행 +
+                students.current_unit_id) — localStorage를 전혀 쓰지 않으므로
+                "존재하지 않는 교재/유닛을 가리키는 localStorage" 문제
+                자체가 없다. 셀렉트의 "(현재 교재)"/유닛 목록 밖 값 방어
+                옵션은 서버 캐시 갱신 지연 같은 예외만 커버하는 것.
+              · 선택 상태는 studentId(UUID) 키 기반 서버 행이므로 동명
+                중복 계정과 절대 섞이지 않는다(규칙 4). */}
+          {className && (
+            <div className="text-sm text-purple-200 mt-1 flex items-center justify-center gap-1.5 flex-wrap">
+              <span>반: {className}</span>
+            </div>
+          )}
           <TextbookSelector
             options={textbookOptions}
             currentId={currentTextbookId}
@@ -487,9 +512,13 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
             error={textbookSwitchError}
             onSwitch={handleTextbookChange}
           />
+          {/* 유닛 줄도 반 줄과 동일하게 className 존재 여부에 묶는다 — 원래
+              이 셀렉트가 "반: X · [유닛]" 한 줄로 className 블록 안에 있었던
+              것과 동일한 폴백(반 삭제 등으로 className이 없으면 유닛 줄도
+              표시하지 않음)을 그대로 보존. */}
           {className && (
             <div className="text-sm text-purple-200 mt-1 flex items-center justify-center gap-1.5 flex-wrap">
-              <span>반: {className} ·</span>
+              <span>유닛:</span>
               {unitNames.length > 0 && onUnitSwitch ? (
                 <label className="inline-flex items-center gap-1">
                   <span className="sr-only">현재 유닛 선택</span>
@@ -503,7 +532,7 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
                   {unitSwitching && <span className="text-xs">⏳</span>}
                 </label>
               ) : (
-                <span>유닛: {unitName}</span>
+                <span>{unitName}</span>
               )}
             </div>
           )}
