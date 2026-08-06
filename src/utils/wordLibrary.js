@@ -413,6 +413,26 @@ function synthesizeTextbooks() {
   _textbookMode = false
 }
 
+// 2026-08-06 교과서 저장·조회 P0 — v3.1 백필(7/22) 이후 생성된 반은
+// textbooks/class_textbooks 행이 없어 교재 모드에서 "교재 없는 반"이
+// 된다. 그런 반이 학생의 primary(SCA, textbook_id NULL)로 배정되면
+// getOwnTextbookOfClass가 null → 사람 반 자동 교재 폴백 → 이전
+// 교과서로 되돌아 보이는 실증 버그(중2/중1 동아 윤정미, 고1 능률
+// 민병천). 실제 행이 생길 때까지(관리자 화면 진입 자동 백필 + 신규 반
+// 생성 시 자동 생성, ensureTextbookLayerBackfilled/createClass 참고) 읽기
+// 전용 합성 교재로 보완한다 — DB 쓰기 없음, 실제 행이 생기면 covered에
+// 걸려 자동으로 이 경로를 안 탄다.
+function mergeSyntheticForUncoveredClasses() {
+  const covered = new Set(Array.from(_textbooks.values()).map((t) => t.ownerClassId).filter(Boolean))
+  for (const [name, cls] of Object.entries(_cache)) {
+    if (!cls.id || covered.has(cls.id) || (cls.units || []).length === 0) continue
+    const tbId = SYNTH_TB_PREFIX + cls.id
+    _textbooks.set(tbId, { id: tbId, name, publisherName: null, ownerClassId: cls.id })
+    if (!_classTextbooks.has(cls.id)) _classTextbooks.set(cls.id, [])
+    _classTextbooks.get(cls.id).push(tbId)
+  }
+}
+
 export async function refreshTextbooks() {
   try {
     const [tbRes, ctRes] = await Promise.all([
@@ -438,6 +458,7 @@ export async function refreshTextbooks() {
     _textbookFetchFailed = false
     _textbookMode = _textbooks.size > 0
     if (!_textbookMode) synthesizeTextbooks() // 테이블은 있는데 백필 전 — 합성 유지
+    else mergeSyntheticForUncoveredClasses() // 실제 교재는 있지만 이 반은 아직 미커버 — 읽기 전용 보완
   } catch {
     _textbookFetchFailed = true
     synthesizeTextbooks()
@@ -483,6 +504,55 @@ export function getStudentPrimaryTextbook(studentId) {
     if (own) return own
   }
   return getOwnTextbookOfClass(getStudentClassId(studentId))
+}
+
+// 2026-08-06 — v3.1 이후 생성된 반을 교재 레이어에 실제로 등록(1회성
+// 자동 백필). 관리자 화면 진입 시에만 호출된다(AdminScreen) — 학생 111명
+// 클라이언트가 동시에 쓰기 경쟁하는 것을 피하기 위해 refreshTextbooks
+// (모든 세션이 호출)에서는 절대 쓰지 않는다. textbooks.name UNIQUE +
+// class_textbooks(class_id,textbook_id) UNIQUE 덕에 중복 실행/동시 실행
+// 모두 멱등(23505 = 이미 있음).
+export async function ensureTextbookLayerBackfilled() {
+  if (!_textbookMode) return { created: 0 } // 테이블 자체가 없는 레거시(SQL 미실행) — 규칙 9, 아무 쓰기도 하지 않음
+  // 합성 항목(synthetic-tb:, mergeSyntheticForUncoveredClasses가 넣은 읽기
+  // 전용 보완)은 "실제 커버"가 아니다 — 포함하면 백필 대상이 전부
+  // 건너뛰어져 이 함수가 영원히 no-op이 된다(2026-08-06 검수에서 발견).
+  const covered = new Set(Array.from(_textbooks.values())
+    .filter((t) => !String(t.id).startsWith(SYNTH_TB_PREFIX))
+    .map((t) => t.ownerClassId).filter(Boolean))
+  let created = 0
+  for (const [name, cls] of Object.entries(_cache)) {
+    if (!cls.id || covered.has(cls.id) || (cls.units || []).length === 0) continue
+    try {
+      let textbookId = null
+      const { data: insTb, error: insTbErr } = await supabase.from('textbooks')
+        .insert({ name, owner_class_id: cls.id }).select('id').single()
+      if (insTbErr) {
+        if (insTbErr.code === '23505') {
+          const { data: existingTb, error: selErr } = await supabase.from('textbooks')
+            .select('id').eq('name', name).single()
+          if (selErr) { console.warn('[wordLibrary] 교재 자동 백필 — 기존 교재 조회 실패 (non-fatal):', name, selErr?.message || selErr); continue }
+          textbookId = existingTb?.id || null
+        } else {
+          console.warn('[wordLibrary] 교재 자동 백필 — textbooks insert 실패 (non-fatal):', name, insTbErr?.message || insTbErr)
+          continue
+        }
+      } else {
+        textbookId = insTb?.id || null
+      }
+      if (!textbookId) continue
+      const { error: insCtErr } = await supabase.from('class_textbooks')
+        .insert({ class_id: cls.id, textbook_id: textbookId, sort_order: 0 })
+      if (insCtErr && insCtErr.code !== '23505') {
+        console.warn('[wordLibrary] 교재 자동 백필 — class_textbooks insert 실패 (non-fatal):', name, insCtErr?.message || insCtErr)
+      }
+      created += 1
+    } catch (err) {
+      console.warn('[wordLibrary] 교재 자동 백필 — 반 처리 중 예외 (non-fatal):', name, err?.message || err)
+    }
+  }
+  if (created > 0) await refreshTextbooks()
+  return { created }
 }
 
 // ── 쓰기 시험(Spelling Test) 반별 관리자 설정 ──────────────────────────────
@@ -717,6 +787,32 @@ export async function createClass(name, classType = 'regular', adminPin) {
   const cls = await ensureClass(name, classType, adminPin)
   await ensureUnit(cls.id, DEFAULT_UNIT_NAME, adminPin)
   await refreshWordLibrary()
+  // 2026-08-06 — 앞으로 만드는 반은 즉시 교재 레이어에 등록한다(v3.1
+  // 백필 갭의 재발 방지: 이 백필이 없으면 이 반이 학생 primary로 배정될
+  // 때 getOwnTextbookOfClass가 null → 사람 반 자동 교재 폴백 → 이전
+  // 교과서로 되돌아 보이는 실증 버그가 재발한다). non-fatal — 실패해도
+  // 반 생성 자체는 성공 유지(관리자 화면 진입 시 ensureTextbookLayerBackfilled
+  // 가 다음 기회에 다시 시도한다).
+  if (_textbookMode) {
+    try {
+      const { error: insTbErr } = await supabase.from('textbooks').insert({ name, owner_class_id: cls.id })
+      if (insTbErr && insTbErr.code !== '23505') {
+        console.warn('[wordLibrary] createClass — textbooks insert 실패 (non-fatal):', name, insTbErr?.message || insTbErr)
+      } else {
+        const { data: tb, error: selErr } = await supabase.from('textbooks').select('id').eq('name', name).single()
+        if (!selErr && tb?.id) {
+          const { error: insCtErr } = await supabase.from('class_textbooks')
+            .insert({ class_id: cls.id, textbook_id: tb.id, sort_order: 0 })
+          if (insCtErr && insCtErr.code !== '23505') {
+            console.warn('[wordLibrary] createClass — class_textbooks insert 실패 (non-fatal):', name, insCtErr?.message || insCtErr)
+          }
+        }
+        await refreshTextbooks()
+      }
+    } catch (err) {
+      console.warn('[wordLibrary] createClass — 교재 레이어 등록 예외 (non-fatal):', name, err?.message || err)
+    }
+  }
 }
 
 // ── words.bulk_replace diff 계획(2026-08-04 P0 데이터 손실 버그 수정) ──────
@@ -1955,6 +2051,31 @@ export async function setPrimaryTextbook(studentId, textbookId) {
     .select('id,current_unit_id')
     .eq('student_id', studentId).eq('textbook_id', textbookId).maybeSingle()
   if (selErr) throw selErr
+  // 2026-08-06 라이브 테스트 발견 — v3.1 이후 생성 경로(addStudent/
+  // ensureTextbookLayerBackfilled 백필)로 만들어진 SCA 행은 textbook_id가
+  // NULL이다(읽기 측 getStudentClassAssignments/getOwnTextbookOfClass가
+  // NULL을 "그 반의 자동 교재"로 해석하는 것과 동일한 규칙). 그런데 위
+  // select는 textbook_id=textbookId로 정확히 매칭하므로 이 NULL 행을 못
+  // 찾고, 그 아래 insert가 unique(student_id, class_id) 충돌(23505)로
+  // 막힌 뒤 재조회도 여전히 빈 결과라 throw — 교과서를 다른 것으로 바꾼
+  // 학생이 원래 교과서로 다시 돌아올 수 없었다. insert 시도 전에 그
+  // "레거시(NULL) 행"을 먼저 찾아 이번 textbookId로 승격(backfill)해
+  // 재사용한다 — 있으면 새 행을 만들 필요가 없다(unique 제약과 애초에
+  // 충돌하지 않음).
+  if (!target) {
+    const { data: legacyRow, error: legacyErr } = await supabase
+      .from('student_class_assignments')
+      .select('id,current_unit_id')
+      .eq('student_id', studentId).eq('class_id', tb.ownerClassId).is('textbook_id', null)
+      .maybeSingle()
+    if (legacyErr) throw legacyErr
+    if (legacyRow) {
+      const { error: claimErr } = await supabase.from('student_class_assignments')
+        .update({ textbook_id: textbookId }).eq('id', legacyRow.id)
+      if (claimErr) throw claimErr
+      target = { id: legacyRow.id, current_unit_id: legacyRow.current_unit_id }
+    }
+  }
   if (!target) {
     const { error: insErr } = await supabase.from('student_class_assignments').insert({
       student_id: studentId, class_id: tb.ownerClassId, textbook_id: textbookId,
