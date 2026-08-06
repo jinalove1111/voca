@@ -16,6 +16,11 @@
 // UI(select) 대신 "교재: <이름>" 정적 텍스트로 항상 보여준다(운영자 지시
 // "교재가 하나뿐이면 선택값을 표시하되 불필요한 조작은 최소화한다"). 옵션
 // 0개(교재 미배정)는 기존 그대로 비렌더.
+//
+// 2026-08-06(같은 날 후속, 운영자 mockup 반영) — 화면 라벨을 "교재"에서
+// "교과서"로 변경(정적 표시 경로 + select 경로 sr-only 라벨 둘 다). 내부
+// 변수명/주석/props 이름(options/currentId 등)은 저장소 관례대로 교재/
+// textbook 그대로 유지 — 바뀐 건 화면에 보이는 문자열뿐이다.
 export default function TextbookSelector({ options, currentId, switching, error, onSwitch }) {
   if (!Array.isArray(options) || options.length === 0) return null
 
@@ -25,7 +30,7 @@ export default function TextbookSelector({ options, currentId, switching, error,
   if (options.length === 1 && (!currentId || currentId === options[0].id)) {
     return (
       <div className="text-sm text-purple-200 mt-1 flex items-center justify-center gap-1.5 flex-wrap">
-        <span>교재: {options[0].label}</span>
+        <span>교과서: {options[0].label}</span>
         {error && <p className="text-xs font-bold text-yellow-200 w-full">⚠️ {error}</p>}
       </div>
     )
@@ -33,9 +38,9 @@ export default function TextbookSelector({ options, currentId, switching, error,
 
   return (
     <div className="text-sm text-purple-200 mt-1 flex items-center justify-center gap-1.5 flex-wrap">
-      <span>교재:</span>
+      <span>교과서:</span>
       <label className="inline-flex items-center gap-1">
-        <span className="sr-only">교재 선택</span>
+        <span className="sr-only">교과서 선택</span>
         <select
           value={currentId || ''}
           disabled={switching}
