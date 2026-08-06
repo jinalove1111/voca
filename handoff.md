@@ -7,6 +7,36 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-07 (50차) — 반 이름 변경 지시 — v3_18 SQL 준비 (anon 쓰기 락다운 확인)
+
+### 운영자 지시
+
+매핑 3건(동일 내용 2회 전송으로 확정): 고1 6월 학평→MS Advanced Class, 고1
+능률 민병천→Presentation 6, 중등 예비반→Pre-Middle School.
+
+### 진행
+
+anon 클라이언트 UPDATE classes 실측 — v3.11 락다운이 조용히 차단(에러 없이
+0행, 이름 불변 검증으로 포착). 클라이언트 실행 불가 확정.
+supabase_v3_18_class_renames.sql 준비(커밋 참조): 실행 가능한 2건만 id+현재
+이름 동시 WHERE 멱등 UPDATE, 롤백 역UPDATE 주석, "Presentation 6" vs 기존
+"Presentation 6 -2026" 유사 명명 경고(운영자 2회 확정 지시로 의도 간주),
+파괴 구문 0.
+"중등 예비반"은 classes에 미존재 — 개명 불가. 신설 목적이면 관리자 화면
+"반 만들기"로 "Pre-Middle School" 생성(2026-08-06 배포 코드부터 신설 반
+교과서 레이어 자동 등록). 참고 insert는 주석 처리로만 포함.
+안전성 근거: classes.name 단일 컬럼 — 학생/유닛/단어/배정 전부 class_id
+UUID FK라 무영향, textbooks.name 별개(교과서 이름 유지 — 반/교과서 이름
+자연 분리).
+
+### 운영자 실행
+
+1. Supabase SQL Editor에서 supabase_v3_18_class_renames.sql 실행 → 검증
+   SELECT로 2건 확인.
+2. "Pre-Middle School"이 신설 대상이면 관리자 화면 반 만들기로 생성.
+3. 참고: 관리자 화면의 반 이름 변경 기능(admin PIN 경유)으로도 동일 작업
+   가능 — SQL 대신 UI를 써도 됨.
+
 ## 2026-08-07 (49차) — PIN 만들기 반 선택 명확화 + 관리자 카드 3축 분리 표시
 
 ### 운영자 지시·승인 흐름
