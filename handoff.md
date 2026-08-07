@@ -7,6 +7,59 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-08 (55차) — v3_19 실행 검증(구조 모드 활성) + 신설 반 유형 선택 - 커밋 1fcb156/e2b3cd3
+
+### v3_19 실행 라이브 검증 (운영자 실행 보고 → 읽기 전용 실측)
+
+- classes 13개 전수 재조회: 의도한 컨테이너 6개만 `class_type='textbook'`
+  전환 확인(중2 능률 김기택/중2 YMB 박준원/Presentation 6 -2026/
+  중2 천재 이상기/중2 동아 윤정미/중1 동아 윤정미), 실반 2개
+  (MS Advanced Class, Presentation 6)+QA_ 5개는 `'regular'` 유지 —
+  오적용/누락 0.
+- 구조 판별 모드 활성: `classifyRealClassNames` 실반 결과 =
+  {MS Advanced Class, Presentation 6}로 allowlist 시절과 동일.
+  `verify:student`(신규 `testRealClassNames` 16단언 포함) 5개 스크립트 /
+  `verify:unit` 5개 스크립트 라이브 ALL PASS.
+
+### 신설 반 타이핑 갭 수정 (54차 "후속 과제"의 이행)
+
+- 갭: AdminScreen "새 반 추가하기"가 `createClass(name, undefined, pin)`
+  → `class_type='regular'` 고정. 구조 모드에서는 신설 `'regular'` 반이
+  PIN 실반 목록에 자동 포함되므로, 신설 교과서 컨테이너가 타이핑
+  전까지 학생 화면에 노출될 창이 있었다(allowlist 시절엔 fail-closed
+  였던 부분).
+- 추가 발견(2차 차단 지점): `admin-content-write` Edge Function
+  `handleClassCreate`(`index.ts:126`)가 `classType`을
+  `'special'`/`'regular'`로 강제 축소 — `'textbook'`을 보내도
+  `'regular'`로 저장돼 UI 수정만으로는 무효였다. 프로덕션 관리자
+  쓰기는 전부 이 함수 경유(v3.11 락다운).
+- 커밋 `1fcb156` feat(edge): `handleClassCreate` 허용값에 `'textbook'`
+  추가(그 외 값 `'regular'` 폴백 — 하위호환). **Deno 함수라 npm build
+  무관, 운영자가 `supabase functions deploy admin-content-write`
+  재배포해야 반영.**
+- 커밋 `e2b3cd3` feat(admin): "새 반 추가하기"에 라디오 유형 선택
+  (교과서/수업 반), 기본값 `'textbook'`(fail-closed — 실수로 컨테이너가
+  학생 목록에 노출되는 것보다 실반을 나중에 유형 변경하는 쪽이 안전).
+  `wordLibrary` `createClass`는 요청/저장 `class_type` 불일치 시
+  비치명 `console.warn`(미재배포 감지).
+- 검증: build PASS / `verify:admin` 6개 / `verify:student` 5개 라이브
+  PASS. Edge Function 변경은 정적 검토만(로컬 실행 불가) — 재배포
+  전에도 기존 플로우 불변(하위호환 폴백)임을 코드로 확인.
+
+### 운영자 액션
+
+1. `supabase functions deploy admin-content-write` 재배포 → 이후 관리자
+   UI에서 '교과서' 유형 신설 시 `class_type='textbook'` 저장 확인
+   (재배포 전엔 `'regular'`로 저장되고 콘솔 경고만 남음 — 앱은 안
+   깨짐).
+2. 재배포 전 '교과서' 유형으로 만든 반이 있다면 v3_19와 같은 방식의
+   UPDATE로 수동 타이핑 필요(현재 해당 반 0개).
+
+### 무접촉 유지
+
+- 122명 반 이동/Pre-Middle School 생성/A그룹 삭제/보안 잔여 2건/
+  Presentation 6 이름 충돌 — 승인 대기 그대로.
+
 ## 2026-08-08 (54차) — 실반/교과서 컨테이너 판별 구조화(class_type) + v3_19 SQL 준비 — 커밋 7c8e9ee/87ce9f9/fcee076
 
 ### 배경/지시
