@@ -838,6 +838,18 @@ export const getClassWords = (className, unitName = DEFAULT_UNIT_NAME) => {
 // 경로로 폴백한다(§ 위 두 함수 헤더 주석).
 export async function createClass(name, classType = 'regular', adminPin) {
   const cls = await ensureClass(name, classType, adminPin)
+  // 2026-08-08 — ensureClass가 기존 행을 반환한 경우와 신규 생성 응답을
+  // 여기서 구분할 방법이 없어(둘 다 동일한 {id,name,class_type} 모양) 중립
+  // 문구로 경고한다: 요청한 classType과 실제 저장된 class_type이 다르면
+  // admin-content-write Edge Function이 아직 'textbook'을 허용하도록
+  // 재배포되지 않았을 가능성이 크다(§ index.ts handleClassCreate 주석).
+  // non-fatal — 반 생성 자체는 계속 진행.
+  if (cls?.class_type && cls.class_type !== classType) {
+    console.warn(
+      '[wordLibrary] createClass — 요청한 classType과 저장된 class_type이 다름 (admin-content-write 재배포 필요할 수 있음):',
+      { name, requested: classType, stored: cls.class_type }
+    )
+  }
   await ensureUnit(cls.id, DEFAULT_UNIT_NAME, adminPin)
   await refreshWordLibrary()
   // 2026-08-06 — 앞으로 만드는 반은 즉시 교재 레이어에 등록한다(v3.1

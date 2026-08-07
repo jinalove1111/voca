@@ -1625,6 +1625,12 @@ export default function AdminScreen({ onBack }) {
   const [viewClass, setView]  = useState(null)
   const [viewUnit, setViewUnit] = useState('Unit 1')
   const [newClassName, setNewClassName] = useState('')
+  // 2026-08-08 — 신설 반 유형(교과서 컨테이너 / 수업 반). 기본값 'textbook'
+  // 은 fail-closed 선택: 실수로 컨테이너가 학생 PIN 만들기 목록에 노출되는
+  // 것보다, 실반을 나중에 유형 변경하는 쪽이 훨씬 안전하다(§ createClass
+  // 호출부 주석). admin-content-write가 아직 재배포 전이면 'textbook'
+  // 요청도 'regular'로 저장될 수 있음(wordLibrary.js createClass 경고 참고).
+  const [newClassType, setNewClassType] = useState('textbook')
   const [newUnitName, setNewUnitName] = useState('')
   const [newWord, setNewWord] = useState('')
   const [newMeaning, setNewMeaning] = useState('')
@@ -1767,6 +1773,20 @@ export default function AdminScreen({ onBack }) {
 
             <div className="bg-white rounded-3xl card-shadow p-5">
               <p className="text-sm font-black text-gray-700 mb-3">새 반 추가하기</p>
+              {/* 2026-08-08 — 유형 선택 추가(v3_19 구조 판별 대응). 기본값
+                  'textbook'인 이유는 위 newClassType state 주석 참고. */}
+              <div className="flex gap-3 mb-2 text-xs font-bold text-gray-600">
+                <label className="flex items-center gap-1 cursor-pointer">
+                  <input type="radio" name="newClassType" checked={newClassType === 'textbook'}
+                    onChange={() => setNewClassType('textbook')} />
+                  교과서 (학생 반 목록에 안 나옴)
+                </label>
+                <label className="flex items-center gap-1 cursor-pointer">
+                  <input type="radio" name="newClassType" checked={newClassType === 'regular'}
+                    onChange={() => setNewClassType('regular')} />
+                  수업 반 (학생이 PIN 만들기에서 선택 가능)
+                </label>
+              </div>
               <div className="flex gap-2">
                 <input type="text" value={newClassName} onChange={e => setNewClassName(e.target.value)}
                   placeholder="반 이름 입력 (예: Basic 1)"
@@ -1776,7 +1796,7 @@ export default function AdminScreen({ onBack }) {
                     if (!name) return alert('반 이름을 입력해주세요!')
                     if (classes.includes(name)) return alert('이미 있는 반 이름이에요.')
                     try {
-                      await createClass(name, undefined, pin)
+                      await createClass(name, newClassType, pin)
                       setNewClassName('')
                       refresh()
                     } catch (err) {
