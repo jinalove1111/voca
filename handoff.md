@@ -7,6 +7,15 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-08 (60차) — 반/교과서 분리 최종 라이브 검증 ALL PASS (배포 확인 + 26항목)
+
+- 운영자가 Pre-Middle School 개명 SQL 실행 완료 보고 → 라이브 실측으로 "Pre-Middle School"(대문자 S) 반영 확인.
+- 배포 확인: 로컬 HEAD(7d4b2ee) 빌드 번들 해시 index-CVZSciIt.js == 프로덕션(voca-drab.vercel.app) 서빙 번들 — Vercel 자동 배포 반영 확정. Edge Function admin-content-write는 59차에서 textbookId 지원 버전으로 재배포 완료 상태.
+- 라이브 데이터 검증 7/7 PASS: ① 실반 판별 결과 = 정확히 3개 {MS Advanced Class, Pre-Middle School, Presentation 6} ② 교과서 컨테이너 6개 전원 반 목록 제외 ③ QA 반 5개 숨김 ④ 능률 교과서(고1 능률 민병천) textbooks 테이블에 별도 존재(관리자 드롭다운 원천) ⑤ Unit1 40단어 보존 ⑥ Unit2 이름 충돌 없음(생성 가능 상태) ⑦ 개명 반영.
+- 이동 무결성 스위트 재실행 19/19 PASS(Harry=Pre-Middle School, MS Advanced 138, 컨테이너 잔류 0, SCA·학습기록 기준선 불변).
+- optional P6 교과서 배정 SQL·보안 잔여 2건 — 지시대로 미실행/미착수 유지.
+- 이로써 반/교과서 분리 프로젝트(52차 발단 → 54차 구조화 → 55~56차 생성 플로우 → 57~58차 92명 이동 → 59차 능률 복원 → 60차 최종 검증) 완결. 남은 후속: 초등 24명 목적지(2차 배정안), Unit2 업로드 후 textbook_id 태깅 실측, 보안 잔여 2건 결재.
+
 ## 2026-08-08 (59차) — '능률' 교과서 소실 조사(데이터 무손실 확정) + 유닛 textbook_id 자동 태깅 — 커밋 c126888/7064d27
 
 ### 조사 결과 (읽기 전용 실측 — 수정 전 보고 원칙 준수)
