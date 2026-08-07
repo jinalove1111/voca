@@ -7,6 +7,27 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-08 (58차) — 92명 반 이동 실행·검증 완료 (MS Advanced 91 + Pre-Middle school 1)
+
+### 실행 (운영자 승인·순서 준수)
+- 실행 전 세션이 읽기 전용 기준선 스냅샷 확보(ops/class-assignment-plan-2026-08-08/pre_execution_snapshot.json — 92명 students 필드/SCA 101행/student_progress 79·word_status 644 행수).
+- 운영자가 SQL Editor에서 ①백업(backup_20260808_assignment_moves, 92) + ③-a(91명→MS Advanced) 실행.
+- 1차 검증 15/19: 91명 도착·SCA/학습기록 보존 확인. FAIL 4건 = 단일 원인 — Pre-Middle School 미생성으로 ③-b가 설계된 가드대로 0행 no-op(Harry 원위치 무손상, NULL 대입 차단 구조 실증).
+- 운영자가 관리자 화면 '수업 반' 유형으로 반 생성 — 실제 저장명 "Pre-Middle school"(소문자 s, id 39e9acb1-cbd0-4863-8c43-5256b01e784e). SQL ③-b의 'Pre-Middle School' 대문자 완전일치 가드와 불일치 → 재실행해도 no-op였을 상태.
+- 운영자 지시("③-b만 다시 실행")에 따라 세션이 UUID 기반 조건부 1행 UPDATE(id=Harry AND class_id=YMB일 때만)를 anon 키 경로로 직접 실행 — 1 row, Harry → Pre-Middle school. **투명성 기록: students anon UPDATE가 가능한 것은 52차 보안 감사 미해결 항목 ③(권한 개방) 때문 — 해당 락다운 SQL 실행 후에는 이 경로가 막히므로 이런 단건 개입도 운영자 SQL로만 가능해진다(락다운은 여전히 권고 사항).**
+
+### 최종 검증 19/19 ALL PASS (읽기 전용, 기준선 대조)
+- MS Advanced Class 도착 91 / 실계정 총원 138(기존 47+91). Harry → Pre-Middle school(39e9acb1). 오배치 0.
+- 교과서 배정(SCA) 92명 전원 기준선과 완전 일치. 이름/현재유닛/생성일 불변. 학습기록 보존(student_progress 79→79, word_status 644→644).
+- 교과서 컨테이너 잔류: 중등 5개 실계정 0명. "Presentation 6 -2026" 24명은 승인된 보류(목적지 미정)로 유지.
+
+### 후속 항목
+1. (선택) "Pre-Middle school" → "Pre-Middle School" 개명(관리자 rename — 표기 통일, 문서/폴백 allowlist와 일치화. v2.1 FK 구조라 개명 안전).
+2. 초등 24명 목적지 결정 → 2차 배정안.
+3. optional_p6_go1_textbook_sca_NOT_EXECUTED.sql — 운영자 지시로 아직 미실행 유지.
+4. 보안 잔여 2건 결재 권고(특히 students anon UPDATE 개방 — 이번에 실증됨).
+5. 중등 컨테이너 5개는 이제 학생 0명 순수 교과서 컨테이너 — 상태 정상.
+
 ## 2026-08-08 (57차 개정) — high 3건 운영자 판정 반영: 황성연→MS Advanced, Harry→Pre-Middle School
 
 - 운영자 판정: 황성연(2a86fc9b) → MS Advanced Class 확정(고1 계열 유닛/주교재는
