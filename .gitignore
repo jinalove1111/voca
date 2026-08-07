@@ -14,3 +14,8 @@ dashboard/
 
 # Supabase CLI 로컬 링크 상태(supabase link가 생성, 프로젝트 ref 포함 — 커밋 불필요)
 supabase/.temp/
+
+# 운영 산출물(학생 실명·UUID 포함 — 절대 커밋 금지, 2026-08-08 보안 점검)
+# ops/ 아래 CSV/SQL에는 실학생 이름과 student_id가 들어 있다. 이 저장소는
+# 공개(public)이므로 실수로 add되면 개인정보가 그대로 노출된다.
+ops/
