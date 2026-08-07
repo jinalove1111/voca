@@ -1,0 +1,28 @@
+{
+  "agent_name": "main-session (planner/verifier) + implementer(sonnet) + docs-maintainer(sonnet)",
+  "role": "docs-maintainer",
+  "task_id": "verify-pin-merge-attachment-axis-2026-08-07",
+  "task": "fix/verify-student-pin-ilike 병합 사후 검증 + 애착 시스템 콘텐츠 축 정합 P2 수정(useAttachment.js) 문서화",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-07T00:00:00+09:00",
+  "updated_at": "2026-08-07T00:00:00+09:00",
+  "files_owned": [
+    "src/hooks/useAttachment.js",
+    "handoff.md",
+    ".ai-status/verify-pin-merge-attachment-axis-2026-08-07.json"
+  ],
+  "files_read": [
+    "api/verify-student-pin.js",
+    "api/self-set-student-pin.js",
+    "api/set-student-pin.js",
+    "api/generate-audio.js",
+    "src/hooks/useAttachment.js",
+    "src/utils/wordLibrary.js",
+    "handoff.md"
+  ],
+  "summary": "1) caaafd0로 이미 병합된 fix/verify-student-pin-ilike(ilike 와일드카드 이스케이프 + self/set-student-pin 원자 가드 2건 + generate-audio URL 인코딩)를 사후 검증: 이스케이프 정규식 8/8 단위 테스트 PASS, build PASS(번들 해시 불변), verify:student PASS, verify:login은 문서화된 환경 제약으로 제외. 로컬 브랜치 삭제는 destructive-command-gate 훅에 차단되어 브랜치 잔존. 2) 52차 감사 P2(useAttachment가 사람 반 기준으로 유닛 판정해 교재 모드 축 불일치)를 커밋 ce8cc69로 수정: getStudentWords와 동일한 해석으로 isTextbookMode()면 getStudentPrimaryTextbook(studentId).ownerClassId를 콘텐츠 반으로 사용, 해석 실패 시 사람 반 폴백. 파일 1개(+19/-5), build/verify:attachment(137단언)/verify:unit/verify:student ALL PASS. 3) 52차 승인 대기 항목(반 이동 122명, Pre-Middle School, 고1 능률 새책, A그룹 삭제, 보안 잔여 2건, Presentation 6 이름 충돌) 전부 무접촉 유지. push 미실행(로컬 커밋 ce8cc69만).",
+  "blocker": null,
+  "next_action": "운영자: push 여부 결정 + 52차 승인 대기 항목 결재(보안 잔여 2건 우선 권고)",
+  "commits": ["ce8cc69"]
+}

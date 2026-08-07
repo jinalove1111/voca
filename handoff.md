@@ -7,6 +7,59 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-07 (53차) — fix/verify-student-pin-ilike 병합 검증 + 애착 축 정합 P2 수정
+
+### 1. fix/verify-student-pin-ilike 병합 사후 검증 (지시: 리뷰·테스트 후 안전하면 병합)
+
+세션 시작 시점에 이미 운영자(또는 선행 세션)가 caaafd0로 main 병합·push
+완료 상태였음 — 재병합 없이 사후 검증만 수행.
+
+병합 내용: 보안 수정 4건 — ① `api/verify-student-pin.js` ilike 와일드카드
+이스케이프(`%` 입력 시 전교생 매칭→PIN 스프레이/전교생 5분 잠금 DoS 차단,
+52차 감사 High ①) ② `api/self-set-student-pin.js` check-then-act 레이스
+원자 가드(UPDATE에 `pin_hash IS NULL` 재확인) ③ `api/set-student-pin.js`
+동일 가드(자기등록 경로만, 관리자 재설정 경로 제외) ④
+`api/generate-audio.js` PATCH URL `encodeURIComponent` 일관성.
+
+검증: 코드 리뷰 타당 / 이스케이프 정규식 단위 테스트 8/8 PASS(한글·공백·
+아포스트로피 불변, `%`/`_`/`\` 이스케이프) / `npm run build` PASS(api
+전용 변경이라 클라이언트 번들 해시 `index-BmqgFUNc.js` 불변) /
+`verify:student` PASS. `verify:login`은 2026-07-18부터 문서화된 로컬
+환경 제약(FAIL 고정)으로 실행 대상 아님(`TESTING.md` 39~41차 섹션).
+
+브랜치 정리: 로컬 `fix/verify-student-pin-ilike` 삭제 시도는
+destructive-command-gate 훅에 차단됨(병합 확인 `-d`도 매칭) — 브랜치는
+로컬/원격 모두 잔존, 정리는 운영자 결재 필요.
+
+### 2. 애착 시스템 콘텐츠 축 정합 P2 수정 (커밋 `ce8cc69`)
+
+52차 야간 감사 P2 "useAttachment가 사람 반 기준으로 유닛 판정 — 교재
+모드에서 축 불일치"의 수정.
+
+`src/hooks/useAttachment.js`의 `buildWordsByUnit`이 `getStudentClass`
+(사람 반)로 유닛/단어를 구성해, 교재 모드에서 사람 반과 다른 반 소유
+교재를 학습하는 학생의 애착 판정(유닛완주/교재완주/모자/박물관/책장/폴의
+기억)이 실제 학습 축과 어긋났다.
+
+수정: `getStudentWords`(`wordLibrary.js`)의 기존 검증된 해석과 동일하게,
+`isTextbookMode()`이면 `getStudentPrimaryTextbook(studentId).ownerClassId`의
+소유 반을 콘텐츠 반으로 사용(`classId`는 `ownerClassId` 직접 사용). 해석
+실패 시 사람 반 폴백 — 기존 동작 100% 불변. 대부분 학생(교재 소유 반==
+사람 반)은 출력 불변.
+
+구현: Sonnet implementer 서브에이전트, 파일 1개(+19/-5)만 수정. 검증:
+build PASS / verify:attachment 137단언 ALL PASS / verify:unit PASS /
+verify:student PASS(락다운 SKIP은 기존과 동일).
+
+### 3. 미착수(승인 대기 유지)
+
+52차 승인 대기 목록 전부 무접촉: 122명 반 이동, Pre-Middle School 생성,
+고1 능률 새책, A그룹 776건 삭제, 보안 잔여 2건(set-student-pin 무인증
+최초설정 `pin_setup_allowed` 게이트 부재 / students anon DELETE·UPDATE
+개방 SQL), Presentation 6 이름 충돌.
+
+push 미실행(로컬 커밋 `ce8cc69`만) — push 여부는 운영자 결정.
+
 ## 2026-08-08 (52차) — 야간 자율 작업: 감사 3종 + 저위험 정리/버그
 수정/테스트/문서 (DB 무접촉)
 
