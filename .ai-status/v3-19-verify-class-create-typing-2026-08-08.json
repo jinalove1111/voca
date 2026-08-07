@@ -6,7 +6,7 @@
   "status": "completed",
   "progress": 100,
   "started_at": "2026-08-08T00:00:00+09:00",
-  "updated_at": "2026-08-08T00:00:00+09:00",
+  "updated_at": "2026-08-08T23:00:00+09:00",
   "files_owned": [
     "supabase/functions/admin-content-write/index.ts",
     "src/utils/wordLibrary.js",
@@ -15,8 +15,8 @@
     ".ai-status/v3-19-verify-class-create-typing-2026-08-08.json"
   ],
   "files_read": [],
-  "summary": "classes 13개 전수 재조회로 v3_19가 의도한 컨테이너 6개만 class_type='textbook' 전환됐고 실반 2개+QA_ 5개는 'regular' 유지됨을 확인(오적용/누락 0). classifyRealClassNames 구조 판별 모드 활성 확인, verify:student(신규 testRealClassNames 16단언 포함)/verify:unit 라이브 ALL PASS. 54차에서 남긴 '신설 반 타이핑' 갭을 이행: AdminScreen 새 반 추가하기가 createClass(name, undefined, pin)로 항상 class_type='regular' 고정이던 것을 라디오 유형 선택(기본값 'textbook', fail-closed)으로 수정(e2b3cd3)했고, 2차 차단 지점으로 admin-content-write Edge Function의 handleClassCreate가 classType을 'special'/'regular'로만 강제 축소하던 것을 'textbook' 허용하도록 수정(1fcb156). Edge Function은 Deno라 npm build 무관, 재배포 필요(supabase functions deploy admin-content-write). wordLibrary createClass는 요청/저장 class_type 불일치 시 비치명 console.warn으로 미재배포 상태를 감지. build PASS / verify:admin 6개 / verify:student 5개 라이브 PASS. 122명 반 이동/Pre-Middle School 생성/A그룹 삭제/보안 잔여 2건/Presentation 6 이름 충돌은 무접촉 유지.",
+  "summary": "classes 13개 전수 재조회로 v3_19가 의도한 컨테이너 6개만 class_type='textbook' 전환됐고 실반 2개+QA_ 5개는 'regular' 유지됨을 확인(오적용/누락 0). classifyRealClassNames 구조 판별 모드 활성 확인, verify:student(신규 testRealClassNames 16단언 포함)/verify:unit 라이브 ALL PASS. 54차에서 남긴 '신설 반 타이핑' 갭을 이행: AdminScreen 새 반 추가하기가 createClass(name, undefined, pin)로 항상 class_type='regular' 고정이던 것을 라디오 유형 선택(기본값 'textbook', fail-closed)으로 수정(e2b3cd3)했고, 2차 차단 지점으로 admin-content-write Edge Function의 handleClassCreate가 classType을 'special'/'regular'로만 강제 축소하던 것을 'textbook' 허용하도록 수정(1fcb156). Edge Function은 Deno라 npm build 무관, 재배포 필요(supabase functions deploy admin-content-write). wordLibrary createClass는 요청/저장 class_type 불일치 시 비치명 console.warn으로 미재배포 상태를 감지. build PASS / verify:admin 6개 / verify:student 5개 라이브 PASS. 122명 반 이동/Pre-Middle School 생성/A그룹 삭제/보안 잔여 2건/Presentation 6 이름 충돌은 무접촉 유지. [56차 추가] 운영자가 `npx supabase login` 1회 수행 후 세션이 admin-content-write를 재배포(version 6 · ACTIVE 확인), QA_TypeSmoke_20260808으로 classType='textbook' 생성→응답/DB 저장값 확인→실반 판별 불변 확인→자체 삭제 정리까지 8단언 ALL PASS로 반/교과서 분리 구조화 체인이 완결됨.",
   "blocker": null,
-  "next_action": "운영자: supabase functions deploy admin-content-write 재배포 → 교과서 유형 신설 1회 스모크. 이후 후속 후보: 보안 잔여 2건(set-student-pin 게이트/students anon 권한 SQL) 결재",
+  "next_action": "완결 — 후속 후보: 보안 잔여 2건(set-student-pin 게이트/students anon 권한 SQL) 결재",
   "commits": ["1fcb156", "e2b3cd3"]
 }

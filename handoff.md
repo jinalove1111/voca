@@ -7,6 +7,52 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-08 (56차) — admin-content-write 재배포(v6) + 'textbook' 유형 스모크 ALL PASS
+
+### 배포
+
+- 운영자 지시로 Edge Function 재배포 수행. 이 환경에 supabase CLI/토큰이
+  없어 운영자가 자기 터미널에서 `npx supabase login`(브라우저 인증) 1회
+  수행 → 세션이
+  `npx supabase functions deploy admin-content-write --project-ref azsjthtdjfpnctffjfsk --use-api`
+  실행 성공.
+- `functions list` 실측: admin-content-write **version 6 · ACTIVE ·
+  2026-08-08 배포 시각** 확인(55차 1fcb156의 'textbook' 허용 코드 라이브
+  반영).
+
+### 스모크 (8단언 ALL PASS)
+
+- 스크립트: 세션 임시 디렉터리의 smoke_class_type.mjs(저장소 외부,
+  ADMIN_PIN은 환경변수로만 주입·미기록). 절차: QA_TypeSmoke_20260808
+  (QA_ 접두 — 학생 화면 절대 미노출) 이름으로 class.create
+  classType='textbook' 호출 → 응답·DB 저장값 모두 class_type='textbook'
+  확인 → 실반 판별 시뮬레이션에서 스모크 반 미포함 + 실반 목록
+  {MS Advanced Class, Presentation 6} 불변 확인 → class.delete로 자체
+  정리 → 삭제 확인.
+- 1차 시도 not_authorized 원인 2건 기록(다음 세션 참고 가치): ①
+  .env.local ADMIN_PIN 값이 따옴표 포함 형식 ② 따옴표 제거 후에도
+  불일치 — **.env.local의 ADMIN_PIN은 Supabase 시크릿의 실제 ADMIN_PIN과
+  값이 다르다**(함수는 시크릿과 완전일치 비교, 08-02 E2E가 PIN을
+  process.env로만 받은 이유와 동일 구조). 실제 스모크는 운영자가 자기
+  터미널에서 `$env:ADMIN_PIN='...'`로 주입해 실행, ALL PASS 보고.
+- 사후 정리 재확인(세션, 읽기 전용): QA_TypeSmoke_20260808 잔재 0행,
+  classes 총계 13 불변.
+
+### 결론
+
+- 반/교과서 분리 구조화 체인 완결: v3_19 마킹(54차) → 구조 판별 코드
+  (54차) → 신설 반 유형 선택+Edge Function 허용(55차) → 재배포+스모크
+  검증(56차). 이제 관리자가 '교과서' 유형으로 만드는 반은 생성 즉시
+  class_type='textbook'으로 저장되어 학생 PIN 실반 목록에 절대 노출되지
+  않는다.
+- CLI 로그인 토큰은 운영자 로컬에 저장됨(세션은 값 미접근). 스모크용
+  임시 스크립트는 저장소 밖(작업 임시 폴더)이라 커밋 대상 아님.
+
+### 무접촉 유지
+
+- 승인 대기 항목 변동 없음: 보안 잔여 2건(우선 권고), 122명 반 이동,
+  Pre-Middle School 생성, Presentation 6 이름 충돌, A그룹 776건 삭제.
+
 ## 2026-08-08 (55차) — v3_19 실행 검증(구조 모드 활성) + 신설 반 유형 선택 - 커밋 1fcb156/e2b3cd3
 
 ### v3_19 실행 라이브 검증 (운영자 실행 보고 → 읽기 전용 실측)
