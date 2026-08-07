@@ -143,11 +143,23 @@ async function handleClassCreate(supabase: any, payload: any) {
 }
 
 // unit.create — ensureUnit()의 "없으면 생성" 브랜치(wordLibrary.js:504-513 대응).
+// payload.textbookId(선택, 2026-08-08 추가): 신규 유닛에 textbook_id를 함께
+// 태깅한다 — 왜: 교과서 모드에서는 units.textbook_id가 NULL인 유닛이 학생
+// 화면에 아예 안 보이는 기존 갭이 있어(2026-08-06 42차 레이어 갭 버그 계열),
+// 관리자가 새 유닛을 만들 때 소유 반의 교과서 id를 자동으로 물려준다.
+// 미지정이면 기존과 완전히 동일하게 NULL(하위호환) — ⚠ 이 파일 수정 후
+// 운영자가 `supabase functions deploy admin-content-write`로 재배포해야
+// 반영된다(미재배포 상태에서는 클라이언트가 textbookId를 보내도 이 구버전
+// 핸들러가 그 필드를 아예 읽지 않으므로 기존 동작 그대로 유지됨).
 async function handleUnitCreate(supabase: any, payload: any) {
   const classId = requireId(payload?.classId, 'classId')
   const unitName = requireString(payload?.unitName, 'unitName')
+  const insertRow: Record<string, unknown> = { class_id: classId, name: unitName }
+  if (payload?.textbookId != null) {
+    insertRow.textbook_id = requireId(payload.textbookId, 'textbookId')
+  }
   const { data, error } = await supabase
-    .from('units').insert({ class_id: classId, name: unitName }).select('id,name').single()
+    .from('units').insert(insertRow).select('id,name').single()
   if (error) {
     if (error.code === '23505') {
       const { data: existing, error: selErr } = await supabase
