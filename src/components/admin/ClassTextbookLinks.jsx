@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  getClassNames, getClassIdByName, getClassTextbooks, getAllTextbooks,
+  getClassIdByName, getClassNameById, getClassTextbooks, getAllTextbooks,
   isTextbookMode, linkTextbookToClass, unlinkTextbookFromClass,
 } from '../../utils/wordLibrary'
 
@@ -47,14 +47,6 @@ export default function ClassTextbookLinks({ targetClass, onChanged }) {
       </div>
     )
   }
-
-  // ownerClassId -> 반 이름 (소유 컨테이너 표시용). getClassNames +
-  // getClassIdByName 조합 — 전부 동기 캐시 조회라 네트워크 비용 없음.
-  const classNameById = {}
-  getClassNames().forEach((name) => {
-    const id = getClassIdByName(name)
-    if (id) classNameById[id] = name
-  })
 
   const linked = getClassTextbooks(classId) || []
   const linkedIds = new Set(linked.map(t => t.id))
@@ -104,7 +96,7 @@ export default function ClassTextbookLinks({ targetClass, onChanged }) {
         <div className="space-y-1.5">
           {linked.map((t) => {
             const isOwn = t.ownerClassId === classId
-            const ownerName = t.ownerClassId ? classNameById[t.ownerClassId] : null
+            const ownerName = t.ownerClassId ? getClassNameById(t.ownerClassId) : null
             return (
               <div key={t.id} className="flex items-center gap-2 bg-white rounded-lg px-2 py-1.5">
                 <span className="flex-1 min-w-0 text-xs font-bold text-gray-700 overflow-hidden text-ellipsis whitespace-nowrap" title={tbLabel(t)}>

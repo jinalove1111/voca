@@ -1405,7 +1405,9 @@ export const getStudentUnitId = (id) => resolveStudentUnitObj(id)?.id || null
 // class's current name from its id, which is robust against the same class
 // being renamed after a student was assigned to it (a plain className
 // string comparison would silently break in that case).
-const getClassNameById = (classId) => {
+// 2026-08-08 — 관리자 컴포넌트 2곳의 역방향 조회 루프 중복 제거를 위해
+// 공개(기존 내부 사용처 무영향).
+export const getClassNameById = (classId) => {
   if (!classId) return ''
   for (const [name, cls] of Object.entries(_cache)) {
     if (cls.id === classId) return name

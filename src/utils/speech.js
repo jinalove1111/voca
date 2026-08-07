@@ -434,10 +434,6 @@ export function speakPraise(text, onEnd, source = 'praise') {
   speak(text, { rate: 0.95, onEnd, source })
 }
 
-export function hasSpeechRecognition() {
-  return !!(window.SpeechRecognition || window.webkitSpeechRecognition)
-}
-
 // ── Shared microphone stream — the ONLY getUserMedia() call site in the app ──
 // Requesting a fresh getUserMedia() stream for every single recording
 // attempt — and stopping all its tracks right after — causes some mobile
@@ -644,93 +640,6 @@ export function recordWithAutoStop(stream, {
     poll()
   })
   return { promise, stop: () => externalStop() }
-}
-
-function normalize(str) {
-  return str.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim()
-}
-
-function levenshtein(a, b) {
-  if (Math.abs(a.length - b.length) > 3) return 99
-  const m = a.length, n = b.length
-  const row = Array.from({ length: n + 1 }, (_, i) => i)
-  for (let i = 1; i <= m; i++) {
-    let prev = i
-    for (let j = 1; j <= n; j++) {
-      const curr = a[i - 1] === b[j - 1] ? row[j - 1] : 1 + Math.min(row[j], prev, row[j - 1])
-      row[j - 1] = prev
-      prev = curr
-    }
-    row[n] = prev
-  }
-  return row[n]
-}
-
-function lenientMatch(transcript, target) {
-  const normT = normalize(transcript)
-  const normTarget = normalize(target)
-  if (normT.includes(normTarget)) return true
-  const targetWords = normTarget.split(' ')
-  if (targetWords.length === 1) {
-    const len = normTarget.length
-    // Stem: remove common suffixes
-    const stem = normTarget.replace(/(ing|tion|ness|ment|ed|ies|es|s)$/, '')
-    if (stem.length >= 2 && normT.includes(stem)) return true
-    // Prefix: if first ~60% of chars match (handles dropped endings common in Korean accent)
-    const prefixLen = Math.max(3, Math.floor(len * 0.6))
-    if (len >= 4 && normT.split(' ').some(w => w.startsWith(normTarget.slice(0, prefixLen)))) return true
-    // Levenshtein: more lenient thresholds for Korean learners
-    // Korean accent issues: v↔b, f↔p, l↔r, dropped consonant clusters, etc.
-    const maxDist = len <= 4 ? 2 : len <= 7 ? 3 : 4
-    return normT.split(' ').some(w => levenshtein(w, normTarget) <= maxDist)
-  }
-  const stopWords = new Set(['a','an','the','is','are','was','were','i','you','he','she','it','we','they','to','of','in','on','at','and','or','my','your','his','her','do','does','did'])
-  const content = targetWords.filter(w => !stopWords.has(w) && w.length > 1)
-  if (content.length === 0) return normT.includes(normTarget)
-  const transcriptWords = normT.split(' ')
-  // 50% threshold (was 60%) — Korean students often get most words but miss some
-  const matched = content.filter(tw =>
-    transcriptWords.some(rw =>
-      rw.includes(tw) || tw.includes(rw) ||
-      levenshtein(rw, tw) <= (tw.length <= 5 ? 2 : 3)
-    )
-  ).length
-  return matched >= Math.ceil(content.length * 0.5)
-}
-
-// A fresh SpeechRecognition instance per attempt. (An earlier version reused
-// one instance across the whole session to avoid a suspected repeat-
-// permission-prompt issue — that turned out to be caused by insecure-context
-// getUserMedia, not SpeechRecognition, and reusing one instance risked
-// leaving it in a stuck/stale state after repeated start/abort cycles.
-// A fresh instance is cheap and safer.)
-export function listenFor(targetWord, { onStart, onResult, onError } = {}) {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-  if (!SR) {
-    console.warn('[speech] listenFor: no SpeechRecognition available on this browser')
-    onError?.('unsupported')
-    return null
-  }
-  const rec = new SR()
-  rec.lang = 'en-US'
-  rec.interimResults = false
-  rec.maxAlternatives = 5
-  rec.onstart = () => { devLog('[speech] recognition onstart'); onStart?.() }
-  rec.onresult = (event) => {
-    const transcripts = Array.from(event.results[0]).map(r => r.transcript)
-    const success = transcripts.some(t => lenientMatch(t, targetWord))
-    devLog('[speech] recognition onresult:', transcripts, '-> match:', success)
-    onResult?.(success, transcripts[0] || '')
-  }
-  rec.onerror = (event) => { console.warn('[speech] recognition onerror:', event.error); onError?.(event.error) }
-  devLog('[speech] recognition.start() attempted for target:', targetWord)
-  try {
-    rec.start()
-  } catch (e) {
-    console.warn('[speech] recognition.start() threw:', e.name, '-', e.message)
-    onError?.(e.message)
-  }
-  return rec
 }
 
 // ── STT fallback structure ───────────────────────────────────────────────

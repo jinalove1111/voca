@@ -19,6 +19,7 @@ import { supabase } from './supabaseClient'
 // pipeline.js 원본을 spellingReviewBulkPlan.js가 이미 재수출해두고 있어
 // 그걸 그대로 쓴다(서버 파일 직접 import 금지, 재복제 금지 — 헌법 규칙 3).
 import { normalizeForCompare } from './spellingReviewBulkPlan'
+import { isMissingTableError } from './wordLibrary'
 
 let _available = null // null = 미확인, false = 테이블 없음(이 세션 동안 재시도 안 함)
 let _warned = false
@@ -27,22 +28,6 @@ function warnOnce(err) {
   if (_warned) return
   _warned = true
   console.warn('[spellingReview] 검토 큐 접근 실패 — supabase_v2_0_spelling_mixed.sql이 아직 실행 안 됐을 수 있음(기록 자동 스킵, 채점/학습에는 영향 없음):', err?.message || err)
-}
-
-// 2026-08-02 — fetchPendingSpellingReviews가 "테이블 없음"과 "그 외 에러
-// (RLS/네트워크 등)"를 둘 다 null로 뭉뚱그려 패널이 "SQL 실행 필요"로만
-// 안내하던 것을 구분한다. wordLibrary.js가 이미 export하는 isMissingTableError
-// 와 논리적으로 동일하나, 이 파일이 esbuild로 단독 번들되는 테스트가 여럿
-// 있어(scripts/testWritingReviewAiPipeline.mjs 섹션 60의 spellingReviewApi.js
-// 단독 번들 — supabaseClient만 스텁하고 wordLibrary는 스텁 대상이 아님) 새
-// import를 추가하면 그 번들에 wordLibrary.js 전체가 딸려 들어가는 부작용이
-// 생긴다 — writingAnswerStatsApi.js의 동일 이름 로컬 함수와 같은 이유로
-// import 대신 로컬 정의를 유지한다(§ 그 파일 헤더 주석 33-41행).
-function isMissingTableError(err) {
-  if (!err) return false
-  if (err.code === '42P01' || err.code === 'PGRST205') return true
-  const msg = String(err.message || '').toLowerCase()
-  return msg.includes('does not exist') || msg.includes('schema cache')
 }
 
 // ── 학생 제출 통계 기록(2026-07-24, "선생님이 같은 검토를 두 번 하지 않는"

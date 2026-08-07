@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
-  getClassNames, getClassIdByName, getClassUnits, setStudentUnit,
+  getClassNameById, getClassUnits, setStudentUnit,
   getStudentClassAssignments, assignTextbook, removeTextbookAssignment, setAssignmentUnit,
   getAllTextbooks, getOwnTextbookOfClass,
 } from '../../utils/wordLibrary'
@@ -39,13 +39,6 @@ export default function TextbookAssignmentPanel({ studentId, onChanged }) {
   const [tableMissing, setTableMissing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [addTarget, setAddTarget] = useState('')
-
-  const classList = getClassNames()
-  const classNameById = {}
-  classList.forEach((name) => {
-    const id = getClassIdByName(name)
-    if (id) classNameById[id] = name
-  })
 
   const load = async () => {
     setAssignments(await getStudentClassAssignments(studentId))
@@ -86,7 +79,7 @@ export default function TextbookAssignmentPanel({ studentId, onChanged }) {
 
   const handleRemove = async (a) => {
     const tbForRow = a.textbookId ? getAllTextbooks().find((t) => t.id === a.textbookId) : null
-    const clsName = tbForRow?.name || classNameById[a.classId] || '(알 수 없는 반)'
+    const clsName = tbForRow?.name || getClassNameById(a.classId) || '(알 수 없는 반)'
     if (!window.confirm(`"${clsName}" 교과서 배정을 해제할까요?\n(이 교과서에서 쌓은 진행 기록은 지워지지 않고 그대로 남아요)`)) return
     setBusy(true)
     try {
@@ -107,7 +100,7 @@ export default function TextbookAssignmentPanel({ studentId, onChanged }) {
         // 주 교재는 항상 기존 setStudentUnit 경로로 — 학생 실제 학습
         // 화면이 읽는 students.current_unit_id를 여기서 갱신해야 관리자
         // 화면과 실제 화면이 어긋나지 않는다(파일 헤더 주석 참고).
-        const clsName = classNameById[a.classId]
+        const clsName = getClassNameById(a.classId)
         const unitName = clsName && getClassUnits(clsName).find((u) => u.id === unitId)?.name
         if (unitName) await setStudentUnit(studentId, unitName)
       } else {
@@ -139,11 +132,11 @@ export default function TextbookAssignmentPanel({ studentId, onChanged }) {
       ) : (
         <div className="space-y-1.5">
           {assignments.map((a) => {
-            const clsName = classNameById[a.classId] || '(알 수 없는 반)'
+            const clsName = getClassNameById(a.classId)
             // 행 라벨 = 교과서 이름 우선(정책 9), textbookId 해석 불가 시 기존 반 이름 라벨로 폴백.
             const tbForRow = a.textbookId ? getAllTextbooks().find((t) => t.id === a.textbookId) : null
-            const label = tbForRow?.name || clsName
-            const units = classNameById[a.classId] ? getClassUnits(clsName) : []
+            const label = tbForRow?.name || clsName || '(알 수 없는 반)'
+            const units = clsName ? getClassUnits(clsName) : []
             return (
               <div key={a.classId} className="flex items-center gap-2 bg-white rounded-lg px-2 py-1.5">
                 <span className="text-xs font-bold text-gray-700 flex-shrink-0 max-w-[7rem] overflow-hidden text-ellipsis whitespace-nowrap" title={label}>
