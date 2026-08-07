@@ -7,6 +7,79 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-08 (52차) — 야간 자율 작업: 감사 3종 + 저위험 정리/버그
+수정/테스트/문서 (DB 무접촉)
+
+### 운영자 지시
+
+취침 중 승인 불요 작업만: 리팩토링·UI/UX·버그·성능·테스트·문서·TODO·보안
+점검·코드 리뷰. 금지: 학생 이동/SQL 실행/삭제/classes 변경/textbooks
+생성/병합/라이브 DB 수정.
+
+### 완료(커밋)
+
+- `ddb057f` test: 순수 유틸 단위 테스트 31건(matchGame/dateSeoul/
+  assignDirections 최초 커버, houseSystem/analyticsMath는 기존 커버 확인
+  후 경계만 보강). quiz 도메인 등록.
+- `8c9dc6f` docs: ARCHITECTURE(학생 홈 정책)/DATABASE(v3_16~18+backup
+  테이블+도메인 확정)/TESTING(verify:login 환경 제약)/PROJECT_GUIDE(헷갈리는
+  것 #7)/README(신규) — append-only.
+- `6a04867` refactor: speech.js 미사용 export 2개 제거(-91줄, 전 리포
+  참조 0건), spellingReviewApi 중복 isMissingTableError 통합, wordLibrary
+  getClassNameById 공개, 관리자 2곳 역방향 조회 루프 통합.
+- `eb58735` fix: 야간 감사 "안전" 등급 8건 — WordDetail 언마운트 오디오
+  정지+memo deps 문서화, SpellingQuestion/EntranceTest/AdminScreen 타이머
+  cleanup, productEvents dedupe 키에 studentId(공용 기기 2번째 학생 이벤트
+  유실), matchGame 빈 pool 폴백, App.jsx 낡은 주석 정정.
+- `1e59a81` chore(security): `.gitignore`에 `ops/` 추가 — 공개 저장소에
+  학생 실명·UUID 유출 방지.
+- 전부 build PASS, verify:quiz/student PASS, push 완료, Vercel 배포 확인
+  (index-BmqgFUNc.js).
+
+### 감사 결과 요약
+
+- **버그 헌팅**: P0/P1 0건. P2 5건(useAttachment가 사람 반 기준으로 유닛
+  판정 — 교재 모드에서 축 불일치 / WordDetail·QuizGame 마이크 async
+  언마운트 가드 / 그 외 위 커밋에서 처리). P3 8건. 이 저장소는 cancelled
+  플래그·타이머 정리가 대부분 이미 갖춰져 있다는 평가.
+- **정리 목록**: eslint 미설치(설정·의존성 모두 없음 — 경고 집계 불가).
+  raw console.log는 AdminScreen 1건뿐(나머지는 devLog). TODO/FIXME는
+  paulRankShared 2건(P3, 자체 문서화됨). 미사용 스크립트 3개
+  (auditLegacyMultiClass/preMigrationCounts/testReadingLive)와 export-only
+  불필요 다수는 위험도 판단 후 미제거.
+- **보안 점검(신규 High 2건 + 기존 미머지 1건)**: ①
+  fix/verify-student-pin-ilike 브랜치의 패치가 3주째 미머지 — 이름에 `%`
+  입력 시 전교생 매칭(실측 content-range 1156) → 전교생 로그인 5분 잠금
+  DoS 및 PIN 스프레이 가능 ② api/set-student-pin 무인증 최초설정 분기가
+  pin_setup_allowed 게이트 없이 동작(현재 PIN 미보유 실학생 8명 선점
+  가능, 자기등록 탭 제거로 합법 호출자 0) ③ students anon DELETE/UPDATE
+  권한 개방(공개 키로 학생 행 삭제·반 변경 가능). 그 외: admin-pin-actions
+  create_student가 house_id 부재로 라이브 500(v2_7 미실행), 저장소 public
+  + 미수정 취약점 재현 문서 공개. XSS/SQLi/번들 시크릿/localStorage
+  민감정보 = 0건, PIN 4컬럼 차단·backup 테이블 anon 차단은 정상 확인.
+
+### 반 이동 Preview 완성(조회 전용)
+
+- `ops/account-cleanup-2026-08-07/class_migration_full_preview.csv`(122행:
+  유닛·별·PIN·배정 교과서·이동 후 필요 교과서·위험도) +
+  `class_migration_summary.md`(반별 표, 위험도 정의, 권고 순서
+  ①백업→②SCA 선배정→③class_id 이동→④검증, 롤백 SQL 텍스트, class_type
+  제안).
+- 위험도: low 117 / medium 1 / high 4. 발견: 122명 중 5명이 `_QA_` 접두
+  테스트 픽스처(기존 `QA_` 필터가 놓침) → 실제 이동 대상 117명. PIN
+  미보유 실학생은 문지유 1명뿐.
+- class_type 조사: 컬럼은 있으나 대상 6개 반 전부 'regular' — 타입 기반
+  구분 불가(코드가 이름 allowlist를 쓰는 이유).
+- ops/는 .gitignore 대상이라 저장소에 커밋되지 않음(학생 PII 보호) —
+  로컬 파일로만 존재.
+
+### 승인 대기(전부 미실행, DB 무접촉 유지)
+
+122명(실 117명) 반별 이동 매핑 / Pre-Middle School 생성 / "고1 능률 새책"
+생성 방식(textbooks에 미존재 확인, 생성 시 컨테이너 classes 행이 늘어나는
+구조적 상충) / A그룹 776건 삭제 / 보안 3건 조치 / Presentation 6 이름
+충돌.
+
 ## 2026-08-07 (51차) — 4증상 원인 분석 + 학생 홈 최종 정책(반 표시
 전용·교과서 허용 목록·드롭다운 상시) — 커밋 a94700a/c1afeed
 
