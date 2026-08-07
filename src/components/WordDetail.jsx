@@ -491,6 +491,14 @@ function QuizStep({ word, classWords, onDone, onMarkQuizSolved, onQuizAnswer }) 
       onError: () => setReplaying(false),
     })
   }
+  // deps를 의도적으로 [word.id]로만 좁힘 — classWords/word.meaning도 body에서
+  // 읽지만, 이 컴포넌트는 WordDetail이 key={word.id}로 렌더해 단어마다 완전히
+  // 새 인스턴스로 마운트된다(파일 하단 "key={word.id} on every step
+  // component" 주석과 동일 원칙). 즉 word.id가 바뀌면 이 useMemo 자체가
+  // 새로 생성되므로 classWords/word.meaning을 deps에 추가로 넣어도 실질적
+  // 차이가 없고, 오히려 같은 단어 안에서 classWords 참조만 바뀌는 리렌더에
+  // 선택지가 재섞이는 걸 막기 위해 좁혀둔 것.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const options = useMemo(() => {
     const pool = (classWords || []).filter(w => w.id !== word.id && w.meaning && w.meaning !== word.meaning)
     const wrongs = shuffle(pool).slice(0, 3).map(w => w.meaning)
@@ -749,6 +757,13 @@ export default function WordDetail({
   const STEPS = buildSteps(mode, !!exampleEnglish, spellingAllowed, !!curriculumExample)
 
   const [step, setStep] = useState(STEPS[0])
+
+  // 화면 이탈(뒤로가기/모드 전환 등으로 이 컴포넌트 자체가 언마운트) 시
+  // 재생 중이던 오디오 정지 — 아래 word.id 변경 effect는 "단어가 바뀔 때"만
+  // stopCurrentAudio()를 부르고, 언마운트 자체에는 cleanup이 없었다
+  // (SpellingQuestion.jsx의 동일 목적 effect와 대조). 빈 deps로 마운트당
+  // 1회만 등록되는 cleanup-only effect.
+  useEffect(() => stopCurrentAudio, [])
 
   // Reset to first step whenever the word changes, and cut off whatever
   // audio was playing for the previous word.

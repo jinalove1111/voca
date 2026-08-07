@@ -244,8 +244,10 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 단일 배정" 1개로 안전하게 폴백하므로(wordLibrary.js 주석 참고), 이
   // state는 오늘 마이그레이션 실행 전(그리고 실행 후에도 아직 두 번째
   // 교재를 안 받은) 학생 전원에게 항상 length===1로 남는다 —
-  // TextbookSelector는 length<=1이면 스스로 아무것도 렌더하지 않는다
-  // (요구사항 2, 7 — 기존 학생 화면 변화 0). 로그인 직후(studentId 변경
+  // TextbookSelector는 options가 0개일 때만 스스로 아무것도 렌더하지
+  // 않는다 — 1개여도 select는 항상 렌더된다(2026-08-07 운영자 정책 3
+  // 최종, TextbookSelector.jsx 파일 헤더 주석 참고. 예전엔 1개일 때 정적
+  // 텍스트로 숨겼으나 그 분기는 폐기됨). 로그인 직후(studentId 변경
   // 시) 1회 fetch하며, 이 호출이 getStudentWords의 classId override
   // 검증용 캐시도 함께 채운다(현재는 override를 쓰지 않지만 — 아래
   // handleTextbookSwitch 주석 참고 — wordLibrary.js의 명시된 계약이라

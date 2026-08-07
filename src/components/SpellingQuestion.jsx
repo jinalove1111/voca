@@ -110,6 +110,10 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
   const reportedRef = useRef(false)
   const cancelRef = useRef(null)
   const inputRef = useRef(null)
+  // markCorrect()의 자동 진행 타이머(700/1700ms) id — 언마운트(화면 이탈)
+  // 시 clearTimeout하지 않으면 백그라운드 탭 스로틀 등으로 지연 발동해
+  // 이미 떠난 화면에서 onDone()이 뒤늦게 한 번 더 불릴 수 있다(이중 진행).
+  const autoAdvanceTimerRef = useRef(null)
   // 브라우저 자동완성 프로필 매칭을 깨기 위한 무작위 비표준 name — 마운트당
   // 1회 고정(리렌더마다 바뀌면 일부 브라우저가 필드를 새 필드로 취급해
   // 포커스/IME 조합이 끊길 수 있음).
@@ -212,9 +216,13 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
     // 보여줌(1700ms) — 일반 정답은 기존 속도감(700ms) 그대로 유지.
     const extra = isComebackWord || isMilestone
     setCelebrateLong(extra)
-    setTimeout(() => onDone?.(), extra ? 1700 : 700)
+    clearTimeout(autoAdvanceTimerRef.current)
+    autoAdvanceTimerRef.current = setTimeout(() => onDone?.(), extra ? 1700 : 700)
     try { playSuccessSound() } catch {}
   }
+
+  // 언마운트(단어 변경으로 인한 key 교체 포함) 시 위 자동 진행 타이머 정리.
+  useEffect(() => () => clearTimeout(autoAdvanceTimerRef.current), [])
 
   const submitAnswer = () => {
     // Writing MVP(2026-07-20) — 빈 입력으로 확인을 눌렀을 때 예전엔 아무
@@ -438,7 +446,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
               어떤 이유로 실패/지연될 때만(1.5초 경과) 나타나는 수동
               탈출구. */}
           {showManualNext && (
-            <button onClick={() => onDone?.()}
+            <button onClick={() => { clearTimeout(autoAdvanceTimerRef.current); onDone?.() }}
               className="w-full mt-3 bg-teal-500 hover:bg-teal-600 text-white font-black py-3 rounded-2xl btn-press text-base animate-slide-up">
               다음 문제 →
             </button>

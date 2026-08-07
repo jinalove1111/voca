@@ -22,7 +22,12 @@ export function shuffle(arr) {
 
 export function pickNextTarget(words, lastWord) {
   const pool = words.length > 1 ? words.filter(w => w.word !== lastWord) : words
-  return pool[Math.floor(Math.random() * pool.length)]
+  // 방어: words에 lastWord와 같은 word 텍스트를 가진 항목만 있으면(예: 같은
+  // 철자 중복 등록) pool이 비어 undefined를 반환해 호출부에서 null-deref가
+  // 날 수 있다. MatchGameShell이 이미 eligible words>=4를 보장해 실제로는
+  // 거의 발생하지 않지만, 비었을 때 words[0]로 폴백해 항상 유효한 단어를
+  // 반환하도록 방어.
+  return pool.length ? pool[Math.floor(Math.random() * pool.length)] : words[0]
 }
 
 // The question is spoken as the English word; the options are Korean

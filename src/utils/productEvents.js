@@ -23,13 +23,21 @@ async function anonIdFor(studentId) {
   return hex
 }
 
-const _sentToday = new Set() // `${event}:${localDay}` — 세션 내 dedupe
+const _sentToday = new Set() // `${event}:${studentId}:${localDay}` — 세션 내 dedupe
 const localDay = () => new Date().toDateString()
 
 export function trackEvent(studentId, event) {
   try {
     if (!studentId || !event || !isFeatureEnabled('productAnalytics')) return
-    const key = `${event}:${localDay()}`
+    // 공용 기기(교실 PC 등)에서 같은 브라우저 세션 안에 학생 A -> 학생 B로
+    // 로그인이 바뀌는 시나리오 방어. 이 Set은 페이지 로드 동안(=세션 내)
+    // 유지되는 모듈 전역이라, 학생 축 없이 `${event}:${day}`만 키로 쓰면
+    // A가 이미 보낸 이벤트를 B가 똑같이 발생시켜도 조용히 무시됐다(관찰
+    // 레이어가 B의 행동을 놓침). studentId를 키에 포함해 학생별로 dedupe.
+    // 하위호환: 오늘 날짜로 이미 쌓인 구 형식 키(`${event}:${day}`)는 이
+    // 새 키와 매치되지 않아 그냥 무시될 뿐(최초 1회 추가 전송 가능성) —
+    // Set은 순수 세션 내 캐시라 저장 데이터 손상/중복 삽입 위험은 없다.
+    const key = `${event}:${studentId}:${localDay()}`
     if (_sentToday.has(key)) return
     _sentToday.add(key)
     anonIdFor(studentId)

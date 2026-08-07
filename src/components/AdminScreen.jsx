@@ -1607,6 +1607,10 @@ export default function AdminScreen({ onBack }) {
   const [tab, setTab]         = useState('classes') // classes | excel | pdf | features | testpaper | debug (debug is hidden — not in the visible tab bar, reached via 5x tap on the title)
   const [titleTapCount, setTitleTapCount] = useState(0)
   const titleTapTimer = useRef(null)
+  // 5연속 탭 감지용 리셋 타이머(1500ms) — 관리자 화면을 벗어나며 언마운트될
+  // 때 정리하지 않으면 이미 떠난 컴포넌트의 setTitleTapCount가 늦게 호출될
+  // 수 있다(React 경고 대상은 아니지만 불필요한 사이드이펙트 방지).
+  useEffect(() => () => clearTimeout(titleTapTimer.current), [])
 
   const handleTitleTap = () => {
     setTitleTapCount((c) => {

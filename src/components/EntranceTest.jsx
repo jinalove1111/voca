@@ -107,6 +107,11 @@ export default function EntranceTest({ studentId, studentName, onBack }) {
   const startedAtRef = useRef(0)
   const finishedRef = useRef(false)
   const inputRef = useRef(null)
+  // advance()의 문제 사이 피드백 타이머(FEEDBACK_MS) id — 화면 이탈(뒤로가기
+  // 등으로 언마운트) 시 정리하지 않으면 이미 떠난 뒤 늦게 발동해 finishTest/
+  // submitResultToServer 같은 사이드이펙트가 예기치 않게 실행될 수 있다.
+  const feedbackTimerRef = useRef(null)
+  useEffect(() => () => clearTimeout(feedbackTimerRef.current), [])
   // 시험용 입력창 자동완성 차단용 무작위 비표준 name(마운트당 1회 고정) —
   // SpellingQuestion과 동일한 조합(autoComplete=off는 Android 키보드가
   // 자주 무시해서, 저장된 폼 프로필 매칭을 깨는 무작위 name을 함께 씀).
@@ -227,7 +232,8 @@ export default function EntranceTest({ studentId, studentName, onBack }) {
     const correct = gradeEntranceAnswer(q, answerText)
     if (correct) playSuccessSound()
     setFeedback({ correct, answer: q.answer })
-    setTimeout(() => {
+    clearTimeout(feedbackTimerRef.current)
+    feedbackTimerRef.current = setTimeout(() => {
       setFeedback(null)
       setInput('')
       if (qIdx + 1 < questionsRef.current.length) {
