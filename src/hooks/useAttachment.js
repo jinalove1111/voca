@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { deriveAttachmentStats, completedUnits } from '../utils/attachment/attachmentCore'
 import { evaluateHatUnlocks, hatById } from '../utils/attachment/hatSystem'
 import { detectNewMilestones } from '../utils/attachment/milestones'
-import { getStudentClass, getClassUnits, getClassWords, getClassIdByName, wordSlug } from '../utils/wordLibrary'
+import { getStudentClass, getClassUnits, getClassWords, getClassIdByName, wordSlug, isTextbookMode, getStudentPrimaryTextbook, getClassNameById } from '../utils/wordLibrary'
 import { trackEvent, EV } from '../utils/productEvents'
 
 // getClassWords()가 돌려주는 단어 객체의 id는 words.id(UUID) — 애착 시스템의
@@ -41,17 +41,31 @@ function toAttachmentWord(raw) {
 
 // 반의 유닛별 단어 목록 — 유닛 완료/박물관/책장이 공유하는 형태.
 // wordLibrary 캐시는 동기 조회라 여기서 바로 구성한다.
+//
+// 콘텐츠 축 = 사람 반이 아니라 현재 교재(getStudentWords, wordLibrary.js
+// 2563~2574줄과 동일한 해석) — 교재 모드에서는 학생이 사람 반과 다른 반
+// 소유 교재를 학습할 수 있어, 사람 반으로 유닛을 구성하면 애착 판정이
+// 실제 학습 축과 어긋난다. tb 해석 실패 시엔 사람 반 그대로 — 기존 동작 불변.
 export function buildWordsByUnit(studentId) {
   const className = getStudentClass(studentId)
   if (!className) return { className: '', classId: null, wordsByUnit: [] }
-  const units = getClassUnits(className)
+  let contentClassName = className
+  let contentClassId = getClassIdByName(className)
+  if (isTextbookMode()) {
+    const tb = getStudentPrimaryTextbook(studentId)
+    if (tb?.ownerClassId) {
+      const contentCls = getClassNameById(tb.ownerClassId)
+      if (contentCls) { contentClassName = contentCls; contentClassId = tb.ownerClassId }
+    }
+  }
+  const units = getClassUnits(contentClassName)
   return {
-    className,
-    classId: getClassIdByName(className),
+    className: contentClassName,
+    classId: contentClassId,
     wordsByUnit: units.map((u) => ({
       unitId: u.id,
       unitName: u.name,
-      words: getClassWords(className, u.name).map(toAttachmentWord),
+      words: getClassWords(contentClassName, u.name).map(toAttachmentWord),
     })),
   }
 }
