@@ -79,6 +79,7 @@ export const DOMAINS = {
       { script: 'scripts/testMultiClass.mjs', builders: ['wordlib'] },
       { script: 'scripts/testRenameClass.mjs', builders: ['wordlib'] },
       { script: 'scripts/testClassDeleteCascade.mjs', builders: [] },
+      { script: 'scripts/testRealClassNames.mjs', builders: ['wordlib'], extra: true, note: '2026-08-08 — 교과서 컨테이너 반 노출 차단(classifyRealClassNames 순수 함수, 네트워크 0). 13개 필수 도메인 밖, 신규 보너스 커버리지.' },
     ],
   },
   admin: {
