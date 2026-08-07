@@ -1518,6 +1518,15 @@ export function getClassIdByName(className) {
   return _cache[className]?.id || null
 }
 
+// 2026-08-08 — 관리자 반 관리 목록을 "수업 반"과 "교과서 라이브러리"로
+// 분리 렌더하기 위한 읽기 전용 조회(AdminScreen.jsx). classifyRealClassNames
+// 는 이름 배열만 반환해 원래 이름과 다시 매칭해야 했으므로, 반 이름 하나를
+// 그대로 classType으로 변환하는 1줄 헬퍼를 별도로 둔다(순수 읽기, DB 접근
+// 없음 — _cache가 이미 getClassNames() 등으로 채워져 있다고 가정).
+export function getClassTypeByName(className) {
+  return _cache[className]?.classType || null
+}
+
 // v2.1 — 반이 바뀌면 current_unit_id도 함께 정리한다: 예전 반의 유닛 id가
 // 그대로 남으면 "학생의 유닛이 자기 반 소속이 아닌" 불일치 행이 생긴다.
 // 새 반에서 같은 이름의 유닛이 있으면 그 id로, 없으면 null(이름/첫 유닛

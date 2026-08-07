@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react'
 // 키웠다(엑셀 업로드는 자주 쓰는 기능이 아님). PdfUpload.handleFile이 이미
 // pdfjs-dist를 동적 import하는 선례가 있어 동일 패턴으로 handleFile 안에서만
 // 로드하도록 바꾼다(정적 import 제거, 동작은 동일).
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchAssignmentHistory, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, fetchXpByEventType, getClassIdByName, getStudents, wordSlug, isoDaysAgoStr, buildUnitWordAssetPayloads, groupAssetPayloadsByShape, ensureTextbookLayerBackfilled, getOwnTextbookOfClass } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchAssignmentHistory, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, fetchXpByEventType, getClassIdByName, getStudents, wordSlug, isoDaysAgoStr, buildUnitWordAssetPayloads, groupAssetPayloadsByShape, ensureTextbookLayerBackfilled, getOwnTextbookOfClass, getClassTypeByName } from '../utils/wordLibrary'
 // Word Asset Library(M3c, 2026-08-05) — 엑셀 업로드 저장 "이후" 자산
 // 업서트 배선 전용(조회 배선은 이번 범위 아님, 규칙 12). fetchWordAssetsByWords/
 // upsertWordAssets 둘 다 절대 throw하지 않는 계약(src/utils/wordAssets.js
@@ -1622,6 +1622,22 @@ export default function AdminScreen({ onBack }) {
     })
   }
   const [classes, setClasses] = useState(() => getClassNames())
+  // 2026-08-08 — 반 관리 목록 렌더를 "🏫 수업 반"/"📚 교과서 라이브러리"
+  // 두 섹션으로 분리하기 위한 파생 배열(운영자 확정 — 교과서 라이브러리
+  // 모델). 판별 자체는 이미 v3_19로 구조화된 classType(class_textbooks/
+  // ensureClass가 채우는 classes.class_type)을 그대로 재사용 — QA_ 반은
+  // 여전히 classType이 'textbook'이 아니므로 자동으로 수업 반 섹션에
+  // 남는다(기존 목록에 섞여 보이던 동작 그대로, 규칙 3 — 이름 매칭이
+  // 아니라 이미 있는 구조 신호를 재사용). 펼침/유닛 관리 등 실제 로직은
+  // renderClassCard(아래)가 그대로 담당하므로 이 배열은 순수 그룹핑용.
+  const regularClassNames = useMemo(
+    () => classes.filter((c) => getClassTypeByName(c) !== 'textbook'),
+    [classes]
+  )
+  const libraryClassNames = useMemo(
+    () => classes.filter((c) => getClassTypeByName(c) === 'textbook'),
+    [classes]
+  )
   const [viewClass, setView]  = useState(null)
   const [viewUnit, setViewUnit] = useState('Unit 1')
   const [newClassName, setNewClassName] = useState('')
@@ -1815,9 +1831,14 @@ export default function AdminScreen({ onBack }) {
                 <p className="font-bold text-gray-500">아직 반이 없어요.</p>
                 <p className="text-sm text-gray-400 mt-1">아래에서 새 반을 추가해보세요!</p>
               </div>
-            ) : (
-            <div className="space-y-4">
-              {(classes || []).map(c => {
+            ) : (() => {
+              /* 2026-08-08 — 운영자 확정(교과서 라이브러리 모델): "🏫 수업
+                 반"과 "📚 교과서 라이브러리"를 별 섹션으로 렌더한다. 카드
+                 마크업/펼침·유닛 관리·단어 추가 등 로직은 기존
+                 `.map(c => {...})` 바디를 글자 그대로 옮긴 것 — renderClassCard
+                 로 이름만 붙여 두 배열(regularClassNames/libraryClassNames)에
+                 재사용한다(동작 무변경, 그룹 분리만 — 규칙 3). */
+              const renderClassCard = (c) => {
                 const units = getClassUnits(c) || []
                 const totalWords = units.reduce((sum, unit) => sum + (unit?.words?.length ?? 0), 0)
                 const unitNames = getClassUnitNames(c) || []
@@ -2071,9 +2092,28 @@ export default function AdminScreen({ onBack }) {
                     )}
                   </div>
                 )
-              })}
-            </div>
-          )}
+              }
+              return (
+                <>
+                  <div>
+                    <p className="font-black text-gray-700 text-sm">🏫 수업 반</p>
+                    <p className="text-xs text-gray-400 mb-2">학생이 소속되는 반</p>
+                    {regularClassNames.length === 0 ? (
+                      <p className="text-xs text-gray-400">수업 반이 없어요.</p>
+                    ) : (
+                      <div className="space-y-4">{regularClassNames.map(renderClassCard)}</div>
+                    )}
+                  </div>
+                  {libraryClassNames.length > 0 && (
+                    <div className="mt-6">
+                      <p className="font-black text-gray-700 text-sm">📚 교과서 라이브러리</p>
+                      <p className="text-xs text-gray-400 mb-2">교과서 콘텐츠(유닛/단어) — 학생 반 목록에 노출되지 않음. 반에 제공하려면 반의 🔗 교재 연결 사용</p>
+                      <div className="space-y-4">{libraryClassNames.map(renderClassCard)}</div>
+                    </div>
+                  )}
+                </>
+              )
+            })()}
           </div>
         )}
 
