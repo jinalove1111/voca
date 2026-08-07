@@ -52,10 +52,22 @@ export default async function handler(req, res) {
   // findStudentByName() used (a student retyping "heeja" vs "Heeja" must
   // resolve to the same account). Now may legitimately return MULTIPLE rows
   // (동명이인, different classes) — the PIN, not the name alone, picks one.
+  //
+  // [SECURITY FIX] ilike wildcard injection — trimmedName is raw user input
+  // fed directly into PostgREST's ilike filter, where `%`/`_` are ILIKE
+  // metacharacters (`%` = any-substring, `_` = any-char), not literal text.
+  // A request like {"name":"%","pin":"1234"} previously matched EVERY
+  // student, turning one request into a PIN spray against all ~111
+  // accounts, and on failure the code below increments pin_fail_count for
+  // every unlocked candidate — i.e. a single crafted request could lock out
+  // the entire student body (mass DoS). Escaping `\`, `%`, `_` before the
+  // query neutralizes the wildcards while leaving normal name matching
+  // (Korean names, spaces, apostrophes, case-insensitivity) unchanged.
+  const escapedName = trimmedName.replace(/[\\%_]/g, '\\$&')
   const { data: candidates, error: selErr } = await supabase
     .from('students')
     .select('id,name,class_id,unit_name,pin_hash,pin_fail_count,pin_locked_until,classes(name)')
-    .ilike('name', trimmedName)
+    .ilike('name', escapedName)
   if (selErr) {
     res.status(500).json({ error: selErr.message })
     return
