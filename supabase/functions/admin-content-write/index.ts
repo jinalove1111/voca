@@ -123,7 +123,11 @@ function requireId(value: unknown, field: string): string {
 // 동시 요청 경합(23505, unique 제약)에도 안전하게 기존 행을 반환한다.
 async function handleClassCreate(supabase: any, payload: any) {
   const name = requireString(payload?.name, 'name')
-  const classType = payload?.classType === 'special' ? 'special' : 'regular'
+  // 'textbook'=교과서 컨테이너(v3_19 구조 판별에서 실반 목록 제외 마킹,
+  // 2026-08-08). 'special'/'textbook' 외 값(미지정 포함)은 기존과 동일하게
+  // 'regular'로 폴백 — 하위호환 유지. ⚠ 이 파일 수정 후 운영자가
+  // `supabase functions deploy admin-content-write`로 재배포해야 반영된다.
+  const classType = ['special', 'textbook'].includes(payload?.classType) ? payload.classType : 'regular'
   const { data, error } = await supabase
     .from('classes').insert({ name, class_type: classType }).select('id,name,class_type').single()
   if (error) {
