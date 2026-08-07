@@ -406,3 +406,22 @@ FAIL하는 것은 **2026-07-18부터 알려진 기존 환경 제약**이고, 39~
 `tests/harness/registry.mjs` 도메인 등록 여부는 코드 소유 세션의 몫이라
 여기서는 존재 확인만 기록하고 표 자체는 건드리지 않는다(append-only,
 동시 작업 파일 비접촉 원칙 — `CLAUDE.md` 규칙 16).
+
+## 관련 항목: `verify:homework`/`verify:persistence` 3종 SKIP 전환 (2026-08-09, 62차)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+`testSyncProgress.mjs`(homework 도메인)/`testMultiDeviceMerge.mjs`/
+`testFullProgressBackup.mjs`(persistence 도메인)가 `verify:all`에서
+FAIL하던 것은 코드 회귀가 아니라 `supabase_v3_16_students_insert_lockdown.sql`
+(학생 INSERT 락다운)이 그새 운영자에 의해 실행되어, 이 스크립트들의
+QA_ 픽스처 생성용 anon `students` INSERT가 42501(permission denied)로
+막힌 것임을 확인했다 — 기존 관례(`788e5ac`/`7eb2d64`의 42501 정직 SKIP
+패턴)와 동일하게 각 스크립트가 42501/RLS 에러를 감지하면 SKIP 로그를
+찍고 exit 0으로 종료하도록 수정됐다(코드는 implementer 영역, 여기서는
+사실 기록만). 결과: `verify:homework` 4/4, `verify:persistence` 9/9로
+그린 복귀. **실검증(sync/merge/backup이 실제로 동작하는지)은 서버 경로
+(`admin create_student` 등) 기반으로 픽스처 생성을 재작성해야 가능한
+후속 과제로 남아있다** — 기존 `testRenameClass` 등과 동일한 성격의
+검증 부채. `verify:login` 로컬 고정 FAIL(위 섹션)은 이번 작업과 무관하게
+그대로 유효.

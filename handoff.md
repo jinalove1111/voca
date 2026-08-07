@@ -7,6 +7,28 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (62차) — 야간 자율: 교과서 라이브러리 완성(v3_21 준비+UI 분리) + 회귀 스위트 정비 — 커밋 46127e7/0a46c2d/6af3c96
+
+### 운영자 확정 아키텍처(2026-08-08 밤)
+- 교과서는 반에 영구 소속되지 않는 재사용 라이브러리, 반↔교과서 다대다. 실측 결론: **데이터 모델은 이미 이 구조** — textbooks(라이브러리)+class_textbooks(다대다)+전용 컨테이너(콘텐츠 1회 저장). v3_20이 민병천을 이미 이 방식으로 처리. 남은 예외는 "고1 6월 학평"(MS Advanced 직접 소유) 하나.
+
+### 완료 3건
+1. 46127e7 sql: supabase_v3_21_hakpyeong_container_class.sql — 고1 6월 학평(2106b090, 유닛 8개 328단어)을 v3_20 패턴 전용 컨테이너로 이사(**운영자 실행 대기**). MS Advanced 링크는 유지(계속 사용, v3_20의 ⑤ 제거 스텝 없음이 차이). 사전 실측: MS Advanced 138명 전원 명시 primary SCA — 소유 폴백 의존 0명이라 이전 안전. 교과서 id는 ops 덤프+라이브 재조회 교차 검증.
+2. 0a46c2d feat(admin): 반 관리 목록을 "🏫 수업 반"/"📚 교과서 라이브러리" 두 섹션으로 분리(getClassTypeByName 1줄 read-only export 신설, classType 기반 그룹핑, 카드 내부 로직 무변경). build+verify:admin/student PASS, push·Vercel 배포.
+3. 6af3c96 test: verify:all에서 FAIL하던 3건(testSyncProgress/testMultiDeviceMerge/testFullProgressBackup)이 코드 회귀가 아니라 **v3_16 학생 INSERT 락다운 실행(그새 운영자 실행됨)** 때문임을 42501로 확정 — 기존 관례(8/5 락다운 SKIP 패턴)대로 감지-SKIP 처리. verify:homework 4/4, verify:persistence 9/9 그린 복귀. 실제 sync/merge/backup 라이브 검증은 서버 경로(create_student) 기반 재작성 후속 과제로 남김(기존 testRenameClass 등과 동일 부채).
+
+### 야간 검증(읽기 전용)
+- 이동 무결성 스위트 19/19 PASS 재확인(Harry=Pre-Middle School/MS Advanced 138/SCA·학습기록 불변).
+- verify:all 27도메인: login(2026-07-18부터 문서화된 로컬 환경 고정 FAIL)+speaking/listening(고정 SKIP) 제외 전 도메인 그린.
+- 하드코딩 반 이름 정찰: 의도된 FALLBACK_REAL_CLASS_NAMES(구조 모드 전 폴백 전용)와 주석뿐. 유일한 스테일 값: DEFAULT_CLASS_LIST의 'Presentation 6 - 2025'(빈 DB 시드 전용, 프로덕션 무영향 — P3).
+- mergeSyntheticForUncoveredClasses 판정(코드): synthetic 항목은 학생 허용목록/관리자 패널 전반에서 이미 일관 격리 — 새 노출 경로 없음. P6(유닛 0)은 합성 대상 아님.
+- 보안 상태 변화 감지: v3_16(학생 INSERT 락다운) 실행됨 확인. **anon UPDATE/DELETE 회수는 여전히 미실행**(58차에 실증된 잔여 항목).
+
+### 운영자 아침 액션
+1. supabase_v3_21_hakpyeong_container_class.sql 실행(멱등) → 파일 내 검증 SELECT (a)~(e) — 실행 후 세션이 재검증 가능.
+2. 관리자 화면 확인: 반 관리가 수업 반 3개/교과서 라이브러리 섹션으로 나뉘어 보이는지 + Unit2 업로드는 라이브러리의 "고1 능률 민병천"에서.
+3. 보안 잔여: students anon UPDATE/DELETE 회수 SQL 결재 권고.
+
 ## 2026-08-08 (61차) — 능률 교과서 전용 컨테이너 이사(v3_20) 실행·검증 ALL PASS
 
 - 운영자 정정 지시: Presentation 6은 초등 반 — 고1 능률 민병천 교과서/Unit2를 P6에 붙이면 안 됨. 목표 구조: MS Advanced Class └ 고1 능률 민병천(Unit1 보존 + Unit2 신규), P6은 완전 분리.

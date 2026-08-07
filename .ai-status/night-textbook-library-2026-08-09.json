@@ -1,0 +1,30 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "문서 갱신",
+  "task_id": "night-textbook-library-2026-08-09",
+  "task": "62차 야간 자율 작업(교과서 라이브러리 완성 v3_21 준비+반 관리 UI 분리, 회귀 스위트 42501 SKIP 정비) 문서화",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-09T00:00:00+09:00",
+  "updated_at": "2026-08-09T00:00:00+09:00",
+  "files_owned": [
+    "handoff.md",
+    "TESTING.md",
+    ".ai-status/night-textbook-library-2026-08-09.json"
+  ],
+  "files_read": [
+    "supabase_v3_21_hakpyeong_container_class.sql",
+    "src/components/AdminScreen.jsx",
+    "src/utils/wordLibrary.js",
+    "scripts/testSyncProgress.mjs",
+    "scripts/testMultiDeviceMerge.mjs",
+    "scripts/testFullProgressBackup.mjs",
+    "TESTING.md",
+    "handoff.md",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "62차 야간 자율 작업(커밋 46127e7/0a46c2d/6af3c96) 3건을 handoff.md 최상단(61차 위)에 새 섹션으로 append: ①v3_21 SQL(고1 6월 학평 전용 컨테이너 이사, 운영자 실행 대기) ②반 관리 UI를 수업 반/교과서 라이브러리 두 섹션으로 분리(getClassTypeByName 신설) ③testSyncProgress/testMultiDeviceMerge/testFullProgressBackup 3종이 v3_16 학생 INSERT 락다운(42501) 때문에 FAIL하던 것을 기존 SKIP 관례대로 정비, verify:homework 4/4·verify:persistence 9/9 그린 복귀. TESTING.md에 같은 사실을 append 섹션으로 짧게 기록(실검증은 서버 경로 재작성 필요한 후속 과제로 명시, login 고정 FAIL은 무관하게 유효). 모든 사실은 실제 SQL 파일/AdminScreen.jsx/wordLibrary.js/3개 테스트 스크립트 소스를 직접 grep/read해 확인 후 작성(git log 직접 조회는 Bash 도구 미보유로 불가했으나 코드 내용으로 교차검증 완료).",
+  "blocker": null,
+  "next_action": "운영자: v3_21 실행+검증 / Unit2 업로드 / anon UPDATE·DELETE 회수 결재"
+}
