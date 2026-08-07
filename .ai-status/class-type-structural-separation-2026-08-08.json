@@ -1,0 +1,24 @@
+{
+  "agent_name": "main-session (planner/verifier) + implementer(sonnet) x2 + docs-maintainer(sonnet)",
+  "role": "docs-maintainer",
+  "task_id": "class-type-structural-separation-2026-08-08",
+  "task": "실반/교과서 컨테이너 판별을 이름 allowlist에서 classes.class_type 구조 신호로 전환(v3_19 SQL 준비, 폴백 100% 동일 보장) — 54차",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-08T00:00:00+09:00",
+  "updated_at": "2026-08-08T00:00:00+09:00",
+  "files_owned": [
+    "src/utils/wordLibrary.js",
+    "src/components/StudentSelect.jsx",
+    "scripts/testRealClassNames.mjs",
+    "tests/harness/registry.mjs",
+    "supabase_v3_19_class_type_textbook_containers.sql",
+    "handoff.md (54차 섹션)",
+    "DATABASE.md (v3_19 항목)",
+    ".ai-status/class-type-structural-separation-2026-08-08.json"
+  ],
+  "files_read": [],
+  "summary": "라이브 실측(anon key)으로 반 13개 전수 분류 확정: 교과서 컨테이너 6개(이름=소유 교과서 1:1) / 실반 2개(MS Advanced Class, Presentation 6 — 둘 다 교과서 소유해 '소유 여부' 판별은 오분류) / QA_ 5개. wordLibrary.js에 classifyRealClassNames 순수 함수 + FALLBACK_REAL_CLASS_NAMES + getRealClassNames() 신설(class_type='textbook' 신호 있으면 구조 판별, 없으면 기존 이름 allowlist 폴백 — 51차 동작과 100% 동일). StudentSelect.jsx는 로컬 REAL_CLASS_NAMES 제거하고 getRealClassNames() 소비. 단위 테스트 16단언 신규(scripts/testRealClassNames.mjs, registry.mjs student 도메인 extra 등록). supabase_v3_19_class_type_textbook_containers.sql은 컨테이너 6개 UUID 대상 조건부 UPDATE(멱등, 이름 기반 WHERE 금지 근거 명시), GRANT 불필요, 검증 SELECT/롤백 텍스트 포함 — 미실행. build PASS, testRealClassNames 16/16 PASS, verify:student 5개 PASS, verify:unit PASS. 커밋 3건: 7c8e9ee(refactor)/87ce9f9(test)/fcee076(sql).",
+  "blocker": null,
+  "next_action": "운영자: ① push 확인 ② v3_19 SQL 실행+검증 SELECT ③ 신규 컨테이너 생성 플로우 타이핑(후속 과제, 고1 능률 새책 결정과 연동)"
+}

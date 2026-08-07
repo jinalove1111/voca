@@ -7,6 +7,73 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-08 (54차) — 실반/교과서 컨테이너 판별 구조화(class_type) + v3_19 SQL 준비 — 커밋 7c8e9ee/87ce9f9/fcee076
+
+### 배경/지시
+
+- 운영자 지시: 53차 커밋 push 후, "교과서가 반으로 노출되지 않는 가장
+  안전한 구조"를 구현·검증하라.
+  `ops/account-cleanup-2026-08-07/class_migration_summary.md` §6의
+  class_type 구조 제안이 이번 지시로 승인·구현됨.
+- 53차 커밋 2건(`ce8cc69`/`0caf34c`)은 지시대로 push 완료
+  (`caaafd0..0caf34c`).
+
+### 라이브 실측(읽기 전용, anon key)
+
+- 반 13개 전수: 교과서 컨테이너 6개(반 이름=소유 교과서 이름 1:1 —
+  중2 능률 김기택 40명 / 중2 YMB 박준원 32 / Presentation 6 -2026 68 /
+  중2 천재 이상기 19 / 중2 동아 윤정미 3 / 중1 동아 윤정미 1), 실반
+  2개(MS Advanced Class 47, Presentation 6 4), QA_ 반 5개.
+  `class_type`은 전부 `'regular'`.
+- 판별 기준으로 "교과서 소유 여부"는 불가 확정: 실반 MS Advanced
+  Class가 '고1 6월 학평', Presentation 6이 '고1 능률 민병천' 교과서를
+  소유(이름≠교과서명) — 소유 기반 자동 판별 시 실반 2개가 오분류된다.
+
+### 구현(커밋 3건)
+
+- `7c8e9ee` refactor(domain): `wordLibrary.js`에
+  `classifyRealClassNames`(순수 함수)+`FALLBACK_REAL_CLASS_NAMES`+
+  `getRealClassNames()` 신설. 판별 계약: `classes.class_type='textbook'`이
+  1개 이상 존재(=v3_19 실행됨)하면 `class_type!=='textbook' && !QA_ 접두`
+  반만 실반(이름 무관 — 개명/신설 안전), 하나도 없으면(실행 전) 기존
+  이름 allowlist(`['MS Advanced Class','Presentation 6',
+  'Pre-Middle School']`)로 폴백 — `StudentSelect.jsx`의 51차 동작과
+  100% 동일(규칙 9: SQL/코드 배포 순서 무관). `StudentSelect.jsx`는
+  로컬 `REAL_CLASS_NAMES`를 제거하고 `getRealClassNames()` 소비.
+- `87ce9f9` test: `scripts/testRealClassNames.mjs` 16단언(전/후 결과
+  동일성, QA_ 제외, 신설 실반 자동 포함, 신규 컨테이너 제외, 빈 입력)
+  — `tests/harness/registry.mjs` student 도메인에 extra로 등록.
+- `fcee076` sql: `supabase_v3_19_class_type_textbook_containers.sql` —
+  컨테이너 6개 UUID 대상 조건부 UPDATE(`is distinct from`, 멱등). 이름
+  기반 WHERE 금지 근거(Presentation 6/-2026 이름 충돌 미해결) 명시,
+  검증 SELECT·롤백 텍스트 포함, GRANT 불필요(기존 컬럼·기존 SELECT —
+  wordLibrary가 이미 `class_type`을 읽음). **미실행 — 운영자 Supabase
+  SQL Editor 수동 실행 대기(규칙 8).**
+
+### 검증
+
+- build PASS / `scripts/testRealClassNames.mjs` 16/16 PASS /
+  `verify:student` 5개 스크립트 PASS(신규 테스트 포함) / `verify:unit`
+  PASS(락다운 SKIP은 기존 상태).
+- v3_19 실행 전이므로 라이브는 폴백 모드로 동작 — 현재 PIN 반 목록
+  결과가 51차와 동일함이 단위 테스트 시나리오로 고정됨.
+
+### 실행 순서 안내(운영자)
+
+1. 코드 배포(push) — 배포 즉시는 폴백 모드, 화면 변화 없음.
+2. `supabase_v3_19_class_type_textbook_containers.sql` 실행(멱등) →
+   검증 SELECT로 6개 'textbook' 확인.
+3. 이후 반 신설/개명 시 allowlist 코드 수정 불필요(구조 판별 자동).
+   단 **새 교과서 컨테이너 반을 만들 때 `class_type='textbook'` 지정은
+   아직 수동** — `createClass` 기본값이 `'regular'`라 생성 플로우
+   타이핑은 미해결 갭(52차 "고1 능률 새책 생성 방식" 운영자 결정과
+   연동, 후속 과제).
+
+### 무접촉 유지
+
+- 122명 반 이동 / Pre-Middle School 생성 / A그룹 삭제 / 보안 잔여 2건
+  / Presentation 6 이름 충돌 — 전부 승인 대기 그대로.
+
 ## 2026-08-07 (53차) — fix/verify-student-pin-ilike 병합 검증 + 애착 축 정합 P2 수정
 
 ### 1. fix/verify-student-pin-ilike 병합 사후 검증 (지시: 리뷰·테스트 후 안전하면 병합)
