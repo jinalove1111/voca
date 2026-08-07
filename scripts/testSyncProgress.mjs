@@ -48,7 +48,21 @@ const NAME = 'QA_SyncTest'
 console.log('\n1. 동기화 대상 학생 생성')
 // P0(2026-07-15): addStudent가 id(UUID)를 반환 — syncStudentProgress는
 // 이제 그 id를 직접 FK로 쓴다(캐시 조회 없이).
-const STUDENT_ID = await addStudent(NAME, anyClass, 'Unit 1')
+// v3_16 보안 락다운(supabase_v3_16_students_insert_lockdown.sql) — anon
+// students INSERT가 42501(permission denied)로 막힌다. 이 스크립트의 QA_
+// 픽스처 생성이 정확히 그 경로라 예상된 보안 동작이니 정직하게 SKIP(scripts/
+// testRenameClass.mjs·testStudentUnitDecouple.mjs와 동일 관례) — 서버 경로
+// (admin create_student) 기반 재작성 필요.
+let STUDENT_ID
+try {
+  STUDENT_ID = await addStudent(NAME, anyClass, 'Unit 1')
+} catch (err) {
+  if (err?.code === '42501' || /row-level security|permission denied/i.test(err?.message || '')) {
+    console.log(`\nSKIP(v3_16 학생 INSERT 락다운 — anon 쓰기 불가, 서버 경로(admin create_student) 기반 재작성 필요). 원본 에러: ${err.message}`)
+    process.exit(0)
+  }
+  throw err
+}
 
 console.log('\n2. syncStudentProgress 호출 (누적 + 오늘자 기록)')
 await syncStudentProgress(STUDENT_ID, {

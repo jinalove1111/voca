@@ -65,7 +65,21 @@ if (!anyClass) throw new Error('테스트할 반이 없음 — 중단')
 
 const NAME = 'QA_MultiDeviceMerge'
 console.log('\n0. QA 학생 생성')
-const studentId = await addStudent(NAME, anyClass, 'Unit 1')
+// v3_16 보안 락다운(supabase_v3_16_students_insert_lockdown.sql) — anon
+// students INSERT가 42501(permission denied)로 막힌다. 이 스크립트의 QA_
+// 픽스처 생성이 정확히 그 경로라 예상된 보안 동작이니 정직하게 SKIP(scripts/
+// testRenameClass.mjs·testStudentUnitDecouple.mjs와 동일 관례) — 서버 경로
+// (admin create_student) 기반 재작성 필요.
+let studentId
+try {
+  studentId = await addStudent(NAME, anyClass, 'Unit 1')
+} catch (err) {
+  if (err?.code === '42501' || /row-level security|permission denied/i.test(err?.message || '')) {
+    console.log(`\nSKIP(v3_16 학생 INSERT 락다운 — anon 쓰기 불가, 서버 경로(admin create_student) 기반 재작성 필요). 원본 에러: ${err.message}`)
+    process.exit(0)
+  }
+  throw err
+}
 console.log(`  (id: ${studentId})`)
 
 try {
