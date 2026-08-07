@@ -766,6 +766,59 @@ async function ensureUnit(classId, unitName, adminPin) {
 // ── Public API (mirrors the old localStorage-backed shape) ────────────────
 export const getClassNames = () => Object.keys(_cache)
 
+// ── 교과서 컨테이너 반 구조적 차단(2026-08-07/08, 운영자 지시) ────────────
+// 배경: 반(classes)은 역사적으로 교과서 컨테이너를 겸했다 — 실DB 13개 반
+// 중 6개가 "반 이름=소유 교과서 이름 1:1"인 순수 교과서 컨테이너(라이브
+// 실측 완료, supabase_v3_19_class_type_textbook_containers.sql 헤더의 UUID
+// 목록 참고). PIN 만들기 등 "학생에게 반을 고르게 하는" 화면에 이 6개가
+// 실반과 섞여 노출되면 학생이 잘못된 반을 골라 등록될 수 있다.
+//
+// 2026-08-07 1차 조치(StudentSelect.jsx)는 이름 allowlist
+// (`['MS Advanced Class', 'Presentation 6', 'Pre-Middle School']`)로 막았다
+// — 동작은 정확했지만 "이름 문자열"이 판별 기준이라 반 개명/신설에
+// 취약했다(규칙 3 배경 — 이름 매칭 기반 판별은 이 저장소가 v2.1에서 이미
+// 한 번 걷어낸 패턴이라 재도입하지 않는다). 이 함수는 그 판별을 구조화한다:
+//   - v3_19 SQL 실행 후(classes.class_type이 최소 1개 'textbook' 값을 가짐):
+//     class_type='textbook'이 아닌 반만 실반 — 이름과 무관하게 신설/개명에
+//     안전. QA_ 반은 class_type이 없어도(항상 'regular'로 시딩됨) 원래도
+//     실반 취급이므로, 구조 모드에서도 별도로 이름 접두사(`QA_`)로 걸러내야
+//     한다(allowlist 모드에서는 allowlist 자체가 이미 QA_를 걸렀으므로 이
+//     필터가 필요 없었다 — 구조 모드로 전환하며 새로 필요해진 조건).
+//   - v3_19 SQL 실행 전(class_type='textbook'인 반이 하나도 없음): 아직 구조
+//     신호가 없으므로 이름 allowlist로 폴백(규칙 9 — SQL이 코드보다 늦게
+//     실행돼도 앱이 절대 깨지지 않아야 한다. 이 폴백은 오늘 StudentSelect.jsx
+//     의 기존 동작과 정확히 동일하다).
+//
+// 순수 함수(네트워크 0) — tests/harness(scripts/testRealClassNames.mjs,
+// student 도메인)가 esbuild 번들로 직접 검증한다.
+export function classifyRealClassNames(entries, fallbackNames) {
+  const list = Array.isArray(entries) ? entries : []
+  const structuralMode = list.some((e) => e?.classType === 'textbook')
+  if (structuralMode) {
+    return list
+      .filter((e) => e?.classType !== 'textbook' && !String(e?.name || '').startsWith('QA_'))
+      .map((e) => e.name)
+  }
+  const fallback = Array.isArray(fallbackNames) ? fallbackNames : []
+  return list.map((e) => e?.name).filter((name) => fallback.includes(name))
+}
+
+// 2026-08-07 운영자 도메인 확정 — 실제 수업 반은 현재 이 3개뿐(나머지 반
+// 이름은 교과서명이 반으로 잘못 생성된 잔재, 데이터 정리는 별도 승인
+// 진행 중). v3_19 SQL 실행 전(class_type 구조 신호 없음) classifyRealClassNames
+// 가 이 목록으로 폴백한다 — StudentSelect.jsx가 예전에 로컬로 갖고 있던
+// REAL_CLASS_NAMES 상수를 그대로 옮겨온 것(동작 변화 없음).
+const FALLBACK_REAL_CLASS_NAMES = ['MS Advanced Class', 'Presentation 6', 'Pre-Middle School']
+
+// getClassNames()/_cache의 classType을 그대로 classifyRealClassNames에
+// 넘기는 캐시 래퍼 — "학생에게 반을 고르게 하는" 모든 화면(현재
+// StudentSelect.jsx PIN 만들기)이 이 함수 하나만 부르면 된다.
+export const getRealClassNames = () =>
+  classifyRealClassNames(
+    getClassNames().map((name) => ({ name, classType: _cache[name]?.classType })),
+    FALLBACK_REAL_CLASS_NAMES,
+  )
+
 export const getClassUnits = (className) => {
   const cls = _cache[className]
   if (!cls || cls.units.length === 0) return [{ name: DEFAULT_UNIT_NAME, words: [] }]
