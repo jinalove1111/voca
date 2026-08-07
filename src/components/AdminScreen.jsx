@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react'
 // 키웠다(엑셀 업로드는 자주 쓰는 기능이 아님). PdfUpload.handleFile이 이미
 // pdfjs-dist를 동적 import하는 선례가 있어 동일 패턴으로 handleFile 안에서만
 // 로드하도록 바꾼다(정적 import 제거, 동작은 동일).
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchAssignmentHistory, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, fetchXpByEventType, getClassIdByName, getStudents, wordSlug, isoDaysAgoStr, buildUnitWordAssetPayloads, groupAssetPayloadsByShape, ensureTextbookLayerBackfilled } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchAssignmentHistory, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, fetchXpByEventType, getClassIdByName, getStudents, wordSlug, isoDaysAgoStr, buildUnitWordAssetPayloads, groupAssetPayloadsByShape, ensureTextbookLayerBackfilled, getOwnTextbookOfClass } from '../utils/wordLibrary'
 // Word Asset Library(M3c, 2026-08-05) — 엑셀 업로드 저장 "이후" 자산
 // 업서트 배선 전용(조회 배선은 이번 범위 아님, 규칙 12). fetchWordAssetsByWords/
 // upsertWordAssets 둘 다 절대 throw하지 않는 계약(src/utils/wordAssets.js
@@ -1850,7 +1850,27 @@ export default function AdminScreen({ onBack }) {
                         </div>
                       ) : (
                         <div>
-                          <p className="font-black text-gray-800">{c}</p>
+                          {/* 2026-08-08 — 소유 교과서 라벨(표시 전용). 왜: v3_18
+                              개명으로 실반 이름이 소유 교과서 이름과 달라진
+                              케이스(예: "고1 능률 민병천"→"Presentation 6")에서
+                              관리자가 콘텐츠 관리 화면(반 이름 기준)에서 교과서를
+                              찾지 못했다 — 교과서 이름이 반 이름과 다를 때만,
+                              synthetic 교과서는 제외하고 보조 배지로 보여준다.
+                              반 이름 자체/정렬/동작은 전혀 바뀌지 않는다. */}
+                          <p className="font-black text-gray-800">
+                            {c}
+                            {(() => {
+                              const classId = getClassIdByName(c)
+                              const ownTextbook = classId ? getOwnTextbookOfClass(classId) : null
+                              if (!ownTextbook || String(ownTextbook.id).startsWith('synthetic-tb:')) return null
+                              if (ownTextbook.name === c) return null
+                              return (
+                                <span className="ml-2 align-middle inline-block text-xs font-bold text-purple-500 bg-purple-50 rounded-full px-2 py-0.5">
+                                  📖 {ownTextbook.name}
+                                </span>
+                              )
+                            })()}
+                          </p>
                           <p className="text-sm text-gray-400">{units.length}개 유닛 · {totalWords}개 단어 · 학생 {getStudentsInClass(c).length}명</p>
                         </div>
                       )}

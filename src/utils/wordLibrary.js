@@ -751,14 +751,45 @@ async function ensureClass(name, classType = 'regular', adminPin) {
   return data
 }
 
+// 2026-08-08 — 신규 유닛 교과서 자동 태깅. 왜: 관리자가 새 유닛을 만들면
+// units.textbook_id가 지금까지 항상 NULL이었고, 교과서 모드에서는
+// textbook_id가 NULL인 유닛이 학생 화면에 아예 안 보인다(2026-08-06 42차
+// 레이어 갭 버그 계열). 소유 반의 자동 교재(getOwnTextbookOfClass)가 있고
+// synthetic(id가 'synthetic-tb:' 접두, uuid 컬럼에 못 넣음)이 아닐 때만
+// textbookId를 함께 보낸다 — 소유 교재가 없거나 synthetic이면 기존과
+// 동일하게 NULL(변화 없음).
+function resolveNewUnitTextbookId(classId) {
+  const own = getOwnTextbookOfClass(classId)
+  return own && !String(own.id).startsWith(SYNTH_TB_PREFIX) ? own.id : null
+}
+
 async function ensureUnit(classId, unitName, adminPin) {
   const { data: existing, error: selErr } = await supabase
     .from('units').select('id,name').eq('class_id', classId).eq('name', unitName).maybeSingle()
   if (selErr) throw selErr
   if (existing) return existing
-  if (adminPin) return callAdminContentWrite('unit.create', { classId, unitName }, adminPin)
-  const { data, error } = await supabase
-    .from('units').insert({ class_id: classId, name: unitName }).select().single()
+  const textbookId = resolveNewUnitTextbookId(classId)
+  if (adminPin) {
+    // textbookId가 null이면 payload에서 아예 생략 — Edge Function
+    // handleUnitCreate는 payload.textbookId를 안 읽으면(구버전 미재배포
+    // 상태 포함) 오늘과 완전히 동일하게 동작한다(하위호환, 이 파일 헤더의
+    // "동작 변화 0" 원칙과 동일).
+    return callAdminContentWrite(
+      'unit.create',
+      textbookId ? { classId, unitName, textbookId } : { classId, unitName },
+      adminPin,
+    )
+  }
+  const insertRow = { class_id: classId, name: unitName }
+  if (textbookId) insertRow.textbook_id = textbookId
+  let { data, error } = await supabase.from('units').insert(insertRow).select().single()
+  if (error && error.code === '42703' && 'textbook_id' in insertRow) {
+    // textbook_id 컬럼 미존재(v3.1 마이그레이션 전 환경) — 기존 컬럼
+    // 셋으로 1회 재시도(getStudentClassAssignments/assignTextbook과 동일
+    // 폴백 관례, 규칙 9).
+    ;({ data, error } = await supabase
+      .from('units').insert({ class_id: classId, name: unitName }).select().single())
+  }
   if (error) throw error
   return data
 }
