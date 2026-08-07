@@ -7,6 +7,21 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (64차) — 운영반/교과서 분리 도메인 감사: 라이브 위반 0건 (setPrimaryAssignment는 레거시 모드 전용)
+
+### 운영자 확정 도메인 모델(2026-08-09)
+학생→운영 반(students.class_id, 실제 학원 반 변경 시에만) / 반↔교과서(class_textbooks 다대다) / 학생↔교과서 개별(SCA) / 현재 학습 상태(SCA primary textbook_id·current_unit_id + students.current_unit_id). 교과서 변경이 class_id를 요구하면 안 됨.
+
+### 감사 결과 (students.class_id 쓰기 경로 전수)
+- **라이브 위반 0건.** 교과서 전환 핸들러(App.jsx:286 handleTextbookSwitch)는 교재 모드에서 setPrimaryTextbook("사람 반은 절대 안 바꾼다", wordLibrary.js:2157) 경로만 탄다 — 51차 정책·검증 그대로.
+- 유일한 금지 패턴 잔존: **setPrimaryAssignment(wordLibrary.js:2065, v2.9)** — students.class_id를 컨테이너 반으로 동기화(2151줄). 단 호출부는 App.jsx:293의 **레거시 모드 분기뿐**(isTextbookMode()===false — v3_1 textbooks 테이블 부재 환경 전용 폴백). 프로덕션은 교재 8권 영구 존재로 이 분기 도달 불가. 레거시 모드에서는 class_id가 유일한 콘텐츠 축이라 그 동기화가 그 모드에선 올바른 동작 — 제거하면 레거시 환경 계약(규칙 9 폴백)이 깨지므로 **코드 제거 대신 "프로덕션 도달 불가 확인"으로 종결**(P3: 언젠가 v2.9 폴백 일괄 정리 시 함께).
+- 정당한 class_id 쓰기(운영 반 이동): setStudentClass/setStudentsClassBulk(관리자 로스터 — 명시적 반 이동), addStudent/create_student(생성 시). 전부 관리자 명시 조작.
+- 콘텐츠 축 읽기: useAttachment(ce8cc69로 교과서 축 수정 완료), getStudentWords(교재 모드 = 교과서 소유 컨테이너 해석). 숙제(daily_assignments)는 사람 반 기준 — 의도된 설계 유지.
+- Harry 실례로 3계층 분리 확인: 운영 반=Pre-Middle School / 접근=class_textbooks(Pre-MS↔고1 6월 학평, 운영자 추가) ∪ SCA(김기택 primary·YMB) / 학습 상태=김기택 Unit 진도. 교과서 어느 것을 골라도 class_id 불변.
+
+### 감사 방법
+students.class_id UPDATE/INSERT 전수 grep(src/api/functions) + 전환 핸들러·선택기 옵션 생성부(App.jsx:286~326) 정독 + 51차 검증 기록 대조. (야간 qa-reviewer 감사 에이전트는 운영자가 중지 — 메인 세션이 직접 압축 감사로 대체.)
+
 ## 2026-08-09 (63차) — v3_21 실행 검증 7/7 + 라이브러리 정규화 완결
 
 - 운영자가 supabase_v3_21 실행 → 라이브 검증: 컨테이너 "고1 6월 학평"(4e2fb8c8…, textbook 타입) 1개 / 소유권 이전 / 유닛 8행 전부 컨테이너 소속·단어 328 불변 / MS Advanced 실반 잔여 유닛 0(콘텐츠 분리 완결) / 실반 3개 유지 / 라이브러리 컨테이너 8개 — **전 교과서(8권) 정규화 완결, 실반은 콘텐츠를 직접 소유하지 않음**.
