@@ -17,7 +17,7 @@
     ".ai-status/assignment-plan-2026-08-08.json"
   ],
   "files_read": [],
-  "summary": "운영자가 52차 승인 대기 항목 중 4건을 확정: ①고1 새책 생성 없음(기존 '고1 6월 학평' 재사용) ②중1·중2 컨테이너 5개 반 실계정 전원 MS Advanced Class로 이동 ③Presentation 6 이름 충돌은 실반(고1 4명) 유지, 초등 24명(-2026)은 보류 ④Pre-Middle School은 빈 수업 반으로 생성만(관리자 화면 '수업 반' 라디오 사용, SQL 불필요). 이 결정을 바탕으로 배정 서브에이전트가 약 1시간 스톨한 뒤, 메인 세션이 기존 완료 분석(라이브 반 구조 실측 + 08-07 preview)만으로 재조사 없이 배정안 5개 파일 직접 산출: assignment_plan.csv(120행, move 92/hold 24/stay 4/QA제외 47), presteps SCA 선배정 SQL(필요 0명), move_class_id SQL(백업→조건부UPDATE 92건→검증→롤백), optional P6 고1 SCA SQL(선택 실행), summary.md(집계·실행순서·롤백·학습기록 보존 근거). 리스크 high 3건(황성연/Cookie/Harry — 유닛-반 소속 불일치) 발견, medium 0. DB 쓰기 0건, 전 과정 읽기 전용, 학생 이동 미실행. docs-maintainer가 handoff.md에 57차 섹션 append(56차 위) 및 이 상태 파일 작성.",
+  "summary": "운영자가 52차 승인 대기 항목 중 4건을 확정: ①고1 새책 생성 없음(기존 '고1 6월 학평' 재사용) ②중1·중2 컨테이너 5개 반 실계정 전원 MS Advanced Class로 이동 ③Presentation 6 이름 충돌은 실반(고1 4명) 유지, 초등 24명(-2026)은 보류 ④Pre-Middle School은 빈 수업 반으로 생성만(관리자 화면 '수업 반' 라디오 사용, SQL 불필요). 이 결정을 바탕으로 배정 서브에이전트가 약 1시간 스톨한 뒤, 메인 세션이 기존 완료 분석(라이브 반 구조 실측 + 08-07 preview)만으로 재조사 없이 배정안 5개 파일 직접 산출: assignment_plan.csv(120행, move 92/hold 24/stay 4/QA제외 47), presteps SCA 선배정 SQL(필요 0명), move_class_id SQL(백업→조건부UPDATE 92건→검증→롤백), optional P6 고1 SCA SQL(선택 실행), summary.md(집계·실행순서·롤백·학습기록 보존 근거). 리스크 high 3건(황성연/Cookie/Harry — 유닛-반 소속 불일치) 발견, medium 0. DB 쓰기 0건, 전 과정 읽기 전용, 학생 이동 미실행. docs-maintainer가 handoff.md에 57차 섹션 append(56차 위) 및 이 상태 파일 작성. [2차 개정] 황성연→MS Adv·Harry→Pre-MS 확정, 이동 92=91+1 분리, high 0/medium 3.",
   "blocker": null,
   "next_action": "운영자: 배정안 검토 → high 3건 판정(특히 황성연 목적지) → Pre-Middle School '수업 반' 생성 → SQL 순서 실행(백업→SCA→이동→검증). 이동 실행 전까지 DB 무변경 유지. 이후 초등 24명(Presentation 6 -2026) 목적지 결정 및 2차 배정안 필요. 이 기록 커밋."
 }

@@ -7,6 +7,21 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-08 (57차 개정) — high 3건 운영자 판정 반영: 황성연→MS Advanced, Harry→Pre-Middle School
+
+- 운영자 판정: 황성연(2a86fc9b) → MS Advanced Class 확정(고1 계열 유닛/주교재는
+  이동 차단 아닌 데이터 정리 항목으로 잔존). Harry(77cc6550) → Pre-Middle School
+  확정(반 미생성 — 생성 선행조건). Cookie(a63923a1)는 판정 불요 — 상세
+  실측으로 주교재(김기택 primary)·현재 유닛 정합 확인, 이동 안전.
+- ops/class-assignment-plan-2026-08-08/ 3종 갱신: assignment_plan.csv 3행
+  패치(전행 12필드 CSV 파싱 검증), move_class_id_NOT_EXECUTED.sql
+  재생성 — 백업 92 전원 유지 / ③-a 91명→MS Advanced / ③-b Harry
+  1명→Pre-Middle School 별도 블록(반이 '수업 반' 유형으로 정확히 1개
+  존재할 때만 실행되는 가드 — 미생성 시 0행 no-op, NULL 대입 불가 구조),
+  summary.md 리스크 표 갱신(high 0 / medium 3) + 개정 이력.
+- DB 무접촉 유지, 이동 미실행. 실행 순서 변화: Harry 이동은 Pre-Middle
+  School 생성(관리자 화면 '수업 반' 라디오) 후에만 가능.
+
 ## 2026-08-08 (57차) — 반 구조 운영 결정 4건 확정 + 학생 배정안 완성(이동 미실행)
 
 ### 운영자 확정 결정 4건 (52차 승인 대기 항목 다수 해소)
