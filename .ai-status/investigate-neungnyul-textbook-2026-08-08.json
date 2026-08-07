@@ -23,7 +23,7 @@
     "src/utils/wordLibrary.js",
     "src/components/AdminScreen.jsx"
   ],
-  "summary": "handoff.md에 59차 섹션 append(58차 위, 최상단 이탤릭 블록 무변경) — '능률' 교과서 소실 조사 결과(데이터 무손실 확정, 원인 2가지), 잠복 실버그(unit.create textbook_id 미태깅) 발견, 커밋 c126888(Edge Function textbookId 선택 인자 + 재배포)/7064d27(ensureUnit 자동 태깅 + 반 목록 소유 교과서 배지) 수정 내역과 검증 결과, 남은 항목 기록. 코드는 implementer가 이미 구현·검증 완료 상태(implementer-textbook-autotag-2026-08-08.json)였고, 이번 세션은 grep으로 실제 코드(textbookId 처리, resolveNewUnitTextbookId, 📖 배지 렌더) 확인 후 문서화만 수행. 코드/설정 파일 수정 없음.",
+  "summary": "handoff.md에 59차 섹션 append(58차 위, 최상단 이탤릭 블록 무변경) — '능률' 교과서 소실 조사 결과(데이터 무손실 확정, 원인 2가지), 잠복 실버그(unit.create textbook_id 미태깅) 발견, 커밋 c126888(Edge Function textbookId 선택 인자 + 재배포)/7064d27(ensureUnit 자동 태깅 + 반 목록 소유 교과서 배지) 수정 내역과 검증 결과, 남은 항목 기록. 코드는 implementer가 이미 구현·검증 완료 상태(implementer-textbook-autotag-2026-08-08.json)였고, 이번 세션은 grep으로 실제 코드(textbookId 처리, resolveNewUnitTextbookId, 📖 배지 렌더) 확인 후 문서화만 수행. 코드/설정 파일 수정 없음. [v3_20 완결] 전용 컨테이너 이사 실행·11/11 검증 PASS, P6 분리 완료",
   "blocker": null,
-  "next_action": "운영자: 'Pre-Middle school' → 'Pre-Middle School' 개명 SQL 1줄 실행 + 능률 Unit2 업로드 후 units.textbook_id=09c073dd 태깅 여부 실측 확인."
+  "next_action": "운영자: Unit2 업로드(후 태깅 실측) / 초등 24명 목적지 / 보안 잔여 2건"
 }

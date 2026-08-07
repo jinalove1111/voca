@@ -7,6 +7,15 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-08 (61차) — 능률 교과서 전용 컨테이너 이사(v3_20) 실행·검증 ALL PASS
+
+- 운영자 정정 지시: Presentation 6은 초등 반 — 고1 능률 민병천 교과서/Unit2를 P6에 붙이면 안 됨. 목표 구조: MS Advanced Class └ 고1 능률 민병천(Unit1 보존 + Unit2 신규), P6은 완전 분리.
+- 사전 실측(수정 전 보고 원칙): 능률 책 소유·유닛(Unit1 40단어 + 빈 Unit 1 0단어)이 P6 밑에 있었고(v3_18 개명 잔재), 민병천 SCA 8건 = MS Advanced 4명(Jinaa·황성연 primary, 김태율, 김보민) + P6 4명(전하은×2·김가윤·권교빈, 전원 primary). MS Advanced는 이미 '고1 6월 학평' 소유(유닛 8개 전부 태깅 확인) — 단순 소유권 이전 시 반당 1권 전제 코드 3곳(getTextbookUnits 무필터 병합/getOwnTextbookOfClass 비결정/유닛 자동태깅 모호)이 깨짐을 확인.
+- 방식 결정(운영자 선택): A안 — 다른 6개 컨테이너와 동일한 전용 컨테이너. B안(MS 직접 소유, 코드 3곳 수정 선행)은 회귀 위험으로 기각.
+- supabase_v3_20_neungnyul_container_class.sql(커밋 de8b649) 운영자 실행 → 검증 11/11 PASS: 컨테이너 "고1 능률 민병천"(ec584e53…, class_type='textbook') 생성 / 교과서 소유권 이전 / 유닛 2행 UUID 그대로 이동·Unit1 40단어 보존 / class_textbooks = 자기링크 + MS Advanced 2행만(P6 링크 제거) / SCA 8건 불변 / 실반 목록 3개 유지(컨테이너 미노출) / P6 잔여 유닛 0(분리 완결) / student_progress 79 불변.
+- 효과: MS Advanced 학생 전원 홈 드롭다운에 민병천 노출(class_textbooks), P6 재학생 4명은 SCA primary로 접근 유지(화면 무변화). Unit2는 관리자 화면 "고1 능률 민병천" 컨테이너에서 업로드 — 자동으로 textbook_id 태깅됨(컨테이너 소유 책 1권이라 결정적).
+- 미착수 유지: optional P6 SCA / 보안 잔여 2건 / 초등 24명 목적지.
+
 ## 2026-08-08 (60차) — 반/교과서 분리 최종 라이브 검증 ALL PASS (배포 확인 + 26항목)
 
 - 운영자가 Pre-Middle School 개명 SQL 실행 완료 보고 → 라이브 실측으로 "Pre-Middle School"(대문자 S) 반영 확인.
