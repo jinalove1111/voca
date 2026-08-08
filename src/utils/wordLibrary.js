@@ -909,7 +909,15 @@ export async function createClass(name, classType = 'regular', adminPin) {
       { name, requested: classType, stored: cls.class_type }
     )
   }
-  await ensureUnit(cls.id, DEFAULT_UNIT_NAME, adminPin)
+  // 2026-08-09 — 기본 "Unit 1" 자동 생성 제거(운영자 지시). 과거엔 반 생성
+  // 즉시 빈 "Unit 1" 행을 만들었는데, 이후 Excel 업로드가 다른 표기/이름으로
+  // 유닛을 만들면 빈 기본 유닛이 교재마다 잔존하는 실사고가 됐다(2026-08-09
+  // 전수 감사에서 빈 유닛 7개 → v3_30 정리). 유닛 행은 이제 실제 필요
+  // 시점에만 생긴다: ①단어 업로드(setClassWords→ensureUnit, 정규화 매칭으로
+  // 표기 변형도 재사용) ②관리자 명시 유닛 추가(addClassUnit). 유닛 0개
+  // 상태의 표시/학생 기본 바인딩은 기존 폴백이 그대로 커버한다 —
+  // getClassUnits의 합성 [{name:'Unit 1', words:[]}] 폴백 + 학생
+  // unit_name 문자열 해석(resolveStudentUnitObj, v2.1 설계).
   await refreshWordLibrary()
   // 2026-08-06 — 앞으로 만드는 반은 즉시 교재 레이어에 등록한다(v3.1
   // 백필 갭의 재발 방지: 이 백필이 없으면 이 반이 학생 primary로 배정될

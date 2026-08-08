@@ -46,6 +46,18 @@ check('빈 문자열/undefined/null 크래시 없음',
 check('숫자 아닌 접미("Unit A")는 소문자+공백 제거만', unitNameKey('Unit A') === 'unita')
 check('선행 0 제거는 말미 숫자에만 적용("U0nit 1" 내부 0 보존)', unitNameKey('U0nit 1') === 'u0nit1')
 
+console.log('\n=== 소스 레벨 회귀 가드(빈 Unit 자동 생성/정규화 매칭) ===')
+// 하네스 관례(runWordsBulkReplacePlan의 소스 검사 패턴): 로직 재구현 없이
+// 소스 텍스트로 구조적 회귀를 잡는다.
+const { readFileSync } = await import('node:fs')
+const src = readFileSync('src/utils/wordLibrary.js', 'utf8')
+check('createClass가 기본 Unit 1을 자동 생성하지 않음(ensureUnit(cls.id, DEFAULT_UNIT_NAME) 호출 부재)',
+  !/ensureUnit\(cls\.id,\s*DEFAULT_UNIT_NAME/.test(src))
+check('ensureUnit이 정규화 키 매칭 사용(unitNameKey 참조)',
+  /const wanted = unitNameKey\(unitName\)/.test(src))
+check('ensureUnit이 이름 정확 일치 단독 조회로 돌아가지 않음(.eq(\'name\', unitName) 부재)',
+  !/from\('units'\)[\s\S]{0,120}\.eq\('name',\s*unitName\)/.test(src))
+
 console.log('\n=== summary ===')
 if (failed === 0) { console.log(`  PASS  unit-name-normalization (${passed}개 단언)`); process.exit(0) }
 console.log(`  FAIL  unit-name-normalization — ${failed}건: ${failures.join(', ')}`)
