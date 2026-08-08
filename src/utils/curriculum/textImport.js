@@ -53,12 +53,85 @@ function escapeRegex(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-// 규칙 형태 변화만 생성(단일 토큰용). 불규칙(go→went)은 만들지 않는다.
-// 반환에는 원형 자신이 포함되지 않는다 — 원형은 'exact' 매칭 전용.
+// 흔한 불규칙 동사/명사 형태(2026-08-09 야간 2차 — 보수적 확장).
+// 원형 → 변화형 목록. 여기서 나온 매칭도 전부 'inflected'(검토 필요)로만
+// 표시되고 자동 저장되지 않는다(운영자 원칙: 확실하지 않으면 자동 확정
+// 금지 — 이 목록은 "추측"이 아니라 고정된 사전이므로 recall만 높인다).
+// 목록은 중학 교과서 빈출 위주 최소 유지 — 확장은 append만.
+const IRREGULAR_FORMS = {
+  be: ['is', 'are', 'was', 'were', 'been', 'being', 'am'],
+  become: ['became', 'becomes', 'becoming'],
+  begin: ['began', 'begun', 'begins', 'beginning'],
+  break: ['broke', 'broken', 'breaks', 'breaking'],
+  bring: ['brought', 'brings', 'bringing'],
+  build: ['built', 'builds', 'building'],
+  buy: ['bought', 'buys', 'buying'],
+  catch: ['caught', 'catches', 'catching'],
+  choose: ['chose', 'chosen', 'chooses', 'choosing'],
+  come: ['came', 'comes', 'coming'],
+  do: ['did', 'done', 'does', 'doing'],
+  draw: ['drew', 'drawn', 'draws', 'drawing'],
+  drink: ['drank', 'drunk', 'drinks', 'drinking'],
+  drive: ['drove', 'driven', 'drives', 'driving'],
+  eat: ['ate', 'eaten', 'eats', 'eating'],
+  fall: ['fell', 'fallen', 'falls', 'falling'],
+  feel: ['felt', 'feels', 'feeling'],
+  find: ['found', 'finds', 'finding'],
+  fly: ['flew', 'flown', 'flies', 'flying'],
+  forget: ['forgot', 'forgotten', 'forgets', 'forgetting'],
+  get: ['got', 'gotten', 'gets', 'getting'],
+  give: ['gave', 'given', 'gives', 'giving'],
+  go: ['went', 'gone', 'goes', 'going'],
+  grow: ['grew', 'grown', 'grows', 'growing'],
+  have: ['had', 'has', 'having'],
+  hear: ['heard', 'hears', 'hearing'],
+  hold: ['held', 'holds', 'holding'],
+  keep: ['kept', 'keeps', 'keeping'],
+  know: ['knew', 'known', 'knows', 'knowing'],
+  leave: ['left', 'leaves', 'leaving'],
+  lose: ['lost', 'loses', 'losing'],
+  make: ['made', 'makes', 'making'],
+  meet: ['met', 'meets', 'meeting'],
+  put: ['puts', 'putting'],
+  read: ['reads', 'reading'],
+  ride: ['rode', 'ridden', 'rides', 'riding'],
+  run: ['ran', 'runs', 'running'],
+  say: ['said', 'says', 'saying'],
+  see: ['saw', 'seen', 'sees', 'seeing'],
+  sell: ['sold', 'sells', 'selling'],
+  send: ['sent', 'sends', 'sending'],
+  sing: ['sang', 'sung', 'sings', 'singing'],
+  sit: ['sat', 'sits', 'sitting'],
+  sleep: ['slept', 'sleeps', 'sleeping'],
+  speak: ['spoke', 'spoken', 'speaks', 'speaking'],
+  spend: ['spent', 'spends', 'spending'],
+  stand: ['stood', 'stands', 'standing'],
+  swim: ['swam', 'swum', 'swims', 'swimming'],
+  take: ['took', 'taken', 'takes', 'taking'],
+  teach: ['taught', 'teaches', 'teaching'],
+  tell: ['told', 'tells', 'telling'],
+  think: ['thought', 'thinks', 'thinking'],
+  throw: ['threw', 'thrown', 'throws', 'throwing'],
+  understand: ['understood', 'understands', 'understanding'],
+  wear: ['wore', 'worn', 'wears', 'wearing'],
+  win: ['won', 'wins', 'winning'],
+  write: ['wrote', 'written', 'writes', 'writing'],
+  child: ['children'],
+  foot: ['feet'],
+  tooth: ['teeth'],
+  man: ['men'],
+  woman: ['women'],
+  mouse: ['mice'],
+  leaf: ['leaves'],
+  life: ['lives'],
+}
+
+// 규칙 형태 변화 + 불규칙 사전(단일 토큰용). 반환에는 원형 자신이 포함되지
+// 않는다 — 원형은 'exact' 매칭 전용.
 export function regularInflections(token) {
   const w = String(token || '').trim().toLowerCase()
   if (!w || /\s/.test(w)) return []
-  const forms = new Set()
+  const forms = new Set(IRREGULAR_FORMS[w] || [])
   // 3인칭/복수: -s / -es / y→ies
   forms.add(`${w}s`)
   forms.add(`${w}es`)

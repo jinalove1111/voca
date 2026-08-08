@@ -166,14 +166,30 @@ console.log('\n-- textImport: 매칭(whole-word/숙어/형태 변화)')
   check('inflected 매칭 문장은 validateExampleFields를 통과하지 못함(저장 차단 근거 — 정직한 계약)',
     validateExampleFields({ target_word: 'protect', english_sentence: byWord['protect'].matches[0].sentence }).ok === false)
 }
-check('regularInflections: 규칙 변화만(s/es/ed/d/ing/e탈락/y변화), 원형 미포함',
+check('regularInflections: 규칙 변화(s/es/ed/d/ing/e탈락/y변화) + 원형 미포함',
   (() => {
     const f = regularInflections('protect')
-    const g = regularInflections('make')
     const h = regularInflections('study')
     return f.includes('protects') && f.includes('protected') && f.includes('protecting') && !f.includes('protect')
-      && g.includes('making') && g.includes('made') === false // 불규칙(made)은 만들지 않음(makeed/maked만 규칙형)
       && h.includes('studies') && h.includes('studied')
+  })())
+check('불규칙 사전(2026-08-09 확장): make→made, go→went, take→took, child→children',
+  regularInflections('make').includes('made')
+  && regularInflections('go').includes('went')
+  && regularInflections('take').includes('took')
+  && regularInflections('child').includes('children'))
+check('불규칙 형태도 inflected(검토 필요)로만 매칭 — 자동 확정 없음',
+  (() => {
+    const r = matchWordsToSentences([{ word: 'go' }, { word: 'take care of' }],
+      ['She went home early.', 'He took care of the dog.'])
+    const by = Object.fromEntries(r.map((x) => [x.word, x]))
+    return by['go'].matches.length === 1 && by['go'].matches[0].matchType === 'inflected'
+      && by['take care of'].matches.length === 1 && by['take care of'].matches[0].matchType === 'inflected'
+  })())
+check('불규칙 사전이 오탐을 만들지 않음: "went"⊄"wenting 같은 파생 아님/win⊄window',
+  (() => {
+    const r = matchWordsToSentences([{ word: 'win' }], ['Look out the window.'])
+    return r[0].matches.length === 0
   })())
 check('같은 문장에 원형+변화형 공존 시 exact 우선',
   (() => {
