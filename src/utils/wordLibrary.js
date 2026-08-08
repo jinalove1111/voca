@@ -773,10 +773,28 @@ function resolveNewUnitTextbookId(classId) {
   return own && !String(own.id).startsWith(SYNTH_TB_PREFIX) ? own.id : null
 }
 
+// 유닛 이름 정규화 비교 키(2026-08-09, 77차) — "Unit 1"/"Unit1"/"unit 01"을
+// 같은 유닛으로 판정한다. 규칙: trim → 내부 공백 전부 제거 → 소문자 →
+// 말미 숫자의 선행 0 제거. 배경: ensureUnit이 이름 "정확 일치"로만 기존
+// 유닛을 찾아서, 반 생성 시 자동 생성된 "Unit 1"(공백 있음)과 Excel 업로드가
+// 입력한 "Unit1"(공백 없음)이 형제 유닛으로 갈라졌고, 그 결과 교재마다
+// "빈 Unit 1 + 실단어 Unit1" 쌍이 쌓이는 실사고가 있었다(2026-08-09 전수
+// 감사, 빈 유닛 7개 → v3_29/v3_30 정리). 표시 이름(DB values)은 여기서
+// 절대 바꾸지 않는다 — 비교 판정에만 쓴다.
+export function unitNameKey(s) {
+  return String(s || '').trim().toLowerCase().replace(/\s+/g, '').replace(/0+(\d+)$/, '$1')
+}
+
 async function ensureUnit(classId, unitName, adminPin) {
-  const { data: existing, error: selErr } = await supabase
-    .from('units').select('id,name').eq('class_id', classId).eq('name', unitName).maybeSingle()
+  // 정확 일치가 아니라 정규화 키 일치로 기존 유닛을 찾는다(위 unitNameKey
+  // 주석 참고). 같은 키의 기존 유닛이 있으면 표시 이름이 달라도 그 유닛을
+  // 재사용한다 — 예: 반에 빈 "Unit 1"이 있는 상태에서 "Unit1"로 업로드하면
+  // 새 형제 유닛을 만들지 않고 기존 "Unit 1"에 단어가 들어간다.
+  const { data: classUnits, error: selErr } = await supabase
+    .from('units').select('id,name').eq('class_id', classId)
   if (selErr) throw selErr
+  const wanted = unitNameKey(unitName)
+  const existing = (classUnits || []).find((u) => unitNameKey(u.name) === wanted)
   if (existing) return existing
   const textbookId = resolveNewUnitTextbookId(classId)
   if (adminPin) {
