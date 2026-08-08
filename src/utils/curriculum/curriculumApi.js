@@ -240,6 +240,34 @@ export async function listUnitsMeta(textbookId) {
   }
 }
 
+// listUnitWords(unitId) → { rows: [{id, word, meaning, position}], featureDisabled }
+// "본문 가져오기"(TextImportPanel)가 선택된 유닛의 단어 목록을 읽는 조회
+// 전용 함수. words는 v1.x부터 있는 프로덕션 테이블이라 부재 폴백이 사실상
+// 필요 없지만, 이 파일의 "조회는 절대 throw하지 않음" 계약을 동일하게
+// 지킨다. wordLibrary.js의 학생용 캐시(getStudentWords 등)는 반/유닛 컨텍스트
+// 전제가 달라 재사용하지 않고 직접 조회한다(위 listTextbooksMeta와 같은 이유).
+export async function listUnitWords(unitId) {
+  if (!unitId) return { rows: [], featureDisabled: false }
+  try {
+    const { data, error } = await supabase
+      .from('words')
+      .select('id,word,meaning,position')
+      .eq('unit_id', unitId)
+      .order('position', { ascending: true })
+    if (error) {
+      console.warn('[curriculumApi] listUnitWords 조회 실패 (non-fatal):', error.message)
+      return { rows: [], featureDisabled: true }
+    }
+    return {
+      rows: (data || []).map((w) => ({ id: w.id, word: w.word, meaning: w.meaning || '', position: w.position ?? null })),
+      featureDisabled: false,
+    }
+  } catch (err) {
+    warnOnce(err)
+    return { rows: [], featureDisabled: true }
+  }
+}
+
 // updateUnitMeta(id, {position?, lessonNo?, objectives?}, adminPin?)
 //
 // 2026-08-02 — v3.11 락다운(supabase_v3_11_lockdown_curriculum_write.sql,
