@@ -7,6 +7,26 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (74차) — 커리큘럼 예문 탭 출판사/학년→교재 dropdown 연동 + "천재 이상기만 표시" 원인 확정 — 커밋 3eb9a52
+
+### 조사(읽기 전용, 운영자 지시)
+"예문 탭 출판사 필터에 천재 이상기 하나만 나옴" 원인 조사. **코드 문제 아님** — 구조 탭(CurriculumTree)과 예문 탭(ExampleManager)은 정확히 같은 소스(curriculumApi.js → publishers/grades/textbooks/units, v3_13 스키마)를 읽는 단일 소스 구조로 이미 올바르게 설계돼 있음. 라이브 DB 실측: publishers 1행("천재 이상기", 2026-08-01 생성 — 실은 교재명이 출판사로 입력됨), grades 1행("풍양중 2"), textbooks 8권 중 "중2 천재 이상기" 1권만 publisher_id/grade_id 메타 연결(나머지 7권 null), examples/grammar_points 0행. 즉 **출판사 마스터 데이터가 1건뿐**인 데이터 문제. 하드코딩/구스키마/이중소스 아님(전 저장소 grep 확인).
+
+### 확인 1 — 구조 탭 쓰기 경로 실측
+v3_13의 "[락다운 합류 블록]"(publishers 등을 anon read-only로 잠그는 주석 블록)은 **미실행 상태** — QA 표시 임시 행(QA_TEMP_PUBLISHER/GRADE_DELETE_ME)을 anon INSERT→즉시 DELETE로 실측 확인. 구조 탭에서 출판사/학년 추가·수정·삭제가 현재 정상 동작한다. DB는 원상 복구 완료(publishers/grades 각 1행 그대로).
+
+### 수정 (3eb9a52, ExampleManager.jsx 1파일)
+유일한 코드 공백은 "출판사/학년 선택 시 교재 dropdown **옵션**도 좁히기"(기존엔 예문 목록 행만 걸러지고 옵션은 항상 전체 교재). `availableTextbooks`(resolvedTextbookIds와 동일 판정식, 역할만 다름) + `setHierarchyFilter`(출판사/학년 변경 시 조건에 안 맞는 교재/유닛 선택 자동 초기화) 추가. 생성/수정 폼의 "교재 정렬" dropdown은 의도적으로 전체 교재 유지. examples CRUD/스키마/데이터 소스 무변경.
+
+### 검증
+- build PASS / verify:admin PASS / verify:student PASS.
+- 실DB 시뮬레이션 10/10 PASS(스크래치 verifyCurriculumFilters.mjs): 출판사→교재, 학년→교재, 출판사+학년→교재, 교재→유닛, 메타 미입력 교재 제외, 교재 리셋 판정, examples 조회.
+- 배포: 프로덕션 index-CdJ4E_HA.js 서빙 확인.
+- PRODUCTION DATA CHANGED: 순변화 NO — QA 임시 행 2개 생성 후 즉시 삭제(쓰기 경로 검증 목적), 기존 데이터 무접촉.
+
+### 남은 것(코드 아님 — 운영자 데이터 입력)
+구조 탭에서 실제 출판사(동아/능률/YBM/천재 등)·학년 추가 후 교재 8권에 메타 부착하면 예문 탭 계단식 필터가 전부 채워짐. 기존 "천재 이상기" 출판사는 이름이 교재명이므로 rename 권장(updatePublisher 있음). 학년 명명은 기존 "풍양중 2" 관례(학교 기반)를 따를지 운영자 결정. "본문 붙여넣기→예문 자동 연결"은 다음 단계(미착수, 운영자 지시).
+
 ## 2026-08-08 (73차) — 관리자 학생 관리: 비활성화/재활성화/안전 완전삭제 + 표시 토글 (재부팅 중단 작업 복구) — 커밋 a4b98fd/37cde4d
 
 ### 맥락

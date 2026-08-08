@@ -1,0 +1,26 @@
+{
+  "agent_name": "implementer",
+  "role": "커리큘럼 예문 탭 필터 연동 + 원인 조사",
+  "task_id": "curriculum-example-filter-link-2026-08-09",
+  "task": "예문 탭 출판사/학년→교재 dropdown 연동(availableTextbooks/setHierarchyFilter) + '천재 이상기만 표시' 원인 확정(publishers 1행 데이터 문제)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-09T00:00:00+09:00",
+  "updated_at": "2026-08-09T00:00:00+09:00",
+  "files_owned": [
+    "src/components/admin/ExampleManager.jsx",
+    "handoff.md",
+    ".ai-status/curriculum-example-filter-link-2026-08-09.json"
+  ],
+  "files_read": [
+    "src/components/admin/CurriculumHub.jsx",
+    "src/components/admin/CurriculumTree.jsx",
+    "src/utils/curriculum/curriculumApi.js",
+    "src/utils/curriculum/exampleLibrary.js",
+    "supabase_v3_13_curriculum_engine_phase0.sql",
+    "DATABASE.md"
+  ],
+  "summary": "구조/예문 탭은 이미 단일 소스(curriculumApi→publishers/grades/textbooks/units). 원인은 publishers 마스터 1행뿐 + 교재 7/8권 메타 null. 구조 탭 anon 쓰기 경로 정상 실측(QA 행 생성→즉시 삭제, 락다운 합류 블록 미실행 확정). ExampleManager에 교재 dropdown 옵션 좁히기+리셋 로직만 추가. build/verify:admin/verify:student PASS, 실DB 시뮬레이션 10/10 PASS, 배포(index-CdJ4E_HA.js) 확인. 순 데이터 변화 없음.",
+  "blocker": null,
+  "next_action": "운영자: 구조 탭에서 실제 출판사/학년 등록 + 교재 8권 메타 부착(데이터 입력). 다음 개발 단계: 본문 붙여넣기→단어 탐색→예문 자동 연결(미착수)."
+}
