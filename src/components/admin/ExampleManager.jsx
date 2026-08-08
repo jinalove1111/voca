@@ -92,6 +92,34 @@ export default function ExampleManager({ adminPin }) {
     )
   }, [filters.publisherId, filters.gradeId, filters.textbookId, textbooksMeta])
 
+  // 2026-08-09 — 출판사/학년 선택 시 "교재" dropdown의 옵션 자체도 같은
+  // 조건으로 좁힌다(운영자 지시 — 이전엔 옵션이 항상 전체 교재였음).
+  // 판정 기준은 위 resolvedTextbookIds와 동일하지만 역할이 다르다 —
+  // 저건 예문 목록 "행" 필터, 이건 dropdown "옵션" 목록. publisher_id/
+  // grade_id 메타가 아직 없는 교재는 출판사/학년을 고르는 순간 목록에서
+  // 빠진다 — 메타 부착은 구조 탭(CurriculumTree)의 책임(단일 원천).
+  const availableTextbooks = useMemo(
+    () => textbooksMeta.filter((t) =>
+      (!filters.publisherId || t.publisherId === filters.publisherId) &&
+      (!filters.gradeId || t.gradeId === filters.gradeId)),
+    [textbooksMeta, filters.publisherId, filters.gradeId],
+  )
+
+  // 출판사/학년 변경 핸들러 — 이미 선택돼 있던 교재가 새 조건에 안 맞으면
+  // 교재/유닛 선택을 함께 초기화한다. 안 하면 dropdown 옵션에는 없는
+  // 교재 id가 filters에 남아 목록·유닛 dropdown이 화면과 어긋난다.
+  const setHierarchyFilter = (key, value) => {
+    setFilters((f) => {
+      const next = { ...f, [key]: value }
+      const textbookStillValid = !f.textbookId || textbooksMeta.some((t) =>
+        t.id === f.textbookId &&
+        (!next.publisherId || t.publisherId === next.publisherId) &&
+        (!next.gradeId || t.gradeId === next.gradeId))
+      if (!textbookStillValid) { next.textbookId = ''; next.unitId = '' }
+      return next
+    })
+  }
+
   const load = async () => {
     setRowsLoaded(false)
     const { rows: r, featureDisabled } = await listExamples({
@@ -217,13 +245,13 @@ export default function ExampleManager({ adminPin }) {
       <div className="bg-white rounded-xl p-3 card-shadow space-y-1.5">
         <p className="text-xs font-black text-gray-700">필터</p>
         <div className="grid grid-cols-2 gap-1.5">
-          <select value={filters.publisherId} onChange={(e) => setFilters((f) => ({ ...f, publisherId: e.target.value }))}
+          <select value={filters.publisherId} onChange={(e) => setHierarchyFilter('publisherId', e.target.value)}
             aria-label="출판사 필터"
             className="text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
             <option value="">출판사 전체</option>
             {publishers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          <select value={filters.gradeId} onChange={(e) => setFilters((f) => ({ ...f, gradeId: e.target.value }))}
+          <select value={filters.gradeId} onChange={(e) => setHierarchyFilter('gradeId', e.target.value)}
             aria-label="학년 필터"
             className="text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
             <option value="">학년 전체</option>
@@ -233,7 +261,11 @@ export default function ExampleManager({ adminPin }) {
             aria-label="교재 필터"
             className="text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
             <option value="">교재 전체</option>
-            {textbooksMeta.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            {/* 옵션은 출판사/학년 선택을 반영(availableTextbooks). 아래
+                생성/수정 폼의 "교재 정렬" dropdown은 의도적으로 전체
+                교재(textbooksMeta) 유지 — 예문을 어느 교재에든 달 수
+                있어야 하고, 필터 상태가 폼 입력을 제한하면 안 됨. */}
+            {availableTextbooks.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
           <select value={filters.unitId} onChange={(e) => setFilters((f) => ({ ...f, unitId: e.target.value }))}
             disabled={!filters.textbookId}
