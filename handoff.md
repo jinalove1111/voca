@@ -7,6 +7,29 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (67차) — PIN 로그인 후속: unlock 버튼 노출 수정(A) 배포·검증 + 김보민/Paul 근본원인 확정(B) — 커밋 fba6e1d
+
+### Issue A — 관리자 "로그인 잠금 해제" 버튼 안 보임 (코드 버그, 수정·배포·검증 완료)
+- 근본원인: StudentDirectory.jsx 버튼이 status.locked(=pin_locked_until 미래)일 때만 렌더. PIN 잠금은 5분 순간창이라 관리자가 볼 땐 대부분 locked=false → 실패 누적됐어도 버튼 사라짐. + api/student-pin-status.js가 pin_fail_count를 안 돌려줘 UI가 실패 상태를 알 수 없었음.
+- 수정(fba6e1d): student-pin-status에 hasFailedAttempts(boolean만, 원시 카운트/해시 미노출 — 무인증 엔드포인트 계약 유지) 추가. 버튼 조건을 (locked || hasFailedAttempts)로 확장, 라벨 "🔓 로그인 잠금 해제", title로 잠김/실패누적 구분. unlock_student_pin 액션은 pin_fail_count/pin_locked_until만 초기화, pin_hash 무접촉(PIN 안 바뀜 재확인).
+- 라이브 검증: 클라이언트 번들 index-BEc21PQZ.js == 로컬 빌드(배포 확인). 김보민 pin-status API가 hasFailedAttempts:true, locked:false 반환 → 버튼 노출 조건 충족 확정.
+
+### Issue B — 김보민 9000 거부 (데이터/크레덴셜, 코드 문제 아님)
+- 실측(로그인과 동일 ilike 규칙): 김보민 = **단일 계정** d68a3f24(MS Advanced, 생성 07-07, progress 1·word_status 7·sca 2). 중복 없음 → 오래된/다른 김보민 레코드 없음, 92명 이동이 선택된 student_id를 바꾸지 않음(6개 조사항목 전부 해소).
+- 프로덕션 단일 진단 로그인(운영자 제공 기대 PIN, 잠금 아닌 상태에서 1회): 김보민 9000 → **wrong_pin**. 즉 저장된 크레덴셜이 9000이 아님(어느 시점 변경/교체 — 규칙 11로 값 조회 불가). 안전 복구는 **김보민 개별 PIN 초기화**(기존 🔑 버튼, 새 임시 PIN 발급, 진행도/배정/학습기록 무접촉)뿐. mass-reset/삭제/재생성/병합 안 함.
+- 부수 확인: 진단 1회 후 재잠금 안 됨(locked=false 유지) → 66차 잠금-만료 수정 정상 작동.
+
+### Paul — 3계정 중복(데이터, 병합 보류)
+- Paul ×3 전부 hasPin=true·현재 미잠금: 335a9560(P6-2026, 07-05, **word_status 17 = 실데이터 = canonical 후보**) + 38717600(MS Advanced, 07-22, ws 0) + fafa6d09(MS Advanced, 08-05, ws 0, 빈 중복). 로그인 시 PIN이 여러 계정 매칭 → duplicate_accounts 거부(정확 PIN인데 로그인 불가). 지시대로 **병합/삭제 미실행** — canonical=335a9560 보존 권고만 기록.
+
+### 요구 동작 검증 상태
+- wrong PIN → 실패 증가: 확정(김보민 진단으로 fail>0). lock 5분 만료: 66차 수정+단위테스트. 성공 시 실패 초기화: 코드 확인(성공 분기 pin_fail_count=0). unlock은 적절 시에만+PIN 무변경: A 수정으로 충족·배포 검증. correct PIN→성공: 김보민 실제 PIN 미상이라 운영자 재설정 후 검증 필요(코드 로직은 정상).
+
+### 운영자 액션
+1. 김보민: 관리자 🔑 PIN 초기화로 새 PIN 발급(또는 학생 자기설정 허용) → 새 PIN 로그인 검증. (9000 복구 불가 — 저장값이 9000 아님.)
+2. Paul 등 동명 28그룹/80계정: 0007 병합(canonical에 진행도 통합) — 운영자 판정 필요. Paul은 335a9560 유지 권고.
+3. 관리자 화면에서 김보민/기타 실패누적 학생에 "🔓 로그인 잠금 해제" 버튼 노출 확인.
+
 ## 2026-08-09 (66차) — 프로덕션 PIN 로그인 장애 진단·수정: 잠금 만료 재잠금 루프(코드) + 동명 중복(데이터) — 커밋 d28709d
 
 ### 증상(운영자 보고)
