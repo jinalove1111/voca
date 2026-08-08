@@ -2,14 +2,14 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   getClassNames, getRealClassNames, getClassUnitNames, getClassIdByName, getStudentClass, getStudentUnit,
   setStudentClass, setStudentUnit, setStudentsClassBulk, setStudentHouse,
-  getClassTextbooks, getStudentClassAssignments, getTextbookById,
+  getClassTextbooks, getStudentClassAssignments, getTextbookById, fetchDashboardData,
 } from '../../utils/wordLibrary'
 // House System(2026-07-19, 게임화 하위카드 8번) — 학생 로스터에 최소
 // 하우스 확인/재배정 UI(HOUSES 상수만 필요, 순수 함수는 wordLibrary.js가
 // 대신 소비).
 import { HOUSES, getHouseById } from '../../utils/houseSystem'
 import { fetchPinStatusMap } from '../../utils/pinStatusApi'
-import { getStudents, removeStudent } from '../../hooks/useStudent'
+import { getStudents } from '../../hooks/useStudent'
 import TextbookAssignmentPanel from './TextbookAssignmentPanel'
 import DuplicateStudentAudit from './DuplicateStudentAudit'
 
@@ -30,13 +30,33 @@ const devLog = import.meta.env?.DEV ? console.log : () => {}
 // 여기 관리자 화면은 그 3계정도 관리자가 조회/관리해야 하므로 **제외하지
 // 않는다**(두 화면의 목적이 다르므로 로컬 사본을 둔다 — wordLibrary 등
 // 공용 유틸에 옮기지 않음, 이번 작업 범위는 이 파일 1개로 한정).
+// 2026-08-08(검색 강화 + 비활성화/재활성화 UI 세션) — 위 isRealDirectoryStudent가
+// 하던 "_DUP/_INACTIVE/QA 제외" 로드 필터를 두 단계로 쪼갠다:
+// (1) 로드 시점 필터(isRealDirectoryStudent, 아래)는 이제 _DUP/QA만 제외한다
+//     (항상 숨김, 토글 없음 — 삭제 예정/테스트 픽스처는 관리자도 볼 이유가 없음).
+// (2) _INACTIVE는 "비활성화" 기능의 대상이 됐으므로(재활성화 UI로 다시 봐야
+//     함) 로드 필터에서 빼고, 아래 표시 단계(displayStudents, 컴포넌트 내부)
+//     에서 "🗄️ 비활성 학생 보기" 토글에 따라 걸러낸다.
+// 테스트 계정(Cookie/Paul/Jinaa) 판정 기준은 StudentSelect.jsx의
+// isRealSetupStudent와 동일(트림·소문자 정확 일치)하지만, 그 화면과 달리
+// 여기서는 "완전 제외"가 아니라 기본값만 숨김이고 "🧪 테스트 계정 보기"
+// 토글로 다시 볼 수 있다(관리자는 여전히 그 3계정을 관리해야 하므로).
 function isRealDirectoryStudent(s) {
   const rawName = s?.name || ''
-  // 1) archive/비활성/중복 계정 — 이름에 _DUP 또는 _INACTIVE 접미(대소문자 무시)
-  if (/_dup|_inactive/i.test(rawName)) return false
+  // 1) archive/중복 계정 — 이름에 _DUP 접미(대소문자 무시)
+  if (/_dup/i.test(rawName)) return false
   // 2) 시스템/QA 테스트 픽스처 — 이름이 QA_ 또는 _QA_ 로 시작(대소문자 무시)
   if (/^(qa_|_qa_)/i.test(rawName)) return false
   return true
+}
+// 비활성(재활성화 대상) 계정 — 이름에 _INACTIVE 접미(대소문자 무시).
+function isInactiveDirectoryStudent(s) {
+  return /_inactive/i.test(s?.name || '')
+}
+// 알려진 테스트 계정 — StudentSelect.jsx isRealSetupStudent와 동일 기준.
+function isTestAccountStudent(s) {
+  const lower = (s?.name || '').trim().toLowerCase()
+  return lower === 'cookie' || lower === 'paul' || lower === 'jinaa'
 }
 
 // 학생 관리 디렉터리 (2026-07-22, 관리자 규모 대응 — 300~1000명) —
@@ -130,6 +150,22 @@ export default function StudentDirectory({ adminPin }) {
   // 열려 있는 카드 id(한 번에 하나). 핸들러는 기존 handleRemove/
   // handleClearPin 그대로, 버튼 위치만 메뉴 안으로 이동(오터치 방지).
   const [menuOpenId, setMenuOpenId] = useState(null)
+  // 2026-08-08 — 표시 토글 2종(기본 둘 다 off — 실학생만 기본 노출) +
+  // 비활성화/재활성화/완전삭제 상태. DB/getStudents() 자체는 무변경, 이
+  // state들은 위 `students`(로드 필터만 적용된 배열)를 추가로 좁히거나
+  // (displayStudents, 아래) 파괴적 액션의 진행 상태만 담는다.
+  const [showTestAccounts, setShowTestAccounts] = useState(false)
+  const [showInactive, setShowInactive] = useState(false)
+  const [deactivateTarget, setDeactivateTarget] = useState(null) // { id, name } — 확인 모달 대상
+  const [deactivateBusy, setDeactivateBusy] = useState(false)
+  const [reactivateBusyId, setReactivateBusyId] = useState(null)
+  const [hardDeleteBusyId, setHardDeleteBusyId] = useState(null)
+  // 학생 카드 보강 정보(최근 학습일/별/완료 단어 수) — 완전삭제 1차 가드
+  // (PIN 미설정 && 별/완료 0)에도 재사용. 전체 로스터를 한 번에 조회하지
+  // 않고, 실제로 화면에 보이는(펼친 반 또는 검색 결과) 학생 id만 배치
+  // 조회한다(fetchDashboardData 재사용, wordLibrary.js 무변경). id ->
+  // { lastStudiedDate, totalStars, clearedCount } | null(조회 실패).
+  const [progressMap, setProgressMap] = useState({})
   const classList = getClassNames()
 
   // ── 반 배정 드롭다운 = 실제 수업 반만(2026-08-08, P1 실사고 재발 방지) ──
@@ -358,14 +394,104 @@ export default function StudentDirectory({ adminPin }) {
     return () => { cancelled = true }
   }, [duplicateInfo])
 
-  const handleRemove = async (id, name) => {
-    if (!window.confirm(`"${name}" 학생을 삭제할까요? 학습 기록도 함께 삭제됩니다.`)) return
+  // ── 학생 비활성화/재활성화/완전삭제(2026-08-08) ─────────────────────
+  // 구 handleRemove(클라이언트 removeStudent 즉시 hard delete, confirm
+  // 1회로 학습 기록까지 삭제)는 이 안전 경로로 대체하고 제거했다 — 삭제의
+  // 기본 방식은 "비활성화"(기록 보존), 완전삭제는 서버가 데이터 0임을
+  // 재검증하는 hard_delete_student(⚙️ 고급)만 남긴다. 서버
+  // api/admin-pin-actions.js의 deactivate_student/reactivate_student/
+  // hard_delete_student 3개 액션을 계약대로 호출한다.
+  const openDeactivateModal = (id, name) => setDeactivateTarget({ id, name })
+  const closeDeactivateModal = () => { if (!deactivateBusy) setDeactivateTarget(null) }
+  const confirmDeactivate = async () => {
+    if (!deactivateTarget) return
+    setDeactivateBusy(true)
     try {
-      await removeStudent(id)
+      const res = await fetch('/api/admin-pin-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deactivate_student', adminPin, studentId: deactivateTarget.id }),
+      })
+      const data = await res.json()
+      if (!data.ok) {
+        if (data.reason === 'not_authorized') throw new Error('관리자 인증에 실패했어요. 관리자 화면을 다시 로그인해주세요.')
+        throw new Error(data.reason ? `요청이 거부됐어요 (${data.reason})` : (data.error || '비활성화에 실패했어요.'))
+      }
+      setDeactivateTarget(null)
+      refresh()
+    } catch (err) {
+      alert('비활성화 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setDeactivateBusy(false)
+    }
+  }
+
+  // 재활성화 — 확인 모달 없이 바로 호출(비활성 목록은 "🗄️ 비활성 학생
+  // 보기" 토글을 켜야만 보이므로 오터치 위험이 낮음, PIN 잠금 해제 등
+  // 기존 비파괴 액션과 동일한 패턴).
+  const handleReactivate = async (id, name) => {
+    setReactivateBusyId(id)
+    try {
+      const res = await fetch('/api/admin-pin-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reactivate_student', adminPin, studentId: id }),
+      })
+      const data = await res.json()
+      if (!data.ok) {
+        if (data.reason === 'not_authorized') throw new Error('관리자 인증에 실패했어요. 관리자 화면을 다시 로그인해주세요.')
+        if (data.reason === 'no_clean_marker') {
+          alert(`"${name}" 학생은 자동으로 재활성화할 수 없어요 — 이름에서 원래 이름을 복원할 표식을 찾지 못했어요. 개발자에게 문의해주세요.`)
+          return
+        }
+        throw new Error(data.reason ? `요청이 거부됐어요 (${data.reason})` : (data.error || '재활성화에 실패했어요.'))
+      }
+      refresh()
+    } catch (err) {
+      alert('재활성화 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setReactivateBusyId(null)
+    }
+  }
+
+  // 완전삭제 — 카드 "⚙️ 고급" 영역 안, 그리고 클라이언트 1차 가드(PIN
+  // 미설정 && 별/완료 단어 0)를 통과한 계정에만 버튼이 렌더된다(아래
+  // renderStudentCard). 서버가 최종 재검증(has_data)하므로 여기 가드가
+  // 뚫려도 데이터가 있는 계정은 실제로 지워지지 않는다.
+  const handleHardDelete = async (id, name) => {
+    if (!window.confirm(`"${name}" 학생을 완전히 삭제할까요?\n\n이 작업은 되돌릴 수 없습니다. 학습 기록이 조금이라도 있으면 서버가 거부해요.`)) return
+    if (!window.confirm('정말 완전 삭제할까요? 한 번 더 확인합니다 — 취소하면 삭제되지 않아요.')) return
+    setHardDeleteBusyId(id)
+    try {
+      const res = await fetch('/api/admin-pin-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'hard_delete_student', adminPin, studentId: id }),
+      })
+      const data = await res.json()
+      if (!data.ok) {
+        if (data.reason === 'not_authorized') throw new Error('관리자 인증에 실패했어요. 관리자 화면을 다시 로그인해주세요.')
+        if (data.reason === 'has_data') {
+          // detail은 { word_status, stars, hasPin, daily, spellingQueue } 객체 —
+          // 그대로 문자열 연결하면 "[object Object]"가 되므로 사람이 읽을 수
+          // 있는 요약으로 바꿔 보여준다.
+          const d = data.detail || {}
+          const parts = []
+          if (d.hasPin) parts.push('PIN 설정됨')
+          if (d.word_status > 0) parts.push(`단어 기록 ${d.word_status}건`)
+          if (d.stars) parts.push('별/XP 있음')
+          if (d.daily > 0) parts.push(`일별 기록 ${d.daily}건`)
+          if (d.spellingQueue > 0) parts.push(`복습 큐 ${d.spellingQueue}건`)
+          throw new Error(`학습 기록이 있어 완전 삭제할 수 없어요${parts.length ? ` (${parts.join(', ')})` : ''} — 대신 "비활성화"를 사용하세요.`)
+        }
+        throw new Error(data.reason ? `요청이 거부됐어요 (${data.reason})` : (data.error || '완전 삭제에 실패했어요.'))
+      }
       setSelected(prev => { const next = new Set(prev); next.delete(id); return next })
       refresh()
     } catch (err) {
-      alert('삭제 중 오류가 발생했어요: ' + (err.message || err))
+      alert('완전 삭제 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setHardDeleteBusyId(null)
     }
   }
 
@@ -536,7 +662,7 @@ export default function StudentDirectory({ adminPin }) {
   // 누르지 않아도 되게. 이미 PIN이 있는 학생은 서버(set-pin-setup-
   // allowed.js)가 자동으로 걸러내므로 안전.
   const handleBulkAllowPinSetup = async (className) => {
-    const targets = students.filter(s => s.className === className && !pinStatus[s.id]?.hasPinHash)
+    const targets = displayStudents.filter(s => s.className === className && !pinStatus[s.id]?.hasPinHash)
     if (targets.length === 0) { alert('이 반에는 PIN 설정이 필요한 학생이 없어요.'); return }
     if (!window.confirm(`"${className}" 반의 PIN 미설정 학생 ${targets.length}명 전원에게 PIN 설정을 허용할까요?`)) return
     try {
@@ -596,20 +722,34 @@ export default function StudentDirectory({ adminPin }) {
   }
 
   const exportCsv = () => {
-    const rows = [['반', '유닛', '이름'], ...students.map(s => [s.className || '미배정', s.unitName || '', s.name])]
+    // 2026-08-08 — 화면에 실제로 보이는 목록(토글 반영)과 일치하도록
+    // displayStudents로 내보낸다(기존엔 students 전체를 그대로 썼음).
+    const rows = [['반', '유닛', '이름'], ...displayStudents.map(s => [s.className || '미배정', s.unitName || '', s.name])]
     downloadCsv(`학생명단_${new Date().toISOString().slice(0, 10)}.csv`, rows)
   }
 
-  // ── 그룹핑 (기존 로직 그대로) ────────────────────────────────────────
+  // ── 표시 필터(토글) — 순수 파생값, DB/students state 자체는 무변경 ─────
+  // students(로드 필터만 적용 — _DUP/QA만 제외)에서 토글 상태에 따라 테스트
+  // 계정/비활성 계정을 추가로 걸러낸 배열. 아래 그룹핑/검색/CSV/헤더 카운트
+  // (일부)가 전부 이 배열 하나를 참조하므로 토글을 켜고 끄면 자동으로 함께
+  // 갱신된다 — refresh() 재호출 불필요.
+  const activeCanonicalStudents = students.filter(s => !isInactiveDirectoryStudent(s) && !isTestAccountStudent(s))
+  const testAccountCount = students.length - students.filter(s => !isTestAccountStudent(s)).length
+  const inactiveCount = students.length - students.filter(s => !isInactiveDirectoryStudent(s)).length
+  let displayStudents = students
+  if (!showTestAccounts) displayStudents = displayStudents.filter(s => !isTestAccountStudent(s))
+  if (!showInactive) displayStudents = displayStudents.filter(s => !isInactiveDirectoryStudent(s))
+
+  // ── 그룹핑 (기존 로직 그대로, 소스만 displayStudents로 교체) ───────────
   // 반별로 묶어 보여주기 — 관리자가 여러 반을 한눈에 비교할 수 있게. 미배정
   // 학생은 별도 그룹으로 맨 위에 표시해 눈에 잘 띄게 함. classList에 없는
   // (반 삭제 직후 등으로 이름이 어긋난) 학생도 별도 그룹으로 반드시 표시해
   // 전체 학생 수(헤더)·CSV에는 있는데 목록에서만 조용히 사라지는 일이 없게 함.
   const knownClassNames = new Set(classList)
   const groups = [
-    { name: '⚠️ 반 미배정', students: students.filter(s => !s.className) },
-    ...classList.map(c => ({ name: c, students: students.filter(s => s.className === c) })),
-    { name: '❓ 알 수 없는 반 (새로고침 필요)', students: students.filter(s => s.className && !knownClassNames.has(s.className)) },
+    { name: '⚠️ 반 미배정', students: displayStudents.filter(s => !s.className) },
+    ...classList.map(c => ({ name: c, students: displayStudents.filter(s => s.className === c) })),
+    { name: '❓ 알 수 없는 반 (새로고침 필요)', students: displayStudents.filter(s => s.className && !knownClassNames.has(s.className)) },
   ].filter(g => g.students.length > 0)
 
   // ── 검색/필터 (2026-07-22 신규 — 조회 전용, 새 API 호출 없음) ─────────
@@ -635,8 +775,8 @@ export default function StudentDirectory({ adminPin }) {
   // N명 = 가장 최근 등록 N명" 폴백을 쓴다(문서화된 의도적 폴백 —
   // wordLibrary.js는 이 작업 범위에서 수정 금지 파일).
   const recentIds = useMemo(
-    () => new Set(students.slice(-RECENT_COUNT).map(s => s.id)),
-    [students],
+    () => new Set(displayStudents.slice(-RECENT_COUNT).map(s => s.id)),
+    [displayStudents],
   )
 
   const query = search.trim().toLowerCase()
@@ -669,6 +809,40 @@ export default function StudentDirectory({ adminPin }) {
   const pinLoaded = Object.keys(pinStatus).length > 0
   const pinDoneCount = (list) => list.filter(s => pinStatus[s.id]?.hasPinHash).length
 
+  // 2026-08-08 — 카드 보강 정보(최근 학습일/별/완료 단어 수) 배치 조회.
+  // 실제로 화면에 보이는 학생(검색/필터 중이면 그 결과 전체, 아니면 펼친
+  // 반 하나)의 id만 대상 — 전체 로스터 동시 조회 없음(성능/네트워크 비용
+  // 방지, 이 파일의 기존 아코디언 설계 원칙과 동일). fetchDashboardData는
+  // wordLibrary.js에 이미 있는 관리자 대시보드용 배치 조회 함수를 그대로
+  // 재사용한다(이번 세션에서 wordLibrary.js는 수정하지 않음).
+  const visibleStudentIds = isFiltering
+    ? filteredGroups.flatMap(g => g.students.map(s => s.id))
+    : (openGroup ? (groups.find(g => g.name === openGroup)?.students || []).map(s => s.id) : [])
+  const visibleIdsKey = visibleStudentIds.join(',')
+  useEffect(() => {
+    const missingIds = visibleStudentIds.filter(id => progressMap[id] === undefined)
+    if (missingIds.length === 0) return
+    let cancelled = false
+    fetchDashboardData(missingIds).then(rows => {
+      if (cancelled) return
+      setProgressMap(prev => {
+        const next = { ...prev }
+        rows.forEach(r => {
+          next[r.id] = r.progress
+            ? { lastStudiedDate: r.progress.last_studied_date || null, totalStars: r.progress.total_stars ?? 0, clearedCount: r.progress.cleared_count ?? 0 }
+            : { lastStudiedDate: null, totalStars: 0, clearedCount: 0 }
+        })
+        return next
+      })
+    }).catch(() => {
+      // 조회 실패 — 부가 정보일 뿐이므로 조용히 무시(카드는 "확인 불가"로
+      // 표시). 완전삭제 가드는 progressMap[id]===undefined일 때 버튼을
+      // 숨기므로(아래 renderStudentCard) 실패 시에도 안전 측(가드 걸림)으로 동작.
+    })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleIdsKey])
+
   // ── 학생 카드 (아코디언/검색 양쪽에서 재사용) ────────────────────────
   // 2026-07-22 컴팩트화: 세로 간격 축소(px-3 py-2.5), 한국어 라벨 세로
   // 줄바꿈 방지(whitespace-nowrap/break-keep), 터치 타겟 최소 40px
@@ -677,6 +851,14 @@ export default function StudentDirectory({ adminPin }) {
   const renderStudentCard = (s) => {
     const status = pinStatus[s.id] // undefined면 아직 로딩 전이거나 v1.7 SQL 미적용
     const menuOpen = menuOpenId === s.id
+    // 2026-08-08 — 비활성화/재활성화/완전삭제 판정. progress는 카드가 화면에
+    // 보일 때(위 visibleStudentIds 이펙트)만 채워짐 — 아직 undefined면
+    // "확인 중"으로 표시하고, 완전삭제 가드는 undefined를 통과시키지 않는다
+    // (데이터를 확인 못 한 계정을 섣불리 삭제 가능하게 두지 않기 위함).
+    const inactive = isInactiveDirectoryStudent(s)
+    const progress = progressMap[s.id]
+    const canHardDelete = status && !status.hasPinHash &&
+      progress && progress.totalStars === 0 && progress.clearedCount === 0
     return (
       <div key={s.id} className="bg-gray-50 rounded-xl px-3 py-2.5">
         <div className="flex items-start justify-between gap-2">
@@ -696,8 +878,22 @@ export default function StudentDirectory({ adminPin }) {
                     : status.pinSetupAllowed
                       ? <span className="text-yellow-600">🔓 학생 설정 대기중</span>
                       : <span className="text-gray-400">⬜ PIN 미설정</span>}
+                  {inactive && <span className="text-gray-400"> · 🗄️ 비활성</span>}
+                  {isTestAccountStudent(s) && <span className="text-purple-400"> · 🧪 테스트</span>}
                 </p>
               )}
+              {/* 2026-08-08 — 최근 학습일 + student_id 앞자리(관리자가 DB에서
+                  직접 찾을 때 대조용, 작은 회색 텍스트). progress가
+                  undefined면 아직 배치 조회 전(카드가 막 보이기 시작)이라
+                  "확인 중"으로만 표시 — 크래시 없음. */}
+              <p className="text-[10px] text-gray-400 mt-0.5 whitespace-nowrap">
+                {progress === undefined
+                  ? '최근 학습: 확인 중…'
+                  : progress.lastStudiedDate
+                    ? `최근 학습: ${progress.lastStudiedDate}`
+                    : '최근 학습 기록 없음'}
+                <span className="ml-1.5 text-gray-300">id {s.id.slice(0, 8)}</span>
+              </p>
               {/* House System(2026-07-19, 게임화 하위카드 8번) —
                   최소 확인/재배정. select 값이 바뀌면 즉시 저장
                   (반/유닛처럼 "편집 모드" 없이 값 하나만 바꾸는
@@ -737,6 +933,21 @@ export default function StudentDirectory({ adminPin }) {
             </button>
             <button onClick={() => startEdit(s.id)}
               className="bg-blue-100 text-blue-600 font-bold px-2.5 min-h-[40px] rounded-xl text-xs btn-press whitespace-nowrap">반 배정</button>
+            {/* 2026-08-08 — 비활성화/재활성화. 활성 학생은 "비활성화"(확인
+                모달 필요, 아래 렌더 참고), 비활성 학생(🗄️ 비활성 학생 보기
+                토글이 켜져 있어야 카드 자체가 보임)은 "재활성화". 삭제
+                (handleRemove)와 달리 학습 기록을 보존하는 안전한 경로. */}
+            {inactive ? (
+              <button onClick={() => handleReactivate(s.id, s.name)} disabled={reactivateBusyId === s.id}
+                className="bg-green-100 text-green-700 font-bold px-2.5 min-h-[40px] rounded-xl text-xs btn-press disabled:opacity-50 whitespace-nowrap">
+                {reactivateBusyId === s.id ? '⏳' : '♻️ 재활성화'}
+              </button>
+            ) : (
+              <button onClick={() => openDeactivateModal(s.id, s.name)}
+                className="bg-orange-100 text-orange-600 font-bold px-2.5 min-h-[40px] rounded-xl text-xs btn-press whitespace-nowrap">
+                🚫 비활성화
+              </button>
+            )}
             {/* v2.9 다중 교재 — 기본 반이 있어야 의미가 있으므로
                 (반 미배정 학생은 "반 배정"부터 먼저) 이 학생이
                 이미 어떤 반에 속해 있을 때만 노출. */}
@@ -746,10 +957,11 @@ export default function StudentDirectory({ adminPin }) {
                 📚 교재 관리
               </button>
             )}
-            {/* "⋯" 오버플로 메뉴 — 파괴적 액션(학생 삭제 handleRemove /
-                PIN 삭제 handleClearPin)만 이 안에. 핸들러·확인 다이얼로그는
-                기존 그대로, 버튼 위치만 이동(실수 터치로 즉시 confirm이
-                뜨는 것 자체를 줄이기 위해). 바깥 클릭 시 닫힘(투명 배경). */}
+            {/* "⋯" 오버플로 메뉴 — 파괴적 액션(PIN 삭제 handleClearPin)만
+                이 안에. 구 "🗑 학생 삭제"(handleRemove, confirm 1회 즉시
+                hard delete)는 2026-08-08 안전 경로로 대체·제거 — 삭제는
+                기본 "비활성화" 버튼, 완전삭제는 카드 하단 "⚙️ 고급"(서버
+                has_data 재검증)만 남긴다. 바깥 클릭 시 닫힘(투명 배경). */}
             <div className="relative">
               <button type="button" aria-label="더보기 (삭제 등)" aria-expanded={menuOpen}
                 onClick={() => setMenuOpenId(menuOpen ? null : s.id)}
@@ -766,16 +978,37 @@ export default function StudentDirectory({ adminPin }) {
                         {pinClearId === s.id ? '⏳ 처리 중...' : '🗑 PIN 초기화(삭제)'}
                       </button>
                     )}
-                    <button onClick={() => { setMenuOpenId(null); handleRemove(s.id, s.name) }}
-                      className="w-full min-h-[40px] px-3 py-2 text-left text-xs font-bold text-red-500 hover:bg-red-50 whitespace-nowrap btn-press">
-                      🗑 학생 삭제
-                    </button>
+                    <p className="px-3 py-2 text-[10px] text-gray-400 whitespace-nowrap">
+                      삭제는 🚫 비활성화(기록 보존) 또는<br />카드 하단 ⚙️ 고급의 완전 삭제를 사용하세요.
+                    </p>
                   </div>
                 </>
               )}
             </div>
           </div>
         </div>
+        {/* 2026-08-08 — "⚙️ 고급": 완전삭제(hard_delete_student)만 이 안에.
+            일반 카드/오버플로 메뉴 어디에도 노출하지 않고, 클라이언트 1차
+            가드(PIN 미설정 && 별·완료 단어 0)를 통과했을 때만 버튼을 보여준다
+            — 서버가 has_data로 최종 재검증하므로 이 가드가 뚫려도 실제
+            데이터가 있는 계정은 지워지지 않는다. status/progress가 아직
+            로딩 전(undefined)이면 버튼을 아예 숨김(안전 측 — 확인 안 된
+            계정을 성급히 지울 수 있게 하지 않음). */}
+        <details className="mt-1.5">
+          <summary className="text-[10px] text-gray-300 font-bold cursor-pointer select-none">⚙️ 고급</summary>
+          <div className="mt-1 pl-1">
+            {canHardDelete ? (
+              <button onClick={() => handleHardDelete(s.id, s.name)} disabled={hardDeleteBusyId === s.id}
+                className="text-[11px] font-bold text-red-500 underline btn-press disabled:opacity-50">
+                {hardDeleteBusyId === s.id ? '⏳ 삭제 중...' : '🗑️ 완전 삭제 (되돌릴 수 없음, 데이터 없는 계정만)'}
+              </button>
+            ) : (
+              <p className="text-[10px] text-gray-300">
+                완전 삭제 불가 — PIN·학습 데이터가 있거나 아직 확인 중이에요. 대신 &quot;비활성화&quot;를 사용하세요.
+              </p>
+            )}
+          </div>
+        </details>
         {textbookManaging === s.id && (
           <div className="mt-3 pt-3 border-t border-gray-200">
             {/* 2026-08-07 운영자 지시 — 소속 반(students.class_id)/배정 교과서(SCA)/
@@ -836,6 +1069,27 @@ export default function StudentDirectory({ adminPin }) {
 
   return (
     <div className="space-y-3">
+      {/* 2026-08-08 — 비활성화 확인 모달(window.confirm이 아니라 실제 모달 —
+          운영자 지시 문구를 그대로 보여주기 위함). fixed 오버레이라 렌더
+          위치는 트리 어디든 상관없음, 최상단에 둬서 눈에 잘 띄게. */}
+      {deactivateTarget && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={closeDeactivateModal}>
+          <div className="bg-white rounded-2xl p-5 max-w-sm w-full space-y-3" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-bold text-gray-800 whitespace-pre-line">
+              {`"${deactivateTarget.name}" 학생을 비활성화할까요?\n\n로그인과 학생 목록에서는 숨겨지지만 학습기록은 보존됩니다.`}
+            </p>
+            <div className="flex gap-2">
+              <button onClick={closeDeactivateModal} disabled={deactivateBusy}
+                className="flex-1 border-2 border-gray-200 text-gray-500 font-bold py-2 rounded-xl text-xs btn-press disabled:opacity-50">취소</button>
+              <button onClick={confirmDeactivate} disabled={deactivateBusy}
+                className="flex-1 bg-orange-500 disabled:bg-gray-300 text-white font-black py-2 rounded-xl text-xs btn-press">
+                {deactivateBusy ? '⏳ 처리 중...' : '비활성화'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {pinResetResult && (
         <div className="bg-yellow-50 border-2 border-yellow-300 rounded-2xl p-4 flex items-center justify-between gap-3">
           <p className="text-sm font-bold text-yellow-800">
@@ -1000,7 +1254,15 @@ export default function StudentDirectory({ adminPin }) {
 
       <div className="bg-white rounded-3xl card-shadow p-5">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-black text-gray-700">👦 전체 학생 ({students.length}명)</p>
+          <p className="text-sm font-black text-gray-700">
+            👦 전체 학생 ({activeCanonicalStudents.length}명)
+            {(testAccountCount > 0 || inactiveCount > 0) && (
+              <span className="text-xs font-normal text-gray-400 ml-1">
+                {testAccountCount > 0 && `· 테스트 ${testAccountCount} `}
+                {inactiveCount > 0 && `· 비활성 ${inactiveCount}`}
+              </span>
+            )}
+          </p>
           <div className="flex gap-2">
             <button onClick={exportCsv} className="text-xs text-green-600 font-bold btn-press">⬇️ CSV</button>
             <button onClick={refresh} className="text-xs text-purple-500 font-bold btn-press">🔄 새로고침</button>
@@ -1027,6 +1289,21 @@ export default function StudentDirectory({ adminPin }) {
               </button>
             ))}
           </div>
+          {/* 2026-08-08 — 표시 토글 2종(기본 둘 다 off). 실학생 카운트(헤더)/
+              그룹/검색/CSV는 전부 displayStudents 하나를 참조하므로 여기서
+              켜고 끄면 목록이 즉시 갱신된다(추가 조회 없음). */}
+          <div className="flex gap-3 px-1">
+            <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500">
+              <input type="checkbox" checked={showTestAccounts} onChange={e => setShowTestAccounts(e.target.checked)}
+                className="w-3.5 h-3.5 accent-purple-500" />
+              🧪 테스트 계정 보기{testAccountCount > 0 ? ` (${testAccountCount})` : ''}
+            </label>
+            <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500">
+              <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)}
+                className="w-3.5 h-3.5 accent-purple-500" />
+              🗄️ 비활성 학생 보기{inactiveCount > 0 ? ` (${inactiveCount})` : ''}
+            </label>
+          </div>
         </div>
 
         {selected.size > 0 && (
@@ -1048,6 +1325,10 @@ export default function StudentDirectory({ adminPin }) {
 
         {students.length === 0 ? (
           <p className="text-center text-gray-400 text-sm py-8">아직 등록된 학생이 없어요.</p>
+        ) : displayStudents.length === 0 ? (
+          <p className="text-center text-gray-400 text-sm py-8">
+            표시할 학생이 없어요 — 테스트/비활성 계정만 있어요. 위 토글을 켜보세요.
+          </p>
         ) : isFiltering ? (
           // ── 검색/필터 모드: 일치 학생만 반별 그룹으로 직접 렌더 ────────
           filteredCount === 0 ? (
