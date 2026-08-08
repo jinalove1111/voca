@@ -7,6 +7,7 @@ import {
 } from '../../utils/curriculum/exampleLibrary'
 import { canTransition, matchesFilters, APPROVAL_STATUSES, validateExampleFields } from '../../utils/curriculum/curriculumModel'
 import { generateCandidateExamples } from '../../utils/curriculum/generatorContract'
+import TextImportPanel from './TextImportPanel'
 
 const SOURCE_BADGE = { teacher: '👩‍🏫', import: '📥', rule: '⚙️', ai: '🤖' }
 const STATUS_STYLE = {
@@ -60,6 +61,9 @@ export default function ExampleManager({ adminPin }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [showForm, setShowForm] = useState(false)
   const [aiNote, setAiNote] = useState(null)
+  // 2026-08-09 — "본문 가져오기"(TextImportPanel) 접기/펼치기. 기본 접힘 —
+  // 기존 예문 CRUD 화면 레이아웃을 바꾸지 않는다.
+  const [showImport, setShowImport] = useState(false)
 
   useEffect(() => {
     (async () => {
@@ -239,6 +243,23 @@ export default function ExampleManager({ adminPin }) {
         <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-3 text-xs font-bold text-orange-700">
           ⚠️ 예문 기능은 supabase_v3_13 실행 후 사용 가능해요. (관리자: supabase_v3_13_curriculum_engine_phase0.sql을 Supabase SQL Editor에서 실행)
         </div>
+      )}
+
+      {/* 본문 가져오기(2026-08-09) — SOURCE TEXT FIRST. 기본 접힘, 펼치면
+          TextImportPanel(교재/Unit 선택 → 본문 붙여넣기 → 매칭 → 승인 저장).
+          저장 후 onSaved=load로 아래 예문 목록이 즉시 갱신된다. */}
+      <button onClick={() => setShowImport((v) => !v)}
+        className={`w-full font-black px-3 py-2 rounded-xl text-xs btn-press ${showImport ? 'bg-indigo-100 text-indigo-700' : 'bg-white text-indigo-600 border-2 border-indigo-200'}`}>
+        {showImport ? '▲ 본문 가져오기 닫기' : '📥 본문 가져오기 — 교과서/학평 본문에서 예문 연결'}
+      </button>
+      {showImport && (
+        <TextImportPanel
+          grades={grades}
+          textbooksMeta={textbooksMeta}
+          grammarPoints={grammarPoints}
+          adminPin={adminPin}
+          onSaved={load}
+        />
       )}
 
       {/* 필터 바 */}
