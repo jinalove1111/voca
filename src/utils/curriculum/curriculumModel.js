@@ -111,6 +111,22 @@ export function matchesFilters(row, filters) {
   return true
 }
 
+// ── 학생 노출 예문 랭킹(2026-08-09, SOURCE TEXT FIRST) ─────────────────────
+// fetchApprovedExamplesForWords(exampleLibrary.js)가 단어별 "최고 1개"를
+// 고를 때 쓰는 순수 랭킹. 2축:
+//   ① 유닛 일치(지배적, x10): 선택 유닛과 정확히 일치하면 2, 아니면 1 —
+//      유닛 정렬 예문이 항상 우선(§2 각주, 기존 동작 보존).
+//   ② 같은 유닛 축 안 source 우선순위: 'import'(실제 교과서/학평 본문 문장)
+//      2 > 'teacher'(교사 직접 작성) 1 > 'rule'/'ai' 0 — 운영자 지시
+//      "SOURCE TEXT FIRST, AI GENERATED SECOND".
+// 동점이면 호출부의 created_at desc 순회가 최신 행을 유지한다.
+export const SOURCE_PRIORITY = { import: 2, teacher: 1, rule: 0, ai: 0 }
+
+export function computeExampleRank(rowUnitId, source, selectedUnitId) {
+  const unitTier = selectedUnitId && rowUnitId === selectedUnitId ? 2 : 1
+  return unitTier * 10 + (SOURCE_PRIORITY[source] || 0)
+}
+
 // target_word 정규화 — 저장 시(createExample) 그리고 조회 매칭 시
 // (fetchApprovedExamplesForWords의 키) 동일하게 사용해 대소문자/공백 차이로
 // 매칭이 어긋나는 것을 방지한다.

@@ -29,6 +29,7 @@ import { pathToFileURL } from 'node:url'
 import esbuild from 'esbuild'
 import {
   APPROVAL_STATUSES, SOURCES, canTransition, validateExampleFields, matchesFilters, normalizeTargetWord,
+  computeExampleRank, SOURCE_PRIORITY,
 } from '../../src/utils/curriculum/curriculumModel.js'
 // textImport.js도 curriculumModel.js와 같은 import-0 순수 모듈 — 직접 로드.
 import {
@@ -179,6 +180,39 @@ check('같은 문장에 원형+변화형 공존 시 exact 우선',
     const r = matchWordsToSentences([{ word: 'protect' }], ['We protect and protected it.'])
     return r[0].matches.length === 1 && r[0].matches[0].matchType === 'exact'
   })())
+
+console.log('\n-- textImport: false positive 방어(추가, 2026-08-09 야간)')
+{
+  const sents = ['The weather is nice.', 'I saw a border collie.', 'This is part of the start.', 'She blocked outside noise.']
+  const res = matchWordsToSentences(
+    [{ word: 'he' }, { word: 'order' }, { word: 'art' }, { word: 'block out' }, { word: 'weather' }],
+    sents,
+  )
+  const byWord = Object.fromEntries(res.map((r) => [r.word, r]))
+  check('"he"가 "The/weather" 안에서 잡히지 않음', byWord['he'].matches.length === 0)
+  check('"order"가 "border" 안에서 잡히지 않음', byWord['order'].matches.length === 0)
+  check('"art"가 "part/start" 안에서 잡히지 않음', byWord['art'].matches.length === 0)
+  check('"block out" 변화형이 "blocked outside"에 오탐되지 않음(\\b 경계)', byWord['block out'].matches.length === 0)
+  check('정상 단어("weather")는 그대로 매칭', byWord['weather'].matches.length === 1)
+}
+
+console.log('\n-- computeExampleRank: SOURCE TEXT FIRST 랭킹(순수)')
+{
+  const U = 'u1'
+  check('같은 유닛: import > teacher > ai (엄격 감소)',
+    computeExampleRank(U, 'import', U) > computeExampleRank(U, 'teacher', U)
+    && computeExampleRank(U, 'teacher', U) > computeExampleRank(U, 'ai', U)
+    && computeExampleRank(U, 'ai', U) === computeExampleRank(U, 'rule', U))
+  check('유닛 일치가 소스보다 지배적: 같은 유닛 ai > 다른 유닛 import',
+    computeExampleRank(U, 'ai', U) > computeExampleRank('u2', 'import', U))
+  check('unitId 미지정(하위 호환): 유닛 축 동률, 소스 축만 차등',
+    computeExampleRank(U, 'import', undefined) - computeExampleRank('u2', 'import', undefined) === 0
+    && computeExampleRank(U, 'import', undefined) > computeExampleRank(U, 'ai', undefined))
+  check('알 수 없는 source는 최하위(0) 취급, 크래시 없음',
+    computeExampleRank(U, 'bogus', U) === computeExampleRank(U, 'ai', U))
+  check('SOURCE_PRIORITY 계약: import 2 / teacher 1 / rule·ai 0',
+    SOURCE_PRIORITY.import === 2 && SOURCE_PRIORITY.teacher === 1 && SOURCE_PRIORITY.rule === 0 && SOURCE_PRIORITY.ai === 0)
+}
 
 console.log('\n-- textImport: duplicateKey(중복 판정)')
 check('공백/대소문자 정규화로 동일 판정',

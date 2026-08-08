@@ -20,7 +20,7 @@
 // 모듈 전체의 안전성이다.
 import { supabase } from '../supabaseClient'
 import { isMissingTableError } from '../wordLibrary'
-import { canTransition, validateExampleFields, normalizeTargetWord } from './curriculumModel'
+import { canTransition, validateExampleFields, normalizeTargetWord, computeExampleRank } from './curriculumModel'
 
 const EXAMPLES_SELECT =
   'id,unit_id,textbook_id,word_id,target_word,english_sentence,korean_translation,' +
@@ -140,12 +140,13 @@ export async function fetchApprovedExamplesForWords(wordTexts, { unitId } = {}) 
     // unitId를 안 넘기면(기본 호출) ①축이 전 행 동일(1)이라 ②축 소스
     // 우선순위 + 최신순만 남는다 — 기존 호출부와 하위 호환(순수 최신순
     // 대비 달라지는 경우는 "본문 예문이 존재할 때 그걸 우선"뿐, 의도된 개선).
-    const SOURCE_RANK = { import: 2, teacher: 1 }
+    // 랭킹 자체는 curriculumModel.computeExampleRank(순수 함수, 하네스가
+    // 직접 단언) — 여기서 재구현하지 않는다.
     const bestByWord = new Map()
     ;(data || []).forEach((r) => {
       const key = normalizeTargetWord(r.target_word)
       if (!key) return
-      const rank = (unitId && r.unit_id === unitId ? 2 : 1) * 10 + (SOURCE_RANK[r.source] || 0)
+      const rank = computeExampleRank(r.unit_id, r.source, unitId)
       const existing = bestByWord.get(key)
       if (!existing || rank > existing.rank) {
         bestByWord.set(key, { row: r, rank })
@@ -209,7 +210,21 @@ export async function createExample(fields, adminPin) {
     approval_status: approvalStatus,
     created_by: 'admin',
   }
-  const { data, error } = await supabase.from('examples').insert(row).select(EXAMPLES_SELECT).single()
+  // provenance(2026-08-09, supabase_v3_31) — 본문 가져오기 등이 출처
+  // 메타데이터({ sentence_index, origin, ... })를 남길 수 있는 additive
+  // jsonb 컬럼. v3_31 SQL 미실행 환경이면 42703로 실패하므로 컬럼만 빼고
+  // 1회 재시도한다(규칙 9 — 마이그레이션 전후 어느 쪽이든 저장 성공).
+  // EXAMPLES_SELECT에는 넣지 않는다 — 컬럼 부재 환경에서 SELECT가 통째로
+  // 400이 나 조회 폴백(featureDisabled)을 오탐하게 되기 때문. 조회 노출은
+  // v3_31 실행이 확인된 후속 세션 범위.
+  if (fields.source_meta && typeof fields.source_meta === 'object') {
+    row.source_meta = fields.source_meta
+  }
+  let { data, error } = await supabase.from('examples').insert(row).select(EXAMPLES_SELECT).single()
+  if (error && 'source_meta' in row && error.code === '42703') {
+    delete row.source_meta
+    ;({ data, error } = await supabase.from('examples').insert(row).select(EXAMPLES_SELECT).single())
+  }
   if (error) throwIfMissingTable(error)
   return toRow(data)
 }
