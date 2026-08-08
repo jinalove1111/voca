@@ -1,0 +1,22 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "문서 갱신",
+  "task_id": "student-textbook-selector-warm-fix-2026-08-09",
+  "task": "학생 교재 셀렉터 웜세션 stale 버그(P0) 수정·배포·라이브검증 기록",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-09T00:00:00+09:00",
+  "updated_at": "2026-08-09T00:00:00+09:00",
+  "files_owned": [
+    "handoff.md",
+    ".ai-status/student-textbook-selector-warm-fix-2026-08-09.json"
+  ],
+  "files_read": [
+    "handoff.md",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "Paul 학생 대시보드 교재 셀렉터가 관리자 패널과 달리 class_textbooks 링크(중1 동아 윤정미)를 반영 못 하던 P0 버그. 원인은 App.jsx의 focus/visibility 새로고침 이펙트가 refreshWordLibrary/refreshStudents/refreshClassSettings만 호출하고 refreshTextbooks()가 빠져 있어, 관리자가 class_textbooks를 추가하기 전에 이미 열려 있던 웜 학생 탭이 stale 1개 교재셋에 갇혔던 것(콜드스타트 경로는 harness로 정상 2개 확인됨). 커밋 1637256으로 refreshTextbooks() 추가(owner/primary/이름 폴백 필터 미추가, 운영자 명시 요청 준수)·push·배포. 배포 번들 index-DWjv1WCQ.js가 로컬 빌드와 일치, 라이브 harness 재실행으로 Paul textbookOptions 2개(동아+Presentation 6 -2026) 확정. setPrimaryTextbook의 class_id 불변·students 컬럼단위 잠금(current_unit_id/SCA는 anon UPDATE 허용, name/class_id만 차단)도 부수 확인. handoff.md에 69차 섹션을 68차 위에 append(기존 섹션·최상단 이탤릭 블록 무변경).",
+  "blocker": null,
+  "next_action": "운영자: Paul 재로그인 후 동아 책 노출·전환 확인 / 웜세션 재현은 하드리로드로 검증"
+}

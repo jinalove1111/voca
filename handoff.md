@@ -7,6 +7,28 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (69차) — 학생 교재 셀렉터 웜세션 stale 버그(P0) 수정·배포·라이브검증 — 커밋 1637256
+
+### 증상/조사
+- 관리자 패널은 Presentation 6 -2026의 class_textbooks 2개(Presentation 6 -2026 + 중1 동아 윤정미) 정상 표시. 그러나 Paul(canonical 335a9560, class_id dcd497c2)의 학생 대시보드 교재 셀렉터엔 동아 책이 안 뜨고 1개만.
+- 데이터 실측: class_textbooks(dcd497c2)=2행 둘 다 enabled, Paul SCA=1(Presentation 6 -2026 primary). 동아 책 faf6dc71은 class_textbooks에만 있고 Paul 개별 SCA엔 없음.
+- 소스 textbookOptions(App.jsx 302~320: getClassTextbooks(getStudentClassId) ∪ SCA)는 owner/primary 필터 없이 정상.
+- 재현 harness(esbuild 번들 wordLibrary를 라이브 anon으로 초기화, ops/reproTextbookSelectorBug.mjs): getStudentClassId(Paul)=dcd497c2 정상, getClassTextbooks=2개, 최종 textbookOptions=2개 → **콜드스타트 경로는 정상**. 드롭 없음.
+
+### 근본원인(확정)
+_textbooks/_classTextbooks 모듈 캐시는 initWordLibrary() 안에서 딱 1회만 채워지고(2차 호출은 _initPromise 메모이제이션으로 no-op). App.jsx의 focus/visibility 새로고침 이펙트는 refreshWordLibrary/refreshStudents/refreshClassSettings만 부르고 **refreshTextbooks()가 빠져 있었다**(v3.1 교재 레이어가 나중에 추가되며 이 목록에 미반영 — 위 refreshStudents 주석이 설명하는 "탭 수명 내내 1회만 로드" 문제와 동일 유형). 결과: 관리자가 class_textbooks 링크를 추가하기 **전에 이미 열려 있던** 학생 탭은 하드 리로드 전까지 stale 교재셋에 갇힘(관리자=매번 새 페이지=정상 2개, 웜 학생탭=1개).
+
+### 수정(커밋 1637256, push·배포)
+- src/App.jsx: focus/visibility 새로고침 Promise.all에 refreshTextbooks() 추가(refreshStudents와 동일 트리거·refreshTick 재계산 방식, 새 개념 없음). owner/primary/current/이름 폴백 필터는 일절 추가 안 함(운영자 명시 제거 요청 준수). class_textbooks 데이터·Paul 반·전환 로직 무접촉.
+
+### 교재 전환 안전성(부수 확인)
+- setPrimaryTextbook은 SCA is_primary 플립 + students.current_unit_id UPDATE + refreshStudents. class_id는 안 바꿈(line 2269 주석). students 잠금은 **컬럼 단위**임을 실측 확인 — anon UPDATE가 current_unit_id/SCA는 허용, name/class_id만 차단(Harry rename이 막힌 이유). 따라서 교재 전환은 정상 작동(전환 시 class_id 불변·동아 유닛은 getTextbookUnits로 표시·별/progress는 student_progress로 무접촉).
+
+### 라이브 검증
+- 배포 번들 index-DWjv1WCQ.js == 로컬 빌드(일치).
+- 라이브 harness 재실행: Paul textbookOptions = [중1 동아 윤정미(동아), Presentation 6 -2026] 2개 확정.
+- 남은 확인(운영자): 실제 브라우저에서 Paul 재로그인/하드리로드(또는 탭 포커스 복귀) 후 동아 책 노출 + 선택 시 동아 유닛 표시·class_id 불변·별 223 유지. 콜드 경로는 harness로 2개 증명됨.
+
 ## 2026-08-09 (68차) — Paul 3계정 중복 통합(rename 비활성화) 실행·검증 완료 — 커밋 3032b8b
 
 ### 배경/원인
