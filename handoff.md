@@ -7,6 +7,24 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (65차) — 최종 검증 중 실사고 1건 복구 + 관리자 반 배정 드롭다운 P1 수정 — 커밋 20ca0e1/d8f4401
+
+### 최종 검증 스윕에서 발견(아침, 운영자 조작 후 상태)
+- 능률 Unit2 업로드 확인: 40단어, textbook_id 정확 태깅(자동 태깅 첫 실전 성공).
+- **실사고**: Harry(77cc6550)가 교과서 컨테이너 "중2 YMB 박준원"으로 반 이동돼 있었음 — 운영자가 YMB 교과서를 주려는 조작이 반 이동이 된 것. 원인: 관리자 로스터(StudentDirectory) 반 배정 드롭다운이 전체 반(컨테이너 포함)을 노출(학생용 PIN 선택기는 54차에 실반 필터 적용, 관리자 쪽 미적용 갭). 세션이 조건부 1행 UPDATE로 즉시 복구 — 반만 Pre-Middle School(39e9acb1)로, **YMB primary SCA·Unit3 학습 상태는 무접촉 유지**(운영자 도메인 모델 그대로: 반 불변, 교과서는 SCA로).
+- 정크 빈 교과서 2권 발견: 'Pre-Middle School'(dc91886a, owner NULL 고아)/'Pre-Middle school'(e407ed1c, self링크 1) — 8/7 반 생성 순간 자기 교과서 자동 등록 잔재(유닛 0·SCA 0). 후자는 학생 드롭다운에 빈 책 노출 가능 상태였음.
+
+### 수정 (커밋 2건, push·배포)
+- 20ca0e1 fix(admin)!: ① StudentDirectory 반 배정 드롭다운 3곳(개별 편집/일괄 이동/학생 추가) 전부 getRealClassNames 기반 실반만 노출 — 컨테이너 소속 학생(보류 24명 등)은 "(현재: 이름 — 교과서 컨테이너)" 현상 유지 옵션 제공 ② createClass/ensureTextbookLayerBackfilled의 자기 교과서 자동 등록을 classType='textbook'에만 한정(수업 반은 class_textbooks 링크로 라이브러리 책 연결 — 정크 재발 차단, 전원 명시 primary SCA 보유 실측으로 폴백 영향 0 확인).
+- d8f4401 sql: supabase_v3_22_premiddle_junk_textbooks.sql — 정크 2권+링크 1행 조건부 삭제(참조 0 not exists 3중 가드), **파괴적 삭제라 운영자 결재·수동 실행 대기**.
+
+### 재검증
+- 프로덕션 데이터 6/6 PASS: 실반 3개 / Harry=Pre-MS 복구 유지+YMB primary 유지 / 능률 Unit1·Unit2 각 40단어 / MS Advanced 138명.
+- build/verify:admin/verify:student PASS. 배포 번들 확인 별도 진행.
+
+### 남은 항목
+- v3_22 결재(정크 2권 삭제 — 선택) / 보안 잔여(students anon UPDATE·DELETE 회수 — Harry 복구도 이 개방 경로로 수행됐음, 회수 후엔 운영자 SQL 필요) / 초등 24명 목적지.
+
 ## 2026-08-09 (64차) — 운영반/교과서 분리 도메인 감사: 라이브 위반 0건 (setPrimaryAssignment는 레거시 모드 전용)
 
 ### 운영자 확정 도메인 모델(2026-08-09)

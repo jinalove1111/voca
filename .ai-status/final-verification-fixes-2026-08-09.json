@@ -1,0 +1,21 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "문서 갱신",
+  "task_id": "final-verification-fixes-2026-08-09",
+  "task": "65차 최종 검증 스윕에서 발견한 반 배정 실사고 복구 + 관리자 반 배정 드롭다운 P1 수정 문서화",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-09T00:00:00+09:00",
+  "updated_at": "2026-08-09T00:00:00+09:00",
+  "files_owned": [
+    "handoff.md"
+  ],
+  "files_read": [
+    "handoff.md",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "능률 Unit2 업로드 확인(40단어, textbook_id 자동 태깅 성공) 중 Harry가 YMB 교과서 컨테이너로 반 이동돼 있던 실사고(원인: 관리자 로스터 반 배정 드롭다운이 컨테이너 포함 전체 반 노출, 학생용은 54차에 필터 적용됨)를 조건부 1행 UPDATE로 복구(YMB primary SCA·Unit3 학습 상태 무접촉). 정크 빈 교과서 2권(Pre-Middle School/Pre-Middle school, 8/7 반 생성 시 자동 등록 잔재)도 발견. 커밋 20ca0e1(반 배정 드롭다운 실반만 노출 + 자기 교과서 자동 등록을 classType='textbook'로 한정)과 d8f4401(정크 2권 삭제 SQL, 운영자 결재 대기) push·배포. 프로덕션 데이터 6/6 재검증 PASS, build/verify:admin/verify:student PASS. handoff.md에 65차 섹션 append 완료.",
+  "blocker": null,
+  "next_action": "운영자: v3_22 결재 여부 / anon 권한 회수 / 초등 24명 목적지"
+}
