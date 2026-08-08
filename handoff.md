@@ -7,6 +7,23 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (78차) — 야간 자율 2차: push/배포 + 규칙 기반 보충 예문 + 불규칙 사전 + 마이그레이션 드라이런 (프로덕션 DB 무변경)
+
+### push 안전성 확인 후 배포
+운영자 조건("DB 자동 변경 가능성 있으면 push 금지") 검증: GitHub 워크플로는 workflow_dispatch 수동 전용, vercel.json 없음, build=vite build만(사전/사후 훅 없음), SQL 파일은 어떤 자동 실행 경로에도 연결 안 됨(규칙 8) → **push=Vercel 코드 배포만**으로 확정, 77차 7커밋 push+배포(index-WvVcPV7X). 이후 이번 세션 커밋들도 동일 성격.
+
+### 신규 구현
+- `295bb50` **규칙 기반 보충 예문 생성기(AI 호출 0, 규칙 7)**: generateCandidateExamples 첫 구현 — 호출자가 주입한 words.example_text(기존 단어 자산)를 reviewCandidate 통과분만 후보로 반환. wordAssets 미주입이면 기존 not_implemented(하위 호환). TextImportPanel: 본문 미발견 단어 → 후보 표시 → **source='rule'+source_meta{origin:'word_asset'}로 draft→pending까지만 저장(승인은 검수함 — 생성 예문 검수 불변식 유지)**. listUnitWords가 자산 필드 포함.
+- `9ae7004` **불규칙 형태 사전(~60개)**: went/took/made/children 등 고정 사전 — 추측 아닌 조회라 오탐 없이 recall 상승, 구동사 첫 토큰에도 적용(take care of→took care of). 전부 inflected(검토 필요) 표시만, 자동 저장 불가 유지.
+- `8fc246e` **source_meta 조회 폴백**: listExamples가 v3_31 실행 후 재배포 없이 provenance를 읽음(42703 시 기본 select로 sticky 폴백). 예문 행에 "본문 N번째 문장" 표시.
+- `9bb29e0`/`3658373` **마이그레이션 준비 완결**: v3_31 패키지(01 precheck/04 verify/05 rollback — 롤백은 저장소 정책상 컬럼 삭제 금지(checkDestructiveSql 훅이 실제 차단, 최초 초안 차단 사실 명기) → 값 초기화/무조치 문서) + unit_naming 드라이런 검증기(scripts/dryRunUnitNaming.mjs, 라이브 5/5 PASS — 지금 실행 가능 상태).
+
+### verify:login 만성 FAIL 원인 정밀 확정 (수정은 보류 — 운영자 결정 필요)
+42501 "permission denied for table students" — 2026-08-06 P0가 학생 생성을 서버 전용(create_student)으로 잠근 **의도된 보안 상태**인데, login 테스트 6개가 잠금 이전 계약(anon 자기등록 INSERT 성공)을 아직 단언. 앱 버그 아님·회귀 아님. 권장 수정(승인 후): ①testRlsSecurity의 "INSERT 성공" 단언을 "42501이 정상(락다운 검증)"으로 반전 ②QA 픽스처 생성을 ADMIN_PIN 경유 create_student로 교체(프로덕션 QA 행 생성이 수반되므로 운영자 판단) 또는 락다운 감지 시 정직한 SKIP. 보안 테스트 의미 반전이라 야간 임의 수정 금지로 판단.
+
+### 검증
+build PASS(전 커밋), verify:examples **80/80**, verify:admin/student PASS, verify:integrity 10/10, unit_naming 드라이런 5/5. verify:all 최종 실행 결과는 야간 보고서에.
+
 ## 2026-08-09 (77차) — 야간 자율 세션: v3_30 검증 PASS + 유닛 정규화 근본수정 + 예문 provenance + 마이그레이션 패키지 (프로덕션 DB 무변경)
 
 ### v3_30 최종 검증(READ-ONLY) — RESULT: PASS

@@ -1,0 +1,31 @@
+{
+  "agent_name": "implementer",
+  "role": "야간 자율 2차 세션 — push/배포 + 규칙 기반 보충 예문 + 마이그레이션 검증 완결",
+  "task_id": "overnight2-2026-08-09",
+  "task": "push 안전성 검증 후 배포, 규칙 기반 보충 예문(단어 자산 재사용), 불규칙 사전 매칭, source_meta 조회 폴백, v3_31 패키지, unit_naming 드라이런 — 프로덕션 DB 무변경",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-09T06:00:00+09:00",
+  "updated_at": "2026-08-09T08:00:00+09:00",
+  "files_owned": [
+    "src/utils/curriculum/generatorContract.js",
+    "src/utils/curriculum/curriculumApi.js",
+    "src/utils/curriculum/exampleLibrary.js",
+    "src/utils/curriculum/textImport.js",
+    "src/components/admin/TextImportPanel.jsx",
+    "src/components/admin/ExampleManager.jsx",
+    "scripts/dryRunUnitNaming.mjs",
+    "tests/harness/runExamples.mjs",
+    "sql_migrations/v3_31_source_meta_20260809/*",
+    "handoff.md",
+    ".ai-status/overnight2-2026-08-09.json"
+  ],
+  "files_read": [
+    ".github/workflows/deploy.yml",
+    "src/components/admin/ApprovalQueue.jsx",
+    "scripts/testRlsSecurity.mjs"
+  ],
+  "summary": "push 안전성 확정(워크플로 수동 전용/훅 없음/SQL 불활성)→77차분 배포. 규칙 기반 보충 예문(AI 0, words.example_text 재사용, pending까지만→검수함), 불규칙 사전 ~60개(inflected 표시만), source_meta 조회 폴백+provenance 표시, v3_31 precheck/verify/rollback(훅이 컬럼 삭제 차단→정책 준수 재설계), unit_naming 드라이런 5/5 PASS. verify:login 만성 FAIL=2026-08-06 락다운 이후 테스트 계약 표류로 확정(수정은 보안 테스트 의미 반전이라 운영자 승인 대기). examples 80/80.",
+  "blocker": "운영자 결정 대기: ①이번 세션 커밋 push 여부(안전성은 동일—코드/테스트/문서/불활성 SQL만) ②v3_31/unit_naming 실행 ③login 테스트 계약 갱신 방향 ④빈 Unit 1 2개 과 번호 ⑤학생 예문 플래그",
+  "next_action": "복귀 후: 야간 보고서 → 미push 커밋 push 승인 → SQL 실행(v3_31 → unit_naming 01~04) → dryRunUnitNaming/verify:integrity 재실행."
+}
