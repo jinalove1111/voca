@@ -4,6 +4,24 @@ import { fetchPinStatuses, fetchPinStatusMap } from '../utils/pinStatusApi'
 import { getReactionById } from '../utils/paulReactions'
 import HeroReaction from './HeroReaction'
 
+// 2026-08-09 운영자 지시 — PIN 만들기 반 목록에 archive/중복/테스트 계정이
+// 노출되던 버그 수정. 로스터 정리(v3_25/27/28)로 중복 계정은 rename
+// (`_DUP`/`_INACTIVE` 접미)만 되고 class_id는 그대로 유지되어
+// getStudentsInClass가 반환하는 원본 목록에 계속 섞여 나왔다. 여기서는
+// "PIN 만들기 화면에 보여줄 진짜 학생"만 걸러낸다 — DB 데이터는 전혀
+// 건드리지 않고 화면 표시만 제외하는 순수 함수(컴포넌트 밖, 부수효과 없음).
+function isRealSetupStudent(s) {
+  const rawName = s?.name || ''
+  const lower = rawName.trim().toLowerCase()
+  // 1) archive/비활성/중복 계정 — 이름에 _DUP 또는 _INACTIVE 접미(대소문자 무시)
+  if (/_dup|_inactive/i.test(rawName)) return false
+  // 2) 시스템/테스트 픽스처 — 이름이 QA_ 또는 _QA_ 로 시작(대소문자 무시)
+  if (/^(qa_|_qa_)/i.test(rawName)) return false
+  // 3) 알려진 테스트 계정(트림·소문자 기준 정확 일치)
+  if (lower === 'cookie' || lower === 'paul' || lower === 'jinaa') return false
+  return true
+}
+
 // P0 identity 리팩터링 + 운영자 지시(2026-07-15) — 로그인 방식을 "이름
 // 자유 입력"(동명이인이면 조용히 아무 것도 안 되던 방식)에서 "이름 + PIN
 // (4자리)"으로 교체했다. student_id(UUID)가 여전히 유일한 데이터
@@ -105,7 +123,10 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
   const [setupRosterStatusLoading, setSetupRosterStatusLoading] = useState(false)
   const setupPinConfirmRef = useRef(null)
   const setupRequestIdRef = useRef(0) // 마지막으로 시작된 "학생 선택" 요청 번호 — 응답이 여전히 최신 선택에 대한 것인지 확인용
-  const setupRoster = setupClass ? getStudentsInClass(setupClass) : []
+  // 2026-08-09 — archive/중복(_DUP/_INACTIVE)·QA·테스트 계정을 걸러낸 목록만
+  // PIN 만들기 화면(및 이하 모든 로직 — 동명 차단/렌더/선택)에 사용한다.
+  const setupRosterAll = setupClass ? getStudentsInClass(setupClass) : []
+  const setupRoster = setupRosterAll.filter(isRealSetupStudent)
   const setupPicked = setupRoster.find(s => s.id === setupStudentId) || null
 
   // 2026-08-06 운영자 지시(최초) — 같은 반에 이름이 같은(정규화 기준)
@@ -328,7 +349,13 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {setupRosterStatusLoading && <p className="text-xs text-gray-400 w-full text-center">⏳ 학생별 PIN 상태 확인 중...</p>}
-                  {setupRoster.map(s => {
+                  {setupRoster
+                    // 2026-08-09 — 이미 PIN이 설정된 학생(hasPinHash === true 확정)은
+                    // 목록에서 완전히 제외한다("로그인" 탭으로 가야 할 학생이 여기
+                    // 섞이지 않게). 상태가 아직 로딩 전(rs undefined)이면 배제하지
+                    // 않고 표시 유지 — 로딩 완료 시 자동으로 빠진다.
+                    .filter(s => setupRosterStatus[s.id]?.hasPinHash !== true)
+                    .map(s => {
                     // 목록 배지는 반 선택 시 배치 조회한 setupRosterStatus 기준(학생 수만큼
                     // 개별 요청 안 함) — 아직 로딩 전이면 배지 없이 이름만 표시.
                     const rs = setupRosterStatus[s.id]
