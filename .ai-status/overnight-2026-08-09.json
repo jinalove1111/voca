@@ -1,0 +1,35 @@
+{
+  "agent_name": "implementer",
+  "role": "야간 자율 세션(6시간) — v3_30 검증/구조 감사/근본수정/마이그레이션 준비",
+  "task_id": "overnight-2026-08-09",
+  "task": "v3_30 검증 PASS, ensureUnit 정규화 근본수정, 예문 provenance/랭킹 순수화, unit_naming SQL 패키지, verify:integrity 신설 — 프로덕션 DB 무변경/push 보류",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-09T03:00:00+09:00",
+  "updated_at": "2026-08-09T05:30:00+09:00",
+  "files_owned": [
+    "src/utils/wordLibrary.js",
+    "src/utils/curriculum/curriculumModel.js",
+    "src/utils/curriculum/exampleLibrary.js",
+    "src/components/admin/TextImportPanel.jsx",
+    "src/components/admin/ExampleManager.jsx",
+    "scripts/testUnitNameNormalization.mjs",
+    "scripts/auditCurriculumIntegrity.mjs",
+    "tests/harness/registry.mjs",
+    "tests/harness/runExamples.mjs",
+    "package.json",
+    "supabase_v3_31_examples_source_meta.sql",
+    "sql_migrations/unit_naming_20260809/*",
+    "handoff.md",
+    ".ai-status/overnight-2026-08-09.json"
+  ],
+  "files_read": [
+    "src/App.jsx",
+    "src/components/WordDetail.jsx",
+    "src/config/features.js",
+    "scripts/buildWordLibBundle.mjs"
+  ],
+  "summary": "V3_30 RESULT: PASS(삭제 5/이전 4 정확, 손실 0 — words 971/progress 190/word_status 1830/SCA 443 보존, Joy·Colin 반 이동 유지). 구조 감사 클린(orphan 0/중복 0, SCA-class 26건은 v3.1 설계상 정상). 로컬 커밋 7개: ensureUnit 정규화(빈 Unit 1 재발 근본 방지)+16단언 / 랭킹 순수화+오탐 10단언 / source_meta provenance(v3_31 SQL 미실행, 코드 폴백) / 예문 목록 메타 라인 / unit_naming 5단계 SQL 패키지(rename 15건, 미실행) / verify:integrity 10단언. verify:all 27 PASS·2 SKIP(오디오)·1 FAIL(login=기존 환경성, 73차 stash로 확정). build PASS.",
+  "blocker": "운영자 승인 대기: ①push+배포(로컬 7커밋) ②v3_31 실행 ③unit_naming 01→05 실행 ④v3_30 선택 블록(황성연) ⑤빈 Unit 1 2개·'Unit' 3개 처분 ⑥학생 예문 노출 플래그",
+  "next_action": "운영자 복귀 후: 야간 보고서 검토 → push 승인 → SQL 실행 순서(README) 따라 진행 → verify:integrity/verify:all 재실행."
+}

@@ -7,6 +7,25 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (77차) — 야간 자율 세션: v3_30 검증 PASS + 유닛 정규화 근본수정 + 예문 provenance + 마이그레이션 패키지 (프로덕션 DB 무변경)
+
+### v3_30 최종 검증(READ-ONLY) — RESULT: PASS
+운영자가 v3_29→v3_30 실행 완료 후 자율 검증. 삭제 예정 5유닛 정확히 삭제(units 34→29), 잔존 참조 0, UNKNOWN 2유닛(김기택/박준원 빈 Unit 1) 보존, Irene SCA→중1동아 Unit1 / 김가윤 SCA→민병천 Unit1 이전 확인, Joy(김가윤)/Colin(황성연) 반=MS Advanced 유지(반 이동 안 되돌림). 손실 0: words 971 / examples 0 / progress 190 / word_status 1830 / SCA 443 / daily 541 전부 보존(행 삭제 없음). 검증 중 가짜 FAIL 2건은 스크립트 측 원인으로 판명(①students 1157은 Barry(08-08, v3_30 이전 생성) 포함 정상 — v3_30 이후 학생 증감 0 실측 ②student_progress는 id 컬럼이 없어 HEAD count 400 — select=student_id로 정정 시 190행). WARNING 1: 황성연 김기택 SCA는 의도된 보류(v3_30 선택 블록 미실행).
+
+### 전체 구조 감사(PHASE 2/3) — 클린
+깨진 FK 0(students/SCA/words/units 전 방향), orphan 0, 활성 동명 중복 0, class/textbook 이름 중복 0, 정규화 유닛 중복 0. 빈 유닛 2(보류)·1단어 "Unit" 테스트 유닛 3(UNKNOWN)만 잔존. "primary SCA class ≠ students.class_id" 26건은 **버그 아님** — wordLibrary.js 1940행 주석이 명시한 v3.1 교재 모드 설계(사람 반 vs 주 교재 컨테이너). 실운영 반: MS Advanced 실학생 13(+테스트 2), Presentation 6 실학생 8, Pre-Middle 9.
+
+### 코드 변경(로컬 커밋만 — 배포 안 함, 운영자 승인 후 push)
+- `9490c38` **ensureUnit 정규화 매칭(근본 수정)**: unitNameKey(trim+공백 제거+소문자+말미 숫자 선행 0 제거) 신설 — "Unit 1"≡"Unit1"≡"unit 01". Excel 업로드가 표기만 다른 형제 유닛을 만들던 실사고 재발 방지(감사에서 빈 Unit 1이 교재마다 쌓인 원인). createClass의 기본 Unit 1 자동 생성은 유지(신규 학생 기본 바인딩 대상 — 이제 업로드가 그 유닛을 재사용해 채움). +testUnitNameNormalization.mjs 16단언, admin 도메인 등록.
+- `4952fec` **예문 랭킹 순수화**: computeExampleRank/SOURCE_PRIORITY를 curriculumModel로 추출(import-0), 하네스 직접 단언 — SOURCE TEXT FIRST(본문 import 2>교사 1>AI·규칙 0, 유닛 일치 지배) + 매칭 오탐 방어 테스트(he⊄the, order⊄border, art⊄part, "blocked outside" 경계) 10단언 추가. ※ createExample의 source_meta 42703 폴백도 이 커밋에 포함됨(커밋 분리 미흡 — 기록).
+- `36f4355` **예문 provenance**: supabase_v3_31(examples.source_meta jsonb, additive/멱등, **미실행**) + TextImportPanel이 {origin:'textbook_passage', sentence_index} 저장. 컬럼 부재 시 자동 폴백(규칙 9). EXAMPLES_SELECT에는 의도적 미포함(부재 환경 SELECT 400 방지) — 조회 노출은 v3_31 실행 후 후속.
+- `4c1dc14` 예문 목록 행에 출처 라벨(교과서 본문/교사/AI)+교재/유닛 메타 라인.
+- `a392553` **Unit 이름 정규화 5단계 SQL 패키지**(sql_migrations/unit_naming_20260809/01~05+README, **미실행**): rename 15건("Unit1"→"Unit 1" 등 표기 통일, 과 번호 불변) + students.unit_name 동기화, 가드 3중, 롤백 동봉. 라이브 충돌 검사 0건 확인.
+- `4f5f923` **verify:integrity 신설**: 커리큘럼 구조 무결성 라이브 감사 10단언(깨진 포인터/중복 유닛 재발/신규 빈 유닛/예문 상태) — 실측 10/10 PASS.
+
+### 미실행(운영자 승인 대기)
+①push+Vercel 배포(로컬 6커밋) ②supabase_v3_31 ③unit_naming 01→05 ④v3_30 선택 블록(황성연 김기택 SCA→Unit 6) ⑤빈 Unit 1 2개/"Unit" 3개 처분(과 번호 확정 필요) ⑥curriculumExamplesStudentUI 플래그 온(학생 예문 노출). ESLint는 미도입(규칙 6 — 의존성 최소화, 빌드 경고 0으로 갈음).
+
 ## 2026-08-09 (76차) — Unit 구조 전수 감사 + 정리 마이그레이션 준비(v3_29 백업/사전검증 SELECT 전용 + v3_30 초안, 둘 다 미실행)
 
 ### 감사 결과(100% READ-ONLY, 34개 유닛 전수)
