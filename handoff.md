@@ -7,6 +7,19 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (81차) — 야간 자율 5차: 게임화/보상 시스템 제품 설계 + 코어 모델 (프로덕션 DB 무변경)
+
+### 핵심 발견(전수 인벤토리 — Explore 에이전트, 파일:줄 근거 확보)
+게임화 레이어는 **이미 대부분 구현돼 있다**: 라이브(오늘의 미션 4/4·streak·별/스티커/선물상자·모자 8종·앨범/정원/PaulTown·미니게임·HeroReaction 21종) + 잠재(Paul Rank/티켓 상점/Word King/House/Season — **`classes.gamification_enabled` v2_5 SQL 미실행** 하나로 전부 숨김). 원장 관례 확립됨(append-only/저장합계 금지/`{event}:{기간키}` 멱등/서버 금액 결정/XP 3중 dedup/별 grantReward 단일 경로). 함정 2개 문서화: total_xp는 Rank XP가 아니라 totalStars 사본 / "숙제 완료" 판정이 라이브(liveMissions)와 high-water(categories_completed) 2기준.
+
+### 산출물
+- `docs/GAME_REWARD_SYSTEM.md`(신규) — 철학(SDT/goal-gradient/overjustification 경계/retrieval·spaced)/Core Loop/경제(Coin 불채택, 기존 3축)/미션·주간·streak·레벨·뱃지·컬렉션·랭킹(총량 순위 불채택 — Word King 보정+개인 성취형)/celebration 계층/anti-farming 현행·갭/관리자/연령 프로파일/데이터 모델(신규 테이블 0으로 P0·P1 대부분)/분석(product_events 재사용)/P0~P2 로드맵/미실행 SQL 표.
+- `docs/GAME_REWARD_RULES.md`(신규) — 전 수치 명세(reward table/레벨 곡선 25n(n−1)/streak freeze/badge 12종 조건/anti-farming 6규칙/celebration 지속·스킵/연령 3프로파일). **현행 라이브 시스템 무변경 — P1 제안임을 헤더에 명시(규칙 3)**.
+- `src/utils/gamification/dailyMissionModel.js`+`streakModel.js`(b89eb3e) — 숙제 연동 미션 판정/freeze형 streak 순수 모델(import-0, 24단언, verify:gamification+gamificationCore 도메인 등록). **학생 UI 배선 안 함**(운영 중 학생 화면 무접촉 — 기존 라이브 미션·streak과 다른 축의 P1 코어).
+
+### P0 결론(운영자 결정 대기)
+게임화 점등의 최단 경로는 코드가 아니라 **v2_5 SQL 1줄 실행 + 반별 토글**(기본 false라 실행 자체는 무변화·안전). 이후 v2_6/v2_7(house_id는 규칙 10 GRANT 동반)/v2_3_1 순. 학생 UI 변경(다음 목표 표시/미션 카드 배선)은 전부 플래그 뒤 P0-next로 준비.
+
 ## 2026-08-09 (80차) — 야간 자율 4차: 보류 유닛 판정표 + 검수함 UX + 시드/메타 SQL 준비 (프로덕션 DB 무변경)
 
 ### 보류 유닛 5개 정밀 지도 + 29유닛 판정표(READ-ONLY)
