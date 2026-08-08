@@ -42,7 +42,15 @@ import { hashPin, randomFourDigitPin, checkAdminReauth, supabaseAdminUrl, supaba
 // 대신 원본 함수를 그대로 가져온다.
 import { assignBalancedHouseId, computeHouseCounts } from '../src/utils/houseSystem.js'
 
-const ALLOWED_ACTIONS = new Set(['bulk_generate_temp_pins', 'set_pin_setup_allowed', 'unlock_student_pin', 'create_student'])
+const ALLOWED_ACTIONS = new Set([
+  'bulk_generate_temp_pins',
+  'set_pin_setup_allowed',
+  'unlock_student_pin',
+  'create_student',
+  'deactivate_student',
+  'reactivate_student',
+  'hard_delete_student',
+])
 
 // 2026-08-06 — create_student가 받는 studentId(클라이언트 생성 UUID,
 // 멱등성 키)/classId 형식 검증에 공용으로 쓴다.
@@ -347,6 +355,245 @@ export default async function handler(req, res) {
       res.status(500).json({ error: error.message })
       return
     }
+    res.status(200).json({ ok: true })
+    return
+  }
+
+  if (action === 'deactivate_student') {
+    // 2026-08-08 — 학생 완전삭제 대신 "비활성화"만 원하는 관리자용 액션.
+    // students 스키마에 soft-delete 컬럼이 없고(실측 확정) name 컬럼은
+    // anon UPDATE가 막혀 있어, 로스터 정리 스크립트가 써온 것과 동일하게
+    // service_role로 name만 `__INACTIVE__` 접미를 붙여 rename한다. name
+    // 외 컬럼(class_id/pin_hash/current_unit_id/별/word_status/progress/
+    // student_class_assignments 등)은 전혀 건드리지 않으므로 재활성화 시
+    // 자동 복원된다. 기존 필터(로그인 후보 조회/PIN 자기설정/관리자 목록)는
+    // 이미 이름에 _inactive가 포함된 계정을 제외하고 있어 별도 스키마
+    // 변경 없이 즉시 로그인/목록에서 숨겨진다.
+    const { studentId } = req.body || {}
+    if (typeof studentId !== 'string' || !UUID_RE.test(studentId)) {
+      res.status(200).json({ ok: false, reason: 'invalid_id' })
+      return
+    }
+
+    const { data: target, error: selErr } = await supabase
+      .from('students')
+      .select('id,name')
+      .eq('id', studentId)
+      .maybeSingle()
+    if (selErr) {
+      res.status(200).json({ ok: false, error: selErr.message })
+      return
+    }
+    if (!target) {
+      res.status(200).json({ ok: false, reason: 'not_found' })
+      return
+    }
+
+    // 멱등 — 이미 비활성 표기(이 액션의 __INACTIVE__ 접미든, 로스터 정리의
+    // _DUP_..._INACTIVE 형식이든)면 재작업 없이 현재 이름 그대로 성공 응답.
+    if (/_inactive/i.test(target.name || '')) {
+      res.status(200).json({ ok: true, alreadyInactive: true, name: target.name })
+      return
+    }
+
+    const newName = `${target.name}__INACTIVE__`
+    const { error: updErr } = await supabase
+      .from('students')
+      .update({ name: newName }) // name만 변경 — 별/progress/class_id/pin 등 무접촉
+      .eq('id', studentId)
+    if (updErr) {
+      res.status(200).json({ ok: false, error: updErr.message })
+      return
+    }
+    res.status(200).json({ ok: true, newName })
+    return
+  }
+
+  if (action === 'reactivate_student') {
+    // deactivate_student의 역연산. 이 액션이 만든 정확한 `__INACTIVE__`
+    // 접미만 되돌린다 — 로스터 정리가 남긴 `_DUP_..._INACTIVE`처럼 더 복잡한
+    // 이름 형식은 "원래 이름"이 무엇인지 이 액션이 함부로 추측하면 위험하므로
+    // 명시적으로 거부한다(no_clean_marker). name 외에는 애초에 deactivate가
+    // 손대지 않았으므로 이름만 복원하면 pin/별/progress/word_status/unit/
+    // textbook은 자동으로 이미 그대로 살아있다.
+    const { studentId } = req.body || {}
+    if (typeof studentId !== 'string' || !UUID_RE.test(studentId)) {
+      res.status(200).json({ ok: false, reason: 'invalid_id' })
+      return
+    }
+
+    const { data: target, error: selErr } = await supabase
+      .from('students')
+      .select('id,name')
+      .eq('id', studentId)
+      .maybeSingle()
+    if (selErr) {
+      res.status(200).json({ ok: false, error: selErr.message })
+      return
+    }
+    if (!target) {
+      res.status(200).json({ ok: false, reason: 'not_found' })
+      return
+    }
+
+    const name = target.name || ''
+    const SUFFIX = '__INACTIVE__'
+    if (!name.endsWith(SUFFIX)) {
+      res.status(200).json({ ok: false, reason: 'no_clean_marker', name })
+      return
+    }
+
+    const restoredName = name.slice(0, -SUFFIX.length)
+    const { error: updErr } = await supabase
+      .from('students')
+      .update({ name: restoredName }) // name만 변경
+      .eq('id', studentId)
+    if (updErr) {
+      res.status(200).json({ ok: false, error: updErr.message })
+      return
+    }
+    res.status(200).json({ ok: true, name: restoredName })
+    return
+  }
+
+  if (action === 'hard_delete_student') {
+    // 2026-08-08 — 완전삭제. "데이터 0인 계정만" 삭제 가능하도록 클라이언트가
+    // 보낸 studentId만 믿지 않고 서버가 직접 모든 조건을 재검증한다(신뢰
+    // 경계를 서버 안쪽으로 유지 — 클라이언트가 이미 확인했다고 주장해도
+    // 재확인 없이는 삭제 실행 안 함). 조건 중 하나라도 데이터가 남아있으면
+    // has_data로 차단한다. 이 세션에서는 액션 구현만 하고 실제 실행/호출은
+    // 하지 않는다(운영자 지시).
+    const { studentId } = req.body || {}
+    if (typeof studentId !== 'string' || !UUID_RE.test(studentId)) {
+      res.status(200).json({ ok: false, reason: 'invalid_id' })
+      return
+    }
+
+    const { data: target, error: existErr } = await supabase
+      .from('students')
+      .select('id')
+      .eq('id', studentId)
+      .maybeSingle()
+    if (existErr) {
+      res.status(200).json({ ok: false, error: existErr.message })
+      return
+    }
+    if (!target) {
+      res.status(200).json({ ok: false, reason: 'not_found' })
+      return
+    }
+
+    // word_status count — 테이블 자체가 없는 환경이면(방어적) 0으로 취급.
+    let wordStatusCount = 0
+    {
+      const { count, error } = await supabase
+        .from('word_status')
+        .select('*', { count: 'exact', head: true })
+        .eq('student_id', studentId)
+      if (error && !isMissingTableError(error)) {
+        res.status(200).json({ ok: false, error: error.message })
+        return
+      }
+      wordStatusCount = count || 0
+    }
+
+    // student_progress — 행이 아예 없거나, 있어도 total_stars/total_xp가
+    // 둘 다 0이면 "데이터 없음"으로 취급.
+    let hasProgressData = false
+    {
+      const { data, error } = await supabase
+        .from('student_progress')
+        .select('total_stars,total_xp')
+        .eq('student_id', studentId)
+        .maybeSingle()
+      if (error && !isMissingTableError(error)) {
+        res.status(200).json({ ok: false, error: error.message })
+        return
+      }
+      if (data) {
+        hasProgressData = (data.total_stars || 0) !== 0 || (data.total_xp || 0) !== 0
+      }
+    }
+
+    // pin_hash IS NULL 여부 — 규칙 11: 값 자체는 절대 SELECT하지 않고, is
+    // null 조건으로 head 카운트만 조회해 boolean만 도출한다(평문/해시
+    // 어느 쪽도 응답에 포함되지 않음).
+    let hasPin = false
+    {
+      const { count, error } = await supabase
+        .from('students')
+        .select('id', { count: 'exact', head: true })
+        .eq('id', studentId)
+        .is('pin_hash', null)
+      if (error) {
+        res.status(200).json({ ok: false, error: error.message })
+        return
+      }
+      // count===1이면 pin_hash가 null(=PIN 미설정) → hasPin=false.
+      hasPin = (count || 0) === 0
+    }
+
+    // student_daily_progress count
+    let dailyCount = 0
+    {
+      const { count, error } = await supabase
+        .from('student_daily_progress')
+        .select('*', { count: 'exact', head: true })
+        .eq('student_id', studentId)
+      if (error && !isMissingTableError(error)) {
+        res.status(200).json({ ok: false, error: error.message })
+        return
+      }
+      dailyCount = count || 0
+    }
+
+    // spelling_review_queue count — "(있으면) ... 등도 0" 요건, 테이블
+    // 부재 환경은 방어적으로 0 취급.
+    let spellingQueueCount = 0
+    {
+      const { count, error } = await supabase
+        .from('spelling_review_queue')
+        .select('*', { count: 'exact', head: true })
+        .eq('student_id', studentId)
+      if (error && !isMissingTableError(error)) {
+        res.status(200).json({ ok: false, error: error.message })
+        return
+      }
+      spellingQueueCount = count || 0
+    }
+
+    const detail = {
+      word_status: wordStatusCount,
+      stars: hasProgressData,
+      hasPin,
+      daily: dailyCount,
+      spellingQueue: spellingQueueCount,
+    }
+    if (wordStatusCount > 0 || hasProgressData || hasPin || dailyCount > 0 || spellingQueueCount > 0) {
+      res.status(200).json({ ok: false, reason: 'has_data', detail })
+      return
+    }
+
+    // 전부 0 — FK 순서(자식→부모)대로 삭제: student_class_assignments →
+    // students. student_class_assignments는 v2.9(코드 배포 완료/SQL 미실행
+    // 가능성 있는 테이블, DATABASE.md 참고)라 부재 시 non-fatal로 스킵한다
+    // (students(id) 자체 FK가 on delete cascade라 실제로는 자동 정리되지만,
+    // 명시적 삭제로 순서를 지키는 게 이 액션의 의도된 계약).
+    const { error: scaErr } = await supabase
+      .from('student_class_assignments')
+      .delete()
+      .eq('student_id', studentId)
+    if (scaErr && !isMissingTableError(scaErr)) {
+      res.status(200).json({ ok: false, error: scaErr.message })
+      return
+    }
+
+    const { error: delErr } = await supabase.from('students').delete().eq('id', studentId)
+    if (delErr) {
+      res.status(200).json({ ok: false, error: delErr.message })
+      return
+    }
+
     res.status(200).json({ ok: true })
     return
   }
