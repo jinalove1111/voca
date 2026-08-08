@@ -23,7 +23,7 @@ import { pickNextGame } from './utils/matchGame'
 import { trackEvent, EV } from './utils/productEvents'
 import { assignDirections } from './utils/entranceTest'
 import { logSpellingReview } from './utils/spellingReviewApi'
-import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getClassSettings, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentClassId, getTextbookById, getStudentPrimaryTextbook, getClassNames, getClassIdByName } from './utils/wordLibrary'
+import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, refreshTextbooks, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getClassSettings, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentClassId, getTextbookById, getStudentPrimaryTextbook, getClassNames, getClassIdByName } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech } from './utils/speech'
 // Curriculum Engine Phase 0(2026-08-01, docs/CURRICULUM_ENGINE.md §8) —
 // 교사 opt-in 예문 학습 단계. isFeatureEnabled('curriculumExamplesStudentUI')
@@ -442,6 +442,23 @@ function AppInner({ studentId, studentName, onLogout }) {
   // initWordLibrary() and never refreshed again for a tab's whole lifetime,
   // which is exactly what let a student's re-assigned unit silently revert
   // to whatever it was when the tab first loaded.
+  //
+  // refreshTextbooks() 추가(2026-08-08, P0) — 교과서 셀렉터가 관리자
+  // 패널(항상 새 페이지 로드 → 새 initWordLibrary)에서는 정상인데 이미
+  // 열려 있던 학생 탭에서는 새로 추가/활성화된 교재(class_textbooks 행)가
+  // 안 보이는 증상의 근본원인: _textbooks/_classTextbooks는 initWordLibrary()
+  // 안에서 딱 한 번만 채워지고(2번째 이후 initWordLibrary() 호출은
+  // _initPromise 메모이제이션으로 완전히 no-op), 그 뒤로는 이 focus 새로고침
+  // 블록에서도 빠져 있었다(refreshWordLibrary/refreshStudents/
+  // refreshClassSettings만 있었음 — 위 refreshStudents 주석이 설명하는
+  // "탭 수명 내내 한 번만 로드되는" 문제와 정확히 같은 유형인데 v3.1 교재
+  // 레이어가 나중에 추가되며 이 새로고침 목록에는 반영되지 않았다). 재현
+  // harness(fresh initWordLibrary→getStudentClassAssignments, ops/
+  // reproTextbookSelectorBug.mjs)로는 실DB 기준 정상 2개가 나와 "콜드
+  // 스타트 로직" 자체는 문제가 없음을 확인했고, 이 gap은 "이미 열려 있던
+  // 세션이 이후 변경된 class_textbooks를 못 따라간다"는 웜 상태 문제라
+  // 코드 읽기로 확정 — refreshStudents와 동일한 트리거(focus/visibility)에
+  // 동일한 방식(Promise.all + refreshTick)으로 편입한다(새 개념 없음).
   useEffect(() => {
     // 2026-07-10 성능 최적화: visibilitychange와 focus는 같은 "앱으로
     // 돌아옴" 순간에 거의 동시에(모바일에서는 둘 다) 발생하는 경우가
@@ -455,7 +472,7 @@ function AppInner({ studentId, studentName, onLogout }) {
     const onVisible = () => {
       if (document.visibilityState === 'visible' && !inFlight) {
         inFlight = true
-        Promise.all([refreshWordLibrary(), refreshStudents(), refreshClassSettings()])
+        Promise.all([refreshWordLibrary(), refreshStudents(), refreshClassSettings(), refreshTextbooks()])
           .then(() => setRefreshTick((t) => t + 1))
           .catch(() => {})
           .finally(() => { inFlight = false })

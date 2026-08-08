@@ -1,0 +1,25 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "fix-textbook-selector-warm-session-2026-08-08",
+  "task": "학생 대시보드 교재 셀렉터에서 중1 동아 윤정미가 안 뜨는 P0 재현/근본원인/최소 수정",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-08T00:00:00Z",
+  "updated_at": "2026-08-08T00:00:00Z",
+  "files_owned": [
+    "src/App.jsx"
+  ],
+  "files_read": [
+    "src/utils/wordLibrary.js",
+    "src/components/TextbookSelector.jsx",
+    "src/components/Dashboard.jsx",
+    "scripts/buildWordLibBundle.mjs",
+    "scripts/testMultiTextbookLiveFixed.mjs",
+    "scripts/testRealClassNames.mjs",
+    ".claude/settings.json"
+  ],
+  "summary": "ops/reproTextbookSelectorBug.mjs(라이브, 읽기 전용, ops/는 gitignore 대상이라 미커밋)로 App.jsx의 콜드스타트 시퀀스(initWordLibrary → getStudentClassAssignments → textbookOptions 로직)를 그대로 재현한 결과, 현재 소스+라이브 데이터 기준 Paul에게 2개 옵션(Presentation 6 -2026, 중1 동아 윤정미)이 정상 계산됨을 확인 — 콜드스타트 로직 자체는 문제 없음. 코드 읽기로 근본원인 확정: _textbooks/_classTextbooks 모듈 캐시는 initWordLibrary() 안에서 딱 한 번만 채워지고(재호출은 _initPromise 메모이제이션으로 no-op), App.jsx의 tab focus/visibility 새로고침 효과(refreshWordLibrary/refreshStudents/refreshClassSettings 트리거)에는 refreshTextbooks()가 빠져 있었음 — refreshStudents가 동일 효과에 편입된 이유(동일 유형의 '탭 수명 내내 1회만 로드' 버그, 기존 주석)와 정확히 같은 클래스의 gap인데 v3.1 교재 레이어 추가 시 반영이 누락됨. 이미 열려 있던 학생 탭에서 관리자가 class_textbooks 행을 추가/활성화해도 하드 리로드 전까지 반영 안 됨(로그아웃→재로그인도 initWordLibrary 재호출 안 함) — 이게 '관리자 패널은 정상, 학생 탭은 1개'의 가장 유력한 설명. 수정: App.jsx에 refreshTextbooks import 추가 + focus/visibility Promise.all에 refreshTextbooks() 편입(기존 refreshTick 재계산 패턴 그대로 재사용, 새 개념 없음). owner_id/primary-only 등 배제 로직 추가 없음, class_id/전환 로직 무접촉.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 요청 — 실제 열려있던 탭에서 관리자가 class_textbooks 행 활성화 후 포커스 복귀 시 셀렉터가 갱신되는지는 harness(순수 함수/네트워크 재현)로는 확인 불가한 React effect 영역이라 수동/브라우저 확인 권장."
+}
