@@ -227,11 +227,32 @@ check('whole-word 불변식 위반 후보 → ok:false', reviewCandidate({ targe
 check('금칙 톤 힌트 감지(사람 검수 필요 표시) → ok:false',
   reviewCandidate({ targetWord: 'school', englishSentence: 'I go to school.', rationale: '너만 못했다' }).ok === false)
 
-// ── generateCandidateExamples — 미구현 계약(네트워크 0) ────────────────────
-console.log('\n-- generateCandidateExamples (미구현 계약)')
+// ── generateCandidateExamples — 규칙 기반 구현(2026-08-09) + 하위 호환 ─────
+console.log('\n-- generateCandidateExamples (규칙 기반 — 단어 자산 재사용, 네트워크 0)')
 const genRes = await generateCandidateExamples({ unitId: 'u1' })
-check('ok:false, reason: not_implemented, candidates: 빈 배열, throw 없음',
+check('wordAssets 없이 호출(기존 계약) → ok:false not_implemented, throw 없음(하위 호환)',
   genRes.ok === false && genRes.reason === 'not_implemented' && Array.isArray(genRes.candidates) && genRes.candidates.length === 0)
+{
+  const assets = [
+    { word: 'improve', exampleText: 'I want to improve my English.', exampleTranslation: '나는 영어를 향상시키고 싶다.' },
+    { word: 'protect', exampleText: 'We protected the forest.' }, // 원형 부재 — whole-word 위반, 걸러져야 함
+    { word: 'empty', exampleText: '' },                            // 자산 없음
+  ]
+  const ok = await generateCandidateExamples({ targetWords: ['improve'], wordAssets: assets })
+  check('자산 있는 단어(improve) → ok:true + 후보 1건(원문/번역 그대로)',
+    ok.ok === true && ok.candidates.length === 1
+    && ok.candidates[0].englishSentence === 'I want to improve my English.'
+    && ok.candidates[0].koreanTranslation === '나는 영어를 향상시키고 싶다.')
+  const filtered = await generateCandidateExamples({ targetWords: ['protect'], wordAssets: assets })
+  check('자산 예문에 원형이 없는 단어(protect/protected) → whole-word 검증으로 걸러져 no_valid_candidates',
+    filtered.ok === false && filtered.reason === 'no_valid_candidates' && filtered.candidates.length === 0)
+  const none = await generateCandidateExamples({ targetWords: ['empty'], wordAssets: assets })
+  check('자산이 빈 단어 → no_valid_candidates', none.ok === false && none.reason === 'no_valid_candidates')
+  const all = await generateCandidateExamples({ wordAssets: assets })
+  check('targetWords 미지정 → 유효 자산 전체가 후보(1건)', all.ok === true && all.candidates.length === 1)
+  check('후보에 승인 전이 능력 없음(auto-publish 구조적 차단 유지) — candidates는 데이터만',
+    all.candidates.every((c) => typeof c.englishSentence === 'string' && !('approve' in c) && !('approvalStatus' in c)))
+}
 
 // ── 순수성(코드 레벨) ──────────────────────────────────────────────────────
 console.log('\n-- 순수성(코드 레벨)')

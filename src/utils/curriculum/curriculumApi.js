@@ -249,9 +249,12 @@ export async function listUnitsMeta(textbookId) {
 export async function listUnitWords(unitId) {
   if (!unitId) return { rows: [], featureDisabled: false }
   try {
+    // example_text/example_translation(v1.x부터 있는 단어 자산 컬럼)도 함께 —
+    // 본문에 없는 단어의 규칙 기반 보충 후보(generatorContract.
+    // generateCandidateExamples의 wordAssets 입력)로 재사용한다(2026-08-09).
     const { data, error } = await supabase
       .from('words')
-      .select('id,word,meaning,position')
+      .select('id,word,meaning,position,example_text,example_translation')
       .eq('unit_id', unitId)
       .order('position', { ascending: true })
     if (error) {
@@ -259,7 +262,10 @@ export async function listUnitWords(unitId) {
       return { rows: [], featureDisabled: true }
     }
     return {
-      rows: (data || []).map((w) => ({ id: w.id, word: w.word, meaning: w.meaning || '', position: w.position ?? null })),
+      rows: (data || []).map((w) => ({
+        id: w.id, word: w.word, meaning: w.meaning || '', position: w.position ?? null,
+        exampleText: w.example_text || null, exampleTranslation: w.example_translation || null,
+      })),
       featureDisabled: false,
     }
   } catch (err) {

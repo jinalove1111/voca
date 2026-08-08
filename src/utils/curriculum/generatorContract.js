@@ -8,21 +8,53 @@
 import { validateExampleFields } from './curriculumModel'
 import { checkAnswer } from '../textbookExampleModel'
 
-// ── generateCandidateExamples(context) — Phase 0~4: 미구현 계약 ───────────
-// 설계 문서 §4: "규칙 기반 생성기가 먼저 구현 가능"하지만, 이 파일은 계약
-// 시그니처만 고정하고 실제 생성 로직은 넣지 않는다(Phase 0 범위 — 나중에
-// 어떤 생성기(rule/ai)든 이 시그니처를 그대로 구현하면 된다).
+// ── generateCandidateExamples(context) — 규칙 기반 구현(2026-08-09) ────────
+// 설계 문서 §4 "규칙 기반 생성기가 먼저 구현 가능"의 첫 구현체.
+// AI 호출 0(CLAUDE.md 규칙 7 — 무료 대안 우선): 새 문장을 "생성"하지 않고,
+// 호출자가 주입한 기존 단어 자산(words.example_text — Word Asset 시스템이
+// 이미 만들어 둔 단어별 예문)을 후보로 재활용한다. 이 파일의 순수성
+// (React/Supabase/네트워크 무의존)은 그대로다 — IO(단어 자산 조회)는
+// 호출자(TextImportPanel 등)의 책임이고, 여기는 값→값 변환만 한다.
 //
-// context: { unitId?, textbookId?, targetWords?, grammarPointIds?, difficulty? }
-// 반환: { ok, candidates: [{ targetWord, englishSentence, koreanTranslation,
-//         grammarPointId?, difficulty, rationale }] }
-//
-// 왜 async인가: 실제 구현체(규칙 엔진이든 AI 호출이든)는 대부분 IO를
-// 동반하므로, 계약 자체를 처음부터 Promise로 고정해 "동기 계약을 나중에
-// 비동기로 바꾸는" breaking change를 피한다.
+// context: {
+//   unitId?, textbookId?, grammarPointIds?, difficulty?,           // 예약
+//   targetWords?: string[],   // 후보가 필요한 단어들(없으면 wordAssets 전체)
+//   wordAssets?: [{ word, exampleText, exampleTranslation? }],
+//     // 호출자가 조회해 넘기는 기존 자산(curriculumApi.listUnitWords 형태).
+//     // 이 키가 없으면 Phase 0 계약 그대로 not_implemented를 반환한다
+//     // (하위 호환 — 기존 호출부/하네스 단언 무변경).
+// }
+// 반환: { ok, reason?, candidates: [{ targetWord, englishSentence,
+//         koreanTranslation, difficulty, rationale }] }
+// 후보는 reviewCandidate(아래)를 통과한 것만 담는다 — whole-word 불변식
+// 위반(자산 예문에 단어 원형이 없음)이나 금칙 톤 의심 후보는 여기서
+// 걸러진다. 승인 전이는 여전히 이 파일에 없다(auto-publish 구조적 차단).
 export async function generateCandidateExamples(context) {
-  void context // Phase 0: 계약만 존재 — 실제 구현체가 붙기 전까지 미사용.
-  return { ok: false, reason: 'not_implemented', candidates: [] }
+  const c = context || {}
+  if (!Array.isArray(c.wordAssets)) {
+    return { ok: false, reason: 'not_implemented', candidates: [] }
+  }
+  const wanted = Array.isArray(c.targetWords) && c.targetWords.length > 0
+    ? new Set(c.targetWords.map((w) => String(w || '').trim().toLowerCase()))
+    : null
+  const candidates = []
+  for (const asset of c.wordAssets) {
+    const word = String(asset?.word || '').trim()
+    if (!word) continue
+    if (wanted && !wanted.has(word.toLowerCase())) continue
+    const sentence = String(asset?.exampleText || '').trim()
+    if (!sentence) continue
+    const candidate = {
+      targetWord: word,
+      englishSentence: sentence,
+      koreanTranslation: asset?.exampleTranslation ? String(asset.exampleTranslation).trim() : null,
+      difficulty: 1,
+      rationale: '기존 단어 자산(words.example_text) 재사용 — 규칙 기반, AI 호출 0',
+    }
+    if (reviewCandidate(candidate).ok) candidates.push(candidate)
+  }
+  if (candidates.length === 0) return { ok: false, reason: 'no_valid_candidates', candidates: [] }
+  return { ok: true, candidates }
 }
 
 // ── 금칙 톤 사전(placeholder) ───────────────────────────────────────────

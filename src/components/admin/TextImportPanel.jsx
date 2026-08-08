@@ -35,10 +35,15 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
   const [units, setUnits] = useState([])
   const [sourceText, setSourceText] = useState('')
 
-  const [analysis, setAnalysis] = useState(null) // { results, unmatched, existingKeys, sentenceCount, wordCount }
+  const [analysis, setAnalysis] = useState(null) // { results, unmatched, existingKeys, unitAssets, sentenceCount, wordCount }
   const [busy, setBusy] = useState(false)
   const [saveNote, setSaveNote] = useState(null)
   const [aiNotes, setAiNotes] = useState({}) // word -> note
+  // word -> { targetWord, englishSentence, koreanTranslation } — 규칙 기반
+  // 보충 후보(기존 단어 자산 재사용). 저장 시 draft→pending으로만 보낸다
+  // (생성 예문은 검수함 통과 필수 — 이 화면에서 즉시 승인하지 않음).
+  const [supplements, setSupplements] = useState({})
+  const [supplementBusyWord, setSupplementBusyWord] = useState(null)
   // 후보 키(`${word}#${sentenceIndex}`) -> { selected, ko, grammarPointId }
   const [drafts, setDrafts] = useState({})
 
@@ -91,6 +96,9 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
       const existingKeys = new Set(existingRows.map((r) => duplicateKey(r.targetWord, r.englishSentence)))
       const results = matched.filter((r) => r.matches.length > 0)
       const unmatched = matched.filter((r) => r.matches.length === 0)
+      // unitWords를 분석 결과에 보관 — 미발견 단어의 규칙 기반 보충 후보
+      // (generateCandidateExamples의 wordAssets 입력, 추가 조회 없음).
+      const unitAssets = unitWords.map((w) => ({ word: w.word, exampleText: w.exampleText, exampleTranslation: w.exampleTranslation }))
       // 기본 선택: exact 매칭이면서 중복이 아닌 후보만 체크 on(형태 변화
       // '검토 필요'는 자동 확정하지 않음 — 운영자 지시 3번).
       const nextDrafts = {}
@@ -106,7 +114,8 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
       })
       setDrafts(nextDrafts)
       setAiNotes({})
-      setAnalysis({ results, unmatched, existingKeys, sentenceCount: sentences.length, wordCount: unitWords.length })
+      setSupplements({})
+      setAnalysis({ results, unmatched, existingKeys, unitAssets, sentenceCount: sentences.length, wordCount: unitWords.length })
     } catch (err) {
       alert('본문 분석 중 오류: ' + (err.message || err))
     } finally {
@@ -178,16 +187,60 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
     }
   }
 
-  // 본문에 없는 단어 — 기존 AI 생성 계약을 보충 수단으로 그대로 재사용
-  // (현재 not_implemented 스텁 — 이 패널은 계약 호출만, 구현은 후속 Phase).
+  // 본문에 없는 단어 — 규칙 기반 보충(2026-08-09 구현): 기존 단어 자산
+  // (words.example_text)을 generateCandidateExamples(순수 계약)에 넘겨 후보를
+  // 받는다. AI 호출 0 — 새 문장을 지어내지 않고 이미 검수된 자산만 재사용.
   const handleAiSupplement = async (word) => {
-    const res = await generateCandidateExamples({ unitId, textbookId, targetWord: word })
-    setAiNotes((n) => ({
-      ...n,
-      [word]: res.ok
-        ? `후보 ${res.candidates.length}건 생성됨 — 검수함에서 확인하세요.`
-        : 'AI 보충 예문은 아직 준비 중이에요 — 본문 예문이 없는 단어는 기존 "새 예문 추가" 폼으로 직접 넣을 수 있어요.',
-    }))
+    const res = await generateCandidateExamples({
+      unitId, textbookId, targetWords: [word],
+      wordAssets: analysis?.unitAssets || [],
+    })
+    if (res.ok && res.candidates[0]) {
+      setSupplements((s) => ({ ...s, [word]: res.candidates[0] }))
+      setAiNotes((n) => ({ ...n, [word]: null }))
+    } else {
+      setAiNotes((n) => ({
+        ...n,
+        [word]: res.reason === 'no_valid_candidates'
+          ? '재사용할 단어 자산 예문이 없어요(자산 미생성 또는 검증 불통과) — "새 예문 추가" 폼으로 직접 넣을 수 있어요.'
+          : '보충 후보를 만들 수 없어요 — "새 예문 추가" 폼으로 직접 넣을 수 있어요.',
+      }))
+    }
+  }
+
+  // 보충 후보 저장 — source='rule'로 draft 생성 후 pending까지만 전이
+  // (검수함에서 승인해야 학생 노출 — 본문 승인 흐름과 달리 여기서
+  // approved로 보내지 않는다: 자산 예문은 이 화면에서 문장 맥락 검토를
+  // 거치지 않았으므로 생성 예문 취급).
+  const handleSaveSupplement = async (word) => {
+    const cand = supplements[word]
+    if (!cand) return
+    if (analysis.existingKeys.has(duplicateKey(cand.targetWord, cand.englishSentence))) {
+      setAiNotes((n) => ({ ...n, [word]: '이미 등록된 예문이에요 — 중복 저장하지 않아요.' }))
+      return
+    }
+    setSupplementBusyWord(word)
+    try {
+      const created = await createExample({
+        target_word: cand.targetWord,
+        english_sentence: cand.englishSentence,
+        korean_translation: cand.koreanTranslation || null,
+        unit_id: unitId,
+        textbook_id: textbookId,
+        word_id: (analysis.unmatched.find((r) => r.word === word) || {}).wordId || null,
+        source: 'rule',
+        source_meta: { origin: 'word_asset' },
+      }, adminPin)
+      await setApprovalStatus(created.id, 'pending', adminPin)
+      analysis.existingKeys.add(duplicateKey(cand.targetWord, cand.englishSentence))
+      setSupplements((s) => ({ ...s, [word]: null }))
+      setAiNotes((n) => ({ ...n, [word]: '📤 검수함(pending)으로 보냈어요 — 승인해야 학생에게 노출돼요.' }))
+      if (onSaved) await onSaved()
+    } catch (err) {
+      setAiNotes((n) => ({ ...n, [word]: '보충 예문 저장 실패: ' + (err.message || err) }))
+    } finally {
+      setSupplementBusyWord(null)
+    }
   }
 
   const selectedCount = analysis
@@ -301,16 +354,28 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
               <p className="text-xs font-black text-amber-800">⚠ 본문에서 찾지 못한 단어 ({analysis.unmatched.length})</p>
               <p className="text-[10px] text-amber-700">본문 예문이 1순위(SOURCE TEXT FIRST) — 아래 단어만 AI 보충 대상이에요.</p>
               {analysis.unmatched.map((r) => (
-                <div key={r.word} className="flex items-center justify-between gap-2 bg-white rounded-lg px-2 py-1.5">
-                  <p className="text-xs font-bold text-gray-700">{r.word}</p>
-                  <button onClick={() => handleAiSupplement(r.word)} disabled={busy}
-                    className="text-[11px] font-bold bg-gray-100 text-gray-500 rounded-lg px-2 py-1 btn-press disabled:opacity-40 whitespace-nowrap">
-                    🤖 AI 보충 예문 생성
-                  </button>
+                <div key={r.word} className="bg-white rounded-lg px-2 py-1.5 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-bold text-gray-700">{r.word}</p>
+                    <button onClick={() => handleAiSupplement(r.word)} disabled={busy}
+                      className="text-[11px] font-bold bg-gray-100 text-gray-500 rounded-lg px-2 py-1 btn-press disabled:opacity-40 whitespace-nowrap">
+                      ⚙️ 보충 예문 후보(단어 자산 재사용)
+                    </button>
+                  </div>
+                  {supplements[r.word] && (
+                    <div className="border border-gray-200 rounded-lg p-2 space-y-1">
+                      <p className="text-xs font-bold text-gray-800 break-words">“{supplements[r.word].englishSentence}”</p>
+                      {supplements[r.word].koreanTranslation && (
+                        <p className="text-[11px] text-gray-500">{supplements[r.word].koreanTranslation}</p>
+                      )}
+                      <button onClick={() => handleSaveSupplement(r.word)} disabled={supplementBusyWord === r.word}
+                        className="text-[11px] font-bold bg-indigo-50 text-indigo-700 rounded-lg px-2 py-1 btn-press disabled:opacity-40">
+                        {supplementBusyWord === r.word ? '⏳ 저장 중...' : '📤 검수함으로 저장(pending)'}
+                      </button>
+                    </div>
+                  )}
+                  {aiNotes[r.word] && <p className="text-[10px] text-gray-500">{aiNotes[r.word]}</p>}
                 </div>
-              ))}
-              {Object.entries(aiNotes).map(([w, note]) => (
-                <p key={w} className="text-[10px] text-gray-500">· {w}: {note}</p>
               ))}
             </div>
           )}
