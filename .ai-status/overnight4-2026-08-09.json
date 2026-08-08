@@ -1,0 +1,23 @@
+{
+  "agent_name": "implementer",
+  "role": "야간 자율 4차 — 보류 유닛 판정표/검수함 UX/시드·메타 SQL 준비",
+  "task_id": "overnight4-2026-08-09",
+  "task": "29유닛 판정표(KEEP 12/RENAME 15/DELETE_CANDIDATE 3/UNKNOWN 2), 황성연 근거 확정, 검수함 provenance UX, grammar_points 시드+출판사 메타 제안 SQL(실행 금지), 플래그 활성화 절차 확정 — 프로덕션 DB 무변경",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-09T12:00:00+09:00",
+  "updated_at": "2026-08-09T13:30:00+09:00",
+  "files_owned": [
+    "src/components/admin/ApprovalQueue.jsx",
+    "sql_migrations/grammar_points_seed_20260809.sql",
+    "sql_migrations/publisher_grade_metadata_proposal_20260809.sql",
+    "handoff.md",
+    ".ai-status/overnight4-2026-08-09.json"
+  ],
+  "files_read": [
+    "src/config/features.js"
+  ],
+  "summary": "판정표: KEEP 12/KEEP+RENAME 15/DELETE_CANDIDATE 3(김기택 'Unit'에 실학생 Harry 비primary SCA 1건 — 처분 시 재연결 필요)/UNKNOWN 2/MERGE 0. 황성연 김기택 SCA→Unit 6 근거 확정(본인+구계정 통틀어 김기택 흔적=Unit 6뿐). 검수함에 출처/교재/유닛/provenance 표시. grammar_points 20종 시드+출판사/학년 메타 제안 SQL 준비(실행 금지, 멱등+롤백 동봉). 플래그 온 절차=DEFAULT 1줄+배포 확정. 드라이런 5/5, integrity 10/10, 자기 검토 버그 0.",
+  "blocker": "운영자 승인 대기: unit_naming 01~05 / grammar_points 시드 / 출판사·학년 메타(이름 확정 2건) / 빈 Unit 1 과 번호 / 'Unit' 3개 처분(Harry SCA 재연결 포함) / 황성연 선택 블록 / 플래그 온",
+  "next_action": "verify:all 확인 → push → 최종 야간 보고서(SQL 실행 순서/예상 row count/롤백 포함)."
+}

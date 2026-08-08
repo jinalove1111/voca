@@ -7,6 +7,19 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (80차) — 야간 자율 4차: 보류 유닛 판정표 + 검수함 UX + 시드/메타 SQL 준비 (프로덕션 DB 무변경)
+
+### 보류 유닛 5개 정밀 지도 + 29유닛 판정표(READ-ONLY)
+- **판정표**: KEEP 12 / KEEP+RENAME 15(unit_naming 대상) / DELETE_CANDIDATE 3("Unit" 1단어 테스트 유닛 — 단, **김기택 "Unit"에 실학생 Harry의 비primary SCA 1건** 발견: 처분 시 이 SCA 재연결 필요) / UNKNOWN 2(김기택·박준원 빈 Unit 1 — 과 번호 확정 대기) / MERGE 0(v3_30에서 완료).
+- 빈 Unit 1 2개의 연결은 전부 archive/QA(+황성연 비primary SCA 1건)로 재확인 — 실학생 학습 위치 아님.
+- **황성연 근거 확정 수준 도달**: ①김기택 교재에서 학습기록 보유 유닛 중 최다 = Unit 6(51건/4명, 본인 포함) ②본인 word_status 전체가 김기택 Unit 6뿐(22건, 7/20~8/5) ③archive 구계정 6개 모두 김기택 기록 0건 — 김기택 교재 관련 흔적은 오직 Unit 6. 변경은 미실행(v3_30 선택 블록 승인 대기).
+
+### 코드/준비물
+- `e0ac326` 검수함 행에 출처 라벨/교재/유닛/provenance("본문 N번째 문장"/"단어 자산 재사용") 표시 — 승인 판단 맥락 완비.
+- `a65b3ef` **grammar_points 시드 20종 SQL**(멱등 INSERT, 예문 연결분 보호 롤백 동봉) + **출판사/학년 메타 입력 제안 SQL**(동아/능률/YBM 생성+교재 5권 매핑, "천재 이상기"→"천재" rename 제안, 학년 명명 관례는 운영자 확정 대기 — 전부 실행 금지 표기).
+- 플래그 활성화 절차 확정: `features.js` DEFAULT `curriculumExamplesStudentUI: true` 1줄+배포(기기 로컬 localStorage 병합 — 2026-08-01 신설 키라 기존 저장본에 없음 → 전 기기 기본값 적용). mock 검증 완료 상태(testExamplePriorityMock 6단언).
+- 드라이런/무결성 재검증: unit_naming 5/5, integrity 10/10. 최근 변경 자기 검토 — HIGH/MEDIUM 버그 0.
+
 ## 2026-08-09 (79차) — 야간 자율 3차: v3_31 검증 PASS + login 만성 FAIL 해소 + 빈 Unit 자동 생성 제거 + 매칭 4단계 (프로덕션 DB 무변경)
 
 ### v3_31 사후 검증 — RESULT: PASS (14/14)
