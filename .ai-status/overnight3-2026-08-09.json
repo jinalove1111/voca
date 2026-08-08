@@ -1,0 +1,34 @@
+{
+  "agent_name": "implementer",
+  "role": "야간 자율 3차 — v3_31 검증/login 계약 갱신/빈 Unit 근절/매칭 4단계",
+  "task_id": "overnight3-2026-08-09",
+  "task": "v3_31 사후 검증 PASS(14/14), login 만성 FAIL 해소(phantom UUID 기법), createClass 빈 Unit 자동 생성 제거, AMBIGUOUS 매칭 분류, 우선순위 mock 하네스, 보안/성능 스캔 — 프로덕션 DB 무변경",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-09T09:00:00+09:00",
+  "updated_at": "2026-08-09T11:00:00+09:00",
+  "files_owned": [
+    "scripts/testRlsSecurity.mjs",
+    "scripts/testStudentLogin.mjs",
+    "scripts/testStudentSelectPinStatus.mjs",
+    "scripts/testStudentPinAuth.mjs",
+    "scripts/testStudentPinSelfSetup.mjs",
+    "scripts/testClearStudentPin.mjs",
+    "scripts/testExamplePriorityMock.mjs",
+    "scripts/testUnitNameNormalization.mjs",
+    "src/utils/wordLibrary.js",
+    "src/utils/curriculum/textImport.js",
+    "src/components/admin/TextImportPanel.jsx",
+    "tests/harness/runExamples.mjs",
+    "tests/harness/registry.mjs",
+    "handoff.md",
+    ".ai-status/overnight3-2026-08-09.json"
+  ],
+  "files_read": [
+    "src/utils/pinStatusApi.js",
+    "src/components/admin/ApprovalQueue.jsx"
+  ],
+  "summary": "V3_31 RESULT: PASS(스키마 예상대로/데이터 손실 0/provenance 실동작/orphan·dup 0). login 도메인 6 FAIL→8 PASS(INSERT 거부=현행 보안 계약 반전 + phantom UUID로 실데이터 무접촉 + 정직 SKIP 5개 — QA 행 생성도 중단). createClass 빈 Unit 자동 생성 제거(+소스 가드 3단언). 매칭 4단계(AMBIGUOUS: leaves=leaf/leave)+요약 칩. 우선순위 mock 하네스 6단언. 보안 스캔 클린(.env 미추적/번들 시크릿 0/규칙 11 클린), 성능 N+1 없음(개선 제안 2건 기록만). examples 84단언.",
+  "blocker": "운영자 결정 대기(기존과 동일): unit_naming 01~05 실행(드라이런 5/5 PASS), 빈 Unit 1 2개 과 번호, 황성연 선택 블록, 학생 예문 플래그 온, 로스터 부트 로드 축소 검토",
+  "next_action": "verify:all 최종 확인 → push(코드/테스트/문서만 — 안전성 기존과 동일) → 야간 보고서."
+}

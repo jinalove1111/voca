@@ -7,6 +7,26 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (79차) — 야간 자율 3차: v3_31 검증 PASS + login 만성 FAIL 해소 + 빈 Unit 자동 생성 제거 + 매칭 4단계 (프로덕션 DB 무변경)
+
+### v3_31 사후 검증 — RESULT: PASS (14/14)
+운영자 v3_31 실행 직후 READ-ONLY 검증: source_meta jsonb 컬럼만 추가(타 테이블 스키마 부작용 0), examples 0→0, jsonb provenance 저장·반환 실동작(marker 1행 insert→즉시 delete, 순변화 0), 기존 행 default null, 전역 카운트 전부 기준치 일치(students 1157/words 971/units 29/progress 190/ws 1830/SCA 443), orphan/duplicate 0. verify:examples 80단언 + verify:integrity 10단언 PASS. 롤백 불필요.
+
+### login 도메인 만성 FAIL 해소 (b73b02c) — 6 FAIL → 8스크립트 PASS
+78차에서 확정한 "테스트 계약 표류"를 운영자 승인에 따라 갱신. `testRlsSecurity`: "자기등록 INSERT 성공" 단언을 [보안] "INSERT 거부(42501)"로 반전(2026-08-06 P0 서버 전용 create_student가 현행 계약) + 픽스처 의존 검사를 전부 **phantom UUID 기법**으로 전환 — 권한 판정은 행 매칭 전이라 42501 검증이 성립하고 실데이터는 0 rows 무접촉, 과거처럼 프로덕션에 QA 행을 만들지도 않음(로스터 오염 중단). 나머지 5개 스크립트는 42501 감지 시 정직한 SKIP(순수 로직 섹션은 계속 실행). **이로써 verify:all 전 도메인 그린**(오디오 2개 SKIP 제외).
+
+### 빈 Unit 자동 생성 제거 (edc9230)
+createClass의 기본 "Unit 1" 자동 생성 삭제(운영자 지시) — 유닛 행은 단어 업로드(정규화 매칭 재사용)·명시적 유닛 추가 시점에만 생성. 표시/학생 바인딩은 기존 폴백(getClassUnits 합성 + unit_name 문자열 해석)이 커버, 기존 프로덕션 유닛 무접촉. 소스 레벨 회귀 가드 3단언(testUnitNameNormalization 19단언).
+
+### 매칭 4단계 + UX (2622472) / mock 하네스 (5d54daa)
+- matchType 4단계: EXACT / SAFE_INFLECTION / **AMBIGUOUS**(변화형이 유닛 내 다른 단어와 겹침 — leaves=leaf/leave, 자동 저장 불가·사람 판단 안내) / NOT_FOUND. 원형 그대로 등장은 항상 exact.
+- TextImportPanel 분석 요약 칩: 단어/문장/정확 일치/형태 변화/중의적/미발견/중복/승인 예정.
+- 학생 예문 우선순위 mock 하네스(testExamplePriorityMock, fetch 가로채기 — 네트워크/DB 0회): 본문>교사>승인AI>폴백 + 유닛 지배 + 실패 {} 폴백 6단언. 플래그 프로덕션 온 전 사전 검증 자산(examples 도메인 등록 — verify:all 경유 실행).
+
+### 성능/보안 스캔(READ-ONLY)
+- 보안: .env git 미추적, 클라이언트 번들에 service_role/secret/ADMIN_PIN 패턴 0, 클라이언트 src의 PIN 컬럼 접근 0(주석뿐 — 규칙 11 클린).
+- 성능: refreshStudents 페이지네이션 정상(2026-08-05 P0), pinStatus 단일 배치, 대시보드 60일 상한 — N+1 없음. 개선 제안(미실행): ①부트 시 전체 로스터 1157행(QA/archive 1116 포함) 로드 → 서버측 필터로 축소 검토(핵심 캐시라 별도 세션에서 신중히) ②examples/검수함 200건 상한 — 물량 증가 시 페이징.
+
 ## 2026-08-09 (78차) — 야간 자율 2차: push/배포 + 규칙 기반 보충 예문 + 불규칙 사전 + 마이그레이션 드라이런 (프로덕션 DB 무변경)
 
 ### push 안전성 확인 후 배포
