@@ -30,6 +30,10 @@ import esbuild from 'esbuild'
 import {
   APPROVAL_STATUSES, SOURCES, canTransition, validateExampleFields, matchesFilters, normalizeTargetWord,
 } from '../../src/utils/curriculum/curriculumModel.js'
+// textImport.js도 curriculumModel.js와 같은 import-0 순수 모듈 — 직접 로드.
+import {
+  splitIntoSentences, regularInflections, matchWordsToSentences, duplicateKey,
+} from '../../src/utils/curriculum/textImport.js'
 
 mkdirSync('scripts/.tmp', { recursive: true })
 await esbuild.build({
@@ -120,6 +124,67 @@ check('approvalStatus 일치/불일치', matchesFilters(row, { approvalStatus: '
 check('targetWord 부분 문자열(대소문자 무관) 검색', matchesFilters(row, { targetWord: 'SCHO' }) === true && matchesFilters(row, { targetWord: 'zzz' }) === false)
 check('snake_case 키는 인식되지 않음(계약은 camelCase 전용 — 오탐 방지)', matchesFilters(row, { unit_id: 'u2' }) === true)
 
+// ── textImport(본문 가져오기) — 2026-08-09 신규 순수 모듈 ─────────────────
+console.log('\n-- textImport: splitIntoSentences (원문 보존/경계 판정)')
+{
+  const text = 'The curtains block out the sunlight. This helps keep the room cool.'
+  const s = splitIntoSentences(text)
+  check('기본 2문장 분리 + 각 문장이 원문 부분 문자열 그대로',
+    s.length === 2
+    && s[0] === 'The curtains block out the sunlight.'
+    && s[1] === 'This helps keep the room cool.'
+    && s.every((x) => text.includes(x)))
+}
+check('줄바꿈은 항상 문장 경계', splitIntoSentences('Hello world\nGood morning').length === 2)
+check('약어(Mr./Dr.) 뒤 마침표는 경계가 아님',
+  (() => { const s = splitIntoSentences('Mr. Kim teaches English. He is kind.'); return s.length === 2 && s[0] === 'Mr. Kim teaches English.' })())
+check('소수점(3.5)은 경계가 아님',
+  (() => { const s = splitIntoSentences('It weighs 3.5 kg. That is heavy.'); return s.length === 2 && s[0] === 'It weighs 3.5 kg.' })())
+check('물음표/느낌표 + 닫는 따옴표 경계',
+  (() => { const s = splitIntoSentences('“Are you ok?” she asked. Yes!'); return s.length >= 2 })())
+check('빈 입력/공백만 → 빈 배열', splitIntoSentences('').length === 0 && splitIntoSentences('   \n  ').length === 0)
+
+console.log('\n-- textImport: 매칭(whole-word/숙어/형태 변화)')
+{
+  const sents = splitIntoSentences('The curtains block out the sunlight. I love my cat. We protected the environment. Take care of yourself.')
+  const res = matchWordsToSentences(
+    [{ id: 'w1', word: 'block out' }, { id: 'w2', word: 'category' }, { id: 'w3', word: 'protect' }, { id: 'w4', word: 'take care of' }, { id: 'w5', word: 'improve' }],
+    sents,
+  )
+  const byWord = Object.fromEntries(res.map((r) => [r.word, r]))
+  check('숙어(block out) 정확 매칭 → exact',
+    byWord['block out'].matches.length === 1 && byWord['block out'].matches[0].matchType === 'exact'
+    && byWord['block out'].matches[0].sentence === 'The curtains block out the sunlight.')
+  check('substring 오탐 없음(cat ⊄ category — category는 본문에 없음)', byWord['category'].matches.length === 0)
+  check('형태 변화(protect→protected) 매칭되지만 inflected로 구분(자동 확정 금지)',
+    byWord['protect'].matches.length === 1 && byWord['protect'].matches[0].matchType === 'inflected')
+  check('구동사(take care of) 매칭', byWord['take care of'].matches.length === 1 && byWord['take care of'].matches[0].matchType === 'exact')
+  check('본문에 없는 단어(improve)는 matches 빈 배열(미발견 구획)', byWord['improve'].matches.length === 0)
+  check('exact 매칭 문장은 validateExampleFields whole-word 불변식을 통과(저장 가능)',
+    validateExampleFields({ target_word: 'block out', english_sentence: byWord['block out'].matches[0].sentence }).ok === true)
+  check('inflected 매칭 문장은 validateExampleFields를 통과하지 못함(저장 차단 근거 — 정직한 계약)',
+    validateExampleFields({ target_word: 'protect', english_sentence: byWord['protect'].matches[0].sentence }).ok === false)
+}
+check('regularInflections: 규칙 변화만(s/es/ed/d/ing/e탈락/y변화), 원형 미포함',
+  (() => {
+    const f = regularInflections('protect')
+    const g = regularInflections('make')
+    const h = regularInflections('study')
+    return f.includes('protects') && f.includes('protected') && f.includes('protecting') && !f.includes('protect')
+      && g.includes('making') && g.includes('made') === false // 불규칙(made)은 만들지 않음(makeed/maked만 규칙형)
+      && h.includes('studies') && h.includes('studied')
+  })())
+check('같은 문장에 원형+변화형 공존 시 exact 우선',
+  (() => {
+    const r = matchWordsToSentences([{ word: 'protect' }], ['We protect and protected it.'])
+    return r[0].matches.length === 1 && r[0].matches[0].matchType === 'exact'
+  })())
+
+console.log('\n-- textImport: duplicateKey(중복 판정)')
+check('공백/대소문자 정규화로 동일 판정',
+  duplicateKey('Block Out', 'The  curtains block out the sunlight.') === duplicateKey('block out', 'the curtains block out the sunlight.'))
+check('문장이 다르면 다른 키', duplicateKey('a', 'x y') !== duplicateKey('a', 'x z'))
+
 // ── reviewCandidate ─────────────────────────────────────────────────────
 console.log('\n-- reviewCandidate')
 check('정상 후보 → ok:true', reviewCandidate({ targetWord: 'school', englishSentence: 'I go to school.' }).ok === true)
@@ -149,6 +214,9 @@ check('curriculumModel.js는 Math.random 없음', !modelSrc.includes('Math.rando
 check('curriculumModel.js는 supabase 실사용 없음(import/클라이언트 호출 패턴 정밀 검사)', !SUPABASE_USAGE_RE.test(modelSrc))
 const contractSrc = readFileSync(new URL('../../src/utils/curriculum/generatorContract.js', import.meta.url), 'utf8')
 check('generatorContract.js는 supabase 실사용 없음(네트워크 0)', !SUPABASE_USAGE_RE.test(contractSrc))
+const textImportSrc = readFileSync(new URL('../../src/utils/curriculum/textImport.js', import.meta.url), 'utf8')
+check('textImport.js는 import 0 순수 모듈', !/^import /m.test(textImportSrc))
+check('textImport.js는 supabase 실사용 없음(네트워크 0)', !SUPABASE_USAGE_RE.test(textImportSrc))
 check('generatorContract.js에 approveExample/publishExample이 없음(auto-publish 구조적 차단, §4)',
   !contractSrc.includes('function approveExample') && !contractSrc.includes('function publishExample'))
 
