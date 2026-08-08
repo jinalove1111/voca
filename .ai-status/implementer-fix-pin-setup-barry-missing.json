@@ -1,0 +1,23 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "fix-pin-setup-barry-missing",
+  "task": "PIN 만들기 화면에 신규 학생 Barry가 안 뜨는 P0 버그 재현/근본원인 확정/최소 수정",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-08T00:00:00+09:00",
+  "updated_at": "2026-08-08T00:30:00+09:00",
+  "files_owned": [
+    "src/components/StudentSelect.jsx",
+    "ops/reproBarryMissingSetup.mjs"
+  ],
+  "files_read": [
+    "src/utils/wordLibrary.js",
+    "src/App.jsx",
+    "ops/reproTextbookSelectorBug.mjs",
+    "scripts/buildWordLibBundle.mjs"
+  ],
+  "summary": "harness(ops/reproBarryMissingSetup.mjs, 읽기 전용)로 콜드 initWordLibrary() 경로는 Barry를 정상 포함함을 확정(getRealClassNames/getStudentsInClass/필터 모두 정상). 근본원인은 웜 세션 stale 캐시 — _students는 initWordLibrary() 1회 + App.jsx window focus/visibilitychange 새로고침에서만 갱신되는데, PIN 만들기 화면 자체에는 새로고침 트리거가 없어 focus 이벤트가 한 번도 안 걸리는 세션(교실 상시 켜진 탭 등)에서 stale 상태로 남음. StudentSelect.jsx에 mode==='setup' 진입/반 선택 시 기존 refreshStudents()를 1회 더 호출하는 useEffect 추가(새 필터/캐시 개념 없음, 기존 함수 재사용). build/verify:student PASS. DB 무접촉, 커밋 안 함.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 대기. 운영자 확인 시 커밋 여부 결정."
+}

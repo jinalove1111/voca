@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { getStudentsInClass, getRealClassNames } from '../utils/wordLibrary'
+import { getStudentsInClass, getRealClassNames, refreshStudents } from '../utils/wordLibrary'
 import { fetchPinStatuses, fetchPinStatusMap } from '../utils/pinStatusApi'
 import { getReactionById } from '../utils/paulReactions'
 import HeroReaction from './HeroReaction'
@@ -123,6 +123,11 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
   const [setupRosterStatusLoading, setSetupRosterStatusLoading] = useState(false)
   const setupPinConfirmRef = useRef(null)
   const setupRequestIdRef = useRef(0) // 마지막으로 시작된 "학생 선택" 요청 번호 — 응답이 여전히 최신 선택에 대한 것인지 확인용
+  // 2026-08-08 P0 — 아래 "학생 명단 새로고침" useEffect가 refreshStudents()
+  // 완료 후 재렌더를 트리거하기 위한 용도(값 자체는 안 씀). setupRosterAll/
+  // setupRoster는 useMemo 없이 렌더마다 getStudentsInClass()를 새로 호출하는
+  // 파생값이라, 재렌더만 일어나면 최신 _students 캐시를 자동으로 반영한다.
+  const [, setSetupRosterRefetchTick] = useState(0)
   // 2026-08-09 — archive/중복(_DUP/_INACTIVE)·QA·테스트 계정을 걸러낸 목록만
   // PIN 만들기 화면(및 이하 모든 로직 — 동명 차단/렌더/선택)에 사용한다.
   const setupRosterAll = setupClass ? getStudentsInClass(setupClass) : []
@@ -191,6 +196,29 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
     setupPickedStatusLoaded &&
     pinlessDupNames.has(normalizeName(setupPicked.name))
   )
+
+  // 2026-08-08 P0 재현·수정 — PIN 만들기 화면에 신규 학생(Barry)이 안 뜨는
+  // 버그. 근본원인: _students(반별 학생 명단 캐시)는 initWordLibrary() 시점
+  // 한 번, 그리고 App.jsx의 window focus/visibilitychange 새로고침에서만
+  // 다시 채워진다. 관리자가 새 학생을 추가한 뒤에도, 로그인 화면이 이미
+  // 열려 있던 채로 한 번도 background→foreground 전환이 없었던 세션(예:
+  // 하루 종일 켜 둔 교실 기기 한 탭)은 그 새로고침을 한 번도 못 받아
+  // _students가 콜드 로드 시점 그대로 stale하게 남는다. harness(ops/
+  // reproBarryMissingSetup.mjs, DB 무접촉·읽기 전용)로 콜드 initWordLibrary
+  // 경로 자체는 Barry를 정상 포함함을 확정 — 즉 필터(isRealSetupStudent/
+  // hasPinHash)나 콜드 조회 쿼리는 원인이 아니고, PIN 만들기 화면에 별도
+  // 새로고침 트리거가 없던 게 원인이다. "PIN 만들기" 탭 진입 또는 반 선택
+  // 시 이미 있는 refreshStudents()(wordLibrary.js, App.jsx 포커스 새로고침과
+  // 동일 함수)를 한 번 더 호출해 최신 명단을 받아온다 — 새 필터/캐시 개념
+  // 없이 기존 새로고침 함수를 이 화면의 트리거에 편입하는 최소 수정.
+  useEffect(() => {
+    if (mode !== 'setup') return
+    let cancelled = false
+    refreshStudents()
+      .then(() => { if (!cancelled) setSetupRosterRefetchTick((t) => t + 1) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [mode, setupClass])
 
   // 반을 고르면 그 반 학생 전원의 PIN 상태를 배치로 실제 DB에서 조회 —
   // 목록에 배지(🟢 PIN 완료 / 🔴 PIN 없음)를 보여주기 위함.
