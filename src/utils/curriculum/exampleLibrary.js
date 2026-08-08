@@ -27,6 +27,13 @@ const EXAMPLES_SELECT =
   'grammar_point_id,difficulty,source,approval_status,created_by,approved_by,approved_at,' +
   'ai_model,ai_meta,created_at,updated_at'
 
+// source_meta(v3_31 additive 컬럼) 포함 select — listExamples 전용.
+// 컬럼 부재 환경(마이그레이션 전)에서는 select 자체가 42703이 나므로,
+// 한 번 부재가 확인되면 세션 동안 기본 select로 폴백한다(sticky —
+// v3_31 실행 후에는 관리자 화면 새로고침이 다음 세션부터 자동 반영).
+const EXAMPLES_SELECT_WITH_META = EXAMPLES_SELECT + ',source_meta'
+let _sourceMetaColumnMissing = false
+
 const MISSING_TABLE_MESSAGE = '교과서 예문 테이블이 아직 준비되지 않았어요 — supabase_v3_13 실행 필요'
 
 // 모듈 전역 sticky 플래그 — sentenceProgressApi.js의 warnOnce 관례와 동일
@@ -63,6 +70,8 @@ function toRow(r) {
     approvedAt: r.approved_at || null,
     aiModel: r.ai_model || null,
     aiMeta: r.ai_meta || null,
+    // v3_31 미실행 환경/기본 select에서는 컬럼 자체가 응답에 없음 → null.
+    sourceMeta: r.source_meta || null,
     createdAt: r.created_at || null,
     updatedAt: r.updated_at || null,
   }
@@ -82,15 +91,25 @@ function toRow(r) {
 export async function listExamples(filters, { limit = 200, offset = 0 } = {}) {
   try {
     const f = filters || {}
-    let query = supabase.from('examples').select(EXAMPLES_SELECT).order('created_at', { ascending: false })
-    if (f.textbookId) query = query.eq('textbook_id', f.textbookId)
-    if (f.unitId) query = query.eq('unit_id', f.unitId)
-    if (f.grammarPointId) query = query.eq('grammar_point_id', f.grammarPointId)
-    if (f.approvalStatus) query = query.eq('approval_status', f.approvalStatus)
-    if (f.targetWord) query = query.ilike('target_word', `%${f.targetWord}%`)
-    query = query.range(offset, offset + Math.max(0, limit - 1))
+    const buildQuery = (selectCols) => {
+      let query = supabase.from('examples').select(selectCols).order('created_at', { ascending: false })
+      if (f.textbookId) query = query.eq('textbook_id', f.textbookId)
+      if (f.unitId) query = query.eq('unit_id', f.unitId)
+      if (f.grammarPointId) query = query.eq('grammar_point_id', f.grammarPointId)
+      if (f.approvalStatus) query = query.eq('approval_status', f.approvalStatus)
+      if (f.targetWord) query = query.ilike('target_word', `%${f.targetWord}%`)
+      return query.range(offset, offset + Math.max(0, limit - 1))
+    }
 
-    const { data, error } = await query
+    // v3_31 실행 여부에 따른 2단 select(위 EXAMPLES_SELECT_WITH_META 주석) —
+    // 컬럼 부재 42703이면 기본 select로 1회 재시도하고 세션 동안 폴백 고정.
+    let { data, error } = await buildQuery(
+      _sourceMetaColumnMissing ? EXAMPLES_SELECT : EXAMPLES_SELECT_WITH_META,
+    )
+    if (error && !_sourceMetaColumnMissing && error.code === '42703') {
+      _sourceMetaColumnMissing = true
+      ;({ data, error } = await buildQuery(EXAMPLES_SELECT))
+    }
     if (error) {
       if (isMissingTableError(error)) warnOnce(error)
       else console.warn('[exampleLibrary] listExamples failed (non-fatal):', error.message)

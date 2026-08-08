@@ -350,6 +350,8 @@ export default function ExampleManager({ adminPin }) {
                   {SOURCE_LABEL[row.source] || row.source}
                   {row.textbookId && ` · ${textbooksMeta.find((t) => t.id === row.textbookId)?.name || '교재'}`}
                   {row.unitId && ` · ${units.find((u) => u.id === row.unitId)?.name || 'Unit'}`}
+                  {/* provenance(v3_31 실행 후에만 값 존재) — 본문 몇 번째 문장 */}
+                  {Number.isInteger(row.sourceMeta?.sentence_index) && ` · 본문 ${row.sourceMeta.sentence_index + 1}번째 문장`}
                 </p>
               </div>
               <span className={`flex-shrink-0 text-[10px] font-black px-2 py-1 rounded-full ${STATUS_STYLE[row.approvalStatus] || 'bg-gray-100 text-gray-500'}`}>
