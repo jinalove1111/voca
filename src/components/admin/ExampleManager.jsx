@@ -10,6 +10,9 @@ import { generateCandidateExamples } from '../../utils/curriculum/generatorContr
 import TextImportPanel from './TextImportPanel'
 
 const SOURCE_BADGE = { teacher: '👩‍🏫', import: '📥', rule: '⚙️', ai: '🤖' }
+// 출처 한글 라벨(2026-08-09) — 본문 원문(import)과 AI 생성을 관리자가 한눈에
+// 구별할 수 있게 목록 행에 배지+텍스트로 함께 표시(SOURCE TEXT FIRST 운영).
+const SOURCE_LABEL = { teacher: '교사 작성', import: '교과서 본문', rule: '규칙 생성', ai: 'AI 생성' }
 const STATUS_STYLE = {
   draft: 'bg-gray-100 text-gray-600',
   pending: 'bg-amber-100 text-amber-700',
@@ -339,6 +342,15 @@ export default function ExampleManager({ adminPin }) {
                 </p>
                 <p className="text-sm font-bold text-gray-800 break-words">{row.englishSentence}</p>
                 {row.koreanTranslation && <p className="text-xs text-gray-500">{row.koreanTranslation}</p>}
+                {/* 출처/교재/유닛 메타 라인(2026-08-09) — 본문 원문과 AI 생성
+                    구별 + 어느 교재·유닛 예문인지 목록에서 바로 확인.
+                    유닛 이름은 현재 필터로 로드된 units에 있을 때만 표시
+                    (전 교재 유닛을 추가 조회하지 않음 — 네트워크 0 유지). */}
+                <p className="text-[10px] text-gray-400 mt-0.5">
+                  {SOURCE_LABEL[row.source] || row.source}
+                  {row.textbookId && ` · ${textbooksMeta.find((t) => t.id === row.textbookId)?.name || '교재'}`}
+                  {row.unitId && ` · ${units.find((u) => u.id === row.unitId)?.name || 'Unit'}`}
+                </p>
               </div>
               <span className={`flex-shrink-0 text-[10px] font-black px-2 py-1 rounded-full ${STATUS_STYLE[row.approvalStatus] || 'bg-gray-100 text-gray-500'}`}>
                 {row.approvalStatus}
