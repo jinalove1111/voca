@@ -1,0 +1,24 @@
+-- v3_31_source_meta 05_rollback.sql — 롤백 정책 문서 + 값 초기화(선택).
+--
+-- ★ 이 저장소는 컬럼을 지우는 구문을 정책적으로 금지한다
+--   (DEVELOPER_GUIDE.md Migration Rules — 하위호환 컬럼은 지우지 않고
+--   남겨둔다. checkDestructiveSql PreToolUse 훅이 실제로 강제하며, 이
+--   파일의 최초 초안이 컬럼 제거 구문을 담았다가 훅에 차단됐다 — 정직 기록).
+--
+-- 따라서 v3_31의 롤백은 "컬럼 제거"가 아니라 다음 둘 중 하나다:
+--
+-- (A) 아무것도 안 함(권장) — source_meta는 additive nullable 컬럼이라
+--     존재 자체로 무해하고, 클라이언트는 컬럼 유무 어느 쪽에서도 정상
+--     동작한다(42703 폴백). 기능을 물리려면 코드 쪽(TextImportPanel의
+--     source_meta 전달)을 되돌리면 되고 DB는 그대로 둔다.
+--
+-- (B) 기록된 값만 초기화(아래) — provenance 값 자체가 문제가 된 경우에만.
+--     실행 전 반드시 백업:
+--       select id, source_meta from examples where source_meta is not null;
+--     결과를 CSV로 저장한 뒤 실행(값은 사라지지만 행/컬럼은 보존).
+
+-- (B) 값 초기화 — source_meta가 기록된 행만 대상(조건부 UPDATE).
+-- update examples set source_meta = null where source_meta is not null;
+
+-- 위 UPDATE는 기본 주석 처리 상태다 — 운영자가 백업을 확인한 뒤에만
+-- 주석을 해제해 실행한다.
