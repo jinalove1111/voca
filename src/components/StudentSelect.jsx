@@ -128,6 +128,13 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
   const setupRosterAll = setupClass ? getStudentsInClass(setupClass) : []
   const setupRoster = setupRosterAll.filter(isRealSetupStudent)
   const setupPicked = setupRoster.find(s => s.id === setupStudentId) || null
+  // 2026-08-08 — 렌더용 파생값: 이미 PIN이 설정된 학생(hasPinHash === true 확정)은
+  // "PIN 만들기" 목록에서 제외한 실제 표시 대상. 상태가 아직 로딩 전(rs undefined)이면
+  // 배제하지 않고 표시 유지 — 로딩 완료 시 자동으로 빠진다.
+  const setupVisibleRoster = setupRoster.filter(s => setupRosterStatus[s.id]?.hasPinHash !== true)
+  // 반의 모든 학생에 대해 PIN 상태 배치 조회가 이미 끝났는지(안내 문구 오탐 방지용).
+  const setupRosterStatusLoaded = !setupRosterStatusLoading && setupRoster.length > 0 &&
+    setupRoster.every(s => setupRosterStatus[s.id] !== undefined)
 
   // 2026-08-06 운영자 지시(최초) — 같은 반에 이름이 같은(정규화 기준)
   // 학생이 2명 이상이면(중복 계정 생성 사고 산출물일 가능성) 학생 스스로
@@ -349,13 +356,7 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {setupRosterStatusLoading && <p className="text-xs text-gray-400 w-full text-center">⏳ 학생별 PIN 상태 확인 중...</p>}
-                  {setupRoster
-                    // 2026-08-09 — 이미 PIN이 설정된 학생(hasPinHash === true 확정)은
-                    // 목록에서 완전히 제외한다("로그인" 탭으로 가야 할 학생이 여기
-                    // 섞이지 않게). 상태가 아직 로딩 전(rs undefined)이면 배제하지
-                    // 않고 표시 유지 — 로딩 완료 시 자동으로 빠진다.
-                    .filter(s => setupRosterStatus[s.id]?.hasPinHash !== true)
-                    .map(s => {
+                  {setupVisibleRoster.map(s => {
                     // 목록 배지는 반 선택 시 배치 조회한 setupRosterStatus 기준(학생 수만큼
                     // 개별 요청 안 함) — 아직 로딩 전이면 배지 없이 이름만 표시.
                     const rs = setupRosterStatus[s.id]
@@ -383,8 +384,17 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
               )
             )}
 
-            {setupClass && setupRoster.length > 0 && !setupPicked && !setupChecking && (
-              <p className="text-xs text-gray-400 text-center py-1">학생을 선택해주세요.</p>
+            {/* 2026-08-08 — setupVisibleRoster가 0명인 경우(반에 학생은 있으나
+                전원 이미 PIN 보유)는 빈 화면 대신 "로그인 탭 이용" 안내를 준다.
+                setupRosterStatusLoaded 확인 없이 표시하면 로딩 중에도(아직
+                setupRosterStatus가 채워지기 전) 오탐으로 뜰 수 있어 반드시 로딩
+                완료 후에만 노출한다. */}
+            {setupClass && !setupPicked && !setupChecking && setupRoster.length > 0 && (
+              setupVisibleRoster.length > 0 ? (
+                <p className="text-xs text-gray-400 text-center py-1">학생을 선택해주세요.</p>
+              ) : setupRosterStatusLoaded ? (
+                <p className="text-xs text-gray-400 text-center py-1">이 반의 모든 학생이 이미 PIN을 만들었어요. 로그인 탭에서 이름과 PIN으로 로그인하세요.</p>
+              ) : null
             )}
 
             {/* 2026-08-06 정밀화 — 차단은 "어느 계정인지 고를 수 없는 진짜
