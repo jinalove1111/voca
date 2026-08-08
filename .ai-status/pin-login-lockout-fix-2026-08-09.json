@@ -1,0 +1,21 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "문서 갱신",
+  "task_id": "pin-login-lockout-fix-2026-08-09",
+  "task": "프로덕션 PIN 로그인 장애 진단·수정 기록: 잠금 만료 재잠금 루프(코드, 커밋 d28709d) + 동명 중복 계정(데이터, 운영자 승인 대기)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-09T00:00:00+09:00",
+  "updated_at": "2026-08-09T00:00:00+09:00",
+  "files_owned": [
+    "handoff.md"
+  ],
+  "files_read": [
+    "handoff.md",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "66차 세션 결과를 handoff.md 최상단(65차 위)에 append. 원인 2건 확정: ①api/verify-student-pin.js의 잠금 만료 후 fail_count 미리셋으로 인한 영구 5분 재잠금 루프(코드, d28709d로 수정·배포, nextFailState 순수 함수 추출) ②동명 중복 실계정 28그룹/80계정(데이터, duplicate_accounts 거부 유발, 병합은 운영자 승인 필요·미착수). 김보민 계정은 배포 후에도 locked=true로 검증 미완(세션 ADMIN_PIN 미보유로 unlock 불가) — 운영자 액션 대기 상태로 기록.",
+  "blocker": null,
+  "next_action": "운영자: 김보민 unlock+9000 검증 / 동명 28그룹 병합(Paul 3계정 우선) / 개별 PIN 재설정 필요시"
+}
