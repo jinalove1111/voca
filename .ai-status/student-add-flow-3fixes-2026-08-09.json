@@ -1,0 +1,20 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "docs-maintainer",
+  "task_id": "student-add-flow-3fixes-2026-08-09",
+  "task": "학생 추가 흐름 3버그 수정 문서화: house_id 500 / 관리자 목록 1156 / PIN 만들기 신규학생 미노출",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-08T00:00:00Z",
+  "updated_at": "2026-08-08T00:00:00Z",
+  "files_owned": [
+    "handoff.md"
+  ],
+  "files_read": [
+    "handoff.md",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "72차 handoff.md 섹션 추가. 버그1(b215741, api/admin-pin-actions.js): create_student가 house_id를 폴백 없이 SELECT/INSERT해 컬럼 미배포(House System v2_7) 프로덕션에서 42703 500 — isMissingColumnError 헬퍼 + 3단계 cascading INSERT 폴백(addStudent와 동일 패턴)으로 수정. 버그2(0d4974c, StudentDirectory.jsx): 관리자 학생 목록이 getStudents() 원본 1156행(QA 811+archive 304+실활성 41) 무필터 표시 — isRealDirectoryStudent 순수함수로 _DUP/_INACTIVE/QA_ 제외(테스트계정 3은 유지), 표시 필터일 뿐 DB 무변경, 1156→41. 버그3(cbe833a, StudentSelect.jsx): PIN 만들기 화면 _students 웜세션 캐시가 신규학생 추가 후에도 새로고침 안 돼 미노출 — setup 탭 진입/반 선택 시 refreshStudents() 호출 편입. 3건 전부 build/verify PASS, 배포 번들 라이브 일치 확인, PRODUCTION DATA CHANGED: NO(학생데이터/PIN/class_id/이름/UUID 무접촉).",
+  "blocker": null,
+  "next_action": "운영자: 실기기 Barry 노출 확인 / House System v2_7 배포 결정(선택) / 관리자 목록 잔여 활성 정리(선택)"
+}

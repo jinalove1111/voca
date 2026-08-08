@@ -7,6 +7,30 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (72차) — 학생 추가 흐름 3버그 수정: house_id 500 / 관리자 목록 1156 / PIN 만들기 신규학생 미노출 — 커밋 b215741/0d4974c/cbe833a
+
+### 증상/맥락
+관리자 학생 추가에서 신규 학생(Barry) 등록 시도 → column students.house_id does not exist 500. 별개로 관리자 학생 목록이 "전체 학생 (1156명)"으로 표시. 신규 학생 추가 후에도 학생 PIN 만들기 화면에 그 학생이 안 뜸.
+
+### 버그1: create_student house_id 500 (커밋 b215741, api/admin-pin-actions.js)
+- 원인: create_student가 students.house_id를 SELECT/INSERT하는데 프로덕션에 house_id 컬럼 부재(42703 실측, House System v2_7 미배포). 클라이언트 addStudent(wordLibrary.js:1407~1417)는 3단계 cascading 폴백이 있으나 서버 create_student엔 없어 500.
+- 분류: A(미배포 게임화 컬럼)+C(쿼리에 폴백 없이 포함). 52차 감사에서 이미 알려진 항목("house_id 부재로 라이브 500").
+- 수정: isMissingColumnError(code 42703 또는 message에 does not exist+컬럼명) 헬퍼 추가. house_id SELECT 실패가 컬럼부재면 500 대신 houseId=null 스킵. INSERT를 addStudent와 동일 3단계(전체→current_unit_id만→baseRow) cascading 폴백. 컬럼 유무 양쪽에서 동작(v2_7 나중에 실행돼도 자동 정상). 스키마 변경 없음, 나머지 흐름(멱등 studentId·중복점검·SCA primary·pin_setup_allowed) 무변경. api/*.js는 Vercel 서버리스라 push로 자동 배포.
+
+### 버그2: 관리자 목록 1156명 (커밋 0d4974c, StudentDirectory.jsx)
+- 원인: 학생 목록이 getStudents() 원본(1156행 = QA 811 + archive _INACTIVE/_DUP 304 + 실활성 41)을 무필터 표시. 삭제된 것 0(로스터 정리는 rename만).
+- 수정: 순수함수 isRealDirectoryStudent로 _DUP/_INACTIVE 접미·QA_/_QA_ 접두 제외(단 테스트계정 Cookie/Paul/Jinaa는 관리자용이라 유지). 데이터 로드 2곳(초기 useState, refresh())에만 필터 → 카운트/검색/CSV/아코디언 등 파생값 자동 반영. 표시 필터일 뿐 DB 삭제 아님, getStudents 원본 무변경. 결과 1156→41(테스트 3 포함). 참고: 41 = canonical 29 + 테스트 3 + 잔여 활성 ~9(비운영반/컨테이너 미archive 활성) — 정확히 32로 좁히려면 그 ~9 별도 정리 필요(범위 밖).
+
+### 버그3: PIN 만들기 신규학생 미노출 (커밋 cbe833a, StudentSelect.jsx)
+- 원인: 웜 세션 캐시 stale. _students 명단 캐시가 initWordLibrary + App.jsx focus/visibility 새로고침에서만 채워지고, PIN 만들기 화면엔 별도 새로고침 트리거 없음 → 관리자가 신규학생 추가 전 이미 열린 학생 세션(포커스 전환 없던 교실 기기 등)이 stale 명단 유지. 69차 교재 셀렉터 웜세션 버그와 동일 유형. harness(읽기전용)로 콜드 initWordLibrary 경로는 Barry(1056c7db) 정상 포함 확인 → 데이터·필터 정상, 새로고침 부재가 원인.
+- Barry DB 상태(정상): id 1056c7db, MS Advanced(0249067d), unit_name Unit 1, SCA 1건 primary, hasPinHash=false, pinSetupAllowed=true. PIN 만들기 필터(isRealSetupStudent/hasPinHash) 전부 통과.
+- 수정: PIN 만들기 탭 진입(mode==='setup')/반 선택 시 기존 refreshStudents() 호출 후 재렌더(더미 tick). setupRoster는 useMemo 없는 파생값이라 재렌더만으로 최신 _students 반영. 새 필터/캐시 개념 없이 기존 함수를 이 화면 트리거에 편입.
+
+### 검증
+- 3건 전부 build PASS / verify:student·admin PASS / 배포 번들 라이브 일치(각 index-zPYNWxQy→최종 index-B2ilNeA2). harness 콜드경로 Barry 노출 확인.
+- PRODUCTION DATA CHANGED: NO(전부 읽기전용 진단+코드수정, 학생데이터/PIN/class_id/이름/UUID 무접촉, Barry 삭제·재생성·PIN reset 없음, 기존 29명 무변경).
+- 후속: House System(v2_7) 실제 배포 여부는 운영자 결정(현재 house_id 컬럼 부재로 게임화 house 기능 사실상 off). 관리자 목록 잔여 활성 ~9 정리(선택). 실기기 확인 권장.
+
 ## 2026-08-09 (71차) — PIN 만들기 화면 학생 목록 필터: archive/중복/테스트/PIN완료 계정 제외 — 커밋 94d7bdf/066772f
 
 ### 증상
