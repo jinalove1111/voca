@@ -15,6 +15,30 @@ import DuplicateStudentAudit from './DuplicateStudentAudit'
 
 const devLog = import.meta.env?.DEV ? console.log : () => {}
 
+// 2026-08-08 — 관리자 학생 로스터가 archive/QA 픽스처까지 필터 없이 전부
+// 노출되던 버그 수정(정확히는: 이 화면이 getStudents()의 원본 배열을 그대로
+// 표시/카운트에 써서, 방금 로스터 정리로 rename만 된 archive 계정
+// (`_INACTIVE`)과 예전 QA 테스트 픽스처(`QA_`/`_QA_` 접두)가 실제 학생과
+// 함께 표시됨 — students 테이블 총 1156행 중 QA 987 + archive 128이 여기
+// 섞여 보였다). DB 삭제/정리가 아니라 **순수 표시 필터**다 — students
+// 테이블·getStudents()의 반환값 자체는 전혀 건드리지 않고, 이 컴포넌트가
+// 화면에 그릴 목록/카운트만 걸러낸다.
+//
+// StudentSelect.jsx의 isRealSetupStudent(학생용 PIN 만들기 반 목록 필터,
+// 2026-08-09 커밋 예정/동일 사고 계열)와 판정 기준(정규식)은 같지만, 그
+// 함수는 "테스트 계정(Cookie/Paul/Jinaa)"도 학생용 화면에서 제외한다 —
+// 여기 관리자 화면은 그 3계정도 관리자가 조회/관리해야 하므로 **제외하지
+// 않는다**(두 화면의 목적이 다르므로 로컬 사본을 둔다 — wordLibrary 등
+// 공용 유틸에 옮기지 않음, 이번 작업 범위는 이 파일 1개로 한정).
+function isRealDirectoryStudent(s) {
+  const rawName = s?.name || ''
+  // 1) archive/비활성/중복 계정 — 이름에 _DUP 또는 _INACTIVE 접미(대소문자 무시)
+  if (/_dup|_inactive/i.test(rawName)) return false
+  // 2) 시스템/QA 테스트 픽스처 — 이름이 QA_ 또는 _QA_ 로 시작(대소문자 무시)
+  if (/^(qa_|_qa_)/i.test(rawName)) return false
+  return true
+}
+
 // 학생 관리 디렉터리 (2026-07-22, 관리자 규모 대응 — 300~1000명) —
 // AdminScreen.jsx의 StudentManagement를 그대로 옮겨온 컴포넌트.
 // 핸들러/데이터 흐름(반 배정/삭제/PIN 4종/하우스/교재 관리/일괄 이동/CSV)은
@@ -75,7 +99,12 @@ const FILTERS = [
 ]
 
 export default function StudentDirectory({ adminPin }) {
-  const [students, setStudents] = useState(() => getStudents())
+  // 표시 필터만 적용(위 isRealDirectoryStudent 주석 참고) — getStudents()
+  // 자체는 무변경, 이 state에 담기는 배열만 실학생으로 좁힌다. 이후
+  // students.length(헤더 카운트)/CSV 내보내기/검색/아코디언/일괄선택 등
+  // 이 컴포넌트의 모든 파생값이 이 state 하나를 참조하므로 자동으로 함께
+  // 필터된다.
+  const [students, setStudents] = useState(() => getStudents().filter(isRealDirectoryStudent))
   const [editing, setEditing] = useState(null) // student id currently being reassigned
   const [editClass, setEditClass] = useState('')
   const [editUnit, setEditUnit] = useState('')
@@ -308,7 +337,7 @@ export default function StudentDirectory({ adminPin }) {
   }
 
   const refresh = () => {
-    const list = getStudents()
+    const list = getStudents().filter(isRealDirectoryStudent) // 표시 필터만 — DB 삭제 아님
     setStudents(list)
     loadPinStatus(list)
   }
