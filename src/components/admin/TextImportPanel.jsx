@@ -130,7 +130,7 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
         if (!d?.selected) return
         if (m.matchType !== 'exact') return // '검토 필요'는 저장 대상이 아님(아래 안내 문구)
         if (analysis.existingKeys.has(duplicateKey(r.word, m.sentence))) return // 이미 등록된 예문
-        jobs.push({ word: r.word, wordId: r.wordId, sentence: m.sentence, ko: d.ko, grammarPointId: d.grammarPointId })
+        jobs.push({ word: r.word, wordId: r.wordId, sentence: m.sentence, sentenceIndex: m.sentenceIndex, ko: d.ko, grammarPointId: d.grammarPointId })
       })
     })
     if (jobs.length === 0) { alert('저장할 후보가 없어요 — 체크된 예문이 있는지 확인해주세요.'); return }
@@ -151,6 +151,10 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
             word_id: job.wordId,
             grammar_point_id: job.grammarPointId || null,
             source: 'import',
+            // provenance(v3_31 additive 컬럼, 부재 시 exampleLibrary가 자동
+            // 폴백) — 본문 몇 번째 문장에서 왔는지. 교재/유닛/단어는 위
+            // FK가 이미 담당(중복 저장 안 함).
+            source_meta: { origin: 'textbook_passage', sentence_index: job.sentenceIndex },
           }, adminPin)
           // 관리자가 방금 눈으로 검수·선택한 문장 — 표준 전이 경로로 승인.
           await setApprovalStatus(created.id, 'pending', adminPin)
