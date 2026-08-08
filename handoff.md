@@ -7,6 +7,20 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (76차) — Unit 구조 전수 감사 + 정리 마이그레이션 준비(v3_29 백업/사전검증 SELECT 전용 + v3_30 초안, 둘 다 미실행)
+
+### 감사 결과(100% READ-ONLY, 34개 유닛 전수)
+- 패턴 확정: `createClass()`(wordLibrary.js:894)가 반=교재 컨테이너 생성 시 빈 "Unit 1"을 자동 생성(`ensureUnit(cls.id, DEFAULT_UNIT_NAME)`, 시드 경로 :353도 동일) → 이후 Excel 업로드가 "Unit1"/"Unit6" 등 다른 표기로 유닛을 새로 만들어(`ensureUnit`이 이름 정확 일치 조회) 빈 Unit 1이 교재마다 잔존.
+- 분류: KEEP 24(단어 26~50 실사용) / 빈 Unit 1 6개 + 고아 1개 / UNKNOWN 3개(이름 "Unit", 단어 "English" 1개짜리 테스트 유닛 — 김기택/천재/박준원).
+- 빈 유닛의 current_unit_id 참조 계정 11명 전원 archive(_DUP/_INACTIVE)/QA — 실학생 0. 단 **SCA에는 실학생 3명**: Irene(중1동아 빈 Unit 1, 비primary), 김가윤(민병천 빈 Unit 1, primary), 황성연(김기택 빈 Unit 1, 비primary).
+- 과(lesson) 번호를 DB에서 확정할 근거 없음(lesson_no 전부 null, import 메타 미저장) — 추측 확정 금지, 운영자가 교과서 대조로 확정 예정(76차 시점 천재 Unit6=단어 40개 주제는 "롤모델/꿈" 계열, 상세 단어 목록은 세션 로그).
+
+### 준비한 파일 2개(운영자 수동 실행 대상, 아직 미실행)
+- `supabase_v3_29_unit_cleanup_step1_backup_precheck.sql` — **SELECT 전용**(실행해도 데이터 무변화). §1 백업 스냅샷(대상 유닛 7행/canonical 4행/students·SCA 포인터/전역 불변식 카운트 — CSV 보관용) §2 사전검증 6개(pass/fail) §3 사람 검토 목록(SCA 실학생).
+- `supabase_v3_30_unit_cleanup_repoint_delete.sql` — **실행 금지 표기된 초안**. 한 트랜잭션: 가드 4개(위반 시 raise exception→전체 자동 롤백) → 확정 4유닛 포인터 이전(천재 빈Unit1→Unit6 4fe5a398 / 민병천→Unit1 e402499b / 중1동아→Unit1 5d9db813 / 중2동아→Unit1 4488e97a; students.current_unit_id + SCA.current_unit_id UPDATE만) → 잔존 참조 0 재확인 → 빈 유닛 5개(확정4+고아 4a1cd04c)만 id 명시 DELETE. **UNKNOWN 2개(김기택 e4804821/박준원 67c8268e 빈 Unit 1)와 황성연 SCA는 파일에 등장하지 않음** — canonical 확정 불가로 보류.
+- Unit 이름 정규화 규칙(합의): 비교 키 = trim + 공백 전부 제거 + 소문자 + 말미 숫자의 선행 0 제거(`Unit 1`≡`Unit1`≡`unit 01`). 표시 canonical 형은 `Unit N`(공백 1개). 재발 방지 코드 수정안(ensureUnit 정규화 매칭)은 76차 보고서에 초안만 — 코드 미수정.
+- PRODUCTION DATA CHANGED: NO(전 과정 SELECT/HEAD 조회만).
+
 ## 2026-08-09 (75차) — 본문 가져오기(SOURCE TEXT FIRST): 교과서/학평 본문 속 실제 문장을 예문으로 연결 — 커밋 93d2b37/a745aa4/396d8fb/c547ef3/9a9630f
 
 ### 목적(운영자 지시)

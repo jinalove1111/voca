@@ -1,0 +1,22 @@
+{
+  "agent_name": "implementer",
+  "role": "Unit 구조 감사 + 정리 마이그레이션 STEP1 준비",
+  "task_id": "unit-cleanup-step1-2026-08-09",
+  "task": "빈 Unit 1 정리용 백업/사전검증 SQL(v3_29, SELECT 전용)과 수정 SQL 초안(v3_30, 실행 금지) 작성 — DB 미실행",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-09T02:00:00+09:00",
+  "updated_at": "2026-08-09T02:40:00+09:00",
+  "files_owned": [
+    "supabase_v3_29_unit_cleanup_step1_backup_precheck.sql",
+    "supabase_v3_30_unit_cleanup_repoint_delete.sql",
+    "handoff.md",
+    ".ai-status/unit-cleanup-step1-2026-08-09.json"
+  ],
+  "files_read": [
+    "src/utils/wordLibrary.js"
+  ],
+  "summary": "34유닛 전수 감사: 빈 Unit 1 6개+고아 1(createClass 자동 생성 + ensureUnit 이름 정확 일치가 원인), canonical 확정 4개만 v3_30 정리 대상(천재→Unit6, 민병천/중1동아/중2동아→정규화 동명 Unit1). UNKNOWN: 김기택/박준원 빈 Unit 1(단어 유닛이 4/5/6 등뿐이라 1과 근거 없음)+테스트 유닛 'Unit' 3개. SCA 실학생 3명(Irene/김가윤=확정 교재로 이동 포함, 황성연=UNKNOWN 보류). v3_29는 SELECT 전용, v3_30은 가드 4개+트랜잭션+실행 금지 헤더. 프로덕션 미실행.",
+  "blocker": "운영자 승인 대기 — v3_29 실행·CSV 백업 후 v3_30 실행 여부 결정. UNKNOWN 유닛의 과 번호는 운영자가 교과서 대조로 확정 필요.",
+  "next_action": "운영자: ①v3_29를 SQL Editor에서 실행, §1 CSV 저장, §2 전부 PASS 확인 ②승인 시 v3_30 실행 ③v3_29 §1-5 재실행으로 units_total만 -5 확인 ④verify:student/admin/unit + 실기기 확인. 코드 재발 방지(ensureUnit 정규화 매칭)는 별도 세션."
+}
