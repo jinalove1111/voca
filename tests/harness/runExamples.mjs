@@ -230,6 +230,23 @@ console.log('\n-- computeExampleRank: SOURCE TEXT FIRST 랭킹(순수)')
     SOURCE_PRIORITY.import === 2 && SOURCE_PRIORITY.teacher === 1 && SOURCE_PRIORITY.rule === 0 && SOURCE_PRIORITY.ai === 0)
 }
 
+console.log('\n-- textImport: AMBIGUOUS 분류(2026-08-09 — 4단계 매칭)')
+{
+  // leaves = leaf 복수 ∧ leave 3인칭 — 유닛에 둘 다 있으면 중의적.
+  const r = matchWordsToSentences([{ word: 'leaf' }, { word: 'leave' }], ['The leaves are green.'])
+  const by = Object.fromEntries(r.map((x) => [x.word, x]))
+  check('유닛에 leaf/leave 공존 시 "leaves" 매칭은 둘 다 ambiguous',
+    by['leaf'].matches[0]?.matchType === 'ambiguous' && by['leave'].matches[0]?.matchType === 'ambiguous')
+  // 겹치는 단어가 없으면 같은 문장이라도 safe inflection.
+  const solo = matchWordsToSentences([{ word: 'leaf' }], ['The leaves are green.'])
+  check('leaf 단독이면 "leaves"는 inflected(safe)', solo[0].matches[0]?.matchType === 'inflected')
+  // 원형이 그대로 있으면 항상 exact(중의성 무관).
+  const exact = matchWordsToSentences([{ word: 'leaf' }, { word: 'leave' }], ['Please leave now.'])
+  const byE = Object.fromEntries(exact.map((x) => [x.word, x]))
+  check('원형 그대로 등장(leave)은 exact 유지', byE['leave'].matches[0]?.matchType === 'exact')
+  check('다른 단어(leaf)는 그 문장에 매칭 없음(NOT_FOUND)', byE['leaf'].matches.length === 0)
+}
+
 console.log('\n-- textImport: duplicateKey(중복 판정)')
 check('공백/대소문자 정규화로 동일 판정',
   duplicateKey('Block Out', 'The  curtains block out the sunlight.') === duplicateKey('block out', 'the curtains block out the sunlight.'))

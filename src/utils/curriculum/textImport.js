@@ -157,16 +157,20 @@ export function buildMatchers(word) {
   const tokens = String(word || '').trim().split(/\s+/).filter(Boolean)
   if (tokens.length === 0) return []
   const matchers = []
+  // form: 매칭에 실제로 쓰인 표면형(소문자) — matchWordsToSentences가 유닛 내
+  // 다른 단어의 변화형과 겹치는지(AMBIGUOUS) 판정할 때 키로 쓴다.
   if (tokens.length === 1) {
-    matchers.push({ re: new RegExp(`\\b${escapeRegex(tokens[0])}\\b`, 'i'), matchType: 'exact' })
+    const base = tokens[0].toLowerCase()
+    matchers.push({ re: new RegExp(`\\b${escapeRegex(tokens[0])}\\b`, 'i'), matchType: 'exact', form: base })
     for (const form of regularInflections(tokens[0])) {
-      matchers.push({ re: new RegExp(`\\b${escapeRegex(form)}\\b`, 'i'), matchType: 'inflected' })
+      matchers.push({ re: new RegExp(`\\b${escapeRegex(form)}\\b`, 'i'), matchType: 'inflected', form })
     }
   } else {
     const rest = tokens.slice(1).map(escapeRegex).join('\\s+')
-    matchers.push({ re: new RegExp(`\\b${escapeRegex(tokens[0])}\\s+${rest}\\b`, 'i'), matchType: 'exact' })
+    const baseForm = tokens.join(' ').toLowerCase()
+    matchers.push({ re: new RegExp(`\\b${escapeRegex(tokens[0])}\\s+${rest}\\b`, 'i'), matchType: 'exact', form: baseForm })
     for (const form of regularInflections(tokens[0])) {
-      matchers.push({ re: new RegExp(`\\b${escapeRegex(form)}\\s+${rest}\\b`, 'i'), matchType: 'inflected' })
+      matchers.push({ re: new RegExp(`\\b${escapeRegex(form)}\\s+${rest}\\b`, 'i'), matchType: 'inflected', form: `${form} ${tokens.slice(1).join(' ').toLowerCase()}` })
     }
   }
   return matchers
@@ -176,29 +180,53 @@ export function buildMatchers(word) {
 //   words: [{ id?, word }](wordLibrary words 행 또는 {word} 최소형)
 //   sentences: splitIntoSentences 결과
 // 반환: [{ word, wordId, matches: [{ sentenceIndex, sentence, matchType }] }]
-//   - matches는 문장 순서대로, 문장당 최대 1건(같은 문장에 원형과 변화형이
-//     같이 있으면 'exact' 우선).
-//   - 본문에 없는 단어는 matches가 빈 배열 — UI가 "본문에서 찾지 못함"
-//     구획으로 분리한다(AI 보충 대상).
+//   matchType 4단계 분류(2026-08-09 확장, 운영자 지시):
+//     'exact'     — 원형이 문장에 그대로 존재(저장 가능)
+//     'inflected' — SAFE_INFLECTION: 변화형으로만 존재하고 그 변화형이
+//                   유닛 내 이 단어에만 속함(검토 필요 표시)
+//     'ambiguous' — 변화형이 유닛 내 다른 단어의 변화형/원형과도 겹침
+//                   (예: leaves = leaf 복수 ∧ leave 3인칭) — 더 강한 검토 필요
+//     (NOT_FOUND  — matches 빈 배열, UI가 미발견 구획으로 분리)
+//   문장당 최대 1건(원형과 변화형이 같이 있으면 'exact' 우선).
 export function matchWordsToSentences(words, sentences) {
   const sents = Array.isArray(sentences) ? sentences : []
-  return (Array.isArray(words) ? words : [])
+  const list = (Array.isArray(words) ? words : [])
     .map((w) => ({ raw: w, text: String(w?.word || '').trim() }))
     .filter((w) => w.text)
-    .map(({ raw, text }) => {
-      const matchers = buildMatchers(text)
-      const matches = []
-      sents.forEach((sentence, sentenceIndex) => {
-        let best = null
-        for (const { re, matchType } of matchers) {
-          if (!re.test(sentence)) continue
-          if (matchType === 'exact') { best = 'exact'; break }
-          best = best || 'inflected'
-        }
-        if (best) matches.push({ sentenceIndex, sentence, matchType: best })
-      })
-      return { word: text, wordId: raw?.id || null, matches }
+
+  // 표면형 → 소유 단어 집합(유닛 범위) — AMBIGUOUS 판정용. 원형 자신도
+  // 소유 표면형에 포함한다(다른 단어의 변화형이 어떤 단어의 원형과 겹치는
+  // 경우도 중의적이므로 — 예: 유닛에 saw(톱)와 see가 같이 있으면 "saw"는
+  // see의 exact가 아니라 saw의 exact/see의 ambiguous).
+  const formOwners = new Map()
+  const own = (form, owner) => {
+    const key = String(form).toLowerCase()
+    if (!formOwners.has(key)) formOwners.set(key, new Set())
+    formOwners.get(key).add(owner)
+  }
+  for (const { text } of list) {
+    for (const m of buildMatchers(text)) own(m.form, text.toLowerCase())
+  }
+
+  return list.map(({ raw, text }) => {
+    const matchers = buildMatchers(text)
+    const matches = []
+    sents.forEach((sentence, sentenceIndex) => {
+      let best = null // { matchType, form }
+      for (const { re, matchType, form } of matchers) {
+        if (!re.test(sentence)) continue
+        if (matchType === 'exact') { best = { matchType, form }; break }
+        best = best || { matchType, form }
+      }
+      if (!best) return
+      let finalType = best.matchType
+      if (finalType === 'inflected' && (formOwners.get(best.form)?.size || 0) > 1) {
+        finalType = 'ambiguous'
+      }
+      matches.push({ sentenceIndex, sentence, matchType: finalType })
     })
+    return { word: text, wordId: raw?.id || null, matches }
+  })
 }
 
 // 중복 판정 키 — "같은 target_word + example_en(공백 정규화, 대소문자 무시)"

@@ -294,12 +294,27 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
         {busy ? '⏳ 처리 중...' : '🔍 본문 분석 및 단어 매칭'}
       </button>
 
-      {analysis && (
+      {analysis && (() => {
+        // 분석 요약 카운트(운영자 지시 11) — 렌더마다 파생 계산(상태 아님).
+        const allMatches = analysis.results.flatMap((r) => r.matches.map((m) => ({ ...m, word: r.word })))
+        const stat = {
+          exact: allMatches.filter((m) => m.matchType === 'exact').length,
+          inflected: allMatches.filter((m) => m.matchType === 'inflected').length,
+          ambiguous: allMatches.filter((m) => m.matchType === 'ambiguous').length,
+          dup: allMatches.filter((m) => analysis.existingKeys.has(duplicateKey(m.word, m.sentence))).length,
+        }
+        return (
         <div className="space-y-2">
-          <p className="text-[11px] font-bold text-gray-600">
-            문장 {analysis.sentenceCount}개 · Unit 단어 {analysis.wordCount}개 중
-            본문 발견 {analysis.results.length}개 / 미발견 {analysis.unmatched.length}개
-          </p>
+          <div className="flex flex-wrap gap-1.5 text-[10px] font-bold">
+            <span className="bg-gray-100 text-gray-600 rounded-full px-2 py-0.5">단어 {analysis.wordCount}</span>
+            <span className="bg-gray-100 text-gray-600 rounded-full px-2 py-0.5">문장 {analysis.sentenceCount}</span>
+            <span className="bg-green-100 text-green-700 rounded-full px-2 py-0.5">✓ 정확 일치 {stat.exact}</span>
+            <span className="bg-amber-100 text-amber-700 rounded-full px-2 py-0.5">⚠ 형태 변화 {stat.inflected}</span>
+            {stat.ambiguous > 0 && <span className="bg-red-100 text-red-600 rounded-full px-2 py-0.5">❓ 중의적 {stat.ambiguous}</span>}
+            <span className="bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">미발견 {analysis.unmatched.length}</span>
+            {stat.dup > 0 && <span className="bg-gray-200 text-gray-500 rounded-full px-2 py-0.5">중복 {stat.dup}</span>}
+            <span className="bg-indigo-100 text-indigo-700 rounded-full px-2 py-0.5">승인 예정 {selectedCount}</span>
+          </div>
 
           {/* ── 본문에서 발견된 단어 — 문장별 승인/제외 ── */}
           {analysis.results.map((r) => (
@@ -324,6 +339,12 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
                           <p className="text-[10px] font-bold text-amber-600">
                             ⚠ 검토 필요 — 형태 변화형으로만 등장해요(원형이 문장에 없음). 빈칸 학습 규칙상 이 형태로는 자동 저장하지
                             않아요. 필요하면 &quot;새 예문 추가&quot; 폼에서 직접 등록하세요.
+                          </p>
+                        )}
+                        {!isDup && m.matchType === 'ambiguous' && (
+                          <p className="text-[10px] font-bold text-red-500">
+                            ❓ 중의적 — 이 변화형은 유닛의 다른 단어와도 겹쳐요(예: leaves = leaf/leave). 어느 단어의 예문인지
+                            사람이 판단해야 하므로 자동 저장하지 않아요.
                           </p>
                         )}
                       </div>
@@ -386,7 +407,8 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
           </button>
           {saveNote && <p className="text-[11px] font-bold text-gray-600">{saveNote}</p>}
         </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
