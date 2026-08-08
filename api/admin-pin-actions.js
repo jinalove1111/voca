@@ -58,6 +58,19 @@ function isMissingTableError(error) {
   return msg.includes('does not exist') || msg.includes('schema cache')
 }
 
+// 2026-08-08 — create_student가 students.house_id(v2.7 House System,
+// 게임화 컬럼)를 다루다 프로덕션에 이 컬럼이 아직 없어(42703 실측 확정)
+// 500으로 죽던 문제 수정용 헬퍼. columnName을 넘기면 메시지에 그 컬럼명이
+// 포함된 "does not exist"만 매칭해 house_id 컬럼 부재와 무관한 다른
+// "does not exist" 에러(예: 다른 테이블/컬럼)를 잘못 삼키지 않게 한다.
+function isMissingColumnError(error, columnName) {
+  if (!error) return false
+  if (error.code === '42703') return true
+  const msg = String(error.message || '').toLowerCase()
+  if (!msg.includes('does not exist')) return false
+  return columnName ? msg.includes(String(columnName).toLowerCase()) : true
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
@@ -229,25 +242,49 @@ export default async function handler(req, res) {
 
     // House System 자동 배정 — wordLibrary.addStudent와 정확히 같은
     // 규칙(houseSystem.js 원본 함수 재사용, 위 import 주석 참고).
+    // 2026-08-08 — house_id는 v2.7(House System, 아직 미배포 게임화) 컬럼이라
+    // 프로덕션 DB에 컬럼 자체가 없다(42703 실측 확정). 컬럼 부재를 500으로
+    // 올리지 않고 house 배정만 조용히 스킵한다(houseId=null) — 그 외 에러는
+    // 기존대로 500. 컬럼이 나중에 추가되면(v2.7 SQL 적용) 이 분기를 안 타고
+    // 정상적으로 house가 배정된다.
+    let houseId = null
     const { data: existingStudents, error: hsErr } = await supabase
       .from('students')
       .select('house_id')
     if (hsErr) {
-      res.status(500).json({ error: hsErr.message })
-      return
+      if (!isMissingColumnError(hsErr, 'house_id')) {
+        res.status(500).json({ error: hsErr.message })
+        return
+      }
+      // house_id 컬럼 부재 — houseId는 null인 채로 계속 진행.
+    } else {
+      const houseCounts = computeHouseCounts((existingStudents || []).map((s) => ({ houseId: s.house_id })))
+      houseId = assignBalancedHouseId(houseCounts)
     }
-    const houseCounts = computeHouseCounts((existingStudents || []).map((s) => ({ houseId: s.house_id })))
-    const houseId = assignBalancedHouseId(houseCounts)
 
-    const insertRow = {
+    const baseRow = {
       id: studentId,
       name: trimmedName,
       class_id: classId,
       unit_name: finalUnitName,
-      current_unit_id: unitId,
-      house_id: houseId,
     }
-    const { error: insErr } = await supabase.from('students').insert(insertRow)
+    // wordLibrary.js addStudent(1407~1417)와 동일한 3단계 cascading 폴백 —
+    // v2.1(current_unit_id)과 v2.7(house_id)은 서로 다른 마이그레이션이라
+    // 어느 한쪽만 적용된 환경이 있을 수 있다. 전부 아니면 bare 한 방 시도면
+    // house_id 컬럼만 없어도 이미 적용된 current_unit_id까지 못 쓰게 되는
+    // 회귀가 생긴다 — 그래서 ①전체 → ②current_unit_id만 → ③baseRow만
+    // 순서로 재시도한다. 23505(멱등 replay 대상)면 재시도 없이 즉시 빠진다.
+    let { error: insErr } = await supabase
+      .from('students')
+      .insert({ ...baseRow, current_unit_id: unitId, house_id: houseId })
+    if (insErr && insErr.code !== '23505') {
+      ;({ error: insErr } = await supabase
+        .from('students')
+        .insert({ ...baseRow, current_unit_id: unitId }))
+    }
+    if (insErr && insErr.code !== '23505') {
+      ;({ error: insErr } = await supabase.from('students').insert(baseRow))
+    }
     if (insErr) {
       if (insErr.code === '23505') {
         // 같은 studentId로 재시도(네트워크 재전송 등) — 그 id 행이 이미
