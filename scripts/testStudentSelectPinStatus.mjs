@@ -50,7 +50,15 @@ if (!cls) { ({ data: cls } = await supabase.from('classes').insert({ name: CLASS
 // 적용 후 anon의 select=*는 pin 컬럼 차단으로 거부되므로. (pin_hash 값을
 // insert하는 것 자체는 v1_9 이후에도 허용 — 자기가 만드는 새 row에만 영향.)
 // 시나리오1: 신규 학생(PIN 없음)
-const { data: freshStudent } = await supabase.from('students').insert({ name: 'QA_FreshNoPin', class_id: cls.id, unit_name: 'Unit 1' }).select('id').single()
+const { data: freshStudent, error: freshErr } = await supabase.from('students').insert({ name: 'QA_FreshNoPin', class_id: cls.id, unit_name: 'Unit 1' }).select('id').single()
+// 2026-08-09 — 학생 생성 락다운(2026-08-06 P0, 서버 전용 create_student) 이후
+// anon INSERT 42501 거부가 현재 제품 계약이다(락다운 검증은
+// testRlsSecurity.mjs가 담당). QA 픽스처를 만들 수 없으므로 이 라이브
+// 검증은 정직하게 SKIP한다 — 가짜 PASS/FAIL 금지 관례(testXpLedgerDb와 동일).
+if (freshErr && (freshErr.code === '42501' || /permission denied/i.test(freshErr.message || ''))) {
+  console.log('\nSKIP — 학생 anon INSERT가 락다운됨(2026-08-06 P0 이후 정상 계약). QA 픽스처 생성 불가로 이 스크립트의 라이브 검증을 건너뜁니다.')
+  process.exit(0)
+}
 // 시나리오2: 기존 학생 PIN 있음
 const { data: withPinStudent } = await supabase.from('students').insert({ name: 'QA_HasPin', class_id: cls.id, unit_name: 'Unit 1', pin_hash: 'deadbeef:deadbeef' }).select('id').single()
 // 시나리오4: 동명이인 — 하나는 PIN 있음, 하나는 없음

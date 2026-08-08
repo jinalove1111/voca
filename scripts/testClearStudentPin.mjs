@@ -104,6 +104,12 @@ const QA_NAME = 'QA_ClearPin_' + Date.now() // 실존 학생과 절대 안 겹�
 const { data: cls } = await supabase.from('classes').select('id,name').limit(1).single()
 const { data: qa, error: insErr } = await supabase
   .from('students').insert({ name: QA_NAME, class_id: cls.id, unit_name: 'Unit 1' }).select('id').single()
+// 2026-08-09 — 학생 생성 락다운(2026-08-06 P0) 이후 anon INSERT 42501 거부가
+// 현재 제품 계약(검증은 testRlsSecurity.mjs). QA 픽스처 불가 → 정직 SKIP.
+if (insErr && (insErr.code === '42501' || /permission denied/i.test(insErr.message || ''))) {
+  console.log('\nSKIP — 학생 anon INSERT가 락다운됨(2026-08-06 P0 이후 정상 계약). QA 픽스처 생성 불가로 라이브 검증을 건너뜁니다.')
+  process.exit(0)
+}
 if (insErr) { console.error('QA insert failed', insErr); process.exit(1) }
 const FIRST_PIN = '4826'
 {

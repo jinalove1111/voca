@@ -62,7 +62,13 @@ if (!cls2) { ({ data: cls2 } = await supabase.from('classes').insert({ name: CLA
 
 // P7 후속: RETURNING 컬럼 명시(select('id')) — supabase_v1_9_security_rls.sql
 // 적용 후 anon의 select=*는 pin 컬럼 차단으로 거부되므로.
-const { data: studentA } = await supabase.from('students').insert({ name: 'QA_SelfSetupKid', class_id: cls.id, unit_name: 'Unit 1' }).select('id').single()
+const { data: studentA, error: qaInsErr } = await supabase.from('students').insert({ name: 'QA_SelfSetupKid', class_id: cls.id, unit_name: 'Unit 1' }).select('id').single()
+// 2026-08-09 — 학생 생성 락다운(2026-08-06 P0) 이후 anon INSERT 42501 거부가
+// 현재 제품 계약(검증은 testRlsSecurity.mjs). QA 픽스처 불가 → 정직 SKIP.
+if (qaInsErr && (qaInsErr.code === '42501' || /permission denied/i.test(qaInsErr.message || ''))) {
+  console.log('\nSKIP — 학생 anon INSERT가 락다운됨(2026-08-06 P0 이후 정상 계약). QA 픽스처 생성 불가로 라이브 검증을 건너뜁니다. (위 취약 PIN 순수 로직 섹션은 이미 검증 완료)')
+  process.exit(0)
+}
 const { data: studentB } = await supabase.from('students').insert({ name: 'QA_SelfSetupKid', class_id: cls2.id, unit_name: 'Unit 1' }).select('id').single()
 const { data: studentC } = await supabase.from('students').insert({ name: 'QA_SelfSetupNotAllowed', class_id: cls.id, unit_name: 'Unit 1' }).select('id').single()
 

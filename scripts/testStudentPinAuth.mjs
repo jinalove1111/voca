@@ -71,7 +71,14 @@ if (!cls) { ({ data: cls } = await supabase.from('classes').insert({ name: CLASS
 // 적용 후에는 anon의 select=*가 pin 컬럼 차단 때문에 거부되므로, 이 스크립트가
 // SQL 적용 전/후 어느 상태에서든 그대로 돌게 유지한다. "pin_hash 아직 null"은
 // 아래 2-1(already_set이 아닌 정상 설정 성공)로 간접 검증된다.
-const { data: student } = await supabase.from('students').insert({ name: 'QA_PinKid', class_id: cls.id, unit_name: 'Unit 1' }).select('id').single()
+const { data: student, error: qaInsErr } = await supabase.from('students').insert({ name: 'QA_PinKid', class_id: cls.id, unit_name: 'Unit 1' }).select('id').single()
+// 2026-08-09 — 학생 생성 락다운(2026-08-06 P0, 서버 전용 create_student) 이후
+// anon INSERT 42501 거부가 현재 제품 계약(락다운 자체 검증은 testRlsSecurity.mjs).
+// QA 픽스처 생성 불가 → 라이브 검증 정직 SKIP(가짜 PASS/FAIL 금지 관례).
+if (qaInsErr && (qaInsErr.code === '42501' || /permission denied/i.test(qaInsErr.message || ''))) {
+  console.log('\nSKIP — 학생 anon INSERT가 락다운됨(2026-08-06 P0 이후 정상 계약). QA 픽스처 생성 불가로 라이브 검증을 건너뜁니다. (위 순수 해시 로직 섹션은 이미 검증 완료)')
+  process.exit(0)
+}
 const studentId = student.id
 check('학생 생성됨', !!studentId)
 

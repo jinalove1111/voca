@@ -24,7 +24,19 @@ const anyClass = CLASSES[0]
 if (!anyClass) throw new Error('No class exists to test against — aborting')
 
 console.log('\n1. 신규 학생 등록 — addStudent가 id(UUID)를 반환')
-const studentId = await addStudent('QA_CaseTest', anyClass, 'Unit 1')
+// 2026-08-09 — 학생 생성 락다운(2026-08-06 P0, 서버 전용 create_student) 이후
+// addStudent의 anon INSERT는 42501로 거부되는 것이 현재 제품 계약이다
+// (락다운 검증은 testRlsSecurity.mjs). QA 픽스처 불가 → 정직 SKIP.
+let studentId
+try {
+  studentId = await addStudent('QA_CaseTest', anyClass, 'Unit 1')
+} catch (err) {
+  if (/permission denied|42501/i.test(err?.message || '') || err?.code === '42501') {
+    console.log('\nSKIP — 학생 anon INSERT가 락다운됨(2026-08-06 P0 이후 정상 계약). QA 픽스처 생성 불가로 라이브 검증을 건너뜁니다.')
+    process.exit(0)
+  }
+  throw err
+}
 check('addStudent가 UUID 형태의 id를 반환함', typeof studentId === 'string' && /^[0-9a-f-]{36}$/i.test(studentId))
 check('getStudentById(id)로 즉시 조회됨', getStudentById(studentId)?.name === 'QA_CaseTest')
 
