@@ -7,6 +7,37 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (70차) — 프로덕션 로스터 정리 완결: 29 실학생 canonical 1:1 + 반 확정 + 로그인 충돌 0 (v3_23~v3_28)
+
+### 배경
+운영자 확정 로스터(P6=8/MSA=12/PreMS=9, 총 29 실학생 + 테스트 3 Cookie/Paul/Jinaa)를 절대 기준으로, 92명 이동(52차 이후)으로 MSA에 누적된 중복·유령·잡계정(비-QA 138개)을 정리.
+
+### canonical 판정 기준
+이름 아님, 최근 실제 학습활동(last_studied/daily_progress timestamp) 우선 + 별/word_status/progress 보조. 동률은 시각(updated_at)으로 tiebreak. Leo/Kai/John/Harry 등 운영자 개별 확정.
+
+### 실행 SQL 6종(전부 운영자 수동, students.class_id/name anon 잠금이라 SQL Editor 필수)
+- v3_23 Paul 3계정 통합(이미)
+- v3_26 SCA 선배정(교재 접근 보존, 실측 결과 0행 — 전원 이미 SCA 보유)
+- v3_24 canonical 17명 class_id 확정 반 이동(단일 트랜잭션)
+- v3_25 빈 중복 33건 archive rename
+- v3_27 운영반(P6/MSA/PreMS) 동명 중복 87건 archive rename
+- v3_28 P6-2026 컨테이너 잔여 동명 중복 6건 archive rename
+
+### 방식
+삭제 0. 전부 rename 비활성화(`_DUP_`/`_DUP2_..._INACTIVE`)로 로그인 후보에서만 제외, 별/word_status/progress/학습기록 전량 보존. stranded(데이터보유) 계정도 rename이라 데이터 온존.
+
+### 최종 검증(읽기 전용, 10/10 PASS)
+29 canonical 전원 확정 반 위치 / 29명 전원 동명 유일(duplicate_accounts 로그인 충돌 완전 해소) / 학습데이터 별·word_status 감소 0 / 카운트 P6=8·MSA=12·PreMS=9(테스트 제외) / Cookie·Paul·Jinaa 유지 / v3_28 6건 _INACTIVE 적용.
+
+### 검증 과정 특기
+v3_27이 "실행 전 검증" 요청 시점에 이미 실행돼 있었음을 _DUP2_ 시그니처 87건으로 확인(정직 보고). 첫 라운드 카운트 조회가 1000행 페이지네이션에 잘려 오판할 뻔한 것을 서버사이드 재조회로 정정. v3_27이 운영반만 대상이라 컨테이너 잔여 6건이 남았고 v3_28로 마무리.
+
+### 미결/후속
+stranded(데이터보유 비-canonical) 계정 다수가 _INACTIVE로 보존됨 — 과거 별 숫자를 canonical에 실제 합산하려면 이중집계 분석 포함 별도 병합 설계 필요(이번엔 보존만). student_class_assignments anon INSERT가 RLS 미차단 관측(후속 보안 검토 후보).
+
+### PII
+v3_23~v3_28 SQL 파일은 실명 다수 포함이라 공개 저장소 미커밋(로컬 전용). 코드 변경 0.
+
 ## 2026-08-09 (69차) — 학생 교재 셀렉터 웜세션 stale 버그(P0) 수정·배포·라이브검증 — 커밋 1637256
 
 ### 증상/조사

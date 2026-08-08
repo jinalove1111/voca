@@ -1,0 +1,23 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "문서 갱신",
+  "task_id": "roster-cleanup-complete-2026-08-09",
+  "task": "프로덕션 로스터 정리 완결(29 실학생 canonical 1:1 + 반 확정 + 로그인 충돌 0, v3_23~v3_28) handoff.md 기록",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-09T00:00:00+09:00",
+  "updated_at": "2026-08-09T00:00:00+09:00",
+  "files_owned": [
+    "handoff.md",
+    ".ai-status/roster-cleanup-complete-2026-08-09.json"
+  ],
+  "files_read": [
+    "handoff.md",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json",
+    ".ai-status/EXAMPLE-implementer-doc-os-setup.json"
+  ],
+  "summary": "70차 세션(운영자+구현 세션 산출물)을 handoff.md 최상단(69차 위)에 append. 내용: 92명 이동 이후 MSA 누적 중복 정리, canonical 판정 기준, v3_23~v3_28 SQL 6종(전부 rename 비활성화 방식, 삭제 0), 10/10 검증 결과, 검증 과정 중 v3_27 선실행 발견·페이지네이션 오판 정정 경위, stranded 계정 별 병합 미결 사항, RLS 관측 이슈, PII로 인한 SQL 파일 비공개 사실. 실명은 전부 배제하고 이니셜/집계/id 앞8자리 수준으로만 기록.",
+  "blocker": null,
+  "next_action": "후속: stranded 별 합산 병합 설계(선택) / student_class_assignments RLS 검토"
+}

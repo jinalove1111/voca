@@ -1,0 +1,26 @@
+{
+  "agent_name": "implementer",
+  "role": "구현",
+  "task_id": "roster-cleanup-v327-2026-08-08",
+  "task": "로스터 정리 마지막 단계 — 3개 운영 반(MSA/P6/PreMS)에 잔존한 비-canonical 활성 중복 계정 rename 비활성화 SQL 작성",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-08T00:00:00+09:00",
+  "updated_at": "2026-08-08T00:00:00+09:00",
+  "files_owned": [
+    "supabase_v3_27_roster_dedup_active_rename.sql",
+    "ops/roster-cleanup-2026-08-09/_tmp_v327_audit.mjs",
+    ".ai-status/roster-cleanup-v327-2026-08-08.json"
+  ],
+  "files_read": [
+    "supabase_v3_24_roster_canonical_class_moves.sql",
+    "supabase_v3_25_roster_archive_empty_dups.sql",
+    "supabase_v3_26_roster_sca_prestep.sql",
+    "ops/roster-cleanup-2026-08-09/audit_full.json",
+    "ops/roster-cleanup-2026-08-09/_tmp_audit.mjs",
+    ".ai-status/roster-cleanup-sql-2026-08-09.json"
+  ],
+  "summary": "읽기 전용 anon SELECT(_tmp_v327_audit.mjs, DB 쓰기·INSERT 프로브 전혀 없음)로 3개 운영 반(MSA/P6/PreMS)에 현재 class_id가 있는 151개 계정을 실측. QA_/_QA_ 접두·이미 _INACTIVE 접미·29 canonical(8자리 접두→audit_full.json 전수 대조로 full UUID 확인)·테스트 3계정을 4중 배제한 결과 대상 87건(MSA 85 + P6 2 + PreMS 0, 예상치와 일치) 확정. canonical/테스트 겹침 0건, id 뒤 6자 접미 충돌 0건 각각 스크립트로 재확인. supabase_v3_27_roster_dedup_active_rename.sql 작성 — v3_23/v3_25와 동일하게 name 컬럼만 '<원래이름>_DUP2_<id뒤6자>_INACTIVE'로 rename(삭제·병합 없음, 87건 각 UPDATE는 id+현재 name 2중 가드로 멱등), 각 UPDATE 위에 [반] 추정 학생그룹(또는 잡계정/미상) + ★total_stars/ws word_status_count 주석(stranded 71건 vs junk(0/0) 16건 구분 — MSA junk 14 + P6 junk 0, 나머지 stranded). 백업 테이블 생성 구문(이미 있으면 no-op) 1개(87건 id/name 스냅샷), 전체 BEGIN...COMMIT 단일 트랜잭션, 롤백 절차 주석 포함. 실행 후 검증 SELECT 3종 준비 — 특히 MSA는 Cookie/Jinaa 테스트 계정 2개가 현재 MSA에 있고 이 SQL이 명시적으로 건드리지 않으므로 '단순 활성 카운트'는 12가 아니라 14로 나오는 것이 정상이고, '테스트 계정 제외' 버전 쿼리라야 목표치(P6=8/MSA=12/PreMS=9)와 정확히 일치함을 주석에 명시(불일치를 오탐하지 않도록). SQL 파일 전체를 정규식으로 파싱해 백업/UPDATE/롤백 3개 id 목록이 87개로 서로 100% 집합 일치함을 자동 대조 완료. 스키마 자체를 지우는 구문이나 테이블을 통째로 비우는 구문, WHERE 절 없는 무조건부 행 삭제 구문의 리터럴 검색 결과 0건(저장소 파괴적 SQL 차단 훅과 별개로 자체 재확인). DB 쓰기·커밋 전혀 없음 — 계획대로 SQL 파일만 산출.",
+  "blocker": null,
+  "next_action": "운영자: v3_26(있다면 이미 실행됨) → v3_24 → v3_25 → v3_27 순서 확인 후 Supabase 대시보드 SQL Editor에서 v3_27 수동 실행. 실행 후 파일 내 검증 SELECT 3종(전체 87건 존재/단순 활성 카운트/테스트 제외 로스터 헤드카운트=P6 8·MSA 12·PreMS 9)으로 결과 확인."
+}
