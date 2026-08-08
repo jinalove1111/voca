@@ -7,6 +7,31 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (71차) — PIN 만들기 화면 학생 목록 필터: archive/중복/테스트/PIN완료 계정 제외 — 커밋 94d7bdf/066772f
+
+### 증상
+PIN 만들기 → 반 선택 시 실학생뿐 아니라 로스터 정리로 archive된 중복 계정(이름에 `_DUP`/`_INACTIVE` 접미)까지 학생 목록에 노출. 초등학생이 직접 쓰는 화면이라 시스템/중복 계정 노출 금지 요구.
+
+### 원인(확정)
+`StudentSelect.jsx`의 setup 로스터가 `getStudentsInClass`(반 class_id 전원)를 그대로 사용. 로스터 정리(v3_25/27/28)가 중복계정을 rename(`_DUP`/`_INACTIVE`)만 하고 `class_id`는 유지해서, archive 계정이 이 목록에 계속 섞여 나옴. 렌더도 PIN 완료 학생을 배지만 붙여 계속 표시.
+
+### 수정(94d7bdf, `src/components/StudentSelect.jsx`만 — `getStudentsInClass` 등 wordLibrary 공용함수 무접촉, DB 무접촉)
+① 순수함수 `isRealSetupStudent`로 이름에 `_DUP`/`_INACTIVE` 포함·`QA_`/`_QA_` 접두·테스트계정(Cookie/Paul/Jinaa) 제외
+② setupRoster를 이 필터 적용값으로
+③ 렌더에서 `hasPinHash===true`(PIN 완료) 학생 숨김(상태 로딩 전엔 표시 유지).
+
+### 후속 UX(066772f)
+`setupVisibleRoster`(PIN 미설정 실학생)가 0명이고 배치 상태조회 완료면 "이 반의 모든 학생이 이미 PIN을 만들었어요. 로그인 탭 이용" 안내. 로딩 중 오탐 방지 가드.
+
+### 검증(읽기 전용, 3개 운영 반)
+반별 canonical active 실학생 / PIN완료 / PIN미설정 / 화면표시 / 제외수·사유. 결과 — Presentation 6: canonical 8, 제외 `_DUP`/`_INACTIVE` 3. MS Advanced: canonical 12, 제외 117(`_DUP`/`_INACTIVE`)+2(테스트). Pre-Middle: canonical 9, 제외 0. 3반 전부: 화면표시 == canonical중 PIN미설정 수(현재 전원 PIN 보유라 0), `_DUP`/`_INACTIVE`/QA/테스트 노출 0개 검증 PASS.
+
+### 빌드/회귀
+build PASS / verify:student PASS / 배포 번들 라이브 일치(`index-CQDwa9xV.js`) 확인. regression: 기존 PIN 로그인은 이름+PIN(verify-student-pin) 경로라 이 UI 필터와 무관·정상. 모바일 레이아웃 무변경.
+
+### PRODUCTION DATA CHANGED
+NO(학생 데이터/PIN/class_id/이름/UUID 전부 무접촉, 화면 조회·필터만).
+
 ## 2026-08-09 (70차) — 프로덕션 로스터 정리 완결: 29 실학생 canonical 1:1 + 반 확정 + 로그인 충돌 0 (v3_23~v3_28)
 
 ### 배경

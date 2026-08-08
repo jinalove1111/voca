@@ -1,0 +1,22 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "문서 갱신",
+  "task_id": "pin-setup-roster-filter-2026-08-09",
+  "task": "PIN 만들기 화면 학생 목록 필터(archive/중복/테스트/PIN완료 계정 제외) 문서화",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-09T00:00:00+09:00",
+  "updated_at": "2026-08-09T00:00:00+09:00",
+  "files_owned": [
+    "handoff.md",
+    ".ai-status/pin-setup-roster-filter-2026-08-09.json"
+  ],
+  "files_read": [
+    "handoff.md",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "StudentSelect.jsx의 PIN 만들기 화면 setup 로스터가 getStudentsInClass(반 전원)를 그대로 써서 archive(_DUP/_INACTIVE) 중복 계정까지 노출되던 문제를 순수함수 isRealSetupStudent(이름 패턴 필터: _DUP/_INACTIVE/QA_/_QA_/테스트계정) + hasPinHash===true 학생 렌더 숨김으로 수정(94d7bdf), '전원 PIN 완료' 안내 UX 추가(066772f). 3개 운영 반(Presentation 6/MS Advanced/Pre-Middle) 읽기전용 검증 PASS, build/verify:student PASS, 배포 번들 일치 확인. handoff.md 71차 섹션 append 완료.",
+  "blocker": null,
+  "next_action": "없음(후속 없음)"
+}
