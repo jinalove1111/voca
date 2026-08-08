@@ -33,7 +33,8 @@
     "verify:words-bulk-replace-plan": "node tests/harness/runWordsBulkReplacePlan.mjs",
     "verify:all": "node tests/harness/runAll.mjs",
     "wiki:search": "node scripts/wikiSearch.mjs",
-    "dashboard": "node scripts/generateDashboard.mjs"
+    "dashboard": "node scripts/generateDashboard.mjs",
+    "verify:integrity": "node scripts/auditCurriculumIntegrity.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
