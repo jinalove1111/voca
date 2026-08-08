@@ -1,0 +1,25 @@
+{
+  "agent_name": "implementer",
+  "role": "재부팅 중단 작업 복구 + 학생 관리 비활성화/재활성화/안전삭제 완성",
+  "task_id": "student-mgmt-lifecycle-2026-08-08",
+  "task": "관리자 학생 관리: deactivate/reactivate/hard_delete 서버 액션 + UI(토글/모달/가드), 구 즉시삭제 버튼 제거",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-08T00:00:00+09:00",
+  "updated_at": "2026-08-08T00:00:00+09:00",
+  "files_owned": [
+    "api/admin-pin-actions.js",
+    "src/components/admin/StudentDirectory.jsx",
+    "handoff.md",
+    ".ai-status/student-mgmt-lifecycle-2026-08-08.json"
+  ],
+  "files_read": [
+    "src/utils/wordLibrary.js",
+    "api/verify-student-pin.js",
+    "src/components/StudentSelect.jsx",
+    "package.json"
+  ],
+  "summary": "재부팅 전 uncommitted diff(서버 액션 3종 + UI 538줄)를 검토해 정합성 확인(fetchDashboardData 계약, 로그인 ilike 정확일치, _inactive 필터 관례). 이어서 구 removeStudent 즉시삭제 버튼 제거, has_data 알럿 [object Object] 수정, 삭제 후 selected 정리. build PASS, verify:admin PASS, verify:login FAIL은 stash 재현으로 기존 환경성(RLS 락다운) 실패 확정. 커밋 a4b98fd(서버)/37cde4d(UI). 프로덕션 데이터 무변경.",
+  "blocker": null,
+  "next_action": "push 후 Vercel 자동 배포 확인, 실기기에서 관리자 화면 비활성화/재활성화/토글 동작 확인(완전삭제는 데이터 0 계정만)."
+}

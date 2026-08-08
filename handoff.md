@@ -7,7 +7,27 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
-## 2026-08-09 (72차) — 학생 추가 흐름 3버그 수정: house_id 500 / 관리자 목록 1156 / PIN 만들기 신규학생 미노출 — 커밋 b215741/0d4974c/cbe833a
+## 2026-08-08 (73차) — 관리자 학생 관리: 비활성화/재활성화/안전 완전삭제 + 표시 토글 (재부팅 중단 작업 복구) — 커밋 a4b98fd/37cde4d
+
+### 맥락
+72차 직후 "학생 관리 화면 실운영 구조 개선"(검색/필터 + 비활성화/재활성화/안전 삭제) 작업 중 머신 재부팅으로 세션 중단. 이번 세션이 uncommitted diff(538줄, api/admin-pin-actions.js + StudentDirectory.jsx)를 검토해 정합성 확인 후 이어서 완성. 검색+퀵필터(이름/반/교재 검색, PIN 완료/미설정/반 미배정/최근 등록)는 2026-07-22에 이미 구현돼 있어 재구현하지 않음(헌법 규칙 3).
+
+### 서버 (a4b98fd, api/admin-pin-actions.js — 액션 3종 추가)
+- `deactivate_student`: name에 `__INACTIVE__` 접미만 부여(로스터 정리 스크립트 관례와 동일 계열). pin/별/progress/word_status/class_id/SCA 무접촉 → 재활성화 시 자동 복원. 기존 필터(로그인 ilike 정확 일치 → 원래 이름으로 매칭 불가, StudentSelect `_inactive` 제외, 관리자 목록 필터)가 이미 이 관례를 처리하므로 스키마 변경 없음. 멱등(이미 `_inactive` 포함 이름이면 성공 응답).
+- `reactivate_student`: 정확히 `__INACTIVE__` 접미로 끝나는 이름만 복원. `_DUP_..._INACTIVE`류는 원래 이름 추측이 위험하므로 `no_clean_marker`로 거부.
+- `hard_delete_student`: 서버가 직접 재검증 — word_status 0건 && 별/XP 0 && pin_hash null(값은 SELECT 안 함, is-null head 카운트만 — 규칙 11 준수) && 일별기록 0 && 복습큐 0 전부 통과해야만 SCA→students 순 삭제. 하나라도 있으면 `has_data` 거부. 인가는 기존 3액션과 동일하게 `checkAdminReauth`가 액션 분기보다 먼저.
+
+### UI (37cde4d, StudentDirectory.jsx)
+- 비활성화: 학생 이름을 명시한 확인 모달("기록은 보존됩니다") → 서버 호출. 재활성화: "🗄️ 비활성 학생 보기" 토글을 켜야만 카드가 보이므로 오터치 위험 낮음, 즉시 호출.
+- 완전삭제: 카드 하단 `⚙️ 고급` details 안에만, 클라 1차 가드(PIN 미설정 && 별·완료 0 — progressMap 배치조회 결과 확인 전엔 버튼 숨김) 통과 시에만 렌더 + confirm 2회. 서버 has_data가 최종 방어.
+- **구 "🗑 학생 삭제" 버튼 제거(이번 세션 추가 수정)** — `removeStudent()` 클라이언트 즉시 hard delete(confirm 1회, 학습기록 포함 삭제)가 ⋯ 메뉴에 남아 있었음. 안전 경로 완성과 함께 제거하고 안내 문구로 대체, `handleRemove`/`removeStudent` import도 정리.
+- 표시 토글 2종(🧪 테스트 계정 Cookie/Paul/Jinaa, 🗄️ 비활성) 기본 off. 로드 필터는 _DUP/QA만 제외로 완화하고 _INACTIVE는 표시 단계로 이동(재활성화 UI가 봐야 하므로). 그룹/검색/CSV/헤더 카운트 전부 displayStudents 단일 파생값 참조.
+- 카드에 최근 학습일/별/완료 단어(fetchDashboardData 재사용, 화면에 보이는 학생만 배치 조회) + id 앞 8자리. has_data 거부 알럿의 `[object Object]` 버그 수정(이번 세션).
+
+### 검증
+- build PASS. verify:admin PASS. verify:login FAIL은 **변경 전 코드(stash)에서도 동일 FAIL 재현** — RLS 락다운 환경에서 하네스의 QA 학생 anon 생성이 막힌 기존 환경성 실패로 이번 변경과 무관(규칙 15 절차로 확정).
+- PRODUCTION DATA CHANGED: NO — 전 과정 읽기전용 조사 + 코드 수정만. deactivate/reactivate/hard_delete 어느 것도 실제 호출하지 않음. Barry(1056c7db)/기존 학생/PIN 무접촉.
+- 후속: 실기기에서 관리자 화면 토글/비활성화/재활성화 확인 권장. 완전삭제는 데이터 0 계정으로만 시험할 것.
 
 ### 증상/맥락
 관리자 학생 추가에서 신규 학생(Barry) 등록 시도 → column students.house_id does not exist 500. 별개로 관리자 학생 목록이 "전체 학생 (1156명)"으로 표시. 신규 학생 추가 후에도 학생 PIN 만들기 화면에 그 학생이 안 뜸.
