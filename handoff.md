@@ -7,6 +7,29 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (75차) — 본문 가져오기(SOURCE TEXT FIRST): 교과서/학평 본문 속 실제 문장을 예문으로 연결 — 커밋 93d2b37/a745aa4/396d8fb/c547ef3/9a9630f
+
+### 목적(운영자 지시)
+AI가 임의로 예문을 만드는 게 아니라, 운영자가 제공한 영어 본문에서 Unit 단어가 실제 쓰인 문장을 찾아 **원문 그대로** 예문으로 연결. AI 생성은 본문에 없는 단어의 보충 수단으로만(SOURCE TEXT FIRST, AI GENERATED SECOND).
+
+### 조사 결론 — 스키마 변경 0
+examples(v3_13, 프로덕션 실행됨)가 이미 전부 보유: `source` CHECK에 'import' / `english_sentence`·`korean_translation` 분리 필드(example_en/ko 요구 충족) / `word_id`·`unit_id`·`textbook_id`(출처: 교재가 grade_id=학교/학년·publisher_id 연결 — 중복 필드 신설 안 함) / `grammar_point_id`. 승인 상태머신(canTransition)·학생 노출 가드(approved만, 데이터 계층 하드코딩)·검수함 전부 재사용. **마이그레이션/신규 테이블/신규 컬럼 없음.**
+
+### 구현(5커밋)
+- `textImport.js`(신규, 93d2b37) — import-0 순수 모듈(curriculumModel 관례): ①splitIntoSentences: 문장은 입력의 연속 부분문자열 trim만(원문 무변경 불변식), 약어(Mr./Dr./e.g.)·소수점 비경계, 줄바꿈 경계 ②buildMatchers/matchWordsToSentences: whole-word(\b) 판정으로 substring 오탐 차단(cat⊄category), 숙어/구동사는 토큰 \s+ 연쇄, 규칙 형태변화(protects/protected/protecting, y→ies/ied, e탈락 ing)는 matchType:'inflected'로 구분 — 불규칙(take→took)은 추측 안 함 ③duplicateKey: target+문장 정규화 중복 키. **NUL 바이트 사고(396d8fb)**: 최초 Write 시 duplicateKey 구분자에 \x00이 들어가 Git이 바이너리 판정 — '#'로 교체(동작 동일). 
+- `curriculumApi.listUnitWords`(a745aa4) — 유닛 단어 조회 전용(조회 무-throw 계약 동일).
+- `TextImportPanel.jsx`(신규)+`ExampleManager.jsx` 배선(c547ef3) — 학교/학년→교재→Unit 선택, 본문 textarea, [본문 분석 및 단어 매칭] → 미리보기: 발견 단어(문장별 체크 승인/제외, 해석·문법포인트 입력, 한 단어 여러 문장 지원)/미발견 단어(기존 generatorContract AI 스텁을 보충 버튼으로 재사용 — 기능 제거 아님). inflected는 "검토 필요" 표시만(whole-word 빈칸 학습 불변식 통과 불가 — 검증 로직 약화 없이 정직 안내). 중복은 같은 교재+Unit 기존 예문과 비교해 "이미 등록된 예문" 표시·차단. 저장: createExample(source:'import') → 소스 가드로 draft 강제 생성 → 관리자가 눈으로 승인한 것이므로 표준 전이 draft→pending→approved(우회 경로 신설 없음). 예문 탭엔 접이식 토글 1개(기본 접힘).
+- `exampleLibrary.js` rank 2축(9a9630f) — 유닛 일치(지배적, x10) 유지 + 같은 축 안 source 우선순위(import 2>teacher 1>rule/ai 0). 학생 UI는 curriculumExamplesStudentUI 플래그(기본 off) 뒤.
+- 한국어 해석: AI 자동 번역은 만들지 않음(규칙 7 무료 우선 — 유료 API 인프라 없음). 미리보기에서 직접 입력(선택), 비워두면 나중에 기존 수정 폼으로 추가.
+
+### 검증
+- runExamples 하네스에 textImport 15단언 추가 — **62/62 PASS**(pure+live). 라이브 섹션이 프로덕션 examples에 marker 행 CRUD 왕복(생성→pending→approved→조회→삭제) 실제 성공 — 저장 경로 동작 확정.
+- build PASS / verify:admin·student·learning-engine PASS. 배포 index-B3vvo28v.js 라이브 일치.
+- PRODUCTION DATA CHANGED: 순변화 NO(하네스 marker 행은 자체 cleanup).
+
+### 남은 것
+grammar_points 0행(문법 포인트 dropdown 비어 있음 — 시드는 운영자/후속), AI 보충 생성기는 여전히 not_implemented 스텁(후속 Phase), 실기기에서 본문 가져오기 1회 실사용 확인 권장.
+
 ## 2026-08-09 (74차) — 커리큘럼 예문 탭 출판사/학년→교재 dropdown 연동 + "천재 이상기만 표시" 원인 확정 — 커밋 3eb9a52
 
 ### 조사(읽기 전용, 운영자 지시)

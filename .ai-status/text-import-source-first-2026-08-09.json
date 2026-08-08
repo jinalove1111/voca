@@ -1,0 +1,29 @@
+{
+  "agent_name": "implementer",
+  "role": "본문 가져오기(SOURCE TEXT FIRST) 구현",
+  "task_id": "text-import-source-first-2026-08-09",
+  "task": "관리자 예문 탭에 본문 붙여넣기→Unit 단어 매칭→원문 문장 예문 연결 기능 (스키마 변경 0, 기존 examples/승인 상태머신 재사용)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-09T00:00:00+09:00",
+  "updated_at": "2026-08-09T01:10:00+09:00",
+  "files_owned": [
+    "src/utils/curriculum/textImport.js",
+    "src/utils/curriculum/curriculumApi.js",
+    "src/utils/curriculum/exampleLibrary.js",
+    "src/components/admin/TextImportPanel.jsx",
+    "src/components/admin/ExampleManager.jsx",
+    "tests/harness/runExamples.mjs",
+    "handoff.md",
+    ".ai-status/text-import-source-first-2026-08-09.json"
+  ],
+  "files_read": [
+    "src/utils/curriculum/curriculumModel.js",
+    "src/utils/textbookExampleModel.js",
+    "src/App.jsx",
+    "supabase_v3_13_curriculum_engine_phase0.sql"
+  ],
+  "summary": "examples 스키마가 요구사항을 이미 전부 지원(source='import'/en·ko 분리/word_id/FK 출처)해 마이그레이션 0. 순수 매칭 모듈(원문 보존·whole-word·inflected 구분) + TextImportPanel(미리보기/승인/중복 차단/AI 보충은 기존 스텁 재사용) + 학생 노출 rank에 source 우선순위(import>teacher>ai). 하네스 62/62 PASS(라이브 CRUD 왕복 포함), build/admin/student/learning-engine PASS, 배포 확인. NUL 바이트 사고 1건 수정(396d8fb). 커밋 93d2b37/a745aa4/396d8fb/c547ef3/9a9630f.",
+  "blocker": null,
+  "next_action": "운영자: 실기기에서 본문 가져오기 1회 실사용(교재/Unit 선택→본문 붙여넣기→승인 저장). 후속: grammar_points 시드, AI 보충 생성기 구현(현재 not_implemented)."
+}
