@@ -522,6 +522,16 @@ export async function ensureTextbookLayerBackfilled() {
     .map((t) => t.ownerClassId).filter(Boolean))
   let created = 0
   for (const [name, cls] of Object.entries(_cache)) {
+    // 2026-08-08 — classType === 'textbook'이 아닌 반(수업 반: regular/
+    // special)은 백필 대상에서 제외. createClass의 동일 날짜 수정과 짝 —
+    // 수업 반은 콘텐츠를 소유하지 않는 라이브러리 모델(2026-08-09 확정)이라,
+    // 이 백필이 뒤늦게 자기 이름 교과서를 만들어 재발시키면 안 된다(실사고:
+    // "Pre-Middle school" 반 생성 직후 자기 이름 교과서 2권 발생,
+    // supabase_v3_22_premiddle_junk_textbooks.sql). classType이 아직 없는
+    // 값(공백/undefined)은 v3_19 이전 레거시 반일 수 있어 여기서는 보수적으로
+    // "textbook이 아니면 제외"로 처리 — 실제 textbook 컨테이너 반은 항상
+    // classType이 명시적으로 'textbook'으로 저장된다(createClass 경유 생성).
+    if (cls.classType !== 'textbook') continue
     if (!cls.id || covered.has(cls.id) || (cls.units || []).length === 0) continue
     try {
       let textbookId = null
@@ -889,7 +899,19 @@ export async function createClass(name, classType = 'regular', adminPin) {
   // 교과서로 되돌아 보이는 실증 버그가 재발한다). non-fatal — 실패해도
   // 반 생성 자체는 성공 유지(관리자 화면 진입 시 ensureTextbookLayerBackfilled
   // 가 다음 기회에 다시 시도한다).
-  if (_textbookMode) {
+  //
+  // 2026-08-08 — classType === 'textbook'일 때만 실행하도록 축소. 실사고:
+  // "Pre-Middle school" 수업 반(classType 'regular') 생성 순간(8/7 18:37)
+  // 자기 이름 교과서 2권(유닛 0·SCA 0, 그중 1권은 owner_class_id 링크가
+  // 끊긴 고아)이 함께 생겨, 학생 교재 선택기에 빈 교과서가 노출될 수 있는
+  // 상태가 됐다(supabase_v3_22_premiddle_junk_textbooks.sql 정리 대상).
+  // 라이브러리 모델(2026-08-09 확정)에서 수업 반(regular/special)은
+  // 콘텐츠를 소유하지 않는다 — class_textbooks로 라이브러리 교과서를
+  // "링크"만 하고, 자기 이름 교과서를 자동 생성하지 않는다. 폴백 영향:
+  // 수업 반의 getOwnTextbookOfClass가 이제 null이어도, 현행 프로덕션
+  // 학생 전원이 명시 primary SCA(student_class_assignments)를 보유하고
+  // 있어(2026-08-09 실측 — MS Advanced 138명 포함) 화면에 영향이 없다.
+  if (_textbookMode && classType === 'textbook') {
     try {
       const { error: insTbErr } = await supabase.from('textbooks').insert({ name, owner_class_id: cls.id })
       if (insTbErr && insTbErr.code !== '23505') {

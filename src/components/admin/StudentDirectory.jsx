@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import {
-  getClassNames, getClassUnitNames, getClassIdByName, getStudentClass, getStudentUnit,
+  getClassNames, getRealClassNames, getClassUnitNames, getClassIdByName, getStudentClass, getStudentUnit,
   setStudentClass, setStudentUnit, setStudentsClassBulk, setStudentHouse,
   getClassTextbooks, getStudentClassAssignments, getTextbookById,
 } from '../../utils/wordLibrary'
@@ -101,6 +101,33 @@ export default function StudentDirectory({ adminPin }) {
   // handleClearPin 그대로, 버튼 위치만 메뉴 안으로 이동(오터치 방지).
   const [menuOpenId, setMenuOpenId] = useState(null)
   const classList = getClassNames()
+
+  // ── 반 배정 드롭다운 = 실제 수업 반만(2026-08-08, P1 실사고 재발 방지) ──
+  // 실사고: 2026-08-08 오전, 운영자가 Harry에게 YMB "교과서"를 배정하려다
+  // 이 화면의 반 배정 드롭다운(당시엔 classList = 전체 반)에서 "중2 YMB
+  // 박준원"(class_type='textbook' 컨테이너 반)을 선택 → students.class_id가
+  // 그 컨테이너로 이동해 운영 중이던 실반 배정이 깨졌다. 학생용 PIN
+  // 선택기(StudentSelect.jsx)는 getRealClassNames()로 이미 고쳐져 있었으나
+  // 관리자 로스터의 반 배정 드롭다운 2곳(개별 편집 editClass / 일괄 이동
+  // bulkTargetClass)은 미적용 상태였다. classList(전체 반, CSV 내보내기·
+  // 반 그룹 아코디언 등에는 그대로 필요)는 건드리지 않고, 이 두 드롭다운의
+  // 옵션 소스만 realClassList로 교체한다.
+  const realClassList = getRealClassNames()
+  const realClassSet = new Set(realClassList)
+  // 편집 대상 학생이 이미 컨테이너 반 소속이면(예: 보류 중인 "Presentation
+  // 6 -2026" 컨테이너 소속 학생) 옵션에서 완전히 숨기지 않고, 그 반 하나를
+  // "(현재: … — 교과서 컨테이너)" 라벨로 최상단에 추가해 현재 상태를 유지
+  // 선택할 수 있게 한다(저장 시 의도치 않은 강제 이동 방지 — 제거가 아니라
+  // 현상 유지용 옵션 1개 추가).
+  const classOptionsFor = (currentClassName) => {
+    if (currentClassName && !realClassSet.has(currentClassName)) {
+      return [
+        { value: currentClassName, label: `(현재: ${currentClassName} — 교과서 컨테이너)` },
+        ...realClassList.map(c => ({ value: c, label: c })),
+      ]
+    }
+    return realClassList.map(c => ({ value: c, label: c }))
+  }
 
   // ── 소속 반/배정 교과서/현재 Unit 3축 요약(2026-08-07 운영자 지시) ─────
   // PIN 만들기 첫 드롭다운이 "소속 반(students.class_id)"인데 교과서
@@ -746,7 +773,7 @@ export default function StudentDirectory({ adminPin }) {
               }}
               className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-bold bg-white">
               <option value="">반 선택</option>
-              {classList.map(c => <option key={c} value={c}>{c}</option>)}
+              {classOptionsFor(s.className).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
             {editClass && (
               <select value={editUnit} onChange={e => setEditUnit(e.target.value)}
@@ -904,7 +931,11 @@ export default function StudentDirectory({ adminPin }) {
               }}
               className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-bold bg-white">
               <option value="">반 선택</option>
-              {classList.map(c => <option key={c} value={c}>{c}</option>)}
+              {/* 2026-08-08 — 학생 추가 폼도 반 배정 드롭다운과 동일 위험
+                  (컨테이너 반 노출) 이 있어 realClassList로 교체. 신규
+                  학생은 아직 소속 반이 없으므로 "현재 반 유지" 예외
+                  (classOptionsFor)는 필요 없음 — realClassList만으로 충분. */}
+              {realClassList.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             {newClass && (
               <select value={newUnit} onChange={e => setNewUnit(e.target.value)}
@@ -972,7 +1003,7 @@ export default function StudentDirectory({ adminPin }) {
             <select value={bulkTargetClass} onChange={e => setBulkTargetClass(e.target.value)}
               className="flex-1 min-w-[8rem] border-2 border-blue-200 rounded-xl px-2 py-1.5 text-xs font-bold bg-white">
               <option value="">이동할 반 선택</option>
-              {classList.map(c => <option key={c} value={c}>{c}</option>)}
+              {realClassList.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <button onClick={handleBulkMove} disabled={!bulkTargetClass || bulkBusy}
               className="bg-blue-500 disabled:bg-gray-300 text-white font-black px-3 py-1.5 rounded-xl text-xs btn-press">
