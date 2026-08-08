@@ -130,15 +130,22 @@ export async function fetchApprovedExamplesForWords(wordTexts, { unitId } = {}) 
       else console.warn('[exampleLibrary] fetchApprovedExamplesForWords failed (non-fatal):', error.message)
       return {}
     }
-    // best.rank: unitId가 주어졌고 이 행의 unit_id가 정확히 일치하면 2,
-    // 그 외(범용 unit_id=null 또는 다른 유닛)는 1 — 항상 유닛 일치가 우선.
-    // unitId를 안 넘기면(기본 호출) 전 행이 rank 1이라 기존 동작(단순
-    // "가장 최근 1개")과 완전히 동일하다(하위 호환).
+    // best.rank 2축(2026-08-09 — SOURCE TEXT FIRST, 운영자 지시):
+    //   ① 유닛 일치(지배적 축, x10): unitId가 주어졌고 이 행의 unit_id가
+    //      정확히 일치하면 2, 그 외(범용 unit_id=null/다른 유닛)는 1 —
+    //      기존 동작 그대로(항상 유닛 일치가 우선).
+    //   ② 같은 유닛 축 안에서 source 우선순위(+0~2): 'import'(실제 교과서/
+    //      학평 본문 문장) 2 > 'teacher'(교사 직접 작성) 1 > 'rule'/'ai' 0.
+    //      실존 본문 예문이 있으면 AI/규칙 생성 예문보다 항상 먼저 노출된다.
+    // unitId를 안 넘기면(기본 호출) ①축이 전 행 동일(1)이라 ②축 소스
+    // 우선순위 + 최신순만 남는다 — 기존 호출부와 하위 호환(순수 최신순
+    // 대비 달라지는 경우는 "본문 예문이 존재할 때 그걸 우선"뿐, 의도된 개선).
+    const SOURCE_RANK = { import: 2, teacher: 1 }
     const bestByWord = new Map()
     ;(data || []).forEach((r) => {
       const key = normalizeTargetWord(r.target_word)
       if (!key) return
-      const rank = unitId && r.unit_id === unitId ? 2 : 1
+      const rank = (unitId && r.unit_id === unitId ? 2 : 1) * 10 + (SOURCE_RANK[r.source] || 0)
       const existing = bestByWord.get(key)
       if (!existing || rank > existing.rank) {
         bestByWord.set(key, { row: r, rank })
