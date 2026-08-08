@@ -34,7 +34,8 @@
     "verify:all": "node tests/harness/runAll.mjs",
     "wiki:search": "node scripts/wikiSearch.mjs",
     "dashboard": "node scripts/generateDashboard.mjs",
-    "verify:integrity": "node scripts/auditCurriculumIntegrity.mjs"
+    "verify:integrity": "node scripts/auditCurriculumIntegrity.mjs",
+    "verify:gamification": "node scripts/testGamificationModels.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

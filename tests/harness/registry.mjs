@@ -257,6 +257,15 @@ export const DOMAINS = {
       { script: 'scripts/testExamplePriorityMock.mjs', builders: [], extra: true, note: '2026-08-09 야간 — 학생 예문 우선순위(SOURCE TEXT FIRST) mock 검증: fetch 가로채기로 네트워크/DB 0회, 배포 코드(exampleLibrary) 번들 그대로 구동. curriculumExamplesStudentUI 플래그 프로덕션 온 전의 사전 검증 자산. 13개 필수 도메인 밖, 신규 보너스 커버리지.' },
     ],
   },
+  // ── 2026-08-09 등록: 게임화 코어 순수 모델(docs/GAME_REWARD_RULES.md) —
+  // 오늘의 미션 파생 판정 + streak(주 1회 freeze/최고 기록 보존) 계산.
+  // 전부 기존 기록(student_daily_progress/word_status)의 파생 — 지급 없음.
+  gamificationCore: {
+    label: '게임화 코어 — 오늘의 미션/streak 순수 모델 (verify:gamification과 동일 실행)',
+    checks: [
+      { script: 'scripts/testGamificationModels.mjs', builders: [], note: 'import-0 순수 모듈 직접 로드(네트워크/DB 0회) — 미션 4종 판정/불가능 미션 방지/streak freeze·best 보존·마일스톤 24단언.' },
+    ],
+  },
   learningEngine: {
     label: 'Learning Engine — 모드 레지스트리/어댑터/결정론 (verify:learning-engine과 동일 실행)',
     checks: [
