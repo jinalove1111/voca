@@ -7,6 +7,30 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (68차) — Paul 3계정 중복 통합(rename 비활성화) 실행·검증 완료 — 커밋 3032b8b
+
+### 배경/원인
+Paul 실계정 3개 중복(자기등록 사고 잔재)으로 로그인 시 verify-student-pin의 ilike 'Paul' 3건 매칭→duplicate_accounts 거부. 실측(2026-08-09) 3계정 전수:
+- canonical 335a9560 (Presentation 6 -2026 반, 생성 07-05): word_status 17, total_stars 223·total_xp 223, 캘린더 실기록, daily 10 → 진짜 계정.
+- 빈 중복 A 38717600 (MS Advanced, 07-22) / B fafa6d09 (MS Advanced, 08-05): word_status 0·별 0·XP 0·캘린더 {} → 이관할 데이터 없음.
+- students 스키마에 soft-delete 컬럼(active/deleted_at/archived) 부재 실측 → 비파괴 비활성화 = 이름 변경.
+
+### 조치(운영자 실행, 세션 검증)
+- 사전 백업: ops/paul-consolidation-2026-08-09/backup_before_rename.json (3계정+의존 39행, 읽기전용).
+- supabase_v3_23_paul_dedup_rename.sql(커밋 3032b8b): 백업 테이블 생성 + 빈 중복 2개만 id+name='Paul' 가드 조건부 UPDATE로 Paul_DUP_20260722/20260805_INACTIVE 이름 변경. canonical·모든 의존 레코드 무접촉, 삭제·병합·반이동·교재변경 전무, 멱등·롤백 포함. **students anon UPDATE는 이 시점 보안 잠금으로 회수돼 있어(운영자가 잔여 보안항목 실행함) 운영자 SQL Editor로만 실행 가능**했음.
+- 운영자가 canonical Paul PIN을 관리자 🔑 초기화로 재설정(평문 미기록).
+
+### 프로덕션 검증(읽기 전용, 백업 대조) — 14/15 PASS + 프로브 1
+- 'Paul' resolve = 정확히 1건(335a9560) / 3계정 전부 존재(삭제·병합 없음) / 빈 중복 2개 rename 확인 / canonical 이름·반(dcd497c2)·current_unit·unit_name(Unit2) 불변 / word_status 17 유지 / 별 223·XP 223 유지 / SCA(교재 tb 26310f76) 불변 / PIN 재설정 반영·미잠금.
+- 유일한 비-PASS: daily_progress 10→11(=+1 신규 활동, **손실 아님** — 요구사항 "손실 없음" 충족).
+- 오답 프로브 1회: reason=wrong_pin(duplicate_accounts 아님) → **중복 차단 해소 확정**. 프로브로 canonical에 fail 1회 누적됐으나 66차 수정으로 무해·다음 정상 로그인 시 자동 초기화.
+
+### 미완 1항목
+- "새 PIN 로그인 성공"은 실제 신규 PIN이 필요(운영자만 보유, 평문 미공유)해 세션이 직접 검증 불가 — 구조상 resolve=1·hasPinHash=true·미잠금이라 정확 PIN이면 성공 보장. 운영자가 새 PIN으로 1회 로그인하거나 $env:ADMIN_PIN 없이 verify_pin_login류 스크립트에 PIN 주입해 확인 권장.
+
+### 남은 항목
+- 동명 나머지 27그룹(80계정 중 Paul 3 제외) 병합 — 같은 rename 비활성화 방식 적용 가능(각 그룹 canonical 판정 필요). 김보민 개별 PIN 재설정(저장값이 9000 아님, 67차).
+
 ## 2026-08-09 (67차) — PIN 로그인 후속: unlock 버튼 노출 수정(A) 배포·검증 + 김보민/Paul 근본원인 확정(B) — 커밋 fba6e1d
 
 ### Issue A — 관리자 "로그인 잠금 해제" 버튼 안 보임 (코드 버그, 수정·배포·검증 완료)
