@@ -34,7 +34,7 @@ export default async function handler(req, res) {
   const supabase = createClient(url, key)
   const { data, error } = await supabase
     .from('students')
-    .select('id,pin_hash,pin_setup_allowed,pin_locked_until')
+    .select('id,pin_hash,pin_setup_allowed,pin_locked_until,pin_fail_count')
     .in('id', studentIds)
   if (error) {
     res.status(500).json({ error: error.message })
@@ -42,11 +42,17 @@ export default async function handler(req, res) {
   }
 
   const now = Date.now()
+  // pin_locked_until is a rolling 5-minute window, so `locked` is usually false
+  // by the time an admin looks at the roster even when a student has failed
+  // attempts stacking up toward the next lockout. hasFailedAttempts (boolean
+  // only, never the raw count) lets AdminScreen/StudentDirectory surface the
+  // unlock control outside that narrow window too.
   const results = (data || []).map((s) => ({
     id: s.id,
     hasPinHash: !!s.pin_hash,
     pinSetupAllowed: !!s.pin_setup_allowed,
     locked: !!(s.pin_locked_until && new Date(s.pin_locked_until).getTime() > now),
+    hasFailedAttempts: (s.pin_fail_count || 0) > 0,
   }))
   res.status(200).json({ results })
 }

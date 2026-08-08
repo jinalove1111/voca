@@ -90,9 +90,10 @@ export default function StudentDirectory({ adminPin }) {
   const [bulkPinBusy, setBulkPinBusy] = useState(false)
   const [pinClearId, setPinClearId] = useState(null) // "PIN 초기화(삭제)" 진행 중인 학생 id
   // 2026-07-16 — 학생 최초 PIN 자기설정. pinStatus: id -> {hasPinHash,
-  // pinSetupAllowed, locked}(api/student-pin-status.js 배치 조회, pin_hash
-  // 원문은 절대 안 내려옴). supabase_v1_7 SQL 미실행 상태에서도(컬럼 없음
-  // 에러) 크래시 없이 "상태 알 수 없음"으로 안전하게 표시.
+  // pinSetupAllowed, locked, hasFailedAttempts}(api/student-pin-status.js
+  // 배치 조회, pin_hash 원문/실패 카운트 원값은 절대 안 내려옴 — boolean만).
+  // supabase_v1_7 SQL 미실행 상태에서도(컬럼 없음 에러) 크래시 없이
+  // "상태 알 수 없음"으로 안전하게 표시.
   const [pinStatus, setPinStatus] = useState({})
   const [allowBusyId, setAllowBusyId] = useState(null)
   const [unlockBusyId, setUnlockBusyId] = useState(null)
@@ -526,7 +527,8 @@ export default function StudentDirectory({ adminPin }) {
     }
   }
 
-  // 관리자 "잠금 해제" — pin_hash는 안 건드리고 실패카운트/잠금만 해제.
+  // 관리자 "로그인 잠금 해제" — unlock_student_pin 액션은 pin_fail_count/
+  // pin_locked_until만 초기화하고 pin_hash(PIN 값 자체)는 절대 건드리지 않는다.
   const handleUnlockPin = async (id, name) => {
     setUnlockBusyId(id)
     try {
@@ -693,10 +695,11 @@ export default function StudentDirectory({ adminPin }) {
                 {allowBusyId === s.id ? '⏳' : status.pinSetupAllowed ? '🔓 허용 취소' : '🔓 설정 허용'}
               </button>
             )}
-            {status?.locked && (
+            {(status?.locked || status?.hasFailedAttempts) && (
               <button onClick={() => handleUnlockPin(s.id, s.name)} disabled={unlockBusyId === s.id}
+                title={status?.locked ? '현재 잠김 — 잠금과 실패 기록을 초기화합니다' : '실패 기록이 누적됨 — 잠기기 전에 초기화합니다'}
                 className="bg-red-100 text-red-600 font-bold px-2.5 min-h-[40px] rounded-xl text-xs btn-press disabled:opacity-50 whitespace-nowrap">
-                {unlockBusyId === s.id ? '⏳' : '🔒 잠금 해제'}
+                {unlockBusyId === s.id ? '⏳' : '🔓 로그인 잠금 해제'}
               </button>
             )}
             <button onClick={() => handleResetPin(s.id, s.name)} disabled={pinResetId === s.id}
