@@ -23,6 +23,27 @@ import { isValidPinFormat, verifyPin, supabaseAdminUrl, supabaseAdminKey } from 
 const MAX_FAILS = 5
 const LOCK_MINUTES = 5
 
+// [P0 FIX 2026-08-09] 잠금-만료 후 재잠금 루프 — 김보민 실사고.
+// 계정이 5회 실패로 잠긴 뒤 5분이 지나 unlocked 후보로 다시 들어와도,
+// pin_fail_count는 성공 로그인/관리자 unlock으로만 리셋되므로 여전히 5로
+// 남아있었다. 그 상태에서 만료 후 첫 시도가 오답이면 nextFailCount=5+1=6 이
+// 되어 즉시 재잠금 → 학생이 "5분 잠금"이 아니라 영구 5분 사이클에 갇힌다.
+// 아래 nextFailState()는 "잠금이 있었지만 지금은 만료됨"을 감지해 그
+// 순간엔 실패 카운트를 0부터 다시 센다(= 만료 후 새 5회 창) — 브루트포스
+// 방지(5분당 최대 5회)라는 보안 의도는 그대로 유지하면서, 만료된 잠금이
+// 스스로 풀리지 않는 버그만 없앤다.
+export function nextFailState(candidate, now, { MAX_FAILS: maxFails, LOCK_MINUTES: lockMinutes }) {
+  const lockHadExpired = !!candidate.pin_locked_until && new Date(candidate.pin_locked_until).getTime() <= now
+  const baseFail = lockHadExpired ? 0 : (candidate.pin_fail_count || 0)
+  const nextFailCount = baseFail + 1
+  const relock = nextFailCount >= maxFails
+  const lockedUntil = relock ? new Date(now + lockMinutes * 60 * 1000).toISOString() : null
+  // 재잠금은 아니지만 만료된 잠금 흔적(pin_locked_until)이 남아있던 경우,
+  // 다음 조회에서 다시 "잠긴 걸로" 오인되지 않도록 정리해준다.
+  const clearLock = !relock && lockHadExpired
+  return { nextFailCount, relock, lockedUntil, clearLock }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
@@ -123,15 +144,18 @@ export default async function handler(req, res) {
   let anyLocked = false
   let latestLockedUntil = null
   await Promise.all(unlocked.map(async (c) => {
-    const nextFailCount = (c.pin_fail_count || 0) + 1
-    const payload = { pin_fail_count: nextFailCount }
-    if (nextFailCount >= MAX_FAILS) {
-      const lockedUntilIso = new Date(now + LOCK_MINUTES * 60 * 1000).toISOString()
-      payload.pin_locked_until = lockedUntilIso
+    const state = nextFailState(c, now, { MAX_FAILS, LOCK_MINUTES })
+    const payload = { pin_fail_count: state.nextFailCount }
+    if (state.relock) {
+      payload.pin_locked_until = state.lockedUntil
       anyLocked = true
       // 여러 후보가 동시에 잠기는 드문 경우에도(전부 같은 now 기준으로
       // 계산하므로 사실상 항상 동일한 시각) 응답에 실을 값을 안전하게 기록.
-      if (!latestLockedUntil || lockedUntilIso > latestLockedUntil) latestLockedUntil = lockedUntilIso
+      if (!latestLockedUntil || state.lockedUntil > latestLockedUntil) latestLockedUntil = state.lockedUntil
+    } else if (state.clearLock) {
+      // 만료된 잠금 흔적 정리(위 nextFailState 주석 참고) — 이번엔 재잠금이
+      // 아니므로 stale pin_locked_until을 남겨두지 않는다.
+      payload.pin_locked_until = null
     }
     await supabase.from('students').update(payload).eq('id', c.id)
   }))
