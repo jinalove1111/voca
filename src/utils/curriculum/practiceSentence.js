@@ -169,6 +169,94 @@ export function practiceQualityScore(targetWord, practiceSentence) {
   return 1
 }
 
+// ── chunkQualityGrade(2026-08-09 운영자 지시 — 핵심 표현 품질 등급) ─────────
+// chunkQualityGrade(targetWord, chunk, sourceSentence) → 'HIGH'|'MEDIUM'|'LOW'
+//
+// 왜 별도 함수인가: practiceQualityScore(0~3)는 대표 예문 "랭킹"용 수치라
+// representativeExample.js가 이미 소비 중 — 그 계약을 건드리지 않고, 관리자
+// 화면의 "이 chunk를 자동 승인해도 되는가" 판단용 등급을 분리했다. 두 함수
+// 모두 같은 validatePracticeSentence(target 포함 + 원문 substring)를 전제로
+// 쓰므로 서로 모순되지 않는다(HIGH가 되는 3~8단어 구간은 점수 3의 4~10단어
+// 구간에 포함 — 등급이 랭킹을 뒤집는 경우 없음).
+//
+// 결정적 점수 합산 기준(경계값 명시 — 전부 이 파일의 기존 어휘 집합 재사용):
+//   [전제 — 실패 시 즉시 LOW]
+//     · chunk 비어있지 않음 + target whole-word 포함
+//     · sourceSentence 전달 시 원문 exact substring(새 문장/의역은 무조건 LOW)
+//   [가점]
+//     · 단어 수 3~8: +2 / 9~10: +1 / 그 외(<3 또는 >10): -1
+//     · collocation 완결 +1(최대 1회): "전치사+관사" 관용 시작("at the …")
+//       또는 chunk 중간의 of/for 보어 연쇄 — 단, chunk 끝이 내용어일 때만
+//       (끝이 함수어면 보어가 미완결이므로 가점 없음)
+//   [감점]
+//     · bare 전치사 시작(전치사 뒤가 관사 아님, "for Korean …"): -1
+//     · 접속사 시작(and/but/so/because …): -1
+//     · 절 경계 불량 — 끝 단어가 전치사/관사/접속사: -3
+//     · 장소/인명 — 함수어 아닌 대문자 시작 토큰 2연속 이상("Tapgol Park",
+//       "Dr. Schofield"): -3 (단일 대문자 토큰("Korean")은 감점 없음 —
+//       국적 형용사가 교과서 chunk에 흔해 오탐이 되기 때문)
+//     · 날짜 — 연도(1000~2099) 또는 월 이름 포함: -3
+//   [등급 경계] 합계 ≥2 → HIGH / 0~1 → MEDIUM / <0 → LOW
+//
+// LOW는 자동 승인 금지(운영자 지시) — UI(TextImportPanel)는 프리필은 하되
+// 경고 배지로 관리자 검토를 유도한다. 이 함수는 순수(부수효과 0)다.
+const CONJS = new Set(['and', 'but', 'so', 'because', 'or', 'although', 'that', 'which', 'who', 'when', 'while'])
+const MONTHS = new Set(['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'])
+const YEAR_RE = /\b(1[0-9]{3}|20[0-9]{2})\b/
+
+export function chunkQualityGrade(targetWord, chunk, sourceSentence) {
+  const s = String(chunk || '').trim()
+  // 전제: target 포함 + (sourceSentence 전달 시) 원문 substring —
+  // validatePracticeSentence 재사용(검증 로직 단일 원본, 재구현 없음).
+  if (!validatePracticeSentence(targetWord, s, sourceSentence).ok) return 'LOW'
+
+  const words = s.split(/\s+/).filter(Boolean)
+  const cores = words.map(coreOf)
+  const isFn = (c) => DETS.has(c) || PREPS.has(c) || CONJS.has(c)
+  let score = 0
+
+  // 단어 수: 3~8 우선 / ≤10 양호 / 그 외 감점
+  const wc = words.length
+  if (wc >= 3 && wc <= 8) score += 2
+  else if (wc >= 9 && wc <= 10) score += 1
+  else score -= 1
+
+  // 절 경계 품질: 끝이 함수어면 미완결 절단("at the invitation of") — 강감점.
+  const endsClean = !isFn(cores[cores.length - 1])
+  if (!endsClean) score -= 3
+
+  // 자연스러움: bare 전치사 시작 / 접속사 시작 감점.
+  if (PREPS.has(cores[0]) && !DETS.has(cores[1])) score -= 1
+  if (CONJS.has(cores[0])) score -= 1
+
+  // collocation 완결 가점 — 끝이 내용어일 때만(미완결이면 완결 가점과 모순).
+  // bare 전치사 시작의 of/for(cores[0])는 시작 감점 대상이지 완결 가점이
+  // 아니므로 i>0만 본다.
+  if (endsClean) {
+    const prepArticleStart = PREPS.has(cores[0]) && DETS.has(cores[1])
+    const midComplement = cores.some((c, i) => i > 0 && RIGHT_COMPLEMENT_PREPS.has(c))
+    if (prepArticleStart || midComplement) score += 1
+  }
+
+  // 장소/인명: 함수어 아닌 대문자 토큰 2연속("Tapgol Park", "Dr. Schofield").
+  let run = 0
+  let properRun = false
+  words.forEach((w, i) => {
+    const properLike = /^[A-Z]/.test(w) && cores[i] !== '' && !isFn(cores[i])
+    run = properLike ? run + 1 : 0
+    if (run >= 2) properRun = true
+  })
+  if (properRun) score -= 3
+
+  // 날짜: 연도/월 이름 — 학습 포인트가 아닌 시점 정보라 chunk 부적합.
+  if (YEAR_RE.test(s)) score -= 3
+  if (cores.some((c) => MONTHS.has(c))) score -= 3
+
+  if (score >= 2) return 'HIGH'
+  if (score >= 0) return 'MEDIUM'
+  return 'LOW'
+}
+
 // suggestPracticeSentence({ targetWord, sourceSentence })
 // → { sentence, origin: 'source_chunk' } | null
 // 2026-08-09 정책 전환: 제안은 **본문 chunk 추출만** — 단어 자산 등 본문에

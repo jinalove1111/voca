@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { listUnitsMeta, listUnitWords } from '../../utils/curriculum/curriculumApi'
 import { listExamples, createExample, setApprovalStatus } from '../../utils/curriculum/exampleLibrary'
 import { parseBilingualPassage, matchWordsToSentences, duplicateKey, preferManualKo } from '../../utils/curriculum/textImport'
-import { suggestPracticeSentence, validatePracticeSentence } from '../../utils/curriculum/practiceSentence'
+import { suggestPracticeSentence, validatePracticeSentence, chunkQualityGrade } from '../../utils/curriculum/practiceSentence'
 import { generateCandidateExamples } from '../../utils/curriculum/generatorContract'
 
 // TextImportPanel.jsx — 관리자 > 커리큘럼 > 예문 "본문 가져오기"(2026-08-09).
@@ -335,6 +335,20 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
             (drafts[candidateKeyOf(m.word, m.sentenceIndex)]?.ko || '').trim()
             || analysis.koBySentence[m.sentenceIndex]).length,
         }
+        // 핵심 표현 품질 등급 카운트(2026-08-09 운영자 지시) — 카드와 동일한
+        // 파생 계산(상태 저장 없음). exact + 비중복 + 값이 있는 chunk만 집계
+        // (중복 카드는 핵심 표현 입력 자체가 없음). LOW는 자동 승인 금지
+        // 정책의 가시화 — LOW>0이면 칩을 빨간 톤으로 띄워 검토를 유도한다.
+        const gradeStat = { HIGH: 0, MEDIUM: 0, LOW: 0 }
+        allMatches.forEach((m) => {
+          if (m.matchType !== 'exact') return
+          if (analysis.existingKeys.has(duplicateKey(m.word, m.sentence))) return
+          const p = (drafts[candidateKeyOf(m.word, m.sentenceIndex)]?.practice || '').trim()
+          if (!p) return
+          const gr = chunkQualityGrade(m.word, p, m.sentence)
+          if (gradeStat[gr] !== undefined) gradeStat[gr]++
+        })
+        const gradeTotal = gradeStat.HIGH + gradeStat.MEDIUM + gradeStat.LOW
         return (
         <div className="space-y-2">
           <div className="flex flex-wrap gap-1.5 text-[10px] font-bold">
@@ -350,6 +364,11 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
               </span>
             )}
             {stat.dup > 0 && <span className="bg-gray-200 text-gray-500 rounded-full px-2 py-0.5">중복 {stat.dup}</span>}
+            {gradeTotal > 0 && (
+              <span className={`rounded-full px-2 py-0.5 ${gradeStat.LOW > 0 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'}`}>
+                핵심표현 HIGH {gradeStat.HIGH} · MED {gradeStat.MEDIUM} · LOW {gradeStat.LOW}
+              </span>
+            )}
             <span className="bg-indigo-100 text-indigo-700 rounded-full px-2 py-0.5">승인 예정 {selectedCount}</span>
           </div>
 
@@ -399,6 +418,12 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
                     {!isDup && m.matchType === 'exact' && (() => {
                       const v = (d.practice || '').trim()
                       const pv = v ? validatePracticeSentence(r.word, v, m.sentence) : null
+                      // 품질 등급(2026-08-09 운영자 지시) — 파생 계산(상태 저장
+                      // 없음). LOW는 자동 승인 금지: 자동 프리필은 유지하되
+                      // 경고 배지로 관리자가 경계를 다듬도록 유도한다. 검증
+                      // 실패(pv.ok=false)는 위의 빨간 검증 문구가 이미 담당
+                      // 하므로 등급 배지는 유효한 값에만 붙인다.
+                      const grade = pv?.ok ? chunkQualityGrade(r.word, v, m.sentence) : null
                       return (
                         <div className="pl-6 space-y-0.5">
                           <input value={d.practice || ''} onChange={(e) => updateDraft(key, { practice: e.target.value })}
@@ -407,6 +432,12 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
                             className="w-full text-[11px] font-medium border border-indigo-200 rounded-lg px-2 py-1" />
                           {pv && !pv.ok && <p className="text-[10px] font-bold text-red-500">{pv.warnings[0]}</p>}
                           {pv && pv.ok && pv.warnings.map((w) => <p key={w} className="text-[10px] font-bold text-amber-600">{w}</p>)}
+                          {grade === 'LOW' && (
+                            <p className="text-[10px] font-bold text-red-500">
+                              <span className="bg-red-100 text-red-600 rounded-full px-1.5 py-0.5 mr-1">LOW</span>
+                              ⚠ 품질 낮음 — 검토 필요
+                            </p>
+                          )}
                         </div>
                       )
                     })()}

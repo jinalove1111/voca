@@ -6,7 +6,7 @@ import {
   listExamples, createExample, updateExample, deleteExample, setApprovalStatus,
 } from '../../utils/curriculum/exampleLibrary'
 import { canTransition, matchesFilters, APPROVAL_STATUSES, validateExampleFields } from '../../utils/curriculum/curriculumModel'
-import { validatePracticeSentence } from '../../utils/curriculum/practiceSentence'
+import { validatePracticeSentence, chunkQualityGrade } from '../../utils/curriculum/practiceSentence'
 import { generateCandidateExamples } from '../../utils/curriculum/generatorContract'
 import TextImportPanel from './TextImportPanel'
 import { groupExamplesByTargetWord } from '../../utils/curriculum/representativeExample'
@@ -20,6 +20,13 @@ const STATUS_STYLE = {
   pending: 'bg-amber-100 text-amber-700',
   approved: 'bg-green-100 text-green-700',
   rejected: 'bg-red-100 text-red-700',
+}
+// 핵심 표현 품질 등급 배지(2026-08-09 운영자 지시) — STATUS_STYLE과 같은
+// Tailwind 칩 관례. LOW는 자동 승인 금지 대상이라 빨강으로 검토를 유도한다.
+const GRADE_STYLE = {
+  HIGH: 'bg-green-100 text-green-700',
+  MEDIUM: 'bg-amber-100 text-amber-700',
+  LOW: 'bg-red-100 text-red-600',
 }
 
 function transitionLabel(from, to) {
@@ -403,9 +410,20 @@ export default function ExampleManager({ adminPin }) {
                 <p className="text-xs font-black text-indigo-800 font-mono">{g.targetWord}</p>
                 <p className="text-[10px] font-bold text-gray-500">본문 발견 {g.count}개</p>
               </div>
-              {g.representative?.practiceSentence ? (
-                <p className="px-1 text-[11px] font-bold text-indigo-700">⭐ 본문 핵심 표현: {g.representative.practiceSentence}</p>
-              ) : (
+              {g.representative?.practiceSentence ? (() => {
+                // 등급 배지(2026-08-09) — 대표 핵심 표현의 품질을 그룹 헤더에서
+                // 즉시 확인(파생 계산, 상태 없음). 원문(englishSentence)을
+                // 기준으로 substring/target 전제까지 함께 판정한다.
+                const grade = chunkQualityGrade(g.representative.targetWord, g.representative.practiceSentence, g.representative.englishSentence)
+                return (
+                  <p className="px-1 text-[11px] font-bold text-indigo-700 flex items-center flex-wrap gap-1.5">
+                    <span>⭐ 본문 핵심 표현: {g.representative.practiceSentence}</span>
+                    <span className={`flex-shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-full ${GRADE_STYLE[grade] || 'bg-gray-100 text-gray-500'}`}>
+                      {grade}
+                    </span>
+                  </p>
+                )
+              })() : (
                 <p className="px-1 text-[11px] font-bold text-gray-400">본문 핵심 표현 없음 — 학생에게 원문 노출(아래 카드 &quot;수정&quot;에서 ✂️ 핵심 표현 입력 가능)</p>
               )}
               {g.representative && renderRow(g.representative)}

@@ -410,6 +410,56 @@ console.log('\n-- practiceSentence: 본문 핵심 표현 추출(2026-08-09 정�
   check('[원문 불변] 추출 후 source 문자열 무변화', SRC1 === before)
 }
 
+console.log('\n-- practiceSentence: chunkQualityGrade(품질 등급 HIGH/MEDIUM/LOW — 2026-08-09 운영자 지시)')
+{
+  // 실데이터(교과서 본문) 기반 등급 검증 — 기준/경계값은
+  // practiceSentence.js chunkQualityGrade 헤더 주석 참고.
+  const { chunkQualityGrade, practiceQualityScore } = await import('../../src/utils/curriculum/practiceSentence.js')
+  const SRC1 = 'In 1958, he returned to Korea at the invitation of the Korean government and never left again.'
+  const SRC2 = 'He believed that every country has the right to be independent, so he helped the Korean independence movement.'
+  const SRC4 = 'On March 1, 1919, Dr. Schofield heard people shouting for Korean independence in Tapgol Park.'
+  const SRCY = 'Korea finally achieved independence in 1945.'
+
+  // HIGH — 3~8단어 + collocation 완결(전치사+관사 관용구 / of·for 보어)
+  check('[등급 HIGH] "at the invitation of the Korean government" — 관용 시작 + of 보어 완결',
+    chunkQualityGrade('invitation', 'at the invitation of the Korean government', SRC1) === 'HIGH')
+  check('[등급 HIGH] "the Korean independence movement" — 4단어 명사구, 감점 요소 0',
+    chunkQualityGrade('independence', 'the Korean independence movement', SRC2) === 'HIGH')
+  // 구현 기준상 HIGH — 내용어(shouting) 시작이라 bare-prep 감점 없음 + 중간
+  // for 보어가 내용어로 완결돼 가점(+2단어수 +1보어 = 3점 ≥ 2).
+  check('[등급 HIGH] "shouting for Korean independence" — 내용어 시작 + for 보어 완결(구현 기준상 HIGH)',
+    chunkQualityGrade('independence', 'shouting for Korean independence', SRC4) === 'HIGH')
+
+  // MEDIUM — bare 전치사 시작(감점)이지만 나머지는 정상
+  check('[등급 MEDIUM] "for Korean independence" — bare-prep 시작 감점(자동 승인 부적합, HIGH 아님)',
+    chunkQualityGrade('independence', 'for Korean independence', SRC4) === 'MEDIUM')
+
+  // LOW — 고유명사 연쇄(장소/인명)·연도·월·절 경계 불량·전제 위반
+  check('[등급 LOW] "for Korean independence in Tapgol Park" — 장소 고유명사 연쇄(Tapgol Park) 감점',
+    chunkQualityGrade('independence', 'for Korean independence in Tapgol Park', SRC4) === 'LOW')
+  check('[등급 LOW] "Dr. Schofield heard people shouting" — 인명 연쇄(Dr. Schofield) 감점',
+    chunkQualityGrade('people', 'Dr. Schofield heard people shouting', SRC4) === 'LOW')
+  check('[등급 LOW] "achieved independence in 1945" — 연도 포함 감점',
+    chunkQualityGrade('independence', 'achieved independence in 1945', SRCY) === 'LOW')
+  check('[등급 LOW] "the meeting in March" — 월 이름 포함 감점',
+    chunkQualityGrade('meeting', 'the meeting in March', 'They planned the meeting in March carefully.') === 'LOW')
+  check('[등급 LOW] "at the invitation of" — 끝이 전치사(절 경계 불량) 감점',
+    chunkQualityGrade('invitation', 'at the invitation of', SRC1) === 'LOW')
+  check('[등급 LOW] 3단어 미만("the invitation") — 단어 수 미달',
+    chunkQualityGrade('invitation', 'the invitation', SRC1) === 'LOW')
+
+  // 전제 위반은 무조건 LOW — validatePracticeSentence와 같은 판정(단일 원본)
+  check('[등급 LOW 전제] 본문에 없는 새 문장 — substring 위반',
+    chunkQualityGrade('invitation', 'He came by invitation.', SRC1) === 'LOW')
+  check('[등급 LOW 전제] target 미포함 chunk',
+    chunkQualityGrade('invitation', 'the Korean government', SRC1) === 'LOW')
+
+  // 등급-랭킹 일관성 — HIGH chunk는 practiceQualityScore도 최고점(3)이라
+  // representativeExample.js의 기존 대표 선정 랭킹과 모순되지 않는다.
+  check('[일관성] HIGH chunk의 practiceQualityScore === 3(대표 랭킹 무모순)',
+    practiceQualityScore('invitation', 'at the invitation of the Korean government') === 3)
+}
+
 console.log('\n-- learningItem.fromExample: 학생 화면 우선순위(practice > source)')
 {
   const { fromExample } = await import('../../src/learning/adapters/learningItem.js')
