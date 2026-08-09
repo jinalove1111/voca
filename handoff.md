@@ -7,6 +7,14 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-10 (88차) — 2일 스프린트 1일차: Writing Coach MVP + 핵심 표현 품질 등급 + 운영 기준서 (프로덕션 DB 무변경)
+
+병렬 에이전트 분담(파일 교집합 0)으로 진행. 산출:
+- **Writing Coach MVP(6006900/9cad1dd)**: 로컬 규칙 기반 Sentence Writing — errorTaxonomy 14유형/ruleChecks(오탐 최소 사전: 시제·관사(school 등 무관사 예외)·3인칭·대문자·문장부호, suggestCorrection은 all-or-null)/writingSession(compact state = 향후 AI 페이로드 동일 구조, 자가 수정 인정 selfCorrectedCount, 3회 후 정답 공개 게이트). WritingCoach.jsx(모바일 우선, DB 0) + Dashboard 진입(writingCoachEnabled 기본 OFF — 프로덕션 불활성). 테스트 74단언(운영자 시나리오 "I go to park yesterday." 축어 재현) + writingCoach 도메인 등록. **서버 AI 검사는 Vercel 함수 12개 한도 도달로 BLOCKED** — docs/WRITING_COACH.md에 3옵션(Supabase Edge Function/함수 통합/Pro) 및 provider abstraction·비용 구조 설계. writing_submissions/attempts additive SQL 설계만(실행 금지).
+- **핵심 표현 품질 등급(957c45d)**: chunkQualityGrade HIGH/MEDIUM/LOW(단어 수/collocation 완결/bare-prep·접속사 시작 감점/절 경계·고유명사 연쇄·연도 감점) — LOW 자동 승인 금지 배지+요약 칩, 실데이터 5건 등급 고정(장소 연쇄 LOW 포함), examples 138단언.
+- **운영 기준서 2종**: docs/CURRICULUM_EXAMPLES.md(본문 예문 파이프라인 전체), docs/DATA_INTEGRITY.md(불변식/검증 도구/대기 SQL).
+- 무결성 10/10·보안 재스캔 클린(.env 미추적/번들 시크릿 0/클라 PIN 접근 0/PII SQL gitignore). Unit 6 40단어 실전 검증은 **본문 전문 필요(BLOCKED — 저장 안 됨, 운영자가 본문 재붙여넣기 시 자동 커버)**.
+
 ## 2026-08-09 (87차) — 승인 교체 실행: 5행 practice_sentence → 본문 핵심 chunk (표적 UPDATE, 그 외 무접촉)
 
 운영자 승인("교체 실행")에 따라 examples 5행의 practice_sentence만 교체: at the invitation of the Korean government / for the independence of Korea / the Korean independence movement / shouting for Korean independence / fight for Korean independence. 실행 가드: 승인안=라이브 재계산 5/5 일치 시에만 진행, 사전 백업(스크래치패드 JSON+기존값 로그). 사후 검증: UPDATED 5행 정확(INSERT/DELETE 0), exact_substring 5/5, 타 컬럼(원문/해석/target/FK/메타) 바이트 불변 PASS, 타 테이블 무접촉(students 1157/words 971/units 29/progress 190 — SCA 443→445·word_status 증가분은 학생 자연 활동, 본 작업과 무관). examples 125/125·learning-engine 21/21·build PASS·배포 최신(index-CNvnj1di). 학생 노출은 기기 로컬 curriculumExamplesStudentUI 토글로 확인 가능(기본 OFF 유지).
