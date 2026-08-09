@@ -1,0 +1,41 @@
+{
+  "snapshotAt": "2026-08-10",
+  "accounts": [
+    {
+      "name": "Cookie",
+      "id": "a63923a1-473d-4ba1-bca6-6b8685848cd3",
+      "progress": {
+        "total_stars": 28,
+        "total_xp": 28,
+        "cleared_count": 0,
+        "streak": 0
+      },
+      "xpLedgerRows": 2,
+      "wordStatusRows": 15
+    },
+    {
+      "name": "Paul",
+      "id": "335a9560-d1f1-4628-bd8d-26bcaa8eaee7",
+      "progress": {
+        "total_stars": 223,
+        "total_xp": 223,
+        "cleared_count": 0,
+        "streak": 0
+      },
+      "xpLedgerRows": 6,
+      "wordStatusRows": 17
+    },
+    {
+      "name": "Jinaa",
+      "id": "738443f3-2676-4b89-9f17-cc7f22aa993c",
+      "progress": {
+        "total_stars": 71,
+        "total_xp": 71,
+        "cleared_count": 0,
+        "streak": 0
+      },
+      "xpLedgerRows": 5,
+      "wordStatusRows": 54
+    }
+  ]
+}

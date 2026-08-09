@@ -1,0 +1,21 @@
+-- v2_5_pilot 02_enable_test_class_DRAFT.sql
+-- ★ 실행 금지 — v2_5 실행·01 postcheck 통과 후, 운영자 승인 시에만 (2026-08-10)
+--
+-- P0-3: 게임화를 **테스트 반 1개에만** 점등한다. 대상은 테스트 계정
+-- (Cookie/Paul/Jinaa)이 소속된 MS Advanced Class가 아니라 — 그 반에는
+-- 실학생 13명이 함께 있으므로 — 실학생 0명인 QA 반을 쓴다.
+-- 후보(2026-08-09 감사 실측): QA_SelfSetupTest2(실학생 0, QA 89) 등.
+-- 단, 테스트 계정 3종은 MS Advanced 소속이라 QA 반 점등으로는 그들
+-- 화면이 안 바뀐다 — 실제 확인은 다음 중 택1(운영자 결정):
+--   (A) QA 반에 테스트 학생을 create_student로 1명 새로 만들어 확인
+--       (관리자 화면 학생 추가 — 서버 경로, 기존 데이터 무접촉)
+--   (B) MS Advanced를 잠깐 점등(실학생 13명에게도 보임 — 수업 외 시간에
+--       짧게, 확인 후 즉시 off) — 위험도 운영자 판단.
+-- 아래 초안은 (A) 기준 QA 반 1개만 켠다.
+
+-- 가드: 대상 반이 실존+현재 false일 때만 1행 UPDATE.
+-- update classes set gamification_enabled = true
+--  where name = 'QA_SelfSetupTest2' and gamification_enabled = false;
+
+-- 롤백(즉시 가능):
+-- update classes set gamification_enabled = false where name = 'QA_SelfSetupTest2';
