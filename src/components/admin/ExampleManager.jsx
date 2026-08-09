@@ -6,6 +6,7 @@ import {
   listExamples, createExample, updateExample, deleteExample, setApprovalStatus,
 } from '../../utils/curriculum/exampleLibrary'
 import { canTransition, matchesFilters, APPROVAL_STATUSES, validateExampleFields } from '../../utils/curriculum/curriculumModel'
+import { validatePracticeSentence } from '../../utils/curriculum/practiceSentence'
 import { generateCandidateExamples } from '../../utils/curriculum/generatorContract'
 import TextImportPanel from './TextImportPanel'
 import { groupExamplesByTargetWord } from '../../utils/curriculum/representativeExample'
@@ -193,6 +194,12 @@ export default function ExampleManager({ adminPin }) {
     // 재구현 없이 재사용(curriculumModel.js 단일 원본).
     const { ok, errors } = validateExampleFields(fields)
     if (!ok) { alert(errors.join('\n')); return }
+    // 본문 핵심 표현 정책(2026-08-09) — 값이 있으면 target 포함 + 원문
+    // substring이어야 저장(새 문장/의역 금지를 수정 폼에서도 강제).
+    if (fields.practice_sentence) {
+      const pv = validatePracticeSentence(form.targetWord, fields.practice_sentence, form.englishSentence)
+      if (!pv.ok) { alert('본문 핵심 표현 검증 실패 — ' + pv.warnings[0]); return }
+    }
 
     setBusy(true)
     try {
@@ -353,7 +360,7 @@ export default function ExampleManager({ adminPin }) {
                 </p>
                 <p className="text-sm font-bold text-gray-800 break-words">{row.englishSentence}</p>
                 {row.practiceSentence && (
-                  <p className="text-xs font-bold text-indigo-600 break-words">✏️ 연습: {row.practiceSentence}</p>
+                  <p className="text-xs font-bold text-indigo-600 break-words">✂️ 핵심 표현: {row.practiceSentence}</p>
                 )}
                 {row.koreanTranslation && <p className="text-xs text-gray-500">{row.koreanTranslation}</p>}
                 {/* 출처/교재/유닛 메타 라인(2026-08-09) — 본문 원문과 AI 생성
@@ -397,9 +404,9 @@ export default function ExampleManager({ adminPin }) {
                 <p className="text-[10px] font-bold text-gray-500">본문 발견 {g.count}개</p>
               </div>
               {g.representative?.practiceSentence ? (
-                <p className="px-1 text-[11px] font-bold text-indigo-700">⭐ 대표 연습 예문: {g.representative.practiceSentence}</p>
+                <p className="px-1 text-[11px] font-bold text-indigo-700">⭐ 본문 핵심 표현: {g.representative.practiceSentence}</p>
               ) : (
-                <p className="px-1 text-[11px] font-bold text-gray-400">대표 연습 예문 없음 — 학생에게 원문 노출(아래 카드 &quot;수정&quot;에서 ✏️ 연습 예문 입력 가능)</p>
+                <p className="px-1 text-[11px] font-bold text-gray-400">본문 핵심 표현 없음 — 학생에게 원문 노출(아래 카드 &quot;수정&quot;에서 ✂️ 핵심 표현 입력 가능)</p>
               )}
               {g.representative && renderRow(g.representative)}
               {others.length > 0 && (
@@ -426,7 +433,7 @@ export default function ExampleManager({ adminPin }) {
           <input value={form.koreanTranslation} onChange={(e) => setForm((f) => ({ ...f, koreanTranslation: e.target.value }))}
             placeholder="한국어 번역(선택)" aria-label="한국어 번역" className="w-full text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5" />
           <input value={form.practiceSentence} onChange={(e) => setForm((f) => ({ ...f, practiceSentence: e.target.value }))}
-            placeholder="✏️ 학생 연습용 짧은 예문(선택 — 비우면 원문 사용, 6~10단어 권장)" aria-label="연습 예문" className="w-full text-xs font-bold border border-indigo-200 rounded-lg px-2 py-1.5" />
+            placeholder="✂️ 본문 핵심 표현(본문에서 그대로 추출 — 비우면 원문 사용, 4~10단어)" aria-label="본문 핵심 표현" className="w-full text-xs font-bold border border-indigo-200 rounded-lg px-2 py-1.5" />
           <select value={form.textbookId} onChange={(e) => setForm((f) => ({ ...f, textbookId: e.target.value }))}
             aria-label="교재 정렬"
             className="w-full text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5 bg-white">

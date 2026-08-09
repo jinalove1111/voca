@@ -358,41 +358,50 @@ check('[D] 수동 입력이 공백뿐이면 자동값 채움', preferManualKo(' 
 check('[D] 둘 다 없으면 빈 문자열', preferManualKo('', null) === '')
 check('[D] 자동값 없고 수동만 있으면 수동 유지', preferManualKo('수동', null) === '수동')
 
-console.log('\n-- practiceSentence: 학생 연습용 짧은 예문(2026-08-09, source/practice 분리)')
+console.log('\n-- practiceSentence: 본문 핵심 표현 추출(2026-08-09 정책 전환 — 본문 substring만)')
 {
-  const { validatePracticeSentence, suggestPracticeSentence, extractPracticeClause, countWords } =
+  const { validatePracticeSentence, suggestPracticeSentence, extractKeyChunk } =
     await import('../../src/utils/curriculum/practiceSentence.js')
 
   const SRC1 = 'In 1958, he returned to Korea at the invitation of the Korean government and never left again.'
   const SRC2 = 'He believed that every country has the right to be independent, so he helped the Korean independence movement.'
 
-  // 자동 제안 — ①단어 자산 우선
+  // 운영자 스펙 케이스 2건 — 정확한 chunk와 substring 보장
+  const c1 = extractKeyChunk(SRC1, 'invitation')
+  check('[스펙] invitation → "at the invitation of the Korean government" (정확 일치 + substring)',
+    c1 === 'at the invitation of the Korean government' && SRC1.includes(c1))
+  const c2 = extractKeyChunk(SRC2, 'independence')
+  check('[스펙] independence → "the Korean independence movement" (정확 일치 + substring)',
+    c2 === 'the Korean independence movement' && SRC2.includes(c2))
+
+  // 새 문장 생성 전면 금지 — 제안은 chunk만, 자산 인자는 무시
   const s1 = suggestPracticeSentence({ targetWord: 'invitation', sourceSentence: SRC1, assetExample: 'I got an invitation to the party.' })
-  check('자산 예문이 유효하면 1순위 채택(word_asset)', s1?.origin === 'word_asset' && s1.sentence === 'I got an invitation to the party.')
-  // ②자산 없으면 원문 절 추출(원문 단어 부분집합만 — 새 단어 발명 없음)
-  const s2 = suggestPracticeSentence({ targetWord: 'invitation', sourceSentence: SRC1, assetExample: null })
-  check('자산 없으면 원문 절 추출(≤12단어 + 대상 단어 포함)',
-    s2?.origin === 'clause' && countWords(s2.sentence) <= 12
-    && /\binvitation\b/i.test(s2.sentence)
-    && s2.sentence.split(/\s+/).every((w) => SRC1.toLowerCase().includes(w.toLowerCase().replace(/[.!?]$/, ''))))
-  const s3 = extractPracticeClause(SRC2, 'independence')
-  check('independence 절 추출 — "so" 제거+대문자화+마침표("He helped the Korean independence movement.")',
-    s3 === 'He helped the Korean independence movement.')
-  // 실패 시 임의 생성 금지
-  check('자산도 절도 없으면 null(임의 생성 금지)',
-    suggestPracticeSentence({ targetWord: 'xyzzy', sourceSentence: 'Nothing here.', assetExample: null }) === null)
+  check('[금지] 단어 자산 문장은 절대 제안하지 않음(assetExample 무시, source_chunk만)',
+    s1?.origin === 'source_chunk' && s1.sentence === 'at the invitation of the Korean government')
+  check('[금지] 본문에 target 없으면 null(임의 생성 없음)',
+    suggestPracticeSentence({ targetWord: 'xyzzy', sourceSentence: 'Nothing here at all.' }) === null)
 
-  // 검증기
-  check('[검증] practice에 target_word 포함 필수', validatePracticeSentence('invitation', 'He came to Korea.').ok === false)
-  check('[검증] 12단어 초과 시 경고(저장은 가능)',
-    (() => { const v = validatePracticeSentence('cat', 'The cat sat on the mat with a very long tail and more words here.'); return v.ok === true && v.warnings.some((w) => w.includes('12단어')) })())
-  check('[검증] 6~10단어 정상 문장 → ok + 경고 없음',
-    (() => { const v = validatePracticeSentence('invitation', 'She came to the party by invitation.'); return v.ok === true && v.warnings.length === 0 })())
+  // 검증기 — substring 강제
+  check('[검증] target 미포함 → 저장 부적합', validatePracticeSentence('invitation', 'He came to Korea.', SRC1).ok === false)
+  check('[검증] 본문에 없는 새 문장(예: "He came to Korea by invitation.") → 저장 차단',
+    validatePracticeSentence('invitation', 'He came to Korea by invitation.', SRC1).ok === false)
+  check('[검증] 본문에서 그대로 잘라낸 chunk → ok', validatePracticeSentence('invitation', c1, SRC1).ok === true)
+  check('[검증] 10단어 초과 chunk → 경고(저장은 가능)',
+    (() => { const long = SRC1.slice(SRC1.indexOf('he returned'), SRC1.indexOf(' and never')); const v = validatePracticeSentence('invitation', long, SRC1); return v.ok === true && v.warnings.length > 0 })())
 
-  // source 원문 불변 — 제안 함수가 원문 문자열을 변형해 반환하지 않는지
+  // 짧은 문장(≤10단어)은 전체 문장 사용
+  const SHORT = 'People shouted for Korean independence loudly.'
+  check('[규칙9] 짧은 문장은 전체 사용', extractKeyChunk(SHORT, 'independence') === SHORT)
+
+  // 최소 4단어 확장 — "fight for Korean independence" 유형
+  const SRC5 = "Dr. Schofield's fight for Korean independence didn't stop even after the March 1st Movement."
+  const c5 = extractKeyChunk(SRC5, 'independence')
+  check('[최소4] 좌측 확장으로 4단어 이상 + substring', SRC5.includes(c5) && c5.split(/\s+/).length >= 4 && /independence/i.test(c5))
+
+  // 원문 불변
   const before = SRC1
-  suggestPracticeSentence({ targetWord: 'invitation', sourceSentence: SRC1, assetExample: null })
-  check('[원문 불변] 제안 후 source 문자열 무변화', SRC1 === before)
+  extractKeyChunk(SRC1, 'invitation')
+  check('[원문 불변] 추출 후 source 문자열 무변화', SRC1 === before)
 }
 
 console.log('\n-- learningItem.fromExample: 학생 화면 우선순위(practice > source)')
@@ -411,11 +420,11 @@ console.log('\n-- representativeExample: 대표 연습 예문 선정/그룹화(2
   const { practiceQualityScore } = await import('../../src/utils/curriculum/practiceSentence.js')
   const { pickRepresentativeExample, groupExamplesByTargetWord } = await import('../../src/utils/curriculum/representativeExample.js')
 
-  check('[품질] 없음 0 / 무효(target 미포함) 0 / >10단어 1 / ≤10단어 2 / 5~8단어 3',
+  check('[품질] 없음 0 / 무효(target 미포함) 0 / >12단어 1 / 11~12단어 2 / 4~10단어 3',
     practiceQualityScore('cat', '') === 0
     && practiceQualityScore('cat', 'A dog runs fast.') === 0
-    && practiceQualityScore('cat', 'The cat sat on the mat with a very long tail today.') === 1
-    && practiceQualityScore('cat', 'The cat sat on the mat quietly today ok.') === 2
+    && practiceQualityScore('cat', 'The cat sat on the mat with a very long tail today again ok.') === 1
+    && practiceQualityScore('cat', 'The cat sat on the mat with a long tail today.') === 2
     && practiceQualityScore('cat', 'The cat sat on the mat.') === 3)
 
   // 프로덕션 실데이터와 같은 형태의 픽스처 — independence 4행(전부 practice
