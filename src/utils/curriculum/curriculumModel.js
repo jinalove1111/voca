@@ -122,9 +122,19 @@ export function matchesFilters(row, filters) {
 // 동점이면 호출부의 created_at desc 순회가 최신 행을 유지한다.
 export const SOURCE_PRIORITY = { import: 2, teacher: 1, rule: 0, ai: 0 }
 
-export function computeExampleRank(rowUnitId, source, selectedUnitId) {
+// 2026-08-09 확장 — 3축 랭킹(대표 연습 예문 선정, 운영자 지시):
+//   ① 유닛 일치(지배적, ×1000)
+//   ② 연습 예문 품질(practiceQuality 0..3, ×100) — 같은 단어가 본문에서
+//      여러 번 발견돼도 학생에게는 "연습 예문이 있는(그리고 5~8단어인)"
+//      대표 1개만 노출되게 하는 축. 점수 계산은 순수 모듈
+//      practiceSentence.practiceQualityScore(이 파일은 import 0 유지 —
+//      숫자만 받는다).
+//   ③ source 우선순위(import 2 > teacher 1 > rule/ai 0, ×10)
+// 동점이면 호출부의 created_at desc 순회가 최신 행 유지(기존 동일).
+export function computeExampleRank(rowUnitId, source, selectedUnitId, practiceQuality = 0) {
   const unitTier = selectedUnitId && rowUnitId === selectedUnitId ? 2 : 1
-  return unitTier * 10 + (SOURCE_PRIORITY[source] || 0)
+  const pq = Math.max(0, Math.min(3, Number(practiceQuality) || 0))
+  return unitTier * 1000 + pq * 100 + (SOURCE_PRIORITY[source] || 0) * 10
 }
 
 // target_word 정규화 — 저장 시(createExample) 그리고 조회 매칭 시

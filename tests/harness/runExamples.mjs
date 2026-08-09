@@ -406,6 +406,58 @@ console.log('\n-- learningItem.fromExample: 학생 화면 우선순위(practice 
   check('[폴백] practice 없으면 원문 사용(기존 동작 동일)', noPractice.text === row.englishSentence && noPractice.hasPractice === false)
 }
 
+console.log('\n-- representativeExample: 대표 연습 예문 선정/그룹화(2026-08-09)')
+{
+  const { practiceQualityScore } = await import('../../src/utils/curriculum/practiceSentence.js')
+  const { pickRepresentativeExample, groupExamplesByTargetWord } = await import('../../src/utils/curriculum/representativeExample.js')
+
+  check('[품질] 없음 0 / 무효(target 미포함) 0 / >10단어 1 / ≤10단어 2 / 5~8단어 3',
+    practiceQualityScore('cat', '') === 0
+    && practiceQualityScore('cat', 'A dog runs fast.') === 0
+    && practiceQualityScore('cat', 'The cat sat on the mat with a very long tail today.') === 1
+    && practiceQualityScore('cat', 'The cat sat on the mat quietly today ok.') === 2
+    && practiceQualityScore('cat', 'The cat sat on the mat.') === 3)
+
+  // 프로덕션 실데이터와 같은 형태의 픽스처 — independence 4행(전부 practice
+  // 보유, 단어 수 5/4/4/6) + 연습 없음 1행.
+  const U = 'unit-6'
+  const mk = (id, practice, createdAt) => ({
+    id, targetWord: 'independence', unitId: U, source: 'import', createdAt,
+    englishSentence: `Source sentence for ${id} with independence.`,
+    practiceSentence: practice,
+  })
+  const rows = [
+    mk('e1', 'They gathered for Korean independence.', '2026-08-09T01:00:00Z'),      // 5단어 → 3점
+    mk('e2', 'Korea fought for independence.', '2026-08-09T02:00:00Z'),               // 4단어 → 2점
+    mk('e3', 'People shouted for independence.', '2026-08-09T03:00:00Z'),             // 4단어 → 2점
+    mk('e4', 'He never stopped fighting for independence.', '2026-08-09T04:00:00Z'),  // 6단어 → 3점
+    mk('e5', null, '2026-08-09T05:00:00Z'),                                           // 연습 없음 → 0점
+  ]
+  const rep = pickRepresentativeExample(rows, { unitId: U })
+  check('[대표 1개] 5~8단어 후보 중 최신(e4) 선택 — 연습 없는 최신 행(e5)이 아님', rep?.id === 'e4')
+  check('[보존] 대표 선정은 파생 선택일 뿐 — 입력 5행 무변경', rows.length === 5 && rows.every((r) => r.englishSentence.startsWith('Source')))
+
+  const groups = groupExamplesByTargetWord([...rows, { id: 'x1', targetWord: 'invitation', unitId: U, source: 'import', createdAt: '2026-08-09T00:30:00Z', englishSentence: 'At the invitation of the government.', practiceSentence: 'He came to Korea by invitation.' }], { unitId: U })
+  check('[그룹] 단어별 그룹 2개(등장 순서 유지) + count 정확',
+    groups.length === 2 && groups[0].targetWord === 'independence' && groups[0].count === 5 && groups[1].count === 1)
+  check('[그룹] 각 그룹 대표 = pick 결과와 동일(관리자 화면과 학생이 같은 대표)',
+    groups[0].representative.id === 'e4' && groups[1].representative.id === 'x1')
+
+  // 학생 소비 경로와 동일 랭킹인지 — computeExampleRank 합성 확인
+  check('[학생 동일성] 연습 품질이 소스 우선순위보다 상위(teacher+practice > import 무practice)',
+    (() => {
+      const t = { id: 't', targetWord: 'cat', unitId: U, source: 'teacher', createdAt: '2026-08-09T01:00:00Z', englishSentence: 'The cat is here.', practiceSentence: 'The cat sat on the mat.' }
+      const i = { id: 'i', targetWord: 'cat', unitId: U, source: 'import', createdAt: '2026-08-09T02:00:00Z', englishSentence: 'A long source with cat.', practiceSentence: null }
+      return pickRepresentativeExample([t, i], { unitId: U })?.id === 't'
+    })())
+  check('[유닛 지배 유지] 다른 유닛의 고품질 연습보다 이 유닛 행 우선',
+    (() => {
+      const other = { id: 'o', targetWord: 'cat', unitId: 'other', source: 'import', createdAt: '2026-08-09T02:00:00Z', englishSentence: 'cat src', practiceSentence: 'The cat sat on the mat.' }
+      const mine = { id: 'm', targetWord: 'cat', unitId: U, source: 'ai', createdAt: '2026-08-09T01:00:00Z', englishSentence: 'my cat src', practiceSentence: null }
+      return pickRepresentativeExample([other, mine], { unitId: U })?.id === 'm'
+    })())
+}
+
 console.log('\n-- textImport: duplicateKey(중복 판정)')
 check('공백/대소문자 정규화로 동일 판정',
   duplicateKey('Block Out', 'The  curtains block out the sunlight.') === duplicateKey('block out', 'the curtains block out the sunlight.'))

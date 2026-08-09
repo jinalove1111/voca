@@ -81,6 +81,23 @@ export function extractPracticeClause(sourceSentence, targetWord) {
   return viable[0]
 }
 
+// practiceQualityScore(targetWord, practiceSentence) → 0..3
+// 대표 연습 예문 선정용 품질 점수(2026-08-09 운영자 지시 — 같은 단어의 여러
+// 예문 중 학생에게 보여줄 1개를 고르는 기준의 수치화):
+//   0 = 연습 예문 없음/무효(target 미포함 등) — 대표 후보 아님
+//   1 = 유효하지만 김(>10단어)
+//   2 = 유효 + 10단어 이하
+//   3 = 유효 + 5~8단어(최우선 구간)
+export function practiceQualityScore(targetWord, practiceSentence) {
+  const s = String(practiceSentence || '').trim()
+  if (!s) return 0
+  const v = validatePracticeSentence(targetWord, s)
+  if (!v.ok) return 0
+  if (v.wordCount >= 5 && v.wordCount <= 8) return 3
+  if (v.wordCount <= 10) return 2
+  return 1
+}
+
 // suggestPracticeSentence({ targetWord, sourceSentence, assetExample })
 // → { sentence, origin: 'word_asset' | 'clause' } | null
 export function suggestPracticeSentence({ targetWord, sourceSentence, assetExample } = {}) {

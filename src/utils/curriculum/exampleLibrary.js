@@ -21,6 +21,7 @@
 import { supabase } from '../supabaseClient'
 import { isMissingTableError } from '../wordLibrary'
 import { canTransition, validateExampleFields, normalizeTargetWord, computeExampleRank } from './curriculumModel'
+import { practiceQualityScore } from './practiceSentence'
 
 const EXAMPLES_SELECT =
   'id,unit_id,textbook_id,word_id,target_word,english_sentence,korean_translation,' +
@@ -182,7 +183,13 @@ export async function fetchApprovedExamplesForWords(wordTexts, { unitId } = {}) 
     ;(data || []).forEach((r) => {
       const key = normalizeTargetWord(r.target_word)
       if (!key) return
-      const rank = computeExampleRank(r.unit_id, r.source, unitId)
+      // 대표 연습 예문 축(2026-08-09) — 같은 단어 여러 예문 중 "연습 예문이
+      // 있는(5~8단어 우선)" 행이 학생 대표로 뽑힌다. TTS/듣기/쓰기/예문
+      // 문제 전부 이 대표 1개를 소비(fromExample이 practice 우선).
+      const rank = computeExampleRank(
+        r.unit_id, r.source, unitId,
+        practiceQualityScore(r.target_word, r.practice_sentence),
+      )
       const existing = bestByWord.get(key)
       if (!existing || rank > existing.rank) {
         bestByWord.set(key, { row: r, rank })
