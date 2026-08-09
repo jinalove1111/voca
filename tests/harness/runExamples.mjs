@@ -358,6 +358,54 @@ check('[D] 수동 입력이 공백뿐이면 자동값 채움', preferManualKo(' 
 check('[D] 둘 다 없으면 빈 문자열', preferManualKo('', null) === '')
 check('[D] 자동값 없고 수동만 있으면 수동 유지', preferManualKo('수동', null) === '수동')
 
+console.log('\n-- practiceSentence: 학생 연습용 짧은 예문(2026-08-09, source/practice 분리)')
+{
+  const { validatePracticeSentence, suggestPracticeSentence, extractPracticeClause, countWords } =
+    await import('../../src/utils/curriculum/practiceSentence.js')
+
+  const SRC1 = 'In 1958, he returned to Korea at the invitation of the Korean government and never left again.'
+  const SRC2 = 'He believed that every country has the right to be independent, so he helped the Korean independence movement.'
+
+  // 자동 제안 — ①단어 자산 우선
+  const s1 = suggestPracticeSentence({ targetWord: 'invitation', sourceSentence: SRC1, assetExample: 'I got an invitation to the party.' })
+  check('자산 예문이 유효하면 1순위 채택(word_asset)', s1?.origin === 'word_asset' && s1.sentence === 'I got an invitation to the party.')
+  // ②자산 없으면 원문 절 추출(원문 단어 부분집합만 — 새 단어 발명 없음)
+  const s2 = suggestPracticeSentence({ targetWord: 'invitation', sourceSentence: SRC1, assetExample: null })
+  check('자산 없으면 원문 절 추출(≤12단어 + 대상 단어 포함)',
+    s2?.origin === 'clause' && countWords(s2.sentence) <= 12
+    && /\binvitation\b/i.test(s2.sentence)
+    && s2.sentence.split(/\s+/).every((w) => SRC1.toLowerCase().includes(w.toLowerCase().replace(/[.!?]$/, ''))))
+  const s3 = extractPracticeClause(SRC2, 'independence')
+  check('independence 절 추출 — "so" 제거+대문자화+마침표("He helped the Korean independence movement.")',
+    s3 === 'He helped the Korean independence movement.')
+  // 실패 시 임의 생성 금지
+  check('자산도 절도 없으면 null(임의 생성 금지)',
+    suggestPracticeSentence({ targetWord: 'xyzzy', sourceSentence: 'Nothing here.', assetExample: null }) === null)
+
+  // 검증기
+  check('[검증] practice에 target_word 포함 필수', validatePracticeSentence('invitation', 'He came to Korea.').ok === false)
+  check('[검증] 12단어 초과 시 경고(저장은 가능)',
+    (() => { const v = validatePracticeSentence('cat', 'The cat sat on the mat with a very long tail and more words here.'); return v.ok === true && v.warnings.some((w) => w.includes('12단어')) })())
+  check('[검증] 6~10단어 정상 문장 → ok + 경고 없음',
+    (() => { const v = validatePracticeSentence('invitation', 'She came to the party by invitation.'); return v.ok === true && v.warnings.length === 0 })())
+
+  // source 원문 불변 — 제안 함수가 원문 문자열을 변형해 반환하지 않는지
+  const before = SRC1
+  suggestPracticeSentence({ targetWord: 'invitation', sourceSentence: SRC1, assetExample: null })
+  check('[원문 불변] 제안 후 source 문자열 무변화', SRC1 === before)
+}
+
+console.log('\n-- learningItem.fromExample: 학생 화면 우선순위(practice > source)')
+{
+  const { fromExample } = await import('../../src/learning/adapters/learningItem.js')
+  const row = { id: 'e1', targetWord: 'invitation', englishSentence: 'In 1958, he returned to Korea at the invitation of the Korean government and never left again.', koreanTranslation: '해석', practiceSentence: 'She came to the party by invitation.' }
+  const item = fromExample(row)
+  check('[학생 기본] practiceSentence 우선(text/audioText)', item.text === row.practiceSentence && item.audioText === row.practiceSentence)
+  check('[본문 보기] sourceText에 원문 그대로 보존', item.sourceText === row.englishSentence && item.hasPractice === true)
+  const noPractice = fromExample({ ...row, practiceSentence: null })
+  check('[폴백] practice 없으면 원문 사용(기존 동작 동일)', noPractice.text === row.englishSentence && noPractice.hasPractice === false)
+}
+
 console.log('\n-- textImport: duplicateKey(중복 판정)')
 check('공백/대소문자 정규화로 동일 판정',
   duplicateKey('Block Out', 'The  curtains block out the sunlight.') === duplicateKey('block out', 'the curtains block out the sunlight.'))

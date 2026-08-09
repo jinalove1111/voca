@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { listUnitsMeta, listUnitWords } from '../../utils/curriculum/curriculumApi'
 import { listExamples, createExample, setApprovalStatus } from '../../utils/curriculum/exampleLibrary'
 import { parseBilingualPassage, matchWordsToSentences, duplicateKey, preferManualKo } from '../../utils/curriculum/textImport'
+import { suggestPracticeSentence, validatePracticeSentence } from '../../utils/curriculum/practiceSentence'
 import { generateCandidateExamples } from '../../utils/curriculum/generatorContract'
 
 // TextImportPanel.jsx — 관리자 > 커리큘럼 > 예문 "본문 가져오기"(2026-08-09).
@@ -115,9 +116,18 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
           // 한국어 해석 프리필: 자동 매칭된 번역. 단, 재분석 전에 관리자가
           // 이미 손으로 입력해 둔 값이 있으면 그 값을 우선 보존한다
           // (운영자 지시 10 — 수동 입력을 자동 분석이 덮어쓰지 않음).
+          // 학생 연습용 짧은 예문 자동 제안(2026-08-09) — ①단어 자산
+          // ②원문 절 추출, 실패 시 빈칸(임의 생성 없음). 원문(m.sentence)은
+          // source로 그대로 저장되고 이 값은 별도 practice 필드다.
+          // 재분석 시 수동 수정값 우선 보존(ko와 동일 규칙).
+          const asset = unitAssets.find((a) => a.word === r.word)
+          const suggestion = m.matchType === 'exact'
+            ? suggestPracticeSentence({ targetWord: r.word, sourceSentence: m.sentence, assetExample: asset?.exampleText })
+            : null
           nextDrafts[key] = {
             selected: m.matchType === 'exact' && !dup,
             ko: preferManualKo(drafts[key]?.ko, koBySentence[m.sentenceIndex]),
+            practice: preferManualKo(drafts[key]?.practice, suggestion?.sentence || ''),
             grammarPointId: drafts[key]?.grammarPointId || '',
           }
         })
@@ -149,7 +159,7 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
         if (!d?.selected) return
         if (m.matchType !== 'exact') return // '검토 필요'는 저장 대상이 아님(아래 안내 문구)
         if (analysis.existingKeys.has(duplicateKey(r.word, m.sentence))) return // 이미 등록된 예문
-        jobs.push({ word: r.word, wordId: r.wordId, sentence: m.sentence, sentenceIndex: m.sentenceIndex, ko: d.ko, grammarPointId: d.grammarPointId })
+        jobs.push({ word: r.word, wordId: r.wordId, sentence: m.sentence, sentenceIndex: m.sentenceIndex, ko: d.ko, practice: (d.practice || '').trim(), grammarPointId: d.grammarPointId })
       })
     })
     if (jobs.length === 0) { alert('저장할 후보가 없어요 — 체크된 예문이 있는지 확인해주세요.'); return }
@@ -161,9 +171,17 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
     try {
       for (const job of jobs) {
         try {
+          // 연습 예문이 있으면 저장 전 최종 검증 — 대상 단어 미포함이면 그
+          // 예문 저장을 막고 이유를 보고(원문 예문만 조용히 저장하지 않음
+          // — 관리자가 고치도록 정직하게 실패 처리).
+          if (job.practice) {
+            const pv = validatePracticeSentence(job.word, job.practice)
+            if (!pv.ok) throw new Error(`연습 예문 검증 실패 — ${pv.warnings[0]}`)
+          }
           const created = await createExample({
             target_word: job.word,
             english_sentence: job.sentence,
+            practice_sentence: job.practice || null,
             korean_translation: job.ko || null,
             unit_id: unitId,
             textbook_id: textbookId,
@@ -376,6 +394,23 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
                       && !analysis.koBySentence[m.sentenceIndex] && !(d.ko || '').trim() && (
                       <p className="pl-6 text-[10px] font-bold text-orange-500">⚠ 한국어 해석 미매칭 — 아래 칸에 직접 입력할 수 있어요.</p>
                     )}
+                    {/* 학생 연습용 짧은 예문(2026-08-09) — 자동 제안(단어 자산/
+                        원문 절 추출) 프리필, 관리자 수정 가능. 원문은 위에
+                        그대로(무수정) — 이 칸은 별도 practice 필드로 저장. */}
+                    {!isDup && m.matchType === 'exact' && (() => {
+                      const v = (d.practice || '').trim()
+                      const pv = v ? validatePracticeSentence(r.word, v) : null
+                      return (
+                        <div className="pl-6 space-y-0.5">
+                          <input value={d.practice || ''} onChange={(e) => updateDraft(key, { practice: e.target.value })}
+                            placeholder="✏️ 학생 연습용 짧은 예문(6~10단어 권장 — 비우면 원문 사용)"
+                            aria-label={`${r.word} 연습 예문`}
+                            className="w-full text-[11px] font-medium border border-indigo-200 rounded-lg px-2 py-1" />
+                          {pv && !pv.ok && <p className="text-[10px] font-bold text-red-500">{pv.warnings[0]}</p>}
+                          {pv && pv.ok && pv.warnings.map((w) => <p key={w} className="text-[10px] font-bold text-amber-600">{w}</p>)}
+                        </div>
+                      )
+                    })()}
                     {!isDup && m.matchType === 'exact' && (
                       <div className="grid grid-cols-2 gap-1.5 pl-6">
                         <input value={d.ko || ''} onChange={(e) => updateDraft(key, { ko: e.target.value })}

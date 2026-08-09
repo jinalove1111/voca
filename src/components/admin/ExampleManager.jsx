@@ -29,7 +29,7 @@ function transitionLabel(from, to) {
 
 const EMPTY_FORM = {
   id: null,
-  targetWord: '', englishSentence: '', koreanTranslation: '',
+  targetWord: '', englishSentence: '', koreanTranslation: '', practiceSentence: '',
   textbookId: '', unitId: '', grammarPointId: '', difficulty: 1,
   approveImmediately: false,
 }
@@ -163,6 +163,7 @@ export default function ExampleManager({ adminPin }) {
     setForm({
       id: row.id,
       targetWord: row.targetWord, englishSentence: row.englishSentence, koreanTranslation: row.koreanTranslation || '',
+      practiceSentence: row.practiceSentence || '',
       textbookId: row.textbookId || '', unitId: row.unitId || '', grammarPointId: row.grammarPointId || '',
       difficulty: row.difficulty ?? 1, approveImmediately: row.approvalStatus === 'approved',
     })
@@ -174,6 +175,7 @@ export default function ExampleManager({ adminPin }) {
       target_word: form.targetWord,
       english_sentence: form.englishSentence,
       korean_translation: form.koreanTranslation || null,
+      practice_sentence: form.practiceSentence || null,
       textbook_id: form.textbookId || null,
       unit_id: form.unitId || null,
       grammar_point_id: form.grammarPointId || null,
@@ -341,6 +343,9 @@ export default function ExampleManager({ adminPin }) {
                   {SOURCE_BADGE[row.source] || '❓'} {row.targetWord}
                 </p>
                 <p className="text-sm font-bold text-gray-800 break-words">{row.englishSentence}</p>
+                {row.practiceSentence && (
+                  <p className="text-xs font-bold text-indigo-600 break-words">✏️ 연습: {row.practiceSentence}</p>
+                )}
                 {row.koreanTranslation && <p className="text-xs text-gray-500">{row.koreanTranslation}</p>}
                 {/* 출처/교재/유닛 메타 라인(2026-08-09) — 본문 원문과 AI 생성
                     구별 + 어느 교재·유닛 예문인지 목록에서 바로 확인.
@@ -388,6 +393,8 @@ export default function ExampleManager({ adminPin }) {
             placeholder="영어 문장(대상 단어를 온전한 단어로 포함)" aria-label="영어 문장" className="w-full text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5" />
           <input value={form.koreanTranslation} onChange={(e) => setForm((f) => ({ ...f, koreanTranslation: e.target.value }))}
             placeholder="한국어 번역(선택)" aria-label="한국어 번역" className="w-full text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5" />
+          <input value={form.practiceSentence} onChange={(e) => setForm((f) => ({ ...f, practiceSentence: e.target.value }))}
+            placeholder="✏️ 학생 연습용 짧은 예문(선택 — 비우면 원문 사용, 6~10단어 권장)" aria-label="연습 예문" className="w-full text-xs font-bold border border-indigo-200 rounded-lg px-2 py-1.5" />
           <select value={form.textbookId} onChange={(e) => setForm((f) => ({ ...f, textbookId: e.target.value }))}
             aria-label="교재 정렬"
             className="w-full text-xs font-bold border border-gray-200 rounded-lg px-2 py-1.5 bg-white">

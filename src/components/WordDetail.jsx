@@ -658,6 +658,16 @@ function CurriculumExampleStep({ example, onDone }) {
         <HeroReaction image={getReactionById('reading')?.image} size="sm" />
         <p className="font-black text-gray-500 text-sm">📚 교과서 예문 학습 ({planIdx + 1}/{CURRICULUM_EXAMPLE_PLAN.length})</p>
       </div>
+      {/* 짧은 연습 예문으로 학습 중일 때만 "본문 보기"(심화) 토글 노출
+          (2026-08-09) — 기본 학습은 practice, 원문은 펼쳐야 보인다.
+          원문/해석은 표시만 — 어떤 수정도 없음. */}
+      {item.hasPractice && item.sourceText && item.sourceText !== item.text && (
+        <details className="bg-indigo-50/60 rounded-xl px-3 py-2">
+          <summary className="text-[11px] font-bold text-indigo-600 cursor-pointer select-none">📖 본문 보기 (교과서 원문)</summary>
+          <p className="mt-1.5 text-sm font-bold text-gray-800 break-words">{item.sourceText}</p>
+          {item.translation && <p className="mt-0.5 text-xs text-gray-500">{item.translation}</p>}
+        </details>
+      )}
       <LearningEngine
         key={`${item.id}-${current.mode}`}
         mode={current.mode}

@@ -28,13 +28,21 @@
 // 이미 있고, 이 어댑터는 "이미 승인된 걸로 걸러진 행"을 정규화만 한다.
 export function fromExample(exampleRow) {
   const r = exampleRow || {}
+  // 학생 기본 학습은 짧은 연습 예문(practiceSentence, v3_32) 우선 —
+  // 없으면 본문 원문(englishSentence) 폴백(2026-08-09 운영자 지시).
+  // 원문은 sourceText로 항상 함께 실어 "본문 보기" UI가 표시할 수 있게
+  // 한다(원문 무수정 — 표시 분리일 뿐).
+  const practice = r.practiceSentence || null
+  const text = practice || r.englishSentence || ''
   return {
     id: r.id,
     contentType: 'example',
-    text: r.englishSentence || '',
+    text,
     translation: r.koreanTranslation || null,
     targetWord: r.targetWord || '',
-    audioText: r.englishSentence || '',
+    audioText: text,
+    sourceText: r.englishSentence || '',
+    hasPractice: !!practice,
     distractorPool: [],
   }
 }
