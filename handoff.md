@@ -7,6 +7,10 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (86차) — 정책 전환: "본문 핵심 표현"(새 문장 생성 전면 금지, 본문 chunk 추출만) — 커밋 참조 git log
+
+운영자 목적 재정의: 연습 문장을 새로 만드는 게 아니라 **학생이 외울 교과서 본문을 단어 단계에서 짧게 미리 보게** 하는 것. extractKeyChunk(오프셋 슬라이싱 — source.includes(chunk) 구조 보장, 좌 전치사구/우 명사·보어 체인, 4~10단어, 짧은 문장은 전문) + substring 강제 검증(패널·수정 폼) + 단어 자산 제안 제거 + UI "본문 핵심 표현" rename. 프로덕션 5행 실측: invitation→"at the invitation of the Korean government"(7) / independence→"for the independence of Korea"(5)·"the Korean independence movement"(4)·"for Korean independence in Tapgol Park"(6)·"fight for Korean independence"(4) — 전부 exact_substring=true. **주의: 기존 저장된 practice_sentence 5건(84차의 생성 문장)은 신정책 위반 — 교체는 운영자 승인 후 5행 표적 UPDATE 대기.** examples 123/123·admin·learning-engine PASS. DB 무변경.
+
 ## 2026-08-09 (85차) — 대표 연습 예문 1개 선정 + 관리자 단어별 그룹화 — 커밋 1d0b916 (DB 변경 0)
 
 같은 target_word가 본문에서 여러 번 발견돼도 학생(TTS/듣기/쓰기/예문 문제)은 대표 연습 예문 1개만 소비. practiceQualityScore(5~8단어=3/≤10=2/>10=1/무효=0) + computeExampleRank 3축(유닛×1000 ≫ 품질×100 ≫ 소스×10 — 기존 상대 순서 단언 전부 유지). representativeExample.js 순수 모듈(파생 선택만 — 행 변경/삭제 0, 본문 근거 문장 전부 보존). ExampleManager 단어별 그룹 카드(⭐ 대표 + 본문 발견 N개 + 근거 펼치기). 프로덕션 실측: invitation 대표 "He came to Korea by invitation." / independence(4건) 대표 "He never stopped fighting for independence."(6단어, 5~8 구간 최신). 테스트 +7 — examples 120/120·mock 6/6·learning-engine 21/21·build PASS·배포(index-QdvataP_). DB 변경 불필요(순수 파생 선택으로 충족 — 제안 사항 없음).
