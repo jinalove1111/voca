@@ -33,7 +33,7 @@ import {
 } from '../../src/utils/curriculum/curriculumModel.js'
 // textImport.js도 curriculumModel.js와 같은 import-0 순수 모듈 — 직접 로드.
 import {
-  splitIntoSentences, regularInflections, matchWordsToSentences, duplicateKey, parseBilingualPassage,
+  splitIntoSentences, regularInflections, matchWordsToSentences, duplicateKey, parseBilingualPassage, preferManualKo,
 } from '../../src/utils/curriculum/textImport.js'
 
 mkdirSync('scripts/.tmp', { recursive: true })
@@ -303,6 +303,60 @@ console.log('\n-- textImport: parseBilingualPassage(영어↔한국어 자동 �
   const { pairs } = parseBilingualPassage('He came home.\n그는 집에 왔다.\n\nShe left early.')
   check('번역 없는 문장은 ko=null, 빈 줄 무시', pairs.length === 2 && pairs[0].ko === '그는 집에 왔다.' && pairs[1].ko === null)
 }
+
+console.log('\n-- textImport: 실전형 통합(패널 데이터 흐름 재현 — 2026-08-09 운영자 재검증 지시)')
+{
+  // TextImportPanel.handleAnalyze와 동일한 흐름을 그대로 재현:
+  // parseBilingualPassage → sentences/koBySentence → matchWordsToSentences
+  // → 각 매칭 카드의 ko = koBySentence[sentenceIndex].
+  // 본문: 제목 + 대화문 + 빈 줄 + 같은 단어(independence) 4회(각자 번역).
+  const passage = [
+    'The Blue-Eyed Korean',
+    '',
+    'In 1958, he returned to Korea at the invitation of the Korean government and never left again.',
+    '1958년, 그는 한국 정부의 초청으로 한국에 돌아왔고 다시는 한국을 떠나지 않았다.',
+    '',
+    'He believed that every country has the right to be independent, so he helped the Korean independence movement.',
+    '그는 모든 나라가 독립할 권리를 가져야 한다고 믿었기에 한국의 독립운동을 도왔다.',
+    '',
+    'Man: Many people are going to gather tomorrow for the independence of Korea.',
+    '남자: 내일 한국의 독립을 위해 많은 사람들이 모일 예정입니다.',
+    '',
+    'The independence fighters never gave up.',
+    '독립운동가들은 결코 포기하지 않았다.',
+    '',
+    'Korea finally achieved independence in 1945.',
+    // (의도적으로 이 문장만 번역 없음 — 미매칭 안전 검증)
+  ].join('\n')
+  const { pairs, hasKorean } = parseBilingualPassage(passage)
+  const sentences = pairs.map((p) => p.en)
+  const koBySentence = pairs.map((p) => p.ko)
+  const res = matchWordsToSentences([{ word: 'invitation' }, { word: 'independence' }], sentences)
+  const by = Object.fromEntries(res.map((r) => [r.word, r]))
+
+  check('[A] invitation 1건 발견 + 자기 번역("1958년…") 자동 연결',
+    hasKorean && by['invitation'].matches.length === 1
+    && koBySentence[by['invitation'].matches[0].sentenceIndex] === '1958년, 그는 한국 정부의 초청으로 한국에 돌아왔고 다시는 한국을 떠나지 않았다.')
+
+  const indep = by['independence'].matches
+  check('[B] independence 4개 문장 발견', indep.length === 4)
+  const koOf = (i) => koBySentence[indep[i].sentenceIndex]
+  check('[B] 각 문장이 자기 바로 뒤 번역과 각각 연결(1↔독립운동/2↔남자:/3↔포기/4↔없음)',
+    koOf(0) === '그는 모든 나라가 독립할 권리를 가져야 한다고 믿었기에 한국의 독립운동을 도왔다.'
+    && koOf(1) === '남자: 내일 한국의 독립을 위해 많은 사람들이 모일 예정입니다.'
+    && koOf(2) === '독립운동가들은 결코 포기하지 않았다.'
+    && koOf(3) === null)
+  check('[C] 번역 없는 문장은 빈칸 유지(다른 한국어를 억지로 붙이지 않음)',
+    indep[3].sentence === 'Korea finally achieved independence in 1945.' && koOf(3) === null)
+  check('[영어 매칭 무변경] 4건 전부 exact', indep.every((m) => m.matchType === 'exact'))
+  check('제목 줄은 별도 문장으로 유지(번역 없음)', sentences[0] === 'The Blue-Eyed Korean' && koBySentence[0] === null)
+}
+
+console.log('\n-- textImport: preferManualKo(재분석 시 수동 입력 보존)')
+check('[D] 수동 입력이 있으면 자동값이 덮어쓰지 않음', preferManualKo('내가 고친 번역', '자동 번역') === '내가 고친 번역')
+check('[D] 수동 입력이 공백뿐이면 자동값 채움', preferManualKo('   ', '자동 번역') === '자동 번역')
+check('[D] 둘 다 없으면 빈 문자열', preferManualKo('', null) === '')
+check('[D] 자동값 없고 수동만 있으면 수동 유지', preferManualKo('수동', null) === '수동')
 
 console.log('\n-- textImport: duplicateKey(중복 판정)')
 check('공백/대소문자 정규화로 동일 판정',

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { listUnitsMeta, listUnitWords } from '../../utils/curriculum/curriculumApi'
 import { listExamples, createExample, setApprovalStatus } from '../../utils/curriculum/exampleLibrary'
-import { parseBilingualPassage, matchWordsToSentences, duplicateKey } from '../../utils/curriculum/textImport'
+import { parseBilingualPassage, matchWordsToSentences, duplicateKey, preferManualKo } from '../../utils/curriculum/textImport'
 import { generateCandidateExamples } from '../../utils/curriculum/generatorContract'
 
 // TextImportPanel.jsx — 관리자 > 커리큘럼 > 예문 "본문 가져오기"(2026-08-09).
@@ -115,10 +115,9 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
           // 한국어 해석 프리필: 자동 매칭된 번역. 단, 재분석 전에 관리자가
           // 이미 손으로 입력해 둔 값이 있으면 그 값을 우선 보존한다
           // (운영자 지시 10 — 수동 입력을 자동 분석이 덮어쓰지 않음).
-          const manualKo = drafts[key]?.ko?.trim()
           nextDrafts[key] = {
             selected: m.matchType === 'exact' && !dup,
-            ko: manualKo || koBySentence[m.sentenceIndex] || '',
+            ko: preferManualKo(drafts[key]?.ko, koBySentence[m.sentenceIndex]),
             grammarPointId: drafts[key]?.grammarPointId || '',
           }
         })
@@ -313,6 +312,11 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
           inflected: allMatches.filter((m) => m.matchType === 'inflected').length,
           ambiguous: allMatches.filter((m) => m.matchType === 'ambiguous').length,
           dup: allMatches.filter((m) => analysis.existingKeys.has(duplicateKey(m.word, m.sentence))).length,
+          // 해석 매칭 N/M(운영자 지시 8): M = 발견된 영어 예문 총수,
+          // N = 해석까지 연결된 예문 수(자동 매칭 또는 수동 입력).
+          koPaired: allMatches.filter((m) =>
+            (drafts[candidateKeyOf(m.word, m.sentenceIndex)]?.ko || '').trim()
+            || analysis.koBySentence[m.sentenceIndex]).length,
         }
         return (
         <div className="space-y-2">
@@ -325,7 +329,7 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
             <span className="bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">미발견 {analysis.unmatched.length}</span>
             {analysis.hasKorean && (
               <span className="bg-blue-100 text-blue-700 rounded-full px-2 py-0.5">
-                해석 매칭 {analysis.koBySentence.filter(Boolean).length}/{analysis.sentenceCount}
+                해석 매칭 {stat.koPaired}/{allMatches.length}
               </span>
             )}
             {stat.dup > 0 && <span className="bg-gray-200 text-gray-500 rounded-full px-2 py-0.5">중복 {stat.dup}</span>}

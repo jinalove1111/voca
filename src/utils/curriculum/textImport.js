@@ -122,6 +122,15 @@ export function parseBilingualPassage(text) {
   return { pairs, hasKorean: true }
 }
 
+// 재분석 시 한국어 해석 병합 규칙(운영자 지시 — 수동 입력 우선):
+// 관리자가 손으로 입력/수정한 값(manual)이 있으면 자동 매칭값(auto)이
+// 절대 덮어쓰지 않는다. manual이 비어 있을 때만 auto를 채운다.
+export function preferManualKo(manual, auto) {
+  const m = typeof manual === 'string' ? manual.trim() : ''
+  if (m) return manual
+  return auto || ''
+}
+
 function escapeRegex(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
