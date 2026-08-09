@@ -7,6 +7,10 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (87차) — 승인 교체 실행: 5행 practice_sentence → 본문 핵심 chunk (표적 UPDATE, 그 외 무접촉)
+
+운영자 승인("교체 실행")에 따라 examples 5행의 practice_sentence만 교체: at the invitation of the Korean government / for the independence of Korea / the Korean independence movement / shouting for Korean independence / fight for Korean independence. 실행 가드: 승인안=라이브 재계산 5/5 일치 시에만 진행, 사전 백업(스크래치패드 JSON+기존값 로그). 사후 검증: UPDATED 5행 정확(INSERT/DELETE 0), exact_substring 5/5, 타 컬럼(원문/해석/target/FK/메타) 바이트 불변 PASS, 타 테이블 무접촉(students 1157/words 971/units 29/progress 190 — SCA 443→445·word_status 증가분은 학생 자연 활동, 본 작업과 무관). examples 125/125·learning-engine 21/21·build PASS·배포 최신(index-CNvnj1di). 학생 노출은 기기 로컬 curriculumExamplesStudentUI 토글로 확인 가능(기본 OFF 유지).
+
 ## 2026-08-09 (86차) — 정책 전환: "본문 핵심 표현"(새 문장 생성 전면 금지, 본문 chunk 추출만) — 커밋 참조 git log
 
 운영자 목적 재정의: 연습 문장을 새로 만드는 게 아니라 **학생이 외울 교과서 본문을 단어 단계에서 짧게 미리 보게** 하는 것. extractKeyChunk(오프셋 슬라이싱 — source.includes(chunk) 구조 보장, 좌 전치사구/우 명사·보어 체인, 4~10단어, 짧은 문장은 전문) + substring 강제 검증(패널·수정 폼) + 단어 자산 제안 제거 + UI "본문 핵심 표현" rename. 프로덕션 5행 실측: invitation→"at the invitation of the Korean government"(7) / independence→"for the independence of Korea"(5)·"the Korean independence movement"(4)·"for Korean independence in Tapgol Park"(6)·"fight for Korean independence"(4) — 전부 exact_substring=true. **주의: 기존 저장된 practice_sentence 5건(84차의 생성 문장)은 신정책 위반 — 교체는 운영자 승인 후 5행 표적 UPDATE 대기.** examples 123/123·admin·learning-engine PASS. DB 무변경.
