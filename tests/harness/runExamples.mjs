@@ -33,7 +33,7 @@ import {
 } from '../../src/utils/curriculum/curriculumModel.js'
 // textImport.js도 curriculumModel.js와 같은 import-0 순수 모듈 — 직접 로드.
 import {
-  splitIntoSentences, regularInflections, matchWordsToSentences, duplicateKey,
+  splitIntoSentences, regularInflections, matchWordsToSentences, duplicateKey, parseBilingualPassage,
 } from '../../src/utils/curriculum/textImport.js'
 
 mkdirSync('scripts/.tmp', { recursive: true })
@@ -245,6 +245,63 @@ console.log('\n-- textImport: AMBIGUOUS 분류(2026-08-09 — 4단계 매칭)')
   const byE = Object.fromEntries(exact.map((x) => [x.word, x]))
   check('원형 그대로 등장(leave)은 exact 유지', byE['leave'].matches[0]?.matchType === 'exact')
   check('다른 단어(leaf)는 그 문장에 매칭 없음(NOT_FOUND)', byE['leaf'].matches.length === 0)
+}
+
+console.log('\n-- textImport: parseBilingualPassage(영어↔한국어 자동 짝짓기, 2026-08-09)')
+{
+  // 운영자 검증 문장 그대로(2026-08-09 지시).
+  const passage = [
+    'In 1958, he returned to Korea at the invitation of the Korean government and never left again.',
+    '1958년, 그는 한국 정부의 초청으로 한국에 돌아왔고 다시는 한국을 떠나지 않았다.',
+    '',
+    'He believed that every country has the right to be independent, so he helped the Korean independence movement.',
+    '그는 모든 나라가 독립할 권리를 가져야 한다고 믿었기에 한국의 독립운동을 도왔다.',
+  ].join('\n')
+  const { pairs, hasKorean } = parseBilingualPassage(passage)
+  check('검증 문장 1: 1958 문장 ↔ 1958년 번역 정확 연결(원문 무수정)',
+    hasKorean === true && pairs.length === 2
+    && pairs[0].en === 'In 1958, he returned to Korea at the invitation of the Korean government and never left again.'
+    && pairs[0].ko === '1958년, 그는 한국 정부의 초청으로 한국에 돌아왔고 다시는 한국을 떠나지 않았다.')
+  check('검증 문장 2: independence 문장 ↔ 독립운동 번역 정확 연결',
+    pairs[1].en === 'He believed that every country has the right to be independent, so he helped the Korean independence movement.'
+    && pairs[1].ko === '그는 모든 나라가 독립할 권리를 가져야 한다고 믿었기에 한국의 독립운동을 도왔다.')
+}
+{
+  // 화자 표시 대화문(운영자 지시 8) — 한 pair로.
+  const { pairs } = parseBilingualPassage('Man: Many people are going to gather tomorrow for the independence of Korea.\n남자: 내일 한국의 독립을 위해 많은 사람들이 모일 예정입니다.')
+  check('화자 표시(Man:/남자:) 대화문도 1 pair', pairs.length === 1
+    && pairs[0].en.startsWith('Man:') && pairs[0].ko === '남자: 내일 한국의 독립을 위해 많은 사람들이 모일 예정입니다.')
+}
+{
+  // 여러 줄로 감긴 영어 1문장 + 여러 줄 한국어 번역(지시 5·6) — 각각 병합.
+  const { pairs } = parseBilingualPassage('For the rest of his life, he worked hard\nto help Koreans, especially poor students.\n그는 여생 동안 한국인, 특히\n가난한 학생들을 돕기 위해 헌신했다.')
+  check('줄바꿈으로 감긴 영어/한국어 각각 병합해 1 pair', pairs.length === 1
+    && pairs[0].en === 'For the rest of his life, he worked hard to help Koreans, especially poor students.'
+    && pairs[0].ko === '그는 여생 동안 한국인, 특히 가난한 학생들을 돕기 위해 헌신했다.')
+}
+{
+  // 영어 블록 2문장 + 한국어 블록 2문장 → 순서대로 1:1.
+  const { pairs } = parseBilingualPassage('He came home. He was happy.\n그는 집에 왔다. 그는 행복했다.')
+  check('영2+한2 블록 → 문장 수 일치 시 1:1', pairs.length === 2
+    && pairs[0].ko === '그는 집에 왔다.' && pairs[1].ko === '그는 행복했다.')
+}
+{
+  // 문장 수 불일치 → 임의 배분 없이 전부 미매칭(지시 11 — 지어내기 금지).
+  const { pairs } = parseBilingualPassage('He came home. He was happy.\n그는 집에 와서 행복했다.')
+  check('영2+한1 불일치 → 전부 ko=null(미매칭 표시)', pairs.length === 2 && pairs.every((p) => p.ko === null))
+}
+{
+  // 영어 전용 본문 → 기존 동작과 동일(회귀 0, 지시 1).
+  const en = 'The curtains block out the sunlight. This helps keep the room cool.'
+  const { pairs, hasKorean } = parseBilingualPassage(en)
+  const legacy = splitIntoSentences(en)
+  check('영어 전용 본문 → hasKorean=false + 기존 분리 결과와 동일',
+    hasKorean === false && pairs.length === legacy.length && pairs.every((p, k) => p.en === legacy[k] && p.ko === null))
+}
+{
+  // 번역 없는 마지막 영어 문장 → ko=null(빈 줄은 문장 아님, 지시 7).
+  const { pairs } = parseBilingualPassage('He came home.\n그는 집에 왔다.\n\nShe left early.')
+  check('번역 없는 문장은 ko=null, 빈 줄 무시', pairs.length === 2 && pairs[0].ko === '그는 집에 왔다.' && pairs[1].ko === null)
 }
 
 console.log('\n-- textImport: duplicateKey(중복 판정)')

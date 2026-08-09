@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { listUnitsMeta, listUnitWords } from '../../utils/curriculum/curriculumApi'
 import { listExamples, createExample, setApprovalStatus } from '../../utils/curriculum/exampleLibrary'
-import { splitIntoSentences, matchWordsToSentences, duplicateKey } from '../../utils/curriculum/textImport'
+import { parseBilingualPassage, matchWordsToSentences, duplicateKey } from '../../utils/curriculum/textImport'
 import { generateCandidateExamples } from '../../utils/curriculum/generatorContract'
 
 // TextImportPanel.jsx — 관리자 > 커리큘럼 > 예문 "본문 가져오기"(2026-08-09).
@@ -87,7 +87,13 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
         alert('이 Unit에 등록된 단어가 없어요 — 단어를 먼저 등록해주세요.')
         return
       }
-      const sentences = splitIntoSentences(sourceText)
+      // 이중 언어 파싱(2026-08-09) — "영어 문장 다음 줄 한국어 번역" 형식을
+      // 자동 짝짓기. 한국어가 없으면 pairs가 기존 splitIntoSentences 결과와
+      // 동일하므로(ko 전부 null) 영어 전용 본문의 기존 동작은 그대로다.
+      // 번역은 입력값을 연결만 함(생성/의역 없음) — 불확실하면 ko=null.
+      const { pairs, hasKorean } = parseBilingualPassage(sourceText)
+      const sentences = pairs.map((p) => p.en)
+      const koBySentence = pairs.map((p) => p.ko)
       if (sentences.length === 0) {
         alert('본문에서 문장을 찾지 못했어요.')
         return
@@ -104,18 +110,23 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
       const nextDrafts = {}
       results.forEach((r) => {
         r.matches.forEach((m) => {
+          const key = candidateKeyOf(r.word, m.sentenceIndex)
           const dup = existingKeys.has(duplicateKey(r.word, m.sentence))
-          nextDrafts[candidateKeyOf(r.word, m.sentenceIndex)] = {
+          // 한국어 해석 프리필: 자동 매칭된 번역. 단, 재분석 전에 관리자가
+          // 이미 손으로 입력해 둔 값이 있으면 그 값을 우선 보존한다
+          // (운영자 지시 10 — 수동 입력을 자동 분석이 덮어쓰지 않음).
+          const manualKo = drafts[key]?.ko?.trim()
+          nextDrafts[key] = {
             selected: m.matchType === 'exact' && !dup,
-            ko: '',
-            grammarPointId: '',
+            ko: manualKo || koBySentence[m.sentenceIndex] || '',
+            grammarPointId: drafts[key]?.grammarPointId || '',
           }
         })
       })
       setDrafts(nextDrafts)
       setAiNotes({})
       setSupplements({})
-      setAnalysis({ results, unmatched, existingKeys, unitAssets, sentenceCount: sentences.length, wordCount: unitWords.length })
+      setAnalysis({ results, unmatched, existingKeys, unitAssets, koBySentence, hasKorean, sentenceCount: sentences.length, wordCount: unitWords.length })
     } catch (err) {
       alert('본문 분석 중 오류: ' + (err.message || err))
     } finally {
@@ -312,6 +323,11 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
             <span className="bg-amber-100 text-amber-700 rounded-full px-2 py-0.5">⚠ 형태 변화 {stat.inflected}</span>
             {stat.ambiguous > 0 && <span className="bg-red-100 text-red-600 rounded-full px-2 py-0.5">❓ 중의적 {stat.ambiguous}</span>}
             <span className="bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">미발견 {analysis.unmatched.length}</span>
+            {analysis.hasKorean && (
+              <span className="bg-blue-100 text-blue-700 rounded-full px-2 py-0.5">
+                해석 매칭 {analysis.koBySentence.filter(Boolean).length}/{analysis.sentenceCount}
+              </span>
+            )}
             {stat.dup > 0 && <span className="bg-gray-200 text-gray-500 rounded-full px-2 py-0.5">중복 {stat.dup}</span>}
             <span className="bg-indigo-100 text-indigo-700 rounded-full px-2 py-0.5">승인 예정 {selectedCount}</span>
           </div>
@@ -349,6 +365,13 @@ export default function TextImportPanel({ grades, textbooksMeta, grammarPoints, 
                         )}
                       </div>
                     </div>
+                    {/* 이중 언어 본문인데 이 문장만 번역 짝을 못 찾은 경우 —
+                        임의 번역을 만들지 않고 미매칭으로 정직하게 표시
+                        (운영자 지시 11). 직접 입력으로 보완 가능. */}
+                    {!isDup && m.matchType === 'exact' && analysis.hasKorean
+                      && !analysis.koBySentence[m.sentenceIndex] && !(d.ko || '').trim() && (
+                      <p className="pl-6 text-[10px] font-bold text-orange-500">⚠ 한국어 해석 미매칭 — 아래 칸에 직접 입력할 수 있어요.</p>
+                    )}
                     {!isDup && m.matchType === 'exact' && (
                       <div className="grid grid-cols-2 gap-1.5 pl-6">
                         <input value={d.ko || ''} onChange={(e) => updateDraft(key, { ko: e.target.value })}

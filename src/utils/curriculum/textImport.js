@@ -49,6 +49,79 @@ export function splitIntoSentences(text) {
   return out
 }
 
+// ── 이중 언어 본문 파싱(2026-08-09, 운영자 지시) ─────────────────────────
+// 운영자가 "영어 문장 다음 줄에 한국어 번역" 형식으로 붙여넣는 본문에서
+// 영어 문장 ↔ 한국어 번역을 1:1로 짝짓는다.
+//
+// 불변식:
+//   - 번역을 "생성/의역"하지 않는다 — 입력된 한국어 줄을 그대로 연결만
+//     한다(trim 외 무수정). 확실하게 짝지을 수 없으면 ko=null(미매칭)로
+//     돌려 UI가 "미매칭"을 표시하게 한다 — 임의 추측 금지.
+//   - 영어 문장 분리는 기존 splitIntoSentences를 그대로 재사용(원문 보존
+//     불변식 포함) — 영어 전용 본문의 기존 동작은 이 함수를 안 타므로 불변.
+//
+// 규칙:
+//   1) 줄 분류: 한글([가-힣])이 포함된 줄 = 한국어 줄, 그 외 비어있지 않은
+//      줄 = 영어 줄. 빈 줄은 블록 경계일 뿐 문장으로 세지 않는다.
+//   2) 연속된 같은 언어 줄은 한 블록으로 병합(화면 줄바꿈으로 나뉜 한
+//      문장/번역 대응) — 공백 1칸으로 잇는다.
+//   3) 영어 블록 → 바로 뒤 한국어 블록을 짝으로 본다.
+//   4) 영어 블록이 여러 문장이면 한국어 블록도 같은 분리기로 나눠 문장 수가
+//      정확히 일치할 때만 순서대로 1:1 — 다르면 그 블록 전체 미매칭(ko=null).
+//      영어 블록이 1문장이면 한국어 블록 전체(여러 줄 병합)를 그 번역으로.
+//   5) "Man: ..."/"남자: ..." 화자 표시 줄도 1)의 분류로 자연 처리된다.
+//
+// 반환: { pairs: [{ en, ko }], hasKorean }
+//   hasKorean=false면(한국어 줄이 하나도 없음) 호출부는 기존 영어 전용
+//   경로(splitIntoSentences)를 그대로 쓰면 된다.
+const HANGUL_RE = /[가-힣]/
+
+export function parseBilingualPassage(text) {
+  const lines = String(text || '').split(/\r?\n/)
+  // 1) 줄 → 블록(연속 같은 언어 병합, 빈 줄은 경계)
+  const blocks = []
+  let cur = null
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    if (!line) { cur = null; continue }
+    const lang = HANGUL_RE.test(line) ? 'ko' : 'en'
+    if (cur && cur.lang === lang) cur.text += ' ' + line
+    else { cur = { lang, text: line }; blocks.push(cur) }
+  }
+  const hasKorean = blocks.some((b) => b.lang === 'ko')
+  if (!hasKorean) {
+    return { pairs: splitIntoSentences(String(text || '')).map((en) => ({ en, ko: null })), hasKorean: false }
+  }
+
+  // 2) 영어 블록 ↔ 직후 한국어 블록 짝짓기
+  const pairs = []
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i]
+    if (b.lang !== 'en') continue // 선행 영어 없는 한국어 블록은 짝 없음 — 버리지 않고 무시(문장 아님)
+    const next = blocks[i + 1]
+    const koBlock = next && next.lang === 'ko' ? next.text : null
+    const enSentences = splitIntoSentences(b.text)
+    if (enSentences.length === 0) continue
+    if (!koBlock) {
+      enSentences.forEach((en) => pairs.push({ en, ko: null }))
+      continue
+    }
+    if (enSentences.length === 1) {
+      pairs.push({ en: enSentences[0], ko: koBlock })
+      continue
+    }
+    // 영어 여러 문장 + 한국어 블록 — 문장 수가 정확히 일치할 때만 1:1.
+    const koSentences = splitIntoSentences(koBlock)
+    if (koSentences.length === enSentences.length) {
+      enSentences.forEach((en, k) => pairs.push({ en, ko: koSentences[k] }))
+    } else {
+      // 불일치 — 임의 배분하지 않고 전부 미매칭(운영자 지시 11).
+      enSentences.forEach((en) => pairs.push({ en, ko: null }))
+    }
+  }
+  return { pairs, hasKorean: true }
+}
+
 function escapeRegex(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
