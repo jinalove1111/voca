@@ -66,8 +66,12 @@ const STOP_RIGHT = new Set([
   'is', 'are', 'was', 'were', 'be', 'been', 'do', 'does', 'did', "didn't", "don't", "doesn't",
   'has', 'have', 'had', 'will', 'would', 'can', 'could', 'should', 'must', 'never', 'not', 'also',
 ])
-const CHUNK_MIN = 4
+const CHUNK_MIN = 3
 const CHUNK_MAX = 10
+// 우측으로 흡수하는 보어 전치사 — of/for 연쇄("invitation of the government",
+// "independence of Korea")만. in/at/on은 흡수하지 않아 장소/시간 꼬리
+// ("in Tapgol Park")가 chunk에 붙지 않는다(2026-08-09 품질 규칙 5).
+const RIGHT_COMPLEMENT_PREPS = new Set(['of', 'for'])
 
 // 토큰화(원문 오프셋 보존) — 슬라이싱이 항상 원문 부분 문자열이 되게 한다.
 function tokenize(src) {
@@ -106,6 +110,14 @@ export function extractKeyChunk(sourceSentence, targetWord) {
     if (PREPS.has(c)) { lo--; break }
     break
   }
+  // 어색한 전치사 시작 방지(품질 규칙 4): 전치사로 시작하되 바로 뒤가
+  // 관사가 아니면("for Korean …") 관용 전치사구가 아니므로 좌측 내용어를
+  // 하나 더 포함해 자연스러운 구를 만든다("shouting for Korean independence",
+  // "fight for Korean independence"). "at the invitation of…"처럼
+  // 전치사+관사로 시작하는 관용 표현은 그대로 허용.
+  if (lo > 0 && PREPS.has(coreOf(tokens[lo].text)) && !DETS.has(coreOf(tokens[lo + 1]?.text))) {
+    lo--
+  }
 
   // RIGHT: ①target 직후 명사 연쇄 ②of/for/in… 전치사구 보어 체인 —
   // 접속사/서술부/문장부호에서 정지, 총 CHUNK_MAX 단어 이내.
@@ -115,7 +127,9 @@ export function extractKeyChunk(sourceSentence, targetWord) {
     const c = coreOf(tokens[hi + 1].text)
     if (STOP_RIGHT.has(c)) break
     if (PREPS.has(c)) {
-      // 전치사구 시작 — 보어(관사/수식어/명사)를 흡수, 다음 전치사/정지어 전까지.
+      // of/for 보어 연쇄만 흡수 — in/at/on 등 장소·시간 전치사구는 학습
+      // 포인트가 아니므로 chunk에 붙이지 않는다(품질 규칙 5).
+      if (!RIGHT_COMPLEMENT_PREPS.has(c)) break
       let k = hi + 2
       while (k < tokens.length && (k - lo + 1) <= CHUNK_MAX) {
         const kc = coreOf(tokens[k].text)

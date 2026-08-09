@@ -393,10 +393,16 @@ console.log('\n-- practiceSentence: 본문 핵심 표현 추출(2026-08-09 정�
   const SHORT = 'People shouted for Korean independence loudly.'
   check('[규칙9] 짧은 문장은 전체 사용', extractKeyChunk(SHORT, 'independence') === SHORT)
 
-  // 최소 4단어 확장 — "fight for Korean independence" 유형
+  // 자연스러운 구 만들기(2026-08-09 품질 규칙) — bare-prep 시작 회피 + 장소 꼬리 제거
+  const SRC4 = 'On March 1, 1919, Dr. Schofield heard people shouting for Korean independence in Tapgol Park.'
+  check('[품질4·5] 장소 꼬리(in Tapgol Park) 제거 + 동사 포함 자연 구("shouting for Korean independence")',
+    extractKeyChunk(SRC4, 'independence') === 'shouting for Korean independence')
   const SRC5 = "Dr. Schofield's fight for Korean independence didn't stop even after the March 1st Movement."
   const c5 = extractKeyChunk(SRC5, 'independence')
-  check('[최소4] 좌측 확장으로 4단어 이상 + substring', SRC5.includes(c5) && c5.split(/\s+/).length >= 4 && /independence/i.test(c5))
+  check('[품질4] bare-prep 시작 회피 — 명사 포함("fight for Korean independence")', c5 === 'fight for Korean independence' && SRC5.includes(c5))
+  const SRC2B = 'Man: Many people are going to gather tomorrow for the independence of Korea.'
+  check('[품질4 예외] 전치사+관사 관용구는 허용("for the independence of Korea")',
+    extractKeyChunk(SRC2B, 'independence') === 'for the independence of Korea')
 
   // 원문 불변
   const before = SRC1
