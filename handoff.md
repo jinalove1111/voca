@@ -7,6 +7,10 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (84차) — 연습 예문 테스트 데이터 5행 기록(운영자 지시 표적 쓰기) + SAFE TO TEST
+
+운영자 지시로 Unit 6 실사용 예문 5행(invitation 1/independence 4)에 practice_sentence 기록 — **null→값 채움만, 한 컬럼만**(source/해석은 기록 전후 바이트 비교로 불변 증명, 이미 값 있으면 SKIP하는 덮어쓰기 가드 포함). 문장은 본문 의미 보존·4~6단어·검증기(whole-word/10단어) 통과 큐레이션: He came to Korea by invitation. / They gathered for Korean independence. / Korea fought for independence. / People shouted for independence. / He never stopped fighting for independence. 학생 확인 경로: 관리자 화면 기능 관리 패널(FeatureManagementPanel)에서 curriculumExamplesStudentUI 토글(기기 로컬 — 테스트 기기에만 적용, 전교생 무영향). examples 113/113·learning-engine 21/21·integrity 10/10·build PASS.
+
 ## 2026-08-09 (83차) — source/practice 예문 분리: 학생용 짧은 연습 예문 — 커밋 4aba98b/2b6cf78, v3_32 준비(미실행)
 
 원문(english_sentence=source, 절대 무수정)과 학생 연습용 짧은 예문(practice_sentence, v3_32 additive 컬럼 — 미실행)을 분리. 자동 제안은 무료 2단(①words.example_text 자산 재사용 — 사전 AI 생성분, 실시간 호출 0 ②원문 절 추출 — 원문 단어 부분집합만, 접속사 제거/대문자/마침표만 보정), 실패 시 빈칸(임의 생성 금지). 검증: target whole-word 필수(미포함 시 저장 차단), 12단어 초과 경고. exampleLibrary는 3단 캐스케이드 select/저장(42703 strip-재시도)로 v3_31/v3_32 실행 순서 무관. 관리자: 본문 가져오기 카드에 [원문][연습 예문(제안 프리필·수정 가능)][한국어 해석] 모두 표시, 목록/수정 폼 지원. 학생: fromExample이 practice 우선 + "📖 본문 보기" 토글로 원문·해석(플래그 뒤 — 프로덕션 불활성). 테스트 +11 — examples 113/113, learning-engine 21/21, admin/student PASS, 배포(index-DxNGWoTd). 프로덕션 DB 무변경.
