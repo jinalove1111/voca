@@ -27,12 +27,32 @@ const EXAMPLES_SELECT =
   'grammar_point_id,difficulty,source,approval_status,created_by,approved_by,approved_at,' +
   'ai_model,ai_meta,created_at,updated_at'
 
-// source_meta(v3_31 additive 컬럼) 포함 select — listExamples 전용.
-// 컬럼 부재 환경(마이그레이션 전)에서는 select 자체가 42703이 나므로,
-// 한 번 부재가 확인되면 세션 동안 기본 select로 폴백한다(sticky —
-// v3_31 실행 후에는 관리자 화면 새로고침이 다음 세션부터 자동 반영).
-const EXAMPLES_SELECT_WITH_META = EXAMPLES_SELECT + ',source_meta'
-let _sourceMetaColumnMissing = false
+// additive 컬럼 캐스케이드 select(2026-08-09 확장) — 마이그레이션 실행
+// 순서와 무관하게 조회가 항상 성공하도록 3단계로 시도한다:
+//   level 2: 기본 + source_meta(v3_31) + practice_sentence(v3_32)
+//   level 1: 기본 + source_meta(v3_31)               ← v3_32 미실행 환경
+//   level 0: 기본                                     ← v3_31도 미실행 환경
+// 42703(컬럼 부재)이면 한 단계 낮춰 재시도하고 세션 동안 그 레벨을 유지
+// (sticky — SQL 실행 후에는 화면 새로고침의 다음 세션부터 자동 상향).
+const SELECT_LEVELS = [
+  EXAMPLES_SELECT,
+  EXAMPLES_SELECT + ',source_meta',
+  EXAMPLES_SELECT + ',source_meta,practice_sentence',
+]
+let _selectLevel = SELECT_LEVELS.length - 1
+
+// runSelectWithFallback(buildQuery) — buildQuery(selectCols)를 현재 레벨로
+// 실행하고 42703이면 레벨을 낮춰 재시도. { data, error } 반환.
+async function runSelectWithFallback(buildQuery) {
+  for (;;) {
+    const { data, error } = await buildQuery(SELECT_LEVELS[_selectLevel])
+    if (error && error.code === '42703' && _selectLevel > 0) {
+      _selectLevel -= 1
+      continue
+    }
+    return { data, error }
+  }
+}
 
 const MISSING_TABLE_MESSAGE = '교과서 예문 테이블이 아직 준비되지 않았어요 — supabase_v3_13 실행 필요'
 
@@ -70,8 +90,11 @@ function toRow(r) {
     approvedAt: r.approved_at || null,
     aiModel: r.ai_model || null,
     aiMeta: r.ai_meta || null,
-    // v3_31 미실행 환경/기본 select에서는 컬럼 자체가 응답에 없음 → null.
+    // v3_31/v3_32 미실행 환경/기본 select에서는 컬럼 자체가 응답에 없음 → null.
     sourceMeta: r.source_meta || null,
+    // 학생 연습용 짧은 예문(v3_32) — null이면 소비처가 englishSentence(원문)
+    // 로 폴백한다(learningItem.fromExample).
+    practiceSentence: r.practice_sentence || null,
     createdAt: r.created_at || null,
     updatedAt: r.updated_at || null,
   }
@@ -101,15 +124,7 @@ export async function listExamples(filters, { limit = 200, offset = 0 } = {}) {
       return query.range(offset, offset + Math.max(0, limit - 1))
     }
 
-    // v3_31 실행 여부에 따른 2단 select(위 EXAMPLES_SELECT_WITH_META 주석) —
-    // 컬럼 부재 42703이면 기본 select로 1회 재시도하고 세션 동안 폴백 고정.
-    let { data, error } = await buildQuery(
-      _sourceMetaColumnMissing ? EXAMPLES_SELECT : EXAMPLES_SELECT_WITH_META,
-    )
-    if (error && !_sourceMetaColumnMissing && error.code === '42703') {
-      _sourceMetaColumnMissing = true
-      ;({ data, error } = await buildQuery(EXAMPLES_SELECT))
-    }
+    const { data, error } = await runSelectWithFallback(buildQuery)
     if (error) {
       if (isMissingTableError(error)) warnOnce(error)
       else console.warn('[exampleLibrary] listExamples failed (non-fatal):', error.message)
@@ -137,13 +152,15 @@ export async function fetchApprovedExamplesForWords(wordTexts, { unitId } = {}) 
   const words = (Array.isArray(wordTexts) ? wordTexts : []).map(normalizeTargetWord).filter(Boolean)
   if (words.length === 0) return {}
   try {
-    const { data, error } = await supabase
+    // 학생 경로도 캐스케이드 select(2026-08-09) — practice_sentence(v3_32)를
+    // 실행 여부와 무관하게 안전 조회(부재 시 자동 하향, 절대 throw 없음 유지).
+    const { data, error } = await runSelectWithFallback((selectCols) => supabase
       .from('examples')
-      .select(EXAMPLES_SELECT)
+      .select(selectCols)
       .eq('approval_status', 'approved')
       .in('target_word', words)
       .order('created_at', { ascending: false })
-      .limit(500) // 리뷰 반영 L2 — 승인 예문이 대량으로 쌓여도 한 번의 조회가 무제한 커지지 않도록 상한
+      .limit(500)) // 리뷰 반영 L2 — 승인 예문이 대량으로 쌓여도 한 번의 조회가 무제한 커지지 않도록 상한
     if (error) {
       if (isMissingTableError(error)) warnOnce(error)
       else console.warn('[exampleLibrary] fetchApprovedExamplesForWords failed (non-fatal):', error.message)
@@ -239,7 +256,18 @@ export async function createExample(fields, adminPin) {
   if (fields.source_meta && typeof fields.source_meta === 'object') {
     row.source_meta = fields.source_meta
   }
+  // practice_sentence(v3_32 additive) — 학생 연습용 짧은 예문. 원문
+  // (english_sentence)은 위에서 그대로 저장되고 이 값은 별도 컬럼.
+  if (typeof fields.practice_sentence === 'string' && fields.practice_sentence.trim()) {
+    row.practice_sentence = fields.practice_sentence.trim()
+  }
+  // additive 컬럼 부재(42703) 캐스케이드 — practice → source_meta 순으로
+  // 하나씩 빼고 재시도(마이그레이션 실행 순서 무관 저장 성공, 규칙 9).
   let { data, error } = await supabase.from('examples').insert(row).select(EXAMPLES_SELECT).single()
+  if (error && 'practice_sentence' in row && error.code === '42703') {
+    delete row.practice_sentence
+    ;({ data, error } = await supabase.from('examples').insert(row).select(EXAMPLES_SELECT).single())
+  }
   if (error && 'source_meta' in row && error.code === '42703') {
     delete row.source_meta
     ;({ data, error } = await supabase.from('examples').insert(row).select(EXAMPLES_SELECT).single())
@@ -279,6 +307,8 @@ export async function updateExample(id, fields, adminPin) {
   if ('korean_translation' in f) patch.korean_translation = f.korean_translation ? String(f.korean_translation).trim() : null
   if ('grammar_point_id' in f) patch.grammar_point_id = f.grammar_point_id || null
   if ('source' in f) patch.source = f.source
+  // practice_sentence(v3_32) — 빈 문자열은 null(연습 예문 제거 의도)로 저장.
+  if ('practice_sentence' in f) patch.practice_sentence = f.practice_sentence?.trim() ? f.practice_sentence.trim() : null
 
   // difficulty(리뷰 반영 — edge case): 유효한 1~5 유한수일 때만 payload에
   // 담는다. 키가 있었는데 유효하지 않으면(예: 0, 6, 'abc', NaN) DB CHECK
@@ -304,7 +334,13 @@ export async function updateExample(id, fields, adminPin) {
 
   patch.updated_at = new Date().toISOString()
 
-  const { data, error } = await supabase.from('examples').update(patch).eq('id', id).select(EXAMPLES_SELECT).single()
+  let { data, error } = await supabase.from('examples').update(patch).eq('id', id).select(EXAMPLES_SELECT).single()
+  // v3_32 미실행 환경에서 practice_sentence 패치만 42703 — 그 키만 빼고
+  // 1회 재시도(다른 필드 수정은 정상 반영, 규칙 9).
+  if (error && 'practice_sentence' in patch && error.code === '42703') {
+    delete patch.practice_sentence
+    ;({ data, error } = await supabase.from('examples').update(patch).eq('id', id).select(EXAMPLES_SELECT).single())
+  }
   if (error) throwIfMissingTable(error)
   return toRow(data)
 }
