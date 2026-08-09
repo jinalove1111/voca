@@ -446,12 +446,16 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
   if (showWritingCoach) {
     return (
       <WritingCoach
-        // targetWords: "오늘 배운 단어" 텍스트 배열이 이 컴포넌트에서 바로
-        // 얻어지는 소스가 없다(classWords는 유닛 전체, 오늘의 숙제는 id
-        // 배열 + wordTextById 매핑 검증 필요) — MVP는 빈 배열로 전달해
-        // "자유 문장" 모드로 동작시키고, 오늘 단어 연결 고도화는 후속 작업
-        // (docs/WRITING_COACH.md §9 백로그 참고).
-        targetWords={[]}
+        // targetWords(2026-08-10 P0-2 연결): 오늘 실제로 학습한 단어 =
+        // round.wordsViewed(오늘 본 단어 id, 자정 리셋·멀티기기 병합 참여)의
+        // 마지막 2개를 wordTextById로 텍스트 변환해 전달 — "오늘 배운 단어
+        // 2개로 문장 만들기"(운영자 스펙). 오늘 학습 전이면 빈 배열 →
+        // 자유 문장 모드(WritingCoach가 칩 없이 동작). 읽기 전용 파생 —
+        // 저장/기록 없음.
+        targetWords={(studentData?.round?.wordsViewed || [])
+          .slice(-2)
+          .map((id) => wordTextById?.get?.(id))
+          .filter(Boolean)}
         onBack={() => setShowWritingCoach(false)}
         // 완료 요약({ attemptCount, selfCorrectedCount, errorTypes })의
         // Supabase 저장(writing_submissions — 설계 SQL만 존재)은 후속 작업.
