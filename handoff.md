@@ -7,6 +7,10 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (83차) — source/practice 예문 분리: 학생용 짧은 연습 예문 — 커밋 4aba98b/2b6cf78, v3_32 준비(미실행)
+
+원문(english_sentence=source, 절대 무수정)과 학생 연습용 짧은 예문(practice_sentence, v3_32 additive 컬럼 — 미실행)을 분리. 자동 제안은 무료 2단(①words.example_text 자산 재사용 — 사전 AI 생성분, 실시간 호출 0 ②원문 절 추출 — 원문 단어 부분집합만, 접속사 제거/대문자/마침표만 보정), 실패 시 빈칸(임의 생성 금지). 검증: target whole-word 필수(미포함 시 저장 차단), 12단어 초과 경고. exampleLibrary는 3단 캐스케이드 select/저장(42703 strip-재시도)로 v3_31/v3_32 실행 순서 무관. 관리자: 본문 가져오기 카드에 [원문][연습 예문(제안 프리필·수정 가능)][한국어 해석] 모두 표시, 목록/수정 폼 지원. 학생: fromExample이 practice 우선 + "📖 본문 보기" 토글로 원문·해석(플래그 뒤 — 프로덕션 불활성). 테스트 +11 — examples 113/113, learning-engine 21/21, admin/student PASS, 배포(index-DxNGWoTd). 프로덕션 DB 무변경.
+
 ## 2026-08-09 (82차) — 본문 가져오기: 영어↔한국어 번역 자동 1:1 매칭 — 커밋 61e7642
 
 운영자가 "영어 문장 다음 줄 한국어 번역" 형식으로 붙여넣는 본문에서 해석 칸이 비던 문제 해결. `parseBilingualPassage`(textImport.js 순수 모듈): 한글 포함 줄=번역, 연속 줄 병합, 영어 블록↔직후 한국어 블록 짝짓기(문장 수 일치 시 1:1, 불일치·부재 시 ko=null 미매칭 — 번역 생성/의역 절대 안 함), 화자 표시(Man:/남자:) 지원. 영어 전용 본문은 기존 분리와 동일함을 테스트로 고정(회귀 0). 패널: 해석 자동 프리필(재분석 시 수동 입력 우선 보존), "해석 매칭 N/M" 칩, 미매칭 배지. DB/저장 경로 무변경(korean_translation 기존 컬럼) — migration 불필요. 테스트 +8단언(운영자 검증 문장 2쌍 그대로) — examples 92/92, admin/student PASS, 배포(index-DC4R5G52) 확인.
