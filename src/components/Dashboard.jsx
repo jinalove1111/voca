@@ -54,6 +54,11 @@ import { pickTodaysDiscovery, gardenBandSummary, starSeedState } from '../utils/
 // 모자 수여식(hatCeremony 플래그) — 새 모자 획득 순간의 전면 오버레이.
 // 표시 여부는 useAttachment의 세션 로컬 큐(pendingCeremonyHat)가 전담.
 import HatCeremony from './HatCeremony'
+// Writing Coach MVP(2026-08-09, docs/WRITING_COACH.md) — writingCoachEnabled
+// 플래그(기본 OFF)일 때만 진입 버튼이 렌더되고, 화면 전환은 App.jsx를
+// 건드리지 않는 Dashboard 로컬 state 풀스크린 렌더 방식(아래 showWritingCoach
+// 주석 참고). 플래그 OFF면 이 import 한 줄 말고는 기존 화면 변화 0.
+import WritingCoach from './WritingCoach'
 import { isFeatureEnabled } from '../config/features'
 import { trackEvent, EV } from '../utils/productEvents'
 
@@ -431,6 +436,31 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
   // 그 단어들로 열린다는 안내만(기존 getStudentWords 동작을 표시로 강화).
   const hasTodaysHomework = className && getTodaysAssignmentWordIds(className).length > 0
 
+  // Writing Coach(2026-08-09) — App.jsx의 screen 라우팅을 건드리지 않는
+  // 최소 방식: Dashboard 로컬 state로 풀스크린 렌더(HatCeremony 오버레이와
+  // 같은 "Dashboard가 자기 위에 다른 화면을 얹는" 계열, 다만 이건 홈 전체를
+  // 대체하는 조건부 렌더). onGo 라우팅 편입은 운영자 승인 후속 —
+  // 플래그(writingCoachEnabled) OFF가 기본이라 이 state는 기본적으로 죽어
+  // 있는 코드 경로다.
+  const [showWritingCoach, setShowWritingCoach] = useState(false)
+  if (showWritingCoach) {
+    return (
+      <WritingCoach
+        // targetWords: "오늘 배운 단어" 텍스트 배열이 이 컴포넌트에서 바로
+        // 얻어지는 소스가 없다(classWords는 유닛 전체, 오늘의 숙제는 id
+        // 배열 + wordTextById 매핑 검증 필요) — MVP는 빈 배열로 전달해
+        // "자유 문장" 모드로 동작시키고, 오늘 단어 연결 고도화는 후속 작업
+        // (docs/WRITING_COACH.md §9 백로그 참고).
+        targetWords={[]}
+        onBack={() => setShowWritingCoach(false)}
+        // 완료 요약({ attemptCount, selfCorrectedCount, errorTypes })의
+        // Supabase 저장(writing_submissions — 설계 SQL만 존재)은 후속 작업.
+        // MVP는 화면만 닫는다 — DB 접근 0.
+        onComplete={() => setShowWritingCoach(false)}
+      />
+    )
+  }
+
   return (
     <div className="min-h-screen p-4 pb-8">
       {/* Header */}
@@ -743,6 +773,12 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
             )}
             <NavBtn emoji="📅" label="공부 캘린더" sub={`🔥 ${streak}일 연속`}                color="from-amber-400 to-orange-500"   onClick={() => onGo('studyCalendar')} />
             <NavBtn emoji="🎮" label="미니 게임"    sub="풍선/낚시/피자/기차 중 랜덤"          color="from-sky-400 to-indigo-500"    onClick={onPlayGame} />
+            {/* Writing Coach MVP(2026-08-09) — 플래그 기본 OFF: 버튼 자체가
+                렌더되지 않는다(애착 시스템 버튼들과 동일한 게이팅 패턴).
+                onGo 라우팅이 아니라 Dashboard 로컬 state 전환(위 주석 참고). */}
+            {isFeatureEnabled('writingCoachEnabled') && (
+              <NavBtn emoji="✍️" label="문장 만들기" sub="쓰고 스스로 고쳐봐요" color="from-teal-400 to-emerald-600" onClick={() => setShowWritingCoach(true)} />
+            )}
           </div>
         </details>
 

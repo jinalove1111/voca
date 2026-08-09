@@ -84,6 +84,15 @@ const DEFAULT_FEATURES = {
   // supabase_v3_13 실행 + 예문 승인 검토 후 켤 자리.
   curriculumExamplesStudentUI: false,
 
+  // Writing Coach MVP(2026-08-09, docs/WRITING_COACH.md) — 학생이 오늘 단어로
+  // 한 문장을 쓰고 로컬 규칙 검사기(src/utils/writing/, AI 호출 0)가 오류
+  // 위치+힌트만 주는 Sentence Writing 화면. 기본 OFF — 꺼져 있으면
+  // Dashboard의 진입 버튼 자체가 렌더되지 않아(readingStudentUI와 동일한
+  // isFeatureEnabled 게이팅) 기존 학생 화면은 바이트 단위로 동일하다.
+  // 저장용 SQL(sql_migrations/writing_coach_20260810_design.sql)은 설계만 —
+  // 미실행이어도 이 기능은 DB 접근 0이라 완전히 동작한다.
+  writingCoachEnabled: false,
+
   // 쓰기 답안 검토 AI 보조(Task 2, 2026-07-23, docs/operations/task2-writing-
   // analysis.md + task2-writing-report.md) — SpellingReviewQueuePanel(관리자
   // 전용)의 "AI 자동분류 미리보기" 버튼을 게이팅. 기본 OFF: (1) supabase_v3_6_
@@ -241,7 +250,11 @@ export const getFeaturesByCategory = (category) => {
     // readingStudentUI와 같은 이유로 여기 얹는다 — 새 카테고리 분리는
     // FeatureManagementPanel 소유 세션의 후속(이 세션은 그 파일을 건드리지
     // 않는다, 규칙 16).
-    attachment: ['attachmentHats', 'attachmentMuseum', 'attachmentAlbum', 'attachmentPaulMemory', 'attachmentWorldGarden', 'attachmentWorldFull', 'attachmentBookshelf', 'attachmentStory', 'paulMemoryV2', 'todaysDiscovery', 'starToSeed', 'hatCeremony', 'paulTownHomeBand', 'paulTownGarden', 'paulTownBuildings', 'productAnalytics', 'readingFoundation', 'readingStudentUI', 'curriculumExamplesStudentUI'],
+    // writingCoachEnabled(Writing Coach MVP, 2026-08-09)도 같은 이유 —
+    // FeatureManagementPanel에 토글이 보이려면 카테고리 목록에 있어야 한다
+    // (writingReviewAiAssist가 빠져서 토글이 안 보였던 2026-07-23 사고의
+    // 교훈 그대로).
+    attachment: ['attachmentHats', 'attachmentMuseum', 'attachmentAlbum', 'attachmentPaulMemory', 'attachmentWorldGarden', 'attachmentWorldFull', 'attachmentBookshelf', 'attachmentStory', 'paulMemoryV2', 'todaysDiscovery', 'starToSeed', 'hatCeremony', 'paulTownHomeBand', 'paulTownGarden', 'paulTownBuildings', 'productAnalytics', 'readingFoundation', 'readingStudentUI', 'curriculumExamplesStudentUI', 'writingCoachEnabled'],
   }
   return categories[category] || []
 }

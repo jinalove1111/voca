@@ -257,6 +257,15 @@ export const DOMAINS = {
       { script: 'scripts/testExamplePriorityMock.mjs', builders: [], extra: true, note: '2026-08-09 야간 — 학생 예문 우선순위(SOURCE TEXT FIRST) mock 검증: fetch 가로채기로 네트워크/DB 0회, 배포 코드(exampleLibrary) 번들 그대로 구동. curriculumExamplesStudentUI 플래그 프로덕션 온 전의 사전 검증 자산. 13개 필수 도메인 밖, 신규 보너스 커버리지.' },
     ],
   },
+  // ── 2026-08-10 등록: Writing Coach MVP(docs/WRITING_COACH.md) — 로컬 규칙
+  // 기반 문장 검사/힌트 진행/자가 수정 인정/3회 후 정답 공개 상태 머신.
+  // 전부 순수 모듈(네트워크/DB 0) — 플레인 Node 직접 import.
+  writingCoach: {
+    label: 'Writing Coach — 오류 taxonomy/규칙 검사/세션 상태 머신 (verify:writing-coach와 동일 실행)',
+    checks: [
+      { script: 'scripts/testWritingCoach.mjs', builders: [], note: '운영자 시나리오 축어 재현("I go to park yesterday." 2오류→자가 수정 인정→완료) + 오탐 방어(무관사 관용 school/home 예외 등) + 3회 후 공개 게이트 — 74단언.' },
+    ],
+  },
   // ── 2026-08-09 등록: 게임화 코어 순수 모델(docs/GAME_REWARD_RULES.md) —
   // 오늘의 미션 파생 판정 + streak(주 1회 freeze/최고 기록 보존) 계산.
   // 전부 기존 기록(student_daily_progress/word_status)의 파생 — 지급 없음.
