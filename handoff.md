@@ -7,6 +7,10 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-09 (85차) — 대표 연습 예문 1개 선정 + 관리자 단어별 그룹화 — 커밋 1d0b916 (DB 변경 0)
+
+같은 target_word가 본문에서 여러 번 발견돼도 학생(TTS/듣기/쓰기/예문 문제)은 대표 연습 예문 1개만 소비. practiceQualityScore(5~8단어=3/≤10=2/>10=1/무효=0) + computeExampleRank 3축(유닛×1000 ≫ 품질×100 ≫ 소스×10 — 기존 상대 순서 단언 전부 유지). representativeExample.js 순수 모듈(파생 선택만 — 행 변경/삭제 0, 본문 근거 문장 전부 보존). ExampleManager 단어별 그룹 카드(⭐ 대표 + 본문 발견 N개 + 근거 펼치기). 프로덕션 실측: invitation 대표 "He came to Korea by invitation." / independence(4건) 대표 "He never stopped fighting for independence."(6단어, 5~8 구간 최신). 테스트 +7 — examples 120/120·mock 6/6·learning-engine 21/21·build PASS·배포(index-QdvataP_). DB 변경 불필요(순수 파생 선택으로 충족 — 제안 사항 없음).
+
 ## 2026-08-09 (84차) — 연습 예문 테스트 데이터 5행 기록(운영자 지시 표적 쓰기) + SAFE TO TEST
 
 운영자 지시로 Unit 6 실사용 예문 5행(invitation 1/independence 4)에 practice_sentence 기록 — **null→값 채움만, 한 컬럼만**(source/해석은 기록 전후 바이트 비교로 불변 증명, 이미 값 있으면 SKIP하는 덮어쓰기 가드 포함). 문장은 본문 의미 보존·4~6단어·검증기(whole-word/10단어) 통과 큐레이션: He came to Korea by invitation. / They gathered for Korean independence. / Korea fought for independence. / People shouted for independence. / He never stopped fighting for independence. 학생 확인 경로: 관리자 화면 기능 관리 패널(FeatureManagementPanel)에서 curriculumExamplesStudentUI 토글(기기 로컬 — 테스트 기기에만 적용, 전교생 무영향). examples 113/113·learning-engine 21/21·integrity 10/10·build PASS.
