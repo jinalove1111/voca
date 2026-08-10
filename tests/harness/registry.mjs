@@ -93,6 +93,7 @@ export const DOMAINS = {
       { script: 'scripts/testEntranceTestDb.mjs', builders: ['wordlib', 'entrance'], extra: true, note: '입실시험 라이브 e2e — 보너스 커버리지, 테이블 미적용 시 스크립트 자체가 안전하게 SKIP(exit 0)' },
       { script: 'scripts/testUnitNameNormalization.mjs', builders: ['wordlib'], extra: true, note: '2026-08-09 야간 — unitNameKey 정규화 계약(ensureUnit 형제 유닛 분열 재발 방지, "Unit 1"≡"Unit1"≡"unit 01"). 네트워크 0 순수 단언. 13개 필수 도메인 밖, 신규 보너스 커버리지.' },
       { script: 'scripts/testEntranceClassScope.mjs', builders: ['wordlib', 'entrance'], extra: true, note: '2026-08-10 — 입실시험 조회 반 범위 계약(사람 반 ∪ 교재 컨테이너 반). 원장이 교재 반으로 시험을 시작하면 학생 배너가 안 뜨던 실사고 회귀 방지. READ-ONLY 라이브 검증(쓰기 0).' },
+      { script: 'scripts/testEntranceEligibilityRules.mjs', builders: [], extra: true, note: '2026-08-11 — 입실시험 eligibility 규칙 순수 단위 테스트(mock 픽스처, 네트워크 0). 라이브 테스트는 그날 데이터에 케이스가 없으면 SKIP만 늘어 규칙 변경을 못 잡으므로, 규칙 자체를 여기서 고정한다(운영자 확정 8개 시나리오 + 반증 테스트).' },
     ],
   },
   homework: {

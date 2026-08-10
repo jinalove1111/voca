@@ -36,7 +36,8 @@
     "dashboard": "node scripts/generateDashboard.mjs",
     "verify:integrity": "node scripts/auditCurriculumIntegrity.mjs",
     "verify:gamification": "node scripts/testGamificationModels.mjs",
-    "verify:writing-coach": "node scripts/testWritingCoach.mjs"
+    "verify:writing-coach": "node scripts/testWritingCoach.mjs",
+    "verify:eligibility": "node scripts/testEntranceEligibilityRules.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

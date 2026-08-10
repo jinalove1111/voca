@@ -1,5 +1,11 @@
 import { supabase } from './supabaseClient'
 import { fmtDay } from './analyticsMath'
+// 입실시험 대상 판정의 단일 진실 공급원(순수 함수) — 규칙 설명은 그 파일
+// 헤더 주석 참고. 학생 화면과 관리자 화면이 반드시 같은 규칙을 쓰게 한다.
+import {
+  entranceScopeClassIds as computeEntranceScopeClassIds,
+  isArchivedOrFixtureStudentName as isArchivedOrFixtureName,
+} from './entranceEligibility'
 // Word Asset Library(M3c, 2026-08-05) — 엑셀 업로드가 만든 유닛 단어로
 // 규칙 기반 자산(word_assets)을 채우는 데만 쓴다(순수 함수, AI 호출 0건,
 // import 0 모듈이라 정적 import해도 순환/부작용 위험이 없다 —
@@ -1400,12 +1406,9 @@ export function getStudentsInClass(className) {
     .map(s => ({ id: s.id, name: s.name, unitName: getStudentUnit(s.id) }))
 }
 
-// 아카이브/중복/QA 픽스처 계정 판별 — 이름 접미·접두 관례(StudentSelect의
-// isRealSetupStudent, StudentDirectory 로드 필터와 같은 규칙 중 "계정 종류"
-// 부분만 옮긴 것). 화면별 예외 목록(cookie/paul 등 특정 이름)은 의도적으로
-// 넣지 않는다 — 그건 그 화면의 정책이지 계정 종류가 아니다.
-export const isArchivedOrFixtureStudentName = (name) =>
-  /_dup|_inactive/i.test(name || '') || /^(qa_|_qa_)/i.test(name || '')
+// 아카이브/중복/QA 픽스처 계정 판별 — 정의는 entranceEligibility.js(순수
+// 모듈)에 있고 여기서는 기존 호출부 호환을 위해 다시 내보내기만 한다.
+export const isArchivedOrFixtureStudentName = isArchivedOrFixtureName
 
 // 이 반의 "입실시험 대상 학생" — 학생 화면(getStudentEntranceClassIds)이
 // 쓰는 것과 **같은 집합**을 관리자 쪽에서 계산한다.
@@ -2072,36 +2075,22 @@ export async function getStudentClassAssignments(studentId) {
 // 없이 동기적으로 끝나고, 콜드면 1회만 조회한다. 조회 실패/테이블 부재는
 // getStudentClassAssignments가 이미 합성 단일 배정으로 흡수하므로 최악의
 // 경우에도 "사람 반 1개"(= 수정 전과 동일 동작)로 폴백한다(규칙 9).
+// 판정 규칙 자체는 entranceEligibility.js(순수 모듈)에 있다 — 이 함수는
+// "캐시/DB에서 재료를 모아 그 규칙에 넘기는" 얇은 어댑터다(2026-08-11 P2:
+// 같은 규칙이 세 곳에 흩어져 세 번 재발한 뒤 단일화).
 export async function getStudentEntranceClassIds(studentId) {
   if (!studentId) return []
-  const ids = []
-  const primary = getStudentClassId(studentId)
-  if (primary) ids.push(primary)
   let assignments = _studentAssignmentsCache.get(studentId)
   if (!assignments) {
     try { assignments = await getStudentClassAssignments(studentId) } catch { assignments = [] }
   }
-  for (const a of assignments || []) {
-    if (a.classId && !ids.includes(a.classId)) ids.push(a.classId)
-    // 교재 축(2026-08-11 실사고 — 위 class_id 축만으로는 부족했다).
-    // 배정 행에는 독립된 두 축이 있다: class_id(v2.9 컨테이너 반)와
-    // textbook_id(v3.1 교재). setPrimaryTextbook은 textbook_id만 갱신하고
-    // class_id는 예전 값 그대로 두므로, 같은 행이 두 축에서 서로 다른 반을
-    // 가리키는 상태가 정상적으로 발생한다(실측: Jinaa의 primary 행 =
-    // class_id "Presentation 6" + textbook_id "고1 능률 민병천").
-    // 단어/유닛(학습 계층)은 textbook_id를 따라가는데 입실시험만 class_id를
-    // 봐서, 매일 그 교재로 공부하는 학생이 그 교재의 시험에서 제외됐다
-    // (실측 8명 — 오늘 시험 기준 3명). 교재의 소유 컨테이너 반까지 범위에
-    // 넣어 두 계층이 같은 반을 가리키게 한다.
-    //
-    // 과도 확장이 아니다: 여기서 더해지는 반은 전부 "이 학생의 배정 행이
-    // 이미 참조하고 있는 교재"의 소유 반뿐이라, 없던 소속을 새로 만들지
-    // 않는다. 합성 교재(synthetic-tb:<classId>, v3.1 SQL 미실행 레거시)는
-    // ownerClassId가 곧 a.classId라 위 줄과 중복돼 자동으로 흡수된다.
-    const ownerClassId = a.textbookId ? getTextbookById(a.textbookId)?.ownerClassId : null
-    if (ownerClassId && !ids.includes(ownerClassId)) ids.push(ownerClassId)
-  }
-  return ids
+  return computeEntranceScopeClassIds({
+    primaryClassId: getStudentClassId(studentId),
+    assignments,
+    // 합성 교재(synthetic-tb:<classId>, v3.1 SQL 미실행 레거시)는
+    // ownerClassId가 곧 그 행의 classId라 중복 제거로 자동 흡수된다.
+    resolveTextbookOwnerClassId: (tbId) => getTextbookById(tbId)?.ownerClassId || null,
+  })
 }
 
 // 2) 쓰기 — 두 번째 이상 교재 배정. is_primary는 항상 false로 insert한다
