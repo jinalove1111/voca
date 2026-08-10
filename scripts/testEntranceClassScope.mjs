@@ -27,10 +27,27 @@ const env = Object.fromEntries(fs.readFileSync(new URL('../.env', import.meta.ur
 const BASE = env.VITE_SUPABASE_URL, KEY = env.VITE_SUPABASE_ANON_KEY
 const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' }
 const restGet = async (p) => (await fetch(`${BASE}/rest/v1/${p}`, { headers: H })).json()
+// PostgREST는 .range()/limit 없는 select를 기본 1000행에서 자른다(실측: students
+// 1157행 중 1000행만 도착 — 이 테스트가 기대 집합을 잘못 계산했던 원인).
+// 앱 쪽 refreshStudents는 이미 페이징하므로 이건 테스트 하네스 전용 보정이다.
+const restGetAll = async (p) => {
+  const out = []
+  const sep = p.includes('?') ? '&' : '?'
+  for (let offset = 0; ; offset += 1000) {
+    const page = await restGet(`${p}${sep}limit=1000&offset=${offset}`)
+    if (!Array.isArray(page)) return Array.isArray(out) && out.length ? out : page
+    out.push(...page)
+    if (page.length < 1000) break
+  }
+  return out
+}
 
 const lib = await import(pathToFileURL(process.env.WORDLIB_BUNDLE).href)
 const api = await import(pathToFileURL(process.env.ENTRANCE_BUNDLE).href)
-const { initWordLibrary, getStudentClassId, getStudentEntranceClassIds, getTextbookById } = lib
+const {
+  initWordLibrary, getStudentClassId, getStudentEntranceClassIds, getTextbookById,
+  fetchEntranceRosterForClass, isArchivedOrFixtureStudentName, getClassNames, getClassIdByName,
+} = lib
 const { fetchTodayTests, fetchTodayTestsForClasses } = api
 
 await initWordLibrary()
@@ -196,6 +213,71 @@ console.log('\n4. 교재 축(2026-08-11 실사고) — setPrimaryTextbook이 cla
     } else {
       console.log('  SKIP  오늘 시작된 시험이 없음')
     }
+  }
+}
+
+console.log('\n5. 관리자 "반 전체 N명" 분모 == 학생 화면 대상 집합')
+{
+  // 2026-08-11 — 관리자 분모(fetchEntranceRosterForClass)와 학생 노출
+  // (getStudentEntranceClassIds)이 같은 집합이어야 한다. 예전엔 관리자만
+  // students.class_id를 봐서 교재 반은 0명, 사람 반은 아카이브 계정까지
+  // 세는 과다 집계였다.
+  const students = await restGetAll('students?select=id,name,class_id')
+  const tbs = await restGetAll('textbooks?select=id,owner_class_id')
+  const ownTbByClass = new Map()
+  for (const t of Array.isArray(tbs) ? tbs : []) {
+    if (!t.owner_class_id) continue
+    if (!ownTbByClass.has(t.owner_class_id)) ownTbByClass.set(t.owner_class_id, [])
+    ownTbByClass.get(t.owner_class_id).push(t.id)
+  }
+  const realStudents = (Array.isArray(students) ? students : []).filter((s) => !isArchivedOrFixtureStudentName(s.name))
+
+  check('아카이브/픽스처 판별기 계약(_DUP/_INACTIVE/QA_ 접두·접미)',
+    isArchivedOrFixtureStudentName('김가윤_DUP2_212b1c_INACTIVE') &&
+    isArchivedOrFixtureStudentName('QA_PinKid') &&
+    isArchivedOrFixtureStudentName('_QA_Song_TextbookModel_20260722') &&
+    !isArchivedOrFixtureStudentName('Jinaa') &&
+    !isArchivedOrFixtureStudentName('박서진'))
+
+  let mismatches = []
+  let junkLeak = []
+  for (const name of getClassNames()) {
+    if (/^QA_|^_QA/.test(name)) continue // QA 픽스처 반은 검증 대상 아님
+    const cid = getClassIdByName(name)
+    if (!cid) continue
+    const roster = await fetchEntranceRosterForClass(cid)
+    // 기대 집합 = 원시 데이터로 같은 규칙을 독립 계산
+    const ownTb = ownTbByClass.get(cid) || []
+    const expected = new Set(realStudents.filter((s) => s.class_id === cid).map((s) => s.id))
+    for (const r of Array.isArray(sca) ? sca : []) {
+      if (r.class_id === cid || (r.textbook_id && ownTb.includes(r.textbook_id))) expected.add(r.student_id)
+    }
+    for (const id of [...expected]) {
+      if (!realStudents.some((s) => s.id === id)) expected.delete(id) // 아카이브/픽스처 제외
+    }
+    const got = new Set(roster.map((s) => s.id))
+    if (got.size !== expected.size || [...expected].some((id) => !got.has(id))) {
+      mismatches.push(`${name}(관리자 ${got.size} vs 기대 ${expected.size})`)
+    }
+    if (roster.some((s) => isArchivedOrFixtureStudentName(s.name))) junkLeak.push(name)
+  }
+  check('모든 실제 반에서 관리자 분모 = 기대 집합(사람 반 ∪ SCA 반 ∪ 배정 교재 소유 반 − 아카이브)',
+    mismatches.length === 0, mismatches.join(', '))
+  check('분모에 아카이브/중복/QA 계정이 섞이지 않는다', junkLeak.length === 0, junkLeak.join(', '))
+
+  // 관리자 분모에 든 학생은 학생 화면에서도 그 반의 시험을 볼 수 있어야 한다
+  // (두 함수가 같은 규칙을 쓰는지 실제 호출로 교차 확인 — 표본 검사).
+  const sampleClass = getClassNames().find((n) => !/^QA_|^_QA/.test(n) && (ownTbByClass.get(getClassIdByName(n)) || []).length > 0)
+  if (!sampleClass) {
+    console.log('  SKIP  교재를 소유한 실제 반이 없음')
+  } else {
+    const cid = getClassIdByName(sampleClass)
+    const roster = await fetchEntranceRosterForClass(cid)
+    let ok = true
+    for (const s of roster.slice(0, 12)) {
+      if (!(await getStudentEntranceClassIds(s.id)).includes(cid)) ok = false
+    }
+    check(`관리자 분모의 학생은 학생 화면 조회 범위에도 그 반이 있다("${sampleClass}" ${Math.min(roster.length, 12)}명 표본)`, ok)
   }
 }
 

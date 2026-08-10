@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   getClassNames, getClassIdByName, getClassUnitNames, getClassWords,
-  getTodaysAssignmentWordIds, getStudentsInClass,
+  getTodaysAssignmentWordIds, fetchEntranceRosterForClass,
 } from '../utils/wordLibrary'
 import { summarizeClassResults } from '../utils/entranceTest'
 import {
@@ -95,7 +95,20 @@ export default function EntranceTestAdmin() {
     () => summarizeClassResults(results.map((r) => ({ ...r, missedWords: r.missedWords }))),
     [results]
   )
-  const roster = cls ? getStudentsInClass(cls) : []
+  // "반 전체 N명"의 분모 — 학생 화면 eligibility와 같은 집합(사람 반 ∪ SCA
+  // 반 ∪ 배정 교재의 소유 반, 아카이브/중복/QA 계정 제외). 예전엔
+  // getStudentsInClass(=students.class_id만)라 교재 반을 고르면 0명,
+  // 사람 반을 고르면 아카이브 계정까지 세어 과다 집계됐다(2026-08-11).
+  // 반이 바뀔 때만 1회 조회하고, 시험 현황 5초 폴링에는 얹지 않는다.
+  const [roster, setRoster] = useState([])
+  useEffect(() => {
+    if (!classId) { setRoster([]); return undefined }
+    let alive = true
+    fetchEntranceRosterForClass(classId)
+      .then((list) => { if (alive) setRoster(list) })
+      .catch(() => { if (alive) setRoster([]) }) // 실패해도 패널은 그대로 동작(분모만 0)
+    return () => { alive = false }
+  }, [classId])
 
   const handleStart = async () => {
     if (!classId) return alert('반을 선택해주세요!')

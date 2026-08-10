@@ -1400,6 +1400,67 @@ export function getStudentsInClass(className) {
     .map(s => ({ id: s.id, name: s.name, unitName: getStudentUnit(s.id) }))
 }
 
+// 아카이브/중복/QA 픽스처 계정 판별 — 이름 접미·접두 관례(StudentSelect의
+// isRealSetupStudent, StudentDirectory 로드 필터와 같은 규칙 중 "계정 종류"
+// 부분만 옮긴 것). 화면별 예외 목록(cookie/paul 등 특정 이름)은 의도적으로
+// 넣지 않는다 — 그건 그 화면의 정책이지 계정 종류가 아니다.
+export const isArchivedOrFixtureStudentName = (name) =>
+  /_dup|_inactive/i.test(name || '') || /^(qa_|_qa_)/i.test(name || '')
+
+// 이 반의 "입실시험 대상 학생" — 학생 화면(getStudentEntranceClassIds)이
+// 쓰는 것과 **같은 집합**을 관리자 쪽에서 계산한다.
+//
+// 왜 getStudentsInClass로는 안 되나(2026-08-11 실사고 3): 그 함수는
+// students.class_id(v1.x 시절 정의)만 본다. 시험은 단어가 사는 교재 컨테이너
+// 반으로 시작되는데 실제 학생의 class_id는 사람 반을 가리키므로 분모가 0이
+// 되고(실측: 고1 능률 민병천 0명 vs 실제 대상 8명), 반대로 사람 반을 고르면
+// 아카이브/중복 계정까지 전부 세어 과다 집계된다(MS Advanced Class 132명 vs
+// 실제 15명). 양방향으로 틀린 숫자라 응시율 판단이 불가능했다.
+//
+// 집합 = students.class_id = X  ∪  SCA.class_id = X  ∪  SCA.textbook_id = (X가
+// 소유한 교재)  −  아카이브/중복/QA 계정.
+//
+// 관리자 화면에서만 호출된다(학생 클라이언트 부하 0). getStudentsInClass는
+// 일부러 그대로 둔다 — 반 관리 학생 목록/배정 이력/대시보드 매핑 등 기존
+// 4개 호출부는 "이 반에 직접 소속된 학생"이라는 원래 의미를 계속 쓴다.
+export async function fetchEntranceRosterForClass(classId) {
+  if (!classId) return []
+  const ids = new Set(
+    Array.from(_students.values()).filter((s) => s.classId === classId).map((s) => s.id)
+  )
+  // 이 반이 "소유한" 교재(합성 교재는 ownerClassId가 곧 classId라 위 class_id
+  // 축과 동치 — 조회에 넣을 실제 행 자체가 없으므로 제외).
+  const ownTextbookIds = Array.from(_textbooks.values())
+    .filter((t) => t.ownerClassId === classId && !String(t.id).startsWith(SYNTH_TB_PREFIX))
+    .map((t) => t.id)
+
+  const runQuery = (withTextbookAxis) => {
+    const q = supabase.from('student_class_assignments').select('student_id')
+    return withTextbookAxis && ownTextbookIds.length > 0
+      ? q.or(`class_id.eq.${classId},textbook_id.in.(${ownTextbookIds.join(',')})`)
+      : q.eq('class_id', classId)
+  }
+
+  let { data, error } = await runQuery(true)
+  // textbook_id 컬럼 부재(v3.1 마이그레이션 전)면 class_id 축만으로 재시도 —
+  // getStudentClassAssignments의 42703 cascading 폴백과 동일 관례(규칙 9).
+  if (error && error.code === '42703') ({ data, error } = await runQuery(false))
+  if (error) {
+    // 조회 실패는 화면을 깨뜨리지 않는다 — 직접 소속(위 ids)만으로 표시하고
+    // 콘솔에만 남긴다(이 파일 전역의 fail-open 원칙).
+    if (!isMissingTableError(error)) {
+      console.warn('[wordLibrary] fetchEntranceRosterForClass: SCA 조회 실패 (non-fatal, 직접 소속만 표시):', error.message)
+    }
+  } else {
+    for (const r of data || []) if (r.student_id) ids.add(r.student_id)
+  }
+
+  return Array.from(ids)
+    .map((id) => _students.get(id))
+    .filter((s) => s && !isArchivedOrFixtureStudentName(s.name))
+    .map((s) => ({ id: s.id, name: s.name, unitName: getStudentUnit(s.id) }))
+}
+
 // 반환값: 새로 생성된 학생의 id(UUID). 호출부(StudentSelect.jsx 자기등록,
 // AdminScreen.jsx)가 이 id로 곧바로 PIN 설정(api/set-student-pin.js) 및
 // 로그인 세션을 이어간다. 동명이인 차단 로직은 의도적으로 제거했다 —
