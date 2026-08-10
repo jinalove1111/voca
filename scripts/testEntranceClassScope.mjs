@@ -1,0 +1,132 @@
+// 입실시험 "조회 반 범위" 회귀 테스트 (2026-08-10) — READ-ONLY 라이브 검증.
+//
+// 잡는 회귀: 학생 화면(배너/응시)이 오늘의 시험을 students.class_id(사람 반)
+// 하나로만 조회하던 문제. v3.1 교재 레이어부터 원장은 단어가 실제로 사는
+// 교재 컨테이너 반(예: "고1 능률 민병천")으로 시험을 시작하는데,
+// setPrimaryTextbook은 의도적으로 students.class_id를 바꾸지 않는다 —
+// 그래서 학생 쪽 조회가 0건이 되고 배너가 조용히 안 떴다(2026-08-10 실사고:
+// 오늘자 시험 3건 전부 교재 컨테이너 반 소속, 그 반의 students.class_id
+// 기준 소속 학생 0명 → 전원 미표시).
+//
+// 계약: 학생 화면의 조회 범위 = 사람 반 ∪ student_class_assignments의 반.
+// 단일 반 학생은 수정 전과 100% 동일해야 한다(회귀 없음).
+//
+// 실행:
+//   node scripts/buildWordLibBundle.mjs
+//   node scripts/buildEntranceBundle.mjs
+//   WORDLIB_BUNDLE=scripts/.tmp/wordLibrary.bundle.mjs \
+//   ENTRANCE_BUNDLE=scripts/.tmp/entranceTestApi.bundle.mjs \
+//   node scripts/testEntranceClassScope.mjs
+//
+// 쓰기는 단 한 건도 하지 않는다(조회 전용) — 실사용 데이터에 안전.
+import fs from 'node:fs'
+import { pathToFileURL } from 'node:url'
+
+const env = Object.fromEntries(fs.readFileSync(new URL('../.env', import.meta.url), 'utf8')
+  .split('\n').filter((l) => l.includes('=')).map((l) => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()]))
+const BASE = env.VITE_SUPABASE_URL, KEY = env.VITE_SUPABASE_ANON_KEY
+const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' }
+const restGet = async (p) => (await fetch(`${BASE}/rest/v1/${p}`, { headers: H })).json()
+
+const lib = await import(pathToFileURL(process.env.WORDLIB_BUNDLE).href)
+const api = await import(pathToFileURL(process.env.ENTRANCE_BUNDLE).href)
+const { initWordLibrary, getStudentClassId, getStudentEntranceClassIds } = lib
+const { fetchTodayTests, fetchTodayTestsForClasses } = api
+
+await initWordLibrary()
+
+let failures = 0
+const check = (label, cond, extra) => {
+  if (cond) console.log(`  PASS  ${label}`)
+  else { console.log(`  FAIL  ${label}`, extra !== undefined ? JSON.stringify(extra) : ''); failures++ }
+}
+
+// entrance_tests 테이블이 아직 없으면(마이그레이션 전) 안전하게 SKIP —
+// testEntranceTestDb.mjs와 동일한 관례(크래시 아님, exit 0).
+const probe = await restGet('entrance_tests?select=id&limit=1')
+if (!Array.isArray(probe)) {
+  console.log('SKIP — entrance_tests 테이블 없음(supabase_v1_8_entrance_test.sql 미실행). 실행 후 다시 돌리세요.')
+  process.exit(0)
+}
+
+const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` })()
+const sca = await restGet('student_class_assignments?select=student_id,class_id')
+const byStudent = new Map()
+for (const r of Array.isArray(sca) ? sca : []) {
+  if (!byStudent.has(r.student_id)) byStudent.set(r.student_id, [])
+  byStudent.get(r.student_id).push(r.class_id)
+}
+
+console.log('\n1. 조회 범위 헬퍼(getStudentEntranceClassIds) 계약')
+{
+  check('studentId 없으면 빈 배열(호출부가 조용히 아무것도 안 함)', (await getStudentEntranceClassIds(null)).length === 0)
+
+  // 다중 배정 학생 — 사람 반과 배정 반이 전부 들어있고 중복이 없어야 한다.
+  const multi = [...byStudent.entries()].find(([sid, ids]) => {
+    const primary = getStudentClassId(sid)
+    return primary && ids.some((c) => c !== primary)
+  })
+  if (!multi) {
+    console.log('  SKIP  다중 배정(사람 반 ≠ 교재 반) 학생이 현재 데이터에 없음')
+  } else {
+    const [sid, ids] = multi
+    const scope = await getStudentEntranceClassIds(sid)
+    check('사람 반(students.class_id)이 반드시 포함된다', scope.includes(getStudentClassId(sid)), scope)
+    check('배정된 교재 컨테이너 반이 전부 포함된다', ids.every((c) => scope.includes(c)), { scope, ids })
+    check('중복 반 id 없음', new Set(scope).size === scope.length, scope)
+  }
+
+  // 단일 반 학생 — 수정 전과 동일하게 정확히 1개여야 한다(회귀 방지).
+  const singles = [...byStudent.entries()]
+    .filter(([sid, ids]) => { const p = getStudentClassId(sid); return p && ids.every((c) => c === p) })
+    .slice(0, 5)
+  if (singles.length === 0) {
+    console.log('  SKIP  단일 반 학생 표본 없음')
+  } else {
+    let ok = true
+    for (const [sid] of singles) {
+      const scope = await getStudentEntranceClassIds(sid)
+      if (scope.length !== 1 || scope[0] !== getStudentClassId(sid)) ok = false
+    }
+    check(`단일 반 학생(${singles.length}명 표본)은 정확히 사람 반 1개 — 수정 전과 동일`, ok)
+  }
+}
+
+console.log('\n2. 다중 반 조회(fetchTodayTestsForClasses) 계약')
+{
+  check('빈 목록 -> 빈 배열(불필요한 조회 없음)', (await fetchTodayTestsForClasses([])).length === 0)
+  check('null/undefined 섞여도 안전', (await fetchTodayTestsForClasses([null, undefined])).length === 0)
+
+  const someClass = (await restGet('classes?select=id&limit=1'))[0]?.id
+  if (someClass) {
+    const single = await fetchTodayTestsForClasses([someClass])
+    const legacy = await fetchTodayTests(someClass)
+    check('단일 id 경로는 기존 fetchTodayTests와 완전히 동일(회귀 0)', single.length === legacy.length)
+    check('중복 id를 넣어도 결과가 부풀지 않는다', (await fetchTodayTestsForClasses([someClass, someClass])).length === legacy.length)
+  }
+}
+
+console.log('\n3. 실사고 재현 — 교재 컨테이너 반으로 시작된 오늘 시험이 학생에게 보이는가')
+{
+  const todays = await restGet(`entrance_tests?select=id,class_id&date=eq.${todayStr}`)
+  if (!Array.isArray(todays) || todays.length === 0) {
+    console.log('  SKIP  오늘 시작된 시험이 없음(원장이 시험을 시작한 날에만 검증되는 항목)')
+  } else {
+    const testClassIds = new Set(todays.map((t) => t.class_id))
+    // 그 반에 배정된 학생 중 "사람 반은 다른 반"인 학생 = 예전 코드가 놓치던 학생
+    const victim = [...byStudent.entries()].find(([sid, ids]) =>
+      ids.some((c) => testClassIds.has(c)) && !testClassIds.has(getStudentClassId(sid)))
+    if (!victim) {
+      console.log('  SKIP  오늘 시험 반 = 학생 사람 반이라 이 회귀 조건에 해당하는 학생이 없음')
+    } else {
+      const [sid] = victim
+      const legacy = await fetchTodayTests(getStudentClassId(sid))
+      const fixed = await fetchTodayTestsForClasses(await getStudentEntranceClassIds(sid))
+      check('예전(사람 반 단독) 경로는 이 학생에게 0건 — 이 회귀가 실제로 재현되는 데이터', legacy.length === 0)
+      check('새 경로는 오늘의 시험을 찾는다(배너가 뜬다)', fixed.length > 0, { found: fixed.length })
+    }
+  }
+}
+
+console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n실패 ${failures}건 ❌`)
+process.exit(failures === 0 ? 0 : 1)
