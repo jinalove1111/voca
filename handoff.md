@@ -7,6 +7,96 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-10 (90차) — P0: 입실시험이 학생 휴대폰에 안 보이던 원인(반 식별 축 불일치) 수정
+
+운영자 신고: "입실시험이 학생들 휴대폰 화면에서 보이지 않는다."
+
+### 원인 — 모바일/권한/플래그/배포가 전부 아니었다
+
+의심 항목을 하나씩 배제한 뒤 라이브 DB 실측(읽기 전용)으로 확정했다.
+
+- ❌ 모바일 전용 CSS/반응형 숨김: `EntranceTestBanner`에 반응형 숨김
+  클래스가 없고 `Dashboard.jsx:607`에서 무조건 렌더된다(데스크톱에서도
+  똑같이 안 보였다 — 모바일 문제가 아니었음).
+- ❌ 권한/RLS: `entrance_tests`는 v1.8의 `allow anon all` 그대로,
+  anon 조회 정상(실측 OK).
+- ❌ feature flag: 배너에 플래그 분기 자체가 없음.
+- ✅ **반(class) 식별 축 불일치** — 진짜 원인.
+
+학생 화면(`EntranceTestBanner`/`EntranceTest`)은 오늘의 시험을
+`students.class_id`(**사람 반**) **하나로만** 조회했다. 그런데 v3.1 교재
+레이어 도입 이후 원장은 단어/유닛이 실제로 사는 **교재 컨테이너 반**으로
+시험을 시작하고, `setPrimaryTextbook`은 설계상 의도적으로
+`students.class_id`를 바꾸지 않는다(사람 반 불변 전환). 두 축이 갈라지면서
+학생 조회가 0건이 되고 배너가 **조용히** 사라졌다(에러/로그도 없음 —
+조회 계열이 전부 빈 배열 폴백이라 실패가 보이지 않는 형태의 회귀).
+
+라이브 실측(2026-08-10):
+
+| 항목 | 실측값 |
+|---|---|
+| 오늘자 시험 | 3건 — 전부 `고1 능률 민병천`(class_type=`textbook`) |
+| 그 반의 `students.class_id` 기준 소속 학생 | **0명** |
+| 그 반에 `student_class_assignments`로 배정된 학생 | 4명(사람 반은 전부 `MS Advanced Class`) |
+
+즉 시험은 정상 생성·저장됐고 데이터도 멀쩡한데, 학생 쪽 조회 키만
+어긋나서 UI가 안 뜬 것이다(요청서의 "데이터는 정상인데 UI만 안 보이는지"
+항목이 정확히 이 케이스).
+
+배경 메모: `App.jsx`의 `handleTextbookSwitch` 주석은 v2.9 시점에 "주 교재를
+영구 전환하면 입실시험 배너를 포함한 15개 이상 호출부가 자동으로 같은 반을
+가리킨다"고 설계 의도를 명시해 뒀는데, v3.1이 그 전제(사람 반이 곧 콘텐츠
+반)를 바꾸면서 이 배너만 전제 붕괴에 남겨졌다.
+
+### 수정 (최소 범위, 학생 화면 조회 축만 확장)
+
+- `src/utils/wordLibrary.js` — `getStudentEntranceClassIds(studentId)` 신규.
+  **사람 반 ∪ `student_class_assignments`의 반**을 중복 없이 반환. 배정
+  캐시(`_studentAssignmentsCache`, App이 로그인 시 이미 예열)를 우선 사용해
+  추가 조회 0, 콜드면 1회만 조회. 실패/테이블 부재는 기존
+  `getStudentClassAssignments`의 합성 단일 배정 폴백이 흡수 → 최악의 경우도
+  "사람 반 1개"(= 수정 전과 동일 동작, 규칙 9).
+- `src/utils/entranceTestApi.js` — `fetchTodayTestsForClasses(classIds)` 신규
+  (`.in('class_id', ids)`). id 1개면 기존 `fetchTodayTests`에 그대로 위임해
+  단일 반 학생 경로는 코드 경로까지 동일. 관리자 화면은 특정 반 하나의
+  현황만 봐야 하므로 계속 단일 조회(`fetchTodayTests`) — **변경 없음**.
+- `src/components/EntranceTestBanner.jsx` — 반 id를 마운트당 1회 해석하고
+  그 목록으로 폴링. B10의 "오늘 시험 0건이면 폴링 중단"(60초 주기) 동작은
+  그대로 보존(첫 조회를 await하지 않는 원본 순서 유지).
+- `src/components/EntranceTest.jsx` — 동일 기준 적용. `classIds === null`은
+  "아직 해석 중"이라 phase를 `loading`으로 유지(빈 배열일 때만 `none`).
+
+DB 마이그레이션 없음. 제출 경로(`api/submit-entrance-result.js`)는 반 소속을
+검증하지 않으므로(문항 스냅샷 기준 재채점만 함) 제출/저장/랭킹은 영향 0.
+관리자 화면·단어학습·숙제·진도·별/점수 코드는 한 줄도 건드리지 않았다.
+
+### 검증
+
+- `npm run build` PASS.
+- `npm run verify:admin` / `verify:student` / `verify:unit` 전부 PASS.
+- 신규 회귀 테스트 `scripts/testEntranceClassScope.mjs`(READ-ONLY 라이브,
+  `registry.mjs` admin 도메인에 등록) — 조회 범위 계약 + **실사고 재현**
+  (예전 경로가 실제로 0건임을 단언한 뒤 새 경로가 시험을 찾는지 확인,
+  규칙 15의 "고치기 전 상태가 실제로 FAIL하는지" 정신).
+- 라이브 읽기 전용 대조: 오늘 시험 반에 배정된 학생 34명 중 배너 노출이
+  **수정 전 1명 → 수정 후 34명**. 단일 반 학생 30명 표본은 수정 전후 결과
+  완전 동일(회귀 0).
+
+### 남은 일 (운영자 확인 필요)
+
+1. **배포**: `origin/main`이 로컬 `main`보다 **8커밋 뒤**(`4b8d406`).
+   이 수정 이전에 이미 프로덕션은 최신이 아니었다(단, 그 8커밋은 입실시험
+   파일을 건드리지 않으므로 이번 버그의 원인은 아님). push→Vercel 배포
+   후에야 학생 폰에 반영된다.
+2. **실계정 모바일 실측**: 로컬에 service_role 키가 없어(PIN 컬럼은
+   서버 전용, 규칙 11) 실제 학생 계정 로그인 브라우저 테스트를 세션에서
+   수행하지 못했다. 배포 후 운영자 휴대폰에서 로그인→배너→응시→제출까지
+   실측 필요.
+3. (별건, 이번 범위 밖) 관리자 입실시험 패널의 "반 전체 N명"이
+   `getStudentsInClass`(=`students.class_id`)만 세므로 교재 컨테이너 반을
+   고르면 0명으로 표시된다 — 응시율 판단이 어긋난다. 같은 축 불일치의
+   관리자 쪽 잔재.
+
 ## 2026-08-10 (88차) — 2일 스프린트 1일차: Writing Coach MVP + 핵심 표현 품질 등급 + 운영 기준서 (프로덕션 DB 무변경)
 
 병렬 에이전트 분담(파일 교집합 0)으로 진행. 산출:

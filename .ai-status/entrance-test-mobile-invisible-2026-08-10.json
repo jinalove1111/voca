@@ -1,0 +1,37 @@
+{
+  "agent_name": "main-session",
+  "role": "진단 + 코드 구현",
+  "task_id": "entrance-test-mobile-invisible",
+  "task": "입실시험이 학생 휴대폰 화면에 안 보이는 문제 — 실계정/모바일 기준 원인 규명 및 최소 수정",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-10T19:30:00+09:00",
+  "updated_at": "2026-08-10T20:40:00+09:00",
+  "files_owned": [
+    "src/utils/wordLibrary.js",
+    "src/utils/entranceTestApi.js",
+    "src/components/EntranceTestBanner.jsx",
+    "src/components/EntranceTest.jsx",
+    "scripts/testEntranceClassScope.mjs",
+    "tests/harness/registry.mjs"
+  ],
+  "files_read": [
+    "src/components/Dashboard.jsx",
+    "src/components/EntranceTestAdmin.jsx",
+    "src/App.jsx",
+    "api/submit-entrance-result.js",
+    "supabase_v1_8_entrance_test.sql",
+    "supabase_v2_4_entrance_result_rls.sql"
+  ],
+  "summary": "원인은 모바일 CSS/권한/플래그/배포가 아니라 '반 식별 축 불일치'였다. 학생 화면(EntranceTestBanner/EntranceTest)이 오늘의 시험을 students.class_id(사람 반) 하나로만 조회했는데, v3.1 교재 레이어 이후 원장은 단어가 실제로 있는 교재 컨테이너 반으로 시험을 시작하고 setPrimaryTextbook은 의도적으로 students.class_id를 바꾸지 않는다. 라이브 실측: 2026-08-10 오늘자 시험 3건이 전부 '고1 능률 민병천'(교재 컨테이너) 소속인데 그 반의 students.class_id 기준 소속 학생은 0명 -> 전원 배너 미표시. 수정: 조회 축을 '사람 반 ∪ student_class_assignments 반'으로 확장(getStudentEntranceClassIds + fetchTodayTestsForClasses). 단일 반 학생은 동작 100% 동일(검증됨). 제출 API(api/submit-entrance-result.js)는 반 소속을 검증하지 않으므로 제출/저장 경로 영향 없음.",
+  "verification": {
+    "build": "PASS (npm run build)",
+    "verify:admin": "PASS (8개 스크립트, 신규 testEntranceClassScope.mjs 포함)",
+    "verify:student": "PASS (5개 스크립트)",
+    "verify:unit": "PASS (5개 스크립트)",
+    "live_readonly_diff": "오늘 시험 반에 배정된 학생 34명 중 배너 노출: 수정 전 1명 -> 수정 후 34명. 단일 반 학생 30명 표본은 수정 전후 결과 동일(회귀 0).",
+    "not_done": "실제 학생 계정 PIN이 없어 로컬에서 실계정 로그인 브라우저 테스트 불가(PIN 컬럼은 service_role 전용, 로컬에 키 없음). 프로덕션 배포 후 운영자 휴대폰 실측 필요."
+  },
+  "blocker": "프로덕션 배포 안 됨 — origin/main이 로컬 main보다 8커밋 뒤(4b8d406). 이 수정 포함 배포는 운영자 승인 후 push 필요.",
+  "next_action": "운영자 승인 후 커밋 push -> Vercel 배포 -> 학생 휴대폰에서 배너/응시/제출 실측"
+}
