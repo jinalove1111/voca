@@ -101,12 +101,17 @@ export default function EntranceTestAdmin() {
   // 사람 반을 고르면 아카이브 계정까지 세어 과다 집계됐다(2026-08-11).
   // 반이 바뀔 때만 1회 조회하고, 시험 현황 5초 폴링에는 얹지 않는다.
   const [roster, setRoster] = useState([])
+  // 조회 실패와 "정말 0명"을 화면에서 구분한다(2026-08-11 야간 검수) —
+  // 예전엔 실패도 0명으로 보여서, 일시적 네트워크 오류를 "이 반엔 아무도
+  // 없다"로 오독할 수 있었다. 패널 동작 자체는 그대로(fail-open).
+  const [rosterError, setRosterError] = useState(false)
   useEffect(() => {
-    if (!classId) { setRoster([]); return undefined }
+    if (!classId) { setRoster([]); setRosterError(false); return undefined }
     let alive = true
+    setRosterError(false)
     fetchEntranceRosterForClass(classId)
       .then((list) => { if (alive) setRoster(list) })
-      .catch(() => { if (alive) setRoster([]) }) // 실패해도 패널은 그대로 동작(분모만 0)
+      .catch(() => { if (alive) { setRoster([]); setRosterError(true) } })
     return () => { alive = false }
   }, [classId])
 
@@ -228,7 +233,7 @@ export default function EntranceTestAdmin() {
           {activeTest && (
             <div className="flex items-center justify-between bg-green-50 border-2 border-green-200 rounded-xl px-3 py-2">
               <p className="text-xs font-bold text-green-700">
-                제출 {results.filter((r) => r.testId === activeTest.id).length}명 / 반 전체 {roster.length}명
+                제출 {results.filter((r) => r.testId === activeTest.id).length}명 / 반 전체 {rosterError ? '확인 실패' : `${roster.length}명`}
               </p>
               <button onClick={handleClose}
                 className="bg-red-400 hover:bg-red-500 text-white font-black text-xs px-4 py-2 rounded-xl btn-press">
