@@ -1992,6 +1992,40 @@ export async function getStudentClassAssignments(studentId) {
   return result
 }
 
+// 1-b) 읽기 전용 — 이 학생이 "속한" 모든 반 id. 사람 반(students.class_id)
+// ∪ 배정 행의 반(student_class_assignments.class_id = 교재 소유 컨테이너 반).
+//
+// 왜 필요한가(2026-08-10 실사고, 입실시험이 학생 폰에 안 보임): v2.9까지는
+// 학생의 반이 사실상 students.class_id 하나였고, 입실시험 배너/화면도 그
+// 하나만 보고 오늘 시험을 조회했다(설계 의도는 App.jsx handleTextbookSwitch
+// 주석에 명시 — "주 교재를 영구 전환하면 15개 이상 호출부가 자동으로 같은
+// 반을 가리킨다"). 그런데 v3.1 교재 레이어가 그 전제를 바꿨다:
+// setPrimaryTextbook은 의도적으로 students.class_id(사람 반)를 바꾸지 않고
+// 교재만 전환한다. 그 결과 원장이 관리자 화면에서 교재 컨테이너 반(예:
+// "고1 능률 민병천" — 단어/유닛이 실제로 사는 곳)으로 입실시험을 시작하면,
+// 학생 쪽은 사람 반(예: "MS Advanced Class")으로만 조회해 0건 → 배너가
+// 조용히 안 뜬다(실측: 2026-08-10 오늘자 시험 3건 전부 교재 컨테이너 반
+// 소속, 그 반의 students.class_id 기준 소속 학생은 0명).
+//
+// 캐시가 예열돼 있으면(App.jsx가 로그인/학생 전환 시 이미 호출) 추가 조회
+// 없이 동기적으로 끝나고, 콜드면 1회만 조회한다. 조회 실패/테이블 부재는
+// getStudentClassAssignments가 이미 합성 단일 배정으로 흡수하므로 최악의
+// 경우에도 "사람 반 1개"(= 수정 전과 동일 동작)로 폴백한다(규칙 9).
+export async function getStudentEntranceClassIds(studentId) {
+  if (!studentId) return []
+  const ids = []
+  const primary = getStudentClassId(studentId)
+  if (primary) ids.push(primary)
+  let assignments = _studentAssignmentsCache.get(studentId)
+  if (!assignments) {
+    try { assignments = await getStudentClassAssignments(studentId) } catch { assignments = [] }
+  }
+  for (const a of assignments || []) {
+    if (a.classId && !ids.includes(a.classId)) ids.push(a.classId)
+  }
+  return ids
+}
+
 // 2) 쓰기 — 두 번째 이상 교재 배정. is_primary는 항상 false로 insert한다
 // (주 교재를 바꾸는 건 setPrimaryAssignment의 책임, 이 함수의 책임 아님).
 // current_unit_id는 의도적으로 null로 시작한다(설계 선택, 문서화: 이 반의

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { fetchTodayTests, findActiveTest } from '../utils/entranceTestApi'
-import { getStudentClassId } from '../utils/wordLibrary'
+import { fetchTodayTestsForClasses, findActiveTest } from '../utils/entranceTestApi'
+import { getStudentEntranceClassIds } from '../utils/wordLibrary'
 
 // ── Dashboard 진입 배너 ──────────────────────────────────────────────────
 // 오늘 이 반의 시험이 하나라도 있으면 표시: active면 "참여하기"(빨강 강조),
@@ -22,24 +22,35 @@ import { getStudentClassId } from '../utils/wordLibrary'
 const BANNER_POLL_MS = 60000
 
 export function EntranceTestBanner({ studentId, onGo }) {
-  const classId = getStudentClassId(studentId)
   const [tests, setTests] = useState([])
 
+  // 2026-08-10 — 조회 기준을 "사람 반 1개"에서 "이 학생이 속한 모든 반"으로
+  // 넓혔다(사람 반 ∪ 교재 컨테이너 반). 원장이 단어가 있는 교재 반으로
+  // 시험을 시작하면 예전 코드는 0건을 받아 배너가 조용히 안 떴다 —
+  // wordLibrary.getStudentEntranceClassIds 주석 참고. 반 id 해석은 마운트당
+  // 1회만 하고(캐시가 예열돼 있으면 추가 조회 0), 폴링은 그 목록으로 돈다.
   useEffect(() => {
-    if (!classId) return undefined
+    if (!studentId) return undefined
     let alive = true
     let iv = null
-    const check = async (isFirst) => {
-      if (document.visibilityState !== 'visible') return
-      const t = await fetchTodayTests(classId)
-      if (!alive) return
-      setTests(t)
-      if (isFirst && t.length === 0 && iv) { clearInterval(iv); iv = null }
+    const run = async () => {
+      const classIds = await getStudentEntranceClassIds(studentId)
+      if (!alive || classIds.length === 0) return
+      const check = async (isFirst) => {
+        if (document.visibilityState !== 'visible') return
+        const t = await fetchTodayTestsForClasses(classIds)
+        if (!alive) return
+        setTests(t)
+        if (isFirst && t.length === 0 && iv) { clearInterval(iv); iv = null }
+      }
+      // await하지 않는다(원본과 동일) — 첫 조회가 끝날 땐 이미 iv가 잡혀
+      // 있어야 B10의 "오늘 시험 0건이면 폴링 중단"이 그대로 동작한다.
+      check(true)
+      iv = setInterval(() => check(false), BANNER_POLL_MS)
     }
-    check(true)
-    iv = setInterval(() => check(false), BANNER_POLL_MS)
+    run()
     return () => { alive = false; if (iv) clearInterval(iv) }
-  }, [classId])
+  }, [studentId])
 
   if (tests.length === 0) return null
   const active = findActiveTest(tests)

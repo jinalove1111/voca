@@ -82,6 +82,29 @@ export async function fetchTodayTests(classId) {
   return (data || []).map(mapTest)
 }
 
+// 여러 반의 오늘 시험을 한 번에 — 학생 화면 전용(배너/응시 화면).
+// 학생은 이제 사람 반 + 교재 컨테이너 반에 동시에 속할 수 있고(v3.1),
+// 원장은 단어가 실제로 사는 교재 컨테이너 반으로 시험을 시작한다. 그래서
+// 학생 쪽은 "내가 속한 모든 반"을 대상으로 조회해야 한다 —
+// wordLibrary.getStudentEntranceClassIds 주석의 2026-08-10 실사고 참고.
+// 관리자 화면(EntranceTestAdmin)은 특정 반 하나의 현황만 봐야 하므로
+// 계속 fetchTodayTests(단일)를 쓴다 — 바뀐 것 없음.
+export async function fetchTodayTestsForClasses(classIds) {
+  const ids = Array.from(new Set((classIds || []).filter(Boolean)))
+  if (ids.length === 0) return []
+  if (ids.length === 1) return fetchTodayTests(ids[0])
+  if (_available === false) return []
+  const { data, error } = await supabase
+    .from('entrance_tests')
+    .select('*')
+    .in('class_id', ids)
+    .eq('date', localIsoDateStr())
+    .order('created_at', { ascending: true })
+  if (error) { warnOnce(error); _available = false; return [] }
+  _available = true
+  return (data || []).map(mapTest)
+}
+
 export const findActiveTest = (tests) => (tests || []).find((t) => t.status === 'active') || null
 
 // 시험 생성(교사 "시험 시작") — 같은 반의 오늘자 기존 active 시험은 먼저

@@ -4,9 +4,9 @@ import {
   bestResultPerStudent, rankResults, pickMvps, formatSeconds,
 } from '../utils/entranceTest'
 import {
-  fetchTodayTests, findActiveTest, fetchResultsForTests, submitEntranceResult,
+  fetchTodayTestsForClasses, findActiveTest, fetchResultsForTests, submitEntranceResult,
 } from '../utils/entranceTestApi'
-import { getStudentClassId, getStudentById } from '../utils/wordLibrary'
+import { getStudentEntranceClassIds, getStudentById } from '../utils/wordLibrary'
 import { playSuccessSound } from '../utils/speech'
 
 // ── 입실 단어시험 (학생 화면) ────────────────────────────────────────────
@@ -85,7 +85,15 @@ export function toRanked(rows) {
 // 위함. App.jsx는 이 컴포넌트를 React.lazy로 로드한다.
 
 export default function EntranceTest({ studentId, studentName, onBack }) {
-  const classId = getStudentClassId(studentId)
+  // 2026-08-10 — 배너와 동일하게 "이 학생이 속한 모든 반"(사람 반 ∪ 교재
+  // 컨테이너 반)을 조회 기준으로 쓴다. null = 아직 해석 중(초기 phase가
+  // 'loading'이므로 그동안 화면은 로딩 상태 그대로).
+  const [classIds, setClassIds] = useState(null)
+  useEffect(() => {
+    let alive = true
+    getStudentEntranceClassIds(studentId).then((ids) => { if (alive) setClassIds(ids) })
+    return () => { alive = false }
+  }, [studentId])
 
   // phase: loading | none | intro | running | result
   const [phase, setPhase] = useState('loading')
@@ -124,7 +132,7 @@ export default function EntranceTest({ studentId, studentName, onBack }) {
   const loadReqIdRef = useRef(0)
   const load = async () => {
     const reqId = ++loadReqIdRef.current
-    const t = await fetchTodayTests(classId)
+    const t = await fetchTodayTestsForClasses(classIds)
     const r = await fetchResultsForTests(t.map((x) => x.id))
     if (loadReqIdRef.current !== reqId) return // 더 최신 load가 시작됨 — 버림
     setRows(r)
@@ -142,10 +150,11 @@ export default function EntranceTest({ studentId, studentName, onBack }) {
   }
 
   useEffect(() => {
-    if (!classId) { setPhase('none'); return }
+    if (classIds === null) return // 아직 반 id 해석 중 — phase는 'loading' 유지
+    if (classIds.length === 0) { setPhase('none'); return }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classId, studentId])
+  }, [classIds, studentId])
 
   // 결과(랭킹) 화면에서만 폴링 — 탭이 백그라운드면 건너뛰어 배터리/API 절약.
   useEffect(() => {
