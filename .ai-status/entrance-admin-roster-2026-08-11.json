@@ -1,0 +1,33 @@
+{
+  "agent_name": "main-session",
+  "role": "코드 구현 + 검증 + 배포",
+  "task_id": "entrance-admin-roster",
+  "task": "관리자 입실시험 '반 전체 N명' 집계가 양방향으로 틀린 문제 수정",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-11T03:00:00+09:00",
+  "updated_at": "2026-08-11T03:50:00+09:00",
+  "files_owned": [
+    "src/utils/wordLibrary.js",
+    "src/components/EntranceTestAdmin.jsx",
+    "scripts/testEntranceClassScope.mjs"
+  ],
+  "files_read": [
+    "src/components/StudentSelect.jsx",
+    "src/components/admin/StudentDirectory.jsx",
+    "src/components/AdminScreen.jsx"
+  ],
+  "summary": "관리자 분모만 getStudentsInClass(students.class_id, v1.x 정의)에 남아 있어 교재 컨테이너 반은 0명, 사람 반은 아카이브/중복 계정까지 세어 과다 집계됐다. fetchEntranceRosterForClass 신규로 학생 화면 eligibility와 동일 집합(사람 반 U SCA 반 U 배정 교재 소유 반 − 아카이브/중복/QA)을 계산. getStudentsInClass는 나머지 4개 호출부를 위해 그대로 유지. 관리자 화면 전용 조회 1건(반 변경 시 1회)이라 학생 클라이언트 부하 0.",
+  "verification": {
+    "build": "PASS",
+    "verify:all": "PASS (전 도메인)",
+    "verify:integrity": "PASS (13개 단언)",
+    "regression_test": "testEntranceClassScope.mjs 5번 섹션 신규 — 모든 실제 반에서 관리자 분모 = 독립 계산 기대 집합 / 아카이브 계정 미포함 / 분모 학생이 학생 화면 조회 범위에도 그 반 보유",
+    "before_after": "고1 능률 민병천 0→8, 고1 6월 학평 0→11, 중2 YMB 2→9, 중2 능률 1→7, 중1 동아 0→3, 중2 천재 0→1, MS Advanced 132→15, Presentation 6 -2026 60→15, Presentation 6 11→12, Pre-Middle 9→9, 중2 동아 0→0",
+    "ms_advanced_audit": "132→15: 빠진 117명 전원이 _DUP/_INACTIVE/QA 계정(프로그램 검증), 실제 학생 손실 0명, 신규 유입 0명. 전 반 합계로도 잔존 아카이브 0건 / 사라진 실제 학생 0명",
+    "test_harness_bug_found": "테스트의 restGet이 PostgREST 1000행 상한에 잘려(students 1157행) 기대 집합을 잘못 계산 → restGetAll 페이징 추가로 수정. 앱 refreshStudents는 원래 페이징돼 있어 프로덕션 영향 없음",
+    "deployed": "commit 3b7e313 → Vercel production Ready, 번들 index-Bm5awccA.js"
+  },
+  "blocker": null,
+  "next_action": "운영자가 관리자 화면 🏁 입실시험 탭에서 반을 골라 '반 전체 N명' 숫자 확인"
+}
