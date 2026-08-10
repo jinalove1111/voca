@@ -1,0 +1,33 @@
+{
+  "agent_name": "main-session",
+  "role": "진단 + 코드 구현 + 배포",
+  "task_id": "entrance-textbook-axis",
+  "task": "학생 3명에게 입실시험이 안 보이는 구조적 eligibility 문제 — READ-ONLY 원인 규명 후 최소 수정",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-11T01:20:00+09:00",
+  "updated_at": "2026-08-11T02:35:00+09:00",
+  "files_owned": [
+    "src/utils/wordLibrary.js",
+    "scripts/testEntranceClassScope.mjs",
+    "scripts/auditCurriculumIntegrity.mjs"
+  ],
+  "files_read": [
+    "src/components/EntranceTestAdmin.jsx",
+    "src/components/EntranceTestBanner.jsx",
+    "src/components/EntranceTest.jsx",
+    "src/utils/entranceTestApi.js",
+    "src/App.jsx"
+  ],
+  "summary": "90차 수정(class_id U SCA.class_id)이 절반짜리였다. student_class_assignments 한 행에 독립된 두 축(class_id = v2.9 컨테이너 반, textbook_id = v3.1 교재)이 있는데 setPrimaryTextbook은 textbook_id만 갱신하고 class_id는 예전 값을 남긴다(실측 56행이 갈라진 상태). 학습 계층(단어/유닛)은 textbook_id를, 입실시험은 class_id를 따라가 매일 그 교재로 공부하는 학생이 그 교재의 시험에서만 제외됐다. 실제 학생 41명 중 8명 누락(오늘 시험 기준 3명: Jinaa/황성연/김가윤 — 셋 다 primary 행이 class=Presentation 6 + textbook=고1 능률 민병천). getStudentEntranceClassIds에 배정 교재의 ownerClassId를 추가해 8명 전원 구제, 잔여 0명.",
+  "verification": {
+    "build": "PASS",
+    "verify:all": "PASS (전 도메인, speaking/listening은 기존 SKIP)",
+    "verify:integrity": "PASS (13개 단언 — 신규 불변식 '학습 유닛의 소유 반 ∈ 입실시험 조회 범위' 포함, 수정 전 데이터 기준 8건 위반 → 수정 후 0건)",
+    "regression_test": "scripts/testEntranceClassScope.mjs 4번 섹션 신규 — 두 축이 갈라진 학생 52명 전원 커버 / 근거 없는 반 미포함(오노출 방지) / 중복 없음 / 오늘 시험 실제 조회",
+    "exposure_delta": "고1 능률 민병천 4→8명, 고1 6월 학평 2→11명, 나머지 9개 반 변화 0. 조회 범위가 넓어진 학생 10명/41명.",
+    "deployed": "commit 519d54b → Vercel production Ready, 번들 index-SNERMf-V.js에 신규 코드 확인"
+  },
+  "blocker": null,
+  "next_action": "운영자가 관리자 화면에서 '고1 능률 민병천' 반으로 입실시험을 새로 시작한 뒤, 학생(Jinaa 등) 휴대폰에서 앱을 새로고침해 배너 확인"
+}
