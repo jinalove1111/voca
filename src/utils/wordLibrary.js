@@ -2022,6 +2022,23 @@ export async function getStudentEntranceClassIds(studentId) {
   }
   for (const a of assignments || []) {
     if (a.classId && !ids.includes(a.classId)) ids.push(a.classId)
+    // 교재 축(2026-08-11 실사고 — 위 class_id 축만으로는 부족했다).
+    // 배정 행에는 독립된 두 축이 있다: class_id(v2.9 컨테이너 반)와
+    // textbook_id(v3.1 교재). setPrimaryTextbook은 textbook_id만 갱신하고
+    // class_id는 예전 값 그대로 두므로, 같은 행이 두 축에서 서로 다른 반을
+    // 가리키는 상태가 정상적으로 발생한다(실측: Jinaa의 primary 행 =
+    // class_id "Presentation 6" + textbook_id "고1 능률 민병천").
+    // 단어/유닛(학습 계층)은 textbook_id를 따라가는데 입실시험만 class_id를
+    // 봐서, 매일 그 교재로 공부하는 학생이 그 교재의 시험에서 제외됐다
+    // (실측 8명 — 오늘 시험 기준 3명). 교재의 소유 컨테이너 반까지 범위에
+    // 넣어 두 계층이 같은 반을 가리키게 한다.
+    //
+    // 과도 확장이 아니다: 여기서 더해지는 반은 전부 "이 학생의 배정 행이
+    // 이미 참조하고 있는 교재"의 소유 반뿐이라, 없던 소속을 새로 만들지
+    // 않는다. 합성 교재(synthetic-tb:<classId>, v3.1 SQL 미실행 레거시)는
+    // ownerClassId가 곧 a.classId라 위 줄과 중복돼 자동으로 흡수된다.
+    const ownerClassId = a.textbookId ? getTextbookById(a.textbookId)?.ownerClassId : null
+    if (ownerClassId && !ids.includes(ownerClassId)) ids.push(ownerClassId)
   }
   return ids
 }

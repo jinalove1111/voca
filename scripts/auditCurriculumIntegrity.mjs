@@ -99,6 +99,45 @@ const allExamples = await getAll('examples', { select: 'id,approval_status', ord
 const badStatus = allExamples.filter(e => !['draft', 'pending', 'approved', 'rejected'].includes(e.approval_status))
 check('examples.approval_status 전부 유효값', badStatus.length === 0)
 
+// 5. 배정 축(class_id vs textbook_id) 정합성 — 2026-08-11 실사고 후속.
+//    배경: student_class_assignments 한 행에는 독립된 두 축이 있다.
+//    class_id(v2.9 컨테이너 반)와 textbook_id(v3.1 교재). setPrimaryTextbook은
+//    textbook_id만 갱신하고 class_id는 예전 값 그대로 두므로 "두 축이 갈라진
+//    행"은 손상이 아니라 정상 상태다 — 따라서 갈라짐 자체는 FAIL이 아니라
+//    관측치로만 기록한다. 진짜로 깨지면 안 되는 불변식은 아래 두 가지다.
+const textbooksFull = await getAll('textbooks', { select: 'id,owner_class_id', order: 'id' })
+const scaTb = await getAll('student_class_assignments', { select: 'student_id,class_id,textbook_id', order: 'student_id' })
+const tbOwner = new Map(textbooksFull.map(t => [t.id, t.owner_class_id]))
+const unitOwnerClass = new Map(units.map(u => [u.id, u.class_id]))
+
+check('SCA.textbook_id 전부 실존 교재(또는 null)', scaTb.every(a => !a.textbook_id || tbIds.has(a.textbook_id)))
+check('textbooks.owner_class_id 전부 실존 반(또는 null)', textbooksFull.every(t => !t.owner_class_id || clsIds.has(t.owner_class_id)))
+
+// 핵심 불변식: 학생이 "실제로 학습 중인" 유닛의 소유 반은 반드시 그 학생의
+// 입실시험 조회 범위(사람 반 ∪ SCA.class_id ∪ 배정 교재의 소유 반) 안에
+// 있어야 한다. 이게 깨지면 그 학생은 매일 그 교재로 공부하면서도 그 교재의
+// 입실시험에서만 존재하지 않는 사람이 된다(2026-08-11 실사고, 실제 8명).
+// wordLibrary.getStudentEntranceClassIds가 계산하는 집합과 같은 규칙이다.
+const scopeOf = new Map()
+for (const s of students) scopeOf.set(s.id, new Set([s.class_id].filter(Boolean)))
+for (const a of scaTb) {
+  const set = scopeOf.get(a.student_id)
+  if (!set) continue
+  if (a.class_id) set.add(a.class_id)
+  const owner = a.textbook_id ? tbOwner.get(a.textbook_id) : null
+  if (owner) set.add(owner)
+}
+const orphanLearners = students.filter(s => {
+  const owner = s.current_unit_id ? unitOwnerClass.get(s.current_unit_id) : null
+  return owner && !scopeOf.get(s.id)?.has(owner)
+})
+check('학습 중인 유닛의 소유 반이 학생의 입실시험 조회 범위 안에 있음(누락 학생 0)',
+  orphanLearners.length === 0,
+  orphanLearners.slice(0, 10).map(s => `${s.name}(${s.id.slice(0, 8)})`).join(', '))
+
+const axisSplitRows = scaTb.filter(a => { const o = a.textbook_id ? tbOwner.get(a.textbook_id) : null; return o && o !== a.class_id })
+console.log(`  INFO  두 축(class_id vs textbook_id)이 갈라진 배정 행: ${axisSplitRows.length}건 — setPrimaryTextbook 설계상 정상, 위 불변식이 지켜지는 한 문제 없음`)
+
 console.log('\n=== summary ===')
 if (failed === 0) { console.log(`  PASS  curriculum-integrity (${passed}개 단언, students ${students.length}/units ${units.length}/words ${words.length})`); process.exit(0) }
 console.log(`  FAIL  curriculum-integrity — ${failed}건: ${failures.join(', ')}`)

@@ -30,7 +30,7 @@ const restGet = async (p) => (await fetch(`${BASE}/rest/v1/${p}`, { headers: H }
 
 const lib = await import(pathToFileURL(process.env.WORDLIB_BUNDLE).href)
 const api = await import(pathToFileURL(process.env.ENTRANCE_BUNDLE).href)
-const { initWordLibrary, getStudentClassId, getStudentEntranceClassIds } = lib
+const { initWordLibrary, getStudentClassId, getStudentEntranceClassIds, getTextbookById } = lib
 const { fetchTodayTests, fetchTodayTestsForClasses } = api
 
 await initWordLibrary()
@@ -50,12 +50,17 @@ if (!Array.isArray(probe)) {
 }
 
 const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` })()
-const sca = await restGet('student_class_assignments?select=student_id,class_id')
+const sca = await restGet('student_class_assignments?select=student_id,class_id,textbook_id')
 const byStudent = new Map()
+const rowsByStudent = new Map()
 for (const r of Array.isArray(sca) ? sca : []) {
   if (!byStudent.has(r.student_id)) byStudent.set(r.student_id, [])
   byStudent.get(r.student_id).push(r.class_id)
+  if (!rowsByStudent.has(r.student_id)) rowsByStudent.set(r.student_id, [])
+  rowsByStudent.get(r.student_id).push(r)
 }
+// 교재 축 — 배정 행의 textbook_id가 가리키는 교재의 소유 컨테이너 반.
+const tbOwnerOf = (textbookId) => (textbookId ? getTextbookById(textbookId)?.ownerClassId || null : null)
 
 console.log('\n1. 조회 범위 헬퍼(getStudentEntranceClassIds) 계약')
 {
@@ -77,8 +82,18 @@ console.log('\n1. 조회 범위 헬퍼(getStudentEntranceClassIds) 계약')
   }
 
   // 단일 반 학생 — 수정 전과 동일하게 정확히 1개여야 한다(회귀 방지).
+  // 교재 축(2026-08-11)까지 같은 반을 가리키는 학생만 표본으로 쓴다 —
+  // 배정 행의 textbook_id가 다른 반의 교재를 가리키면 2개가 되는 것이
+  // 정상(그게 이번 수정의 목적)이라, 그런 학생은 이 표본이 아니다.
   const singles = [...byStudent.entries()]
-    .filter(([sid, ids]) => { const p = getStudentClassId(sid); return p && ids.every((c) => c === p) })
+    .filter(([sid, ids]) => {
+      const p = getStudentClassId(sid)
+      if (!p || !ids.every((c) => c === p)) return false
+      return (rowsByStudent.get(sid) || []).every((r) => {
+        const owner = tbOwnerOf(r.textbook_id)
+        return !owner || owner === p
+      })
+    })
     .slice(0, 5)
   if (singles.length === 0) {
     console.log('  SKIP  단일 반 학생 표본 없음')
@@ -124,6 +139,62 @@ console.log('\n3. 실사고 재현 — 교재 컨테이너 반으로 시작된 �
       const fixed = await fetchTodayTestsForClasses(await getStudentEntranceClassIds(sid))
       check('예전(사람 반 단독) 경로는 이 학생에게 0건 — 이 회귀가 실제로 재현되는 데이터', legacy.length === 0)
       check('새 경로는 오늘의 시험을 찾는다(배너가 뜬다)', fixed.length > 0, { found: fixed.length })
+    }
+  }
+}
+
+console.log('\n4. 교재 축(2026-08-11 실사고) — setPrimaryTextbook이 class_id를 안 바꾸는 구조')
+{
+  // 배정 행의 textbook_id가 그 행의 class_id와 "다른" 반의 교재를 가리키는
+  // 학생 = 학습 계층(단어/유닛)과 입실시험이 서로 다른 반을 보던 케이스.
+  const axisSplit = [...rowsByStudent.entries()].filter(([, rows]) =>
+    rows.some((r) => { const o = tbOwnerOf(r.textbook_id); return o && o !== r.class_id }))
+  if (axisSplit.length === 0) {
+    console.log('  SKIP  두 축이 갈라진 배정 행이 현재 데이터에 없음')
+  } else {
+    let allCovered = true
+    let noPhantom = true
+    for (const [sid, rows] of axisSplit) {
+      const scope = await getStudentEntranceClassIds(sid)
+      // ① 교재의 소유 반이 전부 조회 범위에 들어와야 한다
+      for (const r of rows) {
+        const owner = tbOwnerOf(r.textbook_id)
+        if (owner && !scope.includes(owner)) allCovered = false
+      }
+      // ② 범위에 들어온 반은 전부 "근거 있는" 반이어야 한다 —
+      //    사람 반 / 배정 행의 class_id / 배정 교재의 소유 반 중 하나.
+      const allowed = new Set([
+        getStudentClassId(sid),
+        ...rows.map((r) => r.class_id),
+        ...rows.map((r) => tbOwnerOf(r.textbook_id)),
+      ].filter(Boolean))
+      if (!scope.every((c) => allowed.has(c))) noPhantom = false
+      // ③ 중복 없음
+      if (new Set(scope).size !== scope.length) noPhantom = false
+    }
+    check(`두 축이 갈라진 학생(${axisSplit.length}명) 전원 — 배정 교재의 소유 반이 조회 범위에 포함된다`, allCovered)
+    check('근거 없는 반이 섞이지 않는다(다른 반 시험 오노출 방지) + 중복 없음', noPhantom)
+
+    // 오늘 시험이 있으면 실제 노출까지 확인
+    const todays2 = await restGet(`entrance_tests?select=id,class_id&date=eq.${todayStr}`)
+    if (Array.isArray(todays2) && todays2.length > 0) {
+      const testClassIds = new Set(todays2.map((t) => t.class_id))
+      const rescued = axisSplit.filter(([sid, rows]) => {
+        const oldScope = new Set([getStudentClassId(sid), ...rows.map((r) => r.class_id)].filter(Boolean))
+        const owners = rows.map((r) => tbOwnerOf(r.textbook_id)).filter(Boolean)
+        return owners.some((o) => testClassIds.has(o)) && ![...oldScope].some((c) => testClassIds.has(c))
+      })
+      if (rescued.length === 0) {
+        console.log('  SKIP  오늘 시험 반이 교재 축 전용 학생과 겹치지 않음')
+      } else {
+        let ok = true
+        for (const [sid] of rescued) {
+          if ((await fetchTodayTestsForClasses(await getStudentEntranceClassIds(sid))).length === 0) ok = false
+        }
+        check(`교재 축으로만 자격이 생기는 학생 ${rescued.length}명 — 오늘 시험이 실제로 조회된다`, ok)
+      }
+    } else {
+      console.log('  SKIP  오늘 시작된 시험이 없음')
     }
   }
 }
