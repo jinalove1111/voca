@@ -95,9 +95,39 @@ check(`빈 유닛은 알려진 보류(${KNOWN_EMPTY_UNIT_ALLOWLIST.size}개) 외
 
 // 4. 승인 필터 데이터 레벨 재확인 — pending/draft 예문이 approved 조회에
 //    나오면 안 됨(exampleLibrary가 approved 하드코딩이지만, 데이터 측도 확인).
-const allExamples = await getAll('examples', { select: 'id,approval_status', order: 'id' })
+const allExamples = await getAll('examples', { select: 'id,approval_status,target_word,english_sentence,practice_sentence', order: 'id' })
 const badStatus = allExamples.filter(e => !['draft', 'pending', 'approved', 'rejected'].includes(e.approval_status))
 check('examples.approval_status 전부 유효값', badStatus.length === 0)
+
+// 4-b. 저장된 practice_sentence(본문 핵심 표현) 사후 재검증 — 2026-08-11.
+//    배경: 표현 추출/검증(validatePracticeSentence)은 관리자 UI 컴포넌트
+//    안에서만 돈다. 즉 다른 경로(스크립트/향후 API/직접 수정)로 들어온 값은
+//    아무도 검사하지 않는다. 여기서 "이미 저장된 값"을 데이터 측에서 다시
+//    검사해, 규칙을 벗어난 행이 조용히 쌓이는 것을 감지한다(쓰기 없음).
+//    불변식(둘 다 절대 규칙):
+//      ① practice_sentence는 english_sentence(본문 원문)의 정확한 부분 문자열
+//      ② target_word가 온전한 단어 형태로 포함
+{
+  const rows = allExamples.filter(e => e.practice_sentence && String(e.practice_sentence).trim())
+  const notSubstring = []
+  const missingTarget = []
+  for (const e of rows) {
+    const p = String(e.practice_sentence).trim()
+    const src = String(e.english_sentence || '')
+    if (!src.includes(p)) { notSubstring.push(e.id); continue }
+    const w = String(e.target_word || '').trim()
+    if (!w) continue
+    // 온전한 단어 경계 매칭(대소문자 무시) — practiceSentence.js의
+    // containsTargetWholeWord와 같은 정신. 굴절형은 여기서 판정하지 않고
+    // "원형이 아예 안 보이는" 경우만 잡는다(오탐 최소화).
+    const esc = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    if (!new RegExp(`(^|[^A-Za-z])${esc}`, 'i').test(p)) missingTarget.push(`${e.id.slice(0, 8)}:${w}`)
+  }
+  check(`practice_sentence가 본문 원문의 부분 문자열(검사 ${rows.length}건)`,
+    notSubstring.length === 0, notSubstring.slice(0, 10).join(', '))
+  check('practice_sentence에 target_word가 포함',
+    missingTarget.length === 0, missingTarget.slice(0, 10).join(', '))
+}
 
 // 5. 배정 축(class_id vs textbook_id) 정합성 — 2026-08-11 실사고 후속.
 //    배경: student_class_assignments 한 행에는 독립된 두 축이 있다.
