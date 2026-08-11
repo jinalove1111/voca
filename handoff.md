@@ -7,6 +7,58 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-12 (93차 야간) — 자율 정리 6시간: eligibility 규칙 단일화 + 무결성 감사 + 문서 5종
+
+운영자 취침 중 자율 진행. **프로덕션 DB 변경 0건 / 학생 데이터 변경 0건.**
+상세는 `HANDOFF_2026-08-12_PAUL_EASY_VOCA.md`.
+
+### 핵심: 3일간 3번 재발한 버그의 근본 원인 제거
+
+입실시험 "이 학생이 이 반의 대상인가"를 세 곳에서 서로 다르게 계산하던 것을
+`src/utils/entranceEligibility.js`(순수 함수, 네트워크 0) 한 곳으로 모았다.
+wordLibrary는 재료만 넘기는 얇은 어댑터가 됐다. 규칙에 **못 들어오는 것**
+(class_textbooks / current_unit_id / 반 이름)까지 반증 테스트로 고정했다.
+
+`verify:eligibility` 36단언 신규 — 라이브 테스트는 그날 데이터에 케이스가
+없으면 SKIP만 늘어 규칙 변경을 못 잡으므로, 규칙 자체를 mock으로 고정.
+
+### 라이브 데이터 무결성 21항목: P0 0 / P1 0 / P2 2
+
+`is_primary` 2개 이상 0명, 고아 유닛·단어 0, 깨진 참조 0, 동명이인 0.
+P2 2건은 빈 유닛 2개(기존 allowlist)와 근거 0 class_textbooks 링크 6건.
+
+### class_textbooks 분류 (삭제하지 않음)
+
+KEEP 14 / LIKELY_WRONG 4(전부 Pre-Middle) / NEEDS_OWNER_CONFIRMATION 2.
+삭제 시 접근을 잃는 학생 **0명**(전원 개별 배정 보유). `verify:class-textbooks`
+운영자 도구로 언제든 재확인 가능. 이 링크는 시험 판정에 안 쓰이므로 시험
+노출 영향은 없고, 학생 교재 선택기 노출만의 문제다.
+
+### 감사 오탐 3건을 그대로 반영하지 않은 것
+
+- "숙제 완료 분모를 SCA로 바꿔야" → **오탐**. 숙제는 `humanClassId`(사람 반)
+  기준이라 현재가 맞다(wordLibrary.js:2868). 바꿨으면 완료율이 틀어졌다.
+- "중복계정 감사 도구가 _DUP를 제외 안 함" → **의도된 동작**. 그 도구는
+  중복 계정을 조사하는 게 목적이라 제외하면 무력화된다.
+- "학생 화면 모바일 오버플로 위험" → **오탐**. index.css가 이미 처리.
+
+### 신규 문서 5종
+
+`docs/CLASS_TEXTBOOK_MODEL.md`(5개 개념 분리) ·
+`docs/ENTRANCE_EXAM_ELIGIBILITY.md` · `docs/DATA_INTEGRITY_REPORT.md` ·
+`docs/MOBILE_QA.md` · `docs/REGRESSION_REPORT.md`
+
+### 검증/배포
+
+build PASS · verify:all 전 도메인 PASS · verify:integrity PASS(15단언) ·
+verify:eligibility PASS(36단언). `5644503` → production Ready,
+번들 `index-CiWUYyh_.js` 해시 일치 확인.
+
+### 미실행 대기
+
+`supabase_v3_33_integrity_constraints.sql`(classes.name / units 정규화 이름
+UNIQUE) — 규칙 8에 따라 파일만 준비. 사전 점검 쿼리 실측 전부 0행.
+
 ## 2026-08-11 (92차) — 91차 실측 검증 + 관리자 "반 전체 N명" 집계 수정
 
 91차 배포 후 운영자가 Jinaa 실제 휴대폰에서 **배너 노출·시험 시작 정상
