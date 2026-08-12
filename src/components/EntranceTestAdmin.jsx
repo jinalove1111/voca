@@ -1,9 +1,14 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import {
-  getClassNames, getClassIdByName, getClassUnitNames, getClassWords,
-  getTodaysAssignmentWordIds, fetchEntranceRosterForClass,
+  getClassNames, getClassIdByName, getClassUnitNames,
+  resolveClassUnit, getWordsByUnitId,
+  getTodaysAssignmentWordIds, fetchEntranceRosterForClass, getStudentById,
 } from '../utils/wordLibrary'
 import { summarizeClassResults } from '../utils/entranceTest'
+// 계정 종류(테스트) 판별의 단일 진실 공급원 — 2026-08-11 운영자 확정
+// (accountStatus.js 헤더 주석 참고). entranceTest.js의 순수 함수 계약은
+// 바꾸지 않고, 호출부(여기)에서 넘기는 행 목록만 미리 거른다.
+import { isTestAccountStudent } from '../utils/accountStatus'
 import {
   checkEntranceTestAvailable, fetchTodayTests, findActiveTest,
   createEntranceTest, closeEntranceTest, fetchResultsForTests,
@@ -51,15 +56,27 @@ export default function EntranceTestAdmin() {
 
   // 출제 범위 — 오늘의 단어 배정(slug)이 있고 유닛 단어와 교집합이 있으면
   // 그 서브셋, 아니면 유닛 전체(v1.3 getStudentWords 폴백과 같은 규칙).
+  //
+  // P0(2026-08-12) 두 가지를 바꿨다.
+  //   ① 단어를 유닛 **UUID**로 가져온다(getWordsByUnitId). 예전엔 반 이름 +
+  //      유닛 이름 문자열로 찾았고, 이름이 안 맞으면 wordLibrary가 조용히
+  //      그 반의 첫 유닛 단어를 돌려줬다(임의 폴백 — 지금은 제거됨).
+  //   ② sourceLabel이 "요청한 이름"이 아니라 **실제로 해석된 유닛 이름**을
+  //      쓴다. 예전 라벨은 폴백이 일어나도 요청한 이름을 그대로 찍어서,
+  //      다른 유닛 단어로 시험이 만들어져도 화면상으로는 정상으로 보였다.
+  // 유닛을 못 찾으면 출제하지 않는다(빈 목록 + 명시적 안내) — 조용히 다른
+  // 단어로 시험을 여는 경로를 없앤다.
   const { sourceWords, sourceLabel } = useMemo(() => {
     if (!cls || !unit) return { sourceWords: [], sourceLabel: '' }
-    const unitWords = (getClassWords(cls, unit) || []).filter((w) => w && w.word && w.meaning)
+    const resolved = resolveClassUnit(cls, unit)
+    if (!resolved) return { sourceWords: [], sourceLabel: `"${unit}" 유닛을 찾을 수 없어요 (출제 불가)` }
+    const unitWords = (getWordsByUnitId(resolved.id) || []).filter((w) => w && w.word && w.meaning)
     const assigned = new Set(getTodaysAssignmentWordIds(cls))
     if (assigned.size > 0) {
       const filtered = unitWords.filter((w) => assigned.has(wordSlug(w.word)))
       if (filtered.length > 0) return { sourceWords: filtered, sourceLabel: `오늘의 단어 배정 (${filtered.length}개)` }
     }
-    return { sourceWords: unitWords, sourceLabel: `${unit} 전체 (${unitWords.length}개)` }
+    return { sourceWords: unitWords, sourceLabel: `${resolved.name} 전체 (${unitWords.length}개)` }
   }, [cls, unit])
 
   // 반 선택 시 오늘의 시험 현황 로드 + 5초 폴링(탭이 보일 때만).
@@ -91,8 +108,17 @@ export default function EntranceTestAdmin() {
 
   const activeTest = findActiveTest(tests)
   const ranked = useMemo(() => toRanked(results), [results])
+  // 2026-08-11 운영자 확정 — 반별 요약(응시자 수/평균 정확도/많이 틀린
+  // 단어)에서 운영자 테스트/QA 계정(Cookie/Paul/Jinaa/Barry)의 응시 결과를
+  // 제외한다. 테스트 계정은 계속 정상 응시할 수 있어야 하므로(운영자 요구)
+  // 여기서 결과 자체를 지우는 게 아니라, "통계용 응시자 행 목록"에서만
+  // 뺀다 — entranceTest.js의 summarizeClassResults 시그니처는 그대로.
   const summary = useMemo(
-    () => summarizeClassResults(results.map((r) => ({ ...r, missedWords: r.missedWords }))),
+    () => summarizeClassResults(
+      results
+        .filter((r) => !isTestAccountStudent(getStudentById(r.studentId)))
+        .map((r) => ({ ...r, missedWords: r.missedWords }))
+    ),
     [results]
   )
   // "반 전체 N명"의 분모 — 학생 화면 eligibility와 같은 집합(사람 반 ∪ SCA

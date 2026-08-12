@@ -6,6 +6,9 @@ import {
   entranceScopeClassIds as computeEntranceScopeClassIds,
   isArchivedOrFixtureStudentName as isArchivedOrFixtureName,
 } from './entranceEligibility'
+// 계정 종류(테스트/아카이브) 판별의 단일 진실 공급원 — 2026-08-11 운영자
+// 확정. accountStatus.js 헤더 주석 참고(왜 이 파일이 생겼는지).
+import { isTestAccountStudent } from './accountStatus'
 // Word Asset Library(M3c, 2026-08-05) — 엑셀 업로드가 만든 유닛 단어로
 // 규칙 기반 자산(word_assets)을 채우는 데만 쓴다(순수 함수, AI 호출 0건,
 // import 0 모듈이라 정적 import해도 순환/부작용 위험이 없다 —
@@ -199,16 +202,53 @@ const sortUnitsByName = (units) => [...units].sort((a, b) => naturalCompare(a.na
 // (refreshClassSettings의 spelling_direction과 동일한 부분 마이그레이션
 // 안전 패턴 — SQL보다 코드가 먼저 배포돼도 앱이 절대 깨지지 않음).
 const WORDS_SELECT_BASE = 'id,unit_id,word,meaning,position,word_audio_url,example_audio_url,example_text,example_translation,memory_tip'
+
+// P0(2026-08-12) 1000행 절단 — PostgREST/Supabase는 명시적 range가 없으면
+// 한 응답에 최대 1000행만 돌려주고, **에러 없이 조용히** 나머지를 버린다.
+// 실사고: words 테이블이 1093행이 된 시점부터 앱이 1000행만 받아 93개
+// 단어(24개 유닛의 뒤쪽 단어들, position 38~49)가 통째로 사라졌다. 40단어
+// 유닛이 38단어로 보였고, 입실시험 출제 풀도 38개로 줄어 학생이 실제로
+// 공부한 단어("mistake A for B"/"stand for"/"thanks to"/"around the world"
+// 등)가 시험에 아예 나오지 않았다 — meaning 결측이 아니라 순수 절단이며,
+// 어느 단어가 사라지는지는 정렬 tie 때문에 로드마다 달라질 수 있었다.
+// selectAllStudents(아래)가 students 테이블에 대해 이미 같은 사고를 겪고
+// 같은 방식으로 고쳐져 있다 — 이 헬퍼는 그 패턴을 조회 일반으로 넓힌 것.
+const SELECT_PAGE_SIZE = 1000
+async function selectAllRows(buildQuery) {
+  let all = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await buildQuery().range(from, from + SELECT_PAGE_SIZE - 1)
+    if (error) return { data: null, error }
+    const rows = data || []
+    all = all.concat(rows)
+    if (rows.length < SELECT_PAGE_SIZE) break
+    from += SELECT_PAGE_SIZE
+  }
+  return { data: all, error: null }
+}
+
+// 정렬은 반드시 결정적이어야 한다(페이지네이션의 전제) — 정렬 키에 tie가
+// 있으면 페이지 경계에서 행이 누락/중복될 수 있다. words.position은 유닛
+// 안에서만 유일해서 테이블 전체로 보면 tie가 대량으로 생기므로(같은
+// position이 유닛 수만큼 존재) id를 2차 키로 붙인다. selectAllStudents가
+// created_at에 id를 붙인 것과 같은 이유.
+const wordsQuery = (cols) => supabase.from('words').select(cols).order('position').order('id')
 async function fetchWordsRows() {
-  let res = await supabase.from('words').select(`${WORDS_SELECT_BASE},accepted_meanings`).order('position')
-  if (res.error) res = await supabase.from('words').select(WORDS_SELECT_BASE).order('position')
+  let res = await selectAllRows(() => wordsQuery(`${WORDS_SELECT_BASE},accepted_meanings`))
+  if (res.error) res = await selectAllRows(() => wordsQuery(WORDS_SELECT_BASE))
   return res
 }
 
 export async function refreshWordLibrary() {
   const [classesRes, unitsRes, wordsRes, assignmentsRes] = await Promise.all([
-    supabase.from('classes').select('id,name,class_type').order('created_at'),
-    supabase.from('units').select('id,class_id,name,position').order('position'),
+    // classes/units도 같은 절단 위험을 갖는다(지금은 16행/34행이라 아직
+    // 안 걸렸을 뿐 — 반·유닛이 늘면 조용히 사라진다). units.position은
+    // 실측상 34개 중 32개가 0이라 사실상 tie뿐이므로 name/id를 뒤에 붙여
+    // 순서를 고정한다(아래 sortUnitsByName이 최종 표시 순서를 정하지만,
+    // 페이지 경계 안정성은 쿼리 정렬이 책임진다).
+    selectAllRows(() => supabase.from('classes').select('id,name,class_type').order('created_at').order('id')),
+    selectAllRows(() => supabase.from('units').select('id,class_id,name,position').order('position').order('name').order('id')),
     fetchWordsRows(),
     supabase.from('daily_assignments').select('class_id,word_ids').eq('date', todayDateStr()),
   ])
@@ -892,9 +932,54 @@ export const getClassUnits = (className) => {
 
 export const getClassUnitNames = (className) => getClassUnits(className).map((u) => u.name)
 
+// ── 유닛 해석(이름 -> 유닛 객체) ────────────────────────────────────────
+// P0(2026-08-12) 임의 폴백 제거. 예전 getClassWords는
+//   units.find((u) => u.name === unitName) || units[0]
+// 였다 — 이름이 안 맞으면 **아무 말 없이 그 반의 첫 유닛 단어**를 돌려줬다.
+// 첫 유닛이 무엇인지는 sortUnitsByName의 자연 정렬 결과라 반마다 다르고
+// (실측: "중2 YMB 박준원" -> "Unit 1"(0단어), "중2 능률 김기택" ->
+// "Unit 1"(0단어)), 호출부는 자기가 요청한 유닛의 단어를 받았다고 믿는다.
+// 출제 범위 라벨까지 "요청한 이름"으로 찍히기 때문에 화면이 거짓말을 한다.
+// 이제는 못 찾으면 못 찾았다고 한다(빈 배열) — 조용히 다른 유닛을 고르는
+// 경로를 아예 없앤다.
+//
+// 표기 흔들림("Unit 1"/"Unit1"/"unit  1")은 흡수한다 — 이건 임의 선택이
+// 아니라 같은 유닛을 가리키는 게 확실한 경우다. 단, 정규화 후에도 후보가
+// 2개 이상이면(같은 반 안에 "Unit 1"과 "Unit1"이 동시에 존재하는 분열
+// 상태, auditCurriculumIntegrity.mjs가 감시하는 회귀) 어느 쪽인지 알 수
+// 없으므로 고르지 않는다.
+const normalizeUnitKey = (name) => String(name || '').trim().toLowerCase().replace(/\s+/g, '')
+
+export function resolveClassUnit(className, unitName) {
+  const units = _cache[className]?.units || []
+  if (units.length === 0) return null
+  const exact = units.find((u) => u.name === unitName)
+  if (exact) return exact
+  const key = normalizeUnitKey(unitName)
+  if (!key) return null
+  const candidates = units.filter((u) => normalizeUnitKey(u.name) === key)
+  return candidates.length === 1 ? candidates[0] : null
+}
+
+// 유닛 UUID로 직접 찾는 정규 경로 — 이름이 개입하지 않으므로 같은 이름의
+// 유닛이 여러 교재에 있어도(실측: "Unit" 5개 반, "Unit 1" 4개 반, "Unit3"
+// 4개 반) 다른 교재 단어가 섞이는 것이 **구조적으로 불가능**하다.
+// words 테이블에는 textbook_id 컬럼이 없다 — words.unit_id -> units.class_id
+// -> textbooks.owner_class_id 로 교재가 유일하게 결정되므로, unit_id가 곧
+// "교재+유닛" 복합키의 역할을 한다(이 파일이 쓰는 canonical 키).
+export const getUnitById = (unitId) => {
+  if (!unitId) return null
+  for (const cls of Object.values(_cache)) {
+    const found = (cls.units || []).find((u) => u.id === unitId)
+    if (found) return found
+  }
+  return null
+}
+
+export const getWordsByUnitId = (unitId) => getUnitById(unitId)?.words || []
+
 export const getClassWords = (className, unitName = DEFAULT_UNIT_NAME) => {
-  const units = getClassUnits(className)
-  const unit = units.find((u) => u.name === unitName) || units[0]
+  const unit = resolveClassUnit(className, unitName)
   return unit?.words || []
 }
 
@@ -1460,7 +1545,10 @@ export async function fetchEntranceRosterForClass(classId) {
 
   return Array.from(ids)
     .map((id) => _students.get(id))
-    .filter((s) => s && !isArchivedOrFixtureStudentName(s.name))
+    // 아카이브/중복/QA 픽스처 제외에 더해, 운영자 테스트/QA 계정(Cookie/
+    // Paul/Jinaa/Barry)도 관리자 분모에서 제외한다(2026-08-11 운영자 확정
+    // — 이 함수는 관리자 분모 전용이라 학생 화면 응시 자격에는 영향 없음).
+    .filter((s) => s && !isArchivedOrFixtureStudentName(s.name) && !isTestAccountStudent(s))
     .map((s) => ({ id: s.id, name: s.name, unitName: getStudentUnit(s.id) }))
 }
 

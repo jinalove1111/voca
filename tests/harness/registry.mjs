@@ -30,6 +30,14 @@ export const BUILDERS = {
     env: 'PROGRESS_BUNDLE',
     out: 'scripts/.tmp/useStudent.progress.bundle.mjs',
   },
+  // wordlib와 달리 supabaseClient를 scripts/fakeSupabaseModule.mjs로 갈아끼운
+  // 번들 — 네트워크 0으로 refreshWordLibrary() 같은 조회 경로를 결정적으로
+  // 검증한다(스텁이 PostgREST 1000행 상한을 실제로 강제한다).
+  wordlibOffline: {
+    build: 'scripts/buildWordLibOfflineBundle.mjs',
+    env: 'WORDLIB_OFFLINE_BUNDLE',
+    out: 'scripts/.tmp/wordLibrary.offline.bundle.mjs',
+  },
   race: {
     build: 'scripts/buildRaceBundle.mjs',
     env: null, // testXxx.mjs가 scripts/.tmp/useStudent.race.bundle.mjs를 하드코딩 import
@@ -138,6 +146,7 @@ export const DOMAINS = {
       { script: 'scripts/testUnitResumeIndex.mjs', builders: ['progress'] },
       { script: 'scripts/testStudentUnitDecouple.mjs', builders: ['wordlib'] },
       { script: 'scripts/testStudentSelectUnitSwitch.mjs', builders: ['wordlib'] },
+      { script: 'scripts/testWordLibraryPagination.mjs', builders: ['wordlibOffline'], extra: true, note: '2026-08-12 — words 1000행 절단(P0) + 유닛 임의 폴백 회귀. 실사고: words가 1093행이 되자 range 없는 조회가 1000행만 받아 93개 단어(24개 유닛의 position 38~49)를 에러 없이 버렸고, 40단어 유닛이 38개로 출제됐다. 함께 getClassWords의 `units.find(name) || units[0]` 무음 폴백(요청한 유닛이 없으면 조용히 첫 유닛 단어를 반환)도 제거. 스텁이 PostgREST 1000행 상한을 실제로 강제하므로 페이지네이션이 없으면 반드시 FAIL한다(수정 전 소스로 20단언 FAIL 실측 확인, 규칙 15). 절단 0/동명 유닛 비혼입/Song·Luke 배정 유닛 정확 조회/기존 경로 무회귀 6시나리오, 48단언. 13개 필수 도메인 밖, 신규 보너스 커버리지.' },
     ],
   },
   persistence: {
