@@ -76,6 +76,7 @@ export const DOMAINS = {
     label: '학생 식별자 / 반 소속 무결성',
     checks: [
       { script: 'scripts/testIdentityMigration.mjs', builders: ['race'] },
+      { script: 'scripts/testStarDeltaOnEntry.mjs', builders: ['race'], extra: true, note: '2026-08-12 — 이름 키 소유권 가드(claimName, useStudent.js loadRecord). 동일 기기·동일 표시이름의 다른 studentId가 앞서 생긴 계정의 로컬 진행도(별/스티커/캘린더)를 물려받는 실사고 재현 + 수정 검증. 신규 계정 진입 델타 0(대조군)/동명이인 가로채기 차단/재입장 중복지급 0/dedupKey 재호출 방어/실제 보상 정상 지급/다른 이름 조합 재확인 6개 시나리오, 25단언. 13개 필수 도메인 밖, 신규 보너스 커버리지.' },
       { script: 'scripts/testMultiClass.mjs', builders: ['wordlib'] },
       { script: 'scripts/testRenameClass.mjs', builders: ['wordlib'] },
       { script: 'scripts/testClassDeleteCascade.mjs', builders: [] },

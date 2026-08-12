@@ -626,32 +626,86 @@ function mergeByKeyEarliest(localArr, cloudArr, keyOf, atOf) {
   return [...byKey.values()]
 }
 
+// P0(2026-08-12) 이름 키 소유권 가드 — 실사고 재현: 같은 기기에서 같은
+// 표시이름("권교빈")으로 나중에 생긴 "다른" studentId(동명이인 신규 계정)가
+// 로그인하면, 아래 loadRecord가 먼저 생긴 계정의 이름 키 레코드(별 119개)를
+// 그대로 "물려받아" 마운트 즉시 그 값이 되고 2초 디바운스 동기화가 새 UUID로
+// 클라우드에 업로드까지 해버린다(scripts/testStarDeltaOnEntry.mjs 시나리오
+// ②로 재현 고정). 이름은 전역 유일 키가 아니므로(P0 identity 리팩터링의
+// 원래 이유와 동일한 종류의 문제) "이 기기에서 이 이름 키를 누가 처음
+// 정당하게 채택했는가"를 별도로 기록해, 그 뒤로는 다른 studentId가 같은
+// 이름 키(또는 아래 migrateOldData가 읽는 더 오래된 흩어진 키)를 가로채지
+// 못하게 막는다.
+//   - 아직 아무도 채택한 적 없는 이름: 지금 이 studentId가 최초 채택자 —
+//     허용하고 기록한다(기존 정상 마이그레이션 경로 그대로 — 새 기기에서
+//     첫 로그인하는 기존 학생은 계속 정상 동작, testIdentityMigration.mjs
+//     참고).
+//   - 이미 이 studentId 본인이 채택자로 기록돼 있는 이름: 허용(자기 자신
+//     재로그인).
+//   - 이미 "다른" studentId가 채택자로 기록된 이름: 거부 — 이름 키를
+//     채택하지 않고 아래 loadRecord가 freshRecord(id)로 시작하게 한다.
+// legacyName은 항상 "이번 로그인이 실제로 성공한 이름"이라(useStudent 헤더
+// 주석) — 이미 store[id]가 존재하는 경우(과거에 이미 정당하게 마이그레이션을
+// 마친 기존 학생)도 "이 studentId가 이 이름의 정당한 소유자"라는 뜻이므로
+// 함께 소급 기록한다. 이 패치 배포 이전에 이미 마이그레이션을 마친 학생도
+// 다음 로그인 한 번으로 보호망에 들어온다(그 사이 같은 기기에 동명이인
+// 신규 계정이 먼저 로그인하는 극히 드문 순서만 이 소급 기록으로 못 막는
+// 잔여 리스크 — 아래 loadRecord 주석 참고).
+const NAME_CLAIM_KEY = 'paul_easy_name_claims'
+function loadNameClaims() {
+  try {
+    const v = JSON.parse(localStorage.getItem(NAME_CLAIM_KEY))
+    return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}
+  } catch { return {} }
+}
+function saveNameClaims(claims) {
+  // saveStore와 같은 이유의 방어 — 기록 실패가 로그인 자체를 깨뜨리면 안 됨
+  // (최악의 경우 다음 로그인에서 다시 시도될 뿐, 학습 데이터 아님).
+  try { localStorage.setItem(NAME_CLAIM_KEY, JSON.stringify(claims)) } catch { /* 무시 */ }
+}
+function claimName(legacyName, id) {
+  if (!legacyName) return true
+  const claims = loadNameClaims()
+  const owner = claims[legacyName]
+  if (owner === id) return true
+  if (owner === undefined) {
+    claims[legacyName] = id
+    saveNameClaims(claims)
+    return true
+  }
+  return false // 이미 "다른" studentId가 이 이름을 채택함 — 가로채기 차단
+}
+
 // P0(2026-07-15) Phase 2 identity 마이그레이션 — lazy/on-demand, 로그인
 // 시점에만 실행. 우선순위:
 //   1) 이미 studentId 키로 저장된 레코드가 있으면 그대로 사용(이미 마이그
 //      레이션됐거나, 애초에 새 방식으로 시작한 기기).
 //   2) legacyName이 주어졌고(=이번 로그인이 실제로 그 이름으로 성공했다는
 //      뜻, 모호함 없음) STORE_KEY 아래 그 이름 키로 저장된 통합 레코드가
-//      있으면 studentId로 "복사"한다 — 원본 이름 키는 절대 지우지 않음
-//      (다른 기기/다른 세션이 아직 그 키를 참조 중일 수 있고, 안전 원칙상
-//      기존 데이터 삭제는 금지).
-//   3) 그것도 없으면 더 오래된 흩어진 paulEasyVoca_{name}_{field} 키에서
-//      마이그레이션(기존 migrateOldData 경로, id 부여만 다름).
-//   4) legacyName조차 없으면(순수 신규 등록 — 처음부터 id로 로그인) 완전히
-//      새 레코드.
+//      있고, 위 claimName()이 이 studentId의 채택을 허용하면 studentId로
+//      "복사"한다 — 원본 이름 키는 절대 지우지 않음(다른 기기/다른 세션이
+//      아직 그 키를 참조 중일 수 있고, 안전 원칙상 기존 데이터 삭제는 금지).
+//   3) 그것도 없으면(또는 claimName이 거부하면) 더 오래된 흩어진
+//      paulEasyVoca_{name}_{field} 키에서 마이그레이션 시도 — 단, 이 경로도
+//      claimName 허용 여부를 함께 따른다(같은 이름 가로채기 벡터).
+//   4) legacyName조차 없거나 claimName이 거부했으면 완전히 새 레코드.
 // 전역적으로 모든 이름 키를 훑어 자동 매칭하지 않는다 — 동명이인 상황에서
 // "어느 이름 키가 이 학생 것인지" 알 방법이 없어 위험하기 때문(로그인
 // 시점에 정확히 어느 학생인지 알고 있는 지금이 유일하게 안전한 시점).
 function loadRecord(id, legacyName) {
   const store = loadStore()
+  // claimName은 항상 먼저 호출한다(store[id] 존재 여부와 무관) — 이미 자기
+  // 레코드를 가진 기존 학생의 소급 기록(위 헤더 주석)도 이 호출 한 번으로
+  // 처리된다.
+  const canClaimName = claimName(legacyName, id)
   // 모든 경로가 normalizeRecord를 통과한다(위 주석 참고) — 이미 id 키로
   // 저장된 레코드도 예외 없음: 옛 앱 버전이 저장했거나 과거 마이그레이션이
   // 그대로 복사해둔 옛 스키마 레코드가 지금도 남아있을 수 있다.
   const source = store[id]
     ? store[id]
-    : legacyName && store[legacyName]
+    : legacyName && canClaimName && store[legacyName]
       ? store[legacyName] // 이름 키 → id 키 복사(원본 이름 키는 절대 삭제 안 함)
-      : legacyName ? migrateOldData(legacyName, id) : freshRecord(id)
+      : legacyName && canClaimName ? migrateOldData(legacyName, id) : freshRecord(id)
   const migrated = normalizeRecord(source, id)
   store[id] = migrated
   saveStore(store)

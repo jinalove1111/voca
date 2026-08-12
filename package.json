@@ -38,7 +38,8 @@
     "verify:gamification": "node scripts/testGamificationModels.mjs",
     "verify:writing-coach": "node scripts/testWritingCoach.mjs",
     "verify:eligibility": "node scripts/testEntranceEligibilityRules.mjs",
-    "verify:class-textbooks": "node scripts/verifyClassTextbooks.mjs"
+    "verify:class-textbooks": "node scripts/verifyClassTextbooks.mjs",
+    "verify:star-delta": "node scripts/buildRaceBundle.mjs && node scripts/testStarDeltaOnEntry.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
