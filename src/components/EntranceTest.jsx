@@ -4,9 +4,15 @@ import {
   bestResultPerStudent, rankResults, pickMvps, formatSeconds,
 } from '../utils/entranceTest'
 import {
-  fetchTodayTestsForClasses, findActiveTest, fetchResultsForTests, submitEntranceResult,
+  fetchTodayTestsForClasses, fetchResultsForTests, submitEntranceResult,
 } from '../utils/entranceTestApi'
-import { getStudentEntranceClassIds, getStudentById } from '../utils/wordLibrary'
+import {
+  getStudentEntranceClassIds, getStudentById,
+  getStudentPrimaryTextbook, getStudentUnitId, getStudentAssignedTextbookIds,
+  getStudentClassDefaultTextbookIds, resolveTestTextbookIdByClassId,
+  inferUnitIdFromTestWords, getClassNameById,
+} from '../utils/wordLibrary'
+import { selectEntranceTest, TIER_LABEL } from '../utils/entranceTestSelection'
 import { playSuccessSound } from '../utils/speech'
 
 // ── 입실 단어시험 (학생 화면) ────────────────────────────────────────────
@@ -99,6 +105,10 @@ export default function EntranceTest({ studentId, studentName, onBack }) {
   const [phase, setPhase] = useState('loading')
   const [activeTest, setActiveTest] = useState(null)
   const [rows, setRows] = useState([]) // 오늘 결과 전체(랭킹용)
+  // 최상위 우선순위 시험이 2개 이상일 때 학생에게 보여줄 후보들
+  // ([{ test, tier, textbookId, unitId }]) — entranceTestSelection 참고.
+  const [pendingChoices, setPendingChoices] = useState([])
+  const chosenIdRef = useRef(null)
 
   // 응시 진행 상태
   const [questions, setQuestions] = useState([])
@@ -136,17 +146,59 @@ export default function EntranceTest({ studentId, studentName, onBack }) {
     const r = await fetchResultsForTests(t.map((x) => x.id))
     if (loadReqIdRef.current !== reqId) return // 더 최신 load가 시작됨 — 버림
     setRows(r)
-    const active = findActiveTest(t)
-    setActiveTest(active)
-    const ownActive = active ? r.find((x) => x.testId === active.id && x.studentId === studentId) : null
-    if (active && !ownActive) {
+
+    // P0(2026-08-12) 예전엔 findActiveTest(t) — created_at이 가장 이른 active
+    // 시험 하나를 학생의 실제 학습 교재와 무관하게 골랐다. 두 교재에 배정된
+    // 학생은 아침에 열려 종료되지 않은 다른 교재 시험에 영영 가려졌다
+    // (entranceTestSelection.js 헤더의 Song 실사고). 이제 교재/유닛 축으로
+    // 우선순위를 매기고, 최상위가 동률이면 임의로 고르지 않고 학생이 고른다.
+    const takenTestIds = r.filter((x) => x.studentId === studentId).map((x) => x.testId)
+    const selection = selectEntranceTest({
+      tests: t,
+      takenTestIds,
+      context: {
+        currentTextbookId: getStudentPrimaryTextbook(studentId)?.id || null,
+        currentUnitId: getStudentUnitId(studentId),
+        assignedTextbookIds: getStudentAssignedTextbookIds(studentId),
+        classDefaultTextbookIds: getStudentClassDefaultTextbookIds(studentId),
+        resolveTestTextbookId: (test) => resolveTestTextbookIdByClassId(test.classId),
+        resolveTestUnitId: (test) => inferUnitIdFromTestWords(test.classId, test.words),
+      },
+    })
+    setPendingChoices(selection.needsChoice ? selection.pending : [])
+
+    // 학생이 선택 UI에서 이미 고른 시험이 아직 유효하면 그 선택을 유지한다.
+    const stillPending = (id) => selection.pending.some((p) => p.test.id === id)
+    const picked = chosenIdRef.current && stillPending(chosenIdRef.current)
+      ? selection.pending.find((p) => p.test.id === chosenIdRef.current).test
+      : selection.chosen
+    if (!picked) chosenIdRef.current = null
+
+    setActiveTest(picked)
+    if (picked) {
       setPhase((p) => (p === 'running' ? p : 'intro')) // 응시 중 폴링이 상태를 되돌리지 않게
+    } else if (selection.needsChoice) {
+      setPhase((p) => (p === 'running' ? p : 'choose'))
     } else if (t.length > 0) {
-      if (ownActive) setMyResult((m) => m || { score: ownActive.score, total: ownActive.total, missed: ownActive.missedWords })
+      // 응시 대상이 남지 않음 = 오늘 것을 이미 다 봤거나 전부 종료됨.
+      // 기존 정책 그대로 결과(랭킹) 화면. 내 결과는 가장 최근 제출분.
+      const own = r
+        .filter((x) => x.studentId === studentId)
+        .sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')))[0]
+      if (own) setMyResult((m) => m || { score: own.score, total: own.total, missed: own.missedWords })
       setPhase((p) => (p === 'running' ? p : 'result'))
     } else {
       setPhase((p) => (p === 'running' ? p : 'none'))
     }
+  }
+
+  // 학생이 선택 UI에서 시험을 고르면 그 시험으로 진입한다(폴링이 되돌리지
+  // 않도록 ref에 기억 — 위 load()가 매 폴링마다 이 선택을 존중한다).
+  const pickTest = (test) => {
+    chosenIdRef.current = test.id
+    setActiveTest(test)
+    setPendingChoices([])
+    setPhase('intro')
   }
 
   useEffect(() => {
@@ -281,6 +333,36 @@ export default function EntranceTest({ studentId, studentName, onBack }) {
           <div className="text-5xl mb-3">😴</div>
           <p className="font-black text-gray-700">오늘은 아직 입실시험이 없어요</p>
           <p className="text-sm text-gray-400 mt-1">선생님이 시험을 시작하면 홈 화면에 알려드릴게요!</p>
+        </div>
+      </div>
+    )
+  }
+
+  // 우선순위가 같은 시험이 2개 이상 — 임의로 고르지 않고 학생이 고른다.
+  // (entranceTestSelection.js의 needsChoice) 어느 교재 시험인지 이름으로
+  // 보여줘야 학생이 자기가 공부한 쪽을 고를 수 있다.
+  if (phase === 'choose') {
+    return (
+      <div className="min-h-screen p-4">{header}
+        <div className="max-w-lg mx-auto bg-white rounded-3xl card-shadow p-6 space-y-3">
+          <div className="text-center">
+            <div className="text-5xl mb-2">🤔</div>
+            <p className="font-black text-gray-800">오늘 볼 수 있는 시험이 여러 개예요</p>
+            <p className="text-sm text-gray-500 mt-1">공부한 교재의 시험을 골라주세요!</p>
+          </div>
+          {pendingChoices.map(({ test, tier }) => {
+            const tbName = getClassNameById(test.classId) || '교재'
+            return (
+              <button key={test.id} onClick={() => pickTest(test)}
+                className="w-full text-left border-2 border-rose-200 hover:border-rose-500 rounded-2xl px-4 py-3 bg-white transition">
+                <p className="font-black text-gray-800">{tbName}</p>
+                <p className="text-xs font-bold text-rose-500 mt-0.5">{TIER_LABEL[tier]}</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {Math.min(test.questionCount, test.words.length)}문제 · {Math.round(test.timeLimitSeconds / 60)}분
+                </p>
+              </button>
+            )
+          })}
         </div>
       </div>
     )

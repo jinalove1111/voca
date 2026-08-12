@@ -103,6 +103,7 @@ export const DOMAINS = {
       { script: 'scripts/testUnitNameNormalization.mjs', builders: ['wordlib'], extra: true, note: '2026-08-09 야간 — unitNameKey 정규화 계약(ensureUnit 형제 유닛 분열 재발 방지, "Unit 1"≡"Unit1"≡"unit 01"). 네트워크 0 순수 단언. 13개 필수 도메인 밖, 신규 보너스 커버리지.' },
       { script: 'scripts/testEntranceClassScope.mjs', builders: ['wordlib', 'entrance'], extra: true, note: '2026-08-10 — 입실시험 조회 반 범위 계약(사람 반 ∪ 교재 컨테이너 반). 원장이 교재 반으로 시험을 시작하면 학생 배너가 안 뜨던 실사고 회귀 방지. READ-ONLY 라이브 검증(쓰기 0).' },
       { script: 'scripts/testEntranceEligibilityRules.mjs', builders: [], extra: true, note: '2026-08-11 — 입실시험 eligibility 규칙 순수 단위 테스트(mock 픽스처, 네트워크 0). 라이브 테스트는 그날 데이터에 케이스가 없으면 SKIP만 늘어 규칙 변경을 못 잡으므로, 규칙 자체를 여기서 고정한다(운영자 확정 8개 시나리오 + 반증 테스트).' },
+      { script: 'scripts/testEntranceTestSelection.mjs', builders: [], extra: true, note: '2026-08-12 — 입실시험 "어느 시험을 볼 것인가" 우선순위(entranceTestSelection.js, import 0 순수 모듈). eligibility(누가 볼 수 있는가)와 짝을 이루는 별개 규칙. 실사고: 두 교재에 배정된 Song이 findActiveTest의 created_at 임의 선택 탓에 아침에 열려 종료 안 된 다른 교재 시험에 영영 가려 반 친구와 다른 시험을 봤다(0/10). 1순위 현재 학습 교재+유닛 / 2순위 개별 배정 교재 / 3순위 반 기본 교재 / 동률이면 임의 선택 금지하고 학생 선택 UI. A~G 7시나리오(단일 시험 기존 동작/반 기본≠학습교재/중2의 고1 교재/동률 선택 UI/응시완료 제외/테스트계정 QA 접근 유지/타 학생 노출 불변) 47단언, 네트워크 0.' },
     ],
   },
   homework: {

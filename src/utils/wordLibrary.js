@@ -552,6 +552,60 @@ export function getStudentPrimaryTextbook(studentId) {
   return getOwnTextbookOfClass(getStudentClassId(studentId))
 }
 
+// ── 입실시험 "어느 시험을 볼 것인가" 축 해석 ────────────────────────────
+// entranceTestSelection.js(순수 모듈)가 주입받아 쓰는 어댑터들. 판정 규칙은
+// 저쪽에 있고, 여기는 "이 앱의 캐시에서 그 값을 어떻게 꺼내는가"만 안다.
+
+// 개별 배정된 교재 id 목록(SCA.textbook_id). textbook_id가 NULL인 옛 행은
+// 그 행의 반이 소유한 교재로 폴백한다 — v2.9 시절 행에는 컬럼 자체가 없어
+// NULL로 남아 있고(백필 전), 그 행도 "개별 배정"인 것은 동일하기 때문이다.
+export function getStudentAssignedTextbookIds(studentId) {
+  const cached = _studentAssignmentsCache.get(studentId) || []
+  const out = []
+  for (const a of cached) {
+    const id = a?.textbookId || (a?.classId ? getOwnTextbookOfClass(a.classId)?.id : null)
+    if (id && !out.includes(id)) out.push(id)
+  }
+  return out
+}
+
+// 소속(사람) 반에 연결된 기본 교재 id 목록(class_textbooks).
+export function getStudentClassDefaultTextbookIds(studentId) {
+  const classId = getStudentClassId(studentId)
+  return getClassTextbooks(classId).map((t) => t.id)
+}
+
+// 시험 한 건의 교재 — entrance_tests에는 textbook_id 컬럼이 없어서
+// class_id(시험이 열린 반)가 소유한 교재로 역해석한다. 시험은 단어가 실제로
+// 사는 교재 컨테이너 반으로 열리므로 이 역해석은 1:1이다.
+export function resolveTestTextbookIdByClassId(classId) {
+  return getOwnTextbookOfClass(classId)?.id || null
+}
+
+// 시험 한 건의 유닛 — entrance_tests에는 unit_id 컬럼이 없어서 words 스냅샷
+// 으로 역추적한다. 시험 단어는 항상 "그 유닛 단어의 부분집합"이므로(유닛
+// 전체 또는 오늘의 단어 배정 서브셋 — EntranceTestAdmin 출제 범위 규칙),
+// 시험 단어를 전부 포함하는 유닛을 찾는다. 후보가 정확히 1개일 때만
+// 확정하고, 0개거나 2개 이상이면 **null을 반환한다** — 모르면 끼워맞추지
+// 않는다(잘못 확정하면 1순위 판정이 거짓이 되어 이번 사고가 재발한다).
+export function inferUnitIdFromTestWords(classId, testWords) {
+  const list = Array.isArray(testWords) ? testWords : []
+  if (list.length === 0 || !classId) return null
+  const clsName = getClassNameById(classId)
+  const units = _cache[clsName]?.units || []
+  if (units.length === 0) return null
+  const norm = (s) => String(s || '').trim().toLowerCase()
+  const wanted = new Set(list.map((w) => norm(w?.word)).filter(Boolean))
+  if (wanted.size === 0) return null
+
+  const matches = units.filter((u) => {
+    const have = new Set((u.words || []).map((w) => norm(w.word)))
+    for (const w of wanted) if (!have.has(w)) return false
+    return true
+  })
+  return matches.length === 1 ? matches[0].id : null
+}
+
 // 2026-08-06 — v3.1 이후 생성된 반을 교재 레이어에 실제로 등록(1회성
 // 자동 백필). 관리자 화면 진입 시에만 호출된다(AdminScreen) — 학생 111명
 // 클라이언트가 동시에 쓰기 경쟁하는 것을 피하기 위해 refreshTextbooks
