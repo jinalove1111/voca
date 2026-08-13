@@ -45,6 +45,7 @@
     "verify:entrance-matrix": "node scripts/testEntranceClassroomMatrix.mjs",
     "verify:entrance-roster": "node scripts/testEntranceRosterMinbyungchun.mjs",
     "verify:entrance-fresh-scope": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testEntranceBannerFreshScope.mjs",
+    "verify:word-count": "node scripts/buildWordLibBundle.mjs && node scripts/verifyWordCountConsistency.mjs",
     "verify:entrance-live": "node scripts/entranceLiveDiagnostic.mjs"
   },
   "dependencies": {

@@ -45,7 +45,10 @@ const sel = await import(pathToFileURL(path.resolve('src/utils/entranceTestSelec
 const elig = await import(pathToFileURL(path.resolve('src/utils/entranceEligibility.js')).href)
 const acct = await import(pathToFileURL(path.resolve('src/utils/accountStatus.js')).href)
 
-const today = new Date().toISOString().slice(0, 10)
+// 앱(localIsoDateStr)과 동일한 **로컬(KST) 날짜** — toISOString()은 UTC라
+// KST 00:00~08:59 사이에 전날 시험을 조회하는 오차가 있었다(2026-08-14 수정).
+const _n = new Date()
+const today = `${_n.getFullYear()}-${String(_n.getMonth() + 1).padStart(2, '0')}-${String(_n.getDate()).padStart(2, '0')}`
 const targetName = (process.argv[2] || '').trim()
 
 const [students, classes, textbooks, units, words, sca, classTb, tests] = await Promise.all([
