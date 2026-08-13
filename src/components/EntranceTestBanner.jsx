@@ -14,11 +14,20 @@ import { getStudentEntranceClassIds } from '../utils/wordLibrary'
 // 배너만 이 작은 파일로 분리 + App.jsx에서 EntranceTest는 React.lazy로
 // 전환 — 배너 표시/폴링 동작은 완전히 동일(로직 이동만).
 //
-// B10(2026-08-02) — 시험이 없는 날에도 20초마다 폴링해 불필요한 조회가
-// 쌓였다. 주기를 60초로 늘리고, 첫 조회에서 오늘 시험이 0건이면 폴링을
-// 멈춘다(그 세션 동안엔 시험이 새로 생겨도 안 보일 수 있지만, 다음
-// 대시보드 마운트/새로고침에서 다시 조회하므로 완전히 놓치지는 않음 —
-// 입실시험은 원장이 그 시간대에 미리 준비해 두는 흐름이라 실사용 영향 적음).
+// B10(2026-08-02)은 "첫 조회 0건이면 폴링 중단"이었는데, 2026-08-14 Amin
+// 실사고로 뒤집었다: 수업 직전에 교재가 배정되고 그 뒤 시험이 열리는 실제
+// 운영 순서에서, 이미 켜져 있던 학생 앱은 (배정 이전의) 낡은 반 목록으로
+// 한 번 조회해 0건을 받고 폴링을 영구히 멈춰 시험이 앱 재시작 전까지 안
+// 보였다. 이제는:
+//   - 폴링을 멈추지 않는다(마운트 중 + 탭이 보일 때만, 60초 주기 유지).
+//   - 시험이 안 보이는 동안에는 매 폴링마다 배정을 fresh로 재해석한다
+//     (getStudentEntranceClassIds { fresh: true } — 학생당 인덱스 조회
+//     1회, 전체 재조회 아님). 수업 직전 배정이 앱 재시작 없이 반영된다.
+//   - 시험이 이미 보이는 동안에는 예전처럼 캐시된 반 목록으로만 조회한다
+//     (추가 부하 0 — fresh는 "아무것도 안 보이는" 상태에서만).
+// 비용: 시험 없는 날 대시보드를 켜둔 학생 1명당 60초마다 경량 조회 2회
+// (SCA 1 + 오늘 시험 1). B10이 아끼던 것보다 "시험이 안 떠요"의 운영 비용이
+// 훨씬 컸다(2026-08-13 실측 사고 2건: Amin, 그리고 같은 수업의 Anna 분모).
 const BANNER_POLL_MS = 60000
 
 export function EntranceTestBanner({ studentId, onGo }) {
@@ -27,29 +36,26 @@ export function EntranceTestBanner({ studentId, onGo }) {
   // 2026-08-10 — 조회 기준을 "사람 반 1개"에서 "이 학생이 속한 모든 반"으로
   // 넓혔다(사람 반 ∪ 교재 컨테이너 반). 원장이 단어가 있는 교재 반으로
   // 시험을 시작하면 예전 코드는 0건을 받아 배너가 조용히 안 떴다 —
-  // wordLibrary.getStudentEntranceClassIds 주석 참고. 반 id 해석은 마운트당
-  // 1회만 하고(캐시가 예열돼 있으면 추가 조회 0), 폴링은 그 목록으로 돈다.
+  // wordLibrary.getStudentEntranceClassIds 주석 참고.
   useEffect(() => {
     if (!studentId) return undefined
     let alive = true
-    let iv = null
-    const run = async () => {
-      const classIds = await getStudentEntranceClassIds(studentId)
-      if (!alive || classIds.length === 0) return
-      const check = async (isFirst) => {
-        if (document.visibilityState !== 'visible') return
-        const t = await fetchTodayTestsForClasses(classIds)
-        if (!alive) return
-        setTests(t)
-        if (isFirst && t.length === 0 && iv) { clearInterval(iv); iv = null }
-      }
-      // await하지 않는다(원본과 동일) — 첫 조회가 끝날 땐 이미 iv가 잡혀
-      // 있어야 B10의 "오늘 시험 0건이면 폴링 중단"이 그대로 동작한다.
-      check(true)
-      iv = setInterval(() => check(false), BANNER_POLL_MS)
+    let hasTests = false // 직전 조회에서 시험이 있었는가 — fresh 필요 여부
+    let firstRun = true  // 마운트 직후엔 로그인 직후라 캐시가 최신 — fresh 불필요
+    const check = async () => {
+      if (document.visibilityState !== 'visible') return
+      const classIds = await getStudentEntranceClassIds(studentId, { fresh: !firstRun && !hasTests })
+      firstRun = false
+      if (!alive) return
+      if (classIds.length === 0) { setTests([]); hasTests = false; return }
+      const t = await fetchTodayTestsForClasses(classIds)
+      if (!alive) return
+      setTests(t)
+      hasTests = t.length > 0
     }
-    run()
-    return () => { alive = false; if (iv) clearInterval(iv) }
+    check()
+    const iv = setInterval(check, BANNER_POLL_MS)
+    return () => { alive = false; clearInterval(iv) }
   }, [studentId])
 
   if (tests.length === 0) return null

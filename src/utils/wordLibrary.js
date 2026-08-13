@@ -2220,8 +2220,17 @@ export async function getStudentClassAssignments(studentId) {
 // 판정 규칙 자체는 entranceEligibility.js(순수 모듈)에 있다 — 이 함수는
 // "캐시/DB에서 재료를 모아 그 규칙에 넘기는" 얇은 어댑터다(2026-08-11 P2:
 // 같은 규칙이 세 곳에 흩어져 세 번 재발한 뒤 단일화).
-export async function getStudentEntranceClassIds(studentId) {
+//
+// P0(2026-08-14) fresh 옵션 — Amin 실사고: 수업 직전(시험 생성 61분 전)에
+// 교재가 배정됐는데, Amin의 앱 세션은 그 전에 시작돼 이 캐시가 배정 이전
+// 상태로 고정됐고, 배너 scope에 새 교재 반이 없어 시험이 앱 재시작 전까지
+// 영영 안 보였다(서버 eligibility는 정상 PASS — 순수하게 클라이언트 캐시
+// 문제). { fresh: true }면 이 학생의 캐시 항목만 무효화하고 SCA를 다시
+// 읽는다(학생당 인덱스 조회 1회 — 전체 재조회 아님). 기본 호출의 캐시
+// 동작은 완전히 불변(기존 호출부 성능/의미 보존).
+export async function getStudentEntranceClassIds(studentId, { fresh = false } = {}) {
   if (!studentId) return []
+  if (fresh) _studentAssignmentsCache.delete(studentId)
   let assignments = _studentAssignmentsCache.get(studentId)
   if (!assignments) {
     try { assignments = await getStudentClassAssignments(studentId) } catch { assignments = [] }
