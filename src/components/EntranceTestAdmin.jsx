@@ -5,6 +5,7 @@ import {
   getTodaysAssignmentWordIds, fetchEntranceRosterForClass, getStudentById,
 } from '../utils/wordLibrary'
 import { summarizeClassResults } from '../utils/entranceTest'
+import { computeEntranceSourceWords } from '../utils/entranceTestSelection'
 // 계정 종류(테스트) 판별의 단일 진실 공급원 — 2026-08-11 운영자 확정
 // (accountStatus.js 헤더 주석 참고). entranceTest.js의 순수 함수 계약은
 // 바꾸지 않고, 호출부(여기)에서 넘기는 행 목록만 미리 거른다.
@@ -70,13 +71,15 @@ export default function EntranceTestAdmin() {
     if (!cls || !unit) return { sourceWords: [], sourceLabel: '' }
     const resolved = resolveClassUnit(cls, unit)
     if (!resolved) return { sourceWords: [], sourceLabel: `"${unit}" 유닛을 찾을 수 없어요 (출제 불가)` }
-    const unitWords = (getWordsByUnitId(resolved.id) || []).filter((w) => w && w.word && w.meaning)
-    const assigned = new Set(getTodaysAssignmentWordIds(cls))
-    if (assigned.size > 0) {
-      const filtered = unitWords.filter((w) => assigned.has(wordSlug(w.word)))
-      if (filtered.length > 0) return { sourceWords: filtered, sourceLabel: `오늘의 단어 배정 (${filtered.length}개)` }
-    }
-    return { sourceWords: unitWords, sourceLabel: `${resolved.name} 전체 (${unitWords.length}개)` }
+    // 규칙 자체는 순수 함수(entranceTestSelection.computeEntranceSourceWords)에
+    // 있다 — 여기서는 캐시에서 값을 꺼내 넘기기만 한다(회귀 테스트 가능).
+    const { words, label } = computeEntranceSourceWords({
+      unitWords: getWordsByUnitId(resolved.id),
+      unitName: resolved.name,
+      assignedSlugs: getTodaysAssignmentWordIds(cls),
+      slugOf: wordSlug,
+    })
+    return { sourceWords: words, sourceLabel: label }
   }, [cls, unit])
 
   // 반 선택 시 오늘의 시험 현황 로드 + 5초 폴링(탭이 보일 때만).

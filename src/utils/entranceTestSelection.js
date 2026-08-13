@@ -123,3 +123,37 @@ export function selectEntranceTest({ tests = [], takenTestIds = [], context = {}
     completed,
   }
 }
+
+// 학생이 선택 UI에서 이미 고른 시험이 아직 유효하면 그 선택을 유지한다.
+// 5초 폴링이 매번 selectEntranceTest를 다시 돌리기 때문에 이 함수가 없으면
+// 학생이 고른 시험이 폴링 한 번에 되돌아간다(= 시험 도중 새로고침/포커스
+// 복귀 때 다른 시험으로 바뀌는 사고). 고른 시험이 더 이상 후보가 아니면
+// (종료됐거나 이미 제출) 선택을 버리고 일반 규칙으로 돌아간다.
+export function resolvePickedTest(selection, chosenId) {
+  if (!selection) return null
+  const still = (selection.pending || []).find((p) => p.test?.id === chosenId)
+  return still ? still.test : (selection.chosen || null)
+}
+
+// ── 관리자 출제 범위 규칙 ──────────────────────────────────────────────
+// "오늘의 단어 배정이 있고 유닛 단어와 교집합이 있으면 그 서브셋, 아니면
+// 유닛 전체"(v1.3 getStudentWords 폴백과 같은 규칙). 예전엔 이 규칙이
+// EntranceTestAdmin의 useMemo 안에만 있어서 테스트가 불가능했고, 라벨이
+// 실제 사용된 유닛이 아니라 요청한 이름을 찍어 화면이 거짓말을 했다.
+//
+// unitWords는 **반드시 unit_id로 조회한 그 유닛의 단어**여야 한다(이름
+// 조회 금지 — 동명 유닛 혼입 방지, wordLibrary.getWordsByUnitId 참고).
+// label은 항상 실제 유닛 이름(unitName)으로 만든다.
+export function computeEntranceSourceWords({
+  unitWords = [], unitName = '', assignedSlugs = [], slugOf = (w) => w,
+} = {}) {
+  const usable = (unitWords || []).filter((w) => w && w.word && w.meaning)
+  const assigned = new Set((assignedSlugs || []).filter(Boolean))
+  if (assigned.size > 0) {
+    const filtered = usable.filter((w) => assigned.has(slugOf(w.word)))
+    if (filtered.length > 0) {
+      return { words: filtered, label: `오늘의 단어 배정 (${filtered.length}개)`, mode: 'assignment' }
+    }
+  }
+  return { words: usable, label: `${unitName} 전체 (${usable.length}개)`, mode: 'unit' }
+}

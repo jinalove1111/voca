@@ -12,7 +12,7 @@ import {
   getStudentClassDefaultTextbookIds, resolveTestTextbookIdByClassId,
   inferUnitIdFromTestWords, getClassNameById,
 } from '../utils/wordLibrary'
-import { selectEntranceTest, TIER_LABEL } from '../utils/entranceTestSelection'
+import { selectEntranceTest, resolvePickedTest, TIER_LABEL } from '../utils/entranceTestSelection'
 import { playSuccessSound } from '../utils/speech'
 
 // ── 입실 단어시험 (학생 화면) ────────────────────────────────────────────
@@ -167,11 +167,10 @@ export default function EntranceTest({ studentId, studentName, onBack }) {
     })
     setPendingChoices(selection.needsChoice ? selection.pending : [])
 
-    // 학생이 선택 UI에서 이미 고른 시험이 아직 유효하면 그 선택을 유지한다.
-    const stillPending = (id) => selection.pending.some((p) => p.test.id === id)
-    const picked = chosenIdRef.current && stillPending(chosenIdRef.current)
-      ? selection.pending.find((p) => p.test.id === chosenIdRef.current).test
-      : selection.chosen
+    // 학생이 선택 UI에서 이미 고른 시험이 아직 유효하면 그 선택을 유지한다
+    // (규칙은 순수 함수 resolvePickedTest — 폴링이 학생의 선택을 되돌리거나
+    // 시험 도중 다른 시험으로 바꾸지 않게 하는 계약).
+    const picked = resolvePickedTest(selection, chosenIdRef.current)
     if (!picked) chosenIdRef.current = null
 
     setActiveTest(picked)
@@ -271,7 +270,15 @@ export default function EntranceTest({ studentId, studentName, onBack }) {
     } catch (err) {
       // 점수는 로컬 state에 이미 있어서 학생이 결과를 못 보는 일은 없음 —
       // 저장만 실패한 것이므로 재시도 버튼을 보여준다.
-      setSaveError(err.message || String(err))
+      // P8(2026-08-13): 서버/DB 원본 에러 문자열(Supabase 메시지, HTTP 코드,
+      // UUID 등)은 학생에게 노출하지 않는다 — 콘솔에만 남기고 화면에는
+      // 아이가 읽을 수 있는 문구만. 원인 구분은 오프라인 여부 정도만 한다.
+      console.warn('[entranceTest] 결과 저장 실패(재시도 버튼 표시):', err?.message || err)
+      setSaveError(
+        typeof navigator !== 'undefined' && navigator.onLine === false
+          ? '인터넷 연결이 끊겨서 점수를 저장하지 못했어요. 연결을 확인하고 다시 눌러주세요.'
+          : '점수 저장에 실패했어요. 아래 버튼을 눌러 다시 시도해주세요.'
+      )
     }
   }
 
