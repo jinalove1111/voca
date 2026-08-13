@@ -41,7 +41,10 @@
     "verify:class-textbooks": "node scripts/verifyClassTextbooks.mjs",
     "verify:star-delta": "node scripts/buildRaceBundle.mjs && node scripts/testStarDeltaOnEntry.mjs",
     "verify:word-pagination": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testWordLibraryPagination.mjs",
-    "verify:entrance-selection": "node scripts/testEntranceTestSelection.mjs"
+    "verify:entrance-selection": "node scripts/testEntranceTestSelection.mjs",
+    "verify:entrance-matrix": "node scripts/testEntranceClassroomMatrix.mjs",
+    "verify:entrance-roster": "node scripts/testEntranceRosterMinbyungchun.mjs",
+    "verify:entrance-live": "node scripts/entranceLiveDiagnostic.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
