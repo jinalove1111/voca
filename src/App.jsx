@@ -23,7 +23,7 @@ import { pickNextGame } from './utils/matchGame'
 import { trackEvent, EV } from './utils/productEvents'
 import { assignDirections } from './utils/entranceTest'
 import { logSpellingReview } from './utils/spellingReviewApi'
-import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, refreshTextbooks, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getClassSettings, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentClassId, getTextbookById, getStudentPrimaryTextbook, getClassNames, getClassIdByName } from './utils/wordLibrary'
+import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, refreshTextbooks, refreshAllForLogin, invalidateStudentAssignmentsCache, revalidateUnitWords, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getClassSettings, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentClassId, getTextbookById, getStudentPrimaryTextbook, getClassNames, getClassIdByName } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech } from './utils/speech'
 // Curriculum Engine Phase 0(2026-08-01, docs/CURRICULUM_ENGINE.md §8) —
 // 교사 opt-in 예문 학습 단계. isFeatureEnabled('curriculumExamplesStudentUI')
@@ -231,6 +231,21 @@ function AppInner({ studentId, studentName, onLogout }) {
     try { return getStudentUnitId(studentId) } catch { return null }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId, refreshTick])
+  // stale cache 감사(2026-08-15) 갭 ③ — 연속 foreground(수업 중 앱을 안
+  // 벗어나 위 visibility 재검증이 전혀 발동하지 않음)에서, 지금 보고 있는
+  // 유닛이 바뀔 때(최초 해석 포함)마다 서버 단어 "수"만 가볍게(count HEAD,
+  // 전체 words 재조회 아님) 확인한다 — 캐시와 다를 때만
+  // refreshWordLibrary()로 실제 갱신하고 refreshTick을 올려 classWords를
+  // 다시 계산시킨다. 같지 않을 때만 1회 count 쿼리, 같은 유닛 60초 내
+  // 재확인은 revalidateUnitWords 자체 스로틀로 no-op(추가 네트워크 0).
+  useEffect(() => {
+    if (!currentUnitId) return
+    let cancelled = false
+    revalidateUnitWords(currentUnitId).then((changed) => {
+      if (changed && !cancelled) setRefreshTick((t) => t + 1)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [currentUnitId])
   // v2.1 — Dashboard 유닛 선택기: 전환은 setStudentUnit(id 우선 저장) →
   // refreshTick으로 단어 목록/설정 재계산. 진행도 레코드(useStudent)는
   // 아무것도 건드리지 않는다 — 별/스트릭/스티커/오늘 미션이 유닛 전환으로
@@ -472,6 +487,12 @@ function AppInner({ studentId, studentName, onLogout }) {
     const onVisible = () => {
       if (document.visibilityState === 'visible' && !inFlight) {
         inFlight = true
+        // stale cache 감사(2026-08-15) 갭 ① — 위 4개 refresh와 같은 트리거로
+        // 이 학생의 교재/Unit 배정 캐시(_studentAssignmentsCache)도 함께
+        // 무효화한다. 네트워크 호출 0건(Map.delete뿐) — 다음
+        // getStudentClassAssignments 호출이 실제 재조회를 한다(추가 API
+        // 호출 없음, getStudentEntranceClassIds의 {fresh:true}와 동일 캐시).
+        invalidateStudentAssignmentsCache(studentId)
         Promise.all([refreshWordLibrary(), refreshStudents(), refreshClassSettings(), refreshTextbooks()])
           .then(() => setRefreshTick((t) => t + 1))
           .catch(() => {})
@@ -936,8 +957,16 @@ export default function App() {
   // `sel`은 StudentSelect.jsx가 로그인/등록 성공 시 넘기는 { id, name,
   // className, unitName } — PIN 서버 검증(로그인) 또는 addStudent+set-
   // student-pin(등록) 둘 다 이 모양으로 통일해서 넘긴다.
+  //
+  // stale cache 감사(2026-08-15) 갭 ② — 예전엔 refreshStudents()만 호출해
+  // students 캐시만 최신화되고, 단어/교재/반설정/배정(SCA) 캐시는 탭이 열려
+  // 있던 동안 값 그대로 재로그인 후에도 유지됐다. refreshAllForLogin이 그
+  // 4종 전체(+SCA 무효화)를 하되, initWordLibrary 완료 직후(콜드)라면
+  // 내부에서 스스로 refreshStudents 단독 동작으로 폴백해 중복 fetch를
+  // 만들지 않는다(wordLibrary.js 주석 참고) — 이 한 줄이 기존 동작을
+  // 대체해도 안전한 이유.
   const handleSelect = async (sel) => {
-    try { await refreshStudents() } catch {}
+    try { await refreshAllForLogin(sel.id) } catch {}
     // 콜드스타트 수정(2026-08-06) — 로그인 직후에도 동일하게 배정 캐시를
     // 예열해 첫 렌더부터 실제 primary 교재로 해석되게 한다(위 init effect와 동일 이유).
     try { await getStudentClassAssignments(sel.id) } catch { /* 실패해도 로그인 진행 */ }

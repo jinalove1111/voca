@@ -121,6 +121,15 @@ const SPECIAL_CLASS_NAMES = new Set(['MS 중1', 'MS 중2', 'MS 중3'])
 // { [className]: { id, classType, units: [{ id, name, words: [{id,word,meaning}] }] } }
 let _cache = {}
 let _initPromise = null
+// stale cache 감사(2026-08-15, Fix B) — initWordLibrary()의 내부 Promise.all이
+// 이 페이지 수명에서 실제로 완료된 시각(ms). null이면 아직 콜드(진행 중/미시작).
+// refreshAllForLogin이 "이미 initWordLibrary가 한 번 전부 받아온 뒤인가"를
+// 판단하는 용도로만 쓴다 — App.jsx가 StudentSelect(로그인 화면)를 initWordLibrary
+// 완료(ready=true) 이후에만 렌더하므로, 실사용에서 handleSelect는 항상 이
+// 플래그가 세팅된 뒤에만 불린다. 방어적으로 남겨둔다(콜드일 때 이 값이 아직
+// null이면 기존 refreshStudents 단독 동작으로 폴백해 init 자신의 fetch와
+// 중복되지 않게 함).
+let _initCompletedAt = null
 
 // Rebuilds the entire in-memory cache from Supabase. Call this any time you
 // need guaranteed-fresh data (app start, tab refocus, after a write).
@@ -419,8 +428,35 @@ export function initWordLibrary() {
     // v3.1 교재 레이어 — 반/유닛 캐시가 준비된 뒤 로드(합성 폴백이 _cache에
     // 의존). 실패해도 앱은 "반=교재 1개" 폴백으로 오늘과 동일 동작.
     await refreshTextbooks()
+    _initCompletedAt = Date.now()
   })()
   return _initPromise
+}
+
+// stale cache 감사(2026-08-15) 갭 ② — 재로그인(로그아웃 후 재로그인, 세션
+// 복원이 아니라 StudentSelect의 handleSelect 경로)이 단어/교재/반설정/
+// 배정(SCA) 캐시를 전혀 무효화하지 않아, 그 사이 관리자가 바꾼 내용(단어
+// 업로드/교재·Unit 재배정/반 설정 변경)이 재로그인 후에도 계속 안 보이던
+// 갭을 막는다. 기존 handleSelect는 refreshStudents()만 호출했다 — 그 한
+// 함수만 최신화되고 나머지 3개 캐시(_cache/_classSettings/_textbooks)는
+// 탭이 열려 있던 동안 쌓인 값 그대로 남았다.
+//
+// initWordLibrary가 아직 완료되지 않은 콜드(_initCompletedAt===null) 상태
+// 에서 불리면 — init 자신의 Promise.all이 이미 이 4개를 전부 새로 받아오는
+// 중이므로 — 이 함수는 기존 handleSelect 동작(refreshStudents만)을 그대로
+// 유지해 중복 fetch를 만들지 않는다(App.jsx는 ready===true, 즉
+// initWordLibrary 완료 이후에만 로그인 화면을 렌더하므로 실사용 경로에서는
+// 항상 웜 분기를 타지만, 어떤 경로로든 콜드에 불려도 안전하게 폴백한다).
+// 웜(이미 한 번 완료된 뒤) 상태에서만 4종 전체 refresh를 하고, 이 학생의
+// SCA 캐시도 함께 무효화해 다음 getStudentClassAssignments가 최신을 읽게
+// 한다(네트워크 0 — Map.delete뿐, 실제 재조회는 다음 호출이 함).
+export async function refreshAllForLogin(studentId) {
+  if (_initCompletedAt == null) {
+    await refreshStudents()
+    return
+  }
+  await Promise.all([refreshWordLibrary(), refreshStudents(), refreshClassSettings(), refreshTextbooks()])
+  invalidateStudentAssignmentsCache(studentId)
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -1031,6 +1067,40 @@ export const getUnitById = (unitId) => {
 }
 
 export const getWordsByUnitId = (unitId) => getUnitById(unitId)?.words || []
+
+// stale cache 감사(2026-08-15) 갭 ③ — 연속 foreground(수업 중 앱을 안
+// 벗어나 visibilitychange/focus가 한 번도 안 뜸)에서는 어떤 재검증도 없어,
+// 관리자가 수업 중 단어를 업로드해도 그 유닛을 보고 있는 학생 화면에 반영
+// 안 되던 갭을 막는다(98차 감사 "수업 중 단어 업로드 미반영"). 전체
+// words 테이블을 다시 받지 않는다 — 이 유닛의 서버 단어 "수"만 HEAD count로
+// 가볍게 확인해 캐시된 수와 다를 때만 refreshWordLibrary()(페이지네이션
+// 경로 재사용)로 실제 갱신한다. 같은 unitId는 UNIT_REVALIDATE_THROTTLE_MS
+// 이내 재호출을 no-op으로 걸러 과도한 호출을 막는다(스로틀은 count 쿼리
+// 자체도 막는다 — throttle 안에서는 네트워크 호출이 0회).
+const UNIT_REVALIDATE_THROTTLE_MS = 60_000
+const _unitRevalidateLastCheckedAt = new Map() // unitId -> ms epoch
+export async function revalidateUnitWords(unitId) {
+  if (!unitId) return false
+  const now = Date.now()
+  const last = _unitRevalidateLastCheckedAt.get(unitId)
+  if (last != null && now - last < UNIT_REVALIDATE_THROTTLE_MS) return false
+  _unitRevalidateLastCheckedAt.set(unitId, now)
+  const cachedCount = getWordsByUnitId(unitId).length
+  try {
+    const { count, error } = await supabase
+      .from('words')
+      .select('id', { count: 'exact', head: true })
+      .eq('unit_id', unitId)
+    if (error || count == null) return false
+    if (count !== cachedCount) {
+      await refreshWordLibrary()
+      return true
+    }
+    return false
+  } catch {
+    return false
+  }
+}
 
 export const getClassWords = (className, unitName = DEFAULT_UNIT_NAME) => {
   const unit = resolveClassUnit(className, unitName)
@@ -1998,6 +2068,19 @@ export function isMissingTableError(error) {
 // 같은 "한 번 비동기로 채우고 이후 동기로 읽는다" 관례를 그대로 재사용.
 const _studentAssignmentsCache = new Map()
 
+// stale cache 감사(2026-08-15) 갭 ① — App.jsx의 visibility/focus 재검증
+// 목록(refreshWordLibrary/refreshStudents/refreshClassSettings/refreshTextbooks)
+// 에 이 캐시만 빠져 있어서, 앱을 벗어났다 돌아와도(다른 4개는 새로고침되는데)
+// 교재/Unit 배정만은 계속 옛 값을 보여주던 갭을 막는다. 네트워크 호출 0건
+// (Map에서 항목만 지움) — 다음 getStudentClassAssignments 호출이 지연
+// refetch한다(기존 getStudentEntranceClassIds의 {fresh:true} 옵션과 동일
+// 캐시 위에서 동작하는, 그 옵션의 "무효화만" 부분을 독립 export로 재사용
+// 가능하게 뽑은 것 — 로직 중복 없음, 캐시는 하나뿐).
+export function invalidateStudentAssignmentsCache(studentId) {
+  if (studentId) _studentAssignmentsCache.delete(studentId)
+  else _studentAssignmentsCache.clear()
+}
+
 // 내부(2026-07-22, 레거시 다중 교재 버그 수정) — "반 배정"(단일 반 전환)
 // 의미론으로 student_class_assignments를 유지보수한다: 대상 반 행을
 // primary로 보장(insert, 이미 있으면 primary 승격)하고, 다른 반의 기존
@@ -2230,7 +2313,7 @@ export async function getStudentClassAssignments(studentId) {
 // 동작은 완전히 불변(기존 호출부 성능/의미 보존).
 export async function getStudentEntranceClassIds(studentId, { fresh = false } = {}) {
   if (!studentId) return []
-  if (fresh) _studentAssignmentsCache.delete(studentId)
+  if (fresh) invalidateStudentAssignmentsCache(studentId)
   let assignments = _studentAssignmentsCache.get(studentId)
   if (!assignments) {
     try { assignments = await getStudentClassAssignments(studentId) } catch { assignments = [] }

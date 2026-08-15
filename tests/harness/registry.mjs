@@ -154,6 +154,7 @@ export const DOMAINS = {
       { script: 'scripts/testStudentUnitDecouple.mjs', builders: ['wordlib'] },
       { script: 'scripts/testStudentSelectUnitSwitch.mjs', builders: ['wordlib'] },
       { script: 'scripts/testWordLibraryPagination.mjs', builders: ['wordlibOffline'], extra: true, note: '2026-08-12 — words 1000행 절단(P0) + 유닛 임의 폴백 회귀. 실사고: words가 1093행이 되자 range 없는 조회가 1000행만 받아 93개 단어(24개 유닛의 position 38~49)를 에러 없이 버렸고, 40단어 유닛이 38개로 출제됐다. 함께 getClassWords의 `units.find(name) || units[0]` 무음 폴백(요청한 유닛이 없으면 조용히 첫 유닛 단어를 반환)도 제거. 스텁이 PostgREST 1000행 상한을 실제로 강제하므로 페이지네이션이 없으면 반드시 FAIL한다(수정 전 소스로 20단언 FAIL 실측 확인, 규칙 15). 절단 0/동명 유닛 비혼입/Song·Luke 배정 유닛 정확 조회/기존 경로 무회귀 6시나리오, 48단언. 13개 필수 도메인 밖, 신규 보너스 커버리지.' },
+      { script: 'scripts/testStaleCacheRevalidation.mjs', builders: ['wordlibOffline'], extra: true, note: '2026-08-15 — stale cache BUG(98차 감사): 관리자 변경(단어 업로드/교재·Unit 배정/반설정)이 켜둔 학생 세션에 반영 안 되는 3개 갭을 고정. 갭① invalidateStudentAssignmentsCache(SCA 캐시를 App.jsx visibility 재검증에 편입, 네트워크 0) — getStudentPrimaryTextbook/getStudentAssignedTextbookIds 같은 동기 소비자의 스테일 해소, 실제 재조회는 다음 실제 읽기가 담당. 갭② refreshAllForLogin(재로그인 시 단어/교재/반설정/SCA 4종 전체 무효화, initWordLibrary 미완료 콜드 상태면 기존 refreshStudents 단독 동작으로 폴백해 중복 fetch 방지). 갭③ revalidateUnitWords(연속 foreground에서 유닛 진입 시 서버 단어 "수"만 HEAD count로 가볍게 확인, 불일치 시에만 전체 refreshWordLibrary, 같은 유닛 60초 스로틀). 수정 전 소스(신규 export 3개를 no-op으로 되돌린 임시 스텁)로 12단언 FAIL 실측(규칙 15) 후 복원. 배너 파일(EntranceTestBanner.jsx) 무접촉/진행도·보상 테이블 무접촉까지 확인.' },
     ],
   },
   persistence: {

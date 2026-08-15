@@ -58,7 +58,14 @@ function execute(state) {
 
   const [from, to] = state.range || [0, MAX_ROWS - 1]
   const end = Math.min(to + 1, from + MAX_ROWS)
-  const data = sorted.slice(from, end)
+  // stale cache 감사(2026-08-15) — 실 supabase-js의
+  // `.select(cols, { count: 'exact', head: true })` 패턴(예: revalidateUnitWords
+  // 의 경량 단어 수 확인)을 재현. count는 range/head와 무관하게 필터링된
+  // 전체 행 수, head:true면 데이터 자체는 내려보내지 않는다(실제 PostgREST
+  // HEAD 요청과 동일 계약). count 옵션을 안 쓰는 기존 모든 호출부는
+  // state.countMode가 없어 count:null, head:false 그대로라 동작 무변화.
+  const data = state.head ? [] : sorted.slice(from, end)
+  const count = state.countMode === 'exact' ? filtered.length : null
 
   _calls.push({
     table: state.table,
@@ -66,14 +73,21 @@ function execute(state) {
     orders: state.orders.map(([c]) => c),
     range: state.range,
     returned: data.length,
+    count,
+    head: !!state.head,
   })
-  return { data, error: null }
+  return { data, error: null, count }
 }
 
 function builder(table) {
-  const state = { table, columns: '', orders: [], filters: [], range: null }
+  const state = { table, columns: '', orders: [], filters: [], range: null, countMode: null, head: false }
   const api = {
-    select(columns) { state.columns = columns || ''; return api },
+    select(columns, opts) {
+      state.columns = columns || ''
+      state.countMode = opts?.count || null
+      state.head = !!opts?.head
+      return api
+    },
     order(col, opts) { state.orders.push([col, opts?.ascending !== false]); return api },
     eq(col, val) { state.filters.push((r) => r[col] === val); return api },
     in(col, vals) { state.filters.push((r) => (vals || []).includes(r[col])); return api },
