@@ -11,6 +11,10 @@ import {
   entranceScopeClassIds, isInEntranceScope, entranceEligibilitySource,
   isArchivedOrFixtureStudentName, assignmentClassIds,
 } from '../src/utils/entranceEligibility.js'
+// 계정 종류(테스트) 판별 — 2026-08-11 운영자 확정(accountStatus.js 헤더
+// 주석 참고). isArchivedOrFixtureStudentName(위)과는 판정 대상이 다르다 —
+// 이건 "아카이브 여부"이고, 아래 섹션 7은 "테스트/QA 계정 여부"다.
+import { isTestAccountStudent } from '../src/utils/accountStatus.js'
 
 let failures = 0
 const check = (label, cond, extra) => {
@@ -142,6 +146,48 @@ check('현재 학습 중인 교재(current_unit_id)는 판정 입력이 아니�
 })())
 check('반 이름/학년 문자열은 판정 입력이 아니다(함수 시그니처에 이름이 없음)',
   entranceScopeClassIds.length === 1) // 인자 1개(객체)만 받는다 = 이름 기반 분기 불가
+
+console.log('\n7. 테스트/QA 계정 판별(isTestAccountStudent, 2026-08-11 운영자 확정)')
+{
+  // "고1 능률 민병천" 반 입실시험 분모 사고 조사에서 확정된 사실 — Barry와
+  // Jinaa는 운영자의 테스트/QA 계정이다(삭제/교재 회수는 안 하고, 실제
+  // 학생 집계에서만 제외). Cookie/Paul은 기존부터 알려진 테스트 계정.
+  check('Barry는 테스트 계정', isTestAccountStudent({ name: 'Barry' }))
+  check('Jinaa는 테스트 계정', isTestAccountStudent({ name: 'Jinaa' }))
+  check('Cookie는 테스트 계정', isTestAccountStudent({ name: 'Cookie' }))
+  check('Paul은 테스트 계정', isTestAccountStudent({ name: 'Paul' }))
+
+  // "고1 능률 민병천" 반의 실제 학생 12명 — 전원 테스트 계정이 아니어야 함.
+  const 실제학생12명 = [
+    '황다은', '박서진', '김태율', '권교빈', '황성연', '박건우',
+    '전하은', 'Nana', '김보민', '김규민', '김가윤', '현다율',
+  ]
+  check('실제 학생 12명은 전원 테스트 계정이 아니다',
+    실제학생12명.every((name) => !isTestAccountStudent({ name })),
+    실제학생12명.filter((name) => isTestAccountStudent({ name })))
+
+  // 대소문자/공백 트림 — 기존 두 파일(StudentSelect/StudentDirectory)의
+  // "트림 후 소문자 정확 일치" 규칙을 그대로 유지해야 한다.
+  check('대소문자 무시(BARRY/barry/BaRRy 전부 일치)',
+    isTestAccountStudent({ name: 'BARRY' }) &&
+    isTestAccountStudent({ name: 'barry' }) &&
+    isTestAccountStudent({ name: 'BaRRy' }))
+  check('앞뒤 공백 트림', isTestAccountStudent({ name: '  barry  ' }))
+  check('부분 일치는 걸리지 않는다(정확 일치만, 예: "Barry2"는 테스트 계정 아님)',
+    !isTestAccountStudent({ name: 'Barry2' }) && !isTestAccountStudent({ name: 'notbarry' }))
+  check('null/undefined 학생 안전(예외 없이 false)',
+    !isTestAccountStudent(null) && !isTestAccountStudent(undefined) && !isTestAccountStudent({}))
+
+  // students.is_test 컬럼이 있으면(boolean) 이름보다 우선한다(규칙 9 — 컬럼이
+  // 나중에 생겨도/안 생겨도 앱이 안 깨짐). 컬럼값이 이름과 반대여도 컬럼이 이긴다.
+  check('is_test:true면 이름이 실제 학생이어도 테스트 계정 취급',
+    isTestAccountStudent({ name: '박서진', is_test: true }))
+  check('is_test:false면 이름이 테스트 계정 이름이어도 실제 학생 취급',
+    !isTestAccountStudent({ name: 'Barry', is_test: false }))
+  check('is_test가 undefined(컬럼 없음/미조회)면 이름 폴백',
+    isTestAccountStudent({ name: 'Barry', is_test: undefined }) &&
+    !isTestAccountStudent({ name: '박서진', is_test: undefined }))
+}
 
 console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n실패 ${failures}건 ❌`)
 process.exit(failures === 0 ? 0 : 1)

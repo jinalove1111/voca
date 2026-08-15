@@ -21,6 +21,13 @@
 // 쓰기는 단 한 건도 하지 않는다(조회 전용) — 실사용 데이터에 안전.
 import fs from 'node:fs'
 import { pathToFileURL } from 'node:url'
+// 계정 종류(테스트) 판별 — 순수 모듈이라 번들 없이 직접 import한다
+// (testEntranceEligibilityRules.mjs의 entranceEligibility.js 직접 import와
+// 같은 관례). 2026-08-11 운영자 확정 — 관리자 분모(섹션 5)가 이제 테스트
+// 계정(Cookie/Paul/Jinaa/Barry)도 제외하므로, 이 테스트의 "기대 집합" 독립
+// 계산도 같은 필터를 적용해야 한다 — 안 하면 기대 집합에는 테스트 계정이
+// 남아 실제(필터링된) 관리자 분모와 개수가 어긋나 FAIL 난다.
+import { isTestAccountStudent } from '../src/utils/accountStatus.js'
 
 const env = Object.fromEntries(fs.readFileSync(new URL('../.env', import.meta.url), 'utf8')
   .split('\n').filter((l) => l.includes('=')).map((l) => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()]))
@@ -230,7 +237,11 @@ console.log('\n5. 관리자 "반 전체 N명" 분모 == 학생 화면 대상 집
     if (!ownTbByClass.has(t.owner_class_id)) ownTbByClass.set(t.owner_class_id, [])
     ownTbByClass.get(t.owner_class_id).push(t.id)
   }
-  const realStudents = (Array.isArray(students) ? students : []).filter((s) => !isArchivedOrFixtureStudentName(s.name))
+  // 2026-08-11 — 아카이브/픽스처 제외에 더해, 운영자 테스트/QA 계정(Cookie/
+  // Paul/Jinaa/Barry)도 "실제 학생" 기대 집합에서 제외한다(wordLibrary.js
+  // fetchEntranceRosterForClass의 실제 필터와 동일 규칙이어야 함).
+  const realStudents = (Array.isArray(students) ? students : [])
+    .filter((s) => !isArchivedOrFixtureStudentName(s.name) && !isTestAccountStudent(s))
 
   check('아카이브/픽스처 판별기 계약(_DUP/_INACTIVE/QA_ 접두·접미)',
     isArchivedOrFixtureStudentName('김가윤_DUP2_212b1c_INACTIVE') &&
@@ -259,11 +270,11 @@ console.log('\n5. 관리자 "반 전체 N명" 분모 == 학생 화면 대상 집
     if (got.size !== expected.size || [...expected].some((id) => !got.has(id))) {
       mismatches.push(`${name}(관리자 ${got.size} vs 기대 ${expected.size})`)
     }
-    if (roster.some((s) => isArchivedOrFixtureStudentName(s.name))) junkLeak.push(name)
+    if (roster.some((s) => isArchivedOrFixtureStudentName(s.name) || isTestAccountStudent(s))) junkLeak.push(name)
   }
-  check('모든 실제 반에서 관리자 분모 = 기대 집합(사람 반 ∪ SCA 반 ∪ 배정 교재 소유 반 − 아카이브)',
+  check('모든 실제 반에서 관리자 분모 = 기대 집합(사람 반 ∪ SCA 반 ∪ 배정 교재 소유 반 − 아카이브 − 테스트 계정)',
     mismatches.length === 0, mismatches.join(', '))
-  check('분모에 아카이브/중복/QA 계정이 섞이지 않는다', junkLeak.length === 0, junkLeak.join(', '))
+  check('분모에 아카이브/중복/QA/테스트(Cookie·Paul·Jinaa·Barry) 계정이 섞이지 않는다', junkLeak.length === 0, junkLeak.join(', '))
 
   // 관리자 분모에 든 학생은 학생 화면에서도 그 반의 시험을 볼 수 있어야 한다
   // (두 함수가 같은 규칙을 쓰는지 실제 호출로 교차 확인 — 표본 검사).
