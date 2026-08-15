@@ -11,7 +11,7 @@
 // "Smart Check-in" 등 다른 시험류 기능이 같은 함수를 재사용할 수 있다.
 // 확장자 명시(.js) — Vite는 어느 쪽이든 처리하지만, plain Node(테스트
 // 스크립트의 직접 import)는 확장자가 없으면 모듈을 못 찾는다.
-import { isSpellingCorrect } from './spelling.js'
+import { isSpellingCorrect, answersOverlap } from './spelling.js'
 
 export const ENTRANCE_DIRECTIONS = new Set(['kr2en', 'en2kr', 'random', 'mixed'])
 
@@ -59,6 +59,48 @@ export function buildEntranceQuestions(words, { count = 10, direction = 'en2kr',
   const pool = (words || []).filter((w) => w && w.word && w.meaning)
   const picked = shuffle(pool, rng).slice(0, Math.max(0, Math.min(count, pool.length)))
   const dirs = assignDirections(picked.length, dir, { rng, fallback: 'en2kr' })
+
+  // 2026-08-15 운영자 승인 1안(실사고 — 고1 입실시험에서 work out과 exercise가
+  // 둘 다 "운동하다"로 겹쳐 같은 시험 풀에 실려 있었는데, kr2en(뜻 제시 -> 영어
+  // 입력) 문항이 exercise 쪽에 나오자 학생이 동의어 work out을 입력하고도
+  // 오답 처리됐다). 채점 규칙(gradeEntranceAnswer/isSpellingCorrect) 자체는
+  // 손대지 않고, 문항별 방향이 실시간으로 정해지는 mixed/random 모드에서만
+  // "시험 풀 안에 뜻이 겹치는 다른 단어가 있는 단어"에 kr2en을 배정하지
+  // 않는다(en2kr은 다중 정답을 전부 인정하므로 겹침 자체가 문제되지 않는다).
+  // 고정 방향 시험(direction 전체가 'en2kr'|'kr2en')은 이 분기에 들어오지
+  // 않으므로 절대 안 건드림 — 서버(api/submit-entrance-result.js)가 고정
+  // 방향 시험에서 answers 각 항목의 direction이 시험 direction과 일치하는지
+  // 검증하기 때문에, 고정 kr2en 시험의 문항을 여기서 en2kr로 뒤집으면 그
+  // 자체로 채점이 깨진다. 즉 고정 kr2en 시험에서 뜻이 겹치는 단어가 나오는
+  // 잔여 위험은 이 수정의 알려진 한계로 남는다(교사가 겹치는 뜻의 단어를
+  // 같은 유닛/회차에 함께 내지 않도록 구성하는 것이 현재 유일한 완화책).
+  if (dir === 'mixed' || dir === 'random') {
+    // 충돌 판정은 picked가 아니라 입력 words 전체 풀 기준 — 이번에 안
+    // 뽑혔더라도 같은 시험 풀에 뜻이 겹치는 단어가 존재한다는 사실 자체가
+    // 위험 신호이므로 판정 범위를 좁히지 않는다. 단어별로 한 번만 계산해
+    // 재사용(같은 word가 여러 번 비교되는 것 방지).
+    const collisionCache = new Map()
+    const isCollision = (w) => {
+      if (collisionCache.has(w.word)) return collisionCache.get(w.word)
+      const result = pool.some((other) => other && other.word !== w.word && answersOverlap(w.meaning, other.meaning))
+      collisionCache.set(w.word, result)
+      return result
+    }
+    for (let i = 0; i < picked.length; i++) {
+      if (dirs[i] !== 'kr2en' || !isCollision(picked[i])) continue
+      // 비충돌이면서 en2kr인 문제를 찾아 서로 방향을 맞바꾼다(mixed의
+      // 50:50 균형을 그대로 보존). 없으면 그냥 en2kr로만 바꾼다(균형이
+      // 살짝 깨지더라도 오답 사고를 막는 쪽이 우선 — 규칙 1).
+      const j = dirs.findIndex((d, idx) => d === 'en2kr' && !isCollision(picked[idx]))
+      if (j !== -1) {
+        dirs[i] = 'en2kr'
+        dirs[j] = 'kr2en'
+      } else {
+        dirs[i] = 'en2kr'
+      }
+    }
+  }
+
   return picked.map((w, i) => {
     const d = dirs[i]
     return {

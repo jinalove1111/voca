@@ -81,3 +81,22 @@ export const isSpellingCorrect = (input, target, opts = {}) => {
 // 힌트 — 첫 글자만 보여주고 나머지는 빈칸(밑줄)으로 표시. 방향 무관하게
 // 그대로 재사용 가능(문자열 인덱싱만 하므로 영어/한글 모두 동작).
 export const spellingHintFor = (word) => `${word[0]}${' _'.repeat(Math.max(word.length - 1, 0))}`
+
+// 두 정답 문자열이 정답 집합을 공유하는가 — a의 인정 답 중 하나가 b에서도
+// 정답이면(또는 그 반대) true. 입실시험 mixed/random의 kr2en 출제 회피용
+// (2026-08-15 운영자 승인: 같은 시험 풀에 뜻이 겹치는 단어가 있으면 그
+// 단어들은 kr2en으로 내지 않는다 — 채점 규칙 자체는 무변경).
+// a 쪽을 splitAnswerAlternatives로 쪼갠 대안들(전체 문자열 포함) 각각을
+// isSpellingCorrect(alt, b)로 검사한다 — isSpellingCorrect가 target(b) 쪽의
+// 쉼표/세미콜론 분리는 이미 내부에서 처리하므로, a 쪽만 우리가 직접 쪼개
+// "단일 값 input" 형태로 넘기면 기존 채점 규칙을 그대로 재사용해 양쪽 다
+// 커버할 수 있다. 대칭으로 b -> a도 검사(어느 한쪽이라도 겹치면 true).
+export const answersOverlap = (a, b) => {
+  const aStr = String(a ?? '').trim()
+  const bStr = String(b ?? '').trim()
+  if (!aStr || !bStr) return false
+  const altsOf = (s) => [s, ...splitAnswerAlternatives(s)]
+  if (altsOf(aStr).some((alt) => isSpellingCorrect(alt, bStr))) return true
+  if (altsOf(bStr).some((alt) => isSpellingCorrect(alt, aStr))) return true
+  return false
+}
