@@ -23,6 +23,18 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\voca\\scripts\\notify-windows.ps1\" -Title \"Claude Code\" -Message \"Task finished - check your session\"",
+            "timeout": 15,
+            "async": true
+          }
+        ]
+      }
     ]
   }
 }
