@@ -24,6 +24,11 @@
 import { createClient } from '@supabase/supabase-js'
 import { checkAdminReauth, supabaseAdminUrl, supabaseAdminKey } from './_pinAuth.js'
 import { computeWeeklyWordKing, detectWordKingOutliers, getWeekPeriod, isValidClassId } from '../src/utils/wordKing.js'
+// 계정 종류(테스트/아카이브) 판별의 단일 진실 공급원 — 2026-08-11 운영자
+// 확정. accountStatus.js 헤더 주석 참고. 이 서버 함수는 students.class_id
+// 조회에 필터가 전무해서(아카이브/중복/테스트 계정까지 전부) 랭킹 대상에
+// 섞이던 문제를 여기서 걸러낸다.
+import { isRealStudentAccount } from '../src/utils/accountStatus.js'
 
 const TABLE_MISSING_CODES = new Set(['42P01', 'PGRST205'])
 
@@ -64,8 +69,16 @@ export default async function handler(req, res) {
     res.status(200).json({ ok: false, reason: 'no_students' })
     return
   }
-  const studentIds = students.map((s) => s.id)
-  const nameById = new Map(students.map((s) => [s.id, s.name]))
+  // 아카이브/중복/QA 픽스처 + 운영자 테스트 계정(Cookie/Paul/Jinaa/Barry)은
+  // 랭킹 대상에서 제외한다 — 이 컬럼(name)만 select하므로 항상 이름 폴백
+  // 경로를 탄다(is_test/archived 컬럼은 아직 DB에 없음, 규칙 9).
+  const realStudents = students.filter(isRealStudentAccount)
+  if (realStudents.length === 0) {
+    res.status(200).json({ ok: false, reason: 'no_students' })
+    return
+  }
+  const studentIds = realStudents.map((s) => s.id)
+  const nameById = new Map(realStudents.map((s) => [s.id, s.name]))
 
   // 2) 입실시험 정확도 — 이 반의 이번 기간 시험 id들을 먼저 구한 뒤,
   //    그 시험들의 결과(이미 서버 재채점된 값, api/submit-entrance-
@@ -121,7 +134,7 @@ export default async function handler(req, res) {
 
   // 4) 서버 전용 순수 계산(src/utils/wordKing.js) — 클라이언트는 이 계산에
   //    전혀 관여하지 않는다.
-  const inputs = students.map((s) => ({
+  const inputs = realStudents.map((s) => ({
     studentId: s.id,
     studentName: s.name,
     accuracyCorrect: accuracyByStudent.get(s.id)?.correct || 0,
