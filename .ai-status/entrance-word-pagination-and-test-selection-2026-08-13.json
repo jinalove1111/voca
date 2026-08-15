@@ -1,0 +1,100 @@
+{
+  "agent_name": "main-session",
+  "role": "분석 + 구현 + 검증 + 배포 (95차)",
+  "task_id": "entrance-word-pagination-and-test-selection-2026-08-13",
+  "task": "verify:student 7시간 정지 진단 -> 별 오염 가드 배포 -> words 1000행 절단 P0 수정 -> 입실시험 다중 대상 우선순위 선택",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-12T10:40:00+09:00",
+  "updated_at": "2026-08-13T00:00:00+09:00",
+  "files_owned": [
+    "src/utils/wordLibrary.js",
+    "src/utils/entranceTestSelection.js",
+    "src/components/EntranceTest.jsx",
+    "src/components/EntranceTestAdmin.jsx",
+    "src/hooks/useStudent.js",
+    "scripts/testStarDeltaOnEntry.mjs",
+    "scripts/testWordLibraryPagination.mjs",
+    "scripts/testEntranceTestSelection.mjs",
+    "scripts/fakeSupabaseModule.mjs",
+    "scripts/buildWordLibOfflineBundle.mjs",
+    "tests/harness/registry.mjs",
+    "package.json",
+    "handoff.md"
+  ],
+  "commits_deployed": [
+    {
+      "hash": "3590cd5",
+      "title": "별 오염 차단 — 이름 키 소유권 가드(claimName) + 회귀 테스트 6시나리오",
+      "production_bundle": "index-CVxjrr77.js",
+      "marker_verified": "paul_easy_name_claims 0건 -> 1건"
+    },
+    {
+      "hash": "f228b5c",
+      "title": "words 1000행 절단(P0) 페이지네이션 + 유닛 임의 폴백 제거 + 회귀 48단언",
+      "production_bundle": "index-BakjHQ5h.js",
+      "marker_verified": "range( 2건 탑재"
+    },
+    {
+      "hash": "821eec2",
+      "title": "입실시험 다중 대상 시험을 교재/유닛 우선순위로 선택 + 동률 시 학생 선택 UI",
+      "production_bundle": "index-BfCllfDy.js + EntranceTest-LYglWB2l.js(HTTP 200)",
+      "marker_verified": "선택 UI 문구/티어 라벨 각 1건"
+    }
+  ],
+  "summary": "운영자의 'verify:student 7시간 정지' 보고로 시작 — 실측 결과 node 프로세스 0개/background task 0개로 hang이 아니라 세션 프로세스가 죽고 상태 표시줄만 얼어붙은 것이었고, 재실행 시 2분 내 exit 0이었다. 이후 3개 P0를 순차 수정·배포했다. ①별(star) 오염: 같은 기기의 동명이인 신규 studentId가 loadRecord의 이름 키 경로로 앞 계정의 진행도를 물려받고 새 UUID로 업로드하던 경로를 claimName 소유권 가드(paul_easy_name_claims)로 차단(3590cd5). ②words 1000행 절단 P0: PostgREST 기본 상한 탓에 1093행 중 1000행만 받아 93개 단어(24개 유닛의 position 38~49)가 에러 없이 사라지고 있었다 — 38차의 refreshStudents 1000행 잘림 사고(8e15ff7)와 같은 종류의 재발. selectAllRows 페이지네이션 + 결정적 정렬(tie 브레이커)로 수정, 라이브 적재 1000->1093 확인(f228b5c). ③textbook/unit 단어 오염: getClassWords의 `|| units[0]` 무음 폴백을 제거하고 resolveClassUnit/getUnitById/getWordsByUnitId 도입 — words에는 textbook_id 컬럼이 없고 unit_id가 곧 '교재+유닛' 복합키임을 근거로 혼입을 구조적으로 불가능하게 했다(f228b5c 동봉). ④입실시험 다중 대상: findActiveTest의 created_at 임의 선택을 교재/유닛 4단계 우선순위로 교체하고 동률이면 학생 선택 UI를 띄운다(821eec2). DB migration 없이 코드만으로 구현 — entrance_tests에 textbook_id/unit_id가 없어 교재는 class_id로 역해석, 유닛은 words 스냅샷 역추적(모호하면 null, 끼워맞추지 않음).",
+  "verification": {
+    "build": "PASS (커밋 3건 각각 직전 실행)",
+    "verify:all": "ALL DOMAINS PASS (3회)",
+    "verify:eligibility": "PASS",
+    "verify:star-delta": "PASS (28단언, 신규)",
+    "verify:word-pagination": "PASS (48단언, 신규)",
+    "verify:entrance-selection": "PASS (47단언, 신규)",
+    "rule15_pre_fix_failure_proof": "words 절단/폴백 — 수정 전 소스 역패치 번들로 20단언 FAIL 실측 확인 (esbuild onLoad 메모리 역패치, 디스크 소스 미변경)",
+    "live_readonly_after_deploy": "적재 단어 1000 -> 1093 / 김기택 'Unit 6'·YMB 'Unit4'·YMB 'Unit 5' 전부 38 -> 40개 / 빈 유닛 'Unit 1' 0개(폴백 제거 확인)"
+  },
+  "student_impact_verified": {
+    "Song": {
+      "uuid": "4f3e0b72-2452-4780-92bf-32eeceff9c90",
+      "before": "active 시험 2개 중 created_at이 이른 '중2 능률 김기택'이 임의 선택돼 반 친구와 다른 시험 응시(0/10)",
+      "after": "두 시험 모두 2순위 동률 -> 임의 선택하지 않고 학생 선택 UI 노출(김기택 Unit 6 / YMB Unit4 중 선택)"
+    },
+    "Luke": {
+      "uuid": "48a8c230-e2c1-4814-82dd-f8bc4d0e3658",
+      "before": "중2 YMB 박준원 시험 1건",
+      "after": "active 시험 1개라 예전과 동일하게 바로 진입 — 노출 변화 0"
+    },
+    "liam_star_bug": {
+      "duplicate_reward_on_reentry": "21bce52로 이미 수정·배포된 상태였음(이번 세션 수정 아님)",
+      "name_key_contamination": "3590cd5로 이번에 수정·배포 완료",
+      "session_verified": "프로덕션 번들 마커 탑재 + 회귀 28단언 PASS",
+      "device_check": "운영자가 실기 확인 완료했다고 2026-08-13 보고 — 이 세션이 직접 관측한 값이 아니라 운영자 보고임을 명시"
+    }
+  },
+  "safety": {
+    "production_db_write": "0건 (전 과정 SELECT 전용)",
+    "sql_executed": "0건 (v3_34/v3_35 미실행 유지)",
+    "units_position_modified": "0건",
+    "unit_renamed_or_deleted": "0건",
+    "sca_reassigned": "0건",
+    "textbook_reassigned": "0건",
+    "student_data_change": "0건",
+    "entrance_test_records_change": "0건 (기록/점수/응시 기록 읽기만)"
+  },
+  "known_unfixed": [
+    "Song의 SCA.current_unit_id 문제 — primary 배정이 교재·유닛 모두 NULL인 Pre-Middle School(유닛 0개)을 가리키고, YMB 배정은 단어 1개짜리 'Unit' 쓰레기 유닛을 가리킴. 그래서 1순위(현재 학습 교재+유닛)가 성립하지 않아 2순위 동률 -> 선택 UI로 안전 처리됨. 데이터 정책 결정 전까지 수정하지 않음(운영자 지시).",
+    "같은 상태: 사실상 빈 유닛을 가리키는 배정 6건(Song/Harry/백채아/Yaeji/권교빈/황성연), current_unit_id NULL 8건(Luke/Song/황다은/김규민/현다율/Barry 외 QA 2)",
+    "닫히지 않은 status='active' 시험 18건(2026-07-16~) — date 필터 덕에 기능 영향 없으나 정리 대상",
+    "EntranceTestBanner는 여전히 findActiveTest 사용 — '시험 있는가' 게이트라 선택 로직과 무관하지만 배너 상세줄이 실제 볼 시험과 다를 수 있음(표시상 사소)",
+    "이미 생성된 시험의 words는 스냅샷이라 절단 수정의 영향을 받지 않음 — 새 시험부터 40개"
+  ],
+  "blocker": null,
+  "needs_approval": [
+    "entrance_tests.unit_id 컬럼 추가 여부 — 유닛 축을 words 스냅샷 역추적이 아니라 구조적으로 확정하려면 필요(SQL 미작성·미실행)",
+    "Song/Harry 등 빈 유닛을 가리키는 SCA 6건 재지정 여부",
+    "current_unit_id NULL 배정 8건 처리 여부",
+    "supabase_v3_34_account_status.sql / v3_35_entrance_textbook_backfill.sql 실행 여부(계속 미실행)",
+    "미종료 active 시험 18건 정리 여부"
+  ],
+  "next_action": "운영자: ①새 입실시험을 하나 열어 문항 수 상한이 40으로 오르는지 확인 ②Song 계정으로 시험 2개가 동시에 열린 상황에서 선택 UI가 뜨는지 실기 확인 ③위 needs_approval 5건 중 진행할 것 선택. 다음 세션: 워킹트리에 남은 다른 세션 미커밋 변경(PROJECT_BOARD.md/docs/StudentSelect.jsx/StudentDirectory.jsx/api/compute-word-king.js 등)을 소유 세션이 정리."
+}

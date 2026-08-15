@@ -1,0 +1,62 @@
+{
+  "agent_name": "main-session",
+  "role": "입실시험 6시간 집중 안정화 (96차, 야간 자율)",
+  "task_id": "entrance-stabilization-6h-2026-08-13",
+  "task": "운영자 야간 지시 P0~P18 — 신규 기능 없이 입실시험을 실제 수업에서 안정적으로 쓸 수 있는 상태로",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-13T03:15:00+09:00",
+  "updated_at": "2026-08-13T05:10:00+09:00",
+  "files_owned": [
+    "src/utils/entranceTestSelection.js",
+    "src/components/EntranceTest.jsx",
+    "src/components/EntranceTestAdmin.jsx",
+    "scripts/testEntranceClassroomMatrix.mjs",
+    "scripts/testEntranceRosterMinbyungchun.mjs",
+    "scripts/entranceLiveDiagnostic.mjs",
+    "tests/harness/registry.mjs",
+    "package.json",
+    "handoff.md"
+  ],
+  "commits_deployed": [
+    { "hash": "9f827cb", "title": "fix: 출제 범위·선택 유지 순수 함수화 + 학생 오류 문구 정리" },
+    { "hash": "d3d82a9", "title": "test: 실전 매트릭스 CASE 1~20 + 민병천 12명 fixture + 진단 도구" }
+  ],
+  "production": {
+    "bundle": "index-CyvDzS5o.js + EntranceTest-B5yRYsLR.js (HTTP 200)",
+    "markers": "선택UI 1 / 친화 오류문구 1 / range( 2 / paul_easy_name_claims 1 — 이전 3건 수정 전부 유지"
+  },
+  "summary": "P0: verify:all hang 아님 확인(900s 하드 타임아웃 내 ALL DOMAINS PASS, 잔여 프로세스 0) — 이후 모든 테스트에 timeout 명령 적용. P2/P10: 실전 매트릭스 CASE 1~20 + 채점 불변식 21시나리오(~90단언, mock 전용). P4: computeEntranceSourceWords/resolvePickedTest 순수 함수화로 출제 범위·선택 유지 계약을 테스트 가능하게. P5: 민병천 12명 fixture — 라이브 실측 REAL=12/MISSING=0/EXTRA=0(94차의 분모 10이 백필 반영으로 정상화됐음을 확인, 최은경=Nana 영문명 등록 발견). P7: 중복 제출 3중 방어(DB unique + upsert onConflict + finishedRef) 실재를 소스 단언으로 고정. P8: 학생 화면에 노출되던 서버/DB 원본 에러 문자열 제거(콘솔에만, 화면엔 아이용 문구 + 오프라인 구분). P9: verify:entrance-live 진단 도구(READ-ONLY) — 첫 실행에서 실전 이슈 2건 즉시 검출. P11: 시험 응시가 별/보상 이벤트를 만들지 않음 단언 고정 + verify:star-delta 28단언 PASS 유지. P13: 정리 대상 없음(불용 import 0, magic number 0). P14~P17: build/verify:all/6종 회귀 전부 PASS 후 소커밋 2건 push, 프로덕션 마커 smoke test 통과.",
+  "verification": {
+    "build": "PASS (15.55s, saveError 수정 후 재실행)",
+    "verify:all": "ALL DOMAINS PASS (admin 12개 스크립트)",
+    "verify:eligibility": "PASS",
+    "verify:entrance-selection": "PASS (47단언)",
+    "verify:entrance-matrix": "PASS (21시나리오, 신규)",
+    "verify:entrance-roster": "PASS (mock + 라이브 12/0/0, 신규)",
+    "verify:word-pagination": "PASS (48단언)",
+    "verify:star-delta": "PASS (28단언)",
+    "verify:admin": "PASS (12개 스크립트, 최종 수정 후 재확정)"
+  },
+  "live_issues_found_by_diagnostic": [
+    "오늘(8/13) active YMB 시험의 출제 pool 38개 — 절단 수정 전 구 번들이 캐시된 브라우저에서 생성된 스냅샷. 운영자: 관리자 강력 새로고침 후 시험 재시작하면 40개(기존 시험 스냅샷은 설계상 소급 불변)",
+    "과거 날짜 active 시험 18건 잔존(date 필터 덕에 기능 영향 없음, 정리 대상)"
+  ],
+  "safety": {
+    "production_db_write": "0건",
+    "sql_executed": "0건 (v3_34/v3_35 계속 미실행)",
+    "student_data_change": "0건",
+    "test_records_change": "0건",
+    "destructive": "0건"
+  },
+  "blocked": [
+    "P6 모바일 실기기/브라우저 자동화 — 이 환경에 브라우저 e2e 없음. CASE 9 정적 점검(viewport/반응형/연타 방지)으로 대체하고 실기기 확인은 운영자 아침 체크리스트로 이관",
+    "P12 성능 심층(N+1/동시 부하) — 코드 읽기로 배치 조회(.in())·반 변경 시 1회 roster 조회·5초 폴링 가시성 가드는 확인했으나 부하 측정은 미수행(정확성 우선 원칙)"
+  ],
+  "needs_approval": [
+    "미종료 active 시험 18건 정리(UPDATE 필요 — SQL 준비 가능, 미작성)",
+    "entrance_tests.unit_id 컬럼 추가(유닛 축 구조 확정용)",
+    "v3_34/v3_35 실행 여부(민병천 12명은 이미 정상이라 재확인 필요)"
+  ],
+  "next_action": "운영자 기상 후: ①관리자 브라우저 강력 새로고침 → 현재 38개 pool YMB 시험 종료 후 재시작(40개 확인) ②npm run verify:entrance-live로 수업 전 현황 확인 ③학생 폰 1대로 Song 시나리오(시험 2개 동시 → 선택 UI) 실측"
+}

@@ -1,0 +1,52 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "문서 갱신 — 94차 세션(입실시험 분모 사고 근본원인 확정 + 별 오염 버그 라인 특정) 기록",
+  "task_id": "entrance-roster-star-contamination-2026-08-11",
+  "task": "94차 세션 사실(고1 능률 민병천 분모 10 vs 실제 12 근본원인, accountStatus.js 단일화, 미실행 SQL 2건, 별 오염 버그 라인 특정, 중복계정 포렌식)을 handoff.md/ENTRANCE_EXAM_ELIGIBILITY.md/PROJECT_BOARD.md에 반영",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-11T00:00:00+09:00",
+  "updated_at": "2026-08-11T00:00:00+09:00",
+  "files_owned": [
+    "handoff.md",
+    "docs/ENTRANCE_EXAM_ELIGIBILITY.md",
+    "PROJECT_BOARD.md"
+  ],
+  "files_read": [
+    "handoff.md (기존 전문, 중복 섹션 방지)",
+    "docs/ENTRANCE_EXAM_ELIGIBILITY.md (기존 전문)",
+    "PROJECT_BOARD.md (기존 전문)",
+    ".ai-status/README.md",
+    ".ai-status/EXAMPLE-implementer-doc-os-setup.json",
+    ".ai-status/night-autonomous-2026-08-12.json",
+    ".ai-status/entrance-admin-roster-2026-08-11.json",
+    ".ai-status/docs-maintainer-multi-textbook-docs.json",
+    "src/utils/accountStatus.js (신규 파일 존재/내용 실측 확인)",
+    "docs/operations/2026-08-11-entrance-roster-backfill.md (기존 전문, 수정 안 함)",
+    "src/hooks/useStudent.js (645-659/396-398/548-556/891 라인 실측 확인)",
+    "src/App.jsx (945-953 라인 실측 확인)",
+    "supabase_v3_34_account_status.sql / supabase_v3_35_entrance_textbook_backfill.sql (파일 존재만 Glob으로 확인)"
+  ],
+  "summary": "이번 세션(94차, 코드는 다른 세션이 워킹트리에 이미 작성 — docs-maintainer는 소스/SQL을 전혀 수정하지 않고 사실을 문서 3종에 append만 함)의 핵심: '고1 능률 민병천' 반 관리자 분모 10 vs 실제 학생 12 차이는 '누락 4명(SCA 행 부재 3명 + 중복계정 오염 1명) − 오집계 2명(테스트 계정 Barry/Jinaa가 실제 학생으로 잘못 집계)'의 상쇄였음을 확정. src/utils/accountStatus.js 신규(테스트/아카이브 계정 판별 단일화, barry 추가)가 5개 호출부에 적용됨(fetchEntranceRosterForClass/compute-word-king.js/EntranceTestAdmin.jsx/StudentSelect.jsx/StudentDirectory.jsx). supabase_v3_34(is_test/archived 컬럼)/v3_35(SCA 백필 4행) SQL 2건 준비 완료·미실행. 별개로 별(star) 오염 버그의 정확한 라인(useStudent.js:645-659 loadRecord의 이름 키 소유자검사 없는 채택 -> 396-398 normalizeRecord 덮어쓰기 -> 554 마운트 병합 보존 -> 1553-1584 동기화 업로드, App.jsx:953 handleLogout이 진도 저장소는 안 지움)을 확정했으나 수정은 미착수. 권교빈/전하은 중복계정 포렌식 결론(합산 금지 근거)도 기록. handoff.md 최상단에 94차 섹션 append, ENTRANCE_EXAM_ELIGIBILITY.md 6번 표 아래에 '2026-08-11(94차) 추가' 하위 섹션 append, PROJECT_BOARD.md NEXT 컬럼에 카드 3개(SQL 실행 대기/별 오염 버그/중복계정 통합 판단) 추가. 프로덕션 DB 변경 0건, 소스/SQL 파일 0건 수정.",
+  "verification_reported_by_source_session": {
+    "build": "PASS",
+    "verify:eligibility": "PASS 44/44 (신규 12단언)",
+    "verify:admin": "PASS",
+    "verify:all": "ALL DOMAINS PASS",
+    "note": "이 검증은 코드 변경을 수행한 세션이 보고한 결과를 그대로 옮겨 적은 것 — docs-maintainer는 코드를 수정하지 않았으므로 재실행하지 않음"
+  },
+  "safety": {
+    "production_db_write": "0건",
+    "student_data_change": "0건 (docs-maintainer 작업 범위)",
+    "sql_executed": "0건 (v3_34/v3_35 둘 다 미실행 상태로 기록)",
+    "code_or_sql_files_modified_by_this_session": "0건 (*.md 3개 + 이 .ai-status json만)"
+  },
+  "blocker": null,
+  "needs_approval": [
+    "supabase_v3_34_account_status.sql 실행 여부(운영자)",
+    "supabase_v3_35_entrance_textbook_backfill.sql 실행 여부(운영자, v3_34 이후 권장)",
+    "별 오염 버그 수정 착수 여부(운영자/CTO — 회귀 테스트 2종 선작성 후 규칙 15에 따라 진행)",
+    "권교빈/전하은 중복 계정 통합 여부·방법(운영자)"
+  ],
+  "next_action": "다음 세션(implementer)이 워킹트리의 accountStatus.js 등 미커밋 코드 변경을 리뷰 후 소커밋 — 그 전에 이 docs-maintainer 세션이 만든 handoff.md/ENTRANCE_EXAM_ELIGIBILITY.md/PROJECT_BOARD.md 변경과 섞지 않도록 git status로 파일 소유 범위 확인(규칙 16). SQL 2건은 운영자 수동 실행 대기."
+}

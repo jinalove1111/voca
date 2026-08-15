@@ -78,6 +78,40 @@ isInEntranceScope(scope, entranceTests.class_id) → boolean
 | 관리자 UI에 eligibility source 표시 없음 | 내부 추적만 가능(의도적) |
 | `UITest` 등 규칙에 안 걸리는 테스트 계정 | NEEDS APPROVAL (DDL 필요) |
 
+### 2026-08-11(94차) 추가 — 위 표의 후속 확인
+
+- **"테스트 계정이 필터링 안 됨" → 해결됨.** "고1 능률 민병천" 분모
+  사고(겉보기 10 vs 실제 12)를 조사한 결과, 테스트/QA 계정 판별이
+  `StudentSelect.jsx`/`StudentDirectory.jsx` 두 곳에 각자 다른 사본으로
+  하드코딩돼 있었고 관리자 분모(`fetchEntranceRosterForClass`)와
+  Word King 랭킹(`api/compute-word-king.js`)에는 아예 적용조차 안
+  돼 있었다(MS Advanced Class 132계정 전부가 Word King 랭킹 대상이던
+  버그 포함). `src/utils/accountStatus.js` 신규로 4개 호출부를 단일
+  진실 공급원으로 통합했다(워킹트리 변경, 커밋은 다음 세션). 실제 운영자
+  QA 계정 `barry`가 기존 두 하드코딩 목록 어디에도 없어 "실제 학생"으로
+  잘못 집계되고 있었다는 사실도 이번에 확인됨.
+- **신규로 밝혀진 문제 — 실사용 계정이 `_INACTIVE` 이름을 달고 있는
+  경우가 있다.** 권교빈 학생의 최근 학습(입실시험 능률 배정 포함)이
+  이름이 `권교빈_DUP2_f7d36b_INACTIVE`로 바뀐 계정
+  (`942e7e12-1fab-4948-a870-6d5dd5f7d36b`)에서만 발생하고 있었다. 이름
+  기반 아카이브 필터(`isArchivedOrFixtureStudentName`)는 정확히 설계대로
+  동작했지만, 그 결과 진짜 활동 계정이 "관리자 분모"에서 통째로
+  빠지는 부작용이 발생했다 — 필터 로직 결함이 아니라 계정 이름 붙이기
+  운영 관례와 실제 로그인 계정이 어긋난 것이 근본 원인. 4번 항목
+  "NEEDS APPROVAL" 컬럼 SQL 준비 완료(아래 참고)로 이 계층의 판정을
+  이름 문자열이 아닌 명시 컬럼으로 옮기면 구조적으로 재발을 막을 수
+  있다.
+- **`students.is_test`/`archived` 컬럼 — SQL 준비 완료, 실행 대기.**
+  `supabase_v3_34_account_status.sql`(컬럼 + GRANT + 이름 규칙 백필 +
+  검증 SELECT + 롤백)이 저장소에 있으나 운영자가 아직 실행하지 않았다
+  (규칙 8). `accountStatus.js`/`entranceEligibility.js` 양쪽 다 이
+  컬럼이 있으면 우선 사용하고 없으면 이름 폴백으로 이미 대비돼 있다
+  (규칙 9) — 실행 전후 어느 쪽이든 앱은 깨지지 않는다. 별도로
+  `supabase_v3_35_entrance_textbook_backfill.sql`(황다은/김규민/현다율/
+  권교빈 canonical 계정에 능률 교재 SCA 행 4개 순수 INSERT)도 준비돼
+  있음 — 상세 절차는 `docs/operations/2026-08-11-entrance-roster-
+  backfill.md`, 세션 기록은 `handoff.md` 2026-08-11(94차).
+
 ## 7. 회귀 방지
 
 ```bash

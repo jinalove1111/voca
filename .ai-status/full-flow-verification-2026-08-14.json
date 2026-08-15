@@ -1,0 +1,35 @@
+{
+  "agent_name": "main-session",
+  "role": "실전 흐름 전면 검증 (98차, 신규 기능 0)",
+  "task_id": "full-flow-verification-2026-08-14",
+  "task": "운영자 8개 축 판정 — 입실시험/Conversation6/Amin/Haeun/Irene/Liam별/단어수/캐시",
+  "status": "completed",
+  "progress": 100,
+  "updated_at": "2026-08-14T10:00:00+09:00",
+  "files_owned": [
+    "scripts/verifyWordCountConsistency.mjs",
+    "scripts/entranceLiveDiagnostic.mjs",
+    "package.json",
+    "handoff.md"
+  ],
+  "commit_deployed": { "hash": "2a5ee6c", "content": "verify:word-count 신규 + 진단 도구 KST 날짜 수정 (스크립트만 — 학생 번들 영향 0)" },
+  "verdicts": {
+    "entrance_test": "PASS — verify:all FAIL 0 / matrix 21시나리오 / selection 47단언 / roster",
+    "conversation6": "PASS — 라이브 8명, 실명단 1:1 일치(leo=Leo)",
+    "amin": "CODE PASS — fresh-scope 13단언 + 7조건 매핑, 실기기 확인 잔여",
+    "haeun_40_words": "CODE PASS — DB40/APP40/UI40 + depend on·make sense, 실기기 확인 잔여",
+    "irene_mixed_writing": "코드 정상(mixed 20/20 검증) — 원인은 반 설정 spelling_direction='kr2en'. 관리자 화면에서 '혼합 50:50' 선택으로 해결(SQL 불필요, 운영자 액션)",
+    "liam_star_delta": "PASS — 28단언 + grantReward 6개 호출부 전수 감사(전부 학습 완료 이벤트 내부)",
+    "word_count_consistency": "PASS — 신규 verify:word-count, 34유닛 전부 DB=APP=UI(총 1094)",
+    "cache_session": "감사 완료 — 잔여 BUG 2건 분류(수업 중 단어 업로드 미반영 / 켜둔 앱 번들 미갱신), 수정은 승인 대기 제안만"
+  },
+  "safety": { "db_update_delete": "0건", "student_data_change": "0건", "sql_executed": "0건" },
+  "real_device_pending": [
+    "Amin 폰: 켜둔 앱 + 관리자 배정 -> 60초 내 배너",
+    "Haeun 폰: 재실행 후 민병천 Unit3 40개",
+    "Irene: 반 설정 '혼합' 변경 후 쓰기에서 양방향 확인",
+    "아무 학생 1명: 시험 제출-점수-랭킹 전 구간",
+    "Liam 폰: 로그인/이동만으로 별 +0"
+  ],
+  "next_action": "운영자: ①Irene 반(Presentation 6) 출제 방향을 관리자 화면에서 '혼합 50:50'으로 변경 ②실기기 5항목 확인 ③잔여 BUG 2건(단어 업로드 미반영/새 버전 알림) 수정 착수 여부 결정"
+}

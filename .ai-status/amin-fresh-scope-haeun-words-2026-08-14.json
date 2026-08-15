@@ -1,0 +1,42 @@
+{
+  "agent_name": "main-session",
+  "role": "분석 + 구현 + 검증 + 배포 (97차)",
+  "task_id": "amin-fresh-scope-haeun-words-2026-08-14",
+  "task": "A) Amin stale-session 근본 수정(배정 fresh 재해석) B) Haeun 단어 2개 부족 원인 확정",
+  "status": "completed",
+  "progress": 100,
+  "updated_at": "2026-08-14T00:00:00+09:00",
+  "files_owned": [
+    "src/utils/wordLibrary.js",
+    "src/components/EntranceTestBanner.jsx",
+    "scripts/testEntranceBannerFreshScope.mjs",
+    "tests/harness/registry.mjs",
+    "package.json",
+    "handoff.md"
+  ],
+  "commit_deployed": {
+    "hash": "d2d6587",
+    "production_bundle": "index-CWK1DaDp.js",
+    "markers": "fresh 옵션 배선 1 / B10 폴링중단 코드 잔존 0 / 페이지네이션 range( 2 / 별 가드 1 — 이전 수정 전부 유지"
+  },
+  "summary": "A) Amin 실사고(16:56 교재 배정 -> 17:57 시험 생성, 그 전에 시작된 앱 세션의 배정 캐시가 낡아 시험 미표시) 근본 수정: getStudentEntranceClassIds에 { fresh } 옵션(학생당 캐시 항목만 무효화 + SCA 인덱스 조회 1회) 추가, EntranceTestBanner의 B10(첫 조회 0건 시 폴링 영구 중단)을 뒤집어 폴링 유지 + 시험이 안 보이는 동안만 fresh 재해석(시험 보이면 추가 부하 0, 60초 주기/가시성 가드 유지). 규칙 15 준수: 테스트 먼저 작성 -> 수정 전 4단언 FAIL 실측 -> 수정 -> 13단언 전부 PASS. 민병천 12명(라이브 12/0/0)/Conversation 6 8명 집계 불변 확인. B) Haeun 폰의 '단어 2개 부족'은 95차 words 1000행 절단 버그의 피해 유닛(민병천 Unit3, depend on pos38/make sense pos39)을 절단 수정 이전 번들이 낡은 세션에서 계속 보여준 것 — DB 40개/meaning 정상/현행 배포 코드 적재 40개 전부 실측 확정. 코드 수정 불필요, 기기 절차(앱 완전 종료 후 재실행)로 해결. vercel 캐시 헤더 정상 확인(max-age=0, must-revalidate).",
+  "verification": {
+    "build": "PASS (35.43s)",
+    "verify:all": "ALL DOMAINS PASS (FAIL 0)",
+    "verify:entrance-fresh-scope": "PASS (13단언, 신규 — 수정 전 4단언 FAIL 실측)",
+    "verify:entrance-roster": "PASS (민병천 라이브 12/0/0)",
+    "verify:entrance-matrix": "PASS (21시나리오)",
+    "verify:entrance-selection": "PASS / verify:word-pagination PASS / verify:star-delta PASS / verify:eligibility PASS"
+  },
+  "safety": {
+    "db_update_delete": "0건",
+    "student_identity_change": "0건",
+    "progress_stars_wordstatus_change": "0건",
+    "sql_executed": "0건"
+  },
+  "known_limits": [
+    "요구 9(모바일 실기기에서 배정 변경 후 앱 종료 없이 시험 표시)는 모듈 레벨 재현(테스트 4~5절)까지 — 실기기 확인은 운영자 몫: Amin 폰을 켜둔 채 관리자에서 교재 배정 -> 최대 60초 내 배너 표시 확인",
+    "번들 자체가 낡은 세션(Haeun 케이스)은 이 수정의 범위 밖 — '새 버전 알림' 기능은 별도 검토 사항"
+  ],
+  "next_action": "운영자: ①Amin 폰 재실행 후 시험 표시 확인(기존 안내대로) ②Haeun 폰 앱 완전 종료 후 재실행 -> 민병천 Unit3 40개 확인 ③여유 시 실기기에서 '켜둔 앱 + 새 배정 -> 60초 내 배너' 확인"
+}

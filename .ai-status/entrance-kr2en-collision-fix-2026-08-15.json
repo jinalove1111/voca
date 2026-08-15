@@ -1,0 +1,43 @@
+{
+  "agent_name": "main-session+implementer(sonnet)",
+  "role": "긴급 사고 조사(main) + 구현(implementer) + 독립 재검증/배포(main)",
+  "task_id": "entrance-kr2en-collision-fix-2026-08-15",
+  "task": "고1 입실시험 kr2en 동의어 충돌 오답 사고(work out/exercise='운동하다') — 운영자 승인 1안(출제 회피) 구현·배포",
+  "status": "completed",
+  "progress": 100,
+  "updated_at": "2026-08-15T00:00:00+09:00",
+  "files_owned": [
+    "src/utils/spelling.js",
+    "src/utils/entranceTest.js",
+    "scripts/testEntranceKr2enCollision.mjs",
+    "package.json",
+    "tests/harness/registry.mjs",
+    ".ai-status/entrance-kr2en-collision-fix-2026-08-15.json"
+  ],
+  "commit_deployed": {
+    "hash": "b75ea5d",
+    "pushed": "origin/main + origin/work/night-2026-08-11 (770184f..b75ea5d fast-forward, 커밋 1개)",
+    "production_bundle": "index-BEyLsInb.js (이전 index-CWK1DaDp.js, push 후 30초 내 교체)",
+    "bundle_fingerprint": "배포 번들에서 스왑 로직 미니파이 코드 원문 확인(findIndex((p,g)=>p===\"en2kr\"&&!d(i[g])) ... c[m]=\"en2kr\",c[f]=\"kr2en\")"
+  },
+  "root_cause": "mixed 시험의 kr2en 문항에서 같은 시험 풀에 뜻이 겹치는 두 단어(work out='운동하다'/exercise='운동하다; 운동')가 공존 — 정답이 출제 단어 하나로 고정돼 유효 동의어 입력이 오답. 채점 함수/DB/스냅샷/방향 배선은 전부 실측 무죄. 실피해: 2026-08-14 c67069f7 시험에서 학생 2명(Nana 18/20, Essel 17/20)이 exercise 공통 오답.",
+  "fix": "운영자 승인 1안 — 채점 규칙 무변경, buildEntranceQuestions의 mixed/random 방향 배정 단계에서 풀 내 뜻 겹침 단어에 kr2en 미배정(비충돌 en2kr 문항과 스왑, 50:50 보존). spelling.js에 answersOverlap 순수 추가. 고정 방향 시험(en2kr/kr2en)은 서버 direction 검증 계약 때문에 불변 — 고정 kr2en 시험의 겹침 위험은 알려진 한계로 주석 명시.",
+  "verification": {
+    "rule15": "main 세션이 독립 재현 — entranceTest.js를 HEAD로 임시 되돌려 신규 테스트 EXIT=1(충돌 단언 2개 FAIL, 시드 4/6/7/8), byte-identical 복원 후 EXIT=0(26단언 PASS)",
+    "build": "PASS (18.07s)",
+    "verify:writing / writing-direction / entrance(+collision) / entrance-collision": "전부 EXIT 0",
+    "verify:all(커밋 후 최종)": "PASS 74 / FAIL 0, ALL DOMAINS PASS",
+    "production_smoke": "실사고 시험 c67069f7의 실제 스냅샷 40단어(read-only)로 mixed/random 500시드×2 = 1000회 생성 시뮬레이션 — 충돌 단어 kr2en 배정 위반 0건, mixed 20문항 kr2en 개수 min=max=avg=10(50:50 정확 보존), 문항 수/중복 OK. 실제 entrance_tests INSERT 0건(학생 노출 위험 때문에 실행 안 함)"
+  },
+  "safety": {
+    "db_write": "0건 (SELECT만)",
+    "student_score_change": "0건 (점수 정정은 운영자 판단 보류)",
+    "train_meaning_change": "0건 (운영자가 직접 수정 예정)",
+    "other_session_files": "미커밋 8개 파일 무접촉·미커밋 유지 (규칙 16)"
+  },
+  "known_limits": [
+    "고정 kr2en 시험(direction 전체 고정)은 이 수정 범위 밖 — 겹치는 뜻 단어를 같은 회차에 함께 내지 않는 것이 유일한 완화책",
+    "handoff.md append는 보류 — handoff.md에 다른 세션의 미커밋 454줄이 남아 있어 소유 충돌 방지(다음 docs-maintainer 세션 몫)"
+  ],
+  "next_action": "운영자: ①Nana/Essel 점수 정정 여부 판단 ②train='훈련시키다 / 기차' meaning 직접 수정 ③실기기 검증 5항목(기존 RELEASE GATE PENDING 유지)"
+}

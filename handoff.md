@@ -7,6 +7,505 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-08-15 (99차) — 입실시험 kr2en 동의어 충돌 오답 사고 수정 (production 배포 완료)
+
+- 실사고: 2026-08-14 고1 입실시험(c67069f7, 능률 민병천 Unit3, direction=mixed
+  20/40문항)에서 학생 2명(최은경/Nana 18/20, 현다율/Essel 17/20)이 exercise
+  문항을 공통 오답. 원인: 같은 시험 풀에 work out="운동하다"와 exercise="운동하다;
+  운동"이 공존 — kr2en(뜻 제시→영어 입력) 문항의 정답이 출제 단어 하나로
+  고정돼 유효한 동의어 입력이 오답 처리됨.
+- 배제된 가설(전부 실측): DB 원문 정상(구분자 ASCII "; " 코드포인트 3b 20),
+  시험 스냅샷 정상, en2kr 채점 정상(대표 뜻 전부 정답 재현), 클라이언트 방향
+  배선 정상(prompt/answer/direction 동일 변수 파생).
+- 전수검사: 오늘 시험 2건 스냅샷 80단어 en2kr 대표 뜻 위험 0건. kr2en 뜻
+  충돌은 시험당 1건씩(고1: 운동하다←work out/exercise, 중2 YMB: 종류←type/form).
+  전체 words 1,134행 중 en2kr 실위험 1건: train="훈련시키다 / 기차"(슬래시
+  구분자 미지원) — 데이터 수정은 운영자가 직접 하기로 함(코드/SQL 무변경).
+- 수정(운영자 승인 1안, 커밋 b75ea5d): 채점 규칙(isSpellingCorrect/
+  gradeEntranceAnswer) 무변경. spelling.js에 answersOverlap 순수 추가
+  (+19줄), entranceTest.js buildEntranceQuestions의 mixed/random 방향
+  배정 단계에서만 "시험 풀 내 뜻 겹침 단어"에 kr2en 미배정 — 비충돌 en2kr
+  문항과 스왑해 50:50 균형 보존(+44줄). 신규
+  scripts/testEntranceKr2enCollision.mjs 26단언 + package.json
+  verify:entrance-collision 별칭 + verify:entrance 체인 편입 + registry 등록.
+- 규칙 15 준수: 신규 테스트를 먼저 작성, 수정 전 소스로 2단언 FAIL 실측
+  (mixed 시드 4/6/7/8에서 충돌 단어 kr2en 배정 + random 모드) 후 수정,
+  26단언 전부 PASS. 메인 세션이 독립 재검증(entranceTest.js를 HEAD로 임시
+  교체→FAIL 재현→byte-identical 복원→PASS).
+- 검증: build PASS(18.07s) / verify:writing·writing-direction·entrance
+  (+collision) 전부 PASS / verify:all 커밋 후 최종 PASS 74/FAIL 0.
+- 배포: origin/main 770184f..b75ea5d fast-forward push → Vercel 30초 내
+  번들 교체(index-CWK1DaDp.js → index-BEyLsInb.js). 배포 번들에서 스왑
+  로직 미니파이 코드 원문 지문 확인(findIndex((p,g)=>p==="en2kr"…). 프로덕션
+  스모크: 실사고 시험의 실제 스냅샷 40단어(read-only)로 mixed/random
+  500시드×2모드=1,000회 생성 시뮬레이션 — 충돌 단어 kr2en 위반 0건, mixed
+  20문항 kr2en 개수 min=max=avg=10(50:50 정확 보존). 실제 entrance_tests
+  INSERT 0건.
+- 알려진 한계: 고정 방향 kr2en 시험은 서버(api/submit-entrance-result.js)의
+  direction 일치 검증 때문에 이 수정이 개입하지 않음 — 겹치는 뜻 단어를
+  같은 고정 kr2en 회차에 함께 내지 않는 것이 유일한 완화책(entranceTest.js
+  주석·테스트 헤더에 명시).
+- 안전: Supabase 쓰기 0건(SELECT만), 학생 점수 무수정(Nana/Essel 정정은
+  운영자 확인 후 결정), train meaning 무수정, 다른 세션 소유 미커밋 파일
+  무접촉. 상태 파일: .ai-status/entrance-kr2en-collision-fix-2026-08-15.json.
+- 잔여(운영자 몫): ①Nana/Essel 점수 정정 여부 ②train meaning 수정 ③실기기
+  검증 5항목(Amin 배너 60초/Haeun 40개/Irene 혼합 설정 변경 후 양방향/시험
+  제출 전 구간/Liam 별+0) — RELEASE GATE는 실기기 완료 전까지 PENDING 유지.
+
+## 2026-08-14 (98차) — 실전 흐름 전면 검증(신규 기능 0) — 8개 축 판정 + 캐시 전수 감사
+
+운영자 지시: "코드상 PASS가 아니라 실제 학생 흐름이 정상인지". 신규 기능
+없이 검증만. 커밋 `2a5ee6c`(검증 도구 2건: verify:word-count 신규 +
+진단 도구 KST 날짜 오차 수정 — toISOString이 UTC라 KST 00~09시에 전날
+시험을 조회하던 제 도구 버그).
+
+### 판정 요약 (자동 검증 레벨)
+
+| 축 | 판정 | 근거 |
+|---|---|---|
+| 입실시험 전체 | PASS | verify:all FAIL 0 + matrix 21시나리오 + selection 47 + roster |
+| Conversation 6 | PASS | 라이브 eligibility 정확히 8명, 운영자 실명단과 1:1(leo=Leo) |
+| Amin | PASS(코드) | fresh-scope 13단언 + 7조건 매핑(아래) — 실기기 확인만 잔여 |
+| Haeun 40단어 | PASS(코드) | DB40/APP40/UI40 + depend on·make sense 포함, 이름 경로까지 |
+| Irene 쓰기 혼합 | **설정 문제** | 코드 정상(mixed=20/20 섞임 검증). 원인=반 설정 `spelling_direction='kr2en'`(Presentation 6·중1 동아 윤정미 등 10개 반). **관리자 화면 > 반 설정 > 출제 방향 '혼합 50:50'으로 변경하면 해결(SQL 불필요)** |
+| Liam 별 델타 | PASS | star-delta 28단언 + grantReward 호출부 6곳 전수(전부 학습 완료 이벤트 내부, 진입/이동 경로 0) + 시험 화면 무접촉 단언 |
+| 단어 수 전수 | PASS | 신규 verify:word-count — 34유닛 전부 DB=APP=UI(총 1094) |
+| 캐시/세션 | 감사 완료 | 아래 표 |
+
+### 캐시/세션 전수 감사 — "앱 재시작해야 반영"이 남아있는 곳
+
+Service worker 없음. Vercel 헤더 정상(`max-age=0, must-revalidate`).
+API/CDN 캐시 없음(PostgREST 직결). 문제는 전부 **클라이언트 메모리 캐시**:
+
+| 저장소 | 내용 | 세션 중 갱신 |
+|---|---|---|
+| localStorage `paulEasyVoca_currentStudent` | 로그인 세션(UUID) | 로그아웃 시 삭제 — 정상 |
+| localStorage `paul_easy_voca_v1`/`paul_easy_name_claims` | 진도/이름 소유권 | 동기화 정상 |
+| 메모리 `_studentAssignmentsCache` | 교재 배정 | **97차 fresh로 해소**(배너가 시험 없을 때 60초마다 재해석) |
+| 메모리 `_cache`(단어/유닛) | 전 단어 트리 | **로그인 시 1회 — 세션 중 단어 업로드는 새로고침 전까지 미반영(잔여)** |
+| 메모리 `_students`/`_textbooks`/`_classTextbooks`/`_classSettings` | 명단/교재/설정 | 동일(로그인 시 1회) |
+| 메모리 entranceTestApi `_available` | 테이블 존재 플래그 | 무해(불변 사실) |
+| **번들 자체** | 코드 | **켜둔 앱은 새 배포 미반영(Haeun 사례) — "새 버전" 알림 없음(잔여)** |
+
+**잔여 2건은 BUG로 분류하되 이번 범위(검증 전용)에서 수정하지 않음** —
+수업 중 단어 업로드/배포는 드문 운영 패턴이고, 입실시험 경로(배정→시험)는
+97차 수정으로 재시작 불요가 됐다. 제안: ①배너 fresh와 같은 패턴으로
+"오늘 시험 발견 시 refreshWordLibrary 1회" ②index.html에 빌드 해시 심어
+주기 비교 후 "새 버전이 있어요" 배너. 둘 다 운영자 승인 후 별도 세션.
+
+### Amin 7조건 매핑(요구 2)
+
+신규 세션/재로그인/새로고침/앱 재실행/시험 생성 후 로그인 = 콜드 캐시라
+항상 최신(구조적). 교재 배정 직후 + 시험 생성 전 로그인(켜둔 앱) =
+97차 fresh 폴링이 60초 내 반영(수정 전 FAIL 4단언 → 수정 후 PASS 실측).
+"매번 앱을 꺼야 하는 구조"는 입실시험 경로에서는 제거됨.
+
+## 2026-08-14 (97차) — Amin stale-session 근본 수정(배정 fresh 재해석 + 배너 폴링 중단 제거) + Haeun 2단어 원인 확정
+
+### A. Amin 사고 근본 수정 (`d2d6587` production 배포)
+
+96차 말미에 원인을 확정한 Amin 사고("수업 직전 교재 배정이 이미 켜져 있던
+앱 세션에 반영 안 됨")를 운영자 지시로 구조적으로 수정했다.
+
+- `getStudentEntranceClassIds(studentId, { fresh })` — fresh면 그 학생의
+  `_studentAssignmentsCache` 항목만 무효화하고 SCA 재조회(학생당 인덱스
+  조회 1회, 전체 재조회 아님). 기본 호출 캐시 동작 완전 불변.
+- `EntranceTestBanner` — **B10("첫 조회 0건이면 폴링 영구 중단") 뒤집기**.
+  수업 직전 배정 → 시험 생성이 실제 운영 순서인데 B10은 그 순서에서 이미
+  켜진 앱을 영구히 눈멀게 했다. 이제 폴링을 멈추지 않고(60초/가시성 가드
+  유지), **시험이 안 보이는 동안에만** 배정을 fresh로 재해석한다. 시험이
+  보이면 기존처럼 캐시 목록(추가 부하 0). 마운트 직후 첫 조회는 fresh
+  없이(로그인 직후 캐시가 최신). 비용: 시험 없는 날 대시보드를 켜둔 학생
+  1명당 60초마다 경량 조회 2회.
+- 규칙 15: `scripts/testEntranceBannerFreshScope.mjs`(8절 13단언)를 먼저
+  작성해 **수정 전 소스로 4단언 FAIL 실측** 후 수정 → 전부 PASS.
+  Amin 타임라인 축소 재현(배정 전 scope → 서버에만 배정 추가 → 기본 호출
+  stale 유지(기존 동작 보존) → fresh로 새 반 포함 → 캐시 재적재 → 철회
+  반대 방향 → 배너 소스 계약 → 진행도/보상 테이블 무접촉 단언).
+- 집계 불변: verify:entrance-roster(민병천 12명 라이브 12/0/0) PASS,
+  Conversation 6(Presentation 6) 8명은 roster 로직 무변경으로 유지.
+- 검증: build PASS / verify:all ALL DOMAINS PASS / entrance 회귀 6종 PASS.
+- DB UPDATE/DELETE 0건, identity/progress/stars 무접촉.
+
+### B. 전하은(Haeun) "단어 2개 적게 보임" — 원인 확정, 코드 수정 불필요
+
+- Haeun canonical `16fa6e1c…`의 현재 유닛 = 민병천 "Unit3".
+- 그 유닛의 마지막 2단어 `depend on`(pos38)/`make sense`(pos39)는 **95차
+  words 1000행 절단(P0)의 피해 목록에 있던 바로 그 2개**. meaning 정상
+  존재(결측 아님), DB 40개, **현행 배포 코드 적재도 40개 실측**(둘 다 포함).
+- 즉 Haeun 폰의 38개는 절단 수정(`f228b5c`) **이전 번들**이 낡은 세션에
+  남아 있던 것. vercel 캐시 헤더는 정상(`max-age=0, must-revalidate`)이라
+  HTTP 캐시 문제가 아니고, **앱을 오래 켜둔 세션**이 원인(Amin과 같은
+  '켜둔 앱' 계열).
+- 해결 절차: 앱 완전 종료 후 재실행(또는 새로고침) → Unit3에 40개.
+  회귀는 verify:word-pagination(48단언)이 이미 고정.
+
+## 2026-08-13 (96차) — 입실시험 6시간 집중 안정화 (실전 매트릭스 21시나리오 + 민병천 12명 fixture + 수업 전 진단 도구, production 배포)
+
+운영자 야간 지시(P0~P18): "내일 학생들이 입실시험을 시작했을 때 '또 안
+돼요'가 나오지 않게" — 신규 기능이 아니라 안정화 전용. 커밋 2건 배포:
+
+| 커밋 | 내용 |
+|---|---|
+| `9f827cb` | fix: 출제 범위·선택 유지 순수 함수화 + 학생 오류 문구 정리(P8) |
+| `d3d82a9` | test: 실전 매트릭스 CASE 1~20 + 민병천 12명 fixture + 진단 도구 |
+
+### 완료 항목
+
+- **P0**: verify:all 정지 없음 확인(hang 아님 — 하드 타임아웃 900s 안에
+  ALL DOMAINS PASS, 잔여 node 프로세스 0). 이후 모든 테스트 실행에
+  timeout 명령을 앞세워 무한 대기 자체가 불가능하게 함.
+- **P2/P10**: `scripts/testEntranceClassroomMatrix.mjs` — CASE 1~20 +
+  채점 불변식 21시나리오. 중복 제출은 DB unique(test_id,student_id) +
+  서버 upsert onConflict + 클라 finishedRef **3중 방어**를 소스 레벨로
+  단언(라이브 쓰기 없이). admin 도메인 10→12 스크립트.
+- **P4**: `computeEntranceSourceWords`/`resolvePickedTest` 순수 함수화 —
+  출제 범위 규칙과 "폴링이 학생의 선택을 되돌리지 않는다" 계약이 이제
+  테스트로 고정됨(CASE 7).
+- **P5**: `scripts/testEntranceRosterMinbyungchun.mjs` — 운영자 확정
+  실명단 12명 fixture. **라이브 실측: REAL=12/MISSING=0/EXTRA=0** —
+  94차의 분모 10이 현재는 12로 정상(백필 반영 확인). 주의: DB의
+  students.name은 한글/영문 혼재(최은경은 "Nana"로 등록).
+- **P8**: 결과 저장 실패 시 서버/DB 원본 에러 문자열이 학생 화면에
+  노출되던 것 제거 — 콘솔에만 남기고 화면엔 아이용 문구(오프라인 구분).
+- **P9**: `npm run verify:entrance-live` — 수업 전 10초 READ-ONLY 진단.
+  학생 이름 인자로 개별 추적(class/textbook/unit/eligible/selected/
+  reason). 판정 규칙은 앱과 같은 모듈을 import(중복 구현 금지).
+- **P11**: 시험 응시가 별/보상 이벤트를 만들지 않음을 단언으로 고정 —
+  EntranceTest.jsx는 grantReward/addStars/useStudent를 참조하지 않고,
+  computeTestResult 결과에 stars/reward 필드가 없다. verify:star-delta
+  28단언도 PASS 유지.
+- **P7**: 중복 제출 방지는 이미 3중으로 구조화돼 있음을 확인(신규 수정
+  불필요) — DB unique 제약 + 서버 upsert + finishedRef/disabled 가드.
+
+### 진단 도구가 첫 실행에서 검출한 실전 이슈(코드 아님, 운영 사항)
+
+1. **오늘(8/13) active인 YMB 시험의 출제 pool이 38개** — 절단 수정
+   배포 전 구 번들이 캐시된 관리자 브라우저에서 생성된 시험의 스냅샷.
+   유닛 실제 단어는 40개. **관리자 화면 강력 새로고침 후 시험을 새로
+   시작하면 40개가 된다**(기존 시험 words는 생성 시점 스냅샷이라 코드
+   수정의 소급 영향 없음 — 설계대로).
+2. 과거 날짜인데 status='active'인 시험 18건 잔존(date 필터 덕에 기능
+   영향 없음, 정리 대상).
+
+### 안전 기록
+
+DB/Supabase 변경 0건(전 과정 SELECT 또는 mock). 학생 데이터/시험 기록
+변경 0건. SQL 실행 0건(v3_34/v3_35 계속 미실행). destructive 0건.
+테스트 하드 타임아웃 도입으로 무한 대기 재발 방지(P0/규칙 11·12).
+
+## 2026-08-12~13 (95차) — 별 오염 가드 배포 + words 1000행 절단(P0) 수정 + 입실시험 다중 대상 우선순위 선택 (3건 전부 production 배포 완료)
+
+운영자가 "verify:student가 7시간째 끝나지 않는다"고 보고하며 시작. 실제로는
+node 프로세스 0개 / background task 0개 — 죽일 프로세스가 없었고, 재실행하니
+2분 내 exit 0이었다. 01:12에 테스트 파일을 쓰고 verify를 띄운 직후 **세션
+프로세스 자체가 죽었고 상태 표시줄만 얼어붙은 것**이었다(그 세션은
+`.ai-status` 체크포인트를 남기지 못했다 — 규칙 17 미이행이 유일한 실질 손실).
+이후 운영자 지시로 3개 P0를 순차 수정·배포했다.
+
+### 배포된 커밋 3건 (전부 production Ready 실측 확인)
+
+| 커밋 | 내용 | 프로덕션 번들 |
+|---|---|---|
+| `3590cd5` | 별(star) 오염 차단 — 이름 키 소유권 가드(`claimName`) | `index-CVxjrr77.js` |
+| `f228b5c` | words 1000행 절단(P0) 페이지네이션 + 유닛 임의 폴백 제거 | `index-BakjHQ5h.js` |
+| `821eec2` | 입실시험 다중 대상 교재/유닛 우선순위 선택 + 선택 UI | `index-BfCllfDy.js` |
+
+배포 판정은 해시가 아니라 **번들 안 마커 문자열 실측**으로 했다(배포 전후 같은
+방법으로 대조): `paul_easy_name_claims` 0건→1건, `range(` 2건 탑재, 코드
+스플리팅된 `EntranceTest-LYglWB2l.js`(HTTP 200)에 선택 UI 문구/티어 라벨 1건씩.
+
+### ① 별(star) 오염 버그 — production 수정 완료 (`3590cd5`)
+
+94차가 라인까지 특정해 두고 착수하지 않았던 건을 구현·배포했다. 같은 기기에서
+같은 표시이름으로 나중에 생긴 **다른 studentId**가 `loadRecord`의 이름 키
+경로로 먼저 생긴 계정의 로컬 진행도(별/스티커/캘린더)를 소유자 검사 없이
+물려받고, 2초 디바운스 동기화가 그 값을 새 UUID로 Supabase에 업로드하던
+경로다(실측 증거: 같은 기기 "권교빈" 계정 5개가 119별 공유, 2개는 완전 클론).
+
+`useStudent.js`에 `paul_easy_name_claims` localStorage 키를 두고 "이 기기에서
+이 이름 키를 누가 처음 정당하게 채택했는가"를 기록한다. 최초 채택자/본인
+재로그인은 허용(새 기기 첫 로그인하는 기존 학생의 정상 마이그레이션 경로 유지,
+`testIdentityMigration.mjs` 계속 PASS), 다른 studentId의 가로채기만 차단.
+
+별 지급 자체(`grantReward` dedupKey 멱등, `21bce52`)는 손대지 않았다 — 오염은
+로컬 진도 복원 경로에서만 발생하므로 그 경로만 고쳤다.
+
+`scripts/testStarDeltaOnEntry.mjs`(신규, 28단언 6시나리오): 신규 진입 델타 0 /
+동명이인 가로채기 차단(119가 업로드되지 않음) / 재입장 중복지급 0 / 동일
+dedupKey 재호출 +1만 / 실제 발음 성공 정상 지급 / 다른 이름 조합 재확인.
+
+**Liam/Dain 제보 별 중복 획득 버그의 현재 상태**(두 건을 혼동하지 말 것):
+- 재진입 시 발음 성공 반복 지급(`docs/bugs/star-duplicate-reward-analysis.md`)
+  → `21bce52`로 이미 수정·배포된 상태였다(이번 세션 수정 아님).
+- 이름 키 가로채기 오염 → 이번 `3590cd5`로 수정·배포.
+- **실기 확인**: 이 세션이 확인한 것은 번들 마커 탑재 + 회귀 28단언 PASS까지다.
+  실기기 확인은 **운영자가 완료했다고 2026-08-13 보고**(세션이 직접 관측한
+  값이 아니라 운영자 보고임을 명시해 둔다).
+
+### ② words 1000행 절단 P0 — production 수정 완료 (`f228b5c`)
+
+**38차의 `refreshStudents()` 1000행 잘림 사고(`8e15ff7`)와 완전히 같은 종류가
+`words`에서 재발했다.** PostgREST는 명시적 range가 없으면 최대 1000행만 주고
+나머지를 **에러 없이** 버린다. words가 1093행이 된 시점부터 앱은 1000행만 받아
+**93개 단어(24개 유닛의 position 38~49)를 잃고 있었다** — 40단어 유닛이 38개로
+보였고 입실시험 출제 풀도 38개로 줄었다.
+
+라이브 실측으로 누락 단어를 word 단위까지 확정: 김기택 "Unit 6"의
+`mistake A for B`/`stand for`, YMB "Unit4"의 `thanks to`/`around the world`.
+**meaning은 전부 정상**이라 결측 필터가 아니라 순수 절단임을 증명했다.
+
+- `selectAllRows()` 헬퍼로 words/units/classes를 1000행씩 끝까지 읽는다.
+- 정렬을 결정적으로 고정: words `position→id`, units `position→name→id`,
+  classes `created_at→id`. words.position은 유닛 안에서만 유일해 테이블 전체로
+  tie가 대량이고, **units.position은 실측상 34개 중 32개가 0**이라 사실상 전부
+  tie다 — tie 브레이커 없이 페이지네이션하면 경계에서 행이 누락/중복된다.
+
+### ③ textbook/unit 간 단어 오염 방지 (`f228b5c` 동봉)
+
+`getClassWords`가 `units.find((u) => u.name === unitName) || units[0]` 이었다 —
+요청한 유닛이 없으면 **아무 말 없이 그 반의 첫 유닛 단어**를 돌려줬고, 관리자
+출제 범위 라벨까지 "요청한 이름"으로 찍혀 **화면이 거짓말을 했다**.
+
+- `resolveClassUnit()`으로 분리: 정확 일치 → 표기 정규화 일치("Unit5"↔"Unit 5")
+  → 못 찾으면 `null`. 정규화 후 후보가 2개 이상이면(같은 반에 "Unit 1"과
+  "Unit1"이 공존하는 분열) 고르지 않는다. **임의 `units[0]` 폴백 제거.**
+- `getUnitById()`/`getWordsByUnitId()` 추가 — 유닛 UUID 직접 조회.
+  **`words`에는 `textbook_id` 컬럼이 없다**: `words.unit_id → units.class_id →
+  textbooks.owner_class_id`로 교재가 유일하게 결정되므로 **`unit_id`가 곧
+  "교재+유닛" 복합키**다. 실측상 동명 유닛이 `"Unit"` 5개 반, `"Unit 1"` 4개
+  반, `"Unit3"` 4개 반에 존재하는데, 이 경로를 쓰면 혼입이 구조적으로 불가능.
+- `EntranceTestAdmin`은 `getWordsByUnitId(resolved.id)`로 단어를 가져오고
+  `sourceLabel`이 **실제 해석된 유닛 이름**을 쓴다. 못 찾으면 출제 불가.
+
+`scripts/testWordLibraryPagination.mjs`(신규, 48단언 6시나리오) +
+`scripts/fakeSupabaseModule.mjs`(PostgREST 1000행 상한을 **실제로 강제**하는
+스텁, 정렬 tie를 일부러 흔든다) + `scripts/buildWordLibOfflineBundle.mjs`.
+**규칙 15 검증**: 수정 전 소스로 되돌린 번들(디스크 미변경, esbuild `onLoad`
+메모리 역패치)에 같은 테스트를 물려 **20단언 FAIL 실측 확인** — 실패 목록에
+"임의 units[0] 폴백 제거됨" 단언이 포함돼 두 회귀를 모두 잡음이 증명됐다.
+
+배포 후 라이브 실측: 적재 단어 **1000 → 1093**, 김기택 "Unit 6"/YMB "Unit4"/
+YMB "Unit 5" 전부 **38 → 40개**, 빈 유닛 "Unit 1"은 0개(폴백 제거 확인).
+
+### ④ 입실시험 다중 대상 우선순위 선택 (`821eec2`)
+
+예전엔 `findActiveTest()`가 **created_at이 가장 이른 active 시험 하나**를
+학생의 실제 학습 교재와 무관하게 골랐다. Song(`4f3e0b72…`)은 김기택·YMB 두
+교재에 동시 배정돼 있었고, 아침 08:25에 열려 종료되지 않은 김기택 시험이
+12:20의 YMB 시험을 **영영 가렸다**(0/10). 같은 위험 학생 3명(Song/Harry/Cookie).
+
+신규 순수 모듈 `src/utils/entranceTestSelection.js`(import 0, 네트워크 0):
+
+| 티어 | 조건 |
+|---|---|
+| 1 | 현재 학습 교재 + 현재 유닛 정확 일치 |
+| 2 | 개별 배정 교재(`SCA.textbook_id`) |
+| 3 | 소속 반 기본 교재(`class_textbooks`) |
+| 4 | 자격만 있음 |
+
+최상위 티어가 2개 이상이면 **임의로 고르지 않고 학생이 고른다**(`needsChoice`
+→ `'choose'` 화면). 같은 티어 안은 `created_at` 오름차순이라 단일 교재
+학생(대다수) 결과는 예전과 **완전히 동일**하다. 학년/반 이름은 판정에 일절
+쓰지 않는다(운영 원칙: 중2 학생도 고1 교재를 배정받아 공부한다).
+
+**DB migration 없이 구현했다.** `entrance_tests`에는 `textbook_id`도
+`unit_id`도 없다(컬럼: id, class_id, date, status, direction, question_count,
+time_limit_seconds, words, created_at). 교재 축은 `class_id → 소유 교재`로
+정확히 역해석하고, 유닛 축은 **`words` 스냅샷 역추적**(시험 단어를 전부
+포함하는 유닛이 정확히 1개일 때만 확정, 아니면 `null`)이다. 유닛을 모르면
+1순위로 올리지 않고 2순위 이하로 내려간다 — **모르면 끼워맞추지 않는다**.
+유닛 축을 구조적으로 확실히 하려면 `entrance_tests.unit_id` 컬럼이 맞고, 그
+SQL은 **만들지도 실행하지도 않았다**(규칙 8, 운영자 승인 대기).
+
+`scripts/testEntranceTestSelection.mjs`(신규, 47단언 A~G): 단일 시험 기존 동작 /
+반 기본≠학습교재 / 중2의 고1 교재 / 동률 선택 UI / 응시완료·closed 제외 /
+테스트 계정 QA 접근 유지(모듈이 `accountStatus`를 import하지 않음을 소스 레벨로
+단언) / 타 학생 노출 불변.
+
+### 배포 후 Song·Luke 실제 동작 (2026-08-12 시험 행 기준, READ-ONLY 재현)
+
+**Song** — scope 안 active 시험 2건이 **둘 다 2순위 동률**(개별 배정 교재):
+```
+예전:  중2 능률 김기택   ← created_at이 이르다는 이유만의 임의 선택
+지금:  학생 선택 UI 노출 ← 김기택 Unit 6 / YMB Unit4 중 학생이 고름
+```
+**Luke** — scope 안 active 시험 1건이라 **예전과 동일하게 바로 진입**
+(중2 YMB 박준원, 노출 변화 0).
+
+### 미해결 — Song의 `SCA.current_unit_id` NULL (데이터 정책 결정 전까지 수정 안 함)
+
+Song이 1순위가 아니라 2순위 동률이 된 이유는 **코드가 아니라 데이터**다:
+- primary 배정이 교재·유닛 모두 NULL인 Pre-Middle School(유닛 0개)을 가리킴
+- YMB 배정의 `current_unit_id`가 단어 1개짜리 `"Unit"` 쓰레기 유닛을 가리킴
+- `students.current_unit_id`도 NULL
+
+그래서 "현재 학습 교재/유닛"이 해석되지 않는다. 설계대로 **임의 선택 대신
+학생에게 물어보는** 것으로 안전하게 처리된다. 같은 상태의 배정은 실측상
+"사실상 빈 유닛을 가리킴" 6건(Song/Harry/백채아/Yaeji/권교빈/황성연),
+`current_unit_id` NULL 8건(Luke/Song/황다은/김규민/현다율/Barry 외 QA 2).
+**운영자의 데이터 정책 결정 전까지 SCA 재지정/교재 재배정/유닛 변경을 하지
+않는다**(운영자 지시).
+
+### 안전 기록
+
+- **DB/Supabase 변경 0건** — 전 과정 SELECT만. SQL 실행 0건.
+- `units.position` 수정 0건 / Unit 이름 변경·삭제 0건 / SCA 재지정 0건 /
+  Song·Luke 교재 재배정 0건 / 학생 데이터 변경 0건.
+- 기존 시험 기록·점수·응시 기록 변경 0건(읽기만).
+- `supabase_v3_34_account_status.sql` / `supabase_v3_35_entrance_textbook_backfill.sql`
+  둘 다 **미실행 유지**.
+- `src/utils/accountStatus.js`(다른 세션 작성)는 `f228b5c`에 **동봉**했다 —
+  `wordLibrary.js`/`EntranceTestAdmin.jsx`가 import하는데 untracked라서, 빼면
+  클린 체크아웃 빌드가 깨진다(커밋 전 import 해석 검사로 발견, 운영자 승인).
+  같은 이유로 그 세션의 테스트계정 필터 변경도 함께 실렸다(규칙 16 예외 —
+  운영자가 명시 승인).
+
+### 검증
+
+`npm run build` PASS / `npm run verify:all` **ALL DOMAINS PASS**(3회 각 커밋
+직전 실행) / `verify:eligibility` PASS / `verify:star-delta` 28단언 /
+`verify:word-pagination` 48단언 / `verify:entrance-selection` 47단언.
+신규 npm 스크립트 3개 추가, 하네스 등록: `student` 도메인 5→6,
+`unitSwitching` 5→6, `admin` 9→10 스크립트.
+
+### 다음 세션이 알아야 할 것
+
+1. 이미 만들어진 시험의 `words`는 생성 시점 스냅샷이라 절단 수정의 영향을
+   받지 않는다 — **새 시험부터 40개**가 된다.
+2. 닫히지 않은 `status='active'` 시험이 **18건**(2026-07-16~) 남아 있다.
+   `fetchTodayTests`가 date로 거르므로 기능 영향은 없지만 정리 대상이다.
+3. `EntranceTestBanner`는 여전히 `findActiveTest`를 쓴다 — "시험이 있는가"
+   게이트 용도라 선택 로직과 무관하지만, 배너 상세줄(문항수/제한시간)이
+   실제로 볼 시험과 다를 수 있다(미수정, 표시상 사소).
+
+## 2026-08-11 (94차) — "고1 능률 민병천" 분모 10 vs 실제 12 근본 원인 확정 + 테스트 계정 필터 단일화 + 별 오염 버그 라인 특정(수정 미착수)
+
+93차가 만든 `fetchEntranceRosterForClass` 배포 이후 운영자가 "고1 능률
+민병천" 반에서 관리자 분모 10, 실제 학생 12명이라고 재보고. 이번 세션은
+그 차이 2를 실측으로 완전히 분해했고, 그 과정에서 별개의 별(star) 오염
+버그 원인도 라인 단위로 확정했다. **프로덕션 DB 변경 0건, 학생 데이터
+변경 0건**(세션 중 실제로 학습한 학생 1명분 진도 차이만 before/after
+스냅샷에서 확인, 그 외 students 1157행/SCA 451행/progress 190행 전부 동일).
+
+### 분모 10 vs 12 — 진짜 원인은 "누락 4 − 오집계 2"의 상쇄였다
+
+대상: 반 `ec584e53-1da5-470e-bab0-238d71cc6042`(class_type=textbook),
+교재 `09c073dd-a136-4a66-8e39-44a392f236d8`("고1 능률 민병천"). 실제 학생
+12명은 전부 사람 반 `MS Advanced Class`(`0249067d-dd64-465d-9c27-fb8737e9f4c4`)
+소속 — 그 반 132개 계정을 분해하면 아카이브/QA 117 + 테스트 계정 3
+(Jinaa/Cookie/Barry) + 실제 학생 12로 정확히 나뉜다.
+
+- **겉보기 10 = 실제 학생 8 + 테스트 계정 2**(Barry
+  `1056c7db-8464-45a4-9f3d-d13223c708b6`, Jinaa
+  `738443f3-2676-4b89-9f17-cc7f22aa993c`) — 이 둘이 "실제 학생"으로 잘못
+  집계되고 있었다.
+- **누락 4명**(SCA 행 부재/오염으로 진짜 분모에서 빠짐):
+  - 황다은 `d05dea68-f019-4202-b494-6a917158ccd4`, 김규민
+    `7592fa07-04a0-4597-89ac-31eae0c01299`, 현다율
+    `e32b8d7d-ef76-4292-ba46-059fb7b9719e` — 능률 교재 개별 배정(SCA) 행
+    자체가 없음. `class_textbooks` 링크는 있으나 eligibility 판정 축이
+    아니다(93차가 확정한 정책, 과다집계 방지).
+  - 권교빈 `6548dd2a-cc01-4b4f-80d9-746d55bf5014` — 능률 배정과 최근
+    학습이 전부 중복 계정 `942e7e12-1fab-4948-a870-6d5dd5f7d36b`
+    (권교빈_DUP2_f7d36b_INACTIVE)에만 있어, 아카이브 이름 필터가 그
+    계정을 제외하면서 사람 한 명이 통째로 분모에서 사라졌다.
+- 4 − 2 = 2가 운영자가 본 차이였다. Barry/Jinaa는 운영자가 정상 QA/테스트
+  계정으로 확정 — **삭제·교재 배정 회수 금지, 응시 가능 유지**, 단 실제
+  학생 수·랭킹·통계에서는 제외해야 한다.
+
+### 코드 변경(워킹트리, 이번 세션 기준 미커밋 — 다음 세션이 리뷰/커밋)
+
+- 신규 `src/utils/accountStatus.js` — 테스트/아카이브 계정 판별 단일
+  진실 공급원. `TEST_ACCOUNT_NAMES = ['cookie', 'paul', 'jinaa', 'barry']`
+  (barry 신규 추가), `students.is_test`/`archived` 컬럼이 있으면 우선,
+  없으면 이름 폴백(규칙 9 준수). 아카이브 판정 자체의 정의는 여기서 새로
+  만들지 않고 `entranceEligibility.js`의 `isArchivedOrFixtureStudentName`를
+  re-export만 한다(판정 로직 중복 금지).
+- 적용된 곳: `wordLibrary.fetchEntranceRosterForClass`(관리자 분모),
+  `api/compute-word-king.js`(반 학생 조회에 필터가 전무해 MS Advanced
+  기준 132계정 전부가 Word King 랭킹 대상이던 것 → 실제 학생만),
+  `EntranceTestAdmin.jsx`(통계 응시자 목록), `StudentSelect.jsx`/
+  `StudentDirectory.jsx`(각자 하드코딩돼 있던 사본 2벌 → 공용 유틸 참조).
+- **학생 화면 응시 자격**(`entranceEligibility.js`의 A∪B∪C 판정)은
+  의도적으로 무변경 — 테스트 계정도 QA 목적으로 계속 정상 응시 가능해야
+  한다는 운영자 요구.
+- 검증: `npm run build` PASS, `verify:eligibility` PASS 44/44(신규
+  12단언), `verify:admin` PASS, `verify:all` ALL DOMAINS PASS.
+
+### 준비된 미실행 SQL (규칙 8 — 운영자 수동 실행 대기, 아직 실행 안 됨)
+
+- `supabase_v3_34_account_status.sql` — `students.is_test`/`archived`
+  컬럼 + SELECT GRANT + 이름 규칙 백필 + 검증 SELECT + 롤백(UPDATE로
+  false 복귀, DROP COLUMN 제안 없음).
+- `supabase_v3_35_entrance_textbook_backfill.sql` — 순수 INSERT 4행
+  (황다은/김규민/현다율/권교빈 canonical 계정), `is_primary=false`·
+  `current_unit_id=null`, `where not exists`로 멱등. UPDATE/DELETE 없음.
+- 운영 절차서: `docs/operations/2026-08-11-entrance-roster-backfill.md`
+  (implementer 세션이 이미 작성, 이번 세션은 참조만 하고 수정하지 않음).
+- 적용 후 기대치(사전 시뮬레이션 결과, **아직 실행 전이라 미확인**):
+  분모 정확히 12명, 운영자 명단과 1:1 일치(12/12 MATCH, 명단 밖 0, 테스트
+  계정 0).
+
+### 별(star) 오염 버그 — 원인 라인 단위 확정, 수정은 미착수(승인 대기)
+
+- `src/hooks/useStudent.js:645-659`의 `loadRecord`가, 이 기기에서 처음
+  보는 `studentId`에 대해 `store[legacyName]`(표시 이름 문자열 키)로
+  로컬 진도를 찾아 그대로 채택한다. 같은 파일 396-398행의
+  `normalizeRecord`가 `studentId: id`로 덮어써 **원 소유자 검사 없이**
+  남의 진도를 이 계정 것으로 만든다. 이후 마운트 시 병합이 554행
+  `maxNum(local.totalStars, cloud.totalStars)`로 그 값을 그대로 보존하고,
+  2초 디바운스 동기화(1553-1584행)가 새 계정 UUID로 Supabase에
+  업로드한다.
+- 실측 증거: 같은 기기·같은 이름으로 만들어진 "권교빈" 계정 5개가
+  7/7(47별) + 7/9(72별) = 119별을 공유하고 있고, 그중
+  `f09b8962…`/`fa7f2aa7…` 2개는 별·스티커·학습일까지 완전히 동일한
+  클론이다. 로그아웃(`App.jsx:953` `handleLogout`)은
+  `localStorage.removeItem(SESSION_KEY)`로 세션 키만 지우고 진도
+  저장소(`store[legacyName]`)는 지우지 않는다.
+- 별 지급 자체는 `useStudent.js:891` `grantReward` 한 곳만 통과하고
+  6개 호출부 전부 실제 학생 행동에 묶여 있어 "화면 진입만으로 지급"되는
+  경로는 없다 — **오염은 지급 로직이 아니라 로컬 진도 복원 경로에서
+  발생한다.**
+- 회귀 테스트 설계만 해둠(미구현): ① 신규 계정 마운트→언마운트 시
+  stars가 0으로 유지되는가, ② 기기에 이름 키 블롭(119별 등)이 남은
+  상태에서 새 UUID로 마운트했을 때 오염되지 않는가(현재 코드로는 이
+  테스트가 FAIL해야 정상 — 규칙 15에 따라 수정 착수 전 먼저 이 FAIL을
+  실제로 재현해 확정할 것).
+- **이 버그는 이번 세션에서 수정하지 않았다** — 코드 변경은 운영자
+  승인 후 별도 세션에서 진행.
+
+### 중복 계정 포렌식 결론
+
+- **권교빈**: canonical = `6548dd2a…`(별 1039, 스티커 30, 입실시험 5건
+  응시). DUP `942e7e12…`의 고유 학습분은 8/6(21별) + 8/11(138별) =
+  **159별뿐**이고 나머지 119별은 canonical과 완전 중복이다 — **계정 간
+  별 합산 금지**.
+- **전하은**: canonical = `16fa6e1c…`. DUP `89e62c9f…`
+  (전하은_DUP2_f0633d_INACTIVE)가 8/6·8/11에 고유 학습(92별). 두 계정이
+  같은 날 다른 시간대에 학습한 것으로 보아 기기별로 다른 계정을 쓰는
+  상태이지 중복 지급은 아니다 — 저장은 항상 로그인 UUID 기준으로만
+  이뤄짐(progress/stars/wordStatus/calendar/xp_ledger/
+  entrance_test_results 전부 확인).
+
+### 검증/안전 요약
+
+`npm run build` PASS, `verify:eligibility` PASS 44/44, `verify:admin`
+PASS, `verify:all` ALL DOMAINS PASS. before/after 스냅샷 비교로 이번
+작업으로 인한 프로덕션 데이터 변경 0건 확인(students 1157/SCA 451/
+progress 190 동일, 유일한 차이는 세션 중 실제 학습한 학생 1명의 진도).
+
+### 다음 세션에 넘기는 것
+
+1. `supabase_v3_34_account_status.sql` → `supabase_v3_35_entrance_
+   textbook_backfill.sql` 순서로 운영자 실행, 이후 관리자 화면에서 "고1
+   능률 민병천" 분모가 12명인지 육안 확인.
+2. 별 오염 버그 수정 — 위 라인 특정 내용을 근거로 implementer가 회귀
+   테스트(신규 계정 오염 방지 2종)를 먼저 FAIL로 재현한 뒤 수정 착수
+   (규칙 15).
+3. 권교빈/전하은 중복 계정 통합 여부는 운영자 판단 필요(이번 세션은
+   포렌식만 하고 병합/삭제는 하지 않음).
+
 ## 2026-08-12 (93차 야간) — 자율 정리 6시간: eligibility 규칙 단일화 + 무결성 감사 + 문서 5종
 
 운영자 취침 중 자율 진행. **프로덕션 DB 변경 0건 / 학생 데이터 변경 0건.**

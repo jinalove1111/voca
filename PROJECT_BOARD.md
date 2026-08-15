@@ -47,6 +47,55 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
 
 ## NEXT
 
+### [P1] `supabase_v3_34_account_status.sql` + `supabase_v3_35_entrance_textbook_backfill.sql` 실행 대기 — "고1 능률 민병천" 분모 10 vs 실제 12 사고 해결
+- 근거: `handoff.md` 2026-08-11(94차), `docs/ENTRANCE_EXAM_ELIGIBILITY.md`
+  6번 "2026-08-11(94차) 추가", `docs/operations/2026-08-11-entrance-
+  roster-backfill.md`.
+- 내용: 94차 세션이 분모 10 vs 실제 12 차이를 "누락 4명(SCA 행 부재/
+  중복계정 오염) − 오집계 2명(테스트 계정 Barry/Jinaa)"으로 완전히
+  분해·확정. 순서: ① `supabase_v3_34_account_status.sql`
+  (`students.is_test`/`archived` 컬럼 + GRANT + 이름 규칙 백필, 롤백
+  포함) 실행 → ② `supabase_v3_35_entrance_textbook_backfill.sql`
+  (황다은/김규민/현다율/권교빈 canonical 계정에 능률 교재 SCA 행 4개
+  순수 INSERT, 멱등) 실행 → ③ 관리자 화면에서 "고1 능률 민병천" 분모가
+  12명인지 육안 확인.
+- 미확인(정직 기록): SQL 실행 전이라 실제 적용 후 분모가 사전 시뮬레이션
+  대로 정확히 12명이 되는지는 **아직 확인되지 않음**.
+- 관련 코드 변경(워킹트리, 아직 미커밋): 신규 `src/utils/accountStatus.js`
+  (테스트/아카이브 계정 판별 단일화, `barry` 테스트 계정 추가) —
+  `fetchEntranceRosterForClass`/`compute-word-king.js`/
+  `EntranceTestAdmin.jsx`/`StudentSelect.jsx`/`StudentDirectory.jsx`
+  5곳에 적용. `npm run build`/`verify:eligibility`(44/44)/`verify:admin`/
+  `verify:all` 전부 PASS. 다음 세션이 리뷰 후 커밋 필요.
+
+### [P1] 별(star) 오염 버그 — 원인 라인 특정 완료, 수정 착수는 운영자 승인 대기
+- 근거: `handoff.md` 2026-08-11(94차) "별 오염 버그" 섹션.
+- 내용: `src/hooks/useStudent.js:645-659`의 `loadRecord`가 이 기기에서
+  처음 보는 `studentId`에 대해 `store[legacyName]`(이름 문자열 키)로
+  로컬 진도를 찾아 **소유자 검사 없이** 채택 → 396-398행
+  `normalizeRecord`가 `studentId: id`로 덮어써 남의 진도를 이 계정
+  것으로 만듦 → 554행 마운트 병합이 `maxNum`으로 보존 → 1553-1584행
+  디바운스 동기화가 그 값을 새 계정 UUID로 Supabase 업로드. 로그아웃
+  (`App.jsx:953`)은 세션 키만 지우고 진도 저장소는 지우지 않음.
+- 실측 증거: 같은 기기·같은 이름의 "권교빈" 계정 5개가 119별을 공유,
+  그중 2개는 별/스티커/학습일까지 완전 동일한 클론.
+- 별 지급 자체(`useStudent.js:891` `grantReward`)는 6개 호출부 전부
+  실제 행동에 묶여 있어 지급 경로 자체의 결함은 아님 — 오염은 **로컬
+  진도 복원 경로**에서만 발생.
+- 이번 세션은 수정하지 않음(원인 특정까지만). 착수 전 회귀 테스트
+  2종(신규 계정 마운트 시 stars 0 유지 / 이름 키 블롭이 남은 기기에서
+  새 UUID 오염 방지)을 먼저 작성해 수정 전 코드로 FAIL 재현 필요(규칙
+  15).
+
+### [P2] 권교빈/전하은 중복 계정 통합 여부 — 운영자 판단 대기
+- 근거: `handoff.md` 2026-08-11(94차) "중복 계정 포렌식 결론".
+- 내용: 권교빈 canonical `6548dd2a…`(별 1039) vs DUP
+  `942e7e12…`(고유 학습분 159별, 나머지 119별은 canonical과 중복 —
+  계정 간 별 합산 금지). 전하은 canonical `16fa6e1c…` vs DUP
+  `89e62c9f…`(고유 학습 92별, 기기별로 다른 계정을 쓰는 상태로 추정,
+  중복 지급 아님). 이번 세션은 포렌식만 수행하고 병합/삭제는
+  하지 않음 — 병합 여부·방법은 운영자 판단 필요.
+
 ### [P1] 핵심 4테이블(`students`/`classes`/`units`/`words`) DDL이 저장소에 없음
 - 근거: `DATABASE.md` "핵심 4테이블 — 저장소에 DDL 없음" 섹션,
   `handoff.md` 2026-07-18 Phase 2 발견 1.
