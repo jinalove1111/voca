@@ -3,6 +3,10 @@ import { getStudentsInClass, getRealClassNames, refreshStudents } from '../utils
 import { fetchPinStatuses, fetchPinStatusMap } from '../utils/pinStatusApi'
 import { getReactionById } from '../utils/paulReactions'
 import HeroReaction from './HeroReaction'
+// 계정 종류(테스트) 판별의 단일 진실 공급원 — 2026-08-11 운영자 확정
+// (accountStatus.js 헤더 주석 참고). isTestAccountStudent가 이 화면의
+// "테스트 계정(Cookie/Paul/Jinaa/Barry) 목록 제외" 규칙을 대체한다.
+import { isTestAccountStudent } from '../utils/accountStatus'
 
 // 2026-08-09 운영자 지시 — PIN 만들기 반 목록에 archive/중복/테스트 계정이
 // 노출되던 버그 수정. 로스터 정리(v3_25/27/28)로 중복 계정은 rename
@@ -12,13 +16,13 @@ import HeroReaction from './HeroReaction'
 // 건드리지 않고 화면 표시만 제외하는 순수 함수(컴포넌트 밖, 부수효과 없음).
 function isRealSetupStudent(s) {
   const rawName = s?.name || ''
-  const lower = rawName.trim().toLowerCase()
   // 1) archive/비활성/중복 계정 — 이름에 _DUP 또는 _INACTIVE 접미(대소문자 무시)
   if (/_dup|_inactive/i.test(rawName)) return false
   // 2) 시스템/테스트 픽스처 — 이름이 QA_ 또는 _QA_ 로 시작(대소문자 무시)
   if (/^(qa_|_qa_)/i.test(rawName)) return false
-  // 3) 알려진 테스트 계정(트림·소문자 기준 정확 일치)
-  if (lower === 'cookie' || lower === 'paul' || lower === 'jinaa') return false
+  // 3) 알려진 테스트 계정 — 2026-08-11부터 accountStatus.js로 이관
+  //    (기존엔 cookie/paul/jinaa만 로컬 하드코딩, Barry가 누락돼 있었다).
+  if (isTestAccountStudent(s)) return false
   return true
 }
 

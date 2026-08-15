@@ -10,6 +10,10 @@ import {
 import { HOUSES, getHouseById } from '../../utils/houseSystem'
 import { fetchPinStatusMap } from '../../utils/pinStatusApi'
 import { getStudents } from '../../hooks/useStudent'
+// 계정 종류(테스트) 판별의 단일 진실 공급원 — 2026-08-11 운영자 확정
+// (accountStatus.js 헤더 주석 참고). 이 화면의 로컬 사본(Cookie/Paul/
+// Jinaa만 하드코딩, Barry 누락)을 대체한다.
+import { isTestAccountStudent } from '../../utils/accountStatus'
 import TextbookAssignmentPanel from './TextbookAssignmentPanel'
 import DuplicateStudentAudit from './DuplicateStudentAudit'
 
@@ -41,6 +45,14 @@ const devLog = import.meta.env?.DEV ? console.log : () => {}
 // isRealSetupStudent와 동일(트림·소문자 정확 일치)하지만, 그 화면과 달리
 // 여기서는 "완전 제외"가 아니라 기본값만 숨김이고 "🧪 테스트 계정 보기"
 // 토글로 다시 볼 수 있다(관리자는 여전히 그 3계정을 관리해야 하므로).
+//
+// 2026-08-11 추가 — 위 "3계정"/"로컬 사본" 서술은 이제 정확하지 않다.
+// 운영자 확정으로 Barry(운영자 QA 계정)가 테스트 계정 4번째로 추가됐고,
+// 판정 로직 자체는 이 파일의 로컬 사본이 아니라 src/utils/accountStatus.js
+// (단일 진실 공급원, StudentSelect.jsx도 여기서 import)로 옮겨졌다 — 삭제
+// 금지/교재 배정 회수 금지/입실시험 응시 가능 유지 요건 때문에 "실제 학생
+// 집계"에서만 제외해야 하는 계정이 StudentSelect 하드코딩엔 없던 Barry까지
+// 늘어나면서, 두 화면이 같은 판정을 쓰지 않으면 또 어긋날 위험이 커졌다.
 function isRealDirectoryStudent(s) {
   const rawName = s?.name || ''
   // 1) archive/중복 계정 — 이름에 _DUP 접미(대소문자 무시)
@@ -53,11 +65,10 @@ function isRealDirectoryStudent(s) {
 function isInactiveDirectoryStudent(s) {
   return /_inactive/i.test(s?.name || '')
 }
-// 알려진 테스트 계정 — StudentSelect.jsx isRealSetupStudent와 동일 기준.
-function isTestAccountStudent(s) {
-  const lower = (s?.name || '').trim().toLowerCase()
-  return lower === 'cookie' || lower === 'paul' || lower === 'jinaa'
-}
+// 알려진 테스트 계정 판정 — 2026-08-11부터 accountStatus.js로 이관(파일
+// 상단 import). 기존엔 여기 로컬 사본에 cookie/paul/jinaa만 있었고 운영자
+// 실제 QA 계정인 barry가 빠져 있었다(운영자 확정으로 accountStatus.js에
+// 추가됨).
 
 // 학생 관리 디렉터리 (2026-07-22, 관리자 규모 대응 — 300~1000명) —
 // AdminScreen.jsx의 StudentManagement를 그대로 옮겨온 컴포넌트.
