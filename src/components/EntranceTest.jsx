@@ -90,7 +90,11 @@ export function toRanked(rows) {
 // 이 무거운 파일(응시/채점/랭킹 전체 로직)을 정적으로 안 끌고 오게 하기
 // 위함. App.jsx는 이 컴포넌트를 React.lazy로 로드한다.
 
-export default function EntranceTest({ studentId, studentName, onBack }) {
+// Reward System V1(2026-08-15, Phase 2) — onExamCompleted는 선택 prop
+// (기본 undefined). App.jsx가 studentData.recordExamCompleted를 넘겨준다.
+// 서버 저장이 실제로 성공했을 때만 부른다(아래 submitResultToServer의
+// try 블록 끝, catch 경로에서는 절대 호출하지 않음).
+export default function EntranceTest({ studentId, studentName, onBack, onExamCompleted }) {
   // 2026-08-10 — 배너와 동일하게 "이 학생이 속한 모든 반"(사람 반 ∪ 교재
   // 컨테이너 반)을 조회 기준으로 쓴다. null = 아직 해석 중(초기 phase가
   // 'loading'이므로 그동안 화면은 로딩 상태 그대로).
@@ -267,6 +271,9 @@ export default function EntranceTest({ studentId, studentName, onBack }) {
         durationSeconds: Math.round((Date.now() - startedAtRef.current) / 1000),
       })
       load() // 저장 성공 -> 랭킹 즉시 갱신
+      // Reward System V1 — 서버 저장이 실제로 확정된 시점에만 보상(테스트
+      // 재시도로 여러 번 호출돼도 testId별 idempotency_key라 재지급 없음).
+      onExamCompleted?.(activeTest.id)
     } catch (err) {
       // 점수는 로컬 state에 이미 있어서 학생이 결과를 못 보는 일은 없음 —
       // 저장만 실패한 것이므로 재시도 버튼을 보여준다.

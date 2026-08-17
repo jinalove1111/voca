@@ -46,6 +46,13 @@ import { resolveXpAmount } from '../utils/paulRankShared'
 // ticketEconomy.js 헤더 주석). 서버 없이 로컬 우선(progress_data 백업)
 // 관례를 따르는 판단 근거도 같은 파일에 문서화.
 import { grantTicket, sumTicketBalance, mergeTicketLedgers, redeemReward } from '../utils/ticketEconomy'
+// Reward System V1(2026-08-15, Phase 2 배선) — "언제 몇 별을 줄지"의 순수
+// 규칙은 전부 rewardEngine.js(수정 금지, 63단언 계약 고정)가 담당하고,
+// 이 파일은 그 규칙을 기존 별 지급 단일 경로(grantReward, 945행)에
+// 얹기만 한다(재구현 금지, CLAUDE.md 규칙 3). earnedStars는 쓰지 않는다 —
+// totalStars의 원본은 여전히 record.totalStars(레거시 별 포함) 그대로이고,
+// rewardLedger에서 재계산하지 않는다(운영자 결정, 레거시 별 보존).
+import { REWARD_STARS, rewardIdempotencyKey, streakBonusStars, levelForStars, starsToNextLevel, buildRewardEntry, hasRewardEntry, appendRewardEntry } from '../utils/rewardEngine'
 
 // ── Single unified progress store ───────────────────────────────────────
 // Every per-student value the app tracks (stars, stickers, today's mission
@@ -264,6 +271,12 @@ function freshRecord(id) {
     // 없음). 잔액은 저장하지 않고 항상 sumTicketBalance(ticketLedger)로
     // 파생시킨다(ticketEconomy.js 참고).
     ticketLedger: [],
+    // Reward System V1(2026-08-15) — 별개 append-only 원장(ticketLedger와
+    // 동일 정신, tombstone 불필요 — 지급만 있고 삭제/소비는 없음). 잔액이
+    // 아니라 "이 idempotency_key로 이미 지급했는가"의 진실 원천으로만
+    // 쓰인다 — totalStars 자체는 여전히 grantReward(위)가 유일하게 늘리고,
+    // 이 원장에서 재계산하지 않는다(rewardEngine.js 헤더 주석과 동일 판단).
+    rewardLedger: [],
     missions: [],          // level-up boss missions
     cleared: [],
     // Phase 2 M3(2026-08-03, 학습 신호 2종) — 아래 두 필드는 기존
@@ -400,6 +413,7 @@ function normalizeRecord(raw, id) {
   rec.diaryPlacements = asArray(rec.diaryPlacements)
   rec.diaryRemovedIds = asArray(rec.diaryRemovedIds) // v2.2 이전 레코드/백업엔 없음 — 빈 배열로 채움
   rec.ticketLedger = asArray(rec.ticketLedger) // Ticket Economy 이전 레코드/백업엔 없음 — 빈 배열로 채움
+  rec.rewardLedger = asArray(rec.rewardLedger) // Reward System V1 이전 레코드/백업엔 없음 — 빈 배열로 채움
   rec.missions = asArray(rec.missions)
   rec.cleared = asArray(rec.cleared)
   // Phase 2 M3 — 이전 레코드/백업엔 없음(새 필드) — 빈 배열로 채움, 절대 크래시 없음.
@@ -478,6 +492,18 @@ const unionList = (a, b) => {
   return out
 }
 const maxNum = (a, b) => Math.max(Number(a) || 0, Number(b) || 0)
+// Reward System V1(2026-08-15) — mergeTicketLedgers(ticketEconomy.js)와
+// 정확히 같은 의미론(id 기준 대신 idempotency_key 기준 합집합, local
+// 순서 우선). 별도 파일로 뽑지 않은 이유: rewardEngine.js는 완전 순수/
+// import 0개 계약이 고정돼 있어(수정 금지) 이 병합 로직을 거기 추가할
+// 수 없고, ticketEconomy.js의 함수를 재사용하지도 않는다(키 필드명이
+// 다름 — id vs idempotency_key).
+function mergeRewardLedgers(localLedger, cloudLedger) {
+  const local = Array.isArray(localLedger) ? localLedger : []
+  const cloud = Array.isArray(cloudLedger) ? cloudLedger : []
+  const localKeys = new Set(local.map((e) => e && e.idempotency_key))
+  return [...local, ...cloud.filter((e) => e && !localKeys.has(e.idempotency_key))]
+}
 
 function mergeHistoryDay(a, b) {
   const games = {}
@@ -558,6 +584,8 @@ export function mergeProgressRecords(localRaw, cloudRaw, id) {
     // Ticket Economy — id 기준 합집합(mergeTicketLedgers, diaryPlacements와
     // 같은 정신이지만 tombstone 불필요, ticketEconomy.js 헤더 참고).
     ticketLedger: mergeTicketLedgers(local.ticketLedger, cloud.ticketLedger),
+    // Reward System V1 — ticketLedger와 동일 이유(위 mergeRewardLedgers 주석).
+    rewardLedger: mergeRewardLedgers(local.rewardLedger, cloud.rewardLedger),
     missions: [...missionsById.values()],
     cleared: unionList(local.cleared, cloud.cleared),
     // Phase 2 M3 — wordsViewed/spellingReviewQueue와 동일한 이유로 합집합
@@ -868,7 +896,7 @@ export function useStudent(studentId, legacyName) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId])
 
-  const { round, history, stickers: stickerTypes, diaryPlacements, missions, cleared, completedWords, clearedWords, milestoneStreak, starBadgeThreshold, lastGamePlayed, lastTextbookClassId, lastWordIndex, totalStars: stars, wordStatus, ticketLedger, spellingReviewQueue, hatInventory, equippedHatId, milestones } = record
+  const { round, history, stickers: stickerTypes, diaryPlacements, missions, cleared, completedWords, clearedWords, milestoneStreak, starBadgeThreshold, lastGamePlayed, lastTextbookClassId, lastWordIndex, totalStars: stars, wordStatus, ticketLedger, spellingReviewQueue, hatInventory, equippedHatId, milestones, rewardLedger } = record
   // Ticket Economy — 화면은 항상 이 파생값만 읽는다(원시 잔액을 저장하지
   // 않는 이유는 ticketEconomy.js 헤더 참고).
   const ticketBalance = sumTicketBalance(ticketLedger)
@@ -879,6 +907,10 @@ export function useStudent(studentId, legacyName) {
   // 새로 제공한다.
   const clearedStars = clearedWords.length * CLEARED_STAR_PER_WORD
   const starsDisplay = stars + clearedStars
+  // Reward System V1 — 파생 전용(저장하지 않음), stars(=totalStars) 그대로
+  // 사용(starsDisplay가 아님 — 레벨 판정은 실제 지급된 별 총량 기준).
+  const rewardLevel = levelForStars(stars)
+  const rewardStarsToNext = starsToNextLevel(stars)
 
   const [giftQueue, setGiftQueue] = useState([])
 
@@ -960,6 +992,60 @@ export function useStudent(studentId, legacyName) {
     })
     return true
   }, [patch, round.starGrantLog])
+
+  // ── Reward System V1(2026-08-15, Phase 2) — rewardEngine.js 규칙을
+  // grantReward(위, 별 지급 단일 경로) 위에 얹는 유일한 지급 함수. "언제
+  // 몇 별"인지는 전혀 재구현하지 않는다(REWARD_STARS/rewardIdempotencyKey
+  // 그대로 사용, rewardEngine.js 헤더 주석). 이중 방어 구조:
+  //   1) hasRewardEntry(record.rewardLedger, key) — 이 렌더 클로저 기준
+  //      사전 체크. record.rewardLedger가 이미 그 key를 가지고 있으면
+  //      patch()조차 호출하지 않는다(불필요한 재렌더 회피 + 피드백/레벨업
+  //      판정을 중복 발생시키지 않기 위한 최적화) — grantReward 헤더 주석의
+  //      "1번"과 정확히 같은 성격(참고용 최적화, 정확성의 최종 담보는 아님).
+  //   2) appendRewardEntry가 patch()의 updater "안"에서 prev.rewardLedger를
+  //      다시 검사(idempotency_key 기준) — 같은 tick에 우발적으로 여러 번
+  //      불려도 원장에는 정확히 한 번만 append된다.
+  //   3) grantReward(rewardStars, key) — 같은 key를 grantReward의
+  //      dedupKey로 그대로 재사용해 round.starGrantLog가 totalStars 증가
+  //      자체의 최종 방어를 담당(2차 방어, grantReward 헤더 주석과 동일
+  //      구조). 즉 rewardLedger append와 totalStars 증가가 서로 다른 두
+  //      저장소에 나뉘어 있어도 항상 "둘 다 되거나 둘 다 안 되거나"에
+  //      가깝게 움직인다(완전한 원자성은 아니지만, 같은 key를 공유하므로
+  //      독립적으로 어긋날 여지가 구조적으로 없다).
+  // totalStars 자체는 절대 rewardLedger에서 재계산하지 않는다(운영자 결정
+  // — 레거시 별 보존, rewardEngine.js earnedStars()는 여기서 쓰지 않음).
+  // 레벨업 판정은 "이 호출 직전 record.totalStars"(클로저 stars) 기준
+  // before/after를 순수 계산만으로 비교한다 — grantReward처럼 patch() 이후
+  // 상태를 다시 읽지 않는다(같은 이유, 위 grantReward 헤더 주석 참고).
+  const rewardFeedbackIdRef = useRef(0)
+  const [rewardFeedback, setRewardFeedback] = useState([])
+  const dismissRewardFeedback = useCallback((id) => {
+    setRewardFeedback((q) => q.filter((f) => f.id !== id))
+  }, [])
+  const grantLedgerReward = useCallback((rewardType, sourceType, sourceId, starsOverride, label) => {
+    const key = rewardIdempotencyKey(studentId, rewardType, sourceType, sourceId)
+    const rewardStars = (starsOverride === undefined || starsOverride === null)
+      ? (REWARD_STARS[rewardType] || 0)
+      : starsOverride
+    if (rewardStars <= 0) return false
+    if (hasRewardEntry(rewardLedger, key)) return false
+    patch((prev) => ({
+      rewardLedger: appendRewardEntry(prev.rewardLedger || [], buildRewardEntry({
+        studentId, rewardType, sourceType, sourceId, starsDelta: rewardStars, at: new Date().toISOString(),
+      })),
+    }))
+    grantReward(rewardStars, key)
+    const levelBefore = levelForStars(stars)
+    const levelAfter = levelForStars(stars + rewardStars)
+    rewardFeedbackIdRef.current += 1
+    const feedbackId = `${key}:${rewardFeedbackIdRef.current}`
+    setRewardFeedback((q) => [...q, { id: feedbackId, text: label || `⭐ +${rewardStars}` }])
+    if (levelAfter.level > levelBefore.level) {
+      rewardFeedbackIdRef.current += 1
+      setRewardFeedback((q) => [...q, { id: `${feedbackId}:levelup`, text: 'Level Up! 🎉' }])
+    }
+    return true
+  }, [studentId, rewardLedger, patch, grantReward, stars])
 
   // Paul Rank System(2026-07-19) XP 지급 — totalStars와 완전히 분리된
   // 원장(xp_ledger, 서버 전용 쓰기)에 독립적으로 쌓는다. eventType은
@@ -1258,7 +1344,15 @@ export function useStudent(studentId, legacyName) {
       fired.add(key)
       grantXp(eventType, `${eventType}:${today}`)
     }
-    if (round.completedToday.length >= GOAL) tryFire('word-view', 'word-view-complete')
+    if (round.completedToday.length >= GOAL) {
+      tryFire('word-view', 'word-view-complete')
+      // Reward System V1 앵커(word-session-complete, +1) — tryFire의
+      // dailyCategoryXpFiredRef(XP 전용 1차 방어)와는 완전히 독립된 별도
+      // dedup(rewardLedger.idempotency_key, 날짜:${today} 키라 하루 1회).
+      // tryFire "밖"에 둔 이유: tryFire는 XP 이벤트 이름/금액을 인자로
+      // 받는 헬퍼일 뿐이라 별 지급 원장 항목을 만들 수 없다.
+      grantLedgerReward('word-session-complete', 'daily-words', today)
+    }
     if (round.examplesHeard >= GOAL) tryFire('listening', 'listening-complete')
     if (round.quizSolved >= GOAL) tryFire('quiz', 'quiz-complete')
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1300,6 +1394,14 @@ export function useStudent(studentId, legacyName) {
     // 완료마다 XP가 계속 쌓였는데, 이것도 "같은 행동 반복 시 XP 무한 획득"
     // 이 되므로 이번 리팩터링 범위에 포함해 함께 정리했다).
     grantXp('daily-mission-complete', `daily-mission-complete:${todayStr()}`)
+    // Reward System V1 앵커(daily-goal-complete, +3) — 운영자 결정: 위
+    // 레거시 MISSION_BONUS_STARS(+10, signature 키, 라운드 반복마다 매번
+    // 재지급)는 이번 마일스톤에서 한 글자도 바꾸지 않고 그대로 유지한다.
+    // 신규 원장 지급만 grantXp/grantTicket과 동일한 **날짜** 기간키를 써서
+    // 하루 1회로 별도 제한 — 레거시 재지급 동작과 무관하게 공존한다(레거시
+    // +10은 이 날짜 키 하루 제한과 별개로 라운드가 반복될 때마다 계속
+    // 지급됨, 위 signature 키 주석 참고).
+    grantLedgerReward('daily-goal-complete', 'daily-goal', todayStr())
     // Ticket Economy(GAME_DESIGN.md 7번) — 같은 트리거에 병행 후킹만, 새
     // 트래킹 로직 없음. grantTicket이 `daily-mission-complete:${날짜}`를
     // id로 써서(위 grantXp와 동일한 day 기간키) idempotent하게 append하므로,
@@ -1326,6 +1428,18 @@ export function useStudent(studentId, legacyName) {
     const sticker = getMilestoneSticker()
     const isDuplicate = grantSticker(sticker)
     setGiftQueue(q => [...q, { sticker, isDuplicate, isMilestone: true, streakDays: nextMilestone }])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [history])
+
+  // Reward System V1 — streak-bonus(가변 금액, rewardEngine.streakBonusStars).
+  // 위 STREAK_MILESTONES(3/7/14/30, 스티커 전용) 효과와 완전히 별개 —
+  // milestoneStreak/스티커 지급 로직은 한 글자도 건드리지 않는다. 날짜:
+  // 연속일수 조합 키라 streak 값 자체가 바뀌지 않는 한(=오늘 이미 지급한
+  // 연속일수 그대로인 한) 재지급되지 않는다.
+  useEffect(() => {
+    const streak = calcStreak(history)
+    const bonus = streakBonusStars(streak)
+    if (bonus > 0) grantLedgerReward('streak-bonus', 'streak', `${todayStr()}:${streak}`, bonus, `🔥 ${streak}일 연속! ⭐ +${bonus}`)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [history])
 
@@ -1455,12 +1569,25 @@ export function useStudent(studentId, legacyName) {
         spellingCorrect: nextCorrect,
       }
     })
-    if (justCompletedWriting) grantXp('writing-complete', `writing-complete:${todayStr()}`)
+    if (justCompletedWriting) {
+      grantXp('writing-complete', `writing-complete:${todayStr()}`)
+      // Reward System V1 앵커(writing-complete, +2) — grantXp와 동일한
+      // day 기간키(하루 1회), justCompletedWriting은 정의상 하루에 한
+      // 번만 true가 되므로(prevCorrect가 GOAL을 넘으면 다시 false로
+      // 내려가지 않음) 이 조건 안에서만 호출해도 안전하다.
+      grantLedgerReward('writing-complete', 'daily-writing', todayStr())
+    }
     if (correct) {
       // 콤보/보너스를 같은 클로저 값에서 계산 — 표시되는 콤보 수와 실제
       // 지급된 보너스가 절대 어긋나지 않게. (쓰기 답안은 사람이 타이핑하는
       // 속도로만 들어오므로 stale closure가 실제로 문제될 간격이 아님.)
       const combo = (round.spellingCombo || 0) + 1
+      // Reward System V1 앵커(wrong-word-recovered, +1) — patch() 호출
+      // "전"(제거 전) 클로저 값(spellingReviewQueue, 위 destructure)으로
+      // 판단해서, 아래 clearSpellingReviewWord와 정확히 같은 판단 시점을
+      // 공유한다(둘 다 "제거 직전 상태" 기준). 날짜:wordId 키를 공유하므로
+      // 어느 경로로 먼저 해소되든 정확히 한 번만 지급된다.
+      const wasInReviewQueue = spellingReviewQueue.includes(wordId)
       patch(prev => ({
         round: { ...prev.round, spellingCombo: combo },
         // Writing MVP — 이 단어가 영구 복습 대기열에 있었다면(=적어도
@@ -1471,6 +1598,9 @@ export function useStudent(studentId, legacyName) {
           ? prev.spellingReviewQueue.filter(id => id !== wordId)
           : prev.spellingReviewQueue,
       }))
+      if (wasInReviewQueue) {
+        grantLedgerReward('wrong-word-recovered', 'spelling-review', `${todayStr()}:${wordId}`)
+      }
       const bonus = spellingComboBonus(combo)
       if (bonus > 0) {
         // 별 지급 단일 경로(2026-07-28) — combo/wordId/날짜 조합 dedupKey:
@@ -1493,7 +1623,7 @@ export function useStudent(studentId, legacyName) {
         },
       }))
     }
-  }, [bumpHistory, patch, grantReward, round.spellingCombo, grantXp])
+  }, [bumpHistory, patch, grantReward, round.spellingCombo, grantXp, grantLedgerReward, spellingReviewQueue])
 
   // 복습 화면에서 한 단어를 맞히면 오답노트 큐에서 제거 — 큐가 비면
   // "틀린 단어 복습"이 끝난 것. Writing MVP: 영구 복습 대기열
@@ -1501,13 +1631,32 @@ export function useStudent(studentId, legacyName) {
   // 영구 큐를 합쳐서 보여주므로(App.jsx), 어느 쪽에서 온 단어든 여기서
   // 한 번에 정리된다.
   const clearSpellingReviewWord = useCallback((wordId) => {
+    // Reward System V1 앵커(wrong-word-recovered, +1) — 제거 "전"(이
+    // patch 호출 이전) 클로저 값을 기준으로만 판단한다. 이 화면 자체가
+    // 오늘치 오답(spellingWrongToday)과 영구 복습 대기열(spellingReviewQueue)
+    // 을 합쳐서 보여주므로, 둘 중 어느 쪽에 있었어도 "이번 호출로 회복
+    // 됐다"고 본다. recordSpellingAnswer의 정답 경로와 날짜:wordId 키를
+    // 공유해서 두 경로가 교차 호출돼도 정확히 한 번만 지급된다.
+    if (spellingReviewQueue.includes(wordId) || round.spellingWrongToday.includes(wordId)) {
+      grantLedgerReward('wrong-word-recovered', 'spelling-review', `${todayStr()}:${wordId}`)
+    }
     patch(prev => ({
       round: { ...prev.round, spellingWrongToday: prev.round.spellingWrongToday.filter(id => id !== wordId) },
       spellingReviewQueue: prev.spellingReviewQueue.includes(wordId)
         ? prev.spellingReviewQueue.filter(id => id !== wordId)
         : prev.spellingReviewQueue,
     }))
-  }, [patch])
+  }, [patch, spellingReviewQueue, round.spellingWrongToday, grantLedgerReward])
+
+  // Reward System V1 앵커(exam-complete, +2) — EntranceTest.jsx가
+  // submitEntranceResult() 성공(서버 저장 확정) 직후에만 호출한다(실패
+  // 경로에서는 호출되지 않음, EntranceTest.jsx 주석 참고). testId별
+  // idempotency_key라 같은 시험 재제출 시도(재시도 버튼)로 재지급되지
+  // 않는다.
+  const recordExamCompleted = useCallback((testId) => {
+    if (!testId) return
+    grantLedgerReward('exam-complete', 'entrance-test', String(testId))
+  }, [grantLedgerReward])
 
   // v2.1: unitId(현재 유닛 UUID)를 같이 주면 유닛별 위치도 기록 — 다른
   // 유닛에 다녀와도 각 유닛의 "이어서 학습" 지점이 따로 보존된다. unitId가
@@ -1702,5 +1851,10 @@ export function useStudent(studentId, legacyName) {
     // src/utils/attachment/ 순수 함수, 여기는 append-only 반영만.
     hatInventory, equippedHatId, milestones,
     grantHats, addMilestones, equipHat,
+    // Reward System V1(2026-08-15, Phase 2) — 원장/피드백/파생 표시값.
+    // grantReward(별 지급 단일 경로) 위에 얹은 계층일 뿐, totalStars(stars)
+    // 자체는 여전히 grantReward만 바꾼다(rewardLedger에서 재계산 안 함).
+    rewardLedger, rewardFeedback, dismissRewardFeedback, recordExamCompleted,
+    rewardLevel, rewardStarsToNext,
   }
 }
