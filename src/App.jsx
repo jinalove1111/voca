@@ -35,6 +35,11 @@ import { fetchApprovedExamplesForWords } from './utils/curriculum/exampleLibrary
 // 씨앗 심음" 안내용. 기존 Paul Town 홈 밴드(Dashboard.jsx)가 쓰는 것과
 // 동일한 순수 파생 함수 재사용(새 계산/저장 없음).
 import { starSeedState } from './utils/attachment/paulTown'
+// Reward System V1(2026-08-15, Phase 2) — 화면 상단 고정 소형 토스트,
+// props만 받는 순수 표시 컴포넌트(RewardToast.jsx 헤더 참고). 모달/
+// 오버레이 아님 — AppInner 루트에 항상 렌더해도 다른 화면 전환/입력을
+// 막지 않는다.
+import RewardToast from './components/RewardToast'
 
 // 개발 중에만 찍히는 진단 로그(로그인/Home 진입 시 currentStudent 상태 등)
 // — 프로덕션 콘솔을 어지럽히지 않도록 DEV 빌드에서만 활성화.
@@ -191,7 +196,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 별도 상태로 관리 — 마찬가지로 세션 동안만 유지.
   const [studyScope, setStudyScope] = useState('all')
   const studentData                 = useStudent(studentId, studentName)
-  const { cleared, completedWords, clearedWords, answerMission, missions, grantReward, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord, wordStatus, setWordKnown, setWordUnknown, spellingReviewQueue, setLastTextbookClassId } = studentData
+  const { cleared, completedWords, clearedWords, answerMission, missions, grantReward, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord, wordStatus, setWordKnown, setWordUnknown, spellingReviewQueue, setLastTextbookClassId, recordExamCompleted, rewardFeedback, dismissRewardFeedback } = studentData
   // 애착 시스템(2026-07-22) — 파생 통계 + 모자/밀스톤 자동 판정(복원 확인
   // 후 학생당 1회). 판정 로직은 src/utils/attachment/ 순수 함수.
   const attachment = useAttachment(studentId, studentData)
@@ -597,6 +602,10 @@ function AppInner({ studentId, studentName, onLogout }) {
 
   return (
     <>
+      {/* Reward System V1(2026-08-15, Phase 2) — 화면 전환과 무관하게 항상
+          최상단에 떠 있는 소형 토스트. 모달 아님(다른 화면 입력을 막지
+          않음), 큐가 비어있으면 RewardToast 자체가 null을 반환. */}
+      <RewardToast entries={rewardFeedback} onDismiss={dismissRewardFeedback} />
       {screen === 'dashboard'     && (
         <Dashboard studentId={studentId} studentName={studentName} studentData={studentData} classWords={classWords}
           onGo={setScreen} onLogout={onLogout} onPlayGame={startRandomGame}
@@ -816,7 +825,8 @@ function AppInner({ studentId, studentName, onLogout }) {
             </div>
           </div>
         }>
-          <EntranceTest studentId={studentId} studentName={studentName} onBack={() => setScreen('dashboard')} />
+          <EntranceTest studentId={studentId} studentName={studentName} onBack={() => setScreen('dashboard')}
+            onExamCompleted={recordExamCompleted} />
         </React.Suspense>
       )}
       {screen === 'spellingResult' && (

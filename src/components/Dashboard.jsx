@@ -61,6 +61,11 @@ import HatCeremony from './HatCeremony'
 import WritingCoach from './WritingCoach'
 import { isFeatureEnabled } from '../config/features'
 import { trackEvent, EV } from '../utils/productEvents'
+// Reward System V1(2026-08-15, Phase 2) — 순수 표시 컴포넌트, props만 받음
+// (RewardCard.jsx 헤더 참고). Paul Rank/Word King/House/Season과 동일한
+// "정보 공개 축소" 관례를 따라 접힌 <details> "🎖️ 내 기록 더보기" 안에
+// 렌더한다(아래 사용처).
+import RewardCard from './RewardCard'
 
 const GOAL = 5
 const stickerById = (id) => STICKERS.find(s => s.id === id)
@@ -293,7 +298,7 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 // P0(2026-07-15): student(이름 문자열) 대신 studentId(식별자)+studentName
 // (표시용)을 따로 받는다 — getStudentClass/getStudentUnit은 이제 id 기반.
 export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, completedUnits, completedTextbooks, pendingCeremonyHat, onDismissCeremony, textbookOptions, currentTextbookId, onTextbookSwitch }) {
-  const { stars, starsDisplay, clearedStars, stickerTypes, activeMissions, dailyProgress, liveMissionsCompleted, streak, cleared, ticketBalance, redeemTicketReward, equippedHatId } = studentData
+  const { stars, starsDisplay, clearedStars, stickerTypes, activeMissions, dailyProgress, liveMissionsCompleted, streak, cleared, ticketBalance, redeemTicketReward, equippedHatId, rewardLevel, rewardStarsToNext } = studentData
   // 애착 시스템(2026-07-22) — 학생 아바타의 장착 모자. 미장착이면 기존
   // 기본 아바타(👑) 그대로 — 아무것도 안 얻은/안 고른 학생 화면은 변화 0.
   // 폴(Paul) 캐릭터의 검은 모자와 무관(폴 이미지는 어디서도 안 바뀜).
@@ -654,6 +659,22 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
           <p className="text-center text-xs text-purple-400 mt-3">👆 위의 &lsquo;오늘의 학습&rsquo;을 시작하면 4개가 같이 채워져요</p>
           <p className="text-center text-xs text-gray-400 mt-1">4개를 모두 완료하면 🎁 선물상자! 완료 즉시 새 미션이 또 시작돼요</p>
         </div>
+
+        {/* Reward System V1(2026-08-15, Phase 2) — 운영자 지시(2026-08-17)로
+            접힌 <details>("🎖️ 내 기록 더보기") 안에서 항상 보이는 위치로
+            이동. Paul Rank(XP)와 무관한 별도 계산(totalStars 기반,
+            rewardEngine.js LEVELS) — 기존 XP/Word King/House/Season 표시는
+            전혀 바뀌지 않는다. 게이트(gamificationEnabled) 없이 항상 렌더 —
+            별 지급은 이 반의 게임화 마스터 스위치와 무관한 기본 학습 보상
+            (발음/미션 등)이 이미 별개로 존재하기 때문. props/계산 로직은
+            원래 그대로(순수 위치 이동 + 스타일만 흰 카드용으로 조정). */}
+        <RewardCard
+          totalStars={stars}
+          streak={streak}
+          categoriesCompletedToday={liveMissionsCompleted}
+          level={rewardLevel?.level ?? 1}
+          starsToNext={rewardStarsToNext ?? null}
+        />
 
         {/* 3분 데일리 리추얼(2026-07-22) 정보 공개 축소 — 평생 기록 타일
             3개 + Paul Rank/Word King/House/Season 텍스트 + 티켓 상점을
