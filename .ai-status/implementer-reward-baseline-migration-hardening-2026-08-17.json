@@ -1,0 +1,23 @@
+{
+  "agent_name": "implementer",
+  "role": "implementer",
+  "task_id": "reward-baseline-migration-hardening-2026-08-17",
+  "task": "supabase_v3_37_reward_legacy_baseline.sql 이중 실행 절대 안전 강화(migration marker) + scripts/testRewardBaselineMigration.mjs 신규(정적 단언 + 이중 실행 시뮬레이션) + verify:reward-baseline 등록",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-17T00:00:00+09:00",
+  "updated_at": "2026-08-17T00:00:00+09:00",
+  "files_owned": [
+    "supabase_v3_37_reward_legacy_baseline.sql",
+    "scripts/testRewardBaselineMigration.mjs",
+    "scripts/testRewardEngine.mjs",
+    "package.json",
+    "tests/harness/registry.mjs"
+  ],
+  "files_read": [
+    "supabase_v3_36_reward_ledger.sql"
+  ],
+  "summary": "v3_37에 reward_migration_log marker 테이블(create if not exists) + 완료 시 skip 분기를 추가해, 첫 실행 당시 total_stars=0이라 대상에서 빠졌던 학생이 가동 후 별을 벌어 재실행 시 baseline이 새로 삽입되며 이중 계상되던 취약 시나리오를 차단. FAIL-first(규칙 15): marker 게이트를 임시 비활성화한 상태로 실행해 정적 단언 2개 + B2 1개 + B3 5개, 총 8개 단언 FAIL을 실측한 뒤 marker 로직 복원. SQL 강화 후 verify:reward-baseline(26단언) 신규 PASS, testRewardEngine.mjs의 v3_37 DO블록 개수 단언(2개 이상)이 SQL을 단일 DO블록으로 합친 것과 충돌해 FAIL 1건 발생 -> precheck/postcheck 존재 여부 기반 단언으로 교체 + marker skip 분기 단언 추가해 verify:reward(55단언) 무회귀 PASS. npm run build 통과. Supabase 미접촉, git commit 없음(지시대로).",
+  "blocker": null,
+  "next_action": "운영자가 Supabase 대시보드 SQL Editor에서 v3_36 실행 확인 후 v3_37(marker 강화판)을 가동 전 1회 수동 실행. 이후 세션이 이 산출물을 커밋할지 결정."
+}

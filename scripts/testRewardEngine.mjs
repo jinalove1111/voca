@@ -144,10 +144,16 @@ console.log('\n9. SQL 정적 단언 — 운영자 테스트 14 (v3_36/v3_37 파�
   check('v3_36에 student_progress 대상 파괴적 DDL/DML 없음', !destructivePattern.test(v36))
   check('v3_37에 student_progress 대상 파괴적 DDL/DML 없음', !destructivePattern.test(v37))
 
+  // 2026-08-17 migration marker 강화(scripts/testRewardBaselineMigration.mjs)
+  // 로 precheck/postcheck가 marker-skip 분기와 함께 단일 DO 블록으로
+  // 합쳐졌다(완료 기록이 있으면 postcheck 이전에 RETURN해 통째로 skip) —
+  // 블록 개수가 아니라 precheck/postcheck 각각의 실제 존재(NOTICE/EXCEPTION
+  // 문구)로 확인한다.
   const doBlockCount = (v37.match(/DO\s*\$\$/gi) || []).length
-  check('v3_37에 precheck/postcheck DO 블록 2개 이상 존재', doBlockCount >= 2)
-  check('v3_37에 precheck RAISE NOTICE 존재', /RAISE NOTICE/i.test(v37))
-  check('v3_37에 postcheck RAISE EXCEPTION(불일치 시 롤백) 존재', /RAISE EXCEPTION/i.test(v37))
+  check('v3_37에 DO 블록 1개 이상 존재', doBlockCount >= 1)
+  check('v3_37에 precheck RAISE NOTICE 존재', /precheck/i.test(v37) && /RAISE NOTICE/i.test(v37))
+  check('v3_37에 postcheck RAISE EXCEPTION(불일치 시 롤백) 존재', /postcheck/i.test(v37) && /RAISE EXCEPTION/i.test(v37))
+  check('v3_37에 migration marker(reward_migration_log) skip 분기 존재', /reward_migration_log/i.test(v37) && /already applied, skipping/i.test(v37))
 
   check('v3_36이 create table if not exists로 멱등', /create table if not exists\s+reward_ledger/i.test(v36))
   check('v3_36에 reward_totals 뷰 존재', /create (or replace )?view reward_totals/i.test(v36))
