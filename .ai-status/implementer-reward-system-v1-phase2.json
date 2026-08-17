@@ -1,0 +1,36 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "reward-system-v1-phase2",
+  "task": "Reward System V1 2단계 — rewardEngine.js를 useStudent.js에 배선(grantLedgerReward + 앵커 5종) + UI 2개(RewardCard/RewardToast) + 통합 테스트(testRewardFlow.mjs)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-15T00:20:00Z",
+  "updated_at": "2026-08-17T00:00:00Z",
+  "files_owned": [
+    "src/hooks/useStudent.js",
+    "src/components/RewardCard.jsx",
+    "src/components/RewardToast.jsx",
+    "src/components/Dashboard.jsx",
+    "src/App.jsx",
+    "src/components/EntranceTest.jsx",
+    "scripts/testRewardFlow.mjs",
+    "package.json",
+    "tests/harness/registry.mjs"
+  ],
+  "files_read": [
+    "src/utils/rewardEngine.js",
+    "src/utils/ticketEconomy.js",
+    "scripts/testRewardEngine.mjs",
+    "scripts/testStarDeltaOnEntry.mjs",
+    "scripts/buildRaceBundle.mjs",
+    "scripts/fakeReact.mjs",
+    "scripts/wordLibraryRaceStub.mjs",
+    "scripts/testLoginRestoreCrash.mjs",
+    "tests/harness/registry.mjs"
+  ],
+  "summary": "규칙 15에 따라 testRewardFlow.mjs를 먼저 작성해 배선 전 상태로 실행 -> 55단언 중 30개 FAIL을 실측 기록. 이후 useStudent.js에 grantLedgerReward(rewardIdempotencyKey/hasRewardEntry/appendRewardEntry/buildRewardEntry 재사용, grantReward를 dedupKey 공유로 2차 방어) + 앵커 5종(word-session-complete +1/writing-complete +2/exam-complete +2/wrong-word-recovered +1/daily-goal-complete +3/streak-bonus 가변)을 배선, rewardLedger 스키마(freshRecord/normalizeRecord/mergeProgressRecords+신규 mergeRewardLedgers) 추가, rewardLevel/rewardStarsToNext 파생값 + rewardFeedback 피드백 큐(dismissRewardFeedback) 추가. 레거시 grantReward(MISSION_BONUS_STARS +10)/grantXp/grantTicket 호출은 전부 무변경 보존(라인 삭제/변경 없음, 운영자 결정: 레거시 유지). recordExamCompleted 신규 export, EntranceTest.jsx는 onExamCompleted optional prop 추가 후 submitEntranceResult 성공 직후에만 호출(실패 경로 미호출). UI: RewardCard.jsx(순수 표시, props만)를 Dashboard.jsx의 기존 접힌 <details> '내 기록 더보기'(Paul Rank/Word King/House/Season과 동일한 정보공개축소 관례) 안에 배치, RewardToast.jsx(모달 아님, 1.5초 자동/클릭 즉시 dismiss)를 App.jsx AppInner 루트에 상시 렌더. 디버깅 중 fakeReact.mjs가 useEffect 안에서 patch()가 유발하는 중첩 재렌더의 최신 상태를 outer run()의 stale 캡처가 덮어쓰는 테스트 하네스 특유의 현상을 발견 -> host.rerender()(testLoginRestoreCrash.mjs 기존 관례 재사용)로 우회하는 settle() 헬퍼를 추가해 실제 원인을 실측 확인(production 코드/localStorage는 그 시점에도 항상 정확했음, 순수 테스트 관측 이슈). 최종 55/55 PASS. npm run build 통과(에러/경고 없음). npm run verify:reward(63+55=118단언) PASS. npm run verify:star-delta(28단언, 기존 회귀 방지) PASS 무회귀. npm run verify:student/verify:persistence 추가 확인(SKIP은 전부 기존 라이브 DB 락다운 사유, 이번 변경과 무관). package.json에 verify:reward 스크립트 1줄만 추가(기존 내용 보존), tests/harness/registry.mjs에 rewardSystem 도메인 신규 등록. 커밋 없음(operator 지시).",
+  "blocker": null,
+  "next_action": "커밋은 사람/planner 판단 대기(이번 작업 범위에 커밋 미포함). supabase_v3_36/v3_37 SQL은 Phase 1 그대로 미실행 상태(운영자 수동 실행 대기, CLAUDE.md 규칙 8) — 클라이언트는 이미 폴백 없이도 안전(rewardLedger는 로컬 progress_data blob에만 append, 서버 테이블 부재와 무관하게 동작). qa-reviewer 검수 시 RewardCard/RewardToast 실제 모바일 화면 배치(접힌 details 안이라 기본 노출 안 됨) 의도 확인 요망 — 운영자가 '항상 보이는 카드'를 원했다면 위치 조정 필요.",
+  "checkpoint_2026-08-17": "잔여 갭 1건 해소: RewardCard를 접힌 <details>('🎖️ 내 기록 더보기') 밖으로 이동해 Dashboard.jsx 메인 영역(오늘의 미션 카드 바로 다음, 접힌 details 앞)에 항상 보이도록 재배치. props/계산 로직(stars/streak/liveMissionsCompleted/rewardLevel/rewardStarsToNext) 전부 무변경. RewardCard.jsx 내부 스타일만 흰 카드 컨텍스트에 맞게 조정(bg-white/20+text-purple-* -> bg-white rounded-3xl card-shadow+text-gray-*), 4개 정보 항목(⭐/🔥/🎯/다음 보상)과 Lv. 표시는 그대로 유지, 여전히 2줄 컴팩트. 수정 파일: src/components/Dashboard.jsx(RewardCard JSX 위치만 이동, 663~677행), src/components/RewardCard.jsx(색상 클래스만 교체, 로직 무변경). npm run build 통과, npm run verify:reward PASS(66+55단언, FAIL 0), npm run verify:star-delta PASS(28단언, FAIL 0). 커밋 없음(operator 지시 유지)."
+}

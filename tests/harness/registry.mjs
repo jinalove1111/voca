@@ -328,6 +328,17 @@ export const DOMAINS = {
     ],
   },
 
+  // ── 2026-08-15 등록: Reward System V1(GAME_REWARD_RULES.md 후속, 별도
+  // "레벨/보상" 원장) — Phase 1(순수 규칙 rewardEngine.js) + Phase 2
+  // (useStudent.js 배선 + UI) ──
+  rewardSystem: {
+    label: 'Reward System V1 — 별 지급 규칙(순수)/원장 배선/앵커 5종 (verify:reward와 동일 실행)',
+    checks: [
+      { script: 'scripts/testRewardEngine.mjs', builders: [], extra: true, note: '2026-08-15 Phase 1 — rewardEngine.js(REWARD_STARS/STREAK_BONUS/LEVELS/rewardIdempotencyKey/streakBonusStars/levelForStars/starsToNextLevel/buildRewardEntry/hasRewardEntry/appendRewardEntry/earnedStars) 완전 순수 계약(import 0개, Date.now/Math.random/new Date 소스 레벨 금지 정적 검사 포함) + supabase_v3_36/v3_37 SQL 정적 단언(멱등/파괴적 DDL 없음/precheck·postcheck) 63단언. 13개 필수 도메인 밖, 신규 보너스 커버리지.' },
+      { script: 'scripts/testRewardFlow.mjs', builders: ['race'], extra: true, note: '2026-08-15 Phase 2 — grantLedgerReward(useStudent.js) + 앵커 5종(word-session-complete +1/writing-complete +2/exam-complete +2/wrong-word-recovered +1/daily-goal-complete +3/streak-bonus 가변) 통합 테스트(fakeReact + race 번들, 네트워크 0). 운영자 결정 고정: 레거시 MISSION_BONUS_STARS(+10, 라운드 반복마다 매번 재지급)는 무변경 유지 + 신규 daily-goal-complete는 날짜 키 하루 1회로 별도 공존, rewardIdempotencyKey는 학생별 전역 unique. 신규 학생 진입 델타 0/중복 발화·리마운트·재로그인 재지급 0/mergeRewardLedgers union(local 우선)/구버전 레코드 normalize 안전까지 55단언. 배선 전 30단언 FAIL 실측(규칙 15) 후 배선. 13개 필수 도메인 밖, 신규 보너스 커버리지.' },
+    ],
+  },
+
   // ── words.bulk_replace diff 계획(P0 — word_status FK 보존) ──
   wordsBulkReplacePlan: {
     label: 'words.bulk_replace diff 계획(word_status FK 보존, P0) (verify:words-bulk-replace-plan과 동일 실행)',
