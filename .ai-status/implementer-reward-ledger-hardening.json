@@ -1,0 +1,26 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "reward-ledger-hardening",
+  "task": "supabase_v3_36_reward_ledger.sql 최소 권한(정책0+GRANT0) + 진짜 멱등 강화, 검증SQL 분리(VERIFY 파일), mock 테스트 신규 등록",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-18T00:00:00+09:00",
+  "updated_at": "2026-08-18T00:00:00+09:00",
+  "files_owned": [
+    "supabase_v3_36_reward_ledger.sql",
+    "supabase_v3_36_reward_ledger_VERIFY.sql",
+    "scripts/testRewardLedgerMigration.mjs",
+    "package.json",
+    "tests/harness/registry.mjs"
+  ],
+  "files_read": [
+    "scripts/testRewardBaselineMigration.mjs",
+    "supabase_v3_37_reward_legacy_baseline.sql",
+    "scripts/testRewardEngine.mjs",
+    ".ai-status/README.md"
+  ],
+  "summary": "supabase_v3_36_reward_ledger.sql을 최소 권한(anon/authenticated GRANT 및 create policy 완전 제거 — 정책0+GRANT0, service_role만 RLS 우회 접근)으로 전환하고, enable row level security 재실행 안전성 주석 보강, 검증용 실제 insert/delete 문(anon 거부 테스트, dup-test-1 중복 insert)을 본문에서 제거해 supabase_v3_36_reward_ledger_VERIFY.sql로 분리, smallint 근거(production 최대 1,553 실측) 및 ON DELETE CASCADE 판단근거/트레이드오프 주석 추가. scripts/testRewardLedgerMigration.mjs 신규(정적 단언 17+VERIFY분리 5 + 인메모리 이중실행 시뮬레이션 24, 총 46단언) — 수정 전 SQL로 11개 FAIL 실측(규칙15) 후 PASS 전환 확인. package.json에 verify:reward-ledger 1줄 추가(watch:claude-stall 줄 무접촉), tests/harness/registry.mjs rewardSystem 도메인에 4번째 항목 등록. DDL 미실행(파일만 수정), git commit 없음.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 요청 또는 운영자가 Supabase 대시보드에서 v3_36 실행 후 필요시 VERIFY 파일 선택 실행"
+}
