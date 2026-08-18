@@ -2809,6 +2809,28 @@ export async function postXpEvent(studentId, eventType, sourceEventId) {
   }
 }
 
+// Reward System V1(2026-08-18) — 서버 원장(reward_ledger) 쓰기의 유일한
+// 클라이언트 경로. postXpEvent와 완전히 같은 원칙: 새 api/*.js 파일을
+// 만들지 않고(Vercel Hobby 12개 함수 한도 만석) 기존 /api/grant-xp를
+// `ledger:'reward'` 필드로 분기해 재사용한다. 몇 별을 줄지는 여기서
+// 계산하지 않고 항상 서버(api/grant-xp.js, resolveRewardStars)가 결정 —
+// 이 함수는 "무슨 일이 있었는가"만 전달한다. useStudent.js의
+// grantLedgerReward가 로컬 append + grantReward를 먼저 마친 뒤 이 함수를
+// await 없이(fire-and-forget) 호출한다 — 실패해도 이미 끝난 로컬 별 지급/
+// 학습 흐름에는 전혀 영향이 없다(그 이벤트 하나만 서버 원장에 안 남을 뿐).
+export async function postRewardEvent(studentId, rewardType, sourceType, sourceId) {
+  if (!studentId || !rewardType || !sourceType || !sourceId) return
+  try {
+    await fetch('/api/grant-xp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ledger: 'reward', studentId, rewardType, sourceType, sourceId }),
+    })
+  } catch {
+    // 네트워크 실패 — 조용히 무시(postXpEvent와 동일 원칙, 학습 흐름 비차단).
+  }
+}
+
 export async function fetchXpTotal(studentId) {
   if (!studentId) return 0
   const { data, error } = await supabase

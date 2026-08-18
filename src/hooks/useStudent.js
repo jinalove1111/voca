@@ -29,7 +29,7 @@ import { getRandomSticker, getMilestoneSticker, STICKERS } from '../data/sticker
 // student. Local storage stays authoritative whenever it actually has data —
 // the cloud copy is a safety net, never a silent overwrite.
 export { getStudents, addStudent, removeStudent, findStudentByName } from '../utils/wordLibrary'
-import { syncStudentProgress, fetchFullProgress, fetchProgressBackupStrict, setWordStatus as syncWordStatus, postXpEvent } from '../utils/wordLibrary'
+import { syncStudentProgress, fetchFullProgress, fetchProgressBackupStrict, setWordStatus as syncWordStatus, postXpEvent, postRewardEvent } from '../utils/wordLibrary'
 // Paul Rank System(2026-07-19) — XP는 totalStars에서 파생시키지 않는다
 // (판단 근거: src/utils/paulRankShared.js 헤더).
 // v2.3.1(2026-07-19, 행동 단위 리팩터링) — 운영자가 실제 프로덕션에서
@@ -1035,6 +1035,11 @@ export function useStudent(studentId, legacyName) {
       })),
     }))
     grantReward(rewardStars, key)
+    // 서버 원장(reward_ledger) 쓰기 — fire-and-forget(await 없음). 로컬
+    // append + grantReward가 이미 위에서 끝났으므로, 이 호출이 실패해도
+    // 학습 흐름/로컬 별 지급에는 전혀 영향이 없다(postRewardEvent 헤더
+    // 주석 참고, postXpEvent와 동일 원칙 — CLAUDE.md 규칙 1).
+    postRewardEvent(studentId, rewardType, sourceType, sourceId)
     const levelBefore = levelForStars(stars)
     const levelAfter = levelForStars(stars + rewardStars)
     rewardFeedbackIdRef.current += 1

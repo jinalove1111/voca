@@ -8,6 +8,11 @@ export const findStudentByName = () => null
 export const setWordStatus = async () => {}
 // Paul Rank System(2026-07-19) — no-op stub, XP 지급은 별도 테스트가 담당.
 export const postXpEvent = async () => {}
+// Reward System V1(2026-08-18) — no-op stub, 서버 쓰기 검증은
+// scripts/testRewardServerWrite.mjs가 별도로 담당(네트워크 0, 정적 검사).
+// 여기서는 useStudent.js의 grantLedgerReward가 import 가능하도록 심볼만
+// 제공한다.
+export const postRewardEvent = async () => {}
 
 export const syncCalls = []
 export let fetchFullProgressDeferred = null

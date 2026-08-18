@@ -1,0 +1,31 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "reward-server-write",
+  "task": "Reward System V1 서버 쓰기 경로 — api/grant-xp.js에 ledger:'reward' 분기 추가(service_role, reward_ledger insert), rewardEngine.js에 서버 검증 헬퍼 추가, useStudent.js/wordLibrary.js 배선",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-18T06:20:00Z",
+  "updated_at": "2026-08-18T06:46:31Z",
+  "files_owned": [
+    "src/utils/rewardEngine.js",
+    "api/grant-xp.js",
+    "src/utils/wordLibrary.js",
+    "src/hooks/useStudent.js",
+    "scripts/wordLibraryRaceStub.mjs",
+    "scripts/wordLibraryStub.mjs",
+    "scripts/wordLibraryMultiTabStub.mjs",
+    "scripts/testRewardServerWrite.mjs",
+    "package.json",
+    "tests/harness/registry.mjs"
+  ],
+  "files_read": [
+    "api/_pinAuth.js",
+    "src/utils/paulRankShared.js",
+    "scripts/testRewardEngine.mjs",
+    "scripts/testRewardFlow.mjs"
+  ],
+  "summary": "rewardEngine.js에 REWARD_SOURCE_RULES/isValidRewardType/isValidRewardSource/resolveRewardStars 4개 순수 함수 추가(기존 63단언 무변경, import 0개 유지). api/grant-xp.js에 req.body.ledger==='reward' 분기 추가 — 기존 XP 분기 무변경, 클라이언트가 보낸 금액/idempotency_key를 전혀 읽지 않고 서버가 resolveRewardStars/rewardIdempotencyKey로 직접 계산·조립, reward_ledger에 service_role로 insert(23505→duplicate:true, 42P01/PGRST205→table_missing). wordLibrary.js에 postRewardEvent(fire-and-forget) 추가, useStudent.js의 grantLedgerReward가 로컬 append+grantReward 이후 await 없이 호출. 신규 테스트 scripts/testRewardServerWrite.mjs(56단언, 순수함수 화이트박스 + 소스 정적 검사) FAIL-first 확인(16개 FAIL 실측) 후 구현해 전체 PASS. persistence/unitSwitching 도메인의 3개 word-library stub 파일에 postRewardEvent 누락으로 인한 번들 import 에러 발견·수정(회귀 아님, 신규 export 추가로 인한 필연적 스텁 갱신). npm run build PASS, verify:reward-server/reward/reward-baseline/reward-ledger 전부 PASS, verify:all ALL DOMAINS PASS(SKIP 제외).",
+  "blocker": null,
+  "next_action": "qa-reviewer 검토 대기. 커밋은 하지 않음(작업 지시에 따라 금지) — 운영자/다음 세션이 diff 확인 후 커밋 여부 결정."
+}

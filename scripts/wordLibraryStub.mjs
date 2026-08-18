@@ -16,3 +16,6 @@ export const setWordStatus = async () => {}
 // 검증하지 않으므로(별도 scripts/testPaulRank.mjs / testXpLedgerDb.mjs가
 // 담당) no-op으로 충분.
 export const postXpEvent = async () => {}
+// Reward System V1(2026-08-18) — no-op stub, 서버 쓰기 검증은
+// scripts/testRewardServerWrite.mjs가 별도로 담당(네트워크 0, 정적 검사).
+export const postRewardEvent = async () => {}

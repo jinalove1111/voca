@@ -150,3 +150,98 @@ export function earnedStars(ledger) {
     return (Number.isFinite(v) && v >= 0) ? sum + v : sum
   }, 0)
 }
+
+// ── 7) 서버 쓰기 경로(api/grant-xp.js, ledger:'reward' 분기) 검증 헬퍼 ──
+// 2026-08-18. 클라이언트 로컬 원장(위 5/6번)과는 신뢰 경계가 다르다 — 여기
+// 아래 세 함수는 "서버가 클라이언트 요청을 얼마나 믿어도 되는지"를
+// 결정하는 게이트라, api/grant-xp.js가 이 파일에서 직접 import해서 쓴다
+// (paulRankShared.js의 isValidEventType/isValidSourceEventIdForEvent와
+// 동일한 신뢰 모델 — 서버가 최종 권위, 클라이언트는 "무슨 일이 있었는지"
+// 만 알린다).
+//
+// REWARD_SOURCE_RULES — rewardType별로 클라이언트가 함께 보낼 수 있는
+// sourceType과 sourceId의 형식(pattern)을 화이트리스트로 고정한다.
+// 'legacy-baseline'은 의도적으로 여기 없다 — REWARD_STARS에는 존재하지만
+// (0으로 고정, 위 1번 섹션 주석) 마이그레이션 SQL(v3_37) 전용이라 클라이언트
+// 요청 경로로는 절대 도달하면 안 된다. isValidRewardType이 "키가 여기
+// 있는가"로 이를 걸러낸다.
+export const REWARD_SOURCE_RULES = {
+  'word-session-complete': { sourceType: 'daily-words', pattern: 'date' },
+  'writing-complete': { sourceType: 'daily-writing', pattern: 'date' },
+  'exam-complete': { sourceType: 'entrance-test', pattern: 'uuid' },
+  'wrong-word-recovered': { sourceType: 'spelling-review', pattern: 'date:token' },
+  'daily-goal-complete': { sourceType: 'daily-goal', pattern: 'date' },
+  'streak-bonus': { sourceType: 'streak', pattern: 'date:streak' },
+}
+
+// useStudent.js의 todayStr()가 실제로 만드는 형식(`new Date().toDateString()`)
+// 은 ISO(YYYY-MM-DD)가 아니라 "Www Mmm dd yyyy"(예: "Sat Aug 15 2026") —
+// 요일/월 약어 3글자, 일(day)은 2자리로 항상 0-padding됨(node로 실측:
+// new Date(2026,0,1).toDateString() === 'Thu Jan 01 2026'). 서버 검증은
+// 클라이언트가 실제로 보내는 값과 반드시 같은 형식이어야 하므로, ISO가
+// 아니라 이 형식에 맞는 정규식을 쓴다.
+const DATE_TOKEN_RE = /^[A-Za-z]{3} [A-Za-z]{3} \d{2} \d{4}$/
+const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const WORD_TOKEN_RE = /^[A-Za-z0-9_-]{1,64}$/
+
+function isValidDateToken(value) {
+  return typeof value === 'string' && DATE_TOKEN_RE.test(value)
+}
+
+// rewardType이 REWARD_SOURCE_RULES의 키이고(=클라이언트가 지급 요청 가능한
+// 앵커) REWARD_STARS에도 금액이 정의돼 있어야 한다. 'legacy-baseline'은
+// REWARD_STARS에는 있지만 REWARD_SOURCE_RULES에는 없으므로 여기서 항상
+// false — 클라이언트가 이 rewardType으로 서버에 지급을 요청할 방법이
+// 없다(주석 위 참고).
+export function isValidRewardType(rewardType) {
+  if (typeof rewardType !== 'string') return false
+  return Object.prototype.hasOwnProperty.call(REWARD_SOURCE_RULES, rewardType)
+    && Object.prototype.hasOwnProperty.call(REWARD_STARS, rewardType)
+}
+
+// sourceType이 그 rewardType의 규칙과 정확히 일치하고, sourceId가 규칙의
+// pattern에 맞는 형식인지 확인한다. rewardType 자체가 무효면(isValidRewardType
+// false) 여기서도 항상 false.
+export function isValidRewardSource(rewardType, sourceType, sourceId) {
+  if (!isValidRewardType(rewardType)) return false
+  const rule = REWARD_SOURCE_RULES[rewardType]
+  if (typeof sourceType !== 'string' || sourceType !== rule.sourceType) return false
+  if (typeof sourceId !== 'string' || sourceId.length === 0) return false
+
+  if (rule.pattern === 'date') {
+    return isValidDateToken(sourceId)
+  }
+  if (rule.pattern === 'uuid') {
+    return UUID_V4_RE.test(sourceId)
+  }
+  if (rule.pattern === 'date:token') {
+    const idx = sourceId.indexOf(':')
+    if (idx <= 0) return false
+    const datePart = sourceId.slice(0, idx)
+    const tokenPart = sourceId.slice(idx + 1)
+    return isValidDateToken(datePart) && WORD_TOKEN_RE.test(tokenPart)
+  }
+  if (rule.pattern === 'date:streak') {
+    const idx = sourceId.indexOf(':')
+    if (idx <= 0) return false
+    const datePart = sourceId.slice(0, idx)
+    const streakPart = sourceId.slice(idx + 1)
+    if (!isValidDateToken(datePart)) return false
+    if (!/^\d{1,4}$/.test(streakPart)) return false
+    const streak = Number(streakPart)
+    return Number.isInteger(streak) && streak >= 1 && streak <= 3650
+  }
+  return false
+}
+
+// 서버가 실제로 지급할 별 개수를 결정하는 유일한 함수 — req.body의 금액
+// 필드는 절대 신뢰하지 않고, 항상 이 함수(즉 이 파일의 REWARD_STARS/
+// STREAK_BONUS)에서 조회한다. 'streak-bonus'만 streakDays에 따라 값이
+// 달라지므로 streakBonusStars()로 위임(3/5/7이 아니면 0 — 이미 그 함수가
+// 방어). 그 외 rewardType은 REWARD_STARS[rewardType] 그대로. 무효한
+// rewardType(isValidRewardType false, legacy-baseline 포함)은 0.
+export function resolveRewardStars(rewardType, streakDays) {
+  if (!isValidRewardType(rewardType)) return 0
+  if (rewardType === 'streak-bonus') return streakBonusStars(streakDays)
+  return REWARD_STARS[rewardType] || 0
+}

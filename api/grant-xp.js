@@ -22,6 +22,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { supabaseAdminUrl, supabaseAdminKey } from './_pinAuth.js'
 import { resolveXpAmount, isValidStudentId, isValidSourceEventIdForEvent, isValidEventType } from '../src/utils/paulRankShared.js'
+import { isValidRewardType, isValidRewardSource, resolveRewardStars, rewardIdempotencyKey } from '../src/utils/rewardEngine.js'
 
 // Teacher Controls 마스터 스위치(2026-07-19, classes.gamification_enabled,
 // GAME_DESIGN.md 13번 섹션) 판단 — 이 핸들러는 반의 스위치 상태를 조회해서
@@ -60,6 +61,85 @@ export default async function handler(req, res) {
   const key = supabaseAdminKey()
   if (!url || !key) {
     res.status(500).json({ error: 'Server not configured: SUPABASE_URL / key missing' })
+    return
+  }
+
+  // Reward System V1(2026-08-18) — 별(stars) 지급의 서버 쓰기 경로.
+  // ledger:'reward'가 있을 때만 이 분기를 타고, 없으면(기존 클라이언트가
+  // 보내는 요청은 이 필드 자체가 없음) 아래 기존 XP 로직으로 그대로
+  // 흘러간다 — 기존 XP 경로는 한 글자도 바뀌지 않았다(하위호환).
+  //
+  // 클라이언트는 "무슨 이벤트가 일어났는가"(rewardType/sourceType/
+  // sourceId)만 보낸다 — 몇 별을 줄지(stars)는 req.body 어디서도 읽지
+  // 않고 항상 resolveRewardStars()(rewardEngine.js)가 결정한다. 마찬가지로
+  // idempotency_key도 클라이언트가 보낸 값을 쓰지 않고 서버가
+  // rewardIdempotencyKey()로 studentId/rewardType/sourceType/sourceId를
+  // 직접 조립한다 — 클라이언트가 임의 키를 보내 다른 학생의 지급 기록에
+  // 충돌시키거나 검증을 우회하는 경로를 원천 차단.
+  if (req.body && req.body.ledger === 'reward') {
+    const { studentId: rewardStudentId, rewardType, sourceType, sourceId } = req.body
+
+    if (!isValidStudentId(rewardStudentId)) {
+      res.status(200).json({ ok: false, reason: 'invalid_student_id' })
+      return
+    }
+    if (!isValidRewardType(rewardType)) {
+      // REWARD_SOURCE_RULES에 없는 rewardType은 전부 여기서 거부된다 —
+      // 'legacy-baseline'(마이그레이션 전용, v3_37 SQL만 쓴다)도 이
+      // 화이트리스트에 아예 없으므로 항상 이 분기로 거부된다.
+      res.status(200).json({ ok: false, reason: 'unknown_reward_type' })
+      return
+    }
+    if (!isValidRewardSource(rewardType, sourceType, sourceId)) {
+      res.status(200).json({ ok: false, reason: 'invalid_reward_source' })
+      return
+    }
+
+    // streak-bonus만 금액이 sourceId에 실린 streak 일수에 따라 달라진다
+    // (`${date}:${streakDays}` 형식, isValidRewardSource가 이미 형식을
+    // 확인했으므로 여기서는 안전하게 파싱만 한다). 그 외 rewardType은
+    // streakDays를 쓰지 않는다(resolveRewardStars가 무시).
+    const streakDays = rewardType === 'streak-bonus'
+      ? Number(String(sourceId).slice(String(sourceId).indexOf(':') + 1))
+      : undefined
+    const stars = resolveRewardStars(rewardType, streakDays) // 서버 전용 결정 — req.body의 금액 필드는 어디서도 읽지 않음
+    if (stars <= 0) {
+      res.status(200).json({ ok: false, reason: 'zero_reward' })
+      return
+    }
+
+    const idempotencyKey = rewardIdempotencyKey(rewardStudentId, rewardType, sourceType, sourceId) // 서버가 직접 조립 — 클라이언트가 보낸 키는 신뢰하지 않음
+    const supabase = createClient(url, key)
+
+    const { error } = await supabase.from('reward_ledger').insert({
+      student_id: rewardStudentId,
+      reward_type: rewardType,
+      source_type: sourceType,
+      source_id: sourceId,
+      stars_delta: stars,
+      xp_delta: 0, // Reward System V1은 XP를 절대 파생시키지 않는다(rewardEngine.js 헤더 참고)
+      idempotency_key: idempotencyKey,
+    })
+
+    if (error) {
+      if (error.code === DUPLICATE_KEY_VIOLATION) {
+        // 이미 지급됨 — 중복 지급 아님, 정상 idempotent 응답(위 xp_ledger
+        // 분기와 동일한 원칙).
+        res.status(200).json({ ok: true, duplicate: true, stars })
+        return
+      }
+      if (error.code === '42P01' || error.code === 'PGRST205') {
+        // reward_ledger 테이블이 아직 없음(supabase_v3_36 미실행) — 학습
+        // 흐름을 막지 않도록 조용히 실패 취급(postRewardEvent가 이미
+        // 실패를 삼키므로 학생 화면에는 영향 없음).
+        res.status(200).json({ ok: false, reason: 'table_missing' })
+        return
+      }
+      res.status(500).json({ error: error.message })
+      return
+    }
+
+    res.status(200).json({ ok: true, duplicate: false, stars })
     return
   }
 
