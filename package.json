@@ -54,7 +54,9 @@
     "verify:entrance-collision": "node scripts/testEntranceKr2enCollision.mjs",
     "verify:stale-cache": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testStaleCacheRevalidation.mjs",
     "verify:reward": "node scripts/testRewardEngine.mjs && node scripts/buildRaceBundle.mjs && node scripts/testRewardFlow.mjs",
-    "verify:reward-baseline": "node scripts/testRewardBaselineMigration.mjs"
+    "verify:reward-baseline": "node scripts/testRewardBaselineMigration.mjs",
+    "verify:reward-ledger": "node scripts/testRewardLedgerMigration.mjs",
+    "verify:reward-server": "node scripts/testRewardServerWrite.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
