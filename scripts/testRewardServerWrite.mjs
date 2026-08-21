@@ -158,7 +158,13 @@ console.log("\n10. api/grant-xp.js — 클라이언트 금액/키 신뢰 금지(
   // 둘 다)를 잘라낸 코드만 검사한다(scripts/testRewardEngine.mjs의
   // codeOnly 패턴을 인라인 주석까지 확장 — 이 파일은 `//`가 문자열 리터럴/
   // 정규식 안에 등장하지 않으므로 안전하게 적용 가능).
-  const codeOnly = src.split('\n').map((line) => line.replace(/\/\/.*$/, '')).join('\n')
+  // 2026-08-22 — CRLF 환경 수정. JS 정규식에서 `.`은 `\r`을 매치하지 않아,
+  // CRLF 파일(Windows 체크아웃)에서는 줄이 `...// 주석\r`로 끝나 `//.*$`가
+  // 끝까지 닿지 못하고 주석 제거가 통째로 실패했다 — 그 결과 api/grant-xp.js
+  // 173행의 주석("req.body.amount는 어디서도 읽지 않음")이 코드로 오탐돼
+  // 이 단언이 거짓 FAIL을 냈다(제품 코드는 정상). 줄 끝 `\r`을 먼저 떼고
+  // 주석을 제거해 LF/CRLF 양쪽에서 동일하게 동작하게 한다.
+  const codeOnly = src.split('\n').map((line) => line.replace(/\r$/, '').replace(/\/\/.*$/, '')).join('\n')
   const forbiddenAmountReads = ['body.stars', 'body.amount', 'body.starsDelta', 'body.stars_delta', 'req.body.stars']
   check('req.body에서 금액 필드를 직접 읽는 코드 0건(주석 제외)', forbiddenAmountReads.every((needle) => !codeOnly.includes(needle)))
   const forbiddenKeyReads = ['body.idempotencyKey', 'body.idempotency_key']
