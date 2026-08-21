@@ -51,7 +51,8 @@
     "verify:stars": "npm run verify:star-delta",
     "verify:entrance": "node scripts/testEntranceEligibilityRules.mjs && node scripts/testEntranceTestSelection.mjs && node scripts/testEntranceClassroomMatrix.mjs && node scripts/testEntranceStressMatrix.mjs && node scripts/testEntranceRosterMinbyungchun.mjs && node scripts/testEntranceKr2enCollision.mjs",
     "verify:entrance-live": "node scripts/entranceLiveDiagnostic.mjs",
-    "verify:entrance-collision": "node scripts/testEntranceKr2enCollision.mjs"
+    "verify:entrance-collision": "node scripts/testEntranceKr2enCollision.mjs",
+    "verify:writing-direction-resolution": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testWritingDirectionResolution.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

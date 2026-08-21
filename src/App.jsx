@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import StudentSelect from './components/StudentSelect'
 import Dashboard from './components/Dashboard'
 import WordBrowser from './components/WordBrowser'
@@ -23,7 +23,7 @@ import { pickNextGame } from './utils/matchGame'
 import { trackEvent, EV } from './utils/productEvents'
 import { assignDirections } from './utils/entranceTest'
 import { logSpellingReview } from './utils/spellingReviewApi'
-import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, refreshTextbooks, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getClassSettings, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentClassId, getTextbookById, getStudentPrimaryTextbook, getClassNames, getClassIdByName } from './utils/wordLibrary'
+import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, refreshTextbooks, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getStudentSpellingSettings, extendStableDirections, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentClassId, getTextbookById, getStudentPrimaryTextbook, getClassNames, getClassIdByName } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech } from './utils/speech'
 // Curriculum Engine Phase 0(2026-08-01, docs/CURRICULUM_ENGINE.md §8) —
 // 교사 opt-in 예문 학습 단계. isFeatureEnabled('curriculumExamplesStudentUI')
@@ -347,9 +347,14 @@ function AppInner({ studentId, studentName, onLogout }) {
   )
   // 쓰기 시험 반별 설정 — 관리자가 켜지 않았으면 항상 안전한 기본값(전부
   // 꺼짐)이 돌아오므로, 스키마 SQL을 아직 안 돌렸어도 이 값은 절대
-  // 에러나지 않음 (getClassSettings 참고).
+  // 에러나지 않음 (getStudentSpellingSettings 참고).
+  // 2026-08-20 구조적 버그 수정 — 예전엔 getClassSettings(getStudentClass
+  // (studentId))로 항상 "홈 반" 설정만 읽어, 학생이 실제로 공부 중인
+  // "학습 교재 반"(SCA primary 텍스트북 소유 반) 설정이 무시됐다(John
+  // 실사고). getStudentSpellingSettings가 학습 교재 반 → 홈 반 → 안전한
+  // 기본값 순으로 해석하는 단일 진실 공급원(wordLibrary.js 리졸버 참고).
   const spellingSettings            = useMemo(() => {
-    try { return getClassSettings(getStudentClass(studentId)) } catch { return { spellingTestEnabled: false, spellingHintEnabled: false, wrongAnswerRepeatCount: 3 } }
+    try { return getStudentSpellingSettings(studentId) } catch { return { spellingTestEnabled: false, spellingHintEnabled: false, wrongAnswerRepeatCount: 3, spellingDirection: 'kr2en' } }
   }, [studentId, refreshTick])
 
   // v2.0 혼합(mixed) 방향 — 반 설정이 'mixed'일 때만, 이번 세션 단어
@@ -357,24 +362,93 @@ function AppInner({ studentId, studentName, onLogout }) {
   // (입실시험과 같은 assignDirections — 중복 구현 금지). 단어별 방향은
   // 인덱스로 조회. 다른 방향(kr2en/en2kr/random)은 null — 기존 흐름
   // (SpellingQuestion이 direction prop을 그대로 해석) 완전 동일.
-  // 주의: scope가 'review'면 오답이 쌓이며 sessionWords가 세션 도중 자랄
-  // 수 있어 그때 재배정되지만, 방향은 문제 시작 시점에만 읽으므로 이미
-  // 푼 문제에는 영향 없음(50:50 균형이 약간 흔들리는 정도 — 허용).
+  // 2026-08-20 구조적 버그 수정 — 예전엔 deps가 [spellingSettings,
+  // sessionWords.length]라 scope가 'review'라서 sessionWords가 세션 도중
+  // 자랄 때마다(오답이 쌓임) useMemo가 "전체" 배열을 처음부터 다시
+  // assignDirections로 뽑아, 이미 문제로 나갔던 앞쪽 인덱스의 방향까지
+  // 재배정됐다(재현: 어떤 단어가 문제로 나온 뒤에 방향이 바뀔 수 있었음).
+  // useRef로 이전 배정을 들고 있다가, 학생/유닛/스코프/방향 설정이 바뀔
+  // 때만(reset key 변경) 처음부터 다시 배정하고, 그 외에는
+  // extendStableDirections로 늘어난 길이만큼만 뒤에 이어 붙인다(기존
+  // 인덱스는 절대 재배정하지 않음).
+  const mixedDirectionsKeyRef = useRef(null)
+  const mixedDirectionsRef = useRef([])
   const mixedDirections = useMemo(() => {
-    if (spellingSettings.spellingDirection !== 'mixed') return null
-    return assignDirections(sessionWords.length, 'mixed')
+    if (spellingSettings.spellingDirection !== 'mixed') {
+      mixedDirectionsKeyRef.current = null
+      mixedDirectionsRef.current = []
+      return null
+    }
+    const key = `${studentId}|${currentUnitId}|${studyScope}`
+    if (mixedDirectionsKeyRef.current !== key) {
+      mixedDirectionsKeyRef.current = key
+      mixedDirectionsRef.current = assignDirections(sessionWords.length, 'mixed')
+    } else {
+      mixedDirectionsRef.current = extendStableDirections(mixedDirectionsRef.current, sessionWords.length, 'mixed')
+    }
+    return mixedDirectionsRef.current
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spellingSettings, sessionWords.length])
+  }, [spellingSettings, sessionWords.length, studentId, currentUnitId, studyScope])
 
   // 3분 데일리 리추얼(2026-07-22) — 가이드 세션 전용 mixed 방향 배정.
   // 위 mixedDirections는 sessionWords(studyScope 필터 반영) 기준이라,
   // 항상 classWords 전체를 도는 가이드 세션과는 인덱스 축이 다르다 —
   // 재사용하지 않고 classWords 길이로 따로 배정(승인된 스펙 그대로).
+  // 2026-08-20 — mixedDirections와 동일한 이유로 동일한 안정화 패턴 적용
+  // (관리자가 수업 중 단어를 추가하면 classWords.length가 자랄 수 있음 —
+  // stale cache 재검증 갭③ revalidateUnitWords 참고).
+  const guidedMixedDirectionsKeyRef = useRef(null)
+  const guidedMixedDirectionsRef = useRef([])
   const guidedMixedDirections = useMemo(() => {
-    if (spellingSettings.spellingDirection !== 'mixed') return null
-    return assignDirections(classWords.length, 'mixed')
+    if (spellingSettings.spellingDirection !== 'mixed') {
+      guidedMixedDirectionsKeyRef.current = null
+      guidedMixedDirectionsRef.current = []
+      return null
+    }
+    const key = `${studentId}|${currentUnitId}`
+    if (guidedMixedDirectionsKeyRef.current !== key) {
+      guidedMixedDirectionsKeyRef.current = key
+      guidedMixedDirectionsRef.current = assignDirections(classWords.length, 'mixed')
+    } else {
+      guidedMixedDirectionsRef.current = extendStableDirections(guidedMixedDirectionsRef.current, classWords.length, 'mixed')
+    }
+    return guidedMixedDirectionsRef.current
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spellingSettings, classWords.length])
+  }, [spellingSettings, classWords.length, studentId, currentUnitId])
+
+  // v2.0 복습 경로(SpellingReview) 방향 배정 — 오늘 오답노트 + 영구 복습
+  // 대기열 합집합. JSX에서 매 렌더 새 배열을 만들던 것을 훅으로 끌어올려
+  // 아래 방향 배정 useMemo의 안정적인 길이 소스로도 재사용한다(중복 계산
+  // 없음).
+  const reviewWrongWordIds = useMemo(
+    () => Array.from(new Set([...spellingWrongToday, ...spellingReviewQueue])),
+    [spellingWrongToday, spellingReviewQueue]
+  )
+  // 2026-08-20 구조적 버그 수정 4번 — 예전엔 SpellingReview에
+  // direction={spellingSettings.spellingDirection}로 'mixed' 문자열을
+  // 그대로 넘겨, SpellingQuestion 내부(pickDirection)가 문제마다
+  // Math.random()으로 방향을 뽑았다(50:50 미보장). 단어 학습 경로
+  // (mixedDirections)와 동일하게 App.jsx가 세션 시작 시 assignDirections로
+  // 미리 결정하고, SpellingReview는 이미 배정된 값을 인덱스로 조회만 한다
+  // (SpellingReview.jsx 쪽 최소 수정 — 그 파일 헤더 주석 참고). mixed가
+  // 아니면 계산하지 않는다(null — 기존과 동일하게 direction 그대로 전달).
+  const reviewMixedDirectionsKeyRef = useRef(null)
+  const reviewMixedDirectionsRef = useRef([])
+  const reviewMixedDirections = useMemo(() => {
+    if (spellingSettings.spellingDirection !== 'mixed') {
+      reviewMixedDirectionsKeyRef.current = null
+      reviewMixedDirectionsRef.current = []
+      return null
+    }
+    if (reviewMixedDirectionsKeyRef.current !== studentId) {
+      reviewMixedDirectionsKeyRef.current = studentId
+      reviewMixedDirectionsRef.current = assignDirections(reviewWrongWordIds.length, 'mixed')
+    } else {
+      reviewMixedDirectionsRef.current = extendStableDirections(reviewMixedDirectionsRef.current, reviewWrongWordIds.length, 'mixed')
+    }
+    return reviewMixedDirectionsRef.current
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spellingSettings, reviewWrongWordIds.length, studentId])
 
   // 3분 데일리 리추얼 진입 — Dashboard의 히어로 CTA가 호출.
   const startGuidedSession = () => setScreen('guidedSession')
@@ -809,13 +883,18 @@ function AppInner({ studentId, studentName, onLogout }) {
           // Writing MVP(2026-07-20) — 오늘치 오답노트 + 영구 복습 대기열을
           // 합쳐서(중복 제거) 한 번에 순회. SpellingReview 자체는 이 구분을
           // 몰라도 되고, comebackWordIds만 별도로 받아 배지 판단에 쓴다.
-          wrongWordIds={Array.from(new Set([...spellingWrongToday, ...spellingReviewQueue]))}
+          wrongWordIds={reviewWrongWordIds}
           comebackWordIds={spellingReviewQueue}
           classWords={classWords}
           onClearWord={clearSpellingReviewWord}
           onDone={() => setScreen('dashboard')}
           hintEnabled={spellingSettings.spellingHintEnabled}
           direction={spellingSettings.spellingDirection}
+          // 2026-08-20 구조적 버그 수정 4번 — mixed일 때 세션 시작 시
+          // assignDirections로 미리 결정한 방향(reviewMixedDirections 참고).
+          // mixed가 아니면 null(SpellingReview는 기존과 동일하게 direction을
+          // 그대로 씀).
+          mixedDirections={reviewMixedDirections}
         />
       )}
       <SpeedBtn />

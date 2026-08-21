@@ -25,7 +25,20 @@ import SpellingQuestion from './SpellingQuestion'
 // 무변경). comebackWordIds(=원본 spellingReviewQueue)만 별도로 받아 "이
 // 단어가 적어도 하루 전에 놓친 단어인지"를 판단해 SpellingQuestion에
 // isComebackWord로 전달한다.
-export default function SpellingReview({ wrongWordIds, classWords, onClearWord, onDone, hintEnabled, direction, comebackWordIds = [] }) {
+//
+// mixedDirections(2026-08-20, 구조적 버그 수정 4번) — 예전엔 반 설정이
+// mixed면 direction='mixed' 문자열을 그대로 SpellingQuestion에 넘겼는데,
+// SpellingQuestion 내부(pickDirection)는 'mixed'를 'random'과 동일하게
+// 취급해 문제마다 Math.random()으로 방향을 뽑았다(50:50 미보장). 이제
+// App.jsx가 세션 시작 시 assignDirections로 미리 결정한 배열을
+// mixedDirections로 받아 인덱스로 조회한다 — Math.random() 경로 없음.
+// 인덱스는 `total - words.length`(0-base, currentNo-1과 동일한 값):
+// wrongWordIds는 앞에서부터만 빠지고(clear) 순서가 재배치되지 않으므로,
+// "지금까지 몇 개를 clear했는가"가 그대로 "원래 순서상 이 단어의 위치"와
+// 같다 — App.jsx의 reviewMixedDirections도 동일한 growth-only 소스
+// (wrongWordIds.length)로 배정되므로 인덱스 축이 일치한다. mixedDirections가
+// null이면(mixed가 아닌 반) 기존과 동일하게 direction을 그대로 쓴다.
+export default function SpellingReview({ wrongWordIds, classWords, onClearWord, onDone, hintEnabled, direction, comebackWordIds = [], mixedDirections = null }) {
   const words = useMemo(
     () => wrongWordIds.map(id => classWords.find(w => w.id === id)).filter(Boolean),
     [wrongWordIds, classWords]
@@ -46,6 +59,11 @@ export default function SpellingReview({ wrongWordIds, classWords, onClearWord, 
 
   const current = words[0]
   const currentNo = Math.min(total, total - words.length + 1) // 지금 몇 번째 문제인지 (1-base)
+  // mixed일 때만 사전 배정 배열을 인덱스로 조회(위 헤더 주석 참고). mixed가
+  // 아니면(mixedDirections=null) 기존과 동일하게 direction을 그대로 쓴다.
+  const resolvedDirection = mixedDirections
+    ? (mixedDirections[total - words.length] || 'kr2en')
+    : (direction || 'kr2en')
 
   return (
     <div className="min-h-screen p-4 pb-8 bg-gradient-to-br from-orange-50 to-red-50">
@@ -71,10 +89,10 @@ export default function SpellingReview({ wrongWordIds, classWords, onClearWord, 
           meaning={current.meaning}
           wordAudioUrl={current.wordAudioUrl}
           hintEnabled={hintEnabled}
-          // v2.0: 반 설정이 'mixed'(세션 단위 50:50)여도 복습은 "맞을 때까지
-          // 반복"이라 문제 수가 고정이 아니어서 정확 배분이 무의미 — mixed는
-          // SpellingQuestion이 문제마다 랜덤과 동일하게 처리(방어 내장).
-          direction={direction || 'kr2en'}
+          // v2.0(2026-08-20 갱신): mixed면 위 resolvedDirection이 App.jsx가
+          // 미리 배정한 구체 방향(kr2en/en2kr)을 인덱스로 조회한 값 —
+          // Math.random() 경로 없음(위 헤더 주석 참고).
+          direction={resolvedDirection}
           acceptedMeanings={current.acceptedMeanings}
           isComebackWord={comebackWordIds.includes(current.id)}
           onResult={(correct) => setCombo(c => (correct ? c + 1 : 0))}

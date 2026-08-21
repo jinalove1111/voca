@@ -1,5 +1,11 @@
 import { supabase } from './supabaseClient'
 import { fmtDay } from './analyticsMath'
+// 쓰기 방향 배정 공용 함수(2026-08-20, 구조적 버그 수정 4번/5번) — App.jsx
+// 세션 배정과 완전히 동일한 assignDirections를 재사용(새 배정 로직 발명
+// 금지). entranceTest.js는 spelling.js 외 의존성이 없는 순수 모듈이라
+// 여기서 정적 import해도 순환/부작용 위험이 없다(wordAssetRules.js 등
+// 기존 순수 모듈 import와 동일한 관례).
+import { assignDirections } from './entranceTest'
 // 입실시험 대상 판정의 단일 진실 공급원(순수 함수) — 규칙 설명은 그 파일
 // 헤더 주석 참고. 학생 화면과 관리자 화면이 반드시 같은 규칙을 쓰게 한다.
 import {
@@ -673,18 +679,27 @@ export async function ensureTextbookLayerBackfilled() {
 // 완전히 분리해서 실패해도 그냥 "전부 꺼짐"으로 안전하게 기본값 처리 —
 // SQL을 실행하기 전에 이 코드가 먼저 배포돼도 앱이 절대 깨지지 않음.
 let _classSettings = {}
-// spellingDirection 기본값 'mixed'(2026-07-17 운영자 지시: "혼합 50:50이
-// 기본") — 예전 기본은 'kr2en'(기존 동작 보존)이었으나, 방향 기능이 나오자
-// 마자 운영자가 혼합을 기본으로 확정. 기존 반들도 일괄 'mixed'로 전환됨
-// (scripts/opsSetAllClassesMixed.mjs). 특정 반만 한→영으로 돌리려면 관리자
-// 화면 출제 방향에서 바꾸면 됨. mixed는 클라이언트만으로 완전 동작
-// (App.jsx assignDirections — DB 컬럼이 없어도 배정 자체는 로컬 계산).
+// spellingDirection 기본값 이력 — 2026-07-17 운영자 지시로 한때 'mixed'였다
+// (혼합 50:50 기본, scripts/opsSetAllClassesMixed.mjs로 기존 반 일괄 전환).
+// 2026-08-20 운영자 지시로 되돌림 — "쓰기 방향 결정 구조" 감사에서, 학생이
+// 실제로 공부 중인 "학습 교재 반"이 아니라 "홈 반" 설정만 읽던 구조적 버그
+// (getStudentSpellingSettings 리졸버 도입으로 별도 수정)와 겹쳐, 반 이름
+// 조회가 빗나가거나(캐시 미비/빈 문자열) 설정 조회 자체가 실패하면 이
+// 기본값이 "조용히" 채택돼 관리자가 설정한 적 없는 무작위(mixed) 방향이
+// 학생에게 나갔다(John 실사고 — 홈/학습 반이 둘 다 kr2en인데도 mixed로
+// 보임). 조회 실패/컬럼 부재를 mixed로 흡수하면 관리자가 설정하지 않은
+// 무작위 방향이 학생에게 나간다.
+// mixed는 명시적 설정일 때만(운영자 지시 2026-08-20) — 그래서 안전한
+// 기본값을 'kr2en'(기존 v1.5 동작과 동일, 예전 원래 기본값)으로 되돌린다.
+// mixed는 여전히 클라이언트만으로 완전 동작(App.jsx assignDirections —
+// DB 컬럼이 없어도 배정 자체는 로컬 계산), 다만 그 값 자체가 실제 DB에
+// 저장돼 있을 때만 쓰인다.
 // gamificationEnabled(2026-07-19, Teacher Controls 마스터 스위치,
 // GAME_DESIGN.md 13번 섹션) — spelling_test_enabled와 동일한 opt-in 관례,
 // 기본 false. 컬럼이 아직 없거나(supabase_v2_5_gamification_master_switch.sql
 // 미실행) 값이 없으면 항상 false로 폴백(Rank/XP UI가 절대 갑자기 노출되지
 // 않게 하는 안전한 기본값 — Dashboard.jsx 게이팅이 이 값을 그대로 씀).
-const DEFAULT_CLASS_SETTINGS = { spellingTestEnabled: false, spellingHintEnabled: false, wrongAnswerRepeatCount: 3, spellingDirection: 'mixed', gamificationEnabled: false }
+const DEFAULT_CLASS_SETTINGS = { spellingTestEnabled: false, spellingHintEnabled: false, wrongAnswerRepeatCount: 3, spellingDirection: 'kr2en', gamificationEnabled: false }
 // v2.0: 'mixed'(세션 단위 정확 50:50 배분) 추가 — 배정 로직 자체는
 // entranceTest.js의 assignDirections(입실시험과 공용)가 담당.
 const VALID_SPELLING_DIRECTIONS = new Set(['kr2en', 'en2kr', 'random', 'mixed'])
@@ -718,10 +733,13 @@ export async function refreshClassSettings() {
       spellingTestEnabled: !!c.spelling_test_enabled,
       spellingHintEnabled: !!c.spelling_hint_enabled,
       wrongAnswerRepeatCount: c.wrong_answer_repeat_count ?? 3,
-      // 컬럼이 아직 없거나(부분 마이그레이션) 값이 이상하면 'mixed' 폴백
-      // (2026-07-17 기본값 변경 — DEFAULT_CLASS_SETTINGS 주석 참고).
-      // mixed 배정은 App.jsx의 로컬 계산이라 컬럼 부재 상태에서도 완전 동작.
-      spellingDirection: VALID_SPELLING_DIRECTIONS.has(c.spelling_direction) ? c.spelling_direction : 'mixed',
+      // 컬럼이 아직 없거나(부분 마이그레이션)/값이 이상하면(null/''/미지원
+      // 문자열) kr2en 폴백 — mixed로 흡수하지 않는다. 조회 실패/컬럼 부재를
+      // mixed로 흡수하면 관리자가 설정하지 않은 무작위 방향이 학생에게
+      // 나간다. mixed는 명시적 설정일 때만(운영자 지시 2026-08-20,
+      // DEFAULT_CLASS_SETTINGS 주석 참고 — 같은 이유로 그쪽도 kr2en으로
+      // 되돌림).
+      spellingDirection: VALID_SPELLING_DIRECTIONS.has(c.spelling_direction) ? c.spelling_direction : 'kr2en',
       // Teacher Controls 마스터 스위치(2026-07-19) — 컬럼 부재/null/false
       // 전부 false로 수렴(opt-in, DEFAULT_CLASS_SETTINGS 주석 참고).
       gamificationEnabled: !!c.gamification_enabled,
@@ -734,6 +752,50 @@ export async function refreshClassSettings() {
 
 export function getClassSettings(className) {
   return _classSettings[className] || DEFAULT_CLASS_SETTINGS
+}
+
+// ── 학생 쓰기 방향 source of truth 리졸버 (2026-08-20, 구조적 버그 수정) ──
+// 확정된 원인 — App.jsx가 예전에는 getClassSettings(getStudentClass(studentId))
+// 로 항상 "홈 반"(students.class_id) 설정만 읽었다. 그런데 학생이 실제로
+// 공부하는 단어는 "학습 교재 반"(SCA primary가 가리키는 textbook의
+// owner_class_id) 소유일 수 있어(교재 모드, v3.1), 홈 반과 학습 교재 반의
+// spelling_direction이 다르면 학생 화면에는 엉뚱한(홈 반) 방향이 적용됐다.
+// 우선순위: ① 학습 교재 반 설정(존재 시) → ② 홈 반 설정(존재 시) →
+// ③ 안전한 기본값(DEFAULT_CLASS_SETTINGS, kr2en).
+// "존재 시"를 getClassSettings가 아니라 원본 캐시(_classSettings)로 직접
+// 확인하는 이유 — getClassSettings 자체는 미존재 시 조용히 기본값으로
+// 폴백하므로, 그 폴백과 "다음 우선순위로 넘어가야 하는 진짜 미존재"를
+// 구분하려면 폴백 이전의 원본을 봐야 한다. 새 조회 로직을 만들지 않고
+// 기존 접근자(getStudentPrimaryTextbook/getClassNameById/getStudentClass)를
+// 그대로 재사용한다.
+export function getStudentSpellingSettings(studentId) {
+  try {
+    const tb = getStudentPrimaryTextbook(studentId)
+    const contentClsName = tb?.ownerClassId ? getClassNameById(tb.ownerClassId) : ''
+    if (contentClsName && _classSettings[contentClsName]) return _classSettings[contentClsName]
+  } catch { /* 교재/학습 반 해석 실패 -> 홈 반으로 폴백 */ }
+  try {
+    const homeClsName = getStudentClass(studentId)
+    if (homeClsName && _classSettings[homeClsName]) return _classSettings[homeClsName]
+  } catch { /* 홈 반 해석도 실패 -> 안전한 기본값 */ }
+  return DEFAULT_CLASS_SETTINGS
+}
+
+// ── mixed 배정 안정성 헬퍼 (2026-08-20, 구조적 버그 수정 5번) ────────────
+// App.jsx가 세션 중 sessionWords.length가 늘어도(복습 스코프 등에서 오답이
+// 쌓이며 자람) 이미 배정된 인덱스의 방향을 재배정하지 않기 위해 쓰는 순수
+// 함수. 기존 배정을 그대로 두고, 늘어난 길이만큼만 새로 배정해 뒤에 붙인다
+// (줄어든 요청은 안전하게 무시 — 기존 배열을 그대로 반환). 새 배정 로직을
+// 만들지 않고 assignDirections를 그대로 재사용한다. App.jsx의 React 훅
+// 상태(useRef)에서 직접 테스트하기 어려운 배정 로직을 순수 함수로 분리해
+// scripts/testWritingDirectionResolution.mjs가 오프라인 번들로 직접 실행
+// 검증할 수 있게 한다.
+export function extendStableDirections(prevDirs, targetLength, direction, assignFn = assignDirections) {
+  const prev = Array.isArray(prevDirs) ? prevDirs : []
+  const n = Math.max(0, Math.floor(targetLength) || 0)
+  if (n <= prev.length) return prev
+  const extra = assignFn(n - prev.length, direction)
+  return [...prev, ...extra]
 }
 
 // 2026-07-24 보안 락다운 — adminPin(하위호환 옵셔널 마지막 인자)이 있으면
