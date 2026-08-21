@@ -79,15 +79,25 @@ console.log('\n5. 설정 유지 구조(코드 레벨) — 새로고침/재로그
   check('방향 설정이 DB 컬럼(spelling_direction)에서 읽힘', /spelling_direction/.test(lib))
   check('클라이언트가 방향을 localStorage에 저장하지 않음(표류 방지)',
     !/localStorage[^\n]*[Dd]irection/.test(lib) && !/localStorage[^\n]*[Dd]irection/.test(app))
-  check('유효하지 않은 값은 mixed로 폴백(운영자 확정 기본값 e02249f)',
-    /VALID_SPELLING_DIRECTIONS\.has\(c\.spelling_direction\) \? c\.spelling_direction : 'mixed'/.test(lib))
+  // 2026-08-20 운영자 지시로 안전 기본값이 mixed -> kr2en으로 되돌아감
+  // (쓰기 방향 결정 구조 감사 — 조회 실패/컬럼 부재/이상값을 mixed로
+  // 흡수하면 관리자가 설정한 적 없는 무작위 방향이 학생에게 나갔다, John
+  // 실사고. scripts/testWritingDirectionResolution.mjs가 이 변경의 FAIL→PASS
+  // 전환을 전담 고정한다). 이 파일은 "폴백 규약이 소스에 실재하는지"만
+  // 최소 갱신 — 그 외 mixed 관련 계약(assignDirections 50:50 등)은 무변경.
+  check('유효하지 않은 값은 kr2en으로 폴백(운영자 지시 2026-08-20, 이전 mixed 폴백 e02249f를 대체)',
+    /VALID_SPELLING_DIRECTIONS\.has\(c\.spelling_direction\) \? c\.spelling_direction : 'kr2en'/.test(lib))
   check('App이 mixed일 때 assignDirections로 세션 단위 배정',
     /assignDirections\([^)]*'mixed'\)/.test(app))
   check('mixed가 아니면 단일 방향을 그대로 전달(설정 존중)',
     /spellingSettings\.spellingDirection !== 'mixed'/.test(app))
-  // Unit 이동: 방향은 반 설정 함수(getClassSettings)에서 매번 해석 —
-  // Unit 상태와 무관하므로 Unit을 바꿔도 방향이 바뀌지 않는다.
-  check('방향이 Unit 상태와 독립(getClassSettings 경유)', /getClassSettings\(getStudentClass\(studentId\)\)/.test(app))
+  // Unit 이동: 방향은 학생 쓰기 방향 리졸버(getStudentSpellingSettings)에서
+  // 매번 해석 — Unit 상태와 무관하므로 Unit을 바꿔도 방향이 바뀌지 않는다.
+  // 2026-08-20 — 리졸버가 getClassSettings(getStudentClass(studentId))
+  // (홈 반 전용, 구조적 버그)에서 getStudentSpellingSettings(studentId)
+  // (학습 교재 반 우선)로 교체됨 — testWritingDirectionResolution.mjs 11절이
+  // 이 교체 자체를 전담 검증.
+  check('방향이 Unit 상태와 독립(getStudentSpellingSettings 경유)', /getStudentSpellingSettings\(studentId\)/.test(app))
 }
 
 console.log(failures === 0 ? '\n모든 단언 통과 ✅ (Irene 실기기 확인은 PENDING 유지)' : `\n${failures}개 단언 실패 ❌`)
