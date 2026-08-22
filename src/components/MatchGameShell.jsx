@@ -11,7 +11,16 @@ import HeroReaction from './HeroReaction'
 // checkpoint) — its result screen offers "다음 단어 공부하기" using it, and
 // "그만하기" resumes the lesson too. If omitted (opened from Dashboard or
 // the auto-recommendation banner directly), it behaves standalone.
-export default function MatchGameShell({ theme, words, onBack, onGrantReward, onContinue }) {
+// rewardBlockedReason(2026-08-23 운영자 확정) — 'goal-not-met'이면 오늘
+// 미션 4개 중 3개를 아직 못 채운 것이고, 'daily-limit'이면 오늘 보상 1세션을
+// 이미 받은 것. null이면 평소대로 지급된다. **플레이 자체는 어떤 경우에도
+// 막지 않는다** — 게임을 금지하는 게 아니라 보상 자격만 분리하는 설계라,
+// 이 값은 오직 "별을 보여줄지 / 왜 없는지 설명할지"에만 쓰인다.
+// 이 prop은 실시간 값이지만 판 안에서는 startGame()이 굳힌 sessionBlocked를
+// 쓴다(아래 sessionBlockedRef 주석 — 한도 1에서 필수).
+// 화면에 실제 지급액과 다른 별을 표시하지 않는다는 기존 원칙(아래 결과
+// 화면 주석)을 그대로 따른다 — 차단 상태에서 ⭐+N을 띄우면 그게 곧 거짓말.
+export default function MatchGameShell({ theme, words, onBack, onGrantReward, onContinue, rewardBlockedReason = null }) {
   const [phase, setPhase] = useState('intro') // intro | playing | result
   const [round, setRound] = useState(0)
   const [score, setScore] = useState(0) // rounds correct on the first try
@@ -35,6 +44,15 @@ export default function MatchGameShell({ theme, words, onBack, onGrantReward, on
   // 기존 게임 설계(의도된 반복 보상)는 그대로 유지되고, 오직 "같은 라운드
   // 인스턴스에 대한 우발적 중복 호출"(예: 더블탭 레이스)만 차단된다.
   const sessionIdRef = useRef(null)
+  // 2026-08-23 — 이 판이 "보상 세션"인지를 startGame() 시점에 굳힌다(latch).
+  // 왜 필요한가: 일일 한도가 1이 되면, 1라운드에서 별을 받는 순간
+  // countRewardedGameSessions가 1이 되어 gameRewardEligibility가 즉시
+  // false로 뒤집힌다 — 실시간 prop으로 매 라운드 판정하면 같은 판의
+  // 2~5라운드가 막혀 "하루 1회"가 "하루 1라운드"로 붕괴한다. 자격은 판
+  // 단위로 결정되는 게 정책의 의미이므로, 시작 시점 값을 세션 내내 쓴다.
+  // (결과 화면 표시도 같은 latch 값을 봐야 지급액과 어긋나지 않는다.)
+  const sessionBlockedRef = useRef(null)
+  const [sessionBlocked, setSessionBlocked] = useState(rewardBlockedReason)
 
   // 정답 후 다음 라운드로 넘어가는 setTimeout, 오답 흔들림 표시를 되돌리는
   // setTimeout 둘 다 컴포넌트가 언마운트되면(예: 정답 직후 바로 "그만하기"
@@ -50,6 +68,12 @@ export default function MatchGameShell({ theme, words, onBack, onGrantReward, on
   const startGame = () => {
     unlockAudio()
     sessionIdRef.current = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    // 이 판의 보상 자격을 지금 확정한다(위 sessionBlockedRef 주석 참고).
+    // "한 번 더 하기"로 새 판을 시작할 때도 여기를 다시 지나므로, 그 시점의
+    // 최신 rewardBlockedReason(직전 판으로 한도가 찼으면 'daily-limit')이
+    // 그대로 굳는다.
+    sessionBlockedRef.current = rewardBlockedReason
+    setSessionBlocked(rewardBlockedReason)
     setScore(0)
     nextRound(0)
     setPhase('playing')
@@ -88,8 +112,12 @@ export default function MatchGameShell({ theme, words, onBack, onGrantReward, on
       setAnswerPaul(pickReaction('success'))
       playSuccessSound()
       if (!firstTryUsed) {
+        // 점수(score)는 자격과 무관하게 항상 오른다 — 보상이 없어도 학생은
+        // 자기 실력을 확인할 수 있어야 한다. 별만 latch된 자격을 따른다.
         setScore(s => s + 1)
-        onGrantReward?.(STAR_PER_CORRECT, `matchgame:${sessionIdRef.current}:${round}:${target?.dbId || target?.word}`)
+        if (!sessionBlockedRef.current) {
+          onGrantReward?.(STAR_PER_CORRECT, `matchgame:${sessionIdRef.current}:${round}:${target?.dbId || target?.word}`)
+        }
       }
       advanceTimerRef.current = setTimeout(() => {
         const next = round + 1
@@ -134,7 +162,13 @@ export default function MatchGameShell({ theme, words, onBack, onGrantReward, on
     // 반영한다 — 예전엔 올클리어 보너스를 화면에 보여주면서 실제로는 지급하지 않아
     // 학생에게 실제보다 더 많이 받은 것처럼 오해를 줬다(실제 보너스 지급 여부는
     // 별도 제품 결정 필요, 여기서는 구현하지 않음).
-    const totalStars = score * STAR_PER_CORRECT
+    // 2026-08-22 — 보상이 차단된 세션은 0으로 표시한다(위 헤더 주석).
+    const totalStars = sessionBlocked ? 0 : score * STAR_PER_CORRECT
+    const blockedMsg = sessionBlocked === 'goal-not-met'
+      ? { icon: '📚', title: '오늘 공부를 먼저 하면 별을 받아요!', sub: '오늘의 미션 4개 중 3개를 끝내고 다시 오면 ⭐을 줘요' }
+      : sessionBlocked === 'daily-limit'
+        ? { icon: '🌙', title: '오늘 게임 별은 다 받았어요!', sub: '내일 또 줄게요 — 지금은 연습으로 얼마든지 놀아도 좋아요' }
+        : null
     return (
       <div className={`min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br ${theme.bgGradient}`}>
         <div className="bg-white rounded-3xl card-shadow p-8 max-w-sm w-full text-center animate-slide-up">
@@ -143,9 +177,16 @@ export default function MatchGameShell({ theme, words, onBack, onGrantReward, on
           <div className="text-5xl mb-2">{emoji}</div>
           <p className="text-4xl font-black text-indigo-600 mb-1">{score}/{ROUNDS}</p>
           <p className="text-xl font-black text-gray-700 mb-4">{msg}</p>
-          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-3 mb-6">
-            <p className="text-yellow-700 font-black">⭐ +{totalStars}</p>
-          </div>
+          {blockedMsg ? (
+            <div className="bg-sky-50 border-2 border-sky-200 rounded-2xl p-3 mb-6">
+              <p className="text-sky-700 font-black">{blockedMsg.icon} {blockedMsg.title}</p>
+              <p className="text-sky-500 text-xs font-bold mt-1">{blockedMsg.sub}</p>
+            </div>
+          ) : (
+            <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-3 mb-6">
+              <p className="text-yellow-700 font-black">⭐ +{totalStars}</p>
+            </div>
+          )}
           <div className="flex gap-2">
             <button onClick={startGame}
               className="flex-1 border-2 border-gray-200 text-gray-600 font-bold py-3 rounded-2xl btn-press">한 번 더 하기</button>

@@ -19,7 +19,7 @@ import GuidedSession from './components/GuidedSession'
 import SentenceLearningFlow from './components/SentenceLearningFlow'
 import { useStudent } from './hooks/useStudent'
 import { useAttachment } from './hooks/useAttachment'
-import { pickNextGame } from './utils/matchGame'
+import { pickNextGame, gameRewardEligibility } from './utils/matchGame'
 import { trackEvent, EV } from './utils/productEvents'
 import { assignDirections } from './utils/entranceTest'
 import { logSpellingReview } from './utils/spellingReviewApi'
@@ -196,7 +196,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 별도 상태로 관리 — 마찬가지로 세션 동안만 유지.
   const [studyScope, setStudyScope] = useState('all')
   const studentData                 = useStudent(studentId, studentName)
-  const { cleared, completedWords, clearedWords, answerMission, missions, grantReward, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord, wordStatus, setWordKnown, setWordUnknown, spellingReviewQueue, setLastTextbookClassId, recordExamCompleted, rewardFeedback, dismissRewardFeedback } = studentData
+  const { cleared, completedWords, clearedWords, answerMission, missions, grantReward, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord, wordStatus, setWordKnown, setWordUnknown, spellingReviewQueue, setLastTextbookClassId, recordExamCompleted, rewardFeedback, dismissRewardFeedback, round, liveMissionsCompleted } = studentData
   // 애착 시스템(2026-07-22) — 파생 통계 + 모자/밀스톤 자동 판정(복원 확인
   // 후 학생당 1회). 판정 로직은 src/utils/attachment/ 순수 함수.
   const attachment = useAttachment(studentId, studentData)
@@ -217,6 +217,15 @@ function AppInner({ studentId, studentName, onLogout }) {
   // Rotates through the 4 mini-games, never repeating whichever was played
   // last (across the whole app, not just this checkpoint) — used both by
   // the mid-lesson bonus checkpoint and the Dashboard's direct game button.
+  // 게임 보상 자격(2026-08-22 운영자 지시) — 순수 함수 gameRewardEligibility에
+  // 판정을 위임한다(값/규칙을 여기서 재구현하지 않음, matchGame.js 헤더 참고).
+  // 오늘 보상받은 세션 수는 round.starGrantLog에서 파생되므로 새로 저장하는
+  // 상태가 없다 — 날짜가 바뀌면 freshRound()가 그 배열을 비운다.
+  const gameRewardState = useMemo(
+    () => gameRewardEligibility({ categoriesCompleted: liveMissionsCompleted, starGrantLog: round?.starGrantLog }),
+    [liveMissionsCompleted, round?.starGrantLog]
+  )
+
   const startRandomGame = () => {
     const game = pickNextGame(lastGamePlayed)
     setCurrentGameId(game.id)
@@ -866,15 +875,26 @@ function AppInner({ studentId, studentName, onLogout }) {
         />
       )}
       {screen === 'game'          && (
-        // 별 지급 단일 경로(2026-07-28) — onAddStars={addStars}(raw
-        // primitive, dedup 없음) 대신 onGrantReward={grantReward}(dedupKey
-        // 필수)를 넘긴다. 실제 소비처는 MatchGameShell(BalloonGame/
-        // FishingGame/PizzaGame/TrainGame이 {...props}로 그대로 전달) —
-        // 라운드별 dedupKey는 MatchGameShell이 자체 세션 id로 생성.
+        // 별 지급 단일 경로(2026-07-28) — raw primitive(dedup 없는
+        // onAddStars) 대신 dedupKey가 필수인 grantReward를 넘긴다. 실제
+        // 소비처는 MatchGameShell(BalloonGame/FishingGame/PizzaGame/
+        // TrainGame이 {...props}로 그대로 전달) — 라운드별 dedupKey는
+        // MatchGameShell이 자체 세션 id로 생성.
+        // 2026-08-23 게임 보상 정책(운영자 확정) — 플레이는 항상 자유롭게
+        // 두고 "보상 자격"만 분리한다. 오늘 미션 4개 중 3개를 못 채웠거나
+        // 이미 하루 1세션분 보상을 받았으면 rewardBlockedReason이 채워지고,
+        // MatchGameShell이 그 값을 판 시작 시점에 굳혀(latch) 그 판 전체를
+        // 무보상으로 돌린다.
+        //
+        // onGrantReward는 여기서 null로 바꾸지 않는다 — 한도가 1이라 첫
+        // 라운드 지급 즉시 자격이 false로 뒤집히는데, 실시간으로 함수를
+        // 끊으면 같은 판의 2~5라운드가 막혀 "하루 1회"가 "하루 1라운드"가
+        // 된다. 차단 판정은 오직 latch된 사유가 담당한다.
         <CurrentGame
           words={classWords}
           onBack={balloonFromLesson ? goToPendingWord : () => setScreen('dashboard')}
           onGrantReward={grantReward}
+          rewardBlockedReason={gameRewardState.reason}
           onContinue={balloonFromLesson ? goToPendingWord : null}
         />
       )}
