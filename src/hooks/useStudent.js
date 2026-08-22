@@ -1371,7 +1371,17 @@ export function useStudent(studentId, legacyName) {
   useEffect(() => {
     const allDone = countCategoriesCompleted(round) >= 4
     if (!allDone) return
-    const signature = `${round.date}:${round.wordsViewed.length}:${round.examplesHeard}:${round.quizSolved}:${round.pronunciationOk}`
+    // 2026-08-23 — signature가 이번 라운드를 실제로 식별하게 만든다.
+    // 예전에는 `date:wordsViewed.length:examplesHeard:quizSolved:pronunciationOk`
+    // 였는데 4/4 시점엔 항상 `date:5:5:5:5`라서 **하루의 모든 라운드가 같은
+    // 값**이었다. 지급 직후 starGrantLog를 통째로 비우고 있었기 때문에 그
+    // 충돌이 겉으로 드러나지 않았을 뿐이다(그게 곧 이 버그의 원인).
+    // 이제 로그를 보존하므로, 라운드 구분은 "이번 라운드에 실제로 본 단어
+    // 집합"이 담당한다 — 병합으로 되살아난 같은 라운드는 같은 단어 집합이라
+    // 같은 값(차단), 새로 공부한 라운드는 다른 단어 집합이라 다른 값(지급).
+    // handledRoundRef(마운트 내 가드)와 dedupKey(영속 가드)가 같은 값을 써야
+    // 둘의 판정 범위가 어긋나지 않는다.
+    const signature = `${round.date}:${[...round.wordsViewed].sort().join(',')}`
     if (handledRoundRef.current === signature) return
     handledRoundRef.current = signature
 
@@ -1388,7 +1398,17 @@ export function useStudent(studentId, legacyName) {
     // 않으면서 grantReward의 starGrantLog로도 구조적으로 안전해진다(순수
     // 구조 이전 — 규칙 1 "기존 플로우를 위험하게 하지 않는다"에 따라 날짜
     // 키로의 변경은 별도 운영자 승인 없이는 하지 않음).
-    grantReward(MISSION_BONUS_STARS, `daily-mission-bonus:${signature}`)
+    // 2026-08-23 — dedupKey가 라운드를 실제로 식별하게 만든다. 위 signature는
+    // wordsViewed.length(항상 5)만 쓰므로 **모든 라운드가 같은 키**를 갖는다.
+    // 예전엔 지급 직후 starGrantLog를 통째로 비워서 그 충돌이 드러나지
+    // 않았을 뿐이다(그게 바로 이 버그의 원인). 로그를 보존하도록 고치면
+    // 같은 키 때문에 정상적인 2번째 라운드까지 막히므로, 키에 "이번 라운드에
+    // 실제로 본 단어들"을 넣어 라운드를 구분한다 — 병합으로 되살아난 같은
+    // 라운드는 같은 단어 집합이라 같은 키(차단 ✅), 새로 공부한 라운드는
+    // 다른 단어 집합이라 다른 키(정상 지급 ✅).
+    // 알려진 한계: 같은 날 정확히 같은 5개 단어로 라운드를 다시 채우면
+    // 보수적으로 차단된다(보상 누락 방향의 안전한 오차).
+    const bonusGranted = grantReward(MISSION_BONUS_STARS, `daily-mission-bonus:${signature}`)
     // v2.3.1 — 이벤트 이름을 운영자 지정 8종 표준 이름(daily-mission-
     // complete)으로 재명명하면서, source_event_id도 signature(라운드별
     // 고유값) 대신 **날짜만**(day 기간키)으로 바꿨다. 별/스티커(grantReward/
@@ -1414,11 +1434,35 @@ export function useStudent(studentId, legacyName) {
     // 오늘 첫 4/4 완료 1회만 티켓이 지급된다(XP 쪽 "오늘 이미 지급했는지"
     // 가드와 동일한 원리 재사용, ticketEconomy.js 참고).
     patch(prev => ({ ticketLedger: grantTicket(prev.ticketLedger, 'daily-mission-complete', todayStr()) }))
-    bumpHistory(day => ({ giftsToday: day.giftsToday + 1 }))
-    const sticker = getRandomSticker()
-    const isDuplicate = grantSticker(sticker)
-    setGiftQueue(q => [...q, { sticker, isDuplicate, isMilestone: false }])
-    patch(() => ({ round: freshRound() }))
+    // 2026-08-23 — 선물상자/스티커도 위 별 지급과 같은 판정에 묶는다.
+    // 예전엔 grantReward의 dedup 밖에 있어서, 별이 차단된 재실행에서도
+    // giftsToday가 계속 오르고 grantSticker가 매번 뽑혔다(중복 스티커면
+    // +20별이 랜덤 dedupKey로 무제한 지급 — production 실측 이상분 180별).
+    // bonusGranted가 false면 "이 라운드 보상은 이미 나갔다"는 뜻이므로
+    // 선물상자도 나가지 않는 것이 맞다. 정상적인 새 라운드는 여전히
+    // bonusGranted=true라 기존과 똑같이 선물상자를 받는다.
+    if (bonusGranted) {
+      bumpHistory(day => ({ giftsToday: day.giftsToday + 1 }))
+      const sticker = getRandomSticker()
+      const isDuplicate = grantSticker(sticker)
+      setGiftQueue(q => [...q, { sticker, isDuplicate, isMilestone: false }])
+    }
+    // 2026-08-23 중복 지급 수정 — 예전엔 `round: freshRound()`로 통째로
+    // 갈아끼웠는데, freshRound()의 starGrantLog가 []라서 바로 위
+    // grantReward(MISSION_BONUS_STARS, `daily-mission-bonus:...`)가 방금
+    // 기록한 dedup 키를 같은 tick에 지워버렸다. 이 이벤트에는 영구 상태
+    // 가드가 없고(유일한 가드 handledRoundRef는 useRef라 재마운트마다
+    // 초기화됨), 병합은 wordsViewed=unionList / examplesHeard·quizSolved·
+    // pronunciationOk=maxNum이라 리셋된 카운터를 4/4로 되살린다 — 그래서
+    // 새로고침/재로그인/탭 전환만으로 학습 액션 0개에 +10과 선물상자가
+    // 재발했다(production 실측: 학생 16명 로그에 daily-mission-bonus 키
+    // 0개, 권교빈 2026-07-23 선물상자 37개 vs 필요 퀴즈 185회 대비 실제
+    // 20회, 이상 지급 570별).
+    //
+    // 카운터는 의도대로 리셋하되 dedup 기억만 이어받는다. 자정 롤오버는
+    // 별도 경로(round.date !== todayStr() -> round: freshRound())가 담당하므로
+    // 일별 초기화 동작은 전혀 바뀌지 않는다.
+    patch(prev => ({ round: { ...freshRound(), starGrantLog: prev.round.starGrantLog } }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [round])
 
