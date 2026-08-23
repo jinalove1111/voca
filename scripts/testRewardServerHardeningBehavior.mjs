@@ -104,9 +104,11 @@ await esbuild.build({
     },
   }],
 })
+const realPinAuth = pathToFileURL(path.resolve('api/_pinAuth.js')).href
 fs.writeFileSync(path.join(TMP, 'fakePinAuth.mjs'),
   `export const supabaseAdminUrl = () => 'https://fake.supabase.co'
 export const supabaseAdminKey = () => 'fake-service-role-key'
+export { signSessionToken, verifySessionToken, SESSION_TOKEN_TTL_MS } from ${JSON.stringify(realPinAuth)}
 `, 'utf8')
 // _pinAuth 스텁을 먼저 만든 뒤 다시 번들(위 onResolve가 참조)
 await esbuild.build({
@@ -132,6 +134,12 @@ function check(label, cond) {
   else { console.log(`  FAIL  ${label}`); failures++ }
 }
 
+// 2026-08-24 — 인증 도입 후: 이 하네스의 요청에 유효 토큰을 자동 첨부한다.
+// SESSION_SECRET을 프로세스 환경에 넣어 실제 서명 경로를 그대로 쓴다
+// (테스트 전용 값 — production 시크릿과 무관).
+process.env.SESSION_SECRET = 'behavior-test-secret'
+const { signSessionToken } = await import('../api/_pinAuth.js')
+
 const STUDENT = '11111111-2222-4333-8444-555555555555'
 const OTHER = '99999999-8888-4777-8666-555555555555'
 const TEST_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
@@ -143,7 +151,15 @@ function res() {
   r.json = (b) => { r.body = b; return r }
   return r
 }
-const post = (body) => { const r = res(); return handler({ method: 'POST', body }, r).then(() => r) }
+const tokenFor = (sid) => signSessionToken(sid)
+// reward 요청에는 기본으로 해당 학생의 유효 토큰을 붙인다. 인증 자체를
+// 검증하는 절에서는 body.token을 명시적으로 덮어써서 무효화한다.
+const post = (body) => {
+  const withAuth = (body && body.ledger === 'reward' && body.token === undefined && body.studentId)
+    ? { ...body, token: tokenFor(body.studentId) }
+    : body
+  const r = res(); return handler({ method: 'POST', body: withAuth, headers: {} }, r).then(() => r)
+}
 function seed({ student = true, examResult = false } = {}) {
   fake.__reset()
   if (student) fake.__db.students.push({ id: STUDENT })
@@ -285,6 +301,59 @@ console.log('\n10. 기존 XP 경로 무회귀 — reward 분기가 XP를 건드�
   check('reward_ledger에 기록되지 않음', fake.__db.reward_ledger.length === 0)
 }
 
+
+console.log(String.fromCharCode(10) + '11. ★ 인증 (2026-08-24, HIGH 1) — 실제 핸들러 구동')
+{
+  const OK = { ledger: 'reward', studentId: STUDENT, rewardType: 'word-session-complete', sourceType: 'daily-words', sourceId: today }
+  seed(); const a = await post({ ...OK, token: tokenFor(STUDENT) })
+  check('유효 토큰 -> 허용', a.body?.ok === true && ledger().length === 1)
+
+  seed(); const b = await post({ ...OK, token: null })
+  check('토큰 없음 -> unauthorized(missing_token), 지급 0', b.body?.reason === 'unauthorized' && b.body?.detail === 'missing_token' && ledger().length === 0)
+
+  seed(); const forged = tokenFor(STUDENT).split('.')[0] + '.AAAAAAAA'
+  const c = await post({ ...OK, token: forged })
+  check('서명 변조 -> unauthorized(bad_signature), 지급 0', c.body?.detail === 'bad_signature' && ledger().length === 0)
+
+  seed(); fake.__db.students.push({ id: OTHER })
+  const d = await post({ ...OK, token: tokenFor(OTHER) })
+  check('★ 다른 학생 토큰으로 요청 -> student_mismatch, 지급 0', d.body?.detail === 'student_mismatch' && ledger().length === 0)
+
+  seed(); const e = await post({ ...OK, token: 'garbage-no-dot' })
+  check('malformed 토큰 -> unauthorized, 지급 0', e.body?.reason === 'unauthorized' && ledger().length === 0)
+
+  // SESSION_SECRET 미설정 -> fail-closed
+  seed(); const saved = process.env.SESSION_SECRET; delete process.env.SESSION_SECRET
+  const f = await post({ ...OK, token: 'anything' })
+  process.env.SESSION_SECRET = saved
+  check('SESSION_SECRET 미설정 -> no_secret으로 거부(fail-closed), 지급 0', f.body?.detail === 'no_secret' && ledger().length === 0)
+
+  // 인증 통과 후에도 기존 방어가 살아 있는가
+  seed(); const g = await post({ ledger: 'reward', studentId: STUDENT, rewardType: 'free-stars', sourceType: 'daily-words', sourceId: today, token: tokenFor(STUDENT) })
+  check('인증 통과해도 rewardType 위조는 여전히 거부', g.body?.reason === 'unknown_reward_type')
+
+  seed({ examResult: false }); const h = await post({ ledger: 'reward', studentId: STUDENT, rewardType: 'exam-complete', sourceType: 'entrance-test', sourceId: TEST_ID, token: tokenFor(STUDENT) })
+  check('인증 통과해도 exam 실재 검증(L2)은 여전히 거부', h.body?.reason === 'exam_result_not_found')
+
+  // 인증 + 동시성: 유효 토큰으로 20회 동시 요청해도 1건
+  seed(); const tk = tokenFor(STUDENT)
+  await Promise.all(Array.from({ length: 20 }, () => post({ ledger: 'reward', studentId: STUDENT, rewardType: 'writing-complete', sourceType: 'daily-writing', sourceId: today, token: tk })))
+  check('인증 + 동시 20회 -> 원장 1건', ledger().length === 1)
+
+  // 인증 + replay: 같은 토큰 10회 재생
+  seed(); const tk2 = tokenFor(STUDENT)
+  const rs = []
+  for (let i = 0; i < 10; i++) rs.push(await post({ ledger: 'reward', studentId: STUDENT, rewardType: 'daily-goal-complete', sourceType: 'daily-goal', sourceId: today, token: tk2 }))
+  check('인증 + replay 10회 -> 원장 1건 + duplicate:true', ledger().length === 1 && rs.slice(1).every(r => r.body?.duplicate === true))
+
+  // 서로 다른 두 학생이 각자 토큰으로 동시 요청 -> 각각 1건
+  seed(); fake.__db.students.push({ id: OTHER })
+  await Promise.all([
+    post({ ledger: 'reward', studentId: STUDENT, rewardType: 'word-session-complete', sourceType: 'daily-words', sourceId: today, token: tokenFor(STUDENT) }),
+    post({ ledger: 'reward', studentId: OTHER, rewardType: 'word-session-complete', sourceType: 'daily-words', sourceId: today, token: tokenFor(OTHER) }),
+  ])
+  check('서로 다른 학생 동시 요청 -> 각각 1건(교차 오염 0)', ledger().length === 2 && new Set(ledger().map(r => r.student_id)).size === 2)
+}
 console.log(`\n총 단언 ${asserted}개 중 실패 ${failures}개`)
 console.log(failures === 0 ? '모든 단언 통과 — 서버 강화 동작 검증 ✅' : `${failures}개 단언 실패 ❌`)
 process.exit(failures === 0 ? 0 : 1)

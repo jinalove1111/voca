@@ -59,6 +59,7 @@
     "verify:reward-security": "node scripts/testRewardEndpointSecurity.mjs",
     "verify:reward-hardening": "node scripts/testRewardServerHardening.mjs",
     "verify:reward-hardening-behavior": "node scripts/testRewardServerHardeningBehavior.mjs",
+    "verify:session-auth": "node scripts/testSessionTokenAuth.mjs",
     "verify:reward": "node scripts/testRewardEngine.mjs && node scripts/buildRaceBundle.mjs && node scripts/testRewardFlow.mjs",
     "verify:reward-baseline": "node scripts/testRewardBaselineMigration.mjs",
     "verify:reward-ledger": "node scripts/testRewardLedgerMigration.mjs",

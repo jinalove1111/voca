@@ -116,11 +116,14 @@ if (REWARD_DAILY_CAP && eng.REWARD_STARS) {
   check('수정 전(무제한) 대비 상한이 유한하다', Number.isFinite(worst))
 }
 
-console.log('\n8. H1 인증 — 이 범위에서 닫지 못함을 명시(BLOCKED 기록)')
+console.log(String.fromCharCode(10) + '8. H1 인증 — 2026-08-24 서명 세션 토큰으로 닫힘')
 {
-  const hasAuth = /verifyStudentPin|Authorization|bearer|sessionToken/i.test(code)
-  check('인증이 여전히 없다는 사실을 테스트가 알고 있다(닫히면 이 단언을 갱신)', hasAuth === false)
-  check('대신 L1(학생 실재)이 최소 방어로 들어갔다', /student_not_found/.test(branch))
+  check('reward 분기에 인증 guard가 있다', /verifySessionToken\(/.test(branch))
+  check('거부 사유 unauthorized 존재', /unauthorized/.test(branch))
+  check('L0 인증이 L1~L3보다 먼저 온다(불필요한 DB 조회 방지)',
+    branch.indexOf('verifySessionToken') < branch.indexOf("from('students')"))
+  check('L1~L3 기존 방어가 그대로 남아 있다',
+    /student_not_found/.test(branch) && /exam_result_not_found/.test(branch) && /daily_cap_reached/.test(branch))
 }
 
 console.log(`\n총 단언 ${asserted}개 중 실패 ${failures}개`)
