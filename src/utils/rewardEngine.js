@@ -245,3 +245,56 @@ export function resolveRewardStars(rewardType, streakDays) {
   if (rewardType === 'streak-bonus') return streakBonusStars(streakDays)
   return REWARD_STARS[rewardType] || 0
 }
+
+// ── 서버측 일일 상한 (2026-08-23, 보안 감사 HIGH 4번 대응) ────────────────
+// api/grant-xp.js에는 인증이 없다(POST면 누구나 호출 — 이 저장소에 세션 토큰
+// 개념이 자체가 없어 이번 범위에서 닫지 못한다, HIGH 1은 BLOCKED). 금액과
+// idempotency_key는 서버가 정하므로 1회당 지급액은 못 부풀리지만, sourceId가
+// 클라이언트 제어라 'uuid'/'date:token' 패턴 타입은 값을 바꿔가며 무제한
+// 반복 지급이 가능했다. 그래서 (student_id, reward_type)별 **하루 지급 건수**
+// 상한을 서버가 강제한다 — 피해 반경을 무한에서 유한으로 바꾼다.
+//
+// 값 근거는 가정이 아니라 production 실측:
+//   · wrong-word-recovered 60 — 유닛당 단어 수 실측 최대 50(중앙 40)이므로
+//     한 학생이 하루에 오답을 전부 회복해도 50건. 여유 10을 더한다.
+//   · exam-complete 10 — 반·날짜당 입실시험 실측 최대 8건(평균 2.0).
+//     다만 이 타입의 1차 방어는 상한이 아니라 entrance_test_results 실재
+//     검증이다(서버가 관측 가능한 진실). 상한은 2차 안전망.
+//   · 나머지 4종은 sourceId가 날짜뿐이라 구조적으로 하루 1건.
+//
+// 화이트리스트에 없는 rewardType은 0 — fail-closed(지급 자체가 막힌다).
+export const REWARD_DAILY_CAP = {
+  'word-session-complete': 1,
+  'writing-complete': 1,
+  'exam-complete': 10,
+  'wrong-word-recovered': 60,
+  'daily-goal-complete': 1,
+  'streak-bonus': 1,
+}
+
+export function rewardDailyCap(rewardType) {
+  if (!isValidRewardType(rewardType)) return 0
+  return REWARD_DAILY_CAP[rewardType] || 0
+}
+
+// 상한 집계의 "오늘" 경계 — KST 자정에 해당하는 **epoch 밀리초**를 돌려준다.
+// reward_ledger.created_at은 now()(UTC)로 저장되는데 학생의 하루는 KST라,
+// UTC 자정으로 세면 09:00 KST에 상한이 리셋되는 엉뚱한 동작이 된다.
+// 이 저장소가 날짜를 항상 로컬(한국) 기준으로 다루는 관례(wordLibrary.js
+// localIsoDateStr 주석)를 서버측 집계에도 그대로 적용한다.
+//
+// 순수 함수 — 입력도 출력도 숫자다. 이 파일은 Date.now()/Math.random()/
+// new Date()를 전혀 쓰지 않는 결정론 모듈이라는 계약이 있고
+// (scripts/testRewardEngine.mjs 8절이 강제), Date 객체를 만들지 않으면
+// 그 계약을 지키면서 같은 계산을 할 수 있다. ISO 문자열 변환은 Date를
+// 자유롭게 쓸 수 있는 호출부(api/grant-xp.js)가 담당한다.
+//
+// KST는 서머타임이 없는 고정 UTC+9라 단순 오프셋 산술로 정확하다.
+export function kstDayStartMs(nowMs) {
+  const KST_OFFSET_MS = 9 * 60 * 60 * 1000
+  const DAY_MS = 24 * 60 * 60 * 1000
+  const n = Number(nowMs)
+  if (!Number.isFinite(n)) return NaN
+  // KST 시각축으로 옮겨 하루 단위로 내림한 뒤, 다시 UTC 축으로 되돌린다.
+  return Math.floor((n + KST_OFFSET_MS) / DAY_MS) * DAY_MS - KST_OFFSET_MS
+}

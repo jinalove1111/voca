@@ -14,13 +14,15 @@
 //   · legacy-baseline은 API로 지급 불가(마이그레이션 전용)
 //   · student_progress/students를 UPDATE/DELETE하지 않는다
 //
-// ── 알려진 노출 (HIGH, 미수정) ──────────────────────────────────────────
+// ── 알려진 노출 (HIGH) — 2026-08-23 강화 후 잔여분 ─────────────────────
 // api/grant-xp.js에는 **인증이 없다**(POST면 누구나 호출 가능). 금액과 키는
 // 서버가 정하므로 1회당 지급액은 못 부풀리지만, sourceId가 클라이언트
 // 제어이고 다음 두 타입은 자유도가 사실상 무한하다:
 //   · exam-complete       (pattern 'uuid')       — 임의 UUID v4마다 +2별
 //   · wrong-word-recovered(pattern 'date:token') — 임의 토큰마다 +1별
-// 즉 임의의 studentId에 대해 원장을 무제한 부풀릴 수 있다.
+// 2026-08-23 서버 강화(L1 학생 실재 / L2 exam 실재 / L3 일일 상한)로 이 두
+// 타입의 **무제한**은 닫혔다. 남은 노출은 인증 부재 하나 — 상한 안에서라면
+// 여전히 남의 studentId로 원장을 부풀릴 수 있다(하루 최대 86별).
 //
 // 대조군: 기존 XP 경로(api/grant-xp.js의 XP 분기)는 정확히 이 문제를 겪고
 // 고친 이력이 있다 — source_event_id를 **기간키(날짜)** 로 제한해
@@ -99,17 +101,17 @@ knownExposure('api/grant-xp.js에 인증(PIN/토큰/서명) 검증이 없다',
   const uuids = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-9222-222222222222']
   const bothValid = uuids.every(u => eng.isValidRewardSource('exam-complete', 'entrance-test', u))
   const keysDiffer = new Set(uuids.map(u => eng.rewardIdempotencyKey('s', 'exam-complete', 'entrance-test', u))).size === 2
-  knownExposure(`exam-complete: 임의 UUID마다 +${eng.REWARD_STARS['exam-complete']}별 (실재 시험 검증 없음)`, bothValid && keysDiffer)
+  knownExposure(`exam-complete: 임의 UUID마다 +${eng.REWARD_STARS['exam-complete']}별 (엔진 단독으로는 통과 — 서버 L2가 entrance_test_results로 차단)`, bothValid && keysDiffer)
 }
 {
   // wrong-word-recovered: 날짜는 고정이어도 토큰이 자유
   const toks = [`${today}:aaa`, `${today}:bbb`, `${today}:zzz`]
   const allValid = toks.every(s => eng.isValidRewardSource('wrong-word-recovered', 'spelling-review', s))
   const keysDiffer = new Set(toks.map(s => eng.rewardIdempotencyKey('s', 'wrong-word-recovered', 'spelling-review', s))).size === toks.length
-  knownExposure(`wrong-word-recovered: 임의 토큰마다 +${eng.REWARD_STARS['wrong-word-recovered']}별 (실재 단어 검증 없음)`, allValid && keysDiffer)
+  knownExposure(`wrong-word-recovered: 임의 토큰마다 +${eng.REWARD_STARS['wrong-word-recovered']}별 (엔진 단독으로는 통과 — 서버 L3 일일 상한으로 유한화)`, allValid && keysDiffer)
 }
-knownExposure('서버측 일일 상한(per student/rewardType)이 없다',
-  !/daily_cap|dailyCap|count\(\*\).*today|per_day/i.test(code))
+// 2026-08-23 강화로 닫힘 — KNOWN이 아니라 회귀 방지 단언으로 전환한다.
+check('서버측 일일 상한이 존재한다(2026-08-23 강화)', /rewardDailyCap\(/.test(code) && /daily_cap_reached/.test(code))
 
 console.log('\n6. 완화 요인 — 학생에게 보이는 별은 영향받지 않는다')
 {

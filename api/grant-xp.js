@@ -22,7 +22,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { supabaseAdminUrl, supabaseAdminKey } from './_pinAuth.js'
 import { resolveXpAmount, isValidStudentId, isValidSourceEventIdForEvent, isValidEventType } from '../src/utils/paulRankShared.js'
-import { isValidRewardType, isValidRewardSource, resolveRewardStars, rewardIdempotencyKey } from '../src/utils/rewardEngine.js'
+import { isValidRewardType, isValidRewardSource, resolveRewardStars, rewardIdempotencyKey, rewardDailyCap, kstDayStartMs } from '../src/utils/rewardEngine.js'
 
 // Teacher Controls 마스터 스위치(2026-07-19, classes.gamification_enabled,
 // GAME_DESIGN.md 13번 섹션) 판단 — 이 핸들러는 반의 스위치 상태를 조회해서
@@ -110,6 +110,107 @@ export default async function handler(req, res) {
 
     const idempotencyKey = rewardIdempotencyKey(rewardStudentId, rewardType, sourceType, sourceId) // 서버가 직접 조립 — 클라이언트가 보낸 키는 신뢰하지 않음
     const supabase = createClient(url, key)
+
+    // ── 서버측 방어 3층 (2026-08-23 보안 감사 HIGH 2·3·4 대응) ────────────
+    // 이 엔드포인트에는 인증이 없다(HIGH 1 — 저장소에 세션 토큰 개념이
+    // 없어 이번 범위에서 닫지 못함, BLOCKED). 그래서 "클라이언트가 무엇을
+    // 주장하는가"가 아니라 "서버가 무엇을 관측할 수 있는가"로 막는다.
+    // 세 검증 모두 fail-closed — 조회가 실패하면 지급하지 않는다.
+
+    // L1) 학생 실재 검증 — studentId는 클라이언트 입력이므로 형식 검증만으로는
+    //     부족하다. students에 실제로 있는 학생인지 서버가 확인한다.
+    {
+      const { data: stu, error: stuErr } = await supabase
+        .from('students').select('id').eq('id', rewardStudentId).maybeSingle()
+      if (stuErr) {
+        res.status(200).json({ ok: false, reason: 'student_lookup_failed' })
+        return
+      }
+      if (!stu) {
+        res.status(200).json({ ok: false, reason: 'student_not_found' })
+        return
+      }
+    }
+
+    // L2) 이벤트 실재 검증 — exam-complete는 sourceId가 임의 UUID여도 형식
+    //     검증을 통과하므로(pattern 'uuid'), 그 학생이 그 시험을 실제로
+    //     제출했는지 entrance_test_results로 확인한다. 서버가 관측 가능한
+    //     진실이라 클라이언트가 UUID를 지어내도 통과하지 못한다.
+    //     다른 rewardType은 이 분기를 타지 않는다(기존 동작 무영향).
+    if (rewardType === 'exam-complete') {
+      const { data: examRow, error: examErr } = await supabase
+        .from('entrance_test_results')
+        .select('test_id')
+        .eq('test_id', sourceId)
+        .eq('student_id', rewardStudentId)
+        .maybeSingle()
+      if (examErr) {
+        res.status(200).json({ ok: false, reason: 'exam_lookup_failed' })
+        return
+      }
+      if (!examRow) {
+        res.status(200).json({ ok: false, reason: 'exam_result_not_found' })
+        return
+      }
+    }
+
+    // L2.5) 재시도 선판정 — 이 idempotency_key가 이미 있으면 "이미 지급됨"
+    //     으로 즉시 응답하고 상한 검사를 건너뛴다. 상한은 "하루에 서로 다른
+    //     이벤트 몇 개까지"를 제한하는 것이지, 같은 이벤트의 재시도를 실패로
+    //     만들면 안 된다 — 그렇게 하면 상한이 1인 타입(word-session/writing/
+    //     daily-goal/streak)에서 정상 재시도가 daily_cap_reached로 응답돼
+    //     기존 idempotent 계약이 깨진다(재시도가 실패로 보이면 클라이언트가
+    //     또 재시도하는 악순환, 이 파일 상단 주석의 원칙).
+    //     unique 인덱스가 걸린 컬럼 조회라 비용이 작고, 최종 방어는 여전히
+    //     insert의 23505다(TOCTOU가 나도 DB 제약이 원자적으로 막는다).
+    {
+      const { data: existing, error: dupErr } = await supabase
+        .from('reward_ledger')
+        .select('idempotency_key')
+        .eq('idempotency_key', idempotencyKey)
+        .maybeSingle()
+      if (dupErr) {
+        // 테이블 미존재는 아래 insert 분기가 무해하게 처리하므로 흘려보낸다.
+        if (dupErr.code !== '42P01' && dupErr.code !== 'PGRST205') {
+          res.status(200).json({ ok: false, reason: 'dup_check_failed' })
+          return
+        }
+      } else if (existing) {
+        res.status(200).json({ ok: true, duplicate: true, stars })
+        return
+      }
+    }
+
+    // L3) 일일 상한 — (student_id, reward_type)별 오늘 지급 건수를 세어
+    //     rewardDailyCap()을 넘으면 거부한다. 날짜 경계는 KST 자정
+    //     (kstDayStartIso — 학생의 하루는 KST인데 created_at은 UTC라,
+    //     UTC 자정으로 세면 09:00 KST에 상한이 리셋되는 엉뚱한 동작이 된다).
+    //     sourceId 자유도가 큰 타입(uuid/date:token)의 무제한 반복을
+    //     구조적으로 유한하게 만드는 마지막 방어선.
+    {
+      const cap = rewardDailyCap(rewardType)
+      if (cap <= 0) {
+        res.status(200).json({ ok: false, reason: 'no_daily_cap_defined' })
+        return
+      }
+      const { count, error: capErr } = await supabase
+        .from('reward_ledger')
+        .select('id', { count: 'exact', head: true })
+        .eq('student_id', rewardStudentId)
+        .eq('reward_type', rewardType)
+        .gte('created_at', new Date(kstDayStartMs(Date.now())).toISOString())
+      if (capErr) {
+        // 테이블 미존재(42P01/PGRST205)는 아래 insert 분기가 이미 무해하게
+        // 처리하므로 여기서는 그대로 흘려보낸다 — 그 외 오류는 fail-closed.
+        if (capErr.code !== '42P01' && capErr.code !== 'PGRST205') {
+          res.status(200).json({ ok: false, reason: 'cap_check_failed' })
+          return
+        }
+      } else if ((count || 0) >= cap) {
+        res.status(200).json({ ok: false, reason: 'daily_cap_reached', cap })
+        return
+      }
+    }
 
     const { error } = await supabase.from('reward_ledger').insert({
       student_id: rewardStudentId,
