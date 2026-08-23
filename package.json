@@ -56,6 +56,7 @@
     "verify:writing-direction-resolution": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testWritingDirectionResolution.mjs",
     "verify:mission-bonus": "node scripts/testMissionBonusIdempotency.mjs",
     "verify:game-reward": "node scripts/testGameRewardPolicy.mjs",
+    "verify:reward-security": "node scripts/testRewardEndpointSecurity.mjs",
     "verify:reward": "node scripts/testRewardEngine.mjs && node scripts/buildRaceBundle.mjs && node scripts/testRewardFlow.mjs",
     "verify:reward-baseline": "node scripts/testRewardBaselineMigration.mjs",
     "verify:reward-ledger": "node scripts/testRewardLedgerMigration.mjs",
