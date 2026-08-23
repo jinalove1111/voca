@@ -20,7 +20,7 @@
 // 화면에는 어느 쪽이든 똑같이 성공으로 보이게 한다(재시도가 실패로 보이면
 // 클라이언트가 또 재시도하는 악순환을 막기 위함).
 import { createClient } from '@supabase/supabase-js'
-import { supabaseAdminUrl, supabaseAdminKey } from './_pinAuth.js'
+import { supabaseAdminUrl, supabaseAdminKey, verifySessionToken } from './_pinAuth.js'
 import { resolveXpAmount, isValidStudentId, isValidSourceEventIdForEvent, isValidEventType } from '../src/utils/paulRankShared.js'
 import { isValidRewardType, isValidRewardSource, resolveRewardStars, rewardIdempotencyKey, rewardDailyCap, kstDayStartMs } from '../src/utils/rewardEngine.js'
 
@@ -82,6 +82,33 @@ export default async function handler(req, res) {
     if (!isValidStudentId(rewardStudentId)) {
       res.status(200).json({ ok: false, reason: 'invalid_student_id' })
       return
+    }
+
+    // ── L0) 인증 (2026-08-24, 보안 감사 HIGH 1) ──────────────────────────
+    // 아래 L1~L3는 "이 요청이 말이 되는가"를 보지만, "이 요청을 보낼 자격이
+    // 있는가"는 보지 못했다. 그래서 누구나 남의 studentId를 실어 그 학생의
+    // 원장을 부풀릴 수 있었다(상한 안에서 하루 86별).
+    // 이제 로그인 시 발급된 서명 토큰을 요구하고, 토큰이 주장하는 학생과
+    // body의 studentId가 일치할 때만 통과시킨다 — 토큰은 SESSION_SECRET을
+    // 아는 서버만 만들 수 있고, 그 시크릿은 브라우저 번들에 들어가지 않는다.
+    //
+    // fail-closed: SESSION_SECRET이 없으면 verifySessionToken이
+    // {ok:false, reason:'no_secret'}을 돌려주고 여기서 거부된다. 즉 시크릿
+    // 없이 배포하면 원장 쓰기가 멈춘다(학생 화면은 무영향 — postRewardEvent가
+    // fire-and-forget이라 로컬 별 지급은 이미 끝난 뒤다).
+    //
+    // 토큰은 body.token 또는 x-session-token 헤더 둘 다 받는다 — 기존
+    // 호출부가 body만 쓰지만, 헤더 방식이 필요해질 때 API를 바꾸지 않아도
+    // 되게 열어 둔다.
+    {
+      const supplied = (typeof req.body.token === 'string' && req.body.token)
+        || (req.headers && (req.headers['x-session-token'] || req.headers['X-Session-Token']))
+        || null
+      const authed = verifySessionToken(supplied, { studentId: rewardStudentId })
+      if (!authed.ok) {
+        res.status(200).json({ ok: false, reason: 'unauthorized', detail: authed.reason })
+        return
+      }
     }
     if (!isValidRewardType(rewardType)) {
       // REWARD_SOURCE_RULES에 없는 rewardType은 전부 여기서 거부된다 —

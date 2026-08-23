@@ -23,7 +23,7 @@ import { pickNextGame, gameRewardEligibility } from './utils/matchGame'
 import { trackEvent, EV } from './utils/productEvents'
 import { assignDirections } from './utils/entranceTest'
 import { logSpellingReview } from './utils/spellingReviewApi'
-import { getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, refreshTextbooks, refreshAllForLogin, invalidateStudentAssignmentsCache, revalidateUnitWords, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getStudentSpellingSettings, extendStableDirections, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentClassId, getTextbookById, getStudentPrimaryTextbook, getClassNames, getClassIdByName } from './utils/wordLibrary'
+import { setSessionToken, getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, refreshTextbooks, refreshAllForLogin, invalidateStudentAssignmentsCache, revalidateUnitWords, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getStudentSpellingSettings, extendStableDirections, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentClassId, getTextbookById, getStudentPrimaryTextbook, getClassNames, getClassIdByName } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech } from './utils/speech'
 // Curriculum Engine Phase 0(2026-08-01, docs/CURRICULUM_ENGINE.md §8) —
 // 교사 opt-in 예문 학습 단계. isFeatureEnabled('curriculumExamplesStudentUI')
@@ -967,7 +967,7 @@ function readSession() {
     const raw = localStorage.getItem(SESSION_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw)
-    if (parsed && typeof parsed === 'object' && UUID_RE.test(parsed.id || '')) return parsed
+    if (parsed && typeof parsed === 'object' && UUID_RE.test(parsed.id || '')) return parsed // token 필드가 있으면 그대로 보존된다(2026-08-24)
     return null // 형식이 안 맞음 — legacy 취급
   } catch {
     return null // JSON.parse 실패 = 예전의 순수 이름 문자열이었던 경우 포함 — legacy 취급
@@ -1001,6 +1001,11 @@ export default function App() {
       // 전환한 학생이 새로고침/재입장 때마다 원래 교재의 유닛·단어로
       // 시작했다(라이브 재현으로 확정된 P0).
       const sess = readSession()
+      // 2026-08-24 — 새로고침/재입장에서도 저장된 서명 세션 토큰을 다시
+      // 주입한다. 이게 없으면 새로고침 한 번에 토큰이 유실돼 보상 원장
+      // 쓰기가 조용히 멈춘다(학습 흐름은 무영향이라 눈치채기 어렵다).
+      // 재로그인은 필요 없다 — 토큰은 30일 유효.
+      setSessionToken(sess?.token)
       if (sess?.id) {
         try { await getStudentClassAssignments(sess.id) } catch { /* 실패해도 진입은 막지 않는다 — 합성 폴백이 흡수 */ }
       }
@@ -1083,12 +1088,16 @@ export default function App() {
     devLog('[App] handleSelect — Home 진입 직전 currentStudent:', {
       id: sel.id, name: sel.name, class: getStudentClass(sel.id), unit: getStudentUnit(sel.id),
     })
-    localStorage.setItem(SESSION_KEY, JSON.stringify({ id: sel.id, name: sel.name }))
+    // 2026-08-24 — 서명 세션 토큰을 세션에 함께 보관하고 wordLibrary에
+    // 주입한다. 토큰은 서버 쓰기 요청(postRewardEvent/postXpEvent)에만 쓰이고
+    // 화면에는 전혀 노출되지 않는다.
+    setSessionToken(sel.token)
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ id: sel.id, name: sel.name, token: sel.token || null }))
     setRemovedNotice(false)
     setLegacySessionNotice(false)
     setStudent(sel)
   }
-  const handleLogout = () => { localStorage.removeItem(SESSION_KEY); setStudent(null) }
+  const handleLogout = () => { setSessionToken(null); localStorage.removeItem(SESSION_KEY); setStudent(null) }
 
   if (loadError) {
     return (
