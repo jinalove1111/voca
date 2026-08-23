@@ -18,7 +18,7 @@
 // 들어가 데이터가 갈라지는 사고로 이어진다. 그래서 중복 시엔 로그인
 // 자체를 막고 duplicate_accounts를 반환해 관리자 개입을 유도한다.
 import { createClient } from '@supabase/supabase-js'
-import { isValidPinFormat, verifyPin, supabaseAdminUrl, supabaseAdminKey } from './_pinAuth.js'
+import { isValidPinFormat, verifyPin, supabaseAdminUrl, supabaseAdminKey, signSessionToken } from './_pinAuth.js'
 
 const MAX_FAILS = 5
 const LOCK_MINUTES = 5
@@ -120,12 +120,20 @@ export default async function handler(req, res) {
     const match = matches[0]
     // 성공 — 실패 카운트/잠금 초기화 (그 계정만).
     await supabase.from('students').update({ pin_fail_count: 0, pin_locked_until: null }).eq('id', match.id)
+    // 2026-08-24 — 서명된 세션 토큰 발급(_pinAuth.js 헤더 참고).
+    // 이 지점이 이 앱에서 서버가 학생 신원을 확정하는 **유일한** 순간이라
+    // 여기서만 토큰을 만든다. SESSION_SECRET이 없으면 null이 되고, 그러면
+    // 클라이언트는 토큰 없이 동작한다 — 보상 API가 fail-closed로 거부하므로
+    // 원장 쓰기만 멈추고 학습 흐름/로컬 별 지급은 그대로다(wordLibrary.js의
+    // postRewardEvent가 fire-and-forget이라 학생 화면 영향 0).
+    // 실패 응답(ok:false)에는 절대 토큰을 담지 않는다.
     res.status(200).json({
       ok: true,
       studentId: match.id,
       name: match.name,
       className: match.classes?.name || '',
       unitName: match.unit_name || 'Unit 1',
+      token: signSessionToken(match.id),
     })
     return
   }
