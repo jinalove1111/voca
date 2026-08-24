@@ -581,7 +581,15 @@ function AppInner({ studentId, studentName, onLogout }) {
         // getStudentClassAssignments 호출이 실제 재조회를 한다(추가 API
         // 호출 없음, getStudentEntranceClassIds의 {fresh:true}와 동일 캐시).
         invalidateStudentAssignmentsCache(studentId)
-        Promise.all([refreshWordLibrary(), refreshStudents(), refreshClassSettings(), refreshTextbooks()])
+        // [P0 FIX 2026-08-24] 위 무효화가 비운 배정 캐시를 **여기서 바로**
+        // 다시 채운다. 이 캐시를 채우는 코드는 getStudentClassAssignments
+        // 한 곳뿐이라(wordLibrary.js), 이 호출이 없으면 아래 setRefreshTick이
+        // 빈 캐시 상태로 재렌더를 걸어 getStudentPrimaryTextbook이 null이 되고
+        // getStudentWords의 교재 모드 분기가 스킵된다 — 홈 반에 단어를 두지
+        // 않는 학생(실측 32명)이 "교과서를 선택하세요 / 단어가 부족해요"로
+        // 떨어진 실사고. 로그인 경로(handleSelect)는 원래 재조회를 하고 있어
+        // 안전했고, visibility 경로에만 빠져 있었다.
+        Promise.all([refreshWordLibrary(), refreshStudents(), refreshClassSettings(), refreshTextbooks(), getStudentClassAssignments(studentId)])
           .then(() => setRefreshTick((t) => t + 1))
           .catch(() => {})
           .finally(() => { inFlight = false })
