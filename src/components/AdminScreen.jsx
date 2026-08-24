@@ -1162,9 +1162,17 @@ class ErrorBoundary extends React.Component {
 // etc. The class a word belongs to always comes from the class selected in
 // the admin UI (selectedClass), never from anything in the file.
 const HEADER_ALIASES = {
-  word:    ['word', '단어', '영단어'],
-  meaning: ['meaning', '뜻', '의미', '한글뜻'],
-  unit:    ['unit', '유닛'],
+  // [2026-08-25 재발 방지] 실사고 6건에서 실제로 관측된 헤더 라벨을 추가한다.
+  // 교재 9개 중 6개에 이름이 "Unit"이고 단어가 1개뿐인 가짜 유닛이 있었고,
+  // 그 1개 단어의 정체는 전부 헤더 라벨이었다("English"/"Korean" 5건,
+  // "Word / Phrase"/"뜻" 1건). 이 라벨들이 별칭에 없어 hasHeader가 false가
+  // 되고, 헤더 행이 rows.slice(1)로 잘리지 않은 채 데이터로 편입됐다.
+  // 추가만 한다 — 기존 별칭이 매칭되던 파일의 인식 결과는 그대로다.
+  // 의도적 제외: '영어'/'한글'처럼 흔한 낱말은 넣지 않는다. 실제 어휘 행
+  // ("English"/"영어")이 헤더로 오인돼 통째로 버려지는 것을 막기 위해서다.
+  word:    ['word', '단어', '영단어', 'word / phrase', 'word/phrase', 'english', '영어·어구', '어휘·어구'],
+  meaning: ['meaning', '뜻', '의미', '한글뜻', 'korean'],
+  unit:    ['unit', '유닛', '단원'],
   // "no"/"번호" is recognized only so it can be explicitly ignored — it's
   // a row number, never a word/meaning/class.
   no:      ['no', '번호'],
@@ -1177,6 +1185,12 @@ const HEADER_ALIASES = {
   partOfSpeech:       ['pos', 'part_of_speech', '품사'],
   cefr:               ['cefr', '레벨', '난이도등급'],
 }
+
+// [2026-08-25 재발 방지] 위 별칭 전부를 합친 헤더 라벨 집합. 위치 추정
+// 경로(헤더 미검출)에서 "첫 행이 사실은 헤더였다"를 판정하는 데만 쓴다 —
+// 컬럼 매핑에는 관여하지 않는다.
+const HEADER_LABELS = new Set(Object.values(HEADER_ALIASES).flat())
+const isHeaderLabel = (s) => HEADER_LABELS.has(String(s ?? '').trim().toLowerCase())
 
 function detectHeaderMap(row) {
   const norm = (row || []).map(cell => String(cell ?? '').trim().toLowerCase())
@@ -1221,7 +1235,7 @@ function parseExcelRows(rows, selectedClass = '') {
   const orUndef = (v) => (v === '' || v === undefined ? undefined : v)
 
   const result = dataRows
-    .map(r => {
+    .map((r, rowIdx) => {
       if (!Array.isArray(r) || r.length === 0) return null
       const values = r.map((cell) => (cell == null ? '' : String(cell).trim()))
       let word = '', meaning = '', unit = ''
@@ -1233,7 +1247,13 @@ function parseExcelRows(rows, selectedClass = '') {
       } else {
         const v = numberColOffset ? values.slice(numberColOffset) : values
         if (v.length >= 3) {
-          const isUnit = /^(unit|유닛)\s*\d*/i.test(v[0])
+          // [2026-08-25 재발 방지] \d* -> \d+ : 숫자를 필수로 요구한다.
+          // 기존엔 0자리를 허용해 헤더 라벨 "Unit"/"유닛" 자체가 유닛 값으로
+          // 인정됐고, 그게 DB에 이름 "Unit"인 가짜 유닛을 만든 직접 원인이다
+          // (AdminScreen 저장 루프 -> setClassWords -> wordLibrary.ensureUnit).
+          // "Unit1" / "Unit 1" / "유닛3" / "unit 01" 같은 정상 값은 전부 그대로
+          // 통과한다 — 실DB 유닛명 전수(16종)로 회귀 고정(verify:excel-header).
+          const isUnit = /^(unit|유닛|단원)\s*\d+/i.test(v[0])
           if (isUnit) { unit = v[0]; word = v[1]; meaning = v[2] }
           else { word = v[0]; meaning = v[1] }
         } else {
@@ -1249,6 +1269,15 @@ function parseExcelRows(rows, selectedClass = '') {
       const partOfSpeech       = hasHeader && headerMap.partOfSpeech       !== undefined ? orUndef(values[headerMap.partOfSpeech])       : undefined
       const cefr                = hasHeader && headerMap.cefr               !== undefined ? orUndef(values[headerMap.cefr])                : undefined
 
+      // [2026-08-25 재발 방지] 최후 안전망 — 위치 추정 경로의 **첫 행**이
+      // word·meaning 둘 다 헤더 라벨이면 그 행은 데이터가 아니라 헤더다.
+      // 위 별칭 추가로 대부분은 hasHeader 경로에서 이미 걸러지지만, 아직
+      // 모르는 헤더 표기가 들어와도 가짜 단어가 저장되지 않게 한다.
+      // 조건이 AND인 이유: 한쪽만 라벨인 행은 실제 어휘일 수 있다
+      // (word="word"/meaning="말", word="unit"/meaning="단위") — 절대 버리지
+      // 않는다. 첫 행에만 적용하는 이유: 헤더는 파일 맨 위에만 존재하므로,
+      // 아래 행의 실제 단어를 오탐으로 잃을 위험을 원천 차단한다.
+      if (!hasHeader && rowIdx === 0 && isHeaderLabel(word) && isHeaderLabel(meaning)) return null
       return { className: selectedClass, unit: unit || 'Unit 1', word, meaning, example, exampleTranslation, partOfSpeech, cefr }
     })
     .filter(r => r && r.word && r.meaning)
