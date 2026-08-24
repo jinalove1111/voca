@@ -53,6 +53,7 @@
     "verify:entrance-live": "node scripts/entranceLiveDiagnostic.mjs",
     "verify:entrance-collision": "node scripts/testEntranceKr2enCollision.mjs",
     "verify:stale-cache": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testStaleCacheRevalidation.mjs",
+    "verify:cache-refill": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testAssignmentCacheRefill.mjs",
     "verify:writing-direction-resolution": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testWritingDirectionResolution.mjs",
     "verify:mission-bonus": "node scripts/testMissionBonusIdempotency.mjs",
     "verify:game-reward": "node scripts/testGameRewardPolicy.mjs",
