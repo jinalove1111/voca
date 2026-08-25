@@ -111,6 +111,69 @@ export const HAT_COLOR_STYLE = Object.fromEntries(
   HAT_CATALOG.map((h) => [h.id, { colorName: h.colorName, colorHex: h.colorHex }]),
 )
 
+// ── 이모지 틴트 스타일(표시 전용 · 단일 진실 원천) ────────────────────────
+// 2026-08-26 — 모자 이름과 화면 색이 어긋나던 실사고 수정(Irene: 저장값은
+// 'hat_scientist'(하얀색)인데 화면엔 검은 톱햇). 8종이 전부 같은 🎩
+// (U+1F3A9, 모든 이모지 폰트에서 검은색)를 쓰고 색은 colorHex 틴트로만
+// 구분하는 설계인데, 그 틴트가 HatCollection/Dashboard 4개 렌더 지점에
+// 적용돼 있지 않았다. 기법 자체는 HatCeremony/PaulTown이 이미 쓰던 것을
+// 그대로 함수로 끌어올린 것뿐 — 새 기법을 발명하지 않는다.
+//
+// 원리: 이모지는 CSS color로 물들지 않으므로 color:transparent로 원본
+// 글리프를 지우고, 오프셋 0 그림자로 같은 실루엣을 원하는 색으로 다시
+// 칠한다(순수 CSS, 라이브러리 0).
+//
+// 밝은 색 처리: 하얀색(#ECEFF1)·금색(#FFD54F)은 흰 카드나 밝은 배경에
+// 묻힌다. fill은 요구사항대로 colorHex를 그대로 두고, 그 "뒤에" 1px
+// 어두운 외곽선만 깔아 실루엣을 살린다. 밝음 판정은 모자별 하드코딩이
+// 아니라 colorHex에서 sRGB 상대휘도를 계산해 내린다 — 카탈로그에 새 색을
+// 추가해도 규칙이 자동으로 따라온다.
+const DEFAULT_HAT_HEX = '#2d2d2d'
+const LIGHT_LUMINANCE_THRESHOLD = 0.6
+const HAT_OUTLINE_COLOR = 'rgba(0,0,0,0.45)'
+
+// '#abc' / '#aabbcc' → '#aabbcc'. 그 외(null/빈문자/잘못된 형식)는 null.
+export function normalizeHexColor(hex) {
+  if (typeof hex !== 'string') return null
+  const m = hex.trim().match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i)
+  if (!m) return null
+  const v = m[1]
+  return `#${v.length === 3 ? v.split('').map((c) => c + c).join('') : v}`
+}
+
+// sRGB 상대휘도(WCAG 정의) 0(검정)~1(흰색). 잘못된 입력은 기본색 기준.
+export function hatColorLuminance(hex) {
+  const norm = normalizeHexColor(hex) || DEFAULT_HAT_HEX
+  const channel = (i) => {
+    const c = parseInt(norm.slice(1 + i * 2, 3 + i * 2), 16) / 255
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+  }
+  return 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2)
+}
+
+/**
+ * 모자 이모지에 입힐 인라인 스타일. 모든 렌더 지점(HatCollection 카드/
+ * 아바타, Dashboard 홈 아바타/착용 라벨, HatCeremony 수여식, PaulTown
+ * 모자걸이)이 이 함수 하나만 쓴다.
+ * @param {string} colorHex HAT_CATALOG의 colorHex. 잘못된 값이면 검은색 폴백.
+ * @returns {{color: string, textShadow: string}} React style 객체
+ */
+export function hatTintStyle(colorHex) {
+  const hex = normalizeHexColor(colorHex) || DEFAULT_HAT_HEX
+  // fill은 항상 첫 레이어 — CSS text-shadow는 앞선 그림자가 위에 그려지므로
+  // 외곽선을 뒤에 둬야 colorHex가 덮이지 않는다.
+  const layers = [`0 0 0 ${hex}`]
+  if (hatColorLuminance(hex) >= LIGHT_LUMINANCE_THRESHOLD) {
+    layers.push(
+      `-1px 0 0 ${HAT_OUTLINE_COLOR}`,
+      `1px 0 0 ${HAT_OUTLINE_COLOR}`,
+      `0 -1px 0 ${HAT_OUTLINE_COLOR}`,
+      `0 1px 0 ${HAT_OUTLINE_COLOR}`,
+    )
+  }
+  return { color: 'transparent', textShadow: layers.join(', ') }
+}
+
 /**
  * 아직 인벤토리에 없는데 규칙을 충족한 모자 목록(획득 이벤트 페이로드).
  * 결정론·멱등: 같은 입력이면 같은 출력, 이미 가진 모자는 절대 다시 안 나옴.

@@ -246,6 +246,7 @@ export const DOMAINS = {
     label: '애착 시스템(Attachment & Growth) — 파생 통계/모자/밀스톤/기억/월드/이야기 (verify:attachment와 동일 실행)',
     checks: [
       { script: 'tests/harness/runAttachment.mjs', builders: [], note: '자기완결형 하네스(src/utils/attachment/* 순수 모듈 직접 import, 번들 불필요) — 123단언.' },
+      { script: 'scripts/testHatColorRendering.mjs', builders: [], extra: true, note: '2026-08-26 — 모자 이름과 화면 색이 어긋나던 실사고(Irene: equippedHatId=hat_scientist(하얀색)인데 화면엔 검은 톱햇) 회귀 고정. 원인은 DB/asset이 아니라 표시 계층이었다: 학생 모자 8종은 전부 같은 🎩(U+1F3A9, 이모지 폰트에서 검은색)를 쓰고 색은 HAT_CATALOG.colorHex 틴트로만 구분하는 설계인데(hatSystem.js 헤더), 이모지가 CSS color로 안 물들어 저장소가 채택한 "투명 글자 + text-shadow 실루엣" 기법이 4개 렌더 지점에 빠져 있었다 — HatCollection 아바타/카드, Dashboard 홈 아바타/착용 라벨. HAT_COLOR_STYLE은 PaulTown 한 곳에서만 소비됐고 HatCollection/Dashboard는 import조차 안 했다. 수정: 기존 기법(HatCeremony/PaulTown)을 hatTintStyle()로 끌어올려 4개 지점이 전부 같은 함수를 쓰게 했다(새 기법 발명 0). 밝음 판정은 모자별 하드코딩이 아니라 colorHex의 sRGB 상대휘도(WCAG)로 계산 — 하얀색(#ECEFF1)/금색(#FFD54F)만 1px 어두운 외곽선을 fill 뒤에 깔고 fill 자체는 항상 colorHex(요구사항). 검증: fill이 항상 첫 text-shadow 레이어(외곽선이 색을 덮지 않음)/8종 스타일 전부 상이/카탈로그 밖 임의 색도 같은 규칙(하드코딩 없음 증명)/잘못된 입력 6종 throw 없이 검은색 폴백/미획득 🔒·미장착 👑 분기 보존 + 회귀 잠금(id 8종·colorHex·임계값·evaluateHatUnlocks 결정론/멱등/회수없음·장착 토글 배선). 수정 전 38단언 중 13 FAIL 실측(규칙 15) 후 63단언 전체 PASS. 네트워크 0, Supabase 0, DB write 0. 13개 필수 도메인 밖, 신규 보너스 커버리지.' },
     ],
   },
   analytics: {

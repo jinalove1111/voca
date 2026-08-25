@@ -16,7 +16,7 @@
 // 부드러운 힌트 한 줄만 — 체크리스트 금지(점진 발견).
 import { computeWorldState, gardenPlots } from '../utils/attachment/worldProgress'
 import { retroWelcome, townPlacesState, paulHomeDeco } from '../utils/attachment/paulTown'
-import { HAT_CATALOG, HAT_COLOR_STYLE, hatById } from '../utils/attachment/hatSystem'
+import { HAT_CATALOG, HAT_COLOR_STYLE, hatById, hatTintStyle } from '../utils/attachment/hatSystem'
 import { isFeatureEnabled } from '../config/features'
 
 export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, onGo, onBack }) {
@@ -126,7 +126,7 @@ export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, 
                       isEquipped ? 'border-purple-400 bg-purple-50' : 'border-transparent bg-gray-50 hover:border-purple-200'
                     }`}
                   >
-                    <span style={{ color: 'transparent', textShadow: `0 0 0 ${style?.colorHex || '#2d2d2d'}` }}>🎩</span>
+                    <span style={hatTintStyle(style?.colorHex)}>🎩</span>
                   </button>
                 )
               })}

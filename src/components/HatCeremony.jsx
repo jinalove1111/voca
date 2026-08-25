@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { pickReaction } from '../utils/paulReactions'
 import HeroReaction from './HeroReaction'
+import { hatTintStyle } from '../utils/attachment/hatSystem'
 
 // 모자 수여식(Paul Town v2.0, 2026-07-22) — 조용히 인벤토리에만 들어가던
 // 새 모자 획득을 폴이 직접 축하하며 건네주는 전면 연출로 바꾼다.
@@ -45,7 +46,7 @@ export default function HatCeremony({ hat, onEquip, onDismiss }) {
             className="inline-flex items-center justify-center w-28 h-28 rounded-full animate-wiggle"
             style={{ backgroundColor: `${hat.colorHex}22`, border: `3px solid ${hat.colorHex}` }}
           >
-            <span className="text-7xl" style={{ color: 'transparent', textShadow: `0 0 0 ${hat.colorHex}` }}>🎩</span>
+            <span className="text-7xl" style={hatTintStyle(hat.colorHex)}>🎩</span>
           </div>
           <p className="font-black text-xl text-gray-800 mt-3">{hat.name}</p>
           <p className="text-xs font-bold mt-0.5 text-gray-400">{hat.colorName} 톱햇 · {hat.sourceLabel}</p>

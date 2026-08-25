@@ -4,12 +4,15 @@
 // card-shadow, 그라데이션 헤더 카드, btn-press, RARITY 스타일의 잠금 표시)
 // — 새 디자인 시스템 없음. 폴은 항상 자기 검은 모자를 쓴다: 이 화면은
 // "학생 아바타"의 모자만 다룬다.
-import { HAT_CATALOG } from '../utils/attachment/hatSystem'
+// 색 표시(2026-08-26): 8종이 전부 같은 🎩라 색은 colorHex 틴트로만
+// 구분된다. 이 화면은 그 틴트를 빠뜨려 "하얀색 폴 모자"가 검게 보였다 —
+// hatTintStyle(hatSystem.js)을 단일 진실 원천으로 쓴다(HatCeremony/
+// PaulTown과 동일 함수). 획득/장착 로직은 무변경.
+import { HAT_CATALOG, hatTintStyle } from '../utils/attachment/hatSystem'
 
 export default function HatCollection({ studentName, hatInventory, equippedHatId, onEquip, onBack }) {
   const ownedById = new Map(hatInventory.map((h) => [h.hatId, h]))
   const equipped = HAT_CATALOG.find((h) => h.id === equippedHatId)
-  const avatarEmoji = equipped ? equipped.emoji : '👑'
 
   return (
     <div className="min-h-screen p-4 pb-8">
@@ -20,7 +23,11 @@ export default function HatCollection({ studentName, hatInventory, equippedHatId
       <div className="max-w-lg mx-auto space-y-4 animate-fade-in">
         {/* 아바타 미리보기 — 장착 모자가 바로 보인다 */}
         <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl p-6 text-white text-center card-shadow">
-          <div className="text-6xl mb-2">{avatarEmoji}</div>
+          <div className="text-6xl mb-2">
+            {equipped
+              ? <span style={hatTintStyle(equipped.colorHex)}>{equipped.emoji}</span>
+              : '👑'}
+          </div>
           <h1 className="text-2xl font-black">{studentName}의 모자 컬렉션</h1>
           <p className="text-purple-200 text-sm mt-1">
             {equipped ? `지금 쓰고 있는 모자: ${equipped.name}` : '기본 왕관을 쓰고 있어요'}
@@ -42,7 +49,11 @@ export default function HatCollection({ studentName, hatInventory, equippedHatId
                   : owned ? 'bg-white border-transparent'
                   : 'bg-gray-50 border-gray-200'
                 }`}>
-                <div className={`text-4xl mb-1 ${owned ? '' : 'grayscale opacity-40'}`}>{owned ? hat.emoji : '🔒'}</div>
+                <div className={`text-4xl mb-1 ${owned ? '' : 'grayscale opacity-40'}`}>
+                  {owned
+                    ? <span style={hatTintStyle(hat.colorHex)}>{hat.emoji}</span>
+                    : '🔒'}
+                </div>
                 <p className={`font-black text-sm ${owned ? 'text-gray-800' : 'text-gray-400'}`}>{hat.name}</p>
                 <p className={`text-xs mt-1 ${owned ? 'text-gray-500' : 'text-gray-400'}`}>{hat.desc}</p>
                 {owned ? (

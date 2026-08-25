@@ -45,7 +45,9 @@ import { fetchCurrentSeason } from '../utils/seasonApi'
 // 애착 시스템(2026-07-22) — 장착 모자 카탈로그 조회 + 폴의 기억(실데이터
 // 템플릿) + 플래그 게이트. 전부 순수 조회 — Dashboard의 상태/fetch 로직에
 // 아무것도 추가하지 않는다.
-import { hatById, HAT_CATALOG } from '../utils/attachment/hatSystem'
+// hatTintStyle(2026-08-26) — 모자 8종은 같은 🎩라 색이 colorHex 틴트로만
+// 구분된다. 이 화면이 틴트를 빠뜨려 장착 모자가 항상 검게 보였다.
+import { hatById, HAT_CATALOG, hatTintStyle } from '../utils/attachment/hatSystem'
 import { pickPaulMemory } from '../utils/attachment/paulMemory'
 // Paul Town v2.0(2026-07-22) — 오늘의 발견(하루 1개 결정론 메시지, 폴의
 // 기억 카드 안의 한 줄) + 홈 밴드 요약/별→씨앗(전부 history 파생 — 새
@@ -514,10 +516,16 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
         {/* Profile */}
         <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl p-6 text-white text-center card-shadow">
           {/* 애착 시스템 — 장착한 모자가 아바타가 된다(미장착이면 기존 👑) */}
-          <div className="text-5xl mb-2">{equippedHat ? equippedHat.emoji : '👑'}</div>
+          <div className="text-5xl mb-2">
+            {equippedHat
+              ? <span style={hatTintStyle(equippedHat.colorHex)}>{equippedHat.emoji}</span>
+              : '👑'}
+          </div>
           <h1 className="text-3xl font-black">{studentName}</h1>
           {equippedHat && (
-            <p className="text-purple-200 text-xs mt-0.5">{equippedHat.emoji} {equippedHat.name} 착용 중</p>
+            <p className="text-purple-200 text-xs mt-0.5">
+              <span style={hatTintStyle(equippedHat.colorHex)}>{equippedHat.emoji}</span> {equippedHat.name} 착용 중
+            </p>
           )}
           {/* 2026-08-06 P1(운영자 지시) — 반/교재/유닛 3줄 분리. 예전엔
               TextbookSelector(교재가 2개 이상일 때만 렌더) 다음에 "반: X ·
