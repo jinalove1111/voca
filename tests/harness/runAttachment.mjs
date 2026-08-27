@@ -19,7 +19,7 @@ import { pickPaulMemory, PAUL_MEMORY_TEMPLATE_IDS } from '../../src/utils/attach
 import { pickTodaysDiscovery, starSeedState, gardenBandSummary, retroWelcome, TOWN_PLACES, townPlacesState, TODAYS_DISCOVERY_TEMPLATE_IDS, timeWindows, paulHomeDeco, HOME_DECO_ITEMS } from '../../src/utils/attachment/paulTown.js'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { WORLD_STAGES, computeWorldState, gardenPlots } from '../../src/utils/attachment/worldProgress.js'
+import { WORLD_STAGES, computeWorldState, gardenPlots, PLOT_COUNT, POINTS_PER_STAGE } from '../../src/utils/attachment/worldProgress.js'
 import { buildStoryChapter, getBookshelf, STORY_TEMPLATES, formatTextbookTitle, getTextbookBooks } from '../../src/utils/attachment/storyFoundation.js'
 
 let passed = 0
@@ -97,6 +97,16 @@ check('clearedWordCount = clearedWords.length', stats.clearedWordCount === 2)
 check('clearedWordSet은 clearedWords 슬러그만 반영', stats.clearedWordSet.has('clrOnly1') && stats.clearedWordSet.has('clrOnly2'))
 check('clearedWordSet에 completedWords 전용 슬러그는 없음(축 독립)', !stats.clearedWordSet.has('compOnly1'))
 check('기존 clearedSet(레벨업 미션 기반, cleared 배열)은 그대로 유지 — 새 축과 무관', stats.clearedSet.has('word0') && stats.clearedCount === 12 && !stats.clearedSet.has('compOnly1') && !stats.clearedSet.has('clrOnly1'))
+
+// ── 정원 성장 포인트(2026-08-28) — 세 축의 합집합 ──
+// 픽스처: cleared 12(word0..word11) ∪ completedWords['word1'(중복), compOnly1,
+// compOnly2] ∪ clearedWords[clrOnly1, clrOnly2] = 16개. word1이 두 배열에
+// 모두 있으므로 합집합이 실제로 중복을 제거하는지가 이 단언의 핵심이다.
+check('gardenPoints = 세 축 합집합 크기(중복 제거)', stats.gardenPoints === 16)
+check('gardenPoints는 단순 합(12+3+2=17)이 아님 — word1 중복이 제거됨', stats.gardenPoints !== 12 + 3 + 2)
+check('gardenPoints ≠ clearedCount — 축이 실제로 분리됨', stats.gardenPoints !== stats.clearedCount)
+check('gardenSet은 세 축 슬러그를 모두 포함', stats.gardenSet.has('word0') && stats.gardenSet.has('compOnly1') && stats.gardenSet.has('clrOnly1'))
+check('구 레코드(세 배열 전무)도 gardenPoints 0으로 안전 파생', emptyStats.gardenPoints === 0 && emptyStats.gardenSet.size === 0)
 check('completedWords/clearedWords 없는 구 레코드도 크래시 없이 0으로 파생(하위호환)', emptyStats.completedCount === 0 && emptyStats.clearedWordCount === 0 && emptyStats.completedSet.size === 0 && emptyStats.clearedWordSet.size === 0)
 
 // ── 2) 모자 규칙 ──
@@ -203,7 +213,16 @@ console.log('\n-- 6) 잉글리시 월드 — 단조성/결정론')
 check('6개 구역(정원→집→다리→도서관→마을→왕국)', WORLD_STAGES.length === 6 && WORLD_STAGES[0].id === 'garden' && WORLD_STAGES[5].id === 'kingdom')
 const world = computeWorldState(stats)
 check('정원은 항상 잠금해제(첫 구역, 임계 0)', world.stages[0].unlocked === true)
-check('진행 포인트 = clearedCount', world.growthPoints === stats.clearedCount)
+// 2026-08-28 축 교정 — 예전 계약은 growthPoints === clearedCount였다.
+// clearedCount는 "퀴즈 오답 → 레벨업 미션 3연속 정답"으로만 늘어서 라이브
+// 190명 중 170명(89%)의 정원이 영구 0칸이었다. 이제 실제 학습량(gardenPoints)을
+// 읽는다. clearedCount의 값/의미는 그대로다(위 1) 섹션이 계속 단언).
+check('진행 포인트 = gardenPoints(실제 학습한 단어 수)', world.growthPoints === stats.gardenPoints)
+check('진행 포인트가 더 이상 clearedCount가 아님(회귀 방지)', world.growthPoints !== stats.clearedCount)
+// 폴백 — gardenPoints가 없는 입력(구 progress 백업, DebugPage mock stats)은
+// 예전과 똑같이 clearedCount로 동작해야 한다(헌법 규칙 9).
+check('gardenPoints 없는 stats는 clearedCount로 폴백', computeWorldState({ clearedCount: 30 }).growthPoints === 30)
+check('둘 다 없는 stats도 크래시 없이 0', computeWorldState({}).growthPoints === 0)
 // 단조성: cleared가 늘수록 잠금해제 수가 절대 줄지 않음
 let prevUnlocked = -1
 let monotonic = true
@@ -216,9 +235,32 @@ for (const n of [0, 10, 30, 60, 100, 150, 250, 500]) {
 check('진행 증가 시 잠금해제가 절대 줄지 않음(단조)', monotonic)
 check('250 클리어면 왕국까지 전부 해제', prevUnlocked === 6)
 const plots = gardenPlots(stats)
-check('정원 텃밭은 9칸 고정 격자', plots.length === 9)
-check('클리어 0이면 전부 빈 칸', gardenPlots(emptyStats).every(p => p.stage === 'empty'))
+// 2026-08-28 속도 재조정(운영자 승인): 9칸/3점 → 16칸/2점.
+check('정원 텃밭은 16칸 고정 격자(4x4)', plots.length === 16 && PLOT_COUNT === 16)
+check('한 단계 성장 비용은 2포인트', POINTS_PER_STAGE === 2)
+check('학습 0이면 전부 빈 칸', gardenPlots(emptyStats).every(p => p.stage === 'empty'))
 check('같은 입력 → 같은 정원(결정론)', JSON.stringify(gardenPlots(stats)) === JSON.stringify(plots))
+// 체감 속도 — "새 단어 2개마다 칸 하나가 눈에 보이게 바뀐다"가 이번 변경의
+// 핵심 약속이라 숫자로 고정한다(실측 중앙값 1.9단어/학습일 ≒ 0.94칸/일).
+const filledAt = (n) => gardenPlots({ gardenPoints: n }).filter(p => p.stage !== 'empty').length
+check('1포인트로는 아직 아무 칸도 안 자람', filledAt(1) === 0)
+check('2포인트에 첫 씨앗 1칸', filledAt(2) === 1 && gardenPlots({ gardenPoints: 2 })[0].stage === 'seed')
+check('4포인트에 2칸 — 2단어마다 한 칸씩 증가', filledAt(4) === 2)
+check('32포인트에 16칸 전부 채워짐', filledAt(32) === 16)
+// 만개(16칸 전부 나무) = 16 × 4단계 × 2점 = 128포인트. 며칠 만에 끝나지
+// 않는다는 설계 근거를 숫자로 못박는다.
+check('128포인트에 만개(전부 나무)', gardenPlots({ gardenPoints: 128 }).every(p => p.stage === 'tree'))
+check('126포인트는 아직 만개 아님(천장이 128)', gardenPlots({ gardenPoints: 126 }).some(p => p.stage !== 'tree'))
+// 단조성 — 학습이 늘 때 자란 칸 수가 절대 줄지 않는다(아이가 보던 정원이
+// 쪼그라드는 일이 없어야 한다).
+let prevFilled = -1
+let plotsMonotonic = true
+for (let n = 0; n <= 140; n += 1) {
+  const f = filledAt(n)
+  if (f < prevFilled) plotsMonotonic = false
+  prevFilled = f
+}
+check('학습이 늘 때 자란 칸 수가 절대 줄지 않음(단조)', plotsMonotonic)
 
 // ── 7) 이야기/책장 파운데이션 ──
 console.log('\n-- 7) 책장·이야기 파운데이션 — 결정론 템플릿')
@@ -278,12 +320,15 @@ const band = gardenBandSummary(stats, {}, NOW)
 const expectedFilledPlots = gardenPlots(stats).filter((p) => p.stage !== 'empty').length
 check('홈 밴드 칸 수 = gardenPlots(정원 화면과 동일 계산)', band.flowerCount === expectedFilledPlots && band.filledPlots === expectedFilledPlots)
 check('홈 밴드 오늘 심은 별 = history[오늘].starsEarned', band.seedsToday === 2)
-check('홈 밴드 growthPoints = clearedCount(월드 엔진 재사용)', band.growthPoints === stats.clearedCount && band.text.length > 0)
+check('홈 밴드 growthPoints = gardenPoints(월드 엔진 재사용)', band.growthPoints === stats.gardenPoints && band.text.length > 0)
 
 // 소급 환영 — 정직한 숫자, 신규 학생은 null
 check('신규 학생(클리어 0) → 소급 환영 null', retroWelcome(emptyStats) === null)
 const retro = retroWelcome(stats)
-check('기존 학생 → 실제 클리어 수로 정직한 환영', retro.text.includes('12개') && retro.growthLevel >= 1)
+// 소급 환영의 숫자도 정원과 같은 축이어야 한다 — 같은 카드 안에서 숫자와
+// 성장 시각화가 다른 축이면 "0개인데 마을까지 열림" 같은 문장이 나온다.
+check('기존 학생 → 실제 학습 단어 수로 정직한 환영', retro.text.includes('16개') && retro.growthLevel >= 1)
+check('소급 환영 숫자 = gardenPoints(정원 화면과 동일 축)', retro.text.includes(`${stats.gardenPoints}개`))
 // growthLevel 단조성 — clearedCount가 늘면 절대 줄지 않음
 let prevLevel = 0
 let retroMonotonic = true
@@ -304,6 +349,31 @@ check('플래그 OFF → 건물 미발견(열린 곳만)', flagOff.filter(p => p
 const bigStats = deriveAttachmentStats({ cleared: Array.from({ length: 120 }, (_, i) => `w${i}`) }, NOW)
 const flagOn = townPlacesState(bigStats, () => true)
 check('플래그 ON + 진행 충족 → 점진 발견(120클리어: 박물관/도서관 O, 시계탑 X)', flagOn.find(p => p.id === 'museum').discovered && flagOn.find(p => p.id === 'library').discovered && !flagOn.find(p => p.id === 'clockTower').discovered)
+// 2026-08-28 — 마을 발견도 정원과 같은 축을 읽어야 한다. 정원만 축을 바꾸면
+// "정원은 무성한데 박물관/도서관/시계탑은 영원히 잠김"이 된다.
+const townByGarden = townPlacesState({ gardenPoints: 120, clearedCount: 0 }, () => true)
+check('마을 발견이 gardenPoints를 읽음(clearedCount 0이어도 발견)', townByGarden.find(p => p.id === 'museum').discovered && townByGarden.find(p => p.id === 'library').discovered)
+check('마을 발견도 gardenPoints 없으면 clearedCount로 폴백', townPlacesState({ clearedCount: 120 }, () => true).find(p => p.id === 'museum').discovered)
+
+// ★ 회귀 방지의 핵심 ★ — 보상 경제(모자/밀스톤)는 gardenPoints를 절대
+// 읽으면 안 된다. 읽는 순간 라이브 학생 전원에게 모자가 소급 대량 지급되고
+// (실측: gardenPoints 중앙값 20, 최대 279 vs hat_explorer 임계 10),
+// 모자 인벤토리는 append-only라 회수가 불가능하다. 파일 텍스트 부재로
+// 단언한다(paulTown.js 순수성 단언과 같은 패턴).
+const hatSrc = readFileSync(fileURLToPath(new URL('../../src/utils/attachment/hatSystem.js', import.meta.url)), 'utf8')
+const milestoneSrc = readFileSync(fileURLToPath(new URL('../../src/utils/attachment/milestones.js', import.meta.url)), 'utf8')
+check('hatSystem.js는 gardenPoints를 읽지 않는다(모자 소급 지급 차단)', !hatSrc.includes('gardenPoints') && !hatSrc.includes('gardenSet'))
+check('milestones.js는 gardenPoints를 읽지 않는다(밀스톤 소급 폭발 차단)', !milestoneSrc.includes('gardenPoints') && !milestoneSrc.includes('gardenSet'))
+check('hatSystem.js는 여전히 clearedCount로 판정(기존 계약 유지)', hatSrc.includes('stats.clearedCount >= HAT_THRESHOLDS.explorerCleared') && hatSrc.includes('stats.clearedCount >= HAT_THRESHOLDS.crownCleared'))
+check('milestones.js는 여전히 clearedCount로 판정(기존 계약 유지)', milestoneSrc.includes('stats.clearedCount >= n'))
+// 실제 판정으로도 확인 — gardenPoints가 아무리 커도 clearedCount가 낮으면
+// 모자는 나오지 않는다(이번 변경으로 오지급이 없음을 동작으로 증명).
+const bigGardenSmallCleared = deriveAttachmentStats({ cleared: [], clearedWords: Array.from({ length: 279 }, (_, i) => `q${i}`) }, NOW)
+const noHats = evaluateHatUnlocks(bigGardenSmallCleared, { completedUnits: [] }, [], NOW)
+check('gardenPoints 279 + clearedCount 0 → 파란/금색 모자 미지급(소급 지급 없음)', !noHats.some(h => h.hatId === 'hat_explorer' || h.hatId === 'hat_crown'))
+check('그런데 같은 학생의 정원은 만개한다(기능은 정상 작동)', gardenPlots(bigGardenSmallCleared).every(p => p.stage === 'tree'))
+const noMilestones = detectNewMilestones(bigGardenSmallCleared, { completedUnits: [], completedTextbooks: [], newHats: [] }, [], NOW)
+check('gardenPoints 279 + clearedCount 0 → cleared-N 밀스톤 미발생', !noMilestones.some(m => /^cleared-\d+$/.test(m.id)))
 
 // ── 10) 폴의 기억 v2 — 템플릿 확장 검증 ──
 console.log('\n-- 10) 폴의 기억 v2 — 템플릿 ≥15 + 신규 원천 데이터 가드')
