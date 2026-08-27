@@ -183,6 +183,24 @@ console.log('\n=== 12절. GitHub Actions 워크플로 (정적 검사) ===')
   check('PR 과 main push 에서 실행된다',
     /pull_request:/.test(y) && /push:/.test(y) && /branches:\s*\[\s*main\s*\]/.test(y))
   check('npm run verify:release 를 실행한다', /npm run verify:release/.test(y))
+  // 2026-08-27 — 게이트를 3개 단계로 분리한다. 한 단계로 묶으면 실패했을 때
+  // "npm run verify:release 실패"만 남고 어느 게이트인지 알 수 없다(실제로
+  // run 33041427809 에서 겪었다: 27초 만에 죽었는데 build/verify:all/health 중
+  // 무엇인지 특정하지 못했다). 단계 이름이 곧 진단이 되게 한다.
+  check('Gate 1 이 독립 단계로 분리돼 있다', /name:\s*Gate 1[^\n]*build/.test(y))
+  check('Gate 2 가 독립 단계로 분리돼 있다', /name:\s*Gate 2[^\n]*verify:all/.test(y))
+  check('Gate 3 이 독립 단계로 분리돼 있다', /name:\s*Gate 3[^\n]*health/i.test(y))
+  check('Gate 1 은 npm run build 를 직접 실행한다', /npm run build/.test(y))
+  check('Gate 2 는 npm run verify:all 을 직접 실행한다', /npm run verify:all/.test(y))
+  check('Gate 3 은 verify:release 의 health 만 돌린다(--skip-build --skip-verify)',
+    /verify:release[^\n]*--skip-build[^\n]*--skip-verify/.test(y))
+  // 로그 다운로드는 인증이 필요해 API 로 못 읽는다(403). 반면 annotation 은
+  // 공개 API 로 읽힌다 — 실패 시 출력 꼬리를 annotation 으로 띄워 로그 없이도
+  // 원인을 볼 수 있게 한다.
+  check('실패 시 ::error:: annotation 으로 출력 꼬리를 노출한다',
+    /::error title=/.test(y) && (y.match(/::error title=/g) || []).length >= 3)
+  check('파이프 실패가 삼켜지지 않도록 pipefail 을 켠다', /set -[a-z]*o pipefail|set -o pipefail/.test(y))
+  check('진단용 환경 정보 단계가 있다(node/npm 버전 등)', /Environment info|node --version/.test(y))
   check('Supabase 자격증명을 secrets 로 주입한다',
     /secrets\.VITE_SUPABASE_URL/.test(y) && /secrets\.VITE_SUPABASE_ANON_KEY/.test(y))
   check('후속 잡이 needs 로 게이트에 묶여 있다(실패 시 진행 불가)', /needs:\s*release-gate/.test(y))

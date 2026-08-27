@@ -98,7 +98,51 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
-      # Gate 1 build / Gate 2 verify:all / Gate 3 student health 를 한 번에.
+      # ── 진단 정보 ─────────────────────────────────────────────────────────
+      # 로컬(Windows/Node 24)과 CI(ubuntu/Node 20)의 차이로 생기는 실패를
+      # 빠르게 구분하기 위해 환경을 먼저 찍는다.
+      - name: Environment info
+        shell: bash
+        run: |
+          echo "node   $(node --version)"
+          echo "npm    $(npm --version)"
+          echo "os     $(uname -a)"
+          echo ".env   $([ -f .env ] && echo present || echo MISSING)"
+          echo ".env.local $([ -f .env.local ] && echo present || echo 'absent (정상 — ADMIN_PIN 미주입)')"
+
+      # ── 게이트 3단계 분리 ─────────────────────────────────────────────────
+      # 한 단계로 묶으면 실패 시 "npm run verify:release 실패"만 남아 어느
+      # 게이트인지 알 수 없다(run 33041427809 에서 실제로 겪었다 — 27초 만에
+      # 죽었는데 build/verify:all/health 중 무엇인지 특정 불가).
+      #
+      # 또 Actions 로그 다운로드는 인증이 필요해 API 로 못 읽는 반면(403),
+      # annotation 은 공개 API 로 읽힌다. 그래서 각 게이트가 실패하면 출력
+      # 꼬리를 ::error:: annotation 으로 띄워 로그 없이도 원인이 보이게 한다.
+      #
+      # set -o pipefail — `| tee` 때문에 실패 종료코드가 삼켜지는 것을 막는다.
+
+      - name: Gate 1 — npm run build
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! npm run build 2>&1 | tee /tmp/gate1.log; then
+            echo "::error title=Gate 1 (build) 실패::$(tail -n 30 /tmp/gate1.log | sed ':a;N;$!ba;s/\n/%0A/g')"
+            exit 1
+          fi
+
+      - name: Gate 2 — npm run verify:all (기존 도메인 회귀)
+        shell: bash
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          set -o pipefail
+          if ! npm run verify:all 2>&1 | tee /tmp/gate2.log; then
+            echo "::error title=Gate 2 (verify:all) 실패::$(grep -E '^  FAIL' /tmp/gate2.log | tail -n 20 | sed ':a;N;$!ba;s/\n/%0A/g')"
+            echo "::error title=Gate 2 출력 꼬리::$(tail -n 30 /tmp/gate2.log | sed ':a;N;$!ba;s/\n/%0A/g')"
+            exit 1
+          fi
+
       # Gate 3 은 baseline(scripts/health/baseline.json) 대비 "새로 생긴 FAIL"만
       # 회귀로 보고 차단한다. 이미 알던 문제는 계속 표시되지만 막지 않는다 —
       # 게이트가 늘 빨간불이라 무시당하는 실패 모드를 구조적으로 방지한다.
@@ -107,11 +151,20 @@ jobs:
       #   로그인 식별자 / 홈 반·교재 소유 반 유효성 / 주교재 연결 /
       #   교재-유닛 연결 / current_unit 유효성 / 단어 0개 / 유령 유닛 /
       #   쓰기 방향 리졸버 / 중복 계정 / 배정 고아
-      - name: npm run verify:release
+      #
+      # --skip-build --skip-verify: Gate 1·2 를 위에서 이미 돌렸으므로 중복
+      # 실행하지 않는다. 판정 로직(baseline diff)은 verify:release 그대로 재사용.
+      - name: Gate 3 — student health (baseline 대비 회귀)
+        shell: bash
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-        run: npm run verify:release
+        run: |
+          set -o pipefail
+          if ! npm run verify:release -- --skip-build --skip-verify 2>&1 | tee /tmp/gate3.log; then
+            echo "::error title=Gate 3 (student health) 실패::$(tail -n 40 /tmp/gate3.log | sed ':a;N;$!ba;s/\n/%0A/g')"
+            exit 1
+          fi
 
   # release-gate 가 실패하면 needs 조건이 성립하지 않아 이 잡은 아예 실행되지
   # 않는다 = "이후 배포 단계로 절대 진행되지 않는다". 브랜치 보호에서 필수
