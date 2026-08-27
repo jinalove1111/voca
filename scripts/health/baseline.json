@@ -1,0 +1,13 @@
+{
+  "description": "Student Health Check baseline — 이미 알고 있던 FAIL. 게이트는 여기 없는 새 FAIL 만 차단한다.",
+  "recordedAt": null,
+  "summary": {
+    "total": 35,
+    "pass": 35,
+    "warn": 0,
+    "fail": 0,
+    "byCode": {},
+    "ok": true
+  },
+  "entries": []
+}

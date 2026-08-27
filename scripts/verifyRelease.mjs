@@ -1,0 +1,161 @@
+// Release Gate 실행기 — 배포 전 자동 검증 (2026-08-26, P2)
+//
+// ★ 이 파일은 앱 동작을 바꾸지 않는다 ★
+// src/ 를 import 하지 않고, DB 에 쓰지 않으며, 기존 verify:all / build 스크립트를
+// 그대로 호출하기만 한다. "정상인 기능은 건드리지 않는다"는 원칙 그대로.
+//
+// 게이트 구성
+//   Gate 1  npm run build          코드가 빌드되는가
+//   Gate 2  npm run verify:all     기존 40개 도메인 회귀 하네스
+//   Gate 3  student health check   학생별 해석 체인 — baseline 대비 회귀만 차단
+//
+// Gate 3 이 검사하는 것(scripts/lib/studentHealthRules.mjs, 학생당 19개 체크)
+//   로그인 식별자 / 홈 반·교재 소유 반 유효성 / 주교재 연결 / 교재-유닛 연결 /
+//   current_unit 유효성 / 단어 0개 / 유령 유닛 / 쓰기 방향 리졸버 / 중복 계정 /
+//   배정 고아 — 즉 "코드는 정상인데 특정 학생만 조용히 깨지는" 회귀.
+//
+// baseline 개념 (핵심)
+//   이미 알고 있던 FAIL 은 배포를 막지 않고 계속 보여주기만 한다.
+//   baseline 에 없는 새 FAIL 만 회귀로 보고 배포를 차단한다.
+//   baseline 파일: scripts/health/baseline.json  (없으면 = 모든 FAIL 이 회귀)
+//   갱신: npm run health:baseline   (로컬 파일만 씀. DB 무접촉)
+//
+// 사용법
+//   npm run verify:release                 전체 게이트
+//   npm run verify:release -- --skip-build  빌드 생략(빠른 반복용, CI 에선 쓰지 말 것)
+//   npm run verify:release -- --strict-health  baseline 무시, FAIL 1건이면 차단
+//
+// exit code: 게이트 하나라도 실패하면 1, 전부 통과면 0.
+import { spawnSync } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { EMPTY_BASELINE, normalizeBaseline, diffAgainstBaseline, summarizeGates } from './lib/releaseGate.mjs'
+
+const argv = process.argv.slice(2)
+const has = (f) => argv.includes(f)
+const SKIP_BUILD = has('--skip-build')
+const SKIP_VERIFY = has('--skip-verify')
+const STRICT_HEALTH = has('--strict-health')
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const BASELINE_PATH = path.join(ROOT, 'scripts', 'health', 'baseline.json')
+const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+
+const hr = (s = '─') => console.log(s.repeat(72))
+const gates = []
+
+function runGate(name, label, fn) {
+  hr('═')
+  console.log(`▶ ${label}`)
+  hr()
+  const started = Date.now()
+  const ok = fn()
+  const ms = Date.now() - started
+  gates.push({ name, ok })
+  console.log(`\n${ok ? '✅ PASS' : '❌ FAIL'}  ${label}  (${(ms / 1000).toFixed(1)}s)\n`)
+  return ok
+}
+
+function runNpm(script) {
+  const res = spawnSync(npmCmd, ['run', script], { cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32' })
+  return res.status === 0
+}
+
+// ── Gate 1 — build ────────────────────────────────────────────────────────
+if (SKIP_BUILD) {
+  console.log('⚠ Gate 1 (build) 생략됨 — --skip-build. CI/배포 전에는 쓰지 말 것.\n')
+  gates.push({ name: 'build(skipped)', ok: true })
+} else {
+  runGate('build', 'Gate 1 — npm run build', () => runNpm('build'))
+}
+
+// ── Gate 2 — 기존 회귀 하네스 ─────────────────────────────────────────────
+if (SKIP_VERIFY) {
+  console.log('⚠ Gate 2 (verify:all) 생략됨 — --skip-verify. CI/배포 전에는 쓰지 말 것.\n')
+  gates.push({ name: 'verify:all(skipped)', ok: true })
+} else {
+  runGate('verify:all', 'Gate 2 — npm run verify:all (기존 도메인 회귀)', () => runNpm('verify:all'))
+}
+
+// ── Gate 3 — 학생 헬스체크 (baseline 대비 회귀만 차단) ────────────────────
+runGate('health', 'Gate 3 — Student Health Check (학생별 silent regression)', () => {
+  // --require-env: 자격증명이 없으면 조용히 SKIP 하지 않고 실패한다.
+  // "검증 못 함"이 "통과"로 둔갑하는 것이 게이트의 가장 위험한 실패 모드다.
+  const res = spawnSync(process.execPath,
+    [path.join(ROOT, 'scripts', 'studentHealthCheck.mjs'), '--json', '--require-env'],
+    { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+
+  if (res.error) {
+    console.error(`  헬스체크 실행 실패: ${res.error.message}`)
+    return false
+  }
+  let payload
+  try {
+    payload = JSON.parse(res.stdout)
+  } catch {
+    console.error('  헬스체크 JSON 파싱 실패 — 원본 출력:')
+    console.error((res.stdout || res.stderr || '').slice(0, 1200))
+    return false
+  }
+  if (payload.infraError) {
+    // 학생 문제가 아니라 인프라 오류 — 구분해서 보고한다.
+    console.error(`  INFRA_ERROR (학생 데이터 문제 아님): ${payload.infraError}`)
+    return false
+  }
+
+  const students = Array.isArray(payload.students) ? payload.students : []
+  let baseline = EMPTY_BASELINE
+  let baselineNote = 'baseline 없음 → 모든 FAIL 을 회귀로 본다(가장 엄격)'
+  if (!STRICT_HEALTH && fs.existsSync(BASELINE_PATH)) {
+    try {
+      baseline = normalizeBaseline(JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8')))
+      baselineNote = `baseline ${baseline.keys.length}건 (${path.relative(ROOT, BASELINE_PATH)})`
+    } catch (err) {
+      console.error(`  baseline 파일을 읽지 못함(${err.message}) → 빈 baseline 으로 진행(더 엄격)`)
+    }
+  } else if (STRICT_HEALTH) {
+    baselineNote = 'baseline 무시 — --strict-health'
+  }
+
+  const d = diffAgainstBaseline(students, baseline)
+  const s = payload.summary || {}
+  console.log(`  검사 학생 ${students.length}명 — PASS ${s.pass ?? '?'} / WARN ${s.warn ?? '?'} / FAIL ${s.fail ?? '?'}`)
+  console.log(`  ${baselineNote}`)
+  if (Array.isArray(payload.ghostUnits) && payload.ghostUnits.length) {
+    console.log(`  유령 유닛 ${payload.ghostUnits.length}개 잔존(정보) — 배정된 실학생이 생기면 회귀로 잡힌다`)
+  }
+
+  if (d.known.length) {
+    console.log(`\n  ⚠ 알려진 문제 ${d.known.length}건 (baseline — 배포를 막지 않음, 0으로 줄여갈 것)`)
+    for (const k of d.known) console.log(`      · ${k.name}: ${k.detail}`)
+  }
+  if (d.fixed.length) {
+    console.log(`\n  ✨ 고쳐진 baseline 항목 ${d.fixed.length}건 — npm run health:baseline 로 갱신 권장`)
+    for (const f of d.fixed) console.log(`      · ${f.name ?? f.studentId}: ${f.code}`)
+  }
+  if (d.warnings.length) {
+    console.log(`\n  ⚠ WARN ${d.warnings.length}건 (배포를 막지 않음)`)
+    for (const w of d.warnings) console.log(`      · ${w.name}: ${w.warning}`)
+  }
+  if (d.regressions.length) {
+    console.log(`\n  ❌ 회귀 ${d.regressions.length}건 — 이번 변경이 새로 깨뜨린 것으로 판단, 배포 차단`)
+    for (const r of d.regressions) console.log(`      · ${r.name}: ${r.detail}`)
+    console.log('\n  이 학생들이 수업에서 겪게 될 증상: 로그인 불가 / 단어 0개 /')
+    console.log('  유령 유닛 / 쓰기 방향 고정 등. 원인을 고치거나, 이미 알던 문제라면')
+    console.log('  npm run health:baseline 로 baseline 에 등록한 뒤 다시 실행하세요.')
+  }
+  return d.ok
+})
+
+// ── 종합 ──────────────────────────────────────────────────────────────────
+const total = summarizeGates(gates)
+hr('═')
+for (const g of gates) console.log(`  ${g.ok ? '✅' : '❌'}  ${g.name}`)
+hr('═')
+console.log(total.ok
+  ? 'RELEASE GATE: PASS — 배포 가능'
+  : `RELEASE GATE: FAIL — 실패 게이트: ${total.failed.join(', ')}`)
+console.log('DB WRITE: 0 (모든 게이트가 읽기 전용)')
+
+process.exit(total.ok ? 0 : 1)
