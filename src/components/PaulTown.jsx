@@ -7,7 +7,7 @@
 //
 // 시각 언어: 기존 폴이지보카 카드 문법 그대로(보라/핑크 그라데이션 헤더,
 // bg-white rounded-3xl card-shadow, btn-press) — 새 디자인 시스템 없음.
-// 정원 3x3 격자는 EnglishGarden.jsx와 시각적으로 동일한 렌더링 패턴을
+// 정원 4x4 격자는 EnglishGarden.jsx와 시각적으로 동일한 렌더링 패턴을
 // 자체 포함(컴포넌트 import 없이 — 이 화면은 자기완결)한다.
 //
 // 마을 = 내비게이션(Paul Town 월드, 2026-07-22): 정원/폴의 집은 마을 안

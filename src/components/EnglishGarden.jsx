@@ -1,7 +1,7 @@
 // 잉글리시 월드 — 정원 MVP(2026-07-22, 애착 시스템).
 //
 // worldProgress.js 엔진의 계산 결과만 그린다(저장 없음, 전부 파생).
-// v1 노출: 정원 3x3 텃밭 + 다음 구역 진행바. 이후 구역(집~왕국)의 상세
+// v1 노출: 정원 4x4 텃밭 + 다음 구역 진행바. 이후 구역(집~왕국)의 상세
 // UI는 attachmentWorldFull 플래그(기본 OFF) 뒤 — 여기서는 잠금 목록으로
 // "다음에 열릴 세계"만 살짝 보여준다(별도 게임 인터페이스 없음, 기존
 // 카드 문법 그대로).
@@ -33,10 +33,12 @@ export default function EnglishGarden({ stats, onBack }) {
           <div className="text-5xl mb-2">🌱</div>
           <h1 className="text-2xl font-black">나의 잉글리시 정원</h1>
           <p className="text-green-100 text-sm mt-1">단어를 배울 때마다 정원이 자라나요</p>
-          <p className="text-green-100 text-xs mt-2">🌿 성장 포인트 {world.growthPoints} (클리어한 단어 수)</p>
+          {/* 2026-08-28 — 축이 "클리어(레벨업 미션)"에서 "배운 단어"로 바뀌었으니
+              학생에게 보이는 설명도 실제와 맞춘다(표시 전용, 계산 무변경). */}
+          <p className="text-green-100 text-xs mt-2">🌿 성장 포인트 {world.growthPoints} (배운 단어 수)</p>
         </div>
 
-        {/* 정원 텃밭 — 3x3, 전부 파생(같은 진행이면 어느 기기에서 봐도 같은 정원) */}
+        {/* 정원 텃밭 — 4x4, 전부 파생(같은 진행이면 어느 기기에서 봐도 같은 정원) */}
         <div className="bg-white rounded-3xl card-shadow p-5">
           {/* 2026-08-28 — 9칸(3x3) → 16칸(4x4). 칸이 늘어난 만큼 한 칸의
               시각 크기는 줄이고(text-4xl → text-3xl) gap도 좁혀, 카드 높이가

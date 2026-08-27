@@ -91,7 +91,7 @@ export const PLOT_STAGE_EMOJI = { empty: '🟫', seed: '🌰', sprout: '🌱', f
 
 export function gardenPlots(stats) {
   const points = pointsOf(stats)
-  // 라운드로빈 분배: 포인트가 9칸에 골고루 돌아가며 쌓인다 — 칸 하나만
+  // 라운드로빈 분배: 포인트가 PLOT_COUNT칸에 골고루 돌아가며 쌓인다 — 칸 하나만
   // 먼저 다 자라는 게 아니라 정원 전체가 서서히 무성해지는 연출.
   const perPlotUnits = Math.floor(points / POINTS_PER_STAGE)
   return Array.from({ length: PLOT_COUNT }, (_, i) => {
