@@ -1213,14 +1213,49 @@ function parseExcelRows(rows, selectedClass = '') {
   const hasHeader = headerMap.word !== undefined && headerMap.meaning !== undefined
   const dataRows = hasHeader ? rows.slice(1) : rows
 
+  // [2026-08-28] 컬럼 매핑 오인 경고 — "조용히 잘못 저장"을 막는 신호.
+  // 파싱 결과를 재해석하지 않는다(3열 파일에서 첫 칸이 행번호인지 유닛번호
+  // 인지는 원리적으로 구분 불가). 대신 의심 신호만 모아 미리보기가 저장을
+  // 막게 한다. 오탐이 잦으면 관리자가 경고를 무시하게 되므로, 정상 파일에서
+  // 절대 뜨지 않는 강한 신호만 쓴다(verify:excel-header CASE I 오탐 반증).
+  const warnings = []
+  const warn = (code, message, detail) => {
+    if (!warnings.some((w) => w.code === code)) warnings.push({ code, message, detail })
+  }
+
   // A6(2026-08-02) — 헤더 없는 파일의 위치 추정 경로에서, 첫 칸이 전부
   // 숫자(번호 열)면 이전엔 그 번호를 그대로 word로 읽어버렸다(예:
   // "1, apple, 사과" -> word="1"). 데이터 행 전체의 0번째 칸이 전부
   // 순수 숫자일 때만 번호 열로 간주해 한 칸씩 밀어 읽는다(오탐 방지 —
   // 헤더가 이미 감지된 경우엔 적용 안 함).
+  // [2026-08-28] 선두 헤더/제목 블록 — 첫 "실데이터로 보이는 행" 직전까지.
+  // 헤더는 파일 맨 위에만 존재하므로 이 구간에서만 헤더 라벨 행을 걸러낸다.
+  // 3행을 넘겨 탐색하지 않는다(그 아래는 무조건 데이터로 취급 — 실제 어휘를
+  // 잃지 않는 쪽으로 보수적으로).
+  let leadingCount = 0
+  if (!hasHeader) {
+    const MAX_LEADING = 3
+    for (let i = 0; i < Math.min(MAX_LEADING, dataRows.length); i++) {
+      const v = (dataRows[i] || []).map((c) => (c == null ? '' : String(c).trim()))
+      const nonEmpty = v.filter(Boolean)
+      // 셀이 1개뿐인 행(파일 제목) 또는 헤더 라벨이 2개 이상인 행은 선두 블록.
+      if (nonEmpty.length <= 1 || nonEmpty.filter(isHeaderLabel).length >= 2) leadingCount = i + 1
+      else break
+    }
+  }
+  // leadingCount 가 0 이면 아래 rowIdx 가드는 예전의 rowIdx===0 과 완전히
+  // 동일하게 동작한다(첫 행이 헤더 라벨 쌍이면 leadingCount 가 1 이 되어
+  // rowIdx <= 0, 즉 0번 행만 대상) — 기존 동작 무회귀.
+  const leadingHeaderEnd = Math.max(0, leadingCount - 1)
+
+  // 선두 제목/헤더 블록은 번호 열 판정에서 제외한다. 제목 행
+  // ("2학년 천재소영순 Unit 8") 하나 때문에 col0AllNumeric 이 false 가 되면
+  // 진짜 번호 열이 있는 파일에서도 오프셋이 0 이 되어 컬럼이 한 칸 밀린다
+  // (word="1", meaning="learn"). leadingCount 가 0 이면 예전과 동일한 입력.
+  const bodyRows = leadingCount > 0 ? dataRows.slice(leadingCount) : dataRows
   let numberColOffset = 0
-  if (!hasHeader && dataRows.length > 0) {
-    const col0AllNumeric = dataRows.every((r) => {
+  if (!hasHeader && bodyRows.length > 0) {
+    const col0AllNumeric = bodyRows.every((r) => {
       if (!Array.isArray(r) || r.length === 0) return false
       const v = String(r[0] ?? '').trim()
       return v !== '' && /^\d+$/.test(v)
@@ -1277,13 +1312,55 @@ function parseExcelRows(rows, selectedClass = '') {
       // (word="word"/meaning="말", word="unit"/meaning="단위") — 절대 버리지
       // 않는다. 첫 행에만 적용하는 이유: 헤더는 파일 맨 위에만 존재하므로,
       // 아래 행의 실제 단어를 오탐으로 잃을 위험을 원천 차단한다.
-      if (!hasHeader && rowIdx === 0 && isHeaderLabel(word) && isHeaderLabel(meaning)) return null
+      //
+      // [2026-08-28 확장] rowIdx===0 -> "선두 블록" 으로 넓힌다. 파일 맨 위에
+      // 제목 행이 하나 있고 그 아래에 헤더가 오는 형태
+      //   ["2학년 천재소영순 Unit 8"] / ["No","English","Korean"] / ["1","learn",...]
+      // 에서는 헤더가 1번째 행이라 rowIdx===0 가드를 그냥 지나갔고, 결국
+      // word="No"/meaning="English" 라는 가짜 단어가 저장됐다(유령 유닛 사고의
+      // 재발 형태 — verify:excel-header CASE I G3 로 재현·고정).
+      // 범위를 "아직 실데이터 행이 하나도 안 나온 구간"으로만 넓히므로,
+      // 파일 중간/아래의 실제 어휘 행은 예전과 똑같이 절대 버리지 않는다
+      // (헤더는 파일 맨 위 블록에만 존재한다는 사실을 그대로 쓴다).
+      if (!hasHeader && rowIdx <= leadingHeaderEnd && isHeaderLabel(word) && isHeaderLabel(meaning)) {
+        warn('header-label-row', '헤더로 보이는 행이 데이터 안에 있어 제외했어요', `${word} / ${meaning}`)
+        return null
+      }
       return { className: selectedClass, unit: unit || 'Unit 1', word, meaning, example, exampleTranslation, partOfSpeech, cefr }
     })
     .filter(r => r && r.word && r.meaning)
   // 배열에 메타 정보만 덧붙임(호출부는 여전히 평범한 배열로 취급 가능) —
   // 미리보기에서 "헤더 미검출 — 위치 추정으로 읽었어요" 경고 배지에 사용.
+  // ── 저장 전 오인 신호 판정 (파싱 결과는 이미 확정 — 여기서 안 바꾼다) ──
+  //
+  // ① 맨숫자 단어 — 영어 어휘가 순수 숫자인 경우는 없다. 컬럼이 한 칸 밀려
+  //    읽혔다는 거의 확실한 증거다. 실사고 형태:
+  //      무헤더 4열 ["1","8","learn","배우다"] -> 번호 열이 소비되고 남은
+  //      "8"(맨숫자 유닛)이 isUnit 정규식에 안 걸려 word 로 읽힘 => word="8".
+  //    그대로 저장하면 이름이 "8"인 가짜 단어가 유닛 하나를 통째로 채운다.
+  if (!hasHeader) {
+    const numericWords = result.filter((r) => /^\d+$/.test(r.word)).map((r) => r.word)
+    if (numericWords.length > 0) {
+      warn('numeric-word', '단어 칸에 숫자만 있는 행이 있어요 — 컬럼이 밀려 읽힌 것 같아요',
+        `${[...new Set(numericWords)].slice(0, 5).join(', ')} (${numericWords.length}행)`)
+    }
+
+    // ② 첫 칸이 전부 "같은" 숫자 — 행번호라면 1,2,3…으로 증가해야 한다.
+    //    전부 동일하면 그건 행번호가 아니라 유닛 번호일 가능성이 크고,
+    //    numberColOffset 이 그걸 행번호로 오해해 유닛을 통째로 잃는다
+    //    (Unit 8 단어 40개가 조용히 "Unit 1" 로 저장되는 오배정).
+    //    파싱을 바꾸지는 않는다 — 3열 파일에서 행번호와 유닛번호는 원리적으로
+    //    구분 불가라, 추측해서 재해석하는 대신 사람에게 확인을 받는다.
+    const col0 = dataRows.map((r) => String((r || [])[0] ?? '').trim()).filter((v) => v !== '')
+    const allNum = col0.length > 1 && col0.every((v) => /^\d+$/.test(v))
+    if (allNum && new Set(col0).size === 1 && !result.some((r) => r.unit !== 'Unit 1')) {
+      warn('constant-number-column', '첫 칸이 모든 행에서 같은 숫자예요 — 행번호가 아니라 유닛 번호일 수 있어요',
+        `"${col0[0]}" × ${col0.length}행 → 지금은 전부 Unit 1 로 저장돼요`)
+    }
+  }
+
   result.headerDetected = hasHeader
+  result.warnings = warnings
   return result
 }
 
@@ -1291,12 +1368,18 @@ function ExcelUpload({ onDone, adminPin }) {
   const [selectedClass, setSelectedClass] = useState('')
   const [preview, setPreview]             = useState(null)
   const [saving, setSaving]               = useState(false)
+  // [2026-08-28] 컬럼 오인 경고 확인 여부. 파일을 새로 고르면 반드시 false 로
+  // 되돌린다 — 앞 파일에서 눌러둔 확인이 다음 파일의 경고를 통과시키면 안 된다.
+  const [warnAck, setWarnAck]             = useState(false)
   const fileRef                           = useRef()
   const classList                         = getClassNames()
 
   const handleFile = async (e) => {
     const file = e.target.files[0]
     if (!file) return
+    // [2026-08-28] 새 파일을 고르는 순간 이전 파일에서 눌러둔 경고 확인을
+    // 반드시 해제한다 — 안 그러면 다음 파일의 경고가 조용히 통과한다.
+    setWarnAck(false)
     // 2026-08-02 — 손상된 파일/암호 보호 엑셀 등으로 XLSX.read가 던지면
     // 이전엔 잡히지 않은 예외로 콘솔에만 남고 화면은 "파일 선택" 상태 그대로
     // 멈춰 원인 파악이 어려웠다 — PdfUpload.handleFile(:1191-1213)과 동일하게
@@ -1467,7 +1550,37 @@ function ExcelUpload({ onDone, adminPin }) {
             )}
           </div>
           <p className="text-center text-sm text-gray-500">총 {preview.length}개 단어 발견</p>
-          <button onClick={handleSave} disabled={saving || !selectedClass}
+          {/* [2026-08-28] 컬럼 매핑 오인 경고 — "헤더가 불확실하면 자동 저장하지
+              않는다". 2026-08-27 Unit 8 사고에서 "8 | learn" 처럼 컬럼이 한 칸
+              밀려 읽혀 이름이 "8"인 가짜 단어가 저장될 뻔했다. 저장은 유닛
+              전체 delete-then-insert 라 잘못 저장하면 그 유닛의 기존 단어가
+              통째로 날아간다 — 그래서 경고가 있으면 확인 체크 전까지 저장
+              버튼을 잠근다. 경고가 없는 정상 파일은 예전과 100% 동일하게
+              바로 저장된다(verify:excel-header CASE I 오탐 반증으로 고정). */}
+          {(preview.warnings || []).length > 0 && (
+            <div className="bg-red-50 border-2 border-red-300 rounded-xl px-4 py-3 space-y-2">
+              <p className="text-sm font-black text-red-700">🛑 컬럼이 잘못 읽혔을 수 있어요 — 저장 전에 확인이 필요해요</p>
+              <ul className="space-y-1">
+                {(preview.warnings || []).map((w) => (
+                  <li key={w.code} className="text-xs font-bold text-red-600">
+                    · {w.message}
+                    {w.detail ? <span className="block ml-3 font-normal text-red-400">{w.detail}</span> : null}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[11px] font-normal text-red-500">
+                위 미리보기의 유닛/단어/뜻이 실제 엑셀과 같은지 꼭 확인해주세요.
+                저장하면 그 유닛의 기존 단어가 이 내용으로 통째로 교체돼요.
+              </p>
+              <label className="flex items-center gap-2 text-xs font-black text-red-700">
+                <input type="checkbox" checked={warnAck} disabled={saving}
+                  onChange={(e) => setWarnAck(e.target.checked)} />
+                미리보기를 확인했어요 — 이대로 저장할게요
+              </label>
+            </div>
+          )}
+          <button onClick={handleSave}
+            disabled={saving || !selectedClass || ((preview.warnings || []).length > 0 && !warnAck)}
             className="w-full bg-blue-500 text-white font-black py-4 rounded-2xl btn-press hover:bg-blue-600 disabled:opacity-50">
             {saving ? '⏳ 저장 중...' : `💾 "${selectedClass}" 반에 저장`}
           </button>

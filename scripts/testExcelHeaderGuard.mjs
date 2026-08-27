@@ -225,5 +225,102 @@ check('isUnit 정규식이 숫자를 필수로 요구(\\d+)', /\/\^\(unit\|유�
   { hint: 'isUnit 정규식에 \\d* 가 남아있으면 헤더 라벨 "Unit"이 유닛으로 인정됨' })
 
 // ════════════════════════════════════════════════════════════════════════
+console.log('\n=== CASE I — 컬럼 매핑 오인 경고 (2026-08-28, Unit 8 사고 유형) ===')
+// ════════════════════════════════════════════════════════════════════════
+// 규칙 15 FAIL-first 실측 — 이 절을 넣기 전 실제 파서 출력(추가 전 관측):
+//
+//   ⑧ 무헤더 4열 [['1','8','learn','배우다'], ...]
+//        -> word="8"  meaning="learn"      ← 보고된 "8 | learn" 사고 그대로.
+//           번호 열이 numberColOffset 으로 소비된 뒤 남은 "8"(맨숫자 유닛)이
+//           isUnit(/^(unit|유닛|단원)\s*\d+/) 에 걸리지 않아 단어로 읽혔다.
+//           그대로 저장되면 이름이 "8"인 가짜 단어 40개가 DB 에 들어간다.
+//   ⑤ 무헤더 3열 [['8','learn','배우다'], ...]
+//        -> word/meaning 은 맞지만 unit="Unit 1"  ← Unit 8 단어가 조용히
+//           Unit 1 로 저장되는 오배정(경고도 없었다).
+//   ⑫ 제목 행 + 헤더가 두 번째 행
+//        [['2학년 천재소영순 Unit 8'], ['No','English','Korean'], ['1','learn','배우다']]
+//        -> word="No" meaning="English"    ← 유령 유닛 사고의 재발 형태.
+//           마지막 안전망이 rowIdx===0 에만 걸려 있어 두 번째 행의 헤더를
+//           놓쳤다.
+//
+// 대응 방침: 파싱 결과를 조용히 "재해석"하지 않는다(3열 파일에서 첫 칸이
+// 행번호인지 유닛번호인지는 원리적으로 구분 불가). 대신 (1) 선두 헤더/제목
+// 블록은 데이터에서 제외하고, (2) 의심 신호를 result.warnings 로 올려
+// 미리보기가 저장을 막도록 한다 — "헤더가 불확실하면 자동 저장하지 않는다".
+const warnOf = (rows) => parseExcelRows(rows, '반').warnings || []
+
+{
+  // G1 — 맨숫자 단어: 영어 어휘가 순수 숫자인 경우는 없다. 강한 신호.
+  const r = parseExcelRows([['1', '8', 'learn', '배우다'], ['2', '8', 'study', '공부하다']], '반')
+  check('G1 — 무헤더 4열 숫자유닛 파일에서 numeric-word 경고가 올라온다',
+    (r.warnings || []).some((w) => w.code === 'numeric-word'), { got: r.warnings, rows: r })
+  check('G1 — 경고에 실제로 문제된 값이 담긴다("8")',
+    (r.warnings || []).some((w) => String(w.detail || '').includes('8')), { got: r.warnings })
+}
+{
+  // G2 — 무헤더 3열에서 첫 칸이 전부 같은 숫자면 행번호가 아니라 유닛일 수 있다.
+  const r = parseExcelRows([['8', 'learn', '배우다'], ['8', 'study', '공부하다'], ['8', 'read', '읽다']], '반')
+  check('G2 — 첫 칸이 전부 동일한 숫자면 constant-number-column 경고',
+    (r.warnings || []).some((w) => w.code === 'constant-number-column'), { got: r.warnings })
+  check('G2 — 파싱 결과 자체는 바꾸지 않는다(단어/뜻 그대로)',
+    r.length === 3 && r[0].word === 'learn' && r[0].meaning === '배우다', { got: r })
+}
+{
+  // G3 — 제목 행 뒤에 헤더가 오는 파일. 선두 블록의 헤더 행은 데이터에서 제외.
+  const rows = [['2학년 천재소영순 Unit 8'], ['No', 'English', 'Korean'], ['1', 'learn', '배우다'], ['2', 'study', '공부하다']]
+  const r = parseExcelRows(rows, '반')
+  check('G3 — 헤더 라벨 행("No"/"English")이 단어로 저장되지 않는다',
+    !r.some((x) => x.word === 'No' || x.word === 'no'), { got: r })
+  check('G3 — 실제 단어는 살아남는다', r.some((x) => x.word === 'learn' && x.meaning === '배우다'), { got: r })
+  check('G3 — header-label-row 경고가 올라온다',
+    (r.warnings || []).some((w) => w.code === 'header-label-row'), { got: r.warnings })
+}
+{
+  // 오탐 반증 — 정상 파일에는 경고가 하나도 없어야 한다. 여기서 오탐이 나면
+  // 관리자가 매번 경고를 무시하게 되어 경고 자체가 무의미해진다.
+  check('오탐 반증 — 헤더 있는 정상 파일: 경고 0',
+    warnOf([['Unit', 'Word', 'Meaning'], ['Unit 8', 'learn', '배우다'], ['Unit 8', 'study', '공부하다']]).length === 0,
+    { got: warnOf([['Unit', 'Word', 'Meaning'], ['Unit 8', 'learn', '배우다']]) })
+  check('오탐 반증 — No/Unit/English/Korean 헤더: 경고 0',
+    warnOf([['No', 'Unit', 'English', 'Korean'], ['1', 'Unit 8', 'learn', '배우다'], ['2', 'Unit 8', 'study', '공부하다']]).length === 0)
+  check('오탐 반증 — 무헤더 2열 순수 데이터: 경고 0',
+    warnOf([['learn', '배우다'], ['study', '공부하다']]).length === 0)
+  check('오탐 반증 — 무헤더 3열 "Unit 8" 유닛: 경고 0',
+    warnOf([['Unit 8', 'learn', '배우다'], ['Unit 8', 'study', '공부하다']]).length === 0)
+  check('오탐 반증 — 행번호가 1,2,3 으로 증가하는 정상 파일: 경고 0',
+    warnOf([['1', 'learn', '배우다'], ['2', 'study', '공부하다'], ['3', 'read', '읽다']]).length === 0)
+  check('오탐 반증 — 빈 행이 섞여도 경고 0',
+    warnOf([['Word', 'Meaning'], [], ['learn', '배우다'], [null, null], ['study', '공부하다']]).length === 0)
+  check('오탐 반증 — "word"/"말" 같은 실제 단어를 헤더로 오인해 버리지 않는다',
+    parseExcelRows([['word', '말'], ['unit', '단위']], '반').length === 2)
+}
+{
+  // 40단어 실사이즈 — 정상/비정상 양쪽
+  const ok = Array.from({ length: 40 }, (_, i) => ['Unit 8', `w${i}`, `뜻${i}`])
+  check('40단어 정상 파일: 40행 · 경고 0 · 유닛 유지',
+    parseExcelRows(ok, '반').length === 40 && warnOf(ok).length === 0 && parseExcelRows(ok, '반')[0].unit === 'Unit 8')
+  const bad = Array.from({ length: 40 }, (_, i) => [String(i + 1), '8', `w${i}`, `뜻${i}`])
+  const rb = parseExcelRows(bad, '반')
+  check('40단어 숫자유닛 4열 파일: 경고가 올라와 저장 전에 막을 수 있다', (rb.warnings || []).length > 0, { got: rb.warnings })
+}
+{
+  check('warnings 는 항상 배열(구 호출부 안전)', Array.isArray(parseExcelRows([['a', 'b']], '반').warnings))
+  check('빈 입력에도 throw 하지 않는다', (() => { try { parseExcelRows([], '반'); return true } catch { return false } })())
+}
+{
+  // 경고가 실제로 저장을 막는지 — UI 배선 정적 검사. 파서가 경고를 올려도
+  // 미리보기가 무시하면 "가짜 단어가 DB 에 들어가는 것을 막는다"는 목적이
+  // 달성되지 않는다. 배선이 끊기면 여기서 즉시 FAIL 한다.
+  const ui = src.split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n')
+  check('UI — 저장 버튼이 경고 미확인 시 disabled 된다',
+    /disabled=\{saving \|\| !selectedClass \|\| \(\(preview\.warnings \|\| \[\]\)\.length > 0 && !warnAck\)\}/.test(ui))
+  check('UI — 경고 목록을 실제로 렌더한다', /preview\.warnings \|\| \[\]\)\.map\(/.test(ui))
+  check('UI — 확인 체크박스가 warnAck 상태를 토글한다', /onChange=\{\(e\) => setWarnAck\(e\.target\.checked\)\}/.test(ui))
+  check('UI — 새 파일 선택 시 확인이 해제된다(앞 파일의 확인이 새 파일에 새지 않음)',
+    /setWarnAck\(false\)/.test(ui))
+  check('UI — 기존 헤더 미검출 경고(amber)는 그대로 유지', /preview\.headerDetected === false/.test(ui))
+}
+
+// ════════════════════════════════════════════════════════════════════════
 console.log(`\n${failures === 0 ? 'ALL PASS' : `${failures} FAILURE(S)`}`)
 process.exit(failures === 0 ? 0 : 1)
