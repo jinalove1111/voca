@@ -22,7 +22,19 @@ for (const file of ['.env', '.env.local']) {
   }
 }
 const ADMIN_PIN = process.env.ADMIN_PIN
-if (!ADMIN_PIN) { console.error('ADMIN_PIN missing in .env.local — abort'); process.exit(1) }
+// ADMIN_PIN 부재 = 정직한 SKIP(exit 0). 크래시가 아니라 "예상된 상태"다.
+// 2026-08-27 — CI(GitHub Actions Release Gate)에는 .env.local이 없다. ADMIN_PIN은
+// 관리자 재인증 자격증명이라 공개 저장소의 Actions secret에 넣지 않기로 했다
+// (운영자 결정: 옵션 B). 그래서 로컬에서는 지금까지처럼 전부 실행되고, CI에서만
+// 이 스크립트가 SKIP된다 — 그 대신 "CI는 PIN 인증 경로를 검증하지 않는다"는
+// 커버리지 공백이 생기며, 이 사실은 registry.mjs login 도메인 노트에 명시돼 있다
+// (CLAUDE.md 규칙 18 — 안 되는 걸 되는 것처럼 다루지 않는다).
+// 같은 관례 선례: testComputeWordKingApi.mjs(ADMIN_PIN 없으면 SKIP),
+// testXpLedgerDb.mjs / testEntranceTestDb.mjs(키·테이블 부재 시 SKIP).
+if (!ADMIN_PIN) {
+  console.log('SKIP — ADMIN_PIN이 없음(.env.local 미설정 또는 CI 환경, 예상된 상태). PIN 인증 e2e를 건너뜁니다.')
+  process.exit(0)
+}
 
 const { default: verifyStudentPin } = await import('../api/verify-student-pin.js')
 const { default: setStudentPin } = await import('../api/set-student-pin.js')

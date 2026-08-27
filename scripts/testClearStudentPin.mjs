@@ -37,7 +37,13 @@ const LIVE = process.argv.includes('--live')
 const LIVE_BASE = 'https://voca-drab.vercel.app'
 
 const ADMIN_PIN = process.env.ADMIN_PIN
-if (!ADMIN_PIN) { console.error('ADMIN_PIN missing in .env.local — abort'); process.exit(1) }
+// ADMIN_PIN 부재 = 정직한 SKIP(exit 0) — testStudentPinAuth.mjs의 동일 주석 참고.
+// CI에는 .env.local이 없고, ADMIN_PIN을 공개 저장소 secret에 넣지 않기로 했다
+// (운영자 결정 2026-08-27, 옵션 B). 로컬 실행 구조는 그대로 유지된다.
+if (!ADMIN_PIN) {
+  console.log('SKIP — ADMIN_PIN이 없음(.env.local 미설정 또는 CI 환경, 예상된 상태). PIN 초기화 e2e를 건너뜁니다.')
+  process.exit(0)
+}
 
 let failures = 0
 function check(label, cond, extra) {

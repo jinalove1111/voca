@@ -69,6 +69,23 @@ export const BUILDERS = {
 export const DOMAINS = {
   login: {
     label: '로그인 / PIN 인증',
+    // ⚠️ CI 커버리지 공백 명시 (2026-08-27, 운영자 결정 "옵션 B", CLAUDE.md 규칙 18)
+    // 아래 4개는 ADMIN_PIN(관리자 재인증 자격증명)이 있어야 실행된다.
+    //   scripts/testStudentPinAuth.mjs
+    //   scripts/testStudentPinSelfSetup.mjs
+    //   scripts/testAdminPinActionsDispatch.mjs
+    //   scripts/testClearStudentPin.mjs
+    // ADMIN_PIN 은 .env.local(git 미추적)에만 있고, 이 저장소는 public 이라
+    // GitHub Actions secret 에 넣지 않기로 했다(넣으면 pull_request 트리거 경로로
+    // 노출 위험이 생긴다). 그래서 CI(.github/workflows/release-gate.yml)에서는
+    // 이 4개가 "SKIP(exit 0)"으로 건너뛰어진다 — 예전처럼 abort(exit 1)로 게이트를
+    // 통째로 빨간불로 만들지 않는다.
+    //   · 로컬(.env.local 보유)에서는 지금까지와 100% 동일하게 전부 실행된다.
+    //   · 대신 "CI 는 PIN 인증/관리자 재인증 경로를 검증하지 않는다"는 공백이
+    //     실재한다. 그 경로를 건드리는 변경은 반드시 로컬에서 npm run verify:login
+    //     (또는 verify:all)을 돌려 확인할 것.
+    // 같은 SKIP 관례 선례: testComputeWordKingApi.mjs(ADMIN_PIN 부재 시 SKIP),
+    // testXpLedgerDb.mjs / testEntranceTestDb.mjs(서비스롤 키·테이블 부재 시 SKIP).
     checks: [
       { script: 'scripts/testStudentLogin.mjs', builders: ['wordlib'] },
       { script: 'scripts/testStudentSelectPinStatus.mjs', builders: [] },
