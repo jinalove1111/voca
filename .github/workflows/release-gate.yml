@@ -77,7 +77,16 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Node 24 — 로컬 검증 환경과 동일하게 맞춘다.
+          # 20 이면 안 된다: @supabase/supabase-js 2.110 계열(auth-js/realtime-js/
+          # postgrest-js/storage-js/functions-js)이 engines.node ">=22.0.0" 을
+          # 요구하고, Node 20 에는 전역 WebSocket 이 없어 createClient() 자체가
+          # "Node.js detected but native WebSocket not found" 로 던진다.
+          # npm ci 는 EBADENGINE 경고만 내고 설치는 성공하며, npm run build 는
+          # Supabase 클라이언트를 런타임에 만들지 않으므로 Gate 1 은 통과한다 —
+          # 그래서 Gate 2 에서야 무더기로 터졌다(run 33052585127 실측).
+          # pdfjs-dist 6.0.227 은 ">=22.13.0 || >=24" 를 요구하므로 24 가 안전하다.
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
