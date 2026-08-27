@@ -39,6 +39,13 @@ export const CHECK_CODES = {
   DUPLICATE: 'DUPLICATE',
   DIRECTION_INVALID: 'DIRECTION_INVALID',
   GHOST_UNIT: 'GHOST_UNIT',
+  // 배정 조합 모순(2026-08-28 추가) — 개별 FK 는 전부 유효한데 "조합"이
+  // 모순이라 앱이 조용히 엉뚱한 단어를 보여줄 수 있는 상태.
+  // 2026-08-27 전하은 사건(주교재가 바뀐 뒤 current_unit 이 옛 교재를
+  // 가리켜 앱이 "첫 유닛" 폴백으로 26단어만 보여준 건)과 같은 계열이다.
+  // 그 사건 자체는 기존 UNIT_INVALID:교재불일치 가 이미 잡지만, 아래 세
+  // 가지는 수정 전 규칙이 전부 PASS 를 주던 사각지대였다(실측 확인).
+  ASSIGNMENT_CONFLICT: 'ASSIGNMENT_CONFLICT',
 }
 
 // ── 유령 유닛(ghost unit) 판정 ──────────────────────────────────────────
@@ -258,6 +265,46 @@ export function evaluateStudent(student, ctx) {
   }
   add('no_orphan_assignment', '배정 고아 없음', orphanDetails.length === 0,
     CHECK_CODES.ORPHAN_ASSIGNMENT, orphanDetails.length ? [...new Set(orphanDetails)].join('/') : '')
+
+  // 12-b) 배정 조합 모순(2026-08-28) — 개별 FK 는 멀쩡한데 조합이 모순이라
+  //       앱이 "조용히" 다른 교재/유닛의 단어를 보여줄 수 있는 상태들.
+  //
+  //   ① primary 2개 이상
+  //      앱(wordLibrary.js getStudentAssignments)은 is_primary DESC 로 정렬한
+  //      뒤 앞의 행을 주교재로 쓴다. primary 가 둘이면 동률이라 DB 가 주는
+  //      순서에 따라 주교재가 갈리고, 같은 학생이 새로고침할 때마다 다른
+  //      교재의 단어를 볼 수 있다. 아래 헬스체크 자신도 .find() 로 첫 행만
+  //      집기 때문에 이 상태를 표시하지 않으면 검사기까지 임의의 한쪽만
+  //      보고 PASS 를 준다(실측: 수정 전 PASS).
+  //
+  //   ② SCA 행의 current_unit 이 그 행의 교재 소속이 아님
+  //      학생이 그 교재로 전환하는 순간 전하은 사건과 똑같은 상태가 된다.
+  //      기존 unit_belongs_to_textbook 은 students.current_unit_id(=지금
+  //      쓰는 교재)만 보므로, 아직 전환하지 않은 보조 교재 행의 지뢰는
+  //      전환 전까지 보이지 않는다 — 터지기 전에 잡는 것이 목적이다.
+  //
+  //   ③ 같은 교재에 SCA 행이 2개 이상
+  //      교재 배정 해제/재배정이 겹칠 때 생길 수 있고, 어느 행의
+  //      current_unit 이 이기는지가 불확정이 된다.
+  //
+  //   셋 다 2026-08-28 라이브 실측에서는 0건이다(SCA 482행 전수 확인) —
+  //   즉 지금 있는 문제를 덮는 규칙이 아니라 재발 탐지용 안전망이다.
+  const conflicts = []
+  const primaryRows = myAssignments.filter((a) => a?.is_primary)
+  if (primaryRows.length > 1) conflicts.push(`primary${primaryRows.length}개`)
+  for (const a of myAssignments) {
+    if (!a?.current_unit_id || !a?.textbook_id) continue
+    const rowUnit = unitById.get(a.current_unit_id)
+    if (rowUnit && rowUnit.textbook_id !== a.textbook_id) conflicts.push('배정행유닛불일치')
+  }
+  const tbCounts = new Map()
+  for (const a of myAssignments) {
+    if (!a?.textbook_id) continue
+    tbCounts.set(a.textbook_id, (tbCounts.get(a.textbook_id) || 0) + 1)
+  }
+  if ([...tbCounts.values()].some((n) => n > 1)) conflicts.push('같은교재중복배정')
+  add('no_assignment_conflict', '배정 조합 모순 없음', conflicts.length === 0,
+    CHECK_CODES.ASSIGNMENT_CONFLICT, conflicts.length ? [...new Set(conflicts)].join('/') : '')
 
   // 6~7) 주교재
   const primary = myAssignments.find((a) => a?.is_primary) || null

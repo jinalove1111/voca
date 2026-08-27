@@ -57,9 +57,10 @@ const evalOne = (fx, id = 's-1') => {
 console.log('\n=== 1절. 모듈 계약 ===')
 check('buildContext / evaluateStudent / classifyAccount / summarize 가 export된 함수다',
   [buildContext, evaluateStudent, classifyAccount, summarize].every((f) => typeof f === 'function'))
-check('CHECK_CODES에 9개 FAIL 코드가 전부 있다',
+check('CHECK_CODES에 10개 FAIL 코드가 전부 있다',
   ['LOGIN_FAIL', 'CLASS_INVALID', 'TEXTBOOK_MISSING', 'UNIT_INVALID', 'WORDS_ZERO',
-    'ORPHAN_ASSIGNMENT', 'DUPLICATE', 'DIRECTION_INVALID', 'GHOST_UNIT'].every((c) => CHECK_CODES?.[c] === c),
+    'ORPHAN_ASSIGNMENT', 'DUPLICATE', 'DIRECTION_INVALID', 'GHOST_UNIT',
+    'ASSIGNMENT_CONFLICT'].every((c) => CHECK_CODES?.[c] === c),
   JSON.stringify(CHECK_CODES))
 check('VALID_DIRECTIONS가 앱과 동일한 4종이다(wordLibrary.js VALID_SPELLING_DIRECTIONS)',
   VALID_DIRECTIONS instanceof Set
@@ -125,6 +126,60 @@ console.log('\n=== 3절. FAIL 코드 8종을 각각 재현 ===')
   const fx = baseFixture()
   fx.assignments.push({ student_id: 's-1', class_id: 'c-nope', textbook_id: 'tb-1', is_primary: false })
   check('ORPHAN_ASSIGNMENT — 비-primary 배정의 반이 고아', has(evalOne(fx), 'ORPHAN_ASSIGNMENT'))
+}
+
+// ── ASSIGNMENT_CONFLICT (2026-08-28) — 전하은 사건 계열 재발 탐지 ──
+// 개별 FK 는 전부 유효한데 "조합"이 모순이라 앱이 조용히 다른 교재/유닛의
+// 단어를 보여줄 수 있는 상태. 규칙 15 FAIL-first: 아래 3건은 규칙 추가 전
+// 실측에서 전부 status=PASS / codes=[] 였다(놓침) — 그 결과를 보고 규칙을
+// 넣었고, 지금은 셋 다 FAIL 로 잡힌다.
+{
+  // 보조 교재를 하나 더 갖춘 픽스처(모순 시나리오의 공통 배경)
+  const withSecond = () => {
+    const fx = baseFixture()
+    fx.classes.push({ id: 'c-own2', name: '교재소유반2', spelling_direction: 'mixed' })
+    fx.textbooks.push({ id: 'tb-2', name: '교재2', owner_class_id: 'c-own2' })
+    fx.units.push({ id: 'u-2', name: 'Unit1', textbook_id: 'tb-2' })
+    fx.words.push({ id: 'x1', unit_id: 'u-2' }, { id: 'x2', unit_id: 'u-2' })
+    return fx
+  }
+  {
+    const fx = withSecond()
+    fx.assignments.push({ student_id: 's-1', class_id: 'c-home', textbook_id: 'tb-2', is_primary: true })
+    const res = evalOne(fx)
+    check('ASSIGNMENT_CONFLICT — primary 배정이 2개(앱이 새로고침마다 다른 교재를 고를 수 있음)',
+      has(res, 'ASSIGNMENT_CONFLICT'), JSON.stringify(res?.codes))
+    check('  detail 에 primary 개수가 드러난다', (res?.codes || []).some((c) => String(c).includes('primary2개')))
+  }
+  {
+    const fx = withSecond()
+    fx.assignments.push({ student_id: 's-1', class_id: 'c-home', textbook_id: 'tb-2', current_unit_id: 'u-1', is_primary: false })
+    const res = evalOne(fx)
+    check('ASSIGNMENT_CONFLICT — 보조 배정 행의 current_unit 이 그 행의 교재 소속이 아님(전환 시 터질 지뢰)',
+      has(res, 'ASSIGNMENT_CONFLICT'), JSON.stringify(res?.codes))
+  }
+  {
+    const fx = baseFixture()
+    fx.assignments.push({ student_id: 's-1', class_id: 'c-home', textbook_id: 'tb-1', is_primary: false })
+    check('ASSIGNMENT_CONFLICT — 같은 교재에 SCA 행 2개(어느 행의 유닛이 이기는지 불확정)',
+      has(evalOne(fx), 'ASSIGNMENT_CONFLICT'))
+  }
+  // 오탐 반증 — 정상적인 다중 교재 배정(primary 1 + 보조 1)은 걸리면 안 된다.
+  // 이 저장소는 다중 교재가 정상 운영 형태라(2026-07-21 v2.9) 여기서 오탐이
+  // 나면 라이브 다수 학생이 즉시 FAIL 로 뒤집힌다.
+  {
+    const fx = withSecond()
+    fx.assignments.push({ student_id: 's-1', class_id: 'c-home', textbook_id: 'tb-2', current_unit_id: 'u-2', is_primary: false })
+    const res = evalOne(fx)
+    check('오탐 반증 — 정상 다중 교재(primary 1 + 보조 1, 각자 올바른 유닛)는 PASS',
+      res?.status === 'PASS', JSON.stringify(res?.codes))
+  }
+  {
+    // 보조 배정에 current_unit 이 아예 없는 경우(가장 흔한 정상 형태)
+    const fx = withSecond()
+    fx.assignments.push({ student_id: 's-1', class_id: 'c-home', textbook_id: 'tb-2', is_primary: false })
+    check('오탐 반증 — 보조 배정에 current_unit 이 없어도 PASS', evalOne(fx)?.status === 'PASS')
+  }
 }
 {
   const fx = baseFixture(); fx.students[0].current_unit_id = null
