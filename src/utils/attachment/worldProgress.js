@@ -27,7 +27,17 @@
 //
 // `?? stats.clearedCount` 폴백: gardenPoints가 없는 입력(구 progress 백업,
 // DebugPage의 mock stats 등)에서도 예전과 똑같이 동작한다(헌법 규칙 9).
-const pointsOf = (stats) => stats?.gardenPoints ?? stats?.clearedCount ?? 0
+//
+// 음수/NaN 클램프(2026-08-28, testGardenGrowthFlow.mjs 13번 시나리오에서 발견):
+// 클램프가 없으면 points<0 이나 NaN일 때 아래 gardenPlots의 units가 음수/NaN이
+// 되어 PLOT_STAGES[음수]가 undefined가 되고, 화면에 이모지 없는 빈 타일이
+// 그려진다. 실데이터로는 도달할 수 없지만(gardenPoints는 Set.size, clearedCount는
+// 배열 length라 항상 ≥0이고 DebugPage의 mock 입력도 0으로 클램프한다) 이 함수
+// 하나만 보고도 안전이 보장되도록 여기서 막는다 — 호출자 신뢰에 기대지 않는다.
+const pointsOf = (stats) => {
+  const n = stats?.gardenPoints ?? stats?.clearedCount ?? 0
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
 
 export const WORLD_STAGES = [
   { id: 'garden', emoji: '🌱', name: '나의 정원', minPoints: 0, desc: '단어를 배울 때마다 정원이 자라나요' },
