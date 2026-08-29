@@ -47,6 +47,36 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
 
 ## NEXT
 
+### [P1] `getStudentWords` usingOverride 분기의 첫 유닛 폴백 — 운영자 판단 대기 (2026-08-30 야간 감사)
+- 근거: `src/utils/wordLibrary.js` `getStudentWords` 의 `usingOverride`
+  분기(해당 줄에 같은 내용의 주석을 남겨 뒀다).
+- 내용: 2026-08-29/30 수정으로 `resolveStudentUnitObj`/`setStudentClass`/
+  `setStudentUnit`/`setStudentsClassBulk` 에서 "이름으로 못 찾으면 반의
+  첫 유닛" 폴백을 제거했는데, 이 분기에만 `|| units[0]` 가 남아 있다.
+  배정 행의 `current_unit_id` 가 없으면 그 반의 첫 유닛 단어를 조용히
+  보여준다 — 실측상 첫 유닛 자리에 0단어 유닛 2개와 1단어 유령 유닛
+  7개가 있어 같은 계열의 무증상 실패가 가능하다.
+- **고치지 않은 이유(중요)**: 라이브 실측 결과 `student_class_assignments`
+  482행 중 `current_unit_id` 가 NULL 인 행이 **212행(44%)**, 그중
+  `is_primary=true` 가 203행이다. 그대로 null 로 바꾸면 그 학생들이 지금
+  보던 화면 대신 **0단어**를 보게 된다. "첫 유닛을 보여준다" vs "빈 상태로
+  안내한다" 중 무엇이 맞는지는 제품 판단이라 에이전트가 임의로 정하지 않았다.
+- 선행 조건: 유령 유닛 9개 정리(0단어 2 + 1단어 7)가 먼저면 위험이 크게
+  줄어든다 — 다만 그건 DB DELETE 라 운영자 SQL 실행 필요(헌법 규칙 8).
+
+### [P2] 유령 유닛 9개 정리 — 운영자 SQL 실행 필요 (2026-08-30 야간 감사)
+- 근거: `npm run health:students` 유령 유닛 인벤토리 + 라이브 유닛 50개
+  전수 단어 수 실측.
+- 내용: 0단어 유닛 2개(둘 다 이름이 `Unit 1`) + 1단어 유령 유닛 7개
+  (엑셀 헤더 라벨이 단어로 저장된 잔재) = 50개 중 9개(18%)가 학습 불가
+  상태다. 현재 배정된 실학생은 0명이라 즉시 피해는 없지만, 위 P1 폴백과
+  `setPrimaryTextbook` 의 "단어 있는 첫 유닛" 선택이 1단어 유령 유닛을
+  **정상 유닛보다 먼저** 고를 수 있다.
+- 순서 주의: 폴백 제거(2026-08-29/30, 완료)가 먼저였고 그다음이 정리다.
+  순서를 뒤집으면 정리 중에 학생이 다른 유닛으로 옮겨갈 수 있었다.
+- 에이전트는 SQL 파일만 준비할 수 있고 실행은 운영자 몫이다(헌법 규칙 8).
+  이번 야간 세션은 SQL 파일도 만들지 않았다(운영자 지시 범위 밖).
+
 ### [P1] `supabase_v3_34_account_status.sql` + `supabase_v3_35_entrance_textbook_backfill.sql` 실행 대기 — "고1 능률 민병천" 분모 10 vs 실제 12 사고 해결
 - 근거: `handoff.md` 2026-08-11(94차), `docs/ENTRANCE_EXAM_ELIGIBILITY.md`
   6번 "2026-08-11(94차) 추가", `docs/operations/2026-08-11-entrance-
@@ -61,14 +91,24 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
   12명인지 육안 확인.
 - 미확인(정직 기록): SQL 실행 전이라 실제 적용 후 분모가 사전 시뮬레이션
   대로 정확히 12명이 되는지는 **아직 확인되지 않음**.
-- 관련 코드 변경(워킹트리, 아직 미커밋): 신규 `src/utils/accountStatus.js`
+- ⚠️ 2026-08-30 정정: 아래 "아직 미커밋"은 사실이 아니다 —
+  `src/utils/accountStatus.js`는 `f228b5c`로 이미 커밋됐다. SQL 두 개의
+  **실행 대기**만 여전히 유효하다(라이브 재확인: `students.is_test` 조회가
+  HTTP 400 / 42703 이라 v3_34 미실행 확정).
+- 관련 코드 변경(당시 워킹트리 기준 기록, 지금은 커밋됨): `src/utils/accountStatus.js`
   (테스트/아카이브 계정 판별 단일화, `barry` 테스트 계정 추가) —
   `fetchEntranceRosterForClass`/`compute-word-king.js`/
   `EntranceTestAdmin.jsx`/`StudentSelect.jsx`/`StudentDirectory.jsx`
   5곳에 적용. `npm run build`/`verify:eligibility`(44/44)/`verify:admin`/
   `verify:all` 전부 PASS. 다음 세션이 리뷰 후 커밋 필요.
 
-### [P1] 별(star) 오염 버그 — 원인 라인 특정 완료, 수정 착수는 운영자 승인 대기
+### ~~[P1] 별(star) 오염 버그~~ — **해결됨(2026-08-12, `3590cd5`). DONE으로 이동 대상**
+> ⚠️ 2026-08-30 야간 감사 정정 — 이 카드는 이미 해결된 문제가 NEXT에 남아
+> 있던 것이다. `claimName()` 이름 키 소유권 가드가 `loadRecord` 앞에
+> 추가됐고(`useStudent.js:694-705`), 회귀 테스트
+> `scripts/testStarDeltaOnEntry.mjs`(6시나리오 25단언)가 registry에 등록돼
+> `verify:all`에서 실행 중이다. 아래 본문은 당시 원인 분석 기록으로만
+> 남긴다 — **다시 고치지 말 것**(헌법 규칙 3).
 - 근거: `handoff.md` 2026-08-11(94차) "별 오염 버그" 섹션.
 - 내용: `src/hooks/useStudent.js:645-659`의 `loadRecord`가 이 기기에서
   처음 보는 `studentId`에 대해 `store[legacyName]`(이름 문자열 키)로
@@ -199,9 +239,20 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
   유지되고 반 배정만 해제됩니다"를 추가하면 관리자 불안감 감소(안전성
   자체는 이미 확정 — 순수 UX 개선).
 
-### [P3] `api/student-pin-status.js` 무인증
-- 근거: `handoff.md` 2026-07-18 Phase 4 보안 감사 재확인 목록 #2.
-- 내용: booleans만 노출, 정보 노출 미미 — 낮은 우선순위 유지.
+### ~~[P3] `api/student-pin-status.js` 무인증~~ — **P0였음. 2026-08-29 차단 완료(`c09b09c`)**
+> ⚠️ 2026-08-30 정정 — 아래 "정보 노출 미미, 낮은 우선순위" 판정은 **틀렸다.**
+> 이 boolean 하나(`pinSetupAllowed`)가 계정 탈취 체인의 열쇠였다:
+> anon key로 `students.id` 열거(라이브 HTTP 200) → 무인증 status API로
+> `pinSetupAllowed` 열거(anon 직접 조회는 42501로 막혀 있는데 service_role이
+> 우회 노출) → 무인증 `self-set-student-pin`으로 임의 PIN 선점 →
+> `verify-student-pin` 로그인 → `signSessionToken` 발급 → 보상 원장 쓰기
+> 권한 획득. 즉 2026-08-24 세션 토큰 인증 강화가 통째로 무력화되는 경로였다.
+> **교훈: "노출되는 값이 작다"가 아니라 "그 값으로 무엇을 할 수 있나"로
+> 판정해야 한다.** 비슷한 카드를 다시 P3로 내리기 전에 이 문장을 볼 것.
+- 조치: 관리자 발급 1회용 setup code(SESSION_SECRET HMAC 파생, TTL 20분,
+  DB 컬럼 추가 0)를 제2 인증 요소로 요구 + status API 배치 상한 100(보조 방어).
+  회귀 테스트 `scripts/testPinSetupCapability.mjs` 65단언.
+- 근거: `handoff.md` 2026-07-18 Phase 4 보안 감사 재확인 목록 #2(원래 판정).
 
 ### [P3] 게임화(Gamification) — `GAME_DESIGN.md` 설계 완료, 착수는 운영자 승인 필요
 - 근거: `GAME_DESIGN.md`(신규, 2026-07-18, Engineering Head 순수 설계
