@@ -199,6 +199,17 @@ console.log('\n8. 쓰기 경로 정적 계약 (스텁이 update 를 지원하지
   check('setStudentUnit 에 raw 이름 완전일치가 남아 있지 않다',
     !/\.find\(\s*\(u\)\s*=>\s*u\.name === unitName\s*\)/.test(setUnitBody))
 
+  // 2026-08-30 야간 감사 — 단건 경로(setStudentClass)만 고치고 **일괄
+  // 이동**(관리자 "일괄 이동")을 빠뜨렸던 것을 발견해 함께 고정한다.
+  // 일괄 경로는 한 번의 실수가 여러 학생을 동시에 유닛 없는 상태로 만들어
+  // 단건보다 위험하다.
+  const bulkBody = bodyOf('export async function setStudentsClassBulk')
+  check('setStudentsClassBulk 본문을 추출했다', bulkBody.length > 100 && bulkBody.includes('setStudentsClassBulk'), String(bulkBody.length))
+  check('setStudentsClassBulk 가 공유 리졸버를 쓴다', /findUnitByName|resolveClassUnit/.test(bulkBody))
+  check('setStudentsClassBulk 에 raw 이름 완전일치가 남아 있지 않다',
+    !/\.find\(\s*\(u\)\s*=>\s*u\.name === unitName\s*\)/.test(bulkBody))
+  check('setStudentsClassBulk 에 첫 유닛 폴백이 없다', !/\|\|\s*(tb)?[Uu]nits\[0\]/.test(bulkBody))
+
   const resolveBody = bodyOf('function resolveStudentUnitObj')
   check('resolveStudentUnitObj 본문을 추출했다', resolveBody.length > 100)
   check('resolveStudentUnitObj 가 공유 리졸버를 쓴다', /findUnitByName/.test(resolveBody))

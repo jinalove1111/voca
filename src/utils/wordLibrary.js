@@ -1854,8 +1854,12 @@ export const getStudentClassId = (id) => _students.get(id)?.classId || null
 // ── v2.1 학생 현재 유닛 해석 (단일 진실 공급원) ──────────────────────────
 // 우선순위: ① current_unit_id(UUID — 유닛 이름이 바뀌거나 표기가 달라도
 // 절대 안 끊어짐) ② unit_name 문자열 매칭(마이그레이션 전/백필 실패 행
-// 하위호환) ③ 반의 첫 유닛(기존 getClassWords 폴백과 동일 — 조용히 첫
-// 유닛으로 떨어지던 기존 동작을 "최후 폴백"으로만 남김).
+// 하위호환, findUnitByName이 "Unit6"/"Unit 6" 같은 표기 흔들림을 흡수하되
+// 후보가 둘 이상이면 고르지 않는다) ③ **없음 — 못 찾으면 null이다.**
+// 2026-08-29 이전에는 ③으로 "반의 첫 유닛"에 조용히 떨어졌는데, 실측상
+// 첫 유닛 자리에 0단어 유닛 2개와 1단어 유령 유닛 7개가 있어서 반을 옮긴
+// 학생이 아무 경고 없이 0~1단어 화면을 봤다. 그 폴백을 제거했다 —
+// 이 주석을 읽고 "최후 폴백"을 다시 넣지 말 것(헌법 규칙 3).
 // 화면 표시(getStudentUnit)와 단어 로딩(getStudentWords)이 반드시 같은
 // 함수를 거친다 — 표시되는 유닛과 실제 보이는 단어가 어긋날 수 없게.
 function resolveStudentUnitObj(id) {
@@ -2103,9 +2107,15 @@ export async function setStudentsClassBulk(ids, className, unitName) {
   if (validIds.length === 0) return
   const classId = className ? (await ensureClass(className)).id : null
   // v2.1: 목적지 반에서 unitName과 일치하는 유닛 id를 함께 기록(전원 같은
-  // 반·같은 유닛으로 이동하므로 단일 값). 없으면 null — 이름/첫 유닛 폴백.
+  // 반·같은 유닛으로 이동하므로 단일 값).
+  // 2026-08-30 — setStudentClass(단건)와 같은 표기 흔들림 버그가 여기에도
+  // 있었다. 2026-08-29 수정이 단건 경로만 고치고 이 **일괄 이동**을
+  // 빠뜨렸는데, 일괄 경로는 한 번의 실수가 여러 학생을 동시에 유닛 없는
+  // 상태로 만들어 단건보다 위험하다. 같은 공유 리졸버로 통일한다.
+  // 못 찾으면 여전히 null이지만, 읽기 경로(resolveStudentUnitObj)도 이제
+  // 임의의 첫 유닛을 고르지 않으므로 "조용히 엉뚱한 단어"는 나오지 않는다.
   const unitId = className
-    ? (_cache[className]?.units.find((u) => u.name === unitName)?.id || null)
+    ? (findUnitByName(_cache[className]?.units, unitName)?.id || null)
     : null
   const base = { class_id: classId, unit_name: unitName }
   let { error } = await supabase.from('students')
@@ -3206,8 +3216,16 @@ export const getStudentWords = (studentId, { classId: classIdOverride } = {}) =>
     }
     if (usingOverride) {
       // 학생의 주 반이 아니라 override된 반의 유닛을 해석한다 — 그 배정
-      // 행 자체의 current_unit_id를 우선(있으면), 없으면 그 반의 첫 유닛
-      // (resolveStudentUnitObj의 "반의 첫 유닛" 최후 폴백과 동일한 정신).
+      // 행 자체의 current_unit_id를 우선(있으면), 없으면 그 반의 첫 유닛.
+      //
+      // ⚠️ 2026-08-30 감사 — 이 `|| units[0]`은 resolveStudentUnitObj에서
+      // 제거된 "첫 유닛 최후 폴백"이 **여기만 남은** 것이다(위 함수 주석이
+      // 더 이상 그 폴백을 설명하지 않는다 — 이 주석이 그 사실을 대신 남긴다).
+      // 제거하지 않은 이유: SCA 482행 중 current_unit_id가 NULL인 행이
+      // 212행(44%, 그중 is_primary 203행)이라 그대로 null로 바꾸면 그 학생들이
+      // 지금 보던 화면 대신 0단어를 보게 된다 — 영향 범위가 커서 이번 야간
+      // 범위에서 판단하지 않았다. 올바른 동작(첫 유닛 표시 vs 빈 상태 안내)은
+      // 운영자 판단이 필요하다. 후속 P1 후보.
       const targetUnitId = _studentAssignmentsCache.get(studentId)?.find((a) => a.classId === classId)?.unitId
       const units = _cache[cls]?.units || []
       unitObj = (targetUnitId && units.find((u) => u.id === targetUnitId)) || units[0] || null
