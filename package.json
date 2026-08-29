@@ -70,6 +70,7 @@
     "verify:reward-hardening-behavior": "node scripts/testRewardServerHardeningBehavior.mjs",
     "verify:session-auth": "node scripts/testSessionTokenAuth.mjs",
     "verify:pin-setup-capability": "node scripts/testPinSetupCapability.mjs",
+    "verify:class-move-unit": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testClassMoveUnitResolution.mjs",
     "verify:reward": "node scripts/testRewardEngine.mjs && node scripts/buildRaceBundle.mjs && node scripts/testRewardFlow.mjs",
     "verify:reward-baseline": "node scripts/testRewardBaselineMigration.mjs",
     "verify:reward-ledger": "node scripts/testRewardLedgerMigration.mjs",

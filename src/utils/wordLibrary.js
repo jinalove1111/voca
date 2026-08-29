@@ -1102,15 +1102,27 @@ export const getClassUnitNames = (className) => getClassUnits(className).map((u)
 // 없으므로 고르지 않는다.
 const normalizeUnitKey = (name) => String(name || '').trim().toLowerCase().replace(/\s+/g, '')
 
-export function resolveClassUnit(className, unitName) {
-  const units = _cache[className]?.units || []
-  if (units.length === 0) return null
-  const exact = units.find((u) => u.name === unitName)
+// 2026-08-29 — 위 규칙(완전일치 -> 정규화 유일후보 -> 못 찾으면 null)을
+// units 배열 단위로 쓸 수 있게 분리했다. resolveClassUnit(반 이름 기반)만
+// 이 규칙을 갖고 있어서, 정작 반 이동/유닛 변경/학생 유닛 해석 경로는 raw
+// `u.name === name` 완전일치만 하고 못 찾으면 `|| units[0]`으로 조용히 첫
+// 유닛에 착지하고 있었다. 실측상 프로덕션 유닛 50개의 표기가 4종 혼재
+// (UnitN 29 / Unit N 13 / 번호없는 Unit 6 / 숫자만 2)이고, 첫 유닛 자리에는
+// 0단어 유닛 2개와 1단어 유령 유닛 7개가 있어서 반을 옮긴 학생이 아무 경고
+// 없이 0~1단어 화면을 볼 수 있었다(전하은 사건과 같은 계열).
+export function findUnitByName(units, unitName) {
+  const list = Array.isArray(units) ? units : []
+  if (list.length === 0) return null
+  const exact = list.find((u) => u.name === unitName)
   if (exact) return exact
   const key = normalizeUnitKey(unitName)
   if (!key) return null
-  const candidates = units.filter((u) => normalizeUnitKey(u.name) === key)
+  const candidates = list.filter((u) => normalizeUnitKey(u.name) === key)
   return candidates.length === 1 ? candidates[0] : null
+}
+
+export function resolveClassUnit(className, unitName) {
+  return findUnitByName(_cache[className]?.units, unitName)
 }
 
 // 유닛 UUID로 직접 찾는 정규 경로 — 이름이 개입하지 않으므로 같은 이름의
@@ -1859,7 +1871,11 @@ function resolveStudentUnitObj(id) {
           const byId = tbUnits.find((u) => u.id === s.unitId)
           if (byId) return byId
         }
-        return tbUnits.find((u) => u.name === s.unitName) || tbUnits[0]
+        // 2026-08-29 — 표기 흔들림을 흡수하되, 못 찾으면 **조용히 첫 유닛을
+        // 고르지 않는다**(아래 반 기반 경로와 동일 원칙). 예전에는
+        // `|| tbUnits[0]`이라 이름이 안 맞는 순간 교재의 첫 유닛(실측상
+        // 0단어/1단어 유령 유닛일 수 있다)을 말없이 보여줬다.
+        return findUnitByName(tbUnits, s.unitName)
       }
     }
   }
@@ -1870,7 +1886,12 @@ function resolveStudentUnitObj(id) {
     const byId = units.find((u) => u.id === s.unitId)
     if (byId) return byId
   }
-  return units.find((u) => u.name === s.unitName) || units[0]
+  // 2026-08-29 — 표기 흔들림 흡수 + 조용한 첫 유닛 폴백 제거. 못 찾으면
+  // null 을 돌려주고, 호출부(getStudentUnit/getStudentUnitId/getStudentWords)는
+  // 이미 null 을 안전하게 처리한다(유닛 0개 반에서 이미 null 을 받고 있었다).
+  // 라이브 실측: 이 변경으로 해석 결과가 달라지는 현재 학생은 0명이다
+  // (전체 1157명 중 215명은 FK 경로, 942명은 소속 반에 유닛 0개).
+  return findUnitByName(units, s.unitName)
 }
 
 // 표시용 유닛 이름 — 항상 해석된 값. 반/유닛 캐시가 아직 없으면(반 삭제
@@ -1925,8 +1946,15 @@ export async function setStudentClass(id, className) {
   // P7 감사(2026-07-16): 예전엔 뒤에 bare .select()가 붙어 있었는데, 반환
   // 데이터를 아무도 안 쓰는데도 업데이트된 행의 "모든" 컬럼(pin_hash 포함)이
   // 네트워크 응답에 실려 내려왔다 — 제거(동작 불변, 응답에서 해시 노출만 차단).
+  // 2026-08-29 — 새 반에서 같은 유닛을 찾을 때 표기 흔들림을 흡수한다.
+  // 예전에는 raw 완전일치라 "Unit6" 학생이 "Unit 6" 반으로 옮기면 못 찾고
+  // current_unit_id 가 NULL 로 덮여, 다음 로드에서 resolveStudentUnitObj 의
+  // 첫 유닛 폴백(당시 `|| units[0]`)이 0단어 유령 유닛을 집었다. 실측상
+  // 프로덕션에 두 표기가 각각 29개/13개로 공존하므로 반 이동 한 번으로
+  // 재현 가능한 경로였다. 못 찾으면 여전히 null 이지만, 이제는 읽기 경로도
+  // 임의의 유닛을 고르지 않으므로 "조용히 엉뚱한 단어"가 나오지 않는다.
   const unitIdInNewClass = className
-    ? (_cache[className]?.units.find((u) => u.name === s.unitName)?.id || null)
+    ? (findUnitByName(_cache[className]?.units, s.unitName)?.id || null)
     : null
   let { error } = await supabase.from('students')
     .update({ ...base, current_unit_id: unitIdInNewClass }).eq('id', id)
@@ -2039,7 +2067,7 @@ export async function setStudentUnit(id, unitName) {
     const tb = getStudentPrimaryTextbook(id)
     if (tb) {
       const tbUnits = getTextbookUnits(tb.id)
-      unitId = tbUnits.find((u) => u.name === unitName)?.id || null
+      unitId = findUnitByName(tbUnits, unitName)?.id || null
       // 2026-08-06 교차 교재 오염 수정 ② — 현재 교재에 유닛들이 있는데
       // 이름이 안 맞으면, 아래 사람 반 이름 폴백으로 "다른 교재의 유닛"을
       // 조용히 저장하는 대신 명확히 거부한다. 실측 드리프트(SCA primary는
@@ -2053,7 +2081,7 @@ export async function setStudentUnit(id, unitName) {
   }
   if (unitId == null) {
     const clsName = getClassNameById(s.classId) || s.className
-    unitId = _cache[clsName]?.units.find((u) => u.name === unitName)?.id || null
+    unitId = findUnitByName(_cache[clsName]?.units, unitName)?.id || null
   }
   // P7 감사: bare .select() 제거 — setStudentClass와 동일한 pin_hash 응답 노출 차단.
   let { error } = await supabase.from('students')
