@@ -306,6 +306,53 @@ export function evaluateStudent(student, ctx) {
   add('no_assignment_conflict', '배정 조합 모순 없음', conflicts.length === 0,
     CHECK_CODES.ASSIGNMENT_CONFLICT, conflicts.length ? [...new Set(conflicts)].join('/') : '')
 
+  // 12-c) 배정 행이 유령 유닛을 가리킴 (2026-08-30)
+  //   유령 유닛 9개를 정리하려고 참조를 전수 조사한 결과,
+  //   student_class_assignments 41행이 그 유닛들을 가리키고 있었고 그중
+  //   25행이 실학생 소유였다(실학생 19명, 그중 17명 is_primary). 그런데
+  //   health 는 PASS 35 / WARN 0 / FAIL 0 이었다 — 기존 두 규칙이 각자
+  //   자기 관점만 보느라 그 사이로 빠져나갔다:
+  //     · unit_not_ghost 는 students.current_unit_id(지금 쓰는 유닛)만 본다.
+  //       지금 유령을 쓰는 실학생은 0명이라 전원 PASS.
+  //     · 위 12-b ② 는 "배정 행 유닛이 그 행 교재 소속이 아닌가"를 본다.
+  //       유령 유닛은 그 교재에 **정상적으로 소속**돼 있어서(엑셀 업로드가
+  //       그 교재 밑에 만들었다) 통과한다.
+  //   이건 이론이 아니라 장전된 상태다 — getStudentWords 의 usingOverride
+  //   분기가 배정 행의 current_unit_id 를 우선 쓰므로, 그 교재로 전환하는
+  //   순간 헤더 라벨 1개짜리 화면을 보게 된다. 실제로 word_status 에는
+  //   한 학생이 헤더 단어 "English" 를 known 으로 학습한 기록이 남아 있다.
+  //
+  //   판정은 기존 isGhostUnit 을 그대로 재사용한다 — **0단어라는 이유만으로는
+  //   유령이 아니다**(이름이 정상인 빈 유닛은 교사가 아직 업로드하지 않은
+  //   정상 유닛일 수 있다). GHOST_MAX_WORDS 가드 덕분에 26/40/50단어 정상
+  //   유닛은 구조적으로 이 규칙에 걸리지 않는다.
+  //
+  //   자기 자신이 지금 쓰는 유닛은 아래 unit_not_ghost 가 이미 보고하므로
+  //   여기서 제외한다(같은 원인으로 두 번 보고하지 않는다 — 12-b 주석의
+  //   중복 보고 방지 원칙과 동일).
+  const ghostAssignments = []
+  for (const a of myAssignments) {
+    const uid = a?.current_unit_id
+    if (!uid || uid === student?.current_unit_id) continue
+    const rowUnit = unitById.get(uid)
+    if (!rowUnit) continue // 존재하지 않는 유닛은 ORPHAN_ASSIGNMENT 담당
+    const verdict = isGhostUnit(rowUnit, wordsByUnit.get(uid) || [])
+    if (verdict.ghost) {
+      const tb = a?.textbook_id ? textbookById.get(a.textbook_id) : null
+      ghostAssignments.push(`${tb?.name || a?.textbook_id || '?'}:"${rowUnit.name}"${a?.is_primary ? '(primary)' : ''}`)
+    }
+  }
+  //   심각도는 **WARN**이다(FAIL 아님). 이유: 이건 코드 회귀가 아니라 이미
+  //   쌓여 있던 데이터 부채이고, 해소하려면 운영자가 SQL 로 배정을 재지정해야
+  //   한다(헌법 규칙 8). FAIL 로 두면 실학생 18명이 걸려 Release Gate 가
+  //   모든 배포를 무기한 막고, 결국 게이트를 끄게 만든다 — 그게 더 나쁘다.
+  //   WARN 은 눈에 보이되 배포를 막지 않는다(DIRECTION_RANDOM 선례와 동일).
+  //   재지정이 끝나 0건이 되면 그때 FAIL 로 승격하는 것이 옳다.
+  const ghostAssignDetail = ghostAssignments.length ? [...new Set(ghostAssignments)].join('/') : ''
+  add('no_assignment_ghost_unit', '배정 행이 유령 유닛을 가리키지 않음',
+    true, null, ghostAssignDetail ? `WARN: ${ghostAssignDetail}` : '')
+  if (ghostAssignments.length) warnings.push(`ASSIGNMENT_GHOST_UNIT:${ghostAssignDetail}`)
+
   // 6~7) 주교재
   const primary = myAssignments.find((a) => a?.is_primary) || null
   const textbook = primary?.textbook_id ? textbookById.get(primary.textbook_id) || null : null

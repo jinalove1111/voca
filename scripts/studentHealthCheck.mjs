@@ -94,7 +94,16 @@ try {
     // word,meaning 도 함께 받는다 — 유령 유닛(엑셀 헤더 잔재) 판정에 필요.
     // 이 두 컬럼을 빼면 ghost 판정이 조용히 무력화된다.
     selectAll('words', 'id,unit_id,word,meaning'),
-    selectAll('student_class_assignments', 'student_id,class_id,textbook_id,is_primary'),
+    // 2026-08-30 — current_unit_id 를 반드시 함께 가져온다.
+    // 이 컬럼이 빠져 있어서 studentHealthRules 의 배정 관련 검사 두 개가
+    // **조용히 죽어 있었다**: 12-b ②(배정 행 유닛이 그 행 교재 소속이
+    // 아님)는 `if (!a?.current_unit_id) continue` 로 항상 건너뛰었고,
+    // 그래서 그 규칙 주석의 "라이브 실측 0건"은 데이터가 깨끗해서가 아니라
+    // 검사가 실행되지 않아서였다. 12-c(배정 행이 유령 유닛을 가리킴)도
+    // 같은 이유로 실 데이터에서 발화하지 못했다.
+    // buildContext 의 wordsByUnit 주석과 같은 종류의 함정이다 — 조회 쪽이
+    // 컬럼을 빼면 규칙이 에러 없이 무력화된다.
+    selectAll('student_class_assignments', 'student_id,class_id,textbook_id,is_primary,current_unit_id'),
   ])
   data = { students, classes, textbooks, units, words, assignments }
 } catch (err) {
