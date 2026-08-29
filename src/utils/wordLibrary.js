@@ -228,8 +228,11 @@ const WORDS_SELECT_BASE = 'id,unit_id,word,meaning,position,word_audio_url,examp
 // 어느 단어가 사라지는지는 정렬 tie 때문에 로드마다 달라질 수 있었다.
 // selectAllStudents(아래)가 students 테이블에 대해 이미 같은 사고를 겪고
 // 같은 방식으로 고쳐져 있다 — 이 헬퍼는 그 패턴을 조회 일반으로 넓힌 것.
+// 2026-08-30 — 관리자 분석 패널(AnalyticsPanel)도 같은 절단 사고를 겪고
+// 있어서(product_events 60일 창 5,634행이 1000행으로 잘림) 재사용할 수 있게
+// export 한다. 호출부는 반드시 결정적 정렬을 걸어야 한다(아래 주석 참고).
 const SELECT_PAGE_SIZE = 1000
-async function selectAllRows(buildQuery) {
+export async function selectAllRows(buildQuery) {
   let all = []
   let from = 0
   for (;;) {

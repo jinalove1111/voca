@@ -4,6 +4,9 @@
 // 숫자 라벨은 전부 "실제로 측정하는 것"을 그대로 말한다(근사는 근사라고).
 import { useEffect, useState } from 'react'
 import { supabase } from '../../utils/supabaseClient'
+// 2026-08-30 — 1000행 절단 수정. words/students 가 겪은 같은 사고의 해법을
+// 재사용한다(새 페이지네이션 방식을 만들지 않는다).
+import { selectAllRows } from '../../utils/wordLibrary'
 import { EV, fmtDay, computeReturnRates, computeGardenRevisits, computeAvgSessionMinutes, computeFeatureCounts } from '../../utils/analyticsMath'
 
 const EV_LABEL = {
@@ -23,17 +26,32 @@ export default function AnalyticsPanel() {
       // 60일 창 경계가 하루 밀렸다. product_events.day는 로컬 달력 키
       // (analyticsMath fmtDay와 동일 규칙)이므로 같은 규칙으로 조립한다.
       const since = fmtDay(Date.now() - 60 * 24 * 3600 * 1000)
-      const { data, error } = await supabase.from('product_events')
-        .select('anon_id,event,day,created_at').gte('day', since).limit(20000)
+      // 2026-08-30 절단 수정 — 이 프로젝트의 PostgREST max-rows 는 1000이라
+      // `.limit(20000)` 은 상한을 올려주지 못한다(라이브 실측: words 1,656행에
+      // limit 20000을 걸어도 1000행만 돌아온다). 60일 창의 product_events 는
+      // 실측 5,634행이었고, 잘린 표본으로 아래 4개 지표(재방문율/정원 재방문/
+      // 기능 사용/평균 세션 시간)를 계산하고 있었다. 재방문율·세션 시간은
+      // anon_id 단위 비율이라 단순 과소집계가 아니라 사용자 자체가 통째로
+      // 빠지는 왜곡이 된다. words/students 가 이미 겪은 같은 사고의 해법
+      // (selectAllRows)을 그대로 재사용한다.
+      // 정렬은 페이지네이션의 전제다 — tie 가 있으면 페이지 경계에서 행이
+      // 누락/중복된다. product_events 에는 고유 id 가 있어 그것을 키로 쓴다.
+      const { data, error } = await selectAllRows(() => supabase.from('product_events')
+        .select('anon_id,event,day,created_at').gte('day', since).order('id'))
       if (gone) return
       if (error) { setState({ loading: false, missing: true, rows: [], avgs: null }); return }
       // 평균 지표 — 기존 데이터에서 파생(정직 라벨: 각각 무엇의 평균인지 명시)
       let avgs = null
       try {
+        // 2026-08-30 — 위와 같은 이유로 전량 수집. 현재 실측 행 수는
+        // student_progress 190 / word_status 2,771(그중 mastered 0) /
+        // student_class_assignments 482 로, mastered 를 제외하면 아직 상한
+        // 아래지만 셋 다 상한을 넘는 순간 평균이 조용히 왜곡된다.
+        // 정렬 키는 각 테이블의 고유 컬럼(student_progress 는 student_id 가 PK).
         const [prog, ws, asg] = await Promise.all([
-          supabase.from('student_progress').select('progress_data'),
-          supabase.from('word_status').select('student_id,status').eq('status', 'mastered'),
-          supabase.from('student_class_assignments').select('student_id'),
+          selectAllRows(() => supabase.from('student_progress').select('progress_data').order('student_id')),
+          selectAllRows(() => supabase.from('word_status').select('student_id,status').eq('status', 'mastered').order('id')),
+          selectAllRows(() => supabase.from('student_class_assignments').select('student_id').order('id')),
         ])
         const blobs = (prog.data || []).map((r) => r.progress_data).filter(Boolean)
         const n = blobs.length || 1
