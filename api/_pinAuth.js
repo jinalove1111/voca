@@ -134,3 +134,105 @@ export function supabaseAdminUrl() {
 export function supabaseAdminKey() {
   return process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
 }
+
+// ── 서명된 세션 토큰 (2026-08-24, 보안 감사 HIGH 1 대응) ──────────────────
+// 문제: 이 앱은 Supabase Auth를 쓰지 않는다(supabase.auth.* 호출 0건).
+// 학생 로그인은 이름+PIN -> verify-student-pin.js가 service_role로 검증 ->
+// { studentId } 반환 -> App.jsx가 localStorage에 {id,name} 저장. 그 뒤로는
+// 서버가 클라이언트가 보낸 studentId를 **주장 그대로 신뢰**했다. 즉 누구나
+// 남의 studentId를 실어 보상 API를 호출할 수 있었다.
+//
+// 해법: 새 인증 프레임워크를 도입하지 않고, **이미 존재하는 유일한 로그인
+// 관문**(verify-student-pin)에서 서명 토큰을 함께 발급한다. 위 hashPin이
+// bcrypt 대신 Node 내장 crypto(scrypt)를 쓰는 것과 같은 정신으로, 여기서도
+// 내장 crypto HMAC만 쓴다 — 외부 패키지 0개(규칙 6).
+//
+//   token = base64url(payloadJson) + '.' + base64url(HMAC-SHA256(payloadJson))
+//   payload = { sid, exp }
+//
+// payload는 최소화한다 — 이름/반/유닛/PIN 어떤 개인정보도 담지 않는다.
+// 토큰은 서명만 되어 있고 암호화되어 있지 않으므로(브라우저가 읽을 수 있음),
+// 담기는 값은 "이미 그 클라이언트가 아는 것"(자기 studentId)뿐이어야 한다.
+//
+// 학생 경험 변화 0: 이름+PIN 그대로, 재로그인/계정 재생성 불필요,
+// DB 스키마 변경 0, migration 0.
+const SESSION_TOKEN_VERSION = 1
+export const SESSION_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30일 — 아이가 매번 다시 PIN을 치지 않아도 되는 길이
+
+// 시크릿은 서버 환경변수에서만 읽는다. VITE_ 접두사가 붙은 값은 브라우저
+// 번들에 들어가므로 **절대 폴백하지 않는다**(supabaseAdminKey의 anon 폴백과
+// 의도적으로 다름 — 그건 읽기 권한 폴백이고 이건 위조 방지 시크릿이다).
+export function sessionSecret() {
+  return process.env.SESSION_SECRET || ''
+}
+
+function b64url(buf) {
+  return Buffer.from(buf).toString('base64url')
+}
+function hmac(payloadB64, secret) {
+  return crypto.createHmac('sha256', secret).update(payloadB64).digest()
+}
+
+// 로그인 성공 시에만 호출한다. 시크릿이 없으면 토큰을 만들지 않고 null을
+// 반환한다(fail-closed — 가짜 토큰을 만들어 통과시키는 일이 없도록).
+// opts.now/opts.secret은 테스트 결정성을 위한 주입구다(운영 호출은 생략).
+export function signSessionToken(studentId, opts = {}) {
+  const secret = opts.secret === undefined ? sessionSecret() : opts.secret
+  if (!secret) return null
+  if (typeof studentId !== 'string' || studentId.length === 0) return null
+  const now = typeof opts.now === 'number' ? opts.now : Date.now()
+  const payload = { sid: studentId, exp: now + SESSION_TOKEN_TTL_MS }
+  const payloadB64 = b64url(JSON.stringify(payload))
+  return `${payloadB64}.${b64url(hmac(payloadB64, secret))}`
+}
+
+// 반환: { ok:true, studentId } | { ok:false, reason }
+// reason: no_secret | missing_token | malformed_token | bad_signature |
+//         expired | student_mismatch
+// 어떤 경로로도 예외를 던지지 않는다 — 호출부가 거부만 하면 되도록.
+export function verifySessionToken(token, opts = {}) {
+  const secret = opts.secret === undefined ? sessionSecret() : opts.secret
+  // 시크릿이 없으면 **통과시키지 않는다**(fail-closed, 운영자 지정).
+  if (!secret) return { ok: false, reason: 'no_secret' }
+  if (typeof token !== 'string' || token.trim().length === 0) return { ok: false, reason: 'missing_token' }
+
+  const parts = token.split('.')
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return { ok: false, reason: 'malformed_token' }
+  const [payloadB64, sigB64] = parts
+
+  // 서명 검증을 payload 파싱보다 먼저 한다 — 변조된 payload를 파싱하는
+  // 표면 자체를 줄인다. 비교는 timingSafeEqual(문자열 === 비교 금지).
+  let sigOk = false
+  try {
+    const expected = hmac(payloadB64, secret)
+    const got = Buffer.from(sigB64, 'base64url')
+    sigOk = expected.length === got.length && crypto.timingSafeEqual(expected, got)
+  } catch {
+    sigOk = false
+  }
+  if (!sigOk) return { ok: false, reason: 'bad_signature' }
+
+  let payload
+  try {
+    payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'))
+  } catch {
+    return { ok: false, reason: 'malformed_token' }
+  }
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return { ok: false, reason: 'malformed_token' }
+  if (typeof payload.sid !== 'string' || payload.sid.length === 0) return { ok: false, reason: 'malformed_token' }
+  if (typeof payload.exp !== 'number' || !Number.isFinite(payload.exp)) return { ok: false, reason: 'malformed_token' }
+
+  const now = typeof opts.now === 'number' ? opts.now : Date.now()
+  if (now >= payload.exp) return { ok: false, reason: 'expired' }
+
+  // 호출부가 body의 studentId를 함께 넘기면, 토큰이 주장하는 학생과
+  // 일치하는지까지 확인한다 — 이게 "남의 studentId로 요청" 차단의 핵심.
+  if (opts.studentId !== undefined) {
+    if (typeof opts.studentId !== 'string' || opts.studentId.length === 0) {
+      return { ok: false, reason: 'student_mismatch' }
+    }
+    if (opts.studentId !== payload.sid) return { ok: false, reason: 'student_mismatch' }
+  }
+
+  return { ok: true, studentId: payload.sid, version: SESSION_TOKEN_VERSION }
+}

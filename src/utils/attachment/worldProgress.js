@@ -10,17 +10,44 @@
 // attachmentWorldFull 플래그(기본 OFF) 뒤에 있다 — 별도 게임 인터페이스를
 // 만들지 않는다는 운영자 지시 그대로.
 //
-// growthPoints = clearedCount. 별/XP/티켓과 무관한 순수 학습 진행 지표를
+// growthPoints = gardenPoints. 별/XP/티켓과 무관한 순수 학습 진행 지표를
 // 쓰는 이유: 화폐/보상 경제와 완전히 분리(모자와 같은 원칙 — 코스메틱
 // 세계는 학습량만으로 자란다).
+//
+// 2026-08-28 축 교정 — 예전엔 growthPoints = clearedCount였다. clearedCount는
+// "퀴즈를 틀린 뒤 레벨업 미션에서 3연속 정답으로 되찾은 단어 수"라서(유일한
+// 쓰기 지점 useStudent.answerMission, 진입 조건 QuizGame 오답), 단어 학습
+// 완료·퀴즈 정답·쓰기·유닛 완주·데일리 진행 중 어느 것도 정원을 키우지
+// 못했다. 라이브 실측(2026-08-28): progress 보유 190명 중 170명(89%)이 영구
+// 0칸, 전 학생 cleared 합계 178 vs 퀴즈 정답 6,307. 열심히 한 아이일수록
+// 오답이 적어 정원이 덜 자라는 역인센티브였다.
+// 이제 attachmentCore가 파생하는 gardenPoints(= cleared ∪ completedWords ∪
+// clearedWords, 실제로 학습한 서로 다른 단어 수)를 읽는다. clearedCount는
+// 모자/밀스톤 전용으로 그대로 남는다 — 여기서 절대 다시 쓰지 않는다.
+//
+// `?? stats.clearedCount` 폴백: gardenPoints가 없는 입력(구 progress 백업,
+// DebugPage의 mock stats 등)에서도 예전과 똑같이 동작한다(헌법 규칙 9).
+//
+// 음수/NaN 클램프(2026-08-28, testGardenGrowthFlow.mjs 13번 시나리오에서 발견):
+// 클램프가 없으면 points<0 이나 NaN일 때 아래 gardenPlots의 units가 음수/NaN이
+// 되어 PLOT_STAGES[음수]가 undefined가 되고, 화면에 이모지 없는 빈 타일이
+// 그려진다. 실데이터로는 도달할 수 없지만(gardenPoints는 Set.size, clearedCount는
+// 배열 length라 항상 ≥0이고 DebugPage의 mock 입력도 0으로 클램프한다) 이 함수
+// 하나만 보고도 안전이 보장되도록 여기서 막는다 — 호출자 신뢰에 기대지 않는다.
+const pointsOf = (stats) => {
+  const n = stats?.gardenPoints ?? stats?.clearedCount ?? 0
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
 
 export const WORLD_STAGES = [
   { id: 'garden', emoji: '🌱', name: '나의 정원', minPoints: 0, desc: '단어를 배울 때마다 정원이 자라나요' },
-  { id: 'house', emoji: '🏠', name: '나의 집', minPoints: 30, desc: '단어 30개를 클리어하면 집이 지어져요' },
-  { id: 'bridge', emoji: '🌉', name: '다리', minPoints: 60, desc: '단어 60개를 클리어하면 다리가 놓여요' },
-  { id: 'library', emoji: '📚', name: '도서관', minPoints: 100, desc: '단어 100개를 클리어하면 도서관이 열려요' },
-  { id: 'village', emoji: '🏘️', name: '마을', minPoints: 150, desc: '단어 150개를 클리어하면 마을이 생겨요' },
-  { id: 'kingdom', emoji: '🏰', name: '왕국', minPoints: 250, desc: '단어 250개를 클리어하면 왕국이 완성돼요' },
+  // desc 문구: 축이 "레벨업 미션 클리어"에서 "배운 단어"로 바뀌었으므로
+  // 문구도 실제 조건과 맞춘다(2026-08-28). 임계값(minPoints)은 무변경.
+  { id: 'house', emoji: '🏠', name: '나의 집', minPoints: 30, desc: '단어 30개를 배우면 집이 지어져요' },
+  { id: 'bridge', emoji: '🌉', name: '다리', minPoints: 60, desc: '단어 60개를 배우면 다리가 놓여요' },
+  { id: 'library', emoji: '📚', name: '도서관', minPoints: 100, desc: '단어 100개를 배우면 도서관이 열려요' },
+  { id: 'village', emoji: '🏘️', name: '마을', minPoints: 150, desc: '단어 150개를 배우면 마을이 생겨요' },
+  { id: 'kingdom', emoji: '🏰', name: '왕국', minPoints: 250, desc: '단어 250개를 배우면 왕국이 완성돼요' },
 ]
 
 /**
@@ -28,7 +55,7 @@ export const WORLD_STAGES = [
  * @returns { growthPoints, stages: [{...stage, unlocked, progress(0~1)}], nextStage }
  */
 export function computeWorldState(stats) {
-  const growthPoints = stats.clearedCount || 0
+  const growthPoints = pointsOf(stats)
   const stages = WORLD_STAGES.map((s, i) => {
     const next = WORLD_STAGES[i + 1]
     const span = next ? next.minPoints - s.minPoints : 1
@@ -44,18 +71,27 @@ export function computeWorldState(stats) {
   return { growthPoints, stages, nextStage }
 }
 
-// ── 정원 MVP — 3x3 텃밭 격자 ──
-// 칸당 성장 단계: 클리어 단어 수가 칸을 순서대로 채우며 자란다.
+// ── 정원 — 4x4 텃밭 격자 ──
+// 칸당 성장 단계: 학습한 단어 수가 칸을 순서대로 채우며 자란다.
 //   empty(0) → seed(1~) → sprout → flower → tree
 // 칸 i의 성장은 growthPoints에서 결정론적으로 파생(무작위/저장 없음).
-export const PLOT_COUNT = 9
-export const POINTS_PER_STAGE = 3 // 칸 하나가 한 단계 자라는 데 필요한 클리어 수
+//
+// 2026-08-28 속도 재조정(운영자 승인) — 9칸/3점 → 16칸/2점.
+//   · 1칸이 눈에 보이게 변하는 비용 = 새 단어 2개.
+//     라이브 실측 "학습한 하루당 새 단어" 중앙값 1.9개 → 약 0.94칸/일 =
+//     학습한 날마다 최소 한 번은 눈에 보이는 변화가 생긴다(요청 기준).
+//   · 만개(16칸 전부 나무)까지 16×4×2 = 128포인트. 중앙값 페이스로 약
+//     67 학습일(주 3회면 5개월) — 며칠 만에 끝나지 않는다.
+//   · 9칸/3점을 유지하면 만개가 108포인트라 상위 학생이 즉시 천장에
+//     닿아 더 자랄 곳이 없었다(실측: 현재 데이터로 만개 3명).
+export const PLOT_COUNT = 16
+export const POINTS_PER_STAGE = 2 // 칸 하나가 한 단계 자라는 데 필요한 학습 단어 수
 const PLOT_STAGES = ['empty', 'seed', 'sprout', 'flower', 'tree']
 export const PLOT_STAGE_EMOJI = { empty: '🟫', seed: '🌰', sprout: '🌱', flower: '🌸', tree: '🌳' }
 
 export function gardenPlots(stats) {
-  const points = stats.clearedCount || 0
-  // 라운드로빈 분배: 포인트가 9칸에 골고루 돌아가며 쌓인다 — 칸 하나만
+  const points = pointsOf(stats)
+  // 라운드로빈 분배: 포인트가 PLOT_COUNT칸에 골고루 돌아가며 쌓인다 — 칸 하나만
   // 먼저 다 자라는 게 아니라 정원 전체가 서서히 무성해지는 연출.
   const perPlotUnits = Math.floor(points / POINTS_PER_STAGE)
   return Array.from({ length: PLOT_COUNT }, (_, i) => {

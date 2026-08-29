@@ -119,6 +119,28 @@ export function deriveAttachmentStats(rec, now = new Date()) {
     return (mission && mission.done) || clearedSet.has(wid)
   })
 
+  // ── 정원 성장 포인트(2026-08-28) — "실제로 학습한 서로 다른 단어 수" ──
+  // 세 배열 전부 같은 word 슬러그 축(wordLibrary mapWordRow의 wordSlug)이라
+  // 합집합으로 중복이 정확히 제거된다:
+  //   cleared        레벨업 미션 3연속 정답 (기존 축 — 의미/값 불변)
+  //   completedWords GuidedSession 본 코스 학습 단계 완주 (markWordCompleted)
+  //   clearedWords   퀴즈 정답 (recordQuizAnswer — 모든 퀴즈 경로의 choke point)
+  //
+  // 왜 clearedCount를 바꾸지 않고 새 필드를 만드는가:
+  //   clearedCount는 모자(hatSystem: hat_explorer ≥10, hat_crown ≥200)와
+  //   밀스톤(milestones: cleared-10/50/100/200)의 입력이기도 하다. 라이브
+  //   실측상 이 합집합의 중앙값은 20, 최대 279라서 clearedCount 자체를
+  //   갈아끼우면 다음 로그인에 모자가 대량 소급 지급된다 — 모자 인벤토리는
+  //   append-only(회수 없음)라 되돌릴 수 없다. 그래서 축을 "추가"하고
+  //   소비처(정원/월드/마을)만 이 값을 읽게 한다. clearedCount의 의미와 값은
+  //   한 비트도 바뀌지 않으므로 모자/밀스톤 판정 입력은 바이트 단위로 동일하다.
+  //
+  // 배경: 2026-08-28 조사에서 정원이 clearedCount(퀴즈를 "틀린 뒤" 레벨업
+  // 미션으로 되찾은 단어 수)만 읽고 있어, 라이브 190명 중 170명(89%)이
+  // 영구 0칸이었다. 열심히 한 학생일수록 오답이 적어 정원이 더 안 자라는
+  // 역인센티브 구조였다(paulTown.js masteredCount 영구 0 사건과 같은 계열).
+  const gardenSet = new Set([...cleared, ...completedWords, ...clearedWords])
+
   return {
     clearedCount: cleared.length,
     clearedSet,
@@ -130,6 +152,10 @@ export function deriveAttachmentStats(rec, now = new Date()) {
     completedCount: completedWords.length,
     clearedWordSet: new Set(clearedWords),
     clearedWordCount: clearedWords.length,
+    // 정원/월드/마을 전용 축(위 gardenSet 주석 참고). 보상 판정(모자/밀스톤)은
+    // 이 값을 절대 읽지 않는다 — 읽는 순간 소급 지급이 발생한다.
+    gardenPoints: gardenSet.size,
+    gardenSet,
     masteredCount,
     missionByWordId,
     wordStatus,

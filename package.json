@@ -61,14 +61,21 @@
     "verify:entrance-collision": "node scripts/testEntranceKr2enCollision.mjs",
     "verify:stale-cache": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testStaleCacheRevalidation.mjs",
     "verify:cache-refill": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testAssignmentCacheRefill.mjs",
+    "verify:excel-header": "node scripts/testExcelHeaderGuard.mjs",
     "verify:writing-direction-resolution": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testWritingDirectionResolution.mjs",
     "verify:mission-bonus": "node scripts/testMissionBonusIdempotency.mjs",
     "verify:game-reward": "node scripts/testGameRewardPolicy.mjs",
+    "verify:reward-security": "node scripts/testRewardEndpointSecurity.mjs",
+    "verify:reward-hardening": "node scripts/testRewardServerHardening.mjs",
+    "verify:reward-hardening-behavior": "node scripts/testRewardServerHardeningBehavior.mjs",
+    "verify:session-auth": "node scripts/testSessionTokenAuth.mjs",
     "verify:reward": "node scripts/testRewardEngine.mjs && node scripts/buildRaceBundle.mjs && node scripts/testRewardFlow.mjs",
     "verify:reward-baseline": "node scripts/testRewardBaselineMigration.mjs",
     "verify:reward-ledger": "node scripts/testRewardLedgerMigration.mjs",
     "verify:reward-server": "node scripts/testRewardServerWrite.mjs",
-    "verify:reward-concurrency": "node scripts/testRewardConcurrencyMatrix.mjs"
+    "verify:reward-concurrency": "node scripts/testRewardConcurrencyMatrix.mjs",
+    "verify:reward-stress": "node scripts/buildRaceBundle.mjs && node scripts/testRewardIdempotencyStress.mjs",
+    "watch:claude-stall": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/watchClaudeStall.ps1"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

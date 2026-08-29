@@ -1,0 +1,80 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "garden-growth-axis-fix-2026-08-28",
+  "task": "Paul Town 정원이 학습해도 자라지 않던 P1 구조 버그 수정 — 성장 축을 clearedCount(퀴즈 오답 복구 수)에서 gardenPoints(실제 학습한 서로 다른 단어 수)로 교체하고, 격자를 9칸/3점 → 16칸/2점으로 재조정",
+  "status": "verified_awaiting_commit",
+  "progress": 100,
+  "started_at": "2026-08-28T00:00:00Z",
+  "updated_at": "2026-08-28T00:00:00Z",
+  "files_owned": [
+    "src/utils/attachment/attachmentCore.js",
+    "src/utils/attachment/worldProgress.js",
+    "src/utils/attachment/paulTown.js",
+    "src/components/EnglishGarden.jsx",
+    "src/components/PaulTown.jsx",
+    "tests/harness/runAttachment.mjs",
+    ".ai-status/garden-growth-axis-fix-2026-08-28.json"
+  ],
+  "files_read": [
+    "src/hooks/useStudent.js",
+    "src/hooks/useAttachment.js",
+    "src/components/QuizGame.jsx",
+    "src/components/LevelUpMission.jsx",
+    "src/components/Dashboard.jsx",
+    "src/utils/attachment/hatSystem.js",
+    "src/utils/attachment/milestones.js",
+    "src/utils/attachment/paulMemory.js",
+    "src/config/features.js"
+  ],
+  "files_explicitly_not_touched": [
+    "src/utils/attachment/hatSystem.js — clearedCount 판정 유지(모자 소급 지급 차단)",
+    "src/utils/attachment/milestones.js — clearedCount 판정 유지(밀스톤 소급 폭발 차단)",
+    "src/utils/attachment/paulMemory.js — total-growth 문구는 무변경(표시 회귀 0)",
+    "src/hooks/useStudent.js — syncStudentProgress(cleared_count DB 컬럼) 무변경",
+    "tests/harness/registry.mjs — 세션 시작 전부터 다른 세션이 수정 중(헌법 규칙 16, 커밋 범위 제외)"
+  ],
+  "root_cause": "정원 성장 포인트 growthPoints = stats.clearedCount 였는데, rec.cleared의 유일한 쓰기 지점은 useStudent.answerMission(레벨업 미션 3연속 정답)이고 그 화면 진입 조건은 QuizGame 오답(addMission)이다. 결과적으로 단어 학습 완료/퀴즈 정답/쓰기/유닛 완주/데일리 진행 중 어느 것도 정원을 키우지 못했고, 열심히 한 학생일수록 오답이 적어 정원이 덜 자라는 역인센티브가 됐다.",
+  "live_evidence_before": {
+    "measured_at": "2026-08-28 (읽기 전용 GET)",
+    "student_progress_rows": 190,
+    "garden_zero_plots": "170/190 (89%)",
+    "cleared_sum_all_students": 178,
+    "clearedWords_sum": 1784,
+    "quizCorrect_sum": 6307,
+    "worst_case": "문지유 — 별 1857 / 퀴즈정답 316 / 단어 142개 맞힘인데 cleared 1 → 정원 0칸"
+  },
+  "change": {
+    "new_derived_field": "attachmentCore.deriveAttachmentStats().gardenPoints = |cleared ∪ completedWords ∪ clearedWords|",
+    "consumers_switched": ["worldProgress.computeWorldState", "worldProgress.gardenPlots", "paulTown.townPlacesState", "paulTown.retroWelcome"],
+    "PLOT_COUNT": "9 → 16 (3x3 → 4x4)",
+    "POINTS_PER_STAGE": "3 → 2",
+    "fallback": "gardenPoints 부재 시 clearedCount로 폴백(구 progress 백업/DebugPage mock 안전, 헌법 규칙 9)",
+    "db_schema_change": "없음 (새 컬럼/테이블/마이그레이션 0)"
+  },
+  "live_evidence_after": {
+    "garden_zero_plots": "32/37 (86%) → 11/37 (30%) — 학습기록 보유 실계정 기준",
+    "fully_grown": "3명",
+    "residual_zero_reason": "completedWords/clearedWords 필드가 2026-08-03 신설이라 그 이전에만 학습한 계정은 소급 데이터가 없음 — 다음 학습 1회로 즉시 자라기 시작(소급 마이그레이션 불필요)",
+    "pace": "학습한 하루당 새 단어 중앙값 1.9개 → 약 0.94칸/일, 만개까지 128포인트(중앙값 페이스 약 67 학습일)"
+  },
+  "verification": {
+    "npm run build": "PASS (exit 0)",
+    "verify:attachment": "PASS (수정 전 4건 FAIL을 먼저 확인 — 헌법 규칙 15)",
+    "verify:gamification": "PASS",
+    "verify:star-delta": "PASS",
+    "verify:persistence": "PASS",
+    "verify:all": "ALL DOMAINS PASS (speaking/listening은 원래 SKIP)",
+    "verify:release-gate": "PASS",
+    "verify:health-rules": "PASS",
+    "verify:release (Gate 3)": "PASS",
+    "health:students": "PASS 35 / WARN 0 / FAIL 0",
+    "hat_regression_diff": "라이브 190명 전원 수정 전/후 모자 판정 차이 0건"
+  },
+  "db_write": 0,
+  "student_data_change": 0,
+  "committed": false,
+  "pushed": false,
+  "deployed": false,
+  "next": "운영자 승인 후 소커밋(헌법 규칙 14) + handoff.md/ROADMAP.md append. registry.mjs는 다른 세션 소유라 커밋 범위에서 제외한다."
+}

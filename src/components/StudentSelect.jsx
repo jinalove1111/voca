@@ -65,7 +65,11 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
       })
       const data = await res.json()
       if (data.ok) {
-        await onSelect({ id: data.studentId, name: data.name, className: data.className, unitName: data.unitName })
+        // token(2026-08-24): 서버가 발급한 서명 세션 토큰. 화면에 표시하거나
+        // 학생에게 노출하지 않고 그대로 App으로 넘긴다 — 로그인 입력/화면은
+        // 이름+PIN 그대로이며 UX 변화가 없다. SESSION_SECRET 미설정 시 서버가
+        // null을 주고, 그러면 보상 원장 쓰기만 막힌다(학습 흐름 무영향).
+        await onSelect({ id: data.studentId, name: data.name, className: data.className, unitName: data.unitName, token: data.token })
         return
       }
       const MESSAGES = {

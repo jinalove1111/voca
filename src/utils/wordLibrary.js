@@ -2858,13 +2858,29 @@ export async function fetchProgressBackupStrict(studentId) {
 //     중복값보다 파생값을 우선한다" 원칙을 스키마 레벨에서 강제.
 //   테이블/뷰가 아직 없으면(supabase_v2_3_paul_rank.sql 미실행) 조용히
 //   xp=0으로 폴백 — 코드가 스키마보다 먼저 배포돼도 절대 안 깨짐.
+// ── 세션 토큰 (2026-08-24, 보안 감사 HIGH 1) ────────────────────────────
+// api/verify-student-pin.js가 로그인 성공 시 발급하는 서명 토큰을 여기
+// 모듈 상태로 들고 있다가 서버 쓰기 요청에 실어 보낸다. localStorage를
+// 이 파일이 직접 읽지 않는 이유: 세션 키의 소유자는 App.jsx이고, 여기서
+// 같은 키 문자열을 중복 정의하면 한쪽만 바뀌었을 때 조용히 어긋난다.
+// App.jsx가 로그인/세션 복원 시 setSessionToken()으로 명시적으로 넣어준다
+// (_classSettings 등 이 파일의 기존 모듈 상태 관례와 동일).
+//
+// 토큰이 없으면 그냥 없는 채로 보낸다 — 서버가 fail-closed로 거부하고,
+// 그 거부는 아래 두 함수 모두 fire-and-forget이라 학생 화면에 영향이 없다.
+let _sessionToken = null
+export function setSessionToken(token) {
+  _sessionToken = (typeof token === 'string' && token.length > 0) ? token : null
+}
+export function getSessionTokenForTest() { return _sessionToken }
+
 export async function postXpEvent(studentId, eventType, sourceEventId) {
   if (!studentId || !eventType || !sourceEventId) return
   try {
     await fetch('/api/grant-xp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ studentId, eventType, sourceEventId }),
+      body: JSON.stringify({ studentId, eventType, sourceEventId, token: _sessionToken }),
     })
   } catch {
     // 네트워크 실패 — 조용히 무시(위 주석 참고, 학습 흐름 비차단 원칙).
@@ -2886,7 +2902,7 @@ export async function postRewardEvent(studentId, rewardType, sourceType, sourceI
     await fetch('/api/grant-xp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ledger: 'reward', studentId, rewardType, sourceType, sourceId }),
+      body: JSON.stringify({ ledger: 'reward', studentId, rewardType, sourceType, sourceId, token: _sessionToken }),
     })
   } catch {
     // 네트워크 실패 — 조용히 무시(postXpEvent와 동일 원칙, 학습 흐름 비차단).

@@ -7,7 +7,7 @@
 //
 // 시각 언어: 기존 폴이지보카 카드 문법 그대로(보라/핑크 그라데이션 헤더,
 // bg-white rounded-3xl card-shadow, btn-press) — 새 디자인 시스템 없음.
-// 정원 3x3 격자는 EnglishGarden.jsx와 시각적으로 동일한 렌더링 패턴을
+// 정원 4x4 격자는 EnglishGarden.jsx와 시각적으로 동일한 렌더링 패턴을
 // 자체 포함(컴포넌트 import 없이 — 이 화면은 자기완결)한다.
 //
 // 마을 = 내비게이션(Paul Town 월드, 2026-07-22): 정원/폴의 집은 마을 안
@@ -73,24 +73,25 @@ export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, 
           </div>
         )}
 
-        {/* 정원 — EnglishGarden.jsx의 3x3 텃밭과 시각적으로 동일한 격자
+        {/* 정원 — EnglishGarden.jsx의 4x4 텃밭과 시각적으로 동일한 격자
             (같은 gardenPlots 파생 — 같은 진행이면 어느 화면에서 봐도 같은
-            정원). */}
+            정원). 2026-08-28에 3x3 → 4x4로 함께 바뀌었다 — 한쪽만 바꾸면
+            같은 정원이 화면마다 다르게 보인다. */}
         {showGarden && (
           <div className="bg-white rounded-3xl card-shadow p-5">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-2xl">🌷</span>
               <h2 className="font-black text-gray-800 text-lg">정원</h2>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-1.5">
               {plots.map((p) => (
-                <div key={p.index} className="aspect-square rounded-2xl bg-lime-50 border-2 border-lime-100 flex items-center justify-center text-4xl">
+                <div key={p.index} className="aspect-square rounded-2xl bg-lime-50 border-2 border-lime-100 flex items-center justify-center text-3xl">
                   {p.emoji}
                 </div>
               ))}
             </div>
             <p className="text-center text-xs text-gray-400 mt-3">
-              🌰 씨앗 → 🌱 새싹 → 🌸 꽃 → 🌳 나무 — 단어 클리어가 정원을 키워요
+              🌰 씨앗 → 🌱 새싹 → 🌸 꽃 → 🌳 나무 — 배운 단어가 정원을 키워요
             </p>
           </div>
         )}

@@ -188,11 +188,15 @@ export function gardenBandSummary(stats, ctx = {}, now = new Date()) {
 
 /**
  * 기존 학생 소급 환영 — 이미 배운 단어가 실제로 있을 때만, 정직한 숫자로.
- * 신규 학생(clearedCount 0)은 null — 소급 환영을 지어내지 않는다.
- * growthLevel은 clearedCount 파생(computeWorldState 잠금해제 수 — 단조).
+ * 신규 학생(gardenPoints 0)은 null — 소급 환영을 지어내지 않는다.
+ * growthLevel은 같은 축 파생(computeWorldState 잠금해제 수 — 단조).
+ *
+ * 2026-08-28 — n을 clearedCount에서 gardenPoints로 맞춘다. 같은 카드 안에서
+ * 숫자(n)와 성장 시각화(computeWorldState)가 서로 다른 축을 읽으면
+ * "단어 0개인데 마을까지 열림" 같은 앞뒤 안 맞는 문장이 나온다.
  */
 export function retroWelcome(stats) {
-  const n = stats.clearedCount || 0
+  const n = stats.gardenPoints ?? stats.clearedCount ?? 0
   if (n <= 0) return null
   const world = computeWorldState(stats)
   return {
@@ -320,9 +324,13 @@ export const TOWN_PLACES = [
  * @param {function(string):boolean} isFlagEnabled — 예: isFeatureEnabled
  */
 export function townPlacesState(stats, isFlagEnabled = () => false) {
-  const cleared = stats.clearedCount || 0
+  // 2026-08-28 — 정원/월드와 같은 축(gardenPoints)을 읽는다. 정원만 축을
+  // 바꾸면 "정원은 무성한데 박물관/도서관/시계탑은 영원히 잠김" 상태가 된다
+  // (minCleared 30/100/150은 clearedCount 기준으로는 라이브에서 각각 1명/
+  // 0명/0명만 도달했다). 임계값 자체는 무변경 — 축만 정합시킨다.
+  const points = stats.gardenPoints ?? stats.clearedCount ?? 0
   return TOWN_PLACES.map((p) => ({
     ...p,
-    discovered: (p.open || (p.requiresFlag ? isFlagEnabled(p.requiresFlag) : false)) && cleared >= p.minCleared,
+    discovered: (p.open || (p.requiresFlag ? isFlagEnabled(p.requiresFlag) : false)) && points >= p.minCleared,
   }))
 }

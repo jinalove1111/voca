@@ -10,6 +10,17 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:\\voca\\scripts\\hooks\\claudeHeartbeat.mjs\" pre",
+            "timeout": 5,
+            "async": true
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -22,6 +33,53 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:\\voca\\scripts\\hooks\\claudeHeartbeat.mjs\" post",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:\\voca\\scripts\\hooks\\claudeHeartbeat.mjs\" prompt",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:\\voca\\scripts\\hooks\\claudeHeartbeat.mjs\" notification",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:\\voca\\scripts\\hooks\\claudeHeartbeat.mjs\" session-end",
+            "timeout": 5,
+            "async": true
+          }
+        ]
       }
     ],
     "Stop": [
@@ -31,6 +89,12 @@
             "type": "command",
             "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\voca\\scripts\\notify-windows.ps1\" -Title \"Claude Code\" -Message \"Task finished - check your session\"",
             "timeout": 15,
+            "async": true
+          },
+          {
+            "type": "command",
+            "command": "node \"C:\\voca\\scripts\\hooks\\claudeHeartbeat.mjs\" stop",
+            "timeout": 5,
             "async": true
           }
         ]

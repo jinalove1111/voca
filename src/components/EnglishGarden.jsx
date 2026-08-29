@@ -1,7 +1,7 @@
 // 잉글리시 월드 — 정원 MVP(2026-07-22, 애착 시스템).
 //
 // worldProgress.js 엔진의 계산 결과만 그린다(저장 없음, 전부 파생).
-// v1 노출: 정원 3x3 텃밭 + 다음 구역 진행바. 이후 구역(집~왕국)의 상세
+// v1 노출: 정원 4x4 텃밭 + 다음 구역 진행바. 이후 구역(집~왕국)의 상세
 // UI는 attachmentWorldFull 플래그(기본 OFF) 뒤 — 여기서는 잠금 목록으로
 // "다음에 열릴 세계"만 살짝 보여준다(별도 게임 인터페이스 없음, 기존
 // 카드 문법 그대로).
@@ -16,8 +16,11 @@ export default function EnglishGarden({ stats, onBack }) {
 
   // 정원 카드용 안내 파생값(로직/임계값 변경 없음 — 표시 전용)
   const filledPlots = plots.filter((p) => p.stage !== 'empty').length
-  const firstSproutAt = POINTS_PER_STAGE
-  const toFirstSprout = Math.max(0, firstSproutAt - world.growthPoints)
+  // 첫 칸에 처음 생기는 것은 씨앗(🌰)이다 — 예전 변수명/문구는 "새싹"이라
+  // 실제 화면과 어긋나 있었다(POINTS_PER_STAGE에 도달하면 stage='seed').
+  // 2026-08-28 격자 변경과 함께 문구를 실제 단계에 맞춘다(표시 전용).
+  const firstSeedAt = POINTS_PER_STAGE
+  const toFirstSeed = Math.max(0, firstSeedAt - world.growthPoints)
 
   return (
     <div className="min-h-screen p-4 pb-8">
@@ -30,25 +33,30 @@ export default function EnglishGarden({ stats, onBack }) {
           <div className="text-5xl mb-2">🌱</div>
           <h1 className="text-2xl font-black">나의 잉글리시 정원</h1>
           <p className="text-green-100 text-sm mt-1">단어를 배울 때마다 정원이 자라나요</p>
-          <p className="text-green-100 text-xs mt-2">🌿 성장 포인트 {world.growthPoints} (클리어한 단어 수)</p>
+          {/* 2026-08-28 — 축이 "클리어(레벨업 미션)"에서 "배운 단어"로 바뀌었으니
+              학생에게 보이는 설명도 실제와 맞춘다(표시 전용, 계산 무변경). */}
+          <p className="text-green-100 text-xs mt-2">🌿 성장 포인트 {world.growthPoints} (배운 단어 수)</p>
         </div>
 
-        {/* 정원 텃밭 — 3x3, 전부 파생(같은 진행이면 어느 기기에서 봐도 같은 정원) */}
+        {/* 정원 텃밭 — 4x4, 전부 파생(같은 진행이면 어느 기기에서 봐도 같은 정원) */}
         <div className="bg-white rounded-3xl card-shadow p-5">
-          <div className="grid grid-cols-3 gap-2">
+          {/* 2026-08-28 — 9칸(3x3) → 16칸(4x4). 칸이 늘어난 만큼 한 칸의
+              시각 크기는 줄이고(text-4xl → text-3xl) gap도 좁혀, 카드 높이가
+              기존과 비슷하게 유지되도록 한다(모바일 세로 스크롤 증가 방지). */}
+          <div className="grid grid-cols-4 gap-1.5">
             {plots.map((p) => (
-              <div key={p.index} className="aspect-square rounded-2xl bg-lime-50 border-2 border-lime-100 flex items-center justify-center text-4xl">
+              <div key={p.index} className="aspect-square rounded-2xl bg-lime-50 border-2 border-lime-100 flex items-center justify-center text-3xl">
                 {p.emoji}
               </div>
             ))}
           </div>
           <p className="text-center text-xs text-gray-400 mt-3">
-            🌰 씨앗 → 🌱 새싹 → 🌸 꽃 → 🌳 나무 — 단어 클리어가 정원을 키워요
+            🌰 씨앗 → 🌱 새싹 → 🌸 꽃 → 🌳 나무 — 배운 단어가 정원을 키워요
           </p>
           <p className="text-center text-xs font-bold text-green-600 mt-1">🌱 {filledPlots}/{PLOT_COUNT}칸이 자랐어요</p>
           {filledPlots === 0 && (
             <p className="text-center text-xs text-gray-500 mt-1">
-              아직 씨앗이 없어요 — 단어를 배우면 새싹이 자라나요!{toFirstSprout > 0 ? ` 첫 새싹까지 ${toFirstSprout}개 🌰` : ''}
+              아직 씨앗이 없어요 — 단어를 배우면 씨앗이 심어져요!{toFirstSeed > 0 ? ` 첫 씨앗까지 ${toFirstSeed}개 🌰` : ''}
             </p>
           )}
         </div>
