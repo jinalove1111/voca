@@ -236,3 +236,85 @@ export function verifySessionToken(token, opts = {}) {
 
   return { ok: true, studentId: payload.sid, version: SESSION_TOKEN_VERSION }
 }
+
+// ── PIN 최초 설정용 1회용 setup code (2026-08-29, 보안 감사 P0-1 대응) ────
+// 문제: 최초 PIN 설정 시점에는 학생과 서버가 공유하는 비밀이 없다 — 학생의
+// 유일한 자격증명이 될 것이 바로 지금 만들려는 그 PIN이기 때문이다. 그래서
+// self-set-student-pin.js의 기존 두 게이트(pin_setup_allowed===true /
+// pin_hash IS NULL)는 "요청자가 그 학생 본인인가"에 대해 아무것도 말해주지
+// 못한다 — 둘 다 계정의 *상태*일 뿐이다. 실제로 학생 UUID만 알면(anon key로
+// students.id 열거가 열려 있다 — 로그인 화면이 반 명단을 그리려면 필요)
+// 누구나 그 학생의 PIN을 선점하고, 그 PIN으로 로그인해 세션 토큰까지 받아
+// 보상 원장 쓰기 권한을 얻을 수 있었다.
+//
+// 해법: 관리자가 "PIN 설정 허용"을 누를 때 서버가 코드를 하나 파생해 관리자
+// 화면에 보여주고, 교사가 그 코드를 학생에게 전달한다. 학생은 PIN과 함께
+// 코드를 입력해야 한다 — 이것이 유일하게 가능한 제2 인증 요소다.
+//
+// 저장하지 않는다(DB 컬럼/테이블 추가 0):
+//   · 코드값 — SESSION_SECRET + studentId + 시간버킷에서 매번 파생하므로
+//     서버가 재계산한다. 어디에도 보관하지 않는다.
+//   · 만료   — 시간버킷 자체가 만료다.
+//   · 1회성  — 성공 시 pin_hash가 NULL -> NOT NULL로 전이하고, 기존 원자적
+//     UPDATE(.is('pin_hash', null))가 재사용을 그대로 막는다. "사용됨"
+//     플래그가 따로 필요 없다.
+//
+// 유효기간: 버킷 10분 + 현재/직전 두 버킷 허용 = 최소 10분, **최대 20분**.
+// 운영자가 지정한 TTL 20분을 어떤 경우에도 넘지 않는다.
+//
+// 코드 형식: RFC4648 base32 8자(40비트). 0/1/8/9가 없는 알파벳이라 아이가
+// 소리내어 옮겨 적을 때 0-O, 1-I 혼동이 생기지 않는다. 40비트는 무차별
+// 대입이 비현실적이라(약 1조 분의 1) rate limit 없이도 방어가 성립한다.
+export const PIN_SETUP_CODE_TTL_MS = 20 * 60 * 1000
+const PIN_SETUP_BUCKET_MS = 10 * 60 * 1000
+const PIN_SETUP_CODE_LEN = 8
+const PIN_SETUP_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+
+function setupCodeForBucket(studentId, bucket) {
+  const secret = sessionSecret()
+  if (!secret) return null
+  if (typeof studentId !== 'string' || studentId.length === 0) return null
+  const mac = crypto.createHmac('sha256', secret)
+    .update(`pinsetup:v1:${studentId}:${bucket}`)
+    .digest()
+  let out = ''
+  for (let i = 0; i < PIN_SETUP_CODE_LEN; i++) out += PIN_SETUP_ALPHABET[mac[i] & 31]
+  return out
+}
+
+// 관리자 발급용. 시크릿이 없으면 null(fail-closed — 검증 쪽도 통과시키지
+// 않으므로 "코드 없이 설정되는" 구멍이 생기지 않는다).
+export function pinSetupCode(studentId, opts = {}) {
+  const now = typeof opts.now === 'number' ? opts.now : Date.now()
+  return setupCodeForBucket(studentId, Math.floor(now / PIN_SETUP_BUCKET_MS))
+}
+
+// 관리자 화면에 "언제까지 유효한지" 보여주기 위한 값 — 현재 버킷의 끝에서
+// 한 버킷 더(직전 버킷 허용분)까지가 실제 만료다.
+export function pinSetupCodeExpiresAt(opts = {}) {
+  const now = typeof opts.now === 'number' ? opts.now : Date.now()
+  return (Math.floor(now / PIN_SETUP_BUCKET_MS) + 2) * PIN_SETUP_BUCKET_MS
+}
+
+// 반환: { ok:true } | { ok:false, reason }
+// reason: no_secret | invalid_setup_code
+// 예외를 던지지 않는다 — 호출부가 거부만 하면 되도록.
+export function verifyPinSetupCode(studentId, code, opts = {}) {
+  const secret = sessionSecret()
+  if (!secret) return { ok: false, reason: 'no_secret' }
+  if (typeof code !== 'string') return { ok: false, reason: 'invalid_setup_code' }
+  const normalized = code.trim().toUpperCase().replace(/[\s-]/g, '')
+  if (normalized.length !== PIN_SETUP_CODE_LEN) return { ok: false, reason: 'invalid_setup_code' }
+  const now = typeof opts.now === 'number' ? opts.now : Date.now()
+  const bucket = Math.floor(now / PIN_SETUP_BUCKET_MS)
+  // 현재 버킷과 직전 버킷만 허용(최대 20분). 비교는 timingSafeEqual —
+  // 문자열 === 는 조기 종료로 타이밍 정보를 흘린다.
+  for (const b of [bucket, bucket - 1]) {
+    const expected = setupCodeForBucket(studentId, b)
+    if (!expected) continue
+    const a = Buffer.from(expected, 'utf8')
+    const c = Buffer.from(normalized, 'utf8')
+    if (a.length === c.length && crypto.timingSafeEqual(a, c)) return { ok: true }
+  }
+  return { ok: false, reason: 'invalid_setup_code' }
+}
