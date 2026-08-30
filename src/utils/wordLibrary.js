@@ -228,8 +228,11 @@ const WORDS_SELECT_BASE = 'id,unit_id,word,meaning,position,word_audio_url,examp
 // 어느 단어가 사라지는지는 정렬 tie 때문에 로드마다 달라질 수 있었다.
 // selectAllStudents(아래)가 students 테이블에 대해 이미 같은 사고를 겪고
 // 같은 방식으로 고쳐져 있다 — 이 헬퍼는 그 패턴을 조회 일반으로 넓힌 것.
+// 2026-08-30 — 관리자 분석 패널(AnalyticsPanel)도 같은 절단 사고를 겪고
+// 있어서(product_events 60일 창 5,634행이 1000행으로 잘림) 재사용할 수 있게
+// export 한다. 호출부는 반드시 결정적 정렬을 걸어야 한다(아래 주석 참고).
 const SELECT_PAGE_SIZE = 1000
-async function selectAllRows(buildQuery) {
+export async function selectAllRows(buildQuery) {
   let all = []
   let from = 0
   for (;;) {
@@ -1102,15 +1105,27 @@ export const getClassUnitNames = (className) => getClassUnits(className).map((u)
 // 없으므로 고르지 않는다.
 const normalizeUnitKey = (name) => String(name || '').trim().toLowerCase().replace(/\s+/g, '')
 
-export function resolveClassUnit(className, unitName) {
-  const units = _cache[className]?.units || []
-  if (units.length === 0) return null
-  const exact = units.find((u) => u.name === unitName)
+// 2026-08-29 — 위 규칙(완전일치 -> 정규화 유일후보 -> 못 찾으면 null)을
+// units 배열 단위로 쓸 수 있게 분리했다. resolveClassUnit(반 이름 기반)만
+// 이 규칙을 갖고 있어서, 정작 반 이동/유닛 변경/학생 유닛 해석 경로는 raw
+// `u.name === name` 완전일치만 하고 못 찾으면 `|| units[0]`으로 조용히 첫
+// 유닛에 착지하고 있었다. 실측상 프로덕션 유닛 50개의 표기가 4종 혼재
+// (UnitN 29 / Unit N 13 / 번호없는 Unit 6 / 숫자만 2)이고, 첫 유닛 자리에는
+// 0단어 유닛 2개와 1단어 유령 유닛 7개가 있어서 반을 옮긴 학생이 아무 경고
+// 없이 0~1단어 화면을 볼 수 있었다(전하은 사건과 같은 계열).
+export function findUnitByName(units, unitName) {
+  const list = Array.isArray(units) ? units : []
+  if (list.length === 0) return null
+  const exact = list.find((u) => u.name === unitName)
   if (exact) return exact
   const key = normalizeUnitKey(unitName)
   if (!key) return null
-  const candidates = units.filter((u) => normalizeUnitKey(u.name) === key)
+  const candidates = list.filter((u) => normalizeUnitKey(u.name) === key)
   return candidates.length === 1 ? candidates[0] : null
+}
+
+export function resolveClassUnit(className, unitName) {
+  return findUnitByName(_cache[className]?.units, unitName)
 }
 
 // 유닛 UUID로 직접 찾는 정규 경로 — 이름이 개입하지 않으므로 같은 이름의
@@ -1839,8 +1854,12 @@ export const getStudentClassId = (id) => _students.get(id)?.classId || null
 // ── v2.1 학생 현재 유닛 해석 (단일 진실 공급원) ──────────────────────────
 // 우선순위: ① current_unit_id(UUID — 유닛 이름이 바뀌거나 표기가 달라도
 // 절대 안 끊어짐) ② unit_name 문자열 매칭(마이그레이션 전/백필 실패 행
-// 하위호환) ③ 반의 첫 유닛(기존 getClassWords 폴백과 동일 — 조용히 첫
-// 유닛으로 떨어지던 기존 동작을 "최후 폴백"으로만 남김).
+// 하위호환, findUnitByName이 "Unit6"/"Unit 6" 같은 표기 흔들림을 흡수하되
+// 후보가 둘 이상이면 고르지 않는다) ③ **없음 — 못 찾으면 null이다.**
+// 2026-08-29 이전에는 ③으로 "반의 첫 유닛"에 조용히 떨어졌는데, 실측상
+// 첫 유닛 자리에 0단어 유닛 2개와 1단어 유령 유닛 7개가 있어서 반을 옮긴
+// 학생이 아무 경고 없이 0~1단어 화면을 봤다. 그 폴백을 제거했다 —
+// 이 주석을 읽고 "최후 폴백"을 다시 넣지 말 것(헌법 규칙 3).
 // 화면 표시(getStudentUnit)와 단어 로딩(getStudentWords)이 반드시 같은
 // 함수를 거친다 — 표시되는 유닛과 실제 보이는 단어가 어긋날 수 없게.
 function resolveStudentUnitObj(id) {
@@ -1859,7 +1878,11 @@ function resolveStudentUnitObj(id) {
           const byId = tbUnits.find((u) => u.id === s.unitId)
           if (byId) return byId
         }
-        return tbUnits.find((u) => u.name === s.unitName) || tbUnits[0]
+        // 2026-08-29 — 표기 흔들림을 흡수하되, 못 찾으면 **조용히 첫 유닛을
+        // 고르지 않는다**(아래 반 기반 경로와 동일 원칙). 예전에는
+        // `|| tbUnits[0]`이라 이름이 안 맞는 순간 교재의 첫 유닛(실측상
+        // 0단어/1단어 유령 유닛일 수 있다)을 말없이 보여줬다.
+        return findUnitByName(tbUnits, s.unitName)
       }
     }
   }
@@ -1870,7 +1893,12 @@ function resolveStudentUnitObj(id) {
     const byId = units.find((u) => u.id === s.unitId)
     if (byId) return byId
   }
-  return units.find((u) => u.name === s.unitName) || units[0]
+  // 2026-08-29 — 표기 흔들림 흡수 + 조용한 첫 유닛 폴백 제거. 못 찾으면
+  // null 을 돌려주고, 호출부(getStudentUnit/getStudentUnitId/getStudentWords)는
+  // 이미 null 을 안전하게 처리한다(유닛 0개 반에서 이미 null 을 받고 있었다).
+  // 라이브 실측: 이 변경으로 해석 결과가 달라지는 현재 학생은 0명이다
+  // (전체 1157명 중 215명은 FK 경로, 942명은 소속 반에 유닛 0개).
+  return findUnitByName(units, s.unitName)
 }
 
 // 표시용 유닛 이름 — 항상 해석된 값. 반/유닛 캐시가 아직 없으면(반 삭제
@@ -1925,8 +1953,15 @@ export async function setStudentClass(id, className) {
   // P7 감사(2026-07-16): 예전엔 뒤에 bare .select()가 붙어 있었는데, 반환
   // 데이터를 아무도 안 쓰는데도 업데이트된 행의 "모든" 컬럼(pin_hash 포함)이
   // 네트워크 응답에 실려 내려왔다 — 제거(동작 불변, 응답에서 해시 노출만 차단).
+  // 2026-08-29 — 새 반에서 같은 유닛을 찾을 때 표기 흔들림을 흡수한다.
+  // 예전에는 raw 완전일치라 "Unit6" 학생이 "Unit 6" 반으로 옮기면 못 찾고
+  // current_unit_id 가 NULL 로 덮여, 다음 로드에서 resolveStudentUnitObj 의
+  // 첫 유닛 폴백(당시 `|| units[0]`)이 0단어 유령 유닛을 집었다. 실측상
+  // 프로덕션에 두 표기가 각각 29개/13개로 공존하므로 반 이동 한 번으로
+  // 재현 가능한 경로였다. 못 찾으면 여전히 null 이지만, 이제는 읽기 경로도
+  // 임의의 유닛을 고르지 않으므로 "조용히 엉뚱한 단어"가 나오지 않는다.
   const unitIdInNewClass = className
-    ? (_cache[className]?.units.find((u) => u.name === s.unitName)?.id || null)
+    ? (findUnitByName(_cache[className]?.units, s.unitName)?.id || null)
     : null
   let { error } = await supabase.from('students')
     .update({ ...base, current_unit_id: unitIdInNewClass }).eq('id', id)
@@ -2039,7 +2074,7 @@ export async function setStudentUnit(id, unitName) {
     const tb = getStudentPrimaryTextbook(id)
     if (tb) {
       const tbUnits = getTextbookUnits(tb.id)
-      unitId = tbUnits.find((u) => u.name === unitName)?.id || null
+      unitId = findUnitByName(tbUnits, unitName)?.id || null
       // 2026-08-06 교차 교재 오염 수정 ② — 현재 교재에 유닛들이 있는데
       // 이름이 안 맞으면, 아래 사람 반 이름 폴백으로 "다른 교재의 유닛"을
       // 조용히 저장하는 대신 명확히 거부한다. 실측 드리프트(SCA primary는
@@ -2053,7 +2088,7 @@ export async function setStudentUnit(id, unitName) {
   }
   if (unitId == null) {
     const clsName = getClassNameById(s.classId) || s.className
-    unitId = _cache[clsName]?.units.find((u) => u.name === unitName)?.id || null
+    unitId = findUnitByName(_cache[clsName]?.units, unitName)?.id || null
   }
   // P7 감사: bare .select() 제거 — setStudentClass와 동일한 pin_hash 응답 노출 차단.
   let { error } = await supabase.from('students')
@@ -2072,9 +2107,15 @@ export async function setStudentsClassBulk(ids, className, unitName) {
   if (validIds.length === 0) return
   const classId = className ? (await ensureClass(className)).id : null
   // v2.1: 목적지 반에서 unitName과 일치하는 유닛 id를 함께 기록(전원 같은
-  // 반·같은 유닛으로 이동하므로 단일 값). 없으면 null — 이름/첫 유닛 폴백.
+  // 반·같은 유닛으로 이동하므로 단일 값).
+  // 2026-08-30 — setStudentClass(단건)와 같은 표기 흔들림 버그가 여기에도
+  // 있었다. 2026-08-29 수정이 단건 경로만 고치고 이 **일괄 이동**을
+  // 빠뜨렸는데, 일괄 경로는 한 번의 실수가 여러 학생을 동시에 유닛 없는
+  // 상태로 만들어 단건보다 위험하다. 같은 공유 리졸버로 통일한다.
+  // 못 찾으면 여전히 null이지만, 읽기 경로(resolveStudentUnitObj)도 이제
+  // 임의의 첫 유닛을 고르지 않으므로 "조용히 엉뚱한 단어"는 나오지 않는다.
   const unitId = className
-    ? (_cache[className]?.units.find((u) => u.name === unitName)?.id || null)
+    ? (findUnitByName(_cache[className]?.units, unitName)?.id || null)
     : null
   const base = { class_id: classId, unit_name: unitName }
   let { error } = await supabase.from('students')
@@ -3175,8 +3216,16 @@ export const getStudentWords = (studentId, { classId: classIdOverride } = {}) =>
     }
     if (usingOverride) {
       // 학생의 주 반이 아니라 override된 반의 유닛을 해석한다 — 그 배정
-      // 행 자체의 current_unit_id를 우선(있으면), 없으면 그 반의 첫 유닛
-      // (resolveStudentUnitObj의 "반의 첫 유닛" 최후 폴백과 동일한 정신).
+      // 행 자체의 current_unit_id를 우선(있으면), 없으면 그 반의 첫 유닛.
+      //
+      // ⚠️ 2026-08-30 감사 — 이 `|| units[0]`은 resolveStudentUnitObj에서
+      // 제거된 "첫 유닛 최후 폴백"이 **여기만 남은** 것이다(위 함수 주석이
+      // 더 이상 그 폴백을 설명하지 않는다 — 이 주석이 그 사실을 대신 남긴다).
+      // 제거하지 않은 이유: SCA 482행 중 current_unit_id가 NULL인 행이
+      // 212행(44%, 그중 is_primary 203행)이라 그대로 null로 바꾸면 그 학생들이
+      // 지금 보던 화면 대신 0단어를 보게 된다 — 영향 범위가 커서 이번 야간
+      // 범위에서 판단하지 않았다. 올바른 동작(첫 유닛 표시 vs 빈 상태 안내)은
+      // 운영자 판단이 필요하다. 후속 P1 후보.
       const targetUnitId = _studentAssignmentsCache.get(studentId)?.find((a) => a.classId === classId)?.unitId
       const units = _cache[cls]?.units || []
       unitObj = (targetUnitId && units.find((u) => u.id === targetUnitId)) || units[0] || null

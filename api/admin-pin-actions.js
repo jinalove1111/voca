@@ -32,7 +32,7 @@
 // handleBulkGeneratePins가 data.ok를 아예 안 보고 data.results/data.count만
 // 쓰므로 그대로 유지해야 한다.
 import { createClient } from '@supabase/supabase-js'
-import { hashPin, randomFourDigitPin, checkAdminReauth, supabaseAdminUrl, supabaseAdminKey } from './_pinAuth.js'
+import { hashPin, randomFourDigitPin, checkAdminReauth, supabaseAdminUrl, supabaseAdminKey, pinSetupCode, pinSetupCodeExpiresAt } from './_pinAuth.js'
 // houseSystem.js는 이 저장소의 "순수 계산 모듈"(React/window/document/
 // 네트워크 없음) 관례를 따르는 파일이라 api/*(Node 서버리스)에서도 안전하게
 // import 가능 — compute-word-king.js가 wordKing.js를, grant-xp.js가
@@ -156,6 +156,21 @@ export default async function handler(req, res) {
     const { error } = await applyPinSetupAllowed(supabase, ids, allowed)
     if (error) {
       res.status(500).json({ error: error.message })
+      return
+    }
+    // [SECURITY 2026-08-29] 허용을 열 때만 1회용 setup code를 함께 발급한다.
+    // 학생은 이 코드가 있어야 self-set-student-pin으로 PIN을 만들 수 있다
+    // (관리자가 학생에게 구두 전달). 코드는 SESSION_SECRET에서 파생하므로
+    // 저장하지 않고, 유효기간은 최대 20분이며, 성공 시 pin_hash 전이로
+    // 자동 소모된다. 이 응답은 ADMIN_PIN 재인증을 통과한 요청에만 도달한다
+    // (인가 검사가 action 분기보다 앞에 있다 — 이 파일 상단 주석 참고).
+    // 회수(allowed=false) 시에는 발급하지 않는다.
+    if (allowed) {
+      const expiresAt = pinSetupCodeExpiresAt()
+      const setupCodes = ids
+        .map((id) => ({ studentId: id, code: pinSetupCode(id), expiresAt }))
+        .filter((c) => c.code)
+      res.status(200).json({ ok: true, setupCodes })
       return
     }
     res.status(200).json({ ok: true })

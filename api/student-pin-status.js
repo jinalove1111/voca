@@ -12,6 +12,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { supabaseAdminUrl, supabaseAdminKey } from './_pinAuth.js'
 
+const MAX_BATCH = 100
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
@@ -28,6 +30,18 @@ export default async function handler(req, res) {
   const { studentIds } = req.body || {}
   if (!Array.isArray(studentIds) || studentIds.length === 0) {
     res.status(400).json({ error: 'studentIds (non-empty array) is required' })
+    return
+  }
+  // [SECURITY 2026-08-29] 배치 상한 — 이 엔드포인트는 로그인 **전** 학생
+  // 화면("PIN 만들기")도 쓰기 때문에 세션 토큰을 요구할 수 없다. 대신
+  // 한 번에 전수를 훑는 열거를 막는다. 이건 **보조 방어**임을 분명히 해
+  // 둔다 — 근본 방어는 self-set-student-pin.js의 setup code다(코드 없이는
+  // pinSetupAllowed를 전부 알아내도 아무 권한이 생기지 않는다).
+  // 상한 100은 실제 사용량 기준: 한 반 최대 인원보다 훨씬 크고, 관리자
+  // 로스터(최대 1157명)는 클라이언트 헬퍼(src/utils/pinStatusApi.js)가
+  // 100개씩 쪼개 보내므로 화면 회귀가 없다.
+  if (studentIds.length > MAX_BATCH) {
+    res.status(400).json({ error: `studentIds must be ${MAX_BATCH} or fewer per request` })
     return
   }
 

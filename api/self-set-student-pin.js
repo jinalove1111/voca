@@ -14,7 +14,7 @@
 // 성공 시 pin_setup_allowed를 즉시 다시 false로 원복한다(1회성 — 관리자가
 // 매번 다시 허용해야 재사용 가능).
 import { createClient } from '@supabase/supabase-js'
-import { isValidPinFormat, isWeakPin, hashPin, supabaseAdminUrl, supabaseAdminKey } from './_pinAuth.js'
+import { isValidPinFormat, isWeakPin, hashPin, supabaseAdminUrl, supabaseAdminKey, verifyPinSetupCode } from './_pinAuth.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -29,9 +29,26 @@ export default async function handler(req, res) {
     return
   }
 
-  const { studentId, pin, pinConfirm } = req.body || {}
+  const { studentId, pin, pinConfirm, setupCode } = req.body || {}
   if (!studentId) {
     res.status(400).json({ error: 'studentId is required' })
+    return
+  }
+
+  // [SECURITY 2026-08-29] 제2 인증 요소 — 관리자가 발급한 1회용 setup code.
+  // 이 검사가 없던 동안에는 아래 두 게이트(pin_setup_allowed / pin_hash IS
+  // NULL)가 전부였는데, 둘 다 계정의 *상태*일 뿐 "요청자가 그 학생 본인인가"를
+  // 말해주지 못했다 — 학생 UUID만 알면(anon key로 students.id 열거가 열려
+  // 있다) 누구나 남의 PIN을 선점하고 그 PIN으로 로그인해 세션 토큰까지
+  // 받을 수 있었다(scripts/testPinSetupCapability.mjs 헤더의 공격 체인 A~E).
+  //
+  // 코드 검사를 DB 조회보다 먼저 둔다 — 코드가 없는 요청이 학생 존재 여부나
+  // pin_setup_allowed 상태를 응답 차이로 알아내지 못하게 하기 위함이다.
+  // 시크릿 미설정 시 verifyPinSetupCode가 no_secret으로 거부하므로
+  // fail-closed다(코드 없이 통과하는 경로가 생기지 않는다).
+  const codeCheck = verifyPinSetupCode(studentId, setupCode)
+  if (!codeCheck.ok) {
+    res.status(200).json({ ok: false, reason: 'invalid_setup_code', detail: codeCheck.reason })
     return
   }
   if (!isValidPinFormat(pin)) {

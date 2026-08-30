@@ -122,6 +122,8 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
   const [setupChecking, setSetupChecking] = useState(false)
   const [setupPin, setSetupPin] = useState('')
   const [setupPinConfirm, setSetupPinConfirm] = useState('')
+  // 2026-08-29 보안 — 선생님이 알려주는 8자리 확인코드(제2 인증 요소).
+  const [setupCode, setSetupCode] = useState('')
   const [setupError, setSetupError] = useState('')
   const [settingUp, setSettingUp] = useState(false)
   const [setupDone, setSetupDone] = useState(false)
@@ -279,6 +281,10 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
   }
 
   const handleSetupPin = async () => {
+    // 2026-08-29 보안 — 선생님이 알려준 8자리 확인코드가 제2 인증 요소다.
+    // 이게 없으면 학생 UUID만 아는 제3자가 남의 PIN을 선점할 수 있었다.
+    const normalizedCode = setupCode.trim().toUpperCase().replace(/[\s-]/g, '')
+    if (normalizedCode.length !== 8) { setSetupError('선생님이 알려준 확인코드 8자리를 입력해주세요.'); return }
     if (!/^\d{4}$/.test(setupPin)) { setSetupError('PIN은 숫자 4자리로 만들어주세요.'); return }
     if (setupPin !== setupPinConfirm) { setSetupError('PIN이 서로 달라요. 다시 확인해주세요.'); return }
     setSettingUp(true)
@@ -287,7 +293,7 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
       const res = await fetch('/api/self-set-student-pin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId: setupStudentId, pin: setupPin, pinConfirm: setupPinConfirm }),
+        body: JSON.stringify({ studentId: setupStudentId, pin: setupPin, pinConfirm: setupPinConfirm, setupCode: normalizedCode }),
       })
       const data = await res.json()
       if (data.ok) {
@@ -304,6 +310,7 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
         already_set: '이미 PIN이 설정된 계정이에요 — "로그인" 탭을 이용해주세요.',
         not_allowed: '선생님이 아직 PIN 설정을 허용하지 않았어요. 선생님께 요청해주세요.',
         not_found: '학생 정보를 찾을 수 없어요. 다시 선택해주세요.',
+        invalid_setup_code: '확인코드가 맞지 않거나 시간이 지났어요(20분). 선생님께 새 코드를 받아주세요.',
       }
       setSetupError(MESSAGES[data.reason] || 'PIN 설정에 실패했어요. 다시 시도해주세요.')
     } catch (err) {
@@ -464,7 +471,14 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
                 </p>
               ) : (
                 <>
-                  <p className="text-xs text-gray-500 text-center">이 학생은 아직 PIN이 없습니다. 아래에서 4자리 PIN을 만들어주세요.</p>
+                  <p className="text-xs text-gray-500 text-center">이 학생은 아직 PIN이 없습니다. 선생님께 확인코드를 받아 아래에 입력해주세요.</p>
+                  {/* 2026-08-29 보안 — 선생님이 알려주는 8자리 확인코드.
+                      이게 제2 인증 요소라, 학생 UUID만 아는 제3자는 PIN을
+                      선점할 수 없다. 대소문자/공백/하이픈은 서버가 흡수한다. */}
+                  <input type="text" inputMode="text" autoCapitalize="characters" autoComplete="off" value={setupCode}
+                    onChange={e => { setSetupCode(e.target.value.toUpperCase().replace(/[^A-Z2-7]/g, '').slice(0, 8)); setSetupError('') }}
+                    placeholder="선생님이 알려준 확인코드 8자리" disabled={settingUp}
+                    className="w-full border-2 border-emerald-200 rounded-xl px-4 py-3 text-base font-bold text-center tracking-[0.3em] focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50 disabled:bg-gray-50" />
                   <input type="password" inputMode="numeric" pattern="[0-9]*" value={setupPin}
                     onChange={e => { setSetupPin(e.target.value.replace(/\D/g, '').slice(0, 4)); setSetupError('') }}
                     onKeyDown={e => e.key === 'Enter' && setupPinConfirmRef.current?.focus()}
