@@ -159,6 +159,13 @@ export default function StudentDirectory({ adminPin }) {
   // 2026-08-29 보안 — "PIN 설정 허용" 직후 서버가 발급한 1회용 확인코드를
   // 관리자에게 한 번 보여주기 위한 상태. 화면 표시 전용이며 어디에도
   // 저장하지 않는다(코드는 서버가 SESSION_SECRET에서 매번 파생한다).
+  // 2026-08-30 P0 수정 — 반별 일괄 허용(handleBulkAllowPinSetup)이
+  // 서버가 돌려주는 N명분 코드를 전혀 읽지 않아, 일괄 허용한 반 전원이
+  // PIN을 못 만드는 사각지대가 있었다. 단건/일괄 두 경로가 같은 모양을
+  // 쓰도록 { items: [{ id, name, code }], expiresAt, missing } 로 확장.
+  // missing=true는 "허용 자체는 됐지만 서버가 코드를 0개 줬다"는 뜻으로,
+  // SESSION_SECRET 미설정 등으로 전원이 무증상으로 PIN을 못 만드는
+  // 상태를 관리자가 놓치지 않게 하기 위한 명시적 경고 트리거다.
   const [setupCodeNotice, setSetupCodeNotice] = useState(null)
   const [unlockBusyId, setUnlockBusyId] = useState(null)
   // 파괴적 액션(학생 삭제/PIN 삭제)을 담는 카드별 "⋯" 오버플로 메뉴 —
@@ -667,9 +674,15 @@ export default function StudentDirectory({ adminPin }) {
       // 구두로 전달해야 한다. 코드는 저장되지 않고 최대 20분만 유효하며,
       // 학생이 PIN을 만드는 즉시 소모된다. 화면에만 띄우고 어디에도
       // 기록하지 않는다(로그/localStorage 저장 없음).
+      // 2026-08-30 — 단건/일괄 공용 notice 모양({items, expiresAt, missing})
+      // 으로 통일. 단건 경로는 기존 동작을 그대로 보존한다(회귀 0).
       const issued = Array.isArray(data.setupCodes) ? data.setupCodes[0] : null
       if (nextAllowed && issued?.code) {
-        setSetupCodeNotice({ name, code: issued.code, expiresAt: issued.expiresAt })
+        setSetupCodeNotice({ items: [{ id, name, code: issued.code }], expiresAt: issued.expiresAt, missing: false })
+      } else if (nextAllowed) {
+        // 허용은 성공했는데 서버가 코드를 하나도 안 줬다(SESSION_SECRET
+        // 미설정 의심) — 무증상 실패를 막기 위해 명시적으로 알린다.
+        setSetupCodeNotice({ items: [], expiresAt: null, missing: true })
       } else {
         setSetupCodeNotice(null)
       }
@@ -687,6 +700,13 @@ export default function StudentDirectory({ adminPin }) {
   // 반별 일괄 "설정 허용" — PIN 미설정 학생이 많은 반에서 한 명씩
   // 누르지 않아도 되게. 이미 PIN이 있는 학생은 서버(set-pin-setup-
   // allowed.js)가 자동으로 걸러내므로 안전.
+  // 2026-08-30 P0 수정 — 서버(action: set_pin_setup_allowed)는 허용 시
+  // 대상 전원의 1회용 확인코드(setupCodes: [{studentId, code, expiresAt}])
+  // 를 함께 돌려주는데, 이 핸들러가 그 응답을 읽지 않아 일괄 허용한 반
+  // 학생 전원이 코드를 안내받지 못해 PIN을 만들 수 없었다. 아래에서
+  // setupCodes를 읽어 handleTogglePinSetupAllowed와 같은 notice 모양으로
+  // 화면에 띄운다. 학생 이름 매칭은 이름 문자열이 아니라 studentId(UUID)
+  // 로 한다(저장소 헌법 규칙 4 — 동명이인 안전).
   const handleBulkAllowPinSetup = async (className) => {
     const targets = displayStudents.filter(s => s.className === className && !pinStatus[s.id]?.hasPinHash)
     if (targets.length === 0) { alert('이 반에는 PIN 설정이 필요한 학생이 없어요.'); return }
@@ -701,6 +721,19 @@ export default function StudentDirectory({ adminPin }) {
       if (!data.ok) {
         if (data.reason === 'not_authorized') throw new Error('관리자 인증에 실패했어요. 관리자 화면을 다시 로그인해주세요.')
         throw new Error(data.error || '요청에 실패했어요.')
+      }
+      const issued = Array.isArray(data.setupCodes) ? data.setupCodes : []
+      if (issued.length > 0) {
+        const items = issued.map((c) => {
+          const target = targets.find((t) => t.id === c.studentId)
+          return { id: c.studentId, name: target?.name || c.studentId, code: c.code }
+        })
+        setSetupCodeNotice({ items, expiresAt: issued[0]?.expiresAt ?? null, missing: false })
+      } else {
+        // 허용은 성공했는데 코드가 하나도 안 왔다(SESSION_SECRET 미설정
+        // 의심) — 반 전체가 무증상으로 PIN을 못 만드는 상태이므로 반드시
+        // 알린다.
+        setSetupCodeNotice({ items: [], expiresAt: null, missing: true })
       }
       await loadPinStatus(students)
     } catch (err) {
@@ -1098,25 +1131,65 @@ export default function StudentDirectory({ adminPin }) {
       {/* 2026-08-29 보안 — "PIN 설정 허용" 직후 1회용 확인코드 안내.
           학생은 이 코드가 있어야 PIN을 만들 수 있다(제2 인증 요소).
           코드는 서버가 SESSION_SECRET에서 파생하므로 저장되지 않고,
-          최대 20분 유효하며 학생이 PIN을 만드는 즉시 소모된다. */}
+          최대 20분 유효하며 학생이 PIN을 만드는 즉시 소모된다.
+          2026-08-30 P0 수정 — 단건(items 1개)은 기존과 시각적으로 동일하게
+          큰 코드 하나를 보여주고(회귀 0), 일괄 허용(items 2개 이상)은
+          "이름 — 코드" 목록으로, 코드가 0개 발급됐으면(missing) 경고
+          톤으로 별도 안내한다. 코드 자체는 이 렌더 외에는 어디에도
+          남기지 않는다(console/localStorage/sessionStorage 사용 금지). */}
       {setupCodeNotice && (
-        <div className="border-2 border-emerald-300 bg-emerald-50 rounded-2xl p-4 space-y-2">
-          <p className="text-sm font-bold text-emerald-800">
-            {`"${setupCodeNotice.name}" 학생에게 아래 확인코드를 알려주세요`}
-          </p>
-          <p className="text-2xl font-black tracking-[0.3em] text-center text-emerald-900 select-all">
-            {setupCodeNotice.code}
-          </p>
-          <p className="text-[11px] text-emerald-700">
-            학생이 "PIN 만들기" 화면에서 이 코드를 입력해야 PIN을 만들 수 있어요.
-            {' '}코드는 <b>20분 안에</b> 사용해야 하고, 한 번 쓰면 사라집니다.
-            다시 필요하면 "PIN 설정 허용"을 다시 눌러 새 코드를 받으세요.
-          </p>
-          <button onClick={() => setSetupCodeNotice(null)}
-            className="w-full bg-emerald-600 text-white text-xs font-bold rounded-xl py-2">
-            확인했어요
-          </button>
-        </div>
+        setupCodeNotice.missing ? (
+          <div className="border-2 border-amber-300 bg-amber-50 rounded-2xl p-4 space-y-2">
+            <p className="text-sm font-bold text-amber-800">
+              ⚠️ PIN 설정은 허용됐지만 확인코드를 받지 못했어요
+            </p>
+            <p className="text-[11px] text-amber-700">
+              서버가 확인코드를 발급하지 못했어요(SESSION_SECRET 서버 설정 확인 필요).
+              지금 상태로는 학생이 아직 PIN을 만들 수 없어요 — 서버 설정을 확인한 뒤
+              "PIN 설정 허용"을 다시 눌러주세요.
+            </p>
+            <button onClick={() => setSetupCodeNotice(null)}
+              className="w-full bg-amber-600 text-white text-xs font-bold rounded-xl py-2">
+              확인했어요
+            </button>
+          </div>
+        ) : (
+          <div className="border-2 border-emerald-300 bg-emerald-50 rounded-2xl p-4 space-y-2">
+            {setupCodeNotice.items.length === 1 ? (
+              <>
+                <p className="text-sm font-bold text-emerald-800">
+                  {`"${setupCodeNotice.items[0].name}" 학생에게 아래 확인코드를 알려주세요`}
+                </p>
+                <p className="text-2xl font-black tracking-[0.3em] text-center text-emerald-900 select-all">
+                  {setupCodeNotice.items[0].code}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-bold text-emerald-800">
+                  {`${setupCodeNotice.items.length}명에게 아래 확인코드를 각각 알려주세요`}
+                </p>
+                <div className="max-h-64 overflow-y-auto space-y-1">
+                  {setupCodeNotice.items.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between gap-2 bg-white/60 rounded-lg px-2 py-1">
+                      <span className="text-xs font-bold text-emerald-800 overflow-hidden text-ellipsis whitespace-nowrap">{item.name}</span>
+                      <span className="text-base font-black tracking-[0.3em] text-emerald-900 select-all">{item.code}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            <p className="text-[11px] text-emerald-700">
+              학생이 "PIN 만들기" 화면에서 이 코드를 입력해야 PIN을 만들 수 있어요.
+              {' '}코드는 <b>20분 안에</b> 사용해야 하고, 필요하면 "PIN 설정 허용"을
+              다시 눌러 코드를 다시 확인할 수 있어요.
+            </p>
+            <button onClick={() => setSetupCodeNotice(null)}
+              className="w-full bg-emerald-600 text-white text-xs font-bold rounded-xl py-2">
+              확인했어요
+            </button>
+          </div>
+        )
       )}
       {/* 2026-08-08 — 비활성화 확인 모달(window.confirm이 아니라 실제 모달 —
           운영자 지시 문구를 그대로 보여주기 위함). fixed 오버레이라 렌더

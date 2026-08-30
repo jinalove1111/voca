@@ -295,6 +295,23 @@ console.log('\n9. SESSION_SECRET 미설정 — fail-closed')
   check('pin_hash 미변경', fake.__db.students[0].pin_hash == null)
 }
 
+console.log('\n9b. SESSION_SECRET 미설정 — 관리자 일괄 발급도 코드를 새어보내지 않는다')
+{
+  // 2026-08-30 추가 — 관리자 발급 관점(§11/§11b)에서도 fail-closed가
+  // 지켜지는지 확인한다. §9는 self-set 관점만 다뤄서 이 갭이 비어 있었다.
+  seed({ allowed: false })
+  fake.__db.students.push({ id: SID2, name: 'QA다른학생', class_id: CLASS_ID, unit_name: 'Unit 1', pin_hash: null, pin_setup_allowed: false, pin_fail_count: 0, pin_locked_until: null })
+  const saved = process.env.SESSION_SECRET
+  delete process.env.SESSION_SECRET
+  const r = await callHandler(handlers.admin, { action: 'set_pin_setup_allowed', studentIds: [SID, SID2], allowed: true, adminPin: ADMIN_PIN })
+  const selfSet = await callHandler(handlers.selfSet, { studentId: SID, pin: '2468', pinConfirm: '2468', setupCode: 'ANYTHING' })
+  process.env.SESSION_SECRET = saved
+  check('시크릿 없어도 허용 자체(pin_setup_allowed 토글)는 기존대로 성공한다', r.body?.ok === true, JSON.stringify(r.body))
+  check('시크릿 없으면 setupCodes가 빈 배열이다(코드가 새어나가지 않는다)',
+    Array.isArray(r.body?.setupCodes) && r.body.setupCodes.length === 0, JSON.stringify(r.body?.setupCodes))
+  check('시크릿 없는 상태에서 발급된(사실상 없는) 코드로는 self-set이 여전히 거부된다', selfSet.body?.ok === false)
+}
+
 console.log('\n10. [공격 C] student-pin-status 열거 축소')
 {
   seed({ allowed: true })
@@ -325,6 +342,29 @@ console.log('\n11. 관리자만 코드를 발급받는다')
   check('allowed=false 회수 시에는 코드를 발급하지 않는다', !revoke.body?.setupCodes)
 }
 
+console.log('\n11b. 반별 일괄 발급 — N명분 코드 계약 (UI 회귀 고정용)')
+{
+  // 2026-08-30 추가 — §11은 단건(studentIds: [SID])만 검증해서, 서버가
+  // N명분을 한번에 돌려주는 계약(각 항목의 studentId로 매칭해야 하는 것)이
+  // 비어 있었다. 이 계약이 UI 쪽 handleBulkAllowPinSetup 회귀(§14)의 근거.
+  seed({ allowed: false })
+  fake.__db.students.push({ id: SID2, name: 'QA다른학생', class_id: CLASS_ID, unit_name: 'Unit 1', pin_hash: null, pin_setup_allowed: false, pin_fail_count: 0, pin_locked_until: null })
+  const bulk = await callHandler(handlers.admin, { action: 'set_pin_setup_allowed', studentIds: [SID, SID2], allowed: true, adminPin: ADMIN_PIN })
+  check('일괄 허용 성공', bulk.body?.ok === true, JSON.stringify(bulk.body).slice(0, 120))
+  const codes = bulk.body?.setupCodes
+  check('반환된 코드가 2건이다', Array.isArray(codes) && codes.length === 2, JSON.stringify(codes))
+  const c1 = codes?.find((c) => c.studentId === SID)
+  const c2 = codes?.find((c) => c.studentId === SID2)
+  check('학생 A 코드가 서버 파생값과 일치한다', c1?.code === codeNow(SID))
+  check('학생 B 코드가 서버 파생값과 일치한다', c2?.code === codeNow(SID2))
+  check('두 학생의 코드가 서로 다르다', !!c1?.code && !!c2?.code && c1.code !== c2.code)
+  check('각 항목에 studentId가 담겨 UI가 UUID로 이름을 매칭할 수 있다(헌법 규칙 4)',
+    Array.isArray(codes) && codes.every((c) => typeof c.studentId === 'string' && c.studentId.length > 0))
+  check('각 항목에 만료 시각이 있고 미래다',
+    Array.isArray(codes) && codes.every((c) => typeof c.expiresAt === 'number' && c.expiresAt > Date.now()))
+  check('응답 어디에도 pin_hash가 실려있지 않다', !JSON.stringify(bulk.body).includes('pin_hash'))
+}
+
 console.log('\n12. [공격 E] 로그인/세션 발급 회귀 없음')
 {
   seed({ allowed: true })
@@ -350,6 +390,43 @@ console.log('\n13. 공격 체인 종단 재현 — UUID만으로는 세션까지
   check('E 단계 도달 불가(공격자 PIN 으로 로그인 실패)', e.body?.ok !== true)
   check('세션 토큰 미발급', !e.body?.token)
   check('학생 데이터 무변경(pin_hash null 유지)', fake.__db.students[0].pin_hash == null)
+}
+
+console.log('\n14. UI 소비 계약 정적 검사 (StudentDirectory.jsx) — 반별 일괄 발급 P0 회귀 고정')
+{
+  // 2026-08-30 추가 — 배경: 단건 핸들러(handleTogglePinSetupAllowed)는
+  // data.setupCodes[0]을 읽어 화면에 띄우지만, 반별 일괄 핸들러
+  // (handleBulkAllowPinSetup)는 서버가 N명분 코드를 돌려줘도 이를 전혀
+  // 읽지 않아 화면에 하나도 안 뜨는 P0 구멍이 있었다(일괄 허용한 반
+  // 전원이 PIN을 만들 수 없게 됨). 정적 소스 검사로 이 계약을 고정한다.
+  const uiSrc = fs.readFileSync(path.resolve('src/components/admin/StudentDirectory.jsx'), 'utf8')
+  // 이 파일은 "코드를 로그/스토리지에 남기지 않는다"는 한국어 주석을 코드
+  // 바로 옆(라인 주석 // ...뿐 아니라 JSX 블록 주석 {/* ... */}에도)에
+  // 남기는 관례가 있어서(예: "로그/localStorage 저장 없음",
+  // "console/localStorage/sessionStorage 사용 금지"), 주석까지 그대로
+  // 검사하면 그 안전 안내 문구 자체가 오탐(단어 근접 매칭)을 유발한다.
+  // 라인 주석과 블록 주석을 모두 제거한 소스로 누출 검사를 수행해 실제
+  // 코드만 본다.
+  const stripComments = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').map((line) => {
+      const m = line.match(/(?<!:)\/\/.*/)
+      return m ? line.slice(0, m.index) : line
+    }).join('\n')
+  const uiCodeOnly = stripComments(uiSrc)
+  const bulkStart = uiSrc.indexOf('const handleBulkAllowPinSetup')
+  check('handleBulkAllowPinSetup 함수를 찾았다', bulkStart >= 0)
+  const nextHandleIdx = uiSrc.indexOf('const handle', bulkStart + 1)
+  const bulkBody = bulkStart >= 0 ? uiSrc.slice(bulkStart, nextHandleIdx > 0 ? nextHandleIdx : uiSrc.length) : ''
+  check('일괄 허용 경로가 setupCodes를 읽는다(이번에 고친 P0 회귀를 고정하는 핵심 단언)',
+    /setupCodes/.test(bulkBody))
+  check('일괄 허용 경로가 setSetupCodeNotice를 호출해 화면에 반영한다', /setSetupCodeNotice/.test(bulkBody))
+  check('일괄 허용 경로가 이름이 아니라 studentId(UUID)로 매칭한다(헌법 규칙 4)', /studentId/.test(bulkBody))
+  check('코드가 console.log로 새지 않는다', !/console\.log\([^)]*setupCode/i.test(uiCodeOnly))
+  check('코드가 localStorage로 새지 않는다',
+    !/localStorage[\s\S]{0,80}setupCode/i.test(uiCodeOnly) && !/setupCode[\s\S]{0,80}localStorage/i.test(uiCodeOnly))
+  check('코드가 sessionStorage로 새지 않는다',
+    !/sessionStorage[\s\S]{0,80}setupCode/i.test(uiCodeOnly) && !/setupCode[\s\S]{0,80}sessionStorage/i.test(uiCodeOnly))
 }
 
 console.log('\n' + '='.repeat(60))
