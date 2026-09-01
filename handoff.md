@@ -7,6 +7,16 @@ _최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시�
 `refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
 틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
 
+## 2026-09-02 (100차) — 야간 자율 세션: 유령 유닛 root cause 확정 + 재발 방지 코드 + Phase 2 SQL 패키지 (Production DB 무접촉)
+
+- 범위: 운영자 취침 중 6시간 자율 작업. **Production DB WRITE/SQL 실행/merge/push/deploy 0** — READ-ONLY 조사 + 로컬 커밋 4~6개만. 상세 보고서: `docs/overnight-ghost-unit-audit-2026-09-02.md` (이 섹션은 요약).
+- baseline 불변 실측: health PASS 27/WARN 10/FAIL 0 (시작·중간·종료 동일), 유령 참조 SCA 21/students 2/word_status 1 — 어제 조사와 집합 단위 동일(드리프트 0).
+- **root cause 확정(실측)**: ① hasHeader=true 파일 안의 반복 헤더 행이 `AdminScreen.jsx`의 `!hasHeader` 조건부 안전망을 통과해 unit="Unit"/word="English" 유령을 생성(민병천 유령이 정상 Unit3와 같은 배치에서 3.4초 먼저 생성된 타임라인으로 증명, 이후 업로드가 헤더 단어를 재삽입) ② 서버(admin-content-write) 무검증 ③ isLearnableUnit 가드가 쓰기 3곳에만 있고 학생 Dashboard·생성 폼·TextbookAssignmentPanel 은 유령 노출(08-23 현다율이 유령 화면에서 "English" known 클릭한 word_status 로 실증) ④ 생성 폼 폴백 'Unit 1' → 서버 create_student 명시 이름 매칭에 단어수 검증 부재(유령 "Unit1" 채택 가능 구멍) ⑤ "7" vs "Unit 7" 이원 표기(중1 동아, 내용 동일 40단어 이중 업로드 — 병합은 proposal 만).
+- 재발 방지 커밋(전부 FAIL-FIRST 실측 후 수정, 실행은 Sonnet 실행 에이전트·검수는 메인 세션): `2ac2993` fix(import) 반복 헤더 행/유닛 라벨 차단 + PDF 경로(excelHeaderGuard.js 단일 원천, 수정 전 7건 실패→32/32) / `5c589a8` fix(units) getLearnable* 헬퍼로 학생·관리자 셀렉터 3곳 필터('Unit 1' 리터럴 폴백 제거, 16건 실패→22/22) / `73115cf` fix(students) create_student 명시 유닛 단어≥2 가드(5건 실패→34/34) / `513b389` chore(sql) Phase 2 패키지.
+- **Phase 2 SQL 패키지(실행 금지 상태로 준비만)**: v3_43(SCA 19+students 2 재배정 — 실학생 primary 5 는 실행 시점 권위값 재대조, secondary·비실은 NULL) → v3_43b(Paul_DUP_20260722_INACTIVE 2행 전용 — **파일 실행 = 운영자 승인**이 되도록 분리, 계정·기록 삭제 없음) → v3_44(유령 6개+단어 6개 삭제, 백업 테이블+anon 회수, pg_constraint 동적 FK 스캔; **53e380c7 은 현다율 word_status 실학습기록 CASCADE 소실 때문에 HOLD 제외**). 각 ROLLBACK 동봉. 정적 검증 3중(스펙 UUID 대조 FAIL 0 / libpg-query 파서 6/6 / PL/pgSQL 린트 0). v3_40 은 STALE(전 매핑이 이미 목적지 → 즉시 abort) — 실행 금지.
+- 판정 요약: 유령 7 = SAFE_DELETE 1(35ee95ae) / SAFE_AFTER_REASSIGN 5 / HOLD 1(53e380c7). Paul_DUP_20260722 = 명백한 폐기 테스트 데이터(생성과 같은 분에 SCA 자동 생성, stars·ws·xp·blob 전부 0)이나 승인 게이트 유지. WARN 10 은 전부 실오류(억지 제거 아님) — v3_43 실행 후 0 기대.
+- 내일 운영자: ① v3_43 실행→health WARN 0 확인 ② v3_43b 승인 여부 결정(미승인 시 v3_44 재작성 지시) ③ v3_44 실행 ④ 이 브랜치 PR→Release Gate→merge ⑤ 선택: 53e380c7 최종 방침, 0단어 "Unit 1" 2개(e4804821 에 실학생 Song·황성연 secondary SCA), 엣지 함수 서버 검증, "Unit 7"/"7" 병합.
+
 ## 2026-08-15 (99차) — 입실시험 kr2en 동의어 충돌 오답 사고 수정 (production 배포 완료)
 
 - 실사고: 2026-08-14 고1 입실시험(c67069f7, 능률 민병천 Unit3, direction=mixed

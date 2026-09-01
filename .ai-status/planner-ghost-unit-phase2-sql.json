@@ -1,0 +1,28 @@
+{
+  "agent_name": "planner",
+  "role": "설계·검증 (SQL 작성은 implementer sub-agent 위임)",
+  "task_id": "ghost-unit-phase2-sql",
+  "task": "health WARN 10 + 유령 유닛 7개 정리를 위한 Phase 2 SQL(v3_43 재배정 / v3_44 삭제 + 각 ROLLBACK) 작성과 정적 검증 — DB 실행 0",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-02T00:00:00Z",
+  "updated_at": "2026-09-02T00:00:00Z",
+  "files_owned": [
+    "supabase_v3_43_ghost_sca_reassign.sql",
+    "supabase_v3_43_ghost_sca_reassign_ROLLBACK.sql",
+    "supabase_v3_44_ghost_units_delete.sql",
+    "supabase_v3_44_ghost_units_delete_ROLLBACK.sql"
+  ],
+  "files_read": [
+    "scripts/lib/studentHealthRules.mjs",
+    "src/utils/wordLibrary.js",
+    "api/admin-pin-actions.js",
+    "supabase_v2_9_student_class_assignments.sql",
+    "supabase_v1_5_word_status.sql",
+    "supabase_v3_13_curriculum_engine_phase0.sql",
+    "DATABASE.md"
+  ],
+  "summary": "라이브 READ-ONLY 재조사(GET만): 유령 7개 확정(1단어 헤더 잔재, position 0), 참조 = SCA 21행(실학생 11/비실 10) + students 2행(비실) + word_status 1행(현다율, 53e380c7 단어). health PASS 27/WARN 10/FAIL 0, WARN 11건 전부 ASSIGNMENT_GHOST_UNIT. v3_43: 실학생 primary 5행은 권위값 students.current_unit_id 로 동기화(AUTHORITATIVE, 실행 시점 재검증), secondary 6행 + 비실 10행은 NULL(assignTextbook 초기 상태; 전환 시 앱이 단어 있는 첫 유닛 확정), students 2행 NULL. v3_44: 53e380c7 은 실학습기록(word_status) 때문에 HOLD, 나머지 6개 유닛 + 단어 6개만 삭제(백업 테이블 backup_v3_44_units/words 생성 + anon 권한 회수, pg_constraint 동적 FK 스캔, progress blob 키 7건 무접촉 assert). v3_40 은 STALE(전 11행 이미 목적지) — 재사용하지 않음. 정적 검증: libpg-query 파서 4/4 OK, PL/pgSQL 린트 실오류 0, 스펙 UUID 대조 통과.",
+  "blocker": null,
+  "next_action": "운영자 검토 후 지시 대기. 실행 순서는 v3_43 → health:students 재실행(WARN 0 기대) → v3_44. 53e380c7(고1 능률 민병천 'Unit') 삭제 여부와 Paul_DUP_20260722_INACTIVE 2행 포함 여부는 운영자 결정 필요."
+}

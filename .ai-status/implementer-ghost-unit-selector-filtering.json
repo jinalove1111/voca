@@ -1,0 +1,28 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "ghost-unit-selector-filtering",
+  "task": "학습 가능한 유닛만 셀렉터에 노출 — Dashboard/StudentDirectory/TextbookAssignmentPanel/create_student의 유닛 노출 지점에서 단어<2(엑셀 헤더 잔재/빈) 유닛 제외",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-02T00:00:00+09:00",
+  "updated_at": "2026-09-02T00:00:00+09:00",
+  "files_owned": [
+    "src/utils/wordLibrary.js",
+    "src/components/Dashboard.jsx",
+    "src/components/admin/StudentDirectory.jsx",
+    "src/components/admin/TextbookAssignmentPanel.jsx",
+    "api/admin-pin-actions.js",
+    "scripts/testGhostUnitFiltering.mjs",
+    "scripts/testCreateStudentUnitAssignment.mjs",
+    "tests/harness/registry.mjs",
+    "package.json"
+  ],
+  "files_read": [
+    "scripts/testAdminUnitEdit.mjs",
+    "scripts/testExcelHeaderResidue.mjs (등록만 — 내용 무수정, 다른 세션 산출물)"
+  ],
+  "summary": "wordLibrary.js에 getLearnableTextbookUnits/getLearnableClassUnits/getLearnableClassUnitNames(단어>=2 필터, 기존 getTextbookUnits/getClassUnits(Names)는 하위호환 무변경) 추가. Dashboard.jsx 학생 유닛 셀렉트, StudentDirectory.jsx 생성 폼/일괄이동 폴백, TextbookAssignmentPanel.jsx 배정 유닛 select가 이 헬퍼를 쓰도록 교체(현재 값이 필터로 빠지면 기존 렌더 로직/신규 currentMissing 로직으로 목록에 유지). api/admin-pin-actions.js create_student는 명시 unitName 매칭 결과도 단어<2면 채택하지 않고 자동(단어>=2 첫 유닛) 경로로 폴백하도록 서버측 방어 추가. FAIL-FIRST(규칙 15) 확인: git stash로 5개 소스 파일을 되돌려 신규/확장 테스트가 실측 FAIL하는 것을 먼저 확인(testGhostUnitFiltering 22개 중 16개 FAIL, testCreateStudentUnitAssignment 신규 3b/3c 섹션 5개 전부 FAIL) 후 stash pop으로 복원, 전부 PASS로 전환 확인. testAdminUnitEdit.mjs 기존 33단언 무회귀. npm run build 통과. 후속(코디네이터 지시, 동시작업 해소 후 허용): tests/harness/registry.mjs unitSwitching 도메인에 testGhostUnitFiltering.mjs/testExcelHeaderResidue.mjs 등록(기존 note 스타일 준수) + package.json에 verify:ghost-filtering/verify:excel-residue 스크립트 추가. testExcelHeaderResidue.mjs는 다른 세션 산출물이라 등록만 하고 파일 내용은 건드리지 않음(실행해 32/32 PASS 확인 후 등록). npm run verify:ghost-filtering(22/22 PASS), npm run verify:excel-residue(32/32 PASS), registry 문법 확인용 dynamic import 성공 확인.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 대기. 참고: StudentDirectory.jsx 생성 폼의 레거시(비교재) 분기(getClassUnitNames(newClass) 옵션 렌더, 텍스트북 미연결 반 전용 경로)는 스펙 지시 범위 밖이라 미필터 상태로 남김 — 운영자 확인 시 동일 패턴으로 후속 가능. registry 신규 등록 2건은 다음 npm run verify:all 전체 실행 시 함께 검증될 예정(이번 세션은 verify:all을 돌리지 않음, 코디네이터 지시)."
+}

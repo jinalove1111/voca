@@ -1,0 +1,30 @@
+{
+  "agent_name": "planner",
+  "role": "야간 자율 세션 조정·검증 (구현은 Sonnet 실행 에이전트 3개에 분배)",
+  "task_id": "overnight-ghost-audit-2026-09-02",
+  "task": "유령 유닛 root cause 확정 + 재발 방지 코드 + Phase 2 SQL 재구성(v3_43/43b/44) + 테스트·문서 — Production DB WRITE/SQL 실행/merge/push/deploy 0",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-02T00:00:00Z",
+  "updated_at": "2026-09-02T06:00:00Z",
+  "files_owned": [
+    "docs/overnight-ghost-unit-audit-2026-09-02.md",
+    "handoff.md(100차 append)",
+    "supabase_v3_43_ghost_sca_reassign.sql",
+    "supabase_v3_43b_paul_dup_sca_reassign.sql",
+    "supabase_v3_44_ghost_units_delete.sql",
+    "src/utils/excelHeaderGuard.js",
+    "src/utils/wordLibrary.js(getLearnable*)",
+    "scripts/testGhostUnitFiltering.mjs",
+    "scripts/testExcelHeaderResidue.mjs"
+  ],
+  "files_read": [
+    "scripts/lib/studentHealthRules.mjs",
+    "src/components/AdminScreen.jsx",
+    "src/components/Dashboard.jsx",
+    "supabase/functions/admin-content-write/index.ts"
+  ],
+  "summary": "baseline 드리프트 0(PASS 27/WARN 10/FAIL 0 3회 동일). root cause 5개 실측 확정(반복 헤더 행 통과가 유령 생성 경로 — 민병천 유령이 Unit3와 같은 배치 3.4초 선행 생성으로 증명; 서버 무검증; 셀렉터 노출·쓰기 가드 비대칭 — 현다율 08-23 word_status로 실증; 생성 폼 'Unit 1' 폴백→서버 명시 매칭 무검증; 'Unit 7'/'7' 이원 표기). 재발 방지 커밋 4개(2ac2993 import 방어/5c589a8 셀렉터 필터/73115cf create_student 가드/513b389 SQL 패키지) 전부 FAIL-FIRST 실측. SQL 재구성: Paul_DUP 2행을 v3_43b 승인 게이트로 분리, 53e380c7은 실학습기록 보존 위해 v3_44 HOLD 제외. 정적 검증 3중(스펙 대조 FAIL 0/libpg-query 6/6/린트 0). 최종 build PASS·verify:all ALL PASS(신규 54단언 포함)·health 불변.",
+  "blocker": null,
+  "next_action": "운영자: ① v3_43 실행→health WARN 0 확인 ② v3_43b 승인 결정 ③ v3_44 실행 ④ 브랜치 PR→Release Gate→merge ⑤ 선택 과제(53e380c7 방침/0단어 Unit 1 2개/엣지 함수 서버 검증/Unit 7·7 병합 proposal). 상세: docs/overnight-ghost-unit-audit-2026-09-02.md"
+}
