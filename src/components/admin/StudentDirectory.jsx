@@ -4,6 +4,10 @@ import {
   getStudentUnitId, getStudentEditableUnits, setStudentUnitById,
   setStudentClass, setStudentsClassBulk, setStudentHouse,
   getClassTextbooks, getTextbookUnits, getStudentClassAssignments, getTextbookById, fetchDashboardData,
+  // 2026-09-02(유령 유닛 셀렉터 노출 봉합) — 생성 폼/일괄이동 폴백이 단어<2
+  // 유닛(엑셀 헤더 잔재/빈 유닛)을 옵션·기본값으로 내보내지 않게 하는
+  // "학습 가능 유닛만" 버전. wordLibrary.js의 isLearnableUnit 헬퍼 섹션 참고.
+  getLearnableTextbookUnits, getLearnableClassUnitNames,
 } from '../../utils/wordLibrary'
 // House System(2026-07-19, 게임화 하위카드 8번) — 학생 로스터에 최소
 // 하우스 확인/재배정 UI(HOUSES 상수만 필요, 순수 함수는 wordLibrary.js가
@@ -372,9 +376,13 @@ export default function StudentDirectory({ adminPin }) {
           // 유닛"(단어 2개 이상인 첫 유닛 — 1단어 유령 유닛 자동 제외)을
           // 확정. 관리자가 유닛을 직접 골랐으면 그 이름을 그대로 보낸다.
           textbookId: newTextbook || undefined,
+          // 2026-09-02 — 폴백에서 리터럴 'Unit 1'을 제거(유령 "Unit1" 정규화
+          // 오매칭 원천 차단). learnable 후보가 하나도 없으면 ''을 보내
+          // 서버(create_student)가 "첫 학습 유닛(단어>=2)"을 자동 확정하게
+          // 맡긴다(추측 배정 아님 — 서버가 이미 그 규칙을 갖고 있음).
           unitName: newTextbook
             ? (newUnit || undefined)
-            : (newUnit || getClassUnitNames(newClass)[0] || 'Unit 1'),
+            : (newUnit || getLearnableClassUnitNames(newClass)[0] || ''),
           allowPinSetup: newAllowPinSetup,
           force,
         }),
@@ -876,7 +884,12 @@ export default function StudentDirectory({ adminPin }) {
     if (!bulkTargetClass || selected.size === 0) return
     setBulkBusy(true)
     try {
-      await setStudentsClassBulk([...selected], bulkTargetClass, getClassUnitNames(bulkTargetClass)[0] || 'Unit 1')
+      // 2026-09-02 — learnable 유닛 우선, 그 반에 학습 가능 유닛이 하나도
+      // 없을 때만 기존 동작(getClassUnitNames 폴백/'Unit 1') 보존 — 일괄
+      // 이동은 여러 학생을 동시에 옮기므로 과차단보다 기존 폴백 유지가
+      // 안전하다는 판단(setStudentsClassBulk 자체는 이미 유닛을 못
+      // 찾으면 조용히 null을 남기고 학습 가능 검증은 하지 않음).
+      await setStudentsClassBulk([...selected], bulkTargetClass, getLearnableClassUnitNames(bulkTargetClass)[0] || getClassUnitNames(bulkTargetClass)[0] || 'Unit 1')
       setSelected(new Set())
       setBulkTargetClass('')
     } catch (err) {
@@ -1512,8 +1525,10 @@ export default function StudentDirectory({ adminPin }) {
               <select value={newUnit} onChange={e => setNewUnit(e.target.value)}
                 className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-bold bg-white">
                 {newTextbook
+                  // 2026-09-02 — 생성 폼 유닛 옵션에서 단어<2 유닛(엑셀 헤더
+                  // 잔재/빈 유닛)을 제외한다(getTextbookUnits → learnable 버전).
                   ? [<option key="__auto" value="">첫 학습 유닛 (자동)</option>,
-                     ...getTextbookUnits(newTextbook).map(u => <option key={u.id} value={u.name}>{u.name}</option>)]
+                     ...getLearnableTextbookUnits(newTextbook).map(u => <option key={u.id} value={u.name}>{u.name}</option>)]
                   : getClassUnitNames(newClass).map(u => <option key={u} value={u}>{u}</option>)}
               </select>
             )}
