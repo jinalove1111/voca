@@ -70,6 +70,7 @@
     "verify:reward-hardening-behavior": "node scripts/testRewardServerHardeningBehavior.mjs",
     "verify:session-auth": "node scripts/testSessionTokenAuth.mjs",
     "verify:pin-setup-capability": "node scripts/testPinSetupCapability.mjs",
+    "verify:create-student": "node scripts/testCreateStudentUnitAssignment.mjs",
     "verify:assignment-ghost": "node scripts/testAssignmentGhostUnitRule.mjs",
     "verify:analytics-pagination": "node scripts/testAnalyticsPanelPagination.mjs",
     "verify:class-move-unit": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testClassMoveUnitResolution.mjs",

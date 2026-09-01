@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   getClassNames, getRealClassNames, getClassUnitNames, getClassIdByName, getStudentClass, getStudentUnit,
   setStudentClass, setStudentUnit, setStudentsClassBulk, setStudentHouse,
-  getClassTextbooks, getStudentClassAssignments, getTextbookById, fetchDashboardData,
+  getClassTextbooks, getTextbookUnits, getStudentClassAssignments, getTextbookById, fetchDashboardData,
 } from '../../utils/wordLibrary'
 // House System(2026-07-19, 게임화 하위카드 8번) — 학생 로스터에 최소
 // 하우스 확인/재배정 UI(HOUSES 상수만 필요, 순수 함수는 wordLibrary.js가
@@ -259,6 +259,12 @@ export default function StudentDirectory({ adminPin }) {
   // addStudent 경로)는 더 이상 이 화면에서 쓰지 않는다.
   const [newName, setNewName] = useState('')
   const [newClass, setNewClass] = useState('')
+  // 2026-09-01 — 생성 폼의 교과서 선택. 반과 교재는 독립(2026-08-07 확정
+  // 정책 — 같은 반 학생이라도 다른 교재를 공부할 수 있다)이라 반만으로는
+  // 시작 유닛을 정할 수 없다. 박민준·박성준 실사고(2026-08-31, regular 반
+  // 생성 시 current_unit_id/textbook_id 둘 다 NULL) 재발 방지의 UI 쪽 절반 —
+  // 서버 쪽 절반은 create_student의 textbookId 기반 유닛 확정.
+  const [newTextbook, setNewTextbook] = useState('')
   const [newUnit, setNewUnit] = useState('')
   const [newAllowPinSetup, setNewAllowPinSetup] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -286,11 +292,17 @@ export default function StudentDirectory({ adminPin }) {
   }
 
   const resetCreateForm = () => {
-    setNewName(''); setNewClass(''); setNewUnit(''); setNewAllowPinSetup(true)
+    setNewName(''); setNewClass(''); setNewTextbook(''); setNewUnit(''); setNewAllowPinSetup(true)
     setCreateError(null)
     closeDuplicateWarning()
     newStudentIdRef.current = null
   }
+
+  // 2026-09-01 — 선택한 반에 연결된 교재 목록(class_textbooks 합집합, 위
+  // newTextbook 주석 참고). 렌더마다 캐시(_classTextbooks)에서 동기 조회라
+  // 비용 없음. 반에 연결 교재가 있으면 교과서 선택이 필수다 — 안 고르면
+  // 서버가 유닛을 확정할 수 없어 예전 껍데기 배정이 재발한다.
+  const createTextbookOptions = newClass ? getClassTextbooks(getClassIdByName(newClass) || '') : []
 
   // existing(중복 확인 응답)의 반 이름 표시 — getClassIdByName의 역방향이
   // wordLibrary에 없으므로, 이미 로드된 students 캐시에서 같은 classId를
@@ -332,6 +344,9 @@ export default function StudentDirectory({ adminPin }) {
     if (!newClass) { setCreateError({ message: '반을 선택해주세요.' }); return }
     const classId = getClassIdByName(newClass)
     if (!classId) { setCreateError({ message: '선택한 반을 찾을 수 없어요. 새로고침 후 다시 시도해주세요.' }); return }
+    // 반에 연결된 교재가 있는데 교과서를 안 골랐으면 진행하지 않는다 —
+    // 서버로 textbookId 없이 보내면 유닛이 NULL인 껍데기 배정이 재발한다.
+    if (createTextbookOptions.length > 0 && !newTextbook) { setCreateError({ message: '교과서를 선택해주세요.' }); return }
     if (!newStudentIdRef.current) newStudentIdRef.current = crypto.randomUUID()
     setCreating(true)
     setCreateError(null)
@@ -345,7 +360,13 @@ export default function StudentDirectory({ adminPin }) {
           studentId: newStudentIdRef.current,
           name: trimmed,
           classId,
-          unitName: newUnit || getClassUnitNames(newClass)[0] || 'Unit 1',
+          // 교과서 지정 시: unitName 비움(빈 값) = 서버가 그 교재의 "첫 학습
+          // 유닛"(단어 2개 이상인 첫 유닛 — 1단어 유령 유닛 자동 제외)을
+          // 확정. 관리자가 유닛을 직접 골랐으면 그 이름을 그대로 보낸다.
+          textbookId: newTextbook || undefined,
+          unitName: newTextbook
+            ? (newUnit || undefined)
+            : (newUnit || getClassUnitNames(newClass)[0] || 'Unit 1'),
           allowPinSetup: newAllowPinSetup,
           force,
         }),
@@ -1426,7 +1447,14 @@ export default function StudentDirectory({ adminPin }) {
               className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:border-purple-400" />
             <select value={newClass} onChange={e => {
                 setNewClass(e.target.value)
-                setNewUnit(getClassUnitNames(e.target.value)[0] || '')
+                // 2026-09-01 — 반이 바뀌면 교과서/유닛 선택을 다시 시작한다.
+                // 연결 교재가 정확히 1개면 자동 선택(관리자 클릭 절약),
+                // 여러 개면 빈 값으로 두어 명시적 선택을 강제한다(다수결
+                // 자동 배정 금지 — 박민준·박성준 사고의 교훈).
+                const tbs = getClassTextbooks(getClassIdByName(e.target.value) || '')
+                const autoTb = tbs.length === 1 ? tbs[0].id : ''
+                setNewTextbook(autoTb)
+                setNewUnit(tbs.length > 0 ? '' : (getClassUnitNames(e.target.value)[0] || ''))
               }}
               className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-bold bg-white">
               <option value="">반 선택</option>
@@ -1436,10 +1464,23 @@ export default function StudentDirectory({ adminPin }) {
                   (classOptionsFor)는 필요 없음 — realClassList만으로 충분. */}
               {realClassList.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            {newClass && (
+            {/* 2026-09-01 — 교과서 선택(반에 연결된 교재가 있을 때 필수).
+                이 학생의 primary 교재가 되고, 서버(create_student)가 이
+                교재 기준으로 시작 유닛을 확정한다. */}
+            {newClass && createTextbookOptions.length > 0 && (
+              <select value={newTextbook} onChange={e => { setNewTextbook(e.target.value); setNewUnit('') }}
+                className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-bold bg-white">
+                <option value="">📚 교과서 선택 (필수)</option>
+                {createTextbookOptions.map(tb => <option key={tb.id} value={tb.id}>{tb.name}</option>)}
+              </select>
+            )}
+            {newClass && (newTextbook || createTextbookOptions.length === 0) && (
               <select value={newUnit} onChange={e => setNewUnit(e.target.value)}
                 className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-bold bg-white">
-                {getClassUnitNames(newClass).map(u => <option key={u} value={u}>{u}</option>)}
+                {newTextbook
+                  ? [<option key="__auto" value="">첫 학습 유닛 (자동)</option>,
+                     ...getTextbookUnits(newTextbook).map(u => <option key={u.id} value={u.name}>{u.name}</option>)]
+                  : getClassUnitNames(newClass).map(u => <option key={u} value={u}>{u}</option>)}
               </select>
             )}
             <label className="flex items-center gap-2 text-xs font-bold text-gray-600">

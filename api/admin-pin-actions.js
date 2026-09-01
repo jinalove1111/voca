@@ -247,7 +247,7 @@ export default async function handler(req, res) {
     // 헤더 주석 참고). 재발 방지는 (a) 중복 이름 사전 점검(force로 관리자
     // 명시 승인 시만 통과) (b) 클라이언트가 미리 생성한 UUID를 멱등성
     // 키로 받아 네트워크 재시도/중복 제출에도 안전, 두 가지로 달성한다.
-    const { studentId, name, classId, unitName, allowPinSetup, force } = req.body || {}
+    const { studentId, name, classId, unitName, textbookId, allowPinSetup, force } = req.body || {}
 
     if (typeof studentId !== 'string' || !UUID_RE.test(studentId)) {
       res.status(200).json({ ok: false, reason: 'invalid_id' })
@@ -314,14 +314,130 @@ export default async function handler(req, res) {
       return
     }
 
-    const finalUnitName = unitName || 'Unit 1'
-    const { data: unitRow } = await supabase
-      .from('units')
-      .select('id')
-      .eq('class_id', classId)
-      .eq('name', finalUnitName)
-      .maybeSingle()
-    const unitId = unitRow?.id || null
+    // [2026-09-01 P1 버그수정 — 신규 학생 유닛이 "반" 기준으로 추론되던 문제]
+    // 예전 코드는 units.class_id = <사람 반> 으로 유닛을 찾았는데, 유닛은
+    // 교재 컨테이너 반에 귀속되므로(2026-08-07 확정: 반과 교재는 독립,
+    // 같은 반 학생이라도 다른 교재를 공부할 수 있다) 유닛을 소유하지 않는
+    // regular 반에서는 항상 null이 됐다 — 2026-08-31 박민준·박성준이 정확히
+    // 이 경로로 current_unit_id/textbook_id 둘 다 NULL인 "껍데기 배정"으로
+    // 생성돼 health:students UNIT_INVALID FAIL -> Release Gate 차단으로
+    // 이어진 실사고(데이터는 v3_41로 수동 복구, 이 수정이 코드 재발 방지).
+    //
+    // 새 규칙: 요청의 textbookId(학생별 primary 교재) -> 그 교재의 유닛에서
+    // 확정한다. 회귀 테스트: scripts/testCreateStudentUnitAssignment.mjs.
+    //   · textbookId가 오면: 실존 + (반 소유이거나 class_textbooks enabled
+    //     연결) 검증 — 아니면 fail-closed 거부(invalid_textbook).
+    //   · 없으면: 반이 소유한 교재가 정확히 1개일 때만 그 교재로 폴백
+    //     (컨테이너 반 하위호환). regular 반은 연결 교재가 여럿일 수 있어
+    //     절대 추측하지 않는다(다수결 배정 금지 — 운영자 원칙). 이 경우
+    //     기존과 동일하게 unit null로 생성되고, 이후 교재 배정(setPrimary
+    //     Textbook)이 유닛을 확정한다.
+    let resolvedTextbookId = null
+    if (textbookId != null && textbookId !== '') {
+      if (typeof textbookId !== 'string' || !UUID_RE.test(textbookId)) {
+        res.status(200).json({ ok: false, reason: 'invalid_textbook' })
+        return
+      }
+      const { data: tbRow, error: tbErr } = await supabase
+        .from('textbooks')
+        .select('id,owner_class_id')
+        .eq('id', textbookId)
+        .maybeSingle()
+      if (tbErr) {
+        res.status(500).json({ error: tbErr.message })
+        return
+      }
+      let allowed = tbRow?.owner_class_id === classId
+      if (tbRow && !allowed) {
+        const { data: linkRow, error: linkErr } = await supabase
+          .from('class_textbooks')
+          .select('textbook_id')
+          .eq('class_id', classId)
+          .eq('textbook_id', textbookId)
+          .eq('enabled', true)
+          .maybeSingle()
+        if (linkErr) {
+          res.status(500).json({ error: linkErr.message })
+          return
+        }
+        allowed = !!linkRow
+      }
+      if (!tbRow || !allowed) {
+        res.status(200).json({ ok: false, reason: 'invalid_textbook' })
+        return
+      }
+      resolvedTextbookId = tbRow.id
+    } else {
+      // 반 소유 교재가 정확히 1개일 때만 폴백(그 외엔 null 유지, non-fatal —
+      // 이 조회가 실패해도 학생 생성 자체는 기존 동작대로 계속된다).
+      const { data: ownTbs, error: ownErr } = await supabase
+        .from('textbooks')
+        .select('id')
+        .eq('owner_class_id', classId)
+        .limit(2)
+      if (!ownErr && Array.isArray(ownTbs) && ownTbs.length === 1) resolvedTextbookId = ownTbs[0].id
+    }
+
+    // 유닛 확정 — 교재가 정해졌으면 그 교재의 유닛에서만 찾는다.
+    //   ① 호출자가 unitName을 명시했으면: 완전일치 -> 정규화 유일후보
+    //     (wordLibrary.findUnitByName과 동일 규칙 — "Unit 3"≡"Unit3").
+    //   ② 명시가 없으면: "실제 첫 학습 유닛" = position/이름 정렬 순서에서
+    //     단어가 2개 이상인 첫 유닛. 유령 유닛(엑셀 헤더 잔재)은 정확히
+    //     1단어라 구조적으로 제외된다(v3_41 STEP0-③과 동일 근거). 이는
+    //     2026-08-29에 금지된 "조용한 첫 유닛 폴백"(기존 학생의 저장 유닛
+    //     해석)과 다르다 — 진도가 아직 없는 신규 학생의 시작점 정책이다.
+    //     학습 가능한 유닛이 하나도 없으면 null(추측 금지, 생성은 성공).
+    let unitId = null
+    let resolvedUnitName = unitName || 'Unit 1'
+    let tbUnitLookupFailed = false
+    if (resolvedTextbookId) {
+      const { data: tbUnits, error: unitsErr } = await supabase
+        .from('units')
+        .select('id,name,position')
+        .eq('textbook_id', resolvedTextbookId)
+      if (unitsErr || !Array.isArray(tbUnits)) {
+        // units.textbook_id 컬럼 부재(v3.1 이전 스키마) 등 — 아래 레거시
+        // class_id 경로로 폴백(규칙 9: 마이그레이션 순서 무관 안전).
+        tbUnitLookupFailed = true
+      } else if (tbUnits.length > 0) {
+        const { data: wordRows, error: wErr } = await supabase
+          .from('words')
+          .select('unit_id')
+          .in('unit_id', tbUnits.map((u) => u.id))
+        const countByUnit = new Map()
+        if (!wErr) for (const w of wordRows || []) countByUnit.set(w.unit_id, (countByUnit.get(w.unit_id) || 0) + 1)
+        const sorted = [...tbUnits].sort((a, b) =>
+          ((a.position ?? Infinity) - (b.position ?? Infinity)) ||
+          String(a.name).localeCompare(String(b.name), undefined, { numeric: true }) ||
+          String(a.id).localeCompare(String(b.id)))
+        const normKey = (n) => String(n || '').trim().toLowerCase().replace(/\s+/g, '')
+        let unit = null
+        if (typeof unitName === 'string' && unitName.trim() !== '') {
+          unit = sorted.find((u) => u.name === unitName) || null
+          if (!unit) {
+            const candidates = sorted.filter((u) => normKey(u.name) === normKey(unitName))
+            if (candidates.length === 1) unit = candidates[0]
+          }
+        }
+        if (!unit && !wErr) unit = sorted.find((u) => (countByUnit.get(u.id) || 0) >= 2) || null
+        if (unit) {
+          unitId = unit.id
+          resolvedUnitName = unit.name
+        }
+      }
+    }
+    if (unitId == null && (!resolvedTextbookId || tbUnitLookupFailed)) {
+      // 레거시 경로(변경 전과 동일) — 교재를 못 정한 경우의 하위호환 전용.
+      // 컨테이너 반(units.class_id 보유)에서는 예전처럼 동작한다.
+      const { data: unitRow } = await supabase
+        .from('units')
+        .select('id')
+        .eq('class_id', classId)
+        .eq('name', resolvedUnitName)
+        .maybeSingle()
+      unitId = unitRow?.id || null
+    }
+    const finalUnitName = resolvedUnitName
 
     // House System 자동 배정 — wordLibrary.addStudent와 정확히 같은
     // 규칙(houseSystem.js 원본 함수 재사용, 위 import 주석 참고).
@@ -391,12 +507,24 @@ export default async function handler(req, res) {
     // student_class_assignments primary 행 — wordLibrary.addStudent(1226행
     // 인근)과 동일 계약: 실패는 non-fatal(23505/테이블 부재는 무시, 그 외는
     // 콘솔 로그만) — 학생 생성 자체가 이 보조 테이블 때문에 실패하면 안 된다.
-    const { error: assignErr } = await supabase.from('student_class_assignments').insert({
+    // 2026-09-01 — textbook_id를 함께 기록한다(위 P1 수정의 나머지 절반:
+    // 예전엔 이 컬럼을 아예 안 넣어 항상 NULL "껍데기"였다). v3.1 이전
+    // 스키마(컬럼 부재 42703)면 기존 컬럼 구성으로 재시도(규칙 9).
+    let { error: assignErr } = await supabase.from('student_class_assignments').insert({
       student_id: studentId,
       class_id: classId,
       current_unit_id: unitId,
       is_primary: true,
+      textbook_id: resolvedTextbookId,
     })
+    if (assignErr && isMissingColumnError(assignErr, 'textbook_id')) {
+      ;({ error: assignErr } = await supabase.from('student_class_assignments').insert({
+        student_id: studentId,
+        class_id: classId,
+        current_unit_id: unitId,
+        is_primary: true,
+      }))
+    }
     if (assignErr && !isMissingTableError(assignErr) && assignErr.code !== '23505') {
       console.warn('[admin-pin-actions] create_student: student_class_assignments primary row insert failed (non-fatal):', assignErr.message)
     }
