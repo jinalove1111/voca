@@ -1,11 +1,12 @@
 // 2026-07-16 P7 감사 후속 — supabase_v1_9_security_rls.sql 적용 검증.
 // 브라우저와 동일한 anon key로 라이브 Supabase에 직접 접근해서:
 //   [기능] SQL 적용 전/후 어느 상태에서든 반드시 통과해야 하는 것들 —
-//          로그인 화면 학생 목록 SELECT, 학생 등록 INSERT(RETURNING id),
-//          반/유닛 변경 UPDATE, 학생 삭제 DELETE, 서버리스 API 경로
-//          (service_role — student-pin-status/verify-student-pin) 정상.
+//          로그인 화면 학생 목록 SELECT, 반/유닛 변경 UPDATE, 서버리스 API
+//          경로(service_role — student-pin-status/verify-student-pin) 정상.
 //   [보안] SQL 적용 후에만 통과하는 것들 — anon의 PIN 4컬럼 SELECT/UPDATE
-//          와 select=* 가 전부 42501(권한 거부)로 막히는지.
+//          와 select=* 가 전부 42501(권한 거부)로 막히는지, 학생 등록
+//          INSERT(v3_16)와 학생 삭제 DELETE(v3_42, 2026-09-01 계약 반전 —
+//          §7 주석 참고)가 거부되는지.
 // exit code: 기능+보안 전부 PASS → 0. 기능은 PASS인데 보안이 FAIL이면
 // "v1_9 미적용" 안내와 함께 1. 기능이 FAIL이면 즉시 심각(앱이 깨진 상태) — 1.
 //
@@ -138,10 +139,29 @@ console.log('\n=== 6. [보안] anon으로 PIN 컬럼 UPDATE(계정 탈취/잠금
   checkSec('UPDATE pin_setup_allowed 거부(자기설정 창구 탈취 차단)', isDenied(e3), e3 || '(허용됨)')
 }
 
-console.log('\n=== 7. [기능] 학생 삭제 권한(removeStudent와 동일 DELETE — phantom id, 0 rows) ===')
+console.log('\n=== 7. [보안] anon 학생 DELETE → 거부돼야 함(v3_42, phantom id, 0 rows — 실데이터 무접촉) ===')
 {
+  // 2026-09-01 계약 반전 — 예전엔 이 절이 "DELETE 허용"을 [기능]으로
+  // 단언했다(v1_9 당시 관리자 학생 삭제가 클라이언트 removeStudent → anon
+  // DELETE 경유였기 때문). 2026-08-08부터 관리자 삭제는 서버 액션
+  // hard_delete_student(service_role + 관리자 PIN 재인증)만 쓰고
+  // removeStudent 호출부는 0이라, 이 권한은 앱이 쓰지 않는 dead permission
+  // 이면서 공개 anon key로 임의 학생을 CASCADE 삭제할 수 있는 CRITICAL
+  // 공격면이었다(2026-09-01 감사, 같은 날 pilot cleanup에서 실측 확인).
+  // supabase_v3_42_students_delete_lockdown.sql이 회수하며, 이제 거부(42501)
+  // 를 [보안] PASS로 단언한다. 프로브는 §3·§5·§6과 동일하게 phantom id —
+  // Postgres는 권한 판정을 행 매칭보다 먼저 하므로 42501 여부는 존재하지
+  // 않는 id로도 성립하고, 아직 허용 상태라도 0 rows라 실데이터 무접촉이다.
+  // v3_42 적용 전에 돌리면 이 항목이 FAIL로 나오는 것이 정상(미적용 확인용).
   const { error } = await supabase.from('students').delete().eq('id', PHANTOM_ID)
-  checkFunc('DELETE 권한 허용(에러 없음, 0 rows — 실데이터 무접촉)', !error, error)
+  checkSec('DELETE 거부(42501) — anon 학생 삭제 경로 차단(v3_42)', isDenied(error),
+    error || '(허용됨 — supabase_v3_42_students_delete_lockdown.sql 미적용?)')
+  // authenticated 롤: v3_42는 anon과 함께 회수하지만, 이 앱은 Supabase Auth를
+  // 쓰지 않아(supabase.auth.* 호출 0건) authenticated JWT를 발급할 경로가
+  // 없다 — 정직하게 SKIP으로 표시하고 anon 프로브로 대표 검증한다. 실행
+  // 후 확인은 SQL 파일의 사후 검증 블록(role_table_grants 0건)이 두 롤을
+  // 모두 커버한다.
+  console.log('  SKIP  [보안] authenticated DELETE 거부 — authenticated JWT 발급 경로 없음(Supabase Auth 미사용), v3_42 사후 검증 블록이 두 롤 모두 확인')
 }
 
 console.log('\n────────────────────────────────────────────')
@@ -152,8 +172,9 @@ if (funcFailures > 0) {
   process.exit(1)
 }
 if (secFailures > 0) {
-  console.log(`⚠️  기능은 전부 정상, 보안 항목 ${secFailures}건 미충족 — supabase_v1_9_security_rls.sql이 아직 적용되지 않은 상태로 보임.`)
-  console.log('   Supabase SQL Editor에서 supabase_v1_9_security_rls.sql 실행 후 이 스크립트를 다시 돌려주세요.')
+  console.log(`⚠️  기능은 전부 정상, 보안 항목 ${secFailures}건 미충족 — 어느 보안 SQL이 미적용인지 위 FAIL 라벨로 확인하세요.`)
+  console.log('   PIN 컬럼/select=* 항목 → supabase_v1_9_security_rls.sql / INSERT 항목 → supabase_v3_16_students_insert_lockdown.sql')
+  console.log('   DELETE 항목(§7) → supabase_v3_42_students_delete_lockdown.sql — Supabase SQL Editor에서 실행 후 이 스크립트를 다시 돌려주세요.')
   process.exit(1)
 }
 console.log('✅ 기능 + 보안 전부 통과 — v1_9 적용 완료 상태이며 앱 동작 불변 확인됨.')
