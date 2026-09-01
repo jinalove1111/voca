@@ -9,6 +9,10 @@ import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, 
 // upsertWordAssets 둘 다 절대 throw하지 않는 계약(src/utils/wordAssets.js
 // 헤더 주석) — 이 파일에서도 그 계약을 그대로 신뢰한다.
 import { fetchWordAssetsByWords, upsertWordAssets } from '../utils/wordAssets'
+// [2026-09-02 재발 방지] 반복 헤더 행이 가짜 단어/유령 유닛으로 저장되는
+// 사고 재발 차단 — 순수 로직은 excelHeaderGuard.js가 단일 원천
+// (scripts/testExcelHeaderResidue.mjs로 회귀 고정).
+import { HEADER_ALIASES, isHeaderLabel, isHeaderResidueRow, sanitizeUnitLabel } from '../utils/excelHeaderGuard'
 // 숙제 "자동 생성" 순수 플래너(2026-08-01) — 이 파일은 미리보기(체크박스
 // Set 채우기)에만 쓰고, 실제 저장은 항상 기존 setTodaysAssignment/
 // setAssignmentForDate(adminPin 듀얼패스) 그대로 사용한다.
@@ -1161,36 +1165,10 @@ class ErrorBoundary extends React.Component {
 // class name column, which created bogus classes literally named "1", "2",
 // etc. The class a word belongs to always comes from the class selected in
 // the admin UI (selectedClass), never from anything in the file.
-const HEADER_ALIASES = {
-  // [2026-08-25 재발 방지] 실사고 6건에서 실제로 관측된 헤더 라벨을 추가한다.
-  // 교재 9개 중 6개에 이름이 "Unit"이고 단어가 1개뿐인 가짜 유닛이 있었고,
-  // 그 1개 단어의 정체는 전부 헤더 라벨이었다("English"/"Korean" 5건,
-  // "Word / Phrase"/"뜻" 1건). 이 라벨들이 별칭에 없어 hasHeader가 false가
-  // 되고, 헤더 행이 rows.slice(1)로 잘리지 않은 채 데이터로 편입됐다.
-  // 추가만 한다 — 기존 별칭이 매칭되던 파일의 인식 결과는 그대로다.
-  // 의도적 제외: '영어'/'한글'처럼 흔한 낱말은 넣지 않는다. 실제 어휘 행
-  // ("English"/"영어")이 헤더로 오인돼 통째로 버려지는 것을 막기 위해서다.
-  word:    ['word', '단어', '영단어', 'word / phrase', 'word/phrase', 'english', '영어·어구', '어휘·어구'],
-  meaning: ['meaning', '뜻', '의미', '한글뜻', 'korean'],
-  unit:    ['unit', '유닛', '단원'],
-  // "no"/"번호" is recognized only so it can be explicitly ignored — it's
-  // a row number, never a word/meaning/class.
-  no:      ['no', '번호'],
-  // M3c(2026-08-05) — 전부 선택 컬럼(없어도 기존과 100% 동일 동작). 헤더가
-  // 명시적으로 있을 때만 인식된다 — 헤더 미검출 시의 위치 추정 폴백
-  // (parseExcelRows의 "no header" 분기, :1189-1197 근방)은 word/meaning/
-  // unit 3종만 다루고 이 4개는 절대 추정하지 않는다(지어내지 않음).
-  example:            ['example', '예문', '영어예문'],
-  exampleTranslation: ['example_translation', '예문번역', '해석'],
-  partOfSpeech:       ['pos', 'part_of_speech', '품사'],
-  cefr:               ['cefr', '레벨', '난이도등급'],
-}
-
-// [2026-08-25 재발 방지] 위 별칭 전부를 합친 헤더 라벨 집합. 위치 추정
-// 경로(헤더 미검출)에서 "첫 행이 사실은 헤더였다"를 판정하는 데만 쓴다 —
-// 컬럼 매핑에는 관여하지 않는다.
-const HEADER_LABELS = new Set(Object.values(HEADER_ALIASES).flat())
-const isHeaderLabel = (s) => HEADER_LABELS.has(String(s ?? '').trim().toLowerCase())
+//
+// [2026-09-02] HEADER_ALIASES/HEADER_LABELS/isHeaderLabel 정의는
+// src/utils/excelHeaderGuard.js로 이동했다(단일 원천 — 순수 로직이라
+// node 테스트에서 React 의존 없이 바로 검증 가능). 여기서는 재수출만 쓴다.
 
 function detectHeaderMap(row) {
   const norm = (row || []).map(cell => String(cell ?? '').trim().toLowerCase())
@@ -1239,7 +1217,11 @@ function parseExcelRows(rows, selectedClass = '') {
       const v = (dataRows[i] || []).map((c) => (c == null ? '' : String(c).trim()))
       const nonEmpty = v.filter(Boolean)
       // 셀이 1개뿐인 행(파일 제목) 또는 헤더 라벨이 2개 이상인 행은 선두 블록.
-      if (nonEmpty.length <= 1 || nonEmpty.filter(isHeaderLabel).length >= 2) leadingCount = i + 1
+      // [2026-09-02] isHeaderLabel(cell, kind) 로 2-인자화되면서, 배열
+      // 콜백에 그대로 넘기면 Array.filter가 주입하는 index가 kind로 오인식돼
+      // 1번째 이후 원소의 판정이 항상 false가 되는 회귀가 있었다(실측:
+      // verify:excel-header CASE I G3). 반드시 1-인자 래퍼로 감싸 호출한다.
+      if (nonEmpty.length <= 1 || nonEmpty.filter((c) => isHeaderLabel(c)).length >= 2) leadingCount = i + 1
       else break
     }
   }
@@ -1326,6 +1308,25 @@ function parseExcelRows(rows, selectedClass = '') {
         warn('header-label-row', '헤더로 보이는 행이 데이터 안에 있어 제외했어요', `${word} / ${meaning}`)
         return null
       }
+
+      // [2026-09-02 재발 방지] 반복 헤더 행 — 시트 병합/페이지 구분으로 헤더
+      // 행이 파일 중간에 또 나타나는 경우. 위 안전망과 달리 hasHeader/rowIdx
+      // 와 무관하게(무조건) 적용한다 — hasHeader=true로 정상 인식된 파일
+      // 안의 반복 헤더 행은 위 안전망(!hasHeader 조건)을 통과하지 못했고,
+      // 그게 운영 DB에 실제로 생긴 유령 유닛(이름 "Unit", 단어 1개=헤더
+      // 라벨 자체)의 원인이었다. word·meaning이 둘 다 헤더 라벨일 때만
+      // 버려서 실제 어휘("Korean"=한국인 등)는 절대 잃지 않는다.
+      if (isHeaderResidueRow({ word, meaning })) {
+        warn('header-residue-row', '반복된 헤더 행이 있어 제외했어요', `${word} / ${meaning}`)
+        return null
+      }
+
+      // [2026-09-02 재발 방지] 유닛 칸이 순수 헤더 라벨("Unit"/"유닛"/"단원",
+      // 숫자 없음)이면 비워서 아래 unit || 'Unit 1' 폴백(또는 이전 유닛
+      // 상속)이 작동하게 한다 — 헤더 라벨 자체가 유닛 이름으로 저장되던
+      // 실사고(이름 "Unit"인 유령 유닛)를 유닛 칸 단독으로도 차단한다.
+      unit = sanitizeUnitLabel(unit)
+
       return { className: selectedClass, unit: unit || 'Unit 1', word, meaning, example, exampleTranslation, partOfSpeech, cefr }
     })
     .filter(r => r && r.word && r.meaning)
@@ -1631,7 +1632,13 @@ function PdfUpload({ onDone, adminPin }) {
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
     const parsed = lines.map(l => {
       const parts = l.split(/[,|\t]/).map(p => p.trim())
-      return parts.length >= 2 ? { word: parts[0], meaning: parts[1] } : null
+      if (parts.length < 2) return null
+      const word = parts[0], meaning = parts[1]
+      // [2026-09-02 재발 방지] PDF/텍스트 경로는 헤더 필터가 전혀 없었다 —
+      // 추출된 텍스트 첫 줄이 "단어, 뜻" 같은 표 헤더면 그대로 가짜 단어로
+      // 저장됐다. Excel 경로와 동일한 규칙으로 반복 헤더 행을 제외한다.
+      if (isHeaderResidueRow({ word, meaning })) return null
+      return { word, meaning }
     }).filter(Boolean)
     setWords(parsed)
   }
