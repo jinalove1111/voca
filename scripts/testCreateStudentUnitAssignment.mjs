@@ -144,6 +144,7 @@ const U_GHOST = '40000000-0000-4000-8000-000000000001' // "Unit1" 1단어(엑셀
 const U2      = '40000000-0000-4000-8000-000000000002' // "Unit2" 3단어 — 실제 첫 학습 유닛
 const U3      = '40000000-0000-4000-8000-000000000003' // "Unit3" 3단어
 const U_G2    = '40000000-0000-4000-8000-000000000004' // TB3의 유일한 유닛(1단어)
+const U_ZERO  = '40000000-0000-4000-8000-000000000005' // "Unit4" 0단어(교사 미업로드 — 2026-09-02 신규)
 const SID = (n) => `9000000${n}-0000-4000-8000-00000000000${n}`
 
 function seed() {
@@ -171,6 +172,9 @@ function seed() {
     { id: U2, name: 'Unit2', class_id: CC, textbook_id: TB1, position: 2 },
     { id: U3, name: 'Unit3', class_id: CC, textbook_id: TB1, position: 3 },
     { id: U_G2, name: 'Unit1', class_id: '20000000-0000-4000-8000-00000000000d', textbook_id: TB3, position: 1 },
+    // 2026-09-02 — 명시 unitName 매칭이 단어<2 유닛도 그대로 채택하던 구멍
+    // (유령 셀렉터 노출 봉합의 서버측 대응 짝) 재현용: 0단어 "Unit4".
+    { id: U_ZERO, name: 'Unit4', class_id: CC, textbook_id: TB1, position: 4 },
   )
   fake.__db.words.push(
     { id: 'w1', unit_id: U_GHOST, word: 'No.', meaning: '어휘·어구' }, // 유령: 정확히 1단어
@@ -213,6 +217,34 @@ console.log('\n3. 표기 흔들림("Unit 3" vs "Unit3") — 정규화 유일 후
   const r = await callHandler({ action: 'create_student', adminPin: ADMIN_PIN, studentId: SID(3), name: 'QA생성삼', classId: RC, textbookId: TB1, unitName: 'Unit 3' })
   check('생성 성공', r.body?.ok === true, JSON.stringify(r.body))
   check('"Unit 3"이 Unit3으로 해석됨(findUnitByName 규칙과 동일)', studentRow(SID(3))?.current_unit_id === U3, String(studentRow(SID(3))?.current_unit_id))
+}
+
+console.log('\n3b. [FAIL-FIRST] 명시 unitName="Unit 1" 이 정규화로 유령 "Unit1"(1단어)에 유일매칭 — 채택되지 않고 자동 경로로 폴백')
+{
+  // 배경: 관리자 생성 폼의 옛 폴백 문자열 리터럴 'Unit 1'(StudentDirectory.jsx,
+  // 이번 세션에서 제거됨)이 이 정규화 규칙으로 유령 유닛에 유일 매칭될 수
+  // 있었다 — 서버(create_student)가 그 매칭 결과를 단어 수 검증 없이 그대로
+  // 채택하면 클라이언트가 폴백을 완전히 제거해도 다른 호출자(구버전
+  // 클라이언트/직접 API 호출)가 여전히 같은 값을 보낼 수 있어 서버측
+  // 방어가 필요하다. 수정 전 코드는 U_GHOST(1단어)를 채택했다(FAIL-FIRST
+  // 로 실측).
+  seed()
+  const SID_GHOST = '90000010-0000-4000-8000-000000000010'
+  const r = await callHandler({ action: 'create_student', adminPin: ADMIN_PIN, studentId: SID_GHOST, name: 'QA생성유령매치', classId: RC, textbookId: TB1, unitName: 'Unit 1' })
+  check('생성 성공', r.body?.ok === true, JSON.stringify(r.body))
+  check('유령 "Unit1"(1단어)이 채택되지 않음(current_unit_id != U_GHOST)', studentRow(SID_GHOST)?.current_unit_id !== U_GHOST, String(studentRow(SID_GHOST)?.current_unit_id))
+  check('대신 단어>=2 첫 유닛(Unit2)로 폴백', studentRow(SID_GHOST)?.current_unit_id === U2, String(studentRow(SID_GHOST)?.current_unit_id))
+  check('SCA도 동일하게 폴백(Unit2)', scaRow(SID_GHOST)?.current_unit_id === U2)
+}
+
+console.log('\n3c. [FAIL-FIRST] 명시 unitName="Unit4"(완전일치, 0단어) — 채택되지 않고 자동 경로로 폴백')
+{
+  seed()
+  const SID_ZERO = '90000011-0000-4000-8000-000000000011'
+  const r = await callHandler({ action: 'create_student', adminPin: ADMIN_PIN, studentId: SID_ZERO, name: 'QA생성빈매치', classId: RC, textbookId: TB1, unitName: 'Unit4' })
+  check('생성 성공', r.body?.ok === true, JSON.stringify(r.body))
+  check('0단어 "Unit4"가 채택되지 않음(current_unit_id != U_ZERO)', studentRow(SID_ZERO)?.current_unit_id !== U_ZERO, String(studentRow(SID_ZERO)?.current_unit_id))
+  check('대신 단어>=2 첫 유닛(Unit2)로 폴백', studentRow(SID_ZERO)?.current_unit_id === U2, String(studentRow(SID_ZERO)?.current_unit_id))
 }
 
 console.log('\n4. 반에 연결되지 않은 교재 — fail-closed 거부, 학생 미생성')

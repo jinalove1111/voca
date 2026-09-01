@@ -418,6 +418,14 @@ export default async function handler(req, res) {
             const candidates = sorted.filter((u) => normKey(u.name) === normKey(unitName))
             if (candidates.length === 1) unit = candidates[0]
           }
+          // 2026-09-02(유령 유닛 셀렉터 노출 봉합 후속) — 명시 unitName 매칭이
+          // 성공해도 그 유닛의 단어가 2개 미만이면(엑셀 헤더 잔재 유령/빈
+          // 유닛) 채택하지 않고 아래 자동 경로(단어>=2 첫 유닛)로 폴백한다.
+          // 실사고 경로: 관리자 생성 폼의 폴백 문자열 'Unit 1'이 정규화
+          // 유일후보로 유령 "Unit1"(1단어)에 매칭될 수 있었다(단어 수
+          // 검증 없이 채택). wErr(단어 조회 자체 실패)면 과차단 금지
+          // 원칙대로 필터하지 않는다(기존 동작 유지).
+          if (unit && !wErr && (countByUnit.get(unit.id) || 0) < 2) unit = null
         }
         if (!unit && !wErr) unit = sorted.find((u) => (countByUnit.get(u.id) || 0) >= 2) || null
         if (unit) {
