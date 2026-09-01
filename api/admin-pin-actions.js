@@ -50,6 +50,9 @@ const ALLOWED_ACTIONS = new Set([
   'deactivate_student',
   'reactivate_student',
   'hard_delete_student',
+  // 2026-08-30 — 확인코드 "조회 전용" 액션(아래 handler 본문 주석 참고).
+  // 이 파일에 추가하는 이유도 위와 동일한 12함수 한도(파일 상단 주석).
+  'get_pin_setup_code',
 ])
 
 // 2026-08-06 — create_student가 받는 studentId(클라이언트 생성 UUID,
@@ -174,6 +177,63 @@ export default async function handler(req, res) {
       return
     }
     res.status(200).json({ ok: true })
+    return
+  }
+
+  if (action === 'get_pin_setup_code') {
+    // [SECURITY 2026-08-30] 확인코드 "조회 전용" 액션. 지금까지 확인코드를
+    // 볼 수 있는 유일한 경로가 위 set_pin_setup_allowed(허용 토글) 응답
+    // 1회뿐이었다 — StudentDirectory.jsx가 그 응답을 setupCodeNotice로
+    // 잠깐 띄우는데, 닫거나 새로고침하면 다시 볼 방법이 없어 "이 학생
+    // 코드 뭐였지?"에 답할 UI가 없었다(실 운영에서 막힘). 이 액션은
+    // pin_setup_allowed를 절대 켜지 않고(SELECT만, students UPDATE 0회),
+    // 이미 관리자가 허용해 둔 학생의 코드를 다시 파생해 보여주기만 한다 —
+    // pinSetupCode는 SESSION_SECRET+studentId+시간버킷의 순수 함수라
+    // 저장 없이 몇 번이든 안전하게 재계산할 수 있다(위 set_pin_setup_allowed
+    // 발급과 동일한 값). "새 코드 발급" 개념이 아니라 "이미 존재하는
+    // (버킷 유효기간 내) 코드를 다시 읽기"이므로 UPDATE가 필요 없다.
+    //
+    // 별도 파일(api/get-pin-setup-code.js)로 만들지 않는 이유: Vercel Hobby
+    // 배포당 서버리스 함수 12개 한도(이 파일 상단 헤더 주석, 2026-07-20
+    // 실측 확정)를 이미 꽉 채우고 있어 파일 1개만 늘어도 배포 자체가 깨진다
+    // — 그래서 이 통합 dispatcher에 조회 전용 action으로 추가한다.
+    const { studentId } = req.body || {}
+    if (typeof studentId !== 'string' || !UUID_RE.test(studentId)) {
+      res.status(200).json({ ok: false, reason: 'invalid_id' })
+      return
+    }
+    const { data: target, error: selErr } = await supabase
+      .from('students')
+      .select('id,name,pin_hash,pin_setup_allowed')
+      .eq('id', studentId)
+      .maybeSingle()
+    if (selErr) {
+      res.status(200).json({ ok: false, error: selErr.message })
+      return
+    }
+    if (!target) {
+      res.status(200).json({ ok: false, reason: 'not_found' })
+      return
+    }
+    // 규칙 11 — pin_hash는 존재 여부(truthy 판정)로만 쓰고 응답에는 절대
+    // 싣지 않는다. 이미 PIN이 있는 학생에게 확인코드를 보여줄 이유도 없다
+    // (그 코드로는 self-set-student-pin.js가 already_set으로 거부한다).
+    if (target.pin_hash) {
+      res.status(200).json({ ok: false, reason: 'already_set' })
+      return
+    }
+    if (target.pin_setup_allowed !== true) {
+      res.status(200).json({ ok: false, reason: 'not_allowed' })
+      return
+    }
+    const code = pinSetupCode(studentId)
+    if (!code) {
+      // SESSION_SECRET 미설정 — fail-closed(9b 시나리오와 동일 원칙: 코드가
+      // 새어나가지 않고, 원인을 관리자가 진단할 수 있게 reason을 구분한다).
+      res.status(200).json({ ok: false, reason: 'no_secret' })
+      return
+    }
+    res.status(200).json({ ok: true, studentId, name: target.name, code, expiresAt: pinSetupCodeExpiresAt() })
     return
   }
 

@@ -167,6 +167,11 @@ export default function StudentDirectory({ adminPin }) {
   // SESSION_SECRET 미설정 등으로 전원이 무증상으로 PIN을 못 만드는
   // 상태를 관리자가 놓치지 않게 하기 위한 명시적 경고 트리거다.
   const [setupCodeNotice, setSetupCodeNotice] = useState(null)
+  // 2026-08-30 — "확인코드 보기"(재조회) 버튼의 진행 상태. get_pin_setup_code는
+  // 조회 전용(SELECT만, pin_setup_allowed/pin_hash 어느 쪽도 갱신하지 않음)
+  // 이라 몇 번을 눌러도 안전 — 새 코드를 "발급"하는 게 아니라 이미 유효한
+  // (10분 버킷 내) 코드를 서버에서 다시 읽어오는 것뿐이다.
+  const [viewCodeBusyId, setViewCodeBusyId] = useState(null)
   const [unlockBusyId, setUnlockBusyId] = useState(null)
   // 파괴적 액션(학생 삭제/PIN 삭제)을 담는 카드별 "⋯" 오버플로 메뉴 —
   // 열려 있는 카드 id(한 번에 하나). 핸들러는 기존 handleRemove/
@@ -697,6 +702,60 @@ export default function StudentDirectory({ adminPin }) {
     }
   }
 
+  // 2026-08-30 — 확인코드 "보기"(조회 전용, admin-pin-actions.js의
+  // get_pin_setup_code 액션). set_pin_setup_allowed(허용 토글)의 응답으로만
+  // 1회 볼 수 있던 확인코드를, 카드를 닫거나 새로고침해서 잊어버렸을 때도
+  // 다시 확인할 수 있게 한다 — pin_setup_allowed/pin_hash를 전혀 건드리지
+  // 않으므로(서버 쪽 SELECT만) 몇 번을 눌러도 안전하다. 성공 시 기존
+  // setupCodeNotice(단건 items 1개 렌더)를 그대로 재사용한다 — 새 표시
+  // 컴포넌트를 만들지 않는다.
+  const handleViewPinSetupCode = async (id, name) => {
+    setViewCodeBusyId(id)
+    try {
+      const res = await fetch('/api/admin-pin-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_pin_setup_code', studentId: id, adminPin }),
+      })
+      const data = await res.json()
+      if (data.reason === 'not_authorized') {
+        alert('관리자 인증에 실패했어요. 관리자 화면을 다시 로그인해주세요.')
+        return
+      }
+      if (data.ok && data.code) {
+        setSetupCodeNotice({
+          items: [{ id, name: data.name || name, code: data.code }],
+          expiresAt: typeof data.expiresAt === 'number' ? data.expiresAt : null,
+          missing: false,
+        })
+        return
+      }
+      if (data.reason === 'no_secret') {
+        // 기존 "허용은 됐지만 코드를 못 받았다" amber 경고와 동일 원인
+        // (SESSION_SECRET 서버 설정 미비) — 같은 렌더를 재사용한다.
+        setSetupCodeNotice({ items: [], expiresAt: null, missing: true })
+        return
+      }
+      if (data.reason === 'not_allowed') {
+        alert(`"${name}" 학생은 아직 확인코드를 받을 수 없어요 — 먼저 이 학생의 "PIN 설정 허용"을 눌러주세요.`)
+        return
+      }
+      if (data.reason === 'already_set') {
+        alert(`"${name}" 학생은 이미 PIN 이 설정된 학생이에요.`)
+        return
+      }
+      if (data.reason === 'not_found') {
+        alert('학생 정보를 찾을 수 없어요.')
+        return
+      }
+      alert('확인코드 조회에 실패했어요: ' + (data.error || '알 수 없는 오류'))
+    } catch (err) {
+      alert('확인코드 조회 중 오류가 발생했어요: ' + (err.message || err))
+    } finally {
+      setViewCodeBusyId(null)
+    }
+  }
+
   // 반별 일괄 "설정 허용" — PIN 미설정 학생이 많은 반에서 한 명씩
   // 누르지 않아도 되게. 이미 PIN이 있는 학생은 서버(set-pin-setup-
   // allowed.js)가 자동으로 걸러내므로 안전.
@@ -979,6 +1038,18 @@ export default function StudentDirectory({ adminPin }) {
                 {allowBusyId === s.id ? '⏳' : status.pinSetupAllowed ? '🔓 허용 취소' : '🔓 설정 허용'}
               </button>
             )}
+            {/* 2026-08-30 — 확인코드 "보기"(조회 전용, get_pin_setup_code).
+                안내 카드를 닫거나 새로고침해서 코드를 잊어버렸을 때 다시
+                확인하는 유일한 경로 — pin_setup_allowed/pin_hash를 전혀
+                건드리지 않는다(SELECT만). PIN 없는 학생 카드에 항상 노출하고,
+                아직 "설정 허용"을 안 눌렀으면 클릭 시 안내만 뜬다. */}
+            {status && !status.hasPinHash && (
+              <button onClick={() => handleViewPinSetupCode(s.id, s.name)}
+                disabled={viewCodeBusyId === s.id}
+                className="bg-emerald-100 text-emerald-700 font-bold px-2.5 min-h-[40px] rounded-xl text-xs btn-press disabled:opacity-50 whitespace-nowrap">
+                {viewCodeBusyId === s.id ? '⏳' : '🔎 확인코드 보기'}
+              </button>
+            )}
             {(status?.locked || status?.hasFailedAttempts) && (
               <button onClick={() => handleUnlockPin(s.id, s.name)} disabled={unlockBusyId === s.id}
                 title={status?.locked ? '현재 잠김 — 잠금과 실패 기록을 초기화합니다' : '실패 기록이 누적됨 — 잠기기 전에 초기화합니다'}
@@ -1136,7 +1207,11 @@ export default function StudentDirectory({ adminPin }) {
           큰 코드 하나를 보여주고(회귀 0), 일괄 허용(items 2개 이상)은
           "이름 — 코드" 목록으로, 코드가 0개 발급됐으면(missing) 경고
           톤으로 별도 안내한다. 코드 자체는 이 렌더 외에는 어디에도
-          남기지 않는다(console/localStorage/sessionStorage 사용 금지). */}
+          남기지 않는다(console/localStorage/sessionStorage 사용 금지).
+          2026-08-30 — 이 안내 카드는 이제 "PIN 설정 허용" 직후뿐 아니라
+          학생 카드의 "🔎 확인코드 보기"(handleViewPinSetupCode,
+          get_pin_setup_code 조회 전용 액션) 클릭 시에도 뜬다 — 새 표시
+          컴포넌트를 만들지 않고 이 카드를 그대로 재사용한다. */}
       {setupCodeNotice && (
         setupCodeNotice.missing ? (
           <div className="border-2 border-amber-300 bg-amber-50 rounded-2xl p-4 space-y-2">
@@ -1179,10 +1254,26 @@ export default function StudentDirectory({ adminPin }) {
                 </div>
               </>
             )}
+            {/* 2026-08-30 — 남은 유효시간. expiresAt은 이전부터 상태에
+                저장돼 있었지만 화면에 쓰이지 않고 있었다(get_pin_setup_code
+                도입을 계기로 이제 표시). 코드는 10분 버킷 단위라 "새 코드
+                생성" 개념이 없다 — 같은 버킷 안에서는 다시 조회해도 같은
+                코드가 나온다는 점을 정직하게 안내한다. */}
+            {typeof setupCodeNotice.expiresAt === 'number' && (
+              <p className="text-[11px] font-bold text-emerald-800">
+                {(() => {
+                  const remainMin = Math.max(0, Math.ceil((setupCodeNotice.expiresAt - Date.now()) / 60000))
+                  return remainMin > 0
+                    ? `⏳ 이 코드는 약 ${remainMin}분 후 만료돼요.`
+                    : '⏳ 이 코드는 곧 만료돼요 — 만료됐다면 카드의 "확인코드 보기"를 다시 눌러주세요.'
+                })()}
+              </p>
+            )}
             <p className="text-[11px] text-emerald-700">
               학생이 "PIN 만들기" 화면에서 이 코드를 입력해야 PIN을 만들 수 있어요.
-              {' '}코드는 <b>20분 안에</b> 사용해야 하고, 필요하면 "PIN 설정 허용"을
-              다시 눌러 코드를 다시 확인할 수 있어요.
+              {' '}코드는 <b>약 10분마다 자동으로 바뀌고</b> 최대 20분 안에 사용해야 해요 — 같은
+              버킷 안에서는 다시 조회해도 같은 코드가 나오므로 "새로 발급"이 아니라 학생
+              카드의 <b>"🔎 확인코드 보기"</b>로 언제든 다시 확인하세요.
             </p>
             <button onClick={() => setSetupCodeNotice(null)}
               className="w-full bg-emerald-600 text-white text-xs font-bold rounded-xl py-2">

@@ -208,7 +208,27 @@ console.log('\n1. [공격 D] UUID만 알고 코드 없이 self-set — 반드시
 console.log('\n2. 잘못된 코드 — 거부')
 {
   seed({ allowed: true })
-  for (const bad of ['AAAAAAAA', '', 'ZZZZ', codeNow(SID2), codeNow(SID).slice(0, 7) + 'Z']) {
+  // 2026-09-01 — 이 목록에 있던 `codeNow(SID).slice(0, 7) + 'Z'`는 실제 코드의
+  // 8번째 문자가 우연히 'Z'일 때(알파벳 32자 중 1자 = 약 1/32 확률) 진짜 유효한
+  // 코드와 같아져 이 단언이 무작위로 FAIL하던 flaky 픽스처였다. "마지막 한
+  // 글자만 다른 well-formed 코드"라는 원래 의도는 그대로 두고 결정적으로 만든다
+  // — verifyPinSetupCode가 허용하는 모든 버킷(직전/현재)과, 실행 도중 버킷
+  // 경계를 넘는 경우의 다음 버킷까지 세 코드의 마지막 문자를 전부 제외한
+  // 문자를 고르므로 어떤 타이밍에도 유효 코드와 일치할 수 없다(확률 논증 아님).
+  const BUCKET_MS = 10 * 60 * 1000
+  const nearbyCodes = [
+    codeNow(SID),
+    pinAuth.pinSetupCode?.(SID, { now: Date.now() - BUCKET_MS }) ?? '',
+    pinAuth.pinSetupCode?.(SID, { now: Date.now() + BUCKET_MS }) ?? '',
+  ]
+  const usedLastChars = new Set(nearbyCodes.map((c) => c.slice(-1)))
+  // 후보 4개 중 배제되는 건 최대 3개(버킷 3개)라 반드시 하나가 남는다.
+  const swapChar = ['A', 'B', 'C', 'D'].find((ch) => !usedLastChars.has(ch))
+  const lastCharDiffers = codeNow(SID).slice(0, 7) + swapChar
+  // 규칙 15 — 픽스처 자체가 유효한지(진짜 코드와 정말 다른지) 먼저 단언한다.
+  check('마지막 글자만 바꾼 픽스처가 유효 코드 어느 버킷과도 다르다(테스트 자체의 유효성)',
+    typeof swapChar === 'string' && !nearbyCodes.includes(lastCharDiffers))
+  for (const bad of ['AAAAAAAA', '', 'ZZZZ', codeNow(SID2), lastCharDiffers]) {
     const r = await callHandler(handlers.selfSet, { studentId: SID, pin: '2468', pinConfirm: '2468', setupCode: bad })
     check(`잘못된 코드 거부: ${JSON.stringify(String(bad).slice(0, 10))}`, r.body?.ok === false)
   }
@@ -427,6 +447,144 @@ console.log('\n14. UI 소비 계약 정적 검사 (StudentDirectory.jsx) — 반
     !/localStorage[\s\S]{0,80}setupCode/i.test(uiCodeOnly) && !/setupCode[\s\S]{0,80}localStorage/i.test(uiCodeOnly))
   check('코드가 sessionStorage로 새지 않는다',
     !/sessionStorage[\s\S]{0,80}setupCode/i.test(uiCodeOnly) && !/setupCode[\s\S]{0,80}sessionStorage/i.test(uiCodeOnly))
+}
+
+console.log('\n15. [신규] get_pin_setup_code — 조회 전용 확인코드 재확인 액션')
+{
+  // 2026-08-30 추가 — 배경: 확인코드를 볼 수 있는 유일한 경로가
+  // set_pin_setup_allowed(허용 토글) 응답 1회뿐이라, 관리자가 안내 카드를
+  // 닫거나 새로고침하면 "이 학생 코드 뭐였지?"에 답할 UI가 없어 실 운영이
+  // 막혔다. 새 action은 SELECT만 하고(UPDATE 0), 이미 허용된 학생의 코드를
+  // 다시 파생해 보여주기만 한다.
+  console.log('  15a. adminPin 없으면 거부되고 코드가 없다')
+  {
+    seed({ allowed: true })
+    const r = await callHandler(handlers.admin, { action: 'get_pin_setup_code', studentId: SID })
+    check('adminPin 없으면 ok:false', r.body?.ok !== true, JSON.stringify(r.body))
+    check('거부 응답에 코드가 없다', !JSON.stringify(r.body).includes(codeNow(SID)))
+  }
+
+  console.log('  15b. 정상 호출 — 코드가 서버 파생값과 일치')
+  {
+    seed({ allowed: true })
+    const r = await callHandler(handlers.admin, { action: 'get_pin_setup_code', studentId: SID, adminPin: ADMIN_PIN })
+    check('정상 조회 성공', r.body?.ok === true, JSON.stringify(r.body))
+    check('반환된 코드가 서버 파생값과 일치한다', r.body?.code === codeNow(SID))
+    check('학생 이름이 함께 온다(다른 학생 코드와 혼동 방지)', r.body?.name === 'QA초등학생')
+    check('studentId가 응답에 담겨 있다', r.body?.studentId === SID)
+    check('만료 시각이 포함되고 미래다', typeof r.body?.expiresAt === 'number' && r.body.expiresAt > Date.now())
+  }
+
+  console.log('  15c. 조회만으로는 DB 상태가 전혀 바뀌지 않는다(조회 전용 증명)')
+  {
+    const s = seed({ allowed: true })
+    const beforeAllowed = s.pin_setup_allowed
+    const beforeHash = s.pin_hash
+    await callHandler(handlers.admin, { action: 'get_pin_setup_code', studentId: SID, adminPin: ADMIN_PIN })
+    await callHandler(handlers.admin, { action: 'get_pin_setup_code', studentId: SID, adminPin: ADMIN_PIN })
+    check('여러 번 조회해도 pin_setup_allowed가 그대로다', fake.__db.students[0].pin_setup_allowed === beforeAllowed)
+    check('여러 번 조회해도 pin_hash가 그대로다(null 유지)', fake.__db.students[0].pin_hash === beforeHash)
+  }
+
+  console.log('  15d. pin_setup_allowed=false — not_allowed, 코드 미노출')
+  {
+    seed({ allowed: false })
+    const r = await callHandler(handlers.admin, { action: 'get_pin_setup_code', studentId: SID, adminPin: ADMIN_PIN })
+    check('허용 전이면 not_allowed', r.body?.ok === false && r.body?.reason === 'not_allowed', JSON.stringify(r.body))
+    check('코드가 응답에 없다', !JSON.stringify(r.body).includes(codeNow(SID)))
+  }
+
+  console.log('  15e. 이미 PIN이 있는 학생 — already_set, 코드 미노출')
+  {
+    seed({ allowed: true, pinHash: pinAuth.hashPin('1357') })
+    const r = await callHandler(handlers.admin, { action: 'get_pin_setup_code', studentId: SID, adminPin: ADMIN_PIN })
+    check('PIN이 이미 있으면 already_set', r.body?.ok === false && r.body?.reason === 'already_set', JSON.stringify(r.body))
+    check('코드가 응답에 없다', !JSON.stringify(r.body).includes(codeNow(SID)))
+    check('응답에 pin_hash가 실려있지 않다(규칙 11)', !JSON.stringify(r.body).includes('pin_hash') && !JSON.stringify(r.body).includes(pinAuth.hashPin('1357')))
+  }
+
+  console.log('  15f. SESSION_SECRET 미설정 — no_secret, fail-closed')
+  {
+    seed({ allowed: true })
+    const saved = process.env.SESSION_SECRET
+    delete process.env.SESSION_SECRET
+    const r = await callHandler(handlers.admin, { action: 'get_pin_setup_code', studentId: SID, adminPin: ADMIN_PIN })
+    process.env.SESSION_SECRET = saved
+    check('시크릿 없으면 no_secret', r.body?.ok === false && r.body?.reason === 'no_secret', JSON.stringify(r.body))
+    check('시크릿 없어도 코드가 새지 않는다', !JSON.stringify(r.body).includes(codeNow(SID)))
+  }
+
+  console.log('  15g. 존재하지 않는 학생 — not_found')
+  {
+    seed({ allowed: true })
+    const r = await callHandler(handlers.admin, { action: 'get_pin_setup_code', studentId: SID2, adminPin: ADMIN_PIN })
+    check('존재하지 않으면 not_found', r.body?.ok === false && r.body?.reason === 'not_found', JSON.stringify(r.body))
+  }
+
+  console.log('  15h. 응답 어디에도 pin_hash가 없다(정상 케이스)')
+  {
+    seed({ allowed: true })
+    const r = await callHandler(handlers.admin, { action: 'get_pin_setup_code', studentId: SID, adminPin: ADMIN_PIN })
+    check('정상 응답에도 pin_hash 키가 없다', !JSON.stringify(r.body).includes('pin_hash'))
+  }
+}
+
+console.log('\n16. 종단 흐름 — 허용 → 코드 재조회 → 학생 self-set → 로그인 → 세션 발급 (가짜 픽스처 전용)')
+{
+  // 요구사항 7: 관리자가 "PIN 설정 허용"을 누른 뒤, 관리자가 새로 만든
+  // get_pin_setup_code로 코드를 (재)조회해서 학생에게 전달하고, 학생이 그
+  // 코드+PIN 2회 입력으로 self-set에 성공하고, 그 PIN으로 로그인해 세션
+  // 토큰까지 받는 전체 경로. 실학생 UUID는 절대 쓰지 않고(SID는 이 파일
+  // 상단에 정의된 하네스 전용 가짜 UUID) 이름도 QA 픽스처 이름만 쓴다.
+  seed({ allowed: false }) // 학생은 아직 PIN 미설정, 허용도 안 된 초기 상태
+  const allow = await callHandler(handlers.admin, { action: 'set_pin_setup_allowed', studentIds: [SID], allowed: true, adminPin: ADMIN_PIN })
+  check('1) 관리자 허용 성공', allow.body?.ok === true, JSON.stringify(allow.body))
+
+  const lookup = await callHandler(handlers.admin, { action: 'get_pin_setup_code', studentId: SID, adminPin: ADMIN_PIN })
+  check('2) 관리자가 확인코드를 (재)조회할 수 있다', lookup.body?.ok === true, JSON.stringify(lookup.body))
+  check('2) 조회한 코드가 허용 응답의 코드와 동일하다(같은 시간버킷)', lookup.body?.code === allow.body?.setupCodes?.[0]?.code)
+
+  const selfSet = await callHandler(handlers.selfSet, {
+    studentId: SID, pin: '3579', pinConfirm: '3579', setupCode: lookup.body.code,
+  })
+  check('3) 학생이 코드+PIN 2회 입력으로 self-set 성공', selfSet.body?.ok === true, JSON.stringify(selfSet.body))
+
+  const login = await callHandler(handlers.login, { name: 'QA초등학생', pin: '3579' })
+  check('4) 방금 만든 PIN으로 로그인 성공', login.body?.ok === true, JSON.stringify(login.body))
+  check('4) 로그인 응답에 세션 토큰이 실려있다', typeof login.body?.token === 'string' && login.body.token.includes('.'))
+  check('4) 발급된 토큰이 그 학생(SID) 것으로 검증된다',
+    pinAuth.verifySessionToken(login.body?.token, { studentId: SID }).ok === true)
+
+  // 조회 후 다시 조회해도(관리자가 "코드 다시 보기"를 여러 번 눌러도)
+  // 이미 소모된(already_set) 계정이므로 더 이상 코드를 내주지 않아야 한다.
+  const afterUse = await callHandler(handlers.admin, { action: 'get_pin_setup_code', studentId: SID, adminPin: ADMIN_PIN })
+  check('5) PIN 설정 완료 후에는 재조회가 already_set으로 거부된다(1회성 유지)',
+    afterUse.body?.ok === false && afterUse.body?.reason === 'already_set', JSON.stringify(afterUse.body))
+}
+
+console.log('\n17. UI 소비 계약 정적 검사 — 확인코드 "보기" 버튼 (StudentDirectory.jsx)')
+{
+  // 관리자가 코드를 잃어버렸을 때 다시 볼 수 있는 유일한 신규 진입점 —
+  // PIN이 없는 학생 카드에 get_pin_setup_code를 호출하는 버튼이 있어야
+  // 하고, 그 결과 코드가 로그/스토리지로 새면 안 된다(§14와 동일한 정적
+  // 검사 관례 재사용).
+  const uiSrc = fs.readFileSync(path.resolve('src/components/admin/StudentDirectory.jsx'), 'utf8')
+  const stripComments = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').map((line) => {
+      const m = line.match(/(?<!:)\/\/.*/)
+      return m ? line.slice(0, m.index) : line
+    }).join('\n')
+  const uiCodeOnly = stripComments(uiSrc)
+  check('get_pin_setup_code 액션을 호출하는 코드가 있다', /get_pin_setup_code/.test(uiCodeOnly))
+  check('확인코드 관련 문구가 "확인코드"로 통일되어 있다(StudentSelect.jsx와 용어 일치)',
+    /확인코드/.test(uiCodeOnly))
+  check('코드가 console.log로 새지 않는다(신규 조회 경로 포함)',
+    !/console\.log\([^)]*code/i.test(uiCodeOnly))
+  check('코드가 localStorage로 새지 않는다(신규 조회 경로 포함)',
+    !/localStorage[\s\S]{0,120}\.code\b/i.test(uiCodeOnly) && !/\.code\b[\s\S]{0,120}localStorage/i.test(uiCodeOnly))
+  check('코드가 sessionStorage로 새지 않는다(신규 조회 경로 포함)',
+    !/sessionStorage[\s\S]{0,120}\.code\b/i.test(uiCodeOnly) && !/\.code\b[\s\S]{0,120}sessionStorage/i.test(uiCodeOnly))
 }
 
 console.log('\n' + '='.repeat(60))
