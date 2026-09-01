@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   getClassNames, getRealClassNames, getClassUnitNames, getClassIdByName, getStudentClass, getStudentUnit,
-  setStudentClass, setStudentUnit, setStudentsClassBulk, setStudentHouse,
+  getStudentUnitId, getStudentEditableUnits, setStudentUnitById,
+  setStudentClass, setStudentsClassBulk, setStudentHouse,
   getClassTextbooks, getTextbookUnits, getStudentClassAssignments, getTextbookById, fetchDashboardData,
 } from '../../utils/wordLibrary'
 // House System(2026-07-19, 게임화 하위카드 8번) — 학생 로스터에 최소
@@ -138,7 +139,14 @@ export default function StudentDirectory({ adminPin }) {
   const [students, setStudents] = useState(() => getStudents().filter(isRealDirectoryStudent))
   const [editing, setEditing] = useState(null) // student id currently being reassigned
   const [editClass, setEditClass] = useState('')
-  const [editUnit, setEditUnit] = useState('')
+  // 2026-09-02(Yaeji 유령 유닛 사고 후속) — 유닛은 이름 문자열이 아니라 **unit UUID**
+  // 로 다룬다. 옵션은 이 학생의 primary 교재(SCA)에 실제로 속한 학습 가능 유닛
+  // (getStudentEditableUnits)이며, 사람 반의 유닛(getClassUnitNames)이 아니다 —
+  // 운영 반은 유닛을 소유하지 않아 예전 소스는 placeholder "Unit 1" 만 보여줬고,
+  // 그 문자열이 저장 시 교재의 유령 "Unit1" 에 정규화 오매칭됐다.
+  const [editUnitId, setEditUnitId] = useState('')
+  const [editUnitOptions, setEditUnitOptions] = useState([])
+  const [editOrig, setEditOrig] = useState({ className: '', unitId: null }) // 저장 시 "실제로 바뀐 것만" 쓰기 위한 기준값
   // v2.9 다중 교재 — 교재 관리 패널을 펼쳐서 보고 있는 학생 id(한 번에 한
   // 명만, editing과 같은 패턴).
   const [textbookManaging, setTextbookManaging] = useState(null)
@@ -560,23 +568,42 @@ export default function StudentDirectory({ adminPin }) {
     }
   }
 
-  const startEdit = (id) => {
+  const startEdit = async (id) => {
+    const className = getStudentClass(id)
     setEditing(id)
-    setEditClass(getStudentClass(id))
-    setEditUnit(getStudentUnit(id))
+    setEditClass(className)
+    setEditUnitOptions([])
+    setEditUnitId('')
+    // 배정 캐시가 콜드면 예열 — 그래야 primary 교재(SCA) 기준 유닛 풀이 나온다.
+    try { await getStudentClassAssignments(id) } catch { /* 폴백: 반 기반 풀 */ }
+    const opts = getStudentEditableUnits(id)
+    const currentId = getStudentUnitId(id)
+    setEditUnitOptions(opts)
+    // 현재 유닛이 학습 가능 목록에 있으면 그대로 선택, 없으면(유령 유닛 등) 빈 값 —
+    // 관리자가 명시적으로 고르기 전에는 저장하지 않는다.
+    setEditUnitId(opts.some((o) => o.id === currentId) ? currentId : '')
+    setEditOrig({ className, unitId: currentId })
   }
 
   const saveEdit = async () => {
     if (!editClass) { alert('반을 선택해주세요!'); return }
-    // [진단 로그 1] 관리자가 선택한 unit 값
-    devLog('[AdminScreen] saveEdit — 선택한 unit 값:', { studentId: editing, editClass, editUnit })
+    const classChanged = editClass !== editOrig.className
+    const unitChanged = !!editUnitId && editUnitId !== editOrig.unitId
+    devLog('[AdminScreen] saveEdit —', { studentId: editing, editClass, editUnitId, classChanged, unitChanged })
+    if (!classChanged && !unitChanged) { setEditing(null); return }
     try {
-      await setStudentClass(editing, editClass)
-      await setStudentUnit(editing, editUnit || 'Unit 1')
+      // 반이 실제로 바뀔 때만 반 변경 로직(setStudentClass → SCA 유지보수)을 태운다.
+      // 예전엔 같은 반이어도 호출돼 current_unit_id 가 NULL 로 덮이고 SCA primary
+      // demote + 껍데기 행 INSERT 가 일어났다(Barry/Luke/Song 의 textbook NULL 행 흔적).
+      if (classChanged) await setStudentClass(editing, editClass)
+      // 유닛은 UUID 로 저장 — 이름 문자열 폴백/placeholder 기본값 없음. 풀에 없거나
+      // 학습 불가 유닛이면 setStudentUnitById 가 throw 하고 아래 alert 로 드러난다.
+      if (unitChanged) await setStudentUnitById(editing, editUnitId)
       setEditing(null)
       refresh()
     } catch (err) {
-      alert('반 배정 중 오류가 발생했어요: ' + (err.message || err))
+      // 실패 시 편집 폼을 닫지 않는다 — "저장된 것처럼" 보이지 않게.
+      alert('저장 중 오류가 발생했어요 — 변경이 저장되지 않았습니다: ' + (err.message || err))
     }
   }
 
@@ -1183,19 +1210,26 @@ export default function StudentDirectory({ adminPin }) {
         )}
         {editing === s.id && (
           <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
-            <select value={editClass} onChange={e => {
-                setEditClass(e.target.value)
-                setEditUnit(getClassUnitNames(e.target.value)[0] || 'Unit 1')
-              }}
+            <select value={editClass} onChange={e => setEditClass(e.target.value)}
               className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-bold bg-white">
               <option value="">반 선택</option>
               {classOptionsFor(s.className).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-            {editClass && (
-              <select value={editUnit} onChange={e => setEditUnit(e.target.value)}
+            {/* 2026-09-02 — 유닛 옵션 = 이 학생의 primary 교재 학습 가능 유닛(UUID 값).
+                반 드롭다운과 독립이다(반≠교재). 현재 유닛이 목록에 없으면(유령/빈
+                유닛) 빈 placeholder 를 보여 관리자가 명시적으로 고르게 한다. */}
+            {editUnitOptions.length > 0 ? (
+              <select value={editUnitId} onChange={e => setEditUnitId(e.target.value)}
                 className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-bold bg-white">
-                {getClassUnitNames(editClass).map(u => <option key={u} value={u}>{u}</option>)}
+                {!editUnitOptions.some(o => o.id === editUnitId) && (
+                  <option value="">유닛 선택 — 현재 "{getStudentUnit(s.id)}"은(는) 학습 불가 유닛이라 목록에 없어요</option>
+                )}
+                {editUnitOptions.map(o => <option key={o.id} value={o.id}>{o.name} ({o.wordCount}단어)</option>)}
               </select>
+            ) : (
+              <p className="text-[11px] font-bold text-amber-700">
+                이 학생의 교재에 학습 가능한 유닛이 없어요 — "📚 교재 관리"에서 교재 배정을 먼저 확인해주세요. (여기서는 유닛을 바꾸지 않습니다)
+              </p>
             )}
             <div className="flex gap-2">
               <button onClick={() => setEditing(null)}
