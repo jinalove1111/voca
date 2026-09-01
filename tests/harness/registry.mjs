@@ -106,6 +106,7 @@ export const DOMAINS = {
       { script: 'scripts/testRenameClass.mjs', builders: ['wordlib'] },
       { script: 'scripts/testClassDeleteCascade.mjs', builders: [] },
       { script: 'scripts/testRealClassNames.mjs', builders: ['wordlib'], extra: true, note: '2026-08-08 — 교과서 컨테이너 반 노출 차단(classifyRealClassNames 순수 함수, 네트워크 0). 13개 필수 도메인 밖, 신규 보너스 커버리지.' },
+      { script: 'scripts/testCreateStudentUnitAssignment.mjs', builders: [], extra: true, note: '2026-09-01 — create_student 신규 학생 교재/유닛 배정(P1 실사고 재발 방지). 예전 코드는 units.class_id = <사람 반>으로 유닛을 찾아, 유닛을 소유하지 않는 regular 반(예: Pre-Middle School)에서는 항상 null이 됐고 SCA에 textbook_id를 아예 안 넣어 "껍데기 배정"이 생겼다 — 2026-08-31 박민준·박성준이 이 경로로 UNIT_INVALID FAIL 2건 -> Release Gate 차단(데이터는 v3_41 수동 복구). 새 규칙: 요청 textbookId(학생별 primary 교재, 반 소유 or class_textbooks enabled 연결 검증 — 아니면 invalid_textbook fail-closed) -> 그 교재의 유닛에서 확정(명시 unitName 완전일치/정규화 유일후보 -> 없으면 "첫 학습 유닛" = 단어 2개 이상인 첫 유닛, 1단어 유령 구조적 제외). textbookId 미지정 시 반 소유 교재가 정확히 1개일 때만 폴백(regular 반 다수결 추측 금지), 그 외 기존과 동일 null(하위호환, 규칙 9). UI(StudentDirectory 생성 폼)는 반 선택 시 연결 교재 select 필수 + "첫 학습 유닛(자동)" 기본값. 하네스는 testPinSetupCapability와 동일 방식(esbuild 번들 + 인메모리 가짜 supabase 다중 테이블). 수정 전 27단언 중 13 FAIL 실측(규칙 15) 후 전체 PASS 전환. 네트워크 0, 실제 DB 접촉 0. 13개 필수 도메인 밖, 신규 보너스 커버리지.' },
     ],
   },
   admin: {
