@@ -2060,7 +2060,9 @@ export async function fetchHouseSeasonScore(houseId, seasonStartedAt) {
 // 기존 payload(unit_name만)로 재시도 — SQL 실행 전에도 완전 동작.
 export async function setStudentUnit(id, unitName) {
   const s = _students.get(id)
-  if (!s) return
+  // 2026-09-02 — 예전엔 캐시에 없으면 조용히 return 해서 호출부(관리자 저장/학생
+  // 유닛 전환)가 "저장됨"으로 착각했다. 명시적으로 거부한다(Yaeji 사고 후속).
+  if (!s) throw new Error('학생 정보를 찾을 수 없어요 — 화면을 새로고침한 뒤 다시 시도해주세요.')
   // v3.1 교재 모드 — 유닛은 현재 교재의 유닛에서 찾는다(사람 반이 아니라).
   // 합성/레거시 모드에서는 기존 반 기반 검색 그대로.
   let unitId = null
@@ -2090,11 +2092,92 @@ export async function setStudentUnit(id, unitName) {
     const clsName = getClassNameById(s.classId) || s.className
     unitId = findUnitByName(_cache[clsName]?.units, unitName)?.id || null
   }
-  // P7 감사: bare .select() 제거 — setStudentClass와 동일한 pin_hash 응답 노출 차단.
-  let { error } = await supabase.from('students')
-    .update({ unit_name: unitName, current_unit_id: unitId }).eq('id', id)
-  if (error) ({ error } = await supabase.from('students').update({ unit_name: unitName }).eq('id', id))
+  // 2026-09-02(Yaeji 유령 유닛 사고 후속) — 못 찾은 유닛(예전엔 current_unit_id
+  // NULL 로 "성공" 처리)과 학습 불가 유닛(단어 < MIN_LEARNABLE_WORDS: 엑셀 헤더
+  // 잔재 1단어 유령 등)으로의 변경은 명시적으로 거부한다. 실측 사고: 관리자
+  // 폼의 placeholder 'Unit 1' 이 findUnitByName 의 공백제거 정규화('unit1')로
+  // 교재의 유령 "Unit1" 에 유일 매칭돼 실학생이 1단어 유닛에 착지했다.
+  // 유령 유닛 자체는 DB 에서 지우지 않는다 — 여기서 "쓰기"만 막는다.
+  if (unitId == null) {
+    throw new Error(`"${unitName}" 유닛을 찾을 수 없어요 — 유닛 목록을 새로고침한 뒤 다시 선택해주세요.`)
+  }
+  const target = getUnitById(unitId)
+  if (!isLearnableUnit(target)) {
+    throw new Error(`"${target?.name ?? unitName}" 유닛은 단어가 ${(target?.words || []).length}개뿐이라(엑셀 헤더 잔재/빈 유닛) 학습 유닛으로 지정할 수 없어요.`)
+  }
+  await writeStudentUnit(id, target)
+}
+
+// ── 2026-09-02 — 학생 유닛 쓰기의 단일 지점 + 관리자 편집용 유닛 소스 ────────
+// 배경: 관리자 "반 배정 편집"이 유닛 목록을 사람 반(getClassUnitNames)에서
+// 가져왔는데, 운영 반은 유닛을 소유하지 않아(교재 컨테이너 반이 소유) 목록에
+// placeholder "Unit 1" 만 떴고, 저장 시 이름 문자열이 유령 유닛으로 오매칭됐다.
+// 설계 원칙(운영자 확정): primary textbook(SCA)이 교재 기준, students.current_unit_id
+// 가 현재 유닛의 권위 값, 반≠교재(같은 반 학생이 다른 교재를 쓸 수 있음).
+export const MIN_LEARNABLE_WORDS = 2
+// 학습 가능 유닛 판정 — 단어가 2개 미만인 유닛은 엑셀 헤더 잔재(정확히 1단어)
+// 또는 빈 유닛이라 "현재 학습 유닛"으로 지정할 수 없다. scripts/lib/
+// studentHealthRules.mjs 의 isGhostUnit 과 같은 사고를 겨냥하되, 클라이언트
+// 캐시(_cache 유닛의 words 배열)만으로 판정 가능한 가장 단순한 규칙.
+export const isLearnableUnit = (unit) => !!unit && (unit.words || []).length >= MIN_LEARNABLE_WORDS
+
+// 학생의 "현재 유닛 풀" — resolveStudentUnitObj 가 유닛을 해석하는 소스와
+// 정확히 같은 규칙(교재 모드면 primary 교재의 유닛, 아니면 사람 반 유닛).
+// 표시(관리자 편집 목록)와 쓰기(setStudentUnitById)가 같은 풀을 봐야
+// "목록에 있는데 저장 안 됨/목록에 없는데 저장됨"이 구조적으로 불가능하다.
+export function getStudentUnitPool(studentId) {
+  const s = _students.get(studentId)
+  if (!s) return []
+  if (_textbookMode) {
+    const tb = getStudentPrimaryTextbook(studentId)
+    if (tb) {
+      const tbUnits = getTextbookUnits(tb.id)
+      if (tbUnits.length > 0) return tbUnits
+    }
+  }
+  const clsName = getClassNameById(s.classId) || s.className
+  return _cache[clsName]?.units || []
+}
+
+// 관리자 편집 드롭다운용 — 학습 가능 유닛만 {id, name, wordCount} 로. 이름이
+// 아니라 id 를 값으로 쓰게 하기 위한 형태(이름 정규화 오매칭 원천 차단).
+export const getStudentEditableUnits = (studentId) =>
+  getStudentUnitPool(studentId).filter(isLearnableUnit)
+    .map((u) => ({ id: u.id, name: u.name, wordCount: (u.words || []).length }))
+
+// 유닛 UUID 로 직접 지정 — 관리자 편집 저장 경로. 풀에 없거나 학습 불가면
+// 거부, 성공 시 영향 행 1 을 확인한다(0행 갱신을 성공으로 보고하지 않음).
+export async function setStudentUnitById(studentId, unitId) {
+  const s = _students.get(studentId)
+  if (!s) throw new Error('학생 정보를 찾을 수 없어요 — 화면을 새로고침한 뒤 다시 시도해주세요.')
+  if (!unitId) throw new Error('유닛을 선택해주세요.')
+  if (_textbookMode && !_studentAssignmentsCache.has(studentId)) {
+    try { await getStudentClassAssignments(studentId) } catch { /* 아래 풀 조회가 반 기반으로 폴백 */ }
+  }
+  const unit = getStudentUnitPool(studentId).find((u) => u.id === unitId)
+  if (!unit) throw new Error('선택한 유닛이 이 학생의 현재 교재에 없어요 — "📚 교재 관리"에서 배정을 확인해주세요.')
+  if (!isLearnableUnit(unit)) {
+    throw new Error(`"${unit.name}" 유닛은 단어가 ${(unit.words || []).length}개뿐이라(엑셀 헤더 잔재/빈 유닛) 학습 유닛으로 지정할 수 없어요.`)
+  }
+  await writeStudentUnit(studentId, unit)
+}
+
+// students 행 갱신 단일 지점 — id 와 표시 이름을 함께 기록(unit_name 은 하위호환
+// 표시용). `.select('id')` 로 영향 행수를 검증한다(P7 감사의 bare .select() 금지는
+// pin_hash 노출 때문이었고 id 단일 컬럼은 anon SELECT 허용 컬럼이라 안전).
+// current_unit_id 컬럼 부재(v2.1 SQL 이전, 42703)에만 unit_name 단독으로 재시도
+// — 예전처럼 "어떤 에러든" 재시도하면 권한 오류 같은 진짜 실패가 가려진다.
+async function writeStudentUnit(studentId, unit) {
+  let { data, error } = await supabase.from('students')
+    .update({ unit_name: unit.name, current_unit_id: unit.id }).eq('id', studentId).select('id')
+  if (error && error.code === '42703') {
+    ;({ data, error } = await supabase.from('students')
+      .update({ unit_name: unit.name }).eq('id', studentId).select('id'))
+  }
   if (error) throw error
+  if (!Array.isArray(data) || data.length !== 1) {
+    throw new Error('유닛 변경이 저장되지 않았어요(영향 행 0) — 화면을 새로고침한 뒤 다시 시도해주세요.')
+  }
   await refreshStudents()
 }
 
