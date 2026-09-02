@@ -19,7 +19,7 @@ import {
   redactSecrets,
   scanManifestStringValues,
 } from './lib/hotfixManifest.mjs'
-import { runHotfix } from './prodHotfix.mjs'
+import { runHotfix, createLiveReaderFromClient } from './prodHotfix.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const REPORT_DIR = path.join(ROOT, 'scripts', '.tmp', 'prod-reports-test')
@@ -226,9 +226,9 @@ function makeReader(manifest, opts = {}) {
       if (Array.isArray(q)) {
         const i = countsCallIdx[key] ?? 0
         countsCallIdx[key] = Math.min(i + 1, q.length - 1)
-        return q[Math.min(i, q.length - 1)]
+        return { count: q[Math.min(i, q.length - 1)], tableMissing: false }
       }
-      return opts.baselineDefault ?? 10
+      return { count: opts.baselineDefault ?? 10, tableMissing: false }
     },
     async selectAllRows(table) {
       const q = tableRowsQueues[table]
@@ -798,7 +798,7 @@ console.log('\n=== [18] Case E 회귀 — ghost-unit-landing manifest, 이미 �
       return out
     },
     async countWordsForUnit() { return 2 },
-    async headCountFiltered() { return 0 },
+    async headCountFiltered() { return { count: 0, tableMissing: false } },
     async selectAllRows() { return [] },
   }
   const res = await runHotfix(
@@ -882,7 +882,7 @@ console.log('\n=== [20] --rollback-of 모드 — READY 까지만, WRITE 0(동일
       return v ? { ...v } : null
     },
     async countWordsForUnit() { return 2 },
-    async headCountFiltered() { return 0 },
+    async headCountFiltered() { return { count: 0, tableMissing: false } },
     async selectAllRows() { return [] },
   }
   const calls2 = []
@@ -908,6 +908,107 @@ console.log('\n=== [20] --rollback-of 모드 — READY 까지만, WRITE 0(동일
     { loadEnv: () => envOk() },
   )
   check('rollback-of 모드: manifestId 불일치 시 status = rollback-of-mismatch', mismatchRes.status === 'rollback-of-mismatch')
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Track 11 버그 수정 회귀(2026-09-03) — headCountFiltered 가 select('id')
+// 를 하드코딩해 student_progress(PK=student_id, id 컬럼 없음)에서 PostgREST
+// 400 → 미처리 예외로 baseline 단계 전체가 크래시하던 버그. FAIL-first로
+// 실측(아래 [21]/[22] 를 이 수정 전 코드에 대고 돌리면 관련 assertion 이
+// 실패한다 — 수정 후에는 전부 PASS).
+// ══════════════════════════════════════════════════════════════════════
+
+// supabase-js 의 `.from(table).select(col, opts).eq(k, v)` 체인을 흉내내는
+// 최소 가짜 클라이언트. count-head 쿼리는 `.eq()` 이후 바로 awiat 되므로
+// (maybeSingle/range 없이) builder 자체를 thenable 로 만든다. 실제
+// PostgREST 가 존재하지 않는 컬럼/테이블에 돌려주는 에러 shape(code 필드)
+// 를 그대로 재현한다.
+function makeFakeCountClient(behavior) {
+  return {
+    from(table) {
+      let selectCol = null
+      const filters = {}
+      const builder = {
+        select(col) { selectCol = col; return builder },
+        eq(k, v) { filters[k] = v; return builder },
+        then(resolve, reject) {
+          Promise.resolve(behavior(table, selectCol, filters)).then(resolve, reject)
+        },
+      }
+      return builder
+    },
+  }
+}
+
+function bugFixtureBehavior(table, selectCol) {
+  if (table === 'student_progress') {
+    // student_progress 는 PK 가 student_id 라 id 컬럼이 없다 — select=id 로
+    // 쿼리하면 실제 PostgREST 가 이렇게 42703(undefined_column)/400 을 준다.
+    if (selectCol === 'id') return { count: null, error: { message: 'column student_progress.id does not exist', code: '42703' } }
+    if (selectCol === 'student_id') return { count: 7, error: null }
+  }
+  if (table === 'ghost_table_not_migrated') {
+    // 마이그레이션 미실행 테이블 — relation 자체가 없다(42P01).
+    return { count: null, error: { message: 'relation "public.ghost_table_not_migrated" does not exist', code: '42P01' } }
+  }
+  return { count: 0, error: null }
+}
+
+console.log('\n=== [21] createLiveReaderFromClient.headCountFiltered — select(id) 하드코딩 버그 회귀(FAIL-first) ===')
+{
+  const liveReader = createLiveReaderFromClient(makeFakeCountClient(bugFixtureBehavior))
+
+  let threw = null
+  let result = null
+  try {
+    result = await liveReader.headCountFiltered('student_progress', { student_id: 'sid-1' })
+  } catch (err) { threw = err }
+  check('headCountFiltered(student_progress, {student_id}) 는 예외 없이 카운트 반환(select=student_id 사용)', threw === null)
+  check('정상 카운트 값 반환(7) + tableMissing=false', result?.count === 7 && result?.tableMissing === false)
+
+  const missingResult = await liveReader.headCountFiltered('ghost_table_not_migrated', { student_id: 'sid-1' })
+  check('테이블 부재(42P01)는 예외 대신 count 0 + tableMissing=true 로 fail-open', missingResult.count === 0 && missingResult.tableMissing === true)
+
+  // filters 키가 'id' 인 경우(구버전이 실제로 하던 select=id 쿼리를 재현) —
+  // 테이블 부재가 아닌 다른 에러(컬럼 없음)는 여전히 fail-closed 로 예외
+  // 전파돼야 한다(runHotfix 쪽에서 baseline-failed 로 STOP 하는 근거).
+  let otherErrThrew = null
+  try {
+    await liveReader.headCountFiltered('student_progress', { id: 'sid-1' })
+  } catch (err) { otherErrThrew = err }
+  check('테이블부재가 아닌 다른 에러(컬럼없음 등)는 여전히 예외로 전파(fail-closed)', otherErrThrew !== null && /column student_progress\.id/.test(otherErrThrew.message))
+}
+
+console.log('\n=== [22] runHotfix baseline 단계 — table-missing fail-open / 기타 에러는 crash 대신 baseline-failed(FAIL-first) ===')
+{
+  // 2a) 테이블 부재(fail-open) — 수정 전엔 headCountFiltered 가 select('id')
+  //     로 크래시해 어떤 manifest 도 ready-to-apply 에 도달하지 못했다.
+  const readerMissing = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+  readerMissing.headCountFiltered = async (table) => (
+    table === 'student_progress' ? { count: 0, tableMissing: true } : { count: 5, tableMissing: false }
+  )
+  const resMissing = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-BASELINE-MISSING-1', reportDir: REPORT_DIR, reader: readerMissing, dryRun: true },
+    { loadEnv: () => envOk() },
+  )
+  check('테이블 부재(student_progress) 여도 baseline 단계 통과 → ready-to-apply', resMissing.status === 'ready-to-apply')
+  const missingEntries = resMissing.report.baseline?.tableMissing || []
+  check('report.baseline.tableMissing 에 student_progress 기록', missingEntries.some((m) => m.table === 'student_progress'))
+
+  // 2b) 테이블 부재가 아닌 다른 에러(예: 컬럼 없음) — fail-closed 로 STOP,
+  //     프로세스 크래시(미처리 예외) 대신 상태값으로 보고해야 한다.
+  const readerOtherError = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+  readerOtherError.headCountFiltered = async (table) => {
+    if (table === 'student_progress') throw new Error('READ_ERROR student_progress count column student_progress.id does not exist')
+    return { count: 5, tableMissing: false }
+  }
+  const resOtherError = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-BASELINE-OTHERERR-1', reportDir: REPORT_DIR, reader: readerOtherError, dryRun: true },
+    { loadEnv: () => envOk() },
+  )
+  check('테이블부재 아닌 baseline 조회 에러는 status = baseline-failed(크래시 아님)', resOtherError.status === 'baseline-failed')
+  check('baseline-failed 시 exitCode != 0', resOtherError.exitCode !== 0)
+  check('baseline-failed 시 report.baselineError 기록', typeof resOtherError.report.baselineError === 'string')
 }
 
 console.log(`\n=== summary ===\nPASS ${pass} / FAIL ${fail}`)

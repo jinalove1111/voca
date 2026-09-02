@@ -124,8 +124,24 @@ function loadEnvDefault() {
 }
 
 // ── 리더(읽기 전용) ────────────────────────────────────────────────────
-function createLiveReader(url, anonKey) {
-  const supabase = createClient(url, anonKey)
+// 테이블 부재(마이그레이션 미실행) 에러 판별 — PostgREST 는 relation 자체가
+// 없으면 42P01(undefined_table), 스키마 캐시에 없으면(REST 시작 후 생성된
+// 테이블 등) PGRST205 를 code 로 돌려준다. 이 경우는 "잃을 데이터가 아예
+// 없다"는 뜻이라 fail-open(count 0)으로 처리한다 — 그 외 에러(컬럼 없음
+// 42703 등)는 fail-closed 로 그대로 던져 baseline 단계를 STOP 시킨다.
+function isTableMissingError(error) {
+  const code = error?.code || ''
+  return code === '42P01' || code === 'PGRST205'
+}
+
+/**
+ * 이미 만들어진 supabase-js 클라이언트를 감싸는 리더. createLiveReader()가
+ * 실제 사용하는 경로이자, 네트워크 0으로 headCountFiltered 의 select 컬럼/
+ * 에러 분기 로직만 검증하고 싶을 때(scripts/testProdHotfix.mjs) 가짜
+ * 클라이언트를 주입할 수 있도록 분리해 export 한다.
+ * @param {*} supabase supabase-js 클라이언트(또는 같은 표면을 흉내낸 가짜 객체)
+ */
+export function createLiveReaderFromClient(supabase) {
   return {
     kind: 'live',
     async getRow(table, id, columns) {
@@ -138,12 +154,24 @@ function createLiveReader(url, anonKey) {
       if (error) throw new Error(`READ_ERROR words count unit=${unitId} ${error.message}`)
       return count ?? 0
     },
+    // filters 의 첫 컬럼으로 select 한다(예: {student_id: sid} -> select=student_id).
+    // 예전엔 'id' 를 하드코딩했는데, 학습기록 baseline 6개 테이블(word_status/
+    // student_progress/student_daily_progress/spelling_review_queue/xp_ledger/
+    // entrance_test_results) 중 student_progress 는 PK 가 student_id 라 id
+    // 컬럼이 없어 PostgREST 400(42703 undefined_column) → 미처리 예외로
+    // baseline 단계 전체가 크래시했다(2026-09-03 실측). scripts/lib/
+    // prodDataLoader.mjs 의 loadLearningBaseline() 이 select=student_id 로
+    // 동일 6개 테이블을 세는 방식과 통일한다.
     async headCountFiltered(table, filters) {
-      let q = supabase.from(table).select('id', { count: 'exact', head: true })
+      const selectCol = Object.keys(filters)[0] || 'id'
+      let q = supabase.from(table).select(selectCol, { count: 'exact', head: true })
       for (const [k, v] of Object.entries(filters)) q = q.eq(k, v)
       const { count, error } = await q
-      if (error) throw new Error(`READ_ERROR ${table} count ${error.message}`)
-      return count ?? 0
+      if (error) {
+        if (isTableMissingError(error)) return { count: 0, tableMissing: true }
+        throw new Error(`READ_ERROR ${table} count ${error.message}`)
+      }
+      return { count: count ?? 0, tableMissing: false }
     },
     async selectAllRows(table, columns) {
       const PAGE = 1000
@@ -159,6 +187,10 @@ function createLiveReader(url, anonKey) {
   }
 }
 
+function createLiveReader(url, anonKey) {
+  return createLiveReaderFromClient(createClient(url, anonKey))
+}
+
 function createFixtureReader(fixtureObj) {
   return {
     kind: 'fixture',
@@ -166,7 +198,8 @@ function createFixtureReader(fixtureObj) {
     async countWordsForUnit(unitId) { return fixtureObj[`words_count:${unitId}`] ?? 0 },
     async headCountFiltered(table, filters) {
       const key = `count:${table}:${Object.entries(filters).map(([k, v]) => `${k}=${v}`).join(',')}`
-      return fixtureObj[key] ?? 0
+      if (fixtureObj[`missing:${table}`]) return { count: 0, tableMissing: true }
+      return { count: fixtureObj[key] ?? 0, tableMissing: false }
     },
     async selectAllRows(table) { return fixtureObj[`rows:${table}`] ?? [] },
   }
@@ -409,17 +442,34 @@ export async function runHotfix(options, deps = {}) {
   log('프리플라이트 PASS — 현재 상태가 manifest 의 기대값과 일치')
 
   // 5) baseline 저장(학습기록 카운트 + 무관 행 스냅샷 해시)
+  // headCountFiltered 가 테이블 부재(42P01/PGRST205)를 만나면 {count:0,
+  // tableMissing:true} 로 fail-open 반환한다(마이그레이션 미실행 테이블은
+  // 잃을 데이터가 없다는 뜻) — 그 외 에러(예: 컬럼 없음)는 그대로 던져
+  // 여기서 baseline-failed 로 STOP 한다(예전엔 미처리 예외로 크래시했다).
   const baselineCounts = {}
-  for (const sid of manifest.affected_students || []) {
-    baselineCounts[sid] = {}
-    for (const table of manifest.learning_baseline_tables || []) {
-      baselineCounts[sid][table] = await reader.headCountFiltered(table, { student_id: sid })
+  const baselineTableMissing = []
+  try {
+    for (const sid of manifest.affected_students || []) {
+      baselineCounts[sid] = {}
+      for (const table of manifest.learning_baseline_tables || []) {
+        const r = await reader.headCountFiltered(table, { student_id: sid })
+        baselineCounts[sid][table] = r.count
+        if (r.tableMissing) baselineTableMissing.push({ table, studentId: sid })
+      }
     }
+  } catch (err) {
+    logErr(`FAIL — 학습기록 baseline 조회 실패: ${err.message}`)
+    return finish('baseline-failed', 1, { baselineError: err.message })
+  }
+  if (baselineTableMissing.length) {
+    const missingTables = [...new Set(baselineTableMissing.map((m) => m.table))]
+    log(`baseline 안내 — 부재 테이블(count 0 처리, fail-open): ${missingTables.join(', ')}`)
   }
   const studentsRowsBefore = sortRows(await reader.selectAllRows('students', STUDENTS_SNAPSHOT_COLS))
   const scaRowsBefore = sortRows(await reader.selectAllRows('student_class_assignments', SCA_SNAPSHOT_COLS))
   report.baseline = {
     counts: baselineCounts,
+    tableMissing: baselineTableMissing,
     snapshot: {
       students: { hash: sha256Json(studentsRowsBefore), rowCount: studentsRowsBefore.length },
       student_class_assignments: { hash: sha256Json(scaRowsBefore), rowCount: scaRowsBefore.length },
@@ -517,9 +567,15 @@ export async function runHotfix(options, deps = {}) {
 
   for (const sid of manifest.affected_students || []) {
     for (const table of manifest.learning_baseline_tables || []) {
-      const now2 = await reader.headCountFiltered(table, { student_id: sid })
-      if (now2 !== baselineCounts[sid][table]) {
-        postMismatches.push({ table, studentId: sid, reason: 'learning-baseline-changed', before: baselineCounts[sid][table], after: now2 })
+      try {
+        const r2 = await reader.headCountFiltered(table, { student_id: sid })
+        if (r2.count !== baselineCounts[sid][table]) {
+          postMismatches.push({ table, studentId: sid, reason: 'learning-baseline-changed', before: baselineCounts[sid][table], after: r2.count })
+        }
+      } catch (err) {
+        // apply 는 이미 실행됐다 — 조회 실패는 postflight 미확인으로 취급해
+        // fail-closed(자동 롤백 트리거)로 처리한다(crash 대신).
+        postMismatches.push({ table, studentId: sid, reason: 'learning-baseline-check-failed', error: err.message })
       }
     }
   }
