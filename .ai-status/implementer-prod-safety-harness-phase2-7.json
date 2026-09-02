@@ -1,0 +1,28 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "prod-safety-harness-phase2-7",
+  "task": "prod:hotfix 하네스 강화(Phase 2·7) — manifest 변조 감지, runId 바인딩, allowlist/타입/인젝션 이중 방어, 행수 검증, 비밀값 마스킹, --env 게이트, rollback 메타데이터 + --rollback-of 모드, Case E 회귀, 코디네이터 추가요청 2건(nullable current_unit_id, generated_from 필드)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-03T00:00:00Z",
+  "updated_at": "2026-09-03T00:00:00Z",
+  "files_owned": [
+    "scripts/lib/hotfixManifest.mjs",
+    "scripts/prodHotfix.mjs",
+    "scripts/testProdHotfix.mjs"
+  ],
+  "files_read": [
+    "scripts/lib/sqlExecutor.mjs",
+    "scripts/prod/manifests/ghost-unit-landing-20260902.json",
+    "scripts/lib/prodInvariants.mjs",
+    "scripts/prodCheck.mjs",
+    "scripts/testProdCheck.mjs",
+    "scripts/lib/prodDataLoader.mjs",
+    ".ai-status/README.md",
+    ".env"
+  ],
+  "summary": "테스트 66→148단언(FAIL 0). hotfixManifest.mjs: COLUMN_TYPES(uuid/uuid_or_null/boolean/unit_name) 값 형식 검증, max_changes 상한(기본20/최대50), scanManifestStringValues(; -- /* 이중 인젝션 방어), redactSecrets(text,env), generated_from 선택 필드 스키마, current_unit_id nullable(students/SCA 둘 다, 문자열 'null'은 거부), sqlEq 의 null 가드를 소문자 'is null'로 통일(이미 존재하던 로직이라 SQL 생성 자체는 원래도 null-safe였음 — 표기만 통일). prodHotfix.mjs: runHotfix 를 mode('apply'|'rollback-of')로 일반화해 forward/backward SQL·preflight/postflight 계획을 방향에 따라 스왑(동일 게이트 재사용) — manifest sha256 계산·기록(로드 시)+--expect-manifest-sha 사전 고정+승인 직후 apply 직전 재해시 비교(manifest-tampered), --env production|staging 필수 플래그(env-flag-required, CI는 --env 와 무관하게 write path 계속 비활성), report.rollback{sql_path,guards}, report.expectedRows, --rollback-of <report.json>(원본 manifestId/sha256 대조 후 rollback-of-mismatch 게이트, READY까지 도달 시 WRITE 0 확인), --json 출력, 콘솔/보고서/SQL 파일 전부 redactSecrets 로 감싸는 log()/logErr()/writeReportFile 리팩터. CLI 플래그 --env/--expect-manifest-sha/--rollback-of/--json 추가. 기존 66단언은 로직 변경 없이 envFlag:'production' 옵션만 추가해 그대로 통과 확인(회귀 없음). 라이브 dry-run 1회(--env production --dry-run, ghost-unit-landing manifest)로 여전히 preflight-mismatch(운영자가 이미 수동 적용한 상태) STOP, DB WRITE 0 확인.",
+  "blocker": null,
+  "next_action": "qa-reviewer 인계 — 프로덕션 WRITE 미실행 상태(Management API 실호출 여전히 코드상 미도달) 확인, --rollback-of 의 승인 후 실제 실행 경로(재귀적 recovery)는 이번 단계에서 구현했으나 라이브로 검증되지 않았으므로 다음 단계 실 적용 전 재검토 권장."
+}

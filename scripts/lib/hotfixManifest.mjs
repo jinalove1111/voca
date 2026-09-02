@@ -25,10 +25,110 @@ export const ALLOWLIST = {
   student_class_assignments: ['current_unit_id', 'is_primary', 'textbook_id'],
 }
 
+// ── 컬럼 타입(값 검증용, Phase 2·7 강화) ─────────────────────────────────
+// ALLOWLIST 밖 컬럼(예: student_id)도 expect_before 가드 값으로 자주 등장
+// 하므로, 여기 등록해두면 그 값도 함께 형식 검증된다(설정 가능 여부는
+// 여전히 ALLOWLIST 가 결정 — 이 맵은 "값이 그럴듯한 타입인지"만 본다).
+const COLUMN_TYPES = {
+  // current_unit_id 는 두 테이블 모두 uuid 또는 null 을 허용한다(v3_43 B
+  // 그룹처럼 유령 유닛 참조를 명시적으로 NULL 로 비우는 설계를 manifest 로
+  // 표현할 수 있어야 함 — 리터럴 문자열 "null" 은 여전히 거부된다).
+  students: { current_unit_id: 'uuid_or_null', class_id: 'uuid', unit_name: 'unit_name' },
+  student_class_assignments: {
+    current_unit_id: 'uuid_or_null',
+    textbook_id: 'uuid',
+    student_id: 'uuid',
+    is_primary: 'boolean',
+  },
+}
+
+const MAX_CHANGES_DEFAULT = 20
+const MAX_CHANGES_CAP = 50
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function isUuid(v) {
   return typeof v === 'string' && UUID_RE.test(v)
+}
+
+/**
+ * COLUMN_TYPES 에 등록된 컬럼이면 값 형식을 검증한다. 등록 안 된 컬럼은
+ * 통과(permissive) — 이 함수는 "그럴듯한 타입"만 방어한다.
+ * @returns {string|null} 에러 메시지 또는 null(정상)
+ */
+function checkColumnValueType(table, col, val) {
+  const type = COLUMN_TYPES[table]?.[col]
+  if (!type) return null
+  if (type === 'uuid') {
+    return isUuid(val) ? null : `uuid 형식 아님(값: ${JSON.stringify(val)})`
+  }
+  if (type === 'uuid_or_null') {
+    if (val === null) return null
+    return isUuid(val) ? null : `uuid 형식 또는 null 이어야 함(문자열 "null" 은 허용 안 됨, 값: ${JSON.stringify(val)})`
+  }
+  if (type === 'boolean') {
+    return typeof val === 'boolean' ? null : `boolean 이어야 함(값: ${JSON.stringify(val)})`
+  }
+  if (type === 'unit_name') {
+    return (typeof val === 'string' && val.length >= 1 && val.length <= 50)
+      ? null
+      : `1~50자 문자열이어야 함(값: ${JSON.stringify(val)})`
+  }
+  return null
+}
+
+// ── SQL 인젝션 방어(Phase 2·7): manifest 의 모든 문자열 값에 위험 문자 차단 ──
+const INJECTION_CHAR_RE = /(;|--|\/\*)/
+
+/**
+ * manifest 객체를 재귀적으로 순회해 문자열 값 중 `;`/`--`/`/*` 를 포함한
+ * 것을 찾는다(순수, 네트워크 0). sqlLiteral 이스케이프와 별개의 이중
+ * 방어선 — allowlist 를 통과한 값이라도 SQL 문자열 리터럴 안에 이런
+ * 문자가 섞여 있으면 그 자체로 의심스러우므로 애초에 manifest 검증
+ * 단계에서 거부한다.
+ * @returns {{path:string, value:string}[]}
+ */
+export function scanManifestStringValues(m) {
+  const violations = []
+  function walk(obj, pathStr) {
+    if (obj === null || obj === undefined) return
+    if (typeof obj === 'string') {
+      if (INJECTION_CHAR_RE.test(obj)) violations.push({ path: pathStr, value: obj })
+      return
+    }
+    if (Array.isArray(obj)) {
+      obj.forEach((v, i) => walk(v, `${pathStr}[${i}]`))
+      return
+    }
+    if (typeof obj === 'object') {
+      for (const [k, v] of Object.entries(obj)) walk(v, pathStr ? `${pathStr}.${k}` : k)
+    }
+  }
+  walk(m, '')
+  return violations
+}
+
+// ── 비밀값 마스킹(Phase 2·7) ──────────────────────────────────────────────
+/**
+ * env(key/value 맵) 중 키가 KEY/TOKEN/SECRET/PIN 을 포함하고(대소문자
+ * 무시) 값이 3자 이상인 항목을 찾아, text 안에 그 값이 그대로 등장하면
+ * [REDACTED] 로 치환한다. 순수 문자열 함수(네트워크/IO 없음) — 보고서
+ * JSON, apply/rollback SQL 파일, 콘솔 출력 어디에 써도 안전하도록 호출부
+ * 에서 감싼다.
+ * @param {string} text
+ * @param {Record<string,string>} env
+ * @returns {string}
+ */
+export function redactSecrets(text, env) {
+  let out = String(text ?? '')
+  if (!env || typeof env !== 'object') return out
+  for (const [key, val] of Object.entries(env)) {
+    if (!/(key|token|secret|pin)/i.test(key)) continue
+    if (typeof val !== 'string' || val.length < 3) continue
+    if (!out.includes(val)) continue
+    out = out.split(val).join('[REDACTED]')
+  }
+  return out
 }
 
 /**
@@ -46,6 +146,24 @@ export function validateManifest(m) {
     errors.push('changes 는 비어있지 않은 배열이어야 함')
   }
 
+  // changes 상한(기본 20, max_changes 로 최대 50까지 명시적으로 확장 가능)
+  if (m.max_changes !== undefined) {
+    if (typeof m.max_changes !== 'number' || !Number.isFinite(m.max_changes) || m.max_changes < 1 || m.max_changes > MAX_CHANGES_CAP) {
+      errors.push(`max_changes 는 1~${MAX_CHANGES_CAP} 사이 숫자여야 함(받은 값: ${JSON.stringify(m.max_changes)})`)
+    }
+  }
+  const changesLimit = (typeof m.max_changes === 'number' && m.max_changes >= 1 && m.max_changes <= MAX_CHANGES_CAP)
+    ? m.max_changes
+    : MAX_CHANGES_DEFAULT
+  if (Array.isArray(m.changes) && m.changes.length > changesLimit) {
+    errors.push(`changes 개수(${m.changes.length})가 상한(${changesLimit}, max_changes 미지정 시 기본 ${MAX_CHANGES_DEFAULT})을 초과함`)
+  }
+
+  // SQL 인젝션 방어(이중화): manifest 의 모든 문자열 값에서 위험 문자 차단
+  for (const v of scanManifestStringValues(m)) {
+    errors.push(`manifest 문자열 값에 위험 문자(;/--//*) 포함: ${v.path} = ${JSON.stringify(v.value)}`)
+  }
+
   const seenChangeKeys = new Set()
   for (const [i, c] of (Array.isArray(m.changes) ? m.changes : []).entries()) {
     const tag = `changes[${i}]`
@@ -60,6 +178,11 @@ export function validateManifest(m) {
     if (!isUuid(c.id)) errors.push(`${tag}.id UUID 형식 아님: ${c.id}`)
     if (!c.expect_before || typeof c.expect_before !== 'object' || Array.isArray(c.expect_before)) {
       errors.push(`${tag}.expect_before 필수(object)`)
+    } else {
+      for (const [col, val] of Object.entries(c.expect_before)) {
+        const typeErr = checkColumnValueType(c.table, col, val)
+        if (typeErr) errors.push(`${tag}.expect_before.${col} ${typeErr}`)
+      }
     }
     if (!c.set || typeof c.set !== 'object' || Array.isArray(c.set) || Object.keys(c.set).length === 0) {
       errors.push(`${tag}.set 필수(비어있지 않은 object)`)
@@ -71,6 +194,8 @@ export function validateManifest(m) {
         if (!c.expect_before || !Object.prototype.hasOwnProperty.call(c.expect_before, col)) {
           errors.push(`${tag}.set.${col} 이 expect_before 에 없음(가드 없는 변경 금지)`)
         }
+        const typeErr = checkColumnValueType(c.table, col, c.set[col])
+        if (typeErr) errors.push(`${tag}.set.${col} ${typeErr}`)
       }
     }
     const dupKey = `${c.table}:${c.id}`
@@ -107,6 +232,22 @@ export function validateManifest(m) {
 
   if (m.learning_baseline_tables !== undefined && !Array.isArray(m.learning_baseline_tables)) {
     errors.push('learning_baseline_tables 는 배열이어야 함')
+  }
+
+  // generated_from(선택) — 라이브 읽기로 manifest 를 자동 생성하는 스크립트가
+  // 채울 출처 메타데이터. 형식만 검증한다(내용은 신뢰하지 않음 — preflight
+  // 가 여전히 실제 DB 상태를 다시 확인한다).
+  if (m.generated_from !== undefined) {
+    const gf = m.generated_from
+    if (!gf || typeof gf !== 'object' || Array.isArray(gf)) {
+      errors.push('generated_from 은 객체여야 함')
+    } else {
+      if (typeof gf.tool !== 'string' || !gf.tool) errors.push('generated_from.tool 필수(string)')
+      if (typeof gf.at !== 'string' || !gf.at) errors.push('generated_from.at 필수(string, ISO 8601 권장)')
+      if (gf.snapshot_sha256 !== undefined && (typeof gf.snapshot_sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(gf.snapshot_sha256))) {
+        errors.push('generated_from.snapshot_sha256 은 64자리 hex 문자열이어야 함')
+      }
+    }
   }
 
   return { valid: errors.length === 0, errors }
@@ -174,7 +315,11 @@ function sqlIdentifier(name) {
 }
 
 function sqlEq(col, value) {
-  if (value === null || value === undefined) return `${col} IS NULL`
+  // null 가드는 "col is null"(소문자, 저장소 SQL 스타일과 일관) — WHERE
+  // 절에서 "col = NULL" 은 절대 참이 될 수 없으므로 반드시 IS NULL 이어야
+  // 한다(students/student_class_assignments.current_unit_id 처럼 유령 유닛
+  // 참조를 NULL 로 비우는 변경의 가드/원복 모두 이 경로를 탄다).
+  if (value === null || value === undefined) return `${col} is null`
   return `${col} = ${sqlLiteral(value)}`
 }
 

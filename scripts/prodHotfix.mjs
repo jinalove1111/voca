@@ -1,7 +1,9 @@
-// Production Safety Harness — 핫픽스 실행기 (2026-09-03, Phase 1-B)
+// Production Safety Harness — 핫픽스 실행기 (2026-09-03, Phase 1-B / Phase 2·7 강화)
 //
-// node scripts/prodHotfix.mjs <manifest.json> [--dry-run] [--report-dir <dir>]
-//   [--executor management-api] [--fixture-reader <file>]
+// node scripts/prodHotfix.mjs <manifest.json> --env production|staging
+//   [--dry-run] [--report-dir <dir>] [--executor management-api]
+//   [--fixture-reader <file>] [--expect-manifest-sha <hex>]
+//   [--rollback-of <report.json>] [--json]
 //
 // ★ 이번 단계 프로덕션 WRITE 절대 금지 경로 설계 ★
 //   · Management API 실호출은 이 저장소에 없다(토큰도 없음, SUPABASE_ACCESS_TOKEN
@@ -12,14 +14,25 @@
 //     (`APPLY <runId>` 정확히 입력, TTY 필수) 을 통과해야만 만들어진다.
 //   · --dry-run 이거나 CI 환경이거나 SUPABASE_ACCESS_TOKEN 이 없으면
 //     승인 단계 이전에 항상 STOP(exit 0) 한다.
+//   · --env production|staging 플래그가 없으면(오타 포함) 그 무엇보다
+//     먼저 STOP(env-flag-required) — CI 에서는 --env 값과 무관하게 write
+//     path 가 비활성 상태를 유지한다.
 //
 // 흐름(고정 순서, 어느 단계든 실패 = FAIL-CLOSED STOP):
-//   0 run-id 생성 → 1 manifest 로드/검증 → 2 환경(project_ref) 게이트 →
-//   3 정적 안전 스캔 → 4 프리플라이트(읽기) → 5 baseline 저장 →
-//   6 계획 출력 + apply/rollback SQL 파일 저장 →
-//   7 dry-run/CI/토큰없음 → STOP(ready-to-apply) →
-//   8 대화형 승인 게이트 → 9 apply → 10 postflight →
-//   11 npm run health:students → 12 실패 시 자동 롤백 → 13 보고서
+//   0 run-id 생성 → 1 manifest 로드/검증(+ sha256 기록/--expect-manifest-sha
+//     대조) → 1.5 --env 플래그 게이트 → 2 환경(project_ref) 게이트 →
+//   3 정적 안전 스캔 → (rollback-of 모드면 원본 보고서 대조) →
+//   4 프리플라이트(읽기, 모드에 따라 before/after 값 확인 전환) →
+//   5 baseline 저장 → 6 계획 출력 + apply/rollback SQL 파일 저장(+ rollback
+//     메타데이터 기록) → 7 dry-run/CI/토큰없음 → STOP(ready-to-apply) →
+//   8 대화형 승인 게이트(정확히 `APPLY <runId>`) → 8.5 apply 직전 manifest
+//     파일 재해시 대조(변조 감지) → 9 apply(forward SQL) → 10 postflight →
+//   11 npm run health:students → 12 실패 시 자동 롤백(backward SQL) → 13 보고서
+//
+// mode: 'apply'(기본) 또는 'rollback-of'(--rollback-of 지정 시) — forward/
+// backward SQL 과 preflight/postflight 확인 방향이 서로 뒤바뀔 뿐, 게이트
+// 순서·승인 절차는 완전히 동일한 코드 경로를 공유한다(요구사항: "실제
+// 실행은 동일 승인 게이트").
 //
 // 로직은 CLI 진입점과 분리된 runHotfix(options, deps) 로 있다 — deps 주입으로
 // scripts/testProdHotfix.mjs 가 네트워크 0으로 전체 분기를 검증한다.
@@ -37,8 +50,11 @@ import {
   buildApplySql,
   buildRollbackSql,
   staticSafetyScan,
+  redactSecrets,
 } from './lib/hotfixManifest.mjs'
 import { createDryRunExecutor, createManagementApiExecutor } from './lib/sqlExecutor.mjs'
+
+const ENV_FLAG_VALUES = ['production', 'staging']
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const STUDENTS_SNAPSHOT_COLS = ['id', 'class_id', 'unit_name', 'current_unit_id']
@@ -208,16 +224,26 @@ const defaultDeps = {
   now: () => new Date(),
 }
 
-function writeReportFile(D, reportDir, runId, report) {
+function sha256Text(text) {
+  return crypto.createHash('sha256').update(String(text ?? '')).digest('hex')
+}
+
+function writeReportFile(D, reportDir, runId, report, secretEnv) {
   D.fs.mkdirSync(reportDir, { recursive: true })
   const p = path.join(reportDir, `${runId}.hotfix.json`)
-  D.fs.writeFileSync(p, JSON.stringify(report, null, 2), 'utf8')
+  const raw = JSON.stringify(report, null, 2)
+  const redacted = redactSecrets(redactSecrets(raw, secretEnv || {}), process.env)
+  D.fs.writeFileSync(p, redacted, 'utf8')
   return p
 }
 
 /**
  * 핵심 로직. CLI 진입점과 분리되어 deps 주입으로 전체 흐름을 network 0
  * 으로 검증할 수 있다(scripts/testProdHotfix.mjs).
+ * mode 는 options.rollbackOfReportPath 유무로 결정된다('apply' 기본,
+ * 'rollback-of' — 이전 hotfix 를 되돌리는 모드). 두 모드는 forward/backward
+ * SQL 과 프리/포스트플라이트 확인 방향만 바뀔 뿐, 게이트·승인 절차는
+ * 완전히 같은 코드 경로를 공유한다.
  * @param {object} options
  * @param {object} [deps]
  * @returns {Promise<{status:string, exitCode:number, report:object}>}
@@ -228,12 +254,25 @@ export async function runHotfix(options, deps = {}) {
   const runId = options.runId || makeRunId(D.now())
   const reportDir = options.reportDir || path.join(ROOT, 'scripts', '.tmp', 'prod-reports')
 
+  // 비밀값 마스킹 대상 env — D.loadEnv() 로드 전엔 빈 객체(2단계에서 채움).
+  // process.env 는 매 호출마다 항상 함께 스캔한다(운영 환경 실제 방어선).
+  let secretEnv = {}
+  function log(...args) {
+    const text = args.map((a) => (typeof a === 'string' ? a : String(a))).join(' ')
+    console.log(redactSecrets(redactSecrets(text, secretEnv), process.env))
+  }
+  function logErr(...args) {
+    const text = args.map((a) => (typeof a === 'string' ? a : String(a))).join(' ')
+    console.error(redactSecrets(redactSecrets(text, secretEnv), process.env))
+  }
+
   const report = {
     runId,
     startedAt,
     manifestId: null,
     projectRef: null,
     projectRefHost: null,
+    mode: 'apply',
     status: 'unknown',
   }
 
@@ -241,57 +280,107 @@ export async function runHotfix(options, deps = {}) {
     report.status = status
     report.finishedAt = D.now().toISOString()
     Object.assign(report, extra)
-    const reportPath = writeReportFile(D, reportDir, runId, report)
+    const reportPath = writeReportFile(D, reportDir, runId, report, secretEnv)
     report.reportPath = reportPath
-    console.log(`\nSTATUS: ${status}`)
-    console.log(`DB WRITE: ${extra.dbWriteCount ?? report.dbWriteCount ?? 0}`)
+    log(`\nSTATUS: ${status}`)
+    log(`DB WRITE: ${extra.dbWriteCount ?? report.dbWriteCount ?? 0}`)
+    if (options.jsonOutput) {
+      console.log(redactSecrets(redactSecrets(JSON.stringify(report), secretEnv), process.env))
+    }
     return { status, exitCode, report }
   }
 
-  // 1) manifest 로드·검증
+  // 1) manifest 로드·검증(+ sha256 기록 — 변조 감지의 기준값)
   let manifest = options.manifest
+  let manifestRawText = null
   if (!manifest) {
     if (!options.manifestPath) return finish('invalid-manifest', 1, { errors: ['manifestPath 또는 manifest 옵션 필요'] })
     try {
-      manifest = JSON.parse(D.fs.readFileSync(options.manifestPath, 'utf8'))
+      manifestRawText = D.fs.readFileSync(options.manifestPath, 'utf8')
+      manifest = JSON.parse(manifestRawText)
     } catch (err) {
-      console.error(`FAIL — manifest 파일 로드 실패: ${err.message}`)
+      logErr(`FAIL — manifest 파일 로드 실패: ${err.message}`)
       return finish('invalid-manifest', 1, { errors: [`manifest 파일 로드 실패: ${err.message}`] })
     }
+  } else {
+    manifestRawText = JSON.stringify(manifest)
   }
+  const manifestSha256 = sha256Text(manifestRawText)
+  report.manifestSha256 = manifestSha256
   report.manifestId = manifest?.id ?? null
   report.projectRef = manifest?.project_ref ?? null
 
+  if (options.expectManifestSha && options.expectManifestSha !== manifestSha256) {
+    logErr(`FAIL — --expect-manifest-sha 불일치: 기대=${options.expectManifestSha} 실제=${manifestSha256}`)
+    return finish('manifest-sha-mismatch', 1, { expectManifestSha: options.expectManifestSha })
+  }
+
   const validation = validateManifest(manifest)
   if (!validation.valid) {
-    console.error('FAIL — manifest 검증 실패:')
-    for (const e of validation.errors) console.error(`  - ${e}`)
+    logErr('FAIL — manifest 검증 실패:')
+    for (const e of validation.errors) logErr(`  - ${e}`)
     return finish('invalid-manifest', 1, { errors: validation.errors })
   }
+  report.expectedRows = manifest.changes.length
+
+  // 1.5) --env production|staging 플래그 게이트(가장 먼저 — 프로젝트 혼동 방지)
+  if (!ENV_FLAG_VALUES.includes(options.envFlag)) {
+    logErr(`FAIL — --env production|staging 플래그가 필요합니다(받은 값: ${JSON.stringify(options.envFlag ?? null)})`)
+    return finish('env-flag-required', 1, {})
+  }
+
+  // rollback-of 모드: 이전 실행 보고서의 manifestId/manifest sha256 을 대조해
+  // "당시 적용된 것과 동일한 manifest" 로만 되돌리기를 허용한다.
+  let rollbackOfSourceReport = null
+  if (options.rollbackOfReportPath) {
+    try {
+      rollbackOfSourceReport = JSON.parse(D.fs.readFileSync(options.rollbackOfReportPath, 'utf8'))
+    } catch (err) {
+      logErr(`FAIL — --rollback-of 보고서 로드 실패: ${err.message}`)
+      return finish('rollback-of-report-load-failed', 1, { errors: [err.message] })
+    }
+    if (rollbackOfSourceReport.manifestId !== manifest.id) {
+      logErr(`FAIL — --rollback-of 보고서의 manifestId(${rollbackOfSourceReport.manifestId})가 현재 manifest.id(${manifest.id})와 다릅니다`)
+      return finish('rollback-of-mismatch', 1, {})
+    }
+    if (rollbackOfSourceReport.manifestSha256 && rollbackOfSourceReport.manifestSha256 !== manifestSha256) {
+      logErr('FAIL — --rollback-of 보고서의 manifest sha256 이 현재 manifest 파일과 다릅니다(당시 적용된 것과 다른 manifest)')
+      return finish('rollback-of-mismatch', 1, {})
+    }
+  }
+  const mode = rollbackOfSourceReport ? 'rollback-of' : 'apply'
+  report.mode = mode
+  if (rollbackOfSourceReport) report.rollbackOfSourceRunId = rollbackOfSourceReport.runId
 
   // 2) 환경(project_ref) 게이트
   const env = D.loadEnv()
+  secretEnv = env
   report.projectRefHost = env.url ? hostFromUrl(env.url) : null
   const envRef = env.url ? refFromUrl(env.url) : null
   if (!envRef || envRef !== manifest.project_ref) {
-    console.error(`FAIL — 환경 project_ref 불일치: 로컬 .env=${envRef || '(없음)'} vs manifest=${manifest.project_ref}`)
+    logErr(`FAIL — 환경 project_ref 불일치: 로컬 .env=${envRef || '(없음)'} vs manifest=${manifest.project_ref}`)
     return finish('env-mismatch', 2)
   }
   const ciForced = !!env.ci
-  if (ciForced) console.log('CI 환경 감지(process.env.CI 또는 GITHUB_ACTIONS) — write path 영구 비활성(dry-run 강제)')
+  if (ciForced) log('CI 환경 감지(process.env.CI 또는 GITHUB_ACTIONS) — write path 영구 비활성(dry-run 강제, --env 값과 무관)')
 
   // 3) 정적 안전 스캔 (apply/rollback SQL 은 이 시점에 이미 순수 함수로 생성 가능)
   const applySql = buildApplySql(manifest, runId)
   const rollbackSql = buildRollbackSql(manifest, runId)
   const violations = [...staticSafetyScan(applySql), ...staticSafetyScan(rollbackSql)]
   if (violations.length) {
-    console.error('FAIL — 정적 안전 스캔 위반(파괴적 키워드 감지):')
-    for (const v of violations) console.error(`  line ${v.line}: ${v.text} (${v.match})`)
+    logErr('FAIL — 정적 안전 스캔 위반(파괴적 키워드 감지):')
+    for (const v of violations) logErr(`  line ${v.line}: ${v.text} (${v.match})`)
     return finish('unsafe-sql', 1, { violations })
   }
-  console.log('정적 안전 스캔 PASS(파괴적 키워드 0건) — apply/rollback SQL 생성 완료')
+  log('정적 안전 스캔 PASS(파괴적 키워드 0건) — apply/rollback SQL 생성 완료')
 
-  // 4) 프리플라이트(읽기 전용)
+  // mode 에 따라 forward(이번에 실행)/backward(실패 시 자동 복구) SQL 결정
+  const forwardSql = mode === 'apply' ? applySql : rollbackSql
+  const backwardSql = mode === 'apply' ? rollbackSql : applySql
+
+  // 4) 프리플라이트(읽기 전용) — apply 모드는 expect_before(적용 전) 값,
+  //    rollback-of 모드는 set(적용 후) 값이 현재 DB 상태와 일치하는지 확인
   let reader
   if (options.reader) {
     reader = options.reader
@@ -302,16 +391,22 @@ export async function runHotfix(options, deps = {}) {
     reader = D.createLiveReader(env.url, env.anonKey)
   }
 
-  const preflightPlan = buildPreflightPlan(manifest)
-  const preflightMismatches = await readPlanMismatches(reader, preflightPlan)
+  const preflightPlanFull = buildPreflightPlan(manifest)
+  const postflightPlanCore = buildPostflightPlan(manifest)
+  const forwardPreflightPlan = mode === 'apply' ? preflightPlanFull : postflightPlanCore
+  // 롤백/rollback-of 후 "원 상태로 돌아왔는지" 재확인 시 공용으로 쓰는 계획
+  // (reference_rows_must_exist 의 min_words 항목은 정적 참조 확인이라 제외)
+  const revertVerifyPlan = preflightPlanFull.filter((i) => i.minWords == null)
+
+  const preflightMismatches = await readPlanMismatches(reader, forwardPreflightPlan)
   if (preflightMismatches.length) {
-    console.error('FAIL-CLOSED — 프리플라이트 불일치(현재 DB 상태가 manifest 의 expect_before/expect 와 다름):')
+    logErr('FAIL-CLOSED — 프리플라이트 불일치(현재 DB 상태가 manifest 의 기대값과 다름):')
     for (const m of preflightMismatches) {
-      console.error(`  ${m.table}:${m.id} ${m.column ?? ''} 기대=${JSON.stringify(m.expected ?? m.reason)} 실제=${JSON.stringify(m.actual ?? '')}`)
+      logErr(`  ${m.table}:${m.id} ${m.column ?? ''} 기대=${JSON.stringify(m.expected ?? m.reason)} 실제=${JSON.stringify(m.actual ?? '')}`)
     }
     return finish('preflight-mismatch', 1, { mismatches: preflightMismatches })
   }
-  console.log('프리플라이트 PASS — 현재 상태가 manifest 의 expect_before/expect 와 일치')
+  log('프리플라이트 PASS — 현재 상태가 manifest 의 기대값과 일치')
 
   // 5) baseline 저장(학습기록 카운트 + 무관 행 스냅샷 해시)
   const baselineCounts = {}
@@ -330,73 +425,95 @@ export async function runHotfix(options, deps = {}) {
       student_class_assignments: { hash: sha256Json(scaRowsBefore), rowCount: scaRowsBefore.length },
     },
   }
-  console.log(`baseline 저장 완료 — students ${studentsRowsBefore.length}행 / SCA ${scaRowsBefore.length}행 스냅샷 해시 기록`)
+  log(`baseline 저장 완료 — students ${studentsRowsBefore.length}행(hash ${report.baseline.snapshot.students.hash.slice(0, 12)}…) / SCA ${scaRowsBefore.length}행(hash ${report.baseline.snapshot.student_class_assignments.hash.slice(0, 12)}…) 스냅샷 해시 기록`)
 
-  // 6) 계획 출력 + SQL 파일 저장
-  console.log('\n=== 변경 계획 ===')
+  // 6) 계획 출력 + SQL 파일 저장 + rollback 메타데이터 기록
+  log(mode === 'apply' ? '\n=== 변경 계획(before -> after) ===' : '\n=== 되돌리기 계획(rollback-of, 현재 -> 원복) ===')
   for (const c of manifest.changes) {
-    console.log(`  ${c.table}:${c.id}`)
-    for (const [col, val] of Object.entries(c.set)) {
-      console.log(`    ${col}: ${JSON.stringify(c.expect_before[col])} -> ${JSON.stringify(val)}`)
+    log(`  ${c.table}:${c.id}`)
+    for (const col of Object.keys(c.set)) {
+      const fromVal = mode === 'apply' ? c.expect_before[col] : c.set[col]
+      const toVal = mode === 'apply' ? c.set[col] : c.expect_before[col]
+      log(`    ${col}: ${JSON.stringify(fromVal)} -> ${JSON.stringify(toVal)}`)
     }
   }
-  console.log(`  예상 UPDATE 행 수: ${manifest.changes.length}`)
+  log(`  예상 UPDATE 행 수: ${manifest.changes.length}`)
   if (manifest.must_not_change?.length) {
-    console.log('  must_not_change(불변 확인 대상):')
-    for (const m of manifest.must_not_change) console.log(`    ${m.table}:${m.id}`)
+    log('  must_not_change(불변 확인 대상):')
+    for (const m of manifest.must_not_change) log(`    ${m.table}:${m.id}`)
   }
 
   D.fs.mkdirSync(reportDir, { recursive: true })
   const applySqlPath = path.join(reportDir, `${runId}.apply.sql`)
   const rollbackSqlPath = path.join(reportDir, `${runId}.rollback.sql`)
-  D.fs.writeFileSync(applySqlPath, applySql, 'utf8')
-  D.fs.writeFileSync(rollbackSqlPath, rollbackSql, 'utf8')
+  D.fs.writeFileSync(applySqlPath, redactSecrets(redactSecrets(applySql, secretEnv), process.env), 'utf8')
+  D.fs.writeFileSync(rollbackSqlPath, redactSecrets(redactSecrets(rollbackSql, secretEnv), process.env), 'utf8')
   report.applySqlPath = applySqlPath
   report.rollbackSqlPath = rollbackSqlPath
-  console.log(`\napply SQL 저장: ${applySqlPath}`)
-  console.log(`rollback SQL 저장: ${rollbackSqlPath}`)
-  console.log('\nREADY TO APPLY')
+  report.rollback = {
+    sql_path: rollbackSqlPath,
+    guards: manifest.changes.map((c) => ({ table: c.table, id: c.id, where: c.set })),
+  }
+  log(`\napply SQL 저장: ${applySqlPath}`)
+  log(`rollback SQL 저장: ${rollbackSqlPath}`)
+  log('\nREADY TO APPLY')
 
-  // 7) dry-run / CI / 토큰 없음 → STOP
+  // 7) dry-run / CI / 토큰 없음 → STOP (apply·rollback-of 모드 공통)
   const noToken = !env.accessToken
   if (options.dryRun || ciForced || noToken) {
     const reasons = []
     if (options.dryRun) reasons.push('--dry-run')
     if (ciForced) reasons.push('CI 환경')
     if (noToken) reasons.push('SUPABASE_ACCESS_TOKEN 미설정')
-    console.log(`\nSTOP(정상) — write path 비활성: ${reasons.join(', ')}`)
+    log(`\nSTOP(정상) — write path 비활성: ${reasons.join(', ')}`)
     return finish('ready-to-apply', 0, { stopReasons: reasons, dbWriteCount: 0 })
   }
 
-  // 8) 대화형 승인 게이트
+  // 8) 대화형 승인 게이트 — 정확히 `APPLY <runId>` 만 허용, 재시도 없음
   if (!D.isTTY()) {
-    console.log('\nSTOP — 비대화형(TTY 아님) 환경에서는 승인을 받을 수 없습니다. --dry-run 으로 계획만 확인하세요.')
+    log('\nSTOP — 비대화형(TTY 아님) 환경에서는 승인을 받을 수 없습니다. --dry-run 으로 계획만 확인하세요.')
     return finish('not-interactive', 1, { dbWriteCount: 0 })
   }
   const answer = await D.approve(runId)
   if (String(answer ?? '').trim() !== `APPLY ${runId}`) {
-    console.log('\nSTOP — 승인 문구가 정확히 일치하지 않습니다. 적용하지 않습니다.')
+    log('\nSTOP — 승인 문구가 정확히 일치하지 않습니다. 적용하지 않습니다.')
     return finish('not-approved', 1, { dbWriteCount: 0 })
   }
 
-  // 9) apply
+  // 8.5) apply 직전 manifest 파일 재해시 — 승인 이후 파일이 바뀌었으면 중단
+  if (options.manifestPath) {
+    let currentRaw
+    try {
+      currentRaw = D.fs.readFileSync(options.manifestPath, 'utf8')
+    } catch (err) {
+      logErr(`FAIL — manifest 파일 재확인 실패: ${err.message}`)
+      return finish('manifest-tampered', 1, { dbWriteCount: 0 })
+    }
+    if (sha256Text(currentRaw) !== manifestSha256) {
+      logErr('FAIL — manifest 파일이 로드 이후 변경되었습니다(변조 의심). 적용을 중단합니다.')
+      return finish('manifest-tampered', 1, { dbWriteCount: 0 })
+    }
+  }
+
+  // 9) apply(forward SQL)
   const executor = options.executor || D.createExecutor({
     kind: options.executorKind || 'management-api',
     projectRef: manifest.project_ref,
     accessToken: env.accessToken,
   })
   let dbWriteCount = 0
-  const applyResult = await safeRun(executor, applySql)
+  const applyResult = await safeRun(executor, forwardSql)
   if (!applyResult.ok) {
-    console.error(`\nFAIL — apply 실패(트랜잭션이라 미반영): ${applyResult.error}`)
+    logErr(`\nFAIL — ${mode === 'apply' ? 'apply' : 'rollback'} 실패(트랜잭션이라 미반영): ${applyResult.error}`)
     return finish('apply-failed', 1, { applyError: applyResult.error, dbWriteCount: 0 })
   }
   dbWriteCount += manifest.changes.length
-  console.log('\napply 성공 — postflight 검증 진행')
+  log(`\n${mode === 'apply' ? 'apply' : 'rollback'} 성공 — postflight 검증 진행`)
 
-  // 10) postflight
-  const postflightPlan = buildPostflightPlan(manifest)
-  const postMismatches = await readPlanMismatches(reader, postflightPlan)
+  // 10) postflight — apply 모드는 set(적용 후) 값, rollback-of 모드는
+  //     expect_before(원복) 값이 실제로 반영됐는지 확인
+  const forwardPostflightPlan = mode === 'apply' ? postflightPlanCore : revertVerifyPlan
+  const postMismatches = await readPlanMismatches(reader, forwardPostflightPlan)
 
   for (const sid of manifest.affected_students || []) {
     for (const table of manifest.learning_baseline_tables || []) {
@@ -420,26 +537,27 @@ export async function runHotfix(options, deps = {}) {
   }
 
   if (postMismatches.length || !healthResult.ok) {
-    console.error('\nFAIL — postflight/health 검증 실패, 자동 롤백 진행')
-    for (const m of postMismatches) console.error(`  ${JSON.stringify(m)}`)
-    if (!healthResult.ok) console.error(`  health:students 실패:\n${tail(healthResult.output)}`)
+    logErr('\nFAIL — postflight/health 검증 실패, 자동 복구(backward SQL) 진행')
+    for (const m of postMismatches) logErr(`  ${JSON.stringify(m)}`)
+    if (!healthResult.ok) logErr(`  health:students 실패:\n${tail(healthResult.output)}`)
 
-    const rollbackResult = await safeRun(executor, rollbackSql)
-    if (!rollbackResult.ok) {
-      console.error(`\nFAIL — 롤백도 실패: ${rollbackResult.error} — 수동 조치 필요. apply/rollback SQL 파일을 운영자에게 전달하세요.`)
+    const recoveryResult = await safeRun(executor, backwardSql)
+    if (!recoveryResult.ok) {
+      logErr(`\nFAIL — 복구도 실패: ${recoveryResult.error} — 수동 조치 필요. apply/rollback SQL 파일을 운영자에게 전달하세요.`)
       return finish('rollback-failed', 1, {
         postMismatches,
         healthOutputTail: tail(healthResult.output || ''),
-        rollbackError: rollbackResult.error,
+        rollbackError: recoveryResult.error,
         dbWriteCount,
       })
     }
     dbWriteCount += manifest.changes.length
 
-    // 롤백 후 재확인(원래 expect_before 상태로 돌아왔는지)
-    const rollbackVerifyMismatches = await readPlanMismatches(reader, preflightPlan.filter((i) => i.minWords == null))
+    // 복구 후 재확인(직전 프리플라이트에서 확인했던 상태로 돌아왔는지)
+    const recoveryVerifyPlan = mode === 'apply' ? revertVerifyPlan : postflightPlanCore
+    const rollbackVerifyMismatches = await readPlanMismatches(reader, recoveryVerifyPlan)
     if (rollbackVerifyMismatches.length) {
-      console.error('\n경고 — 롤백 실행은 성공했지만 재확인에서 불일치 발견, 수동 확인 필요')
+      logErr('\n경고 — 복구 실행은 성공했지만 재확인에서 불일치 발견, 수동 확인 필요')
     }
     return finish('rolled-back', 1, {
       postMismatches,
@@ -449,7 +567,7 @@ export async function runHotfix(options, deps = {}) {
     })
   }
 
-  console.log('\npostflight PASS, health:students PASS')
+  log('\npostflight PASS, health:students PASS')
   return finish('applied', 0, { dbWriteCount })
 }
 
@@ -462,6 +580,10 @@ function parseArgv(argv) {
     else if (a === '--report-dir') args.reportDir = argv[++i]
     else if (a === '--executor') args.executorKind = argv[++i]
     else if (a === '--fixture-reader') args.fixtureReaderPath = argv[++i]
+    else if (a === '--env') args.envFlag = argv[++i]
+    else if (a === '--expect-manifest-sha') args.expectManifestSha = argv[++i]
+    else if (a === '--rollback-of') args.rollbackOfReportPath = argv[++i]
+    else if (a === '--json') args.jsonOutput = true
     else args._.push(a)
   }
   return args
@@ -472,7 +594,7 @@ if (isMain) {
   const parsed = parseArgv(process.argv.slice(2))
   const manifestArg = parsed._[0]
   if (!manifestArg) {
-    console.error('사용법: node scripts/prodHotfix.mjs <manifest.json> [--dry-run] [--report-dir <dir>] [--executor management-api] [--fixture-reader <file>]')
+    console.error('사용법: node scripts/prodHotfix.mjs <manifest.json> --env production|staging [--dry-run] [--report-dir <dir>] [--executor management-api] [--fixture-reader <file>] [--expect-manifest-sha <hex>] [--rollback-of <report.json>] [--json]')
     process.exitCode = 1
   } else {
     const result = await runHotfix({
@@ -481,6 +603,10 @@ if (isMain) {
       reportDir: parsed.reportDir ? path.resolve(parsed.reportDir) : undefined,
       executorKind: parsed.executorKind,
       fixtureReaderPath: parsed.fixtureReaderPath ? path.resolve(parsed.fixtureReaderPath) : undefined,
+      envFlag: parsed.envFlag,
+      expectManifestSha: parsed.expectManifestSha,
+      rollbackOfReportPath: parsed.rollbackOfReportPath ? path.resolve(parsed.rollbackOfReportPath) : undefined,
+      jsonOutput: !!parsed.jsonOutput,
     })
     process.exitCode = result.exitCode
   }
