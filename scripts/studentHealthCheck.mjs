@@ -17,6 +17,10 @@
 //   node scripts/studentHealthCheck.mjs --all           QA/아카이브 계정도 포함
 //   node scripts/studentHealthCheck.mjs --with-pin      PIN 상태까지(네트워크 1회)
 //   node scripts/studentHealthCheck.mjs --require-env   자격증명 없으면 exit 1
+//   node scripts/studentHealthCheck.mjs --mask-names    표/불릿/JSON 출력의 학생 실명을 마스킹
+//                                                        (CI/GITHUB_ACTIONS 환경이면 이 플래그 없이도
+//                                                         자동 적용 — 2026-09-03 보안수정, PUBLIC
+//                                                         저장소라 GitHub Actions 로그가 공개된다)
 //
 // exit code: FAIL 학생이 1명이라도 있으면 1, 아니면 0.
 //   .env 가 없으면 기본은 SKIP(exit 0) — 로컬 개발자 편의. 단 게이트에서는
@@ -37,8 +41,30 @@ const INCLUDE_ALL = flag('--all')
 const REQUIRE_ENV = flag('--require-env')
 const ONLY_NAME = opt('--name')
 const PROD_BASE = opt('--prod-base') || 'https://voca-drab.vercel.app'
+// 2026-09-03 보안수정(High) — 저장소가 PUBLIC 이라 GitHub Actions 로그가
+// 누구나 볼 수 있다. CI 에서는 --mask-names 를 명시하지 않아도 자동으로
+// 마스킹한다(verifyRelease.mjs Gate 3 가 --json 만 붙여 이 스크립트를
+// spawn 하므로, 여기서 스스로 환경을 감지하지 않으면 호출부를 전부 고쳐야
+// 한다 — CLAUDE.md 규칙 1, 기존 정상 플로우를 건드리지 않기 위해 감지를
+// 이 파일 안에 둔다).
+const IS_CI = !!(process.env.CI || process.env.GITHUB_ACTIONS)
+const MASK_NAMES = flag('--mask-names') || IS_CI
 
 const log = (...a) => { if (!AS_JSON) console.log(...a) }
+
+// prodCheck.mjs 의 maskName() 과 동일 규칙(첫 글자 + ***, 빈 값은
+// "(이름없음)")을 이 파일에서도 독립적으로 정의한다 — 두 스크립트는 서로
+// import 하지 않는 별도 CLI 라 판정 로직처럼 재사용을 강제할 이유가 없고
+// (CLAUDE.md 규칙 3 은 "이미 검증된 로직의 재구현"을 금지하는 것이지,
+// 이런 표시용 순수 함수의 독립 정의까지 막지 않는다), 파일 소유권(규칙 16)
+// 때문에 공용 모듈로 뽑아 양쪽이 import 하려면 다른 트랙 소유 파일까지
+// 건드려야 한다.
+function maskName(name) {
+  const n = typeof name === 'string' ? name.trim() : ''
+  if (!n) return '(이름없음)'
+  return `${n[0]}***`
+}
+const displayName = (name) => (MASK_NAMES ? maskName(name) : name)
 
 // ── 자격증명 ────────────────────────────────────────────────────────────
 let BASE = process.env.VITE_SUPABASE_URL || ''
@@ -174,10 +200,15 @@ const finalSum = summarize(results)
 const ghostUnits = findGhostUnits(ctx)
 
 if (AS_JSON) {
+  // MASK_NAMES 일 때는 studentId(UUID, PII 아님)는 그대로 두고 name 만
+  // 마스킹한 사본을 내보낸다 — recordHealthBaseline.mjs/verifyRelease.mjs
+  // 는 studentId+code 로 매칭하므로(scripts/lib/releaseGate.mjs baselineKey)
+  // name 마스킹이 baseline diff 판정 자체에는 영향을 주지 않는다.
+  const outputStudents = MASK_NAMES ? results.map((r) => ({ ...r, name: displayName(r.name) })) : results
   console.log(JSON.stringify({
     ok: finalSum.ok, summary: finalSum, excluded, ghostUnits,
     pinChecked: !!pinInfo, fetchMs, totalMs: Date.now() - started,
-    students: results,
+    students: outputStudents,
   }, null, 2))
 } else {
   const pad = (v, n) => String(v ?? '-').padEnd(n)
@@ -193,7 +224,7 @@ if (AS_JSON) {
   for (const r of [...results].sort((a, b) => order[a.status] - order[b.status] || a.name.localeCompare(b.name))) {
     const reason = r.codes.length ? r.codes.join(' | ') : (r.warnings.length ? r.warnings.join(' | ') : '')
     log([
-      pad(r.name, 12), pad(r.resolved.homeClassName, 20), pad(r.resolved.textbookName, 20),
+      pad(displayName(r.name), 12), pad(r.resolved.homeClassName, 20), pad(r.resolved.textbookName, 20),
       pad(r.resolved.unitName, 10), String(r.resolved.wordCount).padStart(4), ' ',
       pad(r.resolved.direction, 8), pad(r.status, 6), reason,
     ].join(' '))
@@ -205,14 +236,14 @@ if (AS_JSON) {
     for (const [code, n] of Object.entries(finalSum.byCode).sort((a, b) => b[1] - a[1])) {
       log(`  ${code.padEnd(20)} ${n}건`)
       for (const r of fails.filter((x) => x.codes.some((c) => String(c).split(':')[0] === code))) {
-        log(`      - ${r.name}: ${r.codes.filter((c) => String(c).split(':')[0] === code).join(', ')}`)
+        log(`      - ${displayName(r.name)}: ${r.codes.filter((c) => String(c).split(':')[0] === code).join(', ')}`)
       }
     }
   }
   const warns = results.filter((r) => r.status === 'WARN')
   if (warns.length) {
     log(`\n=== WARN (${warns.length}명, 게이트는 통과) ===`)
-    for (const r of warns) log(`  - ${r.name}: ${r.warnings.join(', ')}`)
+    for (const r of warns) log(`  - ${displayName(r.name)}: ${r.warnings.join(', ')}`)
   }
 
   if (ghostUnits.length) {
@@ -220,7 +251,7 @@ if (AS_JSON) {
     const tbName = (id) => data.textbooks.find((t) => t.id === id)?.name || '(교재?)'
     const assignedTo = (uid) => data.students
       .filter((s) => s.current_unit_id === uid && classifyAccount(s, ctx) === 'REAL')
-      .map((s) => s.name)
+      .map((s) => displayName(s.name))
     for (const g of ghostUnits) {
       const on = assignedTo(g.id)
       log(`  ${JSON.stringify(g.name).padEnd(10)} 교재=${tbName(g.textbookId).padEnd(20)} 단어 ${g.wordCount}개`)
