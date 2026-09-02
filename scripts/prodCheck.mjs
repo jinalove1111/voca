@@ -24,7 +24,9 @@
 //   node scripts/prodCheck.mjs --report-dir <dir>             리포트 저장 경로(기본 scripts/.tmp/prod-reports)
 //   node scripts/prodCheck.mjs --expect-ref <ref>              projectRef 불일치 시 exit 2
 //   node scripts/prodCheck.mjs --require-env                  .env 없으면 SKIP 대신 FAIL(exit 1)
-//   node scripts/prodCheck.mjs --show-names                   사람용 출력에서 학생 이름 마스킹 해제
+//   node scripts/prodCheck.mjs --show-names                   사람용+JSON 출력 모두 이름 마스킹 해제
+//                                                              (CI/GITHUB_ACTIONS 환경이면 이 플래그를
+//                                                              무시하고 항상 마스킹 — 2026-09-03 보안수정)
 //   node scripts/prodCheck.mjs --baseline-students <id,id>     학습기록 baseline 저장(라이브 전용)
 //   node scripts/prodCheck.mjs --compare-baseline <file>       저장된 baseline 과 지금 값을 비교 출력(라이브 전용)
 //
@@ -51,7 +53,13 @@ const opt = (n) => {
 }
 const AS_JSON = flag('--json')
 const REQUIRE_ENV = flag('--require-env')
-const SHOW_NAMES = flag('--show-names')
+// 2026-09-03 보안수정(High) — 저장소가 PUBLIC 이라 GitHub Actions 로그가
+// 누구나 볼 수 있다. --json 출력(사람용 텍스트뿐 아니라 stdout/보고서 파일
+// 모두)의 학생 실명 마스킹을 기본값으로 바꾼다. CI 환경에서는 --show-names
+// 를 넘겨도 무시하고 강제로 마스킹한다(공개 로그에 실수로 원본이 찍히는
+// 사고를 코드 레벨에서 차단 — 사람이 플래그를 잘못 켜도 안전).
+const IS_CI = !!(process.env.CI || process.env.GITHUB_ACTIONS)
+const SHOW_NAMES = flag('--show-names') && !IS_CI
 const FIXTURE_PATH = opt('--fixture')
 const REPORT_DIR = opt('--report-dir') || path.join('scripts', '.tmp', 'prod-reports')
 const EXPECT_REF = opt('--expect-ref')
@@ -91,6 +99,17 @@ function maskId(id, showNames) {
   if (!s) return '(id없음)'
   if (showNames) return s
   return s.length > 8 ? `${s.slice(0, 8)}***` : `${s}***`
+}
+
+// 2026-09-03 보안수정 — health.results[]/invariants.findings[] 는 raw
+// evaluateStudent()/evaluateInvariants() 출력을 그대로 JSON 에 담기 때문에
+// (사람용 renderBucket() 과 별개 경로) --json/보고서 파일에 실명이 그대로
+// 노출돼 왔다. null/undefined/빈 문자열은 원래 "이름 없음/해당없음"을 뜻하는
+// 값이라 그대로 두고(예: 유닛 단위 invariant 는 studentName 이 null), 실제
+// 이름 문자열만 maskName() 규칙으로 치환한다.
+function maskNameIfPresent(name, showNames) {
+  if (typeof name !== 'string' || !name) return name
+  return maskName(name, showNames)
 }
 
 // health 모듈(scripts/lib/studentHealthRules.mjs, 이 트랙 소유 아님)의
@@ -305,13 +324,20 @@ async function main() {
 
   const ux = classifyForUX(healthResults, findings)
 
+  // health.results[]/invariants.findings[] 는 JSON stdout/보고서 파일에
+  // 그대로 실리므로 여기서 마스킹을 적용한다(classifyForUX/renderBucket 은
+  // 사람용 텍스트 버킷만 담당해 이 두 배열과는 별개 경로다). SHOW_NAMES 는
+  // 이미 CI 에서 강제로 false 로 계산돼 있다(위 IS_CI 처리 참고).
+  const outputHealthResults = healthResults.map((r) => ({ ...r, name: maskNameIfPresent(r.name, SHOW_NAMES) }))
+  const outputFindings = findings.map((f) => ({ ...f, studentName: maskNameIfPresent(f.studentName, SHOW_NAMES) }))
+
   const report = {
     runAt: new Date().toISOString(),
     runId,
     env: { host: envInfo.host, projectRef: envInfo.projectRef, source: envInfo.source },
     verdict,
-    health: { summary: healthSummary, results: healthResults },
-    invariants: { summary: invariantsSummary, findings },
+    health: { summary: healthSummary, results: outputHealthResults },
+    invariants: { summary: invariantsSummary, findings: outputFindings },
     ux: {
       criticalCount: ux.critical.length,
       needsReviewCount: ux.needsReview.length,
