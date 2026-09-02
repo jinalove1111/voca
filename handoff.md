@@ -1,7 +1,62 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-02 (101차, Supabase Security Advisor `rls_disabled_in_public`
-CRITICAL 대응 Phase 1 — 백업 5테이블 + `reward_migration_log` 락다운(v3_45)
-운영자 실행 완료. 상세는 아래 101차 섹션)_
+_최종 갱신: 2026-09-02 (102차, students 잠금 Phase 2b Step 1 — 서버 측 Supabase
+Auth 세션 발급(플래그 OFF) + 관리자 학생 액션 7개 + 반별 최소 로스터 모드,
+코드만·배포·DB 무변경. 상세는 아래 102차 섹션)_
+
+## 2026-09-02 (102차) — students 잠금 Phase 2b Step 1: 서버 측 Supabase Auth 세션 발급(플래그 OFF) + 관리자 학생 액션 7개 + 반별 최소 로스터 모드 (코드만, 배포·DB 무변경)
+
+- 배경: Phase 2b 목표 = anon 으로 students 484행 전체 조회되는 구조 차단 +
+  로그인/PIN/학습/관리자 유지. 설계 결정: 서버가 HS256 커스텀 JWT 를
+  만들지 않고(레거시 secret 의존 배제 — 대시보드 실측: Current key ECC
+  P-256, Legacy HS256 은 검증 전용 잔존), PIN 검증 성공 시 service_role
+  로 학생용 Supabase Auth 사용자(합성 이메일
+  `<students.id>@students.invalid`, `app_metadata.student_id`)를 보장하고
+  `auth.admin.generateLink(magiclink)` 의 hashed_token 을 클라이언트에
+  넘겨 `verifyOtp` 로 정식 세션을 받는 구조. Phase C 에서 RLS 정책은
+  `app_metadata.student_id` 기준.
+- Auth 설정 읽기 전용 확인(`auth/v1/settings`): email provider ON,
+  anonymous sign-ins OFF(운영자 대시보드 확인 완료), **"Allow new users
+  to sign up" 은 아직 ON(`disable_signup=false`) — Step 2 배포 전
+  운영자가 OFF 로 변경해야 함(STOP 조건)**.
+- Step 1-A(`api/_pinAuth.js`, `api/verify-student-pin.js`,
+  `api/student-pin-status.js`, 신규 `scripts/testStudentsRlsPhase2b.mjs`):
+  `STUDENT_AUTH_SESSION` 환경변수('1'/'true')가 켜져 있고
+  `SUPABASE_SERVICE_ROLE_KEY` 가 있을 때만 로그인 성공 응답에
+  `authTokenHash` 추가, 어떤 실패도 로그인을 막지 않음(fail-open,
+  console.warn). 플래그 off(기본) 시 응답 byte-identical.
+  `checkAdminReauth` 를 timingSafeEqual 로 교체(응답 동일).
+  `student-pin-status` 에 `{ className }` 모드: pin_hash null &
+  pin_setup_allowed true 학생의 id,name 만(__INACTIVE__/QA_ 제외),
+  미존재 반 빈 배열, 중복 반 400. FAIL-first: 구현 전 25 FAIL 실측 →
+  87/87 PASS. 라이브 기준선(읽기 전용): anon HEAD students 206/484 =
+  Phase C 전 열림(예상).
+- Step 1-B(`api/admin-pin-actions.js`, 신규
+  `scripts/testAdminStudentActions.mjs`): ALLOWED_ACTIONS 에
+  `list_students`/`set_student_class`/`set_student_unit`/
+  `set_students_class_bulk`/`set_student_house`/`set_primary_assignment`/
+  `set_primary_textbook` 추가(wordLibrary.js 의 selectAllStudents/
+  setStudentClass/writeStudentUnit/setStudentsClassBulk/setStudentHouse/
+  setPrimaryAssignment/setPrimaryTextbook 서버 이식, SCA 부수효과 포함,
+  pin_ 컬럼 무접촉). 클라이언트 캐시 의존 탐색(반 이름→id, 유닛 재검색,
+  isLearnableUnit)은 이식하지 않고 호출부가 해석한 id 를 payload 로
+  받음 — 다음 Step 에서 클라이언트/서버 어디에 둘지 결정 필요. 레거시
+  current_unit_id 없는 학생의 진도 캡처 이름 폴백은 생략. 인증 실패는
+  기존 계약(200 + ok:false not_authorized) 유지. FAIL-first: 구현 전 43
+  FAIL → 85/85 PASS. 새 api 파일 0(12/12 유지), 신규 패키지 0.
+- 검증(메인 세션 재실행): `npm run build` PASS, testStudentsRlsPhase2b
+  87/87, testAdminStudentActions 85/85, 회귀 testPinSetupCapability
+  115/115, testSessionTokenAuth PASS, testAdminPinActionsDispatch PASS,
+  testCreateStudentUnitAssignment 34/34. 네트워크는 기준선 HEAD 1건 외
+  0, 실제 DB 쓰기 0.
+- 부수 발견(구현 에이전트): Windows + Node 24 에서 esbuild 서비스
+  프로세스와 라이브 fetch 가 겹친 채 `process.exit(1)` 을 강제 호출하면
+  네이티브 assertion 크래시 가능 — 신규 스크립트는 `process.exitCode`
+  로 우회. 기존 스크립트 잠재 이슈, 별도 확인 과제.
+- 다음 Step(2): 운영자 signup OFF 확인 → Vercel 배포(플래그 off, 응답
+  동일) → 플래그 on → 라이브 로그인 응답에 authTokenHash 확인. Step 3
+  클라이언트 전환(verifyOtp 세션, 로그인 전 students skip, PIN 만들기
+  로스터 API, 관리자 6함수 dual-path→서버 액션, list_students 로스터).
+  Step 4 v3_46 students RLS. 이번 Step 은 commit 만(push/deploy 없음).
 
 ## 2026-09-02 (101차) — Supabase Security Advisor rls_disabled_in_public CRITICAL 대응 Phase 1: 백업 5 + reward_migration_log 락다운(v3_45, 운영자 실행 완료)
 
