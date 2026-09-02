@@ -2421,13 +2421,30 @@ async function maintainPrimaryAssignmentForClassChange(studentId, classId, unitI
       _studentAssignmentsCache.delete(studentId)
       return
     }
-    // 1) 다른 반의 primary(유령/이전 반) 행 삭제 — 조건부(이 학생 + primary
-    //    + 대상 반이 아닌 것만). 테이블 부재면 여기서 바로 조용히 끝.
-    const { error: delErr } = await supabase.from('student_class_assignments')
-      .delete().eq('student_id', studentId).eq('is_primary', true).neq('class_id', classId)
-    if (delErr) {
-      if (isMissingTableError(delErr)) return
-      throw delErr
+    // 1) 다른 반의 primary(유령/이전 반) 행 — 2026-09-03(T4 정적 감사 Med
+    //    #4) 이전엔 여기서 current_unit_id 캡처 없이 바로 delete했다: 앱
+    //    초기 로드 레이스/마이그레이션 미실행 상태(_textbookMode===false
+    //    && _textbookFetchFailed===false, _textbooks 캐시가 비어 있는
+    //    특수 시점)에 관리자가 반을 옮기면 그 학생의 이전 반 진도
+    //    (current_unit_id)가 통째로 사라질 수 있었다. 이제는 먼저 읽고,
+    //    읽기가 성공하면(행이 있든 없든) delete 대신 demote(is_primary=
+    //    false)로 통일한다 — 교재 모드 분기(위 2396행)와 동일 결과이자
+    //    current_unit_id를 그대로 보존한다(patch가 is_primary만 건드림).
+    //    읽기 자체가 실패하면(테이블 부재 제외) delete를 아예 진행하지
+    //    않고 새 primary 행만 만든다(데이터 보존 우선, non-fatal — throw
+    //    없음, 기존 계약과 동일).
+    const { error: readErr } = await supabase.from('student_class_assignments')
+      .select('id,current_unit_id').eq('student_id', studentId).eq('is_primary', true).neq('class_id', classId)
+    if (readErr) {
+      if (isMissingTableError(readErr)) return
+      console.warn('[wordLibrary] 이전 primary 행 조회 실패 — delete 생략, 새 primary만 생성 (non-fatal):', readErr?.message || readErr)
+    } else {
+      const { error: demErr } = await supabase.from('student_class_assignments')
+        .update({ is_primary: false }).eq('student_id', studentId).eq('is_primary', true).neq('class_id', classId)
+      if (demErr) {
+        if (isMissingTableError(demErr)) return
+        throw demErr
+      }
     }
     // 2) 대상 반 행을 primary로 보장 — 없으면 insert, 이미 있으면(교사가
     //    전에 secondary로 배정해 둔 반으로 이동하는 경우) primary 승격만

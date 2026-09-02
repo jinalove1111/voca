@@ -28,7 +28,12 @@ const fakePath = path.join(TMP, 'fakeSupabaseForAssignmentUnitGuards.mjs')
 fs.writeFileSync(fakePath, `
 export const __db = { classes: [], units: [], words: [], students: [], textbooks: [], class_textbooks: [], student_class_assignments: [], daily_assignments: [] }
 export const __log = []
-export function __reset(ds) { for (const k of Object.keys(__db)) __db[k] = (ds[k] || []).map((r) => ({ ...r })); __log.length = 0 }
+export function __reset(ds) { for (const k of Object.keys(__db)) __db[k] = (ds[k] || []).map((r) => ({ ...r })); __log.length = 0; __pending.length = 0 }
+// 2026-09-03 섹션 6(레거시 분기 읽기 실패 주입) 전용 — 다음 매칭 호출(테이블+
+// 모드) 1건에 한해 실제 결과 대신 지정한 에러를 반환한다(네트워크 실패/RLS
+// 등을 재현). 다른 섹션은 호출하지 않으므로 기존 동작 무회귀.
+const __pending = []
+export function __failNext(table, mode, err) { __pending.push({ table, mode, err }) }
 function builder(table) {
   const st = { table, cols: '', filters: [], orders: [], range: null, count: null, head: false, mode: 'select', patch: null, single: null }
   const api = {
@@ -54,6 +59,12 @@ function builder(table) {
     return out
   }
   function run() {
+    const pendingIdx = __pending.findIndex((p) => p.table === st.table && p.mode === st.mode)
+    if (pendingIdx !== -1) {
+      const p = __pending.splice(pendingIdx, 1)[0]
+      __log.push({ table: st.table, op: st.mode, injectedError: true })
+      return { data: null, error: p.err }
+    }
     const rows = __db[st.table] || []
     if (st.mode === 'update') {
       const hit = rows.filter((r) => st.filters.every((f) => f(r)))
@@ -352,6 +363,77 @@ console.log('\n=== 5. getStudentClassAssignments 읽기 self-heal — 유령 유
     primaryG2After?.class_id === LEGACY_OLD, JSON.stringify(primaryG2After))
   check('5c. 대체 대상이 없으면 self-heal이 건드리지 않아 유닛 값도 원래 그대로(null)',
     primaryG2After?.current_unit_id === null, JSON.stringify(primaryG2After))
+}
+
+// 2026-09-03 T4 정적 감사 Med #4 — maintainPrimaryAssignmentForClassChange의
+// 레거시 분기(_textbookMode===false && _textbookFetchFailed===false, 즉
+// _textbooks 캐시가 비어 있는 특수 시점 — 섹션 5와 동일 트리거 조건)가
+// 이전 primary 행을 current_unit_id 캡처 없이 즉시 delete하던 갭을 막는다.
+// setStudentClass(교재 모드로 안 가는 유일한 직접 호출부, awaited)로 재현.
+console.log('\n=== 6. maintainPrimaryAssignmentForClassChange 레거시 분기 — delete 대신 캡처된 demote 통일 ===')
+{
+  const L_OLD = 'cls-legacy6-old', L_NEW = 'cls-legacy6-new'
+  const LU1 = 'u-legacy6-l1'
+  const X = 'stu-legacy6-x'
+  const OLD_PROGRESS = 'u-legacy6-old-progress'
+  const legacyDataset6 = () => ({
+    classes: [
+      { id: L_OLD, name: '레거시6구반', class_type: 'regular', spelling_direction: 'kr2en' },
+      { id: L_NEW, name: '레거시6새반', class_type: 'regular', spelling_direction: 'kr2en' },
+    ],
+    textbooks: [], class_textbooks: [], // 비교재 모드 강제 — _textbookMode=false(섹션 5와 동일)
+    units: [{ id: LU1, class_id: L_NEW, textbook_id: null, name: 'Unit1', position: 0 }],
+    words: [...words(LU1, 40, 'leg6')],
+    students: [{ id: X, name: 'X학생', class_id: L_OLD, unit_name: 'OldUnit', current_unit_id: OLD_PROGRESS }],
+    student_class_assignments: [
+      { id: 'sca-x6', student_id: X, class_id: L_OLD, textbook_id: null, current_unit_id: OLD_PROGRESS, is_primary: true },
+    ],
+  })
+  async function boot6() {
+    fake.__reset(legacyDataset6())
+    await lib.refreshWordLibrary(); await lib.refreshStudents(); await lib.refreshClassSettings(); await lib.refreshTextbooks()
+    lib.invalidateStudentAssignmentsCache?.()
+    fake.__log.length = 0
+  }
+
+  // 6a — 읽기 성공 → delete 대신 demote, current_unit_id(진도) 보존.
+  await boot6()
+  await lib.setStudentClass(X, '레거시6새반')
+  const oldRow6a = fake.__db.student_class_assignments.find((r) => r.id === 'sca-x6')
+  check('6a. 이전 primary 행(sca-x6)이 삭제되지 않고 그대로 존재', !!oldRow6a, JSON.stringify(oldRow6a))
+  check('6a. 이전 primary 행이 demote됨(is_primary=false)', oldRow6a?.is_primary === false, JSON.stringify(oldRow6a))
+  check('6a. 이전 primary 행의 current_unit_id 보존(진도 유실 없음)', oldRow6a?.current_unit_id === OLD_PROGRESS, JSON.stringify(oldRow6a))
+  check('6a. student_class_assignments에 delete 연산 0건', scaLog().filter((l) => l.op === 'delete').length === 0, JSON.stringify(scaLog()))
+  const newRow6a = fake.__db.student_class_assignments.find((r) => r.student_id === X && r.class_id === L_NEW && r.is_primary)
+  check('6a. 새 반(L_NEW)에 새 primary 행 생성됨', !!newRow6a, JSON.stringify(newRow6a))
+
+  // 6b — 읽기 실패 주입 → delete 미실행 + warn, 이전 행은 완전 무접촉,
+  // 새 primary만 생성(데이터 보존 우선, throw 없음 — 기존 non-fatal 계약).
+  await boot6()
+  fake.__failNext('student_class_assignments', 'select', { code: 'PGRST000', message: 'injected read failure (test)' })
+  const warnCalls = []
+  const origWarn = console.warn
+  console.warn = (...args) => { warnCalls.push(args) }
+  try {
+    await lib.setStudentClass(X, '레거시6새반')
+  } finally {
+    console.warn = origWarn
+  }
+  const oldRow6b = fake.__db.student_class_assignments.find((r) => r.id === 'sca-x6')
+  check('6b. 읽기 실패 시 이전 primary 행(sca-x6)이 완전히 무접촉(is_primary 그대로 true)', oldRow6b?.is_primary === true, JSON.stringify(oldRow6b))
+  check('6b. 읽기 실패 시 이전 primary 행 current_unit_id도 무접촉', oldRow6b?.current_unit_id === OLD_PROGRESS, JSON.stringify(oldRow6b))
+  check('6b. student_class_assignments에 delete 연산 0건', scaLog().filter((l) => l.op === 'delete').length === 0, JSON.stringify(scaLog()))
+  check('6b. console.warn 호출됨(non-fatal 보고)', warnCalls.length >= 1, JSON.stringify(warnCalls))
+  const newRow6b = fake.__db.student_class_assignments.find((r) => r.student_id === X && r.class_id === L_NEW && r.is_primary)
+  check('6b. 새 반(L_NEW)에 새 primary 행은 그래도 생성됨(데이터 보존 우선)', !!newRow6b, JSON.stringify(newRow6b))
+
+  // 6c — 회귀 가드: 교재 모드 분기(섹션 1~4가 이미 검증)는 이 레거시 분기와
+  // 무관하게 그대로 동작한다 — 여기서는 교재 모드에서 demote 대신 delete로
+  // 되돌아가지 않았는지만 재확인(payload는 섹션 1~4가 이미 고정).
+  await boot()
+  fake.__log.length = 0
+  await lib.setPrimaryTextbook(C, TB)
+  check('6c. 교재 모드 경로는 delete를 쓰지 않는다(무회귀)', scaLog().filter((l) => l.op === 'delete').length === 0, JSON.stringify(scaLog()))
 }
 
 console.log('\n' + '='.repeat(60))
