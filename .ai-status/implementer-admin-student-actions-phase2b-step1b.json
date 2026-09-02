@@ -1,0 +1,33 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "admin-student-actions-phase2b-step1b",
+  "task": "관리자 로스터 관리 6개 wordLibrary.js 함수 + 전체 학생 조회를 api/admin-pin-actions.js 서버 액션 7개(list_students/set_student_class/set_student_unit/set_students_class_bulk/set_student_house/set_primary_assignment/set_primary_textbook)로 이식(Phase 2b Step 1-B, 서버 액션만 — 클라이언트 전환은 다음 Step)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-02T00:00:00Z",
+  "updated_at": "2026-09-02T00:00:00Z",
+  "files_owned": [
+    "api/admin-pin-actions.js",
+    "scripts/testAdminStudentActions.mjs"
+  ],
+  "files_read": [
+    "src/utils/wordLibrary.js",
+    "api/_pinAuth.js",
+    "src/utils/houseSystem.js",
+    "scripts/testAdminPinActionsDispatch.mjs",
+    "scripts/testCreateStudentUnitAssignment.mjs",
+    "scripts/testPinSetupCapability.mjs"
+  ],
+  "summary": "wordLibrary.js의 selectAllStudents/refreshStudents(358-421), setStudentClass(1948-1976), setStudentHouse(1983-1993), writeStudentUnit(2195-2207), setStudentsClassBulk(2213-2239), setPrimaryAssignment(2659경), setPrimaryTextbook(2759경) + SCA 부수효과 maintainPrimaryAssignmentForClassChange(2305경)를 api/admin-pin-actions.js에 7개 신규 액션으로 이식. 클라이언트 캐시(_cache/_students/_textbooks) 의존 로직(이름→id 재해석)은 서버에 없으므로 호출부가 이미 해석한 classId/unitId를 payload로 직접 받는 방식으로 단순화(주석에 명시). textbookMode 판정은 매 호출마다 textbooks 테이블 실측 조회로 재현. 신규 api 파일 0개(12함수 한도 유지), 신규 패키지 0개. FAIL-first(규칙15) 절차 준수: git stash로 구현 전 상태 재현 후 테스트 실행해 신규 액션 섹션 43건 FAIL(unknown action) + 게이트/회귀 섹션 PASS 확인 → stash pop 복원 → 구현 재확인 → 85건 전부 PASS.",
+  "blocker": null,
+  "next_action": "qa-reviewer에게 handoff — 클라이언트(wordLibrary.js 6개 함수 + StudentDirectory.jsx 등 호출부)를 이 서버 액션으로 전환하는 다음 Step은 별도 세션/작업으로 분리 필요(이번 Step 범위 아님).",
+  "build_result": "PASS (npm run build, vite v5.4.21, 25.95s, 에러/신규 경고 없음)",
+  "verify_results": {
+    "scripts/testAdminStudentActions.mjs": "PASS 85/85 (신규)",
+    "scripts/testAdminPinActionsDispatch.mjs": "PASS (기존 8개 액션 dispatch 회귀)",
+    "scripts/testCreateStudentUnitAssignment.mjs": "PASS 34/34 (create_student 회귀, 무변경 확인)",
+    "scripts/testPinSetupCapability.mjs": "PASS 115/115 (동시 작업 중인 _pinAuth.js/verify-student-pin.js/student-pin-status.js 관련 회귀 — 읽기만 함, 무수정)"
+  },
+  "commits": []
+}
