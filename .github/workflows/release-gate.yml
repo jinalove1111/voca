@@ -189,13 +189,15 @@ jobs:
       # 대상 프로덕션이다 — Gate 3 이 이미 같은 시크릿으로 학생 헬스체크를
       # 하고 있으므로 새로운 위험은 아니다.
       #
-      # 출력 JSON 의 health.results[]/invariants.findings[] 에는 학생 이름이
-      # 마스킹되지 않은 채 들어 있다(prodCheck.mjs 의 마스킹은 사람이 읽는
-      # 텍스트 출력에만 적용되고, --json 원본에는 적용되지 않는다 —
-      # scripts/prodCheck.mjs 의 renderBucket()/maskName() 참고). 그래서
-      # GITHUB_STEP_SUMMARY(공개 로그)에는 findings/results 배열을 절대
-      # 그대로 옮기지 않고, summary 카운트(health.summary/invariants.summary/
-      # ux.*Count)만 표로 남긴다.
+      # 2026-09-03 보안수정(High) — 이 저장소는 PUBLIC 이라 GitHub Actions
+      # 로그가 누구에게나 보인다. scripts/prodCheck.mjs 는 이제 --json 출력
+      # (stdout 과 --report-dir 보고서 파일 둘 다)에서도 학생 이름을 기본
+      # 마스킹하고, CI/GITHUB_ACTIONS 환경에서는 --show-names 를 넘겨도
+      # 무시하고 강제 마스킹한다(scripts/prodCheck.mjs 의 IS_CI/SHOW_NAMES
+      # 참고) — 그래도 이 스텝은 defense-in-depth 로 원본 JSON 을 이 스텝의
+      # stdout(=Actions 로그)에 아예 올리지 않는다. npm run prod:check 의
+      # 표준출력은 파일로만 리다이렉트하고, 로그/STEP_SUMMARY 에는 요약
+      # 카운트 + (참고용) 마스킹된 이름 목록만 별도로 만들어 찍는다.
       - name: Gate 3b — prod:check (READ-ONLY, invariants + health)
         shell: bash
         env:
@@ -205,36 +207,65 @@ jobs:
           set -o pipefail
           mkdir -p /tmp/prod-reports
           RC=0
-          npm run prod:check -- --require-env --json --report-dir /tmp/prod-reports 2>&1 | tee /tmp/gate3b.log || RC=$?
+          # stdout(원본 --json 출력)은 로그에 올리지 않고 파일로만 받는다.
+          # stderr(실패 메시지, 학생 이름이 담기지 않는 일반 문구만 나온다 —
+          # scripts/prodCheck.mjs 의 console.error 문구 참고)는 그대로 로그에
+          # 남긴다.
+          npm run prod:check -- --require-env --json --report-dir /tmp/prod-reports \
+            > /tmp/gate3b.stdout.json 2> /tmp/gate3b.stderr.log || RC=$?
+          cat /tmp/gate3b.stderr.log
 
           REPORT_FILE=$(ls -t /tmp/prod-reports/*.prodcheck.json 2>/dev/null | head -n1 || true)
+
+          print_summary_table() {
+            node -e "
+              const r = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
+              const rows = [
+                ['verdict', r.verdict],
+                ['health PASS', r.health.summary.pass],
+                ['health WARN', r.health.summary.warn],
+                ['health FAIL', r.health.summary.fail],
+                ['invariants FAIL', r.invariants.summary.fail],
+                ['invariants WARN', r.invariants.summary.warn],
+                ['ux critical', r.ux.criticalCount],
+                ['ux needsReview', r.ux.needsReviewCount],
+                ['ux dataDebt', r.ux.dataDebtCount],
+              ]
+              console.log('| 항목 | 값 |')
+              console.log('|---|---|')
+              for (const [k, v] of rows) console.log('| ' + k + ' | ' + v + ' |')
+            " "$1"
+          }
+
           {
             echo "### Gate 3b — prod:check 요약 (READ-ONLY, 카운트만·이름/원문 미노출)"
             if [ -z "$REPORT_FILE" ]; then
               echo "리포트 파일 없음(조기 실패 또는 --require-env 없이 SKIP)"
             else
-              node -e "
-                const r = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-                const rows = [
-                  ['verdict', r.verdict],
-                  ['health PASS', r.health.summary.pass],
-                  ['health WARN', r.health.summary.warn],
-                  ['health FAIL', r.health.summary.fail],
-                  ['invariants FAIL', r.invariants.summary.fail],
-                  ['invariants WARN', r.invariants.summary.warn],
-                  ['ux critical', r.ux.criticalCount],
-                  ['ux needsReview', r.ux.needsReviewCount],
-                  ['ux dataDebt', r.ux.dataDebtCount],
-                ]
-                console.log('| 항목 | 값 |')
-                console.log('|---|---|')
-                for (const [k, v] of rows) console.log('| ' + k + ' | ' + v + ' |')
-              " "$REPORT_FILE"
+              print_summary_table "$REPORT_FILE"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
+          echo ""
+          echo "=== Gate 3b 콘솔 요약(마스킹, READ-ONLY) ==="
+          if [ -z "$REPORT_FILE" ]; then
+            echo "리포트 파일 없음(조기 실패 또는 --require-env 없이 SKIP)"
+          else
+            print_summary_table "$REPORT_FILE"
+            # 참고용 — prodCheck.mjs 가 이미 마스킹한 이름만 나열한다(원본은
+            # 애초에 여기 도달하지 않는다 — 이름 노출 억제 플래그는 CI 환경
+            # 에서 항상 강제 적용되고, 이 스텝도 그 플래그를 켜지 않는다).
+            node -e "
+              const r = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
+              const names = new Set();
+              for (const h of (r.health && r.health.results) || []) if (h && h.status !== 'PASS' && h.name) names.add(h.name);
+              for (const f of (r.invariants && r.invariants.findings) || []) if (f && f.studentName) names.add(f.studentName);
+              if (names.size) console.log('영향 학생(마스킹):', [...names].join(', '));
+            " "$REPORT_FILE"
+          fi
+
           if [ "$RC" -ne 0 ]; then
-            echo "::error title=Gate 3b (prod:check) 실패::$(tail -n 40 /tmp/gate3b.log | sed ':a;N;$!ba;s/\n/%0A/g')"
+            echo "::error title=Gate 3b (prod:check) 실패::$(tail -n 30 /tmp/gate3b.stderr.log | sed ':a;N;$!ba;s/\n/%0A/g')"
             exit "$RC"
           fi
 
