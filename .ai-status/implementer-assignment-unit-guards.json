@@ -1,0 +1,26 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "assignment-unit-guards",
+  "task": "관리자 교재 배정 쓰기 함수 3개(setAssignmentUnit/setPrimaryAssignment/setPrimaryTextbook)의 유령 유닛 재발 방지 가드 — PR #7(5c589a8)이 셀렉터 노출만 막고 남긴 저장 경로 갭",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-02T19:00:00Z",
+  "updated_at": "2026-09-02T19:44:58Z",
+  "files_owned": [
+    "src/utils/wordLibrary.js",
+    "scripts/testAssignmentUnitGuards.mjs"
+  ],
+  "files_read": [
+    "scripts/testAdminUnitEdit.mjs",
+    "scripts/testAssignmentGhostUnitRule.mjs",
+    "scripts/testGhostUnitFiltering.mjs",
+    "scripts/lib/studentHealthRules.mjs",
+    "scripts/buildWordLibBundle.mjs",
+    "src/components/admin/TextbookAssignmentPanel.jsx",
+    "package.json"
+  ],
+  "summary": "isSuspiciousUnit(!isLearnableUnit || BARE_UNIT_NAME 이름 매칭) 헬퍼를 추가하고 setAssignmentUnit(존재+학습가능+SCA.textbook_id 대비 unit.textbookId 일치 3중 검증, 위반 시 unit_not_found/unit_not_learnable/unit_textbook_mismatch throw, 쓰기 0)/setPrimaryAssignment/setPrimaryTextbook(저장된 current_unit_id를 존재 확인만 하던 것을 존재+학습가능 검증으로 강화, 위반 시 그 반/교재의 첫 학습 가능 유닛으로 결정론적 폴백, 폴백 대상도 없으면 no_learnable_unit throw로 함수 진입 극초반에 쓰기 0 보장, students.unit_name도 항상 함께 기록해 students.current_unit_id==primary SCA.current_unit_id==unit_name 3자 invariant 유지)에 가드를 적용했다. setStudentClass/setStudentsClassBulk의 이름 매칭 결과도 suspicious면 null 강등 대신 그 반의 첫 학습 가능 유닛으로 대체(throw 없음, 기존 non-fatal 계약 유지). 부수 발견: 클라이언트 units 캐시가 애초에 units.textbook_id 컬럼을 SELECT하지 않아(refreshWordLibrary) unit.textbookId가 항상 undefined였음 — fetchUnitsRows() 헬퍼로 컬럼 포함 조회 + 42703 폴백 재시도(fetchWordsRows와 동일 패턴) 추가, unitObj에 textbookId 필드 부여(순수 추가, 기존 소비자 무영향). scripts/testAssignmentUnitGuards.mjs(45단언) 신규 — testAdminUnitEdit.mjs 패턴 복제(그 파일은 무수정), FAIL-first 확인(git stash로 wordLibrary.js만 되돌려 isSuspiciousUnit is not a function 크래시로 사전 상태 FAIL 실측 후 재적용). TextbookAssignmentPanel.jsx는 이미 getLearnableClassUnits 사용 중임을 확인만 하고 무수정(그 컴포넌트의 두 쓰기 경로 setStudentUnit/setAssignmentUnit 중 어느 쪽도 '자동 교정' 폴백을 하지 않으므로 그런 안내문구 추가는 오히려 오도).",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 요청 — package.json/scripts/registry(runAdmin.mjs 등)는 동시 작업 중인 다른 에이전트 소유라 손대지 않았으므로, scripts/testAssignmentUnitGuards.mjs를 npm run verify:admin 등록부에 추가하는 것은 그 파일 소유 에이전트 또는 사람이 후속으로 처리 필요."
+}
