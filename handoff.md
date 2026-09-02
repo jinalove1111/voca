@@ -1,7 +1,65 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-02 (103차, Release Gate FAIL 대응 — 박민준·Cherry 유령
-유닛 착지 핫픽스(운영자 실행 완료), health FAIL 0 복귀, PR #7 Gate PASS.
-상세는 아래 103차 섹션)_
+_최종 갱신: 2026-09-02 (104차, Production Safety Harness 1단계 —
+prod:check(읽기 전용 invariant) + prod:hotfix(manifest 단일 원천
+preflight/apply/postflight/rollback + 승인 게이트) 신규 구축, 프로덕션
+WRITE 0. 상세는 아래 104차 섹션)_
+
+## 2026-09-02 (104차) — Production Safety Harness 1단계: prod:check(읽기 전용 invariant) + prod:hotfix(manifest 단일 원천 preflight/apply/postflight/rollback + 승인 게이트)
+
+- 목표: 운영자의 "SQL 복사 → SQL Editor 실행 → 결과 캡처 → 전달" 반복을
+  제거. 103차 핫픽스에서 VERIFY 와 WRITE precondition 이 별도 작성돼
+  불일치 가능했던 문제를 manifest 단일 원천으로 구조적으로 해결한다.
+- 커밋: `3bd9287` feat(prod-safety) prod:check(1단계 A), 다음 커밋(1단계
+  B) prod:hotfix. 기존 하네스 재사용 —
+  studentHealthRules(buildContext/evaluateStudent/isGhostUnit/
+  findGhostUnits), Release Gate, `tests/harness/registry.mjs`(admin 도메인
+  extra 2건 → `verify:all` 편입).
+- **prod:check**: `scripts/prodCheck.mjs`(+ `scripts/lib/prodDataLoader.mjs`,
+  `scripts/lib/prodInvariants.mjs`). invariant 9종: STUDENT_UNIT_ORPHAN/
+  SCA_UNIT_ORPHAN/STUDENT_GHOST_UNIT(FAIL), SCA_GHOST_UNIT/
+  UNIT_NAME_MISMATCH/PRIMARY_UNIT_MISMATCH/PRIMARY_TEXTBOOK_MISMATCH/
+  UNIT_WORDS_ABNORMAL/GHOST_UNIT_PRESENT(WARN). 옵션 `--json`/`--fixture`/
+  `--report-dir`/`--expect-ref`/`--require-env`. 보고서
+  `scripts/.tmp/prod-reports/<run-id>.prodcheck.json`(키 값 없음). 회귀
+  픽스처 `scripts/prod/fixtures/ghost-unit-landing-20260902.json`(익명
+  StudentA/StudentB, 실 UUID; 밑줄 이름은 health `LOGIN_FAIL` ilike
+  규칙에 걸려 제거). `testProdCheck` 39단언: before → STUDENT_GHOST_UNIT
+  FAIL, after → FAIL 0. 라이브 1회(anon 읽기): health PASS 27/WARN
+  10/FAIL 0 · invariants FAIL 0/WARN 50(SCA 유령 참조 ~10,
+  PRIMARY_UNIT_MISMATCH 다수 — Cherry 포함, UNIT_WORDS_ABNORMAL 5,
+  GHOST_UNIT_PRESENT 7).
+- **prod:hotfix**: `scripts/prodHotfix.mjs`(`runHotfix(options, deps)`),
+  `scripts/lib/hotfixManifest.mjs`(ALLOWLIST — students:
+  current_unit_id/unit_name/class_id, SCA: current_unit_id/is_primary/
+  textbook_id, update 만; `validate`/`buildPreflightPlan`/
+  `buildPostflightPlan`/`buildApplySql`/`buildRollbackSql`/
+  `staticSafetyScan`), `scripts/lib/sqlExecutor.mjs`(management-api 는
+  코드만 — 이번 단계 미호출·토큰 미보유 / fake / dry-run throw). 흐름:
+  project_ref 게이트(불일치 exit 2) → static scan → preflight(불일치
+  STOP) → 학습기록 baseline + students/SCA 전체 스냅샷 sha256 → 계획 +
+  `<runId>.apply.sql`/`<runId>.rollback.sql` 출력(토큰 없이도 SQL Editor
+  폴백 가능) → `--dry-run`/CI/토큰 없음 → READY TO APPLY STOP(DB WRITE
+  0) → TTY 필수 `APPLY <runId>` 입력(우회 플래그 없음) → apply →
+  postflight(값·must_not_change·baseline·무관 행 diff = 변경 id 집합) →
+  `health:students` → 실패 시 자동 rollback. 생성 SQL 의 WHERE 가드가
+  expect_before 전 컬럼을 포함함을 메인 세션이 실제 생성물로 확인(103차
+  수기 SQL 과 의미 동일). `testProdHotfix` 66단언(네트워크 0). 회귀
+  manifest `scripts/prod/manifests/ghost-unit-landing-20260902.json`
+  (UUID 만) — 라이브 dry-run 은 이미 적용 상태라 preflight-mismatch
+  STOP(fail-closed 실증). 운영 작업 디렉터리 `ops/hotfix/manifests` 는
+  gitignore.
+- 검증(메인 세션): `npm run build` PASS, `npm run verify:all` ALL
+  DOMAINS PASS, `npm run health:students` PASS 27/WARN 10/FAIL 0,
+  `npm run verify:prod-check` 39/39, `npm run verify:prod-hotfix` 66/66.
+  프로덕션 WRITE 0, push/deploy 0.
+- 남은 과제: ① Management API write 경로 실검증(운영자
+  `SUPABASE_ACCESS_TOKEN` 로컬 전용 등록 후 무해한 dry-run→apply
+  리허설 대상 필요) ② `prodDataLoader` ↔ `studentHealthCheck` 로더 통합
+  ③ `prod:check` 를 Release Gate/CI 에 편입할지 결정(현재 invariants
+  WARN 50 은 기존 데이터 부채) ④ PRIMARY_UNIT_MISMATCH 다수(Cherry 등)
+  정리 방침 ⑤ `setAssignmentUnit`/`setPrimaryTextbook`/
+  `setPrimaryAssignment` 가드 코드 과제(103차) ⑥ PR #7 merge 결정,
+  Phase 2b Step 2 재개.
 
 ## 2026-09-02 (103차) — Release Gate FAIL 대응: 박민준·Cherry 유령 유닛 착지 핫픽스(운영자 실행 완료, health FAIL 0 복귀, PR #7 Gate PASS)
 
