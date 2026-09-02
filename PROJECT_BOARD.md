@@ -43,6 +43,31 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
   로그인/PIN 4개 스크립트에서 XP 원장 1개 스크립트로 확장된 것뿐.
   상세: `handoff.md` 2026-07-19(3차).
 
+### [P0] PR #8 merge 결정 — 운영자 승인 대기 (2026-09-03, 105차)
+- 근거: `handoff.md` 2026-09-03(105차),
+  https://github.com/jinalove1111/voca/pull/8 (브랜치
+  `fix/pin-setup-and-unit-fallback`).
+- 내용: 야간 세션 커밋 다수(재발 방지 가드 4종 + Production Safety
+  Harness 강화 + WARN 10 분석 + 보안 마스킹 7건) 추가 후 재push 완료.
+  Release Gate 결과는 아침 보고서에서 확인 필요 — merge 는 운영자 승인
+  후에만.
+
+### [P1] `supabase functions deploy admin-content-write` 배포 대기 — class.delete 가드 반영 (2026-09-03, 105차)
+- 근거: `handoff.md` 2026-09-03(105차) 커밋 `2f63ff2`.
+- 내용: Edge Function `class.delete` 에 학습기록 fail-closed + force
+  옵션을 코드로 반영했으나 실제 배포는 운영자만 실행 가능(에이전트는
+  Supabase 대시보드/CLI 배포 권한 없음). 배포 전까지는 옛 무가드 버전이
+  라이브에서 계속 동작.
+
+### [P1] 유령 SCA 재배정 승인 1회 대기 — WARN 10 해소 (2026-09-03, 105차)
+- 근거: `handoff.md` 2026-09-03(105차) 커밋 `a9bcb65`,
+  `docs/audit/2026-09-03-warn10-readonly-analysis.md`.
+- 내용: `node scripts/prod/generateGhostScaManifest.mjs --dry-run-hotfix`
+  재실행 → 생성된 `<runId>.apply.sql` 을 SQL Editor 에 1회 붙여넣기
+  (또는 토큰 등록 후 `prod:hotfix` APPLY) → `npm run prod:check` 로
+  WARN 10 → 0 확인. 대상 11행(A조 5/B조 6), 라이브 dry-run
+  ready-to-apply 확인됨(DB WRITE 0).
+
 ---
 
 ## NEXT
@@ -747,3 +772,28 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
   `scripts/healthCheck.mjs` 신설 (`handoff.md` 2026-07-18 개발자 인프라)
 - 문서 체계 6종 신설(`PROJECT_GUIDE.md`/`ARCHITECTURE.md`/`DATABASE.md`/
   `DEVELOPER_GUIDE.md`/`TESTING.md` + `ROADMAP.md` append)
+- **2026-09-03(105차, 야간 자율 세션)** Production Safety Harness 강화 +
+  재발 방지 가드 — 103차가 남긴 재발 갭(`setAssignmentUnit`/
+  `setPrimaryTextbook`/`setPrimaryAssignment` 유령 유닛 무가드)을
+  `isSuspiciousUnit` + `unit_name` 동기화로 해소(`testAssignmentUnitGuards`
+  45단언), `hard_delete_student` 가드에 `reward_ledger`/
+  `entrance_test_results`/`xp_ledger` 카운트 추가(`testHardDeleteGuard`
+  22단언), Edge Function `class.delete` 학습기록 fail-closed + force
+  옵션(`testClassDeleteGuard` 18단언, **배포는 운영자 몫**:
+  `supabase functions deploy admin-content-write`), 반 삭제 2차 확인
+  모달(카운트 + 반 이름 재입력 + force). `prod:hotfix` 는 manifest
+  sha·변조 감지 + `APPLY <runId>` 정확 일치로 강화(`testProdHotfix`
+  148→157단언), `prod:check` 는 invariant 18종·마스킹 UX·synth
+  픽스처(`testProdCheck` 130단언)로 확장돼 CI Gate 3b(READ-ONLY)/Gate
+  4(WRITE-DISABLED 증명)에 편입(`testReleaseGateProdCheck` 39단언).
+  `generateGhostScaManifest` 신규 — 유령 SCA 재배정 manifest 라이브
+  자동 생성(A조 5/B조 6=11행, `testGenerateGhostScaManifest` 27단언),
+  라이브 dry-run ready-to-apply 확인(DB WRITE 0). 보안 High 1건(PUBLIC
+  저장소 CI 로그 학생 실명 마스킹 — `prodCheck`/`studentHealthCheck`
+  `--mask-names` + CI 강제, `testCiNameMasking` 32단언) + Low 2건
+  (`unlock_student_pin` UUID 검증 등) 수정. WARN 10 전수 분석 완료(전부
+  `ASSIGNMENT_GHOST_UNIT`, false positive 0, 즉시 수정 필요 0).
+  Production WRITE 0, PR merge 0. 근거: `handoff.md` 2026-09-03(105차),
+  `docs/production-safety-harness-runbook.md`,
+  `docs/audit/2026-09-03-warn10-readonly-analysis.md`. PR #8 merge/
+  Edge Function 배포/유령 SCA 재배정 승인은 아래 BLOCKED 카드 참고.

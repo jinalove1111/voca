@@ -1,0 +1,28 @@
+{
+  "agent_name": "security-reviewer",
+  "role": "야간 자율 작업 Track 10 - PIN/관리자 액션/훅스크립트 보안 감사",
+  "task_id": "track10-pin-hardening-audit-2026-09-03",
+  "task": "api/verify-student-pin.js, api/_pinAuth.js, api/student-pin-status.js, api/admin-pin-actions.js, supabase/functions/admin-content-write, scripts/prodHotfix.mjs 등 최근 2일 추가된 서버/하네스 코드 보안 검토",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-03T00:00:00+09:00",
+  "updated_at": "2026-09-03T01:00:00+09:00",
+  "files_owned": [],
+  "files_read": [
+    "api/_pinAuth.js",
+    "api/verify-student-pin.js",
+    "api/student-pin-status.js",
+    "api/admin-pin-actions.js",
+    "supabase/functions/admin-content-write/index.ts",
+    "scripts/prodHotfix.mjs",
+    "scripts/lib/hotfixManifest.mjs",
+    "scripts/lib/sqlExecutor.mjs",
+    "scripts/prodCheck.mjs",
+    ".github/workflows/release-gate.yml",
+    "DATABASE.md",
+    "src/utils/paulRankShared.js"
+  ],
+  "summary": "감사 완료. 신규 발견 High 1건: release-gate.yml Gate 3b(npm run prod:check --json)가 PUBLIC 저장소의 CI 로그(step stdout, 매 실행마다)에 학생 실명+health/invariant 상세(중복계정/유령유닛 등)를 마스킹 없이 출력(scripts/prodCheck.mjs의 --json 분기는 renderBucket/maskName을 전혀 타지 않음). Low 2건(admin-pin-actions.js unlock_student_pin UUID 미검증, redactSecrets 부분일치 한계). 나머지(authTokenHash 실패응답 미노출, STUDENT_AUTH_SESSION 기본OFF, PIN 4컬럼 GRANT 유지, checkAdminReauth 전액션 선행, class.delete force 게이트, Management API executor 도달불가 증명, ADMIN_PIN CI 미주입 등) 전부 PASS로 재확인, 신규 이슈 없음.",
+  "blocker": null,
+  "next_action": "implementer에게 위임: scripts/prodCheck.mjs --json 출력에 이름 마스킹 옵션 추가 또는 Gate 3b가 마스킹된 요약만 stdout에 남기도록 수정(High). admin-pin-actions.js unlock_student_pin에 UUID_RE 검증 추가(Low, 일관성)."
+}

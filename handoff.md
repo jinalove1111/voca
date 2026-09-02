@@ -1,8 +1,104 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-02 (104차, Production Safety Harness 1단계 —
-prod:check(읽기 전용 invariant) + prod:hotfix(manifest 단일 원천
-preflight/apply/postflight/rollback + 승인 게이트) 신규 구축, 프로덕션
-WRITE 0. 상세는 아래 104차 섹션)_
+_최종 갱신: 2026-09-03 (105차, 야간 자율 세션 — Production Safety
+Harness 강화(prod:check invariant 18종·prod:hotfix manifest 변조 감지 +
+유령 SCA 재배정 manifest 라이브 자동 생성) + 재발 방지 가드(배정 저장/
+primary 전환/hard_delete/class.delete) + 데이터 손실 정적 감사 + WARN 10
+전수 분석 + CI 통합(Gate 3b/4) + PUBLIC 저장소 학생 실명 마스킹 보안
+수정 7건. Production WRITE 0, PR merge 0. 상세는 아래 105차 섹션)_
+
+## 2026-09-03 (105차) — 야간 자율 세션: Production Safety Harness 강화 + 재발 방지 가드 + 데이터 손실 가드 + WARN 10 분석 + CI 통합 (Production WRITE 0, PR merge 0)
+
+- 제약 준수: Production DB WRITE 0, SQL 실행 0, 학생 데이터 변경 0, PR
+  merge 0, deploy 0, secret 출력 0. push 는 PR #8 브랜치
+  (`fix/pin-setup-and-unit-fallback`)만.
+- PR #8(https://github.com/jinalove1111/voca/pull/8): 초기 4커밋 Release
+  Gate PASS. 야간 커밋 추가 후 재push(결과는 아침 보고서에).
+- 커밋(모두 로컬 브랜치, 시간순):
+  - `d14e3c2` docs(audit) WARN 10 분석.
+  - `59b0150` admin 배정 저장·primary 전환 유령 가드
+    (`isSuspiciousUnit`, `setAssignmentUnit`/`setPrimaryAssignment`/
+    `setPrimaryTextbook`, `unit_name` 동기화, 유닛 캐시 `textbookId`
+    결함 발견·보강, `testAssignmentUnitGuards` 45단언) — 103차가 남긴
+    "재발 갭"(`setAssignmentUnit`/`setPrimaryTextbook`/
+    `setPrimaryAssignment` 미수정)을 이번에 해소.
+  - `633aae8` `hard_delete_student` 가드에 `reward_ledger`/
+    `entrance_test_results`/`xp_ledger` 카운트 반영
+    (`testHardDeleteGuard` 22단언).
+  - `2f63ff2` Edge Function `class.delete` 학습기록 fail-closed + force
+    옵션(`testClassDeleteGuard` 18단언, **배포는 운영자 몫**:
+    `supabase functions deploy admin-content-write`).
+  - `5b5e2a2` `prod:hotfix` 강화 — manifest sha·변조 감지, `APPLY <runId>`
+    정확 일치, allowlist 타입·null 허용·상한, destructive 이중화,
+    `redactSecrets`, `--env` 필수, `--rollback-of`, `generated_from`
+    (`testProdHotfix` 148단언).
+  - `83121a2` `prod:check` invariant 18종·UX(Critical/Needs review/Data
+    debt, 마스킹)·learning baseline·synth 픽스처(`testProdCheck`
+    130단언). `CLASS_ASSIGNMENT_CONTRADICTION` 은 `class_type='textbook'`
+    컨테이너 반 제외로 오탐 19→1 로 정정, `STUDENT_CLASS_IS_CONTAINER`
+    6건 신규 발견.
+  - `fbe940c` CI Gate 3b(`prod:check` READ-ONLY) + Gate 4(WRITE-DISABLED
+    증명, `testReleaseGateProdCheck` 39단언).
+  - `54ce313` 반 삭제 2차 확인 모달(카운트 + 반 이름 재입력 + force) +
+    읽기 self-heal 유령 전파 차단(`testClassDeleteConfirmWiring`
+    22단언, guards 54단언).
+  - `a9bcb65` `generateGhostScaManifest` — 유령 SCA 재배정 manifest 라이브
+    자동 생성(A조 5 / B조 6 = 11행). `v3_43` stale 값(Harry·이윤제
+    Unit3→Unit5)을 자동으로 최신화(`testGenerateGhostScaManifest`
+    27단언).
+  - `491b02c` docs runbook
+    (`docs/production-safety-harness-runbook.md` — `docs/ops` 는
+    gitignore).
+  - `a5c47ea` registry/package 6종 등록.
+  - `27d38f0` `prodHotfix` baseline 크래시 수정(`student_progress` 에
+    `id` 컬럼이 없던 버그, `testProdHotfix` 157단언) — 이후 라이브
+    dry-run **ready-to-apply, 예상 11행, DB WRITE 0**.
+  - `7c3102a`~`20838dc`(7건) 보안 High 수정: PUBLIC 저장소 CI 로그 학생
+    실명 마스킹(`prodCheck --json` 기본 마스킹 + CI 강제,
+    `studentHealthCheck --mask-names` + CI 자동, Gate 3b stdout tee
+    제거, `testCiNameMasking` 32단언) + `unlock_student_pin` UUID 검증
+    (Low).
+- 정적 감사(T4, 읽기 전용) — 학생 데이터 손실 경로 표: High 2건(반 삭제
+  CASCADE 무가드, `hard_delete` 가드 누락) 은 위 커밋으로 해결. Med
+  2건(`resetWordStatus` 후 다른 기기 자동 동기화가 백업 blob 되살림,
+  반 이동 레거시 분기 무캡처 delete — `_textbooks` 비어있는 특수 시점만)
+  은 코드 과제로 기록만 하고 이번엔 미수정. Low 다수(`syncGenRef`/
+  `mergeProgressRecords` 등 이미 방어됨, 확인만).
+- 보안 리뷰(T10): High 1(위 마스킹, 수정 완료) / Low 2(`unlock` UUID
+  검증 수정 완료, `redactSecrets` 부분문자열 한계는 기록만) / PIN·세션·
+  admin 게이트·Edge 가드·Gate 4 회귀 없음. 추가 기록:
+  `scripts/health/baseline.json` 이 채워지면 실명이 PUBLIC 저장소에
+  평문으로 들어갈 수 있음(현재 entries 0) — 후속 과제로 남김.
+- WARN 10 분석
+  (`docs/audit/2026-09-03-warn10-readonly-analysis.md`): 전부
+  `ASSIGNMENT_GHOST_UNIT`. `v3_43` A조 5/B조 6 매핑 완전, Harry·이윤제
+  목적지는 stale, 현다율 유령 `53e380c7` 에 실 `word_status` 1건(`v3_44`
+  HOLD 정합), 유령 7개 전부 헤더 잔재(false positive 0). 즉시 수정 필요
+  0건, 운영자 결정 필요 4건(황다은·Luke·현다율·Harry/이윤제 목적지),
+  정보성 5건.
+- 최종 검증(메인 세션): `npm run build` PASS, `npm run verify:all` ALL
+  DOMAINS PASS, `npm run health:students` PASS 27/WARN 10/FAIL 0,
+  `npm run prod:check` health 27/10/0 · invariants FAIL 0 / WARN 57
+  (`SCA_GHOST_UNIT` 11, `PRIMARY_UNIT_MISMATCH` 27,
+  `UNIT_WORDS_ABNORMAL` 5, `GHOST_UNIT_PRESENT` 7,
+  `STUDENT_CLASS_IS_CONTAINER` 6, `CONTRADICTION` 1). Safe to continue:
+  YES.
+- BLOCKED_FOR_OPERATOR(내일 확인/승인 필요):
+  1. PR #8 merge 결정.
+  2. `supabase functions deploy admin-content-write`(`class.delete` 가드
+     반영).
+  3. 유령 SCA 재배정 승인 1회: `node scripts/prod/generateGhostScaManifest.mjs
+     --dry-run-hotfix` 재실행 → 생성된 `<runId>.apply.sql` 을 SQL Editor
+     에 1회 붙여넣기(또는 토큰 등록 후 APPLY) → `npm run prod:check` 로
+     WARN 10 → 0 확인.
+  4. Vercel `STUDENT_AUTH_SESSION=1`(Phase 2b Step 2-c) 및 0-b 서비스 키
+     형식 회신.
+  5. `v3_44`(유령 유닛 삭제, `53e380c7` HOLD) 결정.
+  6. `PRIMARY_UNIT_MISMATCH` 27건·`STUDENT_CLASS_IS_CONTAINER` 6건 정리
+     방침.
+- 코드 과제(기록만, 이번 세션 미착수): `resetWordStatus` 재동기화 경합,
+  반 이동 레거시 분기 캡처, `redactSecrets` 강화, `baseline.json` 실명
+  노출 방지, `prodDataLoader` ↔ `studentHealthCheck` 로더 통합,
+  `registry.mjs` note 단언 수 갱신(`testProdHotfix` 66→157).
 
 ## 2026-09-02 (104차) — Production Safety Harness 1단계: prod:check(읽기 전용 invariant) + prod:hotfix(manifest 단일 원천 preflight/apply/postflight/rollback + 승인 게이트)
 
