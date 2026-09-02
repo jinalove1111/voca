@@ -1,7 +1,66 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-02 (102차, students 잠금 Phase 2b Step 1 — 서버 측 Supabase
-Auth 세션 발급(플래그 OFF) + 관리자 학생 액션 7개 + 반별 최소 로스터 모드,
-코드만·배포·DB 무변경. 상세는 아래 102차 섹션)_
+_최종 갱신: 2026-09-02 (103차, Release Gate FAIL 대응 — 박민준·Cherry 유령
+유닛 착지 핫픽스(운영자 실행 완료), health FAIL 0 복귀, PR #7 Gate PASS.
+상세는 아래 103차 섹션)_
+
+## 2026-09-02 (103차) — Release Gate FAIL 대응: 박민준·Cherry 유령 유닛 착지 핫픽스(운영자 실행 완료, health FAIL 0 복귀, PR #7 Gate PASS)
+
+- 계기: PR #7(브랜치 `fix/pin-setup-and-unit-fallback` → `main`, 커밋 11개:
+  야간 유령 유닛 재발 방지 6 + v3_45 Phase 1 2 + Phase 2b Step 1 2 + docs
+  1) Release Gate 가 Gate 3(학생 health)에서 FAIL 1(박민준 GHOST_UNIT) /
+  WARN 11 로 차단. Gate 1·2 는 PASS.
+- 원인(READ-ONLY 실측): 2026-09-02 19:50 KST 옛 배포(main `396aa53`)
+  관리자 교재 배정 UI 로 박민준(`2c6845fc`)에게 "2학년 천재소영순"
+  (`1ba6ec3d`)이 primary 배정되며 유령 유닛 "Unit"(`113ee184`, 단어
+  1개)에 착지 — SCA `f9a14e8a` 와 `students.current_unit_id` 가 유령,
+  `unit_name` 은 옛 값 `'Unit5'` 잔존. 22:20 KST Cherry(`bf05032a`) 도
+  같은 교재 non-primary SCA `26708243` 이 유령. 오늘 생성된 SCA 5건 중
+  2건이 유령 착지. 코드 경로: 셀렉터가 `getClassUnits`(무필터) 로 유령
+  노출 + naturalCompare 가 "Unit" 을 맨 앞에 정렬 → `setAssignmentUnit`
+  무검증 저장 → primary 승격 시 `setPrimaryTextbook` 이 `writeStudentUnit`
+  우회로 `current_unit_id` 만 UPDATE(`unit_name` 미동기화). PR #7 의
+  `5c589a8` 은 셀렉터 노출만 막고,
+  `setAssignmentUnit`/`setPrimaryTextbook`/`setPrimaryAssignment`
+  (`wordLibrary.js` 2623/2841-2858/2737)는 미수정 — **재발 갭, 후속 코드
+  과제**.
+- health 규칙 확인: GHOST_UNIT FAIL 은 `students.current_unit_id` 기준,
+  ASSIGNMENT_GHOST_UNIT WARN 은 SCA 행 기준
+  (`scripts/lib/studentHealthRules.mjs:336-391`).
+- 목적지 결정: 데이터로는 복원 불가(두 학생 모두 새 교재 학습기록 0).
+  박민준 → Unit5(`4ce41359`, 반 9명 중 8명이 Unit5, 운영자 확정), Cherry
+  → Unit1(`6f3788d2`, 첫 학습 가능 유닛, 반 cohort 일치). Cherry
+  students 행(중1 동아 Unit2 `28233ded`)은 무변경.
+- 핫픽스 SQL 3종(실명 포함이라 `v3_41` 관례로 untracked 유지):
+  `supabase_v3_hotfix_20260902_ghost_unit_landing.sql`(begin → STEP0
+  사전검증 fail-first → UPDATE 3행 각 row_count=1·합계 3 → STEP2
+  사후검증 → commit) / `_ROLLBACK.sql`(역방향, `unit_name` 은 실측 변경
+  전 값 `'Unit5'` 유지 — 구현 에이전트가 `'Unit'` 으로 임의 작성한 것을
+  정정) / `_VERIFY.sql`(SELECT 5종). 헤더 주석 21행 `unit_name: 'Unit' ->
+  'Unit5'` 는 오기(실제 변경 전 값도 `'Unit5'`, executable 조건은
+  정확) — 운영자 지시로 파일 무수정, 여기 기록으로 갈음.
+- 실행 경과: 운영자 사전 VERIFY ①~⑤ 전부 기대값 일치 → 본 SQL 실행 →
+  두 번째 실행에서 `ABORT STEP0-①` 오류 보고. 조사 결과 첫 실행이 이미
+  COMMIT 되어 DB 가 목표 상태였고(students/SCA 목표값, 유령 참조
+  students 0 / SCA 3 / 대상 0, 학습기록 카운트 박민준 0/1/2/2/0/0·Cherry
+  2/1/27/24/10/6 무변경, `student_progress.updated_at` 불변, 유령 유닛
+  1행 무접촉), 두 번째 실행은 STEP0-① 이 "이미 변경됨" 을 감지해
+  fail-closed 로 중단(begin 직후, 쓰기 0). 리터럴 바이트 대조(NFC,
+  BOM/CRLF 없음)로 조건 자체 결함 없음 확인. 추가 SQL·ROLLBACK 불필요.
+- 검증: `npm run health:students` PASS 27 / WARN 10 / FAIL 0(어젯밤
+  baseline 복귀, 박민준·Cherry PASS). Release Gate 재실행(run
+  33654431860) → Gate 1·2·3 PASS, Deploy Ready pass. PR #7 merge 는
+  미실행(운영자 승인 대기).
+- 남은 과제: ① PR #7 merge 결정 ②
+  `setAssignmentUnit`/`setPrimaryTextbook`/`setPrimaryAssignment`
+  isLearnableUnit 가드 + `unit_name` 동기화(FAIL-first, PR #7 추가 커밋
+  또는 별도 PR) ③ 기존 WARN 10(유령 참조 SCA 3행 포함, `v3_43` 범위)
+  ④ Cherry primary SCA(Unit 7) vs `students.current_unit_id`(Unit2)
+  기존 불일치(health PASS, 별도 검토) ⑤ Phase 2b Step 2 재개(signup OFF
+  완료, Vercel 서비스 키 형식 0-b 미회신) ⑥ Production Safety Harness
+  설계(운영자 지정 별도 작업).
+- 이번 세션 준수: 에이전트 DB WRITE 0 / SQL 실행 0(운영자 실행) / 학생
+  데이터 변경 0 / 코드 수정 0 / push 0(이전 턴 브랜치 push 1회는 102차
+  기록) / deploy 0.
 
 ## 2026-09-02 (102차) — students 잠금 Phase 2b Step 1: 서버 측 Supabase Auth 세션 발급(플래그 OFF) + 관리자 학생 액션 7개 + 반별 최소 로스터 모드 (코드만, 배포·DB 무변경)
 
