@@ -75,7 +75,14 @@ function adminContentWriteEndpoint() {
 // export: curriculumApi.js(units.textbook_id 메타 저장, 2026-08-02 v3.11
 // 락다운 부작용 수정)도 이 파일과 동일한 admin-content-write 클라이언트를
 // 재사용한다 — fetch/에러 계약을 다시 구현하면 드리프트가 생기므로 재사용.
-export async function callAdminContentWrite(action, payload, adminPin) {
+// 2026-09-03 Track 6(야간 자율 작업) 작업 1 — 4번째 인자 options는 완전히
+// 옵셔널(기존 3-인자 호출부 전부 그대로 동작, 하위호환 100%). 그중
+// passthroughReasons(문자열 배열)는 "ok:false인데 이 reason이면 throw 대신
+// body 자체를 반환"을 지정한다 — 지금은 deleteClass가 has_learning_data
+// 사유 하나만 이렇게 특별 취급한다(admin-content-write class.delete의
+// "학습기록 있으면 차단" 응답, § handleClassDelete 헤더 주석). 다른 모든
+// 호출부(options 미전달)는 기존과 완전히 동일하게 ok:false를 항상 throw한다.
+export async function callAdminContentWrite(action, payload, adminPin, options = {}) {
   const endpoint = adminContentWriteEndpoint()
   if (!endpoint) throw new Error('관리자 쓰기 연결 정보 없음(VITE_SUPABASE_URL 미설정)')
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -97,6 +104,9 @@ export async function callAdminContentWrite(action, payload, adminPin) {
   if (!res.ok || !body || body.ok === false) {
     if (body?.reason === 'not_authorized') {
       throw new Error('관리자 인증이 만료됐거나 서버에 전달되지 않았어요. 관리자 화면을 새로고침 후 다시 로그인해주세요.')
+    }
+    if (body?.reason && Array.isArray(options.passthroughReasons) && options.passthroughReasons.includes(body.reason)) {
+      return body
     }
     throw new Error(body?.error || `관리자 쓰기 서비스 응답 실패(HTTP ${res.status})`)
   }
@@ -1645,11 +1655,27 @@ export async function deleteClassUnit(className, unitName, adminPin) {
 
 // 2026-07-24 보안 락다운 — adminPin 있으면 admin-content-write(class.delete),
 // 없으면 레거시 anon delete(§ callAdminContentWrite 헤더 주석).
-export async function deleteClass(className, adminPin) {
+// 2026-09-03 Track 6 작업 1 — 학습기록(단어 학습/입실시험 결과/교재 배정/
+// 철자 검수) 존재 시 admin-content-write가 { ok:false,
+// reason:'has_learning_data', counts } (HTTP 200)로 차단한다(§
+// handleClassDelete 헤더 주석). 이 함수는 그 응답을 throw로 흘리지 않고
+// { blocked:true, counts }로 반환해 AdminScreen이 2차 확인 모달을 띄울 수
+// 있게 한다 — opts.force===true로 다시 호출하면 payload.force가 실려
+// 나가 서버가 삭제를 강행한다. 그 외 실패 사유(예: not_authorized, 일반
+// 에러)는 기존과 동일하게 throw한다. 정상 성공 경로(ok:true)의 반환값은
+// 이 변경 전과 동일하게 undefined(호출부가 값을 읽지 않음).
+export async function deleteClass(className, adminPin, opts = {}) {
   const cls = _cache[className]
   if (!cls) return
   if (adminPin) {
-    await callAdminContentWrite('class.delete', { classId: cls.id }, adminPin)
+    const force = opts.force === true
+    const result = await callAdminContentWrite(
+      'class.delete', { classId: cls.id, force }, adminPin,
+      { passthroughReasons: ['has_learning_data'] },
+    )
+    if (result && result.ok === false && result.reason === 'has_learning_data') {
+      return { blocked: true, counts: result.counts || {} }
+    }
   } else {
     const { error } = await supabase.from('classes').delete().eq('id', cls.id)
     if (error) throw error
@@ -2532,10 +2558,32 @@ export async function getStudentClassAssignments(studentId) {
           // 쓰지 않는다. 확신이 없으면 NULL로 두면 setPrimaryAssignment의
           // "단어 있는 첫 유닛" 확정 로직이 전환 시점에 올바르게 채운다.
           const clsName = getClassNameById(live.classId)
-          const strictUnitId = (live.unitId != null &&
-            (_cache[clsName]?.units || []).some((u) => u.id === live.unitId))
-            ? live.unitId : null
-          maintainPrimaryAssignmentForClassChange(studentId, live.classId, strictUnitId)
+          const candidateUnit = (_cache[clsName]?.units || []).find((u) => u.id === live.unitId)
+          // 2026-09-03(T1 잔여 갭, 재발 방지) — "그 반 소속인지"만 확인하던
+          // 기존 검사는 candidate가 유령 유닛(BARE_UNIT_NAME/단어<2)이어도
+          // 통과시켜 그대로 DB에 다시 심었다(재발 지점 — assignment 쓰기
+          // 함수 3종의 가드를 우회하는 유일한 경로였다). 유령이면 채택하지
+          // 않고 그 반의 첫 학습 가능 유닛으로 대체하며, 대체 대상도 없으면
+          // (그 반에 학습 가능 유닛이 0개) self-heal 자체를 건너뛴다 — 이
+          // 경로는 non-fatal 읽기이므로 throw하지 않고 console.warn만 남긴다.
+          let strictUnitId = null
+          let skipSelfHeal = false
+          if (live.unitId != null && candidateUnit) {
+            if (!isSuspiciousUnit(candidateUnit)) {
+              strictUnitId = live.unitId
+            } else {
+              const fallback = getLearnableClassUnits(clsName)[0]
+              if (fallback) {
+                strictUnitId = fallback.id
+              } else {
+                skipSelfHeal = true
+                console.warn('[wordLibrary] getStudentClassAssignments self-heal 건너뜀(유령 유닛뿐, 대체할 학습 가능 유닛 없음):', { studentId, classId: live.classId, className: clsName })
+              }
+            }
+          }
+          if (!skipSelfHeal) {
+            maintainPrimaryAssignmentForClassChange(studentId, live.classId, strictUnitId)
+          }
         }
         // 유닛 보정 — students.current_unit_id는 두 모드 모두 권위 값.
         const resolvedUnitId = live.unitId ?? getStudentUnitId(studentId)

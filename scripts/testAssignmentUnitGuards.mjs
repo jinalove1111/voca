@@ -261,6 +261,99 @@ console.log('\n=== 4. 회귀 — 유령 유닛 행 자체는 삭제되지 않는
   check('유령 유닛(G) 행은 DB(가짜)에 그대로 존재(삭제 안 함)', fake.__db.units.some((u) => u.id === U.ghost))
 }
 
+// 2026-09-03 Track 6(야간 자율 작업) 작업 2 — T1 잔여 갭. getStudentClassAssignments
+// 의 읽기 시 self-heal(§ wordLibrary.js maintainPrimaryAssignmentForClassChange
+// 호출부 헤더 주석)이 live.unitId를 그대로 새 반의 current_unit_id로 써버리면,
+// 그 값이 유령 유닛이어도 "그 반 소속"이라는 이유만으로 채택돼 DB에
+// 유령 유닛이 다시 심긴다(재발 지점) — 이 섹션은 legacy(비교재) 모드에서
+// primary SCA 행의 class_id가 students.class_id와 어긋난(반 이동 드리프트)
+// 케이스를 재현해, self-heal이 유령을 전파하지 않고 첫 학습 가능 유닛으로
+// 대체(또는 대체 대상도 없으면 self-heal 자체를 건너뜀 — 쓰기 0, throw 없음)
+// 하는지 검증한다. 위 1~4번 픽스처는 전부 교재 모드(textbooks 테이블에
+// 행이 있음 → _textbookMode=true)라 이 self-heal 분기(!_textbookMode
+// 전용)를 트리거하지 않으므로, 이 섹션만 textbooks가 0개인 별도 픽스처로
+// 리셋한다(다른 섹션에 영향 없음 — 매 섹션이 boot()으로 완전히 새로 리셋).
+console.log('\n=== 5. getStudentClassAssignments 읽기 self-heal — 유령 유닛 비전파(T1 잔여 갭) ===')
+{
+  const LEGACY_OLD = 'cls-legacy-old', LEGACY_NEW = 'cls-legacy-new', LEGACY_NEW_EMPTY = 'cls-legacy-empty'
+  const LU = { ghost: 'u-legacy-ghost', learnable: 'u-legacy-l1', ghostOnly: 'u-legacy-ghost-only' }
+  const E = 'stu-e', F = 'stu-f', G2 = 'stu-g2'
+  const legacyDataset = () => ({
+    classes: [
+      { id: LEGACY_OLD, name: '레거시이전반', class_type: 'regular', spelling_direction: 'kr2en' },
+      { id: LEGACY_NEW, name: '레거시새반', class_type: 'regular', spelling_direction: 'kr2en' },
+      { id: LEGACY_NEW_EMPTY, name: '레거시학습가능0반', class_type: 'regular', spelling_direction: 'kr2en' },
+    ],
+    textbooks: [], class_textbooks: [], // 비교재 모드 강제 — _textbookMode=false
+    units: [
+      { id: LU.ghost, class_id: LEGACY_NEW, textbook_id: null, name: 'Unit', position: 0 }, // 유령(1단어, 번호 없는 이름)
+      { id: LU.learnable, class_id: LEGACY_NEW, textbook_id: null, name: 'Unit1', position: 0 },
+      { id: LU.ghostOnly, class_id: LEGACY_NEW_EMPTY, textbook_id: null, name: 'Unit', position: 0 }, // 유령뿐인 반
+    ],
+    words: [
+      { id: 'lgw', unit_id: LU.ghost, word: 'No.', meaning: '어휘·어구', position: 1 },
+      ...words(LU.learnable, 40, 'leg'),
+      { id: 'lgw2', unit_id: LU.ghostOnly, word: 'No.', meaning: '어휘·어구', position: 1 },
+    ],
+    students: [
+      // E: live.unitId가 정상(학습 가능) 유닛 → 기존과 동일하게 그대로 전파.
+      { id: E, name: 'E학생', class_id: LEGACY_NEW, unit_name: 'Unit1', current_unit_id: LU.learnable },
+      // F: live.unitId가 유령 → 첫 학습 가능 유닛(LU.learnable)으로 대체돼야 함.
+      { id: F, name: 'F학생', class_id: LEGACY_NEW, unit_name: 'Unit', current_unit_id: LU.ghost },
+      // G2: live.unitId가 유령이고 그 반에 학습 가능 유닛이 0개 → self-heal 스킵(쓰기 0).
+      { id: G2, name: 'G2학생', class_id: LEGACY_NEW_EMPTY, unit_name: 'Unit', current_unit_id: LU.ghostOnly },
+    ],
+    student_class_assignments: [
+      // primary SCA 행이 전부 "이전 반"(LEGACY_OLD)을 가리켜, students.class_id
+      // (LEGACY_NEW/LEGACY_NEW_EMPTY)와 불일치 — self-heal 트리거 조건.
+      { id: 'sca-e', student_id: E, class_id: LEGACY_OLD, textbook_id: null, current_unit_id: null, is_primary: true },
+      { id: 'sca-f', student_id: F, class_id: LEGACY_OLD, textbook_id: null, current_unit_id: null, is_primary: true },
+      { id: 'sca-g2', student_id: G2, class_id: LEGACY_OLD, textbook_id: null, current_unit_id: null, is_primary: true },
+    ],
+  })
+  async function bootLegacy() {
+    fake.__reset(legacyDataset())
+    await lib.refreshWordLibrary(); await lib.refreshStudents(); await lib.refreshClassSettings(); await lib.refreshTextbooks()
+    lib.invalidateStudentAssignmentsCache?.()
+    fake.__log.length = 0
+  }
+  // maintainPrimaryAssignmentForClassChange는 self-heal 호출부에서 await 없이
+  // fire-and-forget으로 실행된다(§ wordLibrary.js 호출부 "non-fatal" 주석) —
+  // 가짜 supabase의 다단계 update/insert 체인이 전부 settle할 시간을 준다.
+  const flush = () => new Promise((r) => setTimeout(r, 0))
+
+  await bootLegacy()
+  const beforeE = await lib.getStudentClassAssignments(E)
+  await flush()
+  const primaryEAfter = fake.__db.student_class_assignments.find((r) => r.student_id === E && r.is_primary)
+  check('5a. 정상 유닛(E) self-heal 후 primary SCA가 새 반(LEGACY_NEW)으로 이동',
+    primaryEAfter?.class_id === LEGACY_NEW, JSON.stringify(primaryEAfter))
+  check('5a. 정상 유닛(E) self-heal이 유닛 id를 그대로 전파(기존과 동일 payload, 회귀 가드)',
+    primaryEAfter?.current_unit_id === LU.learnable, JSON.stringify(primaryEAfter))
+  check('5a. 읽기 함수 자체는 throw 없이 배열 반환', Array.isArray(beforeE))
+
+  await bootLegacy()
+  await lib.getStudentClassAssignments(F)
+  await flush()
+  const primaryFAfter = fake.__db.student_class_assignments.find((r) => r.student_id === F && r.is_primary)
+  check('5b. 유령 유닛(F, LU.ghost) self-heal은 유령을 전파하지 않음(current_unit_id !== ghost)',
+    primaryFAfter?.current_unit_id !== LU.ghost, JSON.stringify(primaryFAfter))
+  check('5b. 유령 유닛(F) self-heal이 대신 첫 학습 가능 유닛(LU.learnable)을 채택',
+    primaryFAfter?.current_unit_id === LU.learnable, JSON.stringify(primaryFAfter))
+  check('5b. 유령 유닛(F) self-heal 후 primary SCA가 새 반(LEGACY_NEW)으로는 이동함(반 복구 자체는 여전히 수행)',
+    primaryFAfter?.class_id === LEGACY_NEW, JSON.stringify(primaryFAfter))
+
+  await bootLegacy()
+  const rG2 = await (async () => { try { return { err: null, v: await lib.getStudentClassAssignments(G2) } } catch (e) { return { err: e, v: undefined } } })()
+  await flush()
+  check('5c. 학습 가능 유닛 0개 반(G2) — 읽기 함수는 throw하지 않음(non-fatal 읽기 경로)', rG2.err === null, rG2.err?.message)
+  const primaryG2After = fake.__db.student_class_assignments.find((r) => r.student_id === G2 && r.is_primary)
+  check('5c. 대체 대상이 없으면 self-heal 자체를 건너뜀 — primary SCA가 여전히 이전 반(LEGACY_OLD)',
+    primaryG2After?.class_id === LEGACY_OLD, JSON.stringify(primaryG2After))
+  check('5c. 대체 대상이 없으면 self-heal이 건드리지 않아 유닛 값도 원래 그대로(null)',
+    primaryG2After?.current_unit_id === null, JSON.stringify(primaryG2After))
+}
+
 console.log('\n' + '='.repeat(60))
 console.log(`총 단언 ${asserted}개 중 실패 ${failures}개`)
 if (failures > 0) { console.log('FAILED'); process.exit(1) }
