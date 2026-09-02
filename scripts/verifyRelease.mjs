@@ -90,6 +90,17 @@ if (SKIP_VERIFY) {
 runGate('health', 'Gate 3 — Student Health Check (학생별 silent regression)', () => {
   // --require-env: 자격증명이 없으면 조용히 SKIP 하지 않고 실패한다.
   // "검증 못 함"이 "통과"로 둔갑하는 것이 게이트의 가장 위험한 실패 모드다.
+  //
+  // 2026-09-03 보안수정(High) — 아래 spawnSync 는 env 를 커스텀하지 않으므로
+  // Node 기본값대로 process.env 를 그대로 물려준다. GitHub Actions 는 모든
+  // 스텝에 CI=true/GITHUB_ACTIONS=true 를 자동 주입하므로, studentHealthCheck.
+  // mjs 는 --mask-names 를 여기서 명시로 넘기지 않아도 스스로 CI 를 감지해
+  // JSON students[].name 을 마스킹한다(scripts/studentHealthCheck.mjs 의
+  // IS_CI/MASK_NAMES 참고). 아래 console.log(k.name)/console.log(r.name) 등
+  // (파일 하단 diffAgainstBaseline 결과 출력)이 그 마스킹된 값을 그대로
+  // 받아 출력하므로, 저장소가 PUBLIC 이라도 학생 실명이 이 게이트의
+  // GitHub Actions 로그에 남지 않는다 — 로컬(비 CI) 실행은 기존처럼 원본을
+  // 보여준다(운영자 편의, 로컬 로그는 비공개).
   const res = spawnSync(process.execPath,
     [path.join(ROOT, 'scripts', 'studentHealthCheck.mjs'), '--json', '--require-env'],
     { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
