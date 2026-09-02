@@ -9,6 +9,13 @@
 //     show the PIN creation form).
 //   - AdminScreen.jsx's student roster, to show a 미설정/설정됨/잠김 badge
 //     per student without ever fetching pin_hash into the client.
+//
+// 반별 최소 로스터 모드 — PIN 미설정·허용 학생만, Phase 2b Step 1
+// (2026-09-02): { className } 로 호출하면 그 반에서 pin_hash가 아직 없고
+// (IS NULL) 관리자가 설정을 허용한(pin_setup_allowed=true) 학생만 최소
+// 정보(id,name)로 돌려준다. 반이 존재하지 않으면 빈 배열(존재 여부 노출
+// 최소화), 이름이 중복되면 400으로 명시 거부한다. pin_* 컬럼은 이 모드
+// 응답에도 절대 실리지 않는다.
 import { createClient } from '@supabase/supabase-js'
 import { supabaseAdminUrl, supabaseAdminKey } from './_pinAuth.js'
 
@@ -27,7 +34,59 @@ export default async function handler(req, res) {
     return
   }
 
-  const { studentIds } = req.body || {}
+  const { studentIds, className } = req.body || {}
+  const hasStudentIds = studentIds !== undefined
+  const hasClassName = className !== undefined
+  if (hasStudentIds && hasClassName) {
+    res.status(400).json({ error: 'invalid_request' })
+    return
+  }
+
+  if (hasClassName) {
+    const trimmedClassName = typeof className === 'string' ? className.trim() : ''
+    if (!trimmedClassName || trimmedClassName.length > 100) {
+      res.status(400).json({ error: 'invalid_request' })
+      return
+    }
+    const supabase = createClient(url, key)
+    const { data: classRows, error: classErr } = await supabase
+      .from('classes')
+      .select('id')
+      .eq('name', trimmedClassName)
+      .limit(2)
+    if (classErr) {
+      res.status(500).json({ error: classErr.message })
+      return
+    }
+    if (!classRows || classRows.length === 0) {
+      // 반이 없다는 사실 자체를 굳이 구별해 알려주지 않는다(존재 여부
+      // 노출 최소화) — 그냥 빈 로스터로 응답한다.
+      res.status(200).json({ results: [], roster: [] })
+      return
+    }
+    if (classRows.length >= 2) {
+      res.status(400).json({ error: 'ambiguous_class' })
+      return
+    }
+    const classId = classRows[0].id
+    const { data: studentRows, error: studentErr } = await supabase
+      .from('students')
+      .select('id,name')
+      .eq('class_id', classId)
+      .is('pin_hash', null)
+      .eq('pin_setup_allowed', true)
+      .order('name')
+    if (studentErr) {
+      res.status(500).json({ error: studentErr.message })
+      return
+    }
+    const roster = (studentRows || [])
+      .filter((s) => typeof s.name === 'string' && !s.name.includes('__INACTIVE__') && !s.name.startsWith('QA_'))
+      .map((s) => ({ id: s.id, name: s.name }))
+    res.status(200).json({ roster })
+    return
+  }
+
   if (!Array.isArray(studentIds) || studentIds.length === 0) {
     res.status(400).json({ error: 'studentIds (non-empty array) is required' })
     return

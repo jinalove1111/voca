@@ -1,11 +1,91 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시스템
-전체(이미지/예문/memory tip/distractor/음성/저장/캐시/재생성) 8축 재검증
-지시를 수행 — 검증 과정에서 실버그 2건 발견·수정: ①AI 생성 무저장 침묵
-(패널이 서버 응답을 버리고 뭉뚱그린 배너만 표시, `f19ed56`) ②학생 삭제
-무반응 + 관리자 캐시 1000행 잘림 P0(`removeStudent()` no-op +
-`refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
-틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
+_최종 갱신: 2026-09-02 (102차, students 잠금 Phase 2b Step 1 — 서버 측 Supabase
+Auth 세션 발급(플래그 OFF) + 관리자 학생 액션 7개 + 반별 최소 로스터 모드,
+코드만·배포·DB 무변경. 상세는 아래 102차 섹션)_
+
+## 2026-09-02 (102차) — students 잠금 Phase 2b Step 1: 서버 측 Supabase Auth 세션 발급(플래그 OFF) + 관리자 학생 액션 7개 + 반별 최소 로스터 모드 (코드만, 배포·DB 무변경)
+
+- 배경: Phase 2b 목표 = anon 으로 students 484행 전체 조회되는 구조 차단 +
+  로그인/PIN/학습/관리자 유지. 설계 결정: 서버가 HS256 커스텀 JWT 를
+  만들지 않고(레거시 secret 의존 배제 — 대시보드 실측: Current key ECC
+  P-256, Legacy HS256 은 검증 전용 잔존), PIN 검증 성공 시 service_role
+  로 학생용 Supabase Auth 사용자(합성 이메일
+  `<students.id>@students.invalid`, `app_metadata.student_id`)를 보장하고
+  `auth.admin.generateLink(magiclink)` 의 hashed_token 을 클라이언트에
+  넘겨 `verifyOtp` 로 정식 세션을 받는 구조. Phase C 에서 RLS 정책은
+  `app_metadata.student_id` 기준.
+- Auth 설정 읽기 전용 확인(`auth/v1/settings`): email provider ON,
+  anonymous sign-ins OFF(운영자 대시보드 확인 완료), **"Allow new users
+  to sign up" 은 아직 ON(`disable_signup=false`) — Step 2 배포 전
+  운영자가 OFF 로 변경해야 함(STOP 조건)**.
+- Step 1-A(`api/_pinAuth.js`, `api/verify-student-pin.js`,
+  `api/student-pin-status.js`, 신규 `scripts/testStudentsRlsPhase2b.mjs`):
+  `STUDENT_AUTH_SESSION` 환경변수('1'/'true')가 켜져 있고
+  `SUPABASE_SERVICE_ROLE_KEY` 가 있을 때만 로그인 성공 응답에
+  `authTokenHash` 추가, 어떤 실패도 로그인을 막지 않음(fail-open,
+  console.warn). 플래그 off(기본) 시 응답 byte-identical.
+  `checkAdminReauth` 를 timingSafeEqual 로 교체(응답 동일).
+  `student-pin-status` 에 `{ className }` 모드: pin_hash null &
+  pin_setup_allowed true 학생의 id,name 만(__INACTIVE__/QA_ 제외),
+  미존재 반 빈 배열, 중복 반 400. FAIL-first: 구현 전 25 FAIL 실측 →
+  87/87 PASS. 라이브 기준선(읽기 전용): anon HEAD students 206/484 =
+  Phase C 전 열림(예상).
+- Step 1-B(`api/admin-pin-actions.js`, 신규
+  `scripts/testAdminStudentActions.mjs`): ALLOWED_ACTIONS 에
+  `list_students`/`set_student_class`/`set_student_unit`/
+  `set_students_class_bulk`/`set_student_house`/`set_primary_assignment`/
+  `set_primary_textbook` 추가(wordLibrary.js 의 selectAllStudents/
+  setStudentClass/writeStudentUnit/setStudentsClassBulk/setStudentHouse/
+  setPrimaryAssignment/setPrimaryTextbook 서버 이식, SCA 부수효과 포함,
+  pin_ 컬럼 무접촉). 클라이언트 캐시 의존 탐색(반 이름→id, 유닛 재검색,
+  isLearnableUnit)은 이식하지 않고 호출부가 해석한 id 를 payload 로
+  받음 — 다음 Step 에서 클라이언트/서버 어디에 둘지 결정 필요. 레거시
+  current_unit_id 없는 학생의 진도 캡처 이름 폴백은 생략. 인증 실패는
+  기존 계약(200 + ok:false not_authorized) 유지. FAIL-first: 구현 전 43
+  FAIL → 85/85 PASS. 새 api 파일 0(12/12 유지), 신규 패키지 0.
+- 검증(메인 세션 재실행): `npm run build` PASS, testStudentsRlsPhase2b
+  87/87, testAdminStudentActions 85/85, 회귀 testPinSetupCapability
+  115/115, testSessionTokenAuth PASS, testAdminPinActionsDispatch PASS,
+  testCreateStudentUnitAssignment 34/34. 네트워크는 기준선 HEAD 1건 외
+  0, 실제 DB 쓰기 0.
+- 부수 발견(구현 에이전트): Windows + Node 24 에서 esbuild 서비스
+  프로세스와 라이브 fetch 가 겹친 채 `process.exit(1)` 을 강제 호출하면
+  네이티브 assertion 크래시 가능 — 신규 스크립트는 `process.exitCode`
+  로 우회. 기존 스크립트 잠재 이슈, 별도 확인 과제.
+- 다음 Step(2): 운영자 signup OFF 확인 → Vercel 배포(플래그 off, 응답
+  동일) → 플래그 on → 라이브 로그인 응답에 authTokenHash 확인. Step 3
+  클라이언트 전환(verifyOtp 세션, 로그인 전 students skip, PIN 만들기
+  로스터 API, 관리자 6함수 dual-path→서버 액션, list_students 로스터).
+  Step 4 v3_46 students RLS. 이번 Step 은 commit 만(push/deploy 없음).
+
+## 2026-09-02 (101차) — Supabase Security Advisor rls_disabled_in_public CRITICAL 대응 Phase 1: 백업 5 + reward_migration_log 락다운(v3_45, 운영자 실행 완료)
+
+- 계기: Supabase Security Advisor가 `rls_disabled_in_public` CRITICAL 경고 발생. READ-ONLY 감사(anon key HEAD/GET 프로브 + `supabase_*.sql` 정적 분석 + `src/`/`api/` 전수 grep)로 RLS OFF 테이블을 확정.
+- **실측 확정 대상 6개**: `students`(RLS 비활성·정책 0, `v3_42` 커밋 본문에 명시 — 컬럼 GRANT 전략으로만 보호, Phase 2 대상) + `backup_20260809_paul_dedup`(3행)/`backup_20260809_roster_v324`(17)/`_v325`(33)/`_v327`(87)/`_v328`(6) — `v3_23`/`v3_24`/`v3_25`/`v3_27`/`v3_28`이 `create table as select`로 만든 학생 id·이름 스냅샷이며 RLS/GRANT 구문 없이 생성돼 public 기본 권한으로 anon이 SELECT 200으로 읽히던 상태.
+- `reward_migration_log`는 처음엔 RLS OFF로 오판했으나 운영자 VERIFY 실측으로 **이미 RLS ON + 정책 0 + 실데이터 1행(`v3_37` 완료 마커)** 임이 확인됨(anon에는 0행으로 보였던 이유 = RLS 필터가 이미 걸려 있었음). 즉 `v3_37` baseline은 정상 적용된 상태 — v3_45의 실질 효과는 이 테이블에 한해 anon/authenticated GRANT 회수뿐.
+- **대응 SQL 신규 3파일**: `supabase_v3_45_lockdown_backup_tables.sql` + `_ROLLBACK.sql` + `_VERIFY.sql`(SELECT 전용). 본문 = 위 6개 테이블(존재 확인 후, `to_regclass` 가드) `enable row level security` + `revoke all on table ... from anon, authenticated`, 정책 0개(default deny), FORCE 미사용(postgres 소유자·service_role BYPASSRLS 유지), `notify pgrst 'reload schema'`, 사후검증 `do $$` 블록(RLS false 또는 anon/authenticated GRANT 잔존 시 `raise exception`). DML 0건, 이 6개 외 테이블 무접촉. 앱 코드 참조 0건(`src/`/`api/`/`supabase/functions/` 전수 grep) — 기능 영향 0.
+- **운영자가 2026-09-02 Supabase SQL Editor에서 v3_45 실행 완료**(VERIFY 실행 전 1회 → 본문 → VERIFY 실행 후 1회). VERIFY ④ 행 수는 실행 전/후 동일: 3/17/33/87/6/1.
+- **사후 anon 프로브**(HEAD 전용, 쓰기 0) 결과: 6개 테이블 전부 401/42501로 전환. 학생/학습/콘텐츠 17개 테이블(students 484, student_class_assignments 341, word_status 2963, student_progress 192, student_daily_progress 843, spelling_review_queue 603, entrance_tests 78, entrance_test_results 307, xp_ledger 569, classes 18, units 54, words 1816, textbooks 10, class_textbooks 24, examples 25, daily_assignments 1, seasons 1) 행 수는 조사 시작 시점과 동일(회귀 0). `students` 컬럼 GRANT 불변(허용 컬럼 206, `pin_hash`/`pin_setup_allowed` 조회 시 여전히 42501). `reward_ledger` 42501 유지.
+- **문서 stale 정정(감사 중 발견, 실측 근거)**: `DATABASE.md`의 `v2_8`/`v2_9`/`v3_6`~`v3_9`/`v3_11`/`v3_13`/`v3_15` `[미실행]` 태그는 stale — 전부 실행됨(handoff 근거 다수). `DATABASE.md` 465행 "classes/units/words 저장소에 RLS SQL 없음"은 `v3_11`(2026-08-02 실행)로 SELECT-only 락다운이 이미 완료된 상태를 반영하지 못한 서술. `reward_ledger`/`reward_totals`는 `v3_36` 실행됨(anon 42501 실측). 반대로 `v2_4`/`v2_6`/`v2_7`/`v3_34`는 **미실행 확인**(`word_king_history` 404, `house_id`/`account_status` 컬럼 42703). `DATABASE.md`에 정정 서브섹션을 별도 append(상세는 그쪽 참고).
+- **남은 보안 과제(Phase 2 이후, 미착수)**:
+  1. `students` RLS — 2a: RLS ON + 현행 GRANT와 동일한 select/update 전체허용 정책으로 경고만 해소 → 2b: 로그인 API가 Supabase 검증 JWT(student_id/admin 클레임) 발급 + 본인행/admin 정책으로 전환(선행 확인 필요: 대시보드 legacy HS256 JWT secret 활성 여부 + "PIN 만들기" 로스터 축소 방식).
+  2. `entrance_test_results` — 준비된 `v2_4` 실행만으로 해소.
+  3. `student_class_assignments`/`word_status`/`student_progress`/`student_daily_progress`/`spelling_review_queue`/`entrance_tests`/`textbooks`/`class_textbooks` — RLS는 ON이지만 "allow anon all" 정책이고 앱이 anon 직접 쓰기에 의존 → 2b JWT 구조 완성 후에나 잠글 수 있음.
+  4. `examples` 등 `v3_13` 5개 신규 테이블은 락다운 합류 블록이 SQL 파일에 준비만 돼 있고 미실행.
+  5. `api/grant-xp.js`의 레거시 `xp_ledger` 분기만 세션 토큰 미검증(reward 분기는 검증됨) — 코드 수정 필요, docs-maintainer 범위 아님(implementer 위임 대상).
+  6. `backup_20260807_students`/`backup_20260807_student_class_assignments`는 anon 42501이지만 RLS 플래그 자체는 미확인(Advisor에 계속 남을 수 있음) — 별도 확인 필요.
+- **안전 준수**: 이번 세션 Production DB WRITE 0(에이전트), SQL 실행 0(에이전트 — 실행은 전부 운영자), 학생 데이터 변경 0, 코드 수정 0(SQL 신규 파일 3개만), push/deploy 0.
+- 관련 파일: `C:\voca\supabase_v3_45_lockdown_backup_tables.sql`, `C:\voca\supabase_v3_45_lockdown_backup_tables_ROLLBACK.sql`, `C:\voca\supabase_v3_45_lockdown_backup_tables_VERIFY.sql`, `C:\voca\DATABASE.md`("RLS / 컬럼권한 현황" 신규 서브섹션), `.ai-status/security-rls-phase1-v3_45.json`.
+
+## 2026-09-02 (100차) — 야간 자율 세션: 유령 유닛 root cause 확정 + 재발 방지 코드 + Phase 2 SQL 패키지 (Production DB 무접촉)
+
+- 범위: 운영자 취침 중 6시간 자율 작업. **Production DB WRITE/SQL 실행/merge/push/deploy 0** — READ-ONLY 조사 + 로컬 커밋 4~6개만. 상세 보고서: `docs/overnight-ghost-unit-audit-2026-09-02.md` (이 섹션은 요약).
+- baseline 불변 실측: health PASS 27/WARN 10/FAIL 0 (시작·중간·종료 동일), 유령 참조 SCA 21/students 2/word_status 1 — 어제 조사와 집합 단위 동일(드리프트 0).
+- **root cause 확정(실측)**: ① hasHeader=true 파일 안의 반복 헤더 행이 `AdminScreen.jsx`의 `!hasHeader` 조건부 안전망을 통과해 unit="Unit"/word="English" 유령을 생성(민병천 유령이 정상 Unit3와 같은 배치에서 3.4초 먼저 생성된 타임라인으로 증명, 이후 업로드가 헤더 단어를 재삽입) ② 서버(admin-content-write) 무검증 ③ isLearnableUnit 가드가 쓰기 3곳에만 있고 학생 Dashboard·생성 폼·TextbookAssignmentPanel 은 유령 노출(08-23 현다율이 유령 화면에서 "English" known 클릭한 word_status 로 실증) ④ 생성 폼 폴백 'Unit 1' → 서버 create_student 명시 이름 매칭에 단어수 검증 부재(유령 "Unit1" 채택 가능 구멍) ⑤ "7" vs "Unit 7" 이원 표기(중1 동아, 내용 동일 40단어 이중 업로드 — 병합은 proposal 만).
+- 재발 방지 커밋(전부 FAIL-FIRST 실측 후 수정, 실행은 Sonnet 실행 에이전트·검수는 메인 세션): `2ac2993` fix(import) 반복 헤더 행/유닛 라벨 차단 + PDF 경로(excelHeaderGuard.js 단일 원천, 수정 전 7건 실패→32/32) / `5c589a8` fix(units) getLearnable* 헬퍼로 학생·관리자 셀렉터 3곳 필터('Unit 1' 리터럴 폴백 제거, 16건 실패→22/22) / `73115cf` fix(students) create_student 명시 유닛 단어≥2 가드(5건 실패→34/34) / `513b389` chore(sql) Phase 2 패키지.
+- **Phase 2 SQL 패키지(실행 금지 상태로 준비만)**: v3_43(SCA 19+students 2 재배정 — 실학생 primary 5 는 실행 시점 권위값 재대조, secondary·비실은 NULL) → v3_43b(Paul_DUP_20260722_INACTIVE 2행 전용 — **파일 실행 = 운영자 승인**이 되도록 분리, 계정·기록 삭제 없음) → v3_44(유령 6개+단어 6개 삭제, 백업 테이블+anon 회수, pg_constraint 동적 FK 스캔; **53e380c7 은 현다율 word_status 실학습기록 CASCADE 소실 때문에 HOLD 제외**). 각 ROLLBACK 동봉. 정적 검증 3중(스펙 UUID 대조 FAIL 0 / libpg-query 파서 6/6 / PL/pgSQL 린트 0). v3_40 은 STALE(전 매핑이 이미 목적지 → 즉시 abort) — 실행 금지.
+- 판정 요약: 유령 7 = SAFE_DELETE 1(35ee95ae) / SAFE_AFTER_REASSIGN 5 / HOLD 1(53e380c7). Paul_DUP_20260722 = 명백한 폐기 테스트 데이터(생성과 같은 분에 SCA 자동 생성, stars·ws·xp·blob 전부 0)이나 승인 게이트 유지. WARN 10 은 전부 실오류(억지 제거 아님) — v3_43 실행 후 0 기대.
+- 내일 운영자: ① v3_43 실행→health WARN 0 확인 ② v3_43b 승인 여부 결정(미승인 시 v3_44 재작성 지시) ③ v3_44 실행 ④ 이 브랜치 PR→Release Gate→merge ⑤ 선택: 53e380c7 최종 방침, 0단어 "Unit 1" 2개(e4804821 에 실학생 Song·황성연 secondary SCA), 엣지 함수 서버 검증, "Unit 7"/"7" 병합.
 
 ## 2026-08-15 (99차) — 입실시험 kr2en 동의어 충돌 오답 사고 수정 (production 배포 완료)
 

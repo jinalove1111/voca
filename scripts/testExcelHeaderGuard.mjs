@@ -55,16 +55,27 @@ const check = (label, cond, extra) => {
 const SRC_PATH = path.resolve('src/components/AdminScreen.jsx')
 const src = fs.readFileSync(SRC_PATH, 'utf8')
 
-const startIdx = src.indexOf('const HEADER_ALIASES = {')
-const fnIdx = src.indexOf('function parseExcelRows(')
-if (startIdx === -1 || fnIdx === -1 || fnIdx < startIdx) {
-  console.log('  FAIL  AdminScreen.jsx에서 HEADER_ALIASES / parseExcelRows를 찾지 못함 — 테스트 전제 붕괴')
+// [2026-09-02] HEADER_ALIASES/isHeaderLabel/isHeaderResidueRow/
+// sanitizeUnitLabel 정의가 src/utils/excelHeaderGuard.js(단일 원천)로
+// 이동했다(반복 헤더 행 재발 방지, scripts/testExcelHeaderResidue.mjs
+// 참고). "실제 소스를 그대로 실행한다"는 이 하네스의 원칙을 유지하기
+// 위해 그 모듈의 실제 소스도 함께 읽어 합친다 — 로직을 재구현하지 않는다.
+const GUARD_PATH = path.resolve('src/utils/excelHeaderGuard.js')
+const guardSrcRaw = fs.readFileSync(GUARD_PATH, 'utf8')
+// ESM export 키워드만 벗겨 new Function 안의 평범한 선언으로 만든다(로직은
+// 한 글자도 바꾸지 않는다 — export const/export function만 제거).
+const guardSrc = guardSrcRaw.replace(/^export\s+/gm, '')
+
+const fnIdx = src.indexOf('function detectHeaderMap(')
+const parseFnIdx = src.indexOf('function parseExcelRows(')
+if (fnIdx === -1 || parseFnIdx === -1 || parseFnIdx < fnIdx) {
+  console.log('  FAIL  AdminScreen.jsx에서 detectHeaderMap / parseExcelRows를 찾지 못함 — 테스트 전제 붕괴')
   process.exit(1)
 }
 // parseExcelRows의 본문 끝을 중괄호 균형으로 찾는다(문자열/주석 안의
 // 중괄호까지 정확히 세지는 않지만, 이 함수 본문에는 그런 케이스가 없다 —
 // 아래 추출 검증 단언이 실패하면 즉시 드러난다).
-const bodyStart = src.indexOf('{', fnIdx)
+const bodyStart = src.indexOf('{', parseFnIdx)
 let depth = 0, endIdx = -1
 for (let i = bodyStart; i < src.length; i++) {
   const ch = src[i]
@@ -75,12 +86,12 @@ if (endIdx === -1) {
   console.log('  FAIL  parseExcelRows 본문의 끝을 찾지 못함 — 테스트 전제 붕괴')
   process.exit(1)
 }
-const extracted = src.slice(startIdx, endIdx)
+const extracted = src.slice(fnIdx, endIdx)
 
 let parseExcelRows, detectHeaderMap, HEADER_ALIASES
 try {
   // eslint-disable-next-line no-new-func
-  const factory = new Function(`${extracted}\nreturn { parseExcelRows, detectHeaderMap, HEADER_ALIASES }`)
+  const factory = new Function(`${guardSrc}\n${extracted}\nreturn { parseExcelRows, detectHeaderMap, HEADER_ALIASES }`)
   ;({ parseExcelRows, detectHeaderMap, HEADER_ALIASES } = factory())
 } catch (e) {
   console.log(`  FAIL  추출한 소스 실행 실패 — ${e.message}`)
@@ -205,9 +216,21 @@ check('"unit"/"단위" 실제 단어 보존', realWord.some((r) => r.word === 'u
 check('"no"/"아니오" 실제 단어 보존', realWord.some((r) => r.word === 'no' && r.meaning === '아니오'), { got: realWord })
 check('3행 모두 보존', realWord.length === 3, { got: realWord.length })
 
-// 헤더성 라벨이 첫 행이 아닌 위치에 있으면 건드리지 않는다(실제 단어일 수 있음)
+// [2026-09-02 재발 방지로 계약 확장] 과거(B안 범위)엔 "헤더성 라벨이 첫 행이
+// 아닌 위치에 있으면 건드리지 않는다"였다 — 하지만 hasHeader=true로 정상
+// 인식된 파일 안에서도 시트 병합/페이지 구분으로 반복 헤더 행이 파일
+// 어디에나 나타날 수 있다는 게 운영 DB 실사고로 확인됐다(word·meaning
+// 라벨 조합이 "English"/"Korean" 등으로 실제로 재현됨). 그래서
+// isHeaderResidueRow는 위치와 무관하게(hasHeader 여부와도 무관하게)
+// word·meaning이 "둘 다" 헤더 라벨인 행만 제외한다 — 한쪽만 라벨인 행
+// (word="unit"/meaning="단위" 등, 위 realWord 케이스)은 여전히 절대
+// 버리지 않는다. src/utils/excelHeaderGuard.js / scripts/
+// testExcelHeaderResidue.mjs 참고.
 const midRow = parseExcelRows([['apple', '사과'], ['english', 'korean']], '반')
-check('첫 행이 아닌 헤더성 행은 버리지 않음', midRow.length === 2, { got: midRow })
+check('둘 다 헤더 라벨인 행은 위치와 무관하게 제외된다(반복 헤더 행 재발 방지)',
+  midRow.length === 1 && midRow[0].word === 'apple' && midRow[0].meaning === '사과', { got: midRow })
+check('반복 헤더 행 제외 시 header-residue-row 경고가 올라온다',
+  (parseExcelRows([['apple', '사과'], ['english', 'korean']], '반').warnings || []).some((w) => w.code === 'header-residue-row'))
 
 // ════════════════════════════════════════════════════════════════════════
 console.log('\n=== CASE H — B안 범위 준수: hasHeader 판정식 무변경 (정적) ===')

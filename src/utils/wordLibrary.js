@@ -2121,6 +2121,31 @@ export const MIN_LEARNABLE_WORDS = 2
 // 캐시(_cache 유닛의 words 배열)만으로 판정 가능한 가장 단순한 규칙.
 export const isLearnableUnit = (unit) => !!unit && (unit.words || []).length >= MIN_LEARNABLE_WORDS
 
+// ── 2026-09-02(유령 유닛 셀렉터 노출 봉합) ──────────────────────────────
+// 배경: isLearnableUnit/setStudentUnit/setStudentUnitById(위)는 "쓰기"만
+// 막았지, 학생 대시보드 유닛 셀렉터·관리자 학생 생성 폼·교재 배정 패널은
+// 여전히 필터 없는 getTextbookUnits/getClassUnits(Names)를 그대로 노출해
+// 유령/빈 유닛이 옵션으로 뜰 수 있었다. 아래 3개는 그 노출 지점 전용
+// "학습 가능 유닛만" 버전 — 기존 getTextbookUnits/getClassUnits(Names)는
+// 관리자 콘텐츠 도구(전체 유닛을 봐야 하는 화면)를 위해 그대로 둔다(하위
+// 호환, 시그니처 무변경).
+export function getLearnableTextbookUnits(textbookId) {
+  return getTextbookUnits(textbookId).filter(isLearnableUnit)
+}
+
+// getClassUnits(className)는 유닛이 0개인 반에 합성 placeholder
+// `[{name:'Unit 1', words:[]}]`를 돌려준다(위 정의 참고) — words:[]라
+// isLearnableUnit으로 걸러지긴 하지만, "학습 가능 유닛 소스"라는 이름의
+// 함수가 애초에 placeholder 생성 함수를 거치지 않도록 캐시(_cache)를
+// 직접 필터한다(의도를 코드로도 명시).
+export function getLearnableClassUnits(className) {
+  return (_cache[className]?.units || []).filter(isLearnableUnit)
+}
+
+export function getLearnableClassUnitNames(className) {
+  return getLearnableClassUnits(className).map((u) => u.name)
+}
+
 // 학생의 "현재 유닛 풀" — resolveStudentUnitObj 가 유닛을 해석하는 소스와
 // 정확히 같은 규칙(교재 모드면 primary 교재의 유닛, 아니면 사람 반 유닛).
 // 표시(관리자 편집 목록)와 쓰기(setStudentUnitById)가 같은 풀을 봐야

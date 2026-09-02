@@ -18,7 +18,10 @@
 // 들어가 데이터가 갈라지는 사고로 이어진다. 그래서 중복 시엔 로그인
 // 자체를 막고 duplicate_accounts를 반환해 관리자 개입을 유도한다.
 import { createClient } from '@supabase/supabase-js'
-import { isValidPinFormat, verifyPin, supabaseAdminUrl, supabaseAdminKey, signSessionToken } from './_pinAuth.js'
+import {
+  isValidPinFormat, verifyPin, supabaseAdminUrl, supabaseAdminKey, signSessionToken,
+  isStudentAuthSessionEnabled, ensureStudentAuthUser, issueStudentAuthTokenHash,
+} from './_pinAuth.js'
 
 const MAX_FAILS = 5
 const LOCK_MINUTES = 5
@@ -127,6 +130,36 @@ export default async function handler(req, res) {
     // 원장 쓰기만 멈추고 학습 흐름/로컬 별 지급은 그대로다(wordLibrary.js의
     // postRewardEvent가 fire-and-forget이라 학생 화면 영향 0).
     // 실패 응답(ok:false)에는 절대 토큰을 담지 않는다.
+    //
+    // 2026-09-02 Phase 2b Step 1-A — STUDENT_AUTH_SESSION 플래그 ON +
+    // SUPABASE_SERVICE_ROLE_KEY 설정 시에만 Supabase Auth 세션(hashed
+    // magiclink 토큰)을 함께 발급한다. 어느 단계든 실패해도 로그인 자체는
+    // 절대 실패시키지 않는다(fail-open) — console.warn만 남기고 기존
+    // 응답 그대로 반환. 플래그 off면 이 블록에 진입조차 하지 않으므로
+    // 응답이 byte-identical하게 유지된다. authTokenHash는 아래 최종
+    // res.json 호출부보다 먼저 계산해 두고 조건부 스프레드로만 얹는다
+    // (scripts/testSessionTokenAuth.mjs의 성공 응답 정적 검사가
+    // `ok: true, ... })` 한 리터럴 블록을 전제하므로, 별도 변수에 담아
+    // json() 호출 밖에서 나중에 병합하지 않는다 — 그렇게 하면 그 정적
+    // 검사가 성공 블록을 찾지 못해 회귀로 오탐한다).
+    let authTokenHash
+    if (isStudentAuthSessionEnabled() && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        const ensured = await ensureStudentAuthUser(supabase, match.id)
+        if (!ensured.ok) {
+          console.warn(`[verify-student-pin] auth session issue skipped: ${ensured.reason}`)
+        } else {
+          const issued = await issueStudentAuthTokenHash(supabase, match.id)
+          if (!issued.ok) {
+            console.warn(`[verify-student-pin] auth session issue skipped: ${issued.reason}`)
+          } else {
+            authTokenHash = issued.authTokenHash
+          }
+        }
+      } catch {
+        console.warn('[verify-student-pin] auth session issue skipped: unexpected_error')
+      }
+    }
     res.status(200).json({
       ok: true,
       studentId: match.id,
@@ -134,6 +167,7 @@ export default async function handler(req, res) {
       className: match.classes?.name || '',
       unitName: match.unit_name || 'Unit 1',
       token: signSessionToken(match.id),
+      ...(authTokenHash ? { authTokenHash } : {}),
     })
     return
   }

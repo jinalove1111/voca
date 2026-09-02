@@ -72,6 +72,8 @@
     "verify:pin-setup-capability": "node scripts/testPinSetupCapability.mjs",
     "verify:create-student": "node scripts/testCreateStudentUnitAssignment.mjs",
     "verify:admin-unit-edit": "node scripts/testAdminUnitEdit.mjs",
+    "verify:ghost-filtering": "node scripts/testGhostUnitFiltering.mjs",
+    "verify:excel-residue": "node scripts/testExcelHeaderResidue.mjs",
     "verify:assignment-ghost": "node scripts/testAssignmentGhostUnitRule.mjs",
     "verify:analytics-pagination": "node scripts/testAnalyticsPanelPagination.mjs",
     "verify:class-move-unit": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testClassMoveUnitResolution.mjs",

@@ -40,7 +40,10 @@ import { hashPin, randomFourDigitPin, checkAdminReauth, supabaseAdminUrl, supaba
 // create_student가 wordLibrary.js의 addStudent와 완전히 같은 하우스 자동
 // 배정 규칙(가장 인원 적은 하우스, 동률이면 낮은 id)을 쓰기 위해 재구현
 // 대신 원본 함수를 그대로 가져온다.
-import { assignBalancedHouseId, computeHouseCounts } from '../src/utils/houseSystem.js'
+// HOUSES(id 1~4 유효값 정의)도 함께 가져온다 — set_student_house 액션이
+// wordLibrary.js setStudentHouse와 동일한 "알 수 없는 하우스 id" 검증을
+// 하기 위함(아래 Phase 2b Step 1-B 액션들 참고).
+import { assignBalancedHouseId, computeHouseCounts, HOUSES } from '../src/utils/houseSystem.js'
 
 const ALLOWED_ACTIONS = new Set([
   'bulk_generate_temp_pins',
@@ -53,6 +56,18 @@ const ALLOWED_ACTIONS = new Set([
   // 2026-08-30 — 확인코드 "조회 전용" 액션(아래 handler 본문 주석 참고).
   // 이 파일에 추가하는 이유도 위와 동일한 12함수 한도(파일 상단 주석).
   'get_pin_setup_code',
+  // 2026-09-02 Phase 2b Step 1-B — 관리자 화면이 students를 anon key로
+  // 직접 UPDATE/SELECT하던 6개 wordLibrary.js 함수 + 전체 로스터 조회를
+  // 서버 액션으로 이식(같은 12함수 한도 이유로 이 통합 dispatcher에 추가,
+  // 신규 api 파일 없음). 이번 Step은 서버 액션만 추가 — 클라이언트 호출
+  // 전환은 다음 Step(별도 handoff). 각 액션 헤더 주석에 이식 출처 표기.
+  'list_students',
+  'set_student_class',
+  'set_student_unit',
+  'set_students_class_bulk',
+  'set_student_house',
+  'set_primary_assignment',
+  'set_primary_textbook',
 ])
 
 // 2026-08-06 — create_student가 받는 studentId(클라이언트 생성 UUID,
@@ -418,6 +433,14 @@ export default async function handler(req, res) {
             const candidates = sorted.filter((u) => normKey(u.name) === normKey(unitName))
             if (candidates.length === 1) unit = candidates[0]
           }
+          // 2026-09-02(유령 유닛 셀렉터 노출 봉합 후속) — 명시 unitName 매칭이
+          // 성공해도 그 유닛의 단어가 2개 미만이면(엑셀 헤더 잔재 유령/빈
+          // 유닛) 채택하지 않고 아래 자동 경로(단어>=2 첫 유닛)로 폴백한다.
+          // 실사고 경로: 관리자 생성 폼의 폴백 문자열 'Unit 1'이 정규화
+          // 유일후보로 유령 "Unit1"(1단어)에 매칭될 수 있었다(단어 수
+          // 검증 없이 채택). wErr(단어 조회 자체 실패)면 과차단 금지
+          // 원칙대로 필터하지 않는다(기존 동작 유지).
+          if (unit && !wErr && (countByUnit.get(unit.id) || 0) < 2) unit = null
         }
         if (!unit && !wErr) unit = sorted.find((u) => (countByUnit.get(u.id) || 0) >= 2) || null
         if (unit) {
@@ -799,6 +822,562 @@ export default async function handler(req, res) {
 
     res.status(200).json({ ok: true })
     return
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // Phase 2b Step 1-B(2026-09-02) — 관리자 로스터 관리 서버 이식 7개.
+  // 원본은 전부 src/utils/wordLibrary.js(anon key 직접 CRUD, 클라이언트
+  // 캐시 _cache/_students/_textbooks 의존). 서버는 그 캐시가 없으므로
+  // 호출부(다음 Step에서 붙일 클라이언트)가 이미 알고 있는 값(classId/
+  // unitId 등)을 payload로 직접 받는 방식으로 이식한다 — "이름으로
+  // 유닛/반을 재해석"하는 클라이언트측 로직은 옮기지 않음(아래 각 액션
+  // 주석에 구체적 차이 명시). 응답 규약: uuid 형식 오류는 400
+  // { ok:false, reason:'invalid_request' }, 대상 없음은 200
+  // { ok:false, reason:'not_found' }(파일 상단 다른 액션들의 기존 200
+  // 관례를 그대로 따름 — 파일 전체 응답 스타일 일관성), DB 에러는 500
+  // { ok:false, reason:'db_error' }(내부 메시지는 응답에 싣지 않음).
+  // ════════════════════════════════════════════════════════════════════
+
+  if (action === 'list_students') {
+    // wordLibrary.js:358-390(STUDENTS_SELECT_BASE/STUDENTS_PAGE_SIZE/
+    // selectAllStudents) + refreshStudents(391-421) 서버 이식. 1000행
+    // PostgREST 기본 상한을 .range() 페이지네이션으로 우회해 전량을
+    // 가져온다. house_id는 v2.7 컬럼이라 프로덕션에 없을 수 있어(42703
+    // 실측 확정, create_student와 동일 전례) 별도 열로 시도 후 컬럼
+    // 부재면 제외한다. 규칙 11 — pin_ 접두 컬럼은 select 문자열 어디에도
+    // 없다(응답에도 당연히 없음).
+    const PAGE_SIZE = 1000
+    const BASE_SELECT = 'id,name,class_id,unit_name,current_unit_id,classes(name)'
+    async function fetchAllStudents(selectStr) {
+      let all = []
+      let from = 0
+      for (;;) {
+        const { data, error } = await supabase
+          .from('students')
+          .select(selectStr)
+          .order('created_at')
+          .order('id')
+          .range(from, from + PAGE_SIZE - 1)
+        if (error) return { data: null, error }
+        all = all.concat(data || [])
+        if (!data || data.length < PAGE_SIZE) break
+        from += PAGE_SIZE
+      }
+      return { data: all, error: null }
+    }
+
+    let hasHouse = true
+    let { data, error } = await fetchAllStudents(`${BASE_SELECT},house_id`)
+    if (error) {
+      if (!isMissingColumnError(error, 'house_id')) {
+        res.status(500).json({ ok: false, reason: 'db_error' })
+        return
+      }
+      hasHouse = false
+      ;({ data, error } = await fetchAllStudents(BASE_SELECT))
+    }
+    if (error) {
+      res.status(500).json({ ok: false, reason: 'db_error' })
+      return
+    }
+    const students = (data || []).map((s) => ({
+      id: s.id,
+      name: s.name,
+      class_id: s.class_id || null,
+      unit_name: s.unit_name || null,
+      current_unit_id: s.current_unit_id || null,
+      house_id: hasHouse && s.house_id != null ? Number(s.house_id) : null,
+      className: s.classes?.name || '',
+    }))
+    res.status(200).json({ ok: true, students, count: students.length })
+    return
+  }
+
+  if (action === 'set_student_class') {
+    // wordLibrary.js:1948-1976 setStudentClass 서버 이식. 원본은 className
+    // (문자열)을 받아 ensureClass로 classId를 구하고, 학생의 저장된
+    // unitName을 새 반의 유닛 목록에서 이름으로 재검색해 unitIdInNewClass를
+    // 정한다 — 이 재검색은 _cache(클라이언트 유닛 캐시) 의존이라 서버에는
+    // 없다. 대신 호출부가 이미 해석한 currentUnitId를 payload로 직접
+    // 받는다(없으면 null — 유닛 미배정으로 저장, 기존 "못 찾으면 null"과
+    // 동일한 결과 형태). SCA 부수효과(maintainPrimaryAssignmentForClassChange)
+    // 는 아래 공용 헬퍼로 동일하게 수행한다.
+    const { studentId, classId, currentUnitId } = req.body || {}
+    if (typeof studentId !== 'string' || !UUID_RE.test(studentId)) {
+      res.status(400).json({ ok: false, reason: 'invalid_request' })
+      return
+    }
+    if (classId != null && (typeof classId !== 'string' || !UUID_RE.test(classId))) {
+      res.status(400).json({ ok: false, reason: 'invalid_request' })
+      return
+    }
+    if (currentUnitId != null && (typeof currentUnitId !== 'string' || !UUID_RE.test(currentUnitId))) {
+      res.status(400).json({ ok: false, reason: 'invalid_request' })
+      return
+    }
+    const resolvedClassId = classId || null
+    const resolvedUnitId = currentUnitId || null
+    let { data, error } = await supabase.from('students')
+      .update({ class_id: resolvedClassId, current_unit_id: resolvedUnitId }).eq('id', studentId).select('id')
+    if (error && error.code === '42703') {
+      ;({ data, error } = await supabase.from('students')
+        .update({ class_id: resolvedClassId }).eq('id', studentId).select('id'))
+    }
+    if (error) {
+      res.status(500).json({ ok: false, reason: 'db_error' })
+      return
+    }
+    if (!Array.isArray(data) || data.length === 0) {
+      res.status(200).json({ ok: false, reason: 'not_found' })
+      return
+    }
+    if (resolvedClassId) {
+      await maintainPrimaryAssignmentForClassChange(supabase, studentId, resolvedClassId, resolvedUnitId)
+    }
+    res.status(200).json({ ok: true })
+    return
+  }
+
+  if (action === 'set_student_unit') {
+    // wordLibrary.js:2195-2207 writeStudentUnit(students 갱신 단일 지점)
+    // 서버 이식. 원본 setStudentUnit/setStudentUnitById(2061/2175)의 유닛
+    // "탐색"(교재/반 유닛 풀에서 이름·id로 찾기, isLearnableUnit 검증)은
+    // 클라이언트 캐시 의존이라 옮기지 않는다 — 이 액션은 호출부가 이미
+    // 확정한 unitId/unitName을 그대로 쓰는 순수 쓰기 지점이다(호출부가
+    // 학습 가능 유닛인지 등은 사전에 검증했다고 가정).
+    const { studentId, unitName, unitId } = req.body || {}
+    if (typeof studentId !== 'string' || !UUID_RE.test(studentId)) {
+      res.status(400).json({ ok: false, reason: 'invalid_request' })
+      return
+    }
+    if (typeof unitId !== 'string' || !UUID_RE.test(unitId)) {
+      res.status(400).json({ ok: false, reason: 'invalid_request' })
+      return
+    }
+    if (typeof unitName !== 'string' || unitName.trim().length === 0) {
+      res.status(400).json({ ok: false, reason: 'invalid_request' })
+      return
+    }
+    let { data, error } = await supabase.from('students')
+      .update({ unit_name: unitName, current_unit_id: unitId }).eq('id', studentId).select('id')
+    if (error && error.code === '42703') {
+      ;({ data, error } = await supabase.from('students')
+        .update({ unit_name: unitName }).eq('id', studentId).select('id'))
+    }
+    if (error) {
+      res.status(500).json({ ok: false, reason: 'db_error' })
+      return
+    }
+    if (!Array.isArray(data) || data.length !== 1) {
+      res.status(200).json({ ok: false, reason: 'not_found' })
+      return
+    }
+    res.status(200).json({ ok: true })
+    return
+  }
+
+  if (action === 'set_students_class_bulk') {
+    // wordLibrary.js:2213-2239 setStudentsClassBulk 서버 이식. 원본과
+    // 동일하게 className(여기서는 classId) 재검증 없이 한 번의 update로
+    // 전원을 옮기고, 유닛은 (set_student_class와 동일 이유로) 호출부가
+    // 이미 해석한 currentUnitId를 그대로 쓴다. 최대 200명, 하나라도
+    // uuid가 아니면 전체 거부(부분 적용 없음).
+    const { studentIds, classId, currentUnitId } = req.body || {}
+    if (!Array.isArray(studentIds) || studentIds.length === 0 || studentIds.length > 200) {
+      res.status(400).json({ ok: false, reason: 'invalid_request' })
+      return
+    }
+    if (!studentIds.every((id) => typeof id === 'string' && UUID_RE.test(id))) {
+      res.status(400).json({ ok: false, reason: 'invalid_request' })
+      return
+    }
+    if (classId != null && (typeof classId !== 'string' || !UUID_RE.test(classId))) {
+      res.status(400).json({ ok: false, reason: 'invalid_request' })
+      return
+    }
+    if (currentUnitId != null && (typeof currentUnitId !== 'string' || !UUID_RE.test(currentUnitId))) {
+      res.status(400).json({ ok: false, reason: 'invalid_request' })
+      return
+    }
+    const resolvedClassId = classId || null
+    const resolvedUnitId = currentUnitId || null
+    let { error } = await supabase.from('students')
+      .update({ class_id: resolvedClassId, current_unit_id: resolvedUnitId }).in('id', studentIds)
+    if (error && error.code === '42703') {
+      ;({ error } = await supabase.from('students')
+        .update({ class_id: resolvedClassId }).in('id', studentIds))
+    }
+    if (error) {
+      res.status(500).json({ ok: false, reason: 'db_error' })
+      return
+    }
+    if (resolvedClassId) {
+      // 원본과 동일 — 순차 실행, 각 호출 non-fatal(공용 헬퍼가 내부에서 catch).
+      for (const sid of studentIds) {
+        await maintainPrimaryAssignmentForClassChange(supabase, sid, resolvedClassId, resolvedUnitId)
+      }
+    }
+    res.status(200).json({ ok: true, count: studentIds.length })
+    return
+  }
+
+  if (action === 'set_student_house') {
+    // wordLibrary.js:1983-1993 setStudentHouse 서버 이식. HOUSES(1~4) 범위
+    // 검증도 동일하게 유지. house_id 컬럼 자체가 없으면(v2.7 SQL 미실행)
+    // column_missing으로 명시 응답(create_student의 42703 폴백과 달리
+    // 이 액션은 "저장 자체가 목적"이라 조용한 스킵이 아니라 실패를
+    // 알려야 호출부가 재시도/안내할 수 있다).
+    const { studentId, houseId } = req.body || {}
+    if (typeof studentId !== 'string' || !UUID_RE.test(studentId)) {
+      res.status(400).json({ ok: false, reason: 'invalid_request' })
+      return
+    }
+    let value = null
+    if (houseId !== null && houseId !== undefined) {
+      value = Number(houseId)
+      if (!Number.isInteger(value) || !HOUSES.some((h) => h.id === value)) {
+        res.status(400).json({ ok: false, reason: 'invalid_request' })
+        return
+      }
+    }
+    const { data, error } = await supabase.from('students')
+      .update({ house_id: value }).eq('id', studentId).select('id')
+    if (error) {
+      if (isMissingColumnError(error, 'house_id')) {
+        res.status(200).json({ ok: false, reason: 'column_missing' })
+        return
+      }
+      res.status(500).json({ ok: false, reason: 'db_error' })
+      return
+    }
+    if (!Array.isArray(data) || data.length === 0) {
+      res.status(200).json({ ok: false, reason: 'not_found' })
+      return
+    }
+    res.status(200).json({ ok: true })
+    return
+  }
+
+  if (action === 'set_primary_assignment') {
+    // wordLibrary.js:2659-2723(대략) setPrimaryAssignment 서버 이식.
+    // "나가는 primary 진도 캡처" 중 이름 폴백(resolveStudentUnitObj, 유닛
+    // 이름 문자열을 새 반 유닛과 재매칭)은 옮기지 않는다 — 이미
+    // students.current_unit_id(id 기반, 두 모드 공통 권위 값)가 있으면
+    // 그것만 캡처해도 원본의 "구체적 id 우선" 원칙과 결과가 같고, 그
+    // 값조차 없는 아주 오래된 레거시 학생만 캡처를 건너뛴다(원본도 그 경우
+    // 결국 null로 남기는 경로가 있어 완전히 새로운 실패 모드는 아님).
+    // "단어 있는 첫 유닛" 확정(대상 반의 units/words 조회)은 create_student
+    // (이 파일 240행대)와 동일한 정렬·집계 방식으로 재사용한다.
+    const { studentId, classId } = req.body || {}
+    if (typeof studentId !== 'string' || !UUID_RE.test(studentId)) {
+      res.status(400).json({ ok: false, reason: 'invalid_request' })
+      return
+    }
+    if (typeof classId !== 'string' || !UUID_RE.test(classId)) {
+      res.status(400).json({ ok: false, reason: 'invalid_request' })
+      return
+    }
+
+    const { data: target, error: selErr } = await supabase
+      .from('student_class_assignments')
+      .select('id,current_unit_id')
+      .eq('student_id', studentId).eq('class_id', classId).maybeSingle()
+    if (selErr) {
+      if (isMissingTableError(selErr)) {
+        res.status(200).json({ ok: false, reason: 'table_missing' })
+        return
+      }
+      res.status(500).json({ ok: false, reason: 'db_error' })
+      return
+    }
+    if (!target) {
+      res.status(200).json({ ok: false, reason: 'not_assigned' })
+      return
+    }
+
+    const { data: outgoingRows, error: outSelErr } = await supabase
+      .from('student_class_assignments')
+      .select('id,class_id')
+      .eq('student_id', studentId).eq('is_primary', true)
+    if (outSelErr && !isMissingTableError(outSelErr)) {
+      res.status(500).json({ ok: false, reason: 'db_error' })
+      return
+    }
+    const outgoing = (outgoingRows || []).find((r) => r.class_id !== classId)
+    if (outgoing) {
+      const { data: liveStudent, error: liveErr } = await supabase
+        .from('students').select('current_unit_id').eq('id', studentId).maybeSingle()
+      const capturedUnitId = (!liveErr && liveStudent && liveStudent.current_unit_id != null)
+        ? liveStudent.current_unit_id : null
+      if (capturedUnitId != null) {
+        const { error: healErr } = await supabase.from('student_class_assignments')
+          .update({ current_unit_id: capturedUnitId }).eq('id', outgoing.id)
+        if (healErr) {
+          res.status(500).json({ ok: false, reason: 'db_error' })
+          return
+        }
+      }
+    }
+
+    const { error: trueErr } = await supabase.from('student_class_assignments')
+      .update({ is_primary: true }).eq('id', target.id)
+    if (trueErr) {
+      res.status(500).json({ ok: false, reason: 'db_error' })
+      return
+    }
+    const { error: falseErr } = await supabase.from('student_class_assignments')
+      .update({ is_primary: false }).eq('student_id', studentId).neq('id', target.id)
+    if (falseErr) {
+      res.status(500).json({ ok: false, reason: 'db_error' })
+      return
+    }
+
+    let syncUnitId = target.current_unit_id
+    if (syncUnitId == null) {
+      const { data: unitsRows } = await supabase.from('units').select('id,name,position').eq('class_id', classId)
+      if (Array.isArray(unitsRows) && unitsRows.length > 0) {
+        const { data: wordRows } = await supabase.from('words').select('unit_id').in('unit_id', unitsRows.map((u) => u.id))
+        const countByUnit = new Map()
+        for (const w of wordRows || []) countByUnit.set(w.unit_id, (countByUnit.get(w.unit_id) || 0) + 1)
+        const sorted = [...unitsRows].sort((a, b) =>
+          ((a.position ?? Infinity) - (b.position ?? Infinity)) ||
+          String(a.name).localeCompare(String(b.name), undefined, { numeric: true }) ||
+          String(a.id).localeCompare(String(b.id)))
+        syncUnitId = (sorted.find((u) => (countByUnit.get(u.id) || 0) > 0) || sorted[0])?.id ?? null
+        if (syncUnitId != null) {
+          const { error: fillErr } = await supabase.from('student_class_assignments')
+            .update({ current_unit_id: syncUnitId }).eq('id', target.id)
+          if (fillErr) {
+            res.status(500).json({ ok: false, reason: 'db_error' })
+            return
+          }
+        }
+      }
+    }
+    const { error: syncErr } = await supabase.from('students')
+      .update({ class_id: classId, current_unit_id: syncUnitId }).eq('id', studentId)
+    if (syncErr) {
+      res.status(500).json({ ok: false, reason: 'db_error' })
+      return
+    }
+    res.status(200).json({ ok: true })
+    return
+  }
+
+  if (action === 'set_primary_textbook') {
+    // wordLibrary.js:2759-2860(대략) setPrimaryTextbook 서버 이식 — 사람
+    // 반(students.class_id)은 절대 바꾸지 않는다(원본과 동일 계약). "나가는
+    // primary 진도 캡처"의 이름 폴백 생략은 위 set_primary_assignment와
+    // 동일한 이유·범위.
+    const { studentId, textbookId } = req.body || {}
+    if (typeof studentId !== 'string' || !UUID_RE.test(studentId)) {
+      res.status(400).json({ ok: false, reason: 'invalid_request' })
+      return
+    }
+    if (typeof textbookId !== 'string' || !UUID_RE.test(textbookId)) {
+      res.status(400).json({ ok: false, reason: 'invalid_request' })
+      return
+    }
+
+    const { data: tb, error: tbErr } = await supabase
+      .from('textbooks').select('id,owner_class_id').eq('id', textbookId).maybeSingle()
+    if (tbErr) {
+      res.status(500).json({ ok: false, reason: 'db_error' })
+      return
+    }
+    if (!tb || !tb.owner_class_id) {
+      res.status(200).json({ ok: false, reason: 'invalid_textbook' })
+      return
+    }
+
+    let { data: target, error: selErr } = await supabase
+      .from('student_class_assignments')
+      .select('id,current_unit_id')
+      .eq('student_id', studentId).eq('textbook_id', textbookId).maybeSingle()
+    if (selErr) {
+      res.status(500).json({ ok: false, reason: 'db_error' })
+      return
+    }
+    if (!target) {
+      const { data: legacyRow, error: legacyErr } = await supabase
+        .from('student_class_assignments')
+        .select('id,current_unit_id')
+        .eq('student_id', studentId).eq('class_id', tb.owner_class_id).is('textbook_id', null).maybeSingle()
+      if (legacyErr) {
+        res.status(500).json({ ok: false, reason: 'db_error' })
+        return
+      }
+      if (legacyRow) {
+        const { error: claimErr } = await supabase.from('student_class_assignments')
+          .update({ textbook_id: textbookId }).eq('id', legacyRow.id)
+        if (claimErr) {
+          res.status(500).json({ ok: false, reason: 'db_error' })
+          return
+        }
+        target = { id: legacyRow.id, current_unit_id: legacyRow.current_unit_id }
+      }
+    }
+    if (!target) {
+      const { error: insErr } = await supabase.from('student_class_assignments').insert({
+        student_id: studentId, class_id: tb.owner_class_id, textbook_id: textbookId,
+        current_unit_id: null, is_primary: false,
+      })
+      if (insErr && insErr.code !== '23505') {
+        res.status(500).json({ ok: false, reason: 'db_error' })
+        return
+      }
+      ;({ data: target, error: selErr } = await supabase
+        .from('student_class_assignments')
+        .select('id,current_unit_id')
+        .eq('student_id', studentId).eq('textbook_id', textbookId).maybeSingle())
+      if (selErr || !target) {
+        res.status(500).json({ ok: false, reason: 'db_error' })
+        return
+      }
+    }
+
+    const { data: outgoingRows, error: outErr } = await supabase
+      .from('student_class_assignments')
+      .select('id').eq('student_id', studentId).eq('is_primary', true).neq('id', target.id)
+    if (outErr) {
+      res.status(500).json({ ok: false, reason: 'db_error' })
+      return
+    }
+    if ((outgoingRows || []).length > 0) {
+      const { data: liveStudent, error: liveErr } = await supabase
+        .from('students').select('current_unit_id').eq('id', studentId).maybeSingle()
+      const capturedUnitId = (!liveErr && liveStudent && liveStudent.current_unit_id != null)
+        ? liveStudent.current_unit_id : null
+      if (capturedUnitId != null) {
+        for (const row of outgoingRows) {
+          const { error: healErr } = await supabase.from('student_class_assignments')
+            .update({ current_unit_id: capturedUnitId }).eq('id', row.id)
+          if (healErr) {
+            res.status(500).json({ ok: false, reason: 'db_error' })
+            return
+          }
+        }
+      }
+    }
+
+    const { error: trueErr } = await supabase.from('student_class_assignments')
+      .update({ is_primary: true }).eq('id', target.id)
+    if (trueErr) {
+      res.status(500).json({ ok: false, reason: 'db_error' })
+      return
+    }
+    const { error: falseErr } = await supabase.from('student_class_assignments')
+      .update({ is_primary: false }).eq('student_id', studentId).neq('id', target.id)
+    if (falseErr) {
+      res.status(500).json({ ok: false, reason: 'db_error' })
+      return
+    }
+
+    const { data: tbUnitsRows } = await supabase.from('units').select('id,name,position').eq('class_id', tb.owner_class_id)
+    const tbUnits = Array.isArray(tbUnitsRows) ? tbUnitsRows : []
+    let syncUnitId = target.current_unit_id
+    if (syncUnitId != null && !tbUnits.some((u) => u.id === syncUnitId)) syncUnitId = null
+    if (syncUnitId == null && tbUnits.length > 0) {
+      const { data: wordRows } = await supabase.from('words').select('unit_id').in('unit_id', tbUnits.map((u) => u.id))
+      const countByUnit = new Map()
+      for (const w of wordRows || []) countByUnit.set(w.unit_id, (countByUnit.get(w.unit_id) || 0) + 1)
+      const sorted = [...tbUnits].sort((a, b) =>
+        ((a.position ?? Infinity) - (b.position ?? Infinity)) ||
+        String(a.name).localeCompare(String(b.name), undefined, { numeric: true }) ||
+        String(a.id).localeCompare(String(b.id)))
+      syncUnitId = (sorted.find((u) => (countByUnit.get(u.id) || 0) > 0) || sorted[0])?.id ?? null
+      if (syncUnitId != null) {
+        const { error: fillErr } = await supabase.from('student_class_assignments')
+          .update({ current_unit_id: syncUnitId }).eq('id', target.id)
+        if (fillErr) {
+          res.status(500).json({ ok: false, reason: 'db_error' })
+          return
+        }
+      }
+    }
+    const { error: syncErr } = await supabase.from('students')
+      .update({ current_unit_id: syncUnitId }).eq('id', studentId)
+    if (syncErr) {
+      res.status(500).json({ ok: false, reason: 'db_error' })
+      return
+    }
+    res.status(200).json({ ok: true })
+    return
+  }
+}
+
+// ── Phase 2b Step 1-B 공용 헬퍼 — SCA(student_class_assignments) primary
+// 배정 유지보수. wordLibrary.js:2305-2367(대략) maintainPrimaryAssignmentFor
+// ClassChange 서버 이식. 클라이언트의 _textbookMode/_textbookFetchFailed
+// 전역 플래그(반이 실제 교재 테이블에 연결됐는지 여부 캐시)가 서버에는
+// 없으므로, 매 호출마다 textbooks 테이블에 실제 행이 있는지 직접 조회해
+// 같은 분기를 재현한다(원본의 "_textbooks.size > 0" 판정과 동일 의미 —
+// 테이블 자체가 없으면 레거시 분기, 테이블은 있는데 조회 자체가 실패하면
+// 원본의 _textbookFetchFailed와 동일하게 안전한(비파괴) 분기로 fail-safe).
+async function isTextbookModeActive(supabase) {
+  const { count, error } = await supabase
+    .from('textbooks')
+    .select('id', { count: 'exact', head: true })
+  if (error) {
+    if (isMissingTableError(error)) return { mode: false, failed: false }
+    return { mode: false, failed: true }
+  }
+  return { mode: (count || 0) > 0, failed: false }
+}
+
+async function getOwnTextbookIdOfClass(supabase, classId) {
+  const { data, error } = await supabase.from('textbooks').select('id').eq('owner_class_id', classId).maybeSingle()
+  if (error || !data) return null
+  return data.id
+}
+
+async function maintainPrimaryAssignmentForClassChange(supabase, studentId, classId, unitId) {
+  try {
+    if (!studentId || !classId) return
+    const { mode: textbookMode, failed: fetchFailed } = await isTextbookModeActive(supabase)
+    if (textbookMode || fetchFailed) {
+      const { error: demErr } = await supabase.from('student_class_assignments')
+        .update({ is_primary: false }).eq('student_id', studentId).eq('is_primary', true).neq('class_id', classId)
+      if (demErr) {
+        if (isMissingTableError(demErr)) return
+        throw demErr
+      }
+      const ownId = await getOwnTextbookIdOfClass(supabase, classId)
+      const { error: insErr } = await supabase.from('student_class_assignments').insert({
+        student_id: studentId, class_id: classId, textbook_id: ownId,
+        current_unit_id: unitId ?? null, is_primary: true,
+      })
+      if (insErr) {
+        if (insErr.code === '23505') {
+          const { error: updErr } = await supabase.from('student_class_assignments')
+            .update({ is_primary: true }).eq('student_id', studentId).eq('class_id', classId)
+          if (updErr) throw updErr
+        } else if (!isMissingTableError(insErr)) {
+          throw insErr
+        }
+      }
+      return
+    }
+    const { error: delErr } = await supabase.from('student_class_assignments')
+      .delete().eq('student_id', studentId).eq('is_primary', true).neq('class_id', classId)
+    if (delErr) {
+      if (isMissingTableError(delErr)) return
+      throw delErr
+    }
+    const { error: insErr } = await supabase.from('student_class_assignments').insert({
+      student_id: studentId, class_id: classId, current_unit_id: unitId ?? null, is_primary: true,
+    })
+    if (insErr) {
+      if (insErr.code === '23505') {
+        const { error: updErr } = await supabase.from('student_class_assignments')
+          .update({ is_primary: true }).eq('student_id', studentId).eq('class_id', classId)
+        if (updErr) throw updErr
+      } else if (!isMissingTableError(insErr)) {
+        throw insErr
+      }
+    }
+  } catch (err) {
+    console.warn('[admin-pin-actions] 반 배정 assignment 행 유지보수 실패 (non-fatal):', err?.message || err)
   }
 }
 

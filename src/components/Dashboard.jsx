@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { getStudentClass, getStudentClassId, getStudentUnit, getClassNames, getClassUnitNames, getTodaysAssignmentWordIds, getClassSettings, getClassIdByName, getStudentById, fetchHouseWeeklyScore, fetchHouseSeasonScore, isTextbookMode, getStudentPrimaryTextbook, getTextbookUnits } from '../utils/wordLibrary'
+import { getStudentClass, getStudentClassId, getStudentUnit, getClassNames, getTodaysAssignmentWordIds, getClassSettings, getClassIdByName, getStudentById, fetchHouseWeeklyScore, fetchHouseSeasonScore, isTextbookMode, getStudentPrimaryTextbook, getLearnableTextbookUnits, getLearnableClassUnitNames } from '../utils/wordLibrary'
 // v2.9(2026-07-21, decision 0004 다중 교재) — 2개 이상 교재가 배정된
 // 학생에게만 나타나는 선택기. 0/1개면 컴포넌트 자체가 아무것도 렌더하지
 // 않는다(TextbookSelector.jsx 참고) — 기존 294명 단일-반 학생 화면은
@@ -399,9 +399,15 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
   // v3.1 교재 모드 — 유닛 목록은 현재 교재의 유닛(반이 아니라). 합성/레거시
   // 모드에서는 기존 반 기반 목록 그대로(변화 0). 계층: 반 → 교재 → 유닛.
   const primaryTb = isTextbookMode() ? getStudentPrimaryTextbook(studentId) : null
+  // 2026-09-02(유령 유닛 셀렉터 노출 봉합) — 학생 유닛 셀렉트에 단어<2
+  // 유닛(엑셀 헤더 잔재/빈 유닛)이 옵션으로 뜨지 않게 learnable 버전으로
+  // 교체. 현재 저장된 유닛이 필터로 목록에서 빠져도 표시가 깨지지 않는
+  // 이유: 아래 렌더 로직(약 200줄 뒤, `!unitNames.includes(unitName) &&
+  // <option value={unitName}>{unitName}</option>`)이 목록 밖 현재 값을
+  // 이미 옵션으로 유지해준다 — 이 함수는 손대지 않는다.
   const unitNames = primaryTb
-    ? getTextbookUnits(primaryTb.id).map((u) => u.name)
-    : (className && !classDeleted ? getClassUnitNames(className) : [])
+    ? getLearnableTextbookUnits(primaryTb.id).map((u) => u.name)
+    : (className && !classDeleted ? getLearnableClassUnitNames(className) : [])
   const [unitSwitching, setUnitSwitching] = useState(false)
   const [unitSwitchError, setUnitSwitchError] = useState('')
   const handleUnitChange = async (nextUnit, selectEl) => {

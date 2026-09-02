@@ -3,6 +3,9 @@ import {
   getClassNameById, getClassUnits, setStudentUnit,
   getStudentClassAssignments, assignTextbook, removeTextbookAssignment, setAssignmentUnit,
   getAllTextbooks, getOwnTextbookOfClass,
+  // 2026-09-02(유령 유닛 셀렉터 노출 봉합) — 유닛 select 옵션에서 단어<2
+  // 유닛(엑셀 헤더 잔재/빈 유닛)을 제외하는 버전.
+  getLearnableClassUnits,
 } from '../../utils/wordLibrary'
 
 // v2.9 다중 교재(Multi-Textbook) 관리자 UI — decision 0004
@@ -136,7 +139,16 @@ export default function TextbookAssignmentPanel({ studentId, onChanged }) {
             // 행 라벨 = 교과서 이름 우선(정책 9), textbookId 해석 불가 시 기존 반 이름 라벨로 폴백.
             const tbForRow = a.textbookId ? getAllTextbooks().find((t) => t.id === a.textbookId) : null
             const label = tbForRow?.name || clsName || '(알 수 없는 반)'
-            const units = clsName ? getClassUnits(clsName) : []
+            // 2026-09-02 — 학습 가능 유닛(단어>=2)만 옵션으로. 단, 이 행의
+            // 현재 unitId가 필터로 빠지면(과거에 유령 유닛에 배정된 행 등)
+            // 드롭다운 표시가 깨지지 않도록 그 유닛을 목록 맨 앞에 유지하고
+            // 이름 뒤에 표기를 붙여 구분한다(학습 불가 상태를 숨기지 않음).
+            const learnableUnits = clsName ? getLearnableClassUnits(clsName) : []
+            const currentUnit = a.unitId && clsName ? getClassUnits(clsName).find((u) => u.id === a.unitId) : null
+            const currentMissing = currentUnit && !learnableUnits.some((u) => u.id === a.unitId)
+            const units = currentMissing
+              ? [{ ...currentUnit, name: `${currentUnit.name} (단어 부족)` }, ...learnableUnits]
+              : learnableUnits
             return (
               <div key={a.classId} className="flex items-center gap-2 bg-white rounded-lg px-2 py-1.5">
                 <span className="text-xs font-bold text-gray-700 flex-shrink-0 max-w-[7rem] overflow-hidden text-ellipsis whitespace-nowrap" title={label}>

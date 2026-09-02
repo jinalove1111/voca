@@ -1,0 +1,30 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "pin-auth-session-phase2b-step1a",
+  "task": "PIN 로그인 성공 시 Supabase Auth 세션(hashed magiclink 토큰)을 플래그(STUDENT_AUTH_SESSION) 뒤에서 선택적으로 발급 + 관리자용 반별 PIN 미설정 로스터 조회 모드 + checkAdminReauth timingSafeEqual 치환",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-02T00:00:00Z",
+  "updated_at": "2026-09-02T00:00:00Z",
+  "files_owned": [
+    "api/_pinAuth.js",
+    "api/verify-student-pin.js",
+    "api/student-pin-status.js",
+    "scripts/testStudentsRlsPhase2b.mjs"
+  ],
+  "files_read": [
+    "api/admin-pin-actions.js 는 읽지 않음(동시 작업 중이라 지시에 따라 완전 미접촉)",
+    "scripts/testPinSetupCapability.mjs",
+    "scripts/testSessionTokenAuth.mjs",
+    "scripts/testAdminPinActionsDispatch.mjs",
+    "scripts/testStudentSelectPinStatus.mjs",
+    "src/utils/paulRankShared.js",
+    "package.json",
+    ".ai-status/README.md",
+    ".ai-status/implementer-pin-setup-code-lookup.json"
+  ],
+  "summary": "api/_pinAuth.js에 isStudentAuthSessionEnabled/studentAuthEmail/ensureStudentAuthUser/issueStudentAuthTokenHash 추가(전부 throw 없음, fail-closed 원칙), checkAdminReauth의 === 비교를 crypto.timingSafeEqual로 교체(응답/상태코드 무변경). api/verify-student-pin.js는 STUDENT_AUTH_SESSION='1'|'true' + SUPABASE_SERVICE_ROLE_KEY 설정 시에만 로그인 성공 응답에 authTokenHash를 조건부 스프레드로 추가(fail-open, console.warn만 남김) — 정적 검사(testSessionTokenAuth.mjs)가 `ok: true, ... })` 한 리터럴을 전제하므로 authTokenHash는 별도 변수로 미리 계산해 최종 res.json 리터럴 안에서만 병합. api/student-pin-status.js에 { className } 로스터 모드 추가(pin_hash IS NULL & pin_setup_allowed=true만, __INACTIVE__/QA_ 제외, 이름순 정렬, 반 미존재->빈 배열 200, 중복 반->400 ambiguous_class, studentIds와 동시 전달->400 invalid_request, 기존 studentIds 모드 무회귀). scripts/testStudentsRlsPhase2b.mjs 신규(esbuild+인메모리 가짜 supabase-js, auth.admin.{createUser,generateLink,updateUserById} 포함) — 규칙 15 FAIL-first: 구현 전 87개 단언 중 25개(신규 기능 섹션 0/2/3/3b/4a/7abcd)가 정확히 실패하고 회귀 섹션(1/5/6/8)은 전부 PASS함을 실측한 뒤 구현, 구현 후 87/87 PASS. 부수 발견: Node 24 + Windows에서 esbuild 서비스 프로세스와 라이브 fetch(섹션9 읽기 전용 HEAD)가 겹친 상태로 process.exit(1)을 강제 호출하면 `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)` 네이티브 크래시가 남 — process.exitCode만 설정하고 자연 종료로 바꿔 해결(다른 verify 스크립트에도 잠재할 수 있는 환경 이슈, 이번 세션 범위 밖이라 별도 보고만).",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 대기. api/admin-pin-actions.js는 동시 작업 중인 다른 세션 소유라 이번 변경에 전혀 포함되지 않음(git diff --stat에 잡히지만 내 세션이 만든 변경 아님, git add/commit 자체를 하지 않았음). Phase C(RLS 전환)는 이번 범위 밖 — 그때 라이브 기준선 섹션(9)에 PHASE2B_EXPECT_LOCKED=1로 재확인 필요."
+}
