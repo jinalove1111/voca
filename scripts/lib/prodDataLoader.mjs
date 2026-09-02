@@ -18,6 +18,7 @@
 // 후속 작업에서 studentHealthCheck.mjs 가 이 모듈을 import 하도록 통합해
 // 중복을 없애는 것을 권장한다.
 import fs from 'node:fs'
+import crypto from 'node:crypto'
 
 /**
  * .env 또는 process.env 에서 Supabase 자격증명을 읽는다.
@@ -82,17 +83,133 @@ export async function loadProductionSnapshot(supabase) {
     // (studentHealthCheck.mjs 는 이 컬럼을 안 쓰므로 셀렉트 목록이 여기서
     // 갈린다 — 의도된 차이).
     selectAll(supabase.base, headers, 'students', 'id,name,class_id,current_unit_id,unit_name'),
-    selectAll(supabase.base, headers, 'classes', 'id,name,spelling_direction'),
+    // class_type 도 함께 받는다 — CLASS_ASSIGNMENT_CONTRADICTION/
+    // STUDENT_CLASS_IS_CONTAINER invariant 가 교재 컨테이너 반(class_type=
+    // 'textbook')을 사람 반과 구분하는 데 필요(2026-09-03, Phase 8b 코디네이터 정정).
+    selectAll(supabase.base, headers, 'classes', 'id,name,spelling_direction,class_type'),
     selectAll(supabase.base, headers, 'textbooks', 'id,name,owner_class_id'),
     selectAll(supabase.base, headers, 'units', 'id,name,textbook_id'),
     // word,meaning 도 함께 받는다 — 유령 유닛(엑셀 헤더 잔재) 판정에 필요.
     selectAll(supabase.base, headers, 'words', 'id,unit_id,word,meaning'),
+    // created_at 도 함께 받는다 — CLASS_ASSIGNMENT_CONTRADICTION invariant 의
+    // detail(최신/최초 배정일)에 필요(2026-09-03, Phase 8 확장).
     selectAll(supabase.base, headers, 'student_class_assignments',
-      'student_id,class_id,textbook_id,is_primary,current_unit_id'),
+      'student_id,class_id,textbook_id,is_primary,current_unit_id,created_at'),
   ])
   return {
     students, classes, textbooks, units, words, assignments,
     fetchedAt: new Date().toISOString(),
     projectRef: supabase.projectRef || null,
   }
+}
+
+// ── 학습기록 baseline (2026-09-03, Phase 8) ─────────────────────────────
+// prod:hotfix(다른 에이전트, scripts/prodHotfix.mjs)가 students/
+// student_class_assignments 행 자체의 before/after 스냅샷·해시는 이미
+// 찍지만(sha256Json 패턴), "이 학생들의 학습기록 6종 테이블이 핫픽스
+// 전후로 그대로인가"는 별도 관심사라 다루지 않는다. 여기서는 행 내용을
+// 통째로 읽지 않고(개인 학습 상세를 리포트에 남기지 않기 위해) 테이블별
+// **행 수(HEAD count)** 만 비교한다 — student_progress 는 예외로
+// updated_at/total_stars 두 값만 추가로 본다(요약 지표로 변화 여부를
+// 빠르게 확인하기 위함, 전체 progress_data jsonb 는 절대 읽지 않는다).
+export const LEARNING_BASELINE_TABLES = [
+  'word_status', 'student_progress', 'student_daily_progress',
+  'spelling_review_queue', 'xp_ledger', 'entrance_test_results',
+]
+
+// PostgREST 는 HEAD + Prefer: count=exact 조합에서 본문 없이
+// Content-Range: */<total> (또는 0-N/<total>) 헤더로 총 행수를 돌려준다 —
+// 행 내용을 내려받지 않는다(READ-ONLY 원칙 + 불필요한 개인 데이터 노출 방지).
+async function headCount(base, headers, table, studentId) {
+  const url = `${base}/rest/v1/${table}?select=student_id&student_id=eq.${encodeURIComponent(studentId)}`
+  let res
+  try {
+    res = await fetch(url, { method: 'HEAD', headers: { ...headers, Prefer: 'count=exact' }, signal: AbortSignal.timeout(20000) })
+  } catch (err) {
+    throw new Error(`INFRA_ERROR ${table}(head): ${err?.message || err}`)
+  }
+  if (!res.ok && res.status !== 206) throw new Error(`INFRA_ERROR ${table}(head): HTTP ${res.status}`)
+  const range = res.headers.get('content-range') || ''
+  const m = /\/(\d+)$/.exec(range)
+  return m ? Number(m[1]) : 0
+}
+
+async function fetchStudentProgressValues(base, headers, studentId) {
+  const url = `${base}/rest/v1/student_progress?select=updated_at,total_stars&student_id=eq.${encodeURIComponent(studentId)}&limit=1`
+  let res
+  try {
+    res = await fetch(url, { headers, signal: AbortSignal.timeout(20000) })
+  } catch (err) {
+    throw new Error(`INFRA_ERROR student_progress(values): ${err?.message || err}`)
+  }
+  if (!res.ok) throw new Error(`INFRA_ERROR student_progress(values): HTTP ${res.status}`)
+  const rows = await res.json()
+  const row = rows[0] || null
+  return { updatedAt: row?.updated_at ?? null, totalStars: row?.total_stars ?? null }
+}
+
+/**
+ * 학생별 학습기록 baseline 을 읽는다(공유용 — prod:check/prod:hotfix 양쪽에서
+ * 쓸 수 있게 순수 로더로 분리했다). GET/HEAD 전용, 쓰기 경로 없음.
+ * 행 내용은 절대 읽지 않는다(student_progress 의 updated_at/total_stars
+ * 두 값만 예외) — 학생 개인 학습 상세가 리포트 파일에 남지 않게 하기 위함.
+ * @param {{base:string,key:string}} supabase loadSupabaseEnv() 반환값
+ * @param {string[]} studentIds
+ * @returns {Promise<{students: Record<string, {counts: Record<string, number>, studentProgress: {updatedAt: string|null, totalStars: number|null}}>, sha256: string, tables: string[], generatedAt: string}>}
+ */
+export async function loadLearningBaseline(supabase, studentIds) {
+  if (!supabase?.base || !supabase?.key) {
+    throw new Error('loadLearningBaseline: base/key 가 필요합니다(loadSupabaseEnv() 결과를 넘기세요).')
+  }
+  const ids = Array.isArray(studentIds) ? [...new Set(studentIds.filter((v) => typeof v === 'string' && v))] : []
+  const headers = { apikey: supabase.key, Authorization: `Bearer ${supabase.key}` }
+  const students = {}
+  for (const id of ids) {
+    const counts = {}
+    for (const table of LEARNING_BASELINE_TABLES) {
+      counts[table] = await headCount(supabase.base, headers, table, id)
+    }
+    const studentProgress = await fetchStudentProgressValues(supabase.base, headers, id)
+    students[id] = { counts, studentProgress }
+  }
+  const sha256 = crypto.createHash('sha256').update(JSON.stringify(students)).digest('hex')
+  return { students, sha256, tables: LEARNING_BASELINE_TABLES, generatedAt: new Date().toISOString() }
+}
+
+/**
+ * 두 baseline(loadLearningBaseline() 반환값과 동일 shape)을 비교한다.
+ * 순수 함수(네트워크 없음). 학생별 카운트/student_progress 값이 달라진
+ * 항목만 나열한다 — 변화가 없으면 빈 배열.
+ * @param {ReturnType<typeof loadLearningBaseline> extends Promise<infer T> ? T : never} a "before"
+ * @param {*} b "after"
+ * @returns {Array<{studentId:string, field:string, before:*, after:*}>}
+ */
+export function diffLearningBaseline(a, b) {
+  const changes = []
+  const studentsA = a?.students || {}
+  const studentsB = b?.students || {}
+  const allIds = new Set([...Object.keys(studentsA), ...Object.keys(studentsB)])
+  for (const id of allIds) {
+    const sa = studentsA[id]
+    const sb = studentsB[id]
+    if (sa && !sb) { changes.push({ studentId: id, field: '_presence', before: 'present', after: 'missing' }); continue }
+    if (!sa && sb) { changes.push({ studentId: id, field: '_presence', before: 'missing', after: 'present' }); continue }
+    if (!sa || !sb) continue
+    for (const table of LEARNING_BASELINE_TABLES) {
+      const before = sa.counts?.[table] ?? null
+      const after = sb.counts?.[table] ?? null
+      if (before !== after) changes.push({ studentId: id, field: `counts.${table}`, before, after })
+    }
+    const beforeUpdatedAt = sa.studentProgress?.updatedAt ?? null
+    const afterUpdatedAt = sb.studentProgress?.updatedAt ?? null
+    if (beforeUpdatedAt !== afterUpdatedAt) {
+      changes.push({ studentId: id, field: 'studentProgress.updatedAt', before: beforeUpdatedAt, after: afterUpdatedAt })
+    }
+    const beforeStars = sa.studentProgress?.totalStars ?? null
+    const afterStars = sb.studentProgress?.totalStars ?? null
+    if (beforeStars !== afterStars) {
+      changes.push({ studentId: id, field: 'studentProgress.totalStars', before: beforeStars, after: afterStars })
+    }
+  }
+  return changes
 }
