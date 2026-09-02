@@ -1,11 +1,26 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-08-05 (38차, 37차가 배포까지 마친 Word Asset 시스템
-전체(이미지/예문/memory tip/distractor/음성/저장/캐시/재생성) 8축 재검증
-지시를 수행 — 검증 과정에서 실버그 2건 발견·수정: ①AI 생성 무저장 침묵
-(패널이 서버 응답을 버리고 뭉뚱그린 배너만 표시, `f19ed56`) ②학생 삭제
-무반응 + 관리자 캐시 1000행 잘림 P0(`removeStudent()` no-op +
-`refreshStudents()` PostgREST 기본 상한, `8e15ff7`) — 후자는 최초 진단이
-틀렸음을 헌법 규칙 15로 재현·증명 후 발견됨. 상세는 아래 38차 섹션)_
+_최종 갱신: 2026-09-02 (101차, Supabase Security Advisor `rls_disabled_in_public`
+CRITICAL 대응 Phase 1 — 백업 5테이블 + `reward_migration_log` 락다운(v3_45)
+운영자 실행 완료. 상세는 아래 101차 섹션)_
+
+## 2026-09-02 (101차) — Supabase Security Advisor rls_disabled_in_public CRITICAL 대응 Phase 1: 백업 5 + reward_migration_log 락다운(v3_45, 운영자 실행 완료)
+
+- 계기: Supabase Security Advisor가 `rls_disabled_in_public` CRITICAL 경고 발생. READ-ONLY 감사(anon key HEAD/GET 프로브 + `supabase_*.sql` 정적 분석 + `src/`/`api/` 전수 grep)로 RLS OFF 테이블을 확정.
+- **실측 확정 대상 6개**: `students`(RLS 비활성·정책 0, `v3_42` 커밋 본문에 명시 — 컬럼 GRANT 전략으로만 보호, Phase 2 대상) + `backup_20260809_paul_dedup`(3행)/`backup_20260809_roster_v324`(17)/`_v325`(33)/`_v327`(87)/`_v328`(6) — `v3_23`/`v3_24`/`v3_25`/`v3_27`/`v3_28`이 `create table as select`로 만든 학생 id·이름 스냅샷이며 RLS/GRANT 구문 없이 생성돼 public 기본 권한으로 anon이 SELECT 200으로 읽히던 상태.
+- `reward_migration_log`는 처음엔 RLS OFF로 오판했으나 운영자 VERIFY 실측으로 **이미 RLS ON + 정책 0 + 실데이터 1행(`v3_37` 완료 마커)** 임이 확인됨(anon에는 0행으로 보였던 이유 = RLS 필터가 이미 걸려 있었음). 즉 `v3_37` baseline은 정상 적용된 상태 — v3_45의 실질 효과는 이 테이블에 한해 anon/authenticated GRANT 회수뿐.
+- **대응 SQL 신규 3파일**: `supabase_v3_45_lockdown_backup_tables.sql` + `_ROLLBACK.sql` + `_VERIFY.sql`(SELECT 전용). 본문 = 위 6개 테이블(존재 확인 후, `to_regclass` 가드) `enable row level security` + `revoke all on table ... from anon, authenticated`, 정책 0개(default deny), FORCE 미사용(postgres 소유자·service_role BYPASSRLS 유지), `notify pgrst 'reload schema'`, 사후검증 `do $$` 블록(RLS false 또는 anon/authenticated GRANT 잔존 시 `raise exception`). DML 0건, 이 6개 외 테이블 무접촉. 앱 코드 참조 0건(`src/`/`api/`/`supabase/functions/` 전수 grep) — 기능 영향 0.
+- **운영자가 2026-09-02 Supabase SQL Editor에서 v3_45 실행 완료**(VERIFY 실행 전 1회 → 본문 → VERIFY 실행 후 1회). VERIFY ④ 행 수는 실행 전/후 동일: 3/17/33/87/6/1.
+- **사후 anon 프로브**(HEAD 전용, 쓰기 0) 결과: 6개 테이블 전부 401/42501로 전환. 학생/학습/콘텐츠 17개 테이블(students 484, student_class_assignments 341, word_status 2963, student_progress 192, student_daily_progress 843, spelling_review_queue 603, entrance_tests 78, entrance_test_results 307, xp_ledger 569, classes 18, units 54, words 1816, textbooks 10, class_textbooks 24, examples 25, daily_assignments 1, seasons 1) 행 수는 조사 시작 시점과 동일(회귀 0). `students` 컬럼 GRANT 불변(허용 컬럼 206, `pin_hash`/`pin_setup_allowed` 조회 시 여전히 42501). `reward_ledger` 42501 유지.
+- **문서 stale 정정(감사 중 발견, 실측 근거)**: `DATABASE.md`의 `v2_8`/`v2_9`/`v3_6`~`v3_9`/`v3_11`/`v3_13`/`v3_15` `[미실행]` 태그는 stale — 전부 실행됨(handoff 근거 다수). `DATABASE.md` 465행 "classes/units/words 저장소에 RLS SQL 없음"은 `v3_11`(2026-08-02 실행)로 SELECT-only 락다운이 이미 완료된 상태를 반영하지 못한 서술. `reward_ledger`/`reward_totals`는 `v3_36` 실행됨(anon 42501 실측). 반대로 `v2_4`/`v2_6`/`v2_7`/`v3_34`는 **미실행 확인**(`word_king_history` 404, `house_id`/`account_status` 컬럼 42703). `DATABASE.md`에 정정 서브섹션을 별도 append(상세는 그쪽 참고).
+- **남은 보안 과제(Phase 2 이후, 미착수)**:
+  1. `students` RLS — 2a: RLS ON + 현행 GRANT와 동일한 select/update 전체허용 정책으로 경고만 해소 → 2b: 로그인 API가 Supabase 검증 JWT(student_id/admin 클레임) 발급 + 본인행/admin 정책으로 전환(선행 확인 필요: 대시보드 legacy HS256 JWT secret 활성 여부 + "PIN 만들기" 로스터 축소 방식).
+  2. `entrance_test_results` — 준비된 `v2_4` 실행만으로 해소.
+  3. `student_class_assignments`/`word_status`/`student_progress`/`student_daily_progress`/`spelling_review_queue`/`entrance_tests`/`textbooks`/`class_textbooks` — RLS는 ON이지만 "allow anon all" 정책이고 앱이 anon 직접 쓰기에 의존 → 2b JWT 구조 완성 후에나 잠글 수 있음.
+  4. `examples` 등 `v3_13` 5개 신규 테이블은 락다운 합류 블록이 SQL 파일에 준비만 돼 있고 미실행.
+  5. `api/grant-xp.js`의 레거시 `xp_ledger` 분기만 세션 토큰 미검증(reward 분기는 검증됨) — 코드 수정 필요, docs-maintainer 범위 아님(implementer 위임 대상).
+  6. `backup_20260807_students`/`backup_20260807_student_class_assignments`는 anon 42501이지만 RLS 플래그 자체는 미확인(Advisor에 계속 남을 수 있음) — 별도 확인 필요.
+- **안전 준수**: 이번 세션 Production DB WRITE 0(에이전트), SQL 실행 0(에이전트 — 실행은 전부 운영자), 학생 데이터 변경 0, 코드 수정 0(SQL 신규 파일 3개만), push/deploy 0.
+- 관련 파일: `C:\voca\supabase_v3_45_lockdown_backup_tables.sql`, `C:\voca\supabase_v3_45_lockdown_backup_tables_ROLLBACK.sql`, `C:\voca\supabase_v3_45_lockdown_backup_tables_VERIFY.sql`, `C:\voca\DATABASE.md`("RLS / 컬럼권한 현황" 신규 서브섹션), `.ai-status/security-rls-phase1-v3_45.json`.
 
 ## 2026-09-02 (100차) — 야간 자율 세션: 유령 유닛 root cause 확정 + 재발 방지 코드 + Phase 2 SQL 패키지 (Production DB 무접촉)
 

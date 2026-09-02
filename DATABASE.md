@@ -140,6 +140,8 @@ seasons                                    ※ FK 없음, 반/학생과 무관�
 
 28. `supabase_v3_20_neungnyul_container_class.sql`(2026-08-08, 61차 — 능률 교과서 전용 컨테이너 이사) — 신규 컬럼/테이블 없음. 교과서 "고1 능률 민병천"(09c073dd…)의 소유(`textbooks.owner_class_id`)와 유닛 2행(`units.class_id`)이 v3_18 개명 잔재로 실반 "Presentation 6"(초등, 1693f32b…) 밑에 남아있던 것을, 다른 6개 교과서 컨테이너와 동일한 전용 컨테이너 반 "고1 능률 민병천"(신규, `class_type='textbook'`)으로 이사(단순 MS Advanced 직접 소유 이전은 반당 1권 전제 코드 3곳이 깨져 기각). `class_textbooks` 링크는 컨테이너 자기링크 + `MS Advanced Class`(0249067d…) 신규 추가, `Presentation 6` 링크는 제거. 5개 스텝 전부 조건부(이름/현재소유/현재소속 일치 시에만) — 재실행 시 0행, 멱등(규칙 9). GRANT 불필요(기존 테이블/컬럼만 사용, 규칙 10 미해당). **[실행됨 — 운영자가 Supabase SQL Editor에서 실행, 검증 11/11 PASS: 컨테이너 생성/소유권 이전/유닛 2행 이동(Unit1 40단어 보존)/class_textbooks 링크(자기+MS Advanced, P6 부재)/SCA 8건 불변/실반 목록 3개 유지/P6 잔여 유닛 0/student_progress 79 불변]**. 상세: `handoff.md` 2026-08-08(61차).
 
+29. `supabase_v3_45_lockdown_backup_tables.sql`(2026-09-02, Supabase Security Advisor `rls_disabled_in_public` CRITICAL 대응 Phase 1) — 신규 컬럼/테이블 없음. `backup_20260809_paul_dedup`/`backup_20260809_roster_v324`/`_v325`/`_v327`/`_v328`(전부 `v3_23`/`v3_24`/`v3_25`/`v3_27`/`v3_28`이 만든 학생 id·이름 스냅샷, RLS/GRANT 없이 생성돼 anon SELECT 200이 실측됨) + `reward_migration_log`(이미 RLS ON·정책 0였으나 anon/authenticated GRANT가 남아있던 상태)까지 총 6개 테이블에 대해 `to_regclass` 존재 확인 후 `enable row level security` + `revoke all ... from anon, authenticated`(정책 0개, default deny). 앱 코드 참조 0건(전수 grep), DML 0. `_ROLLBACK.sql`/`_VERIFY.sql`(SELECT 전용) 동봉. **[적용됨, 2026-09-02 — 운영자가 Supabase SQL Editor에서 VERIFY(실행 전)→본문→VERIFY(실행 후) 순서로 실행, 행 수 3/17/33/87/6/1 불변 확인, 사후 anon 프로브 6개 테이블 전부 401/42501 전환]**. 상세: `handoff.md` 2026-09-02(101차), 아래 "RLS / 컬럼권한 현황" 신규 서브섹션.
+
 ## `student_class_assignments` (v2.9, 2026-07-21 — 코드 배포 완료 / SQL 미실행)
 
 학생 1계정이 여러 반(=교재 컨테이너, "핵심 결정" 참고)을 동시에 진행할 수 있게 하는 신규 다대다 조인 테이블. 설계 전문은 `docs/agent-decisions/0004-multi-textbook-architecture.md`, DDL 원문은 `supabase_v2_9_student_class_assignments.sql`.
@@ -463,6 +465,35 @@ INSERT, 목록에서 빠진 단어만 DELETE. 겹치는 단어의 `word_status`�
 - **운영 함정(반드시 지킬 것)**: `students`에 새 컬럼을 추가하는 모든 향후 마이그레이션은 `grant select (새컬럼) on public.students to anon, authenticated;`(필요시 `update`도)를 **반드시 같이** 실행해야 합니다 — 안 하면 그 컬럼만 못 읽는 게 아니라 클라이언트가 원래 읽던 컬럼까지 한 번에 깨질 수 있는 fail-closed 구조입니다(v2.1이 이 절차를 올바르게 준수한 사례로 확인됨, `handoff.md` 2026-07-18 Phase 4).
 
 **`classes`/`units`/`words` — 저장소에 RLS/GRANT SQL 없음**: 위 grep 결과 기준으로 이 3테이블에 대한 `enable row level security`/`create policy`는 어떤 마이그레이션 파일에도 없습니다(원본 대시보드 생성 당시 설정이 무엇인지 파일로 확인 불가 — 핵심 4테이블 DDL 부재와 같은 뿌리의 기술부채). `words.accepted_meanings`만 v2.0에서 명시적으로 컬럼 GRANT 됨.
+
+**정정(2026-09-02)**: 위 문단의 "`classes`/`units`/`words` 저장소에 RLS/GRANT SQL 없음"은 `words`에 대해서는 stale합니다 — `supabase_v3_11_lockdown_curriculum_write.sql`이 2026-08-02 실행되어 `words`는 이미 anon SELECT-only 락다운이 완료된 상태입니다(anon key로 `words` INSERT 시도 시 42501 실측 — 위 372~374행 "RLS 설계 정정" 문단 참고). `classes`/`units`에 대한 이 문단의 서술은 이번 세션(2026-09-02) 감사 범위 밖이라 정정하지 않습니다(재확인 없이 "맞다"고도 쓰지 않습니다 — 다음 세션 재확인 대상).
+
+### 2026-09-02 v3_45 백업/로그 테이블 락다운 + RLS 현황 정정
+
+_추가: 2026-09-02(101차). Supabase Security Advisor `rls_disabled_in_public` CRITICAL 경고 대응 Phase 1. 상세 배경/전문은 `handoff.md` 2026-09-02(101차) 섹션 참고, 이 서브섹션은 DB 상태 사실만 기록._
+
+- **`supabase_v3_45_lockdown_backup_tables.sql` 적용됨(운영자 실행, 2026-09-02)**: `backup_20260809_paul_dedup`(3행)/`backup_20260809_roster_v324`(17)/`_v325`(33)/`_v327`(87)/`_v328`(6)/`reward_migration_log`(1행) — 6개 테이블 전부 `enable row level security` + anon/authenticated `GRANT` 0건(정책 0개, default deny) 확정. 사후 anon HEAD 프로브 6개 전부 401/42501. VERIFY 행 수는 실행 전/후 불변(위 목록과 동일) — 데이터 변경 없음, 접근만 차단.
+- **`students`는 여전히 RLS OFF**입니다(v3_45 대상 아님) — 위 "`students` — RLS 대신 컬럼 단위 GRANT (v1.9, 유일하게 다른 전략)" 절의 컬럼 GRANT 전략으로만 보호되는 상태가 그대로 유지됩니다. Security Advisor는 이 테이블에 대해 계속 `rls_disabled_in_public`을 보고할 것으로 예상됩니다 — 해소하려면 Phase 2(RLS ON + 현행 GRANT와 동등한 permissive 정책, 이후 검증 JWT 기반 본인행 정책으로 전환)가 필요하며 이번 세션 범위 밖입니다.
+- **문서 stale 태그 정정표**(2026-09-02 실측 기준, grep/anon 프로브 근거):
+
+| SQL 파일 | 이 문서의 기존 `[…]` 태그 | 실제 상태(2026-09-02 실측) | 근거 |
+|---|---|---|---|
+| `supabase_v2_8_seasonal_progression.sql` | `[미실행]` | 실행됨(`seasons` 테이블 anon 조회 가능, 1행) | 사후 anon 프로브(`seasons` 1행) |
+| `supabase_v2_9_student_class_assignments.sql` | `[미실행]` | 실행됨(`student_class_assignments` anon 조회 341행) | 사후 anon 프로브 |
+| `supabase_v3_6_*`/`v3_7_*`/`v3_8_ai_usage_daily.sql` | 별도 섹션 미문서화(사실상 미실행 취급) | 실행됨 | handoff.md 다수 세션 기록(2026-08 초 AI 보조 캐시 운영 로그) |
+| `supabase_v3_9_writing_answer_statistics.sql` | `[미실행]` | 실행됨 | handoff.md 근거 |
+| `supabase_v3_11_lockdown_curriculum_write.sql` | (본문 내 "이미 적용돼 있음이 확인됐다"로 이미 정정됨, 372행) | 실행됨(2026-08-02) — `words` anon SELECT-only | 위 372~374행 실측 + 이번 세션 anon INSERT 시도 42501 재확인 |
+| `supabase_v3_13_curriculum_engine_phase0.sql` | `[미실행]` | 실행됨(`examples` anon 조회 25행) | 사후 anon 프로브 |
+| `supabase_v3_15_word_assets.sql` | `[미실행]` | 실행됨 | handoff.md 근거(Word Asset 시스템 38차 배포 전제) |
+
+  반대로 아래는 **미실행이 이번 세션에서 재확인**됨(태그 변경 불필요, 기존 `[미실행]` 태그가 정확함):
+  - `supabase_v2_4_entrance_result_rls.sql` — 미실행(위 15번 항목 태그 그대로 정확).
+  - `supabase_v2_6_word_king.sql` — 미실행(`word_king_history` 조회 시 404 실측).
+  - `supabase_v2_7_house_system.sql` — 미실행(`students.house_id` 컬럼 조회 시 42703 실측).
+  - `supabase_v3_34_*`(계정 상태 관리, 이 문서 마이그레이션 목록에 아직 미등재) — 미실행(`students.account_status` 컬럼 조회 시 42703 실측).
+  - 반대로 `reward_ledger`/`reward_totals`(`v3_36`)는 **실행 확인**(anon 42501 = RLS+정책 정상 동작, 테이블 자체는 존재).
+
+  이 표는 태그 정정 목적의 스냅샷이며, 위 각 항목의 원 태그 문단은 규칙 13(append-only)에 따라 삭제하지 않고 그대로 둡니다 — 이 표를 최신 상태로 우선 참고하세요.
 
 ## 관련 파일
 
