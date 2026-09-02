@@ -1,0 +1,28 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "prod-safety-harness-1a",
+  "task": "Production Safety Harness 1단계 A: npm run prod:check (읽기 전용 크로스 테이블 불변식 검사) 구현",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-02T18:00:00Z",
+  "updated_at": "2026-09-02T18:25:00Z",
+  "files_owned": [
+    "scripts/lib/prodDataLoader.mjs",
+    "scripts/lib/prodInvariants.mjs",
+    "scripts/prodCheck.mjs",
+    "scripts/testProdCheck.mjs",
+    "scripts/prod/fixtures/ghost-unit-landing-20260902.json"
+  ],
+  "files_read": [
+    "scripts/studentHealthCheck.mjs",
+    "scripts/lib/studentHealthRules.mjs",
+    "scripts/testStudentHealthRules.mjs",
+    "package.json",
+    "tests/harness/registry.mjs",
+    "DATABASE.md"
+  ],
+  "summary": "loadProductionSnapshot()(studentHealthCheck.mjs 로더와 동일 계약, GET 전용)와 evaluateInvariants()(9개 코드: STUDENT_UNIT_ORPHAN/SCA_UNIT_ORPHAN/STUDENT_GHOST_UNIT/SCA_GHOST_UNIT/UNIT_NAME_MISMATCH/PRIMARY_UNIT_MISMATCH/PRIMARY_TEXTBOOK_MISMATCH/UNIT_WORDS_ABNORMAL/GHOST_UNIT_PRESENT)를 순수 함수로 구현하고, scripts/prodCheck.mjs CLI(--json/--fixture/--report-dir/--expect-ref, process.exitCode 사용)로 묶었다. 2026-09-02 유령 유닛 착륙 실사고를 anonymize한 회귀 픽스처(before/after)를 만들고 scripts/testProdCheck.mjs(39단언, FAIL-first 정신으로 순서대로 구현) 전부 PASS. 라이브 1회 실행(anon, GET만) 결과 health PASS 27/WARN 10/FAIL 0, invariants FAIL 0/WARN 50(SCA_GHOST_UNIT ~10 + PRIMARY_UNIT_MISMATCH 다수(Cherry 포함) + UNIT_WORDS_ABNORMAL 5 + GHOST_UNIT_PRESENT 7) — 운영자 사전 예측과 정합. package.json/tests/harness/registry.mjs/scripts/studentHealthCheck.mjs/scripts/lib/studentHealthRules.mjs 전부 미수정 확인(git diff 무변경).",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 요청. package.json 소유 에이전트가 여유될 때 \"verify:prod-check\": \"node scripts/testProdCheck.mjs\" 및 \"prod:check\": \"node scripts/prodCheck.mjs\" 등록, tests/harness/registry.mjs 도메인 편입 검토. scripts/studentHealthCheck.mjs 와의 로더 중복은 후속 통합 과제로 남김(이번 작업 범위 밖, 파일 소유권 충돌 회피)."
+}

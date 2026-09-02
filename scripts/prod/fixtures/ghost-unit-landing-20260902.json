@@ -1,0 +1,2702 @@
+{
+  "case": "ghost-unit-landing-20260902",
+  "before": {
+    "data": {
+      "classes": [
+        {
+          "id": "39e9acb1-cbd0-4863-8c43-5256b01e784e",
+          "name": "Pre-Middle School",
+          "spelling_direction": "kr2en"
+        },
+        {
+          "id": "1693f32b-af23-4364-8d66-d4dc5b20eaa6",
+          "name": "Presentation 6",
+          "spelling_direction": "kr2en"
+        }
+      ],
+      "textbooks": [
+        {
+          "id": "1ba6ec3d-b557-47b5-a480-3dbb5ed12e62",
+          "name": "2학년 천재교육 소영순",
+          "owner_class_id": null
+        },
+        {
+          "id": "faf6dc71-c929-491e-beaa-b175d558b7e2",
+          "name": "중1 동아 윤정미",
+          "owner_class_id": null
+        }
+      ],
+      "units": [
+        {
+          "id": "113ee184-c5c7-4ee5-8b6c-99d547a06525",
+          "name": "Unit",
+          "textbook_id": "1ba6ec3d-b557-47b5-a480-3dbb5ed12e62"
+        },
+        {
+          "id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "name": "Unit5",
+          "textbook_id": "1ba6ec3d-b557-47b5-a480-3dbb5ed12e62"
+        },
+        {
+          "id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "name": "Unit1",
+          "textbook_id": "1ba6ec3d-b557-47b5-a480-3dbb5ed12e62"
+        },
+        {
+          "id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "name": "Unit2",
+          "textbook_id": "faf6dc71-c929-491e-beaa-b175d558b7e2"
+        },
+        {
+          "id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "name": "Unit5",
+          "textbook_id": "faf6dc71-c929-491e-beaa-b175d558b7e2"
+        },
+        {
+          "id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "name": "Unit 7",
+          "textbook_id": "faf6dc71-c929-491e-beaa-b175d558b7e2"
+        }
+      ],
+      "words": [
+        {
+          "id": "w1",
+          "unit_id": "113ee184-c5c7-4ee5-8b6c-99d547a06525",
+          "word": "No.",
+          "meaning": "어휘·어구"
+        },
+        {
+          "id": "w2",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word1",
+          "meaning": "뜻1"
+        },
+        {
+          "id": "w3",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word2",
+          "meaning": "뜻2"
+        },
+        {
+          "id": "w4",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word3",
+          "meaning": "뜻3"
+        },
+        {
+          "id": "w5",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word4",
+          "meaning": "뜻4"
+        },
+        {
+          "id": "w6",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word5",
+          "meaning": "뜻5"
+        },
+        {
+          "id": "w7",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word6",
+          "meaning": "뜻6"
+        },
+        {
+          "id": "w8",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word7",
+          "meaning": "뜻7"
+        },
+        {
+          "id": "w9",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word8",
+          "meaning": "뜻8"
+        },
+        {
+          "id": "w10",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word9",
+          "meaning": "뜻9"
+        },
+        {
+          "id": "w11",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word10",
+          "meaning": "뜻10"
+        },
+        {
+          "id": "w12",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word11",
+          "meaning": "뜻11"
+        },
+        {
+          "id": "w13",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word12",
+          "meaning": "뜻12"
+        },
+        {
+          "id": "w14",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word13",
+          "meaning": "뜻13"
+        },
+        {
+          "id": "w15",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word14",
+          "meaning": "뜻14"
+        },
+        {
+          "id": "w16",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word15",
+          "meaning": "뜻15"
+        },
+        {
+          "id": "w17",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word16",
+          "meaning": "뜻16"
+        },
+        {
+          "id": "w18",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word17",
+          "meaning": "뜻17"
+        },
+        {
+          "id": "w19",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word18",
+          "meaning": "뜻18"
+        },
+        {
+          "id": "w20",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word19",
+          "meaning": "뜻19"
+        },
+        {
+          "id": "w21",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word20",
+          "meaning": "뜻20"
+        },
+        {
+          "id": "w22",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word21",
+          "meaning": "뜻21"
+        },
+        {
+          "id": "w23",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word22",
+          "meaning": "뜻22"
+        },
+        {
+          "id": "w24",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word23",
+          "meaning": "뜻23"
+        },
+        {
+          "id": "w25",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word24",
+          "meaning": "뜻24"
+        },
+        {
+          "id": "w26",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word25",
+          "meaning": "뜻25"
+        },
+        {
+          "id": "w27",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word26",
+          "meaning": "뜻26"
+        },
+        {
+          "id": "w28",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word27",
+          "meaning": "뜻27"
+        },
+        {
+          "id": "w29",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word28",
+          "meaning": "뜻28"
+        },
+        {
+          "id": "w30",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word29",
+          "meaning": "뜻29"
+        },
+        {
+          "id": "w31",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word30",
+          "meaning": "뜻30"
+        },
+        {
+          "id": "w32",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word31",
+          "meaning": "뜻31"
+        },
+        {
+          "id": "w33",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word32",
+          "meaning": "뜻32"
+        },
+        {
+          "id": "w34",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word33",
+          "meaning": "뜻33"
+        },
+        {
+          "id": "w35",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word34",
+          "meaning": "뜻34"
+        },
+        {
+          "id": "w36",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word35",
+          "meaning": "뜻35"
+        },
+        {
+          "id": "w37",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word36",
+          "meaning": "뜻36"
+        },
+        {
+          "id": "w38",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word37",
+          "meaning": "뜻37"
+        },
+        {
+          "id": "w39",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word38",
+          "meaning": "뜻38"
+        },
+        {
+          "id": "w40",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word39",
+          "meaning": "뜻39"
+        },
+        {
+          "id": "w41",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word40",
+          "meaning": "뜻40"
+        },
+        {
+          "id": "w42",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word1",
+          "meaning": "뜻1"
+        },
+        {
+          "id": "w43",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word2",
+          "meaning": "뜻2"
+        },
+        {
+          "id": "w44",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word3",
+          "meaning": "뜻3"
+        },
+        {
+          "id": "w45",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word4",
+          "meaning": "뜻4"
+        },
+        {
+          "id": "w46",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word5",
+          "meaning": "뜻5"
+        },
+        {
+          "id": "w47",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word6",
+          "meaning": "뜻6"
+        },
+        {
+          "id": "w48",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word7",
+          "meaning": "뜻7"
+        },
+        {
+          "id": "w49",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word8",
+          "meaning": "뜻8"
+        },
+        {
+          "id": "w50",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word9",
+          "meaning": "뜻9"
+        },
+        {
+          "id": "w51",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word10",
+          "meaning": "뜻10"
+        },
+        {
+          "id": "w52",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word11",
+          "meaning": "뜻11"
+        },
+        {
+          "id": "w53",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word12",
+          "meaning": "뜻12"
+        },
+        {
+          "id": "w54",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word13",
+          "meaning": "뜻13"
+        },
+        {
+          "id": "w55",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word14",
+          "meaning": "뜻14"
+        },
+        {
+          "id": "w56",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word15",
+          "meaning": "뜻15"
+        },
+        {
+          "id": "w57",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word16",
+          "meaning": "뜻16"
+        },
+        {
+          "id": "w58",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word17",
+          "meaning": "뜻17"
+        },
+        {
+          "id": "w59",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word18",
+          "meaning": "뜻18"
+        },
+        {
+          "id": "w60",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word19",
+          "meaning": "뜻19"
+        },
+        {
+          "id": "w61",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word20",
+          "meaning": "뜻20"
+        },
+        {
+          "id": "w62",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word21",
+          "meaning": "뜻21"
+        },
+        {
+          "id": "w63",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word22",
+          "meaning": "뜻22"
+        },
+        {
+          "id": "w64",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word23",
+          "meaning": "뜻23"
+        },
+        {
+          "id": "w65",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word24",
+          "meaning": "뜻24"
+        },
+        {
+          "id": "w66",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word25",
+          "meaning": "뜻25"
+        },
+        {
+          "id": "w67",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word26",
+          "meaning": "뜻26"
+        },
+        {
+          "id": "w68",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word27",
+          "meaning": "뜻27"
+        },
+        {
+          "id": "w69",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word28",
+          "meaning": "뜻28"
+        },
+        {
+          "id": "w70",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word29",
+          "meaning": "뜻29"
+        },
+        {
+          "id": "w71",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word30",
+          "meaning": "뜻30"
+        },
+        {
+          "id": "w72",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word31",
+          "meaning": "뜻31"
+        },
+        {
+          "id": "w73",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word32",
+          "meaning": "뜻32"
+        },
+        {
+          "id": "w74",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word33",
+          "meaning": "뜻33"
+        },
+        {
+          "id": "w75",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word34",
+          "meaning": "뜻34"
+        },
+        {
+          "id": "w76",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word35",
+          "meaning": "뜻35"
+        },
+        {
+          "id": "w77",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word36",
+          "meaning": "뜻36"
+        },
+        {
+          "id": "w78",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word37",
+          "meaning": "뜻37"
+        },
+        {
+          "id": "w79",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word38",
+          "meaning": "뜻38"
+        },
+        {
+          "id": "w80",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word39",
+          "meaning": "뜻39"
+        },
+        {
+          "id": "w81",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word40",
+          "meaning": "뜻40"
+        },
+        {
+          "id": "w82",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word1",
+          "meaning": "뜻1"
+        },
+        {
+          "id": "w83",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word2",
+          "meaning": "뜻2"
+        },
+        {
+          "id": "w84",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word3",
+          "meaning": "뜻3"
+        },
+        {
+          "id": "w85",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word4",
+          "meaning": "뜻4"
+        },
+        {
+          "id": "w86",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word5",
+          "meaning": "뜻5"
+        },
+        {
+          "id": "w87",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word6",
+          "meaning": "뜻6"
+        },
+        {
+          "id": "w88",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word7",
+          "meaning": "뜻7"
+        },
+        {
+          "id": "w89",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word8",
+          "meaning": "뜻8"
+        },
+        {
+          "id": "w90",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word9",
+          "meaning": "뜻9"
+        },
+        {
+          "id": "w91",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word10",
+          "meaning": "뜻10"
+        },
+        {
+          "id": "w92",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word11",
+          "meaning": "뜻11"
+        },
+        {
+          "id": "w93",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word12",
+          "meaning": "뜻12"
+        },
+        {
+          "id": "w94",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word13",
+          "meaning": "뜻13"
+        },
+        {
+          "id": "w95",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word14",
+          "meaning": "뜻14"
+        },
+        {
+          "id": "w96",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word15",
+          "meaning": "뜻15"
+        },
+        {
+          "id": "w97",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word16",
+          "meaning": "뜻16"
+        },
+        {
+          "id": "w98",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word17",
+          "meaning": "뜻17"
+        },
+        {
+          "id": "w99",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word18",
+          "meaning": "뜻18"
+        },
+        {
+          "id": "w100",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word19",
+          "meaning": "뜻19"
+        },
+        {
+          "id": "w101",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word20",
+          "meaning": "뜻20"
+        },
+        {
+          "id": "w102",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word21",
+          "meaning": "뜻21"
+        },
+        {
+          "id": "w103",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word22",
+          "meaning": "뜻22"
+        },
+        {
+          "id": "w104",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word23",
+          "meaning": "뜻23"
+        },
+        {
+          "id": "w105",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word24",
+          "meaning": "뜻24"
+        },
+        {
+          "id": "w106",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word25",
+          "meaning": "뜻25"
+        },
+        {
+          "id": "w107",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word26",
+          "meaning": "뜻26"
+        },
+        {
+          "id": "w108",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word27",
+          "meaning": "뜻27"
+        },
+        {
+          "id": "w109",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word28",
+          "meaning": "뜻28"
+        },
+        {
+          "id": "w110",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word29",
+          "meaning": "뜻29"
+        },
+        {
+          "id": "w111",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word30",
+          "meaning": "뜻30"
+        },
+        {
+          "id": "w112",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word31",
+          "meaning": "뜻31"
+        },
+        {
+          "id": "w113",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word32",
+          "meaning": "뜻32"
+        },
+        {
+          "id": "w114",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word33",
+          "meaning": "뜻33"
+        },
+        {
+          "id": "w115",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word34",
+          "meaning": "뜻34"
+        },
+        {
+          "id": "w116",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word35",
+          "meaning": "뜻35"
+        },
+        {
+          "id": "w117",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word36",
+          "meaning": "뜻36"
+        },
+        {
+          "id": "w118",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word37",
+          "meaning": "뜻37"
+        },
+        {
+          "id": "w119",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word38",
+          "meaning": "뜻38"
+        },
+        {
+          "id": "w120",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word39",
+          "meaning": "뜻39"
+        },
+        {
+          "id": "w121",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word40",
+          "meaning": "뜻40"
+        },
+        {
+          "id": "w122",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word1",
+          "meaning": "뜻1"
+        },
+        {
+          "id": "w123",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word2",
+          "meaning": "뜻2"
+        },
+        {
+          "id": "w124",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word3",
+          "meaning": "뜻3"
+        },
+        {
+          "id": "w125",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word4",
+          "meaning": "뜻4"
+        },
+        {
+          "id": "w126",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word5",
+          "meaning": "뜻5"
+        },
+        {
+          "id": "w127",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word6",
+          "meaning": "뜻6"
+        },
+        {
+          "id": "w128",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word7",
+          "meaning": "뜻7"
+        },
+        {
+          "id": "w129",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word8",
+          "meaning": "뜻8"
+        },
+        {
+          "id": "w130",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word9",
+          "meaning": "뜻9"
+        },
+        {
+          "id": "w131",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word10",
+          "meaning": "뜻10"
+        },
+        {
+          "id": "w132",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word11",
+          "meaning": "뜻11"
+        },
+        {
+          "id": "w133",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word12",
+          "meaning": "뜻12"
+        },
+        {
+          "id": "w134",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word13",
+          "meaning": "뜻13"
+        },
+        {
+          "id": "w135",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word14",
+          "meaning": "뜻14"
+        },
+        {
+          "id": "w136",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word15",
+          "meaning": "뜻15"
+        },
+        {
+          "id": "w137",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word16",
+          "meaning": "뜻16"
+        },
+        {
+          "id": "w138",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word17",
+          "meaning": "뜻17"
+        },
+        {
+          "id": "w139",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word18",
+          "meaning": "뜻18"
+        },
+        {
+          "id": "w140",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word19",
+          "meaning": "뜻19"
+        },
+        {
+          "id": "w141",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word20",
+          "meaning": "뜻20"
+        },
+        {
+          "id": "w142",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word21",
+          "meaning": "뜻21"
+        },
+        {
+          "id": "w143",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word22",
+          "meaning": "뜻22"
+        },
+        {
+          "id": "w144",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word23",
+          "meaning": "뜻23"
+        },
+        {
+          "id": "w145",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word24",
+          "meaning": "뜻24"
+        },
+        {
+          "id": "w146",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word25",
+          "meaning": "뜻25"
+        },
+        {
+          "id": "w147",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word26",
+          "meaning": "뜻26"
+        },
+        {
+          "id": "w148",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word27",
+          "meaning": "뜻27"
+        },
+        {
+          "id": "w149",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word28",
+          "meaning": "뜻28"
+        },
+        {
+          "id": "w150",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word29",
+          "meaning": "뜻29"
+        },
+        {
+          "id": "w151",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word30",
+          "meaning": "뜻30"
+        },
+        {
+          "id": "w152",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word31",
+          "meaning": "뜻31"
+        },
+        {
+          "id": "w153",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word32",
+          "meaning": "뜻32"
+        },
+        {
+          "id": "w154",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word33",
+          "meaning": "뜻33"
+        },
+        {
+          "id": "w155",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word34",
+          "meaning": "뜻34"
+        },
+        {
+          "id": "w156",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word35",
+          "meaning": "뜻35"
+        },
+        {
+          "id": "w157",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word36",
+          "meaning": "뜻36"
+        },
+        {
+          "id": "w158",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word37",
+          "meaning": "뜻37"
+        },
+        {
+          "id": "w159",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word38",
+          "meaning": "뜻38"
+        },
+        {
+          "id": "w160",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word39",
+          "meaning": "뜻39"
+        },
+        {
+          "id": "w161",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word40",
+          "meaning": "뜻40"
+        },
+        {
+          "id": "w162",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word1",
+          "meaning": "뜻1"
+        },
+        {
+          "id": "w163",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word2",
+          "meaning": "뜻2"
+        },
+        {
+          "id": "w164",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word3",
+          "meaning": "뜻3"
+        },
+        {
+          "id": "w165",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word4",
+          "meaning": "뜻4"
+        },
+        {
+          "id": "w166",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word5",
+          "meaning": "뜻5"
+        },
+        {
+          "id": "w167",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word6",
+          "meaning": "뜻6"
+        },
+        {
+          "id": "w168",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word7",
+          "meaning": "뜻7"
+        },
+        {
+          "id": "w169",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word8",
+          "meaning": "뜻8"
+        },
+        {
+          "id": "w170",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word9",
+          "meaning": "뜻9"
+        },
+        {
+          "id": "w171",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word10",
+          "meaning": "뜻10"
+        },
+        {
+          "id": "w172",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word11",
+          "meaning": "뜻11"
+        },
+        {
+          "id": "w173",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word12",
+          "meaning": "뜻12"
+        },
+        {
+          "id": "w174",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word13",
+          "meaning": "뜻13"
+        },
+        {
+          "id": "w175",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word14",
+          "meaning": "뜻14"
+        },
+        {
+          "id": "w176",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word15",
+          "meaning": "뜻15"
+        },
+        {
+          "id": "w177",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word16",
+          "meaning": "뜻16"
+        },
+        {
+          "id": "w178",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word17",
+          "meaning": "뜻17"
+        },
+        {
+          "id": "w179",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word18",
+          "meaning": "뜻18"
+        },
+        {
+          "id": "w180",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word19",
+          "meaning": "뜻19"
+        },
+        {
+          "id": "w181",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word20",
+          "meaning": "뜻20"
+        },
+        {
+          "id": "w182",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word21",
+          "meaning": "뜻21"
+        },
+        {
+          "id": "w183",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word22",
+          "meaning": "뜻22"
+        },
+        {
+          "id": "w184",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word23",
+          "meaning": "뜻23"
+        },
+        {
+          "id": "w185",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word24",
+          "meaning": "뜻24"
+        },
+        {
+          "id": "w186",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word25",
+          "meaning": "뜻25"
+        },
+        {
+          "id": "w187",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word26",
+          "meaning": "뜻26"
+        },
+        {
+          "id": "w188",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word27",
+          "meaning": "뜻27"
+        },
+        {
+          "id": "w189",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word28",
+          "meaning": "뜻28"
+        },
+        {
+          "id": "w190",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word29",
+          "meaning": "뜻29"
+        },
+        {
+          "id": "w191",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word30",
+          "meaning": "뜻30"
+        },
+        {
+          "id": "w192",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word31",
+          "meaning": "뜻31"
+        },
+        {
+          "id": "w193",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word32",
+          "meaning": "뜻32"
+        },
+        {
+          "id": "w194",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word33",
+          "meaning": "뜻33"
+        },
+        {
+          "id": "w195",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word34",
+          "meaning": "뜻34"
+        },
+        {
+          "id": "w196",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word35",
+          "meaning": "뜻35"
+        },
+        {
+          "id": "w197",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word36",
+          "meaning": "뜻36"
+        },
+        {
+          "id": "w198",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word37",
+          "meaning": "뜻37"
+        },
+        {
+          "id": "w199",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word38",
+          "meaning": "뜻38"
+        },
+        {
+          "id": "w200",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word39",
+          "meaning": "뜻39"
+        },
+        {
+          "id": "w201",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word40",
+          "meaning": "뜻40"
+        }
+      ],
+      "students": [
+        {
+          "id": "2c6845fc-b30e-4e4d-b260-d13c13fe7b9a",
+          "name": "StudentA",
+          "class_id": "39e9acb1-cbd0-4863-8c43-5256b01e784e",
+          "unit_name": "Unit5",
+          "current_unit_id": "113ee184-c5c7-4ee5-8b6c-99d547a06525"
+        },
+        {
+          "id": "bf05032a-8210-4082-8584-7e1afdcc02e2",
+          "name": "StudentB",
+          "class_id": "1693f32b-af23-4364-8d66-d4dc5b20eaa6",
+          "unit_name": "Unit2",
+          "current_unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f"
+        }
+      ],
+      "assignments": [
+        {
+          "id": "f9a14e8a-0a2f-4f5a-aaa7-8b6fc7f0db77",
+          "student_id": "2c6845fc-b30e-4e4d-b260-d13c13fe7b9a",
+          "class_id": "39e9acb1-cbd0-4863-8c43-5256b01e784e",
+          "textbook_id": "1ba6ec3d-b557-47b5-a480-3dbb5ed12e62",
+          "is_primary": true,
+          "current_unit_id": "113ee184-c5c7-4ee5-8b6c-99d547a06525"
+        },
+        {
+          "id": "c3514f7e-8693-4ced-a4cc-f13ea76ae2f0",
+          "student_id": "2c6845fc-b30e-4e4d-b260-d13c13fe7b9a",
+          "class_id": "1693f32b-af23-4364-8d66-d4dc5b20eaa6",
+          "textbook_id": "faf6dc71-c929-491e-beaa-b175d558b7e2",
+          "is_primary": false,
+          "current_unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30"
+        },
+        {
+          "id": "cf86c4d0-605b-45c5-a091-3905b448a7cb",
+          "student_id": "bf05032a-8210-4082-8584-7e1afdcc02e2",
+          "class_id": "1693f32b-af23-4364-8d66-d4dc5b20eaa6",
+          "textbook_id": "faf6dc71-c929-491e-beaa-b175d558b7e2",
+          "is_primary": true,
+          "current_unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb"
+        },
+        {
+          "id": "26708243-b465-4df9-b279-2f363c1b1b15",
+          "student_id": "bf05032a-8210-4082-8584-7e1afdcc02e2",
+          "class_id": "39e9acb1-cbd0-4863-8c43-5256b01e784e",
+          "textbook_id": "1ba6ec3d-b557-47b5-a480-3dbb5ed12e62",
+          "is_primary": false,
+          "current_unit_id": "113ee184-c5c7-4ee5-8b6c-99d547a06525"
+        }
+      ]
+    }
+  },
+  "after": {
+    "data": {
+      "classes": [
+        {
+          "id": "39e9acb1-cbd0-4863-8c43-5256b01e784e",
+          "name": "Pre-Middle School",
+          "spelling_direction": "kr2en"
+        },
+        {
+          "id": "1693f32b-af23-4364-8d66-d4dc5b20eaa6",
+          "name": "Presentation 6",
+          "spelling_direction": "kr2en"
+        }
+      ],
+      "textbooks": [
+        {
+          "id": "1ba6ec3d-b557-47b5-a480-3dbb5ed12e62",
+          "name": "2학년 천재교육 소영순",
+          "owner_class_id": null
+        },
+        {
+          "id": "faf6dc71-c929-491e-beaa-b175d558b7e2",
+          "name": "중1 동아 윤정미",
+          "owner_class_id": null
+        }
+      ],
+      "units": [
+        {
+          "id": "113ee184-c5c7-4ee5-8b6c-99d547a06525",
+          "name": "Unit",
+          "textbook_id": "1ba6ec3d-b557-47b5-a480-3dbb5ed12e62"
+        },
+        {
+          "id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "name": "Unit5",
+          "textbook_id": "1ba6ec3d-b557-47b5-a480-3dbb5ed12e62"
+        },
+        {
+          "id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "name": "Unit1",
+          "textbook_id": "1ba6ec3d-b557-47b5-a480-3dbb5ed12e62"
+        },
+        {
+          "id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "name": "Unit2",
+          "textbook_id": "faf6dc71-c929-491e-beaa-b175d558b7e2"
+        },
+        {
+          "id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "name": "Unit5",
+          "textbook_id": "faf6dc71-c929-491e-beaa-b175d558b7e2"
+        },
+        {
+          "id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "name": "Unit 7",
+          "textbook_id": "faf6dc71-c929-491e-beaa-b175d558b7e2"
+        }
+      ],
+      "words": [
+        {
+          "id": "w1",
+          "unit_id": "113ee184-c5c7-4ee5-8b6c-99d547a06525",
+          "word": "No.",
+          "meaning": "어휘·어구"
+        },
+        {
+          "id": "w2",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word1",
+          "meaning": "뜻1"
+        },
+        {
+          "id": "w3",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word2",
+          "meaning": "뜻2"
+        },
+        {
+          "id": "w4",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word3",
+          "meaning": "뜻3"
+        },
+        {
+          "id": "w5",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word4",
+          "meaning": "뜻4"
+        },
+        {
+          "id": "w6",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word5",
+          "meaning": "뜻5"
+        },
+        {
+          "id": "w7",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word6",
+          "meaning": "뜻6"
+        },
+        {
+          "id": "w8",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word7",
+          "meaning": "뜻7"
+        },
+        {
+          "id": "w9",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word8",
+          "meaning": "뜻8"
+        },
+        {
+          "id": "w10",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word9",
+          "meaning": "뜻9"
+        },
+        {
+          "id": "w11",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word10",
+          "meaning": "뜻10"
+        },
+        {
+          "id": "w12",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word11",
+          "meaning": "뜻11"
+        },
+        {
+          "id": "w13",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word12",
+          "meaning": "뜻12"
+        },
+        {
+          "id": "w14",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word13",
+          "meaning": "뜻13"
+        },
+        {
+          "id": "w15",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word14",
+          "meaning": "뜻14"
+        },
+        {
+          "id": "w16",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word15",
+          "meaning": "뜻15"
+        },
+        {
+          "id": "w17",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word16",
+          "meaning": "뜻16"
+        },
+        {
+          "id": "w18",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word17",
+          "meaning": "뜻17"
+        },
+        {
+          "id": "w19",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word18",
+          "meaning": "뜻18"
+        },
+        {
+          "id": "w20",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word19",
+          "meaning": "뜻19"
+        },
+        {
+          "id": "w21",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word20",
+          "meaning": "뜻20"
+        },
+        {
+          "id": "w22",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word21",
+          "meaning": "뜻21"
+        },
+        {
+          "id": "w23",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word22",
+          "meaning": "뜻22"
+        },
+        {
+          "id": "w24",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word23",
+          "meaning": "뜻23"
+        },
+        {
+          "id": "w25",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word24",
+          "meaning": "뜻24"
+        },
+        {
+          "id": "w26",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word25",
+          "meaning": "뜻25"
+        },
+        {
+          "id": "w27",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word26",
+          "meaning": "뜻26"
+        },
+        {
+          "id": "w28",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word27",
+          "meaning": "뜻27"
+        },
+        {
+          "id": "w29",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word28",
+          "meaning": "뜻28"
+        },
+        {
+          "id": "w30",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word29",
+          "meaning": "뜻29"
+        },
+        {
+          "id": "w31",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word30",
+          "meaning": "뜻30"
+        },
+        {
+          "id": "w32",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word31",
+          "meaning": "뜻31"
+        },
+        {
+          "id": "w33",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word32",
+          "meaning": "뜻32"
+        },
+        {
+          "id": "w34",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word33",
+          "meaning": "뜻33"
+        },
+        {
+          "id": "w35",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word34",
+          "meaning": "뜻34"
+        },
+        {
+          "id": "w36",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word35",
+          "meaning": "뜻35"
+        },
+        {
+          "id": "w37",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word36",
+          "meaning": "뜻36"
+        },
+        {
+          "id": "w38",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word37",
+          "meaning": "뜻37"
+        },
+        {
+          "id": "w39",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word38",
+          "meaning": "뜻38"
+        },
+        {
+          "id": "w40",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word39",
+          "meaning": "뜻39"
+        },
+        {
+          "id": "w41",
+          "unit_id": "4ce41359-6424-4b5e-933d-479db6951586",
+          "word": "word40",
+          "meaning": "뜻40"
+        },
+        {
+          "id": "w42",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word1",
+          "meaning": "뜻1"
+        },
+        {
+          "id": "w43",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word2",
+          "meaning": "뜻2"
+        },
+        {
+          "id": "w44",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word3",
+          "meaning": "뜻3"
+        },
+        {
+          "id": "w45",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word4",
+          "meaning": "뜻4"
+        },
+        {
+          "id": "w46",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word5",
+          "meaning": "뜻5"
+        },
+        {
+          "id": "w47",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word6",
+          "meaning": "뜻6"
+        },
+        {
+          "id": "w48",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word7",
+          "meaning": "뜻7"
+        },
+        {
+          "id": "w49",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word8",
+          "meaning": "뜻8"
+        },
+        {
+          "id": "w50",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word9",
+          "meaning": "뜻9"
+        },
+        {
+          "id": "w51",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word10",
+          "meaning": "뜻10"
+        },
+        {
+          "id": "w52",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word11",
+          "meaning": "뜻11"
+        },
+        {
+          "id": "w53",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word12",
+          "meaning": "뜻12"
+        },
+        {
+          "id": "w54",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word13",
+          "meaning": "뜻13"
+        },
+        {
+          "id": "w55",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word14",
+          "meaning": "뜻14"
+        },
+        {
+          "id": "w56",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word15",
+          "meaning": "뜻15"
+        },
+        {
+          "id": "w57",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word16",
+          "meaning": "뜻16"
+        },
+        {
+          "id": "w58",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word17",
+          "meaning": "뜻17"
+        },
+        {
+          "id": "w59",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word18",
+          "meaning": "뜻18"
+        },
+        {
+          "id": "w60",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word19",
+          "meaning": "뜻19"
+        },
+        {
+          "id": "w61",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word20",
+          "meaning": "뜻20"
+        },
+        {
+          "id": "w62",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word21",
+          "meaning": "뜻21"
+        },
+        {
+          "id": "w63",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word22",
+          "meaning": "뜻22"
+        },
+        {
+          "id": "w64",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word23",
+          "meaning": "뜻23"
+        },
+        {
+          "id": "w65",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word24",
+          "meaning": "뜻24"
+        },
+        {
+          "id": "w66",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word25",
+          "meaning": "뜻25"
+        },
+        {
+          "id": "w67",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word26",
+          "meaning": "뜻26"
+        },
+        {
+          "id": "w68",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word27",
+          "meaning": "뜻27"
+        },
+        {
+          "id": "w69",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word28",
+          "meaning": "뜻28"
+        },
+        {
+          "id": "w70",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word29",
+          "meaning": "뜻29"
+        },
+        {
+          "id": "w71",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word30",
+          "meaning": "뜻30"
+        },
+        {
+          "id": "w72",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word31",
+          "meaning": "뜻31"
+        },
+        {
+          "id": "w73",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word32",
+          "meaning": "뜻32"
+        },
+        {
+          "id": "w74",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word33",
+          "meaning": "뜻33"
+        },
+        {
+          "id": "w75",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word34",
+          "meaning": "뜻34"
+        },
+        {
+          "id": "w76",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word35",
+          "meaning": "뜻35"
+        },
+        {
+          "id": "w77",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word36",
+          "meaning": "뜻36"
+        },
+        {
+          "id": "w78",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word37",
+          "meaning": "뜻37"
+        },
+        {
+          "id": "w79",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word38",
+          "meaning": "뜻38"
+        },
+        {
+          "id": "w80",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word39",
+          "meaning": "뜻39"
+        },
+        {
+          "id": "w81",
+          "unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+          "word": "word40",
+          "meaning": "뜻40"
+        },
+        {
+          "id": "w82",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word1",
+          "meaning": "뜻1"
+        },
+        {
+          "id": "w83",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word2",
+          "meaning": "뜻2"
+        },
+        {
+          "id": "w84",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word3",
+          "meaning": "뜻3"
+        },
+        {
+          "id": "w85",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word4",
+          "meaning": "뜻4"
+        },
+        {
+          "id": "w86",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word5",
+          "meaning": "뜻5"
+        },
+        {
+          "id": "w87",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word6",
+          "meaning": "뜻6"
+        },
+        {
+          "id": "w88",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word7",
+          "meaning": "뜻7"
+        },
+        {
+          "id": "w89",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word8",
+          "meaning": "뜻8"
+        },
+        {
+          "id": "w90",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word9",
+          "meaning": "뜻9"
+        },
+        {
+          "id": "w91",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word10",
+          "meaning": "뜻10"
+        },
+        {
+          "id": "w92",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word11",
+          "meaning": "뜻11"
+        },
+        {
+          "id": "w93",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word12",
+          "meaning": "뜻12"
+        },
+        {
+          "id": "w94",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word13",
+          "meaning": "뜻13"
+        },
+        {
+          "id": "w95",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word14",
+          "meaning": "뜻14"
+        },
+        {
+          "id": "w96",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word15",
+          "meaning": "뜻15"
+        },
+        {
+          "id": "w97",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word16",
+          "meaning": "뜻16"
+        },
+        {
+          "id": "w98",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word17",
+          "meaning": "뜻17"
+        },
+        {
+          "id": "w99",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word18",
+          "meaning": "뜻18"
+        },
+        {
+          "id": "w100",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word19",
+          "meaning": "뜻19"
+        },
+        {
+          "id": "w101",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word20",
+          "meaning": "뜻20"
+        },
+        {
+          "id": "w102",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word21",
+          "meaning": "뜻21"
+        },
+        {
+          "id": "w103",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word22",
+          "meaning": "뜻22"
+        },
+        {
+          "id": "w104",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word23",
+          "meaning": "뜻23"
+        },
+        {
+          "id": "w105",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word24",
+          "meaning": "뜻24"
+        },
+        {
+          "id": "w106",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word25",
+          "meaning": "뜻25"
+        },
+        {
+          "id": "w107",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word26",
+          "meaning": "뜻26"
+        },
+        {
+          "id": "w108",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word27",
+          "meaning": "뜻27"
+        },
+        {
+          "id": "w109",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word28",
+          "meaning": "뜻28"
+        },
+        {
+          "id": "w110",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word29",
+          "meaning": "뜻29"
+        },
+        {
+          "id": "w111",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word30",
+          "meaning": "뜻30"
+        },
+        {
+          "id": "w112",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word31",
+          "meaning": "뜻31"
+        },
+        {
+          "id": "w113",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word32",
+          "meaning": "뜻32"
+        },
+        {
+          "id": "w114",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word33",
+          "meaning": "뜻33"
+        },
+        {
+          "id": "w115",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word34",
+          "meaning": "뜻34"
+        },
+        {
+          "id": "w116",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word35",
+          "meaning": "뜻35"
+        },
+        {
+          "id": "w117",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word36",
+          "meaning": "뜻36"
+        },
+        {
+          "id": "w118",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word37",
+          "meaning": "뜻37"
+        },
+        {
+          "id": "w119",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word38",
+          "meaning": "뜻38"
+        },
+        {
+          "id": "w120",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word39",
+          "meaning": "뜻39"
+        },
+        {
+          "id": "w121",
+          "unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f",
+          "word": "word40",
+          "meaning": "뜻40"
+        },
+        {
+          "id": "w122",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word1",
+          "meaning": "뜻1"
+        },
+        {
+          "id": "w123",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word2",
+          "meaning": "뜻2"
+        },
+        {
+          "id": "w124",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word3",
+          "meaning": "뜻3"
+        },
+        {
+          "id": "w125",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word4",
+          "meaning": "뜻4"
+        },
+        {
+          "id": "w126",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word5",
+          "meaning": "뜻5"
+        },
+        {
+          "id": "w127",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word6",
+          "meaning": "뜻6"
+        },
+        {
+          "id": "w128",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word7",
+          "meaning": "뜻7"
+        },
+        {
+          "id": "w129",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word8",
+          "meaning": "뜻8"
+        },
+        {
+          "id": "w130",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word9",
+          "meaning": "뜻9"
+        },
+        {
+          "id": "w131",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word10",
+          "meaning": "뜻10"
+        },
+        {
+          "id": "w132",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word11",
+          "meaning": "뜻11"
+        },
+        {
+          "id": "w133",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word12",
+          "meaning": "뜻12"
+        },
+        {
+          "id": "w134",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word13",
+          "meaning": "뜻13"
+        },
+        {
+          "id": "w135",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word14",
+          "meaning": "뜻14"
+        },
+        {
+          "id": "w136",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word15",
+          "meaning": "뜻15"
+        },
+        {
+          "id": "w137",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word16",
+          "meaning": "뜻16"
+        },
+        {
+          "id": "w138",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word17",
+          "meaning": "뜻17"
+        },
+        {
+          "id": "w139",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word18",
+          "meaning": "뜻18"
+        },
+        {
+          "id": "w140",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word19",
+          "meaning": "뜻19"
+        },
+        {
+          "id": "w141",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word20",
+          "meaning": "뜻20"
+        },
+        {
+          "id": "w142",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word21",
+          "meaning": "뜻21"
+        },
+        {
+          "id": "w143",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word22",
+          "meaning": "뜻22"
+        },
+        {
+          "id": "w144",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word23",
+          "meaning": "뜻23"
+        },
+        {
+          "id": "w145",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word24",
+          "meaning": "뜻24"
+        },
+        {
+          "id": "w146",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word25",
+          "meaning": "뜻25"
+        },
+        {
+          "id": "w147",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word26",
+          "meaning": "뜻26"
+        },
+        {
+          "id": "w148",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word27",
+          "meaning": "뜻27"
+        },
+        {
+          "id": "w149",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word28",
+          "meaning": "뜻28"
+        },
+        {
+          "id": "w150",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word29",
+          "meaning": "뜻29"
+        },
+        {
+          "id": "w151",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word30",
+          "meaning": "뜻30"
+        },
+        {
+          "id": "w152",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word31",
+          "meaning": "뜻31"
+        },
+        {
+          "id": "w153",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word32",
+          "meaning": "뜻32"
+        },
+        {
+          "id": "w154",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word33",
+          "meaning": "뜻33"
+        },
+        {
+          "id": "w155",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word34",
+          "meaning": "뜻34"
+        },
+        {
+          "id": "w156",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word35",
+          "meaning": "뜻35"
+        },
+        {
+          "id": "w157",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word36",
+          "meaning": "뜻36"
+        },
+        {
+          "id": "w158",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word37",
+          "meaning": "뜻37"
+        },
+        {
+          "id": "w159",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word38",
+          "meaning": "뜻38"
+        },
+        {
+          "id": "w160",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word39",
+          "meaning": "뜻39"
+        },
+        {
+          "id": "w161",
+          "unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30",
+          "word": "word40",
+          "meaning": "뜻40"
+        },
+        {
+          "id": "w162",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word1",
+          "meaning": "뜻1"
+        },
+        {
+          "id": "w163",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word2",
+          "meaning": "뜻2"
+        },
+        {
+          "id": "w164",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word3",
+          "meaning": "뜻3"
+        },
+        {
+          "id": "w165",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word4",
+          "meaning": "뜻4"
+        },
+        {
+          "id": "w166",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word5",
+          "meaning": "뜻5"
+        },
+        {
+          "id": "w167",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word6",
+          "meaning": "뜻6"
+        },
+        {
+          "id": "w168",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word7",
+          "meaning": "뜻7"
+        },
+        {
+          "id": "w169",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word8",
+          "meaning": "뜻8"
+        },
+        {
+          "id": "w170",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word9",
+          "meaning": "뜻9"
+        },
+        {
+          "id": "w171",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word10",
+          "meaning": "뜻10"
+        },
+        {
+          "id": "w172",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word11",
+          "meaning": "뜻11"
+        },
+        {
+          "id": "w173",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word12",
+          "meaning": "뜻12"
+        },
+        {
+          "id": "w174",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word13",
+          "meaning": "뜻13"
+        },
+        {
+          "id": "w175",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word14",
+          "meaning": "뜻14"
+        },
+        {
+          "id": "w176",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word15",
+          "meaning": "뜻15"
+        },
+        {
+          "id": "w177",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word16",
+          "meaning": "뜻16"
+        },
+        {
+          "id": "w178",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word17",
+          "meaning": "뜻17"
+        },
+        {
+          "id": "w179",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word18",
+          "meaning": "뜻18"
+        },
+        {
+          "id": "w180",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word19",
+          "meaning": "뜻19"
+        },
+        {
+          "id": "w181",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word20",
+          "meaning": "뜻20"
+        },
+        {
+          "id": "w182",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word21",
+          "meaning": "뜻21"
+        },
+        {
+          "id": "w183",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word22",
+          "meaning": "뜻22"
+        },
+        {
+          "id": "w184",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word23",
+          "meaning": "뜻23"
+        },
+        {
+          "id": "w185",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word24",
+          "meaning": "뜻24"
+        },
+        {
+          "id": "w186",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word25",
+          "meaning": "뜻25"
+        },
+        {
+          "id": "w187",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word26",
+          "meaning": "뜻26"
+        },
+        {
+          "id": "w188",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word27",
+          "meaning": "뜻27"
+        },
+        {
+          "id": "w189",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word28",
+          "meaning": "뜻28"
+        },
+        {
+          "id": "w190",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word29",
+          "meaning": "뜻29"
+        },
+        {
+          "id": "w191",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word30",
+          "meaning": "뜻30"
+        },
+        {
+          "id": "w192",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word31",
+          "meaning": "뜻31"
+        },
+        {
+          "id": "w193",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word32",
+          "meaning": "뜻32"
+        },
+        {
+          "id": "w194",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word33",
+          "meaning": "뜻33"
+        },
+        {
+          "id": "w195",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word34",
+          "meaning": "뜻34"
+        },
+        {
+          "id": "w196",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word35",
+          "meaning": "뜻35"
+        },
+        {
+          "id": "w197",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word36",
+          "meaning": "뜻36"
+        },
+        {
+          "id": "w198",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word37",
+          "meaning": "뜻37"
+        },
+        {
+          "id": "w199",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word38",
+          "meaning": "뜻38"
+        },
+        {
+          "id": "w200",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word39",
+          "meaning": "뜻39"
+        },
+        {
+          "id": "w201",
+          "unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb",
+          "word": "word40",
+          "meaning": "뜻40"
+        }
+      ],
+      "students": [
+        {
+          "id": "2c6845fc-b30e-4e4d-b260-d13c13fe7b9a",
+          "name": "StudentA",
+          "class_id": "39e9acb1-cbd0-4863-8c43-5256b01e784e",
+          "unit_name": "Unit5",
+          "current_unit_id": "4ce41359-6424-4b5e-933d-479db6951586"
+        },
+        {
+          "id": "bf05032a-8210-4082-8584-7e1afdcc02e2",
+          "name": "StudentB",
+          "class_id": "1693f32b-af23-4364-8d66-d4dc5b20eaa6",
+          "unit_name": "Unit2",
+          "current_unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f"
+        }
+      ],
+      "assignments": [
+        {
+          "id": "f9a14e8a-0a2f-4f5a-aaa7-8b6fc7f0db77",
+          "student_id": "2c6845fc-b30e-4e4d-b260-d13c13fe7b9a",
+          "class_id": "39e9acb1-cbd0-4863-8c43-5256b01e784e",
+          "textbook_id": "1ba6ec3d-b557-47b5-a480-3dbb5ed12e62",
+          "is_primary": true,
+          "current_unit_id": "4ce41359-6424-4b5e-933d-479db6951586"
+        },
+        {
+          "id": "c3514f7e-8693-4ced-a4cc-f13ea76ae2f0",
+          "student_id": "2c6845fc-b30e-4e4d-b260-d13c13fe7b9a",
+          "class_id": "1693f32b-af23-4364-8d66-d4dc5b20eaa6",
+          "textbook_id": "faf6dc71-c929-491e-beaa-b175d558b7e2",
+          "is_primary": false,
+          "current_unit_id": "ff9ef7e2-cc52-4205-8066-dc5abb17cf30"
+        },
+        {
+          "id": "cf86c4d0-605b-45c5-a091-3905b448a7cb",
+          "student_id": "bf05032a-8210-4082-8584-7e1afdcc02e2",
+          "class_id": "1693f32b-af23-4364-8d66-d4dc5b20eaa6",
+          "textbook_id": "faf6dc71-c929-491e-beaa-b175d558b7e2",
+          "is_primary": true,
+          "current_unit_id": "18f59bd6-18ea-426a-b356-e2dc807f3cdb"
+        },
+        {
+          "id": "26708243-b465-4df9-b279-2f363c1b1b15",
+          "student_id": "bf05032a-8210-4082-8584-7e1afdcc02e2",
+          "class_id": "39e9acb1-cbd0-4863-8c43-5256b01e784e",
+          "textbook_id": "1ba6ec3d-b557-47b5-a480-3dbb5ed12e62",
+          "is_primary": false,
+          "current_unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "before": {
+      "health": {
+        "fail": 1
+      },
+      "invariants": {
+        "findByCode": {
+          "STUDENT_GHOST_UNIT": [
+            {
+              "studentId": "2c6845fc-b30e-4e4d-b260-d13c13fe7b9a",
+              "severity": "FAIL"
+            }
+          ],
+          "SCA_GHOST_UNIT": [
+            {
+              "studentId": "bf05032a-8210-4082-8584-7e1afdcc02e2",
+              "severity": "WARN"
+            }
+          ],
+          "PRIMARY_UNIT_MISMATCH": [
+            {
+              "studentId": "bf05032a-8210-4082-8584-7e1afdcc02e2",
+              "severity": "WARN"
+            }
+          ],
+          "UNIT_NAME_MISMATCH": [
+            {
+              "studentId": "2c6845fc-b30e-4e4d-b260-d13c13fe7b9a",
+              "severity": "WARN"
+            }
+          ]
+        },
+        "summary": {
+          "fail": 1,
+          "warn": 5,
+          "pass": 0,
+          "checked": 2
+        }
+      }
+    },
+    "after": {
+      "health": {
+        "fail": 0
+      },
+      "invariants": {
+        "summary": {
+          "fail": 0,
+          "warn": 2,
+          "pass": 1,
+          "checked": 2
+        },
+        "stillPresentCodes": [
+          "PRIMARY_UNIT_MISMATCH",
+          "GHOST_UNIT_PRESENT"
+        ],
+        "goneCodesForStudent": {
+          "STUDENT_GHOST_UNIT": "2c6845fc-b30e-4e4d-b260-d13c13fe7b9a",
+          "SCA_GHOST_UNIT": "bf05032a-8210-4082-8584-7e1afdcc02e2",
+          "UNIT_NAME_MISMATCH": "2c6845fc-b30e-4e4d-b260-d13c13fe7b9a"
+        }
+      }
+    }
+  }
+}
