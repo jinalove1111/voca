@@ -1,0 +1,21 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "t4-legacy-primary-demote",
+  "task": "T4 정적 감사 Med #4 — maintainPrimaryAssignmentForClassChange 레거시 분기(delete 전 current_unit_id 캡처 없음) 수정",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-02T20:30:00Z",
+  "updated_at": "2026-09-02T20:47:35Z",
+  "files_owned": [
+    "src/utils/wordLibrary.js",
+    "scripts/testAssignmentUnitGuards.mjs"
+  ],
+  "files_read": [
+    "scripts/testAdminUnitEdit.mjs",
+    ".ai-status/README.md"
+  ],
+  "summary": "maintainPrimaryAssignmentForClassChange의 레거시 분기(_textbookMode===false && _textbookFetchFailed===false)가 이전 primary 행을 current_unit_id 캡처 없이 즉시 delete하던 것을, 먼저 읽고 읽기 성공 시 delete 대신 demote(is_primary=false, current_unit_id 보존)로 통일. 읽기 자체가 실패하면(테이블 부재 제외) delete를 진행하지 않고 새 primary 행만 생성(non-fatal, throw 없음). testAssignmentUnitGuards.mjs에 __failNext 에러 주입 헬퍼 + 섹션 6(11단언) 추가. 규칙 15 FAIL-first — 수정 전 소스로 8건 실측 실패 확인 후 수정, 65/65 PASS. build 통과, testAdminUnitEdit.mjs 33/33 PASS, verify:admin 전체 PASS(exit 0). 커밋 6632e77.",
+  "blocker": null,
+  "next_action": "없음 — qa-reviewer 검수 대기"
+}
