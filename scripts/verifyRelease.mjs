@@ -20,6 +20,14 @@
 //   baseline 파일: scripts/health/baseline.json  (없으면 = 모든 FAIL 이 회귀)
 //   갱신: npm run health:baseline   (로컬 파일만 씀. DB 무접촉)
 //
+// Gate 3b(prod:check READ-ONLY invariants+health) / Gate 4(prod:hotfix
+// WRITE-DISABLED 증명, 가짜 SUPABASE_ACCESS_TOKEN + CI 감지)는 CI 전용이다 —
+// .github/workflows/release-gate.yml 에만 배선하고, 이 파일(로컬
+// npm run verify:release)에는 넣지 않는다(2026-09-03, Phase 10 CI 통합
+// Track 8). 이유: 로컬 실행자는 이미 prod:check/prod:hotfix 를 직접 손으로
+// 돌릴 수 있고(운영자 승인 절차 필요), verify:release 는 "커밋마다 자동으로
+// 도는 저비용 게이트"로 남겨 두는 편이 낫다.
+//
 // 사용법
 //   npm run verify:release                 전체 게이트
 //   npm run verify:release -- --skip-build  빌드 생략(빠른 반복용, CI 에선 쓰지 말 것)

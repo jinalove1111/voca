@@ -175,6 +175,127 @@ jobs:
             exit 1
           fi
 
+      # ── Gate 3b — prod:check (READ-ONLY) ────────────────────────────────
+      # scripts/prodCheck.mjs — anon key GET/HEAD 조회만(PATCH/POST/PUT/DELETE
+      # 없음, scripts/prodCheck.mjs 헤더 주석). Gate 3(학생 헬스체인) 과 달리
+      # 크로스 테이블 invariant(유령 유닛 재고, 배정 모순 등)까지 함께 보는
+      # 프로덕션 안전 하네스다(scripts/lib/prodInvariants.mjs). --require-env
+      # 로 자격증명 부재 시 조용한 SKIP 대신 FAIL 시킨다(CLAUDE.md 규칙 18 —
+      # "검증 못 함"이 조용한 통과가 되지 않게).
+      #
+      # --expect-ref 는 쓰지 않는다 — 이 저장소 secrets 에 project ref 값이
+      # 별도로 등록돼 있지 않기 때문이다(위 "필요한 저장소 시크릿" 섹션 참고).
+      # 대신 VITE_SUPABASE_URL 시크릿이 가리키는 프로젝트가 곧 이 게이트의
+      # 대상 프로덕션이다 — Gate 3 이 이미 같은 시크릿으로 학생 헬스체크를
+      # 하고 있으므로 새로운 위험은 아니다.
+      #
+      # 출력 JSON 의 health.results[]/invariants.findings[] 에는 학생 이름이
+      # 마스킹되지 않은 채 들어 있다(prodCheck.mjs 의 마스킹은 사람이 읽는
+      # 텍스트 출력에만 적용되고, --json 원본에는 적용되지 않는다 —
+      # scripts/prodCheck.mjs 의 renderBucket()/maskName() 참고). 그래서
+      # GITHUB_STEP_SUMMARY(공개 로그)에는 findings/results 배열을 절대
+      # 그대로 옮기지 않고, summary 카운트(health.summary/invariants.summary/
+      # ux.*Count)만 표로 남긴다.
+      - name: Gate 3b — prod:check (READ-ONLY, invariants + health)
+        shell: bash
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          set -o pipefail
+          mkdir -p /tmp/prod-reports
+          RC=0
+          npm run prod:check -- --require-env --json --report-dir /tmp/prod-reports 2>&1 | tee /tmp/gate3b.log || RC=$?
+
+          REPORT_FILE=$(ls -t /tmp/prod-reports/*.prodcheck.json 2>/dev/null | head -n1 || true)
+          {
+            echo "### Gate 3b — prod:check 요약 (READ-ONLY, 카운트만·이름/원문 미노출)"
+            if [ -z "$REPORT_FILE" ]; then
+              echo "리포트 파일 없음(조기 실패 또는 --require-env 없이 SKIP)"
+            else
+              node -e "
+                const r = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
+                const rows = [
+                  ['verdict', r.verdict],
+                  ['health PASS', r.health.summary.pass],
+                  ['health WARN', r.health.summary.warn],
+                  ['health FAIL', r.health.summary.fail],
+                  ['invariants FAIL', r.invariants.summary.fail],
+                  ['invariants WARN', r.invariants.summary.warn],
+                  ['ux critical', r.ux.criticalCount],
+                  ['ux needsReview', r.ux.needsReviewCount],
+                  ['ux dataDebt', r.ux.dataDebtCount],
+                ]
+                console.log('| 항목 | 값 |')
+                console.log('|---|---|')
+                for (const [k, v] of rows) console.log('| ' + k + ' | ' + v + ' |')
+              " "$REPORT_FILE"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$RC" -ne 0 ]; then
+            echo "::error title=Gate 3b (prod:check) 실패::$(tail -n 40 /tmp/gate3b.log | sed ':a;N;$!ba;s/\n/%0A/g')"
+            exit "$RC"
+          fi
+
+      # ── Gate 4 — WRITE-DISABLED PROOF ───────────────────────────────────
+      # scripts/prodHotfix.mjs 는 CI(process.env.CI/GITHUB_ACTIONS) 를 감지하면
+      # write path(Management API executor 생성/승인 게이트/APPLY 실행) 에
+      # 코드상 도달하지 못하고 항상 STOP(ready-to-apply, exit 0) 한다 — 이
+      # 잡은 그 사실을 "말로만" 남기지 않고 매 실행마다 실제로 증명한다.
+      #
+      # SUPABASE_ACCESS_TOKEN 은 실제 시크릿이 아니라 하드코딩된 가짜 문자열
+      # 이다(ci-fake-token-must-never-be-used) — 이 저장소에는 애초에 실제
+      # Management API 토큰 시크릿이 등록돼 있지 않다(prodHotfix.mjs 헤더
+      # 주석). 가짜 토큰을 일부러 주입해 "토큰이 있어도 CI 감지가 먼저 막는다"
+      # 는 더 강한 조건을 검증한다.
+      #
+      # 대상 manifest(ghost-unit-landing-20260902)는 2026-09-02 에 이미 운영자
+      # 승인 하에 프로덕션에 반영된 건이라, 이 게이트에서는 프리플라이트가
+      # "현재 DB 상태가 manifest 의 적용 전 기대값과 다르다"로 정상 STOP
+      # (preflight-mismatch) 하는 경우가 흔하다 — 그래서 성공 판정 기준은
+      # exit 0(ready-to-apply) 또는 exit 1 중 status=preflight-mismatch 로
+      # 잡는다(그 외 exit 1/에러는 실패로 본다).
+      - name: Gate 4 — WRITE-DISABLED PROOF (prod:hotfix dry-run, 가짜 토큰)
+        shell: bash
+        env:
+          SUPABASE_ACCESS_TOKEN: ci-fake-token-must-never-be-used
+          CI: 'true'
+        run: |
+          set -o pipefail
+          mkdir -p /tmp/prod-reports
+          RC=0
+          node scripts/prodHotfix.mjs scripts/prod/manifests/ghost-unit-landing-20260902.json \
+            --env production --dry-run --json --report-dir /tmp/prod-reports 2>&1 | tee /tmp/gate4.log || RC=$?
+
+          if [ "$RC" -gt 1 ]; then
+            echo "::error title=Gate 4 실패 — 예상 밖 exit code(${RC})::0(ready-to-apply) 또는 1(preflight-mismatch)만 정상입니다. $(tail -n 30 /tmp/gate4.log | sed ':a;N;$!ba;s/\n/%0A/g')"
+            exit 1
+          fi
+
+          if ! grep -q '^DB WRITE: 0$' /tmp/gate4.log; then
+            echo "::error title=Gate 4 실패 — 'DB WRITE: 0' 증명 문자열을 찾지 못함(write path 가 실행됐을 위험)::$(tail -n 20 /tmp/gate4.log | sed ':a;N;$!ba;s/\n/%0A/g')"
+            exit 1
+          fi
+
+          REPORT_FILE=$(ls -t /tmp/prod-reports/*.hotfix.json 2>/dev/null | head -n1 || true)
+          if [ -z "$REPORT_FILE" ]; then
+            echo "::error title=Gate 4 실패 — hotfix 보고서 파일을 찾을 수 없음::"
+            exit 1
+          fi
+          STATUS=$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).status)" "$REPORT_FILE")
+          if [ "$STATUS" != "ready-to-apply" ] && [ "$STATUS" != "preflight-mismatch" ]; then
+            echo "::error title=Gate 4 실패 — 예상 밖 status(${STATUS})::write path 가 의도치 않게 진행됐을 가능성이 있습니다."
+            exit 1
+          fi
+
+          if grep -RIl 'ci-fake-token-must-never-be-used' /tmp/gate4.log /tmp/prod-reports >/tmp/gate4-leak.log 2>/dev/null; then
+            echo "::error title=Gate 4 실패 — redaction 실패, 가짜 토큰 문자열이 산출물에 노출됨::$(cat /tmp/gate4-leak.log)"
+            exit 1
+          fi
+
+          echo "Gate 4 PASS — status=${STATUS}, DB WRITE: 0, redaction 확인 완료(가짜 토큰 산출물 미노출)"
+
   # release-gate 가 실패하면 needs 조건이 성립하지 않아 이 잡은 아예 실행되지
   # 않는다 = "이후 배포 단계로 절대 진행되지 않는다". 브랜치 보호에서 필수
   # 체크로 지정하면 병합 자체가 막힌다(위 (A) 참고).
@@ -187,9 +308,11 @@ jobs:
       - name: 게이트 통과 확인
         run: |
           echo "Release Gate 통과 — 이 커밋은 배포 가능 상태입니다."
-          echo "  Gate 1  build"
-          echo "  Gate 2  verify:all (기존 도메인 회귀)"
-          echo "  Gate 3  student health (학생별 silent regression, baseline 대비)"
+          echo "  Gate 1   build"
+          echo "  Gate 2   verify:all (기존 도메인 회귀)"
+          echo "  Gate 3   student health (학생별 silent regression, baseline 대비)"
+          echo "  Gate 3b  prod:check (READ-ONLY, 크로스 테이블 invariants + health)"
+          echo "  Gate 4   prod:hotfix WRITE-DISABLED PROOF (가짜 토큰, DB WRITE: 0 증명)"
           echo ""
           echo "주의: 이 잡은 배포를 수행하지 않습니다. 실제 배포는 main push ->"
           echo "Vercel 자동 배포이며, 그것을 막으려면 main 브랜치 보호 규칙에서"
