@@ -621,6 +621,40 @@ console.log('\n=== [13] redactSecrets(text, env) — 비밀값 마스킹(순수 
   check('빈 문자열 값은 스킵', redactSecrets('x', { EMPTY_KEY: '' }) === 'x')
 }
 
+console.log('\n=== [13c] redactSecrets 강화 — 인코딩된/잘린 노출도 마스킹 (2026-09-03) ===')
+{
+  // (a) base64 인코딩 형태 — manifest 스냅샷/로그가 값을 base64 로 실을 수 있다.
+  const val = 'sekrit-token-999'
+  const b64 = Buffer.from(val, 'utf8').toString('base64')
+  const text = `payload: ${b64}`
+  const redacted = redactSecrets(text, { SUPABASE_ACCESS_TOKEN: val })
+  check('base64 인코딩된 비밀값도 마스킹됨', !redacted.includes(b64) && redacted.includes('[REDACTED]'), redacted)
+}
+{
+  // (b) URL 인코딩 형태 — 값에 인코딩 대상 특수문자(공백/+)가 있어야 encodeURIComponent 결과가 원본과 달라진다.
+  const val = 'sekrit token+999'
+  const urlEnc = encodeURIComponent(val)
+  const text = `q=${urlEnc}`
+  const redacted = redactSecrets(text, { SECRET_KEY: val })
+  check('URL 인코딩된 비밀값도 마스킹됨', !redacted.includes(urlEnc) && redacted.includes('[REDACTED]'), redacted)
+}
+{
+  // (c) 앞 12자 이상 접두 조각만 잘려서 노출된 경우(로그가 값을 앞부분만
+  // 남기고 잘라내는 경우 등)도 마스킹한다.
+  const val = 'sekrit-token-999-longvalue-full-secret-xyz'
+  const clippedLog = `token=${val.slice(0, 12)}...(cut off)`
+  const redacted = redactSecrets(clippedLog, { SUPABASE_ACCESS_TOKEN: val })
+  check('12자 이상 접두 조각만 노출돼도 마스킹됨',
+    !redacted.includes(val.slice(0, 12)) && redacted.includes('[REDACTED]'), redacted)
+}
+{
+  // 6자 미만 값은 새 패턴(base64/URL/접두) 탐지 대상이 아니다(오탐 방지) —
+  // 정확한 부분 문자열 매칭(기존 동작, 3자 이상)은 계속 살아있어야 한다.
+  const redacted = redactSecrets('short=abcd rest unaffected', { SHORT_KEY: 'abcd' })
+  check('4자 값(6자 미만)도 정확 매칭은 그대로 동작(예외 없음)',
+    redacted === 'short=[REDACTED] rest unaffected', redacted)
+}
+
 console.log('\n=== [13b] redaction 통합 — 콘솔 출력에도 FAKE_TOKEN 노출 없음 ===')
 {
   const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })

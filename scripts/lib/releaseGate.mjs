@@ -29,6 +29,21 @@ export const EMPTY_BASELINE = Object.freeze({ keys: Object.freeze([]), meta: Obj
 /** 'WORDS_ZERO:단어0개' -> 'WORDS_ZERO' */
 const codePrefix = (code) => String(code ?? '').split(':')[0].trim()
 
+// 2026-09-03 보안수정 — scripts/health/baseline.json 은 PUBLIC 저장소에
+// 커밋되는 파일이다. recordHealthBaseline.mjs 는 이제 entries[].name 을
+// 항상 마스킹해서 저장하지만(scripts/recordHealthBaseline.mjs 의
+// maskName() 참고), 마스킹 이전에 기록된 레거시 baseline 파일에는 원본
+// 실명이 남아 있을 수 있다. baselineKey 매칭은 studentId+code 로만
+// 이뤄지므로(아래 baselineKey 참고) name 은 순수 표시용 meta 값이다 —
+// 여기서도 한 번 더 마스킹해 어떤 baseline 파일을 읽어도 리포트/콘솔에
+// 원본 실명이 새어나가지 않게 한다(studentHealthCheck.mjs/prodCheck.mjs 와
+// 동일 규칙: 첫 글자 + ***, 파일 소유권 때문에 독립 정의).
+function maskNameForMeta(name) {
+  const n = typeof name === 'string' ? name.trim() : ''
+  if (!n) return null
+  return `${n[0]}***`
+}
+
 /** baseline/결과 양쪽에서 쓰는 동일한 키 규칙. */
 export function baselineKey(studentId, code) {
   return `${String(studentId ?? '')}|${codePrefix(code)}`
@@ -50,7 +65,7 @@ export function normalizeBaseline(raw) {
     const k = baselineKey(e.studentId, e.code)
     if (k === '|') continue
     if (!keys.includes(k)) keys.push(k)
-    meta[k] = { name: e.name ?? null, note: e.note ?? null, code: codePrefix(e.code), studentId: e.studentId ?? null }
+    meta[k] = { name: maskNameForMeta(e.name), note: e.note ?? null, code: codePrefix(e.code), studentId: e.studentId ?? null }
   }
   return { keys, meta }
 }

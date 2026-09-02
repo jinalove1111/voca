@@ -115,6 +115,15 @@ export function scanManifestStringValues(m) {
  * [REDACTED] 로 치환한다. 순수 문자열 함수(네트워크/IO 없음) — 보고서
  * JSON, apply/rollback SQL 파일, 콘솔 출력 어디에 써도 안전하도록 호출부
  * 에서 감싼다.
+ *
+ * 2026-09-03 강화 — 정확한 부분 문자열 일치만으로는 값이 다른 형태로
+ * 실릴 때(로그가 base64/URL 인코딩해서 남기거나, 앞부분만 남기고 잘라
+ * 찍는 경우) 새어나간다. 값이 6자 이상일 때만 아래 3가지 추가 형태도
+ * 찾아 마스킹한다(6자 미만은 흔한 문자열과 우연히 겹칠 오탐 위험이 커
+ * 대상에서 제외 — 기존 3자 이상 정확 매칭 규칙은 그대로 유지).
+ *   (a) base64 인코딩 형태
+ *   (b) URL 인코딩 형태(encodeURIComponent)
+ *   (c) 앞 12자 이상 접두 조각(로그가 값을 잘라서 남기는 경우)
  * @param {string} text
  * @param {Record<string,string>} env
  * @returns {string}
@@ -125,8 +134,23 @@ export function redactSecrets(text, env) {
   for (const [key, val] of Object.entries(env)) {
     if (!/(key|token|secret|pin)/i.test(key)) continue
     if (typeof val !== 'string' || val.length < 3) continue
-    if (!out.includes(val)) continue
-    out = out.split(val).join('[REDACTED]')
+
+    if (out.includes(val)) out = out.split(val).join('[REDACTED]')
+
+    // 6자 미만 값은 아래 인코딩/접두 조각 탐지 대상에서 제외(오탐 방지) —
+    // 그럴듯한 다른 일반 문자열과 우연히 겹칠 가능성이 짧을수록 커진다.
+    if (val.length < 6) continue
+
+    const b64 = Buffer.from(val, 'utf8').toString('base64')
+    if (b64.length >= 6 && out.includes(b64)) out = out.split(b64).join('[REDACTED]')
+
+    const urlEnc = encodeURIComponent(val)
+    if (urlEnc !== val && urlEnc.length >= 6 && out.includes(urlEnc)) out = out.split(urlEnc).join('[REDACTED]')
+
+    if (val.length >= 12) {
+      const prefix = val.slice(0, 12)
+      if (out.includes(prefix)) out = out.split(prefix).join('[REDACTED]')
+    }
   }
   return out
 }

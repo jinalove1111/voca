@@ -1,0 +1,27 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "track13-tech-debt-2026-09-03",
+  "task": "야간 자율 작업 Track 13 — baseline.json 실명 방지, redactSecrets 강화(base64/URL인코딩/접두조각), registry note 단언수 갱신",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-03T00:00:00+09:00",
+  "updated_at": "2026-09-03T00:00:00+09:00",
+  "files_owned": [
+    "scripts/recordHealthBaseline.mjs",
+    "scripts/lib/releaseGate.mjs",
+    "scripts/lib/hotfixManifest.mjs",
+    "scripts/testReleaseGate.mjs",
+    "scripts/testProdHotfix.mjs",
+    "tests/harness/registry.mjs"
+  ],
+  "files_read": [
+    "scripts/verifyRelease.mjs",
+    "scripts/studentHealthCheck.mjs",
+    "scripts/prodCheck.mjs",
+    "scripts/prodHotfix.mjs"
+  ],
+  "summary": "1) recordHealthBaseline.mjs: isMain 가드 추가(prodHotfix.mjs 동일 패턴)로 import 시 실제 spawn/파일쓰기가 일어나지 않게 리팩터, maskName()/buildBaselineEntries()/buildBaselineDoc() 순수 함수로 분리해 baseline.json entries[].name 을 항상 마스킹(첫 글자+***)해서 저장하도록 변경. 2) releaseGate.mjs normalizeBaseline 에 방어적 maskNameForMeta 추가 — 레거시(마스킹 이전) baseline 파일을 읽어도 meta.name 이 원본 실명으로 노출되지 않음. baselineKey 매칭(studentId+code)은 무변경. 3) testReleaseGate.mjs 13절에 FAIL-first로 9개 단언 추가(마스킹 형태/PASS제외/직렬화 스캔/레거시 호환/known 판정 무변화) — 86단언 전체 PASS. 4) hotfixManifest.mjs redactSecrets 를 base64 인코딩/URL 인코딩/앞 12자 이상 접두조각까지 마스킹하도록 강화(6자 미만 값은 새 패턴 탐지 제외, 기존 3자 이상 정확매칭은 무변경). testProdHotfix.mjs 에 FAIL-first로 4개 단언 추가 — 161단언 전체 PASS(기존 157 무회귀 + 신규 4). 5) tests/harness/registry.mjs note 갱신: testProdHotfix 66단언→161단언(정확한 실측치, 원 지시의 157은 구세대 추정치였음), testProdCheck 에 130단언 문구 추가. build PASS, npm run verify:all ALL DOMAINS PASS(exit 0). 사고 처리: import 가드 추가 전 1회, 테스트 파일이 recordHealthBaseline.mjs 를 import 하면서 실제 studentHealthCheck 를 라이브로 spawn해 scripts/health/baseline.json 을 실측치로 덮어쓴 사고 발생 — 즉시 git checkout 으로 원복(entries 0 유지) 후 isMain 가드로 재발 방지.",
+  "blocker": null,
+  "next_action": "지시에 따라 git add/commit 하지 않음(이번 트랙은 git 금지) — 오케스트레이터가 변경 파일 목록을 검토 후 커밋 여부 결정. scripts/testAssignmentUnitGuards.mjs, src/utils/wordLibrary.js 는 동시 작업 중인 다른 에이전트의 변경으로 보이며 이번 트랙에서 손대지 않음(읽지도 않음) — 커밋 시 함께 스테이징되지 않도록 주의 필요."
+}
