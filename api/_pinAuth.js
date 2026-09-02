@@ -11,6 +11,7 @@
 // verify-student-pin.js's pin_fail_count/pin_locked_until), not the hash
 // algorithm's strength — but we still never store or compare plaintext.
 import crypto from 'node:crypto'
+import { isValidStudentId } from '../src/utils/paulRankShared.js'
 
 const KEYLEN = 64
 
@@ -115,7 +116,15 @@ export function checkAdminReauth(req, res) {
     return false
   }
   const supplied = req.body?.adminPin
-  if (typeof supplied !== 'string' || supplied !== adminPin) {
+  // 2026-09-02 — `!==` 문자열 비교를 crypto.timingSafeEqual로 교체(타이밍
+  // 사이드채널 방어). 응답 형식/상태코드는 기존과 완전히 동일하게 유지한다
+  // — 이 변경은 순수 비교 방식 교체이지 새 실패 사유가 아니다.
+  const suppliedBuf = typeof supplied === 'string' ? Buffer.from(supplied, 'utf8') : null
+  const adminBuf = Buffer.from(adminPin, 'utf8')
+  const matches = !!suppliedBuf
+    && suppliedBuf.length === adminBuf.length
+    && crypto.timingSafeEqual(suppliedBuf, adminBuf)
+  if (!matches) {
     res.status(200).json({ ok: false, reason: 'not_authorized' })
     return false
   }
@@ -317,4 +326,109 @@ export function verifyPinSetupCode(studentId, code, opts = {}) {
     if (a.length === c.length && crypto.timingSafeEqual(a, c)) return { ok: true }
   }
   return { ok: false, reason: 'invalid_setup_code' }
+}
+
+// ── Supabase Auth 세션 발급 (Phase 2b Step 1-A, 2026-09-02) ────────────────
+// 배경: 이 앱은 Supabase Auth를 쓰지 않는다(브라우저는 anon key 고정,
+// students는 RLS OFF + 컬럼 GRANT 신뢰 모델). 목표는 PIN 로그인 성공 시
+// 서버가 Supabase Auth 세션을 "대신" 발급해, 이후 클라이언트가
+// `authenticated` 롤 + `app_metadata.student_id`로 본인 행만 접근하게
+// 하는 것(Phase C에서 RLS 전환) — JWT 서명 자체는 Supabase가 한다(서버가
+// 직접 JWT를 만들지 않는다, 이 파일의 signSessionToken과는 별개 트랙).
+//
+// 학생 계정은 이름+PIN이지 이메일이 없으므로, Supabase Auth가 요구하는
+// 이메일 필드에 학생 UUID 기반의 존재하지 않는 도메인(@students.invalid,
+// RFC 2606이 권장하는 예약 TLD류 패턴)을 합성해 채운다 — 실제 메일이
+// 발송되지 않고(email_confirm:true로 확인 메일 생략), 이 이메일은 로그인
+// 자격증명으로 쓰이지 않는다(여전히 이름+PIN만 학생이 입력).
+//
+// 기본 OFF: STUDENT_AUTH_SESSION 환경변수가 '1'|'true'일 때만 동작한다.
+// 미설정/off면 아래 함수들이 호출되는 코드 경로 자체를 verify-student-pin.js가
+// 타지 않으므로 응답이 byte-identical하게 유지된다.
+export function isStudentAuthSessionEnabled() {
+  const v = String(process.env.STUDENT_AUTH_SESSION || '').toLowerCase()
+  return v === '1' || v === 'true'
+}
+
+const STUDENT_AUTH_EMAIL_DOMAIN = 'students.invalid'
+const STUDENT_AUTH_SOURCE = 'paul-easy-voca'
+
+// isValidStudentId를 통과한 값만 이메일을 만든다 — 그렇지 않으면 null을
+// 반환해(fail-closed) 호출부가 이후 admin API를 아예 호출하지 않게 한다.
+export function studentAuthEmail(studentId) {
+  if (!isValidStudentId(studentId)) return null
+  return `${studentId.toLowerCase()}@${STUDENT_AUTH_EMAIL_DOMAIN}`
+}
+
+function isAlreadyExistsAuthError(err) {
+  if (!err) return false
+  const status = err.status ?? err.statusCode
+  const code = err.code
+  const msg = String(err.message || '').toLowerCase()
+  return status === 422 || code === 'email_exists' || msg.includes('already')
+}
+
+// adminClient는 호출부(verify-student-pin.js)가 이미 만들어 둔
+// createClient(url, supabaseAdminKey()) 인스턴스를 그대로 받는다 — 이
+// 함수 안에서 새 클라이언트를 만들지 않는다.
+// 반환: { ok:true } | { ok:false, reason:'invalid_student_id'|'auth_user_create_failed' }
+// 절대 throw하지 않는다 — 어떤 예외든 잡아서 실패 사유로 변환한다.
+export async function ensureStudentAuthUser(adminClient, studentId) {
+  const email = studentAuthEmail(studentId)
+  if (!email) return { ok: false, reason: 'invalid_student_id' }
+  try {
+    const { error } = await adminClient.auth.admin.createUser({
+      email,
+      email_confirm: true,
+      app_metadata: { student_id: studentId, source: STUDENT_AUTH_SOURCE },
+    })
+    if (!error) return { ok: true }
+    // 멱등성 — 이미 만들어진 계정(재로그인)이면 정상 흐름으로 취급한다.
+    if (isAlreadyExistsAuthError(error)) return { ok: true }
+    return { ok: false, reason: 'auth_user_create_failed' }
+  } catch (e) {
+    if (isAlreadyExistsAuthError(e)) return { ok: true }
+    return { ok: false, reason: 'auth_user_create_failed' }
+  }
+}
+
+// magiclink 방식으로 1회용 토큰 해시를 발급한다(이메일 발송 없음 — 링크
+// 자체를 발송하지 않고 hashed_token만 서버가 받아 응답에 실어준다).
+// generateLink가 돌려준 user.app_metadata에 student_id가 없거나 다르면
+// (예: 계정이 다른 경로로 먼저 생겼거나 이전 버전 메타데이터인 경우)
+// updateUserById로 보정한다 — 보정이 실패하면 **세션을 내주지 않는다**
+// (fail-closed: 잘못된 app_metadata로 인증된 세션이 나가면 RLS 전환 후
+// 그 세션이 엉뚱한 studentId로 데이터에 접근할 수 있기 때문).
+// 반환: { ok:true, authTokenHash } | { ok:false, reason:'invalid_student_id'|'auth_link_failed' }
+// 절대 throw하지 않는다.
+export async function issueStudentAuthTokenHash(adminClient, studentId) {
+  const email = studentAuthEmail(studentId)
+  if (!email) return { ok: false, reason: 'invalid_student_id' }
+  let data, error
+  try {
+    const result = await adminClient.auth.admin.generateLink({ type: 'magiclink', email })
+    data = result?.data
+    error = result?.error
+  } catch {
+    return { ok: false, reason: 'auth_link_failed' }
+  }
+  if (error || !data) return { ok: false, reason: 'auth_link_failed' }
+  const hashedToken = data.properties?.hashed_token
+  if (!hashedToken) return { ok: false, reason: 'auth_link_failed' }
+
+  const currentSid = data.user?.app_metadata?.student_id
+  if (currentSid !== studentId) {
+    const userId = data.user?.id
+    if (!userId) return { ok: false, reason: 'auth_link_failed' }
+    try {
+      const { error: updateErr } = await adminClient.auth.admin.updateUserById(userId, {
+        app_metadata: { student_id: studentId, source: STUDENT_AUTH_SOURCE },
+      })
+      if (updateErr) return { ok: false, reason: 'auth_link_failed' }
+    } catch {
+      return { ok: false, reason: 'auth_link_failed' }
+    }
+  }
+
+  return { ok: true, authTokenHash: hashedToken }
 }
