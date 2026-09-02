@@ -49,16 +49,27 @@ console.log('\n=== 1절. Gate 3b — prod:check (READ-ONLY) 스텝 배선 ===')
     /secrets\.VITE_SUPABASE_URL/.test(gate3bBlock) && /secrets\.VITE_SUPABASE_ANON_KEY/.test(gate3bBlock))
   check('Gate 3b 는 GITHUB_STEP_SUMMARY 에 요약을 append 한다',
     /GITHUB_STEP_SUMMARY/.test(gate3bBlock))
-  // 학생 이름/유닛명 등 원문은 prodCheck.mjs --json 출력에서 마스킹되지
-  // 않는다(health.results[].name 등) — 그래서 요약 블록은 findings/results
-  // 배열을 순회하지 않고 summary 카운트(health.summary/invariants.summary/
-  // ux.*Count)만 뽑아야 한다. "results[" 나 "findings[" 같은 배열 인덱싱을
-  // 직접 순회하는 코드가 섞여 있지 않은지는 최소한 배열 반복 키워드
-  // (map/forEach/for...of) 가 results/findings 뒤에 바로 붙어 있지 않은지로
-  // 근사 검증한다.
-  check('Gate 3b 요약은 개별 findings/results 를 순회하지 않는다(카운트만, 이름 미노출)',
-    !/(results|findings)\s*\.\s*(map|forEach)/.test(gate3bBlock)
-    && !/for\s*\([^)]*of[^)]*\.(results|findings)/.test(gate3bBlock))
+  // 2026-09-03 보안수정(High) — scripts/prodCheck.mjs 는 이제 --json 출력
+  // (stdout 과 --report-dir 보고서 파일 모두)에서 학생 이름을 기본
+  // 마스킹하고, CI 환경에서는 --show-names 를 강제로 무시한다(그 계약은
+  // scripts/testProdCheck.mjs/scripts/testCiNameMasking.mjs 가 검증). 그
+  // 전제가 바뀌었으므로 여기서는 두 가지를 나눠서 본다.
+  //   (a) GITHUB_STEP_SUMMARY(트리거 관계없이 항상 남는 요약 페이지, 검색
+  //       엔진에도 노출될 수 있어 가장 보수적으로 다뤄야 함)에 쓰는
+  //       블록만은 여전히 findings/results 를 순회하지 않고 카운트만 쓴다.
+  //   (b) 스텝의 콘솔 로그(=Actions run 로그, 그 자체로 PUBLIC 저장소에서는
+  //       공개됨)에 찍는 "영향 학생" 목록은 마스킹된 값을 순회해서 보여줄
+  //       수 있다 — 원본이 애초에 여기 도달하지 않기 때문(defense-in-depth
+  //       로 원본 JSON 자체를 stdout 에 아예 올리지 않는 것과는 별개 축).
+  const stepSummaryBlock = (gate3bBlock.match(/\{[\s\S]*?\}\s*>>\s*"\$GITHUB_STEP_SUMMARY"/) || [''])[0]
+  check('Gate 3b — GITHUB_STEP_SUMMARY 블록을 추출할 수 있다', stepSummaryBlock.length > 0)
+  check('Gate 3b — GITHUB_STEP_SUMMARY 블록은 개별 findings/results 를 순회하지 않는다(카운트만, 이름 미노출)',
+    !/(results|findings)\s*\.\s*(map|forEach)/.test(stepSummaryBlock)
+    && !/for\s*\([^)]*of[^)]*\.(results|findings)/.test(stepSummaryBlock))
+  check('Gate 3b — 원본 --json stdout 을 로그에 tee 하지 않는다(파일로만 리다이렉트)',
+    !/--json[^\n]*\|\s*tee/.test(gate3bBlock) && /npm run prod:check[\s\S]*?>\s*\/tmp\/[^\s]+\.json/.test(gate3bBlock))
+  check('Gate 3b 는 CI 강제 마스킹에 기대고 --show-names 를 스스로 켜지 않는다',
+    !/--show-names/.test(gate3bBlock))
   check('Gate 3b 는 실패 시 ::error:: annotation 을 남긴다', /::error title=/.test(gate3bBlock))
   check('--expect-ref 미사용 이유(비밀에 ref 없음)와 VITE_SUPABASE_URL 이 대상 ref 라는 사실이 주석에 있다',
     /expect-ref/.test(y) && /VITE_SUPABASE_URL/.test(y))
