@@ -1,0 +1,36 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "prod-safety-harness-1b",
+  "task": "Production Safety Harness 1단계 B: npm run prod:hotfix -- <manifest> (manifest 기반 preflight/apply/rollback/postflight 핫픽스 실행기) 구현",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-03T00:00:00Z",
+  "updated_at": "2026-09-03T00:40:00Z",
+  "files_owned": [
+    "scripts/lib/hotfixManifest.mjs",
+    "scripts/lib/sqlExecutor.mjs",
+    "scripts/prodHotfix.mjs",
+    "scripts/testProdHotfix.mjs",
+    "ops/hotfix/manifests/ghost-unit-landing-20260902.json",
+    "package.json",
+    "tests/harness/registry.mjs"
+  ],
+  "files_read": [
+    "scripts/studentHealthCheck.mjs",
+    "scripts/verifyRelease.mjs",
+    "scripts/testStudentPinAuth.mjs",
+    "scripts/testComputeWordKingApi.mjs",
+    "scripts/lib/releaseGate.mjs",
+    "scripts/lib/prodDataLoader.mjs (다른 에이전트 산출물, 참고만 — import 안 함)",
+    "tests/harness/runDomain.mjs",
+    "tests/harness/runAll.mjs",
+    ".ai-status/implementer-prod-safety-harness-1a.json",
+    ".env",
+    ".env.local",
+    ".gitignore"
+  ],
+  "summary": "manifest(ops/hotfix/manifests/*.json, allowlist students.{current_unit_id,unit_name,class_id} / student_class_assignments.{current_unit_id,is_primary,textbook_id}) 하나에서 preflight 읽기계획/apply SQL/rollback SQL/postflight 읽기계획을 전부 같은 데이터로 생성하는 scripts/lib/hotfixManifest.mjs(순수, 네트워크 0: validateManifest/buildPreflightPlan/buildPostflightPlan/buildApplySql/buildRollbackSql/staticSafetyScan)와 scripts/lib/sqlExecutor.mjs(createManagementApiExecutor 코드만 존재·미호출/createFakeExecutor/createDryRunExecutor)를 구현. scripts/prodHotfix.mjs 는 runHotfix(options, deps) 로 로직을 분리해 CLI(node scripts/prodHotfix.mjs <manifest> [--dry-run|--report-dir|--executor|--fixture-reader])를 얇게 감쌌다. 흐름 고정: manifest 검증 → project_ref 환경 게이트(exit 2) → 파괴적 키워드 정적 스캔 → 프리플라이트(anon key, supabase-js 읽기 전용) → baseline(학습기록 6테이블 카운트 + students/SCA 전체 스냅샷 sha256) → 계획 출력 + apply/rollback .sql 파일 저장 → --dry-run/CI(process.env.CI|GITHUB_ACTIONS)/SUPABASE_ACCESS_TOKEN 부재 시 STOP(exit 0, DB WRITE 0, 이 저장소에는 애초에 토큰이 없음) → 대화형 승인(TTY 필수, `APPLY <runId>` 정확히 일치, 우회 플래그 없음) → apply → postflight(값 일치 + must_not_change 불변 + 학습기록 카운트 불변 + students/SCA 무관 행 diff = manifest 변경 id 집합과 정확히 일치) → npm run health:students → 실패 시 자동 롤백 + 재확인. scripts/testProdHotfix.mjs 는 fake reader/executor/approve/health-check deps 주입으로 66단언 전부 네트워크 0 검증(manifest 검증 9종, SQL 생성 문자열 단언 15종 + drop 문 정적스캔 감지, preflight fail-closed, dry-run ready-to-apply + 토큰/anonKey 비노출 확인, CI 게이트, TTY 비대화형 게이트, 승인 문구 불일치, apply 성공→postflight 값불일치→자동롤백, apply 자체 row-count 예외→apply-failed(rollback 미호출), applied 정상경로, health 실패→롤백, 무관 행(manifest 밖 학생) 변경 감지→롤백, 학습기록 카운트 변화 감지→롤백, project_ref 불일치→exit 2, invalid manifest 즉시 STOP). 라이브 dry-run 1회(anon 읽기 전용, node scripts/prodHotfix.mjs ops/hotfix/manifests/ghost-unit-landing-20260902.json --dry-run) 로 이미 적용된 이 manifest 가 정확히 fail-closed STOP(status=preflight-mismatch, exit 1, DB WRITE 0, 실제 current_unit_id 가 4ce41359...로 이미 바뀌어 있음을 그대로 보고) 하는 것을 실측 확인. npm run build PASS, npm run verify:all PASS(ALL DOMAINS: PASS, 다른 에이전트의 scripts/testProdCheck.mjs 도 이미 존재해 admin 도메인에서 같이 PASS 확인). git 작업(add/commit)은 지시에 따라 수행하지 않음 — 커밋은 사람/다음 세션이 검토 후 진행.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 요청. Management API 실행기(createManagementApiExecutor)는 이번 단계에서 코드만 존재하고 어디서도 호출되지 않음 — 실제 SUPABASE_ACCESS_TOKEN 발급/등록과 그 경로의 라이브 검증은 명시적으로 이번 범위 밖(운영자 결정 필요). Phase 1-A 산출물(scripts/lib/prodDataLoader.mjs, scripts/prodCheck.mjs 등)과의 anon 읽기 로직 중복(내 createLiveReader vs 그쪽 loadProductionSnapshot)은 후속 통합 과제로 남김(이번 작업 범위 밖, 파일 소유권 충돌 회피, studentHealthCheck.mjs 도 동일 이력)."
+}
