@@ -568,7 +568,14 @@ export default async function handler(req, res) {
     // 초기화(pin_hash는 안 건드림) — 브루트포스 방어(5회 잠금)를
     // 무력화하는 액션이라 관리자 재인증 필수.
     const { studentId } = req.body || {}
-    if (!studentId) {
+    // 2026-09-03 보안수정(Low) — 다른 액션(create_student/deactivate_student/
+    // reactivate_student/hard_delete_student)과 동일하게 UUID 형식을
+    // 검증한다(일관성). 이 액션 자체가 위험한 쓰기는 아니지만(잠금 해제만,
+    // pin_hash 는 안 건드림) 형식이 아닌 값을 그대로 .eq()에 흘려보내던
+    // 유일한 액션이었다. 에러 메시지는 기존 계약(scripts/testAdminPinActions
+    // Dispatch.mjs "studentId is required" 단언)을 그대로 유지한다 —
+    // studentId 부재/형식오류 둘 다 같은 400 메시지로 합친다.
+    if (typeof studentId !== 'string' || !UUID_RE.test(studentId)) {
       res.status(400).json({ error: 'studentId is required' })
       return
     }
