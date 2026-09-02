@@ -788,14 +788,93 @@ export default async function handler(req, res) {
       spellingQueueCount = count || 0
     }
 
+    // 2026-09-03 — reward_ledger/entrance_test_results/xp_ledger 3개 추가.
+    // students DELETE는 on delete cascade로 이 3개도 함께 지우는데(각
+    // supabase_v3_36_reward_ledger.sql/supabase_v1_8_entrance_test.sql/
+    // supabase_v2_3_paul_rank.sql의 FK 정의, DATABASE.md 참고) 기존 가드
+    // 5종에는 빠져 있었다 — 이 가드를 우회하면 리워드/응시결과/XP 이력이
+    // 조용히 사라질 수 있어 위 5종과 동일한 "데이터 0만 삭제 허용" 원칙을
+    // 적용한다. 세 테이블 모두 아직 프로덕션에 없을 수 있으므로(예:
+    // xp_ledger는 v2.3.1 인덱스 마이그레이션이 미실행 상태 — DATABASE.md
+    // 참고) 테이블 자체 부재(42P01/PGRST205)는 "잃을 데이터가 없다"는
+    // 의미로 0 취급하되, fail-open과 구분되도록 detail.tableMissing에
+    // 표시해 남긴다.
+    const tableMissing = {}
+    let rewardLedgerCount = 0
+    {
+      const { count, error } = await supabase
+        .from('reward_ledger')
+        .select('*', { count: 'exact', head: true })
+        .eq('student_id', studentId)
+      if (error) {
+        if (isMissingTableError(error)) {
+          tableMissing.rewardLedger = true
+        } else {
+          res.status(200).json({ ok: false, error: error.message })
+          return
+        }
+      } else {
+        rewardLedgerCount = count || 0
+      }
+    }
+
+    let entranceTestResultsCount = 0
+    {
+      const { count, error } = await supabase
+        .from('entrance_test_results')
+        .select('*', { count: 'exact', head: true })
+        .eq('student_id', studentId)
+      if (error) {
+        if (isMissingTableError(error)) {
+          tableMissing.entranceTestResults = true
+        } else {
+          res.status(200).json({ ok: false, error: error.message })
+          return
+        }
+      } else {
+        entranceTestResultsCount = count || 0
+      }
+    }
+
+    let xpLedgerCount = 0
+    {
+      const { count, error } = await supabase
+        .from('xp_ledger')
+        .select('*', { count: 'exact', head: true })
+        .eq('student_id', studentId)
+      if (error) {
+        if (isMissingTableError(error)) {
+          tableMissing.xpLedger = true
+        } else {
+          res.status(200).json({ ok: false, error: error.message })
+          return
+        }
+      } else {
+        xpLedgerCount = count || 0
+      }
+    }
+
     const detail = {
       word_status: wordStatusCount,
       stars: hasProgressData,
       hasPin,
       daily: dailyCount,
       spellingQueue: spellingQueueCount,
+      rewardLedger: rewardLedgerCount,
+      entranceTestResults: entranceTestResultsCount,
+      xpLedger: xpLedgerCount,
+      tableMissing,
     }
-    if (wordStatusCount > 0 || hasProgressData || hasPin || dailyCount > 0 || spellingQueueCount > 0) {
+    if (
+      wordStatusCount > 0 ||
+      hasProgressData ||
+      hasPin ||
+      dailyCount > 0 ||
+      spellingQueueCount > 0 ||
+      rewardLedgerCount > 0 ||
+      entranceTestResultsCount > 0 ||
+      xpLedgerCount > 0
+    ) {
       res.status(200).json({ ok: false, reason: 'has_data', detail })
       return
     }
