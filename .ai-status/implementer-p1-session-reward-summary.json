@@ -1,0 +1,37 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "p1-session-reward-summary",
+  "task": "P1 즉각적인 보상 피드백 — SessionRewardCard(세션 완료 시 별/XP/정원/연속일/다음레벨 요약 카드), 플래그 sessionRewardSummary 기본 OFF",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-03T06:20:00Z",
+  "updated_at": "2026-09-03T06:40:31Z",
+  "files_owned": [
+    "src/utils/rewardSummary.js",
+    "src/components/SessionRewardCard.jsx",
+    "scripts/testSessionRewardSummary.mjs",
+    "scripts/testMissionBonusIdempotency.mjs",
+    "src/hooks/useStudent.js",
+    "src/App.jsx",
+    "src/config/features.js",
+    "package.json",
+    "tests/harness/registry.mjs"
+  ],
+  "files_read": [
+    "src/utils/rewardEngine.js",
+    "src/utils/paulRankShared.js",
+    "src/utils/attachment/worldProgress.js",
+    "src/utils/attachment/attachmentCore.js",
+    "src/components/RewardToast.jsx",
+    "src/components/GiftReveal.jsx",
+    "tailwind.config.js",
+    "src/index.css",
+    "TESTING.md",
+    "scripts/testSpellingDirectionWiring.mjs",
+    "scripts/testMissionBonusIdempotency.mjs (검증만)"
+  ],
+  "summary": "flag sessionRewardSummary(기본 false) 아래에서만 동작하는 SessionRewardCard 구현 완료. 순수 요약 로직은 zero-import 신규 모듈 rewardSummary.js(buildSessionRewardSummary/formatRewardLines)에 격리, useStudent.js의 grantLedgerReward 기존 hasRewardEntry 조기반환(무변경) 통과 후에만 sessionRewardSummary 상태를 세팅 — 새 dedup 없음, 지급 금액/키/서버 호출 무변경. 4개 세션 완료 앵커(word-session-complete/writing-complete/exam-complete/daily-goal-complete) 호출부에 xpAmountHint(선택 인자, resolveXpAmount 실제조회값)만 추가 배선. App.jsx는 studentData.sessionRewardSummary로 카드를 조건부 마운트(z-40, GiftReveal/z-50보다 낮음). FAIL-first: 파일 부재+배선 없음 상태에서 12개 FAIL 실측 후 구현, scripts/testSessionRewardSummary.mjs 42단언 전체 PASS. 내 배선 변경으로 scripts/testMissionBonusIdempotency.mjs의 정적 regex 1건이 깨져(호출부에 추가 인자로 문자열 불일치) 그 정규식만 관용적으로 수정(의미는 무변경) — verify:mission-bonus 21단언 재PASS 확인. build 통과, verify:reward/star-delta/mission-bonus/game-reward 전부 PASS.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검토 요청 — verify:all은 실행하지 않음(운영자 지시), 플래그는 기본 OFF 유지 상태로 커밋만 완료."
+}
