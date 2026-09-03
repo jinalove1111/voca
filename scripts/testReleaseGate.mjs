@@ -334,6 +334,25 @@ console.log('\n=== 15절. Gate 3 진단 강화 배선 (verifyRelease.mjs, 정적
   check('maxBuffer 64MB 를 유지한다(기존 값 축소 금지)', /maxBuffer:\s*64\s*\*\s*1024\s*\*\s*1024/.test(t))
 }
 
+console.log('\n=== 16절. registry 편입 정적 검사(2026-09-04, 야간 P11 트랙) ===')
+{
+  // scripts/testStdoutFlushOnExit.mjs 는 package.json 에 verify:stdout-flush
+  // 로 이미 있었지만 tests/harness/registry.mjs 에는 등록돼 있지 않아
+  // verify:all(runAll.mjs -> registry.mjs)에서 한 번도 실행되지 않고
+  // 있었다(야간 감사에서 발견) — 이 절이 그 등록 자체를 정적으로 고정한다.
+  // 파일 소유권(CLAUDE.md 규칙 16) 참고: 이 테스트는 testReleaseGate.mjs
+  // 자체 로직과는 무관하지만, 그 파일의 헤더가 "이 트랙은 registry 를
+  // 소유하지 않으므로 등록은 하지 않는다"고 명시한 testReleaseGateProdCheck.mjs
+  // 와 동일하게, registry 편입을 대신 수행한 트랙(P11)이 그 등록이 실제로
+  // 존재한다는 것을 단언으로 남긴다.
+  const t = readFileSync(path.resolve('tests/harness/registry.mjs'), 'utf8')
+  check('testStdoutFlushOnExit.mjs 가 registry 에 등록돼 있다', /testStdoutFlushOnExit\.mjs/.test(t))
+  const m = /\{\s*script:\s*'scripts\/testStdoutFlushOnExit\.mjs'[^}]*\}/.exec(t)
+  check('그 등록 항목이 존재하고 파싱 가능하다(단일 라인 객체)', !!m, t.includes('testStdoutFlushOnExit') ? '패턴 불일치(멀티라인?)' : '')
+  check('extra:false 로 등록돼 verify:all exit code 에 실제로 반영된다(가짜 PASS 금지)',
+    !!m && /extra:\s*false/.test(m[0]), m?.[0])
+}
+
 console.log(`\n${'='.repeat(60)}`)
 console.log(`총 ${passed + failed}단언 — PASS ${passed} / FAIL ${failed}`)
 if (failed > 0) {
