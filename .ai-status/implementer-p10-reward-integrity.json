@@ -3,10 +3,10 @@
   "role": "코드 구현",
   "task_id": "p10-reward-integrity",
   "task": "P10 Reward Integrity — 등록 누락 4개 테스트 등록 + scripts/testRewardIntegrityV2.mjs 10개 무결성 시나리오 신설 (branch feat/reward-loop)",
-  "status": "working",
-  "progress": 75,
+  "status": "completed",
+  "progress": 100,
   "started_at": "2026-09-03T07:10:00Z",
-  "updated_at": "2026-09-03T07:39:00Z",
+  "updated_at": "2026-09-03T07:52:00Z",
   "files_owned": [
     "scripts/testRewardIntegrityV2.mjs",
     "package.json",
@@ -34,7 +34,7 @@
     "tests/harness/runDomain.mjs",
     "tests/harness/runAll.mjs"
   ],
-  "summary": "Task A(등록 누락 4개: verify:streak-v2/admin-reward-summary/unit-complete-reward/mastery-reward, BUILDERS.unitComplete 신규) 완료 + 커밋(7175e1f). Task B(scripts/testRewardIntegrityV2.mjs 신설, 10개 시나리오/54단언, verify:reward-integrity-v2 등록) 구현·검증 완료, 커밋 대기 중 — 7절 wrong-word-recovered 일일상한(60) FAIL-first 실측(REWARD_DAILY_CAP 60→999 임시변경 후 원복, git status 클린 확인)까지 마침. 아직 커밋하지 않음(이 상태 파일과 함께 commit 2로 묶을 예정). Task C(verify:all 1회 + health:students)는 아직 미실행.",
+  "summary": "Task A: 등록 누락 4개(verify:streak-v2/admin-reward-summary/unit-complete-reward/mastery-reward, BUILDERS.unitComplete 신규) 등록 완료, 커밋 7175e1f. Task B: scripts/testRewardIntegrityV2.mjs 신설(10개 시나리오/54단언), verify:reward-integrity-v2 등록, 7절 wrong-word-recovered 일일상한(60) FAIL-first 실측(60→999 임시변경 → FAIL 4건 확인 → git checkout으로 즉시 원복, git status 클린 확인)까지 마침, 커밋 4942e45. Task C: npm run verify:all 1회 전체 실행 — 0 FAIL, rewardSystem 도메인 17→22개 스크립트로 확장 후 전부 PASS, speaking/listening 2개 도메인은 기존과 동일하게 SKIP(라이브 오디오/디바이스 필요, 무관), 'ALL DOMAINS: PASS' exit 0(1회 재실행에서 testRewardFlow.mjs가 우연히 FAIL했다가 재실행 2회 연속 PASS로 확인된 일회성 flake — 내 변경과 무관, standalone 재현 안 됨). npm run health:students -- --require-env(READ-ONLY GET) PASS 27 / WARN 10(기존 ghost-unit 배정 경고, 이번 세션 무관) / FAIL 0, DB WRITE 0. 커밋 3(fix) 불필요 — FAIL 0건.",
   "blocker": null,
-  "next_action": "commit 2(test(reward): reward-integrity-v2 통합 무결성 스위트) 생성 후 Task C(verify:all 1회, FAIL 분류, health:students --require-env) 진행 → 최종 상태 completed로 갱신"
+  "next_action": "qa-reviewer에게 handoff. 남은 리스크: rewardSystem 도메인 실행 시간이 22개 스크립트로 늘어 verify:all 총 소요시간이 다소 증가(수 분 단위, 하드 타임아웃 없음). scripts/.tmp/ 산출물 이름 충돌 없음(전용 파일명 확인됨)."
 }
