@@ -266,4 +266,26 @@ if (AS_JSON) {
   log('DB WRITE: 0 (이 스크립트는 GET 만 보냅니다)')
 }
 
-process.exit(finalSum.ok ? 0 : 1)
+// 2026-09-04 — process.exit() 대신 process.exitCode + 자연 종료(drain-safe exit).
+// 근본원인(CI 33787307588): 46명분 --json 출력이 ~179KB 로 커지면서, Linux 에서
+// stdout 이 PIPE(비동기)일 때 process.exit() 가 커널 write 완료를 기다리지
+// 않고 즉시 이벤트 루프를 죽여 부모(verifyRelease.mjs Gate 3 의 spawnSync)가
+// 132,231자로 잘린 stdout 을 받는다 — JSON.parse 실패로 게이트가 FAIL 했다
+// (Windows 로컬은 파이프 구현이 달라 재현되지 않는다 — 이 파일 위쪽의 시각적
+// 출력 위에서 로컬로 확인해도 못 잡는 이유). 여기가 이 스크립트에서 유일하게
+// "process.exit 직전에 큰 stdout 출력"이 일어나는 지점이라(라인 208-212 의
+// 46명 JSON, 그리고 없는 경우 비-JSON 텍스트 표) process.exitCode 만 설정하고
+// 모듈이 자연히 끝나게 둔다 — Node 는 프로세스가 자연 종료될 때는 stdout 을
+// 끝까지 flush 한 뒤에 종료한다. prodCheck.mjs 가 이미 동일 패턴이다(102차,
+// 거기는 Node 24+Windows 크래시 회피가 이유였지만 근거는 같다 — process.exit()
+// 를 안 쓰면 stdout 문제가 구조적으로 사라진다).
+// 이 파일의 다른 process.exit() 호출(83/85/140/155행 — .env 없음/인프라
+// 오류/학생 미발견 가드절)은 의도적으로 그대로 둔다: (a) 출력이 전부 작아서
+// (최대 수백 바이트) 파이프 버퍼(수십 KB)를 넘길 수 없고, (b) 이 파일은
+// main() 함수로 감싸여 있지 않은 top-level 스크립트라 여기를 비동기(콜백)
+// 종료로 바꾸면 process.exit() 가 막아주던 "이후 코드로 폴스루" 문제가
+// 새로 생긴다(예: 인프라 오류 catch 이후 data 가 undefined 인 채로
+// buildContext(data) 가 실행되어 크래시) — 고치지 않는 것이 더 안전하다
+// (CLAUDE.md 규칙 1, 규칙 15와 같은 논리: 근본원인이 확인된 지점만 최소
+// 변경한다).
+process.exitCode = finalSum.ok ? 0 : 1
