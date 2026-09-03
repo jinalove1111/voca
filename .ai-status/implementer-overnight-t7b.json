@@ -1,0 +1,26 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "overnight-t7b",
+  "task": "Overnight T7b — UI 안정성 저위험 수정 3건(GuidedSession 유닛 key 안전망 / 포그라운드 복귀 재조회 10초 쿨다운 / 관리자 학생 검색 렌더 200개 상한)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-04T00:00:00+09:00",
+  "updated_at": "2026-09-04T00:00:00+09:00",
+  "files_owned": [
+    "src/App.jsx",
+    "src/utils/foregroundRefreshGate.js",
+    "src/components/admin/StudentDirectory.jsx",
+    "src/utils/listCap.js",
+    "scripts/testUiStabilityGuards.mjs",
+    "package.json",
+    ".ai-status/implementer-overnight-t7b.json"
+  ],
+  "files_read": [
+    "scripts/testPureUtils.mjs",
+    "scripts/testStdoutFlushOnExit.mjs"
+  ],
+  "summary": "1) App.jsx GuidedSession JSX에 key={currentUnitId ?? 'no-unit'} 추가(구조적 안전망, 현재 유닛전환은 항상 대시보드 리마운트 경유라 실질 영향 없음). 2) src/utils/foregroundRefreshGate.js(shouldRefreshOnForeground 순수 함수) 신규 + App.jsx visibility/focus 핸들러에 lastForegroundRefreshRef 기반 10초 쿨다운 배선(기존 inFlight 근접중복 가드는 그대로 유지, 최초 복귀는 항상 즉시 허용). 3) src/utils/listCap.js(capList 순수 함수) 신규 + StudentDirectory.jsx 검색/필터 결과 렌더 분기에 200개 상한 + '더 보기' 버튼 배선(filteredGroups/matchesStudent 필터링 로직 자체는 무변경, handleBulkAllowPinSetup은 displayStudents 전체 기준이라 캡과 무관 — 확인 완료). scripts/testUiStabilityGuards.mjs 신규(21단언, 정적 소스검사+순수함수 단위테스트, FAIL-first로 wiring 전 상태에서 7건 FAIL 기록 후 구현 → 21/21 PASS 확인) + package.json에 verify:ui-stability 등록.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 대기. 셋 다 독립 커밋으로 분리 예정(fix(ui)/perf(app)/perf(admin)/test 4개)."
+}
