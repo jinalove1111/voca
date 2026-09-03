@@ -1,0 +1,28 @@
+{
+  "agent": "implementer-p3-next-goals",
+  "task": "P3 Next Reward (다음 목표) widget",
+  "branch": "feat/reward-loop",
+  "status": "completed",
+  "started_at": "2026-09-03T00:00:00Z",
+  "updated_at": "2026-09-03T00:10:00Z",
+  "files_owned": [
+    "src/utils/nextGoals.js",
+    "src/components/NextGoalsCard.jsx",
+    "src/components/Dashboard.jsx",
+    "src/hooks/useStudent.js",
+    "scripts/testNextGoals.mjs",
+    ".ai-status/implementer-p3-next-goals.json"
+  ],
+  "files_read": [
+    "docs/REWARD_LOOP_AUDIT_2026-09-03.md",
+    "src/utils/attachment/hatSystem.js",
+    "src/utils/rewardEngine.js",
+    "src/utils/attachment/worldProgress.js",
+    "src/utils/attachment/paulTown.js",
+    "src/config/features.js",
+    "src/components/RewardCard.jsx",
+    "scripts/testRewardEngine.mjs",
+    "scripts/testSpellingDirectionWiring.mjs"
+  ],
+  "notes": "nextGoalsCard flag (already added by orchestrator commit 6891d81) OFF by default; Dashboard byte-identical unless flag ON. build PASS, testNextGoals.mjs 34/34 PASS, verify:star-delta PASS. No DB/SQL, no push/merge."
+}

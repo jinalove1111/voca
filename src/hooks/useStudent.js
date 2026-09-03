@@ -183,7 +183,7 @@ export function spellingComboBonus(combo) {
 const STREAK_MILESTONES = [3, 7, 14, 30]
 // Star-count badges — guaranteed special stickers awarded once per
 // threshold, independent of the gacha/streak systems (never duplicated).
-const STAR_BADGES = [
+export const STAR_BADGES = [
   { threshold: 100,  stickerId: 'ukflag1' },
   { threshold: 300,  stickerId: 'crown1' },
   { threshold: 500,  stickerId: 'guard1' },

@@ -68,6 +68,14 @@ import { trackEvent, EV } from '../utils/productEvents'
 // "정보 공개 축소" 관례를 따라 접힌 <details> "🎖️ 내 기록 더보기" 안에
 // 렌더한다(아래 사용처).
 import RewardCard from './RewardCard'
+// 다음 목표(Next Goals, P3, 2026-09-03, docs/REWARD_LOOP_AUDIT_2026-09-03.md
+// §14) — 오늘/다음/장기 목표 3줄 요약 카드. nextGoalsCard 플래그(기본
+// OFF) 뒤에서만 계산·마운트되고, 순수 함수(computeNextGoals)라 별도
+// 저장/네트워크 없음 — 플래그 OFF면 이 import 두 줄 말고는 기존 화면
+// 변화 0.
+import NextGoalsCard from './NextGoalsCard'
+import { computeNextGoals } from '../utils/nextGoals'
+import { STAR_BADGES } from '../hooks/useStudent'
 
 const GOAL = 5
 const stickerById = (id) => STICKERS.find(s => s.id === id)
@@ -689,6 +697,25 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
           level={rewardLevel?.level ?? 1}
           starsToNext={rewardStarsToNext ?? null}
         />
+
+        {/* 다음 목표(Next Goals, P3, 2026-09-03) — RewardCard 바로 아래,
+            항상 보이는 위치(접힌 <details> 밖). attachmentStats가 아직
+            없으면(구버전 App.jsx 경로) 계산 자체를 생략 — 다른 attachmentStats
+            게이팅 위젯(폴의 기억 등)과 동일한 방어. 플래그 OFF면 이
+            블록 전체가 렌더되지 않아 오늘과 바이트 단위로 동일하다. */}
+        {isFeatureEnabled('nextGoalsCard') && attachmentStats && (
+          <NextGoalsCard
+            goals={computeNextGoals({
+              totalStars: stars,
+              streak,
+              gardenPoints: attachmentStats.gardenPoints,
+              hatInventory: studentData.hatInventory,
+              stats: attachmentStats,
+              todayHistory: { categoriesCompleted: liveMissionsCompleted },
+              starBadges: STAR_BADGES,
+            })}
+          />
+        )}
 
         {/* 3분 데일리 리추얼(2026-07-22) 정보 공개 축소 — 평생 기록 타일
             3개 + Paul Rank/Word King/House/Season 텍스트 + 티켓 상점을
