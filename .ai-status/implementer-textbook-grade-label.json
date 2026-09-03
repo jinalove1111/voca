@@ -6,7 +6,7 @@
   "status": "completed",
   "progress": 100,
   "started_at": "2026-09-03T00:00:00Z",
-  "updated_at": "2026-09-03T00:00:00Z",
+  "updated_at": "2026-09-03T00:10:00Z",
   "files_owned": [
     "src/utils/textbookLabel.js",
     "src/components/admin/ClassTextbookLinks.jsx",
@@ -17,6 +17,24 @@
     "tests/harness/registry.mjs",
     ".ai-status/implementer-textbook-grade-label.json"
   ],
+  "followup_2026-09-03": {
+    "task": "verify:textbook-grade-label required 승격(extra:true → false) + FAIL-first 증거 보강, branch fix/textbook-grade-label",
+    "registry_change": "tests/harness/registry.mjs — scripts/testTextbookGradeLabel.mjs entry의 extra: true를 extra: false로 변경(DEVELOPER_GUIDE.md 규칙: 신규 verify 스크립트는 기본 required, extra:true는 verify:all exit code에 반영되지 않음). npm run verify:admin 재실행으로 41/41 PASS + required 취급 확인.",
+    "fail_first_proof": {
+      "method": "git checkout ac4503d^ -- src/components/admin/TextbookAssignmentPanel.jsx src/components/AdminScreen.jsx (fix 커밋 ac4503d 직전 상태로 두 컴포넌트만 되돌림, src/utils/textbookLabel.js는 유지) 후 node scripts/testTextbookGradeLabel.mjs 실행 → 이후 git checkout HEAD -- 로 복원",
+      "result": "41개 단언 중 4개 FAIL, exit 1",
+      "fail_lines": [
+        "FAIL  [FAIL-first] \"배정할 교과서\" 옵션 줄이 textbookOptionLabel(...)을 호출",
+        "FAIL  [FAIL-first] textbookLabel.js에서 textbookOptionLabel을 import",
+        "FAIL  getTextbookUnits를 wordLibrary에서 import(유닛 수 계산 출처)",
+        "FAIL  [FAIL-first] 옵션 텍스트가 getClassTypeByName(c) === 'textbook' 조건으로 [교재] 태그를 붙임"
+      ],
+      "scenarios_matched": "지시된 시나리오 e(3건: textbookOptionLabel 호출/import wiring + getTextbookUnits import)와 f(1건: [교재] 마커) 정확히 일치. a-d/e-2는 전부 PASS 그대로(계약 동결 무회귀 확인). 재타이트닝 불필요 — 이미 정확히 e/f를 가드하고 있음이 실측 확인됨.",
+      "restore_verified": "git checkout HEAD -- 복원 후 node scripts/testTextbookGradeLabel.mjs 재실행 → 41/41 PASS 재확인"
+    },
+    "build": "npm run build PASS (dist 정상 생성, 에러 없음)",
+    "verify_admin": "npm run verify:admin PASS(전체), testTextbookGradeLabel.mjs required 항목으로 41 PASS 포함"
+  },
   "files_read": [
     "CLAUDE.md",
     "src/App.jsx",
