@@ -523,9 +523,23 @@ console.log('\n=== 10절. UX 출력 — 마스킹/--show-names/Safe to continue 
   check('FAIL 이 있는 픽스처는 "Safe to continue: NO" 를 출력한다', /Safe to continue: NO/.test(res.stdout))
 }
 {
+  // prodCheck.mjs는 CI/GITHUB_ACTIONS 환경이면 --show-names를 무시하고
+  // 항상 마스킹한다(2026-09-03 보안수정 — 공개 저장소 Actions 로그에 실명이
+  // 찍히는 사고를 코드 레벨에서 차단, prodCheck.mjs 주석 참고). runCli는
+  // spawnSync에 별도 env를 주지 않아 부모 프로세스(이 테스트 자신)의 CI/
+  // GITHUB_ACTIONS를 그대로 물려받으므로, `CI=true GITHUB_ACTIONS=true node
+  // scripts/testProdCheck.mjs`로 실행하면(GitHub Actions 러너의 기본값)
+  // --show-names를 줘도 마스킹된 채로 남는 것이 올바른 동작이다 — 이 자체가
+  // 코드 버그가 아니라 자식 프로세스가 같은 보안수정을 상속받는 정상 동작.
+  const IS_CI = !!(process.env.CI || process.env.GITHUB_ACTIONS)
   const res = runCli(['--fixture', beforeFixtureFile, '--show-names', '--report-dir', reportDir])
-  check('--show-names — 학생 실명이 그대로 노출된다', res.stdout.includes('StudentA') || res.stdout.includes('StudentB'),
-    res.stdout.slice(0, 400))
+  if (IS_CI) {
+    check('--show-names — CI 환경이면 강제로 마스킹 유지(실명 미노출, 2026-09-03 보안수정 상속)',
+      !res.stdout.includes('StudentA') && !res.stdout.includes('StudentB'), res.stdout.slice(0, 400))
+  } else {
+    check('--show-names — 학생 실명이 그대로 노출된다', res.stdout.includes('StudentA') || res.stdout.includes('StudentB'),
+      res.stdout.slice(0, 400))
+  }
 }
 {
   const res = runCli(['--fixture', afterFixtureFile, '--report-dir', reportDir])

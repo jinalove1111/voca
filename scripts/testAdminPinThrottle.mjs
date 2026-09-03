@@ -111,9 +111,26 @@ function mockRes() {
   }
 }
 async function timed(fn) {
-  const start = Date.now()
+  // Date.now()는 벽시계 기준이라 CI(특히 가상화된 Linux 러너)에서 타이머
+  // 해상도/스케줄링 지터로 실제 setTimeout 지연보다 짧게 관측되는 flake가
+  // 있었다(2026-09-04, CI 33801415661 — "39ms" < 40ms 임계값). performance.now()
+  // 는 단조 증가 고해상도 클록이라 이 오차의 원인은 아니지만, 근본 원인은
+  // 이벤트 루프/타이머 자체의 지터이므로 아래 TEST_DELAY_MS 상향 + 허용오차
+  // (assertElapsedAtLeast)로 함께 흡수한다.
+  const start = performance.now()
   const result = await fn()
-  return { result, elapsedMs: Date.now() - start }
+  return { result, elapsedMs: performance.now() - start }
+}
+
+// CI 타이머 지터 허용오차(ms) — setTimeout(delay)가 스케줄러 지연으로 delay
+// 보다 살짝 이르게 관측되는 경우가 드물게 있다(로컬에서는 재현되지 않았고
+// CI 러너에서만 40ms 지연에 대해 39ms로 1ms 짧게 관측됨). 절대 시간이 아니라
+// "지연이 사실상 적용됐는가"를 확인하는 것이 이 스위트의 목적이므로, 지연을
+// 0으로 두면(코드 회귀) 여전히 확실히 FAIL하도록 지연값(120ms) 대비 충분히
+// 작은 허용오차(10ms)만 둔다.
+const ELAPSED_TOLERANCE_MS = 10
+function assertElapsedAtLeast(delayMs, elapsedMs) {
+  return elapsedMs >= delayMs - ELAPSED_TOLERANCE_MS
 }
 
 // 더미 값 — 아래 시나리오는 전부 "인가 실패" 경로만 태우므로 Supabase에
@@ -122,7 +139,7 @@ async function timed(fn) {
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'https://fake-test-project.supabase.co'
 process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'fake-service-role-key-not-a-real-secret'
 
-const TEST_DELAY_MS = 40 // 실제 1.5초 대신 짧게 — CI/로컬 모두 빠르게 통과
+const TEST_DELAY_MS = 120 // 실제 1.5초 대신 짧게(+ CI 타이머 지터를 흡수할 만큼 40ms보다 여유있게) — CI/로컬 모두 빠르게 통과
 process.env.ADMIN_PIN_FAIL_DELAY_MS = String(TEST_DELAY_MS)
 process.env.ADMIN_PIN = process.env.ADMIN_PIN_THROTTLE_TEST_PIN || 'qa-throttle-test-9182736'
 const REAL_PIN = process.env.ADMIN_PIN
@@ -137,12 +154,12 @@ console.log('\n=== 3a. [행동] checkAdminReauth — 지연/응답 형태 ===')
   check('틀린 adminPin → false 반환', wrongOk === false)
   check('틀린 adminPin → 응답 형태 무변경(200 + ok:false + not_authorized)',
     wrongRes.statusCode === 200 && wrongRes.body?.ok === false && wrongRes.body?.reason === 'not_authorized', JSON.stringify(wrongRes.body))
-  check(`틀린 adminPin → 설정된 지연(≥${TEST_DELAY_MS}ms) 대기함`, wrongElapsed >= TEST_DELAY_MS, `${wrongElapsed}ms`)
+  check(`틀린 adminPin → 설정된 지연(≥${TEST_DELAY_MS}ms, 허용오차 ${ELAPSED_TOLERANCE_MS}ms) 대기함`, assertElapsedAtLeast(TEST_DELAY_MS, wrongElapsed), `${wrongElapsed.toFixed(1)}ms`)
 
   const okRes = mockRes()
   const { result: okOk, elapsedMs: okElapsed } = await timed(() => checkAdminReauth({ body: { adminPin: REAL_PIN } }, okRes))
   check('올바른 adminPin → true 반환', okOk === true)
-  check('올바른 adminPin → 지연 없이 즉시 반환(<지연값의 절반)', okElapsed < TEST_DELAY_MS / 2, `${okElapsed}ms`)
+  check('올바른 adminPin → 지연 없이 즉시 반환(<지연값의 절반)', okElapsed < TEST_DELAY_MS / 2, `${okElapsed.toFixed(1)}ms`)
 }
 
 console.log('\n=== 3b. [행동] api/verify-admin-pin.js — 지연/응답 형태 ===')
@@ -157,11 +174,11 @@ console.log('\n=== 3b. [행동] api/verify-admin-pin.js — 지연/응답 형태
 
   const { result: wrong, elapsedMs: wrongElapsed } = await timed(() => call(WRONG_PIN))
   check('틀린 pin → { ok:false } (응답 형태 무변경)', wrong.statusCode === 200 && wrong.body?.ok === false, JSON.stringify(wrong))
-  check(`틀린 pin → 설정된 지연(≥${TEST_DELAY_MS}ms) 대기함`, wrongElapsed >= TEST_DELAY_MS, `${wrongElapsed}ms`)
+  check(`틀린 pin → 설정된 지연(≥${TEST_DELAY_MS}ms, 허용오차 ${ELAPSED_TOLERANCE_MS}ms) 대기함`, assertElapsedAtLeast(TEST_DELAY_MS, wrongElapsed), `${wrongElapsed.toFixed(1)}ms`)
 
   const { result: ok, elapsedMs: okElapsed } = await timed(() => call(REAL_PIN))
   check('올바른 pin → { ok:true } (응답 형태 무변경)', ok.statusCode === 200 && ok.body?.ok === true, JSON.stringify(ok))
-  check('올바른 pin → 지연 없이 즉시 반환(<지연값의 절반)', okElapsed < TEST_DELAY_MS / 2, `${okElapsed}ms`)
+  check('올바른 pin → 지연 없이 즉시 반환(<지연값의 절반)', okElapsed < TEST_DELAY_MS / 2, `${okElapsed.toFixed(1)}ms`)
 }
 
 console.log('\n=== 3c. [행동] api/clear-student-pin.js — 인가 실패 시 지연/응답 형태 ===')
@@ -177,7 +194,7 @@ console.log('\n=== 3c. [행동] api/clear-student-pin.js — 인가 실패 시 �
   const { result: wrong, elapsedMs: wrongElapsed } = await timed(() => call(WRONG_PIN))
   check('틀린 adminPin → 응답 형태 무변경(200 + ok:false + not_authorized)',
     wrong.statusCode === 200 && wrong.body?.ok === false && wrong.body?.reason === 'not_authorized', JSON.stringify(wrong))
-  check(`틀린 adminPin → 설정된 지연(≥${TEST_DELAY_MS}ms) 대기함`, wrongElapsed >= TEST_DELAY_MS, `${wrongElapsed}ms`)
+  check(`틀린 adminPin → 설정된 지연(≥${TEST_DELAY_MS}ms, 허용오차 ${ELAPSED_TOLERANCE_MS}ms) 대기함`, assertElapsedAtLeast(TEST_DELAY_MS, wrongElapsed), `${wrongElapsed.toFixed(1)}ms`)
 }
 
 console.log('\n=== 3d. [행동] api/set-student-pin.js — 관리자 무작위 재설정 인가 실패 시 지연/응답 형태 ===')
@@ -196,7 +213,7 @@ console.log('\n=== 3d. [행동] api/set-student-pin.js — 관리자 무작위 �
   const { result: wrong, elapsedMs: wrongElapsed } = await timed(() => call(WRONG_PIN))
   check('틀린 adminPin(무작위 재설정) → 응답 형태 무변경(200 + ok:false + not_authorized)',
     wrong.statusCode === 200 && wrong.body?.ok === false && wrong.body?.reason === 'not_authorized', JSON.stringify(wrong))
-  check(`틀린 adminPin(무작위 재설정) → 설정된 지연(≥${TEST_DELAY_MS}ms) 대기함`, wrongElapsed >= TEST_DELAY_MS, `${wrongElapsed}ms`)
+  check(`틀린 adminPin(무작위 재설정) → 설정된 지연(≥${TEST_DELAY_MS}ms, 허용오차 ${ELAPSED_TOLERANCE_MS}ms) 대기함`, assertElapsedAtLeast(TEST_DELAY_MS, wrongElapsed), `${wrongElapsed.toFixed(1)}ms`)
 }
 
 console.log('\n=== 4. [행동] admin-pin-actions.js dispatch — 인가 회귀 없음(DB 쓰기 없는 2개 샘플 액션) ===')
