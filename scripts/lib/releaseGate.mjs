@@ -111,6 +111,56 @@ export function diffAgainstBaseline(results, baseline) {
   return { regressions, known, fixed, warnings, ok: regressions.length === 0 }
 }
 
+// 2026-09-04 — Gate 3(학생 헬스체크) JSON 파싱 실패 진단 강화(CI 전용
+// 재현, run 33779410198). studentHealthCheck.mjs --json 출력이 CI(리눅스
+// 파이프) 에서만, 그리고 학생 수가 늘어(37→46) 출력이 커진 뒤부터 파싱
+// 실패했다 — stdout 앞부분은 정상 JSON 처럼 보이는데 뒤에서 잘린 것으로
+// 보이는 증상(verifyRelease.mjs 는 기존에 stdout 앞 1200자만 보여줘 원인을
+// 특정할 수 없었다). 이 함수는 그 "관용 복구" 경로용 — 정상 경로에서는
+// JSON.parse(stdout) 이 먼저 성공하므로 절대 호출되지 않아야 한다.
+
+/**
+ * stdout 안에서 첫 '{' 로 시작하는, 문자열 이스케이프를 고려해 depth 를 센
+ * "균형 잡힌" 최상위 JSON 객체 하나를 찾아 파싱한다. trailing garbage(첫
+ * 균형 객체 뒤에 남는 텍스트)는 버린다. 균형이 맞는 지점을 못 찾거나
+ * (=진짜 중간에 잘린 truncation) 그 구간이 유효한 JSON 이 아니면 null 을
+ * 돌려준다 — 호출부는 null 을 "복구 불가, 계속 FAIL" 로 취급해야 한다.
+ * @param {string} text
+ * @returns {{ json: any, start: number, end: number } | null}
+ */
+export function extractBalancedJson(text) {
+  const s = typeof text === 'string' ? text : ''
+  const start = s.indexOf('{')
+  if (start === -1) return null
+  let depth = 0
+  let inString = false
+  let escape = false
+  for (let i = start; i < s.length; i++) {
+    const ch = s[i]
+    if (inString) {
+      if (escape) escape = false
+      else if (ch === '\\') escape = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') { inString = true; continue }
+    if (ch === '{') depth++
+    else if (ch === '}') {
+      depth--
+      if (depth === 0) {
+        const candidate = s.slice(start, i + 1)
+        try {
+          return { json: JSON.parse(candidate), start, end: i + 1 }
+        } catch {
+          return null
+        }
+      }
+      if (depth < 0) return null
+    }
+  }
+  return null
+}
+
 /**
  * 게이트 목록을 합산한다. 하나라도 실패면 전체 실패.
  * @param {Array<{name: string, ok: boolean}>} gates

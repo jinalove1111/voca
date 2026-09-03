@@ -38,7 +38,7 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { EMPTY_BASELINE, normalizeBaseline, diffAgainstBaseline, summarizeGates } from './lib/releaseGate.mjs'
+import { EMPTY_BASELINE, normalizeBaseline, diffAgainstBaseline, summarizeGates, extractBalancedJson } from './lib/releaseGate.mjs'
 
 const argv = process.argv.slice(2)
 const has = (f) => argv.includes(f)
@@ -101,21 +101,48 @@ runGate('health', 'Gate 3 — Student Health Check (학생별 silent regression)
   // 받아 출력하므로, 저장소가 PUBLIC 이라도 학생 실명이 이 게이트의
   // GitHub Actions 로그에 남지 않는다 — 로컬(비 CI) 실행은 기존처럼 원본을
   // 보여준다(운영자 편의, 로컬 로그는 비공개).
+  // stdio 를 명시(['ignore','pipe','pipe'])해 stdin 대기로 인한 행업 가능성을
+  // 구조적으로 차단한다 — 동작은 기존 기본값(전부 pipe)과 동일하다.
   const res = spawnSync(process.execPath,
     [path.join(ROOT, 'scripts', 'studentHealthCheck.mjs'), '--json', '--require-env'],
-    { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] })
 
   if (res.error) {
     console.error(`  헬스체크 실행 실패: ${res.error.message}`)
     return false
   }
+  const stdout = res.stdout || ''
+  const stderr = res.stderr || ''
   let payload
   try {
-    payload = JSON.parse(res.stdout)
-  } catch {
-    console.error('  헬스체크 JSON 파싱 실패 — 원본 출력:')
-    console.error((res.stdout || res.stderr || '').slice(0, 1200))
-    return false
+    payload = JSON.parse(stdout)
+  } catch (err) {
+    // 2026-09-04 — CI(리눅스, run 33779410198)에서만 재현된 파싱 실패 진단
+    // 강화. 기존에는 stdout 앞 1200자만 보여줬는데, 그 구간이 유효한 JSON
+    // 처럼 보여도(ok:true, summary 정상) 실제로는 원인 특정이 불가능했다
+    // — 잘림이 "뒤"에서 났을 가능성이 크기 때문. status/signal/stderr/
+    // 앞+뒤 양쪽 꼬리를 모두 보여준다(학생 이름은 studentHealthCheck.mjs
+    // 가 CI 에서 이미 마스킹해 내보내므로 여기 그대로 출력해도 안전 —
+    // 파일 상단 2026-09-03 보안수정 주석 참고).
+    console.error('  헬스체크 JSON 파싱 실패 — 진단 정보:')
+    console.error(`    parse error   : ${err.message}`)
+    console.error(`    child status  : ${res.status === null || res.status === undefined ? '(null)' : res.status}`)
+    console.error(`    child signal  : ${res.signal ?? '(none)'}`)
+    console.error(`    stdout 길이   : ${stdout.length}자`)
+    if (stderr) console.error(`    stderr(첫 800자):\n${stderr.slice(0, 800)}`)
+    console.error(`    stdout 앞 600자:\n${stdout.slice(0, 600)}`)
+    console.error(`    stdout 뒤 600자:\n${stdout.slice(-600)}`)
+
+    const recovered = extractBalancedJson(stdout)
+    if (recovered) {
+      console.error(`  ⚠ 관용 복구 성공 — 첫 '{'(idx ${recovered.start}) ~ 균형 '}'(idx ${recovered.end}) 구간만 파싱했습니다` +
+        (recovered.end < stdout.length ? `(뒤에 남는 ${stdout.length - recovered.end}자는 버림).` : '.') +
+        ' 정상 상태라면 이 경고가 절대 보이지 않아야 합니다 — 원인 조사 필요.')
+      payload = recovered.json
+    } else {
+      console.error('  관용 복구도 실패 — 균형 잡힌 JSON 객체를 찾지 못했습니다(진짜 중간에 잘린 것으로 보임).')
+      return false
+    }
   }
   if (payload.infraError) {
     // 학생 문제가 아니라 인프라 오류 — 구분해서 보고한다.
