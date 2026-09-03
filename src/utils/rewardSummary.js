@@ -52,6 +52,13 @@ function sumPositive(list, pick) {
   }, 0)
 }
 
+// P5(2026-09-03) — reward_type 기준 원장 항목 개수 세기(순수, 방어적 —
+// 배열이 아니면 0).
+function countByRewardType(list, rewardType) {
+  if (!Array.isArray(list)) return 0
+  return list.reduce((sum, e) => (e && e.reward_type === rewardType ? sum + 1 : sum), 0)
+}
+
 // P4 — entries 안에 unit-complete 항목이 있으면 { unitId } 반환(카드가 큰
 // 축하 변형과 결정적 코스메틱 이모지를 고를 근거), 없으면 null. source_id가
 // 곧 unitId다(rewardEngine.js REWARD_SOURCE_RULES 'unit-complete' 참고).
@@ -122,8 +129,11 @@ export function buildSessionRewardSummary({ entries, xpEvents, gardenBefore, gar
   // P4 — 이번 세션이 unit-complete 앵커였으면 { unitId }, 아니면 null.
   // SessionRewardCard.jsx가 이 값 유무로 "big" 축하 변형을 고른다.
   const unitComplete = findUnitComplete(entries)
+  // P5 — 이번 세션에 실제로 있었던 word-mastered 항목 수(entries 그대로,
+  // 새 지급 로직 아님 — 이미 지급된 항목을 세기만 함).
+  const masteredCount = countByRewardType(entries, 'word-mastered')
 
-  return { stars, xp, gardenGrowth, gardenRawBefore: rawBefore, gardenRawAfter: rawAfter, streak: streakDays, nextGoal, unitComplete }
+  return { stars, xp, gardenGrowth, gardenRawBefore: rawBefore, gardenRawAfter: rawAfter, streak: streakDays, nextGoal, unitComplete, masteredCount }
 }
 
 /**
@@ -161,6 +171,12 @@ export function formatRewardLines(summary) {
 
   if (Number(s.gardenGrowth) > 0) {
     lines.push(`🌱 정원 +${s.gardenGrowth}`)
+  }
+
+  // P5(2026-09-03) — 이번 세션에 실제로 숙달(word-mastered)된 단어가
+  // 있으면 한 줄 추가(zero-omission 원칙 그대로, 0이면 줄 생략).
+  if (Number(s.masteredCount) > 0) {
+    lines.push(`🧠 틀린 단어 ${s.masteredCount}개를 다시 익혔어요`)
   }
 
   if (Number(s.streak) > 0) {

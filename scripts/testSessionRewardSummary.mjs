@@ -157,6 +157,17 @@ if (buildSessionRewardSummary && formatRewardLines) {
   check('entries에 unit-complete가 있으면 unitComplete.unitId === source_id', withUnit.unitComplete && withUnit.unitComplete.unitId === 'unit-uuid-1')
   const withoutUnit = buildSessionRewardSummary({ entries: [{ reward_type: 'word-session-complete', stars_delta: 1 }], xpEvents: [], gardenBefore: 0, gardenAfter: 0, streak: 0, totalStars: 1 })
   check('unit-complete가 없으면 unitComplete는 null', withoutUnit.unitComplete === null)
+
+  // ── P5(복습/숙달 보상 강화, 2026-09-03) — masteredCount 필드 ────────────
+  const withMastered = buildSessionRewardSummary({
+    entries: [{ reward_type: 'word-mastered', stars_delta: 1 }, { reward_type: 'word-mastered', stars_delta: 1 }, { reward_type: 'wrong-word-recovered', stars_delta: 1 }],
+    xpEvents: [], gardenBefore: 0, gardenAfter: 0, streak: 0, totalStars: 3,
+  })
+  check('word-mastered 항목 수를 정확히 셈(2개)', withMastered.masteredCount === 2)
+  const withoutMastered = buildSessionRewardSummary({ entries: [{ reward_type: 'wrong-word-recovered', stars_delta: 1 }], xpEvents: [], gardenBefore: 0, gardenAfter: 0, streak: 0, totalStars: 1 })
+  check('word-mastered가 없으면 masteredCount === 0', withoutMastered.masteredCount === 0)
+  check('formatRewardLines가 masteredCount > 0이면 숙달 줄 추가', formatRewardLines({ stars: 0, xp: 0, gardenGrowth: 0, streak: 0, masteredCount: 3, nextGoal: { kind: 'level', remaining: null, label: null } }).some((l) => l.includes('틀린 단어 3개')))
+  check('formatRewardLines가 masteredCount === 0이면 숙달 줄 생략', formatRewardLines({ stars: 0, xp: 0, gardenGrowth: 0, streak: 0, masteredCount: 0, nextGoal: { kind: 'level', remaining: null, label: null } }).every((l) => !l.includes('틀린 단어')))
 }
 
 // ── 2) SessionRewardCard.jsx — SSR 렌더 문자열 단언 ─────────────────────
@@ -223,6 +234,11 @@ if (SessionRewardCard) {
   const normalSummary = { stars: 1, xp: 0, gardenGrowth: 0, streak: 0, unitComplete: null, nextGoal: { kind: 'level', remaining: null, label: null } }
   const normalHtml = renderToStaticMarkup(React.createElement(SessionRewardCard, { summary: normalSummary, onDismiss: () => {} }))
   check('unitComplete가 null이면 "유닛 완료" 헤딩 없음(일반 변형 그대로)', !normalHtml.includes('유닛 완료'))
+
+  // ── P5(2026-09-03) — masteredCount 줄 렌더 ──────────────────────────
+  const masteredSummary = { stars: 0, xp: 0, gardenGrowth: 0, streak: 0, masteredCount: 2, nextGoal: { kind: 'level', remaining: null, label: null } }
+  const masteredHtml = renderToStaticMarkup(React.createElement(SessionRewardCard, { summary: masteredSummary, onDismiss: () => {} }))
+  check('masteredCount > 0이면 "틀린 단어 2개" 줄 렌더', masteredHtml.includes('틀린 단어 2개'))
 }
 
 // ── 3) 배선 정적 검사 — 플래그 기본 OFF + 기존 지급 가드 재사용 + App 마운트 ──

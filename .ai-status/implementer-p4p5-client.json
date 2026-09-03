@@ -1,0 +1,39 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "p4p5-client",
+  "task": "P4(유닛 완료 보상)/P5(오답 복습·마스터리 보상) 클라이언트 배선 — flag unitCompleteReward/masteryReward OFF, DB 무접촉",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-03T00:00:00+09:00",
+  "updated_at": "2026-09-03T00:00:00+09:00",
+  "files_owned": [
+    "src/hooks/useStudent.js",
+    "src/hooks/useAttachment.js",
+    "src/hooks/unitCompletionDetector.js",
+    "src/utils/rewardSummary.js",
+    "src/components/SessionRewardCard.jsx",
+    "scripts/buildUnitCompleteBundle.mjs",
+    "scripts/testUnitCompleteReward.mjs",
+    "scripts/testMasteryReward.mjs",
+    "scripts/testSessionRewardSummary.mjs",
+    ".ai-status/implementer-p4p5-client.json"
+  ],
+  "files_read": [
+    "docs/REWARD_LOOP_AUDIT_2026-09-03.md",
+    "src/utils/rewardEngine.js",
+    "src/utils/attachment/attachmentCore.js",
+    "src/config/features.js",
+    "src/App.jsx",
+    "src/utils/attachment/growthPoints.js",
+    "scripts/buildRaceBundle.mjs",
+    "scripts/testRewardFlow.mjs",
+    "scripts/fakeReact.mjs",
+    "scripts/fakeReactModule.mjs",
+    "scripts/wordLibraryRaceStub.mjs",
+    "package.json"
+  ],
+  "summary": "recordUnitCompleted(useStudent.js) + useAttachment.js 전이 감지기(별도 effect, 첫 렌더 씨딩만, 소급지급 없음) 구현. diffNewlyCompleted를 src/hooks/unitCompletionDetector.js(zero-import 순수 모듈)로 분리 — useAttachment.js가 productEvents->supabaseClient->import.meta.env를 정적 import해 plain Node에서 직접 로드 불가하기 때문. SessionRewardCard.jsx big 변형(유닛 완료 축하, unitId 순수 해시 기반 결정적 코스메틱, 3.5s 자동닫힘). P5: wrong-word-recovered 두 호출부(recordSpellingAnswer/clearSpellingReviewWord)에서 새 회복 시 grantMasteryRewards 호출 — recoveredToday(freshHistoryDay 신규 필드, flag 무관 항상 카운트) 증가 + flag ON이면 word-mastered(평생 1회)/3회째 review-session-bonus(하루 1회). rewardSummary.js에 masteredCount/unitComplete 필드 추가. 3개 FAIL-first 커밋: (1) recordUnitCompleted+감지기+testUnitCompleteReward.mjs(36단언), (2) SessionRewardCard big variant+testSessionRewardSummary.mjs 확장, (3) word-mastered/review-session-bonus+testMasteryReward.mjs(25단언). useStudent.js에 attachment/* import·worldProgress 문자열 없음(레이어 계약 유지) 확인. FAIL-first 실측: unitCompletionDetector.js/testMasteryReward.mjs 부재로 ERR_MODULE_NOT_FOUND, testSessionRewardSummary.mjs 신규 단언 4건만 사전 FAIL 확인 후 구현 → 전량 PASS 전환.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 대기. 서버측(api/grant-xp.js REWARD_SOURCE_RULES/REWARD_DAILY_CAP 반영·재배포)은 별도 세션 범위(운영자 승인 필요, 감사 §14 P4 행). flag ON 전환은 운영자 결정."
+}

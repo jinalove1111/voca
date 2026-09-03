@@ -264,6 +264,11 @@ const freshHistoryDay = () => ({
   // XP/UI도 이 필드를 읽지 않는다(다음 측정 세션이 student_progress를 통해
   // 읽을 예정) — 순수 관측 배선.
   completedTodayCount: 0,
+  // P5(복습/숙달 보상 강화, 2026-09-03) — 오답노트 회복(wrong-word-recovered,
+  // 레거시 앵커, 하루 반복 가능) 성공 횟수. spellingCorrect와 동일 성격
+  // (flag와 무관하게 항상 카운트되는 순수 관측, 그날 자정 리셋) — 지급
+  // 자체(review-session-bonus, 3회 임계)만 masteryReward flag로 게이팅한다.
+  recoveredToday: 0,
 })
 
 // id는 이제 실제 Supabase students.id(UUID) — 예전엔 이름 문자열이 그대로
@@ -544,6 +549,10 @@ function mergeHistoryDay(a, b) {
     // 같은 규칙(max)으로 병합. maxNum 자체가 Number(...)||0 방어를 포함하므로
     // 구버전 blob(필드 없음, undefined)도 안전하게 0으로 취급된다.
     completedTodayCount: maxNum(a.completedTodayCount, b.completedTodayCount),
+    // P5(2026-09-03) — completedTodayCount와 동일 규칙(그날 안의 high-water
+    // mark, max 병합). maxNum 자체가 Number(...)||0 방어를 포함하므로 이
+    // 필드가 없는 구버전 blob도 안전하게 0으로 취급된다.
+    recoveredToday: maxNum(a.recoveredToday, b.recoveredToday),
   }
 }
 
@@ -1692,6 +1701,40 @@ export function useStudent(studentId, legacyName) {
   // 순간, 다른 3개 카테고리(word-view/listening/quiz)와 동일한 day
   // 기간키 패턴) 단위로만 지급한다 — 몇 번째 단어/몇 번째 콤보에서
   // 도달했는지는 더 이상 지급 여부에 영향을 주지 않는다.
+  // ── P5 "복습/숙달 보상 강화"(2026-09-03, docs/REWARD_LOOP_AUDIT_2026-09-03.md
+  // §4·14, flag masteryReward) ────────────────────────────────────────
+  // 기존 wrong-word-recovered(레거시, 하루 반복 가능, 무변경)가 실제로 새
+  // 원장 항목을 만든 순간에만(=호출부가 grantLedgerReward의 반환값 true를
+  // 확인한 뒤) 불린다 — 새 dedup을 만들지 않고 기존 hasRewardEntry 조기
+  // 반환을 그대로 재사용한다(CLAUDE.md 규칙 3, sessionRewardSummary와
+  // 동일한 설계 원칙).
+  //   1) recoveredToday(freshHistoryDay, 위)는 flag와 무관하게 항상 증가
+  //      (spellingCorrect와 동일 성격의 순수 관측 카운터).
+  //   2) word-mastered(+1, 평생 1회) — flag ON일 때만, 회복될 때마다 매번
+  //      호출하되 sourceId가 wordId뿐(날짜 없음)이라 실제 지급은
+  //      grantLedgerReward 내부 hasRewardEntry가 평생 1회로 자동 제한한다
+  //      (day2에 같은 단어가 다시 회복돼도 word-mastered는 재지급되지 않음).
+  //   3) review-session-bonus(+2, 하루 1회) — recoveredToday가 이번 호출로
+  //      "2 -> 3"을 처음 넘는 순간에만, flag ON일 때만 시도한다. sourceId가
+  //      오늘 날짜뿐이라 하루 안에서 몇 번을 넘겨도(4/5회째) 재지급되지
+  //      않는다(REWARD_SOURCE_RULES 'daily-review' 패턴 + 서버 일일상한 1).
+  const grantMasteryRewards = useCallback((wordId) => {
+    let justReachedThree = false
+    bumpHistory((day) => {
+      const prev = day.recoveredToday || 0
+      const next = prev + 1
+      if (prev < 3 && next >= 3) justReachedThree = true
+      return { recoveredToday: next }
+    })
+    if (!isFeatureEnabled('masteryReward')) return
+    if (wordId) {
+      grantLedgerReward('word-mastered', 'spelling-review-mastery', String(wordId), undefined, '🧠 다시 익혔어요')
+    }
+    if (justReachedThree) {
+      grantLedgerReward('review-session-bonus', 'daily-review', todayStr(), undefined, '🔁 복습 보너스')
+    }
+  }, [bumpHistory, grantLedgerReward])
+
   const recordSpellingAnswer = useCallback((wordId, correct) => {
     let justCompletedWriting = false
     bumpHistory(day => {
@@ -1736,7 +1779,8 @@ export function useStudent(studentId, legacyName) {
           : prev.spellingReviewQueue,
       }))
       if (wasInReviewQueue) {
-        grantLedgerReward('wrong-word-recovered', 'spelling-review', `${todayStr()}:${wordId}`)
+        const recoveredNew = grantLedgerReward('wrong-word-recovered', 'spelling-review', `${todayStr()}:${wordId}`)
+        if (recoveredNew) grantMasteryRewards(wordId)
       }
       const bonus = spellingComboBonus(combo)
       if (bonus > 0) {
@@ -1760,7 +1804,7 @@ export function useStudent(studentId, legacyName) {
         },
       }))
     }
-  }, [bumpHistory, patch, grantReward, round.spellingCombo, grantXp, grantLedgerReward, spellingReviewQueue])
+  }, [bumpHistory, patch, grantReward, round.spellingCombo, grantXp, grantLedgerReward, spellingReviewQueue, grantMasteryRewards])
 
   // 복습 화면에서 한 단어를 맞히면 오답노트 큐에서 제거 — 큐가 비면
   // "틀린 단어 복습"이 끝난 것. Writing MVP: 영구 복습 대기열
@@ -1775,7 +1819,8 @@ export function useStudent(studentId, legacyName) {
     // 됐다"고 본다. recordSpellingAnswer의 정답 경로와 날짜:wordId 키를
     // 공유해서 두 경로가 교차 호출돼도 정확히 한 번만 지급된다.
     if (spellingReviewQueue.includes(wordId) || round.spellingWrongToday.includes(wordId)) {
-      grantLedgerReward('wrong-word-recovered', 'spelling-review', `${todayStr()}:${wordId}`)
+      const recoveredNew = grantLedgerReward('wrong-word-recovered', 'spelling-review', `${todayStr()}:${wordId}`)
+      if (recoveredNew) grantMasteryRewards(wordId)
     }
     patch(prev => ({
       round: { ...prev.round, spellingWrongToday: prev.round.spellingWrongToday.filter(id => id !== wordId) },
@@ -1783,7 +1828,7 @@ export function useStudent(studentId, legacyName) {
         ? prev.spellingReviewQueue.filter(id => id !== wordId)
         : prev.spellingReviewQueue,
     }))
-  }, [patch, spellingReviewQueue, round.spellingWrongToday, grantLedgerReward])
+  }, [patch, spellingReviewQueue, round.spellingWrongToday, grantLedgerReward, grantMasteryRewards])
 
   // Reward System V1 앵커(exam-complete, +2) — EntranceTest.jsx가
   // submitEntranceResult() 성공(서버 저장 확정) 직후에만 호출한다(실패
