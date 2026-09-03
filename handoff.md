@@ -1,10 +1,91 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-03 (105차, 야간 자율 세션 — Production Safety
-Harness 강화(prod:check invariant 18종·prod:hotfix manifest 변조 감지 +
-유령 SCA 재배정 manifest 라이브 자동 생성) + 재발 방지 가드(배정 저장/
-primary 전환/hard_delete/class.delete) + 데이터 손실 정적 감사 + WARN 10
-전수 분석 + CI 통합(Gate 3b/4) + PUBLIC 저장소 학생 실명 마스킹 보안
-수정 7건. Production WRITE 0, PR merge 0. 상세는 아래 105차 섹션)_
+_최종 갱신: 2026-09-03 (106차, 아침 세션 — 운영자 지시로 PR #8 merge
+(`84a36b8`) + main Release Gate/Vercel 프로덕션 배포 SUCCESS + Edge
+Function `admin-content-write` v8 배포(class.delete 학습기록 가드 라이브).
+SQL 실행 0, DB WRITE 0. 상세는 아래 106차 섹션)_
+
+## 2026-09-03 (106차) — 아침 세션: PR #8 merge 최종 점검 + merge + Edge Function v8 배포 (운영자 지시, SQL 실행 0, DB WRITE 0)
+
+- 운영자 지시 순서: ① 신규 기능 개발 중단, PR #8 merge 가능 여부만 최종
+  점검(SQL 13개 미실행·Edge 미배포·`rows.json` 무접촉·DB WRITE 0·코드
+  수정/push 0 조건) → ② "YES" 판정 후 운영자가 merge 지시 → ③ Edge
+  Function 배포 지시 → ④ 이 handoff 기록 지시. 각 단계는 운영자의 명시
+  승인 뒤에만 실행했다.
+
+### 1. merge 전 최종 점검(READ-ONLY) — 판정 YES
+- **"127커밋" 착시 해소**: 로컬 `main`이 2026-08-11(`98734cc`)에 멈춰
+  있어 `main..HEAD`가 127로 보였다. `origin/main`(PR #7까지 머지된
+  `09eaaa8`) 기준 PR #8은 **28커밋·49파일**이며 GitHub PR 화면과 일치.
+  분기점은 102차 handoff 커밋(`3ebb1db`, 09-02). `git merge-tree` 충돌 0,
+  `origin/main`에만 있는 6커밋(PR #2~#7 merge)과 겹치는 src/api/supabase
+  파일 0.
+- **프로덕션 런타임 변경 파일은 3개뿐** (나머지 46개는 scripts/tests/
+  docs/.ai-status/CI 워크플로/package.json 스크립트 등록):
+  - `api/admin-pin-actions.js` — `unlock_student_pin` UUID 형식 검증(400),
+    `hard_delete_student` 가드에 `reward_ledger`/`entrance_test_results`/
+    `xp_ledger` 카운트 추가(테이블 부재는 0 취급, 더 보수적).
+  - `src/utils/wordLibrary.js` — `isSuspiciousUnit`(단어<2 또는 이름이
+    `/^(unit|유닛|단원)\s*$/i`) 기준으로 배정 저장·primary 전환·교재
+    전환·반 이동·일괄 이동·읽기 self-heal에서 유령 유닛 채택 차단(첫
+    학습 가능 유닛으로 대체, 없으면 명시 throw). 레거시 분기 이전 primary
+    행 delete→demote. units 캐시에 `textbookId`(컬럼/권한 부재 시 구
+    쿼리로 폴백). `deleteClass`가 `has_learning_data`를 throw 대신
+    `{ blocked, counts }`로 반환.
+  - `src/components/AdminScreen.jsx` — 반 삭제 2차 확인 모달(반 이름
+    재입력 + force) + "학생별 진행도 유지" 문구를 실제 삭제 범위에 맞게
+    정정.
+- **feature flag 보호 변경 없음** — 위 3파일은 merge 즉시 전부 활성화.
+  diff에 flag/`VITE_` 분기 0건. 학생 로그인·학습·퀴즈 플로우 파일 변경
+  0, 학생 대상 신규 UI 0(규칙 12).
+- **merge로 활성화되지 않는 것**: Edge Function `class.delete` 가드(별도
+  배포 필요). 구 Edge(v7) + 신 클라이언트 조합도 안전 — 구 핸들러는
+  `classId`만 읽고 `force`를 무시하며 `has_learning_data`를 반환하지
+  않으므로 반 삭제가 기존과 동일하게 1차 확인만으로 동작(2차 모달만 안
+  뜸).
+- **DDL 의존 0**: 새로 읽는 `student_class_assignments.textbook_id`는
+  v3.1(07-22) 이후 라이브, `units.textbook_id`는 부재 시 폴백. 컬럼 부재
+  에러는 `isMissingTableError`의 "does not exist" 매칭으로 non-fatal.
+- **CI 근거**: HEAD sha `11bf474`에서 Release Gate(build + verify:all +
+  student health + Gate 3b/4)·Deploy Ready·Vercel 전부 SUCCESS(09-02
+  21:04 UTC).
+
+### 2. merge (운영자 지시)
+- `gh pr merge 8 --merge` — 기존 관례대로 merge commit. 제목 "Merge PR
+  #8: prod-safety: Production Safety Harness 1단계 (prod:check /
+  prod:hotfix) + 유령 유닛 재발 방지 가드 + CI Gate 3b/4 + handoff
+  103~105차". 머지 커밋 **`84a36b8`**, 2026-09-03 04:00 UTC.
+- main 배포 검증: Release Gate SUCCESS, Deploy Ready SUCCESS, Vercel
+  commit status SUCCESS. `https://voca-drab.vercel.app` 200 응답 확인.
+
+### 3. Edge Function 배포 (운영자 지시)
+- 56차와 동일 명령:
+  `npx supabase functions deploy admin-content-write --project-ref azsjthtdjfpnctffjfsk --use-api`
+  (CLI 기존 로그인 세션 재사용, 토큰 env 없음).
+- `functions list` 실측: **admin-content-write version 8 · ACTIVE ·
+  2026-09-03 04:19 UTC**(v7 → v8, `class.delete` 학습기록 가드
+  `decideClassDelete`/`ClassDeleteBlockedError` 라이브 반영).
+- 라이브 스모크(READ-ONLY): 관리자 인증 없이 `class.delete` 호출 →
+  `{ ok:false, reason:'not_authorized' }` HTTP 200. 함수 기동 확인, DB
+  WRITE 0. 로컬 `npm run verify:class-delete-guard` 18단언 ALL PASS.
+- 이제 main 클라이언트와 Edge v8이 한 쌍으로 맞음: 학습기록이 있는
+  반은 counts 4종(`word_status`/`entrance_test_results`/
+  `student_class_assignments`/`spelling_review_queue`)과 함께 차단되고,
+  관리자 화면에서 반 이름 재입력 후 "그래도 삭제"(force)로만 강행. 기록
+  0인 반은 기존과 byte-identical(1차 확인만).
+
+### 4. 남은 운영자 몫 / 다음 세션 참고
+- 미커밋 SQL 13개(`v3_38`~`v3_41`, `hotfix_20260902_*`, `restore_haeun_sca`,
+  `verify_haeun_baseline`)는 이번 merge/배포에 **필요 없음**. 실행 여부는
+  운영자 결정(각각 ROLLBACK 파일 동봉).
+- `rows.json`(학생 실명 포함 스크래치, untracked)은 지시대로 무접촉 —
+  PUBLIC 저장소이므로 커밋 금지, 삭제/`.gitignore` 처리는 운영자 결정.
+- 로컬 `main`은 08-11에 멈춰 있음 → 다음 세션 시작 시 `git checkout main
+  && git pull`. 현재 작업 브랜치 `fix/pin-setup-and-unit-fallback`은
+  merge 완료 상태.
+- `.ai-status/implementer-pin-setup-code-lookup.json`(08-31 completed)은
+  아직 untracked.
+- 이 106차 기록은 handoff.md 단일 파일 변경이며 커밋/push는 운영자 지시
+  대기.
 
 ## 2026-09-03 (105차) — 야간 자율 세션: Production Safety Harness 강화 + 재발 방지 가드 + 데이터 손실 가드 + WARN 10 분석 + CI 통합 (Production WRITE 0, PR merge 0)
 
