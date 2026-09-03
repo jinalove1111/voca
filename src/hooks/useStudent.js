@@ -1627,6 +1627,16 @@ export function useStudent(studentId, legacyName) {
       grantLedgerReward('writing-complete', 'daily-writing', todayStr())
     }
     if (correct) {
+      // 2026-09-04 정원 성장 소스 버그 수정 — 퀴즈 정답(recordQuizAnswer)은
+      // 정답일 때 markWordCleared를 불러 정원 성장 파생값(attachmentCore.js
+      // deriveAttachmentStats이 clearedWords 등에서 계산)을 키우는데, 철자
+      // 시험 정답은 이 호출이 빠져 있어 아무리 철자를 맞혀도 정원이 자라지
+      // 않았다(실측: 철자 정답 347회인데 정원 0칸인 계정 확인). markWordCleared는
+      // 멱등(이미 있으면 no-op)이라 같은 단어를 퀴즈로 먼저 맞혔든 철자로
+      // 먼저 맞혔든 정확히 1포인트만 센다 — 별/XP/콤보/spellingReviewQueue
+      // 로직은 아래 그대로(정원 성장 계산 자체는 이 파일이 여전히 읽거나
+      // 쓰지 않는다 — clearedWords만 append할 뿐, 파생은 attachmentCore.js 몫).
+      markWordCleared(wordId)
       // 콤보/보너스를 같은 클로저 값에서 계산 — 표시되는 콤보 수와 실제
       // 지급된 보너스가 절대 어긋나지 않게. (쓰기 답안은 사람이 타이핑하는
       // 속도로만 들어오므로 stale closure가 실제로 문제될 간격이 아님.)
@@ -1672,7 +1682,7 @@ export function useStudent(studentId, legacyName) {
         },
       }))
     }
-  }, [bumpHistory, patch, grantReward, round.spellingCombo, grantXp, grantLedgerReward, spellingReviewQueue])
+  }, [bumpHistory, patch, grantReward, round.spellingCombo, grantXp, grantLedgerReward, spellingReviewQueue, markWordCleared])
 
   // 복습 화면에서 한 단어를 맞히면 오답노트 큐에서 제거 — 큐가 비면
   // "틀린 단어 복습"이 끝난 것. Writing MVP: 영구 복습 대기열
