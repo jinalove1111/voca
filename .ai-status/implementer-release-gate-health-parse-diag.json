@@ -1,0 +1,23 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "release-gate-health-parse-diag",
+  "task": "Release Gate 3(학생 헬스체크) JSON 파싱 실패 진단 강화 — CI 전용 재현(run 33779410198), status/signal/stderr/앞+뒤 stdout 노출 + 관용 복구(extractBalancedJson) + 테스트",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-04T00:00:00Z",
+  "updated_at": "2026-09-04T00:40:00Z",
+  "files_owned": [
+    "scripts/verifyRelease.mjs",
+    "scripts/lib/releaseGate.mjs",
+    "scripts/testReleaseGate.mjs",
+    ".ai-status/implementer-release-gate-health-parse-diag.json"
+  ],
+  "files_read": [
+    ".github/workflows/release-gate.yml",
+    "scripts/studentHealthCheck.mjs"
+  ],
+  "summary": "Gate 3 파싱 실패 시 기존엔 stdout 앞 1200자만 보여줘 원인 특정 불가했다. child status/signal/stderr(800자)/stdout 앞뒤 각 600자 진단 추가 + releaseGate.mjs 에 순수함수 extractBalancedJson(첫 '{' 부터 문자열 이스케이프 고려한 균형 '}' 까지 추출·파싱, 실패 시 null) 추가해 trailing garbage 는 복구하되 진짜 truncation(균형 안 맞음)은 계속 FAIL 로 취급. spawnSync stdio 명시([ignore,pipe,pipe]), maxBuffer 64MB 유지. testReleaseGate.mjs 에 14/15절 추가(extractBalancedJson pure fn 9건 + verifyRelease.mjs 정적배선 8건). 조사 결과 유력 원인: studentHealthCheck.mjs 269행 process.exit() 이 208행 console.log(대용량 JSON) 직후 호출되는데, 리눅스에서 stdout 이 파이프일 때 대용량 write 는 비동기이고 exit() 이 flush 를 기다리지 않는 Node 고질 문제(nodejs/node#6456 부류)와 부합 — CI(ubuntu)만 재현, 학생 수 37→46 증가로 출력이 커지며 잘릴 확률 상승, Windows 로컬 spawnSync 재현 시도(최대 5MB stub)는 재현 안 됨(플랫폼별 파이프 구현 차이와 일치). 이번 커밋은 studentHealthCheck.mjs 자체는 건드리지 않음(범위 밖, 별도 후속 권고).",
+  "blocker": null,
+  "next_action": "CI(Release Gate)에서 새 진단 로그로 재확인. 만약 status=0/signal=none 인데 stdout 이 중간에 끊긴 게 새 로그로 확인되면, 후속 작업으로 scripts/studentHealthCheck.mjs 의 269행 process.exit() 을 stdout drain 이후로 지연시키는 최소 수정을 별도 소커밋으로 제안(이번 작업 범위 밖, 운영자/planner 승인 필요)."
+}

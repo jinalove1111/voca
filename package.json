@@ -29,6 +29,7 @@
     "health:baseline": "node scripts/recordHealthBaseline.mjs",
     "verify:release": "node scripts/verifyRelease.mjs",
     "verify:release-gate": "node scripts/testReleaseGate.mjs",
+    "verify:stdout-flush": "node scripts/testStdoutFlushOnExit.mjs",
     "verify:analytics": "node tests/harness/runAnalytics.mjs",
     "verify:reading": "node tests/harness/runReading.mjs",
     "verify:sentence-learning": "node tests/harness/runSentenceLearning.mjs",
