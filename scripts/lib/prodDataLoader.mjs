@@ -78,7 +78,7 @@ export async function loadProductionSnapshot(supabase) {
     throw new Error('loadProductionSnapshot: base/key 가 필요합니다(loadSupabaseEnv() 결과를 넘기세요).')
   }
   const headers = { apikey: supabase.key, Authorization: `Bearer ${supabase.key}` }
-  const [students, classes, textbooks, units, words, assignments] = await Promise.all([
+  const [students, classes, textbooks, units, words, assignments, classTextbooks] = await Promise.all([
     // unit_name 도 함께 받는다 — UNIT_NAME_MISMATCH invariant 에 필요
     // (studentHealthCheck.mjs 는 이 컬럼을 안 쓰므로 셀렉트 목록이 여기서
     // 갈린다 — 의도된 차이).
@@ -88,16 +88,23 @@ export async function loadProductionSnapshot(supabase) {
     // 'textbook')을 사람 반과 구분하는 데 필요(2026-09-03, Phase 8b 코디네이터 정정).
     selectAll(supabase.base, headers, 'classes', 'id,name,spelling_direction,class_type'),
     selectAll(supabase.base, headers, 'textbooks', 'id,name,owner_class_id'),
-    selectAll(supabase.base, headers, 'units', 'id,name,textbook_id'),
+    // class_id 도 함께 받는다(DATABASE.md units 역추적 표에 이미 존재하는
+    // 컬럼) — UNIT_TEXTBOOK_CONTAINER_MISMATCH invariant(2026-09-04, P11)가
+    // "이 유닛이 어느 컨테이너 반 소속인가"를 판정하는 데 필요.
+    selectAll(supabase.base, headers, 'units', 'id,name,textbook_id,class_id'),
     // word,meaning 도 함께 받는다 — 유령 유닛(엑셀 헤더 잔재) 판정에 필요.
     selectAll(supabase.base, headers, 'words', 'id,unit_id,word,meaning'),
     // created_at 도 함께 받는다 — CLASS_ASSIGNMENT_CONTRADICTION invariant 의
     // detail(최신/최초 배정일)에 필요(2026-09-03, Phase 8 확장).
     selectAll(supabase.base, headers, 'student_class_assignments',
       'student_id,class_id,textbook_id,is_primary,current_unit_id,created_at'),
+    // 2026-09-04(P11) 신규 — TEXTBOOK_UNREACHABLE/STUDENT_TEXTBOOK_SELECTOR_EMPTY
+    // invariant 가 "반이 어떤 교재에 연결돼 있는가"를 판정하는 데 필요.
+    // scripts/verifyClassTextbooks.mjs 와 동일 셀렉트(class_id,textbook_id,enabled).
+    selectAll(supabase.base, headers, 'class_textbooks', 'class_id,textbook_id,enabled'),
   ])
   return {
-    students, classes, textbooks, units, words, assignments,
+    students, classes, textbooks, units, words, assignments, classTextbooks,
     fetchedAt: new Date().toISOString(),
     projectRef: supabase.projectRef || null,
   }

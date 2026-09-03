@@ -1,0 +1,32 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "overnight-p11",
+  "task": "prod:check invariant 5종 추가(UNIT_TEXTBOOK_CONTAINER_MISMATCH/TEXTBOOK_NAME_DUPLICATE/TEXTBOOK_UNREACHABLE/STUDENT_TEXTBOOK_SELECTOR_EMPTY/UNIT_CONTENT_DUPLICATE, 전부 WARN) + class_textbooks 로더 확장 + testStdoutFlushOnExit.mjs registry 등록",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-04T00:00:00+09:00",
+  "updated_at": "2026-09-04T00:00:00+09:00",
+  "files_owned": [
+    "scripts/testProdCheck.mjs",
+    "scripts/lib/prodInvariants.mjs",
+    "scripts/lib/prodDataLoader.mjs",
+    "tests/harness/registry.mjs",
+    "scripts/testReleaseGate.mjs",
+    ".ai-status/implementer-overnight-p11.json"
+  ],
+  "files_read": [
+    "scripts/lib/studentHealthRules.mjs",
+    "scripts/prodCheck.mjs",
+    "scripts/prod/fixtures/synth.mjs",
+    "scripts/testStdoutFlushOnExit.mjs",
+    "DATABASE.md",
+    "handoff.md",
+    "docs/audit/2026-09-03-primary-mismatch-readonly-analysis.md",
+    "docs/qa/overnight-2026-09-04/P0-baseline.md",
+    "package.json"
+  ],
+  "summary": "prodDataLoader.mjs: units select 에 class_id 추가 + class_textbooks 테이블 신규 GET 로드(class_id,textbook_id,enabled, READ-ONLY). prodInvariants.mjs: 5개 invariant 신규(전부 WARN) — UNIT_TEXTBOOK_CONTAINER_MISMATCH(컨테이너 반 소속 유닛의 교재 FK 드리프트), TEXTBOOK_NAME_DUPLICATE(정규화 후 완전 동일 교재명), TEXTBOOK_UNREACHABLE(class_textbooks 연결이 자기 컨테이너뿐/없음 + 실학생 SCA 0), STUDENT_TEXTBOOK_SELECTOR_EMPTY(홈 반 class_textbooks 0 + SCA textbook_id 0), UNIT_CONTENT_DUPLICATE(내용 기반 Jaccard ≥90%+공통≥20단어, 코디네이터 제안 즉시 구현). FAIL-first로 testProdCheck.mjs 11절 25단언을 먼저 추가해 15개 FAIL 확인 후 구현, 162단언 전체 PASS. testStdoutFlushOnExit.mjs 를 tests/harness/registry.mjs attachment 도메인에 extra:false 로 등록(기존에 package.json 에만 있고 registry 미등록이라 verify:all 에서 실행되지 않던 갭) + scripts/testReleaseGate.mjs 16절에 그 등록을 검증하는 정적 단언 3개 추가(106단언 전체 PASS). 라이브 READ-ONLY prod:check(--require-env --json) 실행 결과: verdict WARN, invariants fail 0/warn 60/pass 12/checked 46. 신규 5종 라이브 카운트 — UNIT_TEXTBOOK_CONTAINER_MISMATCH 0, TEXTBOOK_NAME_DUPLICATE 0, TEXTBOOK_UNREACHABLE 0, STUDENT_TEXTBOOK_SELECTOR_EMPTY 0, UNIT_CONTENT_DUPLICATE 3(그중 1건이 4fc69e2d(중2 컨테이너 e09e147b 소속 'Unit 1', 교재 80e8d5dd)와 36bba4d0(중1 'Unit 1', 교재 0a87be08)의 100% 단어 목록 겹침 — 정확히 이 트랙이 목표로 한 'Unit 1이 엉뚱한 컨테이너에 업로드된' 사고를 잡음). UNIT_TEXTBOOK_CONTAINER_MISMATCH 는 이 케이스에서 예상대로 0건 — 4fc69e2d 의 textbook_id(80e8d5dd)가 실제로 그 컨테이너(e09e147b) 소유 교재이므로 FK 자체는 정상이고, 내용만 잘못 복사됐다(§ 이 갭을 UNIT_CONTENT_DUPLICATE 가 메운다는 것을 이번 세션에서 실측으로 확정). build 통과, verify:prod-check/verify:release-gate/verify:release-gate-prod-check 전부 PASS. 커밋 3개: test-only(FAIL-first) -> invariants 구현 -> registry 등록+static assertion.",
+  "blocker": null,
+  "next_action": "운영자 검토: UNIT_CONTENT_DUPLICATE 3건(그중 4fc69e2d/36bba4d0 쌍은 §handoff 기록대로 '중2 컨테이너에 Unit 1 오업로드' 의심 사례) — SQL 조치는 이번 트랙 범위 밖(READ-ONLY 지시), 다음 세션이 정합화 SQL 필요 여부를 판단."
+}
