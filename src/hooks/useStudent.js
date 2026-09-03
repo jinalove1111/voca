@@ -53,6 +53,17 @@ import { grantTicket, sumTicketBalance, mergeTicketLedgers, redeemReward } from 
 // totalStars의 원본은 여전히 record.totalStars(레거시 별 포함) 그대로이고,
 // rewardLedger에서 재계산하지 않는다(운영자 결정, 레거시 별 보존).
 import { REWARD_STARS, rewardIdempotencyKey, streakBonusStars, levelForStars, starsToNextLevel, buildRewardEntry, hasRewardEntry, appendRewardEntry } from '../utils/rewardEngine'
+// Session Reward Summary(P1 "즉각적인 보상 피드백", 2026-09-03) — 순수 요약
+// 계산은 전부 rewardSummary.js(zero-import, rewardEngine.js와 무관한
+// 독립 모듈)가 담당, 여기서는 그 결과를 grantLedgerReward의 기존 지급
+// 경로(재구현 없음, CLAUDE.md 규칙 3)에 얹어 상태로 노출만 한다.
+import { buildSessionRewardSummary } from '../utils/rewardSummary'
+// 정원 성장(gardenPlots)은 attachment/worldProgress.js가 이미 가진 유일한
+// 계산(재구현 금지) — gardenPoints(실제로 학습한 서로 다른 단어 수, 아래
+// computeGardenPoints가 attachmentCore.deriveAttachmentStats의 gardenSet
+// 공식과 동일하게 파생)만 이 파일에서 새로 계산한다.
+import { gardenPlots } from '../utils/attachment/worldProgress'
+import { isFeatureEnabled } from '../config/features'
 
 // ── Single unified progress store ───────────────────────────────────────
 // Every per-student value the app tracks (stars, stickers, today's mission
@@ -813,6 +824,37 @@ export function resumeIndexForUnit(record, unitId) {
 // behavior change, just visibility into the same logic the hook uses.
 export { freshRecord, freshRound, freshHistoryDay, migrateOldData, calcStreak, countCategoriesCompleted, todayStr, GOAL, isEmptyRecord, normalizeRecord, DIARY_TOMBSTONE_CAP }
 
+// ── Session Reward Summary(P1, 2026-09-03) 정원 스냅샷 헬퍼 ────────────
+// attachmentCore.deriveAttachmentStats의 gardenSet 공식(cleared ∪
+// completedWords ∪ clearedWords, 실제로 학습한 서로 다른 단어 수)을 값만
+// 그대로 재사용한다(전체 deriveAttachmentStats는 훨씬 무거운 파생값을
+// 같이 계산하므로 여기서는 이 세 배열 합집합 크기만 필요, attachmentCore.js
+// 수정 없음 — 재구현이 아니라 이미 문서화된 같은 공식을 그대로 씀).
+function computeGardenPoints(clearedArr, completedArr, clearedWordArr) {
+  return new Set([...(asArray(clearedArr)), ...(asArray(completedArr)), ...(asArray(clearedWordArr))]).size
+}
+
+// gardenPlots()가 반환하는 16칸 배열을 "정원이 전체적으로 얼마나 자랐는지"
+// 하나의 숫자로 접는다(각 칸의 성장 단계 인덱스 합) — "세션 시작 대비
+// gardenPlots() 스테이지 변화량"을 계산하려면 두 시점을 같은 숫자축으로
+// 비교할 수 있어야 하는데, gardenPlots() 자체는 배열이라 그대로는 뺄셈이
+// 안 된다. PLOT_STAGE_EMOJI(worldProgress.js)와 같은 순서(empty~tree)를
+// 그대로 따르되, 이 파일은 emoji가 아니라 순위 숫자만 필요해서 별도로
+// 작은 매핑만 둔다(정원 성장 "단계"의 의미 자체는 worldProgress.js가
+// 정의한 그대로 — 여기서 재정의하지 않음).
+const GARDEN_STAGE_RANK = { empty: 0, seed: 1, sprout: 2, flower: 3, tree: 4 }
+function gardenStageTotal(gardenPoints) {
+  return gardenPlots({ gardenPoints }).reduce((sum, p) => sum + (GARDEN_STAGE_RANK[p.stage] || 0), 0)
+}
+
+// 세션(앱 실행 1회) 동안 보여준 요약 카드가 같은 원장 항목으로 다시
+// 뜨지 않게 막는 새 dedup은 만들지 않는다 — grantLedgerReward의 기존
+// hasRewardEntry(rewardLedger, key) 조기반환(945행 근방, 무변경)이 이미
+// "이 rewardType+sourceId 조합은 하루/이벤트당 한 번만 이 함수 본문을
+// 통과한다"를 보장하므로, 요약 생성 코드를 그 조기반환 "뒤"에만 두면
+// 자동으로 idempotent하다(재지급 로직을 전혀 새로 만들지 않음).
+const SESSION_COMPLETE_REWARD_TYPES = new Set(['word-session-complete', 'writing-complete', 'exam-complete', 'daily-goal-complete'])
+
 // studentId: Supabase students.id(UUID) — 이 학생의 유일한 식별자, 모든
 // 저장/동기화가 이걸로 이뤄진다. legacyName: 이번 로그인이 실제로 성공한
 // "이름"(선택) — 이 기기에 그 이름 키로 저장된 예전 레코드가 있으면 딱
@@ -1022,17 +1064,27 @@ export function useStudent(studentId, legacyName) {
   const dismissRewardFeedback = useCallback((id) => {
     setRewardFeedback((q) => q.filter((f) => f.id !== id))
   }, [])
-  const grantLedgerReward = useCallback((rewardType, sourceType, sourceId, starsOverride, label) => {
+  // Session Reward Summary(P1, 2026-09-03) — "세션 시작 시점" 정원 성장치
+  // 스냅샷. useRef의 초기값 인자는 최초 렌더 1번만 쓰이므로(React 보장),
+  // 이 값은 이 훅이 이 studentId로 처음 마운트됐을 때의 cleared/
+  // completedWords/clearedWords(로컬 우선 로드, loadRecord 결과)를 그대로
+  // 담는다 — 이후 재렌더에도 다시 계산되지 않는다(의도된 "세션 시작"
+  // 정의). 새 Supabase 컬럼/저장 없음(순수 파생값의 순간 스냅샷일 뿐).
+  const sessionGardenSnapshotRef = useRef(computeGardenPoints(cleared, completedWords, clearedWords))
+  const [sessionRewardSummary, setSessionRewardSummary] = useState(null)
+  const dismissSessionRewardSummary = useCallback(() => setSessionRewardSummary(null), [])
+  const grantLedgerReward = useCallback((rewardType, sourceType, sourceId, starsOverride, label, xpAmountHint) => {
     const key = rewardIdempotencyKey(studentId, rewardType, sourceType, sourceId)
     const rewardStars = (starsOverride === undefined || starsOverride === null)
       ? (REWARD_STARS[rewardType] || 0)
       : starsOverride
     if (rewardStars <= 0) return false
     if (hasRewardEntry(rewardLedger, key)) return false
+    const entry = buildRewardEntry({
+      studentId, rewardType, sourceType, sourceId, starsDelta: rewardStars, at: new Date().toISOString(),
+    })
     patch((prev) => ({
-      rewardLedger: appendRewardEntry(prev.rewardLedger || [], buildRewardEntry({
-        studentId, rewardType, sourceType, sourceId, starsDelta: rewardStars, at: new Date().toISOString(),
-      })),
+      rewardLedger: appendRewardEntry(prev.rewardLedger || [], entry),
     }))
     grantReward(rewardStars, key)
     // 서버 원장(reward_ledger) 쓰기 — fire-and-forget(await 없음). 로컬
@@ -1049,8 +1101,30 @@ export function useStudent(studentId, legacyName) {
       rewardFeedbackIdRef.current += 1
       setRewardFeedback((q) => [...q, { id: `${feedbackId}:levelup`, text: 'Level Up! 🎉' }])
     }
+    // Session Reward Summary(P1, 2026-09-03) — 플래그 OFF면 이 블록 전체가
+    // 스킵되어(setSessionRewardSummary 호출 자체가 없음) sessionRewardSummary
+    // 상태는 영원히 null, App.jsx는 그 상태로만 카드를 조건부 마운트하므로
+    // 오늘과 완전히 동일하다. 위 hasRewardEntry 조기반환을 통과했을 때만
+    // 이 지점에 도달하므로(같은 rewardType+sourceId 조합은 이 함수 본문을
+    // 다시 통과하지 못함), 같은 세션 항목이 두 번째 카드를 만들 방법이
+    // 없다 — 새 dedup을 추가한 게 아니라 기존 지급 단일 경로의 가드를
+    // 그대로 재사용(CLAUDE.md 규칙 3). 4종 앵커(word-session-complete/
+    // writing-complete/exam-complete/daily-goal-complete)만 대상 — 그 외
+    // (streak-bonus/wrong-word-recovered)는 기존 RewardToast만 그대로 뜬다.
+    if (isFeatureEnabled('sessionRewardSummary') && SESSION_COMPLETE_REWARD_TYPES.has(rewardType)) {
+      const gardenPointsNow = computeGardenPoints(cleared, completedWords, clearedWords)
+      const summary = buildSessionRewardSummary({
+        entries: [entry],
+        xpEvents: (typeof xpAmountHint === 'number' && xpAmountHint > 0) ? [xpAmountHint] : [],
+        gardenBefore: gardenStageTotal(sessionGardenSnapshotRef.current),
+        gardenAfter: gardenStageTotal(gardenPointsNow),
+        streak: calcStreak(history),
+        totalStars: stars + rewardStars,
+      })
+      setSessionRewardSummary(summary)
+    }
     return true
-  }, [studentId, rewardLedger, patch, grantReward, stars])
+  }, [studentId, rewardLedger, patch, grantReward, stars, cleared, completedWords, clearedWords, history])
 
   // Paul Rank System(2026-07-19) XP 지급 — totalStars와 완전히 분리된
   // 원장(xp_ledger, 서버 전용 쓰기)에 독립적으로 쌓는다. eventType은
@@ -1345,18 +1419,24 @@ export function useStudent(studentId, legacyName) {
     }
     const fired = dailyCategoryXpFiredRef.current.fired
     const tryFire = (key, eventType) => {
-      if (fired.has(key)) return
+      // Session Reward Summary(P1, 2026-09-03) — 반환값은 "이번 호출로
+      // 실제 grantXp가 새로 발화됐는지"의 XP 금액(resolveXpAmount, 실제
+      // 조회값)이다. 기존 XP 지급 판정(fired 셋, 무변경)에는 전혀 영향
+      // 없음 — 호출부(아래)가 이 값을 grantLedgerReward의 xpAmountHint로
+      // 넘겨 카드에 "+N XP"를 정확히 표시하는 데만 쓴다.
+      if (fired.has(key)) return undefined
       fired.add(key)
       grantXp(eventType, `${eventType}:${today}`)
+      return resolveXpAmount(eventType) ?? undefined
     }
     if (round.completedToday.length >= GOAL) {
-      tryFire('word-view', 'word-view-complete')
+      const xpFired = tryFire('word-view', 'word-view-complete')
       // Reward System V1 앵커(word-session-complete, +1) — tryFire의
       // dailyCategoryXpFiredRef(XP 전용 1차 방어)와는 완전히 독립된 별도
       // dedup(rewardLedger.idempotency_key, 날짜:${today} 키라 하루 1회).
       // tryFire "밖"에 둔 이유: tryFire는 XP 이벤트 이름/금액을 인자로
       // 받는 헬퍼일 뿐이라 별 지급 원장 항목을 만들 수 없다.
-      grantLedgerReward('word-session-complete', 'daily-words', today)
+      grantLedgerReward('word-session-complete', 'daily-words', today, undefined, undefined, xpFired)
     }
     if (round.examplesHeard >= GOAL) tryFire('listening', 'listening-complete')
     if (round.quizSolved >= GOAL) tryFire('quiz', 'quiz-complete')
@@ -1426,7 +1506,12 @@ export function useStudent(studentId, legacyName) {
     // 하루 1회로 별도 제한 — 레거시 재지급 동작과 무관하게 공존한다(레거시
     // +10은 이 날짜 키 하루 제한과 별개로 라운드가 반복될 때마다 계속
     // 지급됨, 위 signature 키 주석 참고).
-    grantLedgerReward('daily-goal-complete', 'daily-goal', todayStr())
+    // xpAmountHint: resolveXpAmount(순수 조회, 실제 조회값)를 그대로 넘긴다
+    // — grantXp 호출 자체는 위처럼 라운드마다(하루 여러 번) 실행되지만,
+    // 이 grantLedgerReward는 날짜 키로 하루 1회만 실제로 통과하므로(기존
+    // hasRewardEntry 가드, 무변경) 힌트가 실제로 쓰이는 시점도 항상 그날
+    // 첫 통과와 일치한다(Session Reward Summary, P1, 2026-09-03).
+    grantLedgerReward('daily-goal-complete', 'daily-goal', todayStr(), undefined, undefined, resolveXpAmount('daily-mission-complete') ?? undefined)
     // Ticket Economy(GAME_DESIGN.md 7번) — 같은 트리거에 병행 후킹만, 새
     // 트래킹 로직 없음. grantTicket이 `daily-mission-complete:${날짜}`를
     // id로 써서(위 grantXp와 동일한 day 기간키) idempotent하게 append하므로,
@@ -1624,7 +1709,10 @@ export function useStudent(studentId, legacyName) {
       // day 기간키(하루 1회), justCompletedWriting은 정의상 하루에 한
       // 번만 true가 되므로(prevCorrect가 GOAL을 넘으면 다시 false로
       // 내려가지 않음) 이 조건 안에서만 호출해도 안전하다.
-      grantLedgerReward('writing-complete', 'daily-writing', todayStr())
+      // xpAmountHint(Session Reward Summary, P1, 2026-09-03) — 이 if
+      // 블록에 들어왔다는 것 자체가 justCompletedWriting(하루 정확히 1번)
+      // 이라, 바로 위 grantXp 호출과 같은 tick에 항상 같이 발화된다.
+      grantLedgerReward('writing-complete', 'daily-writing', todayStr(), undefined, undefined, resolveXpAmount('writing-complete') ?? undefined)
     }
     if (correct) {
       // 콤보/보너스를 같은 클로저 값에서 계산 — 표시되는 콤보 수와 실제
@@ -1905,5 +1993,11 @@ export function useStudent(studentId, legacyName) {
     // 자체는 여전히 grantReward만 바꾼다(rewardLedger에서 재계산 안 함).
     rewardLedger, rewardFeedback, dismissRewardFeedback, recordExamCompleted,
     rewardLevel, rewardStarsToNext,
+    // Session Reward Summary(P1 "즉각적인 보상 피드백", 2026-09-03) —
+    // sessionRewardSummary(config/features.js) 플래그 OFF면 이 값은 영원히
+    // null(grantLedgerReward 안의 게이팅 참고) — App.jsx가 이 값으로만
+    // SessionRewardCard를 조건부 마운트하므로 플래그 OFF는 오늘과 바이트
+    // 단위로 동일한 동작을 보장한다.
+    sessionRewardSummary, dismissSessionRewardSummary,
   }
 }
