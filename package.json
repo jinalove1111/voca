@@ -91,6 +91,7 @@
     "verify:reward-server": "node scripts/testRewardServerWrite.mjs",
     "verify:reward-concurrency": "node scripts/testRewardConcurrencyMatrix.mjs",
     "verify:reward-stress": "node scripts/buildRaceBundle.mjs && node scripts/testRewardIdempotencyStress.mjs",
+    "verify:double-events": "node scripts/testDoubleEvents.mjs",
     "prod:check": "node scripts/prodCheck.mjs",
     "prod:hotfix": "node scripts/prodHotfix.mjs",
     "verify:prod-check": "node scripts/testProdCheck.mjs",
