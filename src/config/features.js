@@ -156,6 +156,17 @@ const DEFAULT_FEATURES = {
   // set되지 않음 — 오늘과 바이트 단위로 동일). 어떤 지급 로직/금액/
   // dedup 키도 이 플래그가 바꾸지 않는다(순수 표시 계층).
   sessionRewardSummary: false,
+
+  // ── 보상 루프 P2~P6(2026-09-03, docs/REWARD_LOOP_AUDIT_2026-09-03.md §14) ──
+  // 운영자 승인 전 전부 OFF. P2(정원 성장 신호 v2)/P3(다음 목표 카드)/
+  // P4(유닛 완료 보상, 서버 재배포 필요)/P5(스트릭 v2)/P6(숙달 보상) 각각
+  // 별도 커밋에서 소비 로직이 배선되며, 이 플래그가 꺼져 있으면 기존
+  // 동작과 바이트 단위로 동일해야 한다(각 소비 지점 주석 참고).
+  attachmentGardenGrowthV2: false,
+  nextGoalsCard: false,
+  streakV2: false,
+  unitCompleteReward: false,
+  masteryReward: false,
 }
 
 // localStorage에서 저장된 features 불러오기.
