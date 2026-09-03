@@ -1,0 +1,40 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "p10-reward-integrity",
+  "task": "P10 Reward Integrity — 등록 누락 4개 테스트 등록 + scripts/testRewardIntegrityV2.mjs 10개 무결성 시나리오 신설 (branch feat/reward-loop)",
+  "status": "working",
+  "progress": 75,
+  "started_at": "2026-09-03T07:10:00Z",
+  "updated_at": "2026-09-03T07:39:00Z",
+  "files_owned": [
+    "scripts/testRewardIntegrityV2.mjs",
+    "package.json",
+    "tests/harness/registry.mjs",
+    ".ai-status/implementer-p10-reward-integrity.json"
+  ],
+  "files_read": [
+    "docs/REWARD_LOOP_AUDIT_2026-09-03.md",
+    "CLAUDE.md",
+    "scripts/testStreakV2Wiring.mjs",
+    "scripts/testAdminRewardSummary.mjs",
+    "scripts/testUnitCompleteReward.mjs",
+    "scripts/testMasteryReward.mjs",
+    "scripts/buildUnitCompleteBundle.mjs",
+    "scripts/testRewardFlow.mjs",
+    "scripts/testRewardTypesV2.mjs",
+    "scripts/testRewardServerHardeningBehavior.mjs",
+    "src/utils/rewardEngine.js",
+    "src/hooks/useStudent.js",
+    "src/utils/attachment/growthPoints.js",
+    "src/utils/attachment/attachmentCore.js",
+    "src/config/features.js",
+    "src/hooks/unitCompletionDetector.js",
+    "api/grant-xp.js",
+    "tests/harness/runDomain.mjs",
+    "tests/harness/runAll.mjs"
+  ],
+  "summary": "Task A(등록 누락 4개: verify:streak-v2/admin-reward-summary/unit-complete-reward/mastery-reward, BUILDERS.unitComplete 신규) 완료 + 커밋(7175e1f). Task B(scripts/testRewardIntegrityV2.mjs 신설, 10개 시나리오/54단언, verify:reward-integrity-v2 등록) 구현·검증 완료, 커밋 대기 중 — 7절 wrong-word-recovered 일일상한(60) FAIL-first 실측(REWARD_DAILY_CAP 60→999 임시변경 후 원복, git status 클린 확인)까지 마침. 아직 커밋하지 않음(이 상태 파일과 함께 commit 2로 묶을 예정). Task C(verify:all 1회 + health:students)는 아직 미실행.",
+  "blocker": null,
+  "next_action": "commit 2(test(reward): reward-integrity-v2 통합 무결성 스위트) 생성 후 Task C(verify:all 1회, FAIL 분류, health:students --require-env) 진행 → 최종 상태 completed로 갱신"
+}

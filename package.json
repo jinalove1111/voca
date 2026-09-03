@@ -97,7 +97,7 @@
     "verify:admin-reward-summary": "node scripts/testAdminRewardSummary.mjs",
     "verify:unit-complete-reward": "node scripts/buildUnitCompleteBundle.mjs && node scripts/testUnitCompleteReward.mjs",
     "verify:mastery-reward": "node scripts/buildUnitCompleteBundle.mjs && node scripts/testMasteryReward.mjs",
-    "verify:reward-integrity-v2": "node scripts/testRewardIntegrityV2.mjs",
+    "verify:reward-integrity-v2": "node scripts/buildUnitCompleteBundle.mjs && node scripts/testRewardIntegrityV2.mjs",
     "prod:check": "node scripts/prodCheck.mjs",
     "prod:hotfix": "node scripts/prodHotfix.mjs",
     "verify:prod-check": "node scripts/testProdCheck.mjs",
