@@ -1504,7 +1504,12 @@ function ExcelUpload({ onDone, adminPin }) {
           className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 font-bold focus:outline-none focus:border-purple-500 bg-white"
         >
           <option value="">-- 반을 선택하세요 --</option>
-          {classList.map(c => <option key={c} value={c}>{c}</option>)}
+          {/* 2026-09-03(교재 학년 라벨 오선택 방지) — 이름이 같은 반과
+              교재 컨테이너(예: "중2 천재 이상기"가 사람 반이 아니라 그
+              교재의 소유 컨테이너 반)를 이 목록만 보고는 구분할 수 없어
+              엉뚱한(교재 컨테이너) 반에 업로드할 위험이 있었다. 값(반
+              이름)은 그대로 — 표시 텍스트만 [교재] 태그를 붙인다. */}
+          {classList.map(c => <option key={c} value={c}>{c}{getClassTypeByName(c) === 'textbook' ? ' [교재]' : ''}</option>)}
         </select>
       </div>
 
