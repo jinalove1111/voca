@@ -87,6 +87,7 @@
     "verify:class-delete-confirm-wiring": "node scripts/testClassDeleteConfirmWiring.mjs",
     "verify:release-gate-prod-check": "node scripts/testReleaseGateProdCheck.mjs",
     "verify:generate-ghost-sca-manifest": "node scripts/testGenerateGhostScaManifest.mjs",
+    "verify:student-path-contracts": "node scripts/testStudentPathContracts.mjs",
     "verify:analytics-pagination": "node scripts/testAnalyticsPanelPagination.mjs",
     "verify:class-move-unit": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testClassMoveUnitResolution.mjs",
     "verify:reward": "node scripts/testRewardEngine.mjs && node scripts/buildRaceBundle.mjs && node scripts/testRewardFlow.mjs",
