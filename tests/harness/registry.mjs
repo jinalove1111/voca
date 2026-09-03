@@ -61,6 +61,15 @@ export const BUILDERS = {
     env: null,
     out: 'scripts/.tmp/testPaulReactions.bundle.mjs',
   },
+  unitComplete: {
+    // P4/P5(useStudent.js recordUnitCompleted/word-mastered/review-session-bonus)
+    // 전용 번들 — scripts/testUnitCompleteReward.mjs와 scripts/testMasteryReward.mjs
+    // 둘 다 scripts/.tmp/useStudent.p4p5.bundle.mjs를 하드코딩 import한다
+    // (buildUnitCompleteBundle.mjs 헤더 주석, env 불필요, race/multitab과 동일 패턴).
+    build: 'scripts/buildUnitCompleteBundle.mjs',
+    env: null,
+    out: 'scripts/.tmp/useStudent.p4p5.bundle.mjs',
+  },
 }
 
 // DOMAINS: CLAUDE.md 지시의 13개 도메인 + 실제 존재하는 추가 커버리지(extra:
@@ -392,6 +401,10 @@ export const DOMAINS = {
       { script: 'scripts/testNextGoals.mjs', builders: [], extra: true, note: 'P3 "다음 목표(Next Goals)"(2026-09-03) — src/utils/nextGoals.js(순수 함수, computeNextGoals/formatGoalLine) + NextGoalsCard.jsx SSR 배선. 학생에게 단기(오늘 목표)/중기(레벨·모자·배지 중 가장 가까운 것)/장기(월드 다음 구역) 3개 목표를 endowed progress(이미 가진 진행분을 보여줘 동기부여)와 함께 보여준다. useStudent.js는 확장자 없는 상대 import를 갖고 있어(번들러 전용) 이 테스트가 plain Node로 직접 import할 수 없어, STAR_BADGES 값을 로컬에 미러링하고 0절에서 실제 파일의 export/리터럴과 정규식으로 드리프트 여부만 교차 검증한다. Dashboard.jsx 정적 배선(nextGoalsCard 플래그 기본 OFF, NextGoalsCard import/마운트) 검증까지 포함 — 37단언, 네트워크 0. 구현 전 nextGoals.js를 임시로 옮겨 import 자체가 실패함을 실측(규칙 15) 후 복원·구현해 전체 PASS. implementer 트랙이 registry 소유 범위에서 대신 등록(파일 내용 무수정).' },
       { script: 'scripts/testRewardTypesV2.mjs', builders: [], extra: true, note: 'P4/P5(2026-09-03, docs/REWARD_LOOP_AUDIT_2026-09-03.md §2~4) — 신규 보상 타입 3종(unit-complete +5/일일상한2/유닛당 평생 1회, word-mastered +1/일일상한60/단어당 평생 1회·신규 "token" 패턴(날짜 접두 없는 wrong-word-recovered의 평생판), review-session-bonus +2/일일상한1) 계약 고정. 기존 REWARD_STARS/REWARD_SOURCE_RULES/REWARD_DAILY_CAP 6개 항목 값은 스냅샷으로 동결(값이 바뀌면 이 파일이 FAIL — CLAUDE.md 규칙 3, GAME_REWARD_RULES.md 동결 원칙)하고 새 키 추가만 허용한다. 1부(엔진 순수 함수) + 2부(api/grant-xp.js 서버 행위 — testRewardServerHardeningBehavior.mjs 기법 재사용한 가짜 인메모리 Supabase, 서버 금액 권위/평생 멱등/동시 10회 폭주에도 원장 1건 등) — 54단언, 네트워크 0, production 미접촉. 구현 전 신규 타입 키 부재로 관련 단언 전부 FAIL 실측(규칙 15) 후 rewardEngine.js에 3종 추가해 전체 PASS. implementer 트랙이 registry 소유 범위에서 대신 등록(파일 내용 무수정 — 파일 헤더가 "package.json 등록은 registry 소유 범위 밖"이라고 명시).' },
       { script: 'scripts/testRewardConcurrencyMatrix.mjs', builders: [], extra: true, note: '2026-08-22 야간 감사 Phase 4 — 보상 동시성/부하 매트릭스. testRewardIdempotencyStress.mjs(<=10회 순차)를 대체하지 않고 그 위에 얹는다: 동일 논리 이벤트를 2/5/10/50/100회 (A) 한 tick 동기 폭주 / (B) Promise.all 동시 요청으로 몰아쳐도 원장 1건·잔액 1회분·서버 POST<=1이 유지되는지 검증. (C) postRewardEvent 50ms 지연 중 100회 재호출, (D) 누락 검사(서로 다른 100개 이벤트는 정확히 100건 — 중복 방지가 정상 지급을 막지 않음), (E) idempotency key 안정성(동일 입력 100회 -> 키 1개 / 서로 다른 100개 -> 키 100개), (F) Phase 3 정합성(earnedStars 원장 합계 === 실제 잔액 증가분). 자체 esbuild 번들(scripts/.tmp/useStudent.concurrency.bundle.mjs)과 자체 wordLibrary 스텁을 런타임 생성해 기존 테스트 산출물과 충돌하지 않는다 — production 소스/기존 스크립트 무접촉. 59단언, 네트워크 0, Supabase 0. 13개 필수 도메인 밖, 신규 보너스 커버리지.' },
+      { script: 'scripts/testStreakV2Wiring.mjs', builders: [], extra: true, note: 'P10(2026-09-03) 등록 누락 발견분(commit f477709 패턴) — P6 Streak V2 배선(verify:streak-v2와 동일 실행) FAIL-first 계약 테스트. streakAdapter.js 순수 계약(연속/공백+freeze/리셋+best 보존/퀴즈 단독 인정일) + 레거시 calcStreak(useStudent.js) 시맨틱 무변경 소스 검사(이 세션은 useStudent.js 무수정) + Dashboard.jsx 정적 배선(streakV2 플래그) + StreakChip.jsx 자체 esbuild 번들 SSR 문자열 단언(flag-off/on). 구현 전 9 FAIL/8 PASS 실측(규칙 15, 파일 헤더 주석). 이미 구현·PASS 상태였고 package.json/registry 등록만 빠져 있었다(등록만 대신 수행, 파일 내용 무수정). 네트워크 0.' },
+      { script: 'scripts/testAdminRewardSummary.mjs', builders: [], extra: true, note: 'P10(2026-09-03) 등록 누락 발견분 — P9 관리자 StudentDirectory 보상 요약 1줄(verify:admin-reward-summary와 동일 실행) 순수 로직(summarizeStudentRewards/formatAdminRewardLine, src/utils/adminRewardSummary.js) 계약. null/undefined/빈 행 안전 폴백, 레거시 행(rewardLedger/hatInventory 없는 v1.3~v1.4 레코드) 처리 포함. React/네트워크/Supabase 0 — plain Node import. 이미 구현·PASS 상태였고 등록만 빠져 있었다(등록만 대신 수행, 파일 내용 무수정).' },
+      { script: 'scripts/testUnitCompleteReward.mjs', builders: ['unitComplete'], extra: true, note: 'P10(2026-09-03) 등록 누락 발견분 — P4 유닛 완료 보상(verify:unit-complete-reward와 동일 실행) FAIL-first 계약 테스트. recordUnitCompleted(useStudent.js, esbuild 번들+fakeReact 구동, flag unitCompleteReward OFF/ON·중복지급 방지·별개 unitId 별도 지급) + mergeProgressRecords 원장 병합(unit-complete 항목도 동일 idempotency_key union 규칙) + diffNewlyCompleted(unitCompletionDetector.js 순수 함수) 직접 검증 + useAttachment.js 배선 정적 검사. 이미 구현·PASS 상태였고 등록만 빠져 있었다(등록만 대신 수행, 파일 내용 무수정). 네트워크 0.' },
+      { script: 'scripts/testMasteryReward.mjs', builders: ['unitComplete'], extra: true, note: 'P10(2026-09-03) 등록 누락 발견분 — P5 복습/숙달 보상 강화(verify:mastery-reward와 동일 실행) FAIL-first 계약 테스트. testUnitCompleteReward.mjs와 같은 번들(scripts/.tmp/useStudent.p4p5.bundle.mjs)과 기법 재사용(CLAUDE.md 규칙 3), flag masteryReward를 localStorage 프리시드 + 매 시나리오 cache-busted import로 제어. 이미 구현·PASS 상태였고 등록만 빠져 있었다(등록만 대신 수행, 파일 내용 무수정). 네트워크 0.' },
     ],
   },
 
