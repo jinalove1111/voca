@@ -16,7 +16,7 @@
 //
 // 실행: node scripts/buildRaceBundle.mjs && node scripts/testPaulTownProgression.mjs
 //   (또는 npm run verify:paul-town-progression)
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -374,6 +374,18 @@ function mount(id) {
   raceStub.fetchFullProgressDeferred.resolve(null)
   return host
 }
+// mount()와 달리 freshEnv()를 호출하지 않는다 — "앱 재시작/새로고침"을
+// 시뮬레이션하려면 기존 globalThis.localStorage(디바이스의 영속 상태)를
+// 그대로 둔 채 훅만 다시 마운트해야 한다(testGardenGrowthSources.mjs
+// mount(id, {storage}) 패턴 재사용).
+function remount(id) {
+  raceStub.resetFetchFullProgressDeferred()
+  raceStub.syncCalls.length = 0
+  const clock = createFakeClock()
+  const host = renderHook(() => useStudent(id), clock)
+  raceStub.fetchFullProgressDeferred.resolve(null)
+  return host
+}
 const settle = (host) => { host.rerender(); return host }
 function garden(host) {
   const r = host.result
@@ -624,6 +636,106 @@ function roundTrip(rawRecord, id) {
 sectionTally()
 
 // ══════════════════════════════════════════════════════════════════════
+// 5b. LEGACY FIXTURE · 다중기기 out-of-order/중복 이벤트 · 재적재 2회
+//     (overnight QA track T1, 2026-09-04 확장)
+// ══════════════════════════════════════════════════════════════════════
+sectionHeader('5b. LEGACY FIXTURE · MULTI-DEVICE OUT-OF-ORDER · RELOAD x2')
+
+// E) 레거시 학생 — clearedWords/hatInventory/milestones 세 필드가 아예
+// 없는(cleared/history/missions만 있는) 아주 옛 백업. normalizeRecord가
+// throw 없이 정규화하고, world 상태가 clearedCount 폴백 경로와 완전히
+// 동일해야 한다(pointsOf의 `?? stats.clearedCount` 폴백, worldProgress.js
+// L38 주석 참고).
+{
+  const rawE = {
+    cleared: ['leg_a', 'leg_b', 'leg_c'],
+    history: { 'Mon Jan 05 2026': { studied: true, categoriesCompleted: 4, quizCorrect: 3, quizTotal: 3 } },
+    missions: [{ wordId: 'leg_a', correctCount: 3, done: true }],
+    // 의도적으로 없음: clearedWords, completedWords, hatInventory, milestones,
+    // spellingReviewQueue, wordStatus, equippedHatId — 전부 normalizeRecord의
+    // 기본값(freshRecord)으로만 채워져야 한다.
+  }
+  let threwE = false
+  let normE
+  try { normE = normalizeRecord(rawE, 'QA_PTP_E_legacy') } catch { threwE = true }
+  check('E) 레거시(clearedWords/hatInventory/milestones 필드 자체가 없음) — normalizeRecord가 throw 없이 정규화', !threwE)
+  check('E) 정규화 후 clearedWords/completedWords/hatInventory/milestones는 안전한 빈 배열로 채워짐',
+    Array.isArray(normE.clearedWords) && normE.clearedWords.length === 0 &&
+    Array.isArray(normE.completedWords) && normE.completedWords.length === 0 &&
+    Array.isArray(normE.hatInventory) && normE.hatInventory.length === 0 &&
+    Array.isArray(normE.milestones) && normE.milestones.length === 0)
+
+  const statsE = deriveAttachmentStats(normE)
+  check('E) gardenPoints === clearedCount === 3 (clearedWords/completedWords가 비어 있어 cleared만 반영)', statsE.gardenPoints === 3 && statsE.clearedCount === 3)
+
+  // world 상태 — 실제 파생 stats 경로 vs "gardenPoints 필드조차 없는" 순수
+  // clearedCount-only stats 폴백 경로가 완전히 동치인지 깊은 비교(stages
+  // 전체 + nextStage + growthPoints, 1c 섹션의 unlocked bool만 비교보다
+  // 더 엄격).
+  const worldFromStatsE = computeWorldState(statsE)
+  const worldFromClearedCountOnly = computeWorldState({ clearedCount: statsE.clearedCount })
+  check('E) computeWorldState(실제 파생 statsE) === computeWorldState({clearedCount: 3}) 폴백 경로 (JSON 깊은 동치, growthPoints/nextStage 포함)',
+    JSON.stringify(worldFromStatsE) === JSON.stringify(worldFromClearedCountOnly))
+
+  const rtE = roundTrip(rawE, 'QA_PTP_E_legacy_rt')
+  check('E) round-trip(persistence) 후에도 동일 파생 상태', rtE.ok)
+}
+
+// F) 다중 기기 — hat/milestone을 실제 훅(grantHats/addMilestones)으로
+// "기기 A"와 "기기 B"에 서로 다른(더 이른/더 늦은) earnedAt으로 독립
+// 기록한 뒤, 각 기기의 raw record를 mergeProgressRecords로 병합 — 도착
+// 순서를 바꿔도(A,B / B,A) 결과가 같고 항상 더 이른 시각이 채택되는지
+// 확인(섹션 4는 손으로 구성한 record 리터럴로 같은 계약을 순수 검증했다
+// — 여기서는 실제 훅 쓰기 경로까지 왕복시켜 같은 결론을 재확인).
+{
+  const deviceA = mount('QA_PTP_MD_shared')
+  deviceA.result.grantHats([{ hatId: 'hat_wizard', earnedAt: '2026-03-05T09:00:00.000Z', source: 'deviceA' }])
+  settle(deviceA)
+  deviceA.result.addMilestones([{ id: 'streak-30', type: 'streak', at: '2026-03-05T09:00:00.000Z', emoji: '🔥', title: 't', desc: 'd', data: {} }])
+  settle(deviceA)
+  const rawA = getLocalRecordRaw('QA_PTP_MD_shared')
+
+  // 기기 B — 완전히 별개 저장소(다른 물리 기기 시뮬레이션), 같은 학생 id,
+  // 같은 hatId/milestone id인데 더 이른 시각.
+  const deviceB = mount('QA_PTP_MD_shared')
+  deviceB.result.grantHats([{ hatId: 'hat_wizard', earnedAt: '2026-01-10T09:00:00.000Z', source: 'deviceB' }])
+  settle(deviceB)
+  deviceB.result.addMilestones([{ id: 'streak-30', type: 'streak', at: '2026-01-10T09:00:00.000Z', emoji: '🔥', title: 't', desc: 'd', data: {} }])
+  settle(deviceB)
+  const rawB = getLocalRecordRaw('QA_PTP_MD_shared')
+
+  const mergedAB = mergeProgressRecords(rawA, rawB, 'QA_PTP_MD_shared')
+  const mergedBA = mergeProgressRecords(rawB, rawA, 'QA_PTP_MD_shared')
+  check('F) 다중기기 병합(A,B) — hat_wizard 1개, 더 이른 시각(기기B, 01-10) 채택', mergedAB.hatInventory.length === 1 && mergedAB.hatInventory[0].earnedAt === '2026-01-10T09:00:00.000Z')
+  check('F) 도착 순서를 바꿔도(B,A) 동일한 결과(교환법칙)', canon(mergedAB) === canon(mergedBA))
+  check('F) milestone streak-30도 동일하게 더 이른 시각(01-10) 채택', mergedAB.milestones.find((m) => m.id === 'streak-30')?.at === '2026-01-10T09:00:00.000Z')
+
+  // "기기 C" — 병합 결과를 새 저장소에 주입해 재적재(reload 1회차).
+  globalThis.localStorage = new FakeStorage()
+  globalThis.document = new FakeDocument()
+  globalThis.localStorage.setItem('paul_easy_progress', JSON.stringify({ QA_PTP_MD_shared: mergedAB }))
+  const deviceC = remount('QA_PTP_MD_shared') // mount()가 아니라 remount() — freshEnv()가 방금 주입한 storage를 지우면 안 된다
+  check('F) 기기C 최초 재적재 — hatInventory 1개, earnedAt 보존', deviceC.result.hatInventory.length === 1 && deviceC.result.hatInventory[0].earnedAt === '2026-01-10T09:00:00.000Z')
+  check('F) 기기C 최초 재적재 — milestones에 streak-30 보존', deviceC.result.milestones.some((m) => m.id === 'streak-30'))
+  const canonAfterFirstLoad = canon(getLocalRecordRaw('QA_PTP_MD_shared'))
+
+  // 재적재 2회 — 같은 저장소를 두 번 연속 새로고침(remount)해도 상태가
+  // 완전히 그대로(멱등, 값 소실/중복 증식 없음).
+  const reload1 = remount('QA_PTP_MD_shared')
+  settle(reload1)
+  const canonReload1 = canon(getLocalRecordRaw('QA_PTP_MD_shared'))
+  check('F) 재적재 1회차 — canon 동일(값 소실/증식 없음)', canonReload1 === canonAfterFirstLoad)
+  check('F) 재적재 1회차 — hatInventory/milestones 개수 불변', reload1.result.hatInventory.length === 1 && reload1.result.milestones.length === 1)
+
+  const reload2 = remount('QA_PTP_MD_shared')
+  settle(reload2)
+  const canonReload2 = canon(getLocalRecordRaw('QA_PTP_MD_shared'))
+  check('F) 재적재 2회차(연속) — canon 동일(2번째도 안정)', canonReload2 === canonAfterFirstLoad)
+  check('F) 재적재 2회차 — hatInventory/milestones 개수 불변(중복 누적 없음)', reload2.result.hatInventory.length === 1 && reload2.result.milestones.length === 1)
+}
+sectionTally()
+
+// ══════════════════════════════════════════════════════════════════════
 // 6. UI GATING
 // ══════════════════════════════════════════════════════════════════════
 sectionHeader('6. UI GATING (정적)')
@@ -718,6 +830,100 @@ for (const id of Object.keys(facilityMeta)) {
   console.log(`${id} | ${meta.unlock} | ${meta.source} | ${meta.stored} | ${st.boundary} | ${st.persistence} | ${st.idempotency} | ${st.ui} | ${result}`)
 }
 console.log('-'.repeat(100))
+
+// ══════════════════════════════════════════════════════════════════════
+// ACTIVE / DORMANT / UNREACHABLE / NOT IMPLEMENTED 분류표
+//   (overnight QA track T1, 2026-09-04) — 학생이 실제로 보는 화면 기준
+//   trace: 각 요소가 (1) 기본 플래그로 도달 가능한지, (2) UI가 실제로
+//   소비하는지, (3) 코드가 아예 없는지를 파일:라인 근거와 함께 고정한다.
+//   ACTIVE            기본 플래그로 학생 UI에 렌더되고 도달 가능
+//   DORMANT           구현은 있으나 기본 OFF 플래그 뒤(플래그를 켜면 그
+//                      즉시 다른 동작이 나옴 — "구현된 분기"가 실재)
+//   UNREACHABLE       계산은 되지만 라벨 이상으로 소비하는 UI가 없음
+//   NOT IMPLEMENTED   플래그/주석에 계획만 있고 소비하는 코드가 없음
+// ══════════════════════════════════════════════════════════════════════
+const CLASSIFICATION = [
+  {
+    id: 'garden-screen', name: '정원 화면(EnglishGarden, 4x4 텃밭)', status: 'ACTIVE',
+    evidence: 'attachmentWorldGarden 기본 true(src/config/features.js:56) — Dashboard.jsx:810-812 나의 정원 버튼 → EnglishGarden.jsx:11-102 전체 화면 렌더',
+  },
+  {
+    id: 'world-label-rows', name: '월드 단계(집/다리/도서관/마을/왕국) — 목록 행', status: 'ACTIVE (라벨 행)',
+    evidence: '플래그 무관 항상 렌더: EnglishGarden.jsx:87-96 world.stages.map — 잠금 아이콘/이름/설명만 있는 행. 데이터: worldProgress.js:42-51 WORLD_STAGES',
+  },
+  {
+    id: 'world-full-screens', name: '월드 단계별 전용 화면(집/다리/도서관/마을/왕국 각각의 독립 상세 화면)', status: 'NOT IMPLEMENTED',
+    evidence: '해당 화면 컴포넌트가 저장소에 존재하지 않음(grep 결과 0건) — attachmentWorldFull 플래그를 켜도 EnglishGarden.jsx:92의 라벨 문구만 바뀔 뿐 새 화면/라우트가 생기지 않는다(App.jsx의 screen 분기에 house/bridge/village/kingdom 라우트 없음)',
+  },
+  {
+    id: 'attachmentWorldFull-flag', name: 'attachmentWorldFull 플래그가 게이팅하는 분기(라벨 텍스트)', status: 'DORMANT',
+    evidence: '기본 false(src/config/features.js:57) — 켜면 EnglishGarden.jsx:92의 "곧 구경할 수 있어요" 대신 "열려 있어요!"로 바뀌는 분기가 실제로 존재(정적 하네스 6.UI GATING 섹션에서 정확히 1곳임을 고정)',
+  },
+  {
+    id: 'town-museum', name: 'Paul Town 박물관(museum, 단어 박물관 이동)', status: 'ACTIVE',
+    evidence: 'paulTownBuildings 기본 true(src/config/features.js:72) — PaulTown.jsx:163-186 discoveredPlaces 카드 → onGo(p.screen) → App.jsx:845-849 WordMuseum 렌더',
+  },
+  {
+    id: 'town-library', name: 'Paul Town 도서관(library, 책장 이동)', status: 'ACTIVE',
+    evidence: 'paulTownBuildings 기본 true + attachmentBookshelf 기본 true(src/config/features.js:58,72) — PaulTown.jsx:36 canEnter, App.jsx:866-870 Bookshelf 렌더',
+  },
+  {
+    id: 'town-clockTower', name: 'Paul Town 시계탑(clockTower, 타임머신 이동)', status: 'ACTIVE',
+    evidence: 'paulTownBuildings 기본 true(src/config/features.js:72) — PaulTown.jsx:163-186 → App.jsx:871-874 TimeMachine 렌더',
+  },
+  {
+    id: 'hats', name: '모자 컬렉션 8종(수집/장착)', status: 'ACTIVE',
+    evidence: 'attachmentHats 기본 true(src/config/features.js:52) — Dashboard.jsx:801-803 나비 버튼 → App.jsx:841 HatCollection, PaulTown.jsx:99-143 모자걸이 장착 UI',
+  },
+  {
+    id: 'milestones', name: '밀스톤(성장 앨범, GrowthAlbum)', status: 'ACTIVE',
+    evidence: 'attachmentAlbum 기본 true(src/config/features.js:54) — Dashboard.jsx:807-809 나비 버튼 → App.jsx:850 GrowthAlbum 렌더',
+  },
+  {
+    id: 'home-deco', name: '폴의 집 소품 6종', status: 'ACTIVE',
+    evidence: '플래그 게이트 없음(paulHomeDeco 결과가 있으면 무조건 렌더) — PaulTown.jsx:144-157',
+  },
+  {
+    id: 'story', name: '이어지는 이야기(STORY_TEMPLATES/buildStoryChapter)', status: 'NOT IMPLEMENTED',
+    evidence: 'attachmentStory 기본 false(src/config/features.js:59)이고, 데이터/템플릿 함수 자체는 storyFoundation.js에 구현돼 있으나(코드 존재) 어떤 컴포넌트도 이를 import/소비하지 않음(grep 0건, attachmentWorldFull과 달리 "플래그를 켜도 바뀌는 코드 분기"가 아예 없다) — 백엔드 함수는 있지만 UI 소비자가 전혀 없어 DORMANT(플래그로 켤 수 있는 분기)보다 NOT IMPLEMENTED가 정확',
+  },
+  {
+    id: 'bookshelf', name: '책장(Bookshelf, 완료 유닛에서 파생된 책 목록)', status: 'ACTIVE',
+    evidence: 'attachmentBookshelf 기본 true(src/config/features.js:58) — Bookshelf.jsx:13 getBookshelf/getTextbookBooks 소비, App.jsx:866-870에서 렌더(story와 달리 이 함수들은 실제로 import되어 쓰인다)',
+  },
+]
+console.log(`\n${'='.repeat(100)}`)
+console.log('진행 요소 분류 (ACTIVE / DORMANT / UNREACHABLE / NOT IMPLEMENTED) — file:line 근거 포함')
+console.log('-'.repeat(100))
+for (const c of CLASSIFICATION) console.log(`${c.id} | ${c.name} | ${c.status}\n  근거: ${c.evidence}`)
+console.log('-'.repeat(100))
+const classCounts = CLASSIFICATION.reduce((acc, c) => {
+  const key = c.status.startsWith('ACTIVE') ? 'ACTIVE' : c.status
+  acc[key] = (acc[key] || 0) + 1
+  return acc
+}, {})
+console.log(`분류 요약: ${Object.entries(classCounts).map(([k, v]) => `${k} ${v}`).join(' / ')} (총 ${CLASSIFICATION.length}개)`)
+
+// docs/qa/paul-town-progression-classification.md로도 저장(운영자 커밋 대상)
+try {
+  mkdirSync(path.resolve('docs/qa'), { recursive: true })
+  const mdLines = [
+    '# Paul Town 진행 요소 분류 — ACTIVE / DORMANT / UNREACHABLE / NOT IMPLEMENTED',
+    '',
+    '_scripts/testPaulTownProgression.mjs가 매 실행마다 재생성하는 machine-readable 분류표(overnight QA track T1, 2026-09-04). 값이 바뀌면 이 파일도 다음 실행 시 갱신된다 — 수동 편집 금지, 소스는 이 테스트 파일의 `CLASSIFICATION` 배열._',
+    '',
+    '| id | 요소 | 분류 | 근거(file:line) |',
+    '|---|---|---|---|',
+    ...CLASSIFICATION.map((c) => `| ${c.id} | ${c.name} | ${c.status} | ${c.evidence.replace(/\|/g, '\\|')} |`),
+    '',
+    `분류 요약: ${Object.entries(classCounts).map(([k, v]) => `${k} ${v}`).join(' / ')} (총 ${CLASSIFICATION.length}개)`,
+    '',
+  ]
+  writeFileSync(path.resolve('docs/qa/paul-town-progression-classification.md'), mdLines.join('\n'), 'utf8')
+  console.log('\n[분류표] docs/qa/paul-town-progression-classification.md 갱신 완료')
+} catch (e) {
+  console.warn(`[분류표] docs/qa/paul-town-progression-classification.md 쓰기 실패(무시, 콘솔 출력은 이미 완료) — ${e?.message || e}`)
+}
 
 // ══════════════════════════════════════════════════════════════════════
 // 요약
