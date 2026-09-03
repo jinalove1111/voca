@@ -99,6 +99,13 @@ console.log('\n=== 1. Canonical 헤더 (Unit | Word | Meaning) ===')
   check('2행 모두 파싱', r.length === 2, { got: r })
   check('headerDetected=true', r.headerDetected === true)
   check('경고 없음(정상 파일)', (r.warnings || []).length === 0, { got: r.warnings })
+  // [2026-09-04 overnight T3b] 채택 행 스냅샷 — partial-row/unit-column-empty
+  // 경고 추가가 정상 파일의 "채택되는 행 집합"을 절대 바꾸지 않는다는 것을
+  // 값 단위로 고정한다(경고는 신호 추가일 뿐, 재해석/필터링 변경이 아님).
+  check('정상 파일 채택 행 스냅샷 불변',
+    JSON.stringify(r.map((x) => ({ word: x.word, meaning: x.meaning, unit: x.unit }))) ===
+      JSON.stringify([{ word: 'apple', meaning: '사과', unit: 'Unit1' }, { word: 'book', meaning: '책', unit: 'Unit1' }]),
+    { got: r })
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -240,14 +247,32 @@ console.log('\n=== 9. Invalid — 빈 Unit 칸 -> "Unit 1" 폴백 ===')
 // ════════════════════════════════════════════════════════════════════════
 {
   const r = parseExcelRows([['unit', 'word', 'meaning'], ['', 'apple', '사과'], ['', 'book', '책']], '반')
-  check('빈 unit 칸 -> "Unit 1" 기본값(문서화된 unit || \'Unit 1\' 폴백)',
-    r.every((x) => x.unit === 'Unit 1'), { got: r })
+  check('빈 unit 칸 -> "Unit 1" 기본값(문서화된 unit || \'Unit 1\' 폴백, 파싱 결과 불변)',
+    r.every((x) => x.unit === 'Unit 1') && r.length === 2, { got: r })
   const allWarnings = r.warnings || []
-  const hasEmptyUnitWarning = allWarnings.some((w) => /unit/i.test(w.code) && /empty|빈/i.test(w.message + ' ' + (w.code || '')))
-  check('파일 전체 unit 칸이 비어도 경고는 없음(현재 동작 — 아래 gap 참고)', !hasEmptyUnitWarning, { got: allWarnings })
-  gap('WARN', '전체 파일 unit 칸이 비어도 경고 없음',
-    'unit 헤더 컬럼 자체가 없거나(헤더 없음) 헤더는 있지만 모든 행의 unit 칸이 빈 값이면, 모든 단어가 조용히 "Unit 1"로 저장된다. 관리자가 실제로는 여러 유닛으로 나눠 올리려던 파일(unit 칸을 깜빡 비운 경우)이 전부 Unit 1로 뭉쳐질 수 있는데 경고가 전혀 없다.',
-    '(구현 안 함, 제안) parseExcelRows 끝부분 경고 집계 구간(1342행 부근, `if (!hasHeader)` 블록과 유사한 위치)에 "dataRows.length > 1 && result.every(r => 원본 unit 칸이 빈 값)"이면 all-empty-unit-column 경고 1건 추가 — 파싱 결과(unit=\'Unit 1\')는 바꾸지 않고 신호만 추가하는 낮은 위험의 변경이지만, 헤더 없는 2열(unit 칸 자체가 존재하지 않는 정상 파일 — 예: 5번 케이스의 순수 word/meaning 2열)까지 오탐하지 않도록 "unit 헤더가 감지됐는데 전부 빈 값"으로 조건을 좁혀야 한다. 이번 세션은 test-only 범위라 구현하지 않음.')
+  const unitWarn = allWarnings.find((w) => w.code === 'unit-column-empty')
+  // [2026-09-04 overnight T3b] 이전엔 무경고(silent)였다 — 아래 gap 리포트가
+  // 그 사실을 고정했었다. 이번 세션에서 경고 신호를 추가했다(파싱 결과는
+  // 그대로, 신호만 추가) — 정확한 한국어 메시지까지 고정한다.
+  check('Unit 열이 헤더에서 감지됐고 채택된 모든 행에서 비어 있으면 unit-column-empty 경고 발생',
+    !!unitWarn && unitWarn.message === "Unit 열이 전부 비어 있어 모든 단어가 'Unit 1'로 들어가요 — 의도한 것이 맞는지 확인하세요",
+    { got: allWarnings })
+
+  // 일부만 비어 있으면(전부는 아님) 경고가 뜨지 않아야 한다 — 오탐 방지.
+  const rPartialUnit = parseExcelRows([['unit', 'word', 'meaning'], ['', 'apple', '사과'], ['Unit2', 'book', '책']], '반')
+  check('unit 칸이 일부만(전부가 아니라) 비어 있으면 unit-column-empty 경고 없음(오탐 방지)',
+    !(rPartialUnit.warnings || []).some((w) => w.code === 'unit-column-empty'), { got: rPartialUnit.warnings })
+  check('unit 칸이 일부만 비어도 파싱 결과 불변(첫 행만 Unit 1 폴백)',
+    rPartialUnit.length === 2 && rPartialUnit[0].unit === 'Unit 1' && rPartialUnit[1].unit === 'Unit2', { got: rPartialUnit })
+
+  // unit 헤더 컬럼 자체가 없는 파일(헤더 없음 위치 추정 경로)은 대상이 아님.
+  const rNoUnitCol = parseExcelRows([['xyz1', 'xyz2'], ['abc1', 'abc2']], '반')
+  check('unit 헤더 컬럼이 없는 파일은 unit-column-empty 대상 아님(오탐 방지)',
+    !(rNoUnitCol.warnings || []).some((w) => w.code === 'unit-column-empty'), { got: rNoUnitCol.warnings })
+
+  gap('OK', '전체 파일 unit 칸이 비어도 경고 없음 — 2026-09-04 overnight T3b에서 해소',
+    '이전엔 unit 헤더 컬럼이 감지됐는데 채택된 모든 행의 unit 칸이 비어 있어도 조용히 "Unit 1"로 저장됐다(무경고). 이번 세션에서 unit-column-empty 경고를 추가했다 — 파싱 결과(모든 행 unit="Unit 1")는 전혀 바꾸지 않고 신호만 추가.',
+    null)
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -281,12 +306,37 @@ console.log('\n=== 11. 빈 word / 빈 meaning 행 — 조용히 filter, 경고 �
     ['Unit1', 'book', '책'],
   ]
   const r = parseExcelRows(rows, '반')
-  check('빈 word/meaning 행은 결과에서 제외됨(2행만 남음)', r.length === 2 && r[0].word === 'apple' && r[1].word === 'book', { got: r })
-  const skipSignal = (r.warnings || []).length > 0 || typeof r.skipped === 'number' || typeof r.skippedCount === 'number'
-  check('스킵된 행 수를 알려주는 어떤 신호도 없음(현재 동작 — 아래 gap 참고)', skipSignal === false, { warnings: r.warnings, skipped: r.skipped })
-  gap('FAIL', '빈 word/meaning 행 — 스킵 신호(경고/카운트) 전혀 없음(silent)',
-    '3행(빈 word 1건, 빈 meaning 1건, 둘 다 빈 1건)이 `.filter(r => r && r.word && r.meaning)`(AdminScreen.jsx parseExcelRows 끝부분)에서 조용히 제외되는데, result.warnings에도 별도 카운트 필드에도 이 사실이 전혀 남지 않는다. "invalid fixture는 반드시 비어있지 않은 경고/스킵 신호를 내야 한다"는 이번 작업 요구사항과 어긋나는 silent case.',
-    '최소 수정안(미구현): parseExcelRows의 `.filter(r => r && r.word && r.meaning)` 직전/직후에 스킵된 행 수를 세어(원인별로 word 빈값/meaning 빈값 구분 불필요, 합산 1개 카운트면 충분) `result.warnings`에 empty-cell-row 경고(code, message, detail: 스킵 수)를 추가하는 낮은 위험의 변경 — 파싱 결과(살아남는 행)는 전혀 바꾸지 않는다. 다만 실제 엑셀 파일은 마지막 몇 행이 완전히 빈 셀(트레일링 blank row)인 경우가 매우 흔해(예: 40단어 파일 아래 관례적 공백행), 이 경고를 무조건 올리면 정상 업로드 대부분에서 경고가 뜨고 warnAck 체크박스를 매번 눌러야 하는 UX 회귀 위험이 크다(현재 UI는 `(preview.warnings||[]).length>0 && !warnAck`이면 저장 버튼을 disabled 함). 그래서 "완전히 빈 행"(모든 셀이 공백)은 카운트에서 제외하고 "word만 비었거나 meaning만 비었는데 다른 칸엔 값이 있는" 부분 결손 행만 경고 대상으로 좁혀야 안전하다 — 운영자 확인 후 별도 커밋으로 구현 권장, 이번 test-only 세션에서는 구현하지 않는다.')
+  check('빈 word/meaning 행은 결과에서 제외됨(2행만 남음, 파싱 결과 불변)', r.length === 2 && r[0].word === 'apple' && r[1].word === 'book', { got: r })
+  // [2026-09-04 overnight T3b] 이전엔 완전 silent였다 — 이번 세션에서 "한쪽만
+  // 빈" 행(부분 결손, 원본 3/4행)만 경고하고, "둘 다 빈" 행(원본 5행,
+  // 트레일링 공백 행 흉내)은 계속 조용히 넘어가야 한다(gap 리포트가 지목한
+  // UX 회귀 위험 — 정상 파일의 관례적 공백행까지 경고하면 안 됨).
+  const partialWarn = (r.warnings || []).find((w) => w.code === 'partial-row')
+  check('부분 결손 행(빈 word 1건 + 빈 meaning 1건 = 2건)만 경고, 완전 공백 행은 미포함',
+    !!partialWarn && partialWarn.message === '단어 또는 뜻이 비어 있는 행 2개를 건너뛰었어요 (행: 3, 4)',
+    { got: r.warnings })
+
+  // 둘 다 빈 행만 있는 파일(트레일링 공백행 전형)은 여전히 완전 무경고여야 함.
+  const rBlankOnly = parseExcelRows([
+    ['unit', 'word', 'meaning'],
+    ['Unit1', 'apple', '사과'],
+    ['Unit1', '', ''],
+    ['Unit1', '', ''],
+  ], '반')
+  check('둘 다 빈 행(트레일링 공백행)만 있으면 partial-row 경고 없음(조용히 넘어감, 요구사항)',
+    !(rBlankOnly.warnings || []).some((w) => w.code === 'partial-row'), { got: rBlankOnly.warnings })
+  check('둘 다 빈 행이 있어도 파싱 결과 불변(1행만 남음)', rBlankOnly.length === 1 && rBlankOnly[0].word === 'apple', { got: rBlankOnly })
+
+  // 헤더 없음(위치 추정) 경로에도 동일하게 적용돼야 함.
+  const rNoHeaderPartial = parseExcelRows([['a1', 'b1'], ['a2', '']], '반')
+  check('헤더 없음 경로에서도 부분 결손 행 경고(원본 2행)',
+    (rNoHeaderPartial.warnings || []).some((w) => w.code === 'partial-row' && /2개/.test(w.message) && /행: 2/.test(w.message)),
+    { got: rNoHeaderPartial })
+  check('헤더 없음 경로 파싱 결과 불변(1행만 남음)', rNoHeaderPartial.length === 1 && rNoHeaderPartial[0].word === 'a1', { got: rNoHeaderPartial })
+
+  gap('OK', '빈 word/meaning 행 — 스킵 신호(경고) 전혀 없음(silent) — 2026-09-04 overnight T3b에서 해소',
+    '이전엔 word/meaning 중 정확히 한쪽만 빈 행이 어떤 경고/카운트 신호도 없이 조용히 제외됐다. 이번 세션에서 partial-row 경고를 추가했다 — 파싱 결과(살아남는 행)는 전혀 바꾸지 않고, "둘 다 빈" 행(정상적인 트레일링 공백행)은 여전히 조용히 넘어가 오탐(불필요한 warnAck 체크 요구)을 피한다.',
+    null)
 }
 
 // ════════════════════════════════════════════════════════════════════════
