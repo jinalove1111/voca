@@ -25,6 +25,7 @@ import { assignDirections } from './utils/entranceTest'
 import { logSpellingReview } from './utils/spellingReviewApi'
 import { setSessionToken, getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, refreshTextbooks, refreshAllForLogin, invalidateStudentAssignmentsCache, revalidateUnitWords, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getStudentSpellingSettings, extendStableDirections, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentClassId, getTextbookById, getStudentPrimaryTextbook, getClassNames, getClassIdByName } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech } from './utils/speech'
+import { shouldRefreshOnForeground } from './utils/foregroundRefreshGate'
 // Curriculum Engine Phase 0(2026-08-01, docs/CURRICULUM_ENGINE.md §8) —
 // 교사 opt-in 예문 학습 단계. isFeatureEnabled('curriculumExamplesStudentUI')
 // (기본 false)가 꺼져 있으면 아래 prefetch effect가 조회를 아예 안 한다
@@ -562,6 +563,9 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 세션이 이후 변경된 class_textbooks를 못 따라간다"는 웜 상태 문제라
   // 코드 읽기로 확정 — refreshStudents와 동일한 트리거(focus/visibility)에
   // 동일한 방식(Promise.all + refreshTick)으로 편입한다(새 개념 없음).
+  // 10초 쿨다운(2026-09, overnight T7b)에 쓰는 "마지막 재조회 시각" — ref라
+  // 값이 바뀌어도 리렌더를 유발하지 않는다(순수 타이밍 게이트 용도).
+  const lastForegroundRefreshRef = useRef(0)
   useEffect(() => {
     // 2026-07-10 성능 최적화: visibilitychange와 focus는 같은 "앱으로
     // 돌아옴" 순간에 거의 동시에(모바일에서는 둘 다) 발생하는 경우가
@@ -574,6 +578,17 @@ function AppInner({ studentId, studentName, onLogout }) {
     let inFlight = false
     const onVisible = () => {
       if (document.visibilityState === 'visible' && !inFlight) {
+        // 10초 쿨다운(2026-09, overnight T7b) — 위 inFlight 가드는 "겹쳐서
+        // 들어오는" 근접 중복만 막는다. 앱을 짧은 간격으로 여러 번
+        // 들락날락(다른 앱 확인 후 바로 복귀 등)하면 매번 새 6개 쿼리
+        // 라운드가 돌아 불필요한 재조회가 쌓였다 — 순수 판정
+        // shouldRefreshOnForeground(src/utils/foregroundRefreshGate.js)로
+        // 마지막 재조회로부터 10초 이내면 이번 복귀는 건너뛴다. 최초
+        // 복귀(lastForegroundRefreshRef.current가 아직 0)는 쿨다운과
+        // 무관하게 항상 즉시 실행 — 트리거 시점/조회 대상은 전혀 안 바뀜.
+        const now = Date.now()
+        if (!shouldRefreshOnForeground(lastForegroundRefreshRef.current, now)) return
+        lastForegroundRefreshRef.current = now
         inFlight = true
         // stale cache 감사(2026-08-15) 갭 ① — 위 4개 refresh와 같은 트리거로
         // 이 학생의 교재/Unit 배정 캐시(_studentAssignmentsCache)도 함께
