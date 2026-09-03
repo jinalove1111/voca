@@ -22,6 +22,7 @@
     "verify:audio-tts": "node tests/harness/runAudioTts.mjs",
     "verify:daily-ritual": "node tests/harness/runDailyRitual.mjs",
     "verify:attachment": "node tests/harness/runAttachment.mjs",
+    "verify:garden-growth-sources": "node scripts/buildRaceBundle.mjs && node scripts/testGardenGrowthSources.mjs",
     "verify:hat-color": "node scripts/testHatColorRendering.mjs",
     "verify:health-rules": "node scripts/testStudentHealthRules.mjs",
     "health:students": "node scripts/studentHealthCheck.mjs",

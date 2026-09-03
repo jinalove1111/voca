@@ -1,0 +1,30 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "garden-spelling-growth",
+  "task": "철자 시험 정답이 정원 성장(clearedWords)에 기록되지 않던 버그 수정 + FAIL-first 회귀 스위트",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-04T00:00:00Z",
+  "updated_at": "2026-09-04T00:00:00Z",
+  "files_owned": [
+    "src/hooks/useStudent.js",
+    "scripts/testGardenGrowthSources.mjs",
+    "package.json",
+    "tests/harness/registry.mjs",
+    ".ai-status/implementer-garden-spelling-growth.json"
+  ],
+  "files_read": [
+    "src/components/WordDetail.jsx",
+    "src/App.jsx",
+    "src/utils/attachment/attachmentCore.js",
+    "src/utils/attachment/worldProgress.js",
+    "scripts/testGardenGrowthFlow.mjs",
+    "scripts/buildRaceBundle.mjs",
+    "scripts/fakeReact.mjs",
+    "tests/harness/runDomain.mjs"
+  ],
+  "summary": "원인: 정원 포인트 = |cleared ∪ completedWords ∪ clearedWords|(attachmentCore.js deriveAttachmentStats). recordQuizAnswer는 정답 시 markWordCleared를 부르는데 recordSpellingAnswer(useStudent.js)는 부르지 않아 철자 위주 학습 계정은 정원이 자라지 않았음(실측: 철자 정답 347회·정원 0칸). 수정: recordSpellingAnswer의 if(correct) 분기에 markWordCleared(wordId) 한 줄 배선(+ useCallback deps 추가) — 별/XP/콤보/spellingReviewQueue/history 무변경. clearSpellingReviewWord(복습 큐 정리 이벤트, 정답 이벤트 아님)는 운영자 지정 범위에서 명시적으로 제외(그대로 미변경) — 이 사실을 회귀 스위트에 단언으로 고정. 회귀 스위트(scripts/testGardenGrowthSources.mjs, 44단언)는 fakeReact+esbuild race 번들로 실제 useStudent 훅을 구동해 퀴즈/철자/중복방지/오답/열람/새계정/기존계정(292→293)/교재전환/persistence/mergeProgressRecords/보상독립성을 검증. 수정 전 실행 시 12개 FAIL(철자 관련 전부, 규칙15 재확인) 후 전체 PASS. package.json에 verify:garden-growth-sources 스크립트 추가 + tests/harness/registry.mjs attachment 도메인에 필수(extra 아님) 항목으로 등록. build/verify:attachment/verify:reward/verify:star-delta/verify:mission-bonus/verify:all(전 도메인 PASS) 전부 통과 확인. health:students --require-env는 READ-ONLY로 실행만 했고 PASS 28/WARN 10/FAIL 8은 이 작업과 무관한 기존 유령 유닛 데이터 이슈(수정 대상 아님).",
+  "blocker": null,
+  "next_action": "qa-reviewer에게 handoff — DB write 없음, push/merge 없음(로컬 커밋만), 파일당 단일 소유 원칙 준수 확인됨."
+}
