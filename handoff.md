@@ -172,6 +172,39 @@ deploy 0, SQL 실행 0, Production DB WRITE 0. 상세는 아래 107차 섹션)_
 계열). **한 저장소에서 커밋을 실행하는 에이전트는 항상 1개만 유지하고,
 나머지는 파일 작성까지만 하고 커밋은 조율된 순서로 넘긴다.**
 
+### 사후 QA 수정(같은 날)
+
+- **`a992854`** — `testRewardIntegrityV2.mjs`(9절, REWARD_STARS/
+  STREAK_BONUS/MISSION_BONUS_STARS 동결 확인)가 `git show 84a36b8:...`로
+  84a36b8 시점 소스를 매 실행마다 파싱하던 방식이 CI의 얕은 checkout
+  (`actions/checkout@v4` 기본 `fetch-depth: 1`)에서 84a36b8 오브젝트를
+  찾지 못해 `fatal: invalid object name '84a36b8'`로 크래시(run
+  `33729692487`). 파일 상단 인라인 동결 스냅샷(`LEGACY_SNAPSHOT_84a36b8`)
+  으로 교체해 git 의존을 제거 — CI run `33730955232`에서 PASS 확인,
+  53단언(기존 54단언에서 파싱 관련 보조 단언 1개 정리).
+- **하네스 사실 확인**: `tests/harness/runDomain.mjs` L91-92, L101-104 —
+  `extra: true`로 표시된 검사의 FAIL은 `required` 배열에서 제외되므로
+  `runDomainHarness`의 `ok` 판정과 `summarize`의 exit code에 전혀 반영
+  되지 않는다. 즉 CLAUDE.md 규칙 5/18이 기대하는 "0 FAIL"은 오직
+  `extra: false`(required) 검사에만 보장된다 — `extra: true`는 정직하게
+  "참고용 보너스 커버리지"이지 게이트가 아니다. 이번 세션에 오늘 새로
+  추가된 보상 루프 검사 9종(`testSessionRewardSummary`/
+  `testGrowthPoints`/`testNextGoals`/`testRewardTypesV2`/
+  `testStreakV2Wiring`/`testAdminRewardSummary`/`testUnitCompleteReward`/
+  `testMasteryReward`/`testRewardIntegrityV2`)이 전부 `extra: true`로
+  등록돼 있어 verify:all/CI Release Gate가 이들의 FAIL을 실제로는 차단
+  하지 않는 상태였음을 발견 — 이번 커밋(`tests/harness/registry.mjs`)에서
+  9종 전부 `extra: false`(required)로 승격했다. 재실행 결과 9종 전부
+  PASS(도메인 `rewardSystem` 8종 + `attachment` 도메인 `testGrowthPoints`
+  1종), `runDomainHarness('rewardSystem')`/`runDomainHarness('attachment')`
+  둘 다 `ok: true`.
+- **규칙 18 메모**: `a88c283`에서의 Release Gate CI PASS는 위 크래시를
+  가려서(당시 `testRewardIntegrityV2.mjs`가 `extra: true`라 FAIL해도
+  exit code에 영향이 없었다) 실제로는 이 검사가 CI에서 조용히 깨져
+  있었다는 사실을 숨겼다 — "PASS"라는 표시가 "이 커밋의 required 검사가
+  전부 통과했다"만 뜻하지 "등록된 모든 검사가 실행/통과했다"를 뜻하지
+  않는다는 것을 이번 사고가 실측으로 보여준다.
+
 ## 2026-09-03 (106차) — 아침 세션: PR #8 merge 최종 점검 + merge + Edge Function v8 배포 (운영자 지시, SQL 실행 0, DB WRITE 0)
 
 - 운영자 지시 순서: ① 신규 기능 개발 중단, PR #8 merge 가능 여부만 최종

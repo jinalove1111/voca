@@ -470,3 +470,7 @@ P1~P10(`handoff.md` 2026-09-03 107차)이 `src/config/features.js`에
 `C:\voca\src\utils\attachment\growthPoints.js`,
 `C:\voca\src\utils\attachment\worldProgress.js`,
 `C:\voca\api\grant-xp.js`, `C:\voca\docs\REWARD_LOOP_AUDIT_2026-09-03.md`
+
+새 verify 스크립트는 기본 `extra: false`(required)로 등록한다.
+`extra: true`는 플래키/외부 의존 검사에만 쓰며, 그 FAIL은 verify:all
+exit code에 반영되지 않는다(`runDomain.mjs` L91-104).
