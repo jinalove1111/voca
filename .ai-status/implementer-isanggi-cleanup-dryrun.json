@@ -1,0 +1,29 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "isanggi-cleanup-dryrun",
+  "task": "\"중2 천재 이상기\"(실제 중1) 교재 유령 유닛 참조 8건 재배정 harness manifest 작성 + dry-run 검증(APPLY 대기, DB WRITE 0)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-03T09:45:00Z",
+  "updated_at": "2026-09-03T09:56:00Z",
+  "files_owned": [
+    "scripts/prod/manifests/isanggi-textbook-cleanup-20260903.json",
+    "supabase_v3_46_rename_isanggi_textbook.sql",
+    "supabase_v3_46_rename_isanggi_textbook_ROLLBACK.sql",
+    ".ai-status/implementer-isanggi-cleanup-dryrun.json"
+  ],
+  "files_read": [
+    "docs/production-safety-harness-runbook.md",
+    "scripts/prodHotfix.mjs",
+    "scripts/prodCheck.mjs",
+    "scripts/lib/hotfixManifest.mjs",
+    "scripts/prod/manifests/ghost-unit-landing-20260902.json",
+    "supabase_v3_39_link_soyoungsoon_textbook.sql",
+    ".github/workflows/release-gate.yml",
+    "scripts/hooks/checkDestructiveSql.mjs"
+  ],
+  "summary": "npm run prod:check --require-env --json 으로 SCA_GHOST_UNIT x4 + GHOST_UNIT_PRESENT 확인(textbook A=80e8d5dd, 유령 유닛 e327efc3). 라이브 read-only 재확인으로 8개 SCA 행 전수(2 primary + 6 non-primary)와 8명 학생의 현재 current_unit_id, textbook B(0a87be08) 참조 0건(SCA/students/word_status 전부 0)을 확인. ALLOWLIST(students, student_class_assignments 만 허용, textbooks/classes 없음)를 이유로 manifest 에는 8개 SCA UPDATE만 포함, textbooks.name/classes.name 정정은 별도 v3_46 SQL 파일(미실행)로 분리. primary 2행 중 1056c7db 는 학생 current_unit_id 가 textbook A 의 Unit6 과 정확히 일치해 그 값으로, 38717600 은 일치하는 학습 가능 유닛이 없어 기본값 Unit 1 로 배정. non-primary 6행은 전부 Unit 1 기본 배정. must_not_change 로 8명 학생의 current_unit_id 불변을 가드. dry-run 결과: 정적 스캔 PASS, 프리플라이트 PASS(불일치 0), 예상 UPDATE 8행, status=ready-to-apply, DB WRITE: 0. npm run verify:prod-hotfix(PASS 161/0), npm run verify:prod-check(PASS 130/0), npm run build 전부 통과. 어떤 APPLY/승인도 실행하지 않았고 프로덕션 DB write 는 0건.",
+  "blocker": null,
+  "next_action": "운영자가 dry-run 리포트(apply/rollback SQL 포함)를 검토 후, (a) SCA 8건은 러너블(runbook §2-(c))의 APPLY 명령으로 직접 반영하거나, (b) textbooks/classes name 2건은 supabase_v3_46_rename_isanggi_textbook.sql 을 Supabase 대시보드 SQL Editor에서 수동 실행. 둘 다 이 세션에서는 미실행."
+}

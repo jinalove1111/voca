@@ -1,0 +1,187 @@
+{
+  "id": "isanggi-textbook-cleanup-20260903",
+  "project_ref": "azsjthtdjfpnctffjfsk",
+  "title": "중2 천재 이상기(80e8d5dd, 실제로는 중1) 교재의 유령 유닛(e327efc3 \"Unit\") 참조 8건을 학습 가능 유닛으로 재배정 (SCA 전용, textbooks.name/classes.name 은닉 리네임은 이 하네스의 ALLOWLIST 밖이라 미포함)",
+  "created_at": "2026-09-03",
+  "generated_from": {
+    "tool": "implementer session (isanggi-textbook-cleanup) — prod:check(require env, json) 리포트(runId 20260903094941 3cc3, SCA_GHOST_UNIT x4 + GHOST_UNIT_PRESENT) + 라이브 read only 재확인(8개 SCA 행 전수, 학생 8명 current_unit_id) 기반. textbooks/classes UPDATE 는 ALLOWLIST(students, student_class_assignments 만 허용)에 없어 이 manifest 에서 제외. 별도 SQL 파일(supabase_v3_46_rename_isanggi_textbook.sql, 미실행)로 대체.",
+    "at": "2026-09-03T09:49:41Z"
+  },
+  "affected_students": [
+    "38717600-f114-4092-abb6-c285e531f2d6",
+    "1056c7db-8464-45a4-9f3d-d13223c708b6",
+    "2bc1170a-b3e3-4db5-baf9-ae4e7a706203",
+    "4f3e0b72-2452-4780-92bf-32eeceff9c90",
+    "9f115c32-6a4b-4659-a026-f9905a5cc2e2",
+    "b010d8f6-4f25-44a3-852e-76e8bbcb4794",
+    "58174565-90b1-4b7e-8dc4-61eb2fbb118a",
+    "0446069e-eae0-4042-8bd1-d1907d5496d7"
+  ],
+  "changes": [
+    {
+      "table": "student_class_assignments",
+      "id": "b392747a-3ae8-43df-8eba-e57911f5916b",
+      "_comment": "primary — student(38717600) current_unit_id=67c8268e 는 textbook A 의 학습 가능 유닛(Unit 1 4fc69e2d / Unit6 4fe5a398) 어느 쪽도 아님 → 기본값 Unit 1 로 배정",
+      "expect_before": {
+        "student_id": "38717600-f114-4092-abb6-c285e531f2d6",
+        "textbook_id": "80e8d5dd-a054-4f96-9173-5db981e1fe5b",
+        "is_primary": true,
+        "current_unit_id": "e327efc3-5d35-4b9d-b915-20cb77a79120"
+      },
+      "set": { "current_unit_id": "4fc69e2d-5c59-4089-a851-c25b68b6dda4" }
+    },
+    {
+      "table": "student_class_assignments",
+      "id": "7750b95c-b4ca-434e-a8f3-1527983a9871",
+      "_comment": "primary — student(1056c7db) current_unit_id=4fe5a398(Unit6) 이 textbook A 의 Unit6 과 정확히 일치 → students/SCA 3-way invariant 유지 위해 같은 값으로 배정",
+      "expect_before": {
+        "student_id": "1056c7db-8464-45a4-9f3d-d13223c708b6",
+        "textbook_id": "80e8d5dd-a054-4f96-9173-5db981e1fe5b",
+        "is_primary": true,
+        "current_unit_id": "e327efc3-5d35-4b9d-b915-20cb77a79120"
+      },
+      "set": { "current_unit_id": "4fe5a398-7352-415c-b92f-572fc2ecfef9" }
+    },
+    {
+      "table": "student_class_assignments",
+      "id": "cd51eb67-0b37-4353-bf87-e639648d77f8",
+      "_comment": "non-primary — 규칙대로 Unit 1 기본 배정",
+      "expect_before": {
+        "student_id": "2bc1170a-b3e3-4db5-baf9-ae4e7a706203",
+        "textbook_id": "80e8d5dd-a054-4f96-9173-5db981e1fe5b",
+        "is_primary": false,
+        "current_unit_id": "e327efc3-5d35-4b9d-b915-20cb77a79120"
+      },
+      "set": { "current_unit_id": "4fc69e2d-5c59-4089-a851-c25b68b6dda4" }
+    },
+    {
+      "table": "student_class_assignments",
+      "id": "dc245783-2808-4e68-ab35-fff8cb4d9e76",
+      "_comment": "non-primary — 규칙대로 Unit 1 기본 배정",
+      "expect_before": {
+        "student_id": "4f3e0b72-2452-4780-92bf-32eeceff9c90",
+        "textbook_id": "80e8d5dd-a054-4f96-9173-5db981e1fe5b",
+        "is_primary": false,
+        "current_unit_id": "e327efc3-5d35-4b9d-b915-20cb77a79120"
+      },
+      "set": { "current_unit_id": "4fc69e2d-5c59-4089-a851-c25b68b6dda4" }
+    },
+    {
+      "table": "student_class_assignments",
+      "id": "0b9e542e-cde4-4d56-b248-7d1ff8758d96",
+      "_comment": "non-primary — 규칙대로 Unit 1 기본 배정",
+      "expect_before": {
+        "student_id": "9f115c32-6a4b-4659-a026-f9905a5cc2e2",
+        "textbook_id": "80e8d5dd-a054-4f96-9173-5db981e1fe5b",
+        "is_primary": false,
+        "current_unit_id": "e327efc3-5d35-4b9d-b915-20cb77a79120"
+      },
+      "set": { "current_unit_id": "4fc69e2d-5c59-4089-a851-c25b68b6dda4" }
+    },
+    {
+      "table": "student_class_assignments",
+      "id": "030a0dda-ab4c-48fc-977e-dddcaa004fdd",
+      "_comment": "non-primary — 규칙대로 Unit 1 기본 배정",
+      "expect_before": {
+        "student_id": "b010d8f6-4f25-44a3-852e-76e8bbcb4794",
+        "textbook_id": "80e8d5dd-a054-4f96-9173-5db981e1fe5b",
+        "is_primary": false,
+        "current_unit_id": "e327efc3-5d35-4b9d-b915-20cb77a79120"
+      },
+      "set": { "current_unit_id": "4fc69e2d-5c59-4089-a851-c25b68b6dda4" }
+    },
+    {
+      "table": "student_class_assignments",
+      "id": "da532fa0-050e-415c-91c5-cc1e28da763e",
+      "_comment": "non-primary — 규칙대로 Unit 1 기본 배정",
+      "expect_before": {
+        "student_id": "58174565-90b1-4b7e-8dc4-61eb2fbb118a",
+        "textbook_id": "80e8d5dd-a054-4f96-9173-5db981e1fe5b",
+        "is_primary": false,
+        "current_unit_id": "e327efc3-5d35-4b9d-b915-20cb77a79120"
+      },
+      "set": { "current_unit_id": "4fc69e2d-5c59-4089-a851-c25b68b6dda4" }
+    },
+    {
+      "table": "student_class_assignments",
+      "id": "283e3160-dc78-42c9-bbe8-ea6bd8505ceb",
+      "_comment": "non-primary — 규칙대로 Unit 1 기본 배정",
+      "expect_before": {
+        "student_id": "0446069e-eae0-4042-8bd1-d1907d5496d7",
+        "textbook_id": "80e8d5dd-a054-4f96-9173-5db981e1fe5b",
+        "is_primary": false,
+        "current_unit_id": "e327efc3-5d35-4b9d-b915-20cb77a79120"
+      },
+      "set": { "current_unit_id": "4fc69e2d-5c59-4089-a851-c25b68b6dda4" }
+    }
+  ],
+  "must_not_change": [
+    {
+      "table": "students",
+      "id": "38717600-f114-4092-abb6-c285e531f2d6",
+      "expect": { "current_unit_id": "67c8268e-41b6-4307-918a-47713522f43b" }
+    },
+    {
+      "table": "students",
+      "id": "1056c7db-8464-45a4-9f3d-d13223c708b6",
+      "expect": { "current_unit_id": "4fe5a398-7352-415c-b92f-572fc2ecfef9" }
+    },
+    {
+      "table": "students",
+      "id": "2bc1170a-b3e3-4db5-baf9-ae4e7a706203",
+      "expect": { "current_unit_id": "3d1c753e-fc1e-4f54-93d3-8dd0a4898939" }
+    },
+    {
+      "table": "students",
+      "id": "4f3e0b72-2452-4780-92bf-32eeceff9c90",
+      "expect": { "current_unit_id": "4ce41359-6424-4b5e-933d-479db6951586" }
+    },
+    {
+      "table": "students",
+      "id": "9f115c32-6a4b-4659-a026-f9905a5cc2e2",
+      "expect": { "current_unit_id": "4ce41359-6424-4b5e-933d-479db6951586" }
+    },
+    {
+      "table": "students",
+      "id": "b010d8f6-4f25-44a3-852e-76e8bbcb4794",
+      "expect": { "current_unit_id": "be554320-87e5-48b4-a7be-a8d9bd3d4988" }
+    },
+    {
+      "table": "students",
+      "id": "58174565-90b1-4b7e-8dc4-61eb2fbb118a",
+      "expect": { "current_unit_id": "4ce41359-6424-4b5e-933d-479db6951586" }
+    },
+    {
+      "table": "students",
+      "id": "0446069e-eae0-4042-8bd1-d1907d5496d7",
+      "expect": { "current_unit_id": "4ce41359-6424-4b5e-933d-479db6951586" }
+    }
+  ],
+  "reference_rows_must_exist": [
+    {
+      "table": "units",
+      "id": "4fc69e2d-5c59-4089-a851-c25b68b6dda4",
+      "expect": { "name": "Unit 1", "textbook_id": "80e8d5dd-a054-4f96-9173-5db981e1fe5b" },
+      "min_words": 2
+    },
+    {
+      "table": "units",
+      "id": "4fe5a398-7352-415c-b92f-572fc2ecfef9",
+      "expect": { "name": "Unit6", "textbook_id": "80e8d5dd-a054-4f96-9173-5db981e1fe5b" },
+      "min_words": 2
+    },
+    {
+      "table": "units",
+      "id": "e327efc3-5d35-4b9d-b915-20cb77a79120",
+      "expect": { "name": "Unit", "textbook_id": "80e8d5dd-a054-4f96-9173-5db981e1fe5b" }
+    }
+  ],
+  "learning_baseline_tables": [
+    "word_status",
+    "student_progress",
+    "student_daily_progress",
+    "xp_ledger",
+    "entrance_test_results",
+    "spelling_review_queue"
+  ]
+}
