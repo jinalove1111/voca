@@ -1,0 +1,28 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "p4p5-reward-types",
+  "task": "P4(유닛 완료 보상)/P5(복습·마스터 보상) — 신규 ledger 보상 타입 3종(unit-complete/word-mastered/review-session-bonus) 엔진+서버 신뢰 게이트+테스트",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-03T00:00:00Z",
+  "updated_at": "2026-09-03T01:00:00Z",
+  "files_owned": [
+    "src/utils/rewardEngine.js",
+    "api/grant-xp.js",
+    "scripts/testRewardTypesV2.mjs",
+    ".ai-status/implementer-p4p5-reward-types.json"
+  ],
+  "files_read": [
+    "docs/REWARD_LOOP_AUDIT_2026-09-03.md",
+    "scripts/testRewardEngine.mjs",
+    "scripts/testRewardServerHardeningBehavior.mjs",
+    "scripts/testRewardServerWrite.mjs",
+    "scripts/testRewardServerHardening.mjs",
+    "scripts/testRewardEndpointSecurity.mjs",
+    "scripts/testRewardConcurrencyMatrix.mjs"
+  ],
+  "summary": "rewardEngine.js에 unit-complete(5별,uuid,cap2,평생1회)/word-mastered(1별,신규 'token' 패턴,cap60,평생1회)/review-session-bonus(2별,date,cap1) 추가. 기존 7/6/6개 값 무변경(동결 가드 테스트로 고정). api/grant-xp.js는 로직 무변경(제네릭 경로가 신규 타입 자동 수용) — L2 부재(unit-complete 등에 실재검증 없음, word_status가 anon-writable이라 약한 필터) 설계 결정만 주석 추가. scripts/testRewardTypesV2.mjs 신규(54 단언, FAIL-first 36건 확인 후 전체 PASS). verify:reward/-server/-hardening/-hardening-behavior/-security/-concurrency 전부 PASS, build 통과. verify:reward는 testRewardFlow.mjs 테스트8 1건 FAIL이나 git stash로 확인한 결과 내 변경과 무관한 기존 실패(useStudent.js 동시 작업 중인 다른 에이전트 영역).",
+  "blocker": null,
+  "next_action": "클라이언트 배선(useStudent.js에서 unit-complete/word-mastered/review-session-bonus 트리거 호출)은 다른 에이전트 몫 — 서버는 이미 새 타입 수용 준비 완료. api/grant-xp.js 변경은 운영자 배포 후에만 효력."
+}
