@@ -6,7 +6,7 @@
   "status": "completed",
   "progress": 100,
   "started_at": "2026-09-03T07:10:00Z",
-  "updated_at": "2026-09-03T07:52:00Z",
+  "updated_at": "2026-09-03T09:40:00Z",
   "files_owned": [
     "scripts/testRewardIntegrityV2.mjs",
     "package.json",
@@ -36,5 +36,11 @@
   ],
   "summary": "Task A: 등록 누락 4개(verify:streak-v2/admin-reward-summary/unit-complete-reward/mastery-reward, BUILDERS.unitComplete 신규) 등록 완료, 커밋 7175e1f. Task B: scripts/testRewardIntegrityV2.mjs 신설(10개 시나리오/54단언), verify:reward-integrity-v2 등록, 7절 wrong-word-recovered 일일상한(60) FAIL-first 실측(60→999 임시변경 → FAIL 4건 확인 → git checkout으로 즉시 원복, git status 클린 확인)까지 마침, 커밋 4942e45. Task C: npm run verify:all 1회 전체 실행 — 0 FAIL, rewardSystem 도메인 17→22개 스크립트로 확장 후 전부 PASS, speaking/listening 2개 도메인은 기존과 동일하게 SKIP(라이브 오디오/디바이스 필요, 무관), 'ALL DOMAINS: PASS' exit 0(1회 재실행에서 testRewardFlow.mjs가 우연히 FAIL했다가 재실행 2회 연속 PASS로 확인된 일회성 flake — 내 변경과 무관, standalone 재현 안 됨). npm run health:students -- --require-env(READ-ONLY GET) PASS 27 / WARN 10(기존 ghost-unit 배정 경고, 이번 세션 무관) / FAIL 0, DB WRITE 0. 커밋 3(fix) 불필요 — FAIL 0건.",
   "blocker": null,
-  "next_action": "qa-reviewer에게 handoff. 남은 리스크: rewardSystem 도메인 실행 시간이 22개 스크립트로 늘어 verify:all 총 소요시간이 다소 증가(수 분 단위, 하드 타임아웃 없음). scripts/.tmp/ 산출물 이름 충돌 없음(전용 파일명 확인됨)."
+  "next_action": "qa-reviewer에게 handoff. 남은 리스크: rewardSystem 도메인 실행 시간이 22개 스크립트로 늘어 verify:all 총 소요시간이 다소 증가(수 분 단위, 하드 타임아웃 없음). scripts/.tmp/ 산출물 이름 충돌 없음(전용 파일명 확인됨).",
+  "followup_2026-09-03_ci_fragility_fix": {
+    "root_cause": "CI run 33729692487 — §9 stars legacy baseline 절이 execSync('git show 84a36b8:...')로 커밋 84a36b8을 CI 컨테이너 안에서 파싱했으나, .github/workflows/release-gate.yml의 actions/checkout@v4가 기본 fetch-depth 1(shallow)이라 그 오브젝트가 없어 'fatal: invalid object name 84a36b8' → 스크립트가 중간에 exit 1. 로컬은 full clone이라 항상 통과해 재현이 늦게 발견됨.",
+    "fix": "scripts/testRewardIntegrityV2.mjs 상단에 LEGACY_SNAPSHOT_84a36b8(REWARD_STARS 7개/STREAK_BONUS 3단계/MISSION_BONUS_STARS)을 값 그대로 인라인 동결(2026-09-03에 로컬에서 git show 84a36b8로 1회 추출해 그대로 옮김, 이후 재추출 없음). §9의 execSync 기반 파싱 로직 전부 제거, execSync import 삭제. 단언 약화 없음(값 비교 로직 동일, 84a36b8 REWARD_STARS 블록 파싱 성공 단언 1개만 '파싱' 자체가 사라져 무의미해져 제거 — 53/53, 이전 54/54).",
+    "verification": "node scripts/testRewardIntegrityV2.mjs 로컬 53/53 PASS. git clone --depth 1 file:///C:/voca <scratch>/shallow 로 CI shallow 조건 재현 → 그 클론 안에서 git show 84a36b8:... 는 여전히 fatal(오브젝트 없음)이지만, 수정된 스크립트는 더 이상 git을 호출하지 않으므로 영향 없음(grep -n 'execSync|git show' 코드 라인 0건, 주석만 남음).",
+    "extra_flag_finding": "tests/harness/runDomain.mjs — required = results.filter(r => !r.extra); ok = required.every(r => r.ok) (L91-92), summarize()도 failed = results.filter(x => !x.ok && !x.extra)만 anyFail을 True로 만듦(L101-107), extra FAIL은 대괄호 노트로만 출력되고 도메인 PASS/exit code에는 영향 없음. runAll.mjs L11-13 process.exit(ok?0:1)도 이 summarize 결과를 그대로 씀 — extra:true 체크의 FAIL은 verify:all/verify:<domain> exit code에서 보이지 않는다."
+  }
 }

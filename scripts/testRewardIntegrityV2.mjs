@@ -41,12 +41,36 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { execSync } from 'node:child_process'
 import esbuild from 'esbuild'
 import { createFakeClock, renderHook } from './fakeReact.mjs'
 import { REWARD_STARS, STREAK_BONUS, REWARD_DAILY_CAP } from '../src/utils/rewardEngine.js'
 import { bonusPointsFromLedger, growthPoints, GROWTH_V2_EPOCH } from '../src/utils/attachment/growthPoints.js'
 import { deriveAttachmentStats } from '../src/utils/attachment/attachmentCore.js'
+
+// 9절 전용 — 84a36b8(P4/P5 이전, 규칙 3 "완료 선언 작업 재구현 금지"
+// 기준 커밋)의 레거시 상수 동결 스냅샷. 예전에는 `git show 84a36b8:...`
+// 를 CI에서 매 실행마다 파싱했으나, `.github/workflows/release-gate.yml`
+// 의 actions/checkout@v4가 기본 fetch-depth 1(shallow)이라 84a36b8
+// 오브젝트가 없어 `fatal: invalid object name '84a36b8'`로 크래시했다
+// (CI run 33729692487). git 의존을 완전히 제거하고 값을 이 파일에
+// 직접 동결한다 — 값은 2026-09-03에
+// `git show 84a36b8:src/utils/rewardEngine.js` /
+// `git show 84a36b8:src/hooks/useStudent.js` 로 로컬에서 직접 추출해
+// 그대로 옮긴 것이며, 이후 재추출/변경하지 않는다(그 자체가 "동결"의
+// 의미).
+const LEGACY_SNAPSHOT_84a36b8 = {
+  REWARD_STARS: {
+    'word-session-complete': 1,
+    'writing-complete': 2,
+    'exam-complete': 2,
+    'wrong-word-recovered': 1,
+    'daily-goal-complete': 3,
+    'streak-bonus': 0,
+    'legacy-baseline': 0,
+  },
+  STREAK_BONUS: { 3: 2, 5: 3, 7: 5 },
+  MISSION_BONUS_STARS: 10,
+}
 
 let failures = 0
 let asserted = 0
@@ -500,39 +524,29 @@ console.log('\n8. garden growth(growthPoints/deriveAttachmentStats) ↔ reward l
 // ════════════════════════════════════════════════════════════════════
 console.log('\n9. stars legacy baseline 보존 — 5개 신규 플래그 전부 OFF, 값 동결')
 {
-  // 정적 동결 — REWARD_STARS 7개/STREAK_BONUS를 git show 84a36b8(P4/P5
-  // 이전, 규칙 3의 "완료로 선언된 작업 재구현 금지" 기준 커밋)의
-  // rewardEngine.js 텍스트에서 직접 파싱해 지금 값과 대조한다.
-  const baselineSrc = execSync('git show 84a36b8:src/utils/rewardEngine.js', { encoding: 'utf8', cwd: path.resolve('.') })
-  const starsMatch = baselineSrc.match(/export const REWARD_STARS = \{([\s\S]*?)\n\}/)
-  check('84a36b8 REWARD_STARS 블록 파싱 성공', !!starsMatch)
-  const baselineStars = {}
-  for (const line of (starsMatch ? starsMatch[1] : '').split('\n')) {
-    const m = line.match(/'([\w-]+)':\s*(\d+)/)
-    if (m) baselineStars[m[1]] = Number(m[2])
-  }
+  // 정적 동결 — REWARD_STARS 7개/STREAK_BONUS를 84a36b8 시점 값을 그대로
+  // 옮긴 LEGACY_SNAPSHOT_84a36b8(파일 상단)과 대조한다. 예전에는
+  // `git show 84a36b8:...`를 매 실행마다 파싱했으나, shallow checkout
+  // (CI의 actions/checkout@v4 기본 fetch-depth 1)에서는 84a36b8 오브젝트
+  // 자체가 없어 크래시했다(CI run 33729692487) — 값을 파일에 동결해
+  // git 의존을 제거한다.
+  const baselineStars = LEGACY_SNAPSHOT_84a36b8.REWARD_STARS
   check('baseline REWARD_STARS 7개 키 파싱됨', Object.keys(baselineStars).length === 7)
   check('REWARD_STARS 7개 값 전부 baseline과 동일(회귀 없음)', Object.entries(baselineStars).every(([k, v]) => REWARD_STARS[k] === v))
 
-  const streakMatch = baselineSrc.match(/export const STREAK_BONUS = \{ ([^}]+) \}/)
-  const baselineStreak = {}
-  if (streakMatch) {
-    for (const pair of streakMatch[1].split(',')) {
-      const m = pair.match(/(\d+):\s*(\d+)/)
-      if (m) baselineStreak[Number(m[1])] = Number(m[2])
-    }
-  }
+  const baselineStreak = LEGACY_SNAPSHOT_84a36b8.STREAK_BONUS
   check('baseline STREAK_BONUS 3개 단계 파싱됨', Object.keys(baselineStreak).length === 3)
   check('STREAK_BONUS 값 전부 baseline과 동일', Object.entries(baselineStreak).every(([k, v]) => STREAK_BONUS[Number(k)] === v))
 
   // MISSION_BONUS_STARS(useStudent.js, 이 세션은 그 파일을 수정하지
-  // 않는다 — 파일 소유권 규칙, 소스만 읽어 동결 확인).
-  const baselineUseStudent = execSync('git show 84a36b8:src/hooks/useStudent.js', { encoding: 'utf8', cwd: path.resolve('.') })
-  const baselineMission = baselineUseStudent.match(/const MISSION_BONUS_STARS = (\d+)/)
+  // 않는다 — 파일 소유권 규칙, 소스만 읽어 동결 확인). baseline은
+  // LEGACY_SNAPSHOT_84a36b8, 현재값은 소스에서 정규식으로 읽는다(이
+  // 부분은 git 의존이 없었으므로 그대로 유지).
+  const baselineMissionBonus = LEGACY_SNAPSHOT_84a36b8.MISSION_BONUS_STARS
   const currentUseStudent = fs.readFileSync(path.resolve('src/hooks/useStudent.js'), 'utf8')
   const currentMission = currentUseStudent.match(/const MISSION_BONUS_STARS = (\d+)/)
-  check('baseline/현재 MISSION_BONUS_STARS 둘 다 파싱됨', !!baselineMission && !!currentMission)
-  check('MISSION_BONUS_STARS 값 동결(84a36b8 대비 무변경)', baselineMission && currentMission && baselineMission[1] === currentMission[1])
+  check('baseline/현재 MISSION_BONUS_STARS 둘 다 파싱됨', typeof baselineMissionBonus === 'number' && !!currentMission)
+  check('MISSION_BONUS_STARS 값 동결(84a36b8 대비 무변경)', currentMission && baselineMissionBonus === Number(currentMission[1]))
 
   // 통합 리플레이 — 5개 신규 플래그 전부 OFF 상태로 daily-goal 4/4
   // 라운드 1회 완주(testRewardFlow.mjs 테스트 8과 동일 시나리오: 발음5 +
