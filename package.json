@@ -77,6 +77,7 @@
     "verify:admin-unit-edit": "node scripts/testAdminUnitEdit.mjs",
     "verify:ghost-filtering": "node scripts/testGhostUnitFiltering.mjs",
     "verify:excel-residue": "node scripts/testExcelHeaderResidue.mjs",
+    "verify:excel-import-fixtures": "node scripts/testExcelImportFixtures.mjs",
     "verify:assignment-ghost": "node scripts/testAssignmentGhostUnitRule.mjs",
     "verify:assignment-unit-guards": "node scripts/testAssignmentUnitGuards.mjs",
     "verify:hard-delete-guard": "node scripts/testHardDeleteGuard.mjs",
