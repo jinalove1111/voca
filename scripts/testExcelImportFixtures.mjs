@@ -203,10 +203,19 @@ console.log('\n=== 7. Invalid — 헤더 없음: 위치 추정 + bare "Unit" 유
   // 정상 hasHeader 경로다. rows.slice(1)로 헤더 행이 그냥 제거되므로
   // header-label-row 경고는 뜨지 않는 게 맞다(그 경고는 hasHeader=false
   // 경로 전용, 아래 두 번째 픽스처가 실제로 그 경로를 겪는다).
+  // [주의] 데이터 행이 헤더보다 한 칸 짧다("Unit"/"Word"/"Meaning" 3칸 헤더인데
+  // 데이터는 2칸뿐) — unit='apple'(오독), word='사과', meaning=undefined가
+  // 되어 실제로는 word만 있고 meaning이 없는 부분 결손 행이다. [2026-09-04
+  // overnight T3b] 이전엔 이 상황이 완전 무경고였는데, 이제 partial-row
+  // 경고 대상이 된다(의도된 동작 변경 — 진짜로 한쪽 필드가 빠진 malformed
+  // 행이라 경고하는 게 맞다).
   const r = parseExcelRows([['Unit', 'Word', 'Meaning'], ['apple', '사과']], '반')
   check('완전일치 3칸 헤더는 hasHeader=true 경로로 처리(제목행 취급 아님)', r.headerDetected === true, { got: r })
   check('헤더 행이 데이터로 안 남음(slice(1))', !r.some((x) => x.word === 'Word' || x.unit === 'Unit'), { got: r })
-  check('canonical 헤더가 정상 인식된 경우 경고 없음', (r.warnings || []).length === 0, { got: r.warnings })
+  check('짧은 데이터 행(부분 결손) -> partial-row 경고로 전환(이전엔 무경고, 의도된 변경)',
+    (r.warnings || []).length === 1 && r.warnings[0].code === 'partial-row' &&
+      r.warnings[0].message === '단어 또는 뜻이 비어 있는 행 1개를 건너뛰었어요 (행: 2)',
+    { got: r.warnings })
 
   // 진짜 "헤더 없음" 경로 — rows[0]이 제목 행(별칭 완전일치 없음)이라
   // hasHeader=false가 되고, 그 아래 반복된 헤더 유사 행("No"/"English"/
@@ -329,9 +338,9 @@ console.log('\n=== 11. 빈 word / 빈 meaning 행 — 조용히 filter, 경고 �
 
   // 헤더 없음(위치 추정) 경로에도 동일하게 적용돼야 함.
   const rNoHeaderPartial = parseExcelRows([['a1', 'b1'], ['a2', '']], '반')
-  check('헤더 없음 경로에서도 부분 결손 행 경고(원본 2행)',
-    (rNoHeaderPartial.warnings || []).some((w) => w.code === 'partial-row' && /2개/.test(w.message) && /행: 2/.test(w.message)),
-    { got: rNoHeaderPartial })
+  check('헤더 없음 경로에서도 부분 결손 행 경고(원본 2행 — 1건)',
+    (rNoHeaderPartial.warnings || []).some((w) => w.code === 'partial-row' && /1개/.test(w.message) && /행: 2/.test(w.message)),
+    { got: rNoHeaderPartial.warnings })
   check('헤더 없음 경로 파싱 결과 불변(1행만 남음)', rNoHeaderPartial.length === 1 && rNoHeaderPartial[0].word === 'a1', { got: rNoHeaderPartial })
 
   gap('OK', '빈 word/meaning 행 — 스킵 신호(경고) 전혀 없음(silent) — 2026-09-04 overnight T3b에서 해소',
