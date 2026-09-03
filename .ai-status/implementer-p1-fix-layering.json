@@ -1,0 +1,31 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "p1-fix-layering",
+  "task": "P1 세션 보상 요약(SessionRewardCard) 레이어 계약 회귀 수정 + 보상 루프 테스트 3종 등록",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-03T00:00:00.000Z",
+  "updated_at": "2026-09-03T00:00:00.000Z",
+  "files_owned": [
+    "src/hooks/useStudent.js",
+    "src/utils/attachment/worldProgress.js",
+    "src/utils/rewardSummary.js",
+    "src/components/SessionRewardCard.jsx",
+    "scripts/testSessionRewardSummary.mjs",
+    "package.json",
+    "tests/harness/registry.mjs",
+    ".ai-status/implementer-p1-fix-layering.json"
+  ],
+  "files_read": [
+    "src/App.jsx",
+    "scripts/testGardenGrowthFlow.mjs",
+    "scripts/testGrowthPoints.mjs",
+    "scripts/testNextGoals.mjs",
+    "scripts/testRewardTypesV2.mjs",
+    "scripts/testRewardFlow.mjs"
+  ],
+  "summary": "commit add499e(P1)가 src/hooks/useStudent.js에 ../utils/attachment/worldProgress를 import해 정원 '단계' 계산(GARDEN_STAGE_RANK/gardenStageTotal)을 훅 레이어에 둔 것이 저장소 레이어 계약(useStudent.js는 attachment/* import 금지 + 'worldProgress' 문자열 금지, scripts/testGardenGrowthFlow.mjs 10번 시나리오가 정적으로 고정) 위반이었다. 수정 전 node scripts/testGardenGrowthFlow.mjs 실행으로 2개 FAIL(useStudent.js가 attachment/worldProgress를 import하지 않는다 / gardenPoints를 읽지도 쓰지도 않는다)을 먼저 실측(CLAUDE.md 규칙 15)했다. 수정: (1) worldProgress.js에 gardenStageTotal(순수, GARDEN_STAGE_RANK 포함) export 추가 — 정원 '단계' 계산 소유권을 그 파일로 완전 이전. (2) useStudent.js에서 worldProgress import와 helper 제거, computeGardenPoints(원시 Set 크기)만 유지, grantLedgerReward가 rewardSummary에 원시값(gardenRawBefore/gardenRawAfter)만 전달(useStudent.js 소스 전체에서 'gardenPoints'/'worldProgress' 리터럴 0회 확인). (3) rewardSummary.js(zero-import 유지)가 gardenRawBefore/gardenRawAfter를 받아 그대로 요약에 싣고 gardenGrowth는 null로 두거나(원시 경로) 레거시 gardenBefore/gardenAfter가 오면 즉시 계산(하위호환); withGardenGrowth(순수) 헬퍼 추가. (4) SessionRewardCard.jsx(컴포넌트 레이어, attachment import 허용)가 gardenStageTotal로 단계 변환 후 withGardenGrowth+formatRewardLines로 렌더. (5) scripts/testSessionRewardSummary.mjs에 원시 경로/legacy 경로 분기, withGardenGrowth, SSR 카드 raw 3→5 '정원 +1' 렌더 단언과 useStudent.js의 attachment import 금지/worldProgress 문자열 금지 정적 검사 추가(42→53단언 전체 PASS). testGardenGrowthFlow.mjs 93/93 전체 PASS로 복구. verify:reward(55/55, 테스트 8 daily-goal-complete 포함) / verify:star-delta / verify:mission-bonus 전부 PASS 확인(다른 agent가 보고한 verify:reward 테스트8 FAIL은 재현되지 않음 — 이미 해소된 상태였음). 별도 커밋으로 package.json에 verify:growth-points/verify:next-goals/verify:reward-types-v2 3개 스크립트 추가 + tests/harness/registry.mjs에 testGrowthPoints.mjs(attachment 도메인, 44단언)/testNextGoals.mjs(rewardSystem 도메인, 37단언)/testRewardTypesV2.mjs(rewardSystem 도메인, 54단언) 등록(3개 npm run 스크립트로 개별 실행해 전부 PASS 확인, 세 스크립트 파일 자체는 이 세션 이전에 이미 구현돼 있었고 등록만 이 세션이 수행). npm run build 통과. src/components/Dashboard.jsx / src/components/admin/StudentDirectory.jsx / scripts/testStreakV2Wiring.mjs / src/components/StreakChip.jsx / src/utils/gamification/streakAdapter.js는 다른 에이전트가 동시 작업 중인 흔적(git status)이라 읽지도 커밋에 넣지도 않음(규칙 16).",
+  "blocker": null,
+  "next_action": "qa-reviewer에게 handoff — verify:all 1회 실행은 운영자(요청자)가 별도로 수행 예정."
+}
