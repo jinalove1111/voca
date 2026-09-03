@@ -1,0 +1,30 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "overnight-t4-double-events",
+  "task": "보상 루프 동일 이벤트 2회 발생 멱등 스위트(scripts/testDoubleEvents.mjs) 신설 — 퀴즈/철자/시험/미션/스트릭/마일스톤/정원 클라이언트 더블파이어 + 서버(reward/xp) 직렬·동시 중복 요청 + ledger↔UI 대조",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-04T00:00:00+09:00",
+  "updated_at": "2026-09-04T00:00:00+09:00",
+  "files_owned": [
+    "scripts/testDoubleEvents.mjs",
+    "package.json"
+  ],
+  "files_read": [
+    "docs/REWARD_LOOP_AUDIT_2026-09-03.md (git show 3e8b1a3, feat/reward-loop 전용 — 이 워크트리에는 없음)",
+    "scripts/testRewardFlow.mjs",
+    "scripts/testMissionBonusIdempotency.mjs",
+    "scripts/testRewardServerHardeningBehavior.mjs",
+    "scripts/testGardenGrowthSources.mjs",
+    "scripts/buildRaceBundle.mjs",
+    "scripts/wordLibraryRaceStub.mjs",
+    "src/hooks/useStudent.js",
+    "src/utils/rewardEngine.js",
+    "src/utils/paulRankShared.js",
+    "api/grant-xp.js"
+  ],
+  "summary": "worktree C:/.../wt-reward, 브랜치 test/reward-double-events. 새 스위트 45단언 전부 PASS(npm run verify:double-events, package.json에 등록). FAIL-first 검증(CLAUDE.md 규칙 15) — 미션보너스 remount 가드 코드를 임시로 되돌려 해당 단언 1건이 실제로 FAIL함을 실측 확인 후 정확히 원상 복구(git diff 0). 기존 verify:reward/verify:mission-bonus/verify:star-delta 전부 재실행 PASS. verify:reward-integrity-v2는 이 브랜치/origin main 어디에도 존재하지 않음(package.json 확인, N/A). npm run build 통과. 실제 결함 발견 없음 — 전부 계약 동결(contract-freeze), production 소스 수정 없음.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검토 대기. 병합/푸시 없음(작업 지시 범위 내 test-only)."
+}
