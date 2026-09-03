@@ -904,26 +904,60 @@ const classCounts = CLASSIFICATION.reduce((acc, c) => {
 }, {})
 console.log(`분류 요약: ${Object.entries(classCounts).map(([k, v]) => `${k} ${v}`).join(' / ')} (총 ${CLASSIFICATION.length}개)`)
 
-// docs/qa/paul-town-progression-classification.md로도 저장(운영자 커밋 대상)
-try {
-  mkdirSync(path.resolve('docs/qa'), { recursive: true })
-  const mdLines = [
-    '# Paul Town 진행 요소 분류 — ACTIVE / DORMANT / UNREACHABLE / NOT IMPLEMENTED',
-    '',
-    '_scripts/testPaulTownProgression.mjs가 매 실행마다 재생성하는 machine-readable 분류표(overnight QA track T1, 2026-09-04). 값이 바뀌면 이 파일도 다음 실행 시 갱신된다 — 수동 편집 금지, 소스는 이 테스트 파일의 `CLASSIFICATION` 배열._',
-    '',
-    '| id | 요소 | 분류 | 근거(file:line) |',
-    '|---|---|---|---|',
-    ...CLASSIFICATION.map((c) => `| ${c.id} | ${c.name} | ${c.status} | ${c.evidence.replace(/\|/g, '\\|')} |`),
-    '',
-    `분류 요약: ${Object.entries(classCounts).map(([k, v]) => `${k} ${v}`).join(' / ')} (총 ${CLASSIFICATION.length}개)`,
-    '',
-  ]
-  writeFileSync(path.resolve('docs/qa/paul-town-progression-classification.md'), mdLines.join('\n'), 'utf8')
-  console.log('\n[분류표] docs/qa/paul-town-progression-classification.md 갱신 완료')
-} catch (e) {
-  console.warn(`[분류표] docs/qa/paul-town-progression-classification.md 쓰기 실패(무시, 콘솔 출력은 이미 완료) — ${e?.message || e}`)
+// docs/qa/paul-town-progression-classification.md로도 저장(운영자 커밋 대상) —
+// 단, 내용이 실제로 바뀔 때만 쓴다. 매 실행 write는 line-ending(CRLF
+// 체크아웃 vs LF join) 차이만으로도 작업트리를 오염시켜 verify:all 뒤
+// git status가 항상 dirty해지는 문제가 있었다(2026-09-04 test-hygiene
+// 세션). normalize(LF 통일 + 줄 끝 공백 제거) 후 비교해 동일하면 파일을
+// 아예 건드리지 않는다 — 그리고 그 비교 결과를 아래 7번 섹션에서 테스트
+// 단언으로도 고정해, 생성 로직이 바뀌었는데 커밋된 파일을 안 갱신한 채
+// 넘어가는 drift를 FAIL로 드러낸다(수정은 재생성 1회 + 커밋으로 해소).
+const mdLines = [
+  '# Paul Town 진행 요소 분류 — ACTIVE / DORMANT / UNREACHABLE / NOT IMPLEMENTED',
+  '',
+  '_scripts/testPaulTownProgression.mjs가 매 실행마다 재생성하는 machine-readable 분류표(overnight QA track T1, 2026-09-04). 값이 바뀌면 이 파일도 다음 실행 시 갱신된다 — 수동 편집 금지, 소스는 이 테스트 파일의 `CLASSIFICATION` 배열._',
+  '',
+  '| id | 요소 | 분류 | 근거(file:line) |',
+  '|---|---|---|---|',
+  ...CLASSIFICATION.map((c) => `| ${c.id} | ${c.name} | ${c.status} | ${c.evidence.replace(/\|/g, '\\|')} |`),
+  '',
+  `분류 요약: ${Object.entries(classCounts).map(([k, v]) => `${k} ${v}`).join(' / ')} (총 ${CLASSIFICATION.length}개)`,
+  '',
+]
+function normalizeMd(str) {
+  return str
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+$/, ''))
+    .join('\n')
+    .replace(/\n*$/, '\n')
 }
+const classificationDocPath = path.resolve('docs/qa/paul-town-progression-classification.md')
+const generatedDoc = normalizeMd(mdLines.join('\n'))
+let committedDoc = null
+try { committedDoc = readFileSync(classificationDocPath, 'utf8') } catch { /* 최초 실행 — 파일 없음 */ }
+const normalizedCommittedDoc = committedDoc === null ? null : normalizeMd(committedDoc)
+const docDrift = normalizedCommittedDoc !== generatedDoc
+
+if (docDrift) {
+  try {
+    mkdirSync(path.resolve('docs/qa'), { recursive: true })
+    writeFileSync(classificationDocPath, generatedDoc, 'utf8')
+    console.log('\n[분류표] docs/qa/paul-town-progression-classification.md 갱신 완료(내용 변경 감지)')
+  } catch (e) {
+    console.warn(`[분류표] docs/qa/paul-town-progression-classification.md 쓰기 실패(무시, 콘솔 출력은 이미 완료) — ${e?.message || e}`)
+  }
+} else {
+  console.log('\n[분류표] docs/qa/paul-town-progression-classification.md 변경 없음 — 쓰기 생략(작업트리 무오염)')
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 7. DOCS ARTIFACT (drift 방지)
+// ══════════════════════════════════════════════════════════════════════
+sectionHeader('7. DOCS ARTIFACT')
+check('docs/qa/paul-town-progression-classification.md — 커밋된 파일이 CLASSIFICATION에서 생성한 내용과 정확히 일치(drift 없음, normalize 후 비교)', !docDrift)
+sectionTally()
 
 // ══════════════════════════════════════════════════════════════════════
 // 요약
