@@ -1,0 +1,30 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "track5-hard-delete-class-delete-guards",
+  "task": "야간 자율 작업 Track 5 — hard_delete_student 가드에 reward_ledger/entrance_test_results/xp_ledger 3종 추가, class.delete(admin-content-write Edge Function)에 데이터 있으면 차단하는 가드 신규 추가",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-02T19:20:00Z",
+  "updated_at": "2026-09-02T19:45:47Z",
+  "files_owned": [
+    "api/admin-pin-actions.js",
+    "supabase/functions/admin-content-write/index.ts",
+    "scripts/testHardDeleteGuard.mjs",
+    "scripts/testClassDeleteGuard.mjs",
+    ".ai-status/implementer-track5-hard-delete-class-delete-guards.json"
+  ],
+  "files_read": [
+    "DATABASE.md",
+    "api/_pinAuth.js",
+    "scripts/testAdminStudentActions.mjs",
+    "scripts/testAdminPinActionsDispatch.mjs",
+    "scripts/testClassDeleteCascade.mjs",
+    "package.json",
+    "supabase_v3_36_reward_ledger.sql",
+    "supabase_v3_36_reward_ledger_VERIFY.sql"
+  ],
+  "summary": "문제1: api/admin-pin-actions.js hard_delete_student 가드에 reward_ledger/entrance_test_results/xp_ledger 3개 head-count 조건 추가(테이블 부재는 42P01/PGRST205 판정으로 0 취급하되 detail.tableMissing에 표시). 기존 detail 필드(word_status/stars/hasPin/daily/spellingQueue)는 그대로 유지, 신규 3개+tableMissing만 추가 — 기존 필드 삭제 없음. pin_ 값은 여전히 미조회. scripts/testHardDeleteGuard.mjs(FAIL-first, 독립 esbuild 번들 + 인메모리 fake supabase, testAdminStudentActions.mjs와 별개 사본) 22개 단언 작성 — git stash로 구현 전 코드에 적용해 12개 FAIL 재현 확정 후 구현, 현재 22/22 PASS. 문제2: supabase/functions/admin-content-write/index.ts의 handleClassDelete에 word_status/entrance_test_results/student_class_assignments/spelling_review_queue 4종 카운트(1000행 청크 in() 조회) + 순수 함수 decideClassDelete({counts,force}) 분리 + ClassDeleteBlockedError(마커: classDeleteBlocked)로 삭제 전 차단, 공용 catch에서 { ok:false, reason:'has_learning_data', counts } 200 응답(래핑 없이 원형 반환). force===true면 삭제 강행 + counts/forced:true 함께 반환. counts 전부 0인 기존 정상 경로는 byte-identical({ ok:true }). scripts/testClassDeleteGuard.mjs(FAIL-first) — (a) decideClassDelete만 esbuild 별도 번들(전역 Deno 스텁 + npm: import 리다이렉트로 Deno.serve 부작용 무해화) 단위 테스트 6건, (b) handleClassDelete 소스 정적 단언(word_status/entrance_test_results/student_class_assignments/has_learning_data/force 존재 + .delete() 호출이 그 분기 뒤에만 정확히 1번) 12건, 총 18/18 PASS. git stash로 구현 전 코드에 적용해 10개 FAIL 재현 확정.",
+  "blocker": null,
+  "next_action": "BLOCKED_FOR_OPERATOR — supabase/functions/admin-content-write/index.ts는 Edge Function이라 에이전트가 배포할 수 없다. 운영자가 `supabase functions deploy admin-content-write`로 재배포해야 class.delete 가드가 실제 프로덕션에 반영된다(그 전까지는 기존 무가드 동작 그대로). api/admin-pin-actions.js는 Vercel 서버리스라 다음 배포(git push → Vercel 자동 배포)로 반영됨 — 별도 수동 조치 불필요. QA reviewer에게 handoff: 두 파일 diff, build PASS, 회귀 2종(testAdminStudentActions.mjs 85/85, testAdminPinActionsDispatch.mjs 전체 PASS) + 신규 2종(22/22, 18/18) 결과 확인 요청."
+}

@@ -1,0 +1,74 @@
+{
+  "id": "ghost-unit-landing-20260902",
+  "project_ref": "azsjthtdjfpnctffjfsk",
+  "title": "ghost-unit landing 정정 회귀 픽스처 (2026-09-02 실측 사례, 이미 적용됨 — 프리플라이트 STOP 실증용)",
+  "created_at": "2026-09-02",
+  "affected_students": ["2c6845fc-b30e-4e4d-b260-d13c13fe7b9a", "bf05032a-8210-4082-8584-7e1afdcc02e2"],
+  "changes": [
+    {
+      "table": "student_class_assignments",
+      "id": "f9a14e8a-0a2f-4f5a-aaa7-8b6fc7f0db77",
+      "expect_before": {
+        "student_id": "2c6845fc-b30e-4e4d-b260-d13c13fe7b9a",
+        "textbook_id": "1ba6ec3d-b557-47b5-a480-3dbb5ed12e62",
+        "is_primary": true,
+        "current_unit_id": "113ee184-c5c7-4ee5-8b6c-99d547a06525"
+      },
+      "set": { "current_unit_id": "4ce41359-6424-4b5e-933d-479db6951586" }
+    },
+    {
+      "table": "students",
+      "id": "2c6845fc-b30e-4e4d-b260-d13c13fe7b9a",
+      "expect_before": {
+        "current_unit_id": "113ee184-c5c7-4ee5-8b6c-99d547a06525",
+        "unit_name": "Unit5"
+      },
+      "set": { "current_unit_id": "4ce41359-6424-4b5e-933d-479db6951586", "unit_name": "Unit5" }
+    },
+    {
+      "table": "student_class_assignments",
+      "id": "26708243-b465-4df9-b279-2f363c1b1b15",
+      "expect_before": {
+        "student_id": "bf05032a-8210-4082-8584-7e1afdcc02e2",
+        "textbook_id": "1ba6ec3d-b557-47b5-a480-3dbb5ed12e62",
+        "is_primary": false,
+        "current_unit_id": "113ee184-c5c7-4ee5-8b6c-99d547a06525"
+      },
+      "set": { "current_unit_id": "6f3788d2-fb04-467b-9a06-43009d0017bc" }
+    }
+  ],
+  "must_not_change": [
+    {
+      "table": "students",
+      "id": "bf05032a-8210-4082-8584-7e1afdcc02e2",
+      "expect": { "current_unit_id": "28233ded-cb3e-4672-bbf8-c508e1e32d1f", "unit_name": "Unit2" }
+    }
+  ],
+  "reference_rows_must_exist": [
+    {
+      "table": "units",
+      "id": "4ce41359-6424-4b5e-933d-479db6951586",
+      "expect": { "name": "Unit5", "textbook_id": "1ba6ec3d-b557-47b5-a480-3dbb5ed12e62" },
+      "min_words": 2
+    },
+    {
+      "table": "units",
+      "id": "6f3788d2-fb04-467b-9a06-43009d0017bc",
+      "expect": { "name": "Unit1", "textbook_id": "1ba6ec3d-b557-47b5-a480-3dbb5ed12e62" },
+      "min_words": 2
+    },
+    {
+      "table": "units",
+      "id": "113ee184-c5c7-4ee5-8b6c-99d547a06525",
+      "expect": { "name": "Unit" }
+    }
+  ],
+  "learning_baseline_tables": [
+    "word_status",
+    "student_progress",
+    "student_daily_progress",
+    "xp_ledger",
+    "entrance_test_results",
+    "spelling_review_queue"
+  ]
+}

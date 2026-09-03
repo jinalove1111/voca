@@ -425,3 +425,15 @@ QA_ 픽스처 생성용 anon `students` INSERT가 42501(permission denied)로
 후속 과제로 남아있다** — 기존 `testRenameClass` 등과 동일한 성격의
 검증 부채. `verify:login` 로컬 고정 FAIL(위 섹션)은 이번 작업과 무관하게
 그대로 유효.
+
+## 관련 항목: Production Safety Harness 1단계 — `verify:prod-check`/`verify:prod-hotfix` (2026-09-02, 104차)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+`npm run verify:prod-check`(`testProdCheck.mjs`, 39단언)와
+`npm run verify:prod-hotfix`(`testProdHotfix.mjs`, 66단언, 네트워크 0)가
+`tests/harness/registry.mjs`에 신규 도메인으로 등록되어 `verify:all`에
+편입됐다. 운영 명령은 `npm run prod:check`(읽기 전용 invariant 스캔,
+9종 규칙)와 `npm run prod:hotfix`(manifest 단일 원천 preflight/apply/
+postflight/rollback + TTY 승인 게이트) — 상세는 `handoff.md` 104차 섹션
+참고.

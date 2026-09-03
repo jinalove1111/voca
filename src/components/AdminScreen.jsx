@@ -1801,6 +1801,11 @@ export default function AdminScreen({ onBack }) {
   const [newMeaning, setNewMeaning] = useState('')
   const [newExample, setNewExample] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)
+  // 2026-09-03 Track 6 작업 1 — 반 삭제가 학습기록 존재로 차단된
+  // 경우(deleteClass가 { blocked:true, counts } 반환) 2차 확인 모달 상태.
+  // classDeleteBlock: { className, counts } | null.
+  const [classDeleteBlock, setClassDeleteBlock] = useState(null)
+  const [classDeleteReinput, setClassDeleteReinput] = useState('')
   const [renamingClass, setRenamingClass] = useState(null)
   const [renameValue, setRenameValue] = useState('')
   // "오늘 AI 절약 카드"(2026-07-24) — SpellingReviewQueuePanel의 미리보기/
@@ -2292,7 +2297,11 @@ export default function AdminScreen({ onBack }) {
           <h3 className="font-black text-gray-800 text-lg text-center mb-2">반 삭제</h3>
           <p className="text-gray-600 text-sm text-center mb-1"><span className="font-black text-red-500">"{confirmDelete}"</span></p>
           <p className="text-gray-500 text-sm text-center mb-1">이 반과 연결된 단어/Unit/학습기록이 함께 삭제됩니다.</p>
-          <p className="text-gray-400 text-xs text-center mb-3">✅ 학생 계정과 학생별 진행도는 그대로 유지되고, 반 배정만 해제돼요.</p>
+          {/* 2026-09-03 Track 6 작업 1 — "학생별 진행도는 유지" 문구 정정:
+              별/XP(reward_ledger/xp_ledger)는 유지되지만 단어 학습 기록/
+              시험 결과는 실제로 삭제된다(admin-content-write class.delete
+              가 삭제하는 4개 테이블, § handleClassDelete 헤더 주석). */}
+          <p className="text-gray-400 text-xs text-center mb-3">✅ 학생 계정은 유지되고 별/XP는 보존되지만, 단어 학습 기록·시험 결과는 삭제됩니다.</p>
           <p className="text-gray-500 text-sm text-center mb-5">정말 삭제하시겠습니까?</p>
           <div className="flex gap-2">
             <button onClick={() => setConfirmDelete(null)}
@@ -2301,7 +2310,17 @@ export default function AdminScreen({ onBack }) {
             </button>
             <button onClick={async () => {
               try {
-                await deleteClass(confirmDelete, pin)
+                // 2026-09-03 Track 6 작업 1 — deleteClass가 학습기록 존재로
+                // 차단되면 throw 대신 { blocked:true, counts }를 반환한다
+                // (§ wordLibrary.js deleteClass 헤더 주석). 그 경우 여기서
+                // 끝내지 않고 2차 확인 모달(반 이름 재입력 + force)로 넘어간다.
+                const result = await deleteClass(confirmDelete, pin)
+                if (result && result.blocked) {
+                  setConfirmDelete(null)
+                  setClassDeleteBlock({ className: confirmDelete, counts: result.counts || {} })
+                  setClassDeleteReinput('')
+                  return
+                }
                 if (viewClass === confirmDelete) setView(null)
                 setConfirmDelete(null)
                 refresh()
@@ -2311,6 +2330,57 @@ export default function AdminScreen({ onBack }) {
             }}
               className="flex-1 bg-red-500 text-white font-black py-3 rounded-2xl btn-press hover:bg-red-600">
               삭제
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* 2026-09-03 Track 6 작업 1 — 반 삭제 2차 확인(학습기록 있는 반 전용).
+        deleteClass(className, pin)가 { blocked:true, counts }를 반환했을
+        때만 뜬다(counts 4종 합계가 0인 반은 이 모달을 절대 거치지 않고
+        위 1차 확인만으로 삭제됨 — 무변경). 반 이름을 정확히 재입력해야
+        "그래도 삭제" 버튼이 활성화된다(오타/오클릭으로 인한 영구 데이터
+        삭제 방지). */}
+    {classDeleteBlock && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-3xl p-6 max-w-sm w-full card-shadow">
+          <div className="text-4xl text-center mb-3">⚠️</div>
+          <h3 className="font-black text-red-600 text-lg text-center mb-2">학습 기록이 있는 반입니다</h3>
+          <p className="text-gray-600 text-sm text-center mb-3">
+            이 반에는 학습 기록이 있습니다: 단어 학습 {classDeleteBlock.counts.word_status ?? 0}건 · 입실시험 결과 {classDeleteBlock.counts.entrance_test_results ?? 0}건 · 교재 배정 {classDeleteBlock.counts.student_class_assignments ?? 0}건 · 철자 검수 {classDeleteBlock.counts.spelling_review_queue ?? 0}건.
+            삭제하면 해당 학생들의 이 기록이 영구 삭제됩니다.
+          </p>
+          <p className="text-gray-500 text-xs text-center mb-2">
+            계속하려면 반 이름 <span className="font-black text-gray-700">"{classDeleteBlock.className}"</span>을(를) 정확히 입력하세요.
+          </p>
+          <input
+            type="text"
+            value={classDeleteReinput}
+            onChange={(e) => setClassDeleteReinput(e.target.value)}
+            placeholder={classDeleteBlock.className}
+            className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm mb-4 focus:outline-none focus:border-red-400"
+          />
+          <div className="flex gap-2">
+            <button onClick={() => { setClassDeleteBlock(null); setClassDeleteReinput('') }}
+              className="flex-1 border-2 border-gray-200 text-gray-600 font-bold py-3 rounded-2xl btn-press">
+              취소
+            </button>
+            <button
+              disabled={classDeleteReinput !== classDeleteBlock.className}
+              onClick={async () => {
+                try {
+                  await deleteClass(classDeleteBlock.className, pin, { force: true })
+                  if (viewClass === classDeleteBlock.className) setView(null)
+                  setClassDeleteBlock(null)
+                  setClassDeleteReinput('')
+                  refresh()
+                } catch (err) {
+                  alert('반 삭제 중 오류가 발생했어요: ' + (err.message || err))
+                }
+              }}
+              className="flex-1 bg-red-600 text-white font-black py-3 rounded-2xl btn-press hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed">
+              그래도 삭제
             </button>
           </div>
         </div>

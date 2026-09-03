@@ -15,8 +15,10 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import * as gate from './lib/releaseGate.mjs'
+import * as recorder from './recordHealthBaseline.mjs'
 
 const { EMPTY_BASELINE, baselineKey, normalizeBaseline, diffAgainstBaseline, summarizeGates } = gate
+const { maskName, buildBaselineEntries } = recorder
 
 let passed = 0
 let failed = 0
@@ -221,6 +223,55 @@ console.log('\n=== 12절. GitHub Actions 워크플로 (정적 검사) ===')
   check('deploy.yml 이 여전히 workflow_dispatch 전용(자동 트리거 없음)',
     /workflow_dispatch:/.test(d) && !/^\s{2}push:/m.test(d) && !/^\s{2}pull_request:/m.test(d))
   check('deploy.yml 에 release gate 를 끼워 넣지 않았다', !/verify:release/.test(d))
+}
+
+console.log('\n=== 13절. baseline.json 실명 방지 (2026-09-03) ===')
+// scripts/health/baseline.json 은 PUBLIC 저장소에 커밋되는 파일이다.
+// recordHealthBaseline.mjs 가 채우는 entries[].name 이 학생 실명 그대로면
+// git 이력에 학생 실명이 영구히 남는다 — baselineKey 는 studentId+code 로만
+// 매칭하므로(위 1절) name 필드는 판정에 전혀 필요 없다. 이름은 표시용으로만
+// 쓰되 항상 마스킹한다.
+{
+  check('maskName/buildBaselineEntries 가 export 된다',
+    typeof maskName === 'function' && typeof buildBaselineEntries === 'function')
+  check('maskName: 첫 글자 + *** 형태', maskName('홍길동') === '홍***', maskName('홍길동'))
+  check('maskName: 빈 값은 (이름없음)', maskName('') === '(이름없음)' && maskName(undefined) === '(이름없음)')
+  check('maskName: 원본 이름이 마스킹 결과에 남지 않는다(2자 초과 이름)',
+    !maskName('김철수').includes('철수'))
+}
+{
+  const students = [
+    { studentId: 's1', name: '김철수', status: 'PASS', codes: [] },
+    { studentId: 's2', name: '이영희', status: 'FAIL', codes: ['WORDS_ZERO:단어0개'] },
+    { studentId: 's3', name: '박민준', status: 'FAIL', codes: ['GHOST_UNIT:유령', 'WORDS_ZERO:단어1개'] },
+  ]
+  const entries = buildBaselineEntries(students)
+  check('FAIL 학생만 entries 로 만든다(PASS 제외)', entries.every((e) => e.studentId !== 's1'))
+  check('FAIL 코드 개수만큼 entries 가 생긴다', entries.length === 3, JSON.stringify(entries))
+  check('entries 에 원본 학생 이름이 전혀 남지 않는다(직렬화 스캔)',
+    !JSON.stringify(entries).includes('이영희') && !JSON.stringify(entries).includes('박민준'))
+  check('entries[].name 은 마스킹된 형태다', entries.every((e) => e.name === maskName('이영희') || e.name === maskName('박민준')))
+  check('entries[].studentId/code 는 원본 그대로 유지(매칭용, PII 아님)',
+    entries.some((e) => e.studentId === 's2' && e.code === 'WORDS_ZERO')
+    && entries.some((e) => e.studentId === 's3' && e.code === 'GHOST_UNIT'))
+}
+{
+  // 기존 baseline 파일 형식 호환: entries 에 원본 이름이 이미 박혀 있어도
+  // (마스킹 이전에 기록된 파일) normalizeBaseline 은 표시용 meta.name 을
+  // 방어적으로 다시 마스킹해 리포트/콘솔 출력으로 새어나가지 않게 한다.
+  const legacyBaseline = { entries: [{ studentId: 's9', code: 'WORDS_ZERO', name: '레거시실명', note: 'x' }] }
+  const norm = normalizeBaseline(legacyBaseline)
+  const key = baselineKey('s9', 'WORDS_ZERO')
+  check('normalizeBaseline: 레거시 원본 이름이 meta 에 그대로 남지 않는다', norm.meta[key]?.name !== '레거시실명')
+  check('normalizeBaseline: 레거시 이름 문자열이 JSON 직렬화 결과에도 없다',
+    !JSON.stringify(norm.meta).includes('레거시실명'))
+}
+{
+  // 이름을 마스킹해도 studentId+code 매칭(핵심 판정)은 그대로 동작해야 한다.
+  const students = [{ studentId: 's2', name: '이영희', status: 'FAIL', codes: ['WORDS_ZERO:단어0개'] }]
+  const baseline = normalizeBaseline({ entries: buildBaselineEntries(students) })
+  const r = diffAgainstBaseline(students, baseline)
+  check('마스킹된 entries 로 만든 baseline 도 known 판정이 정상 동작', r.known.length === 1 && r.ok === true, JSON.stringify(r))
 }
 
 console.log(`\n${'='.repeat(60)}`)

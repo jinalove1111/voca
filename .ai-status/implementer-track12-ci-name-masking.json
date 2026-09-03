@@ -1,0 +1,33 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "track12-ci-name-masking",
+  "task": "야간 Track 12 — 보안 리뷰 High 수정: prod:check/student health 의 --json/보고서/CI 로그에서 학생 실명 마스킹 기본화 + CI 강제, Gate 3b stdout JSON tee 제거, unlock_student_pin UUID 검증(Low)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-03T00:00:00+09:00",
+  "updated_at": "2026-09-03T06:00:00+09:00",
+  "files_owned": [
+    "scripts/prodCheck.mjs",
+    "scripts/studentHealthCheck.mjs",
+    "scripts/verifyRelease.mjs",
+    ".github/workflows/release-gate.yml",
+    "scripts/testReleaseGateProdCheck.mjs",
+    "scripts/testCiNameMasking.mjs",
+    "api/admin-pin-actions.js"
+  ],
+  "files_read": [
+    "scripts/testProdCheck.mjs",
+    "scripts/lib/releaseGate.mjs",
+    "scripts/lib/prodInvariants.mjs",
+    "scripts/lib/studentHealthRules.mjs",
+    "scripts/recordHealthBaseline.mjs",
+    "scripts/testAdminPinActionsDispatch.mjs",
+    "scripts/testAdminStudentActions.mjs",
+    "scripts/testStudentPinSelfSetup.mjs",
+    "src/components/admin/StudentDirectory.jsx"
+  ],
+  "summary": "prodCheck.mjs: --json stdout/보고서 파일도 기본 마스킹, CI/GITHUB_ACTIONS 감지 시 --show-names 무시 강제 마스킹(health.results[].name, invariants.findings[].studentName; studentId(UUID)/null 은 그대로). studentHealthCheck.mjs: --mask-names 플래그 + CI 자동감지, 5개 출력지점(JSON students[]/표/FAIL요약/WARN목록/유령유닛 배정학생) 전부 displayName() 적용, 로컬 비-CI 기본은 기존과 동일(원본). verifyRelease.mjs: 코드 변경 없이 spawnSync 의 env 상속으로 CI 마스킹이 자동 전파됨을 확인·주석화(라이브로 CI=true 재현 검증 완료). release-gate.yml Gate 3b: 원본 --json stdout tee 제거, 파일로만 리다이렉트 + 콘솔엔 마스킹된 카운트/이름 요약만, STEP_SUMMARY 는 기존대로 카운트만. testReleaseGateProdCheck.mjs: 옛 '--json 은 마스킹 안 됨' 전제 단언을 GITHUB_STEP_SUMMARY 블록 한정으로 좁히고 tee-없음/--show-names 미사용 단언 추가(42/42 PASS). testCiNameMasking.mjs 신규(32단언, FAIL-first 로 21건 확인 후 구현, 전부 PASS) — prodCheck --fixture --json 마스킹/--show-names/CI 강제, studentHealthCheck 정적배선+golden maskName 단위테스트, Gate 3b tee-없음 정적단언. admin-pin-actions.js unlock_student_pin: 다른 액션과 동일한 UUID_RE 검증 추가, 에러 메시지는 기존 계약 유지. 회귀: testProdCheck(130/130), testReleaseGateProdCheck(42/42), testStudentHealthRules(71/71), testAdminPinActionsDispatch/testAdminStudentActions 전부 PASS, npm run build 성공, npm run verify:release-gate(74/74) PASS, 로컬 health:students 는 기존처럼 원본 이름 노출 확인 + --mask-names/CI=true 로 마스킹 확인(라이브), CI=true npm run verify:release -- --skip-build --skip-verify 로 Gate 3 콘솔 출력이 마스킹되는 것 라이브 확인. prodHotfix.mjs/testProdHotfix.mjs 는 다른 트랙 소유라 읽지도 않았고(이미 커밋 27d38f0 로 반영됨) 건드리지 않음.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 요청. 남은 리스크: scripts/health/baseline.json 은 로컬 npm run health:baseline 으로 기록되며 현재 entries 는 비어 있지만, 향후 항목이 추가되면 그 파일(git 커밋됨, PUBLIC)에 학생 실명이 평문으로 들어갈 수 있음 — 이번 트랙 범위 밖이라 손대지 않았으나 별도 트랙에서 검토 권장."
+}

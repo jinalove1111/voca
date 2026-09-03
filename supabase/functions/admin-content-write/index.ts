@@ -184,11 +184,124 @@ async function handleClassRename(supabase: any, payload: any) {
   return { ok: true }
 }
 
+// 2026-09-03 Track 5(야간 자율 작업) 문제 2 — class.delete "데이터 있으면
+// 차단" 가드. api/admin-pin-actions.js의 hard_delete_student가 이미 쓰는
+// "데이터 0만 파괴적 삭제 허용" 원칙을 여기도 적용한다 — classes DELETE는
+// units→words→word_status/spelling_review_queue(둘 다 words(id) FK cascade,
+// DATABASE.md), entrance_tests→entrance_test_results(entrance_tests.class_id
+// FK cascade), student_class_assignments(class_id FK), class_textbooks까지
+// 연쇄 삭제하는데 지금까지 그중 하나라도 데이터가 있는지 확인하는 장치가
+// 전혀 없었다. counts 4종의 합이 0을 넘고 payload.force !== true면 삭제
+// 자체를 실행하지 않는다(카운트만 하고 삭제 없음 — 순수 조회).
+//
+// decideClassDelete는 DB/네트워크에 전혀 의존하지 않는 순수 함수로 따로
+// 뺐다 — scripts/testClassDeleteGuard.mjs가 Deno 전용 부분(Deno.serve/
+// npm: import)은 건드리지 않고 이 함수만 esbuild로 별도 번들해 단위
+// 테스트한다.
+export function decideClassDelete(
+  input: { counts: Record<string, number>; force?: boolean }
+): { allowed: boolean; total: number } {
+  const counts = input?.counts || {}
+  const total = Object.values(counts).reduce((sum: number, n) => sum + (Number(n) || 0), 0)
+  if (total > 0 && input?.force !== true) return { allowed: false, total }
+  return { allowed: true, total }
+}
+
+// 카운트 조회 결과 "합계>0인데 force가 아님"을 알리는 전용 에러 — 최하단
+// Deno.serve의 공용 catch가 이 마커(classDeleteBlocked)를 보고 일반
+// 500 에러 경로 대신 { ok:false, reason:'has_learning_data', counts }를
+// 그대로(래핑 없이) 200으로 반환한다.
+class ClassDeleteBlockedError extends Error {
+  status = 200
+  classDeleteBlocked = true
+  counts: Record<string, number>
+  constructor(counts: Record<string, number>) {
+    super('has_learning_data')
+    this.counts = counts
+  }
+}
+
 // class.delete — deleteClass()(wordLibrary.js:622 대응).
 async function handleClassDelete(supabase: any, payload: any) {
   const classId = requireId(payload?.classId, 'classId')
+  const force = payload?.force === true
+
+  // units 목록(이 반 소속) — word_status/spelling_review_queue 카운트의
+  // 기준이 되는 word id 집합을 구하려고 먼저 조회한다.
+  const { data: unitRows, error: unitErr } = await supabase
+    .from('units').select('id').eq('class_id', classId)
+  if (unitErr) throw unitErr
+  const unitIds: string[] = (unitRows || []).map((r: any) => r.id)
+
+  // 1000개 단위 청크 — PostgREST in() 상한 방어(반 하나에 유닛/단어가
+  // 수천 개인 경우는 실제로 없지만, 이 가드 자체가 방어적 코드이므로
+  // 상한도 방어적으로 잡는다).
+  let wordIds: string[] = []
+  for (let i = 0; i < unitIds.length; i += 1000) {
+    const chunk = unitIds.slice(i, i + 1000)
+    const { data: wordRows, error: wordErr } = await supabase
+      .from('words').select('id').in('unit_id', chunk)
+    if (wordErr) throw wordErr
+    wordIds.push(...(wordRows || []).map((r: any) => r.id))
+  }
+
+  let wordStatusCount = 0
+  let spellingQueueCount = 0
+  for (let i = 0; i < wordIds.length; i += 1000) {
+    const chunk = wordIds.slice(i, i + 1000)
+    const { count: wsCount, error: wsErr } = await supabase
+      .from('word_status').select('*', { count: 'exact', head: true }).in('word_id', chunk)
+    if (wsErr) throw wsErr
+    wordStatusCount += wsCount || 0
+
+    const { count: sqCount, error: sqErr } = await supabase
+      .from('spelling_review_queue').select('*', { count: 'exact', head: true }).in('word_id', chunk)
+    if (sqErr) throw sqErr
+    spellingQueueCount += sqCount || 0
+  }
+
+  const { data: testRows, error: testErr } = await supabase
+    .from('entrance_tests').select('id').eq('class_id', classId)
+  if (testErr) throw testErr
+  const testIds: string[] = (testRows || []).map((r: any) => r.id)
+
+  let entranceTestResultsCount = 0
+  for (let i = 0; i < testIds.length; i += 1000) {
+    const chunk = testIds.slice(i, i + 1000)
+    const { count, error } = await supabase
+      .from('entrance_test_results').select('*', { count: 'exact', head: true }).in('test_id', chunk)
+    if (error) throw error
+    entranceTestResultsCount += count || 0
+  }
+
+  const { count: scaCount, error: scaErr } = await supabase
+    .from('student_class_assignments').select('*', { count: 'exact', head: true }).eq('class_id', classId)
+  if (scaErr) throw scaErr
+
+  const counts = {
+    word_status: wordStatusCount,
+    entrance_test_results: entranceTestResultsCount,
+    student_class_assignments: scaCount || 0,
+    spelling_review_queue: spellingQueueCount,
+  }
+
+  const decision = decideClassDelete({ counts, force })
+  if (!decision.allowed) {
+    // has_learning_data — force !== true인데 counts 합계>0. 삭제는 전혀
+    // 실행하지 않는다(위 카운트 조회는 전부 순수 select).
+    throw new ClassDeleteBlockedError(counts)
+  }
+
   const { error } = await supabase.from('classes').delete().eq('id', classId)
   if (error) throw error
+
+  if (decision.total > 0) {
+    // force===true로 데이터가 있는데도 삭제를 강행한 경우 — 응답에 실제로
+    // 지워진(지워질) 학습 데이터 규모를 함께 알려준다(관리자 화면이
+    // "n건 삭제됨" 확인 모달을 붙일 수 있게, 클라이언트 배선은 이번 범위 밖).
+    return { ok: true, counts, forced: true }
+  }
+  // counts 합계 0인 기존 정상 경로 — 반환값 byte-identical(기존 { ok:true }).
   return { ok: true }
 }
 
@@ -598,6 +711,12 @@ Deno.serve(async (req: Request) => {
     const data = await ACTION_HANDLERS[action](supabase, payload)
     return json({ ok: true, data })
   } catch (err: any) {
+    // class.delete 전용 — "데이터 있으면 차단" 가드가 던진 마커는 일반
+    // 500/error 포맷이 아니라 { ok:false, reason:'has_learning_data', counts }를
+    // 래핑 없이 그대로 반환한다(§ ClassDeleteBlockedError 헤더 주석).
+    if (err?.classDeleteBlocked === true) {
+      return json({ ok: false, reason: 'has_learning_data', counts: err.counts }, 200)
+    }
     const status = err?.status === 400 ? 400 : 500
     return json({ ok: false, error: err?.message || String(err) }, status)
   }

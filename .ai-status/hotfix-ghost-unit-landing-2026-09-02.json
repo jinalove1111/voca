@@ -1,0 +1,23 @@
+{
+  "agent_name": "docs-maintainer",
+  "role": "문서 갱신",
+  "task_id": "hotfix-ghost-unit-landing-2026-09-02",
+  "task": "Release Gate FAIL 대응: 박민준·Cherry 유령 유닛 착지 핫픽스(운영자 SQL 실행 완료) 결과를 handoff.md에 기록",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-02T00:00:00Z",
+  "updated_at": "2026-09-02T00:00:00Z",
+  "files_owned": [
+    "handoff.md",
+    ".ai-status/hotfix-ghost-unit-landing-2026-09-02.json"
+  ],
+  "files_read": [
+    "handoff.md",
+    ".ai-status/README.md",
+    ".ai-status/TEMPLATE.json",
+    ".ai-status/implementer-pin-setup-code-lookup.json"
+  ],
+  "summary": "PR #7 Release Gate가 Gate 3(학생 health)에서 박민준 GHOST_UNIT FAIL로 차단된 사건을 조사: 2026-09-02 관리자 교재 배정 UI로 박민준·Cherry가 유령 유닛 '2학년 천재소영순'(단어 1개 유닛 'Unit')에 착지, setAssignmentUnit/setPrimaryTextbook이 isLearnableUnit 가드 없이 저장하고 unit_name 미동기화되는 코드 갭이 원인. 운영자가 supabase_v3_hotfix_20260902_ghost_unit_landing.sql(3파일, untracked 유지)을 실행해 박민준->Unit5, Cherry->Unit1로 착지 정정. 첫 실행이 COMMIT된 상태에서 두 번째 실행이 STEP0 사전검증으로 fail-closed 차단된 것을 리터럴 바이트 대조로 확인(추가 SQL 불필요). npm run health:students PASS 27/WARN 10/FAIL 0 복귀, Release Gate 재실행(run 33654431860) Gate 1/2/3 PASS. handoff.md에 103차 섹션(102차 위)을 append하고 메타 헤더를 103차 기준으로 갱신. PR #7 merge는 운영자 승인 대기 중 미실행.",
+  "blocker": null,
+  "next_action": "① PR #7 merge 여부 운영자 결정 대기 ② setAssignmentUnit/setPrimaryTextbook/setPrimaryAssignment(wordLibrary.js)에 isLearnableUnit 가드 + unit_name 동기화 추가(implementer 위임, FAIL-first) ③ Production Safety Harness 설계(운영자 지정 별도 작업)"
+}

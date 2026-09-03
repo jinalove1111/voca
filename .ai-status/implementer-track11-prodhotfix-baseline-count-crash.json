@@ -1,0 +1,23 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "track11-prodhotfix-baseline-count-crash",
+  "task": "scripts/prodHotfix.mjs headCountFiltered select('id') 하드코딩 크래시 수정",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-03T00:00:00Z",
+  "updated_at": "2026-09-03T00:40:00Z",
+  "files_owned": [
+    "scripts/prodHotfix.mjs",
+    "scripts/testProdHotfix.mjs"
+  ],
+  "files_read": [
+    "scripts/lib/prodDataLoader.mjs",
+    "scripts/prod/generateGhostScaManifest.mjs",
+    "package.json",
+    "tests/harness/registry.mjs"
+  ],
+  "summary": "버그 원인: createLiveReader.headCountFiltered 가 select('id')를 하드코딩. student_progress 는 PK가 student_id라 id 컬럼이 없어 PostgREST 400 -> 미처리 예외로 baseline 단계(step 5) 전체가 크래시, 어떤 manifest도 ready-to-apply에 도달 못함. 수정: (1) headCountFiltered를 filters의 첫 키(항상 student_id)로 select하도록 변경, prodDataLoader.mjs의 loadLearningBaseline 방식과 통일. (2) createLiveReaderFromClient로 분리 export(테스트에서 가짜 supabase 클라이언트 주입 가능). (3) 테이블 부재(42P01/PGRST205)는 count 0 + tableMissing:true로 fail-open, 그 외 에러는 여전히 throw. (4) runHotfix의 baseline 루프를 try/catch로 감싸 'baseline-failed' STOP으로 정상 종료(크래시 아님), postflight 루프도 대칭 방어. (5) headCountFiltered 반환 shape을 {count,tableMissing}으로 변경 - createFixtureReader/testProdHotfix.mjs 내 fake reader 3곳도 함께 갱신. FAIL-first 검증: git stash로 prodHotfix.mjs만 일시 원복 -> createLiveReaderFromClient export 없어 테스트 파일 자체가 import 실패로 크래시함을 확인(수정 필요성 실측) -> stash pop으로 복구 후 157/157 PASS(기존 148 + 신규 9, 무회귀). build PASS. 라이브 dry-run 1회(anon GET만, node scripts/prod/generateGhostScaManifest.mjs --dry-run-hotfix) 실행: status=ready-to-apply, DB WRITE:0, 예상 UPDATE 11행, baseline.tableMissing:[](6개 테이블 전부 실재), apply.sql 생성 확인, 승인 프롬프트 없음(정상).",
+  "blocker": null,
+  "next_action": "qa-reviewer 검토 요청. package.json/registry.mjs는 다른 트랙 소유라 미수정 — registry.mjs의 testProdHotfix.mjs 노트 문구(assertion 개수 66단언 등)가 이제 157단언으로 늘어 stale함, registry 소유 에이전트가 후속 갱신 필요."
+}

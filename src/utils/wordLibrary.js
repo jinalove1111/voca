@@ -75,7 +75,14 @@ function adminContentWriteEndpoint() {
 // export: curriculumApi.js(units.textbook_id 메타 저장, 2026-08-02 v3.11
 // 락다운 부작용 수정)도 이 파일과 동일한 admin-content-write 클라이언트를
 // 재사용한다 — fetch/에러 계약을 다시 구현하면 드리프트가 생기므로 재사용.
-export async function callAdminContentWrite(action, payload, adminPin) {
+// 2026-09-03 Track 6(야간 자율 작업) 작업 1 — 4번째 인자 options는 완전히
+// 옵셔널(기존 3-인자 호출부 전부 그대로 동작, 하위호환 100%). 그중
+// passthroughReasons(문자열 배열)는 "ok:false인데 이 reason이면 throw 대신
+// body 자체를 반환"을 지정한다 — 지금은 deleteClass가 has_learning_data
+// 사유 하나만 이렇게 특별 취급한다(admin-content-write class.delete의
+// "학습기록 있으면 차단" 응답, § handleClassDelete 헤더 주석). 다른 모든
+// 호출부(options 미전달)는 기존과 완전히 동일하게 ok:false를 항상 throw한다.
+export async function callAdminContentWrite(action, payload, adminPin, options = {}) {
   const endpoint = adminContentWriteEndpoint()
   if (!endpoint) throw new Error('관리자 쓰기 연결 정보 없음(VITE_SUPABASE_URL 미설정)')
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -97,6 +104,9 @@ export async function callAdminContentWrite(action, payload, adminPin) {
   if (!res.ok || !body || body.ok === false) {
     if (body?.reason === 'not_authorized') {
       throw new Error('관리자 인증이 만료됐거나 서버에 전달되지 않았어요. 관리자 화면을 새로고침 후 다시 로그인해주세요.')
+    }
+    if (body?.reason && Array.isArray(options.passthroughReasons) && options.passthroughReasons.includes(body.reason)) {
+      return body
     }
     throw new Error(body?.error || `관리자 쓰기 서비스 응답 실패(HTTP ${res.status})`)
   }
@@ -258,6 +268,24 @@ async function fetchWordsRows() {
   return res
 }
 
+// 2026-09-03(재발 방지 — setAssignmentUnit 교재 불일치 가드) — units.
+// textbook_id(v3.1 컬럼)를 캐시 유닛 객체에 실어 나른다. 이전까지는 이
+// 컬럼을 아예 SELECT하지 않아(클라이언트 캐시의 "교재"는 오직 unit.classId
+// -> textbooks.owner_class_id 경로로만 파생됐다) 유닛 자체에 잘못 찍힌
+// textbook_id(엑셀 업로드 오배정 등 데이터 오염)를 어디서도 볼 수 없었다.
+// 컬럼 미존재(마이그레이션 전) 시 컬럼만 빼고 재시도 — fetchWordsRows의
+// accepted_meanings와 동일한 부분 마이그레이션 안전 패턴. 순수 추가
+// 필드라 기존 소비자(unitObj를 읽는 다른 모든 코드)는 무영향.
+async function fetchUnitsRows() {
+  let res = await selectAllRows(() =>
+    supabase.from('units').select('id,class_id,name,position,textbook_id').order('position').order('name').order('id'))
+  if (res.error) {
+    res = await selectAllRows(() =>
+      supabase.from('units').select('id,class_id,name,position').order('position').order('name').order('id'))
+  }
+  return res
+}
+
 export async function refreshWordLibrary() {
   const [classesRes, unitsRes, wordsRes, assignmentsRes] = await Promise.all([
     // classes/units도 같은 절단 위험을 갖는다(지금은 16행/34행이라 아직
@@ -266,7 +294,7 @@ export async function refreshWordLibrary() {
     // 순서를 고정한다(아래 sortUnitsByName이 최종 표시 순서를 정하지만,
     // 페이지 경계 안정성은 쿼리 정렬이 책임진다).
     selectAllRows(() => supabase.from('classes').select('id,name,class_type').order('created_at').order('id')),
-    selectAllRows(() => supabase.from('units').select('id,class_id,name,position').order('position').order('name').order('id')),
+    fetchUnitsRows(),
     fetchWordsRows(),
     supabase.from('daily_assignments').select('class_id,word_ids').eq('date', todayDateStr()),
   ])
@@ -290,7 +318,7 @@ export async function refreshWordLibrary() {
   unitsRes.data.forEach((u) => {
     const cls = classesRes.data.find((c) => c.id === u.class_id)
     if (!cls) return
-    const unitObj = { id: u.id, classId: cls.id, name: u.name, words: [] }
+    const unitObj = { id: u.id, classId: cls.id, name: u.name, words: [], textbookId: u.textbook_id ?? null }
     tree[cls.name].units.push(unitObj)
     unitById[u.id] = unitObj
   })
@@ -1627,11 +1655,27 @@ export async function deleteClassUnit(className, unitName, adminPin) {
 
 // 2026-07-24 보안 락다운 — adminPin 있으면 admin-content-write(class.delete),
 // 없으면 레거시 anon delete(§ callAdminContentWrite 헤더 주석).
-export async function deleteClass(className, adminPin) {
+// 2026-09-03 Track 6 작업 1 — 학습기록(단어 학습/입실시험 결과/교재 배정/
+// 철자 검수) 존재 시 admin-content-write가 { ok:false,
+// reason:'has_learning_data', counts } (HTTP 200)로 차단한다(§
+// handleClassDelete 헤더 주석). 이 함수는 그 응답을 throw로 흘리지 않고
+// { blocked:true, counts }로 반환해 AdminScreen이 2차 확인 모달을 띄울 수
+// 있게 한다 — opts.force===true로 다시 호출하면 payload.force가 실려
+// 나가 서버가 삭제를 강행한다. 그 외 실패 사유(예: not_authorized, 일반
+// 에러)는 기존과 동일하게 throw한다. 정상 성공 경로(ok:true)의 반환값은
+// 이 변경 전과 동일하게 undefined(호출부가 값을 읽지 않음).
+export async function deleteClass(className, adminPin, opts = {}) {
   const cls = _cache[className]
   if (!cls) return
   if (adminPin) {
-    await callAdminContentWrite('class.delete', { classId: cls.id }, adminPin)
+    const force = opts.force === true
+    const result = await callAdminContentWrite(
+      'class.delete', { classId: cls.id, force }, adminPin,
+      { passthroughReasons: ['has_learning_data'] },
+    )
+    if (result && result.ok === false && result.reason === 'has_learning_data') {
+      return { blocked: true, counts: result.counts || {} }
+    }
   } else {
     const { error } = await supabase.from('classes').delete().eq('id', cls.id)
     if (error) throw error
@@ -1960,9 +2004,23 @@ export async function setStudentClass(id, className) {
   // 프로덕션에 두 표기가 각각 29개/13개로 공존하므로 반 이동 한 번으로
   // 재현 가능한 경로였다. 못 찾으면 여전히 null 이지만, 이제는 읽기 경로도
   // 임의의 유닛을 고르지 않으므로 "조용히 엉뚱한 단어"가 나오지 않는다.
-  const unitIdInNewClass = className
+  let unitIdInNewClass = className
     ? (findUnitByName(_cache[className]?.units, s.unitName)?.id || null)
     : null
+  // 2026-09-03(재발 방지) — 이름 매칭이 유령/빈 유닛(예: placeholder "Unit 1"이
+  // 정규화로 유령 "Unit1"에 유일 매칭)에 착지하면 절대 채택하지 않는다.
+  // 유령이면 그 반의 첫 학습 가능 유닛으로 대체하고, 학습 가능 유닛이
+  // 하나도 없으면(기존과 동일하게) null로 둔다 — 이 경로는 non-fatal
+  // 조용한 반 이동이라 여기서 throw하지 않는다(setPrimaryAssignment/
+  // setPrimaryTextbook과 달리 사용자가 명시적으로 유닛을 고르는 흐름이
+  // 아님).
+  if (unitIdInNewClass != null) {
+    const candidate = (_cache[className]?.units || []).find((u) => u.id === unitIdInNewClass)
+    if (!candidate || isSuspiciousUnit(candidate)) unitIdInNewClass = null
+  }
+  if (unitIdInNewClass == null && className) {
+    unitIdInNewClass = getLearnableClassUnits(className)[0]?.id ?? null
+  }
   let { error } = await supabase.from('students')
     .update({ ...base, current_unit_id: unitIdInNewClass }).eq('id', id)
   if (error) ({ error } = await supabase.from('students').update(base).eq('id', id))
@@ -2121,6 +2179,16 @@ export const MIN_LEARNABLE_WORDS = 2
 // 캐시(_cache 유닛의 words 배열)만으로 판정 가능한 가장 단순한 규칙.
 export const isLearnableUnit = (unit) => !!unit && (unit.words || []).length >= MIN_LEARNABLE_WORDS
 
+// ── 2026-09-03(재발 방지 — 배정/전환 쓰기 함수의 유령 채택 차단) ──────────
+// 배경: isLearnableUnit(단어<2)만으로는 "이름이 번호 없는 유닛 별칭"인
+// 유령을 못 거른다 — scripts/lib/studentHealthRules.mjs의 isGhostUnit이
+// 이미 BARE_UNIT_NAME(/^(unit|유닛|단원)\s*$/i)로 이 케이스를 잡고 있고,
+// 여기서는 그 판정 기준을 그대로 재사용해 클라이언트 쓰기 경로(관리자
+// 교재 배정)에도 같은 기준을 적용한다. isLearnableUnit 자체의 의미는
+// 바꾸지 않는다(하위 호환 — 기존 소비자는 여전히 "단어>=2"만 본다).
+const BARE_UNIT_NAME = /^(unit|유닛|단원)\s*$/i
+export const isSuspiciousUnit = (unit) => !isLearnableUnit(unit) || BARE_UNIT_NAME.test(String(unit?.name ?? ''))
+
 // ── 2026-09-02(유령 유닛 셀렉터 노출 봉합) ──────────────────────────────
 // 배경: isLearnableUnit/setStudentUnit/setStudentUnitById(위)는 "쓰기"만
 // 막았지, 학생 대시보드 유닛 셀렉터·관리자 학생 생성 폼·교재 배정 패널은
@@ -2222,10 +2290,24 @@ export async function setStudentsClassBulk(ids, className, unitName) {
   // 상태로 만들어 단건보다 위험하다. 같은 공유 리졸버로 통일한다.
   // 못 찾으면 여전히 null이지만, 읽기 경로(resolveStudentUnitObj)도 이제
   // 임의의 첫 유닛을 고르지 않으므로 "조용히 엉뚱한 단어"는 나오지 않는다.
-  const unitId = className
+  let unitId = className
     ? (findUnitByName(_cache[className]?.units, unitName)?.id || null)
     : null
-  const base = { class_id: classId, unit_name: unitName }
+  // 2026-09-03(재발 방지) — setStudentClass와 동일하게, 이름 매칭이
+  // 유령/빈 유닛에 착지하면 채택하지 않고 그 반의 첫 학습 가능 유닛으로
+  // 대체한다(전원 같은 값이므로 unit_name도 그 유닛 이름으로 맞춰
+  // current_unit_id/unit_name 드리프트를 만들지 않는다). 학습 가능 유닛이
+  // 하나도 없으면 기존과 동일하게 null(non-fatal, throw 없음).
+  let resolvedUnitName = unitName
+  if (unitId != null) {
+    const candidate = (_cache[className]?.units || []).find((u) => u.id === unitId)
+    if (!candidate || isSuspiciousUnit(candidate)) unitId = null
+  }
+  if (unitId == null && className) {
+    const fallback = getLearnableClassUnits(className)[0]
+    if (fallback) { unitId = fallback.id; resolvedUnitName = fallback.name }
+  }
+  const base = { class_id: classId, unit_name: resolvedUnitName }
   let { error } = await supabase.from('students')
     .update({ ...base, current_unit_id: unitId }).in('id', validIds)
   if (error) ({ error } = await supabase.from('students').update(base).in('id', validIds))
@@ -2339,13 +2421,30 @@ async function maintainPrimaryAssignmentForClassChange(studentId, classId, unitI
       _studentAssignmentsCache.delete(studentId)
       return
     }
-    // 1) 다른 반의 primary(유령/이전 반) 행 삭제 — 조건부(이 학생 + primary
-    //    + 대상 반이 아닌 것만). 테이블 부재면 여기서 바로 조용히 끝.
-    const { error: delErr } = await supabase.from('student_class_assignments')
-      .delete().eq('student_id', studentId).eq('is_primary', true).neq('class_id', classId)
-    if (delErr) {
-      if (isMissingTableError(delErr)) return
-      throw delErr
+    // 1) 다른 반의 primary(유령/이전 반) 행 — 2026-09-03(T4 정적 감사 Med
+    //    #4) 이전엔 여기서 current_unit_id 캡처 없이 바로 delete했다: 앱
+    //    초기 로드 레이스/마이그레이션 미실행 상태(_textbookMode===false
+    //    && _textbookFetchFailed===false, _textbooks 캐시가 비어 있는
+    //    특수 시점)에 관리자가 반을 옮기면 그 학생의 이전 반 진도
+    //    (current_unit_id)가 통째로 사라질 수 있었다. 이제는 먼저 읽고,
+    //    읽기가 성공하면(행이 있든 없든) delete 대신 demote(is_primary=
+    //    false)로 통일한다 — 교재 모드 분기(위 2396행)와 동일 결과이자
+    //    current_unit_id를 그대로 보존한다(patch가 is_primary만 건드림).
+    //    읽기 자체가 실패하면(테이블 부재 제외) delete를 아예 진행하지
+    //    않고 새 primary 행만 만든다(데이터 보존 우선, non-fatal — throw
+    //    없음, 기존 계약과 동일).
+    const { error: readErr } = await supabase.from('student_class_assignments')
+      .select('id,current_unit_id').eq('student_id', studentId).eq('is_primary', true).neq('class_id', classId)
+    if (readErr) {
+      if (isMissingTableError(readErr)) return
+      console.warn('[wordLibrary] 이전 primary 행 조회 실패 — delete 생략, 새 primary만 생성 (non-fatal):', readErr?.message || readErr)
+    } else {
+      const { error: demErr } = await supabase.from('student_class_assignments')
+        .update({ is_primary: false }).eq('student_id', studentId).eq('is_primary', true).neq('class_id', classId)
+      if (demErr) {
+        if (isMissingTableError(demErr)) return
+        throw demErr
+      }
     }
     // 2) 대상 반 행을 primary로 보장 — 없으면 insert, 이미 있으면(교사가
     //    전에 secondary로 배정해 둔 반으로 이동하는 경우) primary 승격만
@@ -2476,10 +2575,32 @@ export async function getStudentClassAssignments(studentId) {
           // 쓰지 않는다. 확신이 없으면 NULL로 두면 setPrimaryAssignment의
           // "단어 있는 첫 유닛" 확정 로직이 전환 시점에 올바르게 채운다.
           const clsName = getClassNameById(live.classId)
-          const strictUnitId = (live.unitId != null &&
-            (_cache[clsName]?.units || []).some((u) => u.id === live.unitId))
-            ? live.unitId : null
-          maintainPrimaryAssignmentForClassChange(studentId, live.classId, strictUnitId)
+          const candidateUnit = (_cache[clsName]?.units || []).find((u) => u.id === live.unitId)
+          // 2026-09-03(T1 잔여 갭, 재발 방지) — "그 반 소속인지"만 확인하던
+          // 기존 검사는 candidate가 유령 유닛(BARE_UNIT_NAME/단어<2)이어도
+          // 통과시켜 그대로 DB에 다시 심었다(재발 지점 — assignment 쓰기
+          // 함수 3종의 가드를 우회하는 유일한 경로였다). 유령이면 채택하지
+          // 않고 그 반의 첫 학습 가능 유닛으로 대체하며, 대체 대상도 없으면
+          // (그 반에 학습 가능 유닛이 0개) self-heal 자체를 건너뛴다 — 이
+          // 경로는 non-fatal 읽기이므로 throw하지 않고 console.warn만 남긴다.
+          let strictUnitId = null
+          let skipSelfHeal = false
+          if (live.unitId != null && candidateUnit) {
+            if (!isSuspiciousUnit(candidateUnit)) {
+              strictUnitId = live.unitId
+            } else {
+              const fallback = getLearnableClassUnits(clsName)[0]
+              if (fallback) {
+                strictUnitId = fallback.id
+              } else {
+                skipSelfHeal = true
+                console.warn('[wordLibrary] getStudentClassAssignments self-heal 건너뜀(유령 유닛뿐, 대체할 학습 가능 유닛 없음):', { studentId, classId: live.classId, className: clsName })
+              }
+            }
+          }
+          if (!skipSelfHeal) {
+            maintainPrimaryAssignmentForClassChange(studentId, live.classId, strictUnitId)
+          }
         }
         // 유닛 보정 — students.current_unit_id는 두 모드 모두 권위 값.
         const resolvedUnitId = live.unitId ?? getStudentUnitId(studentId)
@@ -2624,8 +2745,28 @@ export async function setAssignmentUnit(studentId, classId, unitId) {
   if (!studentId || !classId) throw new Error('setAssignmentUnit: studentId/classId가 필요합니다.')
   const clsName = getClassNameById(classId)
   const units = _cache[clsName]?.units || []
-  if (unitId != null && !units.some((u) => u.id === unitId)) {
-    throw new Error(`setAssignmentUnit: 유닛(${unitId})이 반(${classId}) 소속이 아닙니다.`)
+  let unit = null
+  if (unitId != null) {
+    unit = units.find((u) => u.id === unitId) || null
+    if (!unit) {
+      throw new Error(`unit_not_found: 유닛(${unitId})이 반(${classId}) 소속이 아닙니다.`)
+    }
+    // 2026-09-03(재발 방지) — 유령 유닛(단어<2 또는 이름이 번호 없는 별칭
+    // "Unit"류)은 검증 없이 저장되던 실사고 재발 지점이었다. 여기서 명시
+    // 거부한다(쓰기 0 — 아래 UPDATE 이전에 throw).
+    if (isSuspiciousUnit(unit)) {
+      throw new Error(`unit_not_learnable: "${unit.name}" 유닛은 단어가 ${(unit.words || []).length}개뿐이라(엑셀 헤더 잔재/빈 유닛) 배정할 수 없어요.`)
+    }
+    // 대상 SCA 행이 이미 특정 교재에 묶여 있으면(textbook_id), 그 교재
+    // 소속이 아닌 유닛을 저장하는 것도 같은 계열의 오배정이다 — 거부.
+    const { data: existing, error: selErr } = await supabase
+      .from('student_class_assignments')
+      .select('id,textbook_id')
+      .eq('student_id', studentId).eq('class_id', classId).maybeSingle()
+    if (selErr && !isMissingTableError(selErr)) throw selErr
+    if (existing?.textbook_id && unit.textbookId && existing.textbook_id !== unit.textbookId) {
+      throw new Error(`unit_textbook_mismatch: "${unit.name}" 유닛은 이 배정의 교재(${existing.textbook_id})와 다른 교재 소속이에요.`)
+    }
   }
   const { error } = await supabase.from('student_class_assignments')
     .update({ current_unit_id: unitId })
@@ -2669,6 +2810,26 @@ export async function setPrimaryAssignment(studentId, classId) {
     throw selErr
   }
   if (!target) throw new Error(`setPrimaryAssignment: 학생이 반(${classId})에 배정돼 있지 않습니다 — 먼저 assignTextbook으로 배정하세요.`)
+
+  // 2026-09-03(재발 방지) — "저장된 유닛이 있으면 존재 여부만 재확인하고
+  // 그대로 채택"하던 것이 실사고의 근원(유령 유닛이어도 통과)이었다. 여기서
+  // 순수 계산(쓰기 0)으로 최종 채택할 유닛을 미리 확정한다: 저장값이
+  // 있고(존재 + 학습 가능 + 유령 이름 아님)면 그대로, 아니면 그 반의 첫
+  // 학습 가능 유닛으로. 학습 가능 유닛이 하나도 없으면 여기서 즉시
+  // throw해 이후의 어떤 쓰기(self-heal/is_primary 플립 포함)도 일어나지
+  // 않게 한다(부분 커밋 방지).
+  const clsNameForPrimary = getClassNameById(classId)
+  const unitsInClass = _cache[clsNameForPrimary]?.units || []
+  const storedUnitForPrimary = target.current_unit_id != null
+    ? unitsInClass.find((u) => u.id === target.current_unit_id)
+    : null
+  let syncUnit = (storedUnitForPrimary && !isSuspiciousUnit(storedUnitForPrimary)) ? storedUnitForPrimary : null
+  if (!syncUnit) {
+    syncUnit = getLearnableClassUnits(clsNameForPrimary)[0] || null
+    if (!syncUnit) {
+      throw new Error(`no_learnable_unit: "${clsNameForPrimary || classId}" 반에 학습 가능한 유닛이 없어요(단어>=2인 유닛 0개) — 먼저 유닛 데이터를 정리한 뒤 다시 시도해주세요.`)
+    }
+  }
 
   // 쓰기 시점 self-heal(2026-07-21, 라이브 드리프트 수정) — 위
   // getStudentClassAssignments의 read-time 보정은 "현재" primary 행에만
@@ -2724,26 +2885,29 @@ export async function setPrimaryAssignment(studentId, classId) {
   // setAssignmentUnit으로 안 정했거나 레거시 백필 산출물) 그대로 NULL을
   // students에 쓰지 않는다: NULL이면 이후 유닛 해석이 stale unit_name
   // 문자열(이전 교재의 유닛 이름!)로 폴백해 다른 교재의 같은 이름 유닛에
-  // 잘못 매칭될 수 있다(교재별 유닛 진도 분리 위반). 대상 반의 첫 유닛으로
-  // 결정론적으로 확정하고, 배정 행에도 같은 값을 되써서 이후 전환이 항상
-  // 구체적 id 기반이 되게 한다.
-  let syncUnitId = target.current_unit_id
-  if (syncUnitId == null) {
-    const clsName = getClassNameById(classId)
-    const units = _cache[clsName]?.units || []
-    // 단어가 실제로 있는 첫 유닛 우선(첫 유닛이 빈 껍데기인 반이 실존 —
-    // 라이브 테스트에서 확인) — 전부 비었으면 첫 유닛이라도(유닛 선택기로
-    // 학생/교사가 이동 가능, 기존 resolveStudentUnitObj 최후 폴백과 동일).
-    syncUnitId = (units.find((u) => (u.words || []).length > 0) || units[0])?.id ?? null
-    if (syncUnitId != null) {
-      const { error: fillErr } = await supabase.from('student_class_assignments')
-        .update({ current_unit_id: syncUnitId }).eq('id', target.id)
-      if (fillErr) throw fillErr
-    }
+  // 잘못 매칭될 수 있다(교재별 유닛 진도 분리 위반). 대상 반의 첫 "학습
+  // 가능" 유닛으로 결정론적으로 확정하고(2026-09-03 — 유령 유닛도 절대
+  // 채택하지 않는다, syncUnit은 위에서 이미 확정), 배정 행에도 같은
+  // 값을 되써서 이후 전환이 항상 구체적 id 기반이 되게 한다. 저장값이
+  // 이미 그대로 채택됐으면(위에서 syncUnit === storedUnitForPrimary)
+  // 여기서 배정 행을 다시 쓰지 않는다(불필요한 쓰기 방지, 기존 정상
+  // 경로와 동일한 no-op).
+  if (syncUnit.id !== target.current_unit_id) {
+    const { error: fillErr } = await supabase.from('student_class_assignments')
+      .update({ current_unit_id: syncUnit.id }).eq('id', target.id)
+    if (fillErr) throw fillErr
   }
-  const { error: syncErr } = await supabase.from('students')
-    .update({ class_id: classId, current_unit_id: syncUnitId }).eq('id', studentId)
+  // 2026-09-03 — unit_name도 함께 기록한다(students.current_unit_id ==
+  // primary SCA.current_unit_id == unit_name이 가리키는 유닛, 3자
+  // invariant). 영향 행을 확인해 0행 갱신을 성공으로 보고하지 않는다
+  // (writeStudentUnit과 동일한 계약).
+  const { data: syncData, error: syncErr } = await supabase.from('students')
+    .update({ class_id: classId, current_unit_id: syncUnit.id, unit_name: syncUnit.name })
+    .eq('id', studentId).select('id')
   if (syncErr) throw syncErr
+  if (!Array.isArray(syncData) || syncData.length !== 1) {
+    throw new Error('주 반 전환이 저장되지 않았어요(영향 행 0) — 새로고침 후 다시 시도해주세요.')
+  }
   _studentAssignmentsCache.delete(studentId)
   await refreshStudents()
 }
@@ -2763,6 +2927,15 @@ export async function setPrimaryTextbook(studentId, textbookId) {
   if (String(textbookId).startsWith(SYNTH_TB_PREFIX)) {
     // 합성 모드(SQL 미실행) — 교재가 1개뿐이라 전환할 것이 없다. 명확히 던짐.
     throw new Error('교재 기능이 아직 활성화되지 않았습니다 (supabase_v3_1_textbooks.sql 미실행).')
+  }
+  // 2026-09-03(재발 방지) — 순수 계산(쓰기 0)으로 미리 확인: 이 교재에
+  // 학습 가능한 유닛이 하나도 없으면(전부 유령/빈 유닛) 아래의 어떤
+  // 쓰기(상태 행 생성/self-heal/is_primary 플립 포함)도 하지 않고 즉시
+  // 거부한다 — 저장된 값이 있어도 이 교재 소속이면서 학습 가능한 값일
+  // 수 없으므로(4번 단계와 동일 판정) 여기서 조기에 걸러도 결과는 같다.
+  const learnableTextbookUnits = getLearnableTextbookUnits(textbookId)
+  if (learnableTextbookUnits.length === 0) {
+    throw new Error(`no_learnable_unit: "${tb.name}" 교재에 학습 가능한 유닛이 없어요(단어>=2인 유닛 0개) — 먼저 유닛 데이터를 정리한 뒤 다시 시도해주세요.`)
   }
 
   // 1) 대상 상태 행 확보(없으면 생성 — class_id는 교재의 소유 컨테이너)
@@ -2838,27 +3011,34 @@ export async function setPrimaryTextbook(studentId, textbookId) {
     .update({ is_primary: false }).eq('student_id', studentId).neq('id', target.id)
   if (falseErr) throw falseErr
 
-  // 4) 유닛 동기화 — 대상 교재 진도(없으면 단어 있는 첫 유닛). class_id는 안 바꿈!
-  let syncUnitId = target.current_unit_id
+  // 4) 유닛 동기화 — 대상 교재 진도(없으면 학습 가능한 첫 유닛). class_id는 안 바꿈!
   // 2026-08-07 운영자 정책 5 — 행에 저장된 유닛이 "그 교재의 현재 유닛
   // 목록"에 실존할 때만 복원한다(유닛 삭제/개편으로 무효해진 저장값이
-  // 그대로 students.current_unit_id에 실리는 것을 차단). 무효면 null로
-  // 떨어뜨려 아래 "단어 있는 첫 유닛" 확정 로직이 처리한다.
-  if (syncUnitId != null && !getTextbookUnits(textbookId).some((u) => u.id === syncUnitId)) {
-    syncUnitId = null
+  // 그대로 students.current_unit_id에 실리는 것을 차단).
+  // 2026-09-03(재발 방지) — 존재만으로는 부족하다: 유령 유닛(단어<2/이름이
+  // 번호 없는 별칭)도 "존재"는 하므로 위 정책 5만으로는 못 걸렀다(실사고
+  // 원인). 존재 + 학습 가능일 때만 저장값을 그대로 신뢰하고, 아니면 이
+  // 교재의 첫 학습 가능 유닛(함수 진입 시 이미 1개 이상 확정됨)으로
+  // 결정론적으로 대체한다.
+  const storedUnitForTextbook = target.current_unit_id != null
+    ? getTextbookUnits(textbookId).find((u) => u.id === target.current_unit_id)
+    : null
+  let syncUnit = (storedUnitForTextbook && !isSuspiciousUnit(storedUnitForTextbook)) ? storedUnitForTextbook : null
+  if (!syncUnit) {
+    syncUnit = learnableTextbookUnits[0] // 함수 진입 시 이미 non-empty 확정
+    const { error: fillErr } = await supabase.from('student_class_assignments')
+      .update({ current_unit_id: syncUnit.id }).eq('id', target.id)
+    if (fillErr) throw fillErr
   }
-  if (syncUnitId == null) {
-    const units = getTextbookUnits(textbookId)
-    syncUnitId = (units.find((u) => (u.words || []).length > 0) || units[0])?.id ?? null
-    if (syncUnitId != null) {
-      const { error: fillErr } = await supabase.from('student_class_assignments')
-        .update({ current_unit_id: syncUnitId }).eq('id', target.id)
-      if (fillErr) throw fillErr
-    }
-  }
-  const { error: syncErr } = await supabase.from('students')
-    .update({ current_unit_id: syncUnitId }).eq('id', studentId)
+  // unit_name도 함께 기록해 3자 invariant(students.current_unit_id ==
+  // primary SCA.current_unit_id == unit_name이 가리키는 유닛)를 유지한다.
+  // 영향 행을 확인해 0행 갱신을 성공으로 보고하지 않는다.
+  const { data: syncData, error: syncErr } = await supabase.from('students')
+    .update({ current_unit_id: syncUnit.id, unit_name: syncUnit.name }).eq('id', studentId).select('id')
   if (syncErr) throw syncErr
+  if (!Array.isArray(syncData) || syncData.length !== 1) {
+    throw new Error('교재 전환이 저장되지 않았어요(영향 행 0) — 새로고침 후 다시 시도해주세요.')
+  }
   _studentAssignmentsCache.delete(studentId)
   await refreshStudents()
   // 캐시 즉시 재예열 — 동기 소비자(resolveStudentUnitObj →
