@@ -845,7 +845,11 @@ function computeGardenPoints(clearedArr, completedArr, clearedWordArr) {
 // "이 rewardType+sourceId 조합은 하루/이벤트당 한 번만 이 함수 본문을
 // 통과한다"를 보장하므로, 요약 생성 코드를 그 조기반환 "뒤"에만 두면
 // 자동으로 idempotent하다(재지급 로직을 전혀 새로 만들지 않음).
-const SESSION_COMPLETE_REWARD_TYPES = new Set(['word-session-complete', 'writing-complete', 'exam-complete', 'daily-goal-complete'])
+// P4(유닛 완료 보상, 2026-09-03, docs/REWARD_LOOP_AUDIT_2026-09-03.md §14) —
+// unit-complete도 "의미있는 학습 완료" 앵커다. sessionRewardSummary
+// 플래그가 꺼져 있으면(오늘) grantLedgerReward 안의 게이팅이 이 목록
+// 자체를 절대 안 읽으므로(위 if 문 참고) 동작에 영향이 없다.
+const SESSION_COMPLETE_REWARD_TYPES = new Set(['word-session-complete', 'writing-complete', 'exam-complete', 'daily-goal-complete', 'unit-complete'])
 
 // studentId: Supabase students.id(UUID) — 이 학생의 유일한 식별자, 모든
 // 저장/동기화가 이걸로 이뤄진다. legacyName: 이번 로그인이 실제로 성공한
@@ -1791,6 +1795,21 @@ export function useStudent(studentId, legacyName) {
     grantLedgerReward('exam-complete', 'entrance-test', String(testId))
   }, [grantLedgerReward])
 
+  // Reward System V1 앵커(unit-complete, +5, P4 2026-09-03) — 유닛 하나를
+  // 완주했을 때 학생당 unitId 1회 평생(sourceId에 날짜가 없음 —
+  // rewardEngine.js REWARD_SOURCE_RULES 'unit-complete' 주석 참고). 호출부
+  // (useAttachment.js의 전이 감지기)는 "새로 완료된 유닛"에만 이 함수를
+  // 부르지만, 실제 중복지급 방지의 최종 담보는 언제나처럼
+  // grantLedgerReward 안의 hasRewardEntry 조기반환이다(호출부가 실수로
+  // 같은 unitId를 여러 번 넘겨도 안전). 반환값은 "이번 호출이 실제로 새
+  // 원장 항목을 만들었는가"(grantLedgerReward의 반환값 그대로) — 호출부가
+  // 참고용으로만 쓸 것(grantReward 헤더 주석과 동일한 낙관적 성질).
+  const recordUnitCompleted = useCallback((unitId) => {
+    if (!unitId) return false
+    if (!isFeatureEnabled('unitCompleteReward')) return false
+    return grantLedgerReward('unit-complete', 'unit', String(unitId), undefined, '📘 유닛 완료!')
+  }, [grantLedgerReward])
+
   // v2.1: unitId(현재 유닛 UUID)를 같이 주면 유닛별 위치도 기록 — 다른
   // 유닛에 다녀와도 각 유닛의 "이어서 학습" 지점이 따로 보존된다. unitId가
   // 없으면(캐시 미비 등) 기존 전역 필드만 갱신(완전 하위호환).
@@ -1988,6 +2007,11 @@ export function useStudent(studentId, legacyName) {
     // grantReward(별 지급 단일 경로) 위에 얹은 계층일 뿐, totalStars(stars)
     // 자체는 여전히 grantReward만 바꾼다(rewardLedger에서 재계산 안 함).
     rewardLedger, rewardFeedback, dismissRewardFeedback, recordExamCompleted,
+    // P4(유닛 완료 보상, 2026-09-03) — useAttachment.js의 전이 감지기가
+    // 새로 완료된 유닛에만 이 함수를 부른다. flag unitCompleteReward OFF면
+    // 항상 false만 반환하고 어떤 상태도 바꾸지 않는다(recordUnitCompleted
+    // 헤더 주석 참고).
+    recordUnitCompleted,
     rewardLevel, rewardStarsToNext,
     // Session Reward Summary(P1 "즉각적인 보상 피드백", 2026-09-03) —
     // sessionRewardSummary(config/features.js) 플래그 OFF면 이 값은 영원히
