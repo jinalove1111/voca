@@ -58,11 +58,16 @@ import { REWARD_STARS, rewardIdempotencyKey, streakBonusStars, levelForStars, st
 // 독립 모듈)가 담당, 여기서는 그 결과를 grantLedgerReward의 기존 지급
 // 경로(재구현 없음, CLAUDE.md 규칙 3)에 얹어 상태로 노출만 한다.
 import { buildSessionRewardSummary } from '../utils/rewardSummary'
-// 정원 성장(gardenPlots)은 attachment/worldProgress.js가 이미 가진 유일한
-// 계산(재구현 금지) — gardenPoints(실제로 학습한 서로 다른 단어 수, 아래
-// computeGardenPoints가 attachmentCore.deriveAttachmentStats의 gardenSet
-// 공식과 동일하게 파생)만 이 파일에서 새로 계산한다.
-import { gardenPlots } from '../utils/attachment/worldProgress'
+// 계층 계약(레이어 계약, scripts/testGardenGrowthFlow.mjs 10번 시나리오가
+// 정적으로 고정) — 이 파일은 attachment 폴더 아래 어떤 모듈도 import하지
+// 않고, 정원 "단계" 계산과 관련된 어떤 식별자도 담지 않는다(정원 단계 계산
+// 전담 파일은 attachment 폴더에만 있다 — 애착 레이어는 useAttachment를
+// 통해서만 파생된다는 저장소 계약). 이 파일은 아래 computeGardenPoints가
+// 계산하는 "실제로 학습한 서로 다른 단어 수"라는 원시(raw) 숫자만 계산해
+// rewardSummary에 그대로 넘기고, 그 숫자를 "정원 단계 변화량"으로 바꾸는
+// 일은 SessionRewardCard.jsx(컴포넌트 레이어, attachment import 허용)가
+// 전담한다(2026-09-03 P1 회귀 수정 — 최초 구현은 이 변환을 여기 뒀다가
+// 계약 위반으로 되돌림, 아래 gardenRawBefore/gardenRawAfter 참고).
 import { isFeatureEnabled } from '../config/features'
 
 // ── Single unified progress store ───────────────────────────────────────
@@ -834,19 +839,6 @@ function computeGardenPoints(clearedArr, completedArr, clearedWordArr) {
   return new Set([...(asArray(clearedArr)), ...(asArray(completedArr)), ...(asArray(clearedWordArr))]).size
 }
 
-// gardenPlots()가 반환하는 16칸 배열을 "정원이 전체적으로 얼마나 자랐는지"
-// 하나의 숫자로 접는다(각 칸의 성장 단계 인덱스 합) — "세션 시작 대비
-// gardenPlots() 스테이지 변화량"을 계산하려면 두 시점을 같은 숫자축으로
-// 비교할 수 있어야 하는데, gardenPlots() 자체는 배열이라 그대로는 뺄셈이
-// 안 된다. PLOT_STAGE_EMOJI(worldProgress.js)와 같은 순서(empty~tree)를
-// 그대로 따르되, 이 파일은 emoji가 아니라 순위 숫자만 필요해서 별도로
-// 작은 매핑만 둔다(정원 성장 "단계"의 의미 자체는 worldProgress.js가
-// 정의한 그대로 — 여기서 재정의하지 않음).
-const GARDEN_STAGE_RANK = { empty: 0, seed: 1, sprout: 2, flower: 3, tree: 4 }
-function gardenStageTotal(gardenPoints) {
-  return gardenPlots({ gardenPoints }).reduce((sum, p) => sum + (GARDEN_STAGE_RANK[p.stage] || 0), 0)
-}
-
 // 세션(앱 실행 1회) 동안 보여준 요약 카드가 같은 원장 항목으로 다시
 // 뜨지 않게 막는 새 dedup은 만들지 않는다 — grantLedgerReward의 기존
 // hasRewardEntry(rewardLedger, key) 조기반환(945행 근방, 무변경)이 이미
@@ -1112,12 +1104,16 @@ export function useStudent(studentId, legacyName) {
     // writing-complete/exam-complete/daily-goal-complete)만 대상 — 그 외
     // (streak-bonus/wrong-word-recovered)는 기존 RewardToast만 그대로 뜬다.
     if (isFeatureEnabled('sessionRewardSummary') && SESSION_COMPLETE_REWARD_TYPES.has(rewardType)) {
-      const gardenPointsNow = computeGardenPoints(cleared, completedWords, clearedWords)
+      const gardenRawNow = computeGardenPoints(cleared, completedWords, clearedWords)
+      // 원시(raw) 정원 숫자만 넘긴다 — "정원 단계 변화량"으로의 변환은
+      // 레이어 계약상 이 파일이 아니라 SessionRewardCard.jsx(컴포넌트,
+      // attachment 폴더의 정원 단계 변환 함수 사용)가 담당(위 import 주석
+      // 참고).
       const summary = buildSessionRewardSummary({
         entries: [entry],
         xpEvents: (typeof xpAmountHint === 'number' && xpAmountHint > 0) ? [xpAmountHint] : [],
-        gardenBefore: gardenStageTotal(sessionGardenSnapshotRef.current),
-        gardenAfter: gardenStageTotal(gardenPointsNow),
+        gardenRawBefore: sessionGardenSnapshotRef.current,
+        gardenRawAfter: gardenRawNow,
         streak: calcStreak(history),
         totalStars: stars + rewardStars,
       })

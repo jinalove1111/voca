@@ -64,22 +64,43 @@ function sumPositive(list, pick) {
  * @param {number[]} args.xpEvents - 이번 세션에 실제로 발화된 grantXp
  *   금액(들, XP_EVENT_TABLE에서 resolveXpAmount로 조회된 실제 값). 캡처
  *   못 했으면 빈 배열 — 그러면 xp는 0(발명하지 않음).
- * @param {number} args.gardenBefore - 세션 시작 시점 정원 성장치(스냅샷,
- *   gardenPlots() 파생값의 합 등 호출부가 계산한 숫자 그대로).
- * @param {number} args.gardenAfter - 지금(세션 끝) 같은 축의 정원 성장치.
+ * @param {number} [args.gardenBefore] - (레거시) 세션 시작 시점 정원 "단계"
+ *   총합(스테이지 랭크 합 — worldProgress.gardenStageTotal() 같은 파생값).
+ *   주어지면 gardenGrowth를 여기서 바로 계산한다.
+ * @param {number} [args.gardenAfter] - (레거시) 지금(세션 끝) 같은 축의
+ *   정원 단계 총합.
+ * @param {number} [args.gardenRawBefore] - (원시, 2026-09-03 레이어 계약
+ *   수정) 세션 시작 시점 정원 성장 원시값(학습한 서로 다른 단어 수, 단계
+ *   변환 이전 — 이 모듈은 zero-import라 gardenPlots/gardenStageTotal을
+ *   직접 계산할 수 없으므로, "단계 변환"은 호출부(SessionRewardCard.jsx,
+ *   withGardenGrowth 참고)가 한다). 주어지면 그대로 요약에 실어 보낸다.
+ * @param {number} [args.gardenRawAfter] - 세션 끝 시점 같은 원시값.
  * @param {number} args.streak - calcStreak(history) 그대로.
  * @param {number} args.totalStars - 이 세션의 별 지급까지 반영된 누적
  *   총 별(totalStars). 다음 레벨 계산에만 쓰인다.
- * @returns {{stars:number, xp:number, gardenGrowth:number, streak:number,
- *   nextGoal:{kind:'level', remaining:number|null, label:string|null}}}
+ * @returns {{stars:number, xp:number, gardenGrowth:number|null,
+ *   gardenRawBefore:number|null, gardenRawAfter:number|null,
+ *   streak:number, nextGoal:{kind:'level', remaining:number|null, label:string|null}}}
  */
-export function buildSessionRewardSummary({ entries, xpEvents, gardenBefore, gardenAfter, streak, totalStars } = {}) {
+export function buildSessionRewardSummary({ entries, xpEvents, gardenBefore, gardenAfter, gardenRawBefore, gardenRawAfter, streak, totalStars } = {}) {
   const stars = sumPositive(entries, (e) => e && e.stars_delta)
   const xp = sumPositive(xpEvents)
 
-  const before = Number.isFinite(Number(gardenBefore)) ? Number(gardenBefore) : 0
-  const after = Number.isFinite(Number(gardenAfter)) ? Number(gardenAfter) : 0
-  const gardenGrowth = Math.max(0, after - before)
+  // 레거시 경로 — 호출부가 이미 "단계" 총합을 계산해 넘겼으면(예: 옛
+  // useStudent.js 배선, 또는 이 모듈을 단계 총합만으로 직접 쓰는 다른
+  // 호출부) 여기서 바로 gardenGrowth를 계산한다. 하나도 안 왔으면(원시값
+  // 경로) null로 남겨 presenter(withGardenGrowth)가 채우게 한다 — "0"과
+  // "아직 모름"을 구분하기 위해 명시적으로 null.
+  const hasStageTotals = gardenBefore !== undefined || gardenAfter !== undefined
+  let gardenGrowth = null
+  if (hasStageTotals) {
+    const before = Number.isFinite(Number(gardenBefore)) ? Number(gardenBefore) : 0
+    const after = Number.isFinite(Number(gardenAfter)) ? Number(gardenAfter) : 0
+    gardenGrowth = Math.max(0, after - before)
+  }
+
+  const rawBefore = Number.isFinite(Number(gardenRawBefore)) ? Number(gardenRawBefore) : null
+  const rawAfter = Number.isFinite(Number(gardenRawAfter)) ? Number(gardenRawAfter) : null
 
   const streakNum = Number(streak)
   const streakDays = (Number.isFinite(streakNum) && streakNum > 0) ? streakNum : 0
@@ -89,7 +110,24 @@ export function buildSessionRewardSummary({ entries, xpEvents, gardenBefore, gar
     ? { kind: 'level', remaining, label: `다음 레벨까지 별 ${remaining}개` }
     : { kind: 'level', remaining: null, label: null }
 
-  return { stars, xp, gardenGrowth, streak: streakDays, nextGoal }
+  return { stars, xp, gardenGrowth, gardenRawBefore: rawBefore, gardenRawAfter: rawAfter, streak: streakDays, nextGoal }
+}
+
+/**
+ * gardenGrowth가 null인 요약(원시 정원 성장값만 실려온 경우)에, 호출부가
+ * (attachment 레이어에서) 계산한 "단계" 총합 before/after를 넣어 gardenGrowth를
+ * 확정한 "새" 요약을 반환하는 순수 헬퍼. 이 모듈은 zero-import 계약이라
+ * worldProgress.gardenStageTotal 자체를 여기서 부를 수 없다 — 그래서 호출부가
+ * 이미 계산해온 숫자만 받는다(재구현 아님, presenter 조립일 뿐).
+ * @param {object} summary - buildSessionRewardSummary() 결과.
+ * @param {number} stageBefore - 세션 시작 시점 정원 단계 총합.
+ * @param {number} stageAfter - 세션 끝 시점 정원 단계 총합.
+ * @returns {object} summary와 동일하되 gardenGrowth만 채워진 새 객체.
+ */
+export function withGardenGrowth(summary, stageBefore, stageAfter) {
+  const before = Number.isFinite(Number(stageBefore)) ? Number(stageBefore) : 0
+  const after = Number.isFinite(Number(stageAfter)) ? Number(stageAfter) : 0
+  return { ...(summary || {}), gardenGrowth: Math.max(0, after - before) }
 }
 
 /**

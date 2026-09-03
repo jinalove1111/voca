@@ -128,6 +128,26 @@ if (buildSessionRewardSummary && formatRewardLines) {
   check(`레벨 경계 ${boundarySamples.length}개 전부 rewardEngine.starsToNextLevel과 일치(드리프트 가드)`, boundaryOk)
   check('LEVELS 최고 레벨(200) 도달 시 remaining=null', buildSessionRewardSummary({ entries: [], xpEvents: [], gardenBefore: 0, gardenAfter: 0, streak: 0, totalStars: 200 }).nextGoal.remaining === null)
   check('최고 레벨이면 formatRewardLines가 다음 목표 줄 생략', formatRewardLines(buildSessionRewardSummary({ entries: [], xpEvents: [], gardenBefore: 0, gardenAfter: 0, streak: 0, totalStars: 999 })).every(l => !l.includes('다음 레벨')))
+
+  // ── 원시 정원값 경로(2026-09-03 레이어 계약 수정) ─────────────────────
+  // useStudent.js는 이제 "단계" 총합(gardenBefore/gardenAfter)이 아니라
+  // 원시 정원 성장값(gardenRawBefore/gardenRawAfter)만 넘긴다(gardenPlots/
+  // gardenStageTotal은 attachment 폴더 소유 — 이 모듈은 zero-import라 직접
+  // 계산할 수 없음). 원시값만 오면 gardenGrowth는 여기서 계산하지 않고
+  // null로 남겨 프레젠터(SessionRewardCard.jsx)가 withGardenGrowth로 채운다.
+  const sRaw = buildSessionRewardSummary({ entries: [], xpEvents: [], gardenRawBefore: 3, gardenRawAfter: 5, streak: 0, totalStars: 0 })
+  check('원시 정원값만 주어지면 gardenGrowth는 null(단계 변환은 프레젠터 책임)', sRaw.gardenGrowth === null)
+  check('gardenRawBefore/gardenRawAfter가 요약에 그대로 실림', sRaw.gardenRawBefore === 3 && sRaw.gardenRawAfter === 5)
+  check('레거시(단계 총합) 경로는 gardenRawBefore/After가 null', buildSessionRewardSummary({ entries: [], xpEvents: [], gardenBefore: 3, gardenAfter: 4, streak: 0, totalStars: 0 }).gardenRawBefore === null)
+
+  const withGardenGrowth = rewardSummaryMod?.withGardenGrowth
+  check('withGardenGrowth export(function)', typeof withGardenGrowth === 'function')
+  if (withGardenGrowth) {
+    const filled = withGardenGrowth(sRaw, 1, 2)
+    check('withGardenGrowth: 단계 before/after로 gardenGrowth 확정(2-1=1)', filled.gardenGrowth === 1)
+    check('withGardenGrowth: 원본 gardenRawBefore/gardenRawAfter는 보존', filled.gardenRawBefore === 3 && filled.gardenRawAfter === 5)
+    check('withGardenGrowth: after<before여도 음수 금지(0으로 클램프)', withGardenGrowth(sRaw, 5, 1).gardenGrowth === 0)
+  }
 }
 
 // ── 2) SessionRewardCard.jsx — SSR 렌더 문자열 단언 ─────────────────────
@@ -169,6 +189,14 @@ if (SessionRewardCard) {
   const zeroSummary = { stars: 0, xp: 0, gardenGrowth: 0, streak: 0, nextGoal: { kind: 'level', remaining: null, label: null } }
   const zeroHtml = renderToStaticMarkup(React.createElement(SessionRewardCard, { summary: zeroSummary, onDismiss: () => {} }))
   check('요약이 전부 0이면(표시할 줄 없음) 아무것도 렌더하지 않음', zeroHtml === '')
+
+  // 원시 정원값(gardenRawBefore/After, 레이어 계약 수정) — 카드가 직접
+  // attachment/worldProgress.gardenStageTotal로 변환해 렌더해야 한다.
+  // 3→5는 gardenStageTotal(3)=1(16칸 중 1칸 seed), gardenStageTotal(5)=2
+  // (2칸 seed) → growth=1(worldProgress.js POINTS_PER_STAGE=2 산수 그대로).
+  const rawSummary = { stars: 0, xp: 0, gardenRawBefore: 3, gardenRawAfter: 5, streak: 0, nextGoal: { kind: 'level', remaining: null, label: null } }
+  const rawHtml = renderToStaticMarkup(React.createElement(SessionRewardCard, { summary: rawSummary, onDismiss: () => {} }))
+  check('원시 정원값 3→5 → 카드가 단계로 변환해 "🌱 정원 +1" 렌더', rawHtml.includes('정원 +1'))
 }
 
 // ── 3) 배선 정적 검사 — 플래그 기본 OFF + 기존 지급 가드 재사용 + App 마운트 ──
@@ -181,6 +209,12 @@ check('features.js에 sessionRewardSummary: false 기본값 존재', /sessionRew
 const useStudentSrc = readSrc('src/hooks/useStudent.js')
 check('useStudent.js가 isFeatureEnabled를 import', /isFeatureEnabled/.test(useStudentSrc) && /from ['"]\.\.\/config\/features['"]/.test(useStudentSrc))
 check('useStudent.js가 sessionRewardSummary 상태를 노출', /sessionRewardSummary/.test(useStudentSrc) && /dismissSessionRewardSummary/.test(useStudentSrc))
+// 레이어 계약(2026-09-03 P1 회귀 수정, scripts/testGardenGrowthFlow.mjs
+// 10번 시나리오와 동일 단언) — useStudent.js는 attachment/* 어떤 모듈도
+// import하지 않고, worldProgress 문자열을 전혀(주석 포함) 담지 않는다.
+// 정원 "단계" 변환은 SessionRewardCard.jsx(컴포넌트 레이어)가 전담한다.
+check('useStudent.js가 attachment/* 모듈을 import하지 않음(레이어 계약)', !/from\s+['"][^'"]*attachment[^'"]*['"]/.test(useStudentSrc))
+check('useStudent.js에 worldProgress 문자열이 없음(레이어 계약)', !/worldProgress/.test(useStudentSrc))
 {
   // 기존 grantLedgerReward의 조기반환(hasRewardEntry(rewardLedger, key)) return false)
   // "이후"에만 요약 생성 코드가 오는지 — 새 dedup을 만들지 않고 기존

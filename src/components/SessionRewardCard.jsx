@@ -1,5 +1,10 @@
 import { useEffect } from 'react'
-import { formatRewardLines } from '../utils/rewardSummary'
+import { formatRewardLines, withGardenGrowth } from '../utils/rewardSummary'
+// 정원 "단계" 변환(gardenStageTotal)은 attachment/worldProgress.js가 이미
+// 가진 유일한 계산(재구현 금지, EnglishGarden.jsx도 이 파일을 그대로
+// import) — 컴포넌트 레이어는 attachment/* import가 허용된다(레이어 계약,
+// 금지는 useStudent.js 같은 훅 레이어에만 적용, 2026-09-03 P1 회귀 수정).
+import { gardenStageTotal } from '../utils/attachment/worldProgress'
 
 // src/components/SessionRewardCard.jsx — Session Reward Summary(P1, 2026-09-03).
 //
@@ -25,7 +30,16 @@ export default function SessionRewardCard({ summary, onDismiss }) {
   }, [summary])
 
   if (!summary) return null
-  const lines = formatRewardLines(summary)
+  // useStudent.js는 정원 성장 원시값(gardenRawBefore/gardenRawAfter)만
+  // 넘긴다(레이어 계약, useStudent.js 헤더 주석 참고) — 여기서 "단계"
+  // 총합으로 변환해 gardenGrowth를 확정한다. 두 값이 없으면(레거시 경로로
+  // 이미 gardenGrowth가 채워진 요약) 그대로 둔다.
+  const hasRawGardenValues = summary.gardenRawBefore !== null && summary.gardenRawBefore !== undefined
+    && summary.gardenRawAfter !== null && summary.gardenRawAfter !== undefined
+  const resolvedSummary = hasRawGardenValues
+    ? withGardenGrowth(summary, gardenStageTotal(summary.gardenRawBefore), gardenStageTotal(summary.gardenRawAfter))
+    : summary
+  const lines = formatRewardLines(resolvedSummary)
   if (lines.length === 0) return null
 
   return (
