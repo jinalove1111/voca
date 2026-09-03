@@ -1,10 +1,175 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-03 (105차, 야간 자율 세션 — Production Safety
-Harness 강화(prod:check invariant 18종·prod:hotfix manifest 변조 감지 +
-유령 SCA 재배정 manifest 라이브 자동 생성) + 재발 방지 가드(배정 저장/
-primary 전환/hard_delete/class.delete) + 데이터 손실 정적 감사 + WARN 10
-전수 분석 + CI 통합(Gate 3b/4) + PUBLIC 저장소 학생 실명 마스킹 보안
-수정 7건. Production WRITE 0, PR merge 0. 상세는 아래 105차 섹션)_
+_최종 갱신: 2026-09-04 (108차, 야간 자율 QA/유지보수 세션 — baseline →
+11개 worktree 병렬 트랙(garden/progression e2e, Excel 파서 fixture,
+reward 더블파이어, 학생 데이터 무결성 READ-ONLY 감사, ghost/legacy
+인벤토리, 보안 감사 A- + 관리자 PIN 스로틀 갭 수정, UI/성능 감사 + 수정
+3건, prod invariant 5종 정적 감사, 학생 경로 SSR 계약, 보안 회귀 고정) →
+통합 브랜치 `qa/overnight-2026-09-04` 병합·registry 정리·최종 검증까지.
+Production DB WRITE 0, SQL WRITE 0, merge 0, deploy 0. 상세는 아래 108차
+섹션)_
+
+## 2026-09-04 (108차) — 야간 자율 QA/유지보수: baseline → 11 트랙 → 통합 브랜치 qa/overnight-2026-09-04 (Production WRITE 0)
+
+### 제약/불변식
+
+- 세션: 2026-09-03 KST 밤 ~ 09-04 새벽, 운영자 수면 중 자율 QA/유지보수
+  모드.
+- 지켜진 불변식: Production DB WRITE 0 · SQL WRITE 0 · 실제 학생 데이터
+  변경 0 · merge 0(원격) · deploy 0 · main push 0. 실행한 라이브 HTTP
+  메서드는 anon key `GET`/`HEAD`만(phantom-id 프로브 포함, 기존
+  `testRlsSecurity` 관례 재사용) — `PATCH`/`POST`/`PUT`/`DELETE`/RPC/Edge
+  Function 호출은 이 세션 어디에도 없다. `pin_hash`/`pin_fail_count`/
+  `pin_locked_until`/`pin_setup_allowed`는 어떤 쿼리에서도 select하지
+  않았다(CLAUDE.md 규칙 11).
+- 작업 방식: 여러 git worktree를 병렬로 열어 트랙별로 독립 브랜치에서
+  작업한 뒤, 통합 전용 worktree(`qa/overnight-2026-09-04`)에서 순차
+  머지 — 파일 소유권 경계(규칙 16) 위반 없이 인덱스 충돌 0으로 완료.
+
+### baseline (`docs/qa/overnight-2026-09-04/P0-baseline.md`)
+
+- `origin/main` = `1712cf57e13a16fab4635f710fd1c5dcae926ced`(Merge PR #12
+  정원 철자 수정) = production. Vercel production: success ·
+  Release Gate(main): success · Deploy Ready: success ·
+  https://voca-drab.vercel.app 200, 배포 번들 해시가 로컬 빌드와 일치.
+- 로컬 검증(origin/main 기준): `npm run build` exit 0, `npm run
+  verify:all` ALL DOMAINS PASS(SKIP 도메인 제외) exit 0.
+- DB READ-ONLY baseline: `health:students` total 46 / PASS 36 / WARN 10 /
+  FAIL 0(제외 ARCHIVED 305, TEST 140, QA_FIXTURE 2), `ghostUnits` 7.
+  `prod:check` verdict WARN(invariants FAIL 0 / WARN 57 / PASS 12, ux
+  critical 0 / needsReview 50 / dataDebt 17), DB WRITE 0.
+- 열린 PR(당시): #9 `feat/reward-loop`(29 ahead), #10
+  `fix/textbook-grade-label`(4 ahead), #11
+  `fix/student-card-name-overlap`(3 ahead).
+
+### 트랙별 결과
+
+| 트랙 | 브랜치 | 커밋 | 단언 | 결과 |
+|---|---|---|---|---|
+| T1 (garden/progression e2e) | `test/paul-town-progression` | `4660c34`/`e773653`/`e55fb63` | garden e2e 44→74, progression 222→236 | 결함 0. Paul Town 진행 요소 분류 ACTIVE 9/DORMANT 1/NOT IMPLEMENTED 2/UNREACHABLE 0(`docs/qa/paul-town-progression-classification.md`) |
+| T2 (교재 라벨+격리) | `fix/textbook-grade-label`(PR #10) | `a38db8c`/`ef5092c` | 43/43 | 결함 0, FAIL-first(demote→delete 되돌려 2 FAIL 확인) 검증 완료. **통합 브랜치에는 미병합 — PR #10에서만 생존**(운영자 merge 결정 대기) |
+| T3/T3b (Excel import fixtures) | `test/excel-import-fixtures` | `8871394`/`4c98eb3`/`a2797f5` → `a2065ea`/`4eadd41` | 62/62 | 파서 결함 0, 파서 경고(gap) 2종 문서화(partial-row, unit-column-empty) — FAIL-first 3 |
+| T4 (더블파이어 회귀) | `test/reward-double-events` | `ae1626d`/`fe118d6` | 45/45 | 결함 0, 레거시 비원장 보상 5종 문서화 |
+| T5 (학생 데이터 무결성 READ-ONLY) | `docs/overnight-qa-2026-09-04` | `96e5cdc` | — | REAL 46명 PASS36/WARN10/FAIL0, 신규 저위험 관찰 2건(§아래) |
+| T6 (보안 정적/동적 감사) | (findings, 코드 변경 없음) | — | — | 등급 A- 유지, Critical/High 신규 0, Medium 1 + Low 1 발견 → T6b로 수정 |
+| T6b (관리자 PIN 스로틀 수정) | `fix/admin-pin-throttle` | (merge `61466f7`) | 23 | `adminPinFailureDelay`/`timingSafeStringEqual` 도입 + 4개 실패 경로 적용, `checkAdminReauth` async 전환 |
+| T7 (UI/성능 감사) | (findings, 코드 변경 없음) | — | — | crash 0, 저위험 후보 3건 발견 → T7b로 수정 |
+| T7b (UI 안정성 수정) | `fix/ui-stability-overnight` | `8d2404a`/`2ac5ff9`/`6e08eac`/`5eec2f9` | 21 | GuidedSession key 고정 / 포그라운드 재조회 10초 쿨다운 / 관리자 검색 렌더 상한 200, FAIL-first 7 |
+| P11 (prod invariant 정적 감사) | `feat/prod-invariants-p11` | (merge `ac3bbb3`) | — | invariant 5종 추가 확인(전부 WARN), `UNIT_CONTENT_DUPLICATE`가 `4fc69e2d`/`36bba4d0` 100% 겹침(라이브 3쌍) 탐지 + `testStdoutFlushOnExit` registry 미등록 발견·편입 |
+| T8 (학생 경로 SSR 계약) | `test/student-path-contracts` | (merge `7b45a3e`) | 61 | 로그인→대시보드→…→로그아웃 SSR/정적 계약, 결함 0 |
+| T9 (보안 회귀 고정) | `test/security-regressions` | (merge `3c8f457`) | 35 PASS / 2 KNOWN | 회귀 고정 + Release Gate vacuous-skip 방지 증명 |
+| registry 정리 | `qa/overnight-2026-09-04`(통합) | `a4313b2`(4종 required 승격) → `154dfc9`(security-regressions required + release-gate §16b) | — | 신규 스위트가 기본 `extra:true`로 등록되던 관행 발견·정정, totals **57 required / 72 extra / 129** |
+
+### 발견 버그 & 수정
+
+1. **관리자 PIN 브루트포스 스로틀 커버리지 갭(Medium, T6→T6b)** —
+   `verify-admin-pin.js`에만 있던 실패 지연(1.5초)이 `checkAdminReauth`
+   (`admin-pin-actions.js` 12개 액션 공유 + `compute-word-king.js` +
+   `start-new-season.js`)와 `clear-student-pin.js`/`set-student-pin.js`
+   인라인 비교에는 없어, 이 경로들로 전속력 온라인 브루트포스가
+   가능했다. `api/_pinAuth.js`에 공용 `adminPinFailureDelay()`/
+   `timingSafeStringEqual()`을 도입해 4개 실패 경로 전부에 적용하고,
+   `verify-admin-pin.js`의 평문 `===` 비교(Low)도
+   `timingSafeStringEqual`로 교체. **`checkAdminReauth`가 이제
+   async(`await` 필수) — 호출부 전수 갱신됨.**
+2. **UI 안정성 저위험 3건(T7→T7b)**:
+   - `App.jsx:721` `<GuidedSession>`에 `key={currentUnitId}` 없음 →
+     구조적 안전망으로 key 고정(유닛 전환 시 이전 유닛 state 유출 방지).
+   - `App.jsx:592` 포그라운드 복귀 시 Supabase fetch 6종 팬아웃(in-flight
+     dedupe만 존재) → 10초 쿨다운(`src/utils/foregroundRefreshGate.js`).
+   - `StudentDirectory.jsx:1648-1659` 검색 결과 렌더 상한 없음 → 200개
+     + 더 보기(`src/utils/listCap.js`).
+3. **`testStdoutFlushOnExit.mjs` registry 미등록(P11 발견)** —
+   2026-09-04(CI Gate 3 stdout 절단 사고 대응으로 작성된) 스크립트가
+   `package.json`에는 `verify:stdout-flush`로 있었지만
+   `tests/harness/registry.mjs`에는 등록되지 않아 `verify:all`에서 한
+   번도 실행되지 않고 있었다 — `attachment` 도메인에 `extra:false`로
+   편입.
+4. **파서 경고(gap) 2종 문서화만, 미구현(T3b)** — `AdminScreen.jsx
+   parseExcelRows`의 partial-row(부분 결손 행 silent filter)/
+   unit-column-empty(unit 칸 공백이어도 무경고) — 위험도 낮음, UX 회귀
+   방지 위해 이번 세션은 구현하지 않고 문서화만(운영자 확인 후 별도
+   커밋 권장).
+
+### 신규 회귀 테스트 목록
+
+| 스크립트 | 도메인 | 단언 | required(`extra`) |
+|---|---|---|---|
+| `scripts/testPaulTownProgression.mjs` | attachment | 222 | required(`extra` 표기 없음) |
+| `scripts/testGardenGrowthSources.mjs` | attachment | 44 | required(`extra` 표기 없음) |
+| `scripts/testExcelImportFixtures.mjs` | unitSwitching | 54(최종 62 — 위 결과 표 참고) | required(`extra:false`) |
+| `scripts/testDoubleEvents.mjs` | rewardSystem | 45 | required(`extra:false`) |
+| `scripts/testAdminPinThrottle.mjs` | login | 23 | required(`extra:false`) |
+| `scripts/testSecurityRegressions.mjs` | login | 35 PASS/2 KNOWN | required(`extra:false`) |
+| `scripts/testUiStabilityGuards.mjs` | quiz | 21 | required(`extra:false`) |
+| `scripts/testStudentPathContracts.mjs` | quiz | 61 | required(`extra:false`) |
+
+(`testStdoutFlushOnExit.mjs`는 신규 작성이 아니라 기존 파일의 registry
+미등록 발견·편입 — attachment 도메인, `extra:false`.)
+
+### P13 최종 검증(`qa/overnight-2026-09-04` @ `154dfc9`)
+
+- `npm run build`: PASS.
+- `npm run verify:all`: ALL DOMAINS PASS.
+- `npm run health:students`: total 46 / PASS 36 / WARN 10 / FAIL 0(무회귀).
+- `npm run prod:check`: verdict WARN(invariants FAIL 0 / WARN 60 — baseline
+  57 + P11 신규 3, PASS 12).
+- 로컬 Release Gate(CI 환경변수 재현): PASS.
+- 신규 스위트 전부 PASS(단, T2 텍스트북 격리 스위트는 PR #10 브랜치에만
+  존재 — 통합 브랜치에는 미병합).
+
+### 교훈
+
+- worktree 병렬 작업으로 인덱스 충돌 0 — 11개 트랙을 순차 세션 대신
+  격리된 워킹 디렉터리에서 동시 진행해도 파일 소유권 경계(규칙 16)가
+  자연히 지켜졌다.
+- 에이전트가 신규 verify 스크립트를 등록할 때 기본적으로 `extra:true`로
+  등록하는 습관이 여러 트랙에서 반복 관찰됨 — 통합 후 registry
+  전수 점검으로 4개 필수 스위트(더블파이어/UI 안정성/Excel fixture/
+  관리자 PIN 스로틀)가 `extra:true`(→ FAIL이 `verify:all` exit code에
+  반영 안 됨)로 방치될 뻔한 것을 발견·정정. 아래 DEVELOPER_GUIDE.md 신규
+  규칙으로 재발 방지.
+- `checkAdminReauth`가 async로 바뀌면서 그 함수를 호출하는 모든 API
+  경로가 `await` 없이는 인가 판정 전에 다음 코드가 실행될 위험이 있다 —
+  이번 세션은 전체 호출부를 갱신·검증했지만, 앞으로 이 함수를 다시
+  호출하는 새 코드는 반드시 `await`를 붙여야 한다(DEVELOPER_GUIDE.md
+  신규 규칙 참고).
+
+### BLOCKED_FOR_OPERATOR
+
+- PR #9(`feat/reward-loop`, 게임화 플래그 OFF) merge 결정.
+- PR #10(`fix/textbook-grade-label`, 교재 라벨 + 격리 스위트 43/43 PASS)
+  merge 결정.
+- PR #11(`fix/student-card-name-overlap`) merge 결정.
+- 신규 `qa/overnight-2026-09-04` 통합 브랜치 → PR 생성 및 merge 결정.
+- 유령 유닛 정리 SQL(`v3_43`/`v3_43b`/`v3_44`) 실행 — HOLD 1건
+  (`53e380c7`, 현*** 학습기록 1건 걸림, 그대로 HOLD 유지 권장).
+- 유령 참조 SCA 8행 manifest는 대상 Unit(6) 관련 재설계 필요(H***/이***
+  목적지 값 stale 가능성, 실행 직전 재계산 필요).
+- 잘못 업로드된 것으로 지목됐던 `4fc69e2d`(중2 천재 이상기 "Unit 1", 40
+  단어) — 재확인 결과 FK 정상·참조자 0명(아무도 학습 안 함), "잘못
+  업로드"라는 판단은 콘텐츠 검토가 필요해 이 감사 스코프 밖 — 삭제 여부
+  운영자 판단.
+- 중복 교재 없음(재확인 완료, "두 천재 이상기" 교재는 학년이 달라
+  정당한 별개 교재).
+- 레거시 wrong-word-recovered 파밍 완화(T6 KNOWN, 기존 상한 60 유지 중).
+- `grant-xp.js` 레거시 XP 분기 무인증(T6/T9 KNOWN, `handoff.md`
+  2026-09-02 기존 기록).
+- `student_class_assignments` allow-anon-all(T6 KNOWN, 기존 기록).
+- `classes.gamification_enabled` 관련 SQL 실행 여부(게임화 로드맵
+  BACKLOG, 이번 세션과 무관하게 여전히 대기).
+- `verify:reward-security`(`testRewardEndpointSecurity.mjs`) KNOWN 문구가
+  일부 stale — 다음 보안 세션이 최신 상태로 갱신 필요.
+
+### 아침에 할 일
+
+1. PR #9/#10/#11 + 신규 `qa/overnight-2026-09-04` 통합 브랜치, 4건의
+   merge 여부를 검토·결정(특히 #10은 T2 격리 스위트가 그 브랜치에서만
+   살아있어, 통합 브랜치와 별도로 판단 필요).
+2. 유령 유닛 정리 SQL(`v3_43`→`v3_43b`→`v3_44`) 실행 여부 결정 — 실행
+   전 H***/이*** 목적지 값 재계산 필요, `53e380c7`은 HOLD 유지.
+3. `PROJECT_BOARD.md` VERIFY/BLOCKED 카드 검토 후 담당자 배정.
+
+---
 
 ## 2026-09-03 (105차) — 야간 자율 세션: Production Safety Harness 강화 + 재발 방지 가드 + 데이터 손실 가드 + WARN 10 분석 + CI 통합 (Production WRITE 0, PR merge 0)
 

@@ -24,6 +24,66 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
 
 ## BLOCKED
 
+### [P0] PR #9/#10/#11 + 신규 `qa/overnight-2026-09-04` 통합 브랜치 merge 결정 — 운영자 승인 대기 (2026-09-04, 108차)
+- 근거: `handoff.md` 2026-09-04(108차), `docs/qa/overnight-2026-09-04/*.md`.
+- 내용: 4건 모두 로컬/CI 검증 완료 상태로 운영자 merge 승인만 남음.
+  - PR #9(`feat/reward-loop`, 게임화 플래그 OFF, 29 ahead) — 이번
+    세션은 손대지 않음, 기존 상태 유지.
+  - PR #10(`fix/textbook-grade-label`) — 교재 라벨 + 격리 스위트
+    43/43 PASS(FAIL-first 검증 완료). **T2 격리 스위트가 이 브랜치에만
+    존재하고 통합 브랜치에는 미병합** — 별도 판단 필요.
+  - PR #11(`fix/student-card-name-overlap`) — 이번 세션은 손대지 않음.
+  - 신규 통합 브랜치 `qa/overnight-2026-09-04`(최종 `154dfc9`) — 11개
+    야간 QA 트랙 병합, `npm run build`/`verify:all`/`health:students`/
+    `prod:check`/로컬 Release Gate 전부 PASS. 아직 PR 미생성.
+
+### [P1] 유령 유닛 정리 SQL(`v3_43`→`v3_43b`→`v3_44`) 실행 여부 — 운영자 판단 대기, HOLD 1건 유지 권장 (2026-09-04, 108차)
+- 근거: `docs/qa/overnight-2026-09-04/ghost-legacy-inventory.md`.
+- 내용: 6개 유령 유닛(단어 1개, 헤더 잔재) 정리 SQL은 이미 준비돼 있음
+  (`supabase_v3_43_ghost_sca_reassign.sql` → `_v3_43b_paul_dup_sca_
+  reassign.sql` → `_v3_44_ghost_units_delete.sql`, HOLD 1건 제외).
+  실행 전 H***/이*** 두 SCA 행의 목적지 값이 SQL 작성 시점 이후
+  stale해졌을 수 있어 **실행 직전 재계산 필요**. `53e380c7`(현*** 학습
+  기록 `word_status` 1건 걸림)은 `_v3_44`가 이미 HOLD로 삭제 대상에서
+  제외해 두었다 — **이 판단은 다시 열지 않고 그대로 HOLD 유지 권장**.
+  0단어 유닛 2개(`e4804821`/`67c8268e`, REAL 2명 참조·전부 비-primary)는
+  기존 v3_43/44 계획에 포함되지 않은 신규 관찰 카테고리라 별도 manifest
+  준비가 필요(이번 세션은 준비하지 않음, READ-ONLY 지시).
+- 위 기존 카드("유령 SCA 재배정 승인 1회 대기")의 `generateGhostScaManifest`
+  11행(A조 5/B조 6)과 이 카드의 v3_43/43b/44는 같은 정리 작업의 앞뒤
+  단계 — 순서: SCA 재배정 승인 → 유닛 삭제.
+
+### [P2] 유령 참조 SCA 8행 — Unit6 대상 재설계 필요 (2026-09-04, 108차)
+- 근거: `docs/qa/overnight-2026-09-04/student-integrity-readonly.md` §4-1,
+  `docs/audit/2026-09-03-warn10-readonly-analysis.md`(Track 3).
+- 내용: `SCA_GHOST_UNIT` 10명(행 11개, H***만 2행)이 유령 유닛을 가리키는
+  기존 baseline — 이번 세션 재조회로 건수·대상 동일함을 재확인(신규
+  발견 아님). 유령 참조 SCA 재배정 대상(Unit6 포함)의 manifest는 기존
+  카드(`generateGhostScaManifest`)가 이미 라이브 생성해 두었으나,
+  운영자가 대상 Unit6 재설계를 별도로 요청한 경우 그 결정이 이 카드의
+  범위 — 재설계 필요 여부는 운영자 판단.
+
+### [P3] "Unit 1" @ 중2 천재 이상기(`4fc69e2d`, 40단어) 삭제 여부 — 운영자 판단 대기 (2026-09-04, 108차)
+- 근거: `docs/qa/overnight-2026-09-04/ghost-legacy-inventory.md` §5.
+- 내용: 운영자 기억상 "이 교재에 잘못 업로드된 유닛"으로 지목됐던
+  대상. READ-ONLY 재확인 결과: 단어 40개, FK 정상, 참조자 0명(REAL/
+  TEST/QA/ARCHIVED 어느 계정도 `current_unit_id`로 가리키지 않음 —
+  아무도 학습 중이 아님), 구조적 무결성 문제는 없음. "잘못 업로드됐다"는
+  판단 자체는 콘텐츠(단어 목록이 실제로 이 교재/학년에 맞는지) 확인이
+  필요해 이 감사 스코프 밖 — 삭제하려면 관리자 UI에서 유닛 삭제(참조 0
+  이라 cascade 손실 없음), 최종 결정은 운영자 몫.
+
+### [P3] T6/T9 보안 KNOWN 노출 재확인 — 운영자 우선순위 판단 대기 (2026-09-04, 108차)
+- 근거: `docs/qa/overnight-2026-09-04/T6-security-findings.md`,
+  `handoff.md` 2026-09-02 기존 기록.
+- 내용: 이번 세션은 변경하지 않고 재확인만 한 기존 KNOWN 4건 —
+  ① `grant-xp.js` 레거시 XP 분기 무인증, ② `wrong-word-recovered`
+  sourceId 자유도(서버 L2/L3로 이미 유한화, 완전 차단은 아님 — 상한 60
+  파밍 완화 여지), ③ `student_class_assignments` allow-anon-all, ④
+  `scripts/testRewardEndpointSecurity.mjs`의 KNOWN 노출 문구가 일부
+  stale(다음 보안 세션이 최신 상태로 갱신 필요). 등급은 A- 유지(Critical/
+  High 신규 0).
+
 ### [P2] `verify:login` 로컬 4/7만 PASS — `SUPABASE_SERVICE_ROLE_KEY` 로컬 부재
 - 근거: `handoff.md` 2026-07-18 "개발자 인프라 구축" Phase 6, "Phase 6 최종
   검증 매트릭스"(`TESTING.md`).
@@ -477,6 +537,25 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
 _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` 상태 파일 생성)_
 
 ## VERIFY
+
+### [P0] `qa/overnight-2026-09-04` 통합 브랜치 — 11 트랙 야간 QA 검증 완료, PR 생성/merge 검토 대기
+- 근거: `handoff.md` 2026-09-04(108차), `ROADMAP.md` 2026-09-04(108차),
+  `docs/qa/overnight-2026-09-04/*.md`.
+- 내용: garden/progression e2e 회귀(T1), Excel 파서 fixture(T3/T3b),
+  reward 더블파이어 회귀(T4), 학생 데이터 무결성 READ-ONLY 감사(T5),
+  ghost/legacy 유닛·교재 인벤토리(P10), 보안 정적/동적 감사 A- + 관리자
+  PIN 스로틀 갭 수정(T6/T6b), UI/성능 감사 + 저위험 수정 3건(T7/T7b),
+  prod invariant 정적 감사 5종(P11), 학생 경로 SSR 계약(T8), 보안 회귀
+  고정(T9), registry 정리(신규 스위트 required 승격 4종 + 미등록 스위트
+  1종 편입)를 최종 커밋 `154dfc9`로 통합.
+- 검증: `npm run build` PASS, `npm run verify:all` ALL DOMAINS PASS,
+  `npm run health:students` 36/10/0(무회귀), `npm run prod:check`
+  WARN(invariant FAIL 0/WARN 60), 로컬 Release Gate(CI 환경변수 재현)
+  PASS. Production DB WRITE 0, SQL WRITE 0, merge 0, deploy 0.
+- 검수 대기 사항: qa-reviewer/security-reviewer 코드 리뷰 미착수, 운영자
+  PR 생성·merge 결정(위 BLOCKED "PR #9/#10/#11 + 신규 통합 브랜치" 카드
+  참고 — T2 텍스트북 격리 스위트는 이 통합 브랜치가 아니라 PR #10에만
+  존재).
 
 ### [P0] Word Asset 전체 재검증(8축) + 실버그 2건 수정 — qa-reviewer/security-reviewer 검수 대기
 - 근거: `handoff.md` 2026-08-05(38차), `ROADMAP.md` 2026-08-05(17차).
