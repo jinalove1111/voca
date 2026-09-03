@@ -53,7 +53,8 @@
 //   node scripts/buildRaceBundle.mjs && node scripts/testGardenGrowthSources.mjs
 //   (또는 npm run verify:garden-growth-sources)
 import { pathToFileURL } from 'node:url'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
+import path from 'node:path'
 import { createFakeClock, renderHook } from './fakeReact.mjs'
 import { deriveAttachmentStats } from '../src/utils/attachment/attachmentCore.js'
 import { gardenPlots, POINTS_PER_STAGE } from '../src/utils/attachment/worldProgress.js'
@@ -341,6 +342,135 @@ console.log(`\n-- ${scenario}`)
   const useStudentSrc = readFileSync(new URL('../src/hooks/useStudent.js', import.meta.url), 'utf8')
   check('useStudent.js는 attachment/worldProgress(정원) 모듈을 import하지 않는다',
     !/from\s+'[^']*attachment[^']*'/.test(useStudentSrc) && !/worldProgress/.test(useStudentSrc))
+}
+
+// ── F) 반복/이미 클리어/오답/전환/rehydrate 확장/정적 계약 강화 ─────────────
+// (overnight QA track T1, 2026-09-04) — A~E에서 부분적으로만 다뤄진 케이스를
+// 명시 단언으로 고정. 기존 축(quiz/spelling 소스, gardenPoints 계약, merge
+// 방향)은 한 글자도 바꾸지 않고 새 시나리오만 추가한다.
+scenario = 'F) 반복 · 전환 · rehydrate 확장 · 정적 계약'
+console.log(`\n-- ${scenario}`)
+{
+  // F1) guided completion(markWordCompleted) 단독 — completedWords 축,
+  // clearedWords에는 들어가지 않지만 gardenPoints는 동일하게 +1.
+  const hg = mount('QA_GGS_F_guided')
+  check('학습 전: 0포인트', garden(hg).points === 0)
+  hg.result.markWordCompleted('kiwi'); settle(hg)
+  check('가이드 완주(markWordCompleted) → completedWords에 기록됨', hg.result.completedWords.includes('kiwi'))
+  check('가이드 완주 → clearedWords에는 기록되지 않음(별개 축)', !hg.result.clearedWords.includes('kiwi'))
+  check('가이드 완주 → 정원 포인트 0→1', garden(hg).points === 1)
+
+  // F2) 같은 단어를 세 소스 조합으로 교차 — 항상 1포인트만(6개 순서쌍 중
+  // A)에서 다룬 quiz↔spelling 2개를 뺀 나머지 4개: quiz→guided/guided→quiz/
+  // spelling→guided/guided→spelling).
+  const crossPairs = [
+    ['quiz_then_guided', (h) => { h.result.recordQuizAnswer('mango_qg', true); settle(h); h.result.markWordCompleted('mango_qg'); settle(h) }],
+    ['guided_then_quiz', (h) => { h.result.markWordCompleted('mango_gq'); settle(h); h.result.recordQuizAnswer('mango_gq', true); settle(h) }],
+    ['spelling_then_guided', (h) => { h.result.recordSpellingAnswer('mango_sg', true); settle(h); h.result.markWordCompleted('mango_sg'); settle(h) }],
+    ['guided_then_spelling', (h) => { h.result.markWordCompleted('mango_gs'); settle(h); h.result.recordSpellingAnswer('mango_gs', true); settle(h) }],
+  ]
+  for (const [label, run] of crossPairs) {
+    const h = mount(`QA_GGS_F_cross_${label}`)
+    run(h)
+    check(`교차 소스(${label}) → 정원 포인트 정확히 1(중복 아님)`, garden(h).points === 1)
+  }
+
+  // F3) 이미 클리어된 단어를 같은 소스로 다시 정답 — 변화 없음(멱등,
+  // A의 "같은 단어 다른 소스" 케이스와 달리 "같은 소스 재정답"을 명시 고정).
+  const hqq = mount('QA_GGS_F_requiz')
+  hqq.result.recordQuizAnswer('nectarine', true); settle(hqq)
+  const afterFirst = garden(hqq).points
+  hqq.result.recordQuizAnswer('nectarine', true); settle(hqq)
+  check('이미 클리어된 단어를 퀴즈로 다시 정답 → 포인트 변화 없음', garden(hqq).points === afterFirst && afterFirst === 1)
+  check('  clearedWords에 정확히 1번만', hqq.result.clearedWords.filter((w) => w === 'nectarine').length === 1)
+
+  const hss = mount('QA_GGS_F_respell')
+  hss.result.recordSpellingAnswer('olive', true); settle(hss)
+  hss.result.recordSpellingAnswer('olive', true); settle(hss)
+  check('이미 클리어된 단어를 철자로 다시 정답 → 포인트 변화 없음(1 유지)', garden(hss).points === 1)
+
+  // F4) 퀴즈 오답 → 성장 없음(A에서는 철자 오답만 고정했음, 퀴즈 축도 대칭 고정)
+  const hwq = mount('QA_GGS_F_wrong_quiz')
+  hwq.result.recordQuizAnswer('papaya', false); settle(hwq)
+  check('퀴즈 오답은 clearedWords에 기록되지 않음', !hwq.result.clearedWords.includes('papaya'))
+  check('퀴즈 오답은 정원 포인트를 주지 않음', garden(hwq).points === 0)
+
+  // F5) 교재 전환(setLastTextbookClassId) — 정원 집합에 전혀 영향 없음
+  const ht = mount('QA_GGS_F_textbook_switch')
+  ht.result.recordQuizAnswer('quince2', true); settle(ht)
+  const beforeSwitch = garden(ht)
+  ht.result.setLastTextbookClassId('classA'); settle(ht)
+  ht.result.setLastTextbookClassId('classB'); settle(ht)
+  check('교재를 전환해도 정원 포인트가 변하지 않음', garden(ht).points === beforeSwitch.points)
+  check('교재를 전환해도 clearedWords 집합이 그대로 유지됨', ht.result.clearedWords.includes('quince2'))
+  ht.result.recordSpellingAnswer('raspberry2', true); settle(ht)
+  check('교재 전환 후에도 새 정답이 정상 누적(1→2)', garden(ht).points === 2)
+
+  // F6) rehydrate 확장 — 정원 텃밭 칸(gardenPlots)까지 포함해 재확인
+  const hr35 = mount('QA_GGS_F_rehydrate')
+  for (let i = 0; i < 35; i++) { hr35.result.recordQuizAnswer(`ggs_f_word_${i}`, true); settle(hr35) }
+  const beforeRehydrate = garden(hr35)
+  // filled = min(floor(points/POINTS_PER_STAGE), PLOT_COUNT) — floor(35/2)=17 > PLOT_COUNT(16)이므로 16칸 전부 채워짐(1포인트는 라운드로빈으로 첫 칸에 더 쌓임)
+  check('사전 조건: 서로 다른 단어 35개 → 정원 35포인트, 텃밭 16칸(전체, floor(35/2)=17>PLOT_COUNT)', beforeRehydrate.points === 35 && beforeRehydrate.filled === 16)
+
+  const rawStr = globalThis.localStorage.getItem('paul_easy_progress')
+  const parsedAll = JSON.parse(rawStr)
+  const rawRec = parsedAll.QA_GGS_F_rehydrate
+  const cloudRT = JSON.parse(JSON.stringify(rawRec)) // JSON round-trip("네트워크를 타고 온" 시뮬레이션)
+
+  const bundleMod = await import(pathToFileURL('scripts/.tmp/useStudent.race.bundle.mjs').href)
+  const { normalizeRecord } = bundleMod
+  const normOnly = normalizeRecord(cloudRT, 'QA_GGS_F_rehydrate')
+  const normOnlyStats = deriveAttachmentStats(normOnly)
+  check('normalizeRecord(cloud) 단독 — gardenPoints 35 보존', normOnlyStats.gardenPoints === 35)
+  check('normalizeRecord(cloud) 단독 — 텃밭 칸 구성이 rehydrate 이전과 바이트 단위 동일',
+    JSON.stringify(gardenPlots(normOnlyStats)) === JSON.stringify(gardenPlots(beforeRehydrate.stats)))
+
+  // local-empty ← cloud (새 기기에서 클라우드 백업으로 최초 복원)
+  const mergedEmptyLocal = mergeProgressRecords({}, cloudRT, 'QA_GGS_F_rehydrate')
+  const mergedEmptyLocalStats = deriveAttachmentStats(mergedEmptyLocal)
+  check('mergeProgressRecords(빈 로컬, cloud) — gardenPoints 35 보존', mergedEmptyLocalStats.gardenPoints === 35)
+  check('mergeProgressRecords(빈 로컬, cloud) — 텃밭 칸이 rehydrate 이전과 동일',
+    JSON.stringify(gardenPlots(mergedEmptyLocalStats)) === JSON.stringify(gardenPlots(beforeRehydrate.stats)))
+
+  // cloud ← cloud (같은 클라우드 blob을 자기 자신과 병합 — 재동기화 재시도 시나리오)
+  const mergedCloudCloud = mergeProgressRecords(cloudRT, cloudRT, 'QA_GGS_F_rehydrate')
+  const mergedCloudCloudStats = deriveAttachmentStats(mergedCloudCloud)
+  check('mergeProgressRecords(cloud, cloud) — gardenPoints 35 보존(중복 합산 없음)', mergedCloudCloudStats.gardenPoints === 35)
+  check('mergeProgressRecords(cloud, cloud) — 텃밭 칸이 rehydrate 이전과 동일',
+    JSON.stringify(gardenPlots(mergedCloudCloudStats)) === JSON.stringify(gardenPlots(beforeRehydrate.stats)))
+
+  // F7) 정적 계약 — gardenPoints를 만드는 합집합(new Set([...cleared,
+  // ...completedWords, ...clearedWords]))을 만드는 곳이 attachmentCore.js
+  // 단 한 곳뿐인지 저장소 전역에서 재확인(다른 모듈이 "정원 파밍"을 몰래
+  // 재구현하지 않았는지의 구조적 증거).
+  function listJsFiles(dir, out = []) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) listJsFiles(full, out)
+      else if (/\.(js|jsx)$/.test(entry.name)) out.push(full)
+    }
+    return out
+  }
+  const srcFiles = listJsFiles(path.resolve('src'))
+  const unionPattern = /new Set\(\[\s*\.\.\.cleared\s*,\s*\.\.\.completedWords\s*,\s*\.\.\.clearedWords\s*\]\)/
+  const unionSites = srcFiles.filter((f) => unionPattern.test(readFileSync(f, 'utf8')))
+  check('gardenPoints 합집합(new Set([...cleared, ...completedWords, ...clearedWords]))을 만드는 곳이 src/ 전체에서 정확히 1곳(attachmentCore.js)뿐',
+    unionSites.length === 1 && unionSites[0].replace(/\\/g, '/').endsWith('src/utils/attachment/attachmentCore.js'))
+
+  // F8) 정적 계약 — Dashboard/EnglishGarden/PaulTown은 stats를 prop으로만
+  // 소비하고, deriveAttachmentStats를 스스로 import해 재계산하지 않는다
+  // (진실 원천이 useAttachment.js 한 곳으로 유지됨을 구조로 고정).
+  const dashSrc = readFileSync(new URL('../src/components/Dashboard.jsx', import.meta.url), 'utf8')
+  const gardenCompSrc = readFileSync(new URL('../src/components/EnglishGarden.jsx', import.meta.url), 'utf8')
+  const townCompSrc = readFileSync(new URL('../src/components/PaulTown.jsx', import.meta.url), 'utf8')
+  check('EnglishGarden.jsx는 deriveAttachmentStats를 import하지 않는다(stats prop만 소비)', !/deriveAttachmentStats/.test(gardenCompSrc))
+  check('EnglishGarden.jsx는 stats를 props로 받는다', /function EnglishGarden\(\{\s*stats/.test(gardenCompSrc))
+  check('PaulTown.jsx는 deriveAttachmentStats를 import하지 않는다(stats prop만 소비)', !/deriveAttachmentStats/.test(townCompSrc))
+  check('PaulTown.jsx는 stats를 props로 받는다', /function PaulTown\(\{\s*stats/.test(townCompSrc))
+  check('Dashboard.jsx는 deriveAttachmentStats를 import하지 않는다(attachmentStats prop만 소비)', !/deriveAttachmentStats/.test(dashSrc))
+  check('Dashboard.jsx는 attachmentStats를 props로 받아 PaulTownHomeBand에 stats로 그대로 전달한다', /attachmentStats/.test(dashSrc) && /stats=\{attachmentStats\}/.test(dashSrc))
 }
 
 // ── 요약 ─────────────────────────────────────────────────────────────────
