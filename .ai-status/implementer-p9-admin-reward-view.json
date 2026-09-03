@@ -1,0 +1,27 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "p9-admin-reward-view",
+  "task": "P9 교사/관리자 관점 — 학생별 보상 정보 최소 노출 (docs/REWARD_LOOP_AUDIT_2026-09-03.md §12)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-03T06:30:00+09:00",
+  "updated_at": "2026-09-03T07:15:00+09:00",
+  "files_owned": [
+    "src/utils/adminRewardSummary.js",
+    "scripts/testAdminRewardSummary.mjs",
+    "src/components/admin/StudentDirectory.jsx",
+    ".ai-status/implementer-p9-admin-reward-view.json"
+  ],
+  "files_read": [
+    "docs/REWARD_LOOP_AUDIT_2026-09-03.md",
+    "src/utils/wordLibrary.js",
+    "src/hooks/useStudent.js",
+    "src/utils/rewardEngine.js",
+    "DATABASE.md",
+    "package.json"
+  ],
+  "summary": "StudentDirectory 학생 카드에 보상 요약 1줄(별/스트릭/정원 포인트/모자 수/최근 학습일/최근 보상/선택적 XP)을 추가. 순수 파생 모듈 src/utils/adminRewardSummary.js(zero-imports, summarizeStudentRewards + formatAdminRewardLine)를 신규 작성하고 FAIL-first 테스트 scripts/testAdminRewardSummary.mjs(40 assertions)를 먼저 실패 확인(2/40 FAIL, static import/usage checks) 후 StudentDirectory.jsx에 배선해 40/40 PASS로 전환. gardenPoints는 useStudent.js computeGardenPoints와 동일한 cleared∪completedWords∪clearedWords distinct union 공식을 이 모듈 안에서 독립 재구현(attachment/**는 다른 세션 소유라 import 안 함). XP는 기존 배치 헬퍼 fetchXpTotals(wordLibrary.js, 무변경)를 재사용해 병렬 조회 1회만 추가, 새 fetch/새 대시보드 없음. PIN 컬럼(pin_hash/pin_fail_count/pin_locked_until) 언급 수는 HEAD 대비 불변(10=10, 정적 테스트로 확인) — 실제 조회/렌더 없음. npm run build PASS, npm run verify:admin PASS(23개 스크립트 전체). 커밋 도중 다른 에이전트가 동시에 staging한 파일(scripts/testStreakV2Wiring.mjs, src/utils/gamification/streakAdapter.js 등)이 두 번째 커밋에 의도치 않게 함께 실릴 뻔한 것을 git status로 즉시 발견 — git reset --soft로 되돌리고 내 파일만 재스테이징해 정정, 다른 에이전트 파일은 손대지 않고 원래 미커밋 상태로 복원.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 대기. 알려진 갭: fetchXpTotals 실패/미배포(xp_totals VIEW 미실행) 시 xp는 null로 카드에서 자동 생략(설계된 동작, 버그 아님). streak/streak_count 두 컬럼이 항상 같은 값으로 동기화되는지(wordLibrary.js syncStudentProgress) 재확인은 별도 세션에서."
+}
