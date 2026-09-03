@@ -1,0 +1,44 @@
+{
+  "agent": "implementer",
+  "task": "P2 Paul Town 성장 연결 — attachmentGardenGrowthV2 (정원 성장 v2, ledger 보너스)",
+  "branch": "feat/reward-loop",
+  "status": "completed",
+  "started_at": "2026-09-03T00:00:00Z",
+  "updated_at": "2026-09-03T00:00:00Z",
+  "files_owned": [
+    "src/config/features.js",
+    "src/utils/attachment/growthPoints.js",
+    "src/utils/attachment/attachmentCore.js",
+    "src/hooks/useAttachment.js",
+    "scripts/testGrowthPoints.mjs",
+    "scripts/testGardenGrowthFlow.mjs",
+    ".ai-status/implementer-p2-garden-growth-v2.json"
+  ],
+  "files_read": [
+    "docs/REWARD_LOOP_AUDIT_2026-09-03.md",
+    "src/utils/attachment/worldProgress.js",
+    "src/hooks/useStudent.js",
+    "src/utils/rewardEngine.js",
+    "tests/harness/runAttachment.mjs",
+    "scripts/testGamificationInvariants.mjs"
+  ],
+  "note_useAttachment_deviation": "handoff 지시는 attachmentCore.js/growthPoints.js/testGrowthPoints.mjs/testGardenGrowthFlow.mjs/features.js만 소유로 명시했지만, deriveAttachmentStats의 유일한 호출자인 src/hooks/useAttachment.js 편집은 지시문에 '그 파일이면 그 한 콜사이트만 수정 가능'으로 명시적으로 허용되어 최소 변경(옵션 파라미터 하나 배선)만 했다.",
+  "flags_added": ["attachmentGardenGrowthV2", "nextGoalsCard", "streakV2", "unitCompleteReward", "masteryReward"],
+  "flags_all_default": false,
+  "commits": [
+    "6891d81 feat(features): 보상 루프 P2~P6 플래그 5종 추가 (전부 OFF)",
+    "097622c feat(garden): growthPoints 순수 모듈(ledger 기반 보너스, epoch, 일일 상한) + FAIL-first 테스트",
+    "(pending) feat(garden): deriveAttachmentStats gardenPoints V2 옵션 배선 (flag attachmentGardenGrowthV2 OFF)"
+  ],
+  "build": "PASS (vite build, 0 errors)",
+  "tests": {
+    "scripts/testGrowthPoints.mjs": "PASS 44/44 (FAIL-first confirmed: 0/44 when module absent)",
+    "scripts/testGardenGrowthFlow.mjs": "93 assertions, 91 PASS / 2 FAIL (pre-existing, unrelated — see known_gaps)",
+    "tests/harness/runAttachment.mjs (verify:attachment)": "PASS 163/163",
+    "scripts/testGamificationInvariants.mjs": "PASS 40/40"
+  },
+  "known_gaps": [
+    "testGardenGrowthFlow.mjs scenario 10 has 2 pre-existing FAILs asserting useStudent.js does not import worldProgress/gardenPoints — this became stale at commit add499e (P1 SessionRewardCard, already merged before this session started), confirmed via git stash isolation that the failures exist identically with or without this session's changes. Not caused by P2 work; out of scope (useStudent.js is explicitly not owned by this session).",
+    "verify:garden npm script / tests/harness/registry.mjs registration intentionally NOT added (package.json and registry.mjs are owned by other sessions per file header note in testGardenGrowthFlow.mjs and this task's file-ownership rule)."
+  ]
+}

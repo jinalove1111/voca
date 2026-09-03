@@ -22,6 +22,7 @@ import { evaluateHatUnlocks, hatById } from '../utils/attachment/hatSystem'
 import { detectNewMilestones } from '../utils/attachment/milestones'
 import { getStudentClass, getClassUnits, getClassWords, getClassIdByName, wordSlug, isTextbookMode, getStudentPrimaryTextbook, getClassNameById } from '../utils/wordLibrary'
 import { trackEvent, EV } from '../utils/productEvents'
+import { isFeatureEnabled } from '../config/features'
 
 // getClassWords()가 돌려주는 단어 객체의 id는 words.id(UUID) — 애착 시스템의
 // cleared/missions/spellingWrongToday/wordStatus 키는 전부 단어 텍스트
@@ -77,11 +78,18 @@ export function useAttachment(studentId, studentData) {
   // completedSet/clearedWordSet 등 표시 전용 파생값을 만들 수 있게 한다 —
   // 이번 마일스톤에서 어떤 판정(unitsDone/textbooksDone/모자/밀스톤)도
   // 이 두 축을 입력으로 쓰지 않는다(기존 cleared 기반 그대로 유지).
-  const { cleared, completedWords, clearedWords, wordStatus, missions, history, streak, spellingReviewQueue, hatInventory, milestones, grantHats, addMilestones, restoreChecked } = studentData
+  const { cleared, completedWords, clearedWords, wordStatus, missions, history, streak, spellingReviewQueue, rewardLedger, hatInventory, milestones, grantHats, addMilestones, restoreChecked } = studentData
+
+  // 정원 성장 v2(P2, 2026-09-03) — 플래그 게이팅은 여기서만 평가한다.
+  // attachmentCore.js는 순수 계산 레이어라 features.js를 직접 import하지
+  // 않는다(헤더 주석 참고) — 이 훅이 유일한 소비 지점이라 게이팅도
+  // 여기서 대신 맡는다. 기본 false — 켜지지 않으면 아래 deriveAttachmentStats
+  // 호출은 기존과 동일한 인자만 넘기는 것과 바이트 단위로 같다.
+  const gardenGrowthV2 = isFeatureEnabled('attachmentGardenGrowthV2')
 
   const stats = useMemo(
-    () => deriveAttachmentStats({ cleared, completedWords, clearedWords, wordStatus, missions, history, streak, spellingReviewQueue }),
-    [cleared, completedWords, clearedWords, wordStatus, missions, history, streak, spellingReviewQueue],
+    () => deriveAttachmentStats({ cleared, completedWords, clearedWords, wordStatus, missions, history, streak, spellingReviewQueue, rewardLedger }, new Date(), { gardenGrowthV2 }),
+    [cleared, completedWords, clearedWords, wordStatus, missions, history, streak, spellingReviewQueue, rewardLedger, gardenGrowthV2],
   )
   const lib = useMemo(() => buildWordsByUnit(studentId), [studentId])
   const unitsDone = useMemo(() => completedUnits(lib.wordsByUnit, stats.clearedSet), [lib, stats])

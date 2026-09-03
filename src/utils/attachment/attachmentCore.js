@@ -15,6 +15,15 @@
 //   mapWordRow 참고). 두 체계를 여기서 명시적으로 구분해 다룬다.
 // - 날짜: history 키는 Date.toDateString() 포맷("Mon Jul 21 2026") —
 //   useStudent.js todayStr()와 동일. 여기서도 그대로 따른다.
+//
+// 정원 성장 v2(P2, 2026-09-03, growthPoints.js) — 이 모듈은 features.js를
+// import하지 않는다(이 파일은 순수 계산 레이어라 브라우저/저장 API에
+// 의존하는 어떤 모듈도 끌어들이지 않는다는 기존 규율, 위 헤더 참고).
+// 대신 deriveAttachmentStats가 명시적 옵션 파라미터(gardenGrowthV2)를
+// 받고, 유일한 호출자(useAttachment.js)가 isFeatureEnabled를 대신
+// 평가해 넘긴다 — 플래그 게이팅과 순수성을 동시에 지킨다.
+
+import { bonusPointsFromLedger } from './growthPoints.js'
 
 const dayMs = 24 * 60 * 60 * 1000
 
@@ -39,10 +48,16 @@ export function masteryTierFor(word, { clearedSet, wordStatus, missionByWordId }
 /**
  * 공유 파생 통계. 모든 애착 기능의 단일 입력.
  * @param {object} rec — useStudent record 필드 부분집합:
- *   { cleared, wordStatus, missions, history, streak, spellingReviewQueue }
+ *   { cleared, wordStatus, missions, history, streak, spellingReviewQueue,
+ *     rewardLedger }
  * @param {Date} now — 테스트 주입용(기본 현재 시각)
+ * @param {{gardenGrowthV2?: boolean}} opts — gardenGrowthV2(기본 false):
+ *   true면 gardenPoints에 rewardLedger 기반 보너스(growthPoints.js)를
+ *   더한다. false(기본, 플래그 OFF)면 기존과 바이트 단위로 동일 —
+ *   gardenPoints는 여전히 gardenSet.size 그대로다.
  */
-export function deriveAttachmentStats(rec, now = new Date()) {
+export function deriveAttachmentStats(rec, now = new Date(), opts = {}) {
+  const { gardenGrowthV2 = false } = opts || {}
   const cleared = Array.isArray(rec.cleared) ? rec.cleared : []
   // Phase 2 M3(2026-08-03, 학습 신호 2종) — completedWords/clearedWords는
   // useStudent.js의 신규 병렬 필드(레벨업 미션 기반 cleared와 완전히
@@ -140,6 +155,11 @@ export function deriveAttachmentStats(rec, now = new Date()) {
   // 영구 0칸이었다. 열심히 한 학생일수록 오답이 적어 정원이 더 안 자라는
   // 역인센티브 구조였다(paulTown.js masteredCount 영구 0 사건과 같은 계열).
   const gardenSet = new Set([...cleared, ...completedWords, ...clearedWords])
+  const gardenWordPoints = gardenSet.size
+  // rewardLedger는 record의 서버 원장 배열(useStudent.js grantLedgerReward가
+  // append) — 없는 레코드/구 백업도 방어(다른 필드와 동일한 배열 방어 패턴).
+  const rewardLedger = Array.isArray(rec.rewardLedger) ? rec.rewardLedger : []
+  const gardenBonusPoints = gardenGrowthV2 ? bonusPointsFromLedger(rewardLedger) : 0
 
   return {
     clearedCount: cleared.length,
@@ -154,7 +174,15 @@ export function deriveAttachmentStats(rec, now = new Date()) {
     clearedWordCount: clearedWords.length,
     // 정원/월드/마을 전용 축(위 gardenSet 주석 참고). 보상 판정(모자/밀스톤)은
     // 이 값을 절대 읽지 않는다 — 읽는 순간 소급 지급이 발생한다.
-    gardenPoints: gardenSet.size,
+    // gardenGrowthV2(기본 false, 플래그 attachmentGardenGrowthV2)가 true일
+    // 때만 gardenPoints에 ledger 보너스가 더해진다 — 기본값은 gardenSet.size
+    // 그대로라 flag-off 상태는 기존과 바이트 단위로 동일(scripts/
+    // testGrowthPoints.mjs 8절, scripts/testGardenGrowthFlow.mjs).
+    gardenPoints: gardenWordPoints + gardenBonusPoints,
+    // 디버그/UI 표시용 추가 분해값(additive) — 어떤 기존 소비처도 이 두
+    // 필드를 읽지 않으므로 존재 자체가 기존 동작에 영향을 주지 않는다.
+    gardenWordPoints,
+    gardenBonusPoints,
     gardenSet,
     masteredCount,
     missionByWordId,
