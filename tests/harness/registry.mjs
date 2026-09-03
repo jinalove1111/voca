@@ -95,6 +95,7 @@ export const DOMAINS = {
       { script: 'scripts/testClearStudentPin.mjs', builders: [] },
       { script: 'scripts/testAdminPinThrottle.mjs', builders: [], extra: false, note: '2026-09-04 야간 T6b — 관리자 PIN 브루트포스 스로틀 회귀(security-reviewer 감사 Medium #P12). verify-admin-pin.js에만 있던 실패 지연(1.5초)이 checkAdminReauth(admin-pin-actions.js 12개 액션/compute-word-king.js/start-new-season.js 공유)와 clear-student-pin.js/set-student-pin.js 인라인 비교에는 없어 그 경로들로 전속력 온라인 브루트포스가 가능했던 문제 수정. api/_pinAuth.js에 공용 adminPinFailureDelay()/timingSafeStringEqual() 도입 + 4개 실패 경로 전부 적용 + verify-admin-pin.js 평문 `===` 비교를 timingSafeStringEqual로 교체. 정적 검사(ADMIN_PIN 직접 비교 파일 전부 지연 호출/평문 비교 부재) + 행동 검증(틀린 PIN은 테스트 전용 ADMIN_PIN_FAIL_DELAY_MS 오버라이드만큼 지연·응답 형태 무변경, 맞는 PIN은 즉시 반환) 23단언, 인가 실패 경로만 태워 네트워크/DB 접촉 0. dispatch 회귀(섹션4)는 ADMIN_PIN 부재 시 SKIP(기존 4개 스크립트와 동일 관례). 수정 전 소스로 8단언 FAIL 실측(규칙 15, git stash로 재현) 후 전체 PASS 전환. 13개 필수 도메인 밖, 신규 보너스 커버리지.' },
       { script: 'scripts/testRlsSecurity.mjs', builders: [] },
+      { script: 'scripts/testSecurityRegressions.mjs', builders: [], note: '2026-09-04 — 보안 회귀 고정 스위트(T9): grant-xp.js 레거시 XP 분기 인증부재(KNOWN, handoff.md 2026-09-02) / AdminScreen.jsx 미인증 fetch 금지 / src 시크릿 노출 0 / .env git 이력 0 / addStudent 호출부 0(자기등록 OFF) / anon 권한 라이브 프로브(phantom id) / PIN 잠금 상수·ilike 이스케이프 / Release Gate 자격증명-부재 자가검증(공허 통과 금지). 네트워크는 anon key phantom id 프로브만, 실데이터 무접촉.' },
       { script: 'scripts/testLoginRestoreCrash.mjs', builders: ['race'] },
     ],
   },
