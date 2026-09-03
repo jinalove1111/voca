@@ -21,10 +21,34 @@ import { gardenStageTotal } from '../utils/attachment/worldProgress'
 // HatCeremony 오버레이보다 낮아서 절대 그것들을 가리지 않는다").
 const AUTO_DISMISS_MS = 2500
 
+// ── P4 "유닛 완료 보상" 축하(2026-09-03, flag unitCompleteReward) ────────
+// summary.unitComplete가 있으면(rewardSummary.buildSessionRewardSummary가
+// entries에서 unit-complete 항목을 찾아 실어준 값, useStudent.js 재구현
+// 아님) "big" 변형으로 렌더 — 더 큰 헤딩 + 결정적(랜덤 아님) 코스메틱
+// 이모지 한 줄. 자동 닫힘도 일반(2.5초)보다 길게(3.5초) — 축하를 조금 더
+// 오래 보여준다.
+const BIG_AUTO_DISMISS_MS = 3500
+
+// P7 "서프라이즈"(코스메틱 전용, 경제/희소성 없음, 감사 §13 원칙 3) —
+// 이 목록 중 어떤 것을 보여줄지는 unitId의 순수 해시로 결정된다(같은
+// 유닛은 항상 같은 줄 — Math.random 없음, 재현 가능).
+const COSMETIC_ROWS = ['🎉✨🎊', '🌟🎆🌟', '🎈🎉🎈', '✨🎉✨', '🎊🌟🎊']
+
+// 문자열 → 0 이상 정수(간단한 순수 해시, 암호학적 용도 아님 — 코스메틱
+// 선택에만 쓴다). 같은 입력은 항상 같은 출력(결정론).
+function hashString(value) {
+  const str = String(value || '')
+  let h = 0
+  for (let i = 0; i < str.length; i++) h = (Math.imul(h, 31) + str.charCodeAt(i)) | 0
+  return Math.abs(h)
+}
+
 export default function SessionRewardCard({ summary, onDismiss }) {
+  const isBig = !!(summary && summary.unitComplete)
+  const autoDismissMs = isBig ? BIG_AUTO_DISMISS_MS : AUTO_DISMISS_MS
   useEffect(() => {
     if (!summary) return undefined
-    const t = setTimeout(() => onDismiss && onDismiss(), AUTO_DISMISS_MS)
+    const t = setTimeout(() => onDismiss && onDismiss(), autoDismissMs)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [summary])
@@ -40,7 +64,12 @@ export default function SessionRewardCard({ summary, onDismiss }) {
     ? withGardenGrowth(summary, gardenStageTotal(summary.gardenRawBefore), gardenStageTotal(summary.gardenRawAfter))
     : summary
   const lines = formatRewardLines(resolvedSummary)
-  if (lines.length === 0) return null
+  // big 변형은 lines가 비어 있어도(이론상 도달 불가 — unit-complete 자체가
+  // +5★ 항목이라 stars 줄이 항상 있다) 축하 헤딩만은 보여준다. 일반
+  // 변형은 기존 그대로 "보여줄 줄이 없으면 아무것도 렌더하지 않음".
+  if (!isBig && lines.length === 0) return null
+
+  const cosmeticRow = isBig ? COSMETIC_ROWS[hashString(summary.unitComplete.unitId) % COSMETIC_ROWS.length] : null
 
   return (
     <div
@@ -49,8 +78,14 @@ export default function SessionRewardCard({ summary, onDismiss }) {
       role="status"
     >
       <div className="flex flex-col gap-1 items-center text-center">
+        {isBig && (
+          <p className="text-xl font-black text-gray-900">📘 유닛 완료!</p>
+        )}
+        {isBig && cosmeticRow && (
+          <p aria-hidden="true" className="text-2xl leading-none">{cosmeticRow}</p>
+        )}
         {lines.map((line, i) => (
-          <p key={i} className={i === 0 ? 'text-base font-black text-gray-900' : 'text-sm font-bold text-gray-600'}>
+          <p key={i} className={i === 0 && !isBig ? 'text-base font-black text-gray-900' : 'text-sm font-bold text-gray-600'}>
             {line}
           </p>
         ))}

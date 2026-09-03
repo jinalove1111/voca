@@ -52,6 +52,15 @@ function sumPositive(list, pick) {
   }, 0)
 }
 
+// P4 — entries 안에 unit-complete 항목이 있으면 { unitId } 반환(카드가 큰
+// 축하 변형과 결정적 코스메틱 이모지를 고를 근거), 없으면 null. source_id가
+// 곧 unitId다(rewardEngine.js REWARD_SOURCE_RULES 'unit-complete' 참고).
+function findUnitComplete(list) {
+  if (!Array.isArray(list)) return null
+  const entry = list.find((e) => e && e.reward_type === 'unit-complete')
+  return entry ? { unitId: entry.source_id } : null
+}
+
 /**
  * 한 세션(한 번의 "의미있는 학습 완료" 순간)에 실제로 있었던 보상을 모아
  * 요약으로 만든다. 어떤 숫자도 여기서 지어내지 않는다 — 전부 호출부가
@@ -110,7 +119,11 @@ export function buildSessionRewardSummary({ entries, xpEvents, gardenBefore, gar
     ? { kind: 'level', remaining, label: `다음 레벨까지 별 ${remaining}개` }
     : { kind: 'level', remaining: null, label: null }
 
-  return { stars, xp, gardenGrowth, gardenRawBefore: rawBefore, gardenRawAfter: rawAfter, streak: streakDays, nextGoal }
+  // P4 — 이번 세션이 unit-complete 앵커였으면 { unitId }, 아니면 null.
+  // SessionRewardCard.jsx가 이 값 유무로 "big" 축하 변형을 고른다.
+  const unitComplete = findUnitComplete(entries)
+
+  return { stars, xp, gardenGrowth, gardenRawBefore: rawBefore, gardenRawAfter: rawAfter, streak: streakDays, nextGoal, unitComplete }
 }
 
 /**

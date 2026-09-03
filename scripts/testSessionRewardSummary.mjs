@@ -148,6 +148,15 @@ if (buildSessionRewardSummary && formatRewardLines) {
     check('withGardenGrowth: 원본 gardenRawBefore/gardenRawAfter는 보존', filled.gardenRawBefore === 3 && filled.gardenRawAfter === 5)
     check('withGardenGrowth: after<before여도 음수 금지(0으로 클램프)', withGardenGrowth(sRaw, 5, 1).gardenGrowth === 0)
   }
+
+  // ── P4(유닛 완료 보상, 2026-09-03) — unitComplete 필드 ──────────────────
+  const withUnit = buildSessionRewardSummary({
+    entries: [{ reward_type: 'unit-complete', source_type: 'unit', source_id: 'unit-uuid-1', stars_delta: 5 }],
+    xpEvents: [], gardenBefore: 0, gardenAfter: 0, streak: 0, totalStars: 5,
+  })
+  check('entries에 unit-complete가 있으면 unitComplete.unitId === source_id', withUnit.unitComplete && withUnit.unitComplete.unitId === 'unit-uuid-1')
+  const withoutUnit = buildSessionRewardSummary({ entries: [{ reward_type: 'word-session-complete', stars_delta: 1 }], xpEvents: [], gardenBefore: 0, gardenAfter: 0, streak: 0, totalStars: 1 })
+  check('unit-complete가 없으면 unitComplete는 null', withoutUnit.unitComplete === null)
 }
 
 // ── 2) SessionRewardCard.jsx — SSR 렌더 문자열 단언 ─────────────────────
@@ -197,6 +206,23 @@ if (SessionRewardCard) {
   const rawSummary = { stars: 0, xp: 0, gardenRawBefore: 3, gardenRawAfter: 5, streak: 0, nextGoal: { kind: 'level', remaining: null, label: null } }
   const rawHtml = renderToStaticMarkup(React.createElement(SessionRewardCard, { summary: rawSummary, onDismiss: () => {} }))
   check('원시 정원값 3→5 → 카드가 단계로 변환해 "🌱 정원 +1" 렌더', rawHtml.includes('정원 +1'))
+
+  // ── P4(유닛 완료 보상, 2026-09-03) — big 변형(축하 헤딩 + 결정적 코스메틱) ──
+  const bigSummary1 = { stars: 5, xp: 0, gardenGrowth: 0, streak: 0, unitComplete: { unitId: 'unit-aaa' }, nextGoal: { kind: 'level', remaining: null, label: null } }
+  const bigHtml1 = renderToStaticMarkup(React.createElement(SessionRewardCard, { summary: bigSummary1, onDismiss: () => {} }))
+  check('unitComplete가 있으면 "유닛 완료" 헤딩 렌더', bigHtml1.includes('유닛 완료'))
+  check('big 변형에도 별 줄은 그대로 렌더', bigHtml1.includes('+5 ⭐'))
+
+  const bigHtml1Again = renderToStaticMarkup(React.createElement(SessionRewardCard, { summary: bigSummary1, onDismiss: () => {} }))
+  check('같은 unitId → 코스메틱 이모지 줄이 항상 동일(결정적, 랜덤 아님)', bigHtml1 === bigHtml1Again)
+
+  const bigSummary2 = { ...bigSummary1, unitComplete: { unitId: 'unit-bbb-completely-different' } }
+  const bigHtml2 = renderToStaticMarkup(React.createElement(SessionRewardCard, { summary: bigSummary2, onDismiss: () => {} }))
+  check('unitId가 다르면 카드 전체 HTML도 다를 수 있음(코스메틱이 unitId에 의존)', typeof bigHtml2 === 'string' && bigHtml2.includes('유닛 완료'))
+
+  const normalSummary = { stars: 1, xp: 0, gardenGrowth: 0, streak: 0, unitComplete: null, nextGoal: { kind: 'level', remaining: null, label: null } }
+  const normalHtml = renderToStaticMarkup(React.createElement(SessionRewardCard, { summary: normalSummary, onDismiss: () => {} }))
+  check('unitComplete가 null이면 "유닛 완료" 헤딩 없음(일반 변형 그대로)', !normalHtml.includes('유닛 완료'))
 }
 
 // ── 3) 배선 정적 검사 — 플래그 기본 OFF + 기존 지급 가드 재사용 + App 마운트 ──
