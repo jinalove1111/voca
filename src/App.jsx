@@ -719,6 +719,12 @@ function AppInner({ studentId, studentName, onLogout }) {
         // GiftReveal 오버레이(아래 pendingGift 블록)는 screen 값과 무관하게
         // 렌더되므로 이 화면도 자동으로 덮는다.
         <GuidedSession
+          // 유닛 전환 안전망(2026-09, overnight T7b) — 현재는 유닛 전환이
+          // 항상 대시보드 경유(리마운트)라 실질적 영향은 없지만, 향후
+          // 대시보드를 거치지 않는 전환 경로가 생겨도 이전 유닛의 내부
+          // state(진행 인덱스 등)가 새 유닛으로 새 상태 그대로 넘어가지
+          // 않도록 unitId를 key로 못박아 강제 리마운트한다.
+          key={currentUnitId ?? 'no-unit'}
           classWords={classWords}
           resumeIndex={studentData.getResumeIndexForUnit(currentUnitId)}
           studentId={studentId}
