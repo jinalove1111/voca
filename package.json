@@ -71,6 +71,7 @@
     "verify:reward-hardening": "node scripts/testRewardServerHardening.mjs",
     "verify:reward-hardening-behavior": "node scripts/testRewardServerHardeningBehavior.mjs",
     "verify:session-auth": "node scripts/testSessionTokenAuth.mjs",
+    "verify:security-regressions": "node scripts/testSecurityRegressions.mjs",
     "verify:pin-setup-capability": "node scripts/testPinSetupCapability.mjs",
     "verify:create-student": "node scripts/testCreateStudentUnitAssignment.mjs",
     "verify:admin-unit-edit": "node scripts/testAdminUnitEdit.mjs",
