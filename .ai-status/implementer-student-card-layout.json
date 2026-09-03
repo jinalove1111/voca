@@ -1,0 +1,26 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "student-card-layout",
+  "task": "학생관리(StudentDirectory) 카드에서 버튼 그룹이 학생 이름을 가리던 레이아웃 버그(운영자 제보) 수정",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-04T00:00:00Z",
+  "updated_at": "2026-09-04T00:00:00Z",
+  "files_owned": [
+    "src/components/admin/StudentDirectory.jsx",
+    "scripts/testStudentCardLayout.mjs",
+    "package.json",
+    "tests/harness/registry.mjs"
+  ],
+  "files_read": [
+    "scripts/testExcelHeaderGuard.mjs",
+    ".ai-status/implementer-pin-setup-code-lookup.json",
+    ".ai-status/README.md"
+  ],
+  "summary": "renderStudentCard의 행 컨테이너(flex items-start justify-between gap-2)에 flex-wrap 추가, 오른쪽 버튼 그룹(flex gap-1.5 flex-wrap justify-end items-center)의 flex-shrink-0을 min-w-0 flex-1 basis-full sm:basis-auto로 교체(더 이상 이름 블록을 밀어내지 않고, 좁은 화면에서는 이름 아래로 줄바꿈), 왼쪽 이름 블록(flex items-start gap-2 min-w-0)에 flex-shrink-0 추가(0으로 붕괴 방지). CSS 클래스만 변경, 버튼 텍스트/핸들러/로직 무변경. scripts/testStudentCardLayout.mjs 신규(renderStudentCard 소스 텍스트 정적 추출·검사, testExcelHeaderGuard.mjs와 동일 관례) — 규칙 15 FAIL-first: 수정 전 소스로 4단언(①행 wrap, ②버튼그룹 shrink-0/min-w-0, ③이름블록 축소가드) FAIL 실측 후 수정, 전체 12단언 PASS 전환(잠금해제 버튼 조건/텍스트 무회귀 + 규칙 11 PIN 컬럼 문자열 등장 횟수 origin/main 대비 불변 포함). npm run verify:student-card-layout 등록(package.json) + tests/harness/registry.mjs admin 도메인 편입(extra 아님, 13개 필수 도메인 안).",
+  "build_result": "npm run build — PASS (오류/신규 경고 없음)",
+  "verify_result": "npm run verify:student-card-layout — ALL PASS(12단언). npm run verify:admin — ALL PASS(24개 스크립트, 본 테스트 포함).",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 대기. DB/마이그레이션 없음, 학생 대상 신규 기능/게임화 없음(순수 CSS 레이아웃 수정)."
+}
