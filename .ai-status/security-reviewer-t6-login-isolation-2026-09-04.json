@@ -1,0 +1,23 @@
+{
+  "agent_name": "security-reviewer",
+  "role": "인증/인가 경계 감사",
+  "task_id": "t6-login-isolation-2026-09-04",
+  "task": "Overnight QA T6: P7 로그인/학생 isolation/보안 회귀 감사 (origin/main 1712cf5)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-04T03:00:00Z",
+  "updated_at": "2026-09-04T04:20:00Z",
+  "files_owned": [],
+  "files_read": [
+    "api/verify-student-pin.js", "api/verify-admin-pin.js", "api/_pinAuth.js",
+    "api/admin-pin-actions.js", "api/set-student-pin.js", "api/clear-student-pin.js",
+    "api/self-set-student-pin.js", "api/student-pin-status.js", "api/grant-xp.js",
+    "api/submit-entrance-result.js", "src/hooks/useStudent.js", "src/App.jsx",
+    "src/components/AdminScreen.jsx", "src/components/StudentSelect.jsx",
+    "src/utils/wordLibrary.js", "src/utils/rewardEngine.js", "DATABASE.md", "handoff.md",
+    "scripts/testRlsSecurity.mjs", "scripts/testRewardEndpointSecurity.mjs"
+  ],
+  "summary": "7항목 전수 감사 완료. 학생 isolation/캐시 스코핑/로그아웃 PASS. AdminScreen PIN 게이트+checkAdminReauth 전 액션 커버 PASS. secrets 노출 0. RLS/컬럼권한 라이브 프로브(anon key, 0-row/phantom-id, testRlsSecurity.mjs+testRewardEndpointSecurity.mjs 실행) 전부 PASS, 기존 3개 KNOWN 노출 재확인. 신규 발견: (1) Low — verify-admin-pin.js가 checkAdminReauth와 달리 timingSafeEqual 미적용 (2) Medium — ADMIN_PIN 브루트포스 1.5초 스로틀이 verify-admin-pin.js 1곳에만 있고 admin-pin-actions.js/compute-word-king.js/start-new-season.js/clear-student-pin.js/set-student-pin.js 5개 엔드포인트(checkAdminReauth 또는 인라인 비교)는 스로틀 없음. student_class_assignments 'allow anon all' anon DELETE/UPDATE/SELECT 라이브 확인(200/204)했으나 handoff.md:286 기존 KNOWN 항목 재확인(신규 아님).",
+  "blocker": null,
+  "next_action": "Medium(ADMIN_PIN 스로틀 불일치)/Low(verify-admin-pin timingSafeEqual) 2건 implementer 위임 — 상세는 세션 최종 보고 참고"
+}
