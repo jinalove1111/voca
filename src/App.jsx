@@ -40,6 +40,11 @@ import { starSeedState } from './utils/attachment/paulTown'
 // 오버레이 아님 — AppInner 루트에 항상 렌더해도 다른 화면 전환/입력을
 // 막지 않는다.
 import RewardToast from './components/RewardToast'
+// Session Reward Summary(P1 "즉각적인 보상 피드백", 2026-09-03) — flag
+// sessionRewardSummary(config/features.js) OFF면 studentData.
+// sessionRewardSummary가 영원히 null이라(useStudent.js 게이팅) 아래 조건부
+// 마운트가 항상 false, 이 import/컴포넌트는 오늘 화면에 전혀 영향 없음.
+import SessionRewardCard from './components/SessionRewardCard'
 
 // 개발 중에만 찍히는 진단 로그(로그인/Home 진입 시 currentStudent 상태 등)
 // — 프로덕션 콘솔을 어지럽히지 않도록 DEV 빌드에서만 활성화.
@@ -196,7 +201,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 별도 상태로 관리 — 마찬가지로 세션 동안만 유지.
   const [studyScope, setStudyScope] = useState('all')
   const studentData                 = useStudent(studentId, studentName)
-  const { cleared, completedWords, clearedWords, answerMission, missions, grantReward, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord, wordStatus, setWordKnown, setWordUnknown, spellingReviewQueue, setLastTextbookClassId, recordExamCompleted, rewardFeedback, dismissRewardFeedback, round, liveMissionsCompleted } = studentData
+  const { cleared, completedWords, clearedWords, answerMission, missions, grantReward, markPronunciationOk, pendingGift, dismissGift, lastGamePlayed, setLastGamePlayed, recordGamePlayed, spellingWrongToday, clearSpellingReviewWord, wordStatus, setWordKnown, setWordUnknown, spellingReviewQueue, setLastTextbookClassId, recordExamCompleted, rewardFeedback, dismissRewardFeedback, sessionRewardSummary, dismissSessionRewardSummary, round, liveMissionsCompleted } = studentData
   // 애착 시스템(2026-07-22) — 파생 통계 + 모자/밀스톤 자동 판정(복원 확인
   // 후 학생당 1회). 판정 로직은 src/utils/attachment/ 순수 함수.
   const attachment = useAttachment(studentId, studentData)
@@ -697,6 +702,12 @@ function AppInner({ studentId, studentName, onLogout }) {
           최상단에 떠 있는 소형 토스트. 모달 아님(다른 화면 입력을 막지
           않음), 큐가 비어있으면 RewardToast 자체가 null을 반환. */}
       <RewardToast entries={rewardFeedback} onDismiss={dismissRewardFeedback} />
+      {/* Session Reward Summary(P1, 2026-09-03) — sessionRewardSummary
+          플래그 OFF면 studentData.sessionRewardSummary가 항상 null이라
+          SessionRewardCard가 null을 반환(마운트는 되지만 렌더 결과 없음,
+          컴포넌트 헤더 주석 참고). GiftReveal 등 전체화면 오버레이보다
+          낮은 z-index(z-40)라 그것들을 절대 가리지 않는다. */}
+      <SessionRewardCard summary={sessionRewardSummary} onDismiss={dismissSessionRewardSummary} />
       {screen === 'dashboard'     && (
         <Dashboard studentId={studentId} studentName={studentName} studentData={studentData} classWords={classWords}
           onGo={setScreen} onLogout={onLogout} onPlayGame={startRandomGame}

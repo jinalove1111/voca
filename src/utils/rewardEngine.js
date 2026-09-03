@@ -45,6 +45,30 @@ export const REWARD_STARS = {
   'daily-goal-complete': 3,
   'streak-bonus': 0,
   'legacy-baseline': 0,
+  // ── P4/P5(2026-09-03, docs/REWARD_LOOP_AUDIT_2026-09-03.md §2·4·14) ──
+  // 위 7개는 동결(frozen) — scripts/testRewardTypesV2.mjs 8절이 값 변경을
+  // 회귀로 잡는다. 아래 3개가 이번에 추가하는 신규 타입이다:
+  //
+  // 'unit-complete' — 유닛 하나를 완주했을 때(감사 §2 "Unit 완료 보상
+  // 이벤트 없음" 갭 해소). 5는 하루 목표(daily-goal-complete=3)보다는
+  // 크게 느껴져야 하지만(유닛 완주가 하루 목표보다 더 큰 성취) 인플레를
+  // 막기 위해 2배를 넘지 않는 선(3의 2배=6 미만)으로 잡았다 — 유닛 개수가
+  // 유한(교재당 정해진 유닛 수)하므로 반복 파밍 여지도 구조적으로 없다.
+  'unit-complete': 5,
+  // 'word-mastered' — 오답 단어를 완전히 "마스터"(스펠링 복습 큐에서
+  // 영구 이탈)했을 때 학생당 wordId 1회 평생. 기존 'wrong-word-recovered'
+  // (하루 단위 회복, 최대 60건/일, 동결)의 anti-farming 짝 개념 —
+  // "그날 한 번 맞혔다"(반복 가능, 하루 상한)와 "완전히 숙달했다"(평생
+  // 1회, 카운터 없음)를 별개 이벤트로 취급해 회상/숙달 자체를 보상한다
+  // (연구 브리프 §8, 감사 §13 원칙 1). 금액은 wrong-word-recovered와
+  // 동일한 1 — "매일 반복되는 회복"과 "평생 한 번의 숙달 완주"를 액수로
+  // 차등하지 않고 상한/수명(lifetime)만으로 구분한다.
+  'word-mastered': 1,
+  // 'review-session-bonus' — 하루에 복습 세션(오답 복습 큐) 하나를
+  // 완주하면 딱 1회. exam-complete(2)와 같은 액수 — "세션 하나 완주"라는
+  // 성취의 크기가 비슷하다고 판단(운영자 지정, 감사 §4 "복습/숙달 보상
+  // 강화" 갭 부분 해소).
+  'review-session-bonus': 2,
 }
 
 // ── 2) 연속 학습일 보너스 — V1은 이 3단계뿐. 새 단계를 추가하려면 이
@@ -172,6 +196,21 @@ export const REWARD_SOURCE_RULES = {
   'wrong-word-recovered': { sourceType: 'spelling-review', pattern: 'date:token' },
   'daily-goal-complete': { sourceType: 'daily-goal', pattern: 'date' },
   'streak-bonus': { sourceType: 'streak', pattern: 'date:streak' },
+  // ── P4/P5 신규 3종(위 REWARD_STARS 주석 참고, 값은 scripts/testRewardTypesV2.mjs
+  // 8절이 동결 고정하는 기존 6개와 별개) ──
+  // 'unit-complete'는 sourceId가 unitId(uuid)뿐이고 날짜를 포함하지 않는다
+  // — 그래서 idempotency_key(아래 rewardIdempotencyKey)도 날짜가 없어
+  // "이 unitId는 이 학생에게 평생 1회"가 자동으로 성립한다(REWARD_DAILY_CAP
+  // 은 "하루에 몇 개의 서로 다른 unitId까지"만 제한).
+  'unit-complete': { sourceType: 'unit', pattern: 'uuid' },
+  // 'word-mastered'는 신규 pattern 'token' — 기존 'date:token'에서 날짜
+  // 접두를 뺀 형태(아래 isValidRewardSource 참고). sourceId가 wordId(토큰)
+  // 뿐이라 이 역시 idempotency_key에 날짜가 없어 "이 wordId는 평생 1회".
+  'word-mastered': { sourceType: 'spelling-review-mastery', pattern: 'token' },
+  // 'review-session-bonus'는 기존 word-session-complete/daily-goal-complete
+  // 와 같은 'date' 패턴 — sourceId가 날짜뿐이라 구조적으로 하루 1건(상한 1과
+  // 정합).
+  'review-session-bonus': { sourceType: 'daily-review', pattern: 'date' },
 }
 
 // useStudent.js의 todayStr()가 실제로 만드는 형식(`new Date().toDateString()`)
@@ -220,6 +259,14 @@ export function isValidRewardSource(rewardType, sourceType, sourceId) {
     const datePart = sourceId.slice(0, idx)
     const tokenPart = sourceId.slice(idx + 1)
     return isValidDateToken(datePart) && WORD_TOKEN_RE.test(tokenPart)
+  }
+  // 'token' — P4/P5(2026-09-03) 신규. 'date:token'과 같은 WORD_TOKEN_RE를
+  // 재사용하되 날짜 접두가 전혀 없다(word-mastered는 평생 1회라 날짜 자체가
+  // 의미 없음 — 날짜를 붙이면 idempotency_key가 날짜별로 달라져 "평생 1회"
+  // 계약이 깨진다). ':'가 하나라도 들어간 값(=date:token 형태로 위장한 값)
+  // 은 WORD_TOKEN_RE 자체가 ':'를 허용하지 않으므로 자동으로 거부된다.
+  if (rule.pattern === 'token') {
+    return WORD_TOKEN_RE.test(sourceId)
   }
   if (rule.pattern === 'date:streak') {
     const idx = sourceId.indexOf(':')
@@ -270,6 +317,19 @@ export const REWARD_DAILY_CAP = {
   'wrong-word-recovered': 60,
   'daily-goal-complete': 1,
   'streak-bonus': 1,
+  // ── P4/P5 신규 3종 ──
+  // 'unit-complete' 2 — sourceId(unitId)는 평생 1회씩만 지급되지만, 하루에
+  // 서로 다른 unitId를 몇 개까지 완주 인정할지는 별개 문제라 상한이 필요
+  // (그렇지 않으면 unitId 자유도만큼, 즉 교재 전체 유닛 수만큼 하루에
+  // 몰아 지급될 수 있다). 하루 2유닛 완주는 실제로 가능한 페이스(반 진도
+  // 재조정 등)라 여유를 주되, 무제한 farming은 막는다.
+  'unit-complete': 2,
+  // 'word-mastered' 60 — wrong-word-recovered와 동일 근거(유닛당 단어 수
+  // 실측 최대 50 + 여유 10). 마스터도 결국 그 유닛의 단어 집합을 넘지 않는다.
+  'word-mastered': 60,
+  // 'review-session-bonus' 1 — sourceId가 날짜뿐이라 구조적으로 하루 1건
+  // (다른 date-pattern 타입과 동일하게 1로 고정).
+  'review-session-bonus': 1,
 }
 
 export function rewardDailyCap(rewardType) {

@@ -144,6 +144,29 @@ const DEFAULT_FEATURES = {
   // 오토파일럿이 실행하는 규칙/AI 단계 결과에서 나오므로 — 오토파일럿이
   // 꺼져 있으면 이 플래그는 아무 효과가 없다).
   writingReviewAutoDismiss: false,
+
+  // ── 즉각적인 보상 피드백(Session Reward Summary, P1, 2026-09-03) ──────
+  // 학생이 "의미있는 학습 완료"(word-session-complete/writing-complete/
+  // exam-complete/daily-goal-complete 앵커 4종)를 마친 순간, 그 세션에서
+  // 실제로 있었던 보상(별/XP/정원 성장/연속일/다음 레벨까지)을 모아 보여
+  // 주는 하단 고정 카드(SessionRewardCard.jsx) 게이팅. 기본 false —
+  // 꺼져 있으면 기존 RewardToast(상단 토스트)만 그대로 동작하고, 이
+  // 카드는 전혀 렌더되지 않는다(App.jsx가 studentData.sessionRewardSummary로
+  // 조건부 마운트, 이 상태 자체가 useStudent.js에서 flag OFF면 절대
+  // set되지 않음 — 오늘과 바이트 단위로 동일). 어떤 지급 로직/금액/
+  // dedup 키도 이 플래그가 바꾸지 않는다(순수 표시 계층).
+  sessionRewardSummary: false,
+
+  // ── 보상 루프 P2~P6(2026-09-03, docs/REWARD_LOOP_AUDIT_2026-09-03.md §14) ──
+  // 운영자 승인 전 전부 OFF. P2(정원 성장 신호 v2)/P3(다음 목표 카드)/
+  // P4(유닛 완료 보상, 서버 재배포 필요)/P5(스트릭 v2)/P6(숙달 보상) 각각
+  // 별도 커밋에서 소비 로직이 배선되며, 이 플래그가 꺼져 있으면 기존
+  // 동작과 바이트 단위로 동일해야 한다(각 소비 지점 주석 참고).
+  attachmentGardenGrowthV2: false,
+  nextGoalsCard: false,
+  streakV2: false,
+  unitCompleteReward: false,
+  masteryReward: false,
 }
 
 // localStorage에서 저장된 features 불러오기.
@@ -232,7 +255,11 @@ export const getFeaturesByCategory = (category) => {
     classManagement: ['classManagement', 'classManagement_create', 'classManagement_edit', 'classManagement_delete'],
     studentManagement: ['studentManagement', 'studentManagement_register', 'studentManagement_edit', 'studentManagement_delete', 'studentAssignment'],
     homework: ['homework', 'homework_create', 'homework_submission', 'homework_stats'],
-    ranking: ['ranking', 'pointSystem', 'leaderboard', 'rewardSystem'],
+    // sessionRewardSummary(Session Reward Summary, 2026-09-03)도 같은 이유로
+    // 여기 얹는다 — FeatureManagementPanel에 토글이 보이려면 카테고리
+    // 목록에 있어야 한다(writingReviewAiAssist가 빠져서 토글이 안 보였던
+    // 2026-07-23 사고의 교훈 그대로, 위 writingCoachEnabled 주석과 동일).
+    ranking: ['ranking', 'pointSystem', 'leaderboard', 'rewardSystem', 'sessionRewardSummary'],
     // writingReviewAiAssist(v1.1, 2026-07-23)는 이 카테고리에 없어서
     // FeatureManagementPanel에 토글 자체가 안 보이던 문제(2026-07-23 관리자
     // UI 2차 개편에서 발견 — 근본 원인 수정)를 이 목록 추가로 고친다.

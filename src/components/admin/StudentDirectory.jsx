@@ -8,7 +8,18 @@ import {
   // 유닛(엑셀 헤더 잔재/빈 유닛)을 옵션·기본값으로 내보내지 않게 하는
   // "학습 가능 유닛만" 버전. wordLibrary.js의 isLearnableUnit 헬퍼 섹션 참고.
   getLearnableTextbookUnits, getLearnableClassUnitNames,
+  // P9(2026-09-03, docs/REWARD_LOOP_AUDIT_2026-09-03.md §12) — 관리자 카드
+  // 보상 요약 줄의 XP 값. 이미 있는 관리자 배치 헬퍼(학생별 N번 조회
+  // 없음, xp_totals VIEW anon SELECT)를 그대로 재사용 — wordLibrary.js
+  // 무변경.
+  fetchXpTotals,
 } from '../../utils/wordLibrary'
+// P9 — 위 fetchDashboardData(전체 컬럼)에서 화면에 필요한 최소 필드만
+// 뽑아 한 줄로 접는 순수 모듈(zero-imports). 이 컴포넌트는 여기서만
+// import하고, PIN 자격증명 관련 컬럼(해시/실패횟수/잠금시각 — 어느
+// 것도 student_progress에 없고 애초에 이 화면 코드가 조회하지도 않음)은
+// 이번 변경으로도 전혀 늘지 않는다(CLAUDE.md 규칙 11).
+import { summarizeStudentRewards, formatAdminRewardLine } from '../../utils/adminRewardSummary'
 // House System(2026-07-19, 게임화 하위카드 8번) — 학생 로스터에 최소
 // 하우스 확인/재배정 UI(HOUSES 상수만 필요, 순수 함수는 wordLibrary.js가
 // 대신 소비).
@@ -203,7 +214,10 @@ export default function StudentDirectory({ adminPin }) {
   // (PIN 미설정 && 별/완료 0)에도 재사용. 전체 로스터를 한 번에 조회하지
   // 않고, 실제로 화면에 보이는(펼친 반 또는 검색 결과) 학생 id만 배치
   // 조회한다(fetchDashboardData 재사용, wordLibrary.js 무변경). id ->
-  // { lastStudiedDate, totalStars, clearedCount } | null(조회 실패).
+  // { lastStudiedDate, totalStars, clearedCount, rewardSummary } |
+  // null(조회 실패). rewardSummary(P9, 2026-09-03)는 summarizeStudentRewards
+  // 결과 — 완전삭제 가드 필드와 같은 배치 조회 결과에서 파생만 추가한
+  // 것이라 새 네트워크 호출이 늘지 않는다(XP만 fetchXpTotals 배치 1회 추가).
   const [progressMap, setProgressMap] = useState({})
   const classList = getClassNames()
 
@@ -1002,14 +1016,21 @@ export default function StudentDirectory({ adminPin }) {
     const missingIds = visibleStudentIds.filter(id => progressMap[id] === undefined)
     if (missingIds.length === 0) return
     let cancelled = false
-    fetchDashboardData(missingIds).then(rows => {
+    // P9(2026-09-03) — 같은 missingIds로 XP 배치도 한 번 더 조회한다(별개
+    // 테이블, xp_totals VIEW). fetchDashboardData와 병렬로 쏘되 실패해도
+    // (뷰/테이블 미존재 등) fetchXpTotals 자체가 빈 객체로 폴백하므로
+    // Promise.all이 reject하지 않는다 — XP만 조용히 "표시 안 함"이 된다.
+    Promise.all([fetchDashboardData(missingIds), fetchXpTotals(missingIds)]).then(([rows, xpTotals]) => {
       if (cancelled) return
       setProgressMap(prev => {
         const next = { ...prev }
         rows.forEach(r => {
+          const rewardSummary = summarizeStudentRewards(
+            r.progress ? { ...r.progress, xpTotal: xpTotals[r.id] } : { xpTotal: xpTotals[r.id] }
+          )
           next[r.id] = r.progress
-            ? { lastStudiedDate: r.progress.last_studied_date || null, totalStars: r.progress.total_stars ?? 0, clearedCount: r.progress.cleared_count ?? 0 }
-            : { lastStudiedDate: null, totalStars: 0, clearedCount: 0 }
+            ? { lastStudiedDate: r.progress.last_studied_date || null, totalStars: r.progress.total_stars ?? 0, clearedCount: r.progress.cleared_count ?? 0, rewardSummary }
+            : { lastStudiedDate: null, totalStars: 0, clearedCount: 0, rewardSummary }
         })
         return next
       })
@@ -1073,6 +1094,17 @@ export default function StudentDirectory({ adminPin }) {
                     : '최근 학습 기록 없음'}
                 <span className="ml-1.5 text-gray-300">id {s.id.slice(0, 8)}</span>
               </p>
+              {/* P9(2026-09-03, docs/REWARD_LOOP_AUDIT_2026-09-03.md §12) —
+                  교사/관리자 관점 보상 정보 최소 노출 1줄. progress가
+                  아직 undefined(배치 조회 전)면 위 "확인 중…"과 중복되므로
+                  생략 — 조회가 끝난 뒤에만 뜬다. 새 화면/새 fetch가 아니라
+                  기존 카드에 파생 텍스트 한 줄만 추가(줄바꿈은 허용,
+                  모바일 좁은 폭 대응). */}
+              {progress && progress.rewardSummary && (
+                <p className="text-[10px] text-gray-400 mt-0.5 break-keep">
+                  {formatAdminRewardLine(progress.rewardSummary)}
+                </p>
+              )}
               {/* House System(2026-07-19, 게임화 하위카드 8번) —
                   최소 확인/재배정. select 값이 바뀌면 즉시 저장
                   (반/유닛처럼 "편집 모드" 없이 값 하나만 바꾸는

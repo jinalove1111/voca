@@ -223,7 +223,12 @@ console.log('\n7. daily-goal-complete(+3, Reward V1)는 같은 취약 구조인�
   check('rewardLedger는 record 최상위 필드', /^\s*rewardLedger: \[\],/m.test(code))
   check('grantLedgerReward의 1차 가드가 rewardLedger(영속) 기준', /hasRewardEntry\(rewardLedger, key\)/.test(code))
   check('병합도 원장 단위(mergeRewardLedgers)로 보존', /rewardLedger: mergeRewardLedgers\(/.test(code))
-  check('daily-goal-complete는 날짜 키(하루 1회)를 쓴다', /grantLedgerReward\('daily-goal-complete', 'daily-goal', todayStr\(\)\)/.test(code))
+  // 2026-09-03 Session Reward Summary(P1) 배선으로 호출부에 xpAmountHint
+  // (5·6번째 인자, undefined/resolveXpAmount(...))가 추가됐다 — 이 검증이
+  // 확인하려는 불변식(날짜 키로 하루 1회만 지급)은 앞의 세 인자만으로
+  // 결정되므로, 뒤에 오는 추가 인자 유무는 정규식에서 관용적으로 허용한다
+  // (닫는 괄호까지 강제하지 않고 쉼표/줄바꿈까지만 확인).
+  check('daily-goal-complete는 날짜 키(하루 1회)를 쓴다', /grantLedgerReward\('daily-goal-complete', 'daily-goal', todayStr\(\)/.test(code))
 
   // 실측: 4/4 라운드를 완료한 뒤 복원-재마운트를 3회 반복해도 원장에
   // daily-goal-complete 항목이 정확히 1건이어야 한다.

@@ -100,3 +100,19 @@ export function gardenPlots(stats) {
     return { index: i, stage, emoji: PLOT_STAGE_EMOJI[stage] }
   })
 }
+
+// Session Reward Summary(P1, 2026-09-03) — gardenPlots()가 반환하는 16칸
+// 배열을 "정원이 전체적으로 얼마나 자랐는지" 하나의 숫자로 접는다(각 칸의
+// 성장 단계 인덱스 합) — "세션 시작 대비 gardenPlots() 스테이지 변화량"을
+// 계산하려면 두 시점을 같은 숫자축으로 비교할 수 있어야 하는데, gardenPlots()
+// 자체는 배열이라 그대로는 뺄셈이 안 된다. 이 파일이 정원 "단계" 계산의
+// 유일한 소유자이므로(레이어 계약, useStudent.js는 attachment/* import
+// 금지 — scripts/testGardenGrowthFlow.mjs 10번 시나리오) 이 헬퍼도 여기
+// 둔다(호출부: SessionRewardCard.jsx). gardenPoints는 computeGardenPoints
+// (useStudent.js, cleared∪completedWords∪clearedWords 크기) 같은 원시
+// 숫자를 그대로 받는다 — pointsOf() 방어(음수/NaN 클램프)는 gardenPlots()가
+// 이미 적용하므로 여기서 다시 클램프하지 않는다.
+const GARDEN_STAGE_RANK = { empty: 0, seed: 1, sprout: 2, flower: 3, tree: 4 }
+export function gardenStageTotal(gardenPoints) {
+  return gardenPlots({ gardenPoints }).reduce((sum, p) => sum + (GARDEN_STAGE_RANK[p.stage] || 0), 0)
+}

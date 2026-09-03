@@ -53,6 +53,22 @@ import { grantTicket, sumTicketBalance, mergeTicketLedgers, redeemReward } from 
 // totalStars의 원본은 여전히 record.totalStars(레거시 별 포함) 그대로이고,
 // rewardLedger에서 재계산하지 않는다(운영자 결정, 레거시 별 보존).
 import { REWARD_STARS, rewardIdempotencyKey, streakBonusStars, levelForStars, starsToNextLevel, buildRewardEntry, hasRewardEntry, appendRewardEntry } from '../utils/rewardEngine'
+// Session Reward Summary(P1 "즉각적인 보상 피드백", 2026-09-03) — 순수 요약
+// 계산은 전부 rewardSummary.js(zero-import, rewardEngine.js와 무관한
+// 독립 모듈)가 담당, 여기서는 그 결과를 grantLedgerReward의 기존 지급
+// 경로(재구현 없음, CLAUDE.md 규칙 3)에 얹어 상태로 노출만 한다.
+import { buildSessionRewardSummary } from '../utils/rewardSummary'
+// 계층 계약(레이어 계약, scripts/testGardenGrowthFlow.mjs 10번 시나리오가
+// 정적으로 고정) — 이 파일은 attachment 폴더 아래 어떤 모듈도 import하지
+// 않고, 정원 "단계" 계산과 관련된 어떤 식별자도 담지 않는다(정원 단계 계산
+// 전담 파일은 attachment 폴더에만 있다 — 애착 레이어는 useAttachment를
+// 통해서만 파생된다는 저장소 계약). 이 파일은 아래 computeGardenPoints가
+// 계산하는 "실제로 학습한 서로 다른 단어 수"라는 원시(raw) 숫자만 계산해
+// rewardSummary에 그대로 넘기고, 그 숫자를 "정원 단계 변화량"으로 바꾸는
+// 일은 SessionRewardCard.jsx(컴포넌트 레이어, attachment import 허용)가
+// 전담한다(2026-09-03 P1 회귀 수정 — 최초 구현은 이 변환을 여기 뒀다가
+// 계약 위반으로 되돌림, 아래 gardenRawBefore/gardenRawAfter 참고).
+import { isFeatureEnabled } from '../config/features'
 
 // ── Single unified progress store ───────────────────────────────────────
 // Every per-student value the app tracks (stars, stickers, today's mission
@@ -172,7 +188,7 @@ export function spellingComboBonus(combo) {
 const STREAK_MILESTONES = [3, 7, 14, 30]
 // Star-count badges — guaranteed special stickers awarded once per
 // threshold, independent of the gacha/streak systems (never duplicated).
-const STAR_BADGES = [
+export const STAR_BADGES = [
   { threshold: 100,  stickerId: 'ukflag1' },
   { threshold: 300,  stickerId: 'crown1' },
   { threshold: 500,  stickerId: 'guard1' },
@@ -248,6 +264,11 @@ const freshHistoryDay = () => ({
   // XP/UI도 이 필드를 읽지 않는다(다음 측정 세션이 student_progress를 통해
   // 읽을 예정) — 순수 관측 배선.
   completedTodayCount: 0,
+  // P5(복습/숙달 보상 강화, 2026-09-03) — 오답노트 회복(wrong-word-recovered,
+  // 레거시 앵커, 하루 반복 가능) 성공 횟수. spellingCorrect와 동일 성격
+  // (flag와 무관하게 항상 카운트되는 순수 관측, 그날 자정 리셋) — 지급
+  // 자체(review-session-bonus, 3회 임계)만 masteryReward flag로 게이팅한다.
+  recoveredToday: 0,
 })
 
 // id는 이제 실제 Supabase students.id(UUID) — 예전엔 이름 문자열이 그대로
@@ -528,6 +549,10 @@ function mergeHistoryDay(a, b) {
     // 같은 규칙(max)으로 병합. maxNum 자체가 Number(...)||0 방어를 포함하므로
     // 구버전 blob(필드 없음, undefined)도 안전하게 0으로 취급된다.
     completedTodayCount: maxNum(a.completedTodayCount, b.completedTodayCount),
+    // P5(2026-09-03) — completedTodayCount와 동일 규칙(그날 안의 high-water
+    // mark, max 병합). maxNum 자체가 Number(...)||0 방어를 포함하므로 이
+    // 필드가 없는 구버전 blob도 안전하게 0으로 취급된다.
+    recoveredToday: maxNum(a.recoveredToday, b.recoveredToday),
   }
 }
 
@@ -813,6 +838,28 @@ export function resumeIndexForUnit(record, unitId) {
 // behavior change, just visibility into the same logic the hook uses.
 export { freshRecord, freshRound, freshHistoryDay, migrateOldData, calcStreak, countCategoriesCompleted, todayStr, GOAL, isEmptyRecord, normalizeRecord, DIARY_TOMBSTONE_CAP }
 
+// ── Session Reward Summary(P1, 2026-09-03) 정원 스냅샷 헬퍼 ────────────
+// attachmentCore.deriveAttachmentStats의 gardenSet 공식(cleared ∪
+// completedWords ∪ clearedWords, 실제로 학습한 서로 다른 단어 수)을 값만
+// 그대로 재사용한다(전체 deriveAttachmentStats는 훨씬 무거운 파생값을
+// 같이 계산하므로 여기서는 이 세 배열 합집합 크기만 필요, attachmentCore.js
+// 수정 없음 — 재구현이 아니라 이미 문서화된 같은 공식을 그대로 씀).
+function computeGardenPoints(clearedArr, completedArr, clearedWordArr) {
+  return new Set([...(asArray(clearedArr)), ...(asArray(completedArr)), ...(asArray(clearedWordArr))]).size
+}
+
+// 세션(앱 실행 1회) 동안 보여준 요약 카드가 같은 원장 항목으로 다시
+// 뜨지 않게 막는 새 dedup은 만들지 않는다 — grantLedgerReward의 기존
+// hasRewardEntry(rewardLedger, key) 조기반환(945행 근방, 무변경)이 이미
+// "이 rewardType+sourceId 조합은 하루/이벤트당 한 번만 이 함수 본문을
+// 통과한다"를 보장하므로, 요약 생성 코드를 그 조기반환 "뒤"에만 두면
+// 자동으로 idempotent하다(재지급 로직을 전혀 새로 만들지 않음).
+// P4(유닛 완료 보상, 2026-09-03, docs/REWARD_LOOP_AUDIT_2026-09-03.md §14) —
+// unit-complete도 "의미있는 학습 완료" 앵커다. sessionRewardSummary
+// 플래그가 꺼져 있으면(오늘) grantLedgerReward 안의 게이팅이 이 목록
+// 자체를 절대 안 읽으므로(위 if 문 참고) 동작에 영향이 없다.
+const SESSION_COMPLETE_REWARD_TYPES = new Set(['word-session-complete', 'writing-complete', 'exam-complete', 'daily-goal-complete', 'unit-complete'])
+
 // studentId: Supabase students.id(UUID) — 이 학생의 유일한 식별자, 모든
 // 저장/동기화가 이걸로 이뤄진다. legacyName: 이번 로그인이 실제로 성공한
 // "이름"(선택) — 이 기기에 그 이름 키로 저장된 예전 레코드가 있으면 딱
@@ -1022,17 +1069,27 @@ export function useStudent(studentId, legacyName) {
   const dismissRewardFeedback = useCallback((id) => {
     setRewardFeedback((q) => q.filter((f) => f.id !== id))
   }, [])
-  const grantLedgerReward = useCallback((rewardType, sourceType, sourceId, starsOverride, label) => {
+  // Session Reward Summary(P1, 2026-09-03) — "세션 시작 시점" 정원 성장치
+  // 스냅샷. useRef의 초기값 인자는 최초 렌더 1번만 쓰이므로(React 보장),
+  // 이 값은 이 훅이 이 studentId로 처음 마운트됐을 때의 cleared/
+  // completedWords/clearedWords(로컬 우선 로드, loadRecord 결과)를 그대로
+  // 담는다 — 이후 재렌더에도 다시 계산되지 않는다(의도된 "세션 시작"
+  // 정의). 새 Supabase 컬럼/저장 없음(순수 파생값의 순간 스냅샷일 뿐).
+  const sessionGardenSnapshotRef = useRef(computeGardenPoints(cleared, completedWords, clearedWords))
+  const [sessionRewardSummary, setSessionRewardSummary] = useState(null)
+  const dismissSessionRewardSummary = useCallback(() => setSessionRewardSummary(null), [])
+  const grantLedgerReward = useCallback((rewardType, sourceType, sourceId, starsOverride, label, xpAmountHint) => {
     const key = rewardIdempotencyKey(studentId, rewardType, sourceType, sourceId)
     const rewardStars = (starsOverride === undefined || starsOverride === null)
       ? (REWARD_STARS[rewardType] || 0)
       : starsOverride
     if (rewardStars <= 0) return false
     if (hasRewardEntry(rewardLedger, key)) return false
+    const entry = buildRewardEntry({
+      studentId, rewardType, sourceType, sourceId, starsDelta: rewardStars, at: new Date().toISOString(),
+    })
     patch((prev) => ({
-      rewardLedger: appendRewardEntry(prev.rewardLedger || [], buildRewardEntry({
-        studentId, rewardType, sourceType, sourceId, starsDelta: rewardStars, at: new Date().toISOString(),
-      })),
+      rewardLedger: appendRewardEntry(prev.rewardLedger || [], entry),
     }))
     grantReward(rewardStars, key)
     // 서버 원장(reward_ledger) 쓰기 — fire-and-forget(await 없음). 로컬
@@ -1049,8 +1106,34 @@ export function useStudent(studentId, legacyName) {
       rewardFeedbackIdRef.current += 1
       setRewardFeedback((q) => [...q, { id: `${feedbackId}:levelup`, text: 'Level Up! 🎉' }])
     }
+    // Session Reward Summary(P1, 2026-09-03) — 플래그 OFF면 이 블록 전체가
+    // 스킵되어(setSessionRewardSummary 호출 자체가 없음) sessionRewardSummary
+    // 상태는 영원히 null, App.jsx는 그 상태로만 카드를 조건부 마운트하므로
+    // 오늘과 완전히 동일하다. 위 hasRewardEntry 조기반환을 통과했을 때만
+    // 이 지점에 도달하므로(같은 rewardType+sourceId 조합은 이 함수 본문을
+    // 다시 통과하지 못함), 같은 세션 항목이 두 번째 카드를 만들 방법이
+    // 없다 — 새 dedup을 추가한 게 아니라 기존 지급 단일 경로의 가드를
+    // 그대로 재사용(CLAUDE.md 규칙 3). 4종 앵커(word-session-complete/
+    // writing-complete/exam-complete/daily-goal-complete)만 대상 — 그 외
+    // (streak-bonus/wrong-word-recovered)는 기존 RewardToast만 그대로 뜬다.
+    if (isFeatureEnabled('sessionRewardSummary') && SESSION_COMPLETE_REWARD_TYPES.has(rewardType)) {
+      const gardenRawNow = computeGardenPoints(cleared, completedWords, clearedWords)
+      // 원시(raw) 정원 숫자만 넘긴다 — "정원 단계 변화량"으로의 변환은
+      // 레이어 계약상 이 파일이 아니라 SessionRewardCard.jsx(컴포넌트,
+      // attachment 폴더의 정원 단계 변환 함수 사용)가 담당(위 import 주석
+      // 참고).
+      const summary = buildSessionRewardSummary({
+        entries: [entry],
+        xpEvents: (typeof xpAmountHint === 'number' && xpAmountHint > 0) ? [xpAmountHint] : [],
+        gardenRawBefore: sessionGardenSnapshotRef.current,
+        gardenRawAfter: gardenRawNow,
+        streak: calcStreak(history),
+        totalStars: stars + rewardStars,
+      })
+      setSessionRewardSummary(summary)
+    }
     return true
-  }, [studentId, rewardLedger, patch, grantReward, stars])
+  }, [studentId, rewardLedger, patch, grantReward, stars, cleared, completedWords, clearedWords, history])
 
   // Paul Rank System(2026-07-19) XP 지급 — totalStars와 완전히 분리된
   // 원장(xp_ledger, 서버 전용 쓰기)에 독립적으로 쌓는다. eventType은
@@ -1345,18 +1428,24 @@ export function useStudent(studentId, legacyName) {
     }
     const fired = dailyCategoryXpFiredRef.current.fired
     const tryFire = (key, eventType) => {
-      if (fired.has(key)) return
+      // Session Reward Summary(P1, 2026-09-03) — 반환값은 "이번 호출로
+      // 실제 grantXp가 새로 발화됐는지"의 XP 금액(resolveXpAmount, 실제
+      // 조회값)이다. 기존 XP 지급 판정(fired 셋, 무변경)에는 전혀 영향
+      // 없음 — 호출부(아래)가 이 값을 grantLedgerReward의 xpAmountHint로
+      // 넘겨 카드에 "+N XP"를 정확히 표시하는 데만 쓴다.
+      if (fired.has(key)) return undefined
       fired.add(key)
       grantXp(eventType, `${eventType}:${today}`)
+      return resolveXpAmount(eventType) ?? undefined
     }
     if (round.completedToday.length >= GOAL) {
-      tryFire('word-view', 'word-view-complete')
+      const xpFired = tryFire('word-view', 'word-view-complete')
       // Reward System V1 앵커(word-session-complete, +1) — tryFire의
       // dailyCategoryXpFiredRef(XP 전용 1차 방어)와는 완전히 독립된 별도
       // dedup(rewardLedger.idempotency_key, 날짜:${today} 키라 하루 1회).
       // tryFire "밖"에 둔 이유: tryFire는 XP 이벤트 이름/금액을 인자로
       // 받는 헬퍼일 뿐이라 별 지급 원장 항목을 만들 수 없다.
-      grantLedgerReward('word-session-complete', 'daily-words', today)
+      grantLedgerReward('word-session-complete', 'daily-words', today, undefined, undefined, xpFired)
     }
     if (round.examplesHeard >= GOAL) tryFire('listening', 'listening-complete')
     if (round.quizSolved >= GOAL) tryFire('quiz', 'quiz-complete')
@@ -1426,7 +1515,12 @@ export function useStudent(studentId, legacyName) {
     // 하루 1회로 별도 제한 — 레거시 재지급 동작과 무관하게 공존한다(레거시
     // +10은 이 날짜 키 하루 제한과 별개로 라운드가 반복될 때마다 계속
     // 지급됨, 위 signature 키 주석 참고).
-    grantLedgerReward('daily-goal-complete', 'daily-goal', todayStr())
+    // xpAmountHint: resolveXpAmount(순수 조회, 실제 조회값)를 그대로 넘긴다
+    // — grantXp 호출 자체는 위처럼 라운드마다(하루 여러 번) 실행되지만,
+    // 이 grantLedgerReward는 날짜 키로 하루 1회만 실제로 통과하므로(기존
+    // hasRewardEntry 가드, 무변경) 힌트가 실제로 쓰이는 시점도 항상 그날
+    // 첫 통과와 일치한다(Session Reward Summary, P1, 2026-09-03).
+    grantLedgerReward('daily-goal-complete', 'daily-goal', todayStr(), undefined, undefined, resolveXpAmount('daily-mission-complete') ?? undefined)
     // Ticket Economy(GAME_DESIGN.md 7번) — 같은 트리거에 병행 후킹만, 새
     // 트래킹 로직 없음. grantTicket이 `daily-mission-complete:${날짜}`를
     // id로 써서(위 grantXp와 동일한 day 기간키) idempotent하게 append하므로,
@@ -1607,6 +1701,40 @@ export function useStudent(studentId, legacyName) {
   // 순간, 다른 3개 카테고리(word-view/listening/quiz)와 동일한 day
   // 기간키 패턴) 단위로만 지급한다 — 몇 번째 단어/몇 번째 콤보에서
   // 도달했는지는 더 이상 지급 여부에 영향을 주지 않는다.
+  // ── P5 "복습/숙달 보상 강화"(2026-09-03, docs/REWARD_LOOP_AUDIT_2026-09-03.md
+  // §4·14, flag masteryReward) ────────────────────────────────────────
+  // 기존 wrong-word-recovered(레거시, 하루 반복 가능, 무변경)가 실제로 새
+  // 원장 항목을 만든 순간에만(=호출부가 grantLedgerReward의 반환값 true를
+  // 확인한 뒤) 불린다 — 새 dedup을 만들지 않고 기존 hasRewardEntry 조기
+  // 반환을 그대로 재사용한다(CLAUDE.md 규칙 3, sessionRewardSummary와
+  // 동일한 설계 원칙).
+  //   1) recoveredToday(freshHistoryDay, 위)는 flag와 무관하게 항상 증가
+  //      (spellingCorrect와 동일 성격의 순수 관측 카운터).
+  //   2) word-mastered(+1, 평생 1회) — flag ON일 때만, 회복될 때마다 매번
+  //      호출하되 sourceId가 wordId뿐(날짜 없음)이라 실제 지급은
+  //      grantLedgerReward 내부 hasRewardEntry가 평생 1회로 자동 제한한다
+  //      (day2에 같은 단어가 다시 회복돼도 word-mastered는 재지급되지 않음).
+  //   3) review-session-bonus(+2, 하루 1회) — recoveredToday가 이번 호출로
+  //      "2 -> 3"을 처음 넘는 순간에만, flag ON일 때만 시도한다. sourceId가
+  //      오늘 날짜뿐이라 하루 안에서 몇 번을 넘겨도(4/5회째) 재지급되지
+  //      않는다(REWARD_SOURCE_RULES 'daily-review' 패턴 + 서버 일일상한 1).
+  const grantMasteryRewards = useCallback((wordId) => {
+    let justReachedThree = false
+    bumpHistory((day) => {
+      const prev = day.recoveredToday || 0
+      const next = prev + 1
+      if (prev < 3 && next >= 3) justReachedThree = true
+      return { recoveredToday: next }
+    })
+    if (!isFeatureEnabled('masteryReward')) return
+    if (wordId) {
+      grantLedgerReward('word-mastered', 'spelling-review-mastery', String(wordId), undefined, '🧠 다시 익혔어요')
+    }
+    if (justReachedThree) {
+      grantLedgerReward('review-session-bonus', 'daily-review', todayStr(), undefined, '🔁 복습 보너스')
+    }
+  }, [bumpHistory, grantLedgerReward])
+
   const recordSpellingAnswer = useCallback((wordId, correct) => {
     let justCompletedWriting = false
     bumpHistory(day => {
@@ -1624,7 +1752,10 @@ export function useStudent(studentId, legacyName) {
       // day 기간키(하루 1회), justCompletedWriting은 정의상 하루에 한
       // 번만 true가 되므로(prevCorrect가 GOAL을 넘으면 다시 false로
       // 내려가지 않음) 이 조건 안에서만 호출해도 안전하다.
-      grantLedgerReward('writing-complete', 'daily-writing', todayStr())
+      // xpAmountHint(Session Reward Summary, P1, 2026-09-03) — 이 if
+      // 블록에 들어왔다는 것 자체가 justCompletedWriting(하루 정확히 1번)
+      // 이라, 바로 위 grantXp 호출과 같은 tick에 항상 같이 발화된다.
+      grantLedgerReward('writing-complete', 'daily-writing', todayStr(), undefined, undefined, resolveXpAmount('writing-complete') ?? undefined)
     }
     if (correct) {
       // 콤보/보너스를 같은 클로저 값에서 계산 — 표시되는 콤보 수와 실제
@@ -1648,7 +1779,8 @@ export function useStudent(studentId, legacyName) {
           : prev.spellingReviewQueue,
       }))
       if (wasInReviewQueue) {
-        grantLedgerReward('wrong-word-recovered', 'spelling-review', `${todayStr()}:${wordId}`)
+        const recoveredNew = grantLedgerReward('wrong-word-recovered', 'spelling-review', `${todayStr()}:${wordId}`)
+        if (recoveredNew) grantMasteryRewards(wordId)
       }
       const bonus = spellingComboBonus(combo)
       if (bonus > 0) {
@@ -1672,7 +1804,7 @@ export function useStudent(studentId, legacyName) {
         },
       }))
     }
-  }, [bumpHistory, patch, grantReward, round.spellingCombo, grantXp, grantLedgerReward, spellingReviewQueue])
+  }, [bumpHistory, patch, grantReward, round.spellingCombo, grantXp, grantLedgerReward, spellingReviewQueue, grantMasteryRewards])
 
   // 복습 화면에서 한 단어를 맞히면 오답노트 큐에서 제거 — 큐가 비면
   // "틀린 단어 복습"이 끝난 것. Writing MVP: 영구 복습 대기열
@@ -1687,7 +1819,8 @@ export function useStudent(studentId, legacyName) {
     // 됐다"고 본다. recordSpellingAnswer의 정답 경로와 날짜:wordId 키를
     // 공유해서 두 경로가 교차 호출돼도 정확히 한 번만 지급된다.
     if (spellingReviewQueue.includes(wordId) || round.spellingWrongToday.includes(wordId)) {
-      grantLedgerReward('wrong-word-recovered', 'spelling-review', `${todayStr()}:${wordId}`)
+      const recoveredNew = grantLedgerReward('wrong-word-recovered', 'spelling-review', `${todayStr()}:${wordId}`)
+      if (recoveredNew) grantMasteryRewards(wordId)
     }
     patch(prev => ({
       round: { ...prev.round, spellingWrongToday: prev.round.spellingWrongToday.filter(id => id !== wordId) },
@@ -1695,7 +1828,7 @@ export function useStudent(studentId, legacyName) {
         ? prev.spellingReviewQueue.filter(id => id !== wordId)
         : prev.spellingReviewQueue,
     }))
-  }, [patch, spellingReviewQueue, round.spellingWrongToday, grantLedgerReward])
+  }, [patch, spellingReviewQueue, round.spellingWrongToday, grantLedgerReward, grantMasteryRewards])
 
   // Reward System V1 앵커(exam-complete, +2) — EntranceTest.jsx가
   // submitEntranceResult() 성공(서버 저장 확정) 직후에만 호출한다(실패
@@ -1705,6 +1838,21 @@ export function useStudent(studentId, legacyName) {
   const recordExamCompleted = useCallback((testId) => {
     if (!testId) return
     grantLedgerReward('exam-complete', 'entrance-test', String(testId))
+  }, [grantLedgerReward])
+
+  // Reward System V1 앵커(unit-complete, +5, P4 2026-09-03) — 유닛 하나를
+  // 완주했을 때 학생당 unitId 1회 평생(sourceId에 날짜가 없음 —
+  // rewardEngine.js REWARD_SOURCE_RULES 'unit-complete' 주석 참고). 호출부
+  // (useAttachment.js의 전이 감지기)는 "새로 완료된 유닛"에만 이 함수를
+  // 부르지만, 실제 중복지급 방지의 최종 담보는 언제나처럼
+  // grantLedgerReward 안의 hasRewardEntry 조기반환이다(호출부가 실수로
+  // 같은 unitId를 여러 번 넘겨도 안전). 반환값은 "이번 호출이 실제로 새
+  // 원장 항목을 만들었는가"(grantLedgerReward의 반환값 그대로) — 호출부가
+  // 참고용으로만 쓸 것(grantReward 헤더 주석과 동일한 낙관적 성질).
+  const recordUnitCompleted = useCallback((unitId) => {
+    if (!unitId) return false
+    if (!isFeatureEnabled('unitCompleteReward')) return false
+    return grantLedgerReward('unit-complete', 'unit', String(unitId), undefined, '📘 유닛 완료!')
   }, [grantLedgerReward])
 
   // v2.1: unitId(현재 유닛 UUID)를 같이 주면 유닛별 위치도 기록 — 다른
@@ -1904,6 +2052,17 @@ export function useStudent(studentId, legacyName) {
     // grantReward(별 지급 단일 경로) 위에 얹은 계층일 뿐, totalStars(stars)
     // 자체는 여전히 grantReward만 바꾼다(rewardLedger에서 재계산 안 함).
     rewardLedger, rewardFeedback, dismissRewardFeedback, recordExamCompleted,
+    // P4(유닛 완료 보상, 2026-09-03) — useAttachment.js의 전이 감지기가
+    // 새로 완료된 유닛에만 이 함수를 부른다. flag unitCompleteReward OFF면
+    // 항상 false만 반환하고 어떤 상태도 바꾸지 않는다(recordUnitCompleted
+    // 헤더 주석 참고).
+    recordUnitCompleted,
     rewardLevel, rewardStarsToNext,
+    // Session Reward Summary(P1 "즉각적인 보상 피드백", 2026-09-03) —
+    // sessionRewardSummary(config/features.js) 플래그 OFF면 이 값은 영원히
+    // null(grantLedgerReward 안의 게이팅 참고) — App.jsx가 이 값으로만
+    // SessionRewardCard를 조건부 마운트하므로 플래그 OFF는 오늘과 바이트
+    // 단위로 동일한 동작을 보장한다.
+    sessionRewardSummary, dismissSessionRewardSummary,
   }
 }

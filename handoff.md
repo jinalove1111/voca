@@ -1,10 +1,292 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-03 (105차, 야간 자율 세션 — Production Safety
-Harness 강화(prod:check invariant 18종·prod:hotfix manifest 변조 감지 +
-유령 SCA 재배정 manifest 라이브 자동 생성) + 재발 방지 가드(배정 저장/
-primary 전환/hard_delete/class.delete) + 데이터 손실 정적 감사 + WARN 10
-전수 분석 + CI 통합(Gate 3b/4) + PUBLIC 저장소 학생 실명 마스킹 보안
-수정 7건. Production WRITE 0, PR merge 0. 상세는 아래 105차 섹션)_
+_최종 갱신: 2026-09-03 (107차, 야간/자율 세션 — 운영자 지시로 "보상 +
+몰입 + Paul Town 성장 시스템" 이니셔티브 착수. P0 READ-ONLY 감사 →
+P1~P6/P9/P10 구현(P7은 P4에 편입, P8은 DEFER). 신규 학생 노출 동작
+전부 feature flag 뒤(기본 OFF) — flag ON 0건, PR merge 0, main push 0,
+deploy 0, SQL 실행 0, Production DB WRITE 0. 상세는 아래 107차 섹션)_
+
+## 2026-09-03 (107차) — 보상 루프 자율 세션: P0 감사 → P1~P6/P9/P10 구현 (전부 플래그 OFF, Production WRITE 0)
+
+### 1. 지시/제약
+
+- 운영자 아침 지시(2026-09-03): 우선순위를 "보상 + 몰입 + Paul Town 성장
+  시스템"으로 전환. `CLAUDE.md` 규칙 12("학생 대상 신규 기능/UI/게임화는
+  이번 'AI 개발 운영체제' 구축 범위에서 절대 금지")는 그 구축 범위에
+  한정된 것이었고, 이번 이니셔티브는 운영자의 명시 지시로 그 범위를 벗어난
+  별도 트랙이다 — 규칙 12 자체를 폐기·재작성한 것이 아니라, 이 세션의
+  작업 범위만 운영자가 명시적으로 예외 처리했다.
+- 운영자 지정 제약(전부 준수, 세션 끝까지 위반 0건): 모든 신규 학생 노출
+  동작은 feature flag 뒤(기본 OFF) + Production DB **WRITE 0** + **SQL
+  실행 0** + **flag ON 0** + **PR merge 0** + **main push 0** + **deploy
+  0**.
+- 선행 작업: `docs/REWARD_LOOP_AUDIT_2026-09-03.md`(P0, READ-ONLY 감사,
+  커밋 `3e8b1a3`) — 현재 보상 루프 아키텍처를 §1~14로 정리하고, 연구
+  브리프(gamification_research.md, 스크래치패드) 10개 설계 규칙(§13)과
+  P1~P10 계획 표(§14)를 근거로 이번 세션의 작업 순서를 정했다.
+
+### 2. 커밋 목록 (범위 `84a36b8..HEAD`, 총 26개)
+
+| 커밋 | 항목 | 내용 |
+|---|---|---|
+| `3e8b1a3` | P0 | `docs/REWARD_LOOP_AUDIT_2026-09-03.md` 신설(READ-ONLY 감사, §1~14) |
+| `2abf175`/`add499e`/`4f5c9cc` | P1 | `SessionRewardCard.jsx` + `src/utils/rewardSummary.js` 신설(세션 종료 요약 카드) |
+| `8c61c43` | P1 레이어링 수정 | `useStudent.js`가 attachment/worldProgress를 import하는 계층 위반을 `testGardenGrowthFlow.mjs` 시나리오 10이 2 FAIL로 실측 검출 → `gardenStageTotal` 계산을 `worldProgress.js`로, raw-points 계산을 `SessionRewardCard.jsx`로 이동해 해소(규칙 15 "테스트 자체의 유효성 검증" 실사례) |
+| `6891d81` | flags | `src/config/features.js`에 신규 플래그 6종 추가(전부 `false`) |
+| `097622c`/`a3a4607` | P2 | `src/utils/attachment/growthPoints.js` 신설(정원 성장 v2 보너스 공식) |
+| `87714c1`/`f5c3407` | P4/P5 엔진+서버 | `rewardEngine.js` 신규 보상 타입 3종(동결 레거시 테이블은 무변경) + `api/grant-xp.js` generic 경로가 신규 타입을 인식하도록 확장 |
+| `40fccbc`/`85b6120` | P3 | `src/utils/nextGoals.js` + `NextGoalsCard.jsx` 신설 |
+| `68ac774`/`5487969`/`5681f86` | P9 | `src/utils/adminRewardSummary.js` + StudentDirectory 관리자 보상 요약 1줄 표시 |
+| `f477709`/`7175e1f` | 등록 | `tests/harness/registry.mjs` `rewardSystem` 도메인에 신규 verify 스크립트 등록(P10 과정에서 발견된 등록 누락분 포함) |
+| `8c5b98f`/`09b6fc2`/`02c8fd7` | P6 | `src/utils/gamification/streakAdapter.js` 신설 + `StreakChip.jsx` 배선(레거시 `calcStreak` 무변경) |
+| `b1d93f9`/`016319e`/`38af7cc` | P4/P5 클라이언트 | `useStudent.js` `recordUnitCompleted` + `src/hooks/unitCompletionDetector.js` + `useAttachment.js` 배선 |
+| `4942e45`/`a88c283` | P10 | `scripts/testRewardIntegrityV2.mjs` 통합 무결성 스위트(10개 실사용 시나리오) |
+
+### 3. 학생이 보게 될 변화 (플래그별 — 전부 현재 `false`, 운영자가 켜야만 보임)
+
+- **`sessionRewardSummary`**(P1) — 켜면 `word-session-complete`/
+  `writing-complete`/`exam-complete`/`daily-goal-complete` 4개 앵커
+  직후 `SessionRewardCard.jsx`가 하단 고정 카드로 그 세션의 실제 지급
+  (별/XP/정원 성장/연속일/다음 레벨까지)을 모아 보여준다. 기존
+  `RewardToast`(상단 토스트)는 무변경 — 카드는 완전히 별개 컴포넌트로
+  추가, 지급 로직/금액/dedup 키는 전혀 바꾸지 않는 순수 표시 계층.
+- **`attachmentGardenGrowthV2`**(P2) — 켜면 정원 성장 포인트 계산에
+  `GROWTH_V2_EPOCH`(현재 `'2026-09-03'`, 운영자가 go-live일로 재조정
+  권장) 이후 원장 항목 기반 보너스(daily-goal +2/writing +1/exam
+  +2/wrong-word-recovered +1(하루 최대 2)/unit-complete +4)가 기존
+  "학습한 서로 다른 단어 수" 축에 더해진다.
+- **`nextGoalsCard`**(P3) — 켜면 오늘/이번 주/다음 정원 단계까지 남은
+  거리를 보여주는 `NextGoalsCard` 노출.
+- **`streakV2`**(P6) — 켜면 `StreakChip`이 freeze(스트릭 유예)를 반영한
+  새 스트릭 계산(`streakAdapter.js`)을 표시. 레거시 `calcStreak` 기반
+  보상 지급 로직 자체는 무변경(표시만 v2, 보상은 그대로).
+- **`unitCompleteReward`**(P4) — 켜면 유닛을 다 끝낸 순간 +5★(unit별
+  1회 평생, 하루 최대 2건) 지급. **서버(`api/grant-xp.js`) 재배포까지
+  마쳐야 실제로 적립됨**(아래 발견 사항 참고).
+- **`masteryReward`**(P5) — 켜면 오답 큐를 완전히 벗어난 단어마다
+  +1★(단어별 1회 평생, 하루 최대 60건) + 복습 세션 완주 시 +2★(하루
+  1회) 지급. 이 역시 서버 재배포 필요.
+
+### 4. Paul Town 변화
+
+- 정원 성장 공식(`growthPoints.js`): `gardenPoints` = 기존 "학습한
+  서로 다른 단어 수" + `GROWTH_V2_EPOCH` 이후 원장 항목 보너스(가중치는
+  위 3절 `attachmentGardenGrowthV2` 참고). 가벼운 날 1칸, 중앙값 페이스
+  2칸, 힘든 날 약 6칸(단어 축만으로 8단어 학습 시 4칸) — 단조증가,
+  리셋 없음, 하드 캡 없음(기존 정원 설계 결정 유지, `worldProgress.js`
+  헤더 주석).
+- P8(성장/언락 로직 추상화) 검토 결과: 정원 축/모자·Paul Town unlock
+  사다리(`WORLD_STAGES`, house@30 포함)/`TOWN_PLACES`는 이미 전부 순수
+  데이터 파생이라 실제 리팩터링 필요성이 낮다고 판단 — **DEFER**(아래
+  8절). 대신 다음 규칙을 문서화: **출시된 파생 unlock 사다리
+  (`WORLD_STAGES`/`TOWN_PLACES`)의 기존 id 임계값은 낮추거나 유지만
+  가능, 절대 올리지 않는다 — unlock 상태는 저장되지 않고 단조 축에서
+  매번 재계산되므로, 임계값을 올리면 이미 "열렸던" 건물/구역이 조용히
+  다시 잠기는 회귀가 된다.**
+- P7(코스메틱 서프라이즈)은 별도 항목이 아니라 P4/P1 작업에 편입 —
+  `SessionRewardCard.jsx` big variant에 유닛ID 해시 기반 결정론적 이모지
+  줄 1개만 추가(경제/희소성 없는 순수 코스메틱, 값의 무작위성 없음).
+
+### 5. Farming(파밍) 방지
+
+- 신규 타입 3종은 전부 lifetime dedup 키를 씀: `unit-complete`는
+  `sourceType:'unit'`/`pattern:'uuid'`(unitId, 학생당 유닛 1회 평생,
+  하루 최대 2건), `word-mastered`는 `sourceType:'spelling-review-
+  mastery'`/신규 `pattern:'token'`(날짜 접두 없는 단어 토큰, 학생당
+  단어 1회 평생, 하루 최대 60건), `review-session-bonus`는
+  `sourceType:'daily-review'`/`pattern:'date'`(하루 1회).
+- 기존 idempotency 인프라(`reward_ledger.idempotency_key` 전역 UNIQUE +
+  서버 재조립, `REWARD_DAILY_CAP`, KST 자정 경계)를 그대로 재사용 —
+  새 방어 메커니즘을 발명하지 않았다(규칙 3).
+
+### 6. 테스트/검증 결과
+
+- 신규 verify 스크립트 9개(전부 `tests/harness/registry.mjs`
+  `rewardSystem` 도메인에 등록, 도메인 스크립트 수 17→22): `verify:
+  session-reward-summary`(53단언)/`verify:growth-points`(44)/`verify:
+  next-goals`(37)/`verify:reward-types-v2`(54)/`verify:streak-v2`(33)/
+  `verify:admin-reward-summary`(40)/`verify:unit-complete-reward`(36)/
+  `verify:mastery-reward`(25)/`verify:reward-integrity-v2`(54).
+- 기존 `testGardenGrowthFlow.mjs` 단언 84→93(P1 레이어링 수정에 따른
+  회귀 방지 시나리오 추가).
+- `npm run verify:all` — **0 FAIL, 전 도메인 PASS**.
+- `npm run health:students -- --require-env` — PASS 27 / WARN 10 / FAIL
+  0(WARN 10건은 기존에 알려진 유령-유닛 항목, 이번 세션과 무관한
+  선행 이슈).
+- `npm run build` — PASS.
+- 규칙 15(FAIL-first) 준수 기록: `testGrowthPoints.mjs`/
+  `testNextGoals.mjs`/`testRewardTypesV2.mjs`/`testStreakV2Wiring.mjs`
+  전부 구현 전 상태(파일 부재 또는 `git stash`로 재현)에서 먼저 실행해
+  실제 FAIL을 확인한 뒤 구현 → 전체 PASS 전환을 각 파일 헤더 주석에
+  원문 기록.
+
+### 7. 발견 사항
+
+1. **레거시 `wrong-word-recovered`는 무제한 반복 파밍이 구조적으로
+   가능**하다 — `date:wordId` 키라 의도적으로 틀렸다 맞히기를 반복하면
+   하루 상한 60건까지, 그리고 날짜가 바뀔 때마다 다시 60건씩 무기한
+   반복 가능하다(신규 `word-mastered`의 lifetime 1회가 이를 완화하는
+   짝이지만, 레거시 타입 자체의 금액/규칙 축소는 동결 테이블 변경이라
+   **운영자 승인 필요**).
+2. `classes.gamification_enabled`(`supabase_v2_5`) SQL이 여전히
+   미실행이라, XP는 이번 세션 이전부터 계속 눈에 보이지 않게 쌓이는
+   중이다(`docs/REWARD_LOOP_AUDIT_2026-09-03.md` §5) — 이번 세션이 만든
+   문제는 아니지만 P4/P5 재배포 판단 시 함께 고려할 사실.
+3. `streakModel.js`는 그동안 죽은 모듈이었으나 이번 세션에서
+   `streakV2` 플래그로 처음 화면(`StreakChip`)에 표시된다(보상 지급
+   로직은 아직 연결하지 않음 — 표시만).
+4. **규칙 16 사고 1건**: 세션 중 두 개의 커밋 주체(에이전트)가 동시에
+   같은 git index를 공유해, 한 커밋이 다른 쪽이 스테이징해 둔 파일을
+   일시적으로 함께 쓸어담는 사고가 있었다 — `git reset`/재커밋으로 즉시
+   교정. 교훈: **커밋하는 에이전트는 동시에 1개만.**
+
+### 8. BLOCKED_FOR_OPERATOR
+
+- **flag ON 결정 6종**(운영자 판단 필요, 권장 순서): `sessionRewardSummary`
+  → `nextGoalsCard` → `streakV2` → `attachmentGardenGrowthV2`(켜기 전
+  `GROWTH_V2_EPOCH`를 실제 go-live일로 재설정 권장) → `unitCompleteReward`
+  → `masteryReward`.
+- **`api/grant-xp.js` + `rewardEngine.js` merge/deploy** — 서버가 신규
+  보상 타입 3종을 실제로 인정하려면 배포가 선행돼야 한다(현재는 로컬
+  코드에만 존재, merge 전까지 서버는 여전히 신규 타입을 거부).
+- **SQL 13개**(기존부터 누적, 이번 작업이 새로 필요로 하지는 않음) —
+  `PROJECT_BOARD.md` 기존 카드 참고.
+- **`v2_5` 게임화 마스터 스위치 SQL** — 위 발견 사항 2번.
+- **레거시 `wrong-word-recovered` 파밍 완화 여부** — 위 발견 사항 1번,
+  동결 테이블 변경이라 운영자 승인 필요.
+- **`rows.json` 처리** — 워킹트리에 남아 있는 미추적 파일(이번 세션
+  소유 아님, 무엇을 위한 파일인지 확인 후 운영자가 폐기/보존 결정).
+
+### 9. 다음 추천 작업
+
+1. 운영자가 위 6개 플래그 중 저위험(`sessionRewardSummary`/
+   `nextGoalsCard`)부터 순서대로 검토 후 ON.
+2. `api/grant-xp.js`/`rewardEngine.js` 변경분 qa-reviewer/security-reviewer
+   검수 → merge → 재배포(P4/P5 flag ON의 선행조건).
+3. `GROWTH_V2_EPOCH` go-live일 확정 후 `attachmentGardenGrowthV2` 검토.
+4. 레거시 `wrong-word-recovered` 파밍 완화 여부 운영자 판단.
+
+### 10. 교훈 (규칙 16)
+
+동시에 여러 에이전트가 커밋을 수행하면 git index 공유로 attribution이
+섞일 수 있다는 것이 이번 세션에서도 재확인됐다(`55f0c86` 사고와 동일
+계열). **한 저장소에서 커밋을 실행하는 에이전트는 항상 1개만 유지하고,
+나머지는 파일 작성까지만 하고 커밋은 조율된 순서로 넘긴다.**
+
+### 사후 QA 수정(같은 날)
+
+- **`a992854`** — `testRewardIntegrityV2.mjs`(9절, REWARD_STARS/
+  STREAK_BONUS/MISSION_BONUS_STARS 동결 확인)가 `git show 84a36b8:...`로
+  84a36b8 시점 소스를 매 실행마다 파싱하던 방식이 CI의 얕은 checkout
+  (`actions/checkout@v4` 기본 `fetch-depth: 1`)에서 84a36b8 오브젝트를
+  찾지 못해 `fatal: invalid object name '84a36b8'`로 크래시(run
+  `33729692487`). 파일 상단 인라인 동결 스냅샷(`LEGACY_SNAPSHOT_84a36b8`)
+  으로 교체해 git 의존을 제거 — CI run `33730955232`에서 PASS 확인,
+  53단언(기존 54단언에서 파싱 관련 보조 단언 1개 정리).
+- **하네스 사실 확인**: `tests/harness/runDomain.mjs` L91-92, L101-104 —
+  `extra: true`로 표시된 검사의 FAIL은 `required` 배열에서 제외되므로
+  `runDomainHarness`의 `ok` 판정과 `summarize`의 exit code에 전혀 반영
+  되지 않는다. 즉 CLAUDE.md 규칙 5/18이 기대하는 "0 FAIL"은 오직
+  `extra: false`(required) 검사에만 보장된다 — `extra: true`는 정직하게
+  "참고용 보너스 커버리지"이지 게이트가 아니다. 이번 세션에 오늘 새로
+  추가된 보상 루프 검사 9종(`testSessionRewardSummary`/
+  `testGrowthPoints`/`testNextGoals`/`testRewardTypesV2`/
+  `testStreakV2Wiring`/`testAdminRewardSummary`/`testUnitCompleteReward`/
+  `testMasteryReward`/`testRewardIntegrityV2`)이 전부 `extra: true`로
+  등록돼 있어 verify:all/CI Release Gate가 이들의 FAIL을 실제로는 차단
+  하지 않는 상태였음을 발견 — 이번 커밋(`tests/harness/registry.mjs`)에서
+  9종 전부 `extra: false`(required)로 승격했다. 재실행 결과 9종 전부
+  PASS(도메인 `rewardSystem` 8종 + `attachment` 도메인 `testGrowthPoints`
+  1종), `runDomainHarness('rewardSystem')`/`runDomainHarness('attachment')`
+  둘 다 `ok: true`.
+- **규칙 18 메모**: `a88c283`에서의 Release Gate CI PASS는 위 크래시를
+  가려서(당시 `testRewardIntegrityV2.mjs`가 `extra: true`라 FAIL해도
+  exit code에 영향이 없었다) 실제로는 이 검사가 CI에서 조용히 깨져
+  있었다는 사실을 숨겼다 — "PASS"라는 표시가 "이 커밋의 required 검사가
+  전부 통과했다"만 뜻하지 "등록된 모든 검사가 실행/통과했다"를 뜻하지
+  않는다는 것을 이번 사고가 실측으로 보여준다.
+
+## 2026-09-03 (106차) — 아침 세션: PR #8 merge 최종 점검 + merge + Edge Function v8 배포 (운영자 지시, SQL 실행 0, DB WRITE 0)
+
+- 운영자 지시 순서: ① 신규 기능 개발 중단, PR #8 merge 가능 여부만 최종
+  점검(SQL 13개 미실행·Edge 미배포·`rows.json` 무접촉·DB WRITE 0·코드
+  수정/push 0 조건) → ② "YES" 판정 후 운영자가 merge 지시 → ③ Edge
+  Function 배포 지시 → ④ 이 handoff 기록 지시. 각 단계는 운영자의 명시
+  승인 뒤에만 실행했다.
+
+### 1. merge 전 최종 점검(READ-ONLY) — 판정 YES
+- **"127커밋" 착시 해소**: 로컬 `main`이 2026-08-11(`98734cc`)에 멈춰
+  있어 `main..HEAD`가 127로 보였다. `origin/main`(PR #7까지 머지된
+  `09eaaa8`) 기준 PR #8은 **28커밋·49파일**이며 GitHub PR 화면과 일치.
+  분기점은 102차 handoff 커밋(`3ebb1db`, 09-02). `git merge-tree` 충돌 0,
+  `origin/main`에만 있는 6커밋(PR #2~#7 merge)과 겹치는 src/api/supabase
+  파일 0.
+- **프로덕션 런타임 변경 파일은 3개뿐** (나머지 46개는 scripts/tests/
+  docs/.ai-status/CI 워크플로/package.json 스크립트 등록):
+  - `api/admin-pin-actions.js` — `unlock_student_pin` UUID 형식 검증(400),
+    `hard_delete_student` 가드에 `reward_ledger`/`entrance_test_results`/
+    `xp_ledger` 카운트 추가(테이블 부재는 0 취급, 더 보수적).
+  - `src/utils/wordLibrary.js` — `isSuspiciousUnit`(단어<2 또는 이름이
+    `/^(unit|유닛|단원)\s*$/i`) 기준으로 배정 저장·primary 전환·교재
+    전환·반 이동·일괄 이동·읽기 self-heal에서 유령 유닛 채택 차단(첫
+    학습 가능 유닛으로 대체, 없으면 명시 throw). 레거시 분기 이전 primary
+    행 delete→demote. units 캐시에 `textbookId`(컬럼/권한 부재 시 구
+    쿼리로 폴백). `deleteClass`가 `has_learning_data`를 throw 대신
+    `{ blocked, counts }`로 반환.
+  - `src/components/AdminScreen.jsx` — 반 삭제 2차 확인 모달(반 이름
+    재입력 + force) + "학생별 진행도 유지" 문구를 실제 삭제 범위에 맞게
+    정정.
+- **feature flag 보호 변경 없음** — 위 3파일은 merge 즉시 전부 활성화.
+  diff에 flag/`VITE_` 분기 0건. 학생 로그인·학습·퀴즈 플로우 파일 변경
+  0, 학생 대상 신규 UI 0(규칙 12).
+- **merge로 활성화되지 않는 것**: Edge Function `class.delete` 가드(별도
+  배포 필요). 구 Edge(v7) + 신 클라이언트 조합도 안전 — 구 핸들러는
+  `classId`만 읽고 `force`를 무시하며 `has_learning_data`를 반환하지
+  않으므로 반 삭제가 기존과 동일하게 1차 확인만으로 동작(2차 모달만 안
+  뜸).
+- **DDL 의존 0**: 새로 읽는 `student_class_assignments.textbook_id`는
+  v3.1(07-22) 이후 라이브, `units.textbook_id`는 부재 시 폴백. 컬럼 부재
+  에러는 `isMissingTableError`의 "does not exist" 매칭으로 non-fatal.
+- **CI 근거**: HEAD sha `11bf474`에서 Release Gate(build + verify:all +
+  student health + Gate 3b/4)·Deploy Ready·Vercel 전부 SUCCESS(09-02
+  21:04 UTC).
+
+### 2. merge (운영자 지시)
+- `gh pr merge 8 --merge` — 기존 관례대로 merge commit. 제목 "Merge PR
+  #8: prod-safety: Production Safety Harness 1단계 (prod:check /
+  prod:hotfix) + 유령 유닛 재발 방지 가드 + CI Gate 3b/4 + handoff
+  103~105차". 머지 커밋 **`84a36b8`**, 2026-09-03 04:00 UTC.
+- main 배포 검증: Release Gate SUCCESS, Deploy Ready SUCCESS, Vercel
+  commit status SUCCESS. `https://voca-drab.vercel.app` 200 응답 확인.
+
+### 3. Edge Function 배포 (운영자 지시)
+- 56차와 동일 명령:
+  `npx supabase functions deploy admin-content-write --project-ref azsjthtdjfpnctffjfsk --use-api`
+  (CLI 기존 로그인 세션 재사용, 토큰 env 없음).
+- `functions list` 실측: **admin-content-write version 8 · ACTIVE ·
+  2026-09-03 04:19 UTC**(v7 → v8, `class.delete` 학습기록 가드
+  `decideClassDelete`/`ClassDeleteBlockedError` 라이브 반영).
+- 라이브 스모크(READ-ONLY): 관리자 인증 없이 `class.delete` 호출 →
+  `{ ok:false, reason:'not_authorized' }` HTTP 200. 함수 기동 확인, DB
+  WRITE 0. 로컬 `npm run verify:class-delete-guard` 18단언 ALL PASS.
+- 이제 main 클라이언트와 Edge v8이 한 쌍으로 맞음: 학습기록이 있는
+  반은 counts 4종(`word_status`/`entrance_test_results`/
+  `student_class_assignments`/`spelling_review_queue`)과 함께 차단되고,
+  관리자 화면에서 반 이름 재입력 후 "그래도 삭제"(force)로만 강행. 기록
+  0인 반은 기존과 byte-identical(1차 확인만).
+
+### 4. 남은 운영자 몫 / 다음 세션 참고
+- 미커밋 SQL 13개(`v3_38`~`v3_41`, `hotfix_20260902_*`, `restore_haeun_sca`,
+  `verify_haeun_baseline`)는 이번 merge/배포에 **필요 없음**. 실행 여부는
+  운영자 결정(각각 ROLLBACK 파일 동봉).
+- `rows.json`(학생 실명 포함 스크래치, untracked)은 지시대로 무접촉 —
+  PUBLIC 저장소이므로 커밋 금지, 삭제/`.gitignore` 처리는 운영자 결정.
+- 로컬 `main`은 08-11에 멈춰 있음 → 다음 세션 시작 시 `git checkout main
+  && git pull`. 현재 작업 브랜치 `fix/pin-setup-and-unit-fallback`은
+  merge 완료 상태.
+- `.ai-status/implementer-pin-setup-code-lookup.json`(08-31 completed)은
+  아직 untracked.
+- 이 106차 기록은 handoff.md 단일 파일 변경이며 커밋/push는 운영자 지시
+  대기.
 
 ## 2026-09-03 (105차) — 야간 자율 세션: Production Safety Harness 강화 + 재발 방지 가드 + 데이터 손실 가드 + WARN 10 분석 + CI 통합 (Production WRITE 0, PR merge 0)
 

@@ -508,6 +508,66 @@ console.log(`\n-- ${scenario}`)
   check('음수/NaN 포인트에도 칸 수가 음수가 되지 않음', gardenPlots({ gardenPoints: -5 }).every((p) => p.stage === 'empty') && gardenPlots({ gardenPoints: NaN }).every((p) => p.stage === 'empty'))
 }
 
+// ── 14) 정원 성장 v2(ledger 보너스, P2, 2026-09-03, flag attachmentGardenGrowthV2) ──
+// deriveAttachmentStats(rec, now, { gardenGrowthV2 }) — 옵션을 안 주면(기본
+// false) 항상 기존과 바이트 단위 동일(위 13절 포함 전 시나리오가 이미
+// 이를 증명). 이 절은 옵션을 명시적으로 켰을 때만 rewardLedger 보너스가
+// gardenPoints에 더해지는지, light/median/hard 세 프로필로 확인한다.
+// 실제 프로덕션에서는 useAttachment.js 한 곳만 이 옵션을 isFeatureEnabled
+// 결과로 채운다 — 이 테스트는 그 소비 계약(옵션이 켜지면 보너스가 실제로
+// 반영된다)을 직접 검증한다.
+scenario = '14) 정원 성장 v2(ledger 보너스)'
+console.log(`\n-- ${scenario}`)
+{
+  const AFTER_EPOCH = '2026-09-05T09:00:00.000Z'
+  const rewardEntry = (rewardType, sourceId, idKey) => ({
+    reward_type: rewardType, source_type: 'x', source_id: sourceId,
+    stars_delta: 1, idempotency_key: idKey, created_at: AFTER_EPOCH,
+  })
+
+  // 가벼운 날 — 단어 2개, 보너스 없음. 문서 산수: 2포인트 = 1칸(플래그
+  // 켜짐/꺼짐 무관, 보너스가 없으면 결과가 같다).
+  const lightRec = { cleared: [], completedWords: ['lw1', 'lw2'], clearedWords: [], rewardLedger: [] }
+  const lightOff = deriveAttachmentStats(lightRec)
+  const lightOn = deriveAttachmentStats(lightRec, new Date(), { gardenGrowthV2: true })
+  check('가벼운 날(단어 2개, 보너스 없음): flag on/off 모두 2포인트 · 1칸', lightOff.gardenPoints === 2 && lightOn.gardenPoints === 2 && gardenPlots(lightOn).filter((p) => p.stage !== 'empty').length === 1)
+
+  // 중앙값 — 단어 2개 + 오늘의 목표 달성 1회(가중치 2). 문서 산수:
+  // 2(단어) + 2(daily-goal-complete) = 4포인트 = 2칸.
+  const medianLedger = [rewardEntry('daily-goal-complete', '2026-09-05:goal', 'g14-median')]
+  const medianRec = { cleared: [], completedWords: ['md1', 'md2'], clearedWords: [], rewardLedger: medianLedger }
+  const medianOff = deriveAttachmentStats(medianRec)
+  const medianOn = deriveAttachmentStats(medianRec, new Date(), { gardenGrowthV2: true })
+  check('중앙값(단어 2개 + 목표달성 1회): flag off는 보너스 무시(2포인트 · 1칸)', medianOff.gardenPoints === 2 && gardenPlots(medianOff).filter((p) => p.stage !== 'empty').length === 1)
+  check('중앙값: flag on은 보너스 반영(4포인트 · 2칸)', medianOn.gardenPoints === 4 && gardenPlots(medianOn).filter((p) => p.stage !== 'empty').length === 2)
+  check('중앙값: gardenWordPoints/gardenBonusPoints 분해값이 합과 일치', medianOn.gardenWordPoints === 2 && medianOn.gardenBonusPoints === 2 && medianOn.gardenWordPoints + medianOn.gardenBonusPoints === medianOn.gardenPoints)
+
+  // 빡센 날 — 단어 8개 + 목표달성(2) + 쓰기시험(1) + 오답복습 3건(상한 2,
+  // 1점×2=2). 문서 산수: 단어축만으로 이미 4칸(8/2) — 보너스 포함
+  // 8+2+1+2=13포인트=6칸(=13/2 내림).
+  const hardLedger = [
+    rewardEntry('daily-goal-complete', '2026-09-05:goal', 'g14-hard-goal'),
+    rewardEntry('writing-complete', '2026-09-05:writing', 'g14-hard-writing'),
+    rewardEntry('wrong-word-recovered', '2026-09-05:worda', 'g14-hard-wwr-a'),
+    rewardEntry('wrong-word-recovered', '2026-09-05:wordb', 'g14-hard-wwr-b'),
+    rewardEntry('wrong-word-recovered', '2026-09-05:wordc', 'g14-hard-wwr-c'), // 3번째는 일일 상한 초과 — 무시
+  ]
+  const hardRec = { cleared: [], completedWords: Array.from({ length: 8 }, (_, i) => `hw${i}`), clearedWords: [], rewardLedger: hardLedger }
+  const hardOff = deriveAttachmentStats(hardRec)
+  const hardOn = deriveAttachmentStats(hardRec, new Date(), { gardenGrowthV2: true })
+  check('빡센 날: flag off는 단어축만(8포인트 · 4칸) — 문서 산수 그대로', hardOff.gardenPoints === 8 && gardenPlots(hardOff).filter((p) => p.stage !== 'empty').length === 4)
+  check('빡센 날: flag on은 보너스 상한 적용 후 13포인트 · 6칸(오답복습 3건 중 2건만 인정)', hardOn.gardenPoints === 13 && gardenPlots(hardOn).filter((p) => p.stage !== 'empty').length === 6)
+
+  // 월드/마을이 여전히 같은 축(gardenPoints)을 읽는지 — flag on 상태에서도
+  // 정합이 깨지지 않아야 한다(11절 계약의 v2 버전).
+  check('월드 상태도 gardenPoints(v2 포함) 축을 그대로 읽는다', computeWorldState(hardOn).growthPoints === hardOn.gardenPoints)
+
+  // 단조성 — light < median < hard 순으로 growthPoints/filled 모두 증가
+  // (v2가 순서를 뒤집지 않는다).
+  check('light < median < hard — growthPoints v2가 단조 증가', lightOn.gardenPoints < medianOn.gardenPoints && medianOn.gardenPoints < hardOn.gardenPoints)
+  check('light < median < hard — 정원 칸 수도 단조 증가', gardenPlots(lightOn).filter((p) => p.stage !== 'empty').length < gardenPlots(medianOn).filter((p) => p.stage !== 'empty').length && gardenPlots(medianOn).filter((p) => p.stage !== 'empty').length < gardenPlots(hardOn).filter((p) => p.stage !== 'empty').length)
+}
+
 // ── 요약 ─────────────────────────────────────────────────────────────────
 console.log(`\n${'='.repeat(64)}`)
 if (failures === 0) {

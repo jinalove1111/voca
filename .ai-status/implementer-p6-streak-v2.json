@@ -1,0 +1,30 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "p6-streak-v2",
+  "task": "P6 Streak V2 표시 배선 — streakModel.js(freeze 포함, 미배선 상태였던 완성 모델)를 Dashboard 헤더 칩/캘린더 내비 서브라벨에 연결(flag streakV2 기본 OFF, 보상 무변경)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-03T00:00:00+09:00",
+  "updated_at": "2026-09-03T00:00:00+09:00",
+  "files_owned": [
+    "src/utils/gamification/streakAdapter.js",
+    "src/components/StreakChip.jsx",
+    "src/components/Dashboard.jsx",
+    "scripts/testStreakV2Wiring.mjs",
+    ".ai-status/implementer-p6-streak-v2.json"
+  ],
+  "files_read": [
+    "src/utils/gamification/streakModel.js",
+    "src/hooks/useStudent.js",
+    "src/utils/attachment/attachmentCore.js",
+    "src/App.jsx",
+    "src/config/features.js",
+    "docs/REWARD_LOOP_AUDIT_2026-09-03.md",
+    "scripts/testGamificationModels.mjs",
+    "scripts/testSessionRewardSummary.mjs"
+  ],
+  "summary": "streakAdapter.js(순수, streakModel만 import) 신규 — historyToQualifiedDates(camelCase history → snake_case 인정일 배열)/computeStreakV2(streak 결과 + protectedThisWeek + milestoneLabel). Dashboard.jsx는 studentData.history를 추가 destructure(App.jsx가 이미 studentData 전체를 넘기고 있어 App.jsx 수정 불필요 — 사전 우려였던 prop 배선 문제는 실제로 발생하지 않음)하고 useMemo로 V2 계산, 헤더 🔥칩을 신규 StreakChip.jsx(v2=null이면 예전 마크업과 바이트 단위 동일)로 교체, 캘린더 내비 sub 라벨도 플래그 ON일 때만 V2 current/보호 표시로 전환. 레거시 calcStreak/STREAK_BONUS 무변경(useStudent.js 읽기만 함). FAIL-first: git stash로 구현 전 상태 재현해 9 FAIL/8 PASS 실측 → 구현 후 scripts/testStreakV2Wiring.mjs 33/33 PASS. npm run build 통과, testGamificationModels.mjs(streakModel 자체 테스트) 24/24 PASS 그대로, npm run verify:star-delta 전 시나리오 PASS. 커밋 2건: 8c5b98f(어댑터+테스트), 09b6fc2(Dashboard 배선). 작업 중 동시 작업 에이전트가 package.json/tests/harness/registry.mjs/src/hooks/useStudent.js/src/components/SessionRewardCard.jsx/src/utils/rewardSummary.js/src/utils/attachment/worldProgress.js/src/components/admin/StudentDirectory.jsx를 실시간으로 add/commit해 인덱스가 여러 번 리셋됨을 관찰 — 매번 git status로 확인 후 pathspec 제한 commit으로 내 파일만 커밋해 attribution 오염 없이 완료.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 대기. App.jsx는 이번 세션에서 전혀 수정하지 않았음(history가 이미 studentData를 통해 전달되고 있었기 때문) — 별도 조치 불필요."
+}

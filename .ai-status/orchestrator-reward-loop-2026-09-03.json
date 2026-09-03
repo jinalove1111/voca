@@ -1,0 +1,21 @@
+{
+  "agent_name": "orchestrator",
+  "role": "보상 루프 자율 세션 조정",
+  "task_id": "reward-loop-2026-09-03",
+  "task": "운영자 지시(2026-09-03): 개발 우선순위를 보상+몰입+Paul Town 성장 루프로 전환. P0 감사 → P1 즉각 보상 피드백 → P2 정원 성장 → P3 Next Reward → P4 Unit 완료 → P5 오답 복습 → P6 Streak → P10 Integrity → P7/P8/P9",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-03T04:40:00Z",
+  "updated_at": "2026-09-03T07:50:20.056Z",
+  "files_owned": [],
+  "files_read": [
+    "handoff.md",
+    "PROJECT_BOARD.md",
+    "package.json"
+  ],
+  "summary": "P0~P10 완료(P7은 P4 big 카드에 결정적 코스메틱으로 흡수, P8은 DEFER+규칙 문서화). 26커밋 + docs. verify:all 0 FAIL, health:students PASS 27/WARN 10/FAIL 0, PR #9 CI 전부 PASS. 플래그 6종 전부 OFF, Production WRITE 0, SQL 0, deploy 0, merge 0.",
+  "constraints": "Production DB WRITE 0, SQL 실행 0, 학생 reward/stars/XP/hat/garden 실데이터 변경 0, flag ON 0, PR merge 0, main push 0, deploy 0. feature 브랜치 커밋/push/PR 생성만 허용.",
+  "blocker": null,
+  "next_action": "운영자: PR #9 리뷰/merge 결정, 플래그 ON 순서 결정(handoff 107차 BLOCKED_FOR_OPERATOR)",
+  "lessons": "동시 커밋 에이전트 2개가 같은 인덱스를 공유해 스테이징 사고 1건(즉시 정정). 이후 커밋 에이전트는 한 번에 1개만."
+}

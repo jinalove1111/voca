@@ -22,6 +22,8 @@ import { evaluateHatUnlocks, hatById } from '../utils/attachment/hatSystem'
 import { detectNewMilestones } from '../utils/attachment/milestones'
 import { getStudentClass, getClassUnits, getClassWords, getClassIdByName, wordSlug, isTextbookMode, getStudentPrimaryTextbook, getClassNameById } from '../utils/wordLibrary'
 import { trackEvent, EV } from '../utils/productEvents'
+import { isFeatureEnabled } from '../config/features'
+import { diffNewlyCompleted } from './unitCompletionDetector'
 
 // getClassWords()가 돌려주는 단어 객체의 id는 words.id(UUID) — 애착 시스템의
 // cleared/missions/spellingWrongToday/wordStatus 키는 전부 단어 텍스트
@@ -77,11 +79,18 @@ export function useAttachment(studentId, studentData) {
   // completedSet/clearedWordSet 등 표시 전용 파생값을 만들 수 있게 한다 —
   // 이번 마일스톤에서 어떤 판정(unitsDone/textbooksDone/모자/밀스톤)도
   // 이 두 축을 입력으로 쓰지 않는다(기존 cleared 기반 그대로 유지).
-  const { cleared, completedWords, clearedWords, wordStatus, missions, history, streak, spellingReviewQueue, hatInventory, milestones, grantHats, addMilestones, restoreChecked } = studentData
+  const { cleared, completedWords, clearedWords, wordStatus, missions, history, streak, spellingReviewQueue, rewardLedger, hatInventory, milestones, grantHats, addMilestones, restoreChecked, recordUnitCompleted } = studentData
+
+  // 정원 성장 v2(P2, 2026-09-03) — 플래그 게이팅은 여기서만 평가한다.
+  // attachmentCore.js는 순수 계산 레이어라 features.js를 직접 import하지
+  // 않는다(헤더 주석 참고) — 이 훅이 유일한 소비 지점이라 게이팅도
+  // 여기서 대신 맡는다. 기본 false — 켜지지 않으면 아래 deriveAttachmentStats
+  // 호출은 기존과 동일한 인자만 넘기는 것과 바이트 단위로 같다.
+  const gardenGrowthV2 = isFeatureEnabled('attachmentGardenGrowthV2')
 
   const stats = useMemo(
-    () => deriveAttachmentStats({ cleared, completedWords, clearedWords, wordStatus, missions, history, streak, spellingReviewQueue }),
-    [cleared, completedWords, clearedWords, wordStatus, missions, history, streak, spellingReviewQueue],
+    () => deriveAttachmentStats({ cleared, completedWords, clearedWords, wordStatus, missions, history, streak, spellingReviewQueue, rewardLedger }, new Date(), { gardenGrowthV2 }),
+    [cleared, completedWords, clearedWords, wordStatus, missions, history, streak, spellingReviewQueue, rewardLedger, gardenGrowthV2],
   )
   const lib = useMemo(() => buildWordsByUnit(studentId), [studentId])
   const unitsDone = useMemo(() => completedUnits(lib.wordsByUnit, stats.clearedSet), [lib, stats])
@@ -143,6 +152,39 @@ export function useAttachment(studentId, studentData) {
     if (events.length > 0) addMilestones(events)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId, restoreChecked])
+
+  // ── P4 "유닛 완료 보상"(2026-09-03, flag unitCompleteReward, useStudent.
+  // recordUnitCompleted 안에서만 게이팅) — 전이(transition) 감지기. 위
+  // hats/milestones 판정 effect(ranRef, 로그인·마운트당 정확히 1회)와는
+  // 완전히 별개의 트리거다 — 재사용하지 않는다(모자 effect는 세션 내내
+  // 다시 안 돌지만, 이 effect는 unitsDone이 세션 중간에 바뀔 때마다 돌아야
+  // "학습 도중 유닛을 막 끝낸 순간"을 놓치지 않는다).
+  //
+  // 최초 실행(studentId당 이 훅이 처음 렌더될 때)은 지급 없이 ref만
+  // 씨딩한다 — 이 기능이 배포되기 전에 이미 완주해 있던 유닛은 절대
+  // 소급 지급되지 않는다(의도된 결정: flag를 켜는 순간 학생마다 보유한
+  // 유닛 수만큼 별이 한꺼번에 터지는 것을 막는다). 그 다음부터는
+  // diffNewlyCompleted(위, 순수 함수)로 "이번에 새로 완료된" unitId만
+  // 골라 recordUnitCompleted를 부른다.
+  //
+  // ref 집합 자체는 "같은 유닛으로 이 effect를 다시 부르지 않는" 최적화일
+  // 뿐 — 실제 중복지급 방지의 최종 담보는 언제나처럼
+  // grantLedgerReward/rewardEngine의 idempotency_key다(recordUnitCompleted
+  // 헤더 주석, useStudent.js 참고).
+  const notifiedUnitIdsRef = useRef(null)
+  useEffect(() => {
+    const currentIds = unitsDone.map((u) => u.unitId).filter((id) => id !== undefined && id !== null)
+    if (notifiedUnitIdsRef.current === null) {
+      notifiedUnitIdsRef.current = new Set(currentIds)
+      return
+    }
+    const newly = diffNewlyCompleted(notifiedUnitIdsRef.current, currentIds)
+    if (newly.length > 0) {
+      for (const unitId of newly) recordUnitCompleted?.(unitId)
+      notifiedUnitIdsRef.current = new Set(currentIds)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unitsDone])
 
   // 폴의 기억용 슬러그→표시 단어 맵(실단어 언급의 진실성 원천)
   const wordTextById = useMemo(() => {
