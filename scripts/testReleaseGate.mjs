@@ -353,6 +353,35 @@ console.log('\n=== 16절. registry 편입 정적 검사(2026-09-04, 야간 P11 �
     !!m && /extra:\s*false/.test(m[0]), m?.[0])
 }
 
+console.log('\n=== 16b절. 야간 신규 스위트 4종 registry required 등록 정적 검사(2026-09-04) ===')
+{
+  // testDoubleEvents.mjs/testUiStabilityGuards.mjs 는 package.json 에
+  // verify:double-events/verify:ui-stability 로 이미 있었지만 registry.mjs
+  // 에는 등록돼 있지 않아 verify:all 에서 한 번도 실행되지 않고 있었다.
+  // testExcelImportFixtures.mjs/testAdminPinThrottle.mjs 는 등록은 돼
+  // 있었지만 extra:true(보너스 취급)라 verify:all 결과에 반영되지 않았다
+  // — DEVELOPER_GUIDE.md 2026-09-03 규칙(신규 verify 스크립트는 기본
+  // required, extra 는 flaky/외부의존일 때만)에 따라 4개 전부 required
+  // (extra:false)로 등록·승격했는지 이 절이 고정한다. 단일 라인 객체
+  // 전제(16절과 동일 파싱 방식).
+  const t = readFileSync(path.resolve('tests/harness/registry.mjs'), 'utf8')
+  const requiredScripts = [
+    'scripts/testDoubleEvents.mjs',
+    'scripts/testUiStabilityGuards.mjs',
+    'scripts/testExcelImportFixtures.mjs',
+    'scripts/testAdminPinThrottle.mjs',
+  ]
+  for (const script of requiredScripts) {
+    const escaped = script.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    check(`${script} 가 registry 에 등록돼 있다`, new RegExp(escaped).test(t))
+    const re = new RegExp(`\\{\\s*script:\\s*'${escaped}'[^}]*\\}`)
+    const em = re.exec(t)
+    check(`${script} 등록 항목이 존재하고 파싱 가능하다(단일 라인 객체)`, !!em)
+    check(`${script} 가 extra:false 로 등록돼 verify:all exit code 에 실제로 반영된다(가짜 PASS 금지)`,
+      !!em && /extra:\s*false/.test(em[0]), em?.[0])
+  }
+}
+
 console.log(`\n${'='.repeat(60)}`)
 console.log(`총 ${passed + failed}단언 — PASS ${passed} / FAIL ${failed}`)
 if (failed > 0) {
