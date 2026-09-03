@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { getStudentClass, getStudentClassId, getStudentUnit, getClassNames, getTodaysAssignmentWordIds, getClassSettings, getClassIdByName, getStudentById, fetchHouseWeeklyScore, fetchHouseSeasonScore, isTextbookMode, getStudentPrimaryTextbook, getLearnableTextbookUnits, getLearnableClassUnitNames } from '../utils/wordLibrary'
 // v2.9(2026-07-21, decision 0004 다중 교재) — 2개 이상 교재가 배정된
 // 학생에게만 나타나는 선택기. 0/1개면 컴포넌트 자체가 아무것도 렌더하지
@@ -76,6 +76,15 @@ import RewardCard from './RewardCard'
 import NextGoalsCard from './NextGoalsCard'
 import { computeNextGoals } from '../utils/nextGoals'
 import { STAR_BADGES } from '../hooks/useStudent'
+// Streak V2(P6, 2026-09-03, docs/REWARD_LOOP_AUDIT_2026-09-03.md §14) —
+// streakModel.js(freeze 포함, 완성돼 있었지만 미배선이던 모델)를 실제
+// 표시에 연결. streakV2 플래그(기본 OFF) 뒤에서만 계산되고, 순수 파생
+// (computeStreakV2)이라 별도 저장/네트워크 없음 — 어떤 보상도 지급하지
+// 않는다(레거시 STREAK_BONUS가 여전히 유일한 스트릭 보상). 플래그 OFF면
+// 이 import 두 줄 + StreakChip 도입 말고는 기존 화면 변화 0(StreakChip의
+// v2=null 분기가 예전 인라인 마크업과 완전히 동일).
+import { computeStreakV2, localTodayStr } from '../utils/gamification/streakAdapter'
+import StreakChip from './StreakChip'
 
 const GOAL = 5
 const stickerById = (id) => STICKERS.find(s => s.id === id)
@@ -308,7 +317,15 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 // P0(2026-07-15): student(이름 문자열) 대신 studentId(식별자)+studentName
 // (표시용)을 따로 받는다 — getStudentClass/getStudentUnit은 이제 id 기반.
 export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, completedUnits, completedTextbooks, pendingCeremonyHat, onDismissCeremony, textbookOptions, currentTextbookId, onTextbookSwitch }) {
-  const { stars, starsDisplay, clearedStars, stickerTypes, activeMissions, dailyProgress, liveMissionsCompleted, streak, cleared, ticketBalance, redeemTicketReward, equippedHatId, rewardLevel, rewardStarsToNext } = studentData
+  const { stars, starsDisplay, clearedStars, stickerTypes, activeMissions, dailyProgress, liveMissionsCompleted, streak, cleared, ticketBalance, redeemTicketReward, equippedHatId, rewardLevel, rewardStarsToNext, history } = studentData
+  // Streak V2(P6, 2026-09-03) — streakV2 플래그 OFF거나 history가 아직
+  // 없으면 항상 null(=StreakChip이 예전 레거시 마크업만 렌더). history는
+  // useStudent.js가 이미 studentData에 담아 반환하던 필드(App.jsx가
+  // studentData 전체를 그대로 이 컴포넌트에 넘긴다) — 새 prop 배선 불필요.
+  const streakV2 = useMemo(() => {
+    if (!isFeatureEnabled('streakV2') || !history) return null
+    return computeStreakV2(history, localTodayStr())
+  }, [history])
   // 애착 시스템(2026-07-22) — 학생 아바타의 장착 모자. 미장착이면 기존
   // 기본 아바타(👑) 그대로 — 아무것도 안 얻은/안 고른 학생 화면은 변화 0.
   // 폴(Paul) 캐릭터의 검은 모자와 무관(폴 이미지는 어디서도 안 바뀜).
@@ -502,12 +519,12 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
           🚪 로그아웃
         </button>
         <div className="flex items-center gap-2">
-          {streak > 0 && (
-            <div className="flex items-center gap-1 bg-orange-100 px-3 py-2 rounded-2xl">
-              <span className="text-lg">🔥</span>
-              <span className="font-black text-orange-600 text-sm">{streak}일</span>
-            </div>
-          )}
+          {/* Streak V2(P6, 2026-09-03) — StreakChip은 v2가 null이면 예전
+              인라인 마크업(streak > 0일 때 🔥{streak}일)과 완전히 동일한
+              마크업만 렌더한다(scripts/testStreakV2Wiring.mjs SSR 단언).
+              streakV2 플래그 OFF면 streakV2가 항상 null이라 오늘과 바이트
+              단위로 동일하다. */}
+          <StreakChip streak={streak} v2={streakV2} />
           {/* M4b(2026-08-04) Cleared Stars — 표시값만 stars → starsDisplay로
               바꾸고(별 지급 자체는 무변경, stars=totalStars는 그대로),
               실력 별(clearedStars)이 섞여 있음을 title 툴팁으로 정직하게
@@ -837,7 +854,7 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
             {isFeatureEnabled('attachmentWorldGarden') && (
               <NavBtn emoji="🌱" label="나의 정원" sub="단어가 키우는 세계" color="from-green-400 to-emerald-600" onClick={() => onGo('englishGarden')} />
             )}
-            <NavBtn emoji="📅" label="공부 캘린더" sub={`🔥 ${streak}일 연속`}                color="from-amber-400 to-orange-500"   onClick={() => onGo('studyCalendar')} />
+            <NavBtn emoji="📅" label="공부 캘린더" sub={streakV2 ? `🔥 ${streakV2.current}일 연속${streakV2.protectedThisWeek ? ' · 🛡️' : ''}` : `🔥 ${streak}일 연속`} color="from-amber-400 to-orange-500"   onClick={() => onGo('studyCalendar')} />
             <NavBtn emoji="🎮" label="미니 게임"    sub="풍선/낚시/피자/기차 중 랜덤"          color="from-sky-400 to-indigo-500"    onClick={onPlayGame} />
             {/* Writing Coach MVP(2026-08-09) — 플래그 기본 OFF: 버튼 자체가
                 렌더되지 않는다(애착 시스템 버튼들과 동일한 게이팅 패턴).
