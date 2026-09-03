@@ -24,6 +24,43 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
 
 ## BLOCKED
 
+### [P1] 보상 루프 flag ON 결정 6종 — 운영자 판단 대기 (2026-09-03, 107차)
+- 근거: `handoff.md` 2026-09-03(107차) 8절, `src/config/features.js`.
+- 내용: `sessionRewardSummary`/`attachmentGardenGrowthV2`/`nextGoalsCard`/
+  `streakV2`/`unitCompleteReward`/`masteryReward` 전부 기본 `false`.
+  권장 순서: `sessionRewardSummary` → `nextGoalsCard` → `streakV2` →
+  `attachmentGardenGrowthV2`(켜기 전 `GROWTH_V2_EPOCH`를 실제 go-live일로
+  재설정 권장) → `unitCompleteReward` → `masteryReward`(뒤 두 개는 아래
+  서버 merge/재배포 카드가 선행조건).
+
+### [P1] `api/grant-xp.js` + `rewardEngine.js` merge/재배포 — P4/P5 선행조건 (2026-09-03, 107차)
+- 근거: `handoff.md` 2026-09-03(107차), `rewardEngine.js` 신규 타입
+  3종(`unit-complete`/`word-mastered`/`review-session-bonus`).
+- 내용: 신규 보상 타입은 로컬 코드에만 존재 — 서버가 실제로 지급을
+  인정하려면 qa-reviewer/security-reviewer 검수 후 merge + 재배포가
+  선행돼야 한다. 미배포 상태에서 `unitCompleteReward`/`masteryReward`
+  flag를 켜면 클라이언트는 지급을 시도하지만 서버가 거부한다.
+
+### [P2] 레거시 `wrong-word-recovered` 파밍 완화 여부 — 운영자 승인 필요 (2026-09-03, 107차)
+- 근거: `handoff.md` 2026-09-03(107차) 7절 발견 1번.
+- 내용: `date:wordId` dedup 키라 하루 상한 60건까지, 날짜가 바뀔 때마다
+  무기한 반복 가능한 구조적 파밍 여지가 있다. 신규 `word-mastered`
+  (lifetime 1회)가 완화 짝이지만, 레거시 타입 자체의 금액/규칙 축소는
+  동결 테이블(`GAME_REWARD_RULES.md`) 변경이라 운영자 승인 없이는
+  손대지 않는다.
+
+### [P2] `classes.gamification_enabled` (`supabase_v2_5`) SQL 실행 대기
+- 근거: `handoff.md` 2026-09-03(107차) 7절 발견 2번,
+  `docs/REWARD_LOOP_AUDIT_2026-09-03.md` §5.
+- 내용: 이번 세션이 새로 만든 문제는 아니지만(선행 이슈), P4/P5 flag ON
+  판단 시 "XP는 쌓이는데 화면엔 안 보이는" 현재 상태를 함께 고려할 것.
+
+### [P3] `rows.json` 처리 — 소유·용도 확인 후 폐기/보존 결정 필요
+- 근거: `git status`(워킹트리 미추적 파일), `handoff.md` 2026-09-03
+  (107차) 8절.
+- 내용: 이번 세션 소유 파일이 아니라 손대지 않았다 — 운영자가 용도
+  확인 후 폐기 또는 `.gitignore` 등록 판단 필요.
+
 ### [P2] `verify:login` 로컬 4/7만 PASS — `SUPABASE_SERVICE_ROLE_KEY` 로컬 부재
 - 근거: `handoff.md` 2026-07-18 "개발자 인프라 구축" Phase 6, "Phase 6 최종
   검증 매트릭스"(`TESTING.md`).
@@ -477,6 +514,26 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
 _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` 상태 파일 생성)_
 
 ## VERIFY
+
+### [P1] 보상 루프 P1~P10 (`feat/reward-loop`) — 운영자 리뷰/플래그 결정 대기 (2026-09-03, 107차)
+- 근거: `handoff.md` 2026-09-03(107차), `ROADMAP.md` 2026-09-03(107차),
+  `docs/REWARD_LOOP_AUDIT_2026-09-03.md`(P0 감사 + 부록 "구현 결과").
+- 내용: 운영자 지시("보상 + 몰입 + Paul Town 성장 시스템")로 P0 READ-ONLY
+  감사 후 P1(`SessionRewardCard`)/P2(정원 성장 v2)/P3(다음 목표
+  카드)/P4(유닛 완료 보상)/P5(복습·숙달 보상 강화)/P6(`streakModel.js`
+  실배선)/P9(관리자 보상 요약 표시)/P10(무결성 테스트 보강) 구현. P7은
+  P4/P1에 편입, P8(성장/언락 로직 추상화)은 DEFER(임계값 하향/유지만
+  가능 규칙만 문서화). 신규 플래그 6종(`sessionRewardSummary`/
+  `attachmentGardenGrowthV2`/`nextGoalsCard`/`streakV2`/
+  `unitCompleteReward`/`masteryReward`) 전부 기본 `false`.
+- 검증: `npm run verify:all` 0 FAIL 전 도메인 PASS(`rewardSystem` 도메인
+  17→22 스크립트), `npm run health:students -- --require-env` PASS 27/
+  WARN 10(기존 유령-유닛, 무관)/FAIL 0, `npm run build` PASS.
+- 제약 준수: 세션 내내 Production DB WRITE 0 / SQL 실행 0 / flag ON 0 /
+  PR merge 0 / main push 0 / deploy 0.
+- 검수 대기 사항: qa-reviewer/security-reviewer 코드 리뷰 미착수, PR
+  생성/리뷰 후 merge 여부 운영자 판단. 아래 BLOCKED 항목들이 이 카드의
+  후속 액션.
 
 ### [P0] Word Asset 전체 재검증(8축) + 실버그 2건 수정 — qa-reviewer/security-reviewer 검수 대기
 - 근거: `handoff.md` 2026-08-05(38차), `ROADMAP.md` 2026-08-05(17차).

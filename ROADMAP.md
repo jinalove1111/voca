@@ -1,9 +1,42 @@
 # Paul Easy Voca — 로드맵
 
-_최종 갱신: 2026-08-05 (17차, 16차 배포 완료 뒤 운영자 지시로 Word Asset
-시스템 전체 8축 재검증 수행, 그 과정에서 실버그 2건 발견·수정(AI 생성
-무저장 침묵 `f19ed56` / 학생 삭제 무반응+캐시 1000행 잘림 P0 `8e15ff7`)
-— 기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+_최종 갱신: 2026-09-03 (107차, 운영자 지시로 "보상 + 몰입 + Paul Town
+성장 시스템" 이니셔티브 P0 감사 + P1~P10 구현. 전부 플래그 OFF, PR/merge/
+deploy/SQL 실행 0 — 상세는 아래 신규 섹션, 기존 섹션은 원본 그대로 유지)_
+
+## 2026-09-03 — 보상 + 몰입 + Paul Town 성장 시스템 이니셔티브 (107차) — 상태: 구현 완료·플래그 OFF·PR 대기
+
+운영자가 이날 아침 우선순위를 "보상 + 몰입 + Paul Town 성장 시스템"으로
+전환 지시(`CLAUDE.md` 규칙 12는 이번 이니셔티브 범위에서 운영자 명시
+지시로 예외 처리 — 규칙 자체는 원문 유지). 상세 근거는
+`docs/REWARD_LOOP_AUDIT_2026-09-03.md`(P0 감사, §1~14) + `handoff.md`
+2026-09-03(107차) 섹션.
+
+**P1~P10 상태 (전부 브랜치 `feat/reward-loop`, main 미병합)**
+
+| ID | 내용 | 상태 |
+|---|---|---|
+| P0 | READ-ONLY 감사(`docs/REWARD_LOOP_AUDIT_2026-09-03.md`) | 완료 |
+| P1 | `SessionRewardCard` 세션 종료 요약 카드(flag `sessionRewardSummary`) | 구현 완료·flag OFF |
+| P2 | 정원 성장 v2 보너스(`growthPoints.js`, flag `attachmentGardenGrowthV2`) | 구현 완료·flag OFF |
+| P3 | 다음 목표 카드(`nextGoals.js`/`NextGoalsCard.jsx`, flag `nextGoalsCard`) | 구현 완료·flag OFF |
+| P4 | 유닛 완료 보상(신규 타입, flag `unitCompleteReward`) | 구현 완료·flag OFF, **서버(`api/grant-xp.js`) merge/재배포 선행 필요** |
+| P5 | 복습/숙달 보상 강화(신규 타입 2종, flag `masteryReward`) | 구현 완료·flag OFF, **서버 merge/재배포 선행 필요** |
+| P6 | `streakModel.js` 실배선(`streakAdapter.js`/`StreakChip.jsx`, flag `streakV2`) | 구현 완료·flag OFF |
+| P7 | 코스메틱 전용 서프라이즈 | **P4/P1 작업에 편입**(별도 커밋 없음 — `SessionRewardCard` big variant 결정론적 이모지 1줄) |
+| P8 | 성장/언락 로직 추상화(정원/모자/Paul Town 공용 인터페이스) | **DEFER** — 이미 순수 파생 구조라 리팩터 실익 낮음. 대신 규칙 하나만 문서화: *출시된 파생 unlock 사다리(`WORLD_STAGES`/`TOWN_PLACES`)의 기존 id 임계값은 낮추거나 유지만 가능, 절대 올리지 않는다(unlock 상태가 저장되지 않고 단조 축에서 매번 재계산되므로 임계값 상승은 이미 열린 구역이 조용히 재잠금되는 회귀가 된다).* |
+| P9 | 관리자 `StudentDirectory` 보상 요약 표시(`adminRewardSummary.js`) | 구현 완료(읽기 전용 표시, flag 불필요) |
+| P10 | 무결성 테스트 보강(`testRewardIntegrityV2.mjs`, 10개 실사용 시나리오) | 완료 |
+
+**검증**: `npm run verify:all` 0 FAIL 전 도메인 PASS(`rewardSystem` 도메인
+17→22 스크립트), `npm run health:students -- --require-env` PASS 27/
+WARN 10(기존 유령-유닛 항목, 무관)/FAIL 0, `npm run build` PASS. 신규
+verify 스크립트 9개 상세는 `TESTING.md` 참고.
+
+**남은 것(운영자 액션)**: 6개 flag의 ON 결정(권장 순서는 `handoff.md`
+107차 8절), `api/grant-xp.js`+`rewardEngine.js` merge/재배포(P4/P5
+선행조건), 레거시 `wrong-word-recovered` 파밍 완화 여부 판단. 상세는
+`PROJECT_BOARD.md` VERIFY/BLOCKED 카드.
 
 ## 2026-08-05 (17차) — Word Asset 전체 재검증(8축) + 실버그 2건 수정(AI 생성 무저장 침묵 / 학생 삭제 무반응+캐시 1000행 잘림 P0) — 검증·수정 완료 ✅(AI 저장 원인은 미확정, 운영자 재확인 대기)
 

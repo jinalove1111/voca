@@ -437,3 +437,35 @@ _이 섹션부터는 append — 위 내용은 원본 그대로 보존._
 9종 규칙)와 `npm run prod:hotfix`(manifest 단일 원천 preflight/apply/
 postflight/rollback + TTY 승인 게이트) — 상세는 `handoff.md` 104차 섹션
 참고.
+
+## 관련 항목: 보상 루프 P1~P10 신규 verify 스크립트 9종 (2026-09-03, 107차)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+`docs/REWARD_LOOP_AUDIT_2026-09-03.md` §14 계획에 따라 구현된 P1~P6/P9/
+P10의 계약 테스트 9개가 `tests/harness/registry.mjs`의 `rewardSystem`
+도메인(`verify:reward`와 동일 실행 그룹)에 등록됐다 — 도메인 스크립트
+수 17→22. 전부 카테고리 1(순수 로직)/2(fakeReact 시뮬레이션)/3(SSR 렌더)
+패턴 재사용(위 "4개 카테고리" 참고), 네트워크/Supabase 접촉 0.
+
+| verify 명령 | 스크립트 | 무엇을 검증하는지 | 빌더/기법 |
+|---|---|---|---|
+| `verify:session-reward-summary` | `scripts/testSessionRewardSummary.mjs` (53단언) | P1 — `src/utils/rewardSummary.js` 순수 계약(zero-omission, `rewardEngine.js` LEVELS 드리프트 가드) + `SessionRewardCard.jsx` esbuild+SSR 렌더 + `useStudent.js`의 기존 `hasRewardEntry` 조기반환 이후에만 요약 생성하는지 정적 배선 검사 + 실제 `rewardEngine.js`/`rewardSummary.js` export를 그대로 이어붙인 재지급 방지 오케스트레이션 시뮬레이션 | esbuild + react-dom/server SSR + 정적 소스 문자열 검사 |
+| `verify:growth-points` | `scripts/testGrowthPoints.mjs` (44단언) | P2 — `src/utils/attachment/growthPoints.js`(zero-import 순수 모듈) `GROWTH_V2_EPOCH`/`BONUS_WEIGHTS`/`PER_DAY_CAPS`/`bonusPointsFromLedger`/`growthPoints` 계약 | plain Node import(빌드 불필요) |
+| `verify:next-goals` | `scripts/testNextGoals.mjs` (37단언) | P3 — `src/utils/nextGoals.js`(`computeNextGoals`/`formatGoalLine`) 순수 계약 + `NextGoalsCard.jsx` esbuild+SSR 배선 + `useStudent.js`의 `STAR_BADGES`/`hatSystem.js`의 `HAT_THRESHOLDS`와의 정적 동기화(값 드리프트 방지) | esbuild + react-dom/server SSR + 정적 정규식 동기화 검사 |
+| `verify:reward-types-v2` | `scripts/testRewardTypesV2.mjs` (54단언) | P4/P5 — `rewardEngine.js` 신규 타입 3종(`unit-complete`/`word-mastered`/`review-session-bonus`) 엔진 계약 + `REWARD_STARS`/`REWARD_SOURCE_RULES`/`REWARD_DAILY_CAP`의 **기존 6개 항목 값 동결 가드**(새 키 추가는 허용, 기존 키 변경 시 FAIL) + `api/grant-xp.js` 서버 행위(인메모리 가짜 Supabase) | 순수 함수 + esbuild + 인메모리 가짜 `@supabase/supabase-js` |
+| `verify:streak-v2` | `scripts/testStreakV2Wiring.mjs` (33단언) | P6 — `src/utils/gamification/streakAdapter.js`(`historyToQualifiedDates`/`computeStreakV2`, freeze/공백/reset/best 보존/퀴즈 단독 인정일) + 레거시 `calcStreak`(`useStudent.js`) 시맨틱 무변경 정적 검사 + `Dashboard.jsx` 배선 검사 + `StreakChip.jsx` esbuild+SSR(flag off/on 비교) | plain import + 정적 소스 검사 + esbuild+SSR |
+| `verify:admin-reward-summary` | `scripts/testAdminRewardSummary.mjs` (40단언) | P9 — `src/utils/adminRewardSummary.js`(`summarizeStudentRewards`/`formatAdminRewardLine`) 순수 계약, null/undefined/빈 행 안전 폴백, 레거시(v1.3~v1.4, rewardLedger/hatInventory 없는) 행 처리 | plain Node import |
+| `verify:unit-complete-reward` | `scripts/buildUnitCompleteBundle.mjs` + `scripts/testUnitCompleteReward.mjs` (36단언) | P4 — `useStudent.js`의 `recordUnitCompleted`(flag off/on, 중복지급 방지, unitId별 별개 지급) + `mergeProgressRecords`가 `unit-complete` 항목도 기존 idempotency_key union 규칙으로 병합하는지 + `unitCompletionDetector.js`의 `diffNewlyCompleted` 순수 함수 + `useAttachment.js` 첫 실행 씨딩 정적 검사 | fakeReact.mjs 번들 시뮬레이션 |
+| `verify:mastery-reward` | `scripts/buildUnitCompleteBundle.mjs` + `scripts/testMasteryReward.mjs` (25단언) | P5 — `testUnitCompleteReward.mjs`와 동일 번들·기법 재사용, `masteryReward` flag를 localStorage 프리시드 + cache-busted import로 제어 | fakeReact.mjs 번들 시뮬레이션(P4와 산출물 공유) |
+| `verify:reward-integrity-v2` | `scripts/buildUnitCompleteBundle.mjs` + `scripts/testRewardIntegrityV2.mjs` (54단언) | P10 — 개별 계약 재검증이 아니라 운영자 지정 10개 실사용 시나리오(중복 제출/새로고침/뒤로가기/네트워크 재시도/멀티기기/재진입/파밍/정원-ledger 일치/레거시 baseline 동결/no-reset)를 앵커 4종(word-session-complete/exam-complete/unit-complete/daily-goal-complete) + 신규 타입 2종(word-mastered/review-session-bonus)에 걸쳐 통합 확인하는 회귀 스위트 | fakeReact.mjs + esbuild + 인메모리 가짜 Supabase(전부 기존 기법 재사용, 새 프레임워크 없음) |
+
+기존 `scripts/testGardenGrowthFlow.mjs`도 P1 레이어링 수정(useStudent.js가
+attachment/worldProgress를 import하면 안 되는 계층 위반을 이 파일의
+시나리오 10이 실측 검출)에 따른 회귀 방지 시나리오가 추가되어 단언 수가
+84→93으로 늘었다(등록 도메인/명령은 무변경).
+
+**검증 실행 결과(2026-09-03)**: `npm run verify:all` — 0 FAIL, 전 도메인
+PASS(`rewardSystem` 도메인 스크립트 수 17→22). `npm run build` PASS.
+전부 flag OFF 상태에서 실행된 결과이며, flag ON 이후의 라이브 재검증은
+별도 필요(`handoff.md` 2026-09-03 107차 섹션 참고).

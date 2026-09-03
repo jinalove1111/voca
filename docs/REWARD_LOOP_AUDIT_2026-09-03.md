@@ -311,3 +311,45 @@ verify 스크립트는 이번 조사 범위에서 발견되지 않았다** — �
 5. 연구 브리프의 회상/숙달 보상·즉각적 정보 피드백 원칙과 현재 구현
    사이의 갭(4·5절)이 P1~P5의 근거이고, 이 중 P4(유닛완료)만 서버
    재배포가 필요한 실제 승인 대상이다(14절).
+
+---
+
+## 부록 — 구현 결과(2026-09-03)
+
+_이 부록부터는 append — 위 §1~14/5줄 요약은 P0 시점(READ-ONLY 감사)
+원문 그대로 보존. 아래는 같은 날 이어진 구현 세션(107차,
+`handoff.md` 2026-09-03 107차 섹션)이 §14 계획을 실제로 어떻게
+구현했는지 기록한다. 브랜치 `feat/reward-loop`, main 미병합, 신규
+플래그 전부 기본 `false`, Production DB WRITE 0 / SQL 실행 0._
+
+### 계획 대비 실적 표
+
+| ID | §14 계획 | 실적 |
+|---|---|---|
+| P1 | `SessionRewardCard`, flag `sessionRewardSummary` | **계획대로 구현.** `src/utils/rewardSummary.js`(순수) + `src/components/SessionRewardCard.jsx`. 구현 중 `useStudent.js`가 attachment/worldProgress를 import하면 안 되는 계층 위반을 `testGardenGrowthFlow.mjs` 시나리오 10이 검출(2 FAIL) → `gardenStageTotal`을 `worldProgress.js`로, raw-points 계산을 `SessionRewardCard.jsx`로 옮겨 해소(커밋 `8c61c43`). |
+| P2 | 성장 신호, 기존 `gardenPoints` 축 재사용, SQL 변경 없음 | **계획대로 구현.** `src/utils/attachment/growthPoints.js` 신설, `GROWTH_V2_EPOCH` 이후 원장 항목 기반 보너스 가중치 추가. 저장 리셋 없음(순수 파생 유지) 확인. |
+| P3 | 다음 목표 위젯 | **계획대로 구현.** `src/utils/nextGoals.js` + `NextGoalsCard.jsx`, 오늘/이번 주/다음 정원 단계 조합 표시. |
+| P4 | 유닛 완료 보상(신규 타입, 서버 재배포 필요) | **계획대로 구현, 서버 재배포는 계획대로 미실행(대기).** `rewardEngine.js`에 `unit-complete`(+5★, uuid, 일일상한 2, 학생당 유닛 1회 평생) 추가 + `api/grant-xp.js` generic 경로 확장. `useStudent.js` `recordUnitCompleted` + `src/hooks/unitCompletionDetector.js` 신설로 클라이언트 배선까지 완료. |
+| P5 | 복습/숙달 보상 강화 | **신규 타입 2개로 구현(계획의 "기존 타입 확장"보다 명확한 형태).** `word-mastered`(+1★, token, 일일상한 60, 학생당 단어 1회 평생) + `review-session-bonus`(+2★, date, 일일상한 1) — 기존 `wrong-word-recovered`는 동결 테이블 원칙에 따라 무변경. |
+| P6 | `streakModel.js` 실배선 | **계획대로 구현.** `src/utils/gamification/streakAdapter.js`(freeze 포함 실모델 배선) + `StreakChip.jsx`, flag `streakV2`. 레거시 `calcStreak` 기반 보상 지급 로직은 무변경(표시만 v2). |
+| P7 | 코스메틱 전용 서프라이즈 | **별도 구현 없이 P1/P4에 편입.** `SessionRewardCard.jsx` big variant에 unitId 해시 기반 결정론적 이모지 줄 1개만 추가(값의 무작위성 없음, §13 원칙 3 "가변비율 보상 금지" 준수). |
+| P8 | 성장/언락 로직 추상화 | **DEFER.** 실제로 뜯어본 결과 정원(`gardenPoints`)/모자(`hatSystem.js`)/Paul Town(`TOWN_PLACES`)이 이미 전부 동일 축을 참조하는 순수 파생 구조라, 공용 인터페이스로 리팩터링해도 외부 동작 변화가 없어 실익 대비 리스크(회귀 가능성)가 크다고 판단. 대신 검토 중 발견한 실질적 위험 하나만 규칙으로 문서화: **출시된 파생 unlock 사다리(`WORLD_STAGES`/`TOWN_PLACES`)의 기존 id 임계값은 낮추거나 유지만 가능, 절대 올리지 않는다**(unlock 상태가 저장되지 않고 단조 축에서 매번 재계산되므로, 임계값 상승은 이미 열린 구역이 조용히 재잠금되는 회귀가 된다) — `DEVELOPER_GUIDE.md`에도 동일 규칙 기록. |
+| P9 | `StudentDirectory` 필드 확장 | **계획대로 구현.** `src/utils/adminRewardSummary.js`(순수) + StudentDirectory 1줄 표시, 읽기 전용이라 flag 불필요. |
+| P10 | 무결성 테스트 보강 | **계획대로 구현, 범위 확장.** `scripts/testRewardIntegrityV2.mjs`(운영자 지정 10개 실사용 시나리오: 중복 제출/새로고침/뒤로가기/네트워크 재시도/멀티기기/재진입/파밍/정원-ledger 일치/레거시 baseline 동결/no-reset) — 계획의 "레거시 무원장 경로 다기기 병합" 범위를 넘어 신규 타입 2종까지 포함하는 통합 스위트로 구현. |
+
+### 검증
+
+`npm run verify:all` 0 FAIL 전 도메인 PASS(`rewardSystem` 도메인 17→22
+스크립트, 신규 9개 상세는 `TESTING.md`), `npm run health:students --
+require-env` PASS 27/WARN 10(기존 유령-유닛, 무관)/FAIL 0, `npm run
+build` PASS. 세션 내내 Production DB WRITE 0 / SQL 실행 0 / flag ON 0 /
+PR merge 0 / main push 0 / deploy 0(운영자 지정 제약 전부 준수).
+
+### 남은 것
+
+`api/grant-xp.js`/`rewardEngine.js` 신규 타입 merge/재배포(P4/P5
+선행조건), 신규 플래그 6종의 ON 결정(권장 순서는
+`DEVELOPER_GUIDE.md` "보상 루프 플래그 6종과 켜는 순서"), 레거시
+`wrong-word-recovered` 파밍 완화 여부(§3 "커버되지 않는 것" 연장선,
+운영자 승인 필요). 상세는 `handoff.md` 2026-09-03(107차) 섹션과
+`PROJECT_BOARD.md` VERIFY/BLOCKED 카드.

@@ -427,3 +427,46 @@ PASS/FAIL/SKIP)다.
 registry.mjs`, `C:\voca\tests\harness\runDomain.mjs`,
 `C:\voca\scripts\healthCheck.mjs`, `C:\voca\PROJECT_BOARD.md`,
 `C:\voca\.ai-status\`, `C:\voca\.gitignore`
+
+## 관련 항목: 보상 루프 플래그 6종과 켜는 순서 (2026-09-03, 107차)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+`docs/REWARD_LOOP_AUDIT_2026-09-03.md`(P0 감사) 이후 구현된 보상 루프
+P1~P10(`handoff.md` 2026-09-03 107차)이 `src/config/features.js`에
+6개 플래그를 추가했다 — 전부 기본 `false`. 운영자가 켤 때 참고할 권장
+순서(선행조건이 있는 것만 뒤로):
+
+1. `sessionRewardSummary`(P1, 세션 종료 요약 카드) — 선행조건 없음.
+2. `nextGoalsCard`(P3, 다음 목표 위젯) — 선행조건 없음.
+3. `streakV2`(P6, 스트릭 v2 표시) — 선행조건 없음, 보상 지급 로직은
+   레거시 `calcStreak` 그대로(표시만 v2).
+4. `attachmentGardenGrowthV2`(P2, 정원 성장 v2 보너스) — 켜기 전
+   `growthPoints.js`의 `GROWTH_V2_EPOCH`를 실제 go-live일로 재설정
+   권장(현재 `'2026-09-03'`은 구현 시점 값).
+5. `unitCompleteReward`(P4, 유닛 완료 보상) — **선행조건: `api/
+   grant-xp.js` + `rewardEngine.js` 신규 타입 3종의 merge/재배포.**
+   미배포 상태에서 켜면 클라이언트는 지급을 시도하지만 서버가 거부한다.
+6. `masteryReward`(P5, 복습·숙달 보상 강화) — 5번과 동일 선행조건.
+
+**단조 unlock 사다리 규칙(P8 검토 결과, 재발 방지용으로 여기 기록)**:
+출시된 파생 unlock 사다리(`WORLD_STAGES`/`TOWN_PLACES` 등)의 기존 id
+임계값은 낮추거나 유지만 가능하고, **절대 올리지 않는다** — unlock
+상태가 저장되지 않고 단조증가 축(예: `gardenPoints`)에서 매번
+재계산되므로, 임계값을 올리면 이미 "열렸던" 건물/구역이 조용히 다시
+잠기는 회귀가 된다.
+
+**동시 커밋 규칙(107차 세션 중 실제 사고로 재확인, 규칙 16 관련)**:
+같은 저장소에서 커밋을 실행하는 에이전트는 항상 1개만 유지한다. 여러
+에이전트가 동시에 커밋하면 git index를 공유해, 한 커밋이 다른 쪽이
+스테이징해 둔 파일을 의도치 않게 함께 쓸어담을 수 있다(`55f0c86`
+사고와 동일 계열, 107차에서도 재현 후 `git reset`/재커밋으로 즉시
+교정). 여러 에이전트가 병행 작업할 때는 파일 작성까지만 각자 하고,
+커밋은 조율된 순서로 한 에이전트에게 넘긴다.
+
+### 관련 파일
+
+`C:\voca\src\config\features.js`, `C:\voca\src\utils\rewardEngine.js`,
+`C:\voca\src\utils\attachment\growthPoints.js`,
+`C:\voca\src\utils\attachment\worldProgress.js`,
+`C:\voca\api\grant-xp.js`, `C:\voca\docs\REWARD_LOOP_AUDIT_2026-09-03.md`
