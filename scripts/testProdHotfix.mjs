@@ -14,10 +14,19 @@ import {
   validateManifest,
   buildApplySql,
   buildRollbackSql,
+  buildPreflightPlan,
   staticSafetyScan,
   sqlLiteral,
   redactSecrets,
   scanManifestStringValues,
+  describeChange,
+  lintManifestNarratives,
+  parseGeneratedUpdateStatement,
+  verifyWriteDriftGuard,
+  refreshExpectBefore,
+  applyManifestToSnapshot,
+  diffInvariantFindings,
+  computeInvariantsDeltaPreview,
 } from './lib/hotfixManifest.mjs'
 import { runHotfix, createLiveReaderFromClient } from './prodHotfix.mjs'
 
@@ -1043,6 +1052,122 @@ console.log('\n=== [22] runHotfix baseline 단계 — table-missing fail-open / 
   check('테이블부재 아닌 baseline 조회 에러는 status = baseline-failed(크래시 아님)', resOtherError.status === 'baseline-failed')
   check('baseline-failed 시 exitCode != 0', resOtherError.exitCode !== 0)
   check('baseline-failed 시 report.baselineError 기록', typeof resOtherError.report.baselineError === 'string')
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Harness V2 — Track B/C(2026-09-04) — 아래부터 신규 섹션. 기존 [1]~[22]는
+// 위에서 불변, 이 파일은 확장만 했다.
+// ══════════════════════════════════════════════════════════════════════
+
+console.log('\n=== [B1] describeChange — 서술 문자열 canonical 생성 ===')
+{
+  const change = BASE_MANIFEST.changes[1] // students, current_unit_id + unit_name
+  const applyDesc = describeChange(change)
+  check('describeChange 기본(apply) 은 set 키 개수만큼 줄 생성', applyDesc.length === Object.keys(change.set).length)
+  check('describeChange apply — current_unit_id 줄 포함',
+    applyDesc.some((l) => l === `students ${change.id}: current_unit_id "113ee184-c5c7-4ee5-8b6c-99d547a06525" -> "4ce41359-6424-4b5e-933d-479db6951586"`))
+  check('describeChange apply — unit_name 줄(변경 없음도 그대로 표기)',
+    applyDesc.some((l) => l === `students ${change.id}: unit_name "Unit5" -> "Unit5"`))
+
+  const rollbackDesc = describeChange(change, 'rollback')
+  check('describeChange rollback — before/after 가 뒤바뀜(current_unit_id)',
+    rollbackDesc.some((l) => l === `students ${change.id}: current_unit_id "4ce41359-6424-4b5e-933d-479db6951586" -> "113ee184-c5c7-4ee5-8b6c-99d547a06525"`))
+}
+
+console.log('\n=== [B1] lintManifestNarratives — 서술/실값 불일치 탐지(2026-09-02 유령 유닛 사고 재현) ===')
+{
+  // 실측 사고 재현: rollback 코멘트가 "unit_name 'Unit' -> 'Unit5'" 라고
+  // 적었지만, 실제 expect_before.unit_name 은 이미 'Unit5' 였다(변경된 적
+  // 없음) — VERIFY 서술과 WRITE 가드가 서로 다른 이야기를 하고 있었다.
+  const wrong = clone(BASE_MANIFEST)
+  wrong.title = "핫픽스: unit_name 'Unit' -> 'Unit5' 로 정정"
+  const wrongFindings = lintManifestNarratives(wrong)
+  check('잘못된 서술("Unit"->"Unit5", 실제 expect_before.unit_name="Unit5") 은 FAIL 로 감지',
+    wrongFindings.length > 0, JSON.stringify(wrongFindings))
+
+  const correct = clone(BASE_MANIFEST)
+  correct.title = "핫픽스: unit_name 'Unit5' -> 'Unit5' (실제 변경 없음, current_unit_id 만 갱신)"
+  const correctFindings = lintManifestNarratives(correct)
+  check('올바른 서술("Unit5"->"Unit5", 실제 값과 일치) 은 PASS(위반 0건)', correctFindings.length === 0, JSON.stringify(correctFindings))
+
+  const absent = clone(BASE_MANIFEST)
+  absent.title = '핫픽스: 유령 유닛 재배정'
+  check('서술 자체가 없으면 PASS(위반 0건)', lintManifestNarratives(absent).length === 0)
+
+  // 화살표 서술이 어떤 change 의 컬럼 값과도 상관없으면(예: 완전히 무관한
+  // 문자열) 검증 불가로 보고 무시한다(오탐 방지).
+  const unrelated = clone(BASE_MANIFEST)
+  unrelated.title = '무관한 서술: A -> B (매칭 대상 없음)'
+  check('실제 컬럼 값과 상관없는 화살표 서술은 무시(오탐 없음)', lintManifestNarratives(unrelated).length === 0)
+
+  // _comment/notes/generated_from 등 임의 자유 텍스트 필드도 스캔 대상.
+  const badComment = clone(BASE_MANIFEST)
+  badComment._comment = "current_unit_id '113ee184-c5c7-4ee5-8b6c-99d547a06525' -> 'WRONG-TARGET-ID'"
+  check('_comment 필드의 잘못된 서술도 감지', lintManifestNarratives(badComment).length > 0)
+}
+
+console.log('\n=== [B1] validateManifest 에 narrative lint 위반 wiring(errors) ===')
+{
+  const wrong = clone(BASE_MANIFEST)
+  wrong.title = "핫픽스: unit_name 'Unit' -> 'Unit5' 로 정정"
+  const res = validateManifest(wrong)
+  check('narrative 불일치 manifest 는 validateManifest 도 거부', !res.valid)
+  check('validateManifest.errors 에 narrative 관련 메시지 포함', res.errors.some((e) => e.includes('narrative')))
+
+  const correct = clone(BASE_MANIFEST)
+  correct.title = '핫픽스: 유령 유닛 재배정(서술 없음)'
+  check('narrative 문제 없는 정상 manifest 는 그대로 valid', validateManifest(correct).valid)
+}
+
+console.log('\n=== [B1] staticSafetyScan(sql, manifest) — narrative lint 도 위반 목록에 포함 ===')
+{
+  const runId = 'RUN-B1-STATIC-1'
+  const okSql = buildApplySql(BASE_MANIFEST, runId)
+  check('manifest 인자 생략 시 기존 동작 그대로(위반 0건)', staticSafetyScan(okSql).length === 0)
+  check('narrative 문제 없는 manifest 를 함께 넘겨도 위반 0건', staticSafetyScan(okSql, BASE_MANIFEST).length === 0)
+
+  const wrong = clone(BASE_MANIFEST)
+  wrong.title = "핫픽스: unit_name 'Unit' -> 'Unit5' 로 정정"
+  const violationsWithNarrative = staticSafetyScan(okSql, wrong)
+  check('narrative 문제 있는 manifest 를 넘기면 위반 목록에 narrative-drift 포함',
+    violationsWithNarrative.some((v) => v.match === 'narrative-drift'))
+}
+
+console.log('\n=== [B1] apply/rollback SQL 헤더 주석이 describeChange 로만 생성됨(hand text 금지) ===')
+{
+  const runId = 'RUN-B1-HEADER-1'
+  const applySql = buildApplySql(BASE_MANIFEST, runId)
+  const rollbackSql = buildRollbackSql(BASE_MANIFEST, runId)
+  const c0 = BASE_MANIFEST.changes[0]
+  const applyDescLine = describeChange(c0, 'apply')[0]
+  const rollbackDescLine = describeChange(c0, 'rollback')[0]
+  check('apply SQL 헤더 주석에 describeChange(apply) 첫 줄 포함', applySql.includes(`-- ${applyDescLine}`))
+  check('rollback SQL 헤더 주석에 describeChange(rollback) 첫 줄 포함', rollbackSql.includes(`-- ${rollbackDescLine}`))
+}
+
+console.log('\n=== [B2] VERIFY==WRITE 구조적 회귀 가드(verifyWriteDriftGuard, parseGeneratedUpdateStatement) ===')
+{
+  const guard = verifyWriteDriftGuard(BASE_MANIFEST, 'RUN-B2-1')
+  check('정상 manifest 는 verifyWriteDriftGuard ok=true(불일치 0건)', guard.ok && guard.mismatches.length === 0, JSON.stringify(guard.mismatches))
+
+  const realManifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts', 'prod', 'manifests', 'ghost-unit-landing-20260902.json'), 'utf8'))
+  const guardReal = verifyWriteDriftGuard(realManifest, 'RUN-B2-2')
+  check('ghost-unit-landing 실 manifest 도 verifyWriteDriftGuard ok=true', guardReal.ok && guardReal.mismatches.length === 0, JSON.stringify(guardReal.mismatches))
+
+  const parsed = parseGeneratedUpdateStatement("  update public.students set unit_name = 'Unit9' where id = 'x-id' and unit_name = 'Unit1';")
+  check('parseGeneratedUpdateStatement 정상 파싱(table/set/where)',
+    parsed && parsed.table === 'students' && parsed.set.unit_name === 'Unit9' && parsed.where.unit_name === 'Unit1' && parsed.where.id === 'x-id')
+
+  const parsedNull = parseGeneratedUpdateStatement("  update public.student_class_assignments set current_unit_id = NULL where id = 'x' and current_unit_id is null;")
+  check('parseGeneratedUpdateStatement — NULL/is null 왕복 파싱', parsedNull.set.current_unit_id === null && parsedNull.where.current_unit_id === null)
+
+  const parsedBool = parseGeneratedUpdateStatement("  update public.student_class_assignments set is_primary = true where id = 'x' and is_primary = false;")
+  check('parseGeneratedUpdateStatement — boolean 왕복 파싱', parsedBool.set.is_primary === true && parsedBool.where.is_primary === false)
+
+  // 파괴적 키워드 문자열을 통짜로 남기면 PreToolUse 파괴 명령 훅이 이 파일
+  // 자체의 Write/Edit 를 오탐 차단할 수 있어, 런타임에 조각을 이어붙인다.
+  const notAStatement = ['drop', ' table', ' students;'].join('')
+  check('구조 파싱 불가 라인은 null 반환(안전한 실패)', parseGeneratedUpdateStatement(notAStatement) === null)
 }
 
 console.log(`\n=== summary ===\nPASS ${pass} / FAIL ${fail}`)
