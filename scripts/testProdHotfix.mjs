@@ -29,7 +29,7 @@ import {
   diffInvariantFindings,
   computeInvariantsDeltaPreview,
 } from './lib/hotfixManifest.mjs'
-import { runHotfix, createLiveReaderFromClient } from './prodHotfix.mjs'
+import { runHotfix, createLiveReaderFromClient, computeStandardStatus } from './prodHotfix.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const REPORT_DIR = path.join(ROOT, 'scripts', '.tmp', 'prod-reports-test')
@@ -1556,6 +1556,55 @@ console.log('\n=== [B5] runHotfix — loadInvariantSnapshot 미주입 시 기존
   )
   check('loadInvariantSnapshot 미주입 시 여전히 ready-to-apply', res.status === 'ready-to-apply')
   check('loadInvariantSnapshot 미주입 시 report.invariantsDelta 없음', res.report.invariantsDelta === undefined)
+}
+
+console.log('\n=== [C2] computeStandardStatus — 4값 enum 매핑(PASS|WARN|FAIL|BLOCKED_NEEDS_APPROVAL) ===')
+{
+  check('plan/dry-run 의 ready-to-apply → PASS',
+    computeStandardStatus({ status: 'ready-to-apply', dryRun: true, stopReasons: ['--dry-run'], hasNewWarn: false }) === 'PASS')
+  check('plan/dry-run 인데 invariants new_warn 있으면 → WARN',
+    computeStandardStatus({ status: 'ready-to-apply', dryRun: true, stopReasons: ['--dry-run'], hasNewWarn: true }) === 'WARN')
+  check('실제 apply 시도(dryRun=false) + 토큰 없음 → BLOCKED_NEEDS_APPROVAL',
+    computeStandardStatus({ status: 'ready-to-apply', dryRun: false, stopReasons: ['SUPABASE_ACCESS_TOKEN 미설정'], hasNewWarn: false }) === 'BLOCKED_NEEDS_APPROVAL')
+  check('실제 apply 시도(dryRun=false) + CI 환경 → BLOCKED_NEEDS_APPROVAL',
+    computeStandardStatus({ status: 'ready-to-apply', dryRun: false, stopReasons: ['CI 환경'], hasNewWarn: false }) === 'BLOCKED_NEEDS_APPROVAL')
+  check('preflight-mismatch → FAIL',
+    computeStandardStatus({ status: 'preflight-mismatch', dryRun: true, stopReasons: [], hasNewWarn: false }) === 'FAIL')
+  check('blocked-invariant → FAIL',
+    computeStandardStatus({ status: 'blocked-invariant', dryRun: false, stopReasons: [], hasNewWarn: false }) === 'FAIL')
+  check('applied(성공) → PASS', computeStandardStatus({ status: 'applied', dryRun: false, stopReasons: [], hasNewWarn: false }) === 'PASS')
+  check('applied + new_warn 있음 → WARN', computeStandardStatus({ status: 'applied', dryRun: false, stopReasons: [], hasNewWarn: true }) === 'WARN')
+  check('rolled-back → FAIL', computeStandardStatus({ status: 'rolled-back', dryRun: false, stopReasons: [], hasNewWarn: false }) === 'FAIL')
+  check('invalid-manifest → FAIL', computeStandardStatus({ status: 'invalid-manifest', dryRun: true, stopReasons: [], hasNewWarn: false }) === 'FAIL')
+}
+
+console.log('\n=== [C2] runHotfix — report.standardStatus + STANDARD_STATUS 콘솔 라인 wiring ===')
+{
+  const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+  const originalLog = console.log
+  const lines = []
+  console.log = (...args) => { lines.push(args.join(' ')) }
+  let res
+  try {
+    res = await runHotfix(
+      { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-C2-STD-1', reportDir: REPORT_DIR, reader, dryRun: true },
+      { loadEnv: () => envOk() },
+    )
+  } finally {
+    console.log = originalLog
+  }
+  check('dry-run(plan) 은 report.standardStatus = PASS', res.report.standardStatus === 'PASS')
+  check('콘솔 출력에 STANDARD_STATUS: PASS 라인 포함', lines.some((l) => l.includes('STANDARD_STATUS: PASS')))
+}
+{
+  // dry-run 없이(--dry-run 미지정) 토큰도 없어 ready-to-apply 로 STOP —
+  // 이건 "계획 확인"이 아니라 "적용 시도"였다는 뜻이라 BLOCKED_NEEDS_APPROVAL.
+  const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+  const res = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-C2-STD-2', reportDir: REPORT_DIR, reader, dryRun: false },
+    { loadEnv: () => envOk({ accessToken: '' }) },
+  )
+  check('토큰 없는 실제 적용 시도는 report.standardStatus = BLOCKED_NEEDS_APPROVAL', res.report.standardStatus === 'BLOCKED_NEEDS_APPROVAL', res.report.standardStatus)
 }
 
 console.log(`\n=== summary ===\nPASS ${pass} / FAIL ${fail}`)
