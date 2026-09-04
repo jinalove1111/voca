@@ -55,6 +55,12 @@ export const INVARIANT_CODES = {
   // 발견한 유일한 진짜 GAP(#8: 학년만 다른 유사명 교재 혼동). 기존 invariant
   // 코드/판정은 일절 변경하지 않고 이 항목만 추가한다(WARN 고정).
   TEXTBOOK_SIMILAR_NAME: 'TEXTBOOK_SIMILAR_NAME',
+  // ── plan-eligibility-textbook-identity 트랙(2026-09-05) — 학생 단위로
+  // "지금 모호한 교재에 실제로 걸쳐 있는가"를 보고한다(위 TEXTBOOK_NAME_
+  // DUPLICATE/TEXTBOOK_SIMILAR_NAME 은 교재 쌍 자체의 인벤토리 보고이고,
+  // 이건 그 모호 쌍에 실제로 배정된 학생을 가리킨다 — prod:hotfix 의 새
+  // blocked-ambiguous-textbook 사전 차단과 같은 판정 기준을 공유한다).
+  AMBIGUOUS_TEXTBOOK: 'AMBIGUOUS_TEXTBOOK',
 }
 
 // 정상 유닛의 단어 수 범위. 이 범위를 벗어나면 데이터 이상 신호로 본다.
@@ -72,7 +78,14 @@ export const UNIT_NAME_MAX_LEN = 30
 // 없어 정규식 값만 복제한다 — 원본이 바뀌면 이 상수도 함께 갱신해야 한다.
 const BARE_UNIT_NAME_MIRROR = /^(unit|유닛|단원)\s*$/i
 
-const norm = (v) => String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+// plan-eligibility-textbook-identity 트랙(2026-09-05) — norm/
+// textbookSimilarityKey 는 원래 이 파일 내부 전용이었지만, prod:hotfix 의
+// 신규 blocked-ambiguous-textbook 사전 차단(scripts/prodHotfix.mjs)이 "이
+// 교재가 지금 라이브 데이터에서 모호 쌍의 일원인가"를 판정할 때 여기 있는
+// 정규화 규칙과 반드시 같은 결과를 내야 한다(두 곳이 서로 다른 정규화를
+// 쓰면 invariant 는 WARN 인데 hotfix 는 차단 안 하는 식의 드리프트가
+// 생긴다) — export 만 추가하고 두 함수의 로직 자체는 절대 바꾸지 않는다.
+export const norm = (v) => String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
 
 // harness-v2 coverage(2026-09-05) — TEXTBOOK_SIMILAR_NAME 용 정규화 키.
 // 이름에서 학년 접두(초1~초6/중1~중3/고1~고3, 공백 유무 무관)와 괄호 문자,
@@ -80,11 +93,63 @@ const norm = (v) => String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
 // "천재이상기"로 수렴한다. 괄호 "안의 내용"은 지우지 않는다(과도한 손실
 // 방지 — 문자만 제거).
 const GRADE_PREFIX_RE = /(초|중|고)\s*[1-6]/g
-const textbookSimilarityKey = (name) => String(name ?? '')
+export const textbookSimilarityKey = (name) => String(name ?? '')
   .toLowerCase()
   .replace(GRADE_PREFIX_RE, '')
   .replace(/[()[\]{}]/g, '')
   .replace(/\s+/g, '')
+
+// plan-eligibility-textbook-identity 트랙(2026-09-05) — "교재 -> 모호한
+// 상대 교재 id 집합" 인덱스를 만든다. 아래 evaluateInvariants() 의 11)
+// TEXTBOOK_NAME_DUPLICATE / 14) TEXTBOOK_SIMILAR_NAME 블록과 정확히 같은
+// 조건(완전 동일 이름 그룹, 또는 같은 출판사 + 학년 접두 제외 동일
+// 정규화 키)을 쓴다 — 그 두 블록은 각자 findings 를 만드는 기존 코드라
+// 손대지 않고(재구현/변경 금지), 이 함수는 같은 정규화 함수(norm/
+// textbookSimilarityKey)로 "교재별 모호 상대" 인덱스만 별도로 파생한다.
+// scripts/prodHotfix.mjs 의 blocked-ambiguous-textbook 사전 차단과 아래
+// AMBIGUOUS_TEXTBOOK invariant 가 이 함수 하나를 공유한다(판정 기준 통일).
+// @param {Map<string,object>|object[]} textbooks textbookById(Map) 또는 배열
+// @returns {Map<string, Set<string>>}
+export function buildAmbiguousTextbookIndex(textbooks) {
+  const entries = textbooks instanceof Map
+    ? [...textbooks.entries()]
+    : (Array.isArray(textbooks) ? textbooks.filter((t) => t && t.id).map((t) => [t.id, t]) : [])
+  const index = new Map()
+  const add = (a, b) => {
+    if (!a || !b || a === b) return
+    if (!index.has(a)) index.set(a, new Set())
+    index.get(a).add(b)
+  }
+  const groups = new Map()
+  for (const [tbId, tb] of entries) {
+    const key = norm(tb?.name)
+    if (!key) continue
+    const list = groups.get(key) || []
+    list.push(tbId)
+    groups.set(key, list)
+  }
+  for (const ids of groups.values()) {
+    if (ids.length < 2) continue
+    for (const a of ids) for (const b of ids) add(a, b)
+  }
+  for (let i = 0; i < entries.length; i++) {
+    for (let j = i + 1; j < entries.length; j++) {
+      const [idA, ta] = entries[i]
+      const [idB, tb] = entries[j]
+      if (!ta?.name || !tb?.name) continue
+      const pubA = norm(ta.publisher_name)
+      const pubB = norm(tb.publisher_name)
+      if (!pubA || !pubB || pubA !== pubB) continue
+      if (norm(ta.name) === norm(tb.name)) continue
+      const keyA = textbookSimilarityKey(ta.name)
+      const keyB = textbookSimilarityKey(tb.name)
+      if (!keyA || !keyB || keyA !== keyB) continue
+      add(idA, idB)
+      add(idB, idA)
+    }
+  }
+  return index
+}
 
 // ── 코드 → 한국어 설명/영향/권장 조치 ────────────────────────────────────
 // impact: 학생이 겪을 증상(사람용 출력 "Critical"/"Needs review" 줄에 그대로
@@ -205,6 +270,11 @@ export const CODE_META = {
   // ── harness-v2 coverage(2026-09-05, wt-cov) ──
   TEXTBOOK_SIMILAR_NAME: {
     impact: '같은 출판사의 학년만 다른 교재끼리 이름이 유사해 관리자 화면 교재 선택 시 다른 학년 교재를 잘못 고를 수 있음',
+    recommended: 'READ-ONLY 조사',
+  },
+  // ── plan-eligibility-textbook-identity 트랙(2026-09-05) ──
+  AMBIGUOUS_TEXTBOOK: {
+    impact: '학생의 주교재 또는 현재 유닛이 이름이 중복/유사한 교재 쌍의 일원이라, 이 학생을 대상으로 한 hotfix manifest 가 실수로 반대쪽 교재를 가리킬 위험이 실제로 있음',
     recommended: 'READ-ONLY 조사',
   },
 }
@@ -803,6 +873,46 @@ export function evaluateInvariants(ctx, opts = {}) {
           detail: `교재 "${ta.name}"과 "${tb.name}"이 같은 출판사("${ta.publisher_name}")이고 학년 접두를 제외하면 이름이 같음(정규화 "${keyA}") — 혼동 가능`,
           refs: { textbookIds: [ids[i], ids[j]], publisherName: ta.publisher_name, normalizedKey: keyA },
         })
+      }
+    }
+  }
+
+  // 15) AMBIGUOUS_TEXTBOOK(2026-09-05, plan-eligibility-textbook-identity
+  // 트랙) — 학생의 primary SCA.textbook_id 또는 students.current_unit_id
+  // 가 가리키는 유닛의 textbook_id 가 위 11)/14) 와 동일 조건(완전 동일
+  // 이름, 또는 같은 출판사+학년 접두 제외 동일 정규화 키)의 모호 쌍
+  // 일원이면 학생 단위로 WARN 한다. 11)/14) 판정 코드는 그대로 두고(재구현
+  // 금지), buildAmbiguousTextbookIndex() 로 같은 조건을 별도 파생해 쓴다.
+  // 메시지에는 교재 UUID 앞 8자리만 싣는다(실명 금지, 규칙 4/PII 최소화와
+  // 동일 원칙).
+  {
+    const ambiguousPartners = buildAmbiguousTextbookIndex(textbookById)
+    if (ambiguousPartners.size > 0) {
+      const shortTbId = (id) => (typeof id === 'string' ? id.slice(0, 8) : String(id ?? ''))
+      for (const student of realStudents) {
+        const sid = student.id
+        const sname = typeof student.name === 'string' ? student.name : null
+        const myAssignments = (ctx?.assignmentsByStudent || new Map()).get(sid) || []
+        const primary = myAssignments.find((a) => a?.is_primary) || null
+        const unit = student.current_unit_id ? unitById.get(student.current_unit_id) : null
+        const candidateTextbookIds = new Set()
+        if (primary?.textbook_id) candidateTextbookIds.add(primary.textbook_id)
+        if (unit?.textbook_id) candidateTextbookIds.add(unit.textbook_id)
+        const reported = new Set()
+        for (const tbId of candidateTextbookIds) {
+          const partners = ambiguousPartners.get(tbId)
+          if (!partners || !partners.size) continue
+          for (const partnerId of partners) {
+            const dedupeKey = `${tbId}::${partnerId}`
+            if (reported.has(dedupeKey)) continue
+            reported.add(dedupeKey)
+            push({
+              code: INVARIANT_CODES.AMBIGUOUS_TEXTBOOK, severity: 'WARN', studentId: sid, studentName: sname,
+              detail: `교재 ${shortTbId(tbId)}…가 이름이 완전 동일하거나(같은 출판사면) 학년만 다른 교재 ${shortTbId(partnerId)}…와 혼동될 수 있는 모호한 교재에 배정됨`,
+              refs: { textbookId: tbId, ambiguousWithTextbookId: partnerId },
+            })
+          }
+        }
       }
     }
   }
