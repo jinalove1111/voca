@@ -104,6 +104,8 @@
     "prod:hotfix": "node scripts/prodHotfix.mjs",
     "verify:prod-check": "node scripts/testProdCheck.mjs",
     "verify:prod-hotfix": "node scripts/testProdHotfix.mjs",
+    "prod:report": "node scripts/prodReport.mjs",
+    "verify:ops-status": "node scripts/testOpsStatus.mjs",
     "watch:claude-stall": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/watchClaudeStall.ps1"
   },
   "dependencies": {
