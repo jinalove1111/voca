@@ -430,3 +430,88 @@ TRUNCATE/DELETE 등을 아예 차단). 즉 유령 *참조*(학생/배정이 유�
 - **v3_44 유령 유닛 삭제 SQL 패키지의 실행 여부/일정** — 위 FAQ Q5에서
   설명한 대로 이 하네스의 자동 실행 경로에 포함되어 있지 않으며, 실행은
   전적으로 운영자 결정·수동 실행 영역입니다.
+
+---
+
+## 7. V2 명령 3개(2026-09-04, Harness V2 Track B/C)
+
+이 절은 위 1~6절(1단계 A/B)에 새 명령 `prod:plan` 을 끼워 넣은 **전체
+흐름**을 요약합니다. 세 명령은 전부 READ-ONLY 로 시작해 마지막
+`prod:apply` 만 실제 승인 게이트를 통과할 수 있습니다 — 순서를 건너뛰지
+마세요.
+
+### (1) `npm run prod:check` — READ-ONLY 전체 무결성
+
+1절과 동일합니다(`students`/`student_class_assignments`/`units`/
+`textbooks` 등 저장소 전체 관점의 invariant + 학생별 health). 매일/배포
+전 습관적으로 돌리는 상태 점검이지 특정 manifest 를 대상으로 하지
+않습니다.
+
+### (2) `npm run prod:plan -- <manifest.json>` — READ-ONLY 계획/drift/위험도/자격
+
+```
+npm run prod:plan -- scripts/prod/manifests/<파일>.json [--refresh-expect] [--fixture-reader <file>] [--report-dir <dir>] [--env production|staging]
+```
+
+`prod:check` 가 "저장소 전체가 지금 건강한가"를 본다면, `prod:plan` 은
+"이 manifest 하나를 적용하면 무슨 일이 일어나는가"를 미리 봅니다.
+내부적으로 `scripts/prodHotfix.mjs` 의 `runHotfix()` 를 항상
+`dryRun:true` 로 호출해 검증·정적 스캔·프리플라이트·invariants delta
+게이트를 그대로 재사용합니다(로직을 다시 구현하지 않음) — **승인
+게이트에 절대 도달하지 않으므로 DB WRITE 는 항상 0**입니다.
+
+출력(콘솔 + `<report-dir>/<runId>.plan.md` + `.plan.json`):
+
+- manifest id/title, 서술 일치성 lint 결과
+- preflight 행별 상태(학생은 짧은 id, 반/교재/유닛은 이름으로 표시,
+  기대값 vs 실측값, 일치 여부)
+- before → after 표(`describeChange()` 로 생성 — apply/rollback SQL 헤더
+  주석과 같은 원천)
+- 영향받는 학생/교재/유닛 수, 학습기록 baseline 테이블 + 카운트
+- **risk**: `LOW`(업데이트 10건 이하 & primary 뒤집힘 없음) /
+  `MEDIUM`(primary 뒤집힘 있거나 10건 초과) / `HIGH`(delete 포함이거나
+  50건 초과)
+- **invariants delta 미리보기**: 이 manifest 를 적용하면 새로 생기는
+  invariant FAIL/WARN, 그리고 해소되는 항목(예: 유령 SCA 재배정으로
+  `SCA_GHOST_UNIT` 이 사라짐)
+- `--refresh-expect` 지정 시: manifest 의 `expect_before` 를 지금 라이브
+  값으로 갱신한 **사본**(`<manifest>.refreshed.json`, 원본은 절대 덮어쓰지
+  않음)과 drift 목록(라이브 값이 manifest 작성 시점과 달라진 컬럼)
+- `apply_eligibility`: `READY` / `BLOCKED_NEEDS_APPROVAL` /
+  `BLOCKED_PREFLIGHT` / `BLOCKED_LINT` / `BLOCKED_INVARIANT` — **`READY`
+  여도 실제 적용은 안 됩니다.** 여전히 `prod:apply` 를 따로 실행해
+  `APPLY <runId>` 를 직접 입력해야 합니다.
+
+`preflight-mismatch`(이미 적용됐거나 그 사이 다른 변경이 있었음)가 가장
+흔한 `BLOCKED_PREFLIGHT` 원인입니다 — 5절 FAQ Q1 참고. 이 경우
+`--refresh-expect` 로 최신 상태 기준 사본을 만들고, drift 목록을 사람이
+검토한 뒤 필요하면 그 사본을 새 manifest 로 채택하세요.
+
+### (3) `npm run prod:apply -- <manifest.json>` — artifact 생성 + 승인 게이트
+
+`node scripts/prodHotfix.mjs <manifest> --env production` 의 별칭입니다
+(2절의 절차와 완전히 동일 — 정적 스캔 → 프리플라이트 → baseline 저장 →
+apply/rollback SQL 파일 저장 → **TTY 에서 `APPLY <runId>` 를 정확히
+입력 + `SUPABASE_ACCESS_TOKEN` 둘 다 있어야만** 실제 WRITE 진행). 어느
+하나라도 없으면(비대화형 셸, 토큰 미설정, CI 환경) 항상 이전과 동일하게
+승인 이전에 STOP 합니다.
+
+새로 추가된 것은 `STANDARD_STATUS` 한 줄뿐입니다(콘솔 + JSON report 의
+`standardStatus` 필드) — 자동화가 수십 종의 세부 `STATUS` 문자열 대신
+4값만 보면 되도록 압축한 것입니다:
+
+| STANDARD_STATUS | 뜻 |
+|---|---|
+| `PASS` | 계획(dry-run) 이 모든 게이트를 통과했거나, 실제 적용이 성공함 |
+| `WARN` | 위와 같지만 invariants delta 에 새 WARN 이 있음(치명적이지 않음, 검토 권장) |
+| `BLOCKED_NEEDS_APPROVAL` | **실제 적용을 시도했는데**(`--dry-run` 아님) 토큰 없음/CI 환경이라 승인 게이트 이전에 멈춤 |
+| `FAIL` | 그 외 모든 차단/실패(검증 실패, 프리플라이트 불일치, invariant 차단, 롤백 등) — fail-closed 기본값 |
+
+### 규칙: rollback SQL 을 손으로 쓰지 않는다
+
+2026-09-02 사고의 근본 원인이 "VERIFY 와 WRITE 를 사람이 따로 작성"이었던
+것처럼, **rollback SQL 도 절대 손으로 쓰지 않습니다.** `prod:apply` 가
+`<runId>.rollback.sql` 을 항상 같은 manifest 에서 자동 생성합니다(B1의
+`describeChange()` 가 헤더 주석까지 포함해 단일 원천에서 만듭니다). 이미
+적용된 것을 나중에 되돌리려면 손으로 반대 SQL을 작성하지 말고 2-(d)절의
+`--rollback-of <이전 실행의 report.json>` 을 쓰세요.
