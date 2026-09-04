@@ -14,6 +14,11 @@ import { createRecorder } from './lib/harness.mjs'
 import { ADMIN_PIN, QA_STUDENT_NAME, TB_A, TB_B, TB_C, TB_D } from './fixtures/index.mjs'
 
 async function loginAdmin(page) {
+  // 앱은 initWordLibrary(전체 캐시 로드)가 끝나야 로그인 화면(StudentSelect)을
+  // 렌더한다 — verify:all 전체 실행 직후처럼 머신이 바쁠 때 30초 기본
+  // 타임아웃으로는 부족했던 flake를 실측(2026-09-05)해서, 진입 화면을
+  // 명시적으로 넉넉히 기다린 뒤 클릭한다.
+  await page.locator('button', { hasText: '⚙️ 관리자' }).waitFor({ state: 'visible', timeout: 90000 })
   await page.locator('button', { hasText: '⚙️ 관리자' }).click()
   await page.getByPlaceholder('비밀번호').fill(ADMIN_PIN)
   await page.locator('button', { hasText: '로그인' }).click()
@@ -133,6 +138,12 @@ export async function run(browser, baseURL) {
     r.check('B5 "중1 동아 윤정미" 옵션의 value가 fixture UUID와 정확히 일치', optC?.value === TB_C.id, JSON.stringify(optC))
     r.check('B5 "중2 동아 윤정미" 옵션의 value가 fixture UUID와 정확히 일치', optD?.value === TB_D.id, JSON.stringify(optD))
     r.check('B5 두 옵션의 value(UUID)가 서로 다름(라벨 유사성과 무관하게 구분됨)', !!optC && !!optD && optC.value !== optD.value, JSON.stringify({ optC, optD }))
+  } catch (err) {
+    // 진단 — 예외 시점의 화면 텍스트/mock 오류를 에러 메시지에 실어 러너가
+    // 그대로 출력하게 한다(페이지는 finally에서 닫히므로 여기서만 읽을 수 있다).
+    const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+    err.message += `\n  [진단] mockErrors=${JSON.stringify(db.errors.slice(0, 3))}\n  [진단] body(앞 400자)=${JSON.stringify(bodyText.slice(0, 400))}`
+    throw err
   } finally {
     await context.close()
   }
