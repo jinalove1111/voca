@@ -51,6 +51,7 @@ import {
   buildRollbackSql,
   staticSafetyScan,
   redactSecrets,
+  describeChange,
 } from './lib/hotfixManifest.mjs'
 import { createDryRunExecutor, createManagementApiExecutor } from './lib/sqlExecutor.mjs'
 
@@ -218,6 +219,21 @@ async function safeRun(executor, sql) {
 async function readPlanMismatches(reader, plan) {
   const mismatches = []
   for (const item of plan) {
+    // B4(2026-09-04) — SCA insert/delete 전용 계획 항목. 'no-duplicate' 는
+    // insert 전 "같은 student_id+textbook_id 행이 이미 없어야 함" 선조건,
+    // 'not-exists' 는 delete 후 "그 id 행이 더는 없어야 함" 확인이다. 둘 다
+    // item.expect 가 없다(비교할 컬럼 값이 아니라 존재 여부 자체가 판정
+    // 대상) — 기존 expect 기반 분기와는 별도로 처리한다.
+    if (item.kind === 'no-duplicate') {
+      const r = await reader.headCountFiltered(item.table, item.filters)
+      if (r.count > 0) mismatches.push({ table: item.table, id: item.id, reason: 'duplicate-row-exists', filters: item.filters, count: r.count })
+      continue
+    }
+    if (item.kind === 'not-exists') {
+      const row = await reader.getRow(item.table, item.id, ['id'])
+      if (row) mismatches.push({ table: item.table, id: item.id, reason: 'row-still-exists' })
+      continue
+    }
     const row = await reader.getRow(item.table, item.id, Object.keys(item.expect))
     if (!row) { mismatches.push({ table: item.table, id: item.id, reason: 'row-not-found' }); continue }
     for (const [col, val] of Object.entries(item.expect)) {
@@ -478,14 +494,14 @@ export async function runHotfix(options, deps = {}) {
   log(`baseline 저장 완료 — students ${studentsRowsBefore.length}행(hash ${report.baseline.snapshot.students.hash.slice(0, 12)}…) / SCA ${scaRowsBefore.length}행(hash ${report.baseline.snapshot.student_class_assignments.hash.slice(0, 12)}…) 스냅샷 해시 기록`)
 
   // 6) 계획 출력 + SQL 파일 저장 + rollback 메타데이터 기록
+  // B4(2026-09-04) — insert/delete change 는 c.set 이 없어(fields/
+  // expect_before 만 있음) 기존처럼 c.set 을 직접 순회하면 크래시한다.
+  // describeChange() (hotfixManifest.mjs, 이 로직의 단일 원천)를 그대로
+  // 재사용해 update/insert/delete 전부 안전하게 표시한다(재구현 금지).
   log(mode === 'apply' ? '\n=== 변경 계획(before -> after) ===' : '\n=== 되돌리기 계획(rollback-of, 현재 -> 원복) ===')
   for (const c of manifest.changes) {
     log(`  ${c.table}:${c.id}`)
-    for (const col of Object.keys(c.set)) {
-      const fromVal = mode === 'apply' ? c.expect_before[col] : c.set[col]
-      const toVal = mode === 'apply' ? c.set[col] : c.expect_before[col]
-      log(`    ${col}: ${JSON.stringify(fromVal)} -> ${JSON.stringify(toVal)}`)
-    }
+    for (const line of describeChange(c, mode === 'apply' ? 'apply' : 'rollback')) log(`    ${line}`)
   }
   log(`  예상 UPDATE 행 수: ${manifest.changes.length}`)
   if (manifest.must_not_change?.length) {
