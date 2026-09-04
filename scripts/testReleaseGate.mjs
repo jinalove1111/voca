@@ -374,6 +374,13 @@ console.log('\n=== 16b절. 야간 신규 스위트 6종 registry required 등록
   // 확인: extra 필드 없는 상태에서 이 절 실행 시 1단언 FAIL 실측, 규칙
   // 15). 두 스크립트를 목록에 추가해 앞으로도 registry 편입이 정적으로
   // 고정되도록 한다.
+  //
+  // 2026-09-04 추가(ops 워크트리 소커밋): testAccountClassification.mjs(신규
+  // 등록, 계정 분류 정책 34단언) / testOpsStatus.mjs·
+  // testCreateStudentUnitAssignment.mjs(기존 extra:true 를 required 로 승격,
+  // 각각 npm run verify:ops-status / verify:create-student 가 이미
+  // package.json 에 있었으나 registry 상 보너스 취급이라 verify:all exit
+  // code 에 반영되지 않고 있었다) 3개를 목록에 추가한다.
   const t = readFileSync(path.resolve('tests/harness/registry.mjs'), 'utf8')
   const requiredScripts = [
     'scripts/testDoubleEvents.mjs',
@@ -382,6 +389,9 @@ console.log('\n=== 16b절. 야간 신규 스위트 6종 registry required 등록
     'scripts/testAdminPinThrottle.mjs',
     'scripts/testStudentPathContracts.mjs',
     'scripts/testSecurityRegressions.mjs',
+    'scripts/testAccountClassification.mjs',
+    'scripts/testOpsStatus.mjs',
+    'scripts/testCreateStudentUnitAssignment.mjs',
   ]
   for (const script of requiredScripts) {
     const escaped = script.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
