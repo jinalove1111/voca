@@ -392,6 +392,7 @@ console.log('\n=== 16b절. 야간 신규 스위트 6종 registry required 등록
     'scripts/testAccountClassification.mjs',
     'scripts/testOpsStatus.mjs',
     'scripts/testCreateStudentUnitAssignment.mjs',
+    'scripts/testProdPlan.mjs',
   ]
   for (const script of requiredScripts) {
     const escaped = script.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
