@@ -1,9 +1,13 @@
 // Production Safety Harness — 핫픽스 manifest 처리 (순수, 네트워크 0)
-// (2026-09-03, Phase 1-B)
+// (2026-09-03, Phase 1-B / 2026-09-04, Harness V2 Track B/C)
 //
 // 이 모듈은 파일 I/O·네트워크·DB 접근이 전혀 없다. manifest(JSON) 객체를
 // 입력받아 검증하거나, 결정론적으로 SQL 문자열/읽기 계획을 만들어 낼 뿐이다.
 // 실제 조회/실행은 scripts/prodHotfix.mjs(라이브 IO 담당)가 한다.
+// B5(2026-09-04) — prodInvariants.mjs(같은 트랙, 순수 판정 모듈) 를
+// import 해 스냅샷+manifest 로부터 invariant delta 를 미리 계산하는
+// 순수 변환도 이 파일에 둔다(별도 IO 로더를 새로 만들지 않기 위해).
+import { buildInvariantContext, evaluateInvariants } from './prodInvariants.mjs'
 //
 // ── 배경 ──────────────────────────────────────────────────────────────
 // 2026-09-02 유령 유닛 착지 핫픽스에서 운영자가 VERIFY SQL → 본 SQL →
@@ -25,6 +29,14 @@ export const ALLOWLIST = {
   student_class_assignments: ['current_unit_id', 'is_primary', 'textbook_id'],
 }
 
+// B4(2026-09-04): student_class_assignments 전용 op:'insert'/op:'delete' —
+// 위 ALLOWLIST 는 UPDATE 전용이라 SCA 행 자체의 신규 생성/제거(예: 유령
+// 유닛 재배정이 아니라 아예 새 반 배정을 추가하는 premiddle 케이스)를
+// 표현할 수 없었다. 이 두 상수는 그 좁은 예외의 필드 목록이다 — 다른
+// 테이블/다른 필드로는 절대 확장되지 않는다(validateManifest 가 강제).
+export const SCA_INSERT_FIELDS = ['student_id', 'class_id', 'textbook_id', 'current_unit_id', 'is_primary']
+export const SCA_DELETE_EXPECT_FIELDS = ['student_id', 'class_id', 'textbook_id', 'current_unit_id', 'is_primary']
+
 // ── 컬럼 타입(값 검증용, Phase 2·7 강화) ─────────────────────────────────
 // ALLOWLIST 밖 컬럼(예: student_id)도 expect_before 가드 값으로 자주 등장
 // 하므로, 여기 등록해두면 그 값도 함께 형식 검증된다(설정 가능 여부는
@@ -39,6 +51,9 @@ const COLUMN_TYPES = {
     textbook_id: 'uuid',
     student_id: 'uuid',
     is_primary: 'boolean',
+    // class_id 는 update ALLOWLIST 에는 없지만(반 이동은 이 하네스 범위
+    // 밖) B4 insert/delete 의 필드/expect_before 값 검증에는 필요하다.
+    class_id: 'uuid',
   },
 }
 
@@ -155,6 +170,143 @@ export function redactSecrets(text, env) {
   return out
 }
 
+// ── B1(2026-09-04): 서술 일치성 린트(narrative consistency lint) ─────────
+// 2026-09-02 유령 유닛 착지 핫픽스에서 손으로 쓴 rollback 코멘트가
+// "unit_name 'Unit' -> 'Unit5'" 라고 적었지만 실제 expect_before.unit_name
+// 은 이미 'Unit5' 였다(그 컬럼은 실제로 변경된 적이 없었다) — VERIFY 서술과
+// WRITE 가드가 서로 다른 이야기를 하고 있었는데, 하네스는 SQL 자체는
+// 올바르게 생성했으므로 아무 것도 이를 잡아내지 못했다. 이 섹션은 manifest
+// 안의 모든 자유 텍스트(제목/코멘트/생성 메타데이터 등)에서 "A -> B" 류
+// 서술을 찾아 실제 expect_before/set 값과 대조한다.
+
+/**
+ * change 하나를 "<table> <id>: <col> <before> -> <after>" 형태의 canonical
+ * 문자열 배열로 표현한다(set 의 키마다 한 줄). apply/rollback SQL 헤더
+ * 주석과 서술 일치성 린트가 이 함수 하나에서만 문구를 만든다 — 사람이 손으로
+ * 따로 쓰는 서술 텍스트는 이제 없다.
+ * @param {object} change manifest.changes[i]
+ * @param {'apply'|'rollback'} [direction]
+ * @returns {string[]}
+ */
+export function describeChange(change, direction = 'apply') {
+  const table = change?.table
+  const id = change?.id
+  const op = change?.op || 'update'
+  if (op === 'insert') {
+    const summary = JSON.stringify(change?.fields || {})
+    return direction === 'apply'
+      ? [`${table} ${id}: INSERT ${summary}`]
+      : [`${table} ${id}: DELETE(rollback of insert) ${summary}`]
+  }
+  if (op === 'delete') {
+    const summary = JSON.stringify(change?.expect_before || {})
+    return direction === 'apply'
+      ? [`${table} ${id}: DELETE ${summary}`]
+      : [`${table} ${id}: INSERT(rollback of delete) ${summary}`]
+  }
+  const lines = []
+  for (const col of Object.keys(change?.set || {})) {
+    const beforeVal = direction === 'apply' ? change?.expect_before?.[col] : change?.set?.[col]
+    const afterVal = direction === 'apply' ? change?.set?.[col] : change?.expect_before?.[col]
+    lines.push(`${table} ${id}: ${col} ${JSON.stringify(beforeVal)} -> ${JSON.stringify(afterVal)}`)
+  }
+  return lines
+}
+
+// "A -> B" 류 화살표 서술을 텍스트에서 추출한다. 범용 자연어 파서가 아니라
+// 이 저장소의 실제 습관(따옴표로 감싼 값, 유니코드 화살표, 공백을 둔 ascii
+// 화살표)만 대상으로 하는 휴리스틱이다 — 못 찾으면 그냥 빈 배열(오탐보다
+// 미탐이 안전한 방향, "찾은 것만" 검증한다).
+function extractArrowNarratives(text) {
+  const found = []
+  let remaining = String(text ?? '')
+
+  // 1) 따옴표 형태: (선택) 컬럼명 단어 'before' -> 'after' (화살표는 -> 또는 →)
+  remaining = remaining.replace(/([a-zA-Z_][a-zA-Z0-9_]*)?\s*'([^']*)'\s*(?:->|→)\s*'([^']*)'/g, (m, col, before, after) => {
+    found.push({ col: col || null, before, after })
+    return ' '.repeat(m.length)
+  })
+
+  // 2) 유니코드 화살표(공백 없이 붙어도 됨): (선택) 컬럼명 token→token
+  remaining = remaining.replace(/([a-zA-Z_][a-zA-Z0-9_]*)?\s*([^\s'"→]+)→([^\s'"→]+)/g, (m, col, before, after) => {
+    found.push({ col: col || null, before, after })
+    return ' '.repeat(m.length)
+  })
+
+  // 3) 맨 문자열 ascii 화살표: (선택) 컬럼명 token -> token
+  remaining = remaining.replace(/([a-zA-Z_][a-zA-Z0-9_]*)?\s*([^\s'"]+)\s->\s([^\s'"]+)/g, (m, col, before, after) => {
+    found.push({ col: col || null, before, after })
+    return ' '.repeat(m.length)
+  })
+
+  return found
+}
+
+/**
+ * manifest 안의 모든 자유 텍스트 문자열(title/_comment/notes/
+ * generated_from.* 등, changes[].expect_before/set/expect 는 구조적 가드
+ * 값이라 스캔 제외)에서 "A -> B" 류 서술을 찾아, 같은 행(changeCtx 안이면
+ * 그 행, 그 외 최상위 필드는 changes 전체)의 실제 expect_before/set 값과
+ * 대조한다. 서술의 before/after 중 하나만 실제 값과 일치하고 나머지가
+ * 다르면(=서술이 실제와 다른 이야기를 하고 있으면) FAIL 로 본다. 둘 다
+ * 일치하거나 어느 change 의 컬럼 값과도 상관없으면(검증 불가) 무시한다
+ * (오탐 방지 — "찾아서 대조 가능한 것만" 검증).
+ * @param {object} manifest
+ * @returns {string[]} lint 위반 메시지 목록(빈 배열 = 문제 없음)
+ */
+export function lintManifestNarratives(manifest) {
+  const errors = []
+  if (!manifest || typeof manifest !== 'object') return errors
+  const changes = Array.isArray(manifest.changes) ? manifest.changes : []
+
+  function checkText(text, pathStr, changeCtx) {
+    for (const n of extractArrowNarratives(text)) {
+      const candidates = changeCtx ? [changeCtx] : changes
+      for (const c of candidates) {
+        if (!c || !c.set || typeof c.set !== 'object') continue
+        const cols = n.col ? [n.col] : Object.keys(c.set)
+        for (const col of cols) {
+          if (!(col in c.set)) continue
+          const expectBeforeVal = c.expect_before ? c.expect_before[col] : undefined
+          const setVal = c.set[col]
+          const beforeMatches = n.before === String(expectBeforeVal)
+          const afterMatches = n.after === String(setVal)
+          if ((beforeMatches || afterMatches) && !(beforeMatches && afterMatches)) {
+            errors.push(
+              `narrative 불일치: ${pathStr} "${n.col ? `${n.col} ` : ''}'${n.before}' -> '${n.after}'" `
+              + `vs 실제 ${c.table}:${c.id}.${col} ${JSON.stringify(expectBeforeVal)} -> ${JSON.stringify(setVal)}`,
+            )
+          }
+        }
+      }
+    }
+  }
+
+  function walk(obj, pathStr, changeCtx) {
+    if (obj === null || obj === undefined) return
+    if (typeof obj === 'string') { checkText(obj, pathStr, changeCtx); return }
+    if (Array.isArray(obj)) { obj.forEach((v, i) => walk(v, `${pathStr}[${i}]`, changeCtx)); return }
+    if (typeof obj === 'object') {
+      for (const [k, v] of Object.entries(obj)) {
+        // expect_before/set/expect 는 서술형 텍스트가 아니라 구조적 가드
+        // 값이다 — 우연히 화살표 패턴을 담은 문자열이 있어도 스캔 제외.
+        if (k === 'expect_before' || k === 'set' || k === 'expect' || k === 'fields') continue
+        walk(v, pathStr ? `${pathStr}.${k}` : k, changeCtx)
+      }
+    }
+  }
+
+  for (const [k, v] of Object.entries(manifest)) {
+    if (k === 'changes') {
+      changes.forEach((c, i) => walk(c, `changes[${i}]`, c))
+    } else {
+      walk(v, k, null)
+    }
+  }
+
+  return errors
+}
+
 /**
  * manifest 스키마·allowlist·가드 규칙을 검증한다. 네트워크/DB 접근 없음.
  * @returns {{valid:boolean, errors:string[]}}
@@ -188,38 +340,89 @@ export function validateManifest(m) {
     errors.push(`manifest 문자열 값에 위험 문자(;/--//*) 포함: ${v.path} = ${JSON.stringify(v.value)}`)
   }
 
+  // B1(2026-09-04): 서술 일치성 린트 — 자유 텍스트(title/_comment/notes/
+  // generated_from 등)의 "A -> B" 서술이 실제 expect_before/set 값과
+  // 어긋나면 여기서 거부한다(2026-09-02 유령 유닛 사고 재현 방지).
+  errors.push(...lintManifestNarratives(m))
+
   const seenChangeKeys = new Set()
   for (const [i, c] of (Array.isArray(m.changes) ? m.changes : []).entries()) {
     const tag = `changes[${i}]`
     if (!c || typeof c !== 'object') { errors.push(`${tag} 객체 아님`); continue }
-    if (c.op !== undefined && c.op !== 'update') {
-      errors.push(`${tag}.op 은 update 만 허용(받은 값: ${JSON.stringify(c.op)})`)
+    const op = c.op === undefined ? 'update' : c.op
+    if (!['update', 'insert', 'delete'].includes(op)) {
+      errors.push(`${tag}.op 은 update/insert/delete 만 허용(받은 값: ${JSON.stringify(c.op)})`)
+      continue
     }
     if (!Object.prototype.hasOwnProperty.call(ALLOWLIST, c.table)) {
       errors.push(`${tag}.table 허용되지 않음(allowlist 밖): ${c.table}`)
       continue
     }
     if (!isUuid(c.id)) errors.push(`${tag}.id UUID 형식 아님: ${c.id}`)
-    if (!c.expect_before || typeof c.expect_before !== 'object' || Array.isArray(c.expect_before)) {
-      errors.push(`${tag}.expect_before 필수(object)`)
-    } else {
-      for (const [col, val] of Object.entries(c.expect_before)) {
-        const typeErr = checkColumnValueType(c.table, col, val)
-        if (typeErr) errors.push(`${tag}.expect_before.${col} ${typeErr}`)
+
+    // B4(2026-09-04): op:'insert'/'delete' 는 student_class_assignments
+    // 전용의 좁은 예외다 — update 와 완전히 다른 스키마(expect_before/set
+    // 대신 fields, 또는 행 전체 expect_before)를 쓴다.
+    if (op === 'insert') {
+      if (c.table !== 'student_class_assignments') {
+        errors.push(`${tag} op=insert 는 student_class_assignments 테이블만 허용(받은 값: ${c.table})`)
       }
-    }
-    if (!c.set || typeof c.set !== 'object' || Array.isArray(c.set) || Object.keys(c.set).length === 0) {
-      errors.push(`${tag}.set 필수(비어있지 않은 object)`)
+      if (!c.fields || typeof c.fields !== 'object' || Array.isArray(c.fields)) {
+        errors.push(`${tag}.fields 필수(object, op=insert)`)
+      } else {
+        const missing = SCA_INSERT_FIELDS.filter((f) => !(f in c.fields))
+        if (missing.length) errors.push(`${tag}.fields 누락 컬럼: ${missing.join(',')}`)
+        const extra = Object.keys(c.fields).filter((f) => !SCA_INSERT_FIELDS.includes(f))
+        if (extra.length) errors.push(`${tag}.fields 허용되지 않은 컬럼: ${extra.join(',')}`)
+        for (const [col, val] of Object.entries(c.fields)) {
+          const typeErr = checkColumnValueType(c.table, col, val)
+          if (typeErr) errors.push(`${tag}.fields.${col} ${typeErr}`)
+        }
+      }
+      if (c.expect_before !== undefined) errors.push(`${tag}.expect_before 는 op=insert 에서 사용하지 않음(fields 만 사용)`)
+      if (c.set !== undefined) errors.push(`${tag}.set 은 op=insert 에서 사용하지 않음(fields 만 사용)`)
+    } else if (op === 'delete') {
+      if (c.table !== 'student_class_assignments') {
+        errors.push(`${tag} op=delete 는 student_class_assignments 테이블만 허용(받은 값: ${c.table})`)
+      }
+      if (!c.expect_before || typeof c.expect_before !== 'object' || Array.isArray(c.expect_before)) {
+        errors.push(`${tag}.expect_before 필수(object, op=delete — 행 전체 5개 컬럼)`)
+      } else {
+        const missing = SCA_DELETE_EXPECT_FIELDS.filter((f) => !(f in c.expect_before))
+        if (missing.length) errors.push(`${tag}.expect_before op=delete 는 행 전체(5개 컬럼) 필요, 누락: ${missing.join(',')}`)
+        for (const [col, val] of Object.entries(c.expect_before)) {
+          const typeErr = checkColumnValueType(c.table, col, val)
+          if (typeErr) errors.push(`${tag}.expect_before.${col} ${typeErr}`)
+        }
+        if (c.expect_before.is_primary === true && m.allow_primary_delete !== true) {
+          errors.push(`${tag} op=delete 대상이 is_primary=true 인데 manifest.allow_primary_delete=true 가 없음(주교재 삭제는 명시적 허용 필요)`)
+        }
+      }
+      if (c.set !== undefined) errors.push(`${tag}.set 은 op=delete 에서 사용하지 않음`)
+      if (c.fields !== undefined) errors.push(`${tag}.fields 는 op=delete 에서 사용하지 않음`)
     } else {
-      for (const col of Object.keys(c.set)) {
-        if (!ALLOWLIST[c.table].includes(col)) {
-          errors.push(`${tag}.set.${col} 허용되지 않은 컬럼(테이블 ${c.table}, allowlist: ${ALLOWLIST[c.table].join(',')})`)
+      // op === 'update' (기존 로직 그대로)
+      if (!c.expect_before || typeof c.expect_before !== 'object' || Array.isArray(c.expect_before)) {
+        errors.push(`${tag}.expect_before 필수(object)`)
+      } else {
+        for (const [col, val] of Object.entries(c.expect_before)) {
+          const typeErr = checkColumnValueType(c.table, col, val)
+          if (typeErr) errors.push(`${tag}.expect_before.${col} ${typeErr}`)
         }
-        if (!c.expect_before || !Object.prototype.hasOwnProperty.call(c.expect_before, col)) {
-          errors.push(`${tag}.set.${col} 이 expect_before 에 없음(가드 없는 변경 금지)`)
+      }
+      if (!c.set || typeof c.set !== 'object' || Array.isArray(c.set) || Object.keys(c.set).length === 0) {
+        errors.push(`${tag}.set 필수(비어있지 않은 object)`)
+      } else {
+        for (const col of Object.keys(c.set)) {
+          if (!ALLOWLIST[c.table].includes(col)) {
+            errors.push(`${tag}.set.${col} 허용되지 않은 컬럼(테이블 ${c.table}, allowlist: ${ALLOWLIST[c.table].join(',')})`)
+          }
+          if (!c.expect_before || !Object.prototype.hasOwnProperty.call(c.expect_before, col)) {
+            errors.push(`${tag}.set.${col} 이 expect_before 에 없음(가드 없는 변경 금지)`)
+          }
+          const typeErr = checkColumnValueType(c.table, col, c.set[col])
+          if (typeErr) errors.push(`${tag}.set.${col} ${typeErr}`)
         }
-        const typeErr = checkColumnValueType(c.table, col, c.set[col])
-        if (typeErr) errors.push(`${tag}.set.${col} ${typeErr}`)
       }
     }
     const dupKey = `${c.table}:${c.id}`
@@ -279,13 +482,22 @@ export function validateManifest(m) {
 
 /**
  * preflight(적용 전) 에 읽어서 확인해야 할 행 목록.
- * changes 의 expect_before + must_not_change + reference_rows_must_exist
- * (+ min_words 지정 시 단어 수 확인 플래그).
- * @returns {{table:string, id:string, expect:object, minWords:(number|null)}[]}
+ * update change 는 expect_before, insert change 는 "중복 없음" 선조건
+ * (kind:'no-duplicate'), delete change 는 삭제 대상 행 전체(expect_before)
+ * + must_not_change + reference_rows_must_exist(+ min_words).
+ * @returns {Array<{table:string, id:string, expect?:object, kind?:string, filters?:object, minWords:(number|null)}>}
  */
 export function buildPreflightPlan(manifest) {
   const items = []
   for (const c of manifest.changes || []) {
+    const op = c.op || 'update'
+    if (op === 'insert') {
+      items.push({
+        table: c.table, id: c.id, kind: 'no-duplicate', minWords: null,
+        filters: { student_id: c.fields?.student_id, textbook_id: c.fields?.textbook_id },
+      })
+      continue
+    }
     items.push({ table: c.table, id: c.id, expect: c.expect_before, minWords: null })
   }
   for (const m of manifest.must_not_change || []) {
@@ -299,12 +511,17 @@ export function buildPreflightPlan(manifest) {
 
 /**
  * postflight(적용 후) 에 읽어서 확인해야 할 행 목록.
- * changes 의 set(=유일한 after 기대값) + must_not_change(불변 확인).
- * @returns {{table:string, id:string, expect:object}[]}
+ * update change 는 set(=유일한 after 기대값), insert change 는 새로
+ * 생겼어야 할 행(expect:fields), delete change 는 더는 존재하지 않아야
+ * 함(kind:'not-exists') + must_not_change(불변 확인).
+ * @returns {Array<{table:string, id:string, expect?:object, kind?:string}>}
  */
 export function buildPostflightPlan(manifest) {
   const items = []
   for (const c of manifest.changes || []) {
+    const op = c.op || 'update'
+    if (op === 'insert') { items.push({ table: c.table, id: c.id, expect: c.fields }); continue }
+    if (op === 'delete') { items.push({ table: c.table, id: c.id, kind: 'not-exists' }); continue }
     items.push({ table: c.table, id: c.id, expect: c.set })
   }
   for (const m of manifest.must_not_change || []) {
@@ -364,6 +581,41 @@ function buildExistsCondition(table, id, entries) {
   return `select 1 from public.${t} where ${whereSql}`
 }
 
+// B4(2026-09-04): insert/delete SQL 조각. student_class_assignments 전용
+// (validateManifest 가 이미 강제) — 다른 테이블/형태는 staticSafetyScan 의
+// SAFE_SCA_*_RE 가 이 정확한 포맷만 통과시킨다.
+function buildInsertStatement(table, id, fields) {
+  const t = sqlIdentifier(table)
+  const cols = ['id', ...Object.keys(fields)]
+  const vals = [id, ...Object.values(fields)]
+  const colSql = cols.map(sqlIdentifier).join(', ')
+  const valSql = vals.map(sqlLiteral).join(', ')
+  return `  insert into public.${t} (${colSql}) values (${valSql});`
+}
+
+function buildDeleteStatement(table, id, whereEntries) {
+  const t = sqlIdentifier(table)
+  const whereSql = [`id = ${sqlLiteral(id)}`, ...whereEntries.map(([col, val]) => sqlEq(sqlIdentifier(col), val))].join(' and ')
+  return `  delete from public.${t} where ${whereSql};`
+}
+
+function buildNoDuplicateGuard(table, filters, runId, changeIdx) {
+  const t = sqlIdentifier(table)
+  const cond = Object.entries(filters).map(([col, val]) => sqlEq(sqlIdentifier(col), val)).join(' and ')
+  const msg = escMsg(`ABORT[${runId}] insert precondition 위반(changes[${changeIdx}]): student_id+textbook_id 중복 행 이미 존재`)
+  return `  if exists (select 1 from public.${t} where ${cond}) then raise exception '${msg}'; end if;`
+}
+
+// direction='apply' 이면 declaredOp 그대로 실행, direction='rollback' 이면
+// insert<->delete 를 서로 뒤집는다(update 는 rollback 도 update, SET/WHERE
+// 값만 뒤집힘 — 기존 로직 그대로).
+function opForDirection(declaredOp, direction) {
+  if (direction === 'apply') return declaredOp
+  if (declaredOp === 'insert') return 'delete'
+  if (declaredOp === 'delete') return 'insert'
+  return 'update'
+}
+
 function buildTransactionSql(manifest, runId, direction) {
   const changes = manifest.changes || []
   const lines = []
@@ -374,32 +626,65 @@ function buildTransactionSql(manifest, runId, direction) {
   lines.push('  v_total integer := 0;')
   lines.push('begin')
 
-  for (const c of changes) {
-    const setEntries = direction === 'apply'
-      ? Object.entries(c.set)
-      : Object.keys(c.set).map((col) => [col, c.expect_before[col]])
-    const whereEntries = direction === 'apply'
-      ? Object.entries(c.expect_before)
-      : Object.entries(c.set)
-    lines.push(`  -- ${c.table} ${c.id}`)
-    lines.push(buildUpdateStatement(c.table, c.id, setEntries, whereEntries))
+  changes.forEach((c, idx) => {
+    const declaredOp = c.op || 'update'
+    const execOp = opForDirection(declaredOp, direction)
+    for (const desc of describeChange(c, direction)) lines.push(`  -- ${desc}`)
+
+    if (execOp === 'update') {
+      const setEntries = direction === 'apply'
+        ? Object.entries(c.set)
+        : Object.keys(c.set).map((col) => [col, c.expect_before[col]])
+      const whereEntries = direction === 'apply'
+        ? Object.entries(c.expect_before)
+        : Object.entries(c.set)
+      lines.push(buildUpdateStatement(c.table, c.id, setEntries, whereEntries))
+    } else if (execOp === 'insert') {
+      // declaredOp==='insert'(apply) -> 진짜 신규 삽입(fields) + 중복 가드.
+      // declaredOp==='delete'(rollback) -> 방금 지운 행을 expect_before 로 복원.
+      const insertFields = declaredOp === 'insert' ? c.fields : c.expect_before
+      if (declaredOp === 'insert' && direction === 'apply') {
+        lines.push(buildNoDuplicateGuard(c.table, { student_id: c.fields.student_id, textbook_id: c.fields.textbook_id }, runId, idx))
+      }
+      lines.push(buildInsertStatement(c.table, c.id, insertFields))
+    } else {
+      // execOp === 'delete'. declaredOp==='delete'(apply) -> expect_before
+      // 전체로 가드해 삭제. declaredOp==='insert'(rollback) -> 방금 넣은
+      // 행을 fields 전체로 가드해 삭제.
+      const whereFields = declaredOp === 'delete' ? c.expect_before : c.fields
+      lines.push(buildDeleteStatement(c.table, c.id, Object.entries(whereFields)))
+    }
+
     lines.push('  get diagnostics v_rows = row_count;')
     const msg1 = escMsg(`ABORT[${runId}] ${c.table} ${c.id} 영향 %행(기대 1)`)
     lines.push(`  if v_rows <> 1 then raise exception '${msg1}', v_rows; end if;`)
     lines.push('  v_total := v_total + v_rows;')
-  }
+  })
 
   const total = changes.length
   const msgTotal = escMsg(`ABORT[${runId}] 총 영향 행 수 불일치: % (기대 ${total})`)
   lines.push(`  if v_total <> ${total} then raise exception '${msgTotal}', v_total; end if;`)
 
   for (const c of changes) {
-    const afterEntries = direction === 'apply'
-      ? Object.entries(c.set)
-      : Object.keys(c.set).map((col) => [col, c.expect_before[col]])
-    const cond = buildExistsCondition(c.table, c.id, afterEntries)
-    const msg2 = escMsg(`ABORT[${runId}] ${c.table} ${c.id} 사후 값 불일치`)
-    lines.push(`  if not exists (${cond}) then raise exception '${msg2}'; end if;`)
+    const declaredOp = c.op || 'update'
+    const execOp = opForDirection(declaredOp, direction)
+    if (execOp === 'update') {
+      const afterEntries = direction === 'apply'
+        ? Object.entries(c.set)
+        : Object.keys(c.set).map((col) => [col, c.expect_before[col]])
+      const cond = buildExistsCondition(c.table, c.id, afterEntries)
+      const msg2 = escMsg(`ABORT[${runId}] ${c.table} ${c.id} 사후 값 불일치`)
+      lines.push(`  if not exists (${cond}) then raise exception '${msg2}'; end if;`)
+    } else if (execOp === 'insert') {
+      const insertFields = declaredOp === 'insert' ? c.fields : c.expect_before
+      const cond = buildExistsCondition(c.table, c.id, Object.entries(insertFields))
+      const msg2 = escMsg(`ABORT[${runId}] ${c.table} ${c.id} 사후 값 불일치(삽입 확인 실패)`)
+      lines.push(`  if not exists (${cond}) then raise exception '${msg2}'; end if;`)
+    } else {
+      const t = sqlIdentifier(c.table)
+      const msg2 = escMsg(`ABORT[${runId}] ${c.table} ${c.id} 삭제 확인 실패(행이 여전히 존재)`)
+      lines.push(`  if exists (select 1 from public.${t} where id = ${sqlLiteral(c.id)}) then raise exception '${msg2}'; end if;`)
+    }
   }
 
   for (const mnc of manifest.must_not_change || []) {
@@ -441,18 +726,283 @@ const DANGEROUS_WORDS = [
 ]
 const DANGEROUS_RE = new RegExp(`\\b(${DANGEROUS_WORDS.join('|')})\\b`, 'i')
 
+// B4(2026-09-04): student_class_assignments 전용 insert/delete 는 이 정확한
+// 생성 포맷일 때만 정적 스캔을 통과한다(그 외 테이블/형태의 INSERT/DELETE
+// 는 여전히 전부 거부 — ALLOWLIST 는 UPDATE 전용이라는 원칙을 이 세 패턴
+// 밖에서는 그대로 유지한다).
+const SAFE_SCA_INSERT_RE = /^\s*insert into public\.student_class_assignments \([a-z_, ]+\) values \(.*\);\s*$/i
+const SAFE_SCA_DELETE_RE = /^\s*delete from public\.student_class_assignments where id = .+;\s*$/i
+const SAFE_SCA_DUP_GUARD_RE = /^\s*if exists \(select 1 from public\.student_class_assignments where .*\) then raise exception '.*'; end if;\s*$/i
+
 /**
  * 파괴적 SQL 키워드 정적 스캔(비주석 라인만). 주석에는 이 단어들을 쓰지
- * 않는다는 저장소 관례를 전제로, `--` 이후를 잘라내고 검사한다.
+ * 않는다는 저장소 관례를 전제로, `--` 이후를 잘라내고 검사한다. B4 —
+ * student_class_assignments 전용으로 이 파일이 스스로 생성하는 정확한
+ * insert/delete 포맷(SAFE_SCA_*_RE)만 예외로 통과시킨다.
+ * B1 — manifest 를 함께 넘기면 lintManifestNarratives() 위반도 violations
+ * 목록에 `match:'narrative-drift'` 로 포함시킨다(선택 인자, 생략 시 기존
+ * 동작 그대로).
+ * @param {string} sql
+ * @param {object} [manifest]
  * @returns {{line:number, text:string, match:string}[]} 위반 목록(빈 배열 = 안전)
  */
-export function staticSafetyScan(sql) {
+export function staticSafetyScan(sql, manifest) {
   const violations = []
   const lines = String(sql).split(/\r?\n/)
   lines.forEach((line, idx) => {
     const codePart = line.split('--')[0]
     const m = codePart.match(DANGEROUS_RE)
-    if (m) violations.push({ line: idx + 1, text: line.trim(), match: m[0].toLowerCase() })
+    if (m) {
+      const isSafeScaOp = SAFE_SCA_INSERT_RE.test(codePart) || SAFE_SCA_DELETE_RE.test(codePart) || SAFE_SCA_DUP_GUARD_RE.test(codePart)
+      if (!isSafeScaOp) violations.push({ line: idx + 1, text: line.trim(), match: m[0].toLowerCase() })
+    }
   })
+  if (manifest) {
+    for (const finding of lintManifestNarratives(manifest)) {
+      violations.push({ line: 0, text: finding, match: 'narrative-drift' })
+    }
+  }
   return violations
+}
+
+// ── B2(2026-09-04): VERIFY==WRITE 구조적 회귀 가드 ────────────────────────
+// 기존 테스트 섹션 [2]는 buildApplySql()/buildRollbackSql() 출력에 특정
+// 리터럴이 "포함되는지"(문자열 .includes()) 만 확인했다 — 부분 문자열
+// 서브셋 검사라 SET/WHERE 절이 "그 값을 포함하되 다른 값도 섞여 있는" 회귀는
+// 못 잡는다. 여기서는 생성된 SQL 을 역파싱해 WHERE == expect_before(+id),
+// SET == set (rollback 은 반대) 을 완전 일치로 재확인한다.
+
+function parseSqlSingleLiteral(lit) {
+  const s = String(lit).trim()
+  if (s === 'NULL') return null
+  if (s === 'true') return true
+  if (s === 'false') return false
+  if (/^-?\d+(\.\d+)?$/.test(s)) return Number(s)
+  if (s.startsWith("'") && s.endsWith("'")) return s.slice(1, -1).replace(/''/g, "'")
+  return s
+}
+
+function parseCondList(str) {
+  return str.split(/\s+and\s+/i).map((pair) => {
+    if (/\bis null$/i.test(pair.trim())) {
+      return [pair.trim().replace(/\s+is null$/i, '').trim(), null]
+    }
+    const idx = pair.indexOf('=')
+    const col = pair.slice(0, idx).trim()
+    const val = parseSqlSingleLiteral(pair.slice(idx + 1).trim())
+    return [col, val]
+  })
+}
+
+/**
+ * buildUpdateStatement() 가 생성한 한 줄(`update public.<table> set ... where
+ * ...;`)만 역파싱한다(범용 SQL 파서 아님 — 이 파일이 스스로 만든 포맷만
+ * 안전하게 되읽는다). B2 회귀 가드 전용.
+ * @param {string} line
+ * @returns {{table:string, set:Record<string,*>, where:Record<string,*>}|null}
+ */
+export function parseGeneratedUpdateStatement(line) {
+  const m = /^\s*update public\.(\w+) set (.+) where (.+);\s*$/.exec(String(line ?? ''))
+  if (!m) return null
+  const [, table, setStr, whereStr] = m
+  const setPairs = setStr.split(/,\s*(?=\w+\s*=)/).map((pair) => {
+    const idx = pair.indexOf('=')
+    const col = pair.slice(0, idx).trim()
+    const val = parseSqlSingleLiteral(pair.slice(idx + 1).trim())
+    return [col, val]
+  })
+  return {
+    table,
+    set: Object.fromEntries(setPairs),
+    where: Object.fromEntries(parseCondList(whereStr)),
+  }
+}
+
+function sortObjJson(o) {
+  const out = {}
+  for (const k of Object.keys(o || {}).sort()) out[k] = o[k]
+  return JSON.stringify(out)
+}
+
+/**
+ * B2 — VERIFY(preflight 계획) 와 WRITE(apply/rollback SQL) 가 항상 같은
+ * expect_before/set 데이터에서 파생되는지 구조적으로 재확인한다. update
+ * 타입 change 만 대상(insert/delete 는 포맷이 달라 이 가드 범위 밖 — B4 의
+ * 전용 postflight 계획이 그 대신 확인한다). 순수 함수, 상시 회귀 가드
+ * (VERIFY_WRITE_DRIFT) — 절대 throw 하지 않는다.
+ * @param {object} manifest
+ * @param {string} runId
+ * @returns {{ok:boolean, mismatches:Array<object>}}
+ */
+export function verifyWriteDriftGuard(manifest, runId) {
+  const mismatches = []
+  const applySql = buildApplySql(manifest, runId)
+  const rollbackSql = buildRollbackSql(manifest, runId)
+  const applyLines = applySql.split('\n').filter((l) => /^\s*update public\./.test(l)).map(parseGeneratedUpdateStatement)
+  const rollbackLines = rollbackSql.split('\n').filter((l) => /^\s*update public\./.test(l)).map(parseGeneratedUpdateStatement)
+  const preflightPlan = buildPreflightPlan(manifest)
+  const updateChanges = (manifest.changes || []).filter((c) => (c.op || 'update') === 'update')
+
+  for (const c of updateChanges) {
+    const parsedApply = applyLines.find((p) => p && p.table === c.table && p.where.id === c.id)
+    if (!parsedApply) { mismatches.push({ table: c.table, id: c.id, reason: 'apply-sql-not-found' }); continue }
+    const expectedWhere = { id: c.id, ...c.expect_before }
+    if (sortObjJson(parsedApply.where) !== sortObjJson(expectedWhere)) {
+      mismatches.push({ table: c.table, id: c.id, reason: 'apply-where-mismatch', expected: expectedWhere, actual: parsedApply.where })
+    }
+    if (sortObjJson(parsedApply.set) !== sortObjJson(c.set)) {
+      mismatches.push({ table: c.table, id: c.id, reason: 'apply-set-mismatch', expected: c.set, actual: parsedApply.set })
+    }
+
+    const parsedRollback = rollbackLines.find((p) => p && p.table === c.table && p.where.id === c.id)
+    if (!parsedRollback) { mismatches.push({ table: c.table, id: c.id, reason: 'rollback-sql-not-found' }); continue }
+    const expectedRollbackWhere = { id: c.id, ...c.set }
+    if (sortObjJson(parsedRollback.where) !== sortObjJson(expectedRollbackWhere)) {
+      mismatches.push({ table: c.table, id: c.id, reason: 'rollback-where-mismatch', expected: expectedRollbackWhere, actual: parsedRollback.where })
+    }
+    const expectedRollbackSet = {}
+    for (const col of Object.keys(c.set)) expectedRollbackSet[col] = c.expect_before[col]
+    if (sortObjJson(parsedRollback.set) !== sortObjJson(expectedRollbackSet)) {
+      mismatches.push({ table: c.table, id: c.id, reason: 'rollback-set-mismatch', expected: expectedRollbackSet, actual: parsedRollback.set })
+    }
+
+    const planItem = preflightPlan.find((p) => p.table === c.table && p.id === c.id)
+    if (!planItem || sortObjJson(planItem.expect) !== sortObjJson(c.expect_before)) {
+      mismatches.push({ table: c.table, id: c.id, reason: 'preflight-plan-mismatch', expected: c.expect_before, actual: planItem?.expect })
+    }
+  }
+
+  return { ok: mismatches.length === 0, mismatches }
+}
+
+// ── B3(2026-09-04): drift refresh ─────────────────────────────────────────
+// preflight-mismatch 의 가장 흔한 원인은 "manifest 를 만든 이후 라이브 값이
+// 이미 바뀜"이다(이 harness 의 정상 fail-closed 동작이지만, 매번 사람이
+// manifest 를 손으로 다시 타이핑하는 건 번거롭고 실수 유발). 이 함수는
+// expect_before 를 지금 라이브(또는 픽스처) 값으로 갱신한 **사본**을
+// 만든다 — 원본 manifest 는 절대 mutate 하지 않고, DB 에는 아무 것도
+// 쓰지 않는다(reader.getRow 만 호출).
+
+/**
+ * @param {object} manifest
+ * @param {{getRow: (table:string, id:string, columns:string[]) => Promise<object|null>}} reader
+ * @returns {Promise<{manifest:object, drift:Array<{table:string,id:string,column:string,manifest_value:*,live_value:*}>}>}
+ */
+export async function refreshExpectBefore(manifest, reader) {
+  const copy = JSON.parse(JSON.stringify(manifest))
+  const drift = []
+  for (const c of copy.changes || []) {
+    if ((c.op || 'update') !== 'update' || !c.expect_before) continue
+    const cols = Object.keys(c.expect_before)
+    const row = await reader.getRow(c.table, c.id, cols)
+    for (const col of cols) {
+      const liveVal = row && Object.prototype.hasOwnProperty.call(row, col) ? row[col] : null
+      const manifestVal = c.expect_before[col]
+      if (liveVal !== manifestVal) {
+        drift.push({ table: c.table, id: c.id, column: col, manifest_value: manifestVal, live_value: liveVal })
+      }
+      c.expect_before[col] = liveVal
+    }
+  }
+  const now = new Date().toISOString()
+  const prevGeneratedFrom = copy.generated_from || {}
+  copy.generated_from = {
+    ...prevGeneratedFrom,
+    tool: prevGeneratedFrom.tool || 'refreshExpectBefore',
+    at: prevGeneratedFrom.at || now,
+    refreshed_at: now,
+  }
+  return { manifest: copy, drift }
+}
+
+// ── B5(2026-09-04): postflight invariant delta ────────────────────────────
+// prod:hotfix 는 지금까지 "이 manifest 가 자기가 건드리기로 한 행을 정확히
+// 건드렸는가"(postMismatches)만 확인했다 — "그 결과로 저장소 전체 관점의
+// invariant 가 새로 깨지는가"는 별도 관심사라 다루지 않았다(예: 실수로
+// primary SCA 를 2개로 만드는 manifest 도 개별 행 값은 다 맞을 수 있다).
+// 이 섹션은 순수 변환만 한다 — 스냅샷을 어떻게 읽어올지(라이브/픽스처)는
+// scripts/prodHotfix.mjs 가 결정한다.
+
+/**
+ * manifest 의 changes 를 스냅샷(loadProductionSnapshot() 반환과 동일
+ * shape — students/assignments 배열)에 순수하게(원본 mutate 없이) 적용한
+ * 사본을 만든다. update/insert/delete(student_class_assignments) 전부
+ * 반영한다. DB 에는 아무 것도 쓰지 않는다 — "적용했다면 어떻게 될지" 를
+ * 미리보기 위한 순수 변환이다.
+ * @param {{students:object[], assignments:object[]}} data
+ * @param {object} manifest
+ * @returns {{students:object[], assignments:object[]}} data 의 나머지 필드는 그대로 유지
+ */
+export function applyManifestToSnapshot(data, manifest) {
+  const students = (data?.students || []).map((s) => ({ ...s }))
+  const studentById = new Map(students.map((s) => [s.id, s]))
+  let assignments = (data?.assignments || []).map((a) => ({ ...a }))
+
+  for (const c of manifest?.changes || []) {
+    const op = c.op || 'update'
+    if (c.table === 'students') {
+      if (op !== 'update') continue // students 는 update 만 허용(ALLOWLIST)
+      const s = studentById.get(c.id)
+      if (s) Object.assign(s, c.set)
+      continue
+    }
+    if (c.table === 'student_class_assignments') {
+      if (op === 'update') {
+        const row = assignments.find((a) => a.id === c.id)
+        if (row) Object.assign(row, c.set)
+      } else if (op === 'insert') {
+        assignments = [...assignments, { id: c.id, ...c.fields }]
+      } else if (op === 'delete') {
+        assignments = assignments.filter((a) => a.id !== c.id)
+      }
+    }
+  }
+
+  return { ...data, students, assignments }
+}
+
+/**
+ * evaluateInvariants() findings 두 집합(적용 전/후)을 비교해 새로 생긴
+ * FAIL/WARN 과, 더는 나타나지 않는(해소된) finding 을 나눈다. 순수 함수.
+ * 같은 finding 인지는 code+studentId+refs(JSON) 조합으로 판정한다(같은
+ * evaluateInvariants() 호출 계열이 항상 같은 refs shape 을 만든다는 전제 —
+ * prodInvariants.mjs 재구현 금지, 그 출력을 그대로 비교만 한다).
+ * @returns {{new_fail:Array, new_warn:Array, resolved:Array}}
+ */
+export function diffInvariantFindings(beforeFindings, afterFindings) {
+  const keyOf = (f) => `${f.code}|${f.studentId ?? ''}|${JSON.stringify(f.refs || {})}`
+  const beforeMap = new Map((beforeFindings || []).map((f) => [keyOf(f), f]))
+  const afterMap = new Map((afterFindings || []).map((f) => [keyOf(f), f]))
+  const new_fail = []
+  const new_warn = []
+  const resolved = []
+  for (const [key, f] of afterMap) {
+    if (!beforeMap.has(key)) {
+      if (f.severity === 'FAIL') new_fail.push(f)
+      else new_warn.push(f)
+    }
+  }
+  for (const [key, f] of beforeMap) {
+    if (!afterMap.has(key)) resolved.push(f)
+  }
+  return { new_fail, new_warn, resolved }
+}
+
+/**
+ * B5 메인 진입점 — 적용 전 스냅샷 + manifest 로 "적용했다면 invariant 가
+ * 어떻게 바뀔지" 를 미리 계산한다(순수 변환, DB 접근 없음). 실제 적용 후
+ * 재확인은 호출부가 적용 후 새로 읽은 스냅샷 두 개를 evaluateInvariants 에
+ * 각각 돌려 diffInvariantFindings() 로 직접 비교한다(이 함수는 그 dry-run
+ * 미리보기 절반만 담당 — "적용 전 스냅샷을 어떻게 변환해서 비교하는가").
+ * @param {object} snapshotBefore loadProductionSnapshot() 또는 동일 shape
+ * @param {object} manifest
+ * @returns {{new_fail:Array, new_warn:Array, resolved:Array}}
+ */
+export function computeInvariantsDeltaPreview(snapshotBefore, manifest) {
+  const beforeCtx = buildInvariantContext(snapshotBefore)
+  const { findings: beforeFindings } = evaluateInvariants(beforeCtx)
+  const snapshotAfter = applyManifestToSnapshot(snapshotBefore, manifest)
+  const afterCtx = buildInvariantContext(snapshotAfter)
+  const { findings: afterFindings } = evaluateInvariants(afterCtx)
+  return diffInvariantFindings(beforeFindings, afterFindings)
 }
