@@ -104,6 +104,7 @@
     "prod:hotfix": "node scripts/prodHotfix.mjs",
     "verify:prod-check": "node scripts/testProdCheck.mjs",
     "verify:prod-hotfix": "node scripts/testProdHotfix.mjs",
+    "verify:student-card-layout": "node scripts/testStudentCardLayout.mjs",
     "watch:claude-stall": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/watchClaudeStall.ps1"
   },
   "dependencies": {

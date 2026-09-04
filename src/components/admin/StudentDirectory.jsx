@@ -1068,8 +1068,13 @@ export default function StudentDirectory({ adminPin }) {
       progress && progress.totalStars === 0 && progress.clearedCount === 0
     return (
       <div key={s.id} className="bg-gray-50 rounded-xl px-3 py-2.5">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-start gap-2 min-w-0">
+        {/* 2026-09-04 — 버튼 그룹이 이름을 가리던 레이아웃 버그(운영자 제보)
+            수정: 행 컨테이너에 flex-wrap을 추가해 버튼 그룹이 필요하면 이름
+            아래로 줄바꿈될 수 있게 하고, 이름 블록에 flex-shrink-0을 줘
+            0으로 붕괴하지 않게 한다. 자세한 사고 경위는
+            scripts/testStudentCardLayout.mjs 헤더 주석 참고. */}
+        <div className="flex items-start justify-between gap-2 flex-wrap">
+          <div className="flex items-start gap-2 min-w-0 flex-shrink-0">
             <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSelected(s.id)}
               className="w-4 h-4 mt-1 accent-blue-500 flex-shrink-0" />
             <div className="min-w-0">
@@ -1119,7 +1124,7 @@ export default function StudentDirectory({ adminPin }) {
               </label>
             </div>
           </div>
-          <div className="flex gap-1.5 flex-wrap justify-end items-center flex-shrink-0">
+          <div className="flex gap-1.5 flex-wrap justify-end items-center min-w-0 flex-1 basis-full sm:basis-auto">
             {status && !status.hasPinHash && (
               <button onClick={() => handleTogglePinSetupAllowed(s.id, s.name, !status.pinSetupAllowed)}
                 disabled={allowBusyId === s.id}
