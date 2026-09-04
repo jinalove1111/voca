@@ -15,7 +15,7 @@
 // Only the hash is ever written to Supabase (see api/_pinAuth.js — Node's
 // built-in crypto.scrypt, no external dependency).
 import { createClient } from '@supabase/supabase-js'
-import { isValidPinFormat, hashPin, randomFourDigitPin, supabaseAdminUrl, supabaseAdminKey } from './_pinAuth.js'
+import { isValidPinFormat, hashPin, randomFourDigitPin, supabaseAdminUrl, supabaseAdminKey, timingSafeStringEqual, adminPinFailureDelay } from './_pinAuth.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -39,14 +39,20 @@ export default async function handler(req, res) {
   // 관리자 재인증 — ADMIN_PIN이 서버에 설정돼 있고 body.adminPin이 정확히
   // 일치할 때만. (ADMIN_PIN 미설정 서버에서는 관리자 경로가 성립할 수 없을
   // 뿐, 학생 자기등록 경로는 아래에서 계속 동작한다.)
+  // 2026-09-04 — 평문 `===` 비교를 timingSafeStringEqual로 교체(브루트포스
+  // 스로틀 감사 후속, api/_pinAuth.js 공용 헬퍼로 통일).
   const configuredAdminPin = process.env.ADMIN_PIN
-  const adminAuthed = !!configuredAdminPin && typeof adminPin === 'string' && adminPin === configuredAdminPin
+  const adminAuthed = !!configuredAdminPin && timingSafeStringEqual(adminPin, configuredAdminPin)
 
   let finalPin = pin
   if (finalPin === undefined || finalPin === null || finalPin === '') {
     // 무작위 재설정은 관리자 전용 — 익명 호출이 임의 학생의 새 PIN을
-    // 응답으로 받아가는 것을 차단.
+    // 응답으로 받아가는 것을 차단. 이 분기는 학생 자기등록 경로가 절대
+    // 타지 않는다(자기등록은 항상 `pin`을 명시 전달) — 그래서 여기서
+    // adminPinFailureDelay(브루트포스 스로틀)를 걸어도 정상 학생 흐름에는
+    // 영향이 없다(2026-09-04, clear-student-pin.js와 동일한 판단).
     if (!adminAuthed) {
+      await adminPinFailureDelay()
       res.status(200).json({ ok: false, reason: 'not_authorized', error: '관리자 인증이 필요해요.' })
       return
     }

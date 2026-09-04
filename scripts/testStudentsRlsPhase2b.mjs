@@ -461,35 +461,47 @@ console.log('\n7. [로스터] student-pin-status className 모드')
 
 console.log('\n8. [관리자] checkAdminReauth — timingSafeEqual 치환 후 응답/상태코드 무변경')
 {
-  const ok = pinAuth.checkAdminReauth({ body: { adminPin: ADMIN_PIN } }, mockRes())
+  // 2026-09-04 — checkAdminReauth가 실패 지연(브루트포스 스로틀, P12
+  // 보안 감사 후속) 도입으로 async가 됐다. 이 섹션 전용으로 지연을
+  // 최소화(테스트 전용 오버라이드, api/_pinAuth.js 참고)해 하네스 속도를
+  // 지키면서 모든 호출부에 await를 추가한다 — await 없이 호출하면 Promise
+  // 객체가 항상 truthy라 '올바른 PIN 통과'/'틀린 PIN 거부' 판정 자체가
+  // 무의미해진다.
+  const savedDelayMs = process.env.ADMIN_PIN_FAIL_DELAY_MS
+  process.env.ADMIN_PIN_FAIL_DELAY_MS = '1'
+
+  const ok = await pinAuth.checkAdminReauth({ body: { adminPin: ADMIN_PIN } }, mockRes())
   check('올바른 PIN 통과', ok === true)
 
   const wrongRes = mockRes()
-  const wrong = pinAuth.checkAdminReauth({ body: { adminPin: '000000' } }, wrongRes)
+  const wrong = await pinAuth.checkAdminReauth({ body: { adminPin: '000000' } }, wrongRes)
   check('틀린 PIN 거부', wrong === false)
   check('틀린 PIN 응답 형태 유지(200 + ok:false + not_authorized)',
     wrongRes.statusCode === 200 && wrongRes.body?.ok === false && wrongRes.body?.reason === 'not_authorized', JSON.stringify(wrongRes.body))
 
   const emptyRes = mockRes()
-  check('빈 값 거부', pinAuth.checkAdminReauth({ body: { adminPin: '' } }, emptyRes) === false)
+  check('빈 값 거부', await pinAuth.checkAdminReauth({ body: { adminPin: '' } }, emptyRes) === false)
   check('빈 값 거부 응답 형태 동일', emptyRes.statusCode === 200 && emptyRes.body?.reason === 'not_authorized')
 
   const diffLenRes = mockRes()
-  check('길이 다른 값 거부', pinAuth.checkAdminReauth({ body: { adminPin: ADMIN_PIN + '99' } }, diffLenRes) === false)
+  check('길이 다른 값 거부', await pinAuth.checkAdminReauth({ body: { adminPin: ADMIN_PIN + '99' } }, diffLenRes) === false)
   check('길이 다른 값 거부 응답 형태 동일', diffLenRes.statusCode === 200 && diffLenRes.body?.reason === 'not_authorized')
 
   const nonStrRes = mockRes()
-  check('비문자열 거부', pinAuth.checkAdminReauth({ body: { adminPin: 583917 } }, nonStrRes) === false)
+  check('비문자열 거부', await pinAuth.checkAdminReauth({ body: { adminPin: 583917 } }, nonStrRes) === false)
 
   const noBodyRes = mockRes()
-  check('adminPin 미제공 거부', pinAuth.checkAdminReauth({ body: {} }, noBodyRes) === false)
+  check('adminPin 미제공 거부', await pinAuth.checkAdminReauth({ body: {} }, noBodyRes) === false)
 
   const savedAdminPin = process.env.ADMIN_PIN
   delete process.env.ADMIN_PIN
   const noConfigRes = mockRes()
-  const noConfig = pinAuth.checkAdminReauth({ body: { adminPin: 'anything' } }, noConfigRes)
+  const noConfig = await pinAuth.checkAdminReauth({ body: { adminPin: 'anything' } }, noConfigRes)
   check('ADMIN_PIN 미설정 시 500(서버 설정 오류) 무변경', noConfig === false && noConfigRes.statusCode === 500)
   process.env.ADMIN_PIN = savedAdminPin
+
+  if (savedDelayMs === undefined) delete process.env.ADMIN_PIN_FAIL_DELAY_MS
+  else process.env.ADMIN_PIN_FAIL_DELAY_MS = savedDelayMs
 }
 
 console.log('\n9. [라이브 기준선, 읽기 전용] anon HEAD students?select=id&limit=1')

@@ -62,6 +62,7 @@ _작성: 2026-07-18. 발명한 규칙이 아니라 이 저장소가 실제로 �
 - **테스트는 반드시 실제 소스를 esbuild로 번들해서 실행한다 — 로직을 손으로 베껴 테스트 파일에 재구현하지 않는다.** `scripts/build*Bundle.mjs`가 `src/hooks/useStudent.js` 등을 실제로 번들하고, `test*.mjs`는 그 번들을 import해서 검증한다(react/wordLibrary 등 브라우저·네트워크 의존성만 스텁으로 교체). 이렇게 해야 "테스트가 통과하는데 실제 버그가 남아있는" 괴리가 생기지 않는다.
 - **라이브 Supabase에 대한 e2e 테스트는 `QA_` 접두 데이터만 만들고 반드시 정리(cleanup)한다.** 프로덕션 학생 데이터(111명)는 절대 건드리지 않는다.
 - **회귀가 의심되면 수정 전 코드로 되돌려 같은 테스트가 실제로 FAIL하는지 먼저 확인한다("테스트 자체의 유효성 검증").** 2026-07-18 세대 카운터(`syncGenRef`) 수정 시 이 패턴이 실제로 쓰였다(가드를 임시 무력화 → FAIL 재현 확인 → 복구 → PASS 확인).
+- **새 `scripts/testX.mjs`를 `tests/harness/registry.mjs`에 등록할 때는 `extra:false`(required)를 기본값으로 한다.** `extra:true`는 그 스위트의 FAIL이 `verify:all` exit code에 반영되지 않는다는 뜻이라, 회귀를 잡지 못하면서 "PASS"만 보고하는 가짜 안전망이 될 수 있다(2026-09-04(108차) 야간 QA 세션이 신규 스위트 4개가 기본값으로 `extra:true` 등록될 뻔한 것을 발견·정정한 사례가 근거, `handoff.md`/`TESTING.md` 108차 섹션). `extra:true`는 정말로 "13개 필수 도메인 밖 보너스 커버리지"일 때만 명시적으로 붙인다. 또한 Release Gate에 새로 편입하는 정적/동적 검증(예: prod-check/prod-hotfix 계열)은 `scripts/testReleaseGate.mjs` §16b 매트릭스에도 함께 추가해 게이트가 그 검증을 실제로 요구하는지 고정한다.
 
 ## Deployment Checklist
 
@@ -89,6 +90,7 @@ _작성: 2026-07-18. 발명한 규칙이 아니라 이 저장소가 실제로 �
 - PIN 검증이 클라이언트가 아니라 서버(`api/*.js`, `_pinAuth.js`)에서만 이뤄지는가.
 - 새로 추가하는 `students` 컬럼이 민감정보라면 v1.9 패턴대로 컬럼권한에서 anon/authenticated를 명시적으로 제외했는가.
 - 관리자 재인증(`checkAdminReauth`)이 클라이언트의 `authed` state만으로 우회 가능한 구조가 아닌가.
+- **`checkAdminReauth`는 async다 — 호출부는 반드시 `await`한다.** 2026-09-04(108차) 야간 QA 세션(T6b)이 관리자 PIN 브루트포스 스로틀 커버리지 갭(`verify-admin-pin.js`에만 있던 실패 지연이 `checkAdminReauth` 공유 경로 12개 액션 + `compute-word-king.js`/`start-new-season.js`에는 없던 문제)을 고치며 `api/_pinAuth.js`에 공용 `adminPinFailureDelay()`/`timingSafeStringEqual()`을 추가해 `checkAdminReauth` 내부에서 await하도록 만들었다 — 이 함수를 새로 호출하는 코드가 `await` 없이 결과를 동기로 취급하면 인가 판정 전에 다음 코드가 실행될 위험이 있다(`handoff.md` 108차 섹션 참고).
 - 새 anon 전체허용(`allow anon all`) RLS 정책을 추가하기 전에 그 테이블이 정말 "학생 이름/PIN만으로 동작하는 이 앱의 신뢰 모델"에 맞는지(민감 데이터가 없는지) 확인했는가.
 
 ## Performance Checklist

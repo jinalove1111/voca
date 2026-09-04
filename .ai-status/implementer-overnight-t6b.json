@@ -1,0 +1,36 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "overnight-t6b",
+  "task": "P12 보안 감사 Medium — 관리자 PIN(ADMIN_PIN) 브루트포스 스로틀을 모든 검증 경로에 적용 + verify-admin-pin.js 상수시간 비교 전환",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-04T00:00:00Z",
+  "updated_at": "2026-09-04T00:00:00Z",
+  "files_owned": [
+    "api/_pinAuth.js",
+    "api/admin-pin-actions.js",
+    "api/clear-student-pin.js",
+    "api/compute-word-king.js",
+    "api/set-student-pin.js",
+    "api/start-new-season.js",
+    "api/verify-admin-pin.js",
+    "scripts/testAdminPinThrottle.mjs",
+    "scripts/testStudentsRlsPhase2b.mjs",
+    "package.json",
+    "tests/harness/registry.mjs",
+    ".ai-status/implementer-overnight-t6b.json"
+  ],
+  "files_read": [
+    "scripts/testAdminPinActionsDispatch.mjs",
+    "scripts/testPinSetupCapability.mjs",
+    "scripts/testClearStudentPin.mjs",
+    "scripts/testAdminStudentActions.mjs",
+    "scripts/testComputeWordKingApi.mjs",
+    "scripts/testStartNewSeasonApi.mjs",
+    "tests/harness/runDomain.mjs"
+  ],
+  "summary": "api/_pinAuth.js에 공용 adminPinFailureDelay()/adminPinFailDelayMs()(ADMIN_PIN_FAIL_DELAY_MS 테스트 전용 오버라이드, 기본 1500ms)와 timingSafeStringEqual()을 도입. checkAdminReauth를 async로 전환해 실패 시 지연을 걸고, 이를 사용하는 admin-pin-actions.js/compute-word-king.js/start-new-season.js 3개 호출부를 await로 갱신(await 누락 시 Promise가 항상 truthy라 인증이 무력화되므로 필수). verify-admin-pin.js의 평문 `===` 비교를 timingSafeStringEqual로, 하드코딩된 1.5초 setTimeout을 공용 adminPinFailureDelay()로 교체. clear-student-pin.js(항상 관리자 전용)와 set-student-pin.js(무작위 재설정 분기만 관리자 전용, 자기등록 경로는 이 분기를 타지 않으므로 학생 흐름 영향 없음)의 인라인 adminPin 비교에도 동일한 상수시간 비교+지연을 추가. 부수 수정: 기존 scripts/testStudentsRlsPhase2b.mjs가 checkAdminReauth를 동기 호출하고 있어(await 없이) 시그니처 변경으로 깨질 것이었으므로 6개 호출부에 await 추가(섹션 전용 ADMIN_PIN_FAIL_DELAY_MS=1로 하네스 속도 유지) — 이 파일은 다른 트랙 산출물이지만 내 시그니처 변경의 직접 결과라 최소 수정. 신규 FAIL-first 테스트 scripts/testAdminPinThrottle.mjs(23단언: 정적 1/2 + 행동 3a~3d + dispatch 회귀 4)를 package.json verify:admin-pin-throttle과 tests/harness/registry.mjs login 도메인에 등록. 규칙 15 절차: git stash로 수정 전 상태 재현 → 8건 FAIL 실측 확인 → stash pop → 전체 PASS 전환 확인.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 요청. 배포는 운영자가 이 브랜치를 main에 머지(Vercel 자동 배포) — 이 세션은 push/merge를 하지 않았음."
+}

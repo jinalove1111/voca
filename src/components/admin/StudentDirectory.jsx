@@ -19,6 +19,7 @@ import { getStudents } from '../../hooks/useStudent'
 // (accountStatus.js 헤더 주석 참고). 이 화면의 로컬 사본(Cookie/Paul/
 // Jinaa만 하드코딩, Barry 누락)을 대체한다.
 import { isTestAccountStudent } from '../../utils/accountStatus'
+import { capList } from '../../utils/listCap'
 import TextbookAssignmentPanel from './TextbookAssignmentPanel'
 import DuplicateStudentAudit from './DuplicateStudentAudit'
 
@@ -125,6 +126,10 @@ const ssSet = (key, value) => { try { sessionStorage.setItem(key, value) } catch
 // "최근 등록" 필터의 크기 — created_at이 학생 캐시에 없어(아래 주석) 날짜
 // 기준 14일 필터가 불가능하므로, 등록순 최신 N명 폴백으로 대체.
 const RECENT_COUNT = 20
+
+// 검색/필터 결과 렌더 상한(2026-09, overnight T7b) — DOM 노드 수 방지용
+// 순수 렌더 캡. "더 보기" 버튼이 한 번 누를 때마다 이만큼씩 상한을 올린다.
+const SEARCH_RENDER_LIMIT_STEP = 200
 
 const FILTERS = [
   ['all', '전체'],
@@ -420,8 +425,13 @@ export default function StudentDirectory({ adminPin }) {
     ssSet(SS_OPEN, next || '')
     return next
   })
-  const setFilter = (value) => { setFilterState(value); ssSet(SS_FILTER, value) }
-  const setSearch = (value) => { setSearchState(value); ssSet(SS_SEARCH, value) }
+  // 검색 결과 렌더 상한(2026-09, overnight T7b) — 필터링 결과 자체가 아니라
+  // "그중 몇 개를 DOM에 그릴지"만 조절하는 순수 렌더 캡(src/utils/listCap.js).
+  // 검색어/퀵필터가 바뀌면 새 검색이니 상한을 200으로 되돌린다(이전
+  // 검색에서 "더 보기"로 올려둔 한도가 다음 검색까지 남아있으면 안 됨).
+  const [searchRenderLimit, setSearchRenderLimit] = useState(SEARCH_RENDER_LIMIT_STEP)
+  const setFilter = (value) => { setFilterState(value); ssSet(SS_FILTER, value); setSearchRenderLimit(SEARCH_RENDER_LIMIT_STEP) }
+  const setSearch = (value) => { setSearchState(value); ssSet(SS_SEARCH, value); setSearchRenderLimit(SEARCH_RENDER_LIMIT_STEP) }
 
   const loadPinStatus = async (list) => {
     if (!list.length) { setPinStatus({}); return }
@@ -982,6 +992,24 @@ export default function StudentDirectory({ adminPin }) {
     : groups
 
   const filteredCount = isFiltering ? filteredGroups.reduce((sum, g) => sum + g.students.length, 0) : students.length
+
+  // 렌더 상한(2026-09, overnight T7b) — filteredGroups/filteredCount는 필터
+  // 결과 전체를 그대로 들고 있고(선택/카운트 표시는 항상 이 전체 기준),
+  // 여기서는 순서를 보존한 채 화면에 그릴 학생만 capList로 잘라 별도
+  // 목록(renderGroups)을 만든다. 그룹 구조를 유지해야 해서 capList는
+  // 평탄화한 전체 목록에 적용한 뒤, 그 결과에 남은 id만으로 그룹을
+  // 다시 구성한다 — filteredGroups 자체는 건드리지 않는다.
+  const { items: cappedFilteredStudents, remaining: filteredRenderRemaining } = isFiltering
+    ? capList(filteredGroups.flatMap(g => g.students), searchRenderLimit)
+    : { items: [], remaining: 0 }
+  const renderGroups = isFiltering
+    ? (() => {
+        const cappedIds = new Set(cappedFilteredStudents.map(s => s.id))
+        return filteredGroups
+          .map(g => ({ ...g, students: g.students.filter(s => cappedIds.has(s.id)) }))
+          .filter(g => g.students.length > 0)
+      })()
+    : filteredGroups
 
   // PIN 상태가 하나라도 로드됐을 때만 그룹 헤더에 "PIN 완료 n/m" 표시 —
   // v1.7 SQL 미실행/네트워크 실패면 기존 학생 카드 배지처럼 조용히 생략.
@@ -1645,7 +1673,7 @@ export default function StudentDirectory({ adminPin }) {
                 {filteredCount}명 일치
                 {filter === 'recent' && ` · 최근 등록 = 등록순 최신 ${RECENT_COUNT}명`}
               </p>
-              {filteredGroups.map(group => (
+              {renderGroups.map(group => (
                 <div key={group.name}>
                   <div className="flex items-center justify-between mb-1.5 px-1">
                     <p className="text-xs font-black text-gray-500 break-keep">{group.name} ({group.students.length}명)</p>
@@ -1656,6 +1684,17 @@ export default function StudentDirectory({ adminPin }) {
                   </div>
                 </div>
               ))}
+              {filteredRenderRemaining > 0 && (
+                // 렌더 상한(2026-09, overnight T7b) — 필터링/선택 로직은
+                // 그대로, 화면에 그리는 카드 수만 단계적으로 늘린다.
+                <button
+                  type="button"
+                  onClick={() => setSearchRenderLimit(prev => prev + SEARCH_RENDER_LIMIT_STEP)}
+                  className="w-full text-center text-xs font-bold text-purple-600 bg-purple-50 rounded-xl py-2 btn-press"
+                >
+                  더 보기 ({filteredRenderRemaining}개 남음)
+                </button>
+              )}
             </div>
           )
         ) : (

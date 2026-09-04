@@ -1,0 +1,42 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현(TEST-ONLY)",
+  "task_id": "paul-town-progression-tests",
+  "task": "Paul Town 진행(월드 단계/정원/마을/모자/밀스톤/집 소품) 경계·연결·persistence·멱등·학생 시뮬레이션·UI 게이팅 통합 회귀 스위트 작성 — src/ 무수정, 실 프로덕션 DB 접촉 0",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-04T00:00:00.000Z",
+  "updated_at": "2026-09-04T00:00:00.000Z",
+  "files_owned": [
+    "scripts/testPaulTownProgression.mjs",
+    "package.json",
+    "tests/harness/registry.mjs",
+    ".ai-status/implementer-paul-town-progression-tests.json"
+  ],
+  "files_read": [
+    "CLAUDE.md",
+    "src/utils/attachment/worldProgress.js",
+    "src/utils/attachment/attachmentCore.js",
+    "src/utils/attachment/paulTown.js",
+    "src/utils/attachment/hatSystem.js",
+    "src/utils/attachment/milestones.js",
+    "src/hooks/useStudent.js",
+    "src/components/EnglishGarden.jsx",
+    "src/components/PaulTown.jsx",
+    "src/config/features.js",
+    "tests/harness/runAttachment.mjs",
+    "tests/harness/runAll.mjs",
+    "tests/harness/runDomain.mjs",
+    "scripts/testGardenGrowthFlow.mjs",
+    "scripts/testGardenGrowthSources.mjs",
+    "scripts/testHatColorRendering.mjs",
+    "scripts/buildRaceBundle.mjs",
+    "scripts/fakeReact.mjs",
+    "scripts/fakeReactModule.mjs",
+    "scripts/wordLibraryRaceStub.mjs",
+    "scripts/testSpellingDirectionWiring.mjs"
+  ],
+  "summary": "branch test/paul-town-progression(origin/main 기준)에 scripts/testPaulTownProgression.mjs(222개 단언) 신규 작성. 1) BOUNDARY: 모든 unlockable(월드 6단계/정원 16칸/마을 3건물/모자 8종/밀스톤 3종/집소품 6종)을 threshold-1/=/+1로 검증, WORLD_STAGES/TOWN_PLACES/HAT_THRESHOLDS/CLEARED_MILESTONES 등 실제 export 상수를 순회(하드코딩 최소화). 2) PROGRESSION LINKAGE: 잠금해제가 항상 사다리 접두사(prefix)를 이룸(points 0..300 전수), nextStage 정확성, 마을 3건물과 world 단계의 축 동치성. 3) PERSISTENCE: 실제 useStudent.js(esbuild race bundle)로 35단어+모자2+밀스톤3 record를 만들고 getLocalRecordRaw→JSON 직렬화→normalizeRecord/mergeProgressRecords(빈로컬,cloud)/이중재수화/재재수화 전부 canon(정렬 파생상태) byte-identical 확인, 구버전 백업(cleared+history만)도 throw 없이 정규화. 4) IDEMPOTENCY: 중복 정답/grantHats/addMilestones, 두 기기 병합 시 더 이른 시각 채택, 보상 원장과의 독립성, 이미 소유한 모자 재평가 무영향. 5) 학생 시뮬레이션 A(신규)/B(heavy 295pt)/C(29pt house잠김)/D(160pt village해제)가 실제 record round-trip까지 통과. 6) UI: EnglishGarden.jsx/PaulTown.jsx 정적 배선 + esbuild+react-dom/server SSR로 실제 컴포넌트를 points=29/30 렌더해 house 행 잠김↔해제 문구 확인(WARN 폴백 설계, 이번 실행은 성공). package.json에 verify:paul-town-progression 스크립트 등록, tests/harness/registry.mjs attachment 도메인에 등록(extra 없음 — 13개 필수 도메인 커버리지). npm run build PASS, verify:paul-town-progression/verify:attachment/testGardenGrowthFlow.mjs/verify:garden-growth-sources 전부 PASS. 발견된 실제 앱 결함 0건 — TEST-ONLY 세션이라 src/는 한 글자도 수정하지 않음. push/merge 없음.",
+  "blocker": null,
+  "next_action": "qa-reviewer 또는 운영자 검토 후 필요 시 origin/main으로 머지 판단(이번 세션은 push/merge 범위 밖)."
+}

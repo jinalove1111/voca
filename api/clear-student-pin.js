@@ -22,7 +22,7 @@
 // 액션이므로 예외적으로 요청마다 서버에서 adminPin을 재검증한다(같은
 // ADMIN_PIN 서버 전용 env, api/verify-admin-pin.js와 동일한 비교 방식).
 import { createClient } from '@supabase/supabase-js'
-import { supabaseAdminUrl, supabaseAdminKey } from './_pinAuth.js'
+import { supabaseAdminUrl, supabaseAdminKey, timingSafeStringEqual, adminPinFailureDelay } from './_pinAuth.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -37,7 +37,13 @@ export default async function handler(req, res) {
   }
 
   const { studentId, adminPin: suppliedAdminPin } = req.body || {}
-  if (typeof suppliedAdminPin !== 'string' || suppliedAdminPin !== adminPin) {
+  // 2026-09-04 — 평문 `!==` 비교를 timingSafeStringEqual로 교체 + 실패 시
+  // adminPinFailureDelay(브루트포스 스로틀, checkAdminReauth/verify-admin-
+  // pin.js/set-student-pin.js와 동일한 공용 지연) 추가. 이 함수는 항상
+  // 관리자 전용 액션이라(자기등록 경로 없음) 무조건 지연을 걸어도 정상
+  // 사용자 흐름에 영향이 없다. 응답 형식/상태코드는 완전히 동일하게 유지.
+  if (!timingSafeStringEqual(suppliedAdminPin, adminPin)) {
+    await adminPinFailureDelay()
     res.status(200).json({ ok: false, reason: 'not_authorized' })
     return
   }

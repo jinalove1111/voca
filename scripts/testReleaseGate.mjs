@@ -334,6 +334,66 @@ console.log('\n=== 15절. Gate 3 진단 강화 배선 (verifyRelease.mjs, 정적
   check('maxBuffer 64MB 를 유지한다(기존 값 축소 금지)', /maxBuffer:\s*64\s*\*\s*1024\s*\*\s*1024/.test(t))
 }
 
+console.log('\n=== 16절. registry 편입 정적 검사(2026-09-04, 야간 P11 트랙) ===')
+{
+  // scripts/testStdoutFlushOnExit.mjs 는 package.json 에 verify:stdout-flush
+  // 로 이미 있었지만 tests/harness/registry.mjs 에는 등록돼 있지 않아
+  // verify:all(runAll.mjs -> registry.mjs)에서 한 번도 실행되지 않고
+  // 있었다(야간 감사에서 발견) — 이 절이 그 등록 자체를 정적으로 고정한다.
+  // 파일 소유권(CLAUDE.md 규칙 16) 참고: 이 테스트는 testReleaseGate.mjs
+  // 자체 로직과는 무관하지만, 그 파일의 헤더가 "이 트랙은 registry 를
+  // 소유하지 않으므로 등록은 하지 않는다"고 명시한 testReleaseGateProdCheck.mjs
+  // 와 동일하게, registry 편입을 대신 수행한 트랙(P11)이 그 등록이 실제로
+  // 존재한다는 것을 단언으로 남긴다.
+  const t = readFileSync(path.resolve('tests/harness/registry.mjs'), 'utf8')
+  check('testStdoutFlushOnExit.mjs 가 registry 에 등록돼 있다', /testStdoutFlushOnExit\.mjs/.test(t))
+  const m = /\{\s*script:\s*'scripts\/testStdoutFlushOnExit\.mjs'[^}]*\}/.exec(t)
+  check('그 등록 항목이 존재하고 파싱 가능하다(단일 라인 객체)', !!m, t.includes('testStdoutFlushOnExit') ? '패턴 불일치(멀티라인?)' : '')
+  check('extra:false 로 등록돼 verify:all exit code 에 실제로 반영된다(가짜 PASS 금지)',
+    !!m && /extra:\s*false/.test(m[0]), m?.[0])
+}
+
+console.log('\n=== 16b절. 야간 신규 스위트 6종 registry required 등록 정적 검사(2026-09-04) ===')
+{
+  // testDoubleEvents.mjs/testUiStabilityGuards.mjs 는 package.json 에
+  // verify:double-events/verify:ui-stability 로 이미 있었지만 registry.mjs
+  // 에는 등록돼 있지 않아 verify:all 에서 한 번도 실행되지 않고 있었다.
+  // testExcelImportFixtures.mjs/testAdminPinThrottle.mjs 는 등록은 돼
+  // 있었지만 extra:true(보너스 취급)라 verify:all 결과에 반영되지 않았다
+  // — DEVELOPER_GUIDE.md 2026-09-03 규칙(신규 verify 스크립트는 기본
+  // required, extra 는 flaky/외부의존일 때만)에 따라 4개 전부 required
+  // (extra:false)로 등록·승격했는지 이 절이 고정한다. 단일 라인 객체
+  // 전제(16절과 동일 파싱 방식).
+  // 2026-09-04 야간 통합 병합(qa/overnight-2026-09-04, T8/T9): 브랜치
+  // test/student-path-contracts 는 testStudentPathContracts.mjs 를 registry
+  // quiz 도메인에 extra:true 로 추가해 왔는데, 병합 충돌 해소 과정에서
+  // 규칙대로 extra:false 로 승격했다. test/security-regressions 는
+  // testSecurityRegressions.mjs 를 extra 필드 없이(암묵적 falsy=required)
+  // 등록해 실질적으로는 이미 required 였지만, 이 절의 정규식이 명시적
+  // `extra: false` 문자열을 요구하므로 명시적으로 추가했다(FAIL-first로
+  // 확인: extra 필드 없는 상태에서 이 절 실행 시 1단언 FAIL 실측, 규칙
+  // 15). 두 스크립트를 목록에 추가해 앞으로도 registry 편입이 정적으로
+  // 고정되도록 한다.
+  const t = readFileSync(path.resolve('tests/harness/registry.mjs'), 'utf8')
+  const requiredScripts = [
+    'scripts/testDoubleEvents.mjs',
+    'scripts/testUiStabilityGuards.mjs',
+    'scripts/testExcelImportFixtures.mjs',
+    'scripts/testAdminPinThrottle.mjs',
+    'scripts/testStudentPathContracts.mjs',
+    'scripts/testSecurityRegressions.mjs',
+  ]
+  for (const script of requiredScripts) {
+    const escaped = script.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    check(`${script} 가 registry 에 등록돼 있다`, new RegExp(escaped).test(t))
+    const re = new RegExp(`\\{\\s*script:\\s*'${escaped}'[^}]*\\}`)
+    const em = re.exec(t)
+    check(`${script} 등록 항목이 존재하고 파싱 가능하다(단일 라인 객체)`, !!em)
+    check(`${script} 가 extra:false 로 등록돼 verify:all exit code 에 실제로 반영된다(가짜 PASS 금지)`,
+      !!em && /extra:\s*false/.test(em[0]), em?.[0])
+  }
+}
+
 console.log(`\n${'='.repeat(60)}`)
 console.log(`총 ${passed + failed}단언 — PASS ${passed} / FAIL ${failed}`)
 if (failed > 0) {
