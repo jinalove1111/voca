@@ -21,9 +21,14 @@
 //       실행 결과 stdout을 캡처해 둔 텍스트. "KNOWN ..." 줄만 파싱한다.
 //   node scripts/prodReport.mjs --sha <sha>             origin/main 대신 이 sha 표기
 //   node scripts/prodReport.mjs --no-network-web        배포 페이지 GET 생략
+//   node scripts/prodReport.mjs --out-dir <dir>         산출물 디렉토리 override
+//     (기본값 docs/qa/ops-report — 테스트(scripts/testOpsStatus.mjs)가
+//     커밋된 실제 운영 보고서를 fixture 데이터로 덮어쓰지 않도록 scratch
+//     디렉토리를 넘기는 용도. 라이브 실행 시에는 절대 생략하지 말 것.)
 //
-// 산출물: docs/qa/ops-report/ops-report-latest.{md,json} +
-//         docs/qa/ops-report/history/ops-report-<UTC>.{md,json}
+// 산출물: <out-dir>/ops-report-latest.{md,json} +
+//         <out-dir>/history/ops-report-<UTC>.{md,json}
+//         (out-dir 기본값 docs/qa/ops-report)
 //
 // 이 파일은 표준 finding 변환(scripts/lib/opsStatus.mjs, 다른 파일 — 재구현
 // 아님)을 그대로 쓴다. 판정 로직은 전혀 갖지 않는다 — 여기서는 조회·집계·
@@ -45,6 +50,7 @@ const opt = (n) => {
 const FROM_DIR = opt('--from-dir')
 const SHA_OVERRIDE = opt('--sha')
 const NO_NETWORK_WEB = flag('--no-network-web')
+const OUT_DIR_OVERRIDE = opt('--out-dir')
 
 // 13개 섹션 — 정확히 이 순서로 렌더된다(테스트가 순서를 고정 단언한다).
 export const SECTION_TITLES = [
@@ -312,7 +318,7 @@ async function main() {
 
   const md = L.join('\n') + '\n'
 
-  const OUT_DIR = path.join(ROOT, 'docs', 'qa', 'ops-report')
+  const OUT_DIR = OUT_DIR_OVERRIDE ? path.resolve(ROOT, OUT_DIR_OVERRIDE) : path.join(ROOT, 'docs', 'qa', 'ops-report')
   const HISTORY_DIR = path.join(OUT_DIR, 'history')
   fs.mkdirSync(HISTORY_DIR, { recursive: true })
   const dateTag = timestamp.replace(/[:.]/g, '-')

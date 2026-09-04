@@ -8,6 +8,7 @@
 // 시점에는 이 파일의 import 문 자체가 에러라 전부 FAIL했다(CLAUDE.md 규칙 15).
 import fs from 'node:fs'
 import path from 'node:path'
+import crypto from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import {
@@ -184,6 +185,29 @@ check('renderSummary — approval_required 항목이 큐에 실제로 나열된�
 check('renderSummary([]) — 빈 입력도 안전(없음 표시)', /없음/.test(renderSummary([])))
 
 console.log('\n=== 7절. prodReport.mjs CLI(--from-dir, 네트워크 0) ===')
+// ★ 커밋된 실제 운영 보고서(docs/qa/ops-report/*)를 절대 건드리지 않는다 ★
+// --out-dir로 scratch 디렉토리를 넘기고, 실행 전/후 docs/qa/ops-report의
+// 파일 목록+해시 스냅샷을 비교해 회귀(테스트가 라이브 리포트를 fixture로
+// 덮어쓰는 사고)를 구조적으로 차단한다.
+function snapshotDir(dir) {
+  const out = {}
+  if (!fs.existsSync(dir)) return out
+  const walk = (d) => {
+    for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, entry.name)
+      if (entry.isDirectory()) walk(p)
+      else if (entry.isFile()) {
+        const rel = path.relative(dir, p)
+        out[rel] = crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex')
+      }
+    }
+  }
+  walk(dir)
+  return out
+}
+const DOCS_OUT_DIR = path.join(ROOT, 'docs', 'qa', 'ops-report')
+const docsSnapshotBefore = snapshotDir(DOCS_OUT_DIR)
+
 const TMP_DIR = path.join(ROOT, 'scripts', '.tmp', 'testOpsStatus.fromdir')
 fs.mkdirSync(TMP_DIR, { recursive: true })
 fs.writeFileSync(path.join(TMP_DIR, 'prodcheck.json'), JSON.stringify(synthProdCheck), 'utf8')
@@ -195,13 +219,22 @@ fs.writeFileSync(path.join(TMP_DIR, 'health.json'), JSON.stringify(synthHealthWi
 fs.writeFileSync(path.join(TMP_DIR, 'security-regressions.txt'),
   '  KNOWN api/grant-xp.js 레거시 XP 분기 인증부재\n  PASS 뭔가\n  KNOWN anon DELETE student_class_assignments(phantom)\n', 'utf8')
 
-const cliRes = spawnSync(process.execPath, [path.join(ROOT, 'scripts/prodReport.mjs'), '--from-dir', TMP_DIR],
+const REPORT_OUT_DIR = path.join(ROOT, 'scripts', '.tmp', 'ops-report-test')
+fs.rmSync(REPORT_OUT_DIR, { recursive: true, force: true })
+
+const cliRes = spawnSync(process.execPath,
+  [path.join(ROOT, 'scripts/prodReport.mjs'), '--from-dir', TMP_DIR, '--out-dir', REPORT_OUT_DIR],
   { cwd: ROOT, encoding: 'utf8' })
 check('CLI — exit 0', cliRes.status === 0, `status=${cliRes.status} stderr=${cliRes.stderr}`)
 check('CLI stdout — DB WRITE: 0', /DB WRITE: 0/.test(cliRes.stdout))
 
-const mdPath = path.join(ROOT, 'docs', 'qa', 'ops-report', 'ops-report-latest.md')
-const jsonPath = path.join(ROOT, 'docs', 'qa', 'ops-report', 'ops-report-latest.json')
+const docsSnapshotAfter = snapshotDir(DOCS_OUT_DIR)
+check('docs/qa/ops-report/ 는 --out-dir 테스트 중 변경되지 않는다(커밋된 실제 운영 보고서 보호)',
+  JSON.stringify(docsSnapshotBefore) === JSON.stringify(docsSnapshotAfter),
+  `before=${Object.keys(docsSnapshotBefore).length}files after=${Object.keys(docsSnapshotAfter).length}files`)
+
+const mdPath = path.join(REPORT_OUT_DIR, 'ops-report-latest.md')
+const jsonPath = path.join(REPORT_OUT_DIR, 'ops-report-latest.json')
 check('ops-report-latest.md 생성됨', fs.existsSync(mdPath))
 check('ops-report-latest.json 생성됨', fs.existsSync(jsonPath))
 const md = fs.existsSync(mdPath) ? fs.readFileSync(mdPath, 'utf8') : ''
@@ -226,8 +259,8 @@ check('DB WRITE: 0 푸터', md.includes('DB WRITE: 0'))
 check('JSON 산출물 — dbWrite:0', jsonOut?.dbWrite === 0)
 check('JSON 산출물 — findings 배열이 전부 assertFinding 통과', Array.isArray(jsonOut?.findings) && jsonOut.findings.every((f) => assertFinding(f).ok))
 
-const historyFiles = fs.existsSync(path.join(ROOT, 'docs', 'qa', 'ops-report', 'history'))
-  ? fs.readdirSync(path.join(ROOT, 'docs', 'qa', 'ops-report', 'history'))
+const historyFiles = fs.existsSync(path.join(REPORT_OUT_DIR, 'history'))
+  ? fs.readdirSync(path.join(REPORT_OUT_DIR, 'history'))
   : []
 check('history 디렉토리에 dated copy(.md/.json) 존재', historyFiles.some((f) => f.endsWith('.md')) && historyFiles.some((f) => f.endsWith('.json')))
 
