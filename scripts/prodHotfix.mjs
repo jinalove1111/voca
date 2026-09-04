@@ -55,6 +55,7 @@ import {
   computeInvariantsDeltaPreview,
   lintManifestNarratives,
   refreshExpectBefore,
+  verifyWriteDriftGuard,
 } from './lib/hotfixManifest.mjs'
 import { createDryRunExecutor, createManagementApiExecutor } from './lib/sqlExecutor.mjs'
 
@@ -278,10 +279,21 @@ const defaultDeps = {
   loadEnv: loadEnvDefault,
   createLiveReader,
   createFixtureReader,
+  // C3(2026-09-05) — SQL 생성기를 D 로 노출한다(기본값은 순수 import 그대로,
+  // 동작 변화 없음). 테스트가 이 두 함수만 감싸 SET/WHERE/행 수가 다른 SQL을
+  // 돌려주는 stub 을 주입하면, verifyWriteDriftGuard 배선(6.5단계)이 실제로
+  // 그 드리프트를 잡아 STOP 하는지 네트워크 0으로 검증할 수 있다.
+  buildApplySql,
+  buildRollbackSql,
   createExecutor: ({ kind, projectRef, accessToken }) => {
     if (kind === 'management-api') return createManagementApiExecutor({ projectRef, accessToken })
     return createDryRunExecutor()
   },
+  // C3(2026-09-05) — 각 단계 진입 시 호출되는 선택적 훅(기본 no-op, 기존
+  // 어떤 호출부도 이 값을 넘기지 않으므로 동작이 전혀 바뀌지 않는다).
+  // scripts/testProdHotfix.mjs 가 이 훅으로 단계 순서를 배열로 수집해
+  // 고정 순서(READ-ONLY preflight → ... → health)를 단언한다.
+  onStep: () => {},
   isTTY: () => !!process.stdin.isTTY,
   approve: async (runId) => {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
@@ -409,6 +421,7 @@ export async function runHotfix(options, deps = {}) {
   }
 
   // 1) manifest 로드·검증(+ sha256 기록 — 변조 감지의 기준값)
+  D.onStep('manifest-load')
   let manifest = options.manifest
   let manifestRawText = null
   if (!manifest) {
@@ -442,6 +455,7 @@ export async function runHotfix(options, deps = {}) {
   report.expectedRows = manifest.changes.length
 
   // 1.5) --env production|staging 플래그 게이트(가장 먼저 — 프로젝트 혼동 방지)
+  D.onStep('env-flag')
   if (!ENV_FLAG_VALUES.includes(options.envFlag)) {
     logErr(`FAIL — --env production|staging 플래그가 필요합니다(받은 값: ${JSON.stringify(options.envFlag ?? null)})`)
     return finish('env-flag-required', 1, {})
@@ -471,6 +485,7 @@ export async function runHotfix(options, deps = {}) {
   if (rollbackOfSourceReport) report.rollbackOfSourceRunId = rollbackOfSourceReport.runId
 
   // 2) 환경(project_ref) 게이트
+  D.onStep('env-ref')
   const env = D.loadEnv()
   secretEnv = env
   report.projectRefHost = env.url ? hostFromUrl(env.url) : null
@@ -483,8 +498,9 @@ export async function runHotfix(options, deps = {}) {
   if (ciForced) log('CI 환경 감지(process.env.CI 또는 GITHUB_ACTIONS) — write path 영구 비활성(dry-run 강제, --env 값과 무관)')
 
   // 3) 정적 안전 스캔 (apply/rollback SQL 은 이 시점에 이미 순수 함수로 생성 가능)
-  const applySql = buildApplySql(manifest, runId)
-  const rollbackSql = buildRollbackSql(manifest, runId)
+  D.onStep('static-scan')
+  const applySql = D.buildApplySql(manifest, runId)
+  const rollbackSql = D.buildRollbackSql(manifest, runId)
   // QA-V2(2026-09-04): manifest 를 함께 넘겨 narrative-drift 도 이 단계에서
   // 한 번 더 본다(예전엔 인자를 아예 안 넘겨 staticSafetyScan 의 manifest
   // 분기가 이 경로에서는 죽은 코드였다). rollback SQL 쪽은 같은 manifest 라
@@ -503,6 +519,7 @@ export async function runHotfix(options, deps = {}) {
 
   // 4) 프리플라이트(읽기 전용) — apply 모드는 expect_before(적용 전) 값,
   //    rollback-of 모드는 set(적용 후) 값이 현재 DB 상태와 일치하는지 확인
+  D.onStep('preflight')
   let reader
   if (options.reader) {
     reader = options.reader
@@ -535,6 +552,7 @@ export async function runHotfix(options, deps = {}) {
   // tableMissing:true} 로 fail-open 반환한다(마이그레이션 미실행 테이블은
   // 잃을 데이터가 없다는 뜻) — 그 외 에러(예: 컬럼 없음)는 그대로 던져
   // 여기서 baseline-failed 로 STOP 한다(예전엔 미처리 예외로 크래시했다).
+  D.onStep('baseline')
   const baselineCounts = {}
   const baselineTableMissing = []
   try {
@@ -575,6 +593,7 @@ export async function runHotfix(options, deps = {}) {
   // 전부 맞더라도 승인 전에 미리 잡는다 — computeInvariantsDeltaPreview 는
   // 순수 변환이라 이 단계 자체는 DB 에 아무 것도 쓰지 않는다.
   if (typeof D.loadInvariantSnapshot === 'function') {
+    D.onStep('invariants-delta')
     try {
       const snapshotBefore = await D.loadInvariantSnapshot(reader)
       const invariantsDelta = computeInvariantsDeltaPreview(snapshotBefore, manifest)
@@ -603,6 +622,7 @@ export async function runHotfix(options, deps = {}) {
   // expect_before 만 있음) 기존처럼 c.set 을 직접 순회하면 크래시한다.
   // describeChange() (hotfixManifest.mjs, 이 로직의 단일 원천)를 그대로
   // 재사용해 update/insert/delete 전부 안전하게 표시한다(재구현 금지).
+  D.onStep('plan-output')
   log(mode === 'apply' ? '\n=== 변경 계획(before -> after) ===' : '\n=== 되돌리기 계획(rollback-of, 현재 -> 원복) ===')
   for (const c of manifest.changes) {
     log(`  ${c.table}:${c.id}`)
@@ -627,6 +647,24 @@ export async function runHotfix(options, deps = {}) {
   }
   log(`\napply SQL 저장: ${applySqlPath}`)
   log(`rollback SQL 저장: ${rollbackSqlPath}`)
+
+  // 6.5) C3(2026-09-05) — VERIFY==WRITE 구조적 회귀 가드(verifyWriteDriftGuard)
+  // 를 런타임 FAIL-CLOSED 게이트로 배선한다. 예전엔 이 가드가
+  // scripts/testProdHotfix.mjs 의 happy-path 테스트([B2])에서만 호출됐고,
+  // runHotfix() 흐름 어디에서도 실행되지 않았다 — 즉 실제 프로덕션 실행에는
+  // 전혀 영향을 주지 못하는 죽은 가드였다. 여기서 방금 저장한 applySql/
+  // rollbackSql 그 자체(D.buildApplySql/D.buildRollbackSql 의 실제 출력)를
+  // manifest.changes 의 expect_before/set 과 재대조한다 — 승인 게이트(8)와
+  // dry-run STOP(7) 이전이라, 걸리면 executor.run() 은 절대 호출되지 않는다.
+  D.onStep('write-drift-guard')
+  const writeDriftGuard = verifyWriteDriftGuard(manifest, applySql, rollbackSql)
+  report.writeDriftGuard = writeDriftGuard
+  if (!writeDriftGuard.ok) {
+    logErr('FAIL-CLOSED — VERIFY==WRITE 드리프트 가드 위반(생성된 SQL 이 manifest 와 구조적으로 다름):')
+    for (const m of writeDriftGuard.mismatches) logErr(`  ${m.table ?? '(전체)'}:${m.id ?? ''} ${m.reason} 기대=${JSON.stringify(m.expected ?? '')} 실제=${JSON.stringify(m.actual ?? '')}`)
+    return finish('blocked-write-drift', 1, { writeDriftGuard, dbWriteCount: 0 })
+  }
+  log('VERIFY==WRITE 드리프트 가드 PASS — 생성된 SQL 이 manifest 와 구조적으로 일치')
   log('\nREADY TO APPLY')
 
   // 7) dry-run / CI / 토큰 없음 → STOP (apply·rollback-of 모드 공통)
@@ -637,10 +675,12 @@ export async function runHotfix(options, deps = {}) {
     if (ciForced) reasons.push('CI 환경')
     if (noToken) reasons.push('SUPABASE_ACCESS_TOKEN 미설정')
     log(`\nSTOP(정상) — write path 비활성: ${reasons.join(', ')}`)
+    D.onStep('dry-run-stop')
     return finish('ready-to-apply', 0, { stopReasons: reasons, dbWriteCount: 0 })
   }
 
   // 8) 대화형 승인 게이트 — 정확히 `APPLY <runId>` 만 허용, 재시도 없음
+  D.onStep('approval-gate')
   if (!D.isTTY()) {
     log('\nSTOP — 비대화형(TTY 아님) 환경에서는 승인을 받을 수 없습니다. --dry-run 으로 계획만 확인하세요.')
     return finish('not-interactive', 1, { dbWriteCount: 0 })
@@ -652,6 +692,7 @@ export async function runHotfix(options, deps = {}) {
   }
 
   // 8.5) apply 직전 manifest 파일 재해시 — 승인 이후 파일이 바뀌었으면 중단
+  D.onStep('manifest-reverify')
   if (options.manifestPath) {
     let currentRaw
     try {
@@ -667,6 +708,7 @@ export async function runHotfix(options, deps = {}) {
   }
 
   // 9) apply(forward SQL)
+  D.onStep('apply')
   const executor = options.executor || D.createExecutor({
     kind: options.executorKind || 'management-api',
     projectRef: manifest.project_ref,
@@ -683,6 +725,7 @@ export async function runHotfix(options, deps = {}) {
 
   // 10) postflight — apply 모드는 set(적용 후) 값, rollback-of 모드는
   //     expect_before(원복) 값이 실제로 반영됐는지 확인
+  D.onStep('postflight')
   const forwardPostflightPlan = mode === 'apply' ? postflightPlanCore : revertVerifyPlan
   const postMismatches = await readPlanMismatches(reader, forwardPostflightPlan)
 
@@ -710,6 +753,7 @@ export async function runHotfix(options, deps = {}) {
 
   let healthResult = { ok: true, output: '' }
   if (!postMismatches.length) {
+    D.onStep('health-check')
     healthResult = D.runHealthCheck()
   }
 

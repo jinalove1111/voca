@@ -235,7 +235,13 @@ npm run prod:hotfix -- <manifest.json> --env production --dry-run
 5. `apply SQL 저장: <경로>`, `rollback SQL 저장: <경로>` — 각각
    `<runId>.apply.sql` / `<runId>.rollback.sql` 로
    `scripts/.tmp/prod-reports/`(기본)에 저장됩니다.
-6. `READY TO APPLY` 다음에 `STOP(정상) — write path 비활성: --dry-run` 처럼
+6. `VERIFY==WRITE 드리프트 가드 PASS — 생성된 SQL 이 manifest 와 구조적으로
+   일치`(2026-09-05 추가) — 방금 저장한 apply/rollback SQL 을 다시 읽어
+   manifest 의 `expect_before`/`set`(WHERE/SET 절, 대상 row id, 변경 건수)과
+   구조적으로 완전히 같은지 재확인한 결과. 여기서 어긋나면 `STATUS:
+   blocked-write-drift`로 즉시 STOP 합니다(승인 게이트보다 먼저 — 아래
+   표 참고).
+7. `READY TO APPLY` 다음에 `STOP(정상) — write path 비활성: --dry-run` 처럼
    STOP 사유가 나오면 정상입니다(승인 전이므로 당연히 멈춥니다).
 
 **STOP 사유로 나올 수 있는 실제 status 값(모두 fail-closed):**
@@ -248,6 +254,7 @@ npm run prod:hotfix -- <manifest.json> --env production --dry-run
 | `env-mismatch` | 로컬 `.env`의 project ref 와 manifest의 `project_ref` 불일치(exit 2) | 잘못된 환경에서 실행(스테이징 manifest를 프로덕션 env로 등) |
 | `unsafe-sql` | 생성된 SQL에 파괴적 키워드(DROP/TRUNCATE/DELETE/INSERT/ALTER/GRANT/REVOKE/CREATE) 발견 | 이 하네스에서는 발생하면 안 됨(버그 신호) |
 | `preflight-mismatch` | 현재 DB 상태가 manifest의 `expect_before`와 다름 | **이미 적용됐거나, 그 사이 다른 변경이 있었음** — 아래 FAQ 참고 |
+| `blocked-write-drift` | (2026-09-05 추가) 생성된 apply/rollback SQL이 manifest의 `expect_before`/`set`(SET 값, 대상 row id, 변경 건수 중 하나 이상)과 구조적으로 다름 | **이 하네스의 SQL 생성 경로에 버그가 있다는 신호(버그 신호)** — 정상 운영에서는 발생하면 안 됨. `report.writeDriftGuard.mismatches`에 어떤 change가 무엇이 어긋났는지 기록됨 |
 | `ready-to-apply` | 모든 확인 통과, 승인만 하면 적용 가능(exit 0) | `--dry-run`/CI/토큰없음이면 여기서 정상 STOP |
 | `not-interactive` | 비대화형(TTY 아님) 환경이라 승인을 받을 수 없음 | 스크립트/파이프에서 실행 시도 |
 | `not-approved` | 승인 문구가 정확히 일치하지 않음 | `APPLY <runId>` 오타 |
