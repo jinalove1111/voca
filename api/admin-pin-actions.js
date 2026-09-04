@@ -562,7 +562,23 @@ export default async function handler(req, res) {
       }
     }
 
-    res.status(200).json({ ok: true, studentId })
+    // 2026-09-04 P1 UX-safety — 교재/유닛 미배정 상태로 조용히 성공만
+    // 반환하던 문제 대응(2026-09-03 Pre-Middle 사고: health:students
+    // UNIT_INVALID FAIL -> Release Gate 차단). 쓰기 동작은 위와 완전히
+    // 동일(규칙 9 하위호환 유지) — 이미 확정된 resolvedTextbookId/unitId를
+    // 그대로 읽어 응답에만 신호를 추가한다. 관리자가 즉시 알아채도록
+    // 하는 게 목적이라, "학생 생성 자체 성공"(ok:true)과는 분리한다.
+    const warnings = []
+    if (!resolvedTextbookId) warnings.push('no_textbook')
+    else if (!unitId) warnings.push('no_unit')
+    const responseBody = { ok: true, studentId }
+    if (warnings.length > 0) {
+      responseBody.warnings = warnings
+      responseBody.message = warnings.includes('no_textbook')
+        ? '교재가 배정되지 않아 이 학생은 아직 학습을 시작할 수 없어요 — 교재 배정이 필요합니다.'
+        : '유닛이 배정되지 않아 이 학생은 아직 학습을 시작할 수 없어요 — 교재 배정에서 유닛을 확인하세요.'
+    }
+    res.status(200).json(responseBody)
     return
   }
 

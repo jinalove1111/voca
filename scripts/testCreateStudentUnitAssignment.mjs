@@ -319,6 +319,23 @@ console.log('\n10. UI 소비 계약 정적 검사 — 생성 폼이 교과서를
   check('생성 폼에 교과서 선택 UI가 있다(getClassTextbooks 사용)', /getClassTextbooks/.test(uiCodeOnly))
 }
 
+console.log('\n11. [2026-09-04 P1] UI 소비 계약 정적 검사 — 생성 성공 후 warnings 경고 배너 + 제출 전 힌트 (StudentDirectory.jsx)')
+{
+  // testAdminUnitEdit.mjs/testGhostUnitFiltering.mjs와 동일한 정적 검사
+  // 방식(이 컴포넌트는 wordLibrary/sessionStorage 등 SSR 스텁 비용이 큰
+  // 대형 컴포넌트라 이 저장소의 기존 관례가 실제 렌더 대신 소스 정적
+  // 검사다) — response.warnings/message를 successInfo에 그대로 담아
+  // "교재/유닛 미배정" 경고 배너를, createTextbookOptions.length===0일 때
+  // 제출 전 힌트를 렌더하는지 확인한다.
+  const uiSrc = fs.readFileSync(path.resolve('src/components/admin/StudentDirectory.jsx'), 'utf8')
+  check('create_student 응답 data.warnings를 successInfo에 담는다', /warnings:\s*Array\.isArray\(data\.warnings\)/.test(uiSrc))
+  check('경고 배너가 createSuccess.warnings.length > 0로 게이팅된다', /createSuccess\.warnings\.length > 0/.test(uiSrc))
+  check('경고 배너 문구(교재/유닛 미배정 안내)가 있다', /교재\/유닛이 배정되지 않아 이 학생은 아직 학습을 시작할 수 없어요/.test(uiSrc))
+  check('경고 배너에 교재 배정 열기 버튼(revealExistingStudent forTextbook 재사용)이 있다', /revealExistingStudent\(\{ id: createSuccess\.id, classId: createSuccess\.classId \}, \{ forTextbook: true \}\)/.test(uiSrc))
+  check('제출 전 힌트가 createTextbookOptions.length === 0로 게이팅된다', /createTextbookOptions\.length === 0/.test(uiSrc))
+  check('제출 전 힌트 문구(반에 연결된 교재 없음 안내)가 있다', /이 반에는 연결된 교재가 없어요/.test(uiSrc))
+}
+
 console.log('\n' + '='.repeat(60))
 console.log(`총 단언 ${asserted}개 중 실패 ${failures}개`)
 if (failures > 0) { console.log('FAILED'); process.exit(1) }
