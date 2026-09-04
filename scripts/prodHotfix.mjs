@@ -53,6 +53,8 @@ import {
   redactSecrets,
   describeChange,
   computeInvariantsDeltaPreview,
+  lintManifestNarratives,
+  refreshExpectBefore,
 } from './lib/hotfixManifest.mjs'
 import { createDryRunExecutor, createManagementApiExecutor } from './lib/sqlExecutor.mjs'
 
@@ -301,6 +303,29 @@ function sha256Text(text) {
   return crypto.createHash('sha256').update(String(text ?? '')).digest('hex')
 }
 
+// C2(2026-09-04) — runHotfix() 의 status 문자열(수십 종, apply-failed/
+// preflight-mismatch/blocked-invariant/ready-to-apply/...)을 사람/자동화가
+// 공통으로 볼 수 있는 4값 enum 으로 압축한다. 순수 함수(입력만으로 결정) —
+// 어디서도 network/IO 를 하지 않는다.
+// - PASS: dry-run/plan 모드에서 모든 게이트를 통과(ready-to-apply)했거나,
+//   실제 적용까지 성공(applied)했을 때(경고성 invariant WARN 이 없을 때).
+// - WARN: PASS 와 같은 상태지만 invariants delta 에 new_warn 이 있을 때.
+// - BLOCKED_NEEDS_APPROVAL: dry-run 이 아닌 실제 적용 시도인데 토큰
+//   없음/CI 라서 승인 게이트 이전에 멈췄을 때(status 자체는 ready-to-apply
+//   와 같지만 "계획 확인"이 아니라 "적용 시도"라는 의도가 다르다).
+// - FAIL: 그 외 모든 차단/실패 상태(전부 fail-closed 기본값).
+export function computeStandardStatus({ status, dryRun, stopReasons, hasNewWarn }) {
+  if (status === 'ready-to-apply') {
+    const reasons = stopReasons || []
+    if (!dryRun && (reasons.includes('SUPABASE_ACCESS_TOKEN 미설정') || reasons.includes('CI 환경'))) {
+      return 'BLOCKED_NEEDS_APPROVAL'
+    }
+    return hasNewWarn ? 'WARN' : 'PASS'
+  }
+  if (status === 'applied') return hasNewWarn ? 'WARN' : 'PASS'
+  return 'FAIL'
+}
+
 function writeReportFile(D, reportDir, runId, report, secretEnv) {
   D.fs.mkdirSync(reportDir, { recursive: true })
   const p = path.join(reportDir, `${runId}.hotfix.json`)
@@ -353,9 +378,16 @@ export async function runHotfix(options, deps = {}) {
     report.status = status
     report.finishedAt = D.now().toISOString()
     Object.assign(report, extra)
+    report.standardStatus = computeStandardStatus({
+      status,
+      dryRun: !!options.dryRun,
+      stopReasons: extra.stopReasons || report.stopReasons || [],
+      hasNewWarn: ((extra.invariantsDelta || report.invariantsDelta)?.new_warn?.length || 0) > 0,
+    })
     const reportPath = writeReportFile(D, reportDir, runId, report, secretEnv)
     report.reportPath = reportPath
     log(`\nSTATUS: ${status}`)
+    log(`STANDARD_STATUS: ${report.standardStatus}`)
     log(`DB WRITE: ${extra.dbWriteCount ?? report.dbWriteCount ?? 0}`)
     if (options.jsonOutput) {
       console.log(redactSecrets(redactSecrets(JSON.stringify(report), secretEnv), process.env))
@@ -694,6 +726,176 @@ export async function runHotfix(options, deps = {}) {
 
   log('\npostflight PASS, health:students PASS')
   return finish('applied', 0, { dbWriteCount })
+}
+
+// ── C1(2026-09-04) — prod:plan 공유 로직 ──────────────────────────────────
+// scripts/prodPlan.mjs(READ-ONLY CLI)가 호출하는 단일 진입점. runHotfix()
+// 를 항상 dryRun:true 로 호출해 게이트 판정(검증/정적스캔/프리플라이트/
+// invariants delta/승인 전 STOP)을 전부 그대로 재사용한다(로직 복제 없음) —
+// 이 함수는 그 위에 "계획을 사람이 읽기 좋게" 만드는 표시 전용 로직만
+// 더한다(위험도 산정, 영향받는 학생/교재/유닛 수 집계, 이름 해석, drift,
+// apply_eligibility 4값 매핑).
+function computeRiskLevel(manifest) {
+  const changes = manifest.changes || []
+  const rowCount = changes.length
+  const hasDelete = changes.some((c) => (c.op || 'update') === 'delete')
+  if (hasDelete || rowCount > 50) return 'HIGH'
+  const hasPrimaryFlip = changes.some((c) => {
+    const op = c.op || 'update'
+    if (op === 'update') return 'is_primary' in (c.set || {}) && c.set.is_primary !== c.expect_before?.is_primary
+    if (op === 'insert') return c.fields?.is_primary === true
+    return false
+  })
+  if (hasPrimaryFlip || rowCount > 10) return 'MEDIUM'
+  return 'LOW'
+}
+
+function summarizeAffected(manifest) {
+  const studentIds = new Set(manifest.affected_students || [])
+  const textbookIds = new Set()
+  const unitIds = new Set()
+  for (const c of manifest.changes || []) {
+    if (c.table !== 'student_class_assignments') continue
+    const tb = c.fields?.textbook_id ?? c.expect_before?.textbook_id ?? c.set?.textbook_id
+    if (tb) textbookIds.add(tb)
+    for (const uid of [c.fields?.current_unit_id, c.expect_before?.current_unit_id, c.set?.current_unit_id]) {
+      if (uid) unitIds.add(uid)
+    }
+  }
+  for (const r of manifest.reference_rows_must_exist || []) {
+    if (r.table === 'units') unitIds.add(r.id)
+    if (r.table === 'textbooks') textbookIds.add(r.id)
+  }
+  return { students: studentIds.size, textbooks: textbookIds.size, units: unitIds.size }
+}
+
+function shortId(id) {
+  return typeof id === 'string' && id.length > 8 ? `${id.slice(0, 8)}…` : String(id ?? '')
+}
+
+function resolveEntityName(namedSnapshot, table, id) {
+  if (!namedSnapshot || !id) return null
+  const map = { classes: namedSnapshot.classes, textbooks: namedSnapshot.textbooks, units: namedSnapshot.units }[table]
+  const row = (map || []).find((r) => r.id === id)
+  return row?.name ?? null
+}
+
+// preflight 항목 하나를 사람이 읽기 좋게(엔티티 라벨 마스킹) 표시한다.
+// 학생 id 는 항상 shortId 로 줄이고(개인 식별 최소화), class/textbook/unit
+// id 는 namedSnapshot 에서 이름을 찾아 함께 보여준다(못 찾으면 shortId 로
+// 폴백). 실제 값 비교(match)는 hotfixResult.report.mismatches 를 그대로
+// 재사용한다(재조회 없음 — 이미 runHotfix 프리플라이트가 한 번 읽은 결과).
+function describePreflightRows(manifest, mismatches, namedSnapshot) {
+  const mismatchByKey = new Map()
+  for (const m of mismatches || []) {
+    const key = `${m.table}:${m.id}:${m.column ?? ''}`
+    mismatchByKey.set(key, m)
+  }
+  const rows = []
+  for (const c of manifest.changes || []) {
+    const op = c.op || 'update'
+    const expect = op === 'insert' ? null : c.expect_before
+    const label = c.table === 'student_class_assignments'
+      ? `SCA ${shortId(c.id)} (학생 ${shortId(expect?.student_id ?? c.fields?.student_id)}, `
+        + `교재 ${resolveEntityName(namedSnapshot, 'textbooks', expect?.textbook_id ?? c.fields?.textbook_id) || shortId(expect?.textbook_id ?? c.fields?.textbook_id)})`
+      : `${c.table} ${shortId(c.id)}`
+    const rowMismatch = (mismatches || []).find((m) => m.table === c.table && m.id === c.id && !m.column)
+    const colMismatches = (expect ? Object.keys(expect) : []).filter((col) => mismatchByKey.has(`${c.table}:${c.id}:${col}`))
+    rows.push({
+      op, label, expect,
+      match: !rowMismatch && colMismatches.length === 0,
+      mismatchReason: rowMismatch?.reason || (colMismatches.length ? `컬럼 불일치: ${colMismatches.join(',')}` : null),
+    })
+  }
+  return rows
+}
+
+/**
+ * @param {object} options runHotfix() 와 같은 옵션(manifestPath 또는 manifest,
+ *   envFlag, reader/fixtureReaderPath, reportDir 등) + refreshExpect(boolean)
+ * @param {object} [deps]
+ * @returns {Promise<{plan:object, hotfixResult:object}>}
+ */
+export async function runPlan(options, deps = {}) {
+  const D = { ...defaultDeps, ...deps }
+  const env = D.loadEnv()
+
+  let manifest = options.manifest
+  if (!manifest) {
+    if (!options.manifestPath) throw new Error('runPlan: manifestPath 또는 manifest 옵션이 필요합니다')
+    manifest = JSON.parse(D.fs.readFileSync(options.manifestPath, 'utf8'))
+  }
+
+  const buildReader = () => {
+    if (options.reader) return options.reader
+    if (options.fixtureReaderPath) {
+      return D.createFixtureReader(JSON.parse(D.fs.readFileSync(options.fixtureReaderPath, 'utf8')))
+    }
+    return D.createLiveReader(env.url, env.anonKey)
+  }
+
+  // (선택) drift refresh — 원본 manifest 파일은 절대 건드리지 않고
+  // <manifest>.refreshed.json 에만 저장한다(B3, 순수 변환 + 이 함수의 IO만 추가).
+  let refreshInfo = null
+  if (options.refreshExpect) {
+    try {
+      const { manifest: refreshed, drift } = await refreshExpectBefore(manifest, buildReader())
+      refreshInfo = { drift }
+      if (options.manifestPath) {
+        const outPath = options.manifestPath.replace(/\.json$/i, '.refreshed.json')
+        D.fs.writeFileSync(outPath, `${JSON.stringify(refreshed, null, 2)}\n`, 'utf8')
+        refreshInfo.outPath = outPath
+      }
+    } catch (err) {
+      refreshInfo = { error: err.message, drift: [] }
+    }
+  }
+
+  const lintFindings = lintManifestNarratives(manifest)
+
+  // 핵심 게이트는 runHotfix() 를 dry-run + invariants delta 켜서 그대로
+  // 재사용한다(READ-ONLY 는 dryRun:true 가 구조적으로 보장 — 승인 게이트
+  // 진입 전에 항상 STOP).
+  const hotfixResult = await runHotfix(
+    { ...options, manifest, manifestPath: undefined, dryRun: true },
+    { ...D, loadInvariantSnapshot: D.loadInvariantSnapshot || buildInvariantSnapshotFromReader },
+  )
+
+  // 이름 해석용 스냅샷 — 실패해도 plan 자체는 계속(엔티티 라벨이 shortId 로 폴백).
+  let namedSnapshot = null
+  try {
+    namedSnapshot = await buildInvariantSnapshotFromReader(buildReader())
+  } catch { /* 이름 해석 실패는 무시 — plan 은 이미 hotfixResult 로 판정 완료 */ }
+
+  const lintOk = lintFindings.length === 0
+  let apply_eligibility
+  if (!lintOk) apply_eligibility = 'BLOCKED_LINT'
+  else if (hotfixResult.status === 'preflight-mismatch') apply_eligibility = 'BLOCKED_PREFLIGHT'
+  else if (hotfixResult.status === 'blocked-invariant') apply_eligibility = 'BLOCKED_INVARIANT'
+  else if (hotfixResult.status === 'ready-to-apply') apply_eligibility = 'READY'
+  else apply_eligibility = 'BLOCKED_NEEDS_APPROVAL'
+
+  const plan = {
+    runId: hotfixResult.report.runId,
+    manifestId: manifest.id,
+    title: manifest.title || null,
+    projectRef: manifest.project_ref,
+    lint: { ok: lintOk, findings: lintFindings },
+    status: hotfixResult.status,
+    preflight: describePreflightRows(manifest, hotfixResult.report.mismatches, namedSnapshot),
+    affected: summarizeAffected(manifest),
+    learningBaselineTables: manifest.learning_baseline_tables || [],
+    baseline: hotfixResult.report.baseline || null,
+    risk: computeRiskLevel(manifest),
+    invariantsDelta: hotfixResult.report.invariantsDelta || null,
+    drift: refreshInfo?.drift || [],
+    refreshedManifestPath: refreshInfo?.outPath || null,
+    applySqlPath: hotfixResult.report.applySqlPath || null,
+    rollbackSqlPath: hotfixResult.report.rollbackSqlPath || null,
+    apply_eligibility,
+    dbWriteCount: 0,
+  }
+  return { plan, hotfixResult }
 }
 
 // ── CLI 진입점 ─────────────────────────────────────────────────────────

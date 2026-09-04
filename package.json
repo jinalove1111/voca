@@ -102,8 +102,11 @@
     "verify:double-events": "node scripts/testDoubleEvents.mjs",
     "prod:check": "node scripts/prodCheck.mjs",
     "prod:hotfix": "node scripts/prodHotfix.mjs",
+    "prod:plan": "node scripts/prodPlan.mjs",
+    "prod:apply": "node scripts/prodHotfix.mjs --env production",
     "verify:prod-check": "node scripts/testProdCheck.mjs",
     "verify:prod-hotfix": "node scripts/testProdHotfix.mjs",
+    "verify:prod-plan": "node scripts/testProdPlan.mjs",
     "watch:claude-stall": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/watchClaudeStall.ps1"
   },
   "dependencies": {
