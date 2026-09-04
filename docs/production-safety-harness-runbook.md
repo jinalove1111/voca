@@ -516,7 +516,7 @@ apply/rollback SQL 파일 저장 → **TTY 에서 `APPLY <runId>` 를 정확히
 적용된 것을 나중에 되돌리려면 손으로 반대 SQL을 작성하지 말고 2-(d)절의
 `--rollback-of <이전 실행의 report.json>` 을 쓰세요.
 
-> 명령 체계 요약: (READ-ONLY 무결성) → (READ-ONLY 계획·drift·위험도·자격) → (artifact 생성 + 승인 게이트, 실제 write는 TTY  + token 필요). 보고서는 (READ-ONLY, §8).
+> 명령 체계 요약: `prod:check`(READ-ONLY 무결성) → `prod:plan -- <manifest>`(READ-ONLY 계획·drift·위험도·자격) → `prod:apply -- <manifest>`(artifact 생성 + 승인 게이트, 실제 write는 TTY `APPLY <runId>` + token 필요). 보고서는 `prod:report`(READ-ONLY, §8).
 
 ## 8. 운영 자동검증 사용법 (2026-09-04 추가) — `prod:check` → `prod:report` → 승인 대기열
 
