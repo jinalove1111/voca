@@ -231,6 +231,35 @@ console.log('\n=== [C1] runPlan — 항상 DB WRITE 0(dryRun 강제, 승인 게�
   check('hotfixResult.exitCode = 0', hotfixResult.exitCode === 0)
 }
 
+console.log('\n=== [QA4] runPlan — invariants 스냅샷 조회 실패 → BLOCKED_INVARIANT(계산 실패 = 적용 차단) ===')
+{
+  // 수정 전 실측: 스냅샷 조회가 실패해도 fail-open 으로 넘어가 ready-to-apply
+  // → apply_eligibility=READY 가 나왔다(검증 못 한 계획이 "적용 가능"으로 표시).
+  const snap = buildBaseSnapshot()
+  const base = makePlanReader(snap)
+  const reader = {
+    ...base,
+    async selectAllRows(table) {
+      if (table === 'units') throw new Error('READ_ERROR units selectAll (fixture)')
+      return base.selectAllRows(table)
+    },
+  }
+  const { plan } = await runPlan(
+    { manifest: buildOkManifest(), envFlag: 'production', reader, reportDir: REPORT_DIR, runId: 'RUN-PLAN-INVFAIL-1' },
+    { loadEnv: () => envOk() },
+  )
+  check('status = blocked-invariant-unavailable', plan.status === 'blocked-invariant-unavailable', plan.status)
+  check('apply_eligibility = BLOCKED_INVARIANT', plan.apply_eligibility === 'BLOCKED_INVARIANT', plan.apply_eligibility)
+  check('invariantsDelta 는 null(계산 실패)', plan.invariantsDelta === null)
+}
+
+console.log('\n=== [QA4] prodPlan.mjs 렌더 문구 — 계산 실패는 "적용 차단" 으로 표기 ===')
+{
+  const src = fs.readFileSync(path.join(ROOT, 'scripts', 'prodPlan.mjs'), 'utf8')
+  check('마크다운에 "(계산 실패 — 적용 차단)" 문구 사용', src.includes('(계산 실패 — 적용 차단)'))
+  check('오해를 부르는 "(계산 안 됨" 문구는 제거됨', !src.includes('(계산 안 됨'))
+}
+
 console.log(`\n=== summary ===\nPASS ${pass} / FAIL ${fail}`)
 if (fail > 0) {
   console.log('FAIL')

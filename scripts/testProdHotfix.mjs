@@ -1607,6 +1607,221 @@ console.log('\n=== [C2] runHotfix — report.standardStatus + STANDARD_STATUS �
   check('토큰 없는 실제 적용 시도는 report.standardStatus = BLOCKED_NEEDS_APPROVAL', res.report.standardStatus === 'BLOCKED_NEEDS_APPROVAL', res.report.standardStatus)
 }
 
+// ── QA-V2(2026-09-04): V2 보안 리뷰 회귀 7종(FAIL-first) ──────────────────
+// 아래 섹션들은 read-only 보안 리뷰가 지적한 7개 항목을 회귀 테스트로 고정한다.
+// CLAUDE.md 규칙 15에 따라 수정 전 코드에서 먼저 실행해 실제로 FAIL 하는 것을
+// 확인한 뒤(각 섹션 주석의 "수정 전 실측" 참고) 구현을 넣었다.
+
+console.log('\n=== [QA1] manifest 문자열 값 $/%/역슬래시/제어문자 차단 + dollar-quote 태그화 ===')
+{
+  // 수정 전 실측: INJECTION_CHAR_RE 가 ;/--//* 만 봐서 아래 값들이 전부 통과했다.
+  const stealthDollar = clone(BASE_MANIFEST)
+  stealthDollar.changes[1].set.unit_name = 'A$$ x'
+  check('set 값의 $$ 는 scanManifestStringValues 가 검출',
+    scanManifestStringValues(stealthDollar).some((v) => v.value === 'A$$ x'))
+  check('set 값에 $$ 가 있으면 invalid-manifest', !validateManifest(stealthDollar).valid)
+
+  const pctId = clone(BASE_MANIFEST)
+  pctId.id = 'test%hotfix-001'
+  check('manifest.id 의 % 는 거부(raise notice 포맷 탈출 방지)', !validateManifest(pctId).valid)
+
+  const backslash = clone(BASE_MANIFEST)
+  backslash.title = 'back\\slash 제목'
+  check('문자열 값의 역슬래시 거부', !validateManifest(backslash).valid)
+
+  const control = clone(BASE_MANIFEST)
+  control.notes = ['a', String.fromCharCode(7), 'b'].join('')
+  check('문자열 값의 제어문자 거부', !validateManifest(control).valid)
+
+  const expectPct = clone(BASE_MANIFEST)
+  expectPct.must_not_change[0].expect.unit_name = 'Unit%2'
+  check('must_not_change.expect 값의 % 도 거부', !validateManifest(expectPct).valid)
+
+  const refDollar = clone(BASE_MANIFEST)
+  refDollar.reference_rows_must_exist[0].expect.name = 'Unit$5'
+  check('reference_rows_must_exist.expect 값의 $ 도 거부', !validateManifest(refDollar).valid)
+}
+{
+  const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+  const calls = []
+  const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
+  const stealth = clone(BASE_MANIFEST)
+  stealth.changes[1].set.unit_name = 'A$$ x'
+  const res = await runHotfix(
+    { manifest: stealth, envFlag: 'production', runId: 'RUN-QA1-STEALTH-1', reportDir: REPORT_DIR, reader, executor, dryRun: true },
+    { loadEnv: () => envOk() },
+  )
+  check('stealth manifest 는 SQL 생성 이전에 invalid-manifest 로 STOP', res.status === 'invalid-manifest', res.status)
+  check('stealth manifest 는 apply SQL 파일을 만들지 않음', !res.report.applySqlPath)
+  check('stealth manifest 는 executor 호출 0', calls.length === 0)
+}
+{
+  const runId = 'RUNID-TEST-1'
+  const sql = buildApplySql(BASE_MANIFEST, runId)
+  check('생성 SQL 은 태그 없는 $$ 를 쓰지 않음', !sql.includes('$$'), sql.split('\n').find((l) => l.includes('$$')) || '')
+  check('생성 SQL 은 runId 기반 태그 인용 사용(do)', sql.includes('do $hotfix_RUNIDTEST1$'))
+  check('생성 SQL 은 runId 기반 태그 인용 사용(end)', sql.includes('end $hotfix_RUNIDTEST1$;'))
+  check('rollback SQL 도 같은 태그 인용 사용', buildRollbackSql(BASE_MANIFEST, runId).includes('$hotfix_RUNIDTEST1$'))
+
+  let threw = false
+  try { buildApplySql(BASE_MANIFEST, 'bad$id') } catch { threw = true }
+  check('runId 이 영숫자/하이픈 밖 문자를 포함하면 SQL 생성 자체가 throw(fail-closed)', threw)
+
+  const pctManifest = clone(BASE_MANIFEST)
+  pctManifest.id = 'pct%id' // validateManifest 는 거부하지만, 생성기 자체의 이스케이프를 직접 확인
+  const pctSql = buildApplySql(pctManifest, runId)
+  check('raise notice 포맷에 실린 데이터의 % 는 %% 로 이스케이프', pctSql.includes('pct%%id'))
+  check('의도된 자리표시자(% rows)는 그대로 유지', /raise notice '[^']*OK: % rows', v_total;/.test(pctSql))
+}
+
+console.log('\n=== [QA2] must_not_change/reference_rows_must_exist 의 expect 값 타입 검사 ===')
+{
+  // 수정 전 실측: expect 는 "object 인지"만 확인하고 값 타입은 전혀 안 봤다.
+  const badMnc = clone(BASE_MANIFEST)
+  badMnc.must_not_change[0].expect.current_unit_id = 'NOT-A-UUID'
+  check('must_not_change.expect 의 uuid 컬럼이 uuid 아니면 거부', !validateManifest(badMnc).valid)
+
+  const nullMnc = clone(BASE_MANIFEST)
+  nullMnc.must_not_change[0].expect.current_unit_id = null
+  check('must_not_change.expect 의 current_unit_id=null 은 허용(uuid_or_null)',
+    validateManifest(nullMnc).valid, JSON.stringify(validateManifest(nullMnc).errors))
+
+  const nullClassId = clone(BASE_MANIFEST)
+  nullClassId.must_not_change.push({ table: 'students', id: crypto.randomUUID(), expect: { class_id: null } })
+  check('must_not_change.expect 의 class_id=null 은 거부(uuid 전용 컬럼)', !validateManifest(nullClassId).valid)
+
+  const badBool = clone(BASE_MANIFEST)
+  badBool.must_not_change.push({ table: 'student_class_assignments', id: crypto.randomUUID(), expect: { is_primary: 'true' } })
+  check('must_not_change.expect 의 boolean 컬럼이 문자열이면 거부', !validateManifest(badBool).valid)
+
+  const badRef = clone(BASE_MANIFEST)
+  badRef.reference_rows_must_exist[0].expect.textbook_id = 'nope'
+  check('reference_rows_must_exist.expect 의 textbook_id 가 uuid 아니면 거부', !validateManifest(badRef).valid)
+
+  const objRef = clone(BASE_MANIFEST)
+  objRef.reference_rows_must_exist[0].expect.name = { nested: 'x' }
+  check('expect 값이 스칼라(string/number/boolean/null)가 아니면 거부', !validateManifest(objRef).valid)
+
+  check('정상 BASE_MANIFEST 의 expect 들은 그대로 통과', validateManifest(BASE_MANIFEST).valid,
+    JSON.stringify(validateManifest(BASE_MANIFEST).errors))
+}
+
+console.log('\n=== [QA3] 서술 lint 오탐 — 여러 change 가 같은 before 를 공유하는 경우(유령 유닛 N행) ===')
+{
+  // 수정 전 실측: title 이 changes[0] 과 완전히 일치해도, 같은 before 값을 쓰는
+  // changes[2](다른 after)와 부분 일치한다는 이유로 FAIL 로 잡혔다(오탐).
+  const ghostTitle = clone(BASE_MANIFEST)
+  ghostTitle.title = "핫픽스: current_unit_id '113ee184-c5c7-4ee5-8b6c-99d547a06525' -> '4ce41359-6424-4b5e-933d-479db6951586'"
+  check('한 change 와 완전히 일치하는 서술은 다른 change 때문에 FAIL 되지 않음(오탐 0)',
+    lintManifestNarratives(ghostTitle).length === 0, JSON.stringify(lintManifestNarratives(ghostTitle)))
+  check('오탐 없는 서술은 validateManifest 도 통과', validateManifest(ghostTitle).valid)
+
+  const contradiction = clone(BASE_MANIFEST)
+  contradiction.title = "핫픽스: current_unit_id '113ee184-c5c7-4ee5-8b6c-99d547a06525' -> '00000000-0000-4000-8000-000000000000'"
+  check('어느 change 와도 일치하지 않는 서술은 여전히 FAIL(모순 탐지 유지)',
+    lintManifestNarratives(contradiction).length > 0)
+
+  const inChange = clone(BASE_MANIFEST)
+  inChange.changes[2]._comment = "current_unit_id '113ee184-c5c7-4ee5-8b6c-99d547a06525' -> '4ce41359-6424-4b5e-933d-479db6951586'"
+  check('changes[i] 안의 서술은 그 change 하고만 대조(다른 change 와 맞아도 FAIL)',
+    lintManifestNarratives(inChange).length > 0, JSON.stringify(lintManifestNarratives(inChange)))
+}
+
+console.log('\n=== [QA4] invariants delta 계산 실패 → fail-closed(blocked-invariant-unavailable) ===')
+{
+  // 수정 전 실측: 로더/평가 예외를 catch 해 "fail-open, 정보성" 으로 넘기고
+  // ready-to-apply 로 진행했다(=검증되지 않은 채 승인 대상이 됨).
+  const base = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+  const reader = {
+    ...base,
+    async selectAllRows(table, columns) {
+      if (table === 'units') throw new Error('READ_ERROR units selectAll (fixture)')
+      return base.selectAllRows(table, columns)
+    },
+  }
+  const calls = []
+  const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
+  const res = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-QA4-INV-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+    {
+      loadEnv: () => envOk(),
+      isTTY: () => true,
+      approve: async (rid) => `APPLY ${rid}`,
+      runHealthCheck: () => ({ ok: true, output: '' }),
+      loadInvariantSnapshot: async (r) => {
+        await r.selectAllRows('units', ['id'])
+        return { students: [], assignments: [] }
+      },
+    },
+  )
+  check('스냅샷 조회 실패 시 status = blocked-invariant-unavailable', res.status === 'blocked-invariant-unavailable', res.status)
+  check('계산 실패는 절대 ready-to-apply 가 아님', res.status !== 'ready-to-apply')
+  check('계산 실패 시 STANDARD_STATUS = FAIL', res.report.standardStatus === 'FAIL', res.report.standardStatus)
+  check('계산 실패 시 exitCode != 0', res.exitCode !== 0)
+  check('계산 실패 시 executor 호출 0', calls.length === 0)
+  check('computeStandardStatus(blocked-invariant-unavailable) = FAIL',
+    computeStandardStatus({ status: 'blocked-invariant-unavailable', dryRun: true, stopReasons: [], hasNewWarn: false }) === 'FAIL')
+}
+
+console.log('\n=== [QA5] delete rollback 의 created_at 복원 + insert (student_id,class_id) 선행조건 ===')
+{
+  // 수정 전 실측: op=delete 의 expect_before 는 5개 컬럼만 요구했고, rollback
+  // insert 는 created_at 없이 행을 다시 넣어 원래 생성시각이 소실됐다.
+  const noCreatedAt = clone(DELETE_MANIFEST)
+  delete noCreatedAt.changes[0].expect_before.created_at
+  check('op=delete expect_before 에 created_at 없으면 거부', !validateManifest(noCreatedAt).valid)
+  check('created_at 포함 delete manifest 는 valid',
+    validateManifest(DELETE_MANIFEST).valid, JSON.stringify(validateManifest(DELETE_MANIFEST).errors))
+
+  const rollback = buildRollbackSql(DELETE_MANIFEST, 'RUN-QA5-1')
+  check('delete rollback insert 컬럼 목록에 created_at 포함',
+    /insert into public\.student_class_assignments \([^)]*created_at[^)]*\)/.test(rollback))
+  check('delete rollback insert 값에 원래 created_at 리터럴 포함',
+    rollback.includes(`'${DELETE_MANIFEST.changes[0].expect_before.created_at}'`))
+  check('delete rollback 정적 스캔 위반 0건', staticSafetyScan(rollback).length === 0, JSON.stringify(staticSafetyScan(rollback)))
+
+  const insertApply = buildApplySql(INSERT_MANIFEST, 'RUN-QA5-2')
+  check('insert 선행조건에 (student_id, textbook_id) 가드 포함',
+    /if exists \(select 1 from public\.student_class_assignments where student_id = '[^']+' and textbook_id = /.test(insertApply))
+  check('insert 선행조건에 (student_id, class_id) 가드 포함(테이블 실제 unique key)',
+    /if exists \(select 1 from public\.student_class_assignments where student_id = '[^']+' and class_id = /.test(insertApply))
+  check('두 선행조건 모두 정적 스캔 통과', staticSafetyScan(insertApply).length === 0, JSON.stringify(staticSafetyScan(insertApply)))
+
+  const dupItems = buildPreflightPlan(INSERT_MANIFEST).filter((p) => p.kind === 'no-duplicate')
+  check('preflight no-duplicate 항목 2건(textbook_id/class_id)', dupItems.length === 2, JSON.stringify(dupItems))
+  check('preflight no-duplicate 에 class_id 필터 포함', dupItems.some((p) => 'class_id' in (p.filters || {})))
+}
+
+console.log('\n=== [QA6] staticSafetyScan 에 manifest 를 실제로 넘긴다(narrative-drift 이중 방어선) ===')
+{
+  const src = fs.readFileSync(path.join(ROOT, 'scripts', 'prodHotfix.mjs'), 'utf8')
+  check('3단계가 staticSafetyScan(applySql, manifest) 로 호출', /staticSafetyScan\(applySql, manifest\)/.test(src))
+  check('manifest 를 빠뜨린 호출 형태가 남아있지 않음', !/staticSafetyScan\(applySql\)/.test(src))
+}
+
+console.log('\n=== [QA7] dry-run 콘솔 문구 + .tmp gitignore ===')
+{
+  const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+  const originalLog = console.log
+  const lines = []
+  console.log = (...args) => { lines.push(args.join(' ')) }
+  try {
+    await runHotfix(
+      { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-QA7-DRY-1', reportDir: REPORT_DIR, reader, dryRun: true },
+      { loadEnv: () => envOk() },
+    )
+  } finally {
+    console.log = originalLog
+  }
+  check('dry-run 은 STANDARD_STATUS 에 (DRY-RUN — 실제 적용 아님) 을 덧붙여 표시',
+    lines.some((l) => l.trim() === 'STANDARD_STATUS: PASS (DRY-RUN — 실제 적용 아님)'),
+    JSON.stringify(lines.filter((l) => l.includes('STANDARD_STATUS'))))
+
+  const gitignore = fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8')
+  check('.gitignore 에 루트 .tmp/ 포함(운영 보고서 실값 추적 금지)',
+    gitignore.split(/\r?\n/).some((l) => l.trim() === '.tmp/'))
+}
+
 console.log(`\n=== summary ===\nPASS ${pass} / FAIL ${fail}`)
 if (fail > 0) {
   console.log('FAIL')
