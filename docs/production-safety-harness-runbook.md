@@ -430,3 +430,80 @@ TRUNCATE/DELETE 등을 아예 차단). 즉 유령 *참조*(학생/배정이 유�
 - **v3_44 유령 유닛 삭제 SQL 패키지의 실행 여부/일정** — 위 FAQ Q5에서
   설명한 대로 이 하네스의 자동 실행 경로에 포함되어 있지 않으며, 실행은
   전적으로 운영자 결정·수동 실행 영역입니다.
+
+## 7. 운영 자동검증 사용법 (2026-09-04 추가) — `prod:check` → `prod:report` → 승인 대기열
+
+이 절은 위 1~6절(`prod:check`/`prod:hotfix` 자체)과는 별개로, 그 위에
+"매일/필요할 때 한눈에 보는 운영 보고서"를 자동으로 만들어 주는
+`npm run prod:report`(`scripts/prodReport.mjs`)를 다룹니다. **`prod:report`는
+`prod:hotfix`의 apply 경로를 아예 import하지 않습니다** — 이 명령은 항상
+읽기 전용입니다.
+
+### 7-1. 한 줄 요약
+
+```
+npm run prod:report
+```
+
+이 한 줄이 내부적으로 하는 일:
+
+1. `node scripts/studentHealthCheck.mjs --json --require-env --mask-names` 실행
+   (READ-ONLY, GET만)
+2. `node scripts/prodCheck.mjs --require-env --json --report-dir <dir>` 실행
+   (READ-ONLY, GET만)
+3. 두 결과를 `scripts/lib/opsStatus.mjs`의 표준 finding 스키마로 변환
+4. (선택, 실패해도 무시) `gh pr list`로 열린 PR 목록, 배포 페이지 GET 1회,
+   `git rev-parse origin/main`, `PROJECT_BOARD.md`의 `## BLOCKED` 카드 읽기
+5. `docs/qa/ops-report/ops-report-latest.{md,json}` +
+   `docs/qa/ops-report/history/ops-report-<UTC>.{md,json}` 저장
+
+산출물 맨 끝에 항상 `DB WRITE: 0`이 찍힙니다 — 이 줄이 없으면(또는 명령이
+0이 아닌 값을 쓰면) 버그로 취급하고 실행을 중단하세요.
+
+### 7-2. 무엇이 나오는가
+
+`ops-report-latest.md`는 13개 절 고정 순서입니다: 실행 요약 → 프로덕션
+헬스 → 학생 무결성 → 교재 무결성 → 정원 → 폴 타운 → 보상 → 엑셀 → 보안 →
+성능 → 유령/레거시 → 열린 PR → **승인 대기열(Approval Queue)**.
+
+가장 먼저 볼 곳은 맨 위 "실행 요약"의 **상태**(`PASS`/`WARN`/`FAIL`) 한 줄과
+맨 아래 **승인 대기열**입니다 — 승인 대기열은 "실제로 고치려면 DB에 쓰기가
+필요하고(`write_required`), 그래서 운영자 승인이 필요한(`approval_required`)"
+항목만 모아 둔 목록입니다(둘은 이 시스템에서 항상 같은 값입니다 — 에이전트
+자동 쓰기 경로가 이 저장소 어디에도 없으므로 "쓰기가 필요하다"는 곧
+"운영자가 승인해야 한다"는 뜻입니다). 각 행은 `check_id`/대상(`entity`)/
+기대값(`expected`)/실제값(`actual`)/권장 조치(`recommended_action`)를
+같이 보여줘 SQL Editor를 열기 전에 무엇을 해야 하는지 바로 읽을 수
+있습니다.
+
+학생 이름은 항상 마스킹됩니다(`H***` 형식) — `prod:report`는 어떤 경우에도
+`--show-names`를 넘기지 않습니다.
+
+### 7-3. 오프라인/CI 회귀 모드(`--from-dir`)
+
+라이브 조회 없이(네트워크 0) 이미 저장해 둔 JSON으로 리포트만 다시
+생성하려면:
+
+```
+node scripts/prodReport.mjs --from-dir <dir>
+```
+
+`<dir>` 안에 `prodcheck.json`(= `prod:check --json` stdout 그대로)과
+`health.json`(= `studentHealthCheck.mjs --json` stdout 그대로)을 두면
+됩니다. 이 모드는 `gh`/배포 페이지 GET을 자동으로 생략합니다(회귀 테스트
+`scripts/testOpsStatus.mjs`가 이 모드로 네트워크 0을 보장합니다).
+
+### 7-4. `prod:hotfix apply`와의 관계 — 이 명령은 그 경로에 닿지 않는다
+
+`npm run prod:report`는 승인 대기열을 **보여줄 뿐** 아무것도 고치지
+않습니다. 승인 대기열의 항목을 실제로 고치려면(예: 유령 유닛 SCA
+재배정) 여전히 1~6절의 `prod:hotfix`(manifest 준비 → dry-run → 대화형
+`APPLY <runId>` 승인) 절차를 그대로 따라야 합니다. `prod:report`는
+`scripts/prodHotfix.mjs`를 소스 코드 레벨에서 아예 import하지 않으므로,
+이 명령을 아무리 많이 돌려도 구조적으로 apply 경로에 도달할 수 없습니다.
+
+### 7-5. 검증
+
+`npm run verify:ops-status`(`scripts/testOpsStatus.mjs`)가 스키마/어댑터/
+`renderSummary`/`prod:report` CLI(`--from-dir`, 13절 헤더 순서, 마스킹
+우회 방지 회귀 포함)를 141단언으로 고정합니다.
