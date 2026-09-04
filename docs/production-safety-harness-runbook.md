@@ -676,6 +676,6 @@ raise exception` 가드와 preflight 읽기 계획에서 함께 확인합니다.
 
 ### 9-7. 검증
 
-`npm run verify:prod-hotfix`(300단언) / `npm run verify:prod-plan`(32단언)이
+`npm run verify:prod-hotfix`(301단언) / `npm run verify:prod-plan`(32단언)이
 위 7개 항목을 회귀로 고정합니다(FAIL-first 로 추가 — 수정 전 각각 34건,
 4건 FAIL 을 실측한 뒤 구현).

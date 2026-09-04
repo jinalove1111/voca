@@ -470,3 +470,76 @@ _이 섹션부터는 append — 위 내용은 원본 그대로 보존._
 `extra:false`로 시작하고(`DEVELOPER_GUIDE.md` 신규 규칙 참고) 정말
 "13개 필수 도메인 밖 보너스 커버리지"인 경우에만 명시적으로 `extra:true`
 를 붙인다.
+
+## 관련 항목: 운영 자동검증 스위트 신규 2종 + 기존 3종 확장 (2026-09-04, 109차)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+12시간 자율 운영 자동검증 세션(`handoff.md` 2026-09-04(109차) 참고)이
+추가/확장한 스위트다. **전부 네트워크 0**(라이브 조회가 필요한 경로는
+`--from-dir`/`--fixture`/`dryRun` 픽스처로 대체) — 이 스위트들을 아무리
+많이 돌려도 프로덕션에는 어떤 쓰기도 나가지 않는다.
+
+| 스크립트 | verify 명령 | 도메인 | 단언 | required(`extra`) |
+|---|---|---|---|---|
+| `scripts/testAdminFlows.mjs`(신규) | `verify:admin-flows` | admin | **63** | required(`extra:false`) |
+| `scripts/testAccountClassification.mjs`(신규) | `verify:account-classification` | admin | **34** | required(`extra:false`) |
+| `scripts/testOpsStatus.mjs`(신규) | `verify:ops-status` | admin | 141 → **150** | required(`extra:false`) |
+| `scripts/testProdPlan.mjs`(신규) | `verify:prod-plan` | admin | 27 → **32** | required(`extra:false`) |
+| `scripts/testProdHotfix.mjs`(확장) | `verify:prod-hotfix` | admin | 253 → **301** | `extra:true`(기존 등록 유지) |
+| `scripts/testProdCheck.mjs`(확장) | `verify:prod-check` | admin | 162 → **195** | `extra:true`(기존 등록 유지) |
+
+각 스위트가 고정하는 계약:
+
+- **`testAdminFlows.mjs`** — "학생 생성 → 반 이동 → 교재 배정/전환 →
+  유닛 변경"을 같은 픽스처 위에 이어 붙인 **복합** 회귀. 개별 흐름은 이미
+  `testCreateStudentUnitAssignment`/`testTextbookIsolation`/
+  `testAdminUnitEdit`/`testAssignmentUnitGuards`가 각각 보므로 로직을
+  재구현하지 않고 **단계 간 상호작용**만 본다(이전 primary가 삭제가 아니라
+  demote되는지, 교재 왕복 전환 후에도 각 SCA가 자기 진도를 지키는지, 전
+  구간 `student_progress`/`student_daily_progress`/`word_status` 쓰기가
+  계속 0건인지). FAIL-first 자가검증(규칙 15): src를 고치지 않고 가짜 DB에
+  "delete-instead-of-demote" 옛 동작을 재현해 데모트 단언이 실제로 false가
+  됨을 증명했다.
+- **`testAccountClassification.mjs`** — `classifyAccount`의 REAL/TEST/
+  ARCHIVED/QA_FIXTURE 판정 정책(Paul/Cookie/Jinaa/Barry/QA/archived) 회귀.
+  게이트가 REAL만 대상으로 하므로 이 분류가 흔들리면 health/invariant
+  결과 전체가 조용히 달라진다.
+- **`testOpsStatus.mjs`** — `STATUS` enum 4값, finding 스키마
+  (`assertFinding`), `recommendedActionFor`/`writeRequiredFor`/
+  `approvalRequiredFor`의 **코드 전수 커버리지**(INVARIANT_CODES + health
+  `CHECK_CODES` + WARN 전용 파생 2종 — 미상 코드는 조용한 통과가 아니라
+  보수적 폴백), 두 하네스 `--json` → finding 어댑터, `prod:report` CLI
+  (`--from-dir` 오프라인 모드, 13절 헤더 순서, **마스킹 우회 방지 decoy
+  필드 회귀**).
+- **`testProdPlan.mjs`** — `prod:plan`이 항상 `dryRun:true`로만 동작하고
+  risk/영향 집계/이름 해석/drift/`apply_eligibility` 4값을 정확히 내는지.
+- **`testProdHotfix.mjs` 확장분(V2 보안 하드닝 7종)** — dollar-quote
+  태그화, `raise` 데이터 `%%` 이스케이프, manifest 문자열 값의
+  `$`/`%`/역슬래시/제어문자 차단, `expect` 타입 검사, 서술 lint 오탐,
+  invariant delta 실패 시 fail-closed, `op:'delete'` rollback의
+  `created_at` + `op:'insert'`의 `(student_id, class_id)` 선행조건.
+  전부 FAIL-first로 추가(수정 전 코드에서 각각 34건/4건 FAIL 실측).
+- **`testProdCheck.mjs` 확장분** — 신규 invariant 4종
+  (`STALE_CLASS_SCA`/`DUPLICATE_SCA_TEXTBOOK`/`STUDENT_NO_CLASS`/
+  `UNIT_NAME_UUID_CONTRADICTION`). FAIL-first(`b11a6a6`에서 16단언 FAIL
+  확인) 후 구현.
+
+정리 후 `tests/harness/registry.mjs` totals는 **64 required / 71 extra**다
+(108차의 57/72에서 신규 등록 + required 승격 반영). 이번 세션도 신규
+스위트가 기본 `extra:true`로 등록되는 습관이 재발해 4종을 required로
+승격했다(`50d07cb`/`9bcfcd8`) — 108차에서 한 번 정정한 문제가 다시 나온
+것이므로, 규칙을 `DEVELOPER_GUIDE.md`에도 명시했다.
+
+> **주의(정직 기록)**: `docs/production-safety-harness-runbook.md` §9-7은
+> `verify:prod-hotfix`를 300단언으로 적어 두었으나 최종 실행 기준은 301이다
+> — 마지막 커밋(`2ea5e86`) 이후 1단언 증가분이 런북 문구에만 미반영된
+> 상태이며, 코드/테스트 자체의 불일치는 아니다.
+
+### 운영 산출물을 만드는 스위트의 격리 규칙
+
+`prod:report`처럼 **저장소에 커밋되는 산출물**을 만드는 도구의 회귀
+테스트는 반드시 `--out-dir` 등으로 출력 경로를 격리해야 한다. 이번
+세션에 회귀 테스트가 기본 경로에 그대로 써서 실행할 때마다 커밋된
+`docs/qa/ops-report/ops-report-latest.{md,json}`을 덮어쓰는 문제가
+발견돼 `4f622ca`로 수정했다.

@@ -1,5 +1,188 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-04 (108차, 야간 자율 QA/유지보수 세션 — baseline →
+_최종 갱신: 2026-09-04 (109차, 오전~오후 12시간 자율 운영 자동검증 세션 —
+운영자 부재. Harness V2(`prod:plan`/`prod:apply` 게이트) + `prod:report`
+운영 보고서 + invariant 4종 + 관리자 흐름/계정 분류 회귀 + P1 생성 경고를
+통합 브랜치 `qa/ops-automation-2026-09-04`(HEAD `278c89a`)로 병합.
+Production DB WRITE 0, SQL 실행 0, 학생 데이터 변경 0, merge 0, deploy 0,
+main push 0. 상세는 아래 109차 섹션)_
+
+## 2026-09-04 (109차) — 12시간 자율 운영 자동검증: Harness V2(prod:plan/prod:apply 게이트) + prod:report + invariant 4종 + 관리자 흐름/계정 분류 회귀 + P1 생성 경고 (Production WRITE 0)
+
+### 제약/불변식
+
+- 세션: 2026-09-04 KST 오전 ~ 오후, 약 12시간. **운영자 부재** 상태의
+  자율 운영 자동검증 모드(승인이 필요한 행위는 전부 대기열로 적재).
+- 지켜진 불변식: **Production DB WRITE 0 · SQL 실행 0 · 실제 학생 데이터
+  변경 0 · merge 0(원격) · deploy 0 · main push 0.** 라이브 접촉은 anon
+  key `GET`/`HEAD`만(`prod:check`/`health:students`/`prod:report`/
+  `prod:plan` dry-run) — `PATCH`/`POST`/`PUT`/`DELETE`/RPC/Edge Function
+  호출은 이 세션 어디에도 없다. `pin_hash`/`pin_fail_count`/
+  `pin_locked_until`/`pin_setup_allowed`는 어떤 쿼리에서도 select하지
+  않았다(CLAUDE.md 규칙 11).
+- 기준점: `origin/main` = `2c52a78`. 작업 방식은 108차와 동일하게 트랙별
+  독립 worktree/브랜치 → 통합 전용 worktree(`qa/ops-automation-2026-09-04`)
+  순차 머지.
+
+### 트랙별 결과
+
+| 트랙 | 브랜치 | 커밋 수 | 단언 | 결과 |
+|---|---|---|---|---|
+| A 하네스 인벤토리(문서) | `docs/ops-2026-09-04` | 1(`310bd37`, H와 동일 커밋) | — | 기존 하네스 19행 표(목적/입력/READ·WRITE/FAIL 조건/승인 지점/약점) + V2 재사용 계획 10항 → `docs/qa/ops-2026-09-04/harness-inventory.md` |
+| H 정원 성장 경로 분류 | `docs/ops-2026-09-04` | (A와 동일 커밋) | — | COUNTS 4 / INTENTIONALLY_DOES_NOT_COUNT 7 / UNDECIDED_PRODUCT_POLICY 3 / **BUG 0** → `docs/qa/ops-2026-09-04/garden-growth-paths.md` |
+| B/C Harness V2 | `feat/harness-v2` | 9 소커밋(test/feat 페어) + 통합 후 QA 하드닝 3(`b4f89c0`/`e0d8392`/`2ea5e86`) | prod-hotfix 253→**301**, prod-plan 27→**32** | 서술 lint · VERIFY==WRITE 구조 보장 · drift refresh(`.refreshed.json`) · SCA insert/delete narrow ALLOWLIST · invariant delta preview fail-closed · `prod:plan` 신설 · `prod:apply` 별칭 + `STANDARD_STATUS` |
+| D/P 운영 보고서 | `feat/prod-report` | 머지 1(`0900d97`, 개별 커밋 수 미실측) + `4f622ca`(--out-dir 격리) | ops-status 141→**150** | `opsStatus.mjs` 4-state enum + finding 스키마 + `prod:report` → `docs/qa/ops-report/ops-report-latest.{md,json}`. 첫 라이브 보고서 **WARN 91 / FAIL 0 / 승인 대기 82** |
+| E/F invariant 4종 + 계정 분류 | `feat/health-rules-v2` | 3(`b11a6a6` FAIL-first / `81728de` 구현 / `a9cc129` 회귀) | prod-check 162→**195**, account-classification **34** | `STALE_CLASS_SCA`(라이브 3건) / `DUPLICATE_SCA_TEXTBOOK`(0) / `STUDENT_NO_CLASS`(0) / `UNIT_NAME_UUID_CONTRADICTION`(0) |
+| M 관리자 핵심 흐름 | `test/admin-flows` | 머지 1(`38df3ad`) | **63** | 생성→반 이동→교재 배정/전환→유닛 변경 복합 회귀, 학습기록 쓰기 0건 · 결함 0 · FAIL-first 자가검증(delete-instead-of-demote 재현) |
+| O ghost/legacy 인벤토리 REFRESH | `docs/ops-2026-09-04` | (A/H 커밋에 포함) | — | 개별 26항목(DANGEROUS 1 / LIKELY_CLEANUP 6 / REVIEW 8 / SAFE_TO_IGNORE 11). `4fc69e2d` SCA 참조 0→**1**(REAL 비-primary), 콘텐츠 중복 3쌍 |
+| P1 생성 경고 수정 | `fix/create-student-no-textbook-warning` | 머지 1(`578573648`… → `0900d97` 이전) | **44** | `create_student` 응답 `warnings` + 관리자 UI 비차단 배너(쓰기 동작 무변경) |
+| registry/통합 정리 | `qa/ops-automation-2026-09-04` | `50d07cb`/`9bcfcd8`/`02eb966`/`dd31319` | — | account-classification·ops-status·create-student·prod-plan required 승격, totals **64 required / 71 extra** |
+
+### Harness V2 요약 — 명령 3개와 그 보장
+
+운영 명령은 이제 셋이며, **순서를 건너뛸 수 없다**(상세: `docs/production-
+safety-harness-runbook.md` §7~§9):
+
+1. `npm run prod:check` — READ-ONLY 전체 무결성(invariant + 학생별 health).
+2. `npm run prod:plan -- <manifest.json>` — READ-ONLY. 내부적으로
+   `runHotfix()`를 항상 `dryRun:true`로 재사용해(로직 재구현 0) 검증/정적
+   스캔/프리플라이트/invariants delta를 그대로 돌리고 risk(`LOW`/`MEDIUM`/
+   `HIGH`)·영향 집계·drift·`apply_eligibility`(`READY`/
+   `BLOCKED_NEEDS_APPROVAL`/`BLOCKED_PREFLIGHT`/`BLOCKED_LINT`/
+   `BLOCKED_INVARIANT`)를 출력한다. `--refresh-expect`는 원본을 덮어쓰지
+   않고 `<manifest>.refreshed.json` **사본**만 만든다. 승인 게이트에 도달
+   자체를 하지 않으므로 DB WRITE는 항상 0.
+3. `npm run prod:apply -- <manifest.json>` — `prodHotfix.mjs --env
+   production` 별칭. 절차는 기존과 동일(TTY에서 `APPLY <runId>` 정확 입력
+   + `SUPABASE_ACCESS_TOKEN` 둘 다 있어야만 WRITE). 추가된 것은
+   `STANDARD_STATUS` 4값(`PASS`/`WARN`/`FAIL`/`BLOCKED_NEEDS_APPROVAL`)
+   한 줄뿐.
+
+구조적으로 새로 보장되는 것:
+
+- **서술 일치성 lint** — manifest의 자유 텍스트 서술이 `expect_before`/`set`
+  과 어긋나면 SQL 생성 이전에 STOP. 2026-09-02 핫픽스에서 수기 롤백 주석
+  (`'Unit'→'Unit5'`)이 실제 pre값과 달랐던 사고의 재발 방지책.
+- **VERIFY == WRITE 구조 보장** — 생성된 UPDATE문을 되파싱해 preflight
+  읽기 계획과 같은 precondition인지 기계가 확인.
+- **SCA `insert`/`delete` 좁은 ALLOWLIST** — `student_class_assignments`
+  전용, 중복/전체행 가드 + 대칭 rollback(`delete`는 `created_at`까지 캡처).
+- **invariant delta preview fail-closed** — 스냅샷 조회/평가가 실패하면
+  예전처럼 "부가 정보이니 계속"(fail-open)이 아니라
+  `blocked-invariant-unavailable`로 STOP.
+- **rollback SQL 수기 작성 금지** — 항상 같은 manifest에서 자동 생성
+  (`describeChange()` 단일 원천), 되돌리기는 `--rollback-of <report.json>`.
+
+### 발견 / 수정
+
+1. **`create_student`가 교재/유닛 미배정으로 조용히 성공(P1, 수정)** —
+   쓰기 동작은 그대로 두고 응답에 `warnings`(`no_textbook`/`no_unit`) +
+   한글 message를 추가하고, `StudentDirectory.jsx` 생성 성공 배너에
+   비차단 경고 + 기존 교재 배정 패널 재사용 버튼, 생성 폼에는 반의 연결
+   교재가 0개일 때 제출 전 힌트를 넣었다. FAIL-first로 3개 응답 계약
+   단언이 먼저 FAIL함을 확인 후 구현(44단언 PASS).
+2. **V2 보안 리뷰 하드닝 7건(수정, `e0d8392`)** — ① 생성 SQL
+   dollar-quote 태그화(`do $hotfix_<runId>$`) ② `raise` 데이터의 `%`를
+   `%%`로 이스케이프 ③ manifest 문자열 값에서 `$`/`%`/역슬래시/제어문자
+   추가 차단 ④ `must_not_change`/`reference_rows_must_exist`의 `expect`도
+   타입 검사 ⑤ 서술 lint 오탐 수정 ⑥ invariant delta 계산 실패 =
+   fail-closed(**FAIL-first로 수정 전 코드에서 executor까지 도달함을 실제
+   재현**) ⑦ `op:'delete'` rollback의 `created_at` 복원 + `op:'insert'`
+   선행조건에 `(student_id, class_id)`(테이블 실제 unique key) 추가.
+3. **`.gitignore`의 레거시 `ops/` 전면 차단 패턴과 신규 산출물 경로 충돌**
+   — 당초 `docs/qa/ops/`에 보고서를 쓰려다 커밋이 안 되는 것을 발견.
+   `.gitignore`를 고치거나 `git add -f`로 우회하지 않고 **경로를
+   `docs/qa/ops-report/`로 변경**해 회피.
+4. **테스트가 커밋된 운영 보고서를 덮어쓰던 문제(수정, `4f622ca`)** —
+   `prod:report` 회귀 테스트가 실행될 때마다 저장소에 커밋된
+   `ops-report-latest.{md,json}`을 다시 써서 워킹트리를 더럽혔다.
+   `--out-dir` 옵션으로 테스트 산출물을 격리.
+5. **registry `extra:true` 습관 재발(정정)** — 108차에서 이미 한 번
+   정정한 문제가 이번 세션 신규 스위트에서 또 관찰돼 4종을 required로
+   승격. 정리 후 totals **64 required / 71 extra**.
+6. **`4fc69e2d`(중2 천재 이상기 "Unit 1") SCA 참조 0 → 1** — REAL 학생
+   1명이 2026-09-03 08:26 UTC에 비-primary로 새로 탐색. 동시에 신규
+   `UNIT_CONTENT_DUPLICATE`가 이 유닛을 `36bba4d0`(중1 천재 이상기
+   "Unit 1", REAL 11 SCA/9 students)과 단어 40개 **100% 동일**로 탐지 —
+   "미스업로드" 의심의 구조적 증거. **REVIEW로만 분류, 삭제하지 않음**
+   (`students.current_unit_id`는 이 유닛을 가리키지 않아 학습 영향 0).
+7. **`STALE_CLASS_SCA` 라이브 3건(신규 코드, 데이터 조치 없음)** — REAL
+   3명(황***/김***/김***)의 배정 행이 `Presentation 6`에 남아 있고 현재
+   `students.class_id`는 `MS Advanced Class`. 셋 다
+   `students.current_unit_id` 경로로 화면은 정상 해석(health FAIL 0) —
+   기존 `PRIMARY_UNIT_MISMATCH`/`CLASS_ASSIGNMENT_CONTRADICTION` baseline과
+   같은 근본 원인의 다른 단면이다.
+8. **정원 성장 경로에 버그 0건** — 정원 포인트는
+   `|cleared ∪ completedWords ∪ clearedWords|`(2점/칸, 16칸, 128점 만개).
+   퀴즈/철자/가이드 완료/레벨업 미션은 COUNTS, 열람·듣기·발음은 설계상
+   미집계. 복습 큐 해소/입실시험 정답/미니게임 정답 3건은 **제품 결정
+   필요(UNDECIDED)** — 임의로 바꾸지 않았다.
+
+### 최종 검증 (통합 브랜치 `qa/ops-automation-2026-09-04`, HEAD `278c89a`)
+
+- `npm run build` PASS.
+- `npm run verify:all` **ALL DOMAINS PASS**.
+- `npm run health:students` PASS 36 / WARN 10 / FAIL 0(무회귀).
+- `npm run prod:check` verdict **WARN**(invariant FAIL 0 / WARN 64).
+- 로컬 Release Gate(CI 환경변수 재현) PASS, 개별 15개 스위트 PASS.
+- `prod:report` 라이브 1회(READ-ONLY) → WARN 91 / FAIL 0 / 승인 대기 82.
+- 남은 정직한 갭: `docs/production-safety-harness-runbook.md` §9-7은
+  `verify:prod-hotfix`를 **300단언**으로 적어 두었는데 최종 실행 기준은
+  **301**이다(마지막 `2ea5e86` 이후 1단언 증가분이 런북 문구에 미반영) —
+  코드가 아니라 문서 문구의 1건 지연, 다음 세션이 런북 소유 트랙에서 정정.
+
+### BLOCKED_NEEDS_APPROVAL (운영자 승인 없이는 아무것도 진행 안 함)
+
+1. PR #9 / PR #11 merge 결정.
+2. 본 통합 브랜치(`qa/ops-automation-2026-09-04`) PR 생성 및 merge 결정.
+3. 유령 유닛 정리 SQL 실행(`v3_43` → `v3_43b` → `v3_44`, HOLD 1건 유지 권장).
+4. 유령 참조 SCA 8행 manifest 재설계(Unit6 대상).
+5. `4fc69e2d` 삭제 여부 — **REAL SCA 참조 1건이 새로 생겨 즉시 삭제 불가**
+   (선행: 콘텐츠 확인 → SCA를 `36bba4d0`으로 재배정 → words 후 units 삭제).
+6. `STALE_CLASS_SCA` REAL 3건 정리 여부.
+7. 정원 UNDECIDED 3건(복습 큐 해소 / 입실시험 정답 / 미니게임 정답)의
+   제품 결정.
+8. `api/grant-xp.js` 레거시 XP 분기 무인증 — 인증 추가 여부.
+9. `student_class_assignments` anon 정책(allow-anon-all) 재검토.
+10. `classes.gamification_enabled` 마스터 스위치 SQL 실행.
+
+### 교훈
+
+1. **에이전트 세션 rate limit도 장애로 취급해야 한다.** Sonnet 세션 한도로
+   에이전트 1개가 중단돼, 오케스트레이터가 그 트랙의 머지 충돌 해소를
+   직접 수행하고 이후 haiku/opus로 대체 실행했다. 장시간 자율 세션은
+   "모델 한도"를 인프라 실패 모드로 미리 계획에 넣어야 한다.
+2. **`extra:true` 기본값 습관은 한 번 정정해도 재발한다.** 108차에 이미
+   고친 문제가 이번 세션 신규 스위트에서 또 나왔다 — 사람/에이전트의
+   자율 준수만으로는 부족하므로, 새 스위트는 원칙적으로 `extra:false`로
+   시작한다는 규칙을 `DEVELOPER_GUIDE.md`에 명시했다(훅 강제는 아직 없음,
+   규칙 18에 따라 정직하게 구분해 기록).
+3. **`.gitignore`의 넓은 레거시 패턴이 신규 디렉터리 이름과 우연히
+   충돌할 수 있다.** `ops/` 전면 차단이 `docs/qa/ops/`까지 삼켰다. 이때
+   올바른 대응은 `.gitignore` 수정이나 `git add -f`가 아니라 **경로를
+   바꾸는 것**이었다(다른 세션의 무시 의도를 조용히 훼손하지 않음).
+4. **테스트가 커밋 산출물을 덮어쓰면 안 된다.** 보고서 생성기의 회귀
+   테스트가 기본 경로에 그대로 쓰는 바람에 실행할 때마다 커밋된 운영
+   보고서가 변조됐다 — 산출물을 만드는 도구의 테스트에는 반드시
+   `--out-dir` 같은 격리 옵션을 함께 만든다.
+
+### 내일(다음 세션) 할 일 — 3개
+
+1. **운영자 승인 대기열 처리 지원** — 위 BLOCKED 10건 중 운영자가 결정한
+   것부터. 특히 `4fc69e2d`는 이번에 REAL SCA 참조가 생겼으므로 삭제
+   경로가 "SCA 재배정 선행"으로 바뀌었음을 먼저 설명할 것.
+2. **`prod:plan`을 실제 대기 중인 정리 작업에 1회 적용해 보기**(READ-ONLY)
+   — 유령 SCA 재배정 manifest에 `--refresh-expect`를 걸어 drift 목록과
+   `apply_eligibility`를 뽑아 두면, 운영자 승인 시점에 바로 `prod:apply`로
+   넘어갈 수 있다. 이 단계까지는 여전히 DB WRITE 0.
+3. **런북 §9-7 단언 수(300 → 301) 정정 + `prod:report`의 정직한 갭 2건
+   후속** — Reward/Excel/Security 절이 스위트 이름 나열에 그치는 문제
+   (각 스위트의 `--json` 지원 + opsStatus 어댑터), Garden 절 학생별 world
+   stage 분포 미계산(`prod:check`가 `progress_data` 미로드).
+
+---
+
+_(이전 최종 갱신 기록 — 원문 보존) 2026-09-04 (108차, 야간 자율 QA/유지보수
+세션 — baseline →
 11개 worktree 병렬 트랙(garden/progression e2e, Excel 파서 fixture,
 reward 더블파이어, 학생 데이터 무결성 READ-ONLY 감사, ghost/legacy
 인벤토리, 보안 감사 A- + 관리자 PIN 스로틀 갭 수정, UI/성능 감사 + 수정

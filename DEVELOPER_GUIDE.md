@@ -429,3 +429,89 @@ PASS/FAIL/SKIP)다.
 registry.mjs`, `C:\voca\tests\harness\runDomain.mjs`,
 `C:\voca\scripts\healthCheck.mjs`, `C:\voca\PROJECT_BOARD.md`,
 `C:\voca\.ai-status\`, `C:\voca\.gitignore`
+
+## 운영 하네스/산출물 규칙 4가지 (2026-09-04, 109차 신규)
+
+_append — 위 내용은 원본 그대로 보존. 이 4가지는 전부 **실제 사고/실측
+관찰**에서 나온 규칙이며, 훅으로 강제되는 것은 없다(`CLAUDE.md` 규칙 18에
+따라 정직하게 구분: 아래는 사람/에이전트의 자율 준수 대상이다). 관련
+도구 사용법은 `docs/production-safety-harness-runbook.md` §7~§9,
+회귀 스위트는 `TESTING.md` 2026-09-04(109차) 섹션 참고._
+
+### 1. manifest의 문자열 값에 `$` / `%` / `;` / `--`(그리고 `/*`·역슬래시·제어문자)를 쓰지 않는다
+
+핫픽스 manifest(`scripts/prod/manifests/*.json`)의 **모든** 문자열 값이
+대상이다 — `id`/`title`/`notes` 같은 자유 텍스트, `changes[].expect_before`
+/`set`/`fields`, `must_not_change[].expect`,
+`reference_rows_must_exist[].expect`까지 전부.
+
+이유: 생성되는 SQL이 `do $…$ … $…$` 블록과 `raise exception/notice '… %'`
+포맷 문자열을 쓰기 때문에, 값에 섞인 `$$`/`%`가 하네스 자신의 인용을
+벗어날 수 있다. **끝은 문법 오류로 fail-closed지만, 인용은 애초에
+데이터로 탈출 가능해서는 안 된다.** 실제 운영 값(UUID·`Unit5` 같은
+유닛명·ISO 날짜)에는 이 문자들이 등장하지 않는다.
+
+강제 지점: `scripts/lib/hotfixManifest.mjs`의 `INJECTION_CHAR_RE`가
+**SQL 생성 이전에** `invalid-manifest`로 STOP한다(코드로 강제되는 몇 안 되는
+항목). 이중 방어선으로 dollar-quote는 `do $hotfix_<runId>$`처럼 태그를
+붙이고(runId는 영숫자만), `raise` 메시지에 실리는 데이터의 `%`는 `%%`로,
+`'`는 `''`로 이스케이프한다.
+
+### 2. rollback SQL을 손으로 쓰지 않는다 — `prod:plan`/`prod:apply`가 재생성한다
+
+2026-09-02 사고의 근본 원인이 "VERIFY와 WRITE를 사람이 따로 작성"이었고,
+그 후속으로 작성된 **수기 `_ROLLBACK.sql`의 주석(`'Unit'→'Unit5'`)이 실제
+pre값과 달랐던** 2차 문제까지 실제로 발생했다.
+
+- 되돌릴 SQL을 새로 작성하지 말고 `prod:apply`가 같은 manifest에서 자동
+  생성한 `<runId>.rollback.sql`을 쓴다(`describeChange()`가 헤더 주석까지
+  단일 원천에서 만든다).
+- 이미 적용된 것을 나중에 되돌릴 때도 반대 SQL을 손으로 쓰지 말고
+  `--rollback-of <이전 실행의 report.json>`을 쓴다.
+- 적용 전에는 반드시 `npm run prod:plan -- <manifest>`(READ-ONLY)로
+  drift/위험도/`apply_eligibility`를 먼저 본다. `READY`여도 실제 적용은
+  `prod:apply` + TTY `APPLY <runId>` 입력이 따로 필요하다.
+- manifest의 `expect_before`가 라이브와 어긋나면(`preflight-mismatch`)
+  손으로 값을 고치지 말고 `--refresh-expect`가 만드는
+  `<manifest>.refreshed.json` **사본**과 drift 목록을 사람이 검토한 뒤
+  그 사본을 새 manifest로 채택한다(원본은 절대 덮어쓰지 않는다).
+
+### 3. 새 보고서/산출물은 `docs/qa/ops-report/`에 둔다 — 디렉터리 이름에 `ops/`를 쓰지 않는다
+
+저장소 `.gitignore`에 레거시 `ops/` 전면 차단 패턴이 있어, 새로 만든
+`docs/qa/ops/` 디렉터리가 **이름이 우연히 겹쳤다는 이유로** 통째로
+무시돼 커밋이 되지 않는 일이 있었다.
+
+이때 올바른 대응은 **경로를 바꾸는 것**이다:
+
+- `.gitignore`를 수정하지 않는다(다른 세션의 무시 의도를 조용히 훼손하게
+  된다 — 그 파일은 별도 소유·별도 판단 영역이다).
+- `git add -f`로 우회하지 않는다(다음 사람에게 원인이 보이지 않는다).
+- 운영 보고서 산출물의 정식 위치는 `docs/qa/ops-report/`
+  (`ops-report-latest.{md,json}` + `history/ops-report-<UTC>.{md,json}`),
+  세션별 조사 문서는 `docs/qa/ops-<날짜>/`다.
+- 새 디렉터리를 만들었는데 `git status`에 안 뜨면 **먼저
+  `git check-ignore -v <경로>`로 확인**한다.
+
+### 4. 테스트는 커밋된 산출물을 덮어쓰지 않는다 — 출력 경로를 `--out-dir`로 격리한다
+
+보고서/파일을 생성하는 도구(`prod:report` 등)의 회귀 테스트가 기본 출력
+경로를 그대로 쓰면, 테스트를 돌릴 때마다 저장소에 커밋된 산출물이 변조돼
+워킹트리가 더러워지고 "무엇이 실제 실행 결과인지"를 알 수 없게 된다.
+
+- 산출물을 만드는 도구에는 **처음부터** `--out-dir`(또는 동등한 출력
+  경로 옵션)을 함께 구현하고, 테스트는 항상 임시 디렉터리를 넘긴다.
+- 라이브 조회가 필요한 도구의 테스트는 `--from-dir`/`--fixture` 같은
+  오프라인 모드로 네트워크 0을 구조적으로 보장한다.
+- 임시 산출물 디렉터리(`.tmp/` 등)는 `.gitignore`에 등록한다 — 다만
+  그 안에 실제 학생 UUID가 들어갈 수 있으므로 외부로 복사할 때는 직접
+  확인한다.
+
+### (재확인) 신규 verify 스위트는 `extra:false`로 시작한다
+
+108차에 이미 정정한 문제가 109차 신규 스위트에서 **또** 재발했다.
+`tests/harness/registry.mjs`의 `extra:true`는 그 스위트의 FAIL이
+`verify:all`의 exit code에 반영되지 않는다는 뜻이라, 방치하면 회귀를
+잡지 못한 채 "PASS"만 보고하는 가짜 안전망이 된다. 새 스위트는 원칙적으로
+`extra:false`(required)로 등록하고, 정말 "13개 필수 도메인 밖 보너스
+커버리지"인 경우에만 명시적으로 `extra:true`를 붙인다.
