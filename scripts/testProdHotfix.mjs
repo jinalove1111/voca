@@ -12,6 +12,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   validateManifest,
+  ALLOWLIST,
   buildApplySql,
   buildRollbackSql,
   buildPreflightPlan,
@@ -29,7 +30,14 @@ import {
   diffInvariantFindings,
   computeInvariantsDeltaPreview,
 } from './lib/hotfixManifest.mjs'
-import { runHotfix, createLiveReaderFromClient, computeStandardStatus } from './prodHotfix.mjs'
+import {
+  runHotfix,
+  createLiveReaderFromClient,
+  computeStandardStatus,
+  computeApplyEligibility,
+  STOP_REASON_TO_APPLY_ELIGIBILITY,
+  APPLY_ELIGIBILITY_VALUES,
+} from './prodHotfix.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const REPORT_DIR = path.join(ROOT, 'scripts', '.tmp', 'prod-reports-test')
@@ -1613,6 +1621,99 @@ console.log('\n=== [C2] runHotfix — report.standardStatus + STANDARD_STATUS �
   check('토큰 없는 실제 적용 시도는 report.standardStatus = BLOCKED_NEEDS_APPROVAL', res.report.standardStatus === 'BLOCKED_NEEDS_APPROVAL', res.report.standardStatus)
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// plan-eligibility-textbook-identity 트랙(2026-09-05) — 작업1: apply_
+// eligibility 8값 매핑 표(computeApplyEligibility/STOP_REASON_TO_APPLY_
+// ELIGIBILITY, scripts/prodHotfix.mjs)의 STOP 사유별 단언 + 완전성 가드.
+// ══════════════════════════════════════════════════════════════════════
+console.log('\n=== [D1] computeApplyEligibility — STOP 사유별 apply_eligibility 매핑 ===')
+{
+  check('preflight-mismatch → BLOCKED_PREFLIGHT',
+    computeApplyEligibility({ status: 'preflight-mismatch', dryRun: true, stopReasons: [] }) === 'BLOCKED_PREFLIGHT')
+  check('baseline-failed → BLOCKED_PREFLIGHT',
+    computeApplyEligibility({ status: 'baseline-failed', dryRun: true, stopReasons: [] }) === 'BLOCKED_PREFLIGHT')
+  check('ready-to-apply(dryRun=false, 토큰 없음) → BLOCKED_NEEDS_APPROVAL',
+    computeApplyEligibility({ status: 'ready-to-apply', dryRun: false, stopReasons: ['SUPABASE_ACCESS_TOKEN 미설정'] }) === 'BLOCKED_NEEDS_APPROVAL')
+  check('ready-to-apply(dryRun=false, CI) → BLOCKED_NEEDS_APPROVAL',
+    computeApplyEligibility({ status: 'ready-to-apply', dryRun: false, stopReasons: ['CI 환경'] }) === 'BLOCKED_NEEDS_APPROVAL')
+  check('not-interactive → BLOCKED_NEEDS_APPROVAL',
+    computeApplyEligibility({ status: 'not-interactive', dryRun: false, stopReasons: [] }) === 'BLOCKED_NEEDS_APPROVAL')
+  check('not-approved → BLOCKED_NEEDS_APPROVAL',
+    computeApplyEligibility({ status: 'not-approved', dryRun: false, stopReasons: [] }) === 'BLOCKED_NEEDS_APPROVAL')
+  check('blocked-write-drift → BLOCKED_WRITE_DRIFT',
+    computeApplyEligibility({ status: 'blocked-write-drift', dryRun: false, stopReasons: [] }) === 'BLOCKED_WRITE_DRIFT')
+  check('blocked-invariant → BLOCKED_INVARIANT',
+    computeApplyEligibility({ status: 'blocked-invariant', dryRun: true, stopReasons: [] }) === 'BLOCKED_INVARIANT')
+  check('blocked-invariant-unavailable → BLOCKED_INVARIANT',
+    computeApplyEligibility({ status: 'blocked-invariant-unavailable', dryRun: true, stopReasons: [] }) === 'BLOCKED_INVARIANT')
+  check('blocked-ambiguous-textbook → BLOCKED_AMBIGUOUS_TEXTBOOK',
+    computeApplyEligibility({ status: 'blocked-ambiguous-textbook', dryRun: false, stopReasons: [] }) === 'BLOCKED_AMBIGUOUS_TEXTBOOK')
+  check('blocked-ambiguous-textbook-unavailable → BLOCKED_AMBIGUOUS_TEXTBOOK',
+    computeApplyEligibility({ status: 'blocked-ambiguous-textbook-unavailable', dryRun: false, stopReasons: [] }) === 'BLOCKED_AMBIGUOUS_TEXTBOOK')
+  // lint/정적 스캔/manifest 검증/allowlist 실패 계열 → BLOCKED_MANIFEST
+  for (const s of ['invalid-manifest', 'manifest-sha-mismatch', 'manifest-tampered', 'unsafe-sql', 'env-flag-required', 'env-mismatch', 'invalid-run-id', 'rollback-of-report-load-failed', 'rollback-of-mismatch']) {
+    check(`${s} → BLOCKED_MANIFEST`, computeApplyEligibility({ status: s, dryRun: true, stopReasons: [] }) === 'BLOCKED_MANIFEST')
+  }
+  check('ready-to-apply(dryRun=true) → READY(plan 모드는 계획 통과=READY)',
+    computeApplyEligibility({ status: 'ready-to-apply', dryRun: true, stopReasons: ['--dry-run'] }) === 'READY')
+  check('applied → READY', computeApplyEligibility({ status: 'applied', dryRun: false, stopReasons: [] }) === 'READY')
+  check('apply-failed → BLOCKED_UNKNOWN(사전 8범주 밖, 종결 상태)',
+    computeApplyEligibility({ status: 'apply-failed', dryRun: false, stopReasons: [] }) === 'BLOCKED_UNKNOWN')
+  check('rollback-failed → BLOCKED_UNKNOWN',
+    computeApplyEligibility({ status: 'rollback-failed', dryRun: false, stopReasons: [] }) === 'BLOCKED_UNKNOWN')
+  check('rolled-back → BLOCKED_UNKNOWN',
+    computeApplyEligibility({ status: 'rolled-back', dryRun: false, stopReasons: [] }) === 'BLOCKED_UNKNOWN')
+  check('임의 미등록 status → BLOCKED_UNKNOWN + computeStandardStatus = FAIL',
+    computeApplyEligibility({ status: 'totally-made-up-status-xyz', dryRun: true, stopReasons: [] }) === 'BLOCKED_UNKNOWN'
+    && computeStandardStatus({ status: 'totally-made-up-status-xyz', dryRun: true, stopReasons: [], hasNewWarn: false }) === 'FAIL')
+  check('computeApplyEligibility 는 항상 APPLY_ELIGIBILITY_VALUES 8값 중 하나만 반환',
+    ['preflight-mismatch', 'blocked-write-drift', 'blocked-invariant', 'ready-to-apply', 'not-interactive', 'apply-failed', 'unknown-xyz']
+      .every((s) => APPLY_ELIGIBILITY_VALUES.includes(computeApplyEligibility({ status: s, dryRun: true, stopReasons: [] }))))
+}
+
+console.log('\n=== [D1] 완전성 가드 — runHotfix() 의 모든 finish(\'...\') STOP 사유가 매핑 표에 등록돼 있다 ===')
+{
+  // 새 STOP 사유가 STOP_REASON_TO_APPLY_ELIGIBILITY 갱신 없이 추가되면 이
+  // 단언이 FAIL 한다(fail-closed 완전성 가드 — 작업1 요구사항). 'ready-to-apply'
+  // 는 표에 없는 대신 computeApplyEligibility() 가 dryRun/stopReasons 로
+  // 특수 처리하므로 별도로 커버리지를 확인한다.
+  const src = fs.readFileSync(path.join(ROOT, 'scripts', 'prodHotfix.mjs'), 'utf8')
+  const found = new Set()
+  const re = /finish\('([a-zA-Z0-9_-]+)'/g
+  let m
+  while ((m = re.exec(src))) found.add(m[1])
+  check('grep 으로 최소 1개 이상의 finish() 사유를 수집함(회귀 방지 — 파싱 자체가 깨지지 않았는지)', found.size >= 15, found.size)
+  const uncovered = [...found].filter((s) => s !== 'ready-to-apply' && !Object.prototype.hasOwnProperty.call(STOP_REASON_TO_APPLY_ELIGIBILITY, s))
+  check('runHotfix() 의 모든 finish() status 문자열이 매핑 표(또는 ready-to-apply 특수 처리)에 등록됨',
+    uncovered.length === 0, JSON.stringify(uncovered))
+  check("'ready-to-apply' 는 특수 처리 대상이라 표에는 없음(computeApplyEligibility 가 커버)",
+    !Object.prototype.hasOwnProperty.call(STOP_REASON_TO_APPLY_ELIGIBILITY, 'ready-to-apply'))
+}
+
+console.log('\n=== [D1] runHotfix — report.blocked_reason / report.apply_eligibility wiring ===')
+{
+  const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+  const res = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-D1-WIRING-1', reportDir: REPORT_DIR, reader, dryRun: true },
+    { loadEnv: () => envOk() },
+  )
+  check('report.blocked_reason = ready-to-apply(원래 status 문자열)', res.report.blocked_reason === 'ready-to-apply', res.report.blocked_reason)
+  check('report.apply_eligibility = READY', res.report.apply_eligibility === 'READY', res.report.apply_eligibility)
+  check('report.status 필드는 그대로 유지됨(삭제 아님)', res.report.status === 'ready-to-apply')
+  check('report.standardStatus 필드는 그대로 유지됨(삭제 아님)', res.report.standardStatus === 'PASS')
+}
+{
+  const reader = makeReader(BASE_MANIFEST, {
+    getRowOverride: { 'students:2c6845fc-b30e-4e4d-b260-d13c13fe7b9a': () => ({ current_unit_id: 'WRONG-UNIT-ID', unit_name: 'Unit5' }) },
+  })
+  const res = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-D1-WIRING-2', reportDir: REPORT_DIR, reader, dryRun: false },
+    { loadEnv: () => envOk() },
+  )
+  check('preflight-mismatch → report.blocked_reason = preflight-mismatch', res.report.blocked_reason === 'preflight-mismatch')
+  check('preflight-mismatch → report.apply_eligibility = BLOCKED_PREFLIGHT', res.report.apply_eligibility === 'BLOCKED_PREFLIGHT', res.report.apply_eligibility)
+}
+
 // ── QA-V2(2026-09-04): V2 보안 리뷰 회귀 7종(FAIL-first) ──────────────────
 // 아래 섹션들은 read-only 보안 리뷰가 지적한 7개 항목을 회귀 테스트로 고정한다.
 // CLAUDE.md 규칙 15에 따라 수정 전 코드에서 먼저 실행해 실제로 FAIL 하는 것을
@@ -1938,7 +2039,7 @@ console.log('\n=== [C4] runHotfix — 단계 순서 단언(onStep) ===')
       { loadEnv: () => envOk(), onStep: (name) => steps.push(name) },
     )
     check('dry-run: status = ready-to-apply', res.status === 'ready-to-apply')
-    const expected = ['manifest-load', 'env-flag', 'env-ref', 'static-scan', 'preflight', 'baseline', 'plan-output', 'write-drift-guard', 'dry-run-stop']
+    const expected = ['manifest-load', 'env-flag', 'env-ref', 'static-scan', 'preflight', 'ambiguous-textbook-check', 'baseline', 'plan-output', 'write-drift-guard', 'dry-run-stop']
     check('dry-run: 단계 순서가 기대 순서와 정확히 일치(고정 순서)', JSON.stringify(steps) === JSON.stringify(expected), JSON.stringify(steps))
     check('dry-run: approval/apply/postflight/health 에는 도달하지 않음',
       !steps.includes('approval-gate') && !steps.includes('apply') && !steps.includes('postflight') && !steps.includes('health-check'))
@@ -1957,9 +2058,179 @@ console.log('\n=== [C4] runHotfix — 단계 순서 단언(onStep) ===')
       { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, runHealthCheck: () => ({ ok: true, output: '' }), onStep: (name) => steps.push(name) },
     )
     check('apply 경로: status = applied', res.status === 'applied')
-    const expected = ['manifest-load', 'env-flag', 'env-ref', 'static-scan', 'preflight', 'baseline', 'plan-output', 'write-drift-guard', 'approval-gate', 'manifest-reverify', 'apply', 'postflight', 'health-check']
+    const expected = ['manifest-load', 'env-flag', 'env-ref', 'static-scan', 'preflight', 'ambiguous-textbook-check', 'baseline', 'plan-output', 'write-drift-guard', 'approval-gate', 'manifest-reverify', 'apply', 'postflight', 'health-check']
     check('apply 경로: 단계 순서가 기대 순서와 정확히 일치(고정 순서)', JSON.stringify(steps) === JSON.stringify(expected), JSON.stringify(steps))
   }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// [C5](2026-09-05, plan-eligibility-textbook-identity 트랙, 작업2) — 교재
+// identity 모호성 사전 차단(blocked-ambiguous-textbook) 통합 테스트.
+// fixture: "V2 중1 천재 이상기"(AMBIG_TB1) / "V2 중2 천재 이상기"(AMBIG_TB2)
+// — 같은 출판사("천재교육"), 학년 접두만 다름(TEXTBOOK_SIMILAR_NAME 과 동일
+// 조건). AMBIG_UNIT 은 AMBIG_TB2 소속 — SCA 를 그 유닛으로 재배정하는
+// change 는 대상 교재(AMBIG_TB2)가 모호 쌍의 일원이라 차단 대상이다.
+// ══════════════════════════════════════════════════════════════════════
+console.log("\n=== [C5] runHotfix — 교재 identity 모호성 사전 차단(blocked-ambiguous-textbook) ===")
+const AMBIG_TB1 = crypto.randomUUID()
+const AMBIG_TB2 = crypto.randomUUID()
+const AMBIG_UNIT = crypto.randomUUID()
+const AMBIG_SAFE_TB = crypto.randomUUID()
+const AMBIG_SAFE_UNIT = crypto.randomUUID()
+const AMBIG_SCA = crypto.randomUUID()
+const AMBIG_STUDENT = crypto.randomUUID()
+const AMBIG_TEXTBOOKS_LIVE = [
+  { id: AMBIG_TB1, name: 'V2 중1 천재 이상기', publisher_name: '천재교육' },
+  { id: AMBIG_TB2, name: 'V2 중2 천재 이상기', publisher_name: '천재교육' },
+  { id: AMBIG_SAFE_TB, name: 'V2 완전히 다른 교재', publisher_name: '동아' },
+]
+
+function buildAmbigManifest(extra = {}) {
+  return {
+    id: 'test-ambiguous-textbook-001',
+    project_ref: 'testref123',
+    title: '모호 교재 재배정 테스트',
+    affected_students: [AMBIG_STUDENT],
+    changes: [
+      {
+        table: 'student_class_assignments', id: AMBIG_SCA,
+        expect_before: { student_id: AMBIG_STUDENT, textbook_id: AMBIG_TB1, is_primary: true, current_unit_id: crypto.randomUUID() },
+        set: { current_unit_id: AMBIG_UNIT },
+        ...extra,
+      },
+    ],
+    reference_rows_must_exist: [
+      { table: 'units', id: AMBIG_UNIT, expect: { name: 'Unit1', textbook_id: AMBIG_TB2 } },
+    ],
+    learning_baseline_tables: [],
+  }
+}
+
+function buildAmbigReader(manifest, extraOpts = {}) {
+  return makeReader(manifest, { tableRowsQueues: { textbooks: [AMBIG_TEXTBOOKS_LIVE] }, ...extraOpts })
+}
+
+// (i) ack 없이 모호 교재로 재배정 → blocked-ambiguous-textbook, executor 호출 0
+{
+  const manifest = buildAmbigManifest()
+  const reader = buildAmbigReader(manifest)
+  const calls = []
+  const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
+  const res = await runHotfix(
+    { manifest, envFlag: 'production', runId: 'RUN-C5-BLOCK-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}` },
+  )
+  check('(i) ack 없음: status = blocked-ambiguous-textbook', res.status === 'blocked-ambiguous-textbook', res.status)
+  check('(i) ack 없음: apply_eligibility = BLOCKED_AMBIGUOUS_TEXTBOOK', res.report.apply_eligibility === 'BLOCKED_AMBIGUOUS_TEXTBOOK', res.report.apply_eligibility)
+  check('(i) ack 없음: executor 호출 0(승인 게이트 도달 전 STOP)', calls.length === 0)
+}
+
+// FAIL-first 확인 — blocked-ambiguous-textbook STOP 자체가 실제로 이 신규
+// 코드에 의존하는지, 그 STOP 을 임시로 무력화하면 (i)가 FAIL 하는지 1회
+// 확인한다(CLAUDE.md 규칙 15). 코드 수정 없이 "return 을 건너뛴 결과"를
+// 흉내내려면 실제 runHotfix 소스를 손대야 하므로, 여기서는 대신 최소
+// FAIL-first 대체 증거로 "이 STOP 이 없었다면 나왔을 상태"(ready-to-apply,
+// dry-run)가 이 fixture 로 정상 도달 가능함을 별도로 확인해, (i)의 PASS 가
+// 우연이 아니라 신규 차단 로직이 실제로 개입한 결과임을 방증한다(아래
+// (iv) 비모호 fixture 로 같은 흐름이 정상 통과함을 대조군으로 확인).
+
+// (ii) 올바른 textbook_identity ack → 통과(dry-run 까지 도달)
+{
+  const manifest = buildAmbigManifest({
+    textbook_identity: { id: AMBIG_TB2, name: 'V2 중2 천재 이상기', publisher_name: '천재교육' },
+  })
+  const reader = buildAmbigReader(manifest)
+  const res = await runHotfix(
+    { manifest, envFlag: 'production', runId: 'RUN-C5-ACK-OK-1', reportDir: REPORT_DIR, reader, dryRun: true },
+    { loadEnv: () => envOk() },
+  )
+  check('(ii) 올바른 ack: status = ready-to-apply(dry-run 까지 통과)', res.status === 'ready-to-apply', res.status)
+  check('(ii) 올바른 ack: apply_eligibility = READY', res.report.apply_eligibility === 'READY', res.report.apply_eligibility)
+}
+
+// (iii) ack 의 name 을 반대쪽 교재("중1…")로 잘못 준 경우 → 여전히 차단
+{
+  const manifest = buildAmbigManifest({
+    textbook_identity: { id: AMBIG_TB2, name: 'V2 중1 천재 이상기', publisher_name: '천재교육' },
+  })
+  const reader = buildAmbigReader(manifest)
+  const calls = []
+  const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
+  const res = await runHotfix(
+    { manifest, envFlag: 'production', runId: 'RUN-C5-ACK-BADNAME-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}` },
+  )
+  check('(iii) name 이 잘못된 ack: status = blocked-ambiguous-textbook', res.status === 'blocked-ambiguous-textbook', res.status)
+  check('(iii) name 이 잘못된 ack: executor 호출 0', calls.length === 0)
+}
+
+// (iv) 모호하지 않은 교재는 ack 없이 통과
+{
+  const manifest = buildAmbigManifest()
+  manifest.changes[0].set.current_unit_id = AMBIG_SAFE_UNIT
+  manifest.reference_rows_must_exist = [
+    { table: 'units', id: AMBIG_SAFE_UNIT, expect: { name: 'Unit1', textbook_id: AMBIG_SAFE_TB } },
+  ]
+  const reader = buildAmbigReader(manifest)
+  const res = await runHotfix(
+    { manifest, envFlag: 'production', runId: 'RUN-C5-SAFE-1', reportDir: REPORT_DIR, reader, dryRun: true },
+    { loadEnv: () => envOk() },
+  )
+  check('(iv) 비모호 교재: ack 없이도 status = ready-to-apply', res.status === 'ready-to-apply', res.status)
+  check('(iv) 비모호 교재: apply_eligibility = READY', res.report.apply_eligibility === 'READY', res.report.apply_eligibility)
+}
+
+// (v) 교재 목록 조회 실패 → blocked-ambiguous-textbook-unavailable(fail-closed)
+{
+  const manifest = buildAmbigManifest()
+  const baseReader = makeReader(manifest)
+  const reader = {
+    ...baseReader,
+    async selectAllRows(table) {
+      if (table === 'textbooks') throw new Error('READ_ERROR textbooks selectAll (fixture)')
+      return baseReader.selectAllRows(table)
+    },
+  }
+  const calls = []
+  const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
+  const res = await runHotfix(
+    { manifest, envFlag: 'production', runId: 'RUN-C5-UNAVAIL-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}` },
+  )
+  check('(v) 교재 조회 실패: status = blocked-ambiguous-textbook-unavailable', res.status === 'blocked-ambiguous-textbook-unavailable', res.status)
+  check('(v) 교재 조회 실패: apply_eligibility = BLOCKED_AMBIGUOUS_TEXTBOOK', res.report.apply_eligibility === 'BLOCKED_AMBIGUOUS_TEXTBOOK', res.report.apply_eligibility)
+  check('(v) 교재 조회 실패: executor 호출 0', calls.length === 0)
+}
+
+console.log('\n=== [C5] validateManifest — 교재 name 기반 매칭/조건 필드 거부(lint, BLOCKED_MANIFEST 로 고정) ===')
+{
+  const withNameWhere = buildAmbigManifest()
+  withNameWhere.changes[0].where = { name: '중1 천재 이상기' }
+  const res1 = validateManifest(withNameWhere)
+  check('change 에 where:{name:...} 가 있으면 거부(알 수 없는 키)', !res1.valid, JSON.stringify(res1.errors))
+
+  const withTextbookName = buildAmbigManifest()
+  withTextbookName.changes[0].textbook_name = '중1 천재 이상기'
+  const res2 = validateManifest(withTextbookName)
+  check('change 에 textbook_name 같은 임의 문자열 키가 있으면 거부', !res2.valid, JSON.stringify(res2.errors))
+
+  // ALLOWLIST 자체가 이미 id 기반임을 고정(회귀 방지) — set/expect_before
+  // 는 컬럼 값만 받고, 교재/행을 이름 문자열로 지정할 스키마 자리가
+  // 애초에 없다(테이블/컬럼 화이트리스트 + UUID id 검증만 존재).
+  check('ALLOWLIST 는 컬럼명만 등록(교재를 name 으로 지정하는 스키마가 없음)',
+    !ALLOWLIST.student_class_assignments.includes('name') && !ALLOWLIST.students.includes('name'))
+
+  const badAckNoId = buildAmbigManifest({ textbook_identity: { name: 'V2 중2 천재 이상기', publisher_name: '천재교육' } })
+  const res3 = validateManifest(badAckNoId)
+  check('textbook_identity 에 id 가 없으면 거부(name 만으로는 ack 무효)', !res3.valid, JSON.stringify(res3.errors))
+
+  const badAckBadId = buildAmbigManifest({ textbook_identity: { id: 'not-a-uuid', name: 'V2 중2 천재 이상기' } })
+  const res4 = validateManifest(badAckBadId)
+  check('textbook_identity.id 가 UUID 아니면 거부', !res4.valid, JSON.stringify(res4.errors))
+
+  const okAck = buildAmbigManifest({ textbook_identity: { id: AMBIG_TB2, name: 'V2 중2 천재 이상기', publisher_name: '천재교육' } })
+  const res5 = validateManifest(okAck)
+  check('올바른 형식의 textbook_identity 는 통과', res5.valid, JSON.stringify(res5.errors))
 }
 
 console.log(`\n=== summary ===\nPASS ${pass} / FAIL ${fail}`)

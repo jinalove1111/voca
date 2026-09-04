@@ -407,6 +407,32 @@ export function validateManifest(m) {
   for (const [i, c] of (Array.isArray(m.changes) ? m.changes : []).entries()) {
     const tag = `changes[${i}]`
     if (!c || typeof c !== 'object') { errors.push(`${tag} 객체 아님`); continue }
+
+    // 작업2(c)(2026-09-05, plan-eligibility-textbook-identity) — 교재/행
+    // 식별은 UUID(id)만 canonical 이다(CLAUDE.md 규칙 4의 "이름으로 매칭
+    // 금지" 원칙을 교재에도 그대로 적용). change 객체에 이 스키마가 모르는
+    // 키(특히 where/name/textbook_name 류 — "이름으로 조건을 걸려는 시도"의
+    // 전형적 형태)가 있으면 무조건 거부한다. textbook_identity 는 아래에서
+    // 형식을 검증하는 유일한 예외(명시적 ack, id 가 canonical — 작업2(b)).
+    const KNOWN_CHANGE_KEYS = new Set(['op', 'table', 'id', 'expect_before', 'set', 'fields', 'textbook_identity'])
+    for (const key of Object.keys(c)) {
+      if (!KNOWN_CHANGE_KEYS.has(key)) {
+        errors.push(`${tag} 알 수 없는 키(${key}) — 교재/행 식별은 UUID(id)만 허용, name/where 등 문자열 기반 매칭·조건 금지`)
+      }
+    }
+    if (c.textbook_identity !== undefined) {
+      const ti = c.textbook_identity
+      if (!ti || typeof ti !== 'object' || Array.isArray(ti)) {
+        errors.push(`${tag}.textbook_identity 는 객체여야 함({id, name, publisher_name})`)
+      } else {
+        if (!isUuid(ti.id)) errors.push(`${tag}.textbook_identity.id UUID 형식 아님(name 만으로는 ack 무효): ${JSON.stringify(ti.id)}`)
+        if (typeof ti.name !== 'string' || !ti.name.trim()) errors.push(`${tag}.textbook_identity.name 필수(비어있지 않은 string)`)
+        if (ti.publisher_name !== undefined && ti.publisher_name !== null && typeof ti.publisher_name !== 'string') {
+          errors.push(`${tag}.textbook_identity.publisher_name 은 string 또는 null 이어야 함`)
+        }
+      }
+    }
+
     const op = c.op === undefined ? 'update' : c.op
     if (!['update', 'insert', 'delete'].includes(op)) {
       errors.push(`${tag}.op 은 update/insert/delete 만 허용(받은 값: ${JSON.stringify(c.op)})`)
@@ -547,6 +573,30 @@ export function validateManifest(m) {
   }
 
   return { valid: errors.length === 0, errors }
+}
+
+// 작업2(b)(2026-09-05, plan-eligibility-textbook-identity) — manifest 의
+// changes 중 "대상 교재가 바뀌는" 항목을 순수하게 뽑아낸다(IO 없음). 두
+// 경로가 있다: (a) SCA 의 textbook_id 를 직접 설정/삽입(kind:'direct',
+// textbookId 는 manifest 값에서 바로 안다) — (b) current_unit_id 를
+// 설정/삽입해서 "그 유닛의 교재"가 실질적으로 바뀌는 경우(kind:'via-unit',
+// unitId 만 알고 textbook_id 는 라이브 조회가 필요 — scripts/prodHotfix.mjs
+// 가 reader.getRow('units', ...) 로 마저 채운다). op='delete' 는 대상을
+// 없애는 것이라 "새 교재를 가리키게" 하지 않으므로 제외한다.
+// @param {object} manifest
+// @returns {Array<{table:string, id:string, kind:'direct'|'via-unit', textbookId?:string, unitId?:string}>}
+export function findTextbookTargetsFromManifest(manifest) {
+  const out = []
+  for (const c of manifest?.changes || []) {
+    const op = c?.op || 'update'
+    if (op === 'delete') continue
+    const source = op === 'insert' ? c.fields : c.set
+    const directTextbookId = source?.textbook_id
+    if (directTextbookId) out.push({ table: c.table, id: c.id, kind: 'direct', textbookId: directTextbookId })
+    const unitId = source?.current_unit_id
+    if (unitId) out.push({ table: c.table, id: c.id, kind: 'via-unit', unitId })
+  }
+  return out
 }
 
 /**

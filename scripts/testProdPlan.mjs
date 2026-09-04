@@ -112,8 +112,11 @@ console.log('=== [C1] runPlan — 정상 manifest → READY, DB WRITE 0 ===')
   check('invariantsDelta 계산됨(리더 재사용)', plan.invariantsDelta !== null)
 }
 
-console.log('\n=== [C1] runPlan — narrative lint 위반 → BLOCKED_LINT ===')
+console.log('\n=== [C1] runPlan — narrative lint 위반 → BLOCKED_MANIFEST ===')
 {
+  // plan-eligibility-textbook-identity 트랙(2026-09-05) — apply_eligibility
+  // 값 집합 재설계로 BLOCKED_LINT 는 BLOCKED_MANIFEST 로 흡수됐다(manifest
+  // 검증/lint/정적 스캔/allowlist 실패를 한 범주로 묶음 — 작업1 매핑 표).
   const snap = buildBaseSnapshot()
   const reader = makePlanReader(snap)
   const badManifest = buildOkManifest()
@@ -122,9 +125,10 @@ console.log('\n=== [C1] runPlan — narrative lint 위반 → BLOCKED_LINT ===')
     { manifest: badManifest, envFlag: 'production', reader, reportDir: REPORT_DIR, runId: 'RUN-PLAN-LINT-1' },
     { loadEnv: () => envOk() },
   )
-  check('apply_eligibility = BLOCKED_LINT', plan.apply_eligibility === 'BLOCKED_LINT')
+  check('apply_eligibility = BLOCKED_MANIFEST', plan.apply_eligibility === 'BLOCKED_MANIFEST', plan.apply_eligibility)
   check('lint.ok = false', plan.lint.ok === false)
   check('lint.findings 비어있지 않음', plan.lint.findings.length > 0)
+  check('blocked_reason = invalid-manifest', plan.blocked_reason === 'invalid-manifest', plan.blocked_reason)
 }
 
 console.log('\n=== [C1] runPlan — 프리플라이트 불일치(이미 적용됨) → BLOCKED_PREFLIGHT ===')
