@@ -1,0 +1,24 @@
+{
+  "agent_name": "implementer",
+  "role": "P1 UX-safety 구현",
+  "task_id": "ops-create-warning",
+  "task": "create_student가 교재/유닛 미배정 상태로 조용히 성공만 반환하던 문제 — 응답에 warnings + 관리자 UI 즉시 경고 추가 (branch fix/create-student-no-textbook-warning)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-04T00:00:00Z",
+  "updated_at": "2026-09-04T00:00:00Z",
+  "files_owned": [
+    "api/admin-pin-actions.js",
+    "src/components/admin/StudentDirectory.jsx",
+    "scripts/testCreateStudentUnitAssignment.mjs",
+    ".ai-status/implementer-ops-create-warning.json"
+  ],
+  "files_read": [
+    "tests/harness/runAdmin.mjs",
+    "tests/harness/runDomain.mjs",
+    "package.json"
+  ],
+  "summary": "create_student(api/admin-pin-actions.js) 쓰기 동작은 완전히 동일하게 유지하고, 이미 확정된 resolvedTextbookId/unitId를 읽어 응답에 warnings(['no_textbook']|['no_unit']) + 한글 message만 추가. StudentDirectory.jsx 생성 성공 배너에 비차단 경고 + 기존 교재 배정 패널(revealExistingStudent/textbookManaging) 재사용 버튼, 생성 폼에는 반의 연결 교재가 0개일 때 제출 전 비차단 힌트를 추가. scripts/testCreateStudentUnitAssignment.mjs를 확장(FAIL-first로 3개 신규 응답 계약 단언이 먼저 FAIL함을 확인 후 구현 → 44단언 전체 PASS, UI 정적 검사 섹션 11 신규 6단언 포함). npm run build 통과. npm run verify:create-student(44 PASS), npm run verify:pin-setup-capability(115 PASS) 모두 PASS. npm run verify:admin은 이 worktree에 .env(gitignore)가 없어 이 변경과 무관한 7개 스크립트가 WORDLIB_BUNDLE 빌드 단계에서 사전에 실패(두 수정 파일을 참조하는 스크립트 0개로 확인 — 이번 작업 범위 밖, 환경 제약).",
+  "blocker": null,
+  "next_action": "qa-reviewer 검토 대기. 병합/푸시는 미수행(지시 범위 밖)."
+}
