@@ -38,7 +38,9 @@ export default async function handler(req, res) {
     return
   }
 
-  if (!checkAdminReauth(req, res)) return
+  // 2026-09-04 — checkAdminReauth가 실패 지연(브루트포스 스로틀) 도입으로
+  // async가 됐다. await 필수(api/_pinAuth.js 헤더 주석 참고).
+  if (!(await checkAdminReauth(req, res))) return
 
   const url = supabaseAdminUrl()
   const key = supabaseAdminKey()

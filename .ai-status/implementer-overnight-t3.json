@@ -1,0 +1,25 @@
+{
+  "agent_name": "implementer",
+  "role": "overnight QA track T3 — Excel 업로드 파서 fixture 스위트",
+  "task_id": "overnight-t3",
+  "task": "scripts/testExcelImportFixtures.mjs 신규 작성(canonical/legacy 헤더, Unit 표기, invalid/fail-safe 8종) + verify:excel-import-fixtures 등록",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-04T00:00:00+09:00",
+  "updated_at": "2026-09-04T00:00:00+09:00",
+  "files_owned": [
+    "scripts/testExcelImportFixtures.mjs",
+    "package.json",
+    "tests/harness/registry.mjs"
+  ],
+  "files_read": [
+    "src/utils/excelHeaderGuard.js",
+    "src/components/AdminScreen.jsx",
+    "scripts/testExcelHeaderGuard.mjs",
+    "scripts/testExcelHeaderResidue.mjs",
+    "tests/harness/runAll.mjs"
+  ],
+  "summary": "worktree wt-excel(branch test/excel-import-fixtures)에서 parseExcelRows fixture 스위트 신규 작성. 실제 소스 텍스트 추출 방식(기존 testExcelHeaderGuard.mjs와 동일 기법)으로 54단언 전체 PASS. gap() 리포트로 설계상 알려진 트레이드오프 5건(WARN)과 silent 케이스 1건(빈 word/meaning 행 스킵 신호 부재, FAIL)을 문서화만 하고 구현하지 않음 — 실제 파서 결함은 재현되지 않아 test-only, src/ 무수정. npm run build PASS, verify:excel-import-fixtures/verify:excel-residue/testExcelHeaderGuard.mjs 전부 PASS. 커밋 2개(fixture 스위트 / 등록).",
+  "blocker": null,
+  "next_action": "운영자 판단: gap 리포트의 FAIL 1건(빈 word/meaning 행 silent skip)에 대해 최소 수정(empty-cell-row 경고, 완전 공백행 제외) 구현 여부 결정 — 구현 시 별도 커밋으로 FAIL-first 절차 적용 권장."
+}

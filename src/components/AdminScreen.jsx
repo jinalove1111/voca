@@ -1251,6 +1251,13 @@ function parseExcelRows(rows, selectedClass = '') {
   // 처리하지만, undefined로 통일해 두면 그 계약이 더 명확해진다.
   const orUndef = (v) => (v === '' || v === undefined ? undefined : v)
 
+  // [2026-09-04 overnight T3b] 부분 누락 행 경고 집계용 — word/meaning
+  // 정확히 한쪽만 있는 행의 파일 내 행 번호(1-based, 헤더 행 포함해 셈)를
+  // 모은다. unitColumnValues 는 unit 헤더 컬럼이 감지된 경우 채택된(word·
+  // meaning 둘 다 있는) 행의 unit 원값만 모아 "전부 비어있는지" 판정에 쓴다.
+  const partialRows = []
+  const unitColumnValues = []
+
   const result = dataRows
     .map((r, rowIdx) => {
       if (!Array.isArray(r) || r.length === 0) return null
@@ -1276,6 +1283,16 @@ function parseExcelRows(rows, selectedClass = '') {
         } else {
           word = v[0]; meaning = v[1]
         }
+      }
+
+      // [2026-09-04 overnight T3b] 부분 누락 행 — word/meaning 정확히 한쪽만
+      // 있는 행(둘 다 없는 행은 정상적인 트레일링 공백 행일 수 있어 그대로
+      // 조용히 넘어간다 — 여기서 건드리지 않는다). 기존엔 마지막
+      // .filter(r => r && r.word && r.meaning)에서 아무 신호 없이 버려졌다.
+      // 파싱 결과(채택되는 행 집합)는 절대 바꾸지 않는다 — 신호만 남긴다.
+      if (!!word !== !!meaning) {
+        partialRows.push(rowIdx + (hasHeader ? 2 : 1))
+        return null
       }
 
       // 선택 컬럼 4종 — 헤더가 명시적으로 감지됐고(hasHeader) 그 헤더가
@@ -1327,6 +1344,11 @@ function parseExcelRows(rows, selectedClass = '') {
       // 실사고(이름 "Unit"인 유령 유닛)를 유닛 칸 단독으로도 차단한다.
       unit = sanitizeUnitLabel(unit)
 
+      // [2026-09-04 overnight T3b] Unit 열 전부 비어있음 경고 집계용 — 실제로
+      // 채택될(word/meaning 둘 다 있는) 행만 모은다. 트레일링 공백 행이 이
+      // 신호를 오염시키지 않게 한다.
+      if (hasHeader && headerMap.unit !== undefined && word && meaning) unitColumnValues.push(unit)
+
       return { className: selectedClass, unit: unit || 'Unit 1', word, meaning, example, exampleTranslation, partOfSpeech, cefr }
     })
     .filter(r => r && r.word && r.meaning)
@@ -1358,6 +1380,21 @@ function parseExcelRows(rows, selectedClass = '') {
       warn('constant-number-column', '첫 칸이 모든 행에서 같은 숫자예요 — 행번호가 아니라 유닛 번호일 수 있어요',
         `"${col0[0]}" × ${col0.length}행 → 지금은 전부 Unit 1 로 저장돼요`)
     }
+  }
+
+  // [2026-09-04 overnight T3b] 부분 누락 행 — word/meaning 정확히 한쪽만
+  // 있던 행들(둘 다 없는 행은 트레일링 공백 행으로 보고 계속 조용히 넘어감).
+  if (partialRows.length > 0) {
+    warn('partial-row',
+      `단어 또는 뜻이 비어 있는 행 ${partialRows.length}개를 건너뛰었어요 (행: ${partialRows.join(', ')})`)
+  }
+
+  // [2026-09-04 overnight T3b] Unit 열이 헤더에서 감지됐는데 채택된 모든
+  // 행에서 그 칸이 비어 있으면, 전부 'Unit 1' 폴백으로 저장된다는 사실을
+  // 미리 알린다(파싱 결과 자체는 바꾸지 않음 — 신호만 추가).
+  if (hasHeader && headerMap.unit !== undefined && unitColumnValues.length > 0 && unitColumnValues.every((v) => !v)) {
+    warn('unit-column-empty',
+      "Unit 열이 전부 비어 있어 모든 단어가 'Unit 1'로 들어가요 — 의도한 것이 맞는지 확인하세요")
   }
 
   result.headerDetected = hasHeader

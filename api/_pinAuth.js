@@ -101,30 +101,70 @@ function warnIfWeakAdminPinOnce() {
 // 재실행되지 않으므로 로그 스팸도 없다.
 warnIfWeakAdminPinOnce()
 
+// ── 관리자 PIN 실패 지연 + 상수시간 비교 (2026-09-04, 보안 감사 Medium 대응) ──
+// 문제: verify-admin-pin.js는 실패 시 1.5초 지연을 걸고 있었지만(2026-07-16
+// P7 감사 후속), 같은 ADMIN_PIN을 검증하는 checkAdminReauth(admin-pin-
+// actions.js 12개 액션 dispatch + compute-word-king.js + start-new-season.js
+// 가 공유)와 clear-student-pin.js/set-student-pin.js의 인라인 비교에는
+// 지연이 전혀 없어, 그 경로들로는 온라인 브루트포스를 전속력으로 시도할 수
+// 있었다(자릿수가 짧은 ADMIN_PIN이라 무차별 대입이 비현실적이지 않음).
+// 지연 상수/로직을 이 파일 한 곳으로 옮기고 ADMIN_PIN을 검증하는 모든
+// 실패 경로가 재사용한다. 성공 경로는 어디서도 지연을 걸지 않는다(기존
+// 관리자 UX 그대로 — 정상 로그인/재인증은 지금처럼 즉시 응답).
+//
+// ADMIN_PIN_FAIL_DELAY_MS는 테스트 전용 오버라이드(기본 1500ms, 기존
+// verify-admin-pin.js가 쓰던 값 그대로 승계) — 운영 Vercel 환경에는
+// 설정하지 않는다(항상 기본 1500ms). scripts/testAdminPinThrottle.mjs가
+// 동작 검증 시에만 이 값을 작게 낮춰 빠르게 확인한다.
+const DEFAULT_ADMIN_PIN_FAIL_DELAY_MS = 1500
+export function adminPinFailDelayMs() {
+  const raw = process.env.ADMIN_PIN_FAIL_DELAY_MS
+  const n = raw === undefined || raw === '' ? NaN : Number(raw)
+  return Number.isFinite(n) && n >= 0 ? n : DEFAULT_ADMIN_PIN_FAIL_DELAY_MS
+}
+export async function adminPinFailureDelay() {
+  const ms = adminPinFailDelayMs()
+  if (ms > 0) await new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// 상수시간 문자열 비교 — checkAdminReauth가 2026-09-02에 이미 도입한 방식
+// (crypto.timingSafeEqual, 길이가 다르면 즉시 false)을 공용 헬퍼로 뽑아
+// verify-admin-pin.js/clear-student-pin.js/set-student-pin.js도 동일하게
+// 쓴다(과거엔 이 세 곳이 각자 평문 `===` 비교를 썼다).
+export function timingSafeStringEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false
+  const aBuf = Buffer.from(a, 'utf8')
+  const bBuf = Buffer.from(b, 'utf8')
+  return aBuf.length === bBuf.length && crypto.timingSafeEqual(aBuf, bBuf)
+}
+
 // 2026-07-16 P7 감사 후속 — 관리자 전용 API의 요청당 재인증(clear-student-
 // pin.js가 처음 도입한 패턴의 공용화). 클라이언트 사이드 게이트(AdminScreen
 // 의 authed=true)만 믿으면 누구나 /api/* 를 직접 fetch해서 관리자 액션을
 // 실행할 수 있으므로, 파괴적/유출성 액션은 요청마다 서버에서 ADMIN_PIN을
-// 다시 확인한다. 반환값: 통과하면 true, 아니면 응답을 이미 써놓고 false
-// (호출부는 `if (!checkAdminReauth(req, res)) return` 한 줄).
+// 다시 확인한다. 반환값: 통과하면 true, 아니면 응답을 이미 써놓고 false.
+// 2026-09-04 — 브루트포스 스로틀 도입으로 **async 함수가 됐다**(실패 시
+// adminPinFailureDelay 대기 필요). 호출부는 반드시
+// `if (!(await checkAdminReauth(req, res))) return` 로 await해야 한다 —
+// await 없이 호출하면 Promise 객체가 항상 truthy라 인증이 무력화되므로
+// (이 프로젝트에 현존하는 3개 호출부 전부 이미 async handler 안에서 호출
+// — admin-pin-actions.js/compute-word-king.js/start-new-season.js) 이 계약은
+// 반드시 지켜야 한다.
 // 응답 형식은 clear-student-pin.js와 동일: { ok:false, reason:'not_authorized' }
 // — AdminScreen의 각 핸들러가 이 reason으로 "다시 로그인해주세요" 안내를 띄운다.
-export function checkAdminReauth(req, res) {
+export async function checkAdminReauth(req, res) {
   const adminPin = process.env.ADMIN_PIN
   if (!adminPin) {
     res.status(500).json({ error: 'Server not configured: ADMIN_PIN missing' })
     return false
   }
   const supplied = req.body?.adminPin
-  // 2026-09-02 — `!==` 문자열 비교를 crypto.timingSafeEqual로 교체(타이밍
-  // 사이드채널 방어). 응답 형식/상태코드는 기존과 완전히 동일하게 유지한다
-  // — 이 변경은 순수 비교 방식 교체이지 새 실패 사유가 아니다.
-  const suppliedBuf = typeof supplied === 'string' ? Buffer.from(supplied, 'utf8') : null
-  const adminBuf = Buffer.from(adminPin, 'utf8')
-  const matches = !!suppliedBuf
-    && suppliedBuf.length === adminBuf.length
-    && crypto.timingSafeEqual(suppliedBuf, adminBuf)
+  const matches = timingSafeStringEqual(supplied, adminPin)
   if (!matches) {
+    // 2026-09-04 — 실패 시 지연(브루트포스 스로틀). 응답 형식/상태코드는
+    // 기존과 완전히 동일하게 유지한다 — 이 변경은 지연 추가이지 새 실패
+    // 사유가 아니다.
+    await adminPinFailureDelay()
     res.status(200).json({ ok: false, reason: 'not_authorized' })
     return false
   }

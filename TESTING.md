@@ -437,3 +437,36 @@ _이 섹션부터는 append — 위 내용은 원본 그대로 보존._
 9종 규칙)와 `npm run prod:hotfix`(manifest 단일 원천 preflight/apply/
 postflight/rollback + TTY 승인 게이트) — 상세는 `handoff.md` 104차 섹션
 참고.
+
+## 관련 항목: 야간 QA 신규 verify 스위트 8종 + registry 정리 (2026-09-04, 108차)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+야간 자율 QA 세션(11 트랙, `handoff.md` 2026-09-04(108차) 참고)이
+`tests/harness/registry.mjs`에 신규 등록한 스위트:
+
+| 스크립트 | 도메인 | 단언 | required(`extra`) |
+|---|---|---|---|
+| `scripts/testPaulTownProgression.mjs` | attachment | 222(진행/최종 236) | required |
+| `scripts/testGardenGrowthSources.mjs` | attachment | 44(최종 74) | required |
+| `scripts/testExcelImportFixtures.mjs` | unitSwitching | 54→62 | required(`extra:false`) |
+| `scripts/testDoubleEvents.mjs` | rewardSystem | 45 | required(`extra:false`) |
+| `scripts/testAdminPinThrottle.mjs` | login | 23 | required(`extra:false`) |
+| `scripts/testSecurityRegressions.mjs` | login | 35 PASS/2 KNOWN | required(`extra:false`) |
+| `scripts/testUiStabilityGuards.mjs` | quiz | 21 | required(`extra:false`) |
+| `scripts/testStudentPathContracts.mjs` | quiz | 61 | required(`extra:false`) |
+| `scripts/testStdoutFlushOnExit.mjs`(기존 파일, registry 미등록 발견·편입) | attachment | 8 | required(`extra:false`) |
+
+이 세션은 registry 전수 점검 과정에서 **에이전트가 신규 verify
+스크립트를 등록할 때 기본값으로 `extra:true`를 붙이는 습관**이 여러
+트랙에서 반복 관찰됨을 발견했다 — `extra:true`는 그 스위트의 FAIL이
+`verify:all`의 exit code에 반영되지 않는다는 뜻이라, 방치하면 회귀를
+잡지 못하는 채로 "PASS"만 보고하는 가짜 안전망이 된다. 위 표의 신규
+스위트 중 4개(더블파이어/관리자 PIN 스로틀/UI 안정성/Excel fixture)가
+정확히 이 상태로 등록될 뻔한 것을 발견해 `extra:false`(required)로
+정정했다(커밋 `a4313b2`/`154dfc9`). 정리 후 registry 전체 totals는
+**57 required / 72 extra / 129**(합계) — `extra:true` 스위트의 FAIL은
+여전히 exit code에 반영되지 않으므로, 새 스위트를 추가할 때는 원칙적으로
+`extra:false`로 시작하고(`DEVELOPER_GUIDE.md` 신규 규칙 참고) 정말
+"13개 필수 도메인 밖 보너스 커버리지"인 경우에만 명시적으로 `extra:true`
+를 붙인다.

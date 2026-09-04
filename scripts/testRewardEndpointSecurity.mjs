@@ -14,15 +14,19 @@
 //   · legacy-baseline은 API로 지급 불가(마이그레이션 전용)
 //   · student_progress/students를 UPDATE/DELETE하지 않는다
 //
-// ── 알려진 노출 (HIGH) — 2026-08-23 강화 후 잔여분 ─────────────────────
-// api/grant-xp.js에는 **인증이 없다**(POST면 누구나 호출 가능). 금액과 키는
-// 서버가 정하므로 1회당 지급액은 못 부풀리지만, sourceId가 클라이언트
+// ── 알려진 노출 (HIGH) — 2026-08-23/24 강화 후 잔여분 ────────────────────
+// api/grant-xp.js는 두 분기로 나뉜다: reward 분기(req.body.ledger==='reward')와
+// 레거시 XP 분기(그 외, 하위호환 유지). **레거시 XP 분기에는 인증이 없다**
+// (POST면 누구나 호출 가능) — reward 분기는 2026-08-24에 verifySessionToken()
+// L0 인증이 추가되어 이미 닫혔다(핸드오프 2026-08-24, KNOWN 아님). 금액과
+// 키는 서버가 정하므로 1회당 지급액은 못 부풀리지만, sourceId가 클라이언트
 // 제어이고 다음 두 타입은 자유도가 사실상 무한하다:
 //   · exam-complete       (pattern 'uuid')       — 임의 UUID v4마다 +2별
 //   · wrong-word-recovered(pattern 'date:token') — 임의 토큰마다 +1별
 // 2026-08-23 서버 강화(L1 학생 실재 / L2 exam 실재 / L3 일일 상한)로 이 두
-// 타입의 **무제한**은 닫혔다. 남은 노출은 인증 부재 하나 — 상한 안에서라면
-// 여전히 남의 studentId로 원장을 부풀릴 수 있다(하루 최대 86별).
+// 타입의 **무제한**은 닫혔다. 남은 노출은 레거시 XP 분기의 인증 부재 하나 —
+// 상한 안에서라면 여전히 남의 studentId로 원장을 부풀릴 수 있다(하루 최대
+// 86별, 단 reward 분기 자체는 2026-08-24부터 인증됨).
 //
 // 대조군: 기존 XP 경로(api/grant-xp.js의 XP 분기)는 정확히 이 문제를 겪고
 // 고친 이력이 있다 — source_event_id를 **기간키(날짜)** 로 제한해
@@ -93,9 +97,20 @@ for (const t of ['word-session-complete', 'writing-complete', 'daily-goal-comple
   check(`${t}: 정상 날짜는 통과`, eng.isValidRewardSource(t, rule.sourceType, today) === true)
 }
 
-console.log('\n5. ★ 알려진 노출 (HIGH, 미수정) — 인증 부재 + sourceId 자유도')
-knownExposure('api/grant-xp.js에 인증(PIN/토큰/서명) 검증이 없다',
-  !/verifyStudentPin|verifyAdminPin|Authorization|bearer/i.test(code))
+console.log('\n5. ★ 알려진 노출 (HIGH, 부분 수정) — 레거시 XP 분기 인증 부재 + sourceId 자유도')
+{
+  // reward 분기와 레거시 XP 분기의 경계를 랜드마크로 찾아 인증 검사를
+  // 분기별로 스코프한다(testSecurityRegressions.mjs 1번 항목과 동일 관례
+  // 재사용 — 새 기법 발명 아님).
+  const rewardBranchIdx = code.indexOf("req.body.ledger === 'reward'")
+  const legacyBranchIdx = code.indexOf('const { studentId, eventType, sourceEventId } = req.body')
+  check('reward 분기/레거시 XP 분기 경계 랜드마크를 모두 찾음(아래 인증 스코프 검사의 전제)', rewardBranchIdx >= 0 && legacyBranchIdx > rewardBranchIdx)
+  const rewardBranchSrc = code.slice(rewardBranchIdx, legacyBranchIdx)
+  const legacyBranchSrc = code.slice(legacyBranchIdx)
+  check("reward 분기(ledger==='reward')는 verifySessionToken()을 호출한다(L0 인증, 2026-08-24 강화로 닫힘)", /verifySessionToken\(/.test(rewardBranchSrc))
+  knownExposure("레거시 XP 분기(ledger≠'reward')는 verifySessionToken 미적용(KNOWN); reward 분기는 적용됨(2026-08-24)",
+    !/verifySessionToken\(/.test(legacyBranchSrc))
+}
 {
   // exam-complete: 임의 UUID v4마다 새 키 = 새 지급
   const uuids = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-9222-222222222222']

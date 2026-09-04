@@ -1,9 +1,30 @@
 # Paul Easy Voca — 로드맵
 
-_최종 갱신: 2026-08-05 (17차, 16차 배포 완료 뒤 운영자 지시로 Word Asset
-시스템 전체 8축 재검증 수행, 그 과정에서 실버그 2건 발견·수정(AI 생성
-무저장 침묵 `f19ed56` / 학생 삭제 무반응+캐시 1000행 잘림 P0 `8e15ff7`)
-— 기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+_최종 갱신: 2026-09-04(108차, 야간 자율 QA/유지보수 세션 — 통합 브랜치
+`qa/overnight-2026-09-04` 검증 완료, PR 대기) — 기존 섹션은 원본 그대로
+유지, 위에 이어서 추가함)_
+
+## 2026-09-04 (108차) — 야간 자율 QA/유지보수: 11 트랙 → 통합 브랜치 검증 완료, PR 대기 — 상태: 통합 브랜치 검증 완료 ✅(merge는 운영자 승인 대기)
+
+11개 worktree 병렬 트랙(garden/progression e2e 회귀, Excel 파서
+fixture, reward 더블파이어 회귀, 학생 데이터 무결성 READ-ONLY 감사,
+ghost/legacy 유닛·교재 인벤토리, 보안 정적/동적 감사(A- 유지) + 관리자
+PIN 브루트포스 스로틀 갭 수정, UI/성능 감사 + 저위험 수정 3건, prod
+invariant 정적 감사 5종, 학생 핵심 경로 SSR 계약, 보안 회귀 고정
+스위트)를 야간 자율 세션으로 수행하고 `qa/overnight-2026-09-04` 단일
+통합 브랜치로 병합·registry 정리까지 완료. Production DB WRITE 0, SQL
+WRITE 0, 실제 학생 데이터 변경 0, merge 0(원격)/deploy 0. 최종 검증
+(`154dfc9`): `npm run build` PASS, `npm run verify:all` ALL DOMAINS
+PASS, `health:students` 36/10/0(무회귀), `prod:check` WARN(invariant
+FAIL 0/WARN 60), 로컬 Release Gate PASS. registry 정리로 에이전트가
+신규 verify 스위트를 기본 `extra:true`로 등록하던 습관을 발견·정정(4개
+필수 스위트 required 승격) — totals 57 required / 72 extra / 129.
+발견 버그: 관리자 PIN 스로틀 갭(Medium) 수정 + `checkAdminReauth` async
+전환, UI 안정성 저위험 3건 수정(GuidedSession key/포그라운드 재조회
+쿨다운/검색 렌더 상한), `testStdoutFlushOnExit.mjs` registry 미등록
+발견·편입. 상세는 `handoff.md` 2026-09-04(108차) 섹션, PR 4건(#9/#10/
+#11 + 신규 통합 브랜치) merge 결정은 `PROJECT_BOARD.md` BLOCKED 카드
+참고 — **운영자 승인 전까지 merge 없음**.
 
 ## 2026-08-05 (17차) — Word Asset 전체 재검증(8축) + 실버그 2건 수정(AI 생성 무저장 침묵 / 학생 삭제 무반응+캐시 1000행 잘림 P0) — 검증·수정 완료 ✅(AI 저장 원인은 미확정, 운영자 재확인 대기)
 

@@ -107,7 +107,10 @@ export default async function handler(req, res) {
   // 불문) adminPin이 틀리면 항상 같은 not_authorized로 거부된다. 이렇게
   // 해야 미인증 요청이 action 값을 바꿔가며 "어떤 액션이 존재하는지"를
   // 탐지할 수 없다(보안 리뷰 필수 조건).
-  if (!checkAdminReauth(req, res)) return
+  // 2026-09-04 — checkAdminReauth가 실패 지연(브루트포스 스로틀) 도입으로
+  // async가 됐다. await 없이 호출하면 Promise가 항상 truthy라 인증이
+  // 무력화되므로 반드시 await한다(api/_pinAuth.js 헤더 주석 참고).
+  if (!(await checkAdminReauth(req, res))) return
 
   const url = supabaseAdminUrl()
   const key = supabaseAdminKey()

@@ -39,6 +39,13 @@ export const INVARIANT_CODES = {
   CLASS_ASSIGNMENT_CONTRADICTION: 'CLASS_ASSIGNMENT_CONTRADICTION',
   // Phase 8b(2026-09-03, 코디네이터 정정) — class_type='textbook' 컨테이너 반 대응
   STUDENT_CLASS_IS_CONTAINER: 'STUDENT_CLASS_IS_CONTAINER',
+  // ── Phase 11(2026-09-04, 야간 P11 트랙) — 교재/유닛 정합성 확장 ──
+  UNIT_TEXTBOOK_CONTAINER_MISMATCH: 'UNIT_TEXTBOOK_CONTAINER_MISMATCH',
+  TEXTBOOK_NAME_DUPLICATE: 'TEXTBOOK_NAME_DUPLICATE',
+  TEXTBOOK_UNREACHABLE: 'TEXTBOOK_UNREACHABLE',
+  STUDENT_TEXTBOOK_SELECTOR_EMPTY: 'STUDENT_TEXTBOOK_SELECTOR_EMPTY',
+  // 내용 기반(FK 무관) 중복 — 코디네이터 지시로 제안 즉시 구현.
+  UNIT_CONTENT_DUPLICATE: 'UNIT_CONTENT_DUPLICATE',
 }
 
 // 정상 유닛의 단어 수 범위. 이 범위를 벗어나면 데이터 이상 신호로 본다.
@@ -136,6 +143,27 @@ export const CODE_META = {
     impact: '학생의 홈 반이 교재 컨테이너(class_type=textbook)로 잘못 설정되어 반 관련 로직이 예상과 다르게 동작할 수 있음',
     recommended: '운영자 결정',
   },
+  // ── Phase 11(2026-09-04, 야간 P11 트랙) ──
+  UNIT_TEXTBOOK_CONTAINER_MISMATCH: {
+    impact: '유닛이 속한 컨테이너 반과 유닛의 교재가 어긋나(FK 레벨) 그 컨테이너로 전환 시 다른 교재의 유닛이 섞여 보일 수 있음',
+    recommended: '운영자 결정',
+  },
+  TEXTBOOK_NAME_DUPLICATE: {
+    impact: '이름이 완전히 같은 교재가 2개 이상이라 관리자 화면 교재 선택 시 어느 쪽인지 혼동될 수 있음',
+    recommended: 'READ-ONLY 조사',
+  },
+  TEXTBOOK_UNREACHABLE: {
+    impact: '이 교재로 연결된 반이 자기 컨테이너뿐(또는 전혀 없음)이고 실학생 배정도 없어, 지금은 어떤 학생도 이 교재에 도달할 경로가 없음',
+    recommended: 'READ-ONLY 조사',
+  },
+  STUDENT_TEXTBOOK_SELECTOR_EMPTY: {
+    impact: '학생의 홈 반에 연결된 교재가 없고 개별 배정에도 교재가 없어 교재 선택기가 빈 목록으로 보일 수 있음',
+    recommended: '운영자 결정',
+  },
+  UNIT_CONTENT_DUPLICATE: {
+    impact: '서로 다른 유닛(대개 다른 교재)의 단어 목록이 사실상 동일해 업로드 시 잘못된 교재에 내용이 중복 등록됐을 가능성이 있음',
+    recommended: 'READ-ONLY 조사',
+  },
 }
 
 /**
@@ -152,6 +180,12 @@ export function buildInvariantContext(data) {
     ...base,
     students: Array.isArray(data?.students) ? data.students : [],
     assignments: Array.isArray(data?.assignments) ? data.assignments : [],
+    // 2026-09-04(P11) — TEXTBOOK_UNREACHABLE/STUDENT_TEXTBOOK_SELECTOR_EMPTY
+    // 가 "반이 어떤 교재에 연결돼 있는가"를 판정하는 데 필요. buildContext()
+    // (studentHealthRules.mjs, 이 트랙 소유 아님)는 이 테이블을 모르므로
+    // 여기서 원본 배열만 그대로 얹는다(재구현 아님 — 인덱스 맵은 evaluateInvariants
+    // 안에서 순수 함수로 파생한다).
+    classTextbooks: Array.isArray(data?.classTextbooks) ? data.classTextbooks : [],
   }
 }
 
@@ -170,7 +204,22 @@ export function evaluateInvariants(ctx, opts = {}) {
   const wordsByUnit = ctx?.wordsByUnit || new Map()
   const wordCountByUnit = ctx?.wordCountByUnit || new Map()
   const students = Array.isArray(ctx?.students) ? ctx.students : []
+  const assignments = Array.isArray(ctx?.assignments) ? ctx.assignments : []
   const rawFindings = []
+
+  // Phase 11(2026-09-04) — class_textbooks 인덱스. 원본 배열(ctx.classTextbooks)
+  // 을 순수하게 두 방향 맵으로 파생한다(반→교재 집합, 교재→반 집합).
+  const classTextbooksByClass = new Map()
+  const classTextbooksByTextbook = new Map()
+  for (const ct of (Array.isArray(ctx?.classTextbooks) ? ctx.classTextbooks : [])) {
+    if (!ct?.class_id || !ct?.textbook_id) continue
+    const byClass = classTextbooksByClass.get(ct.class_id) || new Set()
+    byClass.add(ct.textbook_id)
+    classTextbooksByClass.set(ct.class_id, byClass)
+    const byTextbook = classTextbooksByTextbook.get(ct.textbook_id) || new Set()
+    byTextbook.add(ct.class_id)
+    classTextbooksByTextbook.set(ct.textbook_id, byTextbook)
+  }
 
   // Phase 8b(2026-09-03, 코디네이터 정정) — classes.class_type==='textbook' 인
   // 반은 "교재 컨테이너"이고 실제 사람이 소속되는 반이 아니다(반≠교재 설계 —
@@ -197,6 +246,7 @@ export function evaluateInvariants(ctx, opts = {}) {
   }
 
   const realStudents = students.filter((s) => s && classifyAccount(s, ctx) === 'REAL')
+  const realStudentIds = new Set(realStudents.map((s) => s.id))
 
   // 유닛 단어 수 이상 검사(체크 8)를 위해 실학생이 참조하는 유닛 id 를 모은다.
   const referencedUnitIds = new Set()
@@ -215,6 +265,21 @@ export function evaluateInvariants(ctx, opts = {}) {
     const sname = typeof student.name === 'string' ? student.name : null
     const myAssignments = (ctx?.assignmentsByStudent || new Map()).get(sid) || []
     const primary = myAssignments.find((a) => a?.is_primary) || null
+
+    // Phase 11(2026-09-04) — STUDENT_TEXTBOOK_SELECTOR_EMPTY: 홈 반에
+    // class_textbooks 연결이 하나도 없고, 이 학생의 SCA 행 중 textbook_id 가
+    // 있는 것도 하나도 없으면(= SCA 자체가 없는 경우 포함) 교재 선택기가
+    // 빈 목록으로 렌더된다. TEXTBOOK_MISSING(health, primary 전용)과는 달리
+    // "선택지 자체가 없음"을 본다.
+    const hasClassTextbookLink = !!student.class_id && (classTextbooksByClass.get(student.class_id)?.size || 0) > 0
+    const hasAssignmentTextbook = myAssignments.some((a) => !!a?.textbook_id)
+    if (!hasClassTextbookLink && !hasAssignmentTextbook) {
+      push({
+        code: INVARIANT_CODES.STUDENT_TEXTBOOK_SELECTOR_EMPTY, severity: 'WARN', studentId: sid, studentName: sname,
+        detail: `홈 반(${student.class_id ?? '없음'})에 연결된 교재가 없고 개별 배정(SCA)에도 교재가 없음 — 교재 선택기가 빈 목록으로 보일 수 있음`,
+        refs: { classId: student.class_id ?? null, assignmentCount: myAssignments.length },
+      })
+    }
 
     // Phase 8: MULTIPLE_PRIMARY / NO_PRIMARY — primary 카디널리티
     const primaryRows = myAssignments.filter((a) => a?.is_primary)
@@ -446,6 +511,111 @@ export function evaluateInvariants(ctx, opts = {}) {
         detail: `유닛 이름 "${rawName}" 비정상(${reason})`,
         refs: { unitId, textbookId: unit.textbook_id ?? null, name: rawName, reason },
       })
+    }
+  }
+
+  // ── Phase 11(2026-09-04, 야간 P11 트랙) — 교재/유닛 정합성 확장 ──
+  // 전부 저장소 전체 인벤토리 성격(학생 배정 여부 무관, GHOST_UNIT_PRESENT/
+  // UNIT_NAME_ABNORMAL 과 동일 패턴) — studentId 는 null.
+
+  // 10) UNIT_TEXTBOOK_CONTAINER_MISMATCH — 컨테이너 반(class_type=textbook)
+  // 소속 유닛인데 그 유닛의 교재가 그 컨테이너가 소유한 교재가 아님(FK 레벨
+  // 드리프트). "내용이 잘못 업로드된 것"(예: 다른 교재의 단어가 그대로
+  // 복사됨)은 이 검사로 못 잡는다 — FK 는 정상인데 내용만 틀렸을 수 있어서다
+  // (그 경우는 아래 UNIT_CONTENT_DUPLICATE 가 별도로 잡는다).
+  for (const [unitId, unit] of unitById) {
+    if (!unit || !unit.class_id || !isContainerClass(unit.class_id)) continue
+    const tb = unit.textbook_id ? textbookById.get(unit.textbook_id) : null
+    if (!tb || tb.owner_class_id !== unit.class_id) {
+      const containerCls = classById.get(unit.class_id)
+      push({
+        code: INVARIANT_CODES.UNIT_TEXTBOOK_CONTAINER_MISMATCH, severity: 'WARN', studentId: null, studentName: null,
+        detail: `유닛 "${unit.name}"이 교재 컨테이너 반 "${containerCls?.name || unit.class_id}" 소속인데, `
+          + `유닛의 교재(${unit.textbook_id || '없음'})가 그 컨테이너가 소유한 교재가 아님`,
+        refs: {
+          unitId, classId: unit.class_id, className: containerCls?.name ?? null,
+          unitTextbookId: unit.textbook_id ?? null, textbookOwnerClassId: tb?.owner_class_id ?? null,
+          wordCount: wordCountByUnit.get(unitId) || 0,
+        },
+      })
+    }
+  }
+
+  // 11) TEXTBOOK_NAME_DUPLICATE — 정규화(trim/공백축약/소문자) 후 완전히
+  // 같은 이름의 교재가 2개 이상. 전체 문자열 비교라 "중1 천재 이상기"와
+  // "중2 천재 이상기"는 다르다고 본다(의도된 설계 — 학년이 다르면 다른 책).
+  {
+    const groups = new Map()
+    for (const [tbId, tb] of textbookById) {
+      const key = norm(tb?.name)
+      if (!key) continue
+      const list = groups.get(key) || []
+      list.push(tbId)
+      groups.set(key, list)
+    }
+    for (const [key, ids] of groups) {
+      if (ids.length < 2) continue
+      push({
+        code: INVARIANT_CODES.TEXTBOOK_NAME_DUPLICATE, severity: 'WARN', studentId: null, studentName: null,
+        detail: `교재명이 동일(정규화 "${key}")한 교재 ${ids.length}개: ${ids.join(', ')}`,
+        refs: { textbookIds: ids, normalizedName: key },
+      })
+    }
+  }
+
+  // 12) TEXTBOOK_UNREACHABLE — class_textbooks 연결이 자기 컨테이너뿐이거나
+  // 아예 없고(= 일반 반에서 이 교재를 고를 수 있는 경로가 없음), 실학생
+  // SCA 도 이 교재를 하나도 안 씀 — 지금은 어떤 학생도 도달할 수 없다.
+  for (const [tbId, tb] of textbookById) {
+    const linked = classTextbooksByTextbook.get(tbId) || new Set()
+    const ownerClassId = tb?.owner_class_id ?? null
+    const onlyContainerOrNowhere = linked.size === 0 || [...linked].every((cid) => cid === ownerClassId)
+    if (!onlyContainerOrNowhere) continue
+    const hasRealSca = assignments.some((a) => a?.textbook_id === tbId && realStudentIds.has(a?.student_id))
+    if (hasRealSca) continue
+    push({
+      code: INVARIANT_CODES.TEXTBOOK_UNREACHABLE, severity: 'WARN', studentId: null, studentName: null,
+      detail: `교재 "${tb?.name}"이 컨테이너 반 외에는 class_textbooks 로 연결되지 않고(연결 ${linked.size}건), `
+        + `실학생 SCA 배정도 없음 — 지금은 어떤 학생도 이 교재에 도달할 경로가 없음`,
+      refs: { textbookId: tbId, ownerClassId, linkedClassIds: [...linked] },
+    })
+  }
+
+  // 13) UNIT_CONTENT_DUPLICATE — FK 무관, 내용 기반. 서로 다른 유닛의 단어
+  // 목록(word, 소문자 정규화)이 겹침 비율(Jaccard) ≥90% 이고 공통 단어
+  // ≥20개면 "같은 내용이 다른 유닛/교재에 중복 업로드됐을 가능성"으로
+  // 본다. UNIT_TEXTBOOK_CONTAINER_MISMATCH 는 FK 드리프트만 잡고 이런
+  // "FK 는 멀쩡한데 내용만 잘못 업로드된" 사고는 못 잡는다 — 그 사각지대를
+  // 메운다(코디네이터 지시로 제안과 동시에 구현).
+  {
+    const wordSetByUnit = new Map()
+    for (const [unitId] of unitById) {
+      const ws = wordsByUnit.get(unitId) || []
+      if (ws.length < 20) continue
+      wordSetByUnit.set(unitId, new Set(ws.map((w) => norm(w?.word)).filter(Boolean)))
+    }
+    const ids = [...wordSetByUnit.keys()]
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const a = wordSetByUnit.get(ids[i])
+        const b = wordSetByUnit.get(ids[j])
+        let inter = 0
+        for (const w of a) if (b.has(w)) inter++
+        const union = a.size + b.size - inter
+        const ratio = union > 0 ? inter / union : 0
+        if (inter < 20 || ratio < 0.9) continue
+        const ua = unitById.get(ids[i])
+        const ub = unitById.get(ids[j])
+        push({
+          code: INVARIANT_CODES.UNIT_CONTENT_DUPLICATE, severity: 'WARN', studentId: null, studentName: null,
+          detail: `유닛 "${ua?.name}"(교재 ${ua?.textbook_id ?? '없음'})과 "${ub?.name}"(교재 ${ub?.textbook_id ?? '없음'})의 `
+            + `단어 목록이 ${Math.round(ratio * 100)}% 겹침(공통 ${inter}개)`,
+          refs: {
+            unitIds: [ids[i], ids[j]], textbookIds: [ua?.textbook_id ?? null, ub?.textbook_id ?? null],
+            overlapCount: inter, overlapRatio: ratio,
+          },
+        })
+      }
     }
   }
 

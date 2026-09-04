@@ -1,0 +1,35 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "overnight-t9",
+  "task": "보안 회귀 고정 스위트(scripts/testSecurityRegressions.mjs) 신규 작성 + verify:security-regressions 등록(login 도메인 필수) — grant-xp.js 레거시 인증부재 KNOWN 고정, AdminScreen.jsx 미인증 fetch 금지, 시크릿 노출 0, signup OFF, anon 권한 라이브 프로브(phantom id), PIN 잠금 상수, Release Gate 자격증명-부재 자가검증",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-04T04:30:00+09:00",
+  "updated_at": "2026-09-04T05:40:00+09:00",
+  "files_owned": [
+    "scripts/testSecurityRegressions.mjs",
+    "package.json",
+    "tests/harness/registry.mjs"
+  ],
+  "files_read": [
+    "api/grant-xp.js",
+    "src/components/AdminScreen.jsx",
+    "src/utils/wordLibrary.js",
+    "api/admin-pin-actions.js",
+    "api/verify-student-pin.js",
+    "scripts/verifyRelease.mjs",
+    "scripts/studentHealthCheck.mjs",
+    "scripts/testRlsSecurity.mjs",
+    "scripts/testRewardEndpointSecurity.mjs",
+    "scripts/testReleaseGate.mjs",
+    ".gitignore",
+    "handoff.md",
+    "supabase_v3_36_reward_ledger.sql",
+    "supabase_v2_9_student_class_assignments.sql",
+    "supabase_v2_3_paul_rank.sql"
+  ],
+  "summary": "35개 단언(PASS 35 / FAIL 0) + KNOWN 2건 고정. KNOWN #1: api/grant-xp.js 레거시 XP 분기(L274+)는 verifySessionToken 미호출(reward 분기 L79+는 호출) — handoff.md 2026-09-02 §5. KNOWN #2: anon DELETE student_class_assignments phantom id가 아직 204(성공) — handoff.md:286. 실측으로 자체 버그 2건 발견·수정(규칙 15): (a) CRLF 줄바꿈에서 '/\\/\\/.*$/' 정규식이 '\\r' 때문에 매치 실패해 주석 제거가 안 되던 버그 → '$' 앵커 제거로 수정, (b) import.meta.env 키 스캔이 주석 제거 전 raw 텍스트를 스캔해 주석 속 'VITE_*' 예시가 오탐되던 버그 → stripped 텍스트로 스캔하도록 수정. 항목 8(Gate self-test)에서 중요 발견: env var만 비우는 방식(과제 지시 원안)은 studentHealthCheck.mjs가 '../.env' 파일을 직접 재읽기하는 폴백 때문에 자격증명-없음 상태를 재현하지 못함(실측 확인) — .env 파일 자체를 rename(원상복구 try/finally 보장)해야 진짜 재현됨. 실제 재현 결과 Release Gate는 fail-closed(exit 1, require-env 메시지 포함)로 정상 동작 확인(결함 아님). login 도메인(tests/harness/registry.mjs)에 필수 체크로 등록, npm run verify:login 통과(9개 스크립트) 확인. 부수 확인: npm run verify:reward-security(32단언 PASS, KNOWN 3건 유지 — 단 이 파일은 verifySessionToken 도입을 반영 못해 여전히 '인증 없음'을 KNOWN으로 표기하는 stale 상태, 이번 작업 범위 밖이라 미수정/보고만) / node scripts/testRlsSecurity.mjs PASS / npm run verify:release-gate(103단언 PASS) / npm run build PASS. Production DB write 0, 학생 실데이터 무접촉(phantom id만), .env/.env.local 원상 보존 확인.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 대기. 참고(이번 범위 밖, 별도 트랙 권장): scripts/testRewardEndpointSecurity.mjs의 '인증 부재' KNOWN 단언이 2026-08-24 verifySessionToken 도입을 반영 못해 stale — 그 파일 소유 세션이 정규식(verifyStudentPin|verifyAdminPin|Authorization|bearer)에 verifySessionToken을 포함하도록 갱신 검토."
+}

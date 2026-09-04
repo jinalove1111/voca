@@ -523,9 +523,23 @@ console.log('\n=== 10절. UX 출력 — 마스킹/--show-names/Safe to continue 
   check('FAIL 이 있는 픽스처는 "Safe to continue: NO" 를 출력한다', /Safe to continue: NO/.test(res.stdout))
 }
 {
+  // prodCheck.mjs는 CI/GITHUB_ACTIONS 환경이면 --show-names를 무시하고
+  // 항상 마스킹한다(2026-09-03 보안수정 — 공개 저장소 Actions 로그에 실명이
+  // 찍히는 사고를 코드 레벨에서 차단, prodCheck.mjs 주석 참고). runCli는
+  // spawnSync에 별도 env를 주지 않아 부모 프로세스(이 테스트 자신)의 CI/
+  // GITHUB_ACTIONS를 그대로 물려받으므로, `CI=true GITHUB_ACTIONS=true node
+  // scripts/testProdCheck.mjs`로 실행하면(GitHub Actions 러너의 기본값)
+  // --show-names를 줘도 마스킹된 채로 남는 것이 올바른 동작이다 — 이 자체가
+  // 코드 버그가 아니라 자식 프로세스가 같은 보안수정을 상속받는 정상 동작.
+  const IS_CI = !!(process.env.CI || process.env.GITHUB_ACTIONS)
   const res = runCli(['--fixture', beforeFixtureFile, '--show-names', '--report-dir', reportDir])
-  check('--show-names — 학생 실명이 그대로 노출된다', res.stdout.includes('StudentA') || res.stdout.includes('StudentB'),
-    res.stdout.slice(0, 400))
+  if (IS_CI) {
+    check('--show-names — CI 환경이면 강제로 마스킹 유지(실명 미노출, 2026-09-03 보안수정 상속)',
+      !res.stdout.includes('StudentA') && !res.stdout.includes('StudentB'), res.stdout.slice(0, 400))
+  } else {
+    check('--show-names — 학생 실명이 그대로 노출된다', res.stdout.includes('StudentA') || res.stdout.includes('StudentB'),
+      res.stdout.slice(0, 400))
+  }
 }
 {
   const res = runCli(['--fixture', afterFixtureFile, '--report-dir', reportDir])
@@ -549,6 +563,151 @@ console.log('\n=== 10절. UX 출력 — 마스킹/--show-names/Safe to continue 
   fs.writeFileSync(manyFixtureFile, JSON.stringify({ data: many }), 'utf8')
   const res = runCli(['--fixture', manyFixtureFile, '--report-dir', reportDir])
   check('7건 동일 코드(UNIT_WORDS_ABNORMAL) — "외 2건" 요약이 출력된다', /외 2건/.test(res.stdout), res.stdout)
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Phase 11(2026-09-04, 야간 P11 트랙) 확장 — invariant 5종(UNIT_TEXTBOOK_
+// CONTAINER_MISMATCH/TEXTBOOK_NAME_DUPLICATE/TEXTBOOK_UNREACHABLE/
+// STUDENT_TEXTBOOK_SELECTOR_EMPTY/UNIT_CONTENT_DUPLICATE) 전부 WARN.
+// FAIL-first: 이 절을 추가한 직후(prodInvariants.mjs/prodDataLoader.mjs
+// 확장 전) 먼저 실행해 신규 코드가 findings 에 전혀 나타나지 않아 전부
+// FAIL 하는 것을 확인한 뒤 구현했다(CLAUDE.md 규칙 15).
+// ═══════════════════════════════════════════════════════════════════════
+
+console.log('\n=== 11절. Phase 11 신규 invariant 5종 — 개별 양성/음성 ===')
+{
+  // UNIT_TEXTBOOK_CONTAINER_MISMATCH(양성) — 컨테이너 반 소속 유닛인데
+  // 그 유닛의 교재가 컨테이너 소유 교재가 아님(FK 레벨 드리프트).
+  const fx = syntheticBase()
+  fx.classes.push({ id: 'c-container', name: '교재컨테이너', class_type: 'textbook', spelling_direction: 'kr2en' })
+  fx.textbooks.push({ id: 'tb-owned', name: '컨테이너교재', owner_class_id: 'c-container' })
+  fx.units.push({ id: 'u-mismatch', name: 'UnitMismatch', textbook_id: 'tb1', class_id: 'c-container' }) // tb1 은 c-container 소유가 아님
+  fx.words.push(...Array.from({ length: 20 }, (_, i) => ({ id: `um${i}`, unit_id: 'u-mismatch', word: `m${i}`, meaning: `뜻${i}` })))
+  const { findings } = evalFixture(fx)
+  check('UNIT_TEXTBOOK_CONTAINER_MISMATCH(양성) — 컨테이너 소속 유닛의 교재가 컨테이너 소유 교재가 아님',
+    findings.some((f) => f.code === 'UNIT_TEXTBOOK_CONTAINER_MISMATCH' && f.severity === 'WARN' && f.refs?.unitId === 'u-mismatch'),
+    JSON.stringify(findings.map((f) => f.code)))
+}
+{
+  // UNIT_TEXTBOOK_CONTAINER_MISMATCH(음성) — 유닛이 자기 컨테이너에 정상 소속.
+  const fx = syntheticBase()
+  fx.classes.push({ id: 'c-container', name: '교재컨테이너', class_type: 'textbook', spelling_direction: 'kr2en' })
+  fx.textbooks.push({ id: 'tb-owned', name: '컨테이너교재', owner_class_id: 'c-container' })
+  fx.units.push({ id: 'u-ok', name: 'UnitOK', textbook_id: 'tb-owned', class_id: 'c-container' })
+  fx.words.push(...Array.from({ length: 20 }, (_, i) => ({ id: `uo${i}`, unit_id: 'u-ok', word: `o${i}`, meaning: `뜻${i}` })))
+  const { findings } = evalFixture(fx)
+  check('UNIT_TEXTBOOK_CONTAINER_MISMATCH(음성) — 자기 컨테이너 소유 교재와 일치하면 발생 안 함',
+    !findings.some((f) => f.code === 'UNIT_TEXTBOOK_CONTAINER_MISMATCH' && f.refs?.unitId === 'u-ok'))
+}
+{
+  // TEXTBOOK_NAME_DUPLICATE(양성) — 정규화(trim/공백축약/소문자) 후 완전히 같은 이름.
+  const fx = syntheticBase()
+  fx.textbooks.push({ id: 'tb-dup-a', name: '중2 천재 이상기', owner_class_id: null })
+  fx.textbooks.push({ id: 'tb-dup-b', name: '중2   천재  이상기', owner_class_id: null })
+  const { findings } = evalFixture(fx)
+  check('TEXTBOOK_NAME_DUPLICATE(양성) — 공백만 다른 동일 교재명',
+    findings.some((f) => f.code === 'TEXTBOOK_NAME_DUPLICATE' && f.severity === 'WARN'
+      && f.refs?.textbookIds?.includes('tb-dup-a') && f.refs?.textbookIds?.includes('tb-dup-b')),
+    JSON.stringify(findings.filter((f) => f.code === 'TEXTBOOK_NAME_DUPLICATE')))
+}
+{
+  // TEXTBOOK_NAME_DUPLICATE(음성) — 저자는 같지만 학년이 달라 전체 문자열이 다름.
+  const fx = syntheticBase()
+  fx.textbooks.push({ id: 'tb-g1', name: '중1 천재 이상기', owner_class_id: null })
+  fx.textbooks.push({ id: 'tb-g2', name: '중2 천재 이상기', owner_class_id: null })
+  const { findings } = evalFixture(fx)
+  check('TEXTBOOK_NAME_DUPLICATE(음성) — 같은 저자·다른 학년은 중복이 아니다',
+    !findings.some((f) => f.code === 'TEXTBOOK_NAME_DUPLICATE' && f.refs?.textbookIds?.includes('tb-g1')))
+}
+{
+  // TEXTBOOK_UNREACHABLE(양성) — 컨테이너 반 외에는 class_textbooks 연결이
+  // 전혀 없고(여기서는 아예 없음), 실학생 SCA 도 하나도 이 교재를 안 씀.
+  const fx = syntheticBase()
+  fx.classes.push({ id: 'c-container-2', name: '교재컨테이너2', class_type: 'textbook', spelling_direction: 'kr2en' })
+  fx.textbooks.push({ id: 'tb-orphan', name: '고아교재', owner_class_id: 'c-container-2' })
+  const { findings } = evalFixture(fx)
+  check('TEXTBOOK_UNREACHABLE(양성) — class_textbooks 연결도 실학생 SCA 도 없는 교재',
+    findings.some((f) => f.code === 'TEXTBOOK_UNREACHABLE' && f.severity === 'WARN' && f.refs?.textbookId === 'tb-orphan'),
+    JSON.stringify(findings.filter((f) => f.code === 'TEXTBOOK_UNREACHABLE')))
+}
+{
+  // TEXTBOOK_UNREACHABLE(음성) — 일반 반에 class_textbooks 로 연결됨(도달 가능).
+  const fx = syntheticBase()
+  fx.textbooks.push({ id: 'tb-linked', name: '연결교재', owner_class_id: null })
+  fx.classTextbooks = [{ class_id: 'c1', textbook_id: 'tb-linked', enabled: true }]
+  const { findings } = evalFixture(fx)
+  check('TEXTBOOK_UNREACHABLE(음성) — 일반 반에 class_textbooks 로 연결되면 도달 가능으로 본다',
+    !findings.some((f) => f.code === 'TEXTBOOK_UNREACHABLE' && f.refs?.textbookId === 'tb-linked'))
+}
+{
+  // STUDENT_TEXTBOOK_SELECTOR_EMPTY(양성) — 홈 반에 class_textbooks 도 없고
+  // 학생 SCA 에도 textbook_id 가 하나도 없음(SCA 자체가 없는 경우 포함).
+  const fx = syntheticBase()
+  fx.classes.push({ id: 'c-empty', name: '빈반', spelling_direction: 'kr2en' })
+  fx.students.push({ id: 's2', name: '학생2', class_id: 'c-empty', current_unit_id: null, unit_name: null })
+  const { findings } = evalFixture(fx)
+  check('STUDENT_TEXTBOOK_SELECTOR_EMPTY(양성) — 홈 반 class_textbooks 0 + SCA textbook_id 0',
+    findings.some((f) => f.code === 'STUDENT_TEXTBOOK_SELECTOR_EMPTY' && f.severity === 'WARN' && f.studentId === 's2'),
+    JSON.stringify(findings.filter((f) => f.code === 'STUDENT_TEXTBOOK_SELECTOR_EMPTY')))
+}
+{
+  // STUDENT_TEXTBOOK_SELECTOR_EMPTY(음성) — SCA 는 없지만 홈 반에
+  // class_textbooks 링크가 있으면 선택기가 비지 않는다.
+  const fx = syntheticBase()
+  fx.students.push({ id: 's3', name: '학생3', class_id: 'c1', current_unit_id: null, unit_name: null })
+  fx.classTextbooks = [{ class_id: 'c1', textbook_id: 'tb1', enabled: true }]
+  const { findings } = evalFixture(fx)
+  check('STUDENT_TEXTBOOK_SELECTOR_EMPTY(음성) — 홈 반에 class_textbooks 링크가 있으면 발생 안 함',
+    !findings.some((f) => f.code === 'STUDENT_TEXTBOOK_SELECTOR_EMPTY' && f.studentId === 's3'))
+  check('STUDENT_TEXTBOOK_SELECTOR_EMPTY(음성, 기본 픽스처) — s1 은 SCA 에 textbook_id 가 있어 발생 안 함',
+    !findings.some((f) => f.code === 'STUDENT_TEXTBOOK_SELECTOR_EMPTY' && f.studentId === 's1'))
+}
+{
+  // UNIT_CONTENT_DUPLICATE(양성) — 서로 다른 교재의 두 유닛이 단어 목록
+  // ≥90% 겹치고(여기선 100%) ≥20 단어.
+  const fx = syntheticBase()
+  fx.textbooks.push({ id: 'tb-dupc-1', name: '교재C1', owner_class_id: null })
+  fx.textbooks.push({ id: 'tb-dupc-2', name: '교재C2', owner_class_id: null })
+  fx.units.push({ id: 'u-dupc-a', name: 'UnitDupA', textbook_id: 'tb-dupc-1' })
+  fx.units.push({ id: 'u-dupc-b', name: 'UnitDupB', textbook_id: 'tb-dupc-2' })
+  fx.words.push(...Array.from({ length: 20 }, (_, i) => ({ id: `dca${i}`, unit_id: 'u-dupc-a', word: `dupword${i}`, meaning: `뜻${i}` })))
+  fx.words.push(...Array.from({ length: 20 }, (_, i) => ({ id: `dcb${i}`, unit_id: 'u-dupc-b', word: `dupword${i}`, meaning: `뜻${i}` })))
+  const { findings } = evalFixture(fx)
+  const hit = findings.find((f) => f.code === 'UNIT_CONTENT_DUPLICATE'
+    && f.refs?.unitIds?.includes('u-dupc-a') && f.refs?.unitIds?.includes('u-dupc-b'))
+  check('UNIT_CONTENT_DUPLICATE(양성) — 다른 교재의 두 유닛이 단어 목록 100% 겹침(20단어)',
+    !!hit && hit.severity === 'WARN', JSON.stringify(findings.filter((f) => f.code === 'UNIT_CONTENT_DUPLICATE')))
+}
+{
+  // UNIT_CONTENT_DUPLICATE(음성) — 단어 목록이 다르면 발생하지 않는다(기본
+  // 픽스처 u1 과 겹치지 않는 20단어 유닛을 별도 교재에 추가).
+  const fx = syntheticBase()
+  fx.units.push({ id: 'u-diff', name: 'UnitDiff', textbook_id: 'tb2' })
+  fx.words.push(...Array.from({ length: 20 }, (_, i) => ({ id: `df${i}`, unit_id: 'u-diff', word: `zzzunique${i}`, meaning: `뜻${i}` })))
+  const { findings } = evalFixture(fx)
+  check('UNIT_CONTENT_DUPLICATE(음성) — 단어 목록이 겹치지 않으면 발생 안 함',
+    !findings.some((f) => f.code === 'UNIT_CONTENT_DUPLICATE'))
+}
+{
+  // CODE_META — 신규 5종 모두 impact/recommended 존재 + severity 는 findings 에서 전부 WARN.
+  const codes = ['UNIT_TEXTBOOK_CONTAINER_MISMATCH', 'TEXTBOOK_NAME_DUPLICATE', 'TEXTBOOK_UNREACHABLE',
+    'STUDENT_TEXTBOOK_SELECTOR_EMPTY', 'UNIT_CONTENT_DUPLICATE']
+  for (const code of codes) {
+    check(`CODE_META.${code} — impact/recommended 존재`,
+      !!CODE_META[code]?.impact && !!CODE_META[code]?.recommended, JSON.stringify(CODE_META[code]))
+    check(`INVARIANT_CODES.${code} 가 등록돼 있다`, INVARIANT_CODES?.[code] === code)
+  }
+}
+{
+  // 사람용 출력 — 신규 코드도 기존 마스킹 경로(renderBucket/maskName)를 그대로 탄다(전용 우회 경로 없음).
+  const fx = syntheticBase()
+  fx.classes.push({ id: 'c-empty2', name: '빈반2', spelling_direction: 'kr2en' })
+  fx.students.push({ id: 's-mask', name: 'MaskTargetStudent', class_id: 'c-empty2', current_unit_id: null, unit_name: null })
+  const maskFixtureFile = path.join(TMP_DIR, 'testProdCheck.mask11.fixture.json')
+  fs.writeFileSync(maskFixtureFile, JSON.stringify({ data: fx }), 'utf8')
+  const res = runCli(['--fixture', maskFixtureFile, '--report-dir', reportDir])
+  check('STUDENT_TEXTBOOK_SELECTOR_EMPTY 도 기본 출력에서 학생 실명이 마스킹된다',
+    !res.stdout.includes('MaskTargetStudent') && /M\*\*\*/.test(res.stdout), res.stdout.slice(0, 600))
 }
 
 console.log(`\n${'='.repeat(60)}`)

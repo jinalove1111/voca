@@ -1,0 +1,36 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현(오늘 밤 QA track T1 — 테스트 전용)",
+  "task_id": "overnight-t1-paul-town-progression",
+  "task": "Paul Town/English Garden 진행 회귀 스위트 강화 — P1 testGardenGrowthSources.mjs e2e 확장(74단언), P2 testPaulTownProgression.mjs legacy/멀티기기/재적재 강화(236단언) + ACTIVE/DORMANT/UNREACHABLE/NOT IMPLEMENTED 분류표",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-04T00:00:00.000Z",
+  "updated_at": "2026-09-04T00:00:00.000Z",
+  "files_owned": [
+    "scripts/testGardenGrowthSources.mjs",
+    "scripts/testPaulTownProgression.mjs",
+    "docs/qa/paul-town-progression-classification.md",
+    ".ai-status/implementer-overnight-t1.json"
+  ],
+  "files_read": [
+    "src/hooks/useStudent.js",
+    "src/hooks/useAttachment.js",
+    "src/utils/attachment/attachmentCore.js",
+    "src/utils/attachment/worldProgress.js",
+    "src/utils/attachment/paulTown.js",
+    "src/utils/attachment/storyFoundation.js",
+    "src/components/Dashboard.jsx",
+    "src/components/EnglishGarden.jsx",
+    "src/components/PaulTown.jsx",
+    "src/components/Bookshelf.jsx",
+    "src/App.jsx",
+    "src/config/features.js",
+    "scripts/fakeReact.mjs",
+    "scripts/buildRaceBundle.mjs",
+    "package.json"
+  ],
+  "summary": "HARD RULES 준수(no network/DB, no src/ edits, no push/merge, git add explicit paths only). P1: testGardenGrowthSources.mjs에 F섹션 추가(44→74단언) — guided completion 단독, 3소스 교차 조합 4쌍, 이미클리어 재정답 멱등(퀴즈/철자 각각), 퀴즈 오답=0, 교재전환 무영향, rehydrate 확장(normalizeRecord 단독/local-empty←cloud/cloud←cloud 3방향 + gardenPlots 칸까지 비교), 정적 계약 2건(gardenPoints 합집합을 만드는 곳이 src/ 전체에서 attachmentCore.js 1곳뿐 — grep 재귀 검사, Dashboard/EnglishGarden/PaulTown이 deriveAttachmentStats를 스스로 import하지 않고 stats prop만 소비). P2: testPaulTownProgression.mjs에 '5b' 섹션 추가(222→236단언) — E) clearedWords/hatInventory/milestones 필드 자체가 없는 레거시 record가 throw 없이 정규화되고 world 상태가 clearedCount 폴백 경로와 JSON 깊은 동치임을 고정, F) 실제 grantHats/addMilestones로 두 기기(다른 storage, 같은 학생 id)에 out-of-order earnedAt을 기록 → mergeProgressRecords 양방향 교환법칙 + 최초 재적재 + 연속 재적재 2회 canon 불변. facility 표 뒤에 새 ACTIVE/DORMANT/UNREACHABLE/NOT IMPLEMENTED 분류표(12개 요소, file:line 근거) 콘솔 출력 + docs/qa/paul-town-progression-classification.md 자동 생성(테스트 실행마다 재생성). FAIL 없음 — 새 assertion이 실제로 깨진 순간은 1건(정원 35포인트 텃밭 filled 계산을 17로 잘못 예상 — floor(35/2)=17>PLOT_COUNT(16)이라 실제로는 16칸, 공식 재확인 후 수정, src 결함 아님).",
+  "blocker": null,
+  "next_action": "qa-reviewer/planner 검토 대기. src/ 결함 발견 0건(모든 FAIL은 테스트 코드 자체의 예상값 오류였고 즉시 수정·재확인함). 후속 아이디어(범위 밖, 제안만): world-full-screens/story는 NOT IMPLEMENTED로 확정됐으므로 실제 화면 구현 여부는 운영자 우선순위 결정 필요."
+}
