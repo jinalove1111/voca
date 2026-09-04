@@ -1,0 +1,32 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "harness-v2-trackbc",
+  "task": "Production Safety Harness V2 — Track B(narrative lint/VERIFY==WRITE drift guard/drift refresh/SCA insert-delete/invariants delta) + Track C(prod:plan/prod:apply alias+STANDARD_STATUS/runbook)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-04T04:00:00.000Z",
+  "updated_at": "2026-09-04T04:40:00.000Z",
+  "files_owned": [
+    "scripts/lib/hotfixManifest.mjs",
+    "scripts/prodHotfix.mjs",
+    "scripts/prodPlan.mjs",
+    "scripts/testProdHotfix.mjs",
+    "scripts/testProdPlan.mjs",
+    "package.json",
+    "docs/production-safety-harness-runbook.md"
+  ],
+  "files_read": [
+    "scripts/lib/prodDataLoader.mjs",
+    "scripts/lib/prodInvariants.mjs",
+    "scripts/prod/manifests/ghost-unit-landing-20260902.json",
+    "scripts/prodCheck.mjs",
+    "scripts/testProdCheck.mjs",
+    "scripts/testReleaseGateProdCheck.mjs",
+    "scripts/lib/studentHealthRules.mjs",
+    ".env"
+  ],
+  "summary": "B1 describeChange()/lintManifestNarratives() 서술 일치성 린트(2026-09-02 유령 유닛 사고 재현 방지, validateManifest+staticSafetyScan 에 wiring). B2 parseGeneratedUpdateStatement()/verifyWriteDriftGuard() VERIFY==WRITE 구조적 회귀 가드. B3 refreshExpectBefore() drift refresh(순수, 원본 불변). B4 student_class_assignments 전용 op:insert/delete(narrow ALLOWLIST, 중복/전체행 가드, 대칭 rollback, staticSafetyScan 예외 패턴). B5 applyManifestToSnapshot/diffInvariantFindings/computeInvariantsDeltaPreview(순수) + prodHotfix.mjs 5.5단계(승인 전 blocked-invariant fail-closed, D.loadInvariantSnapshot 옵션 — 기본 off, CLI만 실제 라이브 구현 주입, 기존 30여 시나리오 무영향). C1 scripts/prodPlan.mjs 신규 + runPlan()(READ-ONLY, dryRun 강제 재사용, risk/영향집계/이름해석/drift/apply_eligibility 4값). C2 prod:apply 별칭 + computeStandardStatus() 4값 매핑(PASS/WARN/FAIL/BLOCKED_NEEDS_APPROVAL). C3 runbook 7절 append. 전 구간 FAIL-first(먼저 import/assert FAIL 확인 후 구현) + 소커밋 9개(test/feat 페어, 단 시간 제약으로 B1-B3 test/feat 두 커밋에 B1~B5(pure) 가 실제로는 함께 들어감 — 커밋 메시지에 정직하게 기록 못한 점은 최종 보고서에 명시). verify:prod-hotfix 253/253, verify:prod-plan 27/27, verify:prod-check 162/162, verify:release-gate-prod-check 42/42, build 통과. 라이브 READ-ONLY 스모크(npm run prod:plan, CI dry-run, prod:apply --dry-run) 전부 DB WRITE 0 확인.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 요청 — 특히 (a) prodDataLoader.mjs 는 건드리지 않았고(파일 소유권 보존) 대신 이미 있던 reader.selectAllRows() 추상화로 buildInvariantSnapshotFromReader() 를 만들었는데, class_textbooks 는 복합키라 이 경로로 못 가져와 항상 빈 배열(TEXTBOOK_UNREACHABLE/STUDENT_TEXTBOOK_SELECTOR_EMPTY 두 invariant 는 이 delta 미리보기에서 항상 스킵)인 트레이드오프가 허용 가능한지 확인, (b) manifest.id/runId 문자열에 dangerous keyword 부분일치(예: 'insert'/'delete' 포함 슬러그, hyphen 경계도 \\b 매치됨) 시 static scan 이 fail-closed 로 막는 실사용 영향(문서화만 하고 코드는 고치지 않음) 검토, (c) B1-B3/B4/B5(pure) 가 실제로는 커밋 82e3891/b734fa4(B1-B3 라벨) 안에 전부 함께 들어간 점(시간 제약으로 순차 커밋 분리 못함) — 커밋 이력이 실제 diff 내용과 라벨이 다소 어긋난다는 점 인지 필요."
+}
