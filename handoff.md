@@ -112,7 +112,7 @@ fork 서브에이전트가 같은 worktree에서 동시 커밋(규칙 16 위반 
 `studentHealthCheck` PASS 36 / WARN 10 / FAIL 0 · `prod:check`
 invariants FAIL 0 / WARN 68(+`AMBIGUOUS_TEXTBOOK` 2).
 
-최종 검증: (메인 세션 기록 예정)
+최종 검증: 6c52311 기준 메인 세션 실측(wt-e2e, playwright 설치 환경) — build PASS · verify:all ALL DOMAINS PASS(e2e 도메인 포함) · prod-hotfix 371/371 · prod-plan 33/33 · prod-check 214/214 · ops-status 154/154 · release-gate 145/145 · generate-ghost-sca-manifest 32/32 · browser E2E 56/56(SKIP 0, 미mock 요청 0) · 정원/보상 6종 exit 0 · 로컬 Release Gate 5게이트 PASS(Gate 5 e2e 47.4s, DB WRITE 0) · student health PASS 36 / WARN 10 / FAIL 0 · prod:check invariants FAIL 0 / WARN 68(AMBIGUOUS_TEXTBOOK 2 포함).
 
 ### 스크린샷 의존 현황
 
