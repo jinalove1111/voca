@@ -1,10 +1,148 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-04 (109차, 오전~오후 12시간 자율 운영 자동검증 세션 —
-운영자 부재. Harness V2(`prod:plan`/`prod:apply` 게이트) + `prod:report`
-운영 보고서 + invariant 4종 + 관리자 흐름/계정 분류 회귀 + P1 생성 경고를
-통합 브랜치 `qa/ops-automation-2026-09-04`(HEAD `278c89a`)로 병합.
-Production DB WRITE 0, SQL 실행 0, 학생 데이터 변경 0, merge 0, deploy 0,
-main push 0. 상세는 아래 109차 섹션)_
+_최종 갱신: 2026-09-05 (110차, Harness V2 최종 검증 세션 — 운영자 지시로
+PR #15 merge는 보류하고 하네스 자체만 검증. write drift guard 배선
+누락·동어반복 버그를 FAIL-first로 발견·수정(prod-hotfix 301→317건),
+12종 운영 오류 자동탐지 커버리지 12/12 확인(신규 TEXTBOOK_SIMILAR_NAME
+포함, prod-check 195→204건). Production DB WRITE 0, SQL 실행 0, 학생
+데이터 변경 0, 승인 대기 APPLY 0, merge/deploy 0. 상세는 아래 110차 섹션)_
+
+## 2026-09-05 (110차) — Harness V2 최종 검증: write drift guard 배선 수정 + 12종 오류탐지 커버리지 12/12 (Production WRITE 0, PR #15 merge 보류)
+
+### 제약/불변식
+
+- 세션: 2026-09-05, 운영자 지시 — PR #15(`qa/ops-automation-2026-09-04`)
+  merge는 보류하고 Harness V2 자체(코드/테스트)만 최종 검증.
+- 지켜진 불변식: **Production DB WRITE 0 · SQL 실행 0 · 학생 데이터 변경
+  0 · 승인 대기 APPLY 0 · merge/deploy 0.** 실행한 라이브 명령은
+  READ-ONLY(`prod:check`/`prod:plan`/`studentHealthCheck`/`prod:report`)
+  뿐이다.
+
+### PR #15 변경 43파일 분류
+
+| 분류 | 파일 수 | 내용 |
+|---|---|---|
+| HARNESS_CORE | 8 | `.gitignore`, `package.json`, `scripts/lib/hotfixManifest.mjs`, `scripts/lib/opsStatus.mjs`, `scripts/lib/prodInvariants.mjs`, `scripts/prodHotfix.mjs`, `scripts/prodPlan.mjs`, `scripts/prodReport.mjs` |
+| TEST_DIAG_REPORT | 21 | 테스트/진단/보고서 산출물 |
+| APP_CODE | 2 | `api/admin-pin-actions.js`(`create_student` 응답 `warnings` 필드 추가만) / `src/components/admin/StudentDirectory.jsx`(배너 UI만) — 둘 다 DB 쓰기 의미 변화 없음 |
+| DOCS | 6 | 문서 |
+| STATUS | 6 | `.ai-status/` |
+
+### 하네스 write 안전성
+
+하네스 파일 전체에 PostgREST `insert`/`update`/`delete`/`upsert`/`rpc`
+호출 0건. 유일한 쓰기 실행기는 `scripts/lib/sqlExecutor.mjs`(Management
+API, 이번 PR 미수정)이며 `prodHotfix.mjs`만 이를 import한다. 가드 체인:
+TTY 확인(644~647행) → `APPLY <runId>` 정확 입력(649~652행) →
+`SUPABASE_ACCESS_TOKEN` 존재(125행, 637~641행) → CI/`GITHUB_ACTIONS`
+환경변수 STOP(126행, 483행, 634~641행) → invariant delta fail-closed
+(577~597행). `prodCheck`/`prodPlan`/`prodReport`/`studentHealthCheck`는
+전부 anon key로만 읽는다. 단계 순서(READ-ONLY preflight → expect_before
+→ dry-run → diff preview → 승인 → 트랜잭션 → row-count → postflight →
+학생 health)는 운영자 요구사항과 1:1 일치하며, row-count 단언은 트랜잭션
+SQL 내부(`hotfixManifest.mjs` 783~789행)에 있어 원자적이다.
+
+### 중대 발견 및 수정 — write drift guard 배선
+
+`fix/harness-v2-drift-guard-wiring`(커밋 `9620586`/`41b4f40`, 병합
+`bfa1a0f`)에서 `verifyWriteDriftGuard`가 다음 세 가지 문제를 갖고 있음을
+발견·수정:
+
+1. `runHotfix` 흐름에 배선되지 않은 **죽은 코드**였다.
+2. 시그니처가 `(manifest, runId)`로, SQL을 내부에서 **재생성해 자기
+   자신과 비교**하는 동어반복(tautology)이었다.
+3. 이를 검증하던 테스트 `[B2]`가 happy-path만 확인해 이 문제를 못 잡았다.
+
+수정: 시그니처를 `(manifest, applySql, rollbackSql)`로 바꿔 **실제로
+생성·저장된 SQL**을 재파싱해 대조 + 총 row-count 비교를 추가하고,
+`runHotfix` step 6.5(SQL 저장 직후, dry-run STOP(7)/승인(8) 이전)에
+배선했다. 새 STOP 사유 `blocked-write-drift`(표준 상태 `FAIL`)를 추가.
+테스트 보강: `[C3]` SET 값/대상 row id/row 수 드리프트 3케이스 +
+대조군(executor 호출 0회 단언), `[C4]` `D.onStep` 훅으로 dry-run
+경로·apply 성공 경로의 단계 순서 배열 단언. FAIL-first(규칙 15): 배선
+`return`을 임시 제거하자 정확히 6단언 FAIL(311/317) → 복구 후 317/317
+확인. 런북에 step 6 출력 줄과 STOP 사유 행을 추가.
+
+**미처리(다음 세션 인계)**: `runPlan`의 `apply_eligibility`가
+`blocked-write-drift`를 별도 매핑하지 않고 else 분기
+(`BLOCKED_NEEDS_APPROVAL`)로 떨어진다 — 동작상 무해하지만 의미가
+부정확하다.
+
+### 12종 운영 오류 자동탐지 커버리지 12/12
+
+`test/harness-v2-coverage`(커밋 `cc55154`/`af8aea1`/`5c36b7d`/
+`09104d9`, 병합 `21c0bd8`):
+
+| # | 오류 유형 | 탐지 코드 |
+|---|---|---|
+| 1 | primary 없음 | `NO_PRIMARY` |
+| 2 | primary 2개 이상 | `MULTIPLE_PRIMARY` |
+| 3 | `current_unit_id` NULL | health `current_unit_present` |
+| 4 | unit-교재 불일치 | `PRIMARY_UNIT_MISMATCH`/`PRIMARY_TEXTBOOK_MISMATCH` |
+| 5 | ghost 참조 | `GHOST_UNIT_PRESENT`/`STUDENT_GHOST_UNIT`/`SCA_GHOST_UNIT` |
+| 6 | 비정상 unit | `UNIT_WORDS_ABNORMAL`/`UNIT_NAME_ABNORMAL` |
+| 7 | stale SCA | `STALE_CLASS_SCA` |
+| 8 | 중1·중2 동일저자 유사명(신규) | **`TEXTBOOK_SIMILAR_NAME`(WARN)** |
+| 9 | 잘못된 `textbook_id` | `SCA_TEXTBOOK_ORPHAN`/`UNIT_TEXTBOOK_ORPHAN` |
+| 10 | garden 기록 누락 | `verify:garden-growth-sources`(74단언) |
+| 11 | spelling·quiz·guided 후 성장 누락 | 같은 스위트 + `verify:double-events` |
+| 12 | reward·XP 중복 지급 | `verify:double-events`(45단언, 동시 10회 dedupe) |
+
+**#8 신규 규칙**: 같은 `publisher_name` + 학년 접두(초/중/고 1~6)·괄호·
+공백을 제거한 정규화 키가 동일하면 경고(완전동일명은 기존
+`TEXTBOOK_NAME_DUPLICATE`가 담당하므로 제외). `prodDataLoader`의
+`textbooks` SELECT에 `publisher_name`을 추가했다(`src/utils/
+wordLibrary.js`가 이미 라이브에서 쓰던 컬럼이라 신규 GRANT 불필요).
+fixture 양성 1건 + 대조군 3건 → `prod-check` 195→**204**단언. **라이브
+`prod:check`에서 실제로 1건 검출**: 교재 `faf6dc71`/`01afd62a`, 출판사
+"동아", 정규화 키 "동아윤정미"(중1/중2).
+
+### 승인 대기 10건 분류(READ-ONLY, `prod:check` 라이브 재확인 — 109차와
+동일: `GHOST_UNIT_PRESENT` 7 · `SCA_GHOST_UNIT` 11 · `STUDENT_GHOST_UNIT`
+0 · `STALE_CLASS_SCA` 3 · `UNIT_CONTENT_DUPLICATE` 3)
+
+| # | 항목 | 분류 | 영향 학생 | 예상 row | rollback |
+|---|---|---|---|---|---|
+| 1 | PR #15 merge | SAFE | 0 | 0 | revert |
+| 2 | PR #9 merge(플래그 6종 OFF) | SAFE | 0 | 0 | revert |
+| 3 | PR #11 merge(CSS) | SAFE | 0 | 0 | revert |
+| 4 | v3_43/43b/44 ghost cleanup SQL | NEEDS_REVIEW | REAL 10 + 비실계정 | SCA UPDATE 21, units/words DELETE 각 6 | fingerprint·backup 테이블로 가능 |
+| 5 | ghost SCA 8행 manifest(Unit6) | NEEDS_REVIEW | REAL 10 | SCA UPDATE 11 | 하네스 자동 rollback |
+| 6 | `4fc69e2d` 삭제 | DANGEROUS | REAL 1(비-primary) | SCA 1 + unit 1 + words 40(미확정) | SQL/manifest 미준비 |
+| 7 | `STALE_CLASS_SCA` 3행 | NEEDS_REVIEW | REAL 3(`d68a3f24`, `1d9d3183` 외 1) | SCA UPDATE 3 | manifest 만들면 자동 |
+| 8 | 정원 정책 3건 | SAFE(제품 결정) | 0 | 0 | — |
+| 9 | `grant-xp` 레거시 인증 + SCA `allow-anon-all` 축소 | DANGEROUS | 구조적 전체(493 SCA 흐름) | 0(정책) | 설계 선행 |
+| 10 | `gamification_enabled` DDL | SAFE | 0 | ALTER 1 | drop column |
+
+행 5 참고: `prod:plan` 결과 `preflight-mismatch` / `MEDIUM` /
+`BLOCKED_PREFLIGHT` — `4f3e0b72`·`9f115c32`가 manifest 생성(09-02) 이후
+스스로 Unit5→Unit6(`85ae4169`)로 이동해 재생성이 필요하다.
+
+3그룹: **A 코드/스키마 merge**(1, 2, 3, 10 — 학생 0·row 0) / **B 데이터
+정리 재작업**(4, 5, 6, 7 — REAL 최대 14명, SCA 약 25행 + DELETE 최대
+7+46; 5는 재생성 필요, 6은 SQL 미준비) / **C 정책·보안 설계**(8, 9).
+
+### 스크린샷이 여전히 필요한 항목(하네스가 못 보는 것)
+
+(a) 학생 화면 드롭다운/렌더링 결과 — 하네스는 DB 상태만 보고 UI 렌더는
+보지 않는다(브라우저 e2e 부재). (b) 교재 콘텐츠의 "정답" 여부 —
+`4fc69e2d` 같은 잘못 업로드는 중복만 검출하고 어느 쪽이 맞는지는 운영자
+판단 영역. (c) 반 이동·진도 이동의 의도 — `STALE_CLASS_SCA`, Unit5→Unit6
+같은 변화가 의도인지 사고인지는 하네스가 판단 못 함. (d) 관리자 화면
+오동작 — 관리자 UI e2e가 없어 `admin-flows`는 API 계약만 본다. (e) 정원
+성장 정책 결정 — 109차 UNDECIDED 3건 그대로.
+
+### 최종 검증
+
+(메인 세션 기록 예정)
+
+---
+
+_(이전 최종 갱신 기록 — 원문 보존) 2026-09-04 (109차, 오전~오후 12시간
+자율 운영 자동검증 세션 — 운영자 부재. Harness V2(`prod:plan`/`prod:apply`
+게이트) + `prod:report` 운영 보고서 + invariant 4종 + 관리자 흐름/계정
+분류 회귀 + P1 생성 경고를 통합 브랜치 `qa/ops-automation-2026-09-04`
+(HEAD `278c89a`)로 병합. Production DB WRITE 0, SQL 실행 0, 학생 데이터
+변경 0, merge 0, deploy 0, main push 0. 상세는 아래 109차 섹션)_
 
 ## 2026-09-04 (109차) — 12시간 자율 운영 자동검증: Harness V2(prod:plan/prod:apply 게이트) + prod:report + invariant 4종 + 관리자 흐름/계정 분류 회귀 + P1 생성 경고 (Production WRITE 0)
 

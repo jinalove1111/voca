@@ -130,3 +130,9 @@ node scripts/prodReport.mjs --from-dir <dir>   # prodcheck.json + health.json �
 그대로 남는다. 테스트/실험용으로 생성할 때는 반드시 `--out-dir`로 출력을
 격리해 커밋된 `ops-report-latest.*`를 덮어쓰지 않는다
 (`DEVELOPER_GUIDE.md` "운영 하네스/산출물 규칙 4가지" 참고).
+
+---
+
+**후속(2026-09-05, 110차)**: 이 하네스 자체의 write drift guard 배선
+수정 + 12종 오류탐지 커버리지 12/12 최종 검증(PR #15 merge는 보류)은
+`handoff.md` 2026-09-05(110차) 섹션 참고.

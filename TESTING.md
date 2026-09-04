@@ -543,3 +543,43 @@ _이 섹션부터는 append — 위 내용은 원본 그대로 보존._
 세션에 회귀 테스트가 기본 경로에 그대로 써서 실행할 때마다 커밋된
 `docs/qa/ops-report/ops-report-latest.{md,json}`을 덮어쓰는 문제가
 발견돼 `4f622ca`로 수정했다.
+
+## 관련 항목: Harness V2 최종 검증 — write drift guard 배선 수정 + 12종 오류탐지 커버리지 12/12 (2026-09-05, 110차)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+운영자 지시로 PR #15 merge는 보류하고 Harness V2 자체만 최종 검증한
+세션(`handoff.md` 2026-09-05(110차) 참고)이 `verify:prod-hotfix`/
+`verify:prod-check`를 확장했다.
+
+- **`verify:prod-hotfix`(`testProdHotfix.mjs`) 301 → 317단언**
+  (`fix/harness-v2-drift-guard-wiring`, 커밋 `9620586`/`41b4f40`). 새 섹션
+  `[C3]`(write drift guard — SET 값/대상 row id/row 수 드리프트 3케이스 +
+  대조군 실행 0회 단언)와 `[C4]`(`D.onStep` 훅으로 dry-run/apply 성공
+  경로의 단계 순서 배열 단언)를 추가. 배경: `verifyWriteDriftGuard`가
+  `runHotfix`에 배선되지 않은 죽은 코드였고, 시그니처가
+  `(manifest, runId)`로 SQL을 내부에서 재생성해 비교하는 동어반복이었다
+  — 시그니처를 `(manifest, applySql, rollbackSql)`로 바꿔 실제 생성·저장된
+  SQL을 재파싱 대조하도록 수정하고 `runHotfix` step 6.5에 배선, 새 STOP
+  사유 `blocked-write-drift`(표준 상태 `FAIL`)를 추가했다. FAIL-first(규칙
+  15): 배선 `return`을 임시 제거하면 정확히 6단언 FAIL(311/317), 복구 후
+  317/317.
+- **`verify:prod-check`(`testProdCheck.mjs`) 195 → 204단언**
+  (`test/harness-v2-coverage`, 커밋 `cc55154`/`af8aea1`/`5c36b7d`/
+  `09104d9`). 신규 invariant `TEXTBOOK_SIMILAR_NAME`(WARN) — 같은
+  `publisher_name` + 학년 접두(초/중/고 1~6)·괄호·공백을 제거한 정규화
+  키가 동일하면 경고(완전동일명은 기존 `TEXTBOOK_NAME_DUPLICATE`가 담당).
+  fixture 양성 1건 + 대조군 3건. `prodDataLoader`의 `textbooks` SELECT에
+  `publisher_name`을 추가(`src/utils/wordLibrary.js`가 이미 라이브에서
+  쓰던 컬럼이라 신규 GRANT 불필요). 라이브 `prod:check`에서 실제로 1건
+  검출: 교재 `faf6dc71`/`01afd62a`(출판사 "동아", 정규화 키
+  "동아윤정미", 중1/중2).
+- 이로써 12종 운영 오류 자동탐지 커버리지가 **12/12**로 확인됐다(상세
+  표는 `handoff.md` 110차 참고 — primary 없음/중복, `current_unit_id`
+  NULL, unit-교재 불일치, ghost 참조, 비정상 unit, stale SCA, 교재 유사명,
+  잘못된 `textbook_id`, garden 기록 누락, spelling/quiz/guided 성장 누락,
+  reward/XP 중복 지급).
+
+> **주의(정직 기록)**: `docs/production-safety-harness-runbook.md`
+> §9-7의 단언 수(300/301)는 이번 세션에서 317로 다시 늘어났다 — 위 §9-7
+> 정정 항목과 마찬가지로 문서 문구 갱신은 다음 세션 인계 사항이다.
