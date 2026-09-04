@@ -2,11 +2,17 @@ import { useEffect, useState } from 'react'
 import {
   getClassNameById, getClassUnits, setStudentUnit,
   getStudentClassAssignments, assignTextbook, removeTextbookAssignment, setAssignmentUnit,
-  getAllTextbooks, getOwnTextbookOfClass,
+  getAllTextbooks, getOwnTextbookOfClass, getTextbookUnits,
   // 2026-09-02(유령 유닛 셀렉터 노출 봉합) — 유닛 select 옵션에서 단어<2
   // 유닛(엑셀 헤더 잔재/빈 유닛)을 제외하는 버전.
   getLearnableClassUnits,
 } from '../../utils/wordLibrary'
+// 2026-09-03(교재 학년 라벨 오선택 방지, root cause: 이름만 같고 학년이
+// 다른 두 교재 — "중1 천재 이상기" vs "중2 천재 이상기" — 를 이 아래
+// "배정할 교과서" <select>가 이름만 보여줘 구분 못 했다) — 출판사 +
+// 유닛 수까지 붙여 구분한다. 데이터 쓰기(assignTextbook 등)는 무변경,
+// 옵션 표시 텍스트만 바뀐다. scripts/testTextbookGradeLabel.mjs 참고.
+import { textbookOptionLabel } from '../../utils/textbookLabel'
 
 // v2.9 다중 교재(Multi-Textbook) 관리자 UI — decision 0004
 // (docs/agent-decisions/0004-multi-textbook-architecture.md), 백엔드는
@@ -175,7 +181,7 @@ export default function TextbookAssignmentPanel({ studentId, onChanged }) {
         <select value={addTarget} onChange={(e) => setAddTarget(e.target.value)} disabled={busy}
           className="flex-1 min-w-0 text-xs font-bold border-2 border-purple-200 rounded-lg px-2 py-1.5 bg-white">
           <option value="">➕ 배정할 교과서 선택</option>
-          {addableTextbooks.map((tb) => <option key={tb.id} value={tb.id}>{tb.name}</option>)}
+          {addableTextbooks.map((tb) => <option key={tb.id} value={tb.id}>{textbookOptionLabel(tb, getTextbookUnits(tb.id).length)}</option>)}
         </select>
         <button onClick={handleAdd} disabled={busy || !addTarget}
           className="flex-shrink-0 bg-purple-500 disabled:bg-gray-300 text-white font-black px-3 py-1.5 rounded-lg text-xs btn-press">

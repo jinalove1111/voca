@@ -1,0 +1,55 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "textbook-grade-label",
+  "task": "교재 배정/업로드 선택지 라벨 명확화 — 중1/중2 동명 교재 오선택 방지(FAIL-first 회귀 테스트 포함)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-03T00:00:00Z",
+  "updated_at": "2026-09-03T00:10:00Z",
+  "files_owned": [
+    "src/utils/textbookLabel.js",
+    "src/components/admin/ClassTextbookLinks.jsx",
+    "src/components/admin/TextbookAssignmentPanel.jsx",
+    "src/components/AdminScreen.jsx",
+    "scripts/testTextbookGradeLabel.mjs",
+    "package.json",
+    "tests/harness/registry.mjs",
+    ".ai-status/implementer-textbook-grade-label.json"
+  ],
+  "followup_2026-09-03": {
+    "task": "verify:textbook-grade-label required 승격(extra:true → false) + FAIL-first 증거 보강, branch fix/textbook-grade-label",
+    "registry_change": "tests/harness/registry.mjs — scripts/testTextbookGradeLabel.mjs entry의 extra: true를 extra: false로 변경(DEVELOPER_GUIDE.md 규칙: 신규 verify 스크립트는 기본 required, extra:true는 verify:all exit code에 반영되지 않음). npm run verify:admin 재실행으로 41/41 PASS + required 취급 확인.",
+    "fail_first_proof": {
+      "method": "git checkout ac4503d^ -- src/components/admin/TextbookAssignmentPanel.jsx src/components/AdminScreen.jsx (fix 커밋 ac4503d 직전 상태로 두 컴포넌트만 되돌림, src/utils/textbookLabel.js는 유지) 후 node scripts/testTextbookGradeLabel.mjs 실행 → 이후 git checkout HEAD -- 로 복원",
+      "result": "41개 단언 중 4개 FAIL, exit 1",
+      "fail_lines": [
+        "FAIL  [FAIL-first] \"배정할 교과서\" 옵션 줄이 textbookOptionLabel(...)을 호출",
+        "FAIL  [FAIL-first] textbookLabel.js에서 textbookOptionLabel을 import",
+        "FAIL  getTextbookUnits를 wordLibrary에서 import(유닛 수 계산 출처)",
+        "FAIL  [FAIL-first] 옵션 텍스트가 getClassTypeByName(c) === 'textbook' 조건으로 [교재] 태그를 붙임"
+      ],
+      "scenarios_matched": "지시된 시나리오 e(3건: textbookOptionLabel 호출/import wiring + getTextbookUnits import)와 f(1건: [교재] 마커) 정확히 일치. a-d/e-2는 전부 PASS 그대로(계약 동결 무회귀 확인). 재타이트닝 불필요 — 이미 정확히 e/f를 가드하고 있음이 실측 확인됨.",
+      "restore_verified": "git checkout HEAD -- 복원 후 node scripts/testTextbookGradeLabel.mjs 재실행 → 41/41 PASS 재확인"
+    },
+    "build": "npm run build PASS (dist 정상 생성, 에러 없음)",
+    "verify_admin": "npm run verify:admin PASS(전체), testTextbookGradeLabel.mjs required 항목으로 41 PASS 포함"
+  },
+  "files_read": [
+    "CLAUDE.md",
+    "src/App.jsx",
+    "src/utils/wordLibrary.js",
+    "src/data/wordLibrary.js",
+    "scripts/fakeSupabaseModule.mjs",
+    "scripts/testMultiTextbookLiveFixed.mjs",
+    "scripts/buildWordLibOfflineBundle.mjs",
+    "scripts/testAdminUnitEdit.mjs",
+    "scripts/testSpellingDirectionWiring.mjs",
+    "supabase_v3_1_textbooks.sql",
+    "DATABASE.md",
+    "package.json"
+  ],
+  "summary": "근본 원인: createClass/textbooks는 정확 이름 UNIQUE 매칭만 하고 학년 유추가 없음(정상) — 문제는 TextbookAssignmentPanel.jsx의 '배정할 교과서' <select> 옵션이 tb.name만 렌더해 '중1 천재 이상기'/'중2 천재 이상기'처럼 이름이 같고 학년만 다른 두 교재를 구분 못 했던 순수 UI 결함. src/utils/textbookLabel.js 신설(textbookLabel/textbookOptionLabel, ClassTextbookLinks.jsx의 기존 인라인 tbLabel을 글자 그대로 추출 — 출력 불변) → TextbookAssignmentPanel.jsx 옵션에 출판사+유닛 수 추가, AdminScreen.jsx ExcelUpload 반 선택 <select>에 교재 컨테이너 [교재] 태그 추가. createClass/assignTextbook/setClassWords 등 쓰기 경로 전혀 무수정. scripts/testTextbookGradeLabel.mjs 41단언(esbuild+인메모리 가짜 supabase로 createClass a-c 계약 동결 + textbookLabel.js 순수 함수·컴포넌트 소스 정적 배선 검사 d-f). git stash로 FAIL-first 실측: 수정 전 a-c(13단언) PASS 그대로, d-f는 textbookLabel.js 부재로 ERR_MODULE_NOT_FOUND(exit 1). 수정 후 41/41 PASS. npm run build 통과. verify:textbook-grade-label PASS. verify:all/health:students 결과는 handoff 보고 참고.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검토 — 커밋 3건(test/fix/registry) 생성 완료, push/merge는 하지 않음(운영자 지시 범위 밖)"
+}

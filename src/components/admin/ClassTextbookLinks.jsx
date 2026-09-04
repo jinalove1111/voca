@@ -3,6 +3,11 @@ import {
   getClassIdByName, getClassNameById, getClassTextbooks, getAllTextbooks,
   isTextbookMode, linkTextbookToClass, unlinkTextbookFromClass,
 } from '../../utils/wordLibrary'
+// 2026-09-03 — 라벨(이름+출판사) 조립은 textbookLabel.js가 단일 원천(교재
+// 학년 라벨 오선택 방지 작업, scripts/testTextbookGradeLabel.mjs). 이
+// 컴포넌트가 2026-07-22부터 인라인으로 쓰던 것과 출력 100% 동일 — 아래
+// tbLabel은 그 함수를 그대로 가리키는 별칭이라 나머지 코드는 무변경.
+import { textbookLabel as tbLabel } from '../../utils/textbookLabel'
 
 // 반↔교재 연결 관리 패널 (2026-07-22, v3.1 교재 도메인 모델 후속 관리자
 // UI) — 반 관리 탭에서 반을 펼쳤을 때, 그 반에 연결된 교재 목록을 보고
@@ -53,8 +58,6 @@ export default function ClassTextbookLinks({ targetClass, onChanged }) {
   const addable = getAllTextbooks()
     .filter(t => !linkedIds.has(t.id))
     .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-
-  const tbLabel = (t) => [t.name, t.publisherName && `(${t.publisherName})`].filter(Boolean).join(' ')
 
   const handleLink = async () => {
     if (!addId) return
