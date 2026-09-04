@@ -133,7 +133,7 @@ fixture 양성 1건 + 대조군 3건 → `prod-check` 195→**204**단언. **라
 
 ### 최종 검증
 
-(메인 세션 기록 예정)
+bfa1a0f 기준 메인 세션 실측 — build PASS · verify:all ALL DOMAINS PASS · verify:release-gate 136/136 · verify:prod-hotfix 317/317 · verify:prod-check 204/204 · 로컬 Release Gate PASS(DB WRITE 0) · student health PASS 36 / WARN 10 / FAIL 0 · prod:check invariants FAIL 0 / WARN 66 · prod:report 재생성(WARN, FAIL 0) · AUTO-CHECK COVERAGE 12/12.
 
 ---
 
