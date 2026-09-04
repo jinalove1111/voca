@@ -952,23 +952,44 @@ function sortObjJson(o) {
 }
 
 /**
- * B2 — VERIFY(preflight 계획) 와 WRITE(apply/rollback SQL) 가 항상 같은
+ * B2(2026-09-04) → C3(2026-09-05, 런타임 가드로 배선하며 시그니처 변경) —
+ * VERIFY(preflight 계획) 와 WRITE(apply/rollback SQL) 가 항상 같은
  * expect_before/set 데이터에서 파생되는지 구조적으로 재확인한다. update
  * 타입 change 만 대상(insert/delete 는 포맷이 달라 이 가드 범위 밖 — B4 의
  * 전용 postflight 계획이 그 대신 확인한다). 순수 함수, 상시 회귀 가드
  * (VERIFY_WRITE_DRIFT) — 절대 throw 하지 않는다.
+ *
+ * C3: 이전엔 (manifest, runId) 를 받아 buildApplySql/buildRollbackSql 을
+ * **내부에서 다시** 호출했다 — manifest 하나에서 두 경로(SQL 생성 vs 이
+ * 가드)가 각각 독립적으로 같은 순수 함수를 호출하는 구조라, 실제로 쓰일
+ * applySql/rollbackSql 이 아니라 "같은 입력을 다시 넣었을 때 재현되는 값"만
+ * 검증하는 동어반복이었다(runHotfix() 어디서도 호출되지 않았던 이유 —
+ * 실행 경로에 배선해도 의미 있는 검증이 되지 않았다). 이제 이미 생성된
+ * applySql/rollbackSql(파일로 저장하기 직전의 그 문자열 그대로)을 인자로
+ * 받아 재파싱 — SQL 생성 경로(D.buildApplySql 등 의존성 주입/테스트 스텁
+ * 포함)에서 실제로 무엇이 만들어졌는지를 manifest 기대값과 대조한다.
  * @param {object} manifest
- * @param {string} runId
+ * @param {string} applySql buildApplySql(manifest, runId) 의 실제 출력(또는 동등물)
+ * @param {string} rollbackSql buildRollbackSql(manifest, runId) 의 실제 출력(또는 동등물)
  * @returns {{ok:boolean, mismatches:Array<object>}}
  */
-export function verifyWriteDriftGuard(manifest, runId) {
+export function verifyWriteDriftGuard(manifest, applySql, rollbackSql) {
   const mismatches = []
-  const applySql = buildApplySql(manifest, runId)
-  const rollbackSql = buildRollbackSql(manifest, runId)
-  const applyLines = applySql.split('\n').filter((l) => /^\s*update public\./.test(l)).map(parseGeneratedUpdateStatement)
-  const rollbackLines = rollbackSql.split('\n').filter((l) => /^\s*update public\./.test(l)).map(parseGeneratedUpdateStatement)
+  const applyLines = String(applySql ?? '').split('\n').filter((l) => /^\s*update public\./.test(l)).map(parseGeneratedUpdateStatement)
+  const rollbackLines = String(rollbackSql ?? '').split('\n').filter((l) => /^\s*update public\./.test(l)).map(parseGeneratedUpdateStatement)
   const preflightPlan = buildPreflightPlan(manifest)
   const updateChanges = (manifest.changes || []).filter((c) => (c.op || 'update') === 'update')
+
+  // C3 — 건수(row 수) 드리프트: manifest 의 update change 개수와 실제 SQL 에
+  // 담긴 update 문 개수가 다르면(관련 없는 문장이 섞였거나 일부가 빠졌으면)
+  // 아래 per-change 대조(where.id 매칭)만으로는 "매칭 안 된 여분 라인"을
+  // 못 잡는다 — 총 개수 비교로 그 갭을 메운다.
+  if (applyLines.length !== updateChanges.length) {
+    mismatches.push({ table: null, id: null, reason: 'apply-row-count-mismatch', expected: updateChanges.length, actual: applyLines.length })
+  }
+  if (rollbackLines.length !== updateChanges.length) {
+    mismatches.push({ table: null, id: null, reason: 'rollback-row-count-mismatch', expected: updateChanges.length, actual: rollbackLines.length })
+  }
 
   for (const c of updateChanges) {
     const parsedApply = applyLines.find((p) => p && p.table === c.table && p.where.id === c.id)
