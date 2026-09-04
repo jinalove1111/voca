@@ -1148,11 +1148,14 @@ console.log('\n=== [B1] apply/rollback SQL 헤더 주석이 describeChange 로�
 
 console.log('\n=== [B2] VERIFY==WRITE 구조적 회귀 가드(verifyWriteDriftGuard, parseGeneratedUpdateStatement) ===')
 {
-  const guard = verifyWriteDriftGuard(BASE_MANIFEST, 'RUN-B2-1')
+  // C3(2026-09-05): 시그니처가 (manifest, runId) 에서 (manifest, applySql,
+  // rollbackSql) 로 바뀌었다(실제 생성된 SQL을 대조하도록) — 호출부도 실제
+  // SQL을 먼저 만들어 넘긴다.
+  const guard = verifyWriteDriftGuard(BASE_MANIFEST, buildApplySql(BASE_MANIFEST, 'RUN-B2-1'), buildRollbackSql(BASE_MANIFEST, 'RUN-B2-1'))
   check('정상 manifest 는 verifyWriteDriftGuard ok=true(불일치 0건)', guard.ok && guard.mismatches.length === 0, JSON.stringify(guard.mismatches))
 
   const realManifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts', 'prod', 'manifests', 'ghost-unit-landing-20260902.json'), 'utf8'))
-  const guardReal = verifyWriteDriftGuard(realManifest, 'RUN-B2-2')
+  const guardReal = verifyWriteDriftGuard(realManifest, buildApplySql(realManifest, 'RUN-B2-2'), buildRollbackSql(realManifest, 'RUN-B2-2'))
   check('ghost-unit-landing 실 manifest 도 verifyWriteDriftGuard ok=true', guardReal.ok && guardReal.mismatches.length === 0, JSON.stringify(guardReal.mismatches))
 
   const parsed = parseGeneratedUpdateStatement("  update public.students set unit_name = 'Unit9' where id = 'x-id' and unit_name = 'Unit1';")
@@ -1823,6 +1826,140 @@ console.log('\n=== [QA7] dry-run 콘솔 문구 + .tmp gitignore ===')
   const gitignore = fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8')
   check('.gitignore 에 루트 .tmp/ 포함(운영 보고서 실값 추적 금지)',
     gitignore.split(/\r?\n/).some((l) => l.trim() === '.tmp/'))
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// C3(2026-09-05) — verifyWriteDriftGuard 를 runHotfix() 실행 흐름(6.5단계)에
+// 배선한 런타임 FAIL-CLOSED 게이트 검증. 예전엔 이 가드가 [B2] 의
+// happy-path 호출로만 존재를 확인받았고, runHotfix() 어디서도 호출되지
+// 않아 실제 실행에는 아무 영향이 없었다(감사에서 확인된 문제 [1]).
+// D.buildApplySql 을 감싸 실제 생성 SQL 을 변조하는 stub 으로 세 가지
+// 드리프트(SET 값/대상 row id/변경 건수)를 재현하고, 매 케이스에서
+// executor.run() 이 절대 호출되지 않음(승인 게이트/apply 도달 전 STOP)을
+// 단언한다 — dryRun:false + isTTY:true + approve 성공까지 세팅해, 가드가
+// 없었다면 실제로 apply 까지 진행됐을 조건을 일부러 만든다.
+// ══════════════════════════════════════════════════════════════════════
+console.log('\n=== [C3] runHotfix — VERIFY==WRITE 드리프트 가드 배선(blocked-write-drift, FAIL-first) ===')
+{
+  // 통제군 — 정상 manifest 는 배선된 가드도 그대로 통과(ok=true), 기존
+  // dry-run 동작(ready-to-apply) 이 바뀌지 않는다([B2]의 pure-function 대조군과
+  // 별개로, 실행 흐름(runHotfix)에 배선된 뒤에도 정상 케이스가 안 깨짐을 확인).
+  {
+    const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+    const res = await runHotfix(
+      { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-C3-CONTROL-1', reportDir: REPORT_DIR, reader, dryRun: true },
+      { loadEnv: () => envOk() },
+    )
+    check('통제군: status = ready-to-apply(기존 동작 그대로)', res.status === 'ready-to-apply')
+    check('통제군: report.writeDriftGuard.ok = true(불일치 0건)',
+      res.report.writeDriftGuard?.ok === true && (res.report.writeDriftGuard?.mismatches || []).length === 0,
+      JSON.stringify(res.report.writeDriftGuard))
+  }
+
+  // (i) SET 값 드리프트 — BASE_MANIFEST.changes[0](SCA f9a14e8a…)의 SET
+  // current_unit_id 를 buildApplySql 결과에서만 다른 UUID 로 바꿔치기한다.
+  {
+    const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+    const calls = []
+    const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
+    const driftedBuildApplySql = (manifest, runId) => buildApplySql(manifest, runId).replace(
+      "set current_unit_id = '4ce41359-6424-4b5e-933d-479db6951586' where id = 'f9a14e8a",
+      "set current_unit_id = '00000000-0000-4000-8000-000000000099' where id = 'f9a14e8a",
+    )
+    const res = await runHotfix(
+      { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-C3-SETDRIFT-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+      { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, buildApplySql: driftedBuildApplySql },
+    )
+    check('(i) SET 값 드리프트: status = blocked-write-drift', res.status === 'blocked-write-drift')
+    check('(i) SET 값 드리프트: executor 호출 0(승인 게이트 도달 전 STOP)', calls.length === 0)
+    const mismatches = res.report.writeDriftGuard?.mismatches || []
+    check('(i) SET 값 드리프트: apply-set-mismatch 포함', mismatches.some((m) => m.reason === 'apply-set-mismatch'), JSON.stringify(mismatches))
+  }
+
+  // (ii) 대상 row id 드리프트 — 같은 change 의 WHERE id 를 다른 UUID 로 바꿔,
+  // 원래 id 로는 매칭되는 SQL 라인을 찾을 수 없게 만든다.
+  {
+    const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+    const calls = []
+    const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
+    const driftedBuildApplySql = (manifest, runId) => buildApplySql(manifest, runId).replace(
+      "where id = 'f9a14e8a-0a2f-4f5a-aaa7-8b6fc7f0db77' and student_id",
+      "where id = '00000000-0000-4000-8000-000000000088' and student_id",
+    )
+    const res = await runHotfix(
+      { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-C3-IDDRIFT-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+      { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, buildApplySql: driftedBuildApplySql },
+    )
+    check('(ii) 대상 row id 드리프트: status = blocked-write-drift', res.status === 'blocked-write-drift')
+    check('(ii) 대상 row id 드리프트: executor 호출 0', calls.length === 0)
+    const mismatches = res.report.writeDriftGuard?.mismatches || []
+    check('(ii) 대상 row id 드리프트: apply-sql-not-found 포함(원래 id 로 매칭되는 라인을 못 찾음)',
+      mismatches.some((m) => m.reason === 'apply-sql-not-found'), JSON.stringify(mismatches))
+  }
+
+  // (iii) 변경 건수(row 수) 드리프트 — manifest 밖 여분 UPDATE 문을 1개 끼워
+  // 넣는다(기존 3개 라인은 그대로 두어 per-change 대조는 전부 통과하지만,
+  // 총 개수(3 vs 4)가 어긋난다 — apply-row-count-mismatch 전용 케이스).
+  {
+    const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+    const calls = []
+    const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
+    const driftedBuildApplySql = (manifest, runId) => buildApplySql(manifest, runId).replace(
+      '  if v_total <> 3 then raise exception',
+      "  update public.students set unit_name = 'ExtraDrift' where id = '2c6845fc-b30e-4e4d-b260-d13c13fe7b9a' and unit_name = 'Unit5';\n  if v_total <> 3 then raise exception",
+    )
+    const res = await runHotfix(
+      { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-C3-COUNTDRIFT-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+      { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, buildApplySql: driftedBuildApplySql },
+    )
+    check('(iii) 행 수 드리프트: status = blocked-write-drift', res.status === 'blocked-write-drift')
+    check('(iii) 행 수 드리프트: executor 호출 0', calls.length === 0)
+    const mismatches = res.report.writeDriftGuard?.mismatches || []
+    check('(iii) 행 수 드리프트: apply-row-count-mismatch 포함(기대 3, 실제 4)',
+      mismatches.some((m) => m.reason === 'apply-row-count-mismatch' && m.expected === 3 && m.actual === 4), JSON.stringify(mismatches))
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// C3(2026-09-05) — 단계 순서 단언. defaultDeps.onStep(선택적 훅, 기본
+// no-op)으로 runHotfix() 가 각 단계 진입 시 남기는 이름을 배열로 수집해,
+// 고정 순서(감사 문제 [3]) 를 배열 완전 일치로 확인한다. dry-run 흐름은
+// approval-gate/apply/postflight/health-check 에 도달하지 않아야 하고,
+// 승인 이후(apply 성공) 흐름은 그 뒤 단계까지 이어져야 한다.
+// ══════════════════════════════════════════════════════════════════════
+console.log('\n=== [C4] runHotfix — 단계 순서 단언(onStep) ===')
+{
+  // dry-run 흐름 — write-drift-guard(6.5) 통과 후 dry-run-stop 에서 멈춘다.
+  {
+    const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+    const steps = []
+    const res = await runHotfix(
+      { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-C4-DRY-1', reportDir: REPORT_DIR, reader, dryRun: true },
+      { loadEnv: () => envOk(), onStep: (name) => steps.push(name) },
+    )
+    check('dry-run: status = ready-to-apply', res.status === 'ready-to-apply')
+    const expected = ['manifest-load', 'env-flag', 'env-ref', 'static-scan', 'preflight', 'baseline', 'plan-output', 'write-drift-guard', 'dry-run-stop']
+    check('dry-run: 단계 순서가 기대 순서와 정확히 일치(고정 순서)', JSON.stringify(steps) === JSON.stringify(expected), JSON.stringify(steps))
+    check('dry-run: approval/apply/postflight/health 에는 도달하지 않음',
+      !steps.includes('approval-gate') && !steps.includes('apply') && !steps.includes('postflight') && !steps.includes('health-check'))
+  }
+
+  // 승인 이후 apply 성공 전체 흐름 — approval-gate 부터 health-check 까지 이어진다.
+  {
+    const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+    const calls = []
+    const executor = {
+      async run(sql) { calls.push(sql); if (calls.length === 1) applyChangesToDb(reader.db, BASE_MANIFEST); return { ok: true } },
+    }
+    const steps = []
+    const res = await runHotfix(
+      { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-C4-APPLY-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+      { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, runHealthCheck: () => ({ ok: true, output: '' }), onStep: (name) => steps.push(name) },
+    )
+    check('apply 경로: status = applied', res.status === 'applied')
+    const expected = ['manifest-load', 'env-flag', 'env-ref', 'static-scan', 'preflight', 'baseline', 'plan-output', 'write-drift-guard', 'approval-gate', 'manifest-reverify', 'apply', 'postflight', 'health-check']
+    check('apply 경로: 단계 순서가 기대 순서와 정확히 일치(고정 순서)', JSON.stringify(steps) === JSON.stringify(expected), JSON.stringify(steps))
+  }
 }
 
 console.log(`\n=== summary ===\nPASS ${pass} / FAIL ${fail}`)
