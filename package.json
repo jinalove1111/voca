@@ -52,6 +52,7 @@
     "verify:class-textbooks": "node scripts/verifyClassTextbooks.mjs",
     "verify:textbook-grade-label": "node scripts/testTextbookGradeLabel.mjs",
     "verify:textbook-isolation": "node scripts/testTextbookIsolation.mjs",
+    "verify:admin-flows": "node scripts/testAdminFlows.mjs",
     "verify:star-delta": "node scripts/buildRaceBundle.mjs && node scripts/testStarDeltaOnEntry.mjs",
     "verify:word-pagination": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testWordLibraryPagination.mjs",
     "verify:entrance-selection": "node scripts/testEntranceTestSelection.mjs",
