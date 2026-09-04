@@ -252,6 +252,48 @@ console.log('\n=== [7] buildApplySql — is null 가드 + 각 가드 포함 ==='
 // (참고용 — is null 가드 자체는 B그룹 케이스에서 이미 검증됨, 7절과 중복
 // 방지를 위해 별도 섹션 생략)
 
+// ── 시나리오 8(2026-09-05, plan-eligibility-textbook-identity 트랙, 작업2-d)
+// A그룹 목적지 교재(tb1)가 이름 완전중복 쌍(tb1/tb1-dup)의 일원이면 생성
+// 자체를 STOP 한다(자동으로 textbook_identity ack 를 채우지 않음 — 자동
+// 수정 금지 원칙). FAIL-first: 이 STOP 을 추가하기 전 먼저 실행해 manifest
+// 가 그대로 생성되는 것(회귀)을 확인한 뒤 구현했다(CLAUDE.md 규칙 15).
+console.log('\n=== [8] 목적지 교재가 모호 쌍(이름 완전중복)의 일원 -> 생성 STOP(자동 ack 채움 금지) ===')
+{
+  const fx = makeFixture()
+  fx.textbooks.push({ id: uid(), name: '합성교재1', owner_class_id: null }) // tb1 과 완전 동일 이름(모호 쌍)
+  const stuId = uid()
+  const scaId = uid()
+  const students = [{ id: stuId, name: '합성학생8', class_id: fx.ids.cls1, current_unit_id: fx.ids.unit2, unit_name: 'Unit2' }]
+  const assignments = [{
+    id: scaId, student_id: stuId, class_id: fx.ids.clsC1, textbook_id: fx.ids.tb1,
+    is_primary: true, current_unit_id: fx.ids.unitGhost, created_at: '2026-01-01T00:00:00Z',
+  }]
+  const file = writeFixtureFile('case8', buildSnapshot(fx, students, assignments))
+  const outFile = path.join(TMP_DIR, 'case8.out.json')
+  const res = runCli(['--fixture', file, '--json', '--out', outFile])
+  check('CLI exit != 0(STOP)', res.status !== 0, `stdout=${res.stdout.slice(0, 300)}`)
+  check('STOP 사유가 stderr 에 출력됨', /STOP/.test(res.stderr) && /모호/.test(res.stderr), res.stderr.slice(0, 400))
+  check('manifest 파일 미생성(자동 ack 채움 금지 — 절반 완성 산출물도 남기지 않음)', !fs.existsSync(outFile))
+}
+
+// ── 시나리오 9 — 목적지 교재가 모호하지 않으면(기본 픽스처) 정상 생성 ──
+console.log('\n=== [9] 대조군 — 목적지 교재가 모호하지 않으면 정상 생성(회귀 없음) ===')
+{
+  const fx = makeFixture()
+  const stuId = uid()
+  const scaId = uid()
+  const students = [{ id: stuId, name: '합성학생9', class_id: fx.ids.cls1, current_unit_id: fx.ids.unit2, unit_name: 'Unit2' }]
+  const assignments = [{
+    id: scaId, student_id: stuId, class_id: fx.ids.clsC1, textbook_id: fx.ids.tb1,
+    is_primary: true, current_unit_id: fx.ids.unitGhost, created_at: '2026-01-01T00:00:00Z',
+  }]
+  const file = writeFixtureFile('case9', buildSnapshot(fx, students, assignments))
+  const outFile = path.join(TMP_DIR, 'case9.out.json')
+  const res = runCli(['--fixture', file, '--json', '--out', outFile])
+  check('CLI exit 0(모호하지 않으면 정상 생성)', res.status === 0, `stderr=${res.stderr}`)
+  check('manifest 파일 생성됨', fs.existsSync(outFile))
+}
+
 console.log(`\n=== 결과: ${passed} PASS / ${failed} FAIL ===`)
 if (failed > 0) {
   console.log('실패 목록:', failures.join(', '))
