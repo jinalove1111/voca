@@ -52,6 +52,7 @@ import {
   staticSafetyScan,
   redactSecrets,
   describeChange,
+  computeInvariantsDeltaPreview,
 } from './lib/hotfixManifest.mjs'
 import { createDryRunExecutor, createManagementApiExecutor } from './lib/sqlExecutor.mjs'
 
@@ -204,6 +205,29 @@ function createFixtureReader(fixtureObj) {
     },
     async selectAllRows(table) { return fixtureObj[`rows:${table}`] ?? [] },
   }
+}
+
+// B5(2026-09-04) — invariants delta 미리보기용 스냅샷을 이미 존재하는
+// `reader`(live/fixture/test 어디든 공통) 의 selectAllRows() 만으로 만든다.
+// scripts/lib/prodDataLoader.mjs의 loadProductionSnapshot() 처럼 새 HTTP
+// 로더를 또 만들지 않고, prodHotfix 가 이미 갖고 있는 reader 추상화를 그대로
+// 재사용한다(라이브 CLI 경로는 아래 isMain 에서 buildInvariantSnapshotFromReader
+// 를 실제 loadInvariantSnapshot 로 주입, 테스트는 자기 reader/픽스처로 검증).
+// class_textbooks 는 PK 가 복합키라 id 컬럼이 없어 이 reader.selectAllRows
+// (정렬 기준 id 고정)로 가져올 수 없다 — TEXTBOOK_UNREACHABLE/
+// STUDENT_TEXTBOOK_SELECTOR_EMPTY 두 invariant 는 이 delta 미리보기에서
+// 항상 연결 0건으로 평가된다(알려진 갭, 나머지 invariant 는 정상 커버 —
+// 이 두 코드 전용 새 HTTP 로더를 추가하는 대신 감수한 트레이드오프).
+async function buildInvariantSnapshotFromReader(reader) {
+  const [students, classes, textbooks, units, words, assignments] = await Promise.all([
+    reader.selectAllRows('students', ['id', 'name', 'class_id', 'current_unit_id', 'unit_name']),
+    reader.selectAllRows('classes', ['id', 'name', 'spelling_direction', 'class_type']),
+    reader.selectAllRows('textbooks', ['id', 'name', 'owner_class_id']),
+    reader.selectAllRows('units', ['id', 'name', 'textbook_id', 'class_id']),
+    reader.selectAllRows('words', ['id', 'unit_id', 'word', 'meaning']),
+    reader.selectAllRows('student_class_assignments', ['id', 'student_id', 'class_id', 'textbook_id', 'is_primary', 'current_unit_id', 'created_at']),
+  ])
+  return { students, classes, textbooks, units, words, assignments, classTextbooks: [] }
 }
 
 async function safeRun(executor, sql) {
@@ -493,6 +517,35 @@ export async function runHotfix(options, deps = {}) {
   }
   log(`baseline 저장 완료 — students ${studentsRowsBefore.length}행(hash ${report.baseline.snapshot.students.hash.slice(0, 12)}…) / SCA ${scaRowsBefore.length}행(hash ${report.baseline.snapshot.student_class_assignments.hash.slice(0, 12)}…) 스냅샷 해시 기록`)
 
+  // 5.5) B5(2026-09-04) — invariants delta 미리보기(승인 이전, fail-closed).
+  // D.loadInvariantSnapshot 이 주입된 경우에만 계산한다(기본은 없음 — 이
+  // 기존 30여개 시나리오를 포함해 이 인자를 안 넘기는 모든 호출은 동작이
+  // 전혀 바뀌지 않는다). CLI 진입점(isMain)만 실제 라이브 구현을 넘긴다.
+  // manifest 를 적용했다면 저장소 전체 관점의 invariant 가 새로 FAIL 로
+  // 바뀌는지(예: primary SCA 를 실수로 2개로 만드는 것)를 개별 행 값이
+  // 전부 맞더라도 승인 전에 미리 잡는다 — computeInvariantsDeltaPreview 는
+  // 순수 변환이라 이 단계 자체는 DB 에 아무 것도 쓰지 않는다.
+  if (typeof D.loadInvariantSnapshot === 'function') {
+    try {
+      const snapshotBefore = await D.loadInvariantSnapshot(reader)
+      const invariantsDelta = computeInvariantsDeltaPreview(snapshotBefore, manifest)
+      report.invariantsDelta = invariantsDelta
+      if (invariantsDelta.new_fail.length > 0) {
+        logErr('FAIL-CLOSED — 이 manifest 를 적용하면 새 invariant FAIL 이 발생합니다(승인 전 차단):')
+        for (const f of invariantsDelta.new_fail) logErr(`  ${f.code} ${f.studentId ?? '(유닛)'} — ${f.detail}`)
+        return finish('blocked-invariant', 1, { invariantsDelta })
+      }
+      if (invariantsDelta.new_warn.length || invariantsDelta.resolved.length) {
+        log(`invariants delta 미리보기 — new_warn ${invariantsDelta.new_warn.length}건, resolved ${invariantsDelta.resolved.length}건`)
+      }
+    } catch (err) {
+      // 이 미리보기는 이미 fail-closed 인 preflight/postflight 위에 얹은
+      // 부가 안전망이다 — 조회 자체가 실패해도(네트워크 등) 핵심 흐름을
+      // 막지 않고 경고만 남긴다(fail-open, 정보성 기능).
+      log(`invariants delta 미리보기 조회 실패(계속 진행, fail-open): ${err.message}`)
+    }
+  }
+
   // 6) 계획 출력 + SQL 파일 저장 + rollback 메타데이터 기록
   // B4(2026-09-04) — insert/delete change 는 c.set 이 없어(fields/
   // expect_before 만 있음) 기존처럼 c.set 을 직접 순회하면 크래시한다.
@@ -669,6 +722,11 @@ if (isMain) {
     console.error('사용법: node scripts/prodHotfix.mjs <manifest.json> --env production|staging [--dry-run] [--report-dir <dir>] [--executor management-api] [--fixture-reader <file>] [--expect-manifest-sha <hex>] [--rollback-of <report.json>] [--json]')
     process.exitCode = 1
   } else {
+    // B5(2026-09-04) — 실제 CLI 경로에서만 invariants delta 미리보기를
+    // 켠다(D.loadInvariantSnapshot 이 함수일 때만 5.5 단계가 동작 — 테스트는
+    // 이 값을 넘기지 않으므로 기존 동작이 전혀 바뀌지 않는다). 픽스처 리더
+    // 여도 그대로 동작한다(buildInvariantSnapshotFromReader 는 reader 추상화
+    // 하나만 쓴다 — 없는 테이블은 빈 배열로 안전하게 스킵).
     const result = await runHotfix({
       manifestPath: path.resolve(manifestArg),
       dryRun: !!parsed.dryRun,
@@ -679,7 +737,7 @@ if (isMain) {
       expectManifestSha: parsed.expectManifestSha,
       rollbackOfReportPath: parsed.rollbackOfReportPath ? path.resolve(parsed.rollbackOfReportPath) : undefined,
       jsonOutput: !!parsed.jsonOutput,
-    })
+    }, { loadInvariantSnapshot: buildInvariantSnapshotFromReader })
     process.exitCode = result.exitCode
   }
 }
