@@ -1414,6 +1414,150 @@ console.log('\n=== [B4] runHotfix — delete 대상 행이 이미 없음 → pre
   check('삭제 대상 없음 시 executor 호출 0', calls.length === 0)
 }
 
+// ── B5 픽스처: invariants delta 미리보기용 최소 스냅샷 ───────────────────
+const B5_TB1 = crypto.randomUUID()
+const B5_TB2 = crypto.randomUUID()
+const B5_UNIT_GOOD = crypto.randomUUID() // TB1 소속, 정상 유닛(2단어)
+const B5_UNIT_GOOD2 = crypto.randomUUID() // TB2 소속, 정상 유닛(2단어) — 유령 재배정 목적지
+const B5_UNIT_GHOST = crypto.randomUUID() // TB2 소속, 유령(단어 전부 헤더 라벨)
+const B5_STUDENT_GHOST = crypto.randomUUID()
+const B5_SCA_PRIMARY = crypto.randomUUID()
+const B5_SCA_GHOST = crypto.randomUUID()
+const B5_CLASS_ID = crypto.randomUUID()
+
+function buildB5GhostSnapshot() {
+  return {
+    students: [{ id: B5_STUDENT_GHOST, name: 'B5테스트학생', class_id: null, current_unit_id: B5_UNIT_GOOD, unit_name: 'Unit1' }],
+    classes: [],
+    textbooks: [{ id: B5_TB1, name: 'TB1', owner_class_id: null }, { id: B5_TB2, name: 'TB2', owner_class_id: null }],
+    units: [
+      { id: B5_UNIT_GOOD, name: 'Unit1', textbook_id: B5_TB1, class_id: null },
+      { id: B5_UNIT_GOOD2, name: 'Unit2', textbook_id: B5_TB2, class_id: null },
+      { id: B5_UNIT_GHOST, name: 'UnitX', textbook_id: B5_TB2, class_id: null },
+    ],
+    words: [
+      { id: crypto.randomUUID(), unit_id: B5_UNIT_GOOD, word: 'apple', meaning: '사과' },
+      { id: crypto.randomUUID(), unit_id: B5_UNIT_GOOD, word: 'banana', meaning: '바나나' },
+      { id: crypto.randomUUID(), unit_id: B5_UNIT_GOOD2, word: 'cat', meaning: '고양이' },
+      { id: crypto.randomUUID(), unit_id: B5_UNIT_GOOD2, word: 'dog', meaning: '개' },
+      { id: crypto.randomUUID(), unit_id: B5_UNIT_GHOST, word: 'word', meaning: '뜻' }, // 헤더 라벨 잔재 -> ghost
+    ],
+    assignments: [
+      { id: B5_SCA_PRIMARY, student_id: B5_STUDENT_GHOST, class_id: null, textbook_id: B5_TB1, current_unit_id: B5_UNIT_GOOD, is_primary: true, created_at: '2026-01-01' },
+      { id: B5_SCA_GHOST, student_id: B5_STUDENT_GHOST, class_id: null, textbook_id: B5_TB2, current_unit_id: B5_UNIT_GHOST, is_primary: false, created_at: '2026-01-01' },
+    ],
+    classTextbooks: [],
+  }
+}
+
+console.log('\n=== [B5] applyManifestToSnapshot — 순수 변환(update/insert/delete) ===')
+{
+  const snap = buildB5GhostSnapshot()
+  const updateManifest = { id: 'x', project_ref: 'y', changes: [
+    { table: 'student_class_assignments', id: B5_SCA_GHOST, expect_before: { current_unit_id: B5_UNIT_GHOST }, set: { current_unit_id: B5_UNIT_GOOD2 } },
+  ] }
+  const after = applyManifestToSnapshot(snap, updateManifest)
+  check('applyManifestToSnapshot — 원본 snap 은 mutate 되지 않음', snap.assignments.find((a) => a.id === B5_SCA_GHOST).current_unit_id === B5_UNIT_GHOST)
+  check('applyManifestToSnapshot — 사본은 update 반영됨', after.assignments.find((a) => a.id === B5_SCA_GHOST).current_unit_id === B5_UNIT_GOOD2)
+
+  const insertId = crypto.randomUUID()
+  const insertManifest = { id: 'x', project_ref: 'y', changes: [
+    { op: 'insert', table: 'student_class_assignments', id: insertId, fields: { student_id: B5_STUDENT_GHOST, class_id: null, textbook_id: B5_TB2, current_unit_id: B5_UNIT_GOOD2, is_primary: false } },
+  ] }
+  const afterInsert = applyManifestToSnapshot(snap, insertManifest)
+  check('applyManifestToSnapshot — insert 로 새 행이 사본에 추가됨', afterInsert.assignments.some((a) => a.id === insertId))
+  check('applyManifestToSnapshot — insert 는 원본 배열 길이를 바꾸지 않음', snap.assignments.length === 2)
+
+  const deleteManifest = { id: 'x', project_ref: 'y', changes: [
+    { op: 'delete', table: 'student_class_assignments', id: B5_SCA_GHOST, expect_before: { student_id: B5_STUDENT_GHOST, class_id: null, textbook_id: B5_TB2, current_unit_id: B5_UNIT_GHOST, is_primary: false } },
+  ] }
+  const afterDelete = applyManifestToSnapshot(snap, deleteManifest)
+  check('applyManifestToSnapshot — delete 로 사본에서 행이 사라짐', !afterDelete.assignments.some((a) => a.id === B5_SCA_GHOST))
+  check('applyManifestToSnapshot — delete 는 원본 배열을 바꾸지 않음', snap.assignments.some((a) => a.id === B5_SCA_GHOST))
+}
+
+console.log('\n=== [B5] diffInvariantFindings — 순수 비교(new_fail/new_warn/resolved) ===')
+{
+  const before = [
+    { code: 'A', studentId: 's1', severity: 'WARN', refs: { x: 1 } },
+    { code: 'B', studentId: 's2', severity: 'FAIL', refs: { y: 2 } },
+  ]
+  const after = [
+    { code: 'A', studentId: 's1', severity: 'WARN', refs: { x: 1 } }, // 그대로 유지
+    { code: 'C', studentId: 's3', severity: 'FAIL', refs: { z: 3 } }, // 새 FAIL
+    { code: 'D', studentId: 's4', severity: 'WARN', refs: { w: 4 } }, // 새 WARN
+  ]
+  const delta = diffInvariantFindings(before, after)
+  check('diffInvariantFindings — new_fail 에 C 포함', delta.new_fail.some((f) => f.code === 'C'))
+  check('diffInvariantFindings — new_warn 에 D 포함', delta.new_warn.some((f) => f.code === 'D'))
+  check('diffInvariantFindings — resolved 에 B 포함', delta.resolved.some((f) => f.code === 'B'))
+  check('diffInvariantFindings — 유지된 A 는 new_*/resolved 어디에도 없음',
+    !delta.new_fail.some((f) => f.code === 'A') && !delta.new_warn.some((f) => f.code === 'A') && !delta.resolved.some((f) => f.code === 'A'))
+}
+
+console.log('\n=== [B5] computeInvariantsDeltaPreview — 유령 SCA 재배정 → resolved 에 SCA_GHOST_UNIT ===')
+{
+  const snap = buildB5GhostSnapshot()
+  const fixManifest = { id: 'fix-ghost-sca', project_ref: 'y', changes: [
+    { table: 'student_class_assignments', id: B5_SCA_GHOST, expect_before: { current_unit_id: B5_UNIT_GHOST }, set: { current_unit_id: B5_UNIT_GOOD2 } },
+  ] }
+  const delta = computeInvariantsDeltaPreview(snap, fixManifest)
+  check('유령 SCA 재배정 후 resolved 에 SCA_GHOST_UNIT 포함', delta.resolved.some((f) => f.code === 'SCA_GHOST_UNIT'), JSON.stringify(delta))
+  check('유령 SCA 재배정은 새 FAIL 을 만들지 않음', delta.new_fail.length === 0, JSON.stringify(delta.new_fail))
+}
+
+console.log('\n=== [B5] computeInvariantsDeltaPreview — 두 번째 primary 추가 → new_fail 에 MULTIPLE_PRIMARY ===')
+{
+  const snap = buildB5GhostSnapshot()
+  const newScaId = crypto.randomUUID()
+  const badManifest = { id: 'bad-second-primary', project_ref: 'y', changes: [
+    { op: 'insert', table: 'student_class_assignments', id: newScaId,
+      fields: { student_id: B5_STUDENT_GHOST, class_id: null, textbook_id: B5_TB2, current_unit_id: B5_UNIT_GOOD2, is_primary: true } },
+  ] }
+  const delta = computeInvariantsDeltaPreview(snap, badManifest)
+  check('두 번째 primary 삽입 시 new_fail 에 MULTIPLE_PRIMARY 포함', delta.new_fail.some((f) => f.code === 'MULTIPLE_PRIMARY'), JSON.stringify(delta.new_fail))
+}
+
+console.log('\n=== [B5] runHotfix — invariants delta 가 MULTIPLE_PRIMARY FAIL 을 만들면 승인 전 blocked-invariant(fail-closed) ===')
+{
+  const snap = buildB5GhostSnapshot()
+  const newScaId = crypto.randomUUID()
+  const badManifest = {
+    id: 'bad-second-primary-live', project_ref: 'testref123',
+    affected_students: [B5_STUDENT_GHOST],
+    changes: [
+      { op: 'insert', table: 'student_class_assignments', id: newScaId,
+        fields: { student_id: B5_STUDENT_GHOST, class_id: B5_CLASS_ID, textbook_id: B5_TB2, current_unit_id: B5_UNIT_GOOD2, is_primary: true } },
+    ],
+  }
+  const reader = {
+    async getRow() { return null },
+    async countWordsForUnit() { return 2 },
+    async headCountFiltered() { return { count: 0, tableMissing: false } }, // no-duplicate 사전조건 충족
+    async selectAllRows() { return [] }, // students/SCA 스냅샷 해시(baseline)는 무관 행이라 빈 배열로 충분
+  }
+  const calls = []
+  const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
+  const res = await runHotfix(
+    { manifest: badManifest, envFlag: 'production', runId: 'RUN-B5-BLOCK-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, loadInvariantSnapshot: async () => snap },
+  )
+  check('status = blocked-invariant', res.status === 'blocked-invariant', res.status)
+  check('승인 전 차단이라 executor 호출 0(승인 콜백 자체는 도달 전에 STOP)', calls.length === 0)
+  check('report.invariantsDelta.new_fail 에 MULTIPLE_PRIMARY 포함', (res.report.invariantsDelta?.new_fail || []).some((f) => f.code === 'MULTIPLE_PRIMARY'))
+}
+
+console.log('\n=== [B5] runHotfix — loadInvariantSnapshot 미주입 시 기존 동작 그대로(회귀 없음) ===')
+{
+  const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+  const res = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-B5-NOOP-1', reportDir: REPORT_DIR, reader, dryRun: true },
+    { loadEnv: () => envOk() }, // loadInvariantSnapshot 없음
+  )
+  check('loadInvariantSnapshot 미주입 시 여전히 ready-to-apply', res.status === 'ready-to-apply')
+  check('loadInvariantSnapshot 미주입 시 report.invariantsDelta 없음', res.report.invariantsDelta === undefined)
+}
+
 console.log(`\n=== summary ===\nPASS ${pass} / FAIL ${fail}`)
 if (fail > 0) {
   console.log('FAIL')
