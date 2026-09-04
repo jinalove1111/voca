@@ -9,6 +9,10 @@ dist
 
 scripts/.tmp
 
+# 운영 하네스 산출물(런북 예시가 --report-dir .tmp/prod-reports 를 씀).
+# 계획/보고서 JSON·SQL 에는 실제 학생 UUID 가 들어가므로 추적 금지.
+.tmp/
+
 # 개발자 대시보드 산출물(scripts/generateDashboard.mjs가 매번 재생성) — 생성 스크립트만 커밋
 dashboard/
 
