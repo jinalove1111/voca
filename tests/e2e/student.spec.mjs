@@ -10,6 +10,9 @@ import { writesTo } from './lib/postgrestMock.mjs'
 import { QA_STUDENT_NAME, QA_LOGIN_PIN, TB_A, TB_B, TB_A_UNIT2_WORD_COUNT } from './fixtures/index.mjs'
 
 async function login(page) {
+  // initWordLibrary 완료 후에야 로그인 화면이 뜬다 — 머신이 바쁠 때(verify:all
+  // 직후) 기본 30초로는 부족한 flake를 실측해 넉넉히 기다린다(admin.spec 동일).
+  await page.getByPlaceholder('이름 입력...').waitFor({ state: 'visible', timeout: 90000 })
   await page.getByPlaceholder('이름 입력...').fill(QA_STUDENT_NAME)
   await page.getByPlaceholder('PIN 4자리').fill(QA_LOGIN_PIN)
   await page.getByRole('button', { name: '시작하기!' }).click()
@@ -119,6 +122,12 @@ export async function run(browser, baseURL) {
     // spelling/guided-learning — 정직한 SKIP.
     r.skip('spelling(맞춤법) 완료 후 화면 갱신', '스펠링 리뷰는 방향(kr2en/en2kr/mixed) 설정 + SpellingReview 다단계 입력 플로우가 필요해 이번 1차 구현 범위에서 제외 — quiz 경로로 A6/A7의 핵심 계약(쓰기 기록/정원 성장)은 이미 검증됨.')
     r.skip('guided-learning 완료 후 화면 갱신', 'GuidedSession은 단어 뜻/예문/발음 다단계 코스라 단일 세션 안에서 안정적으로 자동화하기엔 시나리오가 큼 — 이번 1차 구현 범위에서 제외, quiz 경로로 동일한 저장 계약을 검증.')
+  } catch (err) {
+    // 진단 — 예외 시점의 화면 텍스트/mock 오류를 에러 메시지에 실어 러너가
+    // 그대로 출력하게 한다(페이지는 finally에서 닫히므로 여기서만 읽을 수 있다).
+    const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+    err.message += `\n  [진단] mockErrors=${JSON.stringify(db.errors.slice(0, 3))}\n  [진단] body(앞 400자)=${JSON.stringify(bodyText.slice(0, 400))}`
+    throw err
   } finally {
     await context.close()
   }
