@@ -26,6 +26,7 @@
     "verify:paul-town-progression": "node scripts/buildRaceBundle.mjs && node scripts/testPaulTownProgression.mjs",
     "verify:hat-color": "node scripts/testHatColorRendering.mjs",
     "verify:health-rules": "node scripts/testStudentHealthRules.mjs",
+    "verify:account-classification": "node scripts/testAccountClassification.mjs",
     "health:students": "node scripts/studentHealthCheck.mjs",
     "health:student": "node scripts/studentHealthCheck.mjs",
     "health:baseline": "node scripts/recordHealthBaseline.mjs",
