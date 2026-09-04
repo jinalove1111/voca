@@ -136,3 +136,9 @@ node scripts/prodReport.mjs --from-dir <dir>   # prodcheck.json + health.json �
 **후속(2026-09-05, 110차)**: 이 하네스 자체의 write drift guard 배선
 수정 + 12종 오류탐지 커버리지 12/12 최종 검증(PR #15 merge는 보류)은
 `handoff.md` 2026-09-05(110차) 섹션 참고.
+
+**후속(2026-09-05, 111차)**: apply_eligibility 8값 1:1 매핑 + 교재
+UUID canonical/AMBIGUOUS_TEXTBOOK 사전 차단 + Playwright 브라우저 E2E를
+통합 브랜치 `qa/ops-automation-2026-09-04`(HEAD `ce26abc`)로 합쳐 최종
+검증(Production DB WRITE 0, merge/deploy 0)은 `handoff.md`
+2026-09-05(111차) 섹션 참고.

@@ -1,5 +1,12 @@
 # Paul Easy Voca — 로드맵
 
+_(2026-09-05 111차 추가) 스크린샷 의존 축소 — apply_eligibility 8값 1:1
+매핑 + 교재 UUID canonical/AMBIGUOUS_TEXTBOOK 사전 차단(prod-hotfix
+317→371) + Playwright 브라우저 E2E(학생/관리자 화면, 44단언, Release
+Gate 5)를 통합 브랜치 qa/ops-automation-2026-09-04(HEAD ce26abc)로
+합쳐 최종 검증. Production DB WRITE 0, merge/deploy 0. 상세는
+`handoff.md` 2026-09-05(111차) 섹션._
+
 _(2026-09-05 110차 추가) Harness V2 최종 검증 — write drift guard 배선
 누락·동어반복 버그 수정(prod-hotfix 301→317단언) + 12종 운영 오류
 자동탐지 커버리지 12/12 확인(신규 TEXTBOOK_SIMILAR_NAME, prod-check

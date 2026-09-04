@@ -1,13 +1,144 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-05 (111차, apply_eligibility 원인별 매핑 + 교재 identity
-UUID canonical/AMBIGUOUS_TEXTBOOK 트랙 — runPlan 의 BLOCKED_NEEDS_APPROVAL
-뭉뚱그림을 8값(READY/BLOCKED_PREFLIGHT/BLOCKED_NEEDS_APPROVAL/
-BLOCKED_WRITE_DRIFT/BLOCKED_INVARIANT/BLOCKED_AMBIGUOUS_TEXTBOOK/
-BLOCKED_MANIFEST/BLOCKED_UNKNOWN) 1:1 매핑으로 교체, 신규 STOP
-blocked-ambiguous-textbook(-unavailable) + AMBIGUOUS_TEXTBOOK invariant로
-"중1/중2 천재 이상기"류 모호 교재 자동 오배정을 사전 차단. 라이브
-prod:check 에서 AMBIGUOUS_TEXTBOOK WARN 2건(학생 1명) 실측. Production DB
-WRITE 0, SQL 실행 0, merge/deploy 0. 상세는 아래 111차 섹션)_
+_최종 갱신: 2026-09-05 (111차, 스크린샷 의존 축소 — apply_eligibility
+1:1 매핑 + 교재 UUID canonical/AMBIGUOUS_TEXTBOOK + 브라우저 E2E 통합
+검증. apply_eligibility 8값 매핑과 AMBIGUOUS_TEXTBOOK invariant/사전
+차단(브랜치 fix/plan-eligibility-textbook-identity, 병합 b2c94dc)에
+Playwright 브라우저 E2E(브랜치 test/browser-e2e, 병합 ce26abc)를 통합
+브랜치 qa/ops-automation-2026-09-04(wt-int, HEAD ce26abc)로 합쳐 최종
+검증. Production DB WRITE 0, SQL 실행 0, 승인 대기 10건 APPLY 0, 정원
+정책 변경 0, merge/deploy 0. 상세는 아래 111차 섹션)_
+
+## 2026-09-05 (111차) — 스크린샷 의존 축소: apply_eligibility 1:1 매핑 + 교재 UUID canonical/AMBIGUOUS_TEXTBOOK + 브라우저 E2E 통합 (Production WRITE 0)
+
+### 제약/불변식
+
+- 운영자 지시: Harness V2 재설계 금지(기존 구조 유지, 추가·정정만) ·
+  승인 대기 항목 APPLY 금지 · 정원 정책 변경 금지 · merge/deploy 금지.
+- 지켜진 불변식: **Production DB WRITE 0 · SQL 실행 0 · 실제 학생 데이터
+  변경 0 · 승인 대기 10건 APPLY 0 · 정원 정책 변경 0(기술 검증만) ·
+  merge/deploy 0.** 앱 코드(`src/`, `api/`) 변경 0 — 브라우저 E2E도
+  `data-testid` 추가조차 없이 기존 선택자만 사용.
+
+### 작업1 — apply_eligibility 1:1 매핑(브랜치 `fix/plan-eligibility-textbook-identity`, 병합 `b2c94dc`)
+
+`STOP_REASON_TO_APPLY_ELIGIBILITY` 매핑 표 + `computeApplyEligibility()`
+(`scripts/prodHotfix.mjs`)가 `runPlan()`/`computeStandardStatus()` 공통
+단일 출처. 8값: `READY` / `BLOCKED_PREFLIGHT`(preflight-mismatch) /
+`BLOCKED_NEEDS_APPROVAL`(no-token·not-interactive·CI·dry-run 완료 등
+"승인만 남음") / `BLOCKED_WRITE_DRIFT`(blocked-write-drift) /
+`BLOCKED_INVARIANT`(blocked-invariant·-unavailable) /
+`BLOCKED_AMBIGUOUS_TEXTBOOK` / `BLOCKED_MANIFEST`(검증·lint·정적
+스캔·ALLOWLIST, 구 `BLOCKED_LINT` 흡수) / `BLOCKED_UNKNOWN`(미등록 사유,
+fail-closed, 표준 상태 `FAIL`). 리포트에 `blocked_reason`(원 status) +
+`apply_eligibility` 병기. 완전성 가드 테스트: `runHotfix()`의 모든
+`finish('...')` 사유를 grep해 매핑 표 커버를 단언(새 STOP 사유가 매핑
+없이 추가되면 FAIL). 라이브 `prod:plan`(ghost-sca-reassign-20260902) →
+`BLOCKED_PREFLIGHT`, DB WRITE 0.
+
+### 작업3 — 교재 identity: UUID canonical + AMBIGUOUS_TEXTBOOK(같은 브랜치)
+
+원칙 — 관계/배정은 `textbooks.id`(UUID)만, name/grade/publisher는
+표시·검증 메타. 중1/중2 천재 이상기는 절대 동일 취급 금지.
+
+- (a) 신규 invariant `AMBIGUOUS_TEXTBOOK`(WARN, 학생 단위): primary SCA
+  또는 `current_unit`의 교재가 `TEXTBOOK_NAME_DUPLICATE`/
+  `TEXTBOOK_SIMILAR_NAME` 쌍의 일원 → 라이브 2 finding(학생 1명, 교재
+  `faf6dc71…`/`01afd62a…`).
+- (b) `prodHotfix.mjs`에 새 단계 `ambiguous-textbook-check`(preflight
+  직후, invariant delta 이전): 대상 교재가 모호 쌍이면 STOP
+  `blocked-ambiguous-textbook`, 조회 실패 시
+  `blocked-ambiguous-textbook-unavailable`(fail-closed). 예외는
+  `textbook_identity: {id, name, publisher_name}` 세 값 정확 일치
+  ack만(이름만 주는 ack 무효).
+- (c) `validateManifest`가 미지 키(`where`/`name`/`textbook_name` 등
+  이름 기반 매칭) 거부 → `BLOCKED_MANIFEST`.
+- (d) `generateGhostScaManifest`: 목적 교재가 모호하면 ack 자동 채움
+  없이 생성 STOP.
+
+FAIL-first(규칙 15): 두 STOP의 `return`을 임시 제거 시 해당 단언 FAIL
+확인 후 복구. 테스트 수치: `prod-hotfix` 317→371([D1] 매핑/완전성,
+[C5] 모호 교재 5케이스), `prod-plan` 32→33, `prod-check` →214(§13),
+`generate-ghost-sca-manifest` 27→32, `ops-status` 154.
+
+### 작업2 — 브라우저 E2E(브랜치 `test/browser-e2e`, 병합 `ce26abc`)
+
+Playwright 1.62.0 devDependency 추가(규칙 6 예외 — 운영자 명시 요청;
+`node_modules`에 있던 `playwright-core` 1.62.0은 `package-lock`
+미기재 잔재라 사용 안 함). 설계: `vite preview`로 build 산출물 서빙 +
+`page.route()`로 전체 네트워크 mock — `tests/e2e/lib/postgrestMock.mjs`
+(PostgREST 소형 에뮬레이터: select/eq/in/order/limit, 미지원 연산자
+즉시 throw), `tests/e2e/lib/mockRoutes.mjs`(`/api/verify-student-pin`·
+`/api/verify-admin-pin` 등 서버리스 mock + 미mock 외부 요청 발견 시
+FAIL하는 fail-closed 가드, 폰트 CDN만 허용), `tests/e2e/fixtures/index.mjs`
+(교재 4종: 중1/중2 천재 이상기(같은 출판사·다른 UUID) + 중1/중2 동아
+윤정미 함정, QA 학생 1명 = TEST_ACCOUNT_NAMES, SCA primary A/비-primary
+B, current_unit=A Unit2, 유닛별 단어 수 상이).
+
+시나리오: 학생 A1 로그인 / A2 교재 라벨 A·B 별개(중1·중2 각 1개) / A3
+현재 Unit2 / A4 Unit 드롭다운 A의 3개만 / A5 단어 수 15 / A6 quiz
+정답→갱신+mock `student_progress` 쓰기 / A7 정원 0→1칸(2점=1칸) ;
+관리자 B1 로그인 / B2 QA 학생 카드 / B3 배정 목록 A(현재)·B / B4 교재
+4종 별개 카드+유닛 수 / B5 옵션 value(UUID)로 A≠B 판정(라벨 문자열
+판정 금지) / B6 동아 윤정미 중1/중2 비혼입. 1차 결과 44단언 PASS 42 /
+SKIP 2(spelling·guided — 후속 커밋에서 채우는 중, 최종 수치는 아래
+자리표시).
+
+러너 `scripts/testBrowserE2E.mjs`(`verify:e2e`), registry
+`extra:true`(브라우저 없는 로컬 `verify:all` 보호, 주석에 사유),
+Release Gate **Gate 5 browser E2E**(`scripts/verifyRelease.mjs`: CI에서는
+fail-closed, 로컬은 브라우저 없으면 SKIP 표기),
+`.github/workflows/release-gate.yml`에
+`npx playwright install --with-deps chromium` 단계. `testReleaseGate`
+136→145.
+
+정직 기록: 설계와 달리 엔드포인트는 `/api/verify-pin`이 아니라
+`/api/verify-student-pin`, 유닛 수 라벨은 `TextbookAssignmentPanel`이
+아니라 "반 관리" 카드에 있음; 첫 `verify:all`에서 admin spec 30s
+타임아웃 플레이크 1회 → 초기 화면 대기 90s로 상향 후 재발 0; 구현 중
+fork 서브에이전트가 같은 worktree에서 동시 커밋(규칙 16 위반 사례,
+`git diff HEAD` 공백으로 내용 동일성만 확인).
+
+### 정원/Paul Town 기술 검증(정책 변경 0)
+
+`paul-town-progression`, `garden-growth-sources`, `attachment`,
+`double-events`, `reward-ledger`, `reward-hardening`(2), `reward-concurrency`,
+`mission-bonus`, `game-reward`, `star-delta` 11종 exit 0.
+
+### 중간 검증(`ce26abc`, `wt-int`)
+
+`npm run build` PASS · `npm run verify:all` ALL DOMAINS PASS(`e2e`는
+`wt-int`에 Playwright 미설치라 extra FAIL — 최종은 `wt-e2e`에서 실측) ·
+`prod-check` 214 · `ops-status` 154 · `release-gate` 145 ·
+`studentHealthCheck` PASS 36 / WARN 10 / FAIL 0 · `prod:check`
+invariants FAIL 0 / WARN 68(+`AMBIGUOUS_TEXTBOOK` 2).
+
+최종 검증: (메인 세션 기록 예정)
+
+### 스크린샷 의존 현황
+
+- 여전히 스크린샷이 필요한 항목(E2E 도입 후 남는 것): 교재 콘텐츠
+  정답 여부(어느 업로드가 맞는지), 반 이동·진도 이동의 의도, 제품
+  정책(정원 집계 범위).
+- E2E로 자동화된 것: 학생/관리자 화면 렌더 결과, 교재 분리 표시.
+- 아직 못 하는 것: 실 DB 상태의 화면 반영(E2E는 mock이라 화면 로직만
+  검증, 실 데이터는 `prod:check` 담당 — 분업).
+
+### 소유 파일(이 세션에서 Write/Edit)
+
+`handoff.md`(이 111차 통합 섹션). 코드/스크립트/개별 문서 소유는 각
+브랜치의 implementer 세션 몫 — `.ai-status/implementer-plan-eligibility-textbook-identity.json`,
+`.ai-status/implementer-browser-e2e.json` 참고.
+
+_(이전 최종 갱신 기록 — 원문 보존) 2026-09-05 (111차, apply_eligibility
+원인별 매핑 + 교재 identity UUID canonical/AMBIGUOUS_TEXTBOOK 트랙 —
+runPlan 의 BLOCKED_NEEDS_APPROVAL 뭉뚱그림을 8값(READY/BLOCKED_PREFLIGHT/
+BLOCKED_NEEDS_APPROVAL/BLOCKED_WRITE_DRIFT/BLOCKED_INVARIANT/
+BLOCKED_AMBIGUOUS_TEXTBOOK/BLOCKED_MANIFEST/BLOCKED_UNKNOWN) 1:1 매핑으로
+교체, 신규 STOP blocked-ambiguous-textbook(-unavailable) +
+AMBIGUOUS_TEXTBOOK invariant로 "중1/중2 천재 이상기"류 모호 교재 자동
+오배정을 사전 차단. 라이브 prod:check 에서 AMBIGUOUS_TEXTBOOK WARN
+2건(학생 1명) 실측. Production DB WRITE 0, SQL 실행 0, merge/deploy 0.
+상세는 아래 111차 섹션)_
 
 ## 2026-09-05 (111차) — apply_eligibility 원인별 매핑(8값) + 교재 identity UUID canonical/AMBIGUOUS_TEXTBOOK(Production WRITE 0)
 
