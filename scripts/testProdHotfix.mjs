@@ -15,6 +15,7 @@ import {
   buildApplySql,
   buildRollbackSql,
   buildPreflightPlan,
+  buildPostflightPlan,
   staticSafetyScan,
   sqlLiteral,
   redactSecrets,
@@ -1168,6 +1169,249 @@ console.log('\n=== [B2] VERIFY==WRITE 구조적 회귀 가드(verifyWriteDriftGu
   // 자체의 Write/Edit 를 오탐 차단할 수 있어, 런타임에 조각을 이어붙인다.
   const notAStatement = ['drop', ' table', ' students;'].join('')
   check('구조 파싱 불가 라인은 null 반환(안전한 실패)', parseGeneratedUpdateStatement(notAStatement) === null)
+}
+
+// ── B4 픽스처: SCA 전용 insert/delete manifest ──────────────────────────
+const NEW_SCA_ID = crypto.randomUUID()
+const NEW_CLASS_ID = crypto.randomUUID()
+const NEW_TEXTBOOK_ID = crypto.randomUUID()
+const INSERT_STUDENT_ID = BASE_MANIFEST.changes[1].id
+const INSERT_MANIFEST = {
+  id: 'test-hotfix-sca-add-001',
+  project_ref: 'testref123',
+  title: 'SCA 신규 배정 추가(premiddle 케이스 재현)',
+  affected_students: [INSERT_STUDENT_ID],
+  changes: [
+    {
+      op: 'insert',
+      table: 'student_class_assignments',
+      id: NEW_SCA_ID,
+      fields: {
+        student_id: INSERT_STUDENT_ID,
+        class_id: NEW_CLASS_ID,
+        textbook_id: NEW_TEXTBOOK_ID,
+        current_unit_id: null,
+        is_primary: false,
+      },
+    },
+  ],
+}
+
+const DELETE_SCA_ID = crypto.randomUUID()
+const DELETE_STUDENT_ID = BASE_MANIFEST.changes[2].expect_before.student_id
+const DELETE_MANIFEST = {
+  id: 'test-hotfix-sca-remove-001',
+  project_ref: 'testref123',
+  title: 'SCA 배정 제거',
+  affected_students: [DELETE_STUDENT_ID],
+  changes: [
+    {
+      op: 'delete',
+      table: 'student_class_assignments',
+      id: DELETE_SCA_ID,
+      expect_before: {
+        student_id: DELETE_STUDENT_ID,
+        class_id: NEW_CLASS_ID,
+        textbook_id: NEW_TEXTBOOK_ID,
+        current_unit_id: null,
+        is_primary: false,
+      },
+    },
+  ],
+}
+
+console.log('\n=== [B4] validateManifest — SCA insert/delete op 검증 ===')
+{
+  check('정상 insert manifest 는 valid', validateManifest(INSERT_MANIFEST).valid, JSON.stringify(validateManifest(INSERT_MANIFEST).errors))
+  check('정상 delete manifest 는 valid', validateManifest(DELETE_MANIFEST).valid, JSON.stringify(validateManifest(DELETE_MANIFEST).errors))
+
+  const insertWrongTable = clone(INSERT_MANIFEST)
+  insertWrongTable.changes[0].table = 'students'
+  check('op=insert 는 students 테이블 거부', !validateManifest(insertWrongTable).valid)
+
+  const insertMissingField = clone(INSERT_MANIFEST)
+  delete insertMissingField.changes[0].fields.is_primary
+  check('op=insert fields 누락 컬럼 거부', !validateManifest(insertMissingField).valid)
+
+  const insertExtraField = clone(INSERT_MANIFEST)
+  insertExtraField.changes[0].fields.extra_col = 'x'
+  check('op=insert fields 허용 안 된 컬럼 거부', !validateManifest(insertExtraField).valid)
+
+  const insertBadBoolean = clone(INSERT_MANIFEST)
+  insertBadBoolean.changes[0].fields.is_primary = 'false'
+  check('op=insert fields.is_primary 문자열이면 거부', !validateManifest(insertBadBoolean).valid)
+
+  const insertWithExpectBefore = clone(INSERT_MANIFEST)
+  insertWithExpectBefore.changes[0].expect_before = { foo: 'bar' }
+  check('op=insert 에 expect_before 있으면 거부', !validateManifest(insertWithExpectBefore).valid)
+
+  const deleteWrongTable = clone(DELETE_MANIFEST)
+  deleteWrongTable.changes[0].table = 'students'
+  check('op=delete 는 students 테이블 거부', !validateManifest(deleteWrongTable).valid)
+
+  const deleteMissingField = clone(DELETE_MANIFEST)
+  delete deleteMissingField.changes[0].expect_before.class_id
+  check('op=delete expect_before 5개 컬럼 미만이면 거부', !validateManifest(deleteMissingField).valid)
+
+  const deletePrimaryNoFlag = clone(DELETE_MANIFEST)
+  deletePrimaryNoFlag.changes[0].expect_before.is_primary = true
+  check('op=delete is_primary=true 인데 allow_primary_delete 없으면 거부', !validateManifest(deletePrimaryNoFlag).valid)
+
+  const deletePrimaryWithFlag = clone(DELETE_MANIFEST)
+  deletePrimaryWithFlag.changes[0].expect_before.is_primary = true
+  deletePrimaryWithFlag.allow_primary_delete = true
+  check('op=delete is_primary=true + allow_primary_delete=true 는 허용',
+    validateManifest(deletePrimaryWithFlag).valid, JSON.stringify(validateManifest(deletePrimaryWithFlag).errors))
+
+  const deleteWithSet = clone(DELETE_MANIFEST)
+  deleteWithSet.changes[0].set = { current_unit_id: null }
+  check('op=delete 에 set 있으면 거부', !validateManifest(deleteWithSet).valid)
+}
+
+console.log('\n=== [B4] buildApplySql/buildRollbackSql — SCA insert/delete SQL 생성 ===')
+{
+  const runId = 'RUN-B4-SQL-1'
+  const insertApply = buildApplySql(INSERT_MANIFEST, runId)
+  const insertRollback = buildRollbackSql(INSERT_MANIFEST, runId)
+  check('insert apply SQL 에 insert into 포함', /insert into public\.student_class_assignments/.test(insertApply))
+  check('insert apply SQL 에 중복 가드(if exists) 포함', insertApply.includes('중복 행 이미 존재'))
+  check('insert apply SQL 정적 스캔 위반 0건', staticSafetyScan(insertApply).length === 0, JSON.stringify(staticSafetyScan(insertApply)))
+  check('insert rollback SQL 은 delete from(방금 넣은 행 제거)', /delete from public\.student_class_assignments where id = /.test(insertRollback))
+  check('insert rollback SQL 정적 스캔 위반 0건', staticSafetyScan(insertRollback).length === 0, JSON.stringify(staticSafetyScan(insertRollback)))
+
+  const deleteApply = buildApplySql(DELETE_MANIFEST, runId)
+  const deleteRollback = buildRollbackSql(DELETE_MANIFEST, runId)
+  check('delete apply SQL 은 delete from(expect_before 전체로 가드)', /delete from public\.student_class_assignments where id = /.test(deleteApply))
+  check('delete apply SQL 정적 스캔 위반 0건', staticSafetyScan(deleteApply).length === 0, JSON.stringify(staticSafetyScan(deleteApply)))
+  check('delete rollback SQL 은 insert into(원복)', /insert into public\.student_class_assignments/.test(deleteRollback))
+  check('delete rollback SQL 에 원복 값(student_id) 포함', deleteRollback.includes(DELETE_MANIFEST.changes[0].expect_before.student_id))
+  check('delete rollback SQL 정적 스캔 위반 0건(중복 가드 없음 — 복원이라 스킵)', staticSafetyScan(deleteRollback).length === 0, JSON.stringify(staticSafetyScan(deleteRollback)))
+
+  // 다른 테이블/형태의 INSERT/DELETE 는 여전히 전부 거부(ALLOWLIST 는
+  // UPDATE 전용이라는 원칙이 이 세 안전 패턴 밖에서는 그대로 유지된다).
+  const otherTableInsert = "begin;\n  insert into public.students (id, name) values ('x', 'y');\ncommit;\n"
+  check('student_class_assignments 가 아닌 테이블의 insert 는 정적 스캔 위반', staticSafetyScan(otherTableInsert).length >= 1)
+  const otherTableDelete = "begin;\n  delete from public.classes where id = 'x';\ncommit;\n"
+  check('student_class_assignments 가 아닌 테이블의 delete 는 정적 스캔 위반', staticSafetyScan(otherTableDelete).length >= 1)
+}
+
+console.log('\n=== [B4] buildPreflightPlan/buildPostflightPlan — insert(no-duplicate)/delete(not-exists) ===')
+{
+  const preInsert = buildPreflightPlan(INSERT_MANIFEST)
+  check('insert change 는 preflight kind=no-duplicate', preInsert[0].kind === 'no-duplicate')
+  check('insert change preflight filters 에 student_id/textbook_id 포함',
+    preInsert[0].filters.student_id === INSERT_MANIFEST.changes[0].fields.student_id
+    && preInsert[0].filters.textbook_id === INSERT_MANIFEST.changes[0].fields.textbook_id)
+
+  const postInsert = buildPostflightPlan(INSERT_MANIFEST)
+  check('insert change 는 postflight expect=fields', JSON.stringify(postInsert[0].expect) === JSON.stringify(INSERT_MANIFEST.changes[0].fields))
+
+  const preDelete = buildPreflightPlan(DELETE_MANIFEST)
+  check('delete change 는 preflight expect=expect_before(행 전체)', JSON.stringify(preDelete[0].expect) === JSON.stringify(DELETE_MANIFEST.changes[0].expect_before))
+
+  const postDelete = buildPostflightPlan(DELETE_MANIFEST)
+  check('delete change 는 postflight kind=not-exists', postDelete[0].kind === 'not-exists')
+}
+
+console.log('\n=== [B4] runHotfix 통합 — SCA insert(정상 적용) ===')
+{
+  const reader = {
+    db: {},
+    async getRow(table, id, columns) {
+      const row = this.db[`${table}:${id}`]
+      if (!row) return null
+      if (!columns) return { ...row }
+      const out = {}
+      for (const c of columns) out[c] = row[c]
+      return out
+    },
+    async countWordsForUnit() { return 2 },
+    async headCountFiltered() { return { count: 0, tableMissing: false } }, // 아직 중복 없음
+    async selectAllRows() { return [] },
+  }
+  const executor = {
+    calls: [],
+    async run(sql) {
+      executor.calls.push(sql)
+      reader.db[`student_class_assignments:${NEW_SCA_ID}`] = { id: NEW_SCA_ID, ...INSERT_MANIFEST.changes[0].fields }
+      return { ok: true }
+    },
+  }
+  const res = await runHotfix(
+    { manifest: INSERT_MANIFEST, envFlag: 'production', runId: 'RUN-B4-SCA-ADD-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, runHealthCheck: () => ({ ok: true, output: '' }) },
+  )
+  check('insert manifest 적용 성공 → applied', res.status === 'applied', JSON.stringify(res.report.postMismatches || res.status))
+  check('insert manifest 적용 시 executor 호출 1회', executor.calls.length === 1)
+}
+
+console.log('\n=== [B4] runHotfix 통합 — SCA delete(정상 적용) ===')
+{
+  const reader = {
+    db: { [`student_class_assignments:${DELETE_SCA_ID}`]: { id: DELETE_SCA_ID, ...DELETE_MANIFEST.changes[0].expect_before } },
+    async getRow(table, id, columns) {
+      const row = this.db[`${table}:${id}`]
+      if (!row) return null
+      if (!columns) return { ...row }
+      const out = {}
+      for (const c of columns) out[c] = row[c]
+      return out
+    },
+    async countWordsForUnit() { return 2 },
+    async headCountFiltered() { return { count: 0, tableMissing: false } },
+    async selectAllRows() { return [] },
+  }
+  const executor = {
+    calls: [],
+    async run(sql) {
+      executor.calls.push(sql)
+      delete reader.db[`student_class_assignments:${DELETE_SCA_ID}`]
+      return { ok: true }
+    },
+  }
+  const res = await runHotfix(
+    { manifest: DELETE_MANIFEST, envFlag: 'production', runId: 'RUN-B4-SCA-DEL-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, runHealthCheck: () => ({ ok: true, output: '' }) },
+  )
+  check('delete manifest 적용 성공 → applied', res.status === 'applied', JSON.stringify(res.report.postMismatches || res.status))
+  check('delete manifest 적용 시 executor 호출 1회', executor.calls.length === 1)
+}
+
+console.log('\n=== [B4] runHotfix — insert 중복 사전조건 위반 → preflight-mismatch(fail-closed) ===')
+{
+  const reader = {
+    async getRow() { return null },
+    async countWordsForUnit() { return 2 },
+    async headCountFiltered() { return { count: 1, tableMissing: false } }, // 이미 같은 student+textbook 행 존재
+    async selectAllRows() { return [] },
+  }
+  const calls = []
+  const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
+  const res = await runHotfix(
+    { manifest: INSERT_MANIFEST, envFlag: 'production', runId: 'RUN-B4-DUP-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+    { loadEnv: () => envOk() },
+  )
+  check('중복 SCA 존재 시 status = preflight-mismatch', res.status === 'preflight-mismatch')
+  check('중복 SCA 존재 시 executor 호출 0', calls.length === 0)
+  check('mismatches 에 duplicate-row-exists 기록', (res.report.mismatches || []).some((m) => m.reason === 'duplicate-row-exists'))
+}
+
+console.log('\n=== [B4] runHotfix — delete 대상 행이 이미 없음 → preflight-mismatch(fail-closed) ===')
+{
+  const reader = {
+    async getRow() { return null },
+    async countWordsForUnit() { return 2 },
+    async headCountFiltered() { return { count: 0, tableMissing: false } },
+    async selectAllRows() { return [] },
+  }
+  const calls = []
+  const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
+  const res = await runHotfix(
+    { manifest: DELETE_MANIFEST, envFlag: 'production', runId: 'RUN-B4-DELMISS-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+    { loadEnv: () => envOk() },
+  )
+  check('삭제 대상 행이 이미 없으면 status = preflight-mismatch', res.status === 'preflight-mismatch')
+  check('삭제 대상 없음 시 executor 호출 0', calls.length === 0)
 }
 
 console.log(`\n=== summary ===\nPASS ${pass} / FAIL ${fail}`)
