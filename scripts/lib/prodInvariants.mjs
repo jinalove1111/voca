@@ -46,6 +46,11 @@ export const INVARIANT_CODES = {
   STUDENT_TEXTBOOK_SELECTOR_EMPTY: 'STUDENT_TEXTBOOK_SELECTOR_EMPTY',
   // 내용 기반(FK 무관) 중복 — 코디네이터 지시로 제안 즉시 구현.
   UNIT_CONTENT_DUPLICATE: 'UNIT_CONTENT_DUPLICATE',
+  // ── Track E/F(2026-09-04, wt-rules) — 반 이동/중복 배정/이름-UUID 정합성 ──
+  STALE_CLASS_SCA: 'STALE_CLASS_SCA',
+  DUPLICATE_SCA_TEXTBOOK: 'DUPLICATE_SCA_TEXTBOOK',
+  STUDENT_NO_CLASS: 'STUDENT_NO_CLASS',
+  UNIT_NAME_UUID_CONTRADICTION: 'UNIT_NAME_UUID_CONTRADICTION',
 }
 
 // 정상 유닛의 단어 수 범위. 이 범위를 벗어나면 데이터 이상 신호로 본다.
@@ -164,6 +169,23 @@ export const CODE_META = {
     impact: '서로 다른 유닛(대개 다른 교재)의 단어 목록이 사실상 동일해 업로드 시 잘못된 교재에 내용이 중복 등록됐을 가능성이 있음',
     recommended: 'READ-ONLY 조사',
   },
+  // ── Track E/F(2026-09-04, wt-rules) ──
+  STALE_CLASS_SCA: {
+    impact: '반 이동 후에도 옛 사람 반을 가리키는 배정 행이 남아있어 관리자 화면에서 소속 반이 헷갈릴 수 있음',
+    recommended: '운영자 결정',
+  },
+  DUPLICATE_SCA_TEXTBOOK: {
+    impact: '같은 교재에 배정 행이 2개 이상이라 어느 행의 current_unit이 이길지 불확정임',
+    recommended: '운영자 결정',
+  },
+  STUDENT_NO_CLASS: {
+    impact: '홈 반이 없거나 삭제된 반을 가리켜 반 기반 로직(숙제/스케줄 등)이 대상에서 빠질 수 있음',
+    recommended: '운영자 결정',
+  },
+  UNIT_NAME_UUID_CONTRADICTION: {
+    impact: '레거시 이름이 실제로는 지금과 다른 유닛을 가리키고 있어, 표시상 혼동을 넘어 그 이름으로 재해석하면 다른 단어를 보게 될 수 있음',
+    recommended: 'READ-ONLY 조사',
+  },
 }
 
 /**
@@ -228,6 +250,20 @@ export function evaluateInvariants(ctx, opts = {}) {
   // 미상) 'textbook' 이 아니면 사람 반으로 취급한다(과거 데이터/미마이그레이션
   // 대비 — 규칙 4는 "기존처럼 취급"이라 미상을 컨테이너로 보지 않는다).
   const isContainerClass = (classId) => classById.get(classId)?.class_type === 'textbook'
+
+  // Track E/F(2026-09-04) — (textbook_id, 정규화된 유닛 이름) -> unit id 목록
+  // 인덱스. UNIT_NAME_UUID_CONTRADICTION 이 "레거시 unit_name 문자열이 실제로는
+  // 지금과 다른 유닛을 가리키는가"를 판정하는 데 필요(단순 문자열 불일치를
+  // 보는 UNIT_NAME_MISMATCH 와 달리, 그 이름이 실존하는 다른 유닛과 매칭되는
+  // 경우만 잡는다).
+  const unitsByTextbookAndName = new Map()
+  for (const [id, u] of unitById) {
+    if (!u?.textbook_id) continue
+    const key = `${u.textbook_id}::${norm(u.name)}`
+    const list = unitsByTextbookAndName.get(key) || []
+    list.push(id)
+    unitsByTextbookAndName.set(key, list)
+  }
 
   // impact/recommended 는 코드에서 파생되므로 push 시점에 자동으로 붙인다
   // (호출부마다 반복 기입하지 않게 — 누락 방지).
@@ -350,6 +386,28 @@ export function evaluateInvariants(ctx, opts = {}) {
 
     // 2/4) SCA 행 순회 — 배정 행이 가리키는 교재/유닛의 고아·모순·유령 여부
     for (const a of myAssignments) {
+      // Track E/F(2026-09-04): STALE_CLASS_SCA — 배정 행의 class_id 가
+      // 사람 반(컨테이너 아님)이고 students.class_id 와 다름(반 이동 후
+      // 잔존 배정). CLASS_ASSIGNMENT_CONTRADICTION 은 "일치하는 배정이
+      // 하나도 없을 때"만 학생 단위로 보고하지만, 이건 배정 "행" 단위로
+      // 잔존 자체를 보고한다(일치하는 다른 행이 있어도 이 옛 행은 여전히
+      // 잔존 데이터다). student.class_id 가 없으면(STUDENT_NO_CLASS 대상)
+      // 비교 기준이 없어 여기서는 건너뛴다.
+      if (a?.class_id && student.class_id && a.class_id !== student.class_id && !isContainerClass(a.class_id)) {
+        const staleCls = classById.get(a.class_id)
+        const curCls = classById.get(student.class_id)
+        push({
+          code: INVARIANT_CODES.STALE_CLASS_SCA, severity: 'WARN', studentId: sid, studentName: sname,
+          detail: `배정 행의 class_id(${a.class_id}, "${staleCls?.name || '?'}")가 사람 반이고 `
+            + `students.class_id(${student.class_id}, "${curCls?.name || '?'}")와 다름${a?.is_primary ? '(primary)' : ''}`,
+          refs: {
+            staleClassId: a.class_id, staleClassName: staleCls?.name ?? null,
+            currentClassId: student.class_id, currentClassName: curCls?.name ?? null,
+            isPrimary: !!a?.is_primary, recommendedAction: '반 이동 후 잔존 배정 검토',
+          },
+        })
+      }
+
       // Phase 8: SCA_TEXTBOOK_ORPHAN — uid 유무와 무관하게 textbook_id 자체의
       // 유효성을 본다(유닛이 없는 행도 textbook_id 는 있을 수 있음).
       if (a?.textbook_id && !textbookById.has(a.textbook_id)) {
@@ -423,6 +481,28 @@ export function evaluateInvariants(ctx, opts = {}) {
         })
       }
 
+      // Track E/F(2026-09-04): UNIT_NAME_UUID_CONTRADICTION — unit_name 이
+      // 단순히 현재 유닛 이름과 다른 것(위 UNIT_NAME_MISMATCH)을 넘어, 주교재
+      // 소속의 실존하는 "다른" 유닛 이름과 정확히 매칭될 때만 보고한다. 오탈자/
+      // 임의 문자열은 매칭되는 실제 유닛이 없어 여기 걸리지 않는다(그건 위
+      // UNIT_NAME_MISMATCH 의 몫). primary 배정이 없으면 어떤 교재 범위에서
+      // 이름을 찾을지 근거가 없어 건너뛴다.
+      if (unit && typeof student.unit_name === 'string' && student.unit_name.trim() && primary?.textbook_id) {
+        const key = `${primary.textbook_id}::${norm(student.unit_name)}`
+        const candidates = (unitsByTextbookAndName.get(key) || []).filter((uid) => uid !== student.current_unit_id)
+        if (candidates.length > 0) {
+          push({
+            code: INVARIANT_CODES.UNIT_NAME_UUID_CONTRADICTION, severity: 'WARN', studentId: sid, studentName: sname,
+            detail: `students.unit_name("${student.unit_name}")이 실제로는 다른 유닛(${candidates.join(', ')})을 가리키는데 `
+              + `students.current_unit_id(${student.current_unit_id})와 다름`,
+            refs: {
+              studentUnitName: student.unit_name, resolvedUnitIds: candidates,
+              currentUnitId: student.current_unit_id, textbookId: primary.textbook_id,
+            },
+          })
+        }
+      }
+
       // 7) PRIMARY_TEXTBOOK_MISMATCH — 현재 유닛의 교재와 주교재가 다름
       if (unit && unit.textbook_id && primary?.textbook_id && unit.textbook_id !== primary.textbook_id) {
         push({
@@ -455,6 +535,63 @@ export function evaluateInvariants(ctx, opts = {}) {
         detail: `primary 배정 유닛(${primary.current_unit_id})이 students.current_unit_id(${student.current_unit_id})와 다름`,
         refs: { studentUnitId: student.current_unit_id, primaryUnitId: primary.current_unit_id, textbookId: primary.textbook_id ?? null },
       })
+    }
+  }
+
+  // ── Track E/F(2026-09-04) — REAL 이 아닌 계정도 포함해야 하는 검사 2종 ──
+  // 위 for(realStudents) 루프는 실학생만 돈다. 아래 둘은 그보다 넓은 범위가
+  // 필요해 별도 순회로 둔다(기존 루프 스코프를 바꾸면 다른 15개 검사의
+  // "실학생만" 전제가 깨질 위험이 있어 최소 변경 원칙상 분리했다).
+
+  // STUDENT_NO_CLASS — REAL + TEST 계정 대상(health CLASS_INVALID 는 REAL만
+  // 본다 — studentHealthCheck.mjs 기본 대상 필터가 classifyAccount==='REAL'
+  // 인 학생만 넘기기 때문). ARCHIVED/QA_FIXTURE 는 범위 밖(운영 픽스처라
+  // 홈 반이 없어도 정상일 수 있어 노이즈만 늘어난다).
+  for (const student of students) {
+    if (!student) continue
+    const accType = classifyAccount(student, ctx)
+    if (accType !== 'REAL' && accType !== 'TEST') continue
+    const cid = student.class_id
+    const orphan = !!cid && !classById.has(cid)
+    if (!cid || orphan) {
+      push({
+        code: INVARIANT_CODES.STUDENT_NO_CLASS, severity: 'WARN', studentId: student.id ?? null,
+        studentName: typeof student.name === 'string' ? student.name : null,
+        detail: cid ? `students.class_id(${cid})가 classes 에 존재하지 않음` : 'students.class_id 가 없음(null)',
+        refs: { classId: cid ?? null, orphan, accountType: accType },
+      })
+    }
+  }
+
+  // DUPLICATE_SCA_TEXTBOOK — ARCHIVED 를 제외한 모든 계정 대상(REAL/TEST/
+  // QA_FIXTURE). health 의 ASSIGNMENT_CONFLICT "같은교재중복배정" 신호는
+  // evaluateStudent 가 REAL 에게만 호출돼(studentHealthCheck.mjs 대상 필터)
+  // TEST/QA_FIXTURE 계정에서는 사각지대다 — 여기서 별도로 명시적으로 잡는다.
+  {
+    const seen = new Set() // `${studentId}::${textbookId}` — 같은 쌍을 두 번 보고하지 않기 위함(SCA 3건 이상이면 조합이 여러 개 나올 수 있어서)
+    for (const student of students) {
+      if (!student || classifyAccount(student, ctx) === 'ARCHIVED') continue
+      const sid = student.id
+      const myAssignments = (ctx?.assignmentsByStudent || new Map()).get(sid) || []
+      const byTextbook = new Map()
+      for (const a of myAssignments) {
+        if (!a?.textbook_id) continue
+        const list = byTextbook.get(a.textbook_id) || []
+        list.push(a)
+        byTextbook.set(a.textbook_id, list)
+      }
+      for (const [textbookId, rows] of byTextbook) {
+        if (rows.length < 2) continue
+        const dedupeKey = `${sid}::${textbookId}`
+        if (seen.has(dedupeKey)) continue
+        seen.add(dedupeKey)
+        push({
+          code: INVARIANT_CODES.DUPLICATE_SCA_TEXTBOOK, severity: 'WARN', studentId: sid,
+          studentName: typeof student.name === 'string' ? student.name : null,
+          detail: `student_class_assignments 에 같은 교재(${textbookId})로 배정 행이 ${rows.length}개`,
+          refs: { textbookId, rowCount: rows.length, primaryCount: rows.filter((a) => a?.is_primary).length },
+        })
+      }
     }
   }
 
