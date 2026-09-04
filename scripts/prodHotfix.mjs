@@ -56,8 +56,10 @@ import {
   lintManifestNarratives,
   refreshExpectBefore,
   verifyWriteDriftGuard,
+  findTextbookTargetsFromManifest,
 } from './lib/hotfixManifest.mjs'
 import { createDryRunExecutor, createManagementApiExecutor } from './lib/sqlExecutor.mjs'
+import { buildAmbiguousTextbookIndex } from './lib/prodInvariants.mjs'
 
 const ENV_FLAG_VALUES = ['production', 'staging']
 
@@ -315,6 +317,100 @@ function sha256Text(text) {
   return crypto.createHash('sha256').update(String(text ?? '')).digest('hex')
 }
 
+// plan-eligibility-textbook-identity 트랙(2026-09-05) — apply_eligibility
+// 8값 enum(추가만, opsStatus.mjs 의 STANDARD_STATUS 4값과는 별개 — 그건
+// 절대 안 바꾼다). runHotfix() 의 status 문자열은 STOP 사유별로 수십 종
+// 존재하는데, 예전엔 그중 일부만 runPlan() 이 개별 if/else 로 분류하고
+// 나머지 전부를 "else BLOCKED_NEEDS_APPROVAL" 로 뭉뚱그렸다(실제 차단
+// 원인과 무관하게). 이 표는 그 STOP 사유 문자열 -> apply_eligibility 를
+// 명시적으로 1:1 대응시키는 **단일 원천**이다 — runPlan() 도, 아래
+// computeStandardStatus() 도 이 표 하나만 본다(다른 곳에서 각자 분류
+// 로직을 새로 만들지 않는다).
+//
+// 값 뜻:
+// - READY: 이 계획을 그대로 적용해도(승인만 하면) 통과한다.
+// - BLOCKED_PREFLIGHT: 라이브 상태가 manifest 의 expect_before 와 다름
+//   (이미 적용됐거나 그 사이 값이 바뀜) — preflight/baseline 읽기 단계.
+// - BLOCKED_NEEDS_APPROVAL: 다른 문제는 전혀 없고 "승인만 남은" 상태
+//   (토큰 없음/CI/비TTY/승인 문구 불일치).
+// - BLOCKED_WRITE_DRIFT: VERIFY(읽기 계획)와 WRITE(생성된 SQL)가 구조적으로
+//   어긋남(verifyWriteDriftGuard).
+// - BLOCKED_INVARIANT: 이 manifest 를 적용하면 저장소 전체 invariant 가
+//   새로 FAIL 하거나(blocked-invariant), 그 계산 자체가 실패함(불가능 확인
+//   = 차단, blocked-invariant-unavailable).
+// - BLOCKED_AMBIGUOUS_TEXTBOOK: 대상 교재가 이름 중복/유사 모호 쌍의
+//   일원인데 textbook_identity ack 가 없거나 라이브 값과 어긋남(작업 2).
+// - BLOCKED_MANIFEST: manifest 자체(스키마/서술 lint/정적 스캔/무결성/
+//   환경 플래그·project_ref/롤백 대조)의 구조적 문제 — 라이브 DB 상태와
+//   무관하게 정적으로 판정 가능한 차단.
+// - BLOCKED_UNKNOWN: 이 표에 등록되지 않은 status(새 STOP 사유가 추가됐는데
+//   분류를 깜빡한 경우) — fail-closed, 표준 상태는 항상 FAIL.
+export const APPLY_ELIGIBILITY_VALUES = [
+  'READY',
+  'BLOCKED_PREFLIGHT',
+  'BLOCKED_NEEDS_APPROVAL',
+  'BLOCKED_WRITE_DRIFT',
+  'BLOCKED_INVARIANT',
+  'BLOCKED_AMBIGUOUS_TEXTBOOK',
+  'BLOCKED_MANIFEST',
+  'BLOCKED_UNKNOWN',
+]
+
+// 'ready-to-apply' 는 표에 없다(dryRun/stopReasons 에 따라 READY 또는
+// BLOCKED_NEEDS_APPROVAL 로 갈리는 유일한 컨텍스트-의존 status — 아래
+// computeApplyEligibility() 가 특수 처리한다). 'applied'/'apply-failed'/
+// 'rolled-back'/'rollback-failed' 는 승인 이후(실제 실행 시도) 도달하는
+// 종결 상태라 "적용해도 되는가" 라는 사전 질문 자체가 더는 의미가 없다 —
+// applied 는 이미 끝났다는 뜻에서 READY, 나머지 셋(실행 중 실패/롤백)은
+// 사전 정의된 8개 차단 범주 중 어디에도 안 맞아 BLOCKED_UNKNOWN 으로 명시
+// 등록한다(누락이 아니라 "이 표의 분류 범위 밖" 이라는 의식적 표시).
+export const STOP_REASON_TO_APPLY_ELIGIBILITY = {
+  'not-interactive': 'BLOCKED_NEEDS_APPROVAL',
+  'not-approved': 'BLOCKED_NEEDS_APPROVAL',
+  'preflight-mismatch': 'BLOCKED_PREFLIGHT',
+  'baseline-failed': 'BLOCKED_PREFLIGHT',
+  'blocked-write-drift': 'BLOCKED_WRITE_DRIFT',
+  'blocked-invariant': 'BLOCKED_INVARIANT',
+  'blocked-invariant-unavailable': 'BLOCKED_INVARIANT',
+  'blocked-ambiguous-textbook': 'BLOCKED_AMBIGUOUS_TEXTBOOK',
+  'blocked-ambiguous-textbook-unavailable': 'BLOCKED_AMBIGUOUS_TEXTBOOK',
+  'invalid-run-id': 'BLOCKED_MANIFEST',
+  'invalid-manifest': 'BLOCKED_MANIFEST',
+  'manifest-sha-mismatch': 'BLOCKED_MANIFEST',
+  'manifest-tampered': 'BLOCKED_MANIFEST',
+  'env-flag-required': 'BLOCKED_MANIFEST',
+  'env-mismatch': 'BLOCKED_MANIFEST',
+  'unsafe-sql': 'BLOCKED_MANIFEST',
+  'rollback-of-report-load-failed': 'BLOCKED_MANIFEST',
+  'rollback-of-mismatch': 'BLOCKED_MANIFEST',
+  applied: 'READY',
+  'apply-failed': 'BLOCKED_UNKNOWN',
+  'rollback-failed': 'BLOCKED_UNKNOWN',
+  'rolled-back': 'BLOCKED_UNKNOWN',
+}
+
+/**
+ * status 문자열(+ dryRun/stopReasons 컨텍스트) -> apply_eligibility 8값.
+ * 순수 함수, network/IO 없음. runPlan() 은 이 함수가 만든 report.
+ * apply_eligibility 를 그대로 재사용하고(재계산하지 않음), computeStandardStatus()
+ * 도 이 함수 하나로 4값을 유도한다(같은 표를 공유 — 서로 다른 판정 로직이
+ * 갈라지지 않도록).
+ * @returns {typeof APPLY_ELIGIBILITY_VALUES[number]}
+ */
+export function computeApplyEligibility({ status, dryRun, stopReasons }) {
+  if (status === 'ready-to-apply') {
+    const reasons = stopReasons || []
+    if (!dryRun && (reasons.includes('SUPABASE_ACCESS_TOKEN 미설정') || reasons.includes('CI 환경'))) {
+      return 'BLOCKED_NEEDS_APPROVAL'
+    }
+    return 'READY'
+  }
+  if (Object.prototype.hasOwnProperty.call(STOP_REASON_TO_APPLY_ELIGIBILITY, status)) {
+    return STOP_REASON_TO_APPLY_ELIGIBILITY[status]
+  }
+  return 'BLOCKED_UNKNOWN'
+}
+
 // C2(2026-09-04) — runHotfix() 의 status 문자열(수십 종, apply-failed/
 // preflight-mismatch/blocked-invariant/ready-to-apply/...)을 사람/자동화가
 // 공통으로 볼 수 있는 4값 enum 으로 압축한다. 순수 함수(입력만으로 결정) —
@@ -326,15 +422,15 @@ function sha256Text(text) {
 //   없음/CI 라서 승인 게이트 이전에 멈췄을 때(status 자체는 ready-to-apply
 //   와 같지만 "계획 확인"이 아니라 "적용 시도"라는 의도가 다르다).
 // - FAIL: 그 외 모든 차단/실패 상태(전부 fail-closed 기본값).
+// plan-eligibility-textbook-identity 트랙(2026-09-05) — 이 함수의 4값
+// 출력/기존 12개 회귀 케이스는 절대 바뀌지 않는다(검증 완료 — 아래는 순수
+// 리팩터: 자체 조건 대신 computeApplyEligibility() 하나로 위임해 "같은
+// 표를 쓰게" 만든 것뿐이다. READY -> PASS/WARN, BLOCKED_NEEDS_APPROVAL 은
+// 그대로, 그 외 전부 FAIL — 원래 로직과 출력이 1:1 대응됨을 확인함).
 export function computeStandardStatus({ status, dryRun, stopReasons, hasNewWarn }) {
-  if (status === 'ready-to-apply') {
-    const reasons = stopReasons || []
-    if (!dryRun && (reasons.includes('SUPABASE_ACCESS_TOKEN 미설정') || reasons.includes('CI 환경'))) {
-      return 'BLOCKED_NEEDS_APPROVAL'
-    }
-    return hasNewWarn ? 'WARN' : 'PASS'
-  }
-  if (status === 'applied') return hasNewWarn ? 'WARN' : 'PASS'
+  const eligibility = computeApplyEligibility({ status, dryRun, stopReasons })
+  if (eligibility === 'READY') return hasNewWarn ? 'WARN' : 'PASS'
+  if (eligibility === 'BLOCKED_NEEDS_APPROVAL') return 'BLOCKED_NEEDS_APPROVAL'
   return 'FAIL'
 }
 
@@ -390,12 +486,19 @@ export async function runHotfix(options, deps = {}) {
     report.status = status
     report.finishedAt = D.now().toISOString()
     Object.assign(report, extra)
+    const stopReasonsForEligibility = extra.stopReasons || report.stopReasons || []
     report.standardStatus = computeStandardStatus({
       status,
       dryRun: !!options.dryRun,
-      stopReasons: extra.stopReasons || report.stopReasons || [],
+      stopReasons: stopReasonsForEligibility,
       hasNewWarn: ((extra.invariantsDelta || report.invariantsDelta)?.new_warn?.length || 0) > 0,
     })
+    // plan-eligibility-textbook-identity 트랙(2026-09-05) — blocked_reason
+    // 은 "원래 status 문자열"(사람이 grep 할 수 있는 원인 그대로), apply_
+    // eligibility 는 위 공유 표로 분류한 8값. 기존 필드(status/standardStatus)
+    // 는 삭제하지 않고 둘 다 추가만 한다.
+    report.blocked_reason = status
+    report.apply_eligibility = computeApplyEligibility({ status, dryRun: !!options.dryRun, stopReasons: stopReasonsForEligibility })
     const reportPath = writeReportFile(D, reportDir, runId, report, secretEnv)
     report.reportPath = reportPath
     log(`\nSTATUS: ${status}`)
@@ -546,6 +649,73 @@ export async function runHotfix(options, deps = {}) {
     return finish('preflight-mismatch', 1, { mismatches: preflightMismatches })
   }
   log('프리플라이트 PASS — 현재 상태가 manifest 의 기대값과 일치')
+
+  // 4.5) 작업2(b)(2026-09-05, plan-eligibility-textbook-identity) — 교재
+  // identity 모호성 사전 차단(fail-closed). manifest 의 change 가 textbook_id
+  // 를 직접 설정/삽입하거나 current_unit_id 를 설정해 그 유닛의 교재가
+  // 바뀌는 경우, 대상 교재가 라이브 데이터에서 모호 쌍(이름 완전중복 또는
+  // 유사명+같은 출판사)의 일원이면 명시적 textbook_identity ack(정확한
+  // id/name/publisher_name 이 라이브 값과 전부 일치) 없이는 통과시키지
+  // 않는다. preflight(읽기) 직후, invariants delta(5.5) 이전에 둔다 —
+  // 교재 목록 조회 자체가 실패하면 "모호 여부를 확인 못 함" = 차단
+  // (blocked-ambiguous-textbook-unavailable, fail-closed).
+  D.onStep('ambiguous-textbook-check')
+  {
+    const textbookTargets = findTextbookTargetsFromManifest(manifest)
+    if (textbookTargets.length) {
+      let liveTextbooks
+      try {
+        liveTextbooks = await reader.selectAllRows('textbooks', ['id', 'name', 'publisher_name'])
+      } catch (err) {
+        logErr(`FAIL-CLOSED — 교재 목록 조회 실패(모호 교재 확인 불가, 적용 차단): ${err.message}`)
+        return finish('blocked-ambiguous-textbook-unavailable', 1, { ambiguousTextbookError: err.message, dbWriteCount: 0 })
+      }
+      const ambiguousIndex = buildAmbiguousTextbookIndex(liveTextbooks)
+      const liveTextbookById = new Map(liveTextbooks.map((t) => [t.id, t]))
+      const flagged = []
+      for (const target of textbookTargets) {
+        let textbookId = target.textbookId
+        if (target.kind === 'via-unit') {
+          let unitRow
+          try {
+            unitRow = await reader.getRow('units', target.unitId, ['textbook_id'])
+          } catch (err) {
+            logErr(`FAIL-CLOSED — 유닛 조회 실패(모호 교재 확인 불가, 적용 차단): ${err.message}`)
+            return finish('blocked-ambiguous-textbook-unavailable', 1, { ambiguousTextbookError: err.message, dbWriteCount: 0 })
+          }
+          textbookId = unitRow?.textbook_id ?? null
+        }
+        if (!textbookId) continue
+        const partners = ambiguousIndex.get(textbookId)
+        if (partners && partners.size) {
+          flagged.push({ table: target.table, id: target.id, textbookId, ambiguousWith: [...partners] })
+        }
+      }
+      if (flagged.length) {
+        const ackByChangeKey = new Map()
+        for (const c of manifest.changes || []) {
+          if (c.textbook_identity) ackByChangeKey.set(`${c.table}:${c.id}`, c.textbook_identity)
+        }
+        const unresolved = flagged.filter((f) => {
+          const ack = ackByChangeKey.get(`${f.table}:${f.id}`)
+          const liveTb = liveTextbookById.get(f.textbookId)
+          // UUID 가 canonical — id 가 정확히 일치해야만 ack 로 인정한다(이름
+          // 만 주고 id 가 다르거나 없는 ack 는 무효, 요구사항 그대로).
+          return !(ack && liveTb && ack.id === f.textbookId
+            && ack.name === liveTb.name
+            && (ack.publisher_name ?? null) === (liveTb.publisher_name ?? null))
+        })
+        if (unresolved.length) {
+          logErr('FAIL-CLOSED — 모호한 교재(이름 중복/유사) 대상 변경이 textbook_identity ack 없이 시도됨:')
+          for (const f of unresolved) {
+            logErr(`  ${f.table}:${f.id} 교재 ${String(f.textbookId).slice(0, 8)}… (모호 상대: ${f.ambiguousWith.map((x) => `${String(x).slice(0, 8)}…`).join(', ')})`)
+          }
+          return finish('blocked-ambiguous-textbook', 1, { ambiguousTextbookTargets: unresolved, dbWriteCount: 0 })
+        }
+        log(`교재 identity 모호성 확인 PASS — 대상 ${flagged.length}건 전부 textbook_identity ack 로 명시 확인됨`)
+      }
+    }
+  }
 
   // 5) baseline 저장(학습기록 카운트 + 무관 행 스냅샷 해시)
   // headCountFiltered 가 테이블 부재(42P01/PGRST205)를 만나면 {count:0,
@@ -931,15 +1101,17 @@ export async function runPlan(options, deps = {}) {
     namedSnapshot = await buildInvariantSnapshotFromReader(buildReader())
   } catch { /* 이름 해석 실패는 무시 — plan 은 이미 hotfixResult 로 판정 완료 */ }
 
+  // plan-eligibility-textbook-identity 트랙(2026-09-05) — apply_eligibility
+  // 는 runHotfix()(항상 dryRun:true 로 호출됨, 위)가 이미 computeApplyEligibility()
+  // 공유 표로 계산해 report 에 실어둔 값을 그대로 재사용한다(재계산/재분류
+  // 하지 않음 — "runPlan 과 computeStandardStatus 가 같은 표를 쓴다"는
+  // 요구를 이 재사용으로 만족). lintFindings(runPlan 자신의 서술 lint
+  // 재확인, 표시용)가 위반이면 BLOCKED_MANIFEST — 실제로는 validateManifest
+  // 내부도 동일한 lintManifestNarratives() 를 호출해 이미 hotfixResult.status
+  // 를 'invalid-manifest'(-> BLOCKED_MANIFEST)로 만들었을 것이므로 이
+  // 분기는 대부분 hotfixResult 값과 일치하지만, 우선순위를 명시적으로 고정한다.
   const lintOk = lintFindings.length === 0
-  let apply_eligibility
-  if (!lintOk) apply_eligibility = 'BLOCKED_LINT'
-  else if (hotfixResult.status === 'preflight-mismatch') apply_eligibility = 'BLOCKED_PREFLIGHT'
-  // QA-V2(2026-09-04): 계산 실패(blocked-invariant-unavailable)도 "확인 못 함
-  // = 적용 차단" 으로 같은 칸에 넣는다(fail-closed).
-  else if (hotfixResult.status === 'blocked-invariant' || hotfixResult.status === 'blocked-invariant-unavailable') apply_eligibility = 'BLOCKED_INVARIANT'
-  else if (hotfixResult.status === 'ready-to-apply') apply_eligibility = 'READY'
-  else apply_eligibility = 'BLOCKED_NEEDS_APPROVAL'
+  const apply_eligibility = lintOk ? hotfixResult.report.apply_eligibility : 'BLOCKED_MANIFEST'
 
   const plan = {
     runId: hotfixResult.report.runId,
@@ -959,6 +1131,7 @@ export async function runPlan(options, deps = {}) {
     applySqlPath: hotfixResult.report.applySqlPath || null,
     rollbackSqlPath: hotfixResult.report.rollbackSqlPath || null,
     apply_eligibility,
+    blocked_reason: lintOk ? hotfixResult.report.blocked_reason : 'invalid-manifest',
     dbWriteCount: 0,
   }
   return { plan, hotfixResult }
