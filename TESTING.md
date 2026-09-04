@@ -659,7 +659,7 @@ npm run verify:e2e     # scripts/testBrowserE2E.mjs — 아래 순서로 자동 
 "검증 못 함"을 조용한 통과로 만들지 않음, CLAUDE.md 규칙 18과 같은 원칙).
 `E2E_SKIP_IF_NO_BROWSER=1`을 설정했을 때만 SKIP(exit 0)으로 넘어간다.
 
-### 시나리오 커버리지 (2026-09-05 기준)
+### 시나리오 커버리지 (2026-09-05 갱신 — A6 spelling/guided-learning SKIP 해소)
 
 | 시나리오 | 상태 | 비고 |
 |---|---|---|
@@ -669,7 +669,8 @@ npm run verify:e2e     # scripts/testBrowserE2E.mjs — 아래 순서로 자동 
 | A4 Unit dropdown 목록(교재 범위) | PASS | |
 | A5 현재 유닛 단어 수 표시 | PASS | |
 | A6 퀴즈 정답 → 화면 갱신 + mock 쓰기 로그(`student_progress`) | PASS | |
-| A6 spelling/guided-learning 정답 → 갱신 | SKIP | SpellingReview는 반별 출제 방향(kr2en/en2kr/mixed) 설정 + 다단계 입력, GuidedSession은 WordDetail 다단계 코스라 이번 1차 구현 범위에서 제외. quiz 경로가 두 축(진행 표시 갱신 + `clearedWords`/gardenPoints 성장)의 핵심 계약을 이미 검증한다. |
+| A6-spelling 쓰기(철자) 모드 단어 1개 정답 → 화면 갱신 + mock 쓰기 로그 + 정원 포인트 +1(대조군: 같은 단어 재정답 +0) | PASS | 별도 브라우저 컨텍스트/fixture(0 기준선)에서 실행 — A6/A7 퀴즈 진행과 정원 포인트가 섞이지 않는다. |
+| A6-guided GuidedSession(3분 데일리 리추얼) 단어 1개(발음→예문→퀴즈) 완료 → 화면 갱신 + `completedWords`/`clearedWords` 동시 기록 + 정원 포인트 +1(합집합) | PASS | PronounceStep/ExampleStep의 "따라 말하기"는 클릭이 필요하지만, headless 환경의 mic 거부 경로(`getUserMedia` reject → `onAnyResult()` 그대로 호출)와 `window.speechSynthesis`의 무음성 `onend`가 실제 마이크/외부 TTS 네트워크 없이도 다음 단계 진행을 가능하게 한다(실측: 미mock 요청 0건). 별도 브라우저 컨텍스트/fixture(0 기준선). |
 | A7 English Garden 성장(gardenPoints 증가) | PASS | |
 | B1 관리자 로그인 | PASS | |
 | B2 학생 카드(실명 없음) | PASS | |
@@ -678,8 +679,9 @@ npm run verify:e2e     # scripts/testBrowserE2E.mjs — 아래 순서로 자동 
 | B5 UUID로 별개 교재 판정(라벨 유사성 무관) | PASS | |
 | B6 유사명 함정 교재 비혼입 | PASS | |
 
-총 44단언(PASS 42 / SKIP 2), 실행마다 "미mock 요청 0건 / mock 내부 오류
-0건"을 함께 확인한다.
+총 56단언(PASS 56 / FAIL 0 / SKIP 0), 실행마다 "미mock 요청 0건 / mock
+내부 오류 0건"을 함께 확인한다(3회 연속 실행으로 플레이크 0 확인,
+2026-09-05).
 
 ### 관리자 화면 UI가 작업 지시서 가정과 다른 점(정직 기록)
 
@@ -792,10 +794,35 @@ preview`)을 실제 브라우저에 렌더해 학생/관리자 화면의 표시 
   + `student_progress` mock 쓰기 호출에 `clearedWords` 반영(2초 디바운스
   대기) → English Garden `gardenPoints`가 2점(단어 2개 clearedWords)
   기준으로 0칸 → 1칸(`POINTS_PER_STAGE=2`) 성장.
-  - spelling/guided-learning 완료 후 갱신은 **정직하게 SKIP**했다 — 방향
-    설정(kr2en/en2kr/mixed)·다단계 입력 플로우가 있어 이번 1차 구현
-    범위 밖으로 남겼고, 동일한 저장 계약(mock 쓰기 로그 + 정원 성장)은
-    quiz 경로로 이미 검증됐다.
+  - **(2026-09-05 갱신)** spelling/guided-learning 완료 후 갱신도 채워
+    넣었다(각각 별도 브라우저 컨텍스트 + 새 fixture, 0 기준선) — 더는
+    SKIP이 아니다.
+    - **A6-spelling**: WordBrowser의 "쓰기" 모드(`mode='write'`) 진입 →
+      단어 목록에 이미 보이는 원문을 그대로 입력(방향은 fixture 전 클래스
+      `spelling_direction='kr2en'`이라 화면엔 뜻만, 입력은 영어 철자) →
+      정답 화면 표시 + "문제 N/전체" 진행 갱신 → `student_progress` mock
+      쓰기 로그의 `clearedWords`에 반영 → 정원 성장 포인트(EnglishGarden의
+      "🌿 성장 포인트 N" 원시값, `readGardenFilled`의 칸 수보다 세밀함)가
+      정확히 +1(`useStudent.js`의 `recordSpellingAnswer` 정답 분기가
+      `markWordCleared`를 1회만 호출) → 같은 단어를 다시 맞혀도(대조군)
+      `markWordCleared`가 멱등이라 +0.
+    - **A6-guided**: 대시보드 히어로 CTA("▶ 오늘의 학습 시작")로
+      GuidedSession 진입 → 첫 단어의 발음(PronounceStep)·예문
+      (ExampleStep)·퀴즈(QuizStep) 3단계를 실제로 통과 → 퀴즈 정답 순간
+      `onQuizAnswer`(=`recordQuizAnswer`)가 `markWordCleared`를, STEPS
+      소진 시점의 `goNext()`가 `onMarkCompleted`(=`markWordCompleted`)를
+      호출해 **같은 단어**가 `student_progress` mock 쓰기 로그의
+      `completedWords`/`clearedWords` 양쪽에 모두 기록됨을 확인 →
+      `attachmentCore.js`의 `gardenSet`이 `cleared∪completedWords∪
+      clearedWords` **합집합**이라 이 단어 하나는 정원 포인트를 정확히
+      +1만 늘린다(두 콜백이 불렸다고 +2가 아님 — 실측으로 확정).
+      PronounceStep/ExampleStep의 "따라 말하기"는 실제 마이크 녹음을
+      요구하지 않는다 — headless Chromium의 `getUserMedia` 거부가
+      `WordDetail.jsx`의 mic 에러 캐치 분기(`onAnyResult()`를 그대로
+      호출)로 흡수되고, `window.speechSynthesis`도 음성이 0개인
+      상태에서 `onend`를 정상 발생시켜(실측) 외부 TTS 네트워크 호출
+      (`translate.googleapis.com` 등)로 폴백하지 않는다 — 3회 연속 실행
+      전부 미mock 요청 0건.
 - **관리자 화면**(`admin.spec.mjs`, B1~B6): PIN 로그인 → "반 관리" 탭에서
   교재 컨테이너 4종이 별개 카드, 카드 라벨에 유닛 수 포함(A/B=3개 유닛,
   C/D=1개 유닛) → "동아 윤정미" 유사명 페어를 각각 펼쳐도 카드별
