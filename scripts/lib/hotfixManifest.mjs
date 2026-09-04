@@ -35,7 +35,12 @@ export const ALLOWLIST = {
 // 표현할 수 없었다. 이 두 상수는 그 좁은 예외의 필드 목록이다 — 다른
 // 테이블/다른 필드로는 절대 확장되지 않는다(validateManifest 가 강제).
 export const SCA_INSERT_FIELDS = ['student_id', 'class_id', 'textbook_id', 'current_unit_id', 'is_primary']
-export const SCA_DELETE_EXPECT_FIELDS = ['student_id', 'class_id', 'textbook_id', 'current_unit_id', 'is_primary']
+// QA-V2(2026-09-04): op:'delete' 의 expect_before 에 created_at 을 필수로
+// 추가했다 — rollback(=삭제한 행 재삽입)이 created_at 을 복원하지 않으면
+// 원복 후의 행이 "방금 만들어진 배정"으로 보여 배정 이력 기준 판정(정렬/
+// 최초 배정일 등)이 조용히 달라진다. 값은 삭제 전 실측값(expect_before)이
+// 유일한 원천이고, rollback insert 가 그 값을 그대로 되돌려 넣는다.
+export const SCA_DELETE_EXPECT_FIELDS = ['student_id', 'class_id', 'textbook_id', 'current_unit_id', 'is_primary', 'created_at']
 
 // ── 컬럼 타입(값 검증용, Phase 2·7 강화) ─────────────────────────────────
 // ALLOWLIST 밖 컬럼(예: student_id)도 expect_before 가드 값으로 자주 등장
@@ -54,7 +59,13 @@ const COLUMN_TYPES = {
     // class_id 는 update ALLOWLIST 에는 없지만(반 이동은 이 하네스 범위
     // 밖) B4 insert/delete 의 필드/expect_before 값 검증에는 필요하다.
     class_id: 'uuid',
+    // QA-V2: op=delete 의 rollback insert 가 되돌려 넣는 원래 생성시각.
+    created_at: 'timestamp',
   },
+  // QA-V2(2026-09-04): reference_rows_must_exist 의 참조 테이블도 값 타입을
+  // 본다(예전엔 expect 가 object 인지만 확인하고 값은 전혀 검증하지 않았다).
+  units: { textbook_id: 'uuid', class_id: 'uuid_or_null' },
+  textbooks: { owner_class_id: 'uuid_or_null' },
 }
 
 const MAX_CHANGES_DEFAULT = 20
@@ -89,18 +100,47 @@ function checkColumnValueType(table, col, val) {
       ? null
       : `1~50자 문자열이어야 함(값: ${JSON.stringify(val)})`
   }
+  if (type === 'timestamp') {
+    // 날짜/시각 문자열(ISO 8601 또는 Postgres timestamptz 표기). 값 자체의
+    // 의미는 해석하지 않고 형식만 본다 — 실제 대조는 preflight 가 라이브
+    // 값과 완전 일치로 확인한다.
+    return (typeof val === 'string' && val.length >= 4 && val.length <= 64 && /^[0-9]{4}-[0-9]{2}-[0-9]{2}/.test(val))
+      ? null
+      : `날짜/시각 문자열(YYYY-MM-DD… , 4~64자)이어야 함(값: ${JSON.stringify(val)})`
+  }
   return null
 }
 
+/**
+ * QA-V2(2026-09-04): expect(must_not_change / reference_rows_must_exist) 값의
+ * 공통 검증 — 스칼라(string/number/boolean/null)만 허용하고, COLUMN_TYPES 에
+ * 등록된 컬럼이면 expect_before 와 동일한 per-column 타입 규칙을 적용한다.
+ * 중첩 객체/배열은 SQL 리터럴로 만들 수 없으므로(sqlLiteral 이 throw) 애초에
+ * 검증 단계에서 거부한다 — 값 문자열의 위험 문자는 scanManifestStringValues
+ * 가 별도로 본다.
+ * @returns {string|null} 에러 메시지 또는 null(정상)
+ */
+function checkExpectValue(table, col, val) {
+  const isScalar = val === null || ['string', 'number', 'boolean'].includes(typeof val)
+  if (!isScalar) return `expect 값은 string/number/boolean/null 만 허용(값: ${JSON.stringify(val)})`
+  return checkColumnValueType(table, col, val)
+}
+
 // ── SQL 인젝션 방어(Phase 2·7): manifest 의 모든 문자열 값에 위험 문자 차단 ──
-const INJECTION_CHAR_RE = /(;|--|\/\*)/
+// QA-V2(2026-09-04): `;`/`--`/`/*` 만으로는 이 하네스 자신의 인용을 벗어날 수
+// 있는 문자를 못 막았다 — `$`(dollar-quote 로 `do $$ … $$` 블록을 조기 종료),
+// `%`(`raise notice '… %'` 포맷 자리표시자 조작), 역슬래시(standard_conforming_
+// strings 가 off 인 세션의 이스케이프), 제어문자(로그/SQL 파일 오염)를 함께
+// 거부한다. 값 자체가 이런 문자를 정당하게 담을 일이 없다(전부 uuid/enum/
+// 유닛명 같은 좁은 도메인 값) — 애매하면 fail-closed.
+const INJECTION_CHAR_RE = new RegExp('(;|--|/\\*|\\$|%|\\\\|[\\u0000-\\u001f\\u007f])')
 
 /**
- * manifest 객체를 재귀적으로 순회해 문자열 값 중 `;`/`--`/`/*` 를 포함한
- * 것을 찾는다(순수, 네트워크 0). sqlLiteral 이스케이프와 별개의 이중
- * 방어선 — allowlist 를 통과한 값이라도 SQL 문자열 리터럴 안에 이런
- * 문자가 섞여 있으면 그 자체로 의심스러우므로 애초에 manifest 검증
- * 단계에서 거부한다.
+ * manifest 객체를 재귀적으로 순회해 문자열 값 중 `;`/`--`/`/*`/`$`/`%`/
+ * 역슬래시/제어문자를 포함한 것을 찾는다(순수, 네트워크 0). sqlLiteral
+ * 이스케이프와 별개의 이중 방어선 — allowlist 를 통과한 값이라도 SQL 문자열
+ * 리터럴 안에 이런 문자가 섞여 있으면 그 자체로 의심스러우므로 애초에
+ * manifest 검증 단계에서 거부한다.
  * @returns {{path:string, value:string}[]}
  */
 export function scanManifestStringValues(m) {
@@ -259,9 +299,21 @@ export function lintManifestNarratives(manifest) {
   if (!manifest || typeof manifest !== 'object') return errors
   const changes = Array.isArray(manifest.changes) ? manifest.changes : []
 
+  // QA-V2(2026-09-04) 오탐 수정 — 예전 규칙은 "부분 일치(before 만 또는 after
+  // 만 일치)하는 change 가 하나라도 있으면 FAIL" 이었다. 유령 유닛 정정처럼
+  // 여러 행이 같은 before 값('113ee184…')에서 서로 다른 목적지로 갈라지는
+  // manifest 에서는, 최상위 제목이 그중 한 change 를 정확히 서술해도 나머지
+  // change 들과 부분 일치한다는 이유로 FAIL 이 났다(실제 모순이 아님).
+  // 새 규칙: 후보 change 중 before/after 가 **둘 다** 맞는 것이 하나라도
+  // 있으면 그 서술은 참이므로 PASS. 하나도 없고 부분 일치만 있으면(=서술이
+  // 실제와 다른 이야기를 하는 상태) FAIL. 아무 것도 못 맞추면 검증 불가로
+  // 보고 무시한다(기존 오탐 방지 원칙 유지). changes[i] 안의 서술은 후보가
+  // 그 change 하나뿐이므로 "그 행만" 과 대조된다.
   function checkText(text, pathStr, changeCtx) {
     for (const n of extractArrowNarratives(text)) {
       const candidates = changeCtx ? [changeCtx] : changes
+      let fullMatch = false
+      const partials = []
       for (const c of candidates) {
         if (!c || !c.set || typeof c.set !== 'object') continue
         const cols = n.col ? [n.col] : Object.keys(c.set)
@@ -271,14 +323,20 @@ export function lintManifestNarratives(manifest) {
           const setVal = c.set[col]
           const beforeMatches = n.before === String(expectBeforeVal)
           const afterMatches = n.after === String(setVal)
-          if ((beforeMatches || afterMatches) && !(beforeMatches && afterMatches)) {
-            errors.push(
-              `narrative 불일치: ${pathStr} "${n.col ? `${n.col} ` : ''}'${n.before}' -> '${n.after}'" `
-              + `vs 실제 ${c.table}:${c.id}.${col} ${JSON.stringify(expectBeforeVal)} -> ${JSON.stringify(setVal)}`,
-            )
+          if (beforeMatches && afterMatches) { fullMatch = true; break }
+          if (beforeMatches || afterMatches) {
+            partials.push({ c, col, expectBeforeVal, setVal })
           }
         }
+        if (fullMatch) break
       }
+      if (fullMatch || partials.length === 0) continue
+      const { c, col, expectBeforeVal, setVal } = partials[0]
+      errors.push(
+        `narrative 불일치: ${pathStr} "${n.col ? `${n.col} ` : ''}'${n.before}' -> '${n.after}'" `
+        + `vs 실제 ${c.table}:${c.id}.${col} ${JSON.stringify(expectBeforeVal)} -> ${JSON.stringify(setVal)}`
+        + (partials.length > 1 ? ` (외 ${partials.length - 1}건 부분 일치, 완전 일치 change 없음)` : ''),
+      )
     }
   }
 
@@ -437,6 +495,12 @@ export function validateManifest(m) {
     if (!isUuid(entry.id)) errors.push(`${tag}.id UUID 형식 아님: ${entry.id}`)
     if (!entry.expect || typeof entry.expect !== 'object' || Array.isArray(entry.expect)) {
       errors.push(`${tag}.expect 필수(object)`)
+    } else {
+      // QA-V2(2026-09-04): expect 값도 expect_before 와 동일한 타입 규칙 적용.
+      for (const [col, val] of Object.entries(entry.expect)) {
+        const typeErr = checkExpectValue(entry.table, col, val)
+        if (typeErr) errors.push(`${tag}.expect.${col} ${typeErr}`)
+      }
     }
   }
 
@@ -447,6 +511,11 @@ export function validateManifest(m) {
     if (!isUuid(entry.id)) errors.push(`${tag}.id UUID 형식 아님: ${entry.id}`)
     if (!entry.expect || typeof entry.expect !== 'object' || Array.isArray(entry.expect)) {
       errors.push(`${tag}.expect 필수(object)`)
+    } else {
+      for (const [col, val] of Object.entries(entry.expect)) {
+        const typeErr = checkExpectValue(entry.table, col, val)
+        if (typeErr) errors.push(`${tag}.expect.${col} ${typeErr}`)
+      }
     }
     if (entry.min_words !== undefined && (typeof entry.min_words !== 'number' || entry.min_words < 0)) {
       errors.push(`${tag}.min_words 는 0 이상 숫자여야 함`)
@@ -492,10 +561,23 @@ export function buildPreflightPlan(manifest) {
   for (const c of manifest.changes || []) {
     const op = c.op || 'update'
     if (op === 'insert') {
+      // QA-V2(2026-09-04): SQL 가드(buildNoDuplicateGuard)와 같은 두 조합을
+      // 읽기 계획에서도 확인한다(VERIFY==WRITE 원칙).
+      //  (a) student_id+textbook_id — 하네스 도메인 규칙
+      //  (b) student_id+class_id — 테이블의 실제 unique key
+      // class_id 가 null 인 배정은 (b) 를 건너뛴다: PostgREST 의 .eq(col, null)
+      // 은 IS NULL 이 아니라 'null' 문자열 비교가 돼 신뢰할 수 없다(SQL 가드
+      // 쪽은 sqlEq 가 `class_id is null` 로 올바르게 만들어 그대로 확인한다).
       items.push({
         table: c.table, id: c.id, kind: 'no-duplicate', minWords: null,
         filters: { student_id: c.fields?.student_id, textbook_id: c.fields?.textbook_id },
       })
+      if (c.fields?.class_id != null) {
+        items.push({
+          table: c.table, id: c.id, kind: 'no-duplicate', minWords: null,
+          filters: { student_id: c.fields?.student_id, class_id: c.fields?.class_id },
+        })
+      }
       continue
     }
     items.push({ table: c.table, id: c.id, expect: c.expect_before, minWords: null })
@@ -564,8 +646,41 @@ function sqlEq(col, value) {
   return `${col} = ${sqlLiteral(value)}`
 }
 
+// QA-V2(2026-09-04): 메시지에 실리는 **데이터** 이스케이프. 작은따옴표는 두
+// 배로, `%` 는 `%%` 로 바꾼다 — `raise exception/notice '…%…', arg` 에서 `%`
+// 는 인자 자리표시자라, 데이터에 섞인 `%` 를 그대로 두면 포맷 문자열의 인자
+// 개수가 어긋나 메시지가 왜곡되거나 실행이 실패한다(값 자체의 `%` 는
+// INJECTION_CHAR_RE 가 이미 manifest 단계에서 거부하지만, 생성기도 스스로
+// 안전해야 한다 — 이중 방어선).
 function escMsg(s) {
-  return String(s).replace(/'/g, "''")
+  return String(s).replace(/'/g, "''").replace(/%/g, '%%')
+}
+
+/**
+ * raise 메시지 포맷 문자열 생성용 태그드 템플릿. 리터럴 조각(이 파일이 직접
+ * 쓴 문구 — 의도된 `%` 자리표시자를 포함)은 그대로 두고, 보간되는 값(데이터)
+ * 만 escMsg 로 이스케이프한다.
+ */
+function fmtMsg(strings, ...vals) {
+  return strings.reduce((acc, part, i) => acc + part + (i < vals.length ? escMsg(vals[i]) : ''), '')
+}
+
+// QA-V2(2026-09-04): dollar-quote 를 태그 없는 `$$` 대신 runId 로 태그화한다
+// (`$hotfix_<runId>$ … $hotfix_<runId>$`). 태그가 없으면 블록 안 어딘가에
+// 우연히/악의적으로 들어간 `$$` 가 블록을 조기 종료시킬 수 있다 — manifest
+// 값의 `$` 는 이미 거부되지만, 인용은 데이터로 탈출 가능하면 안 된다.
+// runId 는 하네스가 만든 값(YYYYMMDDHHmmss-hex, 테스트는 RUN-… 형태)이므로
+// 영숫자/하이픈/언더스코어만 허용하고 그 외 문자는 즉시 throw(fail-closed).
+function dollarQuoteTag(runId) {
+  const raw = String(runId ?? '')
+  if (!/^[A-Za-z0-9_-]+$/.test(raw)) {
+    throw new Error(`dollarQuoteTag: runId 에 허용되지 않는 문자가 있습니다 ${JSON.stringify(runId)}`)
+  }
+  const alnum = raw.replace(/[^A-Za-z0-9]/g, '')
+  if (!/^[A-Za-z0-9]+$/.test(alnum)) {
+    throw new Error(`dollarQuoteTag: runId 에서 유효한 태그를 만들 수 없습니다 ${JSON.stringify(runId)}`)
+  }
+  return `$hotfix_${alnum}$`
 }
 
 function buildUpdateStatement(table, id, setEntries, whereEntries) {
@@ -599,10 +714,18 @@ function buildDeleteStatement(table, id, whereEntries) {
   return `  delete from public.${t} where ${whereSql};`
 }
 
-function buildNoDuplicateGuard(table, filters, runId, changeIdx) {
+// QA-V2(2026-09-04) — insert 선행조건은 두 개다.
+//  (a) (student_id, textbook_id): 이 하네스의 도메인 규칙("한 학생이 같은
+//      교재를 두 번 배정받지 않는다"). 기존부터 있던 가드.
+//  (b) (student_id, class_id): student_class_assignments 테이블의 **실제
+//      unique key**. (a)만 확인하면 같은 반에 이미 행이 있는 경우 INSERT 가
+//      DB 제약 위반으로 터진다(트랜잭션이라 데이터는 안전하지만, 승인 후
+//      실패 = 운영자 재작업). 두 선행조건을 모두 SQL 가드로 넣고, preflight
+//      읽기 계획(buildPreflightPlan)도 같은 두 조합을 확인한다.
+function buildNoDuplicateGuard(table, filters, runId, changeIdx, label) {
   const t = sqlIdentifier(table)
   const cond = Object.entries(filters).map(([col, val]) => sqlEq(sqlIdentifier(col), val)).join(' and ')
-  const msg = escMsg(`ABORT[${runId}] insert precondition 위반(changes[${changeIdx}]): student_id+textbook_id 중복 행 이미 존재`)
+  const msg = fmtMsg`ABORT[${runId}] insert precondition 위반(changes[${changeIdx}]): ${label} 중복 행 이미 존재`
   return `  if exists (select 1 from public.${t} where ${cond}) then raise exception '${msg}'; end if;`
 }
 
@@ -618,9 +741,10 @@ function opForDirection(declaredOp, direction) {
 
 function buildTransactionSql(manifest, runId, direction) {
   const changes = manifest.changes || []
+  const tag = dollarQuoteTag(runId)
   const lines = []
   lines.push('begin;')
-  lines.push('do $$')
+  lines.push(`do ${tag}`)
   lines.push('declare')
   lines.push('  v_rows integer;')
   lines.push('  v_total integer := 0;')
@@ -642,9 +766,12 @@ function buildTransactionSql(manifest, runId, direction) {
     } else if (execOp === 'insert') {
       // declaredOp==='insert'(apply) -> 진짜 신규 삽입(fields) + 중복 가드.
       // declaredOp==='delete'(rollback) -> 방금 지운 행을 expect_before 로 복원.
+      // declaredOp==='delete'(rollback) 의 insertFields 는 expect_before 전체
+      // (created_at 포함) — 삭제 전 행을 필드 하나 빠짐없이 복원한다.
       const insertFields = declaredOp === 'insert' ? c.fields : c.expect_before
       if (declaredOp === 'insert' && direction === 'apply') {
-        lines.push(buildNoDuplicateGuard(c.table, { student_id: c.fields.student_id, textbook_id: c.fields.textbook_id }, runId, idx))
+        lines.push(buildNoDuplicateGuard(c.table, { student_id: c.fields.student_id, textbook_id: c.fields.textbook_id }, runId, idx, 'student_id+textbook_id'))
+        lines.push(buildNoDuplicateGuard(c.table, { student_id: c.fields.student_id, class_id: c.fields.class_id }, runId, idx, 'student_id+class_id(unique key)'))
       }
       lines.push(buildInsertStatement(c.table, c.id, insertFields))
     } else {
@@ -656,13 +783,13 @@ function buildTransactionSql(manifest, runId, direction) {
     }
 
     lines.push('  get diagnostics v_rows = row_count;')
-    const msg1 = escMsg(`ABORT[${runId}] ${c.table} ${c.id} 영향 %행(기대 1)`)
+    const msg1 = fmtMsg`ABORT[${runId}] ${c.table} ${c.id} 영향 %행(기대 1)`
     lines.push(`  if v_rows <> 1 then raise exception '${msg1}', v_rows; end if;`)
     lines.push('  v_total := v_total + v_rows;')
   })
 
   const total = changes.length
-  const msgTotal = escMsg(`ABORT[${runId}] 총 영향 행 수 불일치: % (기대 ${total})`)
+  const msgTotal = fmtMsg`ABORT[${runId}] 총 영향 행 수 불일치: % (기대 ${total})`
   lines.push(`  if v_total <> ${total} then raise exception '${msgTotal}', v_total; end if;`)
 
   for (const c of changes) {
@@ -673,29 +800,29 @@ function buildTransactionSql(manifest, runId, direction) {
         ? Object.entries(c.set)
         : Object.keys(c.set).map((col) => [col, c.expect_before[col]])
       const cond = buildExistsCondition(c.table, c.id, afterEntries)
-      const msg2 = escMsg(`ABORT[${runId}] ${c.table} ${c.id} 사후 값 불일치`)
+      const msg2 = fmtMsg`ABORT[${runId}] ${c.table} ${c.id} 사후 값 불일치`
       lines.push(`  if not exists (${cond}) then raise exception '${msg2}'; end if;`)
     } else if (execOp === 'insert') {
       const insertFields = declaredOp === 'insert' ? c.fields : c.expect_before
       const cond = buildExistsCondition(c.table, c.id, Object.entries(insertFields))
-      const msg2 = escMsg(`ABORT[${runId}] ${c.table} ${c.id} 사후 값 불일치(삽입 확인 실패)`)
+      const msg2 = fmtMsg`ABORT[${runId}] ${c.table} ${c.id} 사후 값 불일치(삽입 확인 실패)`
       lines.push(`  if not exists (${cond}) then raise exception '${msg2}'; end if;`)
     } else {
       const t = sqlIdentifier(c.table)
-      const msg2 = escMsg(`ABORT[${runId}] ${c.table} ${c.id} 삭제 확인 실패(행이 여전히 존재)`)
+      const msg2 = fmtMsg`ABORT[${runId}] ${c.table} ${c.id} 삭제 확인 실패(행이 여전히 존재)`
       lines.push(`  if exists (select 1 from public.${t} where id = ${sqlLiteral(c.id)}) then raise exception '${msg2}'; end if;`)
     }
   }
 
   for (const mnc of manifest.must_not_change || []) {
     const cond = buildExistsCondition(mnc.table, mnc.id, Object.entries(mnc.expect))
-    const msg3 = escMsg(`ABORT[${runId}] must_not_change 위반: ${mnc.table} ${mnc.id}`)
+    const msg3 = fmtMsg`ABORT[${runId}] must_not_change 위반: ${mnc.table} ${mnc.id}`
     lines.push(`  if not exists (${cond}) then raise exception '${msg3}'; end if;`)
   }
 
-  const msgOk = escMsg(`HOTFIX ${manifest.id} ${runId} OK: % rows`)
+  const msgOk = fmtMsg`HOTFIX ${manifest.id} ${runId} OK: % rows`
   lines.push(`  raise notice '${msgOk}', v_total;`)
-  lines.push('end $$;')
+  lines.push(`end ${tag};`)
   lines.push('commit;')
   return `${lines.join('\n')}\n`
 }

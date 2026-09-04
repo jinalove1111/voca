@@ -179,7 +179,7 @@ console.log('\n=== [C1] runPlan — risk 산정(LOW/MEDIUM/HIGH) ===')
   const deleteManifest = {
     id: 'plan-test-risk-remove-001', project_ref: 'testref123', allow_primary_delete: true,
     changes: [{ op: 'delete', table: 'student_class_assignments', id: SCA1,
-      expect_before: { student_id: S1, class_id: CLASS1, textbook_id: TB1, current_unit_id: U1, is_primary: true } }],
+      expect_before: { student_id: S1, class_id: CLASS1, textbook_id: TB1, current_unit_id: U1, is_primary: true, created_at: '2026-01-01T00:00:00+00:00' } }],
   }
   const { plan: planDelete } = await runPlan(
     { manifest: deleteManifest, envFlag: 'production', reader: makePlanReader(snap), reportDir: REPORT_DIR, runId: 'RUN-PLAN-RISK-DEL-1' },

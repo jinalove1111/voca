@@ -732,17 +732,17 @@ console.log('\n=== [14b] CI 는 TTY+정확한 승인 문구가 있어도 --env �
 console.log('\n=== [15] 승인 문구 runId 바인딩 — 재시도 없이 STOP ===')
 {
   const scenarios = [
-    { label: '빈-입력', answer: async () => '' },
-    { label: 'yes', answer: async () => 'yes' },
-    { label: '다른-runId', answer: async () => 'APPLY OTHER-RUN-ID-999' },
-    { label: '대소문자-다름', answer: async (rid) => `apply ${rid}` },
+    { label: '빈-입력', slug: 'EMPTY', answer: async () => '' },
+    { label: 'yes', slug: 'YES', answer: async () => 'yes' },
+    { label: '다른-runId', slug: 'OTHER-RUNID', answer: async () => 'APPLY OTHER-RUN-ID-999' },
+    { label: '대소문자-다름', slug: 'CASE-DIFF', answer: async (rid) => `apply ${rid}` },
   ]
   for (const s of scenarios) {
     const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
     const calls = []
     const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
     const res = await runHotfix(
-      { manifest: BASE_MANIFEST, envFlag: 'production', runId: `RUN-BIND-${s.label}`, reportDir: REPORT_DIR, reader, executor, dryRun: false },
+      { manifest: BASE_MANIFEST, envFlag: 'production', runId: `RUN-BIND-${s.slug}`, reportDir: REPORT_DIR, reader, executor, dryRun: false },
       { loadEnv: () => envOk(), isTTY: () => true, approve: s.answer },
     )
     check(`승인 문구 불일치(${s.label}) 시 status = not-approved`, res.status === 'not-approved')
@@ -1215,6 +1215,9 @@ const DELETE_MANIFEST = {
         textbook_id: NEW_TEXTBOOK_ID,
         current_unit_id: null,
         is_primary: false,
+        // QA-V2: op=delete 는 rollback 재삽입이 원래 생성시각을 복원해야 하므로
+        // expect_before 에 created_at 이 필수다.
+        created_at: '2026-01-01T00:00:00+00:00',
       },
     },
   ],

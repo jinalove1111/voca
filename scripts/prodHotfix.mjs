@@ -387,12 +387,25 @@ export async function runHotfix(options, deps = {}) {
     const reportPath = writeReportFile(D, reportDir, runId, report, secretEnv)
     report.reportPath = reportPath
     log(`\nSTATUS: ${status}`)
-    log(`STANDARD_STATUS: ${report.standardStatus}`)
+    // QA-V2(2026-09-04): dry-run 의 PASS 는 "계획이 통과했다"는 뜻이지 "적용
+    // 했다"는 뜻이 아니다 — 콘솔에서 둘을 혼동하지 않도록 표시만 덧붙인다
+    // (report.standardStatus 값 자체는 그대로 PASS/WARN/FAIL 4값 enum 유지).
+    log(`STANDARD_STATUS: ${report.standardStatus}${options.dryRun ? ' (DRY-RUN — 실제 적용 아님)' : ''}`)
     log(`DB WRITE: ${extra.dbWriteCount ?? report.dbWriteCount ?? 0}`)
     if (options.jsonOutput) {
       console.log(redactSecrets(redactSecrets(JSON.stringify(report), secretEnv), process.env))
     }
     return { status, exitCode, report }
+  }
+
+  // 0.5) run-id 형식 게이트(QA-V2, 2026-09-04) — runId 는 생성 SQL 의
+  // dollar-quote 태그($hotfix_<runId>$)와 ABORT 메시지에 그대로 실린다.
+  // 하네스가 만든 값(YYYYMMDDHHmmss-hex)은 항상 영숫자/하이픈이지만,
+  // 호출부가 임의 문자열을 주입할 수 있으므로 여기서 fail-closed 로 막는다
+  // (마지막 방어선은 hotfixManifest.dollarQuoteTag 의 throw).
+  if (!/^[A-Za-z0-9_-]+$/.test(String(runId))) {
+    logErr(`FAIL — run-id 형식 위반(영숫자/하이픈/언더스코어만 허용): ${JSON.stringify(runId)}`)
+    return finish('invalid-run-id', 1, { dbWriteCount: 0 })
   }
 
   // 1) manifest 로드·검증(+ sha256 기록 — 변조 감지의 기준값)
@@ -472,7 +485,11 @@ export async function runHotfix(options, deps = {}) {
   // 3) 정적 안전 스캔 (apply/rollback SQL 은 이 시점에 이미 순수 함수로 생성 가능)
   const applySql = buildApplySql(manifest, runId)
   const rollbackSql = buildRollbackSql(manifest, runId)
-  const violations = [...staticSafetyScan(applySql), ...staticSafetyScan(rollbackSql)]
+  // QA-V2(2026-09-04): manifest 를 함께 넘겨 narrative-drift 도 이 단계에서
+  // 한 번 더 본다(예전엔 인자를 아예 안 넘겨 staticSafetyScan 의 manifest
+  // 분기가 이 경로에서는 죽은 코드였다). rollback SQL 쪽은 같은 manifest 라
+  // 중복 보고를 피하려고 SQL 만 스캔한다.
+  const violations = [...staticSafetyScan(applySql, manifest), ...staticSafetyScan(rollbackSql)]
   if (violations.length) {
     logErr('FAIL — 정적 안전 스캔 위반(파괴적 키워드 감지):')
     for (const v of violations) logErr(`  line ${v.line}: ${v.text} (${v.match})`)
@@ -571,10 +588,13 @@ export async function runHotfix(options, deps = {}) {
         log(`invariants delta 미리보기 — new_warn ${invariantsDelta.new_warn.length}건, resolved ${invariantsDelta.resolved.length}건`)
       }
     } catch (err) {
-      // 이 미리보기는 이미 fail-closed 인 preflight/postflight 위에 얹은
-      // 부가 안전망이다 — 조회 자체가 실패해도(네트워크 등) 핵심 흐름을
-      // 막지 않고 경고만 남긴다(fail-open, 정보성 기능).
-      log(`invariants delta 미리보기 조회 실패(계속 진행, fail-open): ${err.message}`)
+      // QA-V2(2026-09-04) — 예전엔 이 예외를 "정보성 기능이니 계속 진행"
+      // (fail-open)으로 넘겼다. 그러면 invariant 를 **확인하지 못한** 계획이
+      // ready-to-apply 로 승인 대상이 된다(실측: 로더 예외 상태에서 apply 가
+      // 그대로 실행됐다). 확인 불가 = 차단이 이 하네스의 기본값이므로
+      // fail-closed 로 바꾼다.
+      logErr(`FAIL-CLOSED — invariants delta 미리보기 계산 실패(적용 차단): ${err.message}`)
+      return finish('blocked-invariant-unavailable', 1, { invariantsDeltaError: err.message, dbWriteCount: 0 })
     }
   }
 
@@ -871,7 +891,9 @@ export async function runPlan(options, deps = {}) {
   let apply_eligibility
   if (!lintOk) apply_eligibility = 'BLOCKED_LINT'
   else if (hotfixResult.status === 'preflight-mismatch') apply_eligibility = 'BLOCKED_PREFLIGHT'
-  else if (hotfixResult.status === 'blocked-invariant') apply_eligibility = 'BLOCKED_INVARIANT'
+  // QA-V2(2026-09-04): 계산 실패(blocked-invariant-unavailable)도 "확인 못 함
+  // = 적용 차단" 으로 같은 칸에 넣는다(fail-closed).
+  else if (hotfixResult.status === 'blocked-invariant' || hotfixResult.status === 'blocked-invariant-unavailable') apply_eligibility = 'BLOCKED_INVARIANT'
   else if (hotfixResult.status === 'ready-to-apply') apply_eligibility = 'READY'
   else apply_eligibility = 'BLOCKED_NEEDS_APPROVAL'
 

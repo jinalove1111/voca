@@ -87,7 +87,10 @@ function renderMarkdown(plan, manifest) {
     lines.push(`- resolved: ${plan.invariantsDelta.resolved.length}건`)
     for (const f of plan.invariantsDelta.resolved) lines.push(`  - ${f.code} ${f.studentId ?? '(유닛)'} — ${f.detail}`)
   } else {
-    lines.push('(계산 안 됨 — 스냅샷 조회 실패 또는 미지원)')
+    // QA-V2(2026-09-04): invariants delta 를 계산하지 못한 계획은 "정보 없음"
+    // 이 아니라 적용 차단 사유다(runHotfix 가 blocked-invariant-unavailable 로
+    // STOP 하고 apply_eligibility 는 BLOCKED_INVARIANT 가 된다).
+    lines.push('(계산 실패 — 적용 차단)')
   }
   lines.push('')
 

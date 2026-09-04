@@ -594,3 +594,88 @@ node scripts/prodReport.mjs --from-dir <dir>
 `npm run verify:ops-status`(`scripts/testOpsStatus.mjs`)가 스키마/어댑터/
 `renderSummary`/`prod:report` CLI(`--from-dir`, 13절 헤더 순서, 마스킹
 우회 방지 회귀 포함)를 141단언으로 고정합니다.
+
+## 9. V2 보안 리뷰 하드닝 (2026-09-04) — 인용/타입/차단 규칙
+
+read-only 보안 리뷰 지적사항을 반영한 동작 변경입니다. 기존 절차(1~8절)는
+그대로이고, 아래는 "무엇이 더 빨리, 더 확실히 막히는가"만 달라진 부분입니다.
+
+### 9-1. manifest 문자열 값에서 금지되는 문자
+
+`;` `--` `/*` 에 더해 **`$`, `%`, 역슬래시, 제어문자**도 거부합니다
+(`scripts/lib/hotfixManifest.mjs` `INJECTION_CHAR_RE`). 적용 대상은 manifest
+안의 *모든* 문자열 값입니다 — `id`/`title`/`notes` 같은 자유 텍스트,
+`changes[].expect_before`/`set`/`fields`, 그리고 `must_not_change[].expect`,
+`reference_rows_must_exist[].expect` 값까지 포함합니다.
+
+이유: 생성 SQL 은 `do $…$ … $…$` 블록과 `raise exception/notice '… %'`
+포맷 문자열을 쓰기 때문에, 값에 섞인 `$$`/`%` 가 하네스 자신의 인용을
+벗어날 수 있습니다(끝은 문법 오류로 fail-closed 지만, 인용은 애초에
+데이터로 탈출 가능해서는 안 됩니다). 실제 운영 값(uuid·`Unit5` 같은 유닛명·
+ISO 날짜)에는 이 문자들이 등장하지 않습니다. 걸리면 `invalid-manifest` 로
+**SQL 생성 이전에** STOP 합니다.
+
+같은 맥락의 이중 방어선 2가지:
+
+- 생성 SQL 의 dollar-quote 는 태그를 붙입니다 — `do $hotfix_<runId>$ …
+  $hotfix_<runId>$`(runId 의 영숫자만 사용). `runId` 가 영숫자/하이픈/
+  언더스코어 밖 문자를 담으면 `prodHotfix.mjs` 가 `invalid-run-id` 로 STOP
+  하고, 그래도 도달하면 SQL 생성기가 throw 합니다.
+- `raise` 메시지에 실리는 **데이터**의 `%` 는 `%%` 로, `'` 는 `''` 로
+  이스케이프합니다. 포맷의 의도된 자리표시자(`% rows` 등)는 이 파일이 직접
+  쓴 리터럴 조각에만 존재합니다.
+
+### 9-2. expect 값도 타입 검사
+
+`must_not_change[].expect` / `reference_rows_must_exist[].expect` 의 값은
+이제 `changes[].expect_before` 와 같은 규칙을 받습니다 — uuid 컬럼은 uuid,
+boolean 컬럼은 boolean, 스칼라(string/number/boolean/null)만 허용, null 은
+`uuid_or_null` 로 등록된 컬럼에서만 허용.
+
+### 9-3. invariants delta 계산 실패 = 적용 차단
+
+예전에는 스냅샷 조회/평가가 실패하면 "부가 정보이니 계속"(fail-open)이라
+`ready-to-apply` 로 승인 단계까지 갔습니다. 이제는
+`blocked-invariant-unavailable` 로 STOP 합니다(`STANDARD_STATUS: FAIL`,
+`prod:plan` 의 `apply_eligibility: BLOCKED_INVARIANT`, 계획 문서에는
+"(계산 실패 — 적용 차단)"). 확인하지 못한 것은 통과시키지 않습니다.
+
+### 9-4. `op:'delete'` 는 `created_at` 까지 캡처한다
+
+`op:'delete'` 의 `expect_before` 는 이제 6개 컬럼(`student_id`, `class_id`,
+`textbook_id`, `current_unit_id`, `is_primary`, **`created_at`**)을 전부
+요구합니다. rollback(=삭제한 행 재삽입)이 `created_at` 을 복원하지 않으면
+원복된 배정이 "방금 만들어진 배정"으로 보여 배정 이력 기준 판정이 조용히
+달라지기 때문입니다.
+
+### 9-5. `op:'insert'` 의 선행조건은 2개다
+
+| 조합 | 근거 |
+|---|---|
+| `(student_id, textbook_id)` | 하네스 도메인 규칙 — 한 학생이 같은 교재를 두 번 배정받지 않는다 |
+| `(student_id, class_id)` | `student_class_assignments` 테이블의 **실제 unique key** |
+
+예전에는 앞의 조합만 확인해서, 같은 반에 이미 행이 있으면 승인 이후 DB
+제약 위반으로 실패했습니다(트랜잭션이라 데이터는 안전하지만 운영자가
+다시 처음부터 해야 했습니다). 이제 두 조합 모두 apply SQL 의 `if exists …
+raise exception` 가드와 preflight 읽기 계획에서 함께 확인합니다.
+
+주의(알려진 갭): `class_id` 가 `null` 인 배정은 preflight **읽기** 단계에서
+`(student_id, class_id)` 확인을 건너뜁니다 — PostgREST 의 `.eq(col, null)`
+은 `IS NULL` 이 아니라서 신뢰할 수 없기 때문입니다. SQL 가드 쪽은
+`class_id is null` 로 정확히 생성되어 그대로 확인합니다.
+
+### 9-6. 콘솔 문구 / 산출물 경로
+
+- `--dry-run` 일 때 콘솔은 `STANDARD_STATUS: PASS (DRY-RUN — 실제 적용
+  아님)` 로 표시합니다(보고서 JSON 의 `standardStatus` 값 자체는 그대로
+  `PASS`/`WARN`/`FAIL`/`BLOCKED_NEEDS_APPROVAL` 4값 enum).
+- 이 문서가 예시로 쓰는 `--report-dir .tmp/prod-reports` 산출물에는 실제
+  학생 UUID 가 들어갑니다. 저장소 루트 `.tmp/` 는 `.gitignore` 에 있으니
+  절대 추적되지 않지만, 외부로 복사할 때는 직접 확인하세요.
+
+### 9-7. 검증
+
+`npm run verify:prod-hotfix`(300단언) / `npm run verify:prod-plan`(32단언)이
+위 7개 항목을 회귀로 고정합니다(FAIL-first 로 추가 — 수정 전 각각 34건,
+4건 FAIL 을 실측한 뒤 구현).
