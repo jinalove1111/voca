@@ -413,6 +413,27 @@ export const DOMAINS = {
       { script: 'tests/harness/runWordsBulkReplacePlan.mjs', builders: [], extra: true, note: '자기완결형 하네스 — src/utils/wordLibrary.js의 순수 함수 planWordsBulkReplace/buildAdminBulkReplaceRows를 esbuild 인메모리 번들(더미 env, 네트워크 0)로 직접 검증. 옛 delete-then-insert-all 방식과의 대조군을 포함해 회귀를 고정한다(겹치는 단어의 id가 하나도 보존되지 않아 word_status가 CASCADE 삭제되던 P0 버그). 배포 순서 단언(11~13)이 특히 중요 — 클라이언트 payload가 옛 서버가 읽는 5개 컬럼을 계속 포함하는지 고정해, Vercel만 먼저 배포되고 Edge Function이 아직 옛 코드인 창에서 오디오/예문/번역/암기팁이 null로 덮이는 사고를 막는다. 49단언, 13개 필수 도메인 밖 신규 보너스 커버리지.' },
     ],
   },
+
+  // ── 2026-09-05 등록: Browser E2E (Playwright, 학생/관리자 화면 렌더 자동
+  // 검증, docs/testTextbookIsolation.mjs·testGardenGrowthFlow.mjs와 동일한
+  // fixture 정신을 브라우저 레벨로 확장) — verify:e2e와 동일 실행.
+  // extra: true 인 이유: 이 체크는 Playwright chromium 바이너리(수백MB, npm
+  // install만으로는 안 받아짐 — 별도 `npx playwright install chromium` 필요)가
+  // 로컬에 없으면 실행 자체가 불가능하다. extra:true가 아니면 브라우저 없는
+  // 개발 환경에서 verify:all 전체가 FAIL로 물드는데, 이 체크 하나 때문에
+  // 다른 39개 정상 도메인까지 빨간불로 보이는 건 verify:all의 "한눈에 상태
+  // 파악" 가치를 해친다. testBrowserE2E.mjs 자신은 브라우저 부재 시
+  // E2E_SKIP_IF_NO_BROWSER=1일 때만 SKIP(exit 0)하고, 그 변수가 없으면
+  // fail-closed로 exit 1한다 — CI(.github/workflows/release-gate.yml)는 이
+  // 변수를 세팅하지 않고 사전에 `npx playwright install --with-deps chromium`을
+  // 실행하므로 CI에서는 이 체크가 실제로 강제된다(scripts/verifyRelease.mjs
+  // Gate 5 참고, extra:true와 별개로 그쪽은 fail-closed).
+  e2e: {
+    label: 'Browser E2E — 학생/관리자 화면 렌더 자동 검증(Playwright, 전체 네트워크 mock) (verify:e2e와 동일 실행)',
+    checks: [
+      { script: 'scripts/testBrowserE2E.mjs', builders: [], extra: true, note: '2026-09-05 — Playwright(chromium) + page.route() 전체 네트워크 mock(tests/e2e/lib/postgrestMock.mjs: Supabase PostgREST 소형 에뮬레이터, /api/verify-pin·/api/verify-admin-pin 등 서버리스 mock). 실제 Supabase/Vercel 요청 0건(미mock 요청 발견 시 즉시 FAIL, fail-closed 가드). vite preview로 기존 build 산출물을 서빙해 학생 로그인/교재·유닛 표시/퀴즈·스펠링·가이드학습 완료 후 갱신/English Garden 성장, 관리자 로그인/학생 카드/교재 목록 분리 노출을 tests/e2e/student.spec.mjs·tests/e2e/admin.spec.mjs로 검증. 실 DB write 0, 실 학생 데이터 0(전부 tests/e2e/fixtures 합성 픽스처). 브라우저 미설치 로컬 환경에서도 verify:all이 깨지지 않도록 extra:true(위 주석 참고) — TESTING.md E2E 섹션에 설계/한계 문서화.' },
+    ],
+  },
 }
 
 // Phase 6 최종 검증 매트릭스가 참조하는 "운영자 체크리스트 13항목" ↔ 위 도메인
