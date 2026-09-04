@@ -200,6 +200,7 @@ console.log('1. [실사고 재현] regular 반 + textbookId — 교재/유닛이
   check('SCA.textbook_id = 요청한 교재(껍데기 배정 재발 방지)', scaRow(SID(1))?.textbook_id === TB1, String(scaRow(SID(1))?.textbook_id))
   check('SCA.current_unit_id = students와 동일(Unit2)', scaRow(SID(1))?.current_unit_id === U2)
   check('class_id는 사람 반(regular) 그대로 — 반/교재 독립', studentRow(SID(1))?.class_id === RC && scaRow(SID(1))?.class_id === RC)
+  check('[경고체계] 정상 배정이면 warnings가 응답에 없음', r.body?.warnings === undefined, JSON.stringify(r.body?.warnings))
 }
 
 console.log('\n2. 명시적 unitName — 관리자가 고른 유닛을 그대로 쓴다')
@@ -281,6 +282,8 @@ console.log('\n7. [정직 기록] regular 반 + textbookId 없음 — 추측 배
   const r = await callHandler({ action: 'create_student', adminPin: ADMIN_PIN, studentId: SID(7), name: 'QA생성칠', classId: RC })
   check('생성은 성공(하위호환)', r.body?.ok === true, JSON.stringify(r.body))
   check('유닛은 추측하지 않고 null', studentRow(SID(7))?.current_unit_id == null)
+  check('[경고체계] 교재 미배정 — warnings에 no_textbook', Array.isArray(r.body?.warnings) && r.body.warnings.includes('no_textbook'), JSON.stringify(r.body?.warnings))
+  check('[경고체계] 한글 message 동반', typeof r.body?.message === 'string' && r.body.message.length > 0, JSON.stringify(r.body?.message))
 }
 
 console.log('\n8. 유령 유닛뿐인 교재 — 1단어 유닛을 첫 학습 유닛으로 고르지 않는다')
@@ -290,6 +293,7 @@ console.log('\n8. 유령 유닛뿐인 교재 — 1단어 유닛을 첫 학습 �
   check('생성은 성공(교재는 유효)', r.body?.ok === true, JSON.stringify(r.body))
   check('유령(1단어) 유닛이 배정되지 않음(null 유지)', studentRow(SID(8))?.current_unit_id == null, String(studentRow(SID(8))?.current_unit_id))
   check('SCA.textbook_id는 기록됨(교재 배정 자체는 유효)', scaRow(SID(8))?.textbook_id === TB3)
+  check('[경고체계] 교재는 있지만 유닛이 없음 — warnings에 no_unit(no_textbook은 없음)', Array.isArray(r.body?.warnings) && r.body.warnings.includes('no_unit') && !r.body.warnings.includes('no_textbook'), JSON.stringify(r.body?.warnings))
 }
 
 console.log('\n9. 멱등 replay — 같은 studentId 재요청은 기존 계약 그대로')
