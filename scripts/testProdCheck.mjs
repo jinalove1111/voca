@@ -620,6 +620,50 @@ console.log('\n=== 11절. Phase 11 신규 invariant 5종 — 개별 양성/음�
     !findings.some((f) => f.code === 'TEXTBOOK_NAME_DUPLICATE' && f.refs?.textbookIds?.includes('tb-g1')))
 }
 {
+  // harness-v2 coverage(2026-09-05) — TEXTBOOK_SIMILAR_NAME(양성): 같은
+  // publisher_name, 학년 접두만 다른 유사명 교재 2개(#8 시나리오 그대로).
+  const fx = syntheticBase()
+  fx.textbooks.push({ id: 'tb-sim-1', name: '중1 천재 이상기', owner_class_id: null, publisher_name: '천재' })
+  fx.textbooks.push({ id: 'tb-sim-2', name: '중2 천재 이상기', owner_class_id: null, publisher_name: '천재' })
+  const { findings } = evalFixture(fx)
+  const hit = findings.find((f) => f.code === 'TEXTBOOK_SIMILAR_NAME'
+    && f.refs?.textbookIds?.includes('tb-sim-1') && f.refs?.textbookIds?.includes('tb-sim-2'))
+  check('TEXTBOOK_SIMILAR_NAME(양성) — 같은 출판사, 학년만 다른 유사명(중1/중2 천재 이상기)',
+    !!hit && hit.severity === 'WARN', JSON.stringify(findings.filter((f) => f.code === 'TEXTBOOK_SIMILAR_NAME')))
+}
+{
+  // TEXTBOOK_SIMILAR_NAME(음성) — 이름은 학년만 다르지만 publisher_name 이
+  // 다르면(또는 비어있으면) 오탐 방지를 위해 발생하지 않는다.
+  const fx = syntheticBase()
+  fx.textbooks.push({ id: 'tb-sim-3', name: '중1 능률 VOCA', owner_class_id: null, publisher_name: '능률' })
+  fx.textbooks.push({ id: 'tb-sim-4', name: '중2 능률 VOCA', owner_class_id: null, publisher_name: '다른출판사' })
+  const { findings } = evalFixture(fx)
+  check('TEXTBOOK_SIMILAR_NAME(음성) — publisher_name 이 다르면 발생 안 함',
+    !findings.some((f) => f.code === 'TEXTBOOK_SIMILAR_NAME' && f.refs?.textbookIds?.includes('tb-sim-3')))
+}
+{
+  // TEXTBOOK_SIMILAR_NAME(음성) — publisher_name 이 둘 다 비어있으면(레거시
+  // 미기입) 오탐 방지를 위해 발생하지 않는다("같은 publisher일 때만" 조건).
+  const fx = syntheticBase()
+  fx.textbooks.push({ id: 'tb-sim-5', name: '중1 미기재 VOCA', owner_class_id: null })
+  fx.textbooks.push({ id: 'tb-sim-6', name: '중2 미기재 VOCA', owner_class_id: null })
+  const { findings } = evalFixture(fx)
+  check('TEXTBOOK_SIMILAR_NAME(음성) — publisher_name 둘 다 미기입이면 발생 안 함',
+    !findings.some((f) => f.code === 'TEXTBOOK_SIMILAR_NAME' && f.refs?.textbookIds?.includes('tb-sim-5')))
+}
+{
+  // TEXTBOOK_SIMILAR_NAME(음성) — 이름이 완전히 동일하면 TEXTBOOK_NAME_DUPLICATE
+  // 의 몫이지 SIMILAR_NAME 의 몫이 아니다(중복 보고 방지).
+  const fx = syntheticBase()
+  fx.textbooks.push({ id: 'tb-sim-7', name: '천재 VOCA', owner_class_id: null, publisher_name: '천재' })
+  fx.textbooks.push({ id: 'tb-sim-8', name: '천재 VOCA', owner_class_id: null, publisher_name: '천재' })
+  const { findings } = evalFixture(fx)
+  check('TEXTBOOK_SIMILAR_NAME(음성) — 이름이 완전 동일하면(중복 몫) SIMILAR_NAME 으로 이중 보고하지 않는다',
+    !findings.some((f) => f.code === 'TEXTBOOK_SIMILAR_NAME' && f.refs?.textbookIds?.includes('tb-sim-7')))
+  check('  대신 TEXTBOOK_NAME_DUPLICATE 로 보고된다', findings.some((f) => f.code === 'TEXTBOOK_NAME_DUPLICATE'
+    && f.refs?.textbookIds?.includes('tb-sim-7') && f.refs?.textbookIds?.includes('tb-sim-8')))
+}
+{
   // TEXTBOOK_UNREACHABLE(양성) — 컨테이너 반 외에는 class_textbooks 연결이
   // 전혀 없고(여기서는 아예 없음), 실학생 SCA 도 하나도 이 교재를 안 씀.
   const fx = syntheticBase()
@@ -691,7 +735,7 @@ console.log('\n=== 11절. Phase 11 신규 invariant 5종 — 개별 양성/음�
 {
   // CODE_META — 신규 5종 모두 impact/recommended 존재 + severity 는 findings 에서 전부 WARN.
   const codes = ['UNIT_TEXTBOOK_CONTAINER_MISMATCH', 'TEXTBOOK_NAME_DUPLICATE', 'TEXTBOOK_UNREACHABLE',
-    'STUDENT_TEXTBOOK_SELECTOR_EMPTY', 'UNIT_CONTENT_DUPLICATE']
+    'STUDENT_TEXTBOOK_SELECTOR_EMPTY', 'UNIT_CONTENT_DUPLICATE', 'TEXTBOOK_SIMILAR_NAME']
   for (const code of codes) {
     check(`CODE_META.${code} — impact/recommended 존재`,
       !!CODE_META[code]?.impact && !!CODE_META[code]?.recommended, JSON.stringify(CODE_META[code]))

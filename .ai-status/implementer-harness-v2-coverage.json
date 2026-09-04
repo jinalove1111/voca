@@ -1,0 +1,29 @@
+{
+  "agent_name": "implementer",
+  "role": "Production Safety Harness 12종 오류 회귀 커버리지 감사",
+  "task_id": "harness-v2-coverage",
+  "task": "prod:check invariant 27종 + 앱 회귀 스위트가 실제로 12종 운영 오류를 탐지하는지 검증하고, 유일한 GAP(#8 유사명 교재 혼동)을 WARN invariant로 신설",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-05T02:41:00+09:00",
+  "updated_at": "2026-09-05T02:55:00+09:00",
+  "files_owned": [
+    "scripts/lib/prodDataLoader.mjs",
+    "scripts/lib/prodInvariants.mjs",
+    "scripts/testProdCheck.mjs",
+    ".ai-status/implementer-harness-v2-coverage.json"
+  ],
+  "files_read": [
+    "scripts/lib/studentHealthRules.mjs",
+    "scripts/testStudentHealthRules.mjs",
+    "tests/harness/registry.mjs",
+    "scripts/testGardenGrowthSources.mjs",
+    "scripts/testDoubleEvents.mjs",
+    "scripts/testGardenGrowthFlow.mjs",
+    "DATABASE.md",
+    "package.json"
+  ],
+  "summary": "12종 운영 오류 전부 기존 탐지기(NO_PRIMARY/MULTIPLE_PRIMARY/STUDENT_UNIT_ORPHAN(current_unit_present health rule)/PRIMARY_UNIT_MISMATCH/GHOST_UNIT_PRESENT+STUDENT_GHOST_UNIT+SCA_GHOST_UNIT/UNIT_WORDS_ABNORMAL+UNIT_NAME_ABNORMAL/STALE_CLASS_SCA/SCA_TEXTBOOK_ORPHAN+UNIT_TEXTBOOK_ORPHAN/garden-growth-sources+double-events verify 스위트)로 COVERED, fixture/회귀 테스트도 이미 존재(양성+음성 대조군 포함) — 실행 결과 전부 PASS. 유일한 진짜 GAP은 #8(중1/중2 등 학년만 다른 유사명 교재 혼동) — 신규 WARN invariant TEXTBOOK_SIMILAR_NAME을 prodInvariants.mjs에 추가(기존 코드/판정 변경 없음, 추가만). 판정: 같은 publisher_name(정규화 일치, 둘 다 non-empty)이고 학년 접두(초/중/고 + 1~6)를 제거한 정규화 키가 같은 서로 다른 textbook 쌍 — 단, norm(name) 완전 동일(TEXTBOOK_NAME_DUPLICATE 몫)은 제외해 이중 보고 방지. prodDataLoader.mjs의 textbooks SELECT에 publisher_name 컬럼 추가(READ-ONLY, src/utils/wordLibrary.js가 이미 이 컬럼을 라이브에서 select하고 있어 존재 확인됨). testProdCheck.mjs에 양성 1건 + 음성 3건(publisher 다름/publisher 둘다 미기입/이름 완전동일) fixture 테스트 추가, CODE_META 완전성 체크 목록에도 추가. 195→204단언 전부 PASS. build PASS, verify:prod-check/verify:release-gate/verify:health-rules/verify:garden-growth-sources/verify:double-events/verify:attachment/verify:reward-ledger/verify:reward-hardening/verify:mission-bonus/verify:game-reward 전부 PASS. 라이브 READ-ONLY prod:check 1회 실행: invariants FAIL 0 / WARN 66(신규 TEXTBOOK_SIMILAR_NAME 1건 포함 — textbook faf6dc71.../01afd62a..., publisher '동아', 정규화 키 '동아윤정미' = '중1 동아 윤정미' vs '중2 동아 윤정미', 과제에서 예시로 든 시나리오와 정확히 일치하는 실제 라이브 데이터). DB WRITE 0, SQL 실행 0, merge/push 없음.",
+  "blocker": null,
+  "next_action": "완료. wt-cov 브랜치(test/harness-v2-coverage)는 로컬 커밋만 됨 — merge/push는 운영자 결정 필요. TEXTBOOK_SIMILAR_NAME WARN 1건(faf6dc71/01afd62a, 동아)은 READ-ONLY 조사 권장 — 운영자가 실제로 두 교재가 혼동되고 있는지 확인 후 필요시 교재명에 명확한 학년 표기를 추가하는 별도 운영 작업으로 이어갈 수 있음(자동 수정 없음)."
+}

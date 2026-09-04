@@ -51,6 +51,10 @@ export const INVARIANT_CODES = {
   DUPLICATE_SCA_TEXTBOOK: 'DUPLICATE_SCA_TEXTBOOK',
   STUDENT_NO_CLASS: 'STUDENT_NO_CLASS',
   UNIT_NAME_UUID_CONTRADICTION: 'UNIT_NAME_UUID_CONTRADICTION',
+  // ── harness-v2 coverage(2026-09-05, wt-cov) — 12종 회귀 커버리지 감사에서
+  // 발견한 유일한 진짜 GAP(#8: 학년만 다른 유사명 교재 혼동). 기존 invariant
+  // 코드/판정은 일절 변경하지 않고 이 항목만 추가한다(WARN 고정).
+  TEXTBOOK_SIMILAR_NAME: 'TEXTBOOK_SIMILAR_NAME',
 }
 
 // 정상 유닛의 단어 수 범위. 이 범위를 벗어나면 데이터 이상 신호로 본다.
@@ -69,6 +73,18 @@ export const UNIT_NAME_MAX_LEN = 30
 const BARE_UNIT_NAME_MIRROR = /^(unit|유닛|단원)\s*$/i
 
 const norm = (v) => String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+
+// harness-v2 coverage(2026-09-05) — TEXTBOOK_SIMILAR_NAME 용 정규화 키.
+// 이름에서 학년 접두(초1~초6/중1~중3/고1~고3, 공백 유무 무관)와 괄호 문자,
+// 그리고 모든 공백을 제거한다. "중1 천재 이상기" / "중2 천재 이상기" 둘 다
+// "천재이상기"로 수렴한다. 괄호 "안의 내용"은 지우지 않는다(과도한 손실
+// 방지 — 문자만 제거).
+const GRADE_PREFIX_RE = /(초|중|고)\s*[1-6]/g
+const textbookSimilarityKey = (name) => String(name ?? '')
+  .toLowerCase()
+  .replace(GRADE_PREFIX_RE, '')
+  .replace(/[()[\]{}]/g, '')
+  .replace(/\s+/g, '')
 
 // ── 코드 → 한국어 설명/영향/권장 조치 ────────────────────────────────────
 // impact: 학생이 겪을 증상(사람용 출력 "Critical"/"Needs review" 줄에 그대로
@@ -184,6 +200,11 @@ export const CODE_META = {
   },
   UNIT_NAME_UUID_CONTRADICTION: {
     impact: '레거시 이름이 실제로는 지금과 다른 유닛을 가리키고 있어, 표시상 혼동을 넘어 그 이름으로 재해석하면 다른 단어를 보게 될 수 있음',
+    recommended: 'READ-ONLY 조사',
+  },
+  // ── harness-v2 coverage(2026-09-05, wt-cov) ──
+  TEXTBOOK_SIMILAR_NAME: {
+    impact: '같은 출판사의 학년만 다른 교재끼리 이름이 유사해 관리자 화면 교재 선택 시 다른 학년 교재를 잘못 고를 수 있음',
     recommended: 'READ-ONLY 조사',
   },
 }
@@ -751,6 +772,36 @@ export function evaluateInvariants(ctx, opts = {}) {
             unitIds: [ids[i], ids[j]], textbookIds: [ua?.textbook_id ?? null, ub?.textbook_id ?? null],
             overlapCount: inter, overlapRatio: ratio,
           },
+        })
+      }
+    }
+  }
+
+  // 14) TEXTBOOK_SIMILAR_NAME(2026-09-05, harness-v2 coverage) — 같은
+  // 출판사(publisher_name, 정규화 후 non-empty 일치)이고, 학년 접두를
+  // 제외한 정규화 키가 같은 서로 다른 교재 쌍. TEXTBOOK_NAME_DUPLICATE(완전
+  // 동일 이름)과 겹치지 않도록 norm(name) 이 이미 같은 쌍은 제외한다(그건
+  // 위 검사의 몫 — 이 검사는 "이름 완전중복이 아니라 학년만 다른 유사명"만
+  // 본다). publisher_name 이 비어있으면(레거시/미기입) 오탐 방지를 위해
+  // 건너뛴다 — "같은 출판사일 때만" 조건이 명시 요구사항이다.
+  {
+    const ids = [...textbookById.keys()]
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const ta = textbookById.get(ids[i])
+        const tb = textbookById.get(ids[j])
+        if (!ta?.name || !tb?.name) continue
+        const pubA = norm(ta.publisher_name)
+        const pubB = norm(tb.publisher_name)
+        if (!pubA || !pubB || pubA !== pubB) continue
+        if (norm(ta.name) === norm(tb.name)) continue
+        const keyA = textbookSimilarityKey(ta.name)
+        const keyB = textbookSimilarityKey(tb.name)
+        if (!keyA || !keyB || keyA !== keyB) continue
+        push({
+          code: INVARIANT_CODES.TEXTBOOK_SIMILAR_NAME, severity: 'WARN', studentId: null, studentName: null,
+          detail: `교재 "${ta.name}"과 "${tb.name}"이 같은 출판사("${ta.publisher_name}")이고 학년 접두를 제외하면 이름이 같음(정규화 "${keyA}") — 혼동 가능`,
+          refs: { textbookIds: [ids[i], ids[j]], publisherName: ta.publisher_name, normalizedKey: keyA },
         })
       }
     }

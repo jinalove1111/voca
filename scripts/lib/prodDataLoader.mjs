@@ -87,7 +87,11 @@ export async function loadProductionSnapshot(supabase) {
     // STUDENT_CLASS_IS_CONTAINER invariant 가 교재 컨테이너 반(class_type=
     // 'textbook')을 사람 반과 구분하는 데 필요(2026-09-03, Phase 8b 코디네이터 정정).
     selectAll(supabase.base, headers, 'classes', 'id,name,spelling_direction,class_type'),
-    selectAll(supabase.base, headers, 'textbooks', 'id,name,owner_class_id'),
+    // publisher_name 도 함께 받는다(READ-ONLY, DATABASE.md "publishers(v3.13)"
+    // 섹션 — 기존 textbooks.publisher_name 자유텍스트 컬럼은 v3.13 이전부터
+    // 이미 존재) — TEXTBOOK_SIMILAR_NAME invariant(2026-09-05, harness-v2
+    // coverage 트랙)가 "같은 출판사, 학년만 다른 유사명"을 판정하는 데 필요.
+    selectAll(supabase.base, headers, 'textbooks', 'id,name,owner_class_id,publisher_name'),
     // class_id 도 함께 받는다(DATABASE.md units 역추적 표에 이미 존재하는
     // 컬럼) — UNIT_TEXTBOOK_CONTAINER_MISMATCH invariant(2026-09-04, P11)가
     // "이 유닛이 어느 컨테이너 반 소속인가"를 판정하는 데 필요.
