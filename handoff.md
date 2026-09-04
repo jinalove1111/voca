@@ -1,10 +1,133 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-05 (110차, Harness V2 최종 검증 세션 — 운영자 지시로
-PR #15 merge는 보류하고 하네스 자체만 검증. write drift guard 배선
-누락·동어반복 버그를 FAIL-first로 발견·수정(prod-hotfix 301→317건),
-12종 운영 오류 자동탐지 커버리지 12/12 확인(신규 TEXTBOOK_SIMILAR_NAME
-포함, prod-check 195→204건). Production DB WRITE 0, SQL 실행 0, 학생
-데이터 변경 0, 승인 대기 APPLY 0, merge/deploy 0. 상세는 아래 110차 섹션)_
+_최종 갱신: 2026-09-05 (111차, apply_eligibility 원인별 매핑 + 교재 identity
+UUID canonical/AMBIGUOUS_TEXTBOOK 트랙 — runPlan 의 BLOCKED_NEEDS_APPROVAL
+뭉뚱그림을 8값(READY/BLOCKED_PREFLIGHT/BLOCKED_NEEDS_APPROVAL/
+BLOCKED_WRITE_DRIFT/BLOCKED_INVARIANT/BLOCKED_AMBIGUOUS_TEXTBOOK/
+BLOCKED_MANIFEST/BLOCKED_UNKNOWN) 1:1 매핑으로 교체, 신규 STOP
+blocked-ambiguous-textbook(-unavailable) + AMBIGUOUS_TEXTBOOK invariant로
+"중1/중2 천재 이상기"류 모호 교재 자동 오배정을 사전 차단. 라이브
+prod:check 에서 AMBIGUOUS_TEXTBOOK WARN 2건(학생 1명) 실측. Production DB
+WRITE 0, SQL 실행 0, merge/deploy 0. 상세는 아래 111차 섹션)_
+
+## 2026-09-05 (111차) — apply_eligibility 원인별 매핑(8값) + 교재 identity UUID canonical/AMBIGUOUS_TEXTBOOK(Production WRITE 0)
+
+### 배경/제약
+
+- 새 worktree(`wt-elig`, 브랜치 `fix/plan-eligibility-textbook-identity`,
+  베이스 `qa/ops-automation-2026-09-04`)에서 작업. 절대 규칙: Production
+  DB WRITE 0 · SQL 실행 0 · `prod:apply`/`prod:hotfix` APPLY 금지 · push
+  금지 · 앱 코드(`src/`, `api/`) 미수정 · 하네스 재설계 금지(기존 구조
+  유지, 추가·정정만). 실행한 라이브 명령은 READ-ONLY
+  `prod:check`/`prod:plan` 각 1회뿐.
+
+### 작업1 — runPlan apply_eligibility 원인별 1:1 매핑
+
+- 문제: 예전엔 `blocked-write-drift` 등 일부 STOP 사유가 `runPlan()` 의
+  `else` 분기에서 `BLOCKED_NEEDS_APPROVAL` 로 뭉뚱그려졌다 — 실제 차단
+  원인(교재 모호/write drift/invariant 등)과 무관한 값이 나올 수 있었다.
+- `scripts/prodHotfix.mjs` 에 `STOP_REASON_TO_APPLY_ELIGIBILITY`(status
+  문자열 -> apply_eligibility 8값) 단일 매핑 표 + `computeApplyEligibility()`
+  를 추가(export). `'ready-to-apply'` 는 표에 없고(컨텍스트 의존 —
+  dryRun/stopReasons 로 특수 처리), 표에 없는 그 외 status 는 전부
+  `BLOCKED_UNKNOWN`(fail-closed).
+- `runHotfix()` 의 `finish()` 가 `report.blocked_reason`(원래 status
+  문자열)과 `report.apply_eligibility` 를 함께 기록(기존
+  `report.status`/`report.standardStatus` 필드는 삭제 없이 그대로 유지).
+- `runPlan()` 은 이 값을 **재계산하지 않고** `hotfixResult.report.
+  apply_eligibility` 를 그대로 재사용(단일 원천).
+- `computeStandardStatus()`(opsStatus 의 STANDARD_STATUS 4값 — PASS/
+  WARN/FAIL/BLOCKED_NEEDS_APPROVAL, **값 자체는 절대 변경 안 함**)는
+  기존 12개 회귀 케이스 출력이 전부 동일함을 먼저 확인한 뒤, 내부
+  로직을 `computeApplyEligibility()` 하나로 위임하도록 순수 리팩터(같은
+  표를 runPlan 과 공유 — "다른 곳에서 각자 분류 로직을 새로 만들지
+  않는다"는 요구사항 충족).
+- `apply_eligibility` 값 집합 재설계로 기존 `BLOCKED_LINT` 는
+  `BLOCKED_MANIFEST` 로 흡수됐다(요구된 8값에 `BLOCKED_LINT` 가 없고,
+  `BLOCKED_MANIFEST` 설명이 "manifest 검증/lint/정적 스캔/allowlist
+  실패"를 명시 — `testProdPlan.mjs` 의 관련 테스트를 `BLOCKED_MANIFEST`
+  기대값으로 갱신).
+- 완전성 가드: `testProdHotfix.mjs` [D1]에 `runHotfix()` 소스를 grep 해
+  모든 `finish('...')` status 문자열이 매핑 표(또는 `ready-to-apply` 특수
+  처리)에 등록됐는지 확인하는 단언 추가 — 새 STOP 사유가 매핑 없이
+  추가되면 이 테스트가 FAIL 한다.
+
+### 작업2 — 교재 identity: UUID canonical + AMBIGUOUS_TEXTBOOK 차단
+
+- 원칙: 교재 관계/배정은 `textbooks.id`(UUID)로만 판정. name/grade/
+  publisher/author 는 표시·검증 메타데이터. "중1 천재 이상기"와 "중2
+  천재 이상기"는 절대 같은 교재로 취급하지 않는다(라이브에서 실제로
+  "중1 동아 윤정미"/"중2 동아 윤정미" 유사 쌍 존재 확인).
+- `scripts/lib/prodInvariants.mjs`: `norm`/`textbookSimilarityKey` export
+  (기존 로직 불변, 노출만) + `buildAmbiguousTextbookIndex(textbooks)`
+  신규(기존 `TEXTBOOK_NAME_DUPLICATE`/`TEXTBOOK_SIMILAR_NAME` 검사 블록과
+  동일 조건을 재사용해 "교재 -> 모호 상대 교재" 인덱스만 별도 파생, 그
+  두 블록 자체는 미변경). 신규 `AMBIGUOUS_TEXTBOOK` invariant(WARN) —
+  학생의 primary SCA 또는 `students.current_unit_id` 가 가리키는 교재가
+  모호 쌍 일원이면 학생 단위 보고, 메시지는 교재 UUID 앞 8자리 + 상대
+  UUID 앞 8자리만(실명 금지).
+- `scripts/lib/hotfixManifest.mjs`: `findTextbookTargetsFromManifest()`
+  신규(순수, manifest 의 textbook_id 직접 설정/삽입 또는 current_unit_id
+  설정으로 교재가 바뀌는 change 를 추출). `validateManifest()` 에 (a)
+  change 객체의 미등록 키(`where`/`name`/`textbook_name` 등 "이름 기반
+  매칭·조건" 형태) 거부 — ALLOWLIST 는 이미 컬럼명만 등록해 이름 기반
+  스키마 자리가 애초에 없었음을 테스트로 고정, (b) `textbook_identity`
+  ack 형식 검증(`id` UUID 필수 — name 만으로는 무효, `name` 필수,
+  `publisher_name` string|null).
+- `scripts/prodHotfix.mjs`: `runHotfix()` 의 preflight 직후(step
+  `ambiguous-textbook-check`, invariants delta 이전)에 신규 STOP
+  `blocked-ambiguous-textbook`(ack 없음/불일치, fail-closed) /
+  `blocked-ambiguous-textbook-unavailable`(교재 목록 조회 실패,
+  fail-closed) 배선. 예외: change 에 `textbook_identity:{id,name,
+  publisher_name}` 가 있고 셋 다 라이브 값과 정확히 일치할 때만 통과.
+  `testProdHotfix.mjs` [C4] 의 고정 단계 순서 배열 2개(dry-run/apply
+  경로)에 새 단계를 추가해 갱신.
+- `scripts/prod/generateGhostScaManifest.mjs`: 생성되는 manifest 의
+  목적지 유닛 교재가 모호 쌍이면 `textbook_identity` ack 를 스스로
+  채우지 않고(자동 수정 금지 원칙) 생성 자체를 STOP(사유 출력, exit 1,
+  manifest 파일 미생성).
+- FAIL-first(CLAUDE.md 규칙 15): `blocked-ambiguous-textbook` 의
+  `return finish(...)` 를 임시로 주석 처리 → [C5] (i)/(iii) 5개 단언이
+  실제로 FAIL 하는 것 확인 → 원복. `generateGhostScaManifest.mjs` 의 STOP
+  분기도 동일하게 임시 비활성화 → [8] 3개 단언 FAIL 확인 → 원복.
+
+### 테스트 추가
+
+- `testProdHotfix.mjs`: [D1] apply_eligibility 매핑 단언 24개 + 완전성
+  가드 3개 + wiring 4개, [C5] blocked-ambiguous-textbook 통합 5개
+  시나리오(ack 없음/올바른 ack/틀린 name ack/비모호 대조군/조회 실패,
+  총 13단언) + validateManifest lint/ack 형식 6단언. 총 301→371건.
+- `testProdPlan.mjs`: BLOCKED_LINT → BLOCKED_MANIFEST 갱신 + blocked_reason
+  단언 추가. 32→33건.
+- `testProdCheck.mjs`: 13절 AMBIGUOUS_TEXTBOOK 양성 2종(완전동일이름
+  경로/유사명+같은출판사 경로)·음성 2종·refs/실명노출 검증·CODE_META
+  완전성 8단언. 206→214건.
+- `testGenerateGhostScaManifest.mjs`: [8] 모호 목적지 STOP(exit≠0, 파일
+  미생성) [9] 비모호 대조군(정상 생성) 5단언 추가. 27→32건.
+
+### 검증 수치
+
+`npm run build` PASS. `verify:prod-hotfix` 371/371, `verify:prod-plan`
+33/33, `verify:prod-check` 214/214, `verify:generate-ghost-sca-manifest`
+32/32, `verify:ops-status` 154/154, `verify:release-gate` 136/136,
+`npm run verify:all` 전체 도메인 PASS(exit 0 — admin 도메인의 extra
+`testEntranceRosterMinbyungchun.mjs` FAIL 은 이번 트랙과 무관한 기존
+extra 테스트, 필수 13도메인 게이트에는 영향 없음).
+
+라이브 READ-ONLY 1회씩: `npm run prod:check` — AMBIGUOUS_TEXTBOOK WARN
+2건(학생 1명, 교재 `faf6dc71…`/`01afd62a…` — UUID 앞 8자리만), FAIL 0,
+Safe to continue: YES, DB WRITE 0. `npm run prod:plan --
+ops/hotfix/manifests/ghost-sca-reassign-20260902.json` — `apply_eligibility:
+BLOCKED_PREFLIGHT`(라이브 값이 그 manifest 작성 시점과 이미 달라짐,
+preflight 11/11 항목 중 4건 mismatch), `DB WRITE: 0`.
+
+### 소유 파일(이 세션에서 Write/Edit)
+
+`scripts/prodHotfix.mjs`, `scripts/lib/hotfixManifest.mjs`,
+`scripts/lib/prodInvariants.mjs`, `scripts/prod/generateGhostScaManifest.mjs`,
+`scripts/testProdHotfix.mjs`, `scripts/testProdPlan.mjs`,
+`scripts/testProdCheck.mjs`, `scripts/testGenerateGhostScaManifest.mjs`,
+`docs/production-safety-harness-runbook.md`(§7/§9-8), `handoff.md`,
+`.ai-status/implementer-plan-eligibility-textbook-identity.json`.
 
 ## 2026-09-05 (110차) — Harness V2 최종 검증: write drift guard 배선 수정 + 12종 오류탐지 커버리지 12/12 (Production WRITE 0, PR #15 merge 보류)
 

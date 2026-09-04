@@ -484,10 +484,32 @@ npm run prod:plan -- scripts/prod/manifests/<파일>.json [--refresh-expect] [--
 - `--refresh-expect` 지정 시: manifest 의 `expect_before` 를 지금 라이브
   값으로 갱신한 **사본**(`<manifest>.refreshed.json`, 원본은 절대 덮어쓰지
   않음)과 drift 목록(라이브 값이 manifest 작성 시점과 달라진 컬럼)
-- `apply_eligibility`: `READY` / `BLOCKED_NEEDS_APPROVAL` /
-  `BLOCKED_PREFLIGHT` / `BLOCKED_LINT` / `BLOCKED_INVARIANT` — **`READY`
-  여도 실제 적용은 안 됩니다.** 여전히 `prod:apply` 를 따로 실행해
-  `APPLY <runId>` 를 직접 입력해야 합니다.
+- `apply_eligibility`(2026-09-05 확장, plan-eligibility-textbook-identity
+  트랙 — 8값, 차단 원인과 1:1 대응): **`READY` 여도 실제 적용은 안
+  됩니다.** 여전히 `prod:apply` 를 따로 실행해 `APPLY <runId>` 를 직접
+  입력해야 합니다.
+
+  | `apply_eligibility` | 뜻 | 대표 `blocked_reason`(원래 status) |
+  |---|---|---|
+  | `READY` | 계획이 모든 게이트를 통과 — 승인만 하면 적용 가능 | `ready-to-apply` |
+  | `BLOCKED_PREFLIGHT` | 라이브 상태가 manifest 의 기대값과 다름(이미 적용됐거나 그 사이 값이 바뀜) | `preflight-mismatch`, `baseline-failed` |
+  | `BLOCKED_NEEDS_APPROVAL` | 다른 문제는 없고 "승인만 남음"(토큰 없음/CI/비TTY/승인 문구 불일치) | `not-interactive`, `not-approved` |
+  | `BLOCKED_WRITE_DRIFT` | VERIFY(읽기 계획)와 WRITE(생성된 SQL)가 구조적으로 어긋남 | `blocked-write-drift` |
+  | `BLOCKED_INVARIANT` | 적용하면 저장소 전체 invariant 가 새로 FAIL 하거나, 그 계산 자체가 실패함 | `blocked-invariant`, `blocked-invariant-unavailable` |
+  | `BLOCKED_AMBIGUOUS_TEXTBOOK` | 대상 교재가 이름 중복/유사 모호 쌍의 일원인데 `textbook_identity` ack 가 없거나 라이브 값과 다름(9-8절) | `blocked-ambiguous-textbook`, `blocked-ambiguous-textbook-unavailable` |
+  | `BLOCKED_MANIFEST` | manifest 자체(스키마/서술 lint/정적 스캔/무결성/환경 플래그·project_ref)의 구조적 문제 | `invalid-manifest`, `unsafe-sql`, `manifest-tampered`, `env-flag-required`, `env-mismatch` 등 |
+  | `BLOCKED_UNKNOWN` | 매핑 표에 없는 status(새 STOP 사유가 분류 없이 추가된 경우, fail-closed) | 매핑 안 된 임의 status |
+
+  이 값은 `scripts/prodHotfix.mjs` 의 `computeApplyEligibility()` +
+  `STOP_REASON_TO_APPLY_ELIGIBILITY` 단일 표에서 나옵니다(예전엔
+  `blocked-write-drift` 등 일부 STOP 사유가 `else` 분기에서
+  `BLOCKED_NEEDS_APPROVAL` 로 뭉뚱그려졌습니다 — 지금은 원인별로 반드시
+  구분됩니다). `runPlan()`/`prod:hotfix`(dry-run) 리포트 JSON 모두
+  `blocked_reason`(원래 status 문자열)과 `apply_eligibility` 를 함께
+  기록합니다. `opsStatus.mjs` 의 `STANDARD_STATUS`(`PASS`/`WARN`/`FAIL`/
+  `BLOCKED_NEEDS_APPROVAL` 4값)는 이 표와 별개로 그대로 유지되며,
+  `computeStandardStatus()` 내부에서 같은 표(`computeApplyEligibility()`)
+  를 재사용해 4값을 유도합니다(로직 이원화 방지).
 
 `preflight-mismatch`(이미 적용됐거나 그 사이 다른 변경이 있었음)가 가장
 흔한 `BLOCKED_PREFLIGHT` 원인입니다 — 5절 FAQ Q1 참고. 이 경우
@@ -686,3 +708,65 @@ raise exception` 가드와 preflight 읽기 계획에서 함께 확인합니다.
 `npm run verify:prod-hotfix`(301단언) / `npm run verify:prod-plan`(32단언)이
 위 7개 항목을 회귀로 고정합니다(FAIL-first 로 추가 — 수정 전 각각 34건,
 4건 FAIL 을 실측한 뒤 구현).
+
+### 9-8. 교재 identity — UUID canonical + `AMBIGUOUS_TEXTBOOK`
+(2026-09-05, plan-eligibility-textbook-identity 트랙)
+
+교재/유닛 관계·배정 판정은 **오직 `textbooks.id`(UUID)** 로만 합니다.
+`name`/`grade`/`publisher_name`/`author` 는 표시·검증용 메타데이터일 뿐,
+canonical 식별자가 아닙니다. "중1 천재 이상기"와 "중2 천재 이상기"는
+이름이 유사해도 **절대 같은 교재로 취급하지 않습니다.**
+
+**차단 조건** — manifest 의 change 가 (a) `student_class_assignments.
+textbook_id` 를 직접 설정/삽입하거나, (b) `current_unit_id` 를 설정/삽입해
+그 유닛이 속한 교재가 바뀌는 경우, 대상 교재가 라이브 데이터에서 모호
+쌍(이름 완전중복 `TEXTBOOK_NAME_DUPLICATE` 또는 같은 출판사+유사명
+`TEXTBOOK_SIMILAR_NAME`)의 일원이면 `prod:hotfix`/`prod:plan` 이 새 STOP
+`blocked-ambiguous-textbook` 으로 승인 게이트 이전에 차단합니다
+(preflight 직후, invariants delta 이전 — fail-closed, 자동 수정 없음).
+교재 목록 조회 자체가 실패하면 `blocked-ambiguous-textbook-unavailable`
+로 마찬가지로 차단합니다("모호 여부를 확인 못 함" = 차단).
+
+**예외(명시 ack)** — change 에 다음 필드가 있고 세 값 모두 라이브 값과
+정확히 일치할 때만 통과합니다:
+
+```json
+{
+  "table": "student_class_assignments",
+  "id": "<SCA UUID>",
+  "expect_before": { "...": "..." },
+  "set": { "current_unit_id": "<대상 유닛 UUID>" },
+  "textbook_identity": {
+    "id": "<대상 교재 UUID>",
+    "name": "<대상 교재의 정확한 name>",
+    "publisher_name": "<대상 교재의 정확한 publisher_name(또는 null)>"
+  }
+}
+```
+
+`id` 가 canonical 입니다 — `name`/`publisher_name` 만 주고 `id` 가 없거나
+형식이 UUID 가 아니면 ack 자체가 무효(`validateManifest` 가 거부)입니다.
+`name`/`publisher_name` 값이 라이브와 하나라도 다르면(예: `id` 는
+"중2…"인데 `name` 은 "중1…") 여전히 차단됩니다.
+
+**매니페스트 lint** — change 객체에 이 스키마가 모르는 키(`where`,
+`name`, `textbook_name` 등 "이름으로 조건을 걸려는" 형태)가 있으면
+`validateManifest` 가 즉시 거부합니다(`apply_eligibility =
+BLOCKED_MANIFEST`). `ALLOWLIST`(`scripts/lib/hotfixManifest.mjs`)는
+애초에 컬럼명만 등록하므로 교재를 문자열 이름으로 지정할 스키마 자리가
+없습니다 — 이미 구조적으로 강제됩니다.
+
+**신규 invariant `AMBIGUOUS_TEXTBOOK`**(WARN, `prod:check` 보고 전용) —
+학생의 primary SCA 또는 `students.current_unit_id` 가 가리키는 교재가
+모호 쌍의 일원이면 학생 단위로 경고합니다. 메시지에는 교재 UUID 앞
+8자리 + 상대 교재 UUID 앞 8자리만 싣고 실명은 넣지 않습니다.
+
+**`scripts/prod/generateGhostScaManifest.mjs`** — 생성되는 manifest 의
+목적지 교재가 모호 쌍의 일원이면 `textbook_identity` ack 를 스스로 채우지
+않고 생성 자체를 STOP 합니다(사유 출력, exit 1, manifest 파일 미생성) —
+모호하면 자동 수정하지 않고 운영자 결정으로 넘기는 원칙 그대로입니다.
+
+검증: `npm run verify:prod-hotfix` [C5] 5종(ack 없음/올바른 ack/틀린
+ack/비모호 대조군/조회 실패) + lint 6종, `npm run verify:prod-check`
+13절(AMBIGUOUS_TEXTBOOK 양성 2종/음성 2종), `npm run
+verify:generate-ghost-sca-manifest` [8]/[9].
