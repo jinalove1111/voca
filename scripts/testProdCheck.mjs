@@ -963,6 +963,63 @@ console.log('\n=== 13절. AMBIGUOUS_TEXTBOOK(2026-09-05) — 개별 양성/음�
   check('INVARIANT_CODES.AMBIGUOUS_TEXTBOOK 가 등록돼 있다', INVARIANT_CODES?.AMBIGUOUS_TEXTBOOK === 'AMBIGUOUS_TEXTBOOK')
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// 2026-09-06 야간 QA — WORD_HEADER_RESIDUE: isGhostUnit은 단어 ≤3개인
+// 유닛만 보므로, 41단어짜리 실제 유닛 안에 엑셀 헤더 잔재 행 1건이 섞여
+// 들어가도(실측: 중2 YMB 박준원 "Unit3" 6ec4b139…, word f804c099… word=
+// "영어·어구" meaning="의미") 어떤 기존 검사에도 안 잡히는 사각지대였다.
+// FAIL-first: prodInvariants.mjs에 이 코드를 추가하기 전 먼저 이 절을
+// 실행해 아래 findings 관련 단언이 전부 FAIL(코드 자체가 없어 findings에
+// 절대 나타나지 않음)하는 것을 확인한 뒤 구현했다(CLAUDE.md 규칙 15).
+// ═══════════════════════════════════════════════════════════════════════
+console.log('\n=== 14절. WORD_HEADER_RESIDUE(2026-09-06) — 개별 양성/음성 ===')
+{
+  // (i) 양성 — 41단어 유닛(실측과 동일 규모) 안에 헤더 잔재 행 1건.
+  const fx = syntheticBase()
+  fx.units.push({ id: 'u-residue', name: 'Unit3', textbook_id: 'tb1' })
+  fx.words.push(...Array.from({ length: 40 }, (_, i) => ({ id: `hr${i}`, unit_id: 'u-residue', word: `hr${i}`, meaning: `뜻${i}` })))
+  fx.words.push({ id: 'hr-bad', unit_id: 'u-residue', word: '영어·어구', meaning: '의미' })
+  const { findings } = evalFixture(fx)
+  const hits = findings.filter((f) => f.code === 'WORD_HEADER_RESIDUE')
+  check('WORD_HEADER_RESIDUE(양성) — 정확히 1건 WARN', hits.length === 1 && hits[0].severity === 'WARN',
+    JSON.stringify(hits))
+  check('WORD_HEADER_RESIDUE — refs에 unitId/textbookId/wordId/word/meaning/unitWordCount 전부 존재',
+    hits[0]?.refs?.unitId === 'u-residue' && hits[0]?.refs?.textbookId === 'tb1'
+    && hits[0]?.refs?.wordId === 'hr-bad' && hits[0]?.refs?.word === '영어·어구'
+    && hits[0]?.refs?.meaning === '의미' && hits[0]?.refs?.unitWordCount === 41,
+    JSON.stringify(hits[0]?.refs))
+  check('WORD_HEADER_RESIDUE(양성) 유닛은 GHOST_UNIT_PRESENT로는 안 잡힌다(단어 41개, isGhostUnit=false)',
+    !hasCode(findings, 'GHOST_UNIT_PRESENT'))
+}
+{
+  // (ii) 음성 — 실제 어휘(단어/뜻이 한쪽 별칭만 겹침, AND 조건 미충족).
+  const fx = syntheticBase()
+  fx.words.push({ id: 'real-word', unit_id: 'u1', word: 'word', meaning: '말, 단어' })
+  fx.words.push({ id: 'real-meaning', unit_id: 'u1', word: 'meaning', meaning: '의미, 뜻' })
+  const { findings } = evalFixture(fx)
+  check('WORD_HEADER_RESIDUE(음성) — 실제 어휘(한쪽만 별칭 겹침)는 발생 안 함',
+    !findings.some((f) => f.code === 'WORD_HEADER_RESIDUE'), JSON.stringify(findings.filter((f) => f.code === 'WORD_HEADER_RESIDUE')))
+}
+{
+  // (iii) 배제 — 1단어 유령 유닛(word=English/meaning=Korean, 둘 다 헤더
+  // 별칭)은 오늘처럼 GHOST_UNIT_PRESENT로만 잡히고 WORD_HEADER_RESIDUE는
+  // 중복 보고하지 않는다(서로 다른 신호이지 이중 카운트 아님).
+  const fx = syntheticBase()
+  fx.units.push({ id: 'u-ghost-eng', name: 'Unit', textbook_id: 'tb1' })
+  fx.words.push({ id: 'ghost-eng-w1', unit_id: 'u-ghost-eng', word: 'English', meaning: 'Korean' })
+  const { findings } = evalFixture(fx)
+  check('WORD_HEADER_RESIDUE 배제(iii) — 유령 유닛은 GHOST_UNIT_PRESENT로 잡힌다(기존 동작 불변)',
+    hasCode(findings, 'GHOST_UNIT_PRESENT'))
+  check('WORD_HEADER_RESIDUE 배제(iii) — 유령 유닛에서는 WORD_HEADER_RESIDUE가 나타나지 않는다',
+    !findings.some((f) => f.code === 'WORD_HEADER_RESIDUE' && f.refs?.unitId === 'u-ghost-eng'))
+}
+{
+  // (iv) CODE_META/INVARIANT_CODES 등록.
+  check('INVARIANT_CODES.WORD_HEADER_RESIDUE 가 등록돼 있다', INVARIANT_CODES?.WORD_HEADER_RESIDUE === 'WORD_HEADER_RESIDUE')
+  check('CODE_META.WORD_HEADER_RESIDUE — impact/recommended 존재',
+    !!CODE_META.WORD_HEADER_RESIDUE?.impact && !!CODE_META.WORD_HEADER_RESIDUE?.recommended, JSON.stringify(CODE_META.WORD_HEADER_RESIDUE))
+}
+
 console.log(`\n${'='.repeat(60)}`)
 console.log(`총 ${passed + failed}단언 — PASS ${passed} / FAIL ${failed}`)
 if (failed > 0) {
