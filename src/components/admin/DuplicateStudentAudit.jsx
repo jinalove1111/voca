@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { getStudents, getStudentUnit, fetchDashboardData, fetchWordStatusSummary, fetchXpTotals } from '../../utils/wordLibrary'
+import { isRealStudentAccount } from '../../utils/accountStatus'
 
 // 2026-08-06 P0 후속 — 중복 학생 계정(동명이인 vs 실제 중복 생성 사고) 조사용
 // 읽기 전용 점검 패널. 이 컴포넌트는 어떤 쓰기도 하지 않는다(DB write 0건,
@@ -25,7 +26,6 @@ import { getStudents, getStudentUnit, fetchDashboardData, fetchWordStatusSummary
 // (wordLibrary.js refreshStudents의 .order('created_at').order('id'))만
 // 근사치로 써서 "등록 순서"를 표시한다 — 대표 계정 추천의 "동률이면 가장
 // 오래된 계정" 타이브레이커도 정확한 날짜가 아니라 이 순서로 판정한다.
-const QA_PREFIX_RE = /^QA_/i
 const norm = (name) => (name || '').trim().toLowerCase().normalize('NFC')
 
 function fmtDateTime(iso) {
@@ -46,8 +46,14 @@ export default function DuplicateStudentAudit() {
   // 로드된 로컬 캐시로 즉시 계산 가능하므로 별도 로딩 상태가 필요 없다.
   // 배치 조회(별/XP/단어상태)만 "점검 실행" 클릭 시 시작된다.
   const allStudents = useMemo(() => getStudents(), [])
+  // 2026-09-06 야간 QA — 이전에는 이름이 "QA_"로 시작하는지만 보는 로컬
+  // 정규식 필터를 써서 TEST(Cookie/Paul/Jinaa/Barry)/ARCHIVED(_DUP_/
+  // _INACTIVE) 계정까지 "전체 실학생"에 포함시켰다(라이브 실측 187명 vs
+  // 실제 REAL 46명). 단일 원천은 src/utils/accountStatus.js
+  // isRealStudentAccount(!archived && !test, QA_ 픽스처는
+  // isArchivedOrFixtureStudentName이 커버).
   const realStudents = useMemo(
-    () => allStudents.filter((s) => !QA_PREFIX_RE.test(s.name || '')),
+    () => allStudents.filter(isRealStudentAccount),
     [allStudents],
   )
 
@@ -181,7 +187,7 @@ export default function DuplicateStudentAudit() {
   if (groupsCount === 0) {
     return (
       <div className="text-xs text-gray-400 font-bold py-2">
-        이름이 겹치는 계정이 없어요 (QA_ 테스트 계정 제외, 전체 실학생 {realStudents.length}명).
+        이름이 겹치는 계정이 없어요 (테스트·보관 계정 제외, 전체 실학생 {realStudents.length}명).
       </div>
     )
   }
