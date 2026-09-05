@@ -377,6 +377,54 @@ export async function run(browser, baseURL) {
     unmockedRequests.push(...unmockedRequests3)
     ttsFallbackRequests.push(...ttsFallbackRequests3)
     db.errors.push(...db3.errors)
+
+    // ── A8 — 고정 SpeedBtn(App.jsx, aria-label="발음 재생 속도")이 하단
+    // 콘텐츠 탭을 가로채던 겹침 회귀(2026-09-06 야간 QA). 360×640(작은
+    // 화면)에서 페이지를 끝까지 스크롤해도 Dashboard "더 많은 메뉴" 그리드의
+    // "퀴즈" 카드/WordBrowser 단어 목록 마지막 행이 고정 버튼과 겹치지
+    // 않아야 한다(Dashboard.jsx/WordBrowser.jsx의 min-h-screen 래퍼가 이제
+    // pb-24를 써서 스크롤 여유 공간을 확보).
+    const context4 = await browser.newContext({ viewport: { width: 360, height: 640 } })
+    const page4 = await context4.newPage()
+    const { db: db4, unmockedRequests: unmockedRequests4, ttsFallbackRequests: ttsFallbackRequests4 } = await installMocks(page4)
+    try {
+      await page4.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page4)
+      await page4.getByLabel('교과서 선택').waitFor({ state: 'visible', timeout: 15000 })
+
+      const speedBtn = page4.locator('button[aria-label="발음 재생 속도"]')
+      await speedBtn.waitFor({ state: 'visible' })
+      const overlaps = (a, b) => !!a && !!b
+        && a.x < b.x + b.width && a.x + a.width > b.x
+        && a.y < b.y + b.height && a.y + a.height > b.y
+
+      await openMoreMenu(page4)
+      await page4.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+      const quizCard = page4.locator('button', { hasText: '퀴즈' }).first()
+      await quizCard.waitFor({ state: 'visible' })
+      const quizBox = await quizCard.boundingBox()
+      const speedBoxA = await speedBtn.boundingBox()
+      r.check('A8 "더 많은 메뉴" 퀴즈 카드가 고정 SpeedBtn과 겹치지 않음(하단 스크롤 후, 360×640)',
+        !overlaps(quizBox, speedBoxA), JSON.stringify({ quizBox, speedBoxA }))
+
+      await page4.locator('button', { hasText: '단어 공부' }).click()
+      const wordRows = page4.locator('.space-y-2.animate-fade-in > button')
+      await wordRows.first().waitFor({ state: 'visible' })
+      await page4.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+      const lastRowBox = await wordRows.last().boundingBox()
+      const speedBoxB = await speedBtn.boundingBox()
+      r.check('A8 단어 목록 마지막 행이 고정 SpeedBtn과 겹치지 않음(하단 스크롤 후, 360×640)',
+        !overlaps(lastRowBox, speedBoxB), JSON.stringify({ lastRowBox, speedBoxB }))
+    } catch (err) {
+      const bodyText4 = await page4.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      err.message += `\n  [A8 진단] mockErrors=${JSON.stringify(db4.errors.slice(0, 3))}\n  [A8 진단] body(앞 400자)=${JSON.stringify(bodyText4.slice(0, 400))}`
+      throw err
+    } finally {
+      await context4.close()
+    }
+    unmockedRequests.push(...unmockedRequests4)
+    ttsFallbackRequests.push(...ttsFallbackRequests4)
+    db.errors.push(...db4.errors)
   } catch (err) {
     // 진단 — 예외 시점의 화면 텍스트/mock 오류를 에러 메시지에 실어 러너가
     // 그대로 출력하게 한다(페이지는 finally에서 닫히므로 여기서만 읽을 수 있다).

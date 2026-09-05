@@ -473,8 +473,9 @@ export default function EntranceTest({ studentId, studentName, onBack, onExamCom
 
   // phase === 'result' — 내 결과(있으면) + 오늘의 반 랭킹/VIP
   const pct = myResult && myResult.total > 0 ? Math.round((myResult.score / myResult.total) * 100) : null
+  // pb-24(2026-09-06 야간 QA, App.jsx SpeedBtn 겹침 수정 참고)
   return (
-    <div className="min-h-screen p-4 pb-8">{header}
+    <div className="min-h-screen p-4 pb-24">{header}
       <div className="max-w-lg mx-auto space-y-4 animate-fade-in">
         {myResult && (
           <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl p-6 text-white text-center card-shadow">

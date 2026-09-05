@@ -478,8 +478,11 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
     )
   }
 
+  // pb-24(2026-09-06 야간 QA): 고정 SpeedBtn(bottom-5 right-5, ~44px)이
+  // 하단 콘텐츠 탭을 가로채던 문제 — 스크롤이 버튼 아래까지 여유를 두고
+  // 끝나도록 하단 여백을 넓힘(pb-8 → pb-24).
   return (
-    <div className="min-h-screen p-4 pb-8">
+    <div className="min-h-screen p-4 pb-24">
       {/* Header */}
       <div className="max-w-lg mx-auto pt-2 mb-4 flex items-center justify-between">
         {/* 제품 리뷰(문서 10) S티어 #1 — 다른 모든 화면의 "←"는 화면 이동인데
