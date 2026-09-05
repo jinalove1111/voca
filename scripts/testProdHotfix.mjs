@@ -168,7 +168,17 @@ function buildFakeDb(manifest) {
   return rows
 }
 
+// fix/harness-apply-two-phase-approval(2026-09-05) — db.__applied 플래그를
+// 함께 세운다. 2단계 승인(1단계=티켓 발급, 2단계=검증+apply)에서는 runHotfix()
+// 가 같은 reader 를 상대로 baseline(students/SCA 전체 스냅샷 + 학습기록
+// 카운트)을 "두 번"(1단계 한 번, 2단계 한 번, 둘 다 apply 이전) 읽는다 —
+// makeReader() 의 selectAllRows/headCountFiltered 가 이 플래그로 "실제로
+// apply 가 있었는가"를 보고 before/after 큐를 고르게 해야, 1단계와 2단계의
+// baseline fingerprint 가 (드리프트가 없는 한) 항상 같아진다(순수 호출
+// 횟수로 전환하던 예전 방식은 2번째 runHotfix 호출의 자기 baseline 읽기를
+// 이미 "적용 후"로 잘못 앞당겨 approval-stale 오탐을 냈다).
 function applyChangesToDb(db, manifest) {
+  db.__applied = true
   for (const c of manifest.changes) {
     const key = `${c.table}:${c.id}`
     db[key] = { ...db[key], ...c.set }
@@ -176,6 +186,7 @@ function applyChangesToDb(db, manifest) {
 }
 
 function revertChangesToDb(db, manifest) {
+  db.__applied = false
   for (const c of manifest.changes) {
     const key = `${c.table}:${c.id}`
     const revert = {}
@@ -225,9 +236,7 @@ function makeReader(manifest, opts = {}) {
   const db = buildFakeDb(manifest)
   const getRowCalls = {}
   const tableRowsQueues = opts.tableRowsQueues || {}
-  const tableRowsCallIdx = {}
   const countsQueues = opts.countsQueues || {}
-  const countsCallIdx = {}
   const reader = {
     db,
     async getRow(table, id) {
@@ -238,22 +247,23 @@ function makeReader(manifest, opts = {}) {
       return v ? { ...v } : null
     },
     async countWordsForUnit(unitId) { return opts.wordsCounts?.[unitId] ?? 2 },
+    // fix/harness-apply-two-phase-approval(2026-09-05) — 호출 횟수가 아니라
+    // db.__applied(실제로 apply 가 일어났는가)로 before/after 큐를 고른다
+    // (위 applyChangesToDb/revertChangesToDb 주석 참고).
     async headCountFiltered(table, filters) {
       const key = `${table}|${filters.student_id}`
       const q = countsQueues[key]
       if (Array.isArray(q)) {
-        const i = countsCallIdx[key] ?? 0
-        countsCallIdx[key] = Math.min(i + 1, q.length - 1)
-        return { count: q[Math.min(i, q.length - 1)], tableMissing: false }
+        const idx = db.__applied ? Math.min(1, q.length - 1) : 0
+        return { count: q[idx], tableMissing: false }
       }
       return { count: opts.baselineDefault ?? 10, tableMissing: false }
     },
     async selectAllRows(table) {
       const q = tableRowsQueues[table]
       if (Array.isArray(q)) {
-        const i = tableRowsCallIdx[table] ?? 0
-        tableRowsCallIdx[table] = Math.min(i + 1, q.length - 1)
-        return q[Math.min(i, q.length - 1)]
+        const idx = db.__applied ? Math.min(1, q.length - 1) : 0
+        return q[idx]
       }
       return []
     },
@@ -269,6 +279,23 @@ const OK_SNAPSHOTS = {
 const FAKE_TOKEN = 'FAKE_TOKEN_VALUE_ZZ_998877'
 function envOk(extra = {}) {
   return { url: 'https://testref123.supabase.co', anonKey: 'anon-fake', accessToken: FAKE_TOKEN, ci: false, ...extra }
+}
+
+// fix/harness-apply-two-phase-approval(2026-09-05) — readline 기반 단일
+// 승인 프롬프트(rl.question, 'APPLY <runId>' 문구 비교)를 2단계(1단계=
+// runHotfix() 가 티켓 파일 발급, 2단계=같은 runId 로 --approve 재실행)로
+// 대체한 뒤, 예전에 "isTTY:()=>true, approve: async (rid) => `APPLY ${rid}`"
+// 로 즉시 승인을 흉내내던 테스트가 쓰는 헬퍼. 1단계가 'ticket-issued' 로
+// 끝나지 않으면(dry-run/CI/토큰없음/manifest 오류 등으로 더 일찍 STOP) 그
+// 결과를 그대로 반환한다 — "여전히 1단계에서 막히는" 시나리오도 이 헬퍼로
+// 검증할 수 있다. deps.isTTY 를 명시적으로 넘기면(예: TTY 아님 테스트) 그
+// 값이 기본값(true)을 덮어쓴다.
+async function runApprovedHotfix(options, deps = {}) {
+  const phase1 = await runHotfix({ ...options, approveRunId: undefined }, deps)
+  if (phase1.status !== 'ticket-issued') return phase1
+  const runId = phase1.report.runId
+  const phase2 = await runHotfix({ ...options, runId, approveRunId: runId }, { isTTY: () => true, ...deps })
+  return { ...phase2, phase1 }
 }
 
 console.log('\n=== [3] 프리플라이트 fail-closed ===')
@@ -316,45 +343,190 @@ console.log('\n=== [4] dry-run (ready-to-apply) ===')
   check('report JSON 에 anonKey 문자열 없음', !reportContent.includes('anon-fake'))
 }
 
-console.log('\n=== [5] CI 게이트 — 토큰 있어도 write path 비활성 ===')
+console.log('\n=== [5] CI 게이트 — 토큰 있어도 write path 비활성(2단계에서 확인) ===')
 {
+  // fix/harness-apply-two-phase-approval(2026-09-05) — 1단계(--approve
+  // 없음)는 CI 여도 티켓을 발급한다(계획 통과 기록, DB WRITE 0). CI 게이트
+  // 자체는 2단계(--approve)에서 확인한다 — 상세 시나리오는 [14b] 참고.
   const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
   const calls = []
   const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
-  const res = await runHotfix(
+  const phase1 = await runHotfix(
     { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-CI-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
     { loadEnv: () => envOk({ ci: true }) },
   )
-  check('CI 환경 시 status = ready-to-apply', res.status === 'ready-to-apply')
-  check('CI 환경 시 stopReasons 에 CI 포함', (res.report.stopReasons || []).some((r) => r.includes('CI')))
-  check('CI 환경 시 executor 호출 0', calls.length === 0)
+  check('CI 환경 1단계 시 status = ticket-issued', phase1.status === 'ticket-issued', phase1.status)
+  check('CI 환경 1단계 시 executor 호출 0', calls.length === 0)
+
+  const phase2 = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-CI-1', approveRunId: 'RUN-CI-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+    { loadEnv: () => envOk({ ci: true }), isTTY: () => true },
+  )
+  check('CI 환경 2단계(--approve) 시 status = ready-to-apply', phase2.status === 'ready-to-apply', phase2.status)
+  check('CI 환경 2단계 시 stopReasons 에 CI 포함', (phase2.report.stopReasons || []).some((r) => r.includes('CI')))
+  check('CI 환경 2단계 시에도 executor 호출 0', calls.length === 0)
 }
 
-console.log('\n=== [6] 승인 게이트 — TTY 아니면 STOP ===')
+console.log('\n=== [6] 2단계 승인 게이트 — 1단계(티켓 발급) 기본 동작 ===')
 {
   const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
   const calls = []
   const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
   const res = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-TICKET-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+    { loadEnv: () => envOk() },
+  )
+  check('1단계(--approve 없음) 시 status = ticket-issued', res.status === 'ticket-issued', res.status)
+  check('1단계 시 exitCode = 0', res.exitCode === 0)
+  check('1단계 시 executor 호출 0(DB WRITE 없음)', calls.length === 0)
+  check('1단계 시 report.apply_eligibility = READY', res.report.apply_eligibility === 'READY')
+  const ticketPath = path.join(REPORT_DIR, 'RUN-TICKET-1.ticket.json')
+  check('티켓 파일 생성됨', fs.existsSync(ticketPath))
+  const ticket = JSON.parse(fs.readFileSync(ticketPath, 'utf8'))
+  check('티켓에 runId 기록', ticket.runId === 'RUN-TICKET-1')
+  check('티켓에 manifestSha256 기록(64자리 hex)', /^[0-9a-f]{64}$/.test(ticket.manifestSha256))
+  check('티켓에 preflightFingerprint 기록(64자리 hex)', /^[0-9a-f]{64}$/.test(ticket.preflightFingerprint))
+  check('티켓은 아직 미사용(used=false)', ticket.used === false)
+  check('티켓 만료시각 > 발급시각', new Date(ticket.expiresAt).getTime() > new Date(ticket.createdAt).getTime())
+}
+
+console.log('\n=== [6b] 2단계 승인 게이트 — TTY 아니면 STOP(2단계에서만 확인) ===')
+{
+  const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+  const calls = []
+  const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
+  const res = await runApprovedHotfix(
     { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-TTY-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
     { loadEnv: () => envOk(), isTTY: () => false },
   )
-  check('비대화형 시 status = not-interactive', res.status === 'not-interactive')
+  check('비대화형 시 status = not-interactive', res.status === 'not-interactive', res.status)
   check('비대화형 시 exitCode != 0', res.exitCode !== 0)
   check('비대화형 시 executor 호출 0', calls.length === 0)
+  check('1단계 자체는 여전히 ticket-issued 로 성공함', res.phase1.status === 'ticket-issued')
 }
 
-console.log('\n=== [6b] 승인 게이트 — 승인 문구 불일치 ===')
+console.log('\n=== [6c] 2단계 승인 게이트 — 잘못된 runId(--approve) STOP(approval-mismatch) ===')
 {
   const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
   const calls = []
   const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
-  const res = await runHotfix(
-    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-APPROVE-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-    { loadEnv: () => envOk(), isTTY: () => true, approve: async () => 'yes please' },
+  const phase1 = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-WRONGID-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+    { loadEnv: () => envOk() },
   )
-  check('승인 문구 불일치 시 status = not-approved', res.status === 'not-approved')
-  check('승인 문구 불일치 시 executor 호출 0', calls.length === 0)
+  check('[wrong-runid] 1단계 ticket-issued', phase1.status === 'ticket-issued')
+  const phase2 = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', reportDir: REPORT_DIR, reader, executor, dryRun: false, approveRunId: 'RUN-DOES-NOT-EXIST' },
+    { loadEnv: () => envOk(), isTTY: () => true },
+  )
+  check('잘못된 runId 로 --approve 시 status = approval-mismatch', phase2.status === 'approval-mismatch', phase2.status)
+  check('잘못된 runId 시 executor 호출 0', calls.length === 0)
+}
+
+console.log('\n=== [6d] 2단계 승인 게이트 — 티켓 재사용 STOP(approval-used) ===')
+{
+  const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+  const calls = []
+  const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
+  const phase1 = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-REUSE-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+    { loadEnv: () => envOk() },
+  )
+  check('[reuse] 1단계 ticket-issued', phase1.status === 'ticket-issued')
+  // 이 STOP 사유 하나만 격리하기 위해, 실제 apply 성공을 한 번 더
+  // 시뮬레이션하는 대신(그러면 라이브 값이 바뀌어 preflight-mismatch 가
+  // 먼저 걸린다) 티켓 파일의 used 플래그만 직접 사용됨으로 표시한다(실제
+  // 시나리오: 정상 승인 1회를 끝낸 뒤 같은 --approve 명령을 실수로 다시
+  // 실행하는 경우와 같은 티켓 상태).
+  const ticketPath = path.join(REPORT_DIR, 'RUN-REUSE-1.ticket.json')
+  const ticket = JSON.parse(fs.readFileSync(ticketPath, 'utf8'))
+  ticket.used = true
+  ticket.usedAt = new Date().toISOString()
+  fs.writeFileSync(ticketPath, JSON.stringify(ticket, null, 2), 'utf8')
+  const phase2 = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-REUSE-1', approveRunId: 'RUN-REUSE-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+    { loadEnv: () => envOk(), isTTY: () => true },
+  )
+  check('이미 사용된 티켓으로 승인 시도 시 status = approval-used', phase2.status === 'approval-used', phase2.status)
+  check('재사용 시 executor 호출 0', calls.length === 0)
+}
+
+console.log('\n=== [6e] 2단계 승인 게이트 — 만료된 티켓 STOP(approval-expired) ===')
+{
+  const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+  const calls = []
+  const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
+  const t0 = new Date('2026-09-05T00:00:00.000Z')
+  const t0Plus16m = new Date(t0.getTime() + 16 * 60 * 1000) // TTL(15분) 초과
+  const phase1 = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-EXPIRE-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+    { loadEnv: () => envOk(), now: () => t0 },
+  )
+  check('[expire] 1단계 ticket-issued', phase1.status === 'ticket-issued')
+  const phase2 = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-EXPIRE-1', approveRunId: 'RUN-EXPIRE-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+    { loadEnv: () => envOk(), isTTY: () => true, now: () => t0Plus16m },
+  )
+  check('만료된 티켓 승인 시도 시 status = approval-expired', phase2.status === 'approval-expired', phase2.status)
+  check('만료 시 executor 호출 0', calls.length === 0)
+}
+
+console.log('\n=== [6f] 2단계 승인 게이트 — 티켓 발급 이후 manifest 변조 STOP(approval-manifest-mismatch) ===')
+{
+  const tmpManifestPath = path.join(REPORT_DIR, 'ticket-tamper-manifest.json')
+  fs.mkdirSync(REPORT_DIR, { recursive: true })
+  fs.writeFileSync(tmpManifestPath, JSON.stringify(BASE_MANIFEST), 'utf8')
+  const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+  const calls = []
+  const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
+  const phase1 = await runHotfix(
+    { manifestPath: tmpManifestPath, envFlag: 'production', runId: 'RUN-MTAMPER-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+    { loadEnv: () => envOk() },
+  )
+  check('[manifest-tamper] 1단계 ticket-issued', phase1.status === 'ticket-issued')
+  // 승인(2단계) 이전에 manifest 파일 내용을 바꾼다(티켓의 manifestSha256 과 달라짐).
+  fs.writeFileSync(tmpManifestPath, JSON.stringify({ ...BASE_MANIFEST, id: 'tampered-between-phases' }), 'utf8')
+  const phase2 = await runHotfix(
+    { manifestPath: tmpManifestPath, envFlag: 'production', runId: 'RUN-MTAMPER-1', approveRunId: 'RUN-MTAMPER-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+    { loadEnv: () => envOk(), isTTY: () => true },
+  )
+  check('티켓 발급 이후 manifest 변조 시 status = approval-manifest-mismatch', phase2.status === 'approval-manifest-mismatch', phase2.status)
+  check('manifest 변조 시 executor 호출 0', calls.length === 0)
+  fs.writeFileSync(tmpManifestPath, JSON.stringify(BASE_MANIFEST), 'utf8') // 원복(다음 테스트 오염 방지)
+}
+
+console.log('\n=== [6g] 2단계 승인 게이트 — 티켓 발급 이후 라이브 드리프트 STOP(approval-stale) ===')
+{
+  // 학습기록 카운트만 드리프트시킨다(manifest 가 확인하는 expect_before
+  // 컬럼과는 무관 — preflight-mismatch 가 아니라 approval-stale 이 잡아야
+  // 하는 시나리오를 격리해서 재현한다: "그 사이 학생이 숙제를 더 했다").
+  let learningCount = 10
+  const staleReader = {
+    async getRow(table, id, columns) {
+      const v = buildFakeDb(BASE_MANIFEST)[`${table}:${id}`]
+      if (!v) return null
+      const out = {}
+      for (const col of columns) out[col] = v[col]
+      return out
+    },
+    async countWordsForUnit() { return 2 },
+    async headCountFiltered() { return { count: learningCount, tableMissing: false } },
+    async selectAllRows() { return [] },
+  }
+  const calls = []
+  const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
+  const phase1 = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-STALE-1', reportDir: REPORT_DIR, reader: staleReader, executor, dryRun: false },
+    { loadEnv: () => envOk() },
+  )
+  check('[stale] 1단계 ticket-issued', phase1.status === 'ticket-issued')
+  learningCount = 15 // 티켓 발급 이후 라이브 드리프트(숙제 진행)
+  const phase2 = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-STALE-1', approveRunId: 'RUN-STALE-1', reportDir: REPORT_DIR, reader: staleReader, executor, dryRun: false },
+    { loadEnv: () => envOk(), isTTY: () => true },
+  )
+  check('티켓 발급 이후 드리프트 시 status = approval-stale', phase2.status === 'approval-stale', phase2.status)
+  check('드리프트 감지 시 executor 호출 0(apply 이전에 차단)', calls.length === 0)
 }
 
 console.log('\n=== [7a] apply 성공 → postflight 실패(값 미반영) → 자동 롤백 ===')
@@ -364,9 +536,9 @@ console.log('\n=== [7a] apply 성공 → postflight 실패(값 미반영) → �
   const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
   const calls = []
   const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
-  const res = await runHotfix(
+  const res = await runApprovedHotfix(
     { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-ROLLBACK-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}` },
+    { loadEnv: () => envOk() },
   )
   check('postflight 실패 시 status = rolled-back', res.status === 'rolled-back')
   check('postflight 실패 시 executor 호출 2회(apply, rollback)', calls.length === 2)
@@ -384,9 +556,9 @@ console.log('\n=== [7b] apply 자체 실패(row-count 예외) → apply-failed, 
       throw new Error('ABORT[x] student_class_assignments f9a14e8a 영향 0행(기대 1)')
     },
   }
-  const res = await runHotfix(
+  const res = await runApprovedHotfix(
     { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-APPLYFAIL-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}` },
+    { loadEnv: () => envOk() },
   )
   check('row-count 예외 시 status = apply-failed', res.status === 'apply-failed')
   check('row-count 예외 시 executor 호출 1회(apply 만)', calls.length === 1)
@@ -403,9 +575,9 @@ console.log('\n=== [7c] postflight per-change/must_not_change/health 전부 정�
       return { ok: true }
     },
   }
-  const res = await runHotfix(
+  const res = await runApprovedHotfix(
     { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-APPLIED-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, runHealthCheck: () => ({ ok: true, output: '' }) },
+    { loadEnv: () => envOk(), runHealthCheck: () => ({ ok: true, output: '' }) },
   )
   check('정상 apply+postflight+health 시 status = applied', res.status === 'applied')
   check('정상 apply 시 executor 호출 1회', calls.length === 1)
@@ -416,9 +588,9 @@ console.log('\n=== [7d] postflight/must_not_change 전부 정상이지만 health
 {
   const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
   const executor = makeApplyRevertExecutor(reader, BASE_MANIFEST)
-  const res = await runHotfix(
+  const res = await runApprovedHotfix(
     { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-HEALTHFAIL-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, runHealthCheck: () => ({ ok: false, output: 'FAIL 학생 1명' }) },
+    { loadEnv: () => envOk(), runHealthCheck: () => ({ ok: false, output: 'FAIL 학생 1명' }) },
   )
   check('health 실패 시 status = rolled-back', res.status === 'rolled-back')
   check('health 실패 시 executor 호출 2회(apply, rollback)', executor.calls.length === 2)
@@ -433,9 +605,9 @@ console.log('\n=== [8] 무관 행 변경 감지(manifest 밖 학생) → rollbac
     tableRowsQueues: { students: [STUDENTS_ROWS_BEFORE, studentsAfterUnexpected], student_class_assignments: [SCA_ROWS_BEFORE, SCA_ROWS_AFTER_OK] },
   })
   const executor = makeApplyRevertExecutor(reader, BASE_MANIFEST)
-  const res = await runHotfix(
+  const res = await runApprovedHotfix(
     { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-UNRELATED-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, runHealthCheck: () => ({ ok: true, output: '' }) },
+    { loadEnv: () => envOk(), runHealthCheck: () => ({ ok: true, output: '' }) },
   )
   check('무관 행 변경 감지 시 status = rolled-back', res.status === 'rolled-back')
   const unrelated = (res.report.postMismatches || []).find((m) => m.reason === 'unexpected-row-change' && m.id === 'zz-unrelated-student')
@@ -452,9 +624,9 @@ console.log('\n=== [9] 학습기록 카운트 변화 감지 → rollback ===')
     countsQueues: { [`${changedTable}|${sid}`]: [10, 15] },
   })
   const executor = makeApplyRevertExecutor(reader, BASE_MANIFEST)
-  const res = await runHotfix(
+  const res = await runApprovedHotfix(
     { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-BASELINE-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, runHealthCheck: () => ({ ok: true, output: '' }) },
+    { loadEnv: () => envOk(), runHealthCheck: () => ({ ok: true, output: '' }) },
   )
   check('학습기록 카운트 변화 감지 시 status = rolled-back', res.status === 'rolled-back')
   const learningDiff = (res.report.postMismatches || []).find((m) => m.reason === 'learning-baseline-changed')
@@ -722,39 +894,61 @@ console.log('\n=== [14] --env production|staging 플래그 필수 ===')
   check('--env staging 은 허용(project_ref 만 맞으면 진행)', res3.status === 'ready-to-apply')
 }
 
-console.log('\n=== [14b] CI 는 TTY+정확한 승인 문구가 있어도 --env 값과 무관하게 write path 비활성 ===')
+console.log('\n=== [14b] CI — 1단계 티켓은 발급되지만(계획 통과 기록), 2단계는 CI 우선으로 항상 STOP ===')
 {
+  // fix/harness-apply-two-phase-approval(2026-09-05) — 1단계(티켓 발급)는
+  // "이 계획이 게이트를 통과했다"는 사실만 기록하고 그 자체로는 절대 아무
+  // 것도 쓰지 않는다(dbWriteCount 0) — 그래서 CI 여도 발급 자체는 막지
+  // 않는다. 실제 위험한 경로(executor.run 호출)는 2단계(--approve)에서만
+  // 열릴 수 있고, 거기서는 CI 감지 시 티켓 검증조차 시작하기 전에 항상
+  // STOP 한다 — 이 두 단언이 CI 안전성의 핵심이다.
   const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
   const calls = []
   const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
-  let approveCalled = false
-  const res = await runHotfix(
+  const phase1 = await runHotfix(
     { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-CI-ENV-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-    { loadEnv: () => envOk({ ci: true }), isTTY: () => true, approve: async (rid) => { approveCalled = true; return `APPLY ${rid}` } },
+    { loadEnv: () => envOk({ ci: true }), isTTY: () => true },
   )
-  check('CI+TTY+정확한 승인이어도 status = ready-to-apply(CI 우선)', res.status === 'ready-to-apply')
-  check('CI 환경에서는 승인 콜백 자체가 호출되지 않음', !approveCalled)
-  check('CI 환경에서는 executor 호출 0', calls.length === 0)
+  check('CI+TTY — 1단계는 ticket-issued(계획 통과 기록, DB WRITE 0)', phase1.status === 'ticket-issued', phase1.status)
+  check('CI 환경에서도 1단계 티켓 파일은 생성된다', fs.existsSync(path.join(REPORT_DIR, 'RUN-CI-ENV-1.ticket.json')))
+  check('CI 환경 1단계도 executor 호출 0', calls.length === 0)
+
+  const phase2 = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-CI-ENV-1', approveRunId: 'RUN-CI-ENV-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+    { loadEnv: () => envOk({ ci: true }), isTTY: () => true },
+  )
+  check('CI 환경에서 --approve 를 시도해도 status = ready-to-apply(CI 우선, 절대 승인 불가)', phase2.status === 'ready-to-apply', phase2.status)
+  check('CI 환경에서는 2단계에서도 티켓 검증 이전에 STOP(executor 호출 0 유지)', calls.length === 0)
 }
 
-console.log('\n=== [15] 승인 문구 runId 바인딩 — 재시도 없이 STOP ===')
+console.log('\n=== [15] --approve <runId> 바인딩 — 정확한 runId 아니면 STOP(approval-mismatch) ===')
 {
+  // fix/harness-apply-two-phase-approval(2026-09-05) — readline 문구 비교가
+  // 사라지고 "--approve <runId> 가 티켓 파일명과 정확히 일치하는가"로
+  // 바뀌었다. 빈 문자열은 CLI 파서가 --approve 자체를 안 준 것과 구분이
+  // 안 되므로(falsy) 이 표에서 제외 — 대신 "전혀 다른 runId"/"대소문자만
+  // 다른 runId" 두 경우로 바인딩이 정확히 일치해야만 통과함을 확인한다.
   const scenarios = [
-    { label: '빈-입력', slug: 'EMPTY', answer: async () => '' },
-    { label: 'yes', slug: 'YES', answer: async () => 'yes' },
-    { label: '다른-runId', slug: 'OTHER-RUNID', answer: async () => 'APPLY OTHER-RUN-ID-999' },
-    { label: '대소문자-다름', slug: 'CASE-DIFF', answer: async (rid) => `apply ${rid}` },
+    { label: '다른-runId', slug: 'OTHER', mutate: () => 'OTHER-RUN-ID-999' },
+    { label: '대소문자-다름', slug: 'CASE', mutate: (rid) => rid.toLowerCase() },
   ]
   for (const s of scenarios) {
+    const runId = `RUN-BIND-${s.slug}`
     const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
     const calls = []
     const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
-    const res = await runHotfix(
-      { manifest: BASE_MANIFEST, envFlag: 'production', runId: `RUN-BIND-${s.slug}`, reportDir: REPORT_DIR, reader, executor, dryRun: false },
-      { loadEnv: () => envOk(), isTTY: () => true, approve: s.answer },
+    const phase1 = await runHotfix(
+      { manifest: BASE_MANIFEST, envFlag: 'production', runId, reportDir: REPORT_DIR, reader, executor, dryRun: false },
+      { loadEnv: () => envOk() },
     )
-    check(`승인 문구 불일치(${s.label}) 시 status = not-approved`, res.status === 'not-approved')
-    check(`승인 문구 불일치(${s.label}) 시 executor 호출 0`, calls.length === 0)
+    check(`[bind:${s.label}] 1단계 ticket-issued`, phase1.status === 'ticket-issued')
+    const wrongId = s.mutate(runId)
+    const phase2 = await runHotfix(
+      { manifest: BASE_MANIFEST, envFlag: 'production', reportDir: REPORT_DIR, reader, executor, dryRun: false, approveRunId: wrongId },
+      { loadEnv: () => envOk(), isTTY: () => true },
+    )
+    check(`잘못된 runId(${s.label}) 로 --approve 시 status = approval-mismatch`, phase2.status === 'approval-mismatch', phase2.status)
+    check(`잘못된 runId(${s.label}) 시 executor 호출 0`, calls.length === 0)
   }
 
   // apply SQL 문자열의 runId 가 report.runId 와 정확히 일치(ABORT 메시지 경로)
@@ -781,29 +975,47 @@ console.log('\n=== [16] report.rollback 메타데이터 ===')
   check('report.expectedRows = changes.length', res.report.expectedRows === BASE_MANIFEST.changes.length)
 }
 
-console.log('\n=== [17] manifest 변조 감지(승인 이후 apply 직전 파일 재해시) ===')
+console.log('\n=== [17] manifest 변조 감지(8.5단계 — 티켓 검증 통과 후 apply 직전 파일 재해시) ===')
 {
+  // fix/harness-apply-two-phase-approval(2026-09-05) — 예전엔 readline
+  // approve() 콜백 안에서 파일을 변조해 "승인 직후, 적용 직전" 구간을
+  // 재현했다. 이제 승인은 콜백이 아니라 2단계 CLI 재실행이라, 같은 좁은
+  // 구간(8단계 티켓 검증 통과 이후 ~ 8.5단계 재해시 이전)을 재현하려면
+  // 2단계 실행 "안에서" 티켓 검증(8) 이후·재해시(8.5) 이전에 실행되는
+  // 지점 — 즉 preflight(4단계, getRow) — 에서 파일을 변조한다: 2단계도
+  // 처음부터 0~7단계를 다시 돌기 때문에 4단계 시점엔 아직 8단계 티켓 sha
+  // 대조(phase2 시작 시 1단계에서 읽은 원본 manifestSha256 기준)가 끝나기
+  // 전이라 8단계까지는 통과하고, 8.5단계 재확인에서만 걸린다.
   const tmpManifestPath = path.join(REPORT_DIR, 'tamper-manifest.json')
   fs.mkdirSync(REPORT_DIR, { recursive: true })
   fs.writeFileSync(tmpManifestPath, JSON.stringify(BASE_MANIFEST), 'utf8')
-  const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+
+  const reader1 = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+  const phase1 = await runHotfix(
+    { manifestPath: tmpManifestPath, envFlag: 'production', runId: 'RUN-TAMPER-1', reportDir: REPORT_DIR, reader: reader1, dryRun: false, executor: { async run() { return { ok: true } } } },
+    { loadEnv: () => envOk() },
+  )
+  check('[8.5-tamper] 1단계 ticket-issued(파일 아직 원본)', phase1.status === 'ticket-issued')
+
   const calls = []
   const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
-  const res = await runHotfix(
-    { manifestPath: tmpManifestPath, envFlag: 'production', runId: 'RUN-TAMPER-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-    {
-      loadEnv: () => envOk(),
-      isTTY: () => true,
-      approve: async (rid) => {
-        // 승인 직후, 실제 적용 직전에 파일을 변조(공격 시나리오 재현)
-        fs.writeFileSync(tmpManifestPath, JSON.stringify({ ...BASE_MANIFEST, id: 'tampered' }), 'utf8')
-        return `APPLY ${rid}`
-      },
-    },
+  const reader2 = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+  const originalGetRow = reader2.getRow.bind(reader2)
+  let tamperedOnce = false
+  reader2.getRow = async (...args) => {
+    if (!tamperedOnce) {
+      tamperedOnce = true
+      fs.writeFileSync(tmpManifestPath, JSON.stringify({ ...BASE_MANIFEST, id: 'tampered' }), 'utf8')
+    }
+    return originalGetRow(...args)
+  }
+  const phase2 = await runHotfix(
+    { manifestPath: tmpManifestPath, envFlag: 'production', runId: 'RUN-TAMPER-1', approveRunId: 'RUN-TAMPER-1', reportDir: REPORT_DIR, reader: reader2, executor, dryRun: false },
+    { loadEnv: () => envOk(), isTTY: () => true },
   )
-  check('manifest 파일 변조 시 status = manifest-tampered', res.status === 'manifest-tampered')
+  check('manifest 파일 변조 시 status = manifest-tampered', phase2.status === 'manifest-tampered', phase2.status)
   check('manifest 파일 변조 시 executor 호출 0', calls.length === 0)
-  check('report.manifestSha256 기록됨(64자리 hex)', typeof res.report.manifestSha256 === 'string' && /^[0-9a-f]{64}$/.test(res.report.manifestSha256))
+  check('report.manifestSha256 기록됨(64자리 hex)', typeof phase2.report.manifestSha256 === 'string' && /^[0-9a-f]{64}$/.test(phase2.report.manifestSha256))
   fs.writeFileSync(tmpManifestPath, JSON.stringify(BASE_MANIFEST), 'utf8') // 원복(다음 테스트 오염 방지)
 }
 
@@ -855,7 +1067,7 @@ console.log('\n=== [18] Case E 회귀 — ghost-unit-landing manifest, 이미 �
   }
   const res = await runHotfix(
     { manifestPath, envFlag: 'production', runId: 'RUN-CASE-E-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-    { loadEnv: () => envOk({ url: 'https://azsjthtdjfpnctffjfsk.supabase.co' }), isTTY: () => true, approve: async (rid) => `APPLY ${rid}` },
+    { loadEnv: () => envOk({ url: 'https://azsjthtdjfpnctffjfsk.supabase.co' }) },
   )
   check('Case E: status = preflight-mismatch', res.status === 'preflight-mismatch')
   check('Case E: executor 호출 0', calls.length === 0)
@@ -883,9 +1095,9 @@ console.log('\n=== [19] 행 수 방향(초과/미달) 회귀 — 명시적 라�
       return { ok: true }
     },
   }
-  const resUnder = await runHotfix(
+  const resUnder = await runApprovedHotfix(
     { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-UNDER-1', reportDir: REPORT_DIR, reader: readerUnder, executor: executorUnder, dryRun: false },
-    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, runHealthCheck: () => ({ ok: true, output: '' }) },
+    { loadEnv: () => envOk(), runHealthCheck: () => ({ ok: true, output: '' }) },
   )
   check('행 수 미달(1개 누락) 시 status = rolled-back', resUnder.status === 'rolled-back')
   check('행 수 미달 시 executor 호출 2회(apply, rollback)', callsUnder.length === 2)
@@ -898,9 +1110,9 @@ console.log('\n=== [19] 행 수 방향(초과/미달) 회귀 — 명시적 라�
     tableRowsQueues: { students: [STUDENTS_ROWS_BEFORE, studentsAfterExtra], student_class_assignments: [SCA_ROWS_BEFORE, SCA_ROWS_AFTER_OK] },
   })
   const executorOver = makeApplyRevertExecutor(readerOver, BASE_MANIFEST)
-  const resOver = await runHotfix(
+  const resOver = await runApprovedHotfix(
     { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-OVER-1', reportDir: REPORT_DIR, reader: readerOver, executor: executorOver, dryRun: false },
-    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, runHealthCheck: () => ({ ok: true, output: '' }) },
+    { loadEnv: () => envOk(), runHealthCheck: () => ({ ok: true, output: '' }) },
   )
   check('행 수 초과(무관 행 추가 변경) 시 status = rolled-back', resOver.status === 'rolled-back')
   check('행 수 초과 시 executor 호출 2회(apply, rollback)', executorOver.calls.length === 2)
@@ -918,9 +1130,9 @@ console.log('\n=== [20] --rollback-of 모드 — READY 까지만, WRITE 0(동일
       return { ok: true }
     },
   }
-  const applyRes = await runHotfix(
+  const applyRes = await runApprovedHotfix(
     { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-SOURCE-FOR-ROLLBACKOF-1', reportDir: REPORT_DIR, reader: reader1, executor: executor1, dryRun: false },
-    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, runHealthCheck: () => ({ ok: true, output: '' }) },
+    { loadEnv: () => envOk(), runHealthCheck: () => ({ ok: true, output: '' }) },
   )
   check('rollback-of 소스: 원본 apply 성공(applied)', applyRes.status === 'applied')
   const sourceReportPath = applyRes.report.reportPath
@@ -1351,9 +1563,9 @@ console.log('\n=== [B4] runHotfix 통합 — SCA insert(정상 적용) ===')
       return { ok: true }
     },
   }
-  const res = await runHotfix(
+  const res = await runApprovedHotfix(
     { manifest: INSERT_MANIFEST, envFlag: 'production', runId: 'RUN-B4-SCA-ADD-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, runHealthCheck: () => ({ ok: true, output: '' }) },
+    { loadEnv: () => envOk(), runHealthCheck: () => ({ ok: true, output: '' }) },
   )
   check('insert manifest 적용 성공 → applied', res.status === 'applied', JSON.stringify(res.report.postMismatches || res.status))
   check('insert manifest 적용 시 executor 호출 1회', executor.calls.length === 1)
@@ -1383,9 +1595,9 @@ console.log('\n=== [B4] runHotfix 통합 — SCA delete(정상 적용) ===')
       return { ok: true }
     },
   }
-  const res = await runHotfix(
+  const res = await runApprovedHotfix(
     { manifest: DELETE_MANIFEST, envFlag: 'production', runId: 'RUN-B4-SCA-DEL-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, runHealthCheck: () => ({ ok: true, output: '' }) },
+    { loadEnv: () => envOk(), runHealthCheck: () => ({ ok: true, output: '' }) },
   )
   check('delete manifest 적용 성공 → applied', res.status === 'applied', JSON.stringify(res.report.postMismatches || res.status))
   check('delete manifest 적용 시 executor 호출 1회', executor.calls.length === 1)
@@ -1554,7 +1766,7 @@ console.log('\n=== [B5] runHotfix — invariants delta 가 MULTIPLE_PRIMARY FAIL
   const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
   const res = await runHotfix(
     { manifest: badManifest, envFlag: 'production', runId: 'RUN-B5-BLOCK-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, loadInvariantSnapshot: async () => snap },
+    { loadEnv: () => envOk(), loadInvariantSnapshot: async () => snap },
   )
   check('status = blocked-invariant', res.status === 'blocked-invariant', res.status)
   check('승인 전 차단이라 executor 호출 0(승인 콜백 자체는 도달 전에 STOP)', calls.length === 0)
@@ -1611,14 +1823,25 @@ console.log('\n=== [C2] runHotfix — report.standardStatus + STANDARD_STATUS �
   check('콘솔 출력에 STANDARD_STATUS: PASS 라인 포함', lines.some((l) => l.includes('STANDARD_STATUS: PASS')))
 }
 {
-  // dry-run 없이(--dry-run 미지정) 토큰도 없어 ready-to-apply 로 STOP —
-  // 이건 "계획 확인"이 아니라 "적용 시도"였다는 뜻이라 BLOCKED_NEEDS_APPROVAL.
+  // fix/harness-apply-two-phase-approval(2026-09-05) — dry-run 없이(--dry-run
+  // 미지정) 1단계(--approve 없음)는 토큰이 없어도 티켓을 발급한다(계획이
+  // 통과했다는 사실 자체는 토큰 유무와 무관 — READY). 하지만 그 티켓으로
+  // 2단계(--approve)를 시도하면 그때 토큰 없음에 막혀 BLOCKED_NEEDS_APPROVAL
+  // 이 된다 — "적용 시도"라는 의도가 확정되는 시점은 --approve 때다.
   const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
-  const res = await runHotfix(
+  const phase1 = await runHotfix(
     { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-C2-STD-2', reportDir: REPORT_DIR, reader, dryRun: false },
     { loadEnv: () => envOk({ accessToken: '' }) },
   )
-  check('토큰 없는 실제 적용 시도는 report.standardStatus = BLOCKED_NEEDS_APPROVAL', res.report.standardStatus === 'BLOCKED_NEEDS_APPROVAL', res.report.standardStatus)
+  check('토큰 없어도 1단계는 ticket-issued(READY)', phase1.status === 'ticket-issued', phase1.status)
+  check('토큰 없는 1단계는 report.standardStatus = PASS', phase1.report.standardStatus === 'PASS', phase1.report.standardStatus)
+
+  const phase2 = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-C2-STD-2', approveRunId: 'RUN-C2-STD-2', reportDir: REPORT_DIR, reader, dryRun: false },
+    { loadEnv: () => envOk({ accessToken: '' }), isTTY: () => true },
+  )
+  check('토큰 없는 2단계(--approve) 시도는 status = ready-to-apply(CI/토큰 게이트 재확인)', phase2.status === 'ready-to-apply', phase2.status)
+  check('토큰 없는 2단계 시도는 report.standardStatus = BLOCKED_NEEDS_APPROVAL', phase2.report.standardStatus === 'BLOCKED_NEEDS_APPROVAL', phase2.report.standardStatus)
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -1638,8 +1861,21 @@ console.log('\n=== [D1] computeApplyEligibility — STOP 사유별 apply_eligibi
     computeApplyEligibility({ status: 'ready-to-apply', dryRun: false, stopReasons: ['CI 환경'] }) === 'BLOCKED_NEEDS_APPROVAL')
   check('not-interactive → BLOCKED_NEEDS_APPROVAL',
     computeApplyEligibility({ status: 'not-interactive', dryRun: false, stopReasons: [] }) === 'BLOCKED_NEEDS_APPROVAL')
-  check('not-approved → BLOCKED_NEEDS_APPROVAL',
-    computeApplyEligibility({ status: 'not-approved', dryRun: false, stopReasons: [] }) === 'BLOCKED_NEEDS_APPROVAL')
+  // fix/harness-apply-two-phase-approval(2026-09-05) — 'not-approved' 는
+  // readline 문구 비교 전용 STOP 이라 2단계 승인 게이트에는 더 없다(표에서도
+  // 제거). 대신 새 STOP 사유 6종을 확인한다.
+  check('ticket-issued → READY(1단계 완료, 대기 상태)',
+    computeApplyEligibility({ status: 'ticket-issued', dryRun: false, stopReasons: [] }) === 'READY')
+  check('approval-mismatch → BLOCKED_NEEDS_APPROVAL',
+    computeApplyEligibility({ status: 'approval-mismatch', dryRun: false, stopReasons: [] }) === 'BLOCKED_NEEDS_APPROVAL')
+  check('approval-used → BLOCKED_NEEDS_APPROVAL',
+    computeApplyEligibility({ status: 'approval-used', dryRun: false, stopReasons: [] }) === 'BLOCKED_NEEDS_APPROVAL')
+  check('approval-expired → BLOCKED_NEEDS_APPROVAL',
+    computeApplyEligibility({ status: 'approval-expired', dryRun: false, stopReasons: [] }) === 'BLOCKED_NEEDS_APPROVAL')
+  check('approval-manifest-mismatch → BLOCKED_MANIFEST',
+    computeApplyEligibility({ status: 'approval-manifest-mismatch', dryRun: false, stopReasons: [] }) === 'BLOCKED_MANIFEST')
+  check('approval-stale → BLOCKED_PREFLIGHT',
+    computeApplyEligibility({ status: 'approval-stale', dryRun: false, stopReasons: [] }) === 'BLOCKED_PREFLIGHT')
   check('blocked-write-drift → BLOCKED_WRITE_DRIFT',
     computeApplyEligibility({ status: 'blocked-write-drift', dryRun: false, stopReasons: [] }) === 'BLOCKED_WRITE_DRIFT')
   check('blocked-invariant → BLOCKED_INVARIANT',
@@ -1852,8 +2088,6 @@ console.log('\n=== [QA4] invariants delta 계산 실패 → fail-closed(blocked-
     { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-QA4-INV-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
     {
       loadEnv: () => envOk(),
-      isTTY: () => true,
-      approve: async (rid) => `APPLY ${rid}`,
       runHealthCheck: () => ({ ok: true, output: '' }),
       loadInvariantSnapshot: async (r) => {
         await r.selectAllRows('units', ['id'])
@@ -1936,9 +2170,9 @@ console.log('\n=== [QA7] dry-run 콘솔 문구 + .tmp gitignore ===')
 // 않아 실제 실행에는 아무 영향이 없었다(감사에서 확인된 문제 [1]).
 // D.buildApplySql 을 감싸 실제 생성 SQL 을 변조하는 stub 으로 세 가지
 // 드리프트(SET 값/대상 row id/변경 건수)를 재현하고, 매 케이스에서
-// executor.run() 이 절대 호출되지 않음(승인 게이트/apply 도달 전 STOP)을
-// 단언한다 — dryRun:false + isTTY:true + approve 성공까지 세팅해, 가드가
-// 없었다면 실제로 apply 까지 진행됐을 조건을 일부러 만든다.
+// executor.run() 이 절대 호출되지 않음(6.5단계가 8단계 승인 게이트보다도
+// 먼저라 dryRun:false 로만 두면 충분 — isTTY/approve 는 이 STOP 지점까지
+// 아예 도달하지 않으므로 불필요)을 단언한다.
 // ══════════════════════════════════════════════════════════════════════
 console.log('\n=== [C3] runHotfix — VERIFY==WRITE 드리프트 가드 배선(blocked-write-drift, FAIL-first) ===')
 {
@@ -1969,7 +2203,7 @@ console.log('\n=== [C3] runHotfix — VERIFY==WRITE 드리프트 가드 배선(b
     )
     const res = await runHotfix(
       { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-C3-SETDRIFT-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-      { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, buildApplySql: driftedBuildApplySql },
+      { loadEnv: () => envOk(), buildApplySql: driftedBuildApplySql },
     )
     check('(i) SET 값 드리프트: status = blocked-write-drift', res.status === 'blocked-write-drift')
     check('(i) SET 값 드리프트: executor 호출 0(승인 게이트 도달 전 STOP)', calls.length === 0)
@@ -1989,7 +2223,7 @@ console.log('\n=== [C3] runHotfix — VERIFY==WRITE 드리프트 가드 배선(b
     )
     const res = await runHotfix(
       { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-C3-IDDRIFT-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-      { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, buildApplySql: driftedBuildApplySql },
+      { loadEnv: () => envOk(), buildApplySql: driftedBuildApplySql },
     )
     check('(ii) 대상 row id 드리프트: status = blocked-write-drift', res.status === 'blocked-write-drift')
     check('(ii) 대상 row id 드리프트: executor 호출 0', calls.length === 0)
@@ -2011,7 +2245,7 @@ console.log('\n=== [C3] runHotfix — VERIFY==WRITE 드리프트 가드 배선(b
     )
     const res = await runHotfix(
       { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-C3-COUNTDRIFT-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-      { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, buildApplySql: driftedBuildApplySql },
+      { loadEnv: () => envOk(), buildApplySql: driftedBuildApplySql },
     )
     check('(iii) 행 수 드리프트: status = blocked-write-drift', res.status === 'blocked-write-drift')
     check('(iii) 행 수 드리프트: executor 호출 0', calls.length === 0)
@@ -2046,20 +2280,36 @@ console.log('\n=== [C4] runHotfix — 단계 순서 단언(onStep) ===')
   }
 
   // 승인 이후 apply 성공 전체 흐름 — approval-gate 부터 health-check 까지 이어진다.
+  // fix/harness-apply-two-phase-approval(2026-09-05) — 승인이 2단계(1단계=
+  // 티켓 발급, 2단계=--approve 로 재실행)로 나뉘면서, "승인 이후" 단계 순서도
+  // 두 번의 별도 runHotfix() 호출로 나눠 각각 확인한다(같은 runId 재사용).
   {
     const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
     const calls = []
     const executor = {
       async run(sql) { calls.push(sql); if (calls.length === 1) applyChangesToDb(reader.db, BASE_MANIFEST); return { ok: true } },
     }
-    const steps = []
-    const res = await runHotfix(
+
+    const steps1 = []
+    const phase1 = await runHotfix(
       { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-C4-APPLY-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-      { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}`, runHealthCheck: () => ({ ok: true, output: '' }), onStep: (name) => steps.push(name) },
+      { loadEnv: () => envOk(), onStep: (name) => steps1.push(name) },
     )
-    check('apply 경로: status = applied', res.status === 'applied')
-    const expected = ['manifest-load', 'env-flag', 'env-ref', 'static-scan', 'preflight', 'ambiguous-textbook-check', 'baseline', 'plan-output', 'write-drift-guard', 'approval-gate', 'manifest-reverify', 'apply', 'postflight', 'health-check']
-    check('apply 경로: 단계 순서가 기대 순서와 정확히 일치(고정 순서)', JSON.stringify(steps) === JSON.stringify(expected), JSON.stringify(steps))
+    check('1단계: status = ticket-issued', phase1.status === 'ticket-issued', phase1.status)
+    const expected1 = ['manifest-load', 'env-flag', 'env-ref', 'static-scan', 'preflight', 'ambiguous-textbook-check', 'baseline', 'plan-output', 'write-drift-guard', 'ticket-issue']
+    check('1단계: 단계 순서가 기대 순서와 정확히 일치(고정 순서)', JSON.stringify(steps1) === JSON.stringify(expected1), JSON.stringify(steps1))
+    check('1단계: approval-gate/apply/postflight/health 에는 도달하지 않음',
+      !steps1.includes('approval-gate') && !steps1.includes('apply') && !steps1.includes('postflight') && !steps1.includes('health-check'))
+
+    const steps2 = []
+    const res = await runHotfix(
+      { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-C4-APPLY-1', approveRunId: 'RUN-C4-APPLY-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
+      { loadEnv: () => envOk(), isTTY: () => true, runHealthCheck: () => ({ ok: true, output: '' }), onStep: (name) => steps2.push(name) },
+    )
+    check('2단계: status = applied', res.status === 'applied')
+    const expected2 = ['manifest-load', 'env-flag', 'env-ref', 'static-scan', 'preflight', 'ambiguous-textbook-check', 'baseline', 'plan-output', 'write-drift-guard', 'approval-gate', 'manifest-reverify', 'apply', 'postflight', 'health-check']
+    check('2단계: 단계 순서가 기대 순서와 정확히 일치(고정 순서, readline 없음)', JSON.stringify(steps2) === JSON.stringify(expected2), JSON.stringify(steps2))
+    check('2단계: ticket-issue 단계는 다시 지나가지 않음(이미 1단계에서 발급됨)', !steps2.includes('ticket-issue'))
   }
 }
 
@@ -2118,7 +2368,7 @@ function buildAmbigReader(manifest, extraOpts = {}) {
   const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
   const res = await runHotfix(
     { manifest, envFlag: 'production', runId: 'RUN-C5-BLOCK-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}` },
+    { loadEnv: () => envOk() },
   )
   check('(i) ack 없음: status = blocked-ambiguous-textbook', res.status === 'blocked-ambiguous-textbook', res.status)
   check('(i) ack 없음: apply_eligibility = BLOCKED_AMBIGUOUS_TEXTBOOK', res.report.apply_eligibility === 'BLOCKED_AMBIGUOUS_TEXTBOOK', res.report.apply_eligibility)
@@ -2158,7 +2408,7 @@ function buildAmbigReader(manifest, extraOpts = {}) {
   const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
   const res = await runHotfix(
     { manifest, envFlag: 'production', runId: 'RUN-C5-ACK-BADNAME-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}` },
+    { loadEnv: () => envOk() },
   )
   check('(iii) name 이 잘못된 ack: status = blocked-ambiguous-textbook', res.status === 'blocked-ambiguous-textbook', res.status)
   check('(iii) name 이 잘못된 ack: executor 호출 0', calls.length === 0)
@@ -2195,7 +2445,7 @@ function buildAmbigReader(manifest, extraOpts = {}) {
   const executor = { async run(sql) { calls.push(sql); return { ok: true } } }
   const res = await runHotfix(
     { manifest, envFlag: 'production', runId: 'RUN-C5-UNAVAIL-1', reportDir: REPORT_DIR, reader, executor, dryRun: false },
-    { loadEnv: () => envOk(), isTTY: () => true, approve: async (rid) => `APPLY ${rid}` },
+    { loadEnv: () => envOk() },
   )
   check('(v) 교재 조회 실패: status = blocked-ambiguous-textbook-unavailable', res.status === 'blocked-ambiguous-textbook-unavailable', res.status)
   check('(v) 교재 조회 실패: apply_eligibility = BLOCKED_AMBIGUOUS_TEXTBOOK', res.report.apply_eligibility === 'BLOCKED_AMBIGUOUS_TEXTBOOK', res.report.apply_eligibility)
