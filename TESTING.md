@@ -880,3 +880,81 @@ preview`)을 실제 브라우저에 렌더해 학생/관리자 화면의 표시 
 "프로덕션 데이터 자체가 건강한가"는 보지 않는다. 또한 실제 마이크/스피커
 하드웨어가 필요한 말하기/듣기 도메인은 여전히 이 E2E의 범위 밖(기존
 speaking/listening SKIP 사유와 동일한 구조적 한계)이다.
+
+## TTS 폴백(네트워크 TTS) mock + voice 0개 스텁 (2026-09-05)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+### 문제
+
+CI(GitHub Actions ubuntu, headless chromium)에서만 `verify:e2e`가
+"실제 Supabase/Vercel로 나간 미mock 요청 0건" 가드에 FAIL했다(로컬
+Windows는 56/56 PASS). 실제로 나간 요청은 Supabase/Vercel이 아니라
+`https://translate.googleapis.com/translate_tts?...`(4건, `q=e2e-tb-a-w2-1`
+2회 + `q=I%20can%20see%20an%20e2e-tb-a-w2-1.` 2회) — `src/utils/speech.js`
+274행 `networkTtsUrl()`이 만드는 URL로, `playWordAudio()`(같은 파일
+289행)의 발음 재생 3단계 폴백 중 마지막 tier다: ① Supabase Storage에
+저장된 mp3 → ② 기기 `speechSynthesis`(en-GB) → ③ 그래도 안 되면 Google
+번역 TTS 네트워크 호출. CI의 headless chromium은 `speechSynthesis`
+voice가 0개라 tier ②가 매번 실패해 tier ③으로 넘어갔고, 그 요청이
+`tests/e2e/lib/mockRoutes.mjs`의 가드에 안 걸려 FAIL이 났다(가드 자체는
+"mock 안 된 새 외부 요청을 잡아낸다"는 설계대로 정상 동작한 것 — 이번에
+새로 mock을 추가해야 할 대상이 하나 생긴 것뿐이다). 로컬 Windows는 실제
+voice가 있어 tier ②에서 항상 성공했기 때문에 이 경로 자체가 로컬에서는
+한 번도 실행되지 않았다 — `student.spec.mjs`의 A6-guided 섹션에 있던
+기존 주석("voices 0개로도 onend를 정상 발생시킴")은 이 로컬 실측을
+CI에도 그대로 적용될 것처럼 잘못 일반화한 것이었다(정정 커밋에서 주석도
+함께 고쳤다).
+
+### 수정
+
+`tests/e2e/lib/mockRoutes.mjs`의 `installMocks()`에 두 가지를 추가했다:
+
+1. **`page.addInitScript()`로 voice 0개 조건을 모든 실행 환경에서 강제**
+   — `window.speechSynthesis.getVoices`를 빈 배열을 반환하도록, `speak()`를
+   항상 비동기로 `utterance.onerror`를 발생시키도록 덮어썼다. 이제
+   로컬(Windows, voice 있음)과 CI(ubuntu, voice 없음) 양쪽 모두 tier
+   ②(기기 TTS)가 항상 실패하고 tier ③(네트워크 TTS)이 항상 실행된다 —
+   "로컬은 우연히 이 경로를 안 타서 통과, CI만 실행해서 실패"라는
+   플랫폼 의존적 플레이크를 구조적으로 없앴다(env var 스위치 없이 항상
+   적용 — 별도 옵션을 늘리는 대신 이 경로를 항상 검증하는 쪽을 택함).
+2. **`translate.googleapis.com/translate_tts` 전용 mock route 추가** —
+   catch-all(`**/*`)보다 나중에 등록해 우선 적용되며, 상태 200 + 빈
+   body(`audio/mpeg`)로 응답한다. 빈 body는 브라우저에서 재생 실패
+   (`audio.onerror`)로 이어지지만, `src/utils/speech.js`의
+   `playAudioUrl()`은 이미 이 에러를 흡수해 `onEnd`를 계속 호출하는
+   코드 경로를 갖고 있어(발음 실패가 학습 흐름을 막지 않는다는 기존
+   설계) 화면 진행에 영향이 없다. **허용 목록에 조용히 추가하지 않고**
+   호출마다 `ttsFallbackRequests` 배열에 기록 + `console.log`로 남긴다 —
+   이후 다른 미mock 외부 호스트가 새로 생기면 여전히 fail-closed 가드가
+   잡아낸다는 원래 설계를 그대로 지킨다.
+
+`ttsFallbackRequests`는 `installMocks()` 반환값에 추가되고, 두 spec
+(`student.spec.mjs`/`admin.spec.mjs`) 모두 `unmockedRequests`와 같은
+방식으로 여러 브라우저 컨텍스트(A6/A6-spelling/A6-guided)에 걸쳐 집계해
+최종 반환값에 포함시키며, `scripts/testBrowserE2E.mjs` 러너가 스펙별
+요약 줄에 "TTS 폴백 호출(mock 처리됨) N건"으로 출력한다(실측: student
+스펙 4건 — PronounceStep/ExampleStep의 "따라 말하기" 각 1회 × times
+반복 2회, admin 스펙 0건 — 관리자 화면은 발음 재생을 쓰지 않음).
+
+### FAIL-first 검증
+
+수정 전 상태(voice-0 스텁은 있고 mock route만 없는 상태)로 먼저
+`verify:e2e`를 실행해 CI와 **완전히 동일한** 실패를 로컬에서 재현했다
+(미mock 요청 4건, URL/쿼리스트링까지 CI 로그와 정확히 일치) — 그 다음
+mock route를 복원해 56/56 PASS로 돌아오는 것을 확인했다. 이 순서로
+"수정이 실제로 그 실패를 고쳤다"는 것을 코드가 아니라 실행 결과로
+확인했다(`CLAUDE.md` 규칙 15).
+
+### 참고 — 관련 없는 기존 플레이크(이번에 손대지 않음)
+
+수정 검증 중 `answerOneQuizQuestionCorrectly()`(student.spec.mjs)가
+드물게 `getByRole('button', { name: fixtureWord.meaning })`에서 strict
+mode violation을 낸 사례를 1회 관측했다(`뜻-e2e-tb-a-2-1`이
+`뜻-e2e-tb-a-2-10`/`-12`의 부분 문자열이라 여러 버튼에 매치) — 이 파일의
+A6-spelling 섹션(54-62행)이 이미 같은 부류의 문제를 정규식 앵커로 회피한
+전례가 있는 것으로 보아 사전부터 있던 잠재 결함으로 보이며, TTS/voice
+스텁과는 무관하다(quiz 문항 순서 무작위성에만 의존). 이번 작업 범위(CI
+TTS 폴백 미mock 실패 수정)와 무관하고 하네스 구조 변경 금지 지시가
+있어 손대지 않았다 — 재현 시 `answerOneQuizQuestionCorrectly`에 A6-spelling과
+동일한 정규식 앵커 패턴을 적용하는 별도 후속 작업으로 남긴다.
