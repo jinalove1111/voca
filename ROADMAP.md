@@ -1,5 +1,13 @@
 # Paul Easy Voca — 로드맵
 
+_(2026-09-05 112차 추가) Harness V2 배포 완료 — PR #15 merge 전 재검증
+(CI 4/4 PASS·mergeable CLEAN·위험 파일 스캔 0)으로 MERGE SAFE=YES
+판정 후 main 병합(SHA `42d42da`) → Vercel Production 배포(번들 해시
+일치 확인) → 배포 후 READ-ONLY 검증(prod:check/health/reward+Paul
+Town 스위트 전부 PASS) + Production smoke(테스트 계정 Barry) PASS.
+Production DB WRITE 0, 승인 대기 항목 APPLY 0. 상세는 `handoff.md`
+2026-09-05(112차) 섹션._
+
 _(2026-09-05 111차 추가) 스크린샷 의존 축소 — apply_eligibility 8값 1:1
 매핑 + 교재 UUID canonical/AMBIGUOUS_TEXTBOOK 사전 차단(prod-hotfix
 317→371) + Playwright 브라우저 E2E(학생/관리자 화면, 44단언, Release
