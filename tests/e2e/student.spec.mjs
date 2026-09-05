@@ -67,7 +67,11 @@ async function answerOneQuizQuestionCorrectly(page, db) {
   const wordText = (await wordEl.textContent())?.trim()
   const fixtureWord = db.tables.words.find((w) => w.word === wordText)
   if (!fixtureWord) throw new Error(`퀴즈에 나온 단어 "${wordText}"를 fixture words에서 찾을 수 없음`)
-  await page.getByRole('button', { name: fixtureWord.meaning }).click()
+  // 위 주석(54-59행)이 이미 지적한 문제의 실제 발생 지점 — 이 호출이
+  // 정작 그 anchor 규칙을 안 쓰고 있었다(2026-09-05 정정). 정확히 한
+  // 옵션만 고정한다(quizOptionRe와 동일 패턴, 313행).
+  const optionRe = new RegExp(`^[A-D] ${escapeRegExp(fixtureWord.meaning)}$`)
+  await page.getByRole('button', { name: optionRe }).click()
   await page.getByRole('button', { name: /다음 문제|결과 보기/ }).waitFor({ state: 'visible' })
   return fixtureWord
 }
@@ -76,7 +80,7 @@ export async function run(browser, baseURL) {
   const r = createRecorder('[student]')
   const context = await browser.newContext()
   const page = await context.newPage()
-  const { db, unmockedRequests } = await installMocks(page)
+  const { db, unmockedRequests, ttsFallbackRequests } = await installMocks(page)
 
   try {
     await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
@@ -149,7 +153,7 @@ export async function run(browser, baseURL) {
     // 브라우저 컨텍스트 + 새 fixture(0 기준선)에서 실행한다.
     const context2 = await browser.newContext()
     const page2 = await context2.newPage()
-    const { db: db2, unmockedRequests: unmockedRequests2 } = await installMocks(page2)
+    const { db: db2, unmockedRequests: unmockedRequests2, ttsFallbackRequests: ttsFallbackRequests2 } = await installMocks(page2)
     try {
       await page2.goto(baseURL, { waitUntil: 'domcontentloaded' })
       await login(page2)
@@ -244,6 +248,7 @@ export async function run(browser, baseURL) {
       await context2.close()
     }
     unmockedRequests.push(...unmockedRequests2)
+    ttsFallbackRequests.push(...ttsFallbackRequests2)
     db.errors.push(...db2.errors)
 
     // ── A6-guided — GuidedSession(3분 데일리 리추얼) 세션 1단계(단어 1개)
@@ -252,13 +257,20 @@ export async function run(browser, baseURL) {
     // 마이크 녹음을 실제로 요구하지 않는다 — 이 headless 환경에서
     // getUserMedia는 거부되지만, WordDetail.jsx 181-188행의 mic 에러
     // 캐치 분기("녹음은 나중에 하고 먼저 듣기와 퀴즈를...")가 onAnyResult()를
-    // 그대로 호출해 다음 단계로 진행할 수 있게 해준다(실측: unmocked
-    // network 0건, translate.googleapis.com 등 실제 TTS 폴백 호출도
-    // 발생하지 않음 — headless Chromium의 window.speechSynthesis가
-    // voices 0개로도 onend를 정상 발생시킴).
+    // 그대로 호출해 다음 단계로 진행할 수 있게 해준다.
+    // (2026-09-05 정정: 이 주석은 원래 "voices 0개에서도 onend가 정상
+    // 발생해 TTS 폴백이 아예 안 일어난다"고 적었으나 이는 로컬(Windows,
+    // 실제 voice 보유) 실측이 우연히 그렇게 보인 것이었다 — CI(ubuntu
+    // headless chromium, 진짜 voice 0개)에서는 device TTS가 매번 실패해
+    // translate.googleapis.com 네트워크 TTS로 폴백했고, 그 요청이
+    // mockRoutes.mjs 가드에 안 걸려 CI만 FAIL했다. 지금은 mockRoutes.mjs의
+    // addInitScript가 모든 실행 환경에서 device TTS를 항상 실패시키고
+    // translate_tts 요청을 mock으로 처리하므로, 이 tier 3 폴백 경로가
+    // 로컬/CI 동일하게 항상 실행·검증된다 — 아래 ttsFallbackRequests3에
+    // 실측 호출 건수가 남는다.)
     const context3 = await browser.newContext()
     const page3 = await context3.newPage()
-    const { db: db3, unmockedRequests: unmockedRequests3 } = await installMocks(page3)
+    const { db: db3, unmockedRequests: unmockedRequests3, ttsFallbackRequests: ttsFallbackRequests3 } = await installMocks(page3)
     try {
       await page3.goto(baseURL, { waitUntil: 'domcontentloaded' })
       await login(page3)
@@ -363,6 +375,7 @@ export async function run(browser, baseURL) {
       await context3.close()
     }
     unmockedRequests.push(...unmockedRequests3)
+    ttsFallbackRequests.push(...ttsFallbackRequests3)
     db.errors.push(...db3.errors)
   } catch (err) {
     // 진단 — 예외 시점의 화면 텍스트/mock 오류를 에러 메시지에 실어 러너가
@@ -374,5 +387,5 @@ export async function run(browser, baseURL) {
     await context.close()
   }
 
-  return { results: r.results, unmockedRequests, mockErrors: db.errors }
+  return { results: r.results, unmockedRequests, mockErrors: db.errors, ttsFallbackRequests }
 }

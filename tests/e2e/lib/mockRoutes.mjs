@@ -34,6 +34,30 @@ export async function installMocks(page, { tables } = {}) {
   const unmockedRequests = []
   const externalAssetRequests = []
   const apiCallLog = []
+  const ttsFallbackRequests = []
+
+  // headless chromium(CI, ubuntu)은 speechSynthesis voice가 0개라 src/utils/
+  // speech.js의 _rawSpeak()가 매번 onerror로 실패하고, playWordAudio()가 tier
+  // 3(네트워크 TTS, translate.googleapis.com)로 넘어간다 — Windows 로컬(voice
+  // 있음)에서는 tier 2(device TTS)에서 항상 성공해 이 경로 자체가 실행되지
+  // 않았다(로컬 56/56 PASS, CI 미mock 요청 FAIL의 원인, 2026-09-05 실측).
+  // 로컬/CI 조건을 통일해 이 tier 3 경로가 항상 검증되도록, getVoices()를
+  // 빈 배열로 고정하고 speak()도 항상 onerror로 실패하게 만들어 모든 실행
+  // 환경(OS/voice 유무 무관)에서 device TTS가 실패 → 네트워크 TTS 폴백으로
+  // 넘어가는 동일한 경로를 강제한다(voice 존재 여부에 따라 로컬/CI 결과가
+  // 갈리는 플레이크를 구조적으로 제거).
+  await page.addInitScript(() => {
+    try {
+      const synth = window.speechSynthesis
+      if (!synth) return
+      synth.getVoices = () => []
+      synth.speak = (utterance) => {
+        setTimeout(() => {
+          try { utterance.onerror?.({ error: 'e2e-no-voices-stub' }) } catch { /* 무시 */ }
+        }, 0)
+      }
+    } catch { /* 무시 — 스텁 실패해도 테스트 자체는 계속 진행 */ }
+  })
 
   // 가드를 먼저 등록한다 — Playwright는 여러 route()가 같은 요청에 매치될 때
   // "나중에 등록된 것부터" 실행한다. 아래에서 등록할 구체적 패턴(rest/v1,
@@ -54,6 +78,22 @@ export async function installMocks(page, { tables } = {}) {
       }
     }
     await route.continue()
+  })
+
+  // 발음 재생 tier 3(src/utils/speech.js networkTtsUrl()) — 위 addInitScript로
+  // device TTS(tier 2)가 항상 실패하도록 만들었으니 이 tier가 항상 실행된다.
+  // 실제 Google 서버에는 절대 나가지 않게 여기서 가로채되(catch-all보다
+  // 나중에 등록해 우선 적용), "허용 목록에 조용히 추가"하지는 않는다 — 이
+  // 카운터(ttsFallbackRequests)로 몇 번 불렸는지 항상 드러나게 남겨서, 이후
+  // 다른 미mock 외부 호스트가 새로 생기면 여전히 가드가 FAIL로 잡아낸다.
+  await page.route('https://translate.googleapis.com/translate_tts**', async (route) => {
+    const req = route.request()
+    ttsFallbackRequests.push({ url: req.url(), method: req.method() })
+    console.log(`[mockRoutes] TTS 폴백 호출 가로챔(mock 응답) #${ttsFallbackRequests.length}: ${req.url()}`)
+    // 빈 body — src/utils/speech.js의 playAudioUrl()이 이미 audio.onerror를
+    // 처리하는 코드 경로(giveUp → onError/onEnd 호출, 화면 진행 계속)라
+    // 실제 mp3 바이트를 만들 필요 없이 그 경로를 그대로 검증할 수 있다.
+    await route.fulfill({ status: 200, contentType: 'audio/mpeg', body: Buffer.alloc(0) })
   })
 
   await page.route('**/rest/v1/**', async (route) => {
@@ -115,5 +155,5 @@ export async function installMocks(page, { tables } = {}) {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: body.pin === ADMIN_PIN }) })
   })
 
-  return { db, unmockedRequests, externalAssetRequests, apiCallLog }
+  return { db, unmockedRequests, externalAssetRequests, apiCallLog, ttsFallbackRequests }
 }

@@ -132,6 +132,7 @@ async function main() {
       allResults.push(...outcome.results)
       const unmocked = outcome.unmockedRequests || []
       const mockErrors = outcome.mockErrors || []
+      const ttsFallback = outcome.ttsFallbackRequests || []
       allResults.push({
         name: `${spec.name} 실제 Supabase/Vercel로 나간 미mock 요청 0건(fail-closed 가드)`,
         status: unmocked.length === 0 ? 'PASS' : 'FAIL',
@@ -142,7 +143,7 @@ async function main() {
         status: mockErrors.length === 0 ? 'PASS' : 'FAIL',
         detail: mockErrors.length ? JSON.stringify(mockErrors.slice(0, 5)) : '',
       })
-      specSummaries.push({ name: spec.name, unmockedCount: unmocked.length, errorCount: mockErrors.length })
+      specSummaries.push({ name: spec.name, unmockedCount: unmocked.length, errorCount: mockErrors.length, ttsFallbackCount: ttsFallback.length })
     }
   } finally {
     await browser.close().catch(() => {})
@@ -158,7 +159,7 @@ async function main() {
   }
   console.log(`총 ${allResults.length}단언 — PASS ${pass} / FAIL ${fail} / SKIP ${skip}`)
   for (const s of specSummaries) {
-    console.log(`  ${s.name} 미mock 요청 ${s.unmockedCount}건 / mock 내부 오류 ${s.errorCount}건`)
+    console.log(`  ${s.name} 미mock 요청 ${s.unmockedCount}건 / mock 내부 오류 ${s.errorCount}건 / TTS 폴백 호출(mock 처리됨) ${s.ttsFallbackCount}건`)
   }
   process.exit(fail === 0 ? 0 : 1)
 }
