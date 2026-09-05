@@ -2273,7 +2273,7 @@ console.log('\n=== [C4] runHotfix — 단계 순서 단언(onStep) ===')
       { loadEnv: () => envOk(), onStep: (name) => steps.push(name) },
     )
     check('dry-run: status = ready-to-apply', res.status === 'ready-to-apply')
-    const expected = ['manifest-load', 'env-flag', 'env-ref', 'static-scan', 'preflight', 'ambiguous-textbook-check', 'baseline', 'plan-output', 'write-drift-guard', 'dry-run-stop']
+    const expected = ['manifest-load', 'env-flag', 'env-ref', 'static-scan', 'preflight', 'ambiguous-textbook-check', 'class-id-change-check', 'baseline', 'plan-output', 'write-drift-guard', 'dry-run-stop']
     check('dry-run: 단계 순서가 기대 순서와 정확히 일치(고정 순서)', JSON.stringify(steps) === JSON.stringify(expected), JSON.stringify(steps))
     check('dry-run: approval/apply/postflight/health 에는 도달하지 않음',
       !steps.includes('approval-gate') && !steps.includes('apply') && !steps.includes('postflight') && !steps.includes('health-check'))
@@ -2296,7 +2296,7 @@ console.log('\n=== [C4] runHotfix — 단계 순서 단언(onStep) ===')
       { loadEnv: () => envOk(), onStep: (name) => steps1.push(name) },
     )
     check('1단계: status = ticket-issued', phase1.status === 'ticket-issued', phase1.status)
-    const expected1 = ['manifest-load', 'env-flag', 'env-ref', 'static-scan', 'preflight', 'ambiguous-textbook-check', 'baseline', 'plan-output', 'write-drift-guard', 'ticket-issue']
+    const expected1 = ['manifest-load', 'env-flag', 'env-ref', 'static-scan', 'preflight', 'ambiguous-textbook-check', 'class-id-change-check', 'baseline', 'plan-output', 'write-drift-guard', 'ticket-issue']
     check('1단계: 단계 순서가 기대 순서와 정확히 일치(고정 순서)', JSON.stringify(steps1) === JSON.stringify(expected1), JSON.stringify(steps1))
     check('1단계: approval-gate/apply/postflight/health 에는 도달하지 않음',
       !steps1.includes('approval-gate') && !steps1.includes('apply') && !steps1.includes('postflight') && !steps1.includes('health-check'))
@@ -2307,7 +2307,7 @@ console.log('\n=== [C4] runHotfix — 단계 순서 단언(onStep) ===')
       { loadEnv: () => envOk(), isTTY: () => true, runHealthCheck: () => ({ ok: true, output: '' }), onStep: (name) => steps2.push(name) },
     )
     check('2단계: status = applied', res.status === 'applied')
-    const expected2 = ['manifest-load', 'env-flag', 'env-ref', 'static-scan', 'preflight', 'ambiguous-textbook-check', 'baseline', 'plan-output', 'write-drift-guard', 'approval-gate', 'manifest-reverify', 'apply', 'postflight', 'health-check']
+    const expected2 = ['manifest-load', 'env-flag', 'env-ref', 'static-scan', 'preflight', 'ambiguous-textbook-check', 'class-id-change-check', 'baseline', 'plan-output', 'write-drift-guard', 'approval-gate', 'manifest-reverify', 'apply', 'postflight', 'health-check']
     check('2단계: 단계 순서가 기대 순서와 정확히 일치(고정 순서, readline 없음)', JSON.stringify(steps2) === JSON.stringify(expected2), JSON.stringify(steps2))
     check('2단계: ticket-issue 단계는 다시 지나가지 않음(이미 1단계에서 발급됨)', !steps2.includes('ticket-issue'))
   }

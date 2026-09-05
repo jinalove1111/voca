@@ -109,6 +109,8 @@ import {
   refreshExpectBefore,
   verifyWriteDriftGuard,
   findTextbookTargetsFromManifest,
+  findClassIdChangeGuardViolations,
+  findClassIdOwnerMismatches,
 } from './lib/hotfixManifest.mjs'
 import { createDryRunExecutor, createManagementApiExecutor } from './lib/sqlExecutor.mjs'
 import { buildAmbiguousTextbookIndex } from './lib/prodInvariants.mjs'
@@ -397,6 +399,8 @@ const TICKET_TTL_MS = 15 * 60 * 1000
 // - READY: 이 계획을 그대로 적용해도(승인만 하면) 통과한다.
 // - BLOCKED_PREFLIGHT: 라이브 상태가 manifest 의 expect_before 와 다름
 //   (이미 적용됐거나 그 사이 값이 바뀜) — preflight/baseline 읽기 단계.
+//   class_id 변경 전용 라이브 가드(unique 충돌/must_not_change 커버리지
+//   누락/owner_class_id 불일치, class-id-change-check 단계)도 이 계열이다.
 // - BLOCKED_NEEDS_APPROVAL: 다른 문제는 전혀 없고 "승인만 남은" 상태
 //   (토큰 없음/CI/비TTY/승인 문구 불일치).
 // - BLOCKED_WRITE_DRIFT: VERIFY(읽기 계획)와 WRITE(생성된 SQL)가 구조적으로
@@ -457,6 +461,16 @@ export const STOP_REASON_TO_APPLY_ELIGIBILITY = {
   'approval-stale': 'BLOCKED_PREFLIGHT',
   'preflight-mismatch': 'BLOCKED_PREFLIGHT',
   'baseline-failed': 'BLOCKED_PREFLIGHT',
+  // fix/harness-allowlist-sca-class-id(2026-09-06) — class_id 변경 전용
+  // 라이브 가드 3종. 전부 "라이브 데이터를 다시 읽어야만 판정 가능한
+  // 선행조건"이라는 점에서 preflight-mismatch/baseline-failed 와 같은
+  // 계열(BLOCKED_PREFLIGHT)로 분류한다(정적 스키마 문제인 BLOCKED_MANIFEST
+  // 와 구분 — class_id_policy 필드 누락 등 순수 구조 문제는 validateManifest
+  // 가 invalid-manifest 로 이미 걸러낸다).
+  'preflight-unique-conflict': 'BLOCKED_PREFLIGHT',
+  'preflight-sca-other-rows-uncovered': 'BLOCKED_PREFLIGHT',
+  'class-id-not-owner': 'BLOCKED_PREFLIGHT',
+  'blocked-class-id-check-unavailable': 'BLOCKED_PREFLIGHT',
   'blocked-write-drift': 'BLOCKED_WRITE_DRIFT',
   'blocked-invariant': 'BLOCKED_INVARIANT',
   'blocked-invariant-unavailable': 'BLOCKED_INVARIANT',
@@ -811,6 +825,63 @@ export async function runHotfix(options, deps = {}) {
         }
         log(`교재 identity 모호성 확인 PASS — 대상 ${flagged.length}건 전부 textbook_identity ack 로 명시 확인됨`)
       }
+    }
+  }
+
+  // 4.6) fix/harness-allowlist-sca-class-id(2026-09-06) — class_id 변경
+  // 전용 라이브 가드(fail-closed). ALLOWLIST/validateManifest 는 구조적
+  // 검증(정책 필드 명시/expect_before.student_id·textbook_id 존재/
+  // reference_rows_must_exist 등록)까지만 하고, 여기서 그 위에 라이브
+  // 데이터로만 판정 가능한 3가지를 재확인한다:
+  //  (a) unique(student_id,class_id) 충돌 — 같은 학생의 다른 SCA 행이 이미
+  //      목표 class_id 를 가지면 STOP.
+  //  (b) 같은 학생의 다른 SCA 행 전부가 must_not_change 에 있는가 — 없으면
+  //      "이 학생의 SCA 전체 그림을 모른 채 class_id 만 바꾸는" 것이므로 STOP.
+  //  (c) 대상 textbook_id 의 owner_class_id 가 목표 class_id 와 일치하는가
+  //      (교재 컨테이너 반 규칙) — 다르면 STOP(class-id-not-owner).
+  // ambiguous-textbook-check 와 같은 위치(preflight 직후, baseline 이전)에
+  // 둔다 — 승인 게이트 훨씬 이전이라 걸리면 DB WRITE 0.
+  D.onStep('class-id-change-check')
+  {
+    const classIdChanges = (manifest.changes || []).filter(
+      (c) => (c.op || 'update') === 'update' && c.table === 'student_class_assignments'
+        && c.set && typeof c.set === 'object' && Object.prototype.hasOwnProperty.call(c.set, 'class_id'),
+    )
+    if (classIdChanges.length) {
+      let liveSca
+      try {
+        liveSca = await reader.selectAllRows('student_class_assignments', ['id', 'student_id', 'class_id', 'textbook_id', 'is_primary', 'current_unit_id'])
+      } catch (err) {
+        logErr(`FAIL-CLOSED — class_id 변경 가드용 SCA 조회 실패(적용 차단): ${err.message}`)
+        return finish('blocked-class-id-check-unavailable', 1, { classIdCheckError: err.message, dbWriteCount: 0 })
+      }
+      const { uniqueConflicts, missingMustNotChange } = findClassIdChangeGuardViolations(manifest, liveSca)
+      if (uniqueConflicts.length) {
+        logErr('FAIL-CLOSED — class_id 변경 unique(student_id,class_id) 충돌:')
+        for (const v of uniqueConflicts) logErr(`  change=${v.changeId} student=${v.studentId} target=${v.targetClassId} 기존행=${v.conflictingRowId}`)
+        return finish('preflight-unique-conflict', 1, { uniqueConflicts, dbWriteCount: 0 })
+      }
+      if (missingMustNotChange.length) {
+        logErr('FAIL-CLOSED — class_id 변경 대상 학생의 다른 SCA 행이 must_not_change 에 없음:')
+        for (const v of missingMustNotChange) logErr(`  change=${v.changeId} student=${v.studentId} 누락행=${v.missingRowId}`)
+        return finish('preflight-sca-other-rows-uncovered', 1, { missingMustNotChange, dbWriteCount: 0 })
+      }
+
+      let liveTextbooks
+      try {
+        liveTextbooks = await reader.selectAllRows('textbooks', ['id', 'owner_class_id'])
+      } catch (err) {
+        logErr(`FAIL-CLOSED — class_id 변경 가드용 textbook 조회 실패(적용 차단): ${err.message}`)
+        return finish('blocked-class-id-check-unavailable', 1, { classIdCheckError: err.message, dbWriteCount: 0 })
+      }
+      const textbookById = new Map(liveTextbooks.map((t) => [t.id, t]))
+      const ownerMismatches = findClassIdOwnerMismatches(manifest, textbookById)
+      if (ownerMismatches.length) {
+        logErr('FAIL-CLOSED — class_id 변경 대상이 textbook owner_class_id 와 다름:')
+        for (const v of ownerMismatches) logErr(`  change=${v.changeId} textbook=${v.textbookId} target=${v.targetClassId} owner=${JSON.stringify(v.ownerClassId)}`)
+        return finish('class-id-not-owner', 1, { ownerMismatches, dbWriteCount: 0 })
+      }
+      log(`class_id 변경 가드 PASS — unique 충돌 0건, must_not_change 커버리지 OK, owner_class_id 일치 ${classIdChanges.length}건`)
     }
   }
 
