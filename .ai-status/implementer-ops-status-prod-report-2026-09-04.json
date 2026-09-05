@@ -1,0 +1,37 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "ops-status-prod-report-2026-09-04",
+  "task": "운영 자동검증 표준화(Track D) — scripts/lib/opsStatus.mjs(표준 status/finding 스키마, 순수 모듈) + npm run prod:report(scripts/prodReport.mjs, READ-ONLY 운영 보고서 생성기, 13절 고정) + scripts/testOpsStatus.mjs(141단언) + docs/qa/ops-report/ 첫 실측 산출물",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-04T04:00:00.000Z",
+  "updated_at": "2026-09-04T04:15:00.000Z",
+  "files_owned": [
+    "scripts/lib/opsStatus.mjs",
+    "scripts/prodReport.mjs",
+    "scripts/testOpsStatus.mjs",
+    "package.json",
+    "tests/harness/registry.mjs",
+    "docs/production-safety-harness-runbook.md",
+    "docs/qa/ops-report/ops-report-latest.md",
+    "docs/qa/ops-report/ops-report-latest.json",
+    "docs/qa/ops-report/history/ops-report-2026-09-04T04-10-46-142Z.md",
+    "docs/qa/ops-report/history/ops-report-2026-09-04T04-10-46-142Z.json"
+  ],
+  "files_read": [
+    "scripts/prodCheck.mjs",
+    "scripts/studentHealthCheck.mjs",
+    "scripts/lib/prodInvariants.mjs",
+    "scripts/lib/studentHealthRules.mjs",
+    "scripts/lib/prodDataLoader.mjs",
+    "scripts/testProdCheck.mjs",
+    "src/utils/attachment/worldProgress.js",
+    "PROJECT_BOARD.md",
+    "CLAUDE.md",
+    ".gitignore"
+  ],
+  "summary": "prod:check/studentHealthCheck.mjs 의 --json 출력을 재구현 없이 표준 finding[] 스키마(check_id/timestamp/environment/entity_type/entity_id/entity_label/expected/actual/severity/status/recommended_action/write_required/approval_required/source)로 변환하는 순수 모듈(scripts/lib/opsStatus.mjs)과 그 위에서 두 하네스를 실행해 13절 고정 순서 마크다운+JSON 보고서를 생성하는 npm run prod:report(scripts/prodReport.mjs)를 구현. INVARIANT_CODES 22종 + health CHECK_CODES 10종 + WARN 전용 파생 2종 + HEALTH_FAIL 전수에 대해 recommendedActionFor 가 unknown 폴백으로 새지 않음을 커버리지 테스트로 고정. FAIL-first 확인(scripts/lib/opsStatus.mjs 를 임시 제거하면 ERR_MODULE_NOT_FOUND 로 전부 FAIL 함을 실측) 후 scripts/testOpsStatus.mjs 141단언 전부 PASS. 코디네이터 지시로 산출물 경로를 당초 docs/qa/ops/ 에서 docs/qa/ops-report/ 로 변경(레거시 .gitignore ops/ 전면 차단 패턴과 디렉토리명 우연 충돌 — .gitignore 자체는 무수정, git add -f 도 사용 안 함). npm run build/verify:ops-status/verify:prod-check/verify:release-gate 전부 PASS. 라이브 1회(READ-ONLY, anon key, DB WRITE 0) 로 docs/qa/ops-report/ops-report-latest.{md,json} + history 사본 실제 생성 — 학생 이름 전부 H*** 형식으로 마스킹 확인, gh pr list 로 열린 PR 2건 반영, PROJECT_BOARD.md BLOCKED 카드 9건 반영. docs/production-safety-harness-runbook.md 에 '## 7. 운영 자동검증 사용법' append. package.json(prod:report/verify:ops-status)·tests/harness/registry.mjs(extra:true, admin 도메인) 등록.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 요청. 남은 갭: (1) Reward/Excel/Security 절은 --json 산출물이 아직 없어 스위트 이름 나열만 함(가짜 집계 금지 원칙 유지) — 추후 각 스위트가 --json 을 지원하면 opsStatus 어댑터를 추가해 finding 화 가능. (2) Garden 절 학생별 world stage 분포는 prod:check 가 progress_data 를 로드하지 않아 여전히 계산 불가 — verify 스위트 링크로만 대체(정직한 갭 표시). (3) --no-network-web/--sha 옵션은 구현했으나 이번 라이브 실행에서는 기본값(네트워크 켜짐)으로 1회만 검증."
+}

@@ -57,6 +57,7 @@ import { fileURLToPath } from 'node:url'
 import { loadSupabaseEnv, loadProductionSnapshot, LEARNING_BASELINE_TABLES } from '../lib/prodDataLoader.mjs'
 import { buildContext, findGhostUnits, isGhostUnit, classifyAccount } from '../lib/studentHealthRules.mjs'
 import { validateManifest } from '../lib/hotfixManifest.mjs'
+import { buildAmbiguousTextbookIndex } from '../lib/prodInvariants.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
@@ -376,6 +377,35 @@ async function main() {
     }
     process.exitCode = 0
     return
+  }
+
+  // 작업2(d)(2026-09-05, plan-eligibility-textbook-identity) — 목적지 유닛의
+  // 교재가 라이브 데이터에서 모호 쌍(이름 완전중복 또는 유사명+같은
+  // 출판사)의 일원이면 생성 자체를 STOP 한다. textbook_identity ack 를
+  // 이 스크립트가 대신 채워 넣지 않는다(자동 수정 금지 원칙, CLAUDE.md
+  // 규칙 3/18과 동일한 정신 — 모호하면 운영자 결정으로 넘긴다).
+  {
+    const ambiguousIndex = buildAmbiguousTextbookIndex(ctxPre.textbookById)
+    const ambiguousDestinations = []
+    for (const c of manifest.changes) {
+      const destUnitId = c.set?.current_unit_id
+      if (!destUnitId) continue
+      const destUnit = ctxPre.unitById.get(destUnitId)
+      if (!destUnit?.textbook_id) continue
+      const partners = ambiguousIndex.get(destUnit.textbook_id)
+      if (partners && partners.size) {
+        ambiguousDestinations.push({ scaId: c.id, textbookId: destUnit.textbook_id, ambiguousWith: [...partners] })
+      }
+    }
+    if (ambiguousDestinations.length) {
+      console.error('STOP — 목적지 교재가 이름 중복/유사(모호) 쌍의 일원입니다. 자동 수정 금지 — textbook_identity ack 를 자동으로 채우지 않습니다. 운영자가 직접 확인 후 manifest 의 해당 change 에 textbook_identity:{id,name,publisher_name} 를 추가하세요:')
+      for (const d of ambiguousDestinations) {
+        console.error(`  SCA:${maskId(d.scaId)} 교재:${String(d.textbookId).slice(0, 8)}… (모호 상대: ${d.ambiguousWith.map((x) => `${String(x).slice(0, 8)}…`).join(', ')})`)
+      }
+      if (AS_JSON) console.log(JSON.stringify({ ok: false, stopped: 'ambiguous-textbook', ambiguousDestinations }, null, 2))
+      process.exitCode = 1
+      return
+    }
   }
 
   const validation = validateManifest(manifest)

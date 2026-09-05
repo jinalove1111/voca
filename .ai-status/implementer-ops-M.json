@@ -1,0 +1,39 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "ops-M",
+  "task": "관리자 핵심 흐름(학생 생성/반 지정·이동/교재 배정·primary/교재 변경/유닛 변경/기록 보존) 복합 회귀 스위트 신설",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-04T00:00:00Z",
+  "updated_at": "2026-09-04T00:00:00Z",
+  "files_owned": [
+    "scripts/testAdminFlows.mjs",
+    "package.json",
+    "tests/harness/registry.mjs",
+    ".ai-status/implementer-ops-M.json"
+  ],
+  "files_read": [
+    "scripts/testPinSetupCapability.mjs",
+    "scripts/testTextbookIsolation.mjs",
+    "scripts/testAdminUnitEdit.mjs",
+    "scripts/testCreateStudentUnitAssignment.mjs",
+    "scripts/testAssignmentUnitGuards.mjs",
+    "tests/harness/runAdmin.mjs",
+    "tests/harness/runDomain.mjs",
+    "src/utils/wordLibrary.js",
+    "api/admin-pin-actions.js"
+  ],
+  "summary": "테스트 전용 워크트리(test/admin-flows, 네트워크/DB 0, push/merge 없음)에서 scripts/testAdminFlows.mjs 신설. 기존 4개 스위트(testPinSetupCapability/testTextbookIsolation/testAdminUnitEdit/testCreateStudentUnitAssignment/testAssignmentUnitGuards)의 검증된 인메모리 가짜 supabase 빌더를 그대로 재사용(재구현 0) — PART A: api/admin-pin-actions.js를 esbuild 번들 + @supabase/supabase-js 인메모리 다중 테이블 가짜로 create_student(반+textbookId 지정/교재 미소유 반+textbookId 미지정 두 경로) 검증. PART B: src/utils/wordLibrary.js를 esbuild 번들 + 쓰기 기록형 인메모리 가짜(UNIQUE 제약 시뮬레이션)로 setStudentClass(class_id 변경+이전 primary demote(삭제 아님)+다른 교재 SCA 보존+목적지 유령 유닛 정규화 함정 회피), assignTextbook/removeTextbookAssignment(그 행만 삭제, primary 삭제 불가), setPrimaryTextbook/setPrimaryAssignment(정확히 1개 primary, 왕복 전환에도 각 SCA 자기 진도 유지), setAssignmentUnit(unit_textbook_mismatch/unit_not_learnable 거부), setStudentUnitById/setStudentUnit(UUID 풀 제한, 미존재/유령 이름 거부) 검증. 전 구간 student_progress/student_daily_progress/word_status 쓰기 0건 확인 + 학생 식별 UUID 전용 정적 검사(create_student는 .from('students') 체인 한정 검사로 units 테이블의 정당한 .eq('name',unitName) 오탐 배제) + 규칙15 FAIL-first 자가검증(delete-instead-of-demote를 가짜 DB 로그로 재현해 데모트 단언이 실제로 false가 됨을 src 무수정으로 증명). package.json에 verify:admin-flows 스크립트 추가 + tests/harness/registry.mjs admin 도메인에 extra:false(필수)로 등록. 63단언 전체 PASS.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검토 대기. 병합/push는 이 트랙 범위 밖(운영자 승인 시 별도 진행).",
+  "build_result": "npm run build 통과(esbuild bundle 경고/에러 없음, dist 정상 생성)",
+  "verify_results": {
+    "verify:admin-flows": "PASS (63/63)",
+    "verify:textbook-isolation": "PASS (43/43, 회귀 없음 재확인)",
+    "verify:admin": "PASS (26개 스크립트 전체, 신규 스크립트 포함)"
+  },
+  "commits": [
+    "test(admin): 관리자 핵심 흐름 fixture 스위트 신설 + registration"
+  ]
+}

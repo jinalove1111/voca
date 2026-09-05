@@ -620,6 +620,50 @@ console.log('\n=== 11절. Phase 11 신규 invariant 5종 — 개별 양성/음�
     !findings.some((f) => f.code === 'TEXTBOOK_NAME_DUPLICATE' && f.refs?.textbookIds?.includes('tb-g1')))
 }
 {
+  // harness-v2 coverage(2026-09-05) — TEXTBOOK_SIMILAR_NAME(양성): 같은
+  // publisher_name, 학년 접두만 다른 유사명 교재 2개(#8 시나리오 그대로).
+  const fx = syntheticBase()
+  fx.textbooks.push({ id: 'tb-sim-1', name: '중1 천재 이상기', owner_class_id: null, publisher_name: '천재' })
+  fx.textbooks.push({ id: 'tb-sim-2', name: '중2 천재 이상기', owner_class_id: null, publisher_name: '천재' })
+  const { findings } = evalFixture(fx)
+  const hit = findings.find((f) => f.code === 'TEXTBOOK_SIMILAR_NAME'
+    && f.refs?.textbookIds?.includes('tb-sim-1') && f.refs?.textbookIds?.includes('tb-sim-2'))
+  check('TEXTBOOK_SIMILAR_NAME(양성) — 같은 출판사, 학년만 다른 유사명(중1/중2 천재 이상기)',
+    !!hit && hit.severity === 'WARN', JSON.stringify(findings.filter((f) => f.code === 'TEXTBOOK_SIMILAR_NAME')))
+}
+{
+  // TEXTBOOK_SIMILAR_NAME(음성) — 이름은 학년만 다르지만 publisher_name 이
+  // 다르면(또는 비어있으면) 오탐 방지를 위해 발생하지 않는다.
+  const fx = syntheticBase()
+  fx.textbooks.push({ id: 'tb-sim-3', name: '중1 능률 VOCA', owner_class_id: null, publisher_name: '능률' })
+  fx.textbooks.push({ id: 'tb-sim-4', name: '중2 능률 VOCA', owner_class_id: null, publisher_name: '다른출판사' })
+  const { findings } = evalFixture(fx)
+  check('TEXTBOOK_SIMILAR_NAME(음성) — publisher_name 이 다르면 발생 안 함',
+    !findings.some((f) => f.code === 'TEXTBOOK_SIMILAR_NAME' && f.refs?.textbookIds?.includes('tb-sim-3')))
+}
+{
+  // TEXTBOOK_SIMILAR_NAME(음성) — publisher_name 이 둘 다 비어있으면(레거시
+  // 미기입) 오탐 방지를 위해 발생하지 않는다("같은 publisher일 때만" 조건).
+  const fx = syntheticBase()
+  fx.textbooks.push({ id: 'tb-sim-5', name: '중1 미기재 VOCA', owner_class_id: null })
+  fx.textbooks.push({ id: 'tb-sim-6', name: '중2 미기재 VOCA', owner_class_id: null })
+  const { findings } = evalFixture(fx)
+  check('TEXTBOOK_SIMILAR_NAME(음성) — publisher_name 둘 다 미기입이면 발생 안 함',
+    !findings.some((f) => f.code === 'TEXTBOOK_SIMILAR_NAME' && f.refs?.textbookIds?.includes('tb-sim-5')))
+}
+{
+  // TEXTBOOK_SIMILAR_NAME(음성) — 이름이 완전히 동일하면 TEXTBOOK_NAME_DUPLICATE
+  // 의 몫이지 SIMILAR_NAME 의 몫이 아니다(중복 보고 방지).
+  const fx = syntheticBase()
+  fx.textbooks.push({ id: 'tb-sim-7', name: '천재 VOCA', owner_class_id: null, publisher_name: '천재' })
+  fx.textbooks.push({ id: 'tb-sim-8', name: '천재 VOCA', owner_class_id: null, publisher_name: '천재' })
+  const { findings } = evalFixture(fx)
+  check('TEXTBOOK_SIMILAR_NAME(음성) — 이름이 완전 동일하면(중복 몫) SIMILAR_NAME 으로 이중 보고하지 않는다',
+    !findings.some((f) => f.code === 'TEXTBOOK_SIMILAR_NAME' && f.refs?.textbookIds?.includes('tb-sim-7')))
+  check('  대신 TEXTBOOK_NAME_DUPLICATE 로 보고된다', findings.some((f) => f.code === 'TEXTBOOK_NAME_DUPLICATE'
+    && f.refs?.textbookIds?.includes('tb-sim-7') && f.refs?.textbookIds?.includes('tb-sim-8')))
+}
+{
   // TEXTBOOK_UNREACHABLE(양성) — 컨테이너 반 외에는 class_textbooks 연결이
   // 전혀 없고(여기서는 아예 없음), 실학생 SCA 도 하나도 이 교재를 안 씀.
   const fx = syntheticBase()
@@ -691,7 +735,7 @@ console.log('\n=== 11절. Phase 11 신규 invariant 5종 — 개별 양성/음�
 {
   // CODE_META — 신규 5종 모두 impact/recommended 존재 + severity 는 findings 에서 전부 WARN.
   const codes = ['UNIT_TEXTBOOK_CONTAINER_MISMATCH', 'TEXTBOOK_NAME_DUPLICATE', 'TEXTBOOK_UNREACHABLE',
-    'STUDENT_TEXTBOOK_SELECTOR_EMPTY', 'UNIT_CONTENT_DUPLICATE']
+    'STUDENT_TEXTBOOK_SELECTOR_EMPTY', 'UNIT_CONTENT_DUPLICATE', 'TEXTBOOK_SIMILAR_NAME']
   for (const code of codes) {
     check(`CODE_META.${code} — impact/recommended 존재`,
       !!CODE_META[code]?.impact && !!CODE_META[code]?.recommended, JSON.stringify(CODE_META[code]))
@@ -708,6 +752,215 @@ console.log('\n=== 11절. Phase 11 신규 invariant 5종 — 개별 양성/음�
   const res = runCli(['--fixture', maskFixtureFile, '--report-dir', reportDir])
   check('STUDENT_TEXTBOOK_SELECTOR_EMPTY 도 기본 출력에서 학생 실명이 마스킹된다',
     !res.stdout.includes('MaskTargetStudent') && /M\*\*\*/.test(res.stdout), res.stdout.slice(0, 600))
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Track E/F(2026-09-04, wt-rules) 확장 — invariant 4종(STALE_CLASS_SCA/
+// DUPLICATE_SCA_TEXTBOOK/STUDENT_NO_CLASS/UNIT_NAME_UUID_CONTRADICTION)
+// 전부 WARN. FAIL-first: 이 절을 추가한 직후(prodInvariants.mjs 확장 전)
+// 먼저 실행해 신규 코드가 findings 에 전혀 나타나지 않아 전부 FAIL 하는
+// 것을 확인한 뒤 구현했다(CLAUDE.md 규칙 15).
+// ═══════════════════════════════════════════════════════════════════════
+
+console.log('\n=== 12절. Track E/F 신규 invariant 4종 — 개별 양성/음성 ===')
+{
+  // STALE_CLASS_SCA(양성) — SCA.class_id 가 사람 반(class_type != textbook)
+  // 이고 students.class_id 와 다름(반 이동 후 잔존 배정).
+  const fx = syntheticBase()
+  fx.classes.push({ id: 'c-old', name: '예전반', spelling_direction: 'kr2en' })
+  fx.assignments.push({ student_id: 's1', class_id: 'c-old', textbook_id: 'tb2', is_primary: false, current_unit_id: null })
+  const { findings } = evalFixture(fx)
+  const hit = findings.find((f) => f.code === 'STALE_CLASS_SCA' && f.studentId === 's1')
+  check('STALE_CLASS_SCA(양성) — 사람 반 SCA.class_id != students.class_id',
+    !!hit && hit.severity === 'WARN', JSON.stringify(findings.map((f) => f.code)))
+  check('STALE_CLASS_SCA — refs 에 recommendedAction 문구가 붙는다',
+    hit?.refs?.recommendedAction === '반 이동 후 잔존 배정 검토', JSON.stringify(hit?.refs))
+}
+{
+  // STALE_CLASS_SCA — primary 행이어도 FAIL 로 승격하지 않고 WARN 유지.
+  const fx = syntheticBase()
+  fx.classes.push({ id: 'c-old', name: '예전반', spelling_direction: 'kr2en' })
+  fx.assignments[0].class_id = 'c-old' // 기존 primary 행의 class_id 를 옛 반으로
+  const { findings } = evalFixture(fx)
+  const hit = findings.find((f) => f.code === 'STALE_CLASS_SCA' && f.studentId === 's1')
+  check('STALE_CLASS_SCA(primary 행이어도 WARN, FAIL 아님)',
+    !!hit && hit.severity === 'WARN', JSON.stringify(hit))
+}
+{
+  // STALE_CLASS_SCA(음성) — SCA.class_id 가 students.class_id 와 일치.
+  const { findings } = evalFixture(syntheticBase())
+  check('STALE_CLASS_SCA(음성) — 배정 반이 홈 반과 일치', !findings.some((f) => f.code === 'STALE_CLASS_SCA'))
+}
+{
+  // STALE_CLASS_SCA(음성) — SCA.class_id 가 컨테이너 반(class_type=textbook)이면 제외.
+  const fx = syntheticBase()
+  fx.classes.push({ id: 'c-container', name: '교재컨테이너', class_type: 'textbook', spelling_direction: 'kr2en' })
+  fx.assignments.push({ student_id: 's1', class_id: 'c-container', textbook_id: 'tb2', is_primary: false, current_unit_id: null })
+  const { findings } = evalFixture(fx)
+  check('STALE_CLASS_SCA(음성) — 컨테이너 반을 가리키는 SCA 는 제외',
+    !findings.some((f) => f.code === 'STALE_CLASS_SCA'))
+}
+{
+  // DUPLICATE_SCA_TEXTBOOK(양성) — 같은 학생, 같은 textbook_id 로 SCA 2건.
+  // 비-REAL(TEST) 계정도 대상이어야 한다(health ASSIGNMENT_CONFLICT 는 REAL 만 봄).
+  const fx = syntheticBase()
+  fx.students[0].name = 'Paul' // TEST 계정
+  fx.assignments.push({ student_id: 's1', class_id: 'c1', textbook_id: 'tb1', is_primary: false, current_unit_id: null })
+  const { findings } = evalFixture(fx)
+  check('DUPLICATE_SCA_TEXTBOOK(양성) — TEST 계정도 대상(비-REAL 이지만 비-ARCHIVED)',
+    findings.some((f) => f.code === 'DUPLICATE_SCA_TEXTBOOK' && f.severity === 'WARN' && f.studentId === 's1'),
+    JSON.stringify(findings.map((f) => f.code)))
+}
+{
+  // DUPLICATE_SCA_TEXTBOOK(음성) — 학생당 교재별 SCA 1건.
+  const { findings } = evalFixture(syntheticBase())
+  check('DUPLICATE_SCA_TEXTBOOK(음성) — 기본 픽스처는 중복 없음', !findings.some((f) => f.code === 'DUPLICATE_SCA_TEXTBOOK'))
+}
+{
+  // DUPLICATE_SCA_TEXTBOOK(음성) — ARCHIVED 계정은 제외.
+  const fx = syntheticBase()
+  fx.students[0].name = '학생_dup'
+  fx.assignments.push({ student_id: 's1', class_id: 'c1', textbook_id: 'tb1', is_primary: false, current_unit_id: null })
+  const { findings } = evalFixture(fx)
+  check('DUPLICATE_SCA_TEXTBOOK — ARCHIVED 계정은 제외', !findings.some((f) => f.code === 'DUPLICATE_SCA_TEXTBOOK'))
+}
+{
+  // STUDENT_NO_CLASS(양성) — REAL 학생, class_id null.
+  const fx = syntheticBase()
+  fx.students[0].class_id = null
+  const { findings } = evalFixture(fx)
+  check('STUDENT_NO_CLASS(양성, REAL) — class_id null',
+    findings.some((f) => f.code === 'STUDENT_NO_CLASS' && f.severity === 'WARN' && f.studentId === 's1'),
+    JSON.stringify(findings.map((f) => f.code)))
+}
+{
+  // STUDENT_NO_CLASS(양성) — REAL 학생, class_id 가 orphan(classes 에 없음).
+  const fx = syntheticBase()
+  fx.students[0].class_id = 'c-missing'
+  const { findings } = evalFixture(fx)
+  check('STUDENT_NO_CLASS(양성, REAL) — class_id orphan',
+    findings.some((f) => f.code === 'STUDENT_NO_CLASS' && f.severity === 'WARN' && f.studentId === 's1'))
+}
+{
+  // STUDENT_NO_CLASS(양성) — TEST 계정도 대상(health CLASS_INVALID 는 REAL 만).
+  const fx = syntheticBase()
+  fx.students[0].name = 'Cookie'
+  fx.students[0].class_id = null
+  const { findings } = evalFixture(fx)
+  check('STUDENT_NO_CLASS(양성, TEST) — TEST 계정도 class_id 없음을 잡는다',
+    findings.some((f) => f.code === 'STUDENT_NO_CLASS' && f.studentId === 's1'))
+}
+{
+  // STUDENT_NO_CLASS(음성) — class_id 정상.
+  const { findings } = evalFixture(syntheticBase())
+  check('STUDENT_NO_CLASS(음성) — 정상 class_id', !findings.some((f) => f.code === 'STUDENT_NO_CLASS'))
+}
+{
+  // UNIT_NAME_UUID_CONTRADICTION(양성) — unit_name 이 주교재 소속의 "다른"
+  // 실제 유닛 이름과 일치(현재 유닛과는 다름).
+  const fx = syntheticBase()
+  fx.units.push({ id: 'u-other', name: 'Unit9', textbook_id: 'tb1' })
+  fx.words.push(...Array.from({ length: 20 }, (_, i) => ({ id: `uo${i}`, unit_id: 'u-other', word: `o${i}`, meaning: `뜻${i}` })))
+  fx.students[0].unit_name = 'Unit9' // 실제로는 u-other 를 가리키는 이름인데 current_unit_id 는 여전히 u1
+  const { findings } = evalFixture(fx)
+  const hit = findings.find((f) => f.code === 'UNIT_NAME_UUID_CONTRADICTION' && f.studentId === 's1')
+  check('UNIT_NAME_UUID_CONTRADICTION(양성) — unit_name 이 실제로는 다른 유닛(u-other)을 가리킴',
+    !!hit && hit.severity === 'WARN' && hit.refs?.resolvedUnitIds?.includes('u-other') && hit.refs?.currentUnitId === 'u1',
+    JSON.stringify(findings.map((f) => f.code)))
+}
+{
+  // UNIT_NAME_UUID_CONTRADICTION(음성) — unit_name 이 현재 유닛 자기 자신과 일치.
+  const { findings } = evalFixture(syntheticBase())
+  check('UNIT_NAME_UUID_CONTRADICTION(음성) — unit_name 이 현재 유닛과 일치(기본 픽스처)',
+    !findings.some((f) => f.code === 'UNIT_NAME_UUID_CONTRADICTION'))
+}
+{
+  // UNIT_NAME_UUID_CONTRADICTION(음성) — unit_name 이 어떤 실제 유닛과도 매칭되지 않음
+  // (오탈자 등) — 이 경우는 UNIT_NAME_MISMATCH 의 몫이고 UUID_CONTRADICTION 은 조용.
+  const fx = syntheticBase()
+  fx.students[0].unit_name = '존재하지않는유닛이름'
+  const { findings } = evalFixture(fx)
+  check('UNIT_NAME_UUID_CONTRADICTION(음성) — 매칭되는 실제 유닛이 없으면 발생 안 함',
+    !findings.some((f) => f.code === 'UNIT_NAME_UUID_CONTRADICTION'))
+  check('대신 UNIT_NAME_MISMATCH 는 정상적으로 발생한다(회귀 아님)',
+    findings.some((f) => f.code === 'UNIT_NAME_MISMATCH' && f.studentId === 's1'))
+}
+{
+  // UNIT_NAME_UUID_CONTRADICTION(음성) — primary 배정이 없으면 판정 근거가 없어 스킵.
+  const fx = syntheticBase()
+  fx.assignments[0].is_primary = false
+  fx.units.push({ id: 'u-other', name: 'Unit9', textbook_id: 'tb1' })
+  fx.words.push(...Array.from({ length: 20 }, (_, i) => ({ id: `uo2${i}`, unit_id: 'u-other', word: `o${i}`, meaning: `뜻${i}` })))
+  fx.students[0].unit_name = 'Unit9'
+  const { findings } = evalFixture(fx)
+  check('UNIT_NAME_UUID_CONTRADICTION(음성) — primary 배정 없으면 스킵',
+    !findings.some((f) => f.code === 'UNIT_NAME_UUID_CONTRADICTION'))
+}
+{
+  // CODE_META — 신규 4종 모두 impact/recommended 존재.
+  const codes = ['STALE_CLASS_SCA', 'DUPLICATE_SCA_TEXTBOOK', 'STUDENT_NO_CLASS', 'UNIT_NAME_UUID_CONTRADICTION']
+  for (const code of codes) {
+    check(`CODE_META.${code} — impact/recommended 존재`,
+      !!CODE_META[code]?.impact && !!CODE_META[code]?.recommended, JSON.stringify(CODE_META[code]))
+    check(`INVARIANT_CODES.${code} 가 등록돼 있다`, INVARIANT_CODES?.[code] === code)
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// plan-eligibility-textbook-identity 트랙(2026-09-05, 작업2-a) — AMBIGUOUS_
+// TEXTBOOK: 학생의 primary SCA.textbook_id 또는 current_unit_id 가 가리키는
+// 유닛의 textbook_id 가 TEXTBOOK_NAME_DUPLICATE/TEXTBOOK_SIMILAR_NAME 조건의
+// 모호 쌍 일원이면 학생 단위 WARN. FAIL-first: prodInvariants.mjs 에 이
+// invariant 를 추가하기 전 먼저 실행해 아래 양성 케이스들이 전부 FAIL 하는
+// 것을 확인한 뒤 구현했다(CLAUDE.md 규칙 15).
+// ═══════════════════════════════════════════════════════════════════════
+console.log('\n=== 13절. AMBIGUOUS_TEXTBOOK(2026-09-05) — 개별 양성/음성 ===')
+{
+  // 양성(완전 동일 이름 경로) — s1 의 primary SCA.textbook_id(tb1)가 이름
+  // 완전중복 쌍(tb1/tb1-dup)의 일원.
+  const fx = syntheticBase()
+  fx.textbooks.push({ id: 'tb1-dup', name: '교재1', owner_class_id: null })
+  const { findings } = evalFixture(fx)
+  const hit = findings.find((f) => f.code === 'AMBIGUOUS_TEXTBOOK' && f.studentId === 's1')
+  check('AMBIGUOUS_TEXTBOOK(양성) — primary SCA 교재가 이름 완전중복 쌍의 일원',
+    hasCode(findings, 'AMBIGUOUS_TEXTBOOK', 's1', 'WARN'), JSON.stringify(findings.filter((f) => f.code === 'AMBIGUOUS_TEXTBOOK')))
+  check('AMBIGUOUS_TEXTBOOK — refs.textbookId/ambiguousWithTextbookId 는 UUID(id) 값', hit?.refs?.textbookId === 'tb1' && hit?.refs?.ambiguousWithTextbookId === 'tb1-dup')
+  check('AMBIGUOUS_TEXTBOOK — detail 에 학생/교재 실명 노출 없음(id 만)', !/합성학생/.test(hit?.detail || '') && !/교재1/.test(hit?.detail || ''))
+}
+{
+  // 양성(유사명+같은 출판사 경로, TEXTBOOK_SIMILAR_NAME 과 동일 조건) —
+  // current_unit_id 로 걸린 유닛의 교재가 모호 쌍(학생의 primary 교재와는 무관).
+  const fx = syntheticBase()
+  fx.textbooks.push({ id: 'tb-sim-amb-1', name: '중1 천재 이상기', owner_class_id: null, publisher_name: '천재' })
+  fx.textbooks.push({ id: 'tb-sim-amb-2', name: '중2 천재 이상기', owner_class_id: null, publisher_name: '천재' })
+  fx.units.push({ id: 'u-sim-amb', name: 'UnitSimAmb', textbook_id: 'tb-sim-amb-2' })
+  fx.words.push(...Array.from({ length: 20 }, (_, i) => ({ id: `usa${i}`, unit_id: 'u-sim-amb', word: `sa${i}`, meaning: `뜻${i}` })))
+  fx.students.push({ id: 's-sim-amb', name: '유사명학생', class_id: 'c1', current_unit_id: 'u-sim-amb', unit_name: 'UnitSimAmb' })
+  fx.assignments.push({ student_id: 's-sim-amb', class_id: 'c1', textbook_id: 'tb-sim-amb-2', is_primary: true, current_unit_id: 'u-sim-amb' })
+  const { findings } = evalFixture(fx)
+  check('AMBIGUOUS_TEXTBOOK(양성, 유사명 경로) — 같은 출판사+학년만 다른 쌍도 트리거',
+    hasCode(findings, 'AMBIGUOUS_TEXTBOOK', 's-sim-amb', 'WARN'), JSON.stringify(findings.filter((f) => f.code === 'AMBIGUOUS_TEXTBOOK')))
+}
+{
+  // 대조군(음성) — 기본 픽스처(모호 쌍 없음)에서는 어떤 학생도 보고되지 않음.
+  const fx = syntheticBase()
+  const { findings } = evalFixture(fx)
+  check('AMBIGUOUS_TEXTBOOK(음성) — 모호 쌍이 전혀 없으면 발생 안 함', !findings.some((f) => f.code === 'AMBIGUOUS_TEXTBOOK'))
+}
+{
+  // 대조군(음성) — 모호 쌍이 존재해도 그 쌍과 무관한 학생(다른 교재 배정)은 보고되지 않음.
+  const fx = syntheticBase()
+  fx.textbooks.push({ id: 'tb-unrelated-dup-a', name: '전혀다른교재', owner_class_id: null })
+  fx.textbooks.push({ id: 'tb-unrelated-dup-b', name: '전혀다른교재', owner_class_id: null })
+  const { findings } = evalFixture(fx)
+  check('AMBIGUOUS_TEXTBOOK(음성) — 모호 쌍과 무관한 학생(s1, tb1)은 보고되지 않음',
+    !findings.some((f) => f.code === 'AMBIGUOUS_TEXTBOOK' && f.studentId === 's1'))
+}
+{
+  // CODE_META — AMBIGUOUS_TEXTBOOK impact/recommended 존재(6절 완전성 커버리지와 별개로 명시 고정).
+  check('CODE_META.AMBIGUOUS_TEXTBOOK — impact/recommended 존재',
+    !!CODE_META.AMBIGUOUS_TEXTBOOK?.impact && !!CODE_META.AMBIGUOUS_TEXTBOOK?.recommended, JSON.stringify(CODE_META.AMBIGUOUS_TEXTBOOK))
+  check('INVARIANT_CODES.AMBIGUOUS_TEXTBOOK 가 등록돼 있다', INVARIANT_CODES?.AMBIGUOUS_TEXTBOOK === 'AMBIGUOUS_TEXTBOOK')
 }
 
 console.log(`\n${'='.repeat(60)}`)

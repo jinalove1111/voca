@@ -8,6 +8,16 @@
 //   Gate 1  npm run build          코드가 빌드되는가
 //   Gate 2  npm run verify:all     기존 40개 도메인 회귀 하네스
 //   Gate 3  student health check   학생별 해석 체인 — baseline 대비 회귀만 차단
+//   Gate 5  npm run verify:e2e     브라우저 E2E(Playwright, 전체 네트워크 mock) —
+//                                  학생/관리자 화면이 실제로 올바르게 렌더되는가
+//
+// Gate 5(2026-09-05, tests/e2e/) — 로컬에서 Playwright chromium 이 설치돼
+// 있지 않으면(별도 대용량 바이너리, npm install만으로는 안 받아짐) SKIP 취급
+// 하고 게이트를 막지 않는다(E2E_SKIP_IF_NO_BROWSER=1 주입, 아래 참고). CI
+// (process.env.CI)에서는 이 관용을 끄고 fail-closed로 강제한다 —
+// .github/workflows/release-gate.yml 이 Gate 5 실행 전에
+// `npx playwright install --with-deps chromium`을 미리 돌려 브라우저 부재
+// 자체가 CI에서는 일어나지 않게 만든다.
 //
 // Gate 3 이 검사하는 것(scripts/lib/studentHealthRules.mjs, 학생당 19개 체크)
 //   로그인 식별자 / 홈 반·교재 소유 반 유효성 / 주교재 연결 / 교재-유닛 연결 /
@@ -32,6 +42,7 @@
 //   npm run verify:release                 전체 게이트
 //   npm run verify:release -- --skip-build  빌드 생략(빠른 반복용, CI 에선 쓰지 말 것)
 //   npm run verify:release -- --strict-health  baseline 무시, FAIL 1건이면 차단
+//   npm run verify:release -- --skip-e2e       Gate 5(browser E2E) 생략(빠른 반복용, CI 에선 쓰지 말 것)
 //
 // exit code: 게이트 하나라도 실패하면 1, 전부 통과면 0.
 import { spawnSync } from 'node:child_process'
@@ -45,6 +56,7 @@ const has = (f) => argv.includes(f)
 const SKIP_BUILD = has('--skip-build')
 const SKIP_VERIFY = has('--skip-verify')
 const STRICT_HEALTH = has('--strict-health')
+const SKIP_E2E = has('--skip-e2e')
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const BASELINE_PATH = path.join(ROOT, 'scripts', 'health', 'baseline.json')
@@ -65,8 +77,11 @@ function runGate(name, label, fn) {
   return ok
 }
 
-function runNpm(script) {
-  const res = spawnSync(npmCmd, ['run', script], { cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32' })
+function runNpm(script, extraEnv) {
+  const res = spawnSync(npmCmd, ['run', script], {
+    cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32',
+    env: extraEnv ? { ...process.env, ...extraEnv } : process.env,
+  })
   return res.status === 0
 }
 
@@ -193,6 +208,20 @@ runGate('health', 'Gate 3 — Student Health Check (학생별 silent regression)
   }
   return d.ok
 })
+
+// ── Gate 5 — 브라우저 E2E(Playwright, 전체 네트워크 mock) ─────────────────
+if (SKIP_E2E) {
+  console.log('⚠ Gate 5 (browser E2E) 생략됨 — --skip-e2e. CI/배포 전에는 쓰지 말 것.\n')
+  gates.push({ name: 'e2e(skipped)', ok: true })
+} else {
+  runGate('e2e', 'Gate 5 — npm run verify:e2e (browser E2E, Playwright)', () => {
+    // 로컬에서 Playwright chromium 바이너리가 없으면 SKIP(게이트를 막지
+    // 않음) — CI 에서는 이 관용을 끄고 fail-closed 로 강제한다(scripts/
+    // testBrowserE2E.mjs 의 E2E_SKIP_IF_NO_BROWSER 계약 참고).
+    const extraEnv = process.env.CI ? {} : { E2E_SKIP_IF_NO_BROWSER: '1' }
+    return runNpm('verify:e2e', extraEnv)
+  })
+}
 
 // ── 종합 ──────────────────────────────────────────────────────────────────
 const total = summarizeGates(gates)

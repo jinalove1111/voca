@@ -200,6 +200,7 @@ console.log('1. [실사고 재현] regular 반 + textbookId — 교재/유닛이
   check('SCA.textbook_id = 요청한 교재(껍데기 배정 재발 방지)', scaRow(SID(1))?.textbook_id === TB1, String(scaRow(SID(1))?.textbook_id))
   check('SCA.current_unit_id = students와 동일(Unit2)', scaRow(SID(1))?.current_unit_id === U2)
   check('class_id는 사람 반(regular) 그대로 — 반/교재 독립', studentRow(SID(1))?.class_id === RC && scaRow(SID(1))?.class_id === RC)
+  check('[경고체계] 정상 배정이면 warnings가 응답에 없음', r.body?.warnings === undefined, JSON.stringify(r.body?.warnings))
 }
 
 console.log('\n2. 명시적 unitName — 관리자가 고른 유닛을 그대로 쓴다')
@@ -281,6 +282,8 @@ console.log('\n7. [정직 기록] regular 반 + textbookId 없음 — 추측 배
   const r = await callHandler({ action: 'create_student', adminPin: ADMIN_PIN, studentId: SID(7), name: 'QA생성칠', classId: RC })
   check('생성은 성공(하위호환)', r.body?.ok === true, JSON.stringify(r.body))
   check('유닛은 추측하지 않고 null', studentRow(SID(7))?.current_unit_id == null)
+  check('[경고체계] 교재 미배정 — warnings에 no_textbook', Array.isArray(r.body?.warnings) && r.body.warnings.includes('no_textbook'), JSON.stringify(r.body?.warnings))
+  check('[경고체계] 한글 message 동반', typeof r.body?.message === 'string' && r.body.message.length > 0, JSON.stringify(r.body?.message))
 }
 
 console.log('\n8. 유령 유닛뿐인 교재 — 1단어 유닛을 첫 학습 유닛으로 고르지 않는다')
@@ -290,6 +293,7 @@ console.log('\n8. 유령 유닛뿐인 교재 — 1단어 유닛을 첫 학습 �
   check('생성은 성공(교재는 유효)', r.body?.ok === true, JSON.stringify(r.body))
   check('유령(1단어) 유닛이 배정되지 않음(null 유지)', studentRow(SID(8))?.current_unit_id == null, String(studentRow(SID(8))?.current_unit_id))
   check('SCA.textbook_id는 기록됨(교재 배정 자체는 유효)', scaRow(SID(8))?.textbook_id === TB3)
+  check('[경고체계] 교재는 있지만 유닛이 없음 — warnings에 no_unit(no_textbook은 없음)', Array.isArray(r.body?.warnings) && r.body.warnings.includes('no_unit') && !r.body.warnings.includes('no_textbook'), JSON.stringify(r.body?.warnings))
 }
 
 console.log('\n9. 멱등 replay — 같은 studentId 재요청은 기존 계약 그대로')
@@ -313,6 +317,23 @@ console.log('\n10. UI 소비 계약 정적 검사 — 생성 폼이 교과서를
   const uiCodeOnly = stripComments(uiSrc)
   check('create_student payload에 textbookId가 있다', /action: 'create_student'[\s\S]{0,400}textbookId/.test(uiCodeOnly))
   check('생성 폼에 교과서 선택 UI가 있다(getClassTextbooks 사용)', /getClassTextbooks/.test(uiCodeOnly))
+}
+
+console.log('\n11. [2026-09-04 P1] UI 소비 계약 정적 검사 — 생성 성공 후 warnings 경고 배너 + 제출 전 힌트 (StudentDirectory.jsx)')
+{
+  // testAdminUnitEdit.mjs/testGhostUnitFiltering.mjs와 동일한 정적 검사
+  // 방식(이 컴포넌트는 wordLibrary/sessionStorage 등 SSR 스텁 비용이 큰
+  // 대형 컴포넌트라 이 저장소의 기존 관례가 실제 렌더 대신 소스 정적
+  // 검사다) — response.warnings/message를 successInfo에 그대로 담아
+  // "교재/유닛 미배정" 경고 배너를, createTextbookOptions.length===0일 때
+  // 제출 전 힌트를 렌더하는지 확인한다.
+  const uiSrc = fs.readFileSync(path.resolve('src/components/admin/StudentDirectory.jsx'), 'utf8')
+  check('create_student 응답 data.warnings를 successInfo에 담는다', /warnings:\s*Array\.isArray\(data\.warnings\)/.test(uiSrc))
+  check('경고 배너가 createSuccess.warnings.length > 0로 게이팅된다', /createSuccess\.warnings\.length > 0/.test(uiSrc))
+  check('경고 배너 문구(교재/유닛 미배정 안내)가 있다', /교재\/유닛이 배정되지 않아 이 학생은 아직 학습을 시작할 수 없어요/.test(uiSrc))
+  check('경고 배너에 교재 배정 열기 버튼(revealExistingStudent forTextbook 재사용)이 있다', /revealExistingStudent\(\{ id: createSuccess\.id, classId: createSuccess\.classId \}, \{ forTextbook: true \}\)/.test(uiSrc))
+  check('제출 전 힌트가 createTextbookOptions.length === 0로 게이팅된다', /createTextbookOptions\.length === 0/.test(uiSrc))
+  check('제출 전 힌트 문구(반에 연결된 교재 없음 안내)가 있다', /이 반에는 연결된 교재가 없어요/.test(uiSrc))
 }
 
 console.log('\n' + '='.repeat(60))

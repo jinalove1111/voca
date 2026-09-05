@@ -92,6 +92,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Gate 5(browser E2E, tests/e2e/)가 쓰는 Playwright chromium 바이너리.
+      # npm ci 는 playwright 패키지(JS)만 받고 브라우저 실행 파일은 별도로
+      # 받아야 한다 — 여기서 미리 받아 두지 않으면 scripts/testBrowserE2E.mjs
+      # 가 CI(process.env.CI)에서 fail-closed 로 FAIL 한다(로컬은
+      # E2E_SKIP_IF_NO_BROWSER 관용이 있지만 CI 는 그 관용을 쓰지 않는다 —
+      # scripts/verifyRelease.mjs Gate 5 주석 참고). --with-deps 로 ubuntu
+      # 러너에 필요한 OS 라이브러리까지 함께 설치한다.
+      - name: Install Playwright chromium (Gate 5 — browser E2E)
+        run: npx playwright install --with-deps chromium
+
       # 일부 검증 스크립트는 자격증명을 process.env 가 아니라 .env "파일"에서
       # 직접 읽는다(예: scripts/testStudentSelectPinStatus.mjs 의
       # fs.readFileSync('.env')). .env 는 .gitignore 대상이라 체크아웃에 없으므로
@@ -327,6 +337,23 @@ jobs:
 
           echo "Gate 4 PASS — status=${STATUS}, DB WRITE: 0, redaction 확인 완료(가짜 토큰 산출물 미노출)"
 
+      # ── Gate 5 — browser E2E(Playwright, 전체 네트워크 mock) ────────────
+      # tests/e2e/ — 학생/관리자 화면이 실제 브라우저에서 올바르게 렌더되는지
+      # 자동 검증(fixture 전용, 실 Supabase/Vercel 요청 0건 — 미mock 요청이
+      # 하나라도 나가면 테스트 자체가 FAIL 한다). 위에서 이미 Playwright
+      # chromium 을 설치했으므로 여기서는 SKIP 없이 fail-closed 로 강제된다
+      # (scripts/testBrowserE2E.mjs 의 E2E_SKIP_IF_NO_BROWSER 는 CI 에서
+      # 세팅하지 않는다). Gate 1 이 이미 npm run build 를 해 뒀으므로 그
+      # 산출물(dist/)을 그대로 재사용한다.
+      - name: Gate 5 — npm run verify:e2e (browser E2E)
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! npm run verify:e2e 2>&1 | tee /tmp/gate5.log; then
+            echo "::error title=Gate 5 (browser E2E) 실패::$(tail -n 30 /tmp/gate5.log | sed ':a;N;$!ba;s/\n/%0A/g')"
+            exit 1
+          fi
+
   # release-gate 가 실패하면 needs 조건이 성립하지 않아 이 잡은 아예 실행되지
   # 않는다 = "이후 배포 단계로 절대 진행되지 않는다". 브랜치 보호에서 필수
   # 체크로 지정하면 병합 자체가 막힌다(위 (A) 참고).
@@ -344,6 +371,7 @@ jobs:
           echo "  Gate 3   student health (학생별 silent regression, baseline 대비)"
           echo "  Gate 3b  prod:check (READ-ONLY, 크로스 테이블 invariants + health)"
           echo "  Gate 4   prod:hotfix WRITE-DISABLED PROOF (가짜 토큰, DB WRITE: 0 증명)"
+          echo "  Gate 5   browser E2E (Playwright, 학생/관리자 화면 렌더 자동 검증, 전체 네트워크 mock)"
           echo ""
           echo "주의: 이 잡은 배포를 수행하지 않습니다. 실제 배포는 main push ->"
           echo "Vercel 자동 배포이며, 그것을 막으려면 main 브랜치 보호 규칙에서"

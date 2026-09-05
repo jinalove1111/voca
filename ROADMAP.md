@@ -1,8 +1,70 @@
 # Paul Easy Voca — 로드맵
 
-_최종 갱신: 2026-09-04(108차, 야간 자율 QA/유지보수 세션 — 통합 브랜치
-`qa/overnight-2026-09-04` 검증 완료, PR 대기) — 기존 섹션은 원본 그대로
-유지, 위에 이어서 추가함)_
+_(2026-09-05 111차 추가) 스크린샷 의존 축소 — apply_eligibility 8값 1:1
+매핑 + 교재 UUID canonical/AMBIGUOUS_TEXTBOOK 사전 차단(prod-hotfix
+317→371) + Playwright 브라우저 E2E(학생/관리자 화면, 44단언, Release
+Gate 5)를 통합 브랜치 qa/ops-automation-2026-09-04(HEAD ce26abc)로
+합쳐 최종 검증. Production DB WRITE 0, merge/deploy 0. 상세는
+`handoff.md` 2026-09-05(111차) 섹션._
+
+_(2026-09-05 110차 추가) Harness V2 최종 검증 — write drift guard 배선
+누락·동어반복 버그 수정(prod-hotfix 301→317단언) + 12종 운영 오류
+자동탐지 커버리지 12/12 확인(신규 TEXTBOOK_SIMILAR_NAME, prod-check
+195→204단언). PR #15 merge는 운영자 승인 대기 유지. 상세는 `handoff.md`
+2026-09-05(110차) 섹션._
+
+_최종 갱신: 2026-09-04(109차, 12시간 자율 운영 자동검증 세션 — 통합 브랜치
+`qa/ops-automation-2026-09-04` 검증 완료, PR/merge는 운영자 승인 대기) —
+기존 섹션은 원본 그대로 유지, 위에 이어서 추가함)_
+
+## 2026-09-04 (109차) — 운영 자동검증 인프라: Harness V2(`prod:plan`/`prod:apply`) + `prod:report` + invariant 4종 — 상태: 통합 브랜치 검증 완료 ✅(merge는 운영자 승인 대기)
+
+운영자 부재 상태의 12시간 자율 운영 자동검증 세션. 트랙 A(하네스
+인벤토리) · B/C(Production Safety Harness V2) · D/P(운영 보고서
+표준화) · E/F(invariant 4종 + 계정 분류 회귀) · M(관리자 핵심 흐름 회귀) ·
+O(ghost/legacy 인벤토리 REFRESH) · H(정원 성장 경로 분류) · P1(생성 경고
+수정)을 병렬 worktree로 수행하고 `qa/ops-automation-2026-09-04`(HEAD
+`278c89a`) 단일 통합 브랜치로 병합. **Production DB WRITE 0, SQL 실행 0,
+실제 학생 데이터 변경 0, merge 0(원격)/deploy 0/main push 0** — 라이브
+접촉은 anon key `GET`/`HEAD`뿐.
+
+**Harness V2** — 운영 명령이 `prod:check`(READ-ONLY 무결성) →
+`prod:plan`(READ-ONLY 계획·drift·위험도·`apply_eligibility`) →
+`prod:apply`(artifact 생성 + TTY `APPLY <runId>` 승인 게이트) 3단계로
+정리됐다. 새로 구조적으로 보장되는 것: 서술 일치성 lint(2026-09-02 수기
+롤백 주석 불일치 사고 재발 방지), VERIFY==WRITE 구조 가드, drift
+refresh(`.refreshed.json` 사본, 원본 불변), SCA `insert`/`delete` 좁은
+ALLOWLIST + 대칭 rollback, invariant delta preview fail-closed,
+`STANDARD_STATUS` 4값 enum, **rollback SQL 수기 작성 금지(자동 생성)**.
+
+**운영 보고서** — `scripts/lib/opsStatus.mjs`(4-state enum
+`PASS`/`WARN`/`FAIL`/`BLOCKED_NEEDS_APPROVAL` + finding 스키마) 위에
+`npm run prod:report`가 13절 고정 순서 보고서를
+`docs/qa/ops-report/ops-report-latest.{md,json}`로 생성한다(READ-ONLY,
+학생 이름 상시 마스킹). 첫 라이브 보고서: **WARN 91 / FAIL 0 / 승인 대기
+82**.
+
+**invariant 4종 추가** — `STALE_CLASS_SCA`(라이브 REAL 3건) /
+`DUPLICATE_SCA_TEXTBOOK`(0) / `STUDENT_NO_CLASS`(0) /
+`UNIT_NAME_UUID_CONTRADICTION`(0).
+
+**신규/확장 회귀** — admin-flows 63 · account-classification 34 ·
+ops-status 150 · prod-plan 32 · prod-hotfix 301 · prod-check 195.
+registry totals **64 required / 71 extra**(`extra:true` 기본값 습관 재발
+발견·정정).
+
+**수정된 버그 1건(P1)** — `create_student`가 교재/유닛 미배정 상태로 조용히
+성공만 반환하던 문제 → 응답 `warnings` + 관리자 UI 비차단 배너(쓰기 동작
+무변경, 44단언).
+
+최종 검증(`278c89a`): `npm run build` PASS, `npm run verify:all` ALL
+DOMAINS PASS, `health:students` 36/10/0(무회귀), `prod:check`
+WARN(invariant FAIL 0 / WARN 64), 로컬 Release Gate PASS.
+
+상세는 `handoff.md` 2026-09-04(109차) 섹션. 승인 대기 10건(PR merge, 유령
+유닛/SCA 정리, `4fc69e2d` 처리, `STALE_CLASS_SCA` 3건, 정원 UNDECIDED 3건
+제품 결정 등)은 `PROJECT_BOARD.md` BLOCKED 카드 참고 — **운영자 승인
+전까지 merge/SQL 실행 없음**.
 
 ## 2026-09-04 (108차) — 야간 자율 QA/유지보수: 11 트랙 → 통합 브랜치 검증 완료, PR 대기 — 상태: 통합 브랜치 검증 완료 ✅(merge는 운영자 승인 대기)
 

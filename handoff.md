@@ -1,5 +1,580 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-04 (108차, 야간 자율 QA/유지보수 세션 — baseline →
+_최종 갱신: 2026-09-05 (111차, 스크린샷 의존 축소 — apply_eligibility
+1:1 매핑 + 교재 UUID canonical/AMBIGUOUS_TEXTBOOK + 브라우저 E2E 통합
+검증. apply_eligibility 8값 매핑과 AMBIGUOUS_TEXTBOOK invariant/사전
+차단(브랜치 fix/plan-eligibility-textbook-identity, 병합 b2c94dc)에
+Playwright 브라우저 E2E(브랜치 test/browser-e2e, 병합 ce26abc)를 통합
+브랜치 qa/ops-automation-2026-09-04(wt-int, HEAD ce26abc)로 합쳐 최종
+검증. Production DB WRITE 0, SQL 실행 0, 승인 대기 10건 APPLY 0, 정원
+정책 변경 0, merge/deploy 0. 상세는 아래 111차 섹션)_
+
+## 2026-09-05 (111차) — 스크린샷 의존 축소: apply_eligibility 1:1 매핑 + 교재 UUID canonical/AMBIGUOUS_TEXTBOOK + 브라우저 E2E 통합 (Production WRITE 0)
+
+### 제약/불변식
+
+- 운영자 지시: Harness V2 재설계 금지(기존 구조 유지, 추가·정정만) ·
+  승인 대기 항목 APPLY 금지 · 정원 정책 변경 금지 · merge/deploy 금지.
+- 지켜진 불변식: **Production DB WRITE 0 · SQL 실행 0 · 실제 학생 데이터
+  변경 0 · 승인 대기 10건 APPLY 0 · 정원 정책 변경 0(기술 검증만) ·
+  merge/deploy 0.** 앱 코드(`src/`, `api/`) 변경 0 — 브라우저 E2E도
+  `data-testid` 추가조차 없이 기존 선택자만 사용.
+
+### 작업1 — apply_eligibility 1:1 매핑(브랜치 `fix/plan-eligibility-textbook-identity`, 병합 `b2c94dc`)
+
+`STOP_REASON_TO_APPLY_ELIGIBILITY` 매핑 표 + `computeApplyEligibility()`
+(`scripts/prodHotfix.mjs`)가 `runPlan()`/`computeStandardStatus()` 공통
+단일 출처. 8값: `READY` / `BLOCKED_PREFLIGHT`(preflight-mismatch) /
+`BLOCKED_NEEDS_APPROVAL`(no-token·not-interactive·CI·dry-run 완료 등
+"승인만 남음") / `BLOCKED_WRITE_DRIFT`(blocked-write-drift) /
+`BLOCKED_INVARIANT`(blocked-invariant·-unavailable) /
+`BLOCKED_AMBIGUOUS_TEXTBOOK` / `BLOCKED_MANIFEST`(검증·lint·정적
+스캔·ALLOWLIST, 구 `BLOCKED_LINT` 흡수) / `BLOCKED_UNKNOWN`(미등록 사유,
+fail-closed, 표준 상태 `FAIL`). 리포트에 `blocked_reason`(원 status) +
+`apply_eligibility` 병기. 완전성 가드 테스트: `runHotfix()`의 모든
+`finish('...')` 사유를 grep해 매핑 표 커버를 단언(새 STOP 사유가 매핑
+없이 추가되면 FAIL). 라이브 `prod:plan`(ghost-sca-reassign-20260902) →
+`BLOCKED_PREFLIGHT`, DB WRITE 0.
+
+### 작업3 — 교재 identity: UUID canonical + AMBIGUOUS_TEXTBOOK(같은 브랜치)
+
+원칙 — 관계/배정은 `textbooks.id`(UUID)만, name/grade/publisher는
+표시·검증 메타. 중1/중2 천재 이상기는 절대 동일 취급 금지.
+
+- (a) 신규 invariant `AMBIGUOUS_TEXTBOOK`(WARN, 학생 단위): primary SCA
+  또는 `current_unit`의 교재가 `TEXTBOOK_NAME_DUPLICATE`/
+  `TEXTBOOK_SIMILAR_NAME` 쌍의 일원 → 라이브 2 finding(학생 1명, 교재
+  `faf6dc71…`/`01afd62a…`).
+- (b) `prodHotfix.mjs`에 새 단계 `ambiguous-textbook-check`(preflight
+  직후, invariant delta 이전): 대상 교재가 모호 쌍이면 STOP
+  `blocked-ambiguous-textbook`, 조회 실패 시
+  `blocked-ambiguous-textbook-unavailable`(fail-closed). 예외는
+  `textbook_identity: {id, name, publisher_name}` 세 값 정확 일치
+  ack만(이름만 주는 ack 무효).
+- (c) `validateManifest`가 미지 키(`where`/`name`/`textbook_name` 등
+  이름 기반 매칭) 거부 → `BLOCKED_MANIFEST`.
+- (d) `generateGhostScaManifest`: 목적 교재가 모호하면 ack 자동 채움
+  없이 생성 STOP.
+
+FAIL-first(규칙 15): 두 STOP의 `return`을 임시 제거 시 해당 단언 FAIL
+확인 후 복구. 테스트 수치: `prod-hotfix` 317→371([D1] 매핑/완전성,
+[C5] 모호 교재 5케이스), `prod-plan` 32→33, `prod-check` →214(§13),
+`generate-ghost-sca-manifest` 27→32, `ops-status` 154.
+
+### 작업2 — 브라우저 E2E(브랜치 `test/browser-e2e`, 병합 `ce26abc`)
+
+Playwright 1.62.0 devDependency 추가(규칙 6 예외 — 운영자 명시 요청;
+`node_modules`에 있던 `playwright-core` 1.62.0은 `package-lock`
+미기재 잔재라 사용 안 함). 설계: `vite preview`로 build 산출물 서빙 +
+`page.route()`로 전체 네트워크 mock — `tests/e2e/lib/postgrestMock.mjs`
+(PostgREST 소형 에뮬레이터: select/eq/in/order/limit, 미지원 연산자
+즉시 throw), `tests/e2e/lib/mockRoutes.mjs`(`/api/verify-student-pin`·
+`/api/verify-admin-pin` 등 서버리스 mock + 미mock 외부 요청 발견 시
+FAIL하는 fail-closed 가드, 폰트 CDN만 허용), `tests/e2e/fixtures/index.mjs`
+(교재 4종: 중1/중2 천재 이상기(같은 출판사·다른 UUID) + 중1/중2 동아
+윤정미 함정, QA 학생 1명 = TEST_ACCOUNT_NAMES, SCA primary A/비-primary
+B, current_unit=A Unit2, 유닛별 단어 수 상이).
+
+시나리오: 학생 A1 로그인 / A2 교재 라벨 A·B 별개(중1·중2 각 1개) / A3
+현재 Unit2 / A4 Unit 드롭다운 A의 3개만 / A5 단어 수 15 / A6 quiz
+정답→갱신+mock `student_progress` 쓰기 / A7 정원 0→1칸(2점=1칸) ;
+관리자 B1 로그인 / B2 QA 학생 카드 / B3 배정 목록 A(현재)·B / B4 교재
+4종 별개 카드+유닛 수 / B5 옵션 value(UUID)로 A≠B 판정(라벨 문자열
+판정 금지) / B6 동아 윤정미 중1/중2 비혼입. 1차 결과 44단언 PASS 42 /
+SKIP 2(spelling·guided — 후속 커밋에서 채우는 중, 최종 수치는 아래
+자리표시).
+
+러너 `scripts/testBrowserE2E.mjs`(`verify:e2e`), registry
+`extra:true`(브라우저 없는 로컬 `verify:all` 보호, 주석에 사유),
+Release Gate **Gate 5 browser E2E**(`scripts/verifyRelease.mjs`: CI에서는
+fail-closed, 로컬은 브라우저 없으면 SKIP 표기),
+`.github/workflows/release-gate.yml`에
+`npx playwright install --with-deps chromium` 단계. `testReleaseGate`
+136→145.
+
+정직 기록: 설계와 달리 엔드포인트는 `/api/verify-pin`이 아니라
+`/api/verify-student-pin`, 유닛 수 라벨은 `TextbookAssignmentPanel`이
+아니라 "반 관리" 카드에 있음; 첫 `verify:all`에서 admin spec 30s
+타임아웃 플레이크 1회 → 초기 화면 대기 90s로 상향 후 재발 0; 구현 중
+fork 서브에이전트가 같은 worktree에서 동시 커밋(규칙 16 위반 사례,
+`git diff HEAD` 공백으로 내용 동일성만 확인).
+
+### 정원/Paul Town 기술 검증(정책 변경 0)
+
+`paul-town-progression`, `garden-growth-sources`, `attachment`,
+`double-events`, `reward-ledger`, `reward-hardening`(2), `reward-concurrency`,
+`mission-bonus`, `game-reward`, `star-delta` 11종 exit 0.
+
+### 중간 검증(`ce26abc`, `wt-int`)
+
+`npm run build` PASS · `npm run verify:all` ALL DOMAINS PASS(`e2e`는
+`wt-int`에 Playwright 미설치라 extra FAIL — 최종은 `wt-e2e`에서 실측) ·
+`prod-check` 214 · `ops-status` 154 · `release-gate` 145 ·
+`studentHealthCheck` PASS 36 / WARN 10 / FAIL 0 · `prod:check`
+invariants FAIL 0 / WARN 68(+`AMBIGUOUS_TEXTBOOK` 2).
+
+최종 검증: 6c52311 기준 메인 세션 실측(wt-e2e, playwright 설치 환경) — build PASS · verify:all ALL DOMAINS PASS(e2e 도메인 포함) · prod-hotfix 371/371 · prod-plan 33/33 · prod-check 214/214 · ops-status 154/154 · release-gate 145/145 · generate-ghost-sca-manifest 32/32 · browser E2E 56/56(SKIP 0, 미mock 요청 0) · 정원/보상 6종 exit 0 · 로컬 Release Gate 5게이트 PASS(Gate 5 e2e 47.4s, DB WRITE 0) · student health PASS 36 / WARN 10 / FAIL 0 · prod:check invariants FAIL 0 / WARN 68(AMBIGUOUS_TEXTBOOK 2 포함).
+
+### 스크린샷 의존 현황
+
+- 여전히 스크린샷이 필요한 항목(E2E 도입 후 남는 것): 교재 콘텐츠
+  정답 여부(어느 업로드가 맞는지), 반 이동·진도 이동의 의도, 제품
+  정책(정원 집계 범위).
+- E2E로 자동화된 것: 학생/관리자 화면 렌더 결과, 교재 분리 표시.
+- 아직 못 하는 것: 실 DB 상태의 화면 반영(E2E는 mock이라 화면 로직만
+  검증, 실 데이터는 `prod:check` 담당 — 분업).
+
+### 소유 파일(이 세션에서 Write/Edit)
+
+`handoff.md`(이 111차 통합 섹션). 코드/스크립트/개별 문서 소유는 각
+브랜치의 implementer 세션 몫 — `.ai-status/implementer-plan-eligibility-textbook-identity.json`,
+`.ai-status/implementer-browser-e2e.json` 참고.
+
+_(이전 최종 갱신 기록 — 원문 보존) 2026-09-05 (111차, apply_eligibility
+원인별 매핑 + 교재 identity UUID canonical/AMBIGUOUS_TEXTBOOK 트랙 —
+runPlan 의 BLOCKED_NEEDS_APPROVAL 뭉뚱그림을 8값(READY/BLOCKED_PREFLIGHT/
+BLOCKED_NEEDS_APPROVAL/BLOCKED_WRITE_DRIFT/BLOCKED_INVARIANT/
+BLOCKED_AMBIGUOUS_TEXTBOOK/BLOCKED_MANIFEST/BLOCKED_UNKNOWN) 1:1 매핑으로
+교체, 신규 STOP blocked-ambiguous-textbook(-unavailable) +
+AMBIGUOUS_TEXTBOOK invariant로 "중1/중2 천재 이상기"류 모호 교재 자동
+오배정을 사전 차단. 라이브 prod:check 에서 AMBIGUOUS_TEXTBOOK WARN
+2건(학생 1명) 실측. Production DB WRITE 0, SQL 실행 0, merge/deploy 0.
+상세는 아래 111차 섹션)_
+
+## 2026-09-05 (111차) — apply_eligibility 원인별 매핑(8값) + 교재 identity UUID canonical/AMBIGUOUS_TEXTBOOK(Production WRITE 0)
+
+### 배경/제약
+
+- 새 worktree(`wt-elig`, 브랜치 `fix/plan-eligibility-textbook-identity`,
+  베이스 `qa/ops-automation-2026-09-04`)에서 작업. 절대 규칙: Production
+  DB WRITE 0 · SQL 실행 0 · `prod:apply`/`prod:hotfix` APPLY 금지 · push
+  금지 · 앱 코드(`src/`, `api/`) 미수정 · 하네스 재설계 금지(기존 구조
+  유지, 추가·정정만). 실행한 라이브 명령은 READ-ONLY
+  `prod:check`/`prod:plan` 각 1회뿐.
+
+### 작업1 — runPlan apply_eligibility 원인별 1:1 매핑
+
+- 문제: 예전엔 `blocked-write-drift` 등 일부 STOP 사유가 `runPlan()` 의
+  `else` 분기에서 `BLOCKED_NEEDS_APPROVAL` 로 뭉뚱그려졌다 — 실제 차단
+  원인(교재 모호/write drift/invariant 등)과 무관한 값이 나올 수 있었다.
+- `scripts/prodHotfix.mjs` 에 `STOP_REASON_TO_APPLY_ELIGIBILITY`(status
+  문자열 -> apply_eligibility 8값) 단일 매핑 표 + `computeApplyEligibility()`
+  를 추가(export). `'ready-to-apply'` 는 표에 없고(컨텍스트 의존 —
+  dryRun/stopReasons 로 특수 처리), 표에 없는 그 외 status 는 전부
+  `BLOCKED_UNKNOWN`(fail-closed).
+- `runHotfix()` 의 `finish()` 가 `report.blocked_reason`(원래 status
+  문자열)과 `report.apply_eligibility` 를 함께 기록(기존
+  `report.status`/`report.standardStatus` 필드는 삭제 없이 그대로 유지).
+- `runPlan()` 은 이 값을 **재계산하지 않고** `hotfixResult.report.
+  apply_eligibility` 를 그대로 재사용(단일 원천).
+- `computeStandardStatus()`(opsStatus 의 STANDARD_STATUS 4값 — PASS/
+  WARN/FAIL/BLOCKED_NEEDS_APPROVAL, **값 자체는 절대 변경 안 함**)는
+  기존 12개 회귀 케이스 출력이 전부 동일함을 먼저 확인한 뒤, 내부
+  로직을 `computeApplyEligibility()` 하나로 위임하도록 순수 리팩터(같은
+  표를 runPlan 과 공유 — "다른 곳에서 각자 분류 로직을 새로 만들지
+  않는다"는 요구사항 충족).
+- `apply_eligibility` 값 집합 재설계로 기존 `BLOCKED_LINT` 는
+  `BLOCKED_MANIFEST` 로 흡수됐다(요구된 8값에 `BLOCKED_LINT` 가 없고,
+  `BLOCKED_MANIFEST` 설명이 "manifest 검증/lint/정적 스캔/allowlist
+  실패"를 명시 — `testProdPlan.mjs` 의 관련 테스트를 `BLOCKED_MANIFEST`
+  기대값으로 갱신).
+- 완전성 가드: `testProdHotfix.mjs` [D1]에 `runHotfix()` 소스를 grep 해
+  모든 `finish('...')` status 문자열이 매핑 표(또는 `ready-to-apply` 특수
+  처리)에 등록됐는지 확인하는 단언 추가 — 새 STOP 사유가 매핑 없이
+  추가되면 이 테스트가 FAIL 한다.
+
+### 작업2 — 교재 identity: UUID canonical + AMBIGUOUS_TEXTBOOK 차단
+
+- 원칙: 교재 관계/배정은 `textbooks.id`(UUID)로만 판정. name/grade/
+  publisher/author 는 표시·검증 메타데이터. "중1 천재 이상기"와 "중2
+  천재 이상기"는 절대 같은 교재로 취급하지 않는다(라이브에서 실제로
+  "중1 동아 윤정미"/"중2 동아 윤정미" 유사 쌍 존재 확인).
+- `scripts/lib/prodInvariants.mjs`: `norm`/`textbookSimilarityKey` export
+  (기존 로직 불변, 노출만) + `buildAmbiguousTextbookIndex(textbooks)`
+  신규(기존 `TEXTBOOK_NAME_DUPLICATE`/`TEXTBOOK_SIMILAR_NAME` 검사 블록과
+  동일 조건을 재사용해 "교재 -> 모호 상대 교재" 인덱스만 별도 파생, 그
+  두 블록 자체는 미변경). 신규 `AMBIGUOUS_TEXTBOOK` invariant(WARN) —
+  학생의 primary SCA 또는 `students.current_unit_id` 가 가리키는 교재가
+  모호 쌍 일원이면 학생 단위 보고, 메시지는 교재 UUID 앞 8자리 + 상대
+  UUID 앞 8자리만(실명 금지).
+- `scripts/lib/hotfixManifest.mjs`: `findTextbookTargetsFromManifest()`
+  신규(순수, manifest 의 textbook_id 직접 설정/삽입 또는 current_unit_id
+  설정으로 교재가 바뀌는 change 를 추출). `validateManifest()` 에 (a)
+  change 객체의 미등록 키(`where`/`name`/`textbook_name` 등 "이름 기반
+  매칭·조건" 형태) 거부 — ALLOWLIST 는 이미 컬럼명만 등록해 이름 기반
+  스키마 자리가 애초에 없었음을 테스트로 고정, (b) `textbook_identity`
+  ack 형식 검증(`id` UUID 필수 — name 만으로는 무효, `name` 필수,
+  `publisher_name` string|null).
+- `scripts/prodHotfix.mjs`: `runHotfix()` 의 preflight 직후(step
+  `ambiguous-textbook-check`, invariants delta 이전)에 신규 STOP
+  `blocked-ambiguous-textbook`(ack 없음/불일치, fail-closed) /
+  `blocked-ambiguous-textbook-unavailable`(교재 목록 조회 실패,
+  fail-closed) 배선. 예외: change 에 `textbook_identity:{id,name,
+  publisher_name}` 가 있고 셋 다 라이브 값과 정확히 일치할 때만 통과.
+  `testProdHotfix.mjs` [C4] 의 고정 단계 순서 배열 2개(dry-run/apply
+  경로)에 새 단계를 추가해 갱신.
+- `scripts/prod/generateGhostScaManifest.mjs`: 생성되는 manifest 의
+  목적지 유닛 교재가 모호 쌍이면 `textbook_identity` ack 를 스스로
+  채우지 않고(자동 수정 금지 원칙) 생성 자체를 STOP(사유 출력, exit 1,
+  manifest 파일 미생성).
+- FAIL-first(CLAUDE.md 규칙 15): `blocked-ambiguous-textbook` 의
+  `return finish(...)` 를 임시로 주석 처리 → [C5] (i)/(iii) 5개 단언이
+  실제로 FAIL 하는 것 확인 → 원복. `generateGhostScaManifest.mjs` 의 STOP
+  분기도 동일하게 임시 비활성화 → [8] 3개 단언 FAIL 확인 → 원복.
+
+### 테스트 추가
+
+- `testProdHotfix.mjs`: [D1] apply_eligibility 매핑 단언 24개 + 완전성
+  가드 3개 + wiring 4개, [C5] blocked-ambiguous-textbook 통합 5개
+  시나리오(ack 없음/올바른 ack/틀린 name ack/비모호 대조군/조회 실패,
+  총 13단언) + validateManifest lint/ack 형식 6단언. 총 301→371건.
+- `testProdPlan.mjs`: BLOCKED_LINT → BLOCKED_MANIFEST 갱신 + blocked_reason
+  단언 추가. 32→33건.
+- `testProdCheck.mjs`: 13절 AMBIGUOUS_TEXTBOOK 양성 2종(완전동일이름
+  경로/유사명+같은출판사 경로)·음성 2종·refs/실명노출 검증·CODE_META
+  완전성 8단언. 206→214건.
+- `testGenerateGhostScaManifest.mjs`: [8] 모호 목적지 STOP(exit≠0, 파일
+  미생성) [9] 비모호 대조군(정상 생성) 5단언 추가. 27→32건.
+
+### 검증 수치
+
+`npm run build` PASS. `verify:prod-hotfix` 371/371, `verify:prod-plan`
+33/33, `verify:prod-check` 214/214, `verify:generate-ghost-sca-manifest`
+32/32, `verify:ops-status` 154/154, `verify:release-gate` 136/136,
+`npm run verify:all` 전체 도메인 PASS(exit 0 — admin 도메인의 extra
+`testEntranceRosterMinbyungchun.mjs` FAIL 은 이번 트랙과 무관한 기존
+extra 테스트, 필수 13도메인 게이트에는 영향 없음).
+
+라이브 READ-ONLY 1회씩: `npm run prod:check` — AMBIGUOUS_TEXTBOOK WARN
+2건(학생 1명, 교재 `faf6dc71…`/`01afd62a…` — UUID 앞 8자리만), FAIL 0,
+Safe to continue: YES, DB WRITE 0. `npm run prod:plan --
+ops/hotfix/manifests/ghost-sca-reassign-20260902.json` — `apply_eligibility:
+BLOCKED_PREFLIGHT`(라이브 값이 그 manifest 작성 시점과 이미 달라짐,
+preflight 11/11 항목 중 4건 mismatch), `DB WRITE: 0`.
+
+### 소유 파일(이 세션에서 Write/Edit)
+
+`scripts/prodHotfix.mjs`, `scripts/lib/hotfixManifest.mjs`,
+`scripts/lib/prodInvariants.mjs`, `scripts/prod/generateGhostScaManifest.mjs`,
+`scripts/testProdHotfix.mjs`, `scripts/testProdPlan.mjs`,
+`scripts/testProdCheck.mjs`, `scripts/testGenerateGhostScaManifest.mjs`,
+`docs/production-safety-harness-runbook.md`(§7/§9-8), `handoff.md`,
+`.ai-status/implementer-plan-eligibility-textbook-identity.json`.
+
+## 2026-09-05 (110차) — Harness V2 최종 검증: write drift guard 배선 수정 + 12종 오류탐지 커버리지 12/12 (Production WRITE 0, PR #15 merge 보류)
+
+### 제약/불변식
+
+- 세션: 2026-09-05, 운영자 지시 — PR #15(`qa/ops-automation-2026-09-04`)
+  merge는 보류하고 Harness V2 자체(코드/테스트)만 최종 검증.
+- 지켜진 불변식: **Production DB WRITE 0 · SQL 실행 0 · 학생 데이터 변경
+  0 · 승인 대기 APPLY 0 · merge/deploy 0.** 실행한 라이브 명령은
+  READ-ONLY(`prod:check`/`prod:plan`/`studentHealthCheck`/`prod:report`)
+  뿐이다.
+
+### PR #15 변경 43파일 분류
+
+| 분류 | 파일 수 | 내용 |
+|---|---|---|
+| HARNESS_CORE | 8 | `.gitignore`, `package.json`, `scripts/lib/hotfixManifest.mjs`, `scripts/lib/opsStatus.mjs`, `scripts/lib/prodInvariants.mjs`, `scripts/prodHotfix.mjs`, `scripts/prodPlan.mjs`, `scripts/prodReport.mjs` |
+| TEST_DIAG_REPORT | 21 | 테스트/진단/보고서 산출물 |
+| APP_CODE | 2 | `api/admin-pin-actions.js`(`create_student` 응답 `warnings` 필드 추가만) / `src/components/admin/StudentDirectory.jsx`(배너 UI만) — 둘 다 DB 쓰기 의미 변화 없음 |
+| DOCS | 6 | 문서 |
+| STATUS | 6 | `.ai-status/` |
+
+### 하네스 write 안전성
+
+하네스 파일 전체에 PostgREST `insert`/`update`/`delete`/`upsert`/`rpc`
+호출 0건. 유일한 쓰기 실행기는 `scripts/lib/sqlExecutor.mjs`(Management
+API, 이번 PR 미수정)이며 `prodHotfix.mjs`만 이를 import한다. 가드 체인:
+TTY 확인(644~647행) → `APPLY <runId>` 정확 입력(649~652행) →
+`SUPABASE_ACCESS_TOKEN` 존재(125행, 637~641행) → CI/`GITHUB_ACTIONS`
+환경변수 STOP(126행, 483행, 634~641행) → invariant delta fail-closed
+(577~597행). `prodCheck`/`prodPlan`/`prodReport`/`studentHealthCheck`는
+전부 anon key로만 읽는다. 단계 순서(READ-ONLY preflight → expect_before
+→ dry-run → diff preview → 승인 → 트랜잭션 → row-count → postflight →
+학생 health)는 운영자 요구사항과 1:1 일치하며, row-count 단언은 트랜잭션
+SQL 내부(`hotfixManifest.mjs` 783~789행)에 있어 원자적이다.
+
+### 중대 발견 및 수정 — write drift guard 배선
+
+`fix/harness-v2-drift-guard-wiring`(커밋 `9620586`/`41b4f40`, 병합
+`bfa1a0f`)에서 `verifyWriteDriftGuard`가 다음 세 가지 문제를 갖고 있음을
+발견·수정:
+
+1. `runHotfix` 흐름에 배선되지 않은 **죽은 코드**였다.
+2. 시그니처가 `(manifest, runId)`로, SQL을 내부에서 **재생성해 자기
+   자신과 비교**하는 동어반복(tautology)이었다.
+3. 이를 검증하던 테스트 `[B2]`가 happy-path만 확인해 이 문제를 못 잡았다.
+
+수정: 시그니처를 `(manifest, applySql, rollbackSql)`로 바꿔 **실제로
+생성·저장된 SQL**을 재파싱해 대조 + 총 row-count 비교를 추가하고,
+`runHotfix` step 6.5(SQL 저장 직후, dry-run STOP(7)/승인(8) 이전)에
+배선했다. 새 STOP 사유 `blocked-write-drift`(표준 상태 `FAIL`)를 추가.
+테스트 보강: `[C3]` SET 값/대상 row id/row 수 드리프트 3케이스 +
+대조군(executor 호출 0회 단언), `[C4]` `D.onStep` 훅으로 dry-run
+경로·apply 성공 경로의 단계 순서 배열 단언. FAIL-first(규칙 15): 배선
+`return`을 임시 제거하자 정확히 6단언 FAIL(311/317) → 복구 후 317/317
+확인. 런북에 step 6 출력 줄과 STOP 사유 행을 추가.
+
+**미처리(다음 세션 인계)**: `runPlan`의 `apply_eligibility`가
+`blocked-write-drift`를 별도 매핑하지 않고 else 분기
+(`BLOCKED_NEEDS_APPROVAL`)로 떨어진다 — 동작상 무해하지만 의미가
+부정확하다.
+
+### 12종 운영 오류 자동탐지 커버리지 12/12
+
+`test/harness-v2-coverage`(커밋 `cc55154`/`af8aea1`/`5c36b7d`/
+`09104d9`, 병합 `21c0bd8`):
+
+| # | 오류 유형 | 탐지 코드 |
+|---|---|---|
+| 1 | primary 없음 | `NO_PRIMARY` |
+| 2 | primary 2개 이상 | `MULTIPLE_PRIMARY` |
+| 3 | `current_unit_id` NULL | health `current_unit_present` |
+| 4 | unit-교재 불일치 | `PRIMARY_UNIT_MISMATCH`/`PRIMARY_TEXTBOOK_MISMATCH` |
+| 5 | ghost 참조 | `GHOST_UNIT_PRESENT`/`STUDENT_GHOST_UNIT`/`SCA_GHOST_UNIT` |
+| 6 | 비정상 unit | `UNIT_WORDS_ABNORMAL`/`UNIT_NAME_ABNORMAL` |
+| 7 | stale SCA | `STALE_CLASS_SCA` |
+| 8 | 중1·중2 동일저자 유사명(신규) | **`TEXTBOOK_SIMILAR_NAME`(WARN)** |
+| 9 | 잘못된 `textbook_id` | `SCA_TEXTBOOK_ORPHAN`/`UNIT_TEXTBOOK_ORPHAN` |
+| 10 | garden 기록 누락 | `verify:garden-growth-sources`(74단언) |
+| 11 | spelling·quiz·guided 후 성장 누락 | 같은 스위트 + `verify:double-events` |
+| 12 | reward·XP 중복 지급 | `verify:double-events`(45단언, 동시 10회 dedupe) |
+
+**#8 신규 규칙**: 같은 `publisher_name` + 학년 접두(초/중/고 1~6)·괄호·
+공백을 제거한 정규화 키가 동일하면 경고(완전동일명은 기존
+`TEXTBOOK_NAME_DUPLICATE`가 담당하므로 제외). `prodDataLoader`의
+`textbooks` SELECT에 `publisher_name`을 추가했다(`src/utils/
+wordLibrary.js`가 이미 라이브에서 쓰던 컬럼이라 신규 GRANT 불필요).
+fixture 양성 1건 + 대조군 3건 → `prod-check` 195→**204**단언. **라이브
+`prod:check`에서 실제로 1건 검출**: 교재 `faf6dc71`/`01afd62a`, 출판사
+"동아", 정규화 키 "동아윤정미"(중1/중2).
+
+### 승인 대기 10건 분류(READ-ONLY, `prod:check` 라이브 재확인 — 109차와
+동일: `GHOST_UNIT_PRESENT` 7 · `SCA_GHOST_UNIT` 11 · `STUDENT_GHOST_UNIT`
+0 · `STALE_CLASS_SCA` 3 · `UNIT_CONTENT_DUPLICATE` 3)
+
+| # | 항목 | 분류 | 영향 학생 | 예상 row | rollback |
+|---|---|---|---|---|---|
+| 1 | PR #15 merge | SAFE | 0 | 0 | revert |
+| 2 | PR #9 merge(플래그 6종 OFF) | SAFE | 0 | 0 | revert |
+| 3 | PR #11 merge(CSS) | SAFE | 0 | 0 | revert |
+| 4 | v3_43/43b/44 ghost cleanup SQL | NEEDS_REVIEW | REAL 10 + 비실계정 | SCA UPDATE 21, units/words DELETE 각 6 | fingerprint·backup 테이블로 가능 |
+| 5 | ghost SCA 8행 manifest(Unit6) | NEEDS_REVIEW | REAL 10 | SCA UPDATE 11 | 하네스 자동 rollback |
+| 6 | `4fc69e2d` 삭제 | DANGEROUS | REAL 1(비-primary) | SCA 1 + unit 1 + words 40(미확정) | SQL/manifest 미준비 |
+| 7 | `STALE_CLASS_SCA` 3행 | NEEDS_REVIEW | REAL 3(`d68a3f24`, `1d9d3183` 외 1) | SCA UPDATE 3 | manifest 만들면 자동 |
+| 8 | 정원 정책 3건 | SAFE(제품 결정) | 0 | 0 | — |
+| 9 | `grant-xp` 레거시 인증 + SCA `allow-anon-all` 축소 | DANGEROUS | 구조적 전체(493 SCA 흐름) | 0(정책) | 설계 선행 |
+| 10 | `gamification_enabled` DDL | SAFE | 0 | ALTER 1 | drop column |
+
+행 5 참고: `prod:plan` 결과 `preflight-mismatch` / `MEDIUM` /
+`BLOCKED_PREFLIGHT` — `4f3e0b72`·`9f115c32`가 manifest 생성(09-02) 이후
+스스로 Unit5→Unit6(`85ae4169`)로 이동해 재생성이 필요하다.
+
+3그룹: **A 코드/스키마 merge**(1, 2, 3, 10 — 학생 0·row 0) / **B 데이터
+정리 재작업**(4, 5, 6, 7 — REAL 최대 14명, SCA 약 25행 + DELETE 최대
+7+46; 5는 재생성 필요, 6은 SQL 미준비) / **C 정책·보안 설계**(8, 9).
+
+### 스크린샷이 여전히 필요한 항목(하네스가 못 보는 것)
+
+(a) 학생 화면 드롭다운/렌더링 결과 — 하네스는 DB 상태만 보고 UI 렌더는
+보지 않는다(브라우저 e2e 부재). (b) 교재 콘텐츠의 "정답" 여부 —
+`4fc69e2d` 같은 잘못 업로드는 중복만 검출하고 어느 쪽이 맞는지는 운영자
+판단 영역. (c) 반 이동·진도 이동의 의도 — `STALE_CLASS_SCA`, Unit5→Unit6
+같은 변화가 의도인지 사고인지는 하네스가 판단 못 함. (d) 관리자 화면
+오동작 — 관리자 UI e2e가 없어 `admin-flows`는 API 계약만 본다. (e) 정원
+성장 정책 결정 — 109차 UNDECIDED 3건 그대로.
+
+### 최종 검증
+
+bfa1a0f 기준 메인 세션 실측 — build PASS · verify:all ALL DOMAINS PASS · verify:release-gate 136/136 · verify:prod-hotfix 317/317 · verify:prod-check 204/204 · 로컬 Release Gate PASS(DB WRITE 0) · student health PASS 36 / WARN 10 / FAIL 0 · prod:check invariants FAIL 0 / WARN 66 · prod:report 재생성(WARN, FAIL 0) · AUTO-CHECK COVERAGE 12/12.
+
+---
+
+_(이전 최종 갱신 기록 — 원문 보존) 2026-09-04 (109차, 오전~오후 12시간
+자율 운영 자동검증 세션 — 운영자 부재. Harness V2(`prod:plan`/`prod:apply`
+게이트) + `prod:report` 운영 보고서 + invariant 4종 + 관리자 흐름/계정
+분류 회귀 + P1 생성 경고를 통합 브랜치 `qa/ops-automation-2026-09-04`
+(HEAD `278c89a`)로 병합. Production DB WRITE 0, SQL 실행 0, 학생 데이터
+변경 0, merge 0, deploy 0, main push 0. 상세는 아래 109차 섹션)_
+
+## 2026-09-04 (109차) — 12시간 자율 운영 자동검증: Harness V2(prod:plan/prod:apply 게이트) + prod:report + invariant 4종 + 관리자 흐름/계정 분류 회귀 + P1 생성 경고 (Production WRITE 0)
+
+### 제약/불변식
+
+- 세션: 2026-09-04 KST 오전 ~ 오후, 약 12시간. **운영자 부재** 상태의
+  자율 운영 자동검증 모드(승인이 필요한 행위는 전부 대기열로 적재).
+- 지켜진 불변식: **Production DB WRITE 0 · SQL 실행 0 · 실제 학생 데이터
+  변경 0 · merge 0(원격) · deploy 0 · main push 0.** 라이브 접촉은 anon
+  key `GET`/`HEAD`만(`prod:check`/`health:students`/`prod:report`/
+  `prod:plan` dry-run) — `PATCH`/`POST`/`PUT`/`DELETE`/RPC/Edge Function
+  호출은 이 세션 어디에도 없다. `pin_hash`/`pin_fail_count`/
+  `pin_locked_until`/`pin_setup_allowed`는 어떤 쿼리에서도 select하지
+  않았다(CLAUDE.md 규칙 11).
+- 기준점: `origin/main` = `2c52a78`. 작업 방식은 108차와 동일하게 트랙별
+  독립 worktree/브랜치 → 통합 전용 worktree(`qa/ops-automation-2026-09-04`)
+  순차 머지.
+
+### 트랙별 결과
+
+| 트랙 | 브랜치 | 커밋 수 | 단언 | 결과 |
+|---|---|---|---|---|
+| A 하네스 인벤토리(문서) | `docs/ops-2026-09-04` | 1(`310bd37`, H와 동일 커밋) | — | 기존 하네스 19행 표(목적/입력/READ·WRITE/FAIL 조건/승인 지점/약점) + V2 재사용 계획 10항 → `docs/qa/ops-2026-09-04/harness-inventory.md` |
+| H 정원 성장 경로 분류 | `docs/ops-2026-09-04` | (A와 동일 커밋) | — | COUNTS 4 / INTENTIONALLY_DOES_NOT_COUNT 7 / UNDECIDED_PRODUCT_POLICY 3 / **BUG 0** → `docs/qa/ops-2026-09-04/garden-growth-paths.md` |
+| B/C Harness V2 | `feat/harness-v2` | 9 소커밋(test/feat 페어) + 통합 후 QA 하드닝 3(`b4f89c0`/`e0d8392`/`2ea5e86`) | prod-hotfix 253→**301**, prod-plan 27→**32** | 서술 lint · VERIFY==WRITE 구조 보장 · drift refresh(`.refreshed.json`) · SCA insert/delete narrow ALLOWLIST · invariant delta preview fail-closed · `prod:plan` 신설 · `prod:apply` 별칭 + `STANDARD_STATUS` |
+| D/P 운영 보고서 | `feat/prod-report` | 머지 1(`0900d97`, 개별 커밋 수 미실측) + `4f622ca`(--out-dir 격리) | ops-status 141→**150** | `opsStatus.mjs` 4-state enum + finding 스키마 + `prod:report` → `docs/qa/ops-report/ops-report-latest.{md,json}`. 첫 라이브 보고서 **WARN 91 / FAIL 0 / 승인 대기 82** |
+| E/F invariant 4종 + 계정 분류 | `feat/health-rules-v2` | 3(`b11a6a6` FAIL-first / `81728de` 구현 / `a9cc129` 회귀) | prod-check 162→**195**, account-classification **34** | `STALE_CLASS_SCA`(라이브 3건) / `DUPLICATE_SCA_TEXTBOOK`(0) / `STUDENT_NO_CLASS`(0) / `UNIT_NAME_UUID_CONTRADICTION`(0) |
+| M 관리자 핵심 흐름 | `test/admin-flows` | 머지 1(`38df3ad`) | **63** | 생성→반 이동→교재 배정/전환→유닛 변경 복합 회귀, 학습기록 쓰기 0건 · 결함 0 · FAIL-first 자가검증(delete-instead-of-demote 재현) |
+| O ghost/legacy 인벤토리 REFRESH | `docs/ops-2026-09-04` | (A/H 커밋에 포함) | — | 개별 26항목(DANGEROUS 1 / LIKELY_CLEANUP 6 / REVIEW 8 / SAFE_TO_IGNORE 11). `4fc69e2d` SCA 참조 0→**1**(REAL 비-primary), 콘텐츠 중복 3쌍 |
+| P1 생성 경고 수정 | `fix/create-student-no-textbook-warning` | 머지 1(`578573648`… → `0900d97` 이전) | **44** | `create_student` 응답 `warnings` + 관리자 UI 비차단 배너(쓰기 동작 무변경) |
+| registry/통합 정리 | `qa/ops-automation-2026-09-04` | `50d07cb`/`9bcfcd8`/`02eb966`/`dd31319` | — | account-classification·ops-status·create-student·prod-plan required 승격, totals **64 required / 71 extra** |
+
+### Harness V2 요약 — 명령 3개와 그 보장
+
+운영 명령은 이제 셋이며, **순서를 건너뛸 수 없다**(상세: `docs/production-
+safety-harness-runbook.md` §7~§9):
+
+1. `npm run prod:check` — READ-ONLY 전체 무결성(invariant + 학생별 health).
+2. `npm run prod:plan -- <manifest.json>` — READ-ONLY. 내부적으로
+   `runHotfix()`를 항상 `dryRun:true`로 재사용해(로직 재구현 0) 검증/정적
+   스캔/프리플라이트/invariants delta를 그대로 돌리고 risk(`LOW`/`MEDIUM`/
+   `HIGH`)·영향 집계·drift·`apply_eligibility`(`READY`/
+   `BLOCKED_NEEDS_APPROVAL`/`BLOCKED_PREFLIGHT`/`BLOCKED_LINT`/
+   `BLOCKED_INVARIANT`)를 출력한다. `--refresh-expect`는 원본을 덮어쓰지
+   않고 `<manifest>.refreshed.json` **사본**만 만든다. 승인 게이트에 도달
+   자체를 하지 않으므로 DB WRITE는 항상 0.
+3. `npm run prod:apply -- <manifest.json>` — `prodHotfix.mjs --env
+   production` 별칭. 절차는 기존과 동일(TTY에서 `APPLY <runId>` 정확 입력
+   + `SUPABASE_ACCESS_TOKEN` 둘 다 있어야만 WRITE). 추가된 것은
+   `STANDARD_STATUS` 4값(`PASS`/`WARN`/`FAIL`/`BLOCKED_NEEDS_APPROVAL`)
+   한 줄뿐.
+
+구조적으로 새로 보장되는 것:
+
+- **서술 일치성 lint** — manifest의 자유 텍스트 서술이 `expect_before`/`set`
+  과 어긋나면 SQL 생성 이전에 STOP. 2026-09-02 핫픽스에서 수기 롤백 주석
+  (`'Unit'→'Unit5'`)이 실제 pre값과 달랐던 사고의 재발 방지책.
+- **VERIFY == WRITE 구조 보장** — 생성된 UPDATE문을 되파싱해 preflight
+  읽기 계획과 같은 precondition인지 기계가 확인.
+- **SCA `insert`/`delete` 좁은 ALLOWLIST** — `student_class_assignments`
+  전용, 중복/전체행 가드 + 대칭 rollback(`delete`는 `created_at`까지 캡처).
+- **invariant delta preview fail-closed** — 스냅샷 조회/평가가 실패하면
+  예전처럼 "부가 정보이니 계속"(fail-open)이 아니라
+  `blocked-invariant-unavailable`로 STOP.
+- **rollback SQL 수기 작성 금지** — 항상 같은 manifest에서 자동 생성
+  (`describeChange()` 단일 원천), 되돌리기는 `--rollback-of <report.json>`.
+
+### 발견 / 수정
+
+1. **`create_student`가 교재/유닛 미배정으로 조용히 성공(P1, 수정)** —
+   쓰기 동작은 그대로 두고 응답에 `warnings`(`no_textbook`/`no_unit`) +
+   한글 message를 추가하고, `StudentDirectory.jsx` 생성 성공 배너에
+   비차단 경고 + 기존 교재 배정 패널 재사용 버튼, 생성 폼에는 반의 연결
+   교재가 0개일 때 제출 전 힌트를 넣었다. FAIL-first로 3개 응답 계약
+   단언이 먼저 FAIL함을 확인 후 구현(44단언 PASS).
+2. **V2 보안 리뷰 하드닝 7건(수정, `e0d8392`)** — ① 생성 SQL
+   dollar-quote 태그화(`do $hotfix_<runId>$`) ② `raise` 데이터의 `%`를
+   `%%`로 이스케이프 ③ manifest 문자열 값에서 `$`/`%`/역슬래시/제어문자
+   추가 차단 ④ `must_not_change`/`reference_rows_must_exist`의 `expect`도
+   타입 검사 ⑤ 서술 lint 오탐 수정 ⑥ invariant delta 계산 실패 =
+   fail-closed(**FAIL-first로 수정 전 코드에서 executor까지 도달함을 실제
+   재현**) ⑦ `op:'delete'` rollback의 `created_at` 복원 + `op:'insert'`
+   선행조건에 `(student_id, class_id)`(테이블 실제 unique key) 추가.
+3. **`.gitignore`의 레거시 `ops/` 전면 차단 패턴과 신규 산출물 경로 충돌**
+   — 당초 `docs/qa/ops/`에 보고서를 쓰려다 커밋이 안 되는 것을 발견.
+   `.gitignore`를 고치거나 `git add -f`로 우회하지 않고 **경로를
+   `docs/qa/ops-report/`로 변경**해 회피.
+4. **테스트가 커밋된 운영 보고서를 덮어쓰던 문제(수정, `4f622ca`)** —
+   `prod:report` 회귀 테스트가 실행될 때마다 저장소에 커밋된
+   `ops-report-latest.{md,json}`을 다시 써서 워킹트리를 더럽혔다.
+   `--out-dir` 옵션으로 테스트 산출물을 격리.
+5. **registry `extra:true` 습관 재발(정정)** — 108차에서 이미 한 번
+   정정한 문제가 이번 세션 신규 스위트에서 또 관찰돼 4종을 required로
+   승격. 정리 후 totals **64 required / 71 extra**.
+6. **`4fc69e2d`(중2 천재 이상기 "Unit 1") SCA 참조 0 → 1** — REAL 학생
+   1명이 2026-09-03 08:26 UTC에 비-primary로 새로 탐색. 동시에 신규
+   `UNIT_CONTENT_DUPLICATE`가 이 유닛을 `36bba4d0`(중1 천재 이상기
+   "Unit 1", REAL 11 SCA/9 students)과 단어 40개 **100% 동일**로 탐지 —
+   "미스업로드" 의심의 구조적 증거. **REVIEW로만 분류, 삭제하지 않음**
+   (`students.current_unit_id`는 이 유닛을 가리키지 않아 학습 영향 0).
+7. **`STALE_CLASS_SCA` 라이브 3건(신규 코드, 데이터 조치 없음)** — REAL
+   3명(황***/김***/김***)의 배정 행이 `Presentation 6`에 남아 있고 현재
+   `students.class_id`는 `MS Advanced Class`. 셋 다
+   `students.current_unit_id` 경로로 화면은 정상 해석(health FAIL 0) —
+   기존 `PRIMARY_UNIT_MISMATCH`/`CLASS_ASSIGNMENT_CONTRADICTION` baseline과
+   같은 근본 원인의 다른 단면이다.
+8. **정원 성장 경로에 버그 0건** — 정원 포인트는
+   `|cleared ∪ completedWords ∪ clearedWords|`(2점/칸, 16칸, 128점 만개).
+   퀴즈/철자/가이드 완료/레벨업 미션은 COUNTS, 열람·듣기·발음은 설계상
+   미집계. 복습 큐 해소/입실시험 정답/미니게임 정답 3건은 **제품 결정
+   필요(UNDECIDED)** — 임의로 바꾸지 않았다.
+
+### 최종 검증 (통합 브랜치 `qa/ops-automation-2026-09-04`, HEAD `278c89a`)
+
+- `npm run build` PASS.
+- `npm run verify:all` **ALL DOMAINS PASS**.
+- `npm run health:students` PASS 36 / WARN 10 / FAIL 0(무회귀).
+- `npm run prod:check` verdict **WARN**(invariant FAIL 0 / WARN 64).
+- 로컬 Release Gate(CI 환경변수 재현) PASS, 개별 15개 스위트 PASS.
+- `prod:report` 라이브 1회(READ-ONLY) → WARN 91 / FAIL 0 / 승인 대기 82.
+- 남은 정직한 갭: `docs/production-safety-harness-runbook.md` §9-7은
+  `verify:prod-hotfix`를 **300단언**으로 적어 두었는데 최종 실행 기준은
+  **301**이다(마지막 `2ea5e86` 이후 1단언 증가분이 런북 문구에 미반영) —
+  코드가 아니라 문서 문구의 1건 지연, 다음 세션이 런북 소유 트랙에서 정정.
+
+### BLOCKED_NEEDS_APPROVAL (운영자 승인 없이는 아무것도 진행 안 함)
+
+1. PR #9 / PR #11 merge 결정.
+2. 본 통합 브랜치(`qa/ops-automation-2026-09-04`) PR 생성 및 merge 결정.
+3. 유령 유닛 정리 SQL 실행(`v3_43` → `v3_43b` → `v3_44`, HOLD 1건 유지 권장).
+4. 유령 참조 SCA 8행 manifest 재설계(Unit6 대상).
+5. `4fc69e2d` 삭제 여부 — **REAL SCA 참조 1건이 새로 생겨 즉시 삭제 불가**
+   (선행: 콘텐츠 확인 → SCA를 `36bba4d0`으로 재배정 → words 후 units 삭제).
+6. `STALE_CLASS_SCA` REAL 3건 정리 여부.
+7. 정원 UNDECIDED 3건(복습 큐 해소 / 입실시험 정답 / 미니게임 정답)의
+   제품 결정.
+8. `api/grant-xp.js` 레거시 XP 분기 무인증 — 인증 추가 여부.
+9. `student_class_assignments` anon 정책(allow-anon-all) 재검토.
+10. `classes.gamification_enabled` 마스터 스위치 SQL 실행.
+
+### 교훈
+
+1. **에이전트 세션 rate limit도 장애로 취급해야 한다.** Sonnet 세션 한도로
+   에이전트 1개가 중단돼, 오케스트레이터가 그 트랙의 머지 충돌 해소를
+   직접 수행하고 이후 haiku/opus로 대체 실행했다. 장시간 자율 세션은
+   "모델 한도"를 인프라 실패 모드로 미리 계획에 넣어야 한다.
+2. **`extra:true` 기본값 습관은 한 번 정정해도 재발한다.** 108차에 이미
+   고친 문제가 이번 세션 신규 스위트에서 또 나왔다 — 사람/에이전트의
+   자율 준수만으로는 부족하므로, 새 스위트는 원칙적으로 `extra:false`로
+   시작한다는 규칙을 `DEVELOPER_GUIDE.md`에 명시했다(훅 강제는 아직 없음,
+   규칙 18에 따라 정직하게 구분해 기록).
+3. **`.gitignore`의 넓은 레거시 패턴이 신규 디렉터리 이름과 우연히
+   충돌할 수 있다.** `ops/` 전면 차단이 `docs/qa/ops/`까지 삼켰다. 이때
+   올바른 대응은 `.gitignore` 수정이나 `git add -f`가 아니라 **경로를
+   바꾸는 것**이었다(다른 세션의 무시 의도를 조용히 훼손하지 않음).
+4. **테스트가 커밋 산출물을 덮어쓰면 안 된다.** 보고서 생성기의 회귀
+   테스트가 기본 경로에 그대로 쓰는 바람에 실행할 때마다 커밋된 운영
+   보고서가 변조됐다 — 산출물을 만드는 도구의 테스트에는 반드시
+   `--out-dir` 같은 격리 옵션을 함께 만든다.
+
+### 내일(다음 세션) 할 일 — 3개
+
+1. **운영자 승인 대기열 처리 지원** — 위 BLOCKED 10건 중 운영자가 결정한
+   것부터. 특히 `4fc69e2d`는 이번에 REAL SCA 참조가 생겼으므로 삭제
+   경로가 "SCA 재배정 선행"으로 바뀌었음을 먼저 설명할 것.
+2. **`prod:plan`을 실제 대기 중인 정리 작업에 1회 적용해 보기**(READ-ONLY)
+   — 유령 SCA 재배정 manifest에 `--refresh-expect`를 걸어 drift 목록과
+   `apply_eligibility`를 뽑아 두면, 운영자 승인 시점에 바로 `prod:apply`로
+   넘어갈 수 있다. 이 단계까지는 여전히 DB WRITE 0.
+3. **런북 §9-7 단언 수(300 → 301) 정정 + `prod:report`의 정직한 갭 2건
+   후속** — Reward/Excel/Security 절이 스위트 이름 나열에 그치는 문제
+   (각 스위트의 `--json` 지원 + opsStatus 어댑터), Garden 절 학생별 world
+   stage 분포 미계산(`prod:check`가 `progress_data` 미로드).
+
+---
+
+_(이전 최종 갱신 기록 — 원문 보존) 2026-09-04 (108차, 야간 자율 QA/유지보수
+세션 — baseline →
 11개 worktree 병렬 트랙(garden/progression e2e, Excel 파서 fixture,
 reward 더블파이어, 학생 데이터 무결성 READ-ONLY 감사, ghost/legacy
 인벤토리, 보안 감사 A- + 관리자 PIN 스로틀 갭 수정, UI/성능 감사 + 수정

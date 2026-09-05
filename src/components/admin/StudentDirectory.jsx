@@ -401,7 +401,16 @@ export default function StudentDirectory({ adminPin }) {
         return
       }
       refresh()
-      const successInfo = { name: trimmed, allowPinSetup: newAllowPinSetup }
+      // 2026-09-04 P1 UX-safety — 서버(create_student)가 warnings(no_textbook/
+      // no_unit)를 응답에 실으면 그대로 성공 배너에 노출한다(쓰기는 그대로,
+      // 신호만 추가 — 2026-09-03 Pre-Middle 사고: 교재/유닛 미배정 상태를
+      // 관리자가 알아챌 방법이 없었다).
+      const successInfo = {
+        name: trimmed, allowPinSetup: newAllowPinSetup,
+        id: newStudentIdRef.current, classId,
+        warnings: Array.isArray(data.warnings) ? data.warnings : [],
+        message: data.message || null,
+      }
       resetCreateForm()
       setCreateSuccess(successInfo)
     } catch (err) {
@@ -1423,6 +1432,24 @@ export default function StudentDirectory({ adminPin }) {
             <button onClick={() => setCreateSuccess(null)} className="text-green-600 font-bold flex-shrink-0">닫기</button>
           </div>
         )}
+        {/* 2026-09-04 P1 UX-safety — 교재/유닛 미배정으로 이 학생이 아직
+            학습을 시작할 수 없는 상태임을 즉시 노출(2026-09-03 Pre-Middle
+            사고 대응: health:students UNIT_INVALID로 뒤늦게 발견되던 문제를
+            생성 직후 관리자 화면에서 알아채게 한다). 쓰기는 전혀 하지
+            않음 — 안내 + 기존 교재 배정 패널(textbookManaging) 재사용
+            버튼뿐. */}
+        {createSuccess && createSuccess.warnings.length > 0 && (
+          <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl px-3 py-2 mb-3 text-xs font-bold text-yellow-700 flex items-center justify-between gap-2 flex-wrap">
+            <span>
+              ⚠️ 교재/유닛이 배정되지 않아 이 학생은 아직 학습을 시작할 수 없어요 — &apos;교재 배정&apos;에서 주 교재를 지정하세요.
+            </span>
+            <button
+              onClick={() => revealExistingStudent({ id: createSuccess.id, classId: createSuccess.classId }, { forTextbook: true })}
+              className="text-yellow-700 underline flex-shrink-0">
+              📚 교재 배정하기
+            </button>
+          </div>
+        )}
         {createError && (
           <p className="text-xs font-bold text-red-500 mb-3">{createError.message}</p>
         )}
@@ -1539,6 +1566,15 @@ export default function StudentDirectory({ adminPin }) {
                   (classOptionsFor)는 필요 없음 — realClassList만으로 충분. */}
               {realClassList.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
+            {/* 2026-09-04 P1 UX-safety — 제출 전에 미리 알려주는 힌트(비차단).
+                반에 연결된 교재가 0개면 생성 자체는 막지 않되(반이 아직
+                교재 배정 전인 신설 반일 수 있음), 생성 후 교재 배정이
+                필요함을 미리 안내한다. */}
+            {newClass && createTextbookOptions.length === 0 && (
+              <p className="text-[11px] font-bold text-yellow-600 px-1">
+                ⚠️ 이 반에는 연결된 교재가 없어요 — 생성 후 교재 배정이 필요합니다.
+              </p>
+            )}
             {/* 2026-09-01 — 교과서 선택(반에 연결된 교재가 있을 때 필수).
                 이 학생의 primary 교재가 되고, 서버(create_student)가 이
                 교재 기준으로 시작 유닛을 확정한다. */}

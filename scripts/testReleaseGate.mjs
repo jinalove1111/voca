@@ -154,6 +154,14 @@ console.log('\n=== 10절. verifyRelease.mjs 배선 (정적 검사) ===')
   check('DB 쓰기 경로가 없다(PATCH/POST/PUT/DELETE 문자열 0)',
     !/method:\s*['"](PATCH|POST|PUT|DELETE)['"]/i.test(t))
   check('앱 소스(src/)를 import 하지 않는다', !/from\s+['"]\.\.\/src\//.test(t))
+  // Gate 5(2026-09-05, browser E2E) — 존재 + CI fail-closed 배선.
+  check('Gate 5 — verify:e2e 를 실행한다', /verify:e2e/.test(t))
+  check('Gate 5 — 라벨에 Gate 5 로 표기된다', /Gate 5/.test(t))
+  check('Gate 5 — --skip-e2e 로 생략 가능하다(빠른 반복용)', /--skip-e2e/.test(t))
+  check('Gate 5 — CI 에서는 E2E_SKIP_IF_NO_BROWSER 관용을 끈다(fail-closed)',
+    /process\.env\.CI\s*\?\s*\{\}\s*:\s*\{\s*E2E_SKIP_IF_NO_BROWSER/.test(t))
+  check('Gate 5 — 로컬(비 CI)에서는 E2E_SKIP_IF_NO_BROWSER=1 을 주입한다(브라우저 미설치 관용)',
+    /E2E_SKIP_IF_NO_BROWSER:\s*['"]1['"]/.test(t))
 }
 
 console.log('\n=== 11절. 기존 흐름 무변경 회귀 잠금 ===')
@@ -165,6 +173,7 @@ console.log('\n=== 11절. 기존 흐름 무변경 회귀 잠금 ===')
   check('verify:release 가 등록돼 있다', typeof pkg.scripts['verify:release'] === 'string')
   check('verify:release-gate(순수 테스트)가 등록돼 있다', typeof pkg.scripts['verify:release-gate'] === 'string')
   check('health:baseline 이 등록돼 있다', typeof pkg.scripts['health:baseline'] === 'string')
+  check('verify:e2e(browser E2E)가 등록돼 있다', pkg.scripts['verify:e2e'] === 'node scripts/testBrowserE2E.mjs')
   check('releaseGate 순수 모듈에 네트워크/DB import 가 없다',
     !/supabase|createClient|node:fs|fetch\s*\(/.test(codeOnly(src('scripts/lib/releaseGate.mjs'))))
 }
@@ -215,6 +224,12 @@ console.log('\n=== 12절. GitHub Actions 워크플로 (정적 검사) ===')
     !/(vercel\s+deploy|actions\/deploy-pages|npm\s+publish|gh\s+release)/i.test(y))
   check('Vercel 이 Actions 로 막히지 않는다는 사실이 파일에 명시돼 있다',
     /브랜치 보호|branch protection/i.test(y) && /Vercel/.test(y))
+  // Gate 5(2026-09-05, browser E2E) — CI 가 브라우저를 미리 설치해 fail-closed
+  // 강제가 실제로 작동하게 한다(설치 안 하면 testBrowserE2E.mjs 가 SKIP 이
+  // 아니라 FAIL 해야 정상 — CI 는 E2E_SKIP_IF_NO_BROWSER 를 세팅하지 않으므로).
+  check('Playwright chromium 설치 단계가 있다', /npx playwright install[^\n]*chromium/.test(y))
+  check('Gate 5 가 독립 단계로 분리돼 있다', /name:\s*Gate 5[^\n]*[Ee]2[Ee]/.test(y))
+  check('Gate 5 는 verify:e2e 를 직접 실행한다(브라우저 미설치 관용 없이)', /npm run verify:e2e/.test(y))
 }
 {
   // 기존 배포 워크플로 무변경 잠금 — 이번 작업이 절대 건드리면 안 된다.
@@ -374,6 +389,13 @@ console.log('\n=== 16b절. 야간 신규 스위트 6종 registry required 등록
   // 확인: extra 필드 없는 상태에서 이 절 실행 시 1단언 FAIL 실측, 규칙
   // 15). 두 스크립트를 목록에 추가해 앞으로도 registry 편입이 정적으로
   // 고정되도록 한다.
+  //
+  // 2026-09-04 추가(ops 워크트리 소커밋): testAccountClassification.mjs(신규
+  // 등록, 계정 분류 정책 34단언) / testOpsStatus.mjs·
+  // testCreateStudentUnitAssignment.mjs(기존 extra:true 를 required 로 승격,
+  // 각각 npm run verify:ops-status / verify:create-student 가 이미
+  // package.json 에 있었으나 registry 상 보너스 취급이라 verify:all exit
+  // code 에 반영되지 않고 있었다) 3개를 목록에 추가한다.
   const t = readFileSync(path.resolve('tests/harness/registry.mjs'), 'utf8')
   const requiredScripts = [
     'scripts/testDoubleEvents.mjs',
@@ -382,6 +404,10 @@ console.log('\n=== 16b절. 야간 신규 스위트 6종 registry required 등록
     'scripts/testAdminPinThrottle.mjs',
     'scripts/testStudentPathContracts.mjs',
     'scripts/testSecurityRegressions.mjs',
+    'scripts/testAccountClassification.mjs',
+    'scripts/testOpsStatus.mjs',
+    'scripts/testCreateStudentUnitAssignment.mjs',
+    'scripts/testProdPlan.mjs',
   ]
   for (const script of requiredScripts) {
     const escaped = script.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

@@ -1,0 +1,25 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현 (CI 전용 브라우저 E2E 실패 수정)",
+  "task_id": "browser-e2e-tts-fallback-mock",
+  "task": "verify:e2e CI(ubuntu headless chromium) 전용 실패 — speechSynthesis voice 0개로 인한 tier-3 네트워크 TTS 폴백(translate.googleapis.com) 미mock 요청 4건을 tests/e2e/lib/mockRoutes.mjs에 mock route 추가로 해결. 동시에 voice-0 조건을 addInitScript로 모든 환경에서 강제해 로컬/CI 결과 불일치를 구조적으로 제거",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-05T00:00:00+09:00",
+  "updated_at": "2026-09-05T00:00:00+09:00",
+  "files_owned": [
+    "tests/e2e/lib/mockRoutes.mjs",
+    "tests/e2e/student.spec.mjs",
+    "tests/e2e/admin.spec.mjs",
+    "scripts/testBrowserE2E.mjs",
+    "TESTING.md"
+  ],
+  "files_read": [
+    "src/utils/speech.js",
+    "tests/e2e/lib/postgrestMock.mjs",
+    ".ai-status/implementer-browser-e2e.json"
+  ],
+  "summary": "원인: src/utils/speech.js 267-343행 playWordAudio()의 3단계 폴백 중 tier 3(networkTtsUrl(), 274행)이 CI headless chromium(voice 0개)에서만 실행돼 translate.googleapis.com으로 실제 네트워크 요청을 보냄 — 로컬 Windows(voice 있음)는 tier 2에서 항상 성공해 이 경로 자체가 실행 안 됨(student.spec.mjs의 기존 주석이 이 로컬 관측을 CI에도 적용될 것처럼 잘못 일반화했던 것도 확인·정정). 수정: mockRoutes.mjs의 installMocks()에 (1) page.addInitScript로 getVoices()=[]/speak()=항상 onerror를 모든 실행 환경에 강제해 tier-3 경로를 로컬/CI 동일하게 항상 실행시키고, (2) translate_tts 전용 mock route(200, 빈 audio/mpeg body)를 catch-all 뒤에 등록해 실제 네트워크 요청 0건을 유지하면서 ttsFallbackRequests 카운터(허용목록 아님, 항상 로그)로 호출 건수를 드러냄. FAIL-first: mock route만 비활성화한 상태로 실행해 CI 로그와 완전히 동일한 미mock 요청 4건(동일 URL/쿼리) 재현 확인 후 복원. 결과: verify:e2e 연속 4회 PASS(56/56, TTS 폴백 4건 카운트 확인), npm run build PASS, verify:release-gate 145/145 PASS, node scripts/verifyRelease.mjs 전체 게이트 PASS(Gate 5 포함). 무관한 기존 잠재 플레이크 1건(student.spec.mjs answerOneQuizQuestionCorrectly의 getByRole substring 매칭이 '뜻-e2e-tb-a-2-1' vs '-10'/'-12'와 드물게 충돌) 관측했으나 TTS/voice와 무관하고 하네스 구조 변경 금지 지시 범위 밖이라 손대지 않고 TESTING.md에 기록만 남김. 주의: 기존 .ai-status/implementer-browser-e2e.json(다른 task_id, browser-e2e)을 이번 작업 초반 실수로 같은 파일명에 덮어썼다가 git show HEAD로 즉시 원복 후 본 파일(다른 task_id → 다른 파일명)로 분리했다 — 규칙 16/17 위반을 스스로 잡아 되돌린 것.",
+  "blocker": null,
+  "next_action": "PR로 병합 검토(qa-reviewer). 후속(선택): answerOneQuizQuestionCorrectly에 A6-spelling과 동일한 정규식 앵커 패턴 적용해 무관 플레이크 별도 수정."
+}

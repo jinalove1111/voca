@@ -235,7 +235,13 @@ npm run prod:hotfix -- <manifest.json> --env production --dry-run
 5. `apply SQL 저장: <경로>`, `rollback SQL 저장: <경로>` — 각각
    `<runId>.apply.sql` / `<runId>.rollback.sql` 로
    `scripts/.tmp/prod-reports/`(기본)에 저장됩니다.
-6. `READY TO APPLY` 다음에 `STOP(정상) — write path 비활성: --dry-run` 처럼
+6. `VERIFY==WRITE 드리프트 가드 PASS — 생성된 SQL 이 manifest 와 구조적으로
+   일치`(2026-09-05 추가) — 방금 저장한 apply/rollback SQL 을 다시 읽어
+   manifest 의 `expect_before`/`set`(WHERE/SET 절, 대상 row id, 변경 건수)과
+   구조적으로 완전히 같은지 재확인한 결과. 여기서 어긋나면 `STATUS:
+   blocked-write-drift`로 즉시 STOP 합니다(승인 게이트보다 먼저 — 아래
+   표 참고).
+7. `READY TO APPLY` 다음에 `STOP(정상) — write path 비활성: --dry-run` 처럼
    STOP 사유가 나오면 정상입니다(승인 전이므로 당연히 멈춥니다).
 
 **STOP 사유로 나올 수 있는 실제 status 값(모두 fail-closed):**
@@ -248,6 +254,7 @@ npm run prod:hotfix -- <manifest.json> --env production --dry-run
 | `env-mismatch` | 로컬 `.env`의 project ref 와 manifest의 `project_ref` 불일치(exit 2) | 잘못된 환경에서 실행(스테이징 manifest를 프로덕션 env로 등) |
 | `unsafe-sql` | 생성된 SQL에 파괴적 키워드(DROP/TRUNCATE/DELETE/INSERT/ALTER/GRANT/REVOKE/CREATE) 발견 | 이 하네스에서는 발생하면 안 됨(버그 신호) |
 | `preflight-mismatch` | 현재 DB 상태가 manifest의 `expect_before`와 다름 | **이미 적용됐거나, 그 사이 다른 변경이 있었음** — 아래 FAQ 참고 |
+| `blocked-write-drift` | (2026-09-05 추가) 생성된 apply/rollback SQL이 manifest의 `expect_before`/`set`(SET 값, 대상 row id, 변경 건수 중 하나 이상)과 구조적으로 다름 | **이 하네스의 SQL 생성 경로에 버그가 있다는 신호(버그 신호)** — 정상 운영에서는 발생하면 안 됨. `report.writeDriftGuard.mismatches`에 어떤 change가 무엇이 어긋났는지 기록됨 |
 | `ready-to-apply` | 모든 확인 통과, 승인만 하면 적용 가능(exit 0) | `--dry-run`/CI/토큰없음이면 여기서 정상 STOP |
 | `not-interactive` | 비대화형(TTY 아님) 환경이라 승인을 받을 수 없음 | 스크립트/파이프에서 실행 시도 |
 | `not-approved` | 승인 문구가 정확히 일치하지 않음 | `APPLY <runId>` 오타 |
@@ -430,3 +437,336 @@ TRUNCATE/DELETE 등을 아예 차단). 즉 유령 *참조*(학생/배정이 유�
 - **v3_44 유령 유닛 삭제 SQL 패키지의 실행 여부/일정** — 위 FAQ Q5에서
   설명한 대로 이 하네스의 자동 실행 경로에 포함되어 있지 않으며, 실행은
   전적으로 운영자 결정·수동 실행 영역입니다.
+
+---
+
+## 7. V2 명령 3개(2026-09-04, Harness V2 Track B/C)
+
+이 절은 위 1~6절(1단계 A/B)에 새 명령 `prod:plan` 을 끼워 넣은 **전체
+흐름**을 요약합니다. 세 명령은 전부 READ-ONLY 로 시작해 마지막
+`prod:apply` 만 실제 승인 게이트를 통과할 수 있습니다 — 순서를 건너뛰지
+마세요.
+
+### (1) `npm run prod:check` — READ-ONLY 전체 무결성
+
+1절과 동일합니다(`students`/`student_class_assignments`/`units`/
+`textbooks` 등 저장소 전체 관점의 invariant + 학생별 health). 매일/배포
+전 습관적으로 돌리는 상태 점검이지 특정 manifest 를 대상으로 하지
+않습니다.
+
+### (2) `npm run prod:plan -- <manifest.json>` — READ-ONLY 계획/drift/위험도/자격
+
+```
+npm run prod:plan -- scripts/prod/manifests/<파일>.json [--refresh-expect] [--fixture-reader <file>] [--report-dir <dir>] [--env production|staging]
+```
+
+`prod:check` 가 "저장소 전체가 지금 건강한가"를 본다면, `prod:plan` 은
+"이 manifest 하나를 적용하면 무슨 일이 일어나는가"를 미리 봅니다.
+내부적으로 `scripts/prodHotfix.mjs` 의 `runHotfix()` 를 항상
+`dryRun:true` 로 호출해 검증·정적 스캔·프리플라이트·invariants delta
+게이트를 그대로 재사용합니다(로직을 다시 구현하지 않음) — **승인
+게이트에 절대 도달하지 않으므로 DB WRITE 는 항상 0**입니다.
+
+출력(콘솔 + `<report-dir>/<runId>.plan.md` + `.plan.json`):
+
+- manifest id/title, 서술 일치성 lint 결과
+- preflight 행별 상태(학생은 짧은 id, 반/교재/유닛은 이름으로 표시,
+  기대값 vs 실측값, 일치 여부)
+- before → after 표(`describeChange()` 로 생성 — apply/rollback SQL 헤더
+  주석과 같은 원천)
+- 영향받는 학생/교재/유닛 수, 학습기록 baseline 테이블 + 카운트
+- **risk**: `LOW`(업데이트 10건 이하 & primary 뒤집힘 없음) /
+  `MEDIUM`(primary 뒤집힘 있거나 10건 초과) / `HIGH`(delete 포함이거나
+  50건 초과)
+- **invariants delta 미리보기**: 이 manifest 를 적용하면 새로 생기는
+  invariant FAIL/WARN, 그리고 해소되는 항목(예: 유령 SCA 재배정으로
+  `SCA_GHOST_UNIT` 이 사라짐)
+- `--refresh-expect` 지정 시: manifest 의 `expect_before` 를 지금 라이브
+  값으로 갱신한 **사본**(`<manifest>.refreshed.json`, 원본은 절대 덮어쓰지
+  않음)과 drift 목록(라이브 값이 manifest 작성 시점과 달라진 컬럼)
+- `apply_eligibility`(2026-09-05 확장, plan-eligibility-textbook-identity
+  트랙 — 8값, 차단 원인과 1:1 대응): **`READY` 여도 실제 적용은 안
+  됩니다.** 여전히 `prod:apply` 를 따로 실행해 `APPLY <runId>` 를 직접
+  입력해야 합니다.
+
+  | `apply_eligibility` | 뜻 | 대표 `blocked_reason`(원래 status) |
+  |---|---|---|
+  | `READY` | 계획이 모든 게이트를 통과 — 승인만 하면 적용 가능 | `ready-to-apply` |
+  | `BLOCKED_PREFLIGHT` | 라이브 상태가 manifest 의 기대값과 다름(이미 적용됐거나 그 사이 값이 바뀜) | `preflight-mismatch`, `baseline-failed` |
+  | `BLOCKED_NEEDS_APPROVAL` | 다른 문제는 없고 "승인만 남음"(토큰 없음/CI/비TTY/승인 문구 불일치) | `not-interactive`, `not-approved` |
+  | `BLOCKED_WRITE_DRIFT` | VERIFY(읽기 계획)와 WRITE(생성된 SQL)가 구조적으로 어긋남 | `blocked-write-drift` |
+  | `BLOCKED_INVARIANT` | 적용하면 저장소 전체 invariant 가 새로 FAIL 하거나, 그 계산 자체가 실패함 | `blocked-invariant`, `blocked-invariant-unavailable` |
+  | `BLOCKED_AMBIGUOUS_TEXTBOOK` | 대상 교재가 이름 중복/유사 모호 쌍의 일원인데 `textbook_identity` ack 가 없거나 라이브 값과 다름(9-8절) | `blocked-ambiguous-textbook`, `blocked-ambiguous-textbook-unavailable` |
+  | `BLOCKED_MANIFEST` | manifest 자체(스키마/서술 lint/정적 스캔/무결성/환경 플래그·project_ref)의 구조적 문제 | `invalid-manifest`, `unsafe-sql`, `manifest-tampered`, `env-flag-required`, `env-mismatch` 등 |
+  | `BLOCKED_UNKNOWN` | 매핑 표에 없는 status(새 STOP 사유가 분류 없이 추가된 경우, fail-closed) | 매핑 안 된 임의 status |
+
+  이 값은 `scripts/prodHotfix.mjs` 의 `computeApplyEligibility()` +
+  `STOP_REASON_TO_APPLY_ELIGIBILITY` 단일 표에서 나옵니다(예전엔
+  `blocked-write-drift` 등 일부 STOP 사유가 `else` 분기에서
+  `BLOCKED_NEEDS_APPROVAL` 로 뭉뚱그려졌습니다 — 지금은 원인별로 반드시
+  구분됩니다). `runPlan()`/`prod:hotfix`(dry-run) 리포트 JSON 모두
+  `blocked_reason`(원래 status 문자열)과 `apply_eligibility` 를 함께
+  기록합니다. `opsStatus.mjs` 의 `STANDARD_STATUS`(`PASS`/`WARN`/`FAIL`/
+  `BLOCKED_NEEDS_APPROVAL` 4값)는 이 표와 별개로 그대로 유지되며,
+  `computeStandardStatus()` 내부에서 같은 표(`computeApplyEligibility()`)
+  를 재사용해 4값을 유도합니다(로직 이원화 방지).
+
+`preflight-mismatch`(이미 적용됐거나 그 사이 다른 변경이 있었음)가 가장
+흔한 `BLOCKED_PREFLIGHT` 원인입니다 — 5절 FAQ Q1 참고. 이 경우
+`--refresh-expect` 로 최신 상태 기준 사본을 만들고, drift 목록을 사람이
+검토한 뒤 필요하면 그 사본을 새 manifest 로 채택하세요.
+
+### (3) `npm run prod:apply -- <manifest.json>` — artifact 생성 + 승인 게이트
+
+`node scripts/prodHotfix.mjs <manifest> --env production` 의 별칭입니다
+(2절의 절차와 완전히 동일 — 정적 스캔 → 프리플라이트 → baseline 저장 →
+apply/rollback SQL 파일 저장 → **TTY 에서 `APPLY <runId>` 를 정확히
+입력 + `SUPABASE_ACCESS_TOKEN` 둘 다 있어야만** 실제 WRITE 진행). 어느
+하나라도 없으면(비대화형 셸, 토큰 미설정, CI 환경) 항상 이전과 동일하게
+승인 이전에 STOP 합니다.
+
+새로 추가된 것은 `STANDARD_STATUS` 한 줄뿐입니다(콘솔 + JSON report 의
+`standardStatus` 필드) — 자동화가 수십 종의 세부 `STATUS` 문자열 대신
+4값만 보면 되도록 압축한 것입니다:
+
+| STANDARD_STATUS | 뜻 |
+|---|---|
+| `PASS` | 계획(dry-run) 이 모든 게이트를 통과했거나, 실제 적용이 성공함 |
+| `WARN` | 위와 같지만 invariants delta 에 새 WARN 이 있음(치명적이지 않음, 검토 권장) |
+| `BLOCKED_NEEDS_APPROVAL` | **실제 적용을 시도했는데**(`--dry-run` 아님) 토큰 없음/CI 환경이라 승인 게이트 이전에 멈춤 |
+| `FAIL` | 그 외 모든 차단/실패(검증 실패, 프리플라이트 불일치, invariant 차단, 롤백 등) — fail-closed 기본값 |
+
+### 규칙: rollback SQL 을 손으로 쓰지 않는다
+
+2026-09-02 사고의 근본 원인이 "VERIFY 와 WRITE 를 사람이 따로 작성"이었던
+것처럼, **rollback SQL 도 절대 손으로 쓰지 않습니다.** `prod:apply` 가
+`<runId>.rollback.sql` 을 항상 같은 manifest 에서 자동 생성합니다(B1의
+`describeChange()` 가 헤더 주석까지 포함해 단일 원천에서 만듭니다). 이미
+적용된 것을 나중에 되돌리려면 손으로 반대 SQL을 작성하지 말고 2-(d)절의
+`--rollback-of <이전 실행의 report.json>` 을 쓰세요.
+
+> 명령 체계 요약: `prod:check`(READ-ONLY 무결성) → `prod:plan -- <manifest>`(READ-ONLY 계획·drift·위험도·자격) → `prod:apply -- <manifest>`(artifact 생성 + 승인 게이트, 실제 write는 TTY `APPLY <runId>` + token 필요). 보고서는 `prod:report`(READ-ONLY, §8).
+
+## 8. 운영 자동검증 사용법 (2026-09-04 추가) — `prod:check` → `prod:report` → 승인 대기열
+
+이 절은 위 1~6절(`prod:check`/`prod:hotfix` 자체)과는 별개로, 그 위에
+"매일/필요할 때 한눈에 보는 운영 보고서"를 자동으로 만들어 주는
+`npm run prod:report`(`scripts/prodReport.mjs`)를 다룹니다. **`prod:report`는
+`prod:hotfix`의 apply 경로를 아예 import하지 않습니다** — 이 명령은 항상
+읽기 전용입니다.
+
+### 7-1. 한 줄 요약
+
+```
+npm run prod:report
+```
+
+이 한 줄이 내부적으로 하는 일:
+
+1. `node scripts/studentHealthCheck.mjs --json --require-env --mask-names` 실행
+   (READ-ONLY, GET만)
+2. `node scripts/prodCheck.mjs --require-env --json --report-dir <dir>` 실행
+   (READ-ONLY, GET만)
+3. 두 결과를 `scripts/lib/opsStatus.mjs`의 표준 finding 스키마로 변환
+4. (선택, 실패해도 무시) `gh pr list`로 열린 PR 목록, 배포 페이지 GET 1회,
+   `git rev-parse origin/main`, `PROJECT_BOARD.md`의 `## BLOCKED` 카드 읽기
+5. `docs/qa/ops-report/ops-report-latest.{md,json}` +
+   `docs/qa/ops-report/history/ops-report-<UTC>.{md,json}` 저장
+
+산출물 맨 끝에 항상 `DB WRITE: 0`이 찍힙니다 — 이 줄이 없으면(또는 명령이
+0이 아닌 값을 쓰면) 버그로 취급하고 실행을 중단하세요.
+
+### 7-2. 무엇이 나오는가
+
+`ops-report-latest.md`는 13개 절 고정 순서입니다: 실행 요약 → 프로덕션
+헬스 → 학생 무결성 → 교재 무결성 → 정원 → 폴 타운 → 보상 → 엑셀 → 보안 →
+성능 → 유령/레거시 → 열린 PR → **승인 대기열(Approval Queue)**.
+
+가장 먼저 볼 곳은 맨 위 "실행 요약"의 **상태**(`PASS`/`WARN`/`FAIL`) 한 줄과
+맨 아래 **승인 대기열**입니다 — 승인 대기열은 "실제로 고치려면 DB에 쓰기가
+필요하고(`write_required`), 그래서 운영자 승인이 필요한(`approval_required`)"
+항목만 모아 둔 목록입니다(둘은 이 시스템에서 항상 같은 값입니다 — 에이전트
+자동 쓰기 경로가 이 저장소 어디에도 없으므로 "쓰기가 필요하다"는 곧
+"운영자가 승인해야 한다"는 뜻입니다). 각 행은 `check_id`/대상(`entity`)/
+기대값(`expected`)/실제값(`actual`)/권장 조치(`recommended_action`)를
+같이 보여줘 SQL Editor를 열기 전에 무엇을 해야 하는지 바로 읽을 수
+있습니다.
+
+학생 이름은 항상 마스킹됩니다(`H***` 형식) — `prod:report`는 어떤 경우에도
+`--show-names`를 넘기지 않습니다.
+
+### 7-3. 오프라인/CI 회귀 모드(`--from-dir`)
+
+라이브 조회 없이(네트워크 0) 이미 저장해 둔 JSON으로 리포트만 다시
+생성하려면:
+
+```
+node scripts/prodReport.mjs --from-dir <dir>
+```
+
+`<dir>` 안에 `prodcheck.json`(= `prod:check --json` stdout 그대로)과
+`health.json`(= `studentHealthCheck.mjs --json` stdout 그대로)을 두면
+됩니다. 이 모드는 `gh`/배포 페이지 GET을 자동으로 생략합니다(회귀 테스트
+`scripts/testOpsStatus.mjs`가 이 모드로 네트워크 0을 보장합니다).
+
+### 7-4. `prod:hotfix apply`와의 관계 — 이 명령은 그 경로에 닿지 않는다
+
+`npm run prod:report`는 승인 대기열을 **보여줄 뿐** 아무것도 고치지
+않습니다. 승인 대기열의 항목을 실제로 고치려면(예: 유령 유닛 SCA
+재배정) 여전히 1~6절의 `prod:hotfix`(manifest 준비 → dry-run → 대화형
+`APPLY <runId>` 승인) 절차를 그대로 따라야 합니다. `prod:report`는
+`scripts/prodHotfix.mjs`를 소스 코드 레벨에서 아예 import하지 않으므로,
+이 명령을 아무리 많이 돌려도 구조적으로 apply 경로에 도달할 수 없습니다.
+
+### 7-5. 검증
+
+`npm run verify:ops-status`(`scripts/testOpsStatus.mjs`)가 스키마/어댑터/
+`renderSummary`/`prod:report` CLI(`--from-dir`, 13절 헤더 순서, 마스킹
+우회 방지 회귀 포함)를 141단언으로 고정합니다.
+
+## 9. V2 보안 리뷰 하드닝 (2026-09-04) — 인용/타입/차단 규칙
+
+read-only 보안 리뷰 지적사항을 반영한 동작 변경입니다. 기존 절차(1~8절)는
+그대로이고, 아래는 "무엇이 더 빨리, 더 확실히 막히는가"만 달라진 부분입니다.
+
+### 9-1. manifest 문자열 값에서 금지되는 문자
+
+`;` `--` `/*` 에 더해 **`$`, `%`, 역슬래시, 제어문자**도 거부합니다
+(`scripts/lib/hotfixManifest.mjs` `INJECTION_CHAR_RE`). 적용 대상은 manifest
+안의 *모든* 문자열 값입니다 — `id`/`title`/`notes` 같은 자유 텍스트,
+`changes[].expect_before`/`set`/`fields`, 그리고 `must_not_change[].expect`,
+`reference_rows_must_exist[].expect` 값까지 포함합니다.
+
+이유: 생성 SQL 은 `do $…$ … $…$` 블록과 `raise exception/notice '… %'`
+포맷 문자열을 쓰기 때문에, 값에 섞인 `$$`/`%` 가 하네스 자신의 인용을
+벗어날 수 있습니다(끝은 문법 오류로 fail-closed 지만, 인용은 애초에
+데이터로 탈출 가능해서는 안 됩니다). 실제 운영 값(uuid·`Unit5` 같은 유닛명·
+ISO 날짜)에는 이 문자들이 등장하지 않습니다. 걸리면 `invalid-manifest` 로
+**SQL 생성 이전에** STOP 합니다.
+
+같은 맥락의 이중 방어선 2가지:
+
+- 생성 SQL 의 dollar-quote 는 태그를 붙입니다 — `do $hotfix_<runId>$ …
+  $hotfix_<runId>$`(runId 의 영숫자만 사용). `runId` 가 영숫자/하이픈/
+  언더스코어 밖 문자를 담으면 `prodHotfix.mjs` 가 `invalid-run-id` 로 STOP
+  하고, 그래도 도달하면 SQL 생성기가 throw 합니다.
+- `raise` 메시지에 실리는 **데이터**의 `%` 는 `%%` 로, `'` 는 `''` 로
+  이스케이프합니다. 포맷의 의도된 자리표시자(`% rows` 등)는 이 파일이 직접
+  쓴 리터럴 조각에만 존재합니다.
+
+### 9-2. expect 값도 타입 검사
+
+`must_not_change[].expect` / `reference_rows_must_exist[].expect` 의 값은
+이제 `changes[].expect_before` 와 같은 규칙을 받습니다 — uuid 컬럼은 uuid,
+boolean 컬럼은 boolean, 스칼라(string/number/boolean/null)만 허용, null 은
+`uuid_or_null` 로 등록된 컬럼에서만 허용.
+
+### 9-3. invariants delta 계산 실패 = 적용 차단
+
+예전에는 스냅샷 조회/평가가 실패하면 "부가 정보이니 계속"(fail-open)이라
+`ready-to-apply` 로 승인 단계까지 갔습니다. 이제는
+`blocked-invariant-unavailable` 로 STOP 합니다(`STANDARD_STATUS: FAIL`,
+`prod:plan` 의 `apply_eligibility: BLOCKED_INVARIANT`, 계획 문서에는
+"(계산 실패 — 적용 차단)"). 확인하지 못한 것은 통과시키지 않습니다.
+
+### 9-4. `op:'delete'` 는 `created_at` 까지 캡처한다
+
+`op:'delete'` 의 `expect_before` 는 이제 6개 컬럼(`student_id`, `class_id`,
+`textbook_id`, `current_unit_id`, `is_primary`, **`created_at`**)을 전부
+요구합니다. rollback(=삭제한 행 재삽입)이 `created_at` 을 복원하지 않으면
+원복된 배정이 "방금 만들어진 배정"으로 보여 배정 이력 기준 판정이 조용히
+달라지기 때문입니다.
+
+### 9-5. `op:'insert'` 의 선행조건은 2개다
+
+| 조합 | 근거 |
+|---|---|
+| `(student_id, textbook_id)` | 하네스 도메인 규칙 — 한 학생이 같은 교재를 두 번 배정받지 않는다 |
+| `(student_id, class_id)` | `student_class_assignments` 테이블의 **실제 unique key** |
+
+예전에는 앞의 조합만 확인해서, 같은 반에 이미 행이 있으면 승인 이후 DB
+제약 위반으로 실패했습니다(트랜잭션이라 데이터는 안전하지만 운영자가
+다시 처음부터 해야 했습니다). 이제 두 조합 모두 apply SQL 의 `if exists …
+raise exception` 가드와 preflight 읽기 계획에서 함께 확인합니다.
+
+주의(알려진 갭): `class_id` 가 `null` 인 배정은 preflight **읽기** 단계에서
+`(student_id, class_id)` 확인을 건너뜁니다 — PostgREST 의 `.eq(col, null)`
+은 `IS NULL` 이 아니라서 신뢰할 수 없기 때문입니다. SQL 가드 쪽은
+`class_id is null` 로 정확히 생성되어 그대로 확인합니다.
+
+### 9-6. 콘솔 문구 / 산출물 경로
+
+- `--dry-run` 일 때 콘솔은 `STANDARD_STATUS: PASS (DRY-RUN — 실제 적용
+  아님)` 로 표시합니다(보고서 JSON 의 `standardStatus` 값 자체는 그대로
+  `PASS`/`WARN`/`FAIL`/`BLOCKED_NEEDS_APPROVAL` 4값 enum).
+- 이 문서가 예시로 쓰는 `--report-dir .tmp/prod-reports` 산출물에는 실제
+  학생 UUID 가 들어갑니다. 저장소 루트 `.tmp/` 는 `.gitignore` 에 있으니
+  절대 추적되지 않지만, 외부로 복사할 때는 직접 확인하세요.
+
+### 9-7. 검증
+
+`npm run verify:prod-hotfix`(301단언) / `npm run verify:prod-plan`(32단언)이
+위 7개 항목을 회귀로 고정합니다(FAIL-first 로 추가 — 수정 전 각각 34건,
+4건 FAIL 을 실측한 뒤 구현).
+
+### 9-8. 교재 identity — UUID canonical + `AMBIGUOUS_TEXTBOOK`
+(2026-09-05, plan-eligibility-textbook-identity 트랙)
+
+교재/유닛 관계·배정 판정은 **오직 `textbooks.id`(UUID)** 로만 합니다.
+`name`/`grade`/`publisher_name`/`author` 는 표시·검증용 메타데이터일 뿐,
+canonical 식별자가 아닙니다. "중1 천재 이상기"와 "중2 천재 이상기"는
+이름이 유사해도 **절대 같은 교재로 취급하지 않습니다.**
+
+**차단 조건** — manifest 의 change 가 (a) `student_class_assignments.
+textbook_id` 를 직접 설정/삽입하거나, (b) `current_unit_id` 를 설정/삽입해
+그 유닛이 속한 교재가 바뀌는 경우, 대상 교재가 라이브 데이터에서 모호
+쌍(이름 완전중복 `TEXTBOOK_NAME_DUPLICATE` 또는 같은 출판사+유사명
+`TEXTBOOK_SIMILAR_NAME`)의 일원이면 `prod:hotfix`/`prod:plan` 이 새 STOP
+`blocked-ambiguous-textbook` 으로 승인 게이트 이전에 차단합니다
+(preflight 직후, invariants delta 이전 — fail-closed, 자동 수정 없음).
+교재 목록 조회 자체가 실패하면 `blocked-ambiguous-textbook-unavailable`
+로 마찬가지로 차단합니다("모호 여부를 확인 못 함" = 차단).
+
+**예외(명시 ack)** — change 에 다음 필드가 있고 세 값 모두 라이브 값과
+정확히 일치할 때만 통과합니다:
+
+```json
+{
+  "table": "student_class_assignments",
+  "id": "<SCA UUID>",
+  "expect_before": { "...": "..." },
+  "set": { "current_unit_id": "<대상 유닛 UUID>" },
+  "textbook_identity": {
+    "id": "<대상 교재 UUID>",
+    "name": "<대상 교재의 정확한 name>",
+    "publisher_name": "<대상 교재의 정확한 publisher_name(또는 null)>"
+  }
+}
+```
+
+`id` 가 canonical 입니다 — `name`/`publisher_name` 만 주고 `id` 가 없거나
+형식이 UUID 가 아니면 ack 자체가 무효(`validateManifest` 가 거부)입니다.
+`name`/`publisher_name` 값이 라이브와 하나라도 다르면(예: `id` 는
+"중2…"인데 `name` 은 "중1…") 여전히 차단됩니다.
+
+**매니페스트 lint** — change 객체에 이 스키마가 모르는 키(`where`,
+`name`, `textbook_name` 등 "이름으로 조건을 걸려는" 형태)가 있으면
+`validateManifest` 가 즉시 거부합니다(`apply_eligibility =
+BLOCKED_MANIFEST`). `ALLOWLIST`(`scripts/lib/hotfixManifest.mjs`)는
+애초에 컬럼명만 등록하므로 교재를 문자열 이름으로 지정할 스키마 자리가
+없습니다 — 이미 구조적으로 강제됩니다.
+
+**신규 invariant `AMBIGUOUS_TEXTBOOK`**(WARN, `prod:check` 보고 전용) —
+학생의 primary SCA 또는 `students.current_unit_id` 가 가리키는 교재가
+모호 쌍의 일원이면 학생 단위로 경고합니다. 메시지에는 교재 UUID 앞
+8자리 + 상대 교재 UUID 앞 8자리만 싣고 실명은 넣지 않습니다.
+
+**`scripts/prod/generateGhostScaManifest.mjs`** — 생성되는 manifest 의
+목적지 교재가 모호 쌍의 일원이면 `textbook_identity` ack 를 스스로 채우지
+않고 생성 자체를 STOP 합니다(사유 출력, exit 1, manifest 파일 미생성) —
+모호하면 자동 수정하지 않고 운영자 결정으로 넘기는 원칙 그대로입니다.
+
+검증: `npm run verify:prod-hotfix` [C5] 5종(ack 없음/올바른 ack/틀린
+ack/비모호 대조군/조회 실패) + lint 6종, `npm run verify:prod-check`
+13절(AMBIGUOUS_TEXTBOOK 양성 2종/음성 2종), `npm run
+verify:generate-ghost-sca-manifest` [8]/[9].

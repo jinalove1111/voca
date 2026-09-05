@@ -51,8 +51,15 @@ import {
   buildRollbackSql,
   staticSafetyScan,
   redactSecrets,
+  describeChange,
+  computeInvariantsDeltaPreview,
+  lintManifestNarratives,
+  refreshExpectBefore,
+  verifyWriteDriftGuard,
+  findTextbookTargetsFromManifest,
 } from './lib/hotfixManifest.mjs'
 import { createDryRunExecutor, createManagementApiExecutor } from './lib/sqlExecutor.mjs'
+import { buildAmbiguousTextbookIndex } from './lib/prodInvariants.mjs'
 
 const ENV_FLAG_VALUES = ['production', 'staging']
 
@@ -205,6 +212,29 @@ function createFixtureReader(fixtureObj) {
   }
 }
 
+// B5(2026-09-04) — invariants delta 미리보기용 스냅샷을 이미 존재하는
+// `reader`(live/fixture/test 어디든 공통) 의 selectAllRows() 만으로 만든다.
+// scripts/lib/prodDataLoader.mjs의 loadProductionSnapshot() 처럼 새 HTTP
+// 로더를 또 만들지 않고, prodHotfix 가 이미 갖고 있는 reader 추상화를 그대로
+// 재사용한다(라이브 CLI 경로는 아래 isMain 에서 buildInvariantSnapshotFromReader
+// 를 실제 loadInvariantSnapshot 로 주입, 테스트는 자기 reader/픽스처로 검증).
+// class_textbooks 는 PK 가 복합키라 id 컬럼이 없어 이 reader.selectAllRows
+// (정렬 기준 id 고정)로 가져올 수 없다 — TEXTBOOK_UNREACHABLE/
+// STUDENT_TEXTBOOK_SELECTOR_EMPTY 두 invariant 는 이 delta 미리보기에서
+// 항상 연결 0건으로 평가된다(알려진 갭, 나머지 invariant 는 정상 커버 —
+// 이 두 코드 전용 새 HTTP 로더를 추가하는 대신 감수한 트레이드오프).
+async function buildInvariantSnapshotFromReader(reader) {
+  const [students, classes, textbooks, units, words, assignments] = await Promise.all([
+    reader.selectAllRows('students', ['id', 'name', 'class_id', 'current_unit_id', 'unit_name']),
+    reader.selectAllRows('classes', ['id', 'name', 'spelling_direction', 'class_type']),
+    reader.selectAllRows('textbooks', ['id', 'name', 'owner_class_id']),
+    reader.selectAllRows('units', ['id', 'name', 'textbook_id', 'class_id']),
+    reader.selectAllRows('words', ['id', 'unit_id', 'word', 'meaning']),
+    reader.selectAllRows('student_class_assignments', ['id', 'student_id', 'class_id', 'textbook_id', 'is_primary', 'current_unit_id', 'created_at']),
+  ])
+  return { students, classes, textbooks, units, words, assignments, classTextbooks: [] }
+}
+
 async function safeRun(executor, sql) {
   try {
     const res = await executor.run(sql)
@@ -218,6 +248,21 @@ async function safeRun(executor, sql) {
 async function readPlanMismatches(reader, plan) {
   const mismatches = []
   for (const item of plan) {
+    // B4(2026-09-04) — SCA insert/delete 전용 계획 항목. 'no-duplicate' 는
+    // insert 전 "같은 student_id+textbook_id 행이 이미 없어야 함" 선조건,
+    // 'not-exists' 는 delete 후 "그 id 행이 더는 없어야 함" 확인이다. 둘 다
+    // item.expect 가 없다(비교할 컬럼 값이 아니라 존재 여부 자체가 판정
+    // 대상) — 기존 expect 기반 분기와는 별도로 처리한다.
+    if (item.kind === 'no-duplicate') {
+      const r = await reader.headCountFiltered(item.table, item.filters)
+      if (r.count > 0) mismatches.push({ table: item.table, id: item.id, reason: 'duplicate-row-exists', filters: item.filters, count: r.count })
+      continue
+    }
+    if (item.kind === 'not-exists') {
+      const row = await reader.getRow(item.table, item.id, ['id'])
+      if (row) mismatches.push({ table: item.table, id: item.id, reason: 'row-still-exists' })
+      continue
+    }
     const row = await reader.getRow(item.table, item.id, Object.keys(item.expect))
     if (!row) { mismatches.push({ table: item.table, id: item.id, reason: 'row-not-found' }); continue }
     for (const [col, val] of Object.entries(item.expect)) {
@@ -236,10 +281,21 @@ const defaultDeps = {
   loadEnv: loadEnvDefault,
   createLiveReader,
   createFixtureReader,
+  // C3(2026-09-05) — SQL 생성기를 D 로 노출한다(기본값은 순수 import 그대로,
+  // 동작 변화 없음). 테스트가 이 두 함수만 감싸 SET/WHERE/행 수가 다른 SQL을
+  // 돌려주는 stub 을 주입하면, verifyWriteDriftGuard 배선(6.5단계)이 실제로
+  // 그 드리프트를 잡아 STOP 하는지 네트워크 0으로 검증할 수 있다.
+  buildApplySql,
+  buildRollbackSql,
   createExecutor: ({ kind, projectRef, accessToken }) => {
     if (kind === 'management-api') return createManagementApiExecutor({ projectRef, accessToken })
     return createDryRunExecutor()
   },
+  // C3(2026-09-05) — 각 단계 진입 시 호출되는 선택적 훅(기본 no-op, 기존
+  // 어떤 호출부도 이 값을 넘기지 않으므로 동작이 전혀 바뀌지 않는다).
+  // scripts/testProdHotfix.mjs 가 이 훅으로 단계 순서를 배열로 수집해
+  // 고정 순서(READ-ONLY preflight → ... → health)를 단언한다.
+  onStep: () => {},
   isTTY: () => !!process.stdin.isTTY,
   approve: async (runId) => {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
@@ -259,6 +315,123 @@ const defaultDeps = {
 
 function sha256Text(text) {
   return crypto.createHash('sha256').update(String(text ?? '')).digest('hex')
+}
+
+// plan-eligibility-textbook-identity 트랙(2026-09-05) — apply_eligibility
+// 8값 enum(추가만, opsStatus.mjs 의 STANDARD_STATUS 4값과는 별개 — 그건
+// 절대 안 바꾼다). runHotfix() 의 status 문자열은 STOP 사유별로 수십 종
+// 존재하는데, 예전엔 그중 일부만 runPlan() 이 개별 if/else 로 분류하고
+// 나머지 전부를 "else BLOCKED_NEEDS_APPROVAL" 로 뭉뚱그렸다(실제 차단
+// 원인과 무관하게). 이 표는 그 STOP 사유 문자열 -> apply_eligibility 를
+// 명시적으로 1:1 대응시키는 **단일 원천**이다 — runPlan() 도, 아래
+// computeStandardStatus() 도 이 표 하나만 본다(다른 곳에서 각자 분류
+// 로직을 새로 만들지 않는다).
+//
+// 값 뜻:
+// - READY: 이 계획을 그대로 적용해도(승인만 하면) 통과한다.
+// - BLOCKED_PREFLIGHT: 라이브 상태가 manifest 의 expect_before 와 다름
+//   (이미 적용됐거나 그 사이 값이 바뀜) — preflight/baseline 읽기 단계.
+// - BLOCKED_NEEDS_APPROVAL: 다른 문제는 전혀 없고 "승인만 남은" 상태
+//   (토큰 없음/CI/비TTY/승인 문구 불일치).
+// - BLOCKED_WRITE_DRIFT: VERIFY(읽기 계획)와 WRITE(생성된 SQL)가 구조적으로
+//   어긋남(verifyWriteDriftGuard).
+// - BLOCKED_INVARIANT: 이 manifest 를 적용하면 저장소 전체 invariant 가
+//   새로 FAIL 하거나(blocked-invariant), 그 계산 자체가 실패함(불가능 확인
+//   = 차단, blocked-invariant-unavailable).
+// - BLOCKED_AMBIGUOUS_TEXTBOOK: 대상 교재가 이름 중복/유사 모호 쌍의
+//   일원인데 textbook_identity ack 가 없거나 라이브 값과 어긋남(작업 2).
+// - BLOCKED_MANIFEST: manifest 자체(스키마/서술 lint/정적 스캔/무결성/
+//   환경 플래그·project_ref/롤백 대조)의 구조적 문제 — 라이브 DB 상태와
+//   무관하게 정적으로 판정 가능한 차단.
+// - BLOCKED_UNKNOWN: 이 표에 등록되지 않은 status(새 STOP 사유가 추가됐는데
+//   분류를 깜빡한 경우) — fail-closed, 표준 상태는 항상 FAIL.
+export const APPLY_ELIGIBILITY_VALUES = [
+  'READY',
+  'BLOCKED_PREFLIGHT',
+  'BLOCKED_NEEDS_APPROVAL',
+  'BLOCKED_WRITE_DRIFT',
+  'BLOCKED_INVARIANT',
+  'BLOCKED_AMBIGUOUS_TEXTBOOK',
+  'BLOCKED_MANIFEST',
+  'BLOCKED_UNKNOWN',
+]
+
+// 'ready-to-apply' 는 표에 없다(dryRun/stopReasons 에 따라 READY 또는
+// BLOCKED_NEEDS_APPROVAL 로 갈리는 유일한 컨텍스트-의존 status — 아래
+// computeApplyEligibility() 가 특수 처리한다). 'applied'/'apply-failed'/
+// 'rolled-back'/'rollback-failed' 는 승인 이후(실제 실행 시도) 도달하는
+// 종결 상태라 "적용해도 되는가" 라는 사전 질문 자체가 더는 의미가 없다 —
+// applied 는 이미 끝났다는 뜻에서 READY, 나머지 셋(실행 중 실패/롤백)은
+// 사전 정의된 8개 차단 범주 중 어디에도 안 맞아 BLOCKED_UNKNOWN 으로 명시
+// 등록한다(누락이 아니라 "이 표의 분류 범위 밖" 이라는 의식적 표시).
+export const STOP_REASON_TO_APPLY_ELIGIBILITY = {
+  'not-interactive': 'BLOCKED_NEEDS_APPROVAL',
+  'not-approved': 'BLOCKED_NEEDS_APPROVAL',
+  'preflight-mismatch': 'BLOCKED_PREFLIGHT',
+  'baseline-failed': 'BLOCKED_PREFLIGHT',
+  'blocked-write-drift': 'BLOCKED_WRITE_DRIFT',
+  'blocked-invariant': 'BLOCKED_INVARIANT',
+  'blocked-invariant-unavailable': 'BLOCKED_INVARIANT',
+  'blocked-ambiguous-textbook': 'BLOCKED_AMBIGUOUS_TEXTBOOK',
+  'blocked-ambiguous-textbook-unavailable': 'BLOCKED_AMBIGUOUS_TEXTBOOK',
+  'invalid-run-id': 'BLOCKED_MANIFEST',
+  'invalid-manifest': 'BLOCKED_MANIFEST',
+  'manifest-sha-mismatch': 'BLOCKED_MANIFEST',
+  'manifest-tampered': 'BLOCKED_MANIFEST',
+  'env-flag-required': 'BLOCKED_MANIFEST',
+  'env-mismatch': 'BLOCKED_MANIFEST',
+  'unsafe-sql': 'BLOCKED_MANIFEST',
+  'rollback-of-report-load-failed': 'BLOCKED_MANIFEST',
+  'rollback-of-mismatch': 'BLOCKED_MANIFEST',
+  applied: 'READY',
+  'apply-failed': 'BLOCKED_UNKNOWN',
+  'rollback-failed': 'BLOCKED_UNKNOWN',
+  'rolled-back': 'BLOCKED_UNKNOWN',
+}
+
+/**
+ * status 문자열(+ dryRun/stopReasons 컨텍스트) -> apply_eligibility 8값.
+ * 순수 함수, network/IO 없음. runPlan() 은 이 함수가 만든 report.
+ * apply_eligibility 를 그대로 재사용하고(재계산하지 않음), computeStandardStatus()
+ * 도 이 함수 하나로 4값을 유도한다(같은 표를 공유 — 서로 다른 판정 로직이
+ * 갈라지지 않도록).
+ * @returns {typeof APPLY_ELIGIBILITY_VALUES[number]}
+ */
+export function computeApplyEligibility({ status, dryRun, stopReasons }) {
+  if (status === 'ready-to-apply') {
+    const reasons = stopReasons || []
+    if (!dryRun && (reasons.includes('SUPABASE_ACCESS_TOKEN 미설정') || reasons.includes('CI 환경'))) {
+      return 'BLOCKED_NEEDS_APPROVAL'
+    }
+    return 'READY'
+  }
+  if (Object.prototype.hasOwnProperty.call(STOP_REASON_TO_APPLY_ELIGIBILITY, status)) {
+    return STOP_REASON_TO_APPLY_ELIGIBILITY[status]
+  }
+  return 'BLOCKED_UNKNOWN'
+}
+
+// C2(2026-09-04) — runHotfix() 의 status 문자열(수십 종, apply-failed/
+// preflight-mismatch/blocked-invariant/ready-to-apply/...)을 사람/자동화가
+// 공통으로 볼 수 있는 4값 enum 으로 압축한다. 순수 함수(입력만으로 결정) —
+// 어디서도 network/IO 를 하지 않는다.
+// - PASS: dry-run/plan 모드에서 모든 게이트를 통과(ready-to-apply)했거나,
+//   실제 적용까지 성공(applied)했을 때(경고성 invariant WARN 이 없을 때).
+// - WARN: PASS 와 같은 상태지만 invariants delta 에 new_warn 이 있을 때.
+// - BLOCKED_NEEDS_APPROVAL: dry-run 이 아닌 실제 적용 시도인데 토큰
+//   없음/CI 라서 승인 게이트 이전에 멈췄을 때(status 자체는 ready-to-apply
+//   와 같지만 "계획 확인"이 아니라 "적용 시도"라는 의도가 다르다).
+// - FAIL: 그 외 모든 차단/실패 상태(전부 fail-closed 기본값).
+// plan-eligibility-textbook-identity 트랙(2026-09-05) — 이 함수의 4값
+// 출력/기존 12개 회귀 케이스는 절대 바뀌지 않는다(검증 완료 — 아래는 순수
+// 리팩터: 자체 조건 대신 computeApplyEligibility() 하나로 위임해 "같은
+// 표를 쓰게" 만든 것뿐이다. READY -> PASS/WARN, BLOCKED_NEEDS_APPROVAL 은
+// 그대로, 그 외 전부 FAIL — 원래 로직과 출력이 1:1 대응됨을 확인함).
+export function computeStandardStatus({ status, dryRun, stopReasons, hasNewWarn }) {
+  const eligibility = computeApplyEligibility({ status, dryRun, stopReasons })
+  if (eligibility === 'READY') return hasNewWarn ? 'WARN' : 'PASS'
+  if (eligibility === 'BLOCKED_NEEDS_APPROVAL') return 'BLOCKED_NEEDS_APPROVAL'
+  return 'FAIL'
 }
 
 function writeReportFile(D, reportDir, runId, report, secretEnv) {
@@ -313,9 +486,26 @@ export async function runHotfix(options, deps = {}) {
     report.status = status
     report.finishedAt = D.now().toISOString()
     Object.assign(report, extra)
+    const stopReasonsForEligibility = extra.stopReasons || report.stopReasons || []
+    report.standardStatus = computeStandardStatus({
+      status,
+      dryRun: !!options.dryRun,
+      stopReasons: stopReasonsForEligibility,
+      hasNewWarn: ((extra.invariantsDelta || report.invariantsDelta)?.new_warn?.length || 0) > 0,
+    })
+    // plan-eligibility-textbook-identity 트랙(2026-09-05) — blocked_reason
+    // 은 "원래 status 문자열"(사람이 grep 할 수 있는 원인 그대로), apply_
+    // eligibility 는 위 공유 표로 분류한 8값. 기존 필드(status/standardStatus)
+    // 는 삭제하지 않고 둘 다 추가만 한다.
+    report.blocked_reason = status
+    report.apply_eligibility = computeApplyEligibility({ status, dryRun: !!options.dryRun, stopReasons: stopReasonsForEligibility })
     const reportPath = writeReportFile(D, reportDir, runId, report, secretEnv)
     report.reportPath = reportPath
     log(`\nSTATUS: ${status}`)
+    // QA-V2(2026-09-04): dry-run 의 PASS 는 "계획이 통과했다"는 뜻이지 "적용
+    // 했다"는 뜻이 아니다 — 콘솔에서 둘을 혼동하지 않도록 표시만 덧붙인다
+    // (report.standardStatus 값 자체는 그대로 PASS/WARN/FAIL 4값 enum 유지).
+    log(`STANDARD_STATUS: ${report.standardStatus}${options.dryRun ? ' (DRY-RUN — 실제 적용 아님)' : ''}`)
     log(`DB WRITE: ${extra.dbWriteCount ?? report.dbWriteCount ?? 0}`)
     if (options.jsonOutput) {
       console.log(redactSecrets(redactSecrets(JSON.stringify(report), secretEnv), process.env))
@@ -323,7 +513,18 @@ export async function runHotfix(options, deps = {}) {
     return { status, exitCode, report }
   }
 
+  // 0.5) run-id 형식 게이트(QA-V2, 2026-09-04) — runId 는 생성 SQL 의
+  // dollar-quote 태그($hotfix_<runId>$)와 ABORT 메시지에 그대로 실린다.
+  // 하네스가 만든 값(YYYYMMDDHHmmss-hex)은 항상 영숫자/하이픈이지만,
+  // 호출부가 임의 문자열을 주입할 수 있으므로 여기서 fail-closed 로 막는다
+  // (마지막 방어선은 hotfixManifest.dollarQuoteTag 의 throw).
+  if (!/^[A-Za-z0-9_-]+$/.test(String(runId))) {
+    logErr(`FAIL — run-id 형식 위반(영숫자/하이픈/언더스코어만 허용): ${JSON.stringify(runId)}`)
+    return finish('invalid-run-id', 1, { dbWriteCount: 0 })
+  }
+
   // 1) manifest 로드·검증(+ sha256 기록 — 변조 감지의 기준값)
+  D.onStep('manifest-load')
   let manifest = options.manifest
   let manifestRawText = null
   if (!manifest) {
@@ -357,6 +558,7 @@ export async function runHotfix(options, deps = {}) {
   report.expectedRows = manifest.changes.length
 
   // 1.5) --env production|staging 플래그 게이트(가장 먼저 — 프로젝트 혼동 방지)
+  D.onStep('env-flag')
   if (!ENV_FLAG_VALUES.includes(options.envFlag)) {
     logErr(`FAIL — --env production|staging 플래그가 필요합니다(받은 값: ${JSON.stringify(options.envFlag ?? null)})`)
     return finish('env-flag-required', 1, {})
@@ -386,6 +588,7 @@ export async function runHotfix(options, deps = {}) {
   if (rollbackOfSourceReport) report.rollbackOfSourceRunId = rollbackOfSourceReport.runId
 
   // 2) 환경(project_ref) 게이트
+  D.onStep('env-ref')
   const env = D.loadEnv()
   secretEnv = env
   report.projectRefHost = env.url ? hostFromUrl(env.url) : null
@@ -398,9 +601,14 @@ export async function runHotfix(options, deps = {}) {
   if (ciForced) log('CI 환경 감지(process.env.CI 또는 GITHUB_ACTIONS) — write path 영구 비활성(dry-run 강제, --env 값과 무관)')
 
   // 3) 정적 안전 스캔 (apply/rollback SQL 은 이 시점에 이미 순수 함수로 생성 가능)
-  const applySql = buildApplySql(manifest, runId)
-  const rollbackSql = buildRollbackSql(manifest, runId)
-  const violations = [...staticSafetyScan(applySql), ...staticSafetyScan(rollbackSql)]
+  D.onStep('static-scan')
+  const applySql = D.buildApplySql(manifest, runId)
+  const rollbackSql = D.buildRollbackSql(manifest, runId)
+  // QA-V2(2026-09-04): manifest 를 함께 넘겨 narrative-drift 도 이 단계에서
+  // 한 번 더 본다(예전엔 인자를 아예 안 넘겨 staticSafetyScan 의 manifest
+  // 분기가 이 경로에서는 죽은 코드였다). rollback SQL 쪽은 같은 manifest 라
+  // 중복 보고를 피하려고 SQL 만 스캔한다.
+  const violations = [...staticSafetyScan(applySql, manifest), ...staticSafetyScan(rollbackSql)]
   if (violations.length) {
     logErr('FAIL — 정적 안전 스캔 위반(파괴적 키워드 감지):')
     for (const v of violations) logErr(`  line ${v.line}: ${v.text} (${v.match})`)
@@ -414,6 +622,7 @@ export async function runHotfix(options, deps = {}) {
 
   // 4) 프리플라이트(읽기 전용) — apply 모드는 expect_before(적용 전) 값,
   //    rollback-of 모드는 set(적용 후) 값이 현재 DB 상태와 일치하는지 확인
+  D.onStep('preflight')
   let reader
   if (options.reader) {
     reader = options.reader
@@ -441,11 +650,79 @@ export async function runHotfix(options, deps = {}) {
   }
   log('프리플라이트 PASS — 현재 상태가 manifest 의 기대값과 일치')
 
+  // 4.5) 작업2(b)(2026-09-05, plan-eligibility-textbook-identity) — 교재
+  // identity 모호성 사전 차단(fail-closed). manifest 의 change 가 textbook_id
+  // 를 직접 설정/삽입하거나 current_unit_id 를 설정해 그 유닛의 교재가
+  // 바뀌는 경우, 대상 교재가 라이브 데이터에서 모호 쌍(이름 완전중복 또는
+  // 유사명+같은 출판사)의 일원이면 명시적 textbook_identity ack(정확한
+  // id/name/publisher_name 이 라이브 값과 전부 일치) 없이는 통과시키지
+  // 않는다. preflight(읽기) 직후, invariants delta(5.5) 이전에 둔다 —
+  // 교재 목록 조회 자체가 실패하면 "모호 여부를 확인 못 함" = 차단
+  // (blocked-ambiguous-textbook-unavailable, fail-closed).
+  D.onStep('ambiguous-textbook-check')
+  {
+    const textbookTargets = findTextbookTargetsFromManifest(manifest)
+    if (textbookTargets.length) {
+      let liveTextbooks
+      try {
+        liveTextbooks = await reader.selectAllRows('textbooks', ['id', 'name', 'publisher_name'])
+      } catch (err) {
+        logErr(`FAIL-CLOSED — 교재 목록 조회 실패(모호 교재 확인 불가, 적용 차단): ${err.message}`)
+        return finish('blocked-ambiguous-textbook-unavailable', 1, { ambiguousTextbookError: err.message, dbWriteCount: 0 })
+      }
+      const ambiguousIndex = buildAmbiguousTextbookIndex(liveTextbooks)
+      const liveTextbookById = new Map(liveTextbooks.map((t) => [t.id, t]))
+      const flagged = []
+      for (const target of textbookTargets) {
+        let textbookId = target.textbookId
+        if (target.kind === 'via-unit') {
+          let unitRow
+          try {
+            unitRow = await reader.getRow('units', target.unitId, ['textbook_id'])
+          } catch (err) {
+            logErr(`FAIL-CLOSED — 유닛 조회 실패(모호 교재 확인 불가, 적용 차단): ${err.message}`)
+            return finish('blocked-ambiguous-textbook-unavailable', 1, { ambiguousTextbookError: err.message, dbWriteCount: 0 })
+          }
+          textbookId = unitRow?.textbook_id ?? null
+        }
+        if (!textbookId) continue
+        const partners = ambiguousIndex.get(textbookId)
+        if (partners && partners.size) {
+          flagged.push({ table: target.table, id: target.id, textbookId, ambiguousWith: [...partners] })
+        }
+      }
+      if (flagged.length) {
+        const ackByChangeKey = new Map()
+        for (const c of manifest.changes || []) {
+          if (c.textbook_identity) ackByChangeKey.set(`${c.table}:${c.id}`, c.textbook_identity)
+        }
+        const unresolved = flagged.filter((f) => {
+          const ack = ackByChangeKey.get(`${f.table}:${f.id}`)
+          const liveTb = liveTextbookById.get(f.textbookId)
+          // UUID 가 canonical — id 가 정확히 일치해야만 ack 로 인정한다(이름
+          // 만 주고 id 가 다르거나 없는 ack 는 무효, 요구사항 그대로).
+          return !(ack && liveTb && ack.id === f.textbookId
+            && ack.name === liveTb.name
+            && (ack.publisher_name ?? null) === (liveTb.publisher_name ?? null))
+        })
+        if (unresolved.length) {
+          logErr('FAIL-CLOSED — 모호한 교재(이름 중복/유사) 대상 변경이 textbook_identity ack 없이 시도됨:')
+          for (const f of unresolved) {
+            logErr(`  ${f.table}:${f.id} 교재 ${String(f.textbookId).slice(0, 8)}… (모호 상대: ${f.ambiguousWith.map((x) => `${String(x).slice(0, 8)}…`).join(', ')})`)
+          }
+          return finish('blocked-ambiguous-textbook', 1, { ambiguousTextbookTargets: unresolved, dbWriteCount: 0 })
+        }
+        log(`교재 identity 모호성 확인 PASS — 대상 ${flagged.length}건 전부 textbook_identity ack 로 명시 확인됨`)
+      }
+    }
+  }
+
   // 5) baseline 저장(학습기록 카운트 + 무관 행 스냅샷 해시)
   // headCountFiltered 가 테이블 부재(42P01/PGRST205)를 만나면 {count:0,
   // tableMissing:true} 로 fail-open 반환한다(마이그레이션 미실행 테이블은
   // 잃을 데이터가 없다는 뜻) — 그 외 에러(예: 컬럼 없음)는 그대로 던져
   // 여기서 baseline-failed 로 STOP 한다(예전엔 미처리 예외로 크래시했다).
+  D.onStep('baseline')
   const baselineCounts = {}
   const baselineTableMissing = []
   try {
@@ -477,15 +754,49 @@ export async function runHotfix(options, deps = {}) {
   }
   log(`baseline 저장 완료 — students ${studentsRowsBefore.length}행(hash ${report.baseline.snapshot.students.hash.slice(0, 12)}…) / SCA ${scaRowsBefore.length}행(hash ${report.baseline.snapshot.student_class_assignments.hash.slice(0, 12)}…) 스냅샷 해시 기록`)
 
+  // 5.5) B5(2026-09-04) — invariants delta 미리보기(승인 이전, fail-closed).
+  // D.loadInvariantSnapshot 이 주입된 경우에만 계산한다(기본은 없음 — 이
+  // 기존 30여개 시나리오를 포함해 이 인자를 안 넘기는 모든 호출은 동작이
+  // 전혀 바뀌지 않는다). CLI 진입점(isMain)만 실제 라이브 구현을 넘긴다.
+  // manifest 를 적용했다면 저장소 전체 관점의 invariant 가 새로 FAIL 로
+  // 바뀌는지(예: primary SCA 를 실수로 2개로 만드는 것)를 개별 행 값이
+  // 전부 맞더라도 승인 전에 미리 잡는다 — computeInvariantsDeltaPreview 는
+  // 순수 변환이라 이 단계 자체는 DB 에 아무 것도 쓰지 않는다.
+  if (typeof D.loadInvariantSnapshot === 'function') {
+    D.onStep('invariants-delta')
+    try {
+      const snapshotBefore = await D.loadInvariantSnapshot(reader)
+      const invariantsDelta = computeInvariantsDeltaPreview(snapshotBefore, manifest)
+      report.invariantsDelta = invariantsDelta
+      if (invariantsDelta.new_fail.length > 0) {
+        logErr('FAIL-CLOSED — 이 manifest 를 적용하면 새 invariant FAIL 이 발생합니다(승인 전 차단):')
+        for (const f of invariantsDelta.new_fail) logErr(`  ${f.code} ${f.studentId ?? '(유닛)'} — ${f.detail}`)
+        return finish('blocked-invariant', 1, { invariantsDelta })
+      }
+      if (invariantsDelta.new_warn.length || invariantsDelta.resolved.length) {
+        log(`invariants delta 미리보기 — new_warn ${invariantsDelta.new_warn.length}건, resolved ${invariantsDelta.resolved.length}건`)
+      }
+    } catch (err) {
+      // QA-V2(2026-09-04) — 예전엔 이 예외를 "정보성 기능이니 계속 진행"
+      // (fail-open)으로 넘겼다. 그러면 invariant 를 **확인하지 못한** 계획이
+      // ready-to-apply 로 승인 대상이 된다(실측: 로더 예외 상태에서 apply 가
+      // 그대로 실행됐다). 확인 불가 = 차단이 이 하네스의 기본값이므로
+      // fail-closed 로 바꾼다.
+      logErr(`FAIL-CLOSED — invariants delta 미리보기 계산 실패(적용 차단): ${err.message}`)
+      return finish('blocked-invariant-unavailable', 1, { invariantsDeltaError: err.message, dbWriteCount: 0 })
+    }
+  }
+
   // 6) 계획 출력 + SQL 파일 저장 + rollback 메타데이터 기록
+  // B4(2026-09-04) — insert/delete change 는 c.set 이 없어(fields/
+  // expect_before 만 있음) 기존처럼 c.set 을 직접 순회하면 크래시한다.
+  // describeChange() (hotfixManifest.mjs, 이 로직의 단일 원천)를 그대로
+  // 재사용해 update/insert/delete 전부 안전하게 표시한다(재구현 금지).
+  D.onStep('plan-output')
   log(mode === 'apply' ? '\n=== 변경 계획(before -> after) ===' : '\n=== 되돌리기 계획(rollback-of, 현재 -> 원복) ===')
   for (const c of manifest.changes) {
     log(`  ${c.table}:${c.id}`)
-    for (const col of Object.keys(c.set)) {
-      const fromVal = mode === 'apply' ? c.expect_before[col] : c.set[col]
-      const toVal = mode === 'apply' ? c.set[col] : c.expect_before[col]
-      log(`    ${col}: ${JSON.stringify(fromVal)} -> ${JSON.stringify(toVal)}`)
-    }
+    for (const line of describeChange(c, mode === 'apply' ? 'apply' : 'rollback')) log(`    ${line}`)
   }
   log(`  예상 UPDATE 행 수: ${manifest.changes.length}`)
   if (manifest.must_not_change?.length) {
@@ -506,6 +817,24 @@ export async function runHotfix(options, deps = {}) {
   }
   log(`\napply SQL 저장: ${applySqlPath}`)
   log(`rollback SQL 저장: ${rollbackSqlPath}`)
+
+  // 6.5) C3(2026-09-05) — VERIFY==WRITE 구조적 회귀 가드(verifyWriteDriftGuard)
+  // 를 런타임 FAIL-CLOSED 게이트로 배선한다. 예전엔 이 가드가
+  // scripts/testProdHotfix.mjs 의 happy-path 테스트([B2])에서만 호출됐고,
+  // runHotfix() 흐름 어디에서도 실행되지 않았다 — 즉 실제 프로덕션 실행에는
+  // 전혀 영향을 주지 못하는 죽은 가드였다. 여기서 방금 저장한 applySql/
+  // rollbackSql 그 자체(D.buildApplySql/D.buildRollbackSql 의 실제 출력)를
+  // manifest.changes 의 expect_before/set 과 재대조한다 — 승인 게이트(8)와
+  // dry-run STOP(7) 이전이라, 걸리면 executor.run() 은 절대 호출되지 않는다.
+  D.onStep('write-drift-guard')
+  const writeDriftGuard = verifyWriteDriftGuard(manifest, applySql, rollbackSql)
+  report.writeDriftGuard = writeDriftGuard
+  if (!writeDriftGuard.ok) {
+    logErr('FAIL-CLOSED — VERIFY==WRITE 드리프트 가드 위반(생성된 SQL 이 manifest 와 구조적으로 다름):')
+    for (const m of writeDriftGuard.mismatches) logErr(`  ${m.table ?? '(전체)'}:${m.id ?? ''} ${m.reason} 기대=${JSON.stringify(m.expected ?? '')} 실제=${JSON.stringify(m.actual ?? '')}`)
+    return finish('blocked-write-drift', 1, { writeDriftGuard, dbWriteCount: 0 })
+  }
+  log('VERIFY==WRITE 드리프트 가드 PASS — 생성된 SQL 이 manifest 와 구조적으로 일치')
   log('\nREADY TO APPLY')
 
   // 7) dry-run / CI / 토큰 없음 → STOP (apply·rollback-of 모드 공통)
@@ -516,10 +845,12 @@ export async function runHotfix(options, deps = {}) {
     if (ciForced) reasons.push('CI 환경')
     if (noToken) reasons.push('SUPABASE_ACCESS_TOKEN 미설정')
     log(`\nSTOP(정상) — write path 비활성: ${reasons.join(', ')}`)
+    D.onStep('dry-run-stop')
     return finish('ready-to-apply', 0, { stopReasons: reasons, dbWriteCount: 0 })
   }
 
   // 8) 대화형 승인 게이트 — 정확히 `APPLY <runId>` 만 허용, 재시도 없음
+  D.onStep('approval-gate')
   if (!D.isTTY()) {
     log('\nSTOP — 비대화형(TTY 아님) 환경에서는 승인을 받을 수 없습니다. --dry-run 으로 계획만 확인하세요.')
     return finish('not-interactive', 1, { dbWriteCount: 0 })
@@ -531,6 +862,7 @@ export async function runHotfix(options, deps = {}) {
   }
 
   // 8.5) apply 직전 manifest 파일 재해시 — 승인 이후 파일이 바뀌었으면 중단
+  D.onStep('manifest-reverify')
   if (options.manifestPath) {
     let currentRaw
     try {
@@ -546,6 +878,7 @@ export async function runHotfix(options, deps = {}) {
   }
 
   // 9) apply(forward SQL)
+  D.onStep('apply')
   const executor = options.executor || D.createExecutor({
     kind: options.executorKind || 'management-api',
     projectRef: manifest.project_ref,
@@ -562,6 +895,7 @@ export async function runHotfix(options, deps = {}) {
 
   // 10) postflight — apply 모드는 set(적용 후) 값, rollback-of 모드는
   //     expect_before(원복) 값이 실제로 반영됐는지 확인
+  D.onStep('postflight')
   const forwardPostflightPlan = mode === 'apply' ? postflightPlanCore : revertVerifyPlan
   const postMismatches = await readPlanMismatches(reader, forwardPostflightPlan)
 
@@ -589,6 +923,7 @@ export async function runHotfix(options, deps = {}) {
 
   let healthResult = { ok: true, output: '' }
   if (!postMismatches.length) {
+    D.onStep('health-check')
     healthResult = D.runHealthCheck()
   }
 
@@ -627,6 +962,181 @@ export async function runHotfix(options, deps = {}) {
   return finish('applied', 0, { dbWriteCount })
 }
 
+// ── C1(2026-09-04) — prod:plan 공유 로직 ──────────────────────────────────
+// scripts/prodPlan.mjs(READ-ONLY CLI)가 호출하는 단일 진입점. runHotfix()
+// 를 항상 dryRun:true 로 호출해 게이트 판정(검증/정적스캔/프리플라이트/
+// invariants delta/승인 전 STOP)을 전부 그대로 재사용한다(로직 복제 없음) —
+// 이 함수는 그 위에 "계획을 사람이 읽기 좋게" 만드는 표시 전용 로직만
+// 더한다(위험도 산정, 영향받는 학생/교재/유닛 수 집계, 이름 해석, drift,
+// apply_eligibility 4값 매핑).
+function computeRiskLevel(manifest) {
+  const changes = manifest.changes || []
+  const rowCount = changes.length
+  const hasDelete = changes.some((c) => (c.op || 'update') === 'delete')
+  if (hasDelete || rowCount > 50) return 'HIGH'
+  const hasPrimaryFlip = changes.some((c) => {
+    const op = c.op || 'update'
+    if (op === 'update') return 'is_primary' in (c.set || {}) && c.set.is_primary !== c.expect_before?.is_primary
+    if (op === 'insert') return c.fields?.is_primary === true
+    return false
+  })
+  if (hasPrimaryFlip || rowCount > 10) return 'MEDIUM'
+  return 'LOW'
+}
+
+function summarizeAffected(manifest) {
+  const studentIds = new Set(manifest.affected_students || [])
+  const textbookIds = new Set()
+  const unitIds = new Set()
+  for (const c of manifest.changes || []) {
+    if (c.table !== 'student_class_assignments') continue
+    const tb = c.fields?.textbook_id ?? c.expect_before?.textbook_id ?? c.set?.textbook_id
+    if (tb) textbookIds.add(tb)
+    for (const uid of [c.fields?.current_unit_id, c.expect_before?.current_unit_id, c.set?.current_unit_id]) {
+      if (uid) unitIds.add(uid)
+    }
+  }
+  for (const r of manifest.reference_rows_must_exist || []) {
+    if (r.table === 'units') unitIds.add(r.id)
+    if (r.table === 'textbooks') textbookIds.add(r.id)
+  }
+  return { students: studentIds.size, textbooks: textbookIds.size, units: unitIds.size }
+}
+
+function shortId(id) {
+  return typeof id === 'string' && id.length > 8 ? `${id.slice(0, 8)}…` : String(id ?? '')
+}
+
+function resolveEntityName(namedSnapshot, table, id) {
+  if (!namedSnapshot || !id) return null
+  const map = { classes: namedSnapshot.classes, textbooks: namedSnapshot.textbooks, units: namedSnapshot.units }[table]
+  const row = (map || []).find((r) => r.id === id)
+  return row?.name ?? null
+}
+
+// preflight 항목 하나를 사람이 읽기 좋게(엔티티 라벨 마스킹) 표시한다.
+// 학생 id 는 항상 shortId 로 줄이고(개인 식별 최소화), class/textbook/unit
+// id 는 namedSnapshot 에서 이름을 찾아 함께 보여준다(못 찾으면 shortId 로
+// 폴백). 실제 값 비교(match)는 hotfixResult.report.mismatches 를 그대로
+// 재사용한다(재조회 없음 — 이미 runHotfix 프리플라이트가 한 번 읽은 결과).
+function describePreflightRows(manifest, mismatches, namedSnapshot) {
+  const mismatchByKey = new Map()
+  for (const m of mismatches || []) {
+    const key = `${m.table}:${m.id}:${m.column ?? ''}`
+    mismatchByKey.set(key, m)
+  }
+  const rows = []
+  for (const c of manifest.changes || []) {
+    const op = c.op || 'update'
+    const expect = op === 'insert' ? null : c.expect_before
+    const label = c.table === 'student_class_assignments'
+      ? `SCA ${shortId(c.id)} (학생 ${shortId(expect?.student_id ?? c.fields?.student_id)}, `
+        + `교재 ${resolveEntityName(namedSnapshot, 'textbooks', expect?.textbook_id ?? c.fields?.textbook_id) || shortId(expect?.textbook_id ?? c.fields?.textbook_id)})`
+      : `${c.table} ${shortId(c.id)}`
+    const rowMismatch = (mismatches || []).find((m) => m.table === c.table && m.id === c.id && !m.column)
+    const colMismatches = (expect ? Object.keys(expect) : []).filter((col) => mismatchByKey.has(`${c.table}:${c.id}:${col}`))
+    rows.push({
+      op, label, expect,
+      match: !rowMismatch && colMismatches.length === 0,
+      mismatchReason: rowMismatch?.reason || (colMismatches.length ? `컬럼 불일치: ${colMismatches.join(',')}` : null),
+    })
+  }
+  return rows
+}
+
+/**
+ * @param {object} options runHotfix() 와 같은 옵션(manifestPath 또는 manifest,
+ *   envFlag, reader/fixtureReaderPath, reportDir 등) + refreshExpect(boolean)
+ * @param {object} [deps]
+ * @returns {Promise<{plan:object, hotfixResult:object}>}
+ */
+export async function runPlan(options, deps = {}) {
+  const D = { ...defaultDeps, ...deps }
+  const env = D.loadEnv()
+
+  let manifest = options.manifest
+  if (!manifest) {
+    if (!options.manifestPath) throw new Error('runPlan: manifestPath 또는 manifest 옵션이 필요합니다')
+    manifest = JSON.parse(D.fs.readFileSync(options.manifestPath, 'utf8'))
+  }
+
+  const buildReader = () => {
+    if (options.reader) return options.reader
+    if (options.fixtureReaderPath) {
+      return D.createFixtureReader(JSON.parse(D.fs.readFileSync(options.fixtureReaderPath, 'utf8')))
+    }
+    return D.createLiveReader(env.url, env.anonKey)
+  }
+
+  // (선택) drift refresh — 원본 manifest 파일은 절대 건드리지 않고
+  // <manifest>.refreshed.json 에만 저장한다(B3, 순수 변환 + 이 함수의 IO만 추가).
+  let refreshInfo = null
+  if (options.refreshExpect) {
+    try {
+      const { manifest: refreshed, drift } = await refreshExpectBefore(manifest, buildReader())
+      refreshInfo = { drift }
+      if (options.manifestPath) {
+        const outPath = options.manifestPath.replace(/\.json$/i, '.refreshed.json')
+        D.fs.writeFileSync(outPath, `${JSON.stringify(refreshed, null, 2)}\n`, 'utf8')
+        refreshInfo.outPath = outPath
+      }
+    } catch (err) {
+      refreshInfo = { error: err.message, drift: [] }
+    }
+  }
+
+  const lintFindings = lintManifestNarratives(manifest)
+
+  // 핵심 게이트는 runHotfix() 를 dry-run + invariants delta 켜서 그대로
+  // 재사용한다(READ-ONLY 는 dryRun:true 가 구조적으로 보장 — 승인 게이트
+  // 진입 전에 항상 STOP).
+  const hotfixResult = await runHotfix(
+    { ...options, manifest, manifestPath: undefined, dryRun: true },
+    { ...D, loadInvariantSnapshot: D.loadInvariantSnapshot || buildInvariantSnapshotFromReader },
+  )
+
+  // 이름 해석용 스냅샷 — 실패해도 plan 자체는 계속(엔티티 라벨이 shortId 로 폴백).
+  let namedSnapshot = null
+  try {
+    namedSnapshot = await buildInvariantSnapshotFromReader(buildReader())
+  } catch { /* 이름 해석 실패는 무시 — plan 은 이미 hotfixResult 로 판정 완료 */ }
+
+  // plan-eligibility-textbook-identity 트랙(2026-09-05) — apply_eligibility
+  // 는 runHotfix()(항상 dryRun:true 로 호출됨, 위)가 이미 computeApplyEligibility()
+  // 공유 표로 계산해 report 에 실어둔 값을 그대로 재사용한다(재계산/재분류
+  // 하지 않음 — "runPlan 과 computeStandardStatus 가 같은 표를 쓴다"는
+  // 요구를 이 재사용으로 만족). lintFindings(runPlan 자신의 서술 lint
+  // 재확인, 표시용)가 위반이면 BLOCKED_MANIFEST — 실제로는 validateManifest
+  // 내부도 동일한 lintManifestNarratives() 를 호출해 이미 hotfixResult.status
+  // 를 'invalid-manifest'(-> BLOCKED_MANIFEST)로 만들었을 것이므로 이
+  // 분기는 대부분 hotfixResult 값과 일치하지만, 우선순위를 명시적으로 고정한다.
+  const lintOk = lintFindings.length === 0
+  const apply_eligibility = lintOk ? hotfixResult.report.apply_eligibility : 'BLOCKED_MANIFEST'
+
+  const plan = {
+    runId: hotfixResult.report.runId,
+    manifestId: manifest.id,
+    title: manifest.title || null,
+    projectRef: manifest.project_ref,
+    lint: { ok: lintOk, findings: lintFindings },
+    status: hotfixResult.status,
+    preflight: describePreflightRows(manifest, hotfixResult.report.mismatches, namedSnapshot),
+    affected: summarizeAffected(manifest),
+    learningBaselineTables: manifest.learning_baseline_tables || [],
+    baseline: hotfixResult.report.baseline || null,
+    risk: computeRiskLevel(manifest),
+    invariantsDelta: hotfixResult.report.invariantsDelta || null,
+    drift: refreshInfo?.drift || [],
+    refreshedManifestPath: refreshInfo?.outPath || null,
+    applySqlPath: hotfixResult.report.applySqlPath || null,
+    rollbackSqlPath: hotfixResult.report.rollbackSqlPath || null,
+    apply_eligibility,
+    blocked_reason: lintOk ? hotfixResult.report.blocked_reason : 'invalid-manifest',
+    dbWriteCount: 0,
+  }
+  return { plan, hotfixResult }
+}
+
 // ── CLI 진입점 ─────────────────────────────────────────────────────────
 function parseArgv(argv) {
   const args = { _: [] }
@@ -653,6 +1163,11 @@ if (isMain) {
     console.error('사용법: node scripts/prodHotfix.mjs <manifest.json> --env production|staging [--dry-run] [--report-dir <dir>] [--executor management-api] [--fixture-reader <file>] [--expect-manifest-sha <hex>] [--rollback-of <report.json>] [--json]')
     process.exitCode = 1
   } else {
+    // B5(2026-09-04) — 실제 CLI 경로에서만 invariants delta 미리보기를
+    // 켠다(D.loadInvariantSnapshot 이 함수일 때만 5.5 단계가 동작 — 테스트는
+    // 이 값을 넘기지 않으므로 기존 동작이 전혀 바뀌지 않는다). 픽스처 리더
+    // 여도 그대로 동작한다(buildInvariantSnapshotFromReader 는 reader 추상화
+    // 하나만 쓴다 — 없는 테이블은 빈 배열로 안전하게 스킵).
     const result = await runHotfix({
       manifestPath: path.resolve(manifestArg),
       dryRun: !!parsed.dryRun,
@@ -663,7 +1178,7 @@ if (isMain) {
       expectManifestSha: parsed.expectManifestSha,
       rollbackOfReportPath: parsed.rollbackOfReportPath ? path.resolve(parsed.rollbackOfReportPath) : undefined,
       jsonOutput: !!parsed.jsonOutput,
-    })
+    }, { loadInvariantSnapshot: buildInvariantSnapshotFromReader })
     process.exitCode = result.exitCode
   }
 }

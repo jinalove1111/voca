@@ -24,6 +24,48 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
 
 ## BLOCKED
 
+### [P1] `STALE_CLASS_SCA` REAL 3건 정리 여부 — 운영자 결정 대기 (2026-09-04, 109차)
+- 근거: `handoff.md` 2026-09-04(109차) 발견 7,
+  `.ai-status/implementer-prod-check-invariants-ef.json`,
+  `docs/qa/ops-2026-09-04/ghost-legacy-inventory.md` §12.
+- 내용: 109차에 신설된 invariant `STALE_CLASS_SCA`(배정 행의 `class_id`가
+  사람 반인데 학생의 현재 `students.class_id`와 다름)가 라이브에서 REAL
+  3명을 잡았다 — 황***/김***/김***의 배정 행이 `Presentation 6`에 남아
+  있고 현재 반은 `MS Advanced Class`. **셋 다 `students.current_unit_id`
+  경로로 학습 화면은 정상 해석되어 실사용 영향은 0**(health FAIL 0)이고,
+  기존 `PRIMARY_UNIT_MISMATCH`/`CLASS_ASSIGNMENT_CONTRADICTION` baseline과
+  같은 근본 원인의 다른 단면이다. 정리하려면 DB 쓰기가 필요해 운영자
+  승인 대상 — 코드 조치는 없다.
+- 안전한 경로: `npm run prod:plan -- <manifest>`로 drift/위험도/
+  `apply_eligibility`를 먼저 뽑고(READ-ONLY), 승인 시 `prod:apply`.
+
+### [P2] 정원 성장 경로 UNDECIDED 3건 — 제품 결정 필요 (2026-09-04, 109차)
+- 근거: `docs/qa/ops-2026-09-04/garden-growth-paths.md`.
+- 내용: 정원 포인트에 **집계되지 않는데 집계돼야 하는지 판단이 안 선**
+  경로 3건 — ① 복습 큐 해소(`SpellingReview`, `clearSpellingReviewWord`)
+  ② 입실시험 문항 정답(`EntranceTest`, 시험 완료만 기록) ③ 미니게임
+  정답(Balloon/Fishing/Pizza/Train, `onGrantReward`만). 코드 추적 결과
+  **BUG는 0건**이고(퀴즈/철자/가이드 완료/레벨업 미션은 정상 COUNTS,
+  열람·듣기·발음은 설계상 의도적 미집계) 이 3건은 순수 제품 정책이라
+  에이전트가 임의로 바꾸지 않았다. CLAUDE.md 규칙 12(학생 대상 기능
+  변경 금지)도 함께 걸려 있어 **운영자 지시 없이는 착수 불가**.
+
+### [P2] `4fc69e2d` — REAL SCA 참조 1건 발생으로 삭제 경로 변경 (2026-09-04, 109차)
+- 근거: `docs/qa/ops-2026-09-04/ghost-legacy-inventory.md` §6~§7,
+  `handoff.md` 2026-09-04(109차) 발견 6.
+- 내용: 아래 108차 [P3] 카드("참조자 0명이라 관리자 UI에서 바로 삭제
+  가능")의 **전제가 깨졌다.** 2026-09-03 08:26 UTC에 REAL 학생 1명이 이
+  유닛을 비-primary SCA로 새로 탐색해 참조가 0 → **1**이 됐다
+  (`students.current_unit_id`는 여전히 이 유닛을 안 가리켜 학습 영향은 0).
+  동시에 신규 invariant `UNIT_CONTENT_DUPLICATE`가 이 유닛을
+  `36bba4d0`(중1 천재 이상기 "Unit 1", REAL 11 SCA/9 students)과 단어 40개
+  **100% 동일**로 탐지 — "미스업로드" 의심의 구조적 증거다.
+- 변경된 안전 경로(순서 고정): ① 운영자가 단어 목록을 직접 보고
+  미스업로드임을 확정 → ② 그 REAL 학생의 SCA 행을 `36bba4d0`으로 재배정
+  (`v3_43` 패턴 / `prod:plan` → `prod:apply`) → ③ words 먼저 삭제 후
+  units 삭제(`v3_44` 패턴). **재배정 전 삭제 금지.**
+- 109차는 SQL을 작성하지도 실행하지도 않았다(READ-ONLY 지시).
+
 ### [P0] PR #9/#10/#11 + 신규 `qa/overnight-2026-09-04` 통합 브랜치 merge 결정 — 운영자 승인 대기 (2026-09-04, 108차)
 - 근거: `handoff.md` 2026-09-04(108차), `docs/qa/overnight-2026-09-04/*.md`.
 - 내용: 4건 모두 로컬/CI 검증 완료 상태로 운영자 merge 승인만 남음.
@@ -537,6 +579,29 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
 _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` 상태 파일 생성)_
 
 ## VERIFY
+
+### [P0] `qa/ops-automation-2026-09-04` 통합 브랜치 — 12시간 자율 운영 자동검증 완료, PR 생성/merge 검토 대기 (2026-09-04, 109차)
+- 근거: `handoff.md` 2026-09-04(109차), `ROADMAP.md` 2026-09-04(109차),
+  `docs/qa/ops-2026-09-04/*.md`, `docs/qa/ops-report/ops-report-latest.md`,
+  `docs/production-safety-harness-runbook.md` §7~§9.
+- 내용(최종 커밋 `278c89a`): Harness V2(트랙 B/C — 서술 lint,
+  VERIFY==WRITE 구조 가드, drift refresh, SCA insert/delete narrow
+  ALLOWLIST, invariant delta fail-closed, `prod:plan` 신설, `prod:apply`
+  별칭 + `STANDARD_STATUS`) · 운영 보고서 표준화(트랙 D/P — `opsStatus`
+  4-state enum + finding 스키마 + `npm run prod:report`) · invariant 4종
+  추가(트랙 E/F) · 관리자 핵심 흐름 복합 회귀 63단언(트랙 M) · 계정 분류
+  회귀 34단언 · ghost/legacy 인벤토리 REFRESH 26항목(트랙 O) · 정원 성장
+  경로 분류(트랙 H, BUG 0) · 하네스 인벤토리(트랙 A) · P1 생성 경고 수정
+  (`create_student` warnings + UI 배너, 44단언).
+- 검증: `npm run build` PASS, `npm run verify:all` ALL DOMAINS PASS,
+  `health:students` 36/10/0(무회귀), `prod:check` WARN(invariant FAIL 0 /
+  WARN 64), 로컬 Release Gate PASS, 개별 15 스위트 PASS.
+  **Production DB WRITE 0 · SQL 실행 0 · 학생 데이터 변경 0 · merge 0 ·
+  deploy 0 · main push 0.**
+- 검수 대기 사항: qa-reviewer/security-reviewer 코드 리뷰 미착수, 운영자
+  PR 생성·merge 결정(위 BLOCKED "PR #9/#10/#11 + …" 카드와 함께 판단).
+- 알려진 문서 갭 1건: 런북 §9-7의 `verify:prod-hotfix` 단언 수 표기가
+  300(최종 실행 기준 301) — 코드 불일치 아님, 다음 세션이 정정.
 
 ### [P0] `qa/overnight-2026-09-04` 통합 브랜치 — 11 트랙 야간 QA 검증 완료, PR 생성/merge 검토 대기
 - 근거: `handoff.md` 2026-09-04(108차), `ROADMAP.md` 2026-09-04(108차),

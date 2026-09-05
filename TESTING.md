@@ -470,3 +470,492 @@ _이 섹션부터는 append — 위 내용은 원본 그대로 보존._
 `extra:false`로 시작하고(`DEVELOPER_GUIDE.md` 신규 규칙 참고) 정말
 "13개 필수 도메인 밖 보너스 커버리지"인 경우에만 명시적으로 `extra:true`
 를 붙인다.
+
+## 관련 항목: 운영 자동검증 스위트 신규 2종 + 기존 3종 확장 (2026-09-04, 109차)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+12시간 자율 운영 자동검증 세션(`handoff.md` 2026-09-04(109차) 참고)이
+추가/확장한 스위트다. **전부 네트워크 0**(라이브 조회가 필요한 경로는
+`--from-dir`/`--fixture`/`dryRun` 픽스처로 대체) — 이 스위트들을 아무리
+많이 돌려도 프로덕션에는 어떤 쓰기도 나가지 않는다.
+
+| 스크립트 | verify 명령 | 도메인 | 단언 | required(`extra`) |
+|---|---|---|---|---|
+| `scripts/testAdminFlows.mjs`(신규) | `verify:admin-flows` | admin | **63** | required(`extra:false`) |
+| `scripts/testAccountClassification.mjs`(신규) | `verify:account-classification` | admin | **34** | required(`extra:false`) |
+| `scripts/testOpsStatus.mjs`(신규) | `verify:ops-status` | admin | 141 → **150** | required(`extra:false`) |
+| `scripts/testProdPlan.mjs`(신규) | `verify:prod-plan` | admin | 27 → **32** | required(`extra:false`) |
+| `scripts/testProdHotfix.mjs`(확장) | `verify:prod-hotfix` | admin | 253 → **301** | `extra:true`(기존 등록 유지) |
+| `scripts/testProdCheck.mjs`(확장) | `verify:prod-check` | admin | 162 → **195** | `extra:true`(기존 등록 유지) |
+
+각 스위트가 고정하는 계약:
+
+- **`testAdminFlows.mjs`** — "학생 생성 → 반 이동 → 교재 배정/전환 →
+  유닛 변경"을 같은 픽스처 위에 이어 붙인 **복합** 회귀. 개별 흐름은 이미
+  `testCreateStudentUnitAssignment`/`testTextbookIsolation`/
+  `testAdminUnitEdit`/`testAssignmentUnitGuards`가 각각 보므로 로직을
+  재구현하지 않고 **단계 간 상호작용**만 본다(이전 primary가 삭제가 아니라
+  demote되는지, 교재 왕복 전환 후에도 각 SCA가 자기 진도를 지키는지, 전
+  구간 `student_progress`/`student_daily_progress`/`word_status` 쓰기가
+  계속 0건인지). FAIL-first 자가검증(규칙 15): src를 고치지 않고 가짜 DB에
+  "delete-instead-of-demote" 옛 동작을 재현해 데모트 단언이 실제로 false가
+  됨을 증명했다.
+- **`testAccountClassification.mjs`** — `classifyAccount`의 REAL/TEST/
+  ARCHIVED/QA_FIXTURE 판정 정책(Paul/Cookie/Jinaa/Barry/QA/archived) 회귀.
+  게이트가 REAL만 대상으로 하므로 이 분류가 흔들리면 health/invariant
+  결과 전체가 조용히 달라진다.
+- **`testOpsStatus.mjs`** — `STATUS` enum 4값, finding 스키마
+  (`assertFinding`), `recommendedActionFor`/`writeRequiredFor`/
+  `approvalRequiredFor`의 **코드 전수 커버리지**(INVARIANT_CODES + health
+  `CHECK_CODES` + WARN 전용 파생 2종 — 미상 코드는 조용한 통과가 아니라
+  보수적 폴백), 두 하네스 `--json` → finding 어댑터, `prod:report` CLI
+  (`--from-dir` 오프라인 모드, 13절 헤더 순서, **마스킹 우회 방지 decoy
+  필드 회귀**).
+- **`testProdPlan.mjs`** — `prod:plan`이 항상 `dryRun:true`로만 동작하고
+  risk/영향 집계/이름 해석/drift/`apply_eligibility` 4값을 정확히 내는지.
+- **`testProdHotfix.mjs` 확장분(V2 보안 하드닝 7종)** — dollar-quote
+  태그화, `raise` 데이터 `%%` 이스케이프, manifest 문자열 값의
+  `$`/`%`/역슬래시/제어문자 차단, `expect` 타입 검사, 서술 lint 오탐,
+  invariant delta 실패 시 fail-closed, `op:'delete'` rollback의
+  `created_at` + `op:'insert'`의 `(student_id, class_id)` 선행조건.
+  전부 FAIL-first로 추가(수정 전 코드에서 각각 34건/4건 FAIL 실측).
+- **`testProdCheck.mjs` 확장분** — 신규 invariant 4종
+  (`STALE_CLASS_SCA`/`DUPLICATE_SCA_TEXTBOOK`/`STUDENT_NO_CLASS`/
+  `UNIT_NAME_UUID_CONTRADICTION`). FAIL-first(`b11a6a6`에서 16단언 FAIL
+  확인) 후 구현.
+
+정리 후 `tests/harness/registry.mjs` totals는 **64 required / 71 extra**다
+(108차의 57/72에서 신규 등록 + required 승격 반영). 이번 세션도 신규
+스위트가 기본 `extra:true`로 등록되는 습관이 재발해 4종을 required로
+승격했다(`50d07cb`/`9bcfcd8`) — 108차에서 한 번 정정한 문제가 다시 나온
+것이므로, 규칙을 `DEVELOPER_GUIDE.md`에도 명시했다.
+
+> **주의(정직 기록)**: `docs/production-safety-harness-runbook.md` §9-7은
+> `verify:prod-hotfix`를 300단언으로 적어 두었으나 최종 실행 기준은 301이다
+> — 마지막 커밋(`2ea5e86`) 이후 1단언 증가분이 런북 문구에만 미반영된
+> 상태이며, 코드/테스트 자체의 불일치는 아니다.
+
+### 운영 산출물을 만드는 스위트의 격리 규칙
+
+`prod:report`처럼 **저장소에 커밋되는 산출물**을 만드는 도구의 회귀
+테스트는 반드시 `--out-dir` 등으로 출력 경로를 격리해야 한다. 이번
+세션에 회귀 테스트가 기본 경로에 그대로 써서 실행할 때마다 커밋된
+`docs/qa/ops-report/ops-report-latest.{md,json}`을 덮어쓰는 문제가
+발견돼 `4f622ca`로 수정했다.
+
+## 관련 항목: Harness V2 최종 검증 — write drift guard 배선 수정 + 12종 오류탐지 커버리지 12/12 (2026-09-05, 110차)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+운영자 지시로 PR #15 merge는 보류하고 Harness V2 자체만 최종 검증한
+세션(`handoff.md` 2026-09-05(110차) 참고)이 `verify:prod-hotfix`/
+`verify:prod-check`를 확장했다.
+
+- **`verify:prod-hotfix`(`testProdHotfix.mjs`) 301 → 317단언**
+  (`fix/harness-v2-drift-guard-wiring`, 커밋 `9620586`/`41b4f40`). 새 섹션
+  `[C3]`(write drift guard — SET 값/대상 row id/row 수 드리프트 3케이스 +
+  대조군 실행 0회 단언)와 `[C4]`(`D.onStep` 훅으로 dry-run/apply 성공
+  경로의 단계 순서 배열 단언)를 추가. 배경: `verifyWriteDriftGuard`가
+  `runHotfix`에 배선되지 않은 죽은 코드였고, 시그니처가
+  `(manifest, runId)`로 SQL을 내부에서 재생성해 비교하는 동어반복이었다
+  — 시그니처를 `(manifest, applySql, rollbackSql)`로 바꿔 실제 생성·저장된
+  SQL을 재파싱 대조하도록 수정하고 `runHotfix` step 6.5에 배선, 새 STOP
+  사유 `blocked-write-drift`(표준 상태 `FAIL`)를 추가했다. FAIL-first(규칙
+  15): 배선 `return`을 임시 제거하면 정확히 6단언 FAIL(311/317), 복구 후
+  317/317.
+- **`verify:prod-check`(`testProdCheck.mjs`) 195 → 204단언**
+  (`test/harness-v2-coverage`, 커밋 `cc55154`/`af8aea1`/`5c36b7d`/
+  `09104d9`). 신규 invariant `TEXTBOOK_SIMILAR_NAME`(WARN) — 같은
+  `publisher_name` + 학년 접두(초/중/고 1~6)·괄호·공백을 제거한 정규화
+  키가 동일하면 경고(완전동일명은 기존 `TEXTBOOK_NAME_DUPLICATE`가 담당).
+  fixture 양성 1건 + 대조군 3건. `prodDataLoader`의 `textbooks` SELECT에
+  `publisher_name`을 추가(`src/utils/wordLibrary.js`가 이미 라이브에서
+  쓰던 컬럼이라 신규 GRANT 불필요). 라이브 `prod:check`에서 실제로 1건
+  검출: 교재 `faf6dc71`/`01afd62a`(출판사 "동아", 정규화 키
+  "동아윤정미", 중1/중2).
+- 이로써 12종 운영 오류 자동탐지 커버리지가 **12/12**로 확인됐다(상세
+  표는 `handoff.md` 110차 참고 — primary 없음/중복, `current_unit_id`
+  NULL, unit-교재 불일치, ghost 참조, 비정상 unit, stale SCA, 교재 유사명,
+  잘못된 `textbook_id`, garden 기록 누락, spelling/quiz/guided 성장 누락,
+  reward/XP 중복 지급).
+
+> **주의(정직 기록)**: `docs/production-safety-harness-runbook.md`
+> §9-7의 단언 수(300/301)는 이번 세션에서 317로 다시 늘어났다 — 위 §9-7
+> 정정 항목과 마찬가지로 문서 문구 갱신은 다음 세션 인계 사항이다.
+
+## Browser E2E (Playwright) — 학생/관리자 화면 렌더 자동 검증 (2026-09-05)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+지금까지의 4개 카테고리(순수 로직/오프라인 번들/라이브 e2e 스크립트/
+정적 검사)는 전부 "코드가 올바른 값을 계산하는가"만 본다 — 그 값이 실제
+브라우저 DOM에 **보이는지**는 검증하지 않았다. 운영자가 "학생 화면 스크린샷
+보내주세요"를 대신할 수 있는 자동 검증이 필요해, 5번째 카테고리로
+Playwright(chromium) 기반 브라우저 E2E를 추가했다(`npm run verify:e2e`,
+`tests/e2e/`).
+
+### 설계
+
+- **네트워크 전체 mock** — `tests/e2e/lib/mockRoutes.mjs`가 `page.route()`로
+  이 페이지의 모든 요청을 가로챈다: `**/rest/v1/**`(PostgREST, 아래 소형
+  에뮬레이터로 응답)·`**/auth/v1/**`·`**/realtime/**`(Supabase Auth/
+  Realtime, 빈 응답/차단)·`/api/verify-student-pin`·`/api/verify-admin-pin`
+  (로그인 성공 fixture 응답)·그 외 `/api/**`(fire-and-forget 호출부라
+  실패해도 화면이 안 깨짐, 무해한 응답). 실제 Supabase 프로젝트/Vercel에
+  나가는 요청은 **0건**이 전제 — 가장 먼저 등록하는 catch-all
+  `page.route('**/*', ...)`이 위 어느 패턴에도 안 걸리는 요청을
+  `unmockedRequests`에 기록하고(공개 폰트 CDN 3종은 정적 에셋이라 허용
+  목록으로 제외), 각 spec/러너가 그 배열이 비어있는지 마지막에 단언한다
+  (fail-closed — mock을 깜빡한 새 쿼리가 조용히 실제 네트워크로 새는 것을
+  테스트 스스로 잡아낸다).
+- **소형 PostgREST 에뮬레이터**(`tests/e2e/lib/postgrestMock.mjs`) — 새
+  쿼리 빌더/ORM을 만들지 않고, 앱이 실제로 보내는 URL(`/rest/v1/<table>
+  ?select=...&col=eq.val&order=...`)과 헤더(`Prefer`, `Accept`)만
+  해석해서 인메모리 fixture 테이블에 적용한다. 지원 연산자(`eq/neq/in/is/
+  gt/gte/lt/lte`, `select`의 임베디드 관계, `order`, `.single()`/
+  `.maybeSingle()`의 PGRST116 계약, upsert의 `on_conflict`)를 벗어나면
+  조용히 무시하지 않고 즉시 throw한다 — "이 쿼리는 검증 못 함"이 가짜
+  PASS로 둔갑하지 않게 하기 위함(기존 verify 하네스들의 fail-closed
+  원칙과 동일). PATCH/POST/DELETE는 메모리 테이블에 실제로 반영되고
+  `callLog`에 기록되어(`writesTo(db, table)`) 단언에 쓰인다.
+- **fixture**(`tests/e2e/fixtures/index.mjs`) — 실 프로덕션 데이터/실명
+  0건, 전부 합성. 교재 4종: "중1 천재 이상기"/"중2 천재 이상기"(둘 다
+  publisher_name="천재", 학년만 다름) + 유사명 함정 "중1 동아 윤정미"/
+  "중2 동아 윤정미"(publisher_name="동아") — 이 정확한 조합은 가상의
+  worst case가 아니라 `verify:prod-check`의 `TEXTBOOK_SIMILAR_NAME`
+  invariant가 실제 프로덕션에서 검출한 실제 사례(교재 `faf6dc71`/
+  `01afd62a`, 위 섹션 참고)를 그대로 재현한 것이다. QA 학생은
+  `src/utils/accountStatus.js`의 `TEST_ACCOUNT_NAMES` 중 하나("cookie")
+  — 관리자 화면이 기본적으로 숨기는 테스트 계정이라 실학생 로스터를
+  전혀 침범하지 않는다. SCA는 primary=교재A(Unit2 진행 중)/
+  secondary=교재B로, "배정 교재가 여러 개"인 실제 운영 패턴을 재현한다.
+- **spec 실행 방식** — `npx playwright test`(공식 테스트 러너)를 쓰지
+  않고, `scripts/testBrowserE2E.mjs`가 Playwright의 저수준 API
+  (`chromium.launch()`)를 Node 스크립트 안에서 직접 구동한다. 각 spec
+  (`tests/e2e/student.spec.mjs`/`admin.spec.mjs`)은 `run(browser, baseURL)`
+  하나를 export하고, `tests/e2e/lib/harness.mjs`의 초경량 `check`/`skip`
+  레코더로 기존 `scripts/test*.mjs` 관례("PASS/FAIL/SKIP 한 줄 로그 +
+  마지막에 `총 N단언 — PASS n / FAIL m / SKIP k`")를 그대로 재사용한다 —
+  이 저장소에 두 번째 테스트 프레임워크를 들이지 않기 위함(CLAUDE.md
+  규칙 6과 같은 정신).
+
+### 실행
+
+```
+npm run verify:e2e     # scripts/testBrowserE2E.mjs — 아래 순서로 자동 실행
+```
+
+1. `dist/index.html` 존재 확인(없으면 `npm run build` 먼저 실행)
+2. Playwright chromium 가용성 확인 — 없으면 아래 "브라우저 미설치" 참고
+3. `vite preview`를 고정 포트(기본 4173, `E2E_PREVIEW_PORT`로 변경 가능)로
+   기동, 준비될 때까지 폴링
+4. `student.spec.mjs` → `admin.spec.mjs` 순차 실행, 브라우저/서버 정리
+5. 두 spec의 단언 + "미mock 요청 0건"/"mock 내부 오류 0건" 단언을 합쳐
+   기존 하네스와 동일한 형식으로 요약 출력
+
+**브라우저 미설치**: `npx playwright install chromium`을 아직 안 돌렸다면
+로컬에서 이 스크립트는 기본적으로 **FAIL(exit 1)**한다(fail-closed —
+"검증 못 함"을 조용한 통과로 만들지 않음, CLAUDE.md 규칙 18과 같은 원칙).
+`E2E_SKIP_IF_NO_BROWSER=1`을 설정했을 때만 SKIP(exit 0)으로 넘어간다.
+
+### 시나리오 커버리지 (2026-09-05 갱신 — A6 spelling/guided-learning SKIP 해소)
+
+| 시나리오 | 상태 | 비고 |
+|---|---|---|
+| A1 학생 로그인 | PASS | |
+| A2 배정 교재 표시(라벨/A·B 구분) | PASS | |
+| A3 현재 Unit 표시 | PASS | |
+| A4 Unit dropdown 목록(교재 범위) | PASS | |
+| A5 현재 유닛 단어 수 표시 | PASS | |
+| A6 퀴즈 정답 → 화면 갱신 + mock 쓰기 로그(`student_progress`) | PASS | |
+| A6-spelling 쓰기(철자) 모드 단어 1개 정답 → 화면 갱신 + mock 쓰기 로그 + 정원 포인트 +1(대조군: 같은 단어 재정답 +0) | PASS | 별도 브라우저 컨텍스트/fixture(0 기준선)에서 실행 — A6/A7 퀴즈 진행과 정원 포인트가 섞이지 않는다. |
+| A6-guided GuidedSession(3분 데일리 리추얼) 단어 1개(발음→예문→퀴즈) 완료 → 화면 갱신 + `completedWords`/`clearedWords` 동시 기록 + 정원 포인트 +1(합집합) | PASS | PronounceStep/ExampleStep의 "따라 말하기"는 클릭이 필요하지만, headless 환경의 mic 거부 경로(`getUserMedia` reject → `onAnyResult()` 그대로 호출)와 `window.speechSynthesis`의 무음성 `onend`가 실제 마이크/외부 TTS 네트워크 없이도 다음 단계 진행을 가능하게 한다(실측: 미mock 요청 0건). 별도 브라우저 컨텍스트/fixture(0 기준선). |
+| A7 English Garden 성장(gardenPoints 증가) | PASS | |
+| B1 관리자 로그인 | PASS | |
+| B2 학생 카드(실명 없음) | PASS | |
+| B3 배정 교재 목록(primary 표시) | PASS | |
+| B4 교재/Unit 목록(유닛 수 라벨 포함) | PASS | |
+| B5 UUID로 별개 교재 판정(라벨 유사성 무관) | PASS | |
+| B6 유사명 함정 교재 비혼입 | PASS | |
+
+총 56단언(PASS 56 / FAIL 0 / SKIP 0), 실행마다 "미mock 요청 0건 / mock
+내부 오류 0건"을 함께 확인한다(3회 연속 실행으로 플레이크 0 확인,
+2026-09-05).
+
+### 관리자 화면 UI가 작업 지시서 가정과 다른 점(정직 기록)
+
+작업 지시서는 "교재 선택기 옵션에 유닛 수 포함"을 `TextbookAssignmentPanel`
+드롭다운 하나로 상정했지만, 실제 코드는 두 화면에 걸쳐 있다:
+`src/utils/textbookLabel.js`의 `textbookOptionLabel`(이름 (출판사) · 유닛
+N개)이 "학생 관리" 탭의 "📚 교재 관리" 패널(배정할 교과서 select)에서
+쓰이고, 카드별 유닛 수(`{units.length}개 유닛`)는 "반 관리" 탭의 반
+카드에 별도로 표시된다. `admin.spec.mjs`는 두 화면을 조합해 같은 의도
+(B4/B5/B6)를 검증한다.
+
+### 이 하네스의 한계 — mock이라 실 DB 상태는 검증하지 않는다
+
+이 E2E 스위트는 "코드가 주어진 데이터를 올바르게 렌더하는가"만 본다.
+실제 프로덕션 데이터가 그 전제(예: primary SCA 행 존재, 유령 유닛 없음)를
+만족하는지는 **여기서 검증하지 않는다** — 그건 `npm run prod:check`(위
+Production Safety Harness 섹션, READ-ONLY 라이브 invariant 스캔)의
+몫이다. 두 하네스는 서로 다른 축을 담당한다: `verify:e2e`=코드가 옳게
+그리는가(합성 fixture, DB 무접촉), `prod:check`=지금 DB 데이터가
+정상인가(실 데이터 읽기 전용, 렌더 무검증). 학생 화면이 실제로 깨졌다는
+제보가 오면 먼저 `prod:check`로 데이터 이상을 배제한 뒤, 그래도 이상하면
+`verify:e2e`의 fixture를 그 제보 상황과 비슷하게 조정해 재현을 시도하는
+순서를 권장한다.
+
+새 컴포넌트에 브라우저 E2E를 추가할 때 참고할 것: 이번 두 spec 모두
+`data-testid`를 **한 개도 추가하지 않았다** — 기존 placeholder(`이름
+입력...`/`PIN 4자리`/`비밀번호` 등)·sr-only `<label>`(`교과서 선택`/
+`현재 유닛 선택`)·버튼 텍스트·이미 존재하는 CSS 클래스(`.word-text`,
+`p.font-black.text-gray-800` 카드 헤더 등)만으로 충분했다. `data-testid`는
+헌법상 허용된 유일한 앱 코드 수정 예외지만, 항상 최후 수단으로 남겨둘 것
+— 특히 관리자 "반 카드"처럼 `hasText` 부분 문자열 매칭이 **다른 카드가
+펼쳐졌을 때 그 안의 드롭다운 옵션에 우연히 같은 이름 문자열이 들어있어**
+오탐하는 경우(`admin.spec.mjs`의 `findClassCard`, "🔗 교재 연결" select가
+다른 반 이름을 옵션으로 나열)가 실제로 있었다 — 이런 경우 헤더 요소를
+정확히 매칭(`^exact$` 정규식)한 뒤 `xpath=ancestor::`로 컨테이너를
+거슬러 올라가는 편이, 데이터를 다시 렌더링하는 `data-testid`를 새로
+추가하는 것보다 이 저장소의 "앱 코드 원칙적 무수정" 원칙에 더 잘 맞는다.
+
+## 관련 항목: 브라우저 E2E — `npm run verify:e2e` (2026-09-05)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+기존 4개 카테고리(순수 로직/오프라인 번들/라이브 READ-ONLY/자기완결형
+하네스) 전부 Node 프로세스 안에서 로직만 실행하고 실제 브라우저 렌더는
+검증하지 않는다 — 운영자가 "학생/관리자 화면이 실제로 이렇게 보이나요?"를
+확인하려면 지금까지는 스크린샷을 직접 봐야 했다. `npm run verify:e2e`
+(`scripts/testBrowserE2E.mjs`)는 Playwright(chromium)로 빌드 산출물(`vite
+preview`)을 실제 브라우저에 렌더해 학생/관리자 화면의 표시 결과를 자동
+단언한다 — **다섯 번째 카테고리**.
+
+### 설계 — 전 네트워크 mock, 실제 Supabase/Vercel 요청 0건
+
+- `tests/e2e/lib/postgrestMock.mjs` — 소형 PostgREST 에뮬레이터. 앱이
+  실제로 보내는 쿼리 문자열(`select=`/`eq.`/`in.`/`is.`/`order=`/`limit=`,
+  POST/PATCH/DELETE + `Prefer`/`Accept` 헤더)을 파싱해 인메모리 fixture
+  테이블에 대해 그대로 해석한다. 미지원 연산자는 조용히 무시하지 않고
+  즉시 throw — 호출부(`mockRoutes.mjs`)가 그 throw를 잡아 500 응답 +
+  `db.errors`에 기록하므로, "이 쿼리는 검증 못 함"이 가짜 PASS로 둔갑하지
+  않는다.
+- `tests/e2e/lib/mockRoutes.mjs` — 한 페이지의 모든 네트워크를
+  `page.route()`로 가로챈다: `/rest/v1/**`(위 에뮬레이터에 위임),
+  `/auth/v1/**`·`/realtime/**`(차단), `/api/verify-student-pin`·
+  `/api/verify-admin-pin`(성공 fixture 응답), 그 외 `/api/**`(무해한 실패
+  응답 — 호출부가 fire-and-forget이라 화면에 영향 없음). 공개 폰트 CDN
+  (`fonts.googleapis.com`/`fonts.gstatic.com`/`cdn.jsdelivr.net`)은
+  Supabase/Vercel과 무관한 순수 정적 에셋이라 허용 목록으로 별도 취급하고,
+  그 외 어떤 호스트로든 나가는 요청이 하나라도 있으면
+  `unmockedRequests`에 기록된다 — 각 spec/러너가 이 배열이 비어있는지를
+  fail-closed 가드로 단언한다.
+  - Playwright route 등록 순서 주의사항(실제로 여기서 걸렸던 버그):
+    여러 `route()`가 같은 요청에 매치되면 **나중에 등록된 것부터**
+    실행된다. 그래서 무엇에나 매치되는 catch-all 가드를 제일 먼저
+    등록하고, 넓은 `/api/**`를 그다음, 구체적인
+    `/api/verify-student-pin`·`/api/verify-admin-pin`을 제일 나중에
+    등록한다(제일 나중 등록 = 제일 먼저 실행 = 구체적 mock이 넓은
+    패턴에 가려지지 않음).
+- `tests/e2e/fixtures/index.mjs` — 실 프로덕션 데이터/실명 0건, 전부 합성.
+  교재 2종("중1 천재 이상기"/"중2 천재 이상기", 둘 다 출판사 "천재", 유닛당
+  단어 수 20/15/10 vs 12/12/12) + 유사명 함정 교재 2종("중1/중2 동아
+  윤정미") + QA 학생 1명(`src/utils/accountStatus.js`의
+  `TEST_ACCOUNT_NAMES` 중 "cookie") + SCA(primary=A의 Unit2,
+  secondary=B). 로그인 PIN은 fixture 상수("0000"/관리자 "9999")일 뿐 실제
+  `.env`/`.env.local`의 PIN과는 무관하다.
+- 앱 코드(`src/`, `api/`)는 **한 글자도 수정하지 않았다** — 기존
+  sr-only `<label>`(교과서/유닛 select), 버튼 텍스트, `placeholder`,
+  `<option value>`(UUID)만으로 전부 선택자를 구성할 수 있어
+  `data-testid`조차 추가하지 않았다.
+
+### 실행 흐름 (`scripts/testBrowserE2E.mjs`)
+
+1. `dist/index.html` 존재 확인 — 없으면 `npm run build` 먼저 실행.
+2. Playwright chromium 기동 시도 — 실패(바이너리 미설치)하면:
+   - `E2E_SKIP_IF_NO_BROWSER=1`이면 **SKIP**(exit 0).
+   - 아니면(기본값) **FAIL**(exit 1, fail-closed) — "브라우저가 없으니
+     통과로 친다"를 구조적으로 금지.
+3. `vite preview`를 자식 프로세스로 기동(고정 포트, 준비될 때까지 폴링).
+4. `tests/e2e/student.spec.mjs` → `tests/e2e/admin.spec.mjs` 순서로
+   실행하고, 기존 하네스 관례와 동일한 "총 N단언 — PASS n / FAIL m /
+   SKIP k" 형식으로 출력(Playwright CLI 러너 대신 playwright API를
+   Node에서 직접 구동해 이 출력 형식에 맞춤).
+5. 종료 시 브라우저 + preview 서버를 모두 정리.
+
+### 시나리오 커버리지
+
+- **학생 화면**(`student.spec.mjs`, A1~A7): 이름+PIN 로그인 → 배정 교재
+  라벨("이름 (출판사)" 형식, primary/secondary가 서로 다른 옵션으로 존재,
+  "중1"/"중2"가 각각 정확히 1개 옵션에만 등장) → 현재 Unit(A의 Unit2)
+  선택 상태 → Unit dropdown이 A의 Unit1~3 정확히 3개(B 유닛 비혼입) →
+  현재 유닛 단어 수(15개) 표시 → 퀴즈 2문항 정답 처리 후 진행 표시 갱신
+  + `student_progress` mock 쓰기 호출에 `clearedWords` 반영(2초 디바운스
+  대기) → English Garden `gardenPoints`가 2점(단어 2개 clearedWords)
+  기준으로 0칸 → 1칸(`POINTS_PER_STAGE=2`) 성장.
+  - **(2026-09-05 갱신)** spelling/guided-learning 완료 후 갱신도 채워
+    넣었다(각각 별도 브라우저 컨텍스트 + 새 fixture, 0 기준선) — 더는
+    SKIP이 아니다.
+    - **A6-spelling**: WordBrowser의 "쓰기" 모드(`mode='write'`) 진입 →
+      단어 목록에 이미 보이는 원문을 그대로 입력(방향은 fixture 전 클래스
+      `spelling_direction='kr2en'`이라 화면엔 뜻만, 입력은 영어 철자) →
+      정답 화면 표시 + "문제 N/전체" 진행 갱신 → `student_progress` mock
+      쓰기 로그의 `clearedWords`에 반영 → 정원 성장 포인트(EnglishGarden의
+      "🌿 성장 포인트 N" 원시값, `readGardenFilled`의 칸 수보다 세밀함)가
+      정확히 +1(`useStudent.js`의 `recordSpellingAnswer` 정답 분기가
+      `markWordCleared`를 1회만 호출) → 같은 단어를 다시 맞혀도(대조군)
+      `markWordCleared`가 멱등이라 +0.
+    - **A6-guided**: 대시보드 히어로 CTA("▶ 오늘의 학습 시작")로
+      GuidedSession 진입 → 첫 단어의 발음(PronounceStep)·예문
+      (ExampleStep)·퀴즈(QuizStep) 3단계를 실제로 통과 → 퀴즈 정답 순간
+      `onQuizAnswer`(=`recordQuizAnswer`)가 `markWordCleared`를, STEPS
+      소진 시점의 `goNext()`가 `onMarkCompleted`(=`markWordCompleted`)를
+      호출해 **같은 단어**가 `student_progress` mock 쓰기 로그의
+      `completedWords`/`clearedWords` 양쪽에 모두 기록됨을 확인 →
+      `attachmentCore.js`의 `gardenSet`이 `cleared∪completedWords∪
+      clearedWords` **합집합**이라 이 단어 하나는 정원 포인트를 정확히
+      +1만 늘린다(두 콜백이 불렸다고 +2가 아님 — 실측으로 확정).
+      PronounceStep/ExampleStep의 "따라 말하기"는 실제 마이크 녹음을
+      요구하지 않는다 — headless Chromium의 `getUserMedia` 거부가
+      `WordDetail.jsx`의 mic 에러 캐치 분기(`onAnyResult()`를 그대로
+      호출)로 흡수되고, `window.speechSynthesis`도 음성이 0개인
+      상태에서 `onend`를 정상 발생시켜(실측) 외부 TTS 네트워크 호출
+      (`translate.googleapis.com` 등)로 폴백하지 않는다 — 3회 연속 실행
+      전부 미mock 요청 0건.
+- **관리자 화면**(`admin.spec.mjs`, B1~B6): PIN 로그인 → "반 관리" 탭에서
+  교재 컨테이너 4종이 별개 카드, 카드 라벨에 유닛 수 포함(A/B=3개 유닛,
+  C/D=1개 유닛) → "동아 윤정미" 유사명 페어를 각각 펼쳐도 카드별
+  단어 id(fixture 접두사가 다름)가 섞이지 않음 → "학생 관리" 탭(기본
+  숨김인 "🧪 테스트 계정 보기"를 켜야 QA 학생이 보임)에서 학생 카드 표시
+  → "📚 교재 관리" 패널의 배정 요약에 primary(A, "(현재)" 표시)/
+  secondary(B) 둘 다 노출, C/D는 미노출 → "배정할 교과서 추가" select에는
+  아직 배정 안 된 C/D만 남고 `<option value>`가 각자의 fixture UUID와
+  정확히 일치(문자열 라벨이 아니라 value로 판정).
+  - 원 시나리오 문구("TextbookAssignmentPanel 드롭다운에 유닛 수 포함")는
+    실제 코드 확인 결과와 정확히 일치하지 않았다 — 유닛 수 표시는
+    `TextbookAssignmentPanel`이 아니라 "반 관리" 탭의 반 카드
+    (`AdminScreen.jsx`의 `renderClassCard`)에 있었다. 두 화면을 조합해
+    같은 검증 의도(유닛 수 노출/UUID로 별개 판정/유사명 비혼입)를
+    충족시켰다 — 코드가 아니라 애초 문서 가정 쪽의 오차였다는 점을
+    정직하게 남긴다.
+  - 실측 함정: 반 카드를 펼치면 "🔗 교재 연결" 위젯이 **다른** 반 이름을
+    연결 후보 `<option>` 텍스트로 정당하게 포함한다(예: "중1 동아 윤정미"
+    카드를 펼치면 그 안에 "중2 동아 윤정미"라는 문자열이 존재) — 카드
+    컨테이너 전체를 `hasText`로 찾으면 이 정상 동작 때문에 두 카드가
+    동시에 매치되는 오탐이 실제로 재현됐다. 카드 식별은 반드시 헤더
+    `<p className="font-black text-gray-800">{className}</p>`만 정확히
+    매칭해야 한다(카드 컨테이너 전체 텍스트로 찾지 말 것).
+
+### registry.mjs 편입과 Release Gate
+
+- `tests/harness/registry.mjs`에 `browserE2E` 도메인으로 등록하되
+  `extra: true` — 브라우저가 설치되지 않은 환경(로컬 최초 클론 등)에서
+  `npm run verify:all`이 이 이유만으로 빨간불이 되지 않게 하기 위함(등록
+  항목 note에 이유 명시). `extra: true`는 "실행을 건너뛴다"는 뜻이
+  아니라 "실패해도 도메인 전체 PASS/FAIL 판정에는 반영하지 않는다"는
+  뜻이다(`tests/harness/runDomain.mjs`) — 그래서 브라우저가 없으면
+  `testBrowserE2E.mjs` 자신은 실제로 FAIL(exit 1)하지만, `verify:all`은
+  그 FAIL을 extra로 흡수해 계속 그린으로 남는다.
+- `scripts/verifyRelease.mjs`에는 **Gate 5**로 필수 편입했다(`npm run
+  verify:e2e` 실행, FAIL이면 게이트 FAIL). 로컬(비 CI)에서는
+  `E2E_SKIP_IF_NO_BROWSER=1`을 자동 주입해 브라우저 미설치를 SKIP으로
+  받아주지만, CI(`process.env.CI`)에서는 그 관용을 끄고 그대로
+  fail-closed로 둔다 — `.github/workflows/release-gate.yml`이 Gate 5
+  실행 전에 `npx playwright install --with-deps chromium`을 미리 실행해
+  CI에서는 항상 브라우저가 있는 상태로 이 게이트를 돈다. `npm run
+  verify:release -- --skip-e2e`로 Gate 5만 생략할 수 있다(빠른 반복용,
+  CI/배포 전에는 쓰지 말 것 — 다른 Gate의 `--skip-build`/`--skip-verify`와
+  동일한 관례).
+- `scripts/testReleaseGate.mjs`가 Gate 5의 존재와 CI fail-closed
+  배선(정적 검사)을 단언한다.
+
+### 한계 — 이 하네스가 담당하지 않는 것
+
+이 E2E는 **전부 mock**이다 — 실제 Supabase 프로덕션 DB의 현재 상태(유령
+유닛 잔존, 배정 고아, 학생별 해석 체인 붕괴 등)는 검증하지 않는다. 그
+분업은 `npm run prod:check`(READ-ONLY 라이브 invariant 스캔, Gate 3b)와
+`npm run prod:hotfix`(승인 게이트 있는 실제 수정)가 담당한다 — 이 E2E는
+"이 코드가 브라우저에서 렌더될 때 표시 결과가 맞는가"만 보고,
+"프로덕션 데이터 자체가 건강한가"는 보지 않는다. 또한 실제 마이크/스피커
+하드웨어가 필요한 말하기/듣기 도메인은 여전히 이 E2E의 범위 밖(기존
+speaking/listening SKIP 사유와 동일한 구조적 한계)이다.
+
+## TTS 폴백(네트워크 TTS) mock + voice 0개 스텁 (2026-09-05)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+### 문제
+
+CI(GitHub Actions ubuntu, headless chromium)에서만 `verify:e2e`가
+"실제 Supabase/Vercel로 나간 미mock 요청 0건" 가드에 FAIL했다(로컬
+Windows는 56/56 PASS). 실제로 나간 요청은 Supabase/Vercel이 아니라
+`https://translate.googleapis.com/translate_tts?...`(4건, `q=e2e-tb-a-w2-1`
+2회 + `q=I%20can%20see%20an%20e2e-tb-a-w2-1.` 2회) — `src/utils/speech.js`
+274행 `networkTtsUrl()`이 만드는 URL로, `playWordAudio()`(같은 파일
+289행)의 발음 재생 3단계 폴백 중 마지막 tier다: ① Supabase Storage에
+저장된 mp3 → ② 기기 `speechSynthesis`(en-GB) → ③ 그래도 안 되면 Google
+번역 TTS 네트워크 호출. CI의 headless chromium은 `speechSynthesis`
+voice가 0개라 tier ②가 매번 실패해 tier ③으로 넘어갔고, 그 요청이
+`tests/e2e/lib/mockRoutes.mjs`의 가드에 안 걸려 FAIL이 났다(가드 자체는
+"mock 안 된 새 외부 요청을 잡아낸다"는 설계대로 정상 동작한 것 — 이번에
+새로 mock을 추가해야 할 대상이 하나 생긴 것뿐이다). 로컬 Windows는 실제
+voice가 있어 tier ②에서 항상 성공했기 때문에 이 경로 자체가 로컬에서는
+한 번도 실행되지 않았다 — `student.spec.mjs`의 A6-guided 섹션에 있던
+기존 주석("voices 0개로도 onend를 정상 발생시킴")은 이 로컬 실측을
+CI에도 그대로 적용될 것처럼 잘못 일반화한 것이었다(정정 커밋에서 주석도
+함께 고쳤다).
+
+### 수정
+
+`tests/e2e/lib/mockRoutes.mjs`의 `installMocks()`에 두 가지를 추가했다:
+
+1. **`page.addInitScript()`로 voice 0개 조건을 모든 실행 환경에서 강제**
+   — `window.speechSynthesis.getVoices`를 빈 배열을 반환하도록, `speak()`를
+   항상 비동기로 `utterance.onerror`를 발생시키도록 덮어썼다. 이제
+   로컬(Windows, voice 있음)과 CI(ubuntu, voice 없음) 양쪽 모두 tier
+   ②(기기 TTS)가 항상 실패하고 tier ③(네트워크 TTS)이 항상 실행된다 —
+   "로컬은 우연히 이 경로를 안 타서 통과, CI만 실행해서 실패"라는
+   플랫폼 의존적 플레이크를 구조적으로 없앴다(env var 스위치 없이 항상
+   적용 — 별도 옵션을 늘리는 대신 이 경로를 항상 검증하는 쪽을 택함).
+2. **`translate.googleapis.com/translate_tts` 전용 mock route 추가** —
+   catch-all(`**/*`)보다 나중에 등록해 우선 적용되며, 상태 200 + 빈
+   body(`audio/mpeg`)로 응답한다. 빈 body는 브라우저에서 재생 실패
+   (`audio.onerror`)로 이어지지만, `src/utils/speech.js`의
+   `playAudioUrl()`은 이미 이 에러를 흡수해 `onEnd`를 계속 호출하는
+   코드 경로를 갖고 있어(발음 실패가 학습 흐름을 막지 않는다는 기존
+   설계) 화면 진행에 영향이 없다. **허용 목록에 조용히 추가하지 않고**
+   호출마다 `ttsFallbackRequests` 배열에 기록 + `console.log`로 남긴다 —
+   이후 다른 미mock 외부 호스트가 새로 생기면 여전히 fail-closed 가드가
+   잡아낸다는 원래 설계를 그대로 지킨다.
+
+`ttsFallbackRequests`는 `installMocks()` 반환값에 추가되고, 두 spec
+(`student.spec.mjs`/`admin.spec.mjs`) 모두 `unmockedRequests`와 같은
+방식으로 여러 브라우저 컨텍스트(A6/A6-spelling/A6-guided)에 걸쳐 집계해
+최종 반환값에 포함시키며, `scripts/testBrowserE2E.mjs` 러너가 스펙별
+요약 줄에 "TTS 폴백 호출(mock 처리됨) N건"으로 출력한다(실측: student
+스펙 4건 — PronounceStep/ExampleStep의 "따라 말하기" 각 1회 × times
+반복 2회, admin 스펙 0건 — 관리자 화면은 발음 재생을 쓰지 않음).
+
+### FAIL-first 검증
+
+수정 전 상태(voice-0 스텁은 있고 mock route만 없는 상태)로 먼저
+`verify:e2e`를 실행해 CI와 **완전히 동일한** 실패를 로컬에서 재현했다
+(미mock 요청 4건, URL/쿼리스트링까지 CI 로그와 정확히 일치) — 그 다음
+mock route를 복원해 56/56 PASS로 돌아오는 것을 확인했다. 이 순서로
+"수정이 실제로 그 실패를 고쳤다"는 것을 코드가 아니라 실행 결과로
+확인했다(`CLAUDE.md` 규칙 15).
+
+### 참고 — 관련 없는 기존 플레이크(해결됨, 2026-09-05 후속 커밋)
+
+수정 검증 중 `answerOneQuizQuestionCorrectly()`(student.spec.mjs)가
+드물게 `getByRole('button', { name: fixtureWord.meaning })`에서 strict
+mode violation을 낸 사례를 1회 관측했다(`뜻-e2e-tb-a-2-1`이
+`뜻-e2e-tb-a-2-10`/`-12`의 부분 문자열이라 여러 버튼에 매치) — 이 파일의
+A6-spelling 섹션(54-62행)이 이미 같은 부류의 문제를 정규식 앵커로 회피한
+전례가 있었는데, 정작 `answerOneQuizQuestionCorrectly` 자신은 그 앵커를
+안 쓰고 있었다(주석은 있었지만 적용이 빠짐). TTS/voice 스텁과는
+무관했다(quiz 문항 순서 무작위성에만 의존). 같은 브랜치의 후속 커밋에서
+`answerOneQuizQuestionCorrectly`에도 A6-guided(313행 `quizOptionRe`)와
+동일한 `new RegExp('^[A-D] ' + escapeRegExp(meaning) + '$')` 앵커를
+적용해 해결했다 — `npm run verify:e2e` 3회 연속 56/56 PASS로 확인.

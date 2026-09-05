@@ -1,0 +1,25 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "prod-check-invariants-ef",
+  "task": "Track E/F — prod:check invariant 4종(STALE_CLASS_SCA/DUPLICATE_SCA_TEXTBOOK/STUDENT_NO_CLASS/UNIT_NAME_UUID_CONTRADICTION) + 계정 분류 정책 회귀 테스트",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-04T00:00:00Z",
+  "updated_at": "2026-09-04T04:10:00Z",
+  "files_owned": [
+    "scripts/testProdCheck.mjs",
+    "scripts/lib/prodInvariants.mjs",
+    "scripts/testAccountClassification.mjs",
+    "package.json"
+  ],
+  "files_read": [
+    "scripts/lib/studentHealthRules.mjs",
+    "scripts/studentHealthCheck.mjs",
+    "src/utils/accountStatus.js",
+    "src/utils/entranceEligibility.js"
+  ],
+  "summary": "FAIL-first(b11a6a6, 16단언 FAIL 확인) -> 구현(81728de, 195/195 PASS) -> 계정 분류 정책 회귀 테스트 신규 작성+등록(a9cc129, 34/34 PASS). npm run build 통과, verify:prod-check 195/195, verify:account-classification 34/34, verify:release-gate 124/124 전부 PASS. READ-ONLY 라이브 prod:check --require-env --json 1회 실행(WRITE 0) — STALE_CLASS_SCA 3건(전부 '황***'/'김***' 반이 Presentation 6 SCA 잔존, MS Advanced Class 로 이동 후), DUPLICATE_SCA_TEXTBOOK/STUDENT_NO_CLASS/UNIT_NAME_UUID_CONTRADICTION 라이브 0건. verdict=WARN(health fail 0, invariants fail 0, warn 63).",
+  "blocker": null,
+  "next_action": "qa-reviewer 인수 — STALE_CLASS_SCA 3건은 운영자 결정 대상(refs.recommendedAction='반 이동 후 잔존 배정 검토')일 뿐 코드 조치 없음. .tmp/prod-reports/ 는 로컬 임시 산출물(git 미추적)이라 정리 불필요."
+}
