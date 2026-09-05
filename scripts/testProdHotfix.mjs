@@ -29,6 +29,8 @@ import {
   applyManifestToSnapshot,
   diffInvariantFindings,
   computeInvariantsDeltaPreview,
+  findClassIdChangeGuardViolations,
+  findClassIdOwnerMismatches,
 } from './lib/hotfixManifest.mjs'
 import {
   runHotfix,
@@ -2481,6 +2483,275 @@ console.log('\n=== [C5] validateManifest — 교재 name 기반 매칭/조건 �
   const okAck = buildAmbigManifest({ textbook_identity: { id: AMBIG_TB2, name: 'V2 중2 천재 이상기', publisher_name: '천재교육' } })
   const res5 = validateManifest(okAck)
   check('올바른 형식의 textbook_identity 는 통과', res5.valid, JSON.stringify(res5.errors))
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// [E](2026-09-06, fix/harness-allowlist-sca-class-id) — student_class_
+// assignments.class_id ALLOWLIST 확장 + 전용 가드(findClassIdChangeGuardViolations/
+// findClassIdOwnerMismatches, class-id-change-check 단계) 검증.
+// ══════════════════════════════════════════════════════════════════════
+console.log('\n=== [E1] validateManifest — class_id 변경의 구조적 선행조건 ===')
+const CID_STUDENT_A = crypto.randomUUID()
+const CID_STUDENT_B = crypto.randomUUID()
+const CID_SCA_A = crypto.randomUUID()
+const CID_SCA_B = crypto.randomUUID()
+const CID_SCA_B_OTHER = crypto.randomUUID()
+const CID_TEXTBOOK = crypto.randomUUID()
+const CID_CLASS_OWNER = crypto.randomUUID()
+const CID_CLASS_STALE = crypto.randomUUID()
+const CID_OTHER_CLASS = crypto.randomUUID()
+const CID_OTHER_TEXTBOOK = crypto.randomUUID()
+const CID_UNIT = crypto.randomUUID()
+
+function buildClassIdManifest(overrides = {}) {
+  const { changesOverride, mustNotChangeOverride, referenceOverride, ...topOverrides } = overrides
+  return {
+    id: 'test-class-id-001',
+    project_ref: 'testref123',
+    title: 'class_id 변경 테스트',
+    created_at: '2026-09-06',
+    class_id_policy: 'textbook_owner',
+    affected_students: [CID_STUDENT_A, CID_STUDENT_B],
+    changes: changesOverride || [
+      {
+        table: 'student_class_assignments', id: CID_SCA_A,
+        expect_before: { student_id: CID_STUDENT_A, textbook_id: CID_TEXTBOOK, is_primary: true, current_unit_id: CID_UNIT, class_id: CID_CLASS_STALE },
+        set: { class_id: CID_CLASS_OWNER },
+      },
+      {
+        table: 'student_class_assignments', id: CID_SCA_B,
+        expect_before: { student_id: CID_STUDENT_B, textbook_id: CID_TEXTBOOK, is_primary: true, current_unit_id: CID_UNIT, class_id: CID_CLASS_STALE },
+        set: { class_id: CID_CLASS_OWNER },
+      },
+    ],
+    must_not_change: mustNotChangeOverride !== undefined ? mustNotChangeOverride : [
+      {
+        table: 'student_class_assignments', id: CID_SCA_B_OTHER,
+        expect: { student_id: CID_STUDENT_B, class_id: CID_OTHER_CLASS, textbook_id: CID_OTHER_TEXTBOOK, is_primary: false, current_unit_id: null },
+      },
+    ],
+    reference_rows_must_exist: referenceOverride !== undefined ? referenceOverride : [
+      { table: 'classes', id: CID_CLASS_OWNER, expect: { class_type: 'textbook' } },
+    ],
+    learning_baseline_tables: [],
+    ...topOverrides,
+  }
+}
+
+{
+  const ok = validateManifest(buildClassIdManifest())
+  check('class_id_policy=textbook_owner + expect_before(student_id/textbook_id) + reference_rows_must_exist(classes) 모두 갖추면 valid', ok.valid, JSON.stringify(ok.errors))
+
+  const noPolicy = buildClassIdManifest({ class_id_policy: undefined })
+  const resNoPolicy = validateManifest(noPolicy)
+  check("class_id_policy 필드 없음 → 거부(class_id 변경 자체가 거부됨)", !resNoPolicy.valid, JSON.stringify(resNoPolicy.errors))
+  check('class_id_policy 없음 에러 메시지가 class_id_policy 를 언급', resNoPolicy.errors.some((e) => e.includes('class_id_policy')))
+
+  const wrongPolicy = buildClassIdManifest({ class_id_policy: 'class-move' })
+  check("class_id_policy 가 'textbook_owner' 가 아닌 다른 값 → 거부", !validateManifest(wrongPolicy).valid)
+
+  const noStudentId = buildClassIdManifest({
+    changesOverride: [{
+      table: 'student_class_assignments', id: CID_SCA_A,
+      expect_before: { textbook_id: CID_TEXTBOOK, is_primary: true, current_unit_id: CID_UNIT, class_id: CID_CLASS_STALE },
+      set: { class_id: CID_CLASS_OWNER },
+    }],
+  })
+  check('expect_before.student_id 없으면 거부(unique/must_not_change 가드에 필요)', !validateManifest(noStudentId).valid)
+
+  const noTextbookId = buildClassIdManifest({
+    changesOverride: [{
+      table: 'student_class_assignments', id: CID_SCA_A,
+      expect_before: { student_id: CID_STUDENT_A, is_primary: true, current_unit_id: CID_UNIT, class_id: CID_CLASS_STALE },
+      set: { class_id: CID_CLASS_OWNER },
+    }],
+  })
+  check('expect_before.textbook_id 없으면 거부(owner 가드에 필요)', !validateManifest(noTextbookId).valid)
+
+  const noClassRef = buildClassIdManifest({ referenceOverride: [] })
+  const resNoClassRef = validateManifest(noClassRef)
+  check('reference_rows_must_exist 에 대상 classes 행이 없으면 거부', !resNoClassRef.valid, JSON.stringify(resNoClassRef.errors))
+
+  // 기존 allowlist 밖 컬럼(예: student_id)은 class_id 허용과 무관하게 여전히 거부.
+  const badStudentIdSet = buildClassIdManifest({
+    changesOverride: [{
+      table: 'student_class_assignments', id: CID_SCA_A,
+      expect_before: { student_id: CID_STUDENT_A, textbook_id: CID_TEXTBOOK, is_primary: true, current_unit_id: CID_UNIT, class_id: CID_CLASS_STALE },
+      set: { student_id: CID_STUDENT_A },
+    }],
+  })
+  check('allowlist 밖 컬럼(student_class_assignments.student_id) 은 여전히 거부', !validateManifest(badStudentIdSet).valid)
+}
+
+console.log('\n=== [E2] findClassIdChangeGuardViolations / findClassIdOwnerMismatches — 순수 함수 ===')
+{
+  const manifest = buildClassIdManifest()
+  const liveScaOk = [
+    { id: CID_SCA_A, student_id: CID_STUDENT_A, class_id: CID_CLASS_STALE, textbook_id: CID_TEXTBOOK, is_primary: true, current_unit_id: CID_UNIT },
+    { id: CID_SCA_B, student_id: CID_STUDENT_B, class_id: CID_CLASS_STALE, textbook_id: CID_TEXTBOOK, is_primary: true, current_unit_id: CID_UNIT },
+    { id: CID_SCA_B_OTHER, student_id: CID_STUDENT_B, class_id: CID_OTHER_CLASS, textbook_id: CID_OTHER_TEXTBOOK, is_primary: false, current_unit_id: null },
+  ]
+  const okResult = findClassIdChangeGuardViolations(manifest, liveScaOk)
+  check('정상 케이스: unique 충돌 0건', okResult.uniqueConflicts.length === 0, JSON.stringify(okResult.uniqueConflicts))
+  check('정상 케이스: must_not_change 누락 0건', okResult.missingMustNotChange.length === 0, JSON.stringify(okResult.missingMustNotChange))
+
+  const liveScaConflict = liveScaOk.map((r) => (r.id === CID_SCA_B_OTHER ? { ...r, class_id: CID_CLASS_OWNER } : r))
+  const conflictResult = findClassIdChangeGuardViolations(manifest, liveScaConflict)
+  check('unique 충돌 케이스: uniqueConflicts 1건 검출', conflictResult.uniqueConflicts.length === 1, JSON.stringify(conflictResult.uniqueConflicts))
+  check('unique 충돌 케이스: conflictingRowId = CID_SCA_B_OTHER', conflictResult.uniqueConflicts[0]?.conflictingRowId === CID_SCA_B_OTHER)
+
+  const manifestNoMustNotChange = buildClassIdManifest({ mustNotChangeOverride: [] })
+  const missingResult = findClassIdChangeGuardViolations(manifestNoMustNotChange, liveScaOk)
+  check('must_not_change 비어있으면 CID_SCA_B_OTHER 가 missingMustNotChange 에 잡힘', missingResult.missingMustNotChange.some((v) => v.missingRowId === CID_SCA_B_OTHER))
+
+  const textbookByIdOk = new Map([[CID_TEXTBOOK, { owner_class_id: CID_CLASS_OWNER }]])
+  check('owner 일치 케이스: 불일치 0건', findClassIdOwnerMismatches(manifest, textbookByIdOk).length === 0)
+
+  const textbookByIdWrong = new Map([[CID_TEXTBOOK, { owner_class_id: CID_CLASS_STALE }]])
+  const ownerMismatches = findClassIdOwnerMismatches(manifest, textbookByIdWrong)
+  check('owner 불일치 케이스: 2건(두 change 모두 같은 textbook) 검출', ownerMismatches.length === 2, JSON.stringify(ownerMismatches))
+
+  const textbookByIdMissing = new Map()
+  check('textbook 자체가 없으면(조회 실패 상당) 불일치로 처리(fail-closed)', findClassIdOwnerMismatches(manifest, textbookByIdMissing).length === 2)
+}
+
+console.log('\n=== [E3] runHotfix 통합 — class_id 변경 정상 경로(dry-run PASS, 트랜잭션 도달) ===')
+{
+  const manifest = buildClassIdManifest()
+  const reader = makeReader(manifest, {
+    tableRowsQueues: {
+      student_class_assignments: [
+        [
+          { id: CID_SCA_A, student_id: CID_STUDENT_A, class_id: CID_CLASS_STALE, textbook_id: CID_TEXTBOOK, is_primary: true, current_unit_id: CID_UNIT },
+          { id: CID_SCA_B, student_id: CID_STUDENT_B, class_id: CID_CLASS_STALE, textbook_id: CID_TEXTBOOK, is_primary: true, current_unit_id: CID_UNIT },
+          { id: CID_SCA_B_OTHER, student_id: CID_STUDENT_B, class_id: CID_OTHER_CLASS, textbook_id: CID_OTHER_TEXTBOOK, is_primary: false, current_unit_id: null },
+        ],
+        [], // after — 이 시나리오는 dry-run 이라 실제로 쓰이지 않음
+      ],
+      textbooks: [[{ id: CID_TEXTBOOK, owner_class_id: CID_CLASS_OWNER }], [{ id: CID_TEXTBOOK, owner_class_id: CID_CLASS_OWNER }]],
+    },
+  })
+  const res = await runHotfix(
+    { manifest, envFlag: 'production', runId: 'RUN-E3-CLASSID-1', reportDir: REPORT_DIR, reader, dryRun: true },
+    { loadEnv: () => envOk() },
+  )
+  check('class_id 변경 정상 경로: dry-run 시 status = ready-to-apply(트랜잭션 SQL 생성까지 도달)', res.status === 'ready-to-apply', res.status)
+  check('class_id 변경 정상 경로: apply_eligibility = READY', res.report.apply_eligibility === 'READY', res.report.apply_eligibility)
+
+  const applyContent = fs.readFileSync(path.join(REPORT_DIR, 'RUN-E3-CLASSID-1.apply.sql'), 'utf8')
+  const rollbackContent = fs.readFileSync(path.join(REPORT_DIR, 'RUN-E3-CLASSID-1.rollback.sql'), 'utf8')
+  check('apply SQL 총 영향 행 수 기대값 2 포함(row_count 단언)', /총 영향 행 수 불일치: % \(기대 2\)/.test(applyContent))
+  check('apply SQL WHERE 절에 before class_id 포함', applyContent.includes(`class_id = '${CID_CLASS_STALE}'`))
+  check('apply SQL SET 절에 after class_id 포함', applyContent.includes(`class_id = '${CID_CLASS_OWNER}'`))
+  check('rollback SQL WHERE 절에 after class_id 포함(되돌리기 대상 식별)', rollbackContent.includes(`class_id = '${CID_CLASS_OWNER}'`))
+  check('rollback SQL SET 절에 before class_id 복원 포함', rollbackContent.includes(`class_id = '${CID_CLASS_STALE}'`))
+}
+
+console.log('\n=== [E4] runHotfix 통합 — unique(student_id,class_id) 충돌 → preflight-unique-conflict(FAIL-first) ===')
+{
+  const manifest = buildClassIdManifest()
+  const liveScaConflict = [
+    { id: CID_SCA_A, student_id: CID_STUDENT_A, class_id: CID_CLASS_STALE, textbook_id: CID_TEXTBOOK, is_primary: true, current_unit_id: CID_UNIT },
+    { id: CID_SCA_B, student_id: CID_STUDENT_B, class_id: CID_CLASS_STALE, textbook_id: CID_TEXTBOOK, is_primary: true, current_unit_id: CID_UNIT },
+    // CID_SCA_B_OTHER 가 이미 목표 class_id(CID_CLASS_OWNER)를 가짐 → 학생 B 의 unique 충돌
+    { id: CID_SCA_B_OTHER, student_id: CID_STUDENT_B, class_id: CID_CLASS_OWNER, textbook_id: CID_OTHER_TEXTBOOK, is_primary: false, current_unit_id: null },
+  ]
+  const reader = makeReader(manifest, {
+    tableRowsQueues: {
+      student_class_assignments: [liveScaConflict, liveScaConflict],
+      textbooks: [[{ id: CID_TEXTBOOK, owner_class_id: CID_CLASS_OWNER }], [{ id: CID_TEXTBOOK, owner_class_id: CID_CLASS_OWNER }]],
+    },
+  })
+  const res = await runHotfix(
+    { manifest, envFlag: 'production', runId: 'RUN-E4-CONFLICT-1', reportDir: REPORT_DIR, reader, dryRun: true },
+    { loadEnv: () => envOk() },
+  )
+  check('unique 충돌: status = preflight-unique-conflict', res.status === 'preflight-unique-conflict', res.status)
+  check('unique 충돌: apply_eligibility = BLOCKED_PREFLIGHT', res.report.apply_eligibility === 'BLOCKED_PREFLIGHT', res.report.apply_eligibility)
+  check('unique 충돌: dbWriteCount = 0', (res.report.dbWriteCount ?? 0) === 0)
+}
+
+console.log('\n=== [E5] runHotfix 통합 — owner_class_id 불일치 → class-id-not-owner ===')
+{
+  const manifest = buildClassIdManifest()
+  const reader = makeReader(manifest, {
+    tableRowsQueues: {
+      student_class_assignments: [
+        [
+          { id: CID_SCA_A, student_id: CID_STUDENT_A, class_id: CID_CLASS_STALE, textbook_id: CID_TEXTBOOK, is_primary: true, current_unit_id: CID_UNIT },
+          { id: CID_SCA_B, student_id: CID_STUDENT_B, class_id: CID_CLASS_STALE, textbook_id: CID_TEXTBOOK, is_primary: true, current_unit_id: CID_UNIT },
+          { id: CID_SCA_B_OTHER, student_id: CID_STUDENT_B, class_id: CID_OTHER_CLASS, textbook_id: CID_OTHER_TEXTBOOK, is_primary: false, current_unit_id: null },
+        ],
+      ],
+      // owner_class_id 가 목표(CID_CLASS_OWNER)와 다름 — 사람 반으로의 이동 시도 등
+      textbooks: [[{ id: CID_TEXTBOOK, owner_class_id: CID_CLASS_STALE }]],
+    },
+  })
+  const res = await runHotfix(
+    { manifest, envFlag: 'production', runId: 'RUN-E5-OWNER-1', reportDir: REPORT_DIR, reader, dryRun: true },
+    { loadEnv: () => envOk() },
+  )
+  check('owner 불일치: status = class-id-not-owner', res.status === 'class-id-not-owner', res.status)
+  check('owner 불일치: apply_eligibility = BLOCKED_PREFLIGHT', res.report.apply_eligibility === 'BLOCKED_PREFLIGHT', res.report.apply_eligibility)
+  check('owner 불일치: dbWriteCount = 0', (res.report.dbWriteCount ?? 0) === 0)
+}
+
+console.log('\n=== [E6] runHotfix 통합 — 다른 SCA 행 must_not_change 누락 → preflight-sca-other-rows-uncovered ===')
+{
+  const manifest = buildClassIdManifest({ mustNotChangeOverride: [] }) // CID_SCA_B_OTHER 를 must_not_change 에서 뺌
+  const reader = makeReader(manifest, {
+    tableRowsQueues: {
+      student_class_assignments: [
+        [
+          { id: CID_SCA_A, student_id: CID_STUDENT_A, class_id: CID_CLASS_STALE, textbook_id: CID_TEXTBOOK, is_primary: true, current_unit_id: CID_UNIT },
+          { id: CID_SCA_B, student_id: CID_STUDENT_B, class_id: CID_CLASS_STALE, textbook_id: CID_TEXTBOOK, is_primary: true, current_unit_id: CID_UNIT },
+          { id: CID_SCA_B_OTHER, student_id: CID_STUDENT_B, class_id: CID_OTHER_CLASS, textbook_id: CID_OTHER_TEXTBOOK, is_primary: false, current_unit_id: null },
+        ],
+      ],
+      textbooks: [[{ id: CID_TEXTBOOK, owner_class_id: CID_CLASS_OWNER }]],
+    },
+  })
+  const res = await runHotfix(
+    { manifest, envFlag: 'production', runId: 'RUN-E6-UNCOVERED-1', reportDir: REPORT_DIR, reader, dryRun: true },
+    { loadEnv: () => envOk() },
+  )
+  check('must_not_change 누락: status = preflight-sca-other-rows-uncovered', res.status === 'preflight-sca-other-rows-uncovered', res.status)
+  check('must_not_change 누락: apply_eligibility = BLOCKED_PREFLIGHT', res.report.apply_eligibility === 'BLOCKED_PREFLIGHT', res.report.apply_eligibility)
+  check('must_not_change 누락: dbWriteCount = 0', (res.report.dbWriteCount ?? 0) === 0)
+}
+
+console.log('\n=== [E7] verifyWriteDriftGuard — class_id 드리프트 검출 ===')
+{
+  const manifest = buildClassIdManifest()
+  const runId = 'RUNID-E7-DRIFT'
+  const goodApplySql = buildApplySql(manifest, runId)
+  const goodRollbackSql = buildRollbackSql(manifest, runId)
+  check('정상 SQL: drift guard ok=true', verifyWriteDriftGuard(manifest, goodApplySql, goodRollbackSql).ok)
+
+  // class_id SET 값을 다른(잘못된) UUID 로 조작한 apply SQL — 생성기가 아니라
+  // "실제로 쓰일 SQL 자체"가 manifest 와 다른 회귀를 재현한다.
+  const tamperedTarget = crypto.randomUUID()
+  const tamperedApplySql = goodApplySql.split(`class_id = '${CID_CLASS_OWNER}'`).join(`class_id = '${tamperedTarget}'`)
+  const driftResult = verifyWriteDriftGuard(manifest, tamperedApplySql, goodRollbackSql)
+  check('class_id SET 값이 조작된 apply SQL: drift guard ok=false', !driftResult.ok)
+  check('class_id SET 값 조작: apply-set-mismatch 사유 포함', driftResult.mismatches.some((m) => m.reason === 'apply-set-mismatch'))
+}
+
+console.log('\n=== [E8] 기존 B2 스타일(current_unit_id 만 변경) manifest 회귀 0 — class_id 가드는 개입하지 않음 ===')
+{
+  const ok = validateManifest(BASE_MANIFEST)
+  check('BASE_MANIFEST(class_id 미사용) 는 여전히 valid', ok.valid, JSON.stringify(ok.errors))
+  const violations = findClassIdChangeGuardViolations(BASE_MANIFEST, [])
+  check('class_id 를 쓰지 않는 manifest 는 findClassIdChangeGuardViolations 가 항상 빈 결과', violations.uniqueConflicts.length === 0 && violations.missingMustNotChange.length === 0)
+  const ownerMismatches = findClassIdOwnerMismatches(BASE_MANIFEST, new Map())
+  check('class_id 를 쓰지 않는 manifest 는 findClassIdOwnerMismatches 가 항상 빈 결과', ownerMismatches.length === 0)
+
+  const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+  const res = await runHotfix(
+    { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-E8-REGRESSION-1', reportDir: REPORT_DIR, reader, dryRun: true },
+    { loadEnv: () => envOk() },
+  )
+  check('B2 스타일 manifest 는 여전히 dry-run PASS(class-id-change-check 가 STOP 시키지 않음)', res.status === 'ready-to-apply', res.status)
 }
 
 console.log(`\n=== summary ===\nPASS ${pass} / FAIL ${fail}`)
