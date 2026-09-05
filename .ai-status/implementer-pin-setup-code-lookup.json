@@ -1,0 +1,24 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "pin-setup-code-lookup",
+  "task": "관리자가 이미 발급된 PIN 확인코드를 잃어버렸을 때 다시 조회할 수 있는 조회 전용 action(get_pin_setup_code) + UI 버튼 추가",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-08-31T00:00:00Z",
+  "updated_at": "2026-08-31T00:00:00Z",
+  "files_owned": [
+    "api/admin-pin-actions.js",
+    "src/components/admin/StudentDirectory.jsx",
+    "scripts/testPinSetupCapability.mjs"
+  ],
+  "files_read": [
+    "api/_pinAuth.js",
+    "api/self-set-student-pin.js",
+    "package.json",
+    ".ai-status/README.md"
+  ],
+  "summary": "admin-pin-actions.js에 8번째 action get_pin_setup_code(SELECT 전용, pin_setup_allowed/pin_hash 무변경)를 기존 checkAdminReauth 게이트 아래 추가. StudentDirectory.jsx에 PIN 없는 학생 카드마다 '🔎 확인코드 보기' 버튼과 handleViewPinSetupCode 핸들러를 추가해 기존 setupCodeNotice 렌더(단건 items 1개 모양)를 재사용하고, 남은 유효시간(expiresAt 기반)을 새로 표시. reason별(not_allowed/already_set/no_secret/not_found) 안내 문구 분기. '확인코드' 용어로 통일, StudentSelect.jsx는 무접촉. testPinSetupCapability.mjs에 섹션 15(신규 action 계약: adminPin 없으면 거부/코드 일치/조회로 DB 무변경 증명/not_allowed/already_set/no_secret/not_found/pin_hash 미노출), 섹션 16(종단: 허용→코드조회→self-set→로그인→세션토큰, 가짜 픽스처 SID만 사용), 섹션 17(UI 정적 검사: get_pin_setup_code 호출 존재 + 코드 미유출) 총 31개 신규 단언 추가(83->114). FAIL-first: UI 구현 전 실행해 섹션17의 'get_pin_setup_code 액션을 호출하는 코드가 있다' 1개가 실측 FAIL하는 것을 확인한 뒤 UI 구현, 전체 재실행으로 신규 31단언 전부 PASS 전환 확인. 기존 83단언 전부 보존(0 삭제, git diff --stat으로 확인).",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 대기. 참고: scripts/testPinSetupCapability.mjs 섹션 2(잘못된 코드 5종 거부)에 이번 작업과 무관한 사전 존재 flake가 있음 — 5개 후보 중 마지막 항목(codeNow(SID).slice(0,7)+'Z')이 실제 코드의 8번째 문자가 우연히 'Z'일 때(약 1/32 확률) 유효 코드와 우연히 일치해 버림. git diff로 이 파일이 순수 추가(0 삭제)임을 확인했으므로 이번 변경과 무관 — 별도 세션에서 그 테스트 자체를 수정할지 운영자 판단 필요."
+}
