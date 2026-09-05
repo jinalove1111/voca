@@ -97,6 +97,7 @@ export const DOMAINS = {
       { script: 'scripts/testRlsSecurity.mjs', builders: [] },
       { script: 'scripts/testSecurityRegressions.mjs', builders: [], extra: false, note: '2026-09-04 — 보안 회귀 고정 스위트(T9): grant-xp.js 레거시 XP 분기 인증부재(KNOWN, handoff.md 2026-09-02) / AdminScreen.jsx 미인증 fetch 금지 / src 시크릿 노출 0 / .env git 이력 0 / addStudent 호출부 0(자기등록 OFF) / anon 권한 라이브 프로브(phantom id) / PIN 잠금 상수·ilike 이스케이프 / Release Gate 자격증명-부재 자가검증(공허 통과 금지). 네트워크는 anon key phantom id 프로브만, 실데이터 무접촉.' },
       { script: 'scripts/testLoginRestoreCrash.mjs', builders: ['race'] },
+      { script: 'scripts/testNextFailState.mjs', builders: [], extra: false, note: '2026-09-06 야간 QA — 2026-08-08 d28709d P0(PIN 잠금 만료 후 즉시 재잠금 루프) 회귀 테스트가 registry 미등록으로 한 번도 verify:all에서 실행되지 않던 것을 등록(순수 함수, 네트워크 0).' },
     ],
   },
   student: {
