@@ -1,0 +1,32 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "harness-two-phase-approval",
+  "task": "Production Safety Harness 승인 게이트 장애(Windows AbortError) 조사 + readline 제거, 2단계 승인(티켓 발급/--approve 재실행)으로 재설계",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-05T12:00:00.000Z",
+  "updated_at": "2026-09-05T13:40:00.000Z",
+  "files_owned": [
+    "scripts/prodHotfix.mjs",
+    "scripts/testProdHotfix.mjs",
+    "scripts/prod-apply.ps1",
+    "docs/production-safety-harness-runbook.md",
+    "handoff.md",
+    ".ai-status/implementer-harness-two-phase-approval.json"
+  ],
+  "files_read": [
+    "scripts/lib/hotfixManifest.mjs",
+    "scripts/lib/sqlExecutor.mjs",
+    "scripts/lib/prodInvariants.mjs",
+    "scripts/prodPlan.mjs",
+    "scripts/testProdPlan.mjs",
+    "scripts/testStdoutFlushOnExit.mjs",
+    "package.json",
+    ".gitignore",
+    "ops/hotfix/manifests/B2-ghost-sca-reassign-only.json"
+  ],
+  "summary": "원인: Node 코어(internal/readline/interface.js [kTtyWrite])가 raw-mode stdin 에서 리터럴 0x03(Ctrl+C) 바이트를 감지하면, rl.on('SIGINT') 리스너가 없을 때 rl.close()+AbortError('Aborted with Ctrl+C')로 즉시 reject한다 — OS 시그널이 아니라 순수 키스트로크 감지라 '조작자가 그 순간 Ctrl+C를 안 눌렀다'와 모순되지 않는다. --expose-internals로 소스 확인 + PassThrough 스트림에 0x03 주입해 100% 재현. 이 예외는 미catch라 finish()를 못 거치고 프로세스가 죽어 리포트에 기록이 안 남았다. 수정: prodHotfix.mjs에서 readline 의존/defaultDeps.approve 완전 제거, 승인을 2단계 CLI 재실행으로 재설계(1단계=--approve 없이 실행, 0~6.5단계 통과 후 --dry-run이 아니면 CI/토큰 무관하게 티켓 파일 발급(status=ticket-issued, DB WRITE 0) / 2단계=--approve <runId>로 같은 runId 재실행, 0~6.5단계 처음부터 재검증 후 CI/토큰 게이트 재확인→TTY 확인→티켓 존재/미사용/미만료/manifest sha 일치/baseline fingerprint 일치 확인→1회성 소모→apply). 새 STOP 사유 6종(ticket-issued/approval-mismatch/approval-used/approval-expired/approval-manifest-mismatch/approval-stale)을 STOP_REASON_TO_APPLY_ELIGIBILITY에 등록(완전성 가드 테스트 통과), not-approved는 제거. 티켓 runId를 바이트 단위로 재대조해 Windows/macOS 파일시스템 대소문자 무관 이슈 방어. SUPABASE_ACCESS_TOKEN 출처(process.env/.env/.env.local)만 로그(값은 여전히 비노출). scripts/prod-apply.ps1 신규(PowerShell Read-Host로 승인 문구 확인 후 2단계 실행, node 게이트 우회 없음). testProdHotfix.mjs: 기존 승인 테스트 전면 갱신 + 신규 [6]~[6g]/CI/token 시나리오 추가, makeReader fixture를 호출-횟수 기반에서 db.__applied 플래그 기반으로 교체(2단계 재호출 시 대분류가 어긋나던 문제 수정, 테스트 인프라만). FAIL-first: 티켓 만료 검사 임시 비활성화→[6e] 2개 단언만 정확히 FAIL 확인→즉시 복구. 결과: build PASS, verify:prod-hotfix 410/410, verify:prod-plan 33/33, verify:ops-status 154/154, verify:release-gate 145/145, verify:all ALL DOMAINS PASS(testBrowserE2E.mjs만 FAIL — playwright 패키지 미설치 기존 환경 갭, extra 항목, 본 변경과 무관). 실 manifest 검증: prod:plan(B2-ghost-sca-reassign-only.json) READ-ONLY READY 확인, 토큰 없이 prod:apply 1단계만 실행해 ticket-issued + 티켓 파일 생성 + DB WRITE 0 확인(2단계는 실행하지 않음). 런북 §7-(4)/§9-9 신규 append + §2(b)/(c) 안내 문단 append(기존 텍스트 삭제 없음), handoff.md 112차 섹션 추가. push/커밋은 아직 안 함(다음 단계).",
+  "blocker": null,
+  "next_action": "git status/diff로 소유 파일만 확인 후 파일/기능 단위 소커밋(원인분석 주석/2단계 게이트/테스트/런북·핸드오프/ps1 래퍼) — Co-Authored-By 트레일러 포함, push 금지."
+}

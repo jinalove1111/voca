@@ -1,12 +1,118 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-05 (111차, 스크린샷 의존 축소 — apply_eligibility
-1:1 매핑 + 교재 UUID canonical/AMBIGUOUS_TEXTBOOK + 브라우저 E2E 통합
-검증. apply_eligibility 8값 매핑과 AMBIGUOUS_TEXTBOOK invariant/사전
-차단(브랜치 fix/plan-eligibility-textbook-identity, 병합 b2c94dc)에
-Playwright 브라우저 E2E(브랜치 test/browser-e2e, 병합 ce26abc)를 통합
-브랜치 qa/ops-automation-2026-09-04(wt-int, HEAD ce26abc)로 합쳐 최종
-검증. Production DB WRITE 0, SQL 실행 0, 승인 대기 10건 APPLY 0, 정원
-정책 변경 0, merge/deploy 0. 상세는 아래 111차 섹션)_
+_최종 갱신: 2026-09-05 (112차, Production Safety Harness 승인 게이트
+장애 조사 + Windows 안정화 — `prod:apply` 승인 프롬프트가 Windows 에서
+`AbortError: Aborted with Ctrl+C` 로 예고 없이 죽던 사고의 원인을 Node
+코어 소스(`--expose-internals`)로 확인·재현하고, readline 의존을 완전히
+제거한 2단계 승인(1단계=티켓 발급, 2단계=`--approve <runId>` 재실행)으로
+교체. 새 STOP 사유 6종 등록, testProdHotfix.mjs 410단언 전부 PASS(신규
+23개 포함, FAIL-first 확인됨), 실 manifest 1단계 dry-run 검증(DB WRITE
+0). 브랜치 `fix/harness-apply-two-phase-approval`. 상세는 아래 112차
+섹션)_
+
+## 2026-09-05 (112차) — Production Safety Harness 승인 게이트 장애 조사 + Windows 안정화(readline 제거, 2단계 승인)
+
+### 제약/불변식
+
+- 운영자 지시: Production DB WRITE 0, `prod:apply` 실제 APPLY 금지(테스트·
+  dry-run만), 승인 게이트 제거 금지(Production WRITE는 반드시 운영자의
+  명시적 최종 승인 1회 필요), 앱 코드(`src/`, `api/`) 수정 금지, push 금지.
+- 지켜진 불변식: 위 전부 — 실제 APPLY 0건, 승인 게이트는 제거가 아니라
+  재설계(readline → 2단계 CLI 재실행)이며 "운영자가 정확한 runId 로
+  `--approve` 를 직접 타이핑해 실행하는 행위"가 여전히 유일한 최종 승인
+  경로. push 없음.
+
+### 1. 원인 조사
+
+`scripts/prodHotfix.mjs` 의 `defaultDeps.approve`(구 299~307행)가
+`node:readline/promises` 의 `rl.question()` 으로 `APPLY <runId>` 입력을
+받았다. Node 코어 소스(`internal/readline/interface.js`, `[kTtyWrite]`
+의 `case 'c':` 분기, `node --expose-internals` 로 실제 소스 덤프해 확인)
+를 보면: raw-mode 로 stdin 을 읽는 readline 인터페이스는, **그 인터페이스
+자신에게** `'SIGINT'` 리스너가 하나도 없는 상태에서 리터럴 `0x03`
+(Ctrl+C) 바이트가 입력 스트림에 도착하면 `rl.close()` 를 호출하고 즉시
+`new AbortError('Aborted with Ctrl+C')` 로 그 `question()` Promise 를
+reject 한다 — 이건 OS 시그널이 아니라 순수 키스트로크 감지라서, 그
+순간 사람이 실제로 Ctrl+C 를 누르지 않았어도(Windows 콘솔 입력 버퍼에
+남아있던 이전 Ctrl+C 등) 완전히 같은 에러가 난다. 재현: `PassThrough`
+스트림을 `terminal:true` 로 강제해 raw-mode keypress 파싱 경로를 그대로
+태운 뒤 리터럴 `\x03` 1바이트를 주입 — 100% 확정적으로 정확히
+`AbortError: Aborted with Ctrl+C`(`code: ABORT_ERR`) 재현(운영자가 관측한
+그대로). 예전 코드는 이 예외를 어디서도 catch 하지 않아 `finish()` 를
+거치지 못한 채 프로세스가 죽었다(hotfix 리포트에 해당 run 기록이 안
+남았던 이유 확인됨).
+
+### 2. 수정 — 2단계 승인 게이트(승인 게이트 유지, readline 완전 제거)
+
+`scripts/prodHotfix.mjs`: readline import/`defaultDeps.approve` 제거,
+step 7(dry-run/CI/토큰없음 체크)을 `--dry-run` 전용으로 좁히고, step 8을
+"1단계(--approve 없음)=티켓 발급 / 2단계(--approve <runId>)=CI·토큰
+재확인→티켓 검증→1회성 소모"로 재설계(파일 최상단 주석 40~72행에 전체
+설계 문서화). 새 헬퍼 `sha256Any()`, 상수 `TICKET_TTL_MS`(15분). 티켓
+파일: `<reportDir>/<runId>.ticket.json`(manifestSha256, `report.baseline`
+기반 `preflightFingerprint`, 발급/만료 시각, 1회성 `used`). 2단계는
+같은 runId 로 0~6.5단계를 처음부터 재실행(preflight-mismatch/invariants
+델타가 "그 사이 드리프트"를 자동 재확인) + 파일시스템 대소문자 무관 문제
+방어를 위해 `ticket.runId === runId` 바이트 단위 재대조.
+
+새 STOP 사유 6종(`STOP_REASON_TO_APPLY_ELIGIBILITY` 표 등록, 완전성
+가드 테스트 통과): `ticket-issued`→`READY`, `approval-mismatch`/
+`approval-used`/`approval-expired`→`BLOCKED_NEEDS_APPROVAL`,
+`approval-manifest-mismatch`→`BLOCKED_MANIFEST`,
+`approval-stale`→`BLOCKED_PREFLIGHT`. `not-approved`(readline 문구 비교
+전용)는 더 이상 발생하지 않아 표에서 제거.
+
+토큰 편의: `loadEnvDefault()` 가 `SUPABASE_ACCESS_TOKEN` 출처
+(`process.env`/`.env`/`.env.local`)를 함께 반환, 콘솔에 값 없이 출처
+한 줄만 로그(기존 `.env*` gitignore 로 이미 커버, 마스킹 그대로 유지).
+
+`scripts/prod-apply.ps1`(신규, PowerShell 래퍼) — 1단계 실행 → 티켓
+파일에서 runId 파싱 → PowerShell 자체 `Read-Host`(node readline 비관여)
+로 "APPLY <runId>" 확인 → 일치 시에만 2단계 실행. node 쪽 게이트를 전혀
+우회하지 않는다.
+
+`docs/production-safety-harness-runbook.md`: §7에 "(4) `prod:apply` 승인
+게이트 — readline 제거" 신규 append, §9에 "9-9. 승인 게이트 2단계 재설계"
+신규 append(원인/설계/새 STOP 표/Windows 주의사항 전체), §2(b)/§2(c)에
+구버전 절차임을 알리는 안내 문단 append(기존 텍스트는 삭제하지 않음).
+
+### 3. 테스트
+
+`scripts/testProdHotfix.mjs`: 기존 승인 게이트 테스트([6]/[6b]/[14b]/[15]/
+[17]/[C3]/[C4] 등)를 2단계 방식으로 전면 갱신 + 신규 [6]~[6g](티켓 발급
+기본 동작/TTY/잘못된 runId/재사용/만료/manifest 변조/라이브 드리프트)
+추가. 테스트 fixture(`makeReader`)의 `selectAllRows`/`headCountFiltered`
+큐가 "호출 횟수" 기반이라 2단계(같은 reader 로 runHotfix 를 2번 호출)에서
+바로 다음 순번 값을 잘못 앞당겨 읽는 문제를 발견해 `db.__applied` 플래그
+(실제 apply 발생 여부) 기반으로 교체(`applyChangesToDb`/
+`revertChangesToDb` 가 함께 세팅) — 순수 테스트 인프라 수정, 프로덕션
+코드 무관.
+
+FAIL-first(CLAUDE.md 규칙 15): 티켓 만료 검사(`if (D.now().getTime() >
+new Date(ticket.expiresAt).getTime())`)를 `if (false && …)` 로 임시
+무력화 → [6e] 관련 2개 단언만 정확히 FAIL(총 401 PASS/2 FAIL, 다른 회귀
+없음) 확인 → Edit로 즉시 복구 → 재실행 시 전부 PASS 로 복구 확인.
+
+결과: `npm run build` PASS, `npm run verify:prod-hotfix` 410/410 PASS,
+`npm run verify:prod-plan` 33/33 PASS, `npm run verify:ops-status`
+154/154 PASS, `npm run verify:release-gate` 145/145 PASS, `npm run
+verify:all` — ALL DOMAINS PASS(SKIP 도메인 제외; `testBrowserE2E.mjs`
+1건만 FAIL — `playwright` 패키지가 이 워크트리 `node_modules` 에 없는
+기존 환경 갭, 13개 필수 도메인 밖의 extra 항목이라 본 변경과 무관).
+
+실 manifest 검증(READ-ONLY, DB WRITE 0): `npm run prod:plan --
+C:/voca/ops/hotfix/manifests/B2-ghost-sca-reassign-only.json --env
+production` → `ready-to-apply`/`READY`. 토큰 없이 `npm run prod:apply --
+<같은 manifest> --env production`(1단계만, 2단계는 실행하지 않음) →
+`STATUS: ticket-issued`, 티켓 파일
+(`scripts/.tmp/prod-reports/<runId>.ticket.json`) 생성 확인, `DB WRITE: 0`.
+
+### 운영자용 절차(2줄 요약)
+
+1. `npm run prod:apply -- <manifest> --env production` 실행 → 콘솔
+   마지막 줄에 나온 2단계 명령을 그대로 복사.
+2. 그 명령(`... --approve <runId>`)을 그대로 실행하는 것 자체가 최종
+   승인입니다(추가 프롬프트 없음). 또는 `pwsh -File
+   scripts/prod-apply.ps1 -ManifestPath <manifest>` 로 한 번에.
 
 ## 2026-09-05 (111차) — 스크린샷 의존 축소: apply_eligibility 1:1 매핑 + 교재 UUID canonical/AMBIGUOUS_TEXTBOOK + 브라우저 E2E 통합 (Production WRITE 0)
 

@@ -264,7 +264,18 @@ npm run prod:hotfix -- <manifest.json> --env production --dry-run
 | `rollback-failed` | 적용 후 확인 실패 + 자동 복구까지 실패 | **수동 조치 필요** — apply/rollback SQL 파일을 운영자에게 전달 |
 | `rollback-of-mismatch` | `--rollback-of` 보고서의 manifest와 현재 manifest가 다름 | 되돌리려는 대상이 아님 |
 
+> **2026-09-05 추가**: 승인 게이트가 2단계로 바뀌면서(§9-9) `not-approved`
+> 는 더 이상 발생하지 않고, 대신 `ticket-issued`/`approval-mismatch`/
+> `approval-used`/`approval-expired`/`approval-manifest-mismatch`/
+> `approval-stale` 6종이 새로 생겼습니다 — 표와 뜻은 §9-9 참고.
+
 ### (c) 승인 실행
+
+> **2026-09-05 갱신**: 아래 "TTY 에서 `APPLY <runId>` 를 정확히 입력"
+> 절차는 **구버전**입니다(Windows 에서 readline 이 예고 없이 죽는 문제가
+> 있었음). 지금은 §7-(4)/§9-9 의 2단계(1회차=티켓 발급, 2회차=`--approve
+> <runId>` 재실행) 절차를 따르세요 — 토큰이 없는 지금 상태 설명(다음
+> 문단)은 그대로 유효합니다.
 
 **지금(Management API 토큰이 없는) 상태**에서는 승인 게이트 자체에
 도달하지 못하고 `--dry-run` 여부와 무관하게 `SUPABASE_ACCESS_TOKEN
@@ -547,6 +558,29 @@ apply/rollback SQL 파일 저장 → **TTY 에서 `APPLY <runId>` 를 정확히
 
 > 명령 체계 요약: `prod:check`(READ-ONLY 무결성) → `prod:plan -- <manifest>`(READ-ONLY 계획·drift·위험도·자격) → `prod:apply -- <manifest>`(artifact 생성 + 승인 게이트, 실제 write는 TTY `APPLY <runId>` + token 필요). 보고서는 `prod:report`(READ-ONLY, §8).
 
+### (4) `prod:apply` 승인 게이트 — readline 제거, 2단계 재실행으로 변경
+(2026-09-05, fix/harness-apply-two-phase-approval — 상세 원인/설계는 §9-9)
+
+위 (3)에서 "TTY 에서 `APPLY <runId>` 를 정확히 입력"이라고 쓴 부분은
+**구버전 절차**입니다(그 자리에서 프롬프트에 답하는 방식이었고, Windows
+에서 `AbortError: Aborted with Ctrl+C` 로 예고 없이 죽는 문제가 있었습니다
+— §9-9 참고). 지금은 같은 명령 `npm run prod:apply -- <manifest> --env
+production` 을 **두 번** 실행합니다:
+
+1. 1회차(`--approve` 없이) — 계획이 통과하면 승인 티켓을 발급하고
+   `STATUS: ticket-issued` 로 멈춥니다(DB WRITE 0). 콘솔 마지막 줄에 다음에
+   그대로 실행할 명령이 인쇄됩니다.
+2. 2회차 — 그 명령을 그대로 복사해 실행합니다:
+   `npm run prod:apply -- <manifest> --env production --approve <runId>`.
+   운영자가 정확한 `runId` 로 이 명령을 직접 타이핑해 실행한 행위 자체가
+   최종 1회 승인입니다(readline 프롬프트 없음). 토큰이 없거나 CI 환경이면
+   이 2회차에서도 여전히 `ready-to-apply` 로 STOP 합니다(기존과 동일).
+
+편의를 위해 `pwsh -File scripts/prod-apply.ps1 -ManifestPath <manifest>`
+래퍼로 두 단계를 한 번에 진행할 수도 있습니다(내부적으로 PowerShell 자체
+`Read-Host` 로 승인 문구를 받아 일치할 때만 2회차를 실행 — node 쪽 게이트는
+전혀 우회하지 않습니다).
+
 ## 8. 운영 자동검증 사용법 (2026-09-04 추가) — `prod:check` → `prod:report` → 승인 대기열
 
 이 절은 위 1~6절(`prod:check`/`prod:hotfix` 자체)과는 별개로, 그 위에
@@ -770,3 +804,108 @@ BLOCKED_MANIFEST`). `ALLOWLIST`(`scripts/lib/hotfixManifest.mjs`)는
 ack/비모호 대조군/조회 실패) + lint 6종, `npm run verify:prod-check`
 13절(AMBIGUOUS_TEXTBOOK 양성 2종/음성 2종), `npm run
 verify:generate-ghost-sca-manifest` [8]/[9].
+
+### 9-9. 승인 게이트 2단계 재설계 — readline 제거
+(2026-09-05, fix/harness-apply-two-phase-approval)
+
+**사건**: Windows PowerShell 에서 `npm run prod:apply -- <manifest>` 실행 →
+드리프트 가드까지 전부 PASS → `승인하려면 정확히 입력하세요: APPLY
+<runId>` 프롬프트 표시 → 승인 입력 도중 Node readline 이 `AbortError:
+Aborted with Ctrl+C`(`code: ABORT_ERR`)로 종료 → 운영자는 Ctrl+C 를 누르지
+않았다고 함. DB WRITE 0 은 별도 확인됨(트랜잭션에 도달하기 전에 죽었으니
+당연함).
+
+**원인**(Node 코어 소스로 확인, `--expose-internals` 로 재현 완료 —
+`internal/readline/interface.js` `[kTtyWrite]` 의 `case 'c':` 분기): raw-mode
+로 stdin 을 읽는 readline 인터페이스는, 그 인터페이스 자신에게
+`'SIGINT'` 리스너가 하나도 없는 상태에서 리터럴 `0x03`(Ctrl+C) 바이트가
+입력 스트림에 도착하면 `rl.close()` 를 호출하고 즉시
+`new AbortError('Aborted with Ctrl+C')` 로 그 `question()` Promise 를
+reject 한다. 이건 **OS 시그널이 아니라 순수 키스트로크 감지**라서, 그
+순간 사람이 실제로 Ctrl+C 를 누르지 않았어도(Windows 콘솔 입력 버퍼에
+남아있던 이전 Ctrl+C 등) 완전히 같은 에러가 난다. 예전
+`scripts/prodHotfix.mjs`(`defaultDeps.approve`)는 `rl.on('SIGINT', …)` 를
+전혀 등록하지 않았고, 이 예외는 어디서도 catch 되지 않아 `finish()` 를
+거치지 못한 채 프로세스가 죽었다(hotfix 리포트에 해당 run 기록이 안 남았던
+이유).
+
+**수정**: readline 의존을 완전히 제거하고, 승인을 "그 자리에서 프롬프트에
+답하기"가 아니라 "두 번의 독립된 CLI 실행"으로 재설계했다.
+
+1. **1단계** — `npm run prod:apply -- <manifest.json> --env production`
+   (`--approve` 없이). 기존 0~6.5단계(검증·정적 스캔·프리플라이트·
+   baseline·invariants delta·write-drift-guard)를 전부 그대로 수행한다.
+   `--dry-run` 이 아니라면(진짜 `prod:apply` 호출이라면) **CI/토큰 유무와
+   무관하게** 항상 승인 티켓 파일을 쓰고 `STATUS: ticket-issued` 로
+   STOP(exit 0, DB WRITE 0). 티켓 발급 자체는 아무것도 쓰지 않으므로 CI나
+   토큰 없음이 발급을 막을 이유가 없다(그 티켓은 2단계에서 같은 사유로
+   다시 막혀 절대 승인될 수 없다). `--dry-run`(`prod:plan` 이 항상 이렇게
+   호출)일 때만 예전처럼 티켓 없이 즉시 `ready-to-apply` 로 STOP 한다.
+   티켓 파일(`<reportDir>/<runId>.ticket.json`)에는 `manifestSha256`,
+   preflight/baseline 스냅샷의 `preflightFingerprint`, 발급/만료
+   시각(TTL 15분), 1회성 `used` 플래그가 담긴다. 콘솔 마지막 줄에 다음에
+   그대로 복사해 실행할 2단계 명령을 인쇄한다.
+2. **2단계** — `npm run prod:apply -- <manifest.json> --env production
+   --approve <runId>`(1단계가 인쇄해 준 정확한 `runId`). **같은 runId 로**
+   0~6.5단계를 처음부터 다시 전부 수행한다 — 그 사이 라이브 상태가
+   바뀌었다면 기존 `preflight-mismatch`/invariants delta 로직이 자동으로
+   다시 잡는다. 그다음 순서대로: (a) CI/토큰 게이트 재확인(티켓이 아무리
+   유효해도 이 시점에 CI 이거나 토큰이 없으면 `ready-to-apply` 로 STOP,
+   기존과 동일한 status/exit code), (b) TTY 확인(`not-interactive`),
+   (c) 티켓 로드 — 존재(`approval-mismatch`)/미사용(`approval-used`)/
+   미만료(`approval-expired`)/manifest sha 일치(`approval-manifest-mismatch`)/
+   현재 baseline fingerprint 일치(승인 이후 드리프트 시
+   `approval-stale`) 확인, (d) 전부 통과하면 티켓을 즉시 `used:true` 로
+   갱신(1회성 소모)한 뒤에만 8.5(manifest 재해시)→apply 로 진행한다.
+   **운영자가 정확한 `runId` 로 `--approve` 를 직접 타이핑해 이 명령을
+   실행한 행위 자체가 최종 1회 승인이다** — readline 프롬프트는 더 이상
+   없다.
+
+**새 STOP 사유 6종**(`STOP_REASON_TO_APPLY_ELIGIBILITY` 표에 전부 등록,
+완전성 가드 테스트로 누락 시 FAIL):
+
+| status | apply_eligibility | 뜻 |
+|---|---|---|
+| `ticket-issued` | `READY` | 1단계 완료 — 승인 티켓 발급, DB WRITE 0 |
+| `approval-mismatch` | `BLOCKED_NEEDS_APPROVAL` | `--approve` 로 지정한 runId 에 대응하는 티켓이 없음(잘못된 runId, 또는 1단계 미실행) |
+| `approval-used` | `BLOCKED_NEEDS_APPROVAL` | 티켓이 이미 사용됨(1회성 재사용 시도) |
+| `approval-expired` | `BLOCKED_NEEDS_APPROVAL` | 티켓 발급 후 15분 초과 |
+| `approval-manifest-mismatch` | `BLOCKED_MANIFEST` | 티켓 발급 이후 manifest 파일이 변경됨(sha256 불일치) |
+| `approval-stale` | `BLOCKED_PREFLIGHT` | 티켓 발급 이후 재확인한 baseline fingerprint 가 달라짐(그 사이 라이브 상태 드리프트) |
+
+`not-approved`(읽기 문구 비교 전용 STOP)는 더 이상 발생하지 않아 표에서
+제거했다.
+
+**토큰 편의**: `SUPABASE_ACCESS_TOKEN` 은 여전히 환경변수 또는 `.env`/
+`.env.local`(둘 다 저장소 `.gitignore` 의 `.env*` 로 커버됨) 어디서든 읽되,
+콘솔에는 값이 아니라 출처(`process.env`/`.env`/`.env.local`)만 한 줄
+출력한다(`SUPABASE_ACCESS_TOKEN 출처: …`) — 어디서 읽었는지 확인은 되지만
+값은 절대 로그/리포트에 남지 않는다(기존 마스킹 그대로 유지).
+
+**Windows 주의사항**:
+- 파일시스템 대소문자 이슈 — Windows/macOS 는 기본적으로 파일명 대소문자를
+  구분하지 않는다(Linux 는 구분). `--approve run-id`(소문자)가 실제 파일
+  `RUN-ID.ticket.json` 을 그대로 열어버릴 수 있어, 티켓 조회 성공 여부와
+  별개로 **티켓 내용의 `runId` 필드가 `--approve` 로 준 값과 바이트 단위로
+  정확히 같은지** 별도로 재확인한다(대소문자 한 글자만 달라도
+  `approval-mismatch`).
+- `npm run prod:apply -- <manifest> --approve <runId>` 를 직접 손으로
+  입력할 때 `-- ` 뒤 인자 순서/따옴표에 주의(PowerShell 은 `--` 뒤 인자를
+  그대로 npm 스크립트에 전달하지만, 경로에 공백이 있으면 따옴표로 감싸야
+  한다).
+- 선택적으로 `scripts/prod-apply.ps1` PowerShell 래퍼를 쓸 수 있다: 1단계를
+  실행하고, 방금 생성된 티켓 파일에서 `runId` 를 읽어 **PowerShell 자체
+  `Read-Host`**(node readline 을 전혀 거치지 않음 — 위 AbortError 경로가
+  구조적으로 없다)로 "APPLY <runId>" 입력을 받아 정확히 일치할 때만 2단계를
+  실행한다. 이 래퍼는 node 쪽 게이트(티켓 검증/CI/토큰/TTY)를 전혀
+  우회하지 않는다 — 두 npm 명령을 순서대로 조립해 주는 편의 기능일 뿐이다.
+  ```
+  pwsh -File scripts/prod-apply.ps1 -ManifestPath <manifest.json> -Env production
+  ```
+
+**검증**: `npm run verify:prod-hotfix` — [6]~[6g](티켓 발급 기본 동작/TTY
+확인/잘못된 runId/재사용/만료/manifest 변조/라이브 드리프트) + [14b](CI는
+1단계 티켓 발급은 허용하되 2단계에서 항상 STOP) + [15](`--approve` runId
+바인딩) + [17](8.5단계 재해시, 티켓 검증 통과 이후 apply 직전 변조 감지) +
+[C4](2단계 각각의 onStep 순서 고정) — FAIL-first 로 티켓 만료 검사를
+임시 제거해 [6e] 가 실제로 FAIL 하는지 확인한 뒤 복구.
