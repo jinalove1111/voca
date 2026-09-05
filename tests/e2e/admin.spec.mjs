@@ -45,7 +45,7 @@ export async function run(browser, baseURL) {
   const r = createRecorder('[admin]')
   const context = await browser.newContext()
   const page = await context.newPage()
-  const { db, unmockedRequests } = await installMocks(page)
+  const { db, unmockedRequests, ttsFallbackRequests } = await installMocks(page)
   page.on('dialog', (d) => d.accept())
 
   try {
@@ -148,5 +148,5 @@ export async function run(browser, baseURL) {
     await context.close()
   }
 
-  return { results: r.results, unmockedRequests, mockErrors: db.errors }
+  return { results: r.results, unmockedRequests, mockErrors: db.errors, ttsFallbackRequests }
 }
