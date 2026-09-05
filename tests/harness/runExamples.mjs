@@ -460,6 +460,30 @@ console.log('\n-- practiceSentence: chunkQualityGrade(품질 등급 HIGH/MEDIUM/
     practiceQualityScore('invitation', 'at the invitation of the Korean government') === 3)
 }
 
+console.log('\n-- practiceSentence: 절 경계 문장부호 + 대명사 "I" 오탐 (2026-09-06 야간 QA)')
+{
+  const { extractKeyChunk, chunkQualityGrade } = await import('../../src/utils/curriculum/practiceSentence.js')
+
+  // (a) endsClause가 닫는 인용부호/괄호 뒤 문장부호를 놓쳐 다음 절(they
+  // praised…)까지 흡수하던 결함 — textImport.js splitIntoSentences와 같은
+  // 문장부호+닫는 기호 집합으로 절 경계를 인식해야 한다.
+  const SRC_Q = 'She said, "I love the Korean independence movement," they praised him for his courage that day.'
+  const cq = extractKeyChunk(SRC_Q, 'independence')
+  check('[endsClause] 닫는 인용부호 뒤 콤마도 절 경계 — 다음 절(they/praised)을 흡수하지 않음',
+    cq !== null && cq.startsWith('the Korean independence movement') && !cq.includes('they') && !cq.includes('praised') && SRC_Q.includes(cq))
+  const SRC_Q_CTRL = 'I love the Korean independence movement, they praised him for his courage that day.'
+  check('[endsClause 대조군] 인용부호 없는 동일 구조는 기존과 동일',
+    extractKeyChunk(SRC_Q_CTRL, 'independence') === 'the Korean independence movement')
+
+  // (b) properLike가 대명사 "I"를 고유명사로 오탐해 -3 감점(LOW)하던 결함.
+  check('[properLike] "Luckily, I got the chance" — 대명사 I 오탐 없이 HIGH',
+    chunkQualityGrade('chance', 'Luckily, I got the chance', 'Luckily, I got the chance.') === 'HIGH')
+  check('[properLike] "However, I was very happy at the same time" — 대명사 I 오탐 없음',
+    chunkQualityGrade('time', 'However, I was very happy at the same time', 'However, I was very happy at the same time.') === 'MEDIUM')
+  check('[properLike 대조군] "an NGO, Dolphin Lovers" — 실제 고유명사 연쇄는 그대로 LOW',
+    chunkQualityGrade('NGO', 'an NGO, Dolphin Lovers', 'He worked for an NGO, Dolphin Lovers, protecting sea animals.') === 'LOW')
+}
+
 console.log('\n-- learningItem.fromExample: 학생 화면 우선순위(practice > source)')
 {
   const { fromExample } = await import('../../src/learning/adapters/learningItem.js')

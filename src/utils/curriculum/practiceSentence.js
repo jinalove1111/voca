@@ -121,7 +121,10 @@ export function extractKeyChunk(sourceSentence, targetWord) {
 
   // RIGHT: ①target 직후 명사 연쇄 ②of/for/in… 전치사구 보어 체인 —
   // 접속사/서술부/문장부호에서 정지, 총 CHUNK_MAX 단어 이내.
-  const endsClause = (t) => /[.!?,;:]$/.test(t)
+  // 닫는 인용부호/괄호가 문장부호 뒤에 붙는 경우(예: `movement,"`)도 절
+  // 경계로 인식해야 다음 절을 흡수하지 않는다 — textImport.js
+  // splitIntoSentences와 동일한 닫는 기호 집합(2026-09-06 야간 QA).
+  const endsClause = (t) => /[.!?,;:]["'”’)\]]*$/.test(t)
   while (hi + 1 < tokens.length && (hi - lo + 1) < CHUNK_MAX) {
     if (endsClause(tokens[hi].text)) break
     const c = coreOf(tokens[hi + 1].text)
@@ -242,7 +245,9 @@ export function chunkQualityGrade(targetWord, chunk, sourceSentence) {
   let run = 0
   let properRun = false
   words.forEach((w, i) => {
-    const properLike = /^[A-Z]/.test(w) && cores[i] !== '' && !isFn(cores[i])
+    // 대명사 "I"는 대문자로 시작해도 고유명사가 아니므로 제외(2026-09-06
+    // 야간 QA — "Luckily, I got the chance" 오탐 -3 감점 회귀).
+    const properLike = /^[A-Z]/.test(w) && cores[i] !== '' && cores[i] !== 'i' && !isFn(cores[i])
     run = properLike ? run + 1 : 0
     if (run >= 2) properRun = true
   })
