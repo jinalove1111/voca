@@ -135,6 +135,16 @@ function escapeRegex(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+// 곡선/변형 아포스트로피(‘’ʻʼ′＇)를 표준 스트레이트 아포스트로피(')로
+// 정규화(2026-09-06 야간 QA). don't/I'm처럼 스트레이트로 등록된 축약형
+// 단어가 곡선 아포스트로피로 타이핑된 문장(워드/붙여넣기 흔함)과 whole-word
+// 정규식으로 매칭되지 않아 NOT_FOUND로 분류되던 문제를 고친다. 매칭 판정
+// (regex.test)에만 쓰고, matchWordsToSentences가 반환하는 sentence는 항상
+// 원문 그대로 둔다 — §1 원문 보존 불변식.
+function normalizeApostrophes(s) {
+  return String(s || '').replace(/[‘’ʻʼ′＇]/g, "'")
+}
+
 // 흔한 불규칙 동사/명사 형태(2026-08-09 야간 2차 — 보수적 확장).
 // 원형 → 변화형 목록. 여기서 나온 매칭도 전부 'inflected'(검토 필요)로만
 // 표시되고 자동 저장되지 않는다(운영자 원칙: 확실하지 않으면 자동 확정
@@ -236,7 +246,7 @@ export function regularInflections(token) {
 //    첫 토큰(구동사의 동사 자리)에만 규칙 변화를 적용(inflected) — 나머지
 //    토큰까지 조합 변화시키면 오탐 위험이 커져서 보수적으로 제한한다.
 export function buildMatchers(word) {
-  const tokens = String(word || '').trim().split(/\s+/).filter(Boolean)
+  const tokens = normalizeApostrophes(word).trim().split(/\s+/).filter(Boolean)
   if (tokens.length === 0) return []
   const matchers = []
   // form: 매칭에 실제로 쓰인 표면형(소문자) — matchWordsToSentences가 유닛 내
@@ -294,9 +304,12 @@ export function matchWordsToSentences(words, sentences) {
     const matchers = buildMatchers(text)
     const matches = []
     sents.forEach((sentence, sentenceIndex) => {
+      // 매칭 판정에만 아포스트로피 정규화 사본을 쓴다 — 반환 sentence는
+      // 아래에서 원문 그대로 push(§1 원문 보존 불변식).
+      const testSentence = normalizeApostrophes(sentence)
       let best = null // { matchType, form }
       for (const { re, matchType, form } of matchers) {
-        if (!re.test(sentence)) continue
+        if (!re.test(testSentence)) continue
         if (matchType === 'exact') { best = { matchType, form }; break }
         best = best || { matchType, form }
       }

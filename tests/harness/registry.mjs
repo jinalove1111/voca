@@ -330,6 +330,7 @@ export const DOMAINS = {
     checks: [
       { script: 'tests/harness/runExamples.mjs', builders: [], note: '자기완결형 하네스 — pure 섹션(curriculumModel.js 순수 모듈 직접 import + generatorContract.js는 esbuild 인메모리 번들) 36단언 + live 섹션(env 없으면 SKIP, 있으면 테이블 부재 폴백 확인/CRUD 왕복).' },
       { script: 'scripts/testExamplePriorityMock.mjs', builders: [], extra: true, note: '2026-08-09 야간 — 학생 예문 우선순위(SOURCE TEXT FIRST) mock 검증: fetch 가로채기로 네트워크/DB 0회, 배포 코드(exampleLibrary) 번들 그대로 구동. curriculumExamplesStudentUI 플래그 프로덕션 온 전의 사전 검증 자산. 13개 필수 도메인 밖, 신규 보너스 커버리지.' },
+      { script: 'scripts/testTextImportApostrophe.mjs', builders: [], extra: false, note: '2026-09-06 야간 QA — textImport.js buildMatchers/matchWordsToSentences 곡선 아포스트로피(‘’ʻʼ′＇) 매칭 회귀. don\'t/I\'m처럼 스트레이트로 등록된 축약형 단어가 곡선 아포스트로피로 타이핑된 문장과 매칭되지 않아 NOT_FOUND로 분류되던 결함(정규화는 매칭 판정에만 쓰고 반환 sentence는 원문 그대로 — §1 원문 보존 불변식 유지). 순수 함수, 네트워크 0.' },
     ],
   },
   // ── 2026-08-10 등록: Writing Coach MVP(docs/WRITING_COACH.md) — 로컬 규칙
