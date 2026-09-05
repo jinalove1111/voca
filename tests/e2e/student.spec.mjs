@@ -67,7 +67,11 @@ async function answerOneQuizQuestionCorrectly(page, db) {
   const wordText = (await wordEl.textContent())?.trim()
   const fixtureWord = db.tables.words.find((w) => w.word === wordText)
   if (!fixtureWord) throw new Error(`퀴즈에 나온 단어 "${wordText}"를 fixture words에서 찾을 수 없음`)
-  await page.getByRole('button', { name: fixtureWord.meaning }).click()
+  // 위 주석(54-59행)이 이미 지적한 문제의 실제 발생 지점 — 이 호출이
+  // 정작 그 anchor 규칙을 안 쓰고 있었다(2026-09-05 정정). 정확히 한
+  // 옵션만 고정한다(quizOptionRe와 동일 패턴, 313행).
+  const optionRe = new RegExp(`^[A-D] ${escapeRegExp(fixtureWord.meaning)}$`)
+  await page.getByRole('button', { name: optionRe }).click()
   await page.getByRole('button', { name: /다음 문제|결과 보기/ }).waitFor({ state: 'visible' })
   return fixtureWord
 }

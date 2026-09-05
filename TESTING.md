@@ -946,15 +946,16 @@ mock route를 복원해 56/56 PASS로 돌아오는 것을 확인했다. 이 순�
 "수정이 실제로 그 실패를 고쳤다"는 것을 코드가 아니라 실행 결과로
 확인했다(`CLAUDE.md` 규칙 15).
 
-### 참고 — 관련 없는 기존 플레이크(이번에 손대지 않음)
+### 참고 — 관련 없는 기존 플레이크(해결됨, 2026-09-05 후속 커밋)
 
 수정 검증 중 `answerOneQuizQuestionCorrectly()`(student.spec.mjs)가
 드물게 `getByRole('button', { name: fixtureWord.meaning })`에서 strict
 mode violation을 낸 사례를 1회 관측했다(`뜻-e2e-tb-a-2-1`이
 `뜻-e2e-tb-a-2-10`/`-12`의 부분 문자열이라 여러 버튼에 매치) — 이 파일의
 A6-spelling 섹션(54-62행)이 이미 같은 부류의 문제를 정규식 앵커로 회피한
-전례가 있는 것으로 보아 사전부터 있던 잠재 결함으로 보이며, TTS/voice
-스텁과는 무관하다(quiz 문항 순서 무작위성에만 의존). 이번 작업 범위(CI
-TTS 폴백 미mock 실패 수정)와 무관하고 하네스 구조 변경 금지 지시가
-있어 손대지 않았다 — 재현 시 `answerOneQuizQuestionCorrectly`에 A6-spelling과
-동일한 정규식 앵커 패턴을 적용하는 별도 후속 작업으로 남긴다.
+전례가 있었는데, 정작 `answerOneQuizQuestionCorrectly` 자신은 그 앵커를
+안 쓰고 있었다(주석은 있었지만 적용이 빠짐). TTS/voice 스텁과는
+무관했다(quiz 문항 순서 무작위성에만 의존). 같은 브랜치의 후속 커밋에서
+`answerOneQuizQuestionCorrectly`에도 A6-guided(313행 `quizOptionRe`)와
+동일한 `new RegExp('^[A-D] ' + escapeRegExp(meaning) + '$')` 앵커를
+적용해 해결했다 — `npm run verify:e2e` 3회 연속 56/56 PASS로 확인.
