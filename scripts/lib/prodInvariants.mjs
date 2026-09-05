@@ -105,7 +105,29 @@ const HEADER_LABELS_MIRROR = new Set(Object.values(HEADER_ALIASES_MIRROR).flat()
 const isHeaderLabelMirror = (cell) => HEADER_LABELS_MIRROR.has(String(cell ?? '').trim().toLowerCase())
 // isHeaderResidueRow({word, meaning})의 미러 — word/meaning 둘 다 어떤
 // 종류든 헤더 라벨이어야 true(한쪽만 라벨이면 실제 어휘일 수 있어 AND).
-const isHeaderResidueRowMirror = ({ word, meaning }) => isHeaderLabelMirror(word) && isHeaderLabelMirror(meaning)
+const isHeaderResidueRowRaw = ({ word, meaning }) => isHeaderLabelMirror(word) && isHeaderLabelMirror(meaning)
+
+// 2026-09-06 야간 QA 후속(운영자 실측 오탐 보정) — 영단어 자체가 흔한
+// 헤더 라벨과 우연히 같은 "진짜 어휘"를 헤더 잔재로 오탐하던 문제. 실측:
+// word 455219f7…(unit 801a472f… "Unit4", 40단어 유닛 중 position 14)는
+// word="meaning" meaning="의미"인데 example_text="What is the meaning of
+// this word?" + 발음 오디오 자산까지 갖춘 실제 어휘였다(영단어 "meaning"의
+// 정답 번역이 "의미"). isHeaderResidueRowRaw는 word/meaning 두 칸 다 "어떤
+// 종류든" 헤더 라벨이면 true라, word 칸이 영어 어휘로도 흔한 3종
+// (word/meaning/unit) 중 하나이면서 meaning 칸이 한글로 채워져 있으면
+// (헤더 잔재라면 meaning 칸도 영어 라벨이었을 것 — 한글 뜻이 실제로
+// 채워졌다는 것 자체가 진짜 번역이라는 신호) 예외로 둔다.
+// 계속 잡히는 것들(이 예외에 안 걸림): 한글 라벨 word 칸("영어·어구"/
+// "어휘·어구"/"단어"/"뜻" 등, GENUINE_VOCAB_WORD_LABELS 밖), 영문 meaning
+// 칸("English"→"Korean", "word"→"meaning" — meaning에 한글이 없어 예외
+// 조건 미충족), "no"/"no." word 칸(예외 목록 밖) 전부 그대로 WARN.
+const GENUINE_VOCAB_WORD_LABELS = new Set(['word', 'meaning', 'unit'])
+const HANGUL_RE_MIRROR = /[가-힣]/
+const isGenuineVocabException = ({ word, meaning }) =>
+  GENUINE_VOCAB_WORD_LABELS.has(String(word ?? '').trim().toLowerCase()) && HANGUL_RE_MIRROR.test(String(meaning ?? ''))
+
+const isHeaderResidueRowMirror = ({ word, meaning }) =>
+  isHeaderResidueRowRaw({ word, meaning }) && !isGenuineVocabException({ word, meaning })
 
 // plan-eligibility-textbook-identity 트랙(2026-09-05) — norm/
 // textbookSimilarityKey 는 원래 이 파일 내부 전용이었지만, prod:hotfix 의
