@@ -909,3 +909,63 @@ reject 한다. 이건 **OS 시그널이 아니라 순수 키스트로크 감지*
 바인딩) + [17](8.5단계 재해시, 티켓 검증 통과 이후 apply 직전 변조 감지) +
 [C4](2단계 각각의 onStep 순서 고정) — FAIL-first 로 티켓 만료 검사를
 임시 제거해 [6e] 가 실제로 FAIL 하는지 확인한 뒤 복구.
+
+### 9-10. `student_class_assignments.class_id` — 좁은 ALLOWLIST 확장
+(2026-09-06, fix/harness-allowlist-sca-class-id)
+
+**배경**: 유령 유닛/반 오배정 감사(황성연 2a86fc9b…/김가윤 1d9d3183…)에서
+primary SCA 행의 `class_id` 가 사람 반("Presentation 6")을 가리키고 있어
+`getLearnableClassUnits` 가 그 교재의 유닛 목록을 못 찾는 사고가 발견됐다
+(교재 컨테이너 반 "고1 능률 민병천" 으로 재지정해야 함). 그때까지
+`ALLOWLIST.student_class_assignments` 는 `class_id` 를 전혀 허용하지
+않아(9-5 절의 `op:'insert'`/`op:'delete'` 전용 필드로만 등장) manifest
+자체를 만들 수 없었다(`BLOCKED_MANIFEST`, `D-stale-class-sca-fix-findings.json`).
+
+**무엇이 바뀌었나** — `ALLOWLIST.student_class_assignments` 에 `class_id`
+하나만 추가했다. 이 컬럼은 "반 이동"이 아니라 **"교재 컨테이너 반
+재지정"이라는 좁은 목적**으로만 쓰도록, `validateManifest` 가 `set` 에
+`class_id` 가 있는 change 마다 다음을 구조적으로 강제한다(하나라도
+없으면 `invalid-manifest` → `BLOCKED_MANIFEST`, 다른 정당한 케이스를
+이 하네스가 대신 판단하지 않기 위해 정책 필드 없이는 변경 자체를 거부):
+
+1. `manifest.class_id_policy === 'textbook_owner'` 명시(오타/다른 값도 거부).
+2. `expect_before.student_id`/`expect_before.textbook_id` 가 UUID 로 존재.
+3. `reference_rows_must_exist` 에 `{table:'classes', id:<목표 class_id>}` 항목 등록.
+
+**라이브 가드 3종**(`scripts/lib/hotfixManifest.mjs` 의
+`findClassIdChangeGuardViolations`/`findClassIdOwnerMismatches`, 순수
+함수 — `scripts/prodHotfix.mjs` 의 새 단계 `class-id-change-check` 에서
+라이브 스냅샷으로 실행, ambiguous-textbook-check 직후·baseline 이전이라
+걸리면 승인 게이트 훨씬 이전에 DB WRITE 0 로 STOP):
+
+| 확인 | STOP 사유 | 뜻 |
+|---|---|---|
+| unique(student_id,class_id) 충돌 | `preflight-unique-conflict` | 같은 학생의 다른 SCA 행이 이미 목표 class_id 를 가짐(적용 시 DB unique 제약 위반) |
+| must_not_change 커버리지 | `preflight-sca-other-rows-uncovered` | 같은 학생의 다른 SCA 행이 manifest 에 없음 — "그 학생의 SCA 전체 그림"을 모른 채 class_id 만 바꾸는 것을 막음 |
+| owner_class_id 일치 | `class-id-not-owner` | 대상 `textbook_id` 의 `owner_class_id` 가 목표 class_id 와 다름(교재 컨테이너 반 규칙 위반) |
+| (조회 자체 실패) | `blocked-class-id-check-unavailable` | SCA/textbooks 라이브 조회 실패 — "확인 못 함" = 차단 |
+
+전부 `STOP_REASON_TO_APPLY_ELIGIBILITY` 에 `BLOCKED_PREFLIGHT` 로 등록돼
+있다(완전성 가드 테스트가 누락을 자동으로 잡는다) — 정적 스키마 문제
+(정책 필드 누락 등)는 `validateManifest` 가 이미 `BLOCKED_MANIFEST` 로
+더 이른 시점에 거른다.
+
+**바뀌지 않은 것** — SQL 생성(`buildApplySql`/`buildRollbackSql`/
+`verifyWriteDriftGuard`/`parseGeneratedUpdateStatement`)과 postflight
+계획은 컬럼 이름에 무관한 범용 로직이라 별도 확장 없이 `class_id` 를
+그대로 처리한다(row_count 단언, rollback 의 before 값 복원, drift 가드
+모두 기존 코드 그대로 동작 — 실측으로 확인, `verify:prod-hotfix` [E7]).
+2단계 승인 티켓/postflight/health-check/invariants delta 계산 자체도
+무변경 — `class-id-change-check` 는 그 앞 단계에 끼워 넣은 추가 게이트일
+뿐이다.
+
+**검증**: `npm run verify:prod-hotfix` [E1]~[E8](구조 검증 9종/순수 함수
+단위 테스트/정상 경로 dry-run+SQL 단언/unique 충돌/owner 불일치/
+must_not_change 누락/drift 가드/B2 스타일 manifest 회귀 0) — FAIL-first 로
+[E4] 의 unique 충돌 체크를 임시 비활성화해 해당 단언 2건만 정확히 FAIL
+하는 것을 확인한 뒤 복구. 실 manifest(황성연/김가윤 2행,
+`stale-class-sca-fix-hwang-kim-20260906`) 로 `prod:plan` 실행 —
+`apply_eligibility: READY`, `DB WRITE: 0`, `invariants delta: new_fail 0
+· new_warn 0 · resolved 3`(`STALE_CLASS_SCA` 2건 + `CLASS_ASSIGNMENT_
+CONTRADICTION` 1건 해소, 예측과 실측 일치) 확인. `prod:apply` 는 이
+트랙에서 호출하지 않았다(계획 확인까지만).
