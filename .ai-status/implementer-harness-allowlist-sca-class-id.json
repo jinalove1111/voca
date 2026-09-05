@@ -1,0 +1,25 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "harness-allowlist-sca-class-id",
+  "task": "Production Safety Harness — student_class_assignments.class_id UPDATE 를 ALLOWLIST 에 좁은 범위로 추가 + 전용 가드 3종, 황성연/김가윤 2행 manifest 로 prod:plan 까지만 실행(prod:apply 미실행)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-06T00:00:00.000Z",
+  "updated_at": "2026-09-06T02:20:00.000Z",
+  "files_owned": [
+    "scripts/lib/hotfixManifest.mjs",
+    "scripts/prodHotfix.mjs",
+    "scripts/testProdHotfix.mjs",
+    "docs/production-safety-harness-runbook.md",
+    ".ai-status/implementer-harness-allowlist-sca-class-id.json"
+  ],
+  "files_read": [
+    "scripts/prodPlan.mjs",
+    "scripts/lib/prodInvariants.mjs",
+    "package.json"
+  ],
+  "summary": "ALLOWLIST.student_class_assignments 에 class_id 하나만 추가(다른 테이블/컬럼 무변경). validateManifest 에 class_id 를 set 하는 change 전용 구조 검증 추가 — manifest.class_id_policy==='textbook_owner' 명시 필수(없으면 invalid-manifest 거부, 다른 케이스는 지원 안 함), expect_before.student_id/textbook_id UUID 필수, reference_rows_must_exist 에 대상 classes 행 등록 필수. hotfixManifest.mjs 에 순수 함수 findClassIdChangeGuardViolations(unique(student_id,class_id) 충돌 + 같은 학생의 다른 SCA 행 must_not_change 커버리지)/findClassIdOwnerMismatches(textbook.owner_class_id 일치) 신규. prodHotfix.mjs 새 단계 class-id-change-check(ambiguous-textbook-check 직후, baseline 이전)에서 라이브 reader 로 두 함수를 실행, 위반 시 preflight-unique-conflict/preflight-sca-other-rows-uncovered/class-id-not-owner/blocked-class-id-check-unavailable 로 fail-closed STOP(전부 STOP_REASON_TO_APPLY_ELIGIBILITY 에 BLOCKED_PREFLIGHT 등록, 완전성 가드 테스트 커버). SQL 생성/드리프트 가드/postflight 는 컬럼 무관 범용 로직이라 확장 없이 그대로 동작함을 실측 확인. testProdHotfix.mjs: 기존 [C4] onStep 순서 단언 3건에 'class-id-change-check' 삽입(회귀 0), 기존 allowlist 테스트를 student_id 컬럼 기준으로 갱신(class_id 는 이제 allowlist 안이므로), 신규 [E1]~[E8] 39단언 추가(구조 검증/순수 함수/정상 경로 SQL 단언/unique 충돌/owner 불일치/must_not_change 누락/drift 가드/B2 회귀 0). FAIL-first: [E4] uniqueConflicts 체크를 sed 로 임시 비활성화(if (false && uniqueConflicts.length))해 해당 단언 2건만 정확히 FAIL 확인 후 git checkout 으로 원복, 재실행 449/449 PASS 재확인. 게이트: npm run build PASS, verify:prod-hotfix 449/449, verify:prod-plan 33/33, verify:ops-status 154/154, verify:release-gate 145/145, verify:generate-ghost-sca-manifest 32/32, verify:all ALL DOMAINS PASS(exit 0 — testBrowserE2E.mjs/testReleaseGateProdCheck.mjs 는 extra:true FAIL, 둘 다 이 worktree 의 기존 환경 갭(playwright 미설치/사전 존재 stale regex)이며 32a0a9b 체크아웃으로 대조해 본 변경과 무관함을 확인), node scripts/verifyRelease.mjs 는 build/verify:all/health 3게이트 PASS·e2e 게이트만 playwright 미설치로 로컬 FAIL(허용된 갭). 실 manifest T/manifests/D-stale-class-sca-fix.json(황성연 SCA d9cb8411 class_id 1693f32b->ec584e53, 김가윤 SCA 544c77e8 동일, must_not_change 4건 + students 2건, reference_rows_must_exist classes+textbooks 2건)로 npm run prod:plan 실행 — apply_eligibility=READY, DB WRITE=0, preflight 2/2 match, invariants delta new_fail 0 · new_warn 0 · resolved 3(STALE_CLASS_SCA x2 + CLASS_ASSIGNMENT_CONTRADICTION x1, 예측과 실측 일치), apply.sql/rollback.sql 확인(before/after class_id WHERE/SET 절 정확). prod:apply 는 1단계도 호출하지 않았다(절대 규칙 준수). 커밋 2건(allowlist+가드 코드, 테스트) — 런북 §9-10 append 는 이번 커밋에 아직 미포함(다음 단계).",
+  "blocker": null,
+  "next_action": "runbook §9-10 append + 이 상태 파일을 함께 3번째 커밋으로 마무리(문서만, 코드 변경 없음). push 금지 — 브랜치 fix/harness-allowlist-sca-class-id 는 fix/harness-apply-two-phase-approval(PR #17) 위 스택 브랜치로 로컬에만 존재."
+}

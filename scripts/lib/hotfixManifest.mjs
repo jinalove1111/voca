@@ -24,9 +24,20 @@ import { buildInvariantContext, evaluateInvariants } from './prodInvariants.mjs'
 // 새 테이블/컬럼이 필요하면 이 파일을 사람이 리뷰해 명시적으로 늘려야
 // 한다 — manifest JSON 값만으로 임의 테이블/컬럼을 쓸 수 없게 하는 것이
 // 목적이다.
+// fix/harness-allowlist-sca-class-id(2026-09-06) — student_class_assignments
+// 에 'class_id' 를 추가한다(유일한 이번 확장, 다른 테이블/컬럼은 그대로).
+// class_id 는 "반 이동"이 아니라 "교재 컨테이너 반 재지정"이라는 좁은
+// 목적으로만 허용된다 — validateManifest 가 이 컬럼이 set 에 있으면
+// manifest.class_id_policy === 'textbook_owner' 명시와
+// reference_rows_must_exist 의 대상 classes 행 등록을 강제하고(정책 필드가
+// 없으면 거부), 아래 findClassIdChangeGuardViolations/
+// findClassIdOwnerMismatches 가 (a) unique(student_id,class_id) 충돌
+// (b) 같은 학생의 다른 SCA 행 전부 must_not_change 커버리지
+// (c) 대상 classes 가 textbook_id 의 owner_class_id 와 일치 를 라이브
+// 데이터로 재확인한다(scripts/prodHotfix.mjs 의 class-id-change-check 단계).
 export const ALLOWLIST = {
   students: ['current_unit_id', 'unit_name', 'class_id'],
-  student_class_assignments: ['current_unit_id', 'is_primary', 'textbook_id'],
+  student_class_assignments: ['current_unit_id', 'is_primary', 'textbook_id', 'class_id'],
 }
 
 // B4(2026-09-04): student_class_assignments 전용 op:'insert'/op:'delete' —
@@ -56,8 +67,9 @@ const COLUMN_TYPES = {
     textbook_id: 'uuid',
     student_id: 'uuid',
     is_primary: 'boolean',
-    // class_id 는 update ALLOWLIST 에는 없지만(반 이동은 이 하네스 범위
-    // 밖) B4 insert/delete 의 필드/expect_before 값 검증에는 필요하다.
+    // class_id — B4 insert/delete 의 필드/expect_before 값 검증뿐 아니라
+    // (fix/harness-allowlist-sca-class-id, 2026-09-06) update ALLOWLIST 에도
+    // 등록됐다(교재 컨테이너 반 재지정 전용, class_id_policy 필드로만 활성화).
     class_id: 'uuid',
     // QA-V2: op=delete 의 rollback insert 가 되돌려 넣는 원래 생성시각.
     created_at: 'timestamp',
@@ -508,6 +520,34 @@ export function validateManifest(m) {
           if (typeErr) errors.push(`${tag}.set.${col} ${typeErr}`)
         }
       }
+
+      // fix/harness-allowlist-sca-class-id(2026-09-06) — class_id 변경은
+      // ALLOWLIST 를 통과해도 여전히 좁은 범위로만 허용된다: 정책 필드가
+      // 명시돼 있어야 하고(없으면 거부 — "반 이동" 같은 다른 정당한 case 를
+      // 이 하네스가 대신 판단하지 않는다), unique 충돌/must_not_change
+      // 커버리지/owner 일치 확인에 필요한 값이 구조적으로 갖춰져 있어야
+      // 한다. 라이브 데이터가 필요한 나머지 확인(unique 충돌 실측/
+      // must_not_change 실측 커버리지/owner_class_id 실측 일치)은
+      // scripts/prodHotfix.mjs 의 class-id-change-check 단계(findClassIdChangeGuardViolations/
+      // findClassIdOwnerMismatches)가 한다 — 여기서는 순수 구조 검증만.
+      if (c.table === 'student_class_assignments' && c.set && typeof c.set === 'object'
+        && Object.prototype.hasOwnProperty.call(c.set, 'class_id')) {
+        if (m.class_id_policy !== 'textbook_owner') {
+          errors.push(`${tag}.set.class_id 변경은 manifest.class_id_policy='textbook_owner' 명시 없이는 거부됨(좁은 범위 유지 — 다른 정책은 지원하지 않음)`)
+        }
+        if (!c.expect_before || !isUuid(c.expect_before.student_id)) {
+          errors.push(`${tag}.expect_before.student_id 필수(UUID) — class_id 변경 시 unique 충돌/must_not_change 가드에 필요`)
+        }
+        if (!c.expect_before || !isUuid(c.expect_before.textbook_id)) {
+          errors.push(`${tag}.expect_before.textbook_id 필수(UUID) — class_id 변경 시 textbook owner_class_id 가드에 필요`)
+        }
+        const targetClassId = c.set.class_id
+        const hasClassRef = (Array.isArray(m.reference_rows_must_exist) ? m.reference_rows_must_exist : [])
+          .some((r) => r && r.table === 'classes' && r.id === targetClassId)
+        if (!hasClassRef) {
+          errors.push(`${tag}.set.class_id 대상 classes 행(${JSON.stringify(targetClassId)})이 reference_rows_must_exist 에 없음`)
+        }
+      }
     }
     const dupKey = `${c.table}:${c.id}`
     if (c.id !== undefined && seenChangeKeys.has(dupKey)) errors.push(`${tag} 중복된 (table,id): ${dupKey}`)
@@ -597,6 +637,80 @@ export function findTextbookTargetsFromManifest(manifest) {
     if (unitId) out.push({ table: c.table, id: c.id, kind: 'via-unit', unitId })
   }
   return out
+}
+
+// ── fix/harness-allowlist-sca-class-id(2026-09-06): class_id 변경 전용
+// 라이브 데이터 가드(순수 — 이미 읽어온 스냅샷을 받아 판정만 한다) ────────
+// validateManifest 의 구조적 검증(정책 필드/expect_before.student_id·
+// textbook_id 존재/reference_rows_must_exist 등록)을 통과한 change 만
+// 이 두 함수의 대상이 된다. IO(reader.selectAllRows 호출)는
+// scripts/prodHotfix.mjs 의 class-id-change-check 단계가 한다.
+
+/**
+ * class_id 를 바꾸는 change 마다: (a) 같은 student_id 의 다른 SCA 행이 이미
+ * 목표 class_id 를 가지면 unique(student_id,class_id) 충돌, (b) 같은
+ * student_id 의 다른 SCA 행이 manifest.must_not_change 에 없으면 커버리지
+ * 누락 — 둘 다 이 하네스가 "그 학생의 SCA 전체 그림"을 알지 못한 채
+ * class_id 만 바꾸는 것을 막기 위함이다.
+ * @param {object} manifest
+ * @param {Array<{id:string, student_id:string, class_id:*}>} liveScaRows student_class_assignments 전체 스냅샷
+ * @returns {{
+ *   uniqueConflicts: Array<{changeId:string, studentId:string, targetClassId:string, conflictingRowId:string}>,
+ *   missingMustNotChange: Array<{changeId:string, studentId:string, missingRowId:string}>,
+ * }}
+ */
+export function findClassIdChangeGuardViolations(manifest, liveScaRows) {
+  const uniqueConflicts = []
+  const missingMustNotChange = []
+  const mustNotChangeIds = new Set(
+    (manifest?.must_not_change || [])
+      .filter((e) => e && e.table === 'student_class_assignments')
+      .map((e) => e.id),
+  )
+  for (const c of manifest?.changes || []) {
+    if ((c.op || 'update') !== 'update') continue
+    if (c.table !== 'student_class_assignments') continue
+    if (!c.set || typeof c.set !== 'object' || !Object.prototype.hasOwnProperty.call(c.set, 'class_id')) continue
+    const studentId = c.expect_before?.student_id
+    const targetClassId = c.set.class_id
+    if (!studentId) continue // validateManifest 가 이미 구조적으로 거부(방어적)
+    for (const r of liveScaRows || []) {
+      if (!r || r.id === c.id || r.student_id !== studentId) continue
+      if (r.class_id === targetClassId) {
+        uniqueConflicts.push({ changeId: c.id, studentId, targetClassId, conflictingRowId: r.id })
+      }
+      if (!mustNotChangeIds.has(r.id)) {
+        missingMustNotChange.push({ changeId: c.id, studentId, missingRowId: r.id })
+      }
+    }
+  }
+  return { uniqueConflicts, missingMustNotChange }
+}
+
+/**
+ * class_id 를 바꾸는 change 마다, 대상 textbook_id 의 owner_class_id 가
+ * 목표 class_id 와 정확히 일치하는지 확인한다("교재 컨테이너 반" 규칙 —
+ * class_id_policy='textbook_owner' 로만 활성화되는 좁은 케이스이므로 그
+ * 정책이 사실인지 라이브 데이터로 재확인).
+ * @param {object} manifest
+ * @param {Map<string,{owner_class_id:*}>} textbookById textbooks 전체를 id 로 인덱싱한 Map
+ * @returns {Array<{changeId:string, textbookId:string, targetClassId:string, ownerClassId:(string|null)}>}
+ */
+export function findClassIdOwnerMismatches(manifest, textbookById) {
+  const mismatches = []
+  for (const c of manifest?.changes || []) {
+    if ((c.op || 'update') !== 'update') continue
+    if (c.table !== 'student_class_assignments') continue
+    if (!c.set || typeof c.set !== 'object' || !Object.prototype.hasOwnProperty.call(c.set, 'class_id')) continue
+    const textbookId = c.expect_before?.textbook_id
+    const targetClassId = c.set.class_id
+    const tb = textbookId ? textbookById.get(textbookId) : null
+    const ownerClassId = tb ? (tb.owner_class_id ?? null) : null
+    if (!tb || ownerClassId !== targetClassId) {
+      mismatches.push({ changeId: c.id, textbookId: textbookId ?? null, targetClassId, ownerClassId })
+    }
+  }
+  return mismatches
 }
 
 /**
