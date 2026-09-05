@@ -142,3 +142,8 @@ UUID canonical/AMBIGUOUS_TEXTBOOK 사전 차단 + Playwright 브라우저 E2E를
 통합 브랜치 `qa/ops-automation-2026-09-04`(HEAD `ce26abc`)로 합쳐 최종
 검증(Production DB WRITE 0, merge/deploy 0)은 `handoff.md`
 2026-09-05(111차) 섹션 참고.
+
+**후속(2026-09-05, 112차)**: 이 통합 브랜치를 PR #15로 main에 merge
+(SHA `42d42da`) 후 Vercel Production 배포 + 배포 후 READ-ONLY 검증까지
+완료(HARNESS V2 DEPLOYED = YES, PRODUCTION SMOKE = PASS)는
+`handoff.md` 2026-09-05(112차) 섹션 참고.

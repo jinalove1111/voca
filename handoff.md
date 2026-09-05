@@ -1,12 +1,154 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-05 (111차, 스크린샷 의존 축소 — apply_eligibility
-1:1 매핑 + 교재 UUID canonical/AMBIGUOUS_TEXTBOOK + 브라우저 E2E 통합
-검증. apply_eligibility 8값 매핑과 AMBIGUOUS_TEXTBOOK invariant/사전
-차단(브랜치 fix/plan-eligibility-textbook-identity, 병합 b2c94dc)에
-Playwright 브라우저 E2E(브랜치 test/browser-e2e, 병합 ce26abc)를 통합
-브랜치 qa/ops-automation-2026-09-04(wt-int, HEAD ce26abc)로 합쳐 최종
-검증. Production DB WRITE 0, SQL 실행 0, 승인 대기 10건 APPLY 0, 정원
-정책 변경 0, merge/deploy 0. 상세는 아래 111차 섹션)_
+_최종 갱신: 2026-09-05 (112차, Harness V2 main merge + production 배포 +
+배포 후 검증 — PR #15(head fa2cbbd) merge 전 재검증(CI 4/4 PASS ·
+mergeable CLEAN · 위험 파일 스캔 0)으로 MERGE SAFE=YES 판정 후 main
+병합(SHA 42d42da) → Vercel Production 배포(번들 해시 일치 확인) →
+배포 후 READ-ONLY 검증(prod:check/health/reward+Paul Town 스위트 전부
+PASS) + Production smoke(테스트 계정 Barry, 학습 행동 0)로 학생 화면·
+정원 화면 정상 렌더 확인(관리자 UI는 자격증명 입력 불가로 미검증, 동일
+코드는 CI Gate 5 PASS). Production DB WRITE 0, SQL 실행 0, 실제 학생
+데이터 변경 0, 승인 대기 항목 APPLY 0. 판정: HARNESS V2 DEPLOYED = YES,
+PRODUCTION SMOKE = PASS. 상세는 아래 112차 섹션)_
+
+## 2026-09-05 (112차) — Harness V2 main merge + production 배포 + 배포 후 검증 (Production DB WRITE 0)
+
+### 배경/지시
+
+운영자 지시: MERGE SAFE = YES일 때만 merge·배포를 진행하고, 남은
+데이터/정책 관련 승인 대기 항목은 이번 세션에서 APPLY하지 않고
+READ-ONLY 재분류만 한다.
+
+### 제약/불변식
+
+배포·검증 전 구간에서 지켜진 불변식: **Production DB WRITE 0 · SQL
+실행 0 · 실제 학생 데이터 변경 0 · 승인 대기 항목 APPLY 0**(ghost 유닛
+삭제/SCA 재배정 수정/Unit 삭제/RLS 강화/DDL/reward 정책 변경 전부 0건).
+
+### Merge 전 재검증(PR #15, head `fa2cbbd`)
+
+- CI 4/4 PASS: Release Gate(Gate 5 브라우저 E2E 포함) · Deploy Ready ·
+  Vercel · Preview Comments.
+- `mergeable` 상태 CLEAN, main(`2c52a78`)이 head의 조상(divergence 0).
+- 위험 파일 스캔: `.sql`/`.env`/secret/`vercel.json` 변경 0건. 워크플로
+  변경은 `playwright install --with-deps chromium` 단계 추가 + Gate 5
+  스텝 추가뿐.
+- 앱 코드 변경 2파일(`api/admin-pin-actions.js`의 `create_student`
+  warnings 응답, `src/components/admin/StudentDirectory.jsx` 배너)은
+  DB 쓰기 의미 변화 없음(110차 감사에서 이미 확인된 사실 재확인).
+- 판정: **MERGE SAFE = YES**.
+
+### Merge + 배포
+
+- `gh pr ready 15` → `gh pr merge 15 --merge` → main SHA **`42d42da`**
+  (merge commit).
+- GitHub Deployments API: Production environment `state=success`
+  (2026-09-05T05:28:14Z).
+- `https://voca-drab.vercel.app/` HTTP 200.
+- 프로덕션 `index.html` 번들 `assets/index-DJjWAW_M.js` == main
+  `42d42da` 로컬 빌드 번들 → SHA 일치로 배포 확정(이전 프로덕션 번들
+  `index-CmEgoTwR.js`@`2c52a78`에서 교체됨).
+
+### 배포 후 READ-ONLY 검증(main `42d42da`, `wt-e2e`)
+
+- `prod:check` exit 0. Invariants FAIL 0 / WARN 68.
+- `studentHealthCheck` PASS 36 / WARN 10 / FAIL 0(실학생 46명).
+- "Safe to continue" = YES. DB WRITE 0.
+- reward/idempotency + Paul Town 스위트 PASS: `double-events`,
+  `reward-concurrency`, `reward-ledger`, `mission-bonus`, `game-reward`,
+  `paul-town-progression`, `garden-growth-sources`, `attachment`.
+
+### Production smoke(브라우저, 테스트 계정 Barry — `TEST_ACCOUNT_NAMES`, 학습 행동 0)
+
+- 로그인 화면 렌더 OK, 앱 콘솔 오류 0(유일한 예외는 크롬 확장
+  `content.js`의 "No Listener" — 앱과 무관).
+- 테스트 계정 로그인 OK(브라우저 자동완성, PIN 미입력).
+- 대시보드 렌더 OK — 반 "Pre-Middle School", 교과서 "중2 천재 이상기
+  (천재)" `80e8d5dd…`, 유닛 "Unit6".
+- 교재 드롭다운 8종 전부 별개 UUID — "중1 동아 윤정미 (동아)"
+  `faf6dc71…` / "중2 동아 윤정미 (동아)" `01afd62a…`가 별개 항목으로
+  표시(교재 identity UUID canonical 원칙, 111차 작업의 실사용 확인).
+- Unit 드롭다운 "Unit 1"/"Unit6" 정상 표시, 단어 수 40개 표시.
+- English Garden(Paul Town 화면) 렌더 OK: 성장 포인트 1, 마을 성장
+  1단계, 정원 16칸, 폴의 집·마을 곳곳 섹션 정상.
+- 관리자 화면: 관리자 PIN은 브라우저 자동완성이 없어 자격증명을 직접
+  입력할 수 없다는 원칙에 따라 **프로덕션 관리자 UI(학생 카드/교재
+  배정 UI)는 미검증** — 단 동일 코드는 E2E(mock) 관리자 6시나리오와
+  CI Gate 5에서 PASS. "중1 천재 이상기 / 중2 천재 이상기" 쌍은 Barry
+  계정 드롭다운에 중1 천재 이상기가 없어(배정 안 됨) 프로덕션 화면
+  에서는 "동아 윤정미" 중1/중2 쌍으로 대체 확인했고, 천재 이상기 쌍
+  자체는 E2E fixture로 이미 검증됨(111차).
+
+### 판정
+
+**HARNESS V2 DEPLOYED = YES.** **PRODUCTION SMOKE = PASS**(관리자 UI
+항목은 미검증으로 표기).
+
+### 승인 대기 재분류(READ-ONLY 실측, prod:check runId 20260905053201-vs6j · health --json --mask-names · prod:plan runId 20260905053343-9862ac, 세 명령 모두 DB WRITE 0)
+
+health PASS 36 / WARN 10 / FAIL 0(REAL 46, 제외 ARCHIVED 305/TEST 140/QA
+2, baseline과 동일) · invariants FAIL 0 / WARN 68 ·
+prod:plan(ghost-sca-reassign-20260902) apply_eligibility
+BLOCKED_PREFLIGHT(4f3e0b72·9f115c32 자발 Unit5→Unit6, preflight 4건
+mismatch → 재생성 필요, 미적용).
+
+**A. DATA INTEGRITY**
+
+| 항목 | 라이브 문제 | 영향 학생 | 예상 row | 자동판단 | 운영자 결정 | 위험도 |
+|---|---|---|---|---|---|---|
+| GHOST_UNIT_PRESENT | YES 7(변화 없음) | 0(구조적) | words DELETE 1×6 | NO(정리 순서만 정형) | 필요(v3_43→43b→44 실행 승인) | LOW |
+| SCA_GHOST_UNIT | YES 11 | REAL 10 | SCA UPDATE 11 | YES(manifest 자동 생성, preflight 재계산 필요) | 필요(재생성 후 apply 승인) | MEDIUM |
+| STALE_CLASS_SCA | YES 3 | REAL 3 | SCA UPDATE 3 | NO(primary=true 행이라 삭제 아닌 재배정 판단) | 필요 | MEDIUM |
+| UNIT_CONTENT_DUPLICATE(4fc69e2d 등 3쌍) | YES 3 | REAL 1(4fc69e2d) + 0~2 | words DELETE 40 + SCA 1(미확정) | NO(콘텐츠 정답 여부) | 필요 | HIGH |
+| *_ORPHAN / NO_PRIMARY / MULTIPLE_PRIMARY / DUPLICATE_SCA_TEXTBOOK / STUDENT_NO_CLASS | NO 0 | — | — | — | 불필요 | — |
+| AMBIGUOUS_TEXTBOOK | YES 2(학생 1명, 동아 윤정미 중1/중2 faf6dc71/01afd62a) | REAL 1 | 0(보고용) | YES(모호 쌍 검출·hotfix 차단) | 불필요(hotfix 시 ack로 처리) | LOW |
+| PRIMARY_UNIT_MISMATCH | YES 29(문서 27 대비 +2, 신규 2명 미추적) | REAL 27~29 | 0(정합화 선택 시 최대 29) | YES(리졸버가 안 읽는 죽은 컬럼, 실사용 영향 0 — 11bf474) | 선택(정합화 여부) | LOW |
+| STUDENT_CLASS_IS_CONTAINER | YES 6 | REAL 6 | 0(설계) | YES | 불필요 | LOW |
+| CLASS_ASSIGNMENT_CONTRADICTION | YES 1 | REAL 1(STALE_CLASS_SCA와 동일 학생) | SCA UPDATE 1 | NO | 필요(같은 manifest) | LOW |
+| UNIT_WORDS_ABNORMAL | YES 5 | 0 | — | — | 불필요 | LOW |
+
+**B. SECURITY / INFRA**
+
+| 항목 | 라이브 문제 | 영향 | 예상 row | 자동판단 | 운영자 결정 | 위험도 |
+|---|---|---|---|---|---|---|
+| grant-xp.js 레거시 XP 분기 무인증 | 여전히 존재(legacy 경로 L272-306은 id/eventType 검증만, verifySessionToken 없음; reward 분기만 검증) | 구조적 전체 | 0(코드) | NO | 필요(착수·범위) | HIGH |
+| SCA allow-anon-all RLS | 여전히 라이브(anon SELECT 실측 성공; 하네스 READ-ONLY도 이 정책에 의존) | 구조적 전체(493 SCA 흐름) | 0(정책) | NO | 필요(설계 선행) | HIGH |
+| T6/T9 KNOWN 4건 | 변화 없음 | — | — | — | 후속 | LOW~MEDIUM |
+
+**C. PRODUCT POLICY**
+
+| 항목 | 라이브 문제 | 영향 | 예상 row | 자동판단 | 운영자 결정 | 위험도 |
+|---|---|---|---|---|---|---|
+| Garden 성장 UNDECIDED 3건(복습 큐/입실시험/미니게임) | BUG 0, 정책만 | 0 | 0 | NO | 필요 | LOW |
+| reward 파밍 축소(wrong-word-recovered 하루 60★) | 변화 없음 | 0 | 0 | NO | 필요 | LOW |
+| PR #9(reward loop, 플래그 6종 OFF) merge | OPEN | 0 | 0 | YES(안전성) / NO(시점) | 필요(시점) | LOW |
+| PR #11(admin 카드 CSS) merge | OPEN | 0 | 0 | YES | 필요(시점) | LOW |
+| classes.gamification_enabled DDL | 컬럼 미존재 실측(42703), v2_5 SQL 미실행 | 0 | ALTER 1 | YES(멱등, 기본 false) | 필요(실행) | LOW |
+
+**NEXT APPROVAL REQUIRED(3)**: ① PR #9/#11 merge 시점 ② 4fc69e2d
+콘텐츠 정답 확인(어느 업로드가 맞는지) ③ grant-xp 레거시 인증 + SCA
+allow-anon-all 축소 착수 여부·범위.
+
+### 다음 세션 참고
+
+- `wt-int`는 이제 docs 브랜치(이 112차 문서 작업 전용).
+- `qa/ops-automation-2026-09-04`는 main에 merge됨 — 브랜치 자체는
+  삭제하지 않음.
+- `wt-e2e`는 `42d42da`에 detached(Playwright 설치 환경, E2E 실측용).
+
+### 소유 파일(이 세션에서 Write/Edit)
+
+`handoff.md`(이 112차 섹션), `ROADMAP.md`, `PROJECT_BOARD.md`,
+`docs/qa/ops-2026-09-04/README.md`.
+
+_(이전 최종 갱신 기록 — 원문 보존) 2026-09-05 (111차, 스크린샷 의존
+축소 — apply_eligibility 1:1 매핑 + 교재 UUID canonical/
+AMBIGUOUS_TEXTBOOK + 브라우저 E2E 통합 검증. apply_eligibility 8값
+매핑과 AMBIGUOUS_TEXTBOOK invariant/사전 차단(브랜치
+fix/plan-eligibility-textbook-identity, 병합 b2c94dc)에 Playwright
+브라우저 E2E(브랜치 test/browser-e2e, 병합 ce26abc)를 통합 브랜치
+qa/ops-automation-2026-09-04(wt-int, HEAD ce26abc)로 합쳐 최종 검증.
+Production DB WRITE 0, SQL 실행 0, 승인 대기 10건 APPLY 0, 정원 정책
+변경 0, merge/deploy 0. 상세는 아래 111차 섹션)_
 
 ## 2026-09-05 (111차) — 스크린샷 의존 축소: apply_eligibility 1:1 매핑 + 교재 UUID canonical/AMBIGUOUS_TEXTBOOK + 브라우저 E2E 통합 (Production WRITE 0)
 

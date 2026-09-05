@@ -145,15 +145,6 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
   로그인/PIN 4개 스크립트에서 XP 원장 1개 스크립트로 확장된 것뿐.
   상세: `handoff.md` 2026-07-19(3차).
 
-### [P0] PR #8 merge 결정 — 운영자 승인 대기 (2026-09-03, 105차)
-- 근거: `handoff.md` 2026-09-03(105차),
-  https://github.com/jinalove1111/voca/pull/8 (브랜치
-  `fix/pin-setup-and-unit-fallback`).
-- 내용: 야간 세션 커밋 다수(재발 방지 가드 4종 + Production Safety
-  Harness 강화 + WARN 10 분석 + 보안 마스킹 7건) 추가 후 재push 완료.
-  Release Gate 결과는 아침 보고서에서 확인 필요 — merge 는 운영자 승인
-  후에만.
-
 ### [P1] `supabase functions deploy admin-content-write` 배포 대기 — class.delete 가드 반영 (2026-09-03, 105차)
 - 근거: `handoff.md` 2026-09-03(105차) 커밋 `2f63ff2`.
 - 내용: Edge Function `class.delete` 에 학습기록 fail-closed + force
@@ -580,29 +571,6 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
 
 ## VERIFY
 
-### [P0] `qa/ops-automation-2026-09-04` 통합 브랜치 — 12시간 자율 운영 자동검증 완료, PR 생성/merge 검토 대기 (2026-09-04, 109차)
-- 근거: `handoff.md` 2026-09-04(109차), `ROADMAP.md` 2026-09-04(109차),
-  `docs/qa/ops-2026-09-04/*.md`, `docs/qa/ops-report/ops-report-latest.md`,
-  `docs/production-safety-harness-runbook.md` §7~§9.
-- 내용(최종 커밋 `278c89a`): Harness V2(트랙 B/C — 서술 lint,
-  VERIFY==WRITE 구조 가드, drift refresh, SCA insert/delete narrow
-  ALLOWLIST, invariant delta fail-closed, `prod:plan` 신설, `prod:apply`
-  별칭 + `STANDARD_STATUS`) · 운영 보고서 표준화(트랙 D/P — `opsStatus`
-  4-state enum + finding 스키마 + `npm run prod:report`) · invariant 4종
-  추가(트랙 E/F) · 관리자 핵심 흐름 복합 회귀 63단언(트랙 M) · 계정 분류
-  회귀 34단언 · ghost/legacy 인벤토리 REFRESH 26항목(트랙 O) · 정원 성장
-  경로 분류(트랙 H, BUG 0) · 하네스 인벤토리(트랙 A) · P1 생성 경고 수정
-  (`create_student` warnings + UI 배너, 44단언).
-- 검증: `npm run build` PASS, `npm run verify:all` ALL DOMAINS PASS,
-  `health:students` 36/10/0(무회귀), `prod:check` WARN(invariant FAIL 0 /
-  WARN 64), 로컬 Release Gate PASS, 개별 15 스위트 PASS.
-  **Production DB WRITE 0 · SQL 실행 0 · 학생 데이터 변경 0 · merge 0 ·
-  deploy 0 · main push 0.**
-- 검수 대기 사항: qa-reviewer/security-reviewer 코드 리뷰 미착수, 운영자
-  PR 생성·merge 결정(위 BLOCKED "PR #9/#10/#11 + …" 카드와 함께 판단).
-- 알려진 문서 갭 1건: 런북 §9-7의 `verify:prod-hotfix` 단언 수 표기가
-  300(최종 실행 기준 301) — 코드 불일치 아님, 다음 세션이 정정.
-
 ### [P0] `qa/overnight-2026-09-04` 통합 브랜치 — 11 트랙 야간 QA 검증 완료, PR 생성/merge 검토 대기
 - 근거: `handoff.md` 2026-09-04(108차), `ROADMAP.md` 2026-09-04(108차),
   `docs/qa/overnight-2026-09-04/*.md`.
@@ -882,6 +850,46 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
   `supabase_v2_4_entrance_result_rls.sql` 실행 여부 판단.
 
 ## DONE (최근 완료, 참고용 — 전체 이력은 `ROADMAP.md`/`handoff.md`)
+
+### [P0] PR #8 merge 결정 — stale 카드 정정(112차): 이미 2026-09-02 merge 완료 (2026-09-03, 105차)
+- 근거: `handoff.md` 2026-09-03(105차),
+  https://github.com/jinalove1111/voca/pull/8 (브랜치
+  `fix/pin-setup-and-unit-fallback`).
+- 내용(원문 유지): 야간 세션 커밋 다수(재발 방지 가드 4종 + Production
+  Safety Harness 강화 + WARN 10 분석 + 보안 마스킹 7건) 추가 후 재push
+  완료. Release Gate 결과는 아침 보고서에서 확인 필요 — merge 는 운영자
+  승인 후에만.
+- **stale 카드 정정(2026-09-05, 112차)**: 위 BLOCKED 카드는 PR #8이
+  실제로는 2026-09-02에 이미 merge된 상태를 반영하지 못한 채 남아
+  있던 stale 카드였다 — 이번 세션 정리 과정에서 발견, DONE으로 이동.
+
+### [P0] `qa/ops-automation-2026-09-04` 통합 브랜치 — 12시간 자율 운영 자동검증 완료 → PR #15 merge → main `42d42da`, 2026-09-05 배포 (2026-09-04, 109차 / 2026-09-05, 112차)
+- 근거: `handoff.md` 2026-09-04(109차)/2026-09-05(110~112차),
+  `ROADMAP.md` 2026-09-04(109차)/2026-09-05(112차),
+  `docs/qa/ops-2026-09-04/*.md`, `docs/qa/ops-report/ops-report-latest.md`,
+  `docs/production-safety-harness-runbook.md` §7~§9.
+- 내용(최종 커밋 `278c89a`, 이후 110/111차 후속 커밋 병합, PR #15
+  head `fa2cbbd`): Harness V2(트랙 B/C — 서술 lint, VERIFY==WRITE
+  구조 가드, drift refresh, SCA insert/delete narrow ALLOWLIST,
+  invariant delta fail-closed, `prod:plan` 신설, `prod:apply` 별칭 +
+  `STANDARD_STATUS`) · 운영 보고서 표준화(트랙 D/P) · invariant 4종
+  추가(트랙 E/F) · 관리자 핵심 흐름 복합 회귀 63단언(트랙 M) · 계정 분류
+  회귀 34단언 · ghost/legacy 인벤토리 REFRESH(트랙 O) · 정원 성장 경로
+  분류(트랙 H, BUG 0) · 하네스 인벤토리(트랙 A) · P1 생성 경고 수정 ·
+  apply_eligibility 8값 1:1 매핑 + 교재 UUID canonical/
+  AMBIGUOUS_TEXTBOOK(111차) · Playwright 브라우저 E2E(111차).
+- Merge/배포(112차): CI 4/4 PASS · mergeable CLEAN 재확인 후
+  `gh pr merge 15 --merge` → **main SHA `42d42da`** → Vercel
+  Production 배포(번들 해시 일치 확인, 2026-09-05T05:28:14Z) →
+  배포 후 READ-ONLY 검증(`prod:check` invariants FAIL 0/WARN 68,
+  `health:students` 36/10/0, reward+Paul Town 스위트 전부 PASS) +
+  Production smoke(테스트 계정 Barry) PASS(관리자 UI는 자격증명 입력
+  불가로 미검증, 동일 코드는 CI Gate 5 PASS).
+  **전 구간 Production DB WRITE 0 · SQL 실행 0 · 학생 데이터 변경 0 ·
+  승인 대기 항목 APPLY 0.**
+- 알려진 문서 갭 1건(109차 기록): 런북 §9-7의 `verify:prod-hotfix`
+  단언 수 표기가 300(최종 실행 기준 371) — 코드 불일치 아님, 정정
+  필요.
 
 - 개발자 대시보드(`scripts/generateDashboard.mjs`, `npm run dashboard`)
   신설(Engineering Head, 2026-07-18) — PROJECT_BOARD.md(읽기 전용 파싱)/
