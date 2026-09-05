@@ -1,0 +1,25 @@
+{
+  "agent_name": "qa-overnight",
+  "role": "야간 자율 QA/개선 후보 조사 (Production WRITE 0, main 무접촉)",
+  "task_id": "overnight-qa-2026-09-06",
+  "task": "Track A~P: build/verify:all, 학생 journey 회귀, SCA 무결성(READ-ONLY), 커리큘럼 품질, 관리자 흐름, 보상/진행, 모바일 UX, 보안 정적, health blind spot, v3_38/v3_39 판단 자료, 고아 커밋 재평가, 문서/핸드오프",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-05T19:54:00Z",
+  "updated_at": "2026-09-06T01:30:00Z",
+  "files_owned": [
+    ".ai-status/qa-overnight-2026-09-06.json",
+    "docs/qa/overnight-2026-09-06/track-results.md",
+    "docs/qa/overnight-2026-09-06/v3_38_v3_39_decision.md",
+    "docs/qa/overnight-2026-09-06/backup-commits-review.md",
+    "handoff.md (113차 append)",
+    "TESTING.md (113차 append)",
+    "PROJECT_BOARD.md (BLOCKED 카드 append)"
+  ],
+  "files_read": [
+    "PROJECT_GUIDE.md", "TESTING.md", "PROJECT_BOARD.md", "handoff.md", "package.json", "tests/harness/registry.mjs", "tests/harness/runAll.mjs", "tests/harness/runDomain.mjs", "scripts/verifyRelease.mjs", "scripts/lib/prodInvariants.mjs", "scripts/lib/prodDataLoader.mjs", "src/utils/excelHeaderGuard.js", "src/utils/accountStatus.js", "src/components/admin/DuplicateStudentAudit.jsx", "src/App.jsx", "src/components/Dashboard.jsx", "src/utils/curriculum/practiceSentence.js", "src/utils/curriculum/textImport.js"
+  ],
+  "summary": "브랜치 test/overnight-qa-2026-09-06(base f2fde30). 검증: build PASS, verify:all ALL DOMAINS PASS(139 스크립트), Release Gate 3/5 PASS(health 46명 PASS45/WARN1/FAIL0, e2e 56/56). 서브에이전트 7개 READ-ONLY 조사(C/I/M, D, K/L, N, E/H, B/F, G) + 구현 에이전트 1개 순차 소커밋 10개(25f40c5 죽은 P0 테스트 등록, cf6cf0a practiceSentence 2건, d738867 곡선 아포스트로피, 028214a+7676e49 WORD_HEADER_RESIDUE invariant, d76e8ce 중복 감사 실학생 집계, c6704b6 SpeedBtn 겹침, cea23da 실사고 가드 4종 게이팅, 상태 2). 전부 FAIL-first. 라이브 재검증으로 서브에이전트 오탐(헤더 잔재 5건→1건) 정정. Production WRITE 0 / SQL 실행 0 / v3_38·v3_39 무수정·미실행 / F 재시도 0 / main·backup 무접촉 / push·PR·merge 0.",
+  "blocker": null,
+  "next_action": "운영자: (1) 브랜치 리뷰 → push/PR/Release Gate/merge 결정 (2) v3_38/v3_39 결정(docs/qa/overnight-2026-09-06/v3_38_v3_39_decision.md) (3) 헤더 잔재 단어 1행(f804c099) 삭제 승인 (4) extra:true 게이팅 정책·미등록 스크립트 10개·STALE_CLASS_SCA 카드·모바일 뒤로가기 결정. 상세 docs/qa/overnight-2026-09-06/track-results.md Open Questions."
+}
