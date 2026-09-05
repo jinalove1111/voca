@@ -3,31 +3,84 @@
 // node scripts/prodHotfix.mjs <manifest.json> --env production|staging
 //   [--dry-run] [--report-dir <dir>] [--executor management-api]
 //   [--fixture-reader <file>] [--expect-manifest-sha <hex>]
-//   [--rollback-of <report.json>] [--json]
+//   [--rollback-of <report.json>] [--approve <runId>] [--json]
 //
 // ★ 이번 단계 프로덕션 WRITE 절대 금지 경로 설계 ★
 //   · Management API 실호출은 이 저장소에 없다(토큰도 없음, SUPABASE_ACCESS_TOKEN
 //     은 .env/.env.local 어디에도 없다).
 //   · 라이브 접근은 supabase-js anon key 로 읽기(select/maybeSingle, count head)
 //     만 한다 — 이 파일 안에 UPDATE/INSERT/DELETE 문자열을 담은 실제 실행
-//     경로는 executor.run() 뿐이고, 그 executor 는 대화형 승인
-//     (`APPLY <runId>` 정확히 입력, TTY 필수) 을 통과해야만 만들어진다.
+//     경로는 executor.run() 뿐이고, 그 executor 는 2단계 승인 티켓 게이트
+//     (아래 "2단계 승인 게이트" 참고, TTY 필수) 를 통과해야만 만들어진다.
 //   · --dry-run 이거나 CI 환경이거나 SUPABASE_ACCESS_TOKEN 이 없으면
 //     승인 단계 이전에 항상 STOP(exit 0) 한다.
 //   · --env production|staging 플래그가 없으면(오타 포함) 그 무엇보다
 //     먼저 STOP(env-flag-required) — CI 에서는 --env 값과 무관하게 write
 //     path 가 비활성 상태를 유지한다.
 //
+// ── 2단계 승인 게이트(2026-09-05, fix/harness-apply-two-phase-approval) ──
+// 예전엔 여기서 Node `readline/promises` 의 `rl.question()` 으로 그 자리에서
+// `APPLY <runId>` 입력을 받았다. 이 방식은 Node 코어의 하드코딩된 동작 때문에
+// Windows 에서 불안정했다: readline 은 raw-mode 로 stdin 을 읽는 동안 리터럴
+// 0x03(Ctrl+C) 바이트가 들어오면(그 시점에 `rl.on('SIGINT')` 리스너가 하나도
+// 없으면) `rl.close()` 를 호출하고 `AbortError: Aborted with Ctrl+C`
+// (code: ABORT_ERR) 로 그 question() Promise 를 즉시 reject 한다
+// (internal/readline/interface.js, [kTtyWrite] 의 `case 'c':` 분기 — Node
+// 소스로 직접 확인, `--expose-internals` 로 재현 완료). 이건 OS 시그널이
+// 아니라 "그 순간 입력 스트림에 0x03 바이트가 도착했는가"만 보는 순수
+// 키스트로크 감지라서, Windows 콘솔 입력 버퍼에 남아있던 이전 Ctrl+C(예:
+// 직전 명령을 중단했거나 QuickEdit 복사 중 우연히 섞인 입력)가 이 프로세스가
+// raw-mode 로 stdin 을 열자마자 그대로 전달돼도 똑같은 에러가 난다 — 운영자가
+// "그 순간 Ctrl+C 를 누르지 않았다"고 말해도 모순이 아니다. 그리고 이
+// 예외는 어디서도 catch 되지 않아 finish() 를 거치지 않고 프로세스가
+// 죽었다(리포트에 기록이 안 남았던 이유).
+//
+// 이 문제를 근본적으로 없애기 위해 readline 의존을 완전히 제거하고, 승인을
+// "그 자리에서 프롬프트에 답하기"가 아니라 "두 번의 독립된 CLI 실행"으로
+// 재설계했다:
+//   · 1단계(`--approve` 없이 실행) — 아래 0~6.5단계를 전부 수행한 뒤,
+//     `--dry-run` 이 아니라면(즉 진짜 `prod:apply` 호출이라면) CI/토큰
+//     유무와 **무관하게** 항상 승인 티켓 파일(`<reportDir>/<runId>.ticket.json`
+//     — manifest sha256, preflight/baseline 스냅샷 fingerprint, 발급 시각,
+//     만료 15분, 1회성 used 플래그)을 쓰고 status='ticket-issued' 로 STOP
+//     (exit 0, DB WRITE 0). 티켓 발급 자체는 "이 계획이 게이트를 통과했다"
+//     는 사실을 기록할 뿐 아무것도 쓰지 않으므로 CI/토큰없음이어도 막을
+//     이유가 없다(그 티켓은 2단계에서 같은 사유로 다시 막혀 절대 승인될
+//     수 없다). `--dry-run`(`prod:plan` 이 항상 이렇게 호출)일 때만 티켓
+//     없이 즉시 STOP(`ready-to-apply`, 기존과 동일) — "계획만 보고 싶다"는
+//     의도가 명시적이기 때문이다. 콘솔 마지막 줄에 다음에 그대로 실행할
+//     명령을 인쇄한다.
+//   · 2단계(`--approve <runId>` 로 재실행) — **같은 runId 로** 0~6.5단계를
+//     처음부터 다시 전부 수행한다(= "그 사이 라이브 상태가 바뀌었는가"를
+//     preflight-mismatch/invariants 델타 등 기존 로직이 자동으로 다시 잡는다).
+//     여기서 비로소 CI/토큰 게이트를 다시 확인한다(`ready-to-apply` + 사유,
+//     기존과 동일한 status/exit code) — 티켓이 아무리 유효해도 이 시점에
+//     CI 이거나 토큰이 없으면 절대 통과하지 못한다. 통과하면 TTY 확인 →
+//     티켓을 로드해 존재/미사용/미만료/manifest sha 일치/현재 baseline
+//     fingerprint 일치(승인 이후 드리프트 시 approval-stale)를 확인하고,
+//     통과하면 티켓을 즉시 used=true 로 갱신(1회성 소모)한 뒤에만 apply 로
+//     진행한다. TTY 확인은 이 단계에만 남아있다(비대화형 자동화가 이
+//     명령을 실수로/스크립트로 실행하지 못하게 하는 방어선 — 실제 승인
+//     자체는 readline 프롬프트가 아니라 "운영자가 `--approve <runId>` 를
+//     정확한 runId 로 직접 타이핑해 실행한 행위" 그 자체다).
+// 두 단계 모두 여전히 같은 fail-closed 게이트(정적 스캔/프리플라이트/
+// invariants delta/write-drift-guard)를 동일하게 통과해야 하고, 승인
+// (2단계 CI/토큰 게이트 + 티켓 검증 + TTY) 없이는 어떤 경로로도 apply(9)
+// 이후(트랜잭션)에 도달할 수 없다는 불변식은 그대로다.
+//
 // 흐름(고정 순서, 어느 단계든 실패 = FAIL-CLOSED STOP):
-//   0 run-id 생성 → 1 manifest 로드/검증(+ sha256 기록/--expect-manifest-sha
-//     대조) → 1.5 --env 플래그 게이트 → 2 환경(project_ref) 게이트 →
+//   0 run-id 생성(2단계는 --approve 로 받은 runId 재사용) → 1 manifest
+//     로드/검증(+ sha256 기록/--expect-manifest-sha 대조) → 1.5 --env
+//     플래그 게이트 → 2 환경(project_ref) 게이트 →
 //   3 정적 안전 스캔 → (rollback-of 모드면 원본 보고서 대조) →
 //   4 프리플라이트(읽기, 모드에 따라 before/after 값 확인 전환) →
 //   5 baseline 저장 → 6 계획 출력 + apply/rollback SQL 파일 저장(+ rollback
-//     메타데이터 기록) → 7 dry-run/CI/토큰없음 → STOP(ready-to-apply) →
-//   8 대화형 승인 게이트(정확히 `APPLY <runId>`) → 8.5 apply 직전 manifest
-//     파일 재해시 대조(변조 감지) → 9 apply(forward SQL) → 10 postflight →
-//   11 npm run health:students → 12 실패 시 자동 롤백(backward SQL) → 13 보고서
+//     메타데이터 기록) → 6.5 write-drift-guard → 7 --dry-run → STOP
+//     (ready-to-apply) → 8 2단계 승인 게이트(--approve 없으면 티켓 발급,
+//     있으면 CI/토큰 재확인 → 티켓 검증) → 8.5 apply 직전 manifest 파일
+//     재해시 대조(변조 감지) → 9 apply(forward SQL) →
+//   10 postflight → 11 npm run health:students → 12 실패 시 자동 롤백
+//     (backward SQL) → 13 보고서
 //
 // mode: 'apply'(기본) 또는 'rollback-of'(--rollback-of 지정 시) — forward/
 // backward SQL 과 preflight/postflight 확인 방향이 서로 뒤바뀔 뿐, 게이트
@@ -39,7 +92,6 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import readline from 'node:readline/promises'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { createClient } from '@supabase/supabase-js'
@@ -109,8 +161,13 @@ function diffUnexpectedRows(table, before, after, expectedIds) {
 }
 
 // ── 자격증명 로드(.env + .env.local, 값은 어디에도 로깅하지 않는다) ──────
+// fix/harness-apply-two-phase-approval(2026-09-05) — SUPABASE_ACCESS_TOKEN 을
+// process.env/.env/.env.local 중 어디서 읽었는지(accessTokenSource) 도 함께
+// 반환한다. "토큰 편의" 요구사항 — 값 자체는 절대 반환/로깅하지 않고 출처
+// 라벨만 노출한다(.env.local 은 이미 저장소 .gitignore 의 `.env*` 로 커버됨).
 function loadEnvDefault() {
   const merged = {}
+  const sourceOf = {}
   for (const file of ['.env', '.env.local']) {
     const p = path.join(ROOT, file)
     if (!fs.existsSync(p)) continue
@@ -118,14 +175,18 @@ function loadEnvDefault() {
       const m = line.match(/^([^#=][^=]*)=(.*)$/)
       if (m) {
         const key = m[1].trim()
-        if (merged[key] === undefined) merged[key] = m[2].trim()
+        if (merged[key] === undefined) { merged[key] = m[2].trim(); sourceOf[key] = file }
       }
     }
   }
+  const accessTokenSource = process.env.SUPABASE_ACCESS_TOKEN
+    ? 'process.env'
+    : (merged.SUPABASE_ACCESS_TOKEN ? sourceOf.SUPABASE_ACCESS_TOKEN : null)
   return {
     url: process.env.VITE_SUPABASE_URL || merged.VITE_SUPABASE_URL || '',
     anonKey: process.env.VITE_SUPABASE_ANON_KEY || merged.VITE_SUPABASE_ANON_KEY || '',
     accessToken: process.env.SUPABASE_ACCESS_TOKEN || merged.SUPABASE_ACCESS_TOKEN || '',
+    accessTokenSource,
     ci: !!(process.env.CI || process.env.GITHUB_ACTIONS),
   }
 }
@@ -297,14 +358,6 @@ const defaultDeps = {
   // 고정 순서(READ-ONLY preflight → ... → health)를 단언한다.
   onStep: () => {},
   isTTY: () => !!process.stdin.isTTY,
-  approve: async (runId) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
-    try {
-      return await rl.question(`승인하려면 정확히 입력하세요: APPLY ${runId}\n> `)
-    } finally {
-      rl.close()
-    }
-  },
   runHealthCheck: () => {
     const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm'
     const res = spawnSync(npmCmd, ['run', 'health:students'], { cwd: ROOT, encoding: 'utf8', shell: process.platform === 'win32' })
@@ -316,6 +369,19 @@ const defaultDeps = {
 function sha256Text(text) {
   return crypto.createHash('sha256').update(String(text ?? '')).digest('hex')
 }
+
+// fix/harness-apply-two-phase-approval(2026-09-05) — 임의 JSON 값(주로
+// report.baseline)의 안정적 fingerprint. JSON.stringify 는 객체 키 순서를
+// "삽입 순서"로 보존하는데, report.baseline 은 항상 이 파일 안에서 같은
+// 순서로 조립되므로(baselineCounts → tableMissing → snapshot) 같은 논리적
+// 상태에는 항상 같은 문자열이 나온다 — 정렬까지 다시 구현할 필요 없음.
+function sha256Any(value) {
+  return sha256Text(JSON.stringify(value))
+}
+
+// 승인 티켓 유효기간(15분) — 이 시간이 지나면 --approve 는 approval-expired
+// 로 STOP 하고, 1단계를 다시 실행해 새 티켓을 받아야 한다.
+const TICKET_TTL_MS = 15 * 60 * 1000
 
 // plan-eligibility-textbook-identity 트랙(2026-09-05) — apply_eligibility
 // 8값 enum(추가만, opsStatus.mjs 의 STANDARD_STATUS 4값과는 별개 — 그건
@@ -345,6 +411,23 @@ function sha256Text(text) {
 //   무관하게 정적으로 판정 가능한 차단.
 // - BLOCKED_UNKNOWN: 이 표에 등록되지 않은 status(새 STOP 사유가 추가됐는데
 //   분류를 깜빡한 경우) — fail-closed, 표준 상태는 항상 FAIL.
+//
+// fix/harness-apply-two-phase-approval(2026-09-05) — 2단계 승인 게이트가
+// readline 기반 단일 프롬프트를 대체하면서 새 STOP 사유 6종이 추가됐다
+// ('not-approved' 는 readline 문구 비교 전용이라 더는 발생하지 않아 표에서
+// 제거 — 완전성 가드 테스트는 "발생하는 status 가 표에 있는가"만 보므로
+// 안전):
+// - ticket-issued: 1단계(--approve 없이) 완료 — 승인 티켓 발급, DB WRITE 0.
+//   대기 상태일 뿐 다른 차단 사유가 전혀 없으므로 READY.
+// - approval-mismatch: --approve 로 지정한 runId 에 대응하는 티켓 파일이
+//   없음(잘못된 runId 를 타이핑했거나 1단계를 먼저 실행하지 않음).
+// - approval-used: 티켓이 이미 사용됨(1회성 — 재사용 시도).
+// - approval-expired: 티켓 발급 후 15분 초과.
+// - approval-manifest-mismatch: 티켓 발급 이후 manifest 파일 내용이 바뀜
+//   (sha256 불일치) — manifest-tampered 와 같은 계열이라 BLOCKED_MANIFEST.
+// - approval-stale: 티켓 발급 이후 재확인한 preflight/baseline fingerprint
+//   가 달라짐(그 사이 라이브 상태가 드리프트) — preflight-mismatch/
+//   baseline-failed 와 같은 계열이라 BLOCKED_PREFLIGHT.
 export const APPLY_ELIGIBILITY_VALUES = [
   'READY',
   'BLOCKED_PREFLIGHT',
@@ -366,7 +449,12 @@ export const APPLY_ELIGIBILITY_VALUES = [
 // 등록한다(누락이 아니라 "이 표의 분류 범위 밖" 이라는 의식적 표시).
 export const STOP_REASON_TO_APPLY_ELIGIBILITY = {
   'not-interactive': 'BLOCKED_NEEDS_APPROVAL',
-  'not-approved': 'BLOCKED_NEEDS_APPROVAL',
+  'ticket-issued': 'READY',
+  'approval-mismatch': 'BLOCKED_NEEDS_APPROVAL',
+  'approval-used': 'BLOCKED_NEEDS_APPROVAL',
+  'approval-expired': 'BLOCKED_NEEDS_APPROVAL',
+  'approval-manifest-mismatch': 'BLOCKED_MANIFEST',
+  'approval-stale': 'BLOCKED_PREFLIGHT',
   'preflight-mismatch': 'BLOCKED_PREFLIGHT',
   'baseline-failed': 'BLOCKED_PREFLIGHT',
   'blocked-write-drift': 'BLOCKED_WRITE_DRIFT',
@@ -457,7 +545,13 @@ function writeReportFile(D, reportDir, runId, report, secretEnv) {
 export async function runHotfix(options, deps = {}) {
   const D = { ...defaultDeps, ...deps }
   const startedAt = D.now().toISOString()
-  const runId = options.runId || makeRunId(D.now())
+  // fix/harness-apply-two-phase-approval(2026-09-05) — 2단계(--approve
+  // <runId>) 는 1단계가 발급한 티켓과 같은 runId 로 처음부터 다시 실행돼야
+  // 한다(같은 apply/rollback SQL 파일, 같은 dollar-quote 태그). 그래서
+  // options.approveRunId 가 있으면 그 값을 runId 로 그대로 쓴다 — 별도로
+  // options.runId 를 또 맞춰 넘길 필요가 없다(CLI 는 --approve 값 하나만
+  // runId 로 사용, isMain 참고).
+  const runId = options.approveRunId || options.runId || makeRunId(D.now())
   const reportDir = options.reportDir || path.join(ROOT, 'scripts', '.tmp', 'prod-reports')
 
   // 비밀값 마스킹 대상 env — D.loadEnv() 로드 전엔 빈 객체(2단계에서 채움).
@@ -599,6 +693,9 @@ export async function runHotfix(options, deps = {}) {
   }
   const ciForced = !!env.ci
   if (ciForced) log('CI 환경 감지(process.env.CI 또는 GITHUB_ACTIONS) — write path 영구 비활성(dry-run 강제, --env 값과 무관)')
+  // fix/harness-apply-two-phase-approval(2026-09-05) — "토큰 편의": 값은
+  // 절대 로깅하지 않고, 어디서 읽었는지(출처)만 안내한다.
+  if (env.accessToken) log(`SUPABASE_ACCESS_TOKEN 출처: ${env.accessTokenSource || '(불명)'}`)
 
   // 3) 정적 안전 스캔 (apply/rollback SQL 은 이 시점에 이미 순수 함수로 생성 가능)
   D.onStep('static-scan')
@@ -837,29 +934,113 @@ export async function runHotfix(options, deps = {}) {
   log('VERIFY==WRITE 드리프트 가드 PASS — 생성된 SQL 이 manifest 와 구조적으로 일치')
   log('\nREADY TO APPLY')
 
-  // 7) dry-run / CI / 토큰 없음 → STOP (apply·rollback-of 모드 공통)
+  // 7) --dry-run → STOP (apply·rollback-of 모드 공통). fix/harness-apply-
+  // two-phase-approval(2026-09-05) — 예전엔 CI/토큰없음도 이 시점에 같이
+  // STOP 했지만, 이제 "1단계(티켓 발급)는 계획이 통과했다는 사실 자체를
+  // 기록하는 것"이라 CI/토큰없음이어도 발급은 막지 않는다(그 티켓은 2단계
+  // 에서 CI/토큰 게이트에 다시 걸려 절대 승인될 수 없으므로 안전). 오직
+  // `--dry-run`(prod:plan 이 항상 이렇게 호출)만 여기서 즉시 STOP한다 —
+  // "계획만 보고 싶다"는 의도가 명시적이라 티켓조차 만들 필요가 없다.
+  if (options.dryRun) {
+    log('\nSTOP(정상) — write path 비활성: --dry-run')
+    D.onStep('dry-run-stop')
+    return finish('ready-to-apply', 0, { stopReasons: ['--dry-run'], dbWriteCount: 0 })
+  }
+
+  // 8) 2단계 승인 게이트(readline 제거, fix/harness-apply-two-phase-approval
+  // 2026-09-05 — 파일 최상단 설명 참고).
   const noToken = !env.accessToken
-  if (options.dryRun || ciForced || noToken) {
+  if (!options.approveRunId) {
+    // ── 1단계: 티켓 발급 ──────────────────────────────────────────────
+    D.onStep('ticket-issue')
+    const nowDate = D.now()
+    const ticket = {
+      runId,
+      manifestId: manifest.id,
+      manifestSha256,
+      envFlag: options.envFlag,
+      projectRef: manifest.project_ref,
+      // report.baseline 은 방금 5)/5.5) 단계에서 이미 라이브 상태로 채워졌다
+      // (학습기록 카운트 + students/SCA 전체 스냅샷 해시) — 재조회 없이 그
+      // fingerprint 만 저장해 둔다. 2단계가 이 함수를 처음부터 다시 실행하며
+      // 같은 방식으로 report.baseline 을 재계산해 이 값과 대조한다.
+      preflightFingerprint: sha256Any(report.baseline),
+      createdAt: nowDate.toISOString(),
+      expiresAt: new Date(nowDate.getTime() + TICKET_TTL_MS).toISOString(),
+      used: false,
+      usedAt: null,
+    }
+    D.fs.mkdirSync(reportDir, { recursive: true })
+    const ticketFilePath = path.join(reportDir, `${runId}.ticket.json`)
+    D.fs.writeFileSync(ticketFilePath, JSON.stringify(ticket, null, 2), 'utf8')
+    const approveManifestArg = options.manifestPath ? path.resolve(options.manifestPath) : '<manifest.json>'
+    log(`\n승인 티켓 발급 완료: ${ticketFilePath}`)
+    log(`만료: ${ticket.expiresAt}(15분) — 이 시간 안에 아래 명령으로 승인하세요:`)
+    log(`  npm run prod:apply -- ${approveManifestArg} --env ${options.envFlag} --approve ${runId}`)
+    if (ciForced || noToken) {
+      // 티켓 자체는 발급되지만(계획이 통과했다는 사실 기록), 2단계에서
+      // 이 정확히 같은 사유로 다시 막혀 절대 승인될 수 없다는 것을
+      // 미리 알려준다(운영자가 헷갈리지 않도록).
+      const reasons = [ciForced && 'CI 환경', noToken && 'SUPABASE_ACCESS_TOKEN 미설정'].filter(Boolean)
+      log(`참고 — 지금 환경에서는 2단계(--approve)도 다음 사유로 항상 STOP 됩니다: ${reasons.join(', ')}`)
+    }
+    log('\nSTOP(정상) — 1단계 완료, DB WRITE 없음. 승인은 위 명령을 그대로 실행하는 것 자체입니다.')
+    return finish('ticket-issued', 0, { ticketPath: ticketFilePath, dbWriteCount: 0 })
+  }
+
+  // ── 2단계: CI/토큰 게이트(변경 없음, 여기서 위치만 이동) → 티켓 검증 →
+  // TTY 확인 → 1회성 소모 ──────────────────────────────────────────────
+  if (ciForced || noToken) {
     const reasons = []
-    if (options.dryRun) reasons.push('--dry-run')
     if (ciForced) reasons.push('CI 환경')
     if (noToken) reasons.push('SUPABASE_ACCESS_TOKEN 미설정')
     log(`\nSTOP(정상) — write path 비활성: ${reasons.join(', ')}`)
     D.onStep('dry-run-stop')
     return finish('ready-to-apply', 0, { stopReasons: reasons, dbWriteCount: 0 })
   }
-
-  // 8) 대화형 승인 게이트 — 정확히 `APPLY <runId>` 만 허용, 재시도 없음
   D.onStep('approval-gate')
   if (!D.isTTY()) {
     log('\nSTOP — 비대화형(TTY 아님) 환경에서는 승인을 받을 수 없습니다. --dry-run 으로 계획만 확인하세요.')
     return finish('not-interactive', 1, { dbWriteCount: 0 })
   }
-  const answer = await D.approve(runId)
-  if (String(answer ?? '').trim() !== `APPLY ${runId}`) {
-    log('\nSTOP — 승인 문구가 정확히 일치하지 않습니다. 적용하지 않습니다.')
-    return finish('not-approved', 1, { dbWriteCount: 0 })
+  const ticketFilePath = path.join(reportDir, `${runId}.ticket.json`)
+  let ticket
+  try {
+    ticket = JSON.parse(D.fs.readFileSync(ticketFilePath, 'utf8'))
+  } catch (err) {
+    logErr(`\nFAIL — 승인 티켓을 찾을 수 없습니다(${ticketFilePath}): ${err.message}. 잘못된 runId 이거나 1단계를 먼저 실행하지 않았을 수 있습니다.`)
+    return finish('approval-mismatch', 1, { dbWriteCount: 0 })
   }
+  // Windows/macOS 는 기본적으로 파일시스템이 대소문자를 구분하지 않는다
+  // (Linux 는 구분) — `--approve run-id`(소문자)가 실제 파일 `RUN-ID.ticket.json`
+  // 을 그대로 열어버릴 수 있으므로, 파일 조회 성공 여부와 별개로 티켓
+  // 내용의 runId 가 이번 실행의 runId 와 바이트 단위로 정확히 같은지 한 번
+  // 더 확인한다(플랫폼에 따라 안전성이 갈리지 않도록).
+  if (ticket.runId !== runId) {
+    logErr(`\nFAIL — 티켓의 runId(${ticket.runId})가 --approve 로 지정한 runId(${runId})와 다릅니다(대소문자 포함 정확히 일치해야 함).`)
+    return finish('approval-mismatch', 1, { dbWriteCount: 0 })
+  }
+  if (ticket.used) {
+    logErr('\nFAIL — 이미 사용된 승인 티켓입니다(1회성 — 재사용 불가). 새로 1단계부터 실행하세요.')
+    return finish('approval-used', 1, { dbWriteCount: 0 })
+  }
+  if (D.now().getTime() > new Date(ticket.expiresAt).getTime()) {
+    logErr(`\nFAIL — 승인 티켓이 만료되었습니다(만료: ${ticket.expiresAt}). 1단계부터 다시 실행하세요.`)
+    return finish('approval-expired', 1, { dbWriteCount: 0 })
+  }
+  if (ticket.manifestSha256 !== manifestSha256) {
+    logErr('\nFAIL — manifest 파일이 티켓 발급 이후 변경되었습니다(변조 의심). 1단계부터 다시 실행하세요.')
+    return finish('approval-manifest-mismatch', 1, { dbWriteCount: 0 })
+  }
+  const currentFingerprint = sha256Any(report.baseline)
+  if (ticket.preflightFingerprint !== currentFingerprint) {
+    logErr('\nFAIL-CLOSED — 티켓 발급 이후 라이브 상태가 변경되었습니다(approval-stale). 1단계부터 다시 실행해 새 티켓을 받으세요.')
+    return finish('approval-stale', 1, { dbWriteCount: 0 })
+  }
+  ticket.used = true
+  ticket.usedAt = D.now().toISOString()
+  D.fs.writeFileSync(ticketFilePath, JSON.stringify(ticket, null, 2), 'utf8')
+  log(`\n승인 확인 완료 — 티켓 사용 처리(1회성 소모): ${ticketFilePath}`)
 
   // 8.5) apply 직전 manifest 파일 재해시 — 승인 이후 파일이 바뀌었으면 중단
   D.onStep('manifest-reverify')
@@ -1149,6 +1330,7 @@ function parseArgv(argv) {
     else if (a === '--env') args.envFlag = argv[++i]
     else if (a === '--expect-manifest-sha') args.expectManifestSha = argv[++i]
     else if (a === '--rollback-of') args.rollbackOfReportPath = argv[++i]
+    else if (a === '--approve') args.approveRunId = argv[++i]
     else if (a === '--json') args.jsonOutput = true
     else args._.push(a)
   }
@@ -1160,7 +1342,7 @@ if (isMain) {
   const parsed = parseArgv(process.argv.slice(2))
   const manifestArg = parsed._[0]
   if (!manifestArg) {
-    console.error('사용법: node scripts/prodHotfix.mjs <manifest.json> --env production|staging [--dry-run] [--report-dir <dir>] [--executor management-api] [--fixture-reader <file>] [--expect-manifest-sha <hex>] [--rollback-of <report.json>] [--json]')
+    console.error('사용법: node scripts/prodHotfix.mjs <manifest.json> --env production|staging [--dry-run] [--report-dir <dir>] [--executor management-api] [--fixture-reader <file>] [--expect-manifest-sha <hex>] [--rollback-of <report.json>] [--approve <runId>] [--json]')
     process.exitCode = 1
   } else {
     // B5(2026-09-04) — 실제 CLI 경로에서만 invariants delta 미리보기를
@@ -1177,6 +1359,11 @@ if (isMain) {
       envFlag: parsed.envFlag,
       expectManifestSha: parsed.expectManifestSha,
       rollbackOfReportPath: parsed.rollbackOfReportPath ? path.resolve(parsed.rollbackOfReportPath) : undefined,
+      // fix/harness-apply-two-phase-approval(2026-09-05) — --approve <runId>
+      // 가 있으면 이번 실행은 2단계(티켓 검증)다. runHotfix() 는 이 값을
+      // runId 로도 그대로 재사용한다(1단계가 발급한 티켓/apply.sql/
+      // rollback.sql 파일과 같은 runId 를 가리키게 하기 위함).
+      approveRunId: parsed.approveRunId,
       jsonOutput: !!parsed.jsonOutput,
     }, { loadInvariantSnapshot: buildInvariantSnapshotFromReader })
     process.exitCode = result.exitCode
