@@ -3198,8 +3198,20 @@ export async function fetchProgressBackupStrict(studentId) {
 // 토큰이 없으면 그냥 없는 채로 보낸다 — 서버가 fail-closed로 거부하고,
 // 그 거부는 아래 두 함수 모두 fire-and-forget이라 학생 화면에 영향이 없다.
 let _sessionToken = null
+// Reward Post 재시도 큐(2026-09-06)가 로그인/세션 복원 시점에 큐를 흘려
+// 보내야 하므로(아래 flushRewardPostQueue 헤더 주석 참고) setSessionToken이
+// 그 트리거 지점이다 — 함수 선언 호이스팅 덕에 flushRewardPostQueue가
+// 이 파일 아래쪽에 정의돼도 여기서 참조 가능(순환 아님, 같은 모듈).
+let _rewardPostQueueOnlineListenerRegistered = false
 export function setSessionToken(token) {
   _sessionToken = (typeof token === 'string' && token.length > 0) ? token : null
+  if (_sessionToken) {
+    flushRewardPostQueue()
+    if (typeof window !== 'undefined' && !_rewardPostQueueOnlineListenerRegistered) {
+      _rewardPostQueueOnlineListenerRegistered = true
+      window.addEventListener('online', () => { flushRewardPostQueue() })
+    }
+  }
 }
 export function getSessionTokenForTest() { return _sessionToken }
 
@@ -3225,16 +3237,192 @@ export async function postXpEvent(studentId, eventType, sourceEventId) {
 // grantLedgerReward가 로컬 append + grantReward를 먼저 마친 뒤 이 함수를
 // await 없이(fire-and-forget) 호출한다 — 실패해도 이미 끝난 로컬 별 지급/
 // 학습 흐름에는 전혀 영향이 없다(그 이벤트 하나만 서버 원장에 안 남을 뿐).
-export async function postRewardEvent(studentId, rewardType, sourceType, sourceId) {
-  if (!studentId || !rewardType || !sourceType || !sourceId) return
+// ── Reward Post 재시도 큐(2026-09-06, 레거시 6종 서버 원장 흡수) ──────────
+// 위 postRewardEvent는 지금까지 실패를 그냥 삼켰다(fire-and-forget, 학습
+// 흐름 비차단 원칙 자체는 유지). 레거시 6종(useStudent.js grantReward의
+// parseLegacyDedupKey 경로)까지 이 함수를 타기 시작하면서 호출 빈도가
+// 크게 늘어, "재시도하면 됐을" 실패(네트워크 순단, 재로그인 사이 토큰
+// 부재 등)까지 영구 유실되는 게 아쉬워 localStorage 기반 최소 재시도
+// 큐를 추가한다. 이 큐의 존재/실패는 학습 흐름에 절대 영향을 주지
+// 않는다 — 모든 localStorage 접근은 try/catch로 감싼다(아래 각 함수).
+const REWARD_POST_QUEUE_KEY = 'paul_easy_reward_post_queue'
+const REWARD_POST_QUEUE_MAX_ENTRIES = 300
+const REWARD_POST_QUEUE_MAX_ATTEMPTS = 8
+
+// 서버가 "이 요청은 다시 보내도 절대 성공하지 않는다"고 확정적으로 답한
+// 사유들 — 큐에서 제거한다(재시도해도 결과가 바뀌지 않을 사유들, 문자열은
+// api/grant-xp.js 실제 응답 그대로 — CLAUDE.md 규칙 3, 재구현 아님 확인용
+// 상수 나열).
+const REWARD_POST_DEFINITIVE_REJECT_REASONS = [
+  'unknown_reward_type', 'invalid_reward_source', 'zero_reward',
+  'student_not_found', 'exam_result_not_found', 'invalid_student_id',
+]
+
+function rewardQueueEntryKey(studentId, rewardType, sourceType, sourceId) {
+  return `${studentId}:${rewardType}:${sourceType}:${sourceId}`
+}
+
+// 순수 리듀서 3종 — 큐 배열을 직접 변형하지 않고 항상 새 배열을 반환한다.
+// localStorage/네트워크는 이 함수들 밖(readRewardPostQueue/
+// writeRewardPostQueue/sendRewardPostOnce)에서만 다룬다 — 테스트 가능성을
+// 위해 의도적으로 순수하게 분리(scripts/testRewardPostQueue.mjs가 이
+// 함수들을 직접 호출해 큐 정책을 네트워크 없이 검증한다).
+export function __rewardQueueEnqueue(queue, entry) {
+  const list = Array.isArray(queue) ? queue : []
+  if (list.some((e) => e && e.key === entry.key)) return list // 이미 있으면 그대로(idempotent)
+  const next = [...list, entry]
+  return next.length > REWARD_POST_QUEUE_MAX_ENTRIES
+    ? next.slice(next.length - REWARD_POST_QUEUE_MAX_ENTRIES) // 가장 오래된 것부터 버림
+    : next
+}
+export function __rewardQueueRemove(queue, key) {
+  const list = Array.isArray(queue) ? queue : []
+  return list.filter((e) => !(e && e.key === key))
+}
+export function __rewardQueueRegisterFailure(queue, key) {
+  const list = Array.isArray(queue) ? queue : []
+  const next = []
+  for (const e of list) {
+    if (!e || e.key !== key) { next.push(e); continue }
+    const attempts = (e.attempts || 0) + 1
+    if (attempts >= REWARD_POST_QUEUE_MAX_ATTEMPTS) continue // 포기(더 이상 재시도 안 함)
+    next.push({ ...e, attempts })
+  }
+  return next
+}
+
+function readRewardPostQueue() {
   try {
-    await fetch('/api/grant-xp', {
+    const raw = localStorage.getItem(REWARD_POST_QUEUE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+function writeRewardPostQueue(queue) {
+  try {
+    localStorage.setItem(REWARD_POST_QUEUE_KEY, JSON.stringify(Array.isArray(queue) ? queue : []))
+  } catch {
+    // 저장 실패(용량 초과/프라이빗 모드 등) — 조용히 무시, 학습 흐름 비차단.
+  }
+}
+
+// 테스트 전용 헬퍼(scripts/testRewardPostQueue.mjs) — 실제 화면 코드는
+// 절대 이 두 함수를 부르지 않는다.
+export function __rewardPostQueueForTest() { return readRewardPostQueue() }
+export function __resetRewardPostQueueForTest() {
+  try { localStorage.removeItem(REWARD_POST_QUEUE_KEY) } catch {}
+}
+
+// 이 큐 항목 하나를 실제로 네트워크에 태워본다 — 절대 throw하지 않는다.
+// removeFromQueue: true면 "더 이상 재시도할 필요가 없다"(성공 또는 서버가
+// 확정적으로 거부)는 뜻이고, false면 "재시도 가치가 있다"(네트워크 실패,
+// table_missing/unauthorized — 재로그인 이후 토큰이 갱신될 수 있음,
+// dup_check_failed/cap_check_failed — 서버 쪽 일시 오류)는 뜻이다.
+async function sendRewardPostOnce(entry) {
+  try {
+    const res = await fetch('/api/grant-xp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ledger: 'reward', studentId, rewardType, sourceType, sourceId, token: _sessionToken }),
+      body: JSON.stringify({
+        ledger: 'reward', studentId: entry.studentId, rewardType: entry.rewardType,
+        sourceType: entry.sourceType, sourceId: entry.sourceId, token: _sessionToken,
+      }),
     })
+    if (!res.ok) return { removeFromQueue: false }
+    let json
+    try { json = await res.json() } catch { return { removeFromQueue: false } }
+    if (json && json.ok) return { removeFromQueue: true } // ok:true(duplicate:true 포함)
+    const reason = json && json.reason
+    if (reason === 'daily_cap_reached') return { removeFromQueue: true } // 서버가 "안 된다"고 확정 답변 — 재시도 무의미
+    if (REWARD_POST_DEFINITIVE_REJECT_REASONS.includes(reason)) return { removeFromQueue: true }
+    return { removeFromQueue: false } // table_missing/unauthorized/dup_check_failed/cap_check_failed/미지 사유 — 재시도
   } catch {
-    // 네트워크 실패 — 조용히 무시(postXpEvent와 동일 원칙, 학습 흐름 비차단).
+    return { removeFromQueue: false } // 네트워크 실패 — 재시도
+  }
+}
+
+export async function postRewardEvent(studentId, rewardType, sourceType, sourceId) {
+  if (!studentId || !rewardType || !sourceType || !sourceId) return
+  const key = rewardQueueEntryKey(studentId, rewardType, sourceType, sourceId)
+  const entry = { studentId, rewardType, sourceType, sourceId, key, attempts: 0, at: Date.now() }
+  writeRewardPostQueue(__rewardQueueEnqueue(readRewardPostQueue(), entry))
+  const { removeFromQueue } = await sendRewardPostOnce(entry)
+  if (removeFromQueue) {
+    writeRewardPostQueue(__rewardQueueRemove(readRewardPostQueue(), key))
+    // 이 시도가 성공(또는 확정 거부)했다는 건 지금 네트워크/토큰이 정상
+    // 동작 중이라는 뜻 — 이 기회에 큐에 남아있는 다른 항목들도 흘려보낸다
+    // (fire-and-forget, 이 postRewardEvent 호출 자체의 결과에는 영향 없음).
+    flushRewardPostQueue()
+  } else {
+    writeRewardPostQueue(__rewardQueueRegisterFailure(readRewardPostQueue(), key))
+  }
+}
+
+// flushRewardPostQueue — 큐에 쌓인 항목을 순차적으로(최대 50개) 재시도.
+// 세션 토큰이 없으면(로그인 전/로그아웃 후) 아무 것도 하지 않는다 — 서버가
+// 인증 없는 요청을 fail-closed로 거부할 걸 미리 알고 있으니 불필요한
+// 네트워크 호출 자체를 만들지 않는다(postXpEvent/postRewardEvent와 동일
+// 원칙). 동시에 여러 번 불려도(예: online 이벤트 + setSessionToken이 거의
+// 같은 시점에 겹치는 경우) 재진입 가드(_rewardPostQueueFlushing)로 중복
+// 실행을 막는다.
+let _rewardPostQueueFlushing = false
+export async function flushRewardPostQueue() {
+  if (!_sessionToken) return
+  if (_rewardPostQueueFlushing) return
+  _rewardPostQueueFlushing = true
+  try {
+    const batch = readRewardPostQueue().slice(0, 50)
+    for (const entry of batch) {
+      const { removeFromQueue } = await sendRewardPostOnce(entry)
+      if (removeFromQueue) {
+        writeRewardPostQueue(__rewardQueueRemove(readRewardPostQueue(), entry.key))
+      } else {
+        writeRewardPostQueue(__rewardQueueRegisterFailure(readRewardPostQueue(), entry.key))
+      }
+    }
+  } finally {
+    _rewardPostQueueFlushing = false
+  }
+}
+
+// Paul Town 별 상점 V1(townShopV1, 2026-09-06) — postXpEvent/postRewardEvent와
+// 달리 이 두 함수는 AWAIT되는 요청/응답 왕복이다(구매는 "지금 됐는지"를
+// 즉시 알아야 하는 사용자 액션이라 fire-and-forget이 아니다). 가격/학생
+// 식별은 여기서 절대 계산·전송하지 않는다 — 서버가 token(_sessionToken)
+// 으로 학생을 식별하고 가격도 서버가 결정한다(스펙 — "The client NEVER
+// sends price/studentId for these actions"). 토큰이 없으면 네트워크 호출
+// 자체를 하지 않고 relogin_required로 즉시 반환 — 미로그인 상태에서 상점
+// API를 조용히 두드리지 않는다. 어떤 예외도 throw하지 않고 network_failed로
+// 흡수한다(postXpEvent와 동일한 "학습 흐름 비차단" 철학 — 다만 이건 호출자가
+// await해서 UI에 반영한다는 점만 다르다).
+export async function fetchTownShopState() {
+  if (!_sessionToken) return { ok: false, reason: 'relogin_required' }
+  try {
+    const res = await fetch('/api/grant-xp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'get_town_shop_state', token: _sessionToken }),
+    })
+    return await res.json()
+  } catch {
+    return { ok: false, reason: 'network_failed' }
+  }
+}
+
+export async function postTownPurchase(itemId) {
+  if (!_sessionToken) return { ok: false, reason: 'relogin_required' }
+  try {
+    const res = await fetch('/api/grant-xp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'purchase_town_item', token: _sessionToken, itemId }),
+    })
+    return await res.json()
+  } catch {
+    return { ok: false, reason: 'network_failed' }
   }
 }
 

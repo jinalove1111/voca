@@ -52,7 +52,7 @@ import { grantTicket, sumTicketBalance, mergeTicketLedgers, redeemReward } from 
 // 얹기만 한다(재구현 금지, CLAUDE.md 규칙 3). earnedStars는 쓰지 않는다 —
 // totalStars의 원본은 여전히 record.totalStars(레거시 별 포함) 그대로이고,
 // rewardLedger에서 재계산하지 않는다(운영자 결정, 레거시 별 보존).
-import { REWARD_STARS, rewardIdempotencyKey, streakBonusStars, levelForStars, starsToNextLevel, buildRewardEntry, hasRewardEntry, appendRewardEntry } from '../utils/rewardEngine'
+import { REWARD_STARS, rewardIdempotencyKey, streakBonusStars, levelForStars, starsToNextLevel, buildRewardEntry, hasRewardEntry, appendRewardEntry, parseLegacyDedupKey } from '../utils/rewardEngine'
 
 // ── Single unified progress store ───────────────────────────────────────
 // Every per-student value the app tracks (stars, stickers, today's mission
@@ -974,6 +974,11 @@ export function useStudent(studentId, legacyName) {
   // 위 1번과 같은 이유로 극히 드문 "같은 tick 연속 호출" 상황에서는 실제
   // 지급 여부와 어긋날 수 있다(지급 자체의 정확성은 2번이 담보하지,
   // 반환값이 지급 여부를 좌우하는 게이트가 아니다).
+  // 2026-09-06 — 레거시 postRewardEvent 후킹(아래)의 "같은 tick 중복 호출"
+  // 최적화용 in-tick 가드. 이 마운트 동안 이미 포스트를 보낸 dedupKey를
+  // 기억만 할 뿐 지급 로직/서버 권위는 전혀 바꾸지 않는다(비우지도 않음 —
+  // 마운트당 1회면 충분, 자정 롤오버/리마운트는 새 useRef라 자연 초기화).
+  const postedLegacyKeysRef = useRef(new Set())
   const grantReward = useCallback((amount, dedupKey) => {
     if (!dedupKey) {
       console.warn('[grantReward] dedupKey 없이 호출됨 — 지급 거부(호출부 버그)')
@@ -990,8 +995,34 @@ export function useStudent(studentId, legacyName) {
         history: { ...prev.history, [today]: { ...day, starsEarned: day.starsEarned + amount } },
       }
     })
+    // 레거시 클라이언트 별 지급 6종 서버 원장 흡수(2026-09-06) — 위 dedup
+    // 사전 체크(round.starGrantLog.includes)를 통과했을 때만(=이 호출이
+    // 실제로 지급을 시도하는 경우에만) 실행한다. parseLegacyDedupKey가
+    // 레거시 6종 프리픽스 중 하나를 인식하면 { rewardType, sourceType,
+    // sourceId }를, 그 외(V1 uuid-prefixed 앵커 키 — grantLedgerReward가
+    // 이미 자신의 postRewardEvent를 호출하므로 여기서 또 부르면 중복 전송이
+    // 됨 / pronunciation-unidentified — wordId 미상이라 서버화 대상 아님)는
+    // null을 돌려줘 아무 것도 하지 않는다. grantLedgerReward의 fire-and-
+    // forget 호출과 동일 원칙 — await 없음, 실패해도 위 로컬 지급에는 전혀
+    // 영향 없음(postRewardEvent 헤더 주석 참고).
+    //
+    // 정직한 한계(독립 리뷰 지적, 2026-09-06) — 위 pre-check는 이 렌더
+    // 클로저의 round.starGrantLog(patch() 호출 "전" 스냅샷)만 보므로, 같은
+    // tick에 동일 dedupKey로 grantReward가 두 번 불리면(더블탭 등) POST는
+    // 최대 2회 나갈 수 있다(로컬 지급은 위 patch()의 updater 내부 재검사가
+    // 정확히 1회로 담보 — 이 파일 헤더 주석 "2)"). 서버가 최종 권위:
+    // idempotency_key UNIQUE 제약 + 사전 dup 체크가 두 번째 요청을
+    // duplicate:true로 흡수하므로 이중 지급은 여전히 불가능하다. 아래
+    // postedLegacyKeysRef는 그 흔치 않은 여분 네트워크 요청 자체를 줄이는
+    // 순수 최적화일 뿐(서버 dedup을 대체하지 않음, 마운트당 1회 기억이면
+    // 충분) — 지급/dedup 로직은 한 글자도 바꾸지 않는다.
+    const legacy = parseLegacyDedupKey(dedupKey)
+    if (legacy && !postedLegacyKeysRef.current.has(dedupKey)) {
+      postedLegacyKeysRef.current.add(dedupKey)
+      postRewardEvent(studentId, legacy.rewardType, legacy.sourceType, legacy.sourceId)
+    }
     return true
-  }, [patch, round.starGrantLog])
+  }, [patch, round.starGrantLog, studentId])
 
   // ── Reward System V1(2026-08-15, Phase 2) — rewardEngine.js 규칙을
   // grantReward(위, 별 지급 단일 경로) 위에 얹는 유일한 지급 함수. "언제
@@ -1258,7 +1289,7 @@ export function useStudent(studentId, legacyName) {
   // Grants a sticker directly, bypassing the gift-box gacha (used for
   // guaranteed streak/star-badge rewards). Duplicates still convert to
   // stars so a guaranteed pull is never wasted either.
-  const grantSticker = useCallback((sticker) => {
+  const grantSticker = useCallback((sticker, giftKey) => {
     const isDuplicate = stickerTypes.includes(sticker.id)
     if (isDuplicate) {
       // 별 지급 단일 경로(2026-07-28) — 뽑기 하나하나가 그 자체로 별개
@@ -1267,7 +1298,26 @@ export function useStudent(studentId, legacyName) {
       // diaryPlacements의 placementId와 동일한 패턴) grantReward가 항상
       // 지급하게 한다 — 여전히 단일 경로를 통과하되, 기존처럼 뽑을
       // 때마다 매번 지급되는 동작은 그대로 유지.
-      grantReward(DUPLICATE_BONUS_STARS, `sticker-duplicate:${sticker.id}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`)
+      //
+      // 2026-09-06 — 레거시 서버 원장 흡수를 위해 dedupKey 신원(identity)만
+      // 타임스탬프+랜덤에서 호출자가 넘긴 giftKey(그 선물 이벤트의 안정적
+      // 식별자 — 라운드 signature/마일스톤 값/뱃지 threshold)로 바꾼다.
+      // 의미: 같은 선물 이벤트에서 나온 중복 스티커는 이제 한 번만 지급
+      // (오늘 한 선물 이벤트는 정확히 스티커 1개를 낳으므로 기존 동작과
+      // 동일), 서로 다른 선물 이벤트는 여전히 매번 지급(레거시 동작 보존).
+      // giftKey가 없으면(방어적 — 호출부 버그로 누락된 경우) 회귀를 막기
+      // 위해 옛 타임스탬프+랜덤 키로 폴백하고 1회 경고한다.
+      let key
+      if (giftKey) {
+        key = `sticker-duplicate:${sticker.id}:${giftKey}`
+      } else {
+        if (!grantSticker.__warnedMissingGiftKey) {
+          grantSticker.__warnedMissingGiftKey = true
+          console.warn('[grantSticker] giftKey 없이 호출됨 — 옛 타임스탬프+랜덤 키로 폴백(호출부 확인 필요)')
+        }
+        key = `sticker-duplicate:${sticker.id}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
+      }
+      grantReward(DUPLICATE_BONUS_STARS, key)
       // v2.3.1 — 여기 있던 grantXp('duplicate-sticker-bonus', ...)를
       // 제거했다. 운영자가 지정한 8개 XP 이벤트 목록에 없을 뿐 아니라,
       // 오늘의 미션(4/4)이 하루 여러 번 반복 완료될 수 있다는 기존 설계
@@ -1444,7 +1494,10 @@ export function useStudent(studentId, legacyName) {
     if (bonusGranted) {
       bumpHistory(day => ({ giftsToday: day.giftsToday + 1 }))
       const sticker = getRandomSticker()
-      const isDuplicate = grantSticker(sticker)
+      // giftKey — 이 라운드 선물 이벤트의 안정적 식별자로 바로 위
+      // daily-mission-bonus 지급에 쓴 signature를 그대로 재사용(2026-09-06,
+      // grantSticker 헤더 주석 참고).
+      const isDuplicate = grantSticker(sticker, `round:${signature}`)
       setGiftQueue(q => [...q, { sticker, isDuplicate, isMilestone: false }])
     }
     // 2026-08-23 중복 지급 수정 — 예전엔 `round: freshRound()`로 통째로
@@ -1475,7 +1528,10 @@ export function useStudent(studentId, legacyName) {
     if (!nextMilestone) return
     patch(() => ({ milestoneStreak: nextMilestone }))
     const sticker = getMilestoneSticker()
-    const isDuplicate = grantSticker(sticker)
+    // giftKey — 이 마일스톤 값 자체가 이 선물 이벤트의 안정적 식별자
+    // (STREAK_MILESTONES는 한 번 넘으면 다시 내려가지 않는 고점 표시라
+    // nextMilestone 값이 평생 유일, 2026-09-06).
+    const isDuplicate = grantSticker(sticker, `milestone:${nextMilestone}`)
     setGiftQueue(q => [...q, { sticker, isDuplicate, isMilestone: true, streakDays: nextMilestone }])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [history])
@@ -1500,7 +1556,10 @@ export function useStudent(studentId, legacyName) {
     patch(() => ({ starBadgeThreshold: nextBadge.threshold }))
     const sticker = STICKERS.find(s => s.id === nextBadge.stickerId)
     if (!sticker) return
-    const isDuplicate = grantSticker(sticker)
+    // giftKey — threshold 자체가 이 선물 이벤트의 안정적 식별자(STAR_BADGES도
+    // 위 STREAK_MILESTONES와 동일하게 한 번 넘으면 되돌아가지 않는 고점
+    // 표시, 2026-09-06).
+    const isDuplicate = grantSticker(sticker, `badge:${nextBadge.threshold}`)
     setGiftQueue(q => [...q, { sticker, isDuplicate, isBadge: true, badgeThreshold: nextBadge.threshold }])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stars])
