@@ -24,6 +24,28 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
 
 ## BLOCKED
 
+### [P1] 야간 QA 2026-09-06 브랜치 `test/overnight-qa-2026-09-06` — 코드 커밋 10 + 문서, PR 생성/merge 결정 대기 (113차)
+- 내용: 결함 수정 6건(관리자 실학생 집계, 고정 SpeedBtn 탭 가로챔, practiceSentence 2건, 곡선 아포스트로피, 죽은 P0 테스트 등록) + 신규 invariant `WORD_HEADER_RESIDUE` + 실사고 가드 4종 게이팅 승격. Production WRITE 0. 상세 `docs/qa/overnight-2026-09-06/track-results.md`, handoff 113차.
+- 필요한 결정: push → PR → Release Gate → merge 여부. 미push 상태.
+
+### [P2] v3_38 / v3_39 처리 — 운영자 결정 대기 (113차, `docs/qa/overnight-2026-09-06/v3_38_v3_39_decision.md`)
+- v3_38: 라이브 미적용(kr2en/false). 대상 실학생 1명. 관리자 SpellingSettingsPanel 토글로 대체 가능 → 적용 여부 결정 후 SQL 파일 폐기.
+- v3_39: Presentation 6 연결만 미완(실효 2명). SQL은 2행 가드로 영구 실행 불가 → 관리자 "🔗 교재 연결" UI 1클릭 권장 후 파일 폐기.
+
+### [P2] 정상 유닛 안 엑셀 헤더 잔재 단어 1행 삭제 — 운영자 승인 대기 (113차)
+- 대상: 교재 "중2 YMB 박준원" Unit3(`6ec4b139…`, 41단어) 안 word="영어·어구" meaning="의미"(`f804c099…`, position 0, 2026-08-12 업로드). `prod:check` `WORD_HEADER_RESIDUE` WARN 1건으로 지속 표시됨.
+- 방식: 관리자 단어 편집 UI 삭제 또는 별도 SQL(승인 필요). 자동 삭제 없음.
+
+### [P3] `STALE_CLASS_SCA` REAL 3건 카드 — 2026-09-06 라이브 재측정 0건 (해소 추정, DONE 이동 확인 대기)
+- 근거: `prod:check` 2026-09-06 STALE_CLASS_SCA 0(109차 기준 3). 어떤 조치로 해소됐는지 handoff에 기록 없음 — 운영자 확인 후 위 BLOCKED 카드 DONE 이동.
+
+### [P3] 모바일 뒤로가기가 앱을 이탈시킴(라우터 부재) — 아키텍처 결정 대기 (113차)
+- 근거: Playwright 실측 `history.length` 미증가, `goBack()` → about:blank. 로컬 진행도는 저장되나 진행 중 화면 상태 소실. 규칙 12(학생 UI 신규 금지) 범위라 미수정.
+
+### [P3] registry 미등록 테스트 스크립트 10개 보관/폐기 결정 (113차)
+- 목록은 TESTING.md 113차 항목. 대부분 `*Live*`.
+
+
 ### [P1] `STALE_CLASS_SCA` REAL 3건 정리 여부 — 운영자 결정 대기 (2026-09-04, 109차)
 - 근거: `handoff.md` 2026-09-04(109차) 발견 7,
   `.ai-status/implementer-prod-check-invariants-ef.json`,

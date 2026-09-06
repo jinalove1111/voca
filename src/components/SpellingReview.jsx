@@ -65,8 +65,9 @@ export default function SpellingReview({ wrongWordIds, classWords, onClearWord, 
     ? (mixedDirections[total - words.length] || 'kr2en')
     : (direction || 'kr2en')
 
+  // pb-24(2026-09-06 야간 QA, App.jsx SpeedBtn 겹침 수정 참고)
   return (
-    <div className="min-h-screen p-4 pb-8 bg-gradient-to-br from-orange-50 to-red-50">
+    <div className="min-h-screen p-4 pb-24 bg-gradient-to-br from-orange-50 to-red-50">
       <div className="max-w-lg mx-auto pt-2 mb-4 text-center">
         <p className="text-2xl mb-1">📔</p>
         {/* Writing MVP: 큐에 오늘치+이월된 단어가 섞일 수 있어 "오늘" 한정

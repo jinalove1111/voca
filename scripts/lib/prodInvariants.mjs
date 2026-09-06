@@ -61,6 +61,12 @@ export const INVARIANT_CODES = {
   // 이건 그 모호 쌍에 실제로 배정된 학생을 가리킨다 — prod:hotfix 의 새
   // blocked-ambiguous-textbook 사전 차단과 같은 판정 기준을 공유한다).
   AMBIGUOUS_TEXTBOOK: 'AMBIGUOUS_TEXTBOOK',
+  // ── 2026-09-06 야간 QA — isGhostUnit(단어 ≤3개 유닛만 판정)의 사각지대:
+  // 41단어짜리 실제 유닛 안에 엑셀 헤더 잔재 행 1건이 섞여 있으면(실측: 중2
+  // YMB 박준원 "Unit3") 어떤 기존 검사에도 잡히지 않는다. GHOST_UNIT_PRESENT
+  // (유닛 전체가 헤더 잔재)와는 별개 신호 — 유닛은 정상인데 그 안의 행 1건만
+  // 헤더 잔재인 경우를 본다.
+  WORD_HEADER_RESIDUE: 'WORD_HEADER_RESIDUE',
 }
 
 // 정상 유닛의 단어 수 범위. 이 범위를 벗어나면 데이터 이상 신호로 본다.
@@ -77,6 +83,51 @@ export const UNIT_NAME_MAX_LEN = 30
 // 트랙의 소유가 아니라(파일 소유권, CLAUDE.md 규칙 16) export 를 추가할 수
 // 없어 정규식 값만 복제한다 — 원본이 바뀌면 이 상수도 함께 갱신해야 한다.
 const BARE_UNIT_NAME_MIRROR = /^(unit|유닛|단원)\s*$/i
+
+// src/utils/excelHeaderGuard.js HEADER_ALIASES 의 미러(2026-09-06 야간 QA).
+// scripts/lib 은 이 트랙 소유가 아닌 src/ ESM 모듈을 import하지 않는 관례를
+// 이 파일 안에서 이미 BARE_UNIT_NAME_MIRROR 로 지키고 있어(grep 결과
+// scripts/lib/*.mjs 어디도 '../src'를 import하지 않음) 같은 방식을 따른다
+// — 단일 원천은 src/utils/excelHeaderGuard.js이고, 그 파일이 바뀌면 이
+// 상수도 함께 갱신해야 한다.
+const HEADER_ALIASES_MIRROR = {
+  word: ['word', '단어', '영단어', 'word / phrase', 'word/phrase', 'english', '영어·어구', '어휘·어구'],
+  meaning: ['meaning', '뜻', '의미', '한글뜻', 'korean'],
+  unit: ['unit', '유닛', '단원'],
+  no: ['no', '번호', 'no.'],
+  example: ['example', '예문', '영어예문'],
+  exampleTranslation: ['example_translation', '예문번역', '해석'],
+  partOfSpeech: ['pos', 'part_of_speech', '품사'],
+  cefr: ['cefr', '레벨', '난이도등급'],
+}
+const HEADER_LABELS_MIRROR = new Set(Object.values(HEADER_ALIASES_MIRROR).flat())
+// isHeaderLabel(cell)(kind 생략 — 8종 전체 어디에든 속하는지)의 미러.
+const isHeaderLabelMirror = (cell) => HEADER_LABELS_MIRROR.has(String(cell ?? '').trim().toLowerCase())
+// isHeaderResidueRow({word, meaning})의 미러 — word/meaning 둘 다 어떤
+// 종류든 헤더 라벨이어야 true(한쪽만 라벨이면 실제 어휘일 수 있어 AND).
+const isHeaderResidueRowRaw = ({ word, meaning }) => isHeaderLabelMirror(word) && isHeaderLabelMirror(meaning)
+
+// 2026-09-06 야간 QA 후속(운영자 실측 오탐 보정) — 영단어 자체가 흔한
+// 헤더 라벨과 우연히 같은 "진짜 어휘"를 헤더 잔재로 오탐하던 문제. 실측:
+// word 455219f7…(unit 801a472f… "Unit4", 40단어 유닛 중 position 14)는
+// word="meaning" meaning="의미"인데 example_text="What is the meaning of
+// this word?" + 발음 오디오 자산까지 갖춘 실제 어휘였다(영단어 "meaning"의
+// 정답 번역이 "의미"). isHeaderResidueRowRaw는 word/meaning 두 칸 다 "어떤
+// 종류든" 헤더 라벨이면 true라, word 칸이 영어 어휘로도 흔한 3종
+// (word/meaning/unit) 중 하나이면서 meaning 칸이 한글로 채워져 있으면
+// (헤더 잔재라면 meaning 칸도 영어 라벨이었을 것 — 한글 뜻이 실제로
+// 채워졌다는 것 자체가 진짜 번역이라는 신호) 예외로 둔다.
+// 계속 잡히는 것들(이 예외에 안 걸림): 한글 라벨 word 칸("영어·어구"/
+// "어휘·어구"/"단어"/"뜻" 등, GENUINE_VOCAB_WORD_LABELS 밖), 영문 meaning
+// 칸("English"→"Korean", "word"→"meaning" — meaning에 한글이 없어 예외
+// 조건 미충족), "no"/"no." word 칸(예외 목록 밖) 전부 그대로 WARN.
+const GENUINE_VOCAB_WORD_LABELS = new Set(['word', 'meaning', 'unit'])
+const HANGUL_RE_MIRROR = /[가-힣]/
+const isGenuineVocabException = ({ word, meaning }) =>
+  GENUINE_VOCAB_WORD_LABELS.has(String(word ?? '').trim().toLowerCase()) && HANGUL_RE_MIRROR.test(String(meaning ?? ''))
+
+const isHeaderResidueRowMirror = ({ word, meaning }) =>
+  isHeaderResidueRowRaw({ word, meaning }) && !isGenuineVocabException({ word, meaning })
 
 // plan-eligibility-textbook-identity 트랙(2026-09-05) — norm/
 // textbookSimilarityKey 는 원래 이 파일 내부 전용이었지만, prod:hotfix 의
@@ -276,6 +327,13 @@ export const CODE_META = {
   AMBIGUOUS_TEXTBOOK: {
     impact: '학생의 주교재 또는 현재 유닛이 이름이 중복/유사한 교재 쌍의 일원이라, 이 학생을 대상으로 한 hotfix manifest 가 실수로 반대쪽 교재를 가리킬 위험이 실제로 있음',
     recommended: 'READ-ONLY 조사',
+  },
+  // 2026-09-06 야간 QA — 삭제는 관리자 단어 편집 UI 또는 별도 SQL로, 운영자
+  // 승인 필요(허용값 3종 중 '운영자 결정'과 동일 취급 — recommended 필드는
+  // enum 값만 허용하므로 상세 조치는 이 주석에 남긴다).
+  WORD_HEADER_RESIDUE: {
+    impact: '학생이 단어 카드로 엑셀 헤더 라벨("영어·어구"/"의미" 등)을 보게 됨',
+    recommended: '운영자 결정',
   },
 }
 
@@ -720,6 +778,27 @@ export function evaluateInvariants(ctx, opts = {}) {
       detail: `유령 유닛 "${g.name}"(단어 ${g.wordCount}개) — 참조 실학생 ${referencing.length}명`,
       refs: { unitId: g.id, textbookId: g.textbookId ?? null, wordCount: g.wordCount, referencingStudentIds: referencing },
     })
+  }
+
+  // 9b) WORD_HEADER_RESIDUE(2026-09-06 야간 QA) — isGhostUnit은 단어 ≤3개
+  // 유닛만 보므로, 정상 규모(수십 단어) 유닛 안에 헤더 잔재 행 1건이 섞여
+  // 있어도 위 GHOST_UNIT_PRESENT로는 절대 안 잡힌다. 유닛이 이미 유령으로
+  // 잡힌 경우는 제외(그 유닛 전체가 헤더 잔재라 GHOST_UNIT_PRESENT가 이미
+  // 보고 — 중복 보고 방지, 서로 다른 신호를 섞지 않는다).
+  for (const [unitId, unit] of unitById) {
+    if (!unit || ghostUnitIdSet.has(unitId)) continue
+    const words = wordsByUnit.get(unitId) || []
+    for (const w of words) {
+      if (!w || !isHeaderResidueRowMirror({ word: w.word, meaning: w.meaning })) continue
+      push({
+        code: INVARIANT_CODES.WORD_HEADER_RESIDUE, severity: 'WARN', studentId: null, studentName: null,
+        detail: `유닛 "${unit.name}"(단어 ${words.length}개) 안에 헤더 잔재 행 1건 — word="${w.word}" meaning="${w.meaning}"`,
+        refs: {
+          unitId, textbookId: unit.textbook_id ?? null, wordId: w.id ?? null,
+          word: w.word, meaning: w.meaning, unitWordCount: words.length,
+        },
+      })
+    }
   }
 
   // Phase 8: UNIT_NAME_ABNORMAL — 저장소 전체 유닛 대상(참조 여부 무관,

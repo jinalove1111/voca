@@ -20,7 +20,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildContext, classifyAccount, evaluateStudent, summarize, TEST_ACCOUNT_NAMES as RULES_TEST_NAMES } from './lib/studentHealthRules.mjs'
-import { TEST_ACCOUNT_NAMES as ACCOUNT_STATUS_TEST_NAMES } from '../src/utils/accountStatus.js'
+import { TEST_ACCOUNT_NAMES as ACCOUNT_STATUS_TEST_NAMES, isRealStudentAccount } from '../src/utils/accountStatus.js'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -189,6 +189,32 @@ console.log('\n=== 7절. TEST_ACCOUNT_NAMES 정적 동일성 — studentHealthRu
     /accountStatus\.js[\s\S]{0,40}TEST_ACCOUNT_NAMES/.test(rulesSrc))
   check('accountStatus.js 도 자기 목적(테스트/QA 계정 판별) 헤더 주석을 유지한다',
     /테스트\s*\/\s*QA\s*계정/.test(accountStatusSrc) || /테스트\/QA\s*계정/.test(accountStatusSrc))
+}
+
+console.log('\n=== 8절. DuplicateStudentAudit.jsx — "전체 실학생 N명" 집계가 accountStatus.js 를 단일 원천으로 쓰는지 (2026-09-06 야간 QA) ===')
+{
+  // 배경: 이 컴포넌트가 로컬 `/^QA_/i` 필터만으로 realStudents를 계산해
+  // TEST(Cookie/Paul/Jinaa/Barry)/ARCHIVED(_DUP_/_INACTIVE) 계정까지
+  // "전체 실학생"에 포함시키던 문제(라이브 실측: 187명 vs 실제 REAL 46명).
+  // 단일 원천은 src/utils/accountStatus.js의 isRealStudentAccount.
+  const auditSrc = fs.readFileSync(path.join(ROOT, 'src/components/admin/DuplicateStudentAudit.jsx'), 'utf8')
+  check('DuplicateStudentAudit.jsx가 accountStatus.js에서 isRealStudentAccount를 import한다',
+    /import\s*\{[^}]*isRealStudentAccount[^}]*\}\s*from\s*['"]\.\.\/\.\.\/utils\/accountStatus(\.js)?['"]/.test(auditSrc))
+  check('DuplicateStudentAudit.jsx에 독자적인 `/^QA_/i` 실학생 필터가 더 이상 없다(단일 원천 위반 없음)',
+    !/\/\^QA_\/i/.test(auditSrc))
+
+  // 행동 계약 — isRealStudentAccount를 그대로 쓰면 이 패널이 실제로
+  // 기대하는 필터링 결과가 나온다(픽스처는 테스트/보관/QA_ 전부 섞임).
+  const fixtureStudents = [
+    { name: 'Cookie' }, // TEST
+    { name: '홍길동' }, // REAL
+    { name: 'QA_x' }, // QA_ 픽스처
+    { name: '김철수_DUP_20260722_INACTIVE' }, // ARCHIVED
+    { name: 'Paul' }, // TEST
+  ]
+  const real = fixtureStudents.filter(isRealStudentAccount).map((s) => s.name)
+  check('isRealStudentAccount 필터 결과 — 정확히 ["홍길동"]만 REAL(테스트/보관/QA_ 전부 제외)',
+    JSON.stringify(real) === JSON.stringify(['홍길동']), JSON.stringify(real))
 }
 
 console.log(`\n${'='.repeat(60)}`)

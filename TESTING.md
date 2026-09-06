@@ -959,3 +959,16 @@ A6-spelling 섹션(54-62행)이 이미 같은 부류의 문제를 정규식 앵�
 `answerOneQuizQuestionCorrectly`에도 A6-guided(313행 `quizOptionRe`)와
 동일한 `new RegExp('^[A-D] ' + escapeRegExp(meaning) + '$')` 앵커를
 적용해 해결했다 — `npm run verify:e2e` 3회 연속 56/56 PASS로 확인.
+
+
+
+## 관련 항목: 야간 QA 2026-09-06 — 죽은 P0 테스트 부활 + 신규 스위트 2종 + 실사고 가드 4종 게이팅 승격 (113차)
+
+- **`scripts/testNextFailState.mjs` 등록**(login 도메인, extra:false): 2026-08-08 d28709d P0(PIN 잠금 만료 후 즉시 재잠금 루프, 김보민 실사고) 회귀 테스트가 `tests/harness/registry.mjs`에 없어 verify:all이 한 번도 실행하지 않았다. 순수 함수·네트워크 0.
+- **`scripts/testTextImportApostrophe.mjs`**(examples 도메인, extra:false, 17단언): 곡선 아포스트로피 문장에서 `don't`류 축약형 매칭 + 반환 sentence 원문 보존 불변식 + 대조군.
+- **`scripts/testProdCheck.mjs` §14~15 신설**: `WORD_HEADER_RESIDUE` invariant 계약(41단어 유닛 안 헤더 잔재 1행 → WARN 1, "word→말, 단어"/"meaning→의미"/"unit→단원" 정상 어휘 → 0, 유령 유닛은 GHOST_UNIT_PRESENT로만 보고, "English→Korean"/"No.→어휘·어구" → 1) + `HEADER_ALIASES_MIRROR`가 `src/utils/excelHeaderGuard.js`와 동일한지 드리프트 가드.
+- **`scripts/testAccountClassification.mjs` 확장**: DuplicateStudentAudit.jsx가 `isRealStudentAccount`를 import하고 로컬 `/^QA_/` 필터를 갖지 않는다는 정적 계약 + 픽스처 행위 단언.
+- **`tests/e2e/student.spec.mjs` +2**: 360×640에서 "더 많은 메뉴" 나브 그리드 끝·단어 목록 끝으로 스크롤 후 "퀴즈" 카드/마지막 행 bbox가 `button[aria-label="발음 재생 속도"]`와 겹치지 않음(고정 SpeedBtn 탭 가로챔 회귀).
+- **extra:true → extra:false 승격 4종**(실사고 가드, 순수, 당일 PASS 확인): `testStarDeltaOnEntry.mjs`(권교빈 별 증가), `testWordLibraryPagination.mjs`(words 1000행 절단 P0), `testEntranceTestSelection.mjs`(Song/Luke 시험 선택 P0), `testMissionBonusIdempotency.mjs`(daily-mission-bonus 중복). 이제 verify:all/Release Gate 2의 exit 코드에 반영된다.
+- **정직 기록 — registry에 없어 한 번도 실행되지 않는 스크립트 10개**(운영자 판단 대기): `testCiNameMasking`, `testEdgeFunctionsE2E`, `testLegacyMultiClassLive`, `testLesson5Journey`, `testMultiTextbookLive`, `testMultiTextbookLiveFixed`, `testReadingLive`, `testStudentsRlsPhase2b`, `testTextbookExample`, `testTextbookModelLive`. 대부분 라이브 DB 필요.
+- **환경 메모**: 로컬에 `playwright` 패키지가 node_modules에 없으면 e2e 도메인이 `[extra FAIL]`로 표시된다(exit 코드 비반영). `npm install` 후 `npx playwright install chromium`. `testStudentPinAuth.mjs`는 Node 24 libuv `UV_HANDLE_CLOSING` 크래시가 드물게 1회 관측됨(단독 재실행 PASS).

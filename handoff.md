@@ -1,12 +1,62 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-05 (111차, 스크린샷 의존 축소 — apply_eligibility
-1:1 매핑 + 교재 UUID canonical/AMBIGUOUS_TEXTBOOK + 브라우저 E2E 통합
-검증. apply_eligibility 8값 매핑과 AMBIGUOUS_TEXTBOOK invariant/사전
-차단(브랜치 fix/plan-eligibility-textbook-identity, 병합 b2c94dc)에
-Playwright 브라우저 E2E(브랜치 test/browser-e2e, 병합 ce26abc)를 통합
-브랜치 qa/ops-automation-2026-09-04(wt-int, HEAD ce26abc)로 합쳐 최종
-검증. Production DB WRITE 0, SQL 실행 0, 승인 대기 10건 APPLY 0, 정원
-정책 변경 0, merge/deploy 0. 상세는 아래 111차 섹션)_
+_최종 갱신: 2026-09-06 (113차, 야간 자율 QA — 결함 6건 소커밋 + 신규
+invariant WORD_HEADER_RESIDUE + 실사고 가드 4종 게이팅 승격 + v3_38/v3_39
+판단 자료. 브랜치 test/overnight-qa-2026-09-06(base f2fde30, 미push).
+Production DB WRITE 0, SQL 실행 0, v3_38/v3_39 무수정, F 재시도 0,
+main/backup 무접촉, push/PR/merge 0. 상세는 아래 113차 섹션)_
+
+## 2026-09-06 (113차) — 야간 자율 QA: 결함 6건 소커밋 + 신규 invariant WORD_HEADER_RESIDUE + 실사고 가드 게이팅 승격 + v3_38/v3_39 판단 자료 (Production WRITE 0)
+
+_참고: PR #16(docs/handoff-112-harness-v2-deploy)이 112차를 별도 브랜치에서 추가 중이라 이 세션은 113차로 번호를 잡았다. 두 PR을 모두 머지하면 handoff.md 상단에서 텍스트 충돌이 나며, 해결은 "두 섹션 모두 유지"다._
+
+### 제약/불변식
+
+- 운영자 부재(약 10시간) 자율 세션. 브랜치 `test/overnight-qa-2026-09-06`(base origin/main `f2fde30`), **push/PR/merge 0 · main·backup 브랜치 무접촉**.
+- **Production DB WRITE 0 · SQL 실행 0 · 승인 티켓 0 · prod:apply 0 · manifest 무수정 · 학생 데이터 변경 0 · v3_38/v3_39 파일 무수정·미실행(untracked 그대로) · 핫픽스 F 재시도 0 · 유령 유닛 정리 0.** 라이브 접근은 anon key GET과 READ-ONLY 스크립트(`health:students`/`prod:check`/`verify:integrity`/`verify:class-textbooks`)뿐.
+- 학생 실명이 든 조사 원본은 gitignored `ops/overnight-2026-09-06/`에만 있음. 저장소 문서는 마스킹본.
+- 서브에이전트(Sonnet) 7개가 READ-ONLY 조사, 구현 에이전트 1개가 순차 소커밋(동시 커밋 에이전트 1개 규칙). 한 조사 에이전트가 실명 JSON을 루트에 만든 것을 메인 세션이 즉시 `ops/`로 이동(추적 파일 오염 0).
+
+### 결과 요약
+
+- 검증: build PASS · verify:all ALL DOMAINS PASS(스크립트 139 PASS, SKIP 2 도메인 설계상) · Release Gate 3/5 PASS(health 46명 PASS 45/WARN 1/FAIL 0, e2e 56/56). 유일한 FAIL은 e2e의 로컬 playwright 패키지 부재(환경) — 설치 후 PASS. `testStudentPinAuth.mjs` Node/libuv 크래시 1회는 단독 재실행 PASS(플레이크, 파일 무수정).
+- 신규 결함(NEW): 중복 학생 감사 패널 실학생 집계(187 vs 46, MEDIUM) · 고정 SpeedBtn 탭 가로챔(HIGH, 360×640 bbox 실측) · 정상 유닛 안 헤더 잔재 단어 1행(MEDIUM, `6ec4b139`/`f804c099`) · 죽은 P0 회귀 테스트(testNextFailState 미등록) · 고아 커밋에서 확인된 현재 코드 결함 3건(practiceSentence 절 경계/대명사 I, textImport 곡선 아포스트로피).
+- KNOWN 재확인: prod:check WARN 46 전부 기존 코드 8종(개선: SCA_GHOST_UNIT 11→1, UNIT_WORDS_ABNORMAL 5→2, **STALE_CLASS_SCA 3→0** — BLOCKED 카드 해소 추정). 보안 Critical/High 0.
+- 오탐 정정: 서브에이전트가 "헤더 잔재 5건 HIGH"로 보고한 것을 메인 세션이 라이브 재검증해 4건("word→말, 단어", "meaning→의미, 뜻" 등 position 14~26·예문 보유)은 정상 어휘로 판정 → 1건 MEDIUM으로 강등. 신규 invariant도 처음엔 "meaning→의미"를 잡아 커밋 9에서 보정(영단어 자체가 헤더 라벨인 정상 어휘 제외).
+- **최종 검증(HEAD a806eab, 메인 세션 독립 재실행)**: build PASS · verify:all ALL DOMAINS PASS — 스크립트 142 PASS / 0 FAIL(게이팅 승격 6종 전부 exit 코드 반영) · e2e 58/58.
+- 상세: `docs/qa/overnight-2026-09-06/track-results.md`(A~O 트랙별) · `v3_38_v3_39_decision.md` · `backup-commits-review.md`.
+
+### 커밋 (이 브랜치, 미push — 전부 FAIL-first, 규칙 15)
+
+| 해시 | 내용 | FAIL-first 전→후 |
+|---|---|---|
+| `25f40c5` | test(harness): `scripts/testNextFailState.mjs`(d28709d P0 PIN 재잠금 루프 가드) login 도메인 등록 — registry 미등록으로 한 번도 실행된 적 없었음 | 미실행 → verify:login PASS |
+| `cf6cf0a` | fix(curriculum): practiceSentence.js `endsClause`가 닫는 따옴표 뒤 절 경계를 놓침 + 대명사 "I"를 고유명사 연쇄로 오인(-3) — 고아 커밋 e6b1503 포팅 | runExamples 133P/3F → 136P/0F |
+| `d738867` | fix(curriculum): textImport.js 곡선 아포스트로피(’‘ʼʻ′＇) 매칭 실패 → 판정 사본만 정규화(원문 보존) + `scripts/testTextImportApostrophe.mjs`(examples 도메인) | 2P/15F → 17P/0F |
+| `028214a` | feat(prod-check): invariant `WORD_HEADER_RESIDUE`(WARN, 유령 유닛 제외한 정상 유닛 안의 헤더 잔재 행) + CODE_META + testProdCheck 신규 절 | 218P/4F → 224P/0F |
+| `d76e8ce` | fix(admin): DuplicateStudentAudit.jsx `/^QA_/` 로컬 필터 → `isRealStudentAccount`(accountStatus.js 단일 원천) + testAccountClassification 정적/행위 단언 | 35P/2F → 37P/0F |
+| `c6704b6` | fix(ui): 학생 화면 9개 래퍼 `pb-8→pb-24`(고정 SpeedBtn 44px+bottom-5 여유) + tests/e2e/student.spec.mjs bbox 겹침 단언 2건 | e2e 55P/3F → 58P/0F |
+| `cea23da` | test(harness): testStarDeltaOnEntry/testWordLibraryPagination/testEntranceTestSelection/testMissionBonusIdempotency extra:true→false(게이팅) — 전부 순수·당일 PASS | — |
+| `08b05bc` | chore(status): implementer 체크포인트 | — |
+| `7676e49` | fix(prod-check): WORD_HEADER_RESIDUE 오탐 보정(`word∈{word,meaning,unit}` ∧ 뜻에 한글 → 정상 어휘) + HEADER_ALIASES 미러 드리프트 가드 | 257P/1F → 258P/0F · 라이브 정확히 1건 |
+| `a806eab` | chore(status): 체크포인트 갱신 | — |
+| (문서) | docs: `docs/qa/overnight-2026-09-06/` 3종 + handoff 113차 + TESTING/PROJECT_BOARD append + `.ai-status/qa-overnight-2026-09-06.json` | — |
+
+### 운영자 결정 대기 (아침)
+
+1. **v3_38**: 미적용 확인(kr2en/false). 대상 실학생 1명뿐, 19개 반 전부 spelling_test 미활성. 관리자 SpellingSettingsPanel로 동일 적용 가능 → NEEDS_OWNER_DECISION.
+2. **v3_39**: PMS 연결은 관리자 UI로 이미 생성(08-24), P6만 미연결(실효 2명). SQL은 2행 가드 때문에 영구 실행 불가 → 관리자 "🔗 교재 연결" 1클릭 권장 후 파일 폐기.
+3. 헤더 잔재 단어 1행(`f804c099`, 중2 YMB 박준원 Unit3) 삭제 방식(관리자 단어 편집 UI 또는 별도 SQL, 승인 필요).
+4. 입실시험 스위트 전부·reward 12/13이 extra:true(비게이팅) — 게이팅 정책.
+5. registry 미등록 스크립트 10개(`*Live*` 등) 보관/폐기.
+6. STALE_CLASS_SCA 카드 DONE 이동.
+7. 모바일 뒤로가기(라우터 부재로 앱 이탈) — 아키텍처 결정.
+8. 고아 커밋 NEEDS_REVIEW 항목(exampleLibrary 불변식, fill_blank 유출(플래그 OFF), verifyCurriculumText DB 모드).
+
+### 문서 드리프트(정정 필요, 이번엔 append만)
+
+- handoff 103차 "유닛 배정 함수 미검증 재발 갭" → 2026-09-03 `isSuspiciousUnit` 가드로 닫힘(코드 확인).
+- `students.account_status`(v3_34)는 src/ 참조 0.
+
 
 ## 2026-09-05 (111차) — 스크린샷 의존 축소: apply_eligibility 1:1 매핑 + 교재 UUID canonical/AMBIGUOUS_TEXTBOOK + 브라우저 E2E 통합 (Production WRITE 0)
 

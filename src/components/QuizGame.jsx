@@ -411,8 +411,9 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
     )
   }
 
+  // pb-24(2026-09-06 야간 QA, App.jsx SpeedBtn 겹침 수정 참고)
   return (
-    <div className="min-h-screen p-4 pb-8">
+    <div className="min-h-screen p-4 pb-24">
       <div className="flex items-center justify-between max-w-lg mx-auto mb-4 pt-2">
         <button onClick={onBack} className="py-3 px-2 -my-3 -mx-2 text-purple-600 font-bold btn-press">← 홈</button>
         <div className="flex flex-wrap gap-1">

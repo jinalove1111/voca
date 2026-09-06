@@ -45,8 +45,9 @@ export default function Bookshelf({ lib, unitsDone, textbooksDone, onBack }) {
   }, [lib, textbooksDone])
   const totalBooks = textbookBooks.length + unitBooks.length
 
+  // pb-24(2026-09-06 야간 QA, App.jsx SpeedBtn 겹침 수정 참고)
   return (
-    <div className="min-h-screen p-4 pb-8">
+    <div className="min-h-screen p-4 pb-24">
       <div className="max-w-lg mx-auto pt-2 mb-4">
         <button onClick={onBack} className="py-3 px-2 -my-3 -mx-2 text-purple-400 text-sm font-bold btn-press hover:text-purple-600">← 마을로</button>
       </div>
