@@ -299,7 +299,7 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 
 // P0(2026-07-15): student(이름 문자열) 대신 studentId(식별자)+studentName
 // (표시용)을 따로 받는다 — getStudentClass/getStudentUnit은 이제 id 기반.
-export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, completedUnits, completedTextbooks, pendingCeremonyHat, onDismissCeremony, textbookOptions, currentTextbookId, onTextbookSwitch }) {
+export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, completedUnits, completedTextbooks, pendingCeremonyHat, onDismissCeremony, textbookOptions, currentTextbookId, onTextbookSwitch, walletAvailable = null }) {
   const { stars, starsDisplay, clearedStars, stickerTypes, activeMissions, dailyProgress, liveMissionsCompleted, streak, cleared, ticketBalance, redeemTicketReward, equippedHatId, rewardLevel, rewardStarsToNext } = studentData
   // 애착 시스템(2026-07-22) — 학생 아바타의 장착 모자. 미장착이면 기존
   // 기본 아바타(👑) 그대로 — 아무것도 안 얻은/안 고른 학생 화면은 변화 0.
@@ -506,16 +506,21 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
           {/* M4b(2026-08-04) Cleared Stars — 표시값만 stars → starsDisplay로
               바꾸고(별 지급 자체는 무변경, stars=totalStars는 그대로),
               실력 별(clearedStars)이 섞여 있음을 title 툴팁으로 정직하게
-              알린다. 홈 80% 불변 원칙 — 새 카드 추가 없이 기존 배지 그대로. */}
+              알린다. 홈 80% 불변 원칙 — 새 카드 추가 없이 기존 배지 그대로.
+              townShopV1(2026-09-06): walletAvailable이 오면(플래그 ON +
+              서버 상점 상태 로드 완료) 배지는 "사용 가능한 별"(서버
+              earned−spent)을 보여준다 — 실력 별 안내 줄은 이 모드에서
+              혼동을 줄 수 있어 숨긴다. 플래그 OFF(walletAvailable===null,
+              기본)면 이 분기는 전혀 타지 않아 기존 배지와 완전히 동일하다. */}
           <div
             className="flex items-center gap-2 bg-yellow-100 px-4 py-2 rounded-2xl"
-            title={clearedStars > 0 ? `실력 별 ${clearedStars}개 포함` : undefined}>
+            title={walletAvailable !== null ? '사용 가능한 별' : (clearedStars > 0 ? `실력 별 ${clearedStars}개 포함` : undefined)}>
             <span className="text-xl">⭐</span>
-            <span className="font-black text-yellow-700 text-lg">{starsDisplay}</span>
+            <span className="font-black text-yellow-700 text-lg">{walletAvailable !== null ? walletAvailable : starsDisplay}</span>
           </div>
         </div>
       </div>
-      {clearedStars > 0 && (
+      {walletAvailable === null && clearedStars > 0 && (
         <p className="max-w-lg mx-auto text-right text-[11px] text-yellow-700/70 -mt-3 mb-2 pr-1">
           (실력 별 {clearedStars} 포함)
         </p>
