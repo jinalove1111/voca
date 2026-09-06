@@ -1,9 +1,170 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-06 (113차, 야간 자율 QA — 결함 6건 소커밋 + 신규
-invariant WORD_HEADER_RESIDUE + 실사고 가드 4종 게이팅 승격 + v3_38/v3_39
-판단 자료. 브랜치 test/overnight-qa-2026-09-06(base f2fde30, 미push).
-Production DB WRITE 0, SQL 실행 0, v3_38/v3_39 무수정, F 재시도 0,
-main/backup 무접촉, push/PR/merge 0. 상세는 아래 113차 섹션)_
+_최종 갱신: 2026-09-06 (114차, STAR SPENDING vertical slice Phase 1(상점)
++ Phase 2(레거시 지급 서버화) 구현·격리 검증. 플래그 townShopV1=false,
+Production WRITE 0, SQL 실행 0, commit 0, push/PR/merge 0. 운영자 리뷰
+대기. 상세는 아래 114차 섹션)_
+
+## 2026-09-06 (114차) — STAR SPENDING vertical slice Phase 1(상점) + Phase 2(레거시 지급 서버화) 구현·격리 검증 (플래그 OFF, Production WRITE 0, commit 0)
+
+_전부 워킹트리(uncommitted). `git status`/`git diff --stat`로 확인 가능한
+신규 파일들 — SQL 2쌍(+ROLLBACK), 클라이언트 유틸/훅/컴포넌트 수정,
+`api/grant-xp.js` action 추가, `rewardEngine.js`/`useStudent.js`/
+`wordLibrary.js` 수정, 신규 테스트 스크립트 6개. 커밋 0, push 0, SQL 실행
+0, 승인 티켓 0. 운영자 리뷰 후 커밋 여부 결정 대기._
+
+### 배경/감사 결과
+
+- 2026-09-06 production READ-ONLY 감사: 학생 별 지급 경로가 총 13개
+  (V1 서버 원장 앵커 6종 + 레거시 클라이언트 전용 6종 + `pronunciation-
+  unidentified` 1종) 존재하는데, 그중 서버 `reward_ledger`에 실제로
+  기록되던 건 V1 앵커 6종뿐이었다.
+- 2026-08-23 이후 학생이 실제로 번 별 중 서버 원장에 반영된 비율은
+  **20.8%(524/2,522)** — 나머지 79.2%는 클라이언트 로컬에만 존재.
+- `student_progress.total_stars`는 클라이언트가 직접 쓰는 표시용 캐시고
+  클라우드 병합이 `maxNum`(더 큰 값 채택) 방식이라, 상점 "구매 가능
+  잔액" 판정의 권위로 절대 쓸 수 없다는 것이 확인됨(조작/재생 가능).
+
+### 설계 확정
+
+- `available`(구매 가능 잔액) = `reward_totals.earned`(서버 원장 합계) −
+  `COALESCE(SUM(star_purchases.stars_spent), 0)` — **DB 함수 안에서만**
+  계산(클라이언트는 이 값을 절대 직접 계산하지 않고 `get_town_shop_state`
+  RPC 응답만 표시).
+- 아이템 소유권의 진실 원천은 `star_purchases` 테이블 하나뿐 — 어떤
+  진행도 blob(`progress_data` 등)에도 아이템 필드를 추가하지 않았다.
+- 첫 상점 아이템: `shop-lamp`("💡 책상 램프"), 60별.
+- 학생 식별은 세션 토큰의 `sid`(서명된 payload)만 사용 — `req.body`의
+  `studentId`/가격/잔액은 서버가 전혀 신뢰하지 않는다.
+- 새 Vercel 서버리스 함수 파일을 만들지 않았다(무료 플랜 12/12 함수
+  한도 유지) — 신규 action 2개(`purchase_town_item`/`get_town_shop_state`)
+  는 기존 `api/grant-xp.js`에 추가.
+- 만료/서명 불량 토큰 → `relogin_required`(재로그인 유도, 크래시 없음).
+
+### 구현 파일
+
+**Phase 1(상점)**:
+- `supabase_v3_47_town_shop.sql` / `_ROLLBACK.sql` — `town_items`(카탈로그,
+  시드 1행 shop-lamp 60별, anon SELECT-only) + `star_purchases`
+  (`unique(student_id,item_id)`, RLS 정책 0+GRANT 0, 별도
+  `idempotency_key` 컬럼 없음 — 위 unique 자체가 멱등 메커니즘) +
+  `purchase_town_item`/`get_town_shop_state` RPC(SECURITY DEFINER,
+  service_role 전용, 학생별 advisory lock으로 더블클릭/재시도 직렬화,
+  `#variable_conflict use_column` + 모든 컬럼 참조에 테이블 별칭 명시 —
+  리뷰 중 발견된 컬럼명 모호 오류 보정).
+- `api/grant-xp.js` — action `purchase_town_item`/`get_town_shop_state`
+  추가.
+- `src/utils/townShop.js`(신규) — `shopItemState`/`applyPurchaseResult`/
+  `normalizeShopState`/`purchasedDeco` 순수 함수.
+- `src/hooks/useTownShop.js`(신규) — in-flight 가드 포함 훅.
+- `src/utils/wordLibrary.js` — `fetchTownShopState`/`postTownPurchase`
+  추가.
+- `src/components/PaulTown.jsx` — 상점 행 + 💡 소품 표시.
+- `src/components/Dashboard.jsx` — `walletAvailable` 표시.
+- `src/App.jsx` — 배선.
+- `src/config/features.js` — `townShopV1: false`.
+
+**Phase 2(레거시 지급 서버화)**:
+- `src/utils/rewardEngine.js` — 레거시 6종 화이트리스트(`pronunciation`
+  1/`mission-clear` 3/`daily-mission-bonus` 10/`spelling-combo`
+  1·2·3/`sticker-duplicate` 20/`matchgame` 4) + `REWARD_SOURCE_RULES`
+  패턴 + `REWARD_DAILY_CAP`(`pronunciation` 120/`mission-clear`
+  40/`daily-mission-bonus` 12/`spelling-combo` 60/`sticker-duplicate`
+  15/`matchgame` 5 — **OPEN DECISION, 운영자 확정 대상**) +
+  `parseLegacyDedupKey`/`rewardVariantFromSource` + `WORD_SLUG_TOKEN_RE`
+  확장(`/^[^\s:]{1,64}$/u` — production 실측 27/1,975 단어(1.4%)가
+  아포스트로피/괄호/물결 등을 포함해 기존 정규식에 거부되던 것을 수용,
+  기존 V1 `wrong-word-recovered` 앵커의 동일 갭도 함께 해소).
+- `api/grant-xp.js` — reward 분기가 `rewardVariantFromSource`를 사용하도록
+  1줄 변경.
+- `src/hooks/useStudent.js` — `grantReward`가 `parseLegacyDedupKey`로 레거시
+  지급을 서버에 post(V1 uuid 키는 null로 파싱돼 이중 POST 없음).
+  `grantSticker(sticker, giftKey)`로 타임스탬프+랜덤 대신 안정적 선물
+  식별자(`round:signature`/`milestone:n`/`badge:threshold`) 사용.
+- `src/utils/wordLibrary.js` — 내구성 재시도 큐 `paul_easy_reward_post_queue`
+  (localStorage, 최대 300건, 8회 실패 시 폐기, 토큰 설정/`online`
+  이벤트/성공 후 flush — `daily_cap_reached`와 확정 거부는 재시도 안 함).
+- `pronunciation-unidentified`는 의도적으로 클라이언트 전용 유지
+  (production 실제 발생 0건 확인).
+- 결과: 13경로 중 12개가 서버 기록됨(레거시 6 + V1 앵커 6, 나머지 1은
+  의도적 예외).
+
+### 테스트/회귀
+
+신규 스크립트 6종(전부 네트워크 0, `tests/harness/registry.mjs`
+`extra:false` 등록): `testTownShop.mjs`(75단언) / `testTownShopServer.mjs`
+(47단언) / `testLegacyRewardServer.mjs`(122단언) /
+`testLegacyGrantCoverage.mjs`(60단언) / `testRewardPostQueue.mjs`
+(49단언) / `testBaselineV2Sql.mjs`(정적 33 + 인메모리 시뮬레이션 11).
+`package.json` 신규: `verify:town-shop`/`verify:legacy-reward`/
+`verify:baseline-v2`. 기존 `testRewardEngine.mjs` 섹션 10~17 확장,
+`testRewardServerWrite.mjs` 섹션 12를 `sendRewardPostOnce`로 재앵커(기존
+단언 완화 없음). 회귀 PASS: `verify:stars`/`verify:reward`/
+`verify:reward-server`/`verify:double-events`/`verify:persistence`/
+`verify:paul-town-progression`/`verify:town-shop`/`verify:reward-stress`/
+`verify:mission-bonus`/`verify:game-reward`/`verify:release-gate`.
+`npm run build` PASS. (`verify:release` 전체 게이트 결과는 이 세션
+이후 리드가 별도로 확인할 예정이면 "실행 중"으로 남긴다 — 이 세션
+자체는 개별 도메인 재실행까지만 확인.) 상세는
+`docs/operations/STAR_SHOP_PREPRODUCTION_PACKAGE.md`, `TESTING.md`
+2026-09-06(114차) 섹션.
+
+### baseline dry-run
+
+`scripts/dryRunBaselineV2.mjs`(클라이언트 미러 근사 프록시 — 정확한
+서버 원장 값 아님) 2026-09-06 실행 결과: 대상 학생 24명(실학생 전체
+187명 중), 총 1,998별, 최대 개인 277별, 음수 0, 중복 0. BOUNDED 가드
+4종 전부 PASS(candidates 24∈[5,80] / total 1998∈[500,24000] /
+maxIndividual 277≤1500 / progressRows 193∈[150,500]).
+
+### 배포 순서
+
+1. 코드 배포(플래그 OFF, `townShopV1: false`) — 배포돼도 UI/네트워크
+   호출 0.
+2. `node scripts/preflightTownShop.mjs --expect pre`(READ-ONLY).
+3. `supabase_v3_47_town_shop.sql` 실행(운영자, SQL Editor).
+4. `node scripts/preflightTownShop.mjs --expect post-v3_47` + SELECT
+   확인.
+5. `supabase_v3_48_reward_legacy_baseline_v2.sql` 실행(운영자) — 실행
+   전 NOTICE로 뜨는 precheck 측정값 육안 확인, 가드 위반 시
+   `RAISE EXCEPTION`으로 자동 전체 롤백(부분 삽입 없음).
+6. `node scripts/preflightTownShop.mjs --expect post-v3_48` + 관련 테이블
+   행 수 확인.
+7. QA 계정(Cookie/Paul)으로만 구매 1회 실측 → 새로고침/재로그인 영속성
+   확인.
+8. 전부 통과 후에만 `townShopV1: true`로 전환.
+
+### 열린 결정
+
+- 레거시 `REWARD_DAILY_CAP` 6종 최종 값(현재는 "정상 학습을 절대 깎지
+  않는" 여유값, 정확한 확정은 운영자 몫).
+- baseline 타당성 허용치(+50, 2주 드리프트 가정) 유효기간 — 실행이
+  2주 이상 미뤄지면 `dryRunBaselineV2.mjs` 재실행 권장.
+- `townShopV1` 최종 ON 시점/방식(전체 기본값 전환 vs 개별 기기 안내) —
+  기기 로컬 `localStorage` 플래그 캐시 문제 감안 필요.
+- 같은 기기를 공유하는 여러 학생 계정의 재시도 큐 항목이 8회 실패 후
+  폐기되는 것(P2 노트, 인증 실패 계정 항목이 무한정 쌓이지 않도록 하는
+  의도적 설계지만 잠재적 데이터 유실 가능성 있음).
+
+### 다음 세션 주의
+
+1. **총 별 표시축**: `townShopV1` ON 이후에도 Phase 1은 서버 `available`
+   값을 상점 화면에서만 쓴다 — 학생 화면 전체의 "총 별" 표시축을
+   `total_stars`에서 서버 원장 기준으로 전환하는 결정은 이번 범위 밖.
+2. **`total_stars`를 구매 권위로 쓰지 말 것**: 클라이언트 조작 가능한
+   값이라 어떤 신규 기능도 이 컬럼을 "얼마나 살 수 있는가" 판정에
+   써서는 안 된다(설계 확정 절 참고, 규칙 1/4와 같은 정신).
+3. **레거시 dedup 키 형식 동결**: `parseLegacyDedupKey`가 파싱하는
+   프리픽스(`mission-clear:`/`daily-mission-bonus:`/`spelling-combo:`/
+   `sticker-duplicate:`/`matchgame:`)와 각 포맷을 변경하면 기존
+   `starGrantLog` 항목이 더 이상 서버로 매핑되지 않는다 — 변경 시
+   `testLegacyGrantCoverage.mjs`/`testLegacyRewardServer.mjs` 재검증 필수.
+
+### 알려진 한계
+
+- 서버 `reward_ledger` 실제 행 수는 로컬에서 검증 불가(anon key가
+  차단됨, service_role 로컬 부재) — 라이브 실행 후에만 확인 가능.
+- 드라이런은 클라이언트 미러 근사 프록시로 계산한 값이라 실제 서버
+  원장 값과 정확히 같다는 보장은 없음.
 
 ## 2026-09-06 (113차) — 야간 자율 QA: 결함 6건 소커밋 + 신규 invariant WORD_HEADER_RESIDUE + 실사고 가드 게이팅 승격 + v3_38/v3_39 판단 자료 (Production WRITE 0)
 

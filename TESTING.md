@@ -972,3 +972,41 @@ A6-spelling 섹션(54-62행)이 이미 같은 부류의 문제를 정규식 앵�
 - **extra:true → extra:false 승격 4종**(실사고 가드, 순수, 당일 PASS 확인): `testStarDeltaOnEntry.mjs`(권교빈 별 증가), `testWordLibraryPagination.mjs`(words 1000행 절단 P0), `testEntranceTestSelection.mjs`(Song/Luke 시험 선택 P0), `testMissionBonusIdempotency.mjs`(daily-mission-bonus 중복). 이제 verify:all/Release Gate 2의 exit 코드에 반영된다.
 - **정직 기록 — registry에 없어 한 번도 실행되지 않는 스크립트 10개**(운영자 판단 대기): `testCiNameMasking`, `testEdgeFunctionsE2E`, `testLegacyMultiClassLive`, `testLesson5Journey`, `testMultiTextbookLive`, `testMultiTextbookLiveFixed`, `testReadingLive`, `testStudentsRlsPhase2b`, `testTextbookExample`, `testTextbookModelLive`. 대부분 라이브 DB 필요.
 - **환경 메모**: 로컬에 `playwright` 패키지가 node_modules에 없으면 e2e 도메인이 `[extra FAIL]`로 표시된다(exit 코드 비반영). `npm install` 후 `npx playwright install chromium`. `testStudentPinAuth.mjs`는 Node 24 libuv `UV_HANDLE_CLOSING` 크래시가 드물게 1회 관측됨(단독 재실행 PASS).
+
+## 관련 항목: STAR SPENDING vertical slice Phase 1(상점)+Phase 2(레거시 지급 서버화) — 신규 스위트 6종 (2026-09-06, 114차)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존. 코드/SQL 전부 구현·작성 완료, **커밋 0, `townShopV1=false`, SQL 미실행, Production WRITE 0** — 아래 스위트는 전부 로컬/네트워크 0에서 실행·PASS 확인됐고, 운영자 리뷰 후 커밋될 예정이다. 상세: `handoff.md` 2026-09-06(114차)._
+
+### 신규 스크립트 6종 + `tests/harness/registry.mjs` 등록(전부 `extra:false`, 신규 필수 게이팅)
+
+| 파일 | 단언 | 대상 | 네트워크/DB |
+|---|---|---|---|
+| `scripts/testTownShop.mjs` | 75 | `src/utils/townShop.js` 순수 함수(`shopItemState` 4상태/`applyPurchaseResult` 멱등 리듀서/`normalizeShopState`/`purchasedDeco`) + 정적 배선(features 플래그 기본 false, `wordLibrary.js` `fetchTownShopState`/`postTownPurchase`가 studentId/price를 body에 넣지 않음, `useTownShop.js` in-flight 가드, `useStudent.js` record 무변경) + esbuild+`react-dom/server` SSR로 `PaulTown.jsx` 플래그 OFF byte-identical / ON 4분기(구매가능·부족·구매중·보유) 렌더 확인 | 네트워크 0 |
+| `scripts/testTownShopServer.mjs` | 47 | `api/grant-xp.js`의 신규 action `purchase_town_item`/`get_town_shop_state`(새 api 파일 0개, Vercel 12/12 한도 유지). 토큰 `sid`만 학생 식별(req.body.studentId/price/starsSpent/balance 미참조 정적 확인), 토큰 없음→`relogin_required`, 서명 불량/만료→`unauthorized`, RPC 42883/PGRST202/42P01/PGRST205→`table_missing`. 인메모리 fake `supabase.rpc`로 SQL 계약(충분/정확히 60/부족/중복/더블클릭/재시도/가격·타학생 조작/상태조회) 시뮬레이션 | 네트워크 0(fake supabase rpc — 실제 원자성은 SQL 함수 자체에 있고 여기서는 실행하지 않음, 정직한 경계) |
+| `scripts/testLegacyRewardServer.mjs` | 122 | `rewardEngine.js` 레거시 6종 화이트리스트(`pronunciation` 1/`mission-clear` 3/`daily-mission-bonus` 10/`spelling-combo` 1·2·3/`sticker-duplicate` 20/`matchgame` 4) + 소스 패턴 + `REWARD_DAILY_CAP`(120/40/12/60/15/5, OPEN DECISION) + `parseLegacyDedupKey`/`rewardVariantFromSource`. 서버 e2e(esbuild fake supabase): 정상 지급·서버 조립 idempotency_key·재요청 duplicate·`req.body.stars` 무시·invalid sourceId 12종 거부·일일 상한 6종·`pronunciation-unidentified`는 `unknown_reward_type`·V1/XP 회귀 + `WORD_SLUG_TOKEN_RE` 확장 수용(아포스트로피/괄호/물결/한글) | 네트워크 0 |
+| `scripts/testLegacyGrantCoverage.mjs` | 60 | 클라이언트: `grantReward` 안 `parseLegacyDedupKey→postRewardEvent` 후킹(V1 uuid 키는 null→이중 POST 없음), `grantSticker(sticker, giftKey)` 안정 키(`round:signature`/`milestone:n`/`badge:threshold`, 타임스탬프+랜덤 대체). 실제 useStudent(esbuild race bundle+fakeReact)로 레거시 6경로 정상 지급/POST 1회, 재진입·새로고침 중복 0, 학생 간 격리, 서버 실패 시 로컬 지급 보존, V1 앵커 6종 POST 1회씩(12/13 서버화, `pronunciation-unidentified`는 의도적 0) | 네트워크 0 |
+| `scripts/testRewardPostQueue.mjs` | 49 | `wordLibrary.js` `postRewardEvent` 내구성 재시도 큐(`localStorage` 키 `paul_easy_reward_post_queue`): 키 멱등 enqueue, 300건 trim, 8회 실패 시 폐기, `ok`/`duplicate`/`daily_cap_reached`/확정 거부 4종은 제거, 네트워크 실패·non-2xx·`table_missing`·`unauthorized`·`dup_check_failed`·`cap_check_failed`는 보존+attempts 증가, flush는 토큰 필수·`setSessionToken` 시·`online` 이벤트 시·성공 후 | 네트워크 0 |
+| `scripts/testBaselineV2Sql.mjs` | 정적 33 + 인메모리 시뮬레이션 11시나리오 | `supabase_v3_48_reward_legacy_baseline_v2.sql` 정적 단언(마커 가드/ON CONFLICT/`source_id='v2'` 한정/v1 무수정/롤백 WHERE/가드 상수가 `scripts/lib/baselineV2Guards.mjs`와 리터럴 동기화) + DO 블록 인메모리 시뮬레이션(정상 라우팅/재실행 no-op/ON CONFLICT 중복 0/음수 제외/타당성 초과 review 라우팅/EXACT·BOUNDED 가드 각각 abort) | 네트워크 0, **SQL 실행 0**(정직한 경계 — 실제 DB 트랜잭션 원자성/advisory lock 동시성은 라이브 실행 후에만 확인 가능) |
+
+### 신규 `package.json` 스크립트 3종
+
+```
+"verify:town-shop": "node scripts/testTownShop.mjs && node scripts/testTownShopServer.mjs",
+"verify:legacy-reward": "node scripts/testLegacyRewardServer.mjs && node scripts/testLegacyGrantCoverage.mjs && node scripts/testRewardPostQueue.mjs",
+"verify:baseline-v2": "node scripts/testBaselineV2Sql.mjs"
+```
+
+### 기존 스크립트 확장(신규 파일 아님)
+
+- `scripts/testRewardEngine.mjs` — 섹션 10~17 추가(레거시 6종 화이트리스트/소스패턴/일일상한/`WORD_SLUG_TOKEN_RE` 계약).
+- `scripts/testRewardServerWrite.mjs` — 섹션 12를 `sendRewardPostOnce`(신규 재시도 큐 진입점)로 재앵커 — 기존 단언을 느슨하게 만들지 않고 대상 함수만 교체(금액/키 미신뢰 검증은 그대로 유지).
+
+### `WORD_SLUG_TOKEN_RE` 변경 — 정직한 커버리지 기록
+
+레거시 dedup 키(`mission-clear`/`spelling-combo`의 wordId 부분)는 uuid가 아니라 `wordSlug(word)`(단어 원문 기반 slug)다. 기존 정규식은 이 slug에 공백/`(`/`)`/`~` 등이 섞이면 거부했는데, 2026-09-06 production READ-ONLY 실측 결과 전체 단어 1,975개 중 27개(1.4%)가 이런 문자를 포함해 레거시 서버화 대상에서 누락될 뻔했다(V1 기존 `wrong-word-recovered` 앵커도 같은 이유로 이 27개에 대해서만 오탐 갭이 있었음 — 이번 수정이 그 갭도 함께 닫음). `WORD_SLUG_TOKEN_RE`를 `/^[^\s:]{1,64}$/u`로 넓혀 공백·`:` 주입만 계속 차단하고 나머지 특수문자는 허용하도록 교정 — `testLegacyRewardServer.mjs`가 이 27개 실제 패턴(아포스트로피/괄호/물결/한글)의 수용과 공백/콜론의 거부를 함께 단언한다.
+
+### 정직한 커버리지 경계(과장 없이 기록)
+
+- SQL 실행 자체(`supabase_v3_47_town_shop.sql`/`supabase_v3_48_...v2.sql`)는 로컬에서 검증할 수 없다 — `testTownShopServer.mjs`/`testBaselineV2Sql.mjs`는 fake `supabase.rpc`/인메모리 시뮬레이션으로 **계약**(입출력 형태·분기)만 검증하고, 실제 Postgres 트랜잭션 원자성·`pg_advisory_xact_lock` 동시성·`RAISE EXCEPTION` 시 실제 ROLLBACK 여부는 운영자가 SQL Editor에서 실행한 뒤에만 확인 가능(SQL 파일 헤더에도 동일하게 명시).
+- `scripts/dryRunBaselineV2.mjs`(드라이런, `docs/operations/STAR_SHOP_PREPRODUCTION_PACKAGE.md` 4절)는 서버 원장이 아니라 **클라이언트 미러 근사 프록시**로 계산한 값이라 실제 v3_48 실행 결과와 정확히 같다는 보장은 없다 — BOUNDED 가드가 여유 있게 통과하는지 사전 감(感)을 잡는 용도.
+- 회귀 스위트: `npm run verify:stars`/`verify:reward`/`verify:reward-server`/`verify:double-events`/`verify:persistence`/`verify:paul-town-progression`/`verify:town-shop`/`verify:reward-stress`/`verify:mission-bonus`/`verify:game-reward`/`verify:release-gate` — 전부 PASS(무회귀 확인). `npm run build` PASS.
