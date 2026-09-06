@@ -179,23 +179,38 @@ console.log('\n11. api/grant-xp.js — student_progress/students UPDATE·DELETE 
 }
 
 // ── 12) 클라이언트 배선 정적 검사 ───────────────────────────────────────
-console.log('\n12. src/utils/wordLibrary.js — postRewardEvent(fire-and-forget, 실패 삼킴)')
+console.log('\n12. src/utils/wordLibrary.js — postRewardEvent(재시도 큐 경유, 실패 삼킴)')
 {
+  // 2026-09-06 — Reward Post 재시도 큐 도입(레거시 6종 서버 원장 흡수,
+  // implementer-legacy-grant-coverage 트랙) 이후 실제 fetch('/api/grant-xp')
+  // 호출은 postRewardEvent 함수 본문이 아니라 그 아래에서 postRewardEvent가
+  // 호출하는 내부 헬퍼 sendRewardPostOnce(비-export)로 옮겨갔다. 아래
+  // 두 단언은 "postRewardEvent 함수 텍스트 한 조각"만 슬라이스해서는 더 이상
+  // 검증할 수 없으므로(그 조각엔 fetch 호출이 없다), 실제 네트워크 왕복을
+  // 담당하는 sendRewardPostOnce의 본문을 별도로 슬라이스해 검사한다 —
+  // "postRewardEvent가 직접 하든 그것이 호출하는 헬퍼가 하든, 결과적으로
+  // ledger:'reward' 요청이 나가고 실패가 삼켜진다"는 계약 자체는 그대로다.
   const src = fs.readFileSync('src/utils/wordLibrary.js', 'utf8')
   const hasFn = /export\s+async\s+function\s+postRewardEvent\s*\(/.test(src)
   check('postRewardEvent export 존재', hasFn)
 
-  let body = ''
-  if (hasFn) {
-    const startIdx = src.search(/export\s+async\s+function\s+postRewardEvent\s*\(/)
-    // 다음 top-level export 선언 전까지를 함수 본문으로 취급(대략적이지만
-    // 이 파일의 함수들이 전부 top-level export로 구분되는 스타일이라 충분).
-    const rest = src.slice(startIdx + 10)
+  const postRewardStartIdx = src.search(/export\s+async\s+function\s+postRewardEvent\s*\(/)
+  let postRewardBody = ''
+  if (postRewardStartIdx !== -1) {
+    const rest = src.slice(postRewardStartIdx + 10)
     const nextExportIdx = rest.search(/\nexport\s/)
-    body = nextExportIdx === -1 ? src.slice(startIdx) : src.slice(startIdx, startIdx + 10 + nextExportIdx)
+    postRewardBody = nextExportIdx === -1 ? src.slice(postRewardStartIdx) : src.slice(postRewardStartIdx, postRewardStartIdx + 10 + nextExportIdx)
   }
-  check("ledger:'reward' 요청을 /api/grant-xp로 POST", /ledger\s*:\s*['"]reward['"]/.test(body) && /\/api\/grant-xp/.test(body))
-  check('catch 블록으로 네트워크 실패를 삼킴', /catch\s*\{/.test(body) || /catch\s*\([^)]*\)\s*\{/.test(body))
+
+  const sendOnceStartIdx = src.indexOf('async function sendRewardPostOnce(')
+  const sendOnceBody = (sendOnceStartIdx !== -1 && postRewardStartIdx !== -1 && postRewardStartIdx > sendOnceStartIdx)
+    ? src.slice(sendOnceStartIdx, postRewardStartIdx)
+    : ''
+  check('실제 네트워크 왕복 헬퍼(sendRewardPostOnce) 존재, postRewardEvent 앞에 정의됨', sendOnceBody.length > 0)
+  check("ledger:'reward' 요청을 /api/grant-xp로 POST(helper 경유)", /ledger\s*:\s*['"]reward['"]/.test(sendOnceBody) && /\/api\/grant-xp/.test(sendOnceBody))
+  check('세션 토큰을 token 필드로 그대로 전송', /token\s*:\s*_sessionToken/.test(sendOnceBody))
+  check('helper의 catch 블록으로 네트워크 실패를 삼킴(reject하지 않고 재시도 신호를 반환)', /catch\s*\{/.test(sendOnceBody) || /catch\s*\([^)]*\)\s*\{/.test(sendOnceBody))
+  check('postRewardEvent 자체 본문에 throw 없음(실패해도 호출자에 예외를 전파하지 않음)', !/\bthrow\b/.test(postRewardBody))
 }
 
 console.log('\n13. src/hooks/useStudent.js — grantLedgerReward가 postRewardEvent를 fire-and-forget 호출')
