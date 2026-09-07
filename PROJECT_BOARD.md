@@ -24,6 +24,19 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
 
 ## BLOCKED
 
+### [P1] `townShopV1` ON — v3_47/v3_48 실행 + QA 계정 구매 검증 선행 필요 (2026-09-06, 114차)
+- 근거: `handoff.md` 2026-09-06(114차),
+  `docs/operations/STAR_SHOP_PREPRODUCTION_PACKAGE.md` §2.
+- 내용: 코드/SQL 준비 완료(위 VERIFY 카드) — `townShopV1` 기본값을
+  `true`로 바꾸기 전에 순서 고정: ① 코드 배포(플래그 OFF) → ②
+  `supabase_v3_47_town_shop.sql` 실행(운영자) → ③ post-verify → ④
+  `supabase_v3_48_reward_legacy_baseline_v2.sql` 실행(운영자, NOTICE
+  precheck 값 육안 확인 필수) → ⑤ post-verify → ⑥ QA 계정(Cookie/Paul)
+  으로 구매 1회 실측 + 재로그인 영속성 확인 → ⑦ 전부 통과 후에만 ON.
+- 차단 사유: 운영자만 Supabase SQL Editor에서 DDL 실행 가능(헌법 규칙
+  8) + commit 승인이 아직 없음(위 VERIFY 카드).
+- **2026-09-07 추가(115차)**: `supabase_v3_48_reward_legacy_baseline_v2.sql`이 전역 T 스냅샷(2026-09-06 하드닝판, EXACT/BOUNDED 가드)에서 학생별 `reconcile_legacy_baseline` RPC로 **전면 재설계**됐다 — 레이스 컨디션(클라이언트 업로드/서버 원장 INSERT 시각 비동기 간극에 의한 이중 계상/누락)이 실제로 존재함을 대조군 재현으로 증명(63단언 `testCutoverReconcile.mjs`가 구 설계로 320≠310을 재현). 위 순서의 ④(v3_48 실행)는 이제 학생별 원장 행을 0건 삽입(함수/뷰/marker만 설치)하고, 정산은 학생들이 각자 다음 로그인 시 스스로 채운다(진행 상황은 `reward_baseline_v2_status` 뷰로 모니터링) — ⑤ post-verify/⑥ QA 계정 검증/⑦ ON 순서 자체는 그대로 유효. 신규 스위트 `verify:cutover`(`testCutoverReconcile.mjs` 63단언/`testCutoverClient.mjs` 52단언) + `testBaselineV2Sql.mjs` 전면 재작성(83단언) + `testRewardPostQueue.mjs` 확장(49→95단언). 커밋 0, SQL 실행 0, 플래그 OFF 그대로. 상세: `handoff.md` 2026-09-07(115차), `DATABASE.md`/`TESTING.md` 동일 세션 갱신, `docs/operations/STAR_SHOP_PREPRODUCTION_PACKAGE.md` §0/§1/§3/§4/§8 superseding note.
+
 ### [P1] 야간 QA 2026-09-06 브랜치 `test/overnight-qa-2026-09-06` — 코드 커밋 10 + 문서, PR 생성/merge 결정 대기 (113차)
 - 내용: 결함 수정 6건(관리자 실학생 집계, 고정 SpeedBtn 탭 가로챔, practiceSentence 2건, 곡선 아포스트로피, 죽은 P0 테스트 등록) + 신규 invariant `WORD_HEADER_RESIDUE` + 실사고 가드 4종 게이팅 승격. Production WRITE 0. 상세 `docs/qa/overnight-2026-09-06/track-results.md`, handoff 113차.
 - 필요한 결정: push → PR → Release Gate → merge 여부. 미push 상태.
@@ -601,6 +614,24 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
 _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` 상태 파일 생성)_
 
 ## VERIFY
+
+### [P1] STAR SPENDING Phase 1(상점)+Phase 2(레거시 지급 서버화) — 운영자 리뷰/commit 승인 대기 (2026-09-06, 114차)
+- 근거: `handoff.md` 2026-09-06(114차),
+  `docs/operations/STAR_SHOP_PREPRODUCTION_PACKAGE.md`.
+- 내용: Phase 1(Town Shop V1 — `town_items`/`star_purchases` +
+  `purchase_town_item`/`get_town_shop_state` RPC, 첫 아이템 shop-lamp
+  💡 책상 램프 60별) + Phase 2(레거시 별 지급 6경로 서버 원장화, 13경로
+  중 12개 서버 기록) 구현 완료. 신규 테스트 6종(`testTownShop.mjs` 75/
+  `testTownShopServer.mjs` 47/`testLegacyRewardServer.mjs` 122/
+  `testLegacyGrantCoverage.mjs` 60/`testRewardPostQueue.mjs` 49/
+  `testBaselineV2Sql.mjs` 정적33+시뮬레이션11) 전부 PASS, `npm run build`
+  PASS, 관련 회귀 스위트 11종 무회귀.
+- 상태: **전부 워킹트리(uncommitted), `townShopV1=false`, SQL 미실행
+  (`supabase_v3_47_town_shop.sql`/`supabase_v3_48_reward_legacy_
+  baseline_v2.sql`), Production WRITE 0, commit/push/PR 0.**
+- 검수 대기 사항: qa-reviewer/security-reviewer 코드 리뷰 미착수, 운영자
+  commit 승인. 열린 결정(레거시 `REWARD_DAILY_CAP` 6종 최종값, baseline
+  타당성 허용치 유효기간)은 handoff.md 114차 "열린 결정" 절 참고.
 
 ### [P0] `qa/ops-automation-2026-09-04` 통합 브랜치 — 12시간 자율 운영 자동검증 완료, PR 생성/merge 검토 대기 (2026-09-04, 109차)
 - 근거: `handoff.md` 2026-09-04(109차), `ROADMAP.md` 2026-09-04(109차),

@@ -18,8 +18,12 @@ import { computeWorldState, gardenPlots } from '../utils/attachment/worldProgres
 import { retroWelcome, townPlacesState, paulHomeDeco } from '../utils/attachment/paulTown'
 import { HAT_CATALOG, HAT_COLOR_STYLE, hatById, hatTintStyle } from '../utils/attachment/hatSystem'
 import { isFeatureEnabled } from '../config/features'
+import { TOWN_SHOP_ITEMS, shopItemState, purchasedDeco } from '../utils/townShop'
 
-export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, onGo, onBack }) {
+// Paul Town 별 상점 V1(townShopV1, 2026-09-06) — shopEnabled=false(기본,
+// 플래그 OFF)이면 이 컴포넌트는 shop/shopEnabled를 아예 참조하지 않는
+// 기존 분기만 타므로 렌더 출력이 오늘과 바이트 단위로 동일하다.
+export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, onGo, onBack, shop, shopEnabled }) {
   const welcome = retroWelcome(stats)
   const world = computeWorldState(stats)
   const plots = gardenPlots(stats)
@@ -29,6 +33,13 @@ export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, 
   const undiscoveredHats = Math.max(0, HAT_CATALOG.length - hatInventory.length)
   // 폴의 집 소품 — 진행에서만 파생(paulHomeDeco, 저장 0·단조).
   const deco = paulHomeDeco(stats)
+  // 별 상점 V1(townShopV1, 2026-09-06) — shop이 null(플래그 OFF 또는
+  // App.jsx 미주입)이면 아래는 전부 no-op(shopOwned=[], shopState=null,
+  // allDeco===deco와 동일 내용)이라 기존 렌더 출력에 영향이 없다.
+  const shopItem = TOWN_SHOP_ITEMS[0]
+  const shopOwned = shop?.state?.owned || []
+  const shopState = shop ? shopItemState(shopItem, { available: shop.state?.available, owned: shopOwned, purchasing: shop.purchasing }) : null
+  const allDeco = [...deco, ...purchasedDeco(shopOwned)]
   // 플래그 게이트 건물들 — townPlacesState(플래그 조회는 주입, 엔진은
   // 저장소를 직접 안 읽음). 발견된 곳만 이동 카드로. 도서관은 화면 플래그
   // (attachmentBookshelf)도 켜져 있어야 입장 가능 — 꺼져 있으면 아직
@@ -142,12 +153,45 @@ export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, 
           {undiscoveredHats > 0 && (
             <p className="text-xs text-gray-400 mt-2">아직 발견하지 못한 모자 {undiscoveredHats}개</p>
           )}
+          {/* 별 상점 V1(townShopV1, 2026-09-06) — shopEnabled=false(기본,
+              플래그 OFF)면 이 블록은 렌더되지 않아 기존 화면과 바이트
+              단위로 동일하다. 소유권/잔액은 전부 서버 응답(shop.state) —
+              여기서 아무것도 계산·저장하지 않는다. */}
+          {shopEnabled && shop && (
+            <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-sm font-bold text-gray-700">
+                {shopItem.emoji} {shopItem.name} · ⭐ {shopItem.price}
+                {shop.state && <span className="text-xs text-gray-400 font-normal"> · ⭐ 사용 가능 {shop.state.available}</span>}
+              </span>
+              {shop.error === 'relogin_required' ? (
+                <span className="text-xs font-bold text-gray-400">다시 로그인 후 이용해 주세요</span>
+              ) : shop.error ? (
+                <span className="text-xs font-bold text-gray-400">지금은 상점을 열 수 없어요</span>
+              ) : (
+                <button
+                  onClick={() => shopState?.kind === 'buyable' && shop.purchase(shopItem.id)}
+                  disabled={shopState?.kind !== 'buyable'}
+                  className={`text-xs font-black px-3 py-2 rounded-xl btn-press ${
+                    shopState?.kind === 'buyable' ? 'bg-purple-500 text-white hover:bg-purple-600' : 'bg-gray-100 text-gray-400'
+                  }`}
+                >
+                  {shopState?.kind === 'owned' ? '보유 중'
+                    : shopState?.kind === 'purchasing' ? '구매 중…'
+                    : shopState?.kind === 'insufficient' ? `⭐ ${shopState.missing}개 더 필요`
+                    : '구매'}
+                </button>
+              )}
+            </div>
+          )}
           {/* 방 소품 — 진행에서만 파생(단조: 한 번 생긴 소품은 안 사라짐).
-              열린 소품만 보여준다 — 잠긴 소품 목록/개수 없음(점진 발견). */}
-          {deco.length > 0 && (
+              열린 소품만 보여준다 — 잠긴 소품 목록/개수 없음(점진 발견).
+              allDeco = 기존 진행 소품 + 상점에서 구매한 소품(purchasedDeco,
+              townShopV1) — shopEnabled가 꺼져 있으면 shopOwned가 항상
+              빈 배열이라 여기도 무변화. */}
+          {allDeco.length > 0 && (
             <div className="mt-3 pt-3 border-t border-gray-100">
               <div className="flex gap-2 flex-wrap">
-                {deco.map((d) => (
+                {allDeco.map((d) => (
                   <span key={d.id} title={d.name} className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-xl">
                     {d.emoji}
                   </span>

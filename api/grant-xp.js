@@ -22,7 +22,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { supabaseAdminUrl, supabaseAdminKey, verifySessionToken } from './_pinAuth.js'
 import { resolveXpAmount, isValidStudentId, isValidSourceEventIdForEvent, isValidEventType } from '../src/utils/paulRankShared.js'
-import { isValidRewardType, isValidRewardSource, resolveRewardStars, rewardIdempotencyKey, rewardDailyCap, kstDayStartMs } from '../src/utils/rewardEngine.js'
+import { isValidRewardType, isValidRewardSource, resolveRewardStars, rewardVariantFromSource, rewardIdempotencyKey, rewardDailyCap, kstDayStartMs } from '../src/utils/rewardEngine.js'
 
 // Teacher Controls 마스터 스위치(2026-07-19, classes.gamification_enabled,
 // GAME_DESIGN.md 13번 섹션) 판단 — 이 핸들러는 반의 스위치 상태를 조회해서
@@ -61,6 +61,165 @@ export default async function handler(req, res) {
   const key = supabaseAdminKey()
   if (!url || !key) {
     res.status(500).json({ error: 'Server not configured: SUPABASE_URL / key missing' })
+    return
+  }
+
+  // ── 마을 상점(Town Shop) — 별(stars) "소비"의 유일한 서버 쓰기 경로
+  // (2026-09-06) ───────────────────────────────────────────────────────
+  // 아래 reward 분기가 별을 "버는" 유일한 경로인 것과 대칭으로, 이 두
+  // action 분기는 별을 "쓰는" 유일한 경로다. 잔액 계산(earned-spent)과
+  // 구매 원자성(같은 아이템 중복 구매 방지)은 전부 Postgres 함수
+  // (purchase_town_item / get_town_shop_state, supabase_v3_xx_town_shop.sql)
+  // 안에서 수행한다 — 이 핸들러는 "누가 요청했는가"만 토큰으로 확인하고,
+  // 그 외 모든 판단(가격/잔액/이미 소유했는지)은 DB 함수의 반환값을 그대로
+  // 옮겨 응답할 뿐이다. TOCTOU 여지를 만들지 않기 위해 여기서 잔액을 미리
+  // 계산해서 넘기거나, RPC 결과를 재해석하지 않는다 — 위 reward_ledger의
+  // "DB 제약이 원자적으로 막는다" 원칙과 정확히 같은 신뢰 경계.
+  //
+  // 두 action 모두 studentId를 세션 토큰에서만 얻는다 — req.body.studentId는
+  // 어디서도 읽지 않는다(남의 studentId를 실어 대신 구매/조회시키는 경로
+  // 자체가 코드에 없다).
+  const TOWN_SHOP_TABLE_MISSING_CODES = new Set(['42P01', 'PGRST205', '42883', 'PGRST202'])
+
+  function townShopAuthenticate(req) {
+    const supplied = (typeof req.body.token === 'string' && req.body.token)
+      || (req.headers && (req.headers['x-session-token'] || req.headers['X-Session-Token']))
+      || null
+    if (!supplied) return { ok: false, response: { ok: false, reason: 'relogin_required' } }
+    const authed = verifySessionToken(supplied)
+    if (!authed.ok) return { ok: false, response: { ok: false, reason: 'unauthorized', detail: authed.reason } }
+    return { ok: true, studentId: authed.studentId }
+  }
+
+  if (req.body && req.body.action === 'get_town_shop_state') {
+    const auth = townShopAuthenticate(req)
+    if (!auth.ok) { res.status(200).json(auth.response); return }
+    const studentId = auth.studentId
+
+    const supabase = createClient(url, key)
+    const { data, error } = await supabase.rpc('get_town_shop_state', { p_student_id: studentId })
+    if (error) {
+      if (TOWN_SHOP_TABLE_MISSING_CODES.has(error.code)) {
+        res.status(200).json({ ok: false, reason: 'table_missing' })
+        return
+      }
+      res.status(200).json({ ok: false, reason: 'rpc_failed' })
+      return
+    }
+    const row = (data && data[0]) || {}
+    const earned = Number(row.earned) || 0
+    const spent = Number(row.spent) || 0
+    const available = Math.max(0, Number(row.available) || 0) // 음수 노출 금지 — 표기상 안전망(실제 부족 판정은 DB 함수가 이미 확정)
+    const owned = row.owned_item_ids || []
+
+    // 아이템 목록 조회 실패는 상태 조회 전체를 실패시키지 않는다 — 잔액/보유
+    // 목록은 이미 확보했으므로, 진열대만 빈 배열로 내려도 학생 화면이
+    // 완전히 막히지는 않는다(신규 테이블 부재 등 과도기 대비).
+    let items = []
+    {
+      const { data: itemRows, error: itemErr } = await supabase
+        .from('town_items').select('id,name,emoji,price').eq('active', true)
+      if (!itemErr && itemRows) items = itemRows
+    }
+
+    res.status(200).json({ ok: true, earned, spent, available, owned, items })
+    return
+  }
+
+  if (req.body && req.body.action === 'purchase_town_item') {
+    const auth = townShopAuthenticate(req)
+    if (!auth.ok) { res.status(200).json(auth.response); return }
+    const studentId = auth.studentId
+
+    const itemId = req.body.itemId
+    if (typeof itemId !== 'string' || !/^[a-z0-9-]{1,40}$/.test(itemId)) {
+      res.status(200).json({ ok: false, reason: 'invalid_item' })
+      return
+    }
+
+    // 주의(반드시 지킬 것): req.body.price / req.body.starsSpent /
+    // req.body.balance / req.body.studentId는 이 분기 어디서도 읽지 않는다.
+    // 가격·잔액차감·구매자는 전부 서버(DB 함수 + 세션 토큰)만 결정한다 —
+    // 클라이언트가 이 필드들을 실어 보내도 아래 코드는 참조 자체를 하지
+    // 않으므로 어떤 값을 보내든 결과에 영향을 줄 수 없다.
+    const supabase = createClient(url, key)
+    const { data, error } = await supabase.rpc('purchase_town_item', { p_student_id: studentId, p_item_id: itemId })
+    if (error) {
+      if (TOWN_SHOP_TABLE_MISSING_CODES.has(error.code)) {
+        res.status(200).json({ ok: false, reason: 'table_missing' })
+        return
+      }
+      res.status(200).json({ ok: false, reason: 'rpc_failed' })
+      return
+    }
+    const row = data && data[0]
+    if (!row) {
+      res.status(200).json({ ok: false, reason: 'rpc_failed' })
+      return
+    }
+    res.status(200).json({
+      ok: !!row.ok,
+      reason: row.reason,
+      starsSpent: Number(row.stars_spent) || 0,
+      balanceAfter: Number(row.balance_after) || 0,
+      duplicate: row.reason === 'already_owned',
+    })
+    return
+  }
+
+  // ── 레거시 별 이관(reconcile_legacy_baseline) — 컷오버 레이스 방지
+  // (2026-09-07) ─────────────────────────────────────────────────────
+  // 별 지급이 클라이언트 로컬(legacy) 누계 + 서버 원장(reward_ledger)
+  // 두 곳에 각각 쌓여 온 과도기(마을 상점 도입 전)의 "이관 시점"을
+  // 학생별로 정확히 확정하는 경로. 기존 v3_37의 전역 스냅샷(모든 학생을
+  // 같은 시각 T에 한 번에 이관)은 클라이언트가 total_stars를 서버에
+  // 업로드하는 시점(디바운스, ~2초 지연)과 실제 별 지급 이벤트가
+  // reward_ledger에 꽂히는 시점(POST 도착 또는 재시도 큐로 나중에 도착)이
+  // 서로 어긋나, 그 사이에 발생한 이벤트가 이중 계산되거나 누락되는 레이스가
+  // 있었다 — 그래서 "언제 이관할지"를 전역 T가 아니라 "그 학생이 실제로
+  // 요청한 순간"으로 바꾸고, 판정/차액 계산 전부를 DB 함수(원자적 잠금)
+  // 안에서 한다. 이 분기는 "누가 요청했는가"(토큰)와 "클라이언트가 지금
+  // 스냅샷값이 얼마라고 보는가"(snapshotTotal)만 전달하고, 그 값이 말이
+  // 되는지/실제로 얼마를 이관할지는 전부 RPC(다른 세션이 작성한
+  // reconcile_legacy_baseline SQL 함수)가 결정한다 — 위 마을상점 두
+  // action과 동일한 신뢰 경계(TOCTOU 여지를 만들지 않기 위해 여기서 값을
+  // 미리 계산하거나 RPC 결과를 재해석하지 않는다).
+  if (req.body && req.body.action === 'reconcile_legacy_baseline') {
+    const auth = townShopAuthenticate(req)
+    if (!auth.ok) { res.status(200).json(auth.response); return }
+    const studentId = auth.studentId
+
+    // 주의(반드시 지킬 것): req.body.studentId/earned/baseline은 이 분기
+    // 어디서도 읽지 않는다 — 학생 식별은 오직 세션 토큰에서, 스냅샷
+    // 검증·차액 계산·기존 이관 여부 판정은 오직 서버(RPC)만 한다. 클라이언트가
+    // 이 필드들을 실어 보내도 아래 코드는 참조 자체를 하지 않는다.
+    const snapshot = req.body.snapshotTotal
+    if (!Number.isFinite(snapshot) || !Number.isInteger(snapshot) || snapshot < 0 || snapshot > 100000) {
+      res.status(200).json({ ok: false, reason: 'invalid_snapshot' })
+      return
+    }
+
+    const supabase = createClient(url, key)
+    const { data, error } = await supabase.rpc('reconcile_legacy_baseline', { p_student_id: studentId, p_snapshot_total: snapshot })
+    if (error) {
+      if (TOWN_SHOP_TABLE_MISSING_CODES.has(error.code)) {
+        res.status(200).json({ ok: false, reason: 'table_missing' })
+        return
+      }
+      res.status(200).json({ ok: false, reason: 'rpc_failed' })
+      return
+    }
+    const row = data && data[0]
+    if (!row) {
+      res.status(200).json({ ok: false, reason: 'rpc_failed' })
+      return
+    }
+    res.status(200).json({
+      ok: !!row.ok,
+      reason: row.reason,
+      baselineStars: Number(row.baseline_stars) || 0,
+      earnedAfter: Number(row.earned_after) || 0,
+    })
     return
   }
 
@@ -122,14 +281,14 @@ export default async function handler(req, res) {
       return
     }
 
-    // streak-bonus만 금액이 sourceId에 실린 streak 일수에 따라 달라진다
-    // (`${date}:${streakDays}` 형식, isValidRewardSource가 이미 형식을
-    // 확인했으므로 여기서는 안전하게 파싱만 한다). 그 외 rewardType은
-    // streakDays를 쓰지 않는다(resolveRewardStars가 무시).
-    const streakDays = rewardType === 'streak-bonus'
-      ? Number(String(sourceId).slice(String(sourceId).indexOf(':') + 1))
-      : undefined
-    const stars = resolveRewardStars(rewardType, streakDays) // 서버 전용 결정 — req.body의 금액 필드는 어디서도 읽지 않음
+    // 일부 rewardType(streak-bonus/spelling-combo)만 금액이 sourceId에 실린
+    // 값(streak 일수/콤보 단계)에 따라 달라진다 — isValidRewardSource가 이미
+    // 형식을 확인했으므로 rewardVariantFromSource는 안전하게 재분리만 한다
+    // (2026-09-06, 레거시 6종 흡수로 손파싱을 rewardEngine.js로 일원화).
+    // 그 외 rewardType은 variant가 undefined여도 resolveRewardStars가
+    // 무시한다.
+    const variant = rewardVariantFromSource(rewardType, sourceId)
+    const stars = resolveRewardStars(rewardType, variant) // 서버 전용 결정 — req.body의 금액 필드는 어디서도 읽지 않음
     if (stars <= 0) {
       res.status(200).json({ ok: false, reason: 'zero_reward' })
       return

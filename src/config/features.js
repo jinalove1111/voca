@@ -70,6 +70,7 @@ const DEFAULT_FEATURES = {
   paulTownGarden: true,
   productAnalytics: true,      // 익명 관찰 레이어 — 이벤트 수집(개인정보 0, SQL 미실행 시 무해 no-op)        // Paul Town 정원(기존 정원 엔진 재사용)
   paulTownBuildings: true,     // 도서관/박물관/시계탑 건물(마을=내비게이션) — 2026-07-22 월드 완성으로 ON. 주의: 관리자가 플래그를 저장한 적 있는 기기는 localStorage 스냅샷(false)이 이겨서 그 기기에선 여전히 꺼져 있을 수 있음(기기 로컬 플래그의 기존 한계)
+  townShopV1: false, // Paul Town 별 상점 V1(책상 램프 1개) — 서버 권위 잔액/소유(star_purchases). OFF면 UI/네트워크 호출 0
 
   // Reading Foundation (2026-07-23, v3.3) — 유닛별 읽기 지문(passage).
   readingFoundation: true,     // 관리자 지문 편집기(AdminScreen 반 관리 → 유닛 펼침) — 관리자 전용 화면이라 기본 ON이 안전(학생 화면에 아무 영향 없음)
@@ -254,7 +255,10 @@ export const getFeaturesByCategory = (category) => {
     // FeatureManagementPanel에 토글이 보이려면 카테고리 목록에 있어야 한다
     // (writingReviewAiAssist가 빠져서 토글이 안 보였던 2026-07-23 사고의
     // 교훈 그대로).
-    attachment: ['attachmentHats', 'attachmentMuseum', 'attachmentAlbum', 'attachmentPaulMemory', 'attachmentWorldGarden', 'attachmentWorldFull', 'attachmentBookshelf', 'attachmentStory', 'paulMemoryV2', 'todaysDiscovery', 'starToSeed', 'hatCeremony', 'paulTownHomeBand', 'paulTownGarden', 'paulTownBuildings', 'productAnalytics', 'readingFoundation', 'readingStudentUI', 'curriculumExamplesStudentUI', 'writingCoachEnabled'],
+    // townShopV1(Paul Town 별 상점 V1, 2026-09-06)도 같은 이유로 여기 얹는다
+    // — 새 카테고리 분리는 FeatureManagementPanel 소유 세션의 후속(이 세션은
+    // 그 파일을 건드리지 않는다, 규칙 16).
+    attachment: ['attachmentHats', 'attachmentMuseum', 'attachmentAlbum', 'attachmentPaulMemory', 'attachmentWorldGarden', 'attachmentWorldFull', 'attachmentBookshelf', 'attachmentStory', 'paulMemoryV2', 'todaysDiscovery', 'starToSeed', 'hatCeremony', 'paulTownHomeBand', 'paulTownGarden', 'paulTownBuildings', 'productAnalytics', 'readingFoundation', 'readingStudentUI', 'curriculumExamplesStudentUI', 'writingCoachEnabled', 'townShopV1'],
   }
   return categories[category] || []
 }

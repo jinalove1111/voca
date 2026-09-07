@@ -11,6 +11,9 @@ import {
   REWARD_STARS, STREAK_BONUS, LEVELS,
   rewardIdempotencyKey, streakBonusStars, levelForStars, starsToNextLevel,
   buildRewardEntry, hasRewardEntry, appendRewardEntry, earnedStars,
+  LEGACY_REWARD_TYPES, LEGACY_SPELLING_COMBO_BONUS, REWARD_SOURCE_RULES,
+  isValidRewardType, isValidRewardSource, resolveRewardStars,
+  rewardVariantFromSource, parseLegacyDedupKey, REWARD_DAILY_CAP, rewardDailyCap,
 } from '../src/utils/rewardEngine.js'
 
 let failures = 0
@@ -158,6 +161,257 @@ console.log('\n9. SQL 정적 단언 — 운영자 테스트 14 (v3_36/v3_37 파�
   check('v3_36이 create table if not exists로 멱등', /create table if not exists\s+reward_ledger/i.test(v36))
   check('v3_36에 reward_totals 뷰 존재', /create (or replace )?view reward_totals/i.test(v36))
   check('v3_36에 idempotency_key unique 제약 존재', /idempotency_key\s+text\s+not\s+null\s+unique/i.test(v36))
+}
+
+console.log('\n10. 레거시 6종 흡수(2026-09-06) — 기존 7개 REWARD_STARS 값 무변경')
+{
+  check("word-session-complete = 1(무변경)", REWARD_STARS['word-session-complete'] === 1)
+  check("writing-complete = 2(무변경)", REWARD_STARS['writing-complete'] === 2)
+  check("exam-complete = 2(무변경)", REWARD_STARS['exam-complete'] === 2)
+  check("wrong-word-recovered = 1(무변경)", REWARD_STARS['wrong-word-recovered'] === 1)
+  check("daily-goal-complete = 3(무변경)", REWARD_STARS['daily-goal-complete'] === 3)
+  check("streak-bonus = 0(무변경)", REWARD_STARS['streak-bonus'] === 0)
+  check("legacy-baseline = 0(무변경)", REWARD_STARS['legacy-baseline'] === 0)
+
+  check('LEGACY_REWARD_TYPES 정확히 6종', LEGACY_REWARD_TYPES.length === 6)
+  check('LEGACY_REWARD_TYPES 전부 isValidRewardType true', LEGACY_REWARD_TYPES.every((t) => isValidRewardType(t) === true))
+  check('LEGACY_REWARD_TYPES 전부 REWARD_SOURCE_RULES에 존재', LEGACY_REWARD_TYPES.every((t) => Object.prototype.hasOwnProperty.call(REWARD_SOURCE_RULES, t)))
+
+  check('pronunciation = 1', REWARD_STARS['pronunciation'] === 1)
+  check('mission-clear = 3', REWARD_STARS['mission-clear'] === 3)
+  check('daily-mission-bonus = 10', REWARD_STARS['daily-mission-bonus'] === 10)
+  check('spelling-combo = 0(금액은 combo별 LEGACY_SPELLING_COMBO_BONUS)', REWARD_STARS['spelling-combo'] === 0)
+  check('sticker-duplicate = 20', REWARD_STARS['sticker-duplicate'] === 20)
+  check('matchgame = 4', REWARD_STARS['matchgame'] === 4)
+
+  check('LEGACY_SPELLING_COMBO_BONUS == useStudent.js SPELLING_COMBO_BONUS 리터럴과 동일 도메인', JSON.stringify(LEGACY_SPELLING_COMBO_BONUS) === JSON.stringify({ 3: 1, 5: 2, 10: 3 }))
+
+  // useStudent.js 소스 정적 검사 — 리터럴이 실제로 그 파일에 있는지 확인
+  // (값이 나중에 useStudent.js에서만 바뀌고 여기서 안 바뀌는 드리프트 방지).
+  const useStudentSrc = fs.readFileSync('src/hooks/useStudent.js', 'utf8')
+  check("useStudent.js에 'SPELLING_COMBO_BONUS = { 3: 1, 5: 2, 10: 3 }' 리터럴 존재(드리프트 가드)",
+    /SPELLING_COMBO_BONUS\s*=\s*\{\s*3\s*:\s*1\s*,\s*5\s*:\s*2\s*,\s*10\s*:\s*3\s*\}/.test(useStudentSrc))
+}
+
+console.log('\n11. 레거시 6종 — source pattern accept/reject 매트릭스')
+{
+  const FIXED_DATE = 'Sat Aug 15 2026'
+  const WID = 'word-abc_123'
+  const UUID = '3fa85f64-5717-4562-b3fc-2c963f66afa6'
+
+  // pronunciation: token:date
+  check('pronunciation 정상', isValidRewardSource('pronunciation', 'pronunciation', `${WID}:${FIXED_DATE}`) === true)
+  check('pronunciation — sourceType 불일치', isValidRewardSource('pronunciation', 'mission', `${WID}:${FIXED_DATE}`) === false)
+  check("pronunciation — ':' 주입(wordId 안에 콜론)", isValidRewardSource('pronunciation', 'pronunciation', `w:id:${FIXED_DATE}`) === false)
+  check('pronunciation — 날짜 형식 위조', isValidRewardSource('pronunciation', 'pronunciation', `${WID}:2026-08-15`) === false)
+  check('pronunciation — 구분자 없음', isValidRewardSource('pronunciation', 'pronunciation', WID) === false)
+
+  // mission-clear: token (날짜 없음)
+  check('mission-clear 정상', isValidRewardSource('mission-clear', 'mission', WID) === true)
+  check("mission-clear — ':' 주입", isValidRewardSource('mission-clear', 'mission', `${WID}:${FIXED_DATE}`) === false)
+  check('mission-clear — sourceType 불일치', isValidRewardSource('mission-clear', 'pronunciation', WID) === false)
+  check('mission-clear — 빈 문자열', isValidRewardSource('mission-clear', 'mission', '') === false)
+
+  // daily-mission-bonus: date:tokens
+  const tokens = `${UUID},${UUID}`
+  check('daily-mission-bonus 정상(콤마 join uuid 2개)', isValidRewardSource('daily-mission-bonus', 'daily-round', `${FIXED_DATE}:${tokens}`) === true)
+  check('daily-mission-bonus — sourceType 불일치', isValidRewardSource('daily-mission-bonus', 'mission', `${FIXED_DATE}:${tokens}`) === false)
+  check('daily-mission-bonus — 날짜 형식 위조', isValidRewardSource('daily-mission-bonus', 'daily-round', `2026-08-15:${tokens}`) === false)
+  check('daily-mission-bonus — tokens에 콜론 주입', isValidRewardSource('daily-mission-bonus', 'daily-round', `${FIXED_DATE}:${UUID}:${UUID}`) === false)
+  check('daily-mission-bonus — tokens 601자 초과 거부', isValidRewardSource('daily-mission-bonus', 'daily-round', `${FIXED_DATE}:${'a'.repeat(601)}`) === false)
+
+  // spelling-combo: token:combo:date
+  check('spelling-combo 정상(combo=3)', isValidRewardSource('spelling-combo', 'spelling-combo', `${WID}:3:${FIXED_DATE}`) === true)
+  check('spelling-combo 정상(combo=5)', isValidRewardSource('spelling-combo', 'spelling-combo', `${WID}:5:${FIXED_DATE}`) === true)
+  check('spelling-combo 정상(combo=10)', isValidRewardSource('spelling-combo', 'spelling-combo', `${WID}:10:${FIXED_DATE}`) === true)
+  check('spelling-combo — combo=4(마일스톤 아님) 거부', isValidRewardSource('spelling-combo', 'spelling-combo', `${WID}:4:${FIXED_DATE}`) === false)
+  check('spelling-combo — 날짜 형식 위조', isValidRewardSource('spelling-combo', 'spelling-combo', `${WID}:3:2026-08-15`) === false)
+  check("spelling-combo — wordId에 ':' 주입", isValidRewardSource('spelling-combo', 'spelling-combo', `w:id:3:${FIXED_DATE}`) === false)
+
+  // sticker-duplicate: token:gift (round / milestone / badge)
+  check('sticker-duplicate 정상(round)', isValidRewardSource('sticker-duplicate', 'gift', `sticker1:round:${FIXED_DATE}:${tokens}`) === true)
+  check('sticker-duplicate 정상(milestone)', isValidRewardSource('sticker-duplicate', 'gift', `sticker1:milestone:7`) === true)
+  check('sticker-duplicate 정상(badge)', isValidRewardSource('sticker-duplicate', 'gift', `sticker1:badge:123456`) === true)
+  check('sticker-duplicate — 알 수 없는 gift 프리픽스 거부', isValidRewardSource('sticker-duplicate', 'gift', `sticker1:unknown:1`) === false)
+  check('sticker-duplicate — milestone 자릿수 초과(5자리) 거부', isValidRewardSource('sticker-duplicate', 'gift', `sticker1:milestone:12345`) === false)
+  check("sticker-duplicate — stickerId에 ':' 주입", isValidRewardSource('sticker-duplicate', 'gift', `sticker:1:milestone:7`) === false)
+
+  // matchgame: session:round:word
+  const SID = '1735689600000_a1b2c3'
+  check('matchgame 정상(uuid word token)', isValidRewardSource('matchgame', 'matchgame', `${SID}:3:${UUID}`) === true)
+  check('matchgame 정상(단어 텍스트 폴백, 아포스트로피 포함)', isValidRewardSource('matchgame', 'matchgame', `${SID}:0:don't stop`) === true)
+  check('matchgame — round 100(> 99) 거부', isValidRewardSource('matchgame', 'matchgame', `${SID}:100:${UUID}`) === false)
+  check('matchgame — wordToken에 콜론 주입 거부(파트 4개)', isValidRewardSource('matchgame', 'matchgame', `${SID}:3:bad:token`) === false)
+  check('matchgame — sessionId 형식 위조 거부', isValidRewardSource('matchgame', 'matchgame', `not-a-session:3:${UUID}`) === false)
+}
+
+console.log('\n12. resolveRewardStars — 레거시 콤보/고정금액')
+{
+  check('resolveRewardStars(spelling-combo, 3) = 1', resolveRewardStars('spelling-combo', 3) === 1)
+  check('resolveRewardStars(spelling-combo, 5) = 2', resolveRewardStars('spelling-combo', 5) === 2)
+  check('resolveRewardStars(spelling-combo, 10) = 3', resolveRewardStars('spelling-combo', 10) === 3)
+  check('resolveRewardStars(spelling-combo, 4) = 0(마일스톤 아님)', resolveRewardStars('spelling-combo', 4) === 0)
+  check('resolveRewardStars(matchgame) = 4', resolveRewardStars('matchgame') === 4)
+  check('resolveRewardStars(pronunciation) = 1', resolveRewardStars('pronunciation') === 1)
+  check('resolveRewardStars(mission-clear) = 3', resolveRewardStars('mission-clear') === 3)
+  check('resolveRewardStars(daily-mission-bonus) = 10', resolveRewardStars('daily-mission-bonus') === 10)
+  check('resolveRewardStars(sticker-duplicate) = 20', resolveRewardStars('sticker-duplicate') === 20)
+}
+
+console.log('\n13. rewardVariantFromSource — sourceId에서 가변 금액 변수 추출')
+{
+  check("streak-bonus: 'date:5' -> 5", rewardVariantFromSource('streak-bonus', 'Sat Aug 15 2026:5') === 5)
+  check("spelling-combo: 'wordId:10:date' -> 10", rewardVariantFromSource('spelling-combo', 'word-1:10:Sat Aug 15 2026') === 10)
+  check('그 외 타입은 undefined', rewardVariantFromSource('pronunciation', 'w:date') === undefined
+    && rewardVariantFromSource('mission-clear', 'w') === undefined
+    && rewardVariantFromSource('matchgame', 's:1:w') === undefined)
+}
+
+console.log('\n14. parseLegacyDedupKey — 6종 실제 형식 + null 케이스')
+{
+  const D = 'Sat Aug 15 2026'
+  const WID = 'word-uuid-1'
+  const UUID = '3fa85f64-5717-4562-b3fc-2c963f66afa6'
+  const SID = '1735689600000_a1b2c3'
+
+  {
+    const r = parseLegacyDedupKey(`pronunciation:${WID}:${D}`)
+    check('pronunciation 파싱', r && r.rewardType === 'pronunciation' && r.sourceType === 'pronunciation' && r.sourceId === `${WID}:${D}`)
+  }
+  {
+    const r = parseLegacyDedupKey(`mission-clear:${WID}`)
+    check('mission-clear 파싱', r && r.rewardType === 'mission-clear' && r.sourceType === 'mission' && r.sourceId === WID)
+  }
+  {
+    const tokens = `${UUID},${UUID}`
+    const r = parseLegacyDedupKey(`daily-mission-bonus:${D}:${tokens}`)
+    check('daily-mission-bonus 파싱', r && r.rewardType === 'daily-mission-bonus' && r.sourceType === 'daily-round' && r.sourceId === `${D}:${tokens}`)
+  }
+  {
+    const r = parseLegacyDedupKey(`spelling-combo:${WID}:5:${D}`)
+    check('spelling-combo 파싱', r && r.rewardType === 'spelling-combo' && r.sourceType === 'spelling-combo' && r.sourceId === `${WID}:5:${D}`)
+  }
+  {
+    const r = parseLegacyDedupKey(`sticker-duplicate:sticker1:milestone:7`)
+    check('sticker-duplicate 파싱(milestone)', r && r.rewardType === 'sticker-duplicate' && r.sourceType === 'gift' && r.sourceId === `sticker1:milestone:7`)
+  }
+  {
+    const r = parseLegacyDedupKey(`sticker-duplicate:sticker1:round:${D}:${UUID}`)
+    check('sticker-duplicate 파싱(round)', r && r.sourceId === `sticker1:round:${D}:${UUID}`)
+  }
+  {
+    const r = parseLegacyDedupKey(`matchgame:${SID}:2:${UUID}`)
+    check('matchgame 파싱', r && r.rewardType === 'matchgame' && r.sourceType === 'matchgame' && r.sourceId === `${SID}:2:${UUID}`)
+  }
+
+  check("'pronunciation-unidentified:...' -> null(서버화 불가)", parseLegacyDedupKey(`pronunciation-unidentified:${Date.now()}:abc123`) === null)
+  check("V1 uuid-prefixed 키 -> null", parseLegacyDedupKey(`${UUID}:word-session-complete:2026-08-15`) === null)
+  check("알 수 없는 프리픽스 -> null", parseLegacyDedupKey(`totally-made-up:${WID}`) === null)
+  check("구분자 없는 문자열 -> null", parseLegacyDedupKey('nodots') === null)
+  check("빈 문자열/비문자열 -> null", parseLegacyDedupKey('') === null && parseLegacyDedupKey(null) === null && parseLegacyDedupKey(undefined) === null)
+  check("형식이 깨진 spelling-combo(combo=4) -> 결과가 isValidRewardSource 재검증에서 걸러져 null", parseLegacyDedupKey(`spelling-combo:${WID}:4:${D}`) === null)
+  check("형식이 깨진 matchgame(round>99) -> null", parseLegacyDedupKey(`matchgame:${SID}:100:${UUID}`) === null)
+}
+
+console.log('\n15. REWARD_DAILY_CAP — 레거시 6종 상한 존재 + 구조적 최소값')
+{
+  check('matchgame 상한 == 5(GAME_REWARD_DAILY_LIMIT=1 x ROUNDS=5 구조적 상한)', REWARD_DAILY_CAP['matchgame'] === 5)
+  check('daily-mission-bonus 상한 >= 7(하루 4/4 라운드 반복 실측 최대 7회 이상 커버)', REWARD_DAILY_CAP['daily-mission-bonus'] >= 7)
+  check('pronunciation/mission-clear/spelling-combo/sticker-duplicate 상한 전부 양수', ['pronunciation', 'mission-clear', 'spelling-combo', 'sticker-duplicate'].every((t) => REWARD_DAILY_CAP[t] > 0))
+  check('rewardDailyCap()으로도 동일 값 조회 가능(레거시 6종)', LEGACY_REWARD_TYPES.every((t) => rewardDailyCap(t) === REWARD_DAILY_CAP[t]))
+}
+
+console.log('\n16. 결정론 재확인 — 레거시 확장 후에도 여전히 순수 모듈')
+{
+  const src = fs.readFileSync('src/utils/rewardEngine.js', 'utf8')
+  const codeOnly = src.split('\n').filter((line) => !line.trim().startsWith('//')).join('\n')
+  check('Date.now( 미사용(레거시 확장 후에도)', !codeOnly.includes('Date.now('))
+  check('Math.random( 미사용(레거시 확장 후에도)', !codeOnly.includes('Math.random('))
+  check('new Date( 미사용(레거시 확장 후에도)', !codeOnly.includes('new Date('))
+  check('import 0개(레거시 확장 후에도 완전 순수 모듈)', !/^\s*import\s/m.test(src))
+}
+
+console.log('\n17. WORD_SLUG_TOKEN_RE(2026-09-06 커버리지 수정) — wordSlug(word) 실제 형식 허용')
+{
+  const D = 'Sat Aug 15 2026'
+  // production 실측 27/1,975(1.4%) 실패 슬러그 중 대표 샘플 4개 — 아포스트로피/
+  // 괄호/물결/한글. 이 값들은 이제 mission-clear/spelling-combo/
+  // wrong-word-recovered 세 위치 전부에서 통과해야 한다.
+  const SLUGS = ["do_one's_best", 'practice_(noun)', 'just_as_~_as', '어휘']
+
+  console.log('  17a. mission-clear — 실제 wordSlug 형식 수용')
+  for (const slug of SLUGS) {
+    check(`mission-clear 수용: ${slug}`, isValidRewardSource('mission-clear', 'mission', slug) === true)
+  }
+  console.log('  17b. spelling-combo — 실제 wordSlug 형식 수용(word 파트)')
+  for (const slug of SLUGS) {
+    check(`spelling-combo 수용: ${slug}`, isValidRewardSource('spelling-combo', 'spelling-combo', `${slug}:5:${D}`) === true)
+  }
+  console.log('  17c. wrong-word-recovered(V1) — 실제 wordSlug 형식 수용(token 파트)')
+  for (const slug of SLUGS) {
+    check(`wrong-word-recovered 수용: ${slug}`, isValidRewardSource('wrong-word-recovered', 'spelling-review', `${D}:${slug}`) === true)
+  }
+
+  console.log('  17d. 세 위치 전부 — 여전히 거부해야 하는 값(공백/콜론/빈 문자열/65자 초과)')
+  const rejects = [
+    ['공백 포함(단어 슬러그는 공백을 _로 치환하므로 원래 공백이 남으면 안 됨)', "do one's best"],
+    ["콜론 주입(구분자 충돌)", 'word:evil'],
+    ['빈 문자열', ''],
+    ['65자(64자 초과)', 'a'.repeat(65)],
+  ]
+  for (const [label, bad] of rejects) {
+    check(`mission-clear 거부: ${label}`, isValidRewardSource('mission-clear', 'mission', bad) === false)
+    if (bad.length > 0) {
+      // spelling-combo/wrong-word-recovered는 sourceId 전체가 빈 문자열이면
+      // 안 되므로(위 isValidRewardSource의 length===0 가드) 빈 문자열 케이스는
+      // 이 두 패턴에서 별도로 "구분자 자체가 없어 실패"로 이미 걸러진다 —
+      // 여기서는 비어있지 않은 나머지 3개 케이스만 재사용.
+      check(`spelling-combo 거부: ${label}`, isValidRewardSource('spelling-combo', 'spelling-combo', `${bad}:5:${D}`) === false)
+      check(`wrong-word-recovered 거부: ${label}`, isValidRewardSource('wrong-word-recovered', 'spelling-review', `${D}:${bad}`) === false)
+    }
+  }
+  check('mission-clear — 64자(경계값)는 통과', isValidRewardSource('mission-clear', 'mission', 'a'.repeat(64)) === true)
+
+  console.log('  17e. WORD_SLUG_TOKEN_RE는 pronunciation(uuid 자리)/sticker id에는 적용되지 않음(WORD_TOKEN_RE 유지 확인)')
+  // pronunciation의 wordId 자리는 여전히 WORD_TOKEN_RE(영숫자/_/- 전용) —
+  // 슬러그 특수문자가 여기서는 여전히 거부되어야 한다(넓힌 범위 밖).
+  check("pronunciation — 아포스트로피 포함 토큰은 여전히 거부(word.dbId는 uuid)", isValidRewardSource('pronunciation', 'pronunciation', `do_one's_best:${D}`) === false)
+  check("sticker-duplicate — stickerId 자리에 아포스트로피는 여전히 거부", isValidRewardSource('sticker-duplicate', 'gift', `do_one's_best:milestone:1`) === false)
+
+  console.log('  17f. TOKENS_LIST_RE(2026-09-06 리뷰 지적 수정) — daily-mission-bonus/sticker-duplicate(round:) 콤마 목록도 실제 wordSlug 형식')
+  // 리뷰 발견: daily-mission-bonus의 tokens(round.wordsViewed 정렬 join)와
+  // sticker-duplicate의 'round:' GIFT 변형 내부 tokens도 uuid가 아니라
+  // wordSlug(word) 콤마 목록이다 — 같은 27/1,975 슬러그가 여기서도 걸린다.
+  // 실측 재현: 이 수정 전에는 아래가 null이었다(parseLegacyDedupKey).
+  {
+    const tokensWithSlug = `apple,banana,cherry,date_fruit,do_one's_best`
+    const r = parseLegacyDedupKey(`daily-mission-bonus:${D}:${tokensWithSlug}`)
+    check("리뷰 재현 — do_one's_best 포함 tokens가 이제 null이 아님(daily-mission-bonus)", r !== null && r.sourceId === `${D}:${tokensWithSlug}`)
+  }
+  for (const slug of SLUGS) {
+    const tokens = `apple,${slug},cherry`
+    check(`daily-mission-bonus 수용(tokens에 ${slug} 포함)`, isValidRewardSource('daily-mission-bonus', 'daily-round', `${D}:${tokens}`) === true)
+    check(`sticker-duplicate(round:) 수용(tokens에 ${slug} 포함)`, isValidRewardSource('sticker-duplicate', 'gift', `sticker1:round:${D}:${tokens}`) === true)
+  }
+  {
+    const tokensRejects = [
+      ['공백 포함', 'apple, banana'],
+      ["':' 주입(구분자 충돌, 예: a,b:c)", 'a,b:c'],
+      ['빈 tokens 부분', ''],
+      ['601자(600자 초과)', 'a'.repeat(601)],
+    ]
+    for (const [label, badTokens] of tokensRejects) {
+      const dmb = badTokens.length === 0
+        ? isValidRewardSource('daily-mission-bonus', 'daily-round', `${D}:`) // 콜론 뒤가 비면 sourceId 자체는 비어있지 않지만 tokens 부분이 빈 문자열
+        : isValidRewardSource('daily-mission-bonus', 'daily-round', `${D}:${badTokens}`)
+      check(`daily-mission-bonus 거부: ${label}`, dmb === false)
+      const sd = badTokens.length === 0
+        ? isValidRewardSource('sticker-duplicate', 'gift', `sticker1:round:${D}:`)
+        : isValidRewardSource('sticker-duplicate', 'gift', `sticker1:round:${D}:${badTokens}`)
+      check(`sticker-duplicate(round:) 거부: ${label}`, sd === false)
+    }
+  }
+  check('daily-mission-bonus — tokens 600자(경계값)는 통과', isValidRewardSource('daily-mission-bonus', 'daily-round', `${D}:${'a'.repeat(600)}`) === true)
 }
 
 console.log(failures === 0

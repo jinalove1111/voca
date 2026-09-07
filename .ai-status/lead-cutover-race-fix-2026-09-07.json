@@ -1,0 +1,49 @@
+{
+  "agent_name": "lead-cutover-race-fix",
+  "role": "Production blocker #1 CUTOVER RACE fence — 전역 T baseline을 학생별 정지점 reconcile RPC로 재설계·구현·격리 검증(commit 0, SQL 실행 0, Production WRITE 0, 플래그 OFF)",
+  "task_id": "cutover-race-fix-2026-09-07",
+  "task": "v3_48 재작성(reconcile_legacy_baseline RPC) + grant-xp action + 클라이언트 hold/drain/자연 sync 관찰 프로토콜 + 테스트 4종 + dry-run 프록시 보정 + 독립 리뷰 + 문서 115차",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-07T00:30:00Z",
+  "updated_at": "2026-09-07T04:00:00Z",
+  "files_owned": [
+    "supabase_v3_48_reward_legacy_baseline_v2.sql",
+    "supabase_v3_48_reward_legacy_baseline_v2_ROLLBACK.sql",
+    "scripts/lib/baselineV2Guards.mjs",
+    "scripts/dryRunBaselineV2.mjs",
+    "scripts/testBaselineV2Sql.mjs",
+    "api/grant-xp.js",
+    "scripts/testCutoverReconcile.mjs",
+    "src/hooks/useStudent.js",
+    "src/utils/wordLibrary.js",
+    "scripts/testCutoverClient.mjs",
+    "scripts/testRewardPostQueue.mjs",
+    "scripts/wordLibraryStub.mjs",
+    "scripts/wordLibraryRaceStub.mjs",
+    "scripts/wordLibraryMultiTabStub.mjs",
+    "tests/harness/registry.mjs",
+    "package.json",
+    "handoff.md (115차)",
+    "DATABASE.md",
+    "TESTING.md",
+    "PROJECT_BOARD.md",
+    "docs/operations/STAR_SHOP_PREPRODUCTION_PACKAGE.md"
+  ],
+  "files_read": [
+    "supabase_v3_36_reward_ledger.sql",
+    "supabase_v3_37_reward_legacy_baseline.sql",
+    "src/hooks/useStudent.js",
+    "src/utils/wordLibrary.js",
+    "api/_pinAuth.js"
+  ],
+  "summary": "레이스 증명: 클라이언트 total_stars 업로드(2초 디바운스)와 서버 원장 삽입(도착 시각·재시도 큐) 두 시각이 비동기라 전역 T 스냅샷은 upload<T<insert 이중 계산, insert<T<upload 누락. 서버가 신뢰할 이벤트 시각이 없어(sourceId 날짜=클라이언트 시계) 시간 fence 불가 → 학생별 정지점 reconcile: hold(탭+cross-tab 30s) → 이 학생 큐 드레인(ack 대기, ≤3회) → 자연 로그인 sync 성공 관찰(≤15s, 추가 sync 호출 0) → pending 0 → snapshot → RPC(학생 단위 advisory lock, earned=reward_totals, SNAPSHOT_SLACK 200, delta≤0 0행 마커, history 기반 타당성 TOLERANCE 100·MAX_INDIVIDUAL 1500 초과는 review, unique 1회). 시각 비교 0 → 클라이언트 시계 무관. 테스트: testCutoverReconcile 63(구 설계 이중 계산 320≠310 대조군 재현), testCutoverClient 52(+특성화), testBaselineV2Sql 83, testRewardPostQueue 95; 회귀 테스트 3종(multiTab/starDelta/restoreSyncRace) 무수정 PASS; RELEASE GATE PASS. dry-run 보정 프록시: reconciled 24/nothing 163/review 0/총 1,835. 독립 리뷰 Critical 0/High 0/Medium 1(다기기 미전송 POST 잔여 — 문서 정정)/Low 1.",
+  "blocker": "운영자 승인: TOLERANCE 100·MAX_INDIVIDUAL 1500·SNAPSHOT_SLACK 200, 레거시 일일 상한. 수용된 잔여: 다른 기기의 미전송 POST(토큰 없는 구 세션)가 클라우드 병합으로 스냅샷에 포함되면 1회성 이중 계산 가능(이벤트 시각 미신뢰라 구조적 제거 불가).",
+  "next_action": "운영자 리뷰 → commit 승인 시 소커밋(SQL / 서버+엔진 / 클라이언트 / 테스트+레지스트리 / 문서). 체크포인트 시점 기록이며 운영자 지시 우선.",
+  "operator_values_status": "PROPOSED_OPERATOR_VALUES",
+  "proposed_operator_values": {
+    "TOLERANCE": 100,
+    "MAX_INDIVIDUAL": 1500,
+    "SNAPSHOT_SLACK": 200
+  }
+}

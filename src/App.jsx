@@ -19,6 +19,7 @@ import GuidedSession from './components/GuidedSession'
 import SentenceLearningFlow from './components/SentenceLearningFlow'
 import { useStudent } from './hooks/useStudent'
 import { useAttachment } from './hooks/useAttachment'
+import useTownShop from './hooks/useTownShop'
 import { pickNextGame, gameRewardEligibility } from './utils/matchGame'
 import { trackEvent, EV } from './utils/productEvents'
 import { assignDirections } from './utils/entranceTest'
@@ -201,6 +202,11 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 애착 시스템(2026-07-22) — 파생 통계 + 모자/밀스톤 자동 판정(복원 확인
   // 후 학생당 1회). 판정 로직은 src/utils/attachment/ 순수 함수.
   const attachment = useAttachment(studentId, studentData)
+  // Paul Town 별 상점 V1(townShopV1, 2026-09-06) — 플래그 OFF(기본)면 enabled가
+  // false라 useTownShop 내부에서 fetch가 0회 실행된다(훅 자체의 게이트).
+  // studentId가 아직 없으면(로그인 전) 마찬가지로 no-op.
+  const townShopEnabled = isFeatureEnabled('townShopV1')
+  const townShop = useTownShop(studentId, townShopEnabled && !!studentId)
 
   // 선물상자를 닫은 직후, 오늘 틀린 스펠링 단어나 영구 복습 대기열
   // (Writing MVP, 2026-07-20 — 적어도 하루 전에 놓친 단어)이 남아있으면
@@ -723,7 +729,8 @@ function AppInner({ studentId, studentName, onLogout }) {
           completedUnits={attachment.unitsDone} completedTextbooks={attachment.textbooksDone}
           pendingCeremonyHat={attachment.pendingCeremonyHat} onDismissCeremony={attachment.dismissCeremony}
           textbookOptions={textbookOptions} currentTextbookId={currentTextbookOptionId}
-          onTextbookSwitch={handleTextbookSwitch} />
+          onTextbookSwitch={handleTextbookSwitch}
+          walletAvailable={townShopEnabled && townShop.state ? townShop.state.available : null} />
       )}
       {screen === 'guidedSession' && (
         // 3분 데일리 리추얼(2026-07-22) — 가이드 학습은 항상 classWords
@@ -880,7 +887,8 @@ function AppInner({ studentId, studentName, onLogout }) {
           {screen === 'paulTown' && (
             <PaulTown stats={attachment.stats} hatInventory={studentData.hatInventory}
               equippedHatId={studentData.equippedHatId} onEquip={studentData.equipHat}
-              onGo={setScreen} onBack={() => setScreen('dashboard')} />
+              onGo={setScreen} onBack={() => setScreen('dashboard')}
+              shop={townShopEnabled ? townShop : null} shopEnabled={townShopEnabled} />
           )}
           {/* Paul Town 월드 — 도서관/시계탑. 마을 건물 카드로만 진입하므로
               뒤로 가기는 마을(paulTown)로. 전부 파생 화면 — 저장 0. */}

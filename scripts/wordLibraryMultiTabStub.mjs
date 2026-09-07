@@ -16,6 +16,21 @@ export const postXpEvent = async () => {}
 // Reward System V1(2026-08-18) — no-op stub, 서버 쓰기 검증은
 // scripts/testRewardServerWrite.mjs가 별도로 담당(네트워크 0, 정적 검사).
 export const postRewardEvent = async () => {}
+// 컷오버 레거시 별 기준선 재조정(2026-09-06/07, src/hooks/useStudent.js
+// reconcile effect) — no-op 스텁. wordLibraryRaceStub.mjs/wordLibraryStub.mjs
+// 와 동일한 사유(이 파일을 쓰는 testMultiTabRace.mjs/testClearedStars.mjs는
+// 재조정 자체를 검증하지 않음, 실제 검증은 scripts/testCutoverClient.mjs
+// 담당) — useStudent.js가 이 심볼들을 import 가능하게 하는 목적만.
+// (구현 노트: 이 파일은 애초 작업 지시서의 "허용 파일" 목록엔 없었으나,
+// useStudent.js가 이 4개 심볼을 새로 import하면서 이 스텁을 쓰는 번들이
+// 깨지므로(빌더 'multitab', verify:persistence 대상) 안정성 우선 원칙에
+// 따라 같은 no-op 패턴으로 최소 확장했다 — 구현 보고서에 별도 명시.)
+export const holdRewardPosts = () => {}
+export const flushRewardPostQueue = async () => {}
+export const rewardQueuePendingFor = () => 0
+export const postReconcileLegacyBaseline = async () => ({ ok: false, reason: 'relogin_required' })
+// 드레인 프로토콜(2026-09-07 리뷰 수정) — no-op 스텁(위와 동일 사유).
+export const drainRewardPostQueueForStudent = async () => ({ sent: 0, remaining: 0 })
 
 export const syncCalls = []
 

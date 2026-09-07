@@ -29,7 +29,7 @@ import { getRandomSticker, getMilestoneSticker, STICKERS } from '../data/sticker
 // student. Local storage stays authoritative whenever it actually has data —
 // the cloud copy is a safety net, never a silent overwrite.
 export { getStudents, addStudent, removeStudent, findStudentByName } from '../utils/wordLibrary'
-import { syncStudentProgress, fetchFullProgress, fetchProgressBackupStrict, setWordStatus as syncWordStatus, postXpEvent, postRewardEvent } from '../utils/wordLibrary'
+import { syncStudentProgress, fetchFullProgress, fetchProgressBackupStrict, setWordStatus as syncWordStatus, postXpEvent, postRewardEvent, holdRewardPosts, rewardQueuePendingFor, postReconcileLegacyBaseline, drainRewardPostQueueForStudent } from '../utils/wordLibrary'
 // Paul Rank System(2026-07-19) — XP는 totalStars에서 파생시키지 않는다
 // (판단 근거: src/utils/paulRankShared.js 헤더).
 // v2.3.1(2026-07-19, 행동 단위 리팩터링) — 운영자가 실제 프로덕션에서
@@ -52,7 +52,7 @@ import { grantTicket, sumTicketBalance, mergeTicketLedgers, redeemReward } from 
 // 얹기만 한다(재구현 금지, CLAUDE.md 규칙 3). earnedStars는 쓰지 않는다 —
 // totalStars의 원본은 여전히 record.totalStars(레거시 별 포함) 그대로이고,
 // rewardLedger에서 재계산하지 않는다(운영자 결정, 레거시 별 보존).
-import { REWARD_STARS, rewardIdempotencyKey, streakBonusStars, levelForStars, starsToNextLevel, buildRewardEntry, hasRewardEntry, appendRewardEntry } from '../utils/rewardEngine'
+import { REWARD_STARS, rewardIdempotencyKey, streakBonusStars, levelForStars, starsToNextLevel, buildRewardEntry, hasRewardEntry, appendRewardEntry, parseLegacyDedupKey } from '../utils/rewardEngine'
 
 // ── Single unified progress store ───────────────────────────────────────
 // Every per-student value the app tracks (stars, stickers, today's mission
@@ -974,6 +974,11 @@ export function useStudent(studentId, legacyName) {
   // 위 1번과 같은 이유로 극히 드문 "같은 tick 연속 호출" 상황에서는 실제
   // 지급 여부와 어긋날 수 있다(지급 자체의 정확성은 2번이 담보하지,
   // 반환값이 지급 여부를 좌우하는 게이트가 아니다).
+  // 2026-09-06 — 레거시 postRewardEvent 후킹(아래)의 "같은 tick 중복 호출"
+  // 최적화용 in-tick 가드. 이 마운트 동안 이미 포스트를 보낸 dedupKey를
+  // 기억만 할 뿐 지급 로직/서버 권위는 전혀 바꾸지 않는다(비우지도 않음 —
+  // 마운트당 1회면 충분, 자정 롤오버/리마운트는 새 useRef라 자연 초기화).
+  const postedLegacyKeysRef = useRef(new Set())
   const grantReward = useCallback((amount, dedupKey) => {
     if (!dedupKey) {
       console.warn('[grantReward] dedupKey 없이 호출됨 — 지급 거부(호출부 버그)')
@@ -990,8 +995,34 @@ export function useStudent(studentId, legacyName) {
         history: { ...prev.history, [today]: { ...day, starsEarned: day.starsEarned + amount } },
       }
     })
+    // 레거시 클라이언트 별 지급 6종 서버 원장 흡수(2026-09-06) — 위 dedup
+    // 사전 체크(round.starGrantLog.includes)를 통과했을 때만(=이 호출이
+    // 실제로 지급을 시도하는 경우에만) 실행한다. parseLegacyDedupKey가
+    // 레거시 6종 프리픽스 중 하나를 인식하면 { rewardType, sourceType,
+    // sourceId }를, 그 외(V1 uuid-prefixed 앵커 키 — grantLedgerReward가
+    // 이미 자신의 postRewardEvent를 호출하므로 여기서 또 부르면 중복 전송이
+    // 됨 / pronunciation-unidentified — wordId 미상이라 서버화 대상 아님)는
+    // null을 돌려줘 아무 것도 하지 않는다. grantLedgerReward의 fire-and-
+    // forget 호출과 동일 원칙 — await 없음, 실패해도 위 로컬 지급에는 전혀
+    // 영향 없음(postRewardEvent 헤더 주석 참고).
+    //
+    // 정직한 한계(독립 리뷰 지적, 2026-09-06) — 위 pre-check는 이 렌더
+    // 클로저의 round.starGrantLog(patch() 호출 "전" 스냅샷)만 보므로, 같은
+    // tick에 동일 dedupKey로 grantReward가 두 번 불리면(더블탭 등) POST는
+    // 최대 2회 나갈 수 있다(로컬 지급은 위 patch()의 updater 내부 재검사가
+    // 정확히 1회로 담보 — 이 파일 헤더 주석 "2)"). 서버가 최종 권위:
+    // idempotency_key UNIQUE 제약 + 사전 dup 체크가 두 번째 요청을
+    // duplicate:true로 흡수하므로 이중 지급은 여전히 불가능하다. 아래
+    // postedLegacyKeysRef는 그 흔치 않은 여분 네트워크 요청 자체를 줄이는
+    // 순수 최적화일 뿐(서버 dedup을 대체하지 않음, 마운트당 1회 기억이면
+    // 충분) — 지급/dedup 로직은 한 글자도 바꾸지 않는다.
+    const legacy = parseLegacyDedupKey(dedupKey)
+    if (legacy && !postedLegacyKeysRef.current.has(dedupKey)) {
+      postedLegacyKeysRef.current.add(dedupKey)
+      postRewardEvent(studentId, legacy.rewardType, legacy.sourceType, legacy.sourceId)
+    }
     return true
-  }, [patch, round.starGrantLog])
+  }, [patch, round.starGrantLog, studentId])
 
   // ── Reward System V1(2026-08-15, Phase 2) — rewardEngine.js 규칙을
   // grantReward(위, 별 지급 단일 경로) 위에 얹는 유일한 지급 함수. "언제
@@ -1258,7 +1289,7 @@ export function useStudent(studentId, legacyName) {
   // Grants a sticker directly, bypassing the gift-box gacha (used for
   // guaranteed streak/star-badge rewards). Duplicates still convert to
   // stars so a guaranteed pull is never wasted either.
-  const grantSticker = useCallback((sticker) => {
+  const grantSticker = useCallback((sticker, giftKey) => {
     const isDuplicate = stickerTypes.includes(sticker.id)
     if (isDuplicate) {
       // 별 지급 단일 경로(2026-07-28) — 뽑기 하나하나가 그 자체로 별개
@@ -1267,7 +1298,26 @@ export function useStudent(studentId, legacyName) {
       // diaryPlacements의 placementId와 동일한 패턴) grantReward가 항상
       // 지급하게 한다 — 여전히 단일 경로를 통과하되, 기존처럼 뽑을
       // 때마다 매번 지급되는 동작은 그대로 유지.
-      grantReward(DUPLICATE_BONUS_STARS, `sticker-duplicate:${sticker.id}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`)
+      //
+      // 2026-09-06 — 레거시 서버 원장 흡수를 위해 dedupKey 신원(identity)만
+      // 타임스탬프+랜덤에서 호출자가 넘긴 giftKey(그 선물 이벤트의 안정적
+      // 식별자 — 라운드 signature/마일스톤 값/뱃지 threshold)로 바꾼다.
+      // 의미: 같은 선물 이벤트에서 나온 중복 스티커는 이제 한 번만 지급
+      // (오늘 한 선물 이벤트는 정확히 스티커 1개를 낳으므로 기존 동작과
+      // 동일), 서로 다른 선물 이벤트는 여전히 매번 지급(레거시 동작 보존).
+      // giftKey가 없으면(방어적 — 호출부 버그로 누락된 경우) 회귀를 막기
+      // 위해 옛 타임스탬프+랜덤 키로 폴백하고 1회 경고한다.
+      let key
+      if (giftKey) {
+        key = `sticker-duplicate:${sticker.id}:${giftKey}`
+      } else {
+        if (!grantSticker.__warnedMissingGiftKey) {
+          grantSticker.__warnedMissingGiftKey = true
+          console.warn('[grantSticker] giftKey 없이 호출됨 — 옛 타임스탬프+랜덤 키로 폴백(호출부 확인 필요)')
+        }
+        key = `sticker-duplicate:${sticker.id}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
+      }
+      grantReward(DUPLICATE_BONUS_STARS, key)
       // v2.3.1 — 여기 있던 grantXp('duplicate-sticker-bonus', ...)를
       // 제거했다. 운영자가 지정한 8개 XP 이벤트 목록에 없을 뿐 아니라,
       // 오늘의 미션(4/4)이 하루 여러 번 반복 완료될 수 있다는 기존 설계
@@ -1444,7 +1494,10 @@ export function useStudent(studentId, legacyName) {
     if (bonusGranted) {
       bumpHistory(day => ({ giftsToday: day.giftsToday + 1 }))
       const sticker = getRandomSticker()
-      const isDuplicate = grantSticker(sticker)
+      // giftKey — 이 라운드 선물 이벤트의 안정적 식별자로 바로 위
+      // daily-mission-bonus 지급에 쓴 signature를 그대로 재사용(2026-09-06,
+      // grantSticker 헤더 주석 참고).
+      const isDuplicate = grantSticker(sticker, `round:${signature}`)
       setGiftQueue(q => [...q, { sticker, isDuplicate, isMilestone: false }])
     }
     // 2026-08-23 중복 지급 수정 — 예전엔 `round: freshRound()`로 통째로
@@ -1475,7 +1528,10 @@ export function useStudent(studentId, legacyName) {
     if (!nextMilestone) return
     patch(() => ({ milestoneStreak: nextMilestone }))
     const sticker = getMilestoneSticker()
-    const isDuplicate = grantSticker(sticker)
+    // giftKey — 이 마일스톤 값 자체가 이 선물 이벤트의 안정적 식별자
+    // (STREAK_MILESTONES는 한 번 넘으면 다시 내려가지 않는 고점 표시라
+    // nextMilestone 값이 평생 유일, 2026-09-06).
+    const isDuplicate = grantSticker(sticker, `milestone:${nextMilestone}`)
     setGiftQueue(q => [...q, { sticker, isDuplicate, isMilestone: true, streakDays: nextMilestone }])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [history])
@@ -1500,7 +1556,10 @@ export function useStudent(studentId, legacyName) {
     patch(() => ({ starBadgeThreshold: nextBadge.threshold }))
     const sticker = STICKERS.find(s => s.id === nextBadge.stickerId)
     if (!sticker) return
-    const isDuplicate = grantSticker(sticker)
+    // giftKey — threshold 자체가 이 선물 이벤트의 안정적 식별자(STAR_BADGES도
+    // 위 STREAK_MILESTONES와 동일하게 한 번 넘으면 되돌아가지 않는 고점
+    // 표시, 2026-09-06).
+    const isDuplicate = grantSticker(sticker, `badge:${nextBadge.threshold}`)
     setGiftQueue(q => [...q, { sticker, isDuplicate, isBadge: true, badgeThreshold: nextBadge.threshold }])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stars])
@@ -1814,6 +1873,15 @@ export function useStudent(studentId, legacyName) {
   // 자연 재시도) — 새로 나빠지는 경로 없음.
   const doSyncRef = useRef(null)
   const syncGenRef = useRef(0)
+  // 컷오버 reconcile 프로토콜 전용(2026-09-07, 코디네이터 2차 리뷰) — 이
+  // 카운터는 doSync가 "실제로 성공(업로드까지 끝남)"할 때마다 1씩 늘어난다.
+  // 억지로 추가 sync를 만들지 않고, 이미 존재하던 자연스러운 로그인 후
+  // ~2초 디바운스 업로드(아래 useEffect, doSyncRef.current)가 "방금
+  // 일어났다"는 걸 reconcile effect가 관찰(폴링)하는 용도로만 쓴다 — 기존
+  // sync 호출 횟수/타이밍 계약(scripts/testStarDeltaOnEntry.mjs,
+  // scripts/testRestoreSyncRace.mjs, scripts/testMultiTabRace.mjs가 정밀하게
+  // 검증)은 바이트 단위로 그대로 유지된다(재구현 금지, CLAUDE.md 규칙 3).
+  const syncSuccessSeqRef = useRef(0)
   useEffect(() => {
     doSyncRef.current = async () => {
       const myGen = ++syncGenRef.current
@@ -1839,6 +1907,7 @@ export function useStudent(studentId, legacyName) {
           },
         })
         markSyncSuccess(studentId, 'progress')
+        syncSuccessSeqRef.current += 1 // reconcile effect의 폴링 신호 — 아래 헤더 주석 참고
       } catch (err) {
         markSyncFailure(studentId, 'progress', err)
       }
@@ -1866,6 +1935,188 @@ export function useStudent(studentId, legacyName) {
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [restoreChecked])
+
+  // ── 컷오버: 레거시 별 서버 기준선 재조정(2026-09-06/07) ─────────────────
+  // 배경 — 레거시 별(grantReward, 이 파일의 유일한 지급 경로)은 서버 원장
+  // (reward_ledger)이 레거시 6종을 흡수하기 시작(2026-09-06, postRewardEvent
+  // 헤더 주석) 하기 전까지는 순전히 로컬(localStorage)에서만 누적된 값이라,
+  // 서버는 "이 학생이 지금까지 로컬에서 얼마를 벌었는지"를 사후에 알 방법이
+  // 없다. 그래서 클라이언트가 "지금 이 순간의 totalStars"를 딱 한 번 서버에
+  // 신고해 기준선(baseline)으로 삼게 한다(api/grant-xp.js
+  // action:'reconcile_legacy_baseline', 서버 구현은 다른 세션 담당).
+  //
+  // 왜 "서버 타임스탬프 비교"가 아니라 "클라이언트가 트리거하는 개인별
+  // 조용한 시점"인가 — 100명 넘는 학생이 서로 다른 순간에 이 배포를 받고,
+  // 배포 직후에도 이전 세션에서 실패해 남아있던 레거시 지급(네트워크 재시도
+  // 큐, wordLibrary.js REWARD_POST_QUEUE_KEY)이 뒤늦게 서버로 도착할 수
+  // 있다 — 어느 학생의 기준선을 "이 시각 이전/이후"로 가르는 서버 시계
+  // 방식은 그 지연 도착을 이중/누락 계산할 레이스를 구조적으로 없앨 수
+  // 없다. 그래서 서버 시계 비교를 아예 하지 않고, 이 학생의 레거시 포스트
+  // 큐가 스스로 완전히 비어있다고 확인한(=조용하다) 바로 그 순간에만
+  // 스냅샷을 신고한다 — 그 순간엔 정의상 "아직 서버에 반영 안 된 레거시
+  // 지급"이 없으므로 이중/누락의 여지가 없다.
+  //
+  // holdRewardPosts(true)로 스냅샷을 뜨는 순간과 reconcile 요청이 서버에
+  // 도착하는 순간 사이에 새로 발생하는 레거시 지급의 "서버 통지"만 잠깐
+  // 미룬다(로컬 지급 자체는 전혀 지연되지 않음 — wordLibrary.js
+  // postRewardEvent/holdRewardPosts 헤더 주석 참고) — 그 지급이 스냅샷보다
+  // 먼저 원장에 꽂혀 기준선 계산을 오염시키는 걸 막기 위해서다.
+  //
+  // localStorage 마커(paul_easy_legacy_reconciled:{studentId})는 "이 기기가
+  // 이 학생에 대해 이미 결론을 냈다"는 뜻 — 서버가 "다시 물어봐도 결과가
+  // 안 바뀐다"고 확정 답한 사유(reconciled/already_reconciled/
+  // nothing_to_reconcile/review/invalid_snapshot)에서만 기록한다.
+  // relogin_required/unauthorized/table_missing/rpc_failed/network_failed는
+  // "다시 시도하면 바뀔 수 있다"는 뜻이라 마커 없이 다음 마운트(재로그인/
+  // 새로고침)에서 재시도한다.
+  //
+  // record.round/history/rewardLedger 등 이 파일의 기존 데이터 모양·병합·
+  // grantReward의 dedup 로직은 여기서 한 글자도 건드리지 않는다(재구현
+  // 금지, CLAUDE.md 규칙 3) — 이 effect는 오직 "언제 서버에 기준선을
+  // 신고하는가"만 판단한다.
+  //
+  // ── 프로토콜 수정 2차(코디네이터 리뷰, 2026-09-07) ──────────────────
+  // 1차 수정(위 증명 (1)~(4))까지는 drain으로 "이 학생 몫 큐가 실제로
+  // 비었는가"를 보장했지만, 그 직후 곧바로 doSyncRef.current?.()를 이
+  // effect가 직접(강제로) 호출해 student_progress 업로드를 만들어냈다 —
+  // 이러면 로그인 1회당 진행도 업로드 횟수가 1→2로 늘어(디바운스 타이머의
+  // "자연" 업로드 + reconcile이 강제한 업로드) 기존 sync 호출 횟수/시점
+  // 계약을 정밀 검증하던 회귀 테스트 3종(scripts/testStarDeltaOnEntry.mjs,
+  // scripts/testRestoreSyncRace.mjs, scripts/testMultiTabRace.mjs — 특히
+  // 마지막은 2026-07-18 P1 실사고를 고정한 다중 탭 레이스 테스트라 인덱스
+  // 하나만 어긋나도 그 회귀 가드 자체가 무력화될 위험이 있었다)를 깨뜨렸다.
+  // 코디네이터 결정: 이 effect가 "새 sync를 만들지" 않고, 대신 이미 존재
+  // 하던 자연스러운 디바운스 sync(위 doSyncRef.current, restoreChecked
+  // 이후 약 2초 뒤 자동 발동)가 "방금 성공적으로 끝났다"는 사실을
+  // "관찰"(폴링)만 하도록 바꾼다 — 그러면 sync 호출 횟수/타이밍은 이
+  // effect가 존재하기 전과 바이트 단위로 동일하게 유지된다(추가
+  // 네트워크/업로드 0건 — 재구현 아님, 기존 계약 보존).
+  //
+  // syncSuccessSeqRef(위 doSyncRef 정의부)는 doSync가 실제로 성공(업로드
+  // 완료, markSyncSuccess 직후)할 때마다 1씩 증가하는 카운터 — 이 effect는
+  // "지금부터 그 카운터가 늘어나는 걸 봤다"는 것으로 "내가 개입하지 않은
+  // 정상적인 진행도 업로드가 최근에 일어났다"를 확인한다.
+  //
+  // 최종 안전 불변식(reconcile 시점에 서버에 신고하는 snapshotTotal의 모든
+  // 별이 legacy 아니면 ledger 둘 중 하나에만 속한다) — snapshot은 아래 세
+  // 조건을 전부 만족한 뒤에야 읽는다:
+  //   (a) 이 학생 몫 레거시 포스트 큐가 drain으로 완전히 ack됨(remaining
+  //       === 0) — 위 1차 증명 (1)~(4)와 동일 — "포스트 큐에 있는 별인데
+  //       아직 ack 안 된 것"이 없다는 뜻.
+  //   (b) (a) 확인 이후 자연스러운 doSync가 최소 1회 성공해
+  //       student_progress.total_stars가 최신화됨 — 서버가 reconcile 시점
+  //       비교하는 SNAPSHOT_SLACK 체크의 기준값이 오래되지 않았다는 뜻.
+  //   (c) (b) 관찰 직후 다시 확인한 pending이 여전히 0 — (b)를 기다리는
+  //       동안 새 grantReward가 있었다면(동기 enqueue, 위 증명 (1)(2))
+  //       그 항목은 큐에 남아있을 것이므로, 0이 아니면 (a)로 돌아가
+  //       다시 drain한다(같은 라운드 예산 안에서).
+  // 이 세 조건이 전부 참인 순간에만 snapshot=recordRef.current.totalStars를
+  // 읽는다 — 그 순간엔 정의상 "아직 서버에 반영 안 된 레거시 지급도,
+  // 오래된 student_progress도" 없다.
+  //
+  //   프로토콜(최대 3라운드로 제한 — 무한 재시도 금지, 매 라운드 drain을
+  //   조건 없이 먼저 시도한다):
+  //     1) seqAtStart = syncSuccessSeqRef.current를 effect 시작 시점에
+  //        한 번만 기록.
+  //     2) holdRewardPosts(true) — 이 순간부터 모든 신규 전송(이 탭+다른
+  //        탭)이 멈춘다(로컬 지급 자체는 지연 없음).
+  //     3) drainRewardPostQueueForStudent(studentId) — 이 학생의 "기존"
+  //        큐만(호출 시점 스냅샷) hold를 무시하고 실제 전송+ack 대기.
+  //     4) remaining > 0이면 다음 라운드에서 다시 3)부터 반복 — 3라운드를
+  //        다 써도 remaining > 0이면 포기(hold 해제, reconcile 없이 종료,
+  //        다음 마운트에서 재시도).
+  //     5) remaining === 0이 처음 확인된 라운드에서만(한 번만) — 자연
+  //        sync를 폴링 대기(250ms 간격, 최대 15초 예산, 언마운트 시 즉시
+  //        중단). 예산 안에 syncSuccessSeqRef가 seqAtStart를 넘지 않으면
+  //        포기(hold 해제, reconcile 없이 종료 — 오프라인/sync 실패 상황,
+  //        다음 마운트에서 재시도).
+  //     6) 자연 sync 관찰 후 pending을 다시 확인 — 0이 아니면(그 사이 새
+  //        grantReward) 다음 라운드에서 3)으로 돌아가 마저 drain(같은
+  //        3라운드 예산 안에서, 폴링은 이미 했으므로 반복하지 않음). 0이면
+  //        완료.
+  //     7) snapshot=recordRef.current.totalStars를 읽어
+  //        postReconcileLegacyBaseline(snapshot) 호출, 마커 로직은 기존과
+  //        동일.
+  //     8) finally holdRewardPosts(false) — 해제(크로스탭 키 삭제 포함),
+  //        내부적으로 flush 트리거. (doSyncRef를 이 effect가 직접 호출하는
+  //        지점은 어디에도 없다 — 기존 sync 호출 계약 무변경.)
+  const recordRef = useRef(record)
+  useEffect(() => { recordRef.current = record })
+  const legacyReconcileRanRef = useRef(false)
+  useEffect(() => {
+    if (!restoreChecked || !studentId) return
+    if (legacyReconcileRanRef.current) return // 이 마운트에서 이미 시도함(가드) — StrictMode 이중 렌더/리렌더 대비
+    const markerKey = `paul_easy_legacy_reconciled:${studentId}`
+    const readMarker = () => {
+      try { return localStorage.getItem(markerKey) } catch { return null }
+    }
+    if (readMarker()) return // 이미 이 기기가 이 학생에 대해 결론을 냄 — 재시도 안 함
+    legacyReconcileRanRef.current = true
+
+    let mounted = true
+    const writeMarker = (reason) => {
+      try { localStorage.setItem(markerKey, JSON.stringify({ reason, at: new Date().toISOString() })) } catch { /* 저장 실패 — 다음 마운트에서 재시도될 뿐, throw 없음 */ }
+    }
+    const MAX_ROUNDS = 3
+    const POLL_INTERVAL_MS = 250
+    const POLL_TIMEOUT_MS = 15000
+    // setTimeout을 이 effect 콜백의 "동기 구간"(커밋 단계, 테스트
+    // 하네스에서는 fake clock이 globalThis.setTimeout에 패치돼 있는
+    // 구간)에서 캡처해둔다 — 아래 폴링은 이 async 함수 안(패치가 이미
+    // 풀린 뒤)에서 실행되므로, 여기서 미리 캡처해두지 않으면 테스트의 fake
+    // clock을 타지 못하고 실제 타이머를 써버린다(fakeReact.mjs 관례,
+    // 아래쪽 디바운스 effect의 setTimeout 캡처와 동일 원칙). 실제
+    // 브라우저에서는 항상 진짜 setTimeout이라 이 캡처가 아무 차이를
+    // 만들지 않는다.
+    const scheduleTimeout = setTimeout
+    const seqAtStart = syncSuccessSeqRef.current
+
+    ;(async () => {
+      holdRewardPosts(true)
+      try {
+        let quiescent = false
+        let syncedNaturally = false
+        for (let round = 0; round < MAX_ROUNDS; round++) {
+          // 매 라운드 drain을 무조건 먼저 시도한다(사전에 rewardQueuePendingFor로
+          // "필요한지" 미리 걸러내는 최적화를 하지 않음) — 이 학생 몫으로
+          // 아무 것도 쌓여있지 않으면 drain 자체가 즉시 {sent:0,remaining:0}을
+          // 돌려준다.
+          const { remaining } = await drainRewardPostQueueForStudent(studentId)
+          if (!mounted) return
+          if (remaining > 0) continue // 아직 남음(네트워크 실패 등) — 다음 라운드에서 재시도(예산 3회 안에서)
+          // remaining === 0 — 자연 sync 관찰은 딱 한 번만 기다린다(이미
+          // 관찰했으면 재확인 불필요, 같은 라운드에서 pending만 재확인).
+          if (!syncedNaturally) {
+            let waited = 0
+            while (true) {
+              if (!mounted) return
+              if (syncSuccessSeqRef.current > seqAtStart) { syncedNaturally = true; break }
+              if (waited >= POLL_TIMEOUT_MS) break // 예산 소진 — syncedNaturally는 false로 남음
+              await new Promise((resolve) => scheduleTimeout(resolve, POLL_INTERVAL_MS))
+              waited += POLL_INTERVAL_MS
+            }
+            if (!mounted) return
+            if (!syncedNaturally) return // 자연 sync가 예산 안에 안 옴(오프라인 등) — reconcile 보류, 다음 마운트에서 재시도
+          }
+          if (rewardQueuePendingFor(studentId) === 0) { quiescent = true; break }
+          // 자연 sync를 기다리는 동안 새로 들어온 항목 — 다음 라운드에서 다시 drain.
+        }
+        if (!quiescent) return // 3라운드 안에 조용해지지 못함 — reconcile 보류, 다음 마운트에서 재시도
+        const snapshot = recordRef.current?.totalStars
+        const res = await postReconcileLegacyBaseline(snapshot)
+        if (!mounted) return
+        const reason = res && res.reason
+        const definitiveOk = (res && res.ok) || ['review', 'invalid_snapshot', 'nothing_to_reconcile', 'already_reconciled'].includes(reason)
+        if (definitiveOk) writeMarker(reason || 'reconciled')
+        // else(relogin_required/unauthorized/table_missing/rpc_failed/network_failed/미지):
+        // 마커 없이 다음 마운트(재로그인/새로고침)에서 재시도.
+      } finally {
+        holdRewardPosts(false) // 보류 해제(크로스탭 키 삭제 포함) — 그 사이 쌓인 지급을 흘려보냄(fire-and-forget)
+      }
+    })()
+
+    return () => { mounted = false }
+  }, [studentId, restoreChecked])
 
   return {
     // 로그인 직후 로딩 게이트(App.jsx) — 복원 확인이 끝나기 전에 Dashboard가

@@ -19,3 +19,12 @@ export const postXpEvent = async () => {}
 // Reward System V1(2026-08-18) — no-op stub, 서버 쓰기 검증은
 // scripts/testRewardServerWrite.mjs가 별도로 담당(네트워크 0, 정적 검사).
 export const postRewardEvent = async () => {}
+// 컷오버 레거시 별 기준선 재조정(2026-09-06/07) — no-op 스텁, 위
+// postRewardEvent와 같은 이유(이 파일을 쓰는 테스트들은 재조정 자체를
+// 검증하지 않음, scripts/testCutoverClient.mjs가 실제 번들로 전담).
+export const holdRewardPosts = () => {}
+export const flushRewardPostQueue = async () => {}
+export const rewardQueuePendingFor = () => 0
+export const postReconcileLegacyBaseline = async () => ({ ok: false, reason: 'relogin_required' })
+// 드레인 프로토콜(2026-09-07 리뷰 수정) — no-op 스텁(위와 동일 사유).
+export const drainRewardPostQueueForStudent = async () => ({ sent: 0, remaining: 0 })
