@@ -9,6 +9,20 @@ READ-ONLY(anon key GET/HEAD)로만 수행했고, Production에 대한 WRITE는
 
 ## 0) 현재 상태
 
+> **2026-09-07 갱신(115차, superseding note — 아래 표 원문은 삭제하지
+> 않고 그대로 둔다)**: 아래 표의 `supabase_v3_48_reward_legacy_
+> baseline_v2.sql` 행이 설명하는 "2026-09-06 하드닝 — EXACT/BOUNDED
+> 가드"판은 **레이스 컨디션(클라이언트 `total_stars` 업로드 시각과 서버
+> 원장 INSERT 시각의 비동기 간극에 의한 이중 계상/누락)이 있는 것으로
+> 밝혀져 폐기**됐다. v3_48은 학생별 `reconcile_legacy_baseline` RPC
+> 방식으로 전면 재설계됐고(SQL 실행 자체는 학생별 원장 행을 0건
+> 삽입하고, 정산은 각 학생의 다음 로그인 시점에 분산된다), 이 재설계는
+> 이미 아래 7절("per-student reconcile 규칙(v3_48, 2026-09-07
+> 전면 재설계)")에 반영돼 있다. 배경/레이스 증명 전문은
+> `handoff.md` 2026-09-07(115차) 참고. 아래 표는 여전히 **미실행**
+> 상태를 정확히 반영하지만 "EXACT/BOUNDED 가드 추가"라는 설계 설명
+> 자체는 옛 버전 기준이다.
+
 | 항목 | 상태 |
 |---|---|
 | 코드(서버 `api/grant-xp.js` 액션 2개, 클라이언트 `townShop.js`/`useTownShop.js`/`PaulTown.jsx`/`Dashboard.jsx`) | **구현 완료, 커밋 0**(`.ai-status/implementer-star-shop-phase1-2026-09-06.json` 참고) |
@@ -25,6 +39,22 @@ READ-ONLY(anon key GET/HEAD)로만 수행했고, Production에 대한 WRITE는
 ---
 
 ## 1) 포함 파일 목록
+
+> **2026-09-07 갱신(115차, superseding note)**: 아래 표의 파일명 자체는
+> 그대로 유효하지만, `supabase_v3_48_reward_legacy_baseline_v2.sql`(전역
+> T 스냅샷 → 학생별 reconcile RPC로 전면 재작성) / `scripts/lib/
+> baselineV2Guards.mjs`(가드 상수가 옛 `candidate_count`/
+> `total_delta_sum`/`max_individual`/`progress_rows` 4종에서 새
+> `TOLERANCE`/`MAX_INDIVIDUAL`/`SNAPSHOT_SLACK`/`SNAPSHOT_MAX` 4종으로
+> 전면 교체 — 상태 **PROPOSED_OPERATOR_VALUES**: TOLERANCE=100 /
+> MAX_INDIVIDUAL=1500 / SNAPSHOT_SLACK=200은 제안값이며 Production 승인
+> 완료가 아님, v3_48 실행 전 운영자 최종 확인 필요) /
+> `scripts/testBaselineV2Sql.mjs`(정적 33+시뮬레이션 11 →
+> 83단언, 재작성) 세 파일의 **내용**이 바뀌었다. 또한 이 표에는 없던
+> 신규 테스트 스크립트 2개가 추가됐다: `scripts/testCutoverReconcile.mjs`
+> (서버측 fence, 63단언)/`scripts/testCutoverClient.mjs`(클라이언트측
+> fence, `useStudent.js` reconcile effect, 52단언). 상세는 `TESTING.md`
+> 2026-09-07(115차) 섹션, `handoff.md` 2026-09-07(115차).
 
 | 파일 | 역할 |
 |---|---|
@@ -43,8 +73,24 @@ READ-ONLY(anon key GET/HEAD)로만 수행했고, Production에 대한 WRITE는
 
 ## 2) 실행 순서
 
-1. **코드 배포(플래그 OFF)** — 이미 구현 완료 상태(커밋 대기). 배포돼도
-   `townShopV1=false`라 UI/네트워크 호출 0.
+_2026-09-07 갱신 — `supabase_v3_48_reward_legacy_baseline_v2.sql`이 전역
+1회성 스냅샷 방식에서 **per-student reconcile RPC** 방식으로 전면
+재설계됐다(아래 7절 "왜 전역 BOUNDED 가드를 폐기했는가" 참고). 이에 따라
+"Phase 2를 먼저 끝낼지 v3_48을 먼저 실행할지"를 고민하던 옛 5번 항목이
+사라졌다 — Phase 2(레거시 지급 서버화)와 reconcile 클라이언트(재시도 큐
+드레인 + RPC 호출)가 모두 "코드 배포" 한 단계 안에 포함되고, v3_48 SQL
+자체는 설치만 할 뿐 학생별 정산은 그 이후 각자의 로그인 시점에 분산되어
+일어난다._
+
+1. **코드 배포(플래그 OFF, reconcile 클라이언트 포함)** — Town Shop
+   UI/RPC 배선 + Phase 2(레거시 지급 서버화) + reconcile 클라이언트(로컬
+   reward 재시도 큐를 드레인하고, 그 순간의 `total_stars` 스냅샷으로
+   `reconcile_legacy_baseline` RPC를 호출하는 로직)까지 전부 이 한
+   단계에서 배포한다. `townShopV1=false`라 Town Shop UI/네트워크 호출은
+   0이지만, reconcile 클라이언트는 플래그와 무관하게 학생 로그인 시
+   동작한다(별 정산은 상점 기능이 아니라 원장 정합성 문제이므로
+   `townShopV1` 게이트 밖에 둔다 — 학생에게 보이는 변화는 없음, 3절
+   "단계별 기대 delta" 참고).
 2. **READ-ONLY 프리플라이트(pre)** — `node scripts/preflightTownShop.mjs --expect pre`
    (2026-09-06 실행 결과 PASS=3 FAIL=0 SKIP=1, 본 문서 4절).
 3. **`supabase_v3_47_town_shop.sql` 실행**(운영자, Supabase 대시보드 SQL
@@ -53,29 +99,65 @@ READ-ONLY(anon key GET/HEAD)로만 수행했고, Production에 대한 WRITE는
 4. **post-verify** — `node scripts/preflightTownShop.mjs --expect post-v3_47`
    + 파일 하단 SELECT 스니펫(shop-lamp 1행 price=60, `star_purchases`
    anon 42501/401 등).
-5. **[Phase 2: 레거시 7경로 서버 기록화 — 별도 작업, 미착수]** — 이 단계
-   없이 v3_48/Town Shop을 가동해도 안전하지만(크래시 없음), `available`이
-   실제 획득의 일부만 반영한다는 한계가 남는다. 운영자가 이 갭을 감수하고
-   먼저 진행할지, Phase 2를 먼저 마칠지 결정 필요(8절 "열린 결정" 참고).
-6. **`supabase_v3_48_reward_legacy_baseline_v2.sql` 실행**(운영자). 실행
-   전 SQL Editor 콘솔에 뜨는 `guard-precheck`/`precheck` NOTICE로
-   candidate_count/total_delta_sum/max_individual/progress_rows를 육안
-   확인 — 가드 위반 시 RAISE EXCEPTION으로 자동 중단(아무 행도 남지
-   않음, 7절 "EXACT vs BOUNDED 가드 표" 참고).
-7. **post-verify** — `node scripts/preflightTownShop.mjs --expect post-v3_48`
-   (이 스크립트는 `reward_ledger`를 anon으로 직접 읽지 않고, 대신 운영자가
-   SQL Editor에서 실행할 SELECT 스니펫을 출력한다) + `reward_migration_log`/
-   `reward_baseline_review` 행 수 확인.
-8. **QA/TEST 계정으로만 구매 실측**(Cookie/Paul 계정, 실학생 절대 사용
-   금지) — `townShopV1`을 QA 계정이 로그인한 그 브라우저에서만 로컬로
-   켜고(아래 6절 기기 로컬 플래그 주의) 실제 구매 플로우 1회 수행.
-9. **영속성/재로그인 검증** — 구매 후 새로고침·재로그인해도 소유 아이템/
-   잔액이 서버 값(`get_town_shop_state`)과 일치하는지 확인.
-10. **위 전부 통과 후에만** `townShopV1: true`로 배포(전체 학생 대상 ON).
+5. **`supabase_v3_48_reward_legacy_baseline_v2.sql` 실행**(운영자) —
+   **함수(`reconcile_legacy_baseline`) + 뷰(`reward_baseline_v2_status`)
+   + 감사용 cutover marker 1행만 설치한다. 이 SQL 실행 자체는 학생별
+   원장 행을 단 1건도 삽입하지 않는다** — EXACT 전제조건(v3_37 marker/
+   필수 테이블 3개/`reward_totals` 0행 아님)만 확인하고 즉시 끝난다.
+6. **학생들이 다음 로그인 시 스스로 정산한다** — 배포된 reconcile
+   클라이언트가 각 학생의 다음 로그인마다 `reconcile_legacy_baseline`을
+   1회 호출해 `reward_ledger`에 `source_id='v2'` 행을 학생별로 최대 1건씩
+   점진적으로 채운다(전체 학생이 동시에 채워지지 않는다 — 로그인
+   빈도만큼 시간이 걸린다). 운영자는 아래로 모니터링한다:
+   - **진행 상황**: `select * from reward_baseline_v2_status;`
+     (`reconciled_students`/`nothing_students`/`baseline_total`/
+     `review_rows`가 시간이 지나며 자연스럽게 늘어난다).
+   - **review로 빠진 학생(자동 반영되지 않음, SELECT-only, 운영자가
+     검토용으로만 실행)**:
+     ```sql
+     select student_id, total_stars as snapshot, ledger_earned, delta, plausible_max, created_at
+       from reward_baseline_review
+      where migration_name = 'v3_48_reward_legacy_baseline_v2'
+      order by created_at desc;
+     ```
+   - review 행을 수동으로 원장에 반영하려면(신중하게 검토한 뒤에만),
+     아래 INSERT 템플릿을 참고 — **이 문서는 이 문장을 실행하지 않는다
+     (NOT EXECUTED, 값은 운영자가 직접 채워 SQL Editor에서 판단 후
+     실행)**:
+     ```sql
+     insert into reward_ledger (student_id, reward_type, source_type, source_id, stars_delta, xp_delta, idempotency_key, created_at)
+     values ('<student_id>', 'legacy-baseline', 'migration', 'v2', <운영자가 검토해 확정한 값>, 0, '<student_id>:legacy-baseline:migration:v2', now())
+     on conflict (idempotency_key) do nothing;
+     ```
+7. **QA/TEST 계정으로만 구매 실측**(Cookie/Paul 계정, 실학생 절대 사용
+   금지) — QA 계정으로 먼저 로그인해 reconcile이 정상 완료(`reconciled`
+   또는 `nothing_to_reconcile`)되는지 확인한 뒤, `townShopV1`을 그
+   브라우저에서만 로컬로 켜고(아래 6절 기기 로컬 플래그 주의) 실제 구매
+   플로우 1회 수행.
+8. **영속성/재로그인 검증** — 구매 후 새로고침·재로그인해도 소유 아이템/
+   잔액이 서버 값(`get_town_shop_state`)과 일치하는지, 그리고 재로그인
+   시 reconcile이 `already_reconciled`로 조용히 종료되는지(중복 정산
+   없음) 확인.
+9. **위 전부 통과 후에만** `townShopV1: true`로 배포(전체 학생 대상 ON).
+   이 시점에 아직 로그인하지 않아 reconcile이 안 된 학생이 있어도
+   안전하다 — `get_town_shop_state`가 `reward_totals`(reconcile 완료분만
+   반영)를 그대로 쓰므로, 그 학생은 로그인 후 정산되기 전까지 잔액이
+   실제보다 낮게 보일 뿐 크래시/오류는 없다(다음 로그인 시 자연 해소).
 
 ---
 
 ## 3) 단계별 기대 delta
+
+> **2026-09-07 갱신(115차, superseding note)**: 아래 표의 "v3_48 실행"
+> 행은 옛 전역 스냅샷 설계 기준이라 **더 이상 정확하지 않다.** 새
+> 설계에서는 `supabase_v3_48_reward_legacy_baseline_v2.sql` **실행 자체는
+> `reward_ledger`/`reward_baseline_review`에 학생별 원장 행을 단 1건도
+> 삽입하지 않는다**(함수 `reconcile_legacy_baseline`/뷰 `reward_
+> baseline_v2_status`/감사용 cutover marker 1행만 설치). "최대
+> candidate_count건 신규 삽입(~24건 예상)"은 SQL 실행 시점이 아니라 그
+> 이후 **학생들이 각자 로그인할 때마다 점진적으로** 일어난다 — 위 2절
+> 갱신된 6번 단계와 `reward_baseline_v2_status` 뷰로 진행 상황을
+> 모니터링한다. 상세는 `handoff.md` 2026-09-07(115차).
 
 | 단계 | 무엇이 바뀌는가 | 학생에게 보이는 변화 |
 |---|---|---|
@@ -88,6 +170,21 @@ READ-ONLY(anon key GET/HEAD)로만 수행했고, Production에 대한 WRITE는
 ---
 
 ## 4) must_not_change 목록 + 실측 (2026-09-06, READ-ONLY)
+
+> **2026-09-07 갱신(115차, superseding note)**: 이 절 전체(`--expect
+> pre` 결과, `dryRunBaselineV2.mjs` 최초 실행 결과, `testBaselineV2Sql.
+> mjs` 정적 33+시뮬레이션 11 결과)는 **폐기된 전역 T 스냅샷 설계 +
+> 최초(결함 있는) dry-run 프록시** 기준이다. 최초 프록시(`earned ≈
+> client rewardLedger mirror`만 사용)는 v1 baseline 몫을 반영하지 못해
+> 아래 "BOUNDED 가드" 수치(candidates=24 등)가 우연히 낮게 나왔을 뿐,
+> 같은 결함이 있는 상태로 다시 계산하면 `review`가 187명 중 60명(32%)
+> 까지 치솟는 것이 이후 확인됐다(프록시 결함, per-student 규칙 자체의
+> 결함 아님). **보정된 프록시(v1 baseline 몫 역산 반영)로 재계산한 결과:
+> reconciled 24 / nothing_to_reconcile 163 / review 0 / 실학생 총
+> 1,835명**(우연히 reconciled 건수는 24로 같지만 total delta는 다름 —
+> 아래 옛 수치 1998과 재계산 프록시는 다른 계산식이다). `testBaselineV2
+> Sql.mjs`는 학생별 RPC 설계에 맞춰 83단언으로 전면 재작성됐다(SQL 실행
+> 0은 동일하게 유지). 상세: `TESTING.md`/`handoff.md` 2026-09-07(115차).
 
 `scripts/preflightTownShop.mjs`가 매 단계 자동으로 스냅샷을 남긴다
 (`scripts/.tmp/preflight-<mode>-<timestamp>.json`). 아래 4개 카운트는
@@ -160,28 +257,95 @@ BOUNDED 가드: candidates=24∈[5,80] PASS / total=1998∈[500,24000] PASS /
 
 ---
 
-## 7) EXACT vs BOUNDED 가드 표(v3_48)
+## 7) per-student reconcile 규칙(v3_48, 2026-09-07 전면 재설계)
 
-| 구분 | 가드 | 위반 시 | 근거 |
-|---|---|---|---|
-| EXACT | 음수 delta 미삽입 | 구조상 불가능(`CONTINUE WHEN v_delta<=0`) + postcheck 재확인 | `stars_delta<=0` 행이 원장에 있으면 즉시 EXCEPTION |
-| EXACT | 중복 키 0건 | `idempotency_key` UNIQUE + postcheck(v2 행수==inserted_count) | 두 값이 다르면 unique 제약 우회 경로가 있다는 뜻 |
-| EXACT | v3_37 marker 존재 | RAISE EXCEPTION | v1이 선행돼야 plausible_max 기준점(`v_v1_at`) 확보 가능 |
-| EXACT | 4개 테이블 존재(`reward_totals`/`reward_ledger`/`student_progress`/`student_daily_progress`) | RAISE EXCEPTION | 하나라도 없으면 delta 계산 자체가 무의미 |
-| EXACT | `reward_totals` 0행 아님 | RAISE EXCEPTION | v1 baseline 유실 오인 시 전원 이중 계상 위험 |
-| EXACT | inserted+review==candidates | RAISE EXCEPTION(기존 postcheck) | 부분 처리 방지 |
-| BOUNDED | candidate_count ∈ [5, 80] | RAISE EXCEPTION | 실측 24 · 활성 학생 증가로만 커짐 · 43%(80명) 초과는 구조적 이상 |
-| BOUNDED | total_delta_sum ∈ [500, 24000] | RAISE EXCEPTION | 실측 1,998 + 활성 ~31명×p75 43별×14일 여유(≈+18,700)≈20,698→24,000 반올림 |
-| BOUNDED | max_individual ≤ 1500 | RAISE EXCEPTION | 실측 277 + 14일×관측 최대 75별/일≈1,330→1,500 |
-| BOUNDED | student_progress 행 수 ∈ [150, 500] | RAISE EXCEPTION | 모집단 크기 정합성(111명 규모 학생 수 기준) |
+### 왜 전역 BOUNDED 가드를 폐기했는가(레이스 컨디션)
 
-BOUNDED 상수는 `scripts/lib/baselineV2Guards.mjs`와 SQL 리터럴이 반드시
-일치해야 하며, `scripts/testBaselineV2Sql.mjs`(C절)가 이를 정적으로
-대조한다.
+2026-09-06 하드닝판은 마이그레이션 실행 시각 T 한 번에 전체 학생을
+순회하며 `delta = student_progress.total_stars(T) − reward_totals.
+earned_stars(T)`를 계산해 원장에 심었다. 그런데 클라이언트는 별을 번 뒤
+~2초 디바운스를 거쳐 `total_stars`를 업로드하고, 서버 원장(`reward_
+ledger`) 행은 그 지급 POST가 도착한 시점(또는 재시도 큐를 통해 그보다
+한참 뒤)에 삽입된다 — "화면에 별이 반영된 시각"과 "서버 원장에 그 별이
+기록된 시각" 사이에 신뢰할 수 없는 간극이 있다는 뜻이다. 이 간극 때문에:
+
+- `total_stars` 업로드가 T *이전*, 원장 INSERT가 T *이후*면 → 전역
+  스냅샷이 이미 그 별을 baseline으로 잡고, 뒤이은 원장 INSERT가 또 한
+  번 더해 **이중 계상**된다.
+- 원장 INSERT가 T *이전*, `total_stars` 업로드가 T *이후*면 → 두 계산
+  모두 그 별을 놓쳐 **누락**된다.
+
+이 간극은 "타임스탬프를 비교"해서는 메울 수 없다 — `reward_ledger.
+source_id`/`student_daily_progress.date`에 들어가는 날짜가 전부
+클라이언트 시계 기준이라, 서버가 신뢰할 수 있는 이벤트 시각이 어디에도
+없다. 그래서 v3_48은 "모든 학생이 같은 시점 T에 정산된다"는 전역
+스냅샷의 전제 자체를 버리고, **학생마다 자신이 선언한 정지(quiescent)
+시점에** 그 학생 한 명만 정산하는 방식(`reconcile_legacy_baseline` RPC)
+으로 바꿨다 — 타임스탬프 비교가 전혀 없으므로 레이스 자체가 성립하지
+않는다.
+
+### per-student 가드 표
+
+옛 BOUNDED 가드(candidate_count/total_delta_sum/max_individual/
+progress_rows — 전체 학생 집단에 대한 사전 집계 상한)는 "한 번에 전체를
+계산한다"는 전제에서만 의미가 있었으므로 전부 폐기했다. 대신 매
+`reconcile_legacy_baseline` 호출마다 그 학생 1명에게만 적용되는 4개
+가드로 대체했다:
+
+| 가드 | 위반 시 | 근거(2026-09-07 실측) |
+|---|---|---|
+| `p_snapshot_total` ∈ [0, SNAPSHOT_MAX=100000] | `invalid_snapshot` | 스냅샷 자체가 정수 범위를 벗어난 명백한 오염 값을 최소 비용으로 차단 |
+| `snapshot ≤ uploaded_total_stars + SNAPSHOT_SLACK(200)` | `review`(원장 미삽입, `reward_baseline_review`에 기록) | 클라이언트 스냅샷이 서버에 이미 반영된 값보다 2초 디바운스로는 설명 안 되는 큰 차이로 앞서면 이상치로 간주 |
+| `delta ≤ history_since(v3_37 이후 실제 학습 기록 합) + TOLERANCE(100)` | `review` | history-blob-vs-total_stars 노이즈 실측 p90=57/max=370 — 100은 p90 이상을 통과시키고 극단적 이상치만 review로 보냄 |
+| `delta ≤ MAX_INDIVIDUAL(1500)` | `review` | 실측 관측된 학생별 최대 delta 277 + 14일×관측 최대 75별/일≈1,330 여유를 반올림 |
+
+가드를 통과하면 `reward_ledger`에 그 학생의 `source_id='v2'` 행이
+정확히 1건 삽입되고(`ok=true, reason='reconciled'`), 이미 삽입돼 있으면
+재호출은 즉시 `already_reconciled`로 종료된다(타임스탬프 비교 없이
+"이미 존재하는가"만 확인) — 옛 postcheck(`inserted+review==candidates`)
+같은 전역 카운트 대조는 애초에 "전체 후보 집합"이 존재하지 않는 설계라
+필요 없다. 학생 존재 확인(`student_not_found`)과 EXACT 전제조건(v3_37
+marker/필수 테이블 3개/`reward_totals` 0행 아님, SQL 설치 시점 1회
+확인)은 여전히 유지된다.
+
+가드 상수는 `scripts/lib/baselineV2Guards.mjs`와 SQL(함수 DECLARE 절)
+리터럴이 반드시 일치해야 하며, `scripts/testBaselineV2Sql.mjs`(C절)가
+이를 정적으로 대조한다.
 
 ---
 
 ## 8) 열린 결정 (운영자 확인 필요)
+
+> **2026-09-07 갱신(115차, superseding note)**: 아래 1·2번 항목은 폐기된
+> 전역 스냅샷 설계 기준으로 작성됐다. **1번은 위 2절 갱신된 순서로 이미
+> 답이 정해졌다** — Phase 2(레거시 서버화)와 reconcile 클라이언트가 모두
+> "코드 배포" 한 단계에 함께 포함되고, v3_48 SQL 자체는 설치만 할 뿐
+> 정산은 각 학생의 로그인 시점에 분산된다(더 이상 "먼저/나중" 순서
+> 문제가 아니다). **2번의 "BOUNDED 가드"는 더 이상 존재하지 않는다** —
+> 대신 학생별 `TOLERANCE`/`MAX_INDIVIDUAL`/`SNAPSHOT_SLACK`/
+> `SNAPSHOT_MAX` 4개 상수(2026-09-07 실측 근거, 위 7절 표)가 매 reconcile
+> 호출마다 개별 적용된다. 이 상수들이 "2026-09-07 시점 실측"에 기반하므로
+> — 옛 BOUNDED 가드의 "2주 이상 미루면 재확인" 취지는 여전히 유효하다:
+> reconcile이 아주 오랜 기간(수개월) 미뤄지면 history 노이즈 분포가
+> 달라졌을 수 있어 `TOLERANCE`/`MAX_INDIVIDUAL` 재실측이 필요할 수
+> 있다. 3·4번 항목은 여전히 유효하며 변경 없음. 상세: `handoff.md`
+> 2026-09-07(115차) "잔여"/"다음 세션 주의".
+>
+> **2026-09-07 정정(독립 리뷰, 위 문단 대체 아님 — 다기기 잔여 리스크
+> 범위 확장)**: 로그인 시 배경 병합 복원 effect(`useStudent.js`,
+> `fetchFullProgress` → `mergeProgressRecords` → `totalStars =
+> max(local, cloud)`)가 매번 실행되므로, 다른 기기 B가 과거 언제든
+> 클라우드에 올려둔 `total_stars`에 B의 미전송 지급(예: 토큰 없는 구
+> 세션이라 `unauthorized`로 큐에 남은 POST)이 포함돼 있으면 기기 A의
+> reconcile 스냅샷에도 포함된다 → 이후 B가 재로그인해 큐를 flush하면
+> 그 별이 이중 계산될 수 있다(학생당 1회성, 크기 = B의 미전송 별 수, B가
+> 동시에 켜져 있을 필요 없음). 이벤트 시각을 서버가 신뢰할 수 없어
+> 구조적으로 제거 불가. **수용 근거**: 반대 방향(스냅샷에서 병합분
+> 제외)은 정당한 레거시 별을 영구 누락시키므로 더 나쁘다. **완화**:
+> 재로그인 필수 정책으로 토큰 없는 세션이 소멸할수록 창이 줄어든다.
+> 운영자 모니터링: `reward_baseline_v2_status` 뷰 + `reward_baseline_
+> review` 테이블로 이상치 감시. 임의 dedup 추가 금지 — 문서화된 수용
+> 사항이다. 상세: `handoff.md` 2026-09-07(115차) "잔여".
 
 1. **Phase 2(레거시 7경로 서버 기록화) 순서** — v3_48을 먼저 실행하고
    Phase 2는 나중에 해도 안전한가, 아니면 Phase 2를 먼저 마쳐야 하는가?

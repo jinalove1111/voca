@@ -1,0 +1,34 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "cutover-client-race-fix-2026-09-07",
+  "task": "레거시 별 컷오버 클라이언트 레이스 방지 — holdRewardPosts/drainRewardPostQueueForStudent/rewardQueuePendingFor/postReconcileLegacyBaseline(wordLibrary.js, 크로스탭 보류 포함) + per-student quiescent reconcile 프로토콜(useStudent.js, 자연 sync 폴링 방식) + 신규/확장 테스트. 코디네이터 리뷰 2단계 전부 반영 완료.",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-07T00:00:00Z",
+  "updated_at": "2026-09-07T02:30:00Z",
+  "files_owned": [
+    "src/utils/wordLibrary.js",
+    "src/hooks/useStudent.js",
+    "scripts/testRewardPostQueue.mjs",
+    "scripts/testCutoverClient.mjs",
+    "scripts/wordLibraryRaceStub.mjs",
+    "scripts/wordLibraryStub.mjs",
+    "scripts/wordLibraryMultiTabStub.mjs"
+  ],
+  "files_read": [
+    "scripts/testLegacyGrantCoverage.mjs",
+    "scripts/fakeReact.mjs",
+    "scripts/fakeReactModule.mjs",
+    "scripts/testMultiTabRace.mjs",
+    "scripts/testStarDeltaOnEntry.mjs",
+    "scripts/testRestoreSyncRace.mjs",
+    "tests/harness/registry.mjs",
+    "package.json",
+    "api/grant-xp.js (읽기만 — 서버 계약 확인, 다른 세션 소유/작업 중이라 미수정)"
+  ],
+  "summary": "최종 프로토콜(코디네이터 리뷰 2차 반영): reconcile effect는 이제 새 sync를 전혀 만들지 않는다. useStudent.js에 syncSuccessSeqRef(useRef(0))를 추가해 기존 doSync 성공(markSyncSuccess 직후) 시마다 증가시키고, reconcile effect는 (1) holdRewardPosts(true), (2) drainRewardPostQueueForStudent(studentId)를 최대 3라운드, (3) remaining===0이 된 라운드에서 딱 한 번 seqAtStart(effect 시작 시점 캡처) 대비 syncSuccessSeqRef 증가를 폴링(250ms 간격, 최대 15초, 언마운트 가드) — 기존 ~2초 디바운스 자연 sync가 실제로 성공하는 걸 '관찰'만 함, (4) 자연 sync 관찰 후 pending 재확인(0 아니면 남은 라운드 예산으로 drain 재시도), (5) snapshot=recordRef.current.totalStars로 postReconcileLegacyBaseline 호출, (6) finally holdRewardPosts(false). 폴링의 setTimeout은 effect 콜백의 동기 커밋 구간에서 캡처해 테스트의 fake clock을 타게 함(디바운스 effect의 기존 관례와 동일). 이로써 로그인당 sync 호출 횟수/시점은 이 기능 추가 이전과 바이트 단위로 동일 — scripts/testStarDeltaOnEntry.mjs, scripts/testRestoreSyncRace.mjs를 git checkout으로 완전히 원복했고(diff 0 확인), scripts/testMultiTabRace.mjs는 전혀 손대지 않은 채 그대로 PASS. scripts/testCutoverClient.mjs를 새 폴링 프로토콜에 맞게 재작성(driveNaturalSync/exhaustPollBudget 헬퍼로 fake clock을 실제 전진시켜 자연 sync를 유도, 9시나리오 52단언 — 신규 시나리오9: 자연 sync가 15초 예산 안에 성공 못하면 reconcile 미호출/마커 없음/hold 해제). scripts/testRewardPostQueue.mjs(95단언, drain+크로스탭 hold)는 1단계 리뷰에서 이미 완료돼 이번엔 무변경.",
+  "blocker": null,
+  "next_action": "qa-reviewer 검수 요청. 커밋은 지시에 따라 이번 세션에서 하지 않음(planner/사람 판단). 서버 RPC(reconcile_legacy_baseline, 다른 세션 담당)와 통합 후 e2e 1회 재확인 권장.",
+  "note_deviation": "없음(이번 라운드는 지시받은 파일 범위 — src/hooks/useStudent.js, scripts/testCutoverClient.mjs — 그대로 준수, 회귀 테스트 3종은 코디네이터 지시대로 전부 원복/미수정 확인함)."
+}

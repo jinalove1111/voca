@@ -35,6 +35,7 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
   으로 구매 1회 실측 + 재로그인 영속성 확인 → ⑦ 전부 통과 후에만 ON.
 - 차단 사유: 운영자만 Supabase SQL Editor에서 DDL 실행 가능(헌법 규칙
   8) + commit 승인이 아직 없음(위 VERIFY 카드).
+- **2026-09-07 추가(115차)**: `supabase_v3_48_reward_legacy_baseline_v2.sql`이 전역 T 스냅샷(2026-09-06 하드닝판, EXACT/BOUNDED 가드)에서 학생별 `reconcile_legacy_baseline` RPC로 **전면 재설계**됐다 — 레이스 컨디션(클라이언트 업로드/서버 원장 INSERT 시각 비동기 간극에 의한 이중 계상/누락)이 실제로 존재함을 대조군 재현으로 증명(63단언 `testCutoverReconcile.mjs`가 구 설계로 320≠310을 재현). 위 순서의 ④(v3_48 실행)는 이제 학생별 원장 행을 0건 삽입(함수/뷰/marker만 설치)하고, 정산은 학생들이 각자 다음 로그인 시 스스로 채운다(진행 상황은 `reward_baseline_v2_status` 뷰로 모니터링) — ⑤ post-verify/⑥ QA 계정 검증/⑦ ON 순서 자체는 그대로 유효. 신규 스위트 `verify:cutover`(`testCutoverReconcile.mjs` 63단언/`testCutoverClient.mjs` 52단언) + `testBaselineV2Sql.mjs` 전면 재작성(83단언) + `testRewardPostQueue.mjs` 확장(49→95단언). 커밋 0, SQL 실행 0, 플래그 OFF 그대로. 상세: `handoff.md` 2026-09-07(115차), `DATABASE.md`/`TESTING.md` 동일 세션 갱신, `docs/operations/STAR_SHOP_PREPRODUCTION_PACKAGE.md` §0/§1/§3/§4/§8 superseding note.
 
 ### [P1] 야간 QA 2026-09-06 브랜치 `test/overnight-qa-2026-09-06` — 코드 커밋 10 + 문서, PR 생성/merge 결정 대기 (113차)
 - 내용: 결함 수정 6건(관리자 실학생 집계, 고정 SpeedBtn 탭 가로챔, practiceSentence 2건, 곡선 아포스트로피, 죽은 P0 테스트 등록) + 신규 invariant `WORD_HEADER_RESIDUE` + 실사고 가드 4종 게이팅 승격. Production WRITE 0. 상세 `docs/qa/overnight-2026-09-06/track-results.md`, handoff 113차.

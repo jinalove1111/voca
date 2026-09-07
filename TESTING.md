@@ -1010,3 +1010,58 @@ _이 섹션부터는 append — 위 내용은 원본 그대로 보존. 코드/SQ
 - SQL 실행 자체(`supabase_v3_47_town_shop.sql`/`supabase_v3_48_...v2.sql`)는 로컬에서 검증할 수 없다 — `testTownShopServer.mjs`/`testBaselineV2Sql.mjs`는 fake `supabase.rpc`/인메모리 시뮬레이션으로 **계약**(입출력 형태·분기)만 검증하고, 실제 Postgres 트랜잭션 원자성·`pg_advisory_xact_lock` 동시성·`RAISE EXCEPTION` 시 실제 ROLLBACK 여부는 운영자가 SQL Editor에서 실행한 뒤에만 확인 가능(SQL 파일 헤더에도 동일하게 명시).
 - `scripts/dryRunBaselineV2.mjs`(드라이런, `docs/operations/STAR_SHOP_PREPRODUCTION_PACKAGE.md` 4절)는 서버 원장이 아니라 **클라이언트 미러 근사 프록시**로 계산한 값이라 실제 v3_48 실행 결과와 정확히 같다는 보장은 없다 — BOUNDED 가드가 여유 있게 통과하는지 사전 감(感)을 잡는 용도.
 - 회귀 스위트: `npm run verify:stars`/`verify:reward`/`verify:reward-server`/`verify:double-events`/`verify:persistence`/`verify:paul-town-progression`/`verify:town-shop`/`verify:reward-stress`/`verify:mission-bonus`/`verify:game-reward`/`verify:release-gate` — 전부 PASS(무회귀 확인). `npm run build` PASS.
+
+## 관련 항목: CUTOVER RACE 수정 — 신규 스위트 2종 + `testBaselineV2Sql.mjs` 전면 재작성 + `testRewardPostQueue.mjs` 확장 (2026-09-07, 115차)
+
+_이 섹션부터는 append — 위 내용(114차)은 원본 그대로 보존한다. 114차의
+`supabase_v3_48_reward_legacy_baseline_v2.sql`(전역 T 스냅샷 + EXACT/
+BOUNDED 가드)이 레이스 컨디션(클라이언트 업로드 시각과 서버 원장 INSERT
+시각의 비동기 간극에 의한 이중 계상/누락)을 갖고 있다는 것이 드러나
+학생별 reconcile RPC로 전면 재설계됐다 — 배경/증명은 `handoff.md`
+2026-09-07(115차) 참고. 커밋 0, `townShopV1=false`, SQL 미실행,
+Production WRITE 0._
+
+### 신규/변경 스크립트 4개 + `tests/harness/registry.mjs` 등록(전부 `extra:false`, 신규 필수 게이팅)
+
+| 파일 | 단언 | 대상 | 네트워크/DB |
+|---|---|---|---|
+| `scripts/testCutoverReconcile.mjs`(신규) | 63 | CUTOVER RACE fence(서버). 실제 `api/grant-xp.js` 핸들러 번들 + 공유 인메모리 fake(ledger:reward 삽입·`reward_totals` 파생·RPC 계약 미러·학생 단위 직렬화)로 Device 프로토콜(grant/flush/upload/hold/reconcile) 12시나리오 — 대조군으로 **구 설계(직접 RPC, hold/drain 없음)를 재현해 320≠310 이중 계산을 실제로 관측**하고 새 프로토콜은 310으로 정확함을 확인(규칙 15). 매 시나리오 `earned` == 실지급 합 | 네트워크 0 |
+| `scripts/testCutoverClient.mjs`(신규) | 52 | CUTOVER RACE fence(클라이언트). `useStudent.js` reconcile effect: `restoreChecked` 후 hold → 이 학생 큐 강제 드레인(ack 대기, 최대 3회) → 자연 진행도 업로드 관찰(폴링, 추가 sync 호출 0) → pending 0 확인 → `snapshot=record.totalStars` → `postReconcileLegacyBaseline` → 확정 사유(`reconciled`/`already_reconciled`/`nothing_to_reconcile`/`review`/`invalid_snapshot`)만 `localStorage` 마커 → release+flush. hold는 `localStorage` 키로 cross-tab 적용(30초 만료). 실제 `useStudent` 번들+계측 스텁으로 호출 순서/횟수, 드레인 실패 skip, 타 학생 큐 무관, 보류 중 지급 제외, table_missing/network 재시도, review 종결, 토큰 없음, cross-tab hold, grantReward dedup/V1 회귀 확인 | 네트워크 0 |
+| `scripts/testBaselineV2Sql.mjs`(전면 재작성) | 83(정적 + 인메모리 시뮬레이션 13시나리오) | `supabase_v3_48_reward_legacy_baseline_v2.sql` = 학생별 `reconcile_legacy_baseline(uuid,int)` RPC(전역 T 스냅샷 폐기). 정적: security definer/`set search_path`/`#variable_conflict`/`revoke public·anon·authenticated`+`grant service_role`, 판정 순서(학생 존재→스냅샷 범위→advisory lock→earned→v2 존재→SNAPSHOT_SLACK→delta≤0 0행 마커→history 기반 타당성(TOLERANCE 100·MAX_INDIVIDUAL 1500) review 라우팅→insert unique→reconciled), 가드 상수가 `scripts/lib/baselineV2Guards.mjs`와 리터럴 동기화, EXACT 프리플라이트(v1 마커·3테이블·`reward_totals` 비어있지 않음), `sp.total_stars` 읽기는 SNAPSHOT_SLACK 확인 1곳뿐, `reward_ledger` UPDATE/DELETE 0, 모니터링 뷰 GRANT 0, 롤백은 v2 행·review·cutover 마커·함수·뷰만. 시뮬레이션 13종: 설치/이벤트 전·후/보류 후 release/재시도 멱등/재reconcile already/두 학생 교차/SLACK 초과·타당성 초과·MAX 초과 review/0-delta 마커/조작/`evaluateReconcile` 경계 — 매 시나리오 `earned_after` == 실지급 합 | 네트워크 0, **SQL 실행 0** |
+| `scripts/testRewardPostQueue.mjs`(확장, 신규 파일 아님) | 95(114차 49에서 확장) | 기존 재시도 큐 계약(114차) 위에 이번 세션의 `holdRewardPosts`/`rewardQueuePendingFor`/`drainRewardPostQueueForStudent`/크로스탭 hold 키(`paul_easy_reward_post_hold`, 30초 만료) 단언 추가 | 네트워크 0 |
+
+### 신규 `package.json` 스크립트 1종
+
+```
+"verify:cutover": "node scripts/testCutoverReconcile.mjs && node scripts/testCutoverClient.mjs"
+```
+
+`verify:baseline-v2`(기존, `node scripts/testBaselineV2Sql.mjs`)는 파일
+내용만 재작성됐을 뿐 스크립트 자체는 그대로 유지.
+
+### Dry-run 재실행(`scripts/dryRunBaselineV2.mjs`, READ-ONLY, anon key) — 프록시 보정
+
+114차 최초 프록시(`earned ≈ client rewardLedger mirror`만 사용)는 v1
+baseline 몫을 반영하지 못해 `review` 라우팅이 187명 중 60명(32%)까지
+과다 산출됐다 — 이상치가 아니라 **프록시 결함(artifact)**이었다. 보정된
+프록시(`earned_proxy = max(0, total_stars − historySince0823) +
+ledger_mirror`)로 재실행한 결과: **reconciled 24 / nothing_to_reconcile
+163 / review 0 / 실학생 총 1,835명**. 여전히 근사치이며 실제 SQL 실행
+결과와 다를 수 있음을 스크립트 헤더에 명시.
+
+### 정직한 커버리지 경계(과장 없이 기록, 114차 경계와 동일 정신)
+
+- 실제 Postgres 트랜잭션 원자성·`pg_advisory_xact_lock` 동시성·`RAISE
+  EXCEPTION` 시 실제 ROLLBACK 여부는 운영자가 SQL Editor에서 실행한
+  뒤에만 확인 가능 — `testBaselineV2Sql.mjs`/`testCutoverReconcile.mjs`
+  는 인메모리 시뮬레이션/fake RPC로 **계약**만 검증한다.
+  `reward_ledger`/`reward_totals`는 anon key로 42501이라 로컬에서 직접
+  재확인 불가 — dry-run은 근사 프록시일 뿐이다.
+- 같은 학생의 두 물리 기기(크로스탭이 아니라 서로 다른 브라우저/기기)가
+  동시에 미전송 레거시 지급을 갖고 있는 경우까지는 이 hold 메커니즘이
+  막지 못한다(희귀 케이스, `handoff.md` 2026-09-07(115차) "잔여" 참고).
+- 관련 회귀 스위트 목록(참고용, 이 문서 갱신 세션은 docs-only라 재실행
+  하지 않았다 — 실행/PASS 확인은 구현 세션의 책임): `npm run
+  verify:stars`/`verify:reward`/`verify:reward-server`/
+  `verify:double-events`/`verify:persistence`/`verify:town-shop`/
+  `verify:legacy-reward`/`verify:baseline-v2`/`verify:cutover`.

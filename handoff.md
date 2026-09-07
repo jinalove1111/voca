@@ -1,8 +1,266 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-06 (114차, STAR SPENDING vertical slice Phase 1(상점)
-+ Phase 2(레거시 지급 서버화) 구현·격리 검증. 플래그 townShopV1=false,
-Production WRITE 0, SQL 실행 0, commit 0, push/PR/merge 0. 운영자 리뷰
-대기. 상세는 아래 114차 섹션)_
+_최종 갱신: 2026-09-07 (115차, CUTOVER RACE 수정 — v3_48 레거시 baseline을
+전역 T 스냅샷에서 학생별 reconcile RPC로 전면 재설계해 이중 계상/누락
+레이스를 제거. 플래그 townShopV1=false, Production WRITE 0, SQL 실행 0,
+commit 0, push/PR/merge 0. 운영자 리뷰 대기. 상세는 아래 115차 섹션)_
+
+## 2026-09-07 (115차) — CUTOVER RACE 수정: v3_48 레거시 baseline을 전역 T 스냅샷 → 학생별 reconcile RPC로 재설계 (플래그 OFF, Production WRITE 0, commit 0)
+
+_전부 워킹트리(uncommitted), 브랜치 `feat/star-spending-phase1-2`. 114차가
+작성한 `supabase_v3_48_reward_legacy_baseline_v2.sql`(2026-09-06 하드닝판,
+전역 EXACT/BOUNDED 가드)이 구조적 레이스 컨디션을 갖고 있다는 것이
+후속 리뷰에서 드러나 SQL을 통째로 재작성했다. 커밋 0, push 0, SQL 실행
+0, 승인 티켓 0. 학습 자체는 멈출 필요가 없다(아래 "배포 순서" 참고)._
+
+### 배경 — 레이스가 어떻게 발생하는가(증명)
+
+- 114차 설계는 마이그레이션 실행 시각 `T` 한 번에 전체 학생을 순회하며
+  `delta = student_progress.total_stars(T) − reward_totals.earned_stars(T)`
+  를 전역 스냅샷으로 계산해 원장(`reward_ledger`)에 심었다.
+- 그런데 클라이언트는 별을 번 뒤 ~2초 디바운스를 거쳐서야
+  `student_progress.total_stars`를 서버에 업로드하고, 서버 원장 행은 그
+  지급을 트리거한 POST가 도착한 시점(또는 `wordLibrary.js`의 재시도
+  큐를 통해 그보다 한참 뒤)에야 INSERT된다 — "화면에 별이 반영된 시각"과
+  "서버 원장에 그 별이 기록된 시각" 사이에 신뢰할 수 없는 간극이 있다.
+  - `total_stars` 업로드가 `T` *이전*, 원장 INSERT가 `T` *이후*면 →
+    전역 스냅샷이 이미 이 별을 baseline으로 계상하고, 뒤이은 원장
+    INSERT가 또 한 번 더한다 → **이중 계상**.
+  - 원장 INSERT가 `T` *이전*, `total_stars` 업로드가 `T` *이후*면 → 두
+    계산 모두 이 별을 놓친다 → **누락**.
+- 이 간극은 "타임스탬프를 비교"해서는 메울 수 없다는 것이 핵심 증명이다
+  — `reward_ledger.source_id`/`student_daily_progress.date`에 들어가는
+  날짜가 전부 **클라이언트 시계** 기준이라, 서버가 신뢰할 수 있는 이벤트
+  시각이 어디에도 없다. 따라서 "클라이언트 시각을 서버 판정에 쓰지
+  않는다"는 결론이 설계의 출발점이 됐다(아래 "다음 세션 주의" 참고).
+
+### 설계 — per-student reconcile RPC(전역 스냅샷 폐기)
+
+- `available`/baseline 판정은 여전히 서버 원장(`reward_totals.earned`)만
+  권위로 삼는다(`student_progress.total_stars`는 여전히 클라이언트
+  표시용 캐시일 뿐, 규칙 1/4와 같은 정신 — CLAUDE.md).
+- `supabase_v3_48_reward_legacy_baseline_v2.sql`(전면 재작성)은 이제
+  `reconcile_legacy_baseline(p_student_id uuid, p_snapshot_total integer)`
+  함수(SECURITY DEFINER, service_role 전용) 하나만 새로 심고, **이 SQL
+  실행 자체는 학생별 원장 행을 단 1건도 삽입하지 않는다** — 함수/뷰/
+  감사용 marker 1행만 설치. 학생별 정산은 이후 각 학생이 로그인할 때
+  스스로 채운다.
+  - 학생별 advisory lock(`pg_advisory_xact_lock`)으로 더블클릭/재시도
+    직렬화(purchase_town_item과 동일 패턴).
+  - `v_earned = reward_totals.earned_stars`(권위) vs `p_snapshot_total`
+    (클라이언트가 신고한 스냅샷) 비교. `sp.total_stars`는 오직
+    `SNAPSHOT_SLACK` 상식 확인(스냅샷이 서버에 이미 반영된 값보다 비정상
+    적으로 앞서 있지 않은지) 1곳에서만 읽는다 — 잔액/구매 가능 여부
+    등 어떤 판정에도 쓰지 않는다.
+  - `delta = snapshot − earned`. `delta ≤ 0`이면 0-delta 확정 마커 행을
+    심어 이후 호출을 곧장 `already_reconciled`로 수렴시킨다(재계산 반복
+    방지).
+  - 타당성 검사: `delta ≤ history(v3_37 이후 progress_data.history의
+    starsEarned 합) + TOLERANCE(100)` **그리고** `delta ≤
+    MAX_INDIVIDUAL(1500)` — 둘 중 하나라도 초과하면 원장에 넣지 않고
+    `reward_baseline_review`에 기록만 하고 `review`로 응답한다(운영자
+    수동 검토 대상, 자동 반영 없음).
+  - 학생별 unique idempotency_key(`{studentId}:legacy-baseline:migration:
+    v2`)로 이중 삽입을 원천 차단, `unique_violation` 시
+    `already_reconciled`로 안전 수렴.
+  - EXACT 전제조건(SQL 설치 시점 1회만 확인, 런타임 반복 아님): v1
+    marker(`v3_37_reward_legacy_baseline`) 존재 / 필수 테이블 3개
+    (`reward_totals`/`reward_ledger`/`student_progress`) 존재 /
+    `reward_totals` 0행 아님 — 위반 시 `RAISE EXCEPTION`으로 트랜잭션
+    전체 ROLLBACK(함수/뷰/marker 무엇도 설치되지 않음).
+- 가드 상수(TOLERANCE=100/MAX_INDIVIDUAL=1500/SNAPSHOT_SLACK=200/
+  SNAPSHOT_MAX=100000)는 `scripts/lib/baselineV2Guards.mjs`에 동일
+  리터럴로 미러링(순수 함수 `evaluateReconcile`, 근거 주석 전문 포함) —
+  근거: history-blob-vs-total_stars 노이즈를 2026-09-07 READ-ONLY로
+  실측한 결과 p90=57/max=370(TOLERANCE=100은 p90 이상을 통과시키고
+  극단적 이상치만 review로 보냄). `student_daily_progress`는 2026-08-23
+  이후 63일간 history 대비 1,162별을 과소집계하고 있어(별도 감사 실측)
+  history blob을 타당성 판단의 근거로 채택했다(daily_progress 아님).
+  **상태: PROPOSED_OPERATOR_VALUES** — 이 세 값(TOLERANCE=100 /
+  MAX_INDIVIDUAL=1500 / SNAPSHOT_SLACK=200)은 세션이 실측 근거로 제안한
+  설계값이며 "Production 승인 완료"가 아니다. v3_48 실행 전 운영자 최종
+  확인 필요(2026-09-07 로컬 커밋 시점 기록).
+  두 파일 중 하나만 고치는 리터럴 드리프트는
+  `scripts/testBaselineV2Sql.mjs`가 정적으로 대조해 잡는다.
+- `reward_baseline_review.total_stars` 컬럼의 의미가 바뀌었다 — 더 이상
+  "그 시점 서버 `total_stars`"가 아니라 "그 학생이 reconcile 호출 시 들고
+  온 클라이언트 스냅샷(`p_snapshot_total`)"을 기록한다(컬럼명은 하위
+  호환을 위해 유지, 컬럼 자체는 재사용).
+- `reward_baseline_v2_status`(신규 모니터링 뷰) — `reconciled_students`/
+  `nothing_students`/`baseline_total`/`review_rows`를 파생 집계(저장
+  아님). 학생들이 로그인하며 reconcile을 호출할 때마다 자연스럽게
+  늘어난다. GRANT 0(service_role 전용), PG15+에서 `security_invoker=on`.
+
+### 서버 (`api/grant-xp.js`)
+
+- 신규 action `reconcile_legacy_baseline` 1개 추가(새 Vercel 함수 파일
+  없음, 기존 파일에 분기만 추가 — Vercel 12/12 함수 한도 유지).
+- 인증은 기존 `townShopAuthenticate(req)`와 동일 경로(토큰 `sid`만으로
+  학생 식별) — `req.body.studentId`/`earned`/`baseline`은 이 분기
+  어디서도 읽지 않는다. `snapshotTotal`만 정수 0~100000 범위 검증 후
+  그대로 RPC(`reconcile_legacy_baseline`)에 전달 — 값이 말이 되는지/
+  실제로 얼마를 이관할지는 전부 RPC(DB 함수)가 결정한다(TOCTOU 여지
+  없음, purchase_town_item/get_town_shop_state와 동일 신뢰 경계).
+- 에러 매핑: RPC 부재(`table_missing`), 그 외 RPC 오류(`rpc_failed`),
+  정상 응답은 `{ok, reason, baselineStars, earnedAfter}` 그대로 전달.
+
+### 클라이언트 프로토콜 (`src/hooks/useStudent.js` reconcile effect)
+
+- `restoreChecked`가 참이 된 이후 마운트당 1회만 시도(`legacyReconcileRanRef`
+  가드, StrictMode 이중 렌더 대비). `localStorage` 마커
+  `paul_easy_legacy_reconciled:{studentId}`가 있으면 재시도하지 않는다.
+- 프로토콜(최대 3라운드, 매 라운드 drain을 조건 없이 먼저 시도):
+  1. `holdRewardPosts(true)` — 이 순간부터 이 탭+다른 탭(크로스탭,
+     localStorage 키 `paul_easy_reward_post_hold`, TTL 30초)의 신규
+     레거시 전송을 보류(로컬 지급 자체는 지연 없음, enqueue는 계속됨).
+  2. `drainRewardPostQueueForStudent(studentId)`로 이 학생 몫 큐를
+     hold를 무시하고 실제 전송+ack까지 대기. `remaining > 0`이면 다음
+     라운드에서 재시도(3라운드 예산 안에서), 다 써도 남으면 포기(마커
+     없이 종료, 다음 마운트에서 재시도).
+  3. `remaining === 0`이 처음 확인된 라운드에서만 자연 진행도 업로드
+     (기존 ~2초 디바운스 `doSync`)가 성공하는 것을 **폴링으로 관찰**
+     (250ms 간격, 최대 15초 예산) — 이 effect가 직접 추가 sync를
+     호출하지 않는다(기존 sync 호출 횟수/타이밍 계약을 바이트 단위로
+     보존 — `testStarDeltaOnEntry.mjs`/`testRestoreSyncRace.mjs`/
+     `testMultiTabRace.mjs` 무회귀, 코디네이터 2차 리뷰 결정).
+  4. 자연 sync 관찰 직후 pending을 재확인해 여전히 0이면 quiescent
+     확정, 아니면(그 사이 새 grantReward) 다음 라운드에서 다시 drain.
+  5. quiescent 확정 시에만 `snapshot = record.totalStars`를 읽어
+     `postReconcileLegacyBaseline(snapshot)` 호출.
+  6. 확정 사유(`reconciled`/`already_reconciled`/`nothing_to_reconcile`/
+     `review`/`invalid_snapshot`)에서만 마커 기록. `relogin_required`/
+     `unauthorized`/`table_missing`/`rpc_failed`/`network_failed`는
+     마커 없이 다음 마운트(재로그인/새로고침)에서 재시도.
+  7. `finally`에서 `holdRewardPosts(false)`(크로스탭 키 삭제 포함,
+     내부적으로 큐 flush 트리거).
+- **불변식**: `pending === 0` 확인 시점(hold 아래)이면 그 순간의
+  snapshot에 반영된 모든 별은 legacy 큐 또는 서버 원장 둘 중 하나에만
+  속한다(enqueue가 상태 patch 이전에 동기로 일어나고, hold가 신규
+  전송을 막고, drain이 await로 ack까지 확인하기 때문).
+- `src/utils/wordLibrary.js` 신규/변경: `holdRewardPosts`/
+  `rewardQueuePendingFor`/`drainRewardPostQueueForStudent`/
+  `postReconcileLegacyBaseline`(await 왕복, `_sessionToken` 없으면
+  `relogin_required`, throw 없이 `network_failed`로 흡수) + 크로스탭
+  hold 키.
+
+### 테스트
+
+- `scripts/testCutoverReconcile.mjs`(신규, 63단언, `verify:cutover`
+  1번째) — 서버측 fence. 실제 `api/grant-xp.js` 핸들러 번들 + 공유
+  인메모리 fake(ledger:reward 삽입·`reward_totals` 파생·RPC 계약
+  미러·학생 단위 직렬화)로 Device 프로토콜(grant/flush/upload/hold/
+  reconcile) 12시나리오. 대조군으로 **구 설계(직접 RPC, hold/drain
+  없음)를 그대로 재현해 320≠310 이중 계산을 실제로 관측**하고, 새
+  프로토콜은 같은 시나리오에서 310으로 정확함을 확인(규칙 15 — 회귀가
+  실제로 있었다는 것을 수정 전 코드로 재현). 매 시나리오 `earned` ==
+  실지급 합.
+- `scripts/testCutoverClient.mjs`(신규, 52단언, `verify:cutover` 2번째)
+  — 클라이언트측 fence. 실제 `useStudent.js` 번들+계측 스텁으로 정확히
+  1회 호출·순서(hold→drain→sync→reconcile→release), 드레인 실패 시
+  skip·마커 없음, 타 학생 큐 무관, 보류 중 지급은 snapshot 제외·release
+  후 1회 POST, 마커 있으면 무호출, table_missing/network는 재시도·
+  review는 종결, 토큰 없음, cross-tab hold, grantReward dedup/V1 회귀.
+- `scripts/testBaselineV2Sql.mjs`(전면 재작성, 83단언) — 옛 EXACT/
+  BOUNDED 전역 가드 버전을 검증하던 스위트를 새 per-student RPC
+  설계에 맞춰 재작성. 정적(security definer/search_path/
+  #variable_conflict/revoke public·anon·authenticated+grant
+  service_role/판정 순서/가드 상수 리터럴이 `baselineV2Guards.mjs`와
+  동기화/EXACT 프리플라이트 3종/`sp.total_stars` 단일 읽기 지점/
+  `reward_ledger` UPDATE·DELETE 0/모니터링 뷰 GRANT 0/롤백 범위) +
+  인메모리 시뮬레이션 13종(설치/이벤트 전후/보류 후 release/재시도
+  멱등/재reconcile already/두 학생 교차/SLACK 초과·타당성 초과·MAX
+  초과 review/0-delta 마커/조작/`evaluateReconcile` 경계) — 매
+  시나리오 `earned_after` == 실지급 합.
+- `scripts/testRewardPostQueue.mjs`(확장, hold/drain/cross-tab 단언
+  추가) — 기존 재시도 큐 계약(114차) 위에 이번 세션의
+  `holdRewardPosts`/`rewardQueuePendingFor`/
+  `drainRewardPostQueueForStudent`/크로스탭 키(`paul_easy_reward_post_
+  hold`, 30초 만료) 단언을 추가.
+- `tests/harness/registry.mjs`에 신규 2종은 `extra:false`(신규 필수
+  게이팅), 기존 확장분도 동일. `package.json`에
+  `"verify:cutover": "node scripts/testCutoverReconcile.mjs && node
+  scripts/testCutoverClient.mjs"` 신규 추가.
+
+### Dry-run 재실행 (`scripts/dryRunBaselineV2.mjs`, READ-ONLY, anon key)
+
+- 114차의 최초 프록시는 `earned ≈ client rewardLedger mirror` 만으로
+  근사해 v1 baseline 몫을 반영하지 못했고, 그 결과 `review` 라우팅이
+  187명 중 60명(32%)까지 과다 산출됐다 — **이 60명은 실제 이상치가
+  아니라 프록시 결함(artifact)**이었다.
+- 보정된 프록시(`earned_proxy = max(0, total_stars − historySince0823)
+  + ledger_mirror`, v1 baseline 몫을 역산해 반영)로 재실행한 결과:
+  **reconciled 24 / nothing_to_reconcile 163 / review 0 / total 실학생
+  1,835명**(구 프록시 대비 review 60→0). 이 수치는 여전히 근사치이며
+  실제 `reconcile_legacy_baseline()` 실행 결과와 다를 수 있다 — 스크립트
+  헤더에 이 한계를 명시.
+
+### 배포 순서 (갱신)
+
+1. 코드 배포(플래그 OFF, reconcile 클라이언트 포함) — 학습은 멈추지
+   않는다.
+2. READ-ONLY 프리플라이트(pre).
+3. `supabase_v3_47_town_shop.sql` 실행(운영자).
+4. post-verify.
+5. `supabase_v3_48_reward_legacy_baseline_v2.sql` 실행(운영자, 함수/뷰/
+   marker만 설치, 학생별 원장 행 0건 삽입).
+6. post-verify + 학생들이 다음 로그인 시 스스로 reconcile(모니터링:
+   `reward_baseline_v2_status` 뷰).
+7. QA 계정(Cookie/Paul)으로 구매 1회 실측.
+8. 재로그인 영속성 확인(재로그인 시 reconcile이 `already_reconciled`로
+   조용히 종료되는지 포함).
+9. 전부 통과 후에만 `townShopV1: true`.
+
+### 잔여(정직 기록)
+
+- 같은 학생이 두 기기(또는 두 탭)를 동시에 쓰면서 한쪽 기기에 미전송
+  레거시 지급이 남아 있는 경우, 그 별이 reconcile 스냅샷에 포함될 수
+  있다(희귀 케이스 — 크로스탭 hold는 같은 브라우저 프로필 내에서만
+  작동, 서로 다른 물리 기기 간에는 작동하지 않음).
+  - **2026-09-07 정정(독립 리뷰, 위 문장 대체 아님 — 범위가 더 넓다)**:
+    이 잔여 리스크는 "두 기기가 동시에 켜져 있어야" 발생하는 게
+    아니다. 로그인 시 배경 병합 복원 effect(`useStudent.js`,
+    `fetchFullProgress` → `mergeProgressRecords` → `totalStars =
+    max(local, cloud)`)가 매번 실행되므로, 다른 기기 B가 **과거
+    언제든** 클라우드에 올려둔 `total_stars`에 B의 미전송 지급(예: 토큰
+    없는 구 세션이라 `unauthorized`로 큐에 남은 POST)이 포함돼 있으면,
+    기기 A의 reconcile 스냅샷에도 그 값이 그대로 병합돼 들어간다 →
+    이후 B가 재로그인해 자신의 큐를 flush하면 같은 별이 **이중 계산**
+    될 수 있다(학생당 1회성, 크기 = B의 미전송 별 수, B가 A와 동시에
+    켜져 있을 필요 없음). 이벤트 시각을 서버가 신뢰할 수 없어 이
+    구조적 갭 자체를 제거할 방법은 없다(위 "다음 세션 주의" 참고).
+    **수용 근거**: 반대 방향(reconcile 스냅샷에서 최근 병합분을
+    제외하는 방식)은 정당하게 번 레거시 별을 영구 누락시키므로 이
+    잔여 리스크보다 더 나쁘다. **완화**: 재로그인 필수 정책으로 토큰
+    없는 구 세션이 소멸할수록 이 창이 줄어든다. 운영자는
+    `reward_baseline_v2_status` 뷰와 `reward_baseline_review` 테이블로
+    이상치를 모니터링한다.
+- `pronunciation-unidentified`는 여전히 클라이언트 전용(114차부터 의도적
+  미서버화 — 13경로 중 유일).
+- reconcile 이후 `daily_cap_reached`/확정 거부로 실제로 지급되지 않은
+  이벤트는 애초에 "실제로 벌지 않은 것"이라 authoritative earned에
+  포함되지 않는 것이 맞다(허용된 동작, 버그 아님).
+- `reward_baseline_review`로 빠진 학생은 운영자가 수동 승인해야 한다
+  (SELECT/INSERT 템플릿은 SQL 파일 하단 + `STAR_SHOP_PREPRODUCTION_
+  PACKAGE.md` 6절에 있음, **이 세션은 실행하지 않음**).
+- TOLERANCE/MAX_INDIVIDUAL/SNAPSHOT_SLACK 상수와 레거시 일일 상한값은
+  여전히 운영자 최종 승인 대상(OPEN DECISION, 114차부터 이어짐).
+- 서버 원장(`reward_ledger`/`reward_totals`)은 anon key로 42501이라
+  로컬에서 직접 재확인 불가 — 위 dry-run은 어디까지나 근사 프록시.
+
+### 다음 세션 주의
+
+- **전역 T baseline 재도입 금지** — "한 번에 전체 학생을 계산"하는
+  설계는 이 세션이 증명한 바로 그 레이스를 재발시킨다(CLAUDE.md 규칙 3,
+  재구현 금지).
+- **클라이언트 시각 비교 금지** — `reward_ledger.source_id`/
+  `student_daily_progress.date`는 클라이언트 시계 기준이라 서버 판정에
+  타임스탬프 비교를 쓰지 않는다는 설계 전제를 다시 열지 말 것.
+- **reconcile 마커 키 형식 동결** — `localStorage`
+  `paul_easy_legacy_reconciled:{studentId}` / 서버
+  `idempotency_key = '{studentId}:legacy-baseline:migration:v2'` /
+  `source_id = 'v2'` — 이 3개 키 형식을 바꾸면 이미 배포된 기기의
+  마커와 서버 원장 행이 서로 못 알아본다.
+- **다기기 미전송 POST 잔여 리스크는 문서화된 수용 사항** — 임의
+  dedup 추가 금지(위 "잔여" 절 2026-09-07 정정 참고).
 
 ## 2026-09-06 (114차) — STAR SPENDING vertical slice Phase 1(상점) + Phase 2(레거시 지급 서버화) 구현·격리 검증 (플래그 OFF, Production WRITE 0, commit 0)
 

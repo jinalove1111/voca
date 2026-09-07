@@ -73,7 +73,7 @@ _작성: 2026-07-18. 저장소의 `supabase_*.sql` 11개 파일 전체를 읽고
 | `seasons` | v2.8(2026-07-19, 게임화 하위카드 9번 — Seasonal Progression) | `id`, `started_at` timestamptz(default now()), `note` text(선택, 순수 참고용), `created_at` | FK 없음(반/학생 무관 전역 마커) | 시즌 경계 마커 — 관리자가 "새 시즌 시작" 버튼(`api/start-new-season.js`)을 누를 때마다 새 행 1개 insert(append-only, 삭제/업데이트 없음). 가장 최근 행(`started_at` 최댓값)이 "현재 시즌". `students`/`xp_ledger`/`progress_data.ticketLedger` 등 어떤 기존 테이블도 이 SQL이 건드리지 않는다 — "리셋"은 이 경계 이후 원장 항목만 다시 합산하는 파생 계산(`src/utils/ticketEconomy.js sumTicketBalanceSince`, `src/utils/houseSystem.js computeHouseSeasonScores`)일 뿐, 물리적 삭제가 아니다(설계 판단은 SQL 파일 헤더 참고). `word_king_history`와 같은 이유로 anon read-only + service_role 전용 write(그리핑 방지 — anon 쓰기 허용 시 학생 누구나 가짜 경계로 전교생의 시즌 표시를 리셋시킬 수 있음) |
 | `town_items` | v3.47(2026-09-06, STAR SPENDING Phase 1 — Town Shop V1, **미실행**) | `id` text PK, `name`, `emoji`, `price` smallint(`check(price>0)`), `active` boolean default true, `created_at` | FK 없음(카탈로그) | 상점 아이템 표시용 카탈로그 — 시드 1행(`shop-lamp` 💡 책상 램프, 60별, `on conflict do nothing`이라 재실행해도 운영자가 수동 조정한 가격을 덮어쓰지 않음). anon/authenticated에 `select`만 GRANT(가격 변경 GRANT 없음) |
 | `star_purchases` | v3.47(2026-09-06, STAR SPENDING Phase 1, **미실행**) | `id` uuid PK, `student_id`, `item_id`, `stars_spent` smallint(`check>0`), `created_at`, **unique(`student_id`,`item_id`)**(별도 idempotency_key 컬럼 없음 — 이 unique 자체가 멱등 메커니즘) | `student_id → students(id)` cascade, `item_id → town_items(id)` | 학생별 구매 이력 — **아이템 소유권의 유일한 진실 원천**(`progress_data`/`student_progress` 등 어떤 진행도 blob에도 아이템 필드 없음, 클라이언트 조작 불가). `reward_ledger`(v3_36)와 동일한 최소 권한(정책 0 + GRANT 0, anon/authenticated 완전 차단) — 학생 화면도 이 테이블을 직접 SELECT하지 않고 `get_town_shop_state()` RPC로만 파생 잔액/보유 목록을 받는다. 구매 자체는 `purchase_town_item()` RPC(둘 다 SECURITY DEFINER, service_role 전용, 학생별 advisory lock으로 더블클릭/재시도 직렬화) |
-| `reward_baseline_review` | v3.48(2026-09-06, 레거시 baseline v2, **미실행**) | `student_id`, `total_stars`, `ledger_earned`, `delta`, `plausible_max`, `migration_name`, `created_at`, PK(`student_id`,`migration_name`) | `student_id`는 uuid 컬럼일 뿐 SQL 원문에 `references students(id)` FK 선언 없음(확인된 사실만 기록) | v3_48이 "레거시 delta가 타당성 상한(v1 마커 이후 경과일×일일상한+50)을 초과"로 판단해 원장에 자동 반영하지 않고 사람 검토로 넘긴 학생을 기록하는 큐 — RLS ON, 정책 0 + GRANT 0(anon/authenticated 차단) |
+| `reward_baseline_review` | v3.48(2026-09-06, 레거시 baseline v2, **미실행**) | `student_id`, `total_stars`, `ledger_earned`, `delta`, `plausible_max`, `migration_name`, `created_at`, PK(`student_id`,`migration_name`) | `student_id`는 uuid 컬럼일 뿐 SQL 원문에 `references students(id)` FK 선언 없음(확인된 사실만 기록) | v3_48이 "레거시 delta가 타당성 상한(v1 마커 이후 경과일×일일상한+50)을 초과"로 판단해 원장에 자동 반영하지 않고 사람 검토로 넘긴 학생을 기록하는 큐 — RLS ON, 정책 0 + GRANT 0(anon/authenticated 차단). **2026-09-07 갱신(115차, 컬럼 의미 변경 — 컬럼 추가/삭제 없음)**: v3_48이 전역 T 스냅샷에서 학생별 `reconcile_legacy_baseline` RPC로 전면 재설계되며 `total_stars` 컬럼의 의미가 "그 시점 서버 `student_progress.total_stars`"에서 "그 학생이 reconcile 호출 시 들고 온 클라이언트 스냅샷(`p_snapshot_total`)"으로 바뀌었다(컬럼명은 하위 호환을 위해 그대로 유지). 상세는 아래 신규 서브섹션 "2026-09-07 레거시 baseline v2 — 학생별 reconcile RPC(v3_48 재설계)" 참고. |
 
 **`xp_totals`(VIEW, 테이블 아님)** — `xp_ledger`를 `student_id`별로 `sum(amount)` 집계한 파생 뷰(저장 컬럼 아님, 매 조회 시 재계산). "저장된 중복값보다 파생값을 우선한다"는 이번 지시를 스키마 레벨에서 강제하기 위해 `student_progress.hat_stage` 같은 "빠른 조회용 사본 컬럼" 패턴 대신 VIEW를 선택했다(`supabase_v2_3_paul_rank.sql` 주석 참고). anon/authenticated에 SELECT GRANT됨.
 
@@ -510,6 +510,46 @@ _추가: 2026-09-06(114차). 코드/SQL 전부 구현·작성 완료, 커밋 0, 
 - `star_purchases` — `enable row level security` + 정책 0개 + `revoke all on table star_purchases from anon, authenticated`(`reward_ledger`(v3_36)와 동일한 최소 권한 패턴) — 클라이언트는 자신의 구매 내역조차 직접 SELECT하지 않고 항상 `get_town_shop_state()` RPC로만 파생값(잔액/보유 아이템)을 받는다.
 - `reward_baseline_review`(`supabase_v3_48_reward_legacy_baseline_v2.sql`) — `enable row level security` + 정책 0개 + `revoke all ... from anon, authenticated`.
 - `purchase_town_item(uuid, text)` / `get_town_shop_state(uuid)` — 둘 다 SECURITY DEFINER, `revoke all ... from public`/`from anon, authenticated` 후 `grant execute ... to service_role`만 — 클라이언트는 `api/grant-xp.js`의 신규 action(`purchase_town_item`/`get_town_shop_state`, 세션 토큰 `sid`로만 학생 식별, `req.body.studentId`/가격/잔액은 신뢰하지 않음)을 통해서만 호출한다. 새 Vercel 서버리스 함수 파일은 추가하지 않았다(기존 `api/grant-xp.js`에 action 2개 추가 — Vercel 무료 플랜 12개 함수 한도 유지).
+
+### 2026-09-07 레거시 baseline v2 — 학생별 reconcile RPC(v3_48 재설계, 115차, 미실행)
+
+_추가: 2026-09-07(115차). `supabase_v3_48_reward_legacy_baseline_v2.sql`이
+2026-09-06 하드닝판(전역 T 스냅샷 + EXACT/BOUNDED 가드)에서 전면
+재설계됐다 — 배경/레이스 증명은 `handoff.md` 2026-09-07(115차) 참고. 이
+SQL은 여전히 **미실행**이며, 아래는 파일 원문 기준 계획이다._
+
+- `reconcile_legacy_baseline(p_student_id uuid, p_snapshot_total integer)`
+  — 신규 함수(SECURITY DEFINER, `set search_path = public`,
+  `#variable_conflict use_column`). `revoke all ... from public`/
+  `from anon, authenticated` 후 `grant execute ... to service_role`만 —
+  클라이언트는 `api/grant-xp.js`의 신규 action
+  `reconcile_legacy_baseline`(세션 토큰 `sid`로만 학생 식별,
+  `snapshotTotal`은 정수 0~100000 범위만 검증 후 그대로 RPC 전달, 값의
+  타당성/실제 이관액은 전부 RPC가 결정)을 통해서만 호출한다. 반환
+  `(ok boolean, reason text, baseline_stars integer, earned_after
+  integer)` — `reason`은 `reconciled`/`already_reconciled`/
+  `nothing_to_reconcile`/`review`/`invalid_snapshot`/`student_not_found`
+  중 하나. 학생별 `pg_advisory_xact_lock`으로 더블클릭/재시도 직렬화
+  (`purchase_town_item`과 동일 패턴). 이 함수 호출 자체(SQL 실행과
+  무관)가 `reward_ledger`에 `source_id='v2'` 행을 학생당 최대 1건만
+  심는다 — SQL 파일 실행 시점에는 0건.
+- `reward_baseline_v2_status`(VIEW, 신규) — `reward_ledger`의
+  `source_id='v2'` 행 + `reward_baseline_review`를 집계하는 파생
+  모니터링 뷰(`reconciled_students`/`nothing_students`/`baseline_total`/
+  `review_rows`, 저장 아님, 매 조회 시 재계산). `xp_totals`와 동일한
+  이유로 GRANT 0(service_role 전용), PG15+에서
+  `alter view ... set (security_invoker = on)`(`reward_totals`(v3_36)와
+  동일 자기교정 패턴).
+- 가드 상수(함수 DECLARE 절 CONSTANT, `scripts/lib/baselineV2Guards.mjs`와
+  리터럴 동기화 — `scripts/testBaselineV2Sql.mjs`가 정적 대조):
+  `TOLERANCE=100`/`MAX_INDIVIDUAL=1500`/`SNAPSHOT_SLACK=200`/
+  `SNAPSHOT_MAX=100000`(2026-09-07 실측 근거는 SQL 파일 DECLARE 절 주석
+  전문 참고 — history-blob-vs-total_stars 노이즈 p90=57/max=370).
+- 옛 전역 BOUNDED 가드(`candidate_count`/`total_delta_sum`/
+  `max_individual`/`progress_rows` — 전체 학생 집단 사전 집계 상한)는
+  "한 번에 전체를 계산한다"는 전제에서만 의미가 있어 전부 폐기됐다 —
+  아래 표(위쪽 `reward_baseline_review` 행 각주 참고)와 함께 이 SQL을
+  다루는 다른 세션은 옛 상수명을 재사용하지 말 것.
 
 ## 관련 파일
 
