@@ -3344,11 +3344,98 @@ async function sendRewardPostOnce(entry) {
   }
 }
 
+// 레거시 별 지급 컷오버 보류 플래그(2026-09-06/07, "per-student reconcile" —
+// useStudent.js의 reconcile effect 헤더 주석 참고) — 이 학생의 레거시 별
+// 총합을 서버 기준선으로 확정하는 짧은 창(quiescent point) 동안, 그 사이에
+// 발생하는 레거시 grantReward가 자신의 postRewardEvent를 네트워크로 내보내
+// 서버 원장에 먼저 반영되는 걸 막는다(그러면 기준선 계산에 그 지급이
+// 이중으로 잡힐 수 있음). 큐잉 자체(idempotent 기록)는 보류 중에도 계속
+// 하므로 지급 자체는 전혀 지연되지 않는다 — 오직 "언제 서버에 통지하는가"
+// 만 미룰 뿐(release 시 flushRewardPostQueue()로 흘려보냄).
+//
+// 크로스탭 보류(독립 리뷰 지적, 2026-09-07) — 위 _rewardPostHold는 이
+// 탭(이 JS 모듈 인스턴스)의 메모리에만 있어서, 같은 학생이 다른 탭/창을
+// 동시에 열어둔 경우(흔치 않지만 불가능하지 않음) 그 다른 탭은 이 탭이
+// reconcile 중인지 전혀 모른 채 자기 grantReward의 postRewardEvent를
+// 그대로 네트워크로 내보낼 수 있다 — 그러면 이 탭의 "quiescent 확인"이
+// 성립했던 순간과 실제 서버 상태가 어긋난다. localStorage는 같은 브라우저
+// 프로필의 모든 탭이 공유하므로, holdRewardPosts(true)가 이 키에
+// 만료시각을 적어두면 다른 탭의 postRewardEvent/flushRewardPostQueue도
+// (이 키를 확인하는 한) 같이 멈춘다. 만료(30초)를 둔 이유는 탭이 크래시/
+// 강제종료돼 release(holdRewardPosts(false), 키 삭제)를 못 부르는 경우에도
+// 그 학생의 정상 지급 전송이 영원히 막히지 않게 하기 위해서다 — reconcile
+// 자체가 몇 초 이내에 끝나는 짧은 작업이라 30초는 충분히 넉넉한 여유.
+const REWARD_POST_HOLD_KEY = 'paul_easy_reward_post_hold'
+const REWARD_POST_HOLD_TTL_MS = 30000
+function writeCrossTabRewardPostHold(on) {
+  try {
+    if (on) localStorage.setItem(REWARD_POST_HOLD_KEY, JSON.stringify({ until: Date.now() + REWARD_POST_HOLD_TTL_MS }))
+    else localStorage.removeItem(REWARD_POST_HOLD_KEY)
+  } catch {
+    // 저장 실패 — 조용히 무시(이 탭 자신의 _rewardPostHold는 여전히 유효,
+    // 크로스탭 보호만 못 받을 뿐 학습 흐름엔 영향 없음).
+  }
+}
+function isCrossTabRewardPostHeld() {
+  try {
+    const raw = localStorage.getItem(REWARD_POST_HOLD_KEY)
+    if (!raw) return false
+    const parsed = JSON.parse(raw)
+    return !!(parsed && typeof parsed.until === 'number' && Date.now() < parsed.until)
+  } catch {
+    return false // 파싱 실패 등 — 안전하게 "보류 아님"으로 취급(fail-open, 학습 흐름 비차단)
+  }
+}
+
+let _rewardPostHold = false
+export function holdRewardPosts(on) {
+  const releasing = _rewardPostHold && !on
+  _rewardPostHold = !!on
+  writeCrossTabRewardPostHold(_rewardPostHold) // 다른 탭도 같이 멈추게(위 헤더 주석)
+  if (releasing) flushRewardPostQueue() // fire-and-forget — 호출부가 필요하면 별도로 await 가능
+}
+export function __isRewardPostHeldForTest() { return _rewardPostHold }
+
+// 이 학생 몫으로 아직 서버에 통지되지 않은 큐 항목 수 — reconcile effect가
+// "정말 조용한 시점인가"(이 학생의 레거시 지급이 전부 서버에 반영됐는가)를
+// 판단하는 데 쓴다. 순수 조회(localStorage read only) — 큐를 변형하지 않음.
+export function rewardQueuePendingFor(studentId) {
+  if (!studentId) return 0
+  return readRewardPostQueue().filter((e) => e && e.studentId === studentId).length
+}
+
+// 컷오버 reconcile 프로토콜 전용(2026-09-07, 독립 리뷰 수정) — 보류 중에도
+// "이 학생" 몫의 기존 큐를 실제로 비워내는 유일한 합법 경로. hold(이
+// 탭이든 다른 탭이든)를 의도적으로 무시한다 — useStudent.js의 reconcile
+// effect가 기준선을 신고하기 전 반드시 거쳐야 하는 단계이기 때문이다(아래
+// useStudent.js 헤더 주석의 "pending==0 ⇒ snapshot ⊆ legacy ∪ ledger" 증명
+// 참고). 호출 시점에 딱 한 번 이 학생 몫만 스냅샷 떠서(batch) 순차 처리 —
+// 처리하는 도중 새로 들어온 항목(같은 tick의 다른 grantReward 등)은
+// 이번 batch에 포함되지 않는다(hold가 여전히 그 항목들의 신규 전송은
+// 막고 있으므로 안전 — 호출부가 필요하면 remaining을 보고 다음 라운드에서
+// 다시 이 함수를 불러 그 항목까지 처리한다).
+export async function drainRewardPostQueueForStudent(studentId) {
+  if (!studentId) return { sent: 0, remaining: 0 }
+  const batch = readRewardPostQueue().filter((e) => e && e.studentId === studentId)
+  let sent = 0
+  for (const entry of batch) {
+    const { removeFromQueue } = await sendRewardPostOnce(entry)
+    if (removeFromQueue) {
+      writeRewardPostQueue(__rewardQueueRemove(readRewardPostQueue(), entry.key))
+      sent++
+    } else {
+      writeRewardPostQueue(__rewardQueueRegisterFailure(readRewardPostQueue(), entry.key))
+    }
+  }
+  return { sent, remaining: rewardQueuePendingFor(studentId) }
+}
+
 export async function postRewardEvent(studentId, rewardType, sourceType, sourceId) {
   if (!studentId || !rewardType || !sourceType || !sourceId) return
   const key = rewardQueueEntryKey(studentId, rewardType, sourceType, sourceId)
   const entry = { studentId, rewardType, sourceType, sourceId, key, attempts: 0, at: Date.now() }
   writeRewardPostQueue(__rewardQueueEnqueue(readRewardPostQueue(), entry))
+  if (_rewardPostHold || isCrossTabRewardPostHeld()) return // 보류 중(이 탭 또는 다른 탭) — 큐에는 남기되(idempotent) 네트워크는 release 시 flush/drain으로 미룸
   const { removeFromQueue } = await sendRewardPostOnce(entry)
   if (removeFromQueue) {
     writeRewardPostQueue(__rewardQueueRemove(readRewardPostQueue(), key))
@@ -3370,6 +3457,7 @@ export async function postRewardEvent(studentId, rewardType, sourceType, sourceI
 // 실행을 막는다.
 let _rewardPostQueueFlushing = false
 export async function flushRewardPostQueue() {
+  if (_rewardPostHold || isCrossTabRewardPostHeld()) return // 보류 중(이 탭 또는 다른 탭) — release가 알아서 다시 흘려보냄
   if (!_sessionToken) return
   if (_rewardPostQueueFlushing) return
   _rewardPostQueueFlushing = true
@@ -3385,6 +3473,32 @@ export async function flushRewardPostQueue() {
     }
   } finally {
     _rewardPostQueueFlushing = false
+  }
+}
+
+// 컷오버 레거시 별 기준선 재조정(2026-09-06/07) — postTownPurchase 바로
+// 위에 둔 이유는 이 함수도 "즉시 응답을 기다려야 하는" AWAIT 왕복이라서다
+// (fire-and-forget인 postRewardEvent/postXpEvent와 다름). 학생 식별은
+// studentId를 절대 body에 싣지 않고 오직 _sessionToken(서버가 토큰으로
+// 학생을 특정)만으로 한다 — CLAUDE.md 규칙 4(UUID로만 식별)와 별개로,
+// 여기서는 UUID조차 클라이언트가 보내지 않는다(토큰이 이미 그걸 담보).
+// snapshotTotal은 호출부(useStudent.js reconcile effect)가 "지금 이 순간의
+// record.totalStars"를 그대로 넘기는 값 — 음수/소수/NaN 방어로 여기서
+// Math.max(0, Math.floor(...))만 적용하고, 그 값이 맞는지 서버가 최종
+// 판정한다(review/invalid_snapshot 등). 절대 throw하지 않는다(catch에서
+// network_failed로 흡수, postTownPurchase와 동일 원칙).
+export async function postReconcileLegacyBaseline(snapshotTotal) {
+  if (!_sessionToken) return { ok: false, reason: 'relogin_required' }
+  const safeSnapshot = Math.max(0, Math.floor(Number(snapshotTotal) || 0))
+  try {
+    const res = await fetch('/api/grant-xp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reconcile_legacy_baseline', token: _sessionToken, snapshotTotal: safeSnapshot }),
+    })
+    return await res.json()
+  } catch {
+    return { ok: false, reason: 'network_failed' }
   }
 }
 

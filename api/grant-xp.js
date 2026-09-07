@@ -167,6 +167,62 @@ export default async function handler(req, res) {
     return
   }
 
+  // ── 레거시 별 이관(reconcile_legacy_baseline) — 컷오버 레이스 방지
+  // (2026-09-07) ─────────────────────────────────────────────────────
+  // 별 지급이 클라이언트 로컬(legacy) 누계 + 서버 원장(reward_ledger)
+  // 두 곳에 각각 쌓여 온 과도기(마을 상점 도입 전)의 "이관 시점"을
+  // 학생별로 정확히 확정하는 경로. 기존 v3_37의 전역 스냅샷(모든 학생을
+  // 같은 시각 T에 한 번에 이관)은 클라이언트가 total_stars를 서버에
+  // 업로드하는 시점(디바운스, ~2초 지연)과 실제 별 지급 이벤트가
+  // reward_ledger에 꽂히는 시점(POST 도착 또는 재시도 큐로 나중에 도착)이
+  // 서로 어긋나, 그 사이에 발생한 이벤트가 이중 계산되거나 누락되는 레이스가
+  // 있었다 — 그래서 "언제 이관할지"를 전역 T가 아니라 "그 학생이 실제로
+  // 요청한 순간"으로 바꾸고, 판정/차액 계산 전부를 DB 함수(원자적 잠금)
+  // 안에서 한다. 이 분기는 "누가 요청했는가"(토큰)와 "클라이언트가 지금
+  // 스냅샷값이 얼마라고 보는가"(snapshotTotal)만 전달하고, 그 값이 말이
+  // 되는지/실제로 얼마를 이관할지는 전부 RPC(다른 세션이 작성한
+  // reconcile_legacy_baseline SQL 함수)가 결정한다 — 위 마을상점 두
+  // action과 동일한 신뢰 경계(TOCTOU 여지를 만들지 않기 위해 여기서 값을
+  // 미리 계산하거나 RPC 결과를 재해석하지 않는다).
+  if (req.body && req.body.action === 'reconcile_legacy_baseline') {
+    const auth = townShopAuthenticate(req)
+    if (!auth.ok) { res.status(200).json(auth.response); return }
+    const studentId = auth.studentId
+
+    // 주의(반드시 지킬 것): req.body.studentId/earned/baseline은 이 분기
+    // 어디서도 읽지 않는다 — 학생 식별은 오직 세션 토큰에서, 스냅샷
+    // 검증·차액 계산·기존 이관 여부 판정은 오직 서버(RPC)만 한다. 클라이언트가
+    // 이 필드들을 실어 보내도 아래 코드는 참조 자체를 하지 않는다.
+    const snapshot = req.body.snapshotTotal
+    if (!Number.isFinite(snapshot) || !Number.isInteger(snapshot) || snapshot < 0 || snapshot > 100000) {
+      res.status(200).json({ ok: false, reason: 'invalid_snapshot' })
+      return
+    }
+
+    const supabase = createClient(url, key)
+    const { data, error } = await supabase.rpc('reconcile_legacy_baseline', { p_student_id: studentId, p_snapshot_total: snapshot })
+    if (error) {
+      if (TOWN_SHOP_TABLE_MISSING_CODES.has(error.code)) {
+        res.status(200).json({ ok: false, reason: 'table_missing' })
+        return
+      }
+      res.status(200).json({ ok: false, reason: 'rpc_failed' })
+      return
+    }
+    const row = data && data[0]
+    if (!row) {
+      res.status(200).json({ ok: false, reason: 'rpc_failed' })
+      return
+    }
+    res.status(200).json({
+      ok: !!row.ok,
+      reason: row.reason,
+      baselineStars: Number(row.baseline_stars) || 0,
+      earnedAfter: Number(row.earned_after) || 0,
+    })
+    return
+  }
+
   // Reward System V1(2026-08-18) — 별(stars) 지급의 서버 쓰기 경로.
   // ledger:'reward'가 있을 때만 이 분기를 타고, 없으면(기존 클라이언트가
   // 보내는 요청은 이 필드 자체가 없음) 아래 기존 XP 로직으로 그대로

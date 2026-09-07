@@ -13,6 +13,21 @@ export const postXpEvent = async () => {}
 // 여기서는 useStudent.js의 grantLedgerReward가 import 가능하도록 심볼만
 // 제공한다.
 export const postRewardEvent = async () => {}
+// 컷오버 레거시 별 기준선 재조정(2026-09-06/07, src/hooks/useStudent.js
+// reconcile effect) — no-op 스텁. 이 파일을 공유하는 기존 테스트들은 이
+// 재조정 자체를 검증하지 않으므로(그건 scripts/testCutoverClient.mjs가
+// 실제 wordLibrary.js 번들로 전담) hold는 아무 것도 잠그지 않고,
+// pending은 항상 0(즉시 quiescent 판정), reconcile은 항상
+// relogin_required로 답해 마커를 남기지 않는다 — 재마운트마다 이 effect가
+// 다시 시도하지만 다른 모든 지급 경로(postRewardEvent/postXpEvent 등)와
+// 완전히 무관해 기존 assertion에 부작용이 없다.
+export const holdRewardPosts = () => {}
+export const flushRewardPostQueue = async () => {}
+export const rewardQueuePendingFor = () => 0
+export const postReconcileLegacyBaseline = async () => ({ ok: false, reason: 'relogin_required' })
+// 드레인 프로토콜(2026-09-07 리뷰 수정) — no-op 스텁, 항상 "이미 비어있다"고
+// 답해 위 rewardQueuePendingFor(항상 0)와 일관되게 즉시 quiescent 처리되게 한다.
+export const drainRewardPostQueueForStudent = async () => ({ sent: 0, remaining: 0 })
 
 export const syncCalls = []
 export let fetchFullProgressDeferred = null
