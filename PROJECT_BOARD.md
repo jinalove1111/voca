@@ -964,6 +964,9 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
 
 ## DONE (최근 완료, 참고용 — 전체 이력은 `ROADMAP.md`/`handoff.md`)
 
+### [P1] 야간 QA 2026-09-09 — 회귀 PASS, 수정 8건(테스트/도구/회복력), 감사 분류, 모바일 Back 설계 (119차, PR 대기)
+- 브랜치 `qa/overnight-2026-09-09`(base 7280c67). Production WRITE 0. 상세/결정 필요 항목: `handoff.md` 119차 D·E·H.
+
 ### [P1] 쓰기 연습 항상 양방향(mixed 50:50) — 구현·검증 완료, PR 대기 (2026-09-09, 118차)
 - Yaeji/Irene(Presentation 6) "한 방향만" 원인 = 주 교재 소유 반 '중1 천재 이상기' spelling_direction kr2en(실효 설정). 반 설정 변경 대신 제품 규칙으로 해결: `studyMode==='write'`만 항상 mixed.
 - `src/utils/writePracticeDirection.js` + `App.jsx` mixedDirections 조건. 종합/복습/일일 의식/입실시험 무변경. 한 문제 한 언어, 정답 미노출.

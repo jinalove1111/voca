@@ -2,18 +2,30 @@
   "agent_name": "lead-overnight-qa-2026-09-09",
   "role": "12시간 자율 야간 QA/하드닝 — 학생 핵심 경로 회귀·400 조사·CRLF 테스트·모바일 Back 설계·READ-ONLY 데이터 감사·테스트 품질·데드패스",
   "task_id": "overnight-qa-2026-09-09",
-  "status": "in_progress",
-  "progress": 55,
+  "status": "completed",
+  "progress": 100,
   "started_at": "2026-09-08T20:40:00Z",
-  "updated_at": "2026-09-09T00:00:00Z",
+  "updated_at": "2026-09-09T05:30:00Z",
   "base_sha": "7280c6712f7ac2409ae323ce781bdf0b9a9da585",
   "branch": "qa/overnight-2026-09-09",
-  "files_owned": [".ai-status/lead-overnight-qa-2026-09-09.json", "handoff.md(118차 뒤 119차 append 예정)", "docs/design/MOBILE_BACK_NAVIGATION_DESIGN.md(커밋됨)"],
+  "files_owned": [
+    ".ai-status/lead-overnight-qa-2026-09-09.json",
+    "handoff.md(118차 뒤 119차 append 예정)",
+    "docs/design/MOBILE_BACK_NAVIGATION_DESIGN.md(커밋됨)"
+  ],
   "commits_so_far": [
-    "06f6ba8 test(town-shop): testTownShop stripComments CRLF 정규화(오탐 FAIL 제거)",
-    "91db9ed docs(design): 모바일 Back 앱 종료 — 아키텍처 맵 + 최소 설계안(구현 없음)",
-    "81ed12f fix(harness): prodHotfix preflight/스냅샷 읽기 fail-closed STOP",
-    "e22db9a fix(audit-tool): dbIntegrityAudit 1000행 cap 오탐 수정 + 회귀 30단언"
+    "06f6ba8 test(town-shop): testTownShop.mjs stripComments를 CRLF 무관하게 정규화 — Windows 로컬 오탐 FAIL 제거",
+    "91db9ed docs(design): 모바일 시스템 Back 앱 종료(HIGH) — 내비게이션 아키텍처 맵 + 최소 안전 설계안(구현 없음)",
+    "81ed12f fix(harness): prodHotfix preflight/스냅샷 읽기 실패를 fail-closed STOP(preflight-read-failed)으로 — 크래시 대신 리포트",
+    "e22db9a fix(audit-tool): dbIntegrityAudit fetchAll 1000행 PostgREST cap 오탐 수정 — 페이지네이션(fetchAllPaged) + 오프라인 회귀 30단언",
+    "12ef886 chore(status): 야간 QA 2026-09-09 중간 체크포인트(진행 55%, 커밋 4, 발견 분류)",
+    "08e9ca0 test(settings): refreshClassSettings 회복력 회귀(8단언) + wordSlug 3중 사본 바이트 동일성 가드(9단언) 신설",
+    "3981199 fix(settings): refreshClassSettings — 컬럼 축소 폴백을 42703에만, 일시 오류 시 이전 반 설정 캐시 유지 (+ 위생 3건)",
+    "527a173 test(registry): 미등록 오프라인 테스트 3종 등록 — 관리자 학생 액션 7종(85), CI 이름 마스킹(32), Phase 2b RLS 계약(87)",
+    "344d16f test(crlf): testAdminPinThrottle/testExcelHeaderGuard/testExcelImportFixtures 주석 제거 정규식 CRLF 정규화",
+    "f8e02c3 test(e2e): 고정 sleep 6곳 → 조건 폴링(waitUntil) — 결정적 대기, 단언 무약화, 59/59 4회 연속 PASS(약 37.6s→33s)",
+    "16891f6 test(lint): testRegistryCoverage — scripts/test*.mjs 전부 registry 등록 또는 명시 allowlist(사유 필수), 등록 경로 실존 검사",
+    "c799983 test(registry): testClassSettingsResilience/testWordSlugParity 등록(writing 도메인) + 커버리지 린트 임시 allowlist 정리"
   ],
   "findings": {
     "400_bad_request": "students: refreshStudents가 존재하지 않는 house_id(v2_7 미실행) 프로브 → 42703 → 폴백. classes: refreshClassSettings가 gamification_enabled(v2_5 미실행) 프로브 → 42703 → 폴백. 로드당 각 1회, UI 무영향(설계된 컬럼 부재 감지). 잠재 위험: 폴백이 42703 이외 오류에도 동작(refreshClassSettings는 실패 시 설정 캐시를 {}로 초기화) → 수정 진행 중(에이전트). refreshStudents 42703 게이팅은 로그인 경로 blast radius로 HOLD.",
@@ -23,8 +35,14 @@
     "db_integrity_audit": "143→83 finding(60은 도구 1000행 cap 오탐, 수정). 잔여 83 = _DUP/_INACTIVE 아카이브 계정의 current_unit_id 교재 정합성(QA/ARCHIVE ONLY).",
     "gyobin_harness": "리포지토리에 실행 기록/에러 텍스트 없음(UNVERIFIED). 코드 원인: preflight/스냅샷 read 미보호 → 크래시·리포트 0 → fail-closed로 수정(81ed12f). SUPABASE_ACCESS_TOKEN 부재로 apply는 어차피 BLOCKED_NEEDS_APPROVAL. 데이터 변경 0, manifest 무변경."
   },
-  "in_progress": ["class-settings resilience + hygiene (wordLibrary refreshClassSettings 42703 게이팅·캐시 유지, features 주석, App catch 로그, AdminScreen console.log, wordSlug parity 테스트)", "test-only batch (미등록 테스트 3종 등록, CRLF 정규화 3파일, E2E 폴링 대기, 레지스트리 커버리지 린트)"],
+  "in_progress": [],
   "production_write": 0,
   "blocker": "none",
-  "next_action": "에이전트 결과 검증·격리 커밋 → verify:all/build/e2e 반복 → handoff 119차 append → push → PR(머지 금지) → 최종 보고"
+  "next_action": "PR 생성(머지 금지) → 운영자 검토. TOP5: handoff 119차 H.",
+  "final": {
+    "verify_all": "ALL DOMAINS PASS (extra FAIL 1: testRewardServerHardening 766<200 stale, 결정 필요)",
+    "build": "PASS",
+    "e2e": "59/59 x7",
+    "production_write": 0
+  }
 }
