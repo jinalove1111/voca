@@ -369,6 +369,11 @@ export const STOP_REASON_TO_APPLY_ELIGIBILITY = {
   'not-approved': 'BLOCKED_NEEDS_APPROVAL',
   'preflight-mismatch': 'BLOCKED_PREFLIGHT',
   'baseline-failed': 'BLOCKED_PREFLIGHT',
+  // 야간 QA(2026-09-09) — 메인 preflight(readPlanMismatches)/before-snapshot
+  // (selectAllRows students/SCA) 미보호 read 갭 수정(위 runHotfix() 본문
+  // 주석 참고). 둘 다 "preflight 단계에서 읽기 자체가 실패"라 BLOCKED_PREFLIGHT
+  // 가 기존 preflight-mismatch/baseline-failed 와 같은 자연스러운 분류다.
+  'preflight-read-failed': 'BLOCKED_PREFLIGHT',
   'blocked-write-drift': 'BLOCKED_WRITE_DRIFT',
   'blocked-invariant': 'BLOCKED_INVARIANT',
   'blocked-invariant-unavailable': 'BLOCKED_INVARIANT',
@@ -640,7 +645,22 @@ export async function runHotfix(options, deps = {}) {
   // (reference_rows_must_exist 의 min_words 항목은 정적 참조 확인이라 제외)
   const revertVerifyPlan = preflightPlanFull.filter((i) => i.minWords == null)
 
-  const preflightMismatches = await readPlanMismatches(reader, forwardPreflightPlan)
+  // 야간 QA(2026-09-09) — 이 조회는 예전엔 try/catch 로 보호되지 않았다.
+  // 일반 fetch 에러(테이블 부재 42P01/PGRST205 같은 코드화된 에러가 아니라,
+  // 예: Windows undici `TypeError: fetch failed`)가 나면 그대로 runHotfix()
+  // 밖으로 전파돼 CLI 진입점(top-level await, try/catch 없음)까지 크래시
+  // 했다 — finish() 가 안 불려 .hotfix.json 보고서도 안 남았다("WRITE 0,
+  // 진단 없음" 증상). ambiguous-textbook-check/baseline 은 이미 이 패턴으로
+  // 보호돼 있어 여기도 동일하게 맞춘다(fail-closed, status 는 아래
+  // before-snapshot 조회 실패와 공유하는 'preflight-read-failed' 하나로
+  // 통일 — 둘 다 개념적으로 "preflight 단계에서 읽기 자체가 실패").
+  let preflightMismatches
+  try {
+    preflightMismatches = await readPlanMismatches(reader, forwardPreflightPlan)
+  } catch (err) {
+    logErr(`FAIL-CLOSED — 프리플라이트 조회 실패(fail-closed, 적용 차단): ${err.message}`)
+    return finish('preflight-read-failed', 1, { preflightReadError: err.message, dbWriteCount: 0 })
+  }
   if (preflightMismatches.length) {
     logErr('FAIL-CLOSED — 프리플라이트 불일치(현재 DB 상태가 manifest 의 기대값과 다름):')
     for (const m of preflightMismatches) {
@@ -742,8 +762,17 @@ export async function runHotfix(options, deps = {}) {
     const missingTables = [...new Set(baselineTableMissing.map((m) => m.table))]
     log(`baseline 안내 — 부재 테이블(count 0 처리, fail-open): ${missingTables.join(', ')}`)
   }
-  const studentsRowsBefore = sortRows(await reader.selectAllRows('students', STUDENTS_SNAPSHOT_COLS))
-  const scaRowsBefore = sortRows(await reader.selectAllRows('student_class_assignments', SCA_SNAPSHOT_COLS))
+  // 야간 QA(2026-09-09) — 위 preflight 조회와 같은 갭(미보호 read). 같은
+  // status('preflight-read-failed')를 재사용한다(주석 위와 동일 사유).
+  let studentsRowsBefore
+  let scaRowsBefore
+  try {
+    studentsRowsBefore = sortRows(await reader.selectAllRows('students', STUDENTS_SNAPSHOT_COLS))
+    scaRowsBefore = sortRows(await reader.selectAllRows('student_class_assignments', SCA_SNAPSHOT_COLS))
+  } catch (err) {
+    logErr(`FAIL-CLOSED — before 스냅샷 조회 실패(fail-closed, 적용 차단): ${err.message}`)
+    return finish('preflight-read-failed', 1, { preflightReadError: err.message, dbWriteCount: 0 })
+  }
   report.baseline = {
     counts: baselineCounts,
     tableMissing: baselineTableMissing,
@@ -897,6 +926,9 @@ export async function runHotfix(options, deps = {}) {
   //     expect_before(원복) 값이 실제로 반영됐는지 확인
   D.onStep('postflight')
   const forwardPostflightPlan = mode === 'apply' ? postflightPlanCore : revertVerifyPlan
+  // TODO(야간 QA 2026-09-09, 범위 밖 — 이번 작업은 preflight 만): 이 읽기도
+  // 미보호(apply 이후라 fail-closed 처리 방식이 preflight 와 다를 수 있음 —
+  // 별도 설계 필요, 여기서는 건드리지 않음).
   const postMismatches = await readPlanMismatches(reader, forwardPostflightPlan)
 
   for (const sid of manifest.affected_students || []) {
@@ -914,6 +946,8 @@ export async function runHotfix(options, deps = {}) {
     }
   }
 
+  // TODO(야간 QA 2026-09-09, 범위 밖): after-snapshot 도 미보호 — 위 postflight
+  // TODO 와 동일 사유로 이번 작업에서는 손대지 않는다.
   const studentsRowsAfter = sortRows(await reader.selectAllRows('students', STUDENTS_SNAPSHOT_COLS))
   const scaRowsAfter = sortRows(await reader.selectAllRows('student_class_assignments', SCA_SNAPSHOT_COLS))
   const expectedStudentIds = new Set(manifest.changes.filter((c) => c.table === 'students').map((c) => c.id))
