@@ -964,6 +964,13 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
 
 ## DONE (최근 완료, 참고용 — 전체 이력은 `ROADMAP.md`/`handoff.md`)
 
+### [P1] V3_49 Paul Dollar V1 — CLOSED (2026-09-09, 117차)
+- PR #22 머지 `1cd0de6` → Vercel Production 배포(번들 해시 일치 확인) → 운영자 `supabase_v3_49_paul_dollar.sql` 1회 실행 → post-verify A~E 전부 PASS(anon preflight 9/9 + 운영자 SELECT-only). Production WRITE(세션) 0.
+- 별 데이터 삭제/초기화/중복 지급 0. Paul QA stars_earned 223 유지(구매로 감소 없음), 달러 $0 시작, owned {shop-lamp}.
+- `townShopV1` 전역 OFF → 학생 노출 0. 트리거는 활성(이후 별 획득 시 달러 동액 적립 — 승인 설계).
+- 위 VERIFY 섹션의 "Paul Dollar V1(v3_49) — 운영자 리뷰/commit 승인 대기" 카드는 stale(append-only 원칙으로 보존). **다시 조사·검증·재실행 금지(규칙 3).**
+- 남은 것은 제품 결정(townShopV1 ON 시점/대상). 비차단 잔여: preflight post-v3_49 모드 헤더 주석 불일치, QA 기기 로컬 플래그 OFF 복귀.
+
 - 개발자 대시보드(`scripts/generateDashboard.mjs`, `npm run dashboard`)
   신설(Engineering Head, 2026-07-18) — PROJECT_BOARD.md(읽기 전용 파싱)/
   Health Check/Verify 결과(`--with-verify` 옵션, 기본은 캐시)/

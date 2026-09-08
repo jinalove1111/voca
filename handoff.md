@@ -1,9 +1,82 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-08 (116차, Paul Dollar V1 — 2재화 분리(⭐ 별=서버 권위
-누적 성취, 절대 감소하지 않음 / 💵 폴달러=상점 전용 소비 화폐) 설계+구현
-완료. `supabase_v3_49_paul_dollar.sql` 작성, 플래그 townShopV1=false,
-Production WRITE 0, SQL 실행 0, commit 0, push/PR/merge 0. 운영자 리뷰
-대기. 상세는 아래 116차 섹션)_
+_최종 갱신: 2026-09-09 (117차, V3_49 Paul Dollar CLOSED — PR #22 머지 1cd0de6 배포,
+운영자 v3_49 실행, post-verify A~E 전부 PASS, Production WRITE(세션) 0,
+townShopV1 전역 OFF. 상세는 아래 117차 섹션. 116차 헤더 원문은 117차 섹션
+아래 116차 섹션에 그대로 보존)_
+
+## 2026-09-09 (117차) — V3_49 Paul Dollar: PR #22 머지·배포 → 운영자 v3_49 실행 → post-verify A~E 전부 PASS → **V3_49 CLOSED** (townShopV1 전역 OFF 유지)
+
+_이 섹션은 종결 기록이다. **V3_49는 CLOSED — 다시 조사·검증·재실행하지
+않는다**(규칙 3). 아래 수치는 이후 작업의 기준선(baseline)이다._
+
+### 타임라인(전부 2026-09-08 UTC ~ 09-09 KST)
+
+1. `feat/paul-dollar-v1` 5 커밋(`773a55a` SQL+ROLLBACK / `3e379bc` 서버·
+   클라이언트 / `8c7be42` 테스트·preflight·registry / `bdfd08f` 문서 /
+   `2829f05` chore(status)) → push → **PR #22** → CI 4종 PASS(Release
+   Gate / Deploy Ready / Vercel / Vercel Preview Comments).
+2. 운영자 승인 → **머지 `1cd0de6`**(2026-09-08T15:23Z) → Vercel Production
+   deploy SUCCESS. 머지 SHA 로컬 빌드 번들 해시 `index-BpT87TfB.js` = 프로덕션
+   서빙 번들과 동일(바이트 일치 확인). 번들 내 `townShopV1:!1`(false).
+3. READ-ONLY preflight(`--expect post-v3_48` PASS 2/0, `--expect
+   post-v3_49`는 실행 전이라 FAIL 6 = 정확히 "not applied" 시그니처.
+   `town_items` 400은 아직 없는 `price_currency` 컬럼을 명시 요청한 것 —
+   비차단 발견, 아래 "잔여").
+4. **운영자가 SQL Editor에서 `supabase_v3_49_paul_dollar.sql` 1회 실행**
+   ("Success. No rows returned").
+5. anon READ-ONLY post-verify `--expect post-v3_49` **PASS 9/9**.
+   must_not_change(students 493 / student_progress 200 / xp_ledger 644 /
+   words 2075) 실행 직전·직후·이후 3회 전부 동일 — drift 0.
+6. service_role SELECT-only 검증 `production_v3_49_post_verify.sql`
+   (untracked 운영자 파일, rev2) — 운영자가 A~E 블록 개별 실행, 결과 회신.
+
+### post-verify 결과(운영자 실측, 전부 PASS)
+
+| 블록 | 실측 | 판정 |
+|---|---|---|
+| A 스키마/권한/카운트 12행 | dollar_rules 12 / legacy 0 / rate≠1 0 / dollar_ledger 0행 / 음수 0 / town_purchases 0 / star_purchases lamp 1 / lamp `60\|dollars\|true` / trigger 1 / secdef 함수 3 / 새 테이블 RLS 정책 0 / anon·authenticated grant 0 | PASS 12/12 |
+| B 레거시 별 보호 | reward_ledger 509행 · 33,160★ / legacy-baseline 156행 · 32,642★ / dollars_earned 0 = stars_mirrored_to_dollars 0 | PASS(중복 지급 0, 소급 0) |
+| C 함수 3개 | 정확히 3행, 시그니처 `(uuid)`/`(uuid,text)`/trigger, 전부 security definer. C-2 `has_function_privilege`: anon false / authenticated false / service_role true / acl 기본 PUBLIC 아님 ×3 | PASS |
+| D Paul QA | stars_earned **223**(구매 후에도 감소 없음, 163 아님) / 달러 0·0·0 / owned `{shop-lamp}`(레거시 소유 합집합 유지) | PASS |
+| E 뷰 | `dollar_balances` reloptions `security_invoker=on` | PASS |
+
+- Production WRITE(이 세션): **0** — 모든 확인은 anon GET/HEAD 또는 운영자
+  SELECT. WRITE는 운영자의 v3_49 1회 실행이 유일.
+- 별 데이터: 삭제 0 / 초기화 0 / 중복 지급 0. v3_49 실행 **직전**의
+  reward_ledger 정확 카운트는 기록이 없어 before/after 수치 diff는 불가 —
+  "UNCHANGED" 판정은 v3_49에 해당 테이블 DML이 0건이라는 정적 사실 +
+  위 정합성(달러 0, 음수 0, 레거시 156행 온전)에 근거한다. 509/33,160/156/
+  32,642가 이후 기준선.
+
+### 검증 파일 자체의 실수 2건(마이그레이션 문제 아님, 교훈)
+
+- `production_v3_49_post_verify.sql` rev1: `dollar_balances.dollars_available`
+  참조 → 42703. 뷰 실제 컬럼은 `balance/earned/spent`(`dollars_available`은
+  RPC 반환 컬럼). rev2에서 `sign(balance) = -1`로 정정.
+- 채팅에 붙인 A 블록의 행 끝 인라인 주석/`<` 연산자가 복사 과정에서 섞여
+  42601. 이후 실행 SQL에는 인라인 주석을 넣지 않고 `<`류 연산자를 피함.
+- 교훈: 운영자 SELECT 파일은 (1) 참조 컬럼을 DDL에서 grep으로 대조,
+  (2) 기대값은 SQL 바깥 표로만, (3) 블록별 개별 실행 가능하게 작성.
+
+### 현재 상태(2026-09-09)
+
+- `main` = `1cd0de6`, Production 배포 동일. v3_47/v3_48/v3_49 전부 CLOSED.
+- `townShopV1` 전역 **OFF** → 일반 학생 노출 0(상점 UI·네트워크 호출 0).
+  QA 기기에만 로컬 ON 잔존(115차 기록) — 활성화 결정 전 OFF 복귀 필요.
+- 트리거는 즉시 활성 — 이후 학생이 별을 얻으면 `dollar_ledger`에 동액이
+  쌓인다(플래그와 무관, 표시만 안 됨). 이는 승인된 설계.
+- blocker: 없음. 남은 것은 **제품 결정**(townShopV1 ON 시점·대상)이지
+  기술 작업이 아니다.
+
+### 잔여(비차단)
+
+- `scripts/preflightTownShop.mjs` post-v3_49 모드 헤더 주석("select=*")과
+  실제 코드(`price_currency` 명시 요청) 불일치 — 실행 후 검증에는 무해,
+  실행 전 진단 메시지만 헷갈림. 별도 소커밋 대상.
+- 기능 패널 RBAC 클라이언트 전용(기존 동작, 115차) 그대로.
+- 다음 작업 1개(제안): Paul QA 계정으로 실 플로우 검증 — 학습으로 별 N개
+  획득 → `dollar_ledger` +N 확인 → 램프 이미 보유 상태이므로 구매 경로는
+  두 번째 아이템 추가 전까지 불가. 그 전에 QA 기기 로컬 플래그 OFF 복귀.
 
 ## 2026-09-08 (116차) — Paul Dollar V1: 2재화 분리(⭐ 별=누적 성취, 💵 폴달러=상점 화폐) 설계+구현 완료 (v3_49, 미실행, 플래그 OFF, commit 0)
 
