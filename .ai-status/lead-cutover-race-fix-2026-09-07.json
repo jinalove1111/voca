@@ -6,7 +6,7 @@
   "status": "completed",
   "progress": 100,
   "started_at": "2026-09-07T00:30:00Z",
-  "updated_at": "2026-09-07T04:00:00Z",
+  "updated_at": "2026-09-08T05:30:00Z",
   "files_owned": [
     "supabase_v3_48_reward_legacy_baseline_v2.sql",
     "supabase_v3_48_reward_legacy_baseline_v2_ROLLBACK.sql",
@@ -45,5 +45,13 @@
     "TOLERANCE": 100,
     "MAX_INDIVIDUAL": 1500,
     "SNAPSHOT_SLACK": 200
+  },
+  "rollout": {
+    "pr21": "MERGED c450b54 (2026-09-07T07:05Z), Production deploy SUCCESS",
+    "v3_47": "EXECUTED + POST-VERIFY PASS (CLOSED, 2026-09-07)",
+    "v3_48": "EXECUTED + POST-VERIFY PASS (CLOSED, 2026-09-08) — markers 2 / function+view / acl service_role only",
+    "townShopV1": "OFF (global). QA 기기에서만 로컬 ON 상태 — QA 종료 후 OFF 복귀 필요",
+    "next": "QA 계정(Paul/Cookie) 구매·재로그인 검증 → 이후 ON 검토",
+    "townShopQA": "2026-09-08 Paul(QA) PASS — QA 기기 로컬 플래그 ON(paulEasyVoca_features {townShopV1:true}, 역할 admin 로컬 설정), 상점 행 노출(사용 가능 223), 구매 1회(더블클릭 1회만 차감) → 163·보유 중·💡 소품, 홈 배지 163/RewardCard 223(누적), 새로고침 유지, 로그아웃(confirm 대화상자)→재로그인 유지. 전역 플래그 OFF 유지. 발견(비차단): 기능 패널은 카테고리 단위 토글만 있고 개별 플래그 토글 없음, 패널 RBAC은 클라이언트 전용(paulEasyVoca_userRole) — 관리자 비밀번호 로그인이 역할 부여 안 함(기존 동작)."
   }
 }

@@ -615,6 +615,34 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
 
 ## VERIFY
 
+### [P1] Paul Dollar V1(v3_49) — 2재화 분리 설계+구현 완료, 운영자 리뷰/commit 승인 대기 (2026-09-08, 116차)
+- 근거: `handoff.md` 2026-09-08(116차),
+  `docs/operations/STAR_SHOP_PREPRODUCTION_PACKAGE.md` §12.
+- 내용: ⭐ 별(`reward_totals` 누적 성취, 절대 감소하지 않음)과 💵
+  폴달러(`dollar_ledger` 원장, 상점 전용)를 분리. `supabase_v3_49_
+  paul_dollar.sql`(`dollar_rules`/`dollar_ledger`/`town_purchases` 신규
+  테이블 3개 + `dollar_balances` 뷰 + `trg_reward_ledger_to_dollars`
+  트리거 + `town_items.price_currency` 컬럼 + `get_town_shop_state`/
+  `purchase_town_item` RPC 2종 교체) + `api/grant-xp.js`(응답 키
+  `dollarsAvailable`/`dollarsEarned`/`dollarsSpent` 등으로 교체) +
+  클라이언트(`townShop.js`/`Dashboard.jsx` ⭐+💵 배지/`PaulTown.jsx` 상점
+  UI). 컷오버 시 레거시 별 환산 없음(전원 $0 시작, 운영자 승인
+  2026-09-08). 신규 테스트 1종(`testPaulDollarSql.mjs`) + 기존 2종 확장
+  (`testTownShop.mjs` 75→101/`testTownShopServer.mjs` 47→65), `npm run
+  verify:paul-dollar` 신설. 관련 회귀 스위트 8종 무회귀(리드가 최종
+  확인).
+- 상태: **전부 워킹트리(uncommitted), `townShopV1=false`, SQL 미실행
+  (`supabase_v3_49_paul_dollar.sql`), Production WRITE 0, commit/push/PR
+  0.**
+- 배포 순서(v3_47/v3_48 실행 이후 전제): 코드 배포(플래그 OFF) →
+  `preflightTownShop.mjs --expect post-v3_49`로 미적용 확인 → v3_49
+  실행(운영자) → post-verify(SELECT 6종) → QA 계정 실측(별 불변/달러
+  차감/재로그인 영속성) → 이후 `townShopV1` ON 결정.
+- 검수 대기 사항: qa-reviewer/security-reviewer 코드 리뷰 미착수, 운영자
+  commit 승인. 다음 세션 주의(`handoff.md` 116차 참고): 별을 다시 소비
+  재화로 쓰지 말 것 / `dollar_rules` 배율 조정은 SQL UPDATE로(코드 배포
+  불필요) / `legacy-baseline`은 `dollar_rules`에 절대 추가 금지.
+
 ### [P1] STAR SPENDING Phase 1(상점)+Phase 2(레거시 지급 서버화) — 운영자 리뷰/commit 승인 대기 (2026-09-06, 114차)
 - 근거: `handoff.md` 2026-09-06(114차),
   `docs/operations/STAR_SHOP_PREPRODUCTION_PACKAGE.md`.

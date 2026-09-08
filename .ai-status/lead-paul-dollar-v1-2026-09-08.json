@@ -1,0 +1,37 @@
+{
+  "agent_name": "lead-paul-dollar-v1",
+  "role": "⭐ 별(누적 성취) / 💵 Paul Dollar(상점 화폐) 2재화 분리 — 승인된 DOLLAR_DESIGN_COMPLETE 구현(플래그 OFF, Production WRITE 0, SQL 실행 0, commit 0)",
+  "task_id": "paul-dollar-v1-2026-09-08",
+  "task": "v3_49_paul_dollar SQL(dollar_rules/dollar_ledger/dollar_balances/트리거 fn_reward_ledger_to_dollars/town_purchases(달러 구매 전용, star_purchases는 레거시 이력 무수정)/town_items price_currency/RPC 2개 교체) + ROLLBACK + api/grant-xp.js 응답 필드 + 클라이언트 ⭐/💵 분리 UI + 테스트 + preflight post-v3_49",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-08T06:00:00Z",
+  "updated_at": "2026-09-08T09:00:00Z",
+  "files_owned": [
+    "supabase_v3_49_paul_dollar.sql",
+    "supabase_v3_49_paul_dollar_ROLLBACK.sql",
+    "scripts/testPaulDollarSql.mjs",
+    "scripts/preflightTownShop.mjs",
+    "api/grant-xp.js",
+    "scripts/testTownShopServer.mjs",
+    "src/utils/townShop.js",
+    "src/hooks/useTownShop.js",
+    "src/components/PaulTown.jsx",
+    "src/components/Dashboard.jsx",
+    "src/App.jsx",
+    "scripts/testTownShop.mjs",
+    "tests/harness/registry.mjs",
+    "package.json",
+    ".ai-status/lead-paul-dollar-v1-2026-09-08.json"
+  ],
+  "files_read": [
+    "supabase_v3_47_town_shop.sql",
+    "supabase_v3_48_reward_legacy_baseline_v2.sql",
+    "src/utils/townShop.js",
+    "src/components/PaulTown.jsx",
+    "src/components/Dashboard.jsx"
+  ],
+  "summary": "운영자 승인: 규칙 A(서버 별 1 = $1, 컷오버 이후 $0 시작), 램프 $60(price 숫자 유지·통화만 dollars). 달러 지급은 reward_ledger AFTER INSERT 트리거로 원자 생성(legacy-baseline은 dollar_rules에 없어 $0). 별 계산에서 star_purchases 제외(Paul QA 구매 행은 레거시 이력으로 무수정 보존, 달러 구매는 town_purchases에 기록, 소유권은 합집합). 구매 RPC는 dollar_balances만 차감, 새 api 파일 0, 새 클라이언트 플래그 없음(townShopV1 노출 게이트 유지, 서버 응답 dollarsAvailable 기능 감지). 브랜치 feat/paul-dollar-v1(base c450b54). 에이전트 3개(DB/서버/클라이언트) 병렬. 구현 완료: v3_49(dollar_rules 12종·dollar_ledger·dollar_balances·트리거·town_purchases·town_items.price_currency·RPC 2개 재정의) + ROLLBACK(v3_47 본문 복원), grant-xp 응답 필드(+구 RPC 형태 감지 폴백), 클라이언트 ⭐/💵 분리(+레거시 응답 폴백), 테스트(testPaulDollarSql, testTownShopServer 78, testTownShop 104), preflight post-v3_49, 문서 116차. 독립 리뷰 Critical 0/High 0/Medium 1(배포 창 형태 폴백 — 수정)/Low 2(노트 정정, 구 탭 일반 리스크). 회귀 전부 PASS, RELEASE GATE PASS. 커밋 0 — READY TO APPLY에서 정지.",
+  "blocker": "운영자 승인 대기: (1) 로컬 커밋 + push/PR (2) 코드 배포 후 v3_49 실행. 실행 순서: 코드 배포(플래그 OFF) → preflight post-v3_49(not-applied 확인) → v3_49 실행 → post-verify SELECT → QA Paul 검증(별 획득→달러 적립→구매→⭐ 불변/💵 −60→재로그인) → townShopV1 ON 검토.",
+  "next_action": "운영자 승인 시 소커밋(SQL / 서버 / 클라이언트 / 테스트+레지스트리 / 문서) → push → PR → CI → merge → v3_49 preflight/apply/post-verify. 체크포인트 시점 기록이며 운영자 지시 우선."
+}

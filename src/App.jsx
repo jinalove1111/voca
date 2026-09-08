@@ -730,7 +730,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           pendingCeremonyHat={attachment.pendingCeremonyHat} onDismissCeremony={attachment.dismissCeremony}
           textbookOptions={textbookOptions} currentTextbookId={currentTextbookOptionId}
           onTextbookSwitch={handleTextbookSwitch}
-          walletAvailable={townShopEnabled && townShop.state ? townShop.state.available : null} />
+          wallet={townShopEnabled && townShop.state ? { starsEarned: townShop.state.starsEarned, dollarsAvailable: townShop.state.dollars.available } : null} />
       )}
       {screen === 'guidedSession' && (
         // 3분 데일리 리추얼(2026-07-22) — 가이드 학습은 항상 classWords
