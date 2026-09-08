@@ -52,12 +52,6 @@ const ALLOWLIST = {
   'testMultiTextbookLiveFixed.mjs': 'live — 위 스크립트의 수정판, 마찬가지로 라이브 데이터 전제 수동 진단',
   'testReadingLive.mjs': 'live — Reading Foundation 라이브 데이터 존재를 전제한 수동 진단(오프라인 계약은 tests/harness/runReading.mjs가 이미 registry에 등록돼 커버)',
   'testTextbookModelLive.mjs': 'live — 교재 모델 라이브 데이터 존재를 전제한 수동 진단',
-  // 동시 작업 중인 다른 에이전트 소유(2026-09-09 야간 QA, src/utils/wordLibrary.js
-  // 트랙) — 이 커밋 시점 기준 아직 registry 등록 전이라 임시 allowlist.
-  // 그 트랙이 등록하면 이 두 줄은 제거돼야 한다(제거 안 하면 섹션 3이
-  // "이미 등록됐는데 allowlist에도 남아있다"로 FAIL해 스스로 드러낸다).
-  'testClassSettingsResilience.mjs': '등록 예정(follow-up commit) — 2026-09-09 야간 QA 동시 작업 트랙 소유, 이 세션은 파일 소유권 경계상 등록하지 않음',
-  'testWordSlugParity.mjs': '등록 예정(follow-up commit) — 2026-09-09 야간 QA 동시 작업 트랙 소유, 이 세션은 파일 소유권 경계상 등록하지 않음',
 }
 
 // ── 1. registry.mjs에서 참조하는 scripts/test*.mjs 전부 수집 ─────────────

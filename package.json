@@ -72,6 +72,8 @@
     "verify:cache-refill": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testAssignmentCacheRefill.mjs",
     "verify:excel-header": "node scripts/testExcelHeaderGuard.mjs",
     "verify:writing-direction-resolution": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testWritingDirectionResolution.mjs",
+    "verify:class-settings-resilience": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testClassSettingsResilience.mjs",
+    "verify:word-slug-parity": "node scripts/testWordSlugParity.mjs",
     "verify:write-practice-mixed": "node scripts/testWritePracticeAlwaysMixed.mjs",
     "verify:mission-bonus": "node scripts/testMissionBonusIdempotency.mjs",
     "verify:game-reward": "node scripts/testGameRewardPolicy.mjs",
