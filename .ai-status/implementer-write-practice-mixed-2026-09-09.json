@@ -1,0 +1,32 @@
+{
+  "agent_name": "implementer-write-practice-mixed",
+  "role": "쓰기 연습(studyMode==='write')만 반 설정과 무관하게 항상 양방향(mixed 50:50) 출제 — 운영자 최종 규칙(2026-09-09) 최소 구현 + 테스트 선행",
+  "task_id": "write-practice-always-mixed-2026-09-09",
+  "task": "Yaeji/Irene(Presentation 6) 쓰기 연습 한 방향만 출제 증상 → 원인은 실효 반 설정(주 교재 소유 반 '중1 천재 이상기' kr2en). 코드 규칙으로 해결: App.jsx mixedDirections useMemo가 resolveSessionSpellingDirection(studyMode, classDirection) 결과로 mixed 여부 판단. 종합/복습/일일 의식/입실시험 무변경.",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-09T02:00:00Z",
+  "updated_at": "2026-09-09T03:30:00Z",
+  "branch": "fix/write-practice-always-mixed (base main 62ce51c)",
+  "files_owned": [
+    "src/utils/writePracticeDirection.js",
+    "src/App.jsx",
+    "scripts/testWritePracticeAlwaysMixed.mjs",
+    "tests/harness/registry.mjs",
+    "package.json",
+    ".ai-status/implementer-write-practice-mixed-2026-09-09.json"
+  ],
+  "verification": {
+    "rule15_prefix_fail": "27 checks FAIL on unmodified code (scripts/.tmp/writePractice-prefix-FAIL.txt)",
+    "new_test": "testWritePracticeAlwaysMixed 43/43 PASS",
+    "related": "writing-direction-resolution / student-path-contracts / ui-stability / SpellingDirectionWiring / WritingDirectionEngine / testSpelling / QuizStepReset / EntranceTest 전부 PASS",
+    "build": "PASS",
+    "verify_all": "이 변경 관련 도메인 전부 PASS. 유일한 FAIL = scripts/testTownShop.mjs 1단언 — 로컬 CRLF 아티팩트(core.autocrlf 체크아웃, useTownShop.js 주석 strip 정규식). 내 변경 stash 후에도 동일 재현, useTownShop.js를 LF로 정규화하면 104/104 PASS, CI(Linux)에서는 PR #22/#23 PASS. 이 변경과 무관, Town Shop 파일 무수정."
+  },
+  "production_write": 0,
+  "class_settings_changed": 0,
+  "student_data_changed": 0,
+  "commits": 0,
+  "blocker": "운영자 검토 대기 — commit/push/PR 승인 필요",
+  "next_action": "승인 시 소커밋 2개(① 테스트+레지스트리+package ② util+App.jsx) + handoff 118차/TESTING/PROJECT_BOARD append → push → PR → CI → 머지 승인 대기. 머지·배포 후 QA 계정 쓰기 모드에서 한→영/영→한 혼합 출제 실기기 확인."
+}

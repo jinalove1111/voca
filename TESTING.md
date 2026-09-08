@@ -1100,3 +1100,14 @@ _이 섹션부터는 append — 위 내용(115차)은 원본 그대로 보존한
 
 - 실제 Postgres 트리거 발동/`pg_advisory_xact_lock` 동시성/트랜잭션 원자성은 SQL 실행 전까지 로컬에서 확인 불가 — `testPaulDollarSql.mjs`의 인메모리 시뮬레이션은 SQL이 서술하는 **계약**만 재현한다(SQL 파일 헤더에도 동일하게 명시, 114차/115차와 동일 정신).
 - `scripts/preflightTownShop.mjs --expect post-v3_49`는 anon key READ-ONLY 프로브만 가능하므로 `dollar_rules`/`dollar_ledger`/`dollar_balances`/`town_purchases` 네 객체는 "401/42501=배포됨"으로만 간접 확인하고, 행 개수(`dollar_rules` 12행 등)/트리거 실존/함수 `prosecdef`는 운영자가 SQL Editor SELECT로 직접 확인해야 한다(v3_49 SQL 헤더 "실행 후 확인" 절 참고).
+
+## 관련 항목: 쓰기 연습 항상 양방향(mixed) 규칙 테스트 신설 (2026-09-09, 118차)
+
+_append — 위 내용 보존. 브랜치 `fix/write-practice-always-mixed`. 상세: `handoff.md` 2026-09-09(118차)._
+
+| 파일 | 단언 | 대상 | 네트워크/DB |
+|---|---|---|---|
+| `scripts/testWritePracticeAlwaysMixed.mjs`(신규, `extra:false`, `npm run verify:write-practice-mixed`) | 43 | A) `resolveSessionSpellingDirection` 순수 함수(write→mixed, 그 외 모드→반 설정 그대로, undefined 안전) B) `assignDirections` 50:50 균형(10/20/40/41 × 20회, 편차 ≤1) C) App.jsx mixedDirections 배선 정적 계약(리졸버 호출·deps studyMode·guided/review 메모 무변경·WordDetail override) D) SpellingQuestion 질문 단계 pairedText/targetAnswer 미참조(정답 사전 노출 0) E) WordDetail direction 배선 | 0 / 0 |
+
+- 규칙 15 실측: 수정 전 코드에서 27단언 FAIL → 구현 후 43/43 PASS.
+- Known issue(Windows 로컬 전용): `scripts/testTownShop.mjs` 단언 1개가 core.autocrlf CRLF 작업 트리에서 FAIL(주석 제거 정규식). baseline에서도 재현, LF 정규화 시 PASS, Linux CI PASS. 이 변경과 무관 — 별도 수정 후보.
