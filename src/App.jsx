@@ -23,6 +23,7 @@ import useTownShop from './hooks/useTownShop'
 import { pickNextGame, gameRewardEligibility } from './utils/matchGame'
 import { trackEvent, EV } from './utils/productEvents'
 import { assignDirections } from './utils/entranceTest'
+import { resolveSessionSpellingDirection } from './utils/writePracticeDirection'
 import { logSpellingReview } from './utils/spellingReviewApi'
 import { setSessionToken, getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, refreshTextbooks, refreshAllForLogin, invalidateStudentAssignmentsCache, revalidateUnitWords, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getStudentSpellingSettings, extendStableDirections, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentClassId, getTextbookById, getStudentPrimaryTextbook, getClassNames, getClassIdByName } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech } from './utils/speech'
@@ -407,15 +408,23 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 때만(reset key 변경) 처음부터 다시 배정하고, 그 외에는
   // extendStableDirections로 늘어난 길이만큼만 뒤에 이어 붙인다(기존
   // 인덱스는 절대 재배정하지 않음).
+  // 2026-09-09 — 쓰기 연습(studyMode==='write')만 반 설정과 무관하게 항상
+  // mixed로 강제(운영자 결정, handoff 118차). 판단은
+  // resolveSessionSpellingDirection(순수 함수, writePracticeDirection.js)에
+  // 위임하고, 그 외 배정 로직(assignDirections/extendStableDirections/
+  // useRef 안정화)은 그대로 재사용한다 — 아래 guidedMixedDirections/
+  // reviewMixedDirections(종합 일일 의식/복습 경로)는 의도적으로 손대지
+  // 않았다(반 설정을 오늘과 동일하게 그대로 따름).
   const mixedDirectionsKeyRef = useRef(null)
   const mixedDirectionsRef = useRef([])
   const mixedDirections = useMemo(() => {
-    if (spellingSettings.spellingDirection !== 'mixed') {
+    const sessionDirection = resolveSessionSpellingDirection(studyMode, spellingSettings.spellingDirection)
+    if (sessionDirection !== 'mixed') {
       mixedDirectionsKeyRef.current = null
       mixedDirectionsRef.current = []
       return null
     }
-    const key = `${studentId}|${currentUnitId}|${studyScope}`
+    const key = `${studentId}|${currentUnitId}|${studyScope}|${sessionDirection}`
     if (mixedDirectionsKeyRef.current !== key) {
       mixedDirectionsKeyRef.current = key
       mixedDirectionsRef.current = assignDirections(sessionWords.length, 'mixed')
@@ -424,7 +433,7 @@ function AppInner({ studentId, studentName, onLogout }) {
     }
     return mixedDirectionsRef.current
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spellingSettings, sessionWords.length, studentId, currentUnitId, studyScope])
+  }, [spellingSettings, sessionWords.length, studentId, currentUnitId, studyScope, studyMode])
 
   // 3분 데일리 리추얼(2026-07-22) — 가이드 세션 전용 mixed 방향 배정.
   // 위 mixedDirections는 sessionWords(studyScope 필터 반영) 기준이라,
