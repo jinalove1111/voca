@@ -6,7 +6,7 @@
   "status": "completed",
   "progress": 100,
   "started_at": "2026-09-08T06:00:00Z",
-  "updated_at": "2026-09-08T09:00:00Z",
+  "updated_at": "2026-09-09T00:30:00Z",
   "files_owned": [
     "supabase_v3_49_paul_dollar.sql",
     "supabase_v3_49_paul_dollar_ROLLBACK.sql",
@@ -32,6 +32,20 @@
     "src/components/Dashboard.jsx"
   ],
   "summary": "운영자 승인: 규칙 A(서버 별 1 = $1, 컷오버 이후 $0 시작), 램프 $60(price 숫자 유지·통화만 dollars). 달러 지급은 reward_ledger AFTER INSERT 트리거로 원자 생성(legacy-baseline은 dollar_rules에 없어 $0). 별 계산에서 star_purchases 제외(Paul QA 구매 행은 레거시 이력으로 무수정 보존, 달러 구매는 town_purchases에 기록, 소유권은 합집합). 구매 RPC는 dollar_balances만 차감, 새 api 파일 0, 새 클라이언트 플래그 없음(townShopV1 노출 게이트 유지, 서버 응답 dollarsAvailable 기능 감지). 브랜치 feat/paul-dollar-v1(base c450b54). 에이전트 3개(DB/서버/클라이언트) 병렬. 구현 완료: v3_49(dollar_rules 12종·dollar_ledger·dollar_balances·트리거·town_purchases·town_items.price_currency·RPC 2개 재정의) + ROLLBACK(v3_47 본문 복원), grant-xp 응답 필드(+구 RPC 형태 감지 폴백), 클라이언트 ⭐/💵 분리(+레거시 응답 폴백), 테스트(testPaulDollarSql, testTownShopServer 78, testTownShop 104), preflight post-v3_49, 문서 116차. 독립 리뷰 Critical 0/High 0/Medium 1(배포 창 형태 폴백 — 수정)/Low 2(노트 정정, 구 탭 일반 리스크). 회귀 전부 PASS, RELEASE GATE PASS. 커밋 0 — READY TO APPLY에서 정지.",
-  "blocker": "운영자 승인 대기: (1) 로컬 커밋 + push/PR (2) 코드 배포 후 v3_49 실행. 실행 순서: 코드 배포(플래그 OFF) → preflight post-v3_49(not-applied 확인) → v3_49 실행 → post-verify SELECT → QA Paul 검증(별 획득→달러 적립→구매→⭐ 불변/💵 −60→재로그인) → townShopV1 ON 검토.",
-  "next_action": "운영자 승인 시 소커밋(SQL / 서버 / 클라이언트 / 테스트+레지스트리 / 문서) → push → PR → CI → merge → v3_49 preflight/apply/post-verify. 체크포인트 시점 기록이며 운영자 지시 우선."
+  "blocker": "none — V3_49 CLOSED. Do NOT re-investigate, re-verify or re-run (CLAUDE.md rule 3). Remaining item is a product decision (townShopV1 ON timing/scope), not engineering work.",
+  "next_action": "(optional, separate small commit) fix preflightTownShop.mjs post-v3_49 header comment vs code mismatch; revert QA device local flag. No V3_49 work remains.",
+  "rollout": {
+    "pr22": "MERGED 1cd0de6 (2026-09-08T15:23Z), CI 4/4 PASS, Vercel Production SUCCESS (bundle index-BpT87TfB.js == local build of 1cd0de6)",
+    "v3_49": "EXECUTED by operator 2026-09-09 + POST-VERIFY PASS (anon preflight 9/9; operator SELECT-only A~E all PASS) — CLOSED",
+    "post_verify": {
+      "A": "12/12 PASS",
+      "B": "reward_ledger 509 rows/33160 stars, legacy-baseline 156 rows/32642 stars, dollars_earned 0 == stars_mirrored 0",
+      "C": "3 fns secdef; anon/authenticated EXECUTE false, service_role true, no PUBLIC default acl",
+      "D": "Paul stars_earned 223, dollars 0/0/0, owned {shop-lamp}",
+      "E": "dollar_balances security_invoker=on"
+    },
+    "production_write_by_session": 0,
+    "townShopV1": "OFF (global). QA device local ON residue — revert before any activation decision",
+    "verify_file": "production_v3_49_post_verify.sql (untracked operator file, rev2: balance column fix, no inline comments / no < operators)"
+  }
 }
