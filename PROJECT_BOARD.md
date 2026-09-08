@@ -964,6 +964,12 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
 
 ## DONE (최근 완료, 참고용 — 전체 이력은 `ROADMAP.md`/`handoff.md`)
 
+### [P1] 쓰기 연습 항상 양방향(mixed 50:50) — 구현·검증 완료, PR 대기 (2026-09-09, 118차)
+- Yaeji/Irene(Presentation 6) "한 방향만" 원인 = 주 교재 소유 반 '중1 천재 이상기' spelling_direction kr2en(실효 설정). 반 설정 변경 대신 제품 규칙으로 해결: `studyMode==='write'`만 항상 mixed.
+- `src/utils/writePracticeDirection.js` + `App.jsx` mixedDirections 조건. 종합/복습/일일 의식/입실시험 무변경. 한 문제 한 언어, 정답 미노출.
+- 테스트 43단언(규칙 15 사전 FAIL 27 확인), 관련 스위트·build PASS. verify:all의 testTownShop 1 FAIL은 Windows CRLF baseline known issue(이 PR 범위 밖).
+- 브랜치 `fix/write-practice-always-mixed`, 커밋 `478f06f`/`e08edec`(+docs). 머지·배포 후 QA 실기기 확인 잔여.
+
 ### [P1] V3_49 Paul Dollar V1 — CLOSED (2026-09-09, 117차)
 - PR #22 머지 `1cd0de6` → Vercel Production 배포(번들 해시 일치 확인) → 운영자 `supabase_v3_49_paul_dollar.sql` 1회 실행 → post-verify A~E 전부 PASS(anon preflight 9/9 + 운영자 SELECT-only). Production WRITE(세션) 0.
 - 별 데이터 삭제/초기화/중복 지급 0. Paul QA stars_earned 223 유지(구매로 감소 없음), 달러 $0 시작, owned {shop-lamp}.

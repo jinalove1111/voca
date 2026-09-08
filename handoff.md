@@ -1,8 +1,75 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-09 (117차, V3_49 Paul Dollar CLOSED — PR #22 머지 1cd0de6 배포,
-운영자 v3_49 실행, post-verify A~E 전부 PASS, Production WRITE(세션) 0,
-townShopV1 전역 OFF. 상세는 아래 117차 섹션. 116차 헤더 원문은 117차 섹션
-아래 116차 섹션에 그대로 보존)_
+_최종 갱신: 2026-09-09 (118차, 쓰기 연습 항상 양방향 50:50 — Yaeji/Irene 증상 원인=
+주 교재 소유 반 설정 kr2en, 코드 규칙으로 해결. 브랜치 fix/write-practice-always-mixed,
+PR 대기, Production WRITE 0. 117차 V3_49 CLOSED 기록은 아래 그대로 보존)_
+
+## 2026-09-09 (118차) — 쓰기 연습(studyMode write) 항상 양방향(mixed 50:50) 출제 — Yaeji/Irene(Presentation 6) "한 방향만 나옴" 증상 원인 확정 + 최소 코드 규칙화 (브랜치 fix/write-practice-always-mixed, PR 대기)
+
+_Production DB WRITE 0, 반 설정 변경 0, 학생 데이터 변경 0, V3_49/Town Shop 무접촉.
+소커밋 2 + 문서 1. 머지는 운영자 승인 대기._
+
+### 증상과 조사(READ-ONLY)
+
+- 제보: 임예지(Yaeji)·이예원(Irene), Presentation 6, "쓰기 연습에서 한글과
+  영어가 같이 나오지 않는다". 운영자 정정 후 최종 요구 = **한 문제에 한 언어만
+  보이되, 한 세션에서 KR→EN / EN→KR 두 방향을 모두 연습**(동시 표시 아님).
+- 실사용 계정: Yaeji `1c585815`, Irene `d4bd8d3d`(둘 다 09-08 학습, 홈 반
+  Presentation 6 `1693f32b`, 현재 유닛 "중1 천재 이상기" Unit3 40단어·뜻 전부
+  존재). 한글 이름 계정(임예지 `e22f2367` 07-14, 이예원 `2ba65aaf` 07-11)은
+  "Presentation 6 -2026" 반의 휴면 중복 계정.
+- **원인 = 설정**. `getStudentSpellingSettings`(wordLibrary.js 838행) 우선순위
+  "① 주 교재 소유 반 → ② 홈 반 → ③ kr2en"에 따라 실효 설정은 주 교재 소유 반
+  "중1 천재 이상기"(`2724dc62`, class_type=textbook, 09-01 생성, kr2en). 홈 반
+  Presentation 6도 kr2en. "Presentation 6 -2026"만 mixed였으나 실사용 계정과 무관.
+  관리자 화면에서 이 교재 반은 📚 교과서 라이브러리 섹션 카드에 있고 거기에도
+  쓰기 시험 설정 패널이 렌더된다(AdminScreen 2239·2307행) — 수업 반 카드에서
+  혼합으로 바꿔도 반영되지 않는 구조가 "아직도"의 정체로 추정.
+- mixed 배선(App.jsx 401~427 assignDirections/extendStableDirections, WordDetail
+  817 override) 자체는 정상 — 2026-08-20 구조 수정 후 테스트로 고정된 상태.
+- SpellingQuestion 질문 단계는 한 언어만 표시, 반대 언어는 정답/공개 시점에만
+  병기(2026-07-17 `ae1863f`). CSS 숨김 없음.
+
+### 결정(운영자, 2026-09-09) — 제품 규칙
+
+"쓰기 연습만 반 설정과 무관하게 항상 양방향". 시험/퀴즈/복습/일일 의식/입실시험의
+spellingDirection 동작은 변경하지 않는다. 반 설정 변경은 하지 않는다(코드 규칙).
+(중간에 검토된 "한 문제에 한글+영어 동시 표시" 안은 취소 — 베껴 쓰기 구조 금지.)
+
+### 구현(최소 변경)
+
+- `src/utils/writePracticeDirection.js`(신규, 순수): `resolveSessionSpellingDirection(studyMode, classDirection)`
+  — `'write'`면 `'mixed'`, 그 외 모드는 반 설정값 그대로.
+- `src/App.jsx` mixedDirections useMemo(+15/−3): 조기 반환 조건을 위 함수 결과로
+  판단, 재배정 키에 sessionDirection 추가, deps에 studyMode 추가. 배정·안정화
+  로직(assignDirections/extendStableDirections/useRef)은 그대로 재사용.
+  guidedMixedDirections/reviewMixedDirections는 바이트 동일.
+- 결과: 쓰기 모드 세션 단어를 정확히 50:50(홀수면 1개 난수)으로 배정·셔플, 세션 중
+  재셔플 없음, 결과 화면 방향별 성적(기존). 한 문제 한 언어, 정답 사전 노출 0.
+
+### 검증
+
+- 규칙 15: 수정 전 코드에서 신규 테스트 27단언 FAIL 확인(scripts/.tmp/writePractice-prefix-FAIL.txt) → 구현 후 43/43 PASS.
+- 관련 스위트 PASS: writing-direction-resolution / student-path-contracts / ui-stability /
+  SpellingDirectionWiring / WritingDirectionEngine / testSpelling / QuizStepReset / EntranceTest. build PASS.
+- verify:all: 이 변경 관련 도메인 전부 PASS. **FAIL 1건 = scripts/testTownShop.mjs 단언 1개
+  ("useTownShop.js: useStudent를 import하지 않음") — Windows 로컬 CRLF baseline 이슈**:
+  core.autocrlf 체크아웃으로 작업 트리가 CRLF가 되어 주석 제거 정규식이 주석 속
+  useStudent 언급을 못 지움. 내 변경 stash 후에도 동일 재현, useTownShop.js를 LF로
+  정규화하면 104/104 PASS, Linux CI에서는 PR #22/#23 PASS. 운영자 판정: 이번 변경과
+  무관한 known issue, 이 PR에 Town Shop 수정 포함 금지 → 별도 소커밋 후보(테스트
+  정규식 CRLF 내성).
+
+### 커밋
+
+- `478f06f` test(write-practice): 테스트 43단언 + registry(extra:false) + package.json verify:write-practice-mixed
+- `e08edec` fix(write-practice): writePracticeDirection.js + App.jsx mixedDirections
+- (이 커밋) docs: handoff 118차 / TESTING / PROJECT_BOARD / .ai-status 체크포인트
+
+### 잔여
+
+- 머지·배포 후 QA 계정 쓰기 모드에서 한→영/영→한 혼합 출제 실기기 확인(Yaeji/Irene 계정은 건드리지 않음).
+- testTownShop.mjs CRLF 내성(별도).
+- 관리자 안내: 교재 소유 반 설정이 학생 실효 설정을 결정한다는 점을 반 설정 패널에 1줄 표기(선택, 별도).
 
 ## 2026-09-09 (117차) — V3_49 Paul Dollar: PR #22 머지·배포 → 운영자 v3_49 실행 → post-verify A~E 전부 PASS → **V3_49 CLOSED** (townShopV1 전역 OFF 유지)
 
