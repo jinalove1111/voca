@@ -172,8 +172,10 @@ export async function run(browser, baseURL) {
       await page2.locator('button', { hasText: '쓰기' }).click()
 
       // 목록 화면(WordBrowser.jsx 195행)에 이미 단어 원문이 보이므로, 클릭
-      // 전에 읽어 정답으로 그대로 타이핑한다(방향은 fixture 전 클래스가
-      // spelling_direction='kr2en'이라 화면엔 뜻만 보이고 입력은 영어 철자).
+      // 전에 읽어 fixture를 찾아둔다 — 이 식별은 방향과 무관하다. write
+      // practice는 2026-09-09부터 반의 spelling_direction 설정과 무관하게
+      // 항상 mixed(kr2en/en2kr 50:50 셔플)이므로, 실제 입력 방향은 문제
+      // 화면 진입 후 placeholder를 보고 런타임에 판별한다(아래).
       const wordRow = page2.locator('p.font-black.text-lg.text-gray-800.break-words').first()
       await wordRow.waitFor({ state: 'visible' })
       const spellingTargetWord = (await wordRow.textContent())?.trim()
@@ -182,11 +184,21 @@ export async function run(browser, baseURL) {
       await wordRow.click()
 
       // 진행 표시("문제 N/전체")는 SpellingQuestion(WordDetail 진입 후)에만
-      // 있고 목록 화면에는 없으므로, 클릭해 들어간 뒤에 읽는다.
-      const spellingInput = page2.getByPlaceholder('영어로 철자를 입력하세요')
-      await spellingInput.waitFor({ state: 'visible' })
+      // 있고 목록 화면에는 없으므로, 클릭해 들어간 뒤에 읽는다. write practice가
+      // always mixed이므로 kr2en(placeholder '영어로 철자를 입력하세요',
+      // 정답=word)과 en2kr(placeholder '한글로 뜻을 입력하세요', 정답=meaning)
+      // 중 실제로 뜬 쪽을 런타임에 판별한다(SpellingQuestion.jsx 122-130행 계약).
+      const spellingEnInput = page2.getByPlaceholder('영어로 철자를 입력하세요')
+      const spellingKrInput = page2.getByPlaceholder('한글로 뜻을 입력하세요')
+      await spellingEnInput.or(spellingKrInput).first().waitFor({ state: 'visible', timeout: 30000 })
+      const spellingEnVisible = await spellingEnInput.isVisible()
+      const spellingKrVisible = await spellingKrInput.isVisible()
+      r.check('A6-spelling 쓰기 모드 방향 placeholder가 영어/한글 둘 중 정확히 하나만 보임(write practice always mixed)', spellingEnVisible !== spellingKrVisible, `en=${spellingEnVisible} kr=${spellingKrVisible}`)
+      const spellingIsEn2Kr = spellingKrVisible
+      const spellingInput = spellingIsEn2Kr ? spellingKrInput : spellingEnInput
+      const spellingAnswer = spellingIsEn2Kr ? spellingFixtureWord.meaning : spellingFixtureWord.word
       const progressBefore = await page2.getByText(/문제 \d+ \/ \d+/).textContent()
-      await spellingInput.fill(spellingFixtureWord.word)
+      await spellingInput.fill(spellingAnswer)
       await page2.getByRole('button', { name: '확인' }).click()
       await page2.getByText('정답이에요!', { exact: true }).waitFor({ state: 'visible', timeout: 5000 })
       r.check('A6-spelling 정답 제출 후 정답 화면("정답이에요!")이 표시됨', true)
@@ -230,9 +242,15 @@ export async function run(browser, baseURL) {
       await wordRowAgain.waitFor({ state: 'visible' })
       const sameWordAgain = (await wordRowAgain.textContent())?.trim()
       await wordRowAgain.click()
-      const spellingInputAgain = page2.getByPlaceholder('영어로 철자를 입력하세요')
-      await spellingInputAgain.waitFor({ state: 'visible' })
-      await spellingInputAgain.fill(spellingFixtureWord.word)
+      // 재진입한 문제도 mixed 셔플이라 방향이 첫 시도와 다를 수 있으므로
+      // 다시 판별한다.
+      const spellingEnInputAgain = page2.getByPlaceholder('영어로 철자를 입력하세요')
+      const spellingKrInputAgain = page2.getByPlaceholder('한글로 뜻을 입력하세요')
+      await spellingEnInputAgain.or(spellingKrInputAgain).first().waitFor({ state: 'visible', timeout: 30000 })
+      const spellingIsEn2KrAgain = await spellingKrInputAgain.isVisible()
+      const spellingInputAgain = spellingIsEn2KrAgain ? spellingKrInputAgain : spellingEnInputAgain
+      const spellingAnswerAgain = spellingIsEn2KrAgain ? spellingFixtureWord.meaning : spellingFixtureWord.word
+      await spellingInputAgain.fill(spellingAnswerAgain)
       await page2.getByRole('button', { name: '확인' }).click()
       await page2.getByText('정답이에요!', { exact: true }).waitFor({ state: 'visible', timeout: 5000 })
       await page2.waitForTimeout(1200)
