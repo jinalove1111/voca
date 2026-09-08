@@ -46,7 +46,15 @@ function check(label, cond) {
 function section(name) { console.log(`\n-- ${name} --`) }
 
 function stripComments(src) {
+  // CRLF 안전화: Windows(core.autocrlf=true) 워킹카피는 \r\n인데, 아래
+  // split('\n') 후 각 줄 끝에 남는 \r 때문에 /\/\/.*$/(m 플래그 없음, `.`가
+  // 줄바꿈 문자를 소비 못함)가 `$`(문자열 끝)에 도달하지 못해 라인 주석이
+  // 전혀 제거되지 않는 실사고가 있었다(예: useTownShop.js의 useStudent
+  // 언급 주석이 안 지워져 "import 안 함" 단정이 오탐 FAIL). 정규식들을
+  // 그대로 두고 입력을 먼저 LF로 정규화하는 단일 지점으로 고친다 — LF/CRLF
+  // 어느 워킹카피에서도 동일한 결과를 보장.
   return src
+    .replace(/\r\n?/g, '\n')
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .split('\n')
     .map((line) => line.replace(/\/\/.*$/, ''))
