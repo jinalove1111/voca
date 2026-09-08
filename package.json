@@ -119,6 +119,10 @@
     "verify:ops-status": "node scripts/testOpsStatus.mjs",
     "verify:prod-plan": "node scripts/testProdPlan.mjs",
     "verify:db-audit-paging": "node scripts/testDbIntegrityAuditPaging.mjs",
+    "verify:admin-student-actions": "node scripts/testAdminStudentActions.mjs",
+    "verify:ci-name-masking": "node scripts/testCiNameMasking.mjs",
+    "verify:students-rls-phase2b": "node scripts/testStudentsRlsPhase2b.mjs",
+    "verify:registry-coverage": "node scripts/testRegistryCoverage.mjs",
     "watch:claude-stall": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/watchClaudeStall.ps1"
   },
   "dependencies": {
