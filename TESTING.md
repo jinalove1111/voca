@@ -1065,3 +1065,38 @@ ledger_mirror`)로 재실행한 결과: **reconciled 24 / nothing_to_reconcile
   verify:stars`/`verify:reward`/`verify:reward-server`/
   `verify:double-events`/`verify:persistence`/`verify:town-shop`/
   `verify:legacy-reward`/`verify:baseline-v2`/`verify:cutover`.
+
+## 관련 항목: Paul Dollar V1 — 2재화 분리 신규 스위트 1종 + 기존 2종 확장 (2026-09-08, 116차)
+
+_이 섹션부터는 append — 위 내용(115차)은 원본 그대로 보존한다. 브랜치
+`feat/paul-dollar-v1`. 커밋 0, `townShopV1=false`, SQL 미실행
+(`supabase_v3_49_paul_dollar.sql`), Production WRITE 0. 상세: `handoff.md`
+2026-09-08(116차)._
+
+### 신규 스크립트 1개 + 기존 스크립트 2개 확장, `tests/harness/registry.mjs` 등록(전부 `extra:false`)
+
+| 파일 | 단언 | 대상 | 네트워크/DB |
+|---|---|---|---|
+| `scripts/testPaulDollarSql.mjs`(신규) | 정적 `check()` 호출 165개(grep 실측 카운트 — 실제 실행 결과/PASS 여부는 리드가 최종 확인) | `supabase_v3_49_paul_dollar.sql`+`_ROLLBACK.sql` 정적 단언(`dollar_rules` 12종 시드/`legacy-baseline` 제외, `dollar_ledger` unique idempotency_key + RLS 정책0·GRANT0, `dollar_balances` 뷰, AFTER INSERT 트리거 `fn_reward_ledger_to_dollars`(1★=$1, exception 래핑으로 별 삽입 보호), `star_purchases` 무변경(쓰기 구문 0건), `town_items.price_currency` 기본 dollars + `price` 60 무변경, RPC 2개 재정의(dollars 전용, `item_not_purchasable`, 동일 트랜잭션 2-insert, `total_stars` 미참조), 권한(REVOKE/GRANT service_role), 롤백 WHERE절) + 순수 JS 인메모리 시뮬레이션(지급→달러 동액/중복 키 0/legacy-baseline $0/별 많고 달러 부족→insufficient(별로 결제 불가)/구매 후 별 불변·달러 −60/재시도·더블 already_owned/서로 다른 아이템 동시 구매 직렬화/Paul QA stars 행 보존) | 네트워크 0, SQL 실행 0 |
+| `scripts/testTownShop.mjs`(확장, 신규 파일 아님) | 75→101(114차 75에서 확장) | 2재화 분리 반영 — `shopItemState`가 `dollarsAvailable` 기준으로 판정(레거시 `available` 파라미터명은 하위호환 별칭), `applyPurchaseResult`가 `dollars.available`만 갱신(`starsEarned` 불변 단언 추가), `normalizeShopState`가 `{starsEarned, dollarsAvailable, dollarsEarned, dollarsSpent}` 신규 계약 정규화(레거시 `available`만 있는 응답도 안전 흡수) | 네트워크 0 |
+| `scripts/testTownShopServer.mjs`(확장, 신규 파일 아님) | 47→65(114차 47에서 확장) | `api/grant-xp.js` 응답 키 교체(`starsEarned`/`dollarsAvailable`/`dollarsEarned`/`dollarsSpent`, `items[].priceCurrency`, `purchase_town_item` 응답 `dollarsSpent`/`balanceAfter`) 반영 + `town_items.price_currency` 컬럼 부재 시 폴백 조회(select 에러 시 컬럼 없이 재조회, `priceCurrency:'dollars'` 고정) 시나리오 추가 | 네트워크 0(fake `supabase.rpc` — 실제 원자성은 SQL 함수 자체에 있고 여기서는 실행하지 않음, 정직한 경계) |
+
+### 신규 `package.json` 스크립트 1종
+
+```
+"verify:paul-dollar": "node scripts/testPaulDollarSql.mjs && node scripts/testTownShopSql.mjs && node scripts/testTownShopServer.mjs && node scripts/testTownShop.mjs"
+```
+
+### `scripts/preflightTownShop.mjs` 신규 모드
+
+`--expect post-v3_49` 추가 — `dollar_rules`/`dollar_ledger`/`dollar_balances`/`town_purchases` 네 객체는 anon key로 401/42501(권한 차단, 정상)이어야 "배포됨"으로 판정하고, 404/42P01/PGRST205(부재)가 나오면 v3_49가 아직 미적용임을 뜻한다. `town_items`는 여전히 200이어야 하고 `shop-lamp.price_currency`가 스키마 캐시에 노출되면 `'dollars'`인지 확인, `star_purchases`는 v3_47부터 이미 401/42501이었고 v3_49도 그 권한을 무변경으로 유지해야 한다.
+
+### 회귀 확인
+
+- 관련 회귀 스위트(참고용, 이 문서 갱신 세션은 docs-only라 재실행하지 않았다 — 실행/PASS 확인은 구현 세션의 책임): `npm run verify:stars`/`verify:reward`/`verify:reward-server`/`verify:double-events`/`verify:persistence`/`verify:paul-town-progression`/`verify:cutover`/`verify:legacy-reward`. 별 지급 경로(`reward_ledger` INSERT)의 입출력 계약 자체는 이번 세션에서 변경되지 않았으므로(트리거는 AFTER INSERT로만 얹힘) 무회귀가 기대된다.
+- Release Gate 최종 판정: **리드가 최종 확인**.
+
+### 정직한 커버리지 경계
+
+- 실제 Postgres 트리거 발동/`pg_advisory_xact_lock` 동시성/트랜잭션 원자성은 SQL 실행 전까지 로컬에서 확인 불가 — `testPaulDollarSql.mjs`의 인메모리 시뮬레이션은 SQL이 서술하는 **계약**만 재현한다(SQL 파일 헤더에도 동일하게 명시, 114차/115차와 동일 정신).
+- `scripts/preflightTownShop.mjs --expect post-v3_49`는 anon key READ-ONLY 프로브만 가능하므로 `dollar_rules`/`dollar_ledger`/`dollar_balances`/`town_purchases` 네 객체는 "401/42501=배포됨"으로만 간접 확인하고, 행 개수(`dollar_rules` 12행 등)/트리거 실존/함수 `prosecdef`는 운영자가 SQL Editor SELECT로 직접 확인해야 한다(v3_49 SQL 헤더 "실행 후 확인" 절 참고).

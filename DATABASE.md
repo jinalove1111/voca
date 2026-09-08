@@ -74,8 +74,17 @@ _작성: 2026-07-18. 저장소의 `supabase_*.sql` 11개 파일 전체를 읽고
 | `town_items` | v3.47(2026-09-06, STAR SPENDING Phase 1 — Town Shop V1, **미실행**) | `id` text PK, `name`, `emoji`, `price` smallint(`check(price>0)`), `active` boolean default true, `created_at` | FK 없음(카탈로그) | 상점 아이템 표시용 카탈로그 — 시드 1행(`shop-lamp` 💡 책상 램프, 60별, `on conflict do nothing`이라 재실행해도 운영자가 수동 조정한 가격을 덮어쓰지 않음). anon/authenticated에 `select`만 GRANT(가격 변경 GRANT 없음) |
 | `star_purchases` | v3.47(2026-09-06, STAR SPENDING Phase 1, **미실행**) | `id` uuid PK, `student_id`, `item_id`, `stars_spent` smallint(`check>0`), `created_at`, **unique(`student_id`,`item_id`)**(별도 idempotency_key 컬럼 없음 — 이 unique 자체가 멱등 메커니즘) | `student_id → students(id)` cascade, `item_id → town_items(id)` | 학생별 구매 이력 — **아이템 소유권의 유일한 진실 원천**(`progress_data`/`student_progress` 등 어떤 진행도 blob에도 아이템 필드 없음, 클라이언트 조작 불가). `reward_ledger`(v3_36)와 동일한 최소 권한(정책 0 + GRANT 0, anon/authenticated 완전 차단) — 학생 화면도 이 테이블을 직접 SELECT하지 않고 `get_town_shop_state()` RPC로만 파생 잔액/보유 목록을 받는다. 구매 자체는 `purchase_town_item()` RPC(둘 다 SECURITY DEFINER, service_role 전용, 학생별 advisory lock으로 더블클릭/재시도 직렬화) |
 | `reward_baseline_review` | v3.48(2026-09-06, 레거시 baseline v2, **미실행**) | `student_id`, `total_stars`, `ledger_earned`, `delta`, `plausible_max`, `migration_name`, `created_at`, PK(`student_id`,`migration_name`) | `student_id`는 uuid 컬럼일 뿐 SQL 원문에 `references students(id)` FK 선언 없음(확인된 사실만 기록) | v3_48이 "레거시 delta가 타당성 상한(v1 마커 이후 경과일×일일상한+50)을 초과"로 판단해 원장에 자동 반영하지 않고 사람 검토로 넘긴 학생을 기록하는 큐 — RLS ON, 정책 0 + GRANT 0(anon/authenticated 차단). **2026-09-07 갱신(115차, 컬럼 의미 변경 — 컬럼 추가/삭제 없음)**: v3_48이 전역 T 스냅샷에서 학생별 `reconcile_legacy_baseline` RPC로 전면 재설계되며 `total_stars` 컬럼의 의미가 "그 시점 서버 `student_progress.total_stars`"에서 "그 학생이 reconcile 호출 시 들고 온 클라이언트 스냅샷(`p_snapshot_total`)"으로 바뀌었다(컬럼명은 하위 호환을 위해 그대로 유지). 상세는 아래 신규 서브섹션 "2026-09-07 레거시 baseline v2 — 학생별 reconcile RPC(v3_48 재설계)" 참고. |
+| `dollar_rules` | v3.49(2026-09-08, Paul Dollar V1 — 2재화 분리, **미실행**) | `reward_type` text PK, `dollars_per_star` smallint(`check>=0`, default 1), `active` boolean default true, `created_at` | FK 없음(화이트리스트 카탈로그) | 어떤 `reward_type`이 폴달러로도 전환되는지의 화이트리스트 — `src/utils/rewardEngine.js`의 실제 학습 보상 12종만 시드(`legacy-baseline`은 의도적으로 미시드 — "레거시 별은 폴달러로 환산하지 않는다"는 승인된 설계). `on conflict do nothing`이라 재실행해도 운영자가 이후 조정한 배율/on-off를 덮어쓰지 않는다 — **배율 조정은 코드 배포 없이 `UPDATE dollar_rules SET dollars_per_star=...`만으로 가능**하도록 설계. `reward_ledger`(v3_36)와 동일 최소 권한(정책 0 + GRANT 0) |
+| `dollar_ledger` | v3.49(2026-09-08, Paul Dollar V1, **미실행**) | `id` uuid PK, `student_id`, `event_type` text(`reward:*`/`purchase:*`), `dollars_delta` integer(`check<>0`), `source_type`, `source_id`, `idempotency_key` text unique, `created_at` | `student_id → students(id)` cascade | 폴달러 지급/차감의 단일 진실 원장(append-only, SUM이 잔액 — 저장된 합계 컬럼 없음, `reward_totals`/`xp_totals`와 동일 판단). 트리거 `trg_reward_ledger_to_dollars`(아래)가 `reward_ledger` 지급 시 자동으로 채우고, `purchase_town_item()` RPC가 구매 시 음수 행을 채운다. `reward_ledger`(v3_36)/`star_purchases`(v3_47)와 동일 최소 권한(정책 0 + GRANT 0) |
+| `town_purchases` | v3.49(2026-09-08, Paul Dollar V1, **미실행**) | `id` uuid PK, `student_id`, `item_id`, `currency` text(`check = 'dollars'`, default `'dollars'`), `price_paid` integer(`check>0`), `created_at`, **unique(`student_id`,`item_id`)** | `student_id → students(id)` cascade, `item_id → town_items(id)` | 폴달러 구매 이력 전용 신규 테이블 — **`star_purchases`(v3_47)는 이 마이그레이션이 전혀 건드리지 않고 그대로 보존**(불변 감사 기록, Paul QA `shop-lamp` 1행 포함, currency='stars'/stars_spent=60 무변경). "이미 보유한 아이템인가"는 `star_purchases` ∪ `town_purchases`(UNION)로만 판정(`get_town_shop_state()`). `star_purchases`와 동일 최소 권한(정책 0 + GRANT 0) |
 
 **`xp_totals`(VIEW, 테이블 아님)** — `xp_ledger`를 `student_id`별로 `sum(amount)` 집계한 파생 뷰(저장 컬럼 아님, 매 조회 시 재계산). "저장된 중복값보다 파생값을 우선한다"는 이번 지시를 스키마 레벨에서 강제하기 위해 `student_progress.hat_stage` 같은 "빠른 조회용 사본 컬럼" 패턴 대신 VIEW를 선택했다(`supabase_v2_3_paul_rank.sql` 주석 참고). anon/authenticated에 SELECT GRANT됨.
+
+**`dollar_balances`(VIEW, 테이블 아님, v3.49, 2026-09-08, 미실행)** — `dollar_ledger`를 `student_id`별로 집계하는 파생 뷰: `balance = sum(dollars_delta)`, `earned = sum(양수만)`, `spent = -sum(음수만)`(저장 컬럼 아님, `xp_totals`/`reward_totals`와 동일 판단). PG15+에서 `security_invoker=on`(`reward_totals`와 동일 자기교정 패턴). **GRANT 0**(`revoke all ... from anon, authenticated`) — `xp_totals`와 달리 학생 화면이 이 뷰를 직접 SELECT하지 않고 `get_town_shop_state()` RPC로만 파생값을 받는다(`reward_totals`/`dollar_balances`는 둘 다 service_role 전용 접근).
+
+**트리거 `trg_reward_ledger_to_dollars`(`fn_reward_ledger_to_dollars()`, v3.49, 2026-09-08, 미실행)** — `reward_ledger`에 걸리는 AFTER INSERT 트리거. `new.stars_delta > 0`이고 `dollar_rules`에 해당 `reward_type`의 활성 규칙이 있으면 `stars_delta × dollars_per_star`만큼 `dollar_ledger`에 자동 삽입(`idempotency_key = reward_ledger.idempotency_key || ':dollar'`, `on conflict do nothing`). 함수 본문 전체를 `EXCEPTION WHEN OTHERS`로 감싸 폴달러 계산이 어떤 이유로든 실패해도 **원 별 지급(INSERT)은 절대 막지 않는다**(CLAUDE.md 규칙 1) — 실패 시 `RAISE WARNING`만 남기고 진행. `PUBLIC`/`anon`/`authenticated`의 직접 EXECUTE 권한은 회수돼 있으나(방어적 REVOKE), 트리거 발동 자체는 테이블 소유자 권한으로 이뤄지므로 이와 무관하게 계속 동작한다.
+
+**`town_items.price_currency`(v3.49, 2026-09-08, 미실행, 추가 컬럼)** — 기존 `town_items`(v3.47) 테이블에 `text not null default 'dollars'`(`check in ('stars','dollars')`) 컬럼 1개만 추가(기존 컬럼 0개 변경, `price`=60 무변경). 상점 카탈로그의 화폐 단위 표시용 — anon/authenticated의 기존 `select` GRANT(v3.47)가 이 신규 컬럼도 자동으로 포함한다(컬럼 단위 GRANT가 아니라 테이블 단위 정책이므로 추가 GRANT 불필요).
 
 **Word King 점수 산정 입력에 대한 참고(2026-07-19)** — `GAME_DESIGN.md` §5 원안은 입실시험 정확도 + 쓰기시험 첫시도 정답률(`spellingCorrect`/`spellingTotal`) + `word_status` mastered 개수 3개 신호를 제안했으나, 실제 구현은 ①입실시험 정확도(`entrance_test_results`, 서버 재검증됨)와 ②XP 합계(`xp_ledger`, 서버 전용 쓰기) 2개만 쓴다. 나머지 두 신호는 각각 `student_progress.calendar_data`/`word_status`로 anon `"allow anon all"`이라 클라이언트가 직접 쓸 수 있는 값이라 "서버 전용 계산"이라는 이 기능의 핵심 전제와 맞지 않아 의도적으로 제외했다(`src/utils/wordKing.js` 헤더 주석 전문 참고). §11 Anti-cheat이 이미 지목한 부차 갭이 해소되면 그때 가중치만 추가하면 된다(스키마 변경 불필요).
 
@@ -148,6 +157,8 @@ seasons                                    ※ FK 없음, 반/학생과 무관�
 30. `supabase_v3_47_town_shop.sql`(2026-09-06, STAR SPENDING vertical slice Phase 1 — Town Shop V1) — `town_items`(아이템 카탈로그, 순수 추가, 시드 1행 `shop-lamp` 60별) + `star_purchases`(구매 이력, 순수 추가, 소유권 진실 원천) + `purchase_town_item`/`get_town_shop_state` RPC(SECURITY DEFINER, service_role 전용, 학생별 advisory lock 직렬화, `#variable_conflict use_column` + 테이블 별칭 명시 — 리뷰에서 발견된 컬럼명 모호성 버그 보정). 기존 4테이블 컬럼 0개 변경. **[미실행 — 운영자 실행 대기, 순서: v3_47 → (Phase 2 코드 배포, 레거시 지급 서버화) → `supabase_v3_48_reward_legacy_baseline_v2.sql`]**. 실행 전에는 `townShopV1`(기능 플래그, `src/config/features.js`) 기본값이 `false`라 클라이언트가 이 테이블/RPC를 전혀 호출하지 않는다(회귀 없음). `supabase_v3_47_town_shop_ROLLBACK.sql` 동봉. 상세: `handoff.md` 2026-09-06(114차), `docs/operations/STAR_SHOP_PREPRODUCTION_PACKAGE.md`.
 
 31. `supabase_v3_48_reward_legacy_baseline_v2.sql`(2026-09-06, STAR SPENDING Phase 2 전제 — 레거시 `total_stars` vs 서버 원장 `reward_totals` 괴리 1회 통제 이관 v2) — `reward_baseline_review`(검토 큐, 순수 추가) 신규 + `reward_ledger`에 `source_type='migration'`·`source_id='v2'` 한정 `legacy-baseline` 행 삽입(`idempotency_key` = `${student_id}:legacy-baseline:migration:v2`). EXACT 가드 6종(v1 마커 존재/4테이블 존재/`reward_totals` 0행 아님/음수 delta 미삽입/중복 키 0건/`inserted+review==candidates`) + BOUNDED 가드 4종(candidate_count∈[5,80]/total_delta_sum∈[500,24000]/max_individual≤1500/`student_progress` 행 수∈[150,500]) 중 하나라도 위반 시 `RAISE EXCEPTION`으로 트랜잭션 전체 자동 롤백(부분 삽입 없음). `supabase_v3_37_reward_legacy_baseline.sql`(v1, **이미 실행됨** — marker `v3_37_reward_legacy_baseline` 확인)이 선행 조건. 기존 행(v1 baseline 포함)은 절대 수정/삭제하지 않는다. **[미실행 — 운영자 실행 대기, 순서: v3_47 → (Phase 2 코드 배포) → v3_48]**. `supabase_v3_48_reward_legacy_baseline_v2_ROLLBACK.sql` 동봉(v2 baseline 행/검토 행/marker만 정확히 되돌림). 2026-09-06 클라이언트 미러 드라이런(`scripts/dryRunBaselineV2.mjs`): 대상 24명, 총 1,998별, 최대 277, 음수/중복 0, BOUNDED 4종 전부 PASS(실측값, 라이브 SQL 실행 아님). 상세: `handoff.md` 2026-09-06(114차), `docs/operations/STAR_SHOP_PREPRODUCTION_PACKAGE.md`.
+
+32. `supabase_v3_49_paul_dollar.sql`(2026-09-08, Paul Dollar V1 — 2재화 분리, 운영자 승인) — `dollar_rules`(화이트리스트, 12행 시드, `legacy-baseline` 의도적 제외)/`dollar_ledger`(폴달러 원장)/`town_purchases`(폴달러 구매 이력) 신규 테이블 3개 + `dollar_balances` 파생 뷰 1개 + `trg_reward_ledger_to_dollars`/`fn_reward_ledger_to_dollars` 트리거 1개(AFTER INSERT on `reward_ledger`, exception-wrapped) + `town_items.price_currency` 추가 컬럼 1개(기존 컬럼 0개 변경, `price`=60 무변경) + `get_town_shop_state`/`purchase_town_item` RPC 2개 교체(반환 shape 변경 — `stars_spent`→`dollars_spent` 등, 시그니처 `(uuid)`/`(uuid, text)`는 v3_47과 동일 유지, 폴달러 전용). `star_purchases`(v3_47)는 이 파일이 전혀 건드리지 않음(레거시 별 구매 이력 그대로 보존, Paul QA `shop-lamp` 1행 포함). **⭐ 별은 이 SQL 이후 절대 감소하지 않는다**(구매가 더 이상 별을 차감하지 않음) — 컷오버 시점에 레거시 별을 폴달러로 환산 지급하지 않으므로 전 학생 폴달러 $0에서 시작(운영자 승인, 2026-09-08). **[미실행 — 운영자 실행 대기, 순서: v3_47 → v3_48 → (코드 배포, 플래그 OFF) → v3_49 → post-verify → 이후 `townShopV1` ON 결정]**. `supabase_v3_49_paul_dollar_ROLLBACK.sql` 동봉(v3_47 별 기반 RPC 본문 원복, `dollar_ledger`/`town_purchases`의 트리거/RPC 생성 행만 WHERE로 정확히 삭제, 테이블 구조/`dollar_rules` 시드/`star_purchases`는 전부 보존 — 롤백 시 `townShopV1`은 반드시 OFF여야 함). 상세: `handoff.md` 2026-09-08(116차), `docs/operations/STAR_SHOP_PREPRODUCTION_PACKAGE.md` §12.
 
 ## `student_class_assignments` (v2.9, 2026-07-21 — 코드 배포 완료 / SQL 미실행)
 
@@ -550,6 +561,33 @@ SQL은 여전히 **미실행**이며, 아래는 파일 원문 기준 계획이�
   "한 번에 전체를 계산한다"는 전제에서만 의미가 있어 전부 폐기됐다 —
   아래 표(위쪽 `reward_baseline_review` 행 각주 참고)와 함께 이 SQL을
   다루는 다른 세션은 옛 상수명을 재사용하지 말 것.
+
+### 2026-09-08 Paul Dollar V1 RLS(`supabase_v3_49_paul_dollar.sql`, 미실행 대기)
+
+_추가: 2026-09-08(116차). 코드/SQL 전부 구현·작성 완료, 커밋 0,
+`townShopV1=false`, SQL 미실행 — 아래는 파일 원문 기준 계획된 RLS이며
+아직 라이브에 적용되지 않았다. 상세: `handoff.md` 2026-09-08(116차)._
+
+- `dollar_rules`/`dollar_ledger`/`town_purchases` 셋 다 — `enable row
+  level security` + 정책 0개 + `revoke all ... from anon, authenticated`
+  (`reward_ledger`(v3_36)/`star_purchases`(v3_47)와 동일한 최소 권한
+  패턴). 학생 화면은 이 세 테이블 중 어느 것도 직접 SELECT하지 않고
+  항상 `get_town_shop_state()` RPC로만 파생값(잔액/보유 아이템)을
+  받는다.
+- `dollar_balances`(VIEW) — GRANT 0(`revoke all ... from anon,
+  authenticated`), PG15+에서 `security_invoker=on`.
+- `fn_reward_ledger_to_dollars()`(트리거 함수) — `revoke all ... from
+  public`/`from anon, authenticated`(방어적 REVOKE — 트리거 발동 자체는
+  테이블 소유자 권한으로 이뤄지므로 이 REVOKE와 무관하게 계속 동작,
+  오직 "누군가 SELECT로 직접 호출"만 차단).
+- `get_town_shop_state(uuid)`/`purchase_town_item(uuid, text)` — v3_47과
+  동일하게 `revoke all ... from public`/`from anon, authenticated` 후
+  `grant execute ... to service_role`만. 반환 shape만 교체
+  (`stars_earned, dollars_available, dollars_earned, dollars_spent,
+  owned_item_ids` / `ok, reason, dollars_spent, balance_after`) —
+  클라이언트는 `api/grant-xp.js`의 기존 action(`get_town_shop_state`/
+  `purchase_town_item`)을 그대로 통해서만 호출한다(새 action 없음, 새
+  Vercel 함수 파일 없음, 12/12 한도 유지).
 
 ## 관련 파일
 

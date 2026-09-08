@@ -9,6 +9,21 @@ READ-ONLY(anon key GET/HEAD)로만 수행했고, Production에 대한 WRITE는
 
 ## 0) 현재 상태
 
+> **2026-09-08 갱신(116차, superseding note — 아래 표/115차 note 원문은
+> 삭제하지 않고 그대로 둔다)**: 별(⭐)이 상점에서 소비되는 화폐라는 전제
+> 자체가 폐기됐다. 운영자 승인(2026-09-08)에 따라 `supabase_v3_47_
+> town_shop.sql`이 만든 별 기반 차감 RPC(`purchase_town_item`/
+> `get_town_shop_state`)는 신규 `supabase_v3_49_paul_dollar.sql`이 완전히
+> 교체한다 — ⭐ 별은 이제 `reward_totals` 누적 성취값으로 **절대
+> 감소하지 않고**, 상점 구매는 신규 2차 화폐 💵 폴달러(`dollar_ledger`
+> 원장, `reward_ledger` 지급 시 트리거로 1★=$1 자동 적립, 컷오버 시점
+> 레거시 별 소급 환산 없음 — 전 학생 $0에서 시작)만 소비한다. 아래 표의
+> `supabase_v3_47_town_shop.sql`/`supabase_v3_48_reward_legacy_
+> baseline_v2.sql` 행은 여전히 유효(순서상 v3_49보다 먼저 실행)하지만,
+> 실행 순서 마지막에 v3_49가 추가된다: v3_47 → v3_48 → (코드 배포) →
+> **v3_49** → post-verify → `townShopV1` ON 결정. 상세는 이 문서 맨 아래
+> 신규 §12 "Paul Dollar v3_49", `handoff.md` 2026-09-08(116차) 참고.
+>
 > **2026-09-07 갱신(115차, superseding note — 아래 표 원문은 삭제하지
 > 않고 그대로 둔다)**: 아래 표의 `supabase_v3_48_reward_legacy_
 > baseline_v2.sql` 행이 설명하는 "2026-09-06 하드닝 — EXACT/BOUNDED
@@ -381,3 +396,124 @@ marker/필수 테이블 3개/`reward_totals` 0행 아님, SQL 설치 시점 1회
   파일에 대해 재생(stdin JSON) — 둘 다 exit code 0(파괴적 패턴/무조건부
   DELETE 없음).
 - SQL 실행 0건, Production WRITE 0건, git commit 0건.
+
+---
+
+## 12) Paul Dollar v3_49(2026-09-08, 116차) — 2재화 분리
+
+_추가: 2026-09-08(116차). 브랜치 `feat/paul-dollar-v1`, 커밋 0, push 0,
+SQL 실행 0. 이 절은 위 0~8절(v3_47/v3_48, 상점 V1 + 레거시 baseline v2)을
+전제로 그 뒤에 이어지는 신규 마이그레이션을 다룬다 — 위 절들의 내용을
+대체하지 않고 그 위에 얹는다(§0 상단 116차 superseding note 참고)._
+
+### 운영자 승인(2026-09-08)
+
+- **규칙 A**: 컷오버 시점부터 서버 지급 별 1개 = 폴달러 $1(`dollars_per_
+  star = 1`, 화이트리스트 12종 전부 동일 배율).
+- **폴달러는 $0에서 시작** — 레거시 별(그동안 쌓인 `reward_totals.
+  earned_stars`)을 폴달러로 소급 환산해 지급하지 않는다.
+- **램프 가격 $60 유지** — `town_items.price`(60) 무변경, 화폐 단위만
+  별→폴달러로 전환(`price_currency` 컬럼 신설, 기본값 `'dollars'`).
+
+### 설계 — 두 화폐, 두 개의 진실 원천
+
+- ⭐ 별 = `reward_totals`(변경 없음) 기준 서버 권위 누적 업적, **이 SQL
+  이후 절대 감소하지 않는다**(구매가 더 이상 별을 차감하지 않음 — v3_47의
+  별 기반 차감 RPC 본문을 이 SQL이 완전히 대체).
+- 💵 폴달러 = 신규 `dollar_ledger.dollars_delta`의 합(`dollar_balances`
+  파생 뷰, 저장 합계 컬럼 없음 — `reward_totals`/`xp_totals`와 동일
+  판단).
+- `dollar_rules`(신규, PK `reward_type`) — `src/utils/rewardEngine.js`의
+  실제 학습 보상 12종만 시드(`legacy-baseline`은 의도적으로 미시드).
+  `on conflict do nothing` — 배율/on-off 조정은 코드 배포 없이 SQL
+  `UPDATE dollar_rules SET ...`만으로 가능.
+- `trg_reward_ledger_to_dollars`(AFTER INSERT on `reward_ledger`) +
+  `fn_reward_ledger_to_dollars()` — 화이트리스트에 있으면 같은 비율로
+  폴달러를 자동 지급. 함수 전체를 `EXCEPTION WHEN OTHERS`로 감싸 폴달러
+  계산 실패가 원 별 지급(INSERT)을 절대 막지 않는다(CLAUDE.md 규칙 1).
+- `town_purchases`(신규 테이블, `star_purchases`와 완전히 분리) — 폴달러
+  구매 이력 전용. `star_purchases`(v3_47)는 이 SQL이 전혀 건드리지 않고
+  그대로 보존(불변 감사 기록, Paul QA `shop-lamp` 1행 포함). "이미
+  보유"는 두 테이블의 UNION으로만 판정(`get_town_shop_state()`).
+- `get_town_shop_state(uuid)`/`purchase_town_item(uuid, text)` RPC 2개
+  교체(시그니처 동일, 반환 shape 변경 — 폴달러 전용, `total_stars`
+  미참조).
+- `town_items.price_currency` 컬럼 추가(기본값 `'dollars'`, `check in
+  ('stars','dollars')`) — 기존 컬럼 0개 변경, `price`(60) 무변경.
+
+### 구현 파일
+
+- `supabase_v3_49_paul_dollar.sql` / `supabase_v3_49_paul_dollar_
+  ROLLBACK.sql`(작성 완료, 미실행).
+- `api/grant-xp.js` — `get_town_shop_state`/`purchase_town_item` action
+  2개 유지(새 action/새 Vercel 함수 파일 없음), 응답 바디 키만 교체
+  (`starsEarned`/`dollarsAvailable`/`dollarsEarned`/`dollarsSpent`,
+  `items[].priceCurrency`, `purchase_town_item` → `dollarsSpent`/
+  `balanceAfter`). `price_currency` 컬럼 미존재 시 폴백 조회(컬럼 없이
+  재조회 후 `priceCurrency:'dollars'` 고정).
+- `src/utils/townShop.js` — `shopItemState`/`applyPurchaseResult`(
+  `starsEarned` 불변)/`normalizeShopState`(신규 계약 정규화 + 레거시
+  응답 흡수)/`formatDollars` 신규 export.
+- `src/components/Dashboard.jsx` — `wallet` prop(`App.jsx:733`)이 오면
+  ⭐ 누적 배지 + 💵 초록 배지, `wallet===null`(기본, 플래그 OFF)이면
+  기존 배지와 byte 단위 동일.
+- `src/components/PaulTown.jsx` — 상점 줄 💵 잔액 + `💡 책상 램프 —
+  $60` + 구매/부족/구매중/보유 4분기 버튼. ⭐는 상점 UI에 등장하지 않음.
+- 새 클라이언트 기능 플래그 추가 없음(`townShopV1`,
+  `src/config/features.js:73`, 여전히 `false`가 유일한 노출 게이트).
+
+### 테스트
+
+- `scripts/testPaulDollarSql.mjs`(신규, 정적 `check()` 165개 + 인메모리
+  시뮬레이션, 네트워크 0/SQL 실행 0).
+- `scripts/testTownShop.mjs`(확장) 75→101, `scripts/testTownShopServer.mjs`
+  (확장) 47→65 — 2재화 계약 반영.
+- `tests/harness/registry.mjs`에 `testPaulDollarSql` 등록(`extra:false`).
+- `npm run verify:paul-dollar` 신설(`testPaulDollarSql.mjs &&
+  testTownShopSql.mjs && testTownShopServer.mjs && testTownShop.mjs`).
+- `scripts/preflightTownShop.mjs`에 `--expect post-v3_49` 모드 추가.
+- 관련 회귀 스위트(`verify:stars`/`verify:reward`/`verify:reward-server`/
+  `verify:double-events`/`verify:persistence`/`verify:paul-town-
+  progression`/`verify:cutover`/`verify:legacy-reward`) 무회귀. Release
+  Gate 최종 판정: **리드가 최종 확인**.
+- 상세: `TESTING.md` 2026-09-08(116차) 섹션.
+
+### 배포 순서
+
+1. 코드 배포(플래그 `townShopV1=false` 그대로).
+2. `node scripts/preflightTownShop.mjs --expect post-v3_49` — 미적용
+   확인.
+3. 운영자가 Supabase SQL Editor에서 `supabase_v3_49_paul_dollar.sql`
+   실행(v3_47/v3_48 실행 확인 후 1회).
+4. Post-verify(운영자 SELECT): `dollar_rules` 12행 / 트리거 1행 / 함수
+   3개 `prosecdef=true` / `dollar_ledger` 0행 / `town_purchases` 0행 /
+   `star_purchases` 1행 불변.
+5. QA(Paul) 계정 실측: 별을 벌어 폴달러가 함께 쌓이는지 → 구매(⭐ 불변 /
+   💵 −60) → 재로그인 영속성 확인.
+6. 전부 통과 후에만 `townShopV1` ON 결정(별도 승인 사안).
+
+### 롤백
+
+`supabase_v3_49_paul_dollar_ROLLBACK.sql` — 트리거+트리거 함수 제거, RPC
+2개를 v3_47의 별 기반 본문으로 원복, `dollar_balances` 뷰 제거,
+`dollar_ledger`/`town_purchases`에서 이 마이그레이션이 만든 행만 정확히
+WHERE 삭제. 테이블 구조/`dollar_rules` 시드 행/`star_purchases`(전체)는
+전부 보존. **⚠️ 롤백 시 별 차감 로직이 부활**하므로 `townShopV1`이 이미
+ON 배포돼 있다면 롤백 전 반드시 플래그를 OFF로 내릴 것.
+
+### 잔여 / 알려진 한계
+
+- 폴달러는 컷오버 이후부터만 쌓인다 — Paul QA의 레거시 램프 소유는
+  `star_purchases`에 그대로 남아 계속 "보유"로 인정된다.
+- 첫 로그인 시 상점 상태 조회가 115차 CUTOVER RACE reconcile보다 먼저
+  로드되면, 다음 마운트 전까지 ⭐ 표시가 잠깐 실제보다 낮게 보일 수
+  있는 레이스가 있다(P2, 데이터 손실 없음, 다음 마운트에서 자연 교정).
+
+### 다음 세션 주의
+
+- 별을 다시 소비 재화로 쓰지 말 것.
+- `dollar_rules` 값 변경은 SQL UPDATE로(코드 배포 불필요).
+- `legacy-baseline`은 `dollar_rules`에 절대 추가 금지(레거시 별 소급
+  환산 금지 설계가 깨짐).
+
+상세: `handoff.md` 2026-09-08(116차).
