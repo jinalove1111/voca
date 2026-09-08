@@ -396,7 +396,10 @@ console.log('\n=== 15. 경고 노출 경로 확인(정적) ===')
   const r = parseExcelRows([['unit', 'word', 'meaning'], ['Unit1', 'apple', '사과']], '반')
   check('result.warnings는 항상 배열', Array.isArray(r.warnings))
   check('result.headerDetected는 boolean', typeof r.headerDetected === 'boolean')
-  const uiSrc = src.split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n')
+  // CRLF 안전화(scripts/testTownShop.mjs 06f6ba8과 동일 근거) — split('\n')
+  // 후 각 줄 끝 \r 때문에 /\/\/.*$/ 가 문자열 끝에 도달하지 못해 주석이
+  // 남는 것을 막기 위해 입력을 먼저 LF로 정규화한다.
+  const uiSrc = src.replace(/\r\n?/g, '\n').split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n')
   check('UI가 preview.warnings를 렌더한다(관리자에게 실제로 보임)', /preview\.warnings \|\| \[\]\)\.map\(/.test(uiSrc))
   check('경고 있으면 확인 전 저장 버튼 disabled(silent save 방지)',
     /disabled=\{saving \|\| !selectedClass \|\| \(\(preview\.warnings \|\| \[\]\)\.length > 0 && !warnAck\)\}/.test(uiSrc))

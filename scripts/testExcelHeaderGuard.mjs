@@ -334,7 +334,11 @@ const warnOf = (rows) => parseExcelRows(rows, '반').warnings || []
   // 경고가 실제로 저장을 막는지 — UI 배선 정적 검사. 파서가 경고를 올려도
   // 미리보기가 무시하면 "가짜 단어가 DB 에 들어가는 것을 막는다"는 목적이
   // 달성되지 않는다. 배선이 끊기면 여기서 즉시 FAIL 한다.
-  const ui = src.split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n')
+  // CRLF 안전화(scripts/testTownShop.mjs 06f6ba8과 동일 근거, 이 파일의
+  // CASE H codeOnly 블록은 이미 \r 제거를 하고 있었으나 이 블록은 빠져
+  // 있었다) — split('\n') 후 각 줄 끝 \r 때문에 /\/\/.*$/ 가 문자열 끝에
+  // 도달하지 못해 주석이 남는 것을 막기 위해 입력을 먼저 LF로 정규화한다.
+  const ui = src.replace(/\r\n?/g, '\n').split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n')
   check('UI — 저장 버튼이 경고 미확인 시 disabled 된다',
     /disabled=\{saving \|\| !selectedClass \|\| \(\(preview\.warnings \|\| \[\]\)\.length > 0 && !warnAck\)\}/.test(ui))
   check('UI — 경고 목록을 실제로 렌더한다', /preview\.warnings \|\| \[\]\)\.map\(/.test(ui))

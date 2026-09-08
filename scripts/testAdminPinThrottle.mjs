@@ -65,7 +65,15 @@ function check(label, cond, detail) {
 // 없다(실측 확인) — 완벽한 파서가 아니라 이 파일 집합에 한정된 실용적
 // 근사치임을 명시.
 function stripComments(src) {
+  // CRLF 안전화(scripts/testTownShop.mjs 06f6ba8과 동일 근거): Windows
+  // (core.autocrlf=true) 워킹카피는 \r\n인데, 아래 split('\n') 후 각 줄
+  // 끝에 남는 \r 때문에 /\/\/.*$/(m 플래그 없음, `.`가 줄바꿈 문자를
+  // 소비 못함)가 `$`(문자열 끝)에 도달하지 못해 라인 주석이 전혀 제거되지
+  // 않을 수 있다 — 이 파일의 부재 단언(readsAdminPinDirectly 등)이 주석
+  // 잔존 여부에 영향받지 않도록, 정규식/단언 의미는 그대로 두고 입력을
+  // 먼저 LF로 정규화하는 단일 지점만 추가한다.
   return src
+    .replace(/\r\n?/g, '\n')
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .split('\n')
     .map((line) => line.replace(/\/\/.*$/, ''))
