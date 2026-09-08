@@ -18,7 +18,7 @@ import { computeWorldState, gardenPlots } from '../utils/attachment/worldProgres
 import { retroWelcome, townPlacesState, paulHomeDeco } from '../utils/attachment/paulTown'
 import { HAT_CATALOG, HAT_COLOR_STYLE, hatById, hatTintStyle } from '../utils/attachment/hatSystem'
 import { isFeatureEnabled } from '../config/features'
-import { TOWN_SHOP_ITEMS, shopItemState, purchasedDeco } from '../utils/townShop'
+import { TOWN_SHOP_ITEMS, shopItemState, purchasedDeco, formatDollars } from '../utils/townShop'
 
 // Paul Town 별 상점 V1(townShopV1, 2026-09-06) — shopEnabled=false(기본,
 // 플래그 OFF)이면 이 컴포넌트는 shop/shopEnabled를 아예 참조하지 않는
@@ -38,7 +38,8 @@ export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, 
   // allDeco===deco와 동일 내용)이라 기존 렌더 출력에 영향이 없다.
   const shopItem = TOWN_SHOP_ITEMS[0]
   const shopOwned = shop?.state?.owned || []
-  const shopState = shop ? shopItemState(shopItem, { available: shop.state?.available, owned: shopOwned, purchasing: shop.purchasing }) : null
+  const shopDollars = shop?.state?.dollars?.available
+  const shopState = shop ? shopItemState(shopItem, { dollarsAvailable: shopDollars, owned: shopOwned, purchasing: shop.purchasing }) : null
   const allDeco = [...deco, ...purchasedDeco(shopOwned)]
   // 플래그 게이트 건물들 — townPlacesState(플래그 조회는 주입, 엔진은
   // 저장소를 직접 안 읽음). 발견된 곳만 이동 카드로. 도서관은 화면 플래그
@@ -157,12 +158,22 @@ export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, 
               플래그 OFF)면 이 블록은 렌더되지 않아 기존 화면과 바이트
               단위로 동일하다. 소유권/잔액은 전부 서버 응답(shop.state) —
               여기서 아무것도 계산·저장하지 않는다. */}
+          {/* 💵 Paul Dollar 분리(2026-09-08, DOLLAR_DESIGN_COMPLETE) — 이 줄은
+              절대 ⭐를 보여주지 않는다(별은 누적 성취, 상점에서 소비되지
+              않음). 잔액 배지(초록 계열)는 shop.state가 로드된 뒤에만
+              나타나고, 로딩 중에는 아이템 줄만 먼저 보인다. */}
           {shopEnabled && shop && (
             <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between gap-2 flex-wrap">
-              <span className="text-sm font-bold text-gray-700">
-                {shopItem.emoji} {shopItem.name} · ⭐ {shopItem.price}
-                {shop.state && <span className="text-xs text-gray-400 font-normal"> · ⭐ 사용 가능 {shop.state.available}</span>}
-              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                {shop.state && (
+                  <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-xs font-black px-2.5 py-1 rounded-full">
+                    💵 {formatDollars(shop.state.dollars.available)}
+                  </span>
+                )}
+                <span className="text-sm font-bold text-gray-700">
+                  {shopItem.emoji} {shopItem.name} — {formatDollars(shopItem.price)}
+                </span>
+              </div>
               {shop.error === 'relogin_required' ? (
                 <span className="text-xs font-bold text-gray-400">다시 로그인 후 이용해 주세요</span>
               ) : shop.error ? (
@@ -177,7 +188,7 @@ export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, 
                 >
                   {shopState?.kind === 'owned' ? '보유 중'
                     : shopState?.kind === 'purchasing' ? '구매 중…'
-                    : shopState?.kind === 'insufficient' ? `⭐ ${shopState.missing}개 더 필요`
+                    : shopState?.kind === 'insufficient' ? `💵 ${formatDollars(shopState.missing)} 더 필요`
                     : '구매'}
                 </button>
               )}

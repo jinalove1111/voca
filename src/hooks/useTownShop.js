@@ -64,7 +64,7 @@ export default function useTownShop(studentId, enabled) {
     try {
       const res = await postTownPurchase(itemId)
       if (mountedRef.current) {
-        setState((prev) => applyPurchaseResult(prev || { available: 0, owned: [] }, itemId, res))
+        setState((prev) => applyPurchaseResult(prev || { starsEarned: 0, dollars: { available: 0, earned: 0, spent: 0 }, owned: [] }, itemId, res))
       }
       if (res && res.ok) {
         // 서버와 최종 정합 — fire-and-forget(응답을 기다리지 않는다).

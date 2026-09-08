@@ -68,6 +68,11 @@ import { trackEvent, EV } from '../utils/productEvents'
 // "정보 공개 축소" 관례를 따라 접힌 <details> "🎖️ 내 기록 더보기" 안에
 // 렌더한다(아래 사용처).
 import RewardCard from './RewardCard'
+// Paul Dollar V1(2026-09-08, DOLLAR_DESIGN_COMPLETE) — 상점 화폐 표시
+// 전용 포맷터(순수 함수, townShop.js). ⭐ 별과 💵 Paul Dollar는 이제
+// 서로 다른 값(누적 성취 vs 상점 잔액)이라 배지도 분리한다(아래 wallet
+// prop 사용처).
+import { formatDollars } from '../utils/townShop'
 
 const GOAL = 5
 const stickerById = (id) => STICKERS.find(s => s.id === id)
@@ -299,7 +304,7 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 
 // P0(2026-07-15): student(이름 문자열) 대신 studentId(식별자)+studentName
 // (표시용)을 따로 받는다 — getStudentClass/getStudentUnit은 이제 id 기반.
-export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, completedUnits, completedTextbooks, pendingCeremonyHat, onDismissCeremony, textbookOptions, currentTextbookId, onTextbookSwitch, walletAvailable = null }) {
+export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, completedUnits, completedTextbooks, pendingCeremonyHat, onDismissCeremony, textbookOptions, currentTextbookId, onTextbookSwitch, wallet = null }) {
   const { stars, starsDisplay, clearedStars, stickerTypes, activeMissions, dailyProgress, liveMissionsCompleted, streak, cleared, ticketBalance, redeemTicketReward, equippedHatId, rewardLevel, rewardStarsToNext } = studentData
   // 애착 시스템(2026-07-22) — 학생 아바타의 장착 모자. 미장착이면 기존
   // 기본 아바타(👑) 그대로 — 아무것도 안 얻은/안 고른 학생 화면은 변화 0.
@@ -507,20 +512,29 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
               바꾸고(별 지급 자체는 무변경, stars=totalStars는 그대로),
               실력 별(clearedStars)이 섞여 있음을 title 툴팁으로 정직하게
               알린다. 홈 80% 불변 원칙 — 새 카드 추가 없이 기존 배지 그대로.
-              townShopV1(2026-09-06): walletAvailable이 오면(플래그 ON +
-              서버 상점 상태 로드 완료) 배지는 "사용 가능한 별"(서버
-              earned−spent)을 보여준다 — 실력 별 안내 줄은 이 모드에서
-              혼동을 줄 수 있어 숨긴다. 플래그 OFF(walletAvailable===null,
-              기본)면 이 분기는 전혀 타지 않아 기존 배지와 완전히 동일하다. */}
+              Paul Dollar V1(2026-09-08): wallet이 오면(플래그 ON + 서버
+              상점 상태 로드 완료) ⭐ 배지는 서버 누적 성취값(starsEarned)을
+              보여주고(별은 더 이상 상점에서 소비되지 않으므로 "사용 가능한
+              별" 문구는 더 이상 맞지 않는다 — 새 title로 교체), 바로 옆에
+              💵 상점 잔액 배지가 추가된다. 실력 별 안내 줄은 이 모드에서
+              혼동을 줄 수 있어 숨긴다(기존 동작 유지). 플래그 OFF
+              (wallet===null, 기본)면 이 분기는 전혀 타지 않아 기존 배지와
+              완전히 동일하다. */}
           <div
             className="flex items-center gap-2 bg-yellow-100 px-4 py-2 rounded-2xl"
-            title={walletAvailable !== null ? '사용 가능한 별' : (clearedStars > 0 ? `실력 별 ${clearedStars}개 포함` : undefined)}>
+            title={wallet !== null ? '누적 별(성취)' : (clearedStars > 0 ? `실력 별 ${clearedStars}개 포함` : undefined)}>
             <span className="text-xl">⭐</span>
-            <span className="font-black text-yellow-700 text-lg">{walletAvailable !== null ? walletAvailable : starsDisplay}</span>
+            <span className="font-black text-yellow-700 text-lg">{wallet !== null ? wallet.starsEarned : starsDisplay}</span>
           </div>
+          {wallet !== null && (
+            <div className="flex items-center gap-2 bg-emerald-100 px-4 py-2 rounded-2xl" title="사용 가능한 Paul Dollar">
+              <span className="text-xl">💵</span>
+              <span className="font-black text-emerald-700 text-lg">{formatDollars(wallet.dollarsAvailable)}</span>
+            </div>
+          )}
         </div>
       </div>
-      {walletAvailable === null && clearedStars > 0 && (
+      {wallet === null && clearedStars > 0 && (
         <p className="max-w-lg mx-auto text-right text-[11px] text-yellow-700/70 -mt-3 mb-2 pr-1">
           (실력 별 {clearedStars} 포함)
         </p>

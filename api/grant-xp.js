@@ -107,22 +107,63 @@ export default async function handler(req, res) {
       return
     }
     const row = (data && data[0]) || {}
-    const earned = Number(row.earned) || 0
-    const spent = Number(row.spent) || 0
-    const available = Math.max(0, Number(row.available) || 0) // 음수 노출 금지 — 표기상 안전망(실제 부족 판정은 DB 함수가 이미 확정)
+
+    // ── 배포 순서 창(규칙 9) — supabase_v3_49_paul_dollar.sql이 아직
+    // 실행되기 전에 이 코드가 먼저 배포되면, get_town_shop_state RPC는
+    // 여전히 v3_47 구형 shape({earned, spent, available, owned_item_ids})를
+    // 반환한다. 신형 컬럼명(stars_earned/dollars_*)만 읽으면 그 값이 전부
+    // undefined → Number(undefined)||0으로 조용히 0이 되어, 실제로는 잔액이
+    // 있는데 "부족"으로 보이는 거짓 상태가 된다 — 아래 town_items의
+    // price_currency 컬럼 폴백과 정확히 같은 원칙으로, 신형 컬럼('stars_earned')
+    // 존재 여부로 RPC가 이미 v3_49를 반영했는지 판별한다. 과도기(v3_49 미실행)
+    // 에는 별=달러 분리 이전 단일 풀(earned/available)이 그대로 dollars 슬롯에
+    // 노출되지만(플래그 townShop은 이 시점 OFF이므로 학생 화면에는 무영향),
+    // "0으로 보이는 거짓 부족"보다 안전한 전환 동작이다.
+    const isNewShape = !!row && Object.prototype.hasOwnProperty.call(row, 'stars_earned')
+    let starsEarned, dollarsEarned, dollarsSpent, dollarsAvailable
+    if (isNewShape) {
+      starsEarned = Number(row.stars_earned) || 0
+      dollarsEarned = Number(row.dollars_earned) || 0
+      dollarsSpent = Number(row.dollars_spent) || 0
+      dollarsAvailable = Math.max(0, Number(row.dollars_available) || 0) // 음수 노출 금지 — 표기상 안전망(실제 부족 판정은 DB 함수가 이미 확정)
+    } else {
+      // 구형 RPC(v3_47) — earned/available 단일 풀을 그대로 양쪽에 반영한다.
+      starsEarned = Number(row.earned) || 0
+      dollarsEarned = Number(row.earned) || 0
+      dollarsSpent = Number(row.spent) || 0
+      dollarsAvailable = Math.max(0, Number(row.available) || 0)
+    }
+    const legacyShape = !isNewShape
     const owned = row.owned_item_ids || []
 
     // 아이템 목록 조회 실패는 상태 조회 전체를 실패시키지 않는다 — 잔액/보유
     // 목록은 이미 확보했으므로, 진열대만 빈 배열로 내려도 학생 화면이
     // 완전히 막히지는 않는다(신규 테이블 부재 등 과도기 대비).
+    //
+    // price_currency(2026-09-08, Paul Dollar 분리) 컬럼이 아직 배포 전
+    // 환경(마이그레이션 v3_49 미실행)에서는 select 자체가 에러가 나므로,
+    // 그 경우에만 컬럼 없이 다시 조회하고 priceCurrency를 'dollars'로
+    // 고정한다(현재 모든 상점 아이템이 dollars 전용이라는 전제, 규칙 9의
+    // "마이그레이션 순서 무관 폴백" 원칙).
     let items = []
     {
       const { data: itemRows, error: itemErr } = await supabase
-        .from('town_items').select('id,name,emoji,price').eq('active', true)
-      if (!itemErr && itemRows) items = itemRows
+        .from('town_items').select('id,name,emoji,price,price_currency').eq('active', true)
+      if (!itemErr && itemRows) {
+        items = itemRows.map((it) => ({
+          id: it.id, name: it.name, emoji: it.emoji, price: it.price,
+          priceCurrency: it.price_currency || 'dollars',
+        }))
+      } else if (itemErr) {
+        const { data: fallbackRows, error: fallbackErr } = await supabase
+          .from('town_items').select('id,name,emoji,price').eq('active', true)
+        if (!fallbackErr && fallbackRows) {
+          items = fallbackRows.map((it) => ({ id: it.id, name: it.name, emoji: it.emoji, price: it.price, priceCurrency: 'dollars' }))
+        }
+      }
     }
 
-    res.status(200).json({ ok: true, earned, spent, available, owned, items })
+    res.status(200).json({ ok: true, starsEarned, dollarsAvailable, dollarsEarned, dollarsSpent, owned, items, legacyShape })
     return
   }
 
@@ -157,12 +198,19 @@ export default async function handler(req, res) {
       res.status(200).json({ ok: false, reason: 'rpc_failed' })
       return
     }
+    // 배포 순서 창(규칙 9) — supabase_v3_49 미실행 상태에서는 purchase_town_item
+    // RPC가 여전히 v3_47 구형 컬럼명(stars_spent)으로 응답한다. 위
+    // get_town_shop_state와 동일한 원칙: 신형 컬럼(dollars_spent)이 없으면
+    // 구형 컬럼값을 그대로 쓴다(?? — dollars_spent가 0이어도 정상값이므로
+    // null/undefined일 때만 폴백해야 한다, ||였다면 0을 오폴백으로 오인).
+    const legacyShape = !Object.prototype.hasOwnProperty.call(row, 'dollars_spent')
     res.status(200).json({
       ok: !!row.ok,
       reason: row.reason,
-      starsSpent: Number(row.stars_spent) || 0,
+      dollarsSpent: Number(row.dollars_spent ?? row.stars_spent) || 0,
       balanceAfter: Number(row.balance_after) || 0,
       duplicate: row.reason === 'already_owned',
+      legacyShape,
     })
     return
   }
