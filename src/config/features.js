@@ -74,7 +74,7 @@ const DEFAULT_FEATURES = {
 
   // Reading Foundation (2026-07-23, v3.3) — 유닛별 읽기 지문(passage).
   readingFoundation: true,     // 관리자 지문 편집기(AdminScreen 반 관리 → 유닛 펼침) — 관리자 전용 화면이라 기본 ON이 안전(학생 화면에 아무 영향 없음)
-  readingStudentUI: false,     // 학생용 읽기 학습 화면 — 미구현 예약 플래그. 아직 아무 코드도 이 플래그를 소비하지 않는다(학생 대상 신규 기능은 이번 범위에서 금지 — 이후 운영자 승인 라운드에서 이 플래그로 게이팅해 구현할 자리 표시)
+  readingStudentUI: false,     // 학생용 읽기 학습 화면 게이팅 플래그. GuidedSession.jsx(완료 카드의 "오늘의 핵심 문장" 오퍼)와 WordBrowser.jsx(문장 탭 노출)가 이미 isFeatureEnabled로 소비 중 — 기본 false라 두 곳 모두 오늘 화면 변화 0(2026-09-09 정정, 이후 운영자 승인 라운드에서 켤 자리)
 
   // Curriculum Engine Phase 0(2026-08-01, docs/CURRICULUM_ENGINE.md §8) —
   // 교사 opt-in 예문 학습 단계(제시→빈칸→듣기→섀도잉→쓰기, Learning Engine

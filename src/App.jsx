@@ -1126,7 +1126,7 @@ export default function App() {
   // 만들지 않는다(wordLibrary.js 주석 참고) — 이 한 줄이 기존 동작을
   // 대체해도 안전한 이유.
   const handleSelect = async (sel) => {
-    try { await refreshAllForLogin(sel.id) } catch {}
+    try { await refreshAllForLogin(sel.id) } catch (err) { console.warn('[App] refreshAllForLogin failed (non-fatal, continuing with cached data):', err?.message || err) }
     // 콜드스타트 수정(2026-08-06) — 로그인 직후에도 동일하게 배정 캐시를
     // 예열해 첫 렌더부터 실제 primary 교재로 해석되게 한다(위 init effect와 동일 이유).
     try { await getStudentClassAssignments(sel.id) } catch { /* 실패해도 로그인 진행 */ }

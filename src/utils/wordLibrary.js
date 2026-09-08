@@ -783,15 +783,23 @@ export async function refreshClassSettings() {
     // 마이그레이션이라 부분 실행 상태가 있을 수 있다 — 가장 넓은 select부터
     // 시도하고, 실패하면 최근에 추가된 컬럼부터 하나씩 빼며 재시도해서 이미
     // 켜둔 다른 설정이 이 컬럼 하나 때문에 몽땅 꺼짐으로 되돌아가지 않게 한다.
+    // 2026-09-09(야간 QA 회복력 수정) — 위 캐스케이드는 반드시 "컬럼
+    // 부재"(42703, undefined column)일 때만 다음 단계로 넘어가야 한다.
+    // getStudentClassAssignments(~2502행)의 42703 게이팅과 동일 관례 —
+    // 컬럼 부재가 아닌 다른 에러(네트워크 타임아웃/RLS 등 일시적 문제)까지
+    // 무조건 캐스케이드하면, 그 일시적 에러 하나가 사실상 항상 최종
+    // 실패로 이어지고(다음 두 select도 같은 네트워크 문제로 또 실패),
+    // 아래 catch가 무조건 _classSettings를 비워 앱 전역의 모든 반 설정이
+    // 기본값으로 조용히 되돌아간다.
     let data
     let error
     ;({ data, error } = await supabase
       .from('classes').select('name,spelling_test_enabled,spelling_hint_enabled,wrong_answer_repeat_count,spelling_direction,gamification_enabled'))
-    if (error) {
+    if (error && error.code === '42703') {
       ;({ data, error } = await supabase
         .from('classes').select('name,spelling_test_enabled,spelling_hint_enabled,wrong_answer_repeat_count,spelling_direction'))
     }
-    if (error) {
+    if (error && error.code === '42703') {
       ;({ data, error } = await supabase
         .from('classes').select('name,spelling_test_enabled,spelling_hint_enabled,wrong_answer_repeat_count'))
     }
@@ -812,8 +820,18 @@ export async function refreshClassSettings() {
       gamificationEnabled: !!c.gamification_enabled,
     }]))
   } catch (err) {
-    console.warn('[wordLibrary] class settings fetch failed (spelling_test_schema.sql이 아직 실행 안 됐을 수 있음, 전부 꺼짐으로 처리):', err.message)
-    _classSettings = {}
+    // 2026-09-09(야간 QA 회복력 수정) — 이전에 성공적으로 채워둔 캐시가
+    // 있으면(= 첫 로드가 아님) 이번 실패는 십중팔구 일시적 문제이므로
+    // 절대 비우지 않고 이전 설정을 그대로 유지한다. 캐시가 아예 없는
+    // 최초 로드 실패일 때만(마이그레이션 미실행 등 기존 시나리오) 기존과
+    // 동일하게 안전한 기본값(빈 캐시, DEFAULT_CLASS_SETTINGS 폴백)으로
+    // 떨어진다.
+    if (Object.keys(_classSettings).length > 0) {
+      console.warn('[wordLibrary] class settings 재조회 실패 — 일시적 오류로 판단해 이전 설정을 유지합니다(전부 꺼짐으로 리셋하지 않음):', err.message)
+    } else {
+      console.warn('[wordLibrary] class settings fetch failed (spelling_test_schema.sql이 아직 실행 안 됐을 수 있음, 전부 꺼짐으로 처리):', err.message)
+      _classSettings = {}
+    }
   }
 }
 
