@@ -9,6 +9,32 @@ import { createRecorder } from './lib/harness.mjs'
 import { writesTo } from './lib/postgrestMock.mjs'
 import { QA_STUDENT_NAME, QA_LOGIN_PIN, TB_A, TB_B, TB_A_UNIT2_WORD_COUNT } from './fixtures/index.mjs'
 
+// 2026-09-09 야간 QA — 고정 sleep(waitForTimeout) 제거용 결정론적 폴링
+// 헬퍼. 이 파일이 대기해 온 것들(2초 디바운스 동기화, 700/1700ms 정답
+// 자동진행, 1.8초 퀴즈 자동전환)은 전부 "정확히 몇 ms 후"가 아니라
+// "그 이벤트가 실제로 끝났는가"이므로, 고정 시간 대신 그 조건 자체를
+// 짧은 간격으로 반복 확인한다 — 느린 CI 머신에서는 기존 고정값보다
+// 더 기다려 flake를 줄이고, 빠른 로컬에서는 조건이 즉시 참이면 그만큼
+// 빨리 다음 단계로 넘어간다.
+//
+// 의도적으로 timeout에 도달해도 throw하지 않는다 — fn()이 진실값을
+// 반환하면 즉시 그 값을 돌려주고, 끝내 진실값이 안 나오면 마지막
+// 시도값(대개 false/undefined)을 그대로 반환한다. 그래서 호출부는 항상
+// 기존과 동일한 형태로 "그 다음에 오는 r.check(...)"에게 판정을 맡길
+// 수 있다 — 조건이 실제로 충족되지 않는 회귀가 나면 폴링이 그것을
+// 숨기지 않고 여전히 FAIL로 드러난다(단언 완화 없음).
+async function waitUntil(fn, { timeout = 15000, interval = 200 } = {}) {
+  const start = Date.now()
+  let last
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try { last = await fn() } catch { last = undefined }
+    if (last) return last
+    if (Date.now() - start >= timeout) return last
+    await new Promise((resolve) => setTimeout(resolve, interval))
+  }
+}
+
 async function login(page) {
   // initWordLibrary 완료 후에야 로그인 화면이 뜬다 — 머신이 바쁠 때(verify:all
   // 직후) 기본 30초로는 부족한 flake를 실측해 넉넉히 기다린다(admin.spec 동일).
@@ -136,8 +162,17 @@ export async function run(browser, baseURL) {
     r.check('A6 두 번째 문항도 서로 다른 단어(중복 아님)', secondWord.id !== firstWord.id, `${firstWord.id} / ${secondWord.id}`)
     await page.locator('button', { hasText: '← 홈' }).click()
 
-    // 디바운스(2초) 동기화가 student_progress에 반영될 때까지 대기 후 확인.
-    await page.waitForTimeout(3000)
+    // 디바운스(2초) 동기화가 student_progress에 반영될 때까지 폴링(고정
+    // sleep 대신, 바로 다음 단언이 보는 것과 동일한 조건 — 마지막 쓰기의
+    // clearedWords가 채워짐 — 을 직접 폴링한다. 단순히 "쓰기가 1건이라도
+    // 있다"만 보면 중간에 먼저 도착한 다른 디바운스 사이클의 쓰기를 최종
+    // 상태로 오인할 수 있다(A6-guided에서 실제로 재현된 문제, 2026-09-09).
+    await waitUntil(() => {
+      const writes = writesTo(db, 'student_progress')
+      const last = writes[writes.length - 1]
+      const cleared = last?.body?.progress_data?.clearedWords
+      return Array.isArray(cleared) && cleared.length > 0
+    })
     const progressWrites = writesTo(db, 'student_progress')
     r.check('A6 퀴즈 정답이 student_progress mock 쓰기 호출로 기록됨', progressWrites.length > 0, JSON.stringify(progressWrites.map((w) => w.method)))
     const lastWrite = progressWrites[progressWrites.length - 1]
@@ -204,13 +239,24 @@ export async function run(browser, baseURL) {
       r.check('A6-spelling 정답 제출 후 정답 화면("정답이에요!")이 표시됨', true)
 
       // markCorrect()의 700ms 자동 진행(SpellingQuestion.jsx 220행) 이후
-      // 다음 문제로 — "문제 N/전체" 진행 표시가 실제로 바뀌는지 확인.
-      await page2.waitForTimeout(1200)
-      const progressAfter = await page2.getByText(/문제 \d+ \/ \d+/).textContent()
+      // 다음 문제로 — "문제 N/전체" 진행 표시가 실제로 바뀔 때까지 폴링
+      // (고정 1200ms sleep 대신, 바뀌는 즉시 다음 단계로 진행).
+      let progressAfter = progressBefore
+      await waitUntil(async () => {
+        progressAfter = await page2.getByText(/문제 \d+ \/ \d+/).textContent()
+        return progressAfter !== progressBefore
+      })
       r.check('A6-spelling 정답 처리 후 진행 표시(문제 N/전체)가 다음 문제로 갱신됨', progressAfter !== progressBefore, `${progressBefore} -> ${progressAfter}`)
 
-      // 디바운스 동기화(A6 퀴즈와 동일 패턴) 후 mock 쓰기 로그 확인.
-      await page2.waitForTimeout(3000)
+      // 디바운스 동기화 후 mock 쓰기 로그 확인 — 바로 다음 단언과 동일한
+      // 조건(마지막 쓰기의 clearedWords가 이 단어를 포함)을 직접 폴링한다
+      // (A6과 동일 근거, 2026-09-09).
+      await waitUntil(() => {
+        const writes = writesTo(db2, 'student_progress')
+        const last = writes[writes.length - 1]
+        const cleared = last?.body?.progress_data?.clearedWords
+        return Array.isArray(cleared) && cleared.includes(spellingFixtureWord.word)
+      })
       const progressWritesSpelling = writesTo(db2, 'student_progress')
       r.check('A6-spelling 정답이 student_progress mock 쓰기 호출로 기록됨', progressWritesSpelling.length > 0, JSON.stringify(progressWritesSpelling.map((w) => w.method)))
       const lastWriteSpelling = progressWritesSpelling[progressWritesSpelling.length - 1]
@@ -253,7 +299,10 @@ export async function run(browser, baseURL) {
       await spellingInputAgain.fill(spellingAnswerAgain)
       await page2.getByRole('button', { name: '확인' }).click()
       await page2.getByText('정답이에요!', { exact: true }).waitFor({ state: 'visible', timeout: 5000 })
-      await page2.waitForTimeout(1200)
+      // 위와 동일한 700ms 자동 진행 대기 — 여기는 뒤에 붙는 별도 단언이
+      // 없으므로 "정답이에요!" 화면이 실제로 사라졌는지(=onDone() 발동)를
+      // 폴링해 다음 내비게이션 클릭이 전환 도중에 끼어들지 않게 한다.
+      await waitUntil(async () => !(await page2.getByText('정답이에요!', { exact: true }).isVisible().catch(() => false)))
       await page2.locator('button', { hasText: '← 단어 목록' }).click()
       await page2.locator('button', { hasText: '← 홈' }).click()
       const gardenAfterControl = await readGardenGrowthPoints(page2)
@@ -344,14 +393,45 @@ export async function run(browser, baseURL) {
       // handleQuizAnswer → onQuizAnswer(=studentData.recordQuizAnswer) →
       // (정답이면) markWordCleared를 호출한다(useStudent.js 1578행) — 같은
       // wordId로 completedWords와 clearedWords 둘 다에 들어간다.
-      await page3.waitForTimeout(2200)
-      const guidedNextWordVisible = await page3.locator('h1.word-text-hero').first().isVisible().catch(() => false)
+      // 다음 단어(hero 텍스트 변경) 또는 완료 카드 등장을 폴링(고정
+      // 2200ms sleep 대신, 실제 전환 완료를 직접 감지 — 2026-09-09).
+      // 두 신호(완료 카드/다음 단어 hero)를 감지한 바로 그 폴링 호출
+      // 안에서 최종 상태를 함께 확정해 반환한다 — "변경 감지"와 "가시성
+      // 재확인"을 별도 왕복으로 나누면 그 사이 짧은 리렌더 프레임에서
+      // hero가 일시적으로 안 보이는 순간과 겹쳐 오탐 FAIL이 날 수 있다
+      // (실측 확인, 규칙 15 정신 — 분리된 버전으로 먼저 돌려 재현).
+      //
+      // 완료 카드 판정 정규식은 느슨한 /완료!/가 아니라 " 완료! 🎉"로
+      // 좁혔다 — 원래 정규식은 WordDetail.jsx:608의 정답 직후 버튼
+      // "✅ 완료! 다음 단어 →"에도 매칭돼, 고정 sleep(2200ms) 뒤에는 그
+      // 버튼이 이미 자동 전환으로 사라진 뒤라 우연히 문제가 안 됐지만
+      // (그래서 원본 코드에서 드러나지 않았다), 지금처럼 정답 클릭 직후
+      // 즉시 폴링을 시작하면 아직 화면에 남아있는 그 버튼을 완료 카드로
+      // 오인해 잘못된 분기(else, 🏠 버튼 클릭)를 타 FAIL했다(실측 재현).
+      // GuidedSession.jsx:274 두 완료 타이틀("오늘 단어 전부 완료! 🎉"/
+      // "세션 N 완료! 🎉")은 모두 이 접미사를 갖고, 정답 버튼 문구는
+      // 갖지 않는다 — 판정 정확도만 올린 수정이고 최종 단언(OR 조건)의
+      // 의미는 그대로다.
+      const guidedTransition = await waitUntil(async () => {
+        if (await page3.getByText(/완료! 🎉/).isVisible().catch(() => false)) {
+          return { guidedNextWordVisible: false, guidedDoneCardVisible: true }
+        }
+        const heroLocator = page3.locator('h1.word-text-hero').first()
+        const heroVisible = await heroLocator.isVisible().catch(() => false)
+        if (!heroVisible) return false
+        const currentHero = (await heroLocator.textContent().catch(() => null))?.trim()
+        if (currentHero && currentHero !== guidedWordText) {
+          return { guidedNextWordVisible: true, guidedDoneCardVisible: false }
+        }
+        return false
+      })
+      const guidedNextWordVisible = !!guidedTransition?.guidedNextWordVisible
       // fixture는 15단어(band minSize~maxSize=5~10, mid=8)라 1단어만으로는
       // 세션이 끝나지 않고(실측: "세션 1/2") 다음 단어로 넘어간다 — 그래도
       // 세션 크기 계산이 바뀌어 정확히 1단어 세션이 되는 경우까지 대비해
       // "완료 카드"(GuidedSession.jsx 274행 "세션 N 완료!"/"오늘 단어 전부
       // 완료!") 분기도 함께 받아준다.
-      const guidedDoneCardVisible = await page3.getByText(/완료!/).isVisible().catch(() => false)
+      const guidedDoneCardVisible = !!guidedTransition?.guidedDoneCardVisible
       r.check('A6-guided 1단어 완료 후 다음 단어(또는 완료 카드)로 화면이 갱신됨', guidedNextWordVisible || guidedDoneCardVisible)
 
       // 다음 단어 화면이면 WordDetail의 "← 홈"(GuidedSession.jsx 392행
@@ -364,9 +444,18 @@ export async function run(browser, baseURL) {
       }
       await page3.locator('summary', { hasText: '🧭 더 많은 메뉴' }).waitFor({ state: 'visible', timeout: 15000 })
 
-      // 디바운스 동기화(A6 퀴즈/A6-spelling과 동일 패턴 — 2초 디바운스 +
-      // 여유) 후 mock 쓰기 로그 확인.
-      await page3.waitForTimeout(3000)
+      // 디바운스 동기화(A6 퀴즈/A6-spelling과 동일 패턴 — 2초 디바운스)
+      // 후 mock 쓰기 로그 확인 — 바로 다음 단언과 동일한 조건(마지막
+      // 쓰기의 completedWords가 이 단어를 포함)을 직접 폴링한다.
+      // 단순 "쓰기 1건 이상"만 보면 이 단어를 완료하기 전(발음/예문
+      // 단계 등)에 먼저 도착한 디바운스 사이클의 쓰기를 최종 상태로
+      // 오인해 오탐 FAIL이 났다(실측 재현, 2026-09-09).
+      await waitUntil(() => {
+        const writes = writesTo(db3, 'student_progress')
+        const last = writes[writes.length - 1]
+        const completed = last?.body?.progress_data?.completedWords
+        return Array.isArray(completed) && completed.includes(guidedFixtureWord.word)
+      })
       const progressWritesGuided = writesTo(db3, 'student_progress')
       r.check('A6-guided 완료가 student_progress mock 쓰기 호출로 기록됨', progressWritesGuided.length > 0, JSON.stringify(progressWritesGuided.map((w) => w.method)))
       const lastWriteGuided = progressWritesGuided[progressWritesGuided.length - 1]
