@@ -59,6 +59,12 @@ spellingDirection 동작은 변경하지 않는다. 반 설정 변경은 하지 
   무관한 known issue, 이 PR에 Town Shop 수정 포함 금지 → 별도 소커밋 후보(테스트
   정규식 CRLF 내성).
 
+- **CI 1차 FAIL(run 34263297978) → 원인·수정**: Release Gate e2e(Gate 5)에서 학생 시나리오
+  A6-spelling이 쓰기 모드 첫 문제를 kr2en으로 전제(placeholder '영어로 철자를
+  입력하세요'만 대기) → 항상 mixed가 된 뒤 첫 문제가 en2kr이면 30초 타임아웃(로컬
+  재현 1/2, 50%). 이번 변경의 예상된 파급이며 제품 결함 아님. `tests/e2e/student.spec.mjs`만
+  두 placeholder 중 뜬 쪽으로 방향을 런타임 판별해 word/meaning 입력(첫 시도·대조군),
+  단언 1개 추가(58→59). 로컬 verify:e2e 연속 6회 PASS. 제품 코드 무변경.
 ### 커밋
 
 - `478f06f` test(write-practice): 테스트 43단언 + registry(extra:false) + package.json verify:write-practice-mixed
