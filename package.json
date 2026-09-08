@@ -118,6 +118,7 @@
     "prod:report": "node scripts/prodReport.mjs",
     "verify:ops-status": "node scripts/testOpsStatus.mjs",
     "verify:prod-plan": "node scripts/testProdPlan.mjs",
+    "verify:db-audit-paging": "node scripts/testDbIntegrityAuditPaging.mjs",
     "watch:claude-stall": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/watchClaudeStall.ps1"
   },
   "dependencies": {
