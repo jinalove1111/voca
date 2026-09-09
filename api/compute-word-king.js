@@ -58,10 +58,13 @@ export default async function handler(req, res) {
   const supabase = createClient(url, key)
   const { periodStart, periodEnd } = getWeekPeriod(new Date())
 
-  // 1) 이 반 학생 목록 — 이름 스냅샷도 함께 확보(테이블 저장용).
+  // 1) 이 반 학생 목록 — 이름 스냅샷도 함께 확보(테이블 저장용). classes(name)
+  //    조인은 2026-09-10 야간 QA 감사 추가 — 이름은 평범한데 소속 반이
+  //    QA_*인 픽스처(실측: Cksa/QACombo1)를 걸러내려면 반 이름이 필요하다
+  //    (src/utils/wordLibrary.js STUDENTS_SELECT_BASE와 같은 조인 패턴).
   const { data: students, error: studentsErr } = await supabase
     .from('students')
-    .select('id, name')
+    .select('id, name, classes(name)')
     .eq('class_id', classId)
   if (studentsErr) {
     res.status(500).json({ error: studentsErr.message })
@@ -72,9 +75,12 @@ export default async function handler(req, res) {
     return
   }
   // 아카이브/중복/QA 픽스처 + 운영자 테스트 계정(Cookie/Paul/Jinaa/Barry)은
-  // 랭킹 대상에서 제외한다 — 이 컬럼(name)만 select하므로 항상 이름 폴백
-  // 경로를 탄다(is_test/archived 컬럼은 아직 DB에 없음, 규칙 9).
-  const realStudents = students.filter(isRealStudentAccount)
+  // 랭킹 대상에서 제외한다 — 이름 폴백 경로를 탄다(is_test/archived 컬럼은
+  // 아직 DB에 없음, 규칙 9). className은 위 조인 결과를 isRealStudentAccount가
+  // 읽을 수 있는 필드명으로 붙인 것뿐, 원본 students 행을 바꾸지 않는다.
+  const realStudents = students
+    .map((s) => ({ ...s, className: s.classes?.name || '' }))
+    .filter(isRealStudentAccount)
   if (realStudents.length === 0) {
     res.status(200).json({ ok: false, reason: 'no_students' })
     return

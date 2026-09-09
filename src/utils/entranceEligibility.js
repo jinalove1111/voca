@@ -38,8 +38,21 @@
 // isRealSetupStudent, StudentDirectory 로드 필터와 같은 규칙 중 "계정 종류"
 // 부분만). 화면별 예외 목록(특정 이름 제외 등)은 여기 넣지 않는다 — 그건
 // 그 화면의 정책이지 계정 종류가 아니다.
-export const isArchivedOrFixtureStudentName = (name) =>
-  /_dup|_inactive/i.test(name || '') || /^(qa_|_qa_)/i.test(name || '')
+//
+// className(2026-09-10, 야간 QA 감사 추가, 선택 인자·기본값 undefined):
+// 이름이 평범해도 소속 홈 반이 QA_*/_QA_* 인 학생(실측: "Cksa"→반
+// "QA_SelfSetupTest", "QACombo1"→반 "QA_ComboFixT")은 이름 규칙만으로는
+// 걸러지지 않는다 — scripts/lib/studentHealthRules.mjs classifyAccount는
+// 반 컨텍스트가 있어 이미 QA_FIXTURE로 분류하지만(그 파일은 사본이 아니라
+// ctx.classById로 직접 판정), 이 함수(및 이를 감싸는
+// accountStatus.js isArchivedStudent)는 원래 이름만 받아 반을 볼 방법이
+// 없었다. 호출부가 className을 안 넘기면(기존 모든 호출부) 이 인자는
+// undefined이고 아래 정규식은 빈 문자열에 매치되지 않으므로 기존 동작과
+// 바이트 단위로 동일하다 — 기존 이름 판정 로직 자체는 건드리지 않았다.
+export const isArchivedOrFixtureStudentName = (name, className) =>
+  /_dup|_inactive/i.test(name || '') ||
+  /^(qa_|_qa_)/i.test(name || '') ||
+  /^(qa_|_qa_)/i.test(className || '')
 
 // 배정 행 하나가 근거로 삼는 반 id들 — [class_id, 교재 소유 반].
 // resolveTextbookOwnerClassId: (textbookId) => classId | null (호출부가 주입).

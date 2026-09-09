@@ -49,10 +49,19 @@ export function isTestAccountStudent(student) {
 // 컬럼이 있으면 우선, 없으면 이름 규칙(entranceEligibility.
 // isArchivedOrFixtureStudentName) 폴백. 위와 동일한 이유로 컬럼 유무와
 // 무관하게 안전(규칙 9). archived 컬럼도 아직 DB에 존재하지 않는다.
+//
+// student.className(2026-09-10 야간 QA 감사 추가): 이름은 평범한데 소속
+// 홈 반이 QA_*/_QA_* 인 QA 픽스처(실측: "Cksa"→"QA_SelfSetupTest",
+// "QACombo1"→"QA_ComboFixT")를 걸러내려면 반 이름이 필요하다.
+// student.className은 이미 src/utils/wordLibrary.js의 getStudents()가
+// 정규화해 내려주는 필드라(374행 STUDENTS_SELECT_BASE의 classes(name) 조인
+// → 451행 className 정규화) 새 조회를 추가하지 않아도 이 필드가 있는
+// 호출부는 자동으로 이 판정 혜택을 받는다. 필드가 없는 호출부(className
+// undefined)는 기존과 동일하게 이름만으로 판정한다(회귀 없음).
 export function isArchivedStudent(student) {
   if (!student) return false
   if (typeof student.archived === 'boolean') return student.archived
-  return isArchivedOrFixtureStudentName(student?.name)
+  return isArchivedOrFixtureStudentName(student?.name, student?.className)
 }
 
 // "실제 학생 집계"용 술어 — 아카이브도 테스트 계정도 아닌 경우만 true.
