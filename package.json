@@ -134,6 +134,7 @@
     "verify:ime-enter-guards": "node scripts/testImeEnterGuards.mjs",
     "verify:entrance-test-padding": "node scripts/testEntranceTestPadding.mjs",
     "verify:spelling-review-index": "node scripts/testSpellingReviewIndex.mjs",
+    "verify:speech-btn-stall": "node scripts/buildSpeechBundle.mjs && node scripts/testSpeechBtnSpeakingStall.mjs",
     "watch:claude-stall": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/watchClaudeStall.ps1"
   },
   "dependencies": {

@@ -248,6 +248,7 @@ export const DOMAINS = {
     label: 'TTS 중복 호출 방지(에코 가드) — 로직 전용, 실제 오디오 재생 아님',
     checks: [
       { script: 'scripts/testTtsSingleton.mjs', builders: ['speech'] },
+      { script: 'scripts/testSpeechBtnSpeakingStall.mjs', builders: ['speech'], extra: false, note: '2026-09-10 — 따라 말하기 SpeechBtn speaking 단계 10초 워치독 회귀(fakeReact 동적 재현: TTS 슈퍼시드/콜백 미도착 시 idle 복구, 정상 onEnd 경로·에코 가드 억제 동작 불변) 19단언. Presentation 6 Yaeji 제보. 네트워크 0.' },
     ],
   },
   paulRank: {
