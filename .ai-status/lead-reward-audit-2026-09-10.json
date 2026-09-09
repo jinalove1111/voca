@@ -1,0 +1,30 @@
+{
+  "agent_name": "lead-reward-audit-2026-09-10",
+  "role": "6h 보상 시스템 자율 QA/하드닝 — 보상 지도, 766↔951 원인, 중복/누락/멱등성/레이스, 랭킹 무결성, 학생 UX, invariant 테스트",
+  "task_id": "reward-audit-2026-09-10",
+  "status": "in_progress",
+  "progress": 60,
+  "started_at": "2026-09-10T00:30:00Z",
+  "updated_at": "2026-09-10T03:30:00Z",
+  "base_sha": "7432638728899a1f3c81381f3bd63efe064aaf53",
+  "branch": "qa/reward-audit-2026-09-10",
+  "commits_so_far": [
+    "2e1c9ef test(reward): §7 stale '<200' → 구조적 상한 invariant(예산 숫자 미결정, 46/1→52/0)",
+    "e5e67f9 test(reward): 재시도 큐→서버 원장 정확히 1행(18) + 날짜경계/기기시계 계약(49)",
+    "ca53eac test(account): QA_ 반 소속 픽스처 TEST 분류 계약(수정 전 FAIL)",
+    "13b6cf2 fix(account): QA_ 접두 반 소속 학생 픽스처 분류 — Word King 로스터/중복 감사/입실시험 분모",
+    "8349b8c test(reward): 실제 React 하네스 — writing-complete 누락 FAIL-first(4/8 FAIL)",
+    "aeb6a9e fix(reward): writing-complete +2★/XP 누락 수정(P1 MISSING REWARD, updater 밖 클로저 판정)"
+  ],
+  "findings": {
+    "map": "별 지급 12종 전부 서버 원장 경유(예외: pronunciation-unidentified 클라이언트 전용·무제한, 표시 전용 '실력 별'). 별 기반 랭킹 없음(Word King/Paul Rank=XP, 하우스=클라이언트 ticketLedger·미배포). 관리자 수동 보상 없음.",
+    "budget_766_951": "TEST STALE — <200은 2026-08-23 6앵커(Σ91) 기준, 2026-09-06 레거시 6종 흡수로 766, 가변형 플레이스홀더 0 보정 시 951. 정상 학생 실제 도달 최대 ≈480★(1유닛)/≈721★(2유닛). 예산 승인값 = NEEDS DECISION.",
+    "P1_missing_writing_complete": "FIXED aeb6a9e — 실제 React에서 항상 0건 지급(updater 내부 플래그). 전 학생 공통.",
+    "ranking": "이중 집계 불가(홈 class_id 단일 키, 서버 데이터). 음수 0, 미표기 중복 0. QA_ 반 픽스처 2명 실학생 오분류 → FIXED 13b6cf2.",
+    "ux": "퀴즈 발음 '⭐ 1개 획득' 무조건 표시(dedup no-op에도) / 같은 tick 이중 호출 시 토스트 2회 → 수정 진행 중. RewardCard 총별 vs 배지(실력 별 포함) 표기 차이 = NEEDS DECISION. cap 거부 시 로컬 total 롤백 없음 = 설계(NEEDS DECISION).",
+    "exploit": "server idempotency_key UNIQUE·retry-safety·23505 흡수로 동일 이벤트 중복 0. 상한 경계 TOCTOU(distinct sourceId 동시)만 초과 가능(본인 탭 간, 소폭) — DB 가드 NEEDS DECISION."
+  },
+  "production_write": 0,
+  "blocker": "none",
+  "next_action": "UX 수정·컴포넌트 이중호출 테스트 결과 검증·커밋 → 전체 회귀 → handoff 121차 → PR(머지 금지)"
+}
