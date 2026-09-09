@@ -99,8 +99,16 @@ jobs:
       # E2E_SKIP_IF_NO_BROWSER 관용이 있지만 CI 는 그 관용을 쓰지 않는다 —
       # scripts/verifyRelease.mjs Gate 5 주석 참고). --with-deps 로 ubuntu
       # 러너에 필요한 OS 라이브러리까지 함께 설치한다.
+      # 2026-09-10 (run 34383158319) — 러너에 미리 깔린 Google Chrome apt 소스가
+      # Playwright 의 번들 Chromium 과 무관한데도, dl.google.com 인덱스가 일시
+      # 손상되면 --with-deps 의 apt-get update 가 Hash Sum mismatch 로 통째로
+      # 실패한다(PR #28 에서는 1.5시간 전 동일 스텝이 통과 — 일시적 환경 문제로
+      # 판정). apt-get update 전에 이 소스만 제거해 게이트 자체 강도는 유지한다.
+      - name: Remove unrelated Google Chrome apt source (Gate 5 prep — avoids dl.google.com Hash Sum mismatch blocking apt-get update)
+        run: sudo rm -f /etc/apt/sources.list.d/google-chrome*.list /etc/apt/sources.list.d/google.list || true
+
       - name: Install Playwright chromium (Gate 5 — browser E2E)
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium || (sleep 20 && sudo apt-get update && npx playwright install --with-deps chromium)
 
       # 일부 검증 스크립트는 자격증명을 process.env 가 아니라 .env "파일"에서
       # 직접 읽는다(예: scripts/testStudentSelectPinStatus.mjs 의
