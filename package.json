@@ -128,6 +128,11 @@
     "verify:ci-name-masking": "node scripts/testCiNameMasking.mjs",
     "verify:students-rls-phase2b": "node scripts/testStudentsRlsPhase2b.mjs",
     "verify:registry-coverage": "node scripts/testRegistryCoverage.mjs",
+    "verify:column-probe-memo": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testColumnProbeMemo.mjs",
+    "verify:nav-history-model": "node scripts/testNavHistoryModel.mjs",
+    "verify:spelling-ime-guard": "node scripts/testSpellingImeGuard.mjs",
+    "verify:entrance-test-padding": "node scripts/testEntranceTestPadding.mjs",
+    "verify:spelling-review-index": "node scripts/testSpellingReviewIndex.mjs",
     "watch:claude-stall": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/watchClaudeStall.ps1"
   },
   "dependencies": {
