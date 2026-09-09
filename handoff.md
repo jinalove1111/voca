@@ -7,6 +7,11 @@ IMPLEMENTATION READY, Production WRITE 0. 119차 이하 기록은 그대로 보�
 
 _CLOSED 무접촉: PR #24/#25/#26, V3_39, V3_49/Paul Dollar/Town Shop 제품 코드, write-practice. rollback 0, migration 0, 반 설정·학생 데이터·플래그 0, QA 계정 학습 0, main 직접 push 0, 머지 0._
 
+### PHASE 1 결과(2026-09-09 추가) — **권교빈 ghost pointer CLOSED** (운영자 SQL Editor 실행, UPDATE 1)
+- 운영자가 `production_gyobin_ghost_pointer_apply.sql`을 Supabase SQL Editor에서 1회 실행 → `production_gyobin_ghost_pointer_post_verify.sql` **11/11 ok=true**(target=Unit1, primary SCA·students 행·must_not_change 8건 불변, ghost를 가리키는 SCA 0, ghost unit 행은 보존).
+- 세션 READ-ONLY 재확인(anon GET): SCA daea911e current_unit_id = `e402499b`(Unit1), ghost 53e380c7 참조 SCA 0.
+- delta: UPDATE 1 / INSERT 0 / DELETE 0. 이 세션의 Production WRITE는 여전히 0(운영자 실행 1건이 유일). apply/rollback 재실행 금지 — CLOSED, 재조사 금지(규칙 3).
+- 후속: prod:check SCA_GHOST_UNIT/GHOST_UNIT_PRESENT(53e380c7 참조 실학생 1명) WARN 해소 예상(다음 READ-ONLY prod:check에서 확인). ghost unit 행 삭제 여부는 별도 결정.
 ### PHASE 1 — 권교빈(Liam) ghost pointer: **READY FOR OPERATOR (READY TO APPLY: YES)**
 - 하네스 fetch 실패 코드 원인: `scripts/lib/sqlExecutor.mjs` 실행기 catch가 `err.message`("fetch failed")만 반환해 undici `err.cause`(ENOTFOUND/ECONNRESET/TLS 코드)를 버림 → 진단 불가. 수정(`db146b2`): cause 전파 + accessToken redact, 7케이스 테스트(수정 전 2 FAIL).
 - 환경 원인(UNVERIFIED): 오늘 curl/Node 모두 api.supabase.com 도달(토큰 없이 401), DNS IPv4 2개, 프록시 env 없음. 과거 실패 로그는 저장소에 없음. 재발 시 이제 cause가 리포트에 남는다.

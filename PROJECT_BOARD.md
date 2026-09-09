@@ -965,6 +965,7 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
 ## DONE (최근 완료, 참고용 — 전체 이력은 `ROADMAP.md`/`handoff.md`)
 
 ### [P1] 6h 자율 세션 2026-09-09-b — 권교빈 READY FOR OPERATOR / YBM 잔재 RESOLVED / 학생 경로 결함 3건 FIXED / 400 노이즈 FIXED / invariant 오탐 FIXED / 모바일 Back IMPLEMENTATION READY / Reward 766 NEEDS DECISION (120차, PR 대기)
+- **권교빈 ghost pointer CLOSED(2026-09-09)** — 운영자 SQL Editor apply UPDATE 1, post_verify 11/11 true. 재실행·재조사 금지.
 - 브랜치 `qa/session-2026-09-09-b`(base f91199d). Production WRITE 0. 운영자 행동·결정 목록: `handoff.md` 120차 TOP 5.
 
 ### [P1] 야간 QA 2026-09-09 — 회귀 PASS, 수정 8건(테스트/도구/회복력), 감사 분류, 모바일 Back 설계 (119차, PR 대기)
