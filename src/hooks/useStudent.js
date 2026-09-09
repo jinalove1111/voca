@@ -1666,24 +1666,52 @@ export function useStudent(studentId, legacyName) {
   // 순간, 다른 3개 카테고리(word-view/listening/quiz)와 동일한 day
   // 기간키 패턴) 단위로만 지급한다 — 몇 번째 단어/몇 번째 콤보에서
   // 도달했는지는 더 이상 지급 여부에 영향을 주지 않는다.
+  // 2026-09-10 실사고 수정 — 예전엔 justCompletedWriting을 bumpHistory의
+  // updater "안"에서만 true로 설정하고 그 직후(patch() 호출 뒤) 밖에서
+  // 읽어 grantXp/grantLedgerReward 호출 여부를 판단했다. markPronunciationOk
+  // (이 파일 헤더 951-976행 주석)와 정확히 같은 원인 클래스 — React는 그
+  // 함수형 updater가 patch() 호출과 같은 tick 안에서 "이미 실행 완료
+  // 했다"고 보장하지 않는다. 이번엔 fakeReact.mjs 스텁이 아니라 REAL
+  // React 18(react-dom/client + act(), scripts/testWritingCompleteRealReactTiming.mjs)
+  // 로 재현했고, 실측 결과는 예상보다 더 나빴다 — interleave 여부와
+  // 무관하게 "단독" 호출(그 tick의 유일한 상태 변경)에서도 100% 재현됐다
+  // (React의 setState eager-bailout 최적화가 이 번들+act() 실행 경로에서는
+  // 전혀 발동하지 않음 — 정확한 내부 원인은 위 테스트 파일 헤더 참고).
+  // 그 결과 하루 5번째 철자 정답에서 +2(XP 포함)가 매번 조용히 누락되고
+  // 있었다(재시도 없음 — 이 임계값 통과는 하루 한 번뿐).
+  //
+  // 수정: markPronunciationOk와 동일하게, 판정을 patch() 호출 "전" 이
+  // 렌더의 클로저(history, 이 훅 상단 destructure)만으로 동기 계산한다.
+  // 바로 아래 콤보 계산(round.spellingCombo)과 정확히 같은 이유로 안전 —
+  // "쓰기 답안은 사람이 타이핑하는 속도로만 들어오므로 stale closure가
+  // 실제로 문제될 간격이 아님"(아래 콤보 주석 재사용). writingCompleteGrantedDayRef는
+  // 같은 tick에 이 클로저 기준 판정이 우발적으로 두 번 true가 되어도(예:
+  // 더블탭) grantXp의 fire-and-forget 네트워크 호출이 중복되지 않게 하는
+  // 순수 최적화 — grantLedgerReward 자체의 정확성은 이미 patch()의 updater
+  // 안에서 appendRewardEntry가 prev.rewardLedger를 다시 검사해 담보한다
+  // (이 파일 1036행 주석), 이 ref가 없어도 별 지급은 정확히 1회만 일어남.
+  const writingCompleteGrantedDayRef = useRef(null)
   const recordSpellingAnswer = useCallback((wordId, correct) => {
-    let justCompletedWriting = false
+    const today = todayStr()
+    const prevCorrectSnapshot = history[today]?.spellingCorrect || 0
+    const nextCorrectSnapshot = prevCorrectSnapshot + (correct ? 1 : 0)
+    const justCompletedWriting = prevCorrectSnapshot < GOAL && nextCorrectSnapshot >= GOAL
     bumpHistory(day => {
       const prevCorrect = day.spellingCorrect || 0
       const nextCorrect = prevCorrect + (correct ? 1 : 0)
-      if (prevCorrect < GOAL && nextCorrect >= GOAL) justCompletedWriting = true
       return {
         spellingTotal: (day.spellingTotal || 0) + 1,
         spellingCorrect: nextCorrect,
       }
     })
-    if (justCompletedWriting) {
-      grantXp('writing-complete', `writing-complete:${todayStr()}`)
+    if (justCompletedWriting && writingCompleteGrantedDayRef.current !== today) {
+      writingCompleteGrantedDayRef.current = today
+      grantXp('writing-complete', `writing-complete:${today}`)
       // Reward System V1 앵커(writing-complete, +2) — grantXp와 동일한
       // day 기간키(하루 1회), justCompletedWriting은 정의상 하루에 한
       // 번만 true가 되므로(prevCorrect가 GOAL을 넘으면 다시 false로
       // 내려가지 않음) 이 조건 안에서만 호출해도 안전하다.
-      grantLedgerReward('writing-complete', 'daily-writing', todayStr())
+      grantLedgerReward('writing-complete', 'daily-writing', today)
     }
     if (correct) {
       // 2026-09-04 정원 성장 소스 버그 수정 — 퀴즈 정답(recordQuizAnswer)은
@@ -1741,7 +1769,7 @@ export function useStudent(studentId, legacyName) {
         },
       }))
     }
-  }, [bumpHistory, patch, grantReward, round.spellingCombo, grantXp, grantLedgerReward, spellingReviewQueue, markWordCleared])
+  }, [bumpHistory, patch, grantReward, round.spellingCombo, grantXp, grantLedgerReward, spellingReviewQueue, markWordCleared, history])
 
   // 복습 화면에서 한 단어를 맞히면 오답노트 큐에서 제거 — 큐가 비면
   // "틀린 단어 복습"이 끝난 것. Writing MVP: 영구 복습 대기열
