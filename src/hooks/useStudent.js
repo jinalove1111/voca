@@ -1053,6 +1053,18 @@ export function useStudent(studentId, legacyName) {
   const dismissRewardFeedback = useCallback((id) => {
     setRewardFeedback((q) => q.filter((f) => f.id !== id))
   }, [])
+  // 2026-09-10 — 같은 tick 중복 호출(React StrictMode 개발 모드 double
+  // effect, 또는 우발적 이중 호출) 시 토스트 2개가 뜨는 표시 버그(원인:
+  // 위 hasRewardEntry 사전 체크가 이 렌더의 클로저 rewardLedger만 보고,
+  // patch()의 updater 내부 재검사는 원장/별 지급 자체는 정확히 한 번으로
+  // 담보하지만 그 아래 setRewardFeedback 호출까지는 막지 않았음) 최적화용
+  // in-tick 가드 — postedLegacyKeysRef(이 파일 위쪽, grantReward 헤더
+  // 주석)와 정확히 같은 패턴: 마운트당 한 번 채워지고 절대 비우지 않는다
+  // (자정 롤오버/재로그인은 컴포넌트 리마운트로 새 useRef가 생겨 자연
+  // 초기화되므로, 날짜가 섞인 key라 다음날 정당한 재지급을 막을 여지가
+  // 없다). 지급/dedup 로직(원장 append, grantReward, totalStars)은 한 글자도
+  // 바꾸지 않음 — 오직 중복 토스트만 억제.
+  const ledgerGrantedKeysRef = useRef(new Set())
   const grantLedgerReward = useCallback((rewardType, sourceType, sourceId, starsOverride, label) => {
     const key = rewardIdempotencyKey(studentId, rewardType, sourceType, sourceId)
     const rewardStars = (starsOverride === undefined || starsOverride === null)
@@ -1060,6 +1072,8 @@ export function useStudent(studentId, legacyName) {
       : starsOverride
     if (rewardStars <= 0) return false
     if (hasRewardEntry(rewardLedger, key)) return false
+    if (ledgerGrantedKeysRef.current.has(key)) return false
+    ledgerGrantedKeysRef.current.add(key)
     patch((prev) => ({
       rewardLedger: appendRewardEntry(prev.rewardLedger || [], buildRewardEntry({
         studentId, rewardType, sourceType, sourceId, starsDelta: rewardStars, at: new Date().toISOString(),
@@ -1280,10 +1294,9 @@ export function useStudent(studentId, legacyName) {
       },
     }))
     if (wordId == null) {
-      grantReward(1, `pronunciation-unidentified:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`)
-      return
+      return grantReward(1, `pronunciation-unidentified:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`)
     }
-    grantReward(1, `pronunciation:${wordId}:${todayStr()}`)
+    return grantReward(1, `pronunciation:${wordId}:${todayStr()}`)
   }, [patch, grantReward])
 
   // Grants a sticker directly, bypassing the gift-box gacha (used for
