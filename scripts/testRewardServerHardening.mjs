@@ -105,15 +105,58 @@ check('42P01/PGRST205 table_missing 폴백 유지', /42P01/.test(branch) && /PGR
 check('student_progress를 UPDATE하지 않는다', !/from\('student_progress'\)[\s\S]{0,80}\.update\(/.test(code))
 check('기존 XP 분기는 무변경(같은 파일 내 공존)', /const \{ studentId, eventType, sourceEventId \} = req\.body/.test(code))
 
-console.log('\n7. 공격 시나리오 — 상한이 실제로 피해를 묶는가 (순수 계산)')
-if (REWARD_DAILY_CAP && eng.REWARD_STARS) {
-  const worst = Object.entries(REWARD_DAILY_CAP)
-    .reduce((sum, [t, cap]) => sum + cap * (eng.REWARD_STARS[t] || 0), 0)
-  check(`한 학생당 하루 최대 부풀림 ${worst}별로 상한 (무제한 아님)`, worst > 0 && worst < 200)
+console.log('\n7. 공격 시나리오 — 상한이 실제로 피해를 묶는가 (구조 검증, magic budget 아님)')
+// 이 절은 원래(2026-08-23, commit b55b96e) `worst < 200`을 단언했다 — 그 때
+// REWARD_DAILY_CAP은 원본 6개 앵커뿐이었다(합 91). 2026-09-06 commit 52db9e4가
+// 같은 객체에 레거시 6종을 추가해 Σ가 766으로 뛰었고, 그 Σ 공식 자체도
+// REWARD_STARS의 가변 금액 placeholder(spelling-combo/streak-bonus = 0)를
+// 그대로 곱해 실제 천장(951)을 과소집계한다(정밀 스냅샷은
+// scripts/testRewardDailyCeilingTable.mjs). 운영자가 예산 숫자를 승인한 적이
+// 없으므로(rewardEngine.js REWARD_DAILY_CAP 주석 "OPEN DECISION") 이 절은
+// 더 이상 임의의 상한 리터럴(<200/<766/<951 등)을 단언하지 않고, 원래 의도
+// — "상한이 무제한이 아니다: 모든 지급 타입에 유한한 일일 상한이 존재하고
+// 공격자가 무제한으로 부풀릴 수 없다" — 만 구조적으로 검증한다.
+if (REWARD_DAILY_CAP && eng.REWARD_STARS && eng.REWARD_SOURCE_RULES) {
+  const capKeys = Object.keys(REWARD_DAILY_CAP).sort()
+  const ruleKeys = Object.keys(eng.REWARD_SOURCE_RULES).sort()
+  check('REWARD_SOURCE_RULES의 모든 타입에 유한 양의 정수 상한이 있다',
+    ruleKeys.every((t) => Number.isInteger(REWARD_DAILY_CAP[t]) && REWARD_DAILY_CAP[t] > 0))
+  check('REWARD_DAILY_CAP의 모든 키가 REWARD_SOURCE_RULES에도 존재한다(역방향 — 상한만 있고 지급 경로 없는 유령 키 없음)',
+    capKeys.every((t) => Object.prototype.hasOwnProperty.call(eng.REWARD_SOURCE_RULES, t)))
+  check('두 키 집합이 완전히 동일하다', JSON.stringify(capKeys) === JSON.stringify(ruleKeys))
+
+  check('알 수 없는 타입은 rewardDailyCap() 0 (무제한 아님)', !rewardDailyCap('__unknown_reward_type__'))
+  check('legacy-baseline은 rewardDailyCap() 0 (구성상 배제, API 지급 불가)', !rewardDailyCap('legacy-baseline'))
+
+  // 단일 이벤트 최대 지급액 — 고정 금액 타입은 REWARD_STARS[t] 그대로 양수여야
+  // 하고, 가변 금액 타입(streak-bonus/spelling-combo)은 REWARD_STARS가 0
+  // placeholder이므로(rewardEngine.js:46,60) 실제 금액표(STREAK_BONUS/
+  // LEGACY_SPELLING_COMBO_BONUS)의 최댓값을 봐야 한다 — 이 접근은
+  // testRewardDailyCeilingTable.mjs의 maxStarsFor()와 동일하다(같은 결론에
+  // 두 번 도달해 서로 교차검증).
+  const VARIABLE_TYPES = ['spelling-combo', 'streak-bonus']
+  const maxStarsFor = (t) => {
+    const fixed = eng.REWARD_STARS[t]
+    if (typeof fixed === 'number' && fixed > 0) return fixed
+    if (t === 'spelling-combo' && eng.LEGACY_SPELLING_COMBO_BONUS) return Math.max(...Object.values(eng.LEGACY_SPELLING_COMBO_BONUS))
+    if (t === 'streak-bonus' && eng.STREAK_BONUS) return Math.max(...Object.values(eng.STREAK_BONUS))
+    return 0
+  }
+  check('고정 금액 타입은 전부 REWARD_STARS[t] > 0 (placeholder 0 없음)',
+    ruleKeys.filter((t) => !VARIABLE_TYPES.includes(t)).every((t) => eng.REWARD_STARS[t] > 0))
+  check('가변 금액 타입(spelling-combo/streak-bonus)도 실제 금액표 최댓값이 유한 양수(REWARD_STARS placeholder 0에 가려지지 않음)',
+    VARIABLE_TYPES.every((t) => Number.isFinite(maxStarsFor(t)) && maxStarsFor(t) > 0))
+
   check('exam-complete 단독 상한 = 10 x 2 = 20별', REWARD_DAILY_CAP['exam-complete'] * eng.REWARD_STARS['exam-complete'] === 20)
   check('wrong-word-recovered 단독 상한 = 60 x 1 = 60별', REWARD_DAILY_CAP['wrong-word-recovered'] * eng.REWARD_STARS['wrong-word-recovered'] === 60)
-  // 수정 전에는 무제한이었다 — 상한이 존재한다는 것 자체가 방어
-  check('수정 전(무제한) 대비 상한이 유한하다', Number.isFinite(worst))
+
+  // Σ(cap × 실제 단일 이벤트 최대 금액) — "얼마인지"는 참고용으로만 출력하고
+  // 어떤 문턱값도 assert하지 않는다(운영자 예산 미승인, 위 배경 주석 참고).
+  // 유한하다는 것 자체만 확인 — 이것이 원래 §7의 의도("무제한이 아니다")다.
+  const worst = ruleKeys.reduce((sum, t) => sum + REWARD_DAILY_CAP[t] * maxStarsFor(t), 0)
+  check('한 학생당 하루 이론 상한 합이 유한 양수다(무제한 아님) — 구체적 예산 값은 단언하지 않음',
+    Number.isFinite(worst) && worst > 0)
+  console.log(`  참고(집계 제외, 정책 아님): 이론 상한 합 = ${worst}★ — 예산 승인값은 운영자 결정(OPEN DECISION, rewardEngine.js REWARD_DAILY_CAP 주석)`)
 }
 
 console.log(String.fromCharCode(10) + '8. H1 인증 — 2026-08-24 서명 세션 토큰으로 닫힘')
