@@ -217,6 +217,31 @@ console.log('\n=== 8절. DuplicateStudentAudit.jsx — "전체 실학생 N명" �
     JSON.stringify(real) === JSON.stringify(['홍길동']), JSON.stringify(real))
 }
 
+console.log('\n=== 9절. isRealStudentAccount — className(홈 반 이름)까지 보는지 (2026-09-10 야간 QA) ===')
+{
+  // 배경: 라이브 실측에서 "Cksa"(반 QA_SelfSetupTest)/"QACombo1"(반
+  // QA_ComboFixT)는 이름 자체가 qa_/_qa_로 시작하지 않아 isRealStudentAccount
+  // (accountStatus.js)가 REAL로 잘못 집계했다(별 0개라 지금은 수치 왜곡은
+  // 없지만, "QA/테스트 계정은 실학생 집계를 왜곡하면 안 된다" 불변식 위반).
+  // scripts/lib/studentHealthRules.mjs classifyAccount는 ctx.classById로
+  // 이미 QA_FIXTURE로 잡아내지만(testStudentHealthRules.mjs 참고),
+  // accountStatus.js 쪽은 student.className이 있어야 같은 결론에 도달한다.
+  check('Cksa + className QA_SelfSetupTest → REAL 아님(false)',
+    isRealStudentAccount({ name: 'Cksa', className: 'QA_SelfSetupTest' }) === false)
+  check('QACombo1 + className QA_ComboFixT → REAL 아님(false)',
+    isRealStudentAccount({ name: 'QACombo1', className: 'QA_ComboFixT' }) === false)
+  check('평범한 이름 + className "MS Advanced Class" → REAL(true, 회귀 없음)',
+    isRealStudentAccount({ name: '홍길동', className: 'MS Advanced Class' }) === true)
+  check('이름 자체가 qa_ 접두면 실제 반과 무관하게 REAL 아님(기존 동작 불변)',
+    isRealStudentAccount({ name: 'qa_x', className: 'MS Advanced Class' }) === false)
+  check('className "QA"(밑줄 없음)는 오탐 아님 → REAL(true)',
+    isRealStudentAccount({ name: '평범이름', className: 'QA' }) === true)
+  check('className "Quality Class"는 오탐 아님 → REAL(true)',
+    isRealStudentAccount({ name: '평범이름', className: 'Quality Class' }) === true)
+  check('className 필드가 아예 없는 기존 호출부는 이름만으로 판정(회귀 없음)',
+    isRealStudentAccount({ name: '홍길동' }) === true && isRealStudentAccount({ name: 'QA_x' }) === false)
+}
+
 console.log(`\n${'='.repeat(60)}`)
 console.log(`총 ${passed + failed}단언 — PASS ${passed} / FAIL ${failed}`)
 if (failed > 0) {
