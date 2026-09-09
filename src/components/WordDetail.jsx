@@ -43,14 +43,44 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
   const settledRef         = useRef(true) // true = not currently waiting on a result
   const hangTimerRef       = useRef(null)
   const recUrlRef          = useRef(null) // last URL.createObjectURL(blob) — revoked when replaced/unmounted
+  // 'speaking' phase watchdog (학생 리포트, Presentation 6, 2026-09-09):
+  // this phase used to depend SOLELY on the TTS onEnd callback ever firing.
+  // claimTtsCall()'s supersede guard (student taps the pronunciation card /
+  // "다시 듣기" while the prompt is still playing) or some Android in-app
+  // browsers' speechSynthesis never firing onend/onerror at all left the
+  // button permanently disabled in 'speaking'. speakingActiveRef (not the
+  // stale `phase` closure) tracks whether we're still genuinely waiting.
+  const speakingTimerRef  = useRef(null)
+  const speakingActiveRef = useRef(false)
 
   useEffect(() => () => {
     try { mrRef.current?.stop?.() } catch {}
+    clearTimeout(speakingTimerRef.current)
     if (recUrlRef.current) {
       try { URL.revokeObjectURL(recUrlRef.current) } catch {}
       recUrlRef.current = null
     }
   }, [])
+
+  // Second, independent arm of the same 10s guard, keyed on `phase` instead
+  // of scheduled imperatively inside handleClick. The whole bug class this
+  // fixes is "a callback we depend on might just never run" (claimTtsCall
+  // supersede, or a device speechSynthesis that never fires onend/onerror
+  // at all) — so the recovery path itself deliberately doesn't rely on a
+  // single trigger either. Both this effect and handleClick's own timer
+  // below share speakingActiveRef, so whichever fires first performs the
+  // recovery and the other is a guarded no-op; neither starts recording or
+  // counts an attempt.
+  useEffect(() => {
+    if (phase !== 'speaking') return
+    const id = setTimeout(() => {
+      if (!speakingActiveRef.current) return
+      speakingActiveRef.current = false
+      setPhase('idle')
+      setMsg('다시 눌러 말해봐요 🎤')
+    }, 10000)
+    return () => clearTimeout(id)
+  }, [phase])
 
   // In-app browsers (KakaoTalk etc.) handle mic permission unreliably — skip
   // the recording step there instead of letting students hit a flaky/
@@ -205,16 +235,38 @@ function SpeechBtn({ target, wordAudioUrl, label = '따라 말하기', maxMs = 5
     devLog('[WordDetail] record button clicked')
     if (phase === 'listening') { cancelListen(); return }
     if (phase === 'speaking' || phase === 'success') return
+    clearTimeout(speakingTimerRef.current)
+    speakingTimerRef.current = null
     unlockAudio()
     setMsg('')
     setAudioNotice('')
     setPaulReaction(null)
     setPhase('speaking')
+    // speaking phase watchdog (10s): speakingActiveRef — not a stale `phase`
+    // closure — tracks whether we're still genuinely waiting for TTS to end.
+    // On expiry, if still speaking, recover to idle without starting
+    // recording/counting an attempt (see refs comment above for the bug).
+    speakingActiveRef.current = true
+    speakingTimerRef.current = setTimeout(() => {
+      speakingTimerRef.current = null
+      if (!speakingActiveRef.current) return
+      speakingActiveRef.current = false
+      setPhase('idle')
+      setMsg('다시 눌러 말해봐요 🎤')
+    }, 10000)
     playWordAudio(wordAudioUrl, target, {
       times: 2,
       source: 'speechbtn-prompt',
-      onEnd: () => startListen(),
+      onEnd: () => {
+        clearTimeout(speakingTimerRef.current)
+        speakingTimerRef.current = null
+        speakingActiveRef.current = false
+        startListen()
+      },
       onError: () => {
+        clearTimeout(speakingTimerRef.current)
+        speakingTimerRef.current = null
+        speakingActiveRef.current = false
         setAudioNotice('지금은 소리를 들려줄 수 없어요 — 화면을 보고 말해봐요')
         startListen()
       },
