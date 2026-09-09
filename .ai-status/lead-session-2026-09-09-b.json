@@ -5,7 +5,7 @@
   "status": "completed",
   "progress": 100,
   "started_at": "2026-09-09T08:00:00Z",
-  "updated_at": "2026-09-09T13:30:00Z",
+  "updated_at": "2026-09-09T14:30:00Z",
   "base_sha": "f91199d9878887861b4dbf0e5a970d840c21bb1e",
   "branch": "qa/session-2026-09-09-b",
   "phase_status": {
@@ -22,7 +22,7 @@
   },
   "production_write": 0,
   "blocker": "none",
-  "next_action": "PR #27 리뷰 대기. 다음 미완료: 미가드 Enter 핸들러 9곳 IME 판정/수정, prodCheck notes 표시(Phase 7 잔여).",
+  "next_action": "PR #27 리뷰·머지 결정(운영자). 남은 결정: Reward 예산, 모바일 Back Phase 1, 데이터·플래그 정리.",
   "commits": [
     "db146b2 fix(harness): Management API 실행기 오류 문자열에 undici err.cause(code/message) 전파 — \"fetch failed\" 진단 불가 해소",
     "c46efd3 chore(status): 6h 세션 2026-09-09-b 체크포인트(P1 READY FOR OPERATOR, P2 RESOLVED, 나머지 진행 중)",
@@ -34,5 +34,10 @@
     "d59c7f8 test(student-path): Phase 3 감사 결함 3건 재현 테스트 — SpellingQuestion IME 가드(12), EntranceTest running pb-24(6), SpellingReview 인덱스 드리프트(12)",
     "c9dd262 fix(student-path): 쓰기 IME 조합 중 Enter 제출 차단 + 입실시험 진행 화면 pb-24 + 복습 문제 번호/방향 인덱스 드리프트 수정",
     "620968e test(registry): 세션 신규 테스트 5종 등록(column-probe-memo, nav-history-model[extra], spelling-ime-guard, entrance-test-padding, spelling-review-index) — 커버리지 린트 PASS 복귀"
+  ],
+  "followups": [
+    "f38b212/b08400c IME Enter guards ×3 (login name / sentence blank / admin rename)",
+    "11526ef prodCheck notes INFO section",
+    "post-apply prod:check: health 46/0, invariants WARN 19, SCA_GHOST_UNIT 0"
   ]
 }

@@ -60,6 +60,11 @@ _CLOSED 무접촉: PR #24/#25/#26, V3_39, V3_49/Paul Dollar/Town Shop 제품 코
 - build PASS · verify:all ALL DOMAINS PASS(신규 8 스크립트 실행 확인) · registry coverage PASS · e2e 59/59 ×5 · testProdCheck 278/0 · testProdHotfix 383/0 · testOpsStatus 158/0 · 오프라인 6스위트 ×3 PASS.
 - FAIL 분류: extra testRewardServerHardening 1 = PRE-EXISTING(Phase 6 NEEDS DECISION). NEW REGRESSION 0.
 
+### 후속(2026-09-09, 권교빈 CLOSED 이후) — IME Enter 가드 3곳 + prodCheck notes 표시 + 라이브 효과
+- `f38b212`/`b08400c` 한글 IME 입력 가능 텍스트 입력의 미가드 Enter 3곳 수정: 로그인 이름 입력(StudentSelect ~508, P0 로그인 경로 — 조합 중 Enter로 마지막 음절 미확정 이름 시도), 문장 빈칸(SentenceLearningFlow ~373), 관리자 반/유닛 이름 변경(AdminScreen ~2062). 숫자 PIN/비밀번호/버튼형 핸들러는 무변경 스냅샷. testImeEnterGuards 29단언(수정 전 6 FAIL).
+- `11526ef` prodCheck 리포트·JSON에 notes(PRIMARY_UNIT_BOOKMARK_DRIFT) INFO 절 노출(집계·exit 불변, CI 마스킹 동일). testProdCheck 278→292.
+- 권교빈 apply 이후 READ-ONLY prod:check: health **PASS 46 / WARN 0**(이전 WARN 1), invariants WARN **19**(44→21→19), SCA_GHOST_UNIT 0, 실학생 참조 유령 유닛 0. 잔여 WARN = STUDENT_CLASS_IS_CONTAINER 6 / GHOST_UNIT_PRESENT 7(참조 0) / UNIT_WORDS_ABNORMAL 1 / UNIT_CONTENT_DUPLICATE 3 / TEXTBOOK_SIMILAR_NAME 1 / AMBIGUOUS_TEXTBOOK 1 — 전부 결정 대기 항목.
+- 최종 트리 검증: build PASS · verify:all ALL DOMAINS PASS · e2e 59/59 · registry coverage PASS. extra FAIL 1 = testRewardServerHardening(Phase 6 NEEDS DECISION, 기존).
 ### 커밋(순서)
 - `db146b2` fix(harness): Management API 실행기 오류 문자열에 undici err.cause(code/message) 전파 — "fetch failed" 진단 불가 해소
 - `c46efd3` chore(status): 6h 세션 2026-09-09-b 체크포인트(P1 READY FOR OPERATOR, P2 RESOLVED, 나머지 진행 중)
