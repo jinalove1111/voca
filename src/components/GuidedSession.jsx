@@ -106,6 +106,10 @@ export default function GuidedSession({
   const [retryIds, setRetryIds] = useState([]) // 본 코스 퀴즈 오답 wordId(중복 없음)
   // 이번 세션 성적 집계(다음 세션 크기 계산용) — 렌더에 안 쓰므로 ref.
   const statsRef = useRef({ answered: 0, correct: 0, startedAt: Date.now() })
+  // 2026-09-10 double-invoke 계약 테스트(scripts/testComponentCallbackDoubleInvoke.mjs
+  // §4) 대응 — handleQuizAnswer 자체 중복 호출 가드. `${phase}:${wordId}` 키로
+  // 본 코스와 재시도(같은 wordId, 다른 phase)의 정당한 별개 응답은 그대로 허용.
+  const answeredKeysRef = useRef(new Set())
   // 방금 끝난 세션의 측정값 — 완료 카드 표시 + planSessionSize 입력.
   const [lastStats, setLastStats] = useState(null)
 
@@ -206,6 +210,12 @@ export default function GuidedSession({
   // 그대로 부르고, 그 위에 ①세션 정답률 집계 ②본 코스 오답만 재시도 큐
   // 적재(재시도 중 또 틀린 단어는 재적재 안 함)를 얹는다.
   const handleQuizAnswer = (wordId, correct) => {
+    // 같은 (phase, wordId) 조합에 대한 중복 호출은 무시 — WordDetail/QuizStep의
+    // 내부 isAnswered 가드가 우회되는 경로가 생겨도 실제 보상 콜백/세션 집계는
+    // 정확히 1회만 반영한다(더 아래 phase==='retry' 재응시는 별도 키라 그대로 허용).
+    const key = `${phase}:${wordId}`
+    if (answeredKeysRef.current.has(key)) return
+    answeredKeysRef.current.add(key)
     onQuizAnswer?.(wordId, correct)
     statsRef.current.answered += 1
     if (correct) statsRef.current.correct += 1
@@ -227,6 +237,7 @@ export default function GuidedSession({
     setPos(0)
     setRetryIds([])
     statsRef.current = { answered: 0, correct: 0, startedAt: Date.now() }
+    answeredKeysRef.current.clear()
     setPhase('main')
     onSetLastWordIndex?.(sessionEndAbs)
   }
