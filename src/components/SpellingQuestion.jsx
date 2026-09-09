@@ -378,7 +378,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
           )}
           <input ref={inputRef} {...examInputProps} value={input}
             onChange={e => { setInput(e.target.value); if (lastWrongInput) setLastWrongInput('') }}
-            onKeyDown={e => e.key === 'Enter' && submitAnswer()}
+            onKeyDown={e => e.key === 'Enter' && !e.nativeEvent.isComposing && submitAnswer()}
             placeholder={inputPlaceholder} autoFocus
             className="w-full border-2 border-teal-200 rounded-xl px-4 py-4 text-xl font-black text-center focus:outline-none focus:border-teal-500" />
           <button onClick={submitAnswer}
@@ -401,7 +401,7 @@ export default function SpellingQuestion({ word, meaning, wordAudioUrl, hintEnab
           </div>
           <p className="text-center text-xs text-gray-400">정답을 보고 똑같이 한 번 입력해봐요</p>
           <input ref={inputRef} {...examInputProps} value={input} onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && submitAnswer()}
+            onKeyDown={e => e.key === 'Enter' && !e.nativeEvent.isComposing && submitAnswer()}
             placeholder="다시 입력하세요" autoFocus
             className="w-full border-2 border-red-200 rounded-xl px-4 py-4 text-xl font-black text-center focus:outline-none focus:border-red-500" />
           <button onClick={submitAnswer}

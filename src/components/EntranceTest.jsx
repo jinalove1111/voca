@@ -412,7 +412,11 @@ export default function EntranceTest({ studentId, studentName, onBack, onExamCom
     const q = questions[qIdx]
     const urgent = remaining <= 10
     return (
-      <div className="min-h-screen p-4">
+      // pb-24(2026-09-09, App.jsx 고정 SpeedBtn 겹침 수정 — result 단계
+      // pb-24 패턴을 running 단계에도 동일 적용) — 진행률/입력창/확인/
+      // 모르겠어요 버튼이 화면 아래 고정 SpeedBtn(App.jsx:997)에 가리지
+      // 않도록.
+      <div className="min-h-screen p-4 pb-24">
         <div className="max-w-lg mx-auto space-y-4">
           {/* 진행률 + 타이머 */}
           <div className="flex items-center justify-between pt-2">
