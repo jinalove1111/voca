@@ -115,6 +115,8 @@
     "verify:reward-cap-race": "node scripts/testRewardCapRace.mjs",
     "verify:reward-retry-exactly-one": "node scripts/testRewardRetryExactlyOneRow.mjs",
     "verify:reward-day-boundary": "node scripts/testRewardDayBoundaryDeviceClock.mjs",
+    "verify:reward-feedback-contracts": "node scripts/buildRaceBundle.mjs && node scripts/testRewardFeedbackContracts.mjs",
+    "verify:writing-complete-real-react": "node scripts/buildUseStudentRealReactBundle.mjs && node scripts/testWritingCompleteRealReactTiming.mjs",
     "prod:check": "node scripts/prodCheck.mjs",
     "prod:hotfix": "node scripts/prodHotfix.mjs",
     "prod:plan": "node scripts/prodPlan.mjs",
