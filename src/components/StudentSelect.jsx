@@ -505,7 +505,7 @@ export default function StudentSelect({ onSelect, onAdmin, onParent, removedNoti
         ) : (
           <>
             <input type="text" value={loginName} onChange={e => { setLoginName(e.target.value); setLoginError('') }}
-              onKeyDown={e => e.key === 'Enter' && loginPinRef.current?.focus()}
+              onKeyDown={e => e.key === 'Enter' && !e.nativeEvent.isComposing && loginPinRef.current?.focus()}
               placeholder="이름 입력..." maxLength={10} disabled={loggingIn}
               className="w-full border-2 border-purple-200 rounded-xl px-4 py-3 text-base font-bold focus:outline-none focus:border-purple-500 transition-colors disabled:opacity-50 disabled:bg-gray-50"
               autoFocus />
