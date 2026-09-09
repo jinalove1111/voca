@@ -131,6 +131,7 @@
     "verify:column-probe-memo": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testColumnProbeMemo.mjs",
     "verify:nav-history-model": "node scripts/testNavHistoryModel.mjs",
     "verify:spelling-ime-guard": "node scripts/testSpellingImeGuard.mjs",
+    "verify:ime-enter-guards": "node scripts/testImeEnterGuards.mjs",
     "verify:entrance-test-padding": "node scripts/testEntranceTestPadding.mjs",
     "verify:spelling-review-index": "node scripts/testSpellingReviewIndex.mjs",
     "watch:claude-stall": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/watchClaudeStall.ps1"
