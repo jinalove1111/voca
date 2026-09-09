@@ -1111,3 +1111,20 @@ _append — 위 내용 보존. 브랜치 `fix/write-practice-always-mixed`. 상�
 
 - 규칙 15 실측: 수정 전 코드에서 27단언 FAIL → 구현 후 43/43 PASS.
 - Known issue(Windows 로컬 전용): `scripts/testTownShop.mjs` 단언 1개가 core.autocrlf CRLF 작업 트리에서 FAIL(주석 제거 정규식). baseline에서도 재현, LF 정규화 시 PASS, Linux CI PASS. 이 변경과 무관 — 별도 수정 후보.
+
+## 관련 항목: 야간 QA 2026-09-09 — 신규 스위트 4종 + 미등록 3종 등록 + CRLF 정규화 4파일 + E2E 폴링 (119차)
+
+_append. 상세: `handoff.md` 2026-09-09(119차)._
+
+| 파일 | 단언 | 대상 |
+|---|---|---|
+| `scripts/testRegistryCoverage.mjs`(신규, `verify:registry-coverage`) | 8 | scripts/test*.mjs 전부 registry 등록 또는 명시 allowlist(사유), 등록 경로 실존 |
+| `scripts/testDbIntegrityAuditPaging.mjs`(신규, `verify:db-audit-paging`) | 30 | 감사 도구 fetchAllPaged 페이지네이션(1000행 cap 오탐 회귀) |
+| `scripts/testClassSettingsResilience.mjs`(신규, `verify:class-settings-resilience`) | 8 | refreshClassSettings 42703 게이팅·이전 캐시 유지 |
+| `scripts/testWordSlugParity.mjs`(신규, `verify:word-slug-parity`) | 9 | wordSlug 3중 사본 동일성 |
+| `scripts/testProdHotfix.mjs`(확장 [E1]) | 373→383 | preflight/스냅샷 read 실패 fail-closed |
+| 등록: `testAdminStudentActions`(85) / `testCiNameMasking`(32) / `testStudentsRlsPhase2b`(87) | — | 기존 미등록 오프라인 테스트 |
+| CRLF 정규화: `testTownShop` / `testAdminPinThrottle` / `testExcelHeaderGuard` / `testExcelImportFixtures` | 불변 | Windows 워킹카피 오탐 제거 |
+| `tests/e2e/student.spec.mjs` | 59 | 고정 sleep 6곳 → waitUntil 폴링(약 37.6s→33s), 가이드 완료 판정 정규식 정밀화 |
+
+- Known(extra, 비게이팅): `testRewardServerHardening` "하루 최대 부풀림 < 200" — 승인된 레거시 상한 반영으로 766. 운영자 결정 후 임계값 갱신.

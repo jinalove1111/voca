@@ -72,6 +72,8 @@
     "verify:cache-refill": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testAssignmentCacheRefill.mjs",
     "verify:excel-header": "node scripts/testExcelHeaderGuard.mjs",
     "verify:writing-direction-resolution": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testWritingDirectionResolution.mjs",
+    "verify:class-settings-resilience": "node scripts/buildWordLibOfflineBundle.mjs && node scripts/testClassSettingsResilience.mjs",
+    "verify:word-slug-parity": "node scripts/testWordSlugParity.mjs",
     "verify:write-practice-mixed": "node scripts/testWritePracticeAlwaysMixed.mjs",
     "verify:mission-bonus": "node scripts/testMissionBonusIdempotency.mjs",
     "verify:game-reward": "node scripts/testGameRewardPolicy.mjs",
@@ -118,6 +120,11 @@
     "prod:report": "node scripts/prodReport.mjs",
     "verify:ops-status": "node scripts/testOpsStatus.mjs",
     "verify:prod-plan": "node scripts/testProdPlan.mjs",
+    "verify:db-audit-paging": "node scripts/testDbIntegrityAuditPaging.mjs",
+    "verify:admin-student-actions": "node scripts/testAdminStudentActions.mjs",
+    "verify:ci-name-masking": "node scripts/testCiNameMasking.mjs",
+    "verify:students-rls-phase2b": "node scripts/testStudentsRlsPhase2b.mjs",
+    "verify:registry-coverage": "node scripts/testRegistryCoverage.mjs",
     "watch:claude-stall": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/watchClaudeStall.ps1"
   },
   "dependencies": {

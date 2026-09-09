@@ -1863,7 +1863,7 @@ export default function AdminScreen({ onBack }) {
   // 인증 후(캐시가 initWordLibrary로 이미 준비된 상태) 1회만 실행.
   useEffect(() => {
     if (!authed) return
-    ensureTextbookLayerBackfilled().then((r) => { if (r?.created > 0) console.log('[AdminScreen] 교재 레이어 자동 백필:', r.created, '개 반 등록') }).catch(() => {})
+    ensureTextbookLayerBackfilled().catch(() => {})
   }, [authed])
 
   const refresh = () => {

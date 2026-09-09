@@ -2233,6 +2233,76 @@ console.log('\n=== [C5] validateManifest — 교재 name 기반 매칭/조건 �
   check('올바른 형식의 textbook_identity 는 통과', res5.valid, JSON.stringify(res5.errors))
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// [E1] 야간 QA(2026-09-09) — runHotfix() 의 두 미보호 읽기 지점(메인
+// preflight/before-snapshot) 이 일반 fetch 에러(테이블 부재가 아닌, 예:
+// Windows undici `TypeError: fetch failed`)를 만나면 try/catch 없이 그대로
+// 예외가 전파돼 CLI 진입점(top-level await, 별도 try/catch 없음)까지
+// 크래시한다 — finish() 가 호출되지 않아 .hotfix.json 보고서도 안 남는다
+// ("WRITE 0, 진단 없음" 증상). ambiguous-textbook-check(667-671/680-687)와
+// baseline(728-740)은 이미 이 패턴으로 보호돼 있는데 메인 preflight(643)와
+// before-snapshot(745-746)만 예외였다 — 이 섹션은 그 갭을 FAIL-first 로
+// 고정한다. 두 지점 모두 같은 status 'preflight-read-failed' 하나로
+// 통일한다(요구사항: "가능하면 신규 status 1개로") — 이미 STOP 사유가
+// preflight-mismatch/baseline-failed 등으로 세분화돼 있고, 이 두 지점은
+// 개념적으로 전부 "예정된 preflight 단계에서 읽기 자체가 실패" 라는 점이
+// 동일해 status 를 나눌 실익이 없다고 판단했다.
+// ══════════════════════════════════════════════════════════════════════
+
+console.log('\n=== [E1] runHotfix 메인 preflight(readPlanMismatches) 조회 실패 — crash 대신 preflight-read-failed(FAIL-first) ===')
+{
+  const reader = makeReader(BASE_MANIFEST, {
+    tableRowsQueues: OK_SNAPSHOTS,
+    getRowOverride: {
+      // reference_rows_must_exist 대상(units) 조회 중 일반 fetch 에러 발생을
+      // 재현 — 42P01(테이블 부재) 같은 코드화된 에러가 아니라 순수 네트워크
+      // 예외(테이블 존재 여부와 무관)라 baseline 의 tableMissing fail-open
+      // 분기 대상이 아니다.
+      'units:4ce41359-6424-4b5e-933d-479db6951586': () => { throw new Error('fetch failed') },
+    },
+  })
+  let res = null
+  let threw = null
+  try {
+    res = await runHotfix(
+      { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-PREFLIGHT-READ-FAIL-1', reportDir: REPORT_DIR, reader, dryRun: true },
+      { loadEnv: () => envOk() },
+    )
+  } catch (err) { threw = err }
+  check('메인 preflight 조회 실패 시 크래시하지 않고 status 를 반환한다(finish() 경유)', threw === null, threw?.message)
+  check('status = preflight-read-failed', res?.status === 'preflight-read-failed', res?.status)
+  check('exitCode = 1', res?.exitCode === 1)
+  check('dbWriteCount = 0', (res?.report?.dbWriteCount ?? 0) === 0)
+  check('report.preflightReadError 에 원본 에러 메시지 기록', typeof res?.report?.preflightReadError === 'string' && /fetch failed/.test(res.report.preflightReadError))
+  const reportPath = path.join(REPORT_DIR, 'RUN-PREFLIGHT-READ-FAIL-1.hotfix.json')
+  check('크래시했어도(수정 전) 아니어도(수정 후) 이 케이스는 report JSON 파일이 기록돼야 한다', fs.existsSync(reportPath))
+}
+
+console.log('\n=== [E1] runHotfix before-snapshot(selectAllRows students/SCA) 조회 실패 — crash 대신 preflight-read-failed(FAIL-first) ===')
+{
+  const reader = makeReader(BASE_MANIFEST, { tableRowsQueues: OK_SNAPSHOTS })
+  reader.selectAllRows = async (table, cols) => {
+    if (table === 'students') throw new Error('fetch failed')
+    if (table === 'student_class_assignments') return SCA_ROWS_BEFORE
+    return []
+  }
+  let res = null
+  let threw = null
+  try {
+    res = await runHotfix(
+      { manifest: BASE_MANIFEST, envFlag: 'production', runId: 'RUN-SNAPSHOT-READ-FAIL-1', reportDir: REPORT_DIR, reader, dryRun: true },
+      { loadEnv: () => envOk() },
+    )
+  } catch (err) { threw = err }
+  check('before-snapshot 조회 실패 시 크래시하지 않고 status 를 반환한다(finish() 경유)', threw === null, threw?.message)
+  check('status = preflight-read-failed(메인 preflight 와 같은 status 재사용)', res?.status === 'preflight-read-failed', res?.status)
+  check('exitCode = 1', res?.exitCode === 1)
+  check('dbWriteCount = 0', (res?.report?.dbWriteCount ?? 0) === 0)
+  check('report.preflightReadError 에 원본 에러 메시지 기록', typeof res?.report?.preflightReadError === 'string' && /fetch failed/.test(res.report.preflightReadError))
+  const reportPath = path.join(REPORT_DIR, 'RUN-SNAPSHOT-READ-FAIL-1.hotfix.json')
+  check('크래시했어도(수정 전) 아니어도(수정 후) 이 케이스는 report JSON 파일이 기록돼야 한다', fs.existsSync(reportPath))
+}
+
 console.log(`\n=== summary ===\nPASS ${pass} / FAIL ${fail}`)
 if (fail > 0) {
   console.log('FAIL')

@@ -1,7 +1,82 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-09 (118차, 쓰기 연습 항상 양방향 50:50 — Yaeji/Irene 증상 원인=
-주 교재 소유 반 설정 kr2en, 코드 규칙으로 해결. 브랜치 fix/write-practice-always-mixed,
-PR 대기, Production WRITE 0. 117차 V3_49 CLOSED 기록은 아래 그대로 보존)_
+_최종 갱신: 2026-09-09 (119차, 야간 12h 자율 QA/하드닝 — qa/overnight-2026-09-09,
+Production WRITE 0, 수정 8건(테스트/도구/회복력), READ-ONLY 감사, 모바일 Back 설계.
+118차 write-practice 기록은 아래 그대로 보존)_
+
+## 2026-09-09 (119차) — 야간 12h 자율 QA/하드닝(브랜치 qa/overnight-2026-09-09, base 7280c67) — Production WRITE 0, 수정 8건(테스트/도구/회복력), READ-ONLY 데이터 감사, 모바일 Back 설계 문서
+
+_CLOSED 무접촉: V3_49/Paul Dollar/Town Shop(제품 코드), PR #24 write-practice, v3_39, untracked 운영 SQL. rollback 0, migration 0,
+반 설정·학생 데이터·플래그 변경 0, QA 계정 학습 0. 새 브랜치에서만 작업, main 직접 push 0, 머지 0._
+
+### A. 요약
+- 학생 핵심 경로 회귀: verify:all ALL DOMAINS PASS(13 필수 도메인 + e2e 59/59), build PASS, 명시 스위트(student-path-contracts/
+  writing-direction-resolution/ui-stability/write-practice-mixed) PASS, E2E 총 7회 연속 PASS(폴링 전환 후).
+- 수정(전부 테스트/도구/회복력, 제품 동작 변화는 refreshClassSettings 1건): CRLF 오탐 테스트 4파일, 하네스 fail-closed, 감사 도구
+  1000행 cap 오탐, 반 설정 캐시 소실 방지, 미등록 테스트 3종 등록 + 신규 테스트 4종(레지스트리 커버리지 린트 포함), E2E 고정 sleep→폴링.
+- 400 Bad Request 원인 확정(설계된 컬럼 부재 프로브, UI 무영향). 모바일 Back HIGH는 설계 문서만(구현 금지 준수).
+
+### B. 오늘 화면 400 Bad Request (students/classes SELECT) — 원인 확정, 수정은 부분
+- students: `refreshStudents()`(wordLibrary.js 403~416)가 `house_id`(v2_7 미실행 컬럼)를 포함한 select를 먼저 프로브 → 42703 → `current_unit_id`만으로 재조회 200.
+- classes: `refreshClassSettings()`가 `gamification_enabled`(v2_5 미실행) 포함 select 프로브 → 42703 → 폴백 200.
+- 로드/새로고침당 각 1회, 반복 아님, 폴백 후 데이터 완전 → 학생 기능 영향 0. "UI만 정상으로 보이는 것"이 아니라 설계된 컬럼 부재 감지(규칙 9).
+- 잠재 위험 발견: 두 폴백이 42703이 아닌 어떤 오류에도 동작. refreshClassSettings는 최종 실패 시 설정 캐시를 {}로 초기화 → 일시 오류 1회로
+  전 반 쓰기 설정이 기본값으로 뒤집힘 → **수정**(42703 게이팅 + 이전 캐시 유지, 테스트 8단언). refreshStudents는 로그인 명단 로드 경로라
+  감사자 의견대로 **HOLD**(권장: 동일 42703 게이팅, 스테이징 확인 후).
+- 노이즈 자체를 없애려면 v2_5/v2_7 실행 또는 프로브 제거 결정 필요(운영자).
+
+### C. 수정 목록(커밋 순)
+- `06f6ba8` test(town-shop): testTownShop.mjs stripComments를 CRLF 무관하게 정규화 — Windows 로컬 오탐 FAIL 제거
+- `91db9ed` docs(design): 모바일 시스템 Back 앱 종료(HIGH) — 내비게이션 아키텍처 맵 + 최소 안전 설계안(구현 없음)
+- `81ed12f` fix(harness): prodHotfix preflight/스냅샷 읽기 실패를 fail-closed STOP(preflight-read-failed)으로 — 크래시 대신 리포트
+- `e22db9a` fix(audit-tool): dbIntegrityAudit fetchAll 1000행 PostgREST cap 오탐 수정 — 페이지네이션(fetchAllPaged) + 오프라인 회귀 30단언
+- `12ef886` chore(status): 야간 QA 2026-09-09 중간 체크포인트(진행 55%, 커밋 4, 발견 분류)
+- `08e9ca0` test(settings): refreshClassSettings 회복력 회귀(8단언) + wordSlug 3중 사본 바이트 동일성 가드(9단언) 신설
+- `3981199` fix(settings): refreshClassSettings — 컬럼 축소 폴백을 42703에만, 일시 오류 시 이전 반 설정 캐시 유지 (+ 위생 3건)
+- `527a173` test(registry): 미등록 오프라인 테스트 3종 등록 — 관리자 학생 액션 7종(85), CI 이름 마스킹(32), Phase 2b RLS 계약(87)
+- `344d16f` test(crlf): testAdminPinThrottle/testExcelHeaderGuard/testExcelImportFixtures 주석 제거 정규식 CRLF 정규화
+- `f8e02c3` test(e2e): 고정 sleep 6곳 → 조건 폴링(waitUntil) — 결정적 대기, 단언 무약화, 59/59 4회 연속 PASS(약 37.6s→33s)
+- `16891f6` test(lint): testRegistryCoverage — scripts/test*.mjs 전부 registry 등록 또는 명시 allowlist(사유 필수), 등록 경로 실존 검사
+- `c799983` test(registry): testClassSettingsResilience/testWordSlugParity 등록(writing 도메인) + 커버리지 린트 임시 allowlist 정리
+
+### D. 발견했지만 수정하지 않음
+| 심각도 | 항목 | 근거 | 미수정 사유 / 권장 |
+|---|---|---|---|
+| HIGH(기존) | 모바일 시스템 Back → 앱 이탈 | history API 사용 0, 메모리 screen 상태만 | `docs/design/MOBILE_BACK_NAVIGATION_DESIGN.md`(4단계, 플래그 mobileBackGuard OFF). Phase 1부터 별도 PR |
+| MED | refreshStudents/insert-student 폴백이 42703 외 오류에도 동작 | 감사 §2 | 로그인 경로 blast radius → 스테이징 검증 후 42703 게이팅 |
+| MED(테스트) | extra `testRewardServerHardening` "하루 최대 부풀림 < 200" FAIL(결정적, main에서도 동일) | sum(cap×stars)=766: 레거시 서버화 때 승인된 상한(120/40/12/60/15/5) 반영 결과 | 보상 영역(CLOSED) 무접촉. 766★/일 이론 상한을 승인값으로 확정하면 임계값 갱신(테스트만), 아니면 상한 재검토 — 운영자 결정 |
+| LOW | 관리자 대시보드 `fetchWordStatusSummary`/`fetchLatestWordKingPeriod`가 오류 시 빈 결과 반환(로드 실패와 0 구분 불가) | 감사 §3 | 반환 shape 변경이 소비자에 파급 → 별도 소커밋 |
+| LOW | 미소비 레거시 플래그 다수(classManagement*/homework*/ranking 등), reviewDataBackend 미배선 | 감사 §4/§5 | FeatureManagementPanel 확인 후 정리(HOLD) |
+| LOW | E2E 선택자 이모지/한글 문자열 의존, postgrestMock 암묵 정렬 | 감사 | data-testid 도입은 제품 파일 접촉 → 보류 |
+| LOW | 라이브/프로토타입 테스트 8종 미등록(allowlist로 명시) | 커버리지 린트 | 삭제/이동 결정 |
+
+### E. Production READ-ONLY 데이터 감사(anon GET/HEAD + prod:check/dbIntegrityAudit/auditCurriculumIntegrity)
+- curriculum-integrity 15/15 PASS(students 493 / units 60 / words 2075, orphan 0, 정규화 중복 유닛 0).
+- prod:check health: 실학생 46명 PASS 45 / WARN 1(권교빈 ghost, known) / FAIL 0. invariants FAIL 0 / WARN 44:
+  - PRIMARY_UNIT_MISMATCH 23 → **FALSE POSITIVE(설계상 드리프트)**: SCA.current_unit_id는 교재 전환 시에만 동기화되는 북마크(wordLibrary 2860~2872)이고
+    유닛 전환(writeStudentUnit)은 students만 갱신 → 유닛을 바꾼 모든 학생이 WARN. 실효 유닛은 students.current_unit_id(resolveStudentUnitObj) → 학습 무영향. invariant 완화는 결정 필요.
+  - STUDENT_CLASS_IS_CONTAINER 6 → **NEEDS DECISION(기존 보류)**: Presentation 6 -2026 컨테이너 반 소속 UITest(QA)/백아민(07-23)/박규한(07-08)/이예원(07-11)/임예지(07-14)/Olivia(07-15) — 전부 7월 이후 휴면, "24명 승인 보류" 범위.
+  - GHOST_UNIT_PRESENT 7 + UNIT_WORDS_ABNORMAL 2 → **REAL DATA(저영향)/NEEDS DECISION**: 교재 컨테이너 반의 0~1단어 Unit/Unit 1/Unit1 업로드 잔재 유닛 9개
+    (e4804821, e327efc3, 3d1c753e, 67c8268e, 4bc96928, 5d9db813, 35ee95ae, 53e380c7=권교빈 known, 113ee184). 실학생 참조 1(권교빈).
+  - UNIT_CONTENT_DUPLICATE 3 / TEXTBOOK_SIMILAR_NAME 1 / AMBIGUOUS_TEXTBOOK 1 → 111차 known.
+- dbIntegrityAudit: 143→83 finding. 60건은 **도구 오탐**(1000행 cap, 수정). 잔여 83 = _DUP/_INACTIVE 아카이브 계정의 current_unit_id 교재 정합성 → **QA/ARCHIVE ONLY**.
+- YBM Unit3 잔재 f804c099: **이미 존재하지 않음**(v3_46 실행과 정합, CLOSED). 신규 잔재 후보 1: word 4eb625e1 "어휘·어구/의미", unit 113ee184 Unit(2학년 천재소영순, 단어 1개), word_status/examples 참조 0 → NEEDS DECISION(삭제는 운영자, WRITE 0).
+- 권교빈 ghost: 데이터 재조사 없음. 하네스 fetch 실패의 실행 기록/에러 텍스트는 저장소에 없음(UNVERIFIED). 코드 원인(preflight/스냅샷 read 미보호 → 크래시·리포트 0)만 수정. SUPABASE_ACCESS_TOKEN 부재로 apply는 어차피 BLOCKED_NEEDS_APPROVAL. manifest 무변경.
+- QA/TEST 계정(cookie/paul/jinaa/barry, accountStatus.js SoT)은 health/prod:check에서 REAL 집계 제외 확인.
+
+### F. 테스트 결과(최종 트리)
+- build PASS · verify:all ALL DOMAINS PASS(신규 7 스크립트 포함, extra FAIL 1 = D의 testRewardServerHardening) · e2e 59/59(연속 7회) ·
+  testProdHotfix 383/0 · testProdPlan 33/0 · testDbIntegrityAuditPaging 30/0 · testClassSettingsResilience 8/0 · testWordSlugParity 9/0 ·
+  testRegistryCoverage 8/0 · testTownShop 104/0(CRLF) · testAdminPinThrottle 26 / testExcelHeaderGuard 62 / testExcelImportFixtures 62.
+
+### G. Production 안전
+Production WRITE 0 · SQL WRITE 0 · migration 0 · student/progress/reward mutation 0 · 반 설정 0 · 플래그 0 · QA 계정 학습 0 · main 직접 push 0 · 머지 0.
+
+### H. 다음 액션 TOP 5
+1. PR(야간 브랜치) 검토·머지 결정 — 제품 동작 변화는 refreshClassSettings 1건.
+2. testRewardServerHardening 임계값(766★/일) 승인 여부 결정 → 테스트만 갱신.
+3. 모바일 Back Phase 1(센티널 + 기존 onBack 매핑, 플래그 OFF) 별도 PR 착수 여부.
+4. 잔재 유닛 9개·헤더 잔재 단어 1건·Presentation 6 -2026 휴면 6명 처리 결정(운영자 SQL/관리자 UI).
+5. refreshStudents 42703 게이팅(스테이징 검증 후) + v2_5/v2_7 실행 여부로 400 노이즈 제거.
 
 ## 2026-09-09 (118차) — 쓰기 연습(studyMode write) 항상 양방향(mixed 50:50) 출제 — Yaeji/Irene(Presentation 6) "한 방향만 나옴" 증상 원인 확정 + 최소 코드 규칙화 (브랜치 fix/write-practice-always-mixed, PR 대기)
 
