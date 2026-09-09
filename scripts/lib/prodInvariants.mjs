@@ -67,6 +67,13 @@ export const INVARIANT_CODES = {
   // (유닛 전체가 헤더 잔재)와는 별개 신호 — 유닛은 정상인데 그 안의 행 1건만
   // 헤더 잔재인 경우를 본다.
   WORD_HEADER_RESIDUE: 'WORD_HEADER_RESIDUE',
+  // ── 2026-09-09(qa/session-2026-09-09-b) — PRIMARY_UNIT_MISMATCH 오탐
+  // 보정. findings[]가 아니라 evaluateInvariants() 반환값의 별도 notes[]
+  // 채널에만 등장한다(summary.warn/fail 집계·opsStatus.mjs 스키마·
+  // prodCheck.mjs 3단 분류 어디에도 나타나지 않음 — 위 pushNote/
+  // isNonLearnableUnit 주석 참고). INVARIANT_CODES/CODE_META 에는 등록해
+  // 두어 6절(CODE_META 완전성) 테스트가 이 코드도 계속 커버하게 한다.
+  PRIMARY_UNIT_BOOKMARK_DRIFT: 'PRIMARY_UNIT_BOOKMARK_DRIFT',
 }
 
 // 정상 유닛의 단어 수 범위. 이 범위를 벗어나면 데이터 이상 신호로 본다.
@@ -335,6 +342,16 @@ export const CODE_META = {
     impact: '학생이 단어 카드로 엑셀 헤더 라벨("영어·어구"/"의미" 등)을 보게 됨',
     recommended: '운영자 결정',
   },
+  // 2026-09-09(qa/session-2026-09-09-b) — notes[] 전용 코드(findings[]에는
+  // 절대 나타나지 않음). impact/recommended 는 실제 이상이 아니므로 다른
+  // WARN 코드와 달리 "조치 불필요, 참고용"이 실질 의미지만, recommended
+  // 필드는 허용값 3종(READ-ONLY 조사/운영자 결정/코드 과제)만 받으므로
+  // 형식상 'READ-ONLY 조사'로 두고 실제 안내는 이 주석과 detail 문자열에
+  // 담는다.
+  PRIMARY_UNIT_BOOKMARK_DRIFT: {
+    impact: '실제 영향 없음(참고용) — 유닛 전환 후 주교재 배정(SCA) 북마크가 아직 갱신 안 됐을 뿐, 학생이 보는 유닛은 students.current_unit_id 그대로 정상',
+    recommended: 'READ-ONLY 조사',
+  },
 }
 
 /**
@@ -366,7 +383,10 @@ export function buildInvariantContext(data) {
  * @param {{ghostUnitIds?: Iterable<string>}} [opts]
  *   ghostUnitIds — isGhostUnit() 판정과 별개로 유령으로 취급할 유닛 id 목록
  *   (회귀 픽스처 전용, STUDENT_GHOST_UNIT/SCA_GHOST_UNIT 두 검사에만 적용).
- * @returns {{findings: Array<{code:string,severity:'FAIL'|'WARN',studentId:string|null,studentName:string|null,detail:string,refs:object,impact:string,recommended:string}>, summary:{fail:number,warn:number,pass:number,checked:number}}}
+ * @returns {{findings: Array<{code:string,severity:'FAIL'|'WARN',studentId:string|null,studentName:string|null,detail:string,refs:object,impact:string,recommended:string}>, summary:{fail:number,warn:number,pass:number,checked:number}, notes: Array<{code:string,severity:string,studentId:string|null,studentName:string|null,detail:string,refs:object,impact:string,recommended:string}>}}
+ *   notes — 2026-09-09 추가. summary에 전혀 집계되지 않는 참고용 채널(현재
+ *   PRIMARY_UNIT_BOOKMARK_DRIFT 전용). findings와 혼동하지 말 것 — 이
+ *   배열의 항목은 "실제 이상"이 아니라 "설계상 정상인데 참고할 만한 정보"다.
  */
 export function evaluateInvariants(ctx, opts = {}) {
   const unitById = ctx?.unitById || new Map()
@@ -421,6 +441,22 @@ export function evaluateInvariants(ctx, opts = {}) {
     rawFindings.push({ ...f, impact: meta.impact || '', recommended: meta.recommended || 'READ-ONLY 조사' })
   }
 
+  // 2026-09-09(qa/session-2026-09-09-b) — PRIMARY_UNIT_MISMATCH 오탐 보정
+  // 전용 notes[] 채널. findings[]와 완전히 분리한다: prodCheck.mjs/
+  // opsStatus.mjs 는 evaluateInvariants() 반환값에서 findings/summary만
+  // 구조분해할당으로 꺼내 쓰므로(각 파일 상단 import/호출부 확인됨), 이
+  // 채널에 넣은 항목은 summary.warn/fail 집계에도, opsStatus.mjs
+  // assertFinding()의 SEVERITIES(PASS/WARN/FAIL만 허용) 스키마 검증에도,
+  // prodCheck.mjs classifyForUX()의 Critical/Needs review/Data debt
+  // 3단 분류에도 전혀 나타나지 않는다(있는 그대로 "집계되지 않는 채널"
+  // 이라는 요구사항을 그대로 충족) — do NOT edit prodCheck.mjs/opsStatus.mjs
+  // SEVERITIES.
+  const rawNotes = []
+  const pushNote = (f) => {
+    const meta = CODE_META[f.code] || {}
+    rawNotes.push({ ...f, impact: meta.impact || '', recommended: meta.recommended || 'READ-ONLY 조사' })
+  }
+
   const ghostIdSet = new Set(opts?.ghostUnitIds || [])
   const isGhostId = (unitId) => {
     if (!unitId) return false
@@ -428,6 +464,15 @@ export function evaluateInvariants(ctx, opts = {}) {
     const unit = unitById.get(unitId)
     if (!unit) return false
     return isGhostUnit(unit, wordsByUnit.get(unitId) || []).ghost
+  }
+
+  // PRIMARY_UNIT_MISMATCH 전용 — 두 유닛이 학습 불가능(유령 또는 단어
+  // ≤1개)인지. isGhostId/wordCountByUnit 재사용(재구현 금지, 규칙 3).
+  const isNonLearnableUnit = (unitId) => {
+    if (!unitId) return true
+    if (isGhostId(unitId)) return true
+    const wc = wordCountByUnit.get(unitId)
+    return typeof wc === 'number' && wc <= 1
   }
 
   const realStudents = students.filter((s) => s && classifyAccount(s, ctx) === 'REAL')
@@ -487,6 +532,17 @@ export function evaluateInvariants(ctx, opts = {}) {
     // 잘못 설정됨) 별도로 보고한다. CLASS_ASSIGNMENT_CONTRADICTION 과는 독립
     // 신호다(그쪽은 배정 기록과의 불일치, 이쪽은 students.class_id 값 자체의
     // 타당성).
+    // TODO(2026-09-09, qa/session-2026-09-09-b) — 이 detail에 마지막 학습일
+    // 힌트(student_progress.last_studied_date)를 붙이면 운영자가 "휴면
+    // 계정인지 활동 중인지"를 한 번에 판단할 수 있다(2026-09-09 감사 실측:
+    // 이 코드의 WARN 6건 전부 "Presentation 6 -2026" 컨테이너 반 소속 휴면
+    // 계정 — 이미 운영자 승인 보류 상태). 하지만 scripts/lib/prodDataLoader.mjs
+    // loadProductionSnapshot()은 이 트랙 소유가 아니고(파일 소유권 규칙 16)
+    // student_progress를 아예 가져오지 않는다(로드하는 곳은 별도 목적의
+    // loadLearningBaseline()뿐, evaluateInvariants가 쓰는 buildInvariantContext
+    // 경로가 아님) — 새 fetch를 추가하려면 prodDataLoader.mjs를 확장해야
+    // 하는데 이번 트랙 범위 밖이라 보류. ctx에 studentProgressByStudent 같은
+    // 맵이 이미 채워져 들어오면 그때 detail에 이어붙이면 된다.
     if (student.class_id && isContainerClass(student.class_id)) {
       const containerCls = classById.get(student.class_id)
       push({
@@ -677,13 +733,35 @@ export function evaluateInvariants(ctx, opts = {}) {
     }
 
     // 6) PRIMARY_UNIT_MISMATCH — primary SCA 의 유닛과 students.current_unit_id 가 다름
+    // 2026-09-09 보정 — 두 유닛이 (a) 둘 다 실존하고 (b) 둘 다 학습 가능
+    // (유령도 아니고 단어도 2개 이상)하고 (c) 같은 교재 소속이면 "정상
+    // 유닛 전환 후 SCA 북마크가 아직 안 따라온 것"뿐인 양성 드리프트로 보고
+    // WARN 대신 notes[] 의 PRIMARY_UNIT_BOOKMARK_DRIFT 로만 기록한다(위
+    // isNonLearnableUnit 주석 참고). 그 외(교재가 다르거나, 유닛이 고아라
+    // unitById 에 없거나, 어느 한쪽이라도 유령/1단어 이하)는 진짜 이상
+    // 신호이므로 기존 WARN 을 그대로 유지한다 — 절대 숨기지 않는다.
     if (primary?.current_unit_id && student.current_unit_id
       && primary.current_unit_id !== student.current_unit_id) {
-      push({
-        code: INVARIANT_CODES.PRIMARY_UNIT_MISMATCH, severity: 'WARN', studentId: sid, studentName: sname,
-        detail: `primary 배정 유닛(${primary.current_unit_id})이 students.current_unit_id(${student.current_unit_id})와 다름`,
-        refs: { studentUnitId: student.current_unit_id, primaryUnitId: primary.current_unit_id, textbookId: primary.textbook_id ?? null },
-      })
+      const primaryUnit = unitById.get(primary.current_unit_id) || null
+      const studentUnit = unitById.get(student.current_unit_id) || null
+      const sameTextbook = !!(primaryUnit && studentUnit && primaryUnit.textbook_id
+        && studentUnit.textbook_id && primaryUnit.textbook_id === studentUnit.textbook_id)
+      const benignBookmarkDrift = sameTextbook
+        && !isNonLearnableUnit(primary.current_unit_id) && !isNonLearnableUnit(student.current_unit_id)
+      if (benignBookmarkDrift) {
+        pushNote({
+          code: INVARIANT_CODES.PRIMARY_UNIT_BOOKMARK_DRIFT, severity: 'INFO', studentId: sid, studentName: sname,
+          detail: `primary 배정 유닛(${primary.current_unit_id})이 students.current_unit_id(${student.current_unit_id})와 다르지만 `
+            + `둘 다 같은 교재(${primaryUnit.textbook_id}) 소속의 학습 가능한 유닛 — 유닛 전환 후 SCA 북마크 지연으로 추정(양성)`,
+          refs: { studentUnitId: student.current_unit_id, primaryUnitId: primary.current_unit_id, textbookId: primaryUnit.textbook_id },
+        })
+      } else {
+        push({
+          code: INVARIANT_CODES.PRIMARY_UNIT_MISMATCH, severity: 'WARN', studentId: sid, studentName: sname,
+          detail: `primary 배정 유닛(${primary.current_unit_id})이 students.current_unit_id(${student.current_unit_id})와 다름`,
+          refs: { studentUnitId: student.current_unit_id, primaryUnitId: primary.current_unit_id, textbookId: primary.textbook_id ?? null },
+        })
+      }
     }
   }
 
@@ -1007,5 +1085,10 @@ export function evaluateInvariants(ctx, opts = {}) {
     pass,
     checked: realStudents.length,
   }
-  return { findings, summary }
+  // notes — 2026-09-09(qa/session-2026-09-09-b) 추가. findings와 달리
+  // summary 어디에도 집계되지 않는 참고용 채널(PRIMARY_UNIT_BOOKMARK_DRIFT
+  // 전용, 위 pushNote 주석 참고). 기존 호출부(prodCheck.mjs 등)는 구조
+  // 분해할당으로 findings/summary만 꺼내 쓰므로 이 필드가 추가돼도 기존
+  // 동작에 전혀 영향이 없다(추가 전용 확장, 호환성 보존).
+  return { findings, summary, notes: rawNotes }
 }

@@ -18,7 +18,7 @@
 // heavier approach (vector DB, embeddings) was intentionally not built.
 
 import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, relative, dirname } from 'node:path'
+import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))

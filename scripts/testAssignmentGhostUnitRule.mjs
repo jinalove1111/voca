@@ -33,7 +33,7 @@
 //   · 테스트/아카이브 계정 분류 규칙은 그대로 둔다(실학생 결과 오염 방지).
 //
 // 등록: npm run verify:assignment-ghost
-import { evaluateStudent, isGhostUnit, GHOST_MAX_WORDS, CHECK_CODES } from './lib/studentHealthRules.mjs'
+import { evaluateStudent, isGhostUnit, GHOST_MAX_WORDS } from './lib/studentHealthRules.mjs'
 
 let failures = 0, asserted = 0
 function check(label, cond, detail) {

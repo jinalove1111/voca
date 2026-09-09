@@ -6,7 +6,6 @@
 // speechSynthesis utterance, a setTimeout step), it's suppressed as stale
 // and never runs. This is what makes "two sounds audible at once"
 // structurally impossible regardless of which two call sites raced.
-import assert from 'node:assert/strict'
 
 // Minimal browser globals claimTtsCall's stopAllPlayback() touches.
 globalThis.window = {

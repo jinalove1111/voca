@@ -15,7 +15,6 @@
 // 검사 — wordLibrary 등 외부 의존 0, 네트워크 0).
 import fs from 'node:fs'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
 import {
   isHeaderLabel,
   isHeaderResidueRow,

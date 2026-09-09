@@ -32,12 +32,28 @@ import SpellingQuestion from './SpellingQuestion'
 // 취급해 문제마다 Math.random()으로 방향을 뽑았다(50:50 미보장). 이제
 // App.jsx가 세션 시작 시 assignDirections로 미리 결정한 배열을
 // mixedDirections로 받아 인덱스로 조회한다 — Math.random() 경로 없음.
-// 인덱스는 `total - words.length`(0-base, currentNo-1과 동일한 값):
-// wrongWordIds는 앞에서부터만 빠지고(clear) 순서가 재배치되지 않으므로,
-// "지금까지 몇 개를 clear했는가"가 그대로 "원래 순서상 이 단어의 위치"와
-// 같다 — App.jsx의 reviewMixedDirections도 동일한 growth-only 소스
-// (wrongWordIds.length)로 배정되므로 인덱스 축이 일치한다. mixedDirections가
-// null이면(mixed가 아닌 반) 기존과 동일하게 direction을 그대로 쓴다.
+// mixedDirections가 null이면(mixed가 아닌 반) 기존과 동일하게 direction을
+// 그대로 쓴다.
+//
+// 인덱스 드리프트 수정(2026-09-09, 자체 발견/조사 — CLAUDE.md 규칙 15,
+// 수정 전 FAIL 재현 후 확정, scripts/testSpellingReviewIndex.mjs): 예전엔
+// 카운터/방향 인덱스 둘 다 `total - words.length`(words = wrongWordIds를
+// classWords에서 찾은 결과, 못 찾으면 filter로 제거)로 계산했다. 이건
+// "wrongWordIds가 앞에서부터만 빠진다(clear만 있다)"는 전제 위에서만
+// 맞는데, 세션 도중 단어가 삭제/수정돼 classWords에서 못 찾는 id가
+// 생기면 그 id는 onClearWord 없이 영구히 words에서만 사라져(wrongWordIds
+// 자체에는 그대로 남음) words.length가 실제 clear 횟수보다 더 빨리
+// 줄어든다 — 그 결과 세션 첫 문제부터 카운터가 밀리고(예: 진짜 1번째인데
+// 2번째로 표시), mixedDirections 인덱스도 엉뚱한 값을 가리킬 수 있었다.
+// 고침:
+//   - currentNo는 필터링된 words.length가 아니라 원본 wrongWordIds.length
+//     (prop 그대로, 삭제된 단어도 여전히 카운트에 포함)로 계산 — "지금까지
+//     실제로 clear된 개수"를 부모가 넘겨주는 배열 길이 변화로만 판단한다.
+//   - resolvedDirection은 "지금까지 clear한 개수"라는 간접 지표 대신,
+//     이 문제(current)의 id가 세션 시작 시점 wrongWordIds 배열에서 정확히
+//     몇 번째였는지(initialOrderRef)를 직접 찾아 그 인덱스로
+//     mixedDirections를 조회한다 — App.jsx가 mixedDirections를 배정할 때도
+//     같은 세션 시작 시점 순서를 기준으로 하므로 축이 항상 일치한다.
 export default function SpellingReview({ wrongWordIds, classWords, onClearWord, onDone, hintEnabled, direction, comebackWordIds = [], mixedDirections = null }) {
   const words = useMemo(
     () => wrongWordIds.map(id => classWords.find(w => w.id === id)).filter(Boolean),
@@ -50,6 +66,14 @@ export default function SpellingReview({ wrongWordIds, classWords, onClearWord, 
   const initialTotalRef = useRef(wrongWordIds.length)
   if (wrongWordIds.length > initialTotalRef.current) initialTotalRef.current = wrongWordIds.length
   const total = initialTotalRef.current
+  // mixedDirections 인덱스 축 고정용 — 세션 시작 시점(및 방어적으로, 혹시
+  // 도중 새 id가 나타나면 뒤에 이어붙여) wrongWordIds의 순서를 그대로 보존.
+  // 정상 흐름에서는 복습 도중 새 오답이 추가되지 않으므로(onClearWord만
+  // 있고 추가 로직 없음) 사실상 마운트 시점 스냅샷 그대로 고정된다.
+  const initialOrderRef = useRef([...wrongWordIds])
+  if (wrongWordIds.length > initialOrderRef.current.length) {
+    for (const id of wrongWordIds) if (!initialOrderRef.current.includes(id)) initialOrderRef.current.push(id)
+  }
 
   useEffect(() => {
     if (words.length === 0) onDone()
@@ -58,11 +82,11 @@ export default function SpellingReview({ wrongWordIds, classWords, onClearWord, 
   if (words.length === 0) return null
 
   const current = words[0]
-  const currentNo = Math.min(total, total - words.length + 1) // 지금 몇 번째 문제인지 (1-base)
+  const currentNo = Math.min(total, total - wrongWordIds.length + 1) // 지금 몇 번째 문제인지 (1-base)
   // mixed일 때만 사전 배정 배열을 인덱스로 조회(위 헤더 주석 참고). mixed가
   // 아니면(mixedDirections=null) 기존과 동일하게 direction을 그대로 쓴다.
   const resolvedDirection = mixedDirections
-    ? (mixedDirections[total - words.length] || 'kr2en')
+    ? (mixedDirections[initialOrderRef.current.indexOf(current.id)] || 'kr2en')
     : (direction || 'kr2en')
 
   // pb-24(2026-09-06 야간 QA, App.jsx SpeedBtn 겹침 수정 참고)
