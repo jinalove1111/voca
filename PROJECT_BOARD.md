@@ -965,6 +965,7 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
 ## DONE (최근 완료, 참고용 — 전체 이력은 `ROADMAP.md`/`handoff.md`)
 
 ### [P1] 야간 QA 2026-09-09 — 회귀 PASS, 수정 8건(테스트/도구/회복력), 감사 분류, 모바일 Back 설계 (119차, PR 대기)
+- **PR #25 MERGED · CLOSED(2026-09-09)** — merge `3909fc0`, Production deployment SUCCESS, HTTP 200, Production WRITE 0, blocker 없음.
 - 브랜치 `qa/overnight-2026-09-09`(base 7280c67). Production WRITE 0. 상세/결정 필요 항목: `handoff.md` 119차 D·E·H.
 
 ### [P1] 쓰기 연습 항상 양방향(mixed 50:50) — 구현·검증 완료, PR 대기 (2026-09-09, 118차)
