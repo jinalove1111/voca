@@ -1,0 +1,24 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "column-probe-memo-2026-09-09",
+  "task": "refreshStudents/refreshClassSettings 컬럼 존재 probe 메모(42703 tier skip) — 학생 DevTools 400 반복 노이즈 제거, 기능 동작(폴백 데이터 완전성) 무변경",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-09T00:00:00Z",
+  "updated_at": "2026-09-09T00:00:00Z",
+  "files_owned": [
+    "src/utils/wordLibrary.js",
+    "scripts/testColumnProbeMemo.mjs",
+    ".ai-status/implementer-column-probe-memo-2026-09-09.json"
+  ],
+  "files_read": [
+    "scripts/testClassSettingsResilience.mjs",
+    "scripts/buildWordLibOfflineBundle.mjs",
+    "scripts/fakeSupabaseModule.mjs",
+    "package.json"
+  ],
+  "summary": "src/utils/wordLibrary.js의 selectAllStudents/refreshStudents(~386-451)와 refreshClassSettings(~800-860) 두 함수에만 한정해 모듈 레벨 tier 메모(_studentsSelectTier/_classSettingsSelectTier)를 추가했다. 42703(컬럼 부재)로 확인된 select tier만 이번 페이지 로드 동안 영구 스킵하고, 낮은 tier로는 절대 되돌아가지 않는다(새로고침 시 모듈 재로드로 자연 리셋 — 규칙 9 forward-compat 유지). non-42703 에러는 기존과 동일하게 그 호출 안에서 계속 캐스케이드하되 메모를 갱신하지 않는다(다음 호출은 다시 원래 tier부터). refreshClassSettings의 기존 42703 전용 게이팅(PR #25)은 그대로 유지 — 그 게이팅 로직 자체는 손대지 않고 메모만 얹었다. 테스트 전용 export __resetColumnProbeMemoForTests() 추가(다른 신규 export 없음). tests/harness/registry.mjs와 package.json은 다른 에이전트 소유라 건드리지 않음 — 신규 테스트는 등록 없이 node로 직접 실행 가능한 상태로만 남겨둠. 성공 경로 매핑(_students/_classSettings 값 형태)은 완전히 무변경(테스트 케이스 6으로 바이트 동일성 확인).",
+  "blocker": null,
+  "next_action": "다른 에이전트가 scripts/testColumnProbeMemo.mjs를 tests/harness/registry.mjs + package.json에 등록. qa-reviewer가 diff와 pre/post-fix 테스트 로그를 검수."
+}

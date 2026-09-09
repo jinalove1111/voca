@@ -400,18 +400,45 @@ async function selectAllStudents(selectStr) {
   }
   return { data: all, error: null }
 }
+// House System(2026-07-19) — house_id도 current_unit_id와 같은 컬럼 부재
+// 폴백이 필요(supabase_v2_7_house_system.sql 미실행 대비). 두 신규 컬럼이
+// 서로 다른 마이그레이션(v2.1/v2.7)에 속해 독립적으로 실행될 수 있으므로,
+// 어느 한쪽만 있어도 안전하게 동작해야 한다 — 3단계로 cascading 폴백한다
+// (둘 다 있음 → current_unit_id만 있음 → 둘 다 없음).
+const STUDENTS_SELECT_TIERS = [
+  `${STUDENTS_SELECT_BASE},current_unit_id,house_id`,
+  `${STUDENTS_SELECT_BASE},current_unit_id`,
+  STUDENTS_SELECT_BASE,
+]
+// 2026-09-09(야간 QA 후속, 노이즈 수정) — 위 3단계 캐스케이드 자체는 규칙 9
+// 요구사항(마이그레이션 전/후 모두 앱이 안 깨짐)이라 유지해야 하지만, 이
+// 함수는 initWordLibrary/로그인/App.jsx 포커스·가시성 복귀/StudentSelect
+// 로스터 새로고침/여러 관리자 쓰기 후 등 호출될 때마다 매번 "넓은 select부터
+// 처음부터" 재시도했다. 두 마이그레이션이 실제로 미실행인 프로덕션에서는
+// 이게 매 호출 400 Bad Request를 학생 DevTools에 반복 출력하는 소음이었다
+// (데이터는 항상 폴백으로 완전히 채워짐 — 기능 버그 아님, 순수 소음).
+// 이 모듈 레벨 변수가 "이번 페이지 로드에서 몇 번째 tier부터 시도해야
+// 하는지"를 기억한다. 42703(컬럼 부재)로 확인된 tier만 영구 스킵 대상이고,
+// 그 외 에러(일시적 네트워크 등)는 이 메모를 갱신하지 않는다 — 즉 이번
+// 호출 안에서는 기존과 동일하게 계속 다음 tier로 캐스케이드하되, 다음
+// refreshStudents() 호출에서는 다시 원래 tier부터 재시도한다(일시적
+// 문제였을 수 있으므로, "42703"만 "컬럼이 진짜 없다"는 확정 신호). 페이지를
+// 새로고침하면 모듈이 다시 로드되어 0으로 리셋되므로, 나중에 마이그레이션이
+// 실행되면 다음 새로고침에서 다시 넓은 select부터 정상적으로 재개된다.
+let _studentsSelectTier = 0
 export async function refreshStudents() {
-  // House System(2026-07-19) — house_id도 current_unit_id와 같은 컬럼
-  // 부재 폴백이 필요(supabase_v2_7_house_system.sql 미실행 대비). 두 신규
-  // 컬럼이 서로 다른 마이그레이션(v2.1/v2.7)에 속해 독립적으로 실행될 수
-  // 있으므로, 어느 한쪽만 있어도 안전하게 동작해야 한다 — 3단계로
-  // cascading 폴백한다(둘 다 있음 → current_unit_id만 있음 → 둘 다 없음).
-  let res = await selectAllStudents(`${STUDENTS_SELECT_BASE},current_unit_id,house_id`)
-  if (res.error) {
-    res = await selectAllStudents(`${STUDENTS_SELECT_BASE},current_unit_id`)
-  }
-  if (res.error) {
-    res = await selectAllStudents(STUDENTS_SELECT_BASE)
+  let res = null
+  for (let tier = _studentsSelectTier; tier < STUDENTS_SELECT_TIERS.length; tier++) {
+    res = await selectAllStudents(STUDENTS_SELECT_TIERS[tier])
+    if (!res.error) break
+    if (res.error.code === '42703') {
+      // 이 tier는 컬럼 부재가 확정됐다 — 이번 페이지 로드 동안 다시
+      // 시도하지 않는다(더 낮은 tier로는 절대 되돌아가지 않음, 새로고침만
+      // 리셋한다).
+      _studentsSelectTier = Math.max(_studentsSelectTier, tier + 1)
+    }
+    // 42703이든 아니든 기존 동작 그대로 다음 tier로 캐스케이드(마지막
+    // tier면 for 루프가 자연히 끝나고 아래 throw로 전파된다).
   }
   const { data, error } = res
   if (error) throw error
@@ -771,6 +798,31 @@ const DEFAULT_CLASS_SETTINGS = { spellingTestEnabled: false, spellingHintEnabled
 // entranceTest.js의 assignDirections(입실시험과 공용)가 담당.
 const VALID_SPELLING_DIRECTIONS = new Set(['kr2en', 'en2kr', 'random', 'mixed'])
 
+// refreshStudents의 _studentsSelectTier와 동일한 이유(2026-09-09, 야간 QA
+// 후속 노이즈 수정) — 아래 3단계 select 캐스케이드 자체(42703 게이팅)는
+// PR #25로 이미 고정돼 있고 이 작업에서 바꾸지 않는다. 다만 이 함수도
+// 로그인/포커스 복귀/여러 관리자 쓰기 후 등 호출될 때마다 매번 처음부터
+// 넓은(gamification_enabled 포함) select를 재시도해, gamification_enabled가
+// 실제로 없는 프로덕션에서 매 호출 400을 반복 출력했다. 42703으로 확정된
+// tier만 이번 페이지 로드 동안 영구 스킵하고, 그 외 에러는 메모를 갱신하지
+// 않는다(기존 42703 전용 게이팅 자체는 그대로 — 이번 호출 안에서 non-42703
+// 에러는 여전히 캐스케이드 없이 즉시 멈춘다).
+const CLASS_SETTINGS_SELECT_TIERS = [
+  'name,spelling_test_enabled,spelling_hint_enabled,wrong_answer_repeat_count,spelling_direction,gamification_enabled',
+  'name,spelling_test_enabled,spelling_hint_enabled,wrong_answer_repeat_count,spelling_direction',
+  'name,spelling_test_enabled,spelling_hint_enabled,wrong_answer_repeat_count',
+]
+let _classSettingsSelectTier = 0
+
+// 테스트 전용 — refreshStudents/refreshClassSettings의 컬럼 probe 메모를
+// 리셋한다(실제 프로덕션 코드 경로에서는 절대 호출되지 않음, 새로고침이
+// 곧 리셋이라 런타임에 이 함수를 부를 이유가 없다). scripts/testColumnProbeMemo.mjs
+// 전용.
+export function __resetColumnProbeMemoForTests() {
+  _studentsSelectTier = 0
+  _classSettingsSelectTier = 0
+}
+
 export async function refreshClassSettings() {
   try {
     // spelling_direction 컬럼은 별도 마이그레이션(supabase_spelling_direction_
@@ -793,15 +845,13 @@ export async function refreshClassSettings() {
     // 기본값으로 조용히 되돌아간다.
     let data
     let error
-    ;({ data, error } = await supabase
-      .from('classes').select('name,spelling_test_enabled,spelling_hint_enabled,wrong_answer_repeat_count,spelling_direction,gamification_enabled'))
-    if (error && error.code === '42703') {
-      ;({ data, error } = await supabase
-        .from('classes').select('name,spelling_test_enabled,spelling_hint_enabled,wrong_answer_repeat_count,spelling_direction'))
-    }
-    if (error && error.code === '42703') {
-      ;({ data, error } = await supabase
-        .from('classes').select('name,spelling_test_enabled,spelling_hint_enabled,wrong_answer_repeat_count'))
+    for (let tier = _classSettingsSelectTier; tier < CLASS_SETTINGS_SELECT_TIERS.length; tier++) {
+      ;({ data, error } = await supabase.from('classes').select(CLASS_SETTINGS_SELECT_TIERS[tier]))
+      if (!error) break
+      if (error.code !== '42703') break // 42703 아니면 기존 게이팅 그대로 즉시 중단(메모도 불변)
+      // 이 tier는 컬럼 부재가 확정됐다 — 이번 페이지 로드 동안 다시
+      // 시도하지 않는다(더 낮은 tier로는 절대 되돌아가지 않음).
+      _classSettingsSelectTier = Math.max(_classSettingsSelectTier, tier + 1)
     }
     if (error) throw error
     _classSettings = Object.fromEntries((data || []).map((c) => [c.name, {
