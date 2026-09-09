@@ -117,6 +117,7 @@
     "verify:reward-day-boundary": "node scripts/testRewardDayBoundaryDeviceClock.mjs",
     "verify:reward-feedback-contracts": "node scripts/buildRaceBundle.mjs && node scripts/testRewardFeedbackContracts.mjs",
     "verify:writing-complete-real-react": "node scripts/buildUseStudentRealReactBundle.mjs && node scripts/testWritingCompleteRealReactTiming.mjs",
+    "verify:component-callback-double-invoke": "node scripts/testComponentCallbackDoubleInvoke.mjs",
     "prod:check": "node scripts/prodCheck.mjs",
     "prod:hotfix": "node scripts/prodHotfix.mjs",
     "prod:plan": "node scripts/prodPlan.mjs",
