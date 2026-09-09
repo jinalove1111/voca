@@ -50,8 +50,8 @@ function evalFixture(caseData) {
   const realStudents = caseData.students.filter((s) => classifyAccount(s, ctx) === 'REAL')
   const healthResults = realStudents.map((s) => evaluateStudent(s, ctx))
   const healthSummary = summarize(healthResults)
-  const { findings, summary: invariantsSummary } = evaluateInvariants(invCtx)
-  return { healthResults, healthSummary, findings, invariantsSummary }
+  const { findings, summary: invariantsSummary, notes } = evaluateInvariants(invCtx)
+  return { healthResults, healthSummary, findings, invariantsSummary, notes: notes || [] }
 }
 
 console.log('\n=== 1절. 모듈 계약 ===')
@@ -69,14 +69,22 @@ check('evaluateInvariants — 순수 함수(네트워크/DB import 없음)',
 
 console.log('\n=== 2절. 픽스처(2026-09-02 유령 유닛 착륙 실측 기반) — before ===')
 {
-  const { healthSummary, findings, invariantsSummary } = evalFixture(fixture.before.data)
+  const { healthSummary, findings, invariantsSummary, notes } = evalFixture(fixture.before.data)
   check('health — FAIL 학생 1명(StudentA, GHOST_UNIT)', healthSummary.fail === 1, JSON.stringify(healthSummary))
   check('invariants — STUDENT_GHOST_UNIT FAIL (StudentA)',
     hasCode(findings, 'STUDENT_GHOST_UNIT', STU_A, 'FAIL'), JSON.stringify(findings.map((f) => f.code)))
   check('invariants — SCA_GHOST_UNIT WARN (StudentB, 비-primary 배정이 유령 유닛 가리킴)',
     hasCode(findings, 'SCA_GHOST_UNIT', STU_B, 'WARN'))
-  check('invariants — PRIMARY_UNIT_MISMATCH WARN (StudentB, primary Unit7 vs students Unit2 — 실측 기존 불일치)',
-    hasCode(findings, 'PRIMARY_UNIT_MISMATCH', STU_B, 'WARN'))
+  // 2026-09-09(qa/session-2026-09-09-b) 보정 — StudentB의 primary Unit7과
+  // students.current_unit_id(Unit2)는 둘 다 같은 교재(faf6dc71…, "중1 동아
+  // 윤정미") 소속의 학습 가능한(비유령, 40단어) 유닛이라 이제는 WARN이
+  // 아니라 PRIMARY_UNIT_BOOKMARK_DRIFT 노트로만 기록된다(설계상 오탐 보정
+  // — 2026-09-09 READ-ONLY 감사에서 확인된 패턴 그대로).
+  check('invariants — PRIMARY_UNIT_MISMATCH(StudentB) 는 더 이상 WARN 이 아니다(같은 교재 내 학습가능 유닛 간 드리프트로 보정됨)',
+    !hasCode(findings, 'PRIMARY_UNIT_MISMATCH', STU_B, 'WARN'), JSON.stringify(findings.map((f) => f.code)))
+  check('notes — PRIMARY_UNIT_BOOKMARK_DRIFT(StudentB) 로 기록된다',
+    notes.some((n) => n.code === 'PRIMARY_UNIT_BOOKMARK_DRIFT' && n.studentId === STU_B),
+    JSON.stringify(notes))
   check('invariants 요약 FAIL >= 1', invariantsSummary.fail >= 1, JSON.stringify(invariantsSummary))
   check('StudentA 는 SCA_GHOST_UNIT 로 이중 보고되지 않는다(자기 자신의 primary는 STUDENT_GHOST_UNIT 이 이미 보고)',
     !hasCode(findings, 'SCA_GHOST_UNIT', STU_A))
@@ -84,7 +92,7 @@ console.log('\n=== 2절. 픽스처(2026-09-02 유령 유닛 착륙 실측 기반
 
 console.log('\n=== 3절. 픽스처 — after(유령 유닛 착륙 SQL 핫픽스 반영 후) ===')
 {
-  const { healthSummary, findings, invariantsSummary } = evalFixture(fixture.after.data)
+  const { healthSummary, findings, invariantsSummary, notes } = evalFixture(fixture.after.data)
   check('health — FAIL 0', healthSummary.fail === 0, JSON.stringify(healthSummary))
   check('StudentA — health PASS(유령 탈출)',
     (() => {
@@ -95,8 +103,12 @@ console.log('\n=== 3절. 픽스처 — after(유령 유닛 착륙 SQL 핫픽스 
   check('invariants — 요약 FAIL 0', invariantsSummary.fail === 0, JSON.stringify(invariantsSummary))
   check('invariants — STUDENT_GHOST_UNIT(StudentA) 소멸', !hasCode(findings, 'STUDENT_GHOST_UNIT', STU_A))
   check('invariants — SCA_GHOST_UNIT(StudentB) 소멸', !hasCode(findings, 'SCA_GHOST_UNIT', STU_B))
-  check('invariants — PRIMARY_UNIT_MISMATCH(StudentB) 는 그대로 남는다(별도 과제, 이번 핫픽스 범위 아님)',
-    hasCode(findings, 'PRIMARY_UNIT_MISMATCH', STU_B, 'WARN'))
+  // 2026-09-09 보정 — 위 2절과 동일 이유(같은 교재 내 학습가능 유닛 간
+  // 드리프트)로 WARN 이 아니라 notes 로만 남는다.
+  check('invariants — PRIMARY_UNIT_MISMATCH(StudentB) 는 여전히 WARN 이 아니다(보정 유지)',
+    !hasCode(findings, 'PRIMARY_UNIT_MISMATCH', STU_B, 'WARN'))
+  check('notes — PRIMARY_UNIT_BOOKMARK_DRIFT(StudentB) 는 after 픽스처에서도 그대로 남는다(별도 과제, 이번 핫픽스 범위 아님)',
+    notes.some((n) => n.code === 'PRIMARY_UNIT_BOOKMARK_DRIFT' && n.studentId === STU_B))
 }
 
 console.log('\n=== 4절(a). 합성 케이스 — 개별 invariant 코드 재현 ===')
@@ -1130,6 +1142,86 @@ console.log('\n=== 15절. WORD_HEADER_RESIDUE 오탐 보정(2026-09-06 야간 QA
         excelHeaderGuardSrc.includes(alias))
     }
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 16절(2026-09-09, qa/session-2026-09-09-b) — PRIMARY_UNIT_MISMATCH 오탐
+// 보정. 2026-09-09 READ-ONLY 감사(라이브 prod:check invariants WARN 44건)
+// 확인: 23건이 "student_class_assignments(SCA)의 primary 행 current_unit_id
+// 는 정상 유닛 전환(writeStudentUnit) 시 갱신되지 않는 북마크일 뿐"이라는
+// 설계상 이유로 발생하는 오탐이었다(위 prodInvariants.mjs isNonLearnableUnit/
+// pushNote 주석 참고). FAIL-first(규칙 15) — 이 절을 추가한 직후(보정 전)
+// 먼저 실행해 S1이 여전히 PRIMARY_UNIT_MISMATCH WARN 으로 잡히는 것을
+// 확인한 뒤(회귀 픽스처 자체의 유효성 검증), prodInvariants.mjs를 보정해
+// S1만 WARN 이 사라지고 notes[]로 이동하는 것을 확인했다.
+console.log('\n=== 16절. PRIMARY_UNIT_BOOKMARK_DRIFT(2026-09-09) — S1/S2/S3 픽스처 ===')
+{
+  const DRIFT_FIXTURE_PATH = path.join(ROOT, 'scripts/prod/fixtures/primary-unit-bookmark-drift-20260909.json')
+  const driftFixture = JSON.parse(fs.readFileSync(DRIFT_FIXTURE_PATH, 'utf8'))
+  const S1 = 'dd000000-0000-4000-8000-000000000s1'
+  const S2 = 'dd000000-0000-4000-8000-000000000s2'
+  const S3 = 'dd000000-0000-4000-8000-000000000s3'
+  const { findings, notes } = evalFixture(driftFixture.data)
+
+  check('픽스처 로드 — case 필드가 기대한 이름이다',
+    driftFixture.case === 'primary-unit-bookmark-drift-20260909', driftFixture.case)
+
+  // S1 — primary SCA(UnitA)와 students.current_unit_id(UnitB)가 같은
+  // 교재(T) 소속의 학습 가능한(40단어) 유닛 — 양성 드리프트, WARN 없음.
+  check('S1 — PRIMARY_UNIT_MISMATCH WARN 이 발생하지 않는다(같은 교재 내 학습가능 유닛 간 드리프트)',
+    !hasCode(findings, 'PRIMARY_UNIT_MISMATCH', S1), JSON.stringify(findings.filter((f) => f.studentId === S1)))
+  check('S1 — notes 에 PRIMARY_UNIT_BOOKMARK_DRIFT 로 정확히 1건 기록된다',
+    notes.filter((n) => n.studentId === S1 && n.code === 'PRIMARY_UNIT_BOOKMARK_DRIFT').length === 1,
+    JSON.stringify(notes.filter((n) => n.studentId === S1)))
+  check('S1 — notes 항목의 severity 는 WARN/FAIL 이 아니다(집계 대상 아님)',
+    notes.find((n) => n.studentId === S1)?.severity !== 'WARN'
+    && notes.find((n) => n.studentId === S1)?.severity !== 'FAIL')
+  check('S1 — notes 항목에 refs.studentUnitId/primaryUnitId/textbookId 가 있다',
+    (() => {
+      const n = notes.find((nn) => nn.studentId === S1)
+      return !!n?.refs && n.refs.studentUnitId && n.refs.primaryUnitId && n.refs.textbookId
+    })())
+
+  // S2 — primary SCA(UnitA2, 교재T)와 students.current_unit_id(UnitT2,
+  // 교재T2)가 서로 다른 교재 — 진짜 이상, WARN 유지.
+  check('S2 — PRIMARY_UNIT_MISMATCH WARN 이 그대로 발생한다(서로 다른 교재)',
+    hasCode(findings, 'PRIMARY_UNIT_MISMATCH', S2, 'WARN'), JSON.stringify(findings.filter((f) => f.studentId === S2)))
+  check('S2 — notes 에는 PRIMARY_UNIT_BOOKMARK_DRIFT 로 기록되지 않는다(진짜 이상은 notes 로 숨기지 않는다)',
+    !notes.some((n) => n.studentId === S2 && n.code === 'PRIMARY_UNIT_BOOKMARK_DRIFT'))
+
+  // S3 — primary SCA 가 유령 유닛(1단어)을 가리킴 — 학습 불가능하므로
+  // 같은 교재라도 진짜 이상, WARN 유지(+ 기존 SCA_GHOST_UNIT/STUDENT_GHOST_UNIT
+  // 계열과는 별개로 PRIMARY_UNIT_MISMATCH 자체도 숨기지 않는다).
+  check('S3 — PRIMARY_UNIT_MISMATCH WARN 이 그대로 발생한다(primary SCA 유닛이 유령/비학습가능)',
+    hasCode(findings, 'PRIMARY_UNIT_MISMATCH', S3, 'WARN'), JSON.stringify(findings.filter((f) => f.studentId === S3)))
+  check('S3 — notes 에는 PRIMARY_UNIT_BOOKMARK_DRIFT 로 기록되지 않는다(유령 유닛은 절대 양성으로 보지 않는다)',
+    !notes.some((n) => n.studentId === S3 && n.code === 'PRIMARY_UNIT_BOOKMARK_DRIFT'))
+
+  check('INVARIANT_CODES.PRIMARY_UNIT_BOOKMARK_DRIFT 가 등록돼 있다',
+    INVARIANT_CODES?.PRIMARY_UNIT_BOOKMARK_DRIFT === 'PRIMARY_UNIT_BOOKMARK_DRIFT')
+  check('CODE_META.PRIMARY_UNIT_BOOKMARK_DRIFT — impact/recommended 존재',
+    !!CODE_META.PRIMARY_UNIT_BOOKMARK_DRIFT?.impact && !!CODE_META.PRIMARY_UNIT_BOOKMARK_DRIFT?.recommended,
+    JSON.stringify(CODE_META.PRIMARY_UNIT_BOOKMARK_DRIFT))
+  check('notes[] 는 PRIMARY_UNIT_BOOKMARK_DRIFT 코드로만 기록된다(다른 코드가 새지 않는다)',
+    notes.every((n) => n.code === 'PRIMARY_UNIT_BOOKMARK_DRIFT'), JSON.stringify(notes.map((n) => n.code)))
+
+  // 회귀 방지 — GHOST_UNIT_PRESENT/UNIT_WORDS_ABNORMAL/WORD_HEADER_RESIDUE
+  // 는 이 픽스처로 아예 손대지 않았다는 것을 재확인(요구사항 3항).
+  check('GHOST_UNIT_PRESENT — S3 의 primary 유닛(1단어)이 정확히 1건 유령으로 잡힌다',
+    findings.filter((f) => f.code === 'GHOST_UNIT_PRESENT').length === 1,
+    JSON.stringify(findings.filter((f) => f.code === 'GHOST_UNIT_PRESENT')))
+  check('UNIT_WORDS_ABNORMAL — 이 픽스처의 학습가능 유닛(40단어)들은 abnormal 로 잡히지 않는다',
+    !findings.some((f) => f.code === 'UNIT_WORDS_ABNORMAL'
+      && ['bb000000-0000-4000-8000-0000000000a1', 'bb000000-0000-4000-8000-0000000000b1',
+        'bb000000-0000-4000-8000-0000000000a2', 'bb000000-0000-4000-8000-0000000000t2',
+        'bb000000-0000-4000-8000-0000000000a3'].includes(f.refs?.unitId)))
+  check('WORD_HEADER_RESIDUE — 이 픽스처에는 헤더 잔재 행이 없다(0건)',
+    findings.filter((f) => f.code === 'WORD_HEADER_RESIDUE').length === 0)
+
+  // 순수함수 계약 — 같은 입력이면 notes 도 결정론적으로 같다.
+  const again = evalFixture(driftFixture.data)
+  check('evaluateInvariants(notes) — 같은 입력이면 결과가 동일하다(결정론)',
+    JSON.stringify(notes) === JSON.stringify(again.notes))
 }
 
 console.log(`\n${'='.repeat(60)}`)
