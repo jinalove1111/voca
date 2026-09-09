@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { getStudentClass, getClassUnits, fetchDashboardData, getClassSettings, getStudentById } from '../utils/wordLibrary'
+import { getClassUnits, fetchDashboardData, getClassSettings, getStudentById } from '../utils/wordLibrary'
 import { computeStudentStats, buildWeeklyReport } from '../utils/weeklyReport'
 import HeroReaction from './HeroReaction'
 import { getReactionById } from '../utils/paulReactions'

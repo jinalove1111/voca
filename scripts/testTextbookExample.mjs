@@ -4,7 +4,6 @@
 // React/DB 의존성이 전혀 없는 순수 모듈이라 esbuild 번들 없이 Node에서
 // 바로 import 가능하다(package.json에 "type": "module" 있음).
 //   node scripts/testTextbookExample.mjs
-import assert from 'node:assert/strict'
 import { TEXTBOOK_CURRICULUM } from '../src/data/textbookExamples.js'
 import {
   listGrades,

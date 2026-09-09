@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react'
 // 키웠다(엑셀 업로드는 자주 쓰는 기능이 아님). PdfUpload.handleFile이 이미
 // pdfjs-dist를 동적 import하는 선례가 있어 동일 패턴으로 handleFile 안에서만
 // 로드하도록 바꾼다(정적 import 제거, 동작은 동일).
-import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, deleteClassUnit, getClassUnitNames, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchAssignmentHistory, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, fetchXpByEventType, getClassIdByName, getStudents, wordSlug, isoDaysAgoStr, buildUnitWordAssetPayloads, groupAssetPayloadsByShape, ensureTextbookLayerBackfilled, getOwnTextbookOfClass, getClassTypeByName } from '../utils/wordLibrary'
+import { getClassNames, getClassWords, setClassWords, deleteClass, createClass, renameClass, getClassUnits, addClassUnit, getClassUnitNames, getStudentsInClass, getTodaysAssignmentWordIds, setTodaysAssignment, getAssignmentForDate, setAssignmentForDate, fetchAssignmentHistory, fetchDashboardData, getClassSettings, setClassSettings, localIsoDateStr, fetchWordStatusSummary, resetWordStatus, setWordAcceptedMeanings, fetchXpTotals, fetchXpByEventType, getClassIdByName, getStudents, wordSlug, isoDaysAgoStr, buildUnitWordAssetPayloads, groupAssetPayloadsByShape, ensureTextbookLayerBackfilled, getOwnTextbookOfClass, getClassTypeByName } from '../utils/wordLibrary'
 // Word Asset Library(M3c, 2026-08-05) — 엑셀 업로드 저장 "이후" 자산
 // 업서트 배선 전용(조회 배선은 이번 범위 아님, 규칙 12). fetchWordAssetsByWords/
 // upsertWordAssets 둘 다 절대 throw하지 않는 계약(src/utils/wordAssets.js

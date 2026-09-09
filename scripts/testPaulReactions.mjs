@@ -10,7 +10,6 @@
 //     --platform=node --loader:.png=dataurl \
 //     --outfile=scripts/.tmp/testPaulReactions.bundle.mjs
 //   node scripts/.tmp/testPaulReactions.bundle.mjs
-import assert from 'node:assert/strict'
 import { PAUL_REACTIONS, pickReaction, getReactionById, resolveReaction, pickMessage } from '../src/utils/paulReactions.js'
 
 let failures = 0

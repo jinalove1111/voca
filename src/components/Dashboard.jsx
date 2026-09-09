@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { getStudentClass, getStudentClassId, getStudentUnit, getClassNames, getTodaysAssignmentWordIds, getClassSettings, getClassIdByName, getStudentById, fetchHouseWeeklyScore, fetchHouseSeasonScore, isTextbookMode, getStudentPrimaryTextbook, getLearnableTextbookUnits, getLearnableClassUnitNames } from '../utils/wordLibrary'
+import { getStudentClass, getStudentUnit, getClassNames, getTodaysAssignmentWordIds, getClassSettings, getClassIdByName, getStudentById, fetchHouseWeeklyScore, fetchHouseSeasonScore, isTextbookMode, getStudentPrimaryTextbook, getLearnableTextbookUnits, getLearnableClassUnitNames } from '../utils/wordLibrary'
 // v2.9(2026-07-21, decision 0004 다중 교재) — 2개 이상 교재가 배정된
 // 학생에게만 나타나는 선택기. 0/1개면 컴포넌트 자체가 아무것도 렌더하지
 // 않는다(TextbookSelector.jsx 참고) — 기존 294명 단일-반 학생 화면은

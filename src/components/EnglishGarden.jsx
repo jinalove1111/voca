@@ -5,7 +5,7 @@
 // UI는 attachmentWorldFull 플래그(기본 OFF) 뒤 — 여기서는 잠금 목록으로
 // "다음에 열릴 세계"만 살짝 보여준다(별도 게임 인터페이스 없음, 기존
 // 카드 문법 그대로).
-import { computeWorldState, gardenPlots, WORLD_STAGES, PLOT_COUNT, POINTS_PER_STAGE } from '../utils/attachment/worldProgress'
+import { computeWorldState, gardenPlots, PLOT_COUNT, POINTS_PER_STAGE } from '../utils/attachment/worldProgress'
 import { isFeatureEnabled } from '../config/features'
 
 export default function EnglishGarden({ stats, onBack }) {

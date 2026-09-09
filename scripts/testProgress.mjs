@@ -3,7 +3,6 @@
 // localStorage, to verify: category-completion counting, persistence across
 // a simulated reload, and next-day reset behavior (keeps cumulative fields,
 // resets only today's round).
-import assert from 'node:assert/strict'
 
 // ── Fake localStorage ────────────────────────────────────────────────────
 class FakeStorage {
