@@ -2,19 +2,25 @@
   "agent_name": "lead-reward-audit-2026-09-10",
   "role": "6h 보상 시스템 자율 QA/하드닝 — 보상 지도, 766↔951 원인, 중복/누락/멱등성/레이스, 랭킹 무결성, 학생 UX, invariant 테스트",
   "task_id": "reward-audit-2026-09-10",
-  "status": "in_progress",
-  "progress": 60,
+  "status": "completed",
+  "progress": 100,
   "started_at": "2026-09-10T00:30:00Z",
-  "updated_at": "2026-09-10T03:30:00Z",
+  "updated_at": "2026-09-10T06:30:00Z",
   "base_sha": "7432638728899a1f3c81381f3bd63efe064aaf53",
   "branch": "qa/reward-audit-2026-09-10",
   "commits_so_far": [
-    "2e1c9ef test(reward): §7 stale '<200' → 구조적 상한 invariant(예산 숫자 미결정, 46/1→52/0)",
-    "e5e67f9 test(reward): 재시도 큐→서버 원장 정확히 1행(18) + 날짜경계/기기시계 계약(49)",
-    "ca53eac test(account): QA_ 반 소속 픽스처 TEST 분류 계약(수정 전 FAIL)",
-    "13b6cf2 fix(account): QA_ 접두 반 소속 학생 픽스처 분류 — Word King 로스터/중복 감사/입실시험 분모",
-    "8349b8c test(reward): 실제 React 하네스 — writing-complete 누락 FAIL-first(4/8 FAIL)",
-    "aeb6a9e fix(reward): writing-complete +2★/XP 누락 수정(P1 MISSING REWARD, updater 밖 클로저 판정)"
+    "2e1c9ef test(reward): testRewardServerHardening §7 stale '< 200' 예산 임계값 → 구조적 상한 invariant로 교체(예산 숫자 미결정)",
+    "e5e67f9 test(reward): 재시도 큐 → 서버 원장 정확히 1행(18단언) + 날짜 경계/기기 시계 계약 문서화(49단언) 신설",
+    "ca53eac test(account): QA_ 반 소속 픽스처 학생(Cksa/QACombo1) TEST 분류 계약 추가 — 수정 전 FAIL 실측(isRealStudentAccount true)",
+    "13b6cf2 fix(account): QA_ 접두 반 소속 학생을 픽스처(TEST)로 분류 — 실학생 집계(Word King 로스터/중복 감사/입실시험 분모) 왜곡 제거",
+    "8349b8c test(reward): 실제 React(react-dom createRoot + act)로 useStudent 구동하는 재현 하네스 — writing-complete 누락 FAIL-first(8단언 중 4 FAIL)",
+    "aeb6a9e fix(reward): 쓰기 완료 보상(writing-complete +2★/XP) 누락 수정 — 임계값 판정을 setState updater 밖 클로저 값으로(markPronunciationOk 선례)",
+    "1196af6 chore(status): 보상 감사 세션 2026-09-10 중간 체크포인트(60%, 커밋 6, P1 writing-complete 누락 FIXED)",
+    "a2fd574 test(reward): 컴포넌트 콜백 이중 호출 계약(QuizStep/SpellingQuestion/SpeechBtn/GuidedSession) — 20 PASS / 1 FAIL(수정 전 기록)",
+    "90f4f93 fix(guided): GuidedSession.handleQuizAnswer에 phase:wordId 멱등 가드 — 상위 보상 경로(onQuizAnswer)·세션 통계 이중 전달 차단(방어선)",
+    "f1b1669 test(reward): 보상 표시 계약 테스트(토스트 중복/발음 별 과장, 10단언, 수정 전 8 FAIL) + 실제 React 하네스 등록(useStudentRealReact 빌더)",
+    "2930757 fix(reward-ux): 같은 tick 이중 호출 시 보상 토스트 2회 방지 + 퀴즈 발음 \"⭐ 1개 획득\" 문구를 실제 지급 여부에 연동",
+    "50057d9 test(registry): testComponentCallbackDoubleInvoke 등록(rewardSystem, extra:false) + verify:component-callback-double-invoke — 커버리지 린트 PASS 복귀"
   ],
   "findings": {
     "map": "별 지급 12종 전부 서버 원장 경유(예외: pronunciation-unidentified 클라이언트 전용·무제한, 표시 전용 '실력 별'). 별 기반 랭킹 없음(Word King/Paul Rank=XP, 하우스=클라이언트 ticketLedger·미배포). 관리자 수동 보상 없음.",
@@ -26,5 +32,12 @@
   },
   "production_write": 0,
   "blocker": "none",
-  "next_action": "UX 수정·컴포넌트 이중호출 테스트 결과 검증·커밋 → 전체 회귀 → handoff 121차 → PR(머지 금지)"
+  "next_action": "PR 생성(머지 금지) → 운영자 검토. NEEDS DECISION 6건(handoff 121차).",
+  "final": {
+    "verify_all": "verify:all ALL DOMAINS PASS(FAIL 0 — 기존 extra FAIL testRewardServerHardening도 해소)",
+    "build": "PASS",
+    "e2e": "59/59 x2",
+    "reward_offline_suites": "15/15 PASS",
+    "production_write": 0
+  }
 }

@@ -1146,3 +1146,19 @@ _append. 상세: `handoff.md` 2026-09-09(120차)._
 | `scripts/testProdCheck.mjs`(확장, fixture primary-unit-bookmark-drift-20260909) | 258→278 | PRIMARY_UNIT_BOOKMARK_DRIFT notes / 실제 mismatch WARN 유지 | false |
 
 - Known(extra, 비게이팅): `testRewardServerHardening` "하루 최대 부풀림 < 200" — Phase 6 NEEDS DECISION(예산 승인값 후 타입별 표로 교체).
+
+## 관련 항목: 보상 시스템 감사 2026-09-10 — 신규 스위트 7종 + §7 교체 (121차)
+
+_append. 상세: `handoff.md` 2026-09-10(121차)._
+
+| 파일 | 단언 | 대상 | extra |
+|---|---|---|---|
+| `scripts/testWritingCompleteRealReactTiming.mjs`(빌더 useStudentRealReact = buildUseStudentRealReactBundle) | 8 | 실제 React로 useStudent 구동 — writing-complete 누락 회귀(fakeReact 사각) | false |
+| `scripts/testRewardFeedbackContracts.mjs`(race) | 10 | 토스트 중복 방지, markPronunciationOk 반환값, QuizGame 별 문구 조건부 | false |
+| `scripts/testComponentCallbackDoubleInvoke.mjs` | 21 | QuizStep/SpellingQuestion/SpeechBtn/GuidedSession 보상 콜백 1회(StrictMode식 2회 모드 포함) | false |
+| `scripts/testRewardRetryExactlyOneRow.mjs` | 18 | 재시도 큐 + 실제 api/grant-xp.js → 원장 정확히 1행, replay duplicate | false |
+| `scripts/testRewardDayBoundaryDeviceClock.mjs` | 49 | 날짜 토큰/기간키/서버 상한 창 계약 문서화 | false |
+| `scripts/testAccountClassification.mjs` / `testEntranceEligibilityRules.mjs`(확장) | +11 | QA_ 반 소속 픽스처 TEST 분류 | false |
+| `scripts/testRewardServerHardening.mjs`(§7 교체) | 46→52 | stale `< 200` → 구조적 상한 invariant(예산 미결정) | true(기존) |
+
+- 실제 React 하네스 도입 의미: `scripts/fakeReact.mjs`는 setState updater를 동기 실행해 "updater 안 플래그 → 직후 읽기" 클래스를 볼 수 없음. 같은 클래스 정적 스캔(외부 let 변수) 결과 useStudent 내 추가 사례 0.

@@ -1,7 +1,91 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-09 (120차, 6h 자율 세션 qa/session-2026-09-09-b — 권교빈 READY FOR OPERATOR,
-YBM 잔재 RESOLVED, 학생 경로 결함 3건 수정, 400 노이즈 제거, invariant 오탐 23→0, 모바일 Back
-IMPLEMENTATION READY, Production WRITE 0. 119차 이하 기록은 그대로 보존)_
+_최종 갱신: 2026-09-10 (121차, 보상 시스템 6h 감사 — writing-complete 누락 P1 수정, 표시 결함 2·방어선 1·
+QA 분류 1 수정, 766↔951 TEST STALE 확정, invariant 테스트 7종, Production WRITE 0. 120차 이하 보존)_
+
+## 2026-09-10 (121차) — 보상 시스템 6h 자율 QA/하드닝(qa/reward-audit-2026-09-10, base 7432638) — P1 누락 1건 FIXED(writing-complete), 표시 결함 2건·방어선 1건·QA 분류 1건 FIXED, 766↔951 원인 확정, invariant 테스트 7종 (Production WRITE 0)
+
+_PR #28·V3_49·overnight QA CLOSED 무접촉. Production DB/SQL/migration/학생·진도·보상/반 설정/플래그 WRITE 0. main 직접 push 0, 머지 0._
+
+### 보상 지도(REWARD MAP) — 별 지급 12종, 전부 서버 원장(reward_ledger) 경유
+| 경로 | 트리거 | 금액 | dedup 키 | 일일 상한 |
+|---|---|---|---|---|
+| word-session-complete | 하루 단어 학습 GOAL(5) | 1 | date | 1 |
+| writing-complete | 하루 쓰기 정답 GOAL(5) | 2(+XP) | date | 1 |
+| exam-complete | 입실시험 제출(서버 재검증) | 2 | testId uuid | 10 |
+| wrong-word-recovered | 복습 큐 단어 정답 | 1 | date:wordId | 60 |
+| daily-goal-complete | 4카테고리 완료(1/일) | 3(+XP daily-mission-complete, +티켓) | date | 1 |
+| streak-bonus | 연속 학습 3/5/7일 | 2/3/5 | date:streak | 1 |
+| pronunciation | 단어 발음 성공 | 1 | wordId:date | 120 |
+| mission-clear | 미션 단어 3회 정답 | 3 | wordId(평생 1회) | 40 |
+| daily-mission-bonus | 4/4 라운드마다(설계상 반복) | 10 | round signature | 12 |
+| spelling-combo | 콤보 3/5/10 | 1/2/3 | wordId:combo:date | 60 |
+| sticker-duplicate | 뽑기 중복 스티커 | 20 | stickerId:giftKey | 15 |
+| matchgame | 미니게임 라운드 | 4 | session:round:word | 5(클라 1세션/일) |
+- 서버 미경유 별: `pronunciation-unidentified`(wordId 없음, 클라이언트 전용·무제한·미기록 — 발생 0건 추정, NEEDS DECISION), 표시 전용 "실력 별"(clearedWords 수, 지급 아님).
+- 별 기반 랭킹 없음: Word King/Paul Rank = XP(xp_ledger, 서버 전용), 하우스 점수 = 클라이언트 ticketLedger(house_id 컬럼 부재로 미배포). 관리자 수동 보상 액션 없음. 홈 ⭐ 배지 = 로컬 totalStars(+실력 별) / townShopV1 ON 시 서버 reward_totals.
+
+### 766↔951 ROOT CAUSE — **TEST STALE**(정책 문제 아님)
+- `testRewardServerHardening` §7의 `< 200`은 2026-08-23(b55b96e) 원조 6앵커(Σ 91) 기준. 2026-09-06(52db9e4) 레거시 6종이 같은 REWARD_DAILY_CAP에 합쳐져 generic Σ=766. 공식이 가변형(spelling-combo/streak-bonus)의 REWARD_STARS 0 플레이스홀더를 세어 실제 상한 951(+180+5)을 undercount. 포함 경로 차이/이중 계산/픽스처 문제 아님.
+- 수정(`2e1c9ef`): 예산 숫자 없이 구조적 invariant(키 집합 동일·유한 양의 상한·미지 타입/legacy-baseline 0·가변형 최대치 유한)로 교체, Σ=951은 참고 출력. **예산 승인값 = NEEDS DECISION**.
+
+### ACTUAL DAILY REWARD MAXIMUM(정상 학생 1명, 코드 기준 계산)
+- 공식: realistic(t) = min(트리거 구조상 발생 가능 횟수 × 회당 별, cap(t) × maxStars(t)). 발생 횟수는 dedup 키 단위(date / wordId / round signature / event)로 결정.
+- 1유닛(40단어, 8라운드): 1+2+3+5+2(시험 1회)+40(발음)+40(오답 복구)+120(미션 40×3, cap)+80(라운드 보너스 8×10)+160(중복 스티커 8×20)+~6(콤보 한 연속)+20(게임) ≈ **480★**
+- 2유닛(80단어, 16라운드): 1+2+3+5+2+80+60(cap)+120(cap)+120(cap 12)+300(cap 15)+~8+20 ≈ **721★**
+- 무제한 파밍 경로 없음: pronunciation/mission-clear/spelling-combo/matchgame은 키·리셋 구조로 차단, daily-mission-bonus·sticker-duplicate는 라운드 signature 변경 시 재지급(의도된 경제)이나 서버 cap 12/15가 상한.
+
+### BUGS FOUND / FIXED(각각 수정 전 FAIL → 수정 후 PASS)
+| # | 결함 | 심각도 | 수정 전 | 수정 후 | 학생 가시 변화 |
+|---|---|---|---|---|---|
+| 1 | **writing-complete +2★/XP 누락** — 판정 플래그를 setState updater 안에서 세워 실제 React에서 항상 false(markPronunciationOk 실사고와 동일 클래스) | **P1 MISSING** | 실제 React 하네스 4/8 FAIL(0건 지급) | 8/8, `aeb6a9e` | 하루 쓰기 5정답 시 실제로 ⭐+2 지급·토스트 |
+| 2 | GuidedSession.handleQuizAnswer 멱등 가드 부재(자식 isAnswered에만 의존) → 우회 시 quizSolved 이중 증가·daily-goal 조기 | P1 후보(잠재) | 컴포넌트 이중호출 20/1 FAIL | 21/21, `90f4f93` (phase:wordId 키, retry 단계 재출제 보존) | 없음 |
+| 3 | 같은 tick grantLedgerReward 2회 → 토스트 2개(원장은 1) | Low-Med(표시) | 8/10 FAIL | 10/10, `2930757` | 중복 토스트 소멸 |
+| 4 | 퀴즈 발음 "⭐ 1개 획득" 무조건 표시(dedup no-op에도) | Med(표시) | 동일 테스트 | 동일, `2930757` | 이미 받은 단어는 "(오늘 이 단어 별은 이미 받았어요)" |
+| 5 | QA_ 반 소속 픽스처(Cksa/QACombo1)가 실학생으로 분류 → Word King 로스터/중복 감사/입실 분모 왜곡 | REAL DATA(잠재) | isRealStudentAccount true | 44/44, `13b6cf2` | 없음(감사·랭킹 정확도) |
+| 6 | §7 stale 임계값 | 테스트 | 46/1 FAIL | 52/0, `2e1c9ef` | 없음 |
+
+### DUPLICATE / EXPLOIT 테스트 결과
+- 동일 이벤트 중복(더블클릭·재제출·새로고침·뒤로가기·두 탭·재시도·StrictMode식 이중 effect·콜백 2회): 전부 1회 지급 — 서버 idempotency_key UNIQUE + 23505 흡수 + 재시도 안전 SELECT + 클라 dedup(starGrantLog/rewardLedger/reportedRef/settledRef/isAnswered). 신규: 재시도 큐→서버 원장 정확히 1행(18단언), 컴포넌트 콜백 이중호출(21단언).
+- 유일한 초과 경로: 상한 경계에서 **서로 다른 sourceId** 동시 요청(TOCTOU) — 5건 동시 시 초과 4 재현(testRewardCapRace, 본인 탭 간·소폭). DB 레벨 (student,type,day) 가드 = NEEDS DECISION(v3_47 advisory lock 선례).
+- 날짜 경계: reward date 토큰은 형식만 검사(미래 날짜 통과, 현재 계약 문서화), XP 기간키는 ±허용 폭, 서버 상한 창은 kstDayStartMs(서버 시간)·req.body 참조 0(49단언).
+
+### MISSING REWARD 테스트 결과
+- 정확히 1회 단언 존재: word-session-complete/writing-complete(신규 실제 React)/exam-complete/wrong-word-recovered/daily-goal-complete/streak-bonus. 실패·미완료 0 지급: fail-closed 경로(hardeningBehavior §8) PASS. writing-complete는 수정 전 실제 0건이었음(#1).
+
+### RANKING INTEGRITY(READ-ONLY)
+- 실학생 53명(이름 기준)·진도 46명, 음수 total_stars 0, 미표기 중복 계정 0, SCA 386행 중 primary 정확히 1개(0/2개 없음). Word King 로스터는 students.class_id 단일 키 → 이중 집계 불가. reward_totals/reward_ledger는 anon 401 → 표시 total vs 원장 합 fleet 비교 불가(NEEDS DECISION: 정기 reconcile 감사).
+- word_king_history 테이블 부재(404) → 챔피언 표시 미작동(NEEDS DECISION). 하우스 점수 소스가 클라이언트 티켓 원장(house_id 부재로 미배포, 배포 전 서버 검증 필요).
+
+### STUDENT UX
+- 수정: 토스트 중복, 발음 문구 과장. NEEDS DECISION: RewardCard "총 별"(순수 지급) vs 홈 배지(실력 별 포함) 표기 차이; cap 거부 시 로컬 total 롤백 없음(설계, townShopV1 ON 시 서버 배지와 영구 괴리 가능); 새로고침 merge는 max(local, cloud)(문서화된 수용 tradeoff).
+
+### REGRESSION(최종 트리)
+- verify:all ALL DOMAINS PASS(FAIL 0 — 기존 extra FAIL testRewardServerHardening도 해소) · build PASS · e2e 59/59 ×2 · reward 오프라인 15종 전부 PASS(testRewardServerHardening 52/0 포함 — 기존 extra FAIL 해소) · student-path-contracts 61 · ui-stability 21 · daily-ritual 118. 신규 회귀 0. 학생·진도·보상·반 설정·DB 변경 0.
+
+### 커밋(순서)
+- `2e1c9ef` test(reward): testRewardServerHardening §7 stale '< 200' 예산 임계값 → 구조적 상한 invariant로 교체(예산 숫자 미결정)
+- `e5e67f9` test(reward): 재시도 큐 → 서버 원장 정확히 1행(18단언) + 날짜 경계/기기 시계 계약 문서화(49단언) 신설
+- `ca53eac` test(account): QA_ 반 소속 픽스처 학생(Cksa/QACombo1) TEST 분류 계약 추가 — 수정 전 FAIL 실측(isRealStudentAccount true)
+- `13b6cf2` fix(account): QA_ 접두 반 소속 학생을 픽스처(TEST)로 분류 — 실학생 집계(Word King 로스터/중복 감사/입실시험 분모) 왜곡 제거
+- `8349b8c` test(reward): 실제 React(react-dom createRoot + act)로 useStudent 구동하는 재현 하네스 — writing-complete 누락 FAIL-first(8단언 중 4 FAIL)
+- `aeb6a9e` fix(reward): 쓰기 완료 보상(writing-complete +2★/XP) 누락 수정 — 임계값 판정을 setState updater 밖 클로저 값으로(markPronunciationOk 선례)
+- `1196af6` chore(status): 보상 감사 세션 2026-09-10 중간 체크포인트(60%, 커밋 6, P1 writing-complete 누락 FIXED)
+- `a2fd574` test(reward): 컴포넌트 콜백 이중 호출 계약(QuizStep/SpellingQuestion/SpeechBtn/GuidedSession) — 20 PASS / 1 FAIL(수정 전 기록)
+- `90f4f93` fix(guided): GuidedSession.handleQuizAnswer에 phase:wordId 멱등 가드 — 상위 보상 경로(onQuizAnswer)·세션 통계 이중 전달 차단(방어선)
+- `f1b1669` test(reward): 보상 표시 계약 테스트(토스트 중복/발음 별 과장, 10단언, 수정 전 8 FAIL) + 실제 React 하네스 등록(useStudentRealReact 빌더)
+- `2930757` fix(reward-ux): 같은 tick 이중 호출 시 보상 토스트 2회 방지 + 퀴즈 발음 "⭐ 1개 획득" 문구를 실제 지급 여부에 연동
+- `50057d9` test(registry): testComponentCallbackDoubleInvoke 등록(rewardSystem, extra:false) + verify:component-callback-double-invoke — 커버리지 린트 PASS 복귀
+
+### NEEDS DECISION
+1. 일일 보상 예산 승인값(이론 951 / 실제 ~480~721) → 승인 후 rewardEngine 상수 + 예산 비교 테스트.
+2. 상한 경계 TOCTOU에 DB 레벨 (student,type,day) 가드(advisory lock/유니크) 도입 여부.
+3. pronunciation-unidentified 클라이언트 전용 별 경로 폐기/서버화.
+4. RewardCard vs 홈 배지 총별 표기 통일; cap 거부 시 로컬 롤백/표시 정책.
+5. word_king_history 테이블 생성(v2_6) 또는 챔피언 UI 제거; 하우스 점수 서버 검증; total_stars↔reward_totals 정기 reconcile 감사.
+6. testComputeWordKingApi 라이브 픽스처(QA_ 이름 3명 eligible 단언)와 실계정 규칙 모순(서비스키 환경에서만 노출).
+
+### Production 안전
+DB WRITE 0 · SQL WRITE 0 · migration 0 · 학생/진도/보상 mutation 0 · 반 설정 0 · 플래그 0 · QA 계정 학습 0 · main 직접 push 0 · 머지 0.
 
 ## 2026-09-09 (120차) — 6h 자율 세션(qa/session-2026-09-09-b, base f91199d) — 권교빈 READY FOR OPERATOR, YBM 잔재 RESOLVED, 학생 경로 결함 3건 수정, 400 노이즈 제거, invariant 오탐 23→0, 모바일 Back IMPLEMENTATION READY (Production WRITE 0)
 
