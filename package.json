@@ -111,6 +111,8 @@
     "verify:reward-concurrency": "node scripts/testRewardConcurrencyMatrix.mjs",
     "verify:reward-stress": "node scripts/buildRaceBundle.mjs && node scripts/testRewardIdempotencyStress.mjs",
     "verify:double-events": "node scripts/testDoubleEvents.mjs",
+    "verify:reward-ceiling-table": "node scripts/testRewardDailyCeilingTable.mjs",
+    "verify:reward-cap-race": "node scripts/testRewardCapRace.mjs",
     "prod:check": "node scripts/prodCheck.mjs",
     "prod:hotfix": "node scripts/prodHotfix.mjs",
     "prod:plan": "node scripts/prodPlan.mjs",
