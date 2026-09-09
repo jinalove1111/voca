@@ -8,6 +8,13 @@ Production WRITE 0, 수정 8건(테스트/도구/회복력), READ-ONLY 감사, �
 _CLOSED 무접촉: V3_49/Paul Dollar/Town Shop(제품 코드), PR #24 write-practice, v3_39, untracked 운영 SQL. rollback 0, migration 0,
 반 설정·학생 데이터·플래그 변경 0, QA 계정 학습 0. 새 브랜치에서만 작업, main 직접 push 0, 머지 0._
 
+### A-0. 결과(2026-09-09 추가) — **PR #25 MERGED → Production 배포 완료 → PR #25 STATUS CLOSED**
+- 운영자 최종 리뷰(13 커밋 / 23 파일 diff 기준): production 동작 변경 1커밋(`3981199`, refreshClassSettings 실패 경로 회복력만) / test·harness 9 / docs·checkpoint 3 → READY TO MERGE AS-IS 판정.
+- 머지 직전 재확인: mergeable CLEAN, required checks 4종 SUCCESS, head `5723879` = 리뷰 SHA 동일 → 머지.
+- merge SHA `3909fc039e2b6c45a81189c3d75d07a53f841cd8` (origin/main = local main 동일). Vercel Production deployment 6344234005 SUCCESS(2026-09-09T06:51:43Z),
+  머지 SHA 로컬 빌드 번들 `index-CrtOUwfF.js` = 프로덕션 서빙 번들 동일. HTTP 200.
+- Production WRITE 0(DB/SQL/migration/플래그/반 설정/학생 데이터 전부 0). blocker 없음. 학생에게 도달한 변화 = refreshClassSettings 회복력 1건.
+- 남은 결정 사항은 아래 H(TOP 5) 그대로(PR 머지 항목은 완료).
 ### A. 요약
 - 학생 핵심 경로 회귀: verify:all ALL DOMAINS PASS(13 필수 도메인 + e2e 59/59), build PASS, 명시 스위트(student-path-contracts/
   writing-direction-resolution/ui-stability/write-practice-mixed) PASS, E2E 총 7회 연속 PASS(폴링 전환 후).

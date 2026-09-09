@@ -5,7 +5,7 @@
   "status": "completed",
   "progress": 100,
   "started_at": "2026-09-08T20:40:00Z",
-  "updated_at": "2026-09-09T05:30:00Z",
+  "updated_at": "2026-09-09T07:00:00Z",
   "base_sha": "7280c6712f7ac2409ae323ce781bdf0b9a9da585",
   "branch": "qa/overnight-2026-09-09",
   "files_owned": [
@@ -38,11 +38,22 @@
   "in_progress": [],
   "production_write": 0,
   "blocker": "none",
-  "next_action": "PR 생성(머지 금지) → 운영자 검토. TOP5: handoff 119차 H.",
+  "next_action": "PR #25 CLOSED. 남은 결정: handoff 119차 H(TOP 5) 2~5번.",
   "final": {
     "verify_all": "ALL DOMAINS PASS (extra FAIL 1: testRewardServerHardening 766<200 stale, 결정 필요)",
     "build": "PASS",
     "e2e": "59/59 x7",
     "production_write": 0
+  },
+  "pr25": {
+    "status": "CLOSED",
+    "merged": true,
+    "merge_sha": "3909fc039e2b6c45a81189c3d75d07a53f841cd8",
+    "reviewed_head": "57238794166cadf890baae450097412c751f173a",
+    "production_deployment": "SUCCESS (id 6344234005, 2026-09-09T06:51:43Z, bundle index-CrtOUwfF.js == local build)",
+    "production_http": 200,
+    "production_write": 0,
+    "blocker": "none",
+    "classification": "production-behavior 1 commit (3981199 refreshClassSettings) / test-harness 9 / docs-checkpoint 3"
   }
 }
