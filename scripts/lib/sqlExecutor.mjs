@@ -6,6 +6,8 @@
 // 는 사람이 대화형으로 `APPLY <runId>` 를 정확히 입력해야만 executor.run()
 // 을 호출하고, dry-run/CI/토큰 부재 시엔 항상 createDryRunExecutor 를 써서
 // 어느 경로로도 쓰기가 나갈 수 없게 한다.
+import { redactSecrets } from './hotfixManifest.mjs'
+
 /**
  * Supabase Management API 실행기(HTTP POST /database/query, service 토큰).
  * 이번 Phase 에서는 어디서도 실제로 run() 이 호출되지 않는다.
@@ -34,7 +36,19 @@ export function createManagementApiExecutor({ projectRef, accessToken, fetchImpl
         }
         return { ok: true, rows: body }
       } catch (err) {
-        return { ok: false, error: err?.message || String(err) }
+        // 2026-09-09 — 권교빈 유령 포인터 핫픽스 적용 시도가 undici(Node
+        // 내장 fetch) 네트워크 실패 시 정확히 "fetch failed"만 남기고 두 번
+        // 실패해(DB WRITE 0) 실제 원인(DNS/TLS/타임아웃 등은 err.cause에
+        // 있음)을 아무도 알 수 없었다. cause.code/message를 함께 노출한다
+        // (토큰/헤더는 절대 포함하지 않음 — err/err.cause에 원래 없음).
+        const base = `${err?.name || 'Error'}: ${err?.message || String(err)}`
+        const cause = err?.cause
+        const causeDetail = cause ? `${cause.code || ''} ${cause.message || ''}`.trim() : ''
+        const combined = causeDetail ? `${base} (cause: ${causeDetail})` : base
+        // 방어적 재사용(hotfixManifest.mjs, 무수정) — err.cause.message가
+        // 신뢰 불가한 하위 라이브러리 문자열이라 이론상 accessToken 원문을
+        // 그대로 되돌려줄 가능성을 배제할 수 없어, 반환 직전 한 번 더 지운다.
+        return { ok: false, error: redactSecrets(combined, { SUPABASE_ACCESS_TOKEN: accessToken }) }
       }
     },
   }
