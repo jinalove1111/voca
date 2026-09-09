@@ -1,0 +1,32 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "qa-session-2026-09-09-b-findings123",
+  "task": "QA 세션 2026-09-09-b Finding 1(IME Enter 가드)/2(EntranceTest running 단계 pb-24)/3(SpellingReview 인덱스 드리프트) 수정 + 테스트 3종 신설",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-09T00:00:00Z",
+  "updated_at": "2026-09-09T00:00:00Z",
+  "files_owned": [
+    "src/components/SpellingQuestion.jsx",
+    "src/components/EntranceTest.jsx",
+    "src/components/SpellingReview.jsx",
+    "scripts/testSpellingImeGuard.mjs",
+    "scripts/testEntranceTestPadding.mjs",
+    "scripts/testSpellingReviewIndex.mjs"
+  ],
+  "files_read": [
+    "src/components/AdminScreen.jsx",
+    "src/components/ParentScreen.jsx",
+    "src/components/SentenceLearningFlow.jsx",
+    "src/components/StudentSelect.jsx",
+    "src/components/WordDetail.jsx",
+    "scripts/testStudentPathContracts.mjs",
+    "scripts/testWritingDirectionResolution.mjs",
+    "scripts/testTextbookGradeLabel.mjs",
+    "package.json"
+  ],
+  "summary": "Finding 1: SpellingQuestion.jsx의 answer/reveal 두 onKeyDown에 !e.nativeEvent.isComposing 가드 추가(EntranceTest.jsx 기존 패턴과 동일) — IME 조합 중 Enter 오제출 방지. Finding 2: EntranceTest.jsx 'running' 단계 루트 컨테이너에 pb-24 추가(result 단계와 동일 패턴) — 고정 SpeedBtn 겹침 방지. Finding 3: 실측 결과 드리프트 실재 확인(단, 원 가설이 지목한 지점과 다름 — 세션 첫 문제부터 카운터/방향이 밀림, word c 개별 사례가 아니라 total-words.length 공식 자체 결함). SpellingReview.jsx 최소 수정: currentNo는 원본 wrongWordIds.length로, resolvedDirection은 세션 시작 시점 순서 스냅샷(initialOrderRef)에서 current.id의 원래 위치를 찾아 조회하도록 변경. 3개 신규 테스트 모두 pre-fix FAIL(git stash로 실측 재현) → 수정 후 PASS 확인. verify:student-path-contracts/writing-direction-resolution/ui-stability/testEntranceTest.mjs/verify:e2e(59) 전부 PASS, npm run build PASS. 커밋 없음(작업 지시).",
+  "blocker": null,
+  "next_action": "qa-reviewer에게 handoff — registry.mjs/package.json에 신규 테스트 3종 등록은 별도 소유 에이전트가 진행 예정(이번 작업 범위 아님)."
+}
