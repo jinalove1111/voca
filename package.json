@@ -113,6 +113,8 @@
     "verify:double-events": "node scripts/testDoubleEvents.mjs",
     "verify:reward-ceiling-table": "node scripts/testRewardDailyCeilingTable.mjs",
     "verify:reward-cap-race": "node scripts/testRewardCapRace.mjs",
+    "verify:reward-retry-exactly-one": "node scripts/testRewardRetryExactlyOneRow.mjs",
+    "verify:reward-day-boundary": "node scripts/testRewardDayBoundaryDeviceClock.mjs",
     "prod:check": "node scripts/prodCheck.mjs",
     "prod:hotfix": "node scripts/prodHotfix.mjs",
     "prod:plan": "node scripts/prodPlan.mjs",
