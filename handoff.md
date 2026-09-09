@@ -87,6 +87,11 @@ _PR #28·V3_49·overnight QA CLOSED 무접촉. Production DB/SQL/migration/학�
 ### Production 안전
 DB WRITE 0 · SQL WRITE 0 · migration 0 · 학생/진도/보상 mutation 0 · 반 설정 0 · 플래그 0 · QA 계정 학습 0 · main 직접 push 0 · 머지 0.
 
+### CI 인프라 보강(2026-09-10 추가, `dd08a95` · `6324b07`)
+- PR #29 Release Gate가 3회 연속 `npx playwright install --with-deps chromium` 단계에서 실패: 러너에 미리 깔린 Google Chrome apt 저장소 인덱스 `dl.google.com … Hash Sum mismatch`로 apt-get update 종료 코드 100(PR #28은 1.5시간 전 동일 스텝 통과 → 환경 요인). 우리 코드와 무관.
+- 수정: 설치 직전 `dl.google.com`을 참조하는 apt 소스 파일을 파일명 무관(grep, deb822 .sources 포함)으로 제거 + 실패 시 apt-get update 후 1회 재시도. `--with-deps` 유지, continue-on-error 없음, Gate 5 강도 불변. 첫 시도(glob 파일명)는 러너 파일명 불일치로 효과 없어 v2로 교체.
+- 결과: run 34384427073 Release Gate SUCCESS, PR #29 checks 4/4 SUCCESS, mergeable CLEAN.
+
 ## 2026-09-09 (120차) — 6h 자율 세션(qa/session-2026-09-09-b, base f91199d) — 권교빈 READY FOR OPERATOR, YBM 잔재 RESOLVED, 학생 경로 결함 3건 수정, 400 노이즈 제거, invariant 오탐 23→0, 모바일 Back IMPLEMENTATION READY (Production WRITE 0)
 
 _CLOSED 무접촉: PR #24/#25/#26, V3_39, V3_49/Paul Dollar/Town Shop 제품 코드, write-practice. rollback 0, migration 0, 반 설정·학생 데이터·플래그 0, QA 계정 학습 0, main 직접 push 0, 머지 0._

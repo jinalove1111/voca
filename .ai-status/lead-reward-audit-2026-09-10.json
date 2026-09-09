@@ -5,7 +5,7 @@
   "status": "completed",
   "progress": 100,
   "started_at": "2026-09-10T00:30:00Z",
-  "updated_at": "2026-09-10T06:30:00Z",
+  "updated_at": "2026-09-10T08:00:00Z",
   "base_sha": "7432638728899a1f3c81381f3bd63efe064aaf53",
   "branch": "qa/reward-audit-2026-09-10",
   "commits_so_far": [
@@ -39,5 +39,11 @@
     "e2e": "59/59 x2",
     "reward_offline_suites": "15/15 PASS",
     "production_write": 0
+  },
+  "pr": {
+    "number": 29,
+    "head": "6324b07 (+docs addendum)",
+    "ci": "4/4 SUCCESS after CI apt hardening dd08a95/6324b07",
+    "merged": false
   }
 }
