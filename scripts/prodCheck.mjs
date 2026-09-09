@@ -213,6 +213,34 @@ function renderBucket(title, items, showNames) {
   return lines
 }
 
+// notes[](evaluateInvariants() 의 별도 참고용 채널, 현재 PRIMARY_UNIT_BOOKMARK_DRIFT
+// 전용 — scripts/lib/prodInvariants.mjs 상단 주석 참고)를 renderBucket() 과
+// 동일한 마스킹/절단 규칙으로 렌더링한다. summary.warn/fail 에 전혀 집계되지
+// 않는 정보라는 것을 제목에서 바로 알 수 있게 "집계 제외"를 명시하고,
+// Critical/Needs review/Data debt 3단 버킷과는 분리된 별도 절로만 둔다
+// (classifyForUX()/renderBucket() 은 findings[] 만 다루고 이 함수와 무관 —
+// 기존 3단 분류 로직은 건드리지 않는다, 2026-09-09 잔여 갭 수정).
+function renderNotesSection(notes, showNames) {
+  const lines = []
+  if (!notes.length) return lines
+  const byCode = new Map()
+  for (const n of notes) {
+    const list = byCode.get(n.code) || []
+    list.push(n)
+    byCode.set(n.code, list)
+  }
+  for (const [code, list] of byCode) {
+    lines.push(`참고(INFO, 집계 제외): ${code} ${list.length}건`)
+    const shown = list.slice(0, 5)
+    for (const n of shown) {
+      const who = n.studentId ? maskName(n.studentName, showNames) : '(유닛)'
+      lines.push(`  - ${who} — ${n.detail}`)
+    }
+    if (list.length > 5) lines.push(`  ... 외 ${list.length - 5}건`)
+  }
+  return lines
+}
+
 async function main() {
   let data
   let envInfo = { host: null, projectRef: null, source: null }
@@ -280,7 +308,8 @@ async function main() {
   const healthResults = realStudents.map((s) => evaluateStudent(s, ctx))
   const healthSummary = summarize(healthResults)
 
-  const { findings, summary: invariantsSummary } = evaluateInvariants(invCtx)
+  const { findings, summary: invariantsSummary, notes } = evaluateInvariants(invCtx)
+  const invariantNotes = Array.isArray(notes) ? notes : []
 
   const overallFail = healthSummary.fail > 0 || invariantsSummary.fail > 0
   const overallWarn = !overallFail && (healthSummary.warn > 0 || invariantsSummary.warn > 0)
@@ -330,6 +359,10 @@ async function main() {
   // 이미 CI 에서 강제로 false 로 계산돼 있다(위 IS_CI 처리 참고).
   const outputHealthResults = healthResults.map((r) => ({ ...r, name: maskNameIfPresent(r.name, SHOW_NAMES) }))
   const outputFindings = findings.map((f) => ({ ...f, studentName: maskNameIfPresent(f.studentName, SHOW_NAMES) }))
+  // invariantNotes — 2026-09-09 잔여 갭 수정. findings[]와 동일한 마스킹
+  // 규칙을 적용하되(규칙 4/CI 보안수정과 동일 원칙), summary/ux 버킷과는
+  // 완전히 분리된 top-level 필드로만 둔다(집계 로직에 전혀 관여하지 않음).
+  const outputInvariantNotes = invariantNotes.map((n) => ({ ...n, studentName: maskNameIfPresent(n.studentName, SHOW_NAMES) }))
 
   const report = {
     runAt: new Date().toISOString(),
@@ -338,6 +371,7 @@ async function main() {
     verdict,
     health: { summary: healthSummary, results: outputHealthResults },
     invariants: { summary: invariantsSummary, findings: outputFindings },
+    invariantNotes: outputInvariantNotes,
     ux: {
       criticalCount: ux.critical.length,
       needsReviewCount: ux.needsReview.length,
@@ -361,6 +395,11 @@ async function main() {
     for (const line of renderBucket('Needs review (운영자 판단)', ux.needsReview, SHOW_NAMES)) log(line)
     log('')
     for (const line of renderBucket('Data debt (알려진 이력, 조치 불필요)', ux.dataDebt, SHOW_NAMES)) log(line)
+
+    if (invariantNotes.length) {
+      log('')
+      for (const line of renderNotesSection(invariantNotes, SHOW_NAMES)) log(line)
+    }
 
     log(`\n${'='.repeat(60)}`)
     log('DB WRITE: 0 (이 스크립트는 GET/HEAD 만 보냅니다)')

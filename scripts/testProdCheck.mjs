@@ -235,6 +235,73 @@ function runCli(args) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// 2026-09-09(qa/session-2026-09-09-b, 잔여 갭) — evaluateInvariants() 가
+// 반환하는 notes[](PRIMARY_UNIT_BOOKMARK_DRIFT, INFO 전용 채널)가 CLI 출력/
+// 저장 리포트에서는 아직 보이지 않는다(destructure 시 findings/summary 만
+// 꺼내 씀). 드리프트가 summary/exit code 를 절대 건드리지 않는다는 것과,
+// 사람용 stdout 에 별도 INFO 절로, JSON 리포트에 top-level invariantNotes
+// 로 노출되는 것을 함께 확인한다. FAIL-first: 이 절을 추가한 직후
+// scripts/prodCheck.mjs 를 아직 고치지 않은 상태에서 먼저 실행해 FAIL 하는
+// 것을 확인한 뒤 구현했다(CLAUDE.md 규칙 15).
+console.log('\n=== 5절(b). CLI — PRIMARY_UNIT_BOOKMARK_DRIFT notes[] 가 집계에 영향 없이 노출된다 ===')
+const driftFixtureFile = path.join(ROOT, 'scripts/prod/fixtures/primary-unit-bookmark-drift-20260909.json')
+const driftReportDir = path.join(TMP_DIR, 'testProdCheck.drift-reports')
+const S1_ID = 'dd000000-0000-4000-8000-000000000s1'
+{
+  const res = runCli(['--fixture', driftFixtureFile, '--json', '--report-dir', driftReportDir])
+  check('드리프트 픽스처 --json — exit 1(S3 SCA_GHOST_UNIT 등 진짜 WARN이 있어 이전과 동일)',
+    res.status === 1, `status=${res.status} stderr=${res.stderr}`)
+  let parsed = null
+  try { parsed = JSON.parse(res.stdout) } catch { /* below check fails */ }
+  check('드리프트 픽스처 --json — JSON 파싱 가능', !!parsed, res.stdout.slice(0, 300))
+  check('드리프트 픽스처 --json — invariants.summary 는 드리프트 전과 동일(fail 0 · warn 18 · pass 1 · checked 3)',
+    parsed?.invariants?.summary?.fail === 0 && parsed?.invariants?.summary?.warn === 18
+    && parsed?.invariants?.summary?.pass === 1 && parsed?.invariants?.summary?.checked === 3,
+    JSON.stringify(parsed?.invariants?.summary))
+  check('드리프트 픽스처 --json — health.summary 는 드리프트와 무관(총 3명, PASS 1 · WARN 1 · FAIL 1)',
+    parsed?.health?.summary?.total === 3 && parsed?.health?.summary?.pass === 1
+    && parsed?.health?.summary?.warn === 1 && parsed?.health?.summary?.fail === 1,
+    JSON.stringify(parsed?.health?.summary))
+  check('드리프트 픽스처 --json — top-level invariantNotes 배열이 정확히 S1 1건',
+    Array.isArray(parsed?.invariantNotes) && parsed.invariantNotes.length === 1
+    && parsed.invariantNotes[0]?.code === 'PRIMARY_UNIT_BOOKMARK_DRIFT'
+    && parsed.invariantNotes[0]?.studentId === S1_ID
+    && typeof parsed.invariantNotes[0]?.detail === 'string' && parsed.invariantNotes[0].detail.length > 0,
+    JSON.stringify(parsed?.invariantNotes))
+  check('드리프트 픽스처 --json — invariantNotes 에는 S2/S3(진짜 WARN)가 섞이지 않는다',
+    !(parsed?.invariantNotes || []).some((n) => n.studentId !== S1_ID))
+}
+{
+  const res = runCli(['--fixture', driftFixtureFile, '--report-dir', driftReportDir])
+  check('드리프트 픽스처(사람용) — exit 1(drift 와 무관, 위와 동일)', res.status === 1, `status=${res.status}`)
+  check('드리프트 픽스처(사람용) — "Invariants: FAIL 0 · WARN 18" 줄이 그대로다(집계 불변)',
+    res.stdout.includes('Invariants: FAIL 0 · WARN 18'), res.stdout)
+  check('드리프트 픽스처(사람용) — INFO 절 헤더가 정확히 "참고(INFO, 집계 제외): PRIMARY_UNIT_BOOKMARK_DRIFT 1건"',
+    res.stdout.includes('참고(INFO, 집계 제외): PRIMARY_UNIT_BOOKMARK_DRIFT 1건'), res.stdout)
+  check('드리프트 픽스처(사람용) — INFO 절에 S1 마스킹 이름("D***")이 보인다',
+    /참고\(INFO, 집계 제외\)[\s\S]*?D\*\*\*/.test(res.stdout), res.stdout)
+  check('드리프트 픽스처(사람용) — INFO 절에는 S2/S3 이름이 섞이지 않는다(마스킹 전 원본 없음 + 다른 접두문자 없음)',
+    !res.stdout.includes('DriftStudentS1') && !res.stdout.includes('DriftStudentS2') && !res.stdout.includes('DriftStudentS3'))
+}
+{
+  // 보고서 파일에도 invariantNotes 가 그대로 저장된다.
+  const reportFiles = fs.readdirSync(driftReportDir).filter((f) => f.endsWith('.prodcheck.json'))
+  const latest = reportFiles.map((f) => path.join(driftReportDir, f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0]
+  const reportJson = JSON.parse(fs.readFileSync(latest, 'utf8'))
+  check('저장된 리포트 JSON에도 top-level invariantNotes(S1 1건)가 있다',
+    Array.isArray(reportJson.invariantNotes) && reportJson.invariantNotes.length === 1
+    && reportJson.invariantNotes[0]?.code === 'PRIMARY_UNIT_BOOKMARK_DRIFT')
+  check('저장된 리포트 JSON의 invariants.summary 는 여전히 fail 0 · warn 18', reportJson.invariants?.summary?.fail === 0 && reportJson.invariants?.summary?.warn === 18)
+}
+{
+  // --show-names(비 CI) 로는 INFO 절도 원본 이름을 보여줘야 한다(기존
+  // Critical/Needs review/Data debt 버킷과 동일 규칙).
+  const res = runCli(['--fixture', driftFixtureFile, '--show-names', '--report-dir', driftReportDir])
+  check('--show-names — INFO 절에 원본 이름 "DriftStudentS1" 이 보인다',
+    res.stdout.includes('DriftStudentS1'), res.stdout)
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // Phase 8(2026-09-03) 확장 — invariant 8종 + impact/recommended + baseline
 // 헬퍼 + synth 픽스처 빌더 + UX 출력. FAIL-first: 이 절들을 추가한 직후
 // scripts/lib/prodInvariants.mjs / prodDataLoader.mjs / prodCheck.mjs /
