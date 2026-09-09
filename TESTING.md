@@ -1128,3 +1128,21 @@ _append. 상세: `handoff.md` 2026-09-09(119차)._
 | `tests/e2e/student.spec.mjs` | 59 | 고정 sleep 6곳 → waitUntil 폴링(약 37.6s→33s), 가이드 완료 판정 정규식 정밀화 |
 
 - Known(extra, 비게이팅): `testRewardServerHardening` "하루 최대 부풀림 < 200" — 승인된 레거시 상한 반영으로 766. 운영자 결정 후 임계값 갱신.
+
+## 관련 항목: 6h 세션 2026-09-09-b — 신규 스위트 9종(+fixture 1) (120차)
+
+_append. 상세: `handoff.md` 2026-09-09(120차)._
+
+| 파일 | 단언 | 대상 | extra |
+|---|---|---|---|
+| `scripts/testSqlExecutorErrors.mjs` | 7 | Management API 실행기 err.cause 전파·토큰 미노출 | false |
+| `scripts/testColumnProbeMemo.mjs` | 6 | refreshStudents/refreshClassSettings 42703 tier 메모(오프라인 번들) | false |
+| `scripts/testSpellingImeGuard.mjs` | 12 | SpellingQuestion Enter isComposing 가드 | false |
+| `scripts/testEntranceTestPadding.mjs` | 6 | EntranceTest running/result pb-24 | false |
+| `scripts/testSpellingReviewIndex.mjs` | 12 | SpellingReview 문제 번호/방향 인덱스 드리프트 | false |
+| `scripts/testNavHistoryModel.mjs` | 59 | 모바일 Back 순수 상태기계 프로토타입(설계 검증) | true |
+| `scripts/testRewardDailyCeilingTable.mjs` | 48 | 일일 상한표(951), Σ공식 766 undercount 재현, legacy-baseline 제외 | true |
+| `scripts/testRewardCapRace.mjs` | 9 | 상한 경계 동시요청 TOCTOU 재현(KNOWN GAP 단언) | true |
+| `scripts/testProdCheck.mjs`(확장, fixture primary-unit-bookmark-drift-20260909) | 258→278 | PRIMARY_UNIT_BOOKMARK_DRIFT notes / 실제 mismatch WARN 유지 | false |
+
+- Known(extra, 비게이팅): `testRewardServerHardening` "하루 최대 부풀림 < 200" — Phase 6 NEEDS DECISION(예산 승인값 후 타입별 표로 교체).

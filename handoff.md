@@ -1,7 +1,81 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-09 (119차, 야간 12h 자율 QA/하드닝 — qa/overnight-2026-09-09,
-Production WRITE 0, 수정 8건(테스트/도구/회복력), READ-ONLY 감사, 모바일 Back 설계.
-118차 write-practice 기록은 아래 그대로 보존)_
+_최종 갱신: 2026-09-09 (120차, 6h 자율 세션 qa/session-2026-09-09-b — 권교빈 READY FOR OPERATOR,
+YBM 잔재 RESOLVED, 학생 경로 결함 3건 수정, 400 노이즈 제거, invariant 오탐 23→0, 모바일 Back
+IMPLEMENTATION READY, Production WRITE 0. 119차 이하 기록은 그대로 보존)_
+
+## 2026-09-09 (120차) — 6h 자율 세션(qa/session-2026-09-09-b, base f91199d) — 권교빈 READY FOR OPERATOR, YBM 잔재 RESOLVED, 학생 경로 결함 3건 수정, 400 노이즈 제거, invariant 오탐 23→0, 모바일 Back IMPLEMENTATION READY (Production WRITE 0)
+
+_CLOSED 무접촉: PR #24/#25/#26, V3_39, V3_49/Paul Dollar/Town Shop 제품 코드, write-practice. rollback 0, migration 0, 반 설정·학생 데이터·플래그 0, QA 계정 학습 0, main 직접 push 0, 머지 0._
+
+### PHASE 1 — 권교빈(Liam) ghost pointer: **READY FOR OPERATOR (READY TO APPLY: YES)**
+- 하네스 fetch 실패 코드 원인: `scripts/lib/sqlExecutor.mjs` 실행기 catch가 `err.message`("fetch failed")만 반환해 undici `err.cause`(ENOTFOUND/ECONNRESET/TLS 코드)를 버림 → 진단 불가. 수정(`db146b2`): cause 전파 + accessToken redact, 7케이스 테스트(수정 전 2 FAIL).
+- 환경 원인(UNVERIFIED): 오늘 curl/Node 모두 api.supabase.com 도달(토큰 없이 401), DNS IPv4 2개, 프록시 env 없음. 과거 실패 로그는 저장소에 없음. 재발 시 이제 cause가 리포트에 남는다.
+- READ-ONLY prod:plan(2026-09-09, run 20260909071228-c49c82): 매니페스트 sha256 12f2fd89… 일치, preflight 1/1, must_not_change 8/8, VERIFY==WRITE PASS, invariants delta new_fail 0/new_warn 1/resolved 3, READY TO APPLY, DB WRITE 0.
+- 실행 경로: **1순위 HARNESS** — `SUPABASE_ACCESS_TOKEN` 설정된 대화형 셸에서 `npm run prod:apply -- ops/hotfix/manifests/F-gyobin-ghost-pointer.json --env production` → `APPLY <runId>` 입력. **2순위 SQL EDITOR** — `production_gyobin_ghost_pointer_apply.sql`(하네스 생성 guarded SQL 복사: 정확 id+student_id+기존 unit WHERE, row_count=1·총 1 단언, must_not_change 8건 raise→전체 롤백) → `production_gyobin_ghost_pointer_post_verify.sql`(SELECT 5행 ok=true) / 롤백 `production_gyobin_ghost_pointer_rollback.sql`. 셋 다 untracked 운영자 파일. 기대 delta UPDATE 1 / INSERT 0 / DELETE 0.
+- 무접촉: primary SCA e5b0eced, ghost unit 행, 유닛 "7", 다른 학생/SCA, 보상/진도.
+
+### PHASE 2 — YBM Unit3 header residue: **VERIFIED / RESOLVED (READY TO DELETE: N/A, delta 0)**
+- READ-ONLY: unit `6ec4b139-6eb1-431b-be67-6f6bb4fc36b4` "Unit3"(중2 YMB 박준원) 단어 **40**, word f804c099 **부재**, header-like(어구/의미/English/Korean) 0 → 알려진 상태(41/잔재 1)는 stale, v3_46 실행 결과와 정합. 삭제 패키지 불필요.
+- 범위 밖 별도 후보(NEEDS DECISION, 미조사·미수정): word `4eb625e1` "어휘·어구/의미", unit 113ee184 "Unit"(2학년 천재소영순, 단어 1개), 참조 0(119차 기록).
+
+### PHASE 3 — 학생 핵심 경로 감사: 결함 3건 FIXED(`d59c7f8` 테스트 → `c9dd262` 수정), 나머지 OK
+| 경로 | 결함 | 심각도 | 수정 | 테스트 |
+|---|---|---|---|---|
+| G/H 쓰기(en2kr) | Enter가 IME 조합 중 미완성 음절 제출 | MED | SpellingQuestion onKeyDown 2곳 `!e.nativeEvent.isComposing`(EntranceTest:452 패리티) | testSpellingImeGuard 12 |
+| 입실시험 running | 고정 SpeedBtn이 확인/모르겠어요 버튼 겹침(360×640) | LOW-MED | 루트 컨테이너 `pb-24`(result 단계와 동일) | testEntranceTestPadding 6 |
+| I 복습 | classWords에 없는 id가 큐에 남으면 "문제 N/M"·방향 인덱스가 첫 문제부터 밀림(실재 확인) | LOW | currentNo=원본 wrongWordIds.length, 방향=세션 시작 순서 스냅샷 indexOf | testSpellingReviewIndex 12 |
+- OK 확인: 로그인 UUID 세션·이름 비식별, 교재 전환 북마크(setPrimaryTextbook), 유닛 해석 FK-first/ghost 차단, 퀴즈 옵션 사전 노출 없음·key 리마운트, 보상 dedup/큐 replay, syncGenRef·visibilitychange flush, todayStr 로컬 TZ(알려진 tradeoff).
+- 보고만: 미가드 Enter 핸들러 AdminScreen:1916,2062 / ParentScreen:130 / SentenceLearningFlow:373 / StudentSelect:484,489,508,514 / WordDetail:319,555(한글 IME 입력 여부 개별 판단 필요).
+
+### PHASE 4 — 모바일 Back HIGH: **IMPLEMENTATION READY** (`d707a00`, 제품 코드 무변경)
+- 설계안 A(화면별 history 항목+루트 센티널, Phase-1 범위 제한) / B(단일 센티널 트랩) / C(상위 hash 라우터) 결정 매트릭스 → **A 채택**. 순수 상태기계 `docs/design/prototypes/navHistoryModel.mjs`(screen 21종, 추적 17, 제외 4) + testNavHistoryModel 59단언(guidedSession 이탈 시 screenChanged=false → key 리마운트 없음 증명).
+- Phase 1 = 순수 모델 + 어댑터, 플래그 `mobileBackGuard` 기본 OFF, 별도 PR. 실기기 스모크 미확인: iOS/Android 제스처→popstate, 카카오 WebView, history.go(-n).
+
+### PHASE 5 — 400 Bad Request(students/classes probe): FIXED(`bfd6de7`)
+- 호출 경로: initWordLibrary → refreshAllForLogin(로그인) → App 포커스/visibility 복귀 → StudentSelect 명단 새로고침 → 관리자 쓰기 후 8곳. 매 호출 wide select(house_id v2_7 / gamification_enabled v2_5 미실행) 프로브 → 42703 → 폴백. 기능 영향 0, 노이즈 반복.
+- 수정: 모듈 레벨 tier 메모 — 42703로 확인된 tier는 페이지 로드당 1회만 프로브(새로고침 시 재프로브 → 규칙 9 forward-compat 유지). 비-42703 오류 캐스케이드·성공 매핑·PR #25 게이팅 불변. testColumnProbeMemo 6케이스(수정 전 3 FAIL + reset 부재).
+- 잔여 결정: 첫 프로브 1회 400은 스키마 미확인(anon으로 information_schema 불가)이라 남음 — 제거하려면 v2_5/v2_7 실행 또는 프로브 폐기 결정.
+
+### PHASE 6 — Reward hardening 766 vs 200: **NEEDS DECISION** (`a7985a7` 결정 지원 테스트, 제품 무변경)
+- 766 = Σ cap×REWARD_STARS 구조적 최악치(원조 6앵커 86 + 2026-09-06 레거시 6종 660). 공식이 가변형(spelling-combo 60×3=180, streak-bonus 1×5) 을 0으로 세어 실제 이론 상한 **951/일**. 현실적 heavy user는 수백(sticker-duplicate 300·mission-clear 120·pronunciation 120 상한 근접 가능).
+- 안전: 금액·키는 서버 결정(resolveRewardStars/rewardIdempotencyKey), 세션 토큰 필수, legacy-baseline은 SOURCE_RULES 밖이라 상한 경로 자체에 못 들어감(구성상 제외). 위험: 상한 검사 check-then-insert(TOCTOU) — 서로 다른 sourceId 동시 5건에서 5/5 성공(초과 4) 재현(testRewardCapRace, 본인 탭 간 한정·소폭).
+- 결정 필요: (a) 일일 예산 승인값(예: rewardEngine에 REWARD_DAILY_BUDGET_APPROVED 상수) → hardening 테스트를 타입별 표 + 예산 비교로 교체(임계값 단순 변경 금지), (b) DB 레벨 (student,type,day) 가드 도입 여부.
+
+### PHASE 7 — detector 정밀화: FIXED(`b5ff972`, fixture-first) — 라이브 prod:check invariants WARN **44 → 21**
+- PRIMARY_UNIT_MISMATCH: 같은 교재·양쪽 학습 가능 유닛이면 notes[](PRIMARY_UNIT_BOOKMARK_DRIFT, summary 비집계)로, 다른 교재/고아/ghost는 WARN 유지(숨김 없음). fixture primary-unit-bookmark-drift-20260909(S1/S2/S3), testProdCheck 258→278, testOpsStatus 156→158.
+- 유지: STUDENT_CLASS_IS_CONTAINER 6(승인 보류), GHOST_UNIT_PRESENT 7 + UNIT_WORDS_ABNORMAL 2, UNIT_CONTENT_DUPLICATE 3, TEXTBOOK_SIMILAR_NAME 1, AMBIGUOUS_TEXTBOOK 1, SCA_GHOST_UNIT 1(권교빈). notes는 prodCheck 사람용 리포트 미표시(후속).
+
+### PHASE 8 — 테스트/도구 안정화
+- testTownShop CRLF: 06f6ba8(PR #25 머지)로 해결 상태 재확인 3회 PASS. 오프라인 6스위트 3라운드 전부 PASS, e2e 59/59 ×5(세션 내). flaky 0.
+
+### PHASE 9 — dead/stale code: 미사용 import 11건 제거(`f5e133e`), 나머지 보고
+- 보고만: 미소비 레거시 플래그 22개(FeatureManagementPanel 연동 → 운영자 결정), 42703 폴백 3곳(v2.0/v2.1/v3.13 실행됨이나 규칙 9로 KEEP), stripComments 7중복(테스트, 별도 리팩터), todayStr/fmtDay 3중복, normalizeName 2(의미 상이).
+
+### PHASE 10 — 전체 검증(최종 트리 `620968e`)
+- build PASS · verify:all ALL DOMAINS PASS(신규 8 스크립트 실행 확인) · registry coverage PASS · e2e 59/59 ×5 · testProdCheck 278/0 · testProdHotfix 383/0 · testOpsStatus 158/0 · 오프라인 6스위트 ×3 PASS.
+- FAIL 분류: extra testRewardServerHardening 1 = PRE-EXISTING(Phase 6 NEEDS DECISION). NEW REGRESSION 0.
+
+### 커밋(순서)
+- `db146b2` fix(harness): Management API 실행기 오류 문자열에 undici err.cause(code/message) 전파 — "fetch failed" 진단 불가 해소
+- `c46efd3` chore(status): 6h 세션 2026-09-09-b 체크포인트(P1 READY FOR OPERATOR, P2 RESOLVED, 나머지 진행 중)
+- `d707a00` docs(design)+test: 모바일 Back — 설계안 3종 비교·결정(A 제한형) + 순수 상태기계 프로토타입 + 59단언 (제품 코드 무변경, VERDICT: IMPLEMENTATION READY)
+- `bfd6de7` fix(probe): refreshStudents/refreshClassSettings 컬럼 프로브 42703 tier를 페이지 로드당 1회만 — 반복 400 노이즈 제거(폴백 의미 불변)
+- `a7985a7` test(reward): 일일 상한표(진짜 이론 상한 951, Σ공식 766 undercount 재현) + 상한 경계 동시요청 TOCTOU 재현 — extra, 결정 지원용(제품 코드 무변경)
+- `b5ff972` fix(detector): PRIMARY_UNIT_MISMATCH 오탐 정밀화 — 같은 교재·학습 가능 유닛 간 북마크 드리프트는 WARN 대신 notes(PRIMARY_UNIT_BOOKMARK_DRIFT)
+- `f5e133e` chore(dead-code): 미사용 import 11건 제거(grep 확정, import 목록만 변경, 동작 무변경)
+- `d59c7f8` test(student-path): Phase 3 감사 결함 3건 재현 테스트 — SpellingQuestion IME 가드(12), EntranceTest running pb-24(6), SpellingReview 인덱스 드리프트(12)
+- `c9dd262` fix(student-path): 쓰기 IME 조합 중 Enter 제출 차단 + 입실시험 진행 화면 pb-24 + 복습 문제 번호/방향 인덱스 드리프트 수정
+- `620968e` test(registry): 세션 신규 테스트 5종 등록(column-probe-memo, nav-history-model[extra], spelling-ime-guard, entrance-test-padding, spelling-review-index) — 커버리지 린트 PASS 복귀
+
+### Production 안전
+DB WRITE 0 · SQL WRITE 0 · migration 0 · student mutation 0 · progress/reward mutation 0 · class setting mutation 0 · feature flag mutation 0 · QA 계정 학습 0. 모든 프로덕션 접근은 anon GET/HEAD + prod:plan/prod:check READ-ONLY.
+
+### 운영자 다음 행동 TOP 5
+1. 권교빈 pointer 적용(위 1순위 HARNESS 또는 2순위 SQL EDITOR) → post_verify 5행 ok → 116차 GHOST 참조 실학생 0.
+2. 이 세션 PR 검토·머지 결정(제품 동작 변경 = Phase 3 결함 3건 + Phase 5 프로브 메모; 나머지 테스트/도구/문서).
+3. Phase 6 결정: 일일 보상 예산 승인값 + DB 레벨 상한 가드 도입 여부.
+4. 모바일 Back Phase 1(플래그 OFF) 착수 승인.
+5. 데이터 결정: 잔재 유닛 9개·잔재 단어 4eb625e1·Presentation 6 -2026 휴면 6명·레거시 플래그 22개 정리.
 
 ## 2026-09-09 (119차) — 야간 12h 자율 QA/하드닝(브랜치 qa/overnight-2026-09-09, base 7280c67) — Production WRITE 0, 수정 8건(테스트/도구/회복력), READ-ONLY 데이터 감사, 모바일 Back 설계 문서
 

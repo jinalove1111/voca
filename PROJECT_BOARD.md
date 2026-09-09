@@ -964,6 +964,9 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
 
 ## DONE (최근 완료, 참고용 — 전체 이력은 `ROADMAP.md`/`handoff.md`)
 
+### [P1] 6h 자율 세션 2026-09-09-b — 권교빈 READY FOR OPERATOR / YBM 잔재 RESOLVED / 학생 경로 결함 3건 FIXED / 400 노이즈 FIXED / invariant 오탐 FIXED / 모바일 Back IMPLEMENTATION READY / Reward 766 NEEDS DECISION (120차, PR 대기)
+- 브랜치 `qa/session-2026-09-09-b`(base f91199d). Production WRITE 0. 운영자 행동·결정 목록: `handoff.md` 120차 TOP 5.
+
 ### [P1] 야간 QA 2026-09-09 — 회귀 PASS, 수정 8건(테스트/도구/회복력), 감사 분류, 모바일 Back 설계 (119차, PR 대기)
 - **PR #25 MERGED · CLOSED(2026-09-09)** — merge `3909fc0`, Production deployment SUCCESS, HTTP 200, Production WRITE 0, blocker 없음.
 - 브랜치 `qa/overnight-2026-09-09`(base 7280c67). Production WRITE 0. 상세/결정 필요 항목: `handoff.md` 119차 D·E·H.
