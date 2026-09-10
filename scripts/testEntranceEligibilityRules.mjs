@@ -114,6 +114,29 @@ check('실제 학생은 통과', !isArchivedOrFixtureStudentName('Jinaa') && !is
 check('빈 이름/null 안전(제외 아님)', !isArchivedOrFixtureStudentName('') && !isArchivedOrFixtureStudentName(null))
 check('이름 중간의 dup은 걸린다(아카이브 관례가 접미이므로 보수적으로 제외)', isArchivedOrFixtureStudentName('x_DUP2_y'))
 
+console.log('\n4-b. className 선택 인자(2026-09-10 야간 QA 감사) — 이름은 평범해도 소속 반이 QA_*')
+{
+  // 배경: "Cksa"(반 QA_SelfSetupTest), "QACombo1"(반 QA_ComboFixT)은 이름
+  // 자체가 qa_/_qa_로 시작하지 않아 4절 규칙을 통과했다. classifyAccount
+  // (scripts/lib/studentHealthRules.mjs)는 ctx.classById로 이미 이 갭을
+  // 막았지만, 이 함수(및 accountStatus.js의 isArchivedStudent)는 이름만
+  // 받아서 반을 볼 방법이 없었다 — className을 2번째 선택 인자로 추가.
+  check('이름 평범 + 반 "QA_SelfSetupTest" → true(Cksa 실측)',
+    isArchivedOrFixtureStudentName('Cksa', 'QA_SelfSetupTest'))
+  check('이름 평범 + 반 "QA_ComboFixT" → true(QACombo1 실측)',
+    isArchivedOrFixtureStudentName('QACombo1', 'QA_ComboFixT'))
+  check('_QA_ 접두 반 이름도 걸린다', isArchivedOrFixtureStudentName('평범이름', '_QA_보조반'))
+  check('반 이름 "QA"(밑줄 없음)는 오탐 아님', !isArchivedOrFixtureStudentName('평범이름', 'QA'))
+  check('반 이름 "Quality Class"는 오탐 아님', !isArchivedOrFixtureStudentName('평범이름', 'Quality Class'))
+  check('실제 학생 + 실제 반(MS Advanced Class) → false', !isArchivedOrFixtureStudentName('홍길동', 'MS Advanced Class'))
+  check('이름 규칙(qa_)은 className 없이도 여전히 그대로 걸린다(기존 1-인자 호출 바이트 동일)',
+    isArchivedOrFixtureStudentName('qa_x') && isArchivedOrFixtureStudentName('qa_x', undefined))
+  check('className이 undefined/null/빈문자열이어도 안전(기존 동작 불변)',
+    !isArchivedOrFixtureStudentName('홍길동', undefined) &&
+    !isArchivedOrFixtureStudentName('홍길동', null) &&
+    !isArchivedOrFixtureStudentName('홍길동', ''))
+}
+
 console.log('\n5. 관리자 분모 == 학생 화면 대상 (같은 규칙을 쓰는지 모형으로 확인)')
 {
   // 관리자 분모를 "전 학생을 규칙으로 걸러낸 집합"으로 계산하고,

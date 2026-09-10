@@ -964,6 +964,9 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
 
 ## DONE (최근 완료, 참고용 — 전체 이력은 `ROADMAP.md`/`handoff.md`)
 
+### [P0/P1] 보상 시스템 6h 감사 2026-09-10 — writing-complete +2★ 누락(P1) FIXED, 표시 결함 2·방어선 1·QA 분류 1 FIXED, 766↔951 TEST STALE, invariant 7종 (121차, PR 대기)
+- 브랜치 `qa/reward-audit-2026-09-10`(base 7432638). Production WRITE 0. NEEDS DECISION 6건: `handoff.md` 121차.
+
 ### [P1] 6h 자율 세션 2026-09-09-b — 권교빈 READY FOR OPERATOR / YBM 잔재 RESOLVED / 학생 경로 결함 3건 FIXED / 400 노이즈 FIXED / invariant 오탐 FIXED / 모바일 Back IMPLEMENTATION READY / Reward 766 NEEDS DECISION (120차, PR 대기)
 - **권교빈 ghost pointer CLOSED(2026-09-09)** — 운영자 SQL Editor apply UPDATE 1, post_verify 11/11 true. 재실행·재조사 금지.
 - 브랜치 `qa/session-2026-09-09-b`(base f91199d). Production WRITE 0. 운영자 행동·결정 목록: `handoff.md` 120차 TOP 5.

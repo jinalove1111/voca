@@ -148,8 +148,14 @@ function PronStep({ word, wordAudioUrl, canRecord, onSuccess, onAttempt }) {
           // 뜻일 뿐(blob.size>0 = 성공, 위 주석 참고) — WordDetail.jsx의
           // SpeechBtn(ungraded 분기, "✅ 녹음 완료!")과 같은 정직한 문구로
           // 통일. 별 지급 조건(blob.size>0)은 그대로, 문구만 변경.
-          setMsg('녹음 완료! ⭐ 1개 획득!')
-          onSuccess()
+          // 2026-09-10 — onSuccess()(handlePronSuccess → markPronunciationOk)의
+          // 반환값으로 "오늘 이 단어 별을 실제로 받았는지"를 판정 —
+          // markPronunciationOk가 grantReward의 dedup 결과를 그대로
+          // 돌려주므로(같은 단어를 오늘 이미 연습해 별을 받은 경우 false),
+          // 별을 못 받았는데 "1개 획득!"이라고 과장하지 않는다. WordDetail.jsx
+          // 의 SpeechBtn(항상 실제 지급 여부와 일치하는 문구)과 동일 원칙.
+          const granted = onSuccess()
+          setMsg(granted ? '녹음 완료! ⭐ 1개 획득!' : '녹음 완료! (오늘 이 단어 별은 이미 받았어요)')
         } else {
           setTries(prev => {
             const n = prev + 1
@@ -340,7 +346,11 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
   const handlePronSuccess = () => {
     setPronD(true)
     playSuccessSound()
-    onMarkPronunciationOk?.(current?.word?.dbId)
+    // 2026-09-10 — onSuccess()가 이 반환값을 그대로 받아 "별 실제 지급
+    // 여부"에 맞는 문구를 고르므로(PronStep 내부, 아래 onSuccess 참고),
+    // 이 중간 래퍼가 반환값을 삼키지 않도록 그대로 전달한다. 지급 로직
+    // 자체(어떤 인자로 부르는지 등)는 한 글자도 바꾸지 않음.
+    return onMarkPronunciationOk?.(current?.word?.dbId)
   }
 
   const handleNext = () => {

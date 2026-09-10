@@ -1861,7 +1861,9 @@ export async function fetchEntranceRosterForClass(classId) {
     // 아카이브/중복/QA 픽스처 제외에 더해, 운영자 테스트/QA 계정(Cookie/
     // Paul/Jinaa/Barry)도 관리자 분모에서 제외한다(2026-08-11 운영자 확정
     // — 이 함수는 관리자 분모 전용이라 학생 화면 응시 자격에는 영향 없음).
-    .filter((s) => s && !isArchivedOrFixtureStudentName(s.name) && !isTestAccountStudent(s))
+    // s.className도 함께 넘긴다(2026-09-10 야간 QA 감사) — 이름은 평범해도
+    // 소속 반이 QA_*인 픽스처(실측: Cksa/QACombo1)까지 분모에서 제외한다.
+    .filter((s) => s && !isArchivedOrFixtureStudentName(s.name, s.className) && !isTestAccountStudent(s))
     .map((s) => ({ id: s.id, name: s.name, unitName: getStudentUnit(s.id) }))
 }
 

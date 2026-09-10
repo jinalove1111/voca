@@ -99,8 +99,28 @@ jobs:
       # E2E_SKIP_IF_NO_BROWSER 관용이 있지만 CI 는 그 관용을 쓰지 않는다 —
       # scripts/verifyRelease.mjs Gate 5 주석 참고). --with-deps 로 ubuntu
       # 러너에 필요한 OS 라이브러리까지 함께 설치한다.
+      # 2026-09-10 (run 34383158319) — 러너에 미리 깔린 Google Chrome apt 소스가
+      # Playwright 의 번들 Chromium 과 무관한데도, dl.google.com 인덱스가 일시
+      # 손상되면 --with-deps 의 apt-get update 가 Hash Sum mismatch 로 통째로
+      # 실패한다(PR #28 에서는 1.5시간 전 동일 스텝이 통과 — 일시적 환경 문제로
+      # 판정). apt-get update 전에 이 소스만 제거해 게이트 자체 강도는 유지한다.
+      #
+      # 2026-09-10 (run 34383983321) — 위 파일명 고정 방식(google-chrome*.list /
+      # google.list)이 재발을 못 막았다. 현재 ubuntu-latest(24.04) 러너 이미지는
+      # 같은 저장소를 deb822 형식(`/etc/apt/sources.list.d/google-chrome.sources`)
+      # 으로 등록해 두는 경우가 있어 파일명이 다르면 삭제가 조용히 no-op 된다.
+      # 그래서 파일명을 가정하지 않고 dl.google.com 문자열을 담은 모든 소스
+      # 파일(및 메인 sources.list)을 grep 으로 찾아 지우고, 실제로 뭘 지웠는지
+      # (그리고 남은 게 있는지) 로그에 증거로 남긴다.
+      - name: Remove unrelated Google Chrome apt source (Gate 5 prep — avoids dl.google.com Hash Sum mismatch blocking apt-get update)
+        run: |
+          set -x
+          sudo grep -rlE "dl\.google\.com" /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null | xargs -r sudo rm -f
+          ls -la /etc/apt/sources.list.d/ || true
+          sudo apt-get update || true   # 사전 인덱스 갱신(실패해도 다음 스텝의 --with-deps 가 다시 시도)
+
       - name: Install Playwright chromium (Gate 5 — browser E2E)
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium || (sleep 20 && sudo apt-get update && npx playwright install --with-deps chromium)
 
       # 일부 검증 스크립트는 자격증명을 process.env 가 아니라 .env "파일"에서
       # 직접 읽는다(예: scripts/testStudentSelectPinStatus.mjs 의
