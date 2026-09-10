@@ -1162,3 +1162,10 @@ _append. 상세: `handoff.md` 2026-09-10(121차)._
 | `scripts/testRewardServerHardening.mjs`(§7 교체) | 46→52 | stale `< 200` → 구조적 상한 invariant(예산 미결정) | true(기존) |
 
 - 실제 React 하네스 도입 의미: `scripts/fakeReact.mjs`는 setState updater를 동기 실행해 "updater 안 플래그 → 직후 읽기" 클래스를 볼 수 없음. 같은 클래스 정적 스캔(외부 let 변수) 결과 useStudent 내 추가 사례 0.
+
+## 관련 항목: 모바일 뷰포트 회귀 스펙 신설 — `tests/e2e/mobileViewports.spec.mjs` (2026-09-10)
+
+_append. `npm run verify:e2e`(`scripts/testBrowserE2E.mjs`)의 `[student]`/`[admin]`에 이어 `[mobile]` spec 추가 — 360×640/375×667/390×844/412×915 4개 뷰포트에서 로그인/대시보드/단어공부/쓰기연습/퀴즈 화면의 가로 스크롤 유무, 44px 미만 터치 타겟, 16px 미만 입력 폰트(iOS 자동 확대 유발), 고정 SpeedBtn(`button[aria-label="발음 재생 속도"]`) 겹침을 검증(총 104단언, `student.spec.mjs`의 login/openMoreMenu 헬퍼를 그 파일 수정 없이 복제해 재사용)._
+
+- **실측 FAIL 1건(앱 결함, 단언 완화 없이 그대로 유지)**: `[375x667] 대시보드 — 고정 SpeedBtn이 히어로 CTA와 겹치지 않음` — `heroBox={x:40,y:621.5,w:295,h:68}` vs `speedBox={x:268.06,y:603,w:86.94,h:44}`(약 67×25.5px 겹침). 신규 계정 첫 방문 히어로 CTA("▶ 오늘의 학습 시작")가 이 뷰포트 높이에서만 고정 SpeedBtn과 겹친다 — 360×640/390×844/412×915에서는 재현되지 않음(뷰포트 높이 의존 회귀, iPhone SE(2nd/3rd)·iPhone 6/7/8 실기 해상도). 2회 연속 재현 확인, 앱 코드/단언 모두 미수정 — 수정은 운영자 판단 대기.
+- 나머지 103단언 PASS, 4개 뷰포트 모두 미mock 요청 0건/mock 내부 오류 0건.
