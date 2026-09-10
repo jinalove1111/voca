@@ -3610,6 +3610,25 @@ export async function postTownPurchase(itemId) {
   }
 }
 
+// Paul Town V1(2026-09-11) — 환영 보상 1회 지급. postTownPurchase와 완전히
+// 동일한 계약(같은 엔드포인트/세션 토큰 처리/실패 흡수) — action만 다르다.
+// 서버(api/grant-xp.js)가 idempotency를 최종 보장하므로(이미 지급됐으면
+// granted:false로 응답), 클라이언트는 재시도해도 안전하지만 호출자
+// (useTownShop.claimWelcome)가 마운트당 1회로 추가 방어한다.
+export async function postTownWelcomeClaim() {
+  if (!_sessionToken) return { ok: false, reason: 'relogin_required' }
+  try {
+    const res = await fetch('/api/grant-xp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'claim_town_welcome', token: _sessionToken }),
+    })
+    return await res.json()
+  } catch {
+    return { ok: false, reason: 'network' }
+  }
+}
+
 export async function fetchXpTotal(studentId) {
   if (!studentId) return 0
   const { data, error } = await supabase
