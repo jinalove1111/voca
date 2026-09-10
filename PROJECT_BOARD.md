@@ -615,6 +615,31 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
 
 ## VERIFY
 
+### [P1] 초등 5개 반 확장 준비 2026-09-10 — 브랜치 `qa/elementary-5-readiness-2026-09-10`, PR 생성/merge 결정 대기 (122차)
+- 근거: `handoff.md` 2026-09-10(122차).
+- 내용: 초등 확장 전 READ-ONLY 조사(anon key, DB WRITE 0) + 학생 경로 결함
+  수정 3건.
+  - DB에는 초등 후보 regular 반이 **3개만** 존재(Presentation 6
+    `1693f32b`/Pre-Middle School `39e9acb1`/Pre-middle school 5학년
+    `36bcd6fa`) — "5개 반" 중 2개는 아직 DB에 없어 운영자 반 생성/학생
+    등록 필요.
+  - 결함 수정: F2 `QuizGame.makeOptions` 동일 뜻 선택지(`fe2771d`,
+    `testQuizGameOptions.mjs` 신설) / F3 `spelling.js` "~" 플레이스홀더
+    미처리로 정답 오채점(`40b19f8`, `testSpelling.mjs` §14) / M1 375x667
+    대시보드 고정 SpeedBtn이 히어로 CTA 가로챔(`cc88e72`, 신규
+    `[mobile]` 스펙 `2e54130`).
+  - 쓰기 정책 감사: 쓰기 연습은 이미 3반 모두 양방향(변경 불필요), 일일
+    의식(GuidedSession)에는 `spelling_test_enabled` false로 쓰기가 아예
+    없음 — 포함 여부는 운영자 결정.
+  - 데이터 준비도 티켓 후보(유령 1단어 유닛 3개, 중1 동아 중복 유닛,
+    Pre-Middle 연결 교재 0단어 유닛 2개 등) 및 F1 "오답 반복 횟수" 배선
+    미확인은 handoff 122차 참고.
+- 검증: build PASS, verify:e2e 169/169 ×2, testUiStabilityGuards 21/21,
+  testRegistryCoverage PASS.
+- 검수 대기 사항: qa-reviewer 코드 리뷰 미착수, 운영자 결정 5건(반
+  생성/이름 확정, 쓰기 정책 설정 변경, F1 의미 정의, 데이터 티켓 실행,
+  PR 머지).
+
 ### [P1] Paul Dollar V1(v3_49) — 2재화 분리 설계+구현 완료, 운영자 리뷰/commit 승인 대기 (2026-09-08, 116차)
 - 근거: `handoff.md` 2026-09-08(116차),
   `docs/operations/STAR_SHOP_PREPRODUCTION_PACKAGE.md` §12.
