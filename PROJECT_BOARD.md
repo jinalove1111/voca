@@ -615,6 +615,31 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
 
 ## VERIFY
 
+### [P2] Paul Town V1 — feat/paul-town-v1, 플래그 OFF, v3_50 미실행, PR 대기 (125차)
+- 근거: `handoff.md` 2026-09-11(125차), `docs/design/PAUL_TOWN_V1.md`.
+- 내용: 기존 Paul Town 별 상점(`townShopV1`, 램프 1개)을 마을 상점
+  확장(신규 아이템 16종)·레벨 잠금(별 총량 기준 1~10단계)·8×6 격자
+  배치·신규 학생 웰컴 크레딧($20, 이중 게이트로 이번 PR은 지급 0건)으로
+  확장. 새 화폐 0, 결제 로직 클라이언트 복제 0, `total_stars` 차감 0,
+  Production WRITE/SQL 실행/백필 전부 0.
+- SQL: `supabase_v3_50_town_v1.sql`(미실행) — `town_items` 컬럼 +4/행
+  +16(+shop-lamp 메타 갱신 1) + 함수 3개(`purchase_town_item` 교체 +
+  `town_level_for_stars`/`grant_town_welcome_credit` 신규, 전부
+  `service_role` 전용). 롤백/POST_VERIFY 동봉.
+- 검증: 신규 스위트 7종 전부 registry required — `testTownCatalog`(50)·
+  `testTownLayout`(64)·`testTownLevelLock`(53)·`testTownV1Sql`(209)·
+  `testTownV1Server`(87)·`testTownPlacementsPersistence`(65)·
+  `testTownUiStatic`(70). 무회귀: `testPaulDollarSql`/
+  `testTownShopServer`(78)/`testTownShop`(104)/race 스위트 8종/
+  `verify:attachment`(163).
+- 미수신(검수 대기): `[town]` E2E 스펙, `npm run build`/
+  `npm run verify:all` 전체 실행 결과 — 수신 후 `handoff.md` 125차에
+  append 예정. qa-reviewer/security-reviewer 코드 리뷰 미착수.
+- 운영자 결정 8건: 가격표 확정, 웰컴 금액 $20 확정, `dollar_rules`
+  적립 rate 유지 여부, 실제 일러스트 자산 제작, 플래그 `paulTownV1`
+  ON 시점, 서버 env `TOWN_V1_WELCOME_ENABLED` 설정 시점, v3_50 실행
+  시점, PR 머지 여부.
+
 ### [P1] 초등 5개 반 / 45명 확장 readiness 2026-09-11 — qa/elementary-45-readiness-2026-09-11 + PR #32(docs), PR 대기 (124차)
 - 근거: `handoff.md` 2026-09-11(124차).
 - 내용: 초등 확장 전 READ-ONLY production readiness 점검 —

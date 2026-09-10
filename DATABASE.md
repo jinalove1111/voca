@@ -160,6 +160,8 @@ seasons                                    ※ FK 없음, 반/학생과 무관�
 
 32. `supabase_v3_49_paul_dollar.sql`(2026-09-08, Paul Dollar V1 — 2재화 분리, 운영자 승인) — `dollar_rules`(화이트리스트, 12행 시드, `legacy-baseline` 의도적 제외)/`dollar_ledger`(폴달러 원장)/`town_purchases`(폴달러 구매 이력) 신규 테이블 3개 + `dollar_balances` 파생 뷰 1개 + `trg_reward_ledger_to_dollars`/`fn_reward_ledger_to_dollars` 트리거 1개(AFTER INSERT on `reward_ledger`, exception-wrapped) + `town_items.price_currency` 추가 컬럼 1개(기존 컬럼 0개 변경, `price`=60 무변경) + `get_town_shop_state`/`purchase_town_item` RPC 2개 교체(반환 shape 변경 — `stars_spent`→`dollars_spent` 등, 시그니처 `(uuid)`/`(uuid, text)`는 v3_47과 동일 유지, 폴달러 전용). `star_purchases`(v3_47)는 이 파일이 전혀 건드리지 않음(레거시 별 구매 이력 그대로 보존, Paul QA `shop-lamp` 1행 포함). **⭐ 별은 이 SQL 이후 절대 감소하지 않는다**(구매가 더 이상 별을 차감하지 않음) — 컷오버 시점에 레거시 별을 폴달러로 환산 지급하지 않으므로 전 학생 폴달러 $0에서 시작(운영자 승인, 2026-09-08). **[미실행 — 운영자 실행 대기, 순서: v3_47 → v3_48 → (코드 배포, 플래그 OFF) → v3_49 → post-verify → 이후 `townShopV1` ON 결정]**. `supabase_v3_49_paul_dollar_ROLLBACK.sql` 동봉(v3_47 별 기반 RPC 본문 원복, `dollar_ledger`/`town_purchases`의 트리거/RPC 생성 행만 WHERE로 정확히 삭제, 테이블 구조/`dollar_rules` 시드/`star_purchases`는 전부 보존 — 롤백 시 `townShopV1`은 반드시 OFF여야 함). 상세: `handoff.md` 2026-09-08(116차), `docs/operations/STAR_SHOP_PREPRODUCTION_PACKAGE.md` §12.
 
+33. `supabase_v3_50_town_v1.sql`(2026-09-11, Paul Town V1 — 마을 상점 확장(카탈로그 메타데이터 + 레벨 잠금) + 신규 학생 웰컴 크레딧, 브랜치 `feat/paul-town-v1`) — `town_items`에 카탈로그 메타 컬럼 4개(`category`/`sort_order`/`min_level` smallint CHECK 1~10 default 1/`asset_key`) 추가 + 신규 아이템 16종 시드(`on conflict (id) do update`가 메타 4개만 갱신, `price`/`active`는 SET 절에 없어 절대 안 바뀜) + 기존 `shop-lamp`(v3_47 시드) 메타만 UPDATE(가격 60 불변) + `town_level_for_stars(integer) returns integer`(`language sql immutable`, 테이블 미참조, 임계값 `[0,20,50,100,200,350,550,800,1100,1500]`→레벨 1~10, null/음수는 레벨 1, `service_role`만 EXECUTE) 신규 + `purchase_town_item` 교체(v3_49 본문과 바이트 단위 동일 + 아이템 조회 직후·advisory lock 이전에 레벨 잠금 검사 1곳만 추가, `min_level`보다 낮으면 어떤 자원도 잠그지 않고 `locked` 반환·`balance_after`는 실제 잔액, `reason` 집합에 `locked` 추가 외 계약 무변경) + `grant_town_welcome_credit(uuid) returns table(granted boolean, balance_after integer)`(신규, `dollar_ledger`에 `event_type='welcome:town-v1'`/`dollars_delta=20` 행을 `idempotency_key='${student_id}:welcome:town-v1'` UNIQUE로 정확히 1회만 INSERT, `service_role`만 EXECUTE — 이 마이그레이션 자체는 아무 학생에게도 지급하지 않는다). `star_purchases`/`dollar_rules`/`dollar_ledger`(웰컴 제외)/`town_purchases` 구조는 전혀 건드리지 않음. **[미실행 — 운영자 실행 대기, `supabase_v3_49_paul_dollar.sql`(이미 2026-09-09 실행 완료) 이후 아무 때나 안전, 코드/SQL 순서 무관]**. 실행 전에는 `api/grant-xp.js`의 `get_town_shop_state` select가 새 컬럼 42703 감지 시 3단 폴백 체인으로 조회하고 `level` 필드는 클라이언트 `townLevel.js`와 동일 임계값으로 별도 계산해 응답에 포함하며, 신규 action `claim_town_welcome`은 서버 env `TOWN_V1_WELCOME_ENABLED`가 `'1'`이 아니면(기본 상태) RPC를 호출조차 하지 않고 `disabled`를 반환한다 — 클라이언트 `paulTownV1` 플래그(기본 `false`)와의 이중 게이트로 이 SQL이 실행돼도 실제 웰컴 지급은 여전히 0건. `town_items` 새 컬럼 4개는 v3_47이 이미 부여한 테이블 단위 `grant select`가 자동 커버해 추가 GRANT 불필요(PostgreSQL 테이블 단위 GRANT는 이후 추가 컬럼에도 자동 적용). `supabase_v3_50_town_v1_ROLLBACK.sql`(STAGE 0~3, 함수 2개 drop + `purchase_town_item`을 v3_49 본문으로 원복 + 신규 16행 조건부 삭제 — `town_purchases` FK 있으면 STAGE 2 스킵, `town_items` 신규 컬럼 4개는 이 저장소 destructive-SQL 게이트가 ALTER TABLE 내 DROP 패턴 자체를 차단해 롤백이 지울 수 없음, 이미 지급된 웰컴 크레딧도 소급 회수 안 함) / `supabase_v3_50_town_v1_POST_VERIFY.sql`(SELECT only) 동봉. 상세: `handoff.md` 2026-09-11(125차), `docs/design/PAUL_TOWN_V1.md`.
+
 ### 2026-09-09 v3_49 실행·검증 종결 — **V3_49 CLOSED**
 
 위 32번 항목의 `[미실행 — 운영자 실행 대기]` 태그는 stale — **2026-09-09 운영자가 SQL Editor에서 1회 실행 완료**("Success. No rows returned"). post-verify(운영자 SELECT-only, `production_v3_49_post_verify.sql` rev2 A~E + anon preflight 9/9) 전부 PASS: `dollar_rules` 12행(legacy-baseline 없음), `dollar_ledger`/`town_purchases` 0행(소급 0), 트리거 1(활성), security definer 함수 3(anon/authenticated EXECUTE false, service_role true, PUBLIC 기본권한 없음), 새 테이블 RLS 정책 0·anon/authenticated grant 0(fail-closed), `dollar_balances` security_invoker=on, `town_items.shop-lamp` = 60|dollars|true, `star_purchases` shop-lamp 1행 보존, Paul QA stars_earned 223(감소 없음)·달러 0·owned {shop-lamp}. 기준선: `reward_ledger` 509행·33,160★, legacy-baseline 156행·32,642★. 실행 순서 v3_47 → v3_48 → 코드(PR #22, `1cd0de6`) → v3_49 준수. 다시 조사·재실행하지 않는다(규칙 3). 상세 `handoff.md` 117차.
@@ -592,6 +594,84 @@ _추가: 2026-09-08(116차). 코드/SQL 전부 구현·작성 완료, 커밋 0,
   클라이언트는 `api/grant-xp.js`의 기존 action(`get_town_shop_state`/
   `purchase_town_item`)을 그대로 통해서만 호출한다(새 action 없음, 새
   Vercel 함수 파일 없음, 12/12 한도 유지).
+
+### 2026-09-11 Paul Town V1(`supabase_v3_50_town_v1.sql`, 미실행 대기)
+
+_추가: 2026-09-11(125차), 브랜치 `feat/paul-town-v1`. 코드/SQL 전부
+작성 완료, `paulTownV1=false`, SQL 미실행 — 아래는 파일 원문 기준
+계획된 스키마이며 아직 라이브에 적용되지 않았다. 상세: `handoff.md`
+2026-09-11(125차), `docs/design/PAUL_TOWN_V1.md`._
+
+**`town_items` 신규 컬럼 4개**(기존 컬럼 0개 변경/제거):
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| `category` | text | `house`/`nature`/`animal`/`decoration`/`special` — `src/utils/town/townCatalog.js` `TOWN_CATEGORIES`와 값 일치 |
+| `sort_order` | smallint, not null default 0 | 카테고리 내 표시 순서 |
+| `min_level` | smallint, not null default 1, CHECK(1~10) | `purchase_town_item`이 이 값 미만 학생 레벨에는 `locked` 반환. 기본값 1이라 기존/미래 아이템 전부 안전하게 시작 |
+| `asset_key` | text | `src/assets/town/index.js` 폴더 매핑 키(예: `buildings/british-cottage`). 실제 자산 미준비 시 이모지 폴백 |
+
+신규 아이템 16종(가격 10~200달러, `min_level` 1~8)을 `on conflict (id)
+do update`로 시드 — SET 절에 `category`/`sort_order`/`min_level`/
+`asset_key` 4개만 있어 `price`/`active`는 재실행해도 절대 안 바뀐다.
+기존 `shop-lamp`(v3_47)은 메타 4개만 UPDATE(가격 60/이름/이모지/화폐
+전부 불변).
+
+**`town_level_for_stars(p_stars integer) returns integer`** —
+`language sql immutable`(테이블 미참조, 결정적 계산). 임계값
+`[0,20,50,100,200,350,550,800,1100,1500]`→레벨 1~10, null/음수는 레벨
+1로 취급. `revoke all ... from public, anon, authenticated` 후
+`grant execute ... to service_role`만 — `purchase_town_item` 내부
+전용이고 클라이언트가 직접 RPC로 호출할 필요는 없다(레벨 표시는
+클라이언트 `src/utils/town/townLevel.js`의 동일 임계값 독립 복제로
+계산, 두 값의 동등성은 `scripts/testTownLevelLock.mjs`/
+`scripts/testTownV1Sql.mjs`가 회귀로 고정).
+
+**`purchase_town_item(p_student_id uuid, p_item_id text)` 교체** —
+v3_49 본문과 완전히 동일한 흐름(학생 존재→아이템/가격/화폐 조회→
+`dollars` 화폐가 아니면 `item_not_purchasable`→advisory lock→
+`dollar_balances` 잔액→`already_owned`→`insufficient`→원자적 2-INSERT
+→`unique_violation`시 `already_owned`)에 **딱 한 줄만** 추가됐다 —
+아이템 조회 직후·advisory lock **이전**에 `town_level_for_stars(
+reward_totals.earned_stars)`로 학생 레벨을 계산해 `min_level`보다
+낮으면 어떤 자원도 잠그지 않고 즉시 `locked`을 반환한다(이때
+`balance_after`는 다른 조기 반환 분기와 달리 실제 현재 잔액을 함께
+돌려줌). 반환 shape은 v3_49와 동일(`ok, reason, dollars_spent,
+balance_after`), `reason` 집합에 `locked` 값만 추가.
+
+**`grant_town_welcome_credit(p_student_id uuid) returns table(granted
+boolean, balance_after integer)`** — 신규. `dollar_ledger`에
+`event_type='welcome:town-v1'`, `dollars_delta=20`,
+`idempotency_key='${student_id}:welcome:town-v1'`(v3_49의 UNIQUE 제약
+재사용) 행을 `on conflict (idempotency_key) do nothing`으로 삽입 —
+동시에 여러 요청이 와도 정확히 하나만 삽입되고 나머지는 조용히
+무시된다("정확히 1회"를 UNIQUE 제약이 구조적으로 강제). 이 함수
+자체는 이 마이그레이션 실행만으로는 아무 학생에게도 호출되지 않는다
+(함수 정의뿐) — 지급은 `api/grant-xp.js`의 신규 action
+`claim_town_welcome`이 서버 env `TOWN_V1_WELCOME_ENABLED==='1'`일
+때만 호출한다(기본 미설정 상태에서는 RPC 호출 자체가 일어나지 않음).
+`revoke all ... from public, anon, authenticated` 후
+`grant execute ... to service_role`만.
+
+**GRANT**: `town_items` 새 컬럼 4개는 v3_47이 이미 부여한 테이블 단위
+`grant select on table town_items to anon, authenticated`가 자동으로
+커버한다(PostgreSQL의 테이블 단위 GRANT는 나중에 추가되는 컬럼에도
+자동 적용) — 추가 GRANT 불필요.
+
+**롤백**(`supabase_v3_50_town_v1_ROLLBACK.sql`, STAGE 0~3): STAGE 1이
+함수 2개(`town_level_for_stars`/`grant_town_welcome_credit`) drop +
+`purchase_town_item`을 v3_49 정확한 본문으로 원복(v3_47까지는 되돌리지
+않음 — 달러 경제 자체는 유지)하고, STAGE 2가 신규 16개 아이템 행을
+조건부 삭제(`town_purchases.item_id` FK로 막히면 확인 쿼리
+`blocking_purchases`가 0보다 클 때 건너뛰도록 안내, `shop-lamp`은 이
+STAGE가 절대 삭제하지 않음). `town_items`의 신규 컬럼 4개는 이
+저장소의 destructive-SQL 게이트(`scripts/hooks/checkDestructiveSql.mjs`,
+CLAUDE.md 규칙 18 — ALTER TABLE 내 컬럼 삭제 패턴을 Write/Edit 저장
+단계에서 차단)로 인해 롤백 파일 자체가 그 구문을 담을 수 없다(정책
+선택이 아니라 기술적 불가능 — 남겨진 컬럼은 `min_level` 기본값 1이
+모든 학생을 통과시키는 무해한 상태). 이미 지급된 웰컴 크레딧도 소급
+회수하지 않는다(CLAUDE.md 규칙 1).
+`supabase_v3_50_town_v1_POST_VERIFY.sql`은 SELECT만 포함.
 
 ## 관련 파일
 

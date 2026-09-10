@@ -1,5 +1,56 @@
 # Paul Easy Voca — 로드맵
 
+_(2026-09-11 125차 추가) Paul Town V1 구현 — 마을 상점 확장(신규 아이템
+16종·레벨 잠금·8×6 배치·신규 학생 웰컴 크레딧), 브랜치
+`feat/paul-town-v1`, 플래그 `paulTownV1` OFF, `supabase_v3_50_town_v1.sql`
+미실행, PR 미머지, Production WRITE 0. 상세는 `handoff.md`
+2026-09-11(125차) 섹션, 설계 전문 `docs/design/PAUL_TOWN_V1.md`._
+
+## 2026-09-11 (125차) — Paul Town V1: 마을 상점 확장 + 레벨 잠금 + 웰컴 크레딧 — 상태: 코드/SQL 준비 완료 ✅(플래그 OFF, SQL 미실행, PR 미머지)
+
+기존 Paul Town 별 상점(`townShopV1`, 책상 램프 1개)을 실제로 마을을
+꾸미는 확장으로 넓혔다. 학습(STUDY) → 서버 원장 `reward_ledger`(⭐,
+절대 감소 없음) → 기존 트리거(v3_49)로 `dollar_ledger`(💵, 사용 가능한
+Paul Dollar) 적립 → Town Shop → `purchase_town_item`(v3_49 RPC를 그대로
+재사용하고 레벨 잠금 검사만 1곳 추가) → `town_purchases` → 클라이언트
+`progress_data.townPlacements`에 8×6 격자 배치 → 별 총량 기준 레벨이
+오르면 더 큰 아이템 잠금 해제. 새 화폐 0종, 결제 로직 클라이언트 복제
+0, `total_stars` 차감 0, Production DB WRITE/SQL 실행/백필 전부 0.
+
+**카탈로그** — 신규 16종(가격 10~200달러, 레벨 1~8) + 기존 `shop-lamp`
+(60달러, 레벨 1) = 17종. Paul 캐릭터는 기존 21종 에셋만 재사용(신규
+이미지 0장), 브랜드 문구 5종은 화면당 최대 1개, 팔레트는 전부 CSS
+그라데이션.
+
+**DB(`supabase_v3_50_town_v1.sql`, 미실행)** — `town_items` 컬럼
++4(`category`/`sort_order`/`min_level`/`asset_key`) + 행 +16(+shop-lamp
+메타 갱신 1, 가격/활성 불변) + 함수 3개(`purchase_town_item` 교체 =
+v3_49 본문 + 레벨 잠금 1곳만 추가, `town_level_for_stars` 신규,
+`grant_town_welcome_credit` 신규 — 둘 다 `service_role` 전용).
+`dollar_ledger`/`reward_ledger`/`town_purchases`/`students`/
+`student_progress` 행 변화 0. 롤백/POST_VERIFY 동봉.
+
+**웰컴 크레딧 이중 게이트** — 신규 학생 $20 1회 지급(`claim_town_welcome`
+action, `grant_town_welcome_credit` RPC, UNIQUE idempotency_key로 정확히
+1회 강제)이 클라이언트 플래그 OFF + 서버 env `TOWN_V1_WELCOME_ENABLED`
+미설정 이중 게이트로 이 PR이 배포돼도 실제 지급은 0건.
+
+**신규 테스트 7종**(전부 registry required) — `testTownCatalog.mjs`(50)·
+`testTownLayout.mjs`(64)·`testTownLevelLock.mjs`(53)·`testTownV1Sql.mjs`
+(209)·`testTownV1Server.mjs`(87)·`testTownPlacementsPersistence.mjs`
+(65)·`testTownUiStatic.mjs`(70). 무회귀 확인: `testPaulDollarSql`,
+`testTownShopServer`(78), `testTownShop`(104), race 스위트 8종,
+`verify:attachment`(163).
+
+**미수신 — 이후 append 예정**: `[town]` E2E 스펙 결과, `npm run build`/
+`npm run verify:all` 전체 실행 결과는 이 세션 종료 시점까지 아직
+수신하지 못했다(임의 수치 기재 금지).
+
+상세는 `handoff.md` 2026-09-11(125차) 섹션. 운영자 결정 8건(가격표/
+웰컴 금액/`dollar_rules` rate/일러스트 자산 제작/플래그 ON 시점/서버
+env 설정 시점/v3_50 실행 시점/PR 머지 여부)은 `PROJECT_BOARD.md` VERIFY
+카드 참고 — **운영자 승인 전까지 SQL 실행/플래그 ON/merge 없음**.
+
 _(2026-09-05 111차 추가) 스크린샷 의존 축소 — apply_eligibility 8값 1:1
 매핑 + 교재 UUID canonical/AMBIGUOUS_TEXTBOOK 사전 차단(prod-hotfix
 317→371) + Playwright 브라우저 E2E(학생/관리자 화면, 44단언, Release

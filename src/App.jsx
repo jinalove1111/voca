@@ -78,6 +78,10 @@ const PaulTown = React.lazy(() => import('./components/PaulTown'))
 // 로만 진입하므로 역시 lazy — 학생 메인 번들 비영향.
 const Bookshelf = React.lazy(() => import('./components/Bookshelf'))
 const TimeMachine = React.lazy(() => import('./components/TimeMachine'))
+// Paul Town V1(paulTownV1, 2026-09-11) — 내 마을/상점/보관함 통합 화면.
+// 플래그 OFF(기본)면 screen==='town'에 도달할 방법이 없어(PaulTown의
+// onGoTown이 null이라 진입 카드/버튼 자체가 없음) 코드는 로드조차 안 된다.
+const TownScreen = React.lazy(() => import('./components/town/TownScreen'))
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -207,7 +211,11 @@ function AppInner({ studentId, studentName, onLogout }) {
   // false라 useTownShop 내부에서 fetch가 0회 실행된다(훅 자체의 게이트).
   // studentId가 아직 없으면(로그인 전) 마찬가지로 no-op.
   const townShopEnabled = isFeatureEnabled('townShopV1')
-  const townShop = useTownShop(studentId, townShopEnabled && !!studentId)
+  // Paul Town V1(paulTownV1, 2026-09-11) — 내 마을/상점/보관함 통합 화면.
+  // 별도 상점 API가 아니라 townShopV1과 같은 useTownShop 훅/서버 상태를
+  // 공유한다(진실 원천 1개) — 둘 중 하나라도 켜져 있으면 훅을 활성화한다.
+  const paulTownV1Enabled = isFeatureEnabled('paulTownV1')
+  const townShop = useTownShop(studentId, (townShopEnabled || paulTownV1Enabled) && !!studentId)
 
   // 선물상자를 닫은 직후, 오늘 틀린 스펠링 단어나 영구 복습 대기열
   // (Writing MVP, 2026-07-20 — 적어도 하루 전에 놓친 단어)이 남아있으면
@@ -897,7 +905,8 @@ function AppInner({ studentId, studentName, onLogout }) {
             <PaulTown stats={attachment.stats} hatInventory={studentData.hatInventory}
               equippedHatId={studentData.equippedHatId} onEquip={studentData.equipHat}
               onGo={setScreen} onBack={() => setScreen('dashboard')}
-              shop={townShopEnabled ? townShop : null} shopEnabled={townShopEnabled} />
+              shop={townShopEnabled ? townShop : null} shopEnabled={townShopEnabled}
+              onGoTown={paulTownV1Enabled ? () => setScreen('town') : null} />
           )}
           {/* Paul Town 월드 — 도서관/시계탑. 마을 건물 카드로만 진입하므로
               뒤로 가기는 마을(paulTown)로. 전부 파생 화면 — 저장 0. */}
@@ -910,6 +919,19 @@ function AppInner({ studentId, studentName, onLogout }) {
             <TimeMachine stats={attachment.stats} wordTextById={attachment.wordTextById}
               onBack={() => setScreen('paulTown')} />
           )}
+        </React.Suspense>
+      )}
+      {/* Paul Town V1(paulTownV1, 2026-09-11) — 별도 Suspense(위 애착 시스템
+          블록과 무관하게 독립 진입/이탈). 플래그 OFF면 onGoTown이 null이라
+          PaulTown 화면에 진입 카드가 없으므로 screen이 'town'이 될 방법이
+          없고, 이 블록은 렌더는 되지만 조건이 항상 거짓이라 출력에 영향 0. */}
+      {screen === 'town' && (
+        <React.Suspense fallback={
+          <div className="min-h-screen flex items-center justify-center text-purple-400 font-bold p-6 text-center">
+            마을을 준비하는 중…
+          </div>
+        }>
+          <TownScreen studentData={studentData} townShop={townShop} onBack={() => setScreen('paulTown')} />
         </React.Suspense>
       )}
       {screen === 'bonusChoice'   && (

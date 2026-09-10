@@ -53,6 +53,11 @@ import { grantTicket, sumTicketBalance, mergeTicketLedgers, redeemReward } from 
 // totalStars의 원본은 여전히 record.totalStars(레거시 별 포함) 그대로이고,
 // rewardLedger에서 재계산하지 않는다(운영자 결정, 레거시 별 보존).
 import { REWARD_STARS, rewardIdempotencyKey, streakBonusStars, levelForStars, starsToNextLevel, buildRewardEntry, hasRewardEntry, appendRewardEntry, parseLegacyDedupKey } from '../utils/rewardEngine'
+// Paul Town V1(2026-09-11) — 배치(가구) 영속성. 순수 리듀서/병합은 전부
+// townLayout.js 소유(다른 에이전트 작성, 수정 금지) — 이 파일은 그
+// 계약대로 호출해 record에 반영하는 얇은 래퍼만 추가한다(diaryPlacements의
+// placeSticker/updatePlacement/removePlacement와 동일한 patch 패턴).
+import { mergeTownLayout, placeItem, moveItem, storeItem, emptyTownLayout } from '../utils/town/townLayout'
 
 // ── Single unified progress store ───────────────────────────────────────
 // Every per-student value the app tracks (stars, stickers, today's mission
@@ -266,6 +271,11 @@ function freshRecord(id) {
     // 기록해야 한다. removePlacement가 추가하고 mergeProgressRecords가 양쪽
     // 합집합에서 빼는 데만 쓴다. 상한(DIARY_TOMBSTONE_CAP)으로 무한 성장 방지.
     diaryRemovedIds: [],
+    // Paul Town V1(2026-09-11) — 마을 배치. diaryPlacements/diaryRemovedIds와
+    // 완전히 동일한 성질(로컬 우선 union + tombstone)이지만 별도 그리드
+    // (townLayout.js)라서 필드도 분리 — 순수 리듀서/기본값은 그 파일 소유,
+    // 여기서는 emptyTownLayout()을 그대로 스프레드해 정의를 한 곳에 둔다.
+    ...emptyTownLayout(),
     // Ticket Economy(2026-07-19) — append-only 원장(diaryPlacements와 같은
     // 패턴, tombstone은 불필요 — 소비도 새 항목 추가로 표현되므로 삭제가
     // 없음). 잔액은 저장하지 않고 항상 sumTicketBalance(ticketLedger)로
@@ -412,6 +422,8 @@ function normalizeRecord(raw, id) {
   rec.stickers = asArray(rec.stickers)
   rec.diaryPlacements = asArray(rec.diaryPlacements)
   rec.diaryRemovedIds = asArray(rec.diaryRemovedIds) // v2.2 이전 레코드/백업엔 없음 — 빈 배열로 채움
+  rec.townPlacements = asArray(rec.townPlacements) // Paul Town V1 이전 레코드/백업엔 없음 — 빈 배열로 채움
+  rec.townRemovedIds = asArray(rec.townRemovedIds) // Paul Town V1 이전 레코드/백업엔 없음 — 빈 배열로 채움
   rec.ticketLedger = asArray(rec.ticketLedger) // Ticket Economy 이전 레코드/백업엔 없음 — 빈 배열로 채움
   rec.rewardLedger = asArray(rec.rewardLedger) // Reward System V1 이전 레코드/백업엔 없음 — 빈 배열로 채움
   rec.missions = asArray(rec.missions)
@@ -547,6 +559,14 @@ export function mergeProgressRecords(localRaw, cloudRaw, id) {
     ...cloud.diaryPlacements.filter((p) => !localPlacementIds.has(p.placementId)),
   ].filter((p) => !removedSet.has(p.placementId))
 
+  // Paul Town V1 — 순수 병합은 townLayout.js 소유(mergeTownLayout, 위
+  // diaryPlacements와 동일한 정신을 그대로 미러링한 함수) — 여기서는 그
+  // 계약대로 두 필드를 넘기고 결과를 그대로 받는다(재구현 금지, 규칙 3).
+  const townLayout = mergeTownLayout(
+    { townPlacements: local.townPlacements, townRemovedIds: local.townRemovedIds },
+    { townPlacements: cloud.townPlacements, townRemovedIds: cloud.townRemovedIds },
+  )
+
   // 미션: wordId별 합집합, 더 진전된 쪽(done > correctCount, 동률 로컬)
   const missionsById = new Map()
   for (const m of [...cloud.missions, ...local.missions]) {
@@ -581,6 +601,8 @@ export function mergeProgressRecords(localRaw, cloudRaw, id) {
     stickers: unionList(local.stickers, cloud.stickers),
     diaryPlacements,
     diaryRemovedIds: removed,
+    townPlacements: townLayout.townPlacements,
+    townRemovedIds: townLayout.townRemovedIds,
     // Ticket Economy — id 기준 합집합(mergeTicketLedgers, diaryPlacements와
     // 같은 정신이지만 tombstone 불필요, ticketEconomy.js 헤더 참고).
     ticketLedger: mergeTicketLedgers(local.ticketLedger, cloud.ticketLedger),
@@ -776,6 +798,7 @@ function isEmptyRecord(rec) {
     rec.missions.length === 0 &&
     rec.cleared.length === 0 &&
     rec.diaryPlacements.length === 0 &&
+    rec.townPlacements.length === 0 &&
     Object.keys(rec.history).length === 0 &&
     Object.keys(rec.wordStatus || {}).length === 0
 }
@@ -896,7 +919,7 @@ export function useStudent(studentId, legacyName) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId])
 
-  const { round, history, stickers: stickerTypes, diaryPlacements, missions, cleared, completedWords, clearedWords, milestoneStreak, starBadgeThreshold, lastGamePlayed, lastTextbookClassId, lastWordIndex, totalStars: stars, wordStatus, ticketLedger, spellingReviewQueue, hatInventory, equippedHatId, milestones, rewardLedger } = record
+  const { round, history, stickers: stickerTypes, diaryPlacements, missions, cleared, completedWords, clearedWords, milestoneStreak, starBadgeThreshold, lastGamePlayed, lastTextbookClassId, lastWordIndex, totalStars: stars, wordStatus, ticketLedger, spellingReviewQueue, hatInventory, equippedHatId, milestones, rewardLedger, townPlacements, townRemovedIds } = record
   // Ticket Economy — 화면은 항상 이 파생값만 읽는다(원시 잔액을 저장하지
   // 않는 이유는 ticketEconomy.js 헤더 참고).
   const ticketBalance = sumTicketBalance(ticketLedger)
@@ -1613,6 +1636,52 @@ export function useStudent(studentId, legacyName) {
     })
   }, [patch])
 
+  // Paul Town V1(2026-09-11) — 배치 3종. redeemTicketReward(위)와 동일한
+  // patch 패턴: 클로저 변수(outcome)에 순수 리듀서(townLayout.js 소유,
+  // 재구현 금지) 결과를 담아뒀다가, patch 호출이 끝난 뒤 그대로 호출자에게
+  // {ok, reason} 반환. 실패(ok:false)면 patch가 빈 객체를 반환해 record가
+  // 전혀 바뀌지 않는다 — stars/XP/reward/history 필드는 이 세 함수 어디도
+  // 건드리지 않는다.
+  const placeTownItem = useCallback((itemId, x, y, ownedIds) => {
+    let outcome = { ok: false, reason: 'unknown' }
+    patch(prev => {
+      outcome = placeItem(
+        { townPlacements: prev.townPlacements, townRemovedIds: prev.townRemovedIds },
+        { itemId, x, y, ownedIds },
+      )
+      if (!outcome.ok) return {}
+      return { townPlacements: outcome.state.townPlacements, townRemovedIds: outcome.state.townRemovedIds }
+    })
+    return { ok: outcome.ok, reason: outcome.reason }
+  }, [patch])
+
+  const moveTownItem = useCallback((placementId, x, y) => {
+    let outcome = { ok: false, reason: 'unknown' }
+    patch(prev => {
+      outcome = moveItem(
+        { townPlacements: prev.townPlacements, townRemovedIds: prev.townRemovedIds },
+        placementId, x, y,
+      )
+      if (!outcome.ok) return {}
+      return { townPlacements: outcome.state.townPlacements, townRemovedIds: outcome.state.townRemovedIds }
+    })
+    return { ok: outcome.ok, reason: outcome.reason }
+  }, [patch])
+
+  // storeItem(townLayout.js)은 실패 모드가 없다(못 찾은 placementId는
+  // no-op) — diaryPlacements의 removePlacement와 동일한 성질이라 항상
+  // {ok:true}를 반환한다.
+  const storeTownItem = useCallback((placementId) => {
+    patch(prev => {
+      const next = storeItem(
+        { townPlacements: prev.townPlacements, townRemovedIds: prev.townRemovedIds },
+        placementId,
+      )
+      return { townPlacements: next.townPlacements, townRemovedIds: next.townRemovedIds }
+    })
+    return { ok: true }
+  }, [patch])
+
   const setLastGamePlayed = useCallback((gameId) => patch(() => ({ lastGamePlayed: gameId })), [patch])
 
   // v2.9(decision 0004) — App.jsx의 교재 선택기가 setPrimaryAssignment 성공
@@ -2194,6 +2263,8 @@ export function useStudent(studentId, legacyName) {
     // CLEARED_STAR_PER_WORD 헤더 주석 참고. stars는 그대로 totalStars.
     clearedStars, starsDisplay,
     placeSticker, updatePlacement, removePlacement, movePlacementLayer,
+    // Paul Town V1(2026-09-11) — 배치 영속성(diaryPlacements와 별도 그리드).
+    townPlacements, townRemovedIds, placeTownItem, moveTownItem, storeTownItem,
     wordStatus, setWordKnown, setWordUnknown,
     // Ticket Economy(2026-07-19) — ticketBalance는 항상 ticketLedger에서
     // 파생된 값(sumTicketBalance), 절대 별도 저장하지 않는다.
