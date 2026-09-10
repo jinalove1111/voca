@@ -31,6 +31,16 @@ const stripParenthetical = (s) => s.replace(/\([^)]*\)/g, '').trim()
 const HAS_HANGUL = /[ㄱ-ㆎ가-힣]/
 const normalizeNoSpace = (s) => normalizeSpelling(s).replace(/\s+/g, '')
 
+// 2026-09-10 초등 5반 준비: 교재 원문에 문법 설명용 "~"(물결표) 플레이스홀더가
+// 붙은 뜻/단어가 실제로 존재한다(실 데이터 확인: around="~ 주위에",
+// whether="~인지 아닌지", look="~처럼(~하게) 보이다"; 영어 target 쪽에도
+// 9건 — "listen to ~", "better than ~"). 학생이 교재의 "~"를 빼고 실제
+// 의미만 입력하면(정답의 본질은 맞음) 지금까지는 오답 처리됐다. "~"만 제거
+// (그 결과 생기는 중복 공백은 붙이지 않고 collapse)하는 파생형을 정답
+// 후보에 추가한다 — 조사/서술부 스트리핑은 여전히 하지 않는다(기존 방침
+// 그대로, "~에 속하다" 같은 조사가 살아있는 경우는 계속 오답).
+const stripTilde = (s) => s.replace(/~/g, '').replace(/\s+/g, ' ').trim()
+
 // 대안 항목 하나(alt)의 파생형들 — 딱 두 가지만(보수적 원칙):
 //   1) 괄호 설명 제거: "(규칙적인) 패턴" -> "패턴" (기존 동작 그대로)
 //   2) 괄호 기호만 제거해 내용 합침: "영향(을 미치다)" -> "영향을 미치다"
@@ -45,6 +55,14 @@ const altVariants = (alt) => {
   if (/[()]/.test(alt)) {
     const merged = alt.replace(/[()]/g, '').replace(/\s+/g, ' ').trim()
     if (merged && !variants.includes(merged)) variants.push(merged)
+  }
+  // "~" 제거본 — 지금까지 만들어진 변형 각각에 대해 추가로 생성한다("~처럼
+  // (~하게) 보이다"처럼 괄호 처리와 결합되어야 "처럼 보이다"까지 도달함).
+  if (/~/.test(alt)) {
+    for (const v of variants.slice()) {
+      const noTilde = stripTilde(v)
+      if (noTilde && !variants.includes(noTilde)) variants.push(noTilde)
+    }
   }
   return variants
 }
@@ -64,6 +82,16 @@ const candidateMatches = (candidate, normInput, noSpaceInput) => {
   // 입실시험 로직 테스트 작성 중 발견. 전체 문자열 일치를 먼저 허용한다.
   if (normalizeSpelling(candidate) === normInput) return true
   if (HAS_HANGUL.test(candidate) && normalizeNoSpace(candidate) === noSpaceInput) return true
+  // "~" 제거 후 전체 문자열 비교 — 쉼표/세미콜론으로 쪼개기 전에도, 후보
+  // 전체에서 "~"만 뗀 형태가 입력과 일치하면 정답으로 인정한다(위 altVariants
+  // 쪽 처리는 대안 단위였고, 이건 candidate 전체 단위의 동일한 예외).
+  if (/~/.test(candidate)) {
+    const noTilde = stripTilde(candidate)
+    if (noTilde) {
+      if (normalizeSpelling(noTilde) === normInput) return true
+      if (HAS_HANGUL.test(noTilde) && normalizeNoSpace(noTilde) === noSpaceInput) return true
+    }
+  }
   return splitAnswerAlternatives(candidate).some((alt) => altMatches(alt, normInput, noSpaceInput))
 }
 

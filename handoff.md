@@ -2,6 +2,75 @@
 _최종 갱신: 2026-09-10 (121차, 보상 시스템 6h 감사 — writing-complete 누락 P1 수정, 표시 결함 2·방어선 1·
 QA 분류 1 수정, 766↔951 TEST STALE 확정, invariant 테스트 7종, Production WRITE 0. 120차 이하 보존)_
 
+## 2026-09-10 (122차) — 초등 5개 반 확장 준비 6h 자율 세션 (브랜치 qa/elementary-5-readiness-2026-09-10, PR 미머지)
+
+### 1. Production 안전
+DB WRITE 0 · SQL WRITE 0 · migration 0 · 학생/진도/보상/반설정/플래그 mutation 0 · 실제 학생 계정 학습 0 · main push 0 · merge 0. 조사는 전부 anon key READ-ONLY GET(20 classes/493 students/201 progress/11 textbooks/61 units/2135 words/386 SCA/daily_assignments 초등 3반 0행).
+
+### 2. 초등 반 식별 결과 (반 이름 추측 금지 원칙)
+DB에는 초등 후보 `regular` 반이 **3개만** 존재한다.
+
+| 반 | UUID | 실학생 | 테스트 | 홈 dir | spelling_test_enabled | hint | repeat | primary 교재(실학생) | 현재 유닛 분포 | 연결 교재 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Presentation 6 | `1693f32b-af23-4364-8d66-d4dc5b20eaa6` | 8 | 3(`_DUP`/`_INACTIVE` 계정) | kr2en | false | false | 3 | 중1 천재 이상기 ×8 | Unit2 ×1, Unit3 ×2, Unit4 ×5 | 중1 동아 윤정미(mixed owner), 중1 천재 이상기, 2학년 천재소영순 |
+| Pre-Middle School | `39e9acb1-cbd0-4863-8c43-5256b01e784e` | 11 | 1(Barry) | kr2en | false | false | 3 | 중3 동아 윤정미(동아) ×9, 2학년 천재소영순 ×1, 중1 동아 윤정미 ×1(eff dir mixed) | 중3 Unit1 ×9, 소영순 Unit5, 동아 Unit6 | 8종(고1 6월 학평/중1 동아/중2 동아/중2 천재/중2 능률/중2 YMB/소영순/중3 동아) |
+| Pre-middle school 5학년 | `36bcd6fa-36b5-4585-b3d3-f299c87ecee4` | 9 | 0 | kr2en | false | false | 3 | 중1 천재 이상기 ×9 | Unit 1 ×9 | 중1 천재 이상기 only |
+
+- **제외**: MS Advanced Class(`0249067d`, 실학생 12)는 고1 교재를 쓰는 고등 반이라 초등 후보에서 제외. "Presentation 6 -2026"(`dcd497c2`, class_type=`textbook` 컨테이너)은 실학생 5명이 있으나 7월 이후 휴면이고 Presentation 6 정규반 8명과는 다른 인물이라 초등 반으로 계산하지 않음.
+- **"5개 반" 중 2개는 아직 DB에 없다** → 운영자가 반 생성 + 학생 등록(관리자 화면 `create_student` → `pin_setup_allowed` → 학생 PIN 만들기)이 필요.
+- 활동: 3반 전원 progress 행 존재, 최근 7일 활동 100%(Presentation 6 8/8, Pre-Middle School 11/11, 5학년 9/9). 별 min/med/max: Presentation 6 307/1722/1898, Pre-Middle School 9/101/2022, 5학년 0/44/135.
+- 숙제(`daily_assignments`) 3반 모두 0행 → 유닛 전체가 그대로 노출됨. 오디오 `word_audio_url` 2135/2135(Supabase storage), `example_text` 2135/2135.
+
+### 3. 학생 경로 감사 결과 (코드 정독 + 실데이터 대조)
+
+| # | 결함 | 심각도 | 수정 전 | 수정/커밋 |
+|---|---|---|---|---|
+| F2 | `QuizGame.makeOptions` 동일 뜻 선택지 — 실데이터 재현: 중3 동아 Unit2 delicious/tasty("맛있는", Pre-Middle 9명이 Unit1 학습 중이라 다음 유닛에서 발생), 소영순 Unit3 piece/chip("명 조각")·finding/discovery("명 발견") | P1 | `testQuizGameOptions.mjs`(required) 3 FAIL | `WordDetail` QuizStep 가드 미러링 + 신규 테스트, `fe2771d` |
+| F3 | `spelling.js` "~" 플레이스홀더 미처리 — 뜻 193/2135건·영어 9건(중1 천재 이상기 13뜻+"listen to ~", 중3 동아 15뜻+"better than ~", 소영순 19, 중1 동아 32)에서 학생이 "~" 없이 정답 입력 시 오답 처리(조사 스트리핑 없음) | P1 | `testSpelling.mjs` §14 신설 11단언 중 5 FAIL | `40b19f8` |
+| M1 | 375x667(대시보드) 고정 SpeedBtn이 히어로 CTA 우측 67x25px를 덮어 탭 가로챔(360/390/412 뷰포트에서는 미재현) | P1 | `[mobile]` 스펙 신규 등록으로 재현 | 대시보드 화면에서 SpeedBtn 미렌더, `cc88e72`(신규 `[mobile]` 스펙 `2e54130`, 4뷰포트×5화면 104→108단언) |
+
+- **F1 [NEEDS DECISION]**: 관리자 "오답 반복 횟수"(`wrong_answer_repeat_count`, 3반 모두 3) — `AdminScreen` 저장·`wordLibrary` 로드·`App` fallback 외 소비처 0(grep 확정). `GuidedSession`은 하드코딩 1회 재시도, `SpellingQuestion`의 `UNLOCK_AT=3`은 별개 로직. 교사 기대와 실제 동작이 불일치 — 의미를 정의해 배선하거나 UI에서 숨기는 결정이 필요.
+- **검증 OK 항목**: 로그인(no_pin_setup/duplicate_accounts/ilike escape/trim), `resolveStudentUnitObj` null 폴백 + `GuidedSession` "단어가 없어요" 카드, speech 3단 폴백(항상 onEnd), 마이크 거부/인앱브라우저에서도 진행 가능, 쉼표/괄호 채점, localStorage UUID 키(이름 키 없음), 학생 입력 폰트 ≥16px.
+
+### 4. 쓰기 정책 감사("쓰기는 무조건 두 방향")
+쓰기 연습(`studyMode 'write'`)은 `buildSteps → ['spelling']` + `resolveSessionSpellingDirection`이 항상 `mixed`(PR #24)라 **3반 모두 이미 양방향** — 반 설정 변경 불필요.
+
+종합 학습/오늘의 학습(`GuidedSession`)의 스펠링 단계는 `spelling_test_enabled`(3반 모두 false)로 비활성 → **일일 의식 안에는 쓰기가 아예 없다**. 유효 설정은 "primary 교재 소유 반 → 홈 반" 순으로 해석되므로 홈 반 설정만 바꿔도 효과가 없다.
+
+제안(APPLY 하지 않음, 운영자 결정):
+
+| 반 UUID | 반 이름 | 현재 설정 | 변경 후 | 영향 학생 수 |
+|---|---|---|---|---|
+| `2724dc62` | 중1 천재 이상기(교재 소유) | spelling_test_enabled=false | true(+spelling_direction mixed) | Presentation 6 8명 + 5학년 9명 = 17명 |
+| `5c4130db` | 중3 동아 윤정미(동아)(교재 소유) | spelling_test_enabled=false | true(+spelling_direction mixed) | Pre-Middle School 9명 |
+
+### 5. 데이터 준비도(운영자 티켓 후보, Production 수정 0)
+- 유령 1단어 유닛(헤더 잔재): 소영순 `113ee184`("Unit", 단어 `4eb625e1` "어휘·어구"/"의미", 참조 0) / 중1 동아 `5d9db813`("Unit1", 단어 `7189faf8` "No."/"어휘·어구", 참조 테스트 계정 `fb063caa` 1건) / 중1 동아 `35ee95ae`("Unit", 단어 `739bec2e` "English"/"Korean", 참조 0).
+- 중1 동아 중복 유닛: "7"(`b16ca5e2`) vs "Unit 7"(`18f59bd6`) 39/40 단어 동일 — 차이는 "Why don't we ~?"(`d89bf4ce`, 곡선 아포스트로피) vs (`336e1f40`, 직선) 1건뿐. kr2en 방향에서 곡선형 아포스트로피는 학생이 못 맞힘.
+- Pre-Middle School 연결 교재 위험: 중2 능률 김기택 Unit 1(`e4804821`)이 0단어인데 실학생 S***(`4f3e0b72`)가 비-primary SCA로 이 유닛을 북마크 — 교재 전환 시 0단어 화면. 중2 YMB Unit 1(`67c8268e`)도 0단어(테스트 참조만).
+- 교차 유닛 중복 단어: 중1 천재 4건 / 중3 동아 2건 / 소영순 15건 / 중1 동아 54건.
+- 긴 뜻(>18자): 중1 천재 이상기 5건.
+- 모든 유닛 `position=0`(이름 자연 정렬로 표시 — 코드 설계상 정상, 결함 아님).
+- "word"/"말, 단어"(`822d9c71`)와 "meaning"/"의미"(`455219f7`)는 정상 어휘로 판정(오탐 아님).
+
+### 6. 초등 UX 기준(관찰)
+40단어 유닛 → 세션 밴드 21–40 → 8–12단어/세션(`dailyRitual`). 60단어 유닛(중3 동아)에서는 세션 밴드 41–70 → 10–15단어/세션. 교재 자체가 중1/중3 교재라는 점은 운영자 커리큘럼 선택 영역(코드 이슈 아님). 모바일 뒤로가기: 대형 라우터 도입 안 함(HOLD, `MOBILE_BACK_NAVIGATION_DESIGN.md` Phase 1 결정 대기 그대로).
+
+### 7. 커밋 · 검증
+- `40b19f8` fix(spelling): "~" 플레이스홀더 채점 결함 수정
+- `fe2771d` fix(quiz): QuizGame/QuizStep 동일 뜻 선택지 가드
+- `2e54130` test([mobile]): 4뷰포트×5화면 신규 spec
+- `cc88e72` fix(mobile): 대시보드 고정 SpeedBtn 히어로 CTA 가로챔 수정
+- 검증: build PASS, verify:e2e 169/169 ×2, testUiStabilityGuards 21/21, testRegistryCoverage PASS.
+- `npm run verify:all`(HEAD cc88e72): **ALL DOMAINS PASS**, 출력 내 FAIL 줄 0(extra 스위트 포함), 내부 verify:e2e 169/169.
+
+### 8. 남은 운영자 결정 목록
+1. 나머지 초등 2개 반 생성/이름 확정
+2. 일일 의식(오늘의 학습)에 쓰기 포함 여부 → 4항 설정 변경 여부
+3. F1 "오답 반복 횟수"(`wrong_answer_repeat_count`)의 실제 의미 정의(배선 또는 숨김)
+4. 5항 데이터 티켓 실행 여부(실행 시 SQL은 별도 파일로 준비 필요)
+5. PR 머지 여부
+
 ## 2026-09-10 (121차) — 보상 시스템 6h 자율 QA/하드닝(qa/reward-audit-2026-09-10, base 7432638) — P1 누락 1건 FIXED(writing-complete), 표시 결함 2건·방어선 1건·QA 분류 1건 FIXED, 766↔951 원인 확정, invariant 테스트 7종 (Production WRITE 0)
 
 _PR #28·V3_49·overnight QA CLOSED 무접촉. Production DB/SQL/migration/학생·진도·보상/반 설정/플래그 WRITE 0. main 직접 push 0, 머지 0._

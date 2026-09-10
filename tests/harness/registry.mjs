@@ -167,6 +167,7 @@ export const DOMAINS = {
     label: '퀴즈 스텝 리셋 / 리액션',
     checks: [
       { script: 'scripts/testQuizStepReset.mjs', builders: [] },
+      { script: 'scripts/testQuizGameOptions.mjs', builders: [], note: '2026-09-10 초등 5반 준비 — 독립 퀴즈 동일 뜻 선택지 P1' },
       { script: 'scripts/testPaulReactions.mjs', builders: ['paulReactions'], execPath: 'scripts/.tmp/testPaulReactions.bundle.mjs', extra: true, note: '13개 필수 도메인 밖, 보너스 커버리지. PNG 정적 import 때문에 스크립트 자체를 esbuild로 번들해서 실행(파일 헤더 주석이 지시하는 방법 그대로).' },
       { script: 'scripts/testPureUtils.mjs', builders: [], extra: true, note: '2026-08-08 야간 — 순수 유틸 단위 테스트(네트워크/DB 무접촉)' },
       { script: 'scripts/testUiStabilityGuards.mjs', builders: [], extra: false, note: '2026-09-04 야간 T7b — UI 안정성 가드 3종 회귀(House/PureUtils와 동일 패턴, 전부 정적 소스 검사 + 순수 함수 단위 테스트만, React 렌더/네트워크 0): (1) App.jsx <GuidedSession>이 currentUnitId를 key로 고정(유닛 전환 시 이전 유닛 state 유출 방지 구조적 안전망), (2) 포그라운드 복귀 재조회 쿨다운(src/utils/foregroundRefreshGate.js shouldRefreshOnForeground + App.jsx visibility/focus 핸들러 배선), (3) 관리자 학생 검색 결과 렌더 상한(src/utils/listCap.js capList + StudentDirectory.jsx 배선, 필터/선택 로직 무변경 확인). 21단언. DEVELOPER_GUIDE.md 2026-09-03 규칙(신규 verify 스크립트는 기본 required)에 따라 extra:false로 등록.' },

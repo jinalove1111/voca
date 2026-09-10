@@ -29,10 +29,22 @@ function shuffle(arr) {
   return a
 }
 
-function makeOptions(correctWord, allWords) {
-  const others = allWords.filter(w => w.id !== correctWord.id)
-  const wrong  = shuffle(others).slice(0, 3).map(w => w.meaning)
-  const opts   = shuffle([correctWord.meaning, ...wrong])
+// 2026-09-10 초등 5반 준비: 같은 유닛 안에 뜻이 동일한 단어 쌍이 실제로
+// 존재한다(예: delicious/tasty 둘 다 "맛있는", piece/chip 둘 다 "명 조각").
+// 정답을 index로 채점하므로(opts.indexOf(correctWord.meaning)), 뜻이 같은
+// 오답 후보가 섞이면 버튼 두 개가 같은 텍스트로 보이고 그중 하나를 눌러도
+// 오답 처리되는 문제가 생긴다. src/components/WordDetail.jsx의 QuizStep이
+// 이미 쓰는 가드(빈 뜻/정답과 동일한 뜻 제외)를 그대로 미러링하고, 오답
+// 후보끼리도 뜻 텍스트로 중복 제거한다.
+export function makeOptions(correctWord, allWords) {
+  const pool = allWords.filter(w => w.id !== correctWord.id && w.meaning && w.meaning !== correctWord.meaning)
+  const wrong = []
+  for (const w of shuffle(pool)) {
+    if (wrong.length >= 3) break
+    if (wrong.includes(w.meaning)) continue
+    wrong.push(w.meaning)
+  }
+  const opts = shuffle([correctWord.meaning, ...wrong])
   return { opts, correctIdx: opts.indexOf(correctWord.meaning) }
 }
 

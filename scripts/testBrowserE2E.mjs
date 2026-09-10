@@ -116,6 +116,7 @@ async function main() {
     const specs = [
       { name: '[student]', modulePath: '../tests/e2e/student.spec.mjs' },
       { name: '[admin]', modulePath: '../tests/e2e/admin.spec.mjs' },
+      { name: '[mobile]', modulePath: '../tests/e2e/mobileViewports.spec.mjs' },
     ]
 
     for (const spec of specs) {
