@@ -1173,3 +1173,21 @@ _append. `npm run verify:e2e`(`scripts/testBrowserE2E.mjs`)의 `[student]`/`[adm
 ### 후속 수정 — 375x667 FAIL 해소 (2026-09-10)
 
 위 FAIL은 대시보드가 오디오를 재생하지 않는 화면이라는 점에 착안해 `src/App.jsx`에서 `screen !== 'dashboard'`일 때만 `<SpeedBtn />`을 렌더하도록 고쳐 해소했다(다른 화면은 불변 — 오디오가 있는 단어 공부/쓰기/퀴즈 화면에서는 계속 렌더). 불변식을 "겹치지 않음"에서 "CTA 미가림"(미렌더 또는 겹침 없음 중 하나면 통과)으로 재정의해 `mobileViewports.spec.mjs`의 대시보드 체크 라벨을 `대시보드 — 히어로 CTA가 고정 SpeedBtn에 가려지지 않음(대시보드 미렌더 또는 겹침 없음)`으로 바꾸고, SpeedBtn이 다른 화면에서 사라지지 않았음을 증명하는 `단어 공부 카드 — SpeedBtn 표시 유지` 단언을 뷰포트당 1개(4개) 추가했다(총 104→108단언, 전부 PASS). `student.spec.mjs` A8도 동일 이유로 "퀴즈 카드 겹침 없음" 체크를 "대시보드에서 고정 SpeedBtn 미렌더" 체크로 교체했다(단어 목록 마지막 행 겹침 체크는 그대로 유지). `npm run verify:e2e` 전체 165→169단언, 2회 연속 PASS 169/PASS 0 FAIL.
+
+## 관련 항목: 입실시험 진단 필드 · [entrance] E2E · 정규화 기준선 (2026-09-11)
+
+_append. Kinney 입실시험 오답 사고(`e0fe0f50-8927-44d9-9331-e454620524d9`,
+2026-09-10 시험 `8bb82f2f-e793-46ea-9e26-ddeda310cd83`) 조사 후속, 브랜치
+`fix/entrance-diagnostics-2026-09-11`. 상세: `handoff.md`
+2026-09-11(123차)._
+
+| 파일 | 단언 | 대상 | FAIL-first 증거 | registry |
+|---|---|---|---|---|
+| `scripts/testSubmitEntranceDiagnostics.mjs` | 30 | `api/submit-entrance-result.js` 오답 항목 진단 필드(`input`/`expected`/`direction`/`wordId`) 저장 + 기존 `{word, meaning}` 소비자 호환 | 수정 전 8 FAIL | `entrance` 도메인, `extra: false`(required) |
+| `tests/e2e/entranceInputLoss.spec.mjs`(`[entrance]`) | 11 | 입실시험 입력 유실 의혹 3경로 — (a) 900ms 피드백 중 `<input>` DOM 미존재, (b) 시간 초과 시 미제출 입력 미집계(동작 문서화), (c) 리마운트 직후 입력 보존 | 코드 정독 기반 가설 2건을 실제 브라우저로 반증(NO REPRO), `EntranceTest.jsx` 무변경 | `npm run verify:e2e`에 자동 편입(`[entrance]` spec) |
+| `scripts/testSpelling.mjs` §15 | 22 | `utils/spelling.js` 현재 정규화 동작(공백/NBSP/"~"/아포스트로피/문장부호/하이픈) CORRECT·WRONG 기준선 — `spelling.js` 로직 무변경 | 신설(정책 변경 전 기준선 고정 목적, FAIL 없음) | `writing` 도메인 기존 스크립트 확장 |
+
+- `entranceInputLoss.spec.mjs` 검증 중 `tests/e2e/lib/mockRoutes.mjs`에 `/api/submit-entrance-result` mock을 신규 추가(`computeTestResult` 재사용 + `entrance_test_results` upsert 흉내) — mock 부재 시 결과 화면이 `load()` 재조회로 시작 화면으로 되돌아가는 **mock 아티팩트**(앱 버그 아님)를 먼저 실측하고 해소.
+- `npm run verify:e2e` 169→183(`[entrance]` 신규 스펙 11단언 + 기존 스펙 3단언 조정분 포함).
+- 실행 결과: build PASS · `verify:e2e` 183/183 · `testSubmitEntranceDiagnostics` 30/30 · `testSpelling` 91 PASS · `testEntranceTest`/`testClassroomMatrix`/`testSessionTokenAuth` PASS · registry coverage PASS.
+- **NEEDS DECISION(§15 관련, 변경 금지 상태 유지)**: 아포스트로피 곡선/직선 동등 처리, 끝 문장부호 제거, 영어 내부 NBSP 허용 — 3건 모두 정책 결정 전에는 `spelling.js` 미변경.

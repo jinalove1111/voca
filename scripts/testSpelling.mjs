@@ -123,5 +123,33 @@ check('부정 사례: "around" != "~ 주위에" (단어 자체가 아니라 뜻�
 check('회귀: "ice cream" != "icecream" (여전히 오답 — "~" 처리와 무관하게 공백 무시 없음)', !isSpellingCorrect('icecream', 'ice cream'))
 check('회귀: "ap ple" != "apple" (여전히 오답)', !isSpellingCorrect('ap ple', 'apple'))
 
+console.log('\n15. (2026-09-11) 현재 정규화 동작 고정 — Kinney 입실시험 사고 후속(정책 결정 전 "현재 동작"을 그대로 고정; 완화/강화는 별도 결정)')
+// 이 섹션은 정책을 바꾸지 않는다 — 지금 이 순간의 실제 채점 결과를 그대로
+// assertion으로 얼려 둔다. 나중에 정책(예: 곡선/직선 아포스트로피 동일
+// 취급, 끝 문장부호 제거 등)을 바꾸기로 결정하면, 그 결정으로 이 아래
+// assertion들을 의도적으로 뒤집어야 한다(자동으로 조용히 바뀌면 안 됨).
+check('"  apple  " == "apple" (앞뒤 공백/trim)', isSpellingCorrect('  apple  ', 'apple'))
+check('" 사과 " == "사과" (앞뒤 공백/trim, 한글도 동일)', isSpellingCorrect(' 사과 ', '사과'))
+check('"공포  영화" == "공포 영화" (한글 내부 공백 무시)', isSpellingCorrect('공포  영화', '공포 영화'))
+check('"공포영화" == "공포 영화" (한글 내부 공백 완전 제거해도 정답)', isSpellingCorrect('공포영화', '공포 영화'))
+check('"공포\\u00a0영화" == "공포 영화" (한글 내부 NBSP도 공백으로 처리)', isSpellingCorrect('공포 영화', '공포 영화'))
+check('"apple\\u00a0" == "apple" (trailing NBSP는 trim됨)', isSpellingCorrect('apple ', 'apple'))
+check('"주위에" == "~ 주위에" ("~ " 플레이스홀더 제거, 기존 14번 규칙 재확인)', isSpellingCorrect('주위에', '~ 주위에'))
+check('"listen to" == "listen to ~" (영어 target의 "~"도 동일 제거)', isSpellingCorrect('listen to', 'listen to ~'))
+check('"~ 주위에" == "~ 주위에" (원문 그대로 입력해도 정답)', isSpellingCorrect('~ 주위에', '~ 주위에'))
+check('"APPLE" == "apple" (대소문자 무시)', isSpellingCorrect('APPLE', 'apple'))
+check('"highness" == "Highness" (target 쪽 대문자도 무시)', isSpellingCorrect('highness', 'Highness'))
+check('"horror  movie" != "horror movie" (영어 내부 이중 공백) (현재 오답 — 영어 철자 시험 취지상 의도된 엄격성, 단 NBSP는 모바일 키보드 유입 가능 — NEEDS DECISION)', !isSpellingCorrect('horror  movie', 'horror movie'))
+check('"horrormovie" != "horror movie" (영어는 공백 무시 없음) (현재 오답 — 영어 철자 시험 취지상 의도된 엄격성, 단 NBSP는 모바일 키보드 유입 가능 — NEEDS DECISION)', !isSpellingCorrect('horrormovie', 'horror movie'))
+check('"horror\\u00a0movie" != "horror movie" (영어 내부 NBSP) (현재 오답 — 영어 철자 시험 취지상 의도된 엄격성, 단 NBSP는 모바일 키보드 유입 가능 — NEEDS DECISION)', !isSpellingCorrect('horror movie', 'horror movie'))
+check('"don’t" != "don\'t" (곡선 vs 직선 아포스트로피) (현재 오답 — NEEDS DECISION: 데이터 정규화 vs 채점기 동등 처리)', !isSpellingCorrect('don’t', "don't"))
+check('"don\'t" != "don’t" (반대 방향도 동일) (현재 오답 — NEEDS DECISION: 데이터 정규화 vs 채점기 동등 처리)', !isSpellingCorrect("don't", 'don’t'))
+check('"Why don\'t we ~?" != "Why don’t we ~?" (실데이터 중1 동아 unit "7" 단어 d89bf4ce의 곡선 아포스트로피 — 학생은 직선만 입력 가능) (현재 오답 — NEEDS DECISION: 데이터 정규화 vs 채점기 동등 처리)', !isSpellingCorrect("Why don't we ~?", 'Why don’t we ~?'))
+check('"enjoy." != "enjoy" (끝 마침표) (현재 오답 — NEEDS DECISION: 끝 문장부호 제거 여부)', !isSpellingCorrect('enjoy.', 'enjoy'))
+check('"즐기다." != "즐기다" (끝 마침표, 한글도 동일) (현재 오답 — NEEDS DECISION: 끝 문장부호 제거 여부)', !isSpellingCorrect('즐기다.', '즐기다'))
+check('"즐기다!" != "즐기다" (끝 느낌표) (현재 오답 — NEEDS DECISION: 끝 문장부호 제거 여부)', !isSpellingCorrect('즐기다!', '즐기다'))
+check('"well known" != "well-known" (하이픈 vs 공백) (현재 오답 — 영어 철자 시험 취지상 의도된 엄격성, 단 NBSP는 모바일 키보드 유입 가능 — NEEDS DECISION)', !isSpellingCorrect('well known', 'well-known'))
+check('"ice-cream" != "ice cream" (반대 방향: 공백 vs 하이픈) (현재 오답 — 영어 철자 시험 취지상 의도된 엄격성, 단 NBSP는 모바일 키보드 유입 가능 — NEEDS DECISION)', !isSpellingCorrect('ice-cream', 'ice cream'))
+
 console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n${failures}개 테스트 실패 ❌`)
 process.exit(failures === 0 ? 0 : 1)

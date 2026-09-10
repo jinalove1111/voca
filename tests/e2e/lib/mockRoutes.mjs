@@ -21,6 +21,10 @@
 // 것을 테스트가 스스로 잡아낸다).
 import { createDb, handleRestRequest } from './postgrestMock.mjs'
 import { buildFixtureTables, EMBEDS, QA_STUDENT_ID, QA_STUDENT_NAME, ADMIN_PIN, QA_LOGIN_PIN } from '../fixtures/index.mjs'
+// api/submit-entrance-result.js 실 서버와 동일한 순수 채점 함수 재사용(새 채점
+// 로직 발명 아님) — 아래 '/api/submit-entrance-result' mock이 그 서버의
+// entrance_test_results upsert 부작용까지 흉내낼 때 쓴다.
+import { computeTestResult } from '../../../src/utils/entranceTest.js'
 
 // 학생/관리자 화면이 정상적으로 쓰는 공개 폰트 CDN — Supabase/Vercel과
 // 무관한 순수 정적 에셋(민감정보 0, production 앱/DB 요청이 아님)이라
@@ -153,6 +157,57 @@ export async function installMocks(page, { tables } = {}) {
     try { body = req.postDataJSON() || {} } catch { /* ignore */ }
     apiCallLog.push({ url: req.url(), method: req.method(), body })
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: body.pin === ADMIN_PIN }) })
+  })
+
+  // 입실 단어시험 결과 제출(2026-09-11, entranceInputLoss.spec.mjs 추가) —
+  // 위 넓은 '**/api/**'가 기본으로 { ok:false }를 돌려주면 EntranceTest.jsx의
+  // submitResultToServer가 항상 실패 경로(재시도 버튼)를 타 시험 흐름을 끝까지
+  // 밟아볼 수 없다. 단순히 { ok:true }만 고정 응답하면 안 되는 이유(2026-09-11
+  // 실측) — 실 서버(api/submit-entrance-result.js)는 성공 시 반드시
+  // entrance_test_results에 upsert하는데, 그 부작용까지 흉내내지 않으면
+  // 제출 직후 EntranceTest.jsx의 load() 재조회가 "아직 응시 안 함"으로 오인해
+  // (entranceTestSelection.js가 이 시험을 여전히 pending으로 봄) 방금 표시된
+  // 결과 화면에서 시작 화면으로 되돌아가 버린다 — 이 파일이 검증하려는
+  // 입력유실 여부와 무관한, mock 불완전성이 만든 가짜 결함이었다. 그래서 여기도
+  // 실 서버와 동일하게 entrance_tests.words 스냅샷으로 재채점(computeTestResult
+  // 재사용 — 새 채점 로직 발명 아님) 후 entrance_test_results에 upsert한다.
+  await page.route('**/api/submit-entrance-result', async (route) => {
+    const req = route.request()
+    let body = {}
+    try { body = req.postDataJSON() || {} } catch { /* ignore */ }
+    apiCallLog.push({ url: req.url(), method: req.method(), body })
+
+    const test = (db.tables.entrance_tests || []).find((t) => t.id === body.testId)
+    const wordMap = new Map((test?.words || []).filter((w) => w?.word && w?.meaning).map((w) => [w.word, w.meaning]))
+    const answers = Array.isArray(body.answers) ? body.answers : []
+    const questions = answers.map((a) => {
+      const meaning = wordMap.get(a.word)
+      return { word: a.word, meaning, direction: a.direction, answer: a.direction === 'en2kr' ? meaning : a.word }
+    })
+    const inputs = answers.map((a) => a.input)
+    const result = computeTestResult(questions, inputs)
+
+    if (body.testId && body.studentId) {
+      const table = db.tables.entrance_test_results || (db.tables.entrance_test_results = [])
+      const existing = table.find((row) => row.test_id === body.testId && row.student_id === body.studentId)
+      const row = {
+        id: existing?.id || `mock-entrance-result-${body.testId}-${body.studentId}`,
+        test_id: body.testId,
+        student_id: body.studentId,
+        score: result.score,
+        total: result.total,
+        missed_words: result.missed,
+        duration_seconds: body.durationSeconds ?? null,
+        submitted_at: new Date().toISOString(),
+      }
+      if (existing) Object.assign(existing, row)
+      else table.push(row)
+    }
+
+    await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ ok: true, score: result.score, total: result.total, missed: result.missed }),
+    })
   })
 
   return { db, unmockedRequests, externalAssetRequests, apiCallLog, ttsFallbackRequests }

@@ -615,6 +615,32 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
 
 ## VERIFY
 
+### [P1] Kinney 입실시험 오답 사고 후속 2026-09-11 — 브랜치 fix/entrance-diagnostics-2026-09-11, PR 대기 (123차)
+- 근거: `handoff.md` 2026-09-11(123차).
+- 내용: 학생 Kinney(`e0fe0f50…`) 2026-09-10 입실 단어시험(`8bb82f2f…`)
+  7/10 오답 3건("정확히 입력했는데 오답" 의혹) READ-ONLY 조사 —
+  실제 입력값이 어디에도 저장되지 않아 **KINNEY HISTORICAL INPUT
+  RECOVERABLE: NO** 확정. 점수 수정·백필 0.
+  - A. `api/submit-entrance-result.js`에 오답 항목 진단 필드
+    (`input`/`expected`/`direction`/`wordId`) 추가(`3aac46c`) —
+    `wordId`는 스냅샷에 단어 PK가 없어 항상 `null`(NEEDS DECISION).
+    채점/score/응답 무변경, SQL 0. `testSubmitEntranceDiagnostics.mjs`
+    30단언(수정 전 8 FAIL), registry required.
+  - B. 입력 유실 의혹 — `tests/e2e/entranceInputLoss.spec.mjs`
+    (`[entrance]`, 11단언)로 3경로 실브라우저 검증 → **NO REPRO**,
+    `EntranceTest.jsx` 무변경. `verify:e2e` 169→183.
+  - C. 정규화 기준선 — `testSpelling.mjs` §15(22단언) 신설,
+    `spelling.js` 무변경. 아포스트로피 곡선/직선·끝 문장부호·영어 내부
+    NBSP 3건은 정책 결정 전 변경 금지.
+- Production 안전: DB WRITE 0, SQL 0, 학생/진도/보상/반 설정/단어 변경
+  0, Kinney 점수 수정 0. 조사는 anon READ-ONLY GET.
+- 검증: build PASS, verify:e2e 183/183, testSubmitEntranceDiagnostics
+  30/30, testSpelling 91 PASS, testEntranceTest/ClassroomMatrix/
+  SessionTokenAuth PASS, registry coverage PASS.
+- 검수 대기 사항: qa-reviewer 코드 리뷰 미착수, 운영자 결정 4건(스냅샷
+  단어 PK 저장 여부, 정규화 3건 정책, 2026-09-10 시험 "listen to
+  ~"/"also" 오답 학생 점수 정정 여부, PR 머지 여부).
+
 ### [P1] 초등 5개 반 확장 준비 2026-09-10 — 브랜치 `qa/elementary-5-readiness-2026-09-10`, PR 생성/merge 결정 대기 (122차)
 - 근거: `handoff.md` 2026-09-10(122차).
 - 내용: 초등 확장 전 READ-ONLY 조사(anon key, DB WRITE 0) + 학생 경로 결함

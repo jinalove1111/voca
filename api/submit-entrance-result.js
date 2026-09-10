@@ -153,6 +153,35 @@ export default async function handler(req, res) {
   const inputs = answers.map((a) => a.input)
   const result = computeTestResult(questions, inputs)
 
+  // 2026-09-11, 입실시험 오답 진단 — Kinney 사고 후속. 기존 missed_words는
+  // [{word, meaning}]만 저장해서 학생이 실제로 뭘 입력했는지 어디에도
+  // 남지 않아 오답 신고를 재현할 수 없었다. 정답 문제는 절대 건드리지
+  // 않고, "틀린" 문제에 한해서만 최소 진단 필드를 덧붙인다.
+  //   input    — 학생이 보낸 원문 그대로(정규화/트림 없음, 이미
+  //              isValidAnswersShape이 500자로 상한을 걸어둠).
+  //   expected — 서버가 재계산한 정답(questions[i].answer)과 동일.
+  //   direction— 그 문제의 채점 방향(en2kr/kr2en).
+  //   wordId   — entrance_tests.words 스냅샷이 {word, meaning}만 저장해
+  //              단어 PK가 없으므로 항상 null(스냅샷에 단어 id를 함께
+  //              저장하도록 바꾸는 건 별도 결정 사항 — 범위 밖).
+  // word가 시험 내에서 유일함은 위 duplicate_word 검증으로 이미 보장돼
+  // findIndex(word 기준) 매칭이 항상 정확하다. 이 소비자는 기존
+  // consumer(EntranceTest.jsx/summarizeClassResults)가 word/meaning만
+  // 읽으므로 필드 추가는 그쪽에 영향이 없고, HTTP 응답(result.missed)은
+  // 그대로 둬서 클라이언트에 진단 필드를 노출하지 않는다.
+  const missedDiagnostics = result.missed.map((m) => {
+    const i = questions.findIndex((q) => q.word === m.word)
+    const q = questions[i]
+    return {
+      word: m.word,
+      meaning: m.meaning,
+      input: typeof inputs[i] === 'string' ? inputs[i] : '',
+      expected: q?.answer ?? null,
+      direction: q?.direction ?? null,
+      wordId: null,
+    }
+  })
+
   const duration = Number.isFinite(durationSeconds) && durationSeconds >= 0 ? Math.round(durationSeconds) : null
 
   const { error: upsertErr } = await supabase.from('entrance_test_results').upsert({
@@ -160,7 +189,7 @@ export default async function handler(req, res) {
     student_id: studentId,
     score: result.score,
     total: result.total,
-    missed_words: result.missed,
+    missed_words: missedDiagnostics,
     duration_seconds: duration,
     submitted_at: new Date().toISOString(),
   }, { onConflict: 'test_id,student_id' })
