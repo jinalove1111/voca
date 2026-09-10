@@ -1,0 +1,77 @@
+{
+  "agent_name": "lead-elementary-45-2026-09-11",
+  "role": "초등 5개 반 / 45명 확장 Production readiness 점검 — 격리/부하/보상/숙제/쓰기/발음/모바일 7종 하네스 + speech P1 수정(READ-ONLY 조사)",
+  "task_id": "elementary-45-readiness-2026-09-11",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-11T00:00:00Z",
+  "updated_at": "2026-09-11T06:00:00Z",
+  "branch": "qa/elementary-45-readiness-2026-09-11",
+  "commits_so_far": [
+    "2f434d1 test(isolation): 초등 5반×9명=45명 합성 fixture 학생 간 데이터 격리 543단언",
+    "4c42d38 test(reward/load): 45명 보상 stress(12타입×9시나리오×동시성 5/10/20/45) + 파이프라인 동시성 하네스",
+    "cb1a814 test(homework/writing): 45명 fixture 숙제 파이프라인 183단언 + 5반 쓰기 양방향 정책 90단언",
+    "923ac2a test(e2e): [mobile] 4뷰포트 확장 112→178단언",
+    "913e4cb fix(speech): 저장 mp3 실패 시 onEnd 다중 호출 → 중복 재생/녹음 재시작 (P1) + 발음 경로 영구고착 없음 90단언"
+  ],
+  "findings": {
+    "inventory": "초등 후보 regular 반 3개 — Presentation 6 1693f32b(실8/테스트3), Pre-Middle School 39e9acb1(실11/테스트1 Barry), Pre-middle school 5학년 36bcd6fa(실9/테스트0). 합계 실 28명 → 45명 목표 대비 17명 부족, 4·5번째 반 DB에 없음(NEW CLASS REQUIRED). 'Presentation School' 반 없음, 'Presentation 6 -2026' dcd497c2는 교재 컨테이너(휴면5). 신규 관측: 중1 천재 이상기 Unit5 fd6462fc(40단어) 2026-09-11 추가. 앱 현재 유닛 권위 필드 = students.current_unit_id.",
+    "isolation": "testFortyFiveStudentIsolation 543/543 — 5반×9명 합성(동명이인 Kinney×2/공백·대소문자 변형/Barry/_DUP_INACTIVE/유령유닛 학생 포함), 교차 0, 재로그인 stale 0. 관찰(미수정): getStudentClassAssignments 유령 유닛 read-time self-heal이 !_textbookMode 분기에만 존재 — 교재 모드는 쓰기 가드만.",
+    "load": "testLoadConcurrency45 52/52 — 동시성 5/10/20/45×5단계, 5% 일시 실패 주입, 재시도 후 success 100%, 중복 행 0, lost update 0, 교차오염 0.",
+    "reward": "testRewardStress45 26/26 — duplicate 0, mismatch 0, HTTP 500 0. L3 cap TOCTOU 정보 프로브: cap 10/서로 다른 sourceId 45건 동시 → 초과 44(KNOWN GAP, testRewardCapRace 동일).",
+    "budget": "학생/일 typical 189★/realistic 277★/theoretical 951★, 45명/일 8,505/12,465/42,795★. 판정 SERVER HARDENING RECOMMENDED(cap검사+insert 단일 RPC 원자화 후속) — DB GUARD 45명 전 필수 아님(동일 key UNIQUE 보장, 경합 가능 항목은 저액 wrong-word/exam뿐, 고액은 클라이언트 전용).",
+    "homework": "testHomeworkPipeline45 183/183 — 배정 0행 → 전원 유닛 전체 40단어 폴백(P1 빈 화면 미재현), 중복 upsert 1행, 타반 미전파. 관찰(미수정): 타 교재 word_ids 배정 시 hasTodaysHomework=true 배너 불일치.",
+    "writing": "testWritingPolicyFiveClasses 90/90 — write 모드 5반 전부 항상 mixed, comprehensive는 spelling_test_enabled=false면 스펠링 단계 없음(현재 5반 일일 의식에 쓰기 미포함). 정답 사전 노출 0.",
+    "speech_p1": "speech.js playAudioUrl() 실패 경로가 onError+advance()(→onEnd) 이중 호출 → times:2 설정에서 onEnd 3회/getMicStream 3회. fail() 헬퍼로 하나만 호출하도록 수정, 실패 URL 재시도 제거, 성공 경로 무변경. 수정 전 FAIL 2(A1/A2) → testSpeakingPathNoPermanentDisable 90/90.",
+    "mobile": "[mobile] 112→178단언, verify:e2e 253/253×2 — 긴 텍스트/복습 화면/세션 완료 토스트/wrong-word-recovered/키보드/200%폰트/slow network. 한계: fixture 문자열 짧아 CSS 계약 확인 수준.",
+    "data_blockers": "유령 1단어 유닛 6개(초등 참조 0), 중복 유닛 Unit 7 쌍 1건(초등 SCA 참조 3), 0단어 유닛 2개, 곡선 아포스트로피 1건, 긴 뜻(27자) 1건, students.current_unit_id≠SCA bookmark 9건(같은 교재 LOW). 정상: 28명 전원 primary SCA 정확히 1, 오디오/예문 2175/2175 빈 값 0.",
+    "observability": "product_events anon_id만, ErrorBoundary console.error만, 앱 버전 스탬프 없음 — P2 후보로만 기록, 코드 변경 없음.",
+    "decisions_needed": [
+      "신규 2개 반 이름/학생 수/교재",
+      "17명 배정 조합",
+      "일일 의식 쓰기 포함 여부(교재 소유 반 2724dc62/5c4130db 설정 변경 필요)",
+      "데이터 블로커 4종(유령 유닛/중복 유닛/0단어 유닛/아포스트로피 등) 처리",
+      "보상 cap 서버 원자화 후속 PR 승인 여부",
+      "유령 유닛 교재 모드 read-time self-heal 도입 여부",
+      "파일럿 5~10명 지정",
+      "코드 PR(qa/elementary-45-readiness-2026-09-11) · PR #32(운영자 패키지 문서) 머지 여부"
+    ]
+  },
+  "verification": {
+    "build": "PASS",
+    "verify_e2e": "253/253 (×2연속, [mobile] 112→178 포함)",
+    "testFortyFiveStudentIsolation": "543/543",
+    "testLoadConcurrency45": "52/52",
+    "testRewardStress45": "26/26",
+    "testHomeworkPipeline45": "183/183",
+    "testWritingPolicyFiveClasses": "90/90",
+    "testSpeakingPathNoPermanentDisable": "90/90 (수정 전 FAIL 2)",
+    "other": "testSpeechBtnSpeakingStall 19/19, testTtsSingleton PASS, verify:audio-tts PASS, registry coverage PASS",
+    "verify_all": "ALL DOMAINS PASS (913e4cb), FAIL 0, e2e 253/253"
+  },
+  "production_safety": {
+    "db_write": 0,
+    "sql_write": 0,
+    "migration": 0,
+    "student_progress_reward_class_setting_textbook_assignment_feature_flag_mutation": 0,
+    "class_creation_student_registration": 0,
+    "merge": 0
+  },
+  "files_owned": [
+    "handoff.md",
+    "TESTING.md",
+    "PROJECT_BOARD.md",
+    ".ai-status/lead-elementary-45-2026-09-11.json"
+  ],
+  "files_read": [
+    "handoff.md",
+    "TESTING.md",
+    "PROJECT_BOARD.md",
+    ".ai-status/README.md",
+    ".ai-status/lead-entrance-diagnostics-2026-09-11.json",
+    ".git/logs/HEAD"
+  ],
+  "summary": "초등 5개 반/45명 확장 production readiness를 READ-ONLY로 점검한 6h 세션(브랜치 qa/elementary-45-readiness-2026-09-11)을 handoff.md 124차/TESTING.md/PROJECT_BOARD.md VERIFY 카드로 문서화 완료. 신규 하네스 7종(543+52+26+183+90+90+178단언) + speech.js P1 재생 이중호출 결함 수정(90/90). Production 변경 0(DB WRITE 0, SQL 0, migration 0, 반/학생 등록 0, merge 0). 운영자 패키지 문서(docs/operations/ELEMENTARY_45_ROLLOUT_PACKAGE.md)는 별도 브랜치 docs/elementary-45-operator-package-2026-09-11 → PR #32로 분리돼 이 문서화 범위에서 제외. verify:all 전체 실행 결과는 세션 종료 시점까지 미수신 — 수신 시 handoff.md 124차에 append 예정.",
+  "blocker": null,
+  "next_action": "코드 PR 생성 후 운영자 리뷰 대기(merge 금지); PR #32는 별도 리뷰."
+}

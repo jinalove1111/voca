@@ -248,16 +248,35 @@ function playAudioUrl(url, opts = {}) {
       if (played < times) setTimeout(playOnce, 400)
       else onEnd?.()
     }
+    // 2026-09-11 — 실패 경로(로드 실패/play() 거부)는 advance()를 타지
+    // 않는다. advance()는 "재생이 성공적으로 끝났다"는 신호 전용이어야
+    // 하는데, 예전엔 실패해도 무조건 여기까지 도달해 onEnd를 불러버렸다 —
+    // playWordAudio() tier1 실패 시 onError(tryDeviceTts)로 폴백을 넘기는
+    // 것과 동시에 onEnd가 시기상조로 먼저 불려, 이후 tier2/3가 각자 또
+    // onEnd를 불러 탭 1번에 onEnd가 2~3번 중복 발화되고 SpeechBtn에서
+    // 마이크가 반복 재요청·녹음이 반복 재시작되는 결함으로 이어졌다
+    // (회귀: scripts/testSpeakingPathNoPermanentDisable.mjs A1/A2/A1b/B4b).
+    // fail()은 완료 신호를 정확히 한 번만 내보낸다 — onError가 있으면 그
+    // 폴백 체인(tryDeviceTts→tryNetworkTts→giveUp)이 최종 onEnd를
+    // 전담하므로 여기서 onEnd를 부르지 않고, onError가 없는 호출자는
+    // 기존과 동일하게 onEnd 1회를 그대로 받는다(완료 신호 유실 0). 실패한
+    // URL을 그대로 재시도하던(times 기반) 동작도 함께 제거 — 로드 실패는
+    // 재시도해도 다시 실패할 뿐이라 의미가 없었다.
+    const fail = (msg) => {
+      if (done) return
+      done = true
+      if (_currentAudio === audio) _currentAudio = null
+      if (onError) onError(msg)
+      else onEnd?.()
+    }
     audio.onerror = () => {
       console.warn('[speech] failed to load stored audio:', url, audio.error?.message)
-      onError?.(audio.error?.message || `오디오 로드 실패: ${url}`)
-      advance()
+      fail(audio.error?.message || `오디오 로드 실패: ${url}`)
     }
     audio.onended = advance
     audio.play().catch((err) => {
       console.warn('[speech] play() rejected for stored audio:', url, err?.message || err)
-      onError?.(err?.message || String(err))
-      advance()
+      fail(err?.message || String(err))
     })
   }
 
