@@ -1,0 +1,100 @@
+{
+  "agent_name": "lead-paul-town-v1-2026-09-11",
+  "role": "Paul Town V1(마을 상점 확장·레벨 잠금·배치·웰컴 크레딧) 구현 — 플래그 OFF, v3_50 미실행, PR 미머지",
+  "task_id": "paul-town-v1-2026-09-11",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-11T00:00:00Z",
+  "updated_at": "2026-09-11T00:00:00Z",
+  "branch": "feat/paul-town-v1",
+  "base_commit": "ab66332",
+  "commits_so_far": [
+    "08e5ba8 town: 순수 도메인(townCatalog/townLevel/townLayout/townMessages)",
+    "84e6664 server: api/grant-xp.js get_town_shop_state 컬럼 폴백 3단 + level + claim_town_welcome(TOWN_V1_WELCOME_ENABLED 서버 게이트)",
+    "6ec7df4 test(server): testTownV1Server.mjs 87단언",
+    "c5b65fe sql: supabase_v3_50_town_v1.sql + _ROLLBACK + _POST_VERIFY",
+    "21a2a61 persistence/flag: useStudent.js townPlacements/townRemovedIds + useTownShop.js level/claimWelcome + features.js paulTownV1=false",
+    "a8168d6 ui: TownScreen/TownGrid/TownShopPanel/TownInventory/TownHeader + App.jsx 'town' screen + PaulTown.jsx onGoTown 카드"
+  ],
+  "scope": {
+    "loop": "STUDY → reward_ledger(⭐, 감소 없음) → dollar_ledger 트리거(v3_49, 이미 실행됨) → Town Shop → purchase_town_item(v3_49 RPC 재사용 + v3_50 레벨 잠금) → town_purchases → progress_data.townPlacements 배치 → 마을 성장",
+    "new_currency": 0,
+    "client_payment_logic_duplicated": 0,
+    "total_stars_deduction": 0,
+    "production_write": 0,
+    "sql_executed": 0,
+    "backfill": 0,
+    "paul_new_images": 0,
+    "paul_assets_used": "기존 21종(HeroReaction + paulReactions id hello/ponder/great/almost/study/levelup/lets_learn/happy), 화면당 1회",
+    "catalog_items": "16 신규 + shop-lamp 메타 갱신 1 = 17종",
+    "layout": "8x6 격자, HOME_CELL(3,2) 고정 My House, 아이템당 1배치, tombstone 병합(diaryPlacements 패턴), 학생 UUID 격리"
+  },
+  "db_v3_50_expected_delta": {
+    "town_items_columns": "+4 (category, sort_order, min_level CHECK 1~10, asset_key)",
+    "town_items_rows": "+16 신규 + shop-lamp 메타 갱신 1(price/active 불변)",
+    "functions": "3 — purchase_town_item 교체(v3_49 본문 + 레벨 잠금 1곳) · town_level_for_stars 신규 · grant_town_welcome_credit 신규(service_role 전용)",
+    "dollar_ledger_reward_ledger_town_purchases_students_student_progress_rows": 0
+  },
+  "rollback": "함수 2개 drop + purchase_town_item을 v3_49 본문으로 원복 + 신규 16행 조건부 삭제(town_purchases FK 있으면 STAGE 2 스킵). town_items 신규 컬럼 4개는 destructive-SQL 게이트(ALTER TABLE 내 DROP 패턴 차단)로 롤백이 지울 수 없음(기술적 불가능, 헤더에 명시).",
+  "post_verify": "SELECT only (supabase_v3_50_town_v1_POST_VERIFY.sql)",
+  "execution_order": "코드/SQL 어느 순서든 안전 — 컬럼 부재 시 클라이언트 카탈로그 메타 폴백, 서버 42703 시 3단 폴백",
+  "verification": {
+    "testTownCatalog": "50/50",
+    "testTownLayout": "64/64",
+    "testTownLevelLock": "53/53",
+    "testTownV1Sql": "209/209",
+    "testTownV1Server": "87/87",
+    "testTownPlacementsPersistence": "65/65",
+    "testTownUiStatic": "70/70",
+    "no_regression_suites": "testPaulDollarSql, testTownShopServer(78), testTownShop(104), race 스위트 8종, verify:attachment(163) — 전부 무회귀",
+    "registry": "신규 7종 전부 tests/harness/registry.mjs required(extra:false) 등록",
+    "e2e_town_spec": "tests/e2e/townV1.spec.mjs([town]) 158단언 — 4뷰포트 웰컴 1회/구매/레벨 잠금/잔액 부족/배치·이동·보관/reload 영속/200% 폰트/⭐ 불변 + 플래그 OFF 대조. HEAD 9afb0e0(6커밋+E2E커밋). fixture QA_STUDENT_ID를 UUID 형식으로 교정(App.jsx readSession UUID 검증이 비-UUID를 레거시 세션으로 판정해 reload마다 로그아웃 — 픽스처 전제 위반, 앱 결함 아님)",
+    "verify_e2e": "413/413 ×2연속(student 34/admin 21/mobile 178/entrance 12/town 158), 미mock 요청 0 — 253에서 확장",
+    "verify_all_build": "npm run build PASS(TownScreen 별도 lazy 청크 18.62kB/gzip 6.80kB) · npm run verify:all ALL DOMAINS PASS, FAIL 줄 0(extra 포함) · registry coverage PASS",
+    "limitation": "[town] E2E는 fixture QA 학생 1명 기준 — 진짜 학생 간(다른 UUID) 격리는 세션 포인터 재로그인으로 대체 검증, 실제 다학생 격리는 testTownPlacementsPersistence.mjs(65단언, 45명×3배치=135건) 전담"
+  },
+  "files_owned": [
+    "handoff.md",
+    "TESTING.md",
+    "DATABASE.md",
+    "ROADMAP.md",
+    "PROJECT_BOARD.md",
+    "docs/design/PAUL_TOWN_V1.md",
+    ".ai-status/lead-paul-town-v1-2026-09-11.json"
+  ],
+  "files_read": [
+    "handoff.md",
+    "TESTING.md",
+    "DATABASE.md",
+    "ROADMAP.md",
+    "PROJECT_BOARD.md",
+    "CLAUDE.md",
+    ".ai-status/lead-elementary-45-2026-09-11.json",
+    "supabase_v3_50_town_v1.sql",
+    "supabase_v3_50_town_v1_ROLLBACK.sql",
+    "src/config/features.js",
+    "src/utils/town/townLevel.js",
+    "src/utils/town/townCatalog.js",
+    "api/grant-xp.js",
+    "src/App.jsx",
+    "tests/harness/registry.mjs"
+  ],
+  "decisions_needed": [
+    "가격표(§5) 확정",
+    "웰컴 금액 $20 확정",
+    "dollar_rules 적립 rate(사용 가능 별 적립 ~6~15/일) 유지 여부",
+    "실제 일러스트 자산 제작(assetKey 교체, 현재 전부 이모지 폴백)",
+    "기능 플래그 paulTownV1 ON 시점(Pilot A 기기부터)",
+    "서버 env TOWN_V1_WELCOME_ENABLED 설정 시점",
+    "supabase_v3_50_town_v1.sql 실행 시점(운영자, v3_49 이후 아무 때나 안전)",
+    "브랜치 feat/paul-town-v1 PR 생성/머지 여부"
+  ],
+  "protected_untouched": [
+    "PR #29/#30/#31/#33",
+    "PR #32(미머지 상태 유지)",
+    "untracked 운영 SQL(supabase_v3_38_* ~ supabase_v3_46_*)",
+    "Production DB WRITE 0"
+  ],
+  "blocker": null,
+  "next_action": "[town] E2E(158단언)/build/verify:all 결과 수신·문서화 완료(handoff.md 125차 §11, TESTING.md 125차 섹션) — 이제 qa-reviewer/security-reviewer 코드 리뷰 및 PR 생성 여부가 운영자 결정 대기."
+}

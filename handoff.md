@@ -1,8 +1,164 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-11 (124차, 초등 5개 반/45명 확장 Production readiness 6h
-세션 — 격리/부하/보상/숙제/쓰기/발음/모바일 7종 하네스 + speech P1 수정,
-브랜치 qa/elementary-45-readiness-2026-09-11, PR 미머지(운영자 패키지는
-PR #32 분리), Production WRITE 0. 123차 이하 보존)_
+_최종 갱신: 2026-09-11 (125차, Paul Town V1 구현 — feat/paul-town-v1,
+플래그 paulTownV1 OFF, supabase_v3_50_town_v1.sql 미실행, PR 미머지,
+Production WRITE 0. 124차 이하 보존)_
+
+## 2026-09-11 (125차) — Paul Town V1 구현(feat/paul-town-v1, 플래그 OFF, v3_50 미실행, PR 미머지)
+
+### 1. 목적/범위
+
+기존 Paul Town 별 상점(V1 이전, `townShopV1`, 책상 램프 1개)을 마을을
+실제로 꾸미는 확장으로 넓혔다 — Paul Dollar(v3_49, 이미 2026-09-09 실행
+완료)로 신규 마을 아이템 16종을 사서 8×6 격자에 배치하고, 별 총량 기준
+레벨이 오르면 더 큰 아이템이 잠금 해제되는 흐름. 설계 전문은
+`docs/design/PAUL_TOWN_V1.md`.
+
+브랜치 `feat/paul-town-v1`(base `ab66332`, 6커밋: `08e5ba8` 도메인 ·
+`84e6664` 서버 · `6ec7df4` 서버 테스트 · `c5b65fe` SQL v3_50 ·
+`21a2a61` 영속성/플래그 · `a8168d6` UI).
+
+### 2. 게임 루프 · 스타 경제
+
+```
+STUDY → reward_ledger(⭐, 감소 없음) → dollar_ledger 트리거(v3_49, 기존)
+  → Town Shop → purchase_town_item(v3_49 RPC 재사용 + v3_50 레벨 잠금)
+  → town_purchases → progress_data.townPlacements 배치 → 마을 성장
+```
+
+별(⭐, `reward_totals.earned_stars`)은 레벨만 결정하고 절대 감소하지
+않는다. 달러(💵, `dollar_ledger`)만 구매 시 감소한다. 새 화폐 0종, 결제
+로직 클라이언트 복제 0, `total_stars` 차감 0, Production DB WRITE/SQL
+실행/백필 전부 0.
+
+### 3. DB — `supabase_v3_50_town_v1.sql`(미실행)
+
+`town_items` 컬럼 +4(`category`/`sort_order`/`min_level` CHECK 1~10/
+`asset_key`) · 행 +16(신규 아이템) + 기존 `shop-lamp` 메타만 갱신
+(price/active 불변) · 함수 3개 — `purchase_town_item` 교체(v3_49 본문 +
+advisory lock 이전 레벨 잠금 검사 1곳만 추가, `locked` reason 신규) ·
+`town_level_for_stars`(순수 SQL, 임계값 `[0,20,50,100,200,350,550,800,
+1100,1500]`→레벨 1~10) 신규 · `grant_town_welcome_credit`(신규,
+service_role 전용) 신규. `dollar_ledger`/`reward_ledger`/`town_purchases`/
+`students`/`student_progress` 행 변화 0(이 마이그레이션 자체는 어떤
+학생에게도 지급/구매하지 않는다).
+
+**GRANT**: `town_items` 새 컬럼 4개는 v3_47이 이미 부여한 테이블 단위
+`grant select`가 자동으로 커버해 추가 GRANT 불필요(PostgreSQL 테이블
+단위 GRANT는 나중에 추가되는 컬럼에도 자동 적용). 신규 함수 2개는
+`service_role`만 EXECUTE.
+
+**롤백**(`supabase_v3_50_town_v1_ROLLBACK.sql`): STAGE 0(현재 상태 확인)
+→ STAGE 1(함수 2개 drop + `purchase_town_item`을 v3_49 본문으로 정확히
+원복, town_items 행/컬럼 무관하게 항상 안전) → STAGE 2(신규 16개 아이템
+행 조건부 삭제 — `town_purchases` FK로 막히면 확인 쿼리로 스킵 판단) →
+STAGE 3(최종 확인). `town_items`의 신규 컬럼 4개는 이 저장소의
+destructive-SQL 게이트(ALTER TABLE 내 DROP 패턴을 Write/Edit 단계에서
+차단)로 인해 롤백이 지울 수 없음(기술적 불가능, 무해 — `min_level`
+기본값 1이 모든 학생을 통과시킴). 이미 지급된 웰컴 크레딧도 소급
+회수하지 않는다(CLAUDE.md 규칙 1).
+
+`supabase_v3_50_town_v1_POST_VERIFY.sql`(SELECT only)도 함께 준비.
+실행 순서는 코드/SQL 어느 쪽이 먼저여도 안전 — 컬럼 부재 시 클라이언트
+카탈로그 메타(`townCatalog.js`)로 폴백, 서버는 42703 감지 시 3단
+컬럼 폴백 체인으로 조회.
+
+### 4. 웰컴 크레딧 — 이중 게이트로 이번 PR은 지급 0건
+
+`api/grant-xp.js` 신규 action `claim_town_welcome`(`grant_town_welcome_
+credit` RPC 호출, $20 1회, `idempotency_key` UNIQUE 강제)이 서버
+`process.env.TOWN_V1_WELCOME_ENABLED !== '1'`이면 RPC를 호출조차 하지
+않고 `disabled` 반환 — 클라이언트 `paulTownV1` 플래그 OFF와 함께 이중
+게이트라, 이 PR이 그대로 배포돼도 Production 지급은 0건(백필 0).
+
+### 5. 카탈로그·레벨(정책 초안, NEEDS DECISION)
+
+16개 신규 아이템(가격 10~200, 레벨 1~8) + 기존 `shop-lamp`(60, 레벨 1) =
+17종. 레벨 임계값 앞 5단계는 `rewardEngine.LEVELS`(기존 학업 보상
+레벨)와 값이 동일(의도적 — 두 파일은 서로 import하지 않는 독립 복제,
+드리프트는 `testTownLevelLock.mjs`가 잡음). 상세 표는
+`docs/design/PAUL_TOWN_V1.md` §5.
+
+### 6. 레이아웃 — 8×6 격자
+
+`src/utils/town/townLayout.js`(import 0, `useStudent.js`의
+`diaryPlacements` tombstone 병합 패턴 재사용) — `HOME_CELL(3,2)` 고정
+My House, V1은 아이템당 배치 1개, 학생 UUID 격리(동명이인 두 계정도
+독립). `useStudent.js`에 `townPlacements`/`townRemovedIds` 필드 +
+place/move/store 얇은 래퍼 배선.
+
+### 7. UI · Paul 통합 · 브랜드
+
+`TownScreen`/`TownGrid`/`TownShopPanel`/`TownInventory`/`TownHeader`
+(신규 5개 컴포넌트) — `App.jsx`에서 `React.lazy`+`Suspense`로 별도 청크
+(`paulTownV1` OFF면 로드 자체 안 함), `PaulTown.jsx`에 `onGoTown` 카드
+(플래그 OFF면 기존 `showBuildings` 분기 그대로 보존). Paul은 **기존
+21종 에셋만**(HeroReaction + `paulReactions.js` 8개 id, 화면당 1회),
+새 Paul 이미지 0장. 브랜드 문구 `TOWN_PHRASES` 5종 화면당 최대 1개,
+팔레트는 전부 CSS 그라데이션(이미지 자산 0). 자산 폴더
+`src/assets/town/{backgrounds,buildings,decorations,nature,animals,
+special,ui}/` + `index.js`(assetKey 맵, 현재 비어 있음 → 이모지 폴백).
+
+### 8. 테스트(신규 7종, 전부 registry required)
+
+| 파일 | 단언 | 대상 |
+|---|---|---|
+| `scripts/testTownCatalog.mjs` | 50 | `townCatalog.js` 순수 병합/상태 계산 |
+| `scripts/testTownLayout.mjs` | 64 | `townLayout.js` 8×6 배치/이동/보관/병합 |
+| `scripts/testTownLevelLock.mjs` | 53 | `townLevel.js` 레벨 계산/rewardEngine parity |
+| `scripts/testTownV1Sql.mjs` | 209 | v3_50 SQL 정적 단언 + 인메모리 시뮬레이션(SQL 미실행) |
+| `scripts/testTownV1Server.mjs` | 87 | `claim_town_welcome`/`get_town_shop_state` 확장, 동시성 5/10/20/45 |
+| `scripts/testTownPlacementsPersistence.mjs` | 65 | `useStudent.js` 배선, 영속성/격리 |
+| `scripts/testTownUiStatic.mjs` | 70 | UI 소스 정적 계약(Paul 신규 이미지 0, 문구 1회, 44px 타겟 등) |
+
+무회귀 확인: `testPaulDollarSql`, `testTownShopServer`(78),
+`testTownShop`(104), race 스위트 8종, `verify:attachment`(163).
+
+**미수신 — 이후 append 예정**: `[town]` E2E 스펙 결과와
+`npm run build`/`npm run verify:all` 실행 결과는 이 세션 종료 시점까지
+아직 수신하지 못했다. 임의 수치를 기재하지 않고 비워둔다 — 운영자/
+후속 세션이 결과를 보내면 이 섹션에 이어서 append한다.
+
+### 9. Production 안전
+
+DB WRITE 0 · SQL 실행 0 · migration 0 · 백필 0 · 학생/진도/보상/반
+설정/기능 플래그 변경 0(플래그는 코드 기본값 `false`일 뿐 아무 기기에도
+push되지 않음) · PR #29/#30/#31/#33 무접촉 · PR #32 미머지 · untracked
+운영 SQL(`supabase_v3_38_*` ~ `supabase_v3_46_*`) 무접촉 · merge 0.
+
+### 10. 운영자 결정 목록
+
+(1) §5 가격표 확정. (2) 웰컴 금액 $20 확정. (3) `dollar_rules` 적립
+rate(사용 가능 별 적립 ~6~15/일) 유지 여부. (4) 실제 일러스트 자산
+제작(assetKey 교체, 현재 전부 이모지 폴백). (5) 기능 플래그 `paulTownV1`
+ON 시점(Pilot A 기기부터 권장). (6) 서버 env `TOWN_V1_WELCOME_ENABLED`
+설정 시점. (7) `supabase_v3_50_town_v1.sql` 실행 시점(v3_49 이후 아무
+때나 안전). (8) 브랜치 `feat/paul-town-v1` PR 생성/머지 여부.
+
+### 11. 검증
+
+각 신규 스위트 단독 PASS(50/64/53/209/87/65/70) + 무회귀 스위트 재확인.
+`npm run build`/`npm run verify:all`/`[town]` E2E는 아직 미실행 —
+수신 후 이 섹션에 이어서 append 예정(임의 수치 기재 금지).
+
+**검증 결과 수신(HEAD `9afb0e0` = 위 6커밋 + E2E 커밋)**:
+- `npm run build` PASS — `TownScreen` 별도 lazy 청크 18.62kB(gzip
+  6.80kB), 다른 청크 크기 무변화.
+- `npm run verify:e2e` **413/413 ×2연속**(student 34 · admin 21 ·
+  mobile 178 · entrance 12 · **town 158** 신규, 미mock 요청 0) —
+  E2E 커밋 `9afb0e0`. 시나리오: 4뷰포트 × 웰컴 1회 · 구매 · 레벨
+  잠금 · 잔액 부족 · 배치/이동/보관 · reload 영속 · 200% 폰트 ·
+  ⭐(총 별) 불변 + 플래그 OFF 대조(town 화면/네비게이션 미노출).
+  검증 중 fixture `QA_STUDENT_ID`가 UUID 형식이 아니어서 `App.jsx`
+  `readSession`의 UUID 검증이 매 reload를 레거시 세션으로 판정해
+  로그아웃시키던 문제를 발견 → fixture를 UUID 형식으로 교정(앱
+  결함 아님, 픽스처 전제 위반).
+- `npm run verify:all` **ALL DOMAINS PASS**, FAIL 줄 0(extra 포함),
+  registry coverage PASS.
+- **LIMITATION**: `[town]` E2E는 fixture QA 학생 1명 기준이라 실제
+  "서로 다른 학생 간" 격리는 세션 포인터 재로그인으로 대체 검증했다
+  (같은 브라우저 컨텍스트에서 세션 토큰만 교체) — 진짜 학생 간(다른
+  UUID) 데이터 격리는 `testTownPlacementsPersistence.mjs`(65단언,
+  45명×3배치=135건, 동명이인 포함 교차오염 0)가 전담한다.
 
 ## 2026-09-11 (124차) — 초등 5개 반 / 45명 확장 Production readiness 6h 세션 (브랜치 qa/elementary-45-readiness-2026-09-11, PR 미머지 · 운영자 패키지는 PR #32 분리)
 

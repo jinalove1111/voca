@@ -1219,3 +1219,35 @@ _append. 초등 5개 반/45명 확장 production readiness 점검, 브랜치
 - `verify:all` 전체 실행 결과는 이 세션 종료 시점 기준 미수신 —
   수신 후 `handoff.md` 124차 섹션에 append 예정.
 - `npm run verify:all`(HEAD 913e4cb, 재빌드 후): **ALL DOMAINS PASS**, FAIL 줄 0(extra 포함), 내부 verify:e2e 253/253.
+
+## 관련 항목: Paul Town V1 신규 스위트 7종 (2026-09-11, 125차)
+
+_append. 브랜치 `feat/paul-town-v1`(base `ab66332`), 플래그 `paulTownV1`
+OFF, `supabase_v3_50_town_v1.sql` 미실행, PR 미머지. 설계 전문:
+`docs/design/PAUL_TOWN_V1.md`. 상세: `handoff.md` 2026-09-11(125차)._
+
+| 파일 | 단언 | 대상 | 네트워크/DB |
+|---|---|---|---|
+| `scripts/testTownCatalog.mjs` | 50 | `src/utils/town/townCatalog.js`(import 0) — `TOWN_CATEGORIES`/`TOWN_ITEM_META` 17개 스팟체크, `mergeCatalog`(서버 값 우선, snake/camel 인식, 미지 아이템 안전 기본값), `itemState`(owned>purchasing>locked>insufficient>buyable), `shortfall`, `groupByCategory` | 0 |
+| `scripts/testTownLayout.mjs` | 64 | `src/utils/town/townLayout.js`(import 0) — 8×6 격자, `HOME_CELL(3,2)`, `placeItem`/`moveItem`/`storeItem`(5가지 실패 사유), `mergeTownLayout`(placementId union·로컬 우선·tombstone union·cap 300), `visiblePlacements`, 45명 시뮬레이션 placementId 충돌 0 | 0 |
+| `scripts/testTownLevelLock.mjs` | 53 | `src/utils/town/townLevel.js`(import 0, `rewardEngine.js` 비의존 독립 복제) — `TOWN_LEVELS` 앞 5단계가 `rewardEngine.LEVELS`와 parity, 전 구간 경계값, 비유한값 클램프, `starsToNextTownLevel`, `isUnlocked`, `TOWN_LEVEL_UNLOCKS` | 0 |
+| `scripts/testTownV1Sql.mjs` | 209 | `supabase_v3_50_town_v1.sql`(미실행) 정적 단언(컬럼 4개/시드 16종/메타 UPDATE/함수 3개 권한) + 인메모리 시뮬레이션(레벨 미달 locked, 웰컴 1회, 45명 동시 웰컴 정확히 1행/학생, 레벨 경계 20쌍) — SQL 텍스트/`townLevel.js`/테스트 자체 하드코딩 3중 대조 | 0(SQL 실행 0) |
+| `scripts/testTownV1Server.mjs` | 87 | `api/grant-xp.js` 신규 action `claim_town_welcome`(RPC `grant_town_welcome_credit`, 서버 env `TOWN_V1_WELCOME_ENABLED` 이중 게이트) + `get_town_shop_state` 3단 컬럼 폴백 확장 + `level` 응답 필드. 인메모리 fake RPC로 v3_50 동시성 계약 시뮬레이션(웰컴 최초/재청구 멱등/더블클릭/N=5·10·20·45 동시성 매트릭스/locked/insufficient/학생 A·B 격리) | 0 |
+| `scripts/testTownPlacementsPersistence.mjs`(builders: race) | 65 | `useStudent.js`에 배선된 `townLayout.js` 얇은 래퍼(`townPlacements`/`townRemovedIds` 필드, `placeTownItem`/`moveTownItem`/`storeTownItem`) 실제 번들 검증 — place/move/store, 재마운트·재로그인 영속, 학생 UUID 격리(동명이인 포함), 로그인 병합, 다른 필드(stars 등) byte-identical, 45명×3배치=135건 무결성 | 0(전부 스텁) |
+| `scripts/testTownUiStatic.mjs` | 70 | `src/components/town/{TownScreen,TownGrid,TownShopPanel,TownInventory,TownHeader}.jsx` + `src/assets/town/index.js` 소스 정적 계약(React 렌더 0) — Paul 새 이미지 0(`<img paul>` 0, HeroReaction만), `TOWN_PHRASES` 파일당 최대 1회, `App.jsx`/`PaulTown.jsx` `paulTownV1Enabled` 게이팅, CTA 버튼 `min-h-[44px]`, 에셋 `loading="lazy" decoding="async"`, 자산 폴더 7종 존재 | 0 |
+| `tests/e2e/townV1.spec.mjs`(`[town]`, `npm run verify:e2e`에 자동 편입) | 158 | 4뷰포트 실브라우저 — 웰컴 1회, 구매, 레벨 잠금, 잔액 부족, 배치/이동/보관, reload 영속, 200% 폰트, ⭐(총 별) 불변 + 플래그 OFF 대조(town 화면/네비게이션 미노출) | mock 라우트만(미mock 요청 0) |
+
+- 무회귀 확인: `testPaulDollarSql`, `testTownShopServer`(78),
+  `testTownShop`(104), race 스위트 8종, `verify:attachment`(163) — 전부
+  변경 없음.
+- `db_v3_50_expected_delta`: `town_items` 컬럼 +4·행 +16(+shop-lamp 메타
+  갱신 1) · 함수 3(신규 2 + 교체 1) · `dollar_ledger`/`reward_ledger`/
+  `town_purchases`/`students`/`student_progress` 행 0.
+- **검증 결과 수신(HEAD `9afb0e0` = 위 6커밋 + E2E 커밋)**: `npm run
+  build` PASS(`TownScreen` 별도 lazy 청크 18.62kB/gzip 6.80kB) ·
+  `npm run verify:e2e` **253→413단언 ×2연속**(student 34 · admin 21 ·
+  mobile 178 · entrance 12 · **town 158** 신규, 미mock 요청 0 —
+  fixture `QA_STUDENT_ID`를 UUID 형식으로 교정: `App.jsx` `readSession`
+  UUID 검증이 비-UUID를 레거시 세션으로 판정해 reload마다 로그아웃시키던
+  픽스처 전제 위반이었고 앱 결함은 아님) · `npm run verify:all` **ALL
+  DOMAINS PASS**, FAIL 줄 0(extra 포함), registry coverage PASS.
