@@ -17,7 +17,18 @@ function uid(tag) {
 }
 
 export const QA_STUDENT_NAME = 'cookie' // src/utils/accountStatus.js TEST_ACCOUNT_NAMES
-export const QA_STUDENT_ID = uid('student-qa')
+// UUID 형식 고정(townV1.spec.mjs, 2026-09-11 추가) — App.jsx의 readSession()이
+// 세션 id를 UUID_RE(`/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i`)
+// 로 검증해, UUID 형식이 아니면 "레거시 세션"으로 간주해 새로고침마다 강제
+// 로그아웃시킨다(v1.6 P0 identity 리팩터링의 안전장치 — 실 프로덕션
+// students.id는 항상 진짜 UUID라 이 분기를 타지 않는다). 이전 값(`e2e-student-qa`,
+// uid() 기본 접두사)은 이 정규식을 통과하지 못해 page.reload() 이후 항상
+// 로그인 화면으로 튕겨나갔다 — 실 앱 결함이 아니라 fixture id 포맷이 프로덕션
+// 전제(항상 UUID)를 어긴 것이었다(townV1.spec.mjs가 reload 지속성을 검증하며
+// 처음 발견). 다른 어떤 spec도 이 상수의 리터럴 문자열 값 자체를 단언하지
+// 않으므로(내부적으로만 참조) 이 값 변경은 student/admin/mobile/entrance의
+// 단언 개수에 영향이 없다.
+export const QA_STUDENT_ID = 'e2e00000-0000-4000-8000-00000000a001'
 export const QA_LOGIN_PIN = '0000'
 export const ADMIN_PIN = '9999'
 

@@ -118,6 +118,7 @@ async function main() {
       { name: '[admin]', modulePath: '../tests/e2e/admin.spec.mjs' },
       { name: '[mobile]', modulePath: '../tests/e2e/mobileViewports.spec.mjs' },
       { name: '[entrance]', modulePath: '../tests/e2e/entranceInputLoss.spec.mjs' },
+      { name: '[town]', modulePath: '../tests/e2e/townV1.spec.mjs' },
     ]
 
     for (const spec of specs) {

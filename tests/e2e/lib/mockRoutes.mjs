@@ -25,6 +25,10 @@ import { buildFixtureTables, EMBEDS, QA_STUDENT_ID, QA_STUDENT_NAME, ADMIN_PIN, 
 // 로직 발명 아님) — 아래 '/api/submit-entrance-result' mock이 그 서버의
 // entrance_test_results upsert 부작용까지 흉내낼 때 쓴다.
 import { computeTestResult } from '../../../src/utils/entranceTest.js'
+// Paul Town V1(townV1.spec.mjs, 2026-09-11) — 상점 아이템 메타(가격/최소
+// 레벨/카테고리)의 유일한 소스. 이 mock은 새 가격 정책을 발명하지 않고
+// 클라이언트가 이미 쓰는 초안 메타를 그대로 서버 응답 모양으로 옮긴다.
+import { TOWN_ITEM_META } from '../../../src/utils/town/townCatalog.js'
 
 // 학생/관리자 화면이 정상적으로 쓰는 공개 폰트 CDN — Supabase/Vercel과
 // 무관한 순수 정적 에셋(민감정보 0, production 앱/DB 요청이 아님)이라
@@ -208,6 +212,121 @@ export async function installMocks(page, { tables } = {}) {
       status: 200, contentType: 'application/json',
       body: JSON.stringify({ ok: true, score: result.score, total: result.total, missed: result.missed }),
     })
+  })
+
+  // Paul Town V1(townV1.spec.mjs, 2026-09-11) — get_town_shop_state/
+  // purchase_town_item/claim_town_welcome 전용 stateful mock. api/grant-xp.js
+  // 실 서버 응답 shape을 그대로 흉내낸다(새 계약 발명 아님, CLAUDE.md 규칙
+  // 3) — 학생 식별은 세션 토큰(verify-student-pin mock이 항상 내려주는
+  // 'e2e-mock-token')으로만 하고, 클라이언트가 보낼 수 있는 price/balance/
+  // studentId 등은 실 서버와 마찬가지로 이 핸들러도 참조하지 않는다.
+  // 이 세 action이 아니면(reward/xp/reconcile 등 기존 action) 위 넓은
+  // '**/api/**'(기본 {ok:false, reason:'not_mocked_in_e2e'})가 그대로
+  // 처리하도록 route.fallback()으로 넘긴다 — 기존 student/admin/mobile/
+  // entrance 스펙의 grant-xp 관련 동작을 절대 바꾸지 않는다(파일당 소유권
+  // 원칙, 다른 세션이 이미 그 응답에 의존).
+  const TOWN_LEVEL_THRESHOLDS = [0, 20, 50, 100, 200, 350, 550, 800, 1100, 1500]
+  function townLevelForStarsMock(stars) {
+    let level = 1
+    for (let i = 0; i < TOWN_LEVEL_THRESHOLDS.length; i++) {
+      if (stars >= TOWN_LEVEL_THRESHOLDS[i]) level = i + 1
+    }
+    return level
+  }
+  // townCatalog.js(TOWN_ITEM_META)를 그대로 소스로 써서 서버 town_items
+  // 응답(camelCase, api/grant-xp.js 신형 shape)을 흉내낸다 — 가격/최소
+  // 레벨/카테고리를 이 mock이 새로 발명하지 않는다(17개 전부 노출).
+  const TOWN_MOCK_ITEMS = Object.entries(TOWN_ITEM_META).map(([id, m]) => ({
+    id, name: m.nameKo, emoji: m.emoji, price: m.defaultPrice, priceCurrency: 'dollars',
+    category: m.category, sortOrder: m.sortOrder, minLevel: m.minLevel, assetKey: `${m.category}/${id}`,
+  }))
+  db._townCalls = { get_town_shop_state: 0, claim_town_welcome: 0, purchase_town_item: {} }
+  const townStates = {}
+  // advisory lock 흉내 — 실 서버(purchase_town_item RPC)의 원자성 가정을
+  // 재현한다. .catch(()=>{})로 체인 꼬리를 항상 비-거부 상태로 유지해,
+  // 한 요청이 실패해도 이후 요청의 직렬화 체인이 영구히 끊기지 않게 한다.
+  let townLock = Promise.resolve()
+  function getTownMockState(studentId) {
+    if (!townStates[studentId]) {
+      // starsEarned=20 -> townLevelForStarsMock(20)===2 — tree(minLevel1)/
+      // cat(minLevel2)는 레벨 조건 충족, flower-garden(minLevel3)은 잠김
+      // 상태로 남는다(townV1.spec.mjs 시나리오 전제, 과제 지시 그대로).
+      townStates[studentId] = { starsEarned: 20, dollars: { available: 0, earned: 0, spent: 0 }, owned: [], welcomeClaimed: false }
+    }
+    return townStates[studentId]
+  }
+
+  await page.route('**/api/grant-xp', async (route) => {
+    const req = route.request()
+    let body = {}
+    try { body = req.postDataJSON() || {} } catch { /* ignore */ }
+    const action = body.action
+    if (action !== 'get_town_shop_state' && action !== 'purchase_town_item' && action !== 'claim_town_welcome') {
+      await route.fallback()
+      return
+    }
+    apiCallLog.push({ url: req.url(), method: req.method(), body })
+
+    const resultPromise = townLock.then(async () => {
+      const studentId = body.token === 'e2e-mock-token' ? QA_STUDENT_ID : null
+      if (!studentId) return { ok: false, reason: 'unauthorized' }
+      const state = getTownMockState(studentId)
+
+      if (action === 'get_town_shop_state') {
+        db._townCalls.get_town_shop_state += 1
+        return {
+          ok: true,
+          starsEarned: state.starsEarned,
+          dollarsAvailable: state.dollars.available,
+          dollarsEarned: state.dollars.earned,
+          dollarsSpent: state.dollars.spent,
+          owned: [...state.owned],
+          items: TOWN_MOCK_ITEMS,
+          level: townLevelForStarsMock(state.starsEarned),
+        }
+      }
+
+      if (action === 'purchase_town_item') {
+        const itemId = body.itemId
+        db._townCalls.purchase_town_item[itemId] = (db._townCalls.purchase_town_item[itemId] || 0) + 1
+        const item = TOWN_MOCK_ITEMS.find((it) => it.id === itemId)
+        if (!item) return { ok: false, reason: 'invalid_item', balanceAfter: state.dollars.available }
+        if (state.owned.includes(itemId)) {
+          return { ok: true, reason: 'already_owned', dollarsSpent: 0, balanceAfter: state.dollars.available, duplicate: true }
+        }
+        const level = townLevelForStarsMock(state.starsEarned)
+        if (level < item.minLevel) {
+          return { ok: false, reason: 'locked', balanceAfter: state.dollars.available }
+        }
+        if (state.dollars.available < item.price) {
+          return { ok: false, reason: 'insufficient', balanceAfter: state.dollars.available }
+        }
+        state.dollars.available -= item.price
+        state.dollars.spent += item.price
+        state.owned.push(itemId)
+        return { ok: true, reason: 'purchased', dollarsSpent: item.price, balanceAfter: state.dollars.available, duplicate: false }
+      }
+
+      // action === 'claim_town_welcome'
+      db._townCalls.claim_town_welcome += 1
+      if (state.welcomeClaimed) {
+        return { ok: true, granted: false, balanceAfter: state.dollars.available }
+      }
+      state.welcomeClaimed = true
+      state.dollars.available += 20
+      state.dollars.earned += 20
+      return { ok: true, granted: true, balanceAfter: state.dollars.available }
+    })
+    townLock = resultPromise.catch(() => {})
+
+    let result
+    try {
+      result = await resultPromise
+    } catch (err) {
+      db.errors.push({ url: req.url(), method: req.method(), message: err.message })
+      result = { ok: false, reason: 'mock_error' }
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(result) })
   })
 
   return { db, unmockedRequests, externalAssetRequests, apiCallLog, ttsFallbackRequests }
