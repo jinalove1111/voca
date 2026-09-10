@@ -23,6 +23,7 @@ import { createClient } from '@supabase/supabase-js'
 import { supabaseAdminUrl, supabaseAdminKey, verifySessionToken } from './_pinAuth.js'
 import { resolveXpAmount, isValidStudentId, isValidSourceEventIdForEvent, isValidEventType } from '../src/utils/paulRankShared.js'
 import { isValidRewardType, isValidRewardSource, resolveRewardStars, rewardVariantFromSource, rewardIdempotencyKey, rewardDailyCap, kstDayStartMs } from '../src/utils/rewardEngine.js'
+import { townLevelForStars } from '../src/utils/town/townLevel.js'
 
 // Teacher Controls 마스터 스위치(2026-07-19, classes.gamification_enabled,
 // GAME_DESIGN.md 13번 섹션) 판단 — 이 핸들러는 반의 스위치 상태를 조회해서
@@ -145,25 +146,45 @@ export default async function handler(req, res) {
     // 그 경우에만 컬럼 없이 다시 조회하고 priceCurrency를 'dollars'로
     // 고정한다(현재 모든 상점 아이템이 dollars 전용이라는 전제, 규칙 9의
     // "마이그레이션 순서 무관 폴백" 원칙).
+    //
+    // Paul Town V1(2026-09-11) — category/sort_order/min_level/asset_key
+    // 4개 신규 컬럼(v3_50, 미실행 가능)을 추가로 시도한다. 3단 폴백 체인
+    // (신형 전체 -> price_currency만 있는 중간형 -> 최소형)으로, 어느
+    // 마이그레이션 순서로 배포되든(규칙 9) 42703(컬럼 없음)만 만나면 한
+    // 단계씩 내려가고 절대 throw하지 않는다. 신규 필드는 응답에서 값이
+    // 없을 때 undefined로 남긴다(클라이언트 useTownShop.js가 이미 안전한
+    // 기본값으로 후처리).
     let items = []
     {
       const { data: itemRows, error: itemErr } = await supabase
-        .from('town_items').select('id,name,emoji,price,price_currency').eq('active', true)
+        .from('town_items')
+        .select('id,name,emoji,price,price_currency,active,category,sort_order,min_level,asset_key')
+        .eq('active', true)
       if (!itemErr && itemRows) {
         items = itemRows.map((it) => ({
           id: it.id, name: it.name, emoji: it.emoji, price: it.price,
           priceCurrency: it.price_currency || 'dollars',
+          category: it.category, sortOrder: it.sort_order, minLevel: it.min_level, assetKey: it.asset_key,
         }))
       } else if (itemErr) {
-        const { data: fallbackRows, error: fallbackErr } = await supabase
-          .from('town_items').select('id,name,emoji,price').eq('active', true)
-        if (!fallbackErr && fallbackRows) {
-          items = fallbackRows.map((it) => ({ id: it.id, name: it.name, emoji: it.emoji, price: it.price, priceCurrency: 'dollars' }))
+        const { data: midRows, error: midErr } = await supabase
+          .from('town_items').select('id,name,emoji,price,price_currency').eq('active', true)
+        if (!midErr && midRows) {
+          items = midRows.map((it) => ({
+            id: it.id, name: it.name, emoji: it.emoji, price: it.price,
+            priceCurrency: it.price_currency || 'dollars',
+          }))
+        } else if (midErr) {
+          const { data: fallbackRows, error: fallbackErr } = await supabase
+            .from('town_items').select('id,name,emoji,price').eq('active', true)
+          if (!fallbackErr && fallbackRows) {
+            items = fallbackRows.map((it) => ({ id: it.id, name: it.name, emoji: it.emoji, price: it.price, priceCurrency: 'dollars' }))
+          }
         }
       }
     }
 
-    res.status(200).json({ ok: true, starsEarned, dollarsAvailable, dollarsEarned, dollarsSpent, owned, items, legacyShape })
+    res.status(200).json({ ok: true, starsEarned, dollarsAvailable, dollarsEarned, dollarsSpent, owned, items, legacyShape, level: townLevelForStars(starsEarned) })
     return
   }
 
@@ -211,6 +232,48 @@ export default async function handler(req, res) {
       balanceAfter: Number(row.balance_after) || 0,
       duplicate: row.reason === 'already_owned',
       legacyShape,
+    })
+    return
+  }
+
+  // ── Paul Town V1 환영 보상(claim_town_welcome, 2026-09-11) ────────────
+  // 신규 진입 학생에게 1회 한정 달러 크레딧을 지급하는 경로 — 위 두
+  // action과 동일한 신뢰 경계(studentId는 세션 토큰에서만, 지급 여부/
+  // 금액/멱등은 전부 RPC(grant_town_welcome_credit)가 결정, 이 핸들러는
+  // 재해석 없이 그대로 옮긴다). 이중 게이트: 이 서버 스위치
+  // (TOWN_V1_WELCOME_ENABLED)가 '1'이 아니면 RPC를 호출조차 하지 않고
+  // 'disabled'를 반환한다 — 클라이언트 플래그(townShopV1 등)가 켜져 있어도
+  // 서버 환경변수가 없으면 이 PR은 프로덕션에서 실제로 아무것도 지급하지
+  // 않는다(문서화된 무배포 상태, 다른 town action들과 동일 원칙).
+  if (req.body && req.body.action === 'claim_town_welcome') {
+    const auth = townShopAuthenticate(req)
+    if (!auth.ok) { res.status(200).json(auth.response); return }
+    const studentId = auth.studentId
+
+    if (process.env.TOWN_V1_WELCOME_ENABLED !== '1') {
+      res.status(200).json({ ok: false, reason: 'disabled' })
+      return
+    }
+
+    const supabase = createClient(url, key)
+    const { data, error } = await supabase.rpc('grant_town_welcome_credit', { p_student_id: studentId })
+    if (error) {
+      if (TOWN_SHOP_TABLE_MISSING_CODES.has(error.code)) {
+        res.status(200).json({ ok: false, reason: 'table_missing' })
+        return
+      }
+      res.status(200).json({ ok: false, reason: 'rpc_failed' })
+      return
+    }
+    const row = data && data[0]
+    if (!row) {
+      res.status(200).json({ ok: false, reason: 'rpc_failed' })
+      return
+    }
+    res.status(200).json({
+      ok: true,
+      granted: !!row.granted,
+      balanceAfter: row.balance_after ?? null,
     })
     return
   }
