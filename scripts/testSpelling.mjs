@@ -110,5 +110,18 @@ console.log('\n13. (2026-07-17) assignDirections — mixed 50:50 정확 배분 (
   check('0개/음수 안전', assignDirections(0, 'mixed').length === 0 && assignDirections(-5, 'mixed').length === 0)
 }
 
+console.log('\n14. (2026-09-10) 초등 5반 준비 — "~" 플레이스홀더 허용 (실제 words.meaning 표본: around="~ 주위에", whether="~인지 아닌지", look="~처럼(~하게) 보이다"; 영어 target에도 9건 존재: "listen to ~", "better than ~")')
+check('"주위에" == "~ 주위에" (뜻 앞 "~ " 제거)', isSpellingCorrect('주위에', '~ 주위에'))
+check('"~주위에" == "~ 주위에" (학생이 "~"까지 그대로 입력해도 정답)', isSpellingCorrect('~주위에', '~ 주위에'))
+check('"인지 아닌지" == "~인지 아닌지"', isSpellingCorrect('인지 아닌지', '~인지 아닌지'))
+check('"처럼 보이다" == "~처럼(~하게) 보이다" ("~" 제거 + 괄호 제거 결합)', isSpellingCorrect('처럼 보이다', '~처럼(~하게) 보이다'))
+check('정책: "속하다" != "~의 것이다, ~에 속하다" (말단 조사 "에"가 남아 있어 보수적으로 오답 유지 — 조사 스트리핑은 하지 않는다는 기존 방침)', !isSpellingCorrect('속하다', '~의 것이다, ~에 속하다'))
+check('kr2en: "listen to" == "listen to ~" (영어 target의 "~"도 동일하게 제거)', isSpellingCorrect('listen to', 'listen to ~'))
+check('kr2en: "better than" == "better than ~"', isSpellingCorrect('better than', 'better than ~'))
+check('부정 사례: "listen" != "listen to ~" (부분 단어는 여전히 오답)', !isSpellingCorrect('listen', 'listen to ~'))
+check('부정 사례: "around" != "~ 주위에" (단어 자체가 아니라 뜻이므로 무관)', !isSpellingCorrect('around', '~ 주위에'))
+check('회귀: "ice cream" != "icecream" (여전히 오답 — "~" 처리와 무관하게 공백 무시 없음)', !isSpellingCorrect('icecream', 'ice cream'))
+check('회귀: "ap ple" != "apple" (여전히 오답)', !isSpellingCorrect('ap ple', 'apple'))
+
 console.log(failures === 0 ? '\n모든 테스트 통과 ✅' : `\n${failures}개 테스트 실패 ❌`)
 process.exit(failures === 0 ? 0 : 1)
