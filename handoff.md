@@ -1,6 +1,94 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-10 (121차, 보상 시스템 6h 감사 — writing-complete 누락 P1 수정, 표시 결함 2·방어선 1·
-QA 분류 1 수정, 766↔951 TEST STALE 확정, invariant 테스트 7종, Production WRITE 0. 120차 이하 보존)_
+_최종 갱신: 2026-09-11 (123차, Kinney 입실시험 오답 사고 조사 — 진단 필드 + 입력유실 NO REPRO +
+정규화 기준선, 브랜치 fix/entrance-diagnostics-2026-09-11, PR 미머지, Production WRITE 0. 122차 이하 보존)_
+
+## 2026-09-11 (123차) — Kinney 입실시험 오답 사고 조사 → 진단 필드 + 입력유실 NO REPRO + 정규화 기준선 (브랜치 fix/entrance-diagnostics-2026-09-11, PR 미머지)
+
+### 1. 사고 개요
+학생 Kinney(`e0fe0f50-8927-44d9-9331-e454620524d9`, Pre-middle school 5학년
+`36bcd6fa`, primary 교재 중1 천재 이상기 `0a87be08`, Unit 1 `36bba4d0`)가
+2026-09-10 입실 단어시험(`8bb82f2f-e793-46ea-9e26-ddeda310cd83`, mixed,
+10문항)에서 7/10, 123초, 10:16:15Z 제출 — missed_words: horror movie/공포
+영화, enjoy/즐기다, patient/참을성 있는·환자. "정확히 입력했는데 오답
+처리됐다"는 의혹이 제기됐으나, 서버가 score/total/missed_words만
+upsert하고 `writing_answer_statistics` 0행이라 **학생의 실제 입력값이
+어디에도 저장되지 않아** 확정이 불가능했다(KINNEY HISTORICAL INPUT
+RECOVERABLE: NO). 세 단어 모두 "~"/괄호/특수문자가 없어 PR #30과 무관.
+같은 시험 다른 학생의 "listen to ~"/"also(~도 또한)" 오답은 옛 채점기
+(PR #30 배포 10:49Z 이전) 결함 클래스로 재현됐다(old FAIL/new OK) — 점수
+정정은 운영 결정 영역.
+
+**점수 수정·백필 0.** Kinney 점수는 손대지 않았다.
+
+### 2. Production 안전
+DB WRITE 0 · SQL 0 · 학생/진도/보상/반 설정/단어 변경 0 · Kinney 점수
+수정 0 · 백필 0. 조사는 전부 anon key READ-ONLY GET. 기존
+`missed_words` 379행/1468항목 전부 `{word, meaning}`만 존재함을 먼저
+확인해 신규 필드 추가가 기존 소비자와 충돌하지 않는 호환 기준선을 잡았다.
+
+### 3. A — 진단 필드 (`3aac46c`)
+`api/submit-entrance-result.js`가 오답 항목에만 다음 필드를 추가로
+기록한다:
+- `input` — 학생이 보낸 원문 그대로(정규화/트림 없음, 기존 500자 상한 그대로)
+- `expected` — 서버가 재계산한 정답(`questions[i].answer`)
+- `direction` — 그 문제의 채점 방향(`en2kr`/`kr2en`)
+- `wordId` — **항상 `null`**. `entrance_tests.words` 스냅샷이 단어 PK를
+  저장하지 않아(`{word, meaning}`만) 채울 수 없다 — 스냅샷 생성부 변경은
+  NEEDS DECISION(아래 6번).
+
+채점 로직/`score`/`total`/HTTP 응답은 무변경. jsonb 컬럼이라 SQL/migration
+0. 소비자 `EntranceTest.jsx`·`summarizeClassResults`는 `word`/`meaning`만
+읽어 하위 호환 확인됨. 신규 테스트
+`scripts/testSubmitEntranceDiagnostics.mjs`(30단언, 수정 전 8 FAIL)를
+`tests/harness/registry.mjs`에 `extra: false`(required)로 등록.
+
+### 4. B — 입력 유실 조사 → NO REPRO (`424cd729`)
+`tests/e2e/entranceInputLoss.spec.mjs`(`[entrance]`, 11단언) — 코드 정독
+결과 의심 지점 2곳(900ms 피드백 타이머, `advance()` 중복 호출)을 실제
+브라우저로 실증:
+- (a) 900ms 피드백 표시 동안 `<input>` DOM 자체가 존재하지 않는다 →
+  그 구간에 타이핑이 유실될 수 없다.
+- (b) 시간 초과 시 미제출 입력은 미집계된다(**현재 동작을 문서화한
+  것 — 버그로 판정하지 않음**).
+- (c) 리마운트 직후에도 입력이 보존된다.
+
+결론: **NO REPRO**, `EntranceTest.jsx` 무변경. 검증 중
+`tests/e2e/lib/mockRoutes.mjs`에 `/api/submit-entrance-result` mock을
+추가했다(`computeTestResult` 재사용 + `entrance_test_results` upsert
+흉내) — 이 mock이 없으면 결과 화면 렌더 후 `load()` 재조회가 시작
+화면으로 되돌리는 **mock 아티팩트**(실제 앱 버그 아님)가 발생함을 먼저
+실측하고 해소했다. `verify:e2e` 169→183.
+
+### 5. C — 정규화 기준선 (`06026fe`)
+`scripts/testSpelling.mjs` §15(22단언) 신설, `spelling.js` 로직 자체는
+무변경(현재 동작을 있는 그대로 고정하는 기준선 테스트).
+
+| 판정 | 케이스 |
+|---|---|
+| CORRECT | 앞뒤 공백 / 한글 내부 이중 공백·공백 생략·NBSP / 영어 trailing NBSP(trim) / "~" 생략(뜻·영어 양쪽) / 대소문자 무시 |
+| WRONG | 영어 내부 이중 공백 / 영어 내부 공백 생략("horrormovie") / 영어 내부 NBSP / 곡선↔직선 아포스트로피(`don't` vs `don't`, 실데이터: 중1 동아 unit "7" `d89bf4ce` "Why don't we ~?") / 끝 문장부호(`enjoy.`/`즐기다.`/`즐기다!`) / 하이픈 유무 |
+
+**NEEDS DECISION(정책 결정 전 변경 금지)**:
+1. 아포스트로피 곡선/직선 동등 처리 vs 데이터 정규화(원본 수정)
+2. 끝 문장부호 제거 여부
+3. 영어 내부 NBSP 허용 여부(모바일 키보드에서 유입 가능한 문자)
+
+내부 공백 collapse나 문장부호 제거를 채점기에 넣으면 "horror  movie"류
+오탈자까지 정답 처리하게 되어 영어 철자 시험의 취지를 훼손할 위험이 있다
+— 그래서 정책 결정 전에는 손대지 않았다.
+
+### 6. 남은 운영자 결정
+1. `entrance_tests.words` 스냅샷에 단어 PK를 추가로 저장할지(위 A의 `wordId`를 채우는 선행 작업, 스냅샷 생성부 변경 필요)
+2. 위 §5 정규화 3건(아포스트로피/문장부호/NBSP) 정책 확정
+3. 2026-09-10 시험에서 확인된 "listen to ~"/"also" 오답 학생들의 점수 정정 여부(옛 채점기 결함 클래스로 재현 확정, PR #30 배포 이후 신규 응시는 정상)
+4. `fix/entrance-diagnostics-2026-09-11` PR 생성/merge 여부
+
+### 7. 검증
+build PASS · `verify:e2e` 183/183 · `testSubmitEntranceDiagnostics` 30/30
+· `testSpelling` 91 PASS(§15 22단언 포함) · `testEntranceTest`/
+`testClassroomMatrix`/`testSessionTokenAuth` PASS · registry coverage
+PASS.
+- `npm run verify:all`(HEAD 424cd72): **ALL DOMAINS PASS**, FAIL 줄 0(extra 포함), 내부 verify:e2e 183/183.
 
 ## 2026-09-10 (122차) — 초등 5개 반 확장 준비 6h 자율 세션 (브랜치 qa/elementary-5-readiness-2026-09-10, PR 미머지)
 
