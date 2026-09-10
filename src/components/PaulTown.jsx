@@ -23,7 +23,10 @@ import { TOWN_SHOP_ITEMS, shopItemState, purchasedDeco, formatDollars } from '..
 // Paul Town 별 상점 V1(townShopV1, 2026-09-06) — shopEnabled=false(기본,
 // 플래그 OFF)이면 이 컴포넌트는 shop/shopEnabled를 아예 참조하지 않는
 // 기존 분기만 타므로 렌더 출력이 오늘과 바이트 단위로 동일하다.
-export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, onGo, onBack, shop, shopEnabled }) {
+// Paul Town V1(paulTownV1, 2026-09-11) — onGoTown이 없으면(플래그 OFF 또는
+// App.jsx 미주입) 이 컴포넌트는 이 prop을 전혀 참조하지 않는 기존 분기만
+// 타므로 렌더 출력이 오늘과 바이트 단위로 동일하다.
+export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, onGo, onBack, shop, shopEnabled, onGoTown }) {
   const welcome = retroWelcome(stats)
   const world = computeWorldState(stats)
   const plots = gardenPlots(stats)
@@ -216,12 +219,30 @@ export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, 
         {/* 건물들 — 마을이 곧 내비게이션: 발견된 건물 카드를 누르면 해당
             화면(박물관/도서관/시계탑)으로 들어간다. 잠긴 곳은 목록/개수
             없이 부드러운 힌트 한 줄만(점진 발견 — 체크리스트 금지). */}
-        {showBuildings && (discoveredPlaces.length > 0 || anyHidden) && (
+        {(onGoTown || (showBuildings && (discoveredPlaces.length > 0 || anyHidden))) && (
           <div className="bg-white rounded-3xl card-shadow p-5">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-2xl">🗺️</span>
               <h2 className="font-black text-gray-800 text-lg">마을 곳곳</h2>
             </div>
+            {/* Paul Town V1(paulTownV1, 2026-09-11) — 새 진입 카드 1개.
+                onGoTown이 없으면(플래그 OFF) 이 블록 자체가 렌더되지 않아
+                기존 화면과 완전히 동일하다. */}
+            {onGoTown && (
+              <button
+                onClick={onGoTown}
+                className="w-full flex items-center gap-3 rounded-2xl p-3 mb-2 bg-gradient-to-r from-purple-50 to-pink-50 btn-press hover:from-purple-100 hover:to-pink-100 text-left"
+              >
+                <span className="text-2xl flex-shrink-0">🏘</span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-black text-sm text-gray-800">내 마을 — Welcome to Paul Town</p>
+                  <p className="text-xs text-gray-400">별로 마을을 꾸며봐요</p>
+                </div>
+                <span className="flex-shrink-0 min-h-[44px] flex items-center px-3 rounded-xl bg-purple-500 text-white text-xs font-black">
+                  들어가기
+                </span>
+              </button>
+            )}
             {discoveredPlaces.length > 0 && (
               <div className="space-y-2">
                 {discoveredPlaces.map((p) => (
