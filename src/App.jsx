@@ -994,7 +994,11 @@ function AppInner({ studentId, studentName, onLogout }) {
           mixedDirections={reviewMixedDirections}
         />
       )}
-      <SpeedBtn />
+      {/* 2026-09-10 초등 5반 준비 — 대시보드는 오디오 재생이 없고, 375x667에서
+          고정 버튼이 히어로 CTA("▶ 오늘의 학습 시작")를 덮어 탭을 가로채는
+          실측 회귀가 있어 대시보드에서는 렌더하지 않는다. 다른 모든 화면은
+          불변. */}
+      {screen !== 'dashboard' && <SpeedBtn />}
     </>
   )
 }

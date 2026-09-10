@@ -109,11 +109,16 @@ export async function run(browser, baseURL) {
       r.check(`${name} 대시보드 — 히어로 CTA가 뷰포트 폭 안에 완전히 들어옴`,
         !!heroBox && heroBox.x >= 0 && heroBox.x + heroBox.width <= vp.width, JSON.stringify(heroBox))
 
+      // 2026-09-10 — App.jsx가 대시보드에서는 SpeedBtn을 아예 렌더하지
+      // 않도록 고쳤다(오디오 재생 없는 화면에서 히어로 CTA를 가리던 375x667
+      // 실측 회귀 수정). 그래서 지금의 불변식은 "안 겹침"이 아니라 "미렌더
+      // 또는(렌더돼도) 안 겹침" — 둘 중 하나만 성립하면 CTA는 안전하다.
       const speedBtn = page.locator('button[aria-label="발음 재생 속도"]')
       const speedVisible = await speedBtn.isVisible().catch(() => false)
       const speedBox = speedVisible ? await speedBtn.boundingBox() : null
-      r.check(`${name} 대시보드 — 고정 SpeedBtn이 히어로 CTA와 겹치지 않음`,
-        speedVisible && !overlaps(heroBox, speedBox), JSON.stringify({ heroBox, speedBox }))
+      const heroNotObstructed = !speedVisible || !overlaps(heroBox, speedBox)
+      r.check(`${name} 대시보드 — 히어로 CTA가 고정 SpeedBtn에 가려지지 않음(대시보드 미렌더 또는 겹침 없음)`,
+        heroNotObstructed, JSON.stringify({ heroBox, speedVisible, speedBox }))
 
       // ── 3) 단어 공부(기본 모드='comprehensive') ─────────────────────
       await openMoreMenu(page)
@@ -121,6 +126,12 @@ export async function run(browser, baseURL) {
       const wordRows = page.locator('.space-y-2.animate-fade-in > button')
       await wordRows.first().waitFor({ state: 'visible' })
       await wordRows.first().click()
+
+      // 대시보드에서는 미렌더지만, 단어 공부 화면은 오디오 재생이 있는
+      // 화면이라 SpeedBtn이 계속 보여야 한다(위 수정이 다른 화면까지
+      // 건드리지 않았다는 증거).
+      const speedBtnOnCard = page.locator('button[aria-label="발음 재생 속도"]')
+      r.check(`${name} 단어 공부 카드 — SpeedBtn 표시 유지`, await speedBtnOnCard.isVisible().catch(() => false))
 
       r.check(`${name} 단어 공부 카드 — 가로 스크롤 없음`, await noHorizontalOverflow(page))
 

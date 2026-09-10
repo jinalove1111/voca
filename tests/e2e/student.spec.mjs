@@ -486,10 +486,14 @@ export async function run(browser, baseURL) {
     db.errors.push(...db3.errors)
 
     // ── A8 — 고정 SpeedBtn(App.jsx, aria-label="발음 재생 속도")이 하단
-    // 콘텐츠 탭을 가로채던 겹침 회귀(2026-09-06 야간 QA). 360×640(작은
-    // 화면)에서 페이지를 끝까지 스크롤해도 Dashboard "더 많은 메뉴" 그리드의
-    // "퀴즈" 카드/WordBrowser 단어 목록 마지막 행이 고정 버튼과 겹치지
-    // 않아야 한다(Dashboard.jsx/WordBrowser.jsx의 min-h-screen 래퍼가 이제
+    // 콘텐츠 탭을 가로채던 겹침 회귀(2026-09-06 야간 QA). 2026-09-10에
+    // 375x667에서 대시보드 히어로 CTA를 가리는 재발이 확인되어, 대시보드는
+    // 오디오 재생이 없다는 점에 착안해 App.jsx가 대시보드에서는 SpeedBtn을
+    // 아예 렌더하지 않도록 고쳤다 — 그래서 대시보드 쪽 불변식은 이제
+    // "겹치지 않음"이 아니라 "미렌더"다. 오디오가 있는 WordBrowser 단어
+    // 목록에서는 여전히 렌더되므로, 360×640(작은 화면)에서 페이지를 끝까지
+    // 스크롤해도 마지막 행이 고정 버튼과 겹치지 않아야 한다는 원래 검증은
+    // 그대로 유지한다(Dashboard.jsx/WordBrowser.jsx의 min-h-screen 래퍼가
     // pb-24를 써서 스크롤 여유 공간을 확보).
     const context4 = await browser.newContext({ viewport: { width: 360, height: 640 } })
     const page4 = await context4.newPage()
@@ -500,23 +504,25 @@ export async function run(browser, baseURL) {
       await page4.getByLabel('교과서 선택').waitFor({ state: 'visible', timeout: 15000 })
 
       const speedBtn = page4.locator('button[aria-label="발음 재생 속도"]')
-      await speedBtn.waitFor({ state: 'visible' })
       const overlaps = (a, b) => !!a && !!b
         && a.x < b.x + b.width && a.x + a.width > b.x
         && a.y < b.y + b.height && a.y + a.height > b.y
 
-      await openMoreMenu(page4)
-      await page4.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
-      const quizCard = page4.locator('button', { hasText: '퀴즈' }).first()
-      await quizCard.waitFor({ state: 'visible' })
-      const quizBox = await quizCard.boundingBox()
-      const speedBoxA = await speedBtn.boundingBox()
-      r.check('A8 "더 많은 메뉴" 퀴즈 카드가 고정 SpeedBtn과 겹치지 않음(하단 스크롤 후, 360×640)',
-        !overlaps(quizBox, speedBoxA), JSON.stringify({ quizBox, speedBoxA }))
+      // 2026-09-10 — App.jsx가 대시보드에서는 SpeedBtn을 아예 렌더하지
+      // 않도록 고쳐(오디오 재생 없는 화면에서 히어로 CTA를 가리던 375x667
+      // 실측 회귀 수정) "메뉴 카드와 안 겹침"이 아니라 "애초에 없음"이
+      // 지금의 대시보드 불변식이다.
+      const speedGoneOnDashboard = await waitUntil(async () => (await speedBtn.count()) === 0, { timeout: 3000, interval: 100 })
+      r.check('A8 대시보드에서 고정 SpeedBtn 미렌더(히어로/메뉴 카드 겹침 구조적으로 불가, 2026-09-10)',
+        speedGoneOnDashboard === true, `count=${await speedBtn.count()}`)
 
+      await openMoreMenu(page4)
       await page4.locator('button', { hasText: '단어 공부' }).click()
       const wordRows = page4.locator('.space-y-2.animate-fade-in > button')
       await wordRows.first().waitFor({ state: 'visible' })
+      // 대시보드와 달리 단어 공부 화면은 오디오 재생이 있어 SpeedBtn이
+      // 계속 렌더된다 — 클릭 직후 다시 나타나길 기다린다.
+      await speedBtn.waitFor({ state: 'visible' })
       await page4.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
       const lastRowBox = await wordRows.last().boundingBox()
       const speedBoxB = await speedBtn.boundingBox()
