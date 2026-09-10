@@ -1,6 +1,165 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-11 (123차, Kinney 입실시험 오답 사고 조사 — 진단 필드 + 입력유실 NO REPRO +
-정규화 기준선, 브랜치 fix/entrance-diagnostics-2026-09-11, PR 미머지, Production WRITE 0. 122차 이하 보존)_
+_최종 갱신: 2026-09-11 (124차, 초등 5개 반/45명 확장 Production readiness 6h
+세션 — 격리/부하/보상/숙제/쓰기/발음/모바일 7종 하네스 + speech P1 수정,
+브랜치 qa/elementary-45-readiness-2026-09-11, PR 미머지(운영자 패키지는
+PR #32 분리), Production WRITE 0. 123차 이하 보존)_
+
+## 2026-09-11 (124차) — 초등 5개 반 / 45명 확장 Production readiness 6h 세션 (브랜치 qa/elementary-45-readiness-2026-09-11, PR 미머지 · 운영자 패키지는 PR #32 분리)
+
+### 1. 목적/범위
+
+초등 5개 반(45명) 확장을 앞두고 현재 초등 후보 3개 반(28명)에 대해
+격리·부하·보상·숙제·쓰기·발음·모바일 7종 회귀 하네스를 신설해
+production readiness를 READ-ONLY로 점검했다. 조사 중 발견된 발음 재생
+경로 결함 1건(P1)만 최소 범위로 수정했다 — 그 외 반/학생 등록, 배정,
+데이터 정리는 전부 운영자 결정 대기로 남겨뒀다.
+
+### 2. Production 안전
+
+DB WRITE 0 · SQL 0 · migration 0 · 학생/진도/보상/반 설정/교재 배정/
+기능 플래그 변경 0 · 반 생성/학생 등록 0 · merge 0. 조사는 전부 anon
+key READ-ONLY GET(20개 반 / 493명 학생 / 386 SCA / 62 유닛 / 2175단어 /
+`daily_assignments` 1행(중2 천재, 2026-07-14)). 저장소에 untracked 상태로
+남아있는 운영 SQL(`supabase_v3_38_*` ~ `supabase_v3_46_*`)은 이 세션에서
+전혀 접촉하지 않았다.
+
+### 3. 인벤토리 (READ-ONLY 조사)
+
+초등 후보 regular 반 3개:
+
+- **Presentation 6** `1693f32b-af23-4364-8d66-d4dc5b20eaa6` — 실 8명,
+  테스트 3명, 중1 천재 이상기 ×8, `students.current_unit_id` Unit4 ×3 /
+  Unit5 ×5, SCA bookmark Unit 1 ×8(같은 교재 drift LOW), kr2en/false/
+  false/3, 숙제 배정 0행, 최근 7일 활동 8/8.
+- **Pre-Middle School** `39e9acb1-cbd0-4863-8c43-5256b01e784e` — 실
+  11명, 테스트 1명(Barry), 중3 동아 ×9 + 소영순 ×1 + 중1 동아 ×1,
+  kr2en/false/false/3, 숙제 0행, 11/11.
+- **Pre-middle school 5학년** `36bcd6fa-36b5-4585-b3d3-f299c87ecee4` —
+  실 9명, 테스트 0명, 중1 천재 이상기 ×9, Unit 1 ×9, kr2en/false/
+  false/3, 숙제 0행, 9/9.
+
+합계 실 28명 → 45명 목표 대비 **17명 부족**. 4·5번째 반은 DB에 아예
+없다(NEW CLASS REQUIRED). "Presentation School"이라는 이름의 반은
+존재하지 않는다. "Presentation 6 -2026" `dcd497c2…`는 반이 아니라
+교재 컨테이너(휴면 5명)다. 신규 관측: 중1 천재 이상기 Unit5
+`fd6462fc-9f25-475f-961d-1d4c3f365dc2`(40단어)가 2026-09-11에 추가돼
+있었다. 앱의 현재 유닛 권위 필드는 `students.current_unit_id`
+(`resolveStudentUnitObj`가 `s.unitId`를 우선 사용,
+`utils/wordLibrary.js` ~1979줄).
+
+### 4. 커밋 (브랜치 `qa/elementary-45-readiness-2026-09-11`)
+
+| SHA | 메시지 |
+|---|---|
+| `2f434d1` | test(isolation): 초등 5반×9명=45명 합성 fixture 학생 간 데이터 격리 543단언 |
+| `4c42d38` | test(reward/load): 45명 보상 stress(12타입×9시나리오×동시성 5/10/20/45) + 파이프라인 동시성 하네스 |
+| `cb1a814` | test(homework/writing): 45명 fixture 숙제 파이프라인 183단언 + 5반 쓰기 양방향 정책 90단언 |
+| `923ac2a` | test(e2e): [mobile] 4뷰포트 확장 112→178단언 |
+| `913e4cb` | fix(speech): 저장 mp3 실패 시 onEnd 다중 호출 → 중복 재생/녹음 재시작(P1) + 발음 경로 영구고착 없음 90단언 |
+
+별도 브랜치 `docs/elementary-45-operator-package-2026-09-11` → **PR #32**
+(`docs/operations/ELEMENTARY_45_ROLLOUT_PACKAGE.md`, 코드 변경 0)로
+분리했다 — 이 세션의 코드 커밋 목록에는 포함하지 않는다.
+
+### 5. 결과
+
+**(3) 격리** — `testFortyFiveStudentIsolation` 543/543, 5반×9명 합성
+(`scripts/fixtures/elementary45.mjs`), 동명이인 Kinney×2·공백/대소문자
+변형·Barry·`_DUP_INACTIVE`·유령유닛 학생 포함, 교차 0, 재로그인 stale
+0, localStorage 키 UUID 정적 확인. **관찰(미수정, NEEDS DECISION)**:
+`getStudentClassAssignments`의 유령 유닛 read-time self-heal이
+`!_textbookMode` 분기에만 존재한다 — 교재 모드는 쓰기 가드
+(`setAssignmentUnit`/`setPrimaryAssignment`/`setPrimaryTextbook`)만
+있다.
+
+**(4) 부하** — `testLoadConcurrency45` 52/52: 동시성 5/10/20/45 × 5단계,
+5% 일시 실패 주입, 재시도 후 success 100%, p95 8~167ms(fake DB, 상대
+지표), 중복 행 0, lost update 0, 교차오염 0; 문항 단위 즉시 DB 쓰기는
+`word_status` upsert뿐이고(집계는 진행도 upsert 시점).
+
+**(5) 보상** — `testRewardStress45` 26/26: 12타입×9시나리오×동시성
+4레벨, duplicate 0, stars/XP mismatch 0, 학생 교차 0, HTTP 500 0; L3
+cap TOCTOU 정보 프로브: cap 10 / 서로 다른 sourceId 45건 동시 요청 →
+초과 44건(**KNOWN GAP**, `testRewardCapRace`와 동일한 결함 클래스).
+
+**(6) 예산(정책 무변경)** — 학생/일 typical 189★ · realistic 277★ ·
+theoretical 951★; 45명/일 8,505★ · 12,465★ · 42,795★. 판정 **SERVER
+HARDENING RECOMMENDED**(cap 검사 + insert를 단일 RPC로 원자화하는 후속
+작업 권고) — DB GUARD는 45명 확장 **전 필수는 아니다**(근거: 동일 key
+UNIQUE 보장, 학생 1명당 기기 1대 in-flight 2~3건, 서버 원장 6종 중
+4종은 `sourceId`=날짜라 경합 자체가 불가능, 경합 가능한 것은
+wrong-word 1★/exam 2★뿐이고 고액인 sticker-duplicate 20★/
+daily-mission-bonus 10★는 클라이언트 전용).
+
+**(7) 숙제** — `testHomeworkPipeline45` 183/183: 배정 0행 → 전원 유닛
+전체 40단어로 폴백(P1 "빈 화면" 미재현), 반+날짜 스코프, 중복 upsert
+1행, 미래 날짜 rollover, 타반 미전파. **관찰(미수정)**: 타 교재
+`word_ids` 배정 시 콘텐츠는 유닛 전체로 폴백하지만
+`hasTodaysHomework=true`(배너 불일치).
+
+**(8) 쓰기** — `testWritingPolicyFiveClasses` 90/90: write 모드는 5반
+전부 항상 mixed, comprehensive는 `spelling_test_enabled=false`면
+스펠링 단계가 아예 없음(현재 5개 반의 일일 의식에는 쓰기가 포함돼
+있지 않다 — 포함을 원하면 교재 소유 반 `2724dc62`/`5c4130db` 둘 다
+test_enabled true + direction mixed로 설정해야 함). mixed 20/20 안정,
+정답 사전 노출 0, en2kr 3회 오답 후 힌트는 hint 설정과 무관하게
+표시(현재 동작 고정).
+
+**(9) 발음** — `testSpeakingPathNoPermanentDisable` 90/90(12개 시나리오,
+영구고착 0). **P1 발견·수정**: `speech.js`의 `playAudioUrl()` 실패
+경로가 `onError`(폴백)와 `advance()`(→`onEnd`)를 둘 다 호출해, 실제
+설정(times:2)에서 한 탭에 `onEnd` 3회·`getMicStream` 3회가
+발생했다(단어가 2번 발음되고 녹음이 재시작됨). `fail()` 헬퍼로 정확히
+하나만 호출하도록 고치고 실패한 URL 재시도를 제거했다(성공 경로는
+무변경) — 수정 전 FAIL 2건(A1/A2) → 수정 후 90/90.
+`testSpeechBtnSpeakingStall` 19/19 · `testTtsSingleton` PASS ·
+`verify:audio-tts` PASS.
+
+**(10) 모바일** — `[mobile]` 112→178단언, `verify:e2e` 253/253 ×2연속
+(student 34/admin 21/entrance 12 불변): 긴 텍스트 overflow-wrap
+계약, 복습("틀린 단어 다시 보기") 화면, 실제 "세션 1 완료! 🎉",
+wrong-word-recovered 보상 토스트, 키보드(뷰포트 60%), 200% 폰트
+proxy, 360x640 slow network 1.5s. 한계: fixture 문자열이 짧아 장문
+스트레스는 CSS 계약 확인 수준에 머문다.
+
+**(11) 데이터(수정 0)** — 유령 1단어 유닛 6개(`35ee95ae`/`5d9db813`/
+`113ee184`/`4bc96928`/`3d1c753e`/`e327efc3`; 초등 참조 0), 중복 유닛
+"Unit 7" `18f59bd6-18ea-426a-b356-e2dc807f3cdb` vs "7"
+`b16ca5e2-c7d4-4cc8-916c-92628d00573f` 39/40단어(초등 SCA 참조 3),
+0단어 Unit 1 `e4804821-5bab-408f-b2eb-4d991d9d3c22`(Pre-Middle S***
+`4f3e0b72` 비-primary SCA `1e02ed69` 북마크) · `67c8268e`, 곡선
+아포스트로피 `d89bf4ce-8edb-4d3e-852b-9259efae0c39`, 긴 뜻 `a42894a0`
+27자, `students.current_unit_id` ≠ SCA bookmark 9건(같은 교재라 drift
+LOW). 정상: 28명 전원 primary SCA 정확히 1개, 오디오/예문 2175/2175
+빈 값 0, orphan SCA 0.
+
+**(15) 관측성** — `product_events`는 `anon_id`만 기록, `ErrorBoundary`는
+`console.error`만, 앱 버전 스탬프가 없다 — P2 후보(`VITE_BUILD_SHA`
+주입 등)로만 남기고 코드는 변경하지 않았다.
+
+### 6. 검증
+
+build PASS · `verify:e2e` 253/253 · registry coverage PASS · 위 5번의
+각 스위트 PASS(543/52/26/183/90/90/90/19). `verify:all` 전체 실행
+결과는 이 세션 종료 시점까지 아직 수신하지 못해 이 문서에는 비워둔다
+— 운영자가 결과를 보내면 이 섹션에 이어서 append한다(임의 수치
+기재 금지).
+- `npm run verify:all`(HEAD 913e4cb, 재빌드 후): **ALL DOMAINS PASS**, FAIL 줄 0(extra 포함), 내부 verify:e2e 253/253.
+
+### 7. 운영자 결정 목록
+
+(1) 신규 2개 반 이름/학생 수/교재. (2) 17명 배정 조합. (3) 일일
+의식에 쓰기 포함 여부(교재 소유 반 `2724dc62`/`5c4130db` 설정 변경
+필요). (4) 위 11번 데이터 블로커 처리. (5) 보상 cap 서버 원자화
+후속 PR 승인 여부. (6) 유령 유닛 교재 모드 read-time self-heal 도입
+여부. (7) 파일럿 5~10명 지정. (8) 코드 PR
+(`qa/elementary-45-readiness-2026-09-11`) · 운영자 패키지 PR #32
+머지 여부.
+
+### 8. 다음 단계
+
+코드 PR 생성 후 운영자 리뷰 대기(merge 금지). PR #32(운영자 롤아웃
+패키지 문서)는 별도로 리뷰한다.
 
 ## 2026-09-11 (123차) — Kinney 입실시험 오답 사고 조사 → 진단 필드 + 입력유실 NO REPRO + 정규화 기준선 (브랜치 fix/entrance-diagnostics-2026-09-11, PR 미머지)
 

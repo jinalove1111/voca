@@ -615,6 +615,27 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
 
 ## VERIFY
 
+### [P1] 초등 5개 반 / 45명 확장 readiness 2026-09-11 — qa/elementary-45-readiness-2026-09-11 + PR #32(docs), PR 대기 (124차)
+- 근거: `handoff.md` 2026-09-11(124차).
+- 내용: 초등 확장 전 READ-ONLY production readiness 점검 —
+  격리/부하/보상/숙제/쓰기/발음/모바일 7종 신규 하네스(합계 543+52+
+  26+183+90+90+178단언) + `speech.js` P1 발견·수정(재생 실패 경로
+  `onError`+`advance()` 이중 호출 → 중복 재생/녹음 재시작, 수정 전
+  FAIL 2 → 90/90).
+- 인벤토리: 초등 후보 regular 반 3개(Presentation 6/Pre-Middle School/
+  Pre-middle school 5학년) 합계 실 28명 → 45명 목표 대비 17명 부족,
+  4·5번째 반 DB에 없음(신규 반 필요).
+- Production 안전: DB WRITE 0, SQL 0, migration 0, 학생/진도/보상/반
+  설정/교재 배정/기능 플래그 변경 0, 반 생성/학생 등록 0, merge 0.
+  조사는 anon key READ-ONLY GET.
+- 검증: build PASS, `verify:e2e` 253/253 ×2, registry coverage PASS,
+  각 스위트 PASS. `verify:all` 결과는 수신 후 `handoff.md` 124차에
+  append 예정.
+- 검수 대기 사항: qa-reviewer 코드 리뷰 미착수, 운영자 결정 8건(신규
+  반 2개 구성, 17명 배정, 일일 의식 쓰기 포함 여부, 데이터 블로커 4종
+  처리, 보상 cap 서버 원자화 후속 PR, 유령 유닛 교재 모드 self-heal
+  도입 여부, 파일럿 지정, 코드 PR·PR #32 머지 여부).
+
 ### [P1] Kinney 입실시험 오답 사고 후속 2026-09-11 — 브랜치 fix/entrance-diagnostics-2026-09-11, PR 대기 (123차)
 - 근거: `handoff.md` 2026-09-11(123차).
 - 내용: 학생 Kinney(`e0fe0f50…`) 2026-09-10 입실 단어시험(`8bb82f2f…`)

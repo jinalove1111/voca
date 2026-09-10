@@ -1191,3 +1191,31 @@ _append. Kinney 입실시험 오답 사고(`e0fe0f50-8927-44d9-9331-e454620524d9
 - `npm run verify:e2e` 169→183(`[entrance]` 신규 스펙 11단언 + 기존 스펙 3단언 조정분 포함).
 - 실행 결과: build PASS · `verify:e2e` 183/183 · `testSubmitEntranceDiagnostics` 30/30 · `testSpelling` 91 PASS · `testEntranceTest`/`testClassroomMatrix`/`testSessionTokenAuth` PASS · registry coverage PASS.
 - **NEEDS DECISION(§15 관련, 변경 금지 상태 유지)**: 아포스트로피 곡선/직선 동등 처리, 끝 문장부호 제거, 영어 내부 NBSP 허용 — 3건 모두 정책 결정 전에는 `spelling.js` 미변경.
+
+## 관련 항목: 초등 5반/45명 readiness 하네스 7종 + speech P1 (2026-09-11)
+
+_append. 초등 5개 반/45명 확장 production readiness 점검, 브랜치
+`qa/elementary-45-readiness-2026-09-11`. 상세: `handoff.md`
+2026-09-11(124차)._
+
+| script | 단언 | FAIL-first | 도메인 |
+|---|---|---|---|
+| `scripts/fixtures/elementary45.mjs`(fixture, 테스트 아님) | - | - | 5반×9명=45명 합성 데이터(동명이인/공백·대소문자 변형/테스트 계정/`_DUP_INACTIVE`/유령유닛 학생 포함) |
+| `scripts/testFortyFiveStudentIsolation.mjs` | 543 | 아니오(교차 0 확인용) | isolation |
+| `scripts/testLoadConcurrency45.mjs` | 52 | 아니오 | reward/load |
+| `scripts/testRewardStress45.mjs` | 26 | 아니오(L3 cap TOCTOU는 정보성 프로브, KNOWN GAP) | reward |
+| `scripts/testHomeworkPipeline45.mjs` | 183 | 아니오 | homework |
+| `scripts/testWritingPolicyFiveClasses.mjs` | 90 | 아니오 | writing |
+| `tests/e2e/mobileViewports.spec.mjs`(확장) | 112→178 | 아니오 | e2e `[mobile]` |
+| `scripts/testSpeakingPathNoPermanentDisable.mjs` | 90 | 예 — 수정 전 FAIL 2건(A1/A2), `speech.js` `playAudioUrl()` 실패 경로가 `onError`+`advance()`(→`onEnd`)를 이중 호출하던 결함(P1) 수정 후 90/90 | speech |
+
+- `verify:e2e` 253/253 ×2연속(student 34/admin 21/entrance 12 불변 +
+  `[mobile]` 178). `verify:audio-tts` PASS, `testSpeechBtnSpeakingStall`
+  19/19, `testTtsSingleton` PASS. registry coverage PASS.
+- 데이터 인벤토리(수정 0): 유령 1단어 유닛 6개, 중복 유닛 "Unit 7" 쌍
+  1건, 0단어 유닛 2개, 곡선 아포스트로피 1건, 긴 뜻(27자) 1건,
+  `students.current_unit_id` ≠ SCA bookmark 9건(같은 교재라 drift
+  LOW) — 전부 운영자 결정 대기, 코드/데이터 변경 없음.
+- `verify:all` 전체 실행 결과는 이 세션 종료 시점 기준 미수신 —
+  수신 후 `handoff.md` 124차 섹션에 append 예정.
+- `npm run verify:all`(HEAD 913e4cb, 재빌드 후): **ALL DOMAINS PASS**, FAIL 줄 0(extra 포함), 내부 verify:e2e 253/253.
