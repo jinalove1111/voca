@@ -1,0 +1,96 @@
+{
+  "agent_name": "lead-town-loop-2026-09-11",
+  "role": "6h 자율 세션 — Paul Town 학습 루프 하드닝(45명 전체 루프 stress + writing-complete 경계 + 이코노미/레벨 시뮬 재계산) + v3_50 적용 후 Phase 1 anon READ-ONLY 감사 + UX additive + 자산 요청 목록",
+  "task_id": "town-loop-hardening-2026-09-11",
+  "status": "completed",
+  "progress": 88,
+  "started_at": "2026-09-11T00:00:00Z",
+  "updated_at": "2026-09-11T00:00:00Z",
+  "branch": "qa/town-loop-hardening-2026-09-11",
+  "base": "qa/overnight-town-2026-09-11(126차 결과물)",
+  "commits_so_far": [
+    "be49551 docs(town): ASSET REQUEST LIST 21건(17 아이템 + 배경 타일 3 + 간판 프레임 1) + 격자 가독성 리뷰",
+    "2ece329 feat(town): 학습→보상 연결 UX additive(💵 캡션·빈 지갑 안내·잠금 카드 ⭐필요치·부족액 안내·빈 보관함→상점·earn_hint) — testTownUiStatic 70→95",
+    "12c1a30 docs(reward): 보상 경로 전수 감사 매트릭스(17 이벤트) + GAPS P1~P3",
+    "3beae92 test(town): testTownFullLoop45.mjs 신규 — 45명 전체 루프 stress 170단언",
+    "7684c13 test(economy): testTownEconomySim.mjs 신규 — 이코노미/레벨 시뮬, 핵심 재발견(52db9e4 이후 레거시 6경로 서버 원장 도달 → PD 12종 적립)",
+    "23fbb88 test(reward): testWritingCompleteBoundary.mjs 신규 — writing-complete 경계 55단언",
+    "eb1c8367 docs(economy): TOWN_ECONOMY_AUDIT_2026-09-11.md §0 정정 + REWARD_PATH_AUDIT_2026-09-11.md 상단 정정 노트(타 세션 소유, §3 재발견과 정합 — diff 미열람)",
+    "e10f40e8 test(e2e): [town] 380→480 — Phase 4 UX + Phase 10, verify:e2e 735/735 x2 확인 완료(아래 verification 참고)",
+    "2cfecdc test(reward): testPronunciationRewardOnce.mjs 신규 54/54 — pronunciation exactly-once, pronunciation-unidentified 비멱등 KNOWN GAP 고정",
+    "0d2170b docs: PR #32 패키지 v4 갱신·푸시(미머지)"
+  ],
+  "commit_hash_provenance": "be49551~23fbb88 6개는 상위(리드) 세션이 제공한 값을 그대로 인용 + 이 문서화 세션이 .git/logs/HEAD 직접 열람으로 전체 SHA와 커밋 메시지 존재를 재확인함. eb1c8367/e10f40e8 2개는 상위 세션이 제공한 목록에는 없었으나 같은 브랜치의 .git/logs/HEAD에서 그 뒤에 이어진 실제 커밋으로 발견되어 존재만 추가 기재(diff 내용 미검증, 실행 결과 미수신).",
+  "pr_status": {
+    "current_branch_pr": "없음(작성 시점 기준 미생성)",
+    "pr_32": "126차 이하 이력 참고 — 45명 확장 readiness 문서 브랜치, 미머지 상태 유지(이 세션에서 추가 갱신 없음)"
+  },
+  "production_safety": {
+    "db_write_this_session": 0,
+    "sql_editor_execution_this_session": 0,
+    "v3_50_applied": true,
+    "v3_50_applied_by": "운영자, 이 세션 시작 전 정확히 1회(Success. No rows returned)",
+    "post_apply_block_e_operator_check": "new_item_purchases 0행 / welcome_rows 0행 / purchase_town_item 함수 md5 6f049ec7d802b1bd8b77e841c37a5061 일치",
+    "student_reward_star_xp_pd_class_textbook_word_changes": 0,
+    "feature_flags_changed": 0,
+    "pilot_a_activated": false,
+    "welcome_credits_granted": 0,
+    "pr_merges": 0,
+    "deploys": 0,
+    "supabase_access_mode": "anon key READ-ONLY(SELECT/HEAD)만 — Phase 1 감사 1회"
+  },
+  "task_results": {
+    "phase1_readonly_audit": "v3_50 적용 후 anon key READ-ONLY 9/9 PASS — town_items 17행(신규16+shop-lamp1, category null 0, min_level 1~10, asset_key 전부, dollars 전부, shop-lamp 60 불변, 시드 가격/레벨 16종 일치). 드리프트: students 1행(A*** 8a109c98 Unit4→Unit5, 학생 학습), xp_ledger +1(quiz-complete 05:59Z), progress updated_at — 전부 마이그레이션 무관. classes/SCA/textbooks/units/words/word_status 동일. BLOCK B/C/D(함수 존재·권한)는 service_role 전용이라 운영자 확인 대기.",
+    "town_full_loop_45": "scripts/testTownFullLoop45.mjs(신규, 170단언) — 로그인→학습 보상 4종→dollar 트리거 파생→welcome 더블클릭→상점 구매(tree)/locked(cat)/invalid→배치·이동→refresh→relogin, 5/10/20/45 동시성, leak/lost 0.",
+    "writing_complete_boundary": "scripts/testWritingCompleteBoundary.mjs(신규, 55단언) — 4→5 정확히 1회, 5→6/6→7/10 추가 0, refresh 0, relogin 0, 타 UUID 독립, 재시도 동일 키, 날짜 경계 1회. src 무변경.",
+    "economy_premise_correction_P1": "scripts/testTownEconomySim.mjs(신규) — 핵심 재발견: 2026-09-06 52db9e4부터 grantReward()가 레거시 6경로도 parseLegacyDedupKey→postRewardEvent로 서버 원장 기록 → reward_ledger 도달 유형 12종(legacy-baseline만 제외) → dollar_rules rate 1로 전부 PD 적립. 이전 문서(126차, TOWN_ECONOMY_AUDIT 초판, PR #32 v3) '6종만 PD, 6~15 PD/일' 전제는 오류. 재계산 PD/일: 평범 36 · 열심 75 · 매우많이 186. 가격 다수 TOO CHEAP, 기존 학생 09-08부터 PD 적립 중(Pilot A 시점 수백 PD 보유 가능), 레벨 L8~L10 다수 추정, dead zone 0건. 운영자 결정 옵션 A(가격 x3~5)/B(dollar_rules rate 하향)/C(관찰)/D(A+B) 전부 미적용.",
+    "ux_brand_guardrails": "커밋 2ece329 — Paul 기존 21종만 재사용(신규 이미지 0), British cosy village 톤 짧은 문구, 저작권 문자열 0, 새 버튼 전부 >=44px, HeroReaction 화면당 1장 유지. testTownUiStatic 70->95.",
+    "asset_request_list": "커밋 be49551 — ASSET REQUEST LIST 21건(P1 7 · P2 7 · P3 6+1), 실제 일러스트 미제작(이모지 폴백 유지).",
+    "reward_path_audit_matrix": "커밋 12c1a30 — docs/design/REWARD_PATH_AUDIT_2026-09-11.md(타 세션 소유, 이 문서화 세션 미열람) — 17 이벤트 x 트리거/★/XP/PD/멱등키/클라·서버 가드/일일 한도/재시도/더블클릭/refresh/relogin 감사 매트릭스 + GAPS P1~P3(상위 세션 보고 인용).",
+    "gaps_identified": "pronunciation-unidentified 비멱등 키(P1 NEEDS DECISION, testPronunciationRewardOnce.mjs로 재현·회귀 고정 완료 — 5회 호출시 로컬 5★/서버 0회, 수정은 미적용) · L3 cap TOCTOU(P2) · postXpEvent 재시도 큐 없음(P3) · 탭 간 storage 리스너 없음(P3).",
+    "pronunciation_exactly_once": "커밋 2cfecdc — scripts/testPronunciationRewardOnce.mjs(신규) 54/54: 더블클릭·TTS 폴백 onSuccess 2회·onEnd 3회·재렌더·리마운트·재시도 → 단어/일 1회 + postRewardEvent 1회, 다음날 1회, 두 단어 2회. pronunciation-unidentified 비멱등 현재 동작을 회귀로 고정(수정 없음). src/ 무변경."
+  },
+  "verification": {
+    "regression_9_suites": "817단언 PASS(신규 스위트 아님, 무회귀 재확인)",
+    "town_full_loop_45": "170/170 PASS",
+    "writing_complete_boundary": "55/55 PASS",
+    "town_economy_sim": "GATE 14/14 PASS + FINDING 4건 중 1건 의도된 FAIL 보고(정책 관측, exit code 비관여, CLAUDE.md 규칙 15)",
+    "e2e_town_extension": "완료 — 커밋 e10f40e(380->480단언), npm run build PASS, npm run verify:e2e 735/735 x2연속(student 34/admin 21/mobile 178/entrance 12/town 480, 미mock 0, 실결함 0). tests/e2e/lib/mockRoutes.mjs에 opt-in 옵션 townWelcomeDisabled/slowGrantXpMs 추가(기존 spec 무영향).",
+    "pronunciation_exactly_once_test": "완료 — 54/54 PASS(위 pronunciation_exactly_once 참고).",
+    "build": "PASS(커밋 e10f40e 기준)",
+    "verify_all": "ALL DOMAINS PASS (local, 2nd run; 1st run registry-coverage timing race → standalone 8/8) — HEAD 2cfecdc, FAIL 줄 0/exit 0/SKIP 도메인 제외, verify:all 내부 E2E 735/735 PASS/SKIP 0(student 34/admin 21/mobile 178/entrance 12/town 480), 신규 스위트 testWritingCompleteBoundary 55/55·testPronunciationRewardOnce 54/54·testRegistryCoverage 8/8·testBundleBudget 10/10·rewardSystem 47스크립트 PASS. 로컬 PASS, 최종 판정은 CI Release Gate(PR 생성 후).",
+    "final_verdict": "완료 — 학습 루프 무결성/writing-complete 경계/이코노미 재계산/E2E 735건/pronunciation exactly-once/verify:all 전부 로컬 PASS 확정. 최종 판정은 CI Release Gate(PR 생성 후)."
+  },
+  "decisions_needed": [
+    "가격표(town_items.price)/dollar_rules 적립률 조정 옵션 A(가격 x3~5)/B(rate 하향)/C(관찰)/D(A+B) 중 선택 — 필수 선행: Pilot A 5명 dollar_balances 잔액 진단 SQL 확인",
+    "pronunciation-unidentified 비멱등 키 처리 여부(P1)",
+    "isEmptyRecord() tombstone-only 레코드 오분류 처리 여부(126차 이월, P3)",
+    "postXpEvent 재시도 큐 도입 여부(P3)",
+    "마을 일러스트 자산 실제 제작(126차 이월, ASSET REQUEST LIST 21건 기반)",
+    "post-apply BLOCK B/C/D(함수 존재·권한) 운영자 직접 실행/확인",
+    "서버 env TOWN_V1_WELCOME_ENABLED 설정 시점",
+    "기능 플래그 paulTownV1 ON 범위(Pilot A 5명 기기부터인지 등)"
+  ],
+  "files_owned": [
+    "handoff.md",
+    "TESTING.md",
+    "PROJECT_BOARD.md",
+    ".ai-status/lead-town-loop-2026-09-11.json"
+  ],
+  "files_read": [
+    "handoff.md",
+    "TESTING.md",
+    "PROJECT_BOARD.md",
+    ".ai-status/lead-overnight-town-2026-09-11.json",
+    ".ai-status/README.md",
+    "CLAUDE.md",
+    "tests/harness/registry.mjs",
+    "tests/e2e/townV1.spec.mjs",
+    "tests/e2e/lib/harness.mjs",
+    ".git/logs/HEAD",
+    ".git/refs/heads/main",
+    ".git/refs/heads/qa/town-loop-hardening-2026-09-11"
+  ],
+  "blocker": null,
+  "next_action": "docs 커밋 → push → PR 생성(MERGE 금지) → CI 확인 → 최종 6h 보고. 별도로: 1) 운영자 진단 SQL 3블록으로 Pilot A 대상 학생 5명의 dollar_balances 잔액 확인(플래그 ON 전 필수 선행) → 가격/적립률 옵션 A~D 결정 → DB 값만 반영 → 서버 env(TOWN_V1_WELCOME_ENABLED) + paulTownV1 플래그 Pilot A 5명 범위 ON → 24시간 후 진단 SQL 재실행. 2) qa-reviewer/security-reviewer 코드 리뷰 미착수(대기). 3) pronunciation-unidentified 비멱등 키(§gaps_identified) 처리 여부 운영자 결정 대기."
+}
