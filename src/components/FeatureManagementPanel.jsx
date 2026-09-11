@@ -19,7 +19,7 @@ import {
   getUserPermissions,
   getRolePermissions,
 } from '../config/rbac'
-import { hasPermission, PERMISSIONS as PERMS } from '../config/rbac'
+import { canManageFeatures } from '../config/rbac'
 
 const FEATURE_CATEGORIES = [
   {
@@ -143,15 +143,15 @@ function FeatureCategoryToggle({ category, features, onChange }) {
   )
 }
 
-function RolePermissionViewer() {
+function RolePermissionViewer({ adminSession = false }) {
   const currentRole = getUserRole()
 
   return (
     <div className="bg-white rounded-lg shadow p-6 mb-6">
       <h2 className="text-2xl font-bold mb-4">👤 현재 역할 및 권한</h2>
-      
+
       <div className="mb-6">
-        <p className="font-bold mb-2">현재 역할: <span className="text-lg text-purple-600">{currentRole}</span></p>
+        <p className="font-bold mb-2">현재 역할: <span className="text-lg text-purple-600">{adminSession ? 'admin (관리자 PIN 세션)' : currentRole}</span></p>
         <p className="text-sm text-gray-600 mb-4">
           역할을 변경하려면 개발자 도구에서 다음을 실행하세요:
         </p>
@@ -195,7 +195,7 @@ function RolePermissionViewer() {
   )
 }
 
-export default function FeatureManagementPanel() {
+export default function FeatureManagementPanel({ adminSession = false }) {
   const [features, setFeatures] = useState(() => getAllFeatures())
   const [tab, setTab] = useState('features')
 
@@ -209,7 +209,7 @@ export default function FeatureManagementPanel() {
   // 호출하는 것으로 충분하다(다른 탭/세션에서의 동시 편집은 기존에도 지원 대상이
   // 아니었음 — 새로고침하면 반영됨).
 
-  if (!hasPermission(PERMS.MANAGE_FEATURES)) {
+  if (!canManageFeatures(adminSession)) {
     return (
       <div className="bg-red-50 border-2 border-red-200 rounded-lg p-6 text-center">
         <h2 className="text-2xl font-bold text-red-900 mb-2">❌ 접근 권한 없음</h2>
@@ -281,8 +281,8 @@ export default function FeatureManagementPanel() {
       {/* Roles Tab */}
       {tab === 'roles' && (
         <div>
-          <RolePermissionViewer />
-          
+          <RolePermissionViewer adminSession={adminSession} />
+
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
             <h3 className="font-bold mb-2">🔐 역할 변경 방법 (개발자용)</h3>
             <p className="text-sm text-blue-900 mb-3">
