@@ -17,6 +17,10 @@
 import { installMocks } from './lib/mockRoutes.mjs'
 import { createRecorder } from './lib/harness.mjs'
 import { QA_STUDENT_NAME, QA_LOGIN_PIN } from './fixtures/index.mjs'
+// PHASE 10(2026-09-11) — "가장 긴 카탈로그 이름" 카드 오버플로우 회귀용.
+// 새 이름을 여기서 발명하지 않고 townCatalog.js(진실 원천, 다른 세션
+// 소유 파일 — import만 하고 수정하지 않는다)의 메타를 그대로 읽는다.
+import { TOWN_ITEM_META, TOWN_CATEGORIES } from '../../src/utils/town/townCatalog.js'
 
 const VIEWPORTS = [
   { width: 360, height: 640 },
@@ -80,6 +84,27 @@ async function waitUntil(fn, { timeout = 15000, interval = 150 } = {}) {
 async function noHorizontalOverflow(page) {
   return page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
 }
+
+// PHASE 10(2026-09-11) — 신규 회귀 4종(연타 배치 중복 방지/긴 라벨 카드
+// 오버플로우/느린 네트워크/환영 토스트)은 과제 지시가 명시한 5개 뷰포트
+// (360/375/390/412x*, 768x1024)에서만 실행한다. 1280x800/844x390(TASK 7
+// 가로모드·데스크톱 전용 뷰포트)은 "keep as-is" 지시대로 손대지 않는다.
+function isPhase10Viewport(vp) {
+  const skip = (vp.width === 1280 && vp.height === 800) || (vp.width === 844 && vp.height === 390)
+  return !skip
+}
+
+// PHASE 10 — 카탈로그 전체(17개)에서 한글 이름이 가장 긴 아이템 1개를
+// 고른다(동률이면 TOWN_ITEM_META 선언 순서상 먼저 나오는 쪽 — 실측
+// 2026-09-11 기준 'british-cottage'/영국 코티지). 하드코딩 대신 메타를
+// 그대로 읽어, 나중에 townCatalog.js가 바뀌어도 이 스펙이 따라간다.
+const LONGEST_TOWN_ITEM = Object.entries(TOWN_ITEM_META).reduce((best, [id, m]) => (
+  !best || m.nameKo.length > best.meta.nameKo.length ? { id, meta: m } : best
+), null)
+const LONGEST_TOWN_ITEM_CATEGORY_LABEL = (() => {
+  const entry = LONGEST_TOWN_ITEM && TOWN_CATEGORIES.find((c) => c.id === LONGEST_TOWN_ITEM.meta.category)
+  return entry ? entry.label : null
+})()
 
 // paulTownV1 플래그 ON — src/config/features.js의 localStorage 스냅샷에
 // 이 키만 심어둔다(그 외 플래그는 DEFAULT_FEATURES가 채운다, loadFeaturesFromStorage
@@ -167,6 +192,19 @@ export async function run(browser, baseURL) {
       r.check(`${name} TASK7 — PD 잔액 배지가 뷰포트 안에 완전히 표시됨(클리핑 없음)`,
         boxInsideViewport(dollarBadgeBox, vp), JSON.stringify(dollarBadgeBox))
 
+      // ── PHASE 4(2026-09-11) — 💵 배지 아래 학습→보상 연결 캡션
+      //     "공부하면 💵가 생겨요"(TownHeader.jsx) — 표시/뷰포트 안/배지와
+      //     겹치지 않음(세로로 배지 아래 위치). ─────────────────────────────
+      const captionLocator = page.getByText('공부하면 💵가 생겨요', { exact: true })
+      const captionVisible = await captionLocator.isVisible().catch(() => false)
+      r.check(`${name} PHASE4 — 헤더 캡션 "공부하면 💵가 생겨요" 표시`, captionVisible)
+      const captionBox = await captionLocator.boundingBox().catch(() => null)
+      r.check(`${name} PHASE4 — 헤더 캡션이 뷰포트 안에 완전히 표시됨(클리핑 없음)`,
+        boxInsideViewport(captionBox, vp), JSON.stringify(captionBox))
+      const captionBelowBadge = !!captionBox && !!dollarBadgeBox && captionBox.y >= dollarBadgeBox.y + dollarBadgeBox.height - 0.5
+      r.check(`${name} PHASE4 — 헤더 캡션이 💵 배지와 겹치지 않음(배지 아래 배치)`,
+        captionBelowBadge, `captionBox=${JSON.stringify(captionBox)} dollarBadgeBox=${JSON.stringify(dollarBadgeBox)}`)
+
       // ── 폴 이미지 1장만(HeroReaction, img[alt] — welcome 가이드가 뜬 뒤) ──
       // welcome 가이드는 마운트 후 useEffect로 세팅되므로(동기 렌더에는 없음)
       // 이미지가 실제로 나타날 때까지 폴링한다.
@@ -177,6 +215,28 @@ export async function run(browser, baseURL) {
       // ── 환영 선물 20 Paul Dollar — 1회만 지급 ───────────────────────────
       const welcomeClaimed = await waitUntil(() => (db._townCalls.claim_town_welcome || 0) >= 1, { timeout: 10000 })
       r.check(`${name} 환영 선물 — claim_town_welcome 호출 발생`, !!welcomeClaimed)
+
+      // ── PHASE 10(2026-09-11) — 환영 보상 토스트("🎁 환영 선물", TownScreen.jsx
+      //     toast state — granted:true일 때만 표시, 3초 뒤 자동 소멸). 지정된
+      //     5개 뷰포트에서만 확인(그 외는 TASK 7 "keep as-is"). ────────────
+      if (isPhase10Viewport(vp)) {
+        const rewardToastLocator = page.getByText('🎁 환영 선물', { exact: false })
+        const toastAppeared = await waitUntil(() => rewardToastLocator.first().isVisible().catch(() => false), { timeout: 5000 })
+        r.check(`${name} PHASE10 — 환영 선물 토스트("🎁 환영 선물") 표시`, !!toastAppeared)
+        if (toastAppeared) {
+          const toastBox = await rewardToastLocator.first().boundingBox().catch(() => null)
+          r.check(`${name} PHASE10 — 환영 선물 토스트가 뷰포트 안에 표시됨(클리핑 없음)`,
+            boxInsideViewport(toastBox, vp), JSON.stringify(toastBox))
+          const headerBox = await page.locator('div.bg-white.rounded-3xl.card-shadow.p-3.flex.items-center.gap-2').first().boundingBox().catch(() => null)
+          const noOverlapWithHeader = !!toastBox && !!headerBox
+            && (toastBox.y >= headerBox.y + headerBox.height - 0.5 || toastBox.y + toastBox.height <= headerBox.y + 0.5)
+          r.check(`${name} PHASE10 — 환영 선물 토스트가 헤더(Lv./💵 바)와 겹치지 않음`,
+            noOverlapWithHeader, `toastBox=${JSON.stringify(toastBox)} headerBox=${JSON.stringify(headerBox)}`)
+        }
+        const toastDisappeared = await waitUntil(async () => !(await rewardToastLocator.first().isVisible().catch(() => false)), { timeout: 5000 })
+        r.check(`${name} PHASE10 — 환영 선물 토스트가 일정 시간 후 사라짐(자동 dismiss)`, !!toastDisappeared)
+      }
+
       const balanceAfterWelcome = await waitUntil(async () => {
         const t2 = (await dollarBadge.textContent().catch(() => '')) || ''
         return t2.includes('20') ? t2 : false
@@ -222,6 +282,22 @@ export async function run(browser, baseURL) {
           const homeCellVisible = await page.getByRole('button', { name: 'My House' }).isVisible().catch(() => false)
           r.check(`${name} town 탭 — HOME 칸(🏠 My House) 표시`, homeCellVisible)
         }
+
+        // ── PHASE 4(2026-09-11) — 보관함이 아직 비어있는 시점(이 루프는 첫
+        //     구매보다 먼저 실행됨)에 안내 문구 + "🛒 상점으로 가기" 버튼
+        //     (TownInventory.jsx) 검증. 클릭 시 탭이 상점으로 전환된다. ─────
+        if (tabName === 'inventory') {
+          const emptyInventoryMsgVisible = await page.getByText('상점에서 첫 아이템을 사보세요 🌳').isVisible().catch(() => false)
+          r.check(`${name} PHASE4 — 빈 보관함 안내 문구 "상점에서 첫 아이템을 사보세요 🌳" 표시`, emptyInventoryMsgVisible)
+          const goShopBtn = page.getByRole('button', { name: '🛒 상점으로 가기' })
+          const goShopBtnBox = await goShopBtn.boundingBox().catch(() => null)
+          r.check(`${name} PHASE4 — 빈 보관함 "🛒 상점으로 가기" 버튼 높이 >= 44px`,
+            !!goShopBtnBox && goShopBtnBox.height >= 44, JSON.stringify(goShopBtnBox))
+          await goShopBtn.click()
+          const switchedToShopTab = await page.getByRole('button', { name: '자연 카테고리' })
+            .waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false)
+          r.check(`${name} PHASE4 — "🛒 상점으로 가기" 클릭 시 상점 탭으로 전환됨`, switchedToShopTab)
+        }
       }
 
       // ── 상점 탭 — 카테고리/잠금/부족액 ───────────────────────────────────
@@ -252,6 +328,11 @@ export async function run(browser, baseURL) {
       const flowerText = (await flowerCard.textContent().catch(() => '')) || ''
       r.check(`${name} 상점 — 꽃밭(flower-garden) 카드 잠김(🔒) 표시`, flowerText.includes('🔒'), flowerText)
       r.check(`${name} 상점 — 꽃밭(flower-garden) 카드 "Level 3" 표시`, flowerText.includes('Level 3'), flowerText)
+      // ── PHASE 4(2026-09-11) — 잠금 카드 두 번째 줄 "Level N = ⭐M"
+      //     (TownShopPanel.jsx, starsForLevel) 형식 검증. ────────────────
+      const flowerLockedSecondLineText = (await flowerCard.getByText(/Level \d+ = ⭐\d+/).textContent().catch(() => '')) || ''
+      r.check(`${name} PHASE4 — 잠금 카드 두 번째 줄 "Level N = ⭐M" 형식 표시`,
+        /Level \d+ = ⭐\d+/.test(flowerLockedSecondLineText), flowerLockedSecondLineText)
 
       // ── TASK 7 — 잠금 문구("Level N에서 열려요") 폰트 크기 가독성 ────────
       const flowerLockedBtn = flowerCard.getByRole('button')
@@ -323,6 +404,26 @@ export async function run(browser, baseURL) {
       await catCard.waitFor({ state: 'visible', timeout: 10000 })
       const catText = (await catCard.textContent().catch(() => '')) || ''
       r.check(`${name} 상점 — 고양이(cat) 카드 "10 더 필요" 표시(잔액 10, 가격 20)`, catText.includes('10 더 필요'), catText)
+      // ── PHASE 4(2026-09-11) — 부족액 카드 두 번째 줄 "(공부하면 모여요)"
+      //     (TownShopPanel.jsx). ────────────────────────────────────────
+      r.check(`${name} PHASE4 — 부족액 카드 두 번째 줄 "(공부하면 모여요)" 표시`, catText.includes('(공부하면 모여요)'), catText)
+
+      // ── PHASE 10(2026-09-11) — 카탈로그 최장 한글 이름 카드가 자기 카드
+      //     폭 안에서 잘리지 않음(scrollWidth <= clientWidth+1). 지정된 5개
+      //     뷰포트에서만(그 외는 TASK 7 "keep as-is"). ──────────────────────
+      if (isPhase10Viewport(vp) && LONGEST_TOWN_ITEM && LONGEST_TOWN_ITEM_CATEGORY_LABEL) {
+        await page.getByRole('button', { name: `${LONGEST_TOWN_ITEM_CATEGORY_LABEL} 카테고리` }).click()
+        const longNameKo = LONGEST_TOWN_ITEM.meta.nameKo
+        const longCard = page.locator('div.bg-white.rounded-2xl.card-shadow', { has: page.getByText(longNameKo, { exact: true }) }).first()
+        const longCardVisible = await longCard.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+        r.check(`${name} PHASE10 — 최장 카탈로그 이름("${longNameKo}") 카드 표시`, longCardVisible)
+        if (longCardVisible) {
+          const overflowMetrics = await longCard.getByText(longNameKo, { exact: true })
+            .evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }))
+          r.check(`${name} PHASE10 — 최장 카탈로그 이름("${longNameKo}") 카드 텍스트 오버플로우 없음`,
+            overflowMetrics.scrollWidth <= overflowMetrics.clientWidth + 1, JSON.stringify(overflowMetrics))
+        }
+      }
 
       // ── 보관함 탭 — "마을에 놓기" ────────────────────────────────────────
       await page.getByRole('button', { name: '🎁 보관함' }).click()
@@ -374,9 +475,32 @@ export async function run(browser, baseURL) {
       //     후 reload ────────────────────────────────────────────────────
       await page.getByRole('button', { name: '마을에 놓기' }).click()
       await emptyCellBtn().waitFor({ state: 'visible', timeout: 10000 })
-      await emptyCellBtn().click()
+      // PHASE 10(2026-09-11) — 지정된 5개 뷰포트에서는 빈 칸을 "연타"(같은
+      // 틱에 실제 클릭 이벤트 2회 디스패치 — 위 buyBtn 더블클릭 방지 검증과
+      // 동일한 패턴)해 배치 중복 방지 가드를 검증한다. 그 외 뷰포트
+      // (1280x800/844x390)는 TASK 7 "keep as-is" 지시대로 기존 단일 클릭
+      // 그대로 유지한다.
+      if (isPhase10Viewport(vp)) {
+        await emptyCellBtn().evaluate((el) => {
+          el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+          el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+        })
+      } else {
+        await emptyCellBtn().click()
+      }
       const treePlacedAgain = await waitUntil(() => treeCell.isVisible().catch(() => false), { timeout: 10000 })
       r.check(`${name} 재배치 — 새로고침 전 나무가 격자에 표시됨`, !!treePlacedAgain)
+
+      if (isPhase10Viewport(vp)) {
+        const treeEmojiCountAfterRapidTap = await page.getByText('🌳', { exact: true }).count()
+        r.check(`${name} PHASE10 — 빈 칸 연타(rapid tap) 후 나무 이모지가 격자에 정확히 1개만 표시됨(중복 배치 없음)`,
+          treeEmojiCountAfterRapidTap === 1, `count=${treeEmojiCountAfterRapidTap}`)
+        await page.getByRole('button', { name: '🎁 보관함' }).click()
+        const treeStillInNotPlacedList = await page.getByRole('button', { name: '마을에 놓기' }).isVisible().catch(() => false)
+        r.check(`${name} PHASE10 — 연타 배치 후 보관함 "마을에 놓기" 목록에 나무가 더 이상 없음(중복 배치 없음)`, !treeStillInNotPlacedList)
+        await page.getByRole('button', { name: '🏘 내 마을' }).click()
+      }
+
       const placedLabel = (await treeCell.getAttribute('aria-label').catch(() => '')) || ''
 
       await page.reload({ waitUntil: 'domcontentloaded' })
@@ -503,6 +627,94 @@ export async function run(browser, baseURL) {
       const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
       r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
         `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      unmockedRequests.push(...u)
+      ttsFallbackRequests.push(...t)
+      mockErrors.push(...db.errors)
+      await context.close()
+    }
+  }
+
+  // ── PHASE 4(2026-09-11) EMPTY-WALLET(뷰포트 1개만, 360x640) — 환영
+  //     선물을 청구하지 않는(비활성) mock 옵션(installMocks의
+  //     townWelcomeDisabled → db._townWelcomeDisabled)으로 잔액 0·보유 0
+  //     상태를 안정적으로 유지해, 메인 루프에서는 타이밍상 재현할 수 없는
+  //     "아직 💵가 없어요" 상점 안내 카드(TownShopPanel.jsx)를 검증한다. ──
+  {
+    const vp = VIEWPORTS[0]
+    const name = `${vpName(vp)} EMPTY-WALLET`
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
+    const page = await context.newPage()
+    await enableTownFlag(page)
+    const { db, unmockedRequests: u, ttsFallbackRequests: t } = await installMocks(page, { townWelcomeDisabled: true })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownV1(page)
+      await card.click()
+      await waitForTownHeader(page)
+      await page.getByRole('button', { name: '🛒 상점' }).click()
+
+      const emptyWalletMsgVisible = await waitUntil(
+        () => page.getByText('아직 💵가 없어요', { exact: false }).isVisible().catch(() => false),
+        { timeout: 10000 },
+      )
+      r.check(`${name} — 빈 지갑(잔액 0·보유 0) 상점 안내 카드 "아직 💵가 없어요" 표시`, !!emptyWalletMsgVisible)
+      const emptyWalletHeaderText = (await page.locator(DOLLAR_BADGE_SEL).textContent().catch(() => '')) || ''
+      r.check(`${name} — claim_town_welcome이 비활성화된 mock에서도 헤더 잔액이 "0"으로 유지됨`,
+        emptyWalletHeaderText.includes('0'), emptyWalletHeaderText)
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] mockErrors=${JSON.stringify(db.errors.slice(0, 3))}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      unmockedRequests.push(...u)
+      ttsFallbackRequests.push(...t)
+      mockErrors.push(...db.errors)
+      await context.close()
+    }
+  }
+
+  // ── PHASE 10(2026-09-11) SLOW-NETWORK(뷰포트 1개만, 360x640) — /api/
+  //     grant-xp(Town action 3종)를 1200ms 지연시켜, 상점 화면이 10초
+  //     안에 에러 문구 없이 최종 잔액($20, 환영 선물 정상 지급 포함)을
+  //     표시하는지 확인한다(로딩/비활성 상태 자체는 구현이 아직 없어도
+  //     이 스펙은 "결국 정상 렌더"만 강제 — 과제 지시의 "or simply renders
+  //     correctly ... within 10s" 대안 경로). ─────────────────────────────
+  {
+    const vp = VIEWPORTS[0]
+    const name = `${vpName(vp)} SLOW-NETWORK`
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
+    const page = await context.newPage()
+    await enableTownFlag(page)
+    const { db, unmockedRequests: u, ttsFallbackRequests: t } = await installMocks(page, { slowGrantXpMs: 1200 })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownV1(page)
+      await card.click()
+      await waitForTownHeader(page)
+      await page.getByRole('button', { name: '🛒 상점' }).click()
+
+      const start = Date.now()
+      const dollarBadge = page.locator(DOLLAR_BADGE_SEL)
+      const balanceShown = await waitUntil(async () => {
+        const t2 = (await dollarBadge.textContent().catch(() => '')) || ''
+        return t2.includes('20') ? t2 : false
+      }, { timeout: 10000 })
+      const elapsedMs = Date.now() - start
+      r.check(`${name} — 느린 네트워크(grant-xp 1200ms 지연)에도 10초 안에 환영 선물 잔액($20) 표시`,
+        !!balanceShown, `elapsedMs=${elapsedMs} text=${balanceShown || '(none)'}`)
+
+      const bodyTextDuring = await page.locator('body').innerText().catch(() => '')
+      const hasErrorText = bodyTextDuring.includes('문제가 발생했어요')
+      r.check(`${name} — 느린 네트워크 중 에러 문구 없음`, !hasErrorText, bodyTextDuring.slice(0, 200))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] mockErrors=${JSON.stringify(db.errors.slice(0, 3))}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
     } finally {
       unmockedRequests.push(...u)
       ttsFallbackRequests.push(...t)
