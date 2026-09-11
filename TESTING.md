@@ -1321,6 +1321,19 @@ DB WRITE 0 — `supabase_v3_50_town_v1.sql`은 세션 시작 전 운영자가
 | `tests/e2e/townV1.spec.mjs`(확장, 커밋 `e10f40e`) | 380→480, 실행 **735/735 ×2연속** | Phase 4 UX(💵 캡션·빈 지갑 카드(`townWelcomeDisabled` 옵션)·잠금 카드 ⭐필요치 정규식·부족액 "(공부하면 모여요)"·빈 보관함→상점 버튼) + Phase 10(격자 더블탭 1배치·긴 라벨 오버플로·slow network 1.2s·환영 토스트 위치/자동 소멸). `npm run verify:e2e` 735/735 ×2(student 34·admin 21·mobile 178·entrance 12·**town 480**, 미mock 0, 실결함 0). `tests/e2e/lib/mockRoutes.mjs`에 opt-in 옵션 `townWelcomeDisabled`/`slowGrantXpMs` 추가(기존 spec 무영향). e2e `[town]`, `extra:false` |
 | `scripts/testPronunciationRewardOnce.mjs`(신규, 커밋 `2cfecdc`) | 54 | 더블클릭·TTS 폴백 onSuccess 2회·onEnd 3회·재렌더·리마운트·재시도 → 단어/일 1회 + `postRewardEvent` 1회, 다음날 1회, 두 단어 2회. **`pronunciation-unidentified`는 비멱등 그대로 확인**(5회 호출 → 로컬 5★, 서버 0회) — 수정 없이 현재 동작을 회귀로 고정(KNOWN GAP/NEEDS DECISION). `src/` 무변경. reward/pronunciation, `extra:false` |
 
+**2026-09-12(128차) 갱신**: 위 `testPronunciationRewardOnce.mjs`의
+pronunciation-unidentified 시나리오(scenario 8)가 P1 수정과 함께
+**54 → 70단언**으로 재작성됐다(KNOWN GAP 라벨 제거). `markPronunciationOk
+(wordId, wordText)`로 시그니처 확장 — wordId가 null이면
+`pronunciation-unidentified:${token}:${today}`(token = 단어 텍스트
+정규화, trim/lowercase/공백→`_`, 빈 값은 `unknown`)로 결정적 멱등키를
+생성해 더블클릭/재렌더/리마운트/재시도/대소문자·공백 변형 → 1회, 다른
+단어 텍스트는 독립적으로 1회, 다음날 1회로 고정. 식별 경로
+(`pronunciation:${wordId}:${today}`)는 바이트 동일 유지. 비식별 경로는
+여전히 서버 미전송(의도적, PD 적립 영향 없음). 70/70 PASS, `src/` 변경
+3파일(`useStudent.js`/`WordDetail.jsx`/`QuizGame.jsx`), `extra:false`
+유지. 상세: `handoff.md` 2026-09-12(128차) §1.
+
 - 지원 문서(테스트 아님, 타 세션이 동시 편집 중이라 이 세션은
   열람·수정하지 않음): `docs/design/REWARD_PATH_AUDIT_2026-09-11.md`
   (보상 경로 17이벤트 감사 매트릭스, 커밋 `12c1a30`; 상단 정정 노트

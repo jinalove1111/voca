@@ -658,12 +658,15 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
   qa-reviewer/security-reviewer 코드 리뷰 미착수.
 - 운영자 결정 대기: 가격표(`town_items.price`) ×3~5 인상 / `dollar_
   rules` 고빈도 유형 rate 하향 / Pilot A 현상 유지 관찰 / 조합안(A~D)
-  중 선택, `pronunciation-unidentified` 키 처리, `isEmptyRecord()`
-  tombstone 오분류(126차 이월), `postXpEvent` 재시도 큐, 마을 일러스트
-  제작(126차 이월), BLOCK B/C/D 운영자 직접 실행/확인,
-  `TOWN_V1_WELCOME_ENABLED` 설정 시점, `paulTownV1` 플래그 ON 범위.
-  **필수 선행**: 플래그 ON 전 진단 SQL 3블록으로 Pilot A 대상 학생
-  5명의 `dollar_balances` 잔액 확인.
+  중 선택, `pronunciation-unidentified` 키 처리(해결됨, 128차),
+  `isEmptyRecord()` tombstone 오분류(126차 이월), `postXpEvent` 재시도
+  큐, 마을 일러스트 제작(126차 이월), BLOCK B/C/D 운영자 직접
+  실행/확인, `TOWN_V1_WELCOME_ENABLED` 설정 시점, `paulTownV1` 플래그
+  ON 범위. **필수 선행**: 플래그 ON 전 진단 SQL 3블록으로 Pilot A
+  대상 학생 5명의 `dollar_balances` 잔액 확인.
+- **2026-09-12 (128차) 갱신**: pronunciation-unidentified P1 수정
+  포함(70/70), 이코노미 OPTION C 관찰 확정, v3_50 POST B/C/D 운영자
+  실행 대기.
 
 ### [P1] 야간 SAFE 세션 2026-09-11 — Town V1 하드닝·v3_50 apply 패키지·Pilot A 진단 (126차), PR 대기
 - 근거: `handoff.md` 2026-09-11(126차), `TESTING.md` 2026-09-11(126차),

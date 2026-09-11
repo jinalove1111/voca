@@ -1,0 +1,76 @@
+{
+  "agent_name": "lead-p1-pronunciation-2026-09-12",
+  "role": "pronunciation-unidentified P1 비멱등 키 수정 + v3_50 POST verify 운영자 패키지 정리 + 이코노미 OPTION C 확정 문서화",
+  "task_id": "p1-pronunciation-unidentified-2026-09-12",
+  "status": "in_progress",
+  "progress": 80,
+  "started_at": "2026-09-12T00:00:00Z",
+  "updated_at": "2026-09-12T00:00:00Z",
+  "branch": "qa/town-loop-hardening-2026-09-11",
+  "base": "127차 결과물 위",
+  "production_safety": {
+    "db_write_this_session": 0,
+    "sql_editor_execution_this_session": 0,
+    "v3_50_applied": true,
+    "v3_50_applied_by": "운영자, 127차 이전에 정확히 1회(이 세션에서 추가 적용 없음)",
+    "v3_50_post_verify_blocks_b_c_d_executed_this_session": false,
+    "student_reward_star_xp_pd_class_textbook_word_changes": 0,
+    "feature_flags_changed": 0,
+    "pilot_a_activated": false,
+    "welcome_credits_granted": 0,
+    "pr_merges": 0,
+    "deploys": 0,
+    "town_flag_state": "OFF (paulTownV1 미변경)"
+  },
+  "task_results": {
+    "p1_pronunciation_unidentified_fix": "CLOSED — src/hooks/useStudent.js markPronunciationOk(wordId, wordText) 시그니처 확장, wordId null 시 `pronunciation-unidentified:${token}:${todayStr()}` 결정적 키(token=wordText trim/lowercase/공백->'_', 빈 값 'unknown'). 식별 경로(pronunciation:${wordId}:${today})는 무변경. 호출부 갱신: src/components/WordDetail.jsx(onMarkPronunciationOk?.(word.dbId, word.word)), src/components/QuizGame.jsx handlePronSuccess(current?.word?.dbId, current?.word?.word). 비식별 경로는 여전히 서버 미전송(parseLegacyDedupKey null 그대로, 의도적, PD 영향 없음). 보상 금액/CAP/rewardEngine.js/api/ 전부 무변경.",
+    "test_update": "scripts/testPronunciationRewardOnce.mjs scenario 8 재작성(KNOWN GAP 라벨 제거) — 54 -> 70단언, 70/70 PASS. tests/harness/registry.mjs 노트 갱신(extra:false 유지).",
+    "v3_50_post_verify_package": "production_v3_50_baseline_and_post_verify.sql의 BLOCK B/B-2/C/C-2/D 기대 PASS 값 정리 완료(READY, 운영자 실행 대기). BLOCK E(post-apply, 127차 이전 운영자 실행)는 new_item_purchases 0 / welcome_rows 0 / purchase_fn_body_md5_now 6f049ec7d802b1bd8b77e841c37a5061로 이미 확인됨.",
+    "economy_decision": "OPTION C 확정 — 가격/dollar_rules 변경 없음, Pilot A 실측 관찰(적립 PD/day·첫구매시점·구매아이템·잔액·재참여) 후 사후 결정. 추정치 유지: 평범 36 / 열심 75 / 매우많이 186 PD/일(127차 재계산 그대로, 이번 세션 재계산 없음)."
+  },
+  "verification": {
+    "build": "PASS (32s)",
+    "testPronunciationRewardOnce": "70/70 PASS",
+    "testWritingCompleteBoundary": "55/55 PASS",
+    "testTownFullLoop45": "170/170 PASS",
+    "testLegacyGrantCoverage": "60/60 PASS",
+    "testTownWelcomeExactlyOnce": "87/87 PASS",
+    "testTownUiStatic": "95/95 PASS",
+    "verify_reward": "PASS (rewardEngine + rewardFlow 55/55)",
+    "testDoubleEvents": "45/45 PASS",
+    "verify_all": "running (결과는 다음 체크포인트 갱신분 참고, 추측 금지)",
+    "ci": "pending (commit not yet pushed)"
+  },
+  "decisions_needed": [
+    "v3_50 POST verify BLOCK B/B-2/C/C-2/D 운영자 직접 실행(production_v3_50_baseline_and_post_verify.sql, service_role 필요)",
+    "서버 env TOWN_V1_WELCOME_ENABLED 설정 시점",
+    "기능 플래그 paulTownV1 ON 범위(Pilot A 5명 기기부터인지 등)",
+    "isEmptyRecord() tombstone-only 레코드 오분류 처리 여부(P3, 126차 이월)",
+    "postXpEvent 재시도 큐 도입 여부(P3)",
+    "마을 일러스트 자산 실제 제작(126차 이월, ASSET REQUEST LIST 21건 기반)"
+  ],
+  "files_owned": [
+    "src/hooks/useStudent.js",
+    "src/components/WordDetail.jsx",
+    "src/components/QuizGame.jsx",
+    "scripts/testPronunciationRewardOnce.mjs",
+    "tests/harness/registry.mjs",
+    "handoff.md",
+    "TESTING.md",
+    "PROJECT_BOARD.md",
+    ".ai-status/lead-p1-pronunciation-2026-09-12.json"
+  ],
+  "files_read": [
+    "handoff.md",
+    "TESTING.md",
+    "PROJECT_BOARD.md",
+    ".ai-status/README.md",
+    ".ai-status/lead-town-loop-2026-09-11.json",
+    "CLAUDE.md",
+    "src/utils/wordLibrary.js",
+    "scripts/wordLibraryRaceStub.mjs",
+    "production_v3_50_baseline_and_post_verify.sql"
+  ],
+  "blocker": null,
+  "next_action": "commit 3파일(src) + 테스트 + registry.mjs (문서 3종은 docs-maintainer가 별도 커밋) -> push -> PR #36 갱신 -> CI 재실행 확인 -> verify:all 결과 수신 후 이 체크포인트 completed로 갱신. 별도로: 운영자에게 v3_50 POST BLOCK B/B-2/C/C-2/D 실행 요청, 이코노미 OPTION C 관찰 착수는 Pilot A 활성화 이후."
+}

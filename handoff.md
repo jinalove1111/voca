@@ -1,8 +1,138 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-11 (127차, 6h 자율 세션 — Paul Town 학습 루프 하드닝,
-브랜치 `qa/town-loop-hardening-2026-09-11`, PR 미머지, 이 세션 자체의
-Production DB WRITE 0 — 단 `supabase_v3_50_town_v1.sql`은 세션 시작 전
-운영자가 정확히 1회 적용 완료(§4). 126차 이하 보존)_
+_최종 갱신: 2026-09-12 (128차, pronunciation-unidentified P1 수정 완료 +
+v3_50 POST verify 운영자 실행 패키지 + 이코노미 정책 OPTION C(관찰) 확정,
+브랜치 `qa/town-loop-hardening-2026-09-11` 계속, PR #36 갱신 대기(미머지),
+이 세션 Production DB WRITE 0. 127차 이하 보존)_
+
+## 2026-09-12 (128차) — pronunciation-unidentified P1 수정 + v3_50 POST verify 운영자 패키지 + 이코노미 OPTION C 확정
+
+### 0. 안전 요약(최우선 확인)
+
+이 세션 자체가 실행한 Production DB WRITE는 0이다. `supabase_v3_50_town_v1.sql`
+자체는 127차 이전에 운영자가 이미 1회 적용 완료한 상태이고, 이번 세션은
+그 적용 결과의 POST verify 실행 패키지(BLOCK B/B-2/C/C-2/D)를 준비만
+했을 뿐 실행하지 않았다(service_role 필요, CLAUDE.md 규칙 8) — SQL
+실행 0건. 기능 플래그 전부 OFF 유지, welcome 크레딧 지급 0건, Pilot A
+미활성화, PR #36 merge 0, 배포 0. 이번 세션에서 실제로 수정된 코드는
+`src/hooks/useStudent.js`/`src/components/WordDetail.jsx`/
+`src/components/QuizGame.jsx` 3개 파일과 테스트
+`scripts/testPronunciationRewardOnce.mjs`/`tests/harness/registry.mjs`
+노트뿐이며, 보상 금액(1★)·`REWARD_DAILY_CAP`·`rewardEngine.js`·`api/`·
+서버 원장 동작·이코노미 상수는 전부 무변경이다.
+
+### 1. P1 수정: pronunciation-unidentified 비멱등 키 (CLOSED)
+
+**수정 전 재현**: `node scripts/testPronunciationRewardOnce.mjs`
+scenario 8에서 `markPronunciationOk(null)`을 5회 호출하면 로컬 별이
+5개 늘고(⭐5), `markPronunciationOk(undefined)`를 추가 호출하면
+6개까지 늘었으나, 서버 보상 POST(`postRewardEvent`)는 0회였다 — 매
+호출마다 키가 `pronunciation-unidentified:${Date.now()}:${random}`
+형태로 새로 생성돼 매번 달랐기 때문이다.
+
+**근본 원인**: `src/hooks/useStudent.js`의 `markPronunciationOk`가
+`word.dbId`(wordId)가 null일 때 타임스탬프+난수 조합으로 dedupKey를
+만들어, `grantReward`의 로컬 `starGrantLog` 중복 제거가 이 값에 절대
+매칭될 수 없었다. `parseLegacyDedupKey`도 이 접두사(`pronunciation-
+unidentified:${timestamp}:${random}`)를 인식하지 못해 null을 반환하므로
+서버 쪽 원장 중복 제거도 걸리지 않았다.
+
+**수정 내용**(src 3파일):
+- `markPronunciationOk(wordId, wordText)`로 시그니처 확장. wordId가
+  null/undefined이면 키를 `pronunciation-unidentified:${token}:
+  ${todayStr()}`로 생성 — `token`은 wordText를 trim → lowercase →
+  공백을 `_`로 치환한 값(`src/utils/wordLibrary.js:3791`의 `wordSlug`
+  로직을 그대로 미러링한 인라인 정규화이며, `wordSlug` 자체를 import
+  하지는 않았다 — 이 함수를 쓰는 테스트 스텁
+  `scripts/wordLibraryRaceStub.mjs`가 약 20개 테스트 번들에서 쓰이는데
+  `wordSlug`를 export하지 않기 때문). wordText가 비었으면 토큰은
+  `'unknown'`.
+- 호출부 갱신: `src/components/WordDetail.jsx`가
+  `onMarkPronunciationOk?.(word.dbId, word.word)`로, `QuizGame.jsx`의
+  `handlePronSuccess`가 `current?.word?.dbId, current?.word?.word`로
+  각각 두 번째 인자를 추가 전달.
+- 식별 경로(`pronunciation:${wordId}:${today}`)는 바이트 단위로 완전
+  동일 — 변경 없음.
+- 비식별 경로(wordId null)는 여전히 서버로 전송되지 않는다
+  (`parseLegacyDedupKey`가 이 접두사에 대해 여전히 null 반환) — 이는
+  의도된 것으로, 새로운 PD 적립이 생기지 않아 이코노미에 영향이 없다.
+
+**멱등성 전략**: 학생 레코드 × 정규화된 단어 텍스트 × 로컬 날짜
+조합으로 결정적 키를 만든다. 같은 틱 더블클릭 / 별도 틱 재시도 /
+`onEnd` 3회 발화 / 재렌더 / 리마운트(refresh) / 대소문자·공백만 다른
+변형 → 모두 1★로 수렴. 다른 단어 텍스트는 각각 독립적으로 1★. 다른
+학생은 서로 독립(잘못된 학생 UUID로는 0). 다음 날에는 1★ 추가. 단어
+텍스트가 없는 호출도 `'unknown'` 토큰으로 하루 1회로 수렴.
+
+**테스트**: `scripts/testPronunciationRewardOnce.mjs`의 scenario 8을
+재작성(KNOWN GAP 라벨 제거) — 54 → **70단언**, 70/70 PASS.
+`tests/harness/registry.mjs`의 해당 스크립트 노트를 갱신(`extra:false`
+는 그대로 유지).
+
+**이번 세션 로컬 검증 실행**: `npm run build` PASS(32초) ·
+`testPronunciationRewardOnce` 70/70 · `testWritingCompleteBoundary`
+55/55 · `testTownFullLoop45` 170/170 · `testLegacyGrantCoverage` 60/60 ·
+`testTownWelcomeExactlyOnce` 87/87 · `testTownUiStatic` 95/95 ·
+`verify:reward` PASS(`rewardEngine` + `rewardFlow` 55/55) ·
+`testDoubleEvents` 45/45. `npm run verify:all`과 CI는 이 문서 작성
+시점 기준 **실행 중**이었다 — 결과를 추측하지 않고 다음 체크포인트
+갱신분(`.ai-status/lead-p1-pronunciation-2026-09-12.json`)을 참고하도록
+남긴다.
+
+### 2. v3_50 POST verify — 운영자 실행 패키지 (이번 세션 SQL 실행 0건, Production WRITE 0)
+
+운영자는 127차 이전에 `supabase_v3_50_town_v1.sql`을 이미 정확히 1회
+적용했고, 그 직후 운영자가 직접 실행한 BLOCK E 결과는 `new_item_
+purchases` 0행 / `welcome_rows_granted_so_far` 0행 /
+`purchase_fn_body_md5_now` `6f049ec7d802b1bd8b77e841c37a5061`이었다.
+`production_v3_50_baseline_and_post_verify.sql`에 남아 있는 나머지
+블록(운영자가 service_role로 직접 실행해야 함, 이번 세션은 실행하지
+않음)의 기대 PASS 값:
+
+- **BLOCK B**: `town_items_new_columns_present` = 4 · `fn_town_level_
+  for_stars` = 1 · `fn_grant_town_welcome_credit` = 1 ·
+  `secdef_town_functions` = 3 · `anon_exec_purchase` = false ·
+  `auth_exec_purchase` = false · `service_exec_purchase` = true ·
+  `anon_exec_welcome` = false · `auth_exec_welcome` = false ·
+  `service_exec_welcome` = true · `anon_exec_state` = false ·
+  `service_exec_state` = true. 이 중 하나라도 `'ABSENT'`면 FAIL.
+- **BLOCK B-2**: `lv_0 | lv_19 | lv_20 | lv_1499 | lv_1500` =
+  `1 | 1 | 2 | 9 | 10`.
+- **BLOCK C**: `town_items_count` 17 · `town_items_active` 17 ·
+  `town_items_category_null` 0 · `town_items_min_level_out_of_range` 0 ·
+  `town_items_dollars` 17 · `shop_lamp_row` =
+  `60|dollars|true|decoration|1` · `new_items_present` 16 ·
+  `dollar_ledger_welcome_rows` 0 · `purchase_fn_body_md5_after` =
+  `6f049ec7d802b1bd8b77e841c37a5061`(BLOCK E 값과 반드시 일치) ·
+  `purchase_fn_has_locked_reason` = true. BLOCK C-2는 17행 목록.
+- **BLOCK D**(`must_not_change`, BLOCK A 베이스라인 대비): students/
+  classes/SCA/textbooks/words md5+count 동일 · `dollar_rules_count`/
+  md5 동일 · `trigger_reward_to_dollars` = 1 · `star_purchases_count`
+  동일 · `town_purchases_count`/md5 동일 · `dollar_ledger_welcome_
+  rows` 0. 허용된 드리프트(A→D 사이 학생이 실제로 학습해 생기는 변화):
+  `reward_ledger`/`xp_ledger`/`dollar_ledger`/`dollar_balances`/
+  `student_progress`/`word_status`의 건수·합계는 **학습으로만** 증가할
+  수 있다 — 새로 생긴 `dollar_ledger` 행은 전부 `source_type`이
+  `'welcome'`도 `'migration'`도 아니어야 한다. `reward_ledger_legacy_
+  rows`는 변하면 안 되고, shop-lamp 가격은 60 그대로여야 한다. 그
+  외의 차이가 나오면 FAIL → `supabase_v3_50_town_v1_ROLLBACK.sql`
+  실행(`new_item_purchases` = 0인 동안은 안전).
+- **상태**: 운영자가 B/B-2/C/C-2/D를 실행할 수 있도록 READY. 이번
+  세션(에이전트)은 실행하지 않았다(service_role 필요, 규칙 8).
+
+### 3. 이코노미 정책 결정: OPTION C 확정 — Pilot A 관찰 우선
+
+가격표(`town_items.price`) 변경과 `dollar_rules` 적립률 변경은 이번
+PR에서 **전부 적용하지 않는다**. 대신 Pilot A에서 실측 관찰: 학생당
+일일 적립 PD, 첫 구매 시점, 구매한 아이템, 남은 잔액, 재참여 빈도를
+지켜본 뒤 가격/적립률 조정 여부를 사후에 결정한다. 추정치는 127차
+그대로 유지(평범 ≈36 / 열심 ≈75 / 매우많이 ≈186 PD/일) — 이번 세션에서
+재계산하지 않았다.
+
+### 4. 가드레일 유지 확인
+
+PR #36 미머지, 배포 0, Production DB WRITE 0, Town 플래그 OFF, welcome
+지급 0건 — 전부 유지 확인. PR #36은 이번 세션의 수정 커밋 반영과 함께
+갱신될 예정이며 CI 재실행은 대기 중이다.
 
 ## 2026-09-11 (127차) — 6h 자율 세션: Paul Town 학습 루프 하드닝 (qa/town-loop-hardening-2026-09-11, PR 미머지, Production WRITE 0, v3_50 적용 후 감사)
 
