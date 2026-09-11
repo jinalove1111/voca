@@ -9,7 +9,17 @@
 > 이 세션에서 실행된 것은 0건이다. 모르는 값은 추측하지 않고
 > "NEEDS OPERATOR INPUT"으로 표기한다.
 
-**문서 갱신 이력**: 2026-09-11 v3(PR #34 머지·배포 반영, Town V1 정책
+**문서 갱신 이력 v4 (2026-09-11 오후: 이코노미 전제 정정)**: 3절
+"서버 원장 기록 6종 vs 클라이언트 전용 6종" 전제가 틀린 것으로
+확인돼(커밋 `52db9e4`로 레거시 6종도 서버 원장에 도달, 12종 전부
+반영) 3절을 정정하고, 재계산된 일일 PD(평범 36·열심 75·매우많이
+186)와 "상점 가격 상당수가 TOO CHEAP 재평가" 결론을 반영했다. 6절
+Pilot A Town 게이트에 "플래그 ON 전 5명 `dollar_balances` 확인" 항목을
+추가하고, 9절 최종 결정 대기 목록에 이코노미 재조정 옵션 A~D를
+추가했다. 상세 근거는 `docs/design/TOWN_ECONOMY_AUDIT_2026-09-11.md`
+§0 참고.
+
+이전: 2026-09-11 v3(PR #34 머지·배포 반영, Town V1 정책
 확정, v3_50 미적용) — PR #34(Paul Town V1) 머지 커밋 `7c98392` ·
 배포 성공 2026-09-10 23:22Z 반영, 신규 8절 "Paul Town V1 현황" 추가,
 6절 Pilot A에 실제 대상 5명(READ-ONLY 선정) 반영, 9절(구 8절) 최종
@@ -170,12 +180,31 @@ drift)는 2절에 별도 표기했다.
 - **realistic**: typical + 7일 연속 streak, 매치게임 5회, 중복 스티커
   2회, 시험 2회, 오답 복구 20건, 콤보 보상 2배 빈도.
 
-원장(서버) 기록 유형 6종과 클라이언트 전용(서버 미기록) 별 6종을
-구분한다:
+정정(2026-09-11 오후): 아래 "서버 원장 기록 6종 vs 클라이언트 전용
+6종" 구분은 **틀렸다**. 커밋 `52db9e4`(2026-09-06, "feat(reward):
+레거시 별 지급 6경로 서버 원장 기록 + 재시도 큐")로 레거시 6종
+(mission-clear/pronunciation/spelling-combo/daily-mission-bonus/
+sticker-duplicate/matchgame)도 `grantReward()` → `parseLegacyDedupKey`
+→ `postRewardEvent()` 경로로 서버 `reward_ledger`에 도달한다(상세:
+`docs/design/TOWN_ECONOMY_AUDIT_2026-09-11.md` §0). 즉 **12종 전부가
+서버 원장에 기록**되고 `dollar_rules`(전 유형 rate=1)를 거쳐 폴달러로
+전환된다. 재계산된 일일 Paul Dollar 획득은 평범 **36** PD · 열심
+**75** PD · 매우많이(이론상) **186** PD(`scripts/testTownEconomySim
+.mjs`)이며, 이 기준으로 보면 8절 상점 가격(tree 10~clock-tower 200)은
+대부분 **TOO CHEAP** 쪽으로 재평가된다 — L1~L3 9종 가격 합(425 PD)이
+열심 기준 ≈6일, 평범 기준 ≈12일이면 전부 소진 가능하다. 또한 v3_49
+트리거는 2026-09-08부터 프로덕션에 라이브였으므로 **기존 재학생은
+이미 그 이후 매일 PD가 누적돼 왔을 수 있다** — Pilot A 대상 5명의
+실제 잔액은 이 문서 작성 시점 기준 확인되지 않았다(6절 게이트에 확인
+절차 추가, 아래 참고). 재조정 옵션은 9절 참고.
 
-- **서버 원장(reward_ledger) 기록 6종**: word-session, writing,
+원장(서버) 기록 유형 6종과 클라이언트 전용(서버 미기록) 별 6종을
+구분한다(**구 전제 — 위 정정 참고, 52db9e4 이후로는 이 구분이
+성립하지 않는다**):
+
+- **서버 원장(reward_ledger) 기록 6종(구 전제)**: word-session, writing,
   daily-goal, streak, wrong-word, exam.
-- **클라이언트 전용 별 6종(서버 미기록)**: mission-clear,
+- **클라이언트 전용 별 6종(서버 미기록, 구 전제)**: mission-clear,
   pronunciation, spelling-combo, daily-mission-bonus,
   sticker-duplicate, matchgame.
 
@@ -474,6 +503,14 @@ NEEDS OPERATOR INPUT — 이 문서에서 임의로 채우지 않는다.
 Town 기능을 함께 켜고 Pilot A를 진행할 경우, 6절 공통 체크리스트에
 아래 항목을 추가로 통과해야 한다:
 
+**플래그 ON 전 사전 확인(신규, 2026-09-11 오후 추가)**: 운영자가 5명
+(예지/Cherry/이동훈/신지율/Lucas) 각각의 `dollar_balances`를
+`production_pilot_student_diagnostic.sql` 3번째 블록으로 먼저
+조회한다 — v3_49 트리거가 2026-09-08부터 라이브였으므로 이미 수백
+PD가 쌓여 있을 수 있다. 이미 수백 PD면 웰컴 20 PD가 무의미하고
+파일럿 첫날 카탈로그 상당 부분을 즉시 구매할 수 있으므로, 가격/
+적립률 조정(아래 옵션 A~D, 9절)을 먼저 결정한 뒤 플래그를 켠다.
+
 | 항목 | 확인 방법 |
 |---|---|
 | welcome 지급 정확히 1회 | 운영자 SQL Editor READ-ONLY: `SELECT student_id, COUNT(*) FROM dollar_ledger WHERE source_type='welcome' GROUP BY student_id HAVING COUNT(*)<>1;` 결과 0행(첫 방문 학생당 정확히 1행) |
@@ -517,3 +554,19 @@ Editor, READ-ONLY 조회 전용) + `scripts/pilotStudentDiag.mjs
     8절 참고).
 12. Pilot B~D(6절/8절)의 실명/반 구성 확정(Pilot A 5명은 이미 확정
     완료).
+13. 이코노미 재조정 옵션 A~D 중 선택(`TOWN_ECONOMY_AUDIT_2026-09-11
+    .md` §0.7 상세, 3절 정정 참고) — **파일럿 A `paulTownV1` 플래그
+    ON 전 결정 권장**:
+    - **옵션 A — 가격 인상(×3~5)**: `town_items.price`만 DB에서
+      조정(예: tree 10→30~50, clock-tower 200→600~1000). 레벨
+      게이트 유지, 코드 배포 불필요.
+    - **옵션 B — 적립률 인하**: 고빈도 유형(pronunciation/
+      mission-clear/spelling-combo 등)의 `dollar_rules
+      .dollars_per_star`를 0 또는 소수로 낮춘다 — 별(⭐, 레벨)
+      적립 속도는 불변, 폴달러 적립만 완화.
+    - **옵션 C — 현행 유지 + 데이터 관찰**: Pilot A 5명의 실제
+      `dollar_balances`(6절 신규 사전 확인)를 먼저 본 뒤 재조정.
+    - **옵션 D — A+B 동시 적용**: 가격 인상과 적립률 인하를 함께
+      적용.
+    네 옵션 모두 이 문서/트랙에서 구현되지 않았다(SQL 데이터 UPDATE
+    후보만 존재, 실행 0건) — 운영자 승인 후 별도 세션에서 적용한다.
