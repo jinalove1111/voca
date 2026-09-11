@@ -23,9 +23,46 @@ const VIEWPORTS = [
   { width: 375, height: 667 },
   { width: 390, height: 844 },
   { width: 412, height: 915 },
+  // TASK 7(2026-09-11) 추가 — 태블릿/데스크톱/가로모드 폰. 콘텐츠가 전부
+  // max-w-lg(TownScreen.jsx/TownGrid.jsx) 안에 갇혀 있어 넓은 뷰포트에서도
+  // 같은 시나리오 흐름을 그대로 재사용할 수 있다(러너 구조 변경 없음).
+  { width: 768, height: 1024 },
+  { width: 1280, height: 800 },
+  { width: 844, height: 390 },
 ]
 
 function vpName(vp) { return `[${vp.width}x${vp.height}]` }
+
+// TASK 7 — 뷰포트 경계 안에 완전히 들어오는지(부분 클리핑 없이) 확인.
+// Playwright boundingBox 좌표는 viewport 기준이라 x/y가 음수거나
+// x+width/y+height가 viewport 크기를 넘으면 화면 밖으로 잘린 것이다.
+function boxInsideViewport(box, vp, { checkY = true } = {}) {
+  if (!box) return false
+  const xOk = box.x >= -0.5 && (box.x + box.width) <= vp.width + 0.5
+  if (!checkY) return xOk
+  return xOk && box.y >= -0.5 && (box.y + box.height) <= vp.height + 0.5
+}
+
+// TASK 7 — 화면에 보이는(크기>0, display/visibility 숨김 아님) <button> 전체의
+// 최소 높이. disabled 버튼(HOME 칸처럼 실제 탭 대상이 아닌 장식용)은
+// 터치 타겟 판정에서 제외한다.
+async function minVisibleButtonHeight(page) {
+  return page.evaluate(() => {
+    const buttons = Array.from(document.querySelectorAll('button'))
+    let min = Infinity
+    let count = 0
+    for (const b of buttons) {
+      if (b.disabled) continue
+      const rect = b.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) continue
+      const style = window.getComputedStyle(b)
+      if (style.visibility === 'hidden' || style.display === 'none') continue
+      count += 1
+      if (rect.height < min) min = rect.height
+    }
+    return { min: Number.isFinite(min) ? min : null, count }
+  })
+}
 
 // student.spec.mjs/mobileViewports.spec.mjs와 동일한 결정론적 폴링 헬퍼 —
 // 새 파일이라 재정의(다른 세션 소유 파일을 import해서 재사용하지 않는다,
@@ -125,6 +162,11 @@ export async function run(browser, baseURL) {
       const dollarTextInit = (await dollarBadge.textContent().catch(() => '')) || ''
       r.check(`${name} TownScreen 헤더 — "💵" 표시`, dollarTextInit.includes('💵'), dollarTextInit)
 
+      // ── TASK 7 — PD(Paul Dollar) 배지가 뷰포트 안에 완전히 들어옴 ────────
+      const dollarBadgeBox = await dollarBadge.boundingBox().catch(() => null)
+      r.check(`${name} TASK7 — PD 잔액 배지가 뷰포트 안에 완전히 표시됨(클리핑 없음)`,
+        boxInsideViewport(dollarBadgeBox, vp), JSON.stringify(dollarBadgeBox))
+
       // ── 폴 이미지 1장만(HeroReaction, img[alt] — welcome 가이드가 뜬 뒤) ──
       // welcome 가이드는 마운트 후 useEffect로 세팅되므로(동기 렌더에는 없음)
       // 이미지가 실제로 나타날 때까지 폴링한다.
@@ -160,10 +202,26 @@ export async function run(browser, baseURL) {
       const dollarTextAfterReload = (await dollarBadge.textContent().catch(() => '')) || ''
       r.check(`${name} 새로고침 후 — 헤더 잔액이 여전히 $20(서버가 잔액을 기억)`, dollarTextAfterReload.includes('20'), dollarTextAfterReload)
 
-      // ── 탭 3개 가로 스크롤 없음 ──────────────────────────────────────────
+      // ── 탭 3개 가로 스크롤 없음 + (TASK 7) 터치 타겟/내 마을 그리드 ───────
       for (const [tabLabel, tabName] of [['🏘 내 마을', 'town'], ['🛒 상점', 'shop'], ['🎁 보관함', 'inventory']]) {
         await page.getByRole('button', { name: tabLabel }).click()
         r.check(`${name} ${tabName} 탭 — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+
+        // TASK 7 — 이 탭에서 보이는(disabled 제외) 버튼 전체의 최소 높이가
+        // >= 40px인지. 실제 최솟값은 항상 detail에 기록(리포트 요구사항).
+        const btnScan = await minVisibleButtonHeight(page)
+        r.check(`${name} ${tabName} 탭 — 보이는 버튼 전체 터치 타겟 높이 >= 40px`,
+          btnScan.min !== null && btnScan.min >= 40, `min=${btnScan.min} count=${btnScan.count}`)
+
+        if (tabName === 'town') {
+          // TASK 7 — 내 마을 그리드가 뷰포트 가로폭 안에 들어오고, HOME
+          // 칸(🏠 My House, 절대 탭 불가/장식)이 표시됨.
+          const gridBox = await page.locator('div.grid.gap-1.rounded-3xl.p-2').first().boundingBox().catch(() => null)
+          r.check(`${name} town 탭 — 내 마을 그리드가 뷰포트 가로폭 안에 들어옴`,
+            boxInsideViewport(gridBox, vp, { checkY: false }), JSON.stringify(gridBox))
+          const homeCellVisible = await page.getByRole('button', { name: 'My House' }).isVisible().catch(() => false)
+          r.check(`${name} town 탭 — HOME 칸(🏠 My House) 표시`, homeCellVisible)
+        }
       }
 
       // ── 상점 탭 — 카테고리/잠금/부족액 ───────────────────────────────────
@@ -178,12 +236,28 @@ export async function run(browser, baseURL) {
       const treeBuyBtn = treeCard.getByRole('button', { name: '구매' })
       const treeBuyBox = await treeBuyBtn.boundingBox().catch(() => null)
       r.check(`${name} 상점 — 나무(tree) 카드 "구매" 버튼 높이 >= 44px`, !!treeBuyBox && treeBuyBox.height >= 44, JSON.stringify(treeBuyBox))
+      // TASK 7 — 상점 사용성: 첫 구매 가능 카드의 "구매" 버튼이 뷰포트
+      // 안에 완전히 들어옴(카테고리 탭도 위에서 이미 클릭·표시로 검증됨).
+      // 스크롤 후 위치를 본다 — 세로로 짧은 랜드스케이프 뷰포트(844x390)
+      // 등에서는 페이지가 세로 스크롤되는 게 정상이라(fixed 오버레이 없음,
+      // TownScreen.jsx 확인), 스크롤 전 fold 밖에 있는 것 자체는 결함이
+      // 아니다 — 스크롤"해도" 잘리는지가 진짜 회귀 신호다.
+      await treeBuyBtn.scrollIntoViewIfNeeded().catch(() => {})
+      const treeBuyBoxScrolled = await treeBuyBtn.boundingBox().catch(() => null)
+      r.check(`${name} TASK7 — 상점 첫 구매 가능 카드 "구매" 버튼이 뷰포트 안에 표시됨(스크롤 후)`,
+        boxInsideViewport(treeBuyBoxScrolled, vp), JSON.stringify(treeBuyBoxScrolled))
 
       const flowerCard = page.locator('div.bg-white.rounded-2xl.card-shadow', { has: page.getByText('꽃밭', { exact: true }) }).first()
       await flowerCard.waitFor({ state: 'visible', timeout: 10000 })
       const flowerText = (await flowerCard.textContent().catch(() => '')) || ''
       r.check(`${name} 상점 — 꽃밭(flower-garden) 카드 잠김(🔒) 표시`, flowerText.includes('🔒'), flowerText)
       r.check(`${name} 상점 — 꽃밭(flower-garden) 카드 "Level 3" 표시`, flowerText.includes('Level 3'), flowerText)
+
+      // ── TASK 7 — 잠금 문구("Level N에서 열려요") 폰트 크기 가독성 ────────
+      const flowerLockedBtn = flowerCard.getByRole('button')
+      const flowerLockedFontSize = await flowerLockedBtn.evaluate((el) => parseFloat(window.getComputedStyle(el).fontSize)).catch(() => 0)
+      r.check(`${name} TASK7 — 잠김 문구("Level N에서 열려요") 폰트 크기 >= 12px`,
+        flowerLockedFontSize >= 12, `fontSize=${flowerLockedFontSize}px`)
 
       // ── 별(⭐) 배지 — 구매 전 텍스트 보관(구매 후 불변 확인용) ──────────
       const lvTextBeforePurchase = (await lvBadge.textContent().catch(() => '')) || ''
@@ -192,6 +266,19 @@ export async function run(browser, baseURL) {
       await treeBuyBtn.click()
       const confirmSheet = page.locator('div.animate-slide-up')
       await confirmSheet.waitFor({ state: 'visible', timeout: 10000 })
+
+      // ── TASK 7 — 패널/시트 닫기: "취소"로 확인 시트가 닫히고, 구매 호출이
+      //     증가하지 않음(닫은 뒤 다시 열어 원래 시나리오를 이어간다). ──────
+      const cancelBtn = page.getByRole('button', { name: '취소' })
+      await cancelBtn.waitFor({ state: 'visible', timeout: 5000 })
+      await cancelBtn.click()
+      const sheetClosedByCancel = await waitUntil(async () => !(await confirmSheet.isVisible().catch(() => false)), { timeout: 5000 })
+      r.check(`${name} TASK7 — 확인 시트 "취소" 클릭 시 닫힘`, !!sheetClosedByCancel)
+      r.check(`${name} TASK7 — "취소" 클릭 후 purchase_town_item(tree) 호출 증가 없음`,
+        !(db._townCalls.purchase_town_item.tree > 0), `count=${db._townCalls.purchase_town_item.tree || 0}`)
+      await treeBuyBtn.click()
+      await confirmSheet.waitFor({ state: 'visible', timeout: 10000 })
+
       const confirmText = (await confirmSheet.textContent().catch(() => '')) || ''
       r.check(`${name} 나무 구매 확인 시트 — 가격 "$10" 표시`, confirmText.includes('$10'), confirmText)
       r.check(`${name} 나무 구매 확인 시트 — 잔여 안내에 "10" 표시(20-10)`, /남는[^0-9]*10/.test(confirmText), confirmText)
@@ -332,7 +419,47 @@ export async function run(browser, baseURL) {
       }
       r.check(`${name} PROXY(200% 폰트) — 상점 탭 가로 스크롤 없음`, shopNoOverflowAtScale)
       r.check(`${name} PROXY(200% 폰트) — "구매" 버튼 텍스트 잘림 없음`, buyBtnClipOk)
+
+      // ── TASK 7 — 200% 폰트 확대를 나머지 두 탭(내 마을/보관함)에도 적용해
+      //     가로 스크롤이 없는지 확인(폰트는 그대로 200% 유지한 채 탭만
+      //     전환 — 기존 상점 탭 검증 방식과 동일한 폰트 배율 재사용). ──────
+      for (const [tabLabel, tabName] of [['🏘 내 마을', 'town'], ['🎁 보관함', 'inventory']]) {
+        await page.getByRole('button', { name: tabLabel }).click()
+        r.check(`${name} PROXY(200% 폰트) — ${tabName} 탭 가로 스크롤 없음`, await noHorizontalOverflow(page))
+      }
       await page.evaluate(() => { document.documentElement.style.fontSize = '' })
+
+      // ── TASK 7 — 뒤로가기(1): 화면 안 "← Paul Town" 버튼 → PaulTown
+      //     화면으로 복귀(진입 카드가 다시 보임). ───────────────────────────
+      await page.getByRole('button', { name: '← Paul Town' }).click()
+      const backToPaulTown = await page.getByText('내 마을 — Welcome to Paul Town')
+        .waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false)
+      r.check(`${name} TASK7 — "← Paul Town" 클릭 시 PaulTown 화면으로 복귀(진입 카드 재표시)`, backToPaulTown)
+
+      // ── TASK 7 — 뒤로가기(2): 브라우저 레벨 goBack(). 이 앱은 client-side
+      //     라우팅(pushState/hash)이 전혀 없다(App.jsx는 순수 React
+      //     useState로 화면을 전환 — src 전역에 pushState/popstate 없음,
+      //     2026-09-11 실측). 따라서 goBack()은 SPA 화면 전환을 되돌리는
+      //     게 아니라 브라우저 세션 히스토리상 이전 문서(이 컨텍스트에서는
+      //     최초 about:blank)로 완전히 이탈하거나, 되돌아갈 이전 문서가
+      //     없으면 아무 일도 하지 않는다 — 둘 다 "정상"이고, 실제 회귀는
+      //     오직 크래시/에러 문구가 뜨는 경우뿐이다. 이 화면이 마지막
+      //     단계라 이후 남은 단언에 영향 없음(re-enter 불필요). ──────────
+      const card5 = await enterTownV1(page)
+      await card5.click()
+      await waitForTownHeader(page)
+      await page.goBack({ waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {})
+      await page.waitForTimeout(300)
+      const afterBackBody = await page.locator('body').innerText().catch(() => '')
+      const afterBackUrl = page.url()
+      const crashed = afterBackBody.includes('문제가 발생했어요')
+      const stillHasAppUi = /이름 입력|Paul Town|Lv\.|시작하기/.test(afterBackBody)
+      const wentBlank = afterBackUrl === 'about:blank' || afterBackBody.trim().length === 0
+      r.check(`${name} TASK7 — 브라우저 뒤로가기(page.goBack) 후 크래시/에러 문구 없음`, !crashed,
+        `url=${afterBackUrl} bodyHead=${JSON.stringify(afterBackBody.slice(0, 200))}`)
+      r.check(`${name} TASK7 — 브라우저 뒤로가기(page.goBack) 실제 동작 문서화(SPA에 client-side 라우팅 없음 — 앱 이탈 또는 무변화 중 하나, 에러만 회귀)`,
+        crashed ? false : (wentBlank || stillHasAppUi),
+        `url=${afterBackUrl} wentBlank=${wentBlank} stillHasAppUi=${stillHasAppUi}`)
     } catch (err) {
       const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
       r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
