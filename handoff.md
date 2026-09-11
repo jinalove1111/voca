@@ -1,7 +1,302 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-11 (125차, Paul Town V1 구현 — feat/paul-town-v1,
-플래그 paulTownV1 OFF, supabase_v3_50_town_v1.sql 미실행, PR 미머지,
-Production WRITE 0. 124차 이하 보존)_
+_최종 갱신: 2026-09-11 (126차, 야간 SAFE 세션 — Paul Town V1 하드닝 +
+45명 확장 준비, 브랜치 `qa/overnight-town-2026-09-11`, PR #32 미머지,
+Production DB WRITE 0/SQL Editor WRITE 0. 125차 이하 보존)_
+
+## 2026-09-11 (126차) — 야간 SAFE 세션: Paul Town V1·45명 확장 준비 (qa/overnight-town-2026-09-11, PR 미머지, Production WRITE 0)
+
+### 0. 안전 요약(최우선 확인)
+
+Production DB WRITE 0 · SQL Editor에서의 실행 0 · `v3_50` 미적용 ·
+학생/보상/별(⭐)/XP/Paul Dollar(💵)/반/교재/단어 데이터 변경 0 · 기능
+플래그 전부 OFF 유지 · Pilot A 미활성화 · welcome 크레딧 지급 0건 · PR
+merge 0(PR #32 미머지) · 배포 0. Supabase 접촉은 anon key READ-ONLY
+조회뿐(사전점검 1회 + baseline 스냅샷 1회 + 진단 스크립트 실측 1회) —
+전부 SELECT/HEAD, INSERT/UPDATE/DELETE/DDL 0.
+
+이 섹션은 상위(리드) 세션이 정리한 작업 로그를 docs-maintainer가
+`handoff.md`/`TESTING.md`/`PROJECT_BOARD.md`/`.ai-status/`에 옮겨 적은
+것이다 — 이번 문서화 세션 자체는 `*.md`/`.ai-status/*.json` 외 어떤
+파일도 Write/Edit하지 않았고, 코드/SQL 내용은 Read/Grep/Glob으로 실제
+파일을 열어 교차 확인한 뒤 기재했다(아래 각 절 인용 경로 참고). 커밋
+해시는 상위 세션이 제공한 값을 그대로 인용했다(이 세션에는 git 실행
+도구가 없어 `git log` 자체 재실행으로 재검증하지 않음 — 인용 커밋이
+가리키는 최종 코드 상태는 파일 열람으로 개별 확인함).
+
+### 1. 브랜치·커밋 이력
+
+브랜치 `qa/overnight-town-2026-09-11`, 커밋 순서(인용):
+
+1. `795bc01` docs: runbook
+2. `dc9fea2` docs: 이코노미 감사 + 자산 스펙
+3. `f78a560` test: welcome exactly-once 87단언
+4. `c920429` test: 구매 stress 68단언
+5. `a2a0bd3` test: 번들 예산 10단언 + 성능 리뷰
+6. `8f7d673` feat: pilot 진단 스크립트 + self-test 6단언
+7. `56c37d8` fix: `townLayout` stale overwrite(P2) + layout stress
+   84단언 + `testTownLayout` 69단언 + registry 5종
+
+별도로 문서 전용 브랜치 PR #32(45명 확장 readiness, 124차)가 패키지
+v3로 갱신·푸시(`67cf268`)됐으나 **미머지** 상태 그대로 유지됐다.
+
+미커밋 운영자용 SQL 2개(이 저장소 관례상 `production_*.sql`은
+커밋하지 않고 운영자에게 직접 전달):
+`production_v3_50_baseline_and_post_verify.sql`(42883 NULL-safe 수정,
+PART 1 PRE BLOCK A/A-2 + PART 2 POST B/B-2/C/C-2/D/E) ·
+`production_pilot_student_diagnostic.sql`(12블록, SELECT only).
+
+### 2. v3_50 적용 준비(T1/T2) — `docs/operations/V3_50_APPLY_RUNBOOK.md`
+
+**T1(SQL 수정 검증)**: `production_v3_50_baseline_and_post_verify.sql`의
+`::regprocedure` 캐스트가 함수 미존재 시 에러로 죽는 문제를
+`to_regprocedure(...)` NULL-safe 패턴으로 교체 — 실행 가능 상태 확인
+(`::regprocedure` 리터럴 잔존 0, write 토큰 0). 이 SQL 자체는 아직 실행
+되지 않았다(READ-ONLY 검증만).
+
+**T2(runbook)**: `docs/operations/V3_50_APPLY_RUNBOOK.md` 신설, A~G
+단계 + 기대 델타(ALTER TABLE 1 · ADD COLUMN 4 · INSERT 1문 16행 ·
+UPDATE 1 · DELETE 0 · 함수 3개 · CONSTRAINT +1 · GRANT/REVOKE 9) +
+`must_not_change` 15개 항목 + 롤백 범위를 명문화. 운영자가 이 문서
+A~C만 실행하고 델타를 육안 대조한 뒤 승인하면 D~E(적용)로 진행하는
+구조.
+
+**Production preflight**(anon key, `--expect post-v3_49`): PASS 9/9,
+`v3_50` 미적용 확인(42703). Baseline 스냅샷(md5로 `%TEMP%/
+v350_pre_apply.json` 저장) — `students` 493 · `classes` 20 ·
+`student_class_assignments` 386 · `textbooks` 11 · `units` 62 ·
+`words` 2175 · `word_status` 3627 · `student_progress` 201(⭐ 합계
+38,019 / XP 합계 37,444) · `xp_ledger` 688(합계 1,790) · `town_items`
+1행. 전부 anon key SELECT/HEAD 조회.
+
+### 3. 마을 이코노미 감사(T3) — `docs/design/TOWN_ECONOMY_AUDIT_2026-09-11.md`
+
+서버 원장(`xp_ledger`/`reward_ledger` 도달 경로) 6종만 Paul
+Dollar(PD)가 실제로 적립됨을 코드 근거로 확인 — word-session-complete
+1PD · writing-complete 2PD · daily-goal-complete 3PD ·
+streak-bonus 2~5PD(3/5/7일 단계) · wrong-word-recovered 1PD/건 ·
+exam-complete 2PD/회. 클라이언트 전용(서버 원장 미도달) 이벤트 6종은
+PD 적립 0(설계상 의도, 결함 아님). 학생별 일일 PD는 typical 6 /
+active 학생 ≈12 / 이론적 max ≈77로 추정. 카탈로그 신규 가격대(10~200
+PD) 기준 목표가 도달 일수 추정: 10PD 1~2일 · 20PD 2~4일 · 30PD 3~5일
+· 50PD 5~9일 · 120PD 10~20일 · 200PD 17~34일. 판정: 저가 3단계(L1~L3)
+BALANCED, L5(120) SLOW, L6~L8(150/200) TOO SLOW.
+
+옵션 A(가격 인하: 120→90/150→110/200→150) · B(`dollar_rules` 적립률
+2배) · C(서버 원장 도달 이벤트 확장) 3안을 제시했으나 **운영자
+결정으로 전부 미적용** — 가격·적립률은 Pilot A 실데이터 확보 후
+재조정하기로 함(가격/SQL/코드 변경 0). Welcome 크레딧 20PD(v3_50
+`grant_town_welcome_credit`)는 위 typical 적립 대비 적당한 액수로
+판정.
+
+### 4. Welcome 크레딧 exactly-once 검증(T4)
+
+`scripts/testTownWelcomeExactlyOnce.mjs`(신규, 87단언) — `v3_50`
+`grant_town_welcome_credit`을 인메모리 시뮬레이션으로 10개 시나리오
+검증: 최초 방문 · 새로고침(같은 토큰 재호출) · 재로그인(새 토큰) ·
+더블클릭(동시 2회 같은 토큰) · 두 탭(동시 2회 다른 토큰) · 두 디바이스
+(지연 스큐 10ms vs 200ms) · 동시 10회 · 네트워크 재시도 · 느린 응답
+도중 재요청 도착 · 타임아웃 재시도. 45명 동시 매트릭스 포함 —
+합계 45행/900PD(45명×20PD), 학생별 정확히 1행, 중복 0, 누락 0.
+`api/grant-xp.js` 핸들러 코드는 무수정(esbuild 그대로 번들). 실제
+`v3_50` SQL은 이 세션 범위 밖(미실행) — 계약 시뮬레이션만.
+
+### 5. 구매 동시성 stress(T5)
+
+`scripts/testTownPurchaseStress45.mjs`(신규, 68단언) —
+`purchase_town_item`(v3_50, 미실행)의 SQL 문장 순서를 인메모리로
+미러링해 5/10/20/45명 동시 학생 규모 스트레스: double-click ·
+same-item×5 · two-items(잔액 초과 조합) · insufficient-race ·
+two-device · locked-probe(레벨 미달) 6개 기법을 4개 동시성 레벨
+전부에서 실행 — neg/double/dup/lost/leak 전부 0, 학생별 최종 잔액
+불변식(시드액 − 소유 아이템 지불합 == 잔액 && ≥0) 위반 0건. 헤더에
+"이 시뮬레이션은 Postgres 트랜잭션/advisory lock 자체를 구동하지 않는
+JS 근사"라고 정직하게 명시.
+
+### 6. 레이아웃 stale overwrite 재현·수정(P2, T6)
+
+`scripts/testTownLayoutIsolationStress45.mjs`(신규, 84단언) — 45명
+배치 격리 stress 도중 두 기기 저장 충돌 시나리오(§6a/§6b: 기기 A가
+아이템을 (5,5)로 이동해 먼저 저장, 기기 B는 오래된 스냅샷(같은
+아이템 (1,1))을 들고 그대로 동기화)를 `mergeTownLayout`
+실제 호출 순서(`useStudent.js` 배선 그대로)로 재현했다.
+
+**재현(규칙 15)**: 수정 전 `mergeTownLayout`은 같은 `placementId`
+충돌 시 시각 비교 없이 항상 local을 우선했고(`moveItem`이 이동 시각을
+전혀 기록하지 않았음), A가 나중에 저장한 최신 좌표(5,5)가 B의 stale
+좌표(1,1)에 덮어써지는 결함이 2건 FAIL로 실측됐다.
+
+**수정**: `src/utils/town/townLayout.js`에 `updatedAt` 필드 추가
+(`placeItem` 생성 시 설정, `moveItem` 이동 성공 시 갱신) +
+`mergeTownLayout` 충돌 해소를 `recency(updatedAt ?? placedAt ?? 0)`
+비교로 교체(동률/양쪽 다 없으면 하위호환으로 local 유지) — LWW
+(last-write-wins) 휴리스틱이며 진짜 CRDT는 아니고, 두 기기의 시스템
+시각이 어긋나는 클럭 스큐 상황의 한계를 파일 헤더에 명시. 수정은
+`townLayout.js` 1개 파일(순수 도메인)에 한정 — `useStudent.js` 등
+배선 코드는 무수정. 이 수정으로 §6a/§6b 포함 84/84, 동명이인·
+새로고침·재로그인·네트워크 재시도 시나리오 전부 PASS.
+
+기존 `scripts/testTownLayout.mjs`도 `updatedAt` 필드 반영으로
+64→69단언으로 확장(실제 카운트: `check(` 호출 69회, 파일 열람으로
+직접 확인).
+
+**관찰(NEEDS DECISION, 코드 무변경)**: `useStudent.js`의
+`isEmptyRecord()`가 `townRemovedIds`/`diaryRemovedIds`만 있는(tombstone
+전용) 레코드를 "빈 레코드"로 오분류해, 그 경우 클라우드 레코드를
+통째로 채택하는 경로로 빠진다 — 기존 `diaryPlacements` 병합에도 이미
+있던 동일한 동작이라 이번 수정 범위 밖으로 문서화만 하고 코드는
+건드리지 않았다.
+
+### 7. E2E 확장 — 터치 타겟 결함 발견, 수정 진행 중(T7)
+
+`tests/e2e/townV1.spec.mjs`(`[town]`)를 태블릿(768×1024) · 데스크톱
+(1280×800) · 가로모드(844×390) 뷰포트 + PD 잔액 배지 · 상점/보관함/
+마을 화면 사용성 · 잠금 안내 텍스트 최소 폰트 12px · 구매 취소
+시트 · 더블탭 방지 · 뒤로가기 · 200% 폰트 확대 3탭 · 터치 타겟 전수
+스캔으로 확장(단언 158→380).
+
+**실측 FAIL 3건**: 360×640/375×667/390×844 좁은 세로 모바일
+뷰포트에서 8×6 마을 격자 셀 실측 폭이 35~39px로 최소 터치 타겟
+40px 미만이었다. 원인은 `src/components/town/TownGrid.jsx`가
+`gridTemplateColumns: repeat(${cols}, minmax(0, 1fr))`로 하한 없이
+등분해, 화면 폭이 좁을수록 셀이 무한정 줄어드는 구조였다(파일 열람으로
+직접 확인 — `minmax(0, 1fr)`에 최소값이 없음).
+
+**수정 방침(P2, 이 문서화 시점 기준 진행 중·미완료)**: `TownGrid`의
+격자 셀에 최소 40px 하한을 주고, 8×6 전체 폭이 뷰포트보다 넓어지는
+경우를 위해 격자 컨테이너에 가로 스크롤을 허용하는 방향으로 조정 중
+— **이 세션(문서화) 시점에 `TownGrid.jsx` 소스를 열람 확인한 결과 해당
+수정은 아직 코드에 반영되지 않았다**(`min-h-[40px]`/`min-w-[40px]`/
+`overflow-x` 등 관련 패턴 0건, 여전히 `minmax(0, 1fr)`만 존재). 즉
+FAIL 3건은 이 문서화 시점에 **미해결 상태**다. 수정 완료 후 재실행
+결과([town] 380/380 등)는 후속 세션이 수신하는 대로 이 절 아래에
+append한다.
+
+**수정 완료(후속 수신, 커밋 `53bce70` fix(town))**: `src/components/
+town/TownGrid.jsx`를 `gridTemplateColumns: repeat(${TOWN_GRID.cols},
+minmax(40px, 1fr))`(60행 부근, 실측 59행)로 교체 + 격자를
+`<div className="overflow-x-auto -mx-2 px-2 pb-16">`(56행) 래퍼로 감싸
+셀 폭이 40px 아래로 줄지 않고 대신 격자 내부에서만 가로 스크롤되도록
+(페이지 자체의 가로 스크롤은 0) 수정 — 셀 터치 타겟 ≥40px 보장.
+`townV1.spec.mjs` 확장(158→380: 태블릿 768×1024·데스크톱 1280×800·
+가로모드 844×390 + PD 잔액 배지·상점/보관함/마을 사용성·잠금 텍스트
+≥12px·취소 시트·더블탭 1회·뒤로가기·200% 폰트 3탭·터치 타겟 스캔)도
+같은 커밋에 포함. 수정 전 FAIL 3건(360/375/390×~ 셀 35~39px) →
+수정 후 0건. `npm run verify:e2e` **635/635 ×3연속**(student 34 ·
+admin 21 · mobile 178 · entrance 12 · **town 380**, 미mock 요청 0).
+`npm run build`도 PASS.
+
+**잔여 관찰(P3, 코드 무변경)**: 마지막 줄(y=5) 액션 스트립 클리핑을
+`pb-16` 여백으로 선제 대응했으나, `[town]` E2E는 (0,0) 좌표 배치만
+검증해 마지막 줄 클리핑 자체를 실측 커버하지 못한다 — 후속 QA에서
+y=5 배치 시나리오 실측 권장(코드 변경 없음, 관찰만).
+
+### 8. 성능(T8) — `docs/design/TOWN_PERFORMANCE_REVIEW_2026-09-11.md`
+
+`scripts/testBundleBudget.mjs`(신규, 10단언) — `dist/` 정적 산출물
+검사(빌드 트리거 없음): `TownScreen`이 `React.lazy`로 분리된 별도
+청크(gzip ≈6.8KB ≤15KB 예산) · 메인 청크 gzip ≈122.6KB ≤135KB 예산 ·
+메인 청크에 `paulTownV1:!1`(플래그 기본 OFF) 리터럴 포함 · 마을
+아이템 이미지 번들 0(전부 이모지 폴백) · "핵심 시작 경로" JS 원본
+합계 ≈1.168MB ≤1.5MB 예산(관리자 전용 PDF/엑셀 라이브러리는 스코프
+제외, 사유 명시). 리뷰 문서 자체의 1.2MB 표기는 오기이며 실제 예산은
+1.5MB로 정정 필요(후속 세션이 문서 정정) — 실측치(1.168MB)는 어느
+기준으로도 PASS.
+
+리뷰에서 P3(코스메틱, 즉시 조치 불요) 2건 발견: `groupByCategory`
+호출부에 `useMemo` 부재, `TownGrid`의 `cellMap` 파생이 렌더마다
+중복 계산됨.
+
+### 9. 마을 자산 스펙(T9) — `docs/design/PAUL_TOWN_ASSET_SPEC.md`
+
+신규 마을 아이템 17종의 `assetKey`/가로세로 비율/px 크기/스타일
+가이드 문서화. Paul 캐릭터 얼굴/디자인은 불변 원칙 명시 + IP(제3자
+캐릭터/브랜드 유사) 가드레일 명문화. 실제 일러스트 자산은 아직
+제작되지 않음(전부 이모지 폴백 유지, 운영자 결정 대기).
+
+### 10. Pilot 학생 진단 스크립트(T10)
+
+`scripts/pilotStudentDiag.mjs`(신규) — 운영자가 학생 UUID 1개를
+입력하면 보상/Town 관련 상태를 한 번에 조회하는 CLI. anon key
+GET/HEAD 전용, RPC 호출 0, PIN 컬럼(`pin_hash` 등)은 select 목록에
+아예 포함하지 않음(CLAUDE.md 규칙 11). `--self-test` 모드(픽스처
+기반 순수 포맷터 검증) 18단언을 `scripts/testPilotStudentDiag.mjs`
+(신규, 6단언 — 자식 프로세스로 CLI를 직접 구동해 exit 0 + PASS 라인
+정확히 18개 + FAIL 0 + Supabase 자격증명을 지운 환경에서도 통과하는지
+확인)가 감싼다. `production_pilot_student_diagnostic.sql`(12블록,
+SELECT only, service_role 권한 필요 테이블은 CLI가 볼 수 없다는 사실
+자체를 출력에 명시)도 함께 준비.
+
+**실측 1회**(anon key, READ-ONLY) — 학생 Yaeji(`1c585815…`): ⭐ 1781
+· XP 1781 · `xp_ledger` 합계 116 · `word_status` 8행 · 최근 입실시험
+5건(예: 20/20) · `townPlacements` 0건(아직 마을 미사용) ·
+`reward_ledger`/`dollar_ledger`/`town_purchases`/`star_purchases`
+(service_role 전용 4테이블)는 예상대로 401 거부.
+
+### 11. 회귀 확인(T11)
+
+PR #29/#30/#31/#33 관련 스위트 전부 PASS(RewardFeedback 10 ·
+WritingComplete 8 · QuizGameOptions/Spelling/EntranceDiag 30 ·
+SpeakingPath 90). `paulTownV1` 플래그 OFF 경로 E2E 대조도 PASS(town
+화면/네비게이션 미노출 유지). `npm run build` PASS · `npm run
+verify:e2e` **635/635 ×3연속**(§7 후속 수신 참고, TownGrid 터치 타겟
+수정 포함 커밋 `53bce70` 기준). **`npm run verify:all` 전체 실행
+결과는 이 문서화 시점까지 아직 수신하지 못했다** — 수신하는 대로
+후속 세션이 §16에 append한다.
+
+### 12. PR #32 갱신(T12)
+
+45명 확장 readiness 문서 브랜치 PR #32의 패키지를 v3로 갱신하고
+푸시(`67cf268`) — **머지되지 않은 상태 그대로 유지**.
+
+### 13. 이번 세션 코드 수정 요약(T13)
+
+1. `src/utils/town/townLayout.js` — 배치 stale overwrite(P2) 수정
+   완료(§6 참고).
+2. `src/components/town/TownGrid.jsx` — 터치 타겟 40px 미만(P2) 수정
+   **완료**(커밋 `53bce70`, §7 후속 수신 참고 — 56/59행).
+
+### 14. NEEDS DECISION(운영자)
+
+- 가격표/적립률 조정 시점 — Pilot A 실데이터 확보 후로 보류.
+- 마을 일러스트 자산 실제 제작(현재 전부 이모지 폴백).
+- `useStudent.js` `isEmptyRecord()`의 tombstone-only 레코드 오분류
+  처리 여부(§6 관찰).
+- `supabase_v3_50_town_v1.sql` 적용 시점(운영자 승인 필요, 순서는
+  `docs/operations/V3_50_APPLY_RUNBOOK.md` A~G).
+- 서버 env `TOWN_V1_WELCOME_ENABLED` 설정 시점.
+- 기능 플래그 `paulTownV1` ON 범위(Pilot A부터인지 등).
+- 성능 리뷰 P3 2건(§8) 처리 여부.
+
+### 15. 내일 아침 작업 순서(우선순위 1~3)
+
+1. `docs/operations/V3_50_APPLY_RUNBOOK.md` A~C 단계 실행(BLOCK A
+   실행·결과 저장) → 운영자 검토 → 승인.
+2. 승인 시 `supabase_v3_50_town_v1.sql` 1회 적용(운영자, Supabase
+   SQL Editor) → BLOCK B~E(post-verify) → PASS 판정.
+3. 서버 env `TOWN_V1_WELCOME_ENABLED=1` 설정 → Pilot A 학생 5명
+   기기에서만 `paulTownV1` 플래그 ON → 진단 SQL로 welcome 1행 지급
+   확인.
+
+### 16. `npm run verify:all` 결과 — 로컬 verify:all: 비-E2E ALL PASS · E2E는 단독 635/635 · verify:all 내 E2E는 메모리 킬(ENVIRONMENT) · CI로 최종 확인
+
+`TownGrid.jsx` 터치 타겟 40px 수정(커밋 `53bce70`) 완료 + `npm run
+build` PASS + `npm run verify:e2e` 635/635 ×3(town 380 포함)까지는
+§7/§11에 수신·반영 완료.
+
+같은 HEAD `53bce70`에서 로컬 `npm run verify:all` 실행 결과 수신 —
+비-E2E 도메인은 전부 PASS, FAIL 줄은 `testBrowserE2E` 1건만이다.
+원인은 `verify:all` 내부에서 구동되는 Playwright(E2E) 하위 프로세스가
+**로컬 메모리 부족으로 exit code 3221225794(Windows OOM/강제 종료
+코드)로 킬**된 것이며, 재시도 1회도 동일 원인으로 재현됐다. 같은
+HEAD를 대상으로 `verify:e2e`를 **단독 실행**하면 635/635 ×3연속
+PASS(에이전트 실측, §7/§11 참고)이므로 코드 회귀가 아니라 로컬
+환경(메모리 리소스) 분류다 — `verify:all`이 다른 모든 도메인을
+이미 구동한 뒤 이어서 E2E까지 같은 프로세스 예산 안에서 돌리다 보니
+로컬 머신에서만 메모리가 부족해진 것으로 판단된다.
+
+**최종 판정은 CI Release Gate(Gate 2 `verify:all` + Gate 5 e2e)에서
+확인 예정** — 로컬 결과만으로 PASS/FAIL을 확정하지 않는다. 임의
+수치를 기재하지 않고 CI 결과 수신 후 이 섹션에 이어서 append한다.
 
 ## 2026-09-11 (125차) — Paul Town V1 구현(feat/paul-town-v1, 플래그 OFF, v3_50 미실행, PR 미머지)
 

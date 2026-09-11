@@ -1,0 +1,96 @@
+{
+  "agent_name": "lead-overnight-town-2026-09-11",
+  "role": "야간 SAFE 세션 — Paul Town V1 하드닝(결함 재현/수정) + 45명 확장 준비 + v3_50 apply 패키지 + Pilot A 진단 스크립트",
+  "task_id": "overnight-town-2026-09-11",
+  "status": "completed",
+  "progress": 98,
+  "started_at": "2026-09-11T00:00:00Z",
+  "updated_at": "2026-09-11T00:00:00Z",
+  "branch": "qa/overnight-town-2026-09-11",
+  "base": "feat/paul-town-v1(125차 결과물)",
+  "commits_so_far": [
+    "795bc01 docs: runbook",
+    "dc9fea2 docs: 이코노미 감사 + 자산 스펙",
+    "f78a560 test: welcome exactly-once 87단언",
+    "c920429 test: 구매 stress 68단언",
+    "a2a0bd3 test: 번들 예산 10단언 + 성능 리뷰",
+    "8f7d673 feat: pilot 진단 스크립트 + self-test 6단언",
+    "56c37d8 fix: townLayout stale overwrite(P2) + layout stress 84단언 + testTownLayout 69단언 + registry 5종",
+    "53bce70 fix(town): TownGrid.jsx 터치 타겟 40px 미만(P2) 수정 + townV1.spec 158→380 확장"
+  ],
+  "commit_hash_provenance": "위 해시는 상위(리드) 세션이 제공한 값을 그대로 인용 — 이 문서화 세션에는 git 실행 도구가 없어 git log로 자체 재검증하지 않음. 각 커밋이 가리키는 최종 코드 상태(townLayout.js updatedAt, testTownLayout.mjs 69단언, TownGrid.jsx 미수정 등)는 Read/Grep로 파일을 직접 열어 개별 확인함.",
+  "pr_status": {
+    "pr_32": "45명 확장 readiness 문서(124차) 패키지 v3로 갱신·푸시(67cf268) — 미머지",
+    "new_pr_for_this_branch": "없음(작성 시점 기준 미생성)"
+  },
+  "production_safety": {
+    "db_write": 0,
+    "sql_editor_execution": 0,
+    "v3_50_applied": false,
+    "student_reward_star_xp_pd_class_textbook_word_changes": 0,
+    "feature_flags_changed": 0,
+    "pilot_a_activated": false,
+    "welcome_credits_granted": 0,
+    "pr_merges": 0,
+    "deploys": 0,
+    "supabase_access_mode": "anon key READ-ONLY(SELECT/HEAD)만 — preflight 1회 + baseline 스냅샷 1회 + pilotStudentDiag.mjs 실측 1회"
+  },
+  "task_results": {
+    "T1_v3_50_sql_fix": "production_v3_50_baseline_and_post_verify.sql 42883 ::regprocedure NULL-safe(to_regprocedure) 수정 — 실행 가능 확인, write 토큰 0. SQL 자체는 미실행.",
+    "T2_runbook": "docs/operations/V3_50_APPLY_RUNBOOK.md 신설(A~G, 기대 델타 ALTER 1/ADD COLUMN 4/INSERT 16행/UPDATE 1/DELETE 0/함수 3/CONSTRAINT +1/GRANT·REVOKE 9, must_not_change 15항목, 롤백 범위) + Production preflight PASS 9/9(v3_50 미적용, 42703) + baseline 스냅샷(students 493/classes 20/SCA 386/textbooks 11/units 62/words 2175/word_status 3627/student_progress 201(⭐38019/XP37444)/xp_ledger 688(합1790)/town_items 1, md5 저장) 전부 anon READ-ONLY.",
+    "T3_economy_audit": "docs/design/TOWN_ECONOMY_AUDIT_2026-09-11.md — 서버 원장 도달 6종만 PD 적립, 일일 typical 6/active~12/max~77, 목표가 도달일 추정(10PD 1~2일 ~ 200PD 17~34일), 판정 L1~L3 BALANCED/L5 SLOW/L6~L8 TOO SLOW, 옵션 A/B/C 제시했으나 운영자 결정으로 전부 미적용(Pilot A 데이터 후 재조정). welcome 20PD 적당 판정.",
+    "T4_welcome_exactly_once": "scripts/testTownWelcomeExactlyOnce.mjs 87/87, 10 시나리오 + 45명 매트릭스(45행/900PD, 중복 0, 누락 0).",
+    "T5_purchase_stress": "scripts/testTownPurchaseStress45.mjs 68/68, 5/10/20/45명 x 6기법(double-click/same-item x5/two-items/insufficient-race/two-device/locked-probe), neg/double/dup/lost/leak 전부 0.",
+    "T6_layout_stale_overwrite": "scripts/testTownLayoutIsolationStress45.mjs 84/84 — 규칙15: 수정 전 §6a/6b 2건 FAIL 실측(placementId 충돌 시 local 항상 우선하던 결함) 후 src/utils/town/townLayout.js에 updatedAt 필드 + recency(updatedAt ?? placedAt ?? 0) 비교로 수정, PASS 전환. testTownLayout.mjs도 64→69단언 확장(check() 호출 수로 직접 확인). NEEDS DECISION(무수정): useStudent.js isEmptyRecord()가 tombstone-only 레코드를 빈 레코드로 오분류.",
+    "T7_e2e_expansion": "tests/e2e/townV1.spec.mjs [town] 158→380단언(태블릿 768x1024/데스크톱 1280x800/가로모드 844x390 + PD 배지/상점·보관함·마을 사용성/잠금 텍스트>=12px/취소 시트/더블탭 1회/뒤로가기/200% 3탭/터치 타겟 전수 스캔). 실측 FAIL 3건(수정 전): 360/375/390px 세로 모바일에서 8x6 격자 셀 35~39px(<40px). 원인 src/components/town/TownGrid.jsx의 gridTemplateColumns repeat(n, minmax(0, 1fr)) 하한 없음. **수정 완료(커밋 53bce70)**: gridTemplateColumns repeat(n, minmax(40px, 1fr))(59행) + overflow-x-auto -mx-2 px-2 pb-16 래퍼(56행, 격자 내부만 가로 스크롤/페이지 가로 스크롤 0) — FAIL 3건 → 0건. npm run build PASS, npm run verify:e2e 635/635 x3연속(student 34/admin 21/mobile 178/entrance 12/town 380, 미mock 요청 0). 잔여 관찰(P3, 무수정): 마지막 줄(y=5) 액션 스트립 클리핑은 pb-16으로 선제 대응했으나 E2E는 (0,0) 배치만 검증 — 후속 QA 권장.",
+    "T8_performance": "scripts/testBundleBudget.mjs 10/10(main gzip 122.6KB<=135, TownScreen 6.8KB<=15 lazy, paulTownV1 OFF 리터럴, town 이미지 0, core raw 1.168MB<=1.5MB). docs/design/TOWN_PERFORMANCE_REVIEW_2026-09-11.md — P3 2건(groupByCategory useMemo 부재, TownGrid cellMap 중복), 문서 내 1.2MB 표기는 1.5MB로 후속 정정 필요.",
+    "T9_asset_spec": "docs/design/PAUL_TOWN_ASSET_SPEC.md — 17종 assetKey/비율/px/스타일, Paul 얼굴 불변 원칙, IP 가드레일. 실제 일러스트 미제작.",
+    "T10_pilot_diagnostic": "scripts/pilotStudentDiag.mjs(anon READ-ONLY, PIN 컬럼 미조회) + --self-test 18단언 + scripts/testPilotStudentDiag.mjs 6단언(CLI 구동 래퍼) + production_pilot_student_diagnostic.sql(12블록). 실측 1회: 학생 Yaeji(1c585815...) ⭐1781/XP1781/xp_ledger합116/word_status 8행/입실시험 최근5/townPlacements 0, service_role 전용 4테이블 401 확인.",
+    "T11_regression": "PR #29/#30/#31/#33 관련 스위트 PASS(RewardFeedback 10/WritingComplete 8/QuizGameOptions·Spelling·EntranceDiag 30/SpeakingPath 90), paulTownV1 OFF 경로 E2E 대조 PASS. npm run build PASS, npm run verify:e2e 635/635 x3(town 380 포함). npm run verify:all 전체 실행 결과만 이 체크포인트 시점까지 미수신.",
+    "T12_pr32_update": "PR #32 패키지 v3 갱신·푸시(67cf268), 미머지.",
+    "T13_code_fixes": "1) src/utils/town/townLayout.js stale overwrite(P2) 수정 완료. 2) src/components/town/TownGrid.jsx 터치 타겟 40px 미만(P2) 수정 완료(커밋 53bce70, 56/59행 — minmax(40px,1fr) + overflow-x-auto pb-16 래퍼)."
+  },
+  "verification": {
+    "build": "npm run build PASS(HEAD 53bce70)",
+    "verify_e2e_standalone": "635/635 x3연속(student 34/admin 21/mobile 178/entrance 12/town 380, 미mock 요청 0)",
+    "verify_all_local": "동일 HEAD 53bce70 로컬 실행 — 비-E2E 도메인 전부 PASS, FAIL 줄은 testBrowserE2E 1건만. 원인: verify:all 내부 Playwright 하위 프로세스가 로컬 메모리 부족으로 exit code 3221225794(Windows 강제 종료)로 킬됨, 재시도 1회도 동일 원인 재현. 같은 HEAD에서 verify:e2e 단독 실행은 635/635 PASS라 회귀 신호 아님 — ENVIRONMENT(로컬 메모리 리소스) 분류.",
+    "final_verdict": "CI Release Gate(Gate 2 verify:all + Gate 5 e2e)에서 최종 확인 예정 — 로컬 결과만으로 PASS/FAIL 확정하지 않음."
+  },
+  "decisions_needed": [
+    "가격표/적립률 조정 시점(Pilot A 데이터 확보 후로 보류 상태)",
+    "마을 일러스트 자산 실제 제작(현재 전부 이모지 폴백)",
+    "useStudent.js isEmptyRecord()의 tombstone-only 레코드 오분류 처리 여부",
+    "supabase_v3_50_town_v1.sql 적용 시점(운영자 승인, 순서는 V3_50_APPLY_RUNBOOK.md A~G)",
+    "서버 env TOWN_V1_WELCOME_ENABLED 설정 시점",
+    "기능 플래그 paulTownV1 ON 범위(Pilot A 기기부터인지 등)",
+    "성능 리뷰 P3 2건(groupByCategory useMemo, TownGrid cellMap 중복) 처리 여부"
+  ],
+  "files_owned": [
+    "handoff.md",
+    "TESTING.md",
+    "PROJECT_BOARD.md",
+    ".ai-status/lead-overnight-town-2026-09-11.json"
+  ],
+  "files_read": [
+    "handoff.md",
+    "TESTING.md",
+    "PROJECT_BOARD.md",
+    ".ai-status/lead-paul-town-v1-2026-09-11.json",
+    ".ai-status/README.md",
+    "CLAUDE.md",
+    "tests/harness/registry.mjs",
+    "scripts/testTownLayout.mjs",
+    "src/utils/town/townLayout.js",
+    "src/components/town/TownGrid.jsx",
+    "docs/operations/V3_50_APPLY_RUNBOOK.md",
+    "docs/design/TOWN_ECONOMY_AUDIT_2026-09-11.md",
+    "docs/design/TOWN_PERFORMANCE_REVIEW_2026-09-11.md",
+    "docs/design/PAUL_TOWN_ASSET_SPEC.md",
+    "scripts/pilotStudentDiag.mjs",
+    "production_v3_50_baseline_and_post_verify.sql",
+    "production_pilot_student_diagnostic.sql",
+    "tests/e2e/townV1.spec.mjs"
+  ],
+  "blocker": null,
+  "next_action": "1) CI Release Gate(Gate 2 verify:all + Gate 5 e2e)에서 testBrowserE2E ENVIRONMENT 킬(로컬 메모리 부족) 여부와 무관하게 최종 PASS/FAIL 확정 -> 결과를 handoff.md 126차 §16 + TESTING.md 126차 섹션에 append(docs-maintainer, 남은 유일한 미수신 항목). 2) 운영자: docs/operations/V3_50_APPLY_RUNBOOK.md A~C 실행/검토/승인 -> 승인 시 supabase_v3_50_town_v1.sql 1회 적용 -> BLOCK B~E post-verify -> PASS 판정. 3) 승인 후 서버 env TOWN_V1_WELCOME_ENABLED=1 -> Pilot A 5명 기기 paulTownV1 플래그 ON -> 진단 SQL로 welcome 1행 확인. 4) 후속 QA 권장: TownGrid y=5(마지막 줄) 배치 시나리오 실측(P3 관찰, pb-16 클리핑 대응 검증). qa-reviewer/security-reviewer 코드 리뷰 미착수(대기)."
+}
