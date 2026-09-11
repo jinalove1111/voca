@@ -48,10 +48,16 @@ export default function TownGrid({ placements, itemById, mode, onCellTap, onStar
 
   return (
     <div className="max-w-lg mx-auto">
-      <div
-        className="grid gap-1 rounded-3xl p-2 border-2 border-[#1e2a5a]/20 bg-gradient-to-b from-[#fdebd0] via-[#f6e3c8] to-[#cfe3c0]"
-        style={{ gridTemplateColumns: `repeat(${TOWN_GRID.cols}, minmax(0, 1fr))` }}
-      >
+      {/* 2026-09-11 터치 타겟 40px 보장 — 8칸을 각각 40px 이상으로 확보하면
+          360~390px 폭 화면에서는 그리드가 뷰포트보다 넓어진다. 페이지 전체가
+          가로로 밀리지 않도록 이 wrapper 안에서만 가로 스크롤되게 하고(모바일
+          규칙: 넓은 콘텐츠는 자기 컨테이너 안에서 스크롤), 마지막 줄의 이동/
+          보관 액션 스트립이 잘리지 않도록 아래 여백(pb-16)을 넉넉히 둔다. */}
+      <div className="overflow-x-auto -mx-2 px-2 pb-16">
+        <div
+          className="grid gap-1 rounded-3xl p-2 border-2 border-[#1e2a5a]/20 bg-gradient-to-b from-[#fdebd0] via-[#f6e3c8] to-[#cfe3c0]"
+          style={{ gridTemplateColumns: `repeat(${TOWN_GRID.cols}, minmax(40px, 1fr))` }}
+        >
         {cells.map(({ x, y }) => {
           const home = isHomeCell(x, y)
           const placed = !home ? byCell[`${x},${y}`] : null
@@ -110,6 +116,7 @@ export default function TownGrid({ placements, itemById, mode, onCellTap, onStar
             </div>
           )
         })}
+        </div>
       </div>
       <p className="text-center text-xs text-gray-400 mt-2">🏠 My House · 아이템을 눌러 이동하거나 보관해요</p>
     </div>

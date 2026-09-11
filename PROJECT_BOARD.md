@@ -615,6 +615,38 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
 
 ## VERIFY
 
+### [P1] 야간 SAFE 세션 2026-09-11 — Town V1 하드닝·v3_50 apply 패키지·Pilot A 진단 (126차), PR 대기
+- 근거: `handoff.md` 2026-09-11(126차), `TESTING.md` 2026-09-11(126차),
+  `docs/operations/V3_50_APPLY_RUNBOOK.md`,
+  `docs/design/TOWN_ECONOMY_AUDIT_2026-09-11.md`.
+- 내용: 브랜치 `qa/overnight-town-2026-09-11`(base 125차 `feat/
+  paul-town-v1` 결과물) — 신규 스위트 6종(레이아웃 격리 stress 45명
+  84단언 · welcome exactly-once 87단언 · 구매 stress 45명 68단언 ·
+  번들 예산 10단언 · pilot 진단 self-test 6단언 + `testTownLayout`
+  64→69단언 확장) + `[town]` E2E 158→380단언 확장. 이코노미 감사(PD
+  적립·목표가 도달 일수)·성능 리뷰·자산 스펙 3개 설계 문서 신설.
+  Production DB WRITE 0, SQL Editor 실행 0, anon key READ-ONLY 조회만.
+- 결함 발견·수정: (1) 마을 배치 두 기기 저장 충돌(stale overwrite,
+  P2) — 규칙 15대로 FAIL 2건 재현 후 `townLayout.js`에 `updatedAt`/
+  recency LWW 비교로 **수정 완료**. (2) 8×6 마을 격자 셀이 좁은 세로
+  모바일에서 35~39px로 최소 터치 타겟 40px 미달(P2, `TownGrid.jsx`
+  `minmax(0, 1fr)` 하한 없음) — **수정 착수했으나 이 카드 작성 시점
+  기준 미완료**, `[town]` E2E FAIL 3건 미해결.
+- v3_50 적용 준비: `production_v3_50_baseline_and_post_verify.sql`
+  42883 캐스트 NULL-safe 수정 + `docs/operations/
+  V3_50_APPLY_RUNBOOK.md`(A~G 단계, 기대 델타·`must_not_change` 15항목
+  명문화) + Production preflight PASS 9/9 + baseline 스냅샷 확보(전부
+  READ-ONLY, `v3_50` 미적용 상태 확인).
+- 미수신(검수 대기): `TownGrid.jsx` 터치 타겟 수정 완료 후 `[town]`
+  E2E 재실행 결과, `npm run build`/`npm run verify:all` 전체 실행
+  결과 — 수신 후 `handoff.md` 126차 §16에 append 예정. qa-reviewer/
+  security-reviewer 코드 리뷰 미착수.
+- 운영자 결정 7건: 가격표/적립률 조정 시점(Pilot A 후로 보류 상태),
+  마을 일러스트 자산 제작, `isEmptyRecord()` tombstone-only 레코드
+  오분류 처리 여부, `supabase_v3_50_town_v1.sql` 적용 시점, 서버 env
+  `TOWN_V1_WELCOME_ENABLED` 설정 시점, 플래그 `paulTownV1` ON 범위,
+  성능 리뷰 P3 2건 처리 여부.
+
 ### [P2] Paul Town V1 — feat/paul-town-v1, 플래그 OFF, v3_50 미실행, PR 대기 (125차)
 - 근거: `handoff.md` 2026-09-11(125차), `docs/design/PAUL_TOWN_V1.md`.
 - 내용: 기존 Paul Town 별 상점(`townShopV1`, 램프 1개)을 마을 상점

@@ -1251,3 +1251,55 @@ OFF, `supabase_v3_50_town_v1.sql` 미실행, PR 미머지. 설계 전문:
   UUID 검증이 비-UUID를 레거시 세션으로 판정해 reload마다 로그아웃시키던
   픽스처 전제 위반이었고 앱 결함은 아님) · `npm run verify:all` **ALL
   DOMAINS PASS**, FAIL 줄 0(extra 포함), registry coverage PASS.
+
+## 관련 항목: 야간 SAFE 세션 Town/45명 스위트 6종 + E2E 확장 (2026-09-11, 126차)
+
+_append. 브랜치 `qa/overnight-town-2026-09-11`(base `feat/paul-town-v1`
+125차 결과물 위), `paulTownV1`/`townShopV1` 등 기능 플래그 전부 OFF
+유지, `supabase_v3_50_town_v1.sql` 미실행, PR #32(문서) 갱신·푸시
+(`67cf268`)만 하고 미머지. Production DB WRITE 0, SQL Editor 실행 0,
+anon key READ-ONLY 조회만(사전점검+baseline 스냅샷+진단 스크립트 실측
+각 1회). 상세: `handoff.md` 2026-09-11(126차)._
+
+| script | 단언 | FAIL-first | 도메인/extra |
+|---|---|---|---|
+| `scripts/testTownLayoutIsolationStress45.mjs`(신규, builders: race) | 84 | **예** — §6a/6b 두 기기 저장 충돌(stale overwrite) 2건 FAIL 실측 후 `townLayout.js`에 `updatedAt`/recency 비교 추가해 PASS 전환(규칙 15) | town/race, `extra:false` |
+| `scripts/testTownLayout.mjs`(확장) | 64→69 | 아니오(순수 도메인, `updatedAt` 필드 반영 확장 — `check(` 호출 수 직접 카운트로 69 확인) | town, `extra:false` |
+| `scripts/testTownWelcomeExactlyOnce.mjs`(신규) | 87 | 아니오 | town/server, `extra:false` |
+| `scripts/testTownPurchaseStress45.mjs`(신규) | 68 | 아니오 | town/reward stress, `extra:false` |
+| `scripts/testBundleBudget.mjs`(신규) | 10 | 아니오 | perf, `extra:false` |
+| `scripts/testPilotStudentDiag.mjs`(신규, wraps `scripts/pilotStudentDiag.mjs --self-test`) | 6(CLI 자체 `--self-test`는 18단언) | 아니오 | ops 진단, `extra:true`(13개 필수 도메인 밖 보너스 커버리지) |
+| `tests/e2e/townV1.spec.mjs`(`[town]`, 확장) | 158→380 | **예 → 해결** — 태블릿/데스크톱/가로모드 뷰포트 + PD 배지·상점/보관함/마을 사용성·잠금 텍스트 ≥12px·취소 시트·더블탭 1회·뒤로가기·200% 3탭·터치 타겟 전수 스캔 확장 중 좁은 세로 모바일(360/375/390×~) 8×6 격자 셀 실측 35~39px(<40px 최소 터치 타겟) FAIL 3건 실측(`src/components/town/TownGrid.jsx`의 `gridTemplateColumns: repeat(n, minmax(0, 1fr))`에 하한 없음이 원인) → 커밋 `53bce70`(`gridTemplateColumns: repeat(n, minmax(40px, 1fr))` 59행 + `overflow-x-auto -mx-2 px-2 pb-16` 래퍼 56행, 격자 내부만 가로 스크롤/페이지 가로 스크롤 0)로 수정 후 FAIL 0 | e2e `[town]` |
+
+- 지원 문서(테스트 아님, 이 세션에서 신설/갱신): `docs/operations/
+  V3_50_APPLY_RUNBOOK.md`(v3_50 적용 절차 A~G) ·
+  `docs/design/TOWN_ECONOMY_AUDIT_2026-09-11.md`(PD 적립·목표가 도달
+  일수 감사, 가격/적립률 조정 옵션 A/B/C 전부 미적용) ·
+  `docs/design/TOWN_PERFORMANCE_REVIEW_2026-09-11.md`(P3 2건, 문서
+  자체 1.2MB 표기는 1.5MB로 후속 정정 필요) ·
+  `docs/design/PAUL_TOWN_ASSET_SPEC.md`(자산 17종 스펙, 실제 일러스트
+  미제작).
+- 무회귀 확인: PR #29/#30/#31/#33 관련 스위트(RewardFeedback 10 ·
+  WritingComplete 8 · QuizGameOptions/Spelling/EntranceDiag 30 ·
+  SpeakingPath 90) 전부 PASS, `paulTownV1` OFF 경로 E2E 대조 PASS.
+- **검증 결과 수신(커밋 `53bce70` = TownGrid 터치 타겟 수정 + townV1.spec
+  확장 포함)**: `npm run build` PASS · `npm run verify:e2e` **635/635
+  ×3연속**(student 34 · admin 21 · mobile 178 · entrance 12 ·
+  **town 380**, 미mock 요청 0).
+- 잔여 관찰(P3, 코드 무변경): 마지막 줄(y=5) 액션 스트립 클리핑을
+  `pb-16` 여백으로 선제 대응했으나 `[town]` E2E는 (0,0) 좌표 배치만
+  검증해 y=5 클리핑 자체는 실측 커버하지 못함 — 후속 QA 권장.
+- **`npm run verify:all`(로컬, HEAD `53bce70`) 결과 수신**: 비-E2E
+  도메인 전부 PASS, FAIL 줄은 `testBrowserE2E` 1건만 — `verify:all`
+  내부에서 구동되는 Playwright 하위 프로세스가 로컬 메모리 부족으로
+  exit code 3221225794(Windows 강제 종료)로 킬됨(재시도 1회도 동일
+  원인 재현). 같은 HEAD에서 `verify:e2e`를 단독 실행하면 635/635
+  ×3연속 PASS(위 표 참고)이므로 회귀 신호가 아니라 로컬 환경
+  (ENVIRONMENT, 메모리 리소스) 분류로 판정 — 최종 확정은 CI Release
+  Gate(Gate 2 `verify:all` + Gate 5 e2e)에서 한다. 상세:
+  `handoff.md` 2026-09-11(126차) §16.
+- Production 사전점검(anon key, `--expect post-v3_49`) PASS 9/9,
+  `v3_50` 미적용(42703) 확인 + baseline 스냅샷 md5 저장(students 493 ·
+  classes 20 · SCA 386 · textbooks 11 · units 62 · words 2175 ·
+  word_status 3627 · student_progress 201(⭐38,019/XP 37,444) ·
+  xp_ledger 688(합계 1,790) · town_items 1) — 전부 READ-ONLY.
