@@ -2,12 +2,22 @@
   "agent_name": "lead-p1-pronunciation-2026-09-12",
   "role": "pronunciation-unidentified P1 비멱등 키 수정 + v3_50 POST verify 운영자 패키지 정리 + 이코노미 OPTION C 확정 문서화",
   "task_id": "p1-pronunciation-unidentified-2026-09-12",
-  "status": "in_progress",
-  "progress": 80,
+  "status": "completed",
+  "progress": 100,
   "started_at": "2026-09-12T00:00:00Z",
-  "updated_at": "2026-09-12T00:00:00Z",
+  "updated_at": "2026-09-11T16:30:00Z",
   "branch": "qa/town-loop-hardening-2026-09-11",
   "base": "127차 결과물 위",
+  "commits_so_far": [
+    "d55d6e5 fix(reward): pronunciation-unidentified P1 — wordId 미상 발음 별을 결정적 dedupKey로 학생·단어텍스트·일자당 1회 고정 (6 files: useStudent.js/WordDetail.jsx/QuizGame.jsx/testPronunciationRewardOnce.mjs 54→70/testRewardFeedbackContracts.mjs 정적 정규식 2번째 인자 허용/registry.mjs)",
+    "55ded76 docs(handoff): 128차 — 128차 handoff/TESTING/PROJECT_BOARD append + 체크포인트"
+  ],
+  "pr_status": {
+    "pr_36_head": "55ded76",
+    "pr_36_mergeable": true,
+    "pr_36_merged": false,
+    "pushed_to_origin": true
+  },
   "production_safety": {
     "db_write_this_session": 0,
     "sql_editor_execution_this_session": 0,
@@ -20,13 +30,16 @@
     "welcome_credits_granted": 0,
     "pr_merges": 0,
     "deploys": 0,
+    "deploys_note": "Vercel preview only, no production promotion",
     "town_flag_state": "OFF (paulTownV1 미변경)"
   },
   "task_results": {
     "p1_pronunciation_unidentified_fix": "CLOSED — src/hooks/useStudent.js markPronunciationOk(wordId, wordText) 시그니처 확장, wordId null 시 `pronunciation-unidentified:${token}:${todayStr()}` 결정적 키(token=wordText trim/lowercase/공백->'_', 빈 값 'unknown'). 식별 경로(pronunciation:${wordId}:${today})는 무변경. 호출부 갱신: src/components/WordDetail.jsx(onMarkPronunciationOk?.(word.dbId, word.word)), src/components/QuizGame.jsx handlePronSuccess(current?.word?.dbId, current?.word?.word). 비식별 경로는 여전히 서버 미전송(parseLegacyDedupKey null 그대로, 의도적, PD 영향 없음). 보상 금액/CAP/rewardEngine.js/api/ 전부 무변경.",
     "test_update": "scripts/testPronunciationRewardOnce.mjs scenario 8 재작성(KNOWN GAP 라벨 제거) — 54 -> 70단언, 70/70 PASS. tests/harness/registry.mjs 노트 갱신(extra:false 유지).",
     "v3_50_post_verify_package": "production_v3_50_baseline_and_post_verify.sql의 BLOCK B/B-2/C/C-2/D 기대 PASS 값 정리 완료(READY, 운영자 실행 대기). BLOCK E(post-apply, 127차 이전 운영자 실행)는 new_item_purchases 0 / welcome_rows 0 / purchase_fn_body_md5_now 6f049ec7d802b1bd8b77e841c37a5061로 이미 확인됨.",
-    "economy_decision": "OPTION C 확정 — 가격/dollar_rules 변경 없음, Pilot A 실측 관찰(적립 PD/day·첫구매시점·구매아이템·잔액·재참여) 후 사후 결정. 추정치 유지: 평범 36 / 열심 75 / 매우많이 186 PD/일(127차 재계산 그대로, 이번 세션 재계산 없음)."
+    "economy_decision": "OPTION C 확정 — 가격/dollar_rules 변경 없음, Pilot A 실측 관찰(적립 PD/day·첫구매시점·구매아이템·잔액·재참여) 후 사후 결정. 추정치 유지: 평범 36 / 열심 75 / 매우많이 186 PD/일(127차 재계산 그대로, 이번 세션 재계산 없음).",
+    "safe_to_merge_pr36": "YES(로컬 verify:all PASS + CI Release Gate SUCCESS; 최종 merge는 운영자 결정 — 이 세션 merge 0)",
+    "safe_to_start_pilot_a": "운영자 POST BLOCK B/B-2/C/C-2/D 실행·PASS 확인 후 YES(코드 측 차단 요인 없음); 그 전에는 NO"
   },
   "verification": {
     "build": "PASS (32s)",
@@ -38,8 +51,9 @@
     "testTownUiStatic": "95/95 PASS",
     "verify_reward": "PASS (rewardEngine + rewardFlow 55/55)",
     "testDoubleEvents": "45/45 PASS",
-    "verify_all": "running (결과는 다음 체크포인트 갱신분 참고, 추측 금지)",
-    "ci": "pending (commit not yet pushed)"
+    "reward_feedback_contracts": "10/10 PASS after regex update",
+    "verify_all": "run 1 (before testRewardFeedbackContracts regex update): rewardSystem 도메인 FAIL 1건 — testRewardFeedbackContracts.mjs 정적 정규식이 구 1-인자 호출 리터럴만 허용(계약 자체는 유지) → 정규식 갱신 후 run 2: ALL DOMAINS PASS(SKIP speaking/listening 제외), E2E 735/735 PASS/SKIP 0 (student 34/admin 21/mobile 178/entrance 12/town 480). run 2 로그에 FAIL 접두 줄 1개: testEntranceRosterMinbyungchun.mjs(extra:true, 라이브 READ-ONLY) 전 단언 PASS 후 종료 시 libuv 'UV_HANDLE_CLOSING' assertion(exit 3221226505, Windows 플레이크) — login 도메인은 PASS 판정, standalone 재실행 exit 0, 이번 변경과 무관.",
+    "ci": "PR #36 head 55ded76 — Release Gate (build + verify:all + student health) SUCCESS (run 34621675707, 2026-09-11T16:23Z), Deploy Ready SUCCESS, Vercel SUCCESS, Vercel Preview Comments SUCCESS."
   },
   "decisions_needed": [
     "v3_50 POST verify BLOCK B/B-2/C/C-2/D 운영자 직접 실행(production_v3_50_baseline_and_post_verify.sql, service_role 필요)",
@@ -54,6 +68,7 @@
     "src/components/WordDetail.jsx",
     "src/components/QuizGame.jsx",
     "scripts/testPronunciationRewardOnce.mjs",
+    "scripts/testRewardFeedbackContracts.mjs",
     "tests/harness/registry.mjs",
     "handoff.md",
     "TESTING.md",
@@ -72,5 +87,5 @@
     "production_v3_50_baseline_and_post_verify.sql"
   ],
   "blocker": null,
-  "next_action": "commit 3파일(src) + 테스트 + registry.mjs (문서 3종은 docs-maintainer가 별도 커밋) -> push -> PR #36 갱신 -> CI 재실행 확인 -> verify:all 결과 수신 후 이 체크포인트 completed로 갱신. 별도로: 운영자에게 v3_50 POST BLOCK B/B-2/C/C-2/D 실행 요청, 이코노미 OPTION C 관찰 착수는 Pilot A 활성화 이후."
+  "next_action": "완료 — commit d55d6e5(fix) + 55ded76(docs) push 완료, PR #36 head 55ded76 MERGEABLE/CI Release Gate SUCCESS. 남은 것은 운영자 몫: (1) PR #36 merge 여부 결정, (2) v3_50 POST BLOCK B/B-2/C/C-2/D 실행·PASS 확인 후에만 Pilot A 시작(safe_to_start_pilot_a 참고), (3) TOWN_V1_WELCOME_ENABLED 설정 시점·paulTownV1 ON 범위 결정."
 }
