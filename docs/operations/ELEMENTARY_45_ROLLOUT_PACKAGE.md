@@ -9,7 +9,13 @@
 > 이 세션에서 실행된 것은 0건이다. 모르는 값은 추측하지 않고
 > "NEEDS OPERATOR INPUT"으로 표기한다.
 
-**문서 갱신 이력**: 2026-09-11 v2 — PR #33 merged & deployed
+**문서 갱신 이력**: 2026-09-11 v3(PR #34 머지·배포 반영, Town V1 정책
+확정, v3_50 미적용) — PR #34(Paul Town V1) 머지 커밋 `7c98392` ·
+배포 성공 2026-09-10 23:22Z 반영, 신규 8절 "Paul Town V1 현황" 추가,
+6절 Pilot A에 실제 대상 5명(READ-ONLY 선정) 반영, 9절(구 8절) 최종
+결정 대기 목록에서 이미 확정된 Town 정책 3건 제거. 상세는 8절 참고.
+
+이전: 2026-09-11 v2 — PR #33 merged & deployed
 2026-09-10 18:06Z 반영(발음/녹음 저장 실패 시 `onEnd` 다중 호출 P1
 수정). 전체를 Phase 1~7 구조로 재편: Phase 1 반 inventory 재확인 ·
 Phase 2 rollout 설계 · Phase 3 보상 readiness 체크 · Phase 4 데이터
@@ -231,7 +237,7 @@ testRewardCapRace/testRewardStress45의 KNOWN GAP 단언을 뒤집는다.
   입실시험 결과·word-king 서버 계산·wordLibrary 로스터 필터에서
   `isTestAccountStudent`/`isArchivedOrFixtureStudentName` 적용
   (`QA_` 접두 반 포함, PR #29). **House 점수 집계에는 명시적 제외가
-  없음**(관찰 사항, 처리 여부는 8절 결정 대기).
+  없음**(관찰 사항, 처리 여부는 9절 결정 대기).
 
 ---
 
@@ -334,10 +340,15 @@ NEEDS OPERATOR INPUT — 이 문서에서 임의로 채우지 않는다.
 ### Pilot A — 기존 학생 5명
 
 - 대상: 기존 3개 반(Presentation 6 / Pre-Middle School / Pre-middle
-  school 5학년)에서 1~2명씩 총 5명. 실명 지정은
-  **NEEDS OPERATOR INPUT**.
+  school 5학년)에서 1~2명씩 총 5명. **Town V1(8절) 파일럿 대상으로
+  READ-ONLY 조회 기준 이미 선정 완료**(실행/플래그 ON은 0건): 예지
+  `1c585815-...` · Cherry `bf05032a-...` · 이동훈 `80700290-...` ·
+  신지율 `a31037a3-...` · Lucas `17eafbbe-...`. 이 5명은 일반 45명
+  확장 Pilot A와 Town V1 Pilot A를 겸한다.
 - 기간: 숙제 1회 완료 또는 24시간 중 먼저 도달하는 시점까지.
-- 위 체크리스트 전항목 PASS 필요.
+- 위 체크리스트 전항목 PASS 필요. Town(`paulTownV1`)을 함께 켜서
+  진행할 경우 8절 "Pilot A 게이트 추가 항목(Town)"도 동시 충족해야
+  한다.
 
 ### Pilot B — 10명
 
@@ -396,23 +407,113 @@ NEEDS OPERATOR INPUT — 이 문서에서 임의로 채우지 않는다.
 
 ---
 
-## 8. 최종 결정 대기 목록
+## 8. Paul Town V1 현황(PR #34, 2026-09-11 아침 기준)
+
+### 배포 상태
+
+- PR #34 **머지 및 배포 완료** — 머지 커밋 `7c98392`, 배포 성공
+  2026-09-10 23:22Z, 배포 번들은 직전 번들과 byte-identical(기능
+  플래그가 기본 OFF라 실사용자 영향 0).
+- 기능 플래그 `paulTownV1` 기본값 **OFF**(배포 번들 확인:
+  `paulTownV1:!1`), `townShopV1`도 **OFF**. 두 플래그 모두 관리자
+  화면(FeatureManagementPanel)에서 기기별(device-local)로만 켤 수
+  있다 — 서버 강제 ON 없음.
+- 플래그가 꺼져 있는 한 학생 경험은 이전과 동일(Town 화면 진입 불가,
+  기존 로그인/학습/퀴즈/동기화 플로우 영향 0).
+
+### v3_50 마이그레이션 — 미적용
+
+- `supabase_v3_50_town_v1.sql`은 **아직 프로덕션에 적용되지
+  않았다**(이 세션 READ-ONLY 확인 기준).
+- 적용 패키지 구성: `supabase_v3_50_town_v1.sql` +
+  `supabase_v3_50_town_v1_ROLLBACK.sql` +
+  `supabase_v3_50_town_v1_POST_VERIFY.sql` + 운영자용
+  `production_v3_50_baseline_and_post_verify.sql`(실행 순서: PRE
+  BLOCK A → 마이그레이션 적용 → POST BLOCK B/C/D/E).
+- 예상 변화량(BASELINE 대비): `town_items` 1행 → 17행, 신규 컬럼
+  +4개, 함수 신규 +2개 / 교체 1개, `dollar_ledger` ·
+  `reward_ledger` · `students` · `student_progress` 행 수 변화
+  **0**(데이터 마이그레이션 없음, 순수 스키마·시드 추가).
+- **v3 시점에 수정 중**: `production_v3_50_baseline_and_post_verify.sql`의
+  사전 함수 존재 확인 블록이 42883(존재하지 않는 함수 조회 시 오류)
+  로 실패하는 문제 — 사전 체크는 함수 부재 시에도 에러 없이
+  "미존재"로 보고하도록 수정 작업이 진행 중이다.
+
+### 운영 현황(WRITE 0)
+
+- Production WRITE는 이 트랙 전체에서 **0건**(스키마 미적용 포함).
+- Pilot A는 아직 **활성화되지 않았다** — 대상 5명 선정(READ-ONLY)만
+  완료됐고, 실제 플래그 ON·Town 방문은 0건.
+- welcome 크레딧은 아직 **누구에게도 지급되지 않았다**(0건).
+
+### 확정된 정책(운영자 결정 완료 — 9절 최종 결정 대기에서 제외)
+
+- **welcome 지급**: 모든 학생의 Town **첫 방문**에 20 PD 지급.
+  기존 학생도 포함(신규 가입 학생에 한정하지 않음), 소급(backfill)
+  지급은 없음(배포 이전 방문 기록에 대한 사후 지급 없음). 평생
+  정확히 1회만 지급되도록 UNIQUE idempotency 키로 보장한다. 활성화
+  조건은 Vercel 환경변수 `TOWN_V1_WELCOME_ENABLED=1` **AND** 기기별
+  `paulTownV1` 플래그 ON을 모두 충족해야 한다(둘 중 하나만 켜져
+  있으면 지급 안 됨).
+- **상점 가격**: 현재 가격 변경 없음(Pilot A 실사용 데이터 확보 후
+  조정 검토).
+- **`dollar_rules`(화폐 환전/적립 비율)**: 변경 없음.
+- **비주얼(아이템 이미지)**: 파일럿 단계에서는 emoji/assetKey
+  폴백 표시를 허용한다. 최종 일러스트는 이후 `TOWN_ASSETS` 맵으로
+  교체한다. **폴(Paul) 얼굴 일러스트는 어떤 경우에도 다시 그리지
+  않는다**(기존 자산 유지).
+- **rollout 순서**: Pilot A(기존 학생 5명 — 예지 `1c585815-...` ·
+  Cherry `bf05032a-...` · 이동훈 `80700290-...` · 신지율
+  `a31037a3-...` · Lucas `17eafbbe-...`, READ-ONLY로 이미 선정
+  완료) → Pilot B(10명) → 신규 반 1개 전체 → 5개 반 약 45명 전체.
+  이 순서는 6절의 일반 45명 확장 Pilot A~D 단계와 동일 구조를
+  공유한다(대상 학생이 겹칠 수 있음).
+
+### Pilot A 게이트 추가 항목(Town, `paulTownV1` ON 전제)
+
+Town 기능을 함께 켜고 Pilot A를 진행할 경우, 6절 공통 체크리스트에
+아래 항목을 추가로 통과해야 한다:
+
+| 항목 | 확인 방법 |
+|---|---|
+| welcome 지급 정확히 1회 | 운영자 SQL Editor READ-ONLY: `SELECT student_id, COUNT(*) FROM dollar_ledger WHERE source_type='welcome' GROUP BY student_id HAVING COUNT(*)<>1;` 결과 0행(첫 방문 학생당 정확히 1행) |
+| 구매 1회 → 잔액 반영 | 구매 1건마다 `town_purchases` 1행 생성 + 지갑 잔액이 정확히 가격만큼 감소 |
+| 배치 재접속 유지 | 로그아웃 → 재로그인, 새로고침(reload) 후에도 인벤토리·잔액 유지 |
+| ⭐(`total_stars`) 불변 | Town 방문·구매 전후 `student_progress.total_stars` 값 변화 없음(기존 별 체계와 분리된 화폐) |
+
+진단 도구: `production_pilot_student_diagnostic.sql`(운영자 SQL
+Editor, READ-ONLY 조회 전용) + `scripts/pilotStudentDiag.mjs
+--student <uuid>`(작성 중). 두 도구 모두 READ-ONLY이며 이 세션
+실행은 0건이다.
+
+---
+
+## 9. 최종 결정 대기 목록
 
 1. 신규 2개 반(A/B)의 이름 / 학생 수 / 사용 교재(5절 템플릿 작성).
 2. 부족한 17명을 신규 2반 vs 기존 3반 충원 중 어떤 조합으로 배정할지.
 3. 일일 의식에 쓰기 시험을 포함할지(교재 소유 반
    `spelling_test_enabled` 설정 변경 여부).
-4. "Unit 7"(`18f59bd6-...`) vs "7"(`b16ca5e2-...`) 처리 방법 — (a)
-   "7"의 학습 기록을 "Unit 7"로 이관 후 "7" 삭제 vs (b) "7"을
-   관리자 화면에서 숨김만.
-5. 0단어 Unit 1 두 건(중2 능률 `e4804821-...`, 중2 YMB
-   `67c8268e-...`) 처리 여부·순서(단어 채우기 vs 삭제 vs 방치).
-6. 3절 보상 예산 판정 후속 조치 — `grant-xp`의 cap 검사+insert를
+4. 데이터 블로커 처리 실행 여부·순서(2절): (a) "Unit 7"
+   (`18f59bd6-...`) vs "7"(`b16ca5e2-...`) — "7"의 학습 기록을
+   "Unit 7"로 이관 후 삭제 vs 관리자 화면 숨김만, (b) 0단어 Unit 1
+   두 건(중2 능률 `e4804821-...`, 중2 YMB `67c8268e-...`) 단어
+   채우기 vs 삭제 vs 방치, (c) 유령 1단어 유닛 6개(SAFE CLEANUP
+   분류 완료) 실제 삭제 실행 승인, (d) 곡선 아포스트로피 단어 1건
+   (SAFE CLEANUP 분류 완료) 실제 UPDATE 실행 승인.
+5. 3절 보상 예산 판정 후속 조치 — `grant-xp`의 cap 검사+insert를
    단일 RPC로 원자화(SERVER HARDENING)할 착수 시점.
-7. House 점수 집계에 QA/테스트 계정 제외 로직(`isTestAccountStudent`
+6. House 점수 집계에 QA/테스트 계정 제외 로직(`isTestAccountStudent`
    등)을 추가할지 여부.
-8. 유령 유닛(0/1단어) 재발을 막을 "교재 관리 화면 self-heal"(생성 시
+7. 유령 유닛(0/1단어) 재발을 막을 "교재 관리 화면 self-heal"(생성 시
    헤더 잔재 자동 정리) 도입 여부.
-9. `wrong_answer_repeat` 값의 실제 의미와 활용 여부(현재 코드
+8. `wrong_answer_repeat` 값의 실제 의미와 활용 여부(현재 코드
    미소비).
-10. Pilot A~D(6절) 각 단계의 실명/일정 확정.
+9. v3_50 마이그레이션 적용 시점(8절 — 42883 사전 체크 수정 완료
+   후로 예상, 확정 일정은 운영자 결정).
+10. `TOWN_V1_WELCOME_ENABLED` 환경변수 활성화 시점(파일럿 단계별로
+    언제 켤지 — Pilot A부터 즉시 vs 검증 후).
+11. Town 최종 일러스트 자산 제작 일정(현재 emoji/assetKey 폴백 상태,
+    8절 참고).
+12. Pilot B~D(6절/8절)의 실명/반 구성 확정(Pilot A 5명은 이미 확정
+    완료).
