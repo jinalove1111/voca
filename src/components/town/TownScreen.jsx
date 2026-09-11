@@ -59,11 +59,15 @@ export default function TownScreen({ studentData, townShop, onBack }) {
     setGuideEvent(event)
   }
 
-  // 첫 진입 환영 가이드 — 이 화면 마운트(세션)당 1회.
+  // 첫 진입 환영 가이드 — 이 화면 마운트(세션)당 1회. PHASE 4(2026-09-11):
+  // 잔액 0 & 보유 0(=아직 아무 것도 못 산 학생)이면 일반 환영 대신
+  // earn_hint(공부하면 마을이 자란다는 안내)를 보여준다 — 그 외에는 기존
+  // welcome 그대로(동작 변화 없음).
   useEffect(() => {
     if (welcomedRef.current) return
     welcomedRef.current = true
-    showGuide('welcome')
+    const noProgressYet = balance === 0 && ownedIds.length === 0
+    showGuide(noProgressYet ? 'earn_hint' : 'welcome')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -226,6 +230,7 @@ export default function TownScreen({ studentData, townShop, onBack }) {
             placements={placements}
             onPlaceStart={handlePlaceStart}
             onMoveStart={handleMoveStart}
+            onGoShop={() => setTab('shop')}
           />
         )}
 

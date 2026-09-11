@@ -8,9 +8,20 @@
 // 않는다.
 import { useState } from 'react'
 import { TOWN_CATEGORIES, itemState, shortfall, groupByCategory } from '../../utils/town/townCatalog'
+import { TOWN_LEVELS } from '../../utils/town/townLevel'
 import { TOWN_PHRASES } from '../../utils/town/townMessages'
 import { formatDollars } from '../../utils/townShop'
 import { townAsset } from '../../assets/town'
+// PHASE 4(2026-09-11) — 빈 상점(잔액 0 & 보유 0) 안내 카드에 쓰는 보상
+// 금액은 절대 하드코딩하지 않고 rewardEngine.REWARD_STARS를 그대로
+// 읽는다(학업 보상 로직의 유일한 진실 원천, rewardEngine.js 헤더 원칙).
+import { REWARD_STARS } from '../../utils/rewardEngine'
+
+// TOWN_LEVELS는 level(1-based) 배열 — 별 임계값을 잠금 카드 안내에 쓴다.
+function starsForLevel(level) {
+  const entry = TOWN_LEVELS[Math.max(1, Number(level) || 1) - 1]
+  return entry ? entry.min : 0
+}
 
 export default function TownShopPanel({ items, ownedIds, balance, level, purchasingId, onPurchase, onGuide }) {
   const [activeCategory, setActiveCategory] = useState((TOWN_CATEGORIES[0] && TOWN_CATEGORIES[0].id) || 'house')
@@ -45,6 +56,16 @@ export default function TownShopPanel({ items, ownedIds, balance, level, purchas
   return (
     <div className="space-y-3">
       <p className="text-center text-xs font-bold text-purple-400">{TOWN_PHRASES.learnEarn}</p>
+
+      {/* PHASE 4(2026-09-11) — 잔액 0 & 보유 0(첫 방문)일 때만 보이는
+          안내 카드. 숫자는 REWARD_STARS에서만 읽는다(하드코딩 금지). */}
+      {Number(balance) === 0 && (Array.isArray(ownedIds) ? ownedIds.length : 0) === 0 && (
+        <div className="bg-amber-50 rounded-2xl p-3 text-center">
+          <p className="text-xs font-bold text-amber-700">
+            아직 💵가 없어요 — 오늘 단어 공부를 끝내면 💵{REWARD_STARS['word-session-complete']}, 쓰기 5문제 맞히면 💵{REWARD_STARS['writing-complete']}!
+          </p>
+        </div>
+      )}
 
       <div className="flex gap-2 overflow-x-auto pb-1">
         {TOWN_CATEGORIES.map((cat) => (
@@ -85,22 +106,30 @@ export default function TownShopPanel({ items, ownedIds, balance, level, purchas
                 </span>
               )}
               {state === 'locked' && (
-                <button
-                  type="button"
-                  onClick={() => handleCardTap(item, state)}
-                  className="min-h-[44px] w-full rounded-xl bg-gray-100 text-gray-400 text-xs font-black btn-press"
-                >
-                  🔒 Level {item.minLevel}에서 열려요
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleCardTap(item, state)}
+                    className="min-h-[44px] w-full rounded-xl bg-gray-100 text-gray-400 text-xs font-black btn-press"
+                  >
+                    🔒 Level {item.minLevel}에서 열려요
+                  </button>
+                  {/* PHASE 4(2026-09-11) — 목표 별 개수를 숫자로 보여준다. */}
+                  <p className="text-[11px] text-gray-400">Level {item.minLevel} = ⭐{starsForLevel(item.minLevel)}</p>
+                </>
               )}
               {state === 'insufficient' && (
-                <button
-                  type="button"
-                  onClick={() => handleCardTap(item, state)}
-                  className="min-h-[44px] w-full rounded-xl bg-orange-50 text-orange-500 text-xs font-black btn-press"
-                >
-                  💵 {shortfall(item, balance)} 더 필요
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleCardTap(item, state)}
+                    className="min-h-[44px] w-full rounded-xl bg-orange-50 text-orange-500 text-xs font-black btn-press"
+                  >
+                    💵 {shortfall(item, balance)} 더 필요
+                  </button>
+                  {/* PHASE 4(2026-09-11) — 공부하면 💵가 모인다는 것을 상기. */}
+                  <p className="text-[11px] text-gray-400">(공부하면 모여요)</p>
+                </>
               )}
               {state === 'purchasing' && (
                 <span className="min-h-[44px] w-full flex items-center justify-center gap-1 rounded-xl bg-purple-50 text-purple-400 text-xs font-black">

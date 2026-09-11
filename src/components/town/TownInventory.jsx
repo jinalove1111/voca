@@ -6,7 +6,7 @@
 // 아니라 마을에 있다는 사실을 정직하게 표시).
 import { townAsset } from '../../assets/town'
 
-export default function TownInventory({ items, ownedIds, placements, onPlaceStart, onMoveStart }) {
+export default function TownInventory({ items, ownedIds, placements, onPlaceStart, onMoveStart, onGoShop }) {
   const owned = Array.isArray(ownedIds) ? ownedIds : []
   const placementByItemId = {}
   for (const p of (Array.isArray(placements) ? placements : [])) {
@@ -17,7 +17,20 @@ export default function TownInventory({ items, ownedIds, placements, onPlaceStar
   const placed = ownedItems.filter((it) => placementByItemId[it.id])
 
   if (ownedItems.length === 0) {
-    return <p className="text-center text-sm text-gray-400 py-8">아직 보관함이 비어있어요 — 상점에서 아이템을 사보세요!</p>
+    // PHASE 4(2026-09-11) — 빈 보관함 안내 + 상점 탭으로 바로 이동하는
+    // 버튼(부모 TownScreen이 탭 전환을 소유, 여기선 콜백만 호출).
+    return (
+      <div className="text-center py-8 space-y-3">
+        <p className="text-sm text-gray-400">상점에서 첫 아이템을 사보세요 🌳</p>
+        <button
+          type="button"
+          onClick={() => onGoShop && onGoShop()}
+          className="min-h-[44px] px-5 mx-auto rounded-2xl bg-purple-500 text-white text-sm font-black btn-press hover:bg-purple-600"
+        >
+          🛒 상점으로 가기
+        </button>
+      </div>
+    )
   }
 
   return (
