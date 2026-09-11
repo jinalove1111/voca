@@ -180,8 +180,11 @@ console.log('\n시나리오 3 — QuizGame.jsx 정적 검사: "⭐ 1개 획득!"
     /setMsg\(\s*granted\s*\?\s*'녹음 완료! ⭐ 1개 획득!'\s*:\s*'[^']+'\s*\)/.test(quizGameSrc))
   check('무조건 호출(반환값 무시)이던 예전 형태(setMsg 뒤 곧바로 onSuccess())가 더는 없다',
     !/setMsg\('녹음 완료! ⭐ 1개 획득!'\)\s*\n\s*onSuccess\(\)/.test(quizGameSrc))
+  // 2026-09-12 — 두 번째 인자(current?.word?.word)는 P1 dedup 수정으로
+  // 추가된 wordText 폴백 identity(word.dbId 미배정 시 사용) — 있어도/
+  // 없어도 매치, 반환값 전달 계약 자체만 검증.
   check('handlePronSuccess(중간 래퍼)가 onMarkPronunciationOk의 반환값을 그대로 전달한다(return)',
-    /return onMarkPronunciationOk\?\.\(current\?\.word\?\.dbId\)/.test(quizGameSrc))
+    /return onMarkPronunciationOk\?\.\(current\?\.word\?\.dbId(, current\?\.word\?\.word)?\)/.test(quizGameSrc))
 }
 
 // ── 결과 요약 ────────────────────────────────────────────────────────

@@ -11,13 +11,16 @@
 // 'pronunciation', sourceType: 'pronunciation', sourceId: `${wordId}:${today}` }
 // 로 파싱해 postRewardEvent(fire-and-forget)도 함께 나간다(postedLegacyKeysRef
 // in-tick 가드 — grantReward 헤더 "2026-09-06" 주석). wordId가 없으면
-// (word.dbId 미배정 레거시 단어) `pronunciation-unidentified:${Date.now()}:
-// ${random}`이라는 항상-새로운 키로 grantReward를 부른다 — dedup 자체가
-// 구조적으로 불가능한 기존 동작을 그대로 유지(markPronunciationOk 헤더
-// 주석 "wordId가 없는 호출" 문단), parseLegacyDedupKey는 'pronunciation-
-// unidentified' 프리픽스를 인식하는 분기가 없어 null을 돌려주므로(그
-// 함수 헤더 "null을 돌려주는 경우" 목록 1번) 서버에는 전혀 포스트되지
-// 않는다 — 이 파일 시나리오 8이 "정책 결정 전 현재 동작"으로 그대로 고정.
+// (word.dbId 미배정 레거시 단어) 2026-09-12 P1 수정
+// (docs/design/REWARD_PATH_AUDIT_2026-09-11.md) 이후로는 호출자가 함께
+// 넘기는 wordText를 정규화한 토큰으로 결정적 키
+// `pronunciation-unidentified:${token}:${today}`를 만들어 grantReward를
+// 부른다 — 같은 학생/같은 단어 텍스트/같은 날이면 dedup되어 최대 1개만
+// 지급된다(이전엔 매 호출마다 타임스탬프+랜덤 키라 무제한 반복 지급이던
+// 버그, 이 파일 시나리오 8이 새 계약으로 갱신됨). parseLegacyDedupKey는
+// 여전히 'pronunciation-unidentified' 프리픽스를 인식하는 분기가 없어
+// null을 돌려주므로(그 함수 헤더 "null을 돌려주는 경우" 목록 1번) 서버에는
+// 전혀 포스트되지 않는다 — 이 부분은 의도된 그대로 유지.
 //
 // 하네스 — scripts/testWritingCompleteBoundary.mjs의 real-React 기법을
 // 그대로 재사용한다(재구현 아님, 그 파일 헤더 주석과 동일 근거): REAL
@@ -47,11 +50,14 @@
 //   6) 다음날 — 가짜 시계로 날짜 이동 후 같은 단어에 별도 day 기간키로
 //      1개 추가.
 //   7) 서로 다른 두 단어 — 각각 독립적으로 1개씩, 총 2개.
-//   8) pronunciation-unidentified 분기(wordId 미상) — 매 호출이 항상 새
-//      키를 만들어 매번 로컬 별을 지급한다(비-멱등, 현재 동작을 있는
-//      그대로 고정) + parseLegacyDedupKey가 이 프리픽스를 인식하지 못해
-//      서버 reward POST는 0건. "KNOWN GAP / NEEDS DECISION — 정책 결정
-//      전 현재 동작 고정"으로 명시 라벨링.
+//   8) pronunciation-unidentified 분기(wordId 미상) — 2026-09-12 P1 수정
+//      후: wordText를 정규화한 결정적 키로 같은 학생/같은 단어 텍스트/
+//      같은 날이면 최대 1개만 지급(더블클릭/재시도/onEnd 다중 발화/대소문자
+//      공백 차이/재렌더/재마운트 전부 dedup), 다른 단어 텍스트나 다음날은
+//      독립적으로 다시 지급, 텍스트 없음(null/undefined)은 'unknown'
+//      토큰으로 합쳐짐. 서버 reward POST는 여전히 0건(parseLegacyDedupKey가
+//      이 프리픽스를 인식하지 못해 서버 원장에는 기록되지 않음, 의도된
+//      그대로 유지).
 //
 // 네트워크 0, DB 0, production 코드 무수정(src/ 전부 읽기만).
 // 등록: npm run build 없이 node scripts/testPronunciationRewardOnce.mjs로
@@ -380,52 +386,119 @@ check('두 단어 모두 재호출해도 stars 불변(각자 당일 이미 지�
 
 // ═══════════════════════════════════════════════════════════════════════
 // 시나리오 8 — pronunciation-unidentified 분기(wordId 미상, word.dbId
-// 배정 안 된 레거시 단어): markPronunciationOk(null) 호출 조건
-// (markPronunciationOk의 `if (wordId == null)` 분기)을 그대로 재현. 매
-// 호출이 `Date.now():random` 기반 항상-새로운 키를 만들어 dedup이
-// 구조적으로 불가능 — 매번 로컬 별을 지급한다(비-멱등, 기존 레거시
-// 동작을 있는 그대로 유지). parseLegacyDedupKey는 'pronunciation-
-// unidentified' 프리픽스를 인식하지 못해 null을 돌려주므로 서버
-// reward POST는 0건 — 서버 원장에 전혀 기록되지 않는다.
-//
-// KNOWN GAP / NEEDS DECISION — 정책 결정 전 현재 동작 고정. word.dbId가
-// 없는 레거시 단어에서 발음 연습을 반복하면(뒤로가기 후 재시도 등) 별이
-// 무제한 반복 지급될 수 있고 서버 일일 상한(REWARD_DAILY_CAP.pronunciation
-// =120)의 보호도 받지 못한다(애초에 서버에 전달되지 않으므로) — 이 파일은
-// 이 사실을 "실사고"로 새로 발견해 고치는 게 아니라, 기존 설계 주석
-// (markPronunciationOk 헤더, parseLegacyDedupKey 헤더)이 이미 명시한 의도된
-// 한계를 숫자로 고정해 앞으로 조용히 더 나빠지는지(예: 실수로 서버화되며
-// dedup 없이 무제한 지급이 발생) 회귀 감지하는 게 목적이다. production
-// 단어 커버리지(word.dbId 배정률)는 이 파일의 검증 범위 밖.
+// 배정 안 된 레거시 단어): 2026-09-12 P1 수정(docs/design/
+// REWARD_PATH_AUDIT_2026-09-11.md) 이후 새 계약을 고정. wordText를
+// 정규화한 토큰(공백 trim+소문자화+내부 공백을 _로)으로 결정적 키
+// `pronunciation-unidentified:${token}:${today}`를 만들므로, "같은
+// 학생/같은 단어 텍스트/같은 날" 조합이면 wordId 식별 경로(시나리오
+// 1~7)와 동일하게 최대 1회만 지급된다 — 더블클릭/재시도/onEnd 다중
+// 발화/재렌더/재마운트 전부 dedup되고, 대소문자·공백 차이는 같은 논리
+// 이벤트로 합쳐진다. 다른 단어 텍스트나 다음날은 독립적인 새 이벤트로
+// 다시 지급 가능(정상 동작, 버그 아님). 서버 reward POST는 이전과
+// 동일하게 여전히 0건 — parseLegacyDedupKey가 'pronunciation-
+// unidentified' 프리픽스를 인식하는 분기가 없어 null을 돌려주므로(그
+// 함수 헤더 "null을 돌려주는 경우" 목록 1번) 서버 원장에는 기록되지
+// 않는다(이 부분은 이번 수정 범위 밖, 의도된 그대로 유지).
 // ═══════════════════════════════════════════════════════════════════════
-section('시나리오 8 — pronunciation-unidentified(wordId 미상) — KNOWN GAP / NEEDS DECISION: 현재 동작 고정')
+section('시나리오 8 — pronunciation-unidentified(wordId 미상) — wordText 결정적 키로 학생·단어텍스트·일자당 최대 1회(2026-09-12 P1 수정)')
 freshLocalStorage()
 const idC = '22222222-cccc-0000-0000-000000000003'
 let hostC = await mountWithBackup(idC, 'PRO_SessionC', null)
 check('C 최초 마운트 시 stars === 0', hostC.get().stars === 0)
-const UNIDENTIFIED_CALLS = 5
-for (let i = 0; i < UNIDENTIFIED_CALLS; i++) {
-  await act(async () => { hostC.get().markPronunciationOk(null) })
-}
-check(`[KNOWN GAP] wordId===null 호출 ${UNIDENTIFIED_CALLS}회 → stars가 매번 지급되어 정확히 ${UNIDENTIFIED_CALLS}(비-멱등, 현재 동작 그대로 고정)`, hostC.get().stars === PRONUNCIATION_STAR_AMOUNT * UNIDENTIFIED_CALLS, `실제 ${hostC.get().stars}`)
-check('[KNOWN GAP] wordId===null 호출은 wordId!=null 전용 pronunciationOkWordIds에 아무것도 추가하지 않음(null은 dedup 배열에 append 조건 자체가 없음)', hostC.get().round.pronunciationOkWordIds.length === 0)
-check(`[KNOWN GAP] wordId===null 호출 ${UNIDENTIFIED_CALLS}회에도 round.pronunciationOk 원시 카운터는 정상적으로 ${UNIDENTIFIED_CALLS}까지 증가(발음 자체는 정상 기록)`, hostC.get().round.pronunciationOk === UNIDENTIFIED_CALLS)
-check('[KNOWN GAP] wordId===null 호출은 round.starGrantLog에 pronunciation-unidentified 프리픽스 키가 정확히 5개(매번 새 키, 서로 다름)', hostC.get().round.starGrantLog.filter((k) => k.startsWith('pronunciation-unidentified:')).length === UNIDENTIFIED_CALLS)
-const unidentifiedKeys = hostC.get().round.starGrantLog.filter((k) => k.startsWith('pronunciation-unidentified:'))
-check('[KNOWN GAP] 5개의 pronunciation-unidentified 키가 서로 전부 다름(Set 크기 5)', new Set(unidentifiedKeys).size === UNIDENTIFIED_CALLS)
-check(`[KNOWN GAP] wordId===null 호출 ${UNIDENTIFIED_CALLS}회에도 서버 reward POST는 정확히 0건(parseLegacyDedupKey가 이 프리픽스를 인식 못 해 서버 원장에 전혀 기록되지 않음)`, rewardCallsFor(idC, 'pronunciation').length === 0, `실제 ${rewardCallsFor(idC, 'pronunciation').length}건`)
-check('[KNOWN GAP] wordId===undefined 호출도 동일 분기(wordId==null이 undefined도 포함)를 타 stars가 추가로 지급됨', (() => {
-  // eslint 무시 — 의도적 == 사용을 그대로 재현 검증(markPronunciationOk 원문 조건)
-  return true
-})())
-const starsBeforeUndefinedCall = hostC.get().stars
-await act(async () => { hostC.get().markPronunciationOk(undefined) })
-check('[KNOWN GAP] markPronunciationOk(undefined) 1회 추가 호출 → stars 추가로 +1(총 6)', hostC.get().stars === starsBeforeUndefinedCall + PRONUNCIATION_STAR_AMOUNT, `실제 ${hostC.get().stars}`)
-check('[KNOWN GAP] undefined 호출 이후에도 서버 reward POST는 여전히 정확히 0건', rewardCallsFor(idC, 'pronunciation').length === 0)
+
+// 8a — 같은 tick 동기 2연속 호출(apple pie) → stars 1, 원시 카운터는 2.
+const pOkBefore8a = hostC.get().round.pronunciationOk
+await act(async () => {
+  hostC.get().markPronunciationOk(null, 'apple pie')
+  hostC.get().markPronunciationOk(null, 'apple pie')
+})
+check('8a — 같은 tick 동기 2연속 호출(apple pie) → stars 정확히 1', hostC.get().stars === PRONUNCIATION_STAR_AMOUNT, `실제 ${hostC.get().stars}`)
+check('8a — round.pronunciationOk 원시 카운터는 호출 2회 모두 카운트(dedup은 별 지급에만 적용)', hostC.get().round.pronunciationOk === pOkBefore8a + 2)
+
+// 8b — 별도 act(재시도/TTS 폴백 2차 onSuccess)로 재호출 → 여전히 1.
+await act(async () => { hostC.get().markPronunciationOk(null, 'apple pie') })
+check('8b — 별도 act(재시도/TTS 폴백) 재호출 → stars 여전히 1', hostC.get().stars === PRONUNCIATION_STAR_AMOUNT)
+
+// 8c — 같은 tick 3회 호출(onEnd 다중 발화) → 여전히 1, 원시 카운터는 +3.
+const pOkBefore8c = hostC.get().round.pronunciationOk
+await act(async () => {
+  hostC.get().markPronunciationOk(null, 'apple pie')
+  hostC.get().markPronunciationOk(null, 'apple pie')
+  hostC.get().markPronunciationOk(null, 'apple pie')
+})
+check('8c — 같은 tick 3회 호출(onEnd 다중 발화) → stars 여전히 1', hostC.get().stars === PRONUNCIATION_STAR_AMOUNT)
+check('8c — round.pronunciationOk 원시 카운터는 3회 모두 카운트', hostC.get().round.pronunciationOk === pOkBefore8c + 3)
+
+// 8d — 대소문자/공백만 다른 같은 단어("Apple  Pie ") → 같은 논리 이벤트.
+await act(async () => { hostC.get().markPronunciationOk(null, 'Apple  Pie ') })
+check('8d — 다른 대소문자/공백("Apple  Pie ") → 같은 논리 이벤트로 취급, stars 여전히 1', hostC.get().stars === PRONUNCIATION_STAR_AMOUNT)
+
+// 8e — 재렌더(언마운트 없음) 후 재호출, 그리고 재마운트(새로고침, 로컬
+// 유지) 후 재호출 → 둘 다 여전히 1.
+await hostC.rerender()
+await act(async () => { hostC.get().markPronunciationOk(null, 'apple pie') })
+check('8e — 재렌더(언마운트 없음) 후 재호출 → stars 여전히 1', hostC.get().stars === PRONUNCIATION_STAR_AMOUNT)
+await hostC.unmount()
+let hostC2 = await mountWithBackup(idC, 'PRO_SessionC', null) // 새로고침 = 로컬 유지, 클라우드 백업 없음
+check('8e — 재마운트(새로고침) 직후 stars가 로컬에서 그대로 복원됨', hostC2.get().stars === PRONUNCIATION_STAR_AMOUNT)
+await act(async () => { hostC2.get().markPronunciationOk(null, 'apple pie') })
+check('8e — 재마운트 후 재호출 → stars 여전히 1', hostC2.get().stars === PRONUNCIATION_STAR_AMOUNT)
+
+// 8f — 다른 단어 텍스트(banana) → 독립적인 새 이벤트로 총 2, 키 2개가
+// 정확히 결정적 문자열로 존재.
+await act(async () => { hostC2.get().markPronunciationOk(null, 'banana') })
+check('8f — 다른 단어 텍스트(banana) → stars 총 2(독립 이벤트)', hostC2.get().stars === PRONUNCIATION_STAR_AMOUNT * 2, `실제 ${hostC2.get().stars}`)
+const unidentifiedKeysF = hostC2.get().round.starGrantLog.filter((k) => k.startsWith('pronunciation-unidentified:'))
+check('8f — starGrantLog에 pronunciation-unidentified 키가 정확히 2개', unidentifiedKeysF.length === 2, `실제 ${unidentifiedKeysF.length}`)
+check('8f — 키가 정확히 결정적 문자열(apple_pie/banana)과 일치', new Set(unidentifiedKeysF).size === 2 &&
+  unidentifiedKeysF.includes(`pronunciation-unidentified:apple_pie:${today}`) &&
+  unidentifiedKeysF.includes(`pronunciation-unidentified:banana:${today}`))
+
+// 8g — wordText 없이 null/undefined 2회 → 'unknown' 토큰으로 합쳐져
+// 총 +1만.
+const starsBefore8g = hostC2.get().stars
+await act(async () => { hostC2.get().markPronunciationOk(null) })
+await act(async () => { hostC2.get().markPronunciationOk(undefined) })
+check('8g — wordText 없이 null/undefined 호출 2회 → stars 총 +1만(unknown 토큰으로 dedup)', hostC2.get().stars === starsBefore8g + PRONUNCIATION_STAR_AMOUNT, `실제 ${hostC2.get().stars}`)
+check('8g — starGrantLog에 pronunciation-unidentified:unknown 키가 정확히 1개', hostC2.get().round.starGrantLog.filter((k) => k === `pronunciation-unidentified:unknown:${today}`).length === 1)
+
+// 8h — 다른 학생 D(새 uuid, 새 마운트), 같은 단어(apple pie) → D는 1,
+// C는 영향 없음(학생별 독립, 이름 아닌 UUID로 식별).
+const idD = '22222222-cccc-0000-0000-000000000004'
+let hostD = await mountWithBackup(idD, 'PRO_SessionD', null)
+const starsCBefore8h = hostC2.get().stars
+await act(async () => { hostD.get().markPronunciationOk(null, 'apple pie') })
+check('8h — 다른 학생 D, 같은 단어(apple pie) → D는 stars 1', hostD.get().stars === PRONUNCIATION_STAR_AMOUNT)
+check('8h — C의 stars는 변하지 않음(학생별 독립, 잘못된 학생에게 0 지급)', hostC2.get().stars === starsCBefore8h)
+
+// 8i — 다음날: 가짜 시계로 날짜 이동 후 같은 단어(apple pie) → 별도 day
+// 기간키로 1개 추가, 당일 키는 그대로.
+const starsCBefore8i = hostC2.get().stars
+await withFakeToday(1, async () => {
+  const tomorrow = todayStr()
+  check('8i — 가짜 시계로 이동한 "다음날" 문자열이 오늘과 다름', tomorrow !== today)
+  await act(async () => { hostC2.get().markPronunciationOk(null, 'apple pie') })
+  check('8i — 다음날 같은 단어(apple pie) 재호출 → stars +1 추가', hostC2.get().stars === starsCBefore8i + PRONUNCIATION_STAR_AMOUNT, `실제 ${hostC2.get().stars}`)
+  check('8i — 오늘자 apple_pie 키는 여전히 정확히 1개(교차 없음)', hostC2.get().round.starGrantLog.filter((k) => k === `pronunciation-unidentified:apple_pie:${today}`).length === 1)
+  check('8i — 다음날자 apple_pie 키도 정확히 1개 추가됨', hostC2.get().round.starGrantLog.filter((k) => k === `pronunciation-unidentified:apple_pie:${tomorrow}`).length === 1)
+})
+
+// 8j — 시나리오 8 전체에서 rewardType pronunciation 서버 POST는 C/D 모두
+// 0건(미식별 경로는 여전히 서버화 대상이 아님), parseLegacyDedupKey도
+// 여전히 이 프리픽스에 대해 null.
+check('8j — 시나리오 8 전체에서 rewardType pronunciation 서버 POST는 C/D 모두 0건', rewardCallsFor(idC, 'pronunciation').length === 0 && rewardCallsFor(idD, 'pronunciation').length === 0)
+check('8j — parseLegacyDedupKey(pronunciation-unidentified:apple_pie:<today>) === null', parseLegacyDedupKey(`pronunciation-unidentified:apple_pie:${today}`) === null)
+
+// 8k — round.pronunciationOk 원시 카운터는 매 호출마다 계속 증가(발음
+// 연습 자체는 정상 기록), pronunciationOkWordIds는 wordId가 항상
+// null/undefined였으므로 계속 빈 배열.
+check('8k — round.pronunciationOkWordIds는 wordId===null 호출만으로는 채워지지 않음(빈 배열 유지)', hostC2.get().round.pronunciationOkWordIds.length === 0)
+check('8k — D의 round.pronunciationOkWordIds도 동일하게 빈 배열', hostD.get().round.pronunciationOkWordIds.length === 0)
+check('8k — C의 round.pronunciationOk 원시 카운터는 8a~8i 전체 호출 수(13회)만큼 누적(dedup 없이 매번 카운트)', hostC2.get().round.pronunciationOk === 13, `실제 ${hostC2.get().round.pronunciationOk}`)
 
 console.log('\n─── 결과 요약 ───')
 console.log(`총 ${passes + failures}개 단언 중 PASS ${passes}, FAIL ${failures}`)
 console.log(failures === 0
-  ? '\n모든 단언 통과 — pronunciation 별 지급 학생·단어·일자당 최대 1회 계약(식별 경로) + KNOWN GAP(미식별 경로 비-멱등) 현재 동작 고정 확인(실 React) ✅'
+  ? '\n모든 단언 통과 — pronunciation 별 지급 학생·단어·일자당 최대 1회 계약을 식별 경로(wordId)와 미식별 경로(wordText 결정적 키, 2026-09-12 P1 수정) 모두에서 확인(실 React) ✅'
   : `\n${failures}개 단언 실패 ❌`)
 process.exit(failures > 0 ? 1 : 0)

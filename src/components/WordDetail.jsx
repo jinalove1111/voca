@@ -408,7 +408,10 @@ function PronounceStep({ word, onDone, onMarkPronunciationOk, onPronunciationAtt
             // 별을 받았는지" 판단할 수 있다. word.dbId는 이 컴포넌트
             // 안에서 wordStatus 조회 등에 이미 쓰는 것과 동일한 id(아래
             // wordStatus?.[word.dbId] 등 참고) — 새 id 개념 도입 아님.
-            onSuccess={() => onMarkPronunciationOk?.(word.dbId)}
+            // word.word를 두 번째 인자로 함께 실어 보낸다 — word.dbId가
+            // 아직 배정되지 않은 단어일 때 markPronunciationOk가 쓸 폴백
+            // identity(2026-09-12, P1 dedup 수정).
+            onSuccess={() => onMarkPronunciationOk?.(word.dbId, word.word)}
             onAnyResult={() => setCanProceed(true)}
             onAttempt={onPronunciationAttempt}
           />
