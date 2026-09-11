@@ -615,59 +615,6 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
 
 ## VERIFY
 
-### [P1] Paul Town 학습 루프 하드닝 2026-09-11 (127차) — PR 대기, 이코노미 전제 정정 P1
-- 근거: `handoff.md` 2026-09-11(127차), `TESTING.md` 2026-09-11(127차
-  항목), `docs/design/REWARD_PATH_AUDIT_2026-09-11.md`,
-  `docs/design/TOWN_ECONOMY_AUDIT_2026-09-11.md`(전제 정정 커밋
-  `eb1c8367` 포함, 이 두 문서는 타 세션 소유 — 인용만).
-- 내용: 브랜치 `qa/town-loop-hardening-2026-09-11`(base 126차 결과물
-  위), 6h 세션, 커밋 6개(`be49551`~`23fbb88`) — 자산 요청 목록 21건 ·
-  학습→보상 연결 UX additive(`testTownUiStatic` 70→95) · 보상 경로
-  전수 감사 매트릭스(17 이벤트) · 45명 전체 루프 stress 170단언 ·
-  이코노미/레벨 결정론 시뮬레이션 · writing-complete 경계 55단언.
-  이 세션 자체의 Production DB WRITE 0.
-- **P1 핵심 재발견(이코노미 전제 정정)**: 2026-09-06 커밋 `52db9e4`
-  부터 레거시 6경로(pronunciation/mission-clear/daily-mission-bonus/
-  spelling-combo/sticker-duplicate/matchgame)도 서버 원장에 도달 →
-  Paul Dollar(PD) 적립 유형이 6종이 아니라 12종(legacy-baseline만
-  제외). PD/일 재계산: 평범 36 · 열심 75 · 매우많이 186(구 가정
-  6/15/30 대비 6배 수준). 가격 다수 TOO CHEAP(tree 10 PD < 1일,
-  L1~L3 합계 425 PD ≈ 열심 6일, clock-tower 200 PD ≈ 평범 6일), 기존
-  학생은 v3_49 가동(2026-09-08)부터 이미 PD 적립 중이라 Pilot A
-  활성화 시점 수백 PD 보유 가능(welcome 20 PD는 이 규모 대비 미미).
-- v3_50 상태 변화(126차 카드 시점엔 미적용): **운영자가 세션 시작
-  전 정확히 1회 적용 완료**(post-apply BLOCK E: new_item_purchases
-  0행 · welcome_rows 0행 · purchase 함수 md5 일치). 이 세션의 Phase 1
-  anon READ-ONLY 감사 9/9 PASS(town_items 17행 — 신규 16/category
-  null 0/min_level 1~10/asset_key 전부/시드 가격·레벨 16종 일치/
-  shop-lamp 60 불변). 드리프트는 전부 학생 학습 활동(students 1행
-  유닛 진행, xp_ledger +1행, progress updated_at)이라 마이그레이션과
-  무관 확인. BLOCK B/C/D(함수 존재·권한)는 service_role 전용이라
-  운영자 확인 대기.
-- Reward Safety: `scripts/testWritingCompleteBoundary.mjs` 55단언
-  PASS(4→5 정확히 1회 등) · 기존 회귀 9스위트 817단언 PASS(재확인) ·
-  `scripts/testTownFullLoop45.mjs` 45명 170단언(leak/lost 0). GAPS:
-  pronunciation-unidentified 비멱등 키(P1 NEEDS DECISION, 실측 0건) ·
-  L3 cap TOCTOU(P2) · postXpEvent 재시도 큐 없음(P3) · 탭 간 storage
-  리스너 없음(P3).
-- 미수신(검수 대기): `tests/e2e/townV1.spec.mjs` 확장(380→480, 커밋
-  `e10f40e8` — 이 문서화 세션이 `.git/logs/HEAD`로 커밋 존재만 확인,
-  제공받은 사실 목록 밖) 실행 결과, pronunciation exactly-once
-  테스트(이 문서화 시점 기준 미생성 확인), `npm run build`/`npm run
-  verify:all` 결과 — 수신 후 `handoff.md` 127차 §8에 append 예정.
-  qa-reviewer/security-reviewer 코드 리뷰 미착수.
-- 운영자 결정 대기: 가격표(`town_items.price`) ×3~5 인상 / `dollar_
-  rules` 고빈도 유형 rate 하향 / Pilot A 현상 유지 관찰 / 조합안(A~D)
-  중 선택, `pronunciation-unidentified` 키 처리(해결됨, 128차),
-  `isEmptyRecord()` tombstone 오분류(126차 이월), `postXpEvent` 재시도
-  큐, 마을 일러스트 제작(126차 이월), BLOCK B/C/D 운영자 직접
-  실행/확인, `TOWN_V1_WELCOME_ENABLED` 설정 시점, `paulTownV1` 플래그
-  ON 범위. **필수 선행**: 플래그 ON 전 진단 SQL 3블록으로 Pilot A
-  대상 학생 5명의 `dollar_balances` 잔액 확인.
-- **2026-09-12 (128차) 갱신**: pronunciation-unidentified P1 수정
-  포함(70/70), 이코노미 OPTION C 관찰 확정, v3_50 POST B/C/D 운영자
-  실행 대기.
-
 ### [P1] 야간 SAFE 세션 2026-09-11 — Town V1 하드닝·v3_50 apply 패키지·Pilot A 진단 (126차), PR 대기
 - 근거: `handoff.md` 2026-09-11(126차), `TESTING.md` 2026-09-11(126차),
   `docs/operations/V3_50_APPLY_RUNBOOK.md`,
@@ -1145,6 +1092,51 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
   `supabase_v2_4_entrance_result_rls.sql` 실행 여부 판단.
 
 ## DONE (최근 완료, 참고용 — 전체 이력은 `ROADMAP.md`/`handoff.md`)
+
+### [P1] Paul Town 학습 루프 하드닝 2026-09-11 (127차) — CLOSED (2026-09-12, 129차: PR #36 merge + v3_50 POST verify PASS)
+- 근거: `handoff.md` 2026-09-11(127차), `TESTING.md` 2026-09-11(127차
+  항목), `docs/design/REWARD_PATH_AUDIT_2026-09-11.md`,
+  `docs/design/TOWN_ECONOMY_AUDIT_2026-09-11.md`(전제 정정 커밋
+  `eb1c8367` 포함, 이 두 문서는 타 세션 소유 — 인용만).
+- 내용: 브랜치 `qa/town-loop-hardening-2026-09-11`(base 126차 결과물
+  위), 6h 세션, 커밋 6개(`be49551`~`23fbb88`) — 자산 요청 목록 21건 ·
+  학습→보상 연결 UX additive(`testTownUiStatic` 70→95) · 보상 경로
+  전수 감사 매트릭스(17 이벤트) · 45명 전체 루프 stress 170단언 ·
+  이코노미/레벨 결정론 시뮬레이션 · writing-complete 경계 55단언.
+  이 세션 자체의 Production DB WRITE 0.
+- **P1 핵심 재발견(이코노미 전제 정정)**: 2026-09-06 커밋 `52db9e4`
+  부터 레거시 6경로(pronunciation/mission-clear/daily-mission-bonus/
+  spelling-combo/sticker-duplicate/matchgame)도 서버 원장에 도달 →
+  Paul Dollar(PD) 적립 유형이 6종이 아니라 12종(legacy-baseline만
+  제외). PD/일 재계산: 평범 36 · 열심 75 · 매우많이 186(구 가정
+  6/15/30 대비 6배 수준). 가격 다수 TOO CHEAP(tree 10 PD < 1일,
+  L1~L3 합계 425 PD ≈ 열심 6일, clock-tower 200 PD ≈ 평범 6일), 기존
+  학생은 v3_49 가동(2026-09-08)부터 이미 PD 적립 중이라 Pilot A
+  활성화 시점 수백 PD 보유 가능(welcome 20 PD는 이 규모 대비 미미).
+- v3_50 상태 변화(126차 카드 시점엔 미적용): **운영자가 세션 시작
+  전 정확히 1회 적용 완료**(post-apply BLOCK E: new_item_purchases
+  0행 · welcome_rows 0행 · purchase 함수 md5 일치). 이 세션의 Phase 1
+  anon READ-ONLY 감사 9/9 PASS(town_items 17행 — 신규 16/category
+  null 0/min_level 1~10/asset_key 전부/시드 가격·레벨 16종 일치/
+  shop-lamp 60 불변). 드리프트는 전부 학생 학습 활동(students 1행
+  유닛 진행, xp_ledger +1행, progress updated_at)이라 마이그레이션과
+  무관 확인.
+- Reward Safety: `scripts/testWritingCompleteBoundary.mjs` 55단언
+  PASS(4→5 정확히 1회 등) · 기존 회귀 9스위트 817단언 PASS(재확인) ·
+  `scripts/testTownFullLoop45.mjs` 45명 170단언(leak/lost 0). GAPS:
+  pronunciation-unidentified 비멱등 키(P1, 128차에서 CLOSED) ·
+  L3 cap TOCTOU(P2) · postXpEvent 재시도 큐 없음(P3) · 탭 간 storage
+  리스너 없음(P3).
+- **2026-09-12(128차)**: pronunciation-unidentified P1 수정 완료
+  (70/70), 이코노미 OPTION C 관찰 확정, v3_50 POST BLOCK B/B-2/C/C-2/D
+  운영자 실행 패키지 준비(READY).
+- **2026-09-12(129차) — CLOSED**: v3_50 POST BLOCK B/B-2/C/C-2/D 운영자
+  service_role 실행 PASS(함수 3개 prosecdef/권한 정상, level 매핑
+  정상, town_items 17행 이상無, 학습만으로 설명되는 드리프트, legacy-
+  baseline 156→163은 v3_48 reconcile 정상 흐름) + PR #36 merge → main
+  `8837d75`, Release Gate SUCCESS(1차 timeout cancel 후 재실행
+  success), Vercel Production 배포 SHA MATCH 확인. Pilot A 시작의
+  코드/DB 차단 요인 없음(시점은 운영자 결정).
 
 ### [P0/P1] 보상 시스템 6h 감사 2026-09-10 — writing-complete +2★ 누락(P1) FIXED, 표시 결함 2·방어선 1·QA 분류 1 FIXED, 766↔951 TEST STALE, invariant 7종 (121차, PR 대기)
 - 브랜치 `qa/reward-audit-2026-09-10`(base 7432638). Production WRITE 0. NEEDS DECISION 6건: `handoff.md` 121차.

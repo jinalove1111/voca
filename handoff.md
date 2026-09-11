@@ -1,8 +1,107 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-12 (128차, pronunciation-unidentified P1 수정 완료 +
-v3_50 POST verify 운영자 실행 패키지 + 이코노미 정책 OPTION C(관찰) 확정,
-브랜치 `qa/town-loop-hardening-2026-09-11` 계속, PR #36 갱신 대기(미머지),
-이 세션 Production DB WRITE 0. 127차 이하 보존)_
+_최종 갱신: 2026-09-12 (129차, v3_50 POST verify 운영자 실행 종결(PASS,
+BLOCK B/B-2/C/C-2/D 전부) + PR #36 merge → main `8837d75` + Vercel
+Production 배포 SHA MATCH 확인, Pilot A 시작의 코드/DB 차단 요인 없음
+(시점은 운영자 결정), 이 세션 에이전트 Production DB WRITE·SQL 실행
+0(운영자 service_role SELECT-only 3회). 128차 이하 보존)_
+
+## 2026-09-12 (129차) — v3_50 POST verify 운영자 실행 종결(PASS) + PR #36 merge/배포 확인
+
+### 0. 안전 요약(최우선 확인)
+
+이번 세션은 운영자 지시로 (1) `production_v3_50_baseline_and_post_
+verify.sql`의 남은 BLOCK B/B-2/C/C-2/D를 운영자가 service_role로 직접
+실행한 결과를 확인·판정하고 (2) PR #36을 merge하는 두 가지를 수행했다.
+에이전트가 직접 실행한 SQL은 0건(운영자가 SQL Editor에서 3회 실행,
+전부 SELECT-only, CLAUDE.md 규칙 8), Production DB에 대한 에이전트발
+WRITE도 0건이다. PR #36 merge 1회는 운영자 명시 지시에 따른 것이고,
+merge에 따라 Vercel이 자동으로 Production 배포 1회를 트리거했다(에이전트
+수동 배포 0). 기능 플래그(`paulTownV1`)는 여전히 OFF, `TOWN_V1_
+WELCOME_ENABLED`는 여전히 미설정, welcome 크레딧 지급 0건, Pilot A
+미시작, PR #32는 이번 세션 미접촉, 운영자의 untracked SQL 파일들도
+이번 세션은 실행/수정하지 않았다.
+
+### 1. v3_50 POST VERIFY 종결 — PASS (운영자 service_role SELECT-only 3회, 에이전트 SQL 실행 0, Production WRITE 0)
+
+`production_v3_50_baseline_and_post_verify.sql`의 남은 블록을 운영자가
+직접 실행한 결과를 육안·수치로 대조·판정했다:
+
+- **BLOCK B — PASS**: 함수 3개(`purchase_town_item`/`town_level_for_
+  stars`/`grant_town_welcome_credit`) 존재, 셋 다 `prosecdef` = true.
+  `anon`/`authenticated` execute 권한 = false, `service_role` execute
+  권한 = true(전 함수 동일). `purchase_town_item` 함수 본문 md5
+  `6f049ec7d802b1bd8b77e841c37a5061` — 127차 이전 BLOCK E 확인 값과
+  정확히 일치(임의 변조 없음).
+- **BLOCK B-2 — PASS**: `town_level_for_stars` 매핑 0→1 · 19→1 · 20→2
+  · 1499→9 · 1500→10 · NULL→1 · -5→1(경계값·NULL·음수 방어 전부 기대
+  값과 일치).
+- **BLOCK C/C-2 — PASS**: `town_items` 17행, `category` null 0건.
+- **BLOCK D — PASS**(`must_not_change`): `students` 493 / `student_
+  progress` 201 — 이 두 값은 PRE 스냅샷(2026-09-10T23:35:24Z, anon,
+  `scripts/.tmp/preflight-post-v3_49-2026-09-10T23-35-24-639Z.json`)과
+  정확히 동일 확인(이 스냅샷은 `town_items` 1행·`category` 컬럼 없음
+  상태라 v3_50 적용 **이전** 값으로 확정됨). `town_purchases` 0 ·
+  `star_purchases` 1 · `reward_ledger` 1005 · `dollar_ledger` 489 ·
+  `xp_ledger` 699(PRE 688, 학습으로 증가) · `words` 2215(PRE 2175,
+  +40은 관리자 업로드로 추정 — v3_50 자체는 `words` DML을 포함하지
+  않으므로 v3_50과 무관). dollar 측 상세: after-PRE 기준 eligible
+  reward 행 96 = after-PRE dollar 행 96, orphan 0, `welcome`/
+  `migration`/`purchase` 유형 신규 행 0, 음수 잔액 0. (참고: 4개 원장
+  테이블의 v3_50 **직전** PRE 값 자체는 anon 401로 어디에도 남아 있지
+  않다 — 그래서 이 판정은 값 대조가 아니라 트리거 정합성 논리로
+  이뤄졌다.)
+- **legacy-baseline 156→163 조사(추가 확인, FAIL 아님)**: BLOCK D
+  판정 중 `reward_ledger_legacy_rows`가 156 → 163으로 늘어난 것처럼
+  보여 별도로 파고들었다. 156은 v3_50 PRE 값이 아니라
+  2026-09-09 v3_49 post-verify 시점(2026-09-08T15:50Z~09-09T00:30Z
+  사이) 값이었다. 최종 SELECT 결과: v1 145행/145명/중복 0, v2 18행/
+  18명/중복 0, 중복 idempotency key 0, v1/v2 겹치는 학생 8명
+  (145+18−163=8, `dup_students`=8과 정확히 일치해 설명됨), distinct
+  학생 155명, key 형식 불일치 0. 09-08T15:50Z 이후 신규 생성 7행
+  (=+7)인데 그중 v1은 0행, v3_50 하한(09-10T23:35Z) 이후는 단 1행
+  (v2, `42e04cbf…`, `stars_delta` 1133, 2026-09-11 10:04Z — `v3_48`
+  `reconcile_legacy_baseline` RPC의 `MAX_INDIVIDUAL 1500`·
+  `history+100` 가드 내 정상값), v3_50 이후 non-v2 행은 0. 결론:
+  **v3_48 reconcile RPC의 학생별 최초 로그인 정산이 정상적으로
+  계속 진행되고 있는 흐름이며 v3_50과 무관, unintended mutation
+  없음.** 수정/삭제/backfill은 이번 조사에서도 0.
+
+### 2. PR #36 merge + 배포 확인
+
+- 운영자 지시로 PR #36을 merge했다. Merge commit
+  `8837d75611bfee09634cb4272314d774e37b12db`
+  (2026-09-11T17:53:16Z, "Merge PR #36: …") — 이전 PR들과 동일한
+  merge-commit 방식.
+- main Release Gate **1차 run**(34630202665, 17:53:19Z 시작)은
+  18:13:29Z Gate 5(browser E2E) 도중 **cancelled** — 원인은
+  `release-gate.yml`의 `timeout-minutes: 20` 초과였다(Gate 2
+  `verify:all`이 11m23s 소요, 직전 green run들은 10m14s/10m51s였는데
+  Gate 5가 16분 시점에서야 시작해 필요한 4분을 못 채우고 잘렸다) —
+  Gate 1~4는 전부 success, **코드 회귀가 아니라 워크플로 타임아웃
+  설정 문제**로 판정.
+- 변경 없이 동일 run을 재실행한 결과: Gate 2 18:15:45→18:26:21Z
+  success, Gate 5 18:30:25→18:34:22Z success, 전체 success
+  18:35:09Z, Deploy Ready success.
+- Vercel: deployment `6398763662`, environment Production, status
+  success(2026-09-11T17:53:45Z), commit status success. 라이브
+  `https://voca-drab.vercel.app`가 서빙하는 `assets/index-DrTy4-s_.js`
+  가 merge된 트리를 로컬에서 빌드했을 때와 동일한 해시임을 확인 —
+  **DEPLOY SHA MATCH YES**.
+- 안전 확인: Production DB WRITE 0, SQL 실행 0, `paulTownV1` OFF,
+  `TOWN_V1_WELCOME_ENABLED` 미설정, welcome 지급 0, Pilot A 미시작,
+  PR #32 미접촉, untracked 운영자 SQL 파일 미접촉.
+
+### 3. NEXT / 결정 대기
+
+- **Pilot A 시작**: 코드/DB 측 차단 요인 없음(YES). 시작 시점·범위는
+  운영자 결정.
+- `release-gate.yml`의 `timeout-minutes: 20` → 상향 권장(현재
+  18~20분 소요, main push마다 timeout 위험이 실측됨 — §2 1차 run
+  참고). 이번 세션은 수정하지 않았다.
+- 이코노미 OPTION C(Pilot A 관찰) 유지. 가격/`dollar_rules` 무변경.
+- 이월 P3: `isEmptyRecord()` tombstone-only 레코드 오분류 처리,
+  `postXpEvent` 재시도 큐 부재, 마을 일러스트 실제 제작(자산 21건은
+  이미 요청 목록화됨).
 
 ## 2026-09-12 (128차) — pronunciation-unidentified P1 수정 + v3_50 POST verify 운영자 패키지 + 이코노미 OPTION C 확정
 
