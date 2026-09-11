@@ -1,0 +1,54 @@
+{
+  "agent_name": "lead-merge-pr36-2026-09-12",
+  "role": "v3_50 POST verify 운영자 실행 결과 판정 + PR #36 merge/배포 확인 + legacy-baseline 조사 종결",
+  "task_id": "merge-pr36-and-v3_50-close-2026-09-12",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-12T00:00:00Z",
+  "updated_at": "2026-09-12T00:00:00Z",
+  "branch": "docs/handoff-129-2026-09-12",
+  "base": "main 8837d75",
+  "production_safety": {
+    "db_write_this_session": 0,
+    "sql_editor_execution_this_session": 0,
+    "student_reward_star_xp_pd_class_textbook_word_changes": 0,
+    "feature_flags_changed": 0,
+    "pilot_a_activated": false,
+    "welcome_credits_granted": 0,
+    "pr_merges": 1,
+    "pr_merges_detail": "PR #36 → main 8837d75, 운영자 지시",
+    "deploys": "Vercel 자동 production 배포 1회(merge 트리거, 에이전트 수동 배포 0)",
+    "town_flag_state": "OFF (paulTownV1 미변경)",
+    "town_v1_welcome_enabled_env": "미설정 (무변경)"
+  },
+  "verification": {
+    "v3_50_post_verify_block_b": "PASS — 함수 3개 존재, purchase/welcome/get_town_shop_state prosecdef true, anon/authenticated execute false, service_role execute true, purchase_town_item 본문 md5 6f049ec7d802b1bd8b77e841c37a5061(127차 이전 BLOCK E 값과 일치)",
+    "v3_50_post_verify_block_b2": "PASS — town_level_for_stars 0->1, 19->1, 20->2, 1499->9, 1500->10, NULL->1, -5->1",
+    "v3_50_post_verify_block_c_c2": "PASS — town_items 17행, category null 0",
+    "v3_50_post_verify_block_d": "PASS — students 493/student_progress 201(PRE 2026-09-10T23:35:24Z anon 스냅샷과 동일, v3_50 적용 전 확정) · town_purchases 0 · star_purchases 1 · reward_ledger 1005 · dollar_ledger 489 · xp_ledger 699(PRE 688, 학습 증가) · words 2215(PRE 2175, +40 관리자 업로드 추정, v3_50과 무관) · dollar 측 eligible reward 96 = dollar 행 96, orphan/welcome/migration/purchase 신규 0, negative 0",
+    "legacy_baseline_156_to_163_investigation": "CLOSED — 156은 v3_50 PRE가 아니라 2026-09-09 v3_49 post-verify 시점 값. 최종 SELECT: v1 145/145명/dup0, v2 18/18명/dup0, key dup 0, v1/v2 overlap 8명(145+18-163=8=dup_students), distinct 155, key_format_mismatch 0, 09-08T15:50Z 이후 신규 7행(v1 0), v3_50 하한(09-10T23:35Z) 이후 1행(v2, 42e04cbf.., stars_delta 1133, 2026-09-11 10:04Z, MAX_INDIVIDUAL/history+100 가드 내 정상), v3_50 이후 non-v2 0. 결론: v3_48 reconcile_legacy_baseline RPC 정상 흐름, v3_50 무관, unintended mutation 없음. 수정/삭제/backfill 0",
+    "pr36_merge": "merge commit 8837d75611bfee09634cb4272314d774e37b12db, 2026-09-11T17:53:16Z",
+    "release_gate_run1": "34630202665, 17:53:19Z 시작 -> 18:13:29Z Gate5(E2E) 중 cancelled, 원인 timeout-minutes:20 초과(Gate2 verify:all 11m23s, Gate5가 16분 시점 시작해 4분 부족). Gate1~4 success. 코드 회귀 아님",
+    "release_gate_rerun": "동일 run 변경 0으로 재실행 — Gate2 18:15:45->18:26:21Z success, Gate5 18:30:25->18:34:22Z success, 전체 success 18:35:09Z, Deploy Ready success",
+    "vercel_deploy": "deployment 6398763662, environment Production, status success 2026-09-11T17:53:45Z, commit status success, 라이브 assets/index-DrTy4-s_.js 해시가 로컬 빌드와 일치 -> DEPLOY SHA MATCH YES"
+  },
+  "decisions_needed": [
+    "Pilot A 시작 시점/범위 (코드/DB 차단 요인 없음, YES)",
+    "release-gate.yml timeout-minutes 20 -> 상향 여부",
+    "마을 일러스트 자산 실제 제작",
+    "isEmptyRecord() tombstone 오분류 처리 + postXpEvent 재시도 큐 도입 (P3 2건)"
+  ],
+  "files_owned": [
+    "handoff.md",
+    "PROJECT_BOARD.md",
+    ".ai-status/lead-merge-pr36-2026-09-12.json"
+  ],
+  "files_read": [
+    "handoff.md",
+    "PROJECT_BOARD.md",
+    ".ai-status/README.md",
+    ".ai-status/lead-p1-pronunciation-2026-09-12.json"
+  ],
+  "blocker": null,
+  "next_action": "완료 — 운영자 몫: (1) Pilot A 시작 시점/범위 결정, (2) release-gate.yml timeout-minutes 상향 여부, (3) 마을 일러스트 자산 제작, (4) P3 2건(isEmptyRecord tombstone/postXpEvent 재시도 큐) 처리 여부."
+}
