@@ -1303,3 +1303,58 @@ anon key READ-ONLY 조회만(사전점검+baseline 스냅샷+진단 스크립트
   classes 20 · SCA 386 · textbooks 11 · units 62 · words 2175 ·
   word_status 3627 · student_progress 201(⭐38,019/XP 37,444) ·
   xp_ledger 688(합계 1,790) · town_items 1) — 전부 READ-ONLY.
+
+## 관련 항목: 6h 학습 루프 세션 스위트(2026-09-11, 127차)
+
+_append. 브랜치 `qa/town-loop-hardening-2026-09-11`(base 126차 결과물
+위), 기능 플래그 전부 OFF 유지, PR 미머지. 이 세션 자체의 Production
+DB WRITE 0 — `supabase_v3_50_town_v1.sql`은 세션 시작 전 운영자가
+1회 적용 완료(Phase 1 anon READ-ONLY 감사 9/9 PASS). 상세:
+`handoff.md` 2026-09-11(127차)._
+
+| script | 단언 | 목적/도메인 |
+|---|---|---|
+| `scripts/testTownUiStatic.mjs`(확장, 커밋 `2ece329`) | 70→95 | 학습→보상 연결 UX additive 문구(💵 캡션·빈 지갑 안내·잠금 카드 ⭐필요치·부족액 안내·빈 보관함→상점·earn_hint) 정적 계약 확장. town/UI, `extra:false` |
+| `scripts/testTownFullLoop45.mjs`(신규, 커밋 `3beae92`, builders: race) | 170 | 45명 학생 전 구간 루프(로그인→학습 보상 4종→dollar 트리거 파생→welcome 더블클릭→상점 구매(tree)/locked(cat)/invalid→배치·이동→refresh→relogin) 5/10/20/45 동시성, leak/lost 0. town/reward stress, `extra:false` |
+| `scripts/testTownEconomySim.mjs`(신규, 커밋 `7684c13`) | GATE 14(구조, 전부 PASS) + FINDING 4(정책, 1건 의도된 FAIL 보고, CLAUDE.md 규칙 15) | 이코노미/레벨업 결정론 시뮬레이션(하드코딩 금액 0, 실 상수 import) — **핵심 재발견**: 서버 원장 도달 유형이 6종이 아니라 12종(52db9e4 이후 레거시 6경로 흡수), PD/일 재계산 평범 36·열심 75·매우많이 186. town/economy, `extra:false` |
+| `scripts/testWritingCompleteBoundary.mjs`(신규, 커밋 `23fbb88`) | 55 | writing-complete 4→5 정확히 1회, 5→6/6→7/10 추가 0, refresh 0, relogin 0, 타 UUID 독립, 재시도 동일 키, 날짜 경계 1회. reward/boundary, `extra:false` |
+| `tests/e2e/townV1.spec.mjs`(확장, 커밋 `e10f40e`) | 380→480, 실행 **735/735 ×2연속** | Phase 4 UX(💵 캡션·빈 지갑 카드(`townWelcomeDisabled` 옵션)·잠금 카드 ⭐필요치 정규식·부족액 "(공부하면 모여요)"·빈 보관함→상점 버튼) + Phase 10(격자 더블탭 1배치·긴 라벨 오버플로·slow network 1.2s·환영 토스트 위치/자동 소멸). `npm run verify:e2e` 735/735 ×2(student 34·admin 21·mobile 178·entrance 12·**town 480**, 미mock 0, 실결함 0). `tests/e2e/lib/mockRoutes.mjs`에 opt-in 옵션 `townWelcomeDisabled`/`slowGrantXpMs` 추가(기존 spec 무영향). e2e `[town]`, `extra:false` |
+| `scripts/testPronunciationRewardOnce.mjs`(신규, 커밋 `2cfecdc`) | 54 | 더블클릭·TTS 폴백 onSuccess 2회·onEnd 3회·재렌더·리마운트·재시도 → 단어/일 1회 + `postRewardEvent` 1회, 다음날 1회, 두 단어 2회. **`pronunciation-unidentified`는 비멱등 그대로 확인**(5회 호출 → 로컬 5★, 서버 0회) — 수정 없이 현재 동작을 회귀로 고정(KNOWN GAP/NEEDS DECISION). `src/` 무변경. reward/pronunciation, `extra:false` |
+
+**2026-09-12(128차) 갱신**: 위 `testPronunciationRewardOnce.mjs`의
+pronunciation-unidentified 시나리오(scenario 8)가 P1 수정과 함께
+**54 → 70단언**으로 재작성됐다(KNOWN GAP 라벨 제거). `markPronunciationOk
+(wordId, wordText)`로 시그니처 확장 — wordId가 null이면
+`pronunciation-unidentified:${token}:${today}`(token = 단어 텍스트
+정규화, trim/lowercase/공백→`_`, 빈 값은 `unknown`)로 결정적 멱등키를
+생성해 더블클릭/재렌더/리마운트/재시도/대소문자·공백 변형 → 1회, 다른
+단어 텍스트는 독립적으로 1회, 다음날 1회로 고정. 식별 경로
+(`pronunciation:${wordId}:${today}`)는 바이트 동일 유지. 비식별 경로는
+여전히 서버 미전송(의도적, PD 적립 영향 없음). 70/70 PASS, `src/` 변경
+3파일(`useStudent.js`/`WordDetail.jsx`/`QuizGame.jsx`), `extra:false`
+유지. 상세: `handoff.md` 2026-09-12(128차) §1.
+
+- 지원 문서(테스트 아님, 타 세션이 동시 편집 중이라 이 세션은
+  열람·수정하지 않음): `docs/design/REWARD_PATH_AUDIT_2026-09-11.md`
+  (보상 경로 17이벤트 감사 매트릭스, 커밋 `12c1a30`; 상단 정정 노트
+  커밋 `eb1c836`) · `docs/design/TOWN_ECONOMY_AUDIT_2026-09-11.md`
+  (§0 전제 정정, 커밋 `eb1c836`).
+- 무회귀 확인: 기존 회귀 9스위트 817단언 PASS(신규 스위트 아님,
+  재실행 확인).
+- PR #32 패키지 v4 갱신·푸시(`0d2170b`, 미머지) — 45명 확장 readiness
+  문서, 이번 127차 신규 발견(§0 이코노미 재계산 등) 반영 갱신으로 추정
+  (내용 상세는 PR 자체 참고, 이 문서화 세션은 diff 미열람).
+- `npm run build` PASS(커밋 `e10f40e` 기준).
+- `npm run verify:all`(HEAD `2cfecdc`, 로컬 2회 실행): 1차는
+  registry-coverage 도메인 FAIL 1건 — `tests/harness/registry.mjs`의
+  `testPronunciationRewardOnce` 등록 줄이 `verify:all` 시작 시점에
+  아직 커밋/저장 전이던 타이밍 레이스(단독 재실행
+  `node scripts/testRegistryCoverage.mjs` 8/8 PASS로 확정, ENVIRONMENT/
+  TIMING 분류, 앱/테스트 결함 아님). 등록 커밋 후 클린 2차 재실행 —
+  **ALL DOMAINS PASS(SKIP 도메인 제외), FAIL 줄 0, exit 0**, `verify:all`
+  내부 E2E도 메모리 킬 없이 완주해 **735/735 PASS/SKIP 0**(student 34 ·
+  admin 21 · mobile 178 · entrance 12 · town 480). 신규 스위트
+  `verify:all` 내 결과: `testWritingCompleteBoundary` 55/55 ·
+  `testPronunciationRewardOnce` 54/54 · `testRegistryCoverage` 8/8 ·
+  `testBundleBudget` 10/10 · `rewardSystem` 도메인 47개 스크립트 PASS.
+  로컬 PASS이며 최종 판정은 CI Release Gate(PR 생성 후)에서 한다.

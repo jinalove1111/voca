@@ -1301,12 +1301,19 @@ export function useStudent(studentId, legacyName) {
   // starGrantLog가 담당(원래 이 배열이 dedup까지 겸했던 걸 단일 경로로
   // 이전, 배열 자체는 데이터 유실 없이 계속 채워짐 — 멀티기기 병합에도
   // 그대로 참여).
-  // wordId가 없는 호출(예: word.dbId가 아직 배정되지 않은 단어)은 "이
-  // 단어를 특정할 수 없다"는 뜻이라 dedup 자체가 불가능 — 매번 지급하는
-  // 기존 레거시 동작을 그대로 유지(매번 고유 키를 생성해 grantReward를
-  // 통과시킴, 무제한 반복 지급이 아니라 "이 특정 호출은 항상 새 이벤트로
-  // 취급"이라는 뜻).
-  const markPronunciationOk = useCallback((wordId) => {
+  // 2026-09-12 — wordId가 없는 호출(예: word.dbId가 아직 배정되지 않은
+  // 단어)에 대한 P1 수정(docs/design/REWARD_PATH_AUDIT_2026-09-11.md).
+  // 이전에는 매 호출마다 타임스탬프+랜덤 dedupKey를 새로 생성해 무제한
+  // 반복 지급되는 버그가 있었다(재시도/재렌더/TTS 폴백 onSuccess 중복
+  // 호출/뒤로가기 후 재연습마다 +1). 지금은 wordText(호출자가 함께 넘긴
+  // word.word)를 정규화한 토큰으로 dedupKey를 만들어
+  // `pronunciation-unidentified:${token}:${today}` 형태로 고정한다 —
+  // 같은 학생/같은 단어 텍스트/같은 날이면 최대 1개만 지급된다(다른
+  // 단어 텍스트, 또는 다음날이면 다시 지급 가능). 서버 원장으로는 여전히
+  // 올라가지 않는다(parseLegacyDedupKey가 이 prefix에 대해 계속 null을
+  // 반환 — wordId 미상이라 서버화 대상이 아니라는 기존 판단은 그대로
+  // 유지).
+  const markPronunciationOk = useCallback((wordId, wordText) => {
     patch(prev => ({
       round: {
         ...prev.round,
@@ -1317,7 +1324,15 @@ export function useStudent(studentId, legacyName) {
       },
     }))
     if (wordId == null) {
-      return grantReward(1, `pronunciation-unidentified:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`)
+      // wordLibrary.js:3791의 wordSlug와 의도적으로 동일한 정규화를
+      // 인라인으로 재구현 — wordSlug를 import하지 않는 이유: 다수의
+      // 테스트 번들이 scripts/wordLibraryRaceStub.mjs로 wordLibrary
+      // 모듈 전체를 스텁하는데, 그 스텁이 wordSlug를 export하지 않아
+      // import 시 undefined가 되어 번들이 깨진다.
+      const token = (typeof wordText === 'string' && wordText.trim())
+        ? wordText.trim().toLowerCase().replace(/\s+/g, '_')
+        : 'unknown'
+      return grantReward(1, `pronunciation-unidentified:${token}:${todayStr()}`)
     }
     return grantReward(1, `pronunciation:${wordId}:${todayStr()}`)
   }, [patch, grantReward])

@@ -196,6 +196,54 @@ check('TownShopPanel.jsx — TOWN_PHRASES.learnEarn 정확히 1회(헤더 문구
 section('10. registry.mjs 등록 확인')
 check("tests/harness/registry.mjs에 'scripts/testTownUiStatic.mjs' 등록됨", !!registrySrc && /scripts\/testTownUiStatic\.mjs/.test(registrySrc))
 
+// ── 11. PHASE 4(2026-09-11) — 학습→보상 연결 UI/카피 ────────────────────
+section('11. PHASE 4 — 헤더 캡션/빈 상태/가이드 이벤트/잠금·부족 안내')
+const headerSrc = rawByFile['src/components/town/TownHeader.jsx'] || ''
+const headerCode = stripComments(headerSrc)
+
+check('TownHeader.jsx — "공부하면 💵가 생겨요" 캡션 존재', headerSrc.includes('공부하면 💵가 생겨요'))
+check('TownHeader.jsx — 캡션이 text-xs(12px) 이상 클래스를 씀', /<p className="text-xs[^"]*">\s*공부하면 💵가 생겨요\s*<\/p>/.test(headerSrc))
+check('TownHeader.jsx — 캡션에 whitespace-nowrap(줄바꿈 없음)', /text-xs[^"]*whitespace-nowrap[^"]*"[^>]*>\s*공부하면 💵가 생겨요/.test(headerSrc))
+check('TownHeader.jsx — 캡션에 text-[10px]/text-[9px] 같은 12px 미만 폰트 사용 안 함', !/text-\[(9|10|11)px\][^"]*"[^>]*>\s*공부하면 💵가 생겨요/.test(headerSrc))
+
+check('TownShopPanel.jsx — rewardEngine의 REWARD_STARS import', /import\s*\{\s*REWARD_STARS\s*\}\s*from\s+['"]\.\.\/\.\.\/utils\/rewardEngine['"]/.test(shopCode))
+check('TownShopPanel.jsx — 빈 상점 안내 카드 문구 존재("아직 💵가 없어요")', shopSrc.includes('아직 💵가 없어요'))
+check('TownShopPanel.jsx — 빈 상점 안내 카드가 REWARD_STARS 변수 보간을 씀(하드코딩 아님)',
+  /REWARD_STARS\['word-session-complete'\][\s\S]{0,80}REWARD_STARS\['writing-complete'\]/.test(shopCode))
+check('TownShopPanel.jsx — 빈 상점 안내 문구에 "💵1," 같은 하드코딩 숫자 없음', !/💵1,|💵2!/.test(shopSrc))
+check('TownShopPanel.jsx — 빈 상점 조건이 balance===0 && ownedIds 길이 0을 확인', /Number\(balance\)\s*===\s*0\s*&&[\s\S]{0,80}ownedIds\)\s*\?\s*ownedIds\.length\s*:\s*0\)\s*===\s*0/.test(shopCode))
+
+check('TownShopPanel.jsx — TOWN_LEVELS import(townLevel.js)', /import\s*\{\s*TOWN_LEVELS\s*\}\s*from\s+['"]\.\.\/\.\.\/utils\/town\/townLevel['"]/.test(shopCode))
+check('TownShopPanel.jsx — 잠김 카드 2번째 줄(목표 별 개수) 존재', /Level \{item\.minLevel\} = ⭐\{starsForLevel\(item\.minLevel\)\}/.test(shopSrc))
+check('TownShopPanel.jsx — 부족액 카드에 "(공부하면 모여요)" 안내 추가', shopSrc.includes('(공부하면 모여요)'))
+check('TownShopPanel.jsx — "💵 N 더 필요" 문구는 그대로 유지됨', /💵\s*\{shortfall\(item, balance\)\}\s*더 필요/.test(shopSrc))
+
+check('TownInventory.jsx — 빈 보관함 안내 문구("상점에서 첫 아이템을 사보세요 🌳")', invSrc.includes('상점에서 첫 아이템을 사보세요 🌳'))
+check('TownInventory.jsx — 빈 보관함 "상점으로 가기" 버튼 44px+', buttonWithLabelHasTouchTarget(invCode, '상점으로 가기'))
+check('TownInventory.jsx — onGoShop prop 시그니처에 존재', /function TownInventory\(\{[^}]*onGoShop[^}]*\}\)/.test(invCode))
+
+check('TownScreen.jsx — TownInventory에 onGoShop={() => setTab(\'shop\')} 전달', /onGoShop=\{\(\)\s*=>\s*setTab\('shop'\)\}/.test(screenCode))
+check('TownScreen.jsx — earn_hint/welcome 분기(잔액0 & 보유0)', /noProgressYet[\s\S]{0,40}balance === 0 && ownedIds\.length === 0/.test(screenCode))
+check('TownScreen.jsx — showGuide(noProgressYet ? \'earn_hint\' : \'welcome\') 호출', /showGuide\(noProgressYet \? 'earn_hint' : 'welcome'\)/.test(screenCode))
+
+check('townMessages.js — earn_hint 이벤트 템플릿 존재(reactionId: study)', /earn_hint:\s*\{\s*reactionId:\s*'study'/.test(townMessagesSrc))
+check('townMessages.js — level_progress 이벤트 템플릿 존재(reactionId: ponder)', /level_progress:\s*\{\s*reactionId:\s*'ponder'/.test(townMessagesSrc))
+check('townMessages.js — 기존 이벤트(welcome/purchase_success/locked/levelup 등) 문구 불변', [
+  "welcome: { reactionId: 'hello', text: 'Welcome to Paul Town! 오늘도 마을을 키워볼까요?' }",
+  "purchase_success: { reactionId: 'great', text: 'Great job! {name}을(를) 샀어요!' }",
+  "locked: { reactionId: 'study', text: 'Level {level}에서 열려요' }",
+  "levelup: { reactionId: 'levelup', text: 'Small Steps, Big Dreams. Level {level}!' }",
+].every((line) => townMessagesSrc.includes(line)))
+
+// ── 12. 새 버튼/이미지 회귀 가드 ─────────────────────────────────────────
+section('12. PHASE 4 — 새 <img> 없음 / 저작권 문구 없음 / 브랜드 문구 1회 유지')
+// TownInventory.jsx는 기존에도 소유 아이템 에셋용 <img>가 있으므로(변경
+// 대상 아님) 여기서는 이번 PHASE 4에서 새로 손댄 TownHeader.jsx만 검사한다.
+check('src/components/town/TownHeader.jsx — 새 <img> 태그 없음(PHASE 4 추가분)', !/<img/.test(rawByFile['src/components/town/TownHeader.jsx'] || ''))
+const allTownSrcForBrandCheck = TOWN_COMPONENT_FILES.map((f) => rawByFile[f] || '').join('\n') + '\n' + (townMessagesSrc || '')
+check('마을 코드 전체 — "Hogwarts/Harry/Potter" 문자열 없음(저작권 회피)', !/Hogwarts|Harry|Potter/i.test(allTownSrcForBrandCheck))
+check('TownShopPanel.jsx — TOWN_PHRASES.learnEarn 여전히 정확히 1회(PHASE 4로 늘지 않음)', countOccurrences(shopSrc, 'TOWN_PHRASES.learnEarn') === 1)
+
 // ── 결과 ──────────────────────────────────────────────────────────────
 console.log(`\n총 ${totalPassed + totalFailed}개 단언 — PASS ${totalPassed} / FAIL ${totalFailed}`)
 if (failures.length > 0) {

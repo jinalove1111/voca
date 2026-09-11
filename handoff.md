@@ -1,7 +1,369 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-11 (126차, 야간 SAFE 세션 — Paul Town V1 하드닝 +
-45명 확장 준비, 브랜치 `qa/overnight-town-2026-09-11`, PR #32 미머지,
-Production DB WRITE 0/SQL Editor WRITE 0. 125차 이하 보존)_
+_최종 갱신: 2026-09-12 (128차, pronunciation-unidentified P1 수정 완료 +
+v3_50 POST verify 운영자 실행 패키지 + 이코노미 정책 OPTION C(관찰) 확정,
+브랜치 `qa/town-loop-hardening-2026-09-11` 계속, PR #36 갱신 대기(미머지),
+이 세션 Production DB WRITE 0. 127차 이하 보존)_
+
+## 2026-09-12 (128차) — pronunciation-unidentified P1 수정 + v3_50 POST verify 운영자 패키지 + 이코노미 OPTION C 확정
+
+### 0. 안전 요약(최우선 확인)
+
+이 세션 자체가 실행한 Production DB WRITE는 0이다. `supabase_v3_50_town_v1.sql`
+자체는 127차 이전에 운영자가 이미 1회 적용 완료한 상태이고, 이번 세션은
+그 적용 결과의 POST verify 실행 패키지(BLOCK B/B-2/C/C-2/D)를 준비만
+했을 뿐 실행하지 않았다(service_role 필요, CLAUDE.md 규칙 8) — SQL
+실행 0건. 기능 플래그 전부 OFF 유지, welcome 크레딧 지급 0건, Pilot A
+미활성화, PR #36 merge 0, 배포 0. 이번 세션에서 실제로 수정된 코드는
+`src/hooks/useStudent.js`/`src/components/WordDetail.jsx`/
+`src/components/QuizGame.jsx` 3개 파일과 테스트
+`scripts/testPronunciationRewardOnce.mjs`/`tests/harness/registry.mjs`
+노트뿐이며, 보상 금액(1★)·`REWARD_DAILY_CAP`·`rewardEngine.js`·`api/`·
+서버 원장 동작·이코노미 상수는 전부 무변경이다.
+
+### 1. P1 수정: pronunciation-unidentified 비멱등 키 (CLOSED)
+
+**수정 전 재현**: `node scripts/testPronunciationRewardOnce.mjs`
+scenario 8에서 `markPronunciationOk(null)`을 5회 호출하면 로컬 별이
+5개 늘고(⭐5), `markPronunciationOk(undefined)`를 추가 호출하면
+6개까지 늘었으나, 서버 보상 POST(`postRewardEvent`)는 0회였다 — 매
+호출마다 키가 `pronunciation-unidentified:${Date.now()}:${random}`
+형태로 새로 생성돼 매번 달랐기 때문이다.
+
+**근본 원인**: `src/hooks/useStudent.js`의 `markPronunciationOk`가
+`word.dbId`(wordId)가 null일 때 타임스탬프+난수 조합으로 dedupKey를
+만들어, `grantReward`의 로컬 `starGrantLog` 중복 제거가 이 값에 절대
+매칭될 수 없었다. `parseLegacyDedupKey`도 이 접두사(`pronunciation-
+unidentified:${timestamp}:${random}`)를 인식하지 못해 null을 반환하므로
+서버 쪽 원장 중복 제거도 걸리지 않았다.
+
+**수정 내용**(src 3파일):
+- `markPronunciationOk(wordId, wordText)`로 시그니처 확장. wordId가
+  null/undefined이면 키를 `pronunciation-unidentified:${token}:
+  ${todayStr()}`로 생성 — `token`은 wordText를 trim → lowercase →
+  공백을 `_`로 치환한 값(`src/utils/wordLibrary.js:3791`의 `wordSlug`
+  로직을 그대로 미러링한 인라인 정규화이며, `wordSlug` 자체를 import
+  하지는 않았다 — 이 함수를 쓰는 테스트 스텁
+  `scripts/wordLibraryRaceStub.mjs`가 약 20개 테스트 번들에서 쓰이는데
+  `wordSlug`를 export하지 않기 때문). wordText가 비었으면 토큰은
+  `'unknown'`.
+- 호출부 갱신: `src/components/WordDetail.jsx`가
+  `onMarkPronunciationOk?.(word.dbId, word.word)`로, `QuizGame.jsx`의
+  `handlePronSuccess`가 `current?.word?.dbId, current?.word?.word`로
+  각각 두 번째 인자를 추가 전달.
+- 식별 경로(`pronunciation:${wordId}:${today}`)는 바이트 단위로 완전
+  동일 — 변경 없음.
+- 비식별 경로(wordId null)는 여전히 서버로 전송되지 않는다
+  (`parseLegacyDedupKey`가 이 접두사에 대해 여전히 null 반환) — 이는
+  의도된 것으로, 새로운 PD 적립이 생기지 않아 이코노미에 영향이 없다.
+
+**멱등성 전략**: 학생 레코드 × 정규화된 단어 텍스트 × 로컬 날짜
+조합으로 결정적 키를 만든다. 같은 틱 더블클릭 / 별도 틱 재시도 /
+`onEnd` 3회 발화 / 재렌더 / 리마운트(refresh) / 대소문자·공백만 다른
+변형 → 모두 1★로 수렴. 다른 단어 텍스트는 각각 독립적으로 1★. 다른
+학생은 서로 독립(잘못된 학생 UUID로는 0). 다음 날에는 1★ 추가. 단어
+텍스트가 없는 호출도 `'unknown'` 토큰으로 하루 1회로 수렴.
+
+**테스트**: `scripts/testPronunciationRewardOnce.mjs`의 scenario 8을
+재작성(KNOWN GAP 라벨 제거) — 54 → **70단언**, 70/70 PASS.
+`tests/harness/registry.mjs`의 해당 스크립트 노트를 갱신(`extra:false`
+는 그대로 유지).
+
+**이번 세션 로컬 검증 실행**: `npm run build` PASS(32초) ·
+`testPronunciationRewardOnce` 70/70 · `testWritingCompleteBoundary`
+55/55 · `testTownFullLoop45` 170/170 · `testLegacyGrantCoverage` 60/60 ·
+`testTownWelcomeExactlyOnce` 87/87 · `testTownUiStatic` 95/95 ·
+`verify:reward` PASS(`rewardEngine` + `rewardFlow` 55/55) ·
+`testDoubleEvents` 45/45. `npm run verify:all`과 CI는 이 문서 작성
+시점 기준 **실행 중**이었다 — 결과를 추측하지 않고 다음 체크포인트
+갱신분(`.ai-status/lead-p1-pronunciation-2026-09-12.json`)을 참고하도록
+남긴다.
+
+### 2. v3_50 POST verify — 운영자 실행 패키지 (이번 세션 SQL 실행 0건, Production WRITE 0)
+
+운영자는 127차 이전에 `supabase_v3_50_town_v1.sql`을 이미 정확히 1회
+적용했고, 그 직후 운영자가 직접 실행한 BLOCK E 결과는 `new_item_
+purchases` 0행 / `welcome_rows_granted_so_far` 0행 /
+`purchase_fn_body_md5_now` `6f049ec7d802b1bd8b77e841c37a5061`이었다.
+`production_v3_50_baseline_and_post_verify.sql`에 남아 있는 나머지
+블록(운영자가 service_role로 직접 실행해야 함, 이번 세션은 실행하지
+않음)의 기대 PASS 값:
+
+- **BLOCK B**: `town_items_new_columns_present` = 4 · `fn_town_level_
+  for_stars` = 1 · `fn_grant_town_welcome_credit` = 1 ·
+  `secdef_town_functions` = 3 · `anon_exec_purchase` = false ·
+  `auth_exec_purchase` = false · `service_exec_purchase` = true ·
+  `anon_exec_welcome` = false · `auth_exec_welcome` = false ·
+  `service_exec_welcome` = true · `anon_exec_state` = false ·
+  `service_exec_state` = true. 이 중 하나라도 `'ABSENT'`면 FAIL.
+- **BLOCK B-2**: `lv_0 | lv_19 | lv_20 | lv_1499 | lv_1500` =
+  `1 | 1 | 2 | 9 | 10`.
+- **BLOCK C**: `town_items_count` 17 · `town_items_active` 17 ·
+  `town_items_category_null` 0 · `town_items_min_level_out_of_range` 0 ·
+  `town_items_dollars` 17 · `shop_lamp_row` =
+  `60|dollars|true|decoration|1` · `new_items_present` 16 ·
+  `dollar_ledger_welcome_rows` 0 · `purchase_fn_body_md5_after` =
+  `6f049ec7d802b1bd8b77e841c37a5061`(BLOCK E 값과 반드시 일치) ·
+  `purchase_fn_has_locked_reason` = true. BLOCK C-2는 17행 목록.
+- **BLOCK D**(`must_not_change`, BLOCK A 베이스라인 대비): students/
+  classes/SCA/textbooks/words md5+count 동일 · `dollar_rules_count`/
+  md5 동일 · `trigger_reward_to_dollars` = 1 · `star_purchases_count`
+  동일 · `town_purchases_count`/md5 동일 · `dollar_ledger_welcome_
+  rows` 0. 허용된 드리프트(A→D 사이 학생이 실제로 학습해 생기는 변화):
+  `reward_ledger`/`xp_ledger`/`dollar_ledger`/`dollar_balances`/
+  `student_progress`/`word_status`의 건수·합계는 **학습으로만** 증가할
+  수 있다 — 새로 생긴 `dollar_ledger` 행은 전부 `source_type`이
+  `'welcome'`도 `'migration'`도 아니어야 한다. `reward_ledger_legacy_
+  rows`는 변하면 안 되고, shop-lamp 가격은 60 그대로여야 한다. 그
+  외의 차이가 나오면 FAIL → `supabase_v3_50_town_v1_ROLLBACK.sql`
+  실행(`new_item_purchases` = 0인 동안은 안전).
+- **상태**: 운영자가 B/B-2/C/C-2/D를 실행할 수 있도록 READY. 이번
+  세션(에이전트)은 실행하지 않았다(service_role 필요, 규칙 8).
+
+### 3. 이코노미 정책 결정: OPTION C 확정 — Pilot A 관찰 우선
+
+가격표(`town_items.price`) 변경과 `dollar_rules` 적립률 변경은 이번
+PR에서 **전부 적용하지 않는다**. 대신 Pilot A에서 실측 관찰: 학생당
+일일 적립 PD, 첫 구매 시점, 구매한 아이템, 남은 잔액, 재참여 빈도를
+지켜본 뒤 가격/적립률 조정 여부를 사후에 결정한다. 추정치는 127차
+그대로 유지(평범 ≈36 / 열심 ≈75 / 매우많이 ≈186 PD/일) — 이번 세션에서
+재계산하지 않았다.
+
+### 4. 가드레일 유지 확인
+
+PR #36 미머지, 배포 0, Production DB WRITE 0, Town 플래그 OFF, welcome
+지급 0건 — 전부 유지 확인. PR #36은 이번 세션의 수정 커밋 반영과 함께
+갱신될 예정이며 CI 재실행은 대기 중이다.
+
+## 2026-09-11 (127차) — 6h 자율 세션: Paul Town 학습 루프 하드닝 (qa/town-loop-hardening-2026-09-11, PR 미머지, Production WRITE 0, v3_50 적용 후 감사)
+
+### 0. 안전 요약(최우선 확인)
+
+이 세션 자체가 실행한 Production DB WRITE는 0이다. 다만 이 세션이
+시작되기 **전에 운영자가 `supabase_v3_50_town_v1.sql`을 정확히 1회
+적용**했다(Success. No rows returned) — 126차 시점까지는 미적용
+상태였던 것이 이번에 바뀌었다. 운영자가 직접 실행한 post-apply BLOCK
+E 확인 결과: `new_item_purchases` 0행 · `welcome_rows` 0행 ·
+`purchase_town_item` 함수 본문 md5 `6f049ec7d802b1bd8b77e841c37a5061`
+(예상 해시와 일치, 임의 변조 없음). 이 세션은 그 적용 결과를 anon key
+**READ-ONLY**로 감사하는 역할이었다(§4). 기능 플래그 전부 OFF 유지 ·
+welcome 크레딧 지급 0건 · Pilot A 미활성화 · PR merge 0 · 배포 0 · 이
+세션의 Supabase 접촉은 Phase 1 anon key READ-ONLY 감사 1회뿐
+(SELECT/HEAD, INSERT/UPDATE/DELETE/DDL 0).
+
+이 섹션도 상위(리드) 세션의 작업 로그를 docs-maintainer가 옮겨 적은
+것이다. 커밋 SHA 6개는 `.git/logs/HEAD`를 직접 열람해 전부 존재를
+재확인했고, 등록된 신규 verify 스크립트는 `tests/harness/registry.mjs`
+를 직접 읽어 각 스크립트의 노트(단언 수·범위)가 상위 세션이 보고한
+내용과 실질적으로 일치함을 교차 확인했다(§1). SQL 내용·이코노미
+감사 수치 자체는 이 문서화 세션이 재계산하지 않고 상위 세션이 제공한
+값을 그대로 인용했다. `docs/design/TOWN_ECONOMY_AUDIT_2026-09-11.md`/
+`REWARD_PATH_AUDIT_2026-09-11.md`는 이 세션과 동시에 다른 에이전트가
+편집 중이라(규칙 16) 이 문서화 세션은 그 두 파일을 열람·수정하지
+않았다 — 관련 내용은 상위 세션이 제공한 요약만 인용한다.
+
+### 1. 브랜치·커밋 이력
+
+브랜치 `qa/town-loop-hardening-2026-09-11`, 이번 6h 세션 커밋(SHA는
+`.git/logs/HEAD` 직접 대조로 전부 존재 확인):
+
+1. `be49551` docs(town): ASSET REQUEST LIST 21건(17 아이템 + 배경
+   타일 3 + 간판 프레임 1; assetKey/치수/투명/방향/배치/우선순위) +
+   격자 가독성 리뷰.
+2. `2ece329` feat(town): 학습→보상 연결 UX(additive) — 💵 캡션
+   "공부하면 💵가 생겨요" · 빈 지갑 안내(`REWARD_STARS` 값 참조) ·
+   잠금 카드 "Level N = ⭐M" · 부족액 "(공부하면 모여요)" · 빈
+   보관함→상점 이동 버튼 · Paul `earn_hint` 가이드
+   (`scripts/testTownUiStatic.mjs` 70→95).
+3. `12c1a30` docs(reward): 보상 경로 전수 감사 매트릭스(17 이벤트 ×
+   트리거/★/XP/PD/멱등키/클라·서버 가드/일일 한도/재시도/더블클릭/
+   refresh/relogin) + GAPS P1~P3(`docs/design/
+   REWARD_PATH_AUDIT_2026-09-11.md`, 타 세션 소유 파일 — 인용만).
+4. `3beae92` test(town): `scripts/testTownFullLoop45.mjs`(신규) —
+   45명 전체 루프 stress 170단언. 로그인→학습 보상(실
+   `grant-xp` 원장 분기)→dollar 트리거 에뮬→welcome(더블클릭)→
+   상점→구매(tree)/locked(cat)/invalid→배치·이동→refresh→relogin,
+   5/10/20/45 동시성.
+5. `7684c13` test(economy): `scripts/testTownEconomySim.mjs`(신규) —
+   Town 이코노미·레벨 시뮬(실 상수 import, 하드코딩 금액 0). **핵심
+   재발견**: 2026-09-06 `52db9e4` 이후 레거시 6경로도 서버 원장 기록
+   → PD 12종 적립(평범 36 / 열심 75 / 매우많이 186 PD/일; 구 가정
+   6/15/30 PD/일).
+6. `23fbb88` test(reward): `scripts/testWritingCompleteBoundary.mjs`
+   (신규) — writing-complete 경계 55단언: 4→5 정확히 1회, 5→6/6→7/10
+   추가 0, refresh 0, 클라우드 복원 relogin 0, 타 UUID 독립, 재시도
+   동일 키, 날짜 경계 다음날 1회.
+
+**추가 확인(이 문서화 세션이 `.git/logs/HEAD` 열람으로 독립 확인,
+상위 세션이 제공한 목록 밖)**: 위 6개 이후 이 브랜치에 커밋이 두 개
+더 이어졌다 — `eb1c8367` `docs(economy): 전제 정정 — 서버 원장 도달
+유형 6종→12종(52db9e4), PD/일 36/75/186, 가격 다수 TOO CHEAP, 기존
+학생 09-08부터 PD 적립 중, 옵션 A~D(미적용)`(동시 편집 중인
+`TOWN_ECONOMY_AUDIT_2026-09-11.md` 갱신으로 추정, 그 파일 소유
+에이전트 영역이라 이 세션은 열람·수정하지 않음) · `e10f40e8`
+`test(e2e): [town] 380→480 — Phase 4 UX(💵 캡션·빈 지갑 카드·잠금
+⭐필요치·부족액 안내·빈 보관함→상점) + Phase 10(격자 더블탭 1배치·긴
+라벨 오버플로·slow network 1.2s·환영 토스트 위치/자동 소멸)`. 이
+문서화 세션은 두 커밋의 diff 내용을 검증하지 않았고(다른 세션
+소유·아직 실행 결과 미수신), 커밋 메시지 존재만 인용한다 — 실제
+`npm run verify:e2e` 재실행 결과는 §8에 "(수신 후 append)"로 남긴다.
+
+### 2. Phase 9~10 — 학습 루프 무결성(45명) + 보상 안전 확인
+
+`scripts/testTownFullLoop45.mjs`(170단언, 커밋 `3beae92`)와
+`scripts/testWritingCompleteBoundary.mjs`(55단언, 커밋 `23fbb88`)로
+확인한 결과:
+
+- writing-complete 4→5 정확히 1회, 5→6/6→7 추가 0, refresh 0,
+  relogin 0, 타 UUID 독립, 동일 키 재시도 안전, 날짜 경계 1회 —
+  55단언 PASS, `src/` 소스 무변경.
+- 기존 회귀 9스위트 817단언 PASS(레거시 리스트는 이전 세션들이
+  이미 TESTING.md/registry.mjs에 등록한 도메인 전체 — 이 세션이
+  새로 추가한 스위트가 아니라 무회귀 확인 목적으로 재실행한 것).
+- 45명 전체 루프 170단언(leak 0, lost 0, exact balance/중복/timeout
+  재시도/locked→unlocked/invalid 전부 기대대로).
+- GAPS(운영자 결정/후속 대응 필요, 코드 무변경):
+  - **pronunciation-unidentified 비멱등 키(P1, NEEDS DECISION)** —
+    실측 발생 0건이지만 구조적으로 멱등키가 불안정할 수 있는 경로로
+    보고됨(상위 세션 원문). 이번 세션은 재현 테스트를 아직 작성하지
+    않았다(§8 pronunciation exactly-once 테스트 placeholder 참고).
+  - L3 cap TOCTOU(P2) — 기존에 이미 알려진 관찰(`testRewardCapRace.mjs`
+    계열, `tests/harness/registry.mjs` 참고)과 동일 계열의 재확인.
+  - `postXpEvent` 재시도 큐 없음(P3).
+  - 탭 간 storage 리스너 없음(P3).
+
+### 3. P1 문서 정정 — 이코노미 전제 재계산(`scripts/testTownEconomySim.mjs`)
+
+**재발견**: 커밋 `52db9e4`(2026-09-06)부터 `grantReward()`가 레거시
+6경로(`pronunciation`/`mission-clear`/`daily-mission-bonus`/
+`spelling-combo`/`sticker-duplicate`/`matchgame`)도
+`parseLegacyDedupKey`→`postRewardEvent`로 서버 원장에 기록하도록
+바뀌어 있었다 — 그 결과 `reward_ledger` 도달 유형은 12종
+(`legacy-baseline`만 제외)이고, 전부 `dollar_rules` rate 1로 Paul
+Dollar(PD)가 적립된다.
+
+**영향**: 126차 이전 문서들(`TOWN_ECONOMY_AUDIT_2026-09-11.md` 초판,
+PR #32 v3)이 전제로 삼았던 "6종만 PD 적립, 일 6~15 PD" 가정이 더 이상
+사실이 아니다. `scripts/testTownEconomySim.mjs`가 `rewardEngine.js`/
+`townLevel.js`/`townCatalog.js`/`paulRankShared.js`/`matchGame.js`의
+실제 상수를 그대로 import해 재계산한 결과, 학생-일 모델 3종(평범/
+열심/매우많이) 기준 PD/일은 **36 / 75 / 186**이다(구 가정 6/15/30
+대비 6배 수준). 이 재계산에 따르면 카탈로그 가격 다수가 TOO CHEAP —
+`tree`(10 PD)는 평범 모델에서 1일 미만, L1~L3 합계(425 PD)는 열심
+모델 기준 약 6일, `clock-tower`(200 PD)는 평범 모델 기준 약 6일이면
+도달한다. 기존(마이그레이션 이전부터 학습 중이던) 학생은 v3_49가
+가동된 2026-09-08부터 이미 PD가 누적되고 있었으므로, Pilot A를
+활성화하는 시점에는 이미 수백 PD를 보유한 학생이 있을 수 있다
+(welcome 20 PD는 이 규모 대비 미미). 레벨(`reward_totals`, 레거시
+포함 기준)도 기존 학생 다수가 이미 L8~L10 구간으로 추정된다. 가격
+구간의 "죽은 존"(아무도 도달 못 하는 구간)은 0건.
+
+**운영자 결정 옵션(전부 미적용, 코드/SQL/가격 변경 0)**:
+- A. 가격 인상(`town_items.price`) ×3~5.
+- B. `dollar_rules`의 고빈도 유형(레거시 6종 등) 적립률 rate를 0 또는
+  분수로 하향.
+- C. Pilot A는 현재 가격/적립률 그대로 두고 관찰 후 조정.
+- D. A+B 조합.
+
+**필수 선행 조치**: 위 옵션 중 무엇을 택하든, 플래그를 켜기 전에
+운영자가 진단 SQL 3블록으로 Pilot A 대상 학생 5명의
+`dollar_balances` 현재 잔액을 먼저 확인해야 한다(§6 NEXT ①).
+
+### 4. v3_50 적용 후 Phase 1 anon READ-ONLY 감사(9/9 PASS)
+
+운영자가 `supabase_v3_50_town_v1.sql`을 1회 적용(§0)한 뒤, 이 세션이
+anon key READ-ONLY로 실측 확인:
+
+- `town_items` 17행(신규 16 + 기존 `shop-lamp` 1) — `category` null
+  0건 · `min_level` 1~10 범위 · `asset_key` 전부 존재 ·
+  `price_currency` 전부 `dollars` · `shop-lamp` 가격 60/`active`
+  불변 · 시드 가격·레벨 16종이 설계 문서와 일치.
+- 드리프트 점검: `students` 1행 변경(학생 A***, UUID
+  `8a109c98…`, Unit4→Unit5로 정상 학습 진행) · `xp_ledger` +1행
+  (`quiz-complete`, 05:59Z) · `student_progress.updated_at` 갱신 —
+  전부 학생의 정상 학습 활동이며 마이그레이션과 무관한 테이블. 그
+  외 `classes`/`student_class_assignments`/`textbooks`/`units`/
+  `words`/`word_status`는 동일(변경 0).
+- 함수 존재·권한(post-apply BLOCK B/C/D)은 `service_role` 전용
+  RPC/테이블이라 anon key로는 조회할 수 없다 — 운영자 확인 대기
+  (§6 NEXT).
+
+Phase 1 감사 9개 항목 전부 PASS. 이 세션의 Supabase 접촉은 이
+감사 1회뿐(SELECT/HEAD only).
+
+### 5. UX/브랜드 가드레일
+
+`2ece329`(학습→보상 연결 UX)와 `be49551`(자산 요청 목록)이 지킨
+제약: 신규 이미지 자산 0(전부 Paul 기존 21종 재사용) · British cosy
+village 톤의 짧은 문구만 사용 · 저작권/제3자 브랜드 문자열 0 · 새로
+추가된 버튼은 전부 최소 44px 이상 · `HeroReaction`은 화면당 1장
+유지. `docs/design/PAUL_TOWN_ASSET_REQUEST_LIST` 계열 문서에 자산
+요청 21건(P1 7 · P2 7 · P3 6+1) 정리 — 실제 일러스트 제작은 이번
+세션 범위 밖(여전히 이모지 폴백).
+
+### 6. NEEDS DECISION(운영자)
+
+- 가격표(`town_items.price`)/적립률(`dollar_rules`) 조정 A~D(§3).
+- `pronunciation-unidentified` 비멱등 키 처리(§2, 실측 0건이지만
+  구조적 위험).
+- `isEmptyRecord()` tombstone-only 레코드 오분류 처리(126차에서
+  이월, 여전히 미해결·코드 무변경, P3).
+- `postXpEvent` 재시도 큐 부재(P3, §2).
+- 마을 일러스트 실제 제작(126차에서 이월).
+- BLOCK B/C/D(함수 존재·권한) 운영자 직접 실행/확인(§4).
+- `TOWN_V1_WELCOME_ENABLED` 서버 env 설정 시점.
+- 기능 플래그 `paulTownV1` ON 범위(Pilot A 5명 기기부터인지 등).
+
+### 7. 다음 세션 작업 순서(우선순위 1~3)
+
+1. 운영자가 진단 SQL 3블록으로 Pilot A 대상 학생 5명의
+   `dollar_balances` 잔액을 먼저 확인한다(§3 필수 선행).
+2. 확인된 잔액을 근거로 가격/적립률 옵션 A~D 중 하나를 결정 →
+   반영은 DB 값만(코드 변경 없음) → 반영 후 서버 env ·
+   `paulTownV1` 플래그를 Pilot A 5명 범위로 ON.
+3. Pilot A 활성화 24시간 후 같은 진단 SQL을 재실행해 실제 적립·
+   지출 패턴을 재확인한다.
+
+### 8. 검증 결과 수신 — E2E/pronunciation 완료, `verify:all`은 아직 대기
+
+**E2E 확장(커밋 `e10f40e`, 380→480단언)**: Phase 4 UX 체크(💵 캡션 ·
+빈 지갑 카드(`townWelcomeDisabled` 옵션) · 잠금 카드 ⭐필요치
+정규식 · 부족액 "(공부하면 모여요)" · 빈 보관함→상점 버튼) + Phase
+10(격자 더블탭 1배치 · 긴 라벨 오버플로 · slow network 1.2s · 환영
+토스트 위치/자동 소멸). `npm run build` PASS · `npm run verify:e2e`
+**735/735 ×2연속**(student 34 · admin 21 · mobile 178 · entrance 12 ·
+**town 480**, 미mock 요청 0, 실결함 0). `tests/e2e/lib/mockRoutes.mjs`
+에 opt-in 옵션 `townWelcomeDisabled`/`slowGrantXpMs`를 추가했고 기존
+스펙은 기본값 유지로 무영향.
+
+**pronunciation exactly-once(커밋 `2cfecdc`)**:
+`scripts/testPronunciationRewardOnce.mjs`(신규) 54/54 — 더블클릭 ·
+TTS 폴백 onSuccess 2회 · onEnd 3회 · 재렌더 · 리마운트 · 재시도 →
+단어/일 1회 + `postRewardEvent` 1회, 다음날 1회, 두 단어 2회.
+**`pronunciation-unidentified`는 비멱등 상태 그대로 확인됨**(5회
+호출 → 로컬 5★ 반영, 서버 `postRewardEvent` 0회) — 이 세션은 수정
+없이 **현재 동작을 회귀로 고정**했다(§2/§6의 KNOWN GAP/NEEDS
+DECISION은 여전히 미해결 상태로 남는다). `src/` 무변경.
+
+**기타 커밋**: `eb1c836` docs(economy) —
+`docs/design/TOWN_ECONOMY_AUDIT_2026-09-11.md` §0 정정 +
+`docs/design/REWARD_PATH_AUDIT_2026-09-11.md` 상단 정정 노트(두
+문서 모두 타 세션 소유, §3의 재발견 내용과 정합 — 이 문서화 세션은
+diff를 열람하지 않았다) · PR #32 패키지 v4 갱신·푸시(`0d2170b`,
+**미머지**).
+
+**`npm run verify:all`(HEAD `2cfecdc`, 로컬 2회 실행)**: 1차 실행은
+registry-coverage 도메인 FAIL 1건 — 원인은 `verify:all` 시작 시점에
+`tests/harness/registry.mjs`의 `testPronunciationRewardOnce` 등록
+줄이 아직 커밋/저장 전이던 타이밍 레이스였고, 단독 재실행
+`node scripts/testRegistryCoverage.mjs`는 8/8 PASS로 확정(앱/테스트
+결함 아님, ENVIRONMENT/TIMING 분류). 등록 커밋 후 클린 2차 재실행은
+**ALL DOMAINS PASS(SKIP 도메인 제외), FAIL 줄 0, exit 0** — 이번에는
+`verify:all` 내부 E2E도 메모리 킬 없이 완주해 **735/735 PASS/SKIP 0**
+(student 34 · admin 21 · mobile 178 · entrance 12 · town 480). 신규
+스위트의 `verify:all` 내 결과: `testWritingCompleteBoundary` 55/55 ·
+`testPronunciationRewardOnce` 54/54 · `testRegistryCoverage` 8/8 ·
+`testBundleBudget` 10/10 · `rewardSystem` 도메인 47개 스크립트 PASS.
+로컬 PASS이며 최종 판정은 CI Release Gate(PR 생성 후)에서 한다.
 
 ## 2026-09-11 (126차) — 야간 SAFE 세션: Paul Town V1·45명 확장 준비 (qa/overnight-town-2026-09-11, PR 미머지, Production WRITE 0)
 

@@ -37,12 +37,16 @@ export default function TownHeader({ level, starsEarned, dollarsAvailable }) {
           {nextEntry ? `다음 레벨까지 ⭐ ${remaining}` : '최고 레벨이에요!'}
         </p>
       </div>
-      <span
-        className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 text-xs font-black px-2.5 py-1.5 rounded-full flex-shrink-0"
-        title="사용 가능한 Paul Dollar"
-      >
-        💵 {formatDollars(dollarsAvailable)}
-      </span>
+      <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
+        <span
+          className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 text-xs font-black px-2.5 py-1.5 rounded-full"
+          title="사용 가능한 Paul Dollar"
+        >
+          💵 {formatDollars(dollarsAvailable)}
+        </span>
+        {/* PHASE 4(2026-09-11) — 학습→보상 연결 캡션. 1줄, 12px 이상(text-xs). */}
+        <p className="text-xs text-gray-400 whitespace-nowrap">공부하면 💵가 생겨요</p>
+      </div>
     </div>
   )
 }

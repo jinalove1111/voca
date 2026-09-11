@@ -37,7 +37,7 @@ import { TOWN_ITEM_META } from '../../../src/utils/town/townCatalog.js'
 // 그 외 호스트(Supabase 프로젝트/Vercel 등)는 전부 위반으로 기록한다.
 const ALLOWED_EXTERNAL_ASSET_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.jsdelivr.net']
 
-export async function installMocks(page, { tables } = {}) {
+export async function installMocks(page, { tables, townWelcomeDisabled = false, slowGrantXpMs = 0 } = {}) {
   const db = createDb(tables || buildFixtureTables(), EMBEDS)
   const unmockedRequests = []
   const externalAssetRequests = []
@@ -241,6 +241,13 @@ export async function installMocks(page, { tables } = {}) {
     category: m.category, sortOrder: m.sortOrder, minLevel: m.minLevel, assetKey: `${m.category}/${id}`,
   }))
   db._townCalls = { get_town_shop_state: 0, claim_town_welcome: 0, purchase_town_item: {} }
+  // PHASE 4/10(townV1.spec.mjs, 2026-09-11) — 두 신규 회귀(빈 지갑 안내
+  // 카드/느린 네트워크)를 결정론적으로 재현하려면 mock 옵션이 꼭 필요했다
+  // (townShopV1 useEffect의 마운트당 1회 가드 + 실 네트워크 타이밍 때문에
+  // 기존 mock만으로는 "잔액 0을 계속 유지" / "응답 지연"을 안정적으로
+  // 만들 수 없다). db._townWelcomeDisabled는 installMocks() 호출 뒤에도
+  // spec 쪽에서 그대로 덮어쓸 수 있게 db 프로퍼티로 노출한다.
+  db._townWelcomeDisabled = !!townWelcomeDisabled
   const townStates = {}
   // advisory lock 흉내 — 실 서버(purchase_town_item RPC)의 원자성 가정을
   // 재현한다. .catch(()=>{})로 체인 꼬리를 항상 비-거부 상태로 유지해,
@@ -266,6 +273,14 @@ export async function installMocks(page, { tables } = {}) {
       return
     }
     apiCallLog.push({ url: req.url(), method: req.method(), body })
+
+    // PHASE 10(2026-09-11) SLOW-NETWORK — 실 네트워크 지연을 흉내내는 순수
+    // 딜레이. townLock 직렬화 체인보다 먼저 기다려, 여러 요청이 겹쳐도
+    // 각 요청이 최소 slowGrantXpMs만큼 걸리는 실제 "느린 네트워크"에 더
+    // 가깝게 만든다.
+    if (slowGrantXpMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, slowGrantXpMs))
+    }
 
     const resultPromise = townLock.then(async () => {
       const studentId = body.token === 'e2e-mock-token' ? QA_STUDENT_ID : null
@@ -309,6 +324,12 @@ export async function installMocks(page, { tables } = {}) {
 
       // action === 'claim_town_welcome'
       db._townCalls.claim_town_welcome += 1
+      // PHASE 4(2026-09-11) EMPTY-WALLET — db._townWelcomeDisabled이면 항상
+      // granted:false만 돌려줘 잔액 0·보유 0 상태를 안정적으로 유지한다
+      // (townV1.spec.mjs의 빈 지갑 상점 안내 카드 검증 전용).
+      if (db._townWelcomeDisabled) {
+        return { ok: true, granted: false, balanceAfter: state.dollars.available }
+      }
       if (state.welcomeClaimed) {
         return { ok: true, granted: false, balanceAfter: state.dollars.available }
       }

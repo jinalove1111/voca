@@ -362,7 +362,9 @@ export default function QuizGame({ onBack, onAddMission, onMarkQuizSolved, onMar
     // 여부"에 맞는 문구를 고르므로(PronStep 내부, 아래 onSuccess 참고),
     // 이 중간 래퍼가 반환값을 삼키지 않도록 그대로 전달한다. 지급 로직
     // 자체(어떤 인자로 부르는지 등)는 한 글자도 바꾸지 않음.
-    return onMarkPronunciationOk?.(current?.word?.dbId)
+    // current.word.word를 두 번째 인자로 함께 전달 — dbId 미배정 단어일
+    // 때 markPronunciationOk의 폴백 dedup identity로 쓰임(2026-09-12).
+    return onMarkPronunciationOk?.(current?.word?.dbId, current?.word?.word)
   }
 
   const handleNext = () => {

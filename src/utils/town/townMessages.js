@@ -33,6 +33,10 @@ const EVENT_TEMPLATES = {
   levelup: { reactionId: 'levelup', text: 'Small Steps, Big Dreams. Level {level}!' },
   tutorial: { reactionId: 'lets_learn', text: "Let's build your town! 상점에서 사고, 마을에 놓아봐요" },
   first_place: { reactionId: 'happy', text: 'Every word makes your town brighter.' },
+  // PHASE 4(2026-09-11) — 잔액 0/보유 0일 때 첫 진입 가이드(empty state).
+  earn_hint: { reactionId: 'study', text: 'Study today, grow your town! 오늘 공부하면 마을이 자라요' },
+  // PHASE 4(2026-09-11) — 마을 레벨 진행 안내(현재 미배선, 문구만 준비).
+  level_progress: { reactionId: 'ponder', text: 'Level {next}까지 ⭐{remaining}!' },
 }
 
 /**
