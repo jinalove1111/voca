@@ -1,0 +1,54 @@
+{
+  "agent_name": "lead-admin-features-fix-2026-09-12",
+  "role": "Admin Features 패널 접근 버그 원인 규명 + 수정 + PR merge/배포 확인 + Pilot A 사전 체크리스트 작성",
+  "task_id": "admin-features-panel-session-fix-2026-09-12",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-12T00:00:00Z",
+  "updated_at": "2026-09-12T00:00:00Z",
+  "branch": "fix/features-panel-admin-session-2026-09-12",
+  "base": "main aa89e43(main gate SUCCESS 확인 완료, 상세는 handoff.md 130차)",
+  "production_safety": {
+    "db_write_this_session": 0,
+    "sql_editor_execution_this_session": 0,
+    "student_reward_star_xp_pd_class_textbook_word_changes": 0,
+    "feature_flags_changed": 0,
+    "pilot_a_activated": false,
+    "welcome_credits_granted": 0,
+    "pr_merges": 1,
+    "pr_merges_detail": "PR #38 → main aa89e43c99ece2b613d1eb1c7cdcb690828af07d, merge-commit 방식",
+    "deploys": "Vercel 자동 production 1회(merge 트리거, 에이전트 수동 배포 0)",
+    "town_flag_state": "OFF (paulTownV1 미변경)",
+    "town_v1_welcome_enabled_env": "미설정 (무변경)"
+  },
+  "verification": {
+    "root_cause": "관리자 PIN 인증은 AdminScreen React state authed로만 존재. FeatureManagementPanel은 localStorage paulEasyVoca_userRole(rbac.js, 기본 student)만 읽어 MANAGE_FEATURES 판정 — 로그인 흐름 어디도 이 키를 쓰지 않아 새 기기에서 정상 관리자도 접근 거부. 2026-06-23 a7dab44 도입 시점부터의 구조, PR #36/#37 회귀 아님",
+    "fix": "5 files +272/-9 — rbac.js canManageFeatures(adminSession) 순수 함수(저장 없음, role 키 하위 호환) / FeatureManagementPanel.jsx adminSession prop 게이트 + 역할 표시 문구 / AdminScreen.jsx adminSession={authed} 배선(PIN 화면 뒤에서만 렌더) / scripts/testFeaturePanelAdminSession.mjs 신규 30단언",
+    "local_verification": "testFeaturePanelAdminSession 30/30, testUiStabilityGuards 21/21, verify:admin PASS(36 scripts), build PASS, verify:all ALL DOMAINS PASS + E2E 735/735. extra:true testRewardFlow 1단언 1회 FAIL은 동일 SHA standalone(verify:reward) 55/55로 재확인된 플레이크, admin 패널 변경과 무관",
+    "ci": "workflow_dispatch run 34640484935 SUCCESS(19m34s). PR #38 pull_request run 1차 34642334203 timeout cancel(코드 회귀 아님, Gate1~4 success) → 동일 SHA 재실행 SUCCESS",
+    "merge": "PR #38 MERGED 2026-09-11T20:47:48Z, merge commit aa89e43c99ece2b613d1eb1c7cdcb690828af07d",
+    "deploy": "Vercel deployment 6401474256 Production success 2026-09-11T20:48:15Z. index-*.js/AdminScreen-*.js md5 로컬 빌드와 일치 + admin(관리자 PIN 세션) 마커 확인 -> DEPLOY SHA MATCH YES. 확인은 READ-ONLY fetch만",
+    "main_release_gate": "run 34646093186 (aa89e43) 1차 20:47:50Z 시작 -> Gate1~5 전부 success이나 21:07:54Z timeout-minutes:20 초과로 post-step에서 job cancelled(코드 회귀 아님, Deploy Ready skipped) -> 동일 run 코드 변경 0 재실행 21:09:15Z Gate2 시작, job SUCCESS 21:28:19Z(19m43s), Deploy Ready success -> MAIN RELEASE GATE = SUCCESS(aa89e43). 이번 세션 timeout cancel 누적 3건(main 8837d75 1차, PR #38 1차, main aa89e43 1차)"
+  },
+  "decisions_needed": [
+    "Pilot A 시작 승인 (docs/operations/PILOT_A_PRE_ENABLE_CHECKLIST_2026-09-12.md)",
+    "release-gate.yml timeout-minutes 20 -> 상향 여부(이번 세션 누적 3회 timeout cancel(main 8837d75 1차·PR #38 1차·main aa89e43 1차))",
+    "docs PR(이 세션의 handoff/TESTING/PROJECT_BOARD/체크리스트) merge 여부"
+  ],
+  "files_owned": [
+    "handoff.md",
+    "TESTING.md",
+    "PROJECT_BOARD.md",
+    "docs/operations/PILOT_A_PRE_ENABLE_CHECKLIST_2026-09-12.md",
+    ".ai-status/lead-admin-features-fix-2026-09-12.json"
+  ],
+  "files_read": [
+    "handoff.md",
+    "TESTING.md",
+    "PROJECT_BOARD.md",
+    ".ai-status/README.md",
+    ".ai-status/lead-merge-pr36-2026-09-12.json"
+  ],
+  "blocker": null,
+  "next_action": "완료 — 운영자 몫: (1) docs PR(docs/handoff-130-2026-09-12) merge → 운영자 승인 후 docs/operations/PILOT_A_PRE_ENABLE_CHECKLIST_2026-09-12.md 절차로 Pilot A 시작(Kinney 기기 먼저). 코드/DB 측 차단 요인 없음., (2) release-gate timeout 상향 여부."
+}

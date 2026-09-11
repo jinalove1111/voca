@@ -1334,6 +1334,23 @@ pronunciation-unidentified 시나리오(scenario 8)가 P1 수정과 함께
 3파일(`useStudent.js`/`WordDetail.jsx`/`QuizGame.jsx`), `extra:false`
 유지. 상세: `handoff.md` 2026-09-12(128차) §1.
 
+**2026-09-12(130차) 갱신**: `scripts/testFeaturePanelAdminSession.mjs`
+(신규, 커밋 `7b21062`) 30단언 — 관리자 "🎯 기능" 패널의 권한 게이트를
+`canManageFeatures(adminSession)`(rbac.js, 순수 함수)로 교체한 수정의
+회귀 방지 스위트. 순수 진리표(`adminSession === true` 또는 기존
+`role` 기반 `hasPermission(MANAGE_FEATURES)` 중 하나라도 true면
+허용) · 비-boolean 값 거부 · 기존 `role` 키 하위 호환 · `adminSession`
+전달이 localStorage에 아무것도 쓰지 않음(비영속 증명, `setItem` 호출
+0) · `FeatureManagementPanel`↔`AdminScreen` 정적 배선(`adminSession=
+{authed}`) 확인 · `login`/`admin`/`StudentSelect` 소스에
+`setUserRole`/`paulEasyVoca_userRole` 참조 0건 · 관리자 화면
+어디에서도 `(local|session)Storage.setItem('authed'|'userRole', ...)`
+호출 0건. `registry.mjs`에 admin 도메인으로 등록. 배경: 관리자 PIN
+세션(`authed` state)과 이 패널의 권한 판정(localStorage
+`paulEasyVoca_userRole`)이 서로 다른 소스를 봐서, 정상 PIN 인증
+후에도 "❌ 접근 권한 없음 / 현재 역할: student"가 뜨던 버그의 수정.
+상세: `handoff.md` 2026-09-12(130차) §1~2.
+
 - 지원 문서(테스트 아님, 타 세션이 동시 편집 중이라 이 세션은
   열람·수정하지 않음): `docs/design/REWARD_PATH_AUDIT_2026-09-11.md`
   (보상 경로 17이벤트 감사 매트릭스, 커밋 `12c1a30`; 상단 정정 노트
