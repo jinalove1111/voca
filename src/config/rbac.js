@@ -120,6 +120,14 @@ export const hasPermission = (permission) => {
   return permissions.includes(permission)
 }
 
+// 2026-09-12 — 관리자 PIN 세션(AdminScreen의 authed state)과 Features 권한 연결.
+// 세션은 React state로만 전달되고 localStorage에 절대 기록하지 않는다 —
+// 관리자 화면을 나가면(언마운트/새로고침) 권한도 함께 사라진다. 기존
+// paulEasyVoca_userRole 기반 판정은 하위 호환으로 그대로 OR 조건에 남긴다.
+export const canManageFeatures = (adminSession = false) => {
+  return adminSession === true || hasPermission(PERMISSIONS.MANAGE_FEATURES)
+}
+
 /**
  * 사용자가 여러 권한을 모두 가지고 있는지 확인합니다
  * @param {string[]} permissions - PERMISSIONS 배열
@@ -162,6 +170,7 @@ export default {
   getUserRole,
   setUserRole,
   hasPermission,
+  canManageFeatures,
   hasAllPermissions,
   hasAnyPermission,
   getUserPermissions,

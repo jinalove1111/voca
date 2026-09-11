@@ -2326,7 +2326,8 @@ export default function AdminScreen({ onBack }) {
         {tab === 'testpaper' && <TestPaperGenerator />}
         {tab === 'curriculum' && <CurriculumHub adminPin={pin} />}
         {tab === 'wordassets' && <WordAssetPanel adminPin={pin} />}
-        {tab === 'features' && <FeatureManagementPanel />}
+        {/* 2026-09-12 — authed(관리자 PIN 세션)를 Features 패널 권한 판정에 연결(canManageFeatures) */}
+        {tab === 'features' && <FeatureManagementPanel adminSession={authed} />}
         {tab === 'debug' && <DebugPage />}
       </div>
     </div>
