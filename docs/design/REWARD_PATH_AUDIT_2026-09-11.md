@@ -1,5 +1,10 @@
 # 보상 경로 전수 감사 (Reward Path Audit) - 2026-09-11
 
+정정 2026-09-11: 표 A의 PAUL DOLLAR EFFECT 열 — 12종 전부 원장 도달
+(`TOWN_ECONOMY_AUDIT_2026-09-11.md` §0 참고 — 이 문서의 표 A/2.2는
+아래에서 이미 12종 전부의 서버 원장 도달을 정확히 기술하고 있어
+내용 수정은 없음, 확인만 재기록).
+
 READ-ONLY 코드 감사. 수정 없음 - 브랜치 qa/town-loop-hardening-2026-09-11
 (HEAD 3870902 = main), 코드 변경 0, git status/git diff 변경 없음.
 범위: src/hooks/useStudent.js의 모든 별/XP/원장 지급 호출부(grantReward/
