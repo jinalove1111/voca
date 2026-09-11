@@ -103,6 +103,13 @@ section('4. moveItem')
   const sameSpot = moveItem(state, 'p-tree', 0, 0)
   check('자기 자신이 이미 있는 칸으로 "이동"(제자리) → 성공(자기 자신은 점유 판정 제외)', sameSpot.ok === true)
   check('원본 state 미변형', state.townPlacements.find((p) => p.placementId === 'p-tree').x === 0)
+
+  // 2026-09-11 수정 — 이동 성공 시 updatedAt이 now(5번째 인자, 기본
+  // Date.now())로 갱신된다(mergeTownLayout의 recency 비교가 이 값을 읽음).
+  // 원본 state는 순수 함수라 이전 assertion들에 영향 없이 재사용 가능.
+  const movedWithExplicitNow = moveItem(state, 'p-tree', 6, 5, 777777)
+  check('이동 성공 시 updatedAt이 now 인자로 갱신됨', movedWithExplicitNow.state.townPlacements.find((p) => p.placementId === 'p-tree').updatedAt === 777777)
+  check('now 인자 생략 시 기본값(Date.now())으로 updatedAt이 채워짐(크래시 없음)', typeof moveItem(state, 'p-tree', 7, 5).state.townPlacements.find((p) => p.placementId === 'p-tree').updatedAt === 'number')
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -147,10 +154,43 @@ section('6. mergeTownLayout')
   check('서로 다른 placementId → union(둘 다 포함)', unioned.townPlacements.length === 2)
   check('union 순서: local 먼저, cloud 다음', unioned.townPlacements.map((p) => p.placementId).join(',') === 'a,b')
 
-  const localConflict = { townPlacements: [{ placementId: 'a', itemId: 'tree', x: 0, y: 0, placedAt: 1 }], townRemovedIds: [] }
-  const cloudConflict = { townPlacements: [{ placementId: 'a', itemId: 'tree', x: 5, y: 5, placedAt: 99 }], townRemovedIds: [] }
-  const conflictMerged = mergeTownLayout(localConflict, cloudConflict)
-  check('같은 placementId 충돌 → local이 이김(x,y=0,0 유지)', conflictMerged.townPlacements.length === 1 && conflictMerged.townPlacements[0].x === 0 && conflictMerged.townPlacements[0].y === 0)
+  // 2026-09-11 수정(qa-overnight-town 두 기기 stale overwrite 재현 → P2
+  // 승인) — 같은 placementId 충돌 계약이 "local 무조건 승리"에서
+  // "recency(updatedAt ?? placedAt ?? 0)가 더 큰 쪽 승리, 동률/부재 시
+  // local 유지"로 바뀌었다. 아래 4가지 케이스로 새 계약을 고정한다.
+
+  // (1) 구 레코드 — 둘 다 updatedAt이 없어(pre-fix 저장분) placedAt으로
+  // 폴백. cloud의 placedAt(99)이 local(1)보다 커서 cloud가 이긴다.
+  const localOldRecord = { townPlacements: [{ placementId: 'a', itemId: 'tree', x: 0, y: 0, placedAt: 1 }], townRemovedIds: [] }
+  const cloudOldRecord = { townPlacements: [{ placementId: 'a', itemId: 'tree', x: 5, y: 5, placedAt: 99 }], townRemovedIds: [] }
+  const oldRecordMerged = mergeTownLayout(localOldRecord, cloudOldRecord)
+  check('구 레코드(둘 다 updatedAt 없음) — placedAt 폴백, 더 큰 쪽(cloud, 99>1)이 이김(x,y=5,5)',
+    oldRecordMerged.townPlacements.length === 1 && oldRecordMerged.townPlacements[0].x === 5 && oldRecordMerged.townPlacements[0].y === 5)
+
+  // (2) 신규 레코드 — 둘 다 updatedAt 있음. placedAt만 보면 local이 훨씬
+  // "최신 생성"처럼 보이지만(999), 실제 최근 수정 시각(updatedAt)은
+  // cloud가 더 크므로(20>10) updatedAt이 placedAt보다 우선해 cloud가 이김.
+  const localNewer = { townPlacements: [{ placementId: 'a', itemId: 'tree', x: 1, y: 1, placedAt: 999, updatedAt: 10 }], townRemovedIds: [] }
+  const cloudNewer = { townPlacements: [{ placementId: 'a', itemId: 'tree', x: 6, y: 3, placedAt: 1, updatedAt: 20 }], townRemovedIds: [] }
+  const newerMerged = mergeTownLayout(localNewer, cloudNewer)
+  check('신규 레코드 — updatedAt이 placedAt보다 우선(더 큰 updatedAt인 cloud가 이김, x,y=6,3)',
+    newerMerged.townPlacements.length === 1 && newerMerged.townPlacements[0].x === 6 && newerMerged.townPlacements[0].y === 3)
+
+  // (3) updatedAt 동률 → local 유지(하위호환 기본값).
+  const localTieUpdated = { townPlacements: [{ placementId: 'a', itemId: 'tree', x: 2, y: 2, placedAt: 1, updatedAt: 500 }], townRemovedIds: [] }
+  const cloudTieUpdated = { townPlacements: [{ placementId: 'a', itemId: 'tree', x: 4, y: 4, placedAt: 1, updatedAt: 500 }], townRemovedIds: [] }
+  const tieMerged = mergeTownLayout(localTieUpdated, cloudTieUpdated)
+  check('updatedAt 동률 → local 유지(x,y=2,2)', tieMerged.townPlacements.length === 1 && tieMerged.townPlacements[0].x === 2 && tieMerged.townPlacements[0].y === 2)
+
+  // (4) 혼합 — local은 구 레코드(updatedAt 없음, placedAt만), cloud는
+  // 신규 레코드(updatedAt 있음)로 최근에 이동됨 → cloud의 updatedAt이
+  // local의 placedAt 폴백값보다 훨씬 크므로 cloud가 이긴다(폴백 정상 동작,
+  // 두 기기 stale overwrite 재현 시나리오의 정확한 미러).
+  const localNoUpdatedAt = { townPlacements: [{ placementId: 'a', itemId: 'tree', x: 1, y: 1, placedAt: 1 }], townRemovedIds: [] }
+  const cloudWithUpdatedAt = { townPlacements: [{ placementId: 'a', itemId: 'tree', x: 5, y: 5, placedAt: 1, updatedAt: 9999 }], townRemovedIds: [] }
+  const mixedMerged = mergeTownLayout(localNoUpdatedAt, cloudWithUpdatedAt)
+  check('혼합(local엔 updatedAt 없음·cloud엔 있음) — cloud의 updatedAt이 크면 cloud가 이김(x,y=5,5, 2기기 stale overwrite 수정 확인)',
+    mixedMerged.townPlacements.length === 1 && mixedMerged.townPlacements[0].x === 5 && mixedMerged.townPlacements[0].y === 5)
 
   const localWithRemoved = { townPlacements: [], townRemovedIds: ['z'] }
   const cloudWithZ = { townPlacements: [{ placementId: 'z', itemId: 'tree', x: 0, y: 0, placedAt: 1 }], townRemovedIds: [] }
