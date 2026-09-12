@@ -1,0 +1,22 @@
+[
+  {
+    "file": "town_360x640.png",
+    "desc": "360x640 mobile — Town tab, wooden-sign header + ambient ground"
+  },
+  {
+    "file": "town_768x1024.png",
+    "desc": "768x1024 tablet — Town tab"
+  },
+  {
+    "file": "town_1280x800.png",
+    "desc": "1280x800 desktop — Town tab"
+  },
+  {
+    "file": "town_200pct_zoom.png",
+    "desc": "720x1280 viewport, CSS zoom:2 (200%) — Town tab, no horizontal overflow"
+  },
+  {
+    "file": "town_discovery_card_open.png",
+    "desc": "360x640 — placed 빨간 우체통(post-box) tapped open, discovery card visible inside the existing move/store action sheet"
+  }
+]

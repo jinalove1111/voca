@@ -966,7 +966,7 @@ function AppInner({ studentId, studentName, onLogout }) {
             마을을 준비하는 중…
           </div>
         }>
-          <TownScreen studentData={studentData} townShop={townShop} onBack={() => setScreen('paulTown')} />
+          <TownScreen studentData={studentData} townShop={townShop} onBack={() => setScreen('paulTown')} studentId={studentId} />
         </React.Suspense>
       )}
       {screen === 'bonusChoice'   && (
