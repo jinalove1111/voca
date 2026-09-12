@@ -63,6 +63,18 @@ SAFE DEFAULT(운영자가 결정하지 않아도 현재 상태로 안전하게 �
 - **SAFE DEFAULT**: B(현재 상태) — 아무것도 안 해도 기존 화면 무변화,
   회귀 위험 0.
 
+**Phase 2 업데이트(2026-09-12, RESOLVED — 코디네이터 지시로 실배선 완료)**:
+운영자/코디네이터가 명시적으로 실배선을 지시해, 옵션 A를 그대로 적용했다 —
+`TownScreen.jsx`가 `TownWoodenSignHeader`로 `TownHeader`/Paul 가이드 카드를
+감싸고, `TownGrid.jsx`가 `townAmbient`(순수 CSS 톤)와 `TownDiscoveryCard`
+(6개 발견 장소 한정)를 기존 열림 액션 스트립 안에 추가했다. 실측으로
+`testTownUiStatic.mjs`(95) + `tests/e2e/townV1.spec.mjs`(480) 전부 PASS를
+확인했고, 그 과정에서 CSS 스태킹 컨텍스트/팝업 폭 회귀 2건을 발견해
+수정했다(`AGENT_B_REPORT.md` Phase 2 절 참고). 즉 §3에서 예상한 "구조적으로
+안전해 보이지만 실측 필요"라는 판단이 실제로는 **절반만 맞았다** — 실측 없이
+배선했다면 이 2건의 회귀를 그대로 배포했을 것이다(이 문서가 §3에서 실측을
+전제조건으로 못 박아둔 이유).
+
 ## 4. 제안 아이템 4종(`PAUL_TOWN_BRITISH_WORLD.md` §7 / `ASSET_MANIFEST.md` §3) 카탈로그 반영 여부
 
 - **QUESTION**: `rain-puddle`/`tea-shop-sign`/`train-platform`/
@@ -86,6 +98,11 @@ SAFE DEFAULT(운영자가 결정하지 않아도 현재 상태로 안전하게 �
   작업 우선순위(운영자 지시 "1~6번을 완전하게 끝내는 것을 절반짜리
   프로토타입보다 우선")에 따라 이번 세션은 스크린샷 생성을 생략했다.
   §3에서 실제 와이어링이 이뤄진 뒤 스크린샷을 다시 시도하는 것을 권장한다.
+
+**Phase 2 업데이트(2026-09-12, RESOLVED)**: §3이 실배선됨에 따라 이 사유는
+더 이상 적용되지 않는다. `docs/design/town/previews/`에 5장(360×640/
+768×1024/1280×800/200%줌/발견 카드 열림 상태)을 생성했다 — 방법/내용은
+`previews/README.md`와 `AGENT_B_REPORT.md` Phase 2 절 참고.
 
 ## 6. 참고
 
