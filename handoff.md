@@ -1,15 +1,85 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-13 (135차 — Paul Town V2-A 스토리북 마을 시각
-셸(플래그 `paulTownV2` 기본 OFF): Town 화면 신규 레이어드 렌더러
-`src/components/town/v2/`(12개) + 순수 유틸 `src/utils/town/
-townScene.js`/`townAmbient.js`(후자는 PR #44에서 이식), `App.jsx`
-`townV2Active = townV1Enabled && paulTownV2Enabled`로 V1과 분기(V1
-경로 바이트 동일), V1 경제/데이터/좌표/API/SQL 무변경. 신규 테스트
-testTownSceneV2 166/166 + testTownV2Static 101/101 + e2e townV2 83/83,
-회귀 전종 PASS, build PASS, verify:e2e 883/883, verify:all 진행 후
-lazy-chunk 가드 오탐 1건 수정. Production DB WRITE 0. 브랜치
-`feat/paul-town-v2a-visual-shell-2026-09-13`, 미merge·미push·미배포
-(REVIEW ONLY). 134차 이하 보존)_
+_최종 갱신: 2026-09-13 (136차 — Paul Town V2-A 야간 세션: PR #49
+생성(https://github.com/jinalove1111/voca/pull/49, base main 6791b4a,
+REVIEW ONLY, DO NOT MERGE)·Release Gate GREEN(1차 run FAIL 13m10s는
+CI 얕은 체크아웃에서 `testTownV2Static`의 api/*.sql diff 검사가
+`origin/main` 참조 실패를 FAIL로 오집계한 CI/LOCAL-GUARD ARTIFACT →
+SKIP+note 최소 수정 커밋 19195c0 → 2차 run PASS 21m35s), 야간 결함
+수정 커밋 4건(근접 목표 문구 조사, testTownV2Static CI-safe, 아트워크
+최종 사양·One-Town 통합 계획·V2-B/V2-C 로드맵 문서 3종), qa-reviewer
+독립 리뷰 18항목 PASS(Critical 0/Major 0), 로컬 Playwright 프리뷰
+Lv1/3/5/8 + 200%줌 격자 셀 0·오버플로 0. Production DB WRITE 0 ·
+merge 0 · deploy 0 · Kinney 무접촉. 135차 이하 보존)_
+
+## 2026-09-13 (136차) — Paul Town V2-A 야간 세션: PR #49 생성·Release Gate GREEN, 최종 리뷰 결함 3건 수정, 아트워크 최종 사양·One-Town 계획·V2-B/C 로드맵(REVIEW ONLY, 미merge·미배포)
+
+### 0. 안전 요약
+Production DB WRITE 0 · SQL 0 · `api/*.js` 0 · 경제/보상/별/XP/PD/학생
+mutation 0 · 구매 0 · Production 플래그/환경 변경 0 · merge 0 · deploy
+0 · Kinney 무접촉 · PR #44/#45/#32 untouched · 파괴적 git 0. 브랜치
+push 및 PR #49 생성(REVIEW ONLY, DO NOT MERGE).
+
+### 1. 시작 상태
+135차 종료 시점 `a9b3f88`(14 커밋). 야간 지시(6시간 자율, 코드/GitHub만
+승인).
+
+### 2. Phase 1 — 브랜치 push·PR 생성
+범위 재확인(추적 변경 0, 운영자 SQL 패키지 16개 untracked 그대로, diff
+26 파일에 SQL/api/env/junk 0) → `git push -u origin
+feat/paul-town-v2a-visual-shell-2026-09-13` → PR #49
+https://github.com/jinalove1111/voca/pull/49 (base main `6791b4a`).
+
+### 3. Phase 2 — Release Gate
+1차 run `34712078408`(head `a9b3f88`) FAIL 13m10s — 원인:
+`scripts/testTownV2Static.mjs`의 api/*.sql diff 검사가 CI 얕은
+체크아웃(origin/main ref 없음, `fatal: bad revision 'origin/main'`)에서
+예외를 FAIL로 집계(형제 byte-identity 검사 12건은 SKIP 처리) → 분류
+CI/LOCAL-GUARD ARTIFACT → 테스트 측 최소 수정(예외 시 SKIP+note,
+`V2_STATIC_BASE_REF` 오버라이드로 재현: 로컬 103/103·0 SKIP, 모의 CI 90
+PASS/0 FAIL/13 SKIP exit 0) 커밋 `19195c0`. 2차 run
+`34712953980`(head `19195c0`) Release Gate PASS 21m35s + Deploy Ready
+pass → GREEN. 게이트 우회/비활성 0.
+
+### 4. 야간 수정 커밋 4건
+모두 V2-A 범위:
+- `9d41cae` 근접 목표 문구 조사(마지막 이름 받침 → 이/가, "꽃밭이
+  열려요", 단위 3단언 → testTownSceneV2 169/169)
+- `6a10708` docs `V2A_ARTWORK_SPEC_FINAL.md`(400줄)
+- `e7a6711` docs `ONE_TOWN_CONSOLIDATION_PLAN.md`(169줄) +
+  `V2B_V2C_ROADMAP.md`(194줄)
+- `19195c0` `testTownV2Static` CI-safe
+
+push 전 로컬 검증: build PASS, verify:e2e 886/886(0 unmocked),
+testTownV2Static 103/103, testTownSceneV2 169/169, testTownUiStatic
+95/95, testLazyChunkGuards 80/80. 로컬 verify:all은 메모리 부족으로
+e2e 단계에서 2회 강제 종료(그 전 195 스크립트/22 도메인 PASS, FAIL 0);
+전체 verify:all의 권위 결과는 CI Gate 2 PASS.
+
+### 5. Phase 3 — 독립 리뷰
+qa-reviewer(head `19195c0`, 18항목): PASS, Critical 0 / Major 0. Minor:
+죽은 props(freeAnchors mode, TownPlacementOverlay modeKind, TownSprite
+sizeClass/title, TOWN_LEVELS 재export), 바텀시트 Escape/포커스 트랩/본문
+스크롤 잠금 없음, 0행 스프라이트가 상단 울타리 밴드에 근접(외관),
+TownScreenV2가 V1 핸들러 ~100줄 복제(의도적, V2-B 추출). subjectParticle
+받침 판정 정확, BASE_REF SKIP 경로는 실제 diff를 가리지 못함(확인).
+
+### 6. Phase 8 — 로컬 프리뷰
+vite preview 4199 + Playwright, 업로드 0: Lv1 빈 마을 360/430, Lv3
+Kinney 모양(31 PD, 나무 배치) 390, Lv5 360(6개 배치), Lv8 430(14개
+배치, 안개 없음), 200% 줌 — 전부 격자 셀 0, 가로 오버플로 0. 관찰:
+이모지 플레이스홀더라 규모감 부족(아트워크 단계), 안개 행의 "Lv.N에서
+열려요" 칩이 그 행에 배치된 아이템과 겹칠 수 있음(V2-B), 0행 스프라이트
+상단 여백(V2-B), 다리는 물 없이 놓임(아트워크). Phase 5 제품 루프
+평가는 최종 보고서에 기록(요약: A 부분(정원 10/30/60/100 임계값, 당일
+변화는 V2-C), B 예, C 예(플레이스홀더), D 부분(V2-C), E 예, F 예, G
+예, H 예(정원/창문/담쟁이/새), I 예(안개 실루엣만, 압박 없음), J 예).
+
+### 7. 미결/다음
+PR #49 merge는 운영자 결정(SAFE TO MERGE 판단은 최종 보고서). PR #44
+처분(닫기 권장, townAmbient.js 이식 완료). 아트워크 생성은
+`V2A_ARTWORK_SPEC_FINAL.md` 기준 별도 승인. V2-B/V2-C는
+`V2B_V2C_ROADMAP.md` 순서대로, 플래그 `paulTownV2` OFF 유지, Pilot A
+5명은 기기 플래그로만.
 
 ## 2026-09-13 (135차) — Paul Town V2-A 스토리북 마을 시각 셸(플래그 paulTownV2 기본 OFF, REVIEW ONLY, 미merge·미배포)
 
