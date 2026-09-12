@@ -1351,6 +1351,44 @@ pronunciation-unidentified 시나리오(scenario 8)가 P1 수정과 함께
 후에도 "❌ 접근 권한 없음 / 현재 역할: student"가 뜨던 버그의 수정.
 상세: `handoff.md` 2026-09-12(130차) §1~2.
 
+**2026-09-12(131차) 갱신**: P1 프로덕션 장애("앱 오류가 발생했어요")
+원인 규명 후 자동복구 코드에 대한 신규 스위트 2종. (1)
+`scripts/testStaleChunkRecovery.mjs`(신규) 52/52 — `src/utils/
+staleChunkRecovery.js`의 순수 함수(`isStaleChunkError`/
+`tryRecoverFromStaleChunk`/`clearStaleChunkGuard`/`scheduleGuardReset`)
+매트릭스: `ChunkLoadError`/`Failed to fetch dynamically imported
+module`/`Importing a module script failed`/`error loading dynamically
+imported module`/`Unable to preload CSS`/`Loading chunk failed` 6종
++ `vite:preloadError` 각각 자동 reload 정확히 1회, `sessionStorage`
+60초 가드가 활성인 동안 같은 창의 두 번째 발생은 reload 0회, 가드
+만료/명시적 해제 후 다시 1회, 일반 오류/인증 오류 3종/Supabase 오류
+3종은 reload 0회, `undefined`/`null`/문자열 입력에도 무해,
+`sessionStorage` 접근 자체가 throw하는 환경에서도 reload 0회로 안전,
+5회 연속 시뮬레이션 누적 reload 정확히 1회 + `App.jsx`/`main.jsx`
+정적 배선 확인(`AppErrorBoundary`의 `state.stale` 분기, `main.jsx`의
+`vite:preloadError` 리스너·`scheduleGuardReset` 호출). `registry.mjs`
+quiz 도메인 등록, `extra: false`. (2) `tests/e2e/staleChunk.spec.mjs`
+(신규) `[stale-chunk]` — 첫 dynamic import 요청만 abort시키면 자동
+reload 정확히 1회 후 정상 진입, 항상 abort시키면 두 번째 자동 reload는
+0회이고 "앱이 새 버전으로 업데이트됐어요" 안내 화면과 수동 "새로고침"
+버튼이 유지됨을 확인 → `verify:e2e` 735 → **745/745**로 확장.
+`verify:ui-stability` 21/21 그대로. `npm run build` PASS. 로컬
+`npm run verify:all`(HEAD `a940e83`): **ALL DOMAINS PASS**(speaking/
+listening SKIP 제외) — FAIL 접두 줄 1개는
+`testEntranceRosterMinbyungchun.mjs`(`extra:true`, 라이브 READ-ONLY)의
+전 단언 PASS 후 종료 시 libuv `UV_HANDLE_CLOSING` assertion(exit
+`3221226505`, Windows 플레이크, 128차와 동일)일 뿐 login/admin 도메인
+PASS 판정과는 무관, 이번 변경과도 무관. `e2e` 도메인 PASS,
+`[stale-chunk]` 미mock 요청 0건. PR #40 CI(Release Gate run
+`34676151345`, `pull_request`, HEAD `a940e83`): **SUCCESS**
+2026-09-12T05:59:24Z(19m37s), Deploy Ready SUCCESS, CI 로그 ALL
+DOMAINS PASS + E2E 총 745단언 PASS 745/FAIL 0/SKIP 0(Gate 2·Gate 5
+각 1회). PR #40 MERGEABLE CLEAN, 미merge·미배포(운영자 승인 대기).
+배경: 배포마다 lazy 청크 해시가 바뀌어
+배포 전 열린 세션이 code-split 화면 진입 시 404 → `React.lazy`
+reject 캐시로 "그냥 다시 시도"로는 복구 불가하던 문제의 자동복구.
+상세: `handoff.md` 2026-09-12(131차) §1~2.
+
 - 지원 문서(테스트 아님, 타 세션이 동시 편집 중이라 이 세션은
   열람·수정하지 않음): `docs/design/REWARD_PATH_AUDIT_2026-09-11.md`
   (보상 경로 17이벤트 감사 매트릭스, 커밋 `12c1a30`; 상단 정정 노트

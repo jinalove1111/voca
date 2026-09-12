@@ -1,10 +1,131 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-12 (130차, 야간 자율 세션 — Admin Features 패널
-접근 버그(관리자 PIN 세션인데도 "❌ 접근 권한 없음" 오판정) 원인 규명 +
-수정 + PR #38 merge → main `aa89e43` + Vercel Production 배포 SHA
-MATCH 확인, Pilot A 실행 직전 체크리스트 문서 신설(시작은 아직 안 함).
-이 세션 Production DB WRITE·SQL 실행 0, feature flag 변경 0, Pilot A
-NOT STARTED. 129차 이하 보존)_
+_최종 갱신: 2026-09-12 (131차 — P1 프로덕션 장애 "앱 오류가 발생했어요"
+READ-ONLY 조사 완료(원인: 배포마다 lazy 청크 해시가 바뀌어 배포 전 열린
+세션이 404 → React.lazy reject 캐시로 자동복구 불가) + 자동복구 수정
+브랜치 `fix/stale-chunk-recovery-2026-09-12` PR #40 오픈(merge 대기,
+배포 0). 이 세션 Production DB WRITE·SQL 실행 0. 130차 이하 보존)_
+
+## 2026-09-12 (131차) — P1 "앱 오류가 발생했어요" 원인 규명(READ-ONLY) + stale-chunk 자동복구 수정 PR #40
+
+### 0. 안전 요약(최우선 확인)
+
+이번 세션은 학생 기기에서 보고된 "앱 오류가 발생했어요 / 데이터를
+불러오는 중 문제가 발생했어요" P1 장애를 (1) READ-ONLY로 조사해
+근본원인을 규명하고 (2) 최소 범위 자동복구 코드를 구현해 PR #40으로
+올렸다. Production DB WRITE 0, SQL 실행 0, 학생 데이터/reward/PD/star/
+XP 무변경, feature flag 변경 0(`paulTownV1` OFF 그대로),
+`TOWN_V1_WELCOME_ENABLED` 미설정 그대로, welcome 크레딧 지급 0, Pilot A
+NOT STARTED, PR #32는 이번 세션 미접촉, `v3_50`은 이번 세션 미실행(이미
+129차 시점에 적용·POST PASS 완료된 상태 그대로).
+
+### 1. P1 장애 원인 규명 (READ-ONLY 조사)
+
+- 오류 UI 출처: `src/App.jsx`의 `AppErrorBoundary`(class 컴포넌트,
+  ~86~140행) — render-phase throw에서만 발동한다. 일반 fetch 실패는
+  여기 도달하지 않지만, `React.lazy` 동적 import의 reject는 render 중
+  재throw되어 이 경계에 도달한다.
+- 근본 메커니즘(증명됨 — 특정 기기 귀속은 정황상 유력이나 해당 기기
+  콘솔은 미확보라 LIKELY): 매 배포마다 `index-<hash>.js` 파일명이
+  바뀌면서 import specifier 문자열도 바뀌어, code-split된 lazy 청크
+  13개 전부(PaulTown/EnglishGarden/HatCollection/WordMuseum/
+  GrowthAlbum/Bookshelf/TimeMachine/EntranceTest/ParentScreen/
+  TownScreen/AdminScreen/weeklyReport/index)가 재해시된다(직전 세 빌드
+  해시 `3870902`→`8837d75`→`aa89e43` 비교, 소스가 안 바뀐 청크도 해시가
+  바뀜 — `HatCollection` 청크 바이트 diff는
+  `from"./index-<hash>.js"` import 한 줄뿐임을 확인). 프로덕션은 현재
+  배포 자산만 서빙하므로(`PaulTown-DsFGJg61.js`/`index-YSZ54roQ.js`는
+  404, 현재 해시는 200) 배포 전에 열려 있던 세션이 code-split 화면에
+  처음 진입할 때 404가 나고, `React.lazy`는 reject 상태를 내부적으로
+  캐시(`lazyInitializer`)해 "그냥 다시 시도"(state 리셋)로는 복구되지
+  않는다 — "로그아웃 후 다시 시작"(sessionKey 제거 + reload)만 유효한
+  경로였다. `vite:preloadError`/`unhandledrejection` 핸들러는 수정 전
+  기준 0건, 클라이언트 크래시 텔레메트리도 0건이었다. 09-11 17:53Z/
+  20:48Z, 09-12 04:44Z 3회 배포로 노출 창이 3회 있었다. 같은 표면은
+  모바일 네트워크 순단으로 인한 import 실패에도 동일하게 해당한다.
+- 배제된 원인: 로그인 API(`/api/verify-student-pin` 200 JSON 정상),
+  초기화 시점 REST 조회 테이블 전부 정상 응답, 세션 복원의 guarded
+  `JSON.parse`, `normalizeRecord`의 `asArray`/`townLayout`
+  `normalizeState`의 `Array.isArray` 가드(town 기능 플래그 OFF에서도
+  안전), PR #36/#38의 index 변경은 이벤트 핸들러/관리자 청크로 범위가
+  한정됨. `v3_50`은 무관 — 129차 기록상 이미 적용·POST 검증 PASS
+  완료된 상태다. Vercel 서버리스 함수 런타임 로그는 CLI 미로그인으로
+  이번 세션에서 열람하지 못했다.
+- 영향 범위는 텔레메트리 부재로 정확히 알 수 없으나(UNKNOWN), 구조적으로는
+  배포 시점에 세션이 열려 있던 모든 학생 기기가 대상이 될 수 있다.
+  심각도 P1로 분류.
+
+### 2. 수정 — 브랜치 `fix/stale-chunk-recovery-2026-09-12`, 커밋 `a940e83`, PR #40(merge 대기, 배포 0)
+
+- `src/utils/staleChunkRecovery.js`(신규, 순수 함수 모듈):
+  `isStaleChunkError()`가 `ChunkLoadError`/`Failed to fetch dynamically
+  imported module`/`Importing a module script failed`/`error loading
+  dynamically imported module`/`Unable to preload CSS`/`Loading chunk
+  failed` 패턴을 판정하고, `tryRecoverFromStaleChunk()`가
+  `sessionStorage`의 `paulEasyVoca_staleChunkReloadAt` 키로 60초 가드를
+  두어 자동 reload를 최대 1회로 제한한다(가드가 이미 활성 상태면 reload
+  0회, storage 접근 자체가 불가능한 환경에서도 reload 0회로 안전하게
+  무행동). `clearStaleChunkGuard()`/`scheduleGuardReset()`(정상 부팅
+  30초 후 가드 해제)도 함께 제공. `localStorage`는 사용하지 않는다.
+- `App.jsx`의 `AppErrorBoundary`: `state.stale` 필드를 추가해 stale
+  청크 오류로 판정된 경우에만 `componentDidCatch`에서 자동 reload를
+  시도(`console.warn`으로 사유 기록)하고, 화면 문구를 "앱이 새 버전으로
+  업데이트됐어요 / 새로고침하면 바로 이어서 할 수 있어요" + "새로고침"
+  버튼(가드와 무관하게 사용자가 직접 눌러도 항상 동작)으로 분기한다.
+  일반 오류/인증 오류/Supabase 오류 문구와 기존 "그냥 다시 시도"(state
+  리셋)/"로그아웃 후 다시 시작" 버튼 동작은 그대로 유지.
+- `main.jsx`: `'vite:preloadError'` 전역 리스너를 추가해 `event.payload`
+  를 같은 판정 로직/가드에 통과시키고, 이미 이번 세션에서 reload를
+  했다면 `event.preventDefault()`로 중복 처리를 막는다.
+  `scheduleGuardReset()`도 부팅 시 호출.
+- 테스트: `scripts/testStaleChunkRecovery.mjs`(신규) 52/52 — 순수 함수
+  매트릭스(오류 문자열 4종 + `preloadError` 각각 reload 1회, 같은 창
+  안 두 번째 reload는 0회, 가드 만료/해제 후 다시 1회, 일반 오류/인증
+  오류 3종/Supabase 오류 3종은 reload 0회, `undefined`/`null`/문자열
+  입력에도 무해, storage가 throw해도 reload 0회, 5회 연속 시뮬레이션
+  누적 reload 정확히 1회) + `App.jsx`/`main.jsx` 정적 배선 확인.
+  `registry.mjs`에 quiz 도메인으로 등록(`extra: false`).
+  `tests/e2e/staleChunk.spec.mjs`(신규) `[stale-chunk]` 스펙 — 첫 요청만
+  abort시키면 자동 reload 정확히 1회 후 정상 진입하고, 항상 abort시키면
+  두 번째 자동 reload는 0회이며 stale 안내 화면이 유지됨을 확인 →
+  `verify:e2e` 735 → **745/745**로 확장. `verify:ui-stability` 21/21
+  그대로 PASS. `npm run build` PASS. 로컬 `npm run verify:all`(HEAD
+  `a940e83`): **ALL DOMAINS PASS**(speaking/listening SKIP 제외). FAIL
+  접두 줄 1개 — `testEntranceRosterMinbyungchun.mjs`(`extra:true`, 라이브
+  READ-ONLY)는 전 단언 PASS 후 종료 시점에 libuv
+  `UV_HANDLE_CLOSING` assertion(exit `3221226505`, Windows 플레이크,
+  128차와 동일 현상)으로 프로세스가 죽어 FAIL 줄이 찍혔을 뿐, login/
+  admin 도메인 판정 자체는 PASS이고 이번 stale-chunk 변경과는 무관.
+  `e2e` 도메인 PASS, `[stale-chunk]` 스펙은 미mock 요청 0건으로 확인.
+  PR #40의 CI(Release Gate run `34676151345`, `pull_request`, HEAD
+  `a940e83`): **SUCCESS** 2026-09-12T05:59:24Z(19m37s — Gate 2
+  05:40:28→05:51:15Z, Gate 3 →05:55:14Z, Gate 5 05:55:18→05:59:15Z),
+  Deploy Ready SUCCESS. CI 로그 기준 ALL DOMAINS PASS, E2E 총 745단언
+  PASS 745 / FAIL 0 / SKIP 0(Gate 2 내부 실행 1회 + Gate 5 실행 1회
+  각각 동일 결과). PR #40은 MERGEABLE CLEAN 상태이며 아직 미merge·
+  미배포(운영자 승인 대기).
+- 알려진 한계(기록만, 이번 세션 미해결): 가드가 탭 단위(`sessionStorage`)
+  라 여러 탭을 열어둔 경우 탭마다 최대 1회씩 reload될 수 있다. 부팅
+  직후 발생하는 `preloadError`는 리스너가 단독으로 처리하며
+  `AppErrorBoundary`를 거치지 않는다. 클라이언트 크래시 텔레메트리는
+  여전히 0건 — 이번 장애 조사가 READ-ONLY 로그/코드 대조만으로 이뤄진
+  근본 이유이며, 별도 과제로 남는다.
+
+### 3. 안전 상태 요약
+
+Production DB WRITE 0 · SQL 실행 0 · 학생 데이터/reward/PD/star/XP
+무변경 · feature flag 변경 0(`paulTownV1` OFF 그대로) ·
+`TOWN_V1_WELCOME_ENABLED` 미설정 그대로 · welcome 크레딧 지급 0 ·
+Pilot A NOT STARTED · PR #32 미접촉 · `v3_50` 이번 세션 미실행(이미
+적용·POST PASS 완료 상태 유지).
+
+### 4. 운영 권고(기록만, 결정 아님)
+
+- 배포는 가능하면 학생 학습 시간대(KST 오후~저녁)를 피해서 진행할 것.
+- 클라이언트 크래시 텔레메트리(`anon_id` 기반 이벤트 로깅) 도입을
+  검토할 것 — 이번 조사에서 실제 사고 기기의 콘솔을 확보하지 못해
+  "기기 귀속"을 LIKELY 이상으로 올리지 못한 근본 원인.
+- `release-gate.yml`의 `timeout-minutes` 상향(130차부터 이어지는 권고,
+  이번 세션 재확인만).
 
 ## 2026-09-12 (130차) — Admin Features 패널 접근 버그 수정 + PR #38 merge/배포 확인 + Pilot A 체크리스트
 

@@ -626,6 +626,26 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
 
 ## VERIFY
 
+### [P1] Stale 청크 자동복구 — 프로덕션 "앱 오류가 발생했어요" P1 장애 수정, PR #40 오픈(merge 대기, 배포 0) (131차)
+- 근거: `handoff.md` 2026-09-12(131차), `TESTING.md` 2026-09-12(131차),
+  브랜치 `fix/stale-chunk-recovery-2026-09-12`, 커밋 `a940e83`.
+- 내용: 학생 기기 "앱 오류가 발생했어요 / 데이터를 불러오는 중 문제가
+  발생했어요" P1 장애를 READ-ONLY로 조사 — 근본원인은 배포마다
+  lazy 청크 파일 해시가 전부 바뀌어, 배포 전 열려 있던 세션이 code-
+  split 화면 첫 진입 시 404 → `React.lazy` reject를 React가 내부
+  캐시해 "그냥 다시 시도"로 복구 불가(메커니즘 증명, 특정 기기 귀속은
+  LIKELY — 콘솔 미확보). `src/utils/staleChunkRecovery.js`(신규, 순수
+  함수) + `App.jsx` `AppErrorBoundary`에 `state.stale` 분기 + 자동
+  reload(60초 세션 가드, 최대 1회) + "새로고침" 버튼 + `main.jsx`
+  `vite:preloadError` 리스너로 수정. 신규 스위트
+  `testStaleChunkRecovery.mjs` 52/52 + `tests/e2e/staleChunk.spec.mjs`
+  → `verify:e2e` 735→745/745, `verify:ui-stability` 21/21, build PASS.
+  Production DB WRITE 0, SQL 실행 0, feature flag 변경 0.
+- 미수신(검수 대기): `verify:all` 전체 결과, PR #40 CI 결과(작성
+  시점 기준 실행 중) — 수신 후 `handoff.md`에 이어 append 예정.
+  qa-reviewer/security-reviewer 코드 리뷰 미착수, merge/배포 여부는
+  운영자 결정 대기.
+
 ### [P1] 야간 SAFE 세션 2026-09-11 — Town V1 하드닝·v3_50 apply 패키지·Pilot A 진단 (126차), PR 대기
 - 근거: `handoff.md` 2026-09-11(126차), `TESTING.md` 2026-09-11(126차),
   `docs/operations/V3_50_APPLY_RUNBOOK.md`,
