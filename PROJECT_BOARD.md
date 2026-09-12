@@ -220,6 +220,23 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
   전부 정리돼 있다.
 - 필요한 결정: 실행 시점/순서(운영자), 체크리스트 문서 자체의 검토.
 
+### [P2] Agent B `design/paul-town-british-world-2026-09-12` 브랜치 리뷰 + push/PR 여부 — 운영자 결정 대기 (2026-09-12, 132차)
+- 근거: `handoff.md` 2026-09-12(132차) §2, worktree `wt-town-design`,
+  브랜치 `design/paul-town-british-world-2026-09-12`(base `a87866a`,
+  16 commits `663e924`…`755b88d`, **미push**), `docs/design/town/*`
+  (`OWNER_DECISIONS.md`/`AGENT_B_REPORT.md` 포함).
+- 내용: Paul Town British storybook 설계+구현(Phase 1~3) — 기능
+  플래그 `paulTownV1` 게이트 안에서만 배선, `App.jsx` 변경은
+  `TownScreen` 렌더 줄 prop 1개뿐, DB 카탈로그/가격 무변경, 메인
+  워크트리(`C:\voca`) 무접촉. 검증: 기존 Town 게이트(UiStatic 95/95,
+  Layout 69/69, Catalog 50/50, LevelLock 53/53) + 신규
+  `testTownDiscovery` 69/69 + `testTownPrototypeStatic` 51/51 +
+  `testBundleBudget` 10/10 + build PASS + `tests/e2e/townV1.spec.mjs`
+  480/480 — 총 877단언 0 실패. IP 금지어 스캔 15종 0건.
+- 필요한 결정: 이 브랜치를 push해 PR로 올릴지, 리뷰 순서/시점, 향후
+  `paulTownV1`/discovery 기능을 실제로 ON 할지 여부(운영자 판단 —
+  규칙 12 학생 대상 기능 범위 확인 포함).
+
 ### [P1] `getStudentWords` usingOverride 분기의 첫 유닛 폴백 — 운영자 판단 대기 (2026-08-30 야간 감사)
 - 근거: `src/utils/wordLibrary.js` `getStudentWords` 의 `usingOverride`
   분기(해당 줄에 같은 내용의 주석을 남겨 뒀다).
@@ -626,25 +643,28 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
 
 ## VERIFY
 
-### [P1] Stale 청크 자동복구 — 프로덕션 "앱 오류가 발생했어요" P1 장애 수정, PR #40 오픈(merge 대기, 배포 0) (131차)
-- 근거: `handoff.md` 2026-09-12(131차), `TESTING.md` 2026-09-12(131차),
-  브랜치 `fix/stale-chunk-recovery-2026-09-12`, 커밋 `a940e83`.
-- 내용: 학생 기기 "앱 오류가 발생했어요 / 데이터를 불러오는 중 문제가
-  발생했어요" P1 장애를 READ-ONLY로 조사 — 근본원인은 배포마다
-  lazy 청크 파일 해시가 전부 바뀌어, 배포 전 열려 있던 세션이 code-
-  split 화면 첫 진입 시 404 → `React.lazy` reject를 React가 내부
-  캐시해 "그냥 다시 시도"로 복구 불가(메커니즘 증명, 특정 기기 귀속은
-  LIKELY — 콘솔 미확보). `src/utils/staleChunkRecovery.js`(신규, 순수
-  함수) + `App.jsx` `AppErrorBoundary`에 `state.stale` 분기 + 자동
-  reload(60초 세션 가드, 최대 1회) + "새로고침" 버튼 + `main.jsx`
-  `vite:preloadError` 리스너로 수정. 신규 스위트
-  `testStaleChunkRecovery.mjs` 52/52 + `tests/e2e/staleChunk.spec.mjs`
-  → `verify:e2e` 735→745/745, `verify:ui-stability` 21/21, build PASS.
-  Production DB WRITE 0, SQL 실행 0, feature flag 변경 0.
-- 미수신(검수 대기): `verify:all` 전체 결과, PR #40 CI 결과(작성
-  시점 기준 실행 중) — 수신 후 `handoff.md`에 이어 append 예정.
-  qa-reviewer/security-reviewer 코드 리뷰 미착수, merge/배포 여부는
-  운영자 결정 대기.
+### [P1] CI 하네스 일시적 실패 재시도 — PR #41 `ci/reliability-2026-09-12` (OPEN, 미merge) (132차)
+- 근거: `handoff.md` 2026-09-12(132차) §1-2,
+  `docs/operations/CI_FLAKE_CLASSIFICATION_2026-09-12.md`.
+- 내용: `tests/harness/runDomain.mjs`에 `isTransientFailure`/
+  `runWithTransientRetry`(일시적 네트워크 실패로 판정된 경우에만 5초
+  대기 후 1회 재시도) + `release-gate.yml` timeout 20→30분 +
+  `scripts/testHarnessTransientRetry.mjs` 41/41. `verify:quiz` 도메인
+  PASS, `testRegistryCoverage` 8/8, `ui-stability` 21/21. 커밋
+  `3a9286a`/`8473af9`/`50f6fe6`/`abeceb0`.
+- 미수신(검수 대기): qa-reviewer/security-reviewer 코드 리뷰 미착수,
+  merge 여부는 운영자 결정 대기(`docs/operations/OWNER_DECISIONS_2026-09-12.md`).
+
+### [P2] lazy chunk 가드 회귀 스위트 — PR #42 `test/lazy-chunk-guards-2026-09-12` (OPEN, 미merge) (132차)
+- 근거: `handoff.md` 2026-09-12(132차) §1-3,
+  `docs/operations/LAZY_CHUNK_GUARDS_2026-09-12.md`.
+- 내용: `scripts/testLazyChunkGuards.mjs` 76/76 — `App.jsx`의
+  `React.lazy` 11개 전부 `Suspense`+`AppErrorBoundary` 보호, 131차
+  stale-chunk 복구 배선/상수 계약, dist 산출물 가드, 음성(대조군) 3건
+  포함. registry `quiz` 도메인 등록. 커밋
+  `f39efdd`/`052bdf8`/`113d8e5`.
+- 미수신(검수 대기): qa-reviewer 코드 리뷰 미착수, merge 여부는
+  운영자 결정 대기(`docs/operations/OWNER_DECISIONS_2026-09-12.md`).
 
 ### [P1] 야간 SAFE 세션 2026-09-11 — Town V1 하드닝·v3_50 apply 패키지·Pilot A 진단 (126차), PR 대기
 - 근거: `handoff.md` 2026-09-11(126차), `TESTING.md` 2026-09-11(126차),
@@ -1123,6 +1143,33 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
   `supabase_v2_4_entrance_result_rls.sql` 실행 여부 판단.
 
 ## DONE (최근 완료, 참고용 — 전체 이력은 `ROADMAP.md`/`handoff.md`)
+
+### [P1] Stale 청크 자동복구 — 프로덕션 "앱 오류가 발생했어요" P1 장애 수정 — **CLOSED**, PR #40 merge + 배포 + 라이브 검증 완료 (131차 구현 → 132차 CLOSED)
+- 근거: `handoff.md` 2026-09-12(131차/132차 §1-1), `TESTING.md`
+  2026-09-12(131차), 브랜치 `fix/stale-chunk-recovery-2026-09-12`,
+  커밋 `a940e83`.
+- 내용(131차): 학생 기기 "앱 오류가 발생했어요" P1 장애를 READ-ONLY로
+  조사 — 배포마다 lazy 청크 파일 해시가 전부 바뀌어, 배포 전 열려
+  있던 세션이 code-split 화면 첫 진입 시 404 → `React.lazy` reject를
+  React가 내부 캐시해 "그냥 다시 시도"로 복구 불가. `src/utils/
+  staleChunkRecovery.js`(신규, 순수 함수) + `App.jsx`
+  `AppErrorBoundary`에 `state.stale` 분기 + 자동 reload(60초 세션
+  가드, 최대 1회) + "새로고침" 버튼 + `main.jsx` `vite:preloadError`
+  리스너로 수정. 신규 스위트 `testStaleChunkRecovery.mjs` 52/52 +
+  `tests/e2e/staleChunk.spec.mjs` → `verify:e2e` 735→745/745,
+  `verify:ui-stability` 21/21, build PASS.
+- **CLOSED(132차)**: PR #40 merge `2026-09-12T09:00:06Z` → main
+  `a87866a`. Vercel Production 배포 `6407926220` success `09:00:32Z`.
+  라이브 `index-C3T1Z5OA.js` md5 일치 확인, 번들에 `staleChunkReloadAt`/
+  `vite:preloadError` 존재. 라이브 READ-ONLY 검증(Playwright
+  route-abort, 로그인 0): 첫 청크 404 → 자동 reload 정확히 1회 후
+  정상 화면, 영구 404 → 자동 reload 1회 후 stale 안내 화면 +
+  "새로고침" 버튼(두 번째 자동 reload 0, 콘솔 `stale chunk recovery
+  guard_active`), 대조군 자발 reload 0·가드 키 `null`. `main` Release
+  Gate run `34684691847` 1차 Gate 2 실패(`testRlsSecurity`
+  `/api/student-pin-status` Gateway Timeout — 일시적, 보안 단언은
+  PASS) → 동일 SHA 재실행 SUCCESS `09:32:21Z`. Production DB WRITE 0,
+  SQL 실행 0, feature flag 변경 0.
 
 ### [P1] Admin Features 패널 접근 버그(관리자 PIN 세션인데도 "❌ 접근 권한 없음") — FIXED + PR #38 merge/배포 확인 (2026-09-12, 130차)
 - 근거: `handoff.md` 2026-09-12(130차) §1~5, `TESTING.md` 2026-09-12

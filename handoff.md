@@ -1,9 +1,167 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-12 (131차 — P1 프로덕션 장애 "앱 오류가 발생했어요"
-READ-ONLY 조사 완료(원인: 배포마다 lazy 청크 해시가 바뀌어 배포 전 열린
-세션이 404 → React.lazy reject 캐시로 자동복구 불가) + 자동복구 수정
-브랜치 `fix/stale-chunk-recovery-2026-09-12` PR #40 오픈(merge 대기,
-배포 0). 이 세션 Production DB WRITE·SQL 실행 0. 130차 이하 보존)_
+_최종 갱신: 2026-09-12 (132차 — 6시간 자율 세션, 2 워크스트림 병행.
+Agent A: P1 stale-chunk 수정 PR #40 merge(main `a87866a`)+Vercel 배포+
+라이브 READ-ONLY 검증 완료로 **CLOSED**, PR #41(CI 신뢰성)/PR #42(lazy
+chunk 가드) OPEN 미merge, 보안 감사 신규 취약점 0, Safe Hooks v1은
+머신 레벨 훅 차단으로 **BLOCKED**(설계 문서만). Agent B: Paul Town
+British storybook을 별도 worktree/브랜치에서 Phase 1~3까지 완료(플래그
+OFF, DB 카탈로그/가격 무변경, main 무접촉, 미push). 이 세션 Production
+DB WRITE 0·SQL 실행 0·merge는 PR #40 1건뿐. 131차 이하 보존)_
+
+## 2026-09-12 (132차) — 6시간 자율 세션: Agent A(P1 CLOSED + PR #41/#42 + 보안 감사 + Safe Hooks BLOCKED) / Agent B(Paul Town British storybook Phase 1~3, worktree)
+
+### 0. 안전 요약(최우선 확인)
+
+이번 세션은 두 워크스트림을 병행했다 — Agent A(엔지니어링: P1 배포
+검증, CI 신뢰성, 보안 감사, lazy chunk 가드, Safe Hooks 설계)와
+Agent B(별도 worktree `wt-town-design`에서 Paul Town British storybook
+설계+구현). Production DB WRITE 0, SQL 실행 0, migration 0, `v3_50`
+재실행 0, `paulTownV1` 플래그 OFF 그대로, `TOWN_V1_WELCOME_ENABLED`
+미설정 그대로, welcome 크레딧 지급 0, reward/PD/star/XP/student/class/
+textbook/word mutation 0, env 변경 0, 수동 배포 0(PR #40 merge 트리거
+Vercel 자동 배포 1회만), PR merge는 **PR #40 1건만**(지시 범위), 파괴적
+git 명령 0, PR #32는 이번 세션 미접촉, 운영자가 저장소 루트에 남겨둔
+미추적 SQL 16개는 미접촉 그대로.
+
+### 1. Agent A — 엔지니어링
+
+#### 1-1. P1 stale-chunk 수정 — PR #40 merge + 배포 + 라이브 검증 완료, **CLOSED**
+
+- Merge: `2026-09-12T09:00:06Z` → `main a87866a`(merge commit). Vercel
+  Production 배포 `6407926220` success `09:00:32Z`.
+- 배포 확인: 라이브 `index-C3T1Z5OA.js` md5
+  `d6b985643fc8460b3654fdf074f11f6d`가 `a87866a` 로컬 빌드와 일치,
+  번들 안에 `staleChunkReloadAt`/`vite:preloadError` 존재 확인.
+- 라이브 READ-ONLY 검증(Playwright route-abort, 로그인 0회, 스크린샷
+  2장): 첫 청크 404 시나리오 → 자동 reload 정확히 1회 후 정상 화면 +
+  가드 키 기록. 영구 404 시나리오 → 자동 reload 1회 후 stale 안내
+  화면 + "새로고침" 버튼, 이후 15초 관찰 동안 두 번째 자동 reload
+  0회, 콘솔에 `stale chunk recovery guard_active` 로그. 대조군(정상
+  상태)은 자발적 reload 0회·가드 키 `null`.
+- 관찰: import가 abort된 케이스는 먼저 `"reading 'default'"`
+  TypeError로 나타나고, 실제 복구는 `vite:preloadError` 경로로
+  발동함(두 경로 모두 유효하게 캐치됨을 확인).
+- `main` Release Gate run `34684691847`: 1차 시도는 Gate 2에서
+  `testRlsSecurity`의 `/api/student-pin-status` 프로브가
+  `{"error":"Gateway Timeout"}`로 실패(보안 단언 자체는 PASS —
+  일시적 네트워크 이슈로 판단) → 동일 SHA 재실행 SUCCESS
+  `09:32:21Z`(Gate 2 `09:12:59`→`09:24:08Z`, Gate 3 →`09:28:08Z`,
+  Gate 5 →`09:32:13Z`).
+- → 131차부터 열려 있던 P1 카드는 이 세션으로 **CLOSED**.
+
+#### 1-2. PR #41 `ci/reliability-2026-09-12`(OPEN, 미merge)
+
+- 내용: `tests/harness/runDomain.mjs`에 `isTransientFailure`/
+  `runWithTransientRetry`(일시적 네트워크 실패로 판정된 경우에만 5초
+  대기 후 1회 재시도) + `release-gate.yml` timeout 20→30분 +
+  `scripts/testHarnessTransientRetry.mjs` 41/41 +
+  `docs/operations/CI_FLAKE_CLASSIFICATION_2026-09-12.md`.
+- 검증: `verify:quiz` 도메인 PASS, `testRegistryCoverage` 8/8,
+  `ui-stability` 21/21.
+- 커밋: `3a9286a`/`8473af9`/`50f6fe6`/`abeceb0`.
+
+#### 1-3. PR #42 `test/lazy-chunk-guards-2026-09-12`(OPEN, 미merge)
+
+- 내용: `scripts/testLazyChunkGuards.mjs` 76/76 — `App.jsx`의
+  `React.lazy` 11개 전부 `Suspense`+`AppErrorBoundary` 보호 확인,
+  복구 배선/상수 계약 확인, dist 산출물 가드, 음성(대조군) 3건 포함.
+  registry `quiz` 도메인 등록,
+  `docs/operations/LAZY_CHUNK_GUARDS_2026-09-12.md`.
+- 커밋: `f39efdd`/`052bdf8`/`113d8e5`.
+
+#### 1-4. 보안 감사 — `docs/operations/SECURITY_AUDIT_2026-09-12.md`
+
+- PR #36/#38/#40 신규 취약점 0건(Critical/High/Medium/Low), Info 2건.
+- 라이브 `testRlsSecurity` 7/7·`testSecurityRegressions` 35/35 PASS.
+- 기존 KNOWN 2건 유지. Low 권고 1건 — `canManageFeatures`의 레거시
+  OR 절은 향후 패널에 파괴적 액션이 추가될 경우 정리 권장(즉시
+  조치 불필요).
+
+#### 1-5. Safe Hooks v1 — 구현 **BLOCKED**
+
+- 머신 레벨 플러그인 훅(vibe-claude destructive-command-gate,
+  `pre_tool_use`)이 탐지 대상 문자열을 담은 소스/테스트 파일 Write를
+  2회 거부했고, Auto-Mode Bypass 분류기가 우회 시도 중단을
+  지시했다 — 에이전트는 정지했고 우회 시도는 0회, `settings.json`
+  무변경, 생성했던 빈 worktree/브랜치는 제거함.
+- 설계 문서만 남김: `docs/operations/SAFE_HOOKS_V1_DESIGN.md`(리터럴
+  문자열 없이 서술형으로만 작성).
+
+#### 1-6. 문서(docs 브랜치 `docs/ops-2026-09-12`, 커밋
+`85f8efc`/`63417e8`/`1b53220`/`b875e59`/`b02d14a`)
+
+- `docs/operations/DEPLOYMENT_SAFETY_2026-09-12.md`,
+  `docs/operations/TECH_DEBT_INVENTORY_2026-09-12.md`,
+  `docs/operations/SECURITY_AUDIT_2026-09-12.md`,
+  `docs/operations/SAFE_HOOKS_V1_DESIGN.md`,
+  `docs/operations/OWNER_DECISIONS_2026-09-12.md`(운영자 결정 12항목),
+  중간 체크포인트 기록.
+
+#### 1-7. CI 관찰
+
+- Supabase Gateway Timeout 4회/4시간(서로 다른 엔드포인트) — 학생
+  트래픽 영향 관측 0건.
+- `release-gate` 20분 캡에 근접하는 실행 있었음(PR #41이 30분으로
+  상향 제안).
+
+### 2. Agent B — Paul Town British storybook (worktree `wt-town-design`,
+브랜치 `design/paul-town-british-world-2026-09-12`, base `a87866a`,
+16 commits `663e924`…`755b88d`, **미push**, `C:\voca`(메인 워크트리)
+무접촉)
+
+#### 2-1. Phase 1 — 설계 + 순수 유틸/컴포넌트(미배선)
+
+- `docs/design/town/` 하위: `PAUL_TOWN_BRITISH_WORLD.md`(LEARN→EARN→
+  BUILD→EXPLORE→DISCOVER 루프, 레벨별 맵 개념은 기존 17개 카탈로그
+  범위 내), `VISUAL_SYSTEM.md`, `DISCOVERY_SYSTEM.md`,
+  `UX_FLOW.md`("3초 규칙"), `ASSET_MANIFEST.json`/`.md`(기존 17개 +
+  제안 4개, DB 미기록), `COMPONENT_ARCHITECTURE.md`,
+  `OWNER_DECISIONS.md`, `AGENT_B_REPORT.md`.
+- 코드(신규, 미배선): `src/utils/town/townDiscovery.js`(학생
+  UUID+일자 해시 기반 결정론적 로직, 이름 문자열 미사용, 보상 지급
+  0, 네트워크 호출 0), `townAmbient.js`, `TownDiscoveryCard.jsx`,
+  `TownWoodenSignHeader.jsx`.
+- 테스트: `scripts/testTownDiscovery.mjs` 69단언(IP 금지어 스캔
+  포함), `testTownPrototypeStatic.mjs`.
+
+#### 2-2. Phase 2~3 — 배선 + 반응형 보정
+
+- `paulTownV1` 기능 플래그 게이트 안 `TownScreen` 트리에만 배선 —
+  `App.jsx`는 `TownScreen` 렌더링 줄에 `studentId` prop 1개만 추가.
+  `TownGrid` 셀에 ambient/depth 클래스 적용(추가 DOM 노드 0). 배치
+  가능 아이템 6종의 기존 액션 시트 안에 discovery 카드 삽입(모달
+  체인 추가 0). 기존 Paul 캐릭터 자산은 그대로 사용.
+- E2E 실행 중 회귀 2건을 발견해 같은 세션에서 수정(스태킹 컨텍스트
+  z-index 문제, 팝업 폭 문제).
+- Phase 3: 360px 폭 헤더의 "다음 레벨까지 ⭐N" 문구 잘림 →
+  두 줄로 wrap 처리(≥640px 화면은 픽셀 단위로 기존과 동일).
+
+#### 2-3. 검증
+
+- `testTownUiStatic` 95/95, `testTownLayout` 69/69, `testTownCatalog`
+  50/50, `testTownLevelLock` 53/53, `testTownDiscovery` 69/69,
+  `testTownPrototypeStatic` 51/51, `testBundleBudget` 10/10
+  (`TownScreen` 12.0KB/15KB gzip 예산 내), `npm run build` PASS,
+  `tests/e2e/townV1.spec.mjs` 480/480(미mock 0건) — 총 877단언 0 실패.
+- 프리뷰 스크린샷 5장(360×640/768×1024/1280×800/200% zoom/discovery
+  open 상태) + README, 각 파일 300KB 미만.
+- IP 금지어 스캔 15종 0건 검출(보고서 체크리스트의 "X copy: 0" 표기
+  줄 자체는 스캔 대상에서 제외).
+- 기능 플래그 기본값 `false` 유지, DB 카탈로그/가격 무변경.
+
+### 3. 안전 상태(전체 세션 재확인)
+
+Production DB WRITE 0 · SQL 실행 0 · migration 0 · `v3_50` 재실행 0 ·
+Town 플래그 OFF · welcome env 미설정 · welcome 지급 0 · reward/PD/star/
+XP/student/class/textbook/word mutation 0 · env 변경 0 · 수동 배포 0
+(PR #40 merge 트리거 Vercel 자동 배포 1회) · PR merge 1건(#40만) ·
+파괴적 git 명령 0 · PR #32 미접촉 · 운영자 미추적 SQL 16개 미접촉.
+
+### 4. 권고 다음 단계
+
+`docs/operations/OWNER_DECISIONS_2026-09-12.md`의 12개 항목 결정
+필요(우선순위: PR #41/#42 merge 여부, Agent B 브랜치 push/PR 여부,
+Pilot A 시작 여부, Supabase 상태 점검).
 
 ## 2026-09-12 (131차) — P1 "앱 오류가 발생했어요" 원인 규명(READ-ONLY) + stale-chunk 자동복구 수정 PR #40
 
