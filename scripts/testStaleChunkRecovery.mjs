@@ -259,6 +259,134 @@ console.log('\n15. staleChunkRecovery.js는 localStorage를 쓰지 않음(sessio
   check('storage는 전부 매개변수로 주입(전역 window 직접 참조 없음)', !/window\./.test(utilSrc))
 }
 
+// ── H. Supabase/PostgREST 오류 추가 2종(42703/23505) — 기존 3종 포함 재확인 ──
+console.log('\n16. (H) Supabase/PostgREST 오류 5종 → 전부 reload 0, not_stale')
+for (const message of [
+  'PGRST205 Could not find the table',
+  'permission denied for table students',
+  '42501',
+  '42703 column does not exist',
+  '23505 duplicate key value violates unique constraint',
+]) {
+  const storage = makeFakeStorage()
+  const spy = makeReloadSpy()
+  const err = new Error(message)
+  const r = tryRecoverFromStaleChunk({ error: err, storage, reload: spy.fn, now: 1000 })
+  check(`(H) Error('${message}') → reload 0, not_stale`, spy.count === 0 && r.reason === 'not_stale', JSON.stringify(r))
+}
+
+// ── I. 인증/세션 오류 — 기존 unauthorized/JWT expired/relogin_required 포함 재확인 ──
+console.log('\n17. (I) 인증/세션 오류 7종 → 전부 reload 0, not_stale')
+for (const message of [
+  'Invalid login credentials',
+  'unauthorized',
+  'relogin_required',
+  'JWT expired',
+  'session expired',
+  'invalid_token',
+  'malformed_token',
+]) {
+  const storage = makeFakeStorage()
+  const spy = makeReloadSpy()
+  const err = new Error(message)
+  const r = tryRecoverFromStaleChunk({ error: err, storage, reload: spy.fn, now: 1000 })
+  check(`(I) Error('${message}') → reload 0, not_stale`, spy.count === 0 && r.reason === 'not_stale', JSON.stringify(r))
+}
+
+// ── J. 일반 네트워크/API 오류 — stale로 오판되면 안 됨 ───────────────────
+console.log('\n18. (J) 일반 네트워크/API 오류 8종 → isStaleChunkError false AND reload 0')
+{
+  const cases = [
+    new Error('Failed to fetch'),
+    new Error('NetworkError when attempting to fetch resource.'),
+    new Error('Load failed'),
+    new Error('The operation was aborted.'),
+    new Error('timeout of 20000ms exceeded'),
+    new Error('Request failed with status code 500'),
+    new Error('fetch failed'),
+    { ok: false, reason: 'network_failed' },
+    new Error('supabase: FetchError: request to https://x.supabase.co failed'),
+  ]
+  for (const err of cases) {
+    const storage = makeFakeStorage()
+    const spy = makeReloadSpy()
+    const label = err instanceof Error ? err.message : JSON.stringify(err)
+    const r = tryRecoverFromStaleChunk({ error: err, storage, reload: spy.fn, now: 1000 })
+    check(`(J) ${label} → isStaleChunkError false`, isStaleChunkError(err) === false)
+    check(`(J) ${label} → reload 0`, spy.count === 0, JSON.stringify(r))
+  }
+}
+
+// ── K. React 애플리케이션 오류 — stale로 오판되면 안 됨 ──────────────────
+console.log('\n19. (K) React 애플리케이션 오류 6종 → isStaleChunkError false AND reload 0')
+{
+  const cases = [
+    new Error('Minified React error #31; visit https://reactjs.org/docs/error-decoder.html'),
+    new Error('Objects are not valid as a React child'),
+    new Error('Cannot update a component while rendering a different component'),
+    new Error('Maximum update depth exceeded'),
+    new TypeError("Cannot read properties of null (reading 'map')"),
+    new RangeError('Invalid array length'),
+  ]
+  for (const err of cases) {
+    const storage = makeFakeStorage()
+    const spy = makeReloadSpy()
+    const r = tryRecoverFromStaleChunk({ error: err, storage, reload: spy.fn, now: 1000 })
+    check(`(K) ${err.name}('${err.message}') → isStaleChunkError false`, isStaleChunkError(err) === false)
+    check(`(K) ${err.name}('${err.message}') → reload 0`, spy.count === 0, JSON.stringify(r))
+  }
+}
+
+// ── E. 한 복구 사이클 안에서 boundary + preloadError 이벤트가 동시 발생 ───
+console.log('\n20. (E) 같은 storage에서 boundary→preloadError→문자열 3연발 → 총 reload 1(순서/역순 모두)')
+{
+  const storage = makeFakeStorage()
+  const spy = makeReloadSpy()
+  const boundaryErr = Object.assign(new Error('chunk load failed'), { name: 'ChunkLoadError' })
+  const preloadErrorPayload = new Error('Failed to fetch dynamically imported module: https://x/assets/A-abc.js')
+  const stringForm = 'Failed to fetch dynamically imported module: https://x/assets/A-abc.js'
+
+  const r1 = tryRecoverFromStaleChunk({ error: boundaryErr, storage, reload: spy.fn, now: 1000 })
+  const r2 = tryRecoverFromStaleChunk({ error: preloadErrorPayload, storage, reload: spy.fn, now: 1050 })
+  const r3 = tryRecoverFromStaleChunk({ error: stringForm, storage, reload: spy.fn, now: 1100 })
+  check('(E) 정방향 — 총 reload 정확히 1회', spy.count === 1, `count=${spy.count}`)
+  check(
+    '(E) 정방향 — reasons=[reloaded, guard_active, guard_active]',
+    r1.reason === 'reloaded' && r2.reason === 'guard_active' && r3.reason === 'guard_active',
+    JSON.stringify([r1.reason, r2.reason, r3.reason])
+  )
+
+  // 역순 — preloadError 먼저, 그 다음 boundary
+  const storage2 = makeFakeStorage()
+  const spy2 = makeReloadSpy()
+  const r4 = tryRecoverFromStaleChunk({ error: preloadErrorPayload, storage: storage2, reload: spy2.fn, now: 2000 })
+  const r5 = tryRecoverFromStaleChunk({ error: boundaryErr, storage: storage2, reload: spy2.fn, now: 2050 })
+  check('(E) 역순 — 총 reload 정확히 1회', spy2.count === 1, `count=${spy2.count}`)
+  check(
+    '(E) 역순 — reasons=[reloaded, guard_active]',
+    r4.reason === 'reloaded' && r5.reason === 'guard_active',
+    JSON.stringify([r4.reason, r5.reason])
+  )
+}
+
+// ── 추가 — Safari 모듈 스크립트 오류 모양(name=TypeError) + name-only 객체 ──
+console.log('\n21. Safari 모양(name=TypeError, message로만 판정) + name만 있는 ChunkLoadError 객체')
+{
+  const safariErr = Object.assign(new Error('Importing a module script failed.'), { name: 'TypeError' })
+  check('Safari 모양(name=TypeError) → isStaleChunkError true(메시지로 판정)', isStaleChunkError(safariErr) === true)
+  const storage = makeFakeStorage()
+  const spy = makeReloadSpy()
+  const r = tryRecoverFromStaleChunk({ error: safariErr, storage, reload: spy.fn, now: 1000 })
+  check('Safari 모양 → reload 1', spy.count === 1 && r.reloaded === true, JSON.stringify(r))
+
+  const nameOnly = { name: 'ChunkLoadError' }
+  check('message 없이 name만 있는 객체 → isStaleChunkError true', isStaleChunkError(nameOnly) === true)
+  const storage2 = makeFakeStorage()
+  const spy2 = makeReloadSpy()
+  const r2 = tryRecoverFromStaleChunk({ error: nameOnly, storage: storage2, reload: spy2.fn, now: 1000 })
+  check('message 없이 name만 있는 객체 → reload 1', spy2.count === 1 && r2.reloaded === true, JSON.stringify(r2))
+}
+
 console.log(`\n${checks - failures}/${checks} passed`)
 if (failures > 0) {
   console.log(`\nFAIL — ${failures}건 실패`)
