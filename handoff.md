@@ -1,9 +1,152 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-12 (129차, v3_50 POST verify 운영자 실행 종결(PASS,
-BLOCK B/B-2/C/C-2/D 전부) + PR #36 merge → main `8837d75` + Vercel
-Production 배포 SHA MATCH 확인, Pilot A 시작의 코드/DB 차단 요인 없음
-(시점은 운영자 결정), 이 세션 에이전트 Production DB WRITE·SQL 실행
-0(운영자 service_role SELECT-only 3회). 128차 이하 보존)_
+_최종 갱신: 2026-09-12 (130차, 야간 자율 세션 — Admin Features 패널
+접근 버그(관리자 PIN 세션인데도 "❌ 접근 권한 없음" 오판정) 원인 규명 +
+수정 + PR #38 merge → main `aa89e43` + Vercel Production 배포 SHA
+MATCH 확인, Pilot A 실행 직전 체크리스트 문서 신설(시작은 아직 안 함).
+이 세션 Production DB WRITE·SQL 실행 0, feature flag 변경 0, Pilot A
+NOT STARTED. 129차 이하 보존)_
+
+## 2026-09-12 (130차) — Admin Features 패널 접근 버그 수정 + PR #38 merge/배포 확인 + Pilot A 체크리스트
+
+### 0. 안전 요약(최우선 확인)
+
+이번 세션은 야간 자율 세션으로 (1) 관리자 PIN 세션에서도 "🎯 기능"
+패널이 "❌ 접근 권한 없음 / 현재 역할: student"로 막히는 버그의
+근본원인을 규명하고 (2) 최소 범위로 수정한 뒤 (3) PR #38을 merge·배포
+확인하고 (4) Pilot A 실행 직전 절차 문서를 작성했다. Production DB
+WRITE 0, SQL 실행 0, feature flag(`paulTownV1` 등) 변경 0, welcome
+크레딧 지급 0, Pilot A 미시작, PR #32는 이번 세션 미접촉, 운영자의
+untracked SQL 파일들도 이번 세션은 실행/수정하지 않았다.
+
+### 1. 근본원인
+
+관리자 PIN 인증은 `AdminScreen`의 React state `authed`(서버
+`verify-admin-pin` 성공 시 true)로만 존재한다. 반면
+`FeatureManagementPanel`은 `rbac.js`의 `hasPermission(MANAGE_FEATURES)`
+를 통해 localStorage `paulEasyVoca_userRole`(기본값 `'student'`)만
+읽어 권한을 판정하고 있었다. 로그인 흐름 어디에도 이 키를 쓰는 코드가
+없어, 새 기기에서 정상적으로 PIN을 통과한 관리자도 role이 항상
+`student`로 남아 접근이 거부됐다. 이 구조는 2026-06-23 커밋 `a7dab44`
+도입 시점부터의 것으로, PR #36/#37 회귀가 아니다. localStorage를 수동
+편집해 우회하는 방법은 운영자 결정으로 불채택했다.
+
+### 2. 수정 내용 (5 files, +272/−9)
+
+- `rbac.js`: `canManageFeatures(adminSession)` 추가 —
+  `adminSession === true || hasPermission(MANAGE_FEATURES)` (순수 함수,
+  자체적으로 아무것도 저장하지 않음, 기존 `role` 키 기반 하위 호환
+  유지).
+- `FeatureManagementPanel.jsx`: `adminSession` prop 추가, 게이트를
+  `canManageFeatures(adminSession)`로 교체, 역할 표시 문구를
+  `'admin (관리자 PIN 세션)'`로 변경, 미사용 import 제거.
+- `AdminScreen.jsx`: `<FeatureManagementPanel adminSession={authed} />`
+  로 배선 — `AdminScreen.jsx:1910`의 `if (!authed) return`(PIN 화면)
+  뒤에서만 렌더되므로 PIN 미인증 상태에서 이 prop이 true로 전달될 경로
+  없음.
+- `scripts/testFeaturePanelAdminSession.mjs`(신규): 30단언 — 순수
+  진리표, 비-boolean 값 거부, 기존 `role` 키 하위 호환, `adminSession`
+  전달이 localStorage에 아무것도 쓰지 않음을 증명(`setItem` 호출 0),
+  정적 배선 확인, `login`/`admin`/`StudentSelect` 소스에
+  `setUserRole`/`paulEasyVoca_userRole` 참조 0건, 브라우저 저장소
+  `setItem('authed'|'userRole', ...)` 호출 0건. `registry.mjs`에 admin
+  도메인으로 등록.
+
+### 3. 보안 확인
+
+관리자 권한은 React state prop으로만 전달되고 브라우저 저장소(local/
+session storage)에 admin 역할이 기록되는 지점이 0건이다 — 관리자
+화면을 벗어나거나 새로고침하면 소멸한다. PIN 검증 우회 경로는 신설되지
+않았다. `paulEasyVoca_features`의 저장 방식이나 플래그 기본값은
+무변경(`paulTownV1` 기본 false 유지).
+
+### 4. 로컬 검증
+
+`testFeaturePanelAdminSession` 30/30, `testUiStabilityGuards` 21/21,
+`npm run verify:admin` PASS(36 scripts), `npm run build` PASS,
+`npm run verify:all` ALL DOMAINS PASS + E2E 735/735(student 34/admin
+21/mobile 178/entrance 12/town 480). `extra:true`의
+`testRewardFlow`에서 daily goal 관련 1단언이 1회 FAIL했으나 도메인
+판정에는 영향 없었고, 동일 SHA에서 standalone(`verify:reward`)으로
+55/55 재확인 — 이번 변경(admin 패널 한정, `src/` 변경 3파일)과는 무관한
+`useStudent` 번들 스크립트의 플레이크로 기록한다.
+
+### 5. 브랜치/CI/merge/배포
+
+- 브랜치 `fix/features-panel-admin-session-2026-09-12`, 커밋
+  `7b21062`. `workflow_dispatch` run `34640484935` SUCCESS(19m34s).
+- PR #38 생성 → `pull_request` run `34642334203` 1차 cancelled
+  (20m09s, `timeout-minutes: 20` 초과 — Gate 2 11m24s + Gate 3 3m57s
+  → Gate 5가 16분 시점에서야 시작해 4분이 더 필요했음, Gate 1~4는
+  전부 success — **코드 회귀가 아니라 워크플로 타임아웃 문제**) → 동일
+  SHA 재실행 SUCCESS(Gate 2 20:27→20:38Z, Gate 3 →20:42Z, Gate 5
+  20:42→20:46Z).
+- PR #38 MERGED 2026-09-11T20:47:48Z, merge commit
+  `aa89e43c99ece2b613d1eb1c7cdcb690828af07d`(merge-commit 방식, 이전
+  PR들과 동일). main에 branch protection(required check)이 없어 운영
+  규칙상 Release Gate SUCCESS를 요건으로 적용하고 있다.
+- Vercel deployment `6401474256` Production success
+  2026-09-11T20:48:15Z. 라이브 `https://voca-drab.vercel.app`가
+  서빙하는 `assets/index-G2tzYEzo.js`의 md5
+  `74188dde3722b6391dc5586508299e27`가 `aa89e43` 로컬 빌드와 동일,
+  `AdminScreen-BgwANTgZ.js` md5
+  `364a9fcbaeffe077b8e92f1594ae90e1`도 동일하고
+  `'admin (관리자 PIN 세션)'` 마커 1건 + `adminSession` 배선 포함 —
+  **DEPLOY SHA MATCH YES**. 확인은 READ-ONLY fetch만(로그인/학습/
+  구매/보상 0).
+- main Release Gate run `34646093186`(`aa89e43`) 1차: 20:47:50Z 시작
+  → Gate 1~5 전부 success(Gate 2 20:48:29→20:59:46Z, Gate 3
+  →21:03:47Z, Gate 5 21:03:55→21:07:52Z)이나 21:07:54Z에 job
+  cancelled — `timeout-minutes: 20` 초과가 post-step(정리 단계)에서
+  발생. 코드 회귀 아님(모든 게이트 단계 success), Deploy Ready job
+  skipped. 동일 run을 코드 변경 0으로 재실행: 21:09:15Z Gate 2 시작 →
+  Gate 2 21:20:09Z success, Gate 3 21:24:08Z success, Gate 5
+  21:24:13→21:28:08Z success, job SUCCESS 21:28:19Z(19m43s), Deploy
+  Ready success. **MAIN RELEASE GATE = SUCCESS(`aa89e43`)**.
+
+### 6. 안전 상태 (변화 없음)
+
+Production DB WRITE 0 · SQL 실행 0 · feature flags changed 0 ·
+`paulTownV1` OFF · `TOWN_V1_WELCOME_ENABLED` unset · welcome granted 0
+· town purchase 0 · Pilot A NOT STARTED · PR #32 OPEN/untouched
+(`0d2170b`) · 운영자의 untracked SQL 파일들 untouched.
+
+### 7. Pilot A 상태 (참고, 시작 안 함)
+
+- 확정 5명(UUID): Yaeji `1c585815-98c8-461e-81fc-0187ffdcfa1c`
+  (Presentation 6), Lily=문지유
+  `9f115c32-6a4b-4659-a026-f9905a5cc2e2`(Pre-Middle School; 동명
+  archived 레코드 5건 제외: Lily_DUP2_af22a6,
+  문지유_DUP_20260705_1f01e4, 문지유_DUP2_556f75, 문지유_DUP2_fa4c1c,
+  지유_DUP2_718da8), Kinney `e0fe0f50-8927-44d9-9331-e454620524d9`
+  (Pre-middle school 5학년), Irene
+  `d4bd8d3d-afda-47ad-9e5e-a12c8376c892`(Presentation 6;
+  Irene_DUP2_145397 제외), Mimi
+  `3cff7b25-02cd-45a0-8488-a7b84a6d8a58`(Pre-middle school 5학년).
+  신지율/Lucas는 운영자 결정으로 제외.
+- PRE-PILOT SELECT(운영자 service_role, READ-ONLY) PASS: global
+  invariants 전부 PASS(dup reward key 0, dup dollar key 0, orphan 0,
+  welcome 0, migration dollar 0, balance equation 0, purchase/ledger
+  mismatch 0, placement contamination 0, town_purchases 0), 5명
+  townPlacements 0, welcome rows 0. PRE PD baseline: Yaeji
+  null(dollar_ledger 0) / 문지유 null(0) / Kinney 41 / Irene 55 / Mimi
+  67. null은 수정·초기화 금지.
+- 이코노미 OPTION C(관찰) 유지, 가격/`dollar_rules` 무변경.
+- **신규**: Pilot A 실행 직전 체크리스트를
+  `docs/operations/PILOT_A_PRE_ENABLE_CHECKLIST_2026-09-12.md`로
+  작성했다 — 전제(PR #38 배포 완료), 기기당 절차(Kinney 기기 먼저,
+  플래그는 `paulTownV1`만 체크), 구매 테스트 절차, POST READ-ONLY
+  확인 항목, STOP 조건(운영자 목록)을 포함한다. 이 문서 작성 자체가
+  Pilot A 시작을 의미하지 않는다 — 실행 여부/시점은 운영자 결정.
+
+### 8. Maintenance recommendation (기록만, 미수정)
+
+`.github/workflows/release-gate.yml`의 `timeout-minutes: 20` — 최근
+5회 실행이 18~20분(Gate 2 10~11.5분 + Gate 3 3~4분 + Gate 5 4분)이고
+이번 세션 누적 3건 timeout cancel이 발생했다(main `8837d75` 1차, PR
+#38 1차, main `aa89e43` 1차). 25~30분 상향을 권장한다. 이번 fix와는
+별개.
+
+---
 
 ## 2026-09-12 (129차) — v3_50 POST verify 운영자 실행 종결(PASS) + PR #36 merge/배포 확인
 

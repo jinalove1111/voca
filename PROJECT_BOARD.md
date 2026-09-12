@@ -209,6 +209,17 @@ _작성: 2026-07-18. 이 보드가 작업 우선순위의 **단일 권위 소스
 
 ## NEXT
 
+### [P1] Pilot A 실행 — 운영자 승인 대기 (2026-09-12, 130차)
+- 근거: `docs/operations/PILOT_A_PRE_ENABLE_CHECKLIST_2026-09-12.md`,
+  `handoff.md` 2026-09-12(130차) §7.
+- 내용: Admin Features 패널 접근 버그가 PR #38로 수정·배포되어 관리자
+  "🎯 기능" 탭이 새 기기에서 정상적으로 열림 — Pilot A 실행의 코드
+  차단 요인은 해소됐다. 확정 5명(Yaeji/Lily=문지유/Kinney/Irene/Mimi)
+  PRE-PILOT 진단 PASS 완료, PD baseline 확인됨(체크리스트 §7 참고).
+  체크리스트 문서에 기기당 절차·구매 테스트·POST 확인·STOP 조건이
+  전부 정리돼 있다.
+- 필요한 결정: 실행 시점/순서(운영자), 체크리스트 문서 자체의 검토.
+
 ### [P1] `getStudentWords` usingOverride 분기의 첫 유닛 폴백 — 운영자 판단 대기 (2026-08-30 야간 감사)
 - 근거: `src/utils/wordLibrary.js` `getStudentWords` 의 `usingOverride`
   분기(해당 줄에 같은 내용의 주석을 남겨 뒀다).
@@ -1092,6 +1103,29 @@ _(현재 없음 — 작업 시작 시 여기로 카드 이동 + `.ai-status/` �
   `supabase_v2_4_entrance_result_rls.sql` 실행 여부 판단.
 
 ## DONE (최근 완료, 참고용 — 전체 이력은 `ROADMAP.md`/`handoff.md`)
+
+### [P1] Admin Features 패널 접근 버그(관리자 PIN 세션인데도 "❌ 접근 권한 없음") — FIXED + PR #38 merge/배포 확인 (2026-09-12, 130차)
+- 근거: `handoff.md` 2026-09-12(130차) §1~5, `TESTING.md` 2026-09-12
+  (130차 항목).
+- 내용: 근본원인은 관리자 PIN 인증(`AdminScreen` state `authed`)과
+  `FeatureManagementPanel`의 권한 판정(localStorage
+  `paulEasyVoca_userRole`, 기본 `student`)이 서로 다른 소스를 보던
+  것 — 2026-06-23 `a7dab44` 도입 시점부터의 구조, PR #36/#37 회귀
+  아님. 수정 5 files(+272/−9): `rbac.js` `canManageFeatures(
+  adminSession)` 순수 함수 + `FeatureManagementPanel.jsx`
+  `adminSession` prop 게이트 + `AdminScreen.jsx` 배선(PIN 화면 뒤
+  에서만) + 신규 `scripts/testFeaturePanelAdminSession.mjs` 30단언.
+  로컬 검증: 신규 30/30, `verify:admin` PASS, `build` PASS,
+  `verify:all` ALL PASS + E2E 735/735.
+- 브랜치 `fix/features-panel-admin-session-2026-09-12`(`7b21062`) →
+  PR #38 MERGED 2026-09-11T20:47:48Z, merge commit `aa89e43`.
+  Release Gate 1차 timeout cancel(코드 회귀 아님, Gate1~4 success) →
+  재실행 SUCCESS. Vercel Production 배포 SHA MATCH 확인(`assets/
+  index-G2tzYEzo.js`, `AdminScreen-BgwANTgZ.js`). Production DB
+  WRITE 0, feature flag 변경 0.
+- Maintenance recommendation(기록만, 미수정):
+  `.github/workflows/release-gate.yml` `timeout-minutes: 20` 상향
+  권장(최근 2회 timeout cancel).
 
 ### [P1] Paul Town 학습 루프 하드닝 2026-09-11 (127차) — CLOSED (2026-09-12, 129차: PR #36 merge + v3_50 POST verify PASS)
 - 근거: `handoff.md` 2026-09-11(127차), `TESTING.md` 2026-09-11(127차
