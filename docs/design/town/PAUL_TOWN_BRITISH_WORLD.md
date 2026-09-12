@@ -118,9 +118,13 @@ A~D)과 함께 검토해야 할 사안이다._
 
 ## 8. IP 세이프가드 요약
 
-- 금지어(코드/문서 스캔 대상, `DISCOVERY_SYSTEM.md` §5의 테스트가 실제로 검사):
-  Hogwarts, Harry, Potter, Hermione, Gryffindor, Slytherin, Hufflepuff,
-  Ravenclaw, Quidditch, Dumbledore, Voldemort, Muggle, Diagon, Hedwig, Snape.
+- 금지어 15개(운영자 지시 원문 그대로) — 이 문서를 포함한 이번 세션 산출물
+  전체가 `scripts/testTownDiscovery.mjs`의 IP 스캔 대상이라, 그 금지어 자체를
+  여기 다시 나열하지 않는다(나열하는 순간 이 문서 자체가 스캔에서 걸리는
+  자기 지시적 모순을 피하기 위함) — 정확한 15개 목록은
+  `scripts/testTownDiscovery.mjs`의 `FORBIDDEN_TERMS` 상수(단일 원천)를 본다.
+  이 문서/코드 어디에도 그 계열 고유명사(캐릭터/학교/스포츠/마법 도구 이름)를
+  쓰지 않는다는 원칙만 여기 남긴다.
 - 대신 쓰는 일반 모티프: 스톤 코티지, 자갈길, 빨간 우체통, 가로등, 돌다리,
   마을 광장, 영국식 정원, 오래된 책, 랜턴, 부엉이(마을 동물로서, 우편 배달부
   아님), 비 오는 창문, 안개 낀 아침, 티숍, 도서관, 기차 플랫폼, 나무 표지판,
