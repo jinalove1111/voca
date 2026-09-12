@@ -275,6 +275,24 @@ check('nearGoal(catalog, stars=최고레벨) — nextLevel === null', gMax.nextL
 check('nearGoal(catalog, stars=최고레벨) — text === "모든 마을이 열렸어요!"', gMax.text === '모든 마을이 열렸어요!', gMax.text)
 check('fogState(catalog, 10) — visible === false(더 열릴 것 없음)', fogState(catalog, 10).visible === false)
 
+// ── 8b. nearGoal 조사(가/이) 결함 회귀(2026-09-13) — "꽃밭가 열려요"처럼
+//     받침 있는 마지막 이름에 항상 "가"를 붙이던 문제를 subjectParticle()로
+//     수정했는지, 실제 텍스트 접미사로 확인한다. ─────────────────────────
+const bookshopFlowerGoal = nearGoal(catalog, minStarsForLevel(2))
+check(
+  'nearGoal 조사 수정 — "책방 · 꽃밭" 케이스(names=[책방,꽃밭]) text가 "꽃밭이 열려요"로 끝남(받침 있음 → "이")',
+  bookshopFlowerGoal.names.join(',') === '책방,꽃밭' && bookshopFlowerGoal.text.endsWith('꽃밭이 열려요'),
+  JSON.stringify({ names: bookshopFlowerGoal.names, text: bookshopFlowerGoal.text }),
+)
+
+const bridgeOnlyCatalog = [{ id: 'test-bridge', name: '다리', category: 'special', minLevel: 2, sortOrder: 10 }]
+const bridgeOnlyGoal = nearGoal(bridgeOnlyCatalog, minStarsForLevel(1))
+check(
+  'nearGoal 조사 수정 — 합성 카탈로그(다음 아이템 1개 "다리") text가 "다리가 열려요"로 끝남(받침 없음 → "가")',
+  bridgeOnlyGoal.text.endsWith('다리가 열려요'),
+  bridgeOnlyGoal.text,
+)
+
 // ── 9. Kinney-shaped fixture — starsEarned=60 → 레벨3 ────────────────────
 section('9. Kinney-shaped fixture(starsEarned=60)')
 const kinneyGoal = nearGoal(catalog, 60)
@@ -282,6 +300,11 @@ check('nearGoal(catalog, 60).nextLevel === 4', kinneyGoal.nextLevel === 4, JSON.
 check('nearGoal(catalog, 60).remaining === 40', kinneyGoal.remaining === 40, JSON.stringify(kinneyGoal))
 check('nearGoal(catalog, 60).names에 "강아지" 포함', kinneyGoal.names.includes('강아지'), JSON.stringify(kinneyGoal.names))
 check('nearGoal(catalog, 60).names에 "부엉이" 포함', kinneyGoal.names.includes('부엉이'), JSON.stringify(kinneyGoal.names))
+check(
+  'nearGoal 조사 수정 — Kinney fixture(강아지 · 부엉이) text가 "부엉이가 열려요"로 끝남(받침 없음 → "가")',
+  kinneyGoal.text.endsWith('부엉이가 열려요'),
+  kinneyGoal.text,
+)
 
 // ── 10. freeAnchors — HOME/점유 칸 제외, null 허용 ───────────────────────
 section('10. freeAnchors')

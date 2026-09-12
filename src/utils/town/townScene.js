@@ -160,9 +160,21 @@ export function nextUnlocks(catalog, level) {
   return { nextLevel, items: atNextLevel }
 }
 
+// 한글 종성(받침) 유무에 따른 주격 조사 선택 — 받침 있으면 "이", 없으면
+// "가"(2026-09-13 카피 결함 수정: "꽃밭가 열려요"처럼 받침 단어에 항상
+// "가"를 붙이던 문제). 한글 완성형 범위(가~힣) 밖의 마지막 글자(영문/숫자/
+// 이모지 등)는 안전하게 기존 동작("가")을 유지한다.
+function subjectParticle(word) {
+  const w = typeof word === 'string' ? word : ''
+  const ch = w.charCodeAt(w.length - 1)
+  if (Number.isNaN(ch) || ch < 0xac00 || ch > 0xd7a3) return '가'
+  return (ch - 0xac00) % 28 === 0 ? '가' : '이'
+}
+
 /**
  * 다음 마을 레벨까지 남은 별 + 그때 열리는 아이템 이름(최대 2개) 안내문.
  * starsToNextTownLevel(별 축)과 nextUnlocks(레벨→아이템 축)을 조합한다.
+ * 조사(가/이)는 나열된 이름 중 마지막 이름의 받침 유무를 따른다.
  */
 export function nearGoal(catalog, starsEarned) {
   const stars = Number.isFinite(Number(starsEarned)) ? Math.max(0, Number(starsEarned)) : 0
@@ -174,7 +186,7 @@ export function nearGoal(catalog, starsEarned) {
   const { items } = nextUnlocks(catalog, townLevelForStars(stars))
   const names = items.slice(0, 2).map((it) => it.name).filter(Boolean)
   const text = names.length > 0
-    ? `⭐ ${remaining} 더 모으면 ${names.join(' · ')}가 열려요`
+    ? `⭐ ${remaining} 더 모으면 ${names.join(' · ')}${subjectParticle(names[names.length - 1])} 열려요`
     : `⭐ ${remaining} 더 모으면 다음 레벨이 열려요`
 
   return { nextLevel, remaining, names, text }
