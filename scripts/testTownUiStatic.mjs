@@ -154,11 +154,24 @@ check(
   /const\s+paulTownV1Enabled\s*=\s*isFeatureEnabled\(\s*['"]paulTownV1['"]\s*\)/.test(appCode) ||
   /const\s+paulTownV1Enabled\s*=\s*useSyncExternalStore\(\s*subscribeFeatures\s*,\s*\(\)\s*=>\s*isFeatureEnabled\(\s*['"]paulTownV1['"]\s*\)/.test(appCode)
 )
-check('App.jsx — useTownShop enabled 조건에 paulTownV1Enabled 포함', /useTownShop\(\s*studentId\s*,\s*\(townShopEnabled\s*\|\|\s*paulTownV1Enabled\)/.test(appCode))
+// 2026-09-12 Pilot A UUID 허용목록(feat/pilot-a-town-v1-allowlist) — 두
+// 사용처(useTownShop enabled/onGoTown 게이팅)가 paulTownV1Enabled를 직접
+// 참조하던 것을 townV1Enabled(= paulTownV1Enabled || isPilotTownStudent(studentId))로
+// 바꿨다. 최종 진실 원천(isFeatureEnabled('paulTownV1'))은 위 체크에서 이미
+// 확인하므로, 여기서는 두 변수명 중 하나만 있으면 통과하도록 완화한다.
+check(
+  'App.jsx — useTownShop enabled 조건에 paulTownV1Enabled/townV1Enabled 포함',
+  /useTownShop\(\s*studentId\s*,\s*\(townShopEnabled\s*\|\|\s*paulTownV1Enabled\)/.test(appCode) ||
+  /useTownShop\(\s*studentId\s*,\s*\(townShopEnabled\s*\|\|\s*townV1Enabled\)/.test(appCode)
+)
 check("App.jsx — TownScreen React.lazy import (components/town/TownScreen)", /React\.lazy\(\s*\(\)\s*=>\s*import\(\s*['"]\.\/components\/town\/TownScreen['"]\s*\)\s*\)/.test(appCode))
 check("App.jsx — screen === 'town' 렌더 분기 존재", /screen\s*===\s*['"]town['"]/.test(appCode))
 check("App.jsx — screen==='town' 블록이 React.Suspense로 감싸짐", /screen\s*===\s*'town'\s*&&\s*\(\s*<React\.Suspense/.test(appCode))
-check("App.jsx — onGoTown이 paulTownV1Enabled로 게이팅됨(OFF면 null)", /onGoTown=\{paulTownV1Enabled \? \(\) => setScreen\('town'\) : null\}/.test(appCode))
+check(
+  "App.jsx — onGoTown이 paulTownV1Enabled/townV1Enabled로 게이팅됨(OFF면 null)",
+  /onGoTown=\{paulTownV1Enabled \? \(\) => setScreen\('town'\) : null\}/.test(appCode) ||
+  /onGoTown=\{townV1Enabled \? \(\) => setScreen\('town'\) : null\}/.test(appCode)
+)
 check('App.jsx — TownScreen에 studentData/townShop/onBack 전달', /<TownScreen\s+studentData=\{studentData\}\s+townShop=\{townShop\}\s+onBack=/.test(appCode))
 
 // ── 6. PaulTown.jsx — onGoTown 카드(플래그 OFF면 완전 무변화) ──────────
