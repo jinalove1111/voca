@@ -1,12 +1,110 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-12 (134차 — Pilot A Town V1 자격을 학생 UUID
-허용목록으로 부여: `src/config/pilotTown.js` 신규(승인 Pilot A 5명 UUID
-frozen Set + `isPilotTownStudent`) + `App.jsx` 두 곳(`useTownShop` enable/
-`onGoTown`)만 OR 결합, `features.js`/TownScreen/API/SQL 무변경. 신규
-테스트 testPilotTownAllowlist 32/32 + townPilotAllowlist e2e 35/35,
-회귀 6종 PASS, build PASS, verify:e2e 798/798. Production DB WRITE 0.
-브랜치 `feat/pilot-a-town-v1-allowlist-2026-09-12`, 미push·미PR(REVIEW
-ONLY), verify:all 실행 중. 133차 이하 보존)_
+_최종 갱신: 2026-09-13 (135차 — Paul Town V2-A 스토리북 마을 시각
+셸(플래그 `paulTownV2` 기본 OFF): Town 화면 신규 레이어드 렌더러
+`src/components/town/v2/`(12개) + 순수 유틸 `src/utils/town/
+townScene.js`/`townAmbient.js`(후자는 PR #44에서 이식), `App.jsx`
+`townV2Active = townV1Enabled && paulTownV2Enabled`로 V1과 분기(V1
+경로 바이트 동일), V1 경제/데이터/좌표/API/SQL 무변경. 신규 테스트
+testTownSceneV2 166/166 + testTownV2Static 101/101 + e2e townV2 83/83,
+회귀 전종 PASS, build PASS, verify:e2e 883/883, verify:all 진행 후
+lazy-chunk 가드 오탐 1건 수정. Production DB WRITE 0. 브랜치
+`feat/paul-town-v2a-visual-shell-2026-09-13`, 미merge·미push·미배포
+(REVIEW ONLY). 134차 이하 보존)_
+
+## 2026-09-13 (135차) — Paul Town V2-A 스토리북 마을 시각 셸(플래그 paulTownV2 기본 OFF, REVIEW ONLY, 미merge·미배포)
+
+### 0. 안전 요약
+Production DB WRITE 0 · SQL 0 · `api/*.js` 0 · 경제/보상/별/XP/PD/학생
+mutation 0 · 구매 0 · 플래그/환경 변경 0 · merge/push/deploy 0 ·
+Kinney(31 PD, 나무 소유·배치) 무접촉 · PR #44/#45/#32 untouched. 브랜치
+커밋 11개(`36733df`→`67e0b17`), origin/main `6791b4a` 기준 24 files
++2612/−5.
+
+### 1. 배경/결정
+134차 후 PAUL TOWN V2 REDESIGN AUDIT(읽기 전용)를 진행해 Town을 하나로
+통합하기로 결정 — V1 경제/데이터/좌표는 그대로 유지하고, 아이 눈에
+보이는 8x6 격자만 영국 스토리북 마을 장면으로 교체한다. PR #44 REUSE
+REVIEW(읽기 전용) 결과: 내용은 안전하지만 Release Gate가 registry
+미등록 스크립트 2개(`testRegistryCoverage`)로 FAIL이고, 프로토타입이
+`isFeatureEnabled('paulTownV1')` 단독 게이팅이라 Pilot A 허용목록
+학생(기기 플래그 OFF)에게 조용히 사라지는 문제가 있음 → V2-A는 PR
+#44를 merge하지 않고 재사용 가능한 부분만 이식한다(`townAmbient.js`
+동일 경로·동일 내용, 나무 표지판 HUD 패턴, 레이어 모델). PR #44는
+여전히 OPEN(운영자 결정: 닫거나 rebase 필요).
+
+### 2. 구현
+신규: `src/utils/town/townScene.js`(순수 함수 — `anchorFor` 퍼센트
+앵커, `zIndexFor` 행 깊이, `Z_LAYERS`
+ground0/path1/patches2/fog5/objects10/overlay90/popover100(안개는
+배치된 오브젝트 아래 지면 안개), `footprintFor` lg/md/sm,
+`spriteFor` asset_key 기반, `HOME_SPRITE` buildings/my-house,
+`gardenRichness`(gardenPoints 0/10/30/60/100 →
+stage·windowsLit·ivy·birds), `nextUnlocks`/`nearGoal`("⭐ N 더 모으면
+A · B가 열려요")/`fogState`(실루엣 최대 3 + "⭐ Lv.N에서 열려요" 칩)/
+`freeAnchors`), `src/utils/town/townAmbient.js`(PR #44 이식),
+`src/components/town/v2/` 12개(`TownScreenV2`, `TownHud` 나무 표지판,
+`PaulGuide`=HeroReaction 1곳, `TownSheet` 바텀시트(상점/보관함은 V1
+`TownShopPanel`/`TownInventory` 그대로 재사용), `TownScene`(세로 8:13
+장면, 가로 스크롤 0), `TownGroundLayer`(유기적 블롭 6개+울타리 림,
+grid-cols 0), `TownPathLayer`(자갈길 행 3 + 집 앞 오솔길),
+`TownAmbientLayer`(집 옆 화단 상시 + gardenPoints 기반 새싹/꽃/창문
+불빛/담쟁이/새, sr-only 문장), `TownObjectLayer`(My House 고정 (3,2)
++ 배치물 bottom-anchored·행 z-order·이동/보관 팝오버),
+`TownFogLayer`(행 4~5 안개), `TownPlacementOverlay`(배치/이동 모드에서만
+44px 원형 앵커, 격자선 0), `TownSprite`(`townAsset(assetKey)`→img,
+없으면 이모지 폴백)). 수정: `src/config/features.js`(`paulTownV2:false`
++ attachment 카테고리), `src/App.jsx`(lazy `TownScreenV2`,
+`paulTownV2Enabled` useSyncExternalStore, `townV2Active = townV1Enabled
+&& paulTownV2Enabled`, `screen==='town'` Suspense 안에서 V2/V1 분기 —
+V1 `<TownScreen …>` 라인 바이트 동일, gardenPoints=
+`attachment.stats.gardenPoints` 전달), `scripts/testLazyChunkGuards.mjs`
+(`TownScreenV2` 포함 12개). V1 파일(TownScreen/TownGrid/TownHeader/
+TownShopPanel/TownInventory/townLayout/townCatalog/townLevel/
+townMessages/useTownShop/useStudent/api/grant-xp.js/SQL) 바이트
+동일(정적 테스트가 origin/main과 대조).
+
+### 3. 게이팅
+유효 Town 자격 = `townV1Enabled`(기기 플래그 `paulTownV1` OR Pilot A
+UUID 허용목록) — V2는 그 위에 기기 플래그 `paulTownV2` AND. v2 폴더
+안에는 `isFeatureEnabled` 호출 0(정적 단언). 기본 OFF라 오늘
+Production 화면 변화 0.
+
+### 4. 테스트/검증
+`scripts/testTownSceneV2.mjs` 166/166, `scripts/testTownV2Static.mjs`
+101/101(플래그 기본값, 허용목록 인지 게이팅, V1·api·SQL 바이트 동일,
+44px, motion-safe, 에셋/IP 규칙, HeroReaction 1곳, supabase/fetch/
+localStorage/Math.random 0), `tests/e2e/townV2.spec.mjs` 83/83(S1 V2
+OFF→V1 격자, S2 360/390/430 장면·격자 셀 0·오버플로 0·버튼≥44, S3
+Pilot A 허용목록+`paulTownV2`만 ON→장면, S4 환영 20→나무 구매→배치→
+새로고침 유지→이동→보관(purchase_town_item.tree=1, 잔액 10,
+owned ['tree']), S5 Kinney 모양 fixture(Lv3/⭐60/💵31/나무 (2,4)
+배치 — 잔액·소유 불변, purchase 0, welcome 0, grant-xp 액션 ⊆
+{get_town_shop_state}, 나무 z-index > 안개), S6 200% 줌, S7
+reduced-motion 애니메이션 0), registry 등록 2건 + `testBrowserE2E`
+`[town-v2]` 등록, `tests/e2e/lib/mockRoutes.mjs` opt-in `townState`.
+회귀: `testTownUiStatic` 95/95, `testLazyChunkGuards` 80/80, build
+PASS, `verify:e2e` 883/883(기존 798 + 83 + 2 보정), `verify:all` 1차
+51 도메인 PASS + lazy-chunk 가드 오탐(App.jsx 주석의 `<TownScreen>`
+리터럴) 1건 → 수정 후 가드 80/80, 전체 재실행 결과는 136차/PR
+설명에 기록. 실기기 스크린샷(vite preview + Playwright, 390px): 격자
+셀 0, 가로 오버플로 0, 집·나무·화단·안개·칩 렌더 확인. 발견·수정
+2건: 뒤로가기 버튼 44px 누락, 컨테이너 `animate-fade-in`에
+`motion-safe` 누락(S7이 실측으로 잡음).
+
+### 5. 데이터/경제 영향
+마이그레이션 없음, RPC/가격/카탈로그/원장 무변경, 배치 저장은 기존
+`placeTownItem`/`moveTownItem`/`storeTownItem`·`townPlacements`/
+`townRemovedIds` 그대로(좌표 동일 → 기존 배치가 같은 자리에 렌더).
+문서: `docs/design/town/V2A_ASSET_SPEC.md`(207줄, 미래 이미지 에셋
+사양: 파일명/asset_key/픽셀/비율/투명/앵커/footprint/모바일 렌더
+크기/프롬프트 템플릿/플러그인 절차/QA) — 이미지 생성 0.
+
+### 6. 미결/다음 단계
+PR 생성은 운영자 승인 후(REVIEW ONLY, DO NOT MERGE), PR #44 처분
+결정, V2-B(보관함 소포 더미/배치 UX 심화), V2-C(건물 탭→학습 화면·
+발견 카드, gardenPoints 연동 심화), V2-D(레거시 PaulTown 통합), Pilot
+A 5명 실기기 확인은 flag `paulTownV2`를 기기에서 켠 뒤(허용목록
+자격은 그대로).
 
 ## 2026-09-12 (134차) — Pilot A Town V1 자격을 학생 UUID 허용목록으로 부여(기기 플래그 OR 허용목록), PR 준비(REVIEW ONLY)
 
