@@ -89,7 +89,7 @@ const TimeMachine = React.lazy(() => import('./components/TimeMachine'))
 const TownScreen = React.lazy(() => import('./components/town/TownScreen'))
 // Paul Town V2-A(paulTownV2, 2026-09-13) — 스토리북 마을 장면 렌더러(V1의
 // 형제 렌더러, V1 대체 아님). 플래그 OFF(기본)면 townV2Active가 항상
-// false라 아래 screen==='town' 블록은 기존 <TownScreen> 분기만 탄다.
+// false라 아래 screen==='town' 블록은 기존 TownScreen 분기만 탄다.
 const TownScreenV2 = React.lazy(() => import('./components/town/v2/TownScreenV2'))
 
 class AppErrorBoundary extends React.Component {
