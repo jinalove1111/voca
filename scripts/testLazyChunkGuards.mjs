@@ -163,9 +163,9 @@ const lazyDecls = []
   let m
   while ((m = re.exec(appJsx))) lazyDecls.push({ name: m[1], importPath: m[2] })
   console.log(`  lazy 선언 ${lazyDecls.length}개: ${lazyDecls.map((d) => d.name).join(', ')}`)
-  check('React.lazy 선언이 11개 이상(현재 기준 11개)', lazyDecls.length >= 11, `실제 ${lazyDecls.length}개`)
+  check('React.lazy 선언이 12개 이상(현재 기준 12개)', lazyDecls.length >= 12, `실제 ${lazyDecls.length}개`)
   const expected = ['AdminScreen', 'ParentScreen', 'EntranceTest', 'HatCollection', 'WordMuseum',
-    'GrowthAlbum', 'EnglishGarden', 'PaulTown', 'Bookshelf', 'TimeMachine', 'TownScreen']
+    'GrowthAlbum', 'EnglishGarden', 'PaulTown', 'Bookshelf', 'TimeMachine', 'TownScreen', 'TownScreenV2']
   const names = new Set(lazyDecls.map((d) => d.name))
   for (const n of expected) check(`현재 기준 lazy 화면 목록에 ${n} 포함`, names.has(n))
 }
