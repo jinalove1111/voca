@@ -87,6 +87,10 @@ const TimeMachine = React.lazy(() => import('./components/TimeMachine'))
 // 플래그 OFF(기본)면 screen==='town'에 도달할 방법이 없어(PaulTown의
 // onGoTown이 null이라 진입 카드/버튼 자체가 없음) 코드는 로드조차 안 된다.
 const TownScreen = React.lazy(() => import('./components/town/TownScreen'))
+// Paul Town V2-A(paulTownV2, 2026-09-13) — 스토리북 마을 장면 렌더러(V1의
+// 형제 렌더러, V1 대체 아님). 플래그 OFF(기본)면 townV2Active가 항상
+// false라 아래 screen==='town' 블록은 기존 <TownScreen> 분기만 탄다.
+const TownScreenV2 = React.lazy(() => import('./components/town/v2/TownScreenV2'))
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -261,6 +265,12 @@ function AppInner({ studentId, studentName, onLogout }) {
   // UUID 매칭으로 Town V1 진입 자격을 얻는다(src/config/pilotTown.js). 다른
   // 학생은 기존 paulTownV1Enabled 동작 그대로.
   const townV1Enabled = paulTownV1Enabled || isPilotTownStudent(studentId)
+  // Paul Town V2-A(2026-09-13) — 스토리북 마을 장면. 유효 Town 자격(townV1Enabled:
+  // 기기 플래그 OR Pilot A 허용목록)이 있고 기기 플래그 paulTownV2가 켜진 경우에만
+  // V2 렌더러를 고른다. isFeatureEnabled('paulTownV1') 단독 게이팅 금지 —
+  // 허용목록 학생(기기 플래그 OFF)에게서 V2가 조용히 사라지지 않게 한다.
+  const paulTownV2Enabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('paulTownV2'), () => false)
+  const townV2Active = townV1Enabled && paulTownV2Enabled
   const townShop = useTownShop(studentId, (townShopEnabled || townV1Enabled) && !!studentId)
 
   // 선물상자를 닫은 직후, 오늘 틀린 스펠링 단어나 영구 복습 대기열
@@ -977,7 +987,11 @@ function AppInner({ studentId, studentName, onLogout }) {
             마을을 준비하는 중…
           </div>
         }>
-          <TownScreen studentData={studentData} townShop={townShop} onBack={() => setScreen('paulTown')} />
+          {townV2Active ? (
+            <TownScreenV2 studentData={studentData} townShop={townShop} onBack={() => setScreen('paulTown')} gardenPoints={attachment && attachment.stats ? attachment.stats.gardenPoints : 0} />
+          ) : (
+            <TownScreen studentData={studentData} townShop={townShop} onBack={() => setScreen('paulTown')} />
+          )}
         </React.Suspense>
       )}
       {screen === 'bonusChoice'   && (
