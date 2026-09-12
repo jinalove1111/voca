@@ -324,6 +324,14 @@ check('TownObjectLayer.jsx — data-placement-id 속성', /data-placement-id=/.t
 check('TownObjectLayer.jsx — data-item-id 속성', /data-item-id=/.test(objectLayerCode))
 check('TownObjectLayer.jsx — data-cell 속성', /data-cell=/.test(objectLayerCode))
 check('TownObjectLayer.jsx — 버튼 aria-label "눌러서 이동하거나 보관해요" 문구', /눌러서 이동하거나 보관해요/.test(objectLayerCode))
+// 2026-09-13 최종 리뷰 결함 회귀 방지 — 마지막 행(SCENE_ROWS-1)에 놓인
+// 아이템의 이동/보관 팝오버가 항상 top-full(아래)로만 열리면, TownScene의
+// overflow-hidden 박스 밖으로 잘려 나가 그 칸의 아이템은 이동/보관이
+// 아예 불가능해진다(정적으로는 코드에 "마지막 행이면 위로 연다" 분기와
+// bottom-full 클래스가 실제로 존재하는지만 확인 — 좌표 계산 자체는
+// tests/e2e/townV2.spec.mjs S4가 실제 DOM 위치로 검증).
+check('TownObjectLayer.jsx — bottom-full 클래스 존재(마지막 행 팝오버 위쪽 배치)', /bottom-full/.test(objectLayerCode))
+check('TownObjectLayer.jsx — SCENE_ROWS - 1(또는 동등한 마지막 행 판정) 존재', /SCENE_ROWS\s*-\s*1/.test(objectLayerCode))
 
 // ── 20. TownSprite.jsx ────────────────────────────────────────────────────
 section('20. TownSprite.jsx — 에셋/이모지 폴백')

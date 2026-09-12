@@ -8,7 +8,7 @@
 // 정신, 소유권만 부모로 옮김).
 import TownSprite from './TownSprite'
 import {
-  HOME_CELL, HOME_SPRITE, anchorFor, zIndexFor, spriteFor, Z_LAYERS, FOOTPRINT_CLASS, SCENE_COLS,
+  HOME_CELL, HOME_SPRITE, anchorFor, zIndexFor, spriteFor, Z_LAYERS, FOOTPRINT_CLASS, SCENE_COLS, SCENE_ROWS,
 } from '../../../utils/town/townScene'
 
 export default function TownObjectLayer({
@@ -43,6 +43,12 @@ export default function TownObjectLayer({
         const anchor = anchorFor(p.x, p.y)
         const isOpen = openPlacementId === p.placementId
         const popoverAlign = p.x <= 1 ? 'left-0' : p.x >= SCENE_COLS - 2 ? 'right-0' : 'left-1/2 -translate-x-1/2'
+        // 마지막 행(y = SCENE_ROWS-1)의 wrapper는 top:100%/translate(-100%)라
+        // 스프라이트가 이미 씬 바닥에 붙어 있다 — 팝오버를 top-full(아래)로
+        // 열면 overflow-hidden인 TownScene 박스 밖으로 나가 잘려서 이동/보관
+        // 버튼을 아예 누를 수 없었다(2026-09-13 최종 리뷰 결함). 그 행에서만
+        // 팝오버를 스프라이트 위(bottom-full)로 연다.
+        const popoverVertical = p.y >= SCENE_ROWS - 1 ? 'bottom-full mb-1' : 'top-full mt-1'
         const label = `${sprite.label || (item ? item.name : p.itemId)} — 눌러서 이동하거나 보관해요`
 
         return (
@@ -71,7 +77,7 @@ export default function TownObjectLayer({
 
             {isOpen && (
               <div
-                className={`absolute top-full mt-1 flex gap-1 bg-white rounded-2xl card-shadow p-1 whitespace-nowrap ${popoverAlign}`}
+                className={`absolute ${popoverVertical} flex gap-1 bg-white rounded-2xl card-shadow p-1 whitespace-nowrap ${popoverAlign}`}
                 style={{ zIndex: Z_LAYERS.popover }}
               >
                 <button

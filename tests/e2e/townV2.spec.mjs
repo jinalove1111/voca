@@ -372,8 +372,39 @@ export async function run(browser, baseURL) {
       const treeAt54 = await page.locator('[data-item-id="tree"][data-cell="5,4"]').waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
       r.check(`${name} — 나무가 (5,4)로 이동됨`, treeAt54)
 
-      // ── 보관 ──────────────────────────────────────────────────────────
+      // ── 클리핑 회귀 검사: 마지막 행(0,5)으로 한 번 더 이동 후, 그 칸의
+      //     이동/보관 팝오버가 overflow-hidden인 씬 박스 밖으로 잘리지
+      //     않는지 확인(2026-09-13 최종 리뷰 결함 — 팝오버가 항상
+      //     아래(top-full)로만 열리면 마지막 행에서는 씬 밖으로 나가
+      //     잘려서 이동/보관을 누를 수 없었다). ──────────────────────────
       await page.locator('[data-item-id="tree"][data-cell="5,4"] button').click()
+      const moveBtnToLastRow = page.getByRole('button', { name: '이동', exact: true })
+      await moveBtnToLastRow.waitFor({ state: 'visible', timeout: 5000 })
+      await moveBtnToLastRow.click()
+      await page.locator('[data-anchor="0,5"]').waitFor({ state: 'visible', timeout: 10000 })
+      await page.locator('[data-anchor="0,5"]').click()
+      const treeAt05 = page.locator('[data-item-id="tree"][data-cell="0,5"]')
+      const placedAt05 = await treeAt05.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 나무가 (0,5)로 이동됨(마지막 행)`, placedAt05)
+
+      await page.locator('[data-item-id="tree"][data-cell="0,5"] button').click()
+      const moveBtnLastRow = page.getByRole('button', { name: '이동', exact: true })
+      const moveBtnLastRowVisible = await moveBtnLastRow.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 마지막 행(0,5) 팝오버의 "이동" 버튼이 보임(클리핑 안 됨)`, moveBtnLastRowVisible)
+
+      const sceneBoxForClip = await page.locator('[data-testid="town-scene-v2"]').boundingBox()
+      const moveBtnLastRowBox = await moveBtnLastRow.boundingBox()
+      const moveBtnInsideScene = !!sceneBoxForClip && !!moveBtnLastRowBox &&
+        moveBtnLastRowBox.x >= sceneBoxForClip.x &&
+        moveBtnLastRowBox.y >= sceneBoxForClip.y &&
+        (moveBtnLastRowBox.y + moveBtnLastRowBox.height) <= (sceneBoxForClip.y + sceneBoxForClip.height)
+      r.check(
+        `${name} — 마지막 행 팝오버 "이동" 버튼이 씬 박스 안에 완전히 들어옴(클리핑 회귀 방지)`,
+        moveBtnInsideScene,
+        JSON.stringify({ sceneBoxForClip, moveBtnLastRowBox }),
+      )
+
+      // ── 보관(위에서 이미 열어둔 팝오버를 그대로 사용) ────────────────────
       const storeBtn = page.getByRole('button', { name: '보관', exact: true })
       await storeBtn.waitFor({ state: 'visible', timeout: 5000 })
       await storeBtn.click()
