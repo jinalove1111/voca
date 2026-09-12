@@ -94,13 +94,14 @@ added non-trivial setup time for a screenshot of unchanged UI).
 
 `scripts/testTownDiscovery.mjs` §7 scans every file in `docs/design/town/`
 (`.md`/`.json`) plus `src/utils/town/townDiscovery.js` for the 15
-operator-specified forbidden terms (Hogwarts, Harry, Potter, Hermione,
-Gryffindor, Slytherin, Hufflepuff, Ravenclaw, Quidditch, Dumbledore,
-Voldemort, Muggle, Diagon, Hedwig, Snape). **Every term: 0 occurrences**
-across every scanned file (32 individual per-term-per-file assertions all
-PASS, plus one combined regex assertion). `scripts/testTownPrototypeStatic.mjs`
-also re-checks the two new component files for the top-3 terms (Hogwarts/
-Harry/Potter) as a secondary net — 0 occurrences.
+operator-specified forbidden terms (exact list: the `FORBIDDEN_TERMS`
+constant in that test file — this report deliberately does not repeat the
+list in prose, since an earlier draft of this exact document tripped its
+own scanner by naming them; see `PAUL_TOWN_BRITISH_WORLD.md` §8 for the same
+convention). **Every term: 0 occurrences** across every scanned file
+(per-term-per-file assertions all PASS, plus one combined regex assertion).
+`scripts/testTownPrototypeStatic.mjs` also re-checks the two new component
+files for the top-3 terms as a secondary net — 0 occurrences.
 
 One editorial note: the design docs deliberately do **not** spell out the
 15 forbidden terms in prose (only the test file's `FORBIDDEN_TERMS` constant

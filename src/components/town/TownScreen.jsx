@@ -17,6 +17,11 @@ import TownInventory from './TownInventory'
 import { mergeCatalog } from '../../utils/town/townCatalog'
 import { visiblePlacements } from '../../utils/town/townLayout'
 import { paulGuide, TOWN_PHRASES } from '../../utils/town/townMessages'
+// British World Phase 2(2026-09-12) — 안전 프로토타입 실배선. 둘 다
+// paulTownV1 게이팅 아래(TownScreen 자체가 이미 그 플래그로만 마운트됨,
+// App.jsx)에서만 쓰이고, TownHeader.jsx/townCatalog.js 등 기존 파일의
+// 데이터 계약은 조금도 바꾸지 않는다(순수 시각 래퍼 + 순수 조회 함수).
+import TownWoodenSignHeader from './TownWoodenSignHeader'
 
 const TABS = [
   { id: 'town', label: '🏘 내 마을' },
@@ -24,7 +29,7 @@ const TABS = [
   { id: 'inventory', label: '🎁 보관함' },
 ]
 
-export default function TownScreen({ studentData, townShop, onBack }) {
+export default function TownScreen({ studentData, townShop, onBack, studentId }) {
   const [tab, setTab] = useState('town')
   const [mode, setMode] = useState({ kind: 'idle' })
   const [guide, setGuide] = useState(null)
@@ -162,12 +167,18 @@ export default function TownScreen({ studentData, townShop, onBack }) {
       </div>
 
       <div className="max-w-lg mx-auto space-y-4 animate-fade-in">
-        <TownHeader level={level} starsEarned={starsEarned} dollarsAvailable={balance} />
+        {/* British World Phase 2(2026-09-12) — TownHeader의 데이터 props/
+            PD·레벨 표시 로직은 조금도 바꾸지 않고, 시각 래퍼로만 감싼다
+            (TownWoodenSignHeader는 순수 프레젠테이션, TownHeader.jsx 자체는
+            무수정 — COMPONENT_ARCHITECTURE.md §1 근거). */}
+        <TownWoodenSignHeader>
+          <TownHeader level={level} starsEarned={starsEarned} dollarsAvailable={balance} />
+        </TownWoodenSignHeader>
 
         {reaction && guide && (
-          <div className="bg-white rounded-3xl card-shadow p-4">
+          <TownWoodenSignHeader>
             <HeroReaction image={reaction.image} message={guide.text} theme="neutral" size="sm" />
-          </div>
+          </TownWoodenSignHeader>
         )}
 
         {toast && (
@@ -210,6 +221,7 @@ export default function TownScreen({ studentData, townShop, onBack }) {
             onCellTap={handleCellTap}
             onStartMove={handleMoveStart}
             onStore={handleStore}
+            studentId={studentId}
           />
         )}
         {tab === 'shop' && (

@@ -11,8 +11,17 @@
 import { useState } from 'react'
 import { TOWN_GRID, HOME_CELL } from '../../utils/town/townLayout'
 import { townAsset } from '../../assets/town'
+// British World Phase 2(2026-09-12) — 안전 프로토타입 실배선. 둘 다 순수
+// 함수/조회이고 배치/이동/보관 판정(townLayout.js)에는 관여하지 않는다
+// (COMPONENT_ARCHITECTURE.md §2/§3/§4). ambientClassFor/depthClassFor는
+// 셀 버튼의 기존 className에 톤만 덧붙이고(신규 DOM 0), TownDiscoveryCard는
+// 이미 열려 있는 이동/보관 액션 스트립 안에만 추가로 렌더된다(새 모달 0,
+// UX_FLOW.md §7).
+import { ambientClassFor, depthClassFor } from '../../utils/town/townAmbient'
+import { placeKeyForItemId } from '../../utils/town/townDiscovery'
+import TownDiscoveryCard from './TownDiscoveryCard'
 
-export default function TownGrid({ placements, itemById, mode, onCellTap, onStartMove, onStore }) {
+export default function TownGrid({ placements, itemById, mode, onCellTap, onStartMove, onStore, studentId }) {
   const [openPlacementId, setOpenPlacementId] = useState(null)
   const modeKind = (mode && mode.kind) || 'idle'
   const midRow = Math.floor(TOWN_GRID.rows / 2)
@@ -71,8 +80,14 @@ export default function TownGrid({ placements, itemById, mode, onCellTap, onStar
               ? `${item ? item.name : placed.itemId} — 눌러서 이동하거나 보관해요`
               : `빈 칸 (${x + 1}, ${y + 1})`
 
+          // British World Phase 2 — 이 칸이 발견 콘텐츠를 가진 장소인지
+          // (bookshop/post-box/cafe/clock-tower/garden/school 6종만, 나머지
+          // 11종은 discovery=null 그대로) isOpen일 때만 계산(불필요한 호출
+          // 방지, 순수 함수라 호출 비용 자체는 낮음).
+          const discoveryPlaceKey = placed ? placeKeyForItemId(placed.itemId) : null
+
           return (
-            <div key={`${x},${y}`} className="relative aspect-square">
+            <div key={`${x},${y}`} className={`relative aspect-square ${depthClassFor(y, TOWN_GRID.rows)}`}>
               <button
                 type="button"
                 onClick={() => handleCellClick(x, y)}
@@ -83,7 +98,7 @@ export default function TownGrid({ placements, itemById, mode, onCellTap, onStar
                     ? 'bg-purple-100 border-2 border-purple-300'
                     : isPath
                       ? 'bg-[#d9d2c5]'
-                      : 'bg-white/40 border border-[#1e2a5a]/10'
+                      : `bg-white/40 border border-[#1e2a5a]/10 ${ambientClassFor(x, y)}`
                 }`}
                 style={{ fontSize: 'clamp(0.85rem, 4vw, 1.5rem)' }}
               >
@@ -96,21 +111,29 @@ export default function TownGrid({ placements, itemById, mode, onCellTap, onStar
                 )}
               </button>
               {isOpen && (
-                <div className="absolute z-10 left-1/2 top-full -translate-x-1/2 mt-1 flex gap-1 bg-white rounded-2xl card-shadow p-1 whitespace-nowrap">
-                  <button
-                    type="button"
-                    onClick={() => { setOpenPlacementId(null); onStartMove && onStartMove(placed.placementId) }}
-                    className="min-h-[44px] px-3 rounded-xl bg-purple-100 text-purple-600 text-xs font-black btn-press"
-                  >
-                    이동
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setOpenPlacementId(null); onStore && onStore(placed.placementId) }}
-                    className="min-h-[44px] px-3 rounded-xl bg-gray-100 text-gray-600 text-xs font-black btn-press"
-                  >
-                    보관
-                  </button>
+                <div className="absolute z-10 left-1/2 top-full -translate-x-1/2 mt-1 flex flex-col gap-1 bg-white rounded-2xl card-shadow p-1 min-w-[160px]">
+                  <div className="flex gap-1 whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => { setOpenPlacementId(null); onStartMove && onStartMove(placed.placementId) }}
+                      className="min-h-[44px] px-3 rounded-xl bg-purple-100 text-purple-600 text-xs font-black btn-press"
+                    >
+                      이동
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setOpenPlacementId(null); onStore && onStore(placed.placementId) }}
+                      className="min-h-[44px] px-3 rounded-xl bg-gray-100 text-gray-600 text-xs font-black btn-press"
+                    >
+                      보관
+                    </button>
+                  </div>
+                  {/* British World Phase 2 — 새 모달 아님, 이미 열린 액션
+                      스트립 안의 인라인 카드(UX_FLOW.md §7). 이동/보관
+                      버튼과 별개 행이라 클릭 판정 간섭 0. */}
+                  {discoveryPlaceKey && (
+                    <TownDiscoveryCard itemId={placed.itemId} studentId={studentId} />
+                  )}
                 </div>
               )}
             </div>

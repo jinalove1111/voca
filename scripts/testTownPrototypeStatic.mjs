@@ -74,25 +74,61 @@ const ambientCode = ambientSrc ? ambientSrc.replace(/\/\/.*$/gm, '') : ''
 check('townAmbient.js — import 0', !!ambientSrc && !/^import\s/m.test(ambientCode))
 check('townAmbient.js — Math.random 미사용(결정론)', !!ambientSrc && !/Math\.random\(\)/.test(ambientCode))
 
-// ── 3. TownDiscoveryCard.jsx / TownWoodenSignHeader.jsx — 미와이어링 확인 ─
-section('3. 신규 프로토타입 컴포넌트 — 아직 미와이어링(기존 화면 무변화 확인)')
+// ── 3. Phase 2(2026-09-12) — 실배선 확인: TownScreen 트리 내부에서만 ──────
+section('3. 실배선 — TownScreen 트리 내부 import만, Dashboard/App/PaulTown 미import')
 const cardSrc = readSrc('src/components/town/TownDiscoveryCard.jsx')
 const signSrc = readSrc('src/components/town/TownWoodenSignHeader.jsx')
+const ambientSrc2 = readSrc('src/utils/town/townAmbient.js')
 check('TownDiscoveryCard.jsx 존재', cardSrc !== null)
 check('TownWoodenSignHeader.jsx 존재', signSrc !== null)
 
-const EXISTING_TOWN_FILES = [
-  'src/components/town/TownScreen.jsx',
-  'src/components/town/TownGrid.jsx',
-  'src/components/town/TownHeader.jsx',
-  'src/components/town/TownShopPanel.jsx',
-  'src/components/town/TownInventory.jsx',
-  'src/App.jsx',
-]
-for (const f of EXISTING_TOWN_FILES) {
-  const src = readSrc(f) || ''
-  check(`${f} — TownDiscoveryCard를 import하지 않음(미와이어링 확인)`, !/TownDiscoveryCard/.test(src))
-  check(`${f} — TownWoodenSignHeader를 import하지 않음(미와이어링 확인)`, !/TownWoodenSignHeader/.test(src))
+const screenSrc2 = readSrc('src/components/town/TownScreen.jsx') || ''
+const gridSrc2 = readSrc('src/components/town/TownGrid.jsx') || ''
+const headerSrc2 = readSrc('src/components/town/TownHeader.jsx') || ''
+const shopSrc2 = readSrc('src/components/town/TownShopPanel.jsx') || ''
+const invSrc2 = readSrc('src/components/town/TownInventory.jsx') || ''
+const appSrc2 = readSrc('src/App.jsx') || ''
+const dashboardSrc2 = readSrc('src/components/Dashboard.jsx') || ''
+const paulTownSrc2 = readSrc('src/components/PaulTown.jsx') || ''
+
+// 실제로 와이어링된 지점(양성 확인) — TownScreen이 TownWoodenSignHeader를,
+// TownGrid가 ambient/discovery를 실제로 import + 사용해야 한다.
+check('TownScreen.jsx — TownWoodenSignHeader import', /import\s+TownWoodenSignHeader\s+from\s+['"]\.\/TownWoodenSignHeader['"]/.test(screenSrc2))
+check('TownScreen.jsx — <TownWoodenSignHeader 렌더 최소 2곳(헤더+가이드 카드)', (screenSrc2.match(/<TownWoodenSignHeader/g) || []).length >= 2)
+check('TownScreen.jsx — TownHeader에 넘기는 props(level/starsEarned/dollarsAvailable) 불변', /<TownHeader level=\{level\} starsEarned=\{starsEarned\} dollarsAvailable=\{balance\} \/>/.test(screenSrc2))
+check('TownScreen.jsx — TownGrid에 studentId 전달', /<TownGrid[\s\S]*?studentId=\{studentId\}[\s\S]*?\/>/.test(screenSrc2))
+check('TownGrid.jsx — ambientClassFor/depthClassFor import(townAmbient.js)', /import\s*\{\s*ambientClassFor,\s*depthClassFor\s*\}\s*from\s+['"]\.\.\/\.\.\/utils\/town\/townAmbient['"]/.test(gridSrc2))
+check('TownGrid.jsx — ambientClassFor(x, y) 실제 호출', /ambientClassFor\(x,\s*y\)/.test(gridSrc2))
+check('TownGrid.jsx — depthClassFor(y, TOWN_GRID.rows) 실제 호출', /depthClassFor\(y,\s*TOWN_GRID\.rows\)/.test(gridSrc2))
+check('TownGrid.jsx — placeKeyForItemId import(townDiscovery.js)', /import\s*\{\s*placeKeyForItemId\s*\}\s*from\s+['"]\.\.\/\.\.\/utils\/town\/townDiscovery['"]/.test(gridSrc2))
+check('TownGrid.jsx — TownDiscoveryCard import + 렌더', /import\s+TownDiscoveryCard\s+from\s+['"]\.\/TownDiscoveryCard['"]/.test(gridSrc2) && /<TownDiscoveryCard\b/.test(gridSrc2))
+check('TownGrid.jsx — studentId prop 시그니처에 존재', /function TownGrid\(\{[^}]*studentId[^}]*\}\)/.test(gridSrc2))
+
+// 게이팅 확인 — TownScreen은 App.jsx에서 paulTownV1Enabled로만 마운트되므로
+// (App.jsx 5절, testTownUiStatic.mjs가 이미 고정) 그 트리 내부 컴포넌트는
+// 전부 자동으로 같은 게이트 아래에 있다. 여기서는 "그 트리 밖(Dashboard/
+// PaulTown/App 최상위)으로 새지 않았는지"만 추가로 검사한다.
+const NOT_ALLOWED_FILES = {
+  'src/App.jsx': appSrc2,
+  'src/components/Dashboard.jsx': dashboardSrc2,
+  'src/components/PaulTown.jsx': paulTownSrc2,
+}
+for (const [f, src] of Object.entries(NOT_ALLOWED_FILES)) {
+  check(`${f} — TownDiscoveryCard를 import하지 않음(TownScreen 트리 밖 유출 금지)`, !/TownDiscoveryCard/.test(src))
+  check(`${f} — TownWoodenSignHeader를 import하지 않음(TownScreen 트리 밖 유출 금지)`, !/TownWoodenSignHeader/.test(src))
+  check(`${f} — townAmbient를 import하지 않음(TownScreen 트리 밖 유출 금지)`, !/townAmbient/.test(src))
+}
+
+// TownHeader.jsx/TownShopPanel.jsx/TownInventory.jsx는 이번 배선 범위 밖
+// (헤더 데이터 컴포넌트 자체는 무수정, 래핑만 TownScreen이 담당) — 이
+// 파일들이 새 프로토타입 모듈을 직접 import하지 않았는지도 재확인한다.
+const OUT_OF_SCOPE_FILES = {
+  'src/components/town/TownHeader.jsx': headerSrc2,
+  'src/components/town/TownShopPanel.jsx': shopSrc2,
+  'src/components/town/TownInventory.jsx': invSrc2,
+}
+for (const [f, src] of Object.entries(OUT_OF_SCOPE_FILES)) {
+  check(`${f} — TownDiscoveryCard/TownWoodenSignHeader/townAmbient 미import(무수정 확인)`, !/TownDiscoveryCard|TownWoodenSignHeader|townAmbient/.test(src))
 }
 
 // ── 4. 계약 — paulTownV1 게이팅 / 새 <img> 0 / 모달 아님 / 44px+ ─────────
