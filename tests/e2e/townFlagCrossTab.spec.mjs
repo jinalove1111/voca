@@ -40,17 +40,34 @@ async function loginAdmin(page) {
 }
 
 // AdminScreen 탭 목록 중 "🎯 기능" → FeatureManagementPanel → "애착 시스템
-// (Attachment & Growth)" 카테고리를 펼쳐 paulTownV1 체크박스를 켠다
-// (features.js DEFAULT_FEATURES의 attachment 카테고리 목록에 paulTownV1이
-// 포함돼 있음).
-async function togglePaulTownV1Flag(page) {
+// (Attachment & Growth)" 카테고리를 펼친다(paulTownV1을 비롯해 이 스펙이
+// 건드리는 체크박스가 모두 이 카테고리에 있음, features.js DEFAULT_FEATURES
+// 참고). 이미 펼쳐져 있어도(재클릭으로 접히는 것 방지) 안전하게 멱등이 되도록
+// 체크박스가 보일 때까지만 기다린다.
+async function expandAttachmentCategory(page) {
   await page.locator('button', { hasText: '🎯 기능' }).click()
-  await page.getByText('애착 시스템 (Attachment & Growth)').waitFor({ state: 'visible', timeout: 10000 })
-  await page.getByText('애착 시스템 (Attachment & Growth)').click()
-  const checkbox = page.locator('#paulTownV1')
+  const heading = page.getByText('애착 시스템 (Attachment & Growth)')
+  await heading.waitFor({ state: 'visible', timeout: 10000 })
+  const paulTownCheckbox = page.locator('#paulTownV1')
+  if (!(await paulTownCheckbox.isVisible().catch(() => false))) {
+    await heading.click()
+    await paulTownCheckbox.waitFor({ state: 'visible', timeout: 10000 })
+  }
+}
+
+// 임의의 개별 기능 체크박스를 토글(현재 상태의 반대로)한다 — 2026-09-12
+// 시나리오 E/G가 paulTownV1 외의 플래그도 다루기 위한 범용 헬퍼.
+async function toggleFeatureCheckbox(page, featureName) {
+  const checkbox = page.locator(`#${featureName}`)
   await checkbox.waitFor({ state: 'visible', timeout: 10000 })
+  const wasChecked = await checkbox.isChecked()
   await checkbox.click()
-  await waitUntil(() => checkbox.isChecked())
+  await waitUntil(async () => (await checkbox.isChecked()) === !wasChecked)
+}
+
+async function togglePaulTownV1Flag(page) {
+  await expandAttachmentCategory(page)
+  await toggleFeatureCheckbox(page, 'paulTownV1')
 }
 
 async function readStoredPaulTownV1(page) {
@@ -63,6 +80,28 @@ async function readStoredPaulTownV1(page) {
       return null
     }
   })
+}
+
+// 2026-09-12 — FeatureManagementPanel의 온디바이스 진단 UI(저장됨:/주소
+// 라인) 회귀. localStorage 전체를 파싱해 돌려준다(getAllFeatures 메모리
+// 캐시가 아니라 저장소 그 자체 — 관리자 화면이 보여주는 것과 같은 소스).
+async function readAllStoredFeatures(page) {
+  return page.evaluate(() => {
+    try {
+      const raw = localStorage.getItem('paulEasyVoca_features')
+      return raw ? JSON.parse(raw) : null
+    } catch {
+      return null
+    }
+  })
+}
+
+// 특정 featureName의 <label htmlFor=featureName> 안에 렌더되는 "저장됨: …"
+// 텍스트를 읽는다(FeatureManagementPanel.jsx가 그 label 안에 렌더).
+async function readPersistedLineText(page, featureName) {
+  const label = page.locator(`label[for="${featureName}"]`)
+  await label.waitFor({ state: 'visible', timeout: 10000 })
+  return label.innerText()
 }
 
 async function loginStudent(page) {
@@ -196,6 +235,112 @@ export async function run(browser, baseURL) {
     } catch (err) {
       const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
       err.message += `\n  [대조군 진단] mockErrors=${JSON.stringify(mocks.db.errors.slice(0, 3))}\n  [대조군 진단] body(앞 400자)=${JSON.stringify(bodyText.slice(0, 400))}`
+      throw err
+    } finally {
+      await context.close()
+    }
+    unmockedRequests.push(...mocks.unmockedRequests)
+    ttsFallbackRequests.push(...mocks.ttsFallbackRequests)
+    mockErrors.push(...mocks.db.errors)
+  }
+
+  // ── 시나리오 E: paulTownV1을 다시 끄면 저장됨 라인/새 학생 탭 카드가
+  //    즉시 그 사실을 반영(온디바이스 진단 UI 2026-09-12 추가분 회귀) ──────
+  {
+    const context = await browser.newContext()
+    const pageA = await context.newPage()
+    const mocksA = await installMocks(pageA)
+    let mocksC
+
+    try {
+      await pageA.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await loginAdmin(pageA)
+      await togglePaulTownV1Flag(pageA) // ON
+      const lineOn = await readPersistedLineText(pageA, 'paulTownV1')
+      r.check('E paulTownV1 ON 직후 저장됨 라인이 true를 보여줌', lineOn.includes('저장됨: true'), lineOn)
+
+      await toggleFeatureCheckbox(pageA, 'paulTownV1') // OFF
+      const storedAfterOff = await readAllStoredFeatures(pageA)
+      r.check(
+        'E OFF 토글 후 localStorage.paulTownV1 === false',
+        !!storedAfterOff && storedAfterOff.paulTownV1 === false,
+        storedAfterOff
+      )
+      const lineOff = await readPersistedLineText(pageA, 'paulTownV1')
+      r.check('E OFF 토글 후 저장됨 라인이 false를 보여줌', lineOff.includes('저장됨: false'), lineOff)
+
+      // 새 탭(같은 컨텍스트) — 리로드가 아니라 완전히 새로 연 페이지.
+      const pageC = await context.newPage()
+      mocksC = await installMocks(pageC)
+      await pageC.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await loginStudent(pageC)
+      await goToPaulTownScreen(pageC)
+      await pageC.waitForTimeout(1000)
+      const cardVisible = await townEntryCardVisible(pageC)
+      r.check('E 새 학생 탭 — paulTownV1을 다시 끈 뒤에는 진입 카드가 없음', cardVisible === false)
+    } catch (err) {
+      const bodyTextA = await pageA.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      err.message += `\n  [E 진단] mockErrors(A)=${JSON.stringify(mocksA.db.errors.slice(0, 3))}\n  [E 진단] body(A, 앞 400자)=${JSON.stringify(bodyTextA.slice(0, 400))}`
+      throw err
+    } finally {
+      await context.close()
+    }
+    unmockedRequests.push(...mocksA.unmockedRequests)
+    ttsFallbackRequests.push(...mocksA.ttsFallbackRequests)
+    mockErrors.push(...mocksA.db.errors)
+    if (mocksC) {
+      unmockedRequests.push(...mocksC.unmockedRequests)
+      ttsFallbackRequests.push(...mocksC.ttsFallbackRequests)
+      mockErrors.push(...mocksC.db.errors)
+    }
+  }
+
+  // ── 시나리오 G: paulTownV1 토글이 다른 플래그를 건드리지 않음 + 저장됨/
+  //    화면 주소 진단 라인 노출(온디바이스 진단 UI 2026-09-12 추가분 회귀) ──
+  {
+    const context = await browser.newContext()
+    const page = await context.newPage()
+    const mocks = await installMocks(page)
+
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await loginAdmin(page)
+      // "이 화면의 주소:" 라인은 FeatureManagementPanel의 features 탭
+      // 안에서만 렌더된다 — 관리자 로그인 직후 기본 탭은 "🎯 기능"이 아니라
+      // 대시보드이므로, 먼저 "🎯 기능" 탭으로 이동해야 한다(2026-09-12).
+      await expandAttachmentCategory(page)
+
+      const originLine = page.getByText('이 화면의 주소:')
+      await originLine.waitFor({ state: 'visible', timeout: 10000 })
+      const originText = await originLine.innerText()
+      r.check('G 주소 라인이 http://localhost: 를 포함', originText.includes('http://localhost:'), originText)
+
+      // paulTownV1 토글 "전" 스냅샷을 비어있지 않게 만들기 위해 다른
+      // 플래그(attachmentBookshelf)를 먼저 한 번 건드려 저장소를 채운다 —
+      // 그래야 "토글 전후 다른 키 무변화" 비교가 트리비얼하지 않다.
+      await toggleFeatureCheckbox(page, 'attachmentBookshelf')
+      const before = await readAllStoredFeatures(page)
+
+      await toggleFeatureCheckbox(page, 'paulTownV1')
+      const after = await readAllStoredFeatures(page)
+      r.check('G paulTownV1 토글 후 townShopV1은 여전히 false', !!after && after.townShopV1 === false, after)
+
+      const beforeObj = before || {}
+      const afterObj = after || {}
+      const changedOtherKeys = Object.keys({ ...beforeObj, ...afterObj }).filter(
+        (k) => k !== 'paulTownV1' && beforeObj[k] !== afterObj[k]
+      )
+      r.check(
+        'G paulTownV1 외 다른 플래그는 토글 전후 값이 그대로(스냅샷 비교)',
+        changedOtherKeys.length === 0,
+        changedOtherKeys
+      )
+
+      const lineOn = await readPersistedLineText(page, 'paulTownV1')
+      r.check('G 저장됨: true 라인이 paulTownV1 옆에 노출', lineOn.includes('저장됨: true'), lineOn)
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      err.message += `\n  [G 진단] mockErrors=${JSON.stringify(mocks.db.errors.slice(0, 3))}\n  [G 진단] body(앞 400자)=${JSON.stringify(bodyText.slice(0, 400))}`
       throw err
     } finally {
       await context.close()
