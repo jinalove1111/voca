@@ -37,8 +37,34 @@ import { TOWN_ITEM_META } from '../../../src/utils/town/townCatalog.js'
 // 그 외 호스트(Supabase 프로젝트/Vercel 등)는 전부 위반으로 기록한다.
 const ALLOWED_EXTERNAL_ASSET_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.jsdelivr.net']
 
-export async function installMocks(page, { tables, townWelcomeDisabled = false, slowGrantXpMs = 0 } = {}) {
-  const db = createDb(tables || buildFixtureTables(), EMBEDS)
+// Pilot A Town V1 허용목록(2026-09-12, tests/e2e/townPilotAllowlist.spec.mjs) —
+// QA fixture 학생(QA_STUDENT_ID)을 그대로 로그인시키는 대신, 다른 UUID로
+// "재발급"해서 그 UUID로 로그인한 것처럼 만들고 싶을 때 쓰는 opt-in 헬퍼.
+// QA_STUDENT_ID를 참조하는 테이블은 지금 정확히 2개(students/
+// student_class_assignments) — 나머지는 buildFixtureTables()가 전부 빈
+// 배열로 반환해 remap이 필요 없다(2026-09-12 확인). 원본 tables 객체는
+// 변경하지 않는다(얕은 복제 + 배열 map으로 새 객체만 반환).
+function withOverriddenStudentId(baseTables, studentId) {
+  return {
+    ...baseTables,
+    students: (baseTables.students || []).map((s) => (
+      s.id === QA_STUDENT_ID ? { ...s, id: studentId } : s
+    )),
+    student_class_assignments: (baseTables.student_class_assignments || []).map((row) => (
+      row.student_id === QA_STUDENT_ID ? { ...row, student_id: studentId } : row
+    )),
+  }
+}
+
+export async function installMocks(page, { tables, townWelcomeDisabled = false, slowGrantXpMs = 0, studentId } = {}) {
+  // studentId는 호출자가 tables를 직접 넘기지 않은 경우에만 적용한다 — 이미
+  // 자기만의 fixture를 만든 호출자의 studentId 배정을 이 옵션이 조용히
+  // 덮어쓰지 않게 하기 위함(additive, 기본 동작 무변화).
+  const effectiveStudentId = studentId && !tables ? studentId : null
+  const baseTables = tables || buildFixtureTables()
+  const finalTables = effectiveStudentId ? withOverriddenStudentId(baseTables, effectiveStudentId) : baseTables
+  const loginStudentId = effectiveStudentId || QA_STUDENT_ID
+  const db = createDb(finalTables, EMBEDS)
   const unmockedRequests = []
   const externalAssetRequests = []
   const apiCallLog = []
@@ -150,7 +176,7 @@ export async function installMocks(page, { tables, townWelcomeDisabled = false, 
     await route.fulfill({
       status: 200, contentType: 'application/json',
       body: JSON.stringify(ok
-        ? { ok: true, studentId: QA_STUDENT_ID, name: QA_STUDENT_NAME, className: 'MS Advanced Class', unitName: 'Unit 2', token: 'e2e-mock-token' }
+        ? { ok: true, studentId: loginStudentId, name: QA_STUDENT_NAME, className: 'MS Advanced Class', unitName: 'Unit 2', token: 'e2e-mock-token' }
         : { ok: false, reason: 'wrong_pin' }),
     })
   })
