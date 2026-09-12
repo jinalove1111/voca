@@ -31,7 +31,10 @@ export default function TownObjectLayer({
           zIndex: zIndexFor(HOME_CELL.y),
         }}
       >
-        <TownSprite sprite={HOME_SPRITE} className="w-full h-full" />
+        <div className="relative scale-[1.3] origin-bottom w-full h-full">
+          <span aria-hidden="true" className="absolute inset-0 rounded-full bg-[#e0a73a]/20 blur-xl" />
+          <TownSprite sprite={HOME_SPRITE} className="relative w-full h-full" />
+        </div>
       </div>
 
       {list.map((p) => {

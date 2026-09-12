@@ -7,10 +7,13 @@
 // 이모지로 폴백한다 — 기능이 이미지 부재로 깨지지 않는다(V1과 동일 원칙).
 import { townAsset } from '../../../assets/town'
 
+// 2026-09-13 비주얼 폴리시 — 이전 clamp는 최대값이 작아(3rem) 390px
+// 화면에서 이모지가 "작은 알약 속 점"처럼 보였다(코디네이터 스크린샷
+// 피드백). 뷰포트에 비례해 훨씬 크게 스케일하도록 상한을 올린다.
 const EMOJI_SIZE_CLASS = {
-  lg: 'text-[clamp(1.6rem,8vw,3rem)]',
-  md: 'text-[clamp(1.3rem,6vw,2.25rem)]',
-  sm: 'text-[clamp(1rem,4.5vw,1.5rem)]',
+  lg: 'text-[clamp(2.6rem,15vw,4.6rem)]',
+  md: 'text-[clamp(2rem,11vw,3.4rem)]',
+  sm: 'text-[clamp(1.6rem,9vw,2.6rem)]',
 }
 
 export default function TownSprite({ sprite, sizeClass, className = '', style, title }) {
@@ -20,28 +23,32 @@ export default function TownSprite({ sprite, sizeClass, className = '', style, t
 
   if (asset) {
     return (
-      <img
-        src={asset}
-        alt=""
-        loading="lazy"
-        decoding="async"
-        data-asset-key={s.assetKey || ''}
-        title={title}
-        className={`w-full h-full object-contain ${sizeClass || ''} ${className}`}
-        style={style}
-      />
+      <span className={`relative inline-flex items-center justify-center w-full h-full ${className}`} style={style}>
+        <span aria-hidden="true" className="absolute bottom-0 left-1/2 -translate-x-1/2 w-3/4 h-2 rounded-full bg-[#1e2a5a]/15 blur-[2px]" />
+        <img
+          src={asset}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          data-asset-key={s.assetKey || ''}
+          title={title}
+          className={`relative w-full h-full object-contain drop-shadow-sm ${sizeClass || ''}`}
+        />
+      </span>
     )
   }
 
   return (
-    <span
-      aria-hidden="true"
-      data-asset-key={s.assetKey || ''}
-      title={title}
-      className={`inline-flex items-center justify-center w-full h-full leading-none ${emojiSizeClass} ${sizeClass || ''} ${className}`}
-      style={style}
-    >
-      {s.emoji || '🎁'}
+    <span className={`relative inline-flex items-center justify-center w-full h-full ${className}`} style={style}>
+      <span aria-hidden="true" className="absolute bottom-0 left-1/2 -translate-x-1/2 w-3/4 h-2 rounded-full bg-[#1e2a5a]/15 blur-[2px]" />
+      <span
+        aria-hidden="true"
+        data-asset-key={s.assetKey || ''}
+        title={title}
+        className={`relative inline-flex items-center justify-center w-full h-full leading-none drop-shadow-sm ${emojiSizeClass} ${sizeClass || ''}`}
+      >
+        {s.emoji || '🎁'}
+      </span>
     </span>
   )
 }

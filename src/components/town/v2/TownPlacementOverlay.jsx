@@ -11,7 +11,7 @@ export default function TownPlacementOverlay({ anchors, onAnchorTap }) {
   const list = Array.isArray(anchors) ? anchors : []
 
   return (
-    <div className="absolute inset-0 pointer-events-none" style={{ zIndex: Z_LAYERS.overlay }}>
+    <div className="absolute inset-0 pointer-events-none opacity-90" style={{ zIndex: Z_LAYERS.overlay }}>
       {list.map(({ x, y }) => {
         const { leftPct, topPct } = anchorFor(x, y)
         return (
@@ -21,9 +21,11 @@ export default function TownPlacementOverlay({ anchors, onAnchorTap }) {
             onClick={() => onAnchorTap && onAnchorTap(x, y)}
             aria-label={`여기에 놓기 (${x + 1}, ${y + 1})`}
             data-anchor={`${x},${y}`}
-            className="absolute min-h-[44px] min-w-[44px] rounded-full bg-[#fdebd0]/70 border-2 border-[#e0a73a]/70 shadow motion-safe:animate-pulse pointer-events-auto"
+            className="absolute min-h-[44px] min-w-[44px] flex items-center justify-center bg-transparent pointer-events-auto"
             style={{ left: `${leftPct}%`, top: `${topPct}%`, transform: 'translate(-50%, -50%)' }}
-          />
+          >
+            <span aria-hidden="true" className="block w-7 h-7 rounded-full border-2 border-[#e0a73a]/70 bg-[#fdebd0]/60 motion-safe:animate-pulse" />
+          </button>
         )
       })}
     </div>

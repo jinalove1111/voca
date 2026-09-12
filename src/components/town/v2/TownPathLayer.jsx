@@ -20,12 +20,12 @@ export default function TownPathLayer() {
   return (
     <div className="absolute inset-0 pointer-events-none" style={{ zIndex: Z_LAYERS.path }} aria-hidden="true">
       <div
-        className="absolute left-2 right-2 rounded-full bg-[#d9d2c5]"
+        className="absolute left-2 right-2 rounded-full border-y-2 border-[#1e2a5a]/10 bg-[#d9d2c5]"
         style={{ top: `${laneTopPct}%`, height: `${laneHeightPct}%`, ...COBBLE_STYLE }}
       />
       {spurHeightPct > 0 && (
         <div
-          className="absolute w-[6%] max-w-[18px] bg-[#d9d2c5] rounded-full"
+          className="absolute w-[7%] max-w-[18px] bg-[#d9d2c5] rounded-full"
           style={{
             left: `${homeAnchor.leftPct}%`,
             top: `${homeAnchor.bottomPct}%`,
