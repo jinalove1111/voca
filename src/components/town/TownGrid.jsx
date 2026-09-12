@@ -85,15 +85,28 @@ export default function TownGrid({ placements, itemById, mode, onCellTap, onStar
           // 11종은 discovery=null 그대로) isOpen일 때만 계산(불필요한 호출
           // 방지, 순수 함수라 호출 비용 자체는 낮음).
           const discoveryPlaceKey = placed ? placeKeyForItemId(placed.itemId) : null
+          // British World Phase 2 — 발견 카드 팝업(폭 ~160px)은 이동/보관
+          // 버튼 행(폭 ~110px)보다 넓어, 격자 맨 왼쪽/오른쪽 칸에서 중앙
+          // 정렬(left-1/2 -translate-x-1/2)하면 뷰포트 밖으로 잘릴 수
+          // 있다(스크린샷 실측 확인). x 좌표 기반 결정론 정렬로 완화 —
+          // 왼쪽 2칸은 셀 왼쪽에, 오른쪽 2칸은 셀 오른쪽에 붙이고, 그 외는
+          // 기존과 동일하게 중앙 정렬한다. 버튼 전용 팝업(발견 콘텐츠
+          // 없음)은 폭이 좁아 이 조정이 필요 없으므로 그대로 둔다(회귀
+          // 표면 최소화).
+          const discoveryPopupAlignClass = x <= 1
+            ? 'left-0'
+            : x >= TOWN_GRID.cols - 2
+              ? 'right-0'
+              : 'left-1/2 -translate-x-1/2'
 
           return (
-            <div key={`${x},${y}`} className={`relative aspect-square ${depthClassFor(y, TOWN_GRID.rows)}`}>
+            <div key={`${x},${y}`} className="relative aspect-square">
               <button
                 type="button"
                 onClick={() => handleCellClick(x, y)}
                 aria-label={label}
                 disabled={home}
-                className={`w-full h-full rounded-xl flex items-center justify-center leading-none ${
+                className={`w-full h-full rounded-xl flex items-center justify-center leading-none ${depthClassFor(y, TOWN_GRID.rows)} ${
                   home
                     ? 'bg-purple-100 border-2 border-purple-300'
                     : isPath
@@ -110,8 +123,34 @@ export default function TownGrid({ placements, itemById, mode, onCellTap, onStar
                   <span aria-hidden="true">{item ? item.emoji : '🎁'}</span>
                 )}
               </button>
-              {isOpen && (
-                <div className="absolute z-10 left-1/2 top-full -translate-x-1/2 mt-1 flex flex-col gap-1 bg-white rounded-2xl card-shadow p-1 min-w-[160px]">
+              {/* British World Phase 2 — 발견 콘텐츠가 없는 아이템(17종 중
+                  11종)은 액션 스트립 마크업을 기존과 바이트 단위로 동일하게
+                  유지한다(폭/구조 무변경 — overflow-x-auto 안에서 팝업 폭이
+                  넓어지면 그리드 왼쪽 끝 칸에서 클릭 판정이 밀려나는 회귀를
+                  실측으로 확인, tests/e2e/townV1.spec.mjs 재현). 발견
+                  콘텐츠가 있는 6종만 flex-col + 카드 행을 추가한다 — 이
+                  6종은 기존 480단언 스위트가 배치/이동 상호작용을 검증하지
+                  않는 아이템들이라 폭 변경의 실제 영향 범위가 없다. */}
+              {isOpen && !discoveryPlaceKey && (
+                <div className="absolute z-10 left-1/2 top-full -translate-x-1/2 mt-1 flex gap-1 bg-white rounded-2xl card-shadow p-1 whitespace-nowrap">
+                  <button
+                    type="button"
+                    onClick={() => { setOpenPlacementId(null); onStartMove && onStartMove(placed.placementId) }}
+                    className="min-h-[44px] px-3 rounded-xl bg-purple-100 text-purple-600 text-xs font-black btn-press"
+                  >
+                    이동
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setOpenPlacementId(null); onStore && onStore(placed.placementId) }}
+                    className="min-h-[44px] px-3 rounded-xl bg-gray-100 text-gray-600 text-xs font-black btn-press"
+                  >
+                    보관
+                  </button>
+                </div>
+              )}
+              {isOpen && discoveryPlaceKey && (
+                <div className={`absolute z-10 top-full ${discoveryPopupAlignClass} mt-1 flex flex-col gap-1 bg-white rounded-2xl card-shadow p-1 w-[190px] max-w-[70vw]`}>
                   <div className="flex gap-1 whitespace-nowrap">
                     <button
                       type="button"
@@ -131,9 +170,7 @@ export default function TownGrid({ placements, itemById, mode, onCellTap, onStar
                   {/* British World Phase 2 — 새 모달 아님, 이미 열린 액션
                       스트립 안의 인라인 카드(UX_FLOW.md §7). 이동/보관
                       버튼과 별개 행이라 클릭 판정 간섭 0. */}
-                  {discoveryPlaceKey && (
-                    <TownDiscoveryCard itemId={placed.itemId} studentId={studentId} />
-                  )}
+                  <TownDiscoveryCard itemId={placed.itemId} studentId={studentId} />
                 </div>
               )}
             </div>
