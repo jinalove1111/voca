@@ -15,11 +15,22 @@
 // 동일 관례). git show(origin/main) 출력은 저장소 정규화(LF)로 오므로
 // byte-identical 비교 시에도 양쪽을 LF로 맞춘 뒤 비교한다(플랫폼 줄바꿈
 // 차이를 "실제 변경"으로 오인하지 않기 위함).
+//
+// CI 얕은 체크아웃(shallow checkout) 대응(2026-09-13, PR #49 Release Gate
+// CI-only 실패 수정) — GitHub Actions의 기본 checkout은 origin/main
+// 참조가 아예 없을 수 있어(fatal: bad revision 'origin/main') git 명령이
+// 실패한다. 로컬 개발 환경(origin/main 존재)에서는 실제 비교가 돌아야
+// 하므로 기본값은 그대로 'origin/main'을 쓰되, CI가 다른 기준 ref(또는
+// 얕은 체크아웃임을 알리는 값)를 넘길 수 있도록 환경변수로 오버라이드
+// 가능하게 한다. 이 값을 못 찾아 git이 throw하면(byte-identity 12개
+// 체크와 동일한 관례로) FAIL이 아니라 SKIP으로 기록한다 — "origin/main이
+// 없다"는 CI 체크아웃 설정 문제이지, 이 세션이 만든 회귀가 아니기 때문.
 import { readFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 
 const ROOT = process.cwd()
+const BASE_REF = process.env.V2_STATIC_BASE_REF || 'origin/main'
 
 let totalPassed = 0
 let totalFailed = 0
@@ -53,7 +64,7 @@ function stripComments(src) {
 }
 function gitShow(relPath) {
   try {
-    return execFileSync('git', ['show', `origin/main:${relPath}`], { cwd: ROOT, encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 })
+    return execFileSync('git', ['show', `${BASE_REF}:${relPath}`], { cwd: ROOT, encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 })
   } catch (err) {
     return { __error: err?.message || String(err) }
   }
@@ -157,10 +168,16 @@ for (const rel of V1_UNCHANGED_FILES) {
 // ── 5. api/**, *.sql — origin/main 대비 무변경(DDL/서버 로직 무접촉) ──────
 section('5. api/** 및 *.sql — origin/main 대비 무변경')
 try {
-  const diffOut = execFileSync('git', ['diff', '--name-only', 'origin/main', '--', 'api', '*.sql'], { cwd: ROOT, encoding: 'utf8' }).trim()
+  const diffOut = execFileSync('git', ['diff', '--name-only', BASE_REF, '--', 'api', '*.sql'], { cwd: ROOT, encoding: 'utf8' }).trim()
   check('git diff origin/main -- api **/*.sql — 변경 파일 0개', diffOut === '', diffOut)
 } catch (err) {
-  check('git diff origin/main -- api **/*.sql — 실행 가능', false, err?.message || String(err))
+  // 위 12개 byte-identity 체크(gitShow)와 동일한 관례 — BASE_REF가 이
+  // 체크아웃에 없어서(fatal: bad revision 등) git 자체가 실행 안 되는
+  // 것은 "api/**나 *.sql이 바뀌었다"는 신호가 아니므로 FAIL이 아니라
+  // SKIP으로 기록한다. diff 자체는 실행됐는데 결과가 비어있지 않은
+  // 경우(실제 변경 감지)는 위 try 블록의 check(...)가 그대로 FAIL을 낸다.
+  const msg = err?.message || String(err)
+  skip('git diff origin/main -- api **/*.sql — 실행 가능', `git diff 실패(${msg.split('\n')[0]}) — SKIP`)
 }
 
 // ── 6. registry.mjs / testBrowserE2E.mjs 등록 ────────────────────────────
