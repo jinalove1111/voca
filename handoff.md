@@ -1,10 +1,76 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-12 (133차 — Kinney Pilot A 실기기 인시던트: paulTownV1
-ON인데 Town V1 진입 카드 미표시 → 근본 원인은 features.js가 페이지
-인스턴스당 localStorage를 1회만 읽고 재읽기 경로가 없어 토글 전에 열려
-있던 탭/창이 메모리 false를 유지하는 것으로 확인·재현(수정 전 4단언
-FAIL/수정 후 8/8 PASS) → 플래그 스토어 재구독 수정 PR #46 OPEN(REVIEW
-ONLY, 미merge). Production DB WRITE 0·SQL 0. 132차 이하 보존)_
+_최종 갱신: 2026-09-12 (134차 — Pilot A Town V1 자격을 학생 UUID
+허용목록으로 부여: `src/config/pilotTown.js` 신규(승인 Pilot A 5명 UUID
+frozen Set + `isPilotTownStudent`) + `App.jsx` 두 곳(`useTownShop` enable/
+`onGoTown`)만 OR 결합, `features.js`/TownScreen/API/SQL 무변경. 신규
+테스트 testPilotTownAllowlist 32/32 + townPilotAllowlist e2e 35/35,
+회귀 6종 PASS, build PASS, verify:e2e 798/798. Production DB WRITE 0.
+브랜치 `feat/pilot-a-town-v1-allowlist-2026-09-12`, 미push·미PR(REVIEW
+ONLY), verify:all 실행 중. 133차 이하 보존)_
+
+## 2026-09-12 (134차) — Pilot A Town V1 자격을 학생 UUID 허용목록으로 부여(기기 플래그 OR 허용목록), PR 준비(REVIEW ONLY)
+
+### 0. 안전 요약
+Production DB WRITE 0 · SQL 0 · v3_50 미실행 · PD/보상/별/XP/학생
+mutation 0 · 구매 0 · welcome 0 · 플래그/환경 변경 0 · PR #44/#45/#32
+untouched · Odyssey 미착수. 이번 세션 merge/push 0건(브랜치
+`feat/pilot-a-town-v1-allowlist-2026-09-12`, HEAD `29fe6c9`).
+
+### 1. 배경
+PR #46(플래그 스토어 반응형)·#47(패널 진단) 배포 후에도 Kinney
+실기기에서 Town V1 진입 카드 미표시 재현. 운영자가 수동 재시도 루프
+종료를 선언하고 학생 UUID 기반 허용목록 도입을 승인.
+
+### 2. 정적 트레이스 재확인(main `f1e5db4`, 라이브 번들 동일)
+FeatureManagementPanel → setFeatureEnabled → localStorage
+`paulEasyVoca_features`(origin/프로필 단위) → features.js 단일
+인스턴스(storage/visibility/pageshow 재읽기) → App.jsx
+useSyncExternalStore → onGoTown → PaulTown.jsx:222/231 단일 조건
+(onGoTown). 다른 조건 0(townShopV1/레벨/환경/경로 무관). 크로스탭
+E2E 18/18로 코드 경로 정상 증명.
+
+### 3. 근본 원인(확정)
+Town V1 자격이 기기 로컬 저장소에만 묶여 있고 학생 단위 진실 원천이
+없음 → 관리자 토글 컨텍스트(origin/프로필/모드)와 학생 세션 컨텍스트가
+다르면 코드가 연결할 방법이 없다. #46은 같은 저장소 내 stale만, #47은
+표시만 해결.
+
+### 4. 수정(운영자 승인)
+`src/config/pilotTown.js` 신규 — 승인된 Pilot A 5명의 학생 UUID를
+frozen Set으로 보관하고 `isPilotTownStudent(uuid)`(소문자 정확 일치,
+이름 매칭 0)를 제공. `App.jsx`에서
+`townV1Enabled = paulTownV1Enabled || isPilotTownStudent(studentId)`를
+`useTownShop` enable과 `onGoTown` 두 곳에만 적용. `features.js` 기본값
+(`paulTownV1`/`townShopV1` false) 무변경, TownScreen/useTownShop/
+townShop/api/SQL 무변경, welcome은 서버 env unset + 클라이언트 조건
+그대로.
+
+### 5. 테스트
+`scripts/testPilotTownAllowlist.mjs` 32/32(5명 UUID true·대문자 true,
+비파일럿/이름/부분/변형/null false, Set 크기 5, 정적 배선, 기본값
+불변) registry 등록. `tests/e2e/townPilotAllowlist.spec.mjs` 35/35
+(`[town-pilot]` P1~P5 각 UUID 플래그 OFF → 카드/들어가기/Town V1 헤더/
+🛒 상점, N1 비파일럿 OFF 카드 없음, N2 비파일럿 ON 기존 동작, W welcome
+disabled 토스트 없음·잔액 불변, S 학생 격리); mockRoutes에 opt-in
+`{ studentId }` 추가(기본 off). 회귀: lazy-chunk 76, stale-chunk 102,
+TownUiStatic 95(정규식 2곳 townV1Enabled 수용), 패널 35, welcome
+exactly-once 87, isolation45 84. build PASS, verify:e2e 798/798
+(763+35). local `npm run verify:all`(HEAD `29fe6c9`) → ALL DOMAINS
+PASS(SKIP speaking/listening 제외), FAIL 접두 줄 0, e2e 도메인 PASS
+(`[town-pilot]` 포함, 미mock 0).
+
+### 6. 커밋/브랜치
+`4492ddb` feat(config): pilotTown allowlist + App.jsx 결합 /
+`35f1cb8` test(unit): testPilotTownAllowlist 32/32 / `29fe6c9`
+test(e2e): townPilotAllowlist 35/35. 브랜치
+`feat/pilot-a-town-v1-allowlist-2026-09-12`(base main `f1e5db4`).
+미push·미PR — merge/배포는 운영자 결정.
+
+### 7. 영향/다음
+배포 시 Pilot A 5명은 어느 기기/탭/origin에서든 Town V1 진입 카드
+표시(기기 플래그 불필요); 다른 학생 무변화. NEXT_GATE: PR 리뷰/merge
+결정 → 배포 후 Kinney 기기 1회 확인(재토글 없음) → Lv.3·41 PD·welcome
+없음 확인 → tree 10 PD 구매 게이트 재개.
 
 ## 2026-09-12 (133차) — Kinney Pilot A 실기기: paulTownV1 ON인데 Town V1 진입 카드 미표시 → 플래그 스토어 수정 PR #46 (REVIEW ONLY)
 

@@ -1,0 +1,52 @@
+{
+  "agent_name": "lead-pilot-a-allowlist-2026-09-12",
+  "role": "Pilot A Town V1 자격을 학생 UUID 허용목록으로 부여(기기 플래그 OR 허용목록) — Kinney 실기기 재발에 대한 최종 완화",
+  "task_id": "pilot-a-town-v1-allowlist-2026-09-12",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-12T00:00:00Z",
+  "updated_at": "2026-09-12T00:00:00Z",
+  "branch": "feat/pilot-a-town-v1-allowlist-2026-09-12",
+  "pr": null,
+  "commits": ["4492ddb", "35f1cb8", "29fe6c9"],
+  "task_results": {
+    "background": "PR #46(플래그 스토어 반응형)·#47(패널 진단) 배포 후에도 Kinney 실기기에서 Town V1 진입 카드 미표시 재현. 운영자가 수동 재시도 루프 종료를 선언하고 학생 UUID 기반 허용목록 도입을 승인.",
+    "static_trace": "FeatureManagementPanel → setFeatureEnabled → localStorage paulEasyVoca_features(origin/프로필 단위) → features.js 단일 인스턴스(storage/visibility/pageshow 재읽기) → App.jsx useSyncExternalStore → onGoTown → PaulTown.jsx:222/231 단일 조건(onGoTown). 다른 조건 0(townShopV1/레벨/환경/경로 무관). 크로스탭 E2E 18/18로 코드 경로 정상 증명(main f1e5db4, 라이브 번들 동일).",
+    "root_cause": "Town V1 자격이 기기 로컬 저장소에만 묶여 있고 학생 단위 진실 원천이 없음 → 관리자 토글 컨텍스트(origin/프로필/모드)와 학생 세션 컨텍스트가 다르면 코드가 연결할 방법이 없다. #46은 같은 저장소 내 stale만, #47은 표시만 해결.",
+    "fix": "src/config/pilotTown.js 신규 — 승인된 Pilot A 5명의 학생 UUID를 frozen Set으로 보관, isPilotTownStudent(uuid)(소문자 정확 일치, 이름 매칭 0) 제공. App.jsx에서 townV1Enabled = paulTownV1Enabled || isPilotTownStudent(studentId)를 useTownShop enable과 onGoTown 두 곳에만 적용. features.js 기본값(paulTownV1/townShopV1 false) 무변경, TownScreen/useTownShop/townShop/api/SQL 무변경, welcome은 서버 env unset + 클라이언트 조건 그대로.",
+    "verification": "scripts/testPilotTownAllowlist.mjs 32/32(5명 UUID true·대문자 true, 비파일럿/이름/부분/변형/null false, Set 크기 5, 정적 배선, 기본값 불변) registry 등록. tests/e2e/townPilotAllowlist.spec.mjs 35/35([town-pilot] P1~P5 각 UUID 플래그 OFF → 카드/들어가기/Town V1 헤더/🛒 상점, N1 비파일럿 OFF 카드 없음, N2 비파일럿 ON 기존 동작, W welcome disabled 토스트 없음·잔액 불변, S 학생 격리); mockRoutes에 opt-in { studentId } 추가(기본 off). 회귀: lazy-chunk 76, stale-chunk 102, TownUiStatic 95(정규식 2곳 townV1Enabled 수용), 패널 35, welcome exactly-once 87, isolation45 84. build PASS, verify:e2e 798/798(763+35).",
+    "verify_all": "local npm run verify:all(HEAD 29fe6c9) → ALL DOMAINS PASS(SKIP speaking/listening 제외), FAIL 접두 줄 0, e2e 도메인 PASS([town-pilot] 포함, 미mock 0)."
+  },
+  "in_progress": [],
+  "production_safety": {
+    "db_write": 0,
+    "sql": 0,
+    "migration": 0,
+    "v3_50_executed": false,
+    "reward_pd_star_xp_student_mutation": 0,
+    "purchase": 0,
+    "welcome_granted": 0,
+    "flag_env_changes": 0,
+    "pr44_pr45_pr32_touched": false,
+    "odyssey_started": false,
+    "town_flag_default": "false (unchanged)"
+  },
+  "decisions_needed": [
+    "PR 리뷰/merge/배포 승인",
+    "배포 후 Kinney 실기기 1회 확인(재토글 없음) 결과 확인",
+    "Lv.3·41 PD·welcome 없음 확인 후 tree 10 PD 구매 게이트 재개 승인"
+  ],
+  "files_owned": [
+    "handoff.md",
+    ".ai-status/lead-pilot-a-allowlist-2026-09-12.json"
+  ],
+  "files_read": [
+    "handoff.md",
+    ".ai-status/README.md",
+    ".ai-status/lead-kinney-flag-fix-2026-09-12.json",
+    "src/config/pilotTown.js",
+    "src/App.jsx"
+  ],
+  "blocker": null,
+  "next_action": "PR 생성은 리드가 직후 수행(번호는 PR 생성 후 기재). 운영자: PR 리뷰/merge/배포 결정 → 배포 후 Kinney 기기 재확인(재토글 없음) → Lv.3·41 PD·welcome 없음 확인 → tree 10 PD 구매 게이트."
+}
