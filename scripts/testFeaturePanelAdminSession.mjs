@@ -243,6 +243,34 @@ section('7. 기존 기능 무변경 확인(회귀 아님)')
   )
 }
 
+section('8. FeatureManagementPanel.jsx — 온디바이스 진단 라인(2026-09-12 Kinney 재발 대응)')
+{
+  // 저장됨: 라인은 반드시 localStorage(paulEasyVoca_features)를 직접
+  // 읽어야 한다 — getAllFeatures()(메모리 캐시)를 읽으면 이 진단의
+  // 존재 이유(메모리와 저장소 불일치 탐지)가 사라진다.
+  check(
+    "readPersistedFeatureFlag가 localStorage.getItem('paulEasyVoca_features')를 직접 읽음",
+    /readPersistedFeatureFlag[\s\S]*?localStorage\.getItem\(\s*['"]paulEasyVoca_features['"]\s*\)/.test(featurePanelJsx)
+  )
+  check(
+    'getAllFeatures를 저장됨 라인 계산에 쓰지 않음(persisted는 readPersistedFeatureFlag만 사용)',
+    /const persisted = readPersistedFeatureFlag\(featureName\)/.test(featurePanelJsx)
+  )
+  check(
+    "저장됨: 라인이 렌더됨",
+    /저장됨: \{persisted\}/.test(featurePanelJsx)
+  )
+  check(
+    '화면 주소(location.origin) 라인이 렌더됨',
+    /이 화면의 주소: \{screenAddress\}/.test(featurePanelJsx) &&
+    /window\.location\.origin/.test(featurePanelJsx)
+  )
+  check(
+    "저장소 probe가 paulEasyVoca_storage_probe 키로 setItem 후 removeItem",
+    /localStorage\.setItem\(\s*['"]paulEasyVoca_storage_probe['"][\s\S]*?localStorage\.removeItem\(\s*['"]paulEasyVoca_storage_probe['"]\s*\)/.test(featurePanelJsx)
+  )
+}
+
 console.log(`\n${checks - failures}/${checks} passed`)
 if (failures > 0) {
   console.log(`\nFAIL — ${failures}건 실패`)

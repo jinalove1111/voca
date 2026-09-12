@@ -78,8 +78,30 @@ const FEATURE_DETAILS = {
   },
 }
 
+// 2026-09-12 Kinney Pilot A 온디바이스 진단 — localStorage에 실제로 무엇이
+// 저장돼 있는지를 메모리(features state)가 아니라 저장소에서 직접 읽어
+// 문자열로 돌려준다. PR #46로 크로스탭 재조회는 고쳤지만, "관리자 기기의
+// 브라우저가 애초에 쓰기를 거부/무시했는지"(프라이빗 모드 등) 또는
+// "관리자·학생 세션이 서로 다른 저장소 컨텍스트(오리진/모드)를 쓰는지"는
+// 원격으로 재현 불가능한 온디바이스 사실이라, 관리자 화면이 그 진실을
+// 그대로 보여줘야 한다(운영자에게 다시 토글해 달라고 요청하지 않는다).
+function readPersistedFeatureFlag(featureName) {
+  try {
+    const raw = localStorage.getItem('paulEasyVoca_features')
+    if (!raw) return 'unset'
+    const parsed = JSON.parse(raw)
+    if (!parsed || !(featureName in parsed)) return 'unset'
+    return parsed[featureName] === true ? 'true' : 'false'
+  } catch {
+    return 'read-error'
+  }
+}
+
 function FeatureCategoryToggle({ category, features, onChange, onPersistError }) {
   const [expanded, setExpanded] = useState(false)
+  // storageTick — 값 자체는 쓰지 않지만, 토글 직후 저장됨 라인을 강제로
+  // 다시 계산시키기 위한 리렌더 트리거(2026-09-12).
+  const [, setStorageTick] = useState(0)
   const categoryFeatures = getFeaturesByCategory(category.id)
   const allEnabled = categoryFeatures.every(f => features[f] === true)
   const someEnabled = categoryFeatures.some(f => features[f] === true)
@@ -92,6 +114,7 @@ function FeatureCategoryToggle({ category, features, onChange, onPersistError })
     const result = setMultipleFeatures(newState)
     onPersistError?.(result && result.ok === false)
     onChange?.()
+    setStorageTick(t => t + 1)
   }
 
   return (
@@ -119,29 +142,45 @@ function FeatureCategoryToggle({ category, features, onChange, onPersistError })
 
       {expanded && (
         <div className="mt-4 space-y-2 pt-4 border-t">
-          {categoryFeatures.map(featureName => (
-            <div key={featureName} className="flex items-center">
-              <input
-                type="checkbox"
-                id={featureName}
-                checked={features[featureName] === true}
-                onChange={(e) => {
-                  const result = setFeatureEnabled(featureName, e.target.checked)
-                  onPersistError?.(result && result.ok === false)
-                  onChange?.()
-                }}
-                className="mr-3"
-              />
-              <label htmlFor={featureName} className="flex-1 cursor-pointer">
-                <code className="text-sm bg-white px-2 py-1 rounded">{featureName}</code>
-                {FEATURE_DETAILS[featureName] && (
-                  <span className="block text-xs text-gray-600 mt-1">
-                    <strong>{FEATURE_DETAILS[featureName].label}</strong> — {FEATURE_DETAILS[featureName].description}
+          {categoryFeatures.map(featureName => {
+            // 매 렌더마다 저장소를 직접 다시 읽는다(메모리 캐시 아님) —
+            // 이 값이 실제로 기기에 저장된 진실이다(2026-09-12).
+            const persisted = readPersistedFeatureFlag(featureName)
+            const checkedInMemory = features[featureName] === true
+            const mismatch = checkedInMemory && persisted !== 'true'
+            const persistedClass = persisted === 'true'
+              ? 'text-green-600'
+              : mismatch
+                ? 'text-red-600'
+                : 'text-gray-500'
+            return (
+              <div key={featureName} className="flex items-center">
+                <input
+                  type="checkbox"
+                  id={featureName}
+                  checked={checkedInMemory}
+                  onChange={(e) => {
+                    const result = setFeatureEnabled(featureName, e.target.checked)
+                    onPersistError?.(result && result.ok === false)
+                    onChange?.()
+                    setStorageTick(t => t + 1)
+                  }}
+                  className="mr-3"
+                />
+                <label htmlFor={featureName} className="flex-1 cursor-pointer">
+                  <code className="text-sm bg-white px-2 py-1 rounded">{featureName}</code>
+                  {FEATURE_DETAILS[featureName] && (
+                    <span className="block text-xs text-gray-600 mt-1">
+                      <strong>{FEATURE_DETAILS[featureName].label}</strong> — {FEATURE_DETAILS[featureName].description}
+                    </span>
+                  )}
+                  <span className={`block text-[11px] ${persistedClass}`}>
+                    저장됨: {persisted}{mismatch ? ' · 메모리와 불일치' : ''}
                   </span>
-                )}
-              </label>
-            </div>
-          ))}
+                </label>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
@@ -200,9 +239,38 @@ function RolePermissionViewer({ adminSession = false }) {
   )
 }
 
+// 2026-09-12 Kinney Pilot A 온디바이스 진단 — 이 화면이 실제로 어떤
+// origin/path에서 열려 있는지, 그리고 이 브라우저에서 localStorage 쓰기가
+// 아예 막혀 있는지(사파리 프라이빗 모드/일부 임베디드 웹뷰 등)를 probe
+// write+read+remove로 한 번만 확인한다. 학생 세션이 관리자와 다른
+// 저장소 컨텍스트(다른 origin, 예: 배포 프리뷰 URL/다른 프로필)를 쓰는지
+// 판별하는 첫 단서가 이 origin 문자열이다.
+function probeStorageAvailability() {
+  try {
+    localStorage.setItem('paulEasyVoca_storage_probe', '1')
+    localStorage.removeItem('paulEasyVoca_storage_probe')
+    return 'OK'
+  } catch {
+    return '차단됨'
+  }
+}
+
+function currentScreenAddress() {
+  try {
+    return `${window.location.origin}${window.location.pathname}`
+  } catch {
+    return '(주소 읽기 실패)'
+  }
+}
+
 export default function FeatureManagementPanel({ adminSession = false }) {
   const [features, setFeatures] = useState(() => getAllFeatures())
   const [tab, setTab] = useState('features')
+  // 아래 둘은 마운트 시 한 번만 계산 — 값 자체가 매 렌더 바뀔 이유가 없고
+  // (주소는 페이지 이동 시에만, 저장소 가용성은 브라우저 설정이 바뀔 때만
+  // 달라짐), probe가 setItem/removeItem을 반복 실행하지 않게 한다.
+  const [screenAddress] = useState(() => currentScreenAddress())
+  const [storageAvailability] = useState(() => probeStorageAvailability())
   // 2026-09-12 Kinney Pilot A 사고 — localStorage.setItem이 조용히
   // 실패하는 경우(프라이빗 모드/용량 초과 등)를 관리자에게 알린다
   // (src/config/features.js의 read-back 검증 결과를 그대로 반영).
@@ -262,6 +330,10 @@ export default function FeatureManagementPanel({ adminSession = false }) {
       {/* Features Tab */}
       {tab === 'features' && (
         <div>
+          <p className="text-[11px] text-gray-500 mb-2 font-mono">
+            이 화면의 주소: {screenAddress} · 저장소: {storageAvailability}
+          </p>
+
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
             <p className="text-sm text-yellow-900">
               ⚠️ <strong>주의:</strong> 기능을 활성화하면 메뉴와 화면에 표시됩니다.
