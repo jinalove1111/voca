@@ -325,3 +325,77 @@ dcc01fd docs(town): Phase 2 previews
 - `paulTownV1` still defaults to `false` in `src/config/features.js`
   (untouched) — the wiring only takes effect for students/sessions that
   explicitly opt in via that flag, exactly as before.
+
+---
+
+## PHASE 3 (2026-09-12) — Header truncation fix (~30 min polish)
+
+Coordinator spotted a real bug in the Phase 2 `town_360x640.png` preview:
+the "다음 레벨까지 ⭐N" text (UX_FLOW.md 3-second rule #4 — "what unlocks
+next / how many ⭐ to next level") was truncated to an ellipsis at 360px
+width, because it lived in a `flex-1 min-w-0` middle column squeezed
+between the ⭐Lv chip and the 💵 chip+caption column.
+
+**Fix — `src/components/town/TownHeader.jsx` only** (the one file the
+coordinator explicitly allowed touching this round): changed the header's
+outer container to `flex flex-wrap` and added `order-1`/`order-2`/`order-3`
++ `sm:order-none` to its three children, plus `w-full sm:w-auto sm:flex-1`
+on the progress-bar/text column. Below the `sm:` (640px) breakpoint this
+wraps the header onto 2 rows — row 1: ⭐Lv chip + 💵 chip/caption column,
+row 2: full-width progress bar + "다음 레벨까지 ⭐N" text (now
+`whitespace-normal break-words` instead of `whitespace-nowrap overflow-hidden
+text-ellipsis`, and it has the full card width so the number never
+truncates). At ≥640px, `order-none` + `sm:flex-1` restore the exact original
+single-row layout — confirmed byte-identical screenshots for
+`town_768x1024.png`/`town_1280x800.png` (git reported no diff on those two
+files after regenerating all 5 previews). No new DOM nodes, no data/prop/
+semantic changes — `TownHeader`'s props (`level`/`starsEarned`/
+`dollarsAvailable`) and all internal calculations are untouched; only
+className strings changed. The `공부하면 💵가 생겨요` caption `<p>` and the
+💵 chip were not touched at all (same JSX, just re-parented under a new
+`order-2 sm:order-none` wrapper div that already existed).
+
+### Tests run (Phase 3)
+
+| Suite | Assertions | Result |
+|---|---|---|
+| `scripts/testTownUiStatic.mjs` | 95 | PASS (unchanged, including the 4 caption-specific assertions in §11) |
+| `scripts/testTownPrototypeStatic.mjs` | 51 | PASS (unchanged) |
+| `scripts/testBundleBudget.mjs` | 10 | PASS (TownScreen chunk 12.0KB gzip, budget 15KB) |
+| `npm run build` | — | succeeded |
+| `tests/e2e/townV1.spec.mjs` (scratch runner, `npm run preview --port 4191 --strictPort`) | 480 | **PASS, 0 unmocked requests, 0 mock errors** |
+
+Grand total across all three phases: 95+69+50+53+69+51+10+480 = **877**
+assertions, **0 failures** (Phase 3 re-ran the same suites as Phase 2's
+final check, since only `TownHeader.jsx` and 3 preview PNGs changed).
+
+### Previews regenerated
+
+Re-ran the same scratch screenshot script (`shootTownPreviews.mjs`) against
+the rebuilt preview server. Only files that actually differ were staged:
+
+- `town_360x640.png` (68.8KB) — now shows the fixed 2-row header, "다음
+  레벨까지 ⭐ 300" fully visible.
+- `town_200pct_zoom.png` (183.1KB) — 720px viewport is above the `sm:`
+  breakpoint, so this one still renders the single-row header (as expected —
+  the 2-row wrap is a narrow-phone fix, not a zoom fix); regenerated to
+  confirm no regression at this viewport too.
+- `town_discovery_card_open.png` (77.9KB) — also 360px wide, so it picks up
+  the same header fix as a side effect; kept updated for accuracy since the
+  coordinator's instruction only anticipated 2 files changing but this one
+  is also a 360×640 shot.
+- `town_768x1024.png` / `town_1280x800.png` — regenerated but byte-identical
+  to Phase 2 (confirmed via `git status`, no diff), as expected since both
+  are ≥640px.
+
+`previews/README.md` updated with the Phase 3 fix description and a
+corrected note about `TownHeader.jsx` (Phase 2 said "not modified", now
+superseded).
+
+### Commit (Phase 3)
+
+Single commit on `design/paul-town-british-world-2026-09-12`:
+`fix(town): wrap TownHeader onto 2 rows below sm: breakpoint to stop
+"다음 레벨까지" truncation` (see `git log` for the SHA — recorded after
+commit in this same report update, working tree confirmed clean
+immediately after).
