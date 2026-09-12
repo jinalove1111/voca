@@ -141,12 +141,12 @@ export default function TownScreenV2({ studentData, townShop, onBack, gardenPoin
   return (
     <div className="min-h-screen p-4 pb-24" data-testid="town-screen-v2">
       <div className="max-w-lg mx-auto pt-2 mb-4">
-        <button onClick={onBack} className="py-3 px-2 -my-3 -mx-2 text-purple-400 text-sm font-bold btn-press hover:text-purple-600">
+        <button onClick={onBack} className="min-h-[44px] py-3 px-2 -my-3 -mx-2 text-purple-400 text-sm font-bold btn-press hover:text-purple-600">
           ← Paul Town
         </button>
       </div>
 
-      <div className="max-w-lg mx-auto space-y-4 animate-fade-in">
+      <div className="max-w-lg mx-auto space-y-4 motion-safe:animate-fade-in">
         <TownHud
           level={level}
           starsEarned={starsEarned}
