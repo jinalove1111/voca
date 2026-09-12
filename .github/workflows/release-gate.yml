@@ -71,7 +71,8 @@ jobs:
   release-gate:
     name: Release Gate (build + verify:all + student health)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 2026-09-12: 최근 24h 3건이 실제 실패 없이 20분 캡에 걸려 취소됨(전 게이트 그린) — 30으로 상향.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
