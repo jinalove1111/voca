@@ -6,7 +6,7 @@
   "status": "completed",
   "progress": 100,
   "started_at": "2026-09-13T01:20:00+09:00",
-  "updated_at": "2026-09-13T03:30:00+09:00",
+  "updated_at": "2026-09-13T20:45:00+09:00",
   "files_owned": [
     "src/config/features.js",
     "src/App.jsx",
@@ -53,7 +53,7 @@
     "tests/e2e/townV1.spec.mjs",
     "tests/e2e/townPilotAllowlist.spec.mjs"
   ],
-  "summary": "브랜치 feat/paul-town-v2a-visual-shell-2026-09-13(origin/main 6791b4a 기준, 커밋 11개, 24 files +2612/-5). 신규 순수 모델 townScene.js(퍼센트 앵커/행 z-order/footprint/asset_key 스프라이트/정원 풍요도/근접 목표/안개), v2 컴포넌트 12개(장면·나무 표지판 HUD·PaulGuide=HeroReaction 1곳·바텀시트 상점/보관함), App.jsx 분기 townV2Active = townV1Enabled(기기 플래그 OR Pilot A 허용목록) && paulTownV2(기본 OFF). V1 파일/경제/RPC/SQL/api 바이트 동일(정적 단언). 테스트: testTownSceneV2 166/166, testTownV2Static 101/101, e2e [town-v2] 83/83(V2 OFF→V1, 3 뷰포트, 허용목록 게이팅, 구매→배치→새로고침→이동→보관, Kinney 모양 fixture 잔액·소유 불변, 200% 줌, reduced-motion), testTownUiStatic 95/95, testLazyChunkGuards 80/80, build PASS, verify:e2e 883/883. verify:all 1차 51 도메인 PASS + lazy-chunk 가드 오탐 1건 수정 후 재실행(결과는 최종 보고서). 실기기 스크린샷(390px): 격자 셀 0, 오버플로 0. Production DB WRITE 0, 구매 0, 플래그 변경 0, merge/push/deploy 0.",
+  "summary": "브랜치 feat/paul-town-v2a-visual-shell-2026-09-13(origin/main 6791b4a 기준, 커밋 11개, 24 files +2612/-5). 신규 순수 모델 townScene.js(퍼센트 앵커/행 z-order/footprint/asset_key 스프라이트/정원 풍요도/근접 목표/안개), v2 컴포넌트 12개(장면·나무 표지판 HUD·PaulGuide=HeroReaction 1곳·바텀시트 상점/보관함), App.jsx 분기 townV2Active = townV1Enabled(기기 플래그 OR Pilot A 허용목록) && paulTownV2(기본 OFF). V1 파일/경제/RPC/SQL/api 바이트 동일(정적 단언). 테스트: testTownSceneV2 166/166, testTownV2Static 101/101, e2e [town-v2] 83/83(V2 OFF→V1, 3 뷰포트, 허용목록 게이팅, 구매→배치→새로고침→이동→보관, Kinney 모양 fixture 잔액·소유 불변, 200% 줌, reduced-motion), testTownUiStatic 95/95, testLazyChunkGuards 80/80, build PASS, verify:e2e 883/883. verify:all 1차 51 도메인 PASS + lazy-chunk 가드 오탐 1건 수정 후 재실행(결과는 최종 보고서). 실기기 스크린샷(390px): 격자 셀 0, 오버플로 0. Production DB WRITE 0, 구매 0, 플래그 변경 0, merge/push/deploy 0. [136차 갱신] PR #49 생성(https://github.com/jinalove1111/voca/pull/49), 야간 결함 3건 수정(근접 목표 조사·마지막 행 팝오버 클리핑·정원 sr-only), CI 얕은 체크아웃 오탐 수정(testTownV2Static), Release Gate GREEN(head 19195c0, 21m35s), qa-reviewer 독립 리뷰 18항목 PASS(Critical/Major 0), 아트워크 최종 사양·One-Town 계획·V2-B/C 로드맵 문서 3종 작성. 최종 헤드는 handoff 136차 커밋 포함 b165aa4(docs-only, 재게이트 진행 중).",
   "blocker": null,
-  "next_action": "운영자 리뷰 후 PR 생성 여부 결정(REVIEW ONLY, DO NOT MERGE). PR #44 처분(닫기/rebase) 결정. 이후 V2-B(보관함 소포/배치 UX), V2-C(건물 탭→학습 화면·발견 카드), V2-D(레거시 PaulTown 통합). 최종 이미지 에셋은 docs/design/town/V2A_ASSET_SPEC.md 기준으로 별도 승인 후 생성."
+  "next_action": "운영자 PR #49 리뷰 후 merge 여부 결정(REVIEW ONLY, DO NOT MERGE 상태 유지). PR #44는 닫기 권장(재사용 가능 부분은 townAmbient.js로 이식 완료). 아트워크는 docs/design/town/V2A_ARTWORK_SPEC_FINAL.md 기준 별도 승인 후 생성. 이후 V2-B(바텀시트 접근성/소포 더미/배치 UX/에셋 통합/모바일 폴리시/죽은 props 정리) → V2-C(안개 애니메이션/gardenPoints 당일 반영/발견 카드/학습화면 라우팅/폴 하루 한마디) 순서, V2B_V2C_ROADMAP.md 참고."
 }
