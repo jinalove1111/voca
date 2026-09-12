@@ -1,0 +1,61 @@
+{
+  "agent_name": "lead-stale-chunk-fix-2026-09-12",
+  "role": "P1 프로덕션 장애(\"앱 오류가 발생했어요\") READ-ONLY 원인 규명 + stale 청크 자동복구 수정 + PR 오픈",
+  "task_id": "p1-stale-chunk-recovery-2026-09-12",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-12T00:00:00Z",
+  "updated_at": "2026-09-12T00:00:00Z",
+  "branch": "fix/stale-chunk-recovery-2026-09-12",
+  "base": "main aa89e43(main release gate SUCCESS 확인 완료, 상세는 handoff.md 130차)",
+  "pr": "PR #40 오픈, merge 대기, 배포 0",
+  "commit": "a940e83",
+  "production_safety": {
+    "db_write_this_session": 0,
+    "sql_editor_execution_this_session": 0,
+    "student_reward_star_xp_pd_class_textbook_word_changes": 0,
+    "feature_flags_changed": 0,
+    "pilot_a_activated": false,
+    "welcome_credits_granted": 0,
+    "pr_merges": 0,
+    "deploys": 0,
+    "town_flag_state": "OFF (paulTownV1 미변경)",
+    "town_v1_welcome_enabled_env": "미설정 (무변경)",
+    "v3_50_executed_this_session": false,
+    "pr32_touched": false
+  },
+  "verification": {
+    "root_cause": "src/App.jsx AppErrorBoundary(class, render-phase throw에서만 발동)가 오류 UI 출처. 매 배포마다 index-<hash>.js 파일명이 바뀌어 lazy 청크 13개 전부 재해시(3870902→8837d75→aa89e43 세 빌드 비교, 소스 미변경 청크도 해시 변경). 프로덕션은 현재 배포 자산만 서빙 -> 배포 전 열려 있던 세션이 code-split 화면 첫 진입 시 404 -> React.lazy reject를 React가 내부 캐시(lazyInitializer) -> '그냥 다시 시도'(state 리셋)로 복구 불가, '로그아웃 후 다시 시작'만 유효. vite:preloadError/unhandledrejection 핸들러·크래시 텔레메트리 수정 전 0건. 09-11 17:53Z/20:48Z, 09-12 04:44Z 3회 배포로 노출 창 3회. 메커니즘은 증명, 특정 기기 귀속은 LIKELY(콘솔 미확보). Scope UNKNOWN(텔레메트리 부재), 구조적으로는 배포 시점 세션 열린 모든 학생. Severity P1.",
+    "excluded_causes": "로그인 API(/api/verify-student-pin 200 JSON) · 초기화 REST 조회 전부 정상 · 세션 복원 guarded JSON.parse · normalizeRecord asArray/townLayout normalizeState Array.isArray 가드(플래그 OFF에서도 안전) · PR #36/#38 index 변경은 이벤트 핸들러/관리자 청크 한정 · v3_50 무관(이미 적용·POST PASS 완료 상태, 129차 기록과 일치). Vercel 함수 로그는 CLI 미로그인으로 미열람.",
+    "fix": "src/utils/staleChunkRecovery.js(신규, 순수) isStaleChunkError/tryRecoverFromStaleChunk(sessionStorage 60초 가드, 자동 reload 최대 1회)/clearStaleChunkGuard/scheduleGuardReset. App.jsx AppErrorBoundary state.stale 분기 -> stale일 때만 자동 reload 시도 + '새로고침' 버튼(사용자 직접, 가드 무관), 기존 일반/auth/Supabase 문구·버튼 그대로. main.jsx vite:preloadError 리스너(같은 판정/가드) + scheduleGuardReset.",
+    "local_verification": "testStaleChunkRecovery.mjs 52/52(순수 매트릭스 + App.jsx/main.jsx 정적 배선), registry.mjs quiz 도메인 extra:false. tests/e2e/staleChunk.spec.mjs 신규 [stale-chunk](첫 요청만 abort -> 자동 reload 정확히 1회 후 정상 / 항상 abort -> 두 번째 자동 reload 0 + stale 화면 유지) -> verify:e2e 735->745/745. verify:ui-stability 21/21. build PASS.",
+    "verify_all": "로컬 npm run verify:all(HEAD a940e83): ALL DOMAINS PASS(speaking/listening SKIP 제외). FAIL 접두 줄 1개는 testEntranceRosterMinbyungchun.mjs(extra:true, 라이브 READ-ONLY) 전 단언 PASS 후 종료 시 libuv UV_HANDLE_CLOSING assertion(exit 3221226505, Windows 플레이크, 128차와 동일)일 뿐 login/admin 도메인 PASS 판정과 무관, 이번 변경과도 무관. e2e 도메인 PASS, [stale-chunk] 미mock 요청 0건.",
+    "ci": "PR #40 CI Release Gate run 34676151345(pull_request, HEAD a940e83): SUCCESS 2026-09-12T05:59:24Z(19m37s — Gate 2 05:40:28→05:51:15Z, Gate 3 →05:55:14Z, Gate 5 05:55:18→05:59:15Z), Deploy Ready SUCCESS. CI 로그 ALL DOMAINS PASS, E2E 총 745단언 PASS 745/FAIL 0/SKIP 0(Gate 2 내부 1회 + Gate 5 1회). PR #40 MERGEABLE CLEAN, 미merge·미배포(운영자 승인 대기)."
+  },
+  "known_limitations": [
+    "가드가 세션(탭) 단위(sessionStorage) — 여러 탭이 열려 있으면 탭마다 최대 1회씩 자동 reload될 수 있음",
+    "부팅 시점 preloadError는 main.jsx 리스너 단독 처리, AppErrorBoundary 미경유",
+    "클라이언트 크래시 텔레메트리 여전히 0건 — 별도 과제"
+  ],
+  "decisions_needed": [
+    "PR #40 merge 승인 여부",
+    "배포 시간대 정책(학생 학습 시간대 KST 오후~저녁 회피 여부)",
+    "클라이언트 크래시 텔레메트리(anon_id 기반 이벤트) 도입 여부",
+    "release-gate.yml timeout-minutes 상향 여부(130차부터 이어지는 권고)"
+  ],
+  "files_owned": [
+    "handoff.md",
+    "TESTING.md",
+    "PROJECT_BOARD.md",
+    ".ai-status/lead-stale-chunk-fix-2026-09-12.json"
+  ],
+  "files_read": [
+    "handoff.md",
+    "TESTING.md",
+    "PROJECT_BOARD.md",
+    ".ai-status/README.md",
+    ".ai-status/lead-admin-features-fix-2026-09-12.json"
+  ],
+  "blocker": null,
+  "next_action": "verify:all 및 PR #40 CI 결과 수신·handoff.md/TESTING.md/.ai-status 반영 완료. 남은 것은 운영자 몫: PR #40 리뷰/merge 여부 결정, 배포 시간대/텔레메트리/timeout 정책 결정. 코드 자체는 이번 세션 implementer 영역이라 docs-maintainer는 코드/스크립트/SQL을 건드리지 않았음."
+}

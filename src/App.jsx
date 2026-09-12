@@ -43,6 +43,10 @@ import { starSeedState } from './utils/attachment/paulTown'
 // 오버레이 아님 — AppInner 루트에 항상 렌더해도 다른 화면 전환/입력을
 // 막지 않는다.
 import RewardToast from './components/RewardToast'
+// Stale lazy chunk 자동 복구(2026-09-12, src/utils/staleChunkRecovery.js
+// 헤더 주석 참고) — 배포 후 옛 청크 URL 404로 React.lazy가 reject해
+// AppErrorBoundary가 뜨는 경우, 세션당 1회(60초 가드) 자동 새로고침.
+import { isStaleChunkError, tryRecoverFromStaleChunk } from './utils/staleChunkRecovery'
 
 // 개발 중에만 찍히는 진단 로그(로그인/Home 진입 시 currentStudent 상태 등)
 // — 프로덕션 콘솔을 어지럽히지 않도록 DEV 빌드에서만 활성화.
@@ -86,10 +90,10 @@ const TownScreen = React.lazy(() => import('./components/town/TownScreen'))
 class AppErrorBoundary extends React.Component {
   constructor(props) {
     super(props)
-    this.state = { hasError: false, error: null }
+    this.state = { hasError: false, error: null, stale: false }
   }
   static getDerivedStateFromError(error) {
-    return { hasError: true, error }
+    return { hasError: true, error, stale: isStaleChunkError(error) }
   }
   // P0(2026-07-17) — 프로덕션에서는 내부 에러 문구를 학생에게 그대로
   // 노출하지 않는다(아래 render). 대신 진단에 필요한 정보는 전부 콘솔에
@@ -106,7 +110,20 @@ class AppErrorBoundary extends React.Component {
       href: typeof location !== 'undefined' ? location.href : null,
       mode: import.meta.env.MODE,
       timestamp: new Date().toISOString(),
+      stale: isStaleChunkError(error),
     })
+    // Stale lazy chunk(배포 후 옛 청크 404) — setState 리셋으로는 절대
+    // 복구되지 않는 오류라 여기서만 자동 새로고침을 시도한다(60초 가드,
+    // src/utils/staleChunkRecovery.js). 그 외 오류는 아래 render의 기존
+    // "그냥 다시 시도"/"로그아웃 후 다시 시작" 버튼에 맡긴다.
+    if (isStaleChunkError(error)) {
+      const result = tryRecoverFromStaleChunk({
+        error,
+        storage: window.sessionStorage,
+        reload: () => window.location.reload(),
+      })
+      console.warn('[AppErrorBoundary] stale chunk recovery', result.reason)
+    }
   }
   render() {
     if (this.state.hasError) {
@@ -115,9 +132,15 @@ class AppErrorBoundary extends React.Component {
           <div className="bg-white rounded-3xl p-8 text-center max-w-sm w-full shadow-lg">
             <div className="text-5xl mb-4">😵</div>
             <h2 className="font-black text-xl text-gray-800 mb-2">앱 오류가 발생했어요</h2>
-            <p className="text-sm text-gray-500 mb-6">
-              데이터를 불러오는 중 문제가 발생했어요.<br />다시 시도하거나 로그아웃 후 로그인해주세요.
-            </p>
+            {this.state.stale ? (
+              <p className="text-sm text-gray-500 mb-6">
+                앱이 새 버전으로 업데이트됐어요.<br />새로고침하면 바로 이어서 할 수 있어요.
+              </p>
+            ) : (
+              <p className="text-sm text-gray-500 mb-6">
+                데이터를 불러오는 중 문제가 발생했어요.<br />다시 시도하거나 로그아웃 후 로그인해주세요.
+              </p>
+            )}
             {import.meta.env.DEV && (
               <p className="text-xs text-red-400 mb-6 break-all bg-red-50 p-3 rounded-xl">{String(this.state.error)}</p>
             )}
@@ -133,12 +156,24 @@ class AppErrorBoundary extends React.Component {
             >
               로그아웃 후 다시 시작
             </button>
-            <button
-              onClick={() => this.setState({ hasError: false, error: null })}
-              className="w-full border-2 border-gray-200 text-gray-500 font-bold py-3 rounded-2xl"
-            >
-              그냥 다시 시도
-            </button>
+            {this.state.stale ? (
+              // stale 청크는 setState 리셋으로 복구 불가(React.lazy reject
+              // 캐시) — 사용자가 직접 누르는 새로고침은 60초 가드와 무관하게
+              // 항상 즉시 실행된다.
+              <button
+                onClick={() => window.location.reload()}
+                className="w-full border-2 border-gray-200 text-gray-500 font-bold py-3 rounded-2xl"
+              >
+                새로고침
+              </button>
+            ) : (
+              <button
+                onClick={() => this.setState({ hasError: false, error: null })}
+                className="w-full border-2 border-gray-200 text-gray-500 font-bold py-3 rounded-2xl"
+              >
+                그냥 다시 시도
+              </button>
+            )}
           </div>
         </div>
       )
