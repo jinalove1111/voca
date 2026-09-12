@@ -33,6 +33,7 @@ import { shouldRefreshOnForeground } from './utils/foregroundRefreshGate'
 // (기본 false)가 꺼져 있으면 아래 prefetch effect가 조회를 아예 안 한다
 // (readingStudentUI와 동일한 게이팅 메커니즘, GuidedSession.jsx 기존 관례).
 import { isFeatureEnabled, subscribeFeatures } from './config/features'
+import { isPilotTownStudent } from './config/pilotTown'
 import { fetchApprovedExamplesForWords } from './utils/curriculum/exampleLibrary'
 // Wave 4 학생 경험 폴리시(2026-08-02) — GuidedSession 완료 카드의 "오늘
 // 씨앗 심음" 안내용. 기존 Paul Town 홈 밴드(Dashboard.jsx)가 쓰는 것과
@@ -256,7 +257,11 @@ function AppInner({ studentId, studentName, onLogout }) {
   // subscribeFeatures를 구독해, storage/visibility/pageshow 재조회가
   // 일어날 때마다 이 값도 함께 갱신되게 한다.
   const paulTownV1Enabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('paulTownV1'), () => false)
-  const townShop = useTownShop(studentId, (townShopEnabled || paulTownV1Enabled) && !!studentId)
+  // Pilot A(2026-09-12) — 기기 플래그와 별개로, 운영자가 승인한 Pilot A 5명은
+  // UUID 매칭으로 Town V1 진입 자격을 얻는다(src/config/pilotTown.js). 다른
+  // 학생은 기존 paulTownV1Enabled 동작 그대로.
+  const townV1Enabled = paulTownV1Enabled || isPilotTownStudent(studentId)
+  const townShop = useTownShop(studentId, (townShopEnabled || townV1Enabled) && !!studentId)
 
   // 선물상자를 닫은 직후, 오늘 틀린 스펠링 단어나 영구 복습 대기열
   // (Writing MVP, 2026-07-20 — 적어도 하루 전에 놓친 단어)이 남아있으면
@@ -947,7 +952,7 @@ function AppInner({ studentId, studentName, onLogout }) {
               equippedHatId={studentData.equippedHatId} onEquip={studentData.equipHat}
               onGo={setScreen} onBack={() => setScreen('dashboard')}
               shop={townShopEnabled ? townShop : null} shopEnabled={townShopEnabled}
-              onGoTown={paulTownV1Enabled ? () => setScreen('town') : null} />
+              onGoTown={townV1Enabled ? () => setScreen('town') : null} />
           )}
           {/* Paul Town 월드 — 도서관/시계탑. 마을 건물 카드로만 진입하므로
               뒤로 가기는 마을(paulTown)로. 전부 파생 화면 — 저장 0. */}
