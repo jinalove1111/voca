@@ -4,6 +4,43 @@
  * 추후 관리자 패널에서 동적으로 변경 가능하도록 설계되었습니다.
  */
 
+// ── 2026-09-12 — Kinney Pilot A 사고: 크로스탭/저장 미검증 수정 ────────────
+// 실사고: 관리자가 한 탭(Samsung Internet, Kinney 학생 반)에서 "🎯 기능"
+// 패널로 paulTownV1을 켰고 저장도 됐지만(그 탭의 패널 체크박스는 켜짐으로
+// 표시), 그 브라우저에서 이미 로그인 상태로 열려 있던 학생 탭은 여전히
+// 구버전 Paul Town(내 마을 카드 없음)을 보여줬다. 근본 원인은 이 파일의
+// `currentFeatures`가 페이지 인스턴스당 딱 한 번(모듈 최초 로드 시) 메모리에
+// 캐시되고, `isFeatureEnabled`는 그 메모리만 읽는데, 다른 탭/기존에 열려
+// 있던 인스턴스가 그 변경을 다시 읽어올 방법(storage 이벤트 리스너, 포커스/
+// 가시성 재조회, 로그인 시 재조회)이 전혀 없었기 때문이다. 게다가
+// `setFeatureEnabled`의 `localStorage.setItem`은 실패해도(용량 초과,
+// 프라이빗 모드 등) 아무도 확인하지 않았다. 아래
+// subscribeFeatures/refreshFeaturesFromStorage/notify + storage/visibility/
+// pageshow 리스너 + setItem 후 read-back 검증이 이 사고의 최소 수정이다.
+// (문서: docs/operations/PILOT_A_PRE_ENABLE_CHECKLIST_2026-09-12.md)
+
+const listeners = new Set()
+let version = 0
+function notify() {
+  version++
+  listeners.forEach((l) => {
+    try { l() } catch { /* 리스너 하나가 던져도 나머지는 계속 알림 */ }
+  })
+}
+
+/**
+ * features 변경(로컬 토글 또는 다른 탭에서의 refresh) 구독.
+ * @param {() => void} listener
+ * @returns {() => void} unsubscribe
+ */
+export const subscribeFeatures = (listener) => {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+/** useSyncExternalStore 등에서 참조용으로 쓸 수 있는 버전 카운터. */
+export const getFeaturesVersion = () => version
+
 const DEFAULT_FEATURES = {
   // 교실 관리
   classManagement: false,
@@ -168,6 +205,48 @@ const loadFeaturesFromStorage = () => {
 let currentFeatures = loadFeaturesFromStorage()
 
 /**
+ * localStorage에서 다시 읽어 메모리 스냅샷을 최신화한다(다른 탭/이전에
+ * 열려 있던 페이지 인스턴스가 변경을 반영하는 유일한 경로). 실제로 값이
+ * 달라졌을 때만 교체 + 구독자에게 알린다(불필요한 리렌더 방지).
+ * @returns {boolean} 변경 여부
+ */
+export const refreshFeaturesFromStorage = () => {
+  const next = loadFeaturesFromStorage()
+  const changed = JSON.stringify(next) !== JSON.stringify(currentFeatures)
+  if (changed) {
+    currentFeatures = next
+    notify()
+  }
+  return changed
+}
+
+// 크로스탭/포그라운드 재조회 — 전부 try/catch로 감싸 어떤 환경(SSR, 테스트,
+// 구형 브라우저)에서도 모듈 로드 자체는 절대 실패하지 않게 한다.
+if (typeof window !== 'undefined') {
+  try {
+    window.addEventListener('storage', (e) => {
+      try {
+        if (e.key === null || e.key === 'paulEasyVoca_features') refreshFeaturesFromStorage()
+      } catch { /* 무시 */ }
+    })
+  } catch { /* 무시 */ }
+  try {
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        try {
+          if (document.visibilityState === 'visible') refreshFeaturesFromStorage()
+        } catch { /* 무시 */ }
+      })
+    }
+  } catch { /* 무시 */ }
+  try {
+    window.addEventListener('pageshow', () => {
+      try { refreshFeaturesFromStorage() } catch { /* 무시 */ }
+    })
+  } catch { /* 무시 */ }
+}
+
+/**
  * 특정 기능이 활성화되어 있는지 확인
  * @param {string} featureName - 기능명
  * @returns {boolean}
@@ -185,29 +264,51 @@ export const areAllFeaturesEnabled = (featureNames) => {
   return featureNames.every(name => isFeatureEnabled(name))
 }
 
+// 저장 직후 실제로 읽어와 검증(setItem이 조용히 실패하거나 — 프라이빗
+// 모드/용량 초과 — 예외를 던지는 경우 둘 다 잡는다). 성공 시 notify(),
+// 실패 시 이전 스냅샷으로 되돌리고 알리지 않는다.
+function persistAndVerify(snapshotBeforeWrite) {
+  try {
+    localStorage.setItem('paulEasyVoca_features', JSON.stringify(currentFeatures))
+    const raw = localStorage.getItem('paulEasyVoca_features')
+    const parsed = raw ? JSON.parse(raw) : null
+    if (!parsed || JSON.stringify(parsed) !== JSON.stringify(currentFeatures)) {
+      throw new Error('read-back mismatch')
+    }
+    notify()
+    return { ok: true }
+  } catch (e) {
+    currentFeatures = snapshotBeforeWrite
+    return { ok: false, reason: 'persist_failed' }
+  }
+}
+
 /**
  * 기능 활성화/비활성화 (관리자만)
  * @param {string} featureName - 기능명
  * @param {boolean} enabled - 활성화 여부
+ * @returns {{ ok: boolean, reason?: string }}
  */
 export const setFeatureEnabled = (featureName, enabled) => {
-  if (DEFAULT_FEATURES.hasOwnProperty(featureName)) {
-    currentFeatures[featureName] = enabled
-    localStorage.setItem('paulEasyVoca_features', JSON.stringify(currentFeatures))
-  }
+  if (!DEFAULT_FEATURES.hasOwnProperty(featureName)) return { ok: true }
+  const previous = { ...currentFeatures }
+  currentFeatures[featureName] = enabled
+  return persistAndVerify(previous)
 }
 
 /**
  * 여러 기능을 한번에 활성화/비활성화
  * @param {Object} featureMap - { featureName: boolean, ... }
+ * @returns {{ ok: boolean, reason?: string }}
  */
 export const setMultipleFeatures = (featureMap) => {
+  const previous = { ...currentFeatures }
   Object.entries(featureMap).forEach(([name, enabled]) => {
     if (DEFAULT_FEATURES.hasOwnProperty(name)) {
       currentFeatures[name] = enabled
     }
   })
-  localStorage.setItem('paulEasyVoca_features', JSON.stringify(currentFeatures))
+  return persistAndVerify(previous)
 }
 
 /**
@@ -220,10 +321,12 @@ export const getAllFeatures = () => {
 
 /**
  * 기능 상태 초기화
+ * @returns {{ ok: boolean, reason?: string }}
  */
 export const resetFeatures = () => {
+  const previous = { ...currentFeatures }
   currentFeatures = { ...DEFAULT_FEATURES }
-  localStorage.setItem('paulEasyVoca_features', JSON.stringify(currentFeatures))
+  return persistAndVerify(previous)
 }
 
 /**

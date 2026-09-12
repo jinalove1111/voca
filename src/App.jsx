@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import StudentSelect from './components/StudentSelect'
 import Dashboard from './components/Dashboard'
 import WordBrowser from './components/WordBrowser'
@@ -32,7 +32,7 @@ import { shouldRefreshOnForeground } from './utils/foregroundRefreshGate'
 // 교사 opt-in 예문 학습 단계. isFeatureEnabled('curriculumExamplesStudentUI')
 // (기본 false)가 꺼져 있으면 아래 prefetch effect가 조회를 아예 안 한다
 // (readingStudentUI와 동일한 게이팅 메커니즘, GuidedSession.jsx 기존 관례).
-import { isFeatureEnabled } from './config/features'
+import { isFeatureEnabled, subscribeFeatures } from './config/features'
 import { fetchApprovedExamplesForWords } from './utils/curriculum/exampleLibrary'
 // Wave 4 학생 경험 폴리시(2026-08-02) — GuidedSession 완료 카드의 "오늘
 // 씨앗 심음" 안내용. 기존 Paul Town 홈 밴드(Dashboard.jsx)가 쓰는 것과
@@ -249,7 +249,13 @@ function AppInner({ studentId, studentName, onLogout }) {
   // Paul Town V1(paulTownV1, 2026-09-11) — 내 마을/상점/보관함 통합 화면.
   // 별도 상점 API가 아니라 townShopV1과 같은 useTownShop 훅/서버 상태를
   // 공유한다(진실 원천 1개) — 둘 중 하나라도 켜져 있으면 훅을 활성화한다.
-  const paulTownV1Enabled = isFeatureEnabled('paulTownV1')
+  // 2026-09-12 Kinney Pilot A 사고 수정 — 이 값을 isFeatureEnabled() 직접
+  // 호출로 한 번만 읽으면, 관리자가 다른 탭에서 플래그를 켜도 이미 열려
+  // 있던 이 페이지 인스턴스는 리렌더되지 않아 내 마을 진입 카드가 계속
+  // 숨어있었다(src/config/features.js 헤더 주석 참고). useSyncExternalStore로
+  // subscribeFeatures를 구독해, storage/visibility/pageshow 재조회가
+  // 일어날 때마다 이 값도 함께 갱신되게 한다.
+  const paulTownV1Enabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('paulTownV1'), () => false)
   const townShop = useTownShop(studentId, (townShopEnabled || paulTownV1Enabled) && !!studentId)
 
   // 선물상자를 닫은 직후, 오늘 틀린 스펠링 단어나 영구 복습 대기열

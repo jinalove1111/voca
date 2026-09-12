@@ -1,12 +1,66 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-12 (132차 — 6시간 자율 세션, 2 워크스트림 병행.
-Agent A: P1 stale-chunk 수정 PR #40 merge(main `a87866a`)+Vercel 배포+
-라이브 READ-ONLY 검증 완료로 **CLOSED**, PR #41(CI 신뢰성)/PR #42(lazy
-chunk 가드) OPEN 미merge, 보안 감사 신규 취약점 0, Safe Hooks v1은
-머신 레벨 훅 차단으로 **BLOCKED**(설계 문서만). Agent B: Paul Town
-British storybook을 별도 worktree/브랜치에서 Phase 1~3까지 완료(플래그
-OFF, DB 카탈로그/가격 무변경, main 무접촉, 미push). 이 세션 Production
-DB WRITE 0·SQL 실행 0·merge는 PR #40 1건뿐. 131차 이하 보존)_
+_최종 갱신: 2026-09-12 (133차 — Kinney Pilot A 실기기 인시던트: paulTownV1
+ON인데 Town V1 진입 카드 미표시 → 근본 원인은 features.js가 페이지
+인스턴스당 localStorage를 1회만 읽고 재읽기 경로가 없어 토글 전에 열려
+있던 탭/창이 메모리 false를 유지하는 것으로 확인·재현(수정 전 4단언
+FAIL/수정 후 8/8 PASS) → 플래그 스토어 재구독 수정 PR #46 OPEN(REVIEW
+ONLY, 미merge). Production DB WRITE 0·SQL 0. 132차 이하 보존)_
+
+## 2026-09-12 (133차) — Kinney Pilot A 실기기: paulTownV1 ON인데 Town V1 진입 카드 미표시 → 플래그 스토어 수정 PR #46 (REVIEW ONLY)
+
+### 0. 안전 요약
+Production DB WRITE 0 · SQL 0 · PD/보상/별/XP/학생 mutation 0 · 구매 0 ·
+welcome 0 · 플래그/환경 변경 0 · PR #44/#32 untouched · Odyssey 미착수.
+이번 세션 merge 0건(PR #46은 REVIEW ONLY, 브랜치
+`fix/paul-town-v1-flag-entry`, HEAD `1f19d9f`).
+
+### 1. 현상
+Kinney 실기기(Samsung Internet)에서 운영자가 관리자 🎯 기능 → 애착
+시스템 → paulTownV1 체크 후 Kinney 로그인 → 레거시 Paul Town(성장
+포인트 11 등)만 표시, "🏘 내 마을 — Welcome to Paul Town / 들어가기"·
+Town V1 헤더(Lv.3/41 PD)·🛒 상점·🎁 보관함 미도달. Pilot 구매 게이트
+BLOCKED.
+
+### 2. 배포 상태 확인 — 소스·배포 불일치 아님
+production 런타임 = `a87866a` 빌드(`index-C3T1Z5OA.js`), main `70bca88`
+과 런타임 파일 차이 0. PaulTown 청크에 진입 카드/`onGoTown`, index에
+`paulTownV1` 읽기 존재. `townShopV1`은 진입 카드 조건과 무관. 성장
+포인트(gardenPoints=배운 단어 수)와 별/레벨은 의도된 별개 지표.
+
+### 3. 근본 원인(증명)
+`src/config/features.js`의 `currentFeatures`가 페이지 인스턴스당 모듈
+초기화 시 1회만 localStorage를 읽고, 재읽기 경로(storage 이벤트/
+visibility/pageshow/로그인/학생 전환) 0 → 토글 전에 열려 있던 탭/창은
+localStorage가 true여도 메모리 false 유지 → `App.jsx`의 `onGoTown`
+null → PaulTown 카드 미렌더. `setFeatureEnabled`의 `setItem`도
+try/catch·read-back 없이 메모리 선변경(저장 실패 시 화면 안내 0). 로컬
+재현: 한 컨텍스트 두 페이지(토글 전 로드된 학생 탭) → 수정 전 main
+빌드에서 핵심 4단언 FAIL, 수정 빌드 8/8 PASS(규칙 15). 같은 탭 단일
+인스턴스 흐름은 수정 전에도 정상이었음 — 실기기 현상은 다른 페이지
+인스턴스(탭/창) 조합에서만 재현되는 클래스.
+
+### 4. 수정 (PR #46, 미merge·미배포)
+커밋 `8310c53`/`b976383`/`1dd1d64`/`1f19d9f`. `features.js`에
+`subscribeFeatures`/`getFeaturesVersion`/`refreshFeaturesFromStorage` +
+storage/visibilitychange(visible)/pageshow 리스너 + `persistAndVerify`
+(read-back, 실패 시 원복·`{ok:false}`); `App.jsx`의
+`paulTownV1Enabled`를 `useSyncExternalStore`로; `FeatureManagementPanel`
+저장 실패 안내 + 다른 탭 새로고침 힌트; `testTownUiStatic` 정규식 신형
+수용. 플래그 기본값 false·Town 시각/경제/카탈로그 무변경.
+
+### 5. 테스트
+`scripts/testFeatureFlagStore.mjs` 40/40(신규, registry 등록),
+`tests/e2e/townFlagCrossTab.spec.mjs` 8/8(신규 `[town-flag-xtab]`), 회귀
+`testLazyChunkGuards` 76·`testStaleChunkRecovery` 102·
+`testFeaturePanelAdminSession` 30·`testTownUiStatic` 95, build PASS,
+`verify:e2e` 755/755(745+10). 관련 열린 PR: #45(토글→학생 세션 회귀
+15단언, test-only, 미merge).
+
+### 6. NEXT_GATE(운영자)
+PR #46 리뷰/merge 결정 → 배포 후 Kinney 기기에서(토글 재시도 없이) Paul
+Town 재진입 → 카드/Town V1 헤더(Lv.3·41 PD) 확인 → tree 10 PD 구매
+게이트. merge 전 임시 우회는 없음(코드 수정 없이 해결하려면 그 탭을
+새로고침해야 하나 운영자 지시로 토글 재요청 금지 상태).
 
 ## 2026-09-12 (132차) — 6시간 자율 세션: Agent A(P1 CLOSED + PR #41/#42 + 보안 감사 + Safe Hooks BLOCKED) / Agent B(Paul Town British storybook Phase 1~3, worktree)
 

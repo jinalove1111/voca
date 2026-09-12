@@ -1,0 +1,48 @@
+{
+  "agent_name": "lead-kinney-flag-fix-2026-09-12",
+  "role": "Kinney Pilot A 실기기 인시던트 — paulTownV1 ON인데 Town V1 진입 카드 미표시 근본 원인 조사 + 플래그 스토어 재구독 수정",
+  "task_id": "kinney-pilot-flag-entry-2026-09-12",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-12T00:00:00Z",
+  "updated_at": "2026-09-12T00:00:00Z",
+  "branch": "fix/paul-town-v1-flag-entry",
+  "pr": "#46 (OPEN, REVIEW ONLY, 미merge)",
+  "commits": ["8310c53", "b976383", "1dd1d64", "1f19d9f"],
+  "task_results": {
+    "symptom": "Kinney 실기기(Samsung Internet)에서 운영자가 paulTownV1 체크 후 Kinney 로그인 → 레거시 Paul Town만 표시, Town V1 진입 카드/헤더(Lv.3/41 PD)/상점/보관함 미도달 → Pilot A 구매 게이트 BLOCKED.",
+    "deploy_check": "production 런타임 = a87866a 빌드(index-C3T1Z5OA.js), main 70bca88과 런타임 파일 차이 0; PaulTown 청크에 진입 카드/onGoTown, index에 paulTownV1 읽기 존재 → 소스·배포 불일치 아님. townShopV1은 진입 카드 조건과 무관.",
+    "root_cause": "src/config/features.js의 currentFeatures가 페이지 인스턴스당 모듈 초기화 시 1회만 localStorage 읽기, 재읽기 경로(storage 이벤트/visibility/pageshow/로그인/학생 전환) 0 → 토글 전에 열려 있던 탭/창은 localStorage true여도 메모리 false 유지 → App.jsx onGoTown null → PaulTown 카드 미렌더. setFeatureEnabled의 setItem도 try/catch·read-back 없이 메모리 선변경. 증명: 한 컨텍스트 두 페이지 재현 → 수정 전 main 빌드 핵심 4단언 FAIL, 수정 빌드 8/8 PASS(규칙 15). 같은 탭 단일 인스턴스 흐름은 수정 전에도 정상.",
+    "fix": "features.js에 subscribeFeatures/getFeaturesVersion/refreshFeaturesFromStorage + storage/visibilitychange(visible)/pageshow 리스너 + persistAndVerify(read-back, 실패 시 원복·{ok:false}); App.jsx paulTownV1Enabled를 useSyncExternalStore로; FeatureManagementPanel 저장 실패 안내 + 다른 탭 새로고침 힌트; testTownUiStatic 정규식 신형 수용. 플래그 기본값 false·Town 시각/경제/카탈로그 무변경.",
+    "verification": "scripts/testFeatureFlagStore.mjs 40/40(신규, registry 등록), tests/e2e/townFlagCrossTab.spec.mjs 8/8(신규 [town-flag-xtab]), 회귀 testLazyChunkGuards 76·testStaleChunkRecovery 102·testFeaturePanelAdminSession 30·testTownUiStatic 95, build PASS, verify:e2e 755/755(745+10). 관련 열린 PR: #45(토글→학생 세션 회귀 15단언, test-only, 미merge)."
+  },
+  "in_progress": [],
+  "production_safety": {
+    "db_write": 0,
+    "sql": 0,
+    "migration": 0,
+    "reward_pd_star_xp_student_mutation": 0,
+    "purchase": 0,
+    "welcome_granted": 0,
+    "flag_env_changes": 0,
+    "pr44_pr32_touched": false,
+    "odyssey_started": false,
+    "town_flag_default": "false (unchanged)"
+  },
+  "decisions_needed": [
+    "PR #46 리뷰/merge 여부",
+    "PR #45 리뷰/merge 여부",
+    "PR #46 merge·배포 후 Pilot A 구매 게이트 재개 시점"
+  ],
+  "files_owned": [
+    "handoff.md",
+    ".ai-status/lead-kinney-flag-fix-2026-09-12.json"
+  ],
+  "files_read": [
+    ".ai-status/README.md",
+    ".ai-status/lead-6h-session-2026-09-12.json",
+    "handoff.md"
+  ],
+  "blocker": null,
+  "next_action": "운영자: PR #46 리뷰/merge 결정 → 배포 후 Kinney 기기에서(토글 재시도 없이) Paul Town 재진입 → 카드/Town V1 헤더(Lv.3·41 PD) 확인 → tree 10 PD 구매 게이트. merge 전 임시 우회 없음."
+}

@@ -141,7 +141,19 @@ for (const f of TOWN_COMPONENT_FILES) {
 // ── 5. App.jsx 배선 — paulTownV1 게이팅 + lazy + Suspense ──────────────
 section('5. App.jsx — paulTownV1 게이팅/lazy/Suspense')
 const appCode = appSrc ? stripComments(appSrc) : ''
-check("App.jsx — const paulTownV1Enabled = isFeatureEnabled('paulTownV1')", /const\s+paulTownV1Enabled\s*=\s*isFeatureEnabled\(\s*['"]paulTownV1['"]\s*\)/.test(appCode))
+// 2026-09-12 Kinney Pilot A 사고 수정(fix/paul-town-v1-flag-entry) — 크로스탭
+// 재조회를 위해 이 값이 이제 useSyncExternalStore로 subscribeFeatures를
+// 구독하는 형태로 바뀌었다(단순 1회 읽기였던 이전 형태는 관리자가 다른
+// 탭에서 플래그를 켜도 이미 열려 있던 탭이 갱신되지 않는 근본 원인이었음,
+// src/config/features.js 헤더 주석 참고). 두 형태(레거시 직접 호출/신규
+// useSyncExternalStore 구독) 중 하나만 있으면 통과하도록 완화한다 — 어느
+// 쪽이든 실제로 isFeatureEnabled('paulTownV1')를 최종 진실 원천으로 쓰는
+// 것은 동일하게 확인한다.
+check(
+  "App.jsx — paulTownV1Enabled가 isFeatureEnabled('paulTownV1')로 게이팅됨(직접 호출 또는 useSyncExternalStore 구독)",
+  /const\s+paulTownV1Enabled\s*=\s*isFeatureEnabled\(\s*['"]paulTownV1['"]\s*\)/.test(appCode) ||
+  /const\s+paulTownV1Enabled\s*=\s*useSyncExternalStore\(\s*subscribeFeatures\s*,\s*\(\)\s*=>\s*isFeatureEnabled\(\s*['"]paulTownV1['"]\s*\)/.test(appCode)
+)
 check('App.jsx — useTownShop enabled 조건에 paulTownV1Enabled 포함', /useTownShop\(\s*studentId\s*,\s*\(townShopEnabled\s*\|\|\s*paulTownV1Enabled\)/.test(appCode))
 check("App.jsx — TownScreen React.lazy import (components/town/TownScreen)", /React\.lazy\(\s*\(\)\s*=>\s*import\(\s*['"]\.\/components\/town\/TownScreen['"]\s*\)\s*\)/.test(appCode))
 check("App.jsx — screen === 'town' 렌더 분기 존재", /screen\s*===\s*['"]town['"]/.test(appCode))

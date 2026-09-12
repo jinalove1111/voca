@@ -78,7 +78,7 @@ const FEATURE_DETAILS = {
   },
 }
 
-function FeatureCategoryToggle({ category, features, onChange }) {
+function FeatureCategoryToggle({ category, features, onChange, onPersistError }) {
   const [expanded, setExpanded] = useState(false)
   const categoryFeatures = getFeaturesByCategory(category.id)
   const allEnabled = categoryFeatures.every(f => features[f] === true)
@@ -89,7 +89,8 @@ function FeatureCategoryToggle({ category, features, onChange }) {
     categoryFeatures.forEach(f => {
       newState[f] = !allEnabled
     })
-    setMultipleFeatures(newState)
+    const result = setMultipleFeatures(newState)
+    onPersistError?.(result && result.ok === false)
     onChange?.()
   }
 
@@ -124,7 +125,11 @@ function FeatureCategoryToggle({ category, features, onChange }) {
                 type="checkbox"
                 id={featureName}
                 checked={features[featureName] === true}
-                onChange={(e) => { setFeatureEnabled(featureName, e.target.checked); onChange?.() }}
+                onChange={(e) => {
+                  const result = setFeatureEnabled(featureName, e.target.checked)
+                  onPersistError?.(result && result.ok === false)
+                  onChange?.()
+                }}
                 className="mr-3"
               />
               <label htmlFor={featureName} className="flex-1 cursor-pointer">
@@ -198,6 +203,11 @@ function RolePermissionViewer({ adminSession = false }) {
 export default function FeatureManagementPanel({ adminSession = false }) {
   const [features, setFeatures] = useState(() => getAllFeatures())
   const [tab, setTab] = useState('features')
+  // 2026-09-12 Kinney Pilot A 사고 — localStorage.setItem이 조용히
+  // 실패하는 경우(프라이빗 모드/용량 초과 등)를 관리자에게 알린다
+  // (src/config/features.js의 read-back 검증 결과를 그대로 반영).
+  const [persistError, setPersistError] = useState(false)
+  const handlePersistError = (hasError) => setPersistError(!!hasError)
 
   // features 변경시 UI 업데이트
   const refreshFeatures = () => {
@@ -222,7 +232,8 @@ export default function FeatureManagementPanel({ adminSession = false }) {
   return (
     <div className="bg-white rounded-lg shadow p-6">
       <h1 className="text-3xl font-bold mb-2">⚙️ 기능 관리 패널</h1>
-      <p className="text-gray-600 mb-6">숨김 기능들을 활성화/비활성화하고 사용자 역할을 관리합니다.</p>
+      <p className="text-gray-600 mb-2">숨김 기능들을 활성화/비활성화하고 사용자 역할을 관리합니다.</p>
+      <p className="text-xs text-gray-500 mb-6">같은 기기라도 이미 열려 있던 다른 탭/창에는 화면을 새로고침해야 반영돼요.</p>
 
       {/* Tab Navigation */}
       <div className="flex gap-2 mb-6 border-b">
@@ -253,10 +264,18 @@ export default function FeatureManagementPanel({ adminSession = false }) {
         <div>
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
             <p className="text-sm text-yellow-900">
-              ⚠️ <strong>주의:</strong> 기능을 활성화하면 메뉴와 화면에 표시됩니다. 
+              ⚠️ <strong>주의:</strong> 기능을 활성화하면 메뉴와 화면에 표시됩니다.
               비활성화하면 다시 숨겨집니다. 모든 데이터는 유지됩니다.
             </p>
           </div>
+
+          {persistError && (
+            <div className="bg-red-50 border border-red-300 rounded-lg p-3 mb-4">
+              <p className="text-sm text-red-800">
+                ⚠️ 저장 실패 — 이 브라우저의 저장공간/설정 때문에 플래그가 저장되지 않았어요. 페이지를 새로고침한 뒤 다시 시도하세요.
+              </p>
+            </div>
+          )}
 
           {FEATURE_CATEGORIES.map(category => (
             <FeatureCategoryToggle
@@ -264,6 +283,7 @@ export default function FeatureManagementPanel({ adminSession = false }) {
               category={category}
               features={features}
               onChange={refreshFeatures}
+              onPersistError={handlePersistError}
             />
           ))}
 
