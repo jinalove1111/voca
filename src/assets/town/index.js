@@ -4,8 +4,8 @@
 // 2026-09-13부로 8개 키(my-house/british-cottage/tree/garden-stage-0..4)가
 // 채워졌고, 2026-09-14에 9번째 키(buildings/book-shop), 10번째 키
 // (decorations/red-post-box), 11번째 키(animals/cat), 12번째 키
-// (animals/owl)가 추가됐다.
-// townAsset()은 이 12개 키에 대해서만 실제 이미지 URL을 반환한다. 그 외
+// (animals/owl), 13번째 키(animals/puppy)가 추가됐다.
+// townAsset()은 이 13개 키에 대해서만 실제 이미지 URL을 반환한다. 그 외
 // 모든 assetKey(cafe/english-school 등 나머지 카탈로그 항목)는 여전히
 // TOWN_ASSETS에 없어 townAsset()이 null을 반환한다.
 // 호출부(TownGrid/TownShopPanel/TownInventory)는 townAsset(item.assetKey)가
@@ -21,6 +21,7 @@ import bookShop from './buildings/book-shop.webp'
 import redPostBox from './decorations/red-post-box.webp'
 import cat from './animals/cat.webp'
 import owl from './animals/owl.webp'
+import puppy from './animals/puppy.webp'
 import tree from './nature/tree.webp'
 import gardenStage0 from './nature/garden-stage-0.webp'
 import gardenStage1 from './nature/garden-stage-1.webp'
@@ -35,6 +36,7 @@ export const TOWN_ASSETS = {
   'decorations/red-post-box': redPostBox,
   'animals/cat': cat,
   'animals/owl': owl,
+  'animals/puppy': puppy,
   'nature/tree': tree,
   'nature/garden-stage-0': gardenStage0,
   'nature/garden-stage-1': gardenStage1,
