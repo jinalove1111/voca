@@ -52,13 +52,14 @@ function entry(assetKey, filename, folder, canvas, canvas2x, aspectRatio, footpr
   })
 }
 
-// GROUP C — BUILDINGS(`buildings/`, `special/`). 6개 건물(my-house 제외)
-// 중 `-lights` 변형이 있는 5개(british-cottage/book-shop/cafe/
-// english-school/clock-tower) — my-house는 스펙상 `-lights`가
-// "선택(옵션)/1차 납품 필수 아님"으로 명시돼 제외, bridge는 "조명
-// 오버레이 없음(창문 없음)"으로 명시돼 제외.
+// GROUP C — BUILDINGS(`buildings/`, `special/`). 7개 건물 중 `-lights`
+// 변형이 있는 6개(my-house 포함, `V2A_ARTWORK_SPEC_FINAL.md` 165행 —
+// my-house도 "-lights 오버레이(선택)"로 명시됨. 2026-09-13 아트워크
+// 드롭인 계약 문서 작성 중 발견·정정: 최초 초안은 my-house를 실수로
+// 제외했었다) — bridge만 "조명 오버레이 없음(창문 없음)"으로 명시돼
+// 제외.
 const BUILDINGS = [
-  entry('buildings/my-house', 'my-house.webp', 'buildings', { w: 128, h: 160 }, { w: 256, h: 320 }, '4:5', 'lg', 'objects', []),
+  entry('buildings/my-house', 'my-house.webp', 'buildings', { w: 128, h: 160 }, { w: 256, h: 320 }, '4:5', 'lg', 'objects', ['my-house-lights']),
   entry('buildings/british-cottage', 'british-cottage.webp', 'buildings', { w: 128, h: 160 }, { w: 256, h: 320 }, '4:5', 'lg', 'objects', ['british-cottage-lights']),
   entry('buildings/book-shop', 'book-shop.webp', 'buildings', { w: 128, h: 160 }, { w: 256, h: 320 }, '4:5', 'lg', 'objects', ['book-shop-lights']),
   entry('buildings/cafe', 'cafe.webp', 'buildings', { w: 128, h: 160 }, { w: 256, h: 320 }, '4:5', 'lg', 'objects', ['cafe-lights']),
