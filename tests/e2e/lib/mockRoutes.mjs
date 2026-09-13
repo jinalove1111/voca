@@ -56,7 +56,7 @@ function withOverriddenStudentId(baseTables, studentId) {
   }
 }
 
-export async function installMocks(page, { tables, townWelcomeDisabled = false, slowGrantXpMs = 0, studentId } = {}) {
+export async function installMocks(page, { tables, townWelcomeDisabled = false, slowGrantXpMs = 0, studentId, townState } = {}) {
   // studentId는 호출자가 tables를 직접 넘기지 않은 경우에만 적용한다 — 이미
   // 자기만의 fixture를 만든 호출자의 studentId 배정을 이 옵션이 조용히
   // 덮어쓰지 않게 하기 위함(additive, 기본 동작 무변화).
@@ -275,6 +275,12 @@ export async function installMocks(page, { tables, townWelcomeDisabled = false, 
   // spec 쪽에서 그대로 덮어쓸 수 있게 db 프로퍼티로 노출한다.
   db._townWelcomeDisabled = !!townWelcomeDisabled
   const townStates = {}
+  // townV2.spec.mjs(2026-09-13) opt-in — Kinney 모양 fixture(별/달러/보유
+  // 아이템을 임의 값으로 고정)를 재현하려는 호출자를 위한 초기 상태 주입.
+  // 아래 getTownMockState()가 studentId를 항상 QA_STUDENT_ID로 해석하므로
+  // (body.token === 'e2e-mock-token' 고정 매핑, 위 주석 참고) 이 옵션도
+  // 같은 키로 시드한다 — 다른 어떤 기존 동작도 바꾸지 않는 순수 추가.
+  if (townState) townStates[QA_STUDENT_ID] = JSON.parse(JSON.stringify(townState))
   // advisory lock 흉내 — 실 서버(purchase_town_item RPC)의 원자성 가정을
   // 재현한다. .catch(()=>{})로 체인 꼬리를 항상 비-거부 상태로 유지해,
   // 한 요청이 실패해도 이후 요청의 직렬화 체인이 영구히 끊기지 않게 한다.
