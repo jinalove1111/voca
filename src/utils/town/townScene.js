@@ -231,3 +231,27 @@ export function freeAnchors(placements, mode) {
 // townLevelForStars가 내부에서 이미 사용), 씬 레이어(TownHud.jsx 등)가
 // 별도 계산 없이 재사용할 수 있도록 재노출한다.
 export { TOWN_LEVELS }
+
+const GARDEN_STAGE_EMOJI = ['🌱', '🌱', '🌷', '🌻', '🌳']
+
+/**
+ * 정원 단계(stage) -> 화단 자체를 그리는 단일 배경 스프라이트 서술
+ * (`TownAmbientLayer.jsx`의 향후 드롭인 아트용, `TownSprite.jsx` 입력
+ * 형태와 동일). `gardenRichness()`가 이미 계산하는 stage별 장식 플래그
+ * (windowsLit/ivy/birds)나 STAGE_EMOJI 다중 이모지 군집(장식용 flavor)과는
+ * 독립적이다 — 이 함수는 오직 "화단 그 자체"의 이미지 앵커만 서술하고,
+ * 기존 다중 이모지 군집 렌더링은 그대로 유지된다. stage는 정수 0~4로
+ * clamp하고, 비유한/음수는 0, 4 초과는 4로 취급한다.
+ * @param {number} stage
+ * @returns {{assetKey:string, emoji:string, footprint:null, label:string}}
+ */
+export function gardenStageSprite(stage) {
+  const n = Number(stage)
+  const clamped = Number.isFinite(n) ? Math.max(0, Math.min(4, Math.trunc(n))) : 0
+  return {
+    assetKey: `nature/garden-stage-${clamped}`,
+    emoji: GARDEN_STAGE_EMOJI[clamped],
+    footprint: null,
+    label: 'Garden',
+  }
+}
