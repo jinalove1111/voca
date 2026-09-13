@@ -2,9 +2,10 @@
 //
 // 최종 일러스트가 준비되면 여기(assetKey별 import 추가)에서만 교체한다 —
 // 2026-09-13부로 8개 키(my-house/british-cottage/tree/garden-stage-0..4)가
-// 채워졌고, townAsset()은 이 8개 키에 대해서만 실제 이미지 URL을 반환한다.
-// 그 외 모든 assetKey(book-shop/cafe/english-school 등 나머지 카탈로그
-// 항목)는 여전히 TOWN_ASSETS에 없어 townAsset()이 null을 반환한다.
+// 채워졌고, 2026-09-14에 9번째 키(buildings/book-shop)가 추가됐다.
+// townAsset()은 이 9개 키에 대해서만 실제 이미지 URL을 반환한다. 그 외
+// 모든 assetKey(cafe/english-school 등 나머지 카탈로그 항목)는 여전히
+// TOWN_ASSETS에 없어 townAsset()이 null을 반환한다.
 // 호출부(TownGrid/TownShopPanel/TownInventory)는 townAsset(item.assetKey)가
 // null이면 항상 이모지(item.emoji)로 폴백한다(기능이 이미지 부재로 깨지지
 // 않음).
@@ -14,6 +15,7 @@
 // 마을 건물·자연·동물·장식 에셋 전용이다.
 import myHouse from './buildings/my-house.webp'
 import britishCottage from './buildings/british-cottage.webp'
+import bookShop from './buildings/book-shop.webp'
 import tree from './nature/tree.webp'
 import gardenStage0 from './nature/garden-stage-0.webp'
 import gardenStage1 from './nature/garden-stage-1.webp'
@@ -24,6 +26,7 @@ import gardenStage4 from './nature/garden-stage-4.webp'
 export const TOWN_ASSETS = {
   'buildings/my-house': myHouse,
   'buildings/british-cottage': britishCottage,
+  'buildings/book-shop': bookShop,
   'nature/tree': tree,
   'nature/garden-stage-0': gardenStage0,
   'nature/garden-stage-1': gardenStage1,
