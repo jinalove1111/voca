@@ -126,29 +126,29 @@ check(
   !/isFeatureEnabled\(\s*['"]paulTownV1['"]\s*\)\s*&&\s*isFeatureEnabled\(\s*['"]paulTownV2['"]\s*\)/.test(appCode),
 )
 
-// ── 3. src/assets/town/index.js — 드롭인 아트 13개 키만, V2 전용 에셋은 0개 ──
-section('3. src/assets/town/index.js — 드롭인 아트 13개 키 외 무변경')
+// ── 3. src/assets/town/index.js — 드롭인 아트 14개 키만, V2 전용 에셋은 0개 ──
+section('3. src/assets/town/index.js — 드롭인 아트 14개 키 외 무변경')
 const assetsIndexSrc = readSrc('src/assets/town/index.js')
 check('src/assets/town/index.js 존재', assetsIndexSrc !== null)
 // 2026-09-13 아트워크 드롭인(batch1)으로 TOWN_ASSETS가 8개 키(my-house/
 // british-cottage/tree/garden-stage-0..4)로 채워졌고, 2026-09-14에 batch2
 // 9번째 키(book-shop), 10번째 키(red-post-box), 11번째 키(animals/cat),
-// 12번째 키(animals/owl), 13번째 키(animals/puppy)가 추가됐다 — 더 이상
-// 빈 객체가 아니다(scripts/testTownUiStatic.mjs의 동일 계약과 함께 유지).
-// 이 섹션의 핵심은 "V2 전용 새 정적 에셋이 추가로 생기지 않았다"는
-// 것이므로, 정확히 이 13개 키(V1/V2 공용 batch1+batch2)만 있고 그 이상은
-// 없는지를 확인한다.
+// 12번째 키(animals/owl), 13번째 키(animals/puppy), 14번째 키
+// (buildings/cafe)가 추가됐다 — 더 이상 빈 객체가 아니다
+// (scripts/testTownUiStatic.mjs의 동일 계약과 함께 유지). 이 섹션의 핵심은
+// "V2 전용 새 정적 에셋이 추가로 생기지 않았다"는 것이므로, 정확히 이 14개
+// 키(V1/V2 공용 batch1+batch2)만 있고 그 이상은 없는지를 확인한다.
 const townAssetsBlockMatchV2 = assetsIndexSrc ? /export const TOWN_ASSETS\s*=\s*\{([\s\S]*?)\n\}/.exec(assetsIndexSrc) : null
 const townAssetsKeysV2 = townAssetsBlockMatchV2
   ? Array.from(townAssetsBlockMatchV2[1].matchAll(/'([^']+)':/g)).map((m) => m[1])
   : []
 const EXPECTED_BATCH1_ASSET_KEYS = [
-  'buildings/my-house', 'buildings/british-cottage', 'buildings/book-shop', 'decorations/red-post-box', 'animals/cat', 'animals/owl', 'animals/puppy', 'nature/tree',
+  'buildings/my-house', 'buildings/british-cottage', 'buildings/book-shop', 'decorations/red-post-box', 'animals/cat', 'animals/owl', 'animals/puppy', 'buildings/cafe', 'nature/tree',
   'nature/garden-stage-0', 'nature/garden-stage-1', 'nature/garden-stage-2',
   'nature/garden-stage-3', 'nature/garden-stage-4',
 ]
 check(
-  'src/assets/town/index.js — TOWN_ASSETS가 정확히 batch1+batch2 13개 키만 포함(V2 전용 신규 에셋 0개)',
+  'src/assets/town/index.js — TOWN_ASSETS가 정확히 batch1+batch2 14개 키만 포함(V2 전용 신규 에셋 0개)',
   townAssetsKeysV2.length === EXPECTED_BATCH1_ASSET_KEYS.length &&
     EXPECTED_BATCH1_ASSET_KEYS.every((k) => townAssetsKeysV2.includes(k)),
   JSON.stringify(townAssetsKeysV2),
