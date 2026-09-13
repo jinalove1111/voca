@@ -214,3 +214,17 @@ aria-label(1.3 배치 UX 다듬기와 인접한 접근성 보강)에 **이번 �
 이번 세션에 새로 만든 문서 2건: `docs/design/town/
 V2B_ARTWORK_DROPIN_CONTRACT.md`, `docs/design/town/
 V2A_ARTWORK_PROMPT_PACK.md`(둘 다 설계 문서, 코드 변경 없음).
+
+## 5. 2026-09-14 갱신 — §2.2 디자인 결정 부분 해소
+
+§2.2가 "16칸 격자를 씬에 축소 렌더할지, `gardenRichness`를 세분화할지는
+디자인 결정 필요"라고 남겨둔 질문은, PR #50(`9b72808`, `gardenStageSprite()`
+추가)과 PR #51(Batch-1 정원 5단계 실제 아트 연동)로 코드상 이미
+**`gardenRichness` 5단계 단일 스프라이트 방식**으로 사실상 결정·구현됐다
+(`TownAmbientLayer.jsx`, `paulTownV2` 플래그 뒤 — 오늘도 OFF, 학생 영향
+없음). 16칸 격자 축소 렌더 경로는 채택되지 않았다. §2.2가 여전히 열어둔
+진짜 미정 사항은 "당일 gardenPoints 변화의 당일 시각 반영"(§2.2 본문의
+med 리스크 항목)뿐이며, 이에 대한 구체 후보 설계는
+`docs/design/town/V2C_LEARNING_VISIBLE_GROWTH_DESIGN.md`(2026-09-14
+신규)를 참고 — 후보 A(구간 내 부분 채움, 무저장)를 1순위로 권고했다.
+`ONE_TOWN_CONSOLIDATION_PLAN.md` §9에도 동일 취지 addendum을 남겼다.
