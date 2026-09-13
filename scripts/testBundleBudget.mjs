@@ -158,21 +158,22 @@ check(`메인 청크 gzip ≤ 135KB (실측 ${fmtKB(mainGzip)}KB)`, mainGzip <= 
 section('3. 플래그 기본값(paulTownV1 OFF)')
 check("메인 청크에 'paulTownV1:!1'(minify된 false) 리터럴 존재", mainSrc.includes('paulTownV1:!1'))
 
-// ── 4. 마을 이미지 에셋 — 정확히 Batch 1 8개만 번들됨(그 외 0개) ─────────
+// ── 4. 마을 이미지 에셋 — 정확히 Batch 1+2 9개만 번들됨(그 외 0개) ───────
 // 2026-09-13 갱신 — Batch 1 아트워크 드롭인(src/assets/town/index.js의
 // TOWN_ASSETS 8개 키)으로 이 섹션의 전제가 바뀌었다. 예전엔 "마을 이미지
 // 0개"가 TOWN_ASSETS={} 상태와 일치하는 유일하게 옳은 값이었지만, 이제는
-// "정확히 이 8개만 있고 그 이상은 없음"이 옳은 값이다 — testTownUiStatic.mjs/
+// "정확히 이 8개만 있고 그 이상은 없음"이 옳은 값이었다 — testTownUiStatic.mjs/
 // testTownV2Static.mjs가 이미 겪은 것과 동일한 종류의 전제 갱신(그 두
 // 파일과 이 섹션 모두 같은 근본 사실—TOWN_ASSETS의 실제 키 목록—을 서로
-// 다른 관점에서 검사한다: 소스 코드 vs 번들 산출물).
-section('4. 마을 이미지 에셋 — Batch 1 8개만 번들, 그 외 0개')
+// 다른 관점에서 검사한다: 소스 코드 vs 번들 산출물). 2026-09-14에 Batch 2
+// 첫 자산(book-shop)이 추가되어 9개로 갱신.
+section('4. 마을 이미지 에셋 — Batch 1+2 9개만 번들, 그 외 0개')
 const TOWN_ASSET_URL_RE = /assets\/town\//
 check('메인 청크에 assets/town/ 경로 문자열 0건(Vite가 소스 폴더 구조를 산출물 URL에 남기지 않음)', !TOWN_ASSET_URL_RE.test(mainSrc))
 check('TownScreen 청크에 assets/town/ 경로 문자열 0건(위와 동일 이유)', !TOWN_ASSET_URL_RE.test(townSrc))
 const KNOWN_SAFE_IMAGE_PREFIX = /^(paul_|favicon\.)/
 const EXPECTED_BATCH1_IMAGE_BASENAMES = [
-  'my-house', 'british-cottage', 'tree',
+  'my-house', 'british-cottage', 'book-shop', 'tree',
   'garden-stage-0', 'garden-stage-1', 'garden-stage-2', 'garden-stage-3', 'garden-stage-4',
 ]
 // Vite는 해시를 붙여 `<basename>-<hash>.<ext>`로 내보낸다(예:
@@ -184,7 +185,7 @@ const strayImages = assetFiles.filter(
   (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f),
 )
 check(
-  '마을 이미지 중 Batch 1 8개(집/코티지/나무/정원 5단계) 외의 예상치 못한 파일이 dist/assets에 없음',
+  '마을 이미지 중 Batch 1+2 9개(집/코티지/책방/나무/정원 5단계) 외의 예상치 못한 파일이 dist/assets에 없음',
   strayImages.length === 0,
   strayImages.length > 0 ? strayImages.join(', ') : undefined,
 )
@@ -193,7 +194,7 @@ const foundBatch1Bases = new Set(
   foundBatch1.map((f) => EXPECTED_BATCH1_IMAGE_BASENAMES.find((base) => f.startsWith(`${base}-`) || f === `${base}.webp`)),
 )
 check(
-  'Batch 1 8개 asset_key가 전부 dist/assets에 정확히 존재(webp 1개씩)',
+  'Batch 1+2 9개 asset_key가 전부 dist/assets에 정확히 존재(webp 1개씩)',
   EXPECTED_BATCH1_IMAGE_BASENAMES.every((base) => foundBatch1Bases.has(base)),
   `found=${[...foundBatch1Bases].join(',')}`,
 )
