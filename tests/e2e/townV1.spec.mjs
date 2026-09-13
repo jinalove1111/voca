@@ -442,8 +442,20 @@ export async function run(browser, baseURL) {
       const treeCell = page.getByRole('button', { name: /^나무 —/ })
       const treePlaced = await waitUntil(() => treeCell.isVisible().catch(() => false), { timeout: 10000 })
       r.check(`${name} 배치 — 나무(🌳)가 격자에 렌더됨`, !!treePlaced)
+      // 2026-09-13 — nature/tree 아트워크 드롭인(src/assets/town/index.js)
+      // 이후 townAsset('nature/tree')가 더 이상 null이 아니라 실제 이미지
+      // URL을 반환해, TownGrid.jsx가 🌳 이모지 대신 <img>를 렌더할 수
+      // 있다(TownGrid.jsx: asset && <img .../> vs !asset && <span>emoji)
+      // — 어느 쪽이든 "나무가 시각적으로 표시됨"이라는 계약은 동일하므로
+      // 이모지 단독 요구를 emoji-또는-image로 완화한다(에셋 부재 시에도,
+      // 도착 후에도 항상 PASS).
       const treeEmojiVisible = await page.getByText('🌳', { exact: true }).isVisible().catch(() => false)
-      r.check(`${name} 배치 — 격자 셀에 🌳 이모지 표시(에셋 미등록 폴백)`, treeEmojiVisible)
+      const treeImageVisible = await treeCell.locator('img').first().isVisible().catch(() => false)
+      r.check(
+        `${name} 배치 — 격자 셀에 나무 비주얼 표시(🌳 이모지 또는 실제 아트워크 이미지)`,
+        treeEmojiVisible || treeImageVisible,
+        `emoji=${treeEmojiVisible} image=${treeImageVisible}`,
+      )
 
       // ── 이동 ─────────────────────────────────────────────────────────
       await treeCell.click()
@@ -492,9 +504,12 @@ export async function run(browser, baseURL) {
       r.check(`${name} 재배치 — 새로고침 전 나무가 격자에 표시됨`, !!treePlacedAgain)
 
       if (isPhase10Viewport(vp)) {
-        const treeEmojiCountAfterRapidTap = await page.getByText('🌳', { exact: true }).count()
-        r.check(`${name} PHASE10 — 빈 칸 연타(rapid tap) 후 나무 이모지가 격자에 정확히 1개만 표시됨(중복 배치 없음)`,
-          treeEmojiCountAfterRapidTap === 1, `count=${treeEmojiCountAfterRapidTap}`)
+        // 2026-09-13 — 🌳 이모지 대신 실제 이미지가 렌더될 수 있어(위와 동일
+        // 사유) 이모지 glyph 개수 대신, 렌더 방식과 무관한 aria-label 기반
+        // 셀 버튼 개수(정확히 1개여야 중복 배치가 없다는 뜻)로 확인한다.
+        const treeCellCountAfterRapidTap = await page.getByRole('button', { name: /^나무 —/ }).count()
+        r.check(`${name} PHASE10 — 빈 칸 연타(rapid tap) 후 나무가 격자에 정확히 1개만 표시됨(중복 배치 없음, 이모지/이미지 무관)`,
+          treeCellCountAfterRapidTap === 1, `count=${treeCellCountAfterRapidTap}`)
         await page.getByRole('button', { name: '🎁 보관함' }).click()
         const treeStillInNotPlacedList = await page.getByRole('button', { name: '마을에 놓기' }).isVisible().catch(() => false)
         r.check(`${name} PHASE10 — 연타 배치 후 보관함 "마을에 놓기" 목록에 나무가 더 이상 없음(중복 배치 없음)`, !treeStillInNotPlacedList)
