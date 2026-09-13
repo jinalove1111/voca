@@ -139,7 +139,7 @@ export default function TownScreenV2({ studentData, townShop, onBack, gardenPoin
   const goal = nearGoal(catalog, starsEarned)
 
   return (
-    <div className="min-h-screen p-4 pb-24" data-testid="town-screen-v2">
+    <div className="min-h-screen p-4 pb-[max(6rem,env(safe-area-inset-bottom))]" data-testid="town-screen-v2">
       <div className="max-w-lg mx-auto pt-2 mb-4">
         <button onClick={onBack} className="min-h-[44px] py-3 px-2 -my-3 -mx-2 text-purple-400 text-sm font-bold btn-press hover:text-purple-600">
           ← Paul Town
@@ -159,11 +159,11 @@ export default function TownScreenV2({ studentData, townShop, onBack, gardenPoin
         <PaulGuide guide={guide} />
 
         {toast && (
-          <div className="bg-emerald-50 text-emerald-700 text-sm font-bold text-center rounded-2xl p-3">{toast}</div>
+          <div role="status" aria-live="polite" className="bg-emerald-50 text-emerald-700 text-sm font-bold text-center rounded-2xl p-3">{toast}</div>
         )}
 
         {mode.kind !== 'idle' && (
-          <div className="flex items-center justify-between gap-2 bg-purple-50 rounded-2xl p-3">
+          <div role="status" aria-live="polite" className="flex items-center justify-between gap-2 bg-purple-50 rounded-2xl p-3">
             <p className="text-xs font-bold text-purple-600">
               {mode.kind === 'placing'
                 ? `${(itemById[mode.itemId] && itemById[mode.itemId].name) || ''}을(를) 놓을 자리를 선택하세요`

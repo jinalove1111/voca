@@ -12,7 +12,16 @@
 // 트리에서 통째로 제외됨). 장식 div는 그대로 aria-hidden 유지하고, sr-only
 // 문장만 그 div 밖(형제, aria-hidden 아님)으로 뺀다 — 이 파일이 순수 장식
 // 레이어에서 유일하게 스크린리더에 노출해야 하는 문장이라 Fragment로 감싼다.
-import { HOME_CELL, anchorFor, Z_LAYERS } from '../../../utils/town/townScene'
+//
+// 2026-09-13 드롭인 아트 준비(시각 변화 없음) — 화단(garden-bed) 박스
+// 안쪽에, 기존 STAGE_EMOJI 군집(장식 flavor, 그대로 유지) "뒤"에 화단 배경
+// 스프라이트를 조건부로 추가한다. 오늘은 `TOWN_ASSETS`가 비어 있어
+// `townAsset(...)`이 항상 null을 반환하므로 이 레이어는 아무것도 렌더하지
+// 않고(출력이 기존과 byte-for-byte 동일), 실제 `nature/garden-stage-N`
+// 아트가 `TOWN_ASSETS`에 채워지는 순간 코드 변경 없이 자동으로 나타난다.
+import { HOME_CELL, anchorFor, Z_LAYERS, gardenStageSprite } from '../../../utils/town/townScene'
+import { townAsset } from '../../../assets/town'
+import TownSprite from './TownSprite'
 
 const STAGE_EMOJI = {
   0: [],
@@ -27,6 +36,8 @@ export default function TownAmbientLayer({ richness, gardenPoints }) {
   const emojis = STAGE_EMOJI[r.stage] || []
   const homeAnchor = anchorFor(HOME_CELL.x, HOME_CELL.y)
   const points = Number.isFinite(Number(gardenPoints)) && Number(gardenPoints) > 0 ? Number(gardenPoints) : 0
+  const gardenBgSprite = gardenStageSprite(r.stage)
+  const gardenBgAsset = townAsset(gardenBgSprite.assetKey)
 
   return (
     <>
@@ -39,6 +50,11 @@ export default function TownAmbientLayer({ richness, gardenPoints }) {
           className="absolute rounded-[50%] bg-[#c9a227]/15 border border-[#8fb37a]/40 flex flex-wrap items-center justify-center gap-0.5 overflow-hidden"
           style={{ left: '2%', top: '12%', width: '30%', height: '22%' }}
         >
+          {gardenBgAsset && (
+            <div className="absolute inset-0 -z-10">
+              <TownSprite sprite={gardenBgSprite} className="w-full h-full" />
+            </div>
+          )}
           {r.stage === 0 ? (
             <span className="text-lg opacity-40">🌱</span>
           ) : (

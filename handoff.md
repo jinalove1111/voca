@@ -1,15 +1,117 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-13 (136차 — Paul Town V2-A 야간 세션: PR #49
-생성(https://github.com/jinalove1111/voca/pull/49, base main 6791b4a,
-REVIEW ONLY, DO NOT MERGE)·Release Gate GREEN(1차 run FAIL 13m10s는
-CI 얕은 체크아웃에서 `testTownV2Static`의 api/*.sql diff 검사가
-`origin/main` 참조 실패를 FAIL로 오집계한 CI/LOCAL-GUARD ARTIFACT →
-SKIP+note 최소 수정 커밋 19195c0 → 2차 run PASS 21m35s), 야간 결함
-수정 커밋 4건(근접 목표 문구 조사, testTownV2Static CI-safe, 아트워크
-최종 사양·One-Town 통합 계획·V2-B/V2-C 로드맵 문서 3종), qa-reviewer
-독립 리뷰 18항목 PASS(Critical 0/Major 0), 로컬 Playwright 프리뷰
-Lv1/3/5/8 + 200%줌 격자 셀 0·오버플로 0. Production DB WRITE 0 ·
-merge 0 · deploy 0 · Kinney 무접촉. 135차 이하 보존)_
+_최종 갱신: 2026-09-13 (137차 — Paul Town V2-B 야간 세션: 아트워크
+드롭인 파이프라인 + 접근성/모바일 폴리시(REVIEW ONLY, 미merge·미배포).
+136차(V2-A) PR #49 merge·배포 확인 후 신규 브랜치
+`feat/paul-town-v2b-artwork-pipeline-2026-09-13`(main d05d659 기준) 생성.
+갭 분석 1건(TownAmbientLayer.jsx 정원 단계가 townAsset() 경로 미사용) →
+`assetManifest.js` 신규(P0 23개 자산 매니페스트) + `gardenStageSprite()`
++ 조건부 배경 스프라이트(오늘은 byte-identical, 아트 도착 시 코드 변경
+없이 표시), TownSheet 접근성(Escape/스크롤 잠금/포커스 이동·트랩/
+aria-modal/safe-area), TownScreenV2·TownObjectLayer aria 보강(회귀 1건
+발견·근본 수정: 이동/보관 aria-label 추가가 townV2.spec.mjs S4 role name
+계산을 깨뜨려 해당 2줄 제거). 신규 테스트
+testTownAssetManifest(456단언)+townV2ArtworkPipeline e2e(T1~T8), 회귀
+전량 PASS(testTownSceneV2 169/169·testTownV2Static 103/103·
+testTownUiStatic 95/95·testLazyChunkGuards 80/80), verify:e2e
+916/916(0 unmocked), build PASS. 로컬 verify:all은 메모리 부족(OOM-kill)
+2회로 미완주 → GitHub Release Gate에 위임(결과 대기, PR은 이 기록 이후
+생성). 문서 3종(V2B_ARTWORK_DROPIN_CONTRACT.md,
+V2A_ARTWORK_PROMPT_PACK.md, V2B_V2C_ROADMAP.md append). Production DB
+WRITE 0 · SQL 0 · api 0 · 경제/보상/별/XP/PD/학생 mutation 0 · 구매 0 ·
+플래그/환경 변경 0 · paulTownV2 OFF 유지 · merge 0 · deploy 0 · Kinney
+무접촉. 136차 이하 보존)_
+
+## 2026-09-13 (137차) — Paul Town V2-B 아트워크 드롭인 파이프라인 + 접근성/모바일 폴리시(REVIEW ONLY, 미merge·미배포)
+
+### 0. 안전 요약
+Production DB WRITE 0 · SQL 0 · api 0 · 경제/보상/별/XP/PD/학생 mutation
+0 · 구매 0 · Production 플래그/환경 변경 0 · paulTownV2 미활성화(기본
+OFF 유지) · merge 0 · deploy 0 · Kinney 무접촉 · 파괴적 git 0. 브랜치는
+V2-A와 별개로 신규 생성(main `d05d659` 기준), push 완료, PR은 이 세션
+마지막 단계에서 생성.
+
+### 1. 배경
+136차(V2-A) PR #49 merge·배포 완료 확인 후, V2-B(아트워크 드롭인
+파이프라인 + 접근성/모바일 폴리시) 6시간 야간 작업 지시. Phase 0
+재확인: main 헤드 `d05d659`(PR #49 merge 커밋), Production 배포 SHA
+동일 확인(번들 해시 일치), paulTownV2 기본 OFF 유지, prod:check 읽기
+전용 46/46 health PASS·DB WRITE 0.
+
+### 2. Phase 1 — 갭 분석
+기존 파이프라인(townCatalog.js assetKeyFor → spriteFor → TownSprite.jsx의
+townAsset(assetKey) → URL 있으면 img/없으면 이모지)은 이미 드롭인 준비
+완료 상태였음. 유일한 실제 갭 1건 발견: TownAmbientLayer.jsx의 정원
+단계(garden-stage) 렌더링이 STAGE_EMOJI 리터럴을 직접 그려 townAsset()
+경로를 전혀 타지 않음 — 실제 아트 도착 시 코드 변경 없이는 적용
+불가능한 유일한 컴포넌트였음.
+
+### 3. 구현(8커밋)
+`src/assets/town/assetManifest.js`(신규, TOWN_ASSET_MANIFEST — P0 23개:
+카탈로그 17종+my-house+정원 5단계, asset_key/파일명/폴더/캔버스/종횡비/
+앵커/footprint/z레이어/변형/우선순위, 렌더 경로 미연결·DB 가격/레벨/
+소유권과 완전 분리, getManifestEntry/manifestAssetKeys/isKnownAssetKey).
+`townScene.js`에 gardenStageSprite(stage) 추가(순수/additive, 기존
+export 무변경). `TownAmbientLayer.jsx`가 townAsset(gardenStageSprite(stage
+).assetKey) 존재 시에만 조건부 배경 스프라이트 렌더(오늘은 TOWN_ASSETS
+비어있어 출력 byte-identical, 실제 아트 도착 시 코드 변경 없이 자동
+표시) — 기존 STAGE_EMOJI 다중 이모지 군집 flavor는 그대로 유지.
+`TownSheet.jsx` 접근성 보강: Escape 닫기, body 스크롤 잠금(이전 inline
+overflow 값 캡처/복원), 열릴 때 패널로 포커스 이동+닫힐 때 이전 포커스
+복원, 패널 내부 Tab/Shift+Tab 포커스 트랩, aria-modal="true", 노치
+기기 safe-area 하단 여백(pb-8 → pb-[max(2rem,env(safe-area-inset-
+bottom))]) — 구현 중 훅 규칙 위반(조건부 return 이전에 훅 호출)
+발견·직접 수정. `TownScreenV2.jsx` 루트 safe-area 여백(pb-24 등가),
+토스트/모드 배너에 role="status" aria-live="polite" 추가(핸들러/상태/
+effect 무변경). `TownObjectLayer.jsx` 배치 버튼 aria-label에 "배치됨."
+접두(기존 "눌러서 이동하거나 보관해요" 문구 유지) — 이동/보관 버튼에
+별도 aria-label을 추가했다가(당초 지시) 시각 텍스트와 접근 가능한
+이름이 달라지는 WAI-ARIA 계산 규칙 때문에 기존 회귀 스위트
+townV2.spec.mjs S4(getByRole name:'이동')가 깨지는 실제 회귀를 테스트
+세션이 발견 → 해당 2줄 제거로 근본 수정(시각 텍스트 자체가 이미 명확한
+접근 가능한 이름).
+
+### 4. 발견·정정 2건(자기 검토)
+(a) my-house 매니페스트 항목이 -lights 변형에서 초안 작성 시 실수로
+제외됐던 것을 아트워크 드롭인 계약 문서 작성 중 재확인(FINAL 스펙
+165/172행)해 정정(variants: [] → ['my-house-lights']). (b) 위 3번
+항목의 이동/보관 aria-label 회귀 — 테스트 세션이 실측 재현 후 소스 2줄
+제거로 수정, 테스트도 함께 갱신.
+
+### 5. 테스트/검증
+`scripts/testTownAssetManifest.mjs`(신규, 456단언 — 매니페스트 유효성
+23개 항목 전 필드, 미지 asset_key 안전 폴백(null, throw 없음),
+gardenStageSprite clamp 0~4, 매니페스트 파일에 price/level/owned/
+purchase 등 경제 식별자 부재, TownAmbientLayer.jsx 드롭인 계약 정적
+확인) + `tests/e2e/townV2ArtworkPipeline.spec.mjs`(신규, T1~T8 — V2 OFF
+시 V1 격자 유지 회귀, 시트 Escape 닫기, 배경 스크롤 잠금+복원, 포커스
+이동+복원, 360/390/430 오버플로 0, 배치 aria-label "배치됨" 포함,
+reduced-motion 애니메이션 0, 경제 호출 0/구매 미증가) —
+registry.mjs·testBrowserE2E.mjs 등록. 회귀 확인: testTownSceneV2
+169/169, testTownV2Static 103/103, testTownUiStatic 95/95,
+testLazyChunkGuards 80/80(무변경), testRegistryCoverage PASS, build
+PASS. 전체 verify:e2e(신규 포함) 916/916 PASS, unmocked 요청 0. 로컬
+verify:all은 2회 시도 모두 머신 메모리 부족으로 강제종료(exit
+3221225794 = Windows OOM-kill 시그니처, 실제 테스트 실패 아님 — 다수
+무관 스크립트가 동일 종료 코드로 동시 실패한 패턴으로 확인) → 반복
+강행하지 않고 중단, GitHub Release Gate를 권위 있는 전체 검증으로
+위임(PR 생성 후 결과는 다음 기록에 남김). 실기기 대체 확인 불가(시간/
+메모리 제약) — 필요 시 후속 세션에서 재확인.
+
+### 6. 문서
+`docs/design/town/V2B_ARTWORK_DROPIN_CONTRACT.md`(235줄, P0 23개 자산의
+파일명/폴더/캔버스/앵커/footprint/z레이어/변형/폴백/검증 테스트 매핑,
+DB 비침범 원칙 명시), `docs/design/town/V2A_ARTWORK_PROMPT_PACK.md`
+(308줄, 자산별 생성 프롬프트 subject/카메라/조명/비율/크롭/투명/여백/
+앵커/금지 목록, 폴 캐릭터 제외 명시), `V2B_V2C_ROADMAP.md`에 야간 진행
+반영 append(22줄) — 이미지 생성 0.
+
+### 7. 미결/다음
+PR 미생성 상태로 이 기록 작성(다음 단계에서 push된 브랜치로 PR 생성
+예정, DO NOT MERGE), GitHub Release Gate 결과 대기, TownSheet 포커스
+트랩의 알려진 사소한 엣지 케이스(최초 Shift+Tab 시 배경 버튼으로
+포커스가 갈 수 있음 — 기능적 위해 없음, 폐쇄 수단이라 여전히 모달 범위
+내, V2-C 후속 다듬기 후보), 남은 V2-B 항목(소포 더미 UI, 죽은 props
+정리)은 V2B_V2C_ROADMAP.md 순서대로 다음 세션.
 
 ## 2026-09-13 (136차) — Paul Town V2-A 야간 세션: PR #49 생성·Release Gate GREEN, 최종 리뷰 결함 3건 수정, 아트워크 최종 사양·One-Town 계획·V2-B/C 로드맵(REVIEW ONLY, 미merge·미배포)
 

@@ -49,7 +49,7 @@ export default function TownObjectLayer({
         // 버튼을 아예 누를 수 없었다(2026-09-13 최종 리뷰 결함). 그 행에서만
         // 팝오버를 스프라이트 위(bottom-full)로 연다.
         const popoverVertical = p.y >= SCENE_ROWS - 1 ? 'bottom-full mb-1' : 'top-full mt-1'
-        const label = `${sprite.label || (item ? item.name : p.itemId)} — 눌러서 이동하거나 보관해요`
+        const label = `${sprite.label || (item ? item.name : p.itemId)} — 배치됨. 눌러서 이동하거나 보관해요`
 
         return (
           <div
