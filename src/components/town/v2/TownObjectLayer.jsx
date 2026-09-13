@@ -83,7 +83,6 @@ export default function TownObjectLayer({
                 <button
                   type="button"
                   onClick={() => onStartMove && onStartMove(p.placementId)}
-                  aria-label="이동하기"
                   className="min-h-[44px] px-3 rounded-xl bg-purple-100 text-purple-600 text-xs font-black btn-press"
                 >
                   이동
@@ -91,7 +90,6 @@ export default function TownObjectLayer({
                 <button
                   type="button"
                   onClick={() => onStore && onStore(p.placementId)}
-                  aria-label="보관하기"
                   className="min-h-[44px] px-3 rounded-xl bg-gray-100 text-gray-600 text-xs font-black btn-press"
                 >
                   보관
