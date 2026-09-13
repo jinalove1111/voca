@@ -122,6 +122,7 @@ async function main() {
       { name: '[stale-chunk]', modulePath: '../tests/e2e/staleChunk.spec.mjs' },
       { name: '[town-flag-xtab]', modulePath: '../tests/e2e/townFlagCrossTab.spec.mjs' },
       { name: '[town-v2]', modulePath: '../tests/e2e/townV2.spec.mjs' },
+      { name: '[town-v2-artwork]', modulePath: '../tests/e2e/townV2ArtworkPipeline.spec.mjs' },
       { name: '[town-pilot-allowlist]', modulePath: '../tests/e2e/townPilotAllowlist.spec.mjs' },
     ]
 
