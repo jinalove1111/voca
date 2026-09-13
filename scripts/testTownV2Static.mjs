@@ -126,13 +126,29 @@ check(
   !/isFeatureEnabled\(\s*['"]paulTownV1['"]\s*\)\s*&&\s*isFeatureEnabled\(\s*['"]paulTownV2['"]\s*\)/.test(appCode),
 )
 
-// ── 3. src/assets/town/index.js — 무변경(TOWN_ASSETS 여전히 빈 객체) ─────
-section('3. src/assets/town/index.js — 무변경')
+// ── 3. src/assets/town/index.js — 드롭인 아트 8개 키만, V2 전용 에셋은 0개 ──
+section('3. src/assets/town/index.js — 드롭인 아트 8개 키 외 무변경')
 const assetsIndexSrc = readSrc('src/assets/town/index.js')
 check('src/assets/town/index.js 존재', assetsIndexSrc !== null)
+// 2026-09-13 아트워크 드롭인(batch1)으로 TOWN_ASSETS가 8개 키(my-house/
+// british-cottage/tree/garden-stage-0..4)로 채워졌다 — 더 이상 빈 객체가
+// 아니다(scripts/testTownUiStatic.mjs의 동일 계약과 함께 유지). 이 섹션의
+// 핵심은 "V2 전용 새 정적 에셋이 추가로 생기지 않았다"는 것이므로, 정확히
+// 이 8개 키(V1/V2 공용 batch1)만 있고 그 이상은 없는지를 확인한다.
+const townAssetsBlockMatchV2 = assetsIndexSrc ? /export const TOWN_ASSETS\s*=\s*\{([\s\S]*?)\n\}/.exec(assetsIndexSrc) : null
+const townAssetsKeysV2 = townAssetsBlockMatchV2
+  ? Array.from(townAssetsBlockMatchV2[1].matchAll(/'([^']+)':/g)).map((m) => m[1])
+  : []
+const EXPECTED_BATCH1_ASSET_KEYS = [
+  'buildings/my-house', 'buildings/british-cottage', 'nature/tree',
+  'nature/garden-stage-0', 'nature/garden-stage-1', 'nature/garden-stage-2',
+  'nature/garden-stage-3', 'nature/garden-stage-4',
+]
 check(
-  'src/assets/town/index.js — TOWN_ASSETS는 여전히 빈 객체(V2도 새 정적 에셋 0개)',
-  !!assetsIndexSrc && /export const TOWN_ASSETS\s*=\s*\{\s*\}/.test(assetsIndexSrc),
+  'src/assets/town/index.js — TOWN_ASSETS가 정확히 batch1 8개 키만 포함(V2 전용 신규 에셋 0개)',
+  townAssetsKeysV2.length === EXPECTED_BATCH1_ASSET_KEYS.length &&
+    EXPECTED_BATCH1_ASSET_KEYS.every((k) => townAssetsKeysV2.includes(k)),
+  JSON.stringify(townAssetsKeysV2),
 )
 
 // ── 4. V1 파일 byte-identical(origin/main 대비) — V2가 V1을 건드리지 않음 ──
