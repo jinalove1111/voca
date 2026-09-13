@@ -55,16 +55,33 @@ function readSrc(rel) {
 }
 
 // ── 모듈 로드 ────────────────────────────────────────────────────────────
-// assetManifest.js/index.js — import 0(순수 모듈)이라 plain import로 충분.
+// assetManifest.js — import 0(순수 데이터 모듈)이라 plain import로 충분.
 const {
   TOWN_ASSET_MANIFEST, getManifestEntry, manifestAssetKeys, isKnownAssetKey,
 } = await import(`${pathToFileURL(path.join(ROOT, 'src/assets/town/assetManifest.js')).href}`)
-const { townAsset, TOWN_ASSETS } = await import(`${pathToFileURL(path.join(ROOT, 'src/assets/town/index.js')).href}`)
+
+const TMP_DIR = path.join(ROOT, 'scripts', '.tmp')
+mkdirSync(TMP_DIR, { recursive: true })
+
+// index.js — 2026-09-13부로 8개 .webp 정적 import가 생겨(Vite 전용 문법)
+// plain Node ESM 로더는 ERR_UNKNOWN_FILE_EXTENSION으로 죽는다(실측). 다른
+// 소스 코드는 손대지 않고, 이 스크립트만 esbuild의 'dataurl' loader로 각
+// .webp import를 실제 Vite 빌드와 동일한 "문자열 URL"(data: URL)로 치환해
+// 번들한다 — TOWN_ASSETS[key]가 프로덕션처럼 truthy 문자열이 되어 아래
+// townAsset() 폴백/비폴백 분기 테스트가 실제 동작을 그대로 반영한다.
+const INDEX_BUNDLE_PATH = path.join(TMP_DIR, 'townAssetsIndex.assetManifest.bundle.mjs')
+await esbuild.build({
+  entryPoints: ['src/assets/town/index.js'],
+  bundle: true,
+  format: 'esm',
+  platform: 'node',
+  outfile: INDEX_BUNDLE_PATH,
+  loader: { '.webp': 'dataurl' },
+})
+const { townAsset, TOWN_ASSETS } = await import(`${pathToFileURL(INDEX_BUNDLE_PATH).href}?t=${Date.now()}`)
 
 // townScene.js — townLayout.js/townLevel.js를 확장자 없는 상대 import로
 // 참조하는 Vite 관례라 esbuild로 번들해야 plain node에서 로드 가능.
-const TMP_DIR = path.join(ROOT, 'scripts', '.tmp')
-mkdirSync(TMP_DIR, { recursive: true })
 const SCENE_BUNDLE_PATH = path.join(TMP_DIR, 'townScene.assetManifest.bundle.mjs')
 await esbuild.build({
   entryPoints: ['src/utils/town/townScene.js'],
@@ -244,6 +261,54 @@ if (ambientSrc) {
     /STAGE_EMOJI\s*=\s*\{[\s\S]*?0:[\s\S]*?1:[\s\S]*?2:[\s\S]*?3:[\s\S]*?4:[\s\S]*?\}/.test(ambientSrc),
   )
   check('TownAmbientLayer.jsx — sr-only 문장에 "배운 단어" 텍스트 존재', /배운 단어/.test(ambientSrc))
+}
+
+// ── 7. gardenStageSprite label 계약 + TownAmbientLayer 단일/무조건부 렌더
+//      가드(2026-09-13 드롭인 아트 도착 후 필수화 — 이전 리뷰가 SHOULD FIX로
+//      플래그했던 갭) ────────────────────────────────────────────────────
+// 위 섹션 4/4b는 assetKey/footprint(정상 범위)만 검증했고 label 필드는 전혀
+// 검증하지 않았다 — gardenStageSprite()의 반환 계약 4개 필드(assetKey/emoji/
+// footprint/label) 중 label만 누락된 커버리지를 여기서 채운다. 마찬가지로
+// 4b(clamp 입력)도 assetKey만 검증했을 뿐 footprint/label이 clamp 이후에도
+// 여전히 올바른 값(null/'Garden')을 유지하는지는 검증하지 않았다.
+section('7. gardenStageSprite — label 계약(누락 커버리지 보강)')
+for (let n = 0; n <= 4; n++) {
+  const sprite = gardenStageSprite(n)
+  check(`gardenStageSprite(${n}).label === 'Garden'`, sprite.label === 'Garden', JSON.stringify(sprite))
+}
+
+section('7b. gardenStageSprite — 범위 밖/손상 입력에서도 footprint/label 계약 유지')
+for (const input of OUT_OF_RANGE_INPUTS) {
+  let sprite
+  try { sprite = gardenStageSprite(input) } catch { sprite = null }
+  if (sprite) {
+    check(`gardenStageSprite(${JSON.stringify(input)}).footprint === null`, sprite.footprint === null, JSON.stringify(sprite))
+    check(`gardenStageSprite(${JSON.stringify(input)}).label === 'Garden'`, sprite.label === 'Garden', JSON.stringify(sprite))
+  }
+}
+
+// TownAmbientLayer.jsx — 섹션 6은 "조건부 블록 안에 <TownSprite가 있다"는
+// 것만 확인했다. 그것만으로는 파일 다른 곳에 두 번째(무조건부) <TownSprite
+// 렌더가 추가로 있어도 못 잡는다 — "그 게이트가 배경 스프라이트를 유일하게
+// 무조건 지킨다"는 계약을 닫으려면 <TownSprite 렌더 총 개수가 정확히 1이고,
+// 그 유일한 렌더가 게이트보다 뒤에 나온다는 것까지 함께 확인해야 한다.
+section('7c. TownAmbientLayer.jsx — 배경 <TownSprite> 렌더가 유일하고 항상 게이트 뒤에만 존재')
+if (ambientSrc) {
+  const townSpriteRenderCount = countOccurrences(ambientSrc, '<TownSprite')
+  check('TownAmbientLayer.jsx — <TownSprite> 렌더가 정확히 1곳(다른 무조건부 렌더 없음)', townSpriteRenderCount === 1, `count=${townSpriteRenderCount}`)
+
+  const gateIdx = ambientSrc.indexOf('gardenBgAsset &&')
+  const renderIdx = ambientSrc.indexOf('<TownSprite')
+  check(
+    'TownAmbientLayer.jsx — 유일한 <TownSprite> 렌더가 gardenBgAsset && 게이트보다 뒤에 위치',
+    gateIdx !== -1 && renderIdx !== -1 && gateIdx < renderIdx,
+    `gateIdx=${gateIdx} renderIdx=${renderIdx}`,
+  )
+}
+
+function countOccurrences(src, needle) {
+  if (!src) return 0
+  return src.split(needle).length - 1
 }
 
 // ── 결과 ──────────────────────────────────────────────────────────────
