@@ -158,7 +158,7 @@ check(`메인 청크 gzip ≤ 135KB (실측 ${fmtKB(mainGzip)}KB)`, mainGzip <= 
 section('3. 플래그 기본값(paulTownV1 OFF)')
 check("메인 청크에 'paulTownV1:!1'(minify된 false) 리터럴 존재", mainSrc.includes('paulTownV1:!1'))
 
-// ── 4. 마을 이미지 에셋 — 정확히 Batch 1+2 12개만 번들됨(그 외 0개) ──────
+// ── 4. 마을 이미지 에셋 — 정확히 Batch 1+2 13개만 번들됨(그 외 0개) ──────
 // 2026-09-13 갱신 — Batch 1 아트워크 드롭인(src/assets/town/index.js의
 // TOWN_ASSETS 8개 키)으로 이 섹션의 전제가 바뀌었다. 예전엔 "마을 이미지
 // 0개"가 TOWN_ASSETS={} 상태와 일치하는 유일하게 옳은 값이었지만, 이제는
@@ -167,25 +167,26 @@ check("메인 청크에 'paulTownV1:!1'(minify된 false) 리터럴 존재", main
 // 파일과 이 섹션 모두 같은 근본 사실—TOWN_ASSETS의 실제 키 목록—을 서로
 // 다른 관점에서 검사한다: 소스 코드 vs 번들 산출물). 2026-09-14에 Batch 2
 // 첫 자산(book-shop), 두 번째 자산(red-post-box), 세 번째 자산(animals/cat),
-// 네 번째 자산(animals/owl)이 추가되어 12개로 갱신.
+// 네 번째 자산(animals/owl), 다섯 번째 자산(animals/puppy)이 추가되어
+// 13개로 갱신.
 //
-// ⚠ red-post-box·cat·owl은 실측(빌드 산출물 직접 확인)상 나머지 9개와
-// 다르게 동작한다 — 다른 발견 사항을 그대로 보고: red-post-box.webp(3670
-// 바이트)·cat.webp(2516바이트)·owl.webp(3822바이트)는 셋 다 Vite 기본
-// assetsInlineLimit(4096바이트) 미만이라 dist/assets에 별도 물리 파일로
-// 방출되지 않고, 참조하는 JS 청크 안에 data:image/webp;base64 URL로 직접
-// 인라인된다(나머지 9개는 전부 4096바이트 이상이라 물리 파일로 방출됨,
-// 최소 book-shop 10.21KB). owl.webp(3822바이트)는 한도에 특히 근접했지만
-// 실측 빌드 산출물(dist/assets에 owl-*.webp 부재, JS 청크에 세 번째
+// ⚠ red-post-box·cat·owl·puppy는 실측(빌드 산출물 직접 확인)상 나머지
+// 9개와 다르게 동작한다 — 다른 발견 사항을 그대로 보고: red-post-box.webp
+// (3670바이트)·cat.webp(2516바이트)·owl.webp(3822바이트)·puppy.webp(2710
+// 바이트)는 넷 다 Vite 기본 assetsInlineLimit(4096바이트) 미만이라
+// dist/assets에 별도 물리 파일로 방출되지 않고, 참조하는 JS 청크 안에
+// data:image/webp;base64 URL로 직접 인라인된다(나머지 9개는 전부 4096바이트
+// 이상이라 물리 파일로 방출됨, 최소 book-shop 10.21KB). puppy.webp도 실측
+// 빌드 산출물(dist/assets에 puppy-*.webp 부재, JS 청크에 네 번째
 // data:image/webp;base64 인스턴스 존재)로 인라인을 확정했다. 이는 Vite의
 // 표준 동작이며 회귀가 아니다 — 그래서 "물리 파일 9개" 계약과 "인라인
-// 3개" 계약을 분리해서 검사한다.
-section('4. 마을 이미지 에셋 — Batch 1+2 12개만 번들, 그 외 0개')
+// 4개" 계약을 분리해서 검사한다.
+section('4. 마을 이미지 에셋 — Batch 1+2 13개만 번들, 그 외 0개')
 const TOWN_ASSET_URL_RE = /assets\/town\//
 check('메인 청크에 assets/town/ 경로 문자열 0건(Vite가 소스 폴더 구조를 산출물 URL에 남기지 않음)', !TOWN_ASSET_URL_RE.test(mainSrc))
 check('TownScreen 청크에 assets/town/ 경로 문자열 0건(위와 동일 이유)', !TOWN_ASSET_URL_RE.test(townSrc))
 const KNOWN_SAFE_IMAGE_PREFIX = /^(paul_|favicon\.)/
-// 물리 파일로 방출될 것으로 기대되는 9개(red-post-box/cat/owl 제외 — 위 설명 참고).
+// 물리 파일로 방출될 것으로 기대되는 9개(red-post-box/cat/owl/puppy 제외 — 위 설명 참고).
 const EXPECTED_BATCH1_IMAGE_BASENAMES = [
   'my-house', 'british-cottage', 'book-shop', 'tree',
   'garden-stage-0', 'garden-stage-1', 'garden-stage-2', 'garden-stage-3', 'garden-stage-4',
@@ -199,7 +200,7 @@ const strayImages = assetFiles.filter(
   (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f),
 )
 check(
-  '마을 이미지 중 Batch 1+2 물리 파일 9개(집/코티지/책방/나무/정원 5단계; red-post-box/cat/owl은 인라인이라 물리 파일 목록에서 제외) 외의 예상치 못한 파일이 dist/assets에 없음',
+  '마을 이미지 중 Batch 1+2 물리 파일 9개(집/코티지/책방/나무/정원 5단계; red-post-box/cat/owl/puppy는 인라인이라 물리 파일 목록에서 제외) 외의 예상치 못한 파일이 dist/assets에 없음',
   strayImages.length === 0,
   strayImages.length > 0 ? strayImages.join(', ') : undefined,
 )
@@ -224,9 +225,13 @@ check(
   'owl은 물리 파일로 dist/assets에 존재하지 않음(3.8KB < 4KB 인라인 한도, 의도된 Vite 동작)',
   !assetFiles.some((f) => f.startsWith('owl-') || f === 'owl.webp'),
 )
+check(
+  'puppy는 물리 파일로 dist/assets에 존재하지 않음(2.7KB < 4KB 인라인 한도, 의도된 Vite 동작)',
+  !assetFiles.some((f) => f.startsWith('puppy-') || f === 'puppy.webp'),
+)
 const inlinedWebpJsFiles = jsFiles.filter((f) => readAsset(f).includes('data:image/webp;base64,'))
 check(
-  '10번째 자산(red-post-box)·11번째 자산(cat)·12번째 자산(owl)이 최소 1개 JS 청크에 data:image/webp;base64 URL로 실제 인라인됨(자산이 조용히 누락되지 않음)',
+  '10번째 자산(red-post-box)·11번째 자산(cat)·12번째 자산(owl)·13번째 자산(puppy)이 최소 1개 JS 청크에 data:image/webp;base64 URL로 실제 인라인됨(자산이 조용히 누락되지 않음)',
   inlinedWebpJsFiles.length >= 1,
   `matched=${inlinedWebpJsFiles.join(',') || '(none)'}`,
 )
@@ -235,8 +240,8 @@ const totalInlinedWebpOccurrences = jsFiles.reduce(
   0,
 )
 check(
-  '인라인된 data:image/webp;base64 URL 발생 횟수가 정확히 3건(red-post-box 1 + cat 1 + owl 1, 중복/누락 없음)',
-  totalInlinedWebpOccurrences === 3,
+  '인라인된 data:image/webp;base64 URL 발생 횟수가 정확히 4건(red-post-box 1 + cat 1 + owl 1 + puppy 1, 중복/누락 없음)',
+  totalInlinedWebpOccurrences === 4,
   `count=${totalInlinedWebpOccurrences}`,
 )
 
