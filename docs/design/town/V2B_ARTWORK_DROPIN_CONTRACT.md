@@ -233,3 +233,38 @@ DOM을 추가하고 null일 때는 추가하지 않는지(스냅샷 또는 정�
 _작성: docs-maintainer, 2026-09-13(V2-B 세션). 코드/문서 실측 확인만
 반영했으며 추측 수치를 넣지 않았다 — 애매한 값은 "AMBIGUOUS"로,
 불일치는 각주로 정직하게 남겼다._
+
+## 10. 2026-09-14 갱신 — Batch 1 8개 자산 실제 라이브 전환
+
+이 섹션만 추가(append)한다 — 위 1~9절의 기존 행/표는 하나도 수정하지
+않았다. `src/assets/town/index.js`와 `git ls-files src/assets/town/
+buildings src/assets/town/nature`를 이 세션에서 직접 확인했다.
+
+**실제 라이브 전환된 8개 asset_key**(PR #51 병합, `src/assets/town/
+index.js`의 `TOWN_ASSETS`에 실제 WebP/PNG import로 채워짐, Production에
+이미 배포됨 — 단 기능 플래그 `paulTownV2`는 여전히 OFF라 학생 화면에는
+아직 노출되지 않는다):
+
+- `buildings/my-house`
+- `buildings/british-cottage`
+- `nature/tree`
+- `nature/garden-stage-0`
+- `nature/garden-stage-1`
+- `nature/garden-stage-2`
+- `nature/garden-stage-3`
+- `nature/garden-stage-4`
+
+이로써 위 2절(GROUP C)의 `buildings/my-house`/`buildings/
+british-cottage`, 3절(GROUP D-1)의 `nature/tree`, 6절(GROUP D-2)의
+정원 5단계는 "폴백: 이모지" 서술이 더 이상 최신이 아니다 — 이 8개는
+실제 이미지 파일로 렌더된다(단, 플래그가 켜질 때만 화면에 실제로
+보이는 코드 경로 자체는 이 섹션이 새로 바꾸지 않는다).
+
+**변경되지 않은 나머지 15개**: 이 문서의 2절(GROUP C 나머지 5종:
+book-shop/cafe/english-school/clock-tower/bridge), 3절(GROUP D-1
+나머지 2종: flower-garden/stone-fountain), 4절(GROUP E 5종), 5절
+(GROUP F 3종)에 적힌 "폴백: 이모지" 서술은 **여전히 정확하다** —
+`TOWN_ASSETS`에 이 15개 키는 아직 채워지지 않았다(`src/assets/town/
+index.js` 4~10행 헤더 주석이 이를 명시). 이 15개의 커미션 계획은
+`docs/design/town/V2A_BATCH2_COMMISSION_PACK.md`(2026-09-14 작성)를
+참고한다.
