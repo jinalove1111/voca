@@ -1,5 +1,104 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-14 (138차 — PR #52 프로덕션 클로즈아웃 확인 +
+_최종 갱신: 2026-09-14 (139차 — Batch 3 자율 세션: 최종 8자산 재검증
+(신규 통과 없음, bench/street-lamp 계속 REGEN_REQUIRED) + 아트 검증 도구
+신설(validateTownAssetCandidate.mjs) + Town V2 보안/코드품질 리뷰(무결점) +
+ONE_TOWN/로드맵 문서를 실제 코드와 대조 재확인(재작성 없음). PR 미오픈
+(배치 미완료). Production 무접촉·미배포·미merge. 138차 이하 보존)_
+
+## 2026-09-14 (139차) — Batch 3 자율 세션(최종 intake + 파이프라인 하드닝 + V2 리뷰)
+
+### 0. 안전 요약
+
+Production DB WRITE 0 · SQL 0 · api 0 · 경제/보상/별/XP/PD/학생 mutation
+0 · 구매 0 · Production 플래그/환경 변경 0 · paulTownV2 미활성화(기본
+OFF 유지) · merge 0 · deploy 0 · 파괴적 git 0 · 기존 미추적 SQL/운영
+파일 16개 전부 무접촉 확인.
+
+### 1. 최종 8자산 재검증(운영자 "bench/street-lamp 신규 후보 공급" 전제 확인)
+
+디스크 실측 결과 bench4.png/street lamp1.png는 직전 세션에서 이미 평가한
+파일과 해시 동일(변경 없음) — "새 후보가 공급됐다"는 전제를 신뢰하지 않고
+직접 재확인한 결과였다(규칙: 전제를 그대로 믿지 않고 실측). 결론 불변:
+bench 4연속 반려(동일 baked radial glow), street-lamp 유효 후보 없음
+(lamp3=올바른 비율이나 점등, lamp6/7=shop-lamp에 이미 배정). 8자산 중
+6개(bridge/english-school/town-sign/clock-tower/shop-lamp/stone-fountain)
+APPROVED 이상, 2개(bench/street-lamp) REGEN_REQUIRED — Phase 3 게이트
+("8개 전부 A/B") 미충족으로 통합/PR 보류.
+
+### 2. 아트 후보 자동 검증 도구 신설
+
+`scripts/validateTownAssetCandidate.mjs` — 외부 의존성 0개, Node 내장
+zlib만으로 PNG 디코더 직접 구현(PIL 디코더와 픽셀 단위 0-diff로 정확성
+검증). 실제 알파 채널/여백/치수/중복 해시/매니페스트 커버리지(고아
+자산·누락 변형)를 객관적으로 검증하는 3개 모드(단일 후보 대조/--audit/
+--hash). 개발 중 실측으로 발견한 한계 2건을 도구 자체에 정직하게
+기록: (1) bbox 기반 종횡비는 가는 돌출부/원거리 저알파 노이즈로 왜곡
+가능(이미 배선된 special/bridge로 재현 확인, 게이트하지 않음), (2)
+partial-alpha 비율만으로는 baked glow(bench, 실제 결함)와 복잡한
+윤곽선의 정상 안티에일리어싱(special/bridge, 오탐)을 구분 불가함이
+실측 확인됨(자동 경고 포기, 참고 수치만 출력). `--audit` 실행 결과
+매니페스트 23개 중 17개 WIRED·6개 SPEC_ONLY·고아 자산 0건 확인.
+
+### 3. Town V2 보안/코드품질 리뷰(security-reviewer 서브에이전트, read-only)
+
+Critical/High/Medium 발견 0건. Low 1건(정보용) — 정적 import된 Town
+이미지는 배포 후 URL 404 시 이모지로 폴백하는 경로가 없음(V1부터의
+기존 패턴, 이번 diff가 만든 문제 아님, 후속 검토 후보로만 기록). 확인된
+항목: lazy chunk 복구(공용 `AppErrorBoundary` 재사용, Town 전용 우회
+없음)·학생별 상태(Town은 localStorage 미사용, 전부 `studentId` UUID로
+서버/`studentData` 키잉)·크로스student 누수 없음·중복 구매/배치 이중
+방어(`purchasingRef` + `already_placed`/`cell_occupied` + 최신성 기반
+merge)·`townAsset()` 5개 호출부 전부 이모지 폴백 확인·`paulTownV2`
+기본 OFF, 이번 diff가 플래그/게이팅 로직 무변경·디버그 코드/console
+노이즈 0건.
+
+### 4. 기존 설계 문서 재확인(재작성 없음, 규칙 3)
+
+`ONE_TOWN_CONSOLIDATION_PLAN.md`(KEEP/MERGE/RETIRE/DEFER 판정)와
+`V2B_V2C_ROADMAP.md`(PR-1~10 순서)를 실제 코드와 대조 재확인 —
+둘 다 여전히 정확함을 확인(재작성 불필요). 실측으로 검증한 현재 상태:
+1.1(바텀시트 접근성, Escape/스크롤잠금/포커스복귀) 완료 확인,
+1.6(죽은 props: `freeAnchors`의 `mode`, `export { TOWN_LEVELS }`) 여전히
+미착수, 1.3(팝오버 바깥 탭 닫기) 여전히 미착수, 1.2(소포 더미 표현)
+여전히 미착수, 1.5(safe-area 일부 적용됨, 가로모드 미커버). PR #44
+여전히 OPEN(Registry 미등록, Release Gate FAIL 상태 불변). 다음
+착수 후보 3건(전부 클라이언트 전용, DB/경제/아트/운영자 결정 불필요):
+1.6 죽은 props 정리(가장 작음) → 1.3 배치 UX(바깥 탭 닫기) →
+1.2 소포 더미 표현(V1 공유 컴포넌트라 V1 회귀 확인 필요, medium).
+
+### 5. 시각 QA — 제약 사항 정직히 기록
+
+라이브 인앱 스크린샷 QA는 두 가지 이유로 수행하지 않았다: (1) 실제
+로그인+Supabase 세션은 실수로 구매/배치 등 DB WRITE를 일으킬 위험이
+있어 금지 원칙과 충돌, (2) 로컬 정적 서버 기동은 이 세션의 권한
+정책(Expose Local Services)에 의해 거부됨(우회 시도 안 함, 정직히
+기록). 대신 이미 개별 검증된 각 자산 이미지의 육안 검토(이번 세션
+전체) + `assetManifest.js`의 정확한 픽셀 치수 기반 상대 스케일 대조
+(book-shop/cafe 256x320 vs english-school 256x308 동급, town-sign
+144x216 vs red-post-box 144x216 동급 footprint, bridge 320x160
+와이드/로우 확인 완료)로 대체. 기존 정적 테스트(`testTownSceneV2`
+169/169, `testTownV2Static` 103/103)가 씬 구조/클리핑/계층 계약을
+이미 회귀 없이 통과.
+
+### 6. 테스트
+
+`npm run build` PASS · `testTownUiStatic` 96/96 · `testTownV2Static`
+103/103 · `testBundleBudget` 17/17 · `testTownAssetManifest` 487/487 ·
+`testTownCatalog` 50/50 · `testTownSceneV2` 169/169 — 전부 PASS,
+회귀 0건. `verify:e2e`/`verify:all`은 배치가 아직 미완료(bench/
+street-lamp 대기)라 "브랜치가 최종 상태에 도달한 뒤 1회만 실행"
+원칙에 따라 이번 세션엔 보류(불필요한 반복 실행 지양) — 배치 완료 후
+PR 직전에 1회 실행 예정.
+
+### 7. 다음 액션(운영자)
+
+- bench: 배경 없는 순수 컷아웃(글로우/비네트 없이)으로 재출력.
+- street-lamp: lamp6.png/lamp7.png보다 명확히 슬림/장신인 별도
+  독립형(비벽부착) unlit 포스트 디자인 필요(같은 파일 재사용 불가).
+- 8개 전부 통과 시: 1회 전체 회귀(verify:e2e/verify:all) → PR 1개 오픈
+  (merge는 운영자 승인 후).
+
+138차(PR #52 프로덕션 클로즈아웃 확인 +
 Paul Town Batch 3(나머지 8개 자산) 진행 + 아트워크 캐노니컬 계약/배치
 워크플로우 신설. PR #52(book-shop/red-post-box/cat/owl/puppy/cafe)
 merge SHA `6778272` main 반영·배포 확인(번들 해시 바이트 일치·HTTP 200·
