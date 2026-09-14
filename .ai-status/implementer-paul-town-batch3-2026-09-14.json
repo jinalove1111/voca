@@ -1,12 +1,12 @@
 {
   "agent_name": "implementer",
-  "role": "코드 구현 + 문서화",
+  "role": "코드 구현 + 문서화 + 자율 세션 리뷰",
   "task_id": "paul-town-batch3-2026-09-14",
-  "task": "PR #52 프로덕션 클로즈아웃 확인 + Paul Town Batch 3(나머지 8개 자산) 검증/일부 통합 + 아트워크 캐노니컬 계약/배치 워크플로우 신설",
+  "task": "PR #52 프로덕션 클로즈아웃 확인 + Paul Town Batch 3(나머지 8개 자산) 검증/일부 통합 + 아트워크 캐노니컬 계약/배치 워크플로우 신설 + 자율 6시간 세션(파이프라인 하드닝/V2 리뷰)",
   "status": "blocked",
-  "progress": 45,
+  "progress": 55,
   "started_at": "2026-09-14T04:00:00+09:00",
-  "updated_at": "2026-09-14T05:30:00+09:00",
+  "updated_at": "2026-09-14T06:30:00+09:00",
   "files_owned": [
     "src/assets/town/index.js",
     "src/assets/town/special/bridge.png",
@@ -24,6 +24,7 @@
     "scripts/testTownUiStatic.mjs",
     "scripts/testTownV2Static.mjs",
     "scripts/testBundleBudget.mjs",
+    "scripts/validateTownAssetCandidate.mjs",
     "docs/design/town/PAUL_TOWN_ASSET_CONTRACT.md",
     "DEVELOPER_GUIDE.md",
     "handoff.md"
@@ -34,9 +35,16 @@
     "docs/design/town/V2A_ARTWORK_SPEC_FINAL.md",
     "docs/design/town/V2A_ARTWORK_PROMPT_PACK.md",
     "docs/design/town/V2A_BATCH2_COMMISSION_PACK.md",
-    "docs/design/town/V2A_ASSET_SPEC.md"
+    "docs/design/town/V2A_ASSET_SPEC.md",
+    "docs/design/town/ONE_TOWN_CONSOLIDATION_PLAN.md",
+    "docs/design/town/V2B_V2C_ROADMAP.md",
+    "src/config/features.js",
+    "src/components/town/v2/TownSheet.jsx",
+    "src/components/town/v2/TownObjectLayer.jsx",
+    "src/components/town/v2/TownScreenV2.jsx",
+    "src/utils/town/townScene.js"
   ],
-  "summary": "PR #52 merge SHA 6778272가 main/production에 반영됐음을 번들 해시 대조로 확인. art/batch3-remaining-town-assets-2026-09-14 브랜치에 3자산(special/bridge, special/english-school, decorations/town-sign) WIRED, build+3개 test contract 전부 PASS, 9커밋. 나머지 5자산은 후보 검증 결과 REGEN_REQUIRED(stone-fountain만 2차 재제출로 APPROVED, 미wire). 운영자 지시로 batch-first 워크플로우 전환 — 신규 캐노니컬 계약 문서(PAUL_TOWN_ASSET_CONTRACT.md) + DEVELOPER_GUIDE.md 배치 워크플로우 섹션 작성 완료.",
-  "blocker": "clock-tower/bench/shop-lamp/street-lamp 4개 자산이 아직 REGEN_REQUIRED — 유효한 재생성 후보 도착 전까지 배치를 PR로 마감할 수 없음. stone-fountain은 APPROVED 상태로 대기 중(운영자가 단독 wire 승인 또는 나머지 후보 도착까지 대기 여부 결정 필요).",
-  "next_action": "운영자가 clock-tower(숫자/PAUL TOWN 텍스트 제거)/bench(배경 글로우 없는 클린 컷아웃)/shop-lamp(독립형+unlit 신규 후보)/street-lamp(lamp3.png 동일 디자인 unlit 재출력) 재생성본을 제출하면, 배치 전체를 한 번에 §4 export 파이프라인으로 처리→wire→visual QA→전체 회귀 1회→art/batch3 브랜치에 커밋→PR 1개 오픈. stone-fountain wire 시점은 운영자 확인 대기."
+  "summary": "PR #52 merge SHA 6778272가 main/production에 반영됐음을 확인. art/batch3-remaining-town-assets-2026-09-14 브랜치에 3자산(bridge/english-school/town-sign) WIRED, 나머지 5자산은 검증 결과 6/8 APPROVED 이상(clock-tower/shop-lamp/stone-fountain 추가 승인)이나 bench/street-lamp 2개가 4~여러 차례 재제출에도 REGEN_REQUIRED 유지 — Phase 3 게이트(8개 전부 A/B) 미충족으로 PR 미오픈. 자율 세션 동안: (1) 아트 후보 자동 검증 도구 신설(validateTownAssetCandidate.mjs, PIL과 픽셀 0-diff 검증 완료), (2) Town V2 보안/코드품질 리뷰 완료(무결점, Low 1건 정보성), (3) ONE_TOWN/로드맵 문서를 실제 코드와 대조 재확인(재작성 없음, 다음 착수 후보 3건 도출: 1.6 죽은props→1.3 배치UX→1.2 소포더미), (4) 타겟 테스트 전량 재실행 PASS. 라이브 인앱 시각 QA는 DB-write 리스크(실 로그인) + 로컬 서버 기동 권한 거부로 미실시, 대신 개별 자산 육안검토+매니페스트 치수 대조로 대체(정직히 기록).",
+  "blocker": "bench(baked radial glow, 안전 처리로 제거 불가)와 street-lamp(shop-lamp와 구분되는 독립형 unlit 슬림/장신 후보 없음) 2개 자산이 여러 차례 재제출에도 여전히 REGEN_REQUIRED — 8개 전부 A/B 통과 전까지 통합/PR 진행 불가.",
+  "next_action": "운영자가 bench(글로우/비네트 없는 순수 컷아웃)와 street-lamp(shop-lamp와 다른 파일의 독립형 unlit 슬림/장신 디자인) 재생성본을 제출하면: clock-tower/shop-lamp/stone-fountain(이미 APPROVED)까지 포함해 8개 자산을 한 번에 export+wire → 전체 회귀(verify:e2e/verify:all) 1회 → art/batch3 브랜치에 커밋 → PR 1개 오픈(merge는 운영자 승인 후). 코드 개선 다음 후보(아트 무관, 언제든 착수 가능): 1.6 townScene.js 죽은 props 정리(freeAnchors의 mode 매개변수, export TOWN_LEVELS 재노출) — 가장 작고 독립적."
 }
