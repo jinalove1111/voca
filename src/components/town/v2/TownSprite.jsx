@@ -5,6 +5,13 @@
 // (townAsset() 호출부 단일화). 에셋이 아직 없으면(TOWN_ASSETS = {} 고정,
 // src/assets/town/index.js) 항상 null이 돌아오고, 이 컴포넌트는 조용히
 // 이모지로 폴백한다 — 기능이 이미지 부재로 깨지지 않는다(V1과 동일 원칙).
+//
+// 2026-09-14 — 런타임 이미지 로드 실패 폴백(보안 리뷰 발견 사항, Low).
+// townAsset()이 URL을 반환해도 배포 이후 해시된 자산 파일이 사라지면
+// (예: CDN 캐시 정리, 배포 스킵) <img>가 깨진 이미지 아이콘을 그대로
+// 노출했다 — onError 시 1회만 이모지 폴백으로 전환한다(재시도/네트워크
+// 폭주 없음, assetKey가 바뀌면 다음 자산에 대해 다시 시도).
+import { useState, useEffect } from 'react'
 import { townAsset } from '../../../assets/town'
 
 // 2026-09-13 비주얼 폴리시 — 이전 clamp는 최대값이 작아(3rem) 390px
@@ -20,8 +27,15 @@ export default function TownSprite({ sprite, className = '', style }) {
   const s = sprite || {}
   const asset = townAsset(s.assetKey)
   const emojiSizeClass = EMOJI_SIZE_CLASS[s.footprint] || EMOJI_SIZE_CLASS.sm
+  const [loadFailed, setLoadFailed] = useState(false)
 
-  if (asset) {
+  // assetKey가 바뀌면(다른 아이템으로 재사용되는 컴포넌트 인스턴스) 이전
+  // 실패 상태를 들고 있지 않도록 초기화 — 새 자산은 다시 <img>로 시도한다.
+  useEffect(() => {
+    setLoadFailed(false)
+  }, [s.assetKey])
+
+  if (asset && !loadFailed) {
     return (
       <span className={`relative inline-flex items-center justify-center w-full h-full ${className}`} style={style}>
         <span aria-hidden="true" className="absolute bottom-0 left-1/2 -translate-x-1/2 w-3/4 h-2 rounded-full bg-[#1e2a5a]/15 blur-[2px]" />
@@ -31,6 +45,7 @@ export default function TownSprite({ sprite, className = '', style }) {
           loading="lazy"
           decoding="async"
           data-asset-key={s.assetKey || ''}
+          onError={() => setLoadFailed(true)}
           className="relative w-full h-full object-contain drop-shadow-sm"
         />
       </span>
