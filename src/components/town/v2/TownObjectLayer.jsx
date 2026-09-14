@@ -67,7 +67,7 @@ export default function TownObjectLayer({
           >
             <button
               type="button"
-              onClick={() => { if (idle) onTogglePlacement && onTogglePlacement(p.placementId) }}
+              onClick={(e) => { if (idle) onTogglePlacement && onTogglePlacement(p.placementId, e.currentTarget) }}
               disabled={!idle}
               aria-label={label}
               className="min-h-[44px] min-w-[44px] w-full flex items-center justify-center"

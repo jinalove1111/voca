@@ -404,6 +404,37 @@ export async function run(browser, baseURL) {
         JSON.stringify({ sceneBoxForClip, moveBtnLastRowBox }),
       )
 
+      // ── 배치 팝오버 바깥 탭/Escape 닫기(2026-09-14, V2B_V2C_ROADMAP.md 1.3절) ──
+      // 위에서 (0,5) 나무의 팝오버가 이미 열려 있는 상태 — 빈 공간(백드롭
+      // 좌상단, HOME_CELL(3,2)·나무(0,5) 어디와도 겹치지 않는 좌표) 탭 시
+      // 팝오버가 닫히는지 확인.
+      const backdrop = page.locator('[data-testid="town-scene-backdrop"]')
+      await backdrop.click({ position: { x: 5, y: 5 } })
+      const closedByOutsideTap = await waitUntil(
+        async () => (await page.getByRole('button', { name: '이동', exact: true }).count()) === 0,
+        { timeout: 5000 },
+      )
+      r.check(`${name} — 빈 공간 탭 시 배치 팝오버가 닫힘(바깥 탭 닫기)`, !!closedByOutsideTap)
+      r.check(
+        `${name} — 바깥 탭으로 닫아도 나무는 그대로 (0,5)에 남음(배치 불변)`,
+        (await page.locator('[data-item-id="tree"][data-cell="0,5"]').count()) === 1,
+      )
+
+      // 다시 열고 이번엔 Escape로 닫히는지 확인.
+      await page.locator('[data-item-id="tree"][data-cell="0,5"] button').click()
+      await page.getByRole('button', { name: '이동', exact: true }).waitFor({ state: 'visible', timeout: 5000 })
+      await page.keyboard.press('Escape')
+      const closedByEscape = await waitUntil(
+        async () => (await page.getByRole('button', { name: '이동', exact: true }).count()) === 0,
+        { timeout: 5000 },
+      )
+      r.check(`${name} — Escape 키로 배치 팝오버가 닫힘`, !!closedByEscape)
+
+      // 이어지는 보관 단계를 위해 팝오버를 다시 연다(아래 storeBtn이 이 팝오버를 사용).
+      await page.locator('[data-item-id="tree"][data-cell="0,5"] button').click()
+      await page.getByRole('button', { name: '보관', exact: true }).waitFor({ state: 'visible', timeout: 5000 }).catch(() => {})
+      )
+
       // ── 보관(위에서 이미 열어둔 팝오버를 그대로 사용) ────────────────────
       const storeBtn = page.getByRole('button', { name: '보관', exact: true })
       await storeBtn.waitFor({ state: 'visible', timeout: 5000 })
