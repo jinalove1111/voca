@@ -292,12 +292,17 @@ check('TownScreen.jsx — showGuide(noProgressYet ? \'earn_hint\' : \'welcome\')
 
 check('townMessages.js — earn_hint 이벤트 템플릿 존재(reactionId: study)', /earn_hint:\s*\{\s*reactionId:\s*'study'/.test(townMessagesSrc))
 check('townMessages.js — level_progress 이벤트 템플릿 존재(reactionId: ponder)', /level_progress:\s*\{\s*reactionId:\s*'ponder'/.test(townMessagesSrc))
-check('townMessages.js — 기존 이벤트(welcome/purchase_success/locked/levelup 등) 문구 불변', [
+check('townMessages.js — 기존 이벤트(welcome/locked/levelup 등) 문구 불변', [
   "welcome: { reactionId: 'hello', text: 'Welcome to Paul Town! 오늘도 마을을 키워볼까요?' }",
-  "purchase_success: { reactionId: 'great', text: 'Great job! {name}을(를) 샀어요!' }",
   "locked: { reactionId: 'study', text: 'Level {level}에서 열려요' }",
   "levelup: { reactionId: 'levelup', text: 'Small Steps, Big Dreams. Level {level}!' }",
 ].every((line) => townMessagesSrc.includes(line)))
+// 2026-09-15 — purchase_success는 의도적으로 변경됨(구매 직후 배치 안내
+// 추가) — 위 "불변" 목록에서 분리해 새 문구를 직접 검증한다.
+check(
+  "townMessages.js — purchase_success 문구가 구매 확인 + 배치 안내를 함께 담음(2026-09-15 변경)",
+  townMessagesSrc.includes("purchase_success: { reactionId: 'great', text: 'Great job! {name}을(를) 샀어요! 보관함에서 마을에 놓아보세요' }"),
+)
 
 // ── 12. 새 버튼/이미지 회귀 가드 ─────────────────────────────────────────
 section('12. PHASE 4 — 새 <img> 없음 / 저작권 문구 없음 / 브랜드 문구 1회 유지')

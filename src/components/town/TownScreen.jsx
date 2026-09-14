@@ -15,7 +15,7 @@ import TownGrid from './TownGrid'
 import TownShopPanel from './TownShopPanel'
 import TownInventory from './TownInventory'
 import { mergeCatalog } from '../../utils/town/townCatalog'
-import { visiblePlacements } from '../../utils/town/townLayout'
+import { visiblePlacements, unplacedOwnedIds } from '../../utils/town/townLayout'
 import { paulGuide, TOWN_PHRASES } from '../../utils/town/townMessages'
 
 const TABS = [
@@ -53,6 +53,10 @@ export default function TownScreen({ studentData, townShop, onBack }) {
     townRemovedIds: Array.isArray(studentData && studentData.townRemovedIds) ? studentData.townRemovedIds : [],
   }), [studentData && studentData.townPlacements, studentData && studentData.townRemovedIds])
   const placements = useMemo(() => visiblePlacements(rawLayout, ownedIds), [rawLayout, ownedIds])
+  // 2026-09-15 — 구매 직후 "다음엔 마을에 놓아야 한다"는 것을 놓치기 쉬운
+  // 문제의 최소 수정. 보관함 탭에 숫자 배지로 상시 노출(구매 순간뿐 아니라
+  // 나중에 재방문해도 보임) — 기존 ownedIds/placements만 파생, 새 상태 없음.
+  const unplacedCount = useMemo(() => unplacedOwnedIds(ownedIds, placements).length, [ownedIds, placements])
 
   function showGuide(event, ctx) {
     setGuide(paulGuide(event, ctx))
@@ -175,18 +179,30 @@ export default function TownScreen({ studentData, townShop, onBack }) {
         )}
 
         <div className="flex gap-2">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={`flex-1 min-h-[44px] rounded-2xl text-sm font-black btn-press ${
-                tab === t.id ? 'bg-purple-500 text-white' : 'bg-white text-gray-500 card-shadow'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+          {TABS.map((t) => {
+            const showBadge = t.id === 'inventory' && unplacedCount > 0
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                aria-label={showBadge ? `${t.label}, 마을에 놓을 아이템 ${unplacedCount}개` : undefined}
+                className={`relative flex-1 min-h-[44px] rounded-2xl text-sm font-black btn-press ${
+                  tab === t.id ? 'bg-purple-500 text-white' : 'bg-white text-gray-500 card-shadow'
+                }`}
+              >
+                {t.label}
+                {showBadge && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-orange-500 text-white text-[10px] font-black leading-none"
+                  >
+                    {unplacedCount}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
 
         {mode.kind !== 'idle' && (

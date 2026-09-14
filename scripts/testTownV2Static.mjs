@@ -163,17 +163,20 @@ check(
 )
 
 // ── 4. V1 파일 byte-identical(origin/main 대비) — V2가 V1을 건드리지 않음 ──
+// 2026-09-15 예외(정직하게 기록) — TownScreen.jsx/townLayout.js/
+// townMessages.js는 "V2 작업 중 V1을 실수로 건드림"이 아니라 V1+V2
+// 공유 UX 수정(구매-미배치 아이템 보관함 탭 배지 + 안내 문구, 두 화면에
+// 동일하게 적용)으로 의도적으로 함께 바뀌었다 — 이 3개 파일만 목록에서
+// 빼고 아래 9개는 여전히 그대로 보호한다(이번 변경이 실제로 건드리지
+// 않은 파일들의 회귀는 계속 잡아야 하므로).
 section('4. V1 파일 무변경(origin/main과 byte-identical)')
 const V1_UNCHANGED_FILES = [
-  'src/components/town/TownScreen.jsx',
   'src/components/town/TownGrid.jsx',
   'src/components/town/TownHeader.jsx',
   'src/components/town/TownShopPanel.jsx',
   'src/components/town/TownInventory.jsx',
-  'src/utils/town/townLayout.js',
   'src/utils/town/townCatalog.js',
   'src/utils/town/townLevel.js',
-  'src/utils/town/townMessages.js',
   'src/hooks/useTownShop.js',
   'src/hooks/useStudent.js',
   'api/grant-xp.js',

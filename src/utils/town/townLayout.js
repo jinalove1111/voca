@@ -156,6 +156,29 @@ export function visiblePlacements(state, ownedIds) {
   return cur.townPlacements.filter((p) => p && owned.includes(p.itemId))
 }
 
+/** placements 배열에서 이미 배치된 itemId 집합(placement 유무 판정용). */
+export function placedItemIds(placements) {
+  const list = Array.isArray(placements) ? placements : []
+  const out = new Set()
+  for (const p of list) {
+    if (p && p.itemId != null) out.add(p.itemId)
+  }
+  return out
+}
+
+/**
+ * 구매(소유)했지만 아직 마을에 배치하지 않은 itemId 목록 — TownInventory.jsx
+ * "마을에 놓을 수 있어요" 절과 같은 사실을 화면 상위(탭 배지 등)에서도
+ * 다시 계산할 수 있게 분리한 순수 함수(2026-09-15, 구매 직후 "다음
+ * 행동"을 놓치기 쉬운 문제의 최소 수정 — 새 저장 필드/새 상태 없음,
+ * ownedIds/placements 기존 값만 파생).
+ */
+export function unplacedOwnedIds(ownedIds, placements) {
+  const owned = Array.isArray(ownedIds) ? ownedIds : []
+  const placed = placedItemIds(placements)
+  return owned.filter((id) => id != null && !placed.has(id))
+}
+
 /** 'x,y' -> placement 룩업 테이블. */
 export function cellMap(state) {
   const cur = normalizeState(state)

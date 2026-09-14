@@ -16,7 +16,7 @@ import TownSheet from './TownSheet'
 import TownShopPanel from '../TownShopPanel'
 import TownInventory from '../TownInventory'
 import { mergeCatalog } from '../../../utils/town/townCatalog'
-import { visiblePlacements } from '../../../utils/town/townLayout'
+import { visiblePlacements, unplacedOwnedIds } from '../../../utils/town/townLayout'
 import { paulGuide, TOWN_PHRASES } from '../../../utils/town/townMessages'
 import { gardenRichness, fogState, nearGoal } from '../../../utils/town/townScene'
 
@@ -48,6 +48,9 @@ export default function TownScreenV2({ studentData, townShop, onBack, gardenPoin
     townRemovedIds: Array.isArray(studentData && studentData.townRemovedIds) ? studentData.townRemovedIds : [],
   }), [studentData && studentData.townPlacements, studentData && studentData.townRemovedIds])
   const placements = useMemo(() => visiblePlacements(rawLayout, ownedIds), [rawLayout, ownedIds])
+  // 2026-09-15 — V1 TownScreen.jsx와 동일한 최소 수정(구매 직후/재방문 시
+  // "다음엔 마을에 놓아야 한다"는 것을 놓치기 쉬운 문제) — 새 상태 없음.
+  const unplacedCount = useMemo(() => unplacedOwnedIds(ownedIds, placements).length, [ownedIds, placements])
 
   function showGuide(event, ctx) {
     setGuide(paulGuide(event, ctx))
@@ -154,6 +157,7 @@ export default function TownScreenV2({ studentData, townShop, onBack, gardenPoin
           goal={goal}
           onOpenShop={() => setSheet('shop')}
           onOpenInventory={() => setSheet('inventory')}
+          unplacedCount={unplacedCount}
         />
 
         <PaulGuide guide={guide} />
