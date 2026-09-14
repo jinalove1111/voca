@@ -1,5 +1,97 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-14 (139차 — Batch 3 자율 세션: 최종 8자산 재검증
+_최종 갱신: 2026-09-14 (140차 — 두 번째 6시간 자율 세션: bench 4회
+추가 재제출(bench5~8) 전부 반려 확인 + Batch 3와 독립된 안전한 엔지니어링
+작업 2건을 별도 PR로 분리 오픈(PR #53 죽은 코드 정리, PR #54 배치 팝오버
+UX+이미지 폴백) + glow 자동탐지 3종 실측 실패를 계약 문서에 기록. 둘 다
+미merge, Release Gate 확인 대기 중. Production 무접촉·미배포. 139차 이하
+보존)_
+
+## 2026-09-14 (140차) — 두 번째 자율 세션: Batch 3 병행 확인 + 독립 엔지니어링 PR 2건
+
+### 0. 안전 요약
+
+Production DB WRITE 0 · SQL 0 · 경제/보상/별/XP/PD/학생 mutation 0 ·
+플래그 변경 0 · paulTownV2 OFF 유지 · merge 0 · deploy 0 · 파괴적 git 0 ·
+기존 미추적 SQL/운영 파일 16개 전부 무접촉.
+
+### 1. Batch 3 — bench 4차 추가 재제출(bench5~8) 전부 반려
+
+운영자 지시대로 street-lamp/bench 블로커에 세션을 멈추지 않고 병행
+확인 + 독립 작업 진행. bench5.png(벤치+가로등 2오브젝트 합성, 동일
+글로우), bench6.png(bench5와 바이트 동일 중복), bench7.png(단일
+오브젝트로 개선·종횡비 1.46로 계약 근접, 그러나 글로우 미해결),
+bench8.png(bench7과 동일 구도·동일 글로우, 크롭만 다름) — 8차까지
+전부 REGEN_REQUIRED 유지. street-lamp는 이번 세션에 신규 후보 없음.
+운영자가 "전제를 그대로 믿지 말고 실측하라"고 명시해, 실제로 각 파일을
+해시 대조 후 신규/중복 여부부터 확인(맹신 안 함).
+
+### 2. Batch 3와 분리된 독립 엔지니어링 — PR 2건 오픈(미merge)
+
+운영자 지시("아트워크와 무관한 코드 개선을 한 PR에 섞지 말 것")에 따라
+art/batch3 브랜치를 건드리지 않고 main에서 새 브랜치 2개를 만들어 각각
+PR로 분리:
+
+- **PR #53**(`chore/town-dead-code-cleanup-2026-09-14`) — V2B_V2C_ROADMAP.md
+  1.6절의 죽은 코드 4건을 현재 코드에서 재확인 후 제거: `freeAnchors`의
+  미사용 `mode` 매개변수, `townScene.js`의 미사용 `TOWN_LEVELS` 재노출,
+  `TownPlacementOverlay`에 전달되지만 구조분해되지 않는 `modeKind` prop,
+  `TownSprite`의 항상 undefined인 `sizeClass`/`title` props(접근성은
+  이미 alt=""+상위 aria-label로 처리돼 손실 없음 확인 후 제거). build
+  PASS, 영향 테스트 4종 전량 PASS, 전체 E2E 916/916 PASS.
+- **PR #54**(`fix/town-placement-popover-outside-tap-2026-09-14`) — 두
+  건 묶음(둘 다 클라이언트 전용 소규모 UX/견고성 수정):
+  1. V2 배치 팝오버가 같은 아이템 재탭으로만 닫히던 것을 빈 공간 탭
+     (투명 백드롭, objects보다 낮은 z-index라 아이템 버튼 직접 전환은
+     보존)/Escape로도 닫히게, 닫힐 때 트리거로 포커스 복귀(V2B_V2C_
+     ROADMAP.md 1.3절).
+  2. 지난 세션 보안 리뷰가 찾은 Low 발견 사항 — `TownSprite`의 `<img>`
+     가 배포 후 자산 404 시 깨진 아이콘을 노출하던 것을 `onError` 시
+     기존 이모지 폴백으로 전환(재시도 없음).
+  E2E에 바깥 탭/Escape 닫기 회귀 시나리오 2건 신규 추가. build PASS,
+  testTownV2Static 106/106, 전체 E2E 916/916 PASS.
+
+두 PR 모두 push 완료, Release Gate는 CI 실행 중(pending, 결과 미확인
+— 완료 대기 없이 정직하게 pending으로 기록). 둘 다 미merge, 운영자
+승인 대기.
+
+### 3. 아트워크 자동 검증 도구 — glow 탐지 3종 실측, 전부 실패로 결론
+
+운영자가 "캔버스 전역 부분투명 글로우를 자동 플래깅하라"고 지시해
+3가지 방식을 계산·실측 대조(bench 결함 사례 vs 이미 검증된 정상 자산
+special/bridge·shop-lamp·stone-fountain): ① partial-alpha 비율(오탐 —
+정상 자산이 결함 사례보다 높게 나옴) ② strict/loose 알파 임계
+바운딩박스 면적비(결함·정상 전부 거의 동일값) ③ 불투명 영역 팽창 후
+거리 기반 탐지(팽창 반경 5~41px 전 구간에서 결함·정상 전부 0%로 무의미).
+셋 다 신뢰 불가로 결론, `PAUL_TOWN_ASSET_CONTRACT.md` §3에 실패 근거와
+함께 정직하게 기록(다음 세션이 같은 시도를 반복하지 않도록) — 이
+결함 유형은 당분간 순수 사람 시각 검토에 의존.
+
+### 4. 검토했으나 신규 작업 불필요로 결론(중복 작업 방지, 규칙 3)
+
+- **학생 격리/구매·배치 idempotency**(지시 10/11절): 지난 세션
+  security-reviewer 서브에이전트가 이미 UUID 전용 키잉·localStorage
+  미사용·purchasingRef 가드·already_placed/cell_occupied 가드·최신성
+  기반 merge를 전부 확인(무결점). 이번 세션엔 "같은 브라우저 학생
+  전환" 경로만 추가 확인 — Town 컴포넌트는 로컬 useState뿐이고
+  화면/학생 전환 시 통째로 unmount되는 구조라 모듈 레벨 상태 누수
+  자체가 불가능함을 아키텍처로 재확인(신규 코드/테스트 불필요).
+- **ONE_TOWN/로드맵 문서**: 139차에 이미 실제 코드와 대조 재확인
+  완료 — 이번 세션은 갱신 불필요(재작업 금지 원칙).
+- **성능/번들**: batch3 브랜치 빌드 산출물 확인 — TownScreenV2/
+  TownInventory 청크 증가폭 미미(신규 3자산 코드상 몇 줄), eager
+  import·2x 자산의 JS 번들 유입 없음(전부 물리 파일 분리, 기존
+  보안 리뷰에서 이미 확인된 사실 재확인). 안전한 즉시 최적화 대상
+  없음 — 그대로 유지.
+
+### 5. 다음 액션(운영자)
+
+- bench: 배경 없는 순수 컷아웃(글로우/비네트 전혀 없이) 재출력 — 8차
+  전부 동일 결함이므로 소스 생성 방식 자체 점검 필요해 보임.
+- street-lamp: shop-lamp(lamp6.png)와 다른 파일의, 독립형·unlit·더
+  슬림/장신인 디자인 필요.
+- PR #53/#54 Release Gate 확인 후 승인 시 merge(자동 진행 안 함).
+
+## 2026-09-14 (139차) — Batch 3 자율 세션: 최종 8자산 재검증
 (신규 통과 없음, bench/street-lamp 계속 REGEN_REQUIRED) + 아트 검증 도구
 신설(validateTownAssetCandidate.mjs) + Town V2 보안/코드품질 리뷰(무결점) +
 ONE_TOWN/로드맵 문서를 실제 코드와 대조 재확인(재작성 없음). PR 미오픈
