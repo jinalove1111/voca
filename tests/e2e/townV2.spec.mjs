@@ -327,6 +327,20 @@ export async function run(browser, baseURL) {
       const dollarTextAfterBuy = (await page.locator(DOLLAR_BADGE_SEL).textContent().catch(() => '')) || ''
       r.check(`${name} — 구매 후 헤더 잔액 $10(20-10)`, dollarTextAfterBuy.includes('10') && !dollarTextAfterBuy.includes('20'), dollarTextAfterBuy)
 
+      // ── 2026-09-15 — 구매 직후 "다음엔 마을에 놓아야 한다"는 것을 놓치기
+      //     쉬운 문제의 최소 수정(V1과 동일 원리, V2는 HUD 보관함 버튼에
+      //     배지). ────────────────────────────────────────────────────────
+      const placeHintShownV2 = await page.getByText('보관함에서 마을에 놓아보세요', { exact: false }).first().isVisible().catch(() => false)
+      r.check(`${name} 2026-09-15 — 구매 성공 안내 문구에 배치 유도 텍스트 포함("보관함에서 마을에 놓아보세요")`, placeHintShownV2)
+
+      const hudInventoryBtn = page.locator('[data-testid="town-open-inventory"]')
+      const hudInventoryAriaLabelAfterBuy = (await hudInventoryBtn.getAttribute('aria-label').catch(() => '')) || ''
+      r.check(`${name} 2026-09-15 — 나무 구매 직후(미배치 1개) HUD 보관함 버튼 aria-label에 "1개" 포함`,
+        hudInventoryAriaLabelAfterBuy.includes('1개'), hudInventoryAriaLabelAfterBuy)
+      const hudInventoryBadgeTextAfterBuy = (await hudInventoryBtn.locator('span[aria-hidden="true"]').textContent().catch(() => '')) || ''
+      r.check(`${name} 2026-09-15 — 나무 구매 직후 HUD 보관함 버튼 배지 숫자 "1" 표시`,
+        hudInventoryBadgeTextAfterBuy.trim() === '1', hudInventoryBadgeTextAfterBuy)
+
       // ── 시트 닫기 → 보관함 열기 → "마을에 놓기" ──────────────────────────
       await page.locator('[data-testid="town-sheet-close"]').click()
       const sheetClosed = await waitUntil(async () => (await page.locator('[data-testid="town-sheet"]').count()) === 0, { timeout: 5000 })
@@ -351,6 +365,15 @@ export async function run(browser, baseURL) {
       r.check(`${name} — 나무가 (1,1)에 배치됨(data-item-id/data-cell)`, placedAt11)
       const anchorsGoneAfterPlace = await waitUntil(async () => (await page.locator('[data-anchor]').count()) === 0, { timeout: 5000 })
       r.check(`${name} — 배치 완료 후 앵커 오버레이 사라짐`, !!anchorsGoneAfterPlace)
+
+      // ── 2026-09-15 — 배치 완료(유일한 보유 아이템을 마을에 놓음) 후 HUD
+      //     보관함 버튼 배지가 사라짐(unplacedCount 0으로 파생). ───────────
+      const hudInventoryAriaLabelAfterPlace = (await hudInventoryBtn.getAttribute('aria-label').catch(() => '')) || ''
+      r.check(`${name} 2026-09-15 — 배치 완료 후 HUD 보관함 버튼 배지 사라짐(aria-label 기본값 복귀)`,
+        !hudInventoryAriaLabelAfterPlace, hudInventoryAriaLabelAfterPlace)
+      const hudInventoryBadgeCountAfterPlace = await hudInventoryBtn.locator('span[aria-hidden="true"]').count()
+      r.check(`${name} 2026-09-15 — 배치 완료 후 HUD 보관함 버튼 배지 요소 자체가 사라짐(중복/유령 배지 없음)`,
+        hudInventoryBadgeCountAfterPlace === 0, `count=${hudInventoryBadgeCountAfterPlace}`)
 
       // ── 새로고침 후 배치 유지 ────────────────────────────────────────────
       await page.reload({ waitUntil: 'domcontentloaded' })

@@ -398,6 +398,20 @@ export async function run(browser, baseURL) {
       const successGuideShown = await waitUntil(() => page.getByText(/Great job|나무/).first().isVisible().catch(() => false), { timeout: 5000 })
       r.check(`${name} 나무 구매 — 성공 가이드 문구(Great job/나무) 표시`, !!successGuideShown)
 
+      // ── 2026-09-15 — 구매 직후 "다음엔 마을에 놓아야 한다"는 것을 놓치기
+      //     쉬운 문제의 최소 수정: (1) 구매 성공 안내 문구에 배치 유도
+      //     텍스트 포함, (2) 보관함 탭에 미배치 개수 배지가 뜸. ─────────────
+      const placeHintShown = await page.getByText('보관함에서 마을에 놓아보세요', { exact: false }).first().isVisible().catch(() => false)
+      r.check(`${name} 2026-09-15 — 구매 성공 안내 문구에 배치 유도 텍스트 포함("보관함에서 마을에 놓아보세요")`, placeHintShown)
+
+      const inventoryTabBtn = page.getByRole('button', { name: '🎁 보관함' })
+      const inventoryAriaLabelAfterBuy = (await inventoryTabBtn.getAttribute('aria-label').catch(() => '')) || ''
+      r.check(`${name} 2026-09-15 — 나무 구매 직후(미배치 1개) 보관함 탭 aria-label에 "1개" 포함`,
+        inventoryAriaLabelAfterBuy.includes('1개'), inventoryAriaLabelAfterBuy)
+      const inventoryBadgeTextAfterBuy = (await inventoryTabBtn.locator('span[aria-hidden="true"]').textContent().catch(() => '')) || ''
+      r.check(`${name} 2026-09-15 — 나무 구매 직후 보관함 탭 배지 숫자 "1" 표시`,
+        inventoryBadgeTextAfterBuy.trim() === '1', inventoryBadgeTextAfterBuy)
+
       // ── 고양이(cat) — 나무 구매 후 잔액 10으로 부족액 표시 ───────────────
       await page.getByRole('button', { name: '동물 카테고리' }).click()
       const catCard = page.locator('div.bg-white.rounded-2xl.card-shadow', { has: page.getByText('고양이', { exact: true }) }).first()
@@ -456,6 +470,15 @@ export async function run(browser, baseURL) {
         treeEmojiVisible || treeImageVisible,
         `emoji=${treeEmojiVisible} image=${treeImageVisible}`,
       )
+
+      // ── 2026-09-15 — 배치 완료(유일한 보유 아이템을 마을에 놓음) 후
+      //     보관함 탭 배지가 사라짐(unplacedCount 0으로 파생). ─────────────
+      const inventoryAriaLabelAfterPlace = (await inventoryTabBtn.getAttribute('aria-label').catch(() => '')) || ''
+      r.check(`${name} 2026-09-15 — 배치 완료 후 보관함 탭 배지 사라짐(aria-label 기본값 복귀)`,
+        !inventoryAriaLabelAfterPlace, inventoryAriaLabelAfterPlace)
+      const inventoryBadgeCountAfterPlace = await inventoryTabBtn.locator('span[aria-hidden="true"]').count()
+      r.check(`${name} 2026-09-15 — 배치 완료 후 보관함 탭 배지 요소 자체가 사라짐(중복/유령 배지 없음)`,
+        inventoryBadgeCountAfterPlace === 0, `count=${inventoryBadgeCountAfterPlace}`)
 
       // ── 이동 ─────────────────────────────────────────────────────────
       await treeCell.click()
