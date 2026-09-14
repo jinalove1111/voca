@@ -369,6 +369,24 @@ check('TownObjectLayer.jsx — 버튼 aria-label "눌러서 이동하거나 보�
 check('TownObjectLayer.jsx — bottom-full 클래스 존재(마지막 행 팝오버 위쪽 배치)', /bottom-full/.test(objectLayerCode))
 check('TownObjectLayer.jsx — SCENE_ROWS - 1(또는 동등한 마지막 행 판정) 존재', /SCENE_ROWS\s*-\s*1/.test(objectLayerCode))
 
+// 2026-09-14 — 배치 팝오버 바깥 탭 백드롭(TownScene.jsx) 회귀 방지. 이
+// 레이어의 루트(absolute inset-0, objects z-index)가 pointer-events-none이
+// 아니면 빈 칸에서도 포인터 이벤트를 가로채 백드롭 클릭이 전부 막힌다
+// (E2E 실측으로 발견·수정한 실제 버그 — tests/e2e/townV2.spec.mjs S4의
+// 바깥 탭 닫기 시나리오가 동적으로도 검증).
+check(
+  'TownObjectLayer.jsx — 루트 레이어에 pointer-events-none(빈 칸이 백드롭 클릭을 가로채지 않도록)',
+  /className="absolute inset-0 pointer-events-none"/.test(objectLayerCode),
+)
+check(
+  'TownObjectLayer.jsx — 아이템 토글 버튼에 pointer-events-auto(루트가 none이어도 버튼 자체는 클릭 가능)',
+  /pointer-events-auto[^"]*min-h-\[44px\] min-w-\[44px\]/.test(objectLayerCode),
+)
+check(
+  'TownObjectLayer.jsx — 팝오버 이동/보관 버튼에 pointer-events-auto',
+  (objectLayerCode.match(/pointer-events-auto[^"]*btn-press/g) || []).length === 2,
+)
+
 // ── 20. TownSprite.jsx ────────────────────────────────────────────────────
 section('20. TownSprite.jsx — 에셋/이모지 폴백')
 const spriteCode = v2Code['TownSprite.jsx'] || ''
