@@ -47,6 +47,10 @@ APPROVED        — 검증 통과(A/B 등급), 아직 export/wire 안 됨
 WIRED           — src/assets/town/index.js TOWN_ASSETS에 연결 + 커밋 완료(아직 미merge)
 MERGED          — main에 merge됨(아직 프로덕션 미확인)
 DEPLOYED        — 프로덕션 배포·번들 해시 실측 확인 완료
+DEFERRED        — 여러 차례 재제출에도 REGEN_REQUIRED 사유가 반복 해소되지
+                  않아 현재 배치 범위에서 제외, 후속 배치(V2 아트워크
+                  백로그)로 이월. SPEC_ONLY와 달리 "후보가 여러 번 있었지만
+                  전부 불합격했다"는 이력을 구분해 남긴다.
 ```
 
 ## 2. 자산 표 (2026-09-14 기준, PR #52 배포 완료 + Batch 3 진행 중 스냅샷)
@@ -59,15 +63,15 @@ DEPLOYED        — 프로덕션 배포·번들 해시 실측 확인 완료
 | `buildings/cafe` | cafe.webp | house | 128×160 | 256×320 | 4:5 | lg | book-shop과 동급 | 웜앰버+웜크림(#e0a73a,#fdebd0) — 실제 승인본은 네이비 지붕+포레스트그린 트림(명시적 편차 허용, handoff 기록) | NO | 야외 테이블/파라솔(프레임 안) 선택 | 주간 베이스(작은 창문 warm-lit) + `-lights`(P1) | 5 | 120 | `-lights`(P1) | **DEPLOYED** |
 | `special/bridge` | bridge.webp | special | 160×80 | 320×160 | 2:1 | lg | 수평 실루엣, 수직 tower mass 없음 | 우드브라운+웜크림+페인트 콘택트섀도(#8b6f3e,#fdebd0,#1e2a5a) | NO | 없음(연못/램프/조경 금지) | 해당 없음(창문 없음, `-lights` 제외 대상) | 6 | 150 | 없음 | **WIRED**(art/batch3 브랜치, 미merge) |
 | `special/english-school` | english-school.webp | special | 128×154 | 256×308 | 5:6 | lg | 건물군 표준 | 웜크림+모스그린+우드트림(#fdebd0,#cfe3c0,#8b6f3e) | NO(아이콘 전용 방패 문장 허용) | 최소(과도한 화단/현수막/칠판 금지) | 주간 베이스 + `-lights`(P1) | 7 | 150 | `-lights`(P1) | **WIRED**(art/batch3 브랜치, 미merge) |
-| `special/clock-tower` | clock-tower.webp | special | 128×256 | 256×512 | 1:2 | lg | 세트 내 최고 랜드마크(가장 큼) | 머티드네이비+소프트골드 링(#1e2a5a,#c9a227) — **편차**: 승인 후보는 몸체가 웜크림/탄색 석재(지붕·트림만 네이비), cafe 선례와 동일한 종류의 명시적 편차(재생성 요청 안 함, 운영자 확인 권장) | **NO**(숫자·문구·"PAUL TOWN" 간판 전부 금지, 시계 얼굴은 상징적 무문자만) | 최소(화단/펜스/램프 등 지상부 장식 금지) | 주간 베이스 + `-lights`(P1) | 8 | 200 | `-lights`(P1) | **APPROVED**(clock tower2.png — PAUL TOWN 간판 없음, 숫자 없음(눈금 표시만), 지상부 장식 없음, 콘텐츠 종횡비 0.487≈1:2 정확. 아직 미wire) |
+| `special/clock-tower` | clock-tower.webp | special | 128×256 | 256×512 | 1:2 | lg | 세트 내 최고 랜드마크(가장 큼) | 머티드네이비+소프트골드 링(#1e2a5a,#c9a227) — **편차**: 승인 후보는 몸체가 웜크림/탄색 석재(지붕·트림만 네이비), cafe 선례와 동일한 종류의 명시적 편차(재생성 요청 안 함, 운영자 확인 권장) | **NO**(숫자·문구·"PAUL TOWN" 간판 전부 금지, 시계 얼굴은 상징적 무문자만) | 최소(화단/펜스/램프 등 지상부 장식 금지) | 주간 베이스 + `-lights`(P1) | 8 | 200 | `-lights`(P1) | **WIRED**(clock tower2.png — art/batch3 브랜치에 배선·커밋 완료, PAUL TOWN 간판 없음, 숫자 없음(눈금 표시만), 지상부 장식 없음, 콘텐츠 종횡비 0.487≈1:2 정확) |
 | `nature/tree` | tree.webp | nature | 96×128 | 192×256 | 3:4 | md | 스케일 기준점(다른 모든 자산이 이 나무 대비로 비교됨) | 미기록(Batch1 world-defining) | NO | 미기록 | 해당 없음 | 1 | 10 | 없음 | **DEPLOYED** |
 | `nature/flower-garden` | flower-garden.webp | nature | 96×64 | 192×128 | 3:2 | md | tree보다 명확히 낮고 넓음 | 모스그린+소프트골드 꽃 포인트(#8fb37a,#c9a227) | NO | 없음 | 해당 없음 | 3 | 30 | 없음 | **SPEC_ONLY**(이번 배치 범위 밖, 후보 미제출) |
-| `decorations/stone-fountain` | stone-fountain.webp | decorations(카탈로그 규칙상, nature 그룹 소속) | 72×72 | 144×144 | 1:1 | sm | tree보다 명확히 작음 | 머티드네이비+웜크림+모스 악센트(#1e2a5a,#fdebd0,#8fb37a) | NO | 없음(전체 광장/화단/대형 기둥 금지) | 잔잔한 물(격렬한 분사 금지) | 5 | 60 | 없음 | **APPROVED**(fountain2.png 통과 — 단일 1단 분수, 잔잔한 물, 완전 투명 배경. 아직 미wire, "배치 완료 후 일괄 통합" 대기) |
+| `decorations/stone-fountain` | stone-fountain.webp | decorations(카탈로그 규칙상, nature 그룹 소속) | 72×72 | 144×144 | 1:1 | sm | tree보다 명확히 작음 | 머티드네이비+웜크림+모스 악센트(#1e2a5a,#fdebd0,#8fb37a) | NO | 없음(전체 광장/화단/대형 기둥 금지) | 잔잔한 물(격렬한 분사 금지) | 5 | 60 | 없음 | **WIRED**(fountain2.png — art/batch3 브랜치에 배선·커밋 완료, 단일 1단 분수·잔잔한 물·완전 투명 배경) |
 | `nature/garden-stage-0..4` | garden-stage-N.webp | nature(ambient, 카탈로그 외) | 64×64 | 128×128 | 1:1 | null(patches) | 5단계 성장 진행 | 미기록 | NO | 미기록 | 해당 없음 | — | — | 5단계 자체가 진행 애니메이션 | **DEPLOYED**(5개 전부) |
-| `decorations/bench` | bench.webp | decorations | 72×48 | 144×96 | 3:2 | sm | 소형 | 우드브라운+머티드네이비 옅은 악센트(#8b6f3e,#1e2a5a) | NO | **없음**(램프/간판/책/꽃/화분/새/포장/배경 장식 전부 금지 — 벤치 단독) | 해당 없음 | 1 | 15 | 없음 | **REGEN_REQUIRED**(bench1/3/4/5/6/7/8/9(street lamp and bench.png에서 분리).png — 9차 재제출까지 전부 동일 계열 결함. bench5/6/9는 벤치+가로등 2오브젝트 합성이라 단일 오브젝트 요건도 위반(6=5와 바이트 동일 중복). bench7/8부터 단일 오브젝트 구도는 정확해졌고 종횡비도 계약(3:2)에 근접했으나(bench7 실측 1.46), 캔버스 전역에 걸친 은은한 방사형 글로우/비네트는 9차까지 전혀 해결되지 않음 — crop/repad로 안전하게 제거 불가, 배경 없는 순수 컷아웃 재출력만이 유일한 해법(§3 "조사했지만 자동화 불가" 참고)) |
+| `decorations/bench` | bench.webp | decorations | 72×48 | 144×96 | 3:2 | sm | 소형 | 우드브라운+머티드네이비 옅은 악센트(#8b6f3e,#1e2a5a) | NO | **없음**(램프/간판/책/꽃/화분/새/포장/배경 장식 전부 금지 — 벤치 단독) | 해당 없음 | 1 | 15 | 없음 | **DEFERRED**(2026-09-15, 운영자 결정 — Batch 3에서 제외, V2 아트워크 백로그로 이월. 사유: bench1/3/4/5/6/7/8/9/10/"bench 10"(11차 재제출) 전부 동일 계열 baked 배경 글로우/비네트 결함, 안전 처리(crop/repad)로 제거 불가함이 §3 "조사했지만 자동화 불가"에 기록된 3종 자동 탐지 실패와 함께 반복 확인됨. bench5/6/9는 벤치+가로등 2오브젝트 합성이라 단일 오브젝트 요건도 위반(6=5 바이트 동일 중복). bench7/8/9/10부터 단일 오브젝트 구도·종횡비(3:2 근접, bench7 실측 1.46)는 정확했으나 글로우만 11차까지 미해결. 재개 조건: 배경 없는 순수 컷아웃(글로우/비네트 전혀 없는) 재출력) |
 | `decorations/town-sign` | town-sign.webp | decorations | 72×108 | 144×216 | 2:3 | sm | 소형 | 우드브라운+버건디 악센트(#8b6f3e,#7a2e3a) | **NO(완전히 빈 표지판 면, 텍스트/아이콘/"PAUL TOWN" 전부 금지)** | 최소(모던한 지지대만, 과도한 화단/포장 금지) | 해당 없음 | 1 | 40 | 없음 | **WIRED**(art/batch3 브랜치, 미merge) |
-| `decorations/shop-lamp` | shop-lamp.webp | decorations | 72×144 | 144×288 | 1:2 | sm | 소형 장식류 표준 | 우드브라운+소프트골드 트림(#8b6f3e,#c9a227) | NO | 없음(벽걸이 브래킷/간판/화분 결합 금지 — **독립형 지주(post)형, 벽부착 아님**, `V2A_BATCH2_COMMISSION_PACK.md` 확인됨) | **UNLIT/OFF 베이스 필수**(1차 납품은 unlit만) | 1 | 60 | 없음(-on 변형 없음) | **APPROVED**(lamp6.png=lamp7.png 바이트 동일 — 독립형 지주, 유리창 중성색(웜톤 없음)으로 unlit 확인, 배경 외부 전 지점 alpha=0 확인(halo 없음). 아직 미wire) |
-| `decorations/street-lamp` | street-lamp.webp | decorations | 72×144 | 144×288 | **1:2 vs 1:2.5 — 문서 간 불일치, 아래 각주 참고** | sm | 장식류 중 가장 슬림/최장신 | 우드브라운 또는 머티드네이비+소프트골드 헤드(#8b6f3e,#1e2a5a,#c9a227) | NO | 없음(**독립형 지주형, 벽부착 아님**) | **UNLIT/OFF 베이스 필수**(-on 점등 변형은 P1, 이번 범위 밖) | 2 | 25 | `-on`(P1, 범위 밖) | **APPROVED**(street light1.png — 독립형 지주(벽부착 아님)·유리창 실측 중성색(예: (231,232,230)/(249,249,247), 웜앰버 톤 없음 — unlit 확인)·배경 외부 전 지점 alpha=0(halo 없음)·콘텐츠 종횡비 0.19(계약 0.40보다 훨씬 슬림하지만 "장식류 중 가장 슬림/최장신" 취지에는 부합, 절단 없이 램프 전체 포함 확인됨). "street lamp and bench.png" 합성 이미지에서 분리한 동일 계열 후보로도 교차 확인(같은 lit/unlit 판정 재현). shop-lamp(lamp6.png)와는 다른 파일이라 "shop-lamp보다 슬림/장신" 요구 충돌 없음. 아직 미wire — 배치 전체(8개 중 나머지 1개, decorations/bench)가 통과할 때까지 일괄 통합 대기) |
+| `decorations/shop-lamp` | shop-lamp.webp | decorations | 72×144 | 144×288 | 1:2 | sm | 소형 장식류 표준 | 우드브라운+소프트골드 트림(#8b6f3e,#c9a227) | NO | 없음(벽걸이 브래킷/간판/화분 결합 금지 — **독립형 지주(post)형, 벽부착 아님**, `V2A_BATCH2_COMMISSION_PACK.md` 확인됨) | **UNLIT/OFF 베이스 필수**(1차 납품은 unlit만) | 1 | 60 | 없음(-on 변형 없음) | **WIRED**(lamp6.png=lamp7.png 바이트 동일 — art/batch3 브랜치에 배선·커밋 완료, 독립형 지주, 유리창 중성색(웜톤 없음)으로 unlit 확인, 배경 외부 전 지점 alpha=0 확인(halo 없음)) |
+| `decorations/street-lamp` | street-lamp.webp | decorations | 72×144 | 144×288 | **1:2 vs 1:2.5 — 문서 간 불일치, 아래 각주 참고** | sm | 장식류 중 가장 슬림/최장신 | 우드브라운 또는 머티드네이비+소프트골드 헤드(#8b6f3e,#1e2a5a,#c9a227) | NO | 없음(**독립형 지주형, 벽부착 아님**) | **UNLIT/OFF 베이스 필수**(-on 점등 변형은 P1, 이번 범위 밖) | 2 | 25 | `-on`(P1, 범위 밖) | **WIRED**(street light1.png — 독립형 지주(벽부착 아님)·유리창 실측 중성색(예: (231,232,230)/(249,249,247), 웜앰버 톤 없음 — unlit 확인)·배경 외부 전 지점 alpha=0(halo 없음)·콘텐츠 종횡비 0.19(계약 0.40보다 훨씬 슬림하지만 "장식류 중 가장 슬림/최장신" 취지에는 부합, 절단 없이 램프 전체 포함 확인됨). "street lamp and bench.png" 합성 이미지에서 분리한 동일 계열 후보로도 교차 확인(같은 lit/unlit 판정 재현). shop-lamp(lamp6.png)와는 다른 파일이라 "shop-lamp보다 슬림/장신" 요구 충돌 없음. art/batch3 브랜치에 배선·커밋 완료) |
 | `decorations/red-post-box` | red-post-box.webp | decorations | 72×108 | 144×216 | 2:3 | sm | 소형 | **팔레트 예외 — 전통 영국 우체통 빨강 유지**(공용 7색 대체 안 함) + 소프트골드 트림(#c9a227) | NO | 없음 | 해당 없음 | 2 | 25 | 없음 | **DEPLOYED** |
 | `animals/cat` | cat.webp | animals | 72×54 | 144×108 | 4:3 | sm | 소형 | 공용 팔레트 내 자연스러운 털색 | NO | 없음(사실적 얼굴 디테일 금지) | 해당 없음 | 2 | 20 | `-blink`(P2, 범위 밖) | **DEPLOYED** |
 | `animals/puppy` | puppy.webp | animals | 72×54 | 144×108 | 4:3 | sm | 소형 | 공용 팔레트 내 자연스러운 털색 | NO | 없음 | 해당 없음 | 4 | 30 | `-blink`(P2, 범위 밖) | **DEPLOYED** |
@@ -86,7 +90,19 @@ DEPLOYED        — 프로덕션 배포·번들 해시 실측 확인 완료
 캔버스 필드(72×144)의 코드 수정 여부는 운영자 판단이 필요한 별도 결정
 사항으로 남긴다.
 
-## 3. 자동 vs 주관 검증 분리
+## 2.5. Batch 3 클로즈아웃(2026-09-15, 운영자 결정)
+
+목표 8개 자산 중 **7개 배송**(special/bridge, special/english-school,
+special/clock-tower, decorations/town-sign, decorations/shop-lamp,
+decorations/street-lamp, decorations/stone-fountain) — 전부 WIRED,
+art/batch3-remaining-town-assets-2026-09-14 브랜치에 커밋 완료.
+**decorations/bench 1개는 DEFERRED** — 11차 재제출까지 동일한 baked
+배경 글로우/비네트 결함이 해소되지 않아(§3 "조사했지만 자동화 불가"
+참고, 자동 탐지 3종 전부 신뢰 불가로 결론) 운영자가 이번 배치에서
+제외하고 V2 아트워크 백로그로 이월하기로 결정. bench는 벤치 없이
+플레이스홀더 없이 카탈로그에 그대로 남고(이모지 폴백 유지), 별도
+후속 배치에서 재시도한다. 이번 배치는 경제/가격/레벨/DB/플래그
+무변경 — 순수 아트워크 자산 추가만.
 
 **자동화 가능(객관적 사실, §0 공용 규칙 + 위 표 대조로 기계 판정 가능)**:
 실제 알파 채널 존재 여부, 완전투명 코너 확인, 콘텐츠 바운딩박스 기준
