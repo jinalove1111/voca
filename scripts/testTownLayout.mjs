@@ -18,6 +18,8 @@ import {
   mergeTownLayout,
   visiblePlacements,
   cellMap,
+  placedItemIds,
+  unplacedOwnedIds,
 } from '../src/utils/town/townLayout.js'
 
 let passed = 0
@@ -243,6 +245,46 @@ section('7. visiblePlacements / cellMap')
     }
     return cellMap(dup)['2,2'].placementId === 'y'
   })())
+}
+
+// ══════════════════════════════════════════════════════════════════════
+section('7a. placedItemIds / unplacedOwnedIds(2026-09-15 — 구매 후 미배치 배지)')
+// ══════════════════════════════════════════════════════════════════════
+{
+  const placements = [
+    { placementId: 'a', itemId: 'tree', x: 0, y: 0, placedAt: 1 },
+    { placementId: 'b', itemId: 'bench', x: 1, y: 1, placedAt: 2 },
+  ]
+
+  check('placedItemIds: 배치된 itemId만 Set으로', (() => {
+    const s = placedItemIds(placements)
+    return s.has('tree') && s.has('bench') && s.size === 2
+  })())
+  check('placedItemIds: 빈 배열 → 빈 Set', placedItemIds([]).size === 0)
+  check('placedItemIds: malformed(null) → 빈 Set(크래시 없음)', placedItemIds(null).size === 0)
+  check('placedItemIds: 배열 내 null 항목 방어', placedItemIds([null, { itemId: 'tree' }]).size === 1)
+
+  // 미소유(NOT OWNED): ownedIds에 없으면 애초에 후보가 아님 — 배지 대상 0.
+  check('unplacedOwnedIds: 미소유 아이템은 후보에서 제외(빈 ownedIds → 빈 배열)', unplacedOwnedIds([], placements).length === 0)
+
+  // 소유+미배치(OWNED-NOT-PLACED): 산 적 있지만 아직 안 놓은 아이템.
+  check('unplacedOwnedIds: 소유했지만 미배치인 아이템만 반환', (() => {
+    const res = unplacedOwnedIds(['tree', 'bench', 'lamp'], placements)
+    return res.length === 1 && res[0] === 'lamp'
+  })())
+
+  // 소유+배치(OWNED-PLACED): 이미 마을에 있으면 배지 대상 아님.
+  check('unplacedOwnedIds: 소유 + 이미 배치 완료 → 결과에서 제외', (() => {
+    const res = unplacedOwnedIds(['tree', 'bench'], placements)
+    return !res.includes('tree') && !res.includes('bench') && res.length === 0
+  })())
+
+  check('unplacedOwnedIds: placements malformed(null) → 전부 미배치로 취급', (() => {
+    const res = unplacedOwnedIds(['tree', 'bench'], null)
+    return res.length === 2
+  })())
+  check('unplacedOwnedIds: ownedIds malformed(null) → 빈 배열(방어적)', unplacedOwnedIds(null, placements).length === 0)
+  check('unplacedOwnedIds: ownedIds 내 null/undefined 항목은 결과에서 제외', unplacedOwnedIds(['tree', null, undefined, 'lamp'], placements).length === 1)
 }
 
 // ══════════════════════════════════════════════════════════════════════
