@@ -26,7 +26,11 @@ function fill(template, ctx) {
 const EVENT_TEMPLATES = {
   welcome: { reactionId: 'hello', text: 'Welcome to Paul Town! 오늘도 마을을 키워볼까요?' },
   shop: { reactionId: 'ponder', text: '무엇을 살까요? 별을 모으면 Paul Dollar가 생겨요' },
-  purchase_success: { reactionId: 'great', text: 'Great job! {name}을(를) 샀어요!' },
+  // 2026-09-15 — 구매 직후 "다음엔 마을에 놓아야 한다"는 것을 놓치기 쉬운
+  // 문제의 최소 수정(문구만 변경, 새 이벤트/필드 없음). 보관함 탭 숫자
+  // 배지(TownScreen.jsx/TownHud.jsx)와 함께 작동 — 배지는 재방문 시에도
+  // 보이는 상시 신호, 이 문구는 구매 순간의 즉시 안내.
+  purchase_success: { reactionId: 'great', text: 'Great job! {name}을(를) 샀어요! 보관함에서 마을에 놓아보세요' },
   insufficient: { reactionId: 'almost', text: '조금만 더! {shortfall} Paul Dollar가 더 필요해요' },
   locked: { reactionId: 'study', text: 'Level {level}에서 열려요' },
   unlock: { reactionId: 'levelup', text: 'You unlocked something new! Level {level}!' },
