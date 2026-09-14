@@ -374,6 +374,14 @@ section('20. TownSprite.jsx — 에셋/이모지 폴백')
 const spriteCode = v2Code['TownSprite.jsx'] || ''
 check('TownSprite.jsx — data-asset-key 속성', /data-asset-key=/.test(spriteCode))
 check('TownSprite.jsx — <img loading="lazy" decoding="async">(에셋 해석 시)', /<img[^>]*loading="lazy"[^>]*decoding="async"/.test(spriteCode))
+// 2026-09-14 — 런타임 이미지 로드 실패 폴백(배포 후 해시 자산 404 시
+// 깨진 이미지 아이콘 대신 이모지로 전환, 보안 리뷰 Low 발견 사항 수정).
+check('TownSprite.jsx — onError 핸들러가 <img>에 존재', /<img[^>]*onError=/.test(spriteCode))
+check(
+  'TownSprite.jsx — 이미지 렌더 조건이 asset 존재 AND 로드 실패 아님(폴백 상태 게이팅)',
+  /if\s*\(\s*asset\s*&&\s*!\s*\w+\s*\)/.test(spriteCode),
+)
+check('TownSprite.jsx — useState import(로드 실패 상태 추적)', /import\s*\{[^}]*useState[^}]*\}\s*from\s*['"]react['"]/.test(spriteCode))
 
 // ── 21. TownHud.jsx — 레벨/잔액/목표/상점·보관함 진입 ────────────────────
 section('21. TownHud.jsx')
