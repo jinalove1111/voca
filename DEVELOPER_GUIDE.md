@@ -209,6 +209,64 @@ IN_PROGRESS로 옮긴 뒤, CLAUDE.md 18개 규칙 + DEVELOPER_GUIDE.md의
 - 완료/부분/차단 여부와 다음 추천 작업을 마지막에 요약
 ```
 
+### Paul Town 아트워크 배치 워크플로우 (2026-09-14 추가)
+
+_추가 배경: Batch 3(remaining town assets) 진행 중 "이미지 1장 도착 →
+즉시 crop/repad/export/wire/commit/build/test 풀 파이프라인" 패턴을
+8회 가까이 반복하다가 비효율(매번 build+3개 test 파일 갱신+커밋)이
+확인돼, 운영자가 batch-first 워크플로우로 전환 지시. 캐노니컬 계약은
+`docs/design/town/PAUL_TOWN_ASSET_CONTRACT.md`(신규, 이 문서가 모든
+asset_key의 치수/팔레트/텍스트 허용/lit-unlit/lifecycle 상태의 단일
+출처)를 참고._
+
+새 아트워크 배치를 시작할 때 운영자가 이 한 줄만 말하면 되는 것이 목표:
+
+```
+Prepare Paul Town artwork batch: <테마 또는 asset_key 목록>
+```
+
+세션(사람/에이전트 무관)은 이 요청을 받으면 아래 순서를 따른다 —
+**핵심 원칙은 "이미지 1장마다 전체 파이프라인을 돌리지 않는다"**:
+
+1. **SPEC** — `docs/design/town/PAUL_TOWN_ASSET_CONTRACT.md`에서 대상
+   asset_key의 계약(치수/팔레트/텍스트 허용/lit-unlit/소품 허용)을
+   확인한다. 계약에 없는 신규 asset_key면 먼저 계약 표에 `SPEC_ONLY`
+   행을 추가한다. 문서 간 불일치가 있으면 추측하지 말고 그 자리에서
+   충돌을 보고한다(임의로 하나를 고르지 않음).
+2. **CANDIDATES** — 배치 전체의 후보 이미지가 도착할 때까지 기다린다.
+   운영자가 "이게 마지막"이라고 확정하기 전에는 개별 이미지를 즉시
+   wire하지 않는다(최신 버전이라는 이유만으로 성급하게 통합 금지).
+3. **VALIDATE** — 배치 전체를 한 번에 검증한다. 자산별로 A(그대로 가능)/
+   B(안전 처리만 필요)/C(재생성 필요)/D(오매칭/중복)로 등급화하고
+   `PAUL_TOWN_ASSET_CONTRACT.md`의 lifecycle을 갱신한다(§3의 자동/주관
+   검증 분리 기준 그대로 적용).
+4. **REGENERATE FAILURES ONLY** — C/D 등급만 재생성 요청, A/B는 그대로
+   유지.
+5. **EXPORT** — A/B 등급 전체를 한 번에 표준 파이프라인(계약 문서 §4:
+   crop-to-content → repad ≥4% → 1x/2x PNG+WebP)으로 처리한다.
+6. **WIRE** — 배치 전체를 `src/assets/town/index.js`에 한 번에
+   연결한다(이미지 1장마다 반복하지 않음).
+7. **VISUAL QA** — 배치 단위로 대표 Town 화면(360/390/430px, 200% 줌,
+   Town/Shop/Inventory/배치모드, 낮은 레벨/높은 레벨 Town)을 렌더해
+   기존 자산과 나란히 비교한다(상대 스케일/원근/팔레트/클리핑/알파
+   halo/시각적 위계/장면 일관성).
+8. **TEST** — 개발 중에는 타겟 테스트만. PR 전에 배치 전체 기준으로
+   **딱 한 번** 전체 회귀(`npm run build` + 관련 Town 테스트 3종
+   [`testTownUiStatic`/`testTownV2Static`/`testBundleBudget`] +
+   `testTownAssetManifest`/`testTownCatalog` + `verify:e2e` +
+   `verify:all`)를 실행한다. 이미지 1장 추가마다 반복 실행하지 않는다.
+9. **PR** — main → 배치 브랜치 1개(새 배치는 새 브랜치, 이전 배치
+   브랜치 재사용 금지) → 자산별 논리 커밋(파일 단위 소커밋, `CLAUDE.md`
+   규칙 14) → **리뷰 전용 PR 1개**(배치당 1개, 중복 PR 금지).
+10. **RELEASE GATE → 운영자 승인 → merge → 배포 확인** — 자동 merge/
+    배포/V2 활성화 없음. 운영자의 명시적 승인 후에만 진행.
+
+**엔지니어링 안전(모든 배치 공통)**: DB 스키마/SQL/RLS/경제(Paul
+Dollar/별/XP)/학생 데이터/반·교재 데이터/Production 환경변수·플래그는
+아트워크 배치가 절대 건드리지 않는다. 공식 Paul 마스코트 이미지는
+재생성/교체 대상이 아니다. 작업 중 발견한 기존 미추적(untracked)
+SQL/운영 파일은 절대 건드리지 않는다.
+
 ## 아키텍처 변경 시 문서 갱신 규칙
 
 **전부 append만 — 기존 문서 내용을 덮어쓰거나 삭제하지 않는다.** 어떤 변경이 어떤 문서를 건드려야 하는지 매핑:
@@ -221,6 +279,7 @@ IN_PROGRESS로 옮긴 뒤, CLAUDE.md 18개 규칙 + DEVELOPER_GUIDE.md의
 | 새 API(`api/*.js`) 서버리스 함수 추가 | `ARCHITECTURE.md`(인증 흐름 섹션, 해당되면) + `DEVELOPER_GUIDE.md`(Security Checklist에 새 항목 필요 시 append) | 파괴적 액션이면 `checkAdminReauth` 패턴 준수 여부 명시 |
 | 새 테스트 스크립트(`scripts/testX.mjs`) 추가 | `TESTING.md`(카테고리 표에 행 추가) + `tests/harness/registry.mjs`(해당 도메인 `checks` 배열에 추가) | 새 빌드 스크립트가 필요하면 `BUILDERS`에도 추가 |
 | 새 도메인(기존 13개 밖) 기능 추가 | `tests/harness/registry.mjs`(새 `DOMAINS` 항목) + `package.json`(`verify:신규도메인` 스크립트) + `TESTING.md` | 커버할 스크립트가 없으면 정직한 SKIP 사유 명시(가짜 PASS 금지) |
+| Paul Town 아트워크 자산 추가/변경 | `docs/design/town/PAUL_TOWN_ASSET_CONTRACT.md`(해당 asset_key 행의 lifecycle 갱신) + `handoff.md` | 새 asset_key면 계약 표에 `SPEC_ONLY` 행부터 먼저 추가(위 "Paul Town 아트워크 배치 워크플로우" 참고) |
 | 로드맵/버전 완료 | `ROADMAP.md`(버전 섹션 append, 기존 v1.x 이하 섹션 원본 유지) + `handoff.md`(세션 상세 기록) | |
 | 개발 규칙/체크리스트 변경 | `DEVELOPER_GUIDE.md`(해당 섹션에 append, 새 규칙이 왜 생겼는지 근거 파일/사례 명시) | |
 | 헷갈리기 쉬운 새 함정 발견 | `PROJECT_GUIDE.md`("자주 헷갈리는 것" 목록에 append, Top 5 번호를 새로 매기지 않고 6번부터 이어감) | |
