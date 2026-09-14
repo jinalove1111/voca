@@ -94,7 +94,8 @@ check('src/assets/town/index.js 존재', assetsIndexSrc !== null)
 // 10번째 키(red-post-box), 11번째 키(animals/cat), 12번째 키(animals/owl),
 // 13번째 키(animals/puppy), 14번째 키(buildings/cafe)가 추가됐다. 같은 날
 // Batch 3 첫 자산으로 15번째 키(special/bridge), 두 번째 자산으로 16번째
-// 키(special/english-school)가 추가됐다(더 이상 빈 객체가 아님) — 소스
+// 키(special/english-school), 세 번째 자산으로 17번째 키
+// (decorations/town-sign)가 추가됐다(더 이상 빈 객체가 아님) — 소스
 // 텍스트에서 `TOWN_ASSETS = { ... }` 객체 리터럴 블록만 잘라내 그 안의 키
 // 목록을 정규식으로 추출한다(plain Node는 .webp 정적 import를 해석 못
 // 하므로 실제 import 대신 소스 텍스트 검사로 계약을 고정한다).
@@ -103,23 +104,23 @@ const townAssetsKeys = townAssetsBlockMatch
   ? Array.from(townAssetsBlockMatch[1].matchAll(/'([^']+)':/g)).map((m) => m[1])
   : []
 const EXPECTED_TOWN_ASSET_KEYS = [
-  'buildings/my-house', 'buildings/british-cottage', 'buildings/book-shop', 'decorations/red-post-box', 'animals/cat', 'animals/owl', 'animals/puppy', 'buildings/cafe', 'special/bridge', 'special/english-school', 'nature/tree',
+  'buildings/my-house', 'buildings/british-cottage', 'buildings/book-shop', 'decorations/red-post-box', 'animals/cat', 'animals/owl', 'animals/puppy', 'buildings/cafe', 'special/bridge', 'special/english-school', 'decorations/town-sign', 'nature/tree',
   'nature/garden-stage-0', 'nature/garden-stage-1', 'nature/garden-stage-2',
   'nature/garden-stage-3', 'nature/garden-stage-4',
 ]
 const STILL_EMOJI_ONLY_ASSET_KEYS = [
   'special/clock-tower', 'nature/flower-garden',
-  'decorations/stone-fountain', 'decorations/bench', 'decorations/town-sign',
+  'decorations/stone-fountain', 'decorations/bench',
   'decorations/shop-lamp', 'decorations/street-lamp',
 ]
 check(
-  'src/assets/town/index.js — TOWN_ASSETS가 정확히 16개 드롭인 키를 포함',
+  'src/assets/town/index.js — TOWN_ASSETS가 정확히 17개 드롭인 키를 포함',
   townAssetsKeys.length === EXPECTED_TOWN_ASSET_KEYS.length &&
     EXPECTED_TOWN_ASSET_KEYS.every((k) => townAssetsKeys.includes(k)),
   JSON.stringify(townAssetsKeys),
 )
 check(
-  'src/assets/town/index.js — TOWN_ASSETS에 나머지 7개 카탈로그 키는 여전히 없음(이모지 폴백 유지)',
+  'src/assets/town/index.js — TOWN_ASSETS에 나머지 6개 카탈로그 키는 여전히 없음(이모지 폴백 유지)',
   STILL_EMOJI_ONLY_ASSET_KEYS.every((k) => !townAssetsKeys.includes(k)),
   JSON.stringify(townAssetsKeys),
 )
