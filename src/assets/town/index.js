@@ -5,10 +5,10 @@
 // 채워졌고, 2026-09-14에 9번째 키(buildings/book-shop), 10번째 키
 // (decorations/red-post-box), 11번째 키(animals/cat), 12번째 키
 // (animals/owl), 13번째 키(animals/puppy), 14번째 키(buildings/cafe)가
-// 추가됐다. 같은 날 Batch 3 첫 자산으로 15번째 키(special/bridge)가
-// 추가됐다.
-// townAsset()은 이 15개 키에 대해서만 실제 이미지 URL을 반환한다. 그 외
-// 모든 assetKey(english-school 등 나머지 카탈로그 항목)는 여전히
+// 추가됐다. 같은 날 Batch 3 첫 자산으로 15번째 키(special/bridge), 두 번째
+// 자산으로 16번째 키(special/english-school)가 추가됐다.
+// townAsset()은 이 16개 키에 대해서만 실제 이미지 URL을 반환한다. 그 외
+// 모든 assetKey(clock-tower 등 나머지 카탈로그 항목)는 여전히
 // TOWN_ASSETS에 없어 townAsset()이 null을 반환한다.
 // 호출부(TownGrid/TownShopPanel/TownInventory)는 townAsset(item.assetKey)가
 // null이면 항상 이모지(item.emoji)로 폴백한다(기능이 이미지 부재로 깨지지
@@ -26,6 +26,7 @@ import owl from './animals/owl.webp'
 import puppy from './animals/puppy.webp'
 import cafe from './buildings/cafe.webp'
 import bridge from './special/bridge.webp'
+import englishSchool from './special/english-school.webp'
 import tree from './nature/tree.webp'
 import gardenStage0 from './nature/garden-stage-0.webp'
 import gardenStage1 from './nature/garden-stage-1.webp'
@@ -43,6 +44,7 @@ export const TOWN_ASSETS = {
   'animals/puppy': puppy,
   'buildings/cafe': cafe,
   'special/bridge': bridge,
+  'special/english-school': englishSchool,
   'nature/tree': tree,
   'nature/garden-stage-0': gardenStage0,
   'nature/garden-stage-1': gardenStage1,
