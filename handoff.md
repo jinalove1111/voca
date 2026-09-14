@@ -1,5 +1,75 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-14 (140차 — 두 번째 6시간 자율 세션: bench 4회
+_최종 갱신: 2026-09-15 (141차 — PR #53/#54 merge·Production 배포 확인
+완료(read-only 클로즈아웃) + Batch 3 최종 완료: street-lamp 신규
+독립형 unlit 후보 확인(APPROVED)으로 7/8 WIRED, bench는 11차 재제출도
+동일 글로우 결함 반복돼 운영자 결정으로 DEFERRED(V2 아트워크 백로그
+이월). art/batch3 브랜치를 병합된 main(PR #53+#54 포함)으로 업데이트
+(testTownV2Static.mjs 자동 merge, 충돌 없음), 전체 회귀 919/919 PASS.
+아직 PR 미오픈·미merge. Production 무접촉. 140차 이하 보존)_
+
+## 2026-09-15 (141차) — PR #53/#54 프로덕션 클로즈아웃 + Batch 3 최종 완료(7/8, bench DEFERRED)
+
+### 0. 안전 요약
+
+Production DB WRITE 0 · SQL 0 · 경제/보상/별/XP/PD/학생 mutation 0 ·
+플래그 변경 0 · paulTownV2 OFF 유지 · 파괴적 git 0 · 기존 미추적 SQL/
+운영 파일 16개 전부 무접촉.
+
+### 1. PR #53/#54 merge + Production 클로즈아웃(read-only)
+
+운영자 명시 승인 하에 PR #53(죽은 코드 정리, merge SHA `641c4dc`) →
+PR #54(배치 팝오버 UX+이미지 폴백, merge SHA `e6dade8`) 순서로 merge.
+PR #54는 PR #53과 TownSprite.jsx에서 겹치는 것으로 사전 예측된 충돌이
+실제로 발생 — 지시된 규칙대로 정확히 해결(PR#53 시그니처 유지+PR#54
+onError 유지+title 참조 제거), 로컬 E2E 919/919 재확인 후 push, 새
+Release Gate PASS 확인 후 merge. main→Production 자동 배포(기존 Vercel
+연동, 수동 배포 아님) 확인: HTTP 200, 로컬 빌드와 라이브 번들 바이트
+동일(md5 일치), stale-chunk 복구 코드 존재 확인, paulTownV2:!1 확인,
+prod:check 46/46 health PASS·DB WRITE 0.
+
+### 2. Batch 3 — street-lamp 최종 승인 + bench DEFERRED 결정
+
+운영자가 제공한 "street lamp and bench.png"(합성) + "street light1.png"
+후보를 분리 검증 — street-lamp: 독립형 지주(벽부착 아님)·유리창 실측
+중성색(예: (231,232,230), 웜톤 없음 — unlit 확인)·배경 외부 전 지점
+alpha=0(halo 없음)으로 최초로 APPROVED. 동일 합성에서 분리한 bench는
+9번째 재제출로 여전히 동일 글로우 결함(REGEN_REQUIRED 유지), 이후
+bench9/10/"bench 10"(10~11번째 재제출)도 전부 동일 결함 반복 확인.
+운영자가 "DEFER bench, ship remaining 7" 결정 → clock-tower(4번째)·
+shop-lamp(5번째)·street-lamp(6번째)·stone-fountain(7번째) 자산을
+표준 crop+repad 파이프라인으로 export·wire(각 자산별 소커밋),
+`src/assets/town/index.js` TOWN_ASSETS 17→21개 키. 테스트 계약 3종
+(`testTownUiStatic`/`testTownV2Static`/`testBundleBudget`) 21개 키
+기준으로 갱신 — shop-lamp/street-lamp/stone-fountain은 파일 크기가
+Vite assetsInlineLimit(4096B) 미만이라 물리 파일이 아닌 JS 청크
+인라인으로 방출됨을 실측 확인(기존 red-post-box/cat/owl/puppy와 동일
+패턴), 인라인 계약 4→7건으로 갱신.
+
+art/batch3 브랜치가 PR #53/#54 merge 이전의 구 main(`6778272`)에서
+분기돼 있었음을 확인 → 병합된 새 main(`e6dade8`)을 브랜치에 merge
+(testTownV2Static.mjs 자동 merge 성공, 충돌 0건) — PR #54가 이미
+반영한 21개 키 계약(section 3)과 batch3의 21개 키 확장이 서로 다른
+섹션이라 충돌하지 않음. build PASS, 타겟 테스트 6종 전량 PASS, 전체
+E2E 919/919(현재 main 기준선과 동일) PASS.
+
+### 3. 시각 QA — 오프라인 합성 PNG 대체(지난 세션과 동일 제약)
+
+라이브 인앱 QA는 여전히 DB-write 리스크+로컬 서버 권한 거부로 미실시.
+대신 21개 WIRED 자산 전체를 실제 canvas2x 픽셀 크기 그대로 PIL로 합성한
+단일 PNG(공유 지면선 정렬)를 생성해 육안 검토 — 하나의 영국 스토리북
+마을처럼 일관된 스타일/팔레트, 시계탑이 최고 랜드마크, 다리가 낮고
+넓음, shop-lamp 대비 street-lamp가 명확히 슬림/장신임을 직접 확인
+(디코레이션 행 확대 크롭으로 재확인).
+
+### 4. 다음 액션(운영자)
+
+- Batch 3(7개 자산) PR 오픈 대기 — 리뷰 후 승인 시 merge(자동 진행 안 함).
+- bench: 배경 없는 순수 컷아웃 재출력 시 별도 후속 배치로 재시도.
+- clock-tower 팔레트 편차(웜크림 몸체 vs 스펙의 네이비 몸체)·street-lamp
+  캔버스/aspectRatio 문서 불일치는 운영자 확인/결정 필요 항목으로
+  계약 문서에 남아 있음.
+
+## 2026-09-14 (140차) — 두 번째 6시간 자율 세션: bench 4회
 추가 재제출(bench5~8) 전부 반려 확인 + Batch 3와 독립된 안전한 엔지니어링
 작업 2건을 별도 PR로 분리 오픈(PR #53 죽은 코드 정리, PR #54 배치 팝오버
 UX+이미지 폴백) + glow 자동탐지 3종 실측 실패를 계약 문서에 기록. 둘 다
