@@ -8,7 +8,8 @@
 import { TOWN_LEVELS, starsToNextTownLevel } from '../../../utils/town/townLevel'
 import { formatDollars } from '../../../utils/townShop'
 
-export default function TownHud({ level, starsEarned, dollarsAvailable, goal, onOpenShop, onOpenInventory }) {
+export default function TownHud({ level, starsEarned, dollarsAvailable, goal, onOpenShop, onOpenInventory, unplacedCount = 0 }) {
+  const showUnplacedBadge = Number(unplacedCount) > 0
   const lvl = Math.max(1, Number.isFinite(Number(level)) ? Number(level) : 1)
   const stars = Math.max(0, Number.isFinite(Number(starsEarned)) ? Number(starsEarned) : 0)
   const { nextLevel } = starsToNextTownLevel(stars)
@@ -62,9 +63,18 @@ export default function TownHud({ level, starsEarned, dollarsAvailable, goal, on
             type="button"
             onClick={onOpenInventory}
             data-testid="town-open-inventory"
-            className="flex-1 min-h-[44px] rounded-2xl text-sm font-black btn-press bg-white text-[#1e2a5a] border border-[#1e2a5a]/20"
+            aria-label={showUnplacedBadge ? `보관함, 마을에 놓을 아이템 ${unplacedCount}개` : undefined}
+            className="relative flex-1 min-h-[44px] rounded-2xl text-sm font-black btn-press bg-white text-[#1e2a5a] border border-[#1e2a5a]/20"
           >
             🎁 보관함
+            {showUnplacedBadge && (
+              <span
+                aria-hidden="true"
+                className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-orange-500 text-white text-[10px] font-black leading-none"
+              >
+                {unplacedCount}
+              </span>
+            )}
           </button>
         </div>
       </div>
