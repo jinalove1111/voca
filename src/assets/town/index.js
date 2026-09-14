@@ -7,9 +7,15 @@
 // (animals/owl), 13번째 키(animals/puppy), 14번째 키(buildings/cafe)가
 // 추가됐다. 같은 날 Batch 3 첫 자산으로 15번째 키(special/bridge), 두 번째
 // 자산으로 16번째 키(special/english-school), 세 번째 자산으로 17번째 키
-// (decorations/town-sign)가 추가됐다.
-// townAsset()은 이 17개 키에 대해서만 실제 이미지 URL을 반환한다. 그 외
-// 모든 assetKey(clock-tower 등 나머지 카탈로그 항목)는 여전히
+// (decorations/town-sign), 네 번째 자산으로 18번째 키(special/clock-tower),
+// 다섯 번째 자산으로 19번째 키(decorations/shop-lamp), 여섯 번째 자산으로
+// 20번째 키(decorations/street-lamp), 일곱 번째 자산으로 21번째 키
+// (decorations/stone-fountain)가 추가됐다 — Batch 3의 8개 목표 자산 중
+// decorations/bench는 지속적인 baked 배경 글로우/비네트 결함(안전 처리로
+// 제거 불가)으로 이번 배치에서 DEFERRED — V2 아트워크 백로그로 이월,
+// 후속 배치에서 재시도한다(TOWN_ASSETS에 추가하지 않음, 이모지 폴백 유지).
+// townAsset()은 이 21개 키에 대해서만 실제 이미지 URL을 반환한다. 그 외
+// 모든 assetKey(bench 등 나머지 카탈로그 항목)는 여전히
 // TOWN_ASSETS에 없어 townAsset()이 null을 반환한다.
 // 호출부(TownGrid/TownShopPanel/TownInventory)는 townAsset(item.assetKey)가
 // null이면 항상 이모지(item.emoji)로 폴백한다(기능이 이미지 부재로 깨지지
@@ -29,6 +35,10 @@ import cafe from './buildings/cafe.webp'
 import bridge from './special/bridge.webp'
 import englishSchool from './special/english-school.webp'
 import townSign from './decorations/town-sign.webp'
+import clockTower from './special/clock-tower.webp'
+import shopLamp from './decorations/shop-lamp.webp'
+import streetLamp from './decorations/street-lamp.webp'
+import stoneFountain from './decorations/stone-fountain.webp'
 import tree from './nature/tree.webp'
 import gardenStage0 from './nature/garden-stage-0.webp'
 import gardenStage1 from './nature/garden-stage-1.webp'
@@ -48,6 +58,10 @@ export const TOWN_ASSETS = {
   'special/bridge': bridge,
   'special/english-school': englishSchool,
   'decorations/town-sign': townSign,
+  'special/clock-tower': clockTower,
+  'decorations/shop-lamp': shopLamp,
+  'decorations/street-lamp': streetLamp,
+  'decorations/stone-fountain': stoneFountain,
   'nature/tree': tree,
   'nature/garden-stage-0': gardenStage0,
   'nature/garden-stage-1': gardenStage1,
