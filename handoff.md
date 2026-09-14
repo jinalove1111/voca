@@ -1,6 +1,98 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-13 (137차 — Paul Town V2-B 야간 세션: 아트워크
-드롭인 파이프라인 + 접근성/모바일 폴리시(REVIEW ONLY, 미merge·미배포).
+_최종 갱신: 2026-09-14 (138차 — PR #52 프로덕션 클로즈아웃 확인 +
+Paul Town Batch 3(나머지 8개 자산) 진행 + 아트워크 캐노니컬 계약/배치
+워크플로우 신설. PR #52(book-shop/red-post-box/cat/owl/puppy/cafe)
+merge SHA `6778272` main 반영·배포 확인(번들 해시 바이트 일치·HTTP 200·
+paulTownV2 OFF·DB WRITE 0). 신규 브랜치
+`art/batch3-remaining-town-assets-2026-09-14`(main 6778272 기준)에
+3자산 WIRED(special/bridge·special/english-school·decorations/town-sign,
+각 build+testTownUiStatic/testTownV2Static/testBundleBudget 3종 14→17개
+계약 갱신 PASS) — 미merge. 나머지 5자산(clock-tower/bench/shop-lamp/
+street-lamp/stone-fountain)은 8개 후보 검증 결과 전부 REGEN_REQUIRED
+(stone-fountain은 2차 재제출 fountain2.png가 APPROVED, 아직 미wire —
+운영자 지시로 "배치 전체 도착 후 일괄 wire"로 전환). 신규 문서
+`docs/design/town/PAUL_TOWN_ASSET_CONTRACT.md`(19개 P0 자산 단일
+계약표) + `DEVELOPER_GUIDE.md` "Paul Town 아트워크 배치 워크플로우"
+섹션 추가(append). Production DB WRITE 0 · SQL 0 · 경제/보상/별/XP/PD/
+학생 mutation 0 · 플래그 변경 0 · paulTownV2 OFF 유지 · merge 0 · 배포 0 ·
+기존 미추적 SQL/운영 파일 16개 무접촉. 137차 이하 보존)_
+
+## 2026-09-14 (138차) — PR #52 프로덕션 클로즈아웃 + Paul Town Batch 3 진행 + 아트워크 캐노니컬 계약/배치 워크플로우 신설
+
+### 0. 안전 요약
+
+Production DB WRITE 0 · SQL 0 · api 0 · 경제/보상/별/XP/PD/학생 mutation
+0 · 구매 0 · Production 플래그/환경 변경 0 · paulTownV2 미활성화(기본
+OFF 유지) · merge 0 · deploy 0 · Kinney 무접촉 · 파괴적 git 0 · 기존
+미추적 SQL/운영 파일 16개(`production_*.sql`, `supabase_v3_38/39/39b/46_*.sql`,
+`docs/operations/ELEMENTARY_45_ROLLOUT_PACKAGE.md`) 전부 무접촉 확인.
+
+### 1. PR #52 프로덕션 클로즈아웃(read-only 검증)
+
+운영자 요청으로 main을 fast-forward(`5530169`→`6778272`)하고 merge SHA
+`67782720d519b4819bcb029f2e4d75ec5b3cb9e3`가 origin/main tip임을
+`git merge-base --is-ancestor`로 확인. `npm run prod:check`(GET/HEAD
+전용) health 46/46 PASS·DB WRITE 0. 프로덕션 표준 검증 패턴("번들 해시
+대조", `ARCHITECTURE.md` 8절)에 따라 로컬 `main@6778272` 빌드 산출물
+`index-BI5XkPmh.js`(md5 `595f32f4...`)와 라이브
+`https://voca-drab.vercel.app/assets/index-BI5XkPmh.js`가 바이트 단위로
+동일함을 확인, HTTP 200, `TownInventory-CodXm5Hb.js` 청크도 바이트
+동일 확인. 6개 신규 자산(book-shop/red-post-box/cat/owl/puppy/cafe)
+전부 라이브 청크에 참조 존재, 해시된 webp 파일(book-shop/cafe) HTTP
+200 확인. `paulTownV2:!1`(OFF) 확인.
+
+### 2. Paul Town Batch 3 — 나머지 8개 자산 검증/일부 통합
+
+운영자가 순차로 제공한 후보 이미지를 Phase 1(발견)/Phase 2(계약
+대조, A/B/C/D 등급)로 검증. 상세 등급/사유는
+`docs/design/town/PAUL_TOWN_ASSET_CONTRACT.md` §2 표 참고. 요약:
+
+- **WIRED(art/batch3 브랜치, 미merge)**: `special/bridge`(bridge1.png),
+  `special/english-school`(school 1.png), `decorations/town-sign`
+  (lamp1.png — 파일명은 램프이나 실제로는 빈 표지판). 각 자산 4파일
+  (1x/2x, png/webp) + `src/assets/town/index.js` 배선 + build PASS +
+  `testTownUiStatic`/`testTownV2Static`/`testBundleBudget` 3종 순차
+  14→16→17개 계약 갱신, 매 단계 PASS 확인 후 커밋(자산 커밋 3개 + 테스트
+  커밋 6개, 총 9커밋).
+- **APPROVED(미wire)**: `decorations/stone-fountain`(fountain2.png,
+  2차 재제출) — 단일 1단 분수·잔잔한 물·완전 투명 배경으로 계약 충족.
+  운영자 지시("Wait until all currently available candidates have been
+  supplied, then perform ONE batch intake")에 따라 이후 도착분은
+  즉시 wire하지 않고 배치 완료 신호를 기다리는 것으로 전환 — 이 자산부터
+  적용.
+- **REGEN_REQUIRED**: `special/clock-tower`(church.png — 숫자/PAUL TOWN
+  간판/과도한 지상 장식), `decorations/bench`(bench1.png — 단일 벤치
+  구도는 맞으나 알파 채널에 캔버스 전역 은은한 방사형 글로우 baked,
+  안전 처리로 제거 불가), `decorations/shop-lamp`(유효 후보 없음 —
+  lamp2.png는 비율/점등 둘 다 불일치), `decorations/street-lamp`
+  (lamp3.png — 독립형 지주·비율·알파 전부 우수하나 점등 상태, 동일
+  디자인 unlit 재출력만 필요), `decorations/stone-fountain` 1차
+  제출(fountain1.png — 광장형 받침+격렬한 분사, 2차 fountain2.png로
+  교체 승인).
+
+### 3. 아트워크 캐노니컬 계약 + 배치 워크플로우 신설
+
+운영자 지시로 "이미지 1장마다 전체 파이프라인" 패턴을 중단하고
+batch-first 워크플로우로 전환. 신규 `docs/design/town/
+PAUL_TOWN_ASSET_CONTRACT.md`(19개 P0 자산의 치수/팔레트/텍스트 허용/
+lit-unlit/lifecycle 단일 계약표, 기존 4개 스펙 문서는 append 보존 —
+대체 아님) + `DEVELOPER_GUIDE.md` "Paul Town 아트워크 배치 워크플로우"
+섹션(SPEC→CANDIDATES→VALIDATE→REGENERATE→EXPORT→WIRE→VISUAL QA→
+TEST→PR→GATE 10단계, "Prepare Paul Town artwork batch: <목록>" 재사용
+트리거 문구) + 문서 갱신 규칙 표에 신규 행 추가. `decorations/
+street-lamp` 캔버스(72×144, 1:2) vs aspectRatio 필드(1:2.5) 기존
+불일치는 임의 해결하지 않고 계약 문서에 각주로 그대로 이관(운영자 결정
+필요 항목으로 명시).
+
+### 4. 다음 액션(운영자)
+
+- `decorations/shop-lamp`/`street-lamp`/`clock-tower`/`bench` 재생성
+  후보 제출, `stone-fountain` wire 여부(다른 후보 도착 대기 vs 지금
+  단독 통합) 결정.
+- `decorations/street-lamp` 캔버스 필드 불일치(72×144 vs 1:2.5) 해결
+  방향 결정.
+- Batch 3 전체(3~8자산) 확정 후 §7 전체 회귀 1회 + PR 1개 생성 지시.
+
 136차(V2-A) PR #49 merge·배포 확인 후 신규 브랜치
 `feat/paul-town-v2b-artwork-pipeline-2026-09-13`(main d05d659 기준) 생성.
 갭 분석 1건(TownAmbientLayer.jsx 정원 단계가 townAsset() 경로 미사용) →
