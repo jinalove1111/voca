@@ -18,8 +18,13 @@ export default function TownObjectLayer({
   const homeAnchor = anchorFor(HOME_CELL.x, HOME_CELL.y)
   const idle = modeKind === 'idle'
 
+  // 2026-09-14 — 이 레이어의 루트는 씬 전체를 덮는 absolute inset-0라
+  // (objects z-index가 배치 팝오버 바깥 탭 백드롭보다 위) 실제 스프라이트가
+  // 없는 빈 칸에서도 포인터 이벤트를 가로채 백드롭 탭을 막았다(E2E 실측
+  // 확인). 루트는 pointer-events-none으로 "투명"하게 두고, 실제 클릭
+  // 가능한 요소(토글/이동/보관 버튼)에만 pointer-events-auto로 되살린다.
   return (
-    <div className="absolute inset-0" style={{ zIndex: Z_LAYERS.objects }}>
+    <div className="absolute inset-0 pointer-events-none" style={{ zIndex: Z_LAYERS.objects }}>
       <div
         aria-label="My House"
         data-testid="town-home"
@@ -67,10 +72,10 @@ export default function TownObjectLayer({
           >
             <button
               type="button"
-              onClick={() => { if (idle) onTogglePlacement && onTogglePlacement(p.placementId) }}
+              onClick={(e) => { if (idle) onTogglePlacement && onTogglePlacement(p.placementId, e.currentTarget) }}
               disabled={!idle}
               aria-label={label}
-              className="min-h-[44px] min-w-[44px] w-full flex items-center justify-center"
+              className="pointer-events-auto min-h-[44px] min-w-[44px] w-full flex items-center justify-center"
             >
               <TownSprite sprite={sprite} className="w-full h-full" />
             </button>
@@ -83,14 +88,14 @@ export default function TownObjectLayer({
                 <button
                   type="button"
                   onClick={() => onStartMove && onStartMove(p.placementId)}
-                  className="min-h-[44px] px-3 rounded-xl bg-purple-100 text-purple-600 text-xs font-black btn-press"
+                  className="pointer-events-auto min-h-[44px] px-3 rounded-xl bg-purple-100 text-purple-600 text-xs font-black btn-press"
                 >
                   이동
                 </button>
                 <button
                   type="button"
                   onClick={() => onStore && onStore(p.placementId)}
-                  className="min-h-[44px] px-3 rounded-xl bg-gray-100 text-gray-600 text-xs font-black btn-press"
+                  className="pointer-events-auto min-h-[44px] px-3 rounded-xl bg-gray-100 text-gray-600 text-xs font-black btn-press"
                 >
                   보관
                 </button>
