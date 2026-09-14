@@ -1,0 +1,42 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현 + 문서화",
+  "task_id": "paul-town-batch3-2026-09-14",
+  "task": "PR #52 프로덕션 클로즈아웃 확인 + Paul Town Batch 3(나머지 8개 자산) 검증/일부 통합 + 아트워크 캐노니컬 계약/배치 워크플로우 신설",
+  "status": "blocked",
+  "progress": 45,
+  "started_at": "2026-09-14T04:00:00+09:00",
+  "updated_at": "2026-09-14T05:30:00+09:00",
+  "files_owned": [
+    "src/assets/town/index.js",
+    "src/assets/town/special/bridge.png",
+    "src/assets/town/special/bridge.webp",
+    "src/assets/town/special/bridge@2x.png",
+    "src/assets/town/special/bridge@2x.webp",
+    "src/assets/town/special/english-school.png",
+    "src/assets/town/special/english-school.webp",
+    "src/assets/town/special/english-school@2x.png",
+    "src/assets/town/special/english-school@2x.webp",
+    "src/assets/town/decorations/town-sign.png",
+    "src/assets/town/decorations/town-sign.webp",
+    "src/assets/town/decorations/town-sign@2x.png",
+    "src/assets/town/decorations/town-sign@2x.webp",
+    "scripts/testTownUiStatic.mjs",
+    "scripts/testTownV2Static.mjs",
+    "scripts/testBundleBudget.mjs",
+    "docs/design/town/PAUL_TOWN_ASSET_CONTRACT.md",
+    "DEVELOPER_GUIDE.md",
+    "handoff.md"
+  ],
+  "files_read": [
+    "src/assets/town/assetManifest.js",
+    "src/utils/town/townCatalog.js",
+    "docs/design/town/V2A_ARTWORK_SPEC_FINAL.md",
+    "docs/design/town/V2A_ARTWORK_PROMPT_PACK.md",
+    "docs/design/town/V2A_BATCH2_COMMISSION_PACK.md",
+    "docs/design/town/V2A_ASSET_SPEC.md"
+  ],
+  "summary": "PR #52 merge SHA 6778272가 main/production에 반영됐음을 번들 해시 대조로 확인. art/batch3-remaining-town-assets-2026-09-14 브랜치에 3자산(special/bridge, special/english-school, decorations/town-sign) WIRED, build+3개 test contract 전부 PASS, 9커밋. 나머지 5자산은 후보 검증 결과 REGEN_REQUIRED(stone-fountain만 2차 재제출로 APPROVED, 미wire). 운영자 지시로 batch-first 워크플로우 전환 — 신규 캐노니컬 계약 문서(PAUL_TOWN_ASSET_CONTRACT.md) + DEVELOPER_GUIDE.md 배치 워크플로우 섹션 작성 완료.",
+  "blocker": "clock-tower/bench/shop-lamp/street-lamp 4개 자산이 아직 REGEN_REQUIRED — 유효한 재생성 후보 도착 전까지 배치를 PR로 마감할 수 없음. stone-fountain은 APPROVED 상태로 대기 중(운영자가 단독 wire 승인 또는 나머지 후보 도착까지 대기 여부 결정 필요).",
+  "next_action": "운영자가 clock-tower(숫자/PAUL TOWN 텍스트 제거)/bench(배경 글로우 없는 클린 컷아웃)/shop-lamp(독립형+unlit 신규 후보)/street-lamp(lamp3.png 동일 디자인 unlit 재출력) 재생성본을 제출하면, 배치 전체를 한 번에 §4 export 파이프라인으로 처리→wire→visual QA→전체 회귀 1회→art/batch3 브랜치에 커밋→PR 1개 오픈. stone-fountain wire 시점은 운영자 확인 대기."
+}
