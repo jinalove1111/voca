@@ -111,9 +111,8 @@ export default function TownScene({
         <TownFogLayer fog={fog} />
         {modeKind !== 'idle' && (
           <TownPlacementOverlay
-            anchors={freeAnchors(placements, mode)}
+            anchors={freeAnchors(placements)}
             onAnchorTap={handleAnchorTap}
-            modeKind={modeKind}
           />
         )}
       </div>

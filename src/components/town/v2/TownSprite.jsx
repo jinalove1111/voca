@@ -23,7 +23,7 @@ const EMOJI_SIZE_CLASS = {
   sm: 'text-[clamp(1.6rem,9vw,2.6rem)]',
 }
 
-export default function TownSprite({ sprite, sizeClass, className = '', style, title }) {
+export default function TownSprite({ sprite, className = '', style }) {
   const s = sprite || {}
   const asset = townAsset(s.assetKey)
   const emojiSizeClass = EMOJI_SIZE_CLASS[s.footprint] || EMOJI_SIZE_CLASS.sm
@@ -45,9 +45,8 @@ export default function TownSprite({ sprite, sizeClass, className = '', style, t
           loading="lazy"
           decoding="async"
           data-asset-key={s.assetKey || ''}
-          title={title}
           onError={() => setLoadFailed(true)}
-          className={`relative w-full h-full object-contain drop-shadow-sm ${sizeClass || ''}`}
+          className="relative w-full h-full object-contain drop-shadow-sm"
         />
       </span>
     )
@@ -59,8 +58,7 @@ export default function TownSprite({ sprite, sizeClass, className = '', style, t
       <span
         aria-hidden="true"
         data-asset-key={s.assetKey || ''}
-        title={title}
-        className={`relative inline-flex items-center justify-center w-full h-full leading-none drop-shadow-sm ${emojiSizeClass} ${sizeClass || ''}`}
+        className={`relative inline-flex items-center justify-center w-full h-full leading-none drop-shadow-sm ${emojiSizeClass}`}
       >
         {s.emoji || '🎁'}
       </span>
