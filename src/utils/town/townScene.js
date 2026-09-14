@@ -1,8 +1,8 @@
 // src/utils/town/townScene.js — Paul Town V2-A 스토리북 씬 좌표/파생값
 // (순수 도메인, 2026-09-13).
 //
-// import는 townLayout.js(TOWN_GRID/HOME_CELL)과 townLevel.js(TOWN_LEVELS/
-// starsToNextTownLevel/townLevelForStars)만 허용한다 — React/DOM/Date.now/
+// import는 townLayout.js(TOWN_GRID/HOME_CELL)과 townLevel.js
+// (starsToNextTownLevel/townLevelForStars)만 허용한다 — React/DOM/Date.now/
 // Math.random 없음. 이 파일은 기존 8x6 좌표계(townLayout.js가 진실
 // 원천)를 절대 바꾸지 않고, 그 좌표를 "장면(scene)" 픽셀/퍼센트 앵커로
 // 변환하는 순수 파생 함수만 제공한다. 입력을 mutate하지 않고, 손상된
@@ -14,7 +14,7 @@ import { TOWN_GRID, HOME_CELL as TOWN_LAYOUT_HOME_CELL } from './townLayout'
 // 레이어 컴포넌트들이 townLayout.js와 townScene.js 양쪽을 왔다갔다
 // import하지 않도록).
 export const HOME_CELL = TOWN_LAYOUT_HOME_CELL
-import { TOWN_LEVELS, starsToNextTownLevel, townLevelForStars } from './townLevel'
+import { starsToNextTownLevel, townLevelForStars } from './townLevel'
 
 export const SCENE_ROWS = TOWN_GRID.rows
 export const SCENE_COLS = TOWN_GRID.cols
@@ -208,12 +208,9 @@ export function fogState(catalog, level) {
 
 /**
  * HOME_CELL과 이미 배치가 있는 칸을 제외한 모든 빈 칸 좌표(배치 오버레이용).
- * placements 배열에 null이 섞여 있어도 안전. mode는 V1과 동일한 시맨틱을
- * 유지하기 위한 자리(이동 중인 배치 자신의 칸도 여전히 점유로 취급) —
- * 현재는 결과에 영향을 주지 않지만 시그니처를 스펙대로 유지한다.
+ * placements 배열에 null이 섞여 있어도 안전.
  */
-// eslint-disable-next-line no-unused-vars
-export function freeAnchors(placements, mode) {
+export function freeAnchors(placements) {
   const list = Array.isArray(placements) ? placements.filter(Boolean) : []
   const occupied = new Set(list.map((p) => `${p.x},${p.y}`))
   const out = []
@@ -226,11 +223,6 @@ export function freeAnchors(placements, mode) {
   }
   return out
 }
-
-// TOWN_LEVELS는 이 파일에서 직접 쓰진 않지만(starsToNextTownLevel/
-// townLevelForStars가 내부에서 이미 사용), 씬 레이어(TownHud.jsx 등)가
-// 별도 계산 없이 재사용할 수 있도록 재노출한다.
-export { TOWN_LEVELS }
 
 const GARDEN_STAGE_EMOJI = ['🌱', '🌱', '🌷', '🌻', '🌳']
 
