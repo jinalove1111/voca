@@ -163,20 +163,24 @@ check(
 )
 
 // ── 4. V1 파일 byte-identical(origin/main 대비) — V2가 V1을 건드리지 않음 ──
-// 2026-09-15 예외(정직하게 기록) — TownScreen.jsx/townLayout.js/
+// 2026-09-15 예외 1차(정직하게 기록) — TownScreen.jsx/townLayout.js/
 // townMessages.js는 "V2 작업 중 V1을 실수로 건드림"이 아니라 V1+V2
 // 공유 UX 수정(구매-미배치 아이템 보관함 탭 배지 + 안내 문구, 두 화면에
-// 동일하게 적용)으로 의도적으로 함께 바뀌었다 — 이 3개 파일만 목록에서
-// 빼고 아래 9개는 여전히 그대로 보호한다(이번 변경이 실제로 건드리지
-// 않은 파일들의 회귀는 계속 잡아야 하므로).
-// 2026-09-15c 예외 — TownShopPanel.jsx/TownInventory.jsx는 V1+V2가
-// 그대로 공유하는 패널이며, 구매 실패 피드백(서버 사유 'insufficient'
-// 미처리 죽은 분기 + 조용한 실패) 및 <img> onError 이모지 폴백이라는
-// 클라이언트 fail-safe 수정으로 의도적으로 바뀌었다(V2 세션의 실수
-// 아님). 이 2개도 목록에서 빼고 나머지 7개는 계속 보호한다.
+// 동일하게 적용)으로 의도적으로 함께 바뀌었다.
+// 2026-09-15 예외 2차 — TownGrid.jsx는 "마을 장면 비주얼 업그레이드"
+// 작업(체스판/격자 인상 제거, V1이 실제 학생에게 보이는 화면이라 V1을
+// 직접 고침 — V2 TownGroundLayer.jsx/TownPathLayer.jsx에서 이미 검증된
+// CSS 기법을 재사용)으로 의도적으로 바뀌었다. 좌표/클릭 판정은 그대로다.
+// 2026-09-15c 예외(PR #59, main 병합) — TownShopPanel.jsx/TownInventory.jsx는
+// V1+V2가 그대로 공유하는 패널이며, 구매 실패 피드백(서버 사유
+// 'insufficient' 미처리 죽은 분기 + 조용한 실패) 및 <img> onError 이모지
+// 폴백이라는 클라이언트 fail-safe 수정으로 의도적으로 바뀌었다(V2 세션의
+// 실수 아님).
+// 이 6개 파일(TownScreen/townLayout/townMessages/TownGrid/TownShopPanel/
+// TownInventory)만 목록에서 빼고 아래 6개는 여전히 그대로 보호한다(이번
+// 변경들이 실제로 건드리지 않은 파일들의 회귀는 계속 잡아야 하므로).
 section('4. V1 파일 무변경(origin/main과 byte-identical)')
 const V1_UNCHANGED_FILES = [
-  'src/components/town/TownGrid.jsx',
   'src/components/town/TownHeader.jsx',
   'src/utils/town/townCatalog.js',
   'src/utils/town/townLevel.js',
