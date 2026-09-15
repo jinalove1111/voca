@@ -313,6 +313,25 @@ const allTownSrcForBrandCheck = TOWN_COMPONENT_FILES.map((f) => rawByFile[f] || 
 check('마을 코드 전체 — "Hogwarts/Harry/Potter" 문자열 없음(저작권 회피)', !/Hogwarts|Harry|Potter/i.test(allTownSrcForBrandCheck))
 check('TownShopPanel.jsx — TOWN_PHRASES.learnEarn 여전히 정확히 1회(PHASE 4로 늘지 않음)', countOccurrences(shopSrc, 'TOWN_PHRASES.learnEarn') === 1)
 
+// ── 13. 마을 장면 비주얼 업그레이드(2026-09-15) — 체스판 인상 제거 ────────
+section('13. TownGrid.jsx — 체스판(checkerboard) 제거 + 배치모드 전용 안내')
+check('TownGrid.jsx — 칸 배경 bg-white/40 제거됨(체스판의 직접 원인)', !gridCode.includes('bg-white/40'))
+check('TownGrid.jsx — HOME 칸 하드 박스(bg-purple-100 border-purple-300 조합) 제거됨', !gridSrc.includes('bg-purple-100 border-2 border-purple-300'))
+check('TownGrid.jsx — 칸별 고정 자갈길 배경(bg-[#d9d2c5]) 삭제(연속 레이어로 대체)', !/isPath\s*\?\s*'bg-\[#d9d2c5\]'/.test(gridSrc))
+check('TownGrid.jsx — 연속 바닥 레이어(그라데이션 + aria-hidden) 존재', /aria-hidden="true"[^]*?bg-gradient-to-b from-\[#fdebd0\]/.test(gridSrc) || /bg-gradient-to-b from-\[#fdebd0\][^]*?aria-hidden="true"/.test(gridSrc))
+check('TownGrid.jsx — 자갈길 밴드가 COBBLE_STYLE(radial-gradient)로 연속 렌더', /COBBLE_STYLE/.test(gridSrc) && /radial-gradient/.test(gridSrc))
+check('TownGrid.jsx — 빈 칸 배치 안내는 showPlacementGuide 조건에서만 렌더(평시엔 안 보임)', /showPlacementGuide\s*=\s*isEmpty\s*&&\s*\(modeKind === 'placing' \|\| modeKind === 'moving'\)/.test(gridCode))
+check('TownGrid.jsx — 배치 안내는 점선(border-dashed)만 쓰고 강한 체스판 배색 없음', /border-dashed border-\[#e0a73a\]/.test(gridSrc))
+check('TownGrid.jsx — ambientClassFor/depthClassFor(townAmbient.js 기존 순수 함수) 재사용, 새 팔레트 없음', /from '\.\.\/\.\.\/utils\/town\/townAmbient'/.test(gridSrc))
+check('TownGrid.jsx — 좌표/클릭 판정 함수(handleCellClick/isHomeCell) 그대로 유지', /function handleCellClick\(x, y\)/.test(gridCode) && /function isHomeCell\(x, y\)/.test(gridCode))
+check('TownGrid.jsx — 배치된 아이템에 접지 그림자(그라운딩) 요소 존재', /bg-black\/15 blur-\[1px\]/.test(gridSrc))
+check('TownGrid.jsx — 이미지 로드 실패 시 이모지 폴백(onError, V2 TownSprite.jsx와 동일 원칙)', /onError=\{\(\)\s*=>\s*setLoadFailed\(true\)\}/.test(gridSrc))
+// 2026-09-15 — 1차 구현에서 배치 안내를 칸 전체를 채우는 점선 사각형으로
+// 그려 오히려 체스판이 더 강하게 보이는 회귀가 실제로 있었다(시각 QA
+// 스크린샷으로 발견·수정). 재발 방지: 배치 안내는 버튼 자체 배경이
+// 아니라 칸 중앙의 작은 원(w-[45%] 이하)이어야 한다.
+check('TownGrid.jsx — 배치 안내가 칸 전체 배경이 아니라 중앙의 작은 원(회귀 방지)', !/showPlacementGuide\s*\?\s*'border-2 border-dashed/.test(gridCode) && /showPlacementGuide && \([\s\S]{0,200}rounded-full border-2 border-dashed/.test(gridSrc))
+
 // ── 결과 ──────────────────────────────────────────────────────────────
 console.log(`\n총 ${totalPassed + totalFailed}개 단언 — PASS ${totalPassed} / FAIL ${totalFailed}`)
 if (failures.length > 0) {
