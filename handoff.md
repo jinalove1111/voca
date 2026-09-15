@@ -1,11 +1,157 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-15 (141차 — PR #53/#54 merge·Production 배포 확인
-완료(read-only 클로즈아웃) + Batch 3 최종 완료: street-lamp 신규
-독립형 unlit 후보 확인(APPROVED)으로 7/8 WIRED, bench는 11차 재제출도
-동일 글로우 결함 반복돼 운영자 결정으로 DEFERRED(V2 아트워크 백로그
-이월). art/batch3 브랜치를 병합된 main(PR #53+#54 포함)으로 업데이트
-(testTownV2Static.mjs 자동 merge, 충돌 없음), 전체 회귀 919/919 PASS.
-아직 PR 미오픈·미merge. Production 무접촉. 140차 이하 보존)_
+_최종 갱신: 2026-09-16 (142차 — 프로젝트 메모리 동기화: PR #55~#59
+merge 기록 반영(main=origin/main=`9eec10d`, ahead/behind 0) + 141차
+"Batch 3 PR 미오픈" 표기가 PR #55 merge로 stale해진 것을 정정,
+paulTownV2 OFF·paulTownV1 Pilot A 화이트리스트(Kinney 포함) 상태
+재확인. Kinney의 실제 Town V1 화면에서 PR #57 마을 장면 시각
+업그레이드를 read-only로 검증 완료(§6, 44/44 PASS). Production
+DB/SQL/플래그/merge/deploy 전부 0건, Kinney 무접촉. 141차 이하 보존)_
+
+## 2026-09-16 (142차) — 프로젝트 메모리 동기화: PR #55~#59 merge 기록 + Kinney Town V1 시각 업그레이드 검증 착수
+
+### 0. 안전 요약
+
+Production DB WRITE 0 · SQL 0 · 코드 변경 0(문서만) · 플래그 변경 0 ·
+merge/deploy 0 · Kinney 무접촉 · 기존 미추적 파일 17개 전부 무접촉 ·
+git worktree(33개) 삭제 0.
+
+### 1. Git 상태 확인 및 PR #55~#59 merge 기록 정리
+
+main = origin/main = `9eec10d`, ahead 0 / behind 0, 추적 파일 트리
+clean(`git status --short` 미추적 17개만 표시, 아래 3절 참고). 최근
+merge 커밋 로그를 확인해 141차 이후 실제로 merge·배포된 PR 5건을
+기록: PR #55(feat(town): Paul Town 나머지 아트워크 배치 7/8, bench는
+DEFERRED 유지, 2026-09-14 merge), PR #56(fix(town): 구매 후 미배치
+아이템 배지 + 안내 문구, V1+V2 대응, 2026-09-14), PR #57(feat(town):
+마을 장면 체스판 인상 제거 — CSS-only 바닥/자갈길/산울타리 + 환경
+아트워크 4종(하늘/원경, 돌담+산울타리, 자갈길 타일, 정원 장식 3개)을
+TownGrid.jsx에 배선, 2026-09-15), PR #58(chore(town): 아트워크 검증
+도구 WebP 지원, 2026-09-15), PR #59(fix(town): 구매 실패 피드백
+fail-safe + V1 상점/보관함 이미지 폴백, 2026-09-15). main→Production은
+기존 Vercel 연동으로 자동 배포된다(수동 배포 아님).
+
+중요 정정: 141차 항목은 "Batch 3(7개 자산) PR 미오픈"이라고 기록했으나,
+이는 이후 세션에서 PR #55로 오픈·merge되어 이미 stale하다. 다음 세션이
+141차의 "PR 미오픈" 표기만 보고 같은 작업을 다시 오픈하려는 회귀를
+막기 위해 본 항목에 명시적으로 정정 남김 — Batch 3 관련 작업은 더 이상
+남은 PR 오픈 작업이 없다(bench DEFERRED만 백로그로 유효).
+
+### 2. 플래그/파일럿 상태 재확인
+
+`src/config/features.js` 112번째 줄 `paulTownV2: false` 확인(OFF 유지).
+paulTownV1은 기기 단위 플래그 기본값 false이며, `src/config/
+pilotTown.js`의 Pilot A 화이트리스트(UUID 5개, Kinney
+`e0fe0f50-8927-44d9-9331-e454620524d9` 포함)가 UUID 기준으로 해당
+학생에게 Town V1 진입을 허용한다(규칙 4 — 이름이 아닌 UUID 식별
+확인). decorations/bench는 여전히 DEFERRED(V2 아트워크 백로그)로 상태
+변화 없음.
+
+### 3. 미추적 파일/worktree — 의도적 무접촉 확인
+
+기존 미추적 파일 17개(운영자용 수동 SQL 16개: `supabase_v3_38_*`,
+`supabase_v3_39_*`, `supabase_v3_39b_*`, `supabase_v3_46_*` 및 각
+ROLLBACK, `production_v3_47~50_*_verify.sql`,
+`production_gyobin_ghost_pointer_{apply,post_verify,rollback}.sql`,
+`production_pilot_student_diagnostic.sql`; 문서 1개:
+`docs/operations/ELEMENTARY_45_ROLLOUT_PACKAGE.md`)는 이번 세션에서
+읽기조차 하지 않았고 전부 그대로 남아 있다. 스크래치패드 git
+worktree 33개도 의도적으로 정리하지 않았다(과거 세션들의 병렬 작업
+잔재로 별도 정리 작업 범위).
+
+### 4. Open PR 현황(변경 없음)
+
+#45, #44, #32, #18, #17, #16, #11, #9 — 이번 세션에서 열람만 하고
+손대지 않음.
+
+### 5. 다음 작업 — Kinney Town V1 시각 업그레이드 read-only 검증(착수)
+
+PR #57에서 merge된 마을 장면 시각 업그레이드를 실제 파일럿 학생
+Kinney의 기존 Town V1 경로에서 확인하는 작업에 착수한다: `App.jsx`
+`screen === 'town'` → `components/town/TownScreen.jsx` →
+`TownGrid.jsx`. `townV1Enabled`는 `paulTownV1` 플래그 OR
+`isPilotTownStudent(studentId)`로 결정되며 `townV2Active`는 false로
+유지된다. 이 검증은 read-only(구매 없음, 데이터 mutation 없음, 플래그
+변경 없음)로 진행하며, 결과는 검증을 수행하는 후속 세션이 본 142차
+항목 하위에 새 섹션(예: "### 6. Kinney Town V1 검증 결과")으로
+append한다. 본 세션은 문서 동기화(TASK A/B)에 이어 같은 세션에서 실제
+검증까지 완료했다(결과는 §6).
+
+### 6. Kinney Town V1 시각 업그레이드(PR #57) read-only 검증 결과
+
+경로 추적: Kinney UUID `e0fe0f50-8927-44d9-9331-e454620524d9`는
+`src/config/pilotTown.js` Pilot A 허용목록에 포함되어 `App.jsx`의
+`townV1Enabled = paulTownV1(기기 플래그) || isPilotTownStudent(studentId)`가
+true, `townV2Active = townV1Enabled && paulTownV2` = false(paulTownV2
+OFF)로 계산됨을 확인. `screen === 'town'`에서
+`components/town/TownScreen.jsx`(V1) → `TownGrid.jsx`가 렌더되며,
+PR #57의 환경 아트워크 4종(village-sky-backdrop /
+village-hedge-border / village-cobblestone-tile /
+garden-accent-1~3)은 `TownGrid.jsx`(V1)에 직접 배선돼 있어 Kinney
+경로에서 실제로 보인다(V2 전용 아님).
+
+Production 대조(GET/HEAD only): `https://voca-drab.vercel.app` HTTP
+200, 라이브 index-BNVCBtx_.js md5 `57f8ef8c510025b5921b4749c63d7c5a`
+= 로컬 `npm run build`(main `9eec10d`) 산출물 md5 동일. 라이브
+번들에 `paulTownV2:!1`(OFF) 리터럴 확인. TownScreen-CDx5s9pT.js
+청크 및 환경 webp 5종 모두 Production에서 HTTP 200. `npm run
+prod:check` DB WRITE 0, Safe to continue: YES.
+
+Kinney 실데이터 read-only(anon key GET, student_progress.progress_data
+일부 컬럼만): townPlacements = [{x:4, y:2, itemId:'tree',
+placementId:'tree:1789228101707:26pbgn'}], townRemovedIds = [],
+updated_at 2026-09-15T12:59:09Z → 이전 확인된 나무 배치가 그대로
+보존됨. Paul Dollar 잔액/소유 목록은 `get_town_shop_state` RPC가
+service_role 전용이라 에이전트가 read-only로 확인 불가(운영자
+service_role SELECT 또는 Kinney 기기 확인 필요) — 미확인 항목으로
+정직 기록. DB WRITE 0, 구매 0, 이동/삭제 0.
+
+렌더 검증 방법: vite preview(127.0.0.1:4199, main `9eec10d` 빌드) +
+Playwright chromium + 기존 `tests/e2e/lib/mockRoutes.mjs` 전체
+네트워크 mock(실 Supabase/Vercel 요청 0). `installMocks({ studentId:
+Kinney UUID, townState: {starsEarned:60, dollars:{available:31,
+earned:41, spent:10}, owned:['tree'], welcomeClaimed:true} })`,
+기기 플래그 미설정(paulTownV1/V2 OFF) → 허용목록만으로 Town V1 진입
+확인. Kinney 실제 좌표(4,2)에 나무를 mock UI로 배치(townV2.spec S5와
+같은 LIMITATION: 로컬 백업 사전 시드 대신 UI 배치).
+
+결과 44/44 PASS(desktop 1280×800, mobile 390×844 각 22 단언): 진입
+카드 표시, HUD Lv.3/$31, V2 노드 0, 하늘/원경·돌담/산울타리·자갈길
+타일 레이어 렌더, 정원 장식 3개(전부 pointer-events:none + aria-
+hidden), 깨진 이미지 0, 빈 칸 idle 배경 투명 0/46·불투명·테두리
+0/46(체스판 인상 제거), 가로 오버플로 0, 장식이 나무 칸/My House
+칸을 덮는 픽셀 0, 하늘/산울타리 헤더 띠와 0행 칸 겹침 0, 나무
+아트워크 img 렌더(이모지 폴백 아님), 콘솔 에러 0, mock 구매/welcome
+호출 0, 미mock 실네트워크 요청 0.
+
+육안 검토: 하늘·구름·원경 나무 → 담쟁이 덮인 돌담+꽃 산울타리 띠 →
+크림색 잔디 → 자갈길 → 초록 잔디 순으로 일관된 영국 정원/마을
+장면. 격자선/체스판 인상 없음. 배치된 나무와 My House가 장식과
+구분됨. 클리핑 없음. 모바일 프레이밍 정상(격자 40px 칸 유지).
+관찰(코스메틱, 비차단): (1) 산울타리 띠 바로 아래 잔디 영역의
+inset 링(둥근 안쪽 프레임)이 이중 테두리처럼 보임, (2) 자갈길
+밴드가 안쪽 프레임 좌우 끝까지 닿아 링과 겹침, (3) 모바일 390에서
+격자 아래 안내 문구가 기존 우하단 고정 발음 속도 버튼("보통")과
+일부 겹침 — PR #57 이전부터 있던 고정 버튼으로 추정(별도 확인
+필요). 어떤 관찰도 상호작용/데이터에 영향 없음.
+
+스크린샷(세션 스크래치패드, 저장소 외부):
+`C:\Users\jinal\AppData\Local\Temp\claude\C--voca\
+0c666b06-2a35-4326-90d0-b68bb11633d2\scratchpad\screenshots\`의
+kinney-town-v1-desktop-1280.png / kinney-town-v1-desktop-1280-
+grid.png / kinney-town-v1-mobile-390.png / kinney-town-v1-mobile-
+390-grid.png / results.json.
+
+회귀 테스트: testTownUiStatic / testTownV2Static / testBundleBudget
+/ testTownLayout 전부 PASS, `npm run build` PASS(16.3s).
+
+안전 결산: Production DB WRITE 0 · SQL 0 · 코드 변경 0 · 플래그
+변경 0 · 구매 0 · Kinney 데이터 mutation 0 · merge/deploy/PR 오픈 0
+· 미추적 보호 파일 17개 무접촉 · worktree 삭제 0.
+
+권장 다음 액션 1개: 운영자가 Kinney 실기기(Samsung Internet)에서
+Town V1을 1회 열어 잔액 $31·나무 소유·(4,2) 배치를 육안 확인(구매/
+이동 없음) — 에이전트가 read-only로 확인 못 한 잔액/소유 항목을
+닫는다.
 
 ## 2026-09-15 (141차) — PR #53/#54 프로덕션 클로즈아웃 + Batch 3 최종 완료(7/8, bench DEFERRED)
 
