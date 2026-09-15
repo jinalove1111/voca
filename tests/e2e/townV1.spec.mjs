@@ -761,5 +761,80 @@ export async function run(browser, baseURL) {
     }
   }
 
+  // ── 2026-09-15c PURCHASE-FAIL(뷰포트 1개만, 360x640) — 구매 RPC가 실패
+  //     응답을 돌려줄 때 UI가 조용히 실패하지 않고 폴 가이드로 안내하며,
+  //     거짓 소유권이 생기지 않고, 재시도 가능한 상태로 남는지. 실측된
+  //     실제 결함 회귀 가드: (1) 서버 SQL 사유는 'insufficient'인데
+  //     클라이언트는 'insufficient_funds'만 봐서 죽은 분기였음, (2)
+  //     network_failed 등은 아무 안내 없이 시트만 닫혔음. installMocks 뒤에
+  //     등록한 route가 우선 매칭(Playwright: 나중 등록이 먼저) —
+  //     purchase_town_item만 가로채고 나머지 action은 fallback()으로 기존
+  //     mock에 넘긴다(mockRoutes.mjs 무수정). 강제 응답은 mock 상태를 전혀
+  //     건드리지 않으므로 db._townCalls.purchase_town_item도 0으로 남아야
+  //     한다(= 서버 상태 무변경의 증거). ─────────────────────────────────
+  for (const scenario of [
+    { forcedReason: 'network_failed', forcedBody: { ok: false, reason: 'network_failed' }, guideText: '구매가 안 됐어요', afterCardText: '구매' },
+    // balanceAfter:5 < 나무 $10 — applyPurchaseResult가 헤더 잔액을 5로
+    // 정정하고, 안내 문구 부족액도 같은 5를 근거로 계산돼야 한다.
+    { forcedReason: 'insufficient', forcedBody: { ok: false, reason: 'insufficient', balanceAfter: 5 }, guideText: '5 Paul Dollar가 더 필요해요', afterCardText: '5 더 필요' },
+  ]) {
+    const vp = VIEWPORTS[0]
+    const name = `${vpName(vp)} PURCHASE-FAIL(${scenario.forcedReason})`
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
+    const page = await context.newPage()
+    await enableTownFlag(page)
+    const { db, unmockedRequests: u, ttsFallbackRequests: t } = await installMocks(page)
+    let forcedCount = 0
+    await page.route('**/api/grant-xp', async (route) => {
+      let body = {}
+      try { body = route.request().postDataJSON() || {} } catch { /* 무시 */ }
+      if (body.action !== 'purchase_town_item') { await route.fallback(); return }
+      forcedCount += 1
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(scenario.forcedBody) })
+    })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownV1(page)
+      await card.click()
+      await waitForTownHeader(page)
+      const dollarBadge = page.locator(DOLLAR_BADGE_SEL)
+      // 환영 선물($20)이 반영돼 나무($10)가 '구매 가능'이 될 때까지.
+      const welcomeIn = await waitUntil(async () => ((await dollarBadge.textContent().catch(() => '')) || '').includes('20'), { timeout: 10000 })
+      r.check(`${name} — 사전조건: 환영 선물 후 잔액 $20`, !!welcomeIn)
+
+      await page.getByRole('button', { name: '🛒 상점' }).click()
+      await page.getByRole('button', { name: '자연 카테고리' }).click()
+      const treeCard = page.locator('div.bg-white.rounded-2xl.card-shadow', { has: page.getByText('나무', { exact: true }) }).first()
+      const buyBtn = treeCard.getByRole('button', { name: '구매' })
+      await buyBtn.waitFor({ state: 'visible', timeout: 10000 })
+      await buyBtn.click()
+      await page.locator('div.animate-slide-up').waitFor({ state: 'visible', timeout: 10000 })
+      await page.getByRole('button', { name: '사기' }).click()
+
+      const guideShown = await waitUntil(() => page.getByText(scenario.guideText, { exact: false }).first().isVisible().catch(() => false), { timeout: 5000 })
+      r.check(`${name} — 실패 시 폴 가이드 안내("${scenario.guideText}") 표시(조용한 실패 아님)`, !!guideShown)
+      r.check(`${name} — 강제 실패 응답이 정확히 1회 전달됨`, forcedCount === 1, `forcedCount=${forcedCount}`)
+      const cardText = (await treeCard.textContent().catch(() => '')) || ''
+      r.check(`${name} — 실패한 구매는 "보유 ✓"로 표시되지 않음(거짓 소유권 없음)`, !cardText.includes('보유 ✓'), cardText)
+      r.check(`${name} — 카드가 재시도 가능한 정상 상태("${scenario.afterCardText}")로 남음(영구 고착 없음)`, cardText.includes(scenario.afterCardText), cardText)
+      r.check(`${name} — mock 서버 상태 무변경(purchase_town_item mock 호출 0)`, !(db._townCalls.purchase_town_item.tree > 0), JSON.stringify(db._townCalls.purchase_town_item))
+      if (scenario.forcedReason === 'insufficient') {
+        const headerText = (await dollarBadge.textContent().catch(() => '')) || ''
+        r.check(`${name} — 헤더 잔액이 서버 balanceAfter($5)로 정정됨(안내 문구와 일치)`, headerText.includes('5') && !headerText.includes('20'), headerText)
+      }
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] mockErrors=${JSON.stringify(db.errors.slice(0, 3))}\n  [진단] townCalls=${JSON.stringify(db._townCalls)}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      unmockedRequests.push(...u)
+      ttsFallbackRequests.push(...t)
+      mockErrors.push(...db.errors)
+      await context.close()
+    }
+  }
+
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }
 }
