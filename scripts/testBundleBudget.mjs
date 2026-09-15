@@ -208,13 +208,34 @@ const EXPECTED_BATCH1_IMAGE_BASENAMES = [
 function isExpectedBatch1Image(f) {
   return EXPECTED_BATCH1_IMAGE_BASENAMES.some((base) => f.startsWith(`${base}-`) || f === `${base}.webp`)
 }
+// 2026-09-15b — 마을 장면 비주얼 업그레이드용 환경/장식 아트워크 6개
+// (사용자 승인, TownGrid.jsx에서 townAsset()/TOWN_ASSETS 카탈로그를 거치지
+// 않고 직접 import). 위 EXPECTED_BATCH1_IMAGE_BASENAMES와 의도적으로
+// 분리한다 — 그 목록은 구매 가능한 카탈로그 아이템(townCatalog.js) 전용
+// 계약이고, 이건 구매 불가능한 순수 배경/장식이라 서로 다른 개념이다.
+const EXPECTED_ENV_ARTWORK_BASENAMES = [
+  'village-sky-backdrop', 'village-hedge-border', 'village-cobblestone-tile',
+  'garden-accent-1', 'garden-accent-2', 'garden-accent-3',
+]
+function isExpectedEnvArtwork(f) {
+  return EXPECTED_ENV_ARTWORK_BASENAMES.some((base) => f.startsWith(`${base}-`) || f === `${base}.webp`)
+}
 const strayImages = assetFiles.filter(
-  (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f),
+  (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f) && !isExpectedEnvArtwork(f),
 )
 check(
-  '마을 이미지 중 Batch 1+2+3 물리 파일 14개(집/코티지/책방/카페/다리/영어학교/표지판/시계탑/나무/정원 5단계; red-post-box/cat/owl/puppy/shop-lamp/street-lamp/stone-fountain은 인라인이라 물리 파일 목록에서 제외) 외의 예상치 못한 파일이 dist/assets에 없음',
+  '마을 이미지 중 Batch 1+2+3 물리 파일 14개 + 환경/장식 아트워크 6개(카탈로그 아님, 2026-09-15b) 외의 예상치 못한 파일이 dist/assets에 없음',
   strayImages.length === 0,
   strayImages.length > 0 ? strayImages.join(', ') : undefined,
+)
+const foundEnvArtwork = assetFiles.filter(isExpectedEnvArtwork)
+const foundEnvArtworkBases = new Set(
+  foundEnvArtwork.map((f) => EXPECTED_ENV_ARTWORK_BASENAMES.find((base) => f.startsWith(`${base}-`) || f === `${base}.webp`)),
+)
+check(
+  '환경/장식 아트워크 6개가 전부 dist/assets에 정확히 존재(webp 1개씩)',
+  EXPECTED_ENV_ARTWORK_BASENAMES.every((base) => foundEnvArtworkBases.has(base)),
+  `found=${[...foundEnvArtworkBases].join(',')}`,
 )
 const foundBatch1 = assetFiles.filter(isExpectedBatch1Image)
 const foundBatch1Bases = new Set(

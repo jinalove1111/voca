@@ -319,7 +319,20 @@ check('TownGrid.jsx — 칸 배경 bg-white/40 제거됨(체스판의 직접 원
 check('TownGrid.jsx — HOME 칸 하드 박스(bg-purple-100 border-purple-300 조합) 제거됨', !gridSrc.includes('bg-purple-100 border-2 border-purple-300'))
 check('TownGrid.jsx — 칸별 고정 자갈길 배경(bg-[#d9d2c5]) 삭제(연속 레이어로 대체)', !/isPath\s*\?\s*'bg-\[#d9d2c5\]'/.test(gridSrc))
 check('TownGrid.jsx — 연속 바닥 레이어(그라데이션 + aria-hidden) 존재', /aria-hidden="true"[^]*?bg-gradient-to-b from-\[#fdebd0\]/.test(gridSrc) || /bg-gradient-to-b from-\[#fdebd0\][^]*?aria-hidden="true"/.test(gridSrc))
-check('TownGrid.jsx — 자갈길 밴드가 COBBLE_STYLE(radial-gradient)로 연속 렌더', /COBBLE_STYLE/.test(gridSrc) && /radial-gradient/.test(gridSrc))
+check('TownGrid.jsx — 자갈길 밴드가 COBBLE_STYLE(연속 텍스처 배경)로 렌더', /COBBLE_STYLE/.test(gridSrc) && /const COBBLE_STYLE = \{[^}]*backgroundImage/.test(gridSrc))
+// 2026-09-15b — 사용자 승인 콘셉트 이미지 기반 환경 아트워크 4종 배선
+// 회귀 가드. 실제 파일 import 존재 + 구매 가능한 카탈로그 아이템은 이
+// 레이어에 절대 포함되지 않음(townAsset()/TOWN_ASSETS 미사용)을 확인.
+check('TownGrid.jsx — 하늘/원경 배경 아트워크 import 존재', /import skyBackdrop from '\.\.\/\.\.\/assets\/town\/backgrounds\/village-sky-backdrop\.webp'/.test(gridSrc))
+check('TownGrid.jsx — 돌담/산울타리 경계 아트워크 import 존재', /import hedgeBorder from '\.\.\/\.\.\/assets\/town\/backgrounds\/village-hedge-border\.webp'/.test(gridSrc))
+check('TownGrid.jsx — 자갈길 텍스처 아트워크 import 존재', /import cobblestoneTile from '\.\.\/\.\.\/assets\/town\/backgrounds\/village-cobblestone-tile\.webp'/.test(gridSrc))
+check('TownGrid.jsx — 정원 장식 스프라이트 3개 import 존재', /import gardenAccent1 from/.test(gridSrc) && /import gardenAccent2 from/.test(gridSrc) && /import gardenAccent3 from/.test(gridSrc))
+check('TownGrid.jsx — 하늘/산울타리는 grid 칸과 분리된 헤더 띠(row 0과 절대 안 겹침, 카멜플라주 회귀 방지)', /<div className="relative h-16 sm:h-20 md:h-24" aria-hidden="true">/.test(gridSrc))
+check('TownGrid.jsx — 환경 아트워크 레이어에 townAsset()/TOWN_ASSETS 카탈로그 참조 없음(구매 아이템 미포함)', !/GARDEN_ACCENTS[\s\S]{0,400}townAsset\(/.test(gridSrc))
+check('TownGrid.jsx — 장식 스프라이트에 alt 속성 없음(aria-hidden만으로 숨김, img[alt] 카운트 오염 방지 — 2026-09-15b 실제 회귀 수정)', !/gardenAccent1[\s\S]{0,50}alt=/.test(gridSrc) && (() => {
+  const m = gridSrc.match(/\{GARDEN_ACCENTS\.map[\s\S]*?\)\)\}/)
+  return !!m && !/\balt=/.test(m[0])
+})())
 check('TownGrid.jsx — 빈 칸 배치 안내는 showPlacementGuide 조건에서만 렌더(평시엔 안 보임)', /showPlacementGuide\s*=\s*isEmpty\s*&&\s*\(modeKind === 'placing' \|\| modeKind === 'moving'\)/.test(gridCode))
 check('TownGrid.jsx — 배치 안내는 점선(border-dashed)만 쓰고 강한 체스판 배색 없음', /border-dashed border-\[#e0a73a\]/.test(gridSrc))
 check('TownGrid.jsx — ambientClassFor/depthClassFor(townAmbient.js 기존 순수 함수) 재사용, 새 팔레트 없음', /from '\.\.\/\.\.\/utils\/town\/townAmbient'/.test(gridSrc))
