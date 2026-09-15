@@ -706,6 +706,141 @@ props of any kind included in this file.
 FILE NAME: buildings/my-house.webp
 ```
 
+_2026-09-16 3차 라운드(house44.png) 검토 결과: 운영자가 3차 후보를 v3
+스펙의 신뢰성 있는 테스트로 인정하지 않음(생성기가 전체 v3 프롬프트를
+온전히 받지 않았고, 결합된 2패널 합성물로 잘못 생성됨) — 스펙 자체의
+실패로 보지 않는다. SPLIT-PROMPT 전략(자산별 짧은 단일 대상 프롬프트,
+결합 이미지 금지)으로 전환한다._
+
+### 1v4. `env/plate-home.webp` (SPLIT-PROMPT, SHORT, SINGLE-SUBJECT, 2026-09-16)
+
+```
+Paint ONE single opaque background image, canvas 1080×1242 (portrait,
+aspect 1:1.15), full-bleed edge-to-edge, no transparency.
+
+ABSOLUTE PROHIBITIONS — none of these may appear anywhere in the image:
+- NO building, house, or cottage of any kind
+- NO trees, no tree canopy, no tree trunk, anywhere including corners/edges
+- NO sky, no clouds, no view of open air
+- NO bench, no lamp post, no street lamp, no post box, no sign, no animal
+- NO potted plants, no loose props
+
+SUBJECT: a small English cottage's empty front garden plot, seen from a
+fixed 3/4 top-down camera at approximately 30 degrees elevation
+(moderately oblique, not overhead, not a floor plan). Soft mossy lawn.
+Low stone/hedge boundary along the left, right, and bottom edges only.
+
+PATH (exact, do not deviate): one cobblestone path enters bottom-center
+(50% width) at a small garden gate, goes straight up a short distance to
+a fork at 84% of the frame height (measured from the bottom). At the
+fork: a short narrow stub continues straight up only a little further and
+dead-ends completely at 72% height (a doorstep) — this stub must not go
+any further, must not near the top edge or the left side. The single
+main path (wider than the stub) curves away from the fork toward the
+right and exits the TOP edge exactly once, at approximately 78% of the
+frame's width. No other path, branch, or loop may touch the top edge or
+the left edge.
+
+TOP HEDGE: the top edge is boundary hedge everywhere EXCEPT one open gap
+exactly at the path's 78%-width exit point — that gap shows only more
+misty path/lawn continuing, never sky.
+
+EMPTY BUILDING LOT: one simple, empty rectangular raised stone/dirt
+foundation (no building on it), centered at 50% width, its front edge at
+about 66% of the frame's height from the top (lower-middle area, near
+where the doorstep stub ends), sized for roughly a 42%-width cottage
+later. Because of the oblique camera, this rectangle should look like a
+slightly skewed trapezoid, not a perfect flat rectangle.
+
+FLOWER BEDS: exactly two small circular/oval patches of bare, empty soil
+(no flowers, no plants) near the path, one on each side, in the lower
+half of the frame. Because of the oblique camera these should look like
+foreshortened ellipses, not perfect circles.
+
+CAMERA SELF-CHECK: if the lot looks like a perfect rectangle or the
+flower-bed patches look like perfect circles, the camera is too
+flat/overhead — redo at a visibly oblique 30° angle instead.
+
+LIGHT: single warm late-afternoon golden light from the upper-left, soft
+and diffuse.
+
+PALETTE: muted, soft, desaturated only — warm cream #fdebd0/#f6e3c8, soft
+moss #cfe3c0, sage #8fb37a, warm stone #d9d2c5/#b9ab95, wood brown
+#8b6f3e. No vivid or saturated colors.
+
+STYLE: soft painterly British storybook illustration, gentle visible
+brushwork. Not glossy 3D/CGI, not a photograph, no hard black outlines.
+
+SAFETY: no text, no letters, no logos, no people, no franchise
+references (no Harry Potter/Hogwarts-style elements), nothing resembling
+a game character.
+
+FILE NAME: env/plate-home.webp
+```
+
+_2026-09-16 3차 라운드(house44.png) 검토 결과: 운영자가 3차 후보를 v3
+스펙의 신뢰성 있는 테스트로 인정하지 않음(생성기가 전체 v3 프롬프트를
+온전히 받지 않았고, 결합된 2패널 합성물로 잘못 생성됨) — 스펙 자체의
+실패로 보지 않는다. SPLIT-PROMPT 전략(자산별 짧은 단일 대상 프롬프트,
+결합 이미지 금지)으로 전환한다._
+
+### 3v4. `buildings/my-house.webp` (SPLIT-PROMPT, SHORT, SINGLE-SUBJECT, 2026-09-16)
+
+```
+Paint ONE single isolated object on a fully transparent background,
+canvas 768×640 (aspect 6:5). Premultiplied alpha, at least 4% transparent
+margin on every side.
+
+ABSOLUTE PROHIBITIONS — none of these may appear anywhere in the image:
+- NO ground, no grass, no garden, no path, no ground patch of any kind
+  under the house
+- NO potted plants, no pots, no shrubs, no trees, no bench, no fence, no
+  gate, no animal
+- NO wall-mounted lantern, sconce, or any exterior light fixture
+
+SUBJECT: one small cozy British storybook cottage, the player's
+"starter" home — attractive but deliberately not fully decorated. Show:
+a front door, 2-3 small warm-lit windows, a chimney, a peaked roof, and
+bare stone doorstep steps only (nothing resting on them).
+
+GREENERY (strict limit): light climbing ivy confined to roughly
+one-quarter of ONE wall area only (e.g. beside one window, or the base
+of the chimney) — at least three of the four wall/roof areas must stay
+completely bare stone/tile with no ivy. Exactly one small, modest flower
+window box under exactly one window — no flowers anywhere else, none
+woven into the ivy.
+
+SCALE: the cottage (including roof and chimney) must fill 85-95% of the
+canvas height, cropped tight with only a thin transparent margin — not
+floating with empty space around it.
+
+MOBILE-LEGIBILITY: this will display at about 150px tall on a phone —
+use bold, simplified brush strokes for roof-tile and stone texture, not
+fine hairline detail that would blur at that size.
+
+CAMERA: fixed 3/4 top-down camera at approximately 30 degrees elevation,
+same as the paired environment plate.
+
+LIGHT: single warm late-afternoon golden light from the upper-left.
+
+PALETTE: muted stone/cream walls, muted navy door close to #1e2a5a (not
+bright blue), soft moss-green ivy. No vivid saturated colors.
+
+STYLE: soft painterly British storybook illustration, gentle visible
+brushwork. Not glossy 3D/CGI, not a photograph, no hard black outlines.
+
+SELF-CHECK: confirm nothing touches the ground plane except the
+cottage's own foundation/doorstep, and ivy covers no more than one small
+wall area — if ivy spans more than one distinct spot (e.g. both a window
+and the chimney), reduce it before finishing.
+
+SAFETY: no text, no letters, no logos, no people, no franchise
+references, nothing resembling a game character (do not draw "Paul" or
+any mascot).
+
+FILE NAME: buildings/my-house.webp
+```
+
 ### 4. `nature/tree.webp`
 
 ```

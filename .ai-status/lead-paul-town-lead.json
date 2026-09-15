@@ -6,7 +6,7 @@
   "status": "working",
   "progress": 45,
   "started_at": "2026-09-16T04:00:00+09:00",
-  "updated_at": "2026-09-16T05:00:00+09:00",
+  "updated_at": "2026-09-16T05:30:00+09:00",
   "coordination_mechanism": "Agent-tool subagents (background, real independent processes, each with its own agentId, listed via ListAgents while active, resumable via SendMessage) coordinated by this Lead session — NOT the CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS persistent-teammate/dashboard feature. That flag was checked and is unset in this shell; this session has no tool to enable it, create a named 'team', or create a shared task board with a dashboard. Verified 2026-09-16 via `echo $CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` (unset) and ToolSearch (no team/teammate-creation tool exists in this environment; TaskStop can only stop a teammate, not create one). The six roles in agent_roster below are real, independently-run Agent-tool subagents when spawned, not six personas simulated in one context — but they are not the specific named feature the operator asked to enable.",
   "files_owned": [".ai-status/lead-paul-town-lead.json"],
   "files_read": [
@@ -17,7 +17,7 @@
   ],
   "summary": "운영자가 2026-09-16 Paul Town 전담 상시 에이전트 팀 운영 모델을 활성화했다 — Lead가 Art Director/Asset QA/World-Renderer/My House-Inventory/QA-Regression/Docs-Handoff 6개 전문 역할을 내부에서 조율하고, 운영자에게는 Art Gate/Product Gate/Pilot Gate/Production Gate 같은 실질적 결정만 올린다. 기존 잠금 결정(스타일 키 APPROVED, 게임 루프 LOCKED, OWNER DECISION A, 스타터 하우스 밀도 원칙) 전부 재확인, 모순 없음. Batch 0(env/plate-home.webp + buildings/my-house.webp) 등록 — 상태: CORRECTED SPEC COMPLETE, EXTERNAL VISUAL CANDIDATE AVAILABLE, AWAITING AGENT ART REVIEW. 다음 Batch 0 후보 이미지가 오면 Art Director+Asset QA 병렬 검토 후 Lead가 하나의 결과로 통합해 운영자에게 보고한다.",
   "blocker": "이미지 생성 도구가 이 환경에 없음(외부 도구 필요, 팀 활성화의 차단 요인 아님)",
-  "next_action": "운영자가 v3(1v3/3v3) 프롬프트로 3차 후보를 생성해 제공하면 Lead가 다시 art-director + asset-qa 병렬 검토 → 통합 보고. 렌더링 등록 불일치는 운영자가 Step 0 스타일 키와 직접 대조해 판정.",
+  "next_action": "운영자가 1v4(env/plate-home)와 3v4(buildings/my-house)로 각각 별도 이미지 2장을 생성해 제공 → Lead가 art-director + asset-qa 병렬 검토 → 통합 보고. 두 프롬프트를 하나의 결합 이미지로 생성하면 형식 부적합으로 재요청.",
 
   "current_phase": "P0 Batch 0 아트 검토 대기(월드 설계·게임 루프·아트 방향 전부 확정, 구현 착수 전)",
   "current_branch": "design/paul-town-world-redesign-2026-09-16",
@@ -25,7 +25,8 @@
   "world_layout_status": "APPROVED (구조: My House 정서적 중심, 굽은 길, 고정 건물 로트=OWNER DECISION A, 소규모 데코만 배치 엔진)",
   "game_loop_status": "LOCKED (PAUL TOWN=EXPLORE / SHOP=BUY / MY HOUSE=DECORATE / LEARNING=EARN+UNLOCK)",
   "current_art_batch": "BATCH 0 — WORLD DEFINING: env/plate-home.webp, buildings/my-house.webp",
-  "art_batch_status": "CORRECTIONS NEEDED (round 2, house 33.png) — art-director + asset-qa independent parallel review both concluded corrections needed; v3 prompts (1v3/3v3) written; awaiting round-3 external candidate",
+  "art_batch_status": "CORRECTIONS NEEDED (round 3, house44.png) — worse than round 2, art-director + asset-qa both independently flagged likely prompt-fidelity/pipeline issue (explicit new prohibition reproduced verbatim). Owner confirmed round 3 was not a faithful v3 test and does not indict the spec. Switched to SPLIT-PROMPT strategy: two short single-subject prompts (1v4/3v4) now written, no combined two-panel image. Awaiting round-4 candidates (two separate files).",
+  "generation_strategy": "split-prompt-v1 (2026-09-16): env/plate-home.webp and buildings/my-house.webp must be generated as two SEPARATE single-subject images, never a combined two-panel composite. Use the short prompts at ART_GENERATION_HANDOFF_P0_2026-09-16.md §1v4/§3v4 (not the longer 1v3/3v3, which are preserved as history but superseded for actual generation use).",
   "implementation_status": "NOT STARTED — WORLD_LAYOUT_REDESIGN_2026-09-16.md §9 설계만 존재, 코드 변경 0, paulTownV2 플래그 OFF 유지",
   "qa_status": "NOT STARTED (Batch 0 승인 전)",
   "production_status": "무접촉 — Production DB WRITE 0, 배포/PR/merge 0, Kinney Pilot A 실데이터는 142차에서 read-only로만 확인",
@@ -35,7 +36,7 @@
     "향후 My House 외관 커스터마이즈(문/창문/화단/펜스 변형) 아키텍처 — 이번 배치 범위 아님, DB 변경 없이 equippedHatId 패턴 재사용 권장(설계 메모만 존재)",
     "렌더링 등록(painterly vs photoreal/CG) 판정 불일치 — art-director는 적합, asset-qa는 부적합 판단. 운영자가 승인된 Step 0 스타일 키 이미지와 직접 대조해 판정 필요"
   ],
-  "next_exact_step": "운영자가 v3(1v3/3v3) 프롬프트로 3차 후보를 생성해 제공하면 Lead가 다시 art-director + asset-qa 병렬 검토 → 통합 보고. 렌더링 등록 불일치는 운영자가 Step 0 스타일 키와 직접 대조해 판정.",
+  "next_exact_step": "운영자가 1v4(env/plate-home)와 3v4(buildings/my-house)로 각각 별도 이미지 2장을 생성해 제공 → Lead가 art-director + asset-qa 병렬 검토 → 통합 보고. 두 프롬프트를 하나의 결합 이미지로 생성하면 형식 부적합으로 재요청.",
   "agent_roster": {
     "art_director": "스타일 키 집행, 매칭 배치 관리, 카메라/스케일/조명/팔레트, 자산 분리(KEEP/SEPARATE/REMOVE/REGENERATE 판정), 프롬프트 작성",
     "asset_qa": "카메라/스케일/조명/팔레트/투명도/실루엣/모바일 가독성/접지점/앵커 호환/구조 vs 이동 분류/카탈로그 대응/세트 일관성 독립 검증",
