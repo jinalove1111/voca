@@ -169,12 +169,15 @@ check(
 // 동일하게 적용)으로 의도적으로 함께 바뀌었다 — 이 3개 파일만 목록에서
 // 빼고 아래 9개는 여전히 그대로 보호한다(이번 변경이 실제로 건드리지
 // 않은 파일들의 회귀는 계속 잡아야 하므로).
+// 2026-09-15c 예외 — TownShopPanel.jsx/TownInventory.jsx는 V1+V2가
+// 그대로 공유하는 패널이며, 구매 실패 피드백(서버 사유 'insufficient'
+// 미처리 죽은 분기 + 조용한 실패) 및 <img> onError 이모지 폴백이라는
+// 클라이언트 fail-safe 수정으로 의도적으로 바뀌었다(V2 세션의 실수
+// 아님). 이 2개도 목록에서 빼고 나머지 7개는 계속 보호한다.
 section('4. V1 파일 무변경(origin/main과 byte-identical)')
 const V1_UNCHANGED_FILES = [
   'src/components/town/TownGrid.jsx',
   'src/components/town/TownHeader.jsx',
-  'src/components/town/TownShopPanel.jsx',
-  'src/components/town/TownInventory.jsx',
   'src/utils/town/townCatalog.js',
   'src/utils/town/townLevel.js',
   'src/hooks/useTownShop.js',
