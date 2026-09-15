@@ -1,11 +1,67 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-16 (150차 — 8시간 야간 자율 작업 착수: 운영자가 3라운드
-AI 배경판 생성 방식을 폐기하고 STRUCTURAL WORLD GEOMETRY는 코드가 소유,
-ARTWORK는 독립 교체 가능한 격리 자산으로만 쓰는 결정론적 렌더러+격리 아트
-자산+기존 학습→적립→구매→소유→인벤토리→배치→이동→보관→영속 엔진 하이브리드
-아키텍처로 전환 결정, world-renderer 서브에이전트에 실제 코드 구현 위임
-진행 중 — DB WRITE/SQL/경제·카탈로그·가격·레벨/플래그 변경 전부 0,
-merge/deploy/push 0, V1/Kinney/Production 무접촉. 149차 이하 보존)_
+_최종 갱신: 2026-09-16 (151차 — 8시간 야간 자율 빌드 완료: V2 하이브리드
+district 렌더러 구현+검증(build/972 e2e/QA독립검토/반응형 시각확인 전부
+PASS), DB WRITE/SQL/경제·카탈로그·가격·레벨/플래그 변경 전부 0(`paulTownV2`
+여전히 false), merge/deploy/push 0, V1/Kinney/Production 무접촉. 150차
+이하 보존)_
+
+## 2026-09-16 (151차) — 8시간 야간 자율 빌드 완료: V2 하이브리드 district 렌더러 구현+검증(build/972 e2e/QA독립검토/반응형 시각확인 전부 PASS)
+
+### 0. 안전 요약
+
+Production DB WRITE 0 · SQL 0 · 경제/카탈로그/가격/레벨 변경 0 · 플래그
+변경 0(`paulTownV2` 여전히 false) · merge/deploy/push 0 · Kinney/Production
+무접촉 · 미추적 보호 파일 17개 무접촉 · V1 파일(TownGrid/TownScreen 등
+12개) byte-identical 확인(`git diff --stat` 빈 결과).
+
+### 1. 구현 결과
+
+world-renderer 서브에이전트가 `src/utils/town/townScene.js`(+301줄, 기존
+export 전부 보존)와 V2 컴포넌트 8개(`TownGroundLayer`/`TownPathLayer`/
+`TownFogLayer`/`TownObjectLayer`/`TownAmbientLayer`/`TownPlacementOverlay`/
+`TownScene`/`TownScreenV2`)를 검증된 와이어프레임
+(`docs/design/town/wireframe/paul-town-world-wireframe.html`) 지오메트리
+그대로 포팅해 재작성 — DISTRICTS 6개/LOTS 7개/SPOT_MAP 47칸/구역별 SVG
+path를 코드가 소유하는 결정론적 렌더러로 전환, AI 생성 배경판 방식 완전
+폐기(신규 asset import 0개, `src/assets/town/index.js` 21개 키 그대로).
+`anchorFor`/`zIndexFor`/`freeAnchors`에 `level` 매개변수 추가(기본값으로
+하위호환).
+
+### 2. 검증(전부 리드가 직접 재실행해 독립 확인, 서브에이전트 주장 그대로 믿지 않음)
+
+`npm run build` 클린 통과. `testTownV2Static.mjs` 103/103,
+`testTownSceneV2.mjs` 253/253(87→120개 단언, 순수 추가), `testTownUiStatic.mjs`
+126/126(V1 무회귀 증명), `npm run verify:e2e`(전체 10개 spec) 972/972
+PASS·미mock 요청 0건. 독립 qa-reviewer 서브에이전트가 같은 3개 스위트를
+별도로 재실행해 동일 숫자 확인 + diff 전체를 직접 읽고 PASS 판정
+(Critical/Major 0건, 경계 조건(anchorFor 3번째 인자 기본값, 구역 간
+z-index 스택 불변식, SPOT_MAP NaN 안전성, 테스트 파일 실제로 강화됐는지)
+전부 코드로 직접 검증). 리드가 직접 Playwright로 360/390/430px ×
+Lv1/Lv3/Lv5/Lv8 5개 조합 반응형 시각 확인: town-scene-v2 렌더/가로 오버플로
+0/로트 렌더/NaN·undefined 스타일 0/콘솔 에러 0/미mock 요청 0 총 35/35
+PASS, 스크린샷 5장 육안 확인 — 연속된 하나의 굽은 길이 모든 구역을
+관통, 구역별 배경 톤이 뚜렷이 구분되고(home 따뜻한 크림/모스 → tower
+짙은 네이비), Lv1/3에서는 이미 승인된 batch1 `buildings/my-house` 실제
+아트가 자동으로 재사용됨, for-sale(점선)/built(단색) 로트 상태가
+레벨·소유 여부에 따라 정확히 갈림.
+
+### 3. 남은 작업(명시적으로 범위 밖, 숨기지 않음)
+
+Book Shop/Café/English School/Clock Tower 구역의 실제 콘텐츠(안뜰/장식
+배치 등 세부)는 로트+잠금 처리 수준만 구현, 완전한 콘텐츠는 이번 세션
+범위 밖. 건물/장식 실제 아트워크는 여전히 없음(회색 placeholder 박스,
+명시적으로 "world geometry가 placeholder art에 좌우되지 않는다" 원칙
+준수). 인터랙티브 목적지(건물 탭 → 세부 화면)는 P2로 이미 별도 분류,
+미구현. gardenPoints 생기 레이어는 기존 `gardenRichness()` 재배치만
+완료, 신규 시각 효과 추가는 없음.
+
+### 4. 다음
+
+운영자가 스크린샷을 검토해 이 방향(결정론적 렌더러 + placeholder 아트)을
+승인하면, 다음 단계는 (a) 실제 로트/데코 아트워크 생성 재개(이번엔
+격리된 단일 오브젝트 자산으로, 배경판 방식 아님) 또는 (b) Book Shop/광장
+등 구역 콘텐츠 확장. 두 방향 모두 `paulTownV2` 플래그 OFF 유지 상태에서
+계속 진행 가능.
 
 ## 2026-09-16 (150차) — 8시간 야간 자율 작업 착수: AI 배경판 생성 방식 폐기 → 결정론적 렌더러+격리 아트 자산+기존 배치엔진 하이브리드 아키텍처로 전환
 
