@@ -1,5 +1,15 @@
 # Paul Town V2-A — 에셋 스펙 (British Storybook Village)
 
+> **2026-09-16 공지(append, 아래 내용 삭제 없음)**: 이 문서의 **월드
+> 컴포지션(단일 8:13 씬 박스, 8×6 격자 1:1 앵커 매핑, 씬/캔버스 px
+> 규격)**은 `docs/design/town/FINAL_ARTWORK_SPEC_2026-09-16.md`가
+> 대체한다(6개 district 세로 스택 + 고정 건물 로트 구조로 전환,
+> `WORLD_DESIGN_BRIEF.md` 2026-09-16 확정). 반면 `asset_key` 계약
+> (`<folder>/<name>` 키 형식, `assetManifest.js` 필드 구조)과 이모지
+> 폴백 규칙(`townAsset()` → null → emoji)은 그대로 유효하며, 아래
+> 내용은 하나도 삭제하지 않는다 — 과거 캔버스 규격의 근거 이력으로
+> 계속 남긴다.
+
 > 상태: 설계 문서(디자인 전용, 코드 변경 없음). 이 문서가 참조하는
 > `PR #44`(V2-A 씬 레이아웃)는 이 브랜치에 병합되어 있지 않고,
 > `docs/design/town/*.md`도 이 시점에는 이 파일 하나뿐이다. 실제 배치/렌더
