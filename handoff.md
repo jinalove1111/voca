@@ -1,12 +1,49 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-16 (144차 — Paul Town Step 0: 운영자가 143차 월드
-구조(My House 중심/굽은 길/세로 확장/건물-도로 구조 고정·소규모 장식만
-커스터마이즈)를 승인, OWNER DECISION A(건물 로트 고정 렌더)를 운영자
-발언 그대로 재확인해 문서에 확정 기록, Step 0 스타일-키 프롬프트에
-"NO APP INTERFACE OF ANY KIND" 절 추가 보완. 이미지 생성 도구가 이
-환경에 없어 실제 Step 0 이미지는 미생성(환경 제약을 그대로 보고).
-Production DB/SQL/코드/플래그/구매/merge/deploy 전부 0건. 143차 이하
-보존)_
+_최종 갱신: 2026-09-16 (145차 — Paul Town Step 0 스타일 키 APPROVED +
+최종 게임 루프 확정(PAUL TOWN=EXPLORE/SHOP=BUY/MY HOUSE=DECORATE/
+LEARNING=EARN+UNLOCK), 기존 시스템(적립/구매/소유/배치/영속/학생격리)
+전부 파일:줄 근거로 재검증(DB 갭 0), P0 16개 자산 재분류 + 생성 순서
+확정 + GO/NO-GO(첫 최소 배치 = my-house+plate-home 2개만). 신규 문서
+`docs/design/town/PRODUCT_LOOP_LOCK_AND_P0_GATE_2026-09-16.md`. 이미지
+생성 도구가 이 환경에 없어 실제 이미지는 여전히 미생성. Production
+DB/SQL/코드/플래그/구매/merge/deploy 전부 0건. 144차 이하 보존)_
+
+## 2026-09-16 (145차) — Paul Town Step 0 승인 + 최종 게임 루프 확정(PAUL TOWN=EXPLORE/SHOP=BUY/MY HOUSE=DECORATE/LEARNING=EARN+UNLOCK) + P0 프로덕션 게이트
+
+### 0. 안전 요약
+
+Production DB WRITE 0 · SQL 0 · 코드 변경 0 · 경제/카탈로그/가격 변경 0
+· 플래그 변경 0 · 구매 0 · merge/deploy/push 0 · 이미지 생성 0(배치
+미실행) · 미추적 보호 파일 17개 무접촉.
+
+### 1. 결정
+
+스타일 키(Step 0, 1080×1920 6-district 세로 스택) APPROVED. 최종
+게임 모델 확정: PAUL TOWN = EXPLORE(공유 마을, 구조 고정) · SHOP =
+BUY(기존 Paul Dollar 경제) · MY HOUSE = DECORATE(기존 배치 엔진) ·
+LEARNING = EARN + UNLOCK(학습이 화폐를 벌고 레벨을 올림) — 새 화폐/
+보상/퀘스트 없이 기존 별/레벨/Paul Dollar/gardenPoints 축만 재사용.
+OWNER DECISION A(건물은 구역 로트에 고정 렌더, 자유 배치 아님) 유지.
+
+### 2. 산출물
+
+신규 문서 `docs/design/town/PRODUCT_LOOP_LOCK_AND_P0_GATE_2026-09-16.md`
+— 기존 시스템 재사용 매핑(적립/구매/소유/인벤토리/배치/영속/학생격리를
+각각 파일:줄 근거로 재확인, 142차 Kinney 실측 재인용), 갭 분석(DB 갭
+0, UI/렌더 갭·아트 갭만 실재, My House 외관 커스터마이즈는 미래
+항목), My House 미래 아키텍처 제안(`equippedHatId` 패턴 재사용, DB
+변경 없이 레벨 기반 해금 권장), P0 16개 자산 재분류(STRUCTURAL/
+ENVIRONMENT/MY HOUSE/MOVABLE/LOCKED), 생성 순서(my-house →
+plate-home → 이동 데코 5종 → lot-sign → [P0-A 게이트] →
+garden-stage-0~4 → plate-bookshop-lane → book-shop → [P0-B 게이트]),
+GO/NO-GO(첫 최소 배치 GO = my-house+plate-home 2개만, 나머지는
+단계적).
+
+### 3. 미결
+
+`british-cottage` 카탈로그 아이템($80)의 새 월드 역할 UNKNOWN(운영자
+확인 필요), "fences" 데코 카탈로그 미존재(신설 여부는 운영자 결정
+사항), 실제 이미지 생성은 이 환경에 도구가 없어 여전히 미실행.
 
 ## 2026-09-16 (144차) — Paul Town Step 0: 월드 구조 승인 기록 + OWNER DECISION A 확정 + 스타일-키 스펙 검토(이미지 미생성, 환경 미지원)
 
