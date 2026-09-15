@@ -1,10 +1,50 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-16 (146차 — 운영자가 외부 생성 1차 참조 이미지
-(house11.png)를 검토해 env/plate-home·buildings/my-house 결함 7건 확인,
-담쟁이/꽃 밀도(벽에 가벼운 담쟁이+소박한 창문 화단만) 및 "스타터 하우스=
-매력적이지만 의도적으로 미완성" 원칙을 신규 확정, 두 자산 프롬프트를
-OWNER-CORRECTED FINAL(1v2/3v2)로 append-only 보강. 이미지 재생성/코드/
-DB/SQL/플래그/merge/deploy 전부 0건. 145차 이하 보존)_
+_최종 갱신: 2026-09-16 (147차 — 운영자가 Paul Town 전담 상시 에이전트 팀
+운영 모델을 활성화, Lead가 Art Director/Asset QA/World-Renderer/My
+House-Inventory/QA-Regression/Docs-Handoff 6개 전문 역할을 내부 조율하고
+운영자에게는 Art Gate/Product Gate/Pilot Gate/Production Gate 같은
+실질적 결정만 요청하도록 정리, 신규 상시 상태 파일
+`.ai-status/lead-paul-town-lead.json` 생성(task_id 진행 중 계속 같은
+파일을 덮어쓰는 방식). 코드/DB/SQL/경제/카탈로그/플래그/이미지 생성/
+merge/deploy/push 전부 0건. 146차 이하 보존)_
+
+## 2026-09-16 (147차) — Paul Town 상시 에이전트 팀 운영 모델 활성화(Lead + 6개 전문 역할, 운영자 게이트만 승인)
+
+### 0. 안전 요약
+
+코드 변경 0 · DB WRITE 0 · SQL 0 · 경제/카탈로그 변경 0 · 플래그 변경 0 ·
+이미지 생성 0 · merge/deploy/push 0 · 미추적 보호 파일 17개 무접촉.
+
+### 1. 운영 모델
+
+운영자가 Paul Town 전담 상시 에이전트 팀을 활성화했다 — Lead가 Art
+Director/Asset QA/World-Renderer/My House-Inventory/QA-Regression/
+Docs-Handoff 6개 전문 역할을 내부에서 조율하고, 운영자에게는 Art
+Gate/Product Gate/Pilot Gate/Production Gate 같은 실질적 결정만
+요청한다. 파일명/앵커 계산/CSS/사소한 리팩터·버그수정/문서 배치 같은
+기술적 디테일은 운영자에게 올리지 않는다. 기존 잠금 결정(스타일 키
+APPROVED/게임 루프 LOCKED/OWNER DECISION A/스타터 하우스 밀도 원칙/
+143~146차 전체)과 모순 없음을 확인했다 — 재검토 없이 그대로 승계한다.
+
+### 2. 산출물
+
+신규 `.ai-status/lead-paul-town-lead.json` — README 규칙대로 task_id
+진행 중 계속 같은 파일을 덮어써 최신 팀 상태를 유지하는 상시 파일(다른
+세션 `.ai-status` 파일들과 달리 `completed`로 닫히지 않는다).
+`current_phase`/`style_key_status`/`world_layout_status`/
+`game_loop_status`/`current_art_batch`/`art_batch_status`/
+`implementation_status`/`qa_status`/`production_status`/
+`open_owner_decisions`/`next_exact_step`/`agent_roster` 필드를 포함한다.
+Batch 0(env/plate-home.webp + buildings/my-house.webp) 등록: CORRECTED
+SPEC COMPLETE · EXTERNAL VISUAL CANDIDATE AVAILABLE · AWAITING AGENT
+ART REVIEW.
+
+### 3. 다음
+
+운영자가 Batch 0 최신 후보 이미지를 제공하면 Lead가 Art Director+Asset
+QA를 병렬 실행해 결과를 통합, BATCH APPROVED 또는 CORRECTIONS NEEDED로
+보고한다. 미결 3건은 145~146차와 동일: british-cottage 카탈로그 역할,
+fences 카탈로그 신설 여부, My House 외관 커스터마이즈 아키텍처.
 
 ## 2026-09-16 (146차) — 운영자 1차 참조 이미지 검토 + 경로/카메라/스타터 밀도 보정 확정 (env/plate-home, buildings/my-house OWNER-CORRECTED FINAL)
 
