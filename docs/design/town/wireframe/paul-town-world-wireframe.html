@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paul Town Wireframe</title>
+<style>
+  /* ---- design tokens (brief §8 palette) ---- */
+  :root {
+    --cream: #fdebd0;
+    --cream-2: #f6e3c8;
+    --moss: #cfe3c0;
+    --sage: #8fb37a;
+    --stone: #d9d2c5;
+    --stone-2: #b9ab95;
+    --navy: #1e2a5a;
+    --burgundy: #7a2e3a;
+    --amber: #e0a73a;
+    --gold: #c9a227;
+    --postbox-red: #b23b2e;
+    --path-edge: #b9ab95;
+    --path-fill: #d9d2c5;
+    --path-warn: #d1453b;
+
+    --bg: #f2efe6;
+    --panel-bg: #ffffff;
+    --panel-border: #d9d2c5;
+    --ink: #1e2a5a;
+    --ink-soft: #6b6355;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #171b2a;
+      --panel-bg: #212640;
+      --panel-border: #3a3f5c;
+      --ink: #eef0fb;
+      --ink-soft: #b7bad6;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #171b2a;
+    --panel-bg: #212640;
+    --panel-border: #3a3f5c;
+    --ink: #eef0fb;
+    --ink-soft: #b7bad6;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  h1 {
+    font-size: 14px;
+    margin: 0;
+    color: var(--ink-soft);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-align: center;
+  }
+
+  .controls {
+    width: 100%;
+    max-width: 430px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 16px;
+    padding: 10px 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    font-size: 12px;
+  }
+  .controls label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .controls select { font-size: 12px; padding: 2px 4px; }
+
+  .phone-frame {
+    width: var(--frame-w, 390px);
+    max-width: 100%;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 28px;
+    padding: 16px;
+  }
+
+  .hud {
+    max-height: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 4px;
+    position: sticky;
+    top: 0;
+    background: var(--panel-bg);
+    z-index: 50;
+  }
+  .hud-chip {
+    font-size: 11px;
+    font-weight: 800;
+    border-radius: 999px;
+    padding: 6px 10px;
+    white-space: nowrap;
+  }
+  .hud-lv { background: var(--gold); color: var(--navy); }
+  .hud-star { flex: 1; background: var(--cream-2); color: var(--ink); position: relative; overflow: hidden; }
+  .hud-star-fill { position: absolute; inset: 0; width: 40%; background: var(--amber); opacity: .5; }
+  .hud-star span:last-child { position: relative; }
+  .hud-dollar { background: var(--moss); color: var(--navy); }
+
+  .scene-wrap { position: relative; margin-top: 8px; }
+
+  /* Requirement 2 — the scene must clip everything inside its own box;
+     nothing (SVG path, hedge scallops, fog) may bleed into the sticky
+     HUD area above it. */
+  .scene {
+    position: relative;
+    overflow: hidden;
+    border-radius: 18px;
+  }
+
+  .band {
+    position: absolute;
+    left: 0;
+    overflow: hidden;
+    border-top: 1px dashed rgba(30,42,90,0.12);
+  }
+  .band-label {
+    position: absolute;
+    top: 4px;
+    left: 6px;
+    font-size: 9px;
+    font-weight: 800;
+    color: var(--navy);
+    background: rgba(255,255,255,0.55);
+    border-radius: 6px;
+    padding: 1px 5px;
+    z-index: 5;
+  }
+
+  /* ---- fog horizon band (requirement 3) ---- */
+  .fog-band {
+    position: absolute;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+  }
+  .fog-hill {
+    position: absolute;
+    border-radius: 50% 50% 0 0;
+    background: var(--moss);
+    opacity: 0.45;
+  }
+  .fog-silhouette-wrap {
+    position: absolute;
+    transform: translate(-50%, 0);
+    opacity: 0.55;
+    filter: grayscale(1) blur(0.3px);
+  }
+  .fog-chip {
+    margin-top: 6px;
+    font-size: 10px;
+    font-weight: 800;
+    background: rgba(255,255,255,0.92);
+    color: var(--navy);
+    border-radius: 999px;
+    padding: 3px 10px;
+    z-index: 3;
+  }
+
+  /* ---- lots (requirement 5, 6) ---- */
+  .lot {
+    position: absolute;
+    display: block;
+  }
+  .lot-foundation {
+    position: absolute;
+    left: 8%;
+    right: 8%;
+    bottom: 0;
+    height: 30%;
+    background: var(--stone);
+    border-radius: 4px 4px 2px 2px;
+    opacity: 0.85;
+  }
+  .lot-sign { position: absolute; left: 56%; bottom: 26%; width: 16%; height: 50%; }
+  .lot-sign-post {
+    position: absolute; left: 50%; bottom: 0; width: 2px; height: 70%;
+    background: var(--stone-2); transform: translateX(-50%);
+  }
+  .lot-sign-board {
+    position: absolute; left: 50%; top: 0; width: 100%; height: 40%;
+    background: var(--cream-2); border: 1px solid var(--navy);
+    transform: translateX(-50%);
+  }
+  .lot-outline {
+    position: absolute;
+    inset: 0;
+    border: 1px dotted var(--ink-soft);
+    display: none;
+  }
+  body.show-lots .lot-outline { display: block; }
+  .lot-label {
+    position: absolute;
+    bottom: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 8px;
+    font-weight: 800;
+    color: var(--navy);
+    background: rgba(255,255,255,0.75);
+    border-radius: 5px;
+    padding: 1px 4px;
+    white-space: nowrap;
+  }
+
+  /* ---- decoration spots (requirement 4 — idle = nothing) ---- */
+  .spot {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .spot-dot {
+    display: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--sage);
+    opacity: 0.6;
+  }
+  body.show-ids .spot-dot { display: block; }
+  .spot-id {
+    font-size: 7px;
+    color: var(--ink-soft);
+    display: none;
+    white-space: nowrap;
+  }
+  body.show-ids .spot-id { display: block; }
+  .spot-glow {
+    position: absolute;
+    inset: -14px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(207,227,192,0.9) 0%, rgba(207,227,192,0) 70%);
+    display: none;
+  }
+  .spot-ring {
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(224,167,58,0.8);
+    display: none;
+    animation: spotpulse 1.6s ease-in-out infinite;
+  }
+  body.edit-mode .spot-glow,
+  body.edit-mode .spot-ring { display: block; }
+  @keyframes spotpulse { 0%, 100% { opacity: 0.9; } 50% { opacity: 0.35; } }
+
+  /* Requirement 3 (round 3) — a spot too close to its district's path
+     centreline always shows a red ring, regardless of edit mode, so a
+     violation is visible even when just browsing idle. */
+  .spot-warn .spot-ring {
+    display: block;
+    border-color: var(--path-warn);
+    border-width: 2px;
+  }
+  body.show-ids .spot-warn .spot-dot { background: var(--path-warn); }
+
+  .kinney-tree {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .kinney-tree-shape {
+    width: 20px;
+    height: 24px;
+    border-radius: 50% 50% 6px 6px;
+    background: var(--sage);
+    border: 1px solid var(--navy);
+  }
+  .kinney-tree-label {
+    font-size: 7px;
+    font-weight: 800;
+    color: var(--navy);
+    background: rgba(255,255,255,0.8);
+    border-radius: 4px;
+    padding: 0 3px;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+
+  /* ---- scalloped hedge edges (requirement 7) ---- */
+  .hedge-scallop {
+    position: absolute;
+    border-radius: 50%;
+    background: var(--sage);
+    opacity: 0.55;
+    pointer-events: none;
+  }
+  .hedge-tree {
+    position: absolute;
+    width: 22px;
+    height: 26px;
+    border-radius: 50% 50% 10% 10%;
+    background: var(--sage);
+    opacity: 0.6;
+    border: 1px solid rgba(30,42,90,0.18);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  .sky-band {
+    position: absolute;
+    left: 0; top: 0; width: 100%; height: 45%;
+    background: linear-gradient(to bottom, var(--gold), var(--cream));
+    opacity: 0.65;
+  }
+  .hill {
+    position: absolute;
+    bottom: 20%;
+    border-radius: 50% 50% 0 0;
+    background: var(--moss);
+    opacity: 0.7;
+  }
+
+  .paul-bubble {
+    position: fixed;
+    left: 16px;
+    bottom: 16px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 999px;
+    padding: 6px 10px 6px 6px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+  }
+  .paul-bubble-circle { width: 30px; height: 30px; border-radius: 50%; background: var(--stone-2); }
+  .paul-bubble-text { font-size: 9px; font-weight: 700; color: var(--ink-soft); max-width: 120px; line-height: 1.2; }
+
+  .legend {
+    width: 100%;
+    max-width: 430px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    padding: 8px 10px;
+    font-size: 10px;
+    color: var(--ink-soft);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+  .legend-swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+  <h1>Paul Town Wireframe — world layout proof (not final art)</h1>
+
+  <div class="controls">
+    <label>Width
+      <select id="ctrlWidth">
+        <option value="360">360</option>
+        <option value="390" selected>390</option>
+        <option value="430">430</option>
+      </select>
+    </label>
+    <label>Level
+      <select id="ctrlLevel">
+        <option value="1" selected>Lv1</option>
+        <option value="3">Lv3</option>
+        <option value="5">Lv5</option>
+        <option value="6">Lv6</option>
+        <option value="7">Lv7</option>
+        <option value="8">Lv8</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="ctrlEdit"> edit mode</label>
+    <label><input type="checkbox" id="ctrlIds"> show spot ids</label>
+    <label><input type="checkbox" id="ctrlLots"> show lot outlines</label>
+    <label><input type="checkbox" id="ctrlKinney" checked> Kinney sample</label>
+  </div>
+
+  <div class="phone-frame">
+    <div class="hud">
+      <span class="hud-chip hud-lv" id="hudLv">Lv.1</span>
+      <span class="hud-chip hud-star"><span class="hud-star-fill"></span><span id="hudStarText">&#9733; next 20</span></span>
+      <span class="hud-chip hud-dollar" id="hudDollar">$12</span>
+    </div>
+    <div class="scene-wrap">
+      <div class="scene" id="scene"></div>
+    </div>
+  </div>
+
+  <div class="paul-bubble" aria-hidden="true">
+    <span class="paul-bubble-circle"></span>
+    <span class="paul-bubble-text">Paul (official image reused)</span>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------------------------------------------------------------
+  // DATA — must stay numerically identical to
+  // docs/design/town/WORLD_LAYOUT_REDESIGN_2026-09-16.md §3.
+  // ---------------------------------------------------------------
+
+  var DISTRICTS = {
+    tower:  { name: 'Clock Tower & hills/sky', heightUnits: 0.95, scale: 0.56, unlock: 8, bg: 'linear-gradient(to bottom, var(--stone-2), var(--cream))', sky: true },
+    school: { name: 'English School',          heightUnits: 0.80, scale: 0.64, unlock: 7, bg: 'linear-gradient(to bottom, var(--stone), var(--stone-2))' },
+    river:  { name: 'River & Stone Bridge',    heightUnits: 0.50, scale: 0.70, unlock: 6, bg: 'linear-gradient(to bottom, var(--moss), var(--stone))' },
+    square: { name: 'Village Square & Café',   heightUnits: 0.90, scale: 0.76, unlock: 5, bg: 'linear-gradient(to bottom, var(--cream-2), var(--stone))' },
+    lane:   { name: 'Book Shop Lane',          heightUnits: 0.85, scale: 0.86, unlock: 3, bg: 'linear-gradient(to bottom, var(--cream), var(--cream-2))' },
+    home:   { name: 'My Home & Garden',        heightUnits: 1.15, scale: 1.00, unlock: 1, bg: 'linear-gradient(to bottom, var(--cream), var(--moss))' }
+  };
+  var DISTRICT_ORDER = ['tower', 'school', 'river', 'square', 'lane', 'home']; // top -> bottom of page/world
+  var FOG_HEIGHT_UNITS = 0.32;
+
+  // LOTS — { district, left%, top%(baseline), width%(before district scale) }
+  var LOTS = [
+    { id: 'my-house',       label: 'MY HOUSE 42%W', district: 'home',   left: 50, baseline: 66, width: 42, built: true,  aspect: 0.85 },
+    { id: 'book-shop',      label: 'BOOK SHOP lot',  district: 'lane',   left: 30, baseline: 62, width: 36, built: false, aspect: 0.85 },
+    { id: 'cafe',           label: 'CAFÉ lot',       district: 'square', left: 78, baseline: 60, width: 34, built: false, aspect: 0.85 },
+    { id: 'stone-fountain', label: 'FOUNTAIN lot',   district: 'square', left: 50, baseline: 55, width: 16, built: false, aspect: 1.0 },
+    { id: 'bridge',         label: 'BRIDGE lot',     district: 'river',  left: 50, baseline: 50, width: 44, built: false, aspect: 0.45, crossable: true },
+    { id: 'english-school', label: 'SCHOOL lot',     district: 'school', left: 38, baseline: 55, width: 40, built: false, aspect: 0.8 },
+    { id: 'clock-tower',    label: 'CLOCK TOWER lot',district: 'tower',  left: 50, baseline: 60, width: 16, built: false, aspect: 2.75 }
+  ];
+
+  // SPOT_MAP — cell (x,y) -> { district, left%, top%(baseline), scale }
+  var SPOT_MAP = {
+    '0,0': { district: 'home', left: 3,  top: 22, scale: 0.82 },
+    '1,0': { district: 'home', left: 17, top: 15, scale: 0.82 },
+    '2,0': { district: 'home', left: 33, top: 26, scale: 0.82 },
+    '3,0': { district: 'home', left: 46, top: 16, scale: 0.82 },
+    '4,0': { district: 'home', left: 58, top: 24, scale: 0.82 },
+    '5,0': { district: 'home', left: 72, top: 14, scale: 0.82 },
+    '6,0': { district: 'home', left: 73, top: 27, scale: 0.82 }, // moved from 85/27 (2026-09-16 round3: path clearance)
+    '7,0': { district: 'home', left: 97, top: 19, scale: 0.82 },
+
+    '0,1': { district: 'home', left: 7,  top: 37, scale: 0.90 },
+    '1,1': { district: 'home', left: 15, top: 45, scale: 0.90 },
+    '2,1': { district: 'home', left: 23, top: 53, scale: 0.90 },
+    '3,1': { district: 'home', left: 11, top: 58, scale: 0.90 },
+    '4,1': { district: 'home', left: 72, top: 34, scale: 0.90 }, // moved from 81/39 (round3: path+cottage clearance)
+    '5,1': { district: 'home', left: 80, top: 46, scale: 0.90 }, // moved from 89/47 (round3: path+cottage clearance)
+    '6,1': { district: 'home', left: 73, top: 58, scale: 0.90 }, // moved from 94/55 (round3: path+cottage clearance)
+    '7,1': { district: 'home', left: 28, top: 40, scale: 0.90 }, // moved from 92/33 (round3: path+cottage clearance)
+
+    '0,2': { district: 'home', left: 5,  top: 84, scale: 1.00 },
+    '1,2': { district: 'home', left: 15, top: 72, scale: 1.00 },
+    '2,2': { district: 'home', left: 25, top: 66, scale: 1.00 },
+    // (3,2) is the My House lot — no decoration spot here.
+    '4,2': { district: 'home', left: 75, top: 66, scale: 1.00 },
+    '5,2': { district: 'home', left: 80, top: 90, scale: 1.00 }, // moved from 85/74 (2026-09-16 round3: path clearance)
+    '6,2': { district: 'home', left: 93, top: 86, scale: 1.00 },
+    '7,2': { district: 'home', left: 66, top: 95, scale: 1.00 },
+
+    '0,3': { district: 'lane', left: 8,  top: 30, scale: 0.86 },
+    '1,3': { district: 'lane', left: 18, top: 55, scale: 0.86 },
+    '2,3': { district: 'lane', left: 12, top: 78, scale: 0.86 },
+    '3,3': { district: 'lane', left: 60, top: 25, scale: 0.86 },
+    '4,3': { district: 'lane', left: 72, top: 45, scale: 0.86 },
+    '5,3': { district: 'lane', left: 82, top: 68, scale: 0.86 },
+    '6,3': { district: 'lane', left: 90, top: 85, scale: 0.86 },
+    '7,3': { district: 'lane', left: 48, top: 88, scale: 0.86 },
+
+    '0,4': { district: 'square', left: 10, top: 35, scale: 0.76 },
+    '1,4': { district: 'square', left: 20, top: 60, scale: 0.76 },
+    '2,4': { district: 'square', left: 93, top: 55, scale: 0.76 }, // moved from 32/80 (round3: path clearance, runtime-checker find)
+    '3,4': { district: 'square', left: 85, top: 75, scale: 0.76 }, // moved from 35/30 (round3: path clearance, runtime-checker find)
+    '4,4': { district: 'square', left: 65, top: 28, scale: 0.76 },
+    '5,4': { district: 'square', left: 68, top: 82, scale: 0.76 },
+    '6,4': { district: 'square', left: 88, top: 35, scale: 0.76 },
+    '7,4': { district: 'square', left: 45, top: 90, scale: 0.76 },
+
+    '0,5': { district: 'river',  left: 15, top: 55, scale: 0.70 },
+    '1,5': { district: 'river',  left: 85, top: 55, scale: 0.70 },
+    '2,5': { district: 'school', left: 12, top: 70, scale: 0.64 },
+    '3,5': { district: 'school', left: 85, top: 40, scale: 0.64 },
+    '4,5': { district: 'school', left: 78, top: 75, scale: 0.64 },
+    '5,5': { district: 'tower',  left: 20, top: 50, scale: 0.56 },
+    '6,5': { district: 'tower',  left: 75, top: 45, scale: 0.56 },
+    '7,5': { district: 'tower',  left: 80, top: 85, scale: 0.56 } // moved from 50/80 (round3: path clearance, runtime-checker find)
+  };
+
+  var NEXT_UNLOCK = {
+    home:   { nextLevel: 3, name: 'Book Shop' },
+    lane:   { nextLevel: 5, name: 'Café · Fountain' },
+    square: { nextLevel: 6, name: 'Stone Bridge' },
+    river:  { nextLevel: 7, name: 'English School' },
+    school: { nextLevel: 8, name: 'Clock Tower' }
+  };
+
+  var LEVEL_SAMPLE = {
+    1: { dollars: 12,  star: '⭐ Lv.1 · next 20' },
+    3: { dollars: 31,  star: '⭐ Lv.3 · next 40' },
+    5: { dollars: 95,  star: '⭐ Lv.5 · next 150' },
+    6: { dollars: 140, star: '⭐ Lv.6 · next 200' },
+    7: { dollars: 210, star: '⭐ Lv.7 · next 250' },
+    8: { dollars: 320, star: '⭐ Lv.8 · next 300' }
+  };
+
+  // ---------------------------------------------------------------
+  // PATH — per-district cubic/quadratic segments, band-local percent
+  // coordinates (x: 0-100 of W, y: 0-100 of that band's own height,
+  // y=0 top/far edge of band, y=100 bottom/near edge of band). Each
+  // district's first segment.from and last segment.to match the
+  // brief §3 snake's fixed enter/exit x — this keeps every boundary
+  // continuous across bands even though each district detours around
+  // its own lot(s) in between. `c` = quadratic control point (omit
+  // for a straight `L` segment, used only for the river crossing).
+  // ---------------------------------------------------------------
+  var PATHS = {
+    home: [
+      { from: { x: 50, y: 100 }, to: { x: 50, y: 84 } }, // gate -> fork (shared with the doorstep stub below)
+      { from: { x: 50, y: 84 }, c: { x: 70, y: 82 }, to: { x: 82, y: 75 } }, // fork -> diagonally past the cottage's right side
+      { from: { x: 82, y: 75 }, c: { x: 90, y: 58 }, to: { x: 92, y: 44 } }, // continue up the cottage's right flank
+      { from: { x: 92, y: 44 }, c: { x: 87, y: 18 }, to: { x: 78, y: 0 } }  // exit top-right
+    ],
+    lane: [
+      { from: { x: 78, y: 100 }, c: { x: 75, y: 70 }, to: { x: 60, y: 50 } }, // stay right of Book Shop
+      { from: { x: 60, y: 50 }, c: { x: 56, y: 38 }, to: { x: 50, y: 30 } },  // pass above Book Shop's top edge
+      { from: { x: 50, y: 30 }, c: { x: 38, y: 15 }, to: { x: 22, y: 0 } }    // exit top-left
+    ],
+    square: [
+      { from: { x: 22, y: 100 }, c: { x: 25, y: 82 }, to: { x: 35, y: 68 } }, // approach below the fountain
+      { from: { x: 35, y: 68 }, c: { x: 37, y: 48 }, to: { x: 40, y: 32 } },  // ring past the fountain's left side
+      { from: { x: 40, y: 32 }, c: { x: 45, y: 15 }, to: { x: 50, y: 0 } }    // exit top-centre
+    ],
+    river: [
+      { from: { x: 50, y: 100 }, to: { x: 50, y: 0 } } // straight across the bridge lot centre (intentional crossing)
+    ],
+    school: [
+      { from: { x: 50, y: 100 }, c: { x: 55, y: 75 }, to: { x: 60, y: 59 } }, // approach right of the school
+      { from: { x: 60, y: 59 }, c: { x: 65, y: 45 }, to: { x: 68, y: 30 } },  // pass along its right edge
+      { from: { x: 68, y: 30 }, c: { x: 70, y: 15 }, to: { x: 70, y: 0 } }    // exit top-right
+    ],
+    tower: [
+      { from: { x: 70, y: 100 }, c: { x: 60, y: 85 }, to: { x: 50, y: 70 } } // ends at the small square in front of the tower
+    ]
+  };
+  // Doorstep stub — a short dead-end spur off the home main path (only
+  // home has one). It shares its start point with the main path's fork
+  // (50,84) but is NOT part of the main path for width/fog-continuation
+  // purposes, and is rendered narrower (see STUB_WIDTH_PCT).
+  var STUBS = {
+    home: [{ from: { x: 50, y: 84 }, to: { x: 50, y: 72 } }]
+  };
+  var STUB_WIDTH_PCT = 8; // %W, narrower than the main path (13%W)
+
+  var GEO_ORDER = ['home', 'lane', 'square', 'river', 'school', 'tower']; // bottom -> top of world
+
+  // ---------------------------------------------------------------
+  // STATE + query params
+  // ---------------------------------------------------------------
+  var qs = new URLSearchParams(location.search);
+  var state = {
+    w: [360, 390, 430].indexOf(Number(qs.get('w'))) >= 0 ? Number(qs.get('w')) : 390,
+    lv: [1, 3, 5, 6, 7, 8].indexOf(Number(qs.get('lv'))) >= 0 ? Number(qs.get('lv')) : 1,
+    edit: qs.get('edit') === '1',
+    ids: qs.get('ids') === '1',
+    lots: qs.get('lots') === '1',
+    kinney: qs.get('kinney') === '0' ? false : true
+  };
+
+  var elWidth = document.getElementById('ctrlWidth');
+  var elLevel = document.getElementById('ctrlLevel');
+  var elEdit = document.getElementById('ctrlEdit');
+  var elIds = document.getElementById('ctrlIds');
+  var elLots = document.getElementById('ctrlLots');
+  var elKinney = document.getElementById('ctrlKinney');
+
+  elWidth.value = String(state.w);
+  elLevel.value = String(state.lv);
+  elEdit.checked = state.edit;
+  elIds.checked = state.ids;
+  elLots.checked = state.lots;
+  elKinney.checked = state.kinney;
+
+  function syncBodyClasses() {
+    document.body.classList.toggle('edit-mode', state.edit);
+    document.body.classList.toggle('show-ids', state.ids);
+    document.body.classList.toggle('show-lots', state.lots);
+  }
+
+  [elWidth, elLevel, elEdit, elIds, elLots, elKinney].forEach(function (el) {
+    el.addEventListener('change', function () {
+      state.w = Number(elWidth.value);
+      state.lv = Number(elLevel.value);
+      state.edit = elEdit.checked;
+      state.ids = elIds.checked;
+      state.lots = elLots.checked;
+      state.kinney = elKinney.checked;
+      render();
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // RENDER helpers
+  // ---------------------------------------------------------------
+  function px(n) { return n + 'px'; }
+
+  function visibleDistricts(lv) {
+    return DISTRICT_ORDER.filter(function (id) { return DISTRICTS[id].unlock <= lv; });
+  }
+
+  function cottageSvg() {
+    return '<svg viewBox="0 0 100 100" preserveAspectRatio="none" width="100%" height="100%" aria-hidden="true">' +
+      '<polygon points="2,40 50,4 98,40" fill="var(--navy)"/>' +
+      '<rect x="12" y="40" width="76" height="54" rx="2" fill="var(--stone-2)" stroke="var(--navy)" stroke-width="1.5"/>' +
+      '<rect x="20" y="52" width="16" height="16" fill="var(--amber)" stroke="var(--navy)" stroke-width="1"/>' +
+      '<rect x="64" y="52" width="16" height="16" fill="var(--amber)" stroke="var(--navy)" stroke-width="1"/>' +
+      '<rect x="42" y="70" width="16" height="24" fill="var(--burgundy)"/>' +
+      '<rect x="68" y="8" width="10" height="20" fill="var(--stone-2)" stroke="var(--navy)" stroke-width="1"/>' +
+      '<rect x="43" y="95" width="5" height="4" fill="var(--stone)"/>' +
+      '<rect x="52" y="95" width="5" height="4" fill="var(--stone)"/>' +
+      '<circle cx="6" cy="94" r="4" fill="var(--sage)"/><circle cx="94" cy="94" r="4" fill="var(--sage)"/>' +
+      '</svg>';
+  }
+
+  function renderLot(bandEl, lot, W, bandHeightPx) {
+    var widthPx = Math.max(18, (lot.width / 100) * W * DISTRICTS[lot.district].scale);
+    var heightPx = widthPx * lot.aspect;
+    var leftPx = (lot.left / 100) * W - widthPx / 2;
+    var bottomPx = (lot.baseline / 100) * bandHeightPx;
+    var topPx = bottomPx - heightPx;
+
+    var wrap = document.createElement('div');
+    wrap.className = 'lot';
+    wrap.style.left = px(leftPx);
+    wrap.style.top = px(topPx);
+    wrap.style.width = px(widthPx);
+    wrap.style.height = px(heightPx);
+
+    if (lot.built) {
+      var body = document.createElement('div');
+      body.style.position = 'absolute';
+      body.style.inset = '0';
+      body.innerHTML = cottageSvg();
+      wrap.appendChild(body);
+    } else {
+      var slab = document.createElement('div');
+      slab.className = 'lot-foundation';
+      wrap.appendChild(slab);
+      var sign = document.createElement('div');
+      sign.className = 'lot-sign';
+      sign.innerHTML = '<span class="lot-sign-post"></span><span class="lot-sign-board"></span>';
+      wrap.appendChild(sign);
+    }
+
+    var outline = document.createElement('div');
+    outline.className = 'lot-outline';
+    wrap.appendChild(outline);
+
+    var label = document.createElement('div');
+    label.className = 'lot-label';
+    label.textContent = lot.label + (lot.built ? '' : ' (for sale)');
+    if (lot.built) {
+      // The home path's doorstep stub + fork run straight down this
+      // lot's own horizontal centre (scene x=50%) below the baseline —
+      // a centred label would sit on top of that stub. Anchor it to
+      // the lot's left third instead so nothing overlaps it.
+      label.style.left = '-9%';
+      label.style.transform = 'none';
+      label.style.bottom = '-18px';
+    }
+    wrap.appendChild(label);
+
+    bandEl.appendChild(wrap);
+  }
+
+  function renderSpot(bandEl, key, spot, W, bandHeightPx, warn) {
+    var leftPx = (spot.left / 100) * W;
+    var topPx = (spot.top / 100) * bandHeightPx;
+
+    var wrap = document.createElement('div');
+    wrap.className = 'spot' + (warn ? ' spot-warn' : '');
+    wrap.style.left = px(leftPx);
+    wrap.style.top = px(topPx);
+
+    var glow = document.createElement('span');
+    glow.className = 'spot-glow';
+    wrap.appendChild(glow);
+    var ring = document.createElement('span');
+    ring.className = 'spot-ring';
+    wrap.appendChild(ring);
+
+    var dot = document.createElement('span');
+    dot.className = 'spot-dot';
+    dot.style.transform = 'scale(' + spot.scale + ')';
+    wrap.appendChild(dot);
+
+    var idLabel = document.createElement('span');
+    idLabel.className = 'spot-id';
+    idLabel.textContent = 'spot ' + key;
+    wrap.appendChild(idLabel);
+
+    bandEl.appendChild(wrap);
+
+    if (state.kinney && key === '4,2') {
+      var tree = document.createElement('div');
+      tree.className = 'kinney-tree';
+      tree.style.left = px(leftPx);
+      tree.style.top = px(topPx);
+      var shape = document.createElement('div');
+      shape.className = 'kinney-tree-shape';
+      shape.style.transform = 'scale(' + spot.scale + ')';
+      tree.appendChild(shape);
+      var lbl = document.createElement('div');
+      lbl.className = 'kinney-tree-label';
+      lbl.textContent = 'tree (4,2) — Kinney sample';
+      tree.appendChild(lbl);
+      bandEl.appendChild(tree);
+    }
+  }
+
+  function renderHedgeEdges(bandEl, W, bandHeightPx, opts) {
+    opts = opts || {};
+    var d = Math.max(14, 0.055 * W);
+
+    function strip(edge) {
+      var count = Math.max(4, Math.round(bandHeightPx / (d * 1.3)));
+      for (var i = 0; i < count; i++) {
+        var c = document.createElement('span');
+        c.className = 'hedge-scallop';
+        c.style.width = px(d);
+        c.style.height = px(d);
+        c.style.top = px((i / count) * bandHeightPx - d * 0.15 + (i % 2 === 0 ? 3 : -3));
+        c.style.left = edge === 'left' ? px(-d * 0.35) : px(W - d * 0.65);
+        bandEl.appendChild(c);
+      }
+    }
+    strip('left');
+    strip('right');
+
+    if (opts.bottom) {
+      var count2 = Math.max(6, Math.round(W / (d * 1.1)));
+      for (var j = 0; j < count2; j++) {
+        var c2 = document.createElement('span');
+        c2.className = 'hedge-scallop';
+        c2.style.width = px(d);
+        c2.style.height = px(d);
+        c2.style.left = px((j / count2) * W - d * 0.15);
+        c2.style.top = px(bandHeightPx - d * 0.75);
+        bandEl.appendChild(c2);
+      }
+    }
+
+    if (opts.treeClusters) {
+      [{ l: 9, t: 9 }, { l: 91, t: 11 }, { l: 50, t: 6 }].forEach(function (p) {
+        var t = document.createElement('span');
+        t.className = 'hedge-tree';
+        t.style.left = px((p.l / 100) * W);
+        t.style.top = px((p.t / 100) * bandHeightPx);
+        bandEl.appendChild(t);
+      });
+    }
+  }
+
+  function renderDistrict(scene, id, top, height, W, warnSet) {
+    var d = DISTRICTS[id];
+    var band = document.createElement('div');
+    band.className = 'band';
+    band.style.top = px(top);
+    band.style.height = px(height);
+    band.style.width = px(W);
+    band.style.background = d.bg;
+
+    var label = document.createElement('div');
+    label.className = 'band-label';
+    label.textContent = d.name.toUpperCase() + ' · Lv' + d.unlock + ' · scale×' + d.scale;
+    band.appendChild(label);
+
+    if (d.sky) {
+      var sky = document.createElement('div');
+      sky.className = 'sky-band';
+      band.appendChild(sky);
+      [12, 55, 82].forEach(function (l, i) {
+        var hill = document.createElement('div');
+        hill.className = 'hill';
+        hill.style.left = px((l / 100) * W - 40);
+        hill.style.width = px(90 - i * 10);
+        hill.style.height = px(50 - i * 8);
+        band.appendChild(hill);
+      });
+    }
+
+    renderHedgeEdges(band, W, height, id === 'home' ? { bottom: true, treeClusters: true } : {});
+
+    LOTS.filter(function (lot) { return lot.district === id; }).forEach(function (lot) {
+      renderLot(band, lot, W, height);
+    });
+
+    Object.keys(SPOT_MAP).forEach(function (key) {
+      var spot = SPOT_MAP[key];
+      if (spot.district === id) renderSpot(band, key, spot, W, height, warnSet && warnSet.has(key));
+    });
+
+    scene.appendChild(band);
+    return band;
+  }
+
+  function renderFog(scene, top, height, W, aboveDistrictId, entryXpx) {
+    var fog = document.createElement('div');
+    fog.className = 'fog-band';
+    fog.style.top = px(top);
+    fog.style.height = px(height);
+    fog.style.width = px(W);
+    fog.style.background = 'linear-gradient(to top, var(--cream-2), #ffffff)';
+
+    [{ l: 16, w: 0.5 }, { l: 55, w: 0.42 }, { l: 82, w: 0.46 }].forEach(function (h, i) {
+      var hw = h.w * W;
+      var hill = document.createElement('div');
+      hill.className = 'fog-hill';
+      hill.style.width = px(hw);
+      hill.style.height = px(hw * 0.5);
+      hill.style.left = px((h.l / 100) * W - hw / 2);
+      hill.style.bottom = px(height * 0.04 + i * 2);
+      fog.appendChild(hill);
+    });
+
+    var sil = document.createElement('div');
+    sil.className = 'fog-silhouette-wrap';
+    sil.style.left = px(entryXpx);
+    sil.style.bottom = px(height * 0.16);
+    sil.innerHTML = '<svg viewBox="0 0 60 50" width="46" height="38" aria-hidden="true">' +
+      '<polygon points="2,26 30,4 58,26" fill="var(--stone-2)"/>' +
+      '<rect x="8" y="24" width="44" height="24" fill="var(--stone-2)"/>' +
+      '</svg>';
+    fog.appendChild(sil);
+
+    var next = NEXT_UNLOCK[aboveDistrictId];
+    var chip = document.createElement('div');
+    chip.className = 'fog-chip';
+    chip.textContent = next
+      ? ('⭐ Lv.' + next.nextLevel + '에서 ' + next.name + '이(가) 열려요')
+      : '⭐ 다음 구역';
+    fog.appendChild(chip);
+
+    scene.appendChild(fog);
+  }
+
+  function sampleSegment(seg, n) {
+    var pts = [];
+    for (var i = 0; i <= n; i++) {
+      var t = i / n, mt = 1 - t;
+      if (seg.c) {
+        pts.push({
+          x: mt * mt * seg.from.x + 2 * mt * t * seg.c.x + t * t * seg.to.x,
+          y: mt * mt * seg.from.y + 2 * mt * t * seg.c.y + t * t * seg.to.y
+        });
+      } else {
+        pts.push({ x: seg.from.x + (seg.to.x - seg.from.x) * t, y: seg.from.y + (seg.to.y - seg.from.y) * t });
+      }
+    }
+    return pts;
+  }
+
+  function lotBBoxPx(lot, W, bandHeightPx) {
+    var widthPx = Math.max(18, (lot.width / 100) * W * DISTRICTS[lot.district].scale);
+    var heightPx = widthPx * lot.aspect;
+    var centerX = (lot.left / 100) * W;
+    var bottomY = (lot.baseline / 100) * bandHeightPx;
+    return { left: centerX - widthPx / 2, right: centerX + widthPx / 2, top: bottomY - heightPx, bottom: bottomY };
+  }
+
+  function pointInBBox(p, b) { return p.x >= b.left && p.x <= b.right && p.y >= b.top && p.y <= b.bottom; }
+
+  function pathWidthPx(id, W) { return (13 * DISTRICTS[id].scale / 100) * W; }
+
+  // Converts a district's segment list (band-local %) into one global-px
+  // point polyline (dense sampling) and one combined SVG 'd' string
+  // (M + successive Q/L, so it renders as ONE stroked path — no
+  // per-segment round-cap "sausage link" seams at the joins).
+  function pathToGlobal(segments, off, W, samplesPerSeg) {
+    var dAttr = '';
+    var polyline = [];
+    segments.forEach(function (seg, i) {
+      var from = { x: (seg.from.x / 100) * W, y: off.top + (seg.from.y / 100) * off.height };
+      var to = { x: (seg.to.x / 100) * W, y: off.top + (seg.to.y / 100) * off.height };
+      if (i === 0) dAttr += 'M ' + from.x.toFixed(1) + ' ' + from.y.toFixed(1) + ' ';
+      if (seg.c) {
+        var c = { x: (seg.c.x / 100) * W, y: off.top + (seg.c.y / 100) * off.height };
+        dAttr += 'Q ' + c.x.toFixed(1) + ' ' + c.y.toFixed(1) + ' ' + to.x.toFixed(1) + ' ' + to.y.toFixed(1) + ' ';
+      } else {
+        dAttr += 'L ' + to.x.toFixed(1) + ' ' + to.y.toFixed(1) + ' ';
+      }
+      sampleSegment(seg, samplesPerSeg || 16).forEach(function (bp) {
+        polyline.push({ x: (bp.x / 100) * W, y: off.top + (bp.y / 100) * off.height });
+      });
+    });
+    return { d: dAttr.trim(), points: polyline, last: segments.length ? { x: (segments[segments.length - 1].to.x / 100) * W, y: off.top + (segments[segments.length - 1].to.y / 100) * off.height } : null };
+  }
+
+  function distToPolyline(p, points) {
+    var min = Infinity;
+    for (var i = 0; i < points.length; i++) {
+      var dx = p.x - points[i].x, dy = p.y - points[i].y;
+      var d = Math.sqrt(dx * dx + dy * dy);
+      if (d < min) min = d;
+    }
+    return min;
+  }
+
+  // Requirement 3 — a decoration spot must clear (half the district's
+  // main-path width + 4%W) from the path centreline. Checked against
+  // the MAIN path only (not the home doorstep stub). The Kinney sample
+  // spot (4,2) is real Pilot A data, not a placeholder the designer is
+  // free to relocate — it is exempt from the auto-move list (see
+  // WORLD_LAYOUT_REDESIGN §3 "3차 수정" note) but still gets a console
+  // warning if it is this close, so the gap stays visible.
+  function computeSpotWarnings(visible, offsets, W) {
+    var warn = new Set();
+    visible.forEach(function (id) {
+      var off = offsets[id];
+      var built = pathToGlobal(PATHS[id], off, W, 24);
+      var clearance = pathWidthPx(id, W) / 2 + 0.04 * W;
+      Object.keys(SPOT_MAP).forEach(function (key) {
+        var spot = SPOT_MAP[key];
+        if (spot.district !== id) return;
+        var gp = { x: (spot.left / 100) * W, y: off.top + (spot.top / 100) * off.height };
+        var d = distToPolyline(gp, built.points);
+        if (d < clearance) {
+          warn.add(key);
+          console.warn('[paul-town-wireframe] spot', key, 'in district', id, 'is', d.toFixed(1) + 'px from the path centreline (needs ≥' + clearance.toFixed(1) + 'px)');
+        }
+      });
+    });
+    return warn;
+  }
+
+  // Requirement 1 — runtime guard: sample the main path and flag
+  // (console.warn + red stroke) if it enters a lot's bounding box.
+  // The bridge lot is intentionally crossable (that is the point of a
+  // bridge) so it is excluded from the check.
+  function renderPathSvg(scene, visible, offsets, W, totalH, hasFog) {
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('width', W);
+    svg.setAttribute('height', totalH);
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + totalH);
+    svg.style.position = 'absolute';
+    svg.style.left = '0';
+    svg.style.top = '0';
+    svg.style.pointerEvents = 'none';
+    svg.setAttribute('aria-hidden', 'true');
+
+    var defs = document.createElementNS(ns, 'defs');
+    var grad = document.createElementNS(ns, 'linearGradient');
+    grad.setAttribute('id', 'fogFade');
+    grad.setAttribute('x1', '0'); grad.setAttribute('y1', '1'); grad.setAttribute('x2', '0'); grad.setAttribute('y2', '0');
+    var s1 = document.createElementNS(ns, 'stop'); s1.setAttribute('offset', '0'); s1.setAttribute('stop-color', '#d9d2c5'); s1.setAttribute('stop-opacity', '0.55');
+    var s2 = document.createElementNS(ns, 'stop'); s2.setAttribute('offset', '1'); s2.setAttribute('stop-color', '#d9d2c5'); s2.setAttribute('stop-opacity', '0');
+    grad.appendChild(s1); grad.appendChild(s2);
+    defs.appendChild(grad);
+    svg.appendChild(defs);
+
+    var lastPoint = null;
+
+    // Requirement 2 — ONE <path> element per district (single 'd' with
+    // successive M/Q commands) instead of one element per bezier
+    // segment. stroke-linecap="round" only ever applies to the two true
+    // ends of that one combined path, so internal joins never show a
+    // cap/"sausage link" — they are governed purely by
+    // stroke-linejoin="round", which keeps them visually smooth even
+    // though the hand-picked control points are only approximately
+    // (not exactly) tangent-matched at each join.
+    GEO_ORDER.forEach(function (id) {
+      if (visible.indexOf(id) === -1) return;
+      var off = offsets[id];
+      var widthPx = pathWidthPx(id, W);
+      var lotsHere = LOTS.filter(function (lot) { return lot.district === id; });
+      var built = pathToGlobal(PATHS[id], off, W, 16);
+
+      var hit = false;
+      built.points.forEach(function (gp) {
+        lotsHere.forEach(function (lot) {
+          if (lot.crossable) return;
+          var bbox = lotBBoxPx(lot, W, off.height);
+          bbox.top += off.top; bbox.bottom += off.top;
+          if (pointInBBox(gp, bbox)) hit = true;
+        });
+      });
+      if (hit) {
+        console.warn('[paul-town-wireframe] main path intersects a lot bounding box — district:', id);
+      }
+
+      var edge = document.createElementNS(ns, 'path');
+      edge.setAttribute('d', built.d);
+      edge.setAttribute('fill', 'none');
+      edge.setAttribute('stroke', hit ? 'var(--path-warn)' : 'var(--path-edge)');
+      edge.setAttribute('stroke-width', String(widthPx + 2));
+      edge.setAttribute('stroke-linecap', 'round');
+      edge.setAttribute('stroke-linejoin', 'round');
+      edge.setAttribute('opacity', '0.9');
+      svg.appendChild(edge);
+
+      var fill = document.createElementNS(ns, 'path');
+      fill.setAttribute('d', built.d);
+      fill.setAttribute('fill', 'none');
+      fill.setAttribute('stroke', hit ? 'var(--path-warn)' : 'var(--path-fill)');
+      fill.setAttribute('stroke-width', String(widthPx));
+      fill.setAttribute('stroke-linecap', 'round');
+      fill.setAttribute('stroke-linejoin', 'round');
+      if (hit) fill.setAttribute('class', 'path-warn');
+      svg.appendChild(fill);
+
+      var tex = document.createElementNS(ns, 'path');
+      tex.setAttribute('d', built.d);
+      tex.setAttribute('fill', 'none');
+      tex.setAttribute('stroke', 'var(--navy)');
+      tex.setAttribute('stroke-width', '1.4');
+      tex.setAttribute('stroke-linejoin', 'round');
+      tex.setAttribute('stroke-dasharray', '1.5 7');
+      tex.setAttribute('opacity', '0.22');
+      svg.appendChild(tex);
+
+      lastPoint = built.last;
+
+      // Doorstep stub (home only) — its own single path, narrower, own
+      // round caps at both true ends (it is a short dead-end, not part
+      // of the main route, so caps there read correctly as "the path
+      // ends here").
+      if (STUBS[id]) {
+        var stubWidthPx = (STUB_WIDTH_PCT / 100) * W;
+        var builtStub = pathToGlobal(STUBS[id], off, W, 8);
+        var stubFill = document.createElementNS(ns, 'path');
+        stubFill.setAttribute('d', builtStub.d);
+        stubFill.setAttribute('fill', 'none');
+        stubFill.setAttribute('stroke', 'var(--path-fill)');
+        stubFill.setAttribute('stroke-width', String(stubWidthPx));
+        stubFill.setAttribute('stroke-linecap', 'round');
+        svg.appendChild(stubFill);
+        var stubTex = document.createElementNS(ns, 'path');
+        stubTex.setAttribute('d', builtStub.d);
+        stubTex.setAttribute('fill', 'none');
+        stubTex.setAttribute('stroke', 'var(--navy)');
+        stubTex.setAttribute('stroke-width', '1.2');
+        stubTex.setAttribute('stroke-dasharray', '1.5 6');
+        stubTex.setAttribute('opacity', '0.2');
+        svg.appendChild(stubTex);
+      }
+    });
+
+    if (hasFog && lastPoint) {
+      var fogStub = document.createElementNS(ns, 'path');
+      fogStub.setAttribute('d', 'M ' + lastPoint.x.toFixed(1) + ' ' + lastPoint.y.toFixed(1) + ' L ' + lastPoint.x.toFixed(1) + ' 0');
+      fogStub.setAttribute('fill', 'none');
+      fogStub.setAttribute('stroke', 'url(#fogFade)');
+      fogStub.setAttribute('stroke-width', String(Math.max(6, 0.05 * W)));
+      fogStub.setAttribute('stroke-linecap', 'round');
+      fogStub.setAttribute('stroke-dasharray', '3 7');
+      svg.appendChild(fogStub);
+    }
+
+    scene.appendChild(svg);
+    return lastPoint;
+  }
+
+  function updateHud() {
+    var s = LEVEL_SAMPLE[state.lv] || LEVEL_SAMPLE[1];
+    document.getElementById('hudLv').textContent = 'Lv.' + state.lv;
+    document.getElementById('hudStarText').textContent = s.star;
+    document.getElementById('hudDollar').textContent = '$' + s.dollars;
+  }
+
+  function render() {
+    document.documentElement.style.setProperty('--frame-w', state.w + 'px');
+    syncBodyClasses();
+
+    var W = state.w - 32;
+    var scene = document.getElementById('scene');
+    scene.innerHTML = '';
+    scene.style.width = px(W);
+
+    var visible = visibleDistricts(state.lv); // top -> bottom, e.g. ['lane','home'] at Lv3
+    var hasFog = state.lv < 8;
+
+    var offsets = {};
+    var cum = 0;
+    if (hasFog) {
+      var fogH = FOG_HEIGHT_UNITS * W;
+      offsets.fog = { top: cum, height: fogH };
+      cum += fogH;
+    }
+    visible.forEach(function (id) {
+      var h = DISTRICTS[id].heightUnits * W;
+      offsets[id] = { top: cum, height: h };
+      cum += h;
+    });
+    var totalH = cum;
+    scene.style.height = px(totalH);
+
+    if (hasFog) {
+      var topId = visible[0];
+      var lastSeg = PATHS[topId][PATHS[topId].length - 1];
+      var entryXpx = (lastSeg.to.x / 100) * W;
+      renderFog(scene, offsets.fog.top, offsets.fog.height, W, topId, entryXpx);
+    }
+
+    // Requirement 3 — computed once per render so every spot knows
+    // whether to show a red ring. (4,2) is real Kinney/Pilot A data
+    // (see WORLD_LAYOUT_REDESIGN §3 "3차 수정") so it still triggers the
+    // console.warn but is never visually flagged red — moving a real
+    // student's placement is out of scope for this design pass.
+    var spotWarnings = computeSpotWarnings(visible, offsets, W);
+    spotWarnings.delete('4,2');
+
+    visible.forEach(function (id) { renderDistrict(scene, id, offsets[id].top, offsets[id].height, W, spotWarnings); });
+    renderPathSvg(scene, visible, offsets, W, totalH, hasFog);
+
+    updateHud();
+
+    requestAnimationFrame(function () {
+      // Home band is always last in document flow -> scrolling to the
+      // page bottom guarantees it is fully visible on load, matching
+      // brief §3 ("home fully visible on mount, scroll UP to explore").
+      window.scrollTo(0, document.body.scrollHeight);
+      document.body.setAttribute('data-ready', '1');
+    });
+  }
+
+  function renderLegend() {
+    var items = [
+      { c: 'var(--stone-2)', t: 'built cottage silhouette (My House, always owned)' },
+      { c: 'var(--stone)', t: 'for-sale lot (foundation slab + sign)' },
+      { c: 'var(--sage)', t: 'decoration spot (dot, only with "show spot ids")' },
+      { c: 'var(--amber)', t: 'edit-mode spot glow/ring (unlocked districts only)' },
+      { c: 'var(--sage)', t: 'Kinney sample tree @ (4,2) — always shown' },
+      { c: 'var(--stone)', t: 'continuous path (per-district bezier, avoids lots)' },
+      { c: 'var(--path-warn)', t: 'path segment flagged red = intersects a lot (bug)' },
+      { c: 'var(--stone-2)', t: 'fog horizon silhouette (next district)' }
+    ];
+    var legend = document.getElementById('legend');
+    items.forEach(function (it) {
+      var row = document.createElement('div');
+      row.className = 'legend-item';
+      var sw = document.createElement('span');
+      sw.className = 'legend-swatch';
+      sw.style.background = it.c;
+      row.appendChild(sw);
+      var txt = document.createElement('span');
+      txt.textContent = it.t;
+      row.appendChild(txt);
+      legend.appendChild(row);
+    });
+  }
+
+  renderLegend();
+  render();
+})();
+</script>
+</body>
+</html>
