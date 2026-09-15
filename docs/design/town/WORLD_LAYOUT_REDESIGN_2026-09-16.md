@@ -170,6 +170,14 @@ street-lamp/red-post-box/town-sign/shop-lamp/cat/puppy/owl은 기존
   무시하고 로트만 그린다(Pilot A 실데이터 기준 Kinney의 나무 1개
   (4,2)만 존재 — 건물 배치 레코드 자체가 없어 리스크 없음).
 
+**2026-09-16 owner 명시 확인**: 운영자가 이번 세션(continuation, Step 0
+착수 지시)에서 "Major buildings/roads are structural and fixed. Small
+decorations remain customizable through the existing placement
+engine."라고 명시해, 위 결정 A를 문자 그대로 재확인했다. 이 결정은
+economy/schema/영속 데이터를 바꾸지 않는 순수 클라이언트 렌더링 선택
+(플래그 OFF 뒤에서 가역적)이므로 추가 운영자 승인 대기 없이 확정으로
+기록한다.
+
 **인터랙티브 목적지(P2, 이번 범위 아님)**: Book Shop 탭 → 책장 화면,
 Clock Tower 탭 → 타임머신 화면처럼 레거시 `PaulTown.jsx`의 건물 카드와
 유사한 라우팅은 `ONE_TOWN_CONSOLIDATION_PLAN.md` §2 7번 행이 이미

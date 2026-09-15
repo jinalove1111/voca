@@ -118,6 +118,12 @@ reference-image conditioning, use this image as a manual visual
 checklist while reviewing each subsequent asset (1.6절, `FINAL_ARTWORK_
 SPEC_2026-09-16.md`).
 
+_2026-09-16 추가: 아래 프롬프트에 "NO APP INTERFACE OF ANY KIND" 문단이
+간극 보완을 위해 추가됐다 — 실제 참조 이미지(마을그림.png)에 앱 UI
+크롬(상단 타이틀판/코인 카운터/Shop·Map·Achievements·Menu 아이콘/
+말풍선)이 포함돼 있어, Step 0 프롬프트가 이를 명시적으로 제외하도록
+못박는다._
+
 ```
 [GLOBAL MATCHED-SET BLOCK above]
 
@@ -170,6 +176,17 @@ reproduce, crop, or closely copy any specific existing artwork) — only
 the level of detail, richness, and painterly finish should match that
 reference standard, layered and readable rather than simplified into a
 flat cute-cartoon look.
+
+NO APP INTERFACE OF ANY KIND: this image must show ONLY the village
+environment itself — no HUD, no top bar, no buttons, no icons functioning
+as UI, no coin/currency counters, no speech bubbles, no menus, no
+signage lettering, no wordmarks, no interface chrome of any kind, even a
+wordless one. If a British-village reference image was used for
+density/warmth/depth guidance, its interface elements (title plate, coin
+counter, Shop/Map/Achievements/Menu icons, speech bubble, any signage
+text) must NOT be reproduced in any form, styled or otherwise —
+reference it only for the village art direction, never for interface
+design.
 
 This image will NOT be shipped in the app. It exists only to keep every
 following individual asset visually consistent with one another.
