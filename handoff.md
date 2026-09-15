@@ -1,14 +1,75 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-16 (149차 — Paul Town Batch 0 아트 3차 라운드 외부
-후보(house44.png)를 art-director + asset-qa가 독립 병렬 검토, 둘 다
-CORRECTIONS NEEDED로 판정하고 라운드 2보다 오히려 악화됐다고 확인(경로/
-카메라/로트/나무/팔레트 여전히 또는 더 잘못됨, 신규 명시 금지였던
-"벽걸이 랜턴 금지"까지 그대로 재위반). 운영자가 3차 후보를 v3 스펙의
-신뢰성 있는 테스트로 인정하지 않음 — 생성기가 전체 v3 프롬프트를 온전히
-반영하지 않았고 결합된 2패널 합성물로 잘못 생성됐다고 확인, 스펙 자체의
-실패로 보지 않음. SPLIT-PROMPT 전략(자산별 짧은 단일 대상 프롬프트, 결합
-이미지 금지)으로 전환해 1v4/3v4 작성. 코드/DB/SQL/경제/카탈로그/플래그/
-이미지 생성/merge/deploy/push 전부 0건. 148차 이하 보존)_
+_최종 갱신: 2026-09-16 (150차 — 8시간 야간 자율 작업 착수: 운영자가 3라운드
+AI 배경판 생성 방식을 폐기하고 STRUCTURAL WORLD GEOMETRY는 코드가 소유,
+ARTWORK는 독립 교체 가능한 격리 자산으로만 쓰는 결정론적 렌더러+격리 아트
+자산+기존 학습→적립→구매→소유→인벤토리→배치→이동→보관→영속 엔진 하이브리드
+아키텍처로 전환 결정, world-renderer 서브에이전트에 실제 코드 구현 위임
+진행 중 — DB WRITE/SQL/경제·카탈로그·가격·레벨/플래그 변경 전부 0,
+merge/deploy/push 0, V1/Kinney/Production 무접촉. 149차 이하 보존)_
+
+## 2026-09-16 (150차) — 8시간 야간 자율 작업 착수: AI 배경판 생성 방식 폐기 → 결정론적 렌더러+격리 아트 자산+기존 배치엔진 하이브리드 아키텍처로 전환
+
+### 0. 안전 요약
+
+코드 변경은 파일 락 없이 별도 world-renderer 서브에이전트가 진행 중(이
+문서 갱신과 파일 겹침 없음) · DB WRITE 0 · SQL 0 · 경제/카탈로그/가격/레벨
+변경 0 · 플래그 변경 0(`paulTownV2` OFF 유지) · merge/deploy/push 0 ·
+미추적 보호 파일 17개 무접촉 · Kinney/Production 무접촉.
+
+### 1. 운영자 결정 — 아키텍처 대전환
+
+운영자가 3라운드에 걸친 AI 생성 환경 플레이트(`env/plate-home.webp`) 정밀
+지오메트리 접근을 폐기 결정. 이유: 3라운드 모두 카메라/경로/로트 좌표 등
+정밀 기하 요구사항을 이미지 생성 파이프라인이 신뢰성 있게 지키지 못함
+(148~149차 참고). 새 아키텍처: STRUCTURAL WORLD GEOMETRY(월드 크기/구역
+위치/굽은 길/로트/잠금 경계/포그)는 코드(결정론적 CSS/SVG)가 소유하고,
+ARTWORK는 독립적으로 교체 가능한 격리된 자산(집/상점/나무/벤치 등)으로만
+쓰이며 로드나 로트를 절대 구운 배경에 포함하지 않는다. 기존 학습→적립→
+구매→소유→인벤토리→배치→이동→보관→영속 엔진은 완전히 보존, 재구현 금지.
+v4/v5/v6 AI 플레이트 프롬프트 생성 중단.
+
+### 2. Phase 1 — 디스커버리 결과
+
+재확인한 현재 구현 상태(추측 없이 코드로 직접 확인): `paulTownV2` 플래그
+(`src/config/features.js`) 여전히 `false`. V2 샌드박스 컴포넌트 12개
+`src/components/town/v2/*.jsx`(TownScreenV2/TownHud/PaulGuide/TownSheet/
+TownScene/TownGroundLayer/TownPathLayer/TownAmbientLayer/TownFogLayer/
+TownPlacementOverlay/TownObjectLayer/TownSprite, 총 1511줄,
+`src/utils/town/townScene.js` 249줄 포함) 전부 기존 8×6 단일 박스(aspect
+8:13) 방식 그대로. V1(`TownGrid.jsx`/`TownScreen.jsx` 등, Kinney 실제 경로)은
+이번 세션 내내 무접촉 확정. 기존 정적 계약 테스트 `scripts/testTownV2Static.mjs`
+(약 90개 단언, data-testid/aria/버튼문구/V1 byte-identical/변형 메서드
+집합 등)와 `scripts/testTownSceneV2.mjs`(townScene.js 순수함수 테스트) 확인.
+V1이 실제로 호출하는 변형 메서드 정확히 5개 확인: `studentData.placeTownItem`/
+`moveTownItem`/`storeTownItem`, `townShop.purchase`/`claimWelcome` — V2는 이
+집합의 부분집합만 호출해야 함(계약 확인됨). gardenPoints 생기 레이어는 이미
+`townScene.js`의 `gardenRichness(gardenPoints)`(임계값 0/10/30/60/100)로
+구현돼 있어 재사용, 새로 만들지 않음.
+
+### 3. Phase 2 — 구현 계획(월드/렌더러 서브에이전트에 위임, 진행 중)
+
+이미 3라운드 검증을 거쳐 `docs/design/town/wireframe/paul-town-world-wireframe.html`
+(Playwright로 실측 검증됨, 콘솔 경고 0, 가로 오버플로 0)에 구현된 정확한
+지오메트리(DISTRICTS 6개 heightUnits/scale/unlockLevel, LOTS 7개 좌표,
+SPOT_MAP 48칸, 구역별 path bezier 좌표, STUBS 현관 스텁)를 그대로 실제
+React 컴포넌트로 포팅하는 작업을 진행 중. 변경 대상: `townScene.js` 확장
+(DISTRICTS/LOTS/SPOT_MAP/PATHS/`districtsVisible`/`sceneHeightUnits`/
+`districtOffsetUnits`/`lotState`/`anchorFor(x,y,level)` 시그니처 확장 등,
+기존 export 전부 보존) + `TownGroundLayer.jsx`/`TownPathLayer.jsx`(전면
+재작성, CSS/SVG만) + `TownScene.jsx`/`TownObjectLayer.jsx`/`TownFogLayer.jsx`/
+`TownAmbientLayer.jsx`/`TownPlacementOverlay.jsx`/`TownScreenV2.jsx`(level
+prop 배선). 검증 계획: `npm run build` + `testTownV2Static.mjs` +
+`testTownSceneV2.mjs`(신규 케이스 추가) + `testTownUiStatic.mjs`(V1 무회귀
+확인) + `verify:e2e`(townV1/townV2/townPilotAllowlist/townFlagCrossTab).
+완료 후 Lead가 직접 재검증 후 커밋(서브에이전트는 커밋하지 않음).
+
+### 4. 범위(이번 야간 세션 우선순위)
+
+P0(My House 구역) + P1(월드 경로/레이어링) + P2(잠금-다음-구역 안개
+처리)를 이번 세션의 핵심 목표로 확정, P3(Book Shop/광장/카페 실제
+콘텐츠)~P4(다리/학교/시계탑)는 로트+잠금 처리 수준으로만, P5(gardenPoints
+생기 레이어)는 기존 `gardenRichness()` 재배치 수준으로 포함 시도. 완전한
+6개 구역 콘텐츠 마감은 이번 세션 범위 밖으로 명시.
 
 ## 2026-09-16 (149차) — Batch 0 라운드 3 독립 검토(worse than 라운드 2) + 운영자 진단(프롬프트 미충실 반영) + SPLIT-PROMPT 전략 전환(1v4/3v4)
 
