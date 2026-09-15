@@ -6,7 +6,8 @@
   "status": "working",
   "progress": 45,
   "started_at": "2026-09-16T04:00:00+09:00",
-  "updated_at": "2026-09-16T04:00:00+09:00",
+  "updated_at": "2026-09-16T04:20:00+09:00",
+  "coordination_mechanism": "Agent-tool subagents (background, real independent processes, each with its own agentId, listed via ListAgents while active, resumable via SendMessage) coordinated by this Lead session — NOT the CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS persistent-teammate/dashboard feature. That flag was checked and is unset in this shell; this session has no tool to enable it, create a named 'team', or create a shared task board with a dashboard. Verified 2026-09-16 via `echo $CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` (unset) and ToolSearch (no team/teammate-creation tool exists in this environment; TaskStop can only stop a teammate, not create one). The six roles in agent_roster below are real, independently-run Agent-tool subagents when spawned, not six personas simulated in one context — but they are not the specific named feature the operator asked to enable.",
   "files_owned": [".ai-status/lead-paul-town-lead.json"],
   "files_read": [
     "docs/design/town/WORLD_LAYOUT_REDESIGN_2026-09-16.md",
