@@ -31,6 +31,13 @@ const EVENT_TEMPLATES = {
   // 배지(TownScreen.jsx/TownHud.jsx)와 함께 작동 — 배지는 재방문 시에도
   // 보이는 상시 신호, 이 문구는 구매 순간의 즉시 안내.
   purchase_success: { reactionId: 'great', text: 'Great job! {name}을(를) 샀어요! 보관함에서 마을에 놓아보세요' },
+  // 2026-09-15c — 구매 실패 피드백(클라이언트 fail-safe). 서버 SQL(v3_47)이
+  // 돌려주는 사유는 'insufficient'인데 TownShopPanel은 'insufficient_funds'
+  // 만 보고 있었고(죽은 분기), in_flight/network_failed/rpc_failed 등은
+  // 아무 안내 없이 확인 시트만 닫혔다(실측). 경제/가격/서버 계약은 그대로
+  // — 안내 문구 2개만 추가. reactionId는 기존 화이트리스트 안의 것만.
+  purchase_busy: { reactionId: 'ponder', text: '잠깐만요! 아직 앞의 구매를 처리하고 있어요' },
+  purchase_failed: { reactionId: 'almost', text: '앗, {name} 구매가 안 됐어요. 잠시 후 다시 해보세요' },
   insufficient: { reactionId: 'almost', text: '조금만 더! {shortfall} Paul Dollar가 더 필요해요' },
   locked: { reactionId: 'study', text: 'Level {level}에서 열려요' },
   unlock: { reactionId: 'levelup', text: 'You unlocked something new! Level {level}!' },

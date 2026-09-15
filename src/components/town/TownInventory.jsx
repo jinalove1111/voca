@@ -4,7 +4,21 @@
 // 들어가며 부모(TownScreen)가 탭을 내 마을로 전환한다. 이미 놓인 아이템도
 // 함께 목록화해 "위치 옮기기"로 이동 모드를 시작할 수 있다(보관 중이
 // 아니라 마을에 있다는 사실을 정직하게 표시).
+import { useState, useEffect } from 'react'
 import { townAsset } from '../../assets/town'
+
+// 2026-09-15c — TownShopPanel.jsx의 ItemThumb과 동일한 onError 1회 →
+// 이모지 폴백(전체 여정 감사 P2: V1 <img>가 배포 이후 자산 404 시 깨진
+// 이미지 아이콘을 노출). 파일 내부 로컬 컴포넌트로 두어 기존 정적 계약
+// (이 파일에 <img loading="lazy" decoding="async"> 존재)을 유지한다.
+function ItemThumb({ asset, assetKey, emoji }) {
+  const [loadFailed, setLoadFailed] = useState(false)
+  useEffect(() => { setLoadFailed(false) }, [assetKey])
+  if (asset && !loadFailed) {
+    return <img src={asset} alt="" loading="lazy" decoding="async" onError={() => setLoadFailed(true)} className="w-full h-full object-contain" />
+  }
+  return <span aria-hidden="true">{emoji}</span>
+}
 
 export default function TownInventory({ items, ownedIds, placements, onPlaceStart, onMoveStart, onGoShop }) {
   const owned = Array.isArray(ownedIds) ? ownedIds : []
@@ -44,11 +58,7 @@ export default function TownInventory({ items, ownedIds, placements, onPlaceStar
               return (
                 <div key={item.id} className="bg-white rounded-2xl card-shadow p-3 flex flex-col items-center text-center gap-1">
                   <div className="w-12 h-12 flex items-center justify-center text-3xl">
-                    {asset ? (
-                      <img src={asset} alt="" loading="lazy" decoding="async" className="w-full h-full object-contain" />
-                    ) : (
-                      <span aria-hidden="true">{item.emoji}</span>
-                    )}
+                    <ItemThumb asset={asset} assetKey={item.assetKey} emoji={item.emoji} />
                   </div>
                   <p className="text-sm font-black text-gray-800">{item.name}</p>
                   <button
