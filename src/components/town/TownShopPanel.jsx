@@ -6,7 +6,7 @@
 // item.price 같은 "남는 금액 미리보기"만 로컬로 계산하고(구매 확인 문구용,
 // 실제 차감이 아님), ⭐(별)에서 💵(잔액)을 역산하는 계산은 절대 하지
 // 않는다.
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { TOWN_CATEGORIES, itemState, shortfall, groupByCategory } from '../../utils/town/townCatalog'
 import { TOWN_LEVELS } from '../../utils/town/townLevel'
 import { TOWN_PHRASES } from '../../utils/town/townMessages'
@@ -21,6 +21,21 @@ import { REWARD_STARS } from '../../utils/rewardEngine'
 function starsForLevel(level) {
   const entry = TOWN_LEVELS[Math.max(1, Number(level) || 1) - 1]
   return entry ? entry.min : 0
+}
+
+// 2026-09-15c — 배포 이후 해시 자산이 사라지면(CDN 정리/배포 스킵) <img>가
+// 깨진 이미지 아이콘을 그대로 노출하던 격차(전체 여정 감사 P2). V2
+// TownSprite.jsx와 동일하게 onError 1회 → 이모지 폴백(재시도 없음,
+// assetKey가 바뀌면 다음 자산은 다시 시도). 파일 내부 로컬 컴포넌트로
+// 두어 기존 정적 계약(이 파일에 <img loading="lazy" decoding="async">가
+// 존재)을 그대로 만족시킨다.
+function ItemThumb({ asset, assetKey, emoji }) {
+  const [loadFailed, setLoadFailed] = useState(false)
+  useEffect(() => { setLoadFailed(false) }, [assetKey])
+  if (asset && !loadFailed) {
+    return <img src={asset} alt="" loading="lazy" decoding="async" onError={() => setLoadFailed(true)} className="w-full h-full object-contain" />
+  }
+  return <span aria-hidden="true">{emoji}</span>
 }
 
 export default function TownShopPanel({ items, ownedIds, balance, level, purchasingId, onPurchase, onGuide }) {
@@ -39,17 +54,40 @@ export default function TownShopPanel({ items, ownedIds, balance, level, purchas
     }
   }
 
+  // 2026-09-15c — 실패 경로 fail-safe. 실측 결함 2건:
+  //   (1) 서버 SQL(supabase_v3_47_town_shop.sql:157)과 mock이 돌려주는
+  //       사유는 'insufficient'인데 여기서는 'insufficient_funds'만 봐서
+  //       서버측 잔액 부족 거절(클라이언트 잔액이 stale-high일 때)이 죽은
+  //       분기였다 — 둘 다 받는다. 부족액은 서버가 알려준 balanceAfter
+  //       (applyPurchaseResult가 헤더 잔액도 같은 값으로 정정)로 계산해
+  //       안내 문구와 헤더가 항상 일치하게 한다.
+  //   (2) in_flight/network_failed/rpc_failed/relogin_required 등 나머지
+  //       실패는 아무 안내 없이 시트만 닫혀 아이가 "눌렀는데 아무 일도
+  //       안 일어남"을 겪었다 — busy/failed 안내로 갈라 보여준다.
+  //   onPurchase가 throw해도(unhandled rejection) 동일하게 failed로 흡수.
+  // 경제/가격/서버 계약/소유권 판정은 전부 무변경(서버가 여전히 유일한
+  // 진실 원천, 여기서는 그 결과를 안내할 뿐).
   async function handleConfirmPurchase() {
     const item = confirmItem
     setConfirmItem(null)
     if (!item || !onPurchase) return
-    const res = await onPurchase(item.id)
+    let res
+    try {
+      res = await onPurchase(item.id)
+    } catch {
+      res = { ok: false, reason: 'client_error' }
+    }
     if (res && res.ok) {
       onGuide && onGuide('purchase_success', { name: item.name })
-    } else if (res && res.reason === 'insufficient_funds') {
-      onGuide && onGuide('insufficient', { shortfall: shortfall(item, balance) })
+    } else if (res && (res.reason === 'insufficient' || res.reason === 'insufficient_funds')) {
+      const knownBalance = Number.isFinite(Number(res.balanceAfter)) ? Number(res.balanceAfter) : balance
+      onGuide && onGuide('insufficient', { shortfall: shortfall(item, knownBalance) })
     } else if (res && res.reason === 'locked') {
       onGuide && onGuide('locked', { level: item.minLevel })
+    } else if (res && res.reason === 'in_flight') {
+      onGuide && onGuide('purchase_busy', { name: item.name })
+    } else {
+      onGuide && onGuide('purchase_failed', { name: item.name })
     }
   }
 
@@ -90,11 +128,7 @@ export default function TownShopPanel({ items, ownedIds, balance, level, purchas
           return (
             <div key={item.id} className="bg-white rounded-2xl card-shadow p-3 flex flex-col items-center text-center gap-1">
               <div className="w-12 h-12 flex items-center justify-center text-3xl">
-                {asset ? (
-                  <img src={asset} alt="" loading="lazy" decoding="async" className="w-full h-full object-contain" />
-                ) : (
-                  <span aria-hidden="true">{item.emoji}</span>
-                )}
+                <ItemThumb asset={asset} assetKey={item.assetKey} emoji={item.emoji} />
               </div>
               <p className="text-sm font-black text-gray-800">{item.name}</p>
               <p className="text-xs text-gray-400">{item.nameEn}</p>

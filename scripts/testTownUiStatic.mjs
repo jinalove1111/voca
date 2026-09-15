@@ -313,8 +313,26 @@ const allTownSrcForBrandCheck = TOWN_COMPONENT_FILES.map((f) => rawByFile[f] || 
 check('마을 코드 전체 — "Hogwarts/Harry/Potter" 문자열 없음(저작권 회피)', !/Hogwarts|Harry|Potter/i.test(allTownSrcForBrandCheck))
 check('TownShopPanel.jsx — TOWN_PHRASES.learnEarn 여전히 정확히 1회(PHASE 4로 늘지 않음)', countOccurrences(shopSrc, 'TOWN_PHRASES.learnEarn') === 1)
 
-// ── 13. 마을 장면 비주얼 업그레이드(2026-09-15) — 체스판 인상 제거 ────────
-section('13. TownGrid.jsx — 체스판(checkerboard) 제거 + 배치모드 전용 안내')
+// ── 13. 구매 실패 fail-safe + <img> 폴백(2026-09-15c) ─────────────────
+// 실측 결함 회귀 가드: (1) 서버 SQL(supabase_v3_47_town_shop.sql)·mock이
+// 돌려주는 잔액 부족 사유는 'insufficient'인데 클라이언트는
+// 'insufficient_funds'만 봐서 죽은 분기였다, (2) in_flight/network_failed
+// 등 나머지 실패는 아무 안내 없이 확인 시트만 닫혔다, (3) V1 상점/보관함
+// <img>에 onError 폴백이 없어 자산 404 시 깨진 아이콘이 노출됐다.
+section('13. TownShopPanel/TownInventory — 구매 실패 피드백 + 이미지 폴백')
+check("TownShopPanel.jsx — 서버 진실 사유 'insufficient'를 처리(죽은 분기 해소)", /res\.reason === 'insufficient'/.test(shopCode))
+check("TownShopPanel.jsx — 부족액을 서버 balanceAfter 기준으로 계산(헤더 잔액과 일치)", /balanceAfter/.test(shopCode) && /shortfall\(item, knownBalance\)/.test(shopCode))
+check("TownShopPanel.jsx — 'in_flight' → purchase_busy 안내", /'in_flight'[\s\S]{0,120}purchase_busy/.test(shopCode))
+check("TownShopPanel.jsx — 그 외 모든 실패 → purchase_failed 안내(조용한 실패 없음)", /else\s*\{\s*onGuide && onGuide\('purchase_failed'/.test(shopCode))
+check('TownShopPanel.jsx — onPurchase throw도 흡수(try/catch)', /try\s*\{\s*res = await onPurchase\(item\.id\)\s*\}\s*catch/.test(shopCode))
+check("townMessages.js — purchase_busy 템플릿(reactionId ponder)", /purchase_busy:\s*\{\s*reactionId:\s*'ponder'/.test(townMessagesSrc || ''))
+check("townMessages.js — purchase_failed 템플릿(reactionId almost, {name} 포함)", /purchase_failed:\s*\{\s*reactionId:\s*'almost',\s*text:\s*'[^']*\{name\}[^']*'/.test(townMessagesSrc || ''))
+check('TownShopPanel.jsx — <img> onError → 이모지 폴백(ItemThumb)', /onError=\{\(\)\s*=>\s*setLoadFailed\(true\)\}/.test(shopSrc) && /function ItemThumb\(/.test(shopCode))
+check('TownInventory.jsx — <img> onError → 이모지 폴백(ItemThumb)', /onError=\{\(\)\s*=>\s*setLoadFailed\(true\)\}/.test(invSrc) && /function ItemThumb\(/.test(invCode))
+check('TownShopPanel.jsx/TownInventory.jsx — 폴백 상태가 assetKey 변경 시 리셋(useEffect)', /useEffect\(\(\) => \{ setLoadFailed\(false\) \}, \[assetKey\]\)/.test(shopCode) && /useEffect\(\(\) => \{ setLoadFailed\(false\) \}, \[assetKey\]\)/.test(invCode))
+
+// ── 14. 마을 장면 비주얼 업그레이드(2026-09-15) — 체스판 인상 제거 ────────
+section('14. TownGrid.jsx — 체스판(checkerboard) 제거 + 배치모드 전용 안내')
 check('TownGrid.jsx — 칸 배경 bg-white/40 제거됨(체스판의 직접 원인)', !gridCode.includes('bg-white/40'))
 check('TownGrid.jsx — HOME 칸 하드 박스(bg-purple-100 border-purple-300 조합) 제거됨', !gridSrc.includes('bg-purple-100 border-2 border-purple-300'))
 check('TownGrid.jsx — 칸별 고정 자갈길 배경(bg-[#d9d2c5]) 삭제(연속 레이어로 대체)', !/isPath\s*\?\s*'bg-\[#d9d2c5\]'/.test(gridSrc))
