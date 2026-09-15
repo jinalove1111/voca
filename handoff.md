@@ -1,12 +1,53 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-16 (147차 — 운영자가 Paul Town 전담 상시 에이전트 팀
-운영 모델을 활성화, Lead가 Art Director/Asset QA/World-Renderer/My
-House-Inventory/QA-Regression/Docs-Handoff 6개 전문 역할을 내부 조율하고
-운영자에게는 Art Gate/Product Gate/Pilot Gate/Production Gate 같은
-실질적 결정만 요청하도록 정리, 신규 상시 상태 파일
-`.ai-status/lead-paul-town-lead.json` 생성(task_id 진행 중 계속 같은
-파일을 덮어쓰는 방식). 코드/DB/SQL/경제/카탈로그/플래그/이미지 생성/
-merge/deploy/push 전부 0건. 146차 이하 보존)_
+_최종 갱신: 2026-09-16 (148차 — Paul Town Batch 0 아트 2차 라운드 외부
+후보(house 33.png)를 art-director + asset-qa가 서로의 결론을 보지 못한
+채 독립 병렬 검토, 둘 다 BATCH 0 CORRECTIONS NEEDED로 판정. 원본 7개
+결함 중 화분 제거/문 색상 2건 확정 FIXED, 코티지 크롭/상단 산울타리 gap
+2건 개선됐으나 미완, 카메라 불일치/경로 지오메트리/담쟁이 밀도 3건은
+여전히 NOT FIXED, 신규 결함(나무/하늘 베이크)까지 발견. Lead가 MUST FIX
+9건 합의 + 검토자 간 렌더링 등록(painterly vs photoreal) 불일치 1건을
+임의 판정 없이 기록, `ART_GENERATION_HANDOFF_P0_2026-09-16.md`에
+1v3/3v3 OWNER-CORRECTED FINAL(2nd revision) 프롬프트 작성. 코드/DB/SQL/
+경제/카탈로그/플래그/이미지 생성/merge/deploy/push 전부 0건. 147차 이하
+보존)_
+
+## 2026-09-16 (148차) — Batch 0 라운드 2 독립 검토(art-director + asset-qa 병렬) — CORRECTIONS NEEDED, v3 보정 프롬프트(1v3/3v3) 작성
+
+### 0. 안전 요약
+
+코드 변경 0 · DB WRITE 0 · SQL 0 · 경제/카탈로그 변경 0 · 플래그 변경 0 ·
+이미지 생성 0 · merge/deploy/push 0 · 미추적 보호 파일 17개 무접촉.
+
+### 1. 검토 결과
+
+house 33.png(1v2/3v2 프롬프트로 생성된 2차 외부 후보)를 art-director와
+asset-qa가 서로의 결론을 보지 못한 채 독립 병렬 검토, 둘 다 동일하게
+BATCH 0 CORRECTIONS NEEDED 판정. 원본 7개 결함 중 화분 제거/문 색상 2건은
+확정 FIXED, 코티지 크롭·상단 산울타리 gap 2건은 개선됐으나 완전하지
+않음, 카메라 불일치·경로 지오메트리·담쟁이/꽃 밀도 3건은 여전히 NOT
+FIXED — 게다가 나무/하늘 베이크라는 신규 결함(원래 7개 목록에 없던)까지
+발견됨.
+
+### 2. 리드 통합
+
+MUST FIX 9건 합의(카메라 불일치/나무 제거/하늘 제거/로트 위치/경로
+지오메트리/담쟁이 밀도/광원 일치/모바일 가독성 다운스케일 테스트) +
+검토자 간 불일치 1건을 리드가 임의로 판정하지 않고 그대로 기록 —
+art-director는 렌더링 등록(painterly)을 적합하다고 판단했으나 asset-qa는
+photoreal/CG에 가깝다고 판단, 운영자가 승인된 Step 0 스타일 키와 직접
+대조해 판정 필요.
+
+### 3. 산출물
+
+`ART_GENERATION_HANDOFF_P0_2026-09-16.md`에 1v3/3v3 OWNER-CORRECTED
+FINAL(2nd revision) 프롬프트 추가 — 자체 검증 체크리스트를 프롬프트에
+직접 내장(경로 끝점 추적, 로트/화단이 완벽한 직사각형·원이면 카메라
+오류라는 기하학적 자가진단 등)해 동일 결함 3라운드 반복을 막으려 시도.
+
+### 4. 다음
+
+운영자가 v3 프롬프트로 외부에서 3차 후보를 생성 → 재검토, 렌더링 등록
+불일치는 운영자가 Step 0 스타일 키와 대조해 별도로 판정.
 
 ## 2026-09-16 (147차) — Paul Town 상시 에이전트 팀 운영 모델 활성화(Lead + 6개 전문 역할, 운영자 게이트만 승인)
 
