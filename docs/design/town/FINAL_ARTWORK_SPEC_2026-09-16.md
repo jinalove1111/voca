@@ -207,6 +207,21 @@ HANDOFF_P0_2026-09-16.md`의 Step 0(스타일-키 마스터 오버뷰)이 이 �
 공식 Paul 캐릭터(신규 생성 금지, 기존 `paulReactions.js` 리액션 이미지만
 재사용).
 
+### 1.8 스타터 상태 밀도 원칙(2026-09-16 owner 결정, 신규)
+
+운영자가 my-house 1차 참조 이미지 검토 후 확정한 원칙 — 학생이 아직
+아무것도 구매하지 않은 "스타터" 상태의 고정 건물(특히
+`buildings/my-house`, 향후 book-shop/cafe/english-school/clock-tower도
+동일 원칙 적용)은 따뜻하고 매력적으로 보이되 의도적으로 "완성되지 않은"
+느낌을 유지해야 한다 — 벽에 붙은 가벼운 담쟁이/소박한 창문 화단 정도의
+건축적 장식만 허용하고, 화분/독립 꽃무리/관목/나무/벤치/램프/우체통/
+펜스/동물 등 이동 가능한 데코레이션은 절대 건물 스프라이트에 베이크하지
+않는다(전부 별도 구매 가능한 배치 자산으로 유지). 근거: 학생의
+"학습→적립→구매→집으로 가져와 배치"라는 핵심 루프가 성립하려면 시작
+상태가 시각적으로 여백(개선 여지)을 남겨야 한다. `buildings/my-house`
+실제 적용은 `ART_GENERATION_HANDOFF_P0_2026-09-16.md`의 "3v2.
+buildings/my-house.webp (OWNER-CORRECTED FINAL)" 참고.
+
 ## 2. 자산 표
 
 컬럼: `asset_key` | filename | type | canvas(master, 2x px) | render
@@ -223,9 +238,9 @@ z-depth 동작 | variants | priority | lifecycle.
 
 | asset_key | filename | type | canvas(master) | render(1x, district 적용) | aspect | transparent | anchor | footprint(%W) | z-depth | variants | lifecycle |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| `env/plate-home` | `plate-home.webp` | plate | 1080×1242 | 씬 폭 전체 fill, height=1.15×W(=W=358이면 412px) | 1:1.15 | NO(opaque, full-bleed) | top-left fill | N/A(배경 전체) | ground/band baseline — 스택 최하단(가장 앞) | 없음(P0) | SPEC_ONLY(신규 컴포지션, 구 `backgrounds/village-*` 대체) |
+| `env/plate-home` | `plate-home.webp` | plate | 1080×1242 | 씬 폭 전체 fill, height=1.15×W(=W=358이면 412px) | 1:1.15 | NO(opaque, full-bleed) | top-left fill | N/A(배경 전체) | ground/band baseline — 스택 최하단(가장 앞) | 없음(P0) | SPEC_ONLY(신규 컴포지션, 구 `backgrounds/village-*` 대체) (2026-09-16 owner 검토 후 OWNER-CORRECTED FINAL 프롬프트로 갱신 — ART_GENERATION_HANDOFF_P0_2026-09-16.md 3v2/1v2 참고) |
 | `env/plate-fog-horizon` | `plate-fog-horizon.webp` | plate | 1080×346 | 씬 폭 전체 fill, height=0.32×W(=115px @358) | 1:0.32 | NO(opaque) | top-left fill | N/A | fog band — 최상단 잠금 district 위에 재사용(범용) | 없음 | SPEC_ONLY(구 `TownFogLayer` CSS 그라디언트+`backgrounds/fog` P1 계획 대체) |
-| `buildings/my-house` | `my-house.webp` | sprite(lot) | 768×640 | 150×125(42%W, home scale 1.00) | 6:5 | YES | bottom-center | 42 | objects — home 밴드 cottage 로트 고정 위치 | `my-house-lights`(P1, 이번 배치 제외) | SPEC_ONLY — **REPLACE** 구 `buildings/my-house`(128×160, DEPLOYED, 브리프 §7 "too small, garden baked, wrong hierarchy") |
+| `buildings/my-house` | `my-house.webp` | sprite(lot) | 768×640 | 150×125(42%W, home scale 1.00) | 6:5 | YES | bottom-center | 42 | objects — home 밴드 cottage 로트 고정 위치 | `my-house-lights`(P1, 이번 배치 제외) | SPEC_ONLY — **REPLACE** 구 `buildings/my-house`(128×160, DEPLOYED, 브리프 §7 "too small, garden baked, wrong hierarchy") (2026-09-16 owner 검토 후 OWNER-CORRECTED FINAL 프롬프트로 갱신 — ART_GENERATION_HANDOFF_P0_2026-09-16.md 3v2/1v2 참고) |
 | `nature/tree` | `tree.webp` | sprite(spot) | 384×512 | 72×96(20%W, home scale 1.00) | 3:4 | YES | bottom-center | 20 | objects — SPOT_MAP 스팟, y-order로 정렬 | 없음 | SPEC_ONLY — **REPLACE** 구 `nature/tree`(96×128, DEPLOYED, 브리프 §7 TEMPORARY PLACEHOLDER→이번 배치로 교체) |
 | `nature/flower-garden` | `flower-garden.webp` | sprite(spot) | 384×192 | 64×32(18%W, home scale 1.00) | 2:1 | YES | bottom-center | 18(폭)×8(높이 비율 참고) | objects — SPOT_MAP 스팟 | 없음 | SPEC_ONLY — 구 `nature/flower-garden`은 `PAUL_TOWN_ASSET_CONTRACT.md` 기준 SPEC_ONLY(후보 미제출 상태)였으므로 완전 신규 |
 | `decorations/bench` | `bench.webp` | sprite(spot) | 320×224 | 47×33(13%W, home scale 1.00) | 10:7 | YES | bottom-center | 13 | objects — SPOT_MAP 스팟 | 없음 | SPEC_ONLY — **주의: 이 asset_key는 `DEFERRED` 이력 有**(4절 QA 특기사항 참고) |

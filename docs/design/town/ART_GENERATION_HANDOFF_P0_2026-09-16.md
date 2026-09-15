@@ -236,6 +236,96 @@ scene content on all four edges.
 FILE NAME: env/plate-home.webp
 ```
 
+_2026-09-16 owner 수정 지시 반영: 외부 생성 1차 결과물 검토 후 아래 경로
+지오메트리/상단 산울타리/카메라/로트 좌표 보정이 필요해 OWNER-CORRECTED
+FINAL 버전을 추가한다. 원본 프롬프트는 이력으로 보존한다._
+
+### 1v2. `env/plate-home.webp` (OWNER-CORRECTED FINAL, 2026-09-16)
+
+```
+[GLOBAL MATCHED-SET BLOCK above]
+
+CANVAS: 1080×1242 (aspect ratio 1:1.15)
+
+TYPE: Opaque, full-bleed background plate — this is NOT a sprite, do not
+apply the transparency instruction from the global block. Fill the
+entire canvas edge-to-edge with painted scene content, no transparent
+areas at all.
+
+SUBJECT: The "My Home" district — bottom-most, nearest slice of the
+continuous village scene from Step 0's band 1. Paint ONLY the
+environment: soft mossy lawn ground, a low hedge or stone boundary along
+the left, right, and bottom edges of the frame.
+
+PATH (corrected geometry, exact — do not deviate): a single winding
+cobblestone path enters the bottom edge at horizontal center (50% of
+width) directly in front of a small garden gate. It travels straight up
+for a short distance to a fork point at roughly 16% of the frame height
+above the bottom edge (i.e. 84% of the way up from the bottom). At that
+fork, TWO things happen: (1) a short, narrower stepping-stone stub
+continues straight up from the fork for only a small additional distance
+and then dead-ends completely at a doorstep area roughly 28% of the
+frame height above the bottom edge — this stub must NOT continue any
+further and must NOT reach anywhere near the top edge or the left
+boundary; (2) the single main path (wider than the stub) bends away from
+the fork toward the right side of the frame in a smooth continuous
+curve, sweeping right and then upward, passing well clear of the
+building lot and the stub, and exits the FRAME'S TOP EDGE only once, at
+approximately 78% of the frame's width (upper-right area). There must be
+exactly ONE point where any path reaches the top edge of the frame. Do
+not draw a second path branch reaching the left side or the top edge.
+
+TOP BOUNDARY GAP (new, required): unlike the left, right, and bottom
+edges, the top edge of the frame must NOT be sealed by a continuous
+hedge line. Leave the boundary vegetation open in a clear gap exactly
+where the main path exits at approximately 78% of the frame's width, so
+the cobblestone path visibly continues past the top edge with nothing
+blocking it — this plate sits at the bottom of a taller continuous
+village and must read as open to the district above it, not as an
+enclosed garden room. The hedge may continue normally along the rest of
+the top edge away from that gap.
+
+BUILDING LOT: include exactly one empty rectangular building-lot
+foundation (a simple raised stone/dirt footprint outline, no building on
+it), positioned centered at approximately 50% of the frame's width, with
+its front/baseline edge at approximately 66% of the frame's height
+measured from the top of the frame (i.e. in the lower-middle portion of
+the band, close to where the path's stub ends at the doorstep). Size it
+to later hold a small cottage sprite occupying roughly 42% of the
+frame's width.
+
+FLOWER BEDS: include two small circular or oval patches of bare bedded
+soil (flower-bed foundations, no flowers painted in them yet), one on
+each side of the path in the lower half of the frame, near the path —
+these positions are now locked as the approved anchor points for a
+future garden-growth overlay.
+
+Do NOT paint any building, any tree, any bench, any lamp, any post box,
+any sign, or any animal — those are separate sprite layers added later.
+The ground may have gentle color variation and soft texture but no
+directional cast shadows other than very soft, faint contact darkening
+right at the lot foundation and flower-bed edges.
+
+CAMERA (corrected, critical): this must be the SAME fixed 3/4 top-down
+angle at approximately 30 degrees elevation as every other asset in this
+set — specifically the same elevation as the paired `buildings/
+my-house.webp` cottage sprite. Do NOT render this ground plane as a
+steep near-overhead/map-like top-down view. The lawn, path, and lot
+foundation must all be painted as if viewed from that same oblique 30
+degree angle, with visible depth/perspective foreshortening toward the
+top of the frame, not a flat plan view.
+
+LIGHT: warm late-afternoon light from upper-left, consistent with the
+global block.
+
+TRANSPARENCY: NONE — this plate is fully opaque, full-bleed painted
+scene content on all four edges except the required top boundary gap
+described above (which is still painted content — path and soft
+mist/distance, not transparent).
+
+FILE NAME: env/plate-home.webp
+```
+
 ### 2. `env/plate-fog-horizon.webp` (opaque plate, reusable)
 
 ```
@@ -294,6 +384,77 @@ centered building.
 
 TRANSPARENCY: fully transparent background, isolated single object, no
 ground patch, no garden, no path segment included in this file.
+
+FILE NAME: buildings/my-house.webp
+```
+
+_2026-09-16 owner 수정 지시 반영: 스케일 크롭·바닥 화분 제거·담쟁이/꽃
+밀도(운영자 확정: 벽에 가벼운 담쟁이 + 소박한 창문 화단만, 완전히 꾸며지지
+않은 "스타터" 상태)를 반영한 OWNER-CORRECTED FINAL 버전을 추가한다.
+원본 프롬프트는 이력으로 보존한다._
+
+### 3v2. `buildings/my-house.webp` (OWNER-CORRECTED FINAL, 2026-09-16)
+
+```
+[GLOBAL MATCHED-SET BLOCK above]
+
+CANVAS: 768×640 (aspect ratio 6:5)
+
+SUBJECT: A single cozy British storybook cottage — the player's home, in
+its STARTER state (owned from day one, before the student has bought or
+placed any decorations). Must show: a front door, two or three small
+warm-lit windows, a chimney, a small peaked or thatched roof, and a tiny
+doorstep/threshold area immediately in front of the door (bare stone
+steps only). This sprite is ONLY the cottage building and its immediate
+doorstep — do NOT paint the surrounding garden, hedge, or path; those
+live in the plate (see the env/plate-home asset) so garden overlays and
+decorations can be placed around this sprite independently.
+
+DESIGN PRINCIPLE (owner decision, critical): this starter house must
+already look warm and attractive, but it must intentionally NOT look
+fully decorated or finished. It is the "before" state that a student
+personalizes over time by earning currency, buying decorations, and
+bringing them home. Reserve richer, denser decoration for later
+purchasable additions — do not make this base sprite look complete.
+
+ARCHITECTURAL GREENERY (owner-approved, keep but reduced from a denser
+reference draft): include only a LIGHT amount of climbing ivy growing
+directly on the stone wall, concentrated around one corner or one
+window rather than spreading across the whole facade. Include modest
+flower window boxes under at most one or two windows, with a SMALL
+amount of flowers architecturally attached to those boxes only — not a
+dense or overflowing flower display. This greenery reads as built-in
+architectural charm, not as a fully bloomed garden.
+
+DO NOT INCLUDE (explicit): no potted plants, no plant pots, no loose
+flower clusters, no shrubs, no trees, no bench, no lamp, no post box, no
+fence, no gate, no animal, and no other freestanding object of any kind
+standing on the ground or the doorstep. Nothing may rest on the ground
+plane at the base of the house — the doorstep must show only bare stone
+steps. All such items are separate, purchasable, movable decorations
+added later by the student and must never be baked into this sprite.
+
+Scale reference: within its own canvas, the cottage silhouette
+(including roof and chimney) must fill 85-95% of the canvas height,
+cropped tightly with only the minimum transparent margin required by
+the global block's transparency rule — do not leave large empty
+transparent space above, below, or beside the building. When this
+canvas is placed next to the tree canvas (asset 4) at the same display
+scale, the cottage must read as roughly 2.4x taller than the tree. This
+is the single most important "world-defining" sprite in the set and
+also defines the camera elevation every other asset (including the
+env/plate-home ground plane) must match — every other building and
+prop's apparent scale and camera angle are judged against this one.
+
+PERSPECTIVE: fixed 3/4 top-down ~30 degree camera as global block,
+single centered building.
+
+PALETTE NOTE: keep the front door color close to the locked palette's
+muted navy (#1e2a5a) rather than a brighter saturated blue.
+
+TRANSPARENCY: fully transparent background, isolated single object, no
+ground patch, no garden, no path segment, no potted plants, no loose
+props of any kind included in this file.
 
 FILE NAME: buildings/my-house.webp
 ```

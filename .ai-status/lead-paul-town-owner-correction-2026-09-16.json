@@ -1,0 +1,19 @@
+{
+  "agent_name": "lead",
+  "role": "Paul Town 아트 프롬프트 운영자 수정 반영",
+  "task_id": "paul-town-owner-correction-2026-09-16",
+  "task": "운영자가 env/plate-home + buildings/my-house 1차 외부 참조 이미지를 검토하고 경로/카메라/스타터 밀도 보정을 확정 — 두 자산 프롬프트를 OWNER-CORRECTED FINAL(1v2/3v2)로 append",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-16T03:40:00+09:00",
+  "updated_at": "2026-09-16T03:40:00+09:00",
+  "files_owned": [
+    "docs/design/town/ART_GENERATION_HANDOFF_P0_2026-09-16.md",
+    "docs/design/town/FINAL_ARTWORK_SPEC_2026-09-16.md",
+    "handoff.md",
+    ".ai-status/lead-paul-town-owner-correction-2026-09-16.json"
+  ],
+  "summary": "운영자가 외부에서 생성한 1차 참조 이미지(house11.png)를 env/plate-home.webp와 buildings/my-house.webp 두 프롬프트 기준으로 검토해 구체적 결함 7건(경로 fork 오류, 상단 산울타리 폐쇄, 카메라 불일치, 코티지 크롭 부족, 바닥 화분 베이크, 담쟁이/꽃 과밀, 로트 좌표 미확정)을 확인했다. 담쟁이/꽃 밀도는 벽에 붙은 가벼운 담쟁이+소박한 창문 화단만 허용하기로 결정했고, 이를 계기로 \"스타터 하우스=매력적이지만 의도적으로 미완성\" 원칙을 신규 확정해 향후 다른 고정 건물(book-shop/cafe/english-school/clock-tower)에도 동일 적용하기로 했다. 두 자산의 수정된 프롬프트를 원본을 보존한 채 OWNER-CORRECTED FINAL 버전(1v2, 3v2)으로 append했고, FINAL_ARTWORK_SPEC에 신규 §1.6을 추가했으며, handoff.md에 146차 세션 기록을 삽입했다. 코드/DB/SQL/플래그/이미지 생성 변경 없음.",
+  "blocker": null,
+  "next_action": "운영자가 OWNER-CORRECTED FINAL 프롬프트(1v2/3v2)로 env/plate-home.webp + buildings/my-house.webp를 외부에서 재생성 → 다시 검토"
+}

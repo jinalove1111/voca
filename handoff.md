@@ -1,12 +1,53 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-16 (145차 — Paul Town Step 0 스타일 키 APPROVED +
-최종 게임 루프 확정(PAUL TOWN=EXPLORE/SHOP=BUY/MY HOUSE=DECORATE/
-LEARNING=EARN+UNLOCK), 기존 시스템(적립/구매/소유/배치/영속/학생격리)
-전부 파일:줄 근거로 재검증(DB 갭 0), P0 16개 자산 재분류 + 생성 순서
-확정 + GO/NO-GO(첫 최소 배치 = my-house+plate-home 2개만). 신규 문서
-`docs/design/town/PRODUCT_LOOP_LOCK_AND_P0_GATE_2026-09-16.md`. 이미지
-생성 도구가 이 환경에 없어 실제 이미지는 여전히 미생성. Production
-DB/SQL/코드/플래그/구매/merge/deploy 전부 0건. 144차 이하 보존)_
+_최종 갱신: 2026-09-16 (146차 — 운영자가 외부 생성 1차 참조 이미지
+(house11.png)를 검토해 env/plate-home·buildings/my-house 결함 7건 확인,
+담쟁이/꽃 밀도(벽에 가벼운 담쟁이+소박한 창문 화단만) 및 "스타터 하우스=
+매력적이지만 의도적으로 미완성" 원칙을 신규 확정, 두 자산 프롬프트를
+OWNER-CORRECTED FINAL(1v2/3v2)로 append-only 보강. 이미지 재생성/코드/
+DB/SQL/플래그/merge/deploy 전부 0건. 145차 이하 보존)_
+
+## 2026-09-16 (146차) — 운영자 1차 참조 이미지 검토 + 경로/카메라/스타터 밀도 보정 확정 (env/plate-home, buildings/my-house OWNER-CORRECTED FINAL)
+
+### 0. 안전 요약
+
+DB WRITE 0 · SQL 0 · 코드 변경 0 · 경제/카탈로그/가격 변경 0 · 플래그
+변경 0 · 이미지 생성 0(재생성 미실행) · merge/deploy/push 0 · 미추적
+보호 파일 17개 무접촉.
+
+### 1. 검토 결과
+
+운영자가 house11.png(외부 생성 1차 참조)를 리드의 KEEP/SEPARATE/REMOVE
+분석과 함께 검토 — 결함 7건 확인: path fork의 왼쪽 가지가 상단/좌측
+경계까지 도달, 상단 산울타리가 완전히 막혀 다음 구역과의 연결성이
+끊김, 바닥면 카메라가 코티지보다 훨씬 급경사의 탑다운으로 촬영돼
+불일치, 코티지가 캔버스의 85~95%를 채우지 못하고 여백이 큼, 현관 앞
+화분 2개가 건물 스프라이트에 베이크됨, 담쟁이/꽃이 벽 전체를 뒤덮어
+"학습→담쟁이 성장(gardenPoints≥60)" 설계와 충돌할 위험, 로트/캔버스
+정확 좌표 미확인.
+
+### 2. 운영자 결정
+
+담쟁이/꽃 밀도 — 벽에 붙은 가벼운 담쟁이 + 소박한 창문 화단만 허용,
+화분/독립 꽃/관목/나무/벤치/램프/우체통/펜스/동물은 전부 별도 구매
+데코로 분리 유지, "스타터 하우스=매력적이지만 의도적으로 미완성"
+원칙을 신규 확정해 향후 다른 고정 건물에도 동일 적용.
+
+### 3. 산출물
+
+`ART_GENERATION_HANDOFF_P0_2026-09-16.md`에 env/plate-home과
+buildings/my-house의 OWNER-CORRECTED FINAL 프롬프트 추가(1v2/3v2,
+append-only, 원본 보존) — 경로 지오메트리를 WORLD_LAYOUT_REDESIGN §2의
+정확한 fork/stub 좌표로 고정, 상단 경계 개방 지시 추가, 카메라 일치
+지시 추가, 로트/화단 좌표 고정, 코티지 85~95% 크롭 지시, 바닥 화분
+제거 지시, 담쟁이/꽃 밀도 축소 지시. `FINAL_ARTWORK_SPEC_2026-09-16.md`
+에 신규 §1.6 "스타터 상태 밀도 원칙" 추가(향후 book-shop/cafe/
+english-school/clock-tower에도 동일 원칙 적용 예정으로 명시).
+
+### 4. 미결
+
+이미지 재생성은 이 환경에 도구가 없어 여전히 미실행 — 운영자가 외부
+도구로 수정 버전을 다시 생성해 재검토해야 함, british-cottage 카탈로그
+역할과 fences 카탈로그 신설 여부는 143~145차부터 계속 미결.
 
 ## 2026-09-16 (145차) — Paul Town Step 0 승인 + 최종 게임 루프 확정(PAUL TOWN=EXPLORE/SHOP=BUY/MY HOUSE=DECORATE/LEARNING=EARN+UNLOCK) + P0 프로덕션 게이트
 
