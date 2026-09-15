@@ -19,7 +19,17 @@
 // `townAsset(...)`이 항상 null을 반환하므로 이 레이어는 아무것도 렌더하지
 // 않고(출력이 기존과 byte-for-byte 동일), 실제 `nature/garden-stage-N`
 // 아트가 `TOWN_ASSETS`에 채워지는 순간 코드 변경 없이 자동으로 나타난다.
-import { HOME_CELL, anchorFor, Z_LAYERS, gardenStageSprite } from '../../../utils/town/townScene'
+//
+// 2026-09-16 월드 지오메트리 확장 — 화단 박스의 위치를 씬 좌상단 고정
+// 2%/12% 박스(구 8x6 균일 그리드 시절 값)에서 my-house 로트 자신 바로
+// 옆으로 옮긴다. LOTS의 my-house 항목(left/baseline)을
+// districtLocalToGlobal('home', ...)로 변환해 그 로트의 왼쪽에 약간의
+// 여백을 두고 배치한다 — gardenRichness(gardenPoints) 데이터 흐름과
+// windowsLit/ivy/birds가 my-house 자체(HOME_CELL 앵커) 주변에 붙는 로직은
+// 그대로 유지한다(props 시그니처 무변경 — richness/gardenPoints 그대로).
+import {
+  HOME_CELL, anchorFor, Z_LAYERS, gardenStageSprite, districtLocalToGlobal, LOTS,
+} from '../../../utils/town/townScene'
 import { townAsset } from '../../../assets/town'
 import TownSprite from './TownSprite'
 
@@ -31,13 +41,23 @@ const STAGE_EMOJI = {
   4: ['🌳', '🌷', '🌻', '🌼', '🐦'],
 }
 
-export default function TownAmbientLayer({ richness, gardenPoints }) {
+export default function TownAmbientLayer({ richness, gardenPoints, level = 1 }) {
   const r = richness || { stage: 0, windowsLit: false, ivy: false, birds: false }
   const emojis = STAGE_EMOJI[r.stage] || []
-  const homeAnchor = anchorFor(HOME_CELL.x, HOME_CELL.y)
+  const homeAnchor = anchorFor(HOME_CELL.x, HOME_CELL.y, level)
   const points = Number.isFinite(Number(gardenPoints)) && Number(gardenPoints) > 0 ? Number(gardenPoints) : 0
   const gardenBgSprite = gardenStageSprite(r.stage)
   const gardenBgAsset = townAsset(gardenBgSprite.assetKey)
+
+  // my-house 로트 왼쪽에 화단을 붙인다 — 로트 자체 폭(LOTS my-house.width)
+  // 의 절반만큼 로트 중심(left)에서 왼쪽으로 더 간 자리를 화단 박스의
+  // 앵커(오른쪽 가장자리)로 삼는다(겹치지 않으면서 바로 옆에 붙는 배치).
+  const homeLot = LOTS.find((l) => l.id === 'my-house')
+  const gardenWidthPct = 20
+  const gardenHeightPct = 14
+  const gardenLocalLeft = homeLot ? Math.max(0, homeLot.left - homeLot.width / 2 - gardenWidthPct / 2 - 2) : 12
+  const gardenLocalTop = homeLot ? homeLot.baseline - 4 : 62
+  const gardenAnchor = districtLocalToGlobal('home', gardenLocalLeft, gardenLocalTop, level)
 
   return (
     <>
@@ -45,10 +65,16 @@ export default function TownAmbientLayer({ richness, gardenPoints }) {
         {/* 집 옆 화단(garden bed) — 항상 그린다. stage emoji들을 여기 안에
             모아 담아(flex-wrap) "화단"으로 읽히게 한다 — stage 0(아직
             아무것도 안 자람)은 옅은 새싹 하나만 보여줘 "자랄 준비가 된
-            빈 화단"임을 알린다. */}
+            빈 화단"임을 알린다. 2026-09-16 — 위치를 씬 좌상단 고정 박스에서
+            my-house 로트(homeLot) 바로 옆으로 옮김(districtLocalToGlobal). */}
         <div
-          className="absolute rounded-[50%] bg-[#c9a227]/15 border border-[#8fb37a]/40 flex flex-wrap items-center justify-center gap-0.5 overflow-hidden"
-          style={{ left: '2%', top: '12%', width: '30%', height: '22%' }}
+          className="absolute -translate-x-1/2 -translate-y-full rounded-[50%] bg-[#c9a227]/15 border border-[#8fb37a]/40 flex flex-wrap items-center justify-center gap-0.5 overflow-hidden"
+          style={{
+            left: `${gardenAnchor.leftPct}%`,
+            top: `${gardenAnchor.bottomPct}%`,
+            width: `${gardenWidthPct}%`,
+            height: `${gardenHeightPct}%`,
+          }}
         >
           {gardenBgAsset && (
             <div className="absolute inset-0 -z-10">

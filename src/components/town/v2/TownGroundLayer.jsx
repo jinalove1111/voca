@@ -1,66 +1,79 @@
-// src/components/town/v2/TownGroundLayer.jsx — Paul Town V2-A 바닥 레이어
-// (2026-09-13, 2026-09-13 비주얼 폴리시 — 칸별 패치 제거).
+// src/components/town/v2/TownGroundLayer.jsx — Paul Town V2-B 월드 바닥
+// 레이어(2026-09-16 재작성).
 //
-// 크림→따뜻한 톤→모스그린 그라데이션 배경 + 산울타리(hedge) 테두리·상단
-// 밴드 + ~6개의 고정 유기적 블롭(organic blob)으로 톤 변화를 준다. 이전
-// 버전은 칸(x,y)마다 둥근 사각 패치를 하나씩 그려 8x6 격자 리듬이 눈에
-// 보였다(코디네이터 스크린샷 피드백, 2026-09-13) — 이번 버전은 칸 수와
-// 무관한 고정 개수(6개)의 큰 블러 블롭만 그려 격자감을 없앤다. CSS
-// grid를 쓰지 않고(칸 경계선이 보이지 않아야 함) 퍼센트 좌표만 쓴다 —
-// 장식용이라 aria-hidden + pointer-events-none.
-import { Z_LAYERS } from '../../../utils/town/townScene'
-import { ambientClassFor } from '../../../utils/town/townAmbient'
+// 2026-09-13 버전(단일 8/13 박스 + 블러 블롭 6개)을 폐기하고, docs/design/
+// town/WORLD_LAYOUT_REDESIGN_2026-09-16.md §2/§3 + wireframe/
+// paul-town-world-wireframe.html의 "구역(district) 세로 스택" 구조를
+// 그대로 포팅한다 — home(맨 아래) -> lane -> square -> river -> school ->
+// tower(맨 위) 순으로, 각 구역마다 고정 폭 배경 그라데이션 + 좌우(홈은
+// 좌우+하단) 스캘럽 헤지 테두리를 그린다. 안개(fog) 밴드는 이 파일이 아니라
+// TownFogLayer.jsx가 그린다(둘 중 어느 파일이 소유해도 되는 항목 —
+// 작업 지시서 6번, 이 세션은 TownFogLayer.jsx로 결정해 중복 없이 관리).
+//
+// 색상은 이 저장소 town v2 파일들이 이미 쓰던 팔레트에서만 가져온다(새
+// hex 없음) — #fdebd0(크림)/#e8ecd2(옛 TownGroundLayer 중간톤)/
+// #cfe3c0(모스)/#8fb37a(세이지)/#d9d2c5(스톤)/#1e2a5a(네이비).
+//
+// grid-cols/gridTemplateColumns/aspect-square 금지(격자 인상 금지,
+// scripts/testTownV2Static.mjs 섹션 9) — flexbox 없이도 절대 위치(%)만으로
+// 스택을 쌓는다(모든 레이어가 같은 townScene.js 파생 함수를 공유해 정렬이
+// 어긋나지 않는다).
+import {
+  DISTRICTS, districtsVisible, districtOffsetUnits, sceneHeightUnits, Z_LAYERS,
+} from '../../../utils/town/townScene'
 
-// 고정 결정론 위치 6개(칸 좌표와 무관 — 장면 퍼센트로 직접 지정).
-// ambientClassFor(i, i*2)로 톤만 townAmbient.js(순수 도메인)에서 그대로
-// 빌려 쓴다(새 팔레트 발명 없음).
-const BLOBS = [
-  { left: 8, top: 6, w: 46, h: 14 },
-  { left: 55, top: 18, w: 40, h: 12 },
-  { left: -5, top: 38, w: 38, h: 10 },
-  { left: 60, top: 62, w: 45, h: 12 },
-  { left: 10, top: 74, w: 50, h: 12 },
-  { left: 50, top: 88, w: 42, h: 10 },
-]
-
-const HEDGE_BAND_STYLE = {
-  backgroundImage: 'radial-gradient(circle, rgba(88,130,70,0.55) 0 45%, transparent 50%)',
-  backgroundSize: '14px 14px',
+const DISTRICT_BG = {
+  tower: 'linear-gradient(to bottom, #d9d2c5, #1e2a5a)',
+  school: 'linear-gradient(to bottom, #d9d2c5, #cfe3c0)',
+  river: 'linear-gradient(to bottom, #cfe3c0, #d9d2c5)',
+  square: 'linear-gradient(to bottom, #e8ecd2, #d9d2c5)',
+  lane: 'linear-gradient(to bottom, #fdebd0, #cfe3c0)',
+  home: 'linear-gradient(to bottom, #fdebd0, #e8ecd2, #cfe3c0)',
 }
 
-export default function TownGroundLayer() {
+// 스캘럽(반원 물결) 헤지 텍스처 — repeating-radial-gradient만 사용(새 이미지
+// 없음). 좌우 세로 띠와 하단 가로 띠에 동일 톤(세이지)을 쓰되 반복 방향만
+// 바꾼다.
+const HEDGE_VERTICAL_STYLE = {
+  backgroundImage: 'repeating-radial-gradient(circle at 50% 50%, rgba(143,179,122,0.65) 0 42%, transparent 48% 100%)',
+  backgroundSize: '10px 16px',
+}
+const HEDGE_HORIZONTAL_STYLE = {
+  backgroundImage: 'repeating-radial-gradient(circle at 50% 50%, rgba(143,179,122,0.65) 0 42%, transparent 48% 100%)',
+  backgroundSize: '16px 10px',
+}
+
+export default function TownGroundLayer({ level }) {
+  const visible = districtsVisible(level)
+  const total = sceneHeightUnits(level)
+
   return (
     <div
-      className="absolute inset-0 rounded-[28px] border-4 border-[#8fb37a]/60 bg-gradient-to-b from-[#fdebd0] via-[#e8ecd2] to-[#cfe3c0] overflow-hidden pointer-events-none"
+      className="absolute inset-0 overflow-hidden pointer-events-none"
       style={{ zIndex: Z_LAYERS.ground }}
       aria-hidden="true"
     >
-      {BLOBS.map((b, i) => {
-        const toneClass = ambientClassFor(i, i * 2) || 'bg-[#cfe3c0]/20'
+      {visible.map((id) => {
+        const d = DISTRICTS[id]
+        const topPct = total > 0 ? (districtOffsetUnits(id, level) / total) * 100 : 0
+        const heightPct = total > 0 ? (d.heightUnits / total) * 100 : 0
+        const isHome = id === 'home'
+
         return (
-          <span
-            key={i}
-            className={`absolute rounded-[50%] blur-2xl opacity-60 pointer-events-none ${toneClass}`}
-            style={{
-              left: `${b.left}%`,
-              top: `${b.top}%`,
-              width: `${b.w}%`,
-              height: `${b.h}%`,
-              zIndex: Z_LAYERS.patches,
-            }}
-          />
+          <div
+            key={id}
+            data-testid={`town-district-${id}`}
+            className="absolute inset-x-0"
+            style={{ top: `${topPct}%`, height: `${heightPct}%`, background: DISTRICT_BG[id] || DISTRICT_BG.home }}
+          >
+            <span className="absolute left-0 top-0 bottom-0 w-[10px]" style={HEDGE_VERTICAL_STYLE} />
+            <span className="absolute right-0 top-0 bottom-0 w-[10px]" style={HEDGE_VERTICAL_STYLE} />
+            {isHome && (
+              <span className="absolute left-0 right-0 bottom-0 h-[10px]" style={HEDGE_HORIZONTAL_STYLE} />
+            )}
+          </div>
         )
       })}
-
-      {/* 다듬어진 산울타리(hedge) 테두리 — 안쪽 링 + 상단 텍스처 밴드. */}
-      <div
-        className="absolute inset-0 rounded-[28px] shadow-[inset_0_0_0_7px_rgba(143,179,122,0.55)] pointer-events-none"
-        style={{ zIndex: Z_LAYERS.patches }}
-      />
-      <div
-        className="absolute inset-x-0 top-0 h-[3.5%] pointer-events-none"
-        style={{ ...HEDGE_BAND_STYLE, zIndex: Z_LAYERS.patches }}
-      />
     </div>
   )
 }

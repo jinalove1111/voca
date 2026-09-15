@@ -8,6 +8,12 @@
 // 와 townShop(useTownShop.js)이고, 이 화면은 그 둘을 조합해 스토리북
 // 장면(TownScene.jsx)으로 그리기만 한다. 탭 3개(내 마을/상점/보관함)
 // 대신 장면 위에 항상 마을을 보여주고, 상점/보관함은 바텀시트로 연다.
+// 2026-09-16 월드 지오메트리 확장 — TownScene에 level prop을 추가로
+// 전달하고(이미 아래서 계산해 두던 값), 마운트 시 씬을 home 밴드가 보이는
+// 위치(스택 맨 아래)까지 스크롤한다(브리프 "cottage still fully visible on
+// load, scroll UP to explore" 요구사항, WORLD_LAYOUT_REDESIGN_2026-09-16.md
+// §5 "화면 순서"). 그 외 이 파일의 데이터 배선/effect/핸들러는 전혀 바꾸지
+// 않는다.
 import { useState, useEffect, useMemo, useRef } from 'react'
 import TownHud from './TownHud'
 import TownScene from './TownScene'
@@ -85,6 +91,23 @@ export default function TownScreenV2({ studentData, townShop, onBack, gardenPoin
     const timer = setTimeout(() => setToast(null), 3000)
     return () => clearTimeout(timer)
   }, [toast])
+
+  // 마운트 시 씬을 home 밴드(스택 맨 아래, DOM 상 마지막)가 보이도록
+  // 스크롤한다 — wireframe의 "로드 직후 home 밴드가 완전히 보이도록
+  // 자동으로 최하단까지 스크롤"과 동일 정신. TownScene 내부를 forwardRef로
+  // 바꾸지 않고, 이미 존재하는 안정적인 data-testid로 DOM을 직접 찾는다
+  // (기존 정적/E2E 계약이 이미 이 testid에 의존하므로 새 계약을 만들지
+  // 않는다).
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      const el = document.querySelector('[data-testid="town-scene-v2"]')
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ block: 'end', behavior: 'auto' })
+      }
+    })
+    return () => cancelAnimationFrame(raf)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // 마을 레벨 상승 감지 — V1과 동일.
   useEffect(() => {
@@ -189,6 +212,8 @@ export default function TownScreenV2({ studentData, townShop, onBack, gardenPoin
           richness={richness}
           gardenPoints={gardenPoints}
           fog={fog}
+          level={level}
+          ownedIds={ownedIds}
         />
 
         <p className="text-center text-xs text-gray-400">{TOWN_PHRASES.brighter}</p>

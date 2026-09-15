@@ -43,6 +43,10 @@ const {
   footprintFor, FOOTPRINT_CLASS, spriteFor, HOME_SPRITE,
   gardenRichness, GARDEN_STAGE_THRESHOLDS,
   nextUnlocks, nearGoal, fogState, freeAnchors,
+  DISTRICTS, DISTRICT_ORDER, GEO_ORDER, FOG_HEIGHT_UNITS, LOTS, SPOT_MAP,
+  PATHS, STUBS, STUB_WIDTH_PCT, MAIN_PATH_WIDTH_PCT,
+  districtsVisible, sceneHeightUnits, districtOffsetUnits, districtLocalToGlobal,
+  districtForCell, lotState,
 } = await import(`${pathToFileURL(SCENE_BUNDLE_PATH).href}?t=${Date.now()}`)
 // townAmbient.js는 import 0(순수, 다른 파일을 참조하지 않음)이라 확장자
 // 문제가 없어 번들 없이 바로 plain import 가능(위 townScene.js와의 차이를
@@ -98,8 +102,20 @@ check(
   allAnchors.every((a) => [a.leftPct, a.topPct, a.bottomPct].every((v) => Number.isFinite(v) && v >= 0 && v <= 100)),
   JSON.stringify(allAnchors.find((a) => ![a.leftPct, a.topPct, a.bottomPct].every((v) => Number.isFinite(v) && v >= 0 && v <= 100)) || {}),
 )
-const anchorKeys = new Set(allAnchors.map((a) => `${a.leftPct},${a.topPct}`))
-check('48칸의 (leftPct,topPct) 조합이 전부 서로 다름(칸마다 고유 앵커)', anchorKeys.size === 48, `size=${anchorKeys.size}`)
+// 2026-09-16 갱신 — 이 체크는 원래 "균일 8x6 그리드라 48칸이 수학적으로
+// 항상 서로 다른 앵커"라는 옛 모델의 불변식이었다. 월드 지오메트리 확장
+// 이후 anchorFor(x,y,level)은 아직 열리지 않은 구역의 칸도 안전하게(크래시
+// 없이) 처리하기 위해, districtOffsetUnits()가 "보이지 않는 구역"에는
+// sceneHeightUnits(level)(=스택 맨 아래 너머)이라는 동일한 폴백값을
+// 반환하고 clampPct가 100으로 묶어버려, "잠긴 여러 구역의 칸"들이 레벨이
+// 낮을수록 같은 좌표로 뭉치는 게 의도된 동작이다(예: level=1이면 44개 —
+// 실측 확인). 그래서 이 불변식은 "모든 구역이 열린 level=8"에서만 여전히
+// 참이어야 참된 회귀 신호이므로, level 인자를 8로 고정해 검증한다(이
+// 불변식이 지키려던 원래 의도 — "48칸이 서로 다른 자리를 가리켜야 한다"
+// — 는 그대로 유지하되, 어느 레벨에서 성립해야 하는지만 명확히 한다).
+const allAnchorsLv8 = allCells.map((c) => anchorFor(c.x, c.y, 8))
+const anchorKeys = new Set(allAnchorsLv8.map((a) => `${a.leftPct},${a.topPct}`))
+check('48칸의 (leftPct,topPct) 조합이 레벨8(전 구역 개방)에서 전부 서로 다름(칸마다 고유 앵커)', anchorKeys.size === 48, `size=${anchorKeys.size}`)
 
 check(
   'HOME 앵커(anchorFor(3,2)) === anchorFor(HOME_CELL.x, HOME_CELL.y)',
@@ -141,6 +157,24 @@ check('Z_LAYERS.patches < Z_LAYERS.fog', Z_LAYERS.patches < Z_LAYERS.fog)
 check('Z_LAYERS.fog < Z_LAYERS.objects(안개가 배치된 오브젝트보다 아래)', Z_LAYERS.fog < Z_LAYERS.objects)
 check('Z_LAYERS.objects < Z_LAYERS.overlay', Z_LAYERS.objects < Z_LAYERS.overlay)
 check('Z_LAYERS.overlay < Z_LAYERS.popover', Z_LAYERS.overlay < Z_LAYERS.popover)
+
+// 2026-09-16 신규 — zIndexFor(y, districtId) 2번째 인자(구역 스택 순서가
+// 행(row) 순서보다 우선해야 함: home 구역의 어떤 행도 tower 구역의 어떤
+// 행보다 항상 앞(z 높음)이어야 한다).
+check(
+  'zIndexFor — home 구역 최소 y(0)조차 tower 구역 최대 y(5)보다 z가 큼(구역 스택이 행보다 우선)',
+  zIndexFor(0, 'home') > zIndexFor(5, 'tower'),
+  `home(0)=${zIndexFor(0, 'home')} tower(5)=${zIndexFor(5, 'tower')}`,
+)
+for (let i = 0; i < GEO_ORDER.length - 1; i++) {
+  const nearer = GEO_ORDER[i]
+  const farther = GEO_ORDER[i + 1]
+  check(
+    `zIndexFor — ${nearer}(GEO_ORDER 하위)이 ${farther}(GEO_ORDER 상위)보다 항상 z가 큼(같은 y=3 기준)`,
+    zIndexFor(3, nearer) > zIndexFor(3, farther),
+  )
+}
+check('zIndexFor(y, districtId 생략) — 기본값 home 취급', zIndexFor(2) === zIndexFor(2, 'home'))
 
 // ── 3. ZONES — 모든 행이 정확히 하나의 존에 속함 ────────────────────────
 section('3. ZONES — 행 커버리지')
@@ -306,22 +340,41 @@ check(
   kinneyGoal.text,
 )
 
-// ── 10. freeAnchors — HOME/점유 칸 제외, null 허용 ───────────────────────
+// ── 10. freeAnchors — HOME/점유 칸 제외, null 허용, 잠긴 구역 제외 ───────
+// 2026-09-16 갱신 — freeAnchors()는 원래 (placements) 1개 인자만 받았고
+// 둘째 자리에 넘기던 'idle'/'placing' 문자열은 구현이 실제로 읽지 않는
+// 죽은 인자였다(옛 소스 확인). 월드 지오메트리 확장으로 그 자리가
+// 진짜 의미(level, 기본값 1)를 갖게 됐다 — 이제 "레벨이 낮으면 아직 안
+// 열린 구역의 스팟은 배치 후보에서 빠진다"는 새 계약이 생겼으므로, 옛
+// "48-1=47칸" 기대값(구역 개념이 없던 시절, 항상 전체 그리드 47칸)은
+// level=8(전 구역 개방)로 고정했을 때만 그대로 참이다 — 그 경우로
+// 옮기고, 새로 생긴 레벨별 필터링 자체를 검증하는 케이스를 추가한다.
 section('10. freeAnchors')
-const freeEmpty = freeAnchors([], 'idle')
-check('freeAnchors([], idle) — 48-1(HOME)=47칸', freeEmpty.length === 47, `len=${freeEmpty.length}`)
-check('freeAnchors([], idle) — HOME_CELL 미포함', !freeEmpty.some((p) => p.x === HOME_CELL.x && p.y === HOME_CELL.y))
+const freeEmptyLv8 = freeAnchors([], 8)
+check('freeAnchors([], level8) — 48-1(HOME)=47칸(전 구역 개방, 옛 47칸 계약 유지)', freeEmptyLv8.length === 47, `len=${freeEmptyLv8.length}`)
+check('freeAnchors([], level8) — HOME_CELL 미포함', !freeEmptyLv8.some((p) => p.x === HOME_CELL.x && p.y === HOME_CELL.y))
 
-const freeWithPlacements = freeAnchors([{ x: 1, y: 1 }, null, { x: 2, y: 2 }], 'placing')
-check('freeAnchors(placements 2개+null, placing) — 48-1-2=45칸', freeWithPlacements.length === 45, `len=${freeWithPlacements.length}`)
-check('freeAnchors — (1,1) 점유 칸 제외됨', !freeWithPlacements.some((p) => p.x === 1 && p.y === 1))
-check('freeAnchors — (2,2) 점유 칸 제외됨', !freeWithPlacements.some((p) => p.x === 2 && p.y === 2))
+const freeWithPlacementsLv8 = freeAnchors([{ x: 1, y: 1 }, null, { x: 2, y: 2 }], 8)
+check('freeAnchors(placements 2개+null, level8) — 48-1-2=45칸', freeWithPlacementsLv8.length === 45, `len=${freeWithPlacementsLv8.length}`)
+check('freeAnchors — (1,1) 점유 칸 제외됨', !freeWithPlacementsLv8.some((p) => p.x === 1 && p.y === 1))
+check('freeAnchors — (2,2) 점유 칸 제외됨', !freeWithPlacementsLv8.some((p) => p.x === 2 && p.y === 2))
 
-const freeAllNull = freeAnchors([null, null, undefined], 'idle')
-check('freeAnchors(전부 null/undefined) — 크래시 없이 47칸', freeAllNull.length === 47, `len=${freeAllNull.length}`)
+const freeAllNullLv8 = freeAnchors([null, null, undefined], 8)
+check('freeAnchors(전부 null/undefined, level8) — 크래시 없이 47칸', freeAllNullLv8.length === 47, `len=${freeAllNullLv8.length}`)
 
-const freeGarbageInput = freeAnchors(undefined, 'idle')
-check('freeAnchors(undefined) — 크래시 없이 47칸(방어적 기본값)', freeGarbageInput.length === 47, `len=${freeGarbageInput.length}`)
+const freeGarbageInputLv8 = freeAnchors(undefined, 8)
+check('freeAnchors(undefined, level8) — 크래시 없이 47칸(방어적 기본값)', freeGarbageInputLv8.length === 47, `len=${freeGarbageInputLv8.length}`)
+
+// 신규 — 레벨별 구역 필터링(잠긴 구역의 스팟은 배치 후보로 나오지 않음).
+// home 밴드는 y=0,1,2 24칸에서 HOME_CELL(3,2) 1칸을 뺀 23칸.
+check('freeAnchors([], level1) — home만 열림 = 23칸', freeAnchors([], 1).length === 23, `len=${freeAnchors([], 1).length}`)
+check('freeAnchors([]) — level 인자 생략 시 기본값 1과 동일(23칸)', freeAnchors([]).length === 23, `len=${freeAnchors([]).length}`)
+check('freeAnchors([], level3) — home(23)+lane(8) = 31칸', freeAnchors([], 3).length === 31, `len=${freeAnchors([], 3).length}`)
+check('freeAnchors([], level5) — home(23)+lane(8)+square(8) = 39칸', freeAnchors([], 5).length === 39, `len=${freeAnchors([], 5).length}`)
+check(
+  'freeAnchors([], level1) 결과가 전부 home 구역 스팟(또는 SPOT_MAP 미등록 칸 아님)',
+  freeAnchors([], 1).every(({ x, y }) => SPOT_MAP[`${x},${y}`] && SPOT_MAP[`${x},${y}`].district === 'home'),
+)
 
 // ── 11. townScene.js 소스 정적 계약 — import/부작용 0 ────────────────────
 section('11. townScene.js 소스 정적 계약')
@@ -361,6 +414,141 @@ if (ambientSrc) {
   check('townAmbient.js — Math.random 없음', !/Math\.random\(/.test(ambientSrc))
   check('townAmbient.js — React/DOM import 없음(순수 모듈)', !/from\s+['"]react['"]/.test(ambientSrc))
 }
+
+// ── 13. 월드 지오메트리(2026-09-16 확장) — districtsVisible/sceneHeightUnits/
+//     districtOffsetUnits/lotState/anchorFor(level) ─────────────────────
+section('13. 월드 지오메트리 — districtsVisible/sceneHeightUnits')
+check('DISTRICT_ORDER — 6개, tower가 맨 앞(위)/home이 맨 끝(아래)', DISTRICT_ORDER.length === 6 && DISTRICT_ORDER[0] === 'tower' && DISTRICT_ORDER[5] === 'home')
+check('GEO_ORDER — DISTRICT_ORDER의 정확한 역순(세계 바닥->꼭대기)', deepEqual(GEO_ORDER, [...DISTRICT_ORDER].reverse()))
+check('DISTRICTS/DISTRICT_ORDER/LOTS/SPOT_MAP/PATHS/STUBS — 전부 freeze됨', [DISTRICTS, DISTRICT_ORDER, GEO_ORDER, LOTS, SPOT_MAP, PATHS, STUBS].every((o) => Object.isFrozen(o)))
+check('SPOT_MAP — 정확히 47개 키(48칸 - HOME_CELL(3,2))', Object.keys(SPOT_MAP).length === 47, `count=${Object.keys(SPOT_MAP).length}`)
+check('SPOT_MAP — (3,2) 키 없음(My House 로트 자신)', !Object.prototype.hasOwnProperty.call(SPOT_MAP, '3,2'))
+check('LOTS — 정확히 7개(문서 §3.1과 동일)', LOTS.length === 7, `count=${LOTS.length}`)
+check('MAIN_PATH_WIDTH_PCT === 13, STUB_WIDTH_PCT === 8, FOG_HEIGHT_UNITS === 0.32', MAIN_PATH_WIDTH_PCT === 13 && STUB_WIDTH_PCT === 8 && FOG_HEIGHT_UNITS === 0.32)
+check('STUBS — home에만 존재', Object.keys(STUBS).length === 1 && Object.keys(STUBS)[0] === 'home')
+
+// districtsVisible — 브리프/문서 §2 unlock 표 그대로.
+const DISTRICTS_VISIBLE_CASES = [
+  [1, ['home']],
+  [2, ['home']],
+  [3, ['lane', 'home']],
+  [4, ['lane', 'home']],
+  [5, ['square', 'lane', 'home']],
+  [6, ['river', 'square', 'lane', 'home']],
+  [7, ['school', 'river', 'square', 'lane', 'home']],
+  [8, ['tower', 'school', 'river', 'square', 'lane', 'home']],
+  [10, ['tower', 'school', 'river', 'square', 'lane', 'home']],
+]
+for (const [level, expected] of DISTRICTS_VISIBLE_CASES) {
+  check(`districtsVisible(${level}) === ${JSON.stringify(expected)}`, deepEqual(districtsVisible(level), expected), JSON.stringify(districtsVisible(level)))
+}
+
+// sceneHeightUnits — WORLD_LAYOUT_REDESIGN_2026-09-16.md §5 "전체 씬 높이
+// (×W 배수)" 문단 숫자와 직접 대조(문서가 이미 계산해 둔 값을 그대로
+// 손으로 옮긴 것 — 구현을 베끼지 않음).
+const SCENE_HEIGHT_CASES = [[1, 1.47], [2, 1.47], [3, 2.32], [4, 2.32], [5, 3.22], [6, 3.72], [7, 4.52], [8, 5.15], [10, 5.15]]
+for (const [level, expected] of SCENE_HEIGHT_CASES) {
+  const got = sceneHeightUnits(level)
+  check(`sceneHeightUnits(${level}) ≈ ${expected}`, Math.abs(got - expected) < 0.001, `got=${got}`)
+}
+check('sceneHeightUnits(8) 이상 — 안개 없음(fog 높이가 합에 안 들어감)', Math.abs(sceneHeightUnits(8) - Object.values(DISTRICTS).reduce((s, d) => s + d.heightUnits, 0)) < 0.001)
+
+section('13b. districtOffsetUnits — 스택 불변식(레벨 무관하게 하위 구역 위치 고정)')
+// "home은 항상 스택 맨 아래" — home 밴드의 바닥(offset+heightUnits)은
+// 어떤 레벨이든 항상 sceneHeightUnits(level)과 정확히 같아야 한다(그
+// 위에 무엇이 얼마나 쌓이든 home 아래엔 아무것도 없다는 사실 자체는
+// 안 변함 — 브리프가 요구하는 "home은 항상 첫 화면/스택 맨 아래" 불변식).
+for (const level of [1, 3, 5, 6, 7, 8, 10]) {
+  const homeBottom = districtOffsetUnits('home', level) + DISTRICTS.home.heightUnits
+  check(`districtOffsetUnits('home', ${level}) + home.heightUnits === sceneHeightUnits(${level})`, Math.abs(homeBottom - sceneHeightUnits(level)) < 0.001, `homeBottom=${homeBottom} scene=${sceneHeightUnits(level)}`)
+}
+// "lane 아래엔 항상 home 하나만" — lane이 보이는 모든 레벨(3,4,5,6,7,8)에서
+// lane 밴드 바닥부터 씬 전체 바닥까지의 거리는 항상 home.heightUnits와
+// 같아야 한다(위에 square/river/school/tower가 몇 개 더 쌓이든 lane과
+// 그 아래 home의 상대 위치 자체는 흔들리지 않는다는 것 — "구역이 추가돼도
+// 이미 있던 하위 구역끼리의 상대 위치는 고정"이라는 스펙 요구사항의
+// 직접적인 자동화 검증).
+for (const level of [3, 4, 5, 6, 7, 8]) {
+  const laneBottom = districtOffsetUnits('lane', level) + DISTRICTS.lane.heightUnits
+  const distToSceneBottom = sceneHeightUnits(level) - laneBottom
+  check(`레벨${level} — lane 밴드 바닥에서 씬 바닥까지 거리 === home.heightUnits(1.15, 위에 뭐가 더 쌓여도 불변)`, Math.abs(distToSceneBottom - DISTRICTS.home.heightUnits) < 0.001, `got=${distToSceneBottom}`)
+}
+// 같은 논리를 square(레벨5-8)에도 적용 — square 아래엔 항상 lane+home.
+for (const level of [5, 6, 7, 8]) {
+  const squareBottom = districtOffsetUnits('square', level) + DISTRICTS.square.heightUnits
+  const distToSceneBottom = sceneHeightUnits(level) - squareBottom
+  const expected = DISTRICTS.lane.heightUnits + DISTRICTS.home.heightUnits
+  check(`레벨${level} — square 밴드 바닥에서 씬 바닥까지 거리 === lane+home(${expected.toFixed(2)}, 위에 뭐가 더 쌓여도 불변)`, Math.abs(distToSceneBottom - expected) < 0.001, `got=${distToSceneBottom}`)
+}
+// districtOffsetUnits가 안 보이는 구역에도 크래시 없이 유한값을 반환.
+check('districtOffsetUnits(안 열린 구역, 예 tower/level1) — 크래시 없이 유한값', Number.isFinite(districtOffsetUnits('tower', 1)))
+
+section('13c. lotState — hidden/for-sale/built')
+const LOT_STATE_CASES = [
+  ['my-house', 1, [], 'built'],
+  ['my-house', 10, [], 'built'],
+  ['book-shop', 1, [], 'hidden'],
+  ['book-shop', 2, [], 'hidden'],
+  ['book-shop', 3, [], 'for-sale'],
+  ['book-shop', 3, ['book-shop'], 'built'],
+  ['cafe', 4, [], 'hidden'],
+  ['cafe', 5, [], 'for-sale'],
+  ['cafe', 5, ['cafe'], 'built'],
+  ['bridge', 5, [], 'hidden'],
+  ['bridge', 6, [], 'for-sale'],
+  ['bridge', 6, ['bridge'], 'built'],
+  ['english-school', 6, [], 'hidden'],
+  ['english-school', 7, [], 'for-sale'],
+  ['english-school', 7, ['english-school'], 'built'],
+  ['clock-tower', 7, [], 'hidden'],
+  ['clock-tower', 8, [], 'for-sale'],
+  ['clock-tower', 8, ['clock-tower'], 'built'],
+]
+const lotById = Object.fromEntries(LOTS.map((l) => [l.id, l]))
+for (const [id, level, owned, expected] of LOT_STATE_CASES) {
+  const got = lotState(lotById[id], level, owned)
+  check(`lotState(${id}, level=${level}, owned=${JSON.stringify(owned)}) === '${expected}'`, got === expected, `got=${got}`)
+}
+check('lotState(null, 1, []) — 크래시 없이 hidden', lotState(null, 1, []) === 'hidden')
+check('lotState(로트, 레벨 인자 누락, []) — 기본 레벨1로 안전 처리(크래시 없음)', typeof lotState(lotById['my-house'], undefined, []) === 'string')
+
+section('13d. anchorFor(x,y,level) — HOME_CELL 특수 케이스 + 레벨 인자')
+const homeLotAnchorLv1 = anchorFor(HOME_CELL.x, HOME_CELL.y, 1)
+const homeLotAnchorLv8 = anchorFor(HOME_CELL.x, HOME_CELL.y, 8)
+check(
+  'anchorFor(HOME_CELL, level1) — my-house 로트 자신의 위치(district home)로 풀림, [0,100] 범위',
+  [homeLotAnchorLv1.leftPct, homeLotAnchorLv1.topPct, homeLotAnchorLv1.bottomPct].every((v) => Number.isFinite(v) && v >= 0 && v <= 100),
+)
+check(
+  'anchorFor(HOME_CELL, level1) leftPct === 50(LOTS my-house.left)',
+  homeLotAnchorLv1.leftPct === 50,
+  JSON.stringify(homeLotAnchorLv1),
+)
+// home은 항상 스택 맨 아래이므로, 레벨이 올라가 구역이 더 열려도 my-house
+// 로트 자체의 "밴드 내부" 상대 위치(= districtLocalToGlobal 이전의 로컬
+// 값)는 절대 안 변한다(레벨과 무관한 상수, LOTS 데이터 자체가 레벨을
+// 안 받음) — 다만 전역 %(scene 전체 대비)는 스택 전체 키가 달라지므로
+// level1과 level8에서 달라지는 게 정상이다(§0 참고, 허용된 차이).
+check(
+  'anchorFor(HOME_CELL, level1) !== anchorFor(HOME_CELL, level8) — 전역 %는 레벨에 따라 달라짐(허용된 차이, 씬 전체 키가 달라지므로)',
+  homeLotAnchorLv1.bottomPct !== homeLotAnchorLv8.bottomPct,
+  JSON.stringify({ lv1: homeLotAnchorLv1, lv8: homeLotAnchorLv8 }),
+)
+
+// SPOT_MAP 47칸 전부 — level=8(전 구역 개방)에서 anchorFor가 유한하고
+// [0,100] 범위인 leftPct/topPct/bottomPct를 반환하는지 전수 검사.
+let allSpotAnchorsValid = true
+for (const key of Object.keys(SPOT_MAP)) {
+  const [sx, sy] = key.split(',').map(Number)
+  const a = anchorFor(sx, sy, 8)
+  if (![a.leftPct, a.topPct, a.bottomPct].every((v) => Number.isFinite(v) && v >= 0 && v <= 100)) allSpotAnchorsValid = false
+}
+check('SPOT_MAP 47칸 전부 — anchorFor(x,y,8)이 유한/범위 내 값 반환', allSpotAnchorsValid)
+
+// districtForCell — HOME_CELL과 대표 스팟 몇 개.
+check("districtForCell(HOME_CELL.x, HOME_CELL.y) === 'home'", districtForCell(HOME_CELL.x, HOME_CELL.y) === 'home')
+check("districtForCell(0,3) === 'lane'(SPOT_MAP 0,3)", districtForCell(0, 3) === 'lane')
+check("districtForCell(5,5) === 'tower'(SPOT_MAP 5,5)", districtForCell(5, 5) === 'tower')
 
 // ── 결과 ──────────────────────────────────────────────────────────────
 console.log(`\n총 ${totalPassed + totalFailed}개 단언 — PASS ${totalPassed} / FAIL ${totalFailed}`)
