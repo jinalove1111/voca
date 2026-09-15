@@ -29,6 +29,7 @@ import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
 import crypto from 'node:crypto'
+import { pathToFileURL } from 'node:url'
 import { TOWN_ASSET_MANIFEST } from '../src/assets/town/assetManifest.js'
 
 const ROOT = process.cwd()
@@ -61,7 +62,7 @@ function paeth(a, b, c) {
 }
 
 /** @returns {{width:number,height:number,colorType:number,rgba:Buffer}} */
-function decodePng(buf) {
+export function decodePng(buf) {
   const chunks = readPngChunks(buf)
   const ihdr = chunks.find((c) => c.type === 'IHDR')
   if (!ihdr) throw new Error('IHDR 청크 없음')
@@ -115,7 +116,7 @@ function decodePng(buf) {
 
 // ── 알파/여백 분석(순수 함수, decodePng 출력만 소비) ──────────────────────
 
-function analyzeAlpha({ width, height, colorType, rgba }) {
+export function analyzeAlpha({ width, height, colorType, rgba }) {
   const total = width * height
   let transparentCount = 0
   let opaqueCount = 0
@@ -162,6 +163,77 @@ function analyzeAlpha({ width, height, colorType, rgba }) {
   }
 }
 
+// ── WebP 컨테이너 파서(2026-09-15, 세션 하드닝) ───────────────────────────
+//
+// 이 세션에서 새로 추가된 환경 아트워크(village-*/garden-accent-*)가
+// 전부 WebP인데, 위 decodePng()는 PNG 전용이라 WebP는 아예 검증 대상이
+// 아니었다 — 실제로 --audit이 이 6개 파일을 "고아 자산"으로 오탐하는
+// 것도 같은 근본 원인(도구가 이 자산군의 존재를 모름)의 한 증상이었다.
+//
+// 전체 픽셀 디코드(VP8/VP8L 비트스트림 완전 구현)는 PNG 대비 훨씬 큰
+// 작업이라 이번엔 하지 않는다 — 대신 RIFF 컨테이너 레벨 파싱만으로
+// 얻을 수 있는 사실(포맷 유효성/치수/알파 채널 유무)만 정직하게
+// 보고한다. 픽셀 단위 여백/바운딩박스/vignette 참고 수치는 WebP에서는
+// "N/A(PNG만 지원)"로 명시한다 — 못 하는 걸 하는 것처럼 위장하지 않는다.
+export function decodeWebpContainer(buf) {
+  if (buf.length < 12 || buf.toString('ascii', 0, 4) !== 'RIFF' || buf.toString('ascii', 8, 12) !== 'WEBP') {
+    throw new Error('WebP 시그니처 불일치(RIFF....WEBP 아님)')
+  }
+  let off = 12
+  let vp8x = null
+  let vp8l = null
+  let vp8 = null
+  while (off + 8 <= buf.length) {
+    const fourcc = buf.toString('ascii', off, off + 4)
+    const size = buf.readUInt32LE(off + 4)
+    const payloadStart = off + 8
+    if (fourcc === 'VP8X') vp8x = buf.subarray(payloadStart, payloadStart + size)
+    else if (fourcc === 'VP8L') vp8l = buf.subarray(payloadStart, payloadStart + size)
+    else if (fourcc === 'VP8 ') vp8 = buf.subarray(payloadStart, payloadStart + size)
+    off = payloadStart + size + (size % 2) // RIFF 청크는 짝수 바이트로 패딩
+  }
+  if (vp8x) {
+    // VP8X(확장 포맷 헤더, 10바이트): flags(1) + reserved(3) + width-1(3, LE) + height-1(3, LE).
+    // flags 비트: bit4 = Alpha(ALPH 청크 또는 VP8L 내장 알파 존재).
+    const flags = vp8x[0]
+    const hasAlpha = !!(flags & 0x10)
+    const width = (vp8x[4] | (vp8x[5] << 8) | (vp8x[6] << 16)) + 1
+    const height = (vp8x[7] | (vp8x[8] << 8) | (vp8x[9] << 16)) + 1
+    return { format: 'webp(extended, VP8X)', width, height, hasAlpha, pixelDecodeAvailable: false }
+  }
+  if (vp8l) {
+    // VP8L(단순 무손실): 시그니처(1B, 0x2F) + 4바이트 헤더를 LE uint32로.
+    // width-1(14bit) | height-1(14bit) | alpha_is_used(1bit) | version(3bit).
+    if (vp8l[0] !== 0x2f) throw new Error('VP8L 시그니처 불일치')
+    const bits = vp8l.readUInt32LE(1)
+    const width = (bits & 0x3fff) + 1
+    const height = ((bits >> 14) & 0x3fff) + 1
+    const hasAlpha = !!((bits >> 28) & 0x1)
+    return { format: 'webp(lossless, VP8L)', width, height, hasAlpha, pixelDecodeAvailable: false }
+  }
+  if (vp8) {
+    // VP8(단순 손실 — 이 경로는 알파를 가질 수 없음, 스펙상 VP8X+ALPH 필요).
+    // 프레임 태그 3B + 시작코드 3B(0x9d 0x01 0x2a) + width(14bit,LE)+height(14bit,LE).
+    if (!(vp8[3] === 0x9d && vp8[4] === 0x01 && vp8[5] === 0x2a)) throw new Error('VP8 시작 코드 불일치')
+    const width = (vp8.readUInt16LE(6)) & 0x3fff
+    const height = (vp8.readUInt16LE(8)) & 0x3fff
+    return { format: 'webp(lossy, VP8)', width, height, hasAlpha: false, pixelDecodeAvailable: false }
+  }
+  throw new Error('지원 안 함: VP8X/VP8L/VP8 청크를 찾지 못함(애니메이션 WebP 등 — 수동 확인 필요)')
+}
+
+/** PNG 또는 WebP 파일을 매직 바이트로 판별해 알맞은 파서로 위임한다. */
+export function inspectImageFile(buf) {
+  if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+    const decoded = decodePng(buf)
+    return { format: decoded.colorType === 6 ? 'png(RGBA)' : 'png(RGB)', width: decoded.width, height: decoded.height, pixelDecodeAvailable: true, decoded }
+  }
+  if (buf.length >= 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') {
+    return decodeWebpContainer(buf)
+  }
+  throw new Error('지원 안 함: PNG도 WebP도 아님(매직 바이트 불일치)')
+}
+
 function parseAspectRatio(s) {
   const m = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(s)
   if (!m) return null
@@ -190,22 +262,38 @@ function validateCandidate(assetKey, filePath) {
   const md5 = crypto.createHash('md5').update(buf).digest('hex')
   console.log(`asset_key: ${assetKey}`)
   console.log(`file: ${filePath}`)
+  console.log(`file size: ${buf.length}bytes (${(buf.length / 1024).toFixed(1)}KB)`)
   console.log(`md5: ${md5}`)
 
-  let decoded
+  let info
   try {
-    decoded = decodePng(buf)
+    info = inspectImageFile(buf)
   } catch (e) {
-    console.log(`FAIL  PNG 디코드 실패: ${e.message}`)
+    console.log(`FAIL  이미지 디코드 실패: ${e.message}`)
     process.exitCode = 1
     return
   }
-  const a = analyzeAlpha(decoded)
   const results = []
   const check = (label, ok, detail) => {
     results.push({ label, ok, detail })
     console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? ' — ' + detail : ''}`)
   }
+
+  // 2026-09-15 — WebP 후보는 컨테이너 헤더만 파싱 가능(픽셀 디코드 미구현,
+  // decodeWebpContainer 주석 참고) — 알파 존재 여부/치수는 확인되지만
+  // 여백/바운딩박스/partial-alpha 같은 픽셀 단위 항목은 "N/A"로 정직하게
+  // 표시한다(PNG처럼 분석 가능한 척하지 않음).
+  if (!info.pixelDecodeAvailable) {
+    console.log(`  INFO  포맷: ${info.format} — 픽셀 단위 분석(여백/바운딩박스/partial-alpha) 미지원, 컨테이너 헤더만 확인`)
+    check('실제 알파 채널 존재(WebP 컨테이너 헤더 기준)', info.hasAlpha, `format=${info.format}`)
+    check(`캔버스 해상도(참고용) — 실제=${info.width}x${info.height}`, true)
+    const failCountWebp = results.filter((r) => !r.ok).length
+    console.log(failCountWebp === 0 ? '\n결과: 컨테이너 레벨 검증 PASS(픽셀 단위 여백/vignette는 육안 검토 필요, WebP 미지원)' : `\n결과: 컨테이너 레벨 검증 ${failCountWebp}건 FAIL`)
+    if (failCountWebp > 0) process.exitCode = 1
+    return
+  }
+  const decoded = info.decoded
+  const a = analyzeAlpha(decoded)
 
   check('실제 알파 채널 존재(colorType=6 RGBA, 실제 투명 픽셀 有)', a.hasRealAlpha, `colorType=${a.colorType}, transparent=${fmt(a.transparentPct)}%`)
   check('완전 불투명(alpha=255) 아님 — 배경 없이 꽉 찬 파일이 아님', a.transparentPct > 0.5, `transparent=${fmt(a.transparentPct)}%`)
@@ -303,12 +391,25 @@ function auditManifestCoverage() {
     }
   }
 
-  // 고아 자산: town 폴더에 있지만 매니페스트 어디에도 없는 파일
+  // 고아 자산: town 폴더에 있지만 매니페스트 어디에도 없는 파일.
+  // 2026-09-15 — backgrounds/·ui/ 폴더는 애초에 구매 가능한 카탈로그
+  // 아이템(TOWN_ASSET_MANIFEST) 대상이 아니라, 순수 환경/장식 배경
+  // 아트워크 전용으로 예약된 폴더다(마을 장면 비주얼 업그레이드,
+  // src/components/town/TownGrid.jsx가 townAsset()/TOWN_ASSETS를 거치지
+  // 않고 표준 import로 직접 참조) — 이 두 폴더를 고아-스캔 대상에서
+  // 제외하고, 대신 그 안의 파일 목록을 정보용으로만 보여준다. 그 외
+  // 폴더(카탈로그 카테고리)는 기존과 동일하게 엄격히 검사한다.
+  const NON_CATALOG_FOLDERS = new Set(['backgrounds', 'ui'])
   const knownBasenames = new Set(Object.values(TOWN_ASSET_MANIFEST).map((e) => e.filename.replace(/\.webp$/, '')))
   let orphanCount = 0
   for (const folder of readdirSync(townDir)) {
     const full = path.join(townDir, folder)
     if (!statSync(full).isDirectory()) continue
+    if (NON_CATALOG_FOLDERS.has(folder)) {
+      const files = readdirSync(full).filter((f) => f !== '.gitkeep')
+      console.log(`INFO  ${folder}/(카탈로그 아님, 환경/장식 전용 — 검사 제외): ${files.length}개 파일${files.length ? ' — ' + files.join(', ') : ''}`)
+      continue
+    }
     for (const f of readdirSync(full)) {
       if (f === '.gitkeep') continue
       const base = f.replace(/@2x/, '').replace(/\.(png|webp)$/, '')
@@ -318,24 +419,31 @@ function auditManifestCoverage() {
       }
     }
   }
-  if (orphanCount === 0) console.log('\nPASS  고아 자산 0건')
+  if (orphanCount === 0) console.log('\nPASS  고아 자산 0건(카탈로그 카테고리 폴더 기준)')
 
   if (missingFiles > 0 || orphanCount > 0) process.exitCode = 1
 }
 
 // ── entrypoint ─────────────────────────────────────────────────────────────
-
-const args = process.argv.slice(2)
-if (args[0] === '--audit') {
-  auditManifestCoverage()
-} else if (args[0] === '--hash') {
-  hashFiles(args.slice(1))
-} else if (args.length === 2) {
-  validateCandidate(args[0], args[1])
-} else {
-  console.log('사용법:')
-  console.log('  node scripts/validateTownAssetCandidate.mjs <assetKey> <filePath>')
-  console.log('  node scripts/validateTownAssetCandidate.mjs --audit')
-  console.log('  node scripts/validateTownAssetCandidate.mjs --hash <file1> [file2 ...]')
-  process.exitCode = 1
+// 2026-09-15 — import.meta.url 가드 추가. 이 파일을 testTownAssetValidator.mjs
+// 가 순수 함수(decodePng/decodeWebpContainer 등)만 재사용하려고 import할 때,
+// 이 아래 CLI 진입점이 testTownAssetValidator.mjs 자신의 argv(인자 없음)를
+// 보고 "사용법" 출력 + exitCode=1을 내버리는 부작용이 있었다 — 직접 실행될
+// 때만 실행되도록 가드한다(표준 ESM 패턴).
+const isMainModule = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href
+if (isMainModule) {
+  const args = process.argv.slice(2)
+  if (args[0] === '--audit') {
+    auditManifestCoverage()
+  } else if (args[0] === '--hash') {
+    hashFiles(args.slice(1))
+  } else if (args.length === 2) {
+    validateCandidate(args[0], args[1])
+  } else {
+    console.log('사용법:')
+    console.log('  node scripts/validateTownAssetCandidate.mjs <assetKey> <filePath>')
+    console.log('  node scripts/validateTownAssetCandidate.mjs --audit')
+    console.log('  node scripts/validateTownAssetCandidate.mjs --hash <file1> [file2 ...]')
+    process.exitCode = 1
+  }
 }
