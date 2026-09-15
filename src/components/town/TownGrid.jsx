@@ -1,17 +1,21 @@
 // src/components/town/TownGrid.jsx — Paul Town V1 8x6 마을 격자(2026-09-11,
-// 2026-09-15 마을 장면 비주얼 업그레이드 — 격자(checkerboard) 인상 제거).
+// 2026-09-15 마을 장면 비주얼 업그레이드 — 격자(checkerboard) 인상 제거,
+// 2026-09-15b 환경 아트워크 배선 — 사용자 승인 콘셉트 이미지 기반).
 //
-// 좌표/클릭 판정은 그대로 8x6 격자다 — 바뀐 건 오직 겉모습이다. 칸별
-// bg-white/40 테두리 사각형(체스판처럼 보이는 원인)을 없애고, 대신
-// V2(TownGroundLayer.jsx/TownPathLayer.jsx)에서 이미 검증된 것과 동일한
-// CSS-only 기법(그라데이션 바닥 + 연속된 자갈길 밴드, 새 배경 이미지
-// 없음)을 이 grid 컨테이너 밑에 절대배치 레이어 하나로 깐다. 칸(버튼)은
-// idle일 땐 투명해 바닥이 그대로 비쳐 보이고, placing/moving일 때만 빈
-// 칸에 점선 원 안내가 뜬다(V2 TownPlacementOverlay.jsx와 같은 원리) —
-// 배치 완료/취소 즉시 mode가 idle로 돌아가므로 안내도 함께 사라진다.
-// ambientClassFor/depthClassFor(townAmbient.js, 2026-09-12에 이미 만들어졌지만
-// 그 세션엔 배선하지 않았던 순수 함수 — 새 팔레트 발명 없이 재사용)로
-// 칸마다 미묘한 톤 차이를 줘 격자 리듬이 보이지 않게 한다.
+// 좌표/클릭 판정은 그대로 8x6 격자다 — 바뀐 건 오직 겉모습이다. 1차
+// 업그레이드(CSS-only 그라데이션+점무늬)에 이어, 이번엔 사용자가 승인한
+// 콘셉트 이미지를 참고해 실제 환경 아트워크 4종(하늘/원경 마을, 돌담+
+// 산울타리, 자갈길 텍스처, 정원 장식 스프라이트 3개)을 이 grid 컨테이너
+// 밑 절대배치 "바닥" 레이어 안에 깐다 — 전부 순수 장식(aria-hidden +
+// pointer-events-none), 구매/소유/배치 가능한 오브젝트는 단 하나도 이
+// 레이어에 포함하지 않는다(칸 버튼/CellSprite가 여전히 유일한 배치
+// 표현). 칸(버튼)은 idle일 땐 투명해 바닥이 그대로 비쳐 보이고,
+// placing/moving일 때만 빈 칸에 점선 원 안내가 뜬다(V2
+// TownPlacementOverlay.jsx와 같은 원리) — 배치 완료/취소 즉시 mode가
+// idle로 돌아가므로 안내도 함께 사라진다. ambientClassFor/depthClassFor
+// (townAmbient.js, 2026-09-12에 이미 만들어졌지만 그 세션엔 배선하지
+// 않았던 순수 함수)로 칸마다 미묘한 톤 차이를 줘 격자 리듬이 보이지
+// 않게 한다.
 // HOME_CELL(고정 🏠 My House)은 절대 탭 불가. 다른 칸은 mode(idle/
 // placing/moving)에 따라 탭 동작이 달라진다:
 //   - idle: 빈 칸은 반응 없음, 놓인 아이템은 이동/보관 미니 액션 스트립을
@@ -22,20 +26,31 @@ import { useState, useEffect } from 'react'
 import { TOWN_GRID, HOME_CELL } from '../../utils/town/townLayout'
 import { townAsset } from '../../assets/town'
 import { ambientClassFor, depthClassFor } from '../../utils/town/townAmbient'
+import skyBackdrop from '../../assets/town/backgrounds/village-sky-backdrop.webp'
+import hedgeBorder from '../../assets/town/backgrounds/village-hedge-border.webp'
+import cobblestoneTile from '../../assets/town/backgrounds/village-cobblestone-tile.webp'
+import gardenAccent1 from '../../assets/town/backgrounds/garden-accent-1.webp'
+import gardenAccent2 from '../../assets/town/backgrounds/garden-accent-2.webp'
+import gardenAccent3 from '../../assets/town/backgrounds/garden-accent-3.webp'
 
-// V2 TownPathLayer.jsx와 동일한 자갈길(cobblestone) 패턴 — radial-gradient
-// 점무늬만 쓰고 이미지 자산은 추가하지 않는다.
+// 2026-09-15b — 실제 자갈길 텍스처 타일(사용자 승인, village-cobblestone-tile.webp).
+// 타일 자체 비율(320x213 ≈ 1.5:1)을 유지한 채 칸 크기에 맞는 스케일로
+// repeat — CSS radial-gradient 점무늬(1차 업그레이드)를 대체한다.
 const COBBLE_STYLE = {
-  backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(30,42,90,0.10) 0 30%, transparent 32%)',
-  backgroundSize: '18px 14px',
+  backgroundImage: `url(${cobblestoneTile})`,
+  backgroundRepeat: 'repeat',
+  backgroundSize: '96px 64px',
 }
 
-// V2 TownGroundLayer.jsx와 동일한 산울타리(hedge) 상단 텍스처 — "정원을
-// 둘러싼 담장/산울타리" 느낌을 새 이미지 없이 CSS만으로 준다.
-const HEDGE_BAND_STYLE = {
-  backgroundImage: 'radial-gradient(circle, rgba(88,130,70,0.55) 0 45%, transparent 50%)',
-  backgroundSize: '14px 14px',
-}
+// 정원 장식 스프라이트 3개(사용자 승인) — 전부 장식용, aria-hidden +
+// pointer-events-none. 칸 좌표와 무관한 퍼센트 위치라 8x6 격자 리듬과
+// 섞이지 않는다. HOME_CELL/자갈길 밴드/하늘·산울타리 밴드와 겹치지
+// 않는 잔디 영역에만 배치.
+const GARDEN_ACCENTS = [
+  { src: gardenAccent1, left: 9, top: 80, width: 9 },
+  { src: gardenAccent2, left: 84, top: 76, width: 11 },
+  { src: gardenAccent3, left: 80, top: 32, width: 13 },
+]
 
 // 2026-09-15 — TownSprite.jsx(V2)에 이미 있는 런타임 이미지 로드 실패
 // 폴백을 V1에도 미러링(전체 여정 감사에서 발견된 기존 격차, P2) — 해시
@@ -104,27 +119,64 @@ export default function TownGrid({ placements, itemById, mode, onCellTap, onStar
           규칙: 넓은 콘텐츠는 자기 컨테이너 안에서 스크롤), 마지막 줄의 이동/
           보관 액션 스트립이 잘리지 않도록 아래 여백(pb-16)을 넉넉히 둔다. */}
       <div className="overflow-x-auto -mx-2 px-2 pb-16">
-        <div
-          className="relative grid gap-1 rounded-3xl p-2 border-4 border-[#8fb37a]/60"
-          style={{ gridTemplateColumns: `repeat(${TOWN_GRID.cols}, minmax(40px, 1fr))` }}
-        >
-        {/* 마을 바닥(장식) — 칸과 무관한 연속 레이어 하나. overflow-hidden으로
-            자갈길 밴드 모서리를 rounded-3xl 안에 가둔다(부모 grid 컨테이너
-            자체엔 overflow-hidden을 안 둬 아래 이동/보관 팝오버가 안 잘림).
-            산울타리(hedge) 안쪽 링 + 상단 텍스처 밴드는 V2 TownGroundLayer.jsx
-            와 동일한 기법 — 정원을 담장이 둘러싼 느낌을 새 이미지 없이 준다. */}
-        <div
-          className="absolute inset-0 rounded-3xl overflow-hidden bg-gradient-to-b from-[#fdebd0] via-[#f6e3c8] to-[#cfe3c0] pointer-events-none"
-          aria-hidden="true"
-        >
+        <div className="rounded-3xl overflow-hidden border-4 border-[#8fb37a]/60">
+          {/* 2026-09-15b — 하늘/원경 마을 + 돌담·산울타리를 grid 칸 위에
+              절대배치로 겹치지 않고, 격자 "위"의 별도 헤더 띠로 분리한다.
+              1차 배선(칸 내부에 겹쳐 그림)은 0행(y=0)에 배치한 아이템이
+              하늘 배경의 나뭇가지 그림과 완전히 겹쳐 안 보이는 실제
+              버그였다(시각 QA 스크린샷으로 발견) — 헤더를 grid 바깥으로
+              분리해 8x6 어느 칸과도 절대 겹치지 않게 고쳤다. */}
+          <div className="relative h-16 sm:h-20 md:h-24" aria-hidden="true">
+            <div
+              className="absolute inset-0"
+              style={{ backgroundImage: `url(${skyBackdrop})`, backgroundSize: '100% 100%', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }}
+            />
+            <div
+              className="absolute inset-x-0 bottom-0 h-[62%]"
+              style={{ backgroundImage: `url(${hedgeBorder})`, backgroundSize: '100% 100%', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }}
+            />
+          </div>
           <div
-            className="absolute left-0 right-0 border-y-2 border-[#1e2a5a]/10 bg-[#d9d2c5]"
-            style={{ top: `${laneTopPct}%`, height: `${laneHeightPct}%`, ...COBBLE_STYLE }}
-          />
-          <div className="absolute inset-0 rounded-3xl shadow-[inset_0_0_0_6px_rgba(143,179,122,0.45)]" />
-          <div className="absolute inset-x-0 top-0 h-[3%]" style={HEDGE_BAND_STYLE} />
-        </div>
-        {cells.map(({ x, y }) => {
+            className="relative grid gap-1 rounded-3xl p-2"
+            style={{ gridTemplateColumns: `repeat(${TOWN_GRID.cols}, minmax(40px, 1fr))` }}
+          >
+          {/* 마을 바닥(장식) — 칸과 무관한 연속 레이어 하나. overflow-hidden으로
+              모든 장식 요소를 rounded-3xl 안에 가둔다(부모 grid 컨테이너
+              자체엔 overflow-hidden을 안 둬 아래 이동/보관 팝오버가 안 잘림).
+              자갈길 텍스처 + 정원 장식 스프라이트(둘 다 사용자 승인
+              아트워크)만 여기 배선한다 — 전부 구매/배치 불가능한 순수
+              배경이고, 실제 소유 아이템은 여전히 칸 버튼(CellSprite)에서만
+              렌더된다. */}
+          <div
+            className="absolute inset-0 rounded-3xl overflow-hidden bg-gradient-to-b from-[#fdebd0] via-[#f6e3c8] to-[#cfe3c0] pointer-events-none"
+            aria-hidden="true"
+          >
+            {/* 정원 장식 스프라이트 — HOME_CELL/자갈길과 겹치지 않는 잔디
+                영역에만. 구매 불가, 완전히 장식용. alt 속성을 아예 두지
+                않는다(aria-hidden="true"만으로 이미 보조기술에서 완전히
+                숨겨짐) — alt=""도 img[alt] 셀렉터엔 걸려, "화면에 폴
+                이미지 정확히 1장"을 세는 기존 회귀 테스트(townV1.spec.mjs)
+                의 카운트를 실제로 깨뜨렸다(발견·수정, 2026-09-15b). */}
+            {GARDEN_ACCENTS.map((a, i) => (
+              <img
+                key={i}
+                src={a.src}
+                aria-hidden="true"
+                loading="lazy"
+                decoding="async"
+                className="absolute pointer-events-none select-none"
+                style={{ left: `${a.left}%`, top: `${a.top}%`, width: `${a.width}%`, height: 'auto' }}
+              />
+            ))}
+            {/* 자갈길(가운데 행) — 실제 텍스처 타일로 연속 렌더, 칸 사이
+                gap에도 끊기지 않는다. */}
+            <div
+              className="absolute left-0 right-0 border-y-2 border-[#1e2a5a]/10"
+              style={{ top: `${laneTopPct}%`, height: `${laneHeightPct}%`, ...COBBLE_STYLE }}
+            />
+            <div className="absolute inset-0 rounded-3xl shadow-[inset_0_0_0_6px_rgba(143,179,122,0.45)]" />
+          </div>
+          {cells.map(({ x, y }) => {
           const home = isHomeCell(x, y)
           const placed = !home ? byCell[`${x},${y}`] : null
           const item = placed ? itemById && itemById[placed.itemId] : null
@@ -191,6 +243,7 @@ export default function TownGrid({ placements, itemById, mode, onCellTap, onStar
             </div>
           )
         })}
+          </div>
         </div>
       </div>
       <p className="text-center text-xs text-gray-400 mt-2">🏠 My House · 아이템을 눌러 이동하거나 보관해요</p>
