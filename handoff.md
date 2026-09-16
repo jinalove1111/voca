@@ -1,9 +1,53 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-17 (160차 — **PR #61(V2 월드/디자인 브랜치 → main)
-merge + Vercel Production 자동 배포 완료**, merge SHA `eef3e22`, 라이브
-번들에서 `paulTownV2:!1` 확인(학생 경로 V1 유지), 수동 Production WRITE 0.
-PR #60(P0 아트 7/7)은 base를 main으로 재지정해 최종 리뷰 단계, 미merge.
-159차 이하 보존)_
+_최종 갱신: 2026-09-17 (161차 — PR #60 release-gate 1차 FAIL(head `d0067c8`)
+→ 원인 2건 중 `testBundleBudget.mjs`는 P0 아트로 바뀐 산출물 인벤토리
+계약(물리 14→18/인라인 7→5) 갱신으로 수정(`6d6d547`), `testProdCheck.mjs`
+291/292는 로그 절단으로 실패 단언 미확인·로컬/직전 게이트 PASS·이 PR
+무관 입력 → 재실행으로 판정. 미merge. 160차 이하 보존)_
+
+## 2026-09-17 (161차) — PR #60 release-gate 1차 FAIL 진단·수정(문서 + 테스트 계약만, 앱 코드 무변경)
+
+### 0. 안전 요약
+
+앱 동작 변경 0(`scripts/testBundleBudget.mjs` 계약 갱신 1파일 + 이 문서).
+merge/배포/플래그/DB/SQL/Production WRITE 전부 0. PR #60 미merge.
+
+### 1. 실패 사실
+
+head `d0067c8`(160차 문서 커밋) push로 실행된 release-gate(run
+35125173387)가 Gate 2(`verify:all`)에서 FAIL, Gate 3~5 skipped. 실패
+스크립트 2개: `scripts/testBundleBudget.mjs`(exit 1),
+`scripts/testProdCheck.mjs`(exit 1). **기록 교훈**: 백그라운드
+`gh run watch … | tail`의 exit 0을 PASS로 읽을 뻔했다 — 파이프 마지막
+명령의 코드였다. 결론은 항상 `gh run view --json conclusion`으로 확인.
+
+### 2. testBundleBudget — 이 PR이 원인, 계약 갱신으로 수정
+
+크기 예산은 전부 충족(메인 gzip 124.2KB ≤ 135KB, TownScreen 4.6KB ≤
+15KB, 핵심 raw 1.234MB ≤ 1.5MB). 실패 4건은 전부 산출물 **인벤토리**
+핀: (a) flower-garden/bench가 신규 물리 webp, (b) 최종 아트로 교체된
+red-post-box.webp(3670→8644B)·street-lamp.webp(2564→7256B)가 Vite
+assetsInlineLimit(4096B)를 넘어 인라인→물리 파일로 승격. 옛 계약
+"물리 14개 + 인라인 정확히 7건"을 "물리 18개 + 인라인 정확히 5건
+(cat/owl/puppy/shop-lamp/stone-fountain, 이번에 무접촉)"으로 갱신,
+"red-post-box/street-lamp는 물리 파일이 아님" 핀 2개 제거(사실이
+아니게 됨; 존재는 18개 정확 목록이 강제). 예산 수치 무변경. 로컬
+19/19 PASS(옛 계약 기준 17/21). 커밋 `6d6d547`.
+
+### 3. testProdCheck — 실패 단언 미확인, 이 PR과 무관 판단 근거
+
+CI 요약 "총 292단언 — PASS 291 / FAIL 1"만 있고 실패 단언 줄은
+`--log`/`--log-failed` 어디에도 없음 — 하네스가 자식 stdout의 꼬리만
+echo하고 실패 줄이 그 창 위에 있었기 때문(진단 한계로 기록). 근거:
+① 같은 head 코드로 로컬 292/292 PASS, ② 25분 전 PR #61 게이트(동일
+스크립트·인프라)에서 PASS, ③ 이 PR의 변경 파일 중 이 스크립트 입력
+(`scripts/lib/prodDataLoader.mjs`·`prodInvariants.mjs`·
+`studentHealthRules.mjs`·`prod/fixtures/synth.mjs`·`excelHeaderGuard.js`·
+`prodCheck.mjs` CLI)에 해당하는 것 0개, ④ 스크립트의 유일한 라이브
+요청(anon HEAD students, 읽기 전용)은 "기준선(단언 아님)"으로 표기.
+따라서 일시적 실패로 추정하되 **추정을 PASS로 보고하지 않는다** —
+`6d6d547` push로 재실행되는 게이트 결과로 판정. 재발 시 하네스의 꼬리
+창을 늘려 실패 줄을 확보하는 것이 다음 조치(후속 과제로 승격).
 
 ## 2026-09-17 (160차) — PR #61 main merge + Production 자동 배포(운영자 승인) + PR #60 main 재지정: 문서 전용 기록
 
