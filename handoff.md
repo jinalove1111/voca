@@ -1,10 +1,70 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-17 (158차 — Red Post Box 드롭인 완료(파일 교체만,
-코드 변경 0, V1/V2 라이브 확인) + Bench 후보(bench11.png) 알파 없음으로
-차단(colorType=2, 체커보드 baked — 1차 Tree와 동일 결함, 자동 복구
-시도 안 함). P0 6/7 완료, Bench만 진짜 투명 소스 대기.
-chore/paul-town-p0-art-pipeline-2026-09-16 로컬 커밋만·미push. 157차
-이하 보존)_
+_최종 갱신: 2026-09-17 (159차 — Bench 재수출본(bench12.png) 배선으로
+**P0 7종 전부 완료**(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬
+커밋만·미push). decorations/bench 최초 등록(index.js 23번째 키), Batch 3
+DEFERRED 사유였던 baked 글로우는 픽셀 분석으로 부재 확인. 정적 계약
+테스트 2개의 "bench 없음" assertion 제거(112/125). 158차 이하 보존)_
+
+## 2026-09-17 (159차) — Bench 드롭인(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): P0 7/7 완료
+
+### 0. 안전 요약
+
+동일 전용 브랜치, main 무접촉, DB/SQL/경제/카탈로그/가격/레벨/플래그
+변경 0(`paulTownV2` 여전히 false), merge/deploy/push 0, 보호 파일 17개
+무접촉, 완료된 P0 6종 파일과 Town/V1/api 코드 byte-identical(git diff
+빈 결과), 새 npm 패키지 0개. 코드 변경은 `src/assets/town/index.js`
+import+키 1줄과 정적 계약 테스트 2개뿐.
+
+### 1. 소스 — 158차 차단(bench11) 후 재수출본(bench12) 도착
+
+`bench12.png`: `colorType=6(RGBA)`, 실제 투명 49.77%. 뷰어에서 상단
+주황/하단 초록 글로우가 보였고 Bench는 Batch 3에서 정확히 "baked 배경
+글로우"로 DEFERRED됐던 항목이라, 158차 우체통과 같은 픽셀 분석으로
+검증: 글로우 샘플 전부 alpha=0(예: (65,39,15,0)), 콘텐츠 바운딩박스 밖
+alpha>0 픽셀 226개 전부 alpha≤4, 좌석 아래 다리 사이 밴드도 alpha=0.
+즉 알파를 무시하는 뷰어에만 보이는 잔여 색 데이터이고 올바른 합성기
+에서는 보이지 않으며 크롭에서 버려진다 — DEFERRED 사유 해소. 여백만
+우측 0.85%로 미달 → repad.
+
+### 2. 처리와 등록(156차 Flower Garden과 동일 최소 패턴)
+
+크롭 → 비율 유지 축소(130×77) → 좌우 대칭·하단 5% 여백으로 144×96(2x)/
+72×48(1x) 배치 → PNG+WebP(무손실) 4파일 **신규**(이 asset_key 최초
+아트). 계약 전 항목 PASS(최소 여백 4.86%), 앱 지면색 합성 미리보기
+헤일로/사각 배경 없음. `index.js`에 `import bench` + `'decorations/bench':
+bench` 1줄(23번째 키, 기존 22개와 동일 패턴). 렌더러/카탈로그 무변경 —
+`assetKeyFor()`는 153차부터 'decorations/bench'를 정확히 파생. 정적 계약
+테스트: `testTownV2Static.mjs`(EXPECTED 목록 23개, "bench 아직 없음"
+assertion 제거, 113→112), `testTownUiStatic.mjs`(STILL_EMOJI_ONLY 목록이
+비어 해당 check 제거, EXPECTED 23개 정확 일치 유지, 126→125) — 사실이
+아니게 된 부재 단언만 제거, 초과 키 검출은 그대로(약화 아님).
+
+### 3. 검증
+
+`npm run build` 클린 · 매니페스트 감사 "배선됨, 4파일 전부 존재" + 고아
+자산 0 · `testTownV2Static` 112/112 · `testTownSceneV2` 259/259 ·
+`testTownUiStatic` 125/125 · `testTownAssetManifest` 487/487 ·
+`testTownAssetValidator` 32/32 · `testStaleChunkRecovery` 102/102 ·
+`verify:e2e` 972/972(단독 실행) · V2 리드 시각 검증 360/390/430/200%zoom —
+Tree/Flower Bed/Street Lamp/Red Post Box/Bench를 실제 보관함 UI로 연속
+배치((1,1)/(2,1)/(4,1)/(5,1)/(6,1)), 전부 실제 `<img>`+`naturalWidth>0`,
+84/84 PASS · V1 읽기 전용 회귀(`v1BenchCheck.mjs`, 커밋 안 함) 보관함+
+격자 실제 이미지 24/24 PASS · 2배 확대 크롭 육안: P0 7종이 한 화면에
+접지·클리핑 없음·헤일로 없음·스케일 위계 자연스러움.
+
+### 4. 최종 P0 감사(읽기 전용)와 산출물
+
+매니페스트 감사 7종 전부 "배선됨, 4파일 전부 존재", `TOWN_ASSETS` 23개
+키, `paulTownV2: false`(features.js:112). design 브랜치 대비 이 브랜치
+변경은 art 파이프라인/자산/테스트/문서에 한정, `townCatalog.js`/
+`townLevel.js`/V1 4개 화면/`api/`/`supabase*` 무접촉(diff 빈 결과).
+커밋: art `e52130c`, 등록+테스트 `9497399`, 이 handoff 갱신 커밋(전부
+로컬만). **P0 7/7 완료.** 미결(후속 세션): 153차 mock 픽스처 assetKey
+버그(`mockRoutes.mjs:267` + `townCatalog.js:88` 서버키 우선) —
+V1 검증에서 house/decoration 카테고리 항목이 매번 이모지로 먼저 나오는
+원인이라 우선 수정 권장, `town-lot-*` E2E 커버리지 갭, 스크래치패드
+시각 검증 스크립트(`p0First3VisualProof.mjs`/`v1*Check.mjs`)의 정식
+e2e 스펙 승격 검토. 다음 게이트: 운영자 push 승인 → REVIEW-ONLY PR.
 
 ## 2026-09-17 (158차) — Red Post Box 드롭인 + Bench 차단(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): P0 6/7
 
