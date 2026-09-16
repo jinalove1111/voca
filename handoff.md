@@ -1,9 +1,93 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-16 (155차 — Tree 재수출본 배선 완료로 P0 첫 3종 전부
-실물 교체 마무리(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·
-미push): 154차에서 차단했던 Tree, 운영자가 진짜 RGBA 알파를 가진 재수출본
-("tree 2.png") 제공 → 동일 파이프라인으로 검증+배선, 실제 인벤토리
-배치 플로우로 라이브 렌더 확인까지 완료. 154차 이하 보존)_
+_최종 갱신: 2026-09-16 (156차 — Flower Bed 드롭인, 최초 신규 asset_key
+등록(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push):
+nature/flower-garden에 실제 아트 배선(154/155차와 달리 파일 교체가 아니라
+`src/assets/town/index.js`에 import+키 1줄 신규 추가), My House/Book
+Shop/Tree는 무접촉 보호, V1/V2 공용 정적 계약 테스트 2개 갱신. 155차
+이하 보존)_
+
+## 2026-09-16 (156차) — Flower Bed 드롭인(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): nature/flower-garden 신규 등록, 최초로 이모지 폴백에서 실제 아트로 전환
+
+### 0. 안전 요약
+
+동일 전용 브랜치, main 무접촉, DB/SQL/경제/카탈로그/가격/레벨/플래그
+변경 0(`paulTownV2` 여전히 false), merge/deploy/push 0, 보호 파일 17개
+무접촉, My House/Book Shop/Tree 아트·사이징 무접촉(git diff로 확인),
+V1 소스 파일 byte-identical, 새 npm 패키지 0개.
+
+### 1. 이전 3종과의 차이 — 파일 교체가 아니라 최초 등록
+
+154/155차(My House/Book Shop/Tree)는 이미 `TOWN_ASSETS`에 키가 있어
+기존 파일 4개를 교체하는 작업이었다. flower-garden은 처음부터 파일
+자체가 없었고 `TOWN_ASSETS`에 키도 없어(153차에서 확인) `townAsset
+('nature/flower-garden')`이 항상 null → 모든 호출부가 이모지(🌷)로
+폴백하던 상태였다. 이번이 처음으로 이 asset_key에 실제 이미지가
+등록된 순간이다. 카탈로그 쪽 `assetKeyFor()`/`mergeCatalog()`는 이미
+153차에 정확히 검증돼 있어(코드 변경 0), 이번 작업은 오직
+`src/assets/town/index.js`에 신규 import 1줄 + `TOWN_ASSETS` 키 1줄
+추가뿐이다 — 기존 21개 자산이 전부 이 파일에서 정확히 같은 패턴을
+쓰고 있어 "새 렌더 경로"가 아니라 이미 있는 패턴의 22번째 반복.
+
+### 2. 소스 검증과 처리
+
+운영자가 제공한 `flower bed.png` — `colorType=6(RGBA)`, 실제 투명
+45.97%로 진짜 알파 확인(체커보드/평면화 배경 아님). 여백 1건만
+2.18%로 계약(≥4%) 미달이었으나 My House/Book Shop/Tree와 동일한
+"0~4%는 repad로 해결 가능" 카테고리라 repad 진행. 콘텐츠 바운딩박스
+크롭 → 비율 유지 축소(가로 세로 중 짧은 쪽 기준, 스트레치 없음) →
+좌우 대칭 5% + 하단 5% 여백으로 192×128(2x)/96×64(1x) 캔버스에 배치 →
+PNG+WebP(무손실) 4파일 신규 생성.
+
+### 3. 코드 변경 — 최소 등록 + 정적 계약 테스트 갱신
+
+`src/assets/town/index.js`에 `import flowerGarden from
+'./nature/flower-garden.webp'` + `'nature/flower-garden': flowerGarden,`
+2줄 추가(기존 파일 구조·패턴 그대로 따름). 이 파일은 V1/V2 공용
+`townAsset()` resolver의 유일한 데이터 소스라, flower-garden을 보유한
+모든 화면(V1 TownGrid/TownShopPanel/TownInventory, V2 TownObjectLayer
+전부)이 즉시 실제 이미지로 바뀐다 — V1 소스 코드 자체(JSX/로직)는
+한 줄도 안 건드렸고 공용 데이터 테이블 갱신의 자연스러운 파급효과다.
+이 파급효과 때문에 정확한 키 개수(21→22)를 하드코딩해 둔 정적 계약
+테스트 2개가 함께 깨지므로 예상된 방식대로 갱신: `testTownV2Static.mjs`
+(flower-garden "아직 없음" assertion 제거 — 그 assertion 자신의 주석이
+"아트 등록되면 의도적으로 깨져야 정상"이라고 이미 예고), `testTownUiStatic.mjs`
+(동일 패턴, bench는 그대로 이모지 목록에 유지). bench는 이번 작업
+지시서가 명시한 대로 전혀 손대지 않음(파일도 없고 코드도 무변경).
+
+### 4. 검증
+
+`npm run build` 클린 · `testTownV2Static` 113/113(테스트 1개 제거로
+114→113, FAIL 0) · `testTownSceneV2` 259/259 · `testTownUiStatic`
+126/126(V1 byte-identical) · `testTownAssetManifest` 487/487 ·
+`testTownAssetValidator` 32/32 · 매니페스트 감사 — `nature/flower-garden`
+"배선됨, 4파일 전부 존재" PASS, `decorations/bench`는 여전히 SPEC_ONLY로
+정상 표시 · `verify:e2e` 972/972 · 리드 자체 시각 검증(스크래치패드
+전용, 커밋 안 함) — 360/390/430px에서 실제 보관함 UI로 Tree+Flower Bed
+연속 배치(빈 칸 (1,1)/(2,1)) → 둘 다 실제 `<img>` 렌더+`naturalWidth>0`
+확인, My House/Book Shop 항목까지 합쳐 48/48 PASS. 스크린샷으로 4종
+(My House/Book Shop/Tree/Flower Bed) 전부가 한 화면에 자연스러운
+상대 크기로 함께 배치된 상태 확인 — Flower Bed는 눈에 띄게 작고
+낮게 배치돼 나무/건물과의 스케일 위계가 그럴듯함, 붕 뜬 오브젝트/
+클리핑/불투명 배경/왜곡 없음.
+
+### 5. 디버깅 메모(스크래치패드 스크립트 자체 버그, 앱 코드와 무관)
+
+시각 검증 스크립트 작성 중 "두 번째 인벤토리 아이템 배치 시 타임아웃"
+버그를 겪음 — 원인은 스크립트 자체의 중복 `town-open-inventory` 클릭
+호출(리팩터링 잔재)이 시트를 두 번 열어 백드롭이 겹친 것으로, 앱
+코드/실제 사용자 플로우와는 무관한 스크립트 버그였음을 확인 후 수정.
+기록으로만 남김(코드베이스에 영향 없음, 커밋 대상 아님).
+
+### 6. 산출물/커밋/미결
+
+변경 파일 3개(`src/assets/town/index.js`,
+`scripts/testTownV2Static.mjs`, `scripts/testTownUiStatic.mjs`) + 신규
+파일 4개(`src/assets/town/nature/flower-garden.{png,webp,@2x.png,@2x.webp}`).
+커밋 2건(art `03d8333`, 등록+테스트 `2f60b29`) + 이 handoff 갱신 커밋,
+전부 chore 브랜치 로컬만. 남은 P0 자산: bench(파일 자체 미존재, 다음
+세션), street-lamp/red-post-box는 이미 배포된 기존 아트로 hot-swap
+대상일 뿐 이번에도 손댈 필요 없음. 153차가 남긴 mock 픽스처 assetKey
+버그, `town-lot-*` E2E 커버리지 갭도 여전히 미결.
 
 ## 2026-09-16 (155차) — Tree 재수출본 배선(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): P0 첫 3종(My House/Book Shop/Tree) 전부 실물 교체 완료
 
