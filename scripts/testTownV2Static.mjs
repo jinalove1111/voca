@@ -154,21 +154,17 @@ const EXPECTED_BATCH1_ASSET_KEYS = [
   'buildings/my-house', 'buildings/british-cottage', 'buildings/book-shop', 'decorations/red-post-box', 'animals/cat', 'animals/owl', 'animals/puppy', 'buildings/cafe', 'special/bridge', 'special/english-school', 'decorations/town-sign', 'special/clock-tower', 'decorations/shop-lamp', 'decorations/street-lamp', 'decorations/stone-fountain', 'nature/tree',
   'nature/garden-stage-0', 'nature/garden-stage-1', 'nature/garden-stage-2',
   'nature/garden-stage-3', 'nature/garden-stage-4', 'nature/flower-garden',
+  'decorations/bench',
 ]
 check(
-  'src/assets/town/index.js — TOWN_ASSETS가 정확히 batch1+batch2+batch3+flower-garden 22개 키만 포함(bench 등 그 외 신규 에셋 0개)',
+  'src/assets/town/index.js — TOWN_ASSETS가 정확히 batch1+batch2+batch3+flower-garden+bench 23개 키만 포함(그 외 신규 에셋 0개)',
   townAssetsKeysV2.length === EXPECTED_BATCH1_ASSET_KEYS.length &&
     EXPECTED_BATCH1_ASSET_KEYS.every((k) => townAssetsKeysV2.includes(k)),
   JSON.stringify(townAssetsKeysV2),
 )
-// 2026-09-16(155차 이후 갱신) — flower-garden은 실제 아트가 등록돼 이
-// "아직 없음" assertion이 의도한 대로 깨지므로 제거했다(원래 주석이
-// 예고한 대로). bench는 여전히 파일 자체가 없어(이번 작업 지시서도
-// "Do NOT work on Bench yet"로 명시) 아래 assertion을 그대로 유지한다.
-check(
-  "src/assets/town/index.js — TOWN_ASSETS에 'decorations/bench' 키 아직 없음(아트 파일 미존재, townAsset()이 오늘은 null 반환 — 아트 등록 시 이 체크는 의도적으로 깨져야 함)",
-  !townAssetsKeysV2.includes('decorations/bench'),
-)
+// 2026-09-17 — bench도 실제 아트가 등록돼(P0 7/7) 예전 "아직 없음"
+// assertion(flower-garden과 같은 방식)을 제거했다. P0 7종의 등록 여부는
+// 위 EXPECTED_BATCH1_ASSET_KEYS 정확 일치 검사가 그대로 고정한다.
 check(
   'src/assets/town/index.js — townAsset() 본문이 TOWN_ASSETS[assetKey] || null(등록 안 된 키는 항상 null 폴백)',
   !!assetsIndexSrc && /return\s+TOWN_ASSETS\[assetKey\]\s*\|\|\s*null/.test(assetsIndexSrc),

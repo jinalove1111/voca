@@ -21,9 +21,12 @@
 // 추가하면 TownGrid/TownShopPanel/TownInventory/TownObjectLayer 등 이
 // 파일을 거쳐가는 모든 호출부가 즉시 실제 이미지를 그린다(V1/V2 공용
 // resolver라 V1도 함께 emoji→실제 이미지로 바뀜, 의도된 동작).
-// townAsset()은 이제 이 22개 키에 대해서만 실제 이미지 URL을 반환한다.
-// 그 외 모든 assetKey(bench 등 나머지 카탈로그 항목)는 여전히
-// TOWN_ASSETS에 없어 townAsset()이 null을 반환한다.
+// 2026-09-17(P0 Bench 드롭인) — 23번째 키(decorations/bench) 추가. Batch 3
+// 에서 baked 글로우로 DEFERRED됐던 항목인데, 이번 재수출본(bench12.png)은
+// 픽셀 분석으로 글로우가 alpha=0 픽셀의 잔여 색 데이터일 뿐임을 확인해
+// (콘텐츠 바운딩박스 밖 alpha>4 픽셀 0개) 등록했다. 이로써 P0 7종 전부
+// 실제 아트. townAsset()은 이제 이 23개 키에 대해서만 실제 이미지 URL을
+// 반환하고, 그 외 assetKey는 여전히 null(이모지 폴백)이다.
 // 호출부(TownGrid/TownShopPanel/TownInventory)는 townAsset(item.assetKey)가
 // null이면 항상 이모지(item.emoji)로 폴백한다(기능이 이미지 부재로 깨지지
 // 않음).
@@ -45,6 +48,7 @@ import townSign from './decorations/town-sign.webp'
 import clockTower from './special/clock-tower.webp'
 import shopLamp from './decorations/shop-lamp.webp'
 import streetLamp from './decorations/street-lamp.webp'
+import bench from './decorations/bench.webp'
 import stoneFountain from './decorations/stone-fountain.webp'
 import tree from './nature/tree.webp'
 import flowerGarden from './nature/flower-garden.webp'
@@ -69,6 +73,7 @@ export const TOWN_ASSETS = {
   'special/clock-tower': clockTower,
   'decorations/shop-lamp': shopLamp,
   'decorations/street-lamp': streetLamp,
+  'decorations/bench': bench,
   'decorations/stone-fountain': stoneFountain,
   'nature/tree': tree,
   'nature/flower-garden': flowerGarden,

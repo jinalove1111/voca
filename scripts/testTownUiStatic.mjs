@@ -114,25 +114,18 @@ const EXPECTED_TOWN_ASSET_KEYS = [
   'buildings/my-house', 'buildings/british-cottage', 'buildings/book-shop', 'decorations/red-post-box', 'animals/cat', 'animals/owl', 'animals/puppy', 'buildings/cafe', 'special/bridge', 'special/english-school', 'decorations/town-sign', 'special/clock-tower', 'decorations/shop-lamp', 'decorations/street-lamp', 'decorations/stone-fountain', 'nature/tree',
   'nature/garden-stage-0', 'nature/garden-stage-1', 'nature/garden-stage-2',
   'nature/garden-stage-3', 'nature/garden-stage-4', 'nature/flower-garden',
-]
-// 2026-09-16(P0 Flower Bed 드롭인) — flower-garden에 실제 아트가 등록돼
-// EXPECTED_TOWN_ASSET_KEYS로 옮김(이 파일 자체 주석이 예고한 대로 —
-// TOWN_ASSETS는 V1/V2 공용 단일 resolver라 V1의 조회 결과도 함께
-// emoji→실제 이미지로 바뀐다, 의도된 동작이지 V1 로직/JSX 변경 아님).
-// bench는 이번에도 손대지 않아(작업 지시서 "Do NOT work on Bench yet")
-// 계속 이모지 폴백 목록에 남는다.
-const STILL_EMOJI_ONLY_ASSET_KEYS = [
   'decorations/bench',
 ]
+// 2026-09-16 flower-garden, 2026-09-17 bench 순으로 실제 아트가 등록돼
+// 둘 다 EXPECTED_TOWN_ASSET_KEYS로 옮겼다(이 파일 자체 주석이 예고한
+// 대로 — TOWN_ASSETS는 V1/V2 공용 단일 resolver라 V1의 조회 결과도 함께
+// emoji→실제 이미지로 바뀐다, 의도된 동작이지 V1 로직/JSX 변경 아님).
+// 예전 "아직 이모지 폴백인 카탈로그 키" 목록은 비어 P0 7종 전부 등록
+// 완료 — 그 사실은 아래 정확 일치 검사(23개, 초과 키 없음)가 고정한다.
 check(
-  'src/assets/town/index.js — TOWN_ASSETS가 정확히 22개 드롭인 키를 포함(flower-garden 추가 반영)',
+  'src/assets/town/index.js — TOWN_ASSETS가 정확히 23개 드롭인 키를 포함(flower-garden·bench 추가 반영, P0 7종 전부 등록)',
   townAssetsKeys.length === EXPECTED_TOWN_ASSET_KEYS.length &&
     EXPECTED_TOWN_ASSET_KEYS.every((k) => townAssetsKeys.includes(k)),
-  JSON.stringify(townAssetsKeys),
-)
-check(
-  'src/assets/town/index.js — TOWN_ASSETS에 나머지 1개 카탈로그 키(bench, DEFERRED)는 여전히 없음(이모지 폴백 유지)',
-  STILL_EMOJI_ONLY_ASSET_KEYS.every((k) => !townAssetsKeys.includes(k)),
   JSON.stringify(townAssetsKeys),
 )
 check('src/assets/town/index.js — townAsset() export', !!assetsIndexSrc && /export function townAsset\s*\(/.test(assetsIndexSrc))
