@@ -161,6 +161,28 @@ check(
     EXPECTED_BATCH1_ASSET_KEYS.every((k) => townAssetsKeysV2.includes(k)),
   JSON.stringify(townAssetsKeysV2),
 )
+// 2026-09-16 신규 — flower-garden/bench 자산 파일이 아직 없어 정적
+// import를 추가하지 않았음(빌드가 깨지므로)을 명시적으로 재확인한다.
+// townAsset() 본문이 `TOWN_ASSETS[assetKey] || null`인 이상, 이 두 키가
+// TOWN_ASSETS에 없다는 사실 자체가 곧 "townAsset('nature/flower-garden')/
+// townAsset('decorations/bench')가 오늘은 null을 반환한다"는 런타임
+// 사실의 정적 증거다(dynamic import 없이도 안전하게 확인 가능 — 작업
+// 지시서 TASK 5 "static-regex-contract 대체" 경로). 이 값은 영구
+// 불변식이 아니다 — 실제 아트가 등록되면(두 키가 TOWN_ASSETS에 추가되면)
+// 이 체크는 깨져야 정상이고, 그때는 이 assertion을 지우거나 반대로
+// 고쳐야 한다(EXPECTED_BATCH1_ASSET_KEYS 갱신과 함께).
+check(
+  "src/assets/town/index.js — TOWN_ASSETS에 'nature/flower-garden' 키 아직 없음(아트 파일 미존재, townAsset()이 오늘은 null 반환 — 아트 등록 시 이 체크는 의도적으로 깨져야 함)",
+  !townAssetsKeysV2.includes('nature/flower-garden'),
+)
+check(
+  "src/assets/town/index.js — TOWN_ASSETS에 'decorations/bench' 키 아직 없음(아트 파일 미존재, townAsset()이 오늘은 null 반환 — 아트 등록 시 이 체크는 의도적으로 깨져야 함)",
+  !townAssetsKeysV2.includes('decorations/bench'),
+)
+check(
+  'src/assets/town/index.js — townAsset() 본문이 TOWN_ASSETS[assetKey] || null(등록 안 된 키는 항상 null 폴백)',
+  !!assetsIndexSrc && /return\s+TOWN_ASSETS\[assetKey\]\s*\|\|\s*null/.test(assetsIndexSrc),
+)
 
 // ── 4. V1 파일 byte-identical(origin/main 대비) — V2가 V1을 건드리지 않음 ──
 // 2026-09-15 예외 1차(정직하게 기록) — TownScreen.jsx/townLayout.js/
@@ -386,6 +408,45 @@ check('TownObjectLayer.jsx — 버튼 aria-label "눌러서 이동하거나 보�
 // tests/e2e/townV2.spec.mjs S4가 실제 DOM 위치로 검증).
 check('TownObjectLayer.jsx — bottom-full 클래스 존재(마지막 행 팝오버 위쪽 배치)', /bottom-full/.test(objectLayerCode))
 check('TownObjectLayer.jsx — SCENE_ROWS - 1(또는 동등한 마지막 행 판정) 존재', /SCENE_ROWS\s*-\s*1/.test(objectLayerCode))
+
+// 2026-09-16 신규 — 고정 로트(LOTS) built 상태가 itemById[lot.id]의 실제
+// 카탈로그 아이템을 찾아 townAsset()이 등록된 아트를 반환할 때만
+// TownSprite로 그리고, 못 찾거나 아직 미등록이면 기존 placeholder 박스로
+// 폴백하는지(작업 지시서 TASK 1/4) — 아트가 실제로 존재하는지는(픽셀)
+// 검증하지 않는다(그런 자산이 없다), 소스 패턴만 확인한다.
+check(
+  'TownObjectLayer.jsx — townAsset import(../../../assets/town)',
+  /import\s*\{\s*townAsset\s*\}\s*from\s*['"]\.\.\/\.\.\/\.\.\/assets\/town['"]/.test(objectLayerCode),
+)
+check(
+  'TownObjectLayer.jsx — built 로트 카탈로그 조회 itemById[lot.id] 패턴 존재',
+  /itemById\s*&&\s*itemById\[lot\.id\]/.test(objectLayerCode),
+)
+check(
+  'TownObjectLayer.jsx — built 로트 스프라이트 변환 spriteFor(catalogItem) 패턴 존재',
+  /spriteFor\(catalogItem\)/.test(objectLayerCode),
+)
+check(
+  'TownObjectLayer.jsx — hasArt일 때만 <TownSprite 렌더(조건부)',
+  /hasArt\s*\?\s*\(\s*<TownSprite\b/.test(objectLayerCode),
+)
+check(
+  'TownObjectLayer.jsx — built placeholder 박스 클래스(솔리드) 여전히 존재(아트 없을 때 안전 폴백 유지)',
+  objectLayerCode.includes('bg-[#8fb37a]/70 border-2 border-[#1e2a5a]/40'),
+)
+check(
+  'TownObjectLayer.jsx — for-sale placeholder 박스 클래스(대시) + "for sale" 문구 여전히 존재(무변경)',
+  objectLayerCode.includes('bg-[#d9d2c5]/50 border-2 border-dashed border-[#1e2a5a]/40') && objectLayerCode.includes('for sale'),
+)
+check(
+  'TownObjectLayer.jsx — 로트 지오메트리(left/top/width/aspectRatio/transform/zIndex) 스타일 블록이 hasArt 분기로 중복되지 않음(양쪽이 같은 wrapper div를 공유 — g.leftPct 1회만 등장)',
+  (objectLayerCode.match(/\$\{g\.leftPct\}%/g) || []).length === 1,
+  `count=${(objectLayerCode.match(/\$\{g\.leftPct\}%/g) || []).length}`,
+)
+check(
+  'TownObjectLayer.jsx — zIndexFor(2, lot.district) 1회만 등장(geometry 분기 미중복 재확인)',
+  (objectLayerCode.match(/zIndexFor\(2,\s*lot\.district\)/g) || []).length === 1,
+)
 
 // 2026-09-14 — 배치 팝오버 바깥 탭 백드롭(TownScene.jsx) 회귀 방지. 이
 // 레이어의 루트(absolute inset-0, objects z-index)가 pointer-events-none이
