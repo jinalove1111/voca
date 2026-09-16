@@ -1,10 +1,76 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-16 (152차 — PAUL TOWN WORLD BLUEPRINT V1 작성(PM
-디렉티브 응답, 설계 전용): 월드맵/레벨진행/고정·커스터마이즈 매트릭스/
-학습→환경 매트릭스/Owner-Visitor 미래 아키텍처(신규)/Explore 확장
-지점(신규)/개정 아트 스펙/PM 수락 테스트 10문항 정리, 코드/DB/SQL/경제/
-카탈로그/가격/레벨/플래그 변경 전부 0, `paulTownV2` 여전히 false. 151차
-이하 보존)_
+_최종 갱신: 2026-09-16 (153차 — P0 아트 연결 패치
+(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): 6개 고정
+로트 art resolver 연결 + 독립 QA가 문서 오류 발견 + 리드가 별도 mock
+fixture 버그 발견. 152차 이하 보존)_
+
+## 2026-09-16 (153차) — P0 아트 연결 패치(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): 6개 고정 로트 art resolver 연결 + 독립 QA가 문서 오류 발견 + 리드가 별도 mock fixture 버그 발견
+
+### 0. 안전 요약
+
+코드 변경은 신규 전용 브랜치(`chore/paul-town-p0-art-pipeline-2026-09-16`,
+`design/paul-town-world-redesign-2026-09-16`에서 분기)에만 존재, main
+무접촉, DB/SQL/경제/카탈로그/가격/레벨/플래그 변경 0(`paulTownV2` 여전히
+false), merge/deploy/push 0(로컬 커밋만, PR 미오픈 — push는 운영자 명시
+승인 필요), 미추적 보호 파일 17개 무접촉.
+
+### 1. 패치 내용
+
+`TownObjectLayer.jsx`의 고정 로트(LOTS 7개 중 my-house 제외 6개) 렌더링을
+일반화 — `itemById[lot.id]` → `spriteFor()` → `townAsset(assetKey)`로 기존
+자산 리졸버를 재사용해, 이미 등록된 아트가 있으면 `TownSprite`로 그리고
+없으면 기존 placeholder 박스로 안전 폴백. 로트별 특수 코드 없이 6개
+전부에 동일 조건이 자동 적용됨. geometry(left/top/width/aspectRatio/
+zIndex)는 두 분기 모두 동일(변경 없음). flower-garden/bench는 카탈로그
+쪽 `assetKeyFor()`가 이미 정확히 해석함을 신규 테스트로 확인(코드 변경
+불필요, 파일 자체가 없어 import 불가 — 파일 도착 시 1줄 등록만 필요,
+매니페스트 문서 참고).
+
+### 2. 독립 QA가 발견한 사실 — 최초 코드 주석 오류
+
+최초 구현 주석이 "book-shop만 아트가 등록돼 있고 나머지 5개(cafe/
+stone-fountain/bridge/english-school/clock-tower)는 미등록"이라고
+적었으나, 독립 qa-reviewer가 실제 `TOWN_ASSETS`를 직접 대조해 **6개 전부
+이미 등록돼 있음**을 발견(book-shop만이 아님) — 리드가 재확인 후 주석을
+정정(2026-09-16). 5개 자산은 원래 V1 격자 배치용(대략 정사각형 칸)으로
+배포된 것이라, 이번 로트 렌더러의 전혀 다른 박스 비율(예: clock-tower
+1:2.75, bridge 1:0.45)로 그려지는 조합은 이번이 처음 — QA는 이를 시각
+미검증 리스크로 Major 등급 지적.
+
+### 3. 리드가 QA 후속 시각 확인 중 발견한 별도 버그(패치와 무관, 사전 존재) — mock fixture assetKey 오류
+
+QA가 지적한 시각 검증 갭을 메우려 리드가 Playwright로 360/390/430px에서
+6개 로트 전부 소유 상태로 실측한 결과, book-shop/cafe/stone-fountain
+3개는 여전히 placeholder 박스만 보이고(bridge/english-school/clock-tower
+3개는 정상적으로 실제 아트 렌더) — 원인 추적 결과 **실제 앱 코드가
+아니라 공유 e2e mock 픽스처**(`tests/e2e/lib/mockRoutes.mjs:267`)가
+`assetKey: \`${category}/${id}\`` 형태로 원본 category 문자열을 그대로
+써서(예: `house/book-shop`, `decoration/stone-fountain`) `townCatalog.js`의
+실제 `assetKeyFor()`가 쓰는 `CATEGORY_FOLDER` 매핑(house→buildings,
+decoration→decorations, special→special)과 다른 값을 만들어냄 — 우연히
+special 카테고리만 폴더명과 문자열이 같아(special→special) 그 3개
+(bridge/school/tower)는 정상으로 보였을 뿐. `CATEGORY_FOLDER` 직접
+대조로 실제 프로덕션 코드 경로(진짜 `mergeCatalog`/`assetKeyFor`)는 6개
+전부 정확히 해석됨을 확인 — 이번 세션 패치가 만든 회귀가 아니라, 이
+공유 mock 픽스처에 있던 **기존 결함**이 처음으로 드러난 것. 모든 town
+e2e spec이 이 픽스처를 공유하므로 수정 범위가 넓어 이번 세션에서는
+고치지 않고 후속 세션 과제로 남김(§4).
+
+### 4. 산출물/미결
+
+신규 문서 `docs/design/town/P0_ART_DROPIN_MANIFEST_2026-09-16.md`
+(운영자용 7종 자산 투입 매뉴얼). 커밋 `75252bc`(chore 브랜치, 로컬만).
+검증: 리드가 build/`testTownV2Static` 114/114/`testTownSceneV2`
+259/259/`testTownUiStatic` 126/126/`verify:e2e` 972/972(1차 실행 로그
+손상으로 재실행해 확인) 전부 직접 재실행, 독립 qa-reviewer가 동일
+스위트 별도 재실행해 같은 숫자 확인 + diff 전체 정독. 미결 과제(다음
+세션): (a) `tests/e2e/lib/mockRoutes.mjs`의 assetKey 생성 로직을 실제
+`assetKeyFor()`와 일치하도록 수정 — 공유 픽스처라 전체 town e2e 스펙
+회귀 재확인 필요, (b) book-shop/cafe/stone-fountain/bridge/
+english-school/clock-tower 6개 로트가 각자의 실제 LOT_ASPECT 비율로
+렌더될 때의 시각 확인(현재는 mock 버그로 3개만 확인됨, 3개는 mock 수정
+후 재확인 필요), (c) `tests/e2e/townV2.spec.mjs`에
+`data-testid="town-lot-*"` 실제 DOM 검증 부재(QA가 지적한 커버리지 갭).
 
 ## 2026-09-16 (152차) — PAUL TOWN WORLD BLUEPRINT V1 작성(PM 디렉티브 응답, 설계 전용) — Owner/Visitor 미래 아키텍처 + Explore 확장 지점 신규 설계
 
