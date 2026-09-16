@@ -218,6 +218,39 @@ check('spriteFor(tree) — label === 나무', treeSprite.label === '나무')
 check('HOME_SPRITE.assetKey === "buildings/my-house"', HOME_SPRITE.assetKey === 'buildings/my-house')
 check('HOME_SPRITE.footprint === "lg"', HOME_SPRITE.footprint === 'lg')
 
+// ── 5b. mergeCatalog assetKey 파생 — flower-garden/bench(2026-09-16, 아직
+//     아트 없는 두 카탈로그 항목)가 townCatalog.js의 assetKeyFor() 경로를
+//     통해 이미 올바른 assetKey를 갖는지(코드 변경 없이 확인만 — TASK 2/3).
+//     assetKeyFor 자체는 export되지 않으므로, 기존 5절과 동일한 관례(실제
+//     merge된 카탈로그 결과를 통해 간접 검증)를 그대로 따른다. ────────────
+section('5b. mergeCatalog — flower-garden/bench assetKey(TASK 2/3 확인)')
+const flowerGardenCatalogItem = catalog.find((it) => it.id === 'flower-garden')
+const benchCatalogItem = catalog.find((it) => it.id === 'bench')
+check('catalog에 flower-garden 항목 존재', !!flowerGardenCatalogItem)
+check('catalog에 bench 항목 존재', !!benchCatalogItem)
+check(
+  "mergeCatalog — flower-garden.assetKey === 'nature/flower-garden'(category=nature 폴더 파생, 코드 변경 0)",
+  !!flowerGardenCatalogItem && flowerGardenCatalogItem.assetKey === 'nature/flower-garden',
+  JSON.stringify(flowerGardenCatalogItem),
+)
+check(
+  "mergeCatalog — bench.assetKey === 'decorations/bench'(category=decoration -> 폴더 decorations 파생, 코드 변경 0)",
+  !!benchCatalogItem && benchCatalogItem.assetKey === 'decorations/bench',
+  JSON.stringify(benchCatalogItem),
+)
+// spriteFor()가 이 assetKey를 그대로 통과시키는지(TownObjectLayer.jsx가
+// townAsset(sprite.assetKey)로 조회하는 바로 그 값과 동일해야 함).
+const flowerGardenSprite = spriteFor(flowerGardenCatalogItem)
+const benchSprite = spriteFor(benchCatalogItem)
+check(
+  "spriteFor(flower-garden).assetKey === 'nature/flower-garden'",
+  flowerGardenSprite.assetKey === 'nature/flower-garden',
+)
+check(
+  "spriteFor(bench).assetKey === 'decorations/bench'",
+  benchSprite.assetKey === 'decorations/bench',
+)
+
 // ── 6. gardenRichness — 경계값 ───────────────────────────────────────────
 section('6. gardenRichness — GARDEN_STAGE_THRESHOLDS 경계')
 check('GARDEN_STAGE_THRESHOLDS === [0,10,30,60,100]', deepEqual(GARDEN_STAGE_THRESHOLDS, [0, 10, 30, 60, 100]))

@@ -1,10 +1,598 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-16 (152차 — PAUL TOWN WORLD BLUEPRINT V1 작성(PM
-디렉티브 응답, 설계 전용): 월드맵/레벨진행/고정·커스터마이즈 매트릭스/
-학습→환경 매트릭스/Owner-Visitor 미래 아키텍처(신규)/Explore 확장
-지점(신규)/개정 아트 스펙/PM 수락 테스트 10문항 정리, 코드/DB/SQL/경제/
-카탈로그/가격/레벨/플래그 변경 전부 0, `paulTownV2` 여전히 false. 151차
-이하 보존)_
+_최종 갱신: 2026-09-17 (161차 — PR #60 release-gate 1차 FAIL(head `d0067c8`)
+→ 원인 2건 중 `testBundleBudget.mjs`는 P0 아트로 바뀐 산출물 인벤토리
+계약(물리 14→18/인라인 7→5) 갱신으로 수정(`6d6d547`), `testProdCheck.mjs`
+291/292는 로그 절단으로 실패 단언 미확인·로컬/직전 게이트 PASS·이 PR
+무관 입력 → 재실행으로 판정. 미merge. 160차 이하 보존)_
+
+## 2026-09-17 (161차) — PR #60 release-gate 1차 FAIL 진단·수정(문서 + 테스트 계약만, 앱 코드 무변경)
+
+### 0. 안전 요약
+
+앱 동작 변경 0(`scripts/testBundleBudget.mjs` 계약 갱신 1파일 + 이 문서).
+merge/배포/플래그/DB/SQL/Production WRITE 전부 0. PR #60 미merge.
+
+### 1. 실패 사실
+
+head `d0067c8`(160차 문서 커밋) push로 실행된 release-gate(run
+35125173387)가 Gate 2(`verify:all`)에서 FAIL, Gate 3~5 skipped. 실패
+스크립트 2개: `scripts/testBundleBudget.mjs`(exit 1),
+`scripts/testProdCheck.mjs`(exit 1). **기록 교훈**: 백그라운드
+`gh run watch … | tail`의 exit 0을 PASS로 읽을 뻔했다 — 파이프 마지막
+명령의 코드였다. 결론은 항상 `gh run view --json conclusion`으로 확인.
+
+### 2. testBundleBudget — 이 PR이 원인, 계약 갱신으로 수정
+
+크기 예산은 전부 충족(메인 gzip 124.2KB ≤ 135KB, TownScreen 4.6KB ≤
+15KB, 핵심 raw 1.234MB ≤ 1.5MB). 실패 4건은 전부 산출물 **인벤토리**
+핀: (a) flower-garden/bench가 신규 물리 webp, (b) 최종 아트로 교체된
+red-post-box.webp(3670→8644B)·street-lamp.webp(2564→7256B)가 Vite
+assetsInlineLimit(4096B)를 넘어 인라인→물리 파일로 승격. 옛 계약
+"물리 14개 + 인라인 정확히 7건"을 "물리 18개 + 인라인 정확히 5건
+(cat/owl/puppy/shop-lamp/stone-fountain, 이번에 무접촉)"으로 갱신,
+"red-post-box/street-lamp는 물리 파일이 아님" 핀 2개 제거(사실이
+아니게 됨; 존재는 18개 정확 목록이 강제). 예산 수치 무변경. 로컬
+19/19 PASS(옛 계약 기준 17/21). 커밋 `6d6d547`.
+
+### 3. testProdCheck — 실패 단언 미확인, 이 PR과 무관 판단 근거
+
+CI 요약 "총 292단언 — PASS 291 / FAIL 1"만 있고 실패 단언 줄은
+`--log`/`--log-failed` 어디에도 없음 — 하네스가 자식 stdout의 꼬리만
+echo하고 실패 줄이 그 창 위에 있었기 때문(진단 한계로 기록). 근거:
+① 같은 head 코드로 로컬 292/292 PASS, ② 25분 전 PR #61 게이트(동일
+스크립트·인프라)에서 PASS, ③ 이 PR의 변경 파일 중 이 스크립트 입력
+(`scripts/lib/prodDataLoader.mjs`·`prodInvariants.mjs`·
+`studentHealthRules.mjs`·`prod/fixtures/synth.mjs`·`excelHeaderGuard.js`·
+`prodCheck.mjs` CLI)에 해당하는 것 0개, ④ 스크립트의 유일한 라이브
+요청(anon HEAD students, 읽기 전용)은 "기준선(단언 아님)"으로 표기.
+따라서 일시적 실패로 추정하되 **추정을 PASS로 보고하지 않는다** —
+`6d6d547` push로 재실행되는 게이트 결과로 판정. 재발 시 하네스의 꼬리
+창을 늘려 실패 줄을 확보하는 것이 다음 조치(후속 과제로 승격).
+
+## 2026-09-17 (160차) — PR #61 main merge + Production 자동 배포(운영자 승인) + PR #60 main 재지정: 문서 전용 기록
+
+### 0. 안전 요약
+
+이 항목은 문서 전용이다(앱 동작 변경 0). 운영자가 STEP 1로 명시 승인한
+merge와 그에 따르는 Vercel 자동 배포만 실행됐고, 플래그 활성화·SQL 실행·
+Production 수동 WRITE·DB/schema/RLS/auth/경제 변경은 0. PR #60은 merge
+하지 않았다.
+
+### 1. PR #61 — design/paul-town-world-redesign-2026-09-16 → main
+
+- 사전 검증(읽기 전용): design 브랜치는 main(`9eec10d`) 대비 15 ahead /
+  0 behind, 코드 변경은 `src/components/town/v2/*`·`townScene.js`·V2
+  e2e/씬 테스트 11개 파일뿐, SQL/api/auth/경제/학생/보상/V1 화면 전부
+  byte-identical, `paulTownV2: false` 유지. 기존 design→main PR 없음.
+- PR #61 생성(리뷰 전용) → release-gate(run 35119459021) 5게이트 전부
+  success(build / verify:all / student health / prod:check 읽기 전용 /
+  write-disabled proof / 브라우저 e2e), mergeable CLEAN.
+- pre-deploy 안전 게이트: **라이브** 번들(`assets/index-BNVCBtx_.js`)에서
+  `paulTownV1:!1`/`paulTownV2:!1` 직접 확인(플래그는 서버 소스 없이
+  컴파일 기본값 + 기기 localStorage 오버라이드뿐), `App.jsx`의
+  `townV2Active = townV1Enabled && paulTownV2Enabled` 스위치·`features.js`·
+  `TownScreen.jsx` 모두 PR 무변경, env/vercel.json/워크플로 변경 0.
+- **merge를 main에 하면 Vercel Git 연동이 Production을 자동 배포한다**는
+  사실(직전 main HEAD의 Production deployment 기록 + 기존 handoff 관행)을
+  먼저 보고하고 운영자 승인을 받은 뒤 merge(merge commit 방식, 이 저장소
+  관행 그대로, squash 아님). **merge SHA `eef3e22`**(부모 `9eec10d` +
+  `01c1d82`), 2026-09-16T16:39:50Z.
+- post-deploy(읽기 전용): Vercel Production deployment `6485802565`
+  (ref=`eef3e22`) SUCCESS · `https://voca-drab.vercel.app/` HTTP 200 ·
+  메인 번들 `index-BNVCBtx_.js`→`index-Ck4Vs84h.js`로 교체됨(V2 씬 마커
+  포함 = 새 빌드 서빙 확인) · 라이브 번들 `paulTownV2:!1` · 학생 기본
+  Town 경로 V1(`TownScreen-sYbHgf5d.js` 200) · V2 청크
+  `TownScreenV2-CK0dMXai.js`는 존재하나 lazy(플래그 OFF면 미로드) ·
+  메인 번들이 참조하는 lazy 청크 전부 HTTP 200(stale chunk 없음) ·
+  stale-chunk 복구 가드 번들에 포함 확인 · main push의 release-gate
+  (run 35123323415, 읽기 전용 prod:check 포함) 실행 중.
+
+### 2. PR #60 — main으로 재지정(FINAL REVIEW 단계, 미merge)
+
+design 브랜치가 main에 완전히 포함됐으므로(`eef3e22` 트리 == `01c1d82`
+트리, 동일성 확인) PR #60의 base를 `design/...`→`main`으로 재지정. 재지정
+후 diff는 정확히 아트 커밋 17개(36파일, +832/−33): P0 7종 × 4파일,
+`index.js` 등록, `TownObjectLayer.jsx` 최소 수정, 정적 계약 테스트 3개,
+문서 3개. #61의 월드/디자인 파일 중복 0, 보호 경로 무변경, 키당 파일
+정확히 4개, 잔여/중복 아트 파일 0.
+
+### 3. 이 항목의 커밋
+
+이 handoff 갱신 + `.ai-status` 갱신만 chore 브랜치에 커밋해 push한다 —
+PR #60에 문서로 실리며, push가 곧 release-gate(synchronize)를 최종 head에
+대해 다시 실행시킨다(base 재지정 자체는 CI를 트리거하지 않음).
+
+## 2026-09-17 (159차) — Bench 드롭인(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): P0 7/7 완료
+
+### 0. 안전 요약
+
+동일 전용 브랜치, main 무접촉, DB/SQL/경제/카탈로그/가격/레벨/플래그
+변경 0(`paulTownV2` 여전히 false), merge/deploy/push 0, 보호 파일 17개
+무접촉, 완료된 P0 6종 파일과 Town/V1/api 코드 byte-identical(git diff
+빈 결과), 새 npm 패키지 0개. 코드 변경은 `src/assets/town/index.js`
+import+키 1줄과 정적 계약 테스트 2개뿐.
+
+### 1. 소스 — 158차 차단(bench11) 후 재수출본(bench12) 도착
+
+`bench12.png`: `colorType=6(RGBA)`, 실제 투명 49.77%. 뷰어에서 상단
+주황/하단 초록 글로우가 보였고 Bench는 Batch 3에서 정확히 "baked 배경
+글로우"로 DEFERRED됐던 항목이라, 158차 우체통과 같은 픽셀 분석으로
+검증: 글로우 샘플 전부 alpha=0(예: (65,39,15,0)), 콘텐츠 바운딩박스 밖
+alpha>0 픽셀 226개 전부 alpha≤4, 좌석 아래 다리 사이 밴드도 alpha=0.
+즉 알파를 무시하는 뷰어에만 보이는 잔여 색 데이터이고 올바른 합성기
+에서는 보이지 않으며 크롭에서 버려진다 — DEFERRED 사유 해소. 여백만
+우측 0.85%로 미달 → repad.
+
+### 2. 처리와 등록(156차 Flower Garden과 동일 최소 패턴)
+
+크롭 → 비율 유지 축소(130×77) → 좌우 대칭·하단 5% 여백으로 144×96(2x)/
+72×48(1x) 배치 → PNG+WebP(무손실) 4파일 **신규**(이 asset_key 최초
+아트). 계약 전 항목 PASS(최소 여백 4.86%), 앱 지면색 합성 미리보기
+헤일로/사각 배경 없음. `index.js`에 `import bench` + `'decorations/bench':
+bench` 1줄(23번째 키, 기존 22개와 동일 패턴). 렌더러/카탈로그 무변경 —
+`assetKeyFor()`는 153차부터 'decorations/bench'를 정확히 파생. 정적 계약
+테스트: `testTownV2Static.mjs`(EXPECTED 목록 23개, "bench 아직 없음"
+assertion 제거, 113→112), `testTownUiStatic.mjs`(STILL_EMOJI_ONLY 목록이
+비어 해당 check 제거, EXPECTED 23개 정확 일치 유지, 126→125) — 사실이
+아니게 된 부재 단언만 제거, 초과 키 검출은 그대로(약화 아님).
+
+### 3. 검증
+
+`npm run build` 클린 · 매니페스트 감사 "배선됨, 4파일 전부 존재" + 고아
+자산 0 · `testTownV2Static` 112/112 · `testTownSceneV2` 259/259 ·
+`testTownUiStatic` 125/125 · `testTownAssetManifest` 487/487 ·
+`testTownAssetValidator` 32/32 · `testStaleChunkRecovery` 102/102 ·
+`verify:e2e` 972/972(단독 실행) · V2 리드 시각 검증 360/390/430/200%zoom —
+Tree/Flower Bed/Street Lamp/Red Post Box/Bench를 실제 보관함 UI로 연속
+배치((1,1)/(2,1)/(4,1)/(5,1)/(6,1)), 전부 실제 `<img>`+`naturalWidth>0`,
+84/84 PASS · V1 읽기 전용 회귀(`v1BenchCheck.mjs`, 커밋 안 함) 보관함+
+격자 실제 이미지 24/24 PASS · 2배 확대 크롭 육안: P0 7종이 한 화면에
+접지·클리핑 없음·헤일로 없음·스케일 위계 자연스러움.
+
+### 4. 최종 P0 감사(읽기 전용)와 산출물
+
+매니페스트 감사 7종 전부 "배선됨, 4파일 전부 존재", `TOWN_ASSETS` 23개
+키, `paulTownV2: false`(features.js:112). design 브랜치 대비 이 브랜치
+변경은 art 파이프라인/자산/테스트/문서에 한정, `townCatalog.js`/
+`townLevel.js`/V1 4개 화면/`api/`/`supabase*` 무접촉(diff 빈 결과).
+커밋: art `e52130c`, 등록+테스트 `9497399`, 이 handoff 갱신 커밋(전부
+로컬만). **P0 7/7 완료.** 미결(후속 세션): 153차 mock 픽스처 assetKey
+버그(`mockRoutes.mjs:267` + `townCatalog.js:88` 서버키 우선) —
+V1 검증에서 house/decoration 카테고리 항목이 매번 이모지로 먼저 나오는
+원인이라 우선 수정 권장, `town-lot-*` E2E 커버리지 갭, 스크래치패드
+시각 검증 스크립트(`p0First3VisualProof.mjs`/`v1*Check.mjs`)의 정식
+e2e 스펙 승격 검토. 다음 게이트: 운영자 push 승인 → REVIEW-ONLY PR.
+
+## 2026-09-17 (158차) — Red Post Box 드롭인 + Bench 차단(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): P0 6/7
+
+### 0. 안전 요약
+
+동일 전용 브랜치, main 무접촉, 코드 변경 0(Red Post Box 자산 파일 4개
+교체만; Bench는 파일/코드 모두 무접촉), DB/SQL/경제/카탈로그/가격/레벨/
+플래그 변경 0(`paulTownV2` 여전히 false), merge/deploy/push 0, 보호
+파일 17개 무접촉, 완료된 P0 5종과 `index.js`/Town 코드 전부
+byte-identical(git diff 빈 결과), 새 npm 패키지 0개.
+
+### 1. Red Post Box — 파일명은 "post lamp 2.png"였지만 내용은 우체통
+
+운영자 제공 파일명이 `post lamp 2.png`라 먼저 내용을 육안 확인 —
+빨간 우체통 맞음. `colorType=6(RGBA)`, 실제 투명 57.36%. 알파를
+무시하는 뷰어에서는 랜턴 글로우처럼 상단에 붉은/하단에 초록 헤일로가
+보였으나, 픽셀 분석 결과 그 영역은 **alpha=0인 픽셀에 남은 색 데이터**
+(예: (157,32,35,0))였다 — 콘텐츠 바운딩박스 밖에 alpha>0 픽셀은 218개뿐,
+전부 alpha≤4, 5 이상은 0개. 즉 올바른 합성기에서는 보이지 않고, 크롭
+단계에서 어차피 버려진다(baked glow 아님). 여백만 2.80%로 미달 →
+repad. 처리: 동일 파이프라인으로 144×216(2x)/72×108(1x) PNG+WebP
+(무손실) 4파일 교체. 앱의 밝은 지면색 위에 합성한 미리보기로 헤일로/
+번짐 없음 확인. `decorations/red-post-box`는 이미 등록된 키라 코드
+변경 0.
+
+### 2. Red Post Box 검증
+
+`npm run build` 클린 · 매니페스트 감사 "배선됨, 4파일 전부 존재" ·
+`testTownV2Static` 113/113 · `testTownSceneV2` 259/259 ·
+`testTownUiStatic` 126/126 · `testTownAssetManifest` 487/487 ·
+`testTownAssetValidator` 32/32 · `verify:e2e` 972/972(단독 실행) ·
+V2 리드 시각 검증 360/390/430/200%zoom — Tree/Flower Bed/Street Lamp/
+Red Post Box를 실제 보관함 UI로 연속 배치((1,1)/(2,1)/(4,1)/(5,1)),
+전부 실제 `<img>`+`naturalWidth>0`, 72/72 PASS · V1 읽기 전용 회귀
+(`v1PostBoxCheck.mjs`, 커밋 안 함) 보관함+격자 실제 이미지 24/24 PASS ·
+2배 확대 크롭 육안: 가로등 옆 지면에 접지, 스케일은 가로등보다 약간
+낮고 집보다 낮아 그럴듯함, 클리핑/왜곡/불투명 배경/헤일로 없음. 6종
+(My House/Book Shop/Tree/Flower Garden/Street Lamp/Red Post Box)이 한
+화면에 함께 렌더됨을 스크린샷으로 확인.
+
+### 3. Bench 차단 — 진짜 알파 없음(1차 Tree와 동일 결함)
+
+운영자 제공 `bench11.png`: `mode=RGB`, 알파 밴드 없음, 투명 픽셀 0%,
+체커보드가 실제 불투명 픽셀로 구워져 있음(육안 확인). 배경 120×40
+패치에서 서로 다른 색이 402개 — 깔끔한 2색 격자가 아니라 번진
+체커보드라 색 기반 자동 복구도 신뢰 불가(1차 Tree 분석과 동일 결론).
+운영자 지시서의 명시 규칙("실제 알파가 아니면 STOP, 배경 자동 제거
+금지")대로 통합하지 않았고 파일/코드/테스트 전부 무접촉. 필요한 것:
+원본 생성 도구에서 진짜 RGBA 알파를 보존한 재수출(144×96 캔버스 기준,
+bench.webp). 도착 시 절차는 156차 Flower Garden과 동일 — 파일 4개
+신규 + `index.js` import/키 1줄 + 정적 계약 테스트 2개(키 개수 22→23,
+"bench 아직 없음" assertion 제거) 갱신.
+
+### 4. 산출물/커밋/미결
+
+변경 파일 4개(`src/assets/town/decorations/red-post-box.*`). 커밋: art
+1건 + 이 handoff 갱신 커밋(로컬만). P0 6/7 완료, Bench만 남음(소스
+대기). 153차 mock 픽스처 assetKey 버그(`mockRoutes.mjs:267` +
+`townCatalog.js:88` 서버키 우선)·`town-lot-*` E2E 커버리지 갭 여전히
+미결. 156차 항목의 "street-lamp/red-post-box는 작업 불필요" 문구는
+"기존 아트로 hot-swap 가능 상태"라는 뜻이었고, 실제로는 157/158차에서
+최종 아트로 교체됐다(정정).
+
+## 2026-09-16 (157차) — British Street Lamp 드롭인(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): 기존 asset_key 파일 교체만, V1/V2 라이브 확인
+
+### 0. 안전 요약
+
+동일 전용 브랜치, main 무접촉, 코드 변경 0(순수 자산 파일 4개 교체),
+DB/SQL/경제/카탈로그/가격/레벨/플래그 변경 0(`paulTownV2` 여전히
+false), merge/deploy/push 0, 보호 파일 17개 무접촉, 완료된 P0 4종
+(My House/Book Shop/Tree/Flower Garden)과 `index.js`/Town 코드 전부
+byte-identical(git diff 빈 결과로 확인), 새 npm 패키지 0개, `-on`
+변형 미생성(등록된 변형 없음).
+
+### 1. 사전 준비 보고(읽기 전용)와 소스 검증
+
+운영자 요청으로 먼저 코드 무변경 상태에서 남은 3종의 드롭인 경로만
+확인해 보고: street-lamp/red-post-box는 `TOWN_ASSETS`에 이미 키가 있고
+파일 4개씩 존재해 파일 교체만으로 완료(코드 변경 불필요, V1 공용 영향
+있음), bench는 매니페스트/카탈로그는 있으나 파일도 키도 없어
+flower-garden과 같은 최소 등록(import+키 1줄 + 정적 계약 테스트 2개
+갱신)이 필요. 이후 운영자가 `street lamp 2.png` 제공 — `colorType=6
+(RGBA)`, 실제 투명 85.25%(가늘고 긴 가로등이라 정상), 평면화/체커보드
+배경 아님. 여백만 상단 1.24%/하단 1.95%로 계약(≥4%) 미달 → repad
+범주. 랜턴 주변의 따뜻한 글로우는 의도된 반투명 픽셀로 보고 그대로
+보존(partial-alpha 1.52%로 얇음, 배경 글로우/비네트와 다름).
+
+### 2. 처리
+
+동일 파이프라인 — 알파 바운딩박스 크롭(피니얼/랜턴/배너/꽃/받침 전부
+포함) → 비율 유지 축소(스트레치 없음, 세로 기준 맞춤이라 좌우 여백
+29%) → 좌우 대칭·하단 5% 여백으로 144×288(2x)/72×144(1x) 캔버스에
+bottom-anchor 배치 → PNG+WebP(무손실) 4파일 생성 →
+`src/assets/town/decorations/street-lamp.{png,webp,@2x.png,@2x.webp}`
+교체. 재검증: 계약 전 항목 PASS(최소 여백 4.86%), WebP 컨테이너 VP8L
+무손실·alpha=true·치수 정확.
+
+### 3. 검증 — V2 + V1 양쪽 라이브
+
+`npm run build` 클린 · `testTownV2Static` 113/113 · `testTownSceneV2`
+259/259 · `testTownUiStatic` 126/126 · `testTownAssetManifest` 487/487 ·
+`testTownAssetValidator` 32/32 · 매니페스트 감사 "배선됨, 4파일 전부
+존재" · `verify:e2e` 972/972(단독 실행) · V2 리드 시각 검증(스크래치패드
+전용) — 360/390/430/200%zoom, 실제 보관함 UI로 Tree/Flower Bed/Street
+Lamp 연속 배치((1,1)/(2,1)/(4,1)), 전부 실제 `<img>`+`naturalWidth>0`,
+60/60 PASS. 2배 확대 크롭 육안: 가로등이 길 옆 지면에 접지, 글로우가
+사각 헤일로를 만들지 않음, 배너는 장식으로 읽힘, 스케일은 화단보다
+높고 집보다 낮아 그럴듯함, 클리핑/왜곡/불투명 배경 없음.
+**V1 읽기 전용 회귀**(`paulTownV1`만 ON, V2 OFF, 신규 스크립트
+`v1StreetLampCheck.mjs`, 커밋 안 함): 보관함 목록 + 8×6 격자 배치에서
+실제 이미지 렌더 확인, 360/390/430 24/24 PASS, 가로 오버플로/콘솔 에러 0.
+
+### 4. V1 검증에서 mock 픽스처 버그 재현 — 원인 한 단계 더 확정
+
+V1 첫 실행에서는 가로등이 이모지로 나왔다(imgs=0). 원인은 153차에
+기록한 공유 픽스처 버그 그대로 — `tests/e2e/lib/mockRoutes.mjs:267`이
+`assetKey: 'decoration/street-lamp'`(원본 category)를 내려보내고,
+`townCatalog.js:88`의 `pick(s, 'assetKey', 'asset_key', assetKeyFor(...))`
+가 **서버 제공 assetKey를 클라이언트 파생값보다 우선**하므로 잘못된
+키가 그대로 `townAsset()`에 들어가 null → 이모지. 즉 V1/V2 공통으로
+"카테고리 폴더명 ≠ 카테고리명"인 항목(house/decoration)만 픽스처에서
+깨지고, tree(nature)처럼 같은 문자열인 항목은 우연히 통과한다(153차
+관찰과 일치). 스크래치패드 스크립트에만 V2와 동일한 in-page fetch
+보정을 넣어 재실행 → 24/24 PASS로 V1 실제 코드 경로는 정상임을 확정.
+픽스처 파일 자체는 이번에도 손대지 않음(공유 픽스처, 별도 회귀 패스
+필요 — 여전히 후속 과제).
+
+### 5. 산출물/커밋/미결
+
+변경 파일 4개(`src/assets/town/decorations/street-lamp.*`). 커밋: art
+1건 + 이 handoff 갱신 커밋(chore 브랜치 로컬만). P0 진행: 5/7 완료
+(My House/Book Shop/Tree/Flower Garden/Street Lamp). 남은 것: Red Post
+Box(파일 교체만, 코드 변경 불필요), Bench(최소 등록 필요, 파일 미존재).
+153차 mock 픽스처 assetKey 버그·`town-lot-*` E2E 커버리지 갭 여전히 미결.
+
+## 2026-09-16 (156차) — Flower Bed 드롭인(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): nature/flower-garden 신규 등록, 최초로 이모지 폴백에서 실제 아트로 전환
+
+### 0. 안전 요약
+
+동일 전용 브랜치, main 무접촉, DB/SQL/경제/카탈로그/가격/레벨/플래그
+변경 0(`paulTownV2` 여전히 false), merge/deploy/push 0, 보호 파일 17개
+무접촉, My House/Book Shop/Tree 아트·사이징 무접촉(git diff로 확인),
+V1 소스 파일 byte-identical, 새 npm 패키지 0개.
+
+### 1. 이전 3종과의 차이 — 파일 교체가 아니라 최초 등록
+
+154/155차(My House/Book Shop/Tree)는 이미 `TOWN_ASSETS`에 키가 있어
+기존 파일 4개를 교체하는 작업이었다. flower-garden은 처음부터 파일
+자체가 없었고 `TOWN_ASSETS`에 키도 없어(153차에서 확인) `townAsset
+('nature/flower-garden')`이 항상 null → 모든 호출부가 이모지(🌷)로
+폴백하던 상태였다. 이번이 처음으로 이 asset_key에 실제 이미지가
+등록된 순간이다. 카탈로그 쪽 `assetKeyFor()`/`mergeCatalog()`는 이미
+153차에 정확히 검증돼 있어(코드 변경 0), 이번 작업은 오직
+`src/assets/town/index.js`에 신규 import 1줄 + `TOWN_ASSETS` 키 1줄
+추가뿐이다 — 기존 21개 자산이 전부 이 파일에서 정확히 같은 패턴을
+쓰고 있어 "새 렌더 경로"가 아니라 이미 있는 패턴의 22번째 반복.
+
+### 2. 소스 검증과 처리
+
+운영자가 제공한 `flower bed.png` — `colorType=6(RGBA)`, 실제 투명
+45.97%로 진짜 알파 확인(체커보드/평면화 배경 아님). 여백 1건만
+2.18%로 계약(≥4%) 미달이었으나 My House/Book Shop/Tree와 동일한
+"0~4%는 repad로 해결 가능" 카테고리라 repad 진행. 콘텐츠 바운딩박스
+크롭 → 비율 유지 축소(가로 세로 중 짧은 쪽 기준, 스트레치 없음) →
+좌우 대칭 5% + 하단 5% 여백으로 192×128(2x)/96×64(1x) 캔버스에 배치 →
+PNG+WebP(무손실) 4파일 신규 생성.
+
+### 3. 코드 변경 — 최소 등록 + 정적 계약 테스트 갱신
+
+`src/assets/town/index.js`에 `import flowerGarden from
+'./nature/flower-garden.webp'` + `'nature/flower-garden': flowerGarden,`
+2줄 추가(기존 파일 구조·패턴 그대로 따름). 이 파일은 V1/V2 공용
+`townAsset()` resolver의 유일한 데이터 소스라, flower-garden을 보유한
+모든 화면(V1 TownGrid/TownShopPanel/TownInventory, V2 TownObjectLayer
+전부)이 즉시 실제 이미지로 바뀐다 — V1 소스 코드 자체(JSX/로직)는
+한 줄도 안 건드렸고 공용 데이터 테이블 갱신의 자연스러운 파급효과다.
+이 파급효과 때문에 정확한 키 개수(21→22)를 하드코딩해 둔 정적 계약
+테스트 2개가 함께 깨지므로 예상된 방식대로 갱신: `testTownV2Static.mjs`
+(flower-garden "아직 없음" assertion 제거 — 그 assertion 자신의 주석이
+"아트 등록되면 의도적으로 깨져야 정상"이라고 이미 예고), `testTownUiStatic.mjs`
+(동일 패턴, bench는 그대로 이모지 목록에 유지). bench는 이번 작업
+지시서가 명시한 대로 전혀 손대지 않음(파일도 없고 코드도 무변경).
+
+### 4. 검증
+
+`npm run build` 클린 · `testTownV2Static` 113/113(테스트 1개 제거로
+114→113, FAIL 0) · `testTownSceneV2` 259/259 · `testTownUiStatic`
+126/126(V1 byte-identical) · `testTownAssetManifest` 487/487 ·
+`testTownAssetValidator` 32/32 · 매니페스트 감사 — `nature/flower-garden`
+"배선됨, 4파일 전부 존재" PASS, `decorations/bench`는 여전히 SPEC_ONLY로
+정상 표시 · `verify:e2e` 972/972 · 리드 자체 시각 검증(스크래치패드
+전용, 커밋 안 함) — 360/390/430px에서 실제 보관함 UI로 Tree+Flower Bed
+연속 배치(빈 칸 (1,1)/(2,1)) → 둘 다 실제 `<img>` 렌더+`naturalWidth>0`
+확인, My House/Book Shop 항목까지 합쳐 48/48 PASS. 스크린샷으로 4종
+(My House/Book Shop/Tree/Flower Bed) 전부가 한 화면에 자연스러운
+상대 크기로 함께 배치된 상태 확인 — Flower Bed는 눈에 띄게 작고
+낮게 배치돼 나무/건물과의 스케일 위계가 그럴듯함, 붕 뜬 오브젝트/
+클리핑/불투명 배경/왜곡 없음.
+
+### 5. 디버깅 메모(스크래치패드 스크립트 자체 버그, 앱 코드와 무관)
+
+시각 검증 스크립트 작성 중 "두 번째 인벤토리 아이템 배치 시 타임아웃"
+버그를 겪음 — 원인은 스크립트 자체의 중복 `town-open-inventory` 클릭
+호출(리팩터링 잔재)이 시트를 두 번 열어 백드롭이 겹친 것으로, 앱
+코드/실제 사용자 플로우와는 무관한 스크립트 버그였음을 확인 후 수정.
+기록으로만 남김(코드베이스에 영향 없음, 커밋 대상 아님).
+
+### 6. 산출물/커밋/미결
+
+변경 파일 3개(`src/assets/town/index.js`,
+`scripts/testTownV2Static.mjs`, `scripts/testTownUiStatic.mjs`) + 신규
+파일 4개(`src/assets/town/nature/flower-garden.{png,webp,@2x.png,@2x.webp}`).
+커밋 2건(art `03d8333`, 등록+테스트 `2f60b29`) + 이 handoff 갱신 커밋,
+전부 chore 브랜치 로컬만. 남은 P0 자산: bench(파일 자체 미존재, 다음
+세션), street-lamp/red-post-box는 이미 배포된 기존 아트로 hot-swap
+대상일 뿐 이번에도 손댈 필요 없음. 153차가 남긴 mock 픽스처 assetKey
+버그, `town-lot-*` E2E 커버리지 갭도 여전히 미결.
+
+## 2026-09-16 (155차) — Tree 재수출본 배선(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): P0 첫 3종(My House/Book Shop/Tree) 전부 실물 교체 완료
+
+### 0. 안전 요약
+
+동일 전용 브랜치, main 무접촉, DB/SQL/경제/카탈로그/가격/레벨/플래그
+변경 0(`paulTownV2` 여전히 false), merge/deploy/push 0, 보호 파일 17개
+무접촉, 코드 변경 0(순수 자산 파일 교체만 — nature/tree는 이미 hot-swap
+가능한 기존 경로였음), 새 npm 패키지 0개.
+
+### 1. 경과 — 같은 파일 재전송 2회 확인 후 실제 재수출본 도착
+
+운영자가 154차에서 차단 판정한 `Tree 192×256.png` 경로를 이후 2회 다시
+보냈으나 MD5/타임스탬프가 완전히 동일함을 매번 재검증해 "재수출 아님"을
+확인·보고(자동 진행하지 않고 정직하게 재확인 결과만 전달). 추가로 체커보드
+자체가 깔끔한 2색 격자가 아니라 셀 경계가 부드럽게 번져 있어(220/227/236
+등 중간값 다수) 색상 기반 자동 복구도 신뢰할 수 없음을 픽셀 샘플링으로
+확인해 "자동 복구 시도 안 함" 판단을 재확인. 이후 운영자가 새 파일
+`tree 2.png`를 제공 — 검증 결과 `colorType=6(RGBA)`, 실제 투명 43.10%로
+진짜 알파 채널 보유 확인, 즉시 처리 진행.
+
+### 2. 처리와 배선
+
+My House/Book Shop과 동일 파이프라인 — `validateTownAssetCandidate.mjs`로
+알파/여백 객관 검증(여백 1.38%로 1건만 FAIL, repad로 해결되는 범주) →
+콘텐츠 바운딩박스 크롭 → 비율 유지 축소 → 기존 규칙(좌우 대칭, 하단 5%
+여백, bottom-anchor)으로 재배치 → 1x(96×128)/2x(192×256) PNG+WebP(무손실)
+생성 → `src/assets/town/nature/tree.{png,webp,@2x.png,@2x.webp}` 4파일
+교체. 재배치 후 여백 전부 5%대로 계약(≥4%) 통과. asset_key(`nature/tree`)
+불변, 코드 무변경 — nature/tree는 이미 교체 전부터 hot-swap 가능한 기존
+경로였다(153차 P0 핸드오프 문서 기준).
+
+### 3. 검증 — 파일 계약뿐 아니라 실제 배치 플로우로 라이브 확인
+
+`npm run build` 클린 · `testTownV2Static` 114/114 · `testTownSceneV2`
+259/259 · `testTownUiStatic` 126/126(V1 무변경) · 매니페스트 감사 —
+`nature/tree` "배선됨, 4파일 전부 존재" PASS · `verify:e2e` 972/972 ·
+리드 자체 시각 검증 스크립트 확장(스크래치패드 전용, 커밋 안 함) —
+360/390/430px에서 실제 보관함(TownInventory) UI로 "마을에 놓기" 클릭 →
+빈 칸(1,1) 클릭 → 배치 완료 → 실제 `<img>` 렌더(placeholder/이모지
+아님)와 `naturalWidth>0`까지 확인(fixture 우회 없이 진짜 앱 플로우로
+검증). My House/Book Shop 항목까지 합쳐 4개 조건 × 36개 단언 전부 PASS.
+스크린샷으로 Tree/Book Shop/My House 3종이 한 화면에 자연스러운
+상대 크기로 함께 배치된 상태 확인 — 붕 뜬 오브젝트/클리핑/불투명
+배경/왜곡 없음.
+
+### 4. 산출물/커밋/미결
+
+변경 파일 4개 — `src/assets/town/nature/tree.{png,webp,@2x.png,@2x.webp}`.
+커밋 예정(이 handoff 갱신과 함께, chore 브랜치, 로컬만). 이로써 이번
+"P0 첫 3종" 과제(My House/Book Shop/Tree)가 전부 완료. 나머지 P0 자산 중
+street-lamp/red-post-box는 이미 배포된 기존 아트로 hot-swap 대상일 뿐이라
+이번 세션이 손댈 필요가 없었고, flower-garden/bench는 여전히 실제 이미지
+파일 자체가 없어 다음 세션 과제로 남는다(카탈로그 쪽 assetKey 배선은
+153차에서 이미 검증 완료). 153차가 남긴 mock 픽스처 assetKey 버그,
+`town-lot-*` E2E 커버리지 갭도 여전히 미결.
+
+## 2026-09-16 (154차) — P0 첫 3종 아트 실물 교체(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): My House/Book Shop 2종 실제 교체, Tree 차단, my-house 이중 렌더 버그 발견+수정
+
+### 0. 안전 요약
+
+코드 변경은 동일 전용 브랜치에만 존재, main 무접촉, DB/SQL/경제/카탈로그/
+가격/레벨/플래그 변경 0(`paulTownV2` 여전히 false), merge/deploy/push 0
+(로컬 커밋만, push는 운영자 명시 승인 필요), 미추적 보호 파일 17개
+무접촉, 새 npm 패키지 0개(이미 설치돼 있던 시스템 Python+Pillow로
+PNG 리사이즈/WebP 인코딩만 수행, `package.json` 무변경).
+
+### 1. 요청과 실행 범위
+
+운영자가 지정한 3종(My House/Book Shop/Tree, 각 지정 캔버스 256×320·
+256×320·192×256) 실제 완성 아트를 기존 P0 파이프라인에 배선하는 작업.
+소스는 `Downloads/영국교사폴/My House 256×320.png` 등 3개 PNG. 처리:
+`scripts/validateTownAssetCandidate.mjs`(2026-09-14 작성된 기존
+무의존성 PNG/WebP 객관 검증 도구)로 알파 채널/여백을 먼저 확인 → 콘텐츠
+바운딩박스로 크롭 → 비율 유지 축소 → 기존 배포 자산과 동일한 규칙
+(좌우 대칭 여백, 하단 5% 여백, bottom-anchor)으로 투명 캔버스에 재배치
+→ 1x/2x PNG+WebP(무손실, 기존 `nature/tree.webp`와 동일 인코딩) 총 8개
+파일 생성 → `src/assets/town/buildings/`의 기존 4파일 세트 2벌(my-house,
+book-shop) 교체.
+
+### 2. Tree 차단 — 투명 채널이 실제로 없음(운영자 요구사항 자체가 명시한 실패 조건)
+
+`Tree 192×256.png`를 검증 도구로 확인한 결과 `colorType=2(RGB)`,
+투명 픽셀 0% — 알파 채널이 아예 없는 파일이었다. 육안 확인 결과 흔한
+이미지 편집기의 "투명 배경 미리보기" 체커보드 패턴이 실제 불투명 RGB
+픽셀로 그대로 구워져(bake) 있었다 — 운영자가 이번 지시에서 명시적으로
+금지한 바로 그 실패 사례("verify the source really has transparency; do
+not bake checkerboard/background pixels")였다. 신뢰할 수 없는 픽셀 휴리스틱
+(예: "밝은 회색조는 지운다")으로 되살리려 시도하지 않고 — 실제 나뭇잎
+하이라이트를 잘못 지울 위험이 크다 — Tree는 배선하지 않았다. 기존
+`nature/tree.webp`(세션 시작 전부터 있던 아트)는 완전히 무접촉으로
+남아있다. 재생성 시 원본 생성 단계에서 진짜 RGBA(PNG-32) 알파 채널을
+보존해 내보내야 한다는 점이 정확한 재작업 지시다.
+
+### 3. 신규 발견+수정 — my-house 이중 렌더(녹색 placeholder 박스), 153차 이전부터 존재하던 버그
+
+새 My House 아트를 배선한 뒤 360/390/430px 시각 확인 중, 집 아트 뒤에
+녹색 반투명 박스(`bg-[#8fb37a]/70 border-2`)가 테두리처럼 도드라지게
+겹쳐 보이는 결함을 발견했다. 원인: `LOTS` 지오메트리 배열에는 my-house도
+포함(7개 중 하나, 위치 계산용)돼 있지만 `townCatalog.js` 카탈로그
+아이템은 아니라서(무료/항상소유 고정 자산), `TownObjectLayer.jsx`의 LOTS
+렌더 루프가 `itemById['my-house']`를 조회하면 항상 undefined → `hasArt`가
+항상 false로 남아 **집 전용 렌더 블록(`data-testid="town-home"`, 실제
+아트를 그리는 곳)과 별도로** LOTS 루프가 my-house 자리에 옛 solid
+placeholder 박스를 추가로 겹쳐 그리고 있었다. `git show 75252bc`로
+직접 대조 확인 — 153차 패치 이전부터 존재하던 조건(`built ? 박스 : ...`가
+모든 built 로트에 무조건 적용되던 옛 코드)이라 **153차가 만든 회귀가
+아니라 사전 존재 버그**이며, 이번에 사진형 아트로 교체하면서 육안으로
+처음 도드라져 보인 것이다. 수정: `TownObjectLayer.jsx`의 LOTS 루프에
+`if (lot.id === 'my-house') return null` 한 줄을 `hidden` 판정 바로
+다음에 추가 — my-house는 원래 이 루프가 소유할 대상이 아니었으므로(전용
+블록이 유일 소유), 새 렌더 경로를 만들지 않고 기존 전용 블록에 단독
+소유권을 돌려주는 최소 수정. `town-lot-my-house`를 참조하는 테스트/코드는
+전무함을 grep으로 확인 후 진행. 수정 전/후 모두 `testTownV2Static`
+114/114, `testTownSceneV2` 259/259(둘 다 LOTS 데이터/`lotState()` 순수
+함수 자체는 무변경이라 그대로 통과) — 회귀 없음.
+
+### 4. 검증
+
+`npm run build` 클린(2회, 아트 교체 직후 + my-house 수정 직후) ·
+`testTownV2Static` 114/114 · `testTownSceneV2` 259/259 · `testTownUiStatic`
+126/126(V1 무변경 재확인) · `node scripts/validateTownAssetCandidate.mjs
+--audit` — my-house/book-shop 둘 다 "배선됨, 4파일 전부 존재" PASS ·
+`verify:e2e` 972/972(2회 재실행, 아트 교체 후 1회 + 버그 수정 후 1회) ·
+리드 자체 제작 시각 검증 스크립트(스크래치패드 전용, 커밋 안 함) —
+360/390/430px + CSS `documentElement.style.zoom=2`(200%) 4개 조건 ×
+My House 실제 `<img>` 렌더/로드, Book Shop 로트 상태, 가로 오버플로 0,
+콘솔 에러 0 = 24/24 PASS. Book Shop 로트의 실 DOM `<img>` 확인은 153차가
+문서화한 기존 mock 픽스처 버그(`tests/e2e/lib/mockRoutes.mjs:267`,
+assetKey를 원본 category로 잘못 생성)에 막히므로, 공유 픽스처 파일은
+건드리지 않고 스크래치패드 스크립트 안에서만 `window.fetch`를 감싸
+`CATEGORY_FOLDER` 매핑으로 응답의 assetKey를 보정해 확인(실제 앱 코드
+경로 자체를 검증한 것, 픽스처를 고친 것이 아님).
+
+### 5. 산출물/커밋/미결
+
+변경 파일 9개 — `src/components/town/v2/TownObjectLayer.jsx`(my-house
+이중 렌더 수정), `src/assets/town/buildings/{my-house,book-shop}{,@2x}.
+{png,webp}` 8개(실물 교체). 커밋 예정(이 handoff 갱신과 함께, chore
+브랜치, 로컬만). 미결 과제(다음 세션, 153차 미결 항목에 추가): (a) Tree
+재생성 필요(RGBA 알파 보존) — 규격은 `nature/tree` 192×256(2x) 그대로,
+(b) 153차가 남긴 mock 픽스처 assetKey 버그 자체 수정 여전히 미착수,
+(c) My House/Book Shop 신규 아트에 텍스트 간판("My Home", "BOOK SHOP" 등)이
+포함돼 있음 — 스토리북 톤에는 부합하나 원래 P0 스펙에 텍스트 요구사항이
+없었으므로 운영자 육안 승인 필요(주관적 판단이라 자동 게이트 대상
+아님, 차단 사유로 보지 않고 정보로만 기록).
+
+## 2026-09-16 (153차) — P0 아트 연결 패치(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): 6개 고정 로트 art resolver 연결 + 독립 QA가 문서 오류 발견 + 리드가 별도 mock fixture 버그 발견
+
+### 0. 안전 요약
+
+코드 변경은 신규 전용 브랜치(`chore/paul-town-p0-art-pipeline-2026-09-16`,
+`design/paul-town-world-redesign-2026-09-16`에서 분기)에만 존재, main
+무접촉, DB/SQL/경제/카탈로그/가격/레벨/플래그 변경 0(`paulTownV2` 여전히
+false), merge/deploy/push 0(로컬 커밋만, PR 미오픈 — push는 운영자 명시
+승인 필요), 미추적 보호 파일 17개 무접촉.
+
+### 1. 패치 내용
+
+`TownObjectLayer.jsx`의 고정 로트(LOTS 7개 중 my-house 제외 6개) 렌더링을
+일반화 — `itemById[lot.id]` → `spriteFor()` → `townAsset(assetKey)`로 기존
+자산 리졸버를 재사용해, 이미 등록된 아트가 있으면 `TownSprite`로 그리고
+없으면 기존 placeholder 박스로 안전 폴백. 로트별 특수 코드 없이 6개
+전부에 동일 조건이 자동 적용됨. geometry(left/top/width/aspectRatio/
+zIndex)는 두 분기 모두 동일(변경 없음). flower-garden/bench는 카탈로그
+쪽 `assetKeyFor()`가 이미 정확히 해석함을 신규 테스트로 확인(코드 변경
+불필요, 파일 자체가 없어 import 불가 — 파일 도착 시 1줄 등록만 필요,
+매니페스트 문서 참고).
+
+### 2. 독립 QA가 발견한 사실 — 최초 코드 주석 오류
+
+최초 구현 주석이 "book-shop만 아트가 등록돼 있고 나머지 5개(cafe/
+stone-fountain/bridge/english-school/clock-tower)는 미등록"이라고
+적었으나, 독립 qa-reviewer가 실제 `TOWN_ASSETS`를 직접 대조해 **6개 전부
+이미 등록돼 있음**을 발견(book-shop만이 아님) — 리드가 재확인 후 주석을
+정정(2026-09-16). 5개 자산은 원래 V1 격자 배치용(대략 정사각형 칸)으로
+배포된 것이라, 이번 로트 렌더러의 전혀 다른 박스 비율(예: clock-tower
+1:2.75, bridge 1:0.45)로 그려지는 조합은 이번이 처음 — QA는 이를 시각
+미검증 리스크로 Major 등급 지적.
+
+### 3. 리드가 QA 후속 시각 확인 중 발견한 별도 버그(패치와 무관, 사전 존재) — mock fixture assetKey 오류
+
+QA가 지적한 시각 검증 갭을 메우려 리드가 Playwright로 360/390/430px에서
+6개 로트 전부 소유 상태로 실측한 결과, book-shop/cafe/stone-fountain
+3개는 여전히 placeholder 박스만 보이고(bridge/english-school/clock-tower
+3개는 정상적으로 실제 아트 렌더) — 원인 추적 결과 **실제 앱 코드가
+아니라 공유 e2e mock 픽스처**(`tests/e2e/lib/mockRoutes.mjs:267`)가
+`assetKey: \`${category}/${id}\`` 형태로 원본 category 문자열을 그대로
+써서(예: `house/book-shop`, `decoration/stone-fountain`) `townCatalog.js`의
+실제 `assetKeyFor()`가 쓰는 `CATEGORY_FOLDER` 매핑(house→buildings,
+decoration→decorations, special→special)과 다른 값을 만들어냄 — 우연히
+special 카테고리만 폴더명과 문자열이 같아(special→special) 그 3개
+(bridge/school/tower)는 정상으로 보였을 뿐. `CATEGORY_FOLDER` 직접
+대조로 실제 프로덕션 코드 경로(진짜 `mergeCatalog`/`assetKeyFor`)는 6개
+전부 정확히 해석됨을 확인 — 이번 세션 패치가 만든 회귀가 아니라, 이
+공유 mock 픽스처에 있던 **기존 결함**이 처음으로 드러난 것. 모든 town
+e2e spec이 이 픽스처를 공유하므로 수정 범위가 넓어 이번 세션에서는
+고치지 않고 후속 세션 과제로 남김(§4).
+
+### 4. 산출물/미결
+
+신규 문서 `docs/design/town/P0_ART_DROPIN_MANIFEST_2026-09-16.md`
+(운영자용 7종 자산 투입 매뉴얼). 커밋 `75252bc`(chore 브랜치, 로컬만).
+검증: 리드가 build/`testTownV2Static` 114/114/`testTownSceneV2`
+259/259/`testTownUiStatic` 126/126/`verify:e2e` 972/972(1차 실행 로그
+손상으로 재실행해 확인) 전부 직접 재실행, 독립 qa-reviewer가 동일
+스위트 별도 재실행해 같은 숫자 확인 + diff 전체 정독. 미결 과제(다음
+세션): (a) `tests/e2e/lib/mockRoutes.mjs`의 assetKey 생성 로직을 실제
+`assetKeyFor()`와 일치하도록 수정 — 공유 픽스처라 전체 town e2e 스펙
+회귀 재확인 필요, (b) book-shop/cafe/stone-fountain/bridge/
+english-school/clock-tower 6개 로트가 각자의 실제 LOT_ASPECT 비율로
+렌더될 때의 시각 확인(현재는 mock 버그로 3개만 확인됨, 3개는 mock 수정
+후 재확인 필요), (c) `tests/e2e/townV2.spec.mjs`에
+`data-testid="town-lot-*"` 실제 DOM 검증 부재(QA가 지적한 커버리지 갭).
 
 ## 2026-09-16 (152차) — PAUL TOWN WORLD BLUEPRINT V1 작성(PM 디렉티브 응답, 설계 전용) — Owner/Visitor 미래 아키텍처 + Explore 확장 지점 신규 설계
 
