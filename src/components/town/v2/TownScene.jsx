@@ -14,6 +14,16 @@
 // 잡혀 닫히게 한다. Escape로도 닫히고(TownSheet.jsx와 동일 관례), 닫힐 때
 // 그 팝오버를 열었던 버튼으로 포커스를 복귀한다(TownSheet.jsx의 포커스
 // 복귀 패턴과 동일 정신).
+//
+// 2026-09-16 월드 지오메트리 확장 — 고정 8/13 박스를 "구역(district) 세로
+// 스택"으로 교체한다(docs/design/town/WORLD_LAYOUT_REDESIGN_2026-09-16.md,
+// wireframe/paul-town-world-wireframe.html). 새 `level` prop을 받아 모든
+// 하위 레이어에 그대로 전달한다 — 상호작용 로직(팝오버 열기/닫기/Escape/
+// 바깥 탭/핸들러 위임)은 전혀 바꾸지 않고, 그 아래 시각 레이어 5개만
+// 구역 스택을 인식하도록 바뀐다. 루트의 inline aspectRatio는 이제 고정
+// 상수(8/13)가 아니라 sceneHeightUnits(level)로 매 순간 실제 컨텐츠 높이에
+// 맞춰 계산한다(정적 계약이 "aspectRatio 문자열 존재"만 확인하므로 이
+// 동적 계산도 계약을 그대로 만족한다).
 import { useState, useEffect, useRef } from 'react'
 import TownGroundLayer from './TownGroundLayer'
 import TownPathLayer from './TownPathLayer'
@@ -21,10 +31,10 @@ import TownAmbientLayer from './TownAmbientLayer'
 import TownObjectLayer from './TownObjectLayer'
 import TownFogLayer from './TownFogLayer'
 import TownPlacementOverlay from './TownPlacementOverlay'
-import { freeAnchors, Z_LAYERS } from '../../../utils/town/townScene'
+import { freeAnchors, Z_LAYERS, sceneHeightUnits } from '../../../utils/town/townScene'
 
 export default function TownScene({
-  placements, itemById, mode, onCellTap, onStartMove, onStore, richness, gardenPoints, fog,
+  placements, itemById, mode, onCellTap, onStartMove, onStore, richness, gardenPoints, fog, level, ownedIds,
 }) {
   const [openPlacementId, setOpenPlacementId] = useState(null)
   const modeKind = (mode && mode.kind) || 'idle'
@@ -84,11 +94,11 @@ export default function TownScene({
         role="group"
         aria-label="내 마을"
         className="relative w-full overflow-hidden rounded-[28px] card-shadow"
-        style={{ aspectRatio: '8 / 13' }}
+        style={{ aspectRatio: `1 / ${sceneHeightUnits(level)}` }}
       >
-        <TownGroundLayer />
-        <TownPathLayer />
-        <TownAmbientLayer richness={richness} gardenPoints={gardenPoints} />
+        <TownGroundLayer level={level} />
+        <TownPathLayer level={level} />
+        <TownAmbientLayer richness={richness} gardenPoints={gardenPoints} level={level} />
         {openPlacementId != null && (
           <button
             type="button"
@@ -107,12 +117,15 @@ export default function TownScene({
           onTogglePlacement={handleTogglePlacement}
           onStartMove={handleStartMove}
           onStore={handleStore}
+          level={level}
+          ownedIds={ownedIds}
         />
-        <TownFogLayer fog={fog} />
+        <TownFogLayer fog={fog} level={level} />
         {modeKind !== 'idle' && (
           <TownPlacementOverlay
-            anchors={freeAnchors(placements)}
+            anchors={freeAnchors(placements, level)}
             onAnchorTap={handleAnchorTap}
+            level={level}
           />
         )}
       </div>

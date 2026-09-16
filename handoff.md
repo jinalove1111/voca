@@ -1,11 +1,701 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-15 (141차 — PR #53/#54 merge·Production 배포 확인
-완료(read-only 클로즈아웃) + Batch 3 최종 완료: street-lamp 신규
-독립형 unlit 후보 확인(APPROVED)으로 7/8 WIRED, bench는 11차 재제출도
-동일 글로우 결함 반복돼 운영자 결정으로 DEFERRED(V2 아트워크 백로그
-이월). art/batch3 브랜치를 병합된 main(PR #53+#54 포함)으로 업데이트
-(testTownV2Static.mjs 자동 merge, 충돌 없음), 전체 회귀 919/919 PASS.
-아직 PR 미오픈·미merge. Production 무접촉. 140차 이하 보존)_
+_최종 갱신: 2026-09-16 (152차 — PAUL TOWN WORLD BLUEPRINT V1 작성(PM
+디렉티브 응답, 설계 전용): 월드맵/레벨진행/고정·커스터마이즈 매트릭스/
+학습→환경 매트릭스/Owner-Visitor 미래 아키텍처(신규)/Explore 확장
+지점(신규)/개정 아트 스펙/PM 수락 테스트 10문항 정리, 코드/DB/SQL/경제/
+카탈로그/가격/레벨/플래그 변경 전부 0, `paulTownV2` 여전히 false. 151차
+이하 보존)_
+
+## 2026-09-16 (152차) — PAUL TOWN WORLD BLUEPRINT V1 작성(PM 디렉티브 응답, 설계 전용) — Owner/Visitor 미래 아키텍처 + Explore 확장 지점 신규 설계
+
+### 0. 안전 요약
+
+코드/DB/SQL/경제/카탈로그/가격/레벨/플래그 변경 0(`paulTownV2` 여전히
+false) · merge/deploy/push 0 · 미추적 보호 파일 17개(`docs/operations/
+ELEMENTARY_45_ROLLOUT_PACKAGE.md`, `production_*.sql` 5개, `supabase_v3_38/
+39/39b/46*.sql` 8개 등) 무접촉 · 이번 세션이 쓴 파일은 신규 설계 문서
+1개(`docs/design/town/PAUL_TOWN_WORLD_BLUEPRINT_V1_2026-09-16.md`)와 이
+`handoff.md` 항목뿐, `PROJECT_BOARD.md`/소스코드 무접촉.
+
+### 1. 배경
+
+PM 디렉티브가 "거부한" 시각 구성(사각 보드, 평평한 지형, 가로 조약돌 띠,
+작은 이모지 집, 붕 뜬 오브젝트)은 실제로는 **오늘 밤 150~151차 빌드
+이전의 상태**였다 — 151차(커밋 `021498e`→`f6f8dd1`→`0f92321`)에서 이미
+그 구성은 폐기되고 6개 district 세로 스택 + 연속 길 + 고정 로트 구조로
+교체·검증 완료된 상태였다. 즉 PM 디렉티브가 참조한 "현재 상태"는 이미
+151차 이후 시점에서는 유효하지 않은 과거 스냅샷이었다는 점을 이번
+블루프린트가 정정해 기록했다 — 이 사실이 블루프린트 작성을 생략할
+사유는 아니며, 오히려 이미 결정된 구조 위에서 요청받은 전 섹션을
+정리해 내놓는 근거가 됐다.
+
+### 2. 산출물
+
+신규 문서 `docs/design/town/PAUL_TOWN_WORLD_BLUEPRINT_V1_2026-09-16.md`
+(221줄) — 10개 섹션: 월드맵(district별 heightUnits→세로 구간 % 변환),
+레벨별 진행(Lv1~Lv8 공간 확장 vs gardenPoints 생기 축 분리), 고정/
+커스터마이즈 매트릭스(카탈로그 17개 전수 분류), 학습→환경 매트릭스
+(gardenRichness 파생 표), Owner/Visitor 미래 아키텍처(신규 설계 —
+SECURITY DEFINER RPC 개념 + 세션 토큰 원칙 + mode prop + 노출 금지
+항목), Explore 확장 지점(신규 설계 — tower 밴드 상단 여백 재사용),
+개정 아트 스펙(`env/plate-*` 배경판 항목 전부 제거, 고립 오브젝트
+스프라이트만 P0/P1/P2로 재편), 비주얼 목업 구조(기존 와이어프레임+
+스크린샷 재사용, 신규 목업 없음), PM 수락 테스트 10문항.
+
+발견한 정정 사항 1건: PM 디렉티브 예시는 FIXED WORLD를 5개(bridge/
+english-school/clock-tower/book-shop/cafe)로 들어 stone-fountain이
+CUSTOMIZABLE인 것처럼 암시했으나, 실제 `WORLD_LAYOUT_REDESIGN_2026-09-16.md`
+§2 OWNER DECISION A 원문은 Stone Fountain을 다른 5개 건물과 동일하게
+"로트 위 고정 건물"로 명시하고 있음을 원문 인용으로 확인해 FIXED
+WORLD로 정정 분류했다(FIXED WORLD 6개 + CUSTOMIZABLE 10개 +
+RECONSIDER 1개, 총 17개).
+
+### 3. 정직하게 표기한 미해결/부분 항목
+
+PM 수락 테스트 10문항 중 2개는 PARTIAL로 답변했다 — 2번("최종 수준
+아트워크로 보이는가") 건물이 여전히 placeholder 도형(my-house만 실제
+승인 아트)이라 P0/P1/P2 아트워크가 실제로 배선돼야 완전한 YES가 됨,
+6번("모바일에서 깨지지 않는가") 검증이 placeholder 도형 기준이라 실제
+아트워크 반영 후 360/390/430px 재검증이 한 번 더 필요함 — 둘 다 숨기지
+않고 명시했다. §10에 미해결 4건: `british-cottage` 카탈로그 아이템
+역할(이월), 펜스 신규 카탈로그 여부(이월), Visitor 모드 권한 범위(반이
+다른 학생 간 방문 — 소셜 그래프 테이블 부재로 신규 미해결), Explore
+기능의 실제 콘텐츠/목적지(신규 미해결, 위치만 제안).
+
+### 4. 다음
+
+운영자가 블루프린트 검토 후 (a) P0 아트워크 생성 재개(개정된 고립
+오브젝트 방식 — `env/plate-*` 배경판 없이 건물/장식 스프라이트만) 또는
+(b) 구역 콘텐츠 확장(Owner/Visitor, Explore 등 §5/§6 설계 항목의 실제
+구현 착수) 중 우선순위 결정.
+
+## 2026-09-16 (151차) — 8시간 야간 자율 빌드 완료: V2 하이브리드 district 렌더러 구현+검증(build/972 e2e/QA독립검토/반응형 시각확인 전부 PASS)
+
+### 0. 안전 요약
+
+Production DB WRITE 0 · SQL 0 · 경제/카탈로그/가격/레벨 변경 0 · 플래그
+변경 0(`paulTownV2` 여전히 false) · merge/deploy/push 0 · Kinney/Production
+무접촉 · 미추적 보호 파일 17개 무접촉 · V1 파일(TownGrid/TownScreen 등
+12개) byte-identical 확인(`git diff --stat` 빈 결과).
+
+### 1. 구현 결과
+
+world-renderer 서브에이전트가 `src/utils/town/townScene.js`(+301줄, 기존
+export 전부 보존)와 V2 컴포넌트 8개(`TownGroundLayer`/`TownPathLayer`/
+`TownFogLayer`/`TownObjectLayer`/`TownAmbientLayer`/`TownPlacementOverlay`/
+`TownScene`/`TownScreenV2`)를 검증된 와이어프레임
+(`docs/design/town/wireframe/paul-town-world-wireframe.html`) 지오메트리
+그대로 포팅해 재작성 — DISTRICTS 6개/LOTS 7개/SPOT_MAP 47칸/구역별 SVG
+path를 코드가 소유하는 결정론적 렌더러로 전환, AI 생성 배경판 방식 완전
+폐기(신규 asset import 0개, `src/assets/town/index.js` 21개 키 그대로).
+`anchorFor`/`zIndexFor`/`freeAnchors`에 `level` 매개변수 추가(기본값으로
+하위호환).
+
+### 2. 검증(전부 리드가 직접 재실행해 독립 확인, 서브에이전트 주장 그대로 믿지 않음)
+
+`npm run build` 클린 통과. `testTownV2Static.mjs` 103/103,
+`testTownSceneV2.mjs` 253/253(87→120개 단언, 순수 추가), `testTownUiStatic.mjs`
+126/126(V1 무회귀 증명), `npm run verify:e2e`(전체 10개 spec) 972/972
+PASS·미mock 요청 0건. 독립 qa-reviewer 서브에이전트가 같은 3개 스위트를
+별도로 재실행해 동일 숫자 확인 + diff 전체를 직접 읽고 PASS 판정
+(Critical/Major 0건, 경계 조건(anchorFor 3번째 인자 기본값, 구역 간
+z-index 스택 불변식, SPOT_MAP NaN 안전성, 테스트 파일 실제로 강화됐는지)
+전부 코드로 직접 검증). 리드가 직접 Playwright로 360/390/430px ×
+Lv1/Lv3/Lv5/Lv8 5개 조합 반응형 시각 확인: town-scene-v2 렌더/가로 오버플로
+0/로트 렌더/NaN·undefined 스타일 0/콘솔 에러 0/미mock 요청 0 총 35/35
+PASS, 스크린샷 5장 육안 확인 — 연속된 하나의 굽은 길이 모든 구역을
+관통, 구역별 배경 톤이 뚜렷이 구분되고(home 따뜻한 크림/모스 → tower
+짙은 네이비), Lv1/3에서는 이미 승인된 batch1 `buildings/my-house` 실제
+아트가 자동으로 재사용됨, for-sale(점선)/built(단색) 로트 상태가
+레벨·소유 여부에 따라 정확히 갈림.
+
+### 3. 남은 작업(명시적으로 범위 밖, 숨기지 않음)
+
+Book Shop/Café/English School/Clock Tower 구역의 실제 콘텐츠(안뜰/장식
+배치 등 세부)는 로트+잠금 처리 수준만 구현, 완전한 콘텐츠는 이번 세션
+범위 밖. 건물/장식 실제 아트워크는 여전히 없음(회색 placeholder 박스,
+명시적으로 "world geometry가 placeholder art에 좌우되지 않는다" 원칙
+준수). 인터랙티브 목적지(건물 탭 → 세부 화면)는 P2로 이미 별도 분류,
+미구현. gardenPoints 생기 레이어는 기존 `gardenRichness()` 재배치만
+완료, 신규 시각 효과 추가는 없음.
+
+### 4. 다음
+
+운영자가 스크린샷을 검토해 이 방향(결정론적 렌더러 + placeholder 아트)을
+승인하면, 다음 단계는 (a) 실제 로트/데코 아트워크 생성 재개(이번엔
+격리된 단일 오브젝트 자산으로, 배경판 방식 아님) 또는 (b) Book Shop/광장
+등 구역 콘텐츠 확장. 두 방향 모두 `paulTownV2` 플래그 OFF 유지 상태에서
+계속 진행 가능.
+
+## 2026-09-16 (150차) — 8시간 야간 자율 작업 착수: AI 배경판 생성 방식 폐기 → 결정론적 렌더러+격리 아트 자산+기존 배치엔진 하이브리드 아키텍처로 전환
+
+### 0. 안전 요약
+
+코드 변경은 파일 락 없이 별도 world-renderer 서브에이전트가 진행 중(이
+문서 갱신과 파일 겹침 없음) · DB WRITE 0 · SQL 0 · 경제/카탈로그/가격/레벨
+변경 0 · 플래그 변경 0(`paulTownV2` OFF 유지) · merge/deploy/push 0 ·
+미추적 보호 파일 17개 무접촉 · Kinney/Production 무접촉.
+
+### 1. 운영자 결정 — 아키텍처 대전환
+
+운영자가 3라운드에 걸친 AI 생성 환경 플레이트(`env/plate-home.webp`) 정밀
+지오메트리 접근을 폐기 결정. 이유: 3라운드 모두 카메라/경로/로트 좌표 등
+정밀 기하 요구사항을 이미지 생성 파이프라인이 신뢰성 있게 지키지 못함
+(148~149차 참고). 새 아키텍처: STRUCTURAL WORLD GEOMETRY(월드 크기/구역
+위치/굽은 길/로트/잠금 경계/포그)는 코드(결정론적 CSS/SVG)가 소유하고,
+ARTWORK는 독립적으로 교체 가능한 격리된 자산(집/상점/나무/벤치 등)으로만
+쓰이며 로드나 로트를 절대 구운 배경에 포함하지 않는다. 기존 학습→적립→
+구매→소유→인벤토리→배치→이동→보관→영속 엔진은 완전히 보존, 재구현 금지.
+v4/v5/v6 AI 플레이트 프롬프트 생성 중단.
+
+### 2. Phase 1 — 디스커버리 결과
+
+재확인한 현재 구현 상태(추측 없이 코드로 직접 확인): `paulTownV2` 플래그
+(`src/config/features.js`) 여전히 `false`. V2 샌드박스 컴포넌트 12개
+`src/components/town/v2/*.jsx`(TownScreenV2/TownHud/PaulGuide/TownSheet/
+TownScene/TownGroundLayer/TownPathLayer/TownAmbientLayer/TownFogLayer/
+TownPlacementOverlay/TownObjectLayer/TownSprite, 총 1511줄,
+`src/utils/town/townScene.js` 249줄 포함) 전부 기존 8×6 단일 박스(aspect
+8:13) 방식 그대로. V1(`TownGrid.jsx`/`TownScreen.jsx` 등, Kinney 실제 경로)은
+이번 세션 내내 무접촉 확정. 기존 정적 계약 테스트 `scripts/testTownV2Static.mjs`
+(약 90개 단언, data-testid/aria/버튼문구/V1 byte-identical/변형 메서드
+집합 등)와 `scripts/testTownSceneV2.mjs`(townScene.js 순수함수 테스트) 확인.
+V1이 실제로 호출하는 변형 메서드 정확히 5개 확인: `studentData.placeTownItem`/
+`moveTownItem`/`storeTownItem`, `townShop.purchase`/`claimWelcome` — V2는 이
+집합의 부분집합만 호출해야 함(계약 확인됨). gardenPoints 생기 레이어는 이미
+`townScene.js`의 `gardenRichness(gardenPoints)`(임계값 0/10/30/60/100)로
+구현돼 있어 재사용, 새로 만들지 않음.
+
+### 3. Phase 2 — 구현 계획(월드/렌더러 서브에이전트에 위임, 진행 중)
+
+이미 3라운드 검증을 거쳐 `docs/design/town/wireframe/paul-town-world-wireframe.html`
+(Playwright로 실측 검증됨, 콘솔 경고 0, 가로 오버플로 0)에 구현된 정확한
+지오메트리(DISTRICTS 6개 heightUnits/scale/unlockLevel, LOTS 7개 좌표,
+SPOT_MAP 48칸, 구역별 path bezier 좌표, STUBS 현관 스텁)를 그대로 실제
+React 컴포넌트로 포팅하는 작업을 진행 중. 변경 대상: `townScene.js` 확장
+(DISTRICTS/LOTS/SPOT_MAP/PATHS/`districtsVisible`/`sceneHeightUnits`/
+`districtOffsetUnits`/`lotState`/`anchorFor(x,y,level)` 시그니처 확장 등,
+기존 export 전부 보존) + `TownGroundLayer.jsx`/`TownPathLayer.jsx`(전면
+재작성, CSS/SVG만) + `TownScene.jsx`/`TownObjectLayer.jsx`/`TownFogLayer.jsx`/
+`TownAmbientLayer.jsx`/`TownPlacementOverlay.jsx`/`TownScreenV2.jsx`(level
+prop 배선). 검증 계획: `npm run build` + `testTownV2Static.mjs` +
+`testTownSceneV2.mjs`(신규 케이스 추가) + `testTownUiStatic.mjs`(V1 무회귀
+확인) + `verify:e2e`(townV1/townV2/townPilotAllowlist/townFlagCrossTab).
+완료 후 Lead가 직접 재검증 후 커밋(서브에이전트는 커밋하지 않음).
+
+### 4. 범위(이번 야간 세션 우선순위)
+
+P0(My House 구역) + P1(월드 경로/레이어링) + P2(잠금-다음-구역 안개
+처리)를 이번 세션의 핵심 목표로 확정, P3(Book Shop/광장/카페 실제
+콘텐츠)~P4(다리/학교/시계탑)는 로트+잠금 처리 수준으로만, P5(gardenPoints
+생기 레이어)는 기존 `gardenRichness()` 재배치 수준으로 포함 시도. 완전한
+6개 구역 콘텐츠 마감은 이번 세션 범위 밖으로 명시.
+
+## 2026-09-16 (149차) — Batch 0 라운드 3 독립 검토(worse than 라운드 2) + 운영자 진단(프롬프트 미충실 반영) + SPLIT-PROMPT 전략 전환(1v4/3v4)
+
+### 0. 안전 요약
+
+코드 변경 0 · DB WRITE 0 · SQL 0 · 경제/카탈로그 변경 0 · 플래그 변경 0 ·
+이미지 생성 0 · merge/deploy/push 0 · 미추적 보호 파일 17개 무접촉.
+
+### 1. 라운드 3 검토
+
+`house44.png` — v3(1v3/3v3) 프롬프트 기반 3차 후보, 올바른 2파일 형식
+(플레이트+스프라이트)으로는 제출됐으나 art-director/asset-qa 독립 병렬
+검토 결과 둘 다 CORRECTIONS NEEDED, 라운드 2보다 개선이 아니라 악화 —
+특히 라운드 2 발견 후 v3에 신규로 명시 추가된 "벽걸이 랜턴 금지" 단일
+지시가 라운드 3에서도 동일하게 위반돼, 두 검토자 모두 프롬프트 자체보다
+생성 파이프라인이 전체 프롬프트를 충실히 반영하지 못했을 가능성을
+독립적으로 제기.
+
+### 2. 운영자 진단 및 결정
+
+운영자가 라운드 3을 v3 스펙의 신뢰성 있는 테스트로 인정하지 않음 —
+생성기가 전체 v3 프롬프트를 온전히 반영하지 않았고 결합된 2패널
+합성물로 잘못 생성됐다고 확인, 스펙 자체의 실패로 보지 않는다고 명시.
+SPLIT-PROMPT 전략으로 전환 확정: 자산별 짧은 단일 대상 프롬프트
+(1v4/3v4), 결합 이미지 금지, 실패 위험이 큰 항목을 각 프롬프트 앞쪽에
+배치, Step 0 스타일/카메라/조명/팔레트와 모든 잠금 결정은 그대로 유지,
+요구사항을 축소해 짧게 만들지 않음.
+
+### 3. 산출물
+
+`ART_GENERATION_HANDOFF_P0_2026-09-16.md`에 1v4/3v4 SPLIT-PROMPT SHORT
+SINGLE-SUBJECT 프롬프트 추가, append-only, 이전 1v2/3v2/1v3/3v3는 이력
+으로 보존.
+
+### 4. 다음
+
+운영자가 1v4/3v4로 각각 별도 단일 대상 이미지 2장을 생성해 제공 →
+Lead가 다시 art-director + asset-qa 병렬 검토.
+
+## 2026-09-16 (148차) — Batch 0 라운드 2 독립 검토(art-director + asset-qa 병렬) — CORRECTIONS NEEDED, v3 보정 프롬프트(1v3/3v3) 작성
+
+### 0. 안전 요약
+
+코드 변경 0 · DB WRITE 0 · SQL 0 · 경제/카탈로그 변경 0 · 플래그 변경 0 ·
+이미지 생성 0 · merge/deploy/push 0 · 미추적 보호 파일 17개 무접촉.
+
+### 1. 검토 결과
+
+house 33.png(1v2/3v2 프롬프트로 생성된 2차 외부 후보)를 art-director와
+asset-qa가 서로의 결론을 보지 못한 채 독립 병렬 검토, 둘 다 동일하게
+BATCH 0 CORRECTIONS NEEDED 판정. 원본 7개 결함 중 화분 제거/문 색상 2건은
+확정 FIXED, 코티지 크롭·상단 산울타리 gap 2건은 개선됐으나 완전하지
+않음, 카메라 불일치·경로 지오메트리·담쟁이/꽃 밀도 3건은 여전히 NOT
+FIXED — 게다가 나무/하늘 베이크라는 신규 결함(원래 7개 목록에 없던)까지
+발견됨.
+
+### 2. 리드 통합
+
+MUST FIX 9건 합의(카메라 불일치/나무 제거/하늘 제거/로트 위치/경로
+지오메트리/담쟁이 밀도/광원 일치/모바일 가독성 다운스케일 테스트) +
+검토자 간 불일치 1건을 리드가 임의로 판정하지 않고 그대로 기록 —
+art-director는 렌더링 등록(painterly)을 적합하다고 판단했으나 asset-qa는
+photoreal/CG에 가깝다고 판단, 운영자가 승인된 Step 0 스타일 키와 직접
+대조해 판정 필요.
+
+### 3. 산출물
+
+`ART_GENERATION_HANDOFF_P0_2026-09-16.md`에 1v3/3v3 OWNER-CORRECTED
+FINAL(2nd revision) 프롬프트 추가 — 자체 검증 체크리스트를 프롬프트에
+직접 내장(경로 끝점 추적, 로트/화단이 완벽한 직사각형·원이면 카메라
+오류라는 기하학적 자가진단 등)해 동일 결함 3라운드 반복을 막으려 시도.
+
+### 4. 다음
+
+운영자가 v3 프롬프트로 외부에서 3차 후보를 생성 → 재검토, 렌더링 등록
+불일치는 운영자가 Step 0 스타일 키와 대조해 별도로 판정.
+
+## 2026-09-16 (147차) — Paul Town 상시 에이전트 팀 운영 모델 활성화(Lead + 6개 전문 역할, 운영자 게이트만 승인)
+
+### 0. 안전 요약
+
+코드 변경 0 · DB WRITE 0 · SQL 0 · 경제/카탈로그 변경 0 · 플래그 변경 0 ·
+이미지 생성 0 · merge/deploy/push 0 · 미추적 보호 파일 17개 무접촉.
+
+### 1. 운영 모델
+
+운영자가 Paul Town 전담 상시 에이전트 팀을 활성화했다 — Lead가 Art
+Director/Asset QA/World-Renderer/My House-Inventory/QA-Regression/
+Docs-Handoff 6개 전문 역할을 내부에서 조율하고, 운영자에게는 Art
+Gate/Product Gate/Pilot Gate/Production Gate 같은 실질적 결정만
+요청한다. 파일명/앵커 계산/CSS/사소한 리팩터·버그수정/문서 배치 같은
+기술적 디테일은 운영자에게 올리지 않는다. 기존 잠금 결정(스타일 키
+APPROVED/게임 루프 LOCKED/OWNER DECISION A/스타터 하우스 밀도 원칙/
+143~146차 전체)과 모순 없음을 확인했다 — 재검토 없이 그대로 승계한다.
+
+### 2. 산출물
+
+신규 `.ai-status/lead-paul-town-lead.json` — README 규칙대로 task_id
+진행 중 계속 같은 파일을 덮어써 최신 팀 상태를 유지하는 상시 파일(다른
+세션 `.ai-status` 파일들과 달리 `completed`로 닫히지 않는다).
+`current_phase`/`style_key_status`/`world_layout_status`/
+`game_loop_status`/`current_art_batch`/`art_batch_status`/
+`implementation_status`/`qa_status`/`production_status`/
+`open_owner_decisions`/`next_exact_step`/`agent_roster` 필드를 포함한다.
+Batch 0(env/plate-home.webp + buildings/my-house.webp) 등록: CORRECTED
+SPEC COMPLETE · EXTERNAL VISUAL CANDIDATE AVAILABLE · AWAITING AGENT
+ART REVIEW.
+
+### 3. 다음
+
+운영자가 Batch 0 최신 후보 이미지를 제공하면 Lead가 Art Director+Asset
+QA를 병렬 실행해 결과를 통합, BATCH APPROVED 또는 CORRECTIONS NEEDED로
+보고한다. 미결 3건은 145~146차와 동일: british-cottage 카탈로그 역할,
+fences 카탈로그 신설 여부, My House 외관 커스터마이즈 아키텍처.
+
+## 2026-09-16 (146차) — 운영자 1차 참조 이미지 검토 + 경로/카메라/스타터 밀도 보정 확정 (env/plate-home, buildings/my-house OWNER-CORRECTED FINAL)
+
+### 0. 안전 요약
+
+DB WRITE 0 · SQL 0 · 코드 변경 0 · 경제/카탈로그/가격 변경 0 · 플래그
+변경 0 · 이미지 생성 0(재생성 미실행) · merge/deploy/push 0 · 미추적
+보호 파일 17개 무접촉.
+
+### 1. 검토 결과
+
+운영자가 house11.png(외부 생성 1차 참조)를 리드의 KEEP/SEPARATE/REMOVE
+분석과 함께 검토 — 결함 7건 확인: path fork의 왼쪽 가지가 상단/좌측
+경계까지 도달, 상단 산울타리가 완전히 막혀 다음 구역과의 연결성이
+끊김, 바닥면 카메라가 코티지보다 훨씬 급경사의 탑다운으로 촬영돼
+불일치, 코티지가 캔버스의 85~95%를 채우지 못하고 여백이 큼, 현관 앞
+화분 2개가 건물 스프라이트에 베이크됨, 담쟁이/꽃이 벽 전체를 뒤덮어
+"학습→담쟁이 성장(gardenPoints≥60)" 설계와 충돌할 위험, 로트/캔버스
+정확 좌표 미확인.
+
+### 2. 운영자 결정
+
+담쟁이/꽃 밀도 — 벽에 붙은 가벼운 담쟁이 + 소박한 창문 화단만 허용,
+화분/독립 꽃/관목/나무/벤치/램프/우체통/펜스/동물은 전부 별도 구매
+데코로 분리 유지, "스타터 하우스=매력적이지만 의도적으로 미완성"
+원칙을 신규 확정해 향후 다른 고정 건물에도 동일 적용.
+
+### 3. 산출물
+
+`ART_GENERATION_HANDOFF_P0_2026-09-16.md`에 env/plate-home과
+buildings/my-house의 OWNER-CORRECTED FINAL 프롬프트 추가(1v2/3v2,
+append-only, 원본 보존) — 경로 지오메트리를 WORLD_LAYOUT_REDESIGN §2의
+정확한 fork/stub 좌표로 고정, 상단 경계 개방 지시 추가, 카메라 일치
+지시 추가, 로트/화단 좌표 고정, 코티지 85~95% 크롭 지시, 바닥 화분
+제거 지시, 담쟁이/꽃 밀도 축소 지시. `FINAL_ARTWORK_SPEC_2026-09-16.md`
+에 신규 §1.6 "스타터 상태 밀도 원칙" 추가(향후 book-shop/cafe/
+english-school/clock-tower에도 동일 원칙 적용 예정으로 명시).
+
+### 4. 미결
+
+이미지 재생성은 이 환경에 도구가 없어 여전히 미실행 — 운영자가 외부
+도구로 수정 버전을 다시 생성해 재검토해야 함, british-cottage 카탈로그
+역할과 fences 카탈로그 신설 여부는 143~145차부터 계속 미결.
+
+## 2026-09-16 (145차) — Paul Town Step 0 승인 + 최종 게임 루프 확정(PAUL TOWN=EXPLORE/SHOP=BUY/MY HOUSE=DECORATE/LEARNING=EARN+UNLOCK) + P0 프로덕션 게이트
+
+### 0. 안전 요약
+
+Production DB WRITE 0 · SQL 0 · 코드 변경 0 · 경제/카탈로그/가격 변경 0
+· 플래그 변경 0 · 구매 0 · merge/deploy/push 0 · 이미지 생성 0(배치
+미실행) · 미추적 보호 파일 17개 무접촉.
+
+### 1. 결정
+
+스타일 키(Step 0, 1080×1920 6-district 세로 스택) APPROVED. 최종
+게임 모델 확정: PAUL TOWN = EXPLORE(공유 마을, 구조 고정) · SHOP =
+BUY(기존 Paul Dollar 경제) · MY HOUSE = DECORATE(기존 배치 엔진) ·
+LEARNING = EARN + UNLOCK(학습이 화폐를 벌고 레벨을 올림) — 새 화폐/
+보상/퀘스트 없이 기존 별/레벨/Paul Dollar/gardenPoints 축만 재사용.
+OWNER DECISION A(건물은 구역 로트에 고정 렌더, 자유 배치 아님) 유지.
+
+### 2. 산출물
+
+신규 문서 `docs/design/town/PRODUCT_LOOP_LOCK_AND_P0_GATE_2026-09-16.md`
+— 기존 시스템 재사용 매핑(적립/구매/소유/인벤토리/배치/영속/학생격리를
+각각 파일:줄 근거로 재확인, 142차 Kinney 실측 재인용), 갭 분석(DB 갭
+0, UI/렌더 갭·아트 갭만 실재, My House 외관 커스터마이즈는 미래
+항목), My House 미래 아키텍처 제안(`equippedHatId` 패턴 재사용, DB
+변경 없이 레벨 기반 해금 권장), P0 16개 자산 재분류(STRUCTURAL/
+ENVIRONMENT/MY HOUSE/MOVABLE/LOCKED), 생성 순서(my-house →
+plate-home → 이동 데코 5종 → lot-sign → [P0-A 게이트] →
+garden-stage-0~4 → plate-bookshop-lane → book-shop → [P0-B 게이트]),
+GO/NO-GO(첫 최소 배치 GO = my-house+plate-home 2개만, 나머지는
+단계적).
+
+### 3. 미결
+
+`british-cottage` 카탈로그 아이템($80)의 새 월드 역할 UNKNOWN(운영자
+확인 필요), "fences" 데코 카탈로그 미존재(신설 여부는 운영자 결정
+사항), 실제 이미지 생성은 이 환경에 도구가 없어 여전히 미실행.
+
+## 2026-09-16 (144차) — Paul Town Step 0: 월드 구조 승인 기록 + OWNER DECISION A 확정 + 스타일-키 스펙 검토(이미지 미생성, 환경 미지원)
+
+### 0. 안전 요약
+
+Production DB WRITE 0 · SQL 0 · 코드 변경 0 · 경제/카탈로그/가격 변경 0
+· 플래그 변경 0(`paulTownV2` OFF 유지) · 구매 0 · merge/deploy/push 0 ·
+미추적 보호 파일 17개 무접촉 · worktree 삭제 0 · 실제 아트워크 생성 0.
+
+### 1. 결정 사항
+
+143차 산출물(월드 레이아웃 재설계 문서 3종 + 와이어프레임)에 대해
+운영자가 구조적 승인(world structure APPROVED)을 내렸다 — My House가
+초기 세계의 정서적 중심, 굽은 길로 미래 구역과 연결, 다음 목적지가
+항상 보임, 세로 확장, 주요 건물/도로는 구조 고정, 소규모 장식은 기존
+배치 엔진으로 커스터마이즈 가능. 단, 와이어프레임의 현재 시각(단순
+도형/이모지 대체물)은 최종 아트 승인이 아니라 순수 레이아웃 증명이라는
+점을 운영자가 명시했다.
+
+`WORLD_LAYOUT_REDESIGN_2026-09-16.md` §2가 이미 권고·채택한 "건물은
+로트 고정 렌더"(A)를 운영자가 이번 지시에서 "Major buildings/roads are
+structural and fixed"라는 문장으로 문자 그대로 재확인했다 — economy/
+DB/영속 데이터를 바꾸지 않는 가역적 클라이언트 렌더링 선택이라 추가
+승인 대기 없이 확정으로 기록했다. B(자유 배치)는 최종 기각됐다.
+
+### 2. Step 0 검토
+
+Step 0(스타일-키 마스터 이미지)를 검토했다. `ART_GENERATION_HANDOFF_
+P0_2026-09-16.md`에 이미 완성된 스펙(1080×1920, 6개 district 세로
+스택, 게임 UI/Paul 캐릭터/프랜차이즈 요소 전부 금지 목록에 포함)을
+확인했다. 이번 세션에서 참조 이미지(마을그림.png, 접근 가능 확인됨)에
+실제로는 앱 UI 크롬(상단바/코인 카운터/Shop·Map·Achievements·Menu
+아이콘/말풍선)이 포함돼 있음을 재확인해, Step 0 프롬프트에 "NO APP
+INTERFACE OF ANY KIND" 명시 절을 추가했다(간극 보완, append-only).
+
+이미지 생성 실행 관련: 이 세션 환경에는 텍스트→이미지 생성 도구가
+없어(Agent/Artifact/Bash/Edit/Glob/Grep/Read/Write/Skill/Workflow 등만
+제공, 이미지 생성 도구 0) Step 0 이미지를 실제로 생성하지 않았다 —
+지시받은 대로 이 사실을 그대로 보고하고 작업을 중단하지 않았다(스펙
+검토·문서 보완까지 완료).
+
+### 3. 미결/다음
+
+운영자 또는 이미지 생성 워크플로우가 연결된 환경에서 Step 0 스타일-키
+이미지 1장을 먼저 생성 → 승인되면 P0-A 9개 → P0-B 7개 순서(핸드오프
+문서 그대로). 구현 계획(§9)은 아트 승인 후 착수.
+
+## 2026-09-16 (143차) — Paul Town 월드 레이아웃 재설계(디자인 전용): 감사 + 월드 구조 + 와이어프레임 + 최종 아트 스펙 + P0 생성 핸드오프 (REVIEW ONLY, 미merge)
+
+### 0. 안전 요약
+
+Production DB WRITE 0 · SQL 0 · 코드(`src`/`api`/`scripts`) 변경 0 ·
+경제/카탈로그/가격 변경 0 · 플래그 변경 0(`paulTownV2` OFF 유지) ·
+구매 0 · 학생 데이터 mutation 0 · merge/deploy/push 0 · 기존 미추적
+보호 파일 17개 무접촉 · git worktree 삭제 0 · 최종 아트 생성 0(와이어
+프레임/스크린샷만 존재, 실제 아트워크는 아직 미생성).
+
+### 1. 배경/결정
+
+운영자가 실기기에서 V2 기능(달러 증가, 잔액 표시, 아이템 소유/배치/
+이동, 영속 저장, 격자 제거)을 직접 테스트한 결과 기능 자체는 정상
+동작하지만 화면이 여전히 "보드 위에 오브젝트를 올려둔" 인상이라 시각
+품질 기준으로 NOT APPROVED 판정을 받았다. 운영자가 참조 이미지(영국
+스토리북 스타일 마을 그림, `마을그림.png`)를 제공해 이를 1차 아트
+디렉션·월드 컴포지션 기준으로 채택했다. 이번 단계는 월드 설계 +
+구현 계획 수립까지만 진행하며, 최종 아트워크 생성은 포함하지 않는다.
+
+감사 결과 현재 V2 씬이 "보드"로 읽히는 원인은 6가지로 정리됐다(근거는
+`WORLD_LAYOUT_REDESIGN_2026-09-16.md` §1의 파일/라인 인용): 단일
+8:13 박스에 테두리/inset 링을 두른 구성, 균일 그라데이션 바닥 위에
+보이지 않는 blob 장식, `LANE_ROW=3` 전폭 알약형 자갈길, 8×6 균일
+앵커 배치로 인한 빈 공간, HOME 스프라이트가 `lg` 19%×1.3 배율로만
+작아 존재감이 약한 집, 자산별 카메라/스타일 불일치(정면 상점 vs
+3/4 코티지 vs 탑다운 화단 타일 vs 사진 배경 vs 이모지 혼재).
+
+확정한 새 월드 구조는 세로 스택 6개 district다: home(1.15W, Lv1) →
+lane(0.85W, Lv3) → square(0.90W, Lv5) → river(0.50W, Lv6) →
+school(0.80W, Lv7) → tower(0.95W, Lv8), 그리고 아직 잠긴 다음 구역은
+안개 지평선 띠(0.32W)로 표시한다. 집은 맨 아래 전경에 42%W 크기로
+배치하고, 위로 스크롤할수록 마을 깊숙이 들어가는 구조다. 구역별 깊이
+스케일은 1.00/0.86/0.76/0.70/0.64/0.56이다. 길은 플레이트에 베이크된
+하나의 굽은 자갈길로 통일한다(정문→현관 스텁, 메인 경로는 집 오른쪽을
+감싸며 우상단으로 진출; 구역 간 진입/진출 x좌표 고정).
+
+건물(Book Shop/Café/Fountain/Bridge/School/Clock Tower)은 고정 로트로
+배치하고, 동일 카탈로그 아이템을 구매하면 그 로트에 해당 건물이
+등장하는 방식을 권고안(OWNER DECISION A)으로 제시했다 — 가격/레벨/
+아이템 ID 변경은 0건이며 순수 렌더 방식 변경이다. 장식류 10종(tree/
+flower-garden/bench/street-lamp/red-post-box/town-sign/shop-lamp/cat/
+puppy/owl)만 기존 배치 엔진(8×6 좌표 그대로)을 유지하되, 48칸 각각을
+손으로 배치한 "스팟"에 매핑한다(`WORLD_LAYOUT_REDESIGN_2026-09-16.md`
+§3.2 표, wireframe의 `SPOT_MAP`과 동일 수치). 평시에는 스팟 표시가
+0이고, 편집 모드에서만 잔디 글로우+링으로 노출된다. 학습 진도
+(`gardenPoints` 임계 0/10/30/60/100 그대로 유지)는 "생명"(화단 5단계/
+창문 불빛/담쟁이/새)을, 별/레벨은 "확장"을, Paul Dollar는 "구매"를
+표현하는 기존 3계 시스템을 그대로 보존하며 새 화폐는 도입하지 않는다.
+
+### 2. 산출물
+
+전부 `docs/design/town/` 아래 디자인 전용 문서다.
+
+- `WORLD_LAYOUT_REDESIGN_2026-09-16.md` — 감사 결과, 6-district 구조,
+  스팟맵, 레벨별 구성, 모바일 폭 360/390/430 대응, 자산 분류(KEEP 0 ·
+  TEMPORARY 15 · REPLACE 10), 보존해야 할 기존 시스템 목록, 제품 점검
+  체크리스트 A~J(전부 YES), 구현 계획(§9)까지 포함.
+- `docs/design/town/wireframe/paul-town-world-wireframe.html` —
+  인터랙티브 와이어프레임(폭 360/390/430 전환, Lv1/3/5/6/7/8 전환,
+  편집 모드 토글, Kinney 실제 좌표 샘플 나무 (4,2) 포함, 런타임에
+  경로-로트/스팟 교차를 검사하는 가드 포함) + 스크린샷 10장
+  (`wireframe-360-lv1.png`, `wireframe-360-lv1-firstview.png`,
+  `wireframe-390-lv1.png`, `wireframe-390-lv1-firstview.png`,
+  `wireframe-430-lv1.png`, `wireframe-430-lv1-firstview.png`,
+  `wireframe-390-lv3.png`, `wireframe-390-lv5.png`,
+  `wireframe-390-lv8.png`, `wireframe-390-lv3-edit.png`).
+- `FINAL_ARTWORK_SPEC_2026-09-16.md` — P0-A 9개 + P0-B 7개(총 16개
+  파일), P1 8개, P2 미정 목록, 카메라 3/4 30°·좌상단 광원·contact
+  shadow만 사용·팔레트 규칙·"플레이트 연속성" 계약(district 경계에서
+  배경이 끊기지 않게)·납품 QA 게이트를 규정.
+- `ART_GENERATION_HANDOFF_P0_2026-09-16.md` — GLOBAL matched-set
+  블록 + Step 0 스타일-키 마스터 이미지 1장(비납품, 참조 전용) +
+  P0 12개 프롬프트 블록(`garden-stage-0..4`는 5단계를 한 블록에 서술)
+  + 일관성 체크리스트로 구성된 이미지 생성 워크플로우용 영문 프롬프트
+  패키지.
+- `V2A_ASSET_SPEC.md` 상단에 대체 공지 배너 추가(append-only, 기존
+  섹션 삭제 없음) — 이 문서의 예전 아트 스펙이 위 `FINAL_ARTWORK_SPEC_
+  2026-09-16.md`로 대체됐음을 명시.
+
+리드 정정 1건: 초안이 아트 디테일 수준을 기존 카툰풍 동물 자산에
+맞추려 했던 것을, 운영자 참조 이미지 수준의 rich painterly 스타일로
+되돌리고 동물 자산 3종을 KEEP → TEMPORARY(P2 단계 재생성 대상)로
+재분류했다.
+
+### 3. 검증
+
+와이어프레임은 3라운드에 걸쳐 수정됐다. 1차 검토에서 발견된 문제:
+길이 집을 관통, 안개 띠가 비어 있음, 평시에도 스팟 점이 노출, 지붕이
+본체와 분리돼 보임. 2차 수정: 구역별 bezier 곡선 경로, district 간
+클리핑, 안개 지평선에 실루엣 추가, 평시 스팟 무표시로 전환, 코티지
+실루엣 보강, for-sale 로트에 기초+표지판 추가, 스캘럽 헤지 장식 추가.
+3차 수정: 집 앞 수평 구간 제거(포크+현관 스텁 구조로 대체), 구역당
+단일 path로 통일해 이음새 제거, 스팟-길 clearance를 런타임에 검사해
+겹치는 스팟 9개를 재배치.
+
+Playwright로 폭 360/390/430 전부 캡처해 가로 오버플로 0건을 확인했다.
+리드 육안 검토 결과: Lv1 첫 화면에 코티지(42%W) + 안개 지평선 +
+"⭐ Lv.3에서 Book Shop이 열려요" 안내 칩이 한 화면에 모두 들어오고,
+Lv5/Lv8 전체 여정이 하나의 굽은 길로 끊김 없이 연결됨을 확인했다.
+
+관련 커밋: `d994656`(142차 handoff), `39fc1cf`(최종 아트 스펙 +
+P0 핸드오프 문서). 설계 문서 및 와이어프레임 자체를 추가한 커밋과 이번
+143차 handoff 커밋은 리드가 이어서 수행한다(현재 미push, PR 미생성).
+
+### 4. 미결/다음
+
+1. 운영자가 와이어프레임(HTML 파일 또는 Artifact 링크)을 검토해 새
+   월드 컴포지션을 승인해야 다음 단계로 진행 가능.
+2. 승인 시 순서: Step 0 스타일-키 마스터 이미지 생성 → P0-A 9개 →
+   P0-B 7개 (`ART_GENERATION_HANDOFF_P0_2026-09-16.md`에 기술된 순서
+   그대로).
+3. 아트 승인 후 `WORLD_LAYOUT_REDESIGN_2026-09-16.md` §9 구현 계획에
+   따라 V2 렌더러를 개편한다(`paulTownV2` 플래그는 OFF 상태를 유지한
+   채 개발, Production DB 변경 0건).
+4. OWNER DECISION A(건물 고정 로트 방식) vs B(자유 배치 방식) 확정이
+   필요 — 현재는 A를 권고안으로 제시한 상태.
+5. V1(Pilot A 라이브 경로, Kinney 포함)은 이번 작업 범위에서 완전히
+   무접촉이며 계속 그렇게 유지한다.
+
+## 2026-09-16 (142차) — 프로젝트 메모리 동기화: PR #55~#59 merge 기록 + Kinney Town V1 시각 업그레이드 검증 착수
+
+### 0. 안전 요약
+
+Production DB WRITE 0 · SQL 0 · 코드 변경 0(문서만) · 플래그 변경 0 ·
+merge/deploy 0 · Kinney 무접촉 · 기존 미추적 파일 17개 전부 무접촉 ·
+git worktree(33개) 삭제 0.
+
+### 1. Git 상태 확인 및 PR #55~#59 merge 기록 정리
+
+main = origin/main = `9eec10d`, ahead 0 / behind 0, 추적 파일 트리
+clean(`git status --short` 미추적 17개만 표시, 아래 3절 참고). 최근
+merge 커밋 로그를 확인해 141차 이후 실제로 merge·배포된 PR 5건을
+기록: PR #55(feat(town): Paul Town 나머지 아트워크 배치 7/8, bench는
+DEFERRED 유지, 2026-09-14 merge), PR #56(fix(town): 구매 후 미배치
+아이템 배지 + 안내 문구, V1+V2 대응, 2026-09-14), PR #57(feat(town):
+마을 장면 체스판 인상 제거 — CSS-only 바닥/자갈길/산울타리 + 환경
+아트워크 4종(하늘/원경, 돌담+산울타리, 자갈길 타일, 정원 장식 3개)을
+TownGrid.jsx에 배선, 2026-09-15), PR #58(chore(town): 아트워크 검증
+도구 WebP 지원, 2026-09-15), PR #59(fix(town): 구매 실패 피드백
+fail-safe + V1 상점/보관함 이미지 폴백, 2026-09-15). main→Production은
+기존 Vercel 연동으로 자동 배포된다(수동 배포 아님).
+
+중요 정정: 141차 항목은 "Batch 3(7개 자산) PR 미오픈"이라고 기록했으나,
+이는 이후 세션에서 PR #55로 오픈·merge되어 이미 stale하다. 다음 세션이
+141차의 "PR 미오픈" 표기만 보고 같은 작업을 다시 오픈하려는 회귀를
+막기 위해 본 항목에 명시적으로 정정 남김 — Batch 3 관련 작업은 더 이상
+남은 PR 오픈 작업이 없다(bench DEFERRED만 백로그로 유효).
+
+### 2. 플래그/파일럿 상태 재확인
+
+`src/config/features.js` 112번째 줄 `paulTownV2: false` 확인(OFF 유지).
+paulTownV1은 기기 단위 플래그 기본값 false이며, `src/config/
+pilotTown.js`의 Pilot A 화이트리스트(UUID 5개, Kinney
+`e0fe0f50-8927-44d9-9331-e454620524d9` 포함)가 UUID 기준으로 해당
+학생에게 Town V1 진입을 허용한다(규칙 4 — 이름이 아닌 UUID 식별
+확인). decorations/bench는 여전히 DEFERRED(V2 아트워크 백로그)로 상태
+변화 없음.
+
+### 3. 미추적 파일/worktree — 의도적 무접촉 확인
+
+기존 미추적 파일 17개(운영자용 수동 SQL 16개: `supabase_v3_38_*`,
+`supabase_v3_39_*`, `supabase_v3_39b_*`, `supabase_v3_46_*` 및 각
+ROLLBACK, `production_v3_47~50_*_verify.sql`,
+`production_gyobin_ghost_pointer_{apply,post_verify,rollback}.sql`,
+`production_pilot_student_diagnostic.sql`; 문서 1개:
+`docs/operations/ELEMENTARY_45_ROLLOUT_PACKAGE.md`)는 이번 세션에서
+읽기조차 하지 않았고 전부 그대로 남아 있다. 스크래치패드 git
+worktree 33개도 의도적으로 정리하지 않았다(과거 세션들의 병렬 작업
+잔재로 별도 정리 작업 범위).
+
+### 4. Open PR 현황(변경 없음)
+
+#45, #44, #32, #18, #17, #16, #11, #9 — 이번 세션에서 열람만 하고
+손대지 않음.
+
+### 5. 다음 작업 — Kinney Town V1 시각 업그레이드 read-only 검증(착수)
+
+PR #57에서 merge된 마을 장면 시각 업그레이드를 실제 파일럿 학생
+Kinney의 기존 Town V1 경로에서 확인하는 작업에 착수한다: `App.jsx`
+`screen === 'town'` → `components/town/TownScreen.jsx` →
+`TownGrid.jsx`. `townV1Enabled`는 `paulTownV1` 플래그 OR
+`isPilotTownStudent(studentId)`로 결정되며 `townV2Active`는 false로
+유지된다. 이 검증은 read-only(구매 없음, 데이터 mutation 없음, 플래그
+변경 없음)로 진행하며, 결과는 검증을 수행하는 후속 세션이 본 142차
+항목 하위에 새 섹션(예: "### 6. Kinney Town V1 검증 결과")으로
+append한다. 본 세션은 문서 동기화(TASK A/B)에 이어 같은 세션에서 실제
+검증까지 완료했다(결과는 §6).
+
+### 6. Kinney Town V1 시각 업그레이드(PR #57) read-only 검증 결과
+
+경로 추적: Kinney UUID `e0fe0f50-8927-44d9-9331-e454620524d9`는
+`src/config/pilotTown.js` Pilot A 허용목록에 포함되어 `App.jsx`의
+`townV1Enabled = paulTownV1(기기 플래그) || isPilotTownStudent(studentId)`가
+true, `townV2Active = townV1Enabled && paulTownV2` = false(paulTownV2
+OFF)로 계산됨을 확인. `screen === 'town'`에서
+`components/town/TownScreen.jsx`(V1) → `TownGrid.jsx`가 렌더되며,
+PR #57의 환경 아트워크 4종(village-sky-backdrop /
+village-hedge-border / village-cobblestone-tile /
+garden-accent-1~3)은 `TownGrid.jsx`(V1)에 직접 배선돼 있어 Kinney
+경로에서 실제로 보인다(V2 전용 아님).
+
+Production 대조(GET/HEAD only): `https://voca-drab.vercel.app` HTTP
+200, 라이브 index-BNVCBtx_.js md5 `57f8ef8c510025b5921b4749c63d7c5a`
+= 로컬 `npm run build`(main `9eec10d`) 산출물 md5 동일. 라이브
+번들에 `paulTownV2:!1`(OFF) 리터럴 확인. TownScreen-CDx5s9pT.js
+청크 및 환경 webp 5종 모두 Production에서 HTTP 200. `npm run
+prod:check` DB WRITE 0, Safe to continue: YES.
+
+Kinney 실데이터 read-only(anon key GET, student_progress.progress_data
+일부 컬럼만): townPlacements = [{x:4, y:2, itemId:'tree',
+placementId:'tree:1789228101707:26pbgn'}], townRemovedIds = [],
+updated_at 2026-09-15T12:59:09Z → 이전 확인된 나무 배치가 그대로
+보존됨. Paul Dollar 잔액/소유 목록은 `get_town_shop_state` RPC가
+service_role 전용이라 에이전트가 read-only로 확인 불가(운영자
+service_role SELECT 또는 Kinney 기기 확인 필요) — 미확인 항목으로
+정직 기록. DB WRITE 0, 구매 0, 이동/삭제 0.
+
+렌더 검증 방법: vite preview(127.0.0.1:4199, main `9eec10d` 빌드) +
+Playwright chromium + 기존 `tests/e2e/lib/mockRoutes.mjs` 전체
+네트워크 mock(실 Supabase/Vercel 요청 0). `installMocks({ studentId:
+Kinney UUID, townState: {starsEarned:60, dollars:{available:31,
+earned:41, spent:10}, owned:['tree'], welcomeClaimed:true} })`,
+기기 플래그 미설정(paulTownV1/V2 OFF) → 허용목록만으로 Town V1 진입
+확인. Kinney 실제 좌표(4,2)에 나무를 mock UI로 배치(townV2.spec S5와
+같은 LIMITATION: 로컬 백업 사전 시드 대신 UI 배치).
+
+결과 44/44 PASS(desktop 1280×800, mobile 390×844 각 22 단언): 진입
+카드 표시, HUD Lv.3/$31, V2 노드 0, 하늘/원경·돌담/산울타리·자갈길
+타일 레이어 렌더, 정원 장식 3개(전부 pointer-events:none + aria-
+hidden), 깨진 이미지 0, 빈 칸 idle 배경 투명 0/46·불투명·테두리
+0/46(체스판 인상 제거), 가로 오버플로 0, 장식이 나무 칸/My House
+칸을 덮는 픽셀 0, 하늘/산울타리 헤더 띠와 0행 칸 겹침 0, 나무
+아트워크 img 렌더(이모지 폴백 아님), 콘솔 에러 0, mock 구매/welcome
+호출 0, 미mock 실네트워크 요청 0.
+
+육안 검토: 하늘·구름·원경 나무 → 담쟁이 덮인 돌담+꽃 산울타리 띠 →
+크림색 잔디 → 자갈길 → 초록 잔디 순으로 일관된 영국 정원/마을
+장면. 격자선/체스판 인상 없음. 배치된 나무와 My House가 장식과
+구분됨. 클리핑 없음. 모바일 프레이밍 정상(격자 40px 칸 유지).
+관찰(코스메틱, 비차단): (1) 산울타리 띠 바로 아래 잔디 영역의
+inset 링(둥근 안쪽 프레임)이 이중 테두리처럼 보임, (2) 자갈길
+밴드가 안쪽 프레임 좌우 끝까지 닿아 링과 겹침, (3) 모바일 390에서
+격자 아래 안내 문구가 기존 우하단 고정 발음 속도 버튼("보통")과
+일부 겹침 — PR #57 이전부터 있던 고정 버튼으로 추정(별도 확인
+필요). 어떤 관찰도 상호작용/데이터에 영향 없음.
+
+스크린샷(세션 스크래치패드, 저장소 외부):
+`C:\Users\jinal\AppData\Local\Temp\claude\C--voca\
+0c666b06-2a35-4326-90d0-b68bb11633d2\scratchpad\screenshots\`의
+kinney-town-v1-desktop-1280.png / kinney-town-v1-desktop-1280-
+grid.png / kinney-town-v1-mobile-390.png / kinney-town-v1-mobile-
+390-grid.png / results.json.
+
+회귀 테스트: testTownUiStatic / testTownV2Static / testBundleBudget
+/ testTownLayout 전부 PASS, `npm run build` PASS(16.3s).
+
+안전 결산: Production DB WRITE 0 · SQL 0 · 코드 변경 0 · 플래그
+변경 0 · 구매 0 · Kinney 데이터 mutation 0 · merge/deploy/PR 오픈 0
+· 미추적 보호 파일 17개 무접촉 · worktree 삭제 0.
+
+권장 다음 액션 1개: 운영자가 Kinney 실기기(Samsung Internet)에서
+Town V1을 1회 열어 잔액 $31·나무 소유·(4,2) 배치를 육안 확인(구매/
+이동 없음) — 에이전트가 read-only로 확인 못 한 잔액/소유 항목을
+닫는다.
 
 ## 2026-09-15 (141차) — PR #53/#54 프로덕션 클로즈아웃 + Batch 3 최종 완료(7/8, bench DEFERRED)
 

@@ -266,13 +266,25 @@ export async function run(browser, baseURL) {
   }
 
   // ── S4 — 배치 루프(구매→놓기→이동→보관, 390x844, V1+V2 ON) ───────────────
+  // 2026-09-16 갱신 — 월드 지오메트리 확장(anchorFor/freeAnchors가 이제
+  // level로 구역을 거른다) 이후, 기본 mock(starsEarned=20 -> 마을레벨2)로는
+  // home 구역만 열려 있어(23칸) 이 시나리오가 이동 목적지로 쓰던 (5,4)
+  // (square 구역)/(0,5)(river 구역)이 더 이상 배치 후보 앵커에 없다. 이
+  // 시나리오의 실제 목적(구매→놓기→이동→마지막 행 클리핑 회귀→바깥 탭/
+  // Escape 닫기→보관)은 좌표 자체가 아니라 "그 좌표가 유효한 배치 후보로
+  // 열려 있는지"이므로, starsEarned를 800(마을레벨8, 전 구역 개방)으로
+  // 올려 옛 좌표(앵커 47개 포함)를 그대로 재사용한다 — 환영 선물 조건
+  // (owned:[] && available:0)과 welcomeClaimed:false는 그대로 유지해 위쪽
+  // 환영 선물 단언들도 그대로 통과하도록 한다.
   {
     const vp = { width: 390, height: 844 }
     const name = 'S4[390x844] 배치 루프'
     const context = await browser.newContext({ viewport: vp })
     const page = await context.newPage()
     await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
-    const mocks = await installMocks(page)
+    const mocks = await installMocks(page, {
+      townState: { starsEarned: 800, dollars: { available: 0, earned: 0, spent: 0 }, owned: [], welcomeClaimed: false },
+    })
     const { db } = mocks
     try {
       await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
@@ -521,33 +533,48 @@ export async function run(browser, baseURL) {
 
       // 로컬 백업(useStudent.js localStorage)에 사전 배치를 주입할 안전한
       // 경로가 없어(src/ 미수정 원칙) — 계약이 명시한 폴백대로 UI를 통해
-      // 나무를 (2,4)에 배치한다(2026-09-13, 이 스펙 고유 LIMITATION).
+      // 나무를 배치한다(2026-09-13, 이 스펙 고유 LIMITATION). 2026-09-16
+      // 갱신 — 월드 지오메트리 확장으로 (2,4)는 이제 'square' 구역(마을
+      // 레벨5부터 개방)에 속해, 이 시나리오의 레벨3(starsEarned=60)에서는
+      // 더 이상 유효한 배치 후보 앵커가 아니다(freeAnchors가 level로 거름).
+      // (0,3)은 'lane' 구역(레벨3에 이미 열림)에 속한 칸으로 교체한다 —
+      // SPOT_MAP은 townScene.js가 소유한 진실 원천이라 이 세션이 좌표를
+      // 새로 발명하지 않고 그대로 조회했다.
       await page.locator('[data-testid="town-open-inventory"]').click()
       const placeBtn = page.getByRole('button', { name: '마을에 놓기' })
       await placeBtn.waitFor({ state: 'visible', timeout: 10000 })
       await placeBtn.click()
-      await page.locator('[data-anchor="2,4"]').waitFor({ state: 'visible', timeout: 10000 })
-      await page.locator('[data-anchor="2,4"]').click()
-      const treeAt24 = await page.locator('[data-item-id="tree"][data-cell="2,4"]').waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
-      r.check(`${name} — 나무가 (2,4)에 배치됨(LIMITATION: 로컬 백업 사전 시드 대신 UI로 배치)`, treeAt24)
+      await page.locator('[data-anchor="0,3"]').waitFor({ state: 'visible', timeout: 10000 })
+      await page.locator('[data-anchor="0,3"]').click()
+      const treeAt03 = await page.locator('[data-item-id="tree"][data-cell="0,3"]').waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 나무가 (0,3)에 배치됨(LIMITATION: 로컬 백업 사전 시드 대신 UI로 배치)`, treeAt03)
 
-      // ── 2026-09-13 설계 결정 — 안개(fog)는 objects보다 아래(z 낮음)여야
-      //     row 4-5에 놓인 소유 아이템(여기선 y=4의 나무)이 흐리게 가려지지
-      //     않는다. 레벨3에서는 puppy/owl(minLevel4)이 아직 잠겨 있어
-      //     fogState가 visible:true라 실제로 이 회귀가 재현 가능한 조건이다
-      //     — town-fog가 보이는 상태에서 나무 래퍼의 실제 렌더 z-index가
-      //     안개 레이어보다 큰지 getComputedStyle로 직접 비교한다. ─────────
+      // ── 2026-09-16 갱신 — 이 체크는 원래(2026-09-13) "안개(fog)가 objects
+      //     보다 z가 낮아야 row 4-5에 놓인 소유 아이템이 흐리게 가려지지
+      //     않는다"는 z-index 숫자 비교였다. 월드 지오메트리 확장 이후로는
+      //     안개가 더 이상 "그리드의 마지막 두 행 위에 겹쳐 그려지는 밴드"가
+      //     아니라, 현재 열린 구역 스택 맨 위(아직 열리지 않은 구역보다
+      //     위)에 있는 완전히 별도의 영역이다 — 배치 가능한 칸(SPOT_MAP)은
+      //     전부 이미 열린 구역 안에만 있으므로, 안개와 배치된 아이템이
+      //     "같은 화면 자리를 두고 z-index로 다투는" 상황 자체가 구조적으로
+      //     더 이상 생기지 않는다. 그래서 z-index 숫자 비교 대신, 더 강한
+      //     체크(두 요소의 바운딩 박스가 실제로 겹치지 않는지)로 바꿨다 —
+      //     "가려지지 않는다"는 원래 의도를 z-index 우연이 아니라 실제 화면
+      //     레이아웃으로 직접 검증한다.
       const fogVisibleAtLevel3 = await page.locator('[data-testid="town-fog"]').isVisible().catch(() => false)
       r.check(`${name} — town-fog 표시됨(레벨3, puppy/owl 아직 잠김 — 이 회귀를 재현 가능한 조건)`, fogVisibleAtLevel3)
       if (fogVisibleAtLevel3) {
-        const [treeZ, fogZ] = await Promise.all([
-          page.locator('[data-item-id="tree"][data-cell="2,4"]').evaluate((el) => Number(window.getComputedStyle(el).zIndex) || 0),
-          page.locator('[data-testid="town-fog"]').evaluate((el) => Number(window.getComputedStyle(el).zIndex) || 0),
+        const [treeBox, fogBox] = await Promise.all([
+          page.locator('[data-item-id="tree"][data-cell="0,3"]').boundingBox(),
+          page.locator('[data-testid="town-fog"]').boundingBox(),
         ])
+        const overlaps = !!treeBox && !!fogBox &&
+          treeBox.x < fogBox.x + fogBox.width && treeBox.x + treeBox.width > fogBox.x &&
+          treeBox.y < fogBox.y + fogBox.height && treeBox.y + treeBox.height > fogBox.y
         r.check(
-          `${name} — 나무(y=4) 렌더 z-index(${treeZ})가 안개 레이어 z-index(${fogZ})보다 큼(가려지지 않음)`,
-          treeZ > fogZ,
-          `treeZ=${treeZ} fogZ=${fogZ}`,
+          `${name} — 나무(lane 구역)와 안개 밴드(잠긴 구역 위)의 바운딩 박스가 겹치지 않음(가려지지 않음, 새 지오메트리는 애초에 겹칠 수 없는 구조)`,
+          !overlaps,
+          JSON.stringify({ treeBox, fogBox }),
         )
       }
 
