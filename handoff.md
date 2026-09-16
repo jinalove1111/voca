@@ -1,8 +1,99 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-16 (153차 — P0 아트 연결 패치
-(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): 6개 고정
-로트 art resolver 연결 + 독립 QA가 문서 오류 발견 + 리드가 별도 mock
-fixture 버그 발견. 152차 이하 보존)_
+_최종 갱신: 2026-09-16 (154차 — P0 첫 3종 아트 실물 교체
+(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): My
+House/Book Shop 2종 실제 교체, Tree는 투명 채널 없어 미교체(차단), my-house
+이중 렌더(녹색 placeholder 박스) 사전 존재 버그 발견+수정. 153차 이하
+보존)_
+
+## 2026-09-16 (154차) — P0 첫 3종 아트 실물 교체(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): My House/Book Shop 2종 실제 교체, Tree 차단, my-house 이중 렌더 버그 발견+수정
+
+### 0. 안전 요약
+
+코드 변경은 동일 전용 브랜치에만 존재, main 무접촉, DB/SQL/경제/카탈로그/
+가격/레벨/플래그 변경 0(`paulTownV2` 여전히 false), merge/deploy/push 0
+(로컬 커밋만, push는 운영자 명시 승인 필요), 미추적 보호 파일 17개
+무접촉, 새 npm 패키지 0개(이미 설치돼 있던 시스템 Python+Pillow로
+PNG 리사이즈/WebP 인코딩만 수행, `package.json` 무변경).
+
+### 1. 요청과 실행 범위
+
+운영자가 지정한 3종(My House/Book Shop/Tree, 각 지정 캔버스 256×320·
+256×320·192×256) 실제 완성 아트를 기존 P0 파이프라인에 배선하는 작업.
+소스는 `Downloads/영국교사폴/My House 256×320.png` 등 3개 PNG. 처리:
+`scripts/validateTownAssetCandidate.mjs`(2026-09-14 작성된 기존
+무의존성 PNG/WebP 객관 검증 도구)로 알파 채널/여백을 먼저 확인 → 콘텐츠
+바운딩박스로 크롭 → 비율 유지 축소 → 기존 배포 자산과 동일한 규칙
+(좌우 대칭 여백, 하단 5% 여백, bottom-anchor)으로 투명 캔버스에 재배치
+→ 1x/2x PNG+WebP(무손실, 기존 `nature/tree.webp`와 동일 인코딩) 총 8개
+파일 생성 → `src/assets/town/buildings/`의 기존 4파일 세트 2벌(my-house,
+book-shop) 교체.
+
+### 2. Tree 차단 — 투명 채널이 실제로 없음(운영자 요구사항 자체가 명시한 실패 조건)
+
+`Tree 192×256.png`를 검증 도구로 확인한 결과 `colorType=2(RGB)`,
+투명 픽셀 0% — 알파 채널이 아예 없는 파일이었다. 육안 확인 결과 흔한
+이미지 편집기의 "투명 배경 미리보기" 체커보드 패턴이 실제 불투명 RGB
+픽셀로 그대로 구워져(bake) 있었다 — 운영자가 이번 지시에서 명시적으로
+금지한 바로 그 실패 사례("verify the source really has transparency; do
+not bake checkerboard/background pixels")였다. 신뢰할 수 없는 픽셀 휴리스틱
+(예: "밝은 회색조는 지운다")으로 되살리려 시도하지 않고 — 실제 나뭇잎
+하이라이트를 잘못 지울 위험이 크다 — Tree는 배선하지 않았다. 기존
+`nature/tree.webp`(세션 시작 전부터 있던 아트)는 완전히 무접촉으로
+남아있다. 재생성 시 원본 생성 단계에서 진짜 RGBA(PNG-32) 알파 채널을
+보존해 내보내야 한다는 점이 정확한 재작업 지시다.
+
+### 3. 신규 발견+수정 — my-house 이중 렌더(녹색 placeholder 박스), 153차 이전부터 존재하던 버그
+
+새 My House 아트를 배선한 뒤 360/390/430px 시각 확인 중, 집 아트 뒤에
+녹색 반투명 박스(`bg-[#8fb37a]/70 border-2`)가 테두리처럼 도드라지게
+겹쳐 보이는 결함을 발견했다. 원인: `LOTS` 지오메트리 배열에는 my-house도
+포함(7개 중 하나, 위치 계산용)돼 있지만 `townCatalog.js` 카탈로그
+아이템은 아니라서(무료/항상소유 고정 자산), `TownObjectLayer.jsx`의 LOTS
+렌더 루프가 `itemById['my-house']`를 조회하면 항상 undefined → `hasArt`가
+항상 false로 남아 **집 전용 렌더 블록(`data-testid="town-home"`, 실제
+아트를 그리는 곳)과 별도로** LOTS 루프가 my-house 자리에 옛 solid
+placeholder 박스를 추가로 겹쳐 그리고 있었다. `git show 75252bc`로
+직접 대조 확인 — 153차 패치 이전부터 존재하던 조건(`built ? 박스 : ...`가
+모든 built 로트에 무조건 적용되던 옛 코드)이라 **153차가 만든 회귀가
+아니라 사전 존재 버그**이며, 이번에 사진형 아트로 교체하면서 육안으로
+처음 도드라져 보인 것이다. 수정: `TownObjectLayer.jsx`의 LOTS 루프에
+`if (lot.id === 'my-house') return null` 한 줄을 `hidden` 판정 바로
+다음에 추가 — my-house는 원래 이 루프가 소유할 대상이 아니었으므로(전용
+블록이 유일 소유), 새 렌더 경로를 만들지 않고 기존 전용 블록에 단독
+소유권을 돌려주는 최소 수정. `town-lot-my-house`를 참조하는 테스트/코드는
+전무함을 grep으로 확인 후 진행. 수정 전/후 모두 `testTownV2Static`
+114/114, `testTownSceneV2` 259/259(둘 다 LOTS 데이터/`lotState()` 순수
+함수 자체는 무변경이라 그대로 통과) — 회귀 없음.
+
+### 4. 검증
+
+`npm run build` 클린(2회, 아트 교체 직후 + my-house 수정 직후) ·
+`testTownV2Static` 114/114 · `testTownSceneV2` 259/259 · `testTownUiStatic`
+126/126(V1 무변경 재확인) · `node scripts/validateTownAssetCandidate.mjs
+--audit` — my-house/book-shop 둘 다 "배선됨, 4파일 전부 존재" PASS ·
+`verify:e2e` 972/972(2회 재실행, 아트 교체 후 1회 + 버그 수정 후 1회) ·
+리드 자체 제작 시각 검증 스크립트(스크래치패드 전용, 커밋 안 함) —
+360/390/430px + CSS `documentElement.style.zoom=2`(200%) 4개 조건 ×
+My House 실제 `<img>` 렌더/로드, Book Shop 로트 상태, 가로 오버플로 0,
+콘솔 에러 0 = 24/24 PASS. Book Shop 로트의 실 DOM `<img>` 확인은 153차가
+문서화한 기존 mock 픽스처 버그(`tests/e2e/lib/mockRoutes.mjs:267`,
+assetKey를 원본 category로 잘못 생성)에 막히므로, 공유 픽스처 파일은
+건드리지 않고 스크래치패드 스크립트 안에서만 `window.fetch`를 감싸
+`CATEGORY_FOLDER` 매핑으로 응답의 assetKey를 보정해 확인(실제 앱 코드
+경로 자체를 검증한 것, 픽스처를 고친 것이 아님).
+
+### 5. 산출물/커밋/미결
+
+변경 파일 9개 — `src/components/town/v2/TownObjectLayer.jsx`(my-house
+이중 렌더 수정), `src/assets/town/buildings/{my-house,book-shop}{,@2x}.
+{png,webp}` 8개(실물 교체). 커밋 예정(이 handoff 갱신과 함께, chore
+브랜치, 로컬만). 미결 과제(다음 세션, 153차 미결 항목에 추가): (a) Tree
+재생성 필요(RGBA 알파 보존) — 규격은 `nature/tree` 192×256(2x) 그대로,
+(b) 153차가 남긴 mock 픽스처 assetKey 버그 자체 수정 여전히 미착수,
+(c) My House/Book Shop 신규 아트에 텍스트 간판("My Home", "BOOK SHOP" 등)이
+포함돼 있음 — 스토리북 톤에는 부합하나 원래 P0 스펙에 텍스트 요구사항이
+없었으므로 운영자 육안 승인 필요(주관적 판단이라 자동 게이트 대상
+아님, 차단 사유로 보지 않고 정보로만 기록).
 
 ## 2026-09-16 (153차) — P0 아트 연결 패치(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): 6개 고정 로트 art resolver 연결 + 독립 QA가 문서 오류 발견 + 리드가 별도 mock fixture 버그 발견
 
