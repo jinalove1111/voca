@@ -1,9 +1,62 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-17 (159차 — Bench 재수출본(bench12.png) 배선으로
-**P0 7종 전부 완료**(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬
-커밋만·미push). decorations/bench 최초 등록(index.js 23번째 키), Batch 3
-DEFERRED 사유였던 baked 글로우는 픽셀 분석으로 부재 확인. 정적 계약
-테스트 2개의 "bench 없음" assertion 제거(112/125). 158차 이하 보존)_
+_최종 갱신: 2026-09-17 (160차 — **PR #61(V2 월드/디자인 브랜치 → main)
+merge + Vercel Production 자동 배포 완료**, merge SHA `eef3e22`, 라이브
+번들에서 `paulTownV2:!1` 확인(학생 경로 V1 유지), 수동 Production WRITE 0.
+PR #60(P0 아트 7/7)은 base를 main으로 재지정해 최종 리뷰 단계, 미merge.
+159차 이하 보존)_
+
+## 2026-09-17 (160차) — PR #61 main merge + Production 자동 배포(운영자 승인) + PR #60 main 재지정: 문서 전용 기록
+
+### 0. 안전 요약
+
+이 항목은 문서 전용이다(앱 동작 변경 0). 운영자가 STEP 1로 명시 승인한
+merge와 그에 따르는 Vercel 자동 배포만 실행됐고, 플래그 활성화·SQL 실행·
+Production 수동 WRITE·DB/schema/RLS/auth/경제 변경은 0. PR #60은 merge
+하지 않았다.
+
+### 1. PR #61 — design/paul-town-world-redesign-2026-09-16 → main
+
+- 사전 검증(읽기 전용): design 브랜치는 main(`9eec10d`) 대비 15 ahead /
+  0 behind, 코드 변경은 `src/components/town/v2/*`·`townScene.js`·V2
+  e2e/씬 테스트 11개 파일뿐, SQL/api/auth/경제/학생/보상/V1 화면 전부
+  byte-identical, `paulTownV2: false` 유지. 기존 design→main PR 없음.
+- PR #61 생성(리뷰 전용) → release-gate(run 35119459021) 5게이트 전부
+  success(build / verify:all / student health / prod:check 읽기 전용 /
+  write-disabled proof / 브라우저 e2e), mergeable CLEAN.
+- pre-deploy 안전 게이트: **라이브** 번들(`assets/index-BNVCBtx_.js`)에서
+  `paulTownV1:!1`/`paulTownV2:!1` 직접 확인(플래그는 서버 소스 없이
+  컴파일 기본값 + 기기 localStorage 오버라이드뿐), `App.jsx`의
+  `townV2Active = townV1Enabled && paulTownV2Enabled` 스위치·`features.js`·
+  `TownScreen.jsx` 모두 PR 무변경, env/vercel.json/워크플로 변경 0.
+- **merge를 main에 하면 Vercel Git 연동이 Production을 자동 배포한다**는
+  사실(직전 main HEAD의 Production deployment 기록 + 기존 handoff 관행)을
+  먼저 보고하고 운영자 승인을 받은 뒤 merge(merge commit 방식, 이 저장소
+  관행 그대로, squash 아님). **merge SHA `eef3e22`**(부모 `9eec10d` +
+  `01c1d82`), 2026-09-16T16:39:50Z.
+- post-deploy(읽기 전용): Vercel Production deployment `6485802565`
+  (ref=`eef3e22`) SUCCESS · `https://voca-drab.vercel.app/` HTTP 200 ·
+  메인 번들 `index-BNVCBtx_.js`→`index-Ck4Vs84h.js`로 교체됨(V2 씬 마커
+  포함 = 새 빌드 서빙 확인) · 라이브 번들 `paulTownV2:!1` · 학생 기본
+  Town 경로 V1(`TownScreen-sYbHgf5d.js` 200) · V2 청크
+  `TownScreenV2-CK0dMXai.js`는 존재하나 lazy(플래그 OFF면 미로드) ·
+  메인 번들이 참조하는 lazy 청크 전부 HTTP 200(stale chunk 없음) ·
+  stale-chunk 복구 가드 번들에 포함 확인 · main push의 release-gate
+  (run 35123323415, 읽기 전용 prod:check 포함) 실행 중.
+
+### 2. PR #60 — main으로 재지정(FINAL REVIEW 단계, 미merge)
+
+design 브랜치가 main에 완전히 포함됐으므로(`eef3e22` 트리 == `01c1d82`
+트리, 동일성 확인) PR #60의 base를 `design/...`→`main`으로 재지정. 재지정
+후 diff는 정확히 아트 커밋 17개(36파일, +832/−33): P0 7종 × 4파일,
+`index.js` 등록, `TownObjectLayer.jsx` 최소 수정, 정적 계약 테스트 3개,
+문서 3개. #61의 월드/디자인 파일 중복 0, 보호 경로 무변경, 키당 파일
+정확히 4개, 잔여/중복 아트 파일 0.
+
+### 3. 이 항목의 커밋
+
+이 handoff 갱신 + `.ai-status` 갱신만 chore 브랜치에 커밋해 push한다 —
+PR #60에 문서로 실리며, push가 곧 release-gate(synchronize)를 최종 head에
+대해 다시 실행시킨다(base 재지정 자체는 CI를 트리거하지 않음).
 
 ## 2026-09-17 (159차) — Bench 드롭인(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): P0 7/7 완료
 

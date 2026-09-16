@@ -6,7 +6,7 @@
   "status": "working",
   "progress": 60,
   "started_at": "2026-09-16T04:00:00+09:00",
-  "updated_at": "2026-09-17T01:05:00+09:00",
+  "updated_at": "2026-09-17T02:00:00+09:00",
   "coordination_mechanism": "Agent-tool subagents (background, real independent processes, each with its own agentId, listed via ListAgents while active, resumable via SendMessage) coordinated by this Lead session — NOT the CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS persistent-teammate/dashboard feature. That flag was checked and is unset in this shell; this session has no tool to enable it, create a named 'team', or create a shared task board with a dashboard. Verified 2026-09-16 via `echo $CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` (unset) and ToolSearch (no team/teammate-creation tool exists in this environment; TaskStop can only stop a teammate, not create one). The six roles in agent_roster below are real, independently-run Agent-tool subagents when spawned, not six personas simulated in one context — but they are not the specific named feature the operator asked to enable.",
   "files_owned": [
     ".ai-status/lead-paul-town-lead.json"
@@ -44,7 +44,9 @@
   "art_street_lamp_status": "decorations/street-lamp 파일 4개 교체 완료·검증(157차, 코드 변경 0). build 클린, 정적/순수 5개 스위트 전부 PASS, e2e 972/972, V2 시각 60/60(360/390/430/200%), V1 읽기 전용 회귀 24/24(보관함+격자 실제 이미지). V1 첫 실행 이모지 원인 = 153차 mock 픽스처 assetKey 버그 + townCatalog.js:88 서버키 우선 규칙(픽스처만의 결함, 앱 코드 정상). 로컬 커밋만.",
   "art_red_post_box_status": "decorations/red-post-box 파일 4개 교체 완료·검증(158차, 코드 변경 0). 소스 'post lamp 2.png'(파일명 오기, 내용은 우체통) RGBA 57% 투명; 뷰어의 글로우는 alpha=0 픽셀의 잔여 색 데이터로 확인(baked 아님). build 클린, 정적/순수 5개 스위트 PASS, e2e 972/972, V2 72/72(360/390/430/200%), V1 읽기 전용 24/24. 로컬 커밋만.",
   "art_bench_status": "COMPLETE(159차) — bench12.png(RGBA 49.77% 투명) 배선. Batch 3 DEFERRED 사유(baked 글로우)는 픽셀 분석으로 부재 확인(글로우 샘플 전부 alpha=0, bbox 밖 alpha>4 픽셀 0개). index.js 23번째 키 등록, 정적 계약 테스트 2개 갱신(112/125). build 클린, 6개 스위트 PASS, e2e 972/972, V2 84/84, V1 24/24. 커밋 e52130c/9497399(로컬만).",
-  "next_exact_step": "P0 7/7 완료. 다음 게이트 = 운영자 push 승인: `git push -u origin chore/paul-town-p0-art-pipeline-2026-09-16` → design/paul-town-world-redesign-2026-09-16 대상 REVIEW-ONLY PR(P0 아트 드롭인 7/7). 후속 세션: mockRoutes.mjs assetKey 버그 수정(우선), town-lot-* E2E 커버리지, 시각 검증 스크립트의 정식 스펙 승격 검토.",
+  "pr61_status": "MERGED to main 2026-09-16T16:39:50Z, merge SHA eef3e22 (merge commit, 운영자 STEP 1 승인). Vercel Production deployment 6485802565 SUCCESS, https://voca-drab.vercel.app HTTP 200, 라이브 번들 index-Ck4Vs84h.js에서 paulTownV2:!1 확인, 학생 기본 경로 V1, lazy 청크 전부 200(stale 없음). 수동 Production WRITE 0, SQL 0, 플래그 변경 0.",
+  "pr60_status": "OPEN, base를 design→main으로 재지정(2026-09-17). diff = 아트 커밋 17개/36파일, #61 중복 0, 보호 경로 무변경. FINAL REVIEW 단계 — release-gate 최종 head 결과 대기, 미merge.",
+  "next_exact_step": "PR #60 최종 head에 대한 release-gate PASS + 로컬 검증(정적 스위트/아트 무결성/360·390·430·200% 시각) 확인 후 운영자에게 SAFE TO MERGE 보고 → 명시 승인 시에만 merge(자동 Production 배포 동반) → post-deploy 읽기 전용 검증(7종 실제 아트 서빙 확인). 후속 세션: mockRoutes.mjs assetKey 버그 수정(우선), town-lot-* E2E 커버리지.",
   "agent_roster": {
     "art_director": "스타일 키 집행, 매칭 배치 관리, 카메라/스케일/조명/팔레트, 자산 분리(KEEP/SEPARATE/REMOVE/REGENERATE 판정), 프롬프트 작성",
     "asset_qa": "카메라/스케일/조명/팔레트/투명도/실루엣/모바일 가독성/접지점/앵커 호환/구조 vs 이동 분류/카탈로그 대응/세트 일관성 독립 검증",
