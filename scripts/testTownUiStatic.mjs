@@ -113,19 +113,25 @@ const townAssetsKeys = townAssetsBlockMatch
 const EXPECTED_TOWN_ASSET_KEYS = [
   'buildings/my-house', 'buildings/british-cottage', 'buildings/book-shop', 'decorations/red-post-box', 'animals/cat', 'animals/owl', 'animals/puppy', 'buildings/cafe', 'special/bridge', 'special/english-school', 'decorations/town-sign', 'special/clock-tower', 'decorations/shop-lamp', 'decorations/street-lamp', 'decorations/stone-fountain', 'nature/tree',
   'nature/garden-stage-0', 'nature/garden-stage-1', 'nature/garden-stage-2',
-  'nature/garden-stage-3', 'nature/garden-stage-4',
+  'nature/garden-stage-3', 'nature/garden-stage-4', 'nature/flower-garden',
 ]
+// 2026-09-16(P0 Flower Bed 드롭인) — flower-garden에 실제 아트가 등록돼
+// EXPECTED_TOWN_ASSET_KEYS로 옮김(이 파일 자체 주석이 예고한 대로 —
+// TOWN_ASSETS는 V1/V2 공용 단일 resolver라 V1의 조회 결과도 함께
+// emoji→실제 이미지로 바뀐다, 의도된 동작이지 V1 로직/JSX 변경 아님).
+// bench는 이번에도 손대지 않아(작업 지시서 "Do NOT work on Bench yet")
+// 계속 이모지 폴백 목록에 남는다.
 const STILL_EMOJI_ONLY_ASSET_KEYS = [
-  'nature/flower-garden', 'decorations/bench',
+  'decorations/bench',
 ]
 check(
-  'src/assets/town/index.js — TOWN_ASSETS가 정확히 21개 드롭인 키를 포함',
+  'src/assets/town/index.js — TOWN_ASSETS가 정확히 22개 드롭인 키를 포함(flower-garden 추가 반영)',
   townAssetsKeys.length === EXPECTED_TOWN_ASSET_KEYS.length &&
     EXPECTED_TOWN_ASSET_KEYS.every((k) => townAssetsKeys.includes(k)),
   JSON.stringify(townAssetsKeys),
 )
 check(
-  'src/assets/town/index.js — TOWN_ASSETS에 나머지 2개 카탈로그 키(bench 포함, DEFERRED)는 여전히 없음(이모지 폴백 유지)',
+  'src/assets/town/index.js — TOWN_ASSETS에 나머지 1개 카탈로그 키(bench, DEFERRED)는 여전히 없음(이모지 폴백 유지)',
   STILL_EMOJI_ONLY_ASSET_KEYS.every((k) => !townAssetsKeys.includes(k)),
   JSON.stringify(townAssetsKeys),
 )

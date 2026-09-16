@@ -153,28 +153,18 @@ const townAssetsKeysV2 = townAssetsBlockMatchV2
 const EXPECTED_BATCH1_ASSET_KEYS = [
   'buildings/my-house', 'buildings/british-cottage', 'buildings/book-shop', 'decorations/red-post-box', 'animals/cat', 'animals/owl', 'animals/puppy', 'buildings/cafe', 'special/bridge', 'special/english-school', 'decorations/town-sign', 'special/clock-tower', 'decorations/shop-lamp', 'decorations/street-lamp', 'decorations/stone-fountain', 'nature/tree',
   'nature/garden-stage-0', 'nature/garden-stage-1', 'nature/garden-stage-2',
-  'nature/garden-stage-3', 'nature/garden-stage-4',
+  'nature/garden-stage-3', 'nature/garden-stage-4', 'nature/flower-garden',
 ]
 check(
-  'src/assets/town/index.js — TOWN_ASSETS가 정확히 batch1+batch2+batch3 21개 키만 포함(V2 전용 신규 에셋 0개)',
+  'src/assets/town/index.js — TOWN_ASSETS가 정확히 batch1+batch2+batch3+flower-garden 22개 키만 포함(bench 등 그 외 신규 에셋 0개)',
   townAssetsKeysV2.length === EXPECTED_BATCH1_ASSET_KEYS.length &&
     EXPECTED_BATCH1_ASSET_KEYS.every((k) => townAssetsKeysV2.includes(k)),
   JSON.stringify(townAssetsKeysV2),
 )
-// 2026-09-16 신규 — flower-garden/bench 자산 파일이 아직 없어 정적
-// import를 추가하지 않았음(빌드가 깨지므로)을 명시적으로 재확인한다.
-// townAsset() 본문이 `TOWN_ASSETS[assetKey] || null`인 이상, 이 두 키가
-// TOWN_ASSETS에 없다는 사실 자체가 곧 "townAsset('nature/flower-garden')/
-// townAsset('decorations/bench')가 오늘은 null을 반환한다"는 런타임
-// 사실의 정적 증거다(dynamic import 없이도 안전하게 확인 가능 — 작업
-// 지시서 TASK 5 "static-regex-contract 대체" 경로). 이 값은 영구
-// 불변식이 아니다 — 실제 아트가 등록되면(두 키가 TOWN_ASSETS에 추가되면)
-// 이 체크는 깨져야 정상이고, 그때는 이 assertion을 지우거나 반대로
-// 고쳐야 한다(EXPECTED_BATCH1_ASSET_KEYS 갱신과 함께).
-check(
-  "src/assets/town/index.js — TOWN_ASSETS에 'nature/flower-garden' 키 아직 없음(아트 파일 미존재, townAsset()이 오늘은 null 반환 — 아트 등록 시 이 체크는 의도적으로 깨져야 함)",
-  !townAssetsKeysV2.includes('nature/flower-garden'),
-)
+// 2026-09-16(155차 이후 갱신) — flower-garden은 실제 아트가 등록돼 이
+// "아직 없음" assertion이 의도한 대로 깨지므로 제거했다(원래 주석이
+// 예고한 대로). bench는 여전히 파일 자체가 없어(이번 작업 지시서도
+// "Do NOT work on Bench yet"로 명시) 아래 assertion을 그대로 유지한다.
 check(
   "src/assets/town/index.js — TOWN_ASSETS에 'decorations/bench' 키 아직 없음(아트 파일 미존재, townAsset()이 오늘은 null 반환 — 아트 등록 시 이 체크는 의도적으로 깨져야 함)",
   !townAssetsKeysV2.includes('decorations/bench'),

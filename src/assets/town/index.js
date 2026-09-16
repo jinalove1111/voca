@@ -14,8 +14,15 @@
 // decorations/bench는 지속적인 baked 배경 글로우/비네트 결함(안전 처리로
 // 제거 불가)으로 이번 배치에서 DEFERRED — V2 아트워크 백로그로 이월,
 // 후속 배치에서 재시도한다(TOWN_ASSETS에 추가하지 않음, 이모지 폴백 유지).
-// townAsset()은 이 21개 키에 대해서만 실제 이미지 URL을 반환한다. 그 외
-// 모든 assetKey(bench 등 나머지 카탈로그 항목)는 여전히
+// 2026-09-16(P0 Flower Bed 드롭인) — 22번째 키(nature/flower-garden)
+// 추가. 이 키는 154/155차와 달리 기존 파일 교체가 아니라 신규 등록 —
+// assetKeyFor()가 이미 'nature/flower-garden'을 정확히 파생하고 있었음이
+// 153차에 확인됐으므로(townCatalog.js 무변경), 여기 import+키 한 줄만
+// 추가하면 TownGrid/TownShopPanel/TownInventory/TownObjectLayer 등 이
+// 파일을 거쳐가는 모든 호출부가 즉시 실제 이미지를 그린다(V1/V2 공용
+// resolver라 V1도 함께 emoji→실제 이미지로 바뀜, 의도된 동작).
+// townAsset()은 이제 이 22개 키에 대해서만 실제 이미지 URL을 반환한다.
+// 그 외 모든 assetKey(bench 등 나머지 카탈로그 항목)는 여전히
 // TOWN_ASSETS에 없어 townAsset()이 null을 반환한다.
 // 호출부(TownGrid/TownShopPanel/TownInventory)는 townAsset(item.assetKey)가
 // null이면 항상 이모지(item.emoji)로 폴백한다(기능이 이미지 부재로 깨지지
@@ -40,6 +47,7 @@ import shopLamp from './decorations/shop-lamp.webp'
 import streetLamp from './decorations/street-lamp.webp'
 import stoneFountain from './decorations/stone-fountain.webp'
 import tree from './nature/tree.webp'
+import flowerGarden from './nature/flower-garden.webp'
 import gardenStage0 from './nature/garden-stage-0.webp'
 import gardenStage1 from './nature/garden-stage-1.webp'
 import gardenStage2 from './nature/garden-stage-2.webp'
@@ -63,6 +71,7 @@ export const TOWN_ASSETS = {
   'decorations/street-lamp': streetLamp,
   'decorations/stone-fountain': stoneFountain,
   'nature/tree': tree,
+  'nature/flower-garden': flowerGarden,
   'nature/garden-stage-0': gardenStage0,
   'nature/garden-stage-1': gardenStage1,
   'nature/garden-stage-2': gardenStage2,
