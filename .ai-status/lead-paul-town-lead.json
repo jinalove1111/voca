@@ -6,7 +6,7 @@
   "status": "working",
   "progress": 45,
   "started_at": "2026-09-16T04:00:00+09:00",
-  "updated_at": "2026-09-16T20:10:00+09:00",
+  "updated_at": "2026-09-16T21:20:00+09:00",
   "coordination_mechanism": "Agent-tool subagents (background, real independent processes, each with its own agentId, listed via ListAgents while active, resumable via SendMessage) coordinated by this Lead session — NOT the CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS persistent-teammate/dashboard feature. That flag was checked and is unset in this shell; this session has no tool to enable it, create a named 'team', or create a shared task board with a dashboard. Verified 2026-09-16 via `echo $CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` (unset) and ToolSearch (no team/teammate-creation tool exists in this environment; TaskStop can only stop a teammate, not create one). The six roles in agent_roster below are real, independently-run Agent-tool subagents when spawned, not six personas simulated in one context — but they are not the specific named feature the operator asked to enable.",
   "files_owned": [".ai-status/lead-paul-town-lead.json"],
   "files_read": [
@@ -29,7 +29,7 @@
   "art_batch_status": "CORRECTIONS NEEDED (round 3, house44.png) — worse than round 2, art-director + asset-qa both independently flagged likely prompt-fidelity/pipeline issue (explicit new prohibition reproduced verbatim). Owner confirmed round 3 was not a faithful v3 test and does not indict the spec. Switched to SPLIT-PROMPT strategy: two short single-subject prompts (1v4/3v4) now written, no combined two-panel image. Awaiting round-4 candidates (two separate files).",
   "generation_strategy": "split-prompt-v1 (2026-09-16): env/plate-home.webp and buildings/my-house.webp must be generated as two SEPARATE single-subject images, never a combined two-panel composite. Use the short prompts at ART_GENERATION_HANDOFF_P0_2026-09-16.md §1v4/§3v4 (not the longer 1v3/3v3, which are preserved as history but superseded for actual generation use).",
   "art_pipeline_patch_status": "committed locally (75252bc) — 6개 고정 로트 art resolver 연결 완료·검증(build+3 static suites+e2e 972/972 독립 재확인 2회, QA PASS-with-1-Major-doc-fix). 별도 발견: 공유 e2e mock 픽스처(tests/e2e/lib/mockRoutes.mjs)의 assetKey 생성 버그, 실제 앱 코드는 정상, 후속 세션 과제로 이월. PR 미오픈, push 미실행(운영자 승인 대기).",
-  "art_first3_swap_status": "My House + Book Shop 실물 교체 완료·검증(154차) — build 2회 클린, static/pure suites 전부 그대로 PASS, e2e 972/972 2회, 리드 자체 시각검증 24/24 PASS(360/390/430/200%zoom). Tree는 소스 PNG에 실제 알파 채널이 없어(colorType=2, 체커보드가 불투명 픽셀로 구워짐) 배선하지 않고 차단 — 기존 nature/tree.webp 무접촉. 부수 발견: my-house LOTS 이중 렌더(녹색 placeholder 박스) 사전 존재 버그 발견+최소 수정(git show 75252bc로 153차 이전부터 있던 조건임을 확인, 회귀 아님). 커밋 예정(로컬만, 미push).",
+  "art_first3_swap_status": "P0 첫 3종(My House/Book Shop/Tree) 전부 실물 교체+검증 완료(154~155차). My House/Book Shop은 154차에서 완료, my-house LOTS 이중 렌더(녹색 placeholder 박스) 사전 존재 버그 발견+최소 수정도 함께(회귀 아님, git show 75252bc로 확인). Tree는 최초 후보(colorType=2, 체커보드 baked)가 차단됐다가, 운영자가 진짜 RGBA 알파를 가진 재수출본(tree 2.png)을 제공해 155차에서 동일 파이프라인으로 배선 완료 — 실제 인벤토리 '마을에 놓기' 플로우로 라이브 렌더까지 확인(36/36 PASS). build 3회 클린, static/pure suites 전부 그대로 PASS, e2e 972/972 3회. 커밋 4건(9cdd726/00307fe/254d709 + Tree 커밋, 전부 로컬만, 미push).",
   "implementation_status": "NOT STARTED — WORLD_LAYOUT_REDESIGN_2026-09-16.md §9 설계만 존재, 코드 변경 0, paulTownV2 플래그 OFF 유지",
   "qa_status": "NOT STARTED (Batch 0 승인 전)",
   "production_status": "무접촉 — Production DB WRITE 0, 배포/PR/merge 0, Kinney Pilot A 실데이터는 142차에서 read-only로만 확인",
@@ -39,7 +39,7 @@
     "향후 My House 외관 커스터마이즈(문/창문/화단/펜스 변형) 아키텍처 — 이번 배치 범위 아님, DB 변경 없이 equippedHatId 패턴 재사용 권장(설계 메모만 존재)",
     "렌더링 등록(painterly vs photoreal/CG) 판정 불일치 — art-director는 적합, asset-qa는 부적합 판단. 운영자가 승인된 Step 0 스타일 키 이미지와 직접 대조해 판정 필요"
   ],
-  "next_exact_step": "Tree를 실제 RGBA 알파 채널 보존해 재생성(192x256, nature/tree) 후 동일 파이프라인으로 배선 → 이후 운영자가 chore/paul-town-p0-art-pipeline-2026-09-16 브랜치 push 승인 여부 결정 → 승인 시 `git push -u origin chore/paul-town-p0-art-pipeline-2026-09-16` 후 REVIEW-ONLY PR. 별도로 mockRoutes.mjs assetKey 버그 수정은 후속 세션 과제.",
+  "next_exact_step": "P0 첫 3종 전부 완료 — 운영자가 chore/paul-town-p0-art-pipeline-2026-09-16 브랜치 push 승인 여부 결정 → 승인 시 `git push -u origin chore/paul-town-p0-art-pipeline-2026-09-16` 후 REVIEW-ONLY PR. 나머지 P0 자산(flower-garden/bench)은 이미지 파일 자체가 아직 없어 다음 세션 과제, mockRoutes.mjs assetKey 버그 수정도 후속 세션 과제.",
   "agent_roster": {
     "art_director": "스타일 키 집행, 매칭 배치 관리, 카메라/스케일/조명/팔레트, 자산 분리(KEEP/SEPARATE/REMOVE/REGENERATE 판정), 프롬프트 작성",
     "asset_qa": "카메라/스케일/조명/팔레트/투명도/실루엣/모바일 가독성/접지점/앵커 호환/구조 vs 이동 분류/카탈로그 대응/세트 일관성 독립 검증",

@@ -1,9 +1,65 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-16 (154차 — P0 첫 3종 아트 실물 교체
-(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): My
-House/Book Shop 2종 실제 교체, Tree는 투명 채널 없어 미교체(차단), my-house
-이중 렌더(녹색 placeholder 박스) 사전 존재 버그 발견+수정. 153차 이하
-보존)_
+_최종 갱신: 2026-09-16 (155차 — Tree 재수출본 배선 완료로 P0 첫 3종 전부
+실물 교체 마무리(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·
+미push): 154차에서 차단했던 Tree, 운영자가 진짜 RGBA 알파를 가진 재수출본
+("tree 2.png") 제공 → 동일 파이프라인으로 검증+배선, 실제 인벤토리
+배치 플로우로 라이브 렌더 확인까지 완료. 154차 이하 보존)_
+
+## 2026-09-16 (155차) — Tree 재수출본 배선(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): P0 첫 3종(My House/Book Shop/Tree) 전부 실물 교체 완료
+
+### 0. 안전 요약
+
+동일 전용 브랜치, main 무접촉, DB/SQL/경제/카탈로그/가격/레벨/플래그
+변경 0(`paulTownV2` 여전히 false), merge/deploy/push 0, 보호 파일 17개
+무접촉, 코드 변경 0(순수 자산 파일 교체만 — nature/tree는 이미 hot-swap
+가능한 기존 경로였음), 새 npm 패키지 0개.
+
+### 1. 경과 — 같은 파일 재전송 2회 확인 후 실제 재수출본 도착
+
+운영자가 154차에서 차단 판정한 `Tree 192×256.png` 경로를 이후 2회 다시
+보냈으나 MD5/타임스탬프가 완전히 동일함을 매번 재검증해 "재수출 아님"을
+확인·보고(자동 진행하지 않고 정직하게 재확인 결과만 전달). 추가로 체커보드
+자체가 깔끔한 2색 격자가 아니라 셀 경계가 부드럽게 번져 있어(220/227/236
+등 중간값 다수) 색상 기반 자동 복구도 신뢰할 수 없음을 픽셀 샘플링으로
+확인해 "자동 복구 시도 안 함" 판단을 재확인. 이후 운영자가 새 파일
+`tree 2.png`를 제공 — 검증 결과 `colorType=6(RGBA)`, 실제 투명 43.10%로
+진짜 알파 채널 보유 확인, 즉시 처리 진행.
+
+### 2. 처리와 배선
+
+My House/Book Shop과 동일 파이프라인 — `validateTownAssetCandidate.mjs`로
+알파/여백 객관 검증(여백 1.38%로 1건만 FAIL, repad로 해결되는 범주) →
+콘텐츠 바운딩박스 크롭 → 비율 유지 축소 → 기존 규칙(좌우 대칭, 하단 5%
+여백, bottom-anchor)으로 재배치 → 1x(96×128)/2x(192×256) PNG+WebP(무손실)
+생성 → `src/assets/town/nature/tree.{png,webp,@2x.png,@2x.webp}` 4파일
+교체. 재배치 후 여백 전부 5%대로 계약(≥4%) 통과. asset_key(`nature/tree`)
+불변, 코드 무변경 — nature/tree는 이미 교체 전부터 hot-swap 가능한 기존
+경로였다(153차 P0 핸드오프 문서 기준).
+
+### 3. 검증 — 파일 계약뿐 아니라 실제 배치 플로우로 라이브 확인
+
+`npm run build` 클린 · `testTownV2Static` 114/114 · `testTownSceneV2`
+259/259 · `testTownUiStatic` 126/126(V1 무변경) · 매니페스트 감사 —
+`nature/tree` "배선됨, 4파일 전부 존재" PASS · `verify:e2e` 972/972 ·
+리드 자체 시각 검증 스크립트 확장(스크래치패드 전용, 커밋 안 함) —
+360/390/430px에서 실제 보관함(TownInventory) UI로 "마을에 놓기" 클릭 →
+빈 칸(1,1) 클릭 → 배치 완료 → 실제 `<img>` 렌더(placeholder/이모지
+아님)와 `naturalWidth>0`까지 확인(fixture 우회 없이 진짜 앱 플로우로
+검증). My House/Book Shop 항목까지 합쳐 4개 조건 × 36개 단언 전부 PASS.
+스크린샷으로 Tree/Book Shop/My House 3종이 한 화면에 자연스러운
+상대 크기로 함께 배치된 상태 확인 — 붕 뜬 오브젝트/클리핑/불투명
+배경/왜곡 없음.
+
+### 4. 산출물/커밋/미결
+
+변경 파일 4개 — `src/assets/town/nature/tree.{png,webp,@2x.png,@2x.webp}`.
+커밋 예정(이 handoff 갱신과 함께, chore 브랜치, 로컬만). 이로써 이번
+"P0 첫 3종" 과제(My House/Book Shop/Tree)가 전부 완료. 나머지 P0 자산 중
+street-lamp/red-post-box는 이미 배포된 기존 아트로 hot-swap 대상일 뿐이라
+이번 세션이 손댈 필요가 없었고, flower-garden/bench는 여전히 실제 이미지
+파일 자체가 없어 다음 세션 과제로 남는다(카탈로그 쪽 assetKey 배선은
+153차에서 이미 검증 완료). 153차가 남긴 mock 픽스처 assetKey 버그,
+`town-lot-*` E2E 커버리지 갭도 여전히 미결.
 
 ## 2026-09-16 (154차) — P0 첫 3종 아트 실물 교체(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): My House/Book Shop 2종 실제 교체, Tree 차단, my-house 이중 렌더 버그 발견+수정
 
