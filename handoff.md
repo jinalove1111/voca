@@ -1,10 +1,72 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-16 (157차 — British Street Lamp 드롭인
-(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push):
-decorations/street-lamp 기존 키 파일 4개 교체(코드 변경 0), V1/V2 양쪽
-라이브 렌더 확인, mock 픽스처 assetKey 버그가 V1 검증에서도 재현돼
-"서버 제공 assetKey 우선" 규칙(townCatalog.js:88)까지 원인 확정. P0
-5/7 완료, 156차 이하 보존)_
+_최종 갱신: 2026-09-17 (158차 — Red Post Box 드롭인 완료(파일 교체만,
+코드 변경 0, V1/V2 라이브 확인) + Bench 후보(bench11.png) 알파 없음으로
+차단(colorType=2, 체커보드 baked — 1차 Tree와 동일 결함, 자동 복구
+시도 안 함). P0 6/7 완료, Bench만 진짜 투명 소스 대기.
+chore/paul-town-p0-art-pipeline-2026-09-16 로컬 커밋만·미push. 157차
+이하 보존)_
+
+## 2026-09-17 (158차) — Red Post Box 드롭인 + Bench 차단(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): P0 6/7
+
+### 0. 안전 요약
+
+동일 전용 브랜치, main 무접촉, 코드 변경 0(Red Post Box 자산 파일 4개
+교체만; Bench는 파일/코드 모두 무접촉), DB/SQL/경제/카탈로그/가격/레벨/
+플래그 변경 0(`paulTownV2` 여전히 false), merge/deploy/push 0, 보호
+파일 17개 무접촉, 완료된 P0 5종과 `index.js`/Town 코드 전부
+byte-identical(git diff 빈 결과), 새 npm 패키지 0개.
+
+### 1. Red Post Box — 파일명은 "post lamp 2.png"였지만 내용은 우체통
+
+운영자 제공 파일명이 `post lamp 2.png`라 먼저 내용을 육안 확인 —
+빨간 우체통 맞음. `colorType=6(RGBA)`, 실제 투명 57.36%. 알파를
+무시하는 뷰어에서는 랜턴 글로우처럼 상단에 붉은/하단에 초록 헤일로가
+보였으나, 픽셀 분석 결과 그 영역은 **alpha=0인 픽셀에 남은 색 데이터**
+(예: (157,32,35,0))였다 — 콘텐츠 바운딩박스 밖에 alpha>0 픽셀은 218개뿐,
+전부 alpha≤4, 5 이상은 0개. 즉 올바른 합성기에서는 보이지 않고, 크롭
+단계에서 어차피 버려진다(baked glow 아님). 여백만 2.80%로 미달 →
+repad. 처리: 동일 파이프라인으로 144×216(2x)/72×108(1x) PNG+WebP
+(무손실) 4파일 교체. 앱의 밝은 지면색 위에 합성한 미리보기로 헤일로/
+번짐 없음 확인. `decorations/red-post-box`는 이미 등록된 키라 코드
+변경 0.
+
+### 2. Red Post Box 검증
+
+`npm run build` 클린 · 매니페스트 감사 "배선됨, 4파일 전부 존재" ·
+`testTownV2Static` 113/113 · `testTownSceneV2` 259/259 ·
+`testTownUiStatic` 126/126 · `testTownAssetManifest` 487/487 ·
+`testTownAssetValidator` 32/32 · `verify:e2e` 972/972(단독 실행) ·
+V2 리드 시각 검증 360/390/430/200%zoom — Tree/Flower Bed/Street Lamp/
+Red Post Box를 실제 보관함 UI로 연속 배치((1,1)/(2,1)/(4,1)/(5,1)),
+전부 실제 `<img>`+`naturalWidth>0`, 72/72 PASS · V1 읽기 전용 회귀
+(`v1PostBoxCheck.mjs`, 커밋 안 함) 보관함+격자 실제 이미지 24/24 PASS ·
+2배 확대 크롭 육안: 가로등 옆 지면에 접지, 스케일은 가로등보다 약간
+낮고 집보다 낮아 그럴듯함, 클리핑/왜곡/불투명 배경/헤일로 없음. 6종
+(My House/Book Shop/Tree/Flower Garden/Street Lamp/Red Post Box)이 한
+화면에 함께 렌더됨을 스크린샷으로 확인.
+
+### 3. Bench 차단 — 진짜 알파 없음(1차 Tree와 동일 결함)
+
+운영자 제공 `bench11.png`: `mode=RGB`, 알파 밴드 없음, 투명 픽셀 0%,
+체커보드가 실제 불투명 픽셀로 구워져 있음(육안 확인). 배경 120×40
+패치에서 서로 다른 색이 402개 — 깔끔한 2색 격자가 아니라 번진
+체커보드라 색 기반 자동 복구도 신뢰 불가(1차 Tree 분석과 동일 결론).
+운영자 지시서의 명시 규칙("실제 알파가 아니면 STOP, 배경 자동 제거
+금지")대로 통합하지 않았고 파일/코드/테스트 전부 무접촉. 필요한 것:
+원본 생성 도구에서 진짜 RGBA 알파를 보존한 재수출(144×96 캔버스 기준,
+bench.webp). 도착 시 절차는 156차 Flower Garden과 동일 — 파일 4개
+신규 + `index.js` import/키 1줄 + 정적 계약 테스트 2개(키 개수 22→23,
+"bench 아직 없음" assertion 제거) 갱신.
+
+### 4. 산출물/커밋/미결
+
+변경 파일 4개(`src/assets/town/decorations/red-post-box.*`). 커밋: art
+1건 + 이 handoff 갱신 커밋(로컬만). P0 6/7 완료, Bench만 남음(소스
+대기). 153차 mock 픽스처 assetKey 버그(`mockRoutes.mjs:267` +
+`townCatalog.js:88` 서버키 우선)·`town-lot-*` E2E 커버리지 갭 여전히
+미결. 156차 항목의 "street-lamp/red-post-box는 작업 불필요" 문구는
+"기존 아트로 hot-swap 가능 상태"라는 뜻이었고, 실제로는 157/158차에서
+최종 아트로 교체됐다(정정).
 
 ## 2026-09-16 (157차) — British Street Lamp 드롭인(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): 기존 asset_key 파일 교체만, V1/V2 라이브 확인
 
