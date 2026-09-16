@@ -1,10 +1,82 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-16 (156차 — Flower Bed 드롭인, 최초 신규 asset_key
-등록(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push):
-nature/flower-garden에 실제 아트 배선(154/155차와 달리 파일 교체가 아니라
-`src/assets/town/index.js`에 import+키 1줄 신규 추가), My House/Book
-Shop/Tree는 무접촉 보호, V1/V2 공용 정적 계약 테스트 2개 갱신. 155차
-이하 보존)_
+_최종 갱신: 2026-09-16 (157차 — British Street Lamp 드롭인
+(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push):
+decorations/street-lamp 기존 키 파일 4개 교체(코드 변경 0), V1/V2 양쪽
+라이브 렌더 확인, mock 픽스처 assetKey 버그가 V1 검증에서도 재현돼
+"서버 제공 assetKey 우선" 규칙(townCatalog.js:88)까지 원인 확정. P0
+5/7 완료, 156차 이하 보존)_
+
+## 2026-09-16 (157차) — British Street Lamp 드롭인(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): 기존 asset_key 파일 교체만, V1/V2 라이브 확인
+
+### 0. 안전 요약
+
+동일 전용 브랜치, main 무접촉, 코드 변경 0(순수 자산 파일 4개 교체),
+DB/SQL/경제/카탈로그/가격/레벨/플래그 변경 0(`paulTownV2` 여전히
+false), merge/deploy/push 0, 보호 파일 17개 무접촉, 완료된 P0 4종
+(My House/Book Shop/Tree/Flower Garden)과 `index.js`/Town 코드 전부
+byte-identical(git diff 빈 결과로 확인), 새 npm 패키지 0개, `-on`
+변형 미생성(등록된 변형 없음).
+
+### 1. 사전 준비 보고(읽기 전용)와 소스 검증
+
+운영자 요청으로 먼저 코드 무변경 상태에서 남은 3종의 드롭인 경로만
+확인해 보고: street-lamp/red-post-box는 `TOWN_ASSETS`에 이미 키가 있고
+파일 4개씩 존재해 파일 교체만으로 완료(코드 변경 불필요, V1 공용 영향
+있음), bench는 매니페스트/카탈로그는 있으나 파일도 키도 없어
+flower-garden과 같은 최소 등록(import+키 1줄 + 정적 계약 테스트 2개
+갱신)이 필요. 이후 운영자가 `street lamp 2.png` 제공 — `colorType=6
+(RGBA)`, 실제 투명 85.25%(가늘고 긴 가로등이라 정상), 평면화/체커보드
+배경 아님. 여백만 상단 1.24%/하단 1.95%로 계약(≥4%) 미달 → repad
+범주. 랜턴 주변의 따뜻한 글로우는 의도된 반투명 픽셀로 보고 그대로
+보존(partial-alpha 1.52%로 얇음, 배경 글로우/비네트와 다름).
+
+### 2. 처리
+
+동일 파이프라인 — 알파 바운딩박스 크롭(피니얼/랜턴/배너/꽃/받침 전부
+포함) → 비율 유지 축소(스트레치 없음, 세로 기준 맞춤이라 좌우 여백
+29%) → 좌우 대칭·하단 5% 여백으로 144×288(2x)/72×144(1x) 캔버스에
+bottom-anchor 배치 → PNG+WebP(무손실) 4파일 생성 →
+`src/assets/town/decorations/street-lamp.{png,webp,@2x.png,@2x.webp}`
+교체. 재검증: 계약 전 항목 PASS(최소 여백 4.86%), WebP 컨테이너 VP8L
+무손실·alpha=true·치수 정확.
+
+### 3. 검증 — V2 + V1 양쪽 라이브
+
+`npm run build` 클린 · `testTownV2Static` 113/113 · `testTownSceneV2`
+259/259 · `testTownUiStatic` 126/126 · `testTownAssetManifest` 487/487 ·
+`testTownAssetValidator` 32/32 · 매니페스트 감사 "배선됨, 4파일 전부
+존재" · `verify:e2e` 972/972(단독 실행) · V2 리드 시각 검증(스크래치패드
+전용) — 360/390/430/200%zoom, 실제 보관함 UI로 Tree/Flower Bed/Street
+Lamp 연속 배치((1,1)/(2,1)/(4,1)), 전부 실제 `<img>`+`naturalWidth>0`,
+60/60 PASS. 2배 확대 크롭 육안: 가로등이 길 옆 지면에 접지, 글로우가
+사각 헤일로를 만들지 않음, 배너는 장식으로 읽힘, 스케일은 화단보다
+높고 집보다 낮아 그럴듯함, 클리핑/왜곡/불투명 배경 없음.
+**V1 읽기 전용 회귀**(`paulTownV1`만 ON, V2 OFF, 신규 스크립트
+`v1StreetLampCheck.mjs`, 커밋 안 함): 보관함 목록 + 8×6 격자 배치에서
+실제 이미지 렌더 확인, 360/390/430 24/24 PASS, 가로 오버플로/콘솔 에러 0.
+
+### 4. V1 검증에서 mock 픽스처 버그 재현 — 원인 한 단계 더 확정
+
+V1 첫 실행에서는 가로등이 이모지로 나왔다(imgs=0). 원인은 153차에
+기록한 공유 픽스처 버그 그대로 — `tests/e2e/lib/mockRoutes.mjs:267`이
+`assetKey: 'decoration/street-lamp'`(원본 category)를 내려보내고,
+`townCatalog.js:88`의 `pick(s, 'assetKey', 'asset_key', assetKeyFor(...))`
+가 **서버 제공 assetKey를 클라이언트 파생값보다 우선**하므로 잘못된
+키가 그대로 `townAsset()`에 들어가 null → 이모지. 즉 V1/V2 공통으로
+"카테고리 폴더명 ≠ 카테고리명"인 항목(house/decoration)만 픽스처에서
+깨지고, tree(nature)처럼 같은 문자열인 항목은 우연히 통과한다(153차
+관찰과 일치). 스크래치패드 스크립트에만 V2와 동일한 in-page fetch
+보정을 넣어 재실행 → 24/24 PASS로 V1 실제 코드 경로는 정상임을 확정.
+픽스처 파일 자체는 이번에도 손대지 않음(공유 픽스처, 별도 회귀 패스
+필요 — 여전히 후속 과제).
+
+### 5. 산출물/커밋/미결
+
+변경 파일 4개(`src/assets/town/decorations/street-lamp.*`). 커밋: art
+1건 + 이 handoff 갱신 커밋(chore 브랜치 로컬만). P0 진행: 5/7 완료
+(My House/Book Shop/Tree/Flower Garden/Street Lamp). 남은 것: Red Post
+Box(파일 교체만, 코드 변경 불필요), Bench(최소 등록 필요, 파일 미존재).
+153차 mock 픽스처 assetKey 버그·`town-lot-*` E2E 커버리지 갭 여전히 미결.
 
 ## 2026-09-16 (156차) — Flower Bed 드롭인(chore/paul-town-p0-art-pipeline-2026-09-16, 로컬 커밋만·미push): nature/flower-garden 신규 등록, 최초로 이모지 폴백에서 실제 아트로 전환
 
