@@ -1,9 +1,73 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-16 (151차 — 8시간 야간 자율 빌드 완료: V2 하이브리드
-district 렌더러 구현+검증(build/972 e2e/QA독립검토/반응형 시각확인 전부
-PASS), DB WRITE/SQL/경제·카탈로그·가격·레벨/플래그 변경 전부 0(`paulTownV2`
-여전히 false), merge/deploy/push 0, V1/Kinney/Production 무접촉. 150차
+_최종 갱신: 2026-09-16 (152차 — PAUL TOWN WORLD BLUEPRINT V1 작성(PM
+디렉티브 응답, 설계 전용): 월드맵/레벨진행/고정·커스터마이즈 매트릭스/
+학습→환경 매트릭스/Owner-Visitor 미래 아키텍처(신규)/Explore 확장
+지점(신규)/개정 아트 스펙/PM 수락 테스트 10문항 정리, 코드/DB/SQL/경제/
+카탈로그/가격/레벨/플래그 변경 전부 0, `paulTownV2` 여전히 false. 151차
 이하 보존)_
+
+## 2026-09-16 (152차) — PAUL TOWN WORLD BLUEPRINT V1 작성(PM 디렉티브 응답, 설계 전용) — Owner/Visitor 미래 아키텍처 + Explore 확장 지점 신규 설계
+
+### 0. 안전 요약
+
+코드/DB/SQL/경제/카탈로그/가격/레벨/플래그 변경 0(`paulTownV2` 여전히
+false) · merge/deploy/push 0 · 미추적 보호 파일 17개(`docs/operations/
+ELEMENTARY_45_ROLLOUT_PACKAGE.md`, `production_*.sql` 5개, `supabase_v3_38/
+39/39b/46*.sql` 8개 등) 무접촉 · 이번 세션이 쓴 파일은 신규 설계 문서
+1개(`docs/design/town/PAUL_TOWN_WORLD_BLUEPRINT_V1_2026-09-16.md`)와 이
+`handoff.md` 항목뿐, `PROJECT_BOARD.md`/소스코드 무접촉.
+
+### 1. 배경
+
+PM 디렉티브가 "거부한" 시각 구성(사각 보드, 평평한 지형, 가로 조약돌 띠,
+작은 이모지 집, 붕 뜬 오브젝트)은 실제로는 **오늘 밤 150~151차 빌드
+이전의 상태**였다 — 151차(커밋 `021498e`→`f6f8dd1`→`0f92321`)에서 이미
+그 구성은 폐기되고 6개 district 세로 스택 + 연속 길 + 고정 로트 구조로
+교체·검증 완료된 상태였다. 즉 PM 디렉티브가 참조한 "현재 상태"는 이미
+151차 이후 시점에서는 유효하지 않은 과거 스냅샷이었다는 점을 이번
+블루프린트가 정정해 기록했다 — 이 사실이 블루프린트 작성을 생략할
+사유는 아니며, 오히려 이미 결정된 구조 위에서 요청받은 전 섹션을
+정리해 내놓는 근거가 됐다.
+
+### 2. 산출물
+
+신규 문서 `docs/design/town/PAUL_TOWN_WORLD_BLUEPRINT_V1_2026-09-16.md`
+(221줄) — 10개 섹션: 월드맵(district별 heightUnits→세로 구간 % 변환),
+레벨별 진행(Lv1~Lv8 공간 확장 vs gardenPoints 생기 축 분리), 고정/
+커스터마이즈 매트릭스(카탈로그 17개 전수 분류), 학습→환경 매트릭스
+(gardenRichness 파생 표), Owner/Visitor 미래 아키텍처(신규 설계 —
+SECURITY DEFINER RPC 개념 + 세션 토큰 원칙 + mode prop + 노출 금지
+항목), Explore 확장 지점(신규 설계 — tower 밴드 상단 여백 재사용),
+개정 아트 스펙(`env/plate-*` 배경판 항목 전부 제거, 고립 오브젝트
+스프라이트만 P0/P1/P2로 재편), 비주얼 목업 구조(기존 와이어프레임+
+스크린샷 재사용, 신규 목업 없음), PM 수락 테스트 10문항.
+
+발견한 정정 사항 1건: PM 디렉티브 예시는 FIXED WORLD를 5개(bridge/
+english-school/clock-tower/book-shop/cafe)로 들어 stone-fountain이
+CUSTOMIZABLE인 것처럼 암시했으나, 실제 `WORLD_LAYOUT_REDESIGN_2026-09-16.md`
+§2 OWNER DECISION A 원문은 Stone Fountain을 다른 5개 건물과 동일하게
+"로트 위 고정 건물"로 명시하고 있음을 원문 인용으로 확인해 FIXED
+WORLD로 정정 분류했다(FIXED WORLD 6개 + CUSTOMIZABLE 10개 +
+RECONSIDER 1개, 총 17개).
+
+### 3. 정직하게 표기한 미해결/부분 항목
+
+PM 수락 테스트 10문항 중 2개는 PARTIAL로 답변했다 — 2번("최종 수준
+아트워크로 보이는가") 건물이 여전히 placeholder 도형(my-house만 실제
+승인 아트)이라 P0/P1/P2 아트워크가 실제로 배선돼야 완전한 YES가 됨,
+6번("모바일에서 깨지지 않는가") 검증이 placeholder 도형 기준이라 실제
+아트워크 반영 후 360/390/430px 재검증이 한 번 더 필요함 — 둘 다 숨기지
+않고 명시했다. §10에 미해결 4건: `british-cottage` 카탈로그 아이템
+역할(이월), 펜스 신규 카탈로그 여부(이월), Visitor 모드 권한 범위(반이
+다른 학생 간 방문 — 소셜 그래프 테이블 부재로 신규 미해결), Explore
+기능의 실제 콘텐츠/목적지(신규 미해결, 위치만 제안).
+
+### 4. 다음
+
+운영자가 블루프린트 검토 후 (a) P0 아트워크 생성 재개(개정된 고립
+오브젝트 방식 — `env/plate-*` 배경판 없이 건물/장식 스프라이트만) 또는
+(b) 구역 콘텐츠 확장(Owner/Visitor, Explore 등 §5/§6 설계 항목의 실제
+구현 착수) 중 우선순위 결정.
 
 ## 2026-09-16 (151차) — 8시간 야간 자율 빌드 완료: V2 하이브리드 district 렌더러 구현+검증(build/972 e2e/QA독립검토/반응형 시각확인 전부 PASS)
 
