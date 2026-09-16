@@ -197,11 +197,20 @@ const TOWN_ASSET_URL_RE = /assets\/town\//
 check('메인 청크에 assets/town/ 경로 문자열 0건(Vite가 소스 폴더 구조를 산출물 URL에 남기지 않음)', !TOWN_ASSET_URL_RE.test(mainSrc))
 check('TownScreen 청크에 assets/town/ 경로 문자열 0건(위와 동일 이유)', !TOWN_ASSET_URL_RE.test(townSrc))
 const KNOWN_SAFE_IMAGE_PREFIX = /^(paul_|favicon\.)/
-// 물리 파일로 방출될 것으로 기대되는 14개(red-post-box/cat/owl/puppy/
-// shop-lamp/street-lamp/stone-fountain 제외 — 위 설명 참고).
+// 2026-09-17 갱신(P0 최종 아트 7종 드롭인, PR #60) — 전제가 다시 바뀌었다:
+// (a) nature/flower-garden·decorations/bench가 TOWN_ASSETS에 신규 등록돼
+// 23개 키, (b) 최종 아트로 교체된 red-post-box.webp(8644B)·street-lamp.webp
+// (7256B)가 4096바이트 한도를 넘어 이제 물리 파일로 방출된다. 따라서
+// 물리 파일 계약은 14→18개, 인라인 계약은 7→5개(cat/owl/puppy/shop-lamp/
+// stone-fountain — 이 5개는 이번에 손대지 않아 그대로 4KB 미만). 크기
+// 예산(gzip 135KB/15KB, raw 1.5MB) 자체는 그대로다 — 갱신된 것은 산출물
+// 인벤토리 사실뿐이다(빌드 산출물 직접 확인).
+// 물리 파일로 방출될 것으로 기대되는 18개(cat/owl/puppy/shop-lamp/
+// stone-fountain 제외 — 위 설명 참고).
 const EXPECTED_BATCH1_IMAGE_BASENAMES = [
   'my-house', 'british-cottage', 'book-shop', 'cafe', 'bridge', 'english-school', 'town-sign', 'clock-tower', 'tree',
   'garden-stage-0', 'garden-stage-1', 'garden-stage-2', 'garden-stage-3', 'garden-stage-4',
+  'flower-garden', 'bench', 'red-post-box', 'street-lamp',
 ]
 // Vite는 해시를 붙여 `<basename>-<hash>.<ext>`로 내보낸다(예:
 // my-house-BbqH3Nte.webp) — 해시는 빌드마다 바뀌므로 접두사로만 매칭한다.
@@ -224,7 +233,7 @@ const strayImages = assetFiles.filter(
   (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f) && !isExpectedEnvArtwork(f),
 )
 check(
-  '마을 이미지 중 Batch 1+2+3 물리 파일 14개 + 환경/장식 아트워크 6개(카탈로그 아님, 2026-09-15b) 외의 예상치 못한 파일이 dist/assets에 없음',
+  '마을 이미지 중 카탈로그 물리 파일 18개(Batch 1+2+3 14개 + P0 최종 아트로 추가/승격된 4개) + 환경/장식 아트워크 6개(카탈로그 아님, 2026-09-15b) 외의 예상치 못한 파일이 dist/assets에 없음',
   strayImages.length === 0,
   strayImages.length > 0 ? strayImages.join(', ') : undefined,
 )
@@ -242,13 +251,9 @@ const foundBatch1Bases = new Set(
   foundBatch1.map((f) => EXPECTED_BATCH1_IMAGE_BASENAMES.find((base) => f.startsWith(`${base}-`) || f === `${base}.webp`)),
 )
 check(
-  'Batch 1+2+3 물리 파일 14개 asset_key가 전부 dist/assets에 정확히 존재(webp 1개씩)',
+  '카탈로그 물리 파일 18개 asset_key가 전부 dist/assets에 정확히 존재(webp 1개씩)',
   EXPECTED_BATCH1_IMAGE_BASENAMES.every((base) => foundBatch1Bases.has(base)),
   `found=${[...foundBatch1Bases].join(',')}`,
-)
-check(
-  'red-post-box는 물리 파일로 dist/assets에 존재하지 않음(3.6KB < 4KB 인라인 한도, 의도된 Vite 동작)',
-  !assetFiles.some((f) => f.startsWith('red-post-box-') || f === 'red-post-box.webp'),
 )
 check(
   'cat은 물리 파일로 dist/assets에 존재하지 않음(2.5KB < 4KB 인라인 한도, 의도된 Vite 동작)',
@@ -267,16 +272,12 @@ check(
   !assetFiles.some((f) => f.startsWith('shop-lamp-') || f === 'shop-lamp.webp'),
 )
 check(
-  'street-lamp는 물리 파일로 dist/assets에 존재하지 않음(2.6KB < 4KB 인라인 한도, 의도된 Vite 동작)',
-  !assetFiles.some((f) => f.startsWith('street-lamp-') || f === 'street-lamp.webp'),
-)
-check(
   'stone-fountain은 물리 파일로 dist/assets에 존재하지 않음(3.7KB < 4KB 인라인 한도, 의도된 Vite 동작)',
   !assetFiles.some((f) => f.startsWith('stone-fountain-') || f === 'stone-fountain.webp'),
 )
 const inlinedWebpJsFiles = jsFiles.filter((f) => readAsset(f).includes('data:image/webp;base64,'))
 check(
-  '10번째 자산(red-post-box)·11번째 자산(cat)·12번째 자산(owl)·13번째 자산(puppy)·19번째 자산(shop-lamp)·20번째 자산(street-lamp)·21번째 자산(stone-fountain)이 최소 1개 JS 청크에 data:image/webp;base64 URL로 실제 인라인됨(자산이 조용히 누락되지 않음)',
+  '11번째 자산(cat)·12번째 자산(owl)·13번째 자산(puppy)·19번째 자산(shop-lamp)·21번째 자산(stone-fountain)이 최소 1개 JS 청크에 data:image/webp;base64 URL로 실제 인라인됨(자산이 조용히 누락되지 않음)',
   inlinedWebpJsFiles.length >= 1,
   `matched=${inlinedWebpJsFiles.join(',') || '(none)'}`,
 )
@@ -285,8 +286,8 @@ const totalInlinedWebpOccurrences = jsFiles.reduce(
   0,
 )
 check(
-  '인라인된 data:image/webp;base64 URL 발생 횟수가 정확히 7건(red-post-box 1 + cat 1 + owl 1 + puppy 1 + shop-lamp 1 + street-lamp 1 + stone-fountain 1, 중복/누락 없음)',
-  totalInlinedWebpOccurrences === 7,
+  '인라인된 data:image/webp;base64 URL 발생 횟수가 정확히 5건(cat 1 + owl 1 + puppy 1 + shop-lamp 1 + stone-fountain 1, 중복/누락 없음 — red-post-box/street-lamp는 2026-09-17 최종 아트로 4KB를 넘어 물리 파일로 승격)',
+  totalInlinedWebpOccurrences === 5,
   `count=${totalInlinedWebpOccurrences}`,
 )
 
