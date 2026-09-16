@@ -68,6 +68,19 @@ export default function TownObjectLayer({
       {LOTS.map((lot) => {
         const state = lotState(lot, level, owned)
         if (state === 'hidden') return null
+        // 2026-09-16(P0 첫 3종 아트 교체 시각 검증 중 발견, pre-existing —
+        // 이번 패치가 만든 회귀 아님, git show 75252bc로 확인) — my-house는
+        // LOTS 지오메트리 목록에는 있지만 townCatalog.js 카탈로그 아이템이
+        // 아니라 itemById['my-house']가 항상 undefined다. 그래서 이 루프의
+        // hasArt 판정은 my-house에 대해 항상 false로 남아, 실제 집 아트가
+        // 이미 따로(바로 아래 data-testid="town-home" 전용 블록으로) 그려짐에도
+        // *추가로* 옛 solid placeholder 박스(bg-[#8fb37a] 녹색 + 테두리)를
+        // my-house 자리에 겹쳐 그렸다 — 이번에 my-house 아트를 실제 사진형
+        // 이미지로 교체하니 그 박스가 눈에 띄게 도드라져 처음 발견됨. my-house는
+        // 원래부터 이 LOTS 루프가 그릴 대상이 아니므로(전용 블록이 소유),
+        // 여기서는 완전히 건너뛴다 — 새 렌더 경로를 만드는 게 아니라 이미
+        // 있던 전용 블록에게 단독 소유권을 돌려주는 것.
+        if (lot.id === 'my-house') return null
         const district = DISTRICTS[lot.district]
         const g = districtLocalToGlobal(lot.district, lot.left, lot.baseline, level)
         const widthPct = lot.width * (district ? district.scale : 1)
