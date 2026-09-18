@@ -25,6 +25,7 @@ import { mergeCatalog } from '../../../utils/town/townCatalog'
 import { visiblePlacements, unplacedOwnedIds } from '../../../utils/town/townLayout'
 import { paulGuide, TOWN_PHRASES } from '../../../utils/town/townMessages'
 import { gardenRichness, fogState, nearGoal } from '../../../utils/town/townScene'
+import { isFixedLandmarkId } from '../../../utils/town/worldRender'
 
 export default function TownScreenV2({ studentData, townShop, onBack, gardenPoints }) {
   const [sheet, setSheet] = useState(null)
@@ -54,9 +55,26 @@ export default function TownScreenV2({ studentData, townShop, onBack, gardenPoin
     townRemovedIds: Array.isArray(studentData && studentData.townRemovedIds) ? studentData.townRemovedIds : [],
   }), [studentData && studentData.townPlacements, studentData && studentData.townRemovedIds])
   const placements = useMemo(() => visiblePlacements(rawLayout, ownedIds), [rawLayout, ownedIds])
+
+  // 2026-09-18 D1 정정 — LOTS(고정 랜드마크) id는 townCatalog.js에도
+  // ownedIds에도 섞여 있지만(구매 대상이라), 자유 배치 뷰 모델(상점은
+  // 예외 — 구매는 소유권이라 그대로 전체 카탈로그를 쓴다, 아래
+  // TownShopPanel 참고)에서는 전부 걸러낸다 — worldRender.isFixedLandmarkId
+  // 가 유일한 판정 창구(재구현 금지). placements(TownScene 렌더용)도
+  // 마찬가지로 걸러진 renderPlacements만 쓴다 — occupancyPlacements(칸
+  // 점유 판정용, 걸러지지 않은 전체)는 TownScene에 별도로 그대로 넘긴다
+  // (TownScene.jsx 헤더 주석 참고, townLayout.placeItem의 cell_occupied
+  // 규칙이 전체 목록 기준이라).
+  const freeCatalog = useMemo(() => catalog.filter((it) => !isFixedLandmarkId(it.id)), [catalog])
+  const freeOwnedIds = useMemo(() => ownedIds.filter((id) => !isFixedLandmarkId(id)), [ownedIds])
+  const renderPlacements = useMemo(() => placements.filter((p) => p && !isFixedLandmarkId(p.itemId)), [placements])
+
   // 2026-09-15 — V1 TownScreen.jsx와 동일한 최소 수정(구매 직후/재방문 시
   // "다음엔 마을에 놓아야 한다"는 것을 놓치기 쉬운 문제) — 새 상태 없음.
-  const unplacedCount = useMemo(() => unplacedOwnedIds(ownedIds, placements).length, [ownedIds, placements])
+  // 2026-09-18 D1 정정 — 고정 랜드마크는 애초에 "놓아야 할 대상"이
+  // 아니므로(항상 고정 박스에서만 그려짐) freeOwnedIds/renderPlacements
+  // 기준으로 계산한다.
+  const unplacedCount = useMemo(() => unplacedOwnedIds(freeOwnedIds, renderPlacements).length, [freeOwnedIds, renderPlacements])
 
   function showGuide(event, ctx) {
     setGuide(paulGuide(event, ctx))
@@ -203,7 +221,8 @@ export default function TownScreenV2({ studentData, townShop, onBack, gardenPoin
         )}
 
         <TownScene
-          placements={placements}
+          placements={renderPlacements}
+          occupancyPlacements={placements}
           itemById={itemById}
           mode={mode}
           onCellTap={handleCellTap}
@@ -233,9 +252,9 @@ export default function TownScreenV2({ studentData, townShop, onBack, gardenPoin
 
       <TownSheet open={sheet === 'inventory'} title="🎁 보관함" onClose={() => setSheet(null)}>
         <TownInventory
-          items={catalog}
+          items={freeCatalog}
           ownedIds={ownedIds}
-          placements={placements}
+          placements={renderPlacements}
           onPlaceStart={(id) => { setSheet(null); handlePlaceStart(id) }}
           onMoveStart={(pid) => { setSheet(null); handleMoveStart(pid) }}
           onGoShop={() => setSheet('shop')}

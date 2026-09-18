@@ -1,0 +1,47 @@
+{
+  "agent_name": "lead",
+  "role": "Paul Town Batch 1 통합·하네스 패스 조정",
+  "task_id": "paul-town-batch1-integration-2026-09-18",
+  "task": "결정 21a/22b 적용, 전체 재검증, 하네스 패스, Lv1/3/4/5/8 프리뷰, 시각 검토 보고. 렌더러 미착수, paulTownV2 OFF, Production 무접촉.",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-17T17:00:00+09:00",
+  "updated_at": "2026-09-18T01:30:00+09:00",
+  "branch": "feat/paul-town-v2-world-contract-2026-09-17 (로컬 커밋만, 미push)",
+  "assets": {
+    "staged": 12,
+    "rejected_budget": [
+      "wildflower-scatter"
+    ],
+    "missing": 25,
+    "candidates_unkeyed": [
+      "22.png T-junction (art-staging/candidates)"
+    ]
+  },
+  "harness_pass": [
+    "river overlap+feather",
+    "curveStrongMin 75",
+    "adjacent curve vertices merged",
+    ".locked::after veil (generic)",
+    "home garden density with accepted art"
+  ],
+  "tests": {
+    "placement": "690/690",
+    "geometrySync": "75/75",
+    "manifest": "PASS",
+    "shoot": "16 PASS (no overflow, no JS errors)"
+  },
+  "production_write": 0,
+  "src_changed": false,
+  "geometry_changed": false,
+  "flag_paulTownV2": false,
+  "verdict": {
+    "batch1_required_pass": true,
+    "lv1_small_village": true,
+    "my_house_prominent": true,
+    "path_natural": true,
+    "geography_consistent": true,
+    "safe_for_owner_review": true
+  },
+  "next": "나머지 25장 제작(우선순위 handoff 168차 §5) → 동일 파이프라인; 렌더러 착수는 운영자 승인 후"
+}

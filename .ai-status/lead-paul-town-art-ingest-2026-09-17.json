@@ -1,0 +1,54 @@
+{
+  "agent_name": "lead",
+  "role": "Paul Town Batch 1 실물 아트 ingest 조정",
+  "task_id": "paul-town-art-ingest-2026-09-17",
+  "task": "운영자 제공 Batch 1 아트 9장을 기존 파이프라인으로 검증·스테이징·로컬 합성 프리뷰. 렌더러 미착수, paulTownV2 OFF, Production 무접촉.",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-17T09:00:00+09:00",
+  "updated_at": "2026-09-17T10:40:00+09:00",
+  "branch": "feat/paul-town-v2-world-contract-2026-09-17 (로컬 커밋만, 미push)",
+  "files_owned": [
+    "scripts/town-art/ingest.py",
+    "scripts/testEnvArtManifest.mjs",
+    "docs/design/town/manifest/env-art-manifest.json",
+    "docs/design/town/mockup/batch1/*.webp (5)",
+    "docs/design/town/mockup/batch1/README.md",
+    "docs/design/town/mockup/previews/*.png (16)",
+    "handoff.md (163차)"
+  ],
+  "assets": {
+    "received": 9,
+    "mapped": 9,
+    "validated": 5,
+    "rejected": 4,
+    "staged": [
+      "fence-gate",
+      "fence-straight",
+      "hedge-straight",
+      "flower-cluster-mixed",
+      "path-straight"
+    ],
+    "rejected_keys": {
+      "grass-patch-light": "no alpha (RGB)",
+      "path-curve-gentle": "no alpha (RGB)",
+      "path-fork": "no alpha (RGB)",
+      "river-straight": "lossless 94642B > 81920B budget"
+    }
+  },
+  "pipeline_fix": "manifest sha256 now = staged WebP file hash; pixel hash moved to contentHash",
+  "tests": {
+    "validateEnvArtManifest": "PASS",
+    "testEnvArtManifest": "71/71",
+    "shoot": "16 shots, no overflow, no JS errors"
+  },
+  "production_write": 0,
+  "src_changed": false,
+  "close_to_reference": false,
+  "open_owner_decisions": [
+    "1/3/4.png RGBA 재출력",
+    "river-straight 바이트 예산(128KB 상향 vs lossy-alpha vs 재출력)",
+    "길 타일 체인 vs 연속 리본 렌더링 방식"
+  ],
+  "blocker": "Batch 1 30/35 파일 미도착"
+}

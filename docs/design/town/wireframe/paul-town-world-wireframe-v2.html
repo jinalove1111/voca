@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paul Town — World Wireframe v2 (100x190 continuous world)</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #e9e4d6; font-family: -apple-system, BlinkMacSystemFont, 'Malgun Gothic', sans-serif; }
+  .phone { max-width: 390px; margin: 0 auto; position: relative; background: #eef2e6; padding-top: 58px; padding-bottom: 62px; overflow: hidden; }
+  .levelbar { position: fixed; top: 0; left: 0; right: 0; max-width: 390px; margin: 0 auto; background: rgba(255,255,255,0.94); z-index: 50; padding: 8px 12px 6px; border-bottom: 1px solid #e0d9c6; }
+  .levelbar-row { display: flex; gap: 5px; }
+  .lvbtn { flex: 1; padding: 7px 0; border: 1px solid #cfc6ae; background: #faf7ef; border-radius: 8px; font-size: 12px; font-weight: 700; color: #5c5344; cursor: pointer; }
+  .lvbtn.active { background: #5c8a52; border-color: #4a7442; color: #fff; }
+  .editmode { display: flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 10.5px; color: #7a7362; }
+  .world-wrap { width: 100%; line-height: 0; position: relative; }
+  #world { display: block; width: 100%; height: auto; aspect-ratio: 100 / 190; background: #eaf5e6; }
+  .bottomnav { position: fixed; bottom: 0; left: 0; right: 0; max-width: 390px; margin: 0 auto; display: flex; background: rgba(255,255,255,0.96); border-top: 1px solid #e0d9c6; padding: 8px 8px; z-index: 50; }
+  .pill { flex: 1; text-align: center; font-size: 10.5px; padding: 6px 2px; color: #5c5344; border-radius: 18px; font-weight: 600; }
+  .pill.active { background: #5c8a52; color: #fff; }
+  .pill.disabled { color: #b7b09c; }
+  .landmark.locked { filter: grayscale(1); opacity: .45; }
+  .haze.hidden { display: none; }
+  .path-seg.hazed { filter: grayscale(.65); opacity: .55; }
+  #cellsLayer { display: none; }
+  #cellsLayer.show { display: block; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="levelbar">
+    <div class="levelbar-row">
+      <button class="lvbtn" data-level="1">Lv1</button>
+      <button class="lvbtn" data-level="3">Lv3</button>
+      <button class="lvbtn" data-level="4">Lv4</button>
+      <button class="lvbtn" data-level="5">Lv5</button>
+      <button class="lvbtn" data-level="8">Lv8</button>
+    </div>
+    <label class="editmode"><input type="checkbox" id="editModeChk"> show placement cells (edit mode)</label>
+  </div>
+
+  <div class="world-wrap">
+    <svg id="world" viewBox="0 0 100 190" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+
+  <nav class="bottomnav">
+    <div class="pill active">내 마을</div>
+    <div class="pill">상점</div>
+    <div class="pill">보관함</div>
+    <div class="pill disabled">탐험하기</div>
+    <div class="pill disabled">친구 마을</div>
+  </nav>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  // ---- coordinate helpers -------------------------------------------------
+  // World is 100 (x) x 190 (y) raw units, uniform 3.9px/unit at 390px width.
+  // Spec coordinates are given as x:%-of-width (== raw x directly) and
+  // y:%-of-height on a 0-100 scale (world height = 190 units, so raw y = pct*1.9).
+  const Y = p => +(p * 1.9).toFixed(2);
+  const X = p => +p.toFixed(2);
+
+  function lerp(a,b,t){ return a+(b-a)*t; }
+  function lerpColor(c1,c2,t){
+    const h = c => [parseInt(c.slice(1,3),16), parseInt(c.slice(3,5),16), parseInt(c.slice(5,7),16)];
+    const a=h(c1), b=h(c2);
+    const r = a.map((v,i)=>Math.round(lerp(v,b[i],t)));
+    return '#'+r.map(v=>v.toString(16).padStart(2,'0')).join('');
+  }
+
+  // ---- tapering path ribbon (Catmull-Rom centerline, perpendicular offset) --
+  function catmull(p0,p1,p2,p3,t){
+    const t2=t*t, t3=t2*t;
+    return 0.5*((2*p1)+(-p0+p2)*t+(2*p0-5*p1+4*p2-p3)*t2+(-p0+3*p1-3*p2+p3)*t3);
+  }
+  function buildRibbon(pts, steps){
+    steps = steps || 14;
+    const n = pts.length;
+    const left=[], right=[];
+    const get = i => pts[Math.max(0, Math.min(n-1, i))];
+    let lastNx=0, lastNy=1;
+    for (let i=0;i<n-1;i++){
+      const p0=get(i-1), p1=get(i), p2=get(i+1), p3=get(i+2);
+      for (let s=0;s<steps;s++){
+        const t = s/steps;
+        const x = catmull(p0.x,p1.x,p2.x,p3.x,t);
+        const y = catmull(p0.y,p1.y,p2.y,p3.y,t);
+        const w = p1.w + (p2.w-p1.w)*t;
+        const t2 = Math.min(1, t+0.02);
+        const x2 = catmull(p0.x,p1.x,p2.x,p3.x,t2);
+        const y2 = catmull(p0.y,p1.y,p2.y,p3.y,t2);
+        let dx=x2-x, dy=y2-y; const len=Math.hypot(dx,dy)||1; dx/=len; dy/=len;
+        const nx=-dy, ny=dx, hw=w/2;
+        lastNx=nx; lastNy=ny;
+        left.push([x+nx*hw, y+ny*hw]);
+        right.push([x-nx*hw, y-ny*hw]);
+      }
+    }
+    // flat end-cap at full width (avoids pinching to a point, needed so the
+    // river reads as flowing off the canvas edge at full width, not a spike)
+    const last = pts[n-1], hwLast = last.w/2;
+    left.push([last.x+lastNx*hwLast, last.y+lastNy*hwLast]);
+    right.push([last.x-lastNx*hwLast, last.y-lastNy*hwLast]);
+    return {left,right};
+  }
+  function ribbonD(pts){
+    const {left,right} = buildRibbon(pts);
+    const L = left.map(p=>p[0].toFixed(2)+','+p[1].toFixed(2)).join(' L ');
+    const R = right.slice().reverse().map(p=>p[0].toFixed(2)+','+p[1].toFixed(2)).join(' L ');
+    return 'M '+L+' L '+R+' Z';
+  }
+  function toRaw(arr){ return arr.map(p=>({x:p.x, y:Y(p.y), w:p.w})); }
+  // dense point sampler with local outward normal (used for fence pickets)
+  function sampleCurve(pts, steps){
+    steps = steps || 14;
+    const n = pts.length;
+    const out = [];
+    const get = i => pts[Math.max(0, Math.min(n-1, i))];
+    for (let i=0;i<n-1;i++){
+      const p0=get(i-1), p1=get(i), p2=get(i+1), p3=get(i+2);
+      for (let s=0;s<steps;s++){
+        const t = s/steps;
+        const x = catmull(p0.x,p1.x,p2.x,p3.x,t);
+        const y = catmull(p0.y,p1.y,p2.y,p3.y,t);
+        const t2 = Math.min(1, t+0.02);
+        const x2 = catmull(p0.x,p1.x,p2.x,p3.x,t2);
+        const y2 = catmull(p0.y,p1.y,p2.y,p3.y,t2);
+        let dx=x2-x, dy=y2-y; const len=Math.hypot(dx,dy)||1; dx/=len; dy/=len;
+        out.push({x,y,nx:-dy,ny:dx});
+      }
+    }
+    return out;
+  }
+
+  // ---- path network (centerline points from the approved spec, %-scale) ----
+  // SHOP and SEA corrected 2026-09-17 (book shop moved off the river; sea
+  // branch now curves instead of running straight down beside the river).
+  const TRUNK   = [{x:22,y:53,w:6},{x:27,y:58,w:7},{x:33,y:61,w:8},{x:44,y:65,w:9},{x:50,y:62,w:9}];
+  const SEA     = [{x:50,y:62,w:9},{x:47,y:76,w:9},{x:52,y:84,w:9},{x:64,y:90,w:10},{x:80,y:92,w:10},{x:100,y:96,w:10}];
+  const SHOP    = [{x:50,y:62,w:9},{x:60,y:68,w:8},{x:72,y:67,w:7},{x:78,y:63,w:7}];
+  const SQUARE_A= [{x:50,y:62,w:9},{x:55,y:57,w:8},{x:68,y:47,w:7},{x:78,y:40,w:6}];
+  const SQUARE_B= [{x:78,y:40,w:6},{x:84,y:34,w:6},{x:74,y:26,w:5},{x:50,y:26,w:4}];
+
+  // ---- river centerline (corrected 2026-09-17: far-right S-curve) ----------
+  const RIVER = [{x:93,y:12,w:14},{x:88,y:26,w:14},{x:86,y:34,w:14},{x:91,y:44,w:14},{x:94,y:60,w:14},{x:95,y:100,w:14}];
+  function riverCenterX(yp){
+    for (let i=0;i<RIVER.length-1;i++){
+      const a=RIVER[i], b=RIVER[i+1];
+      if (yp>=a.y && yp<=b.y){ const t=(yp-a.y)/(b.y-a.y); return a.x+(b.x-a.x)*t; }
+    }
+    return RIVER[RIVER.length-1].x;
+  }
+
+  function pathSeg(pts, unlock){
+    return '<path class="path-seg" data-unlock="'+unlock+'" d="'+ribbonD(toRaw(pts))+
+      '" fill="#d9cbb4" stroke="#b6a37f" stroke-width="0.35" stroke-linejoin="round"/>';
+  }
+
+  // ---- reusable scenery generators (local coords are RAW units, uniform) ---
+  function treeMk(xp, yp, s){
+    const cx=X(xp), cy=Y(yp);
+    const t = Math.max(0, Math.min(1, (s-0.55)/0.65));
+    const tone = lerpColor('#8fb07f', '#3f8f4f', t);
+    const dark = lerpColor('#6f9a63', '#2f6f3c', t);
+    return '<g transform="translate('+cx+','+cy+') scale('+s+')">'+
+      '<ellipse cx="0" cy="0.6" rx="4.4" ry="1.1" fill="#2c1d0f" opacity="0.16" filter="url(#shadowBlur)"/>'+
+      '<rect x="-0.7" y="-5.8" width="1.4" height="5.8" fill="#7a5636" rx="0.4"/>'+
+      '<circle cx="-3.2" cy="-7.4" r="3.4" fill="'+dark+'"/>'+
+      '<circle cx="3.2" cy="-7.4" r="3.4" fill="'+dark+'"/>'+
+      '<circle cx="0" cy="-9.6" r="4.8" fill="'+tone+'"/>'+
+      '</g>';
+  }
+  function shrubMk(xp, yp, s){
+    const cx=X(xp), cy=Y(yp);
+    return '<g transform="translate('+cx+','+cy+') scale('+s+')">'+
+      '<ellipse cx="0" cy="0.4" rx="3" ry="0.8" fill="#2c1d0f" opacity="0.14" filter="url(#shadowBlur)"/>'+
+      '<circle cx="-1.6" cy="-1.6" r="2.2" fill="#5f9a53"/>'+
+      '<circle cx="1.6" cy="-1.6" r="2.2" fill="#549049"/>'+
+      '<circle cx="0" cy="-2.6" r="2.4" fill="#6aa85c"/>'+
+      '</g>';
+  }
+  function flowerMk(xp, yp, s){
+    const cx=X(xp), cy=Y(yp);
+    const cols=['#e0668a','#f2c14e','#7ea8e0','#f2c14e','#e0668a'];
+    let dots='';
+    for(let i=0;i<5;i++){
+      const ang=(i/5)*Math.PI*2;
+      const dx=Math.cos(ang)*1.6, dy=Math.sin(ang)*0.9-1.2;
+      dots += '<circle cx="'+dx.toFixed(2)+'" cy="'+dy.toFixed(2)+'" r="0.7" fill="'+cols[i]+'"/>';
+    }
+    return '<g transform="translate('+cx+','+cy+') scale('+s+')">'+
+      '<ellipse cx="0" cy="0.3" rx="2.4" ry="0.6" fill="#2c1d0f" opacity="0.12" filter="url(#shadowBlur)"/>'+
+      '<ellipse cx="0" cy="-0.6" rx="2.2" ry="1" fill="#6aa85c"/>'+ dots +
+      '</g>';
+  }
+  function cellMk(xp, yp){
+    const cx=X(xp), cy=Y(yp);
+    return '<ellipse cx="'+cx+'" cy="'+cy+'" rx="3.6" ry="2" fill="url(#cellGlow)"/>';
+  }
+  function signMk(xp, yp, text){
+    const cx=X(xp), cy=Y(yp);
+    return '<g transform="translate('+cx+','+cy+')">'+
+      '<rect x="-0.4" y="-4.2" width="0.8" height="4.2" fill="#8a5a34"/>'+
+      '<rect x="-4.6" y="-7.6" width="9.2" height="3.6" rx="0.6" fill="#f2e6c8" stroke="#8a5a34" stroke-width="0.3"/>'+
+      '<text x="0" y="-5.1" font-size="2.5" text-anchor="middle" fill="#4a3524" font-weight="700">'+text+'</text>'+
+      '</g>';
+  }
+  function hazeEllipse(xp, yp, rx, ry){
+    return '<ellipse cx="'+X(xp)+'" cy="'+Y(yp)+'" rx="'+rx+'" ry="'+ry+'" fill="#f2e6c8" opacity="0.6" filter="url(#hazeBlur)"/>';
+  }
+
+  // ---- static scenery data (percent-scale positions, invented, not spec) ---
+  const TREES = [
+    {x:10,y:18,s:0.58}, {x:65,y:9,s:0.55}, {x:6,y:38,s:0.78}, {x:43,y:30,s:0.75},
+    {x:79,y:50,s:0.85}, {x:13,y:69,s:1.0}, {x:30,y:96,s:1.15}
+  ];
+  const SHRUBS = [
+    {x:43,y:54,s:0.9}, {x:2,y:62,s:0.9}, {x:63,y:64,s:0.85}, {x:83,y:42,s:0.8}, {x:38,y:90,s:1.05}
+  ];
+  const FLOWERS = [
+    {x:53,y:63,s:0.9}, {x:20,y:80,s:1.0}, {x:70,y:80,s:1.0}, {x:84,y:85,s:0.95}, {x:48,y:92,s:1.1}, {x:62,y:90,s:1.05}
+  ];
+  const GRASS_PATCHES = [
+    {x:30,y:45,rx:19,ry:5,c:'#b7e0a0'}, {x:65,y:75,rx:21,ry:5.2,c:'#82b86c'},
+    {x:15,y:85,rx:17,ry:4.4,c:'#c3e7ae'}, {x:55,y:20,rx:15,ry:3.8,c:'#79ab68'}
+  ];
+  const CELLS = [
+    // front garden (10)
+    [7,55],[11,61],[9,58],[16,63],[38,54],[40,60],[35,63],[30,54],[19,54],[14,58],
+    // house lawn / rise outside fence (8)
+    [3,58],[3,48],[3,40],[44,48],[44,40],[44,58],[20,26],[33,28],
+    // lawn connector (5)
+    [46,60],[50,65],[54,68],[48,68],[56,63],
+    // village square ring (8)
+    [42,45],[45,58],[50,48],[60,42],[65,50],[58,60],[48,42],[63,58],
+    // cafe terrace edge (3)
+    [60,48],[62,44],[58,42],
+    // book shop front (4) — repositioned 2026-09-17 for the shop's new (78,63) anchor
+    [71,64],[75,67],[82,66],[85,64],
+    // riverbank (3) — repositioned 2026-09-17 for the new far-right S-curve river
+    [83,45],[86,65],[87,85],
+    // school lawn (3)
+    [38,24],[58,24],[48,30],
+    // tower green (2) — repositioned 2026-09-17 for the new (76,21) land anchor
+    [78,18],[82,12],
+    // foreground verge (1)
+    [70,95]
+  ];
+
+  // ---- assemble markup -----------------------------------------------------
+  let s = '';
+
+  // defs
+  s += '<defs>'+
+    '<linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">'+
+      '<stop offset="0%" stop-color="#bfe3f5"/><stop offset="100%" stop-color="#eaf5e6"/></linearGradient>'+
+    '<radialGradient id="cellGlow" cx="50%" cy="50%" r="50%">'+
+      '<stop offset="0%" stop-color="#ffe9a8" stop-opacity="0.9"/><stop offset="100%" stop-color="#ffe9a8" stop-opacity="0"/></radialGradient>'+
+    '<filter id="hazeBlur" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.2"/></filter>'+
+    '<filter id="softBlur" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="0.6"/></filter>'+
+    '<filter id="shadowBlur" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="0.8"/></filter>'+
+  '</defs>';
+
+  // sky + hills (y 0-12%)
+  s += '<rect x="0" y="0" width="100" height="'+Y(12)+'" fill="url(#skyGrad)"/>';
+  s += '<path d="M0,'+Y(12)+' L0,'+Y(6)+' Q15,'+Y(3)+' 30,'+Y(7)+' Q45,'+Y(10)+' 60,'+Y(5)+' Q80,'+Y(1)+' 100,'+Y(6)+' L100,'+Y(12)+' Z" fill="#9cc98a" opacity="0.5" filter="url(#softBlur)"/>';
+  s += '<path d="M0,'+Y(12)+' L0,'+Y(9)+' Q20,'+Y(6)+' 38,'+Y(9.5)+' Q55,'+Y(12)+' 72,'+Y(8)+' Q88,'+Y(5)+' 100,'+Y(9)+' L100,'+Y(12)+' Z" fill="#7fb26e" opacity="0.7" filter="url(#softBlur)"/>';
+
+  // ground base + grass variation patches
+  s += '<rect x="0" y="'+Y(12)+'" width="100" height="'+(190-Y(12))+'" fill="#9fd18a"/>';
+  GRASS_PATCHES.forEach(g=>{
+    s += '<ellipse cx="'+X(g.x)+'" cy="'+Y(g.y)+'" rx="'+g.rx+'" ry="'+g.ry+'" fill="'+g.c+'" opacity="0.55" filter="url(#softBlur)"/>';
+  });
+
+  // river: gentle S-curve hugging the far right edge (corrected 2026-09-17;
+  // water ~10 units wide, banks ~2 units each side -> outer ribbon ~14 wide)
+  const riverBank    = toRaw(RIVER);
+  const riverWater   = toRaw(RIVER.map(p=>({x:p.x,y:p.y,w:10})));
+  const riverShimmer = toRaw(RIVER.map(p=>({x:p.x,y:p.y,w:2})));
+  s += '<path d="'+ribbonD(riverBank)+'" fill="#e4d9b0"/>';
+  s += '<path d="'+ribbonD(riverWater)+'" fill="#8fd0e8"/>';
+  s += '<path d="'+ribbonD(riverShimmer)+'" fill="#a9dcee" opacity="0.6"/>';
+
+  // path network (drawn under buildings, over ground/water)
+  s += pathSeg(TRUNK, 1);
+  s += pathSeg(SEA, 1);
+  s += pathSeg(SHOP, 3);
+  s += pathSeg(SQUARE_A, 5);
+  s += pathSeg(SQUARE_B, 6);
+
+  // stone wall along riverbank (hugs the new S-curve, land side)
+  (function(){
+    let d='';
+    const ys=[16,22,28,34,42,50,58,66,74,82,90];
+    ys.forEach((yp,i)=>{
+      const xp = riverCenterX(yp) - 7.5 + (i%2)*0.8;
+      d += '<rect x="'+X(xp)+'" y="'+Y(yp)+'" width="3.4" height="2.2" rx="0.5" fill="#b7ada0" stroke="#96897a" stroke-width="0.15"/>';
+    });
+    s += d;
+  })();
+
+  // hedges: left edge of home lawn (vertical) + along the square (short strip)
+  (function(){
+    let d='';
+    for(let i=0;i<10;i++){
+      const yp = 28 + i*3.6;
+      d += '<circle cx="'+X(3)+'" cy="'+Y(yp)+'" r="2.2" fill="#4c7a3f"/>';
+    }
+    for(let i=0;i<6;i++){
+      const xp = 40 + i*2.2;
+      d += '<circle cx="'+X(xp)+'" cy="'+Y(63)+'" r="2" fill="#4c7a3f"/>';
+    }
+    s += d;
+  })();
+
+  // ---- background trees (furthest 2) ----
+  s += treeMk(TREES[0].x, TREES[0].y, TREES[0].s) + treeMk(TREES[1].x, TREES[1].y, TREES[1].s);
+
+  // ---- CLOCK TOWER (lm, unlock 8) — moved onto land 2026-09-17, anchor (76,21) w12 ----
+  s += '<g class="landmark" data-unlock="8">'+
+    '<ellipse cx="'+X(76)+'" cy="'+Y(23)+'" rx="6" ry="1.4" fill="#2c1d0f" opacity="0.15" filter="url(#shadowBlur)"/>'+
+    '<rect x="'+X(72)+'" y="'+Y(8)+'" width="8" height="'+(Y(24)-Y(8))+'" fill="#d8cdb0" stroke="#b7a97f" stroke-width="0.2"/>'+
+    '<polygon points="'+X(76)+','+Y(2)+' '+X(70)+','+Y(8)+' '+X(82)+','+Y(8)+'" fill="#7a3b3b"/>'+
+    '<circle cx="'+X(76)+'" cy="'+Y(13)+'" r="2.3" fill="#f2e6c8" stroke="#4a3524" stroke-width="0.25"/>'+
+    '<line x1="'+X(76)+'" y1="'+Y(13)+'" x2="'+X(76)+'" y2="'+Y(11.6)+'" stroke="#4a3524" stroke-width="0.3"/>'+
+    '<line x1="'+X(76)+'" y1="'+Y(13)+'" x2="'+X(77.2)+'" y2="'+Y(13)+'" stroke="#4a3524" stroke-width="0.3"/>'+
+  '</g>';
+  s += '<g class="haze" data-unlock="8">'+ hazeEllipse(76,16,11,19) + signMk(80,25,'Lv.8') + '</g>';
+
+  // ---- ENGLISH SCHOOL + steps (lm, unlock 7) — anchor (46,24) w30 ----
+  s += '<g class="landmark" data-unlock="7">'+
+    '<ellipse cx="'+X(46)+'" cy="'+Y(27)+'" rx="17" ry="1.8" fill="#2c1d0f" opacity="0.15" filter="url(#shadowBlur)"/>'+
+    '<polygon points="'+X(33)+','+Y(28)+' '+X(59)+','+Y(28)+' '+X(56)+','+Y(25)+' '+X(36)+','+Y(25)+'" fill="#cbb98f"/>'+
+    '<polygon points="'+X(35)+','+Y(25)+' '+X(57)+','+Y(25)+' '+X(55)+','+Y(22)+' '+X(37)+','+Y(22)+'" fill="#d9c9a3"/>'+
+    '<rect x="'+X(34)+'" y="'+Y(16)+'" width="24" height="'+(Y(25)-Y(16))+'" fill="#e9dfc4" stroke="#cbb98f" stroke-width="0.2"/>'+
+    '<polygon points="'+X(46)+','+Y(7)+' '+X(32)+','+Y(16)+' '+X(60)+','+Y(16)+'" fill="#5c6b73"/>'+
+    '<circle cx="'+X(46)+'" cy="'+Y(11)+'" r="2" fill="#f2e6c8" stroke="#4a3524" stroke-width="0.2"/>'+
+    '<rect x="'+X(38)+'" y="'+Y(18)+'" width="3" height="4" fill="#bcd6e0"/>'+
+    '<rect x="'+X(44)+'" y="'+Y(18)+'" width="3" height="4" fill="#bcd6e0"/>'+
+    '<rect x="'+X(50)+'" y="'+Y(18)+'" width="3" height="4" fill="#bcd6e0"/>'+
+    '<line x1="'+X(46)+'" y1="'+Y(3)+'" x2="'+X(46)+'" y2="'+Y(7)+'" stroke="#7a5636" stroke-width="0.3"/>'+
+    '<polygon points="'+X(46)+','+Y(3)+' '+X(49)+','+Y(4)+' '+X(46)+','+Y(5)+'" fill="#c1503c"/>'+
+  '</g>';
+  s += '<g class="haze" data-unlock="7">'+ hazeEllipse(46,17,20,13) + signMk(62,28,'Lv.7') + '</g>';
+
+  // ---- BRIDGE (lm, unlock 6) — anchor (86,34) w20, crosses the new river S-curve ----
+  s += '<g class="landmark" data-unlock="6">'+
+    '<path d="M'+X(76)+','+Y(37)+' Q'+X(86)+','+Y(45)+' '+X(96)+','+Y(37)+' L'+X(96)+','+Y(36)+' Q'+X(86)+','+Y(28)+' '+X(76)+','+Y(36)+' Z" fill="#a89b86"/>'+
+    '<rect x="'+X(76)+'" y="'+Y(32)+'" width="20" height="'+(Y(35)-Y(32))+'" fill="#b0a695" stroke="#8f8471" stroke-width="0.2"/>'+
+    '<rect x="'+X(77)+'" y="'+Y(29.6)+'" width="0.6" height="'+(Y(32)-Y(29.6))+'" fill="#8f8471"/>'+
+    '<rect x="'+X(81)+'" y="'+Y(29.6)+'" width="0.6" height="'+(Y(32)-Y(29.6))+'" fill="#8f8471"/>'+
+    '<rect x="'+X(85)+'" y="'+Y(29.6)+'" width="0.6" height="'+(Y(32)-Y(29.6))+'" fill="#8f8471"/>'+
+    '<rect x="'+X(89)+'" y="'+Y(29.6)+'" width="0.6" height="'+(Y(32)-Y(29.6))+'" fill="#8f8471"/>'+
+    '<rect x="'+X(93)+'" y="'+Y(29.6)+'" width="0.6" height="'+(Y(32)-Y(29.6))+'" fill="#8f8471"/>'+
+    '<rect x="'+X(76)+'" y="'+Y(29.6)+'" width="20" height="0.5" fill="#8f8471"/>'+
+  '</g>';
+  s += '<g class="haze" data-unlock="6">'+ hazeEllipse(86,33,13,9) + signMk(80,37,'Lv.6') + '</g>';
+
+  // ---- mid-back trees ----
+  s += treeMk(TREES[2].x, TREES[2].y, TREES[2].s) + treeMk(TREES[3].x, TREES[3].y, TREES[3].s);
+
+  // ---- CAFE (lm, unlock 5) ----
+  s += '<g class="landmark" data-unlock="5">'+
+    '<ellipse cx="'+X(68)+'" cy="'+Y(48)+'" rx="10" ry="1.4" fill="#2c1d0f" opacity="0.15" filter="url(#shadowBlur)"/>'+
+    '<rect x="'+X(59)+'" y="'+Y(36)+'" width="18" height="'+(Y(47)-Y(36))+'" fill="#f0d9c0" stroke="#d8bd9e" stroke-width="0.2"/>'+
+    '<rect x="'+X(59)+'" y="'+Y(33.8)+'" width="3" height="'+(Y(36)-Y(33.8))+'" fill="#c1503c"/>'+
+    '<rect x="'+X(62)+'" y="'+Y(33.8)+'" width="3" height="'+(Y(36)-Y(33.8))+'" fill="#f7f2e6"/>'+
+    '<rect x="'+X(65)+'" y="'+Y(33.8)+'" width="3" height="'+(Y(36)-Y(33.8))+'" fill="#c1503c"/>'+
+    '<rect x="'+X(68)+'" y="'+Y(33.8)+'" width="3" height="'+(Y(36)-Y(33.8))+'" fill="#f7f2e6"/>'+
+    '<rect x="'+X(71)+'" y="'+Y(33.8)+'" width="3" height="'+(Y(36)-Y(33.8))+'" fill="#c1503c"/>'+
+    '<rect x="'+X(74)+'" y="'+Y(33.8)+'" width="3" height="'+(Y(36)-Y(33.8))+'" fill="#f7f2e6"/>'+
+    '<rect x="'+X(66)+'" y="'+Y(43)+'" width="5" height="'+(Y(47)-Y(43))+'" fill="#6b4a34"/>'+
+    '<rect x="'+X(61)+'" y="'+Y(39)+'" width="4" height="3" fill="#bcd6e0"/>'+
+    '<rect x="'+X(73)+'" y="'+Y(39)+'" width="4" height="3" fill="#bcd6e0"/>'+
+    '<line x1="'+X(63)+'" y1="'+Y(52)+'" x2="'+X(63)+'" y2="'+Y(47)+'" stroke="#8a5a34" stroke-width="0.4"/>'+
+    '<circle cx="'+X(63)+'" cy="'+Y(46)+'" r="2.6" fill="#d1546a"/>'+
+    '<ellipse cx="'+X(63)+'" cy="'+Y(52.5)+'" rx="1.8" ry="0.6" fill="#b98a5e"/>'+
+  '</g>';
+  s += '<g class="haze" data-unlock="5">'+ hazeEllipse(69,43,13,9) + '</g>';
+
+  // ---- VILLAGE SQUARE + FOUNTAIN (lm, unlock 5) ----
+  s += '<g class="landmark" data-unlock="5">'+
+    '<ellipse cx="'+X(55)+'" cy="'+Y(57)+'" rx="16" ry="4.4" fill="#ddd3bd"/>'+
+    '<ellipse cx="'+X(46)+'" cy="'+Y(60)+'" rx="2" ry="0.7" fill="#8a5a34"/>'+
+    '<ellipse cx="'+X(64)+'" cy="'+Y(60)+'" rx="2" ry="0.7" fill="#8a5a34"/>'+
+    '<circle cx="'+X(55)+'" cy="'+Y(56)+'" r="6" fill="#cfc6b8" stroke="#a89b86" stroke-width="0.3"/>'+
+    '<circle cx="'+X(55)+'" cy="'+Y(56)+'" r="4.4" fill="#7cc9e0"/>'+
+    '<circle cx="'+X(55)+'" cy="'+Y(52.4)+'" r="1" fill="#e8f7fb"/>'+
+    '<line x1="'+X(55)+'" y1="'+Y(53.2)+'" x2="'+X(55)+'" y2="'+Y(51)+'" stroke="#cdeef7" stroke-width="0.4"/>'+
+  '</g>';
+  s += '<g class="haze" data-unlock="5">'+ hazeEllipse(55,58,18,15) + signMk(51,58,'Lv.5') + '</g>';
+
+  // ---- MY HOUSE (always on, Lv1) ----
+  s += (function(){
+    let h='';
+    h += '<ellipse cx="'+X(22)+'" cy="'+Y(54)+'" rx="21" ry="3.6" fill="#bcd98f" opacity="0.85"/>'; // low rise
+    h += '<ellipse cx="'+X(22)+'" cy="'+Y(53.6)+'" rx="16" ry="1.6" fill="#2c1d0f" opacity="0.2" filter="url(#shadowBlur)"/>'; // contact shadow
+    // flower bed soil + flowers each side
+    h += '<ellipse cx="'+X(11)+'" cy="'+Y(53)+'" rx="6" ry="1.3" fill="#8a5a3c"/>';
+    h += '<ellipse cx="'+X(33)+'" cy="'+Y(53)+'" rx="6" ry="1.3" fill="#8a5a3c"/>';
+    h += flowerMk(11,52.4,0.8) + flowerMk(33,52.4,0.8) + flowerMk(8,53.6,0.6) + flowerMk(36,53.6,0.6);
+    // roof + body
+    h += '<polygon points="'+X(3)+','+Y(38)+' '+X(22)+','+Y(30.6)+' '+X(41)+','+Y(38)+'" fill="#c1503c"/>';
+    h += '<rect x="'+X(8)+'" y="'+Y(38)+'" width="28" height="'+(Y(53)-Y(38))+'" fill="#f3e6c9" stroke="#dcc79e" stroke-width="0.2"/>';
+    h += '<rect x="'+X(30)+'" y="'+Y(33)+'" width="4" height="'+(Y(39)-Y(33))+'" fill="#a15a3e"/>';
+    h += '<rect x="'+X(29.6)+'" y="'+Y(32.4)+'" width="4.8" height="1.1" fill="#8a4a30"/>';
+    // ivy on left wall
+    h += '<circle cx="'+X(11)+'" cy="'+Y(44)+'" r="2.6" fill="#4f8a4a" opacity="0.85"/>';
+    h += '<circle cx="'+X(9.5)+'" cy="'+Y(47)+'" r="2.1" fill="#4f8a4a" opacity="0.85"/>';
+    h += '<circle cx="'+X(12.5)+'" cy="'+Y(47.5)+'" r="1.8" fill="#5f9a53" opacity="0.85"/>';
+    // windows
+    h += '<rect x="'+X(11)+'" y="'+Y(40)+'" width="6" height="5" fill="#bcd6e0" stroke="#ffffff" stroke-width="0.35"/>';
+    h += '<rect x="'+X(27)+'" y="'+Y(40)+'" width="6" height="5" fill="#bcd6e0" stroke="#ffffff" stroke-width="0.35"/>';
+    // door
+    h += '<rect x="'+X(19)+'" y="'+Y(47)+'" width="6" height="6" rx="1" fill="#7a4a2e"/>';
+    h += '<circle cx="'+X(23.8)+'" cy="'+Y(50)+'" r="0.4" fill="#f2e6c8"/>';
+    // low hedge outside the fence's left + back sides (added 2026-09-17)
+    [50].forEach(yp=>{ [7,14,21,28,35].forEach(xp=>{ h += '<circle cx="'+X(xp)+'" cy="'+Y(yp)+'" r="1.7" fill="#4c7a3f"/>'; }); });
+    [1.4].forEach(xp=>{ [55,58,61,64].forEach(yp=>{ h += '<circle cx="'+X(xp)+'" cy="'+Y(yp)+'" r="1.7" fill="#4c7a3f"/>'; }); });
+
+    // picket fence: rounded, irregular closed curve hugging the garden (never
+    // a rectangle), front edge bowed outward, gate is the only opening, right
+    // where the lane crosses (corrected 2026-09-17)
+    const FENCE_PTS = [
+      {x:30,y:61.5,w:1.4}, {x:19,y:65.5,w:1.4}, {x:9,y:64,w:1.4}, {x:4,y:58.5,w:1.4},
+      {x:3,y:53,w:1.4}, {x:5,y:51.5,w:1.4}, {x:16,y:52.5,w:1.4}, {x:28,y:51.5,w:1.4},
+      {x:39,y:52.8,w:1.4}, {x:42,y:58,w:1.4}, {x:40,y:63.5,w:1.4}, {x:37,y:61,w:1.4}
+    ];
+    h += '<path d="'+ribbonD(toRaw(FENCE_PTS))+'" fill="#f7f7f0" stroke="#d8d0bc" stroke-width="0.2" stroke-linejoin="round"/>';
+    sampleCurve(toRaw(FENCE_PTS)).forEach((p,i)=>{
+      if (i % 8 !== 0) return;
+      const ex=p.x+p.nx*0.9, ey=p.y+p.ny*0.9, ix=p.x-p.nx*0.9, iy=p.y-p.ny*0.9;
+      h += '<line x1="'+ex.toFixed(2)+'" y1="'+ey.toFixed(2)+'" x2="'+ix.toFixed(2)+'" y2="'+iy.toFixed(2)+'" stroke="#f7f7f0" stroke-width="0.5"/>';
+    });
+    // gate (the only opening, where the lane crosses, ~33,61)
+    h += '<rect x="'+X(29.6)+'" y="'+Y(59)+'" width="0.7" height="'+(Y(64)-Y(59))+'" fill="#8a5a34"/>';
+    h += '<rect x="'+X(36.2)+'" y="'+Y(58.5)+'" width="0.7" height="'+(Y(63.5)-Y(58.5))+'" fill="#8a5a34"/>';
+    h += '<rect x="'+X(29.6)+'" y="'+Y(59)+'" width="7.3" height="0.6" fill="#8a5a34"/>';
+    // "My House" sign at (14,60)
+    h += '<rect x="'+X(13.5)+'" y="'+Y(60)+'" width="0.8" height="'+(Y(64)-Y(60))+'" fill="#8a5a34"/>';
+    h += '<rect x="'+X(9.5)+'" y="'+Y(56.6)+'" width="9" height="4" rx="0.6" fill="#f2e6c8" stroke="#8a5a34" stroke-width="0.3"/>';
+    h += '<text x="'+X(14)+'" y="'+(Y(59.2))+'" font-size="2.4" text-anchor="middle" fill="#4a3524" font-weight="700">My House</text>';
+    return '<g class="landmark" data-unlock="1">'+h+'</g>';
+  })();
+
+  // ---- BOOK SHOP (lm, unlock 3) — moved off the river 2026-09-17, anchor (78,63) w20 ----
+  s += '<g class="landmark" data-unlock="3">'+
+    '<ellipse cx="'+X(78)+'" cy="'+Y(63.5)+'" rx="9" ry="1.4" fill="#2c1d0f" opacity="0.15" filter="url(#shadowBlur)"/>'+
+    '<rect x="'+X(70)+'" y="'+Y(49)+'" width="15" height="'+(Y(63)-Y(49))+'" fill="#e8ddb8" stroke="#cdbd8e" stroke-width="0.2"/>'+
+    '<polygon points="'+X(77.5)+','+Y(45)+' '+X(68)+','+Y(49)+' '+X(87)+','+Y(49)+'" fill="#7a3b3b"/>'+
+    '<rect x="'+X(72)+'" y="'+Y(46)+'" width="10" height="4" rx="0.6" fill="#f2e6c8" stroke="#8a5a34" stroke-width="0.25"/>'+
+    '<text x="'+X(77)+'" y="'+(Y(48.6))+'" font-size="2.3" text-anchor="middle" fill="#4a3524" font-weight="700">BOOKS</text>'+
+    '<rect x="'+X(74)+'" y="'+Y(57)+'" width="5" height="6" fill="#5c3a22"/>'+
+    '<rect x="'+X(71)+'" y="'+Y(52)+'" width="3" height="4" fill="#bcd6e0"/>'+
+    '<rect x="'+X(81)+'" y="'+Y(52)+'" width="3" height="4" fill="#bcd6e0"/>'+
+  '</g>';
+  s += '<g class="haze" data-unlock="3">'+ hazeEllipse(78,56,12,20) + signMk(69,66,'Lv.3') + '</g>';
+
+  // shrubs + flower clusters (mid/foreground scenery)
+  SHRUBS.forEach(v=>{ s += shrubMk(v.x,v.y,v.s); });
+  FLOWERS.forEach(v=>{ s += flowerMk(v.x,v.y,v.s); });
+
+  // foreground trees
+  s += treeMk(TREES[4].x, TREES[4].y, TREES[4].s) + treeMk(TREES[5].x, TREES[5].y, TREES[5].s) + treeMk(TREES[6].x, TREES[6].y, TREES[6].s);
+
+  // ---- foreground band: 4-arm signpost, sea sign, Paul ----
+  (function(){
+    let f='';
+    const px = X(34), pbase = Y(84), ptop = Y(72);
+    f += '<rect x="'+(px-0.5)+'" y="'+ptop+'" width="1" height="'+(pbase-ptop)+'" fill="#7a5636"/>';
+    f += '<circle cx="'+px+'" cy="'+ptop+'" r="1" fill="#8a5a34"/>';
+    const arms = [
+      {y:75, dir:-1, label:'Learn'},
+      {y:78, dir:1, label:'Grow'},
+      {y:81, dir:-1, label:'Be Kind'},
+      {y:84, dir:1, label:'Go Further'}
+    ];
+    arms.forEach(a=>{
+      const ax = a.dir<0 ? px-7.4 : px+0.4;
+      f += '<rect x="'+ax+'" y="'+Y(a.y)+'" width="7" height="1.9" rx="0.3" fill="#e8ddb8" stroke="#8a5a34" stroke-width="0.2"/>';
+      f += '<text x="'+(ax+3.5)+'" y="'+(Y(a.y)+1.4)+'" font-size="1.5" text-anchor="middle" fill="#4a3524">'+a.label+'</text>';
+    });
+    // sea sign at (80,92) — path corrected 2026-09-17 to curve toward the bank
+    const sx = X(80), sbase = Y(92), stop = Y(85);
+    f += '<rect x="'+(sx-0.5)+'" y="'+stop+'" width="1" height="'+(sbase-stop)+'" fill="#7a5636"/>';
+    f += '<rect x="'+(sx-6)+'" y="'+(stop-4)+'" width="12" height="4.4" rx="0.6" fill="#f2e6c8" stroke="#8a5a34" stroke-width="0.3"/>';
+    f += '<text x="'+sx+'" y="'+(stop-1.2)+'" font-size="2.2" text-anchor="middle" fill="#4a3524" font-weight="700">To the Sea →</text>';
+    // extra foreground flowers/hedge near signpost
+    for(let i=0;i<5;i++){
+      f += '<circle cx="'+(px-10+i*4.5)+'" cy="'+(Y(88)+ (i%2))+'" r="1.6" fill="#4c7a3f"/>';
+    }
+    s += f;
+  })();
+
+  // Paul placeholder (10,92) — circle head + hat silhouette, no face
+  (function(){
+    const cx = X(10), base = Y(92);
+    let p = '<g transform="translate('+cx+','+base+') scale(1.2)">';
+    p += '<ellipse cx="0" cy="0.6" rx="3.6" ry="1" fill="#2c1d0f" opacity="0.18" filter="url(#shadowBlur)"/>';
+    p += '<path d="M-2.6,0 Q-3,-6 0,-6.4 Q3,-6 2.6,0 Z" fill="#3a6ea5"/>'; // body silhouette
+    p += '<circle cx="0" cy="-8.4" r="2.6" fill="#f0c49a"/>'; // head, no face
+    p += '<path d="M-2.8,-9.4 Q0,-13 2.8,-9.4 Q0,-10.6 -2.8,-9.4 Z" fill="#274a72"/>'; // hat
+    p += '<text x="0" y="3.4" font-size="2.4" text-anchor="middle" fill="#4a3524" font-weight="700">Paul</text>';
+    p += '</g>';
+    s += p;
+  })();
+
+  // placement cells (edit-mode layer, hidden by default)
+  (function(){
+    let c = '<g id="cellsLayer">';
+    CELLS.forEach(([x,y])=>{ c += cellMk(x,y); });
+    c += '</g>';
+    s += c;
+  })();
+
+  document.getElementById('world').innerHTML = s;
+
+  // ---- level logic ----------------------------------------------------------
+  const ALLOWED = [1,3,4,5,8];
+  function levelFromURL(){
+    const params = new URLSearchParams(location.search);
+    const lv = parseInt(params.get('level'), 10);
+    return ALLOWED.indexOf(lv) !== -1 ? lv : 1;
+  }
+  function applyLevel(level){
+    document.querySelectorAll('.landmark').forEach(el=>{
+      const u = +el.getAttribute('data-unlock');
+      el.classList.toggle('locked', level < u);
+    });
+    document.querySelectorAll('.haze').forEach(el=>{
+      const u = +el.getAttribute('data-unlock');
+      el.classList.toggle('hidden', level >= u);
+    });
+    document.querySelectorAll('.path-seg').forEach(el=>{
+      const u = +el.getAttribute('data-unlock');
+      el.classList.toggle('hazed', level < u);
+    });
+    document.querySelectorAll('.lvbtn').forEach(b=>{
+      b.classList.toggle('active', +b.getAttribute('data-level') === level);
+    });
+  }
+  document.querySelectorAll('.lvbtn').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const lv = +b.getAttribute('data-level');
+      applyLevel(lv);
+      const url = new URL(location.href);
+      url.searchParams.set('level', lv);
+      history.replaceState(null, '', url);
+    });
+  });
+  document.getElementById('editModeChk').addEventListener('change', function(){
+    document.getElementById('cellsLayer').classList.toggle('show', this.checked);
+  });
+
+  applyLevel(levelFromURL());
+})();
+</script>
+</body>
+</html>

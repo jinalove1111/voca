@@ -1413,3 +1413,70 @@ reject 캐시로 "그냥 다시 시도"로는 복구 불가하던 문제의 자�
   `testPronunciationRewardOnce` 54/54 · `testRegistryCoverage` 8/8 ·
   `testBundleBudget` 10/10 · `rewardSystem` 도메인 47개 스크립트 PASS.
   로컬 PASS이며 최종 판정은 CI Release Gate(PR 생성 후)에서 한다.
+
+## 관련 항목: Paul Town V2 세계 좌표 렌더러 — 순수 단위 테스트 9종 등록 + 스크린샷 도구 (2026-09-18, 170차)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+Paul Town V2 렌더러 통합(`handoff.md` 2026-09-18(170차) 참고, 플래그
+`paulTownV2` OFF)이 만든 순수 단위 테스트 9종을
+`tests/harness/registry.mjs`(`attachment` 도메인, `npm run
+verify:attachment`로 함께 실행)에 `extra:false`로 등록했다 — 그중 6종
+(`testTownWorldContract`/`testTownPlacementContract`/
+`testTownHarnessGeometrySync`/`testTownDepthOrder`/`testEnvArtManifest`/
+`validateEnvArtManifest`)은 2026-09-17 작성분, 3종(`testTownEnvAssets`/
+`testTownWorldRender`/`testTownWorldScenery`)은 2026-09-18 신규 작성이며,
+9종 전부 이번 세션 이전에는 registry 미등록이라 `verify:all`에서 한 번도
+실행되지 않고 있었다(단독 실행으로 전부 PASS 확인 후 등록).
+
+| 스크립트 | 단언 | 대상 | 네트워크 |
+|---|---|---|---|
+| `scripts/testTownWorldContract.mjs` | 96 | `worldContract.js`(동결 월드 지오메트리) — `townLevel.js`/`townScene.js`(`DISTRICTS[*].unlock`/`lotState`)에 실제로 위임하는지(재구현 아님) | 0 |
+| `scripts/testTownPlacementContract.mjs` | 690 | `placementContract.js`(47칸 배치 계약) — 콜리전/SPOT_MAP 일치/존 배분/tree·bench 배제(시드 고정 LCG 퍼징) | 0 |
+| `scripts/testTownHarnessGeometrySync.mjs` | 75 | 디자인 목업 하네스(`paul-town-recompose.html` `#geometry`)와 `worldContract.js` 대조 | 0 |
+| `scripts/testTownDepthOrder.mjs` | 62 | `depthOrder.js`(월드 깊이/z-index 모델) — 계약+property 테스트 | 0 |
+| `scripts/testEnvArtManifest.mjs` | 71 | `validateEnvArtManifest.mjs` 자체의 회귀 스위트(결함 주입 4종 포함) | 0 |
+| `scripts/validateEnvArtManifest.mjs` | — | env 아트 매니페스트 검증 CLI(스키마/중복 키/px1x=px2x/2/열거값), 인자 없이 실행 시 실제 manifest/spec 검사 | 0 |
+| `scripts/testTownEnvAssets.mjs`(신규) | 196 | `src/assets/town/env/*.webp` 35개 + `index.js`(`TOWN_ENV_ASSETS`) — manifest와 파일 집합/sha256/bytes 일치, "assets/town/env" 참조가 V2 밖(0건)인지 | 0 |
+| `scripts/testTownWorldRender.mjs`(신규) | 97 | `worldRender.js`(세계 좌표 렌더 어댑터) — `cellAnchor`/`landmarkBox`/`worldZIndex`/`freeWorldAnchors`/`pxToWidthPct`/`widthPctToHeightPct`가 기존 계약을 그대로 변환만 하는지 | 0 |
+| `scripts/testTownWorldScenery.mjs`(신규) | 206 | `worldScenery.js`(동결 배경/장식 데이터) — 아래 참고 | 0 |
+
+**`testTownWorldScenery.mjs`의 `node:vm` 동기화 방식** — 이 테스트는
+승인 디자인 하네스(`docs/design/town/mockup/paul-town-recompose.html`)의
+합성 스크립트를 **한 글자도 수정하지 않고** `node:vm` 샌드박스 안에서
+그대로 실행한다. 하네스가 기대하는 `document`/캔버스류 API 대신 값을
+그대로 기록만 하는 가짜 DOM(recording fake DOM)을 주입해, 하네스가
+평소처럼 동작하며 계산해내는 `ENV_PLACEMENTS`(108개)/`GROUND`/
+`PROP_PLACEMENTS`(20개)/`SIGNS`/`LANDMARK_DECOR`/`BG_FILLER_TREES`(10개)
+수치를 그대로 뽑아내 `worldScenery.js`의 동결 상수와 대조한다(허용오차
+0.05, 390px 기준) — 하네스 로직을 테스트 파일에 손으로 베끼지 않는다는
+이 저장소의 "핵심 원칙"(§ 문서 상단)을 프론트엔드 하네스에도 그대로
+적용한 사례. 해상도(360/390/430px) 무관성, 레벨(1/3/4/5/8) 무관성,
+`worldScenery.js` 자체의 모듈 순수성(fetch/localStorage/Math.random/
+document/window/supabase/`isFeatureEnabled` 없음, import는
+`./worldContract` 하나뿐)까지 함께 고정한다.
+
+**`scripts/town-art/shootRenderer.mjs`(신규, verify:* 미등록 — 사람이
+눈으로 보는 QA 보조 도구)** — Paul Town V2 렌더러를 실제 브라우저
+(Playwright chromium)로 띄워 스크린샷을 찍는 도구다.
+`scripts/testBrowserE2E.mjs`와 동일하게 `dist/`가 없으면 먼저
+`npm run build`한 뒤 vite preview로 띄우고, `tests/e2e/lib/mockRoutes.mjs`
+의 전체 네트워크 mock(실 Supabase/Vercel 요청 0건)으로 QA 픽스처 학생을
+로그인시킨다. `npm run verify:*`/`verify:all`에는 등록돼 있지 않고
+PASS/FAIL을 자동 판정하는 테스트도 아니지만, 가로 스크롤/페이지
+에러/환경 자산 요청 실패 같은 명백한 구조적 결함은 exit code 1 +
+콘솔 로그로 fail-closed 신호를 준다.
+
+- **CLI**: `node scripts/town-art/shootRenderer.mjs --levels 1,3,4,5,8
+  --widths 360,390,430 [--zoom2] [--owned all|none] [--out <dir>]`.
+  기본값은 `--levels 4 --widths 390 --owned all --out
+  art-staging/renderer-previews/`(`.gitignore`의 `art-staging/` 아래라
+  산출물은 커밋되지 않는다).
+- **보장하는 것**: Playwright 컨텍스트를 `reducedMotion:'reduce'`로 열어
+  `motion-safe:` 페이드인 애니메이션이 아예 걸리지 않게 하고, 벨트+
+  서스펜더로 씬과 조상 체인의 computed opacity가 전부 1이 되고
+  `img[data-env-asset]` 전부가 `.complete`될 때까지 폴링한 뒤에만
+  셔터를 누른다(색 바랜 스크린샷 방지). 이 도구의 Playwright 페이지
+  안에서만(`addStyleTag`) 앱의 고정 UI 크롬(발음 재생 속도 위젯) 1개를
+  스크린샷 비교 편의를 위해 숨기며, 이는 이 도구의 캡처 화면에만
+  적용되고 실제 학생 화면 동작에는 영향이 없다.

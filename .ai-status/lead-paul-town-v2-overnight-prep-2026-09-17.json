@@ -1,0 +1,34 @@
+{
+  "agent_name": "lead",
+  "role": "Paul Town V2 야간 엔지니어링 준비 조정(월드 계약/배치/깊이/아트 파이프라인/하네스)",
+  "task_id": "paul-town-v2-overnight-prep-2026-09-17",
+  "task": "실물 환경 아트가 도착하면 스테이징→검증→합성→리뷰가 최소 추가 엔지니어링으로 가능하도록 LOCAL 준비. 렌더러 미출하, paulTownV2 OFF, Production 무접촉.",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-17T02:30:00+09:00",
+  "updated_at": "2026-09-17T06:10:00+09:00",
+  "branch": "feat/paul-town-v2-world-contract-2026-09-17 (origin/main a97dc05 기준, 로컬 커밋만, 미push)",
+  "files_owned": [
+    "handoff.md (162차 항목)",
+    ".ai-status/lead-paul-town-v2-overnight-prep-2026-09-17.json",
+    ".gitignore (art-staging/, __pycache__/)"
+  ],
+  "commits": ["a2e1b1a", "8058b8b", "9c8a08d", "be94058", "5ca08ec", "2e5bbee", "855353b", "e7611a1", "497393c", "958abae"],
+  "new_src_modules_unshipped": ["src/utils/town/worldContract.js", "src/utils/town/placementContract.js", "src/utils/town/depthOrder.js"],
+  "new_tests": {
+    "testTownWorldContract": "96/96",
+    "testTownPlacementContract": "690/690",
+    "testTownDepthOrder": "62/62",
+    "testTownHarnessGeometrySync": "75/75",
+    "testEnvArtManifest": "69/69"
+  },
+  "image_generator_available": false,
+  "painted_assets_created": 0,
+  "production_write": 0,
+  "open_owner_decisions": [
+    "riverApproach 셀 3개 잠금 레벨: RIVER_CELLS_UNLOCK=6 가정 vs Lv1",
+    "squarePerimeter 셀 8개 Lv1 사용 가능 유지 여부"
+  ],
+  "next_exact_step": "운영자가 Batch 1 프롬프트(ENV_ART_BATCH1_HANDOFF §2, 35파일)로 실물 아트 생성 → python scripts/town-art/ingest.py --src <폴더> → node scripts/testEnvArtManifest.mjs → 스테이징을 docs/design/town/mockup/batch1/로 복사 → node docs/design/town/mockup/shoot.mjs → 시각 승인 → 렌더러 구현 착수(그 전까지 미착수).",
+  "blocker": "실물 환경 아트 0장(이 환경에 이미지 생성 수단 없음, 외부 생성 필요)"
+}

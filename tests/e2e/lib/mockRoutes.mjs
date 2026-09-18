@@ -262,9 +262,28 @@ export async function installMocks(page, { tables, townWelcomeDisabled = false, 
   // townCatalog.js(TOWN_ITEM_META)를 그대로 소스로 써서 서버 town_items
   // 응답(camelCase, api/grant-xp.js 신형 shape)을 흉내낸다 — 가격/최소
   // 레벨/카테고리를 이 mock이 새로 발명하지 않는다(17개 전부 노출).
+  //
+  // 2026-09-18(작업 지시서 STEP 7 검증 중 발견, pre-existing — 이 세션이
+  // 만든 회귀 아님) — assetKey를 `${category}/${id}`로 직접 조립했는데,
+  // townCatalog.js의 실제 폴더 매핑(CATEGORY_FOLDER, 모듈 비공개라 여기서
+  // 재선언)은 category 값과 폴더명이 다른 경우가 있다(house→buildings,
+  // decoration→decorations 복수형) — 'special' 카테고리 아이템(bridge/
+  // english-school/clock-tower)은 우연히 category===폴더명이라 문제가
+  // 안 드러났지만, book-shop/cafe(house)·stone-fountain(decoration)은
+  // 실제 등록 키(buildings/book-shop 등)와 다른 잘못된 assetKey를 만들어
+  // mergeCatalog()의 pick()이 그 잘못된 값을 그대로 채택(서버가 assetKey를
+  // 이미 준 것으로 취급)해, TownObjectLayer.jsx의 hasArt 판정이 거짓으로
+  // false가 되고 solid placeholder 박스가 그려졌다(Step 7 shootRenderer
+  // 스크린샷 리뷰로 발견 — 앱 코드 문제가 아니라 이 mock 헬퍼의 assetKey
+  // 조립 공식 문제였다). 실제 townCatalog.js의 assetKeyFor()와 동일한
+  // 매핑으로 고친다.
+  const MOCK_CATEGORY_FOLDER = {
+    house: 'buildings', nature: 'nature', animal: 'animals', decoration: 'decorations', special: 'special',
+  }
   const TOWN_MOCK_ITEMS = Object.entries(TOWN_ITEM_META).map(([id, m]) => ({
     id, name: m.nameKo, emoji: m.emoji, price: m.defaultPrice, priceCurrency: 'dollars',
-    category: m.category, sortOrder: m.sortOrder, minLevel: m.minLevel, assetKey: `${m.category}/${id}`,
+    category: m.category, sortOrder: m.sortOrder, minLevel: m.minLevel,
+    assetKey: `${MOCK_CATEGORY_FOLDER[m.category] || 'decorations'}/${id}`,
   }))
   db._townCalls = { get_town_shop_state: 0, claim_town_welcome: 0, purchase_town_item: {} }
   // PHASE 4/10(townV1.spec.mjs, 2026-09-11) — 두 신규 회귀(빈 지갑 안내
