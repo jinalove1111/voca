@@ -1076,5 +1076,177 @@ export async function run(browser, baseURL) {
     }
   }
 
+  // ── S11 — 배치 팝오버 수평 클리핑 정정 회귀 방지(2026-09-19,
+  //        TownObjectLayer.jsx PlacementPopover) — 47개 배치 앵커 전부 x
+  //        3개 폭(360/390/430) = 141개 조합 각각에서 이동/보관 팝오버가
+  //        씬 박스 안에 완전히 들어오는지(수평 클리핑 없음), 두 버튼이
+  //        >=44x44 실제 탭 가능 영역을 유지하는지, 라벨이 살아있는지,
+  //        elementFromPoint가 자기 자신(또는 자손)을 가리키는지, 페이지
+  //        가로 오버플로우가 없는지를 검증한다. S9(D5 겹침 회귀)와 같은
+  //        정신이지만 축이 다르다 — S9는 배치 오버레이(TownPlacementOverlay)
+  //        44px 탭 컨트롤 자체의 겹침을, 이 S11은 아이템을 실제로 배치한
+  //        뒤 여는 이동/보관 팝오버(TownObjectLayer.jsx PlacementPopover)
+  //        의 수평 위치를 검증한다 — 서로 다른 컴포넌트, 다른 버그.
+  //        141회 전부 "배치→팝오버 열기(측정)→보관(닫기+다음 앵커를 위해
+  //        빈칸으로 되돌림)"만 반복해(지시서 명시대로 열기/닫기/Escape/
+  //        백드롭을 141번 반복하지 않음) 실행 시간을 억제한다 — Escape/
+  //        바깥 탭/포커스 복귀는 대표 부분집합(확정 클리핑 3개 + 확정
+  //        정상 3개 앵커, 최악 사례인 360px 폭 하나)에서만 별도로 검증.
+  const S11_VIEWPORTS = [{ width: 360, height: 640 }, { width: 390, height: 844 }, { width: 430, height: 932 }]
+  // 확정 클리핑 3개(1,0)/(2,1)/(7,5) + 확정 정상 3개(0,0)/(5,2)/(4,5) —
+  // 이 세션의 실측 BEFORE/AFTER 표와 동일한 앵커(작업 지시서가 지정한
+  // 9개 조합의 근거 앵커).
+  const S11_CLOSURE_SUBSET = new Set(['1,0', '2,1', '7,5', '0,0', '5,2', '4,5'])
+  {
+    const geometrySummary = []
+    for (const vp of S11_VIEWPORTS) {
+      const name = `S11[${vp.width}x${vp.height}] 배치 팝오버 수평 클리핑 정정`
+      const context = await browser.newContext({ viewport: vp })
+      const page = await context.newPage()
+      await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+      const mocks = await installMocks(page, {
+        townState: { starsEarned: 800, dollars: { available: 0, earned: 0, spent: 0 }, owned: ['tree'], welcomeClaimed: true },
+      })
+      try {
+        await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+        await login(page)
+        await goToPaulTownScreen(page)
+        const card = await enterTownCard(page)
+        await card.click()
+        await waitForTownHeader(page)
+
+        // 47개 배치 앵커 id를 한 번 수집(배치는 하지 않고 취소).
+        await page.locator('[data-testid="town-open-inventory"]').click()
+        const placeBtn0 = page.getByRole('button', { name: '마을에 놓기' })
+        await placeBtn0.waitFor({ state: 'visible', timeout: 10000 })
+        await placeBtn0.click()
+        await page.locator('[data-anchor]').first().waitFor({ state: 'visible', timeout: 10000 })
+        const anchorIds = await page.locator('[data-anchor]').evaluateAll((els) => els.map((el) => el.getAttribute('data-anchor')))
+        r.check(`${name} — 47개 배치 앵커 존재`, anchorIds.length === 47, `count=${anchorIds.length}`)
+        await page.getByRole('button', { name: '취소' }).click()
+
+        let geomOkCount = 0
+        let hitOkCount = 0
+        let pointOkCount = 0
+        let labelOkCount = 0
+        let overflowOkCount = 0
+        const failedAnchors = []
+
+        for (const anchorId of anchorIds) {
+          await page.locator('[data-testid="town-open-inventory"]').click()
+          const placeBtn = page.getByRole('button', { name: '마을에 놓기' })
+          await placeBtn.waitFor({ state: 'visible', timeout: 5000 })
+          await placeBtn.click()
+          const anchorBtn = page.locator(`[data-anchor="${anchorId}"]`)
+          await anchorBtn.waitFor({ state: 'visible', timeout: 5000 })
+          await anchorBtn.click()
+
+          const itemBtn = page.locator(`[data-item-id="tree"][data-cell="${anchorId}"] button`)
+          await itemBtn.waitFor({ state: 'visible', timeout: 5000 })
+          await itemBtn.evaluate((btn) => btn.scrollIntoView({ block: 'center', inline: 'center' }))
+          await itemBtn.click()
+
+          const moveBtn = page.getByRole('button', { name: '이동', exact: true })
+          const storeBtn = page.getByRole('button', { name: '보관', exact: true })
+          await moveBtn.waitFor({ state: 'visible', timeout: 5000 })
+
+          const sceneBox = await page.locator('[data-testid="town-scene-v2"]').boundingBox()
+          const moveBox = await moveBtn.boundingBox()
+          const storeBox = await storeBtn.boundingBox()
+          // (7,3) 팝오버 검사(위 S9)와 동일한 관례 — 씬 박스 기준, ±0.5px
+          // 서브픽셀 여유(제품 계약과 무관한 반올림 아티팩트만 허용).
+          const boxInsideScene = (box) => !!sceneBox && !!box &&
+            box.x >= sceneBox.x - 0.5 && box.y >= sceneBox.y - 0.5 &&
+            (box.x + box.width) <= (sceneBox.x + sceneBox.width + 0.5) &&
+            (box.y + box.height) <= (sceneBox.y + sceneBox.height + 0.5)
+          const geomOk = boxInsideScene(moveBox) && boxInsideScene(storeBox)
+          if (geomOk) geomOkCount++
+          else failedAnchors.push({ anchorId, reason: 'geometry', sceneBox, moveBox, storeBox })
+
+          const hitOk = (moveBox && moveBox.width >= 43.5 && moveBox.height >= 43.5) &&
+            (storeBox && storeBox.width >= 43.5 && storeBox.height >= 43.5)
+          if (hitOk) hitOkCount++
+          else failedAnchors.push({ anchorId, reason: 'hit-size', moveBox, storeBox })
+
+          const moveHit = await moveBtn.evaluate((btn) => {
+            const rect = btn.getBoundingClientRect()
+            const cx = rect.left + rect.width / 2
+            const cy = rect.top + rect.height / 2
+            const top = document.elementFromPoint(cx, cy)
+            return !!top && (top === btn || btn.contains(top))
+          })
+          const storeHit = await storeBtn.evaluate((btn) => {
+            const rect = btn.getBoundingClientRect()
+            const cx = rect.left + rect.width / 2
+            const cy = rect.top + rect.height / 2
+            const top = document.elementFromPoint(cx, cy)
+            return !!top && (top === btn || btn.contains(top))
+          })
+          const elementFromPointOk = moveHit && storeHit
+          if (elementFromPointOk) pointOkCount++
+          else failedAnchors.push({ anchorId, reason: 'elementFromPoint', moveHit, storeHit })
+
+          const moveLabel = (await moveBtn.textContent() || '').trim()
+          const storeLabel = (await storeBtn.textContent() || '').trim()
+          const labelOk = moveLabel === '이동' && storeLabel === '보관'
+          if (labelOk) labelOkCount++
+          else failedAnchors.push({ anchorId, reason: 'label', moveLabel, storeLabel })
+
+          const noOverflow = await noHorizontalOverflow(page)
+          if (noOverflow) overflowOkCount++
+          else failedAnchors.push({ anchorId, reason: 'page-overflow' })
+
+          // 대표 부분집합 + 360px 폭에서만 Escape/바깥 탭/포커스 복귀 추가 검증
+          // (열기/닫기를 141번 반복하지 않는다는 지시서 제약 — 이 앵커들만
+          // 여기서 한 번 더 열어 닫기 시나리오를 검증한 뒤, 마지막엔 항상
+          // '보관'으로 닫아 다음 앵커를 위해 빈 칸으로 되돌린다).
+          if (vp.width === 360 && S11_CLOSURE_SUBSET.has(anchorId)) {
+            await page.keyboard.press('Escape')
+            const closedByEscape = await waitUntil(async () => (await page.getByRole('button', { name: '이동', exact: true }).count()) === 0, { timeout: 5000 })
+            r.check(`${name} — 앵커(${anchorId}) Escape로 팝오버가 닫힘`, !!closedByEscape)
+            const focusReturned = await itemBtn.evaluate((btn) => btn === document.activeElement)
+            r.check(`${name} — 앵커(${anchorId}) Escape로 닫힌 후 포커스가 트리거(아이템) 버튼으로 복귀`, focusReturned)
+
+            await itemBtn.click()
+            await page.getByRole('button', { name: '이동', exact: true }).waitFor({ state: 'visible', timeout: 5000 })
+            const backdrop = page.locator('[data-testid="town-scene-backdrop"]')
+            await backdrop.click({ position: { x: 10, y: 80 } })
+            const closedByBackdrop = await waitUntil(async () => (await page.getByRole('button', { name: '이동', exact: true }).count()) === 0, { timeout: 5000 })
+            r.check(`${name} — 앵커(${anchorId}) 백드롭 클릭으로도 팝오버가 닫힘`, !!closedByBackdrop)
+
+            // 백드롭으로 닫혔으니 보관하려면 다시 열어야 한다.
+            await itemBtn.click()
+            await page.getByRole('button', { name: '보관', exact: true }).waitFor({ state: 'visible', timeout: 5000 })
+          }
+
+          await storeBtn.click()
+          const stored = await waitUntil(async () => (await page.locator(`[data-item-id="tree"][data-cell="${anchorId}"]`).count()) === 0, { timeout: 10000 })
+          if (!stored) failedAnchors.push({ anchorId, reason: 'store-failed' })
+        }
+
+        console.log(`  [town-v2] ${name} — geom=${geomOkCount}/${anchorIds.length} hit=${hitOkCount}/${anchorIds.length} elementFromPoint=${pointOkCount}/${anchorIds.length} label=${labelOkCount}/${anchorIds.length} overflow=${overflowOkCount}/${anchorIds.length}`)
+        if (failedAnchors.length > 0) console.log(`  [town-v2] ${name} — 실패 상세(최대 10개): ${JSON.stringify(failedAnchors.slice(0, 10))}`)
+        geometrySummary.push({ width: vp.width, geomOkCount, hitOkCount, pointOkCount, labelOkCount, overflowOkCount, total: anchorIds.length })
+
+        r.check(`${name} — 47개 앵커 전부 팝오버가 씬 박스 안(클리핑 없음, ${geomOkCount}/${anchorIds.length})`, geomOkCount === anchorIds.length, `${geomOkCount}/${anchorIds.length}`)
+        r.check(`${name} — 47개 앵커 전부 이동/보관 버튼 >=44x44 탭 영역(${hitOkCount}/${anchorIds.length})`, hitOkCount === anchorIds.length, `${hitOkCount}/${anchorIds.length}`)
+        r.check(`${name} — 47개 앵커 전부 elementFromPoint가 자기 자신(또는 자손)을 가리킴(${pointOkCount}/${anchorIds.length})`, pointOkCount === anchorIds.length, `${pointOkCount}/${anchorIds.length}`)
+        r.check(`${name} — 47개 앵커 전부 이동/보관 라벨 표시(${labelOkCount}/${anchorIds.length})`, labelOkCount === anchorIds.length, `${labelOkCount}/${anchorIds.length}`)
+        r.check(`${name} — 47개 앵커 전부 페이지 가로 오버플로우 없음(${overflowOkCount}/${anchorIds.length})`, overflowOkCount === anchorIds.length, `${overflowOkCount}/${anchorIds.length}`)
+      } catch (err) {
+        const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+        r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+          `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+      } finally {
+        collect(mocks)
+        await context.close()
+      }
+    }
+    const totalCombos = geometrySummary.reduce((sum, s) => sum + s.total, 0)
+    const totalGeomOk = geometrySummary.reduce((sum, s) => sum + s.geomOkCount, 0)
+    console.log(`  [town-v2] S11 141-조합 요약 — geom PASS ${totalGeomOk}/${totalCombos} (${JSON.stringify(geometrySummary)})`)
+    r.check('S11 — 141개(47앵커 x 3폭) 조합 전체에서 팝오버 클리핑 PASS', totalGeomOk === totalCombos && totalCombos === 141, `${totalGeomOk}/${totalCombos}`)
+  }
+
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }
 }

@@ -36,11 +36,11 @@
 // 동일 이유 — 스태킹 컨텍스트를 만들지 않아야 y-랭킹 항목들이 다른
 // 레이어와 전역적으로 올바르게 섞인다). 팝오버 z는 sceneZ.js의
 // POPOVER_Z(씬 로컬 UI 상수, 세계 전체보다 항상 위).
-import { Fragment } from 'react'
+import { Fragment, useLayoutEffect, useRef, useState } from 'react'
 import TownSprite from './TownSprite'
 import { townAsset } from '../../../assets/town'
 import {
-  HOME_SPRITE, spriteFor, SCENE_COLS, SCENE_ROWS, LOTS, lotState, districtForCell,
+  HOME_SPRITE, spriteFor, SCENE_ROWS, LOTS, lotState, districtForCell,
 } from '../../../utils/town/townScene'
 import {
   landmarkBox, cellAnchor, worldZIndex, isFixedLandmarkId, placedItemWidthPct,
@@ -97,6 +97,87 @@ function LotShadow({ lot, box, z }) {
         zIndex: z,
       }}
     />
+  )
+}
+
+// 2026-09-19 신규 — 배치 이동/보관 팝오버의 수평 클리핑 정정(오너 지시서,
+// 확정 버그). 옛 popoverAlign은 논리 배치 그리드 인덱스(p.x, 0~7 — 8x6
+// SPOT_MAP 좌표)로 좌/우 정렬을 골랐는데, 실제 화면 위치는 world %
+// 좌표(anchor.leftPct, worldRender.cellAnchor())라 같은 "중간/마지막"
+// 인덱스도 실제로는 화면 왼쪽 가장자리 근처일 수 있었다(실측: SPOT_MAP
+// '7,5'는 논리상 마지막 열이라 옛 코드가 'right-0'을 줬지만 실제
+// leftPct=14.75%로 왼쪽 가장자리에 가까워 오히려 더 왼쪽으로 밀려
+// 잘렸다). 세로축은 이미 anchor.bottomPct(실제 위치)로 판정하는데
+// (TownObjectLayer의 nearGlobalTop/nearGlobalBottom) 가로축만 이 교훈을
+// 놓치고 있었다 — 아래에서 가로축도 anchor.leftPct로 초기 정렬을
+// 고르도록 고쳤다(세로축과 동일 정신의 임계값 미러링, 호출부 참고).
+//
+// 그 위에 실측 지오메트리 안전장치를 한 겹 더 얹는다 — 퍼센트 임계값
+// 만으로는 겹치지 않는다는 "보장"이 되지 않는다(팝오버 자신의 픽셀
+// 너비는 고정인데 씬의 픽셀 너비는 360/390/430로 갈리고, world %→실제
+// px 매핑도 폭마다 살짝 달라진다 — 실측상 390px에서는 씬 컨테이너의
+// 실제 sceneBox.x가 0이 아니라 음수였다). 그래서 팝오버가 열릴 때
+// 딱 한 번(useLayoutEffect, isOpen 의존) 자신의 getBoundingClientRect()를
+// 씬 박스([data-testid="town-scene-v2"], closest()로 찾음 — TownScene.jsx
+// 가 이미 이 testid를 소유)와 비교해, 왼쪽/오른쪽 경계를 marginPx(4,
+// worldRender.layoutPlacementControls의 D5 중심-배제 여유(margin=2)와
+// 같은 자릿수의 작은 안전 여유) 이상 벗어나면 marginLeft(px)로 되돌린다.
+// margin은 박스 모델 단계에서 적용되고 transform은 그 위에 그대로
+// 얹히므로 left-0/right-0/가운데(translateX(-50%)) 세 정렬 클래스
+// 어느 것과도 충돌하지 않는다(대체가 아니라 합성 — 인라인 transform을
+// 직접 쓰면 Tailwind 가운데 정렬 클래스의 translateX(-50%)를 지워버려
+// 충돌했을 것). isOpen이 바뀔 때만 재계산하고 닫히면 0으로 리셋하므로
+// 루프/지터가 없다 — 아이템 자체(버튼) 위치는 전혀 건드리지 않는다,
+// 팝오버 엘리먼트에만 적용한다. SSR/DOM 부재에도 안전(ref가 비어 있으면
+// 그냥 조기 반환, 이 컴포넌트는 이미 브라우저 전용 트리 안에서만 쓰인다).
+function PlacementPopover({
+  isOpen, verticalClass, alignClass, zIndex, onStartMove, onStore,
+}) {
+  const ref = useRef(null)
+  const [safeMarginLeft, setSafeMarginLeft] = useState(0)
+
+  useLayoutEffect(() => {
+    if (!isOpen) { setSafeMarginLeft(0); return }
+    const el = ref.current
+    if (!el) return
+    const scene = el.closest('[data-testid="town-scene-v2"]')
+    if (!scene) return
+    const popRect = el.getBoundingClientRect()
+    const sceneRect = scene.getBoundingClientRect()
+    const marginPx = 4
+    let dx = 0
+    if (popRect.left < sceneRect.left + marginPx) {
+      dx = (sceneRect.left + marginPx) - popRect.left
+    } else if (popRect.right > sceneRect.right - marginPx) {
+      dx = (sceneRect.right - marginPx) - popRect.right
+    }
+    setSafeMarginLeft(dx)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen])
+
+  if (!isOpen) return null
+
+  return (
+    <div
+      ref={ref}
+      className={`absolute ${verticalClass} flex gap-1 bg-white rounded-2xl card-shadow p-1 whitespace-nowrap ${alignClass}`}
+      style={{ zIndex, marginLeft: safeMarginLeft || undefined }}
+    >
+      <button
+        type="button"
+        onClick={onStartMove}
+        className="pointer-events-auto min-h-[44px] px-3 rounded-xl bg-purple-100 text-purple-600 text-xs font-black btn-press"
+      >
+        이동
+      </button>
+      <button
+        type="button"
+        onClick={onStore}
+        className="pointer-events-auto min-h-[44px] px-3 rounded-xl bg-gray-100 text-gray-600 text-xs font-black btn-press"
+      >
+        보관
+      </button>
+    </div>
   )
 }
 
@@ -222,7 +303,18 @@ export default function TownObjectLayer({
         const anchor = cellAnchor(p.x, p.y)
         const itemDistrict = districtForCell(p.x, p.y)
         const isOpen = openPlacementId === p.placementId
-        const popoverAlign = p.x <= 1 ? 'left-0' : p.x >= SCENE_COLS - 2 ? 'right-0' : 'left-1/2 -translate-x-1/2'
+        // 2026-09-19 정정 — 옛 "p.x(논리 배치 그리드 인덱스)가 0/1이면
+        // 왼쪽, SCENE_COLS-2 이상이면 오른쪽" 판정은 균일 8x6 그리드 시절
+        // 가정에 기댔다(위 세로축 2026-09-16 갱신과 동일 교훈, 아래 참고) —
+        // 실제 클리핑 방지는 전역 위치(anchor.leftPct, world %, overflow-
+        // hidden인 씬 박스 기준)로 판정한다. 임계값(15/85)은 세로축
+        // (12/90)과 같은 정신의 비대칭 미러링일 뿐, 최종 보장은 이 파일
+        // 아래 PlacementPopover의 실측 지오메트리 안전장치가 한다(퍼센트
+        // 임계값은 그 안전장치가 옮겨야 할 거리를 최소화하는 초기값일
+        // 뿐이다).
+        const nearGlobalLeft = anchor.leftPct < 15
+        const nearGlobalRight = anchor.leftPct > 85
+        const popoverAlign = nearGlobalLeft ? 'left-0' : nearGlobalRight ? 'right-0' : 'left-1/2 -translate-x-1/2'
         // 2026-09-16 갱신 — 옛 "마지막 행(y=SCENE_ROWS-1)이면 위로 연다"
         // 판정은 균일 8x6 그리드 시절 "y가 클수록 화면 아래쪽"이라는 가정에
         // 기댔다. 실제 클리핑 방지는 전역 위치(anchor.bottomPct, world %,
@@ -268,27 +360,14 @@ export default function TownObjectLayer({
               <TownSprite sprite={sprite} className="w-full h-full" />
             </button>
 
-            {isOpen && (
-              <div
-                className={`absolute ${popoverVertical} flex gap-1 bg-white rounded-2xl card-shadow p-1 whitespace-nowrap ${popoverAlign}`}
-                style={{ zIndex: POPOVER_Z }}
-              >
-                <button
-                  type="button"
-                  onClick={() => onStartMove && onStartMove(p.placementId)}
-                  className="pointer-events-auto min-h-[44px] px-3 rounded-xl bg-purple-100 text-purple-600 text-xs font-black btn-press"
-                >
-                  이동
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onStore && onStore(p.placementId)}
-                  className="pointer-events-auto min-h-[44px] px-3 rounded-xl bg-gray-100 text-gray-600 text-xs font-black btn-press"
-                >
-                  보관
-                </button>
-              </div>
-            )}
+            <PlacementPopover
+              isOpen={isOpen}
+              verticalClass={popoverVertical}
+              alignClass={popoverAlign}
+              zIndex={POPOVER_Z}
+              onStartMove={() => onStartMove && onStartMove(p.placementId)}
+              onStore={() => onStore && onStore(p.placementId)}
+            />
           </div>
         )
       })}
