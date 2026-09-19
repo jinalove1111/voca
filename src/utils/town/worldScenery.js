@@ -357,7 +357,7 @@ export const SIGNS = Object.freeze({
     wPct: 46 / 3.9,
     viewBox: '0 0 46 34',
     anchor: 'bottom-center',
-    svgInner: '<svg viewBox="0 0 46 34"><rect x="21" y="16" width="4" height="18" fill="#7c5a34"/><rect x="1" y="1" width="44" height="17" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.4"/><text x="23" y="13" font-family="Georgia, serif" font-size="9.5" font-weight="700" fill="#4a2f16" text-anchor="middle">My House</text></svg>',
+    svgInner: '<svg viewBox="0 0 46 34"><rect x="21" y="16" width="4" height="18" fill="#7c5a34"/><rect x="1" y="1" width="44" height="17" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.4"/><text x="23" y="13" font-family="Georgia, serif" font-size="7.7" font-weight="700" fill="#4a2f16" text-anchor="middle">My House</text></svg>',
   }),
   sea: Object.freeze({
     text: 'To the Sea →',

@@ -1012,5 +1012,69 @@ export async function run(browser, baseURL) {
     }
   }
 
+  // ── S10 — 표지판 텍스트 폭 회귀 방지: My House 표지판 <text>가 자신의
+  //        박스(<rect>, 기둥이 아니라 표지판 판) 폭 안에 여유 있게 들어맞는지
+  //        (2026-09-19 — font-size 9.5(텍스트 폭 48.92) → 7.7(텍스트 폭
+  //        39.65)로 수정, 박스 폭 44는 그대로). Georgia는 이 하네스(Windows/
+  //        Playwright Chromium)와 실제 CI(Linux, Georgia 미설치 → 시스템
+  //        세리프 폴백) 간 글리프 폭이 달라질 수 있어, 정확히 0 여유가
+  //        아니라 최소 1유닛 이상의 여유를 요구한다(폰트 폴백 흔들림 허용치).
+  //        "To the Sea" 표지판(범위 밖, 미수정)도 같은 방식으로 재봤지만
+  //        실측 마진이 ~0.94 유닛뿐이라(59.07 vs 60) 이 1유닛 마진 기준과
+  //        자연스럽게 맞지 않아 — 이미 알려진 여유이자 이번 수정과 무관한
+  //        서명에 새로운(더 느슨한 기준의) 단언을 추가하는 대신 생략한다
+  //        (지시서의 "낮은 리스크로 자연스럽게 맞을 때만" 옵션 조건 미충족).
+  {
+    const vp = { width: 390, height: 844 }
+    const name = 'S10[390x844] 표지판 텍스트 폭 <= 박스 폭'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownCard(page)
+      await card.click()
+      await page.locator('[data-testid="town-scene-v2"]').waitFor({ state: 'visible', timeout: 15000 })
+
+      // TownSceneryLayer.jsx WorldSign — role="img" aria-label=표지판 텍스트
+      // 래퍼 안의 <svg>에 <text>(표지판 카피) + 여러 <rect>(판 + 기둥)가
+      // 있다. 판은 항상 기둥보다 훨씬 넓은 rect이므로 width가 가장 큰
+      // rect를 "박스"로 취급한다(재도출 없음 — svgInner가 유일한 원천).
+      async function measureSignTextVsBox(ariaLabel) {
+        const sign = page.locator(`div[role="img"][aria-label="${ariaLabel}"]`).first()
+        await sign.waitFor({ state: 'visible', timeout: 10000 })
+        return sign.evaluate((el) => {
+          const text = el.querySelector('text')
+          const rects = Array.from(el.querySelectorAll('rect'))
+          const box = rects.reduce((widest, rectEl) => {
+            const w = parseFloat(rectEl.getAttribute('width') || '0')
+            return w > widest.w ? { w, el: rectEl } : widest
+          }, { w: 0, el: null }).el
+          return {
+            textWidth: text ? text.getComputedTextLength() : null,
+            boxWidth: box ? parseFloat(box.getAttribute('width')) : null,
+          }
+        })
+      }
+
+      const myHouse = await measureSignTextVsBox('My House')
+      r.check(
+        `${name} — My House 표지판 텍스트 폭이 박스 폭보다 최소 1 유닛 이상 작음(양쪽 여유 존재)`,
+        myHouse.textWidth != null && myHouse.boxWidth != null && myHouse.textWidth <= myHouse.boxWidth - 1,
+        JSON.stringify(myHouse),
+      )
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }
 }
