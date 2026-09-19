@@ -1586,5 +1586,391 @@ export async function run(browser, baseURL) {
     }
   }
 
+  // ── S14 — 배치(placed) 카탈로그 아이템 2.5D 프레젠테이션(그림자/깊이
+  //        스케일/선택 강조) 회귀 방지(2026-09-20, bench-first depth/shadow
+  //        파일럿 — worldRender.js placedItemVisual(), TownObjectLayer.jsx
+  //        그림자/lift 렌더, townItemVisualMeta.js). bench를 실제 47칸
+  //        배치 계약(placementContract.js)의 서로 다른 depth 앵커 3개로
+  //        옮기며(back='5,5'(y=6)/middle='7,0'(y=48.6)/front='7,5'(y=94) —
+  //        전부 Lv8(starsEarned=800)에서 유효한 배치 후보, 작업 지시서가
+  //        실측 확인한 앵커 그대로) 폭/그림자/앵커점 고정/단일 렌더를
+  //        검증하고, cat/tree로 같은 메커니즘을 확장 검증한다.
+  //
+  //        기대 렌더 폭은 worldContract.DEPTH_BANDS(이미 동결된 상수, 이
+  //        세션이 발명하지 않음)로 이 테스트가 독립적으로 재계산한 값이다
+  //        (재도출이 아니라 대조 — 코드가 쓰는 것과 같은 공식):
+  //          back  y=6    depthScale = 0.55 + 0.10*(6/28)   = 0.571429
+  //          middle y=48.6 depthScale = 0.85 + 0.15*(3.6/21) = 0.875714
+  //          front y=94   depthScale = 1.00 + 0.20*(28/34)  = 1.164706
+  //        widthPct = BASE.sm(6.5, bench는 category 'decoration' →
+  //        footprintFor()가 'sm') * depthScale — 전부 16% 캡 아래.
+  const DEPTH_ANCHORS = { back: '5,5', middle: '7,0', front: '7,5' }
+  const BENCH_WIDTH_PCT = {
+    back: 6.5 * (0.55 + 0.10 * (6 / 28)),
+    middle: 6.5 * (0.85 + 0.15 * (3.6 / 21)),
+    front: 6.5 * (1.00 + 0.20 * (28 / 34)),
+  }
+  const SHADOW_WIDTH_RATIO = 0.75 // worldRender.placedItemVisual() 기본값(SHADOW_WIDTH_RATIO_DEFAULT)과 동일 상수.
+  const WIDTH_PCT_TOLERANCE = 0.4 // 퍼센트 포인트 — 반올림/보더/서브픽셀 오차 여유.
+
+  const S14_VIEWPORTS = [{ width: 390, height: 844, label: '모바일' }, { width: 1440, height: 900, label: '데스크톱' }]
+  for (const vp of S14_VIEWPORTS) {
+    const name = `S14[${vp.width}x${vp.height},${vp.label}] 배치 아이템 그림자/깊이스케일`
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+    const mocks = await installMocks(page, {
+      townState: {
+        starsEarned: 800,
+        dollars: { available: 0, earned: 0, spent: 0 },
+        owned: ['bench', 'tree', 'cat', 'book-shop', 'cafe', 'stone-fountain', 'bridge', 'english-school', 'clock-tower'],
+        welcomeClaimed: true,
+      },
+    })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownCard(page)
+      await card.click()
+      await waitForTownHeader(page)
+
+      const scene = page.locator('[data-testid="town-scene-v2"]')
+
+      async function widthPctOf(locator) {
+        const [box, sceneBox] = await Promise.all([locator.boundingBox(), scene.boundingBox()])
+        if (!box || !sceneBox || sceneBox.width === 0) return null
+        return (box.width / sceneBox.width) * 100
+      }
+
+      async function placeFromInventory(itemLabel, anchorId) {
+        await page.locator('[data-testid="town-open-inventory"]').click()
+        const cardEl = page.locator('div.bg-white.rounded-2xl.card-shadow', { has: page.getByText(itemLabel, { exact: true }) }).first()
+        await cardEl.waitFor({ state: 'visible', timeout: 10000 })
+        await cardEl.getByRole('button', { name: '마을에 놓기' }).click()
+        await page.locator(`[data-anchor="${anchorId}"]`).waitFor({ state: 'visible', timeout: 10000 })
+        await page.locator(`[data-anchor="${anchorId}"]`).click()
+      }
+
+      async function movePlacedItem(itemId, fromCell, toAnchorId) {
+        await page.locator(`[data-item-id="${itemId}"][data-cell="${fromCell}"] > button`).click()
+        const moveBtn = page.getByRole('button', { name: '이동', exact: true })
+        await moveBtn.waitFor({ state: 'visible', timeout: 5000 })
+        await moveBtn.click()
+        await page.locator(`[data-anchor="${toAnchorId}"]`).waitFor({ state: 'visible', timeout: 10000 })
+        await page.locator(`[data-anchor="${toAnchorId}"]`).click()
+      }
+
+      async function checkShadow(pid, expectedItemWidthPct, label) {
+        const shadow = page.locator(`[data-shadow-for="${pid}"]`)
+        const shadowVisible = await shadow.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false)
+        r.check(`${name} — ${label} 그림자 요소 존재/표시됨(요구사항 #5)`, shadowVisible)
+        if (!shadowVisible) return
+        const [shadowBox, sceneBox, pointerEvents] = await Promise.all([
+          shadow.boundingBox(),
+          scene.boundingBox(),
+          shadow.evaluate((el) => window.getComputedStyle(el).pointerEvents),
+        ])
+        r.check(`${name} — ${label} 그림자 computed pointer-events: none(요구사항 #5)`, pointerEvents === 'none', `pointerEvents=${pointerEvents}`)
+        const withinScene = !!shadowBox && !!sceneBox &&
+          shadowBox.x >= sceneBox.x - 2 && shadowBox.y >= sceneBox.y - 2 &&
+          (shadowBox.x + shadowBox.width) <= (sceneBox.x + sceneBox.width + 2) &&
+          (shadowBox.y + shadowBox.height) <= (sceneBox.y + sceneBox.height + 2)
+        r.check(`${name} — ${label} 그림자 바운딩박스가 씬 경계 안(약간의 여유 포함, 요구사항 #5)`, withinScene, JSON.stringify({ shadowBox, sceneBox }))
+        const shadowWidthPct = shadowBox && sceneBox && sceneBox.width > 0 ? (shadowBox.width / sceneBox.width) * 100 : null
+        const expectedShadowWidthPct = expectedItemWidthPct != null ? expectedItemWidthPct * SHADOW_WIDTH_RATIO : null
+        r.check(
+          `${name} — ${label} 그림자 폭이 아이템 폭에 비례(요구사항 #2, 기대 ${expectedShadowWidthPct != null ? expectedShadowWidthPct.toFixed(3) : '?'}%)`,
+          shadowWidthPct != null && expectedShadowWidthPct != null && Math.abs(shadowWidthPct - expectedShadowWidthPct) < WIDTH_PCT_TOLERANCE,
+          `shadowWidthPct=${shadowWidthPct}`,
+        )
+      }
+
+      // ── bench를 back에 배치 ────────────────────────────────────────────
+      await placeFromInventory('벤치', DEPTH_ANCHORS.back)
+      const benchAtBack = page.locator(`[data-item-id="bench"][data-cell="${DEPTH_ANCHORS.back}"]`)
+      const benchVisibleAtBack = await benchAtBack.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} — bench가 back(${DEPTH_ANCHORS.back})에 배치됨`, benchVisibleAtBack)
+      if (!benchVisibleAtBack) throw new Error('bench back 배치 실패')
+
+      const placementId = await benchAtBack.getAttribute('data-placement-id')
+      r.check(`${name} — 배치 직후 data-placement-id 확보됨`, !!placementId, String(placementId))
+
+      // ── 요구사항 #8 — 단일 렌더(별도 preview 단계 없음): 배치 직후 즉시
+      //     측정한 폭과 300ms 뒤 다시 측정한 폭이 완전히 같음. ──────────
+      const widthImmediate = await widthPctOf(benchAtBack)
+      await page.waitForTimeout(300)
+      const widthSettled = await widthPctOf(benchAtBack)
+      r.check(
+        `${name} — 배치 직후 폭과 300ms 후 폭이 동일(단일 렌더, 요구사항 #8)`,
+        widthImmediate != null && widthSettled != null && Math.abs(widthImmediate - widthSettled) < 0.05,
+        `immediate=${widthImmediate} settled=${widthSettled}`,
+      )
+      r.check(
+        `${name} — back(y=6) 렌더 폭이 기대값과 일치(${BENCH_WIDTH_PCT.back.toFixed(3)}%, 요구사항 #2)`,
+        widthSettled != null && Math.abs(widthSettled - BENCH_WIDTH_PCT.back) < WIDTH_PCT_TOLERANCE,
+        `widthSettled=${widthSettled}`,
+      )
+      await checkShadow(placementId, widthSettled, 'bench@back')
+
+      // ── 요구사항 #3 — 그림자와 아이템이 같은 left%(수평 어긋남 없음),
+      //     groundOffset 기본값(0)이라 top%도 같음(지면 접점 불변). ──────
+      const anchorMatch = await benchAtBack.evaluate((wrapper) => {
+        const shadowEl = wrapper.previousElementSibling
+        return {
+          wrapperLeft: wrapper.style.left,
+          wrapperTop: wrapper.style.top,
+          shadowLeft: shadowEl ? shadowEl.style.left : null,
+          shadowTop: shadowEl ? shadowEl.style.top : null,
+        }
+      })
+      r.check(
+        `${name} — 그림자와 아이템이 같은 left%(수평 어긋남 없음, 요구사항 #3)`,
+        !!anchorMatch.wrapperLeft && anchorMatch.wrapperLeft === anchorMatch.shadowLeft,
+        JSON.stringify(anchorMatch),
+      )
+      r.check(
+        `${name} — groundOffset 기본값(0)이라 그림자 top%도 아이템 top%와 같음(지면 접점 불변, 요구사항 #3)`,
+        !!anchorMatch.wrapperTop && anchorMatch.wrapperTop === anchorMatch.shadowTop,
+        JSON.stringify(anchorMatch),
+      )
+
+      // ── middle로 이동 ──────────────────────────────────────────────────
+      await movePlacedItem('bench', DEPTH_ANCHORS.back, DEPTH_ANCHORS.middle)
+      const benchAtMiddle = page.locator(`[data-item-id="bench"][data-cell="${DEPTH_ANCHORS.middle}"]`)
+      const benchVisibleAtMiddle = await benchAtMiddle.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} — bench가 middle(${DEPTH_ANCHORS.middle})로 이동됨`, benchVisibleAtMiddle)
+      const widthMiddle = await widthPctOf(benchAtMiddle)
+      r.check(
+        `${name} — middle(y=48.6) 렌더 폭이 기대값과 일치(${BENCH_WIDTH_PCT.middle.toFixed(3)}%, 요구사항 #2)`,
+        widthMiddle != null && Math.abs(widthMiddle - BENCH_WIDTH_PCT.middle) < WIDTH_PCT_TOLERANCE,
+        `widthMiddle=${widthMiddle}`,
+      )
+      const placementIdMiddle = await benchAtMiddle.getAttribute('data-placement-id')
+      await checkShadow(placementIdMiddle, widthMiddle, 'bench@middle')
+
+      // ── front로 이동 ───────────────────────────────────────────────────
+      await movePlacedItem('bench', DEPTH_ANCHORS.middle, DEPTH_ANCHORS.front)
+      const benchAtFront = page.locator(`[data-item-id="bench"][data-cell="${DEPTH_ANCHORS.front}"]`)
+      const benchVisibleAtFront = await benchAtFront.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} — bench가 front(${DEPTH_ANCHORS.front})로 이동됨`, benchVisibleAtFront)
+      const widthFront = await widthPctOf(benchAtFront)
+      r.check(
+        `${name} — front(y=94) 렌더 폭이 기대값과 일치(${BENCH_WIDTH_PCT.front.toFixed(3)}%, 요구사항 #2)`,
+        widthFront != null && Math.abs(widthFront - BENCH_WIDTH_PCT.front) < WIDTH_PCT_TOLERANCE,
+        `widthFront=${widthFront}`,
+      )
+      const placementIdFront = await benchAtFront.getAttribute('data-placement-id')
+      await checkShadow(placementIdFront, widthFront, 'bench@front')
+
+      // ── 요구사항 #1 — back < middle < front(엄격 순서, 이동/보관 루프
+      //     중 측정한 3개 지점 폭 재사용 — 새 병렬 측정 없음). ─────────
+      r.check(
+        `${name} — 렌더 폭 순서 back < middle < front(${widthSettled?.toFixed(2)} < ${widthMiddle?.toFixed(2)} < ${widthFront?.toFixed(2)}, 요구사항 #1)`,
+        widthSettled != null && widthMiddle != null && widthFront != null && widthSettled < widthMiddle && widthMiddle < widthFront,
+      )
+
+      // ── 요구사항 #2 — depthScale 합성 후에도 폭이 BASE.sm*depthScale
+      //     기대 범위 안([0.55,1.20]×6.5, 16% 캡 미도달). ────────────────
+      const SM_MIN = 6.5 * 0.55
+      const SM_MAX = 6.5 * 1.20
+      r.check(
+        `${name} — 3개 지점 렌더 폭 전부 BASE.sm*depthScale 기대 범위 [${SM_MIN.toFixed(2)}, ${SM_MAX.toFixed(2)}]% 안(16% 캡 미도달, 요구사항 #2)`,
+        [widthSettled, widthMiddle, widthFront].every((w) => w != null && w >= SM_MIN - WIDTH_PCT_TOLERANCE && w <= SM_MAX + WIDTH_PCT_TOLERANCE),
+        JSON.stringify({ widthSettled, widthMiddle, widthFront }),
+      )
+
+      // ── 요구사항 #6 — 선택(팝오버 열림) 시 버튼 computed transform이
+      //     바뀌고, 닫으면 되돌아옴. transform-origin: 50% 100%라 바닥-
+      //     중앙(지면 접점) 위치는 scale/lift 후에도 거의 그대로여야 함
+      //     (요구사항 #3의 "scaling doesn't shift the anchor" 정신을
+      //     실제 lift 효과로 직접 검증). ──────────────────────────────
+      const benchFrontButton = benchAtFront.locator('> button')
+      const transformClosed = await benchFrontButton.evaluate((btn) => window.getComputedStyle(btn).transform)
+      const closedBox = await benchFrontButton.boundingBox()
+      await benchFrontButton.click()
+      const moveBtnFront = page.getByRole('button', { name: '이동', exact: true })
+      await moveBtnFront.waitFor({ state: 'visible', timeout: 5000 })
+      // motion-safe: transition-duration 150ms(기본, no-preference
+      // 컨텍스트) 동안 스케줄링에 따라 아직 애니메이션이 시작 전일 수
+      // 있다 — 전환이 끝날 때까지 기다린 뒤 최종 값을 읽는다(구현 버그가
+      // 아니라 샘플링 타이밍 이슈, 아래 Escape 복귀 확인과 동일 근거).
+      await page.waitForTimeout(250)
+      const transformOpen = await benchFrontButton.evaluate((btn) => window.getComputedStyle(btn).transform)
+      r.check(
+        `${name} — 팝오버 열림 시 버튼 computed transform이 닫힘 상태와 다름(선택 강조 적용됨, 요구사항 #6)`,
+        transformOpen !== transformClosed,
+        `closed=${transformClosed} open=${transformOpen}`,
+      )
+      const openBox = await benchFrontButton.boundingBox()
+      const bottomCenterClosed = closedBox ? { x: closedBox.x + closedBox.width / 2, y: closedBox.y + closedBox.height } : null
+      const bottomCenterOpen = openBox ? { x: openBox.x + openBox.width / 2, y: openBox.y + openBox.height } : null
+      const anchorDrift = bottomCenterClosed && bottomCenterOpen
+        ? Math.hypot(bottomCenterOpen.x - bottomCenterClosed.x, bottomCenterOpen.y - bottomCenterClosed.y)
+        : null
+      r.check(
+        `${name} — 선택 강조(scale/lift) 적용 후에도 버튼 바닥-중앙(지면 접점)이 거의 그대로(drift=${anchorDrift != null ? anchorDrift.toFixed(2) : '?'}px < 3px, transform-origin: 50% 100% 검증, 요구사항 #3/#6)`,
+        anchorDrift != null && anchorDrift < 3,
+        JSON.stringify({ bottomCenterClosed, bottomCenterOpen }),
+      )
+
+      // ── 요구사항 #9 — 그림자가 있는 상태에서도 팝오버가 씬 박스 안에
+      //     완전히 들어옴(S9/S11 클리핑 회귀 방지 확장, front는 global-
+      //     bottom 임계값을 넘는 실제 edge 앵커). ─────────────────────
+      const sceneBoxForPopover = await scene.boundingBox()
+      const moveBtnFrontBox = await moveBtnFront.boundingBox()
+      const popoverInsideWithShadow = !!sceneBoxForPopover && !!moveBtnFrontBox &&
+        moveBtnFrontBox.x >= sceneBoxForPopover.x - 0.5 && moveBtnFrontBox.y >= sceneBoxForPopover.y - 0.5 &&
+        (moveBtnFrontBox.x + moveBtnFrontBox.width) <= (sceneBoxForPopover.x + sceneBoxForPopover.width + 0.5) &&
+        (moveBtnFrontBox.y + moveBtnFrontBox.height) <= (sceneBoxForPopover.y + sceneBoxForPopover.height + 0.5)
+      r.check(
+        `${name} — 그림자가 있는 상태에서도 팝오버가 씬 박스 안에 완전히 들어옴(클리핑 없음, 요구사항 #9)`,
+        popoverInsideWithShadow,
+        JSON.stringify({ sceneBoxForPopover, moveBtnFrontBox }),
+      )
+
+      await page.keyboard.press('Escape')
+      await moveBtnFront.waitFor({ state: 'detached', timeout: 5000 }).catch(() => {})
+      // motion-safe: transition-duration 150ms(기본, no-preference 컨텍스트)
+      // 이 끝날 때까지 기다린다 — 그렇지 않으면 애니메이션 도중 값을 읽어
+      // "복귀 안 됨"으로 오판한다(구현 버그 아님, 샘플링 타이밍 문제).
+      await page.waitForTimeout(250)
+      const transformReverted = await benchFrontButton.evaluate((btn) => window.getComputedStyle(btn).transform)
+      r.check(
+        `${name} — 팝오버 닫힘(Escape) 후 버튼 computed transform이 닫힘 상태 값으로 되돌아옴(요구사항 #6)`,
+        transformReverted === transformClosed,
+        `closed=${transformClosed} reverted=${transformReverted}`,
+      )
+
+      // ── 요구사항 #4 — front(bench)가 back(cat)보다 z-index 큼(앞이
+      //     뒤를 가림). cat을 back에 배치해 비교. ───────────────────────
+      await placeFromInventory('고양이', DEPTH_ANCHORS.back)
+      const catAtBack = page.locator(`[data-item-id="cat"][data-cell="${DEPTH_ANCHORS.back}"]`)
+      const catVisible = await catAtBack.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} — cat이 back(${DEPTH_ANCHORS.back})에 배치됨`, catVisible)
+      if (catVisible) {
+        const [benchZ, catZ] = await Promise.all([
+          benchAtFront.evaluate((el) => Number(window.getComputedStyle(el).zIndex)),
+          catAtBack.evaluate((el) => Number(window.getComputedStyle(el).zIndex)),
+        ])
+        r.check(
+          `${name} — front(bench, z=${benchZ})가 back(cat, z=${catZ})보다 z-index 큼(앞이 뒤를 가림, 요구사항 #4)`,
+          Number.isFinite(benchZ) && Number.isFinite(catZ) && benchZ > catZ,
+          `benchZ=${benchZ} catZ=${catZ}`,
+        )
+        const catPlacementId = await catAtBack.getAttribute('data-placement-id')
+        const catShadowVisible = await page.locator(`[data-shadow-for="${catPlacementId}"]`).isVisible().catch(() => false)
+        r.check(`${name} — cat(동물, sm footprint)도 같은 기본 메타로 그림자 표시됨(bench 전용 코드 아님, 요구사항 #5 확장)`, catShadowVisible)
+      }
+
+      // ── 요구사항 #5(확장) — tree(자연, md footprint)도 같은 메커니즘으로
+      //     그림자를 받음. ─────────────────────────────────────────────
+      await placeFromInventory('나무', DEPTH_ANCHORS.middle)
+      const treeAtMiddle = page.locator(`[data-item-id="tree"][data-cell="${DEPTH_ANCHORS.middle}"]`)
+      const treeVisible = await treeAtMiddle.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} — tree가 middle(${DEPTH_ANCHORS.middle})에 배치됨`, treeVisible)
+      if (treeVisible) {
+        const treePlacementId = await treeAtMiddle.getAttribute('data-placement-id')
+        const treeShadowVisible = await page.locator(`[data-shadow-for="${treePlacementId}"]`).isVisible().catch(() => false)
+        r.check(`${name} — tree(자연, md footprint)도 그림자 표시됨(요구사항 #5 확장)`, treeShadowVisible)
+      }
+
+      // ── 요구사항 #10 — 보관: bench 아이템/그림자가 함께 사라짐(move는
+      //     위에서 이미 back→middle→front 2회 검증됨). ──────────────────
+      const benchShadowFrontLocator = page.locator(`[data-shadow-for="${placementIdFront}"]`)
+      await benchFrontButton.click()
+      const storeBtn = page.getByRole('button', { name: '보관', exact: true })
+      await storeBtn.waitFor({ state: 'visible', timeout: 5000 })
+      await storeBtn.click()
+      const benchGone = await waitUntil(async () => (await page.locator('[data-item-id="bench"]').count()) === 0, { timeout: 10000 })
+      r.check(`${name} — 보관 후 bench 아이템이 씬에서 사라짐(요구사항 #10)`, !!benchGone)
+      const benchShadowGone = await waitUntil(async () => (await benchShadowFrontLocator.count()) === 0, { timeout: 10000 })
+      r.check(`${name} — 보관 후 bench 그림자도 함께 사라짐(유령 그림자 없음, 요구사항 #10)`, !!benchShadowGone)
+
+      // ── 요구사항 #11 — 가로 스크롤 없음. ────────────────────────────
+      r.check(`${name} — 가로 스크롤 없음(요구사항 #11)`, await noHorizontalOverflow(page))
+
+      // ── 요구사항 #12 — 그림자/선택강조 변경 후에도 상점 시트가 정상
+      //     동작(S12/S13 연장 sanity, 전면 재구현 아님). ─────────────────
+      await page.locator('[data-testid="town-open-shop"]').click()
+      const shopSheet = page.locator('[data-testid="town-sheet"]')
+      const shopSheetVisible = await shopSheet.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 상점 시트가 정상적으로 열림(요구사항 #12)`, shopSheetVisible)
+      if (shopSheetVisible) {
+        const shopSheetRole = await shopSheet.getAttribute('role').catch(() => null)
+        r.check(`${name} — 상점 시트 role="dialog" 유지(요구사항 #12)`, shopSheetRole === 'dialog', `role=${shopSheetRole}`)
+        await page.locator('[data-testid="town-sheet-close"]').click()
+      }
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S15 — 선택 강조 transition이 prefers-reduced-motion을 실제로
+  //        따르는지(요구사항 #7) — motion-safe: 클래스 게이팅이 "당연히
+  //        될 것"이라 가정하지 않고 getComputedStyle로 직접 확인한다.
+  //        no-preference에서는 transition-duration > 0, reduce에서는
+  //        사실상 0이어야 한다. ─────────────────────────────────────────
+  for (const reduced of [false, true]) {
+    const vp = { width: 390, height: 844 }
+    const name = `S15[390x844,${reduced ? 'reduced-motion' : 'no-preference'}] 선택 강조 transition`
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    if (reduced) await page.emulateMedia({ reducedMotion: 'reduce' })
+    await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+    const mocks = await installMocks(page, {
+      townState: { starsEarned: 800, dollars: { available: 0, earned: 0, spent: 0 }, owned: ['bench'], welcomeClaimed: true },
+    })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownCard(page)
+      await card.click()
+      await waitForTownHeader(page)
+
+      await page.locator('[data-testid="town-open-inventory"]').click()
+      const placeBtn = page.getByRole('button', { name: '마을에 놓기' })
+      await placeBtn.waitFor({ state: 'visible', timeout: 10000 })
+      await placeBtn.click()
+      await page.locator('[data-anchor="7,0"]').waitFor({ state: 'visible', timeout: 10000 })
+      await page.locator('[data-anchor="7,0"]').click()
+      const benchButton = page.locator(`[data-item-id="bench"][data-cell="7,0"] > button`)
+      await benchButton.waitFor({ state: 'visible', timeout: 10000 })
+
+      const durationClosed = await benchButton.evaluate((btn) => window.getComputedStyle(btn).transitionDuration)
+      await benchButton.click()
+      await page.getByRole('button', { name: '이동', exact: true }).waitFor({ state: 'visible', timeout: 5000 })
+      const durationOpen = await benchButton.evaluate((btn) => window.getComputedStyle(btn).transitionDuration)
+      const isZero = /^0s(,\s*0s)*$/.test(durationOpen.trim())
+
+      if (reduced) {
+        r.check(
+          `${name} — reduced-motion에서 transition-duration이 사실상 0(motion-safe: 클래스 미적용, 요구사항 #7)`,
+          isZero,
+          `durationClosed=${durationClosed} durationOpen=${durationOpen}`,
+        )
+      } else {
+        r.check(
+          `${name} — no-preference에서 transition-duration이 0보다 큼(motion-safe: 클래스 적용됨, 요구사항 #7)`,
+          !isZero,
+          `durationClosed=${durationClosed} durationOpen=${durationOpen}`,
+        )
+      }
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }
 }

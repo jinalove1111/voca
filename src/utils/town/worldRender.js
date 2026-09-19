@@ -254,6 +254,87 @@ export function placedItemWidthPct(footprint, y) {
   return Math.min(PLACED_ITEM_MAX_WIDTH_PCT, base * scale)
 }
 
+// ---------------------------------------------------------------------
+// 배치 아이템 2.5D 프레젠테이션(그림자/선택 강조) 파생 — 2026-09-20,
+// bench-first depth/shadow 파일럿. 새 depth 계산을 추가하지 않는다 — 이미
+// 계산된 widthPct(placedItemWidthPct(footprint, y) 호출 결과, 호출부가
+// 그대로 넘긴다)와 y(anchor.depthY, depthScale의 입력과 동일)만 재사용해
+// 그림자 지오메트리/불투명도를 파생한다. 튜닝 가능한 4개 필드
+// (townCatalog.js TOWN_ITEM_VISUAL_META, 전부 OPTIONAL)는 호출부(현재
+// TownObjectLayer.jsx)가 조회해 meta로 넘긴다 — 이 파일은 townCatalog.js를
+// import하지 않는다(이 모듈 헤더의 "import는 ./worldContract,
+// ./placementContract, ./depthOrder, ./townScene 넷만 쓴다" 제약을 지킨다,
+// meta는 순수 데이터로만 전달받는다).
+const VISUAL_SCALE_DEFAULT = 1
+const GROUND_OFFSET_DEFAULT = 0
+// TownSceneryLayer.jsx PROP_PLACEMENTS 나무 그림자 실측(shadow.wPct /
+// prop.wPct — prop-0 7.7/10.3, prop-1 7.2/9.7, prop-6 8.7/11.3, prop-17
+// 9.2/12.3 → 0.742~0.770) — 새 값을 발명하지 않고 그대로 가져온다.
+const SHADOW_WIDTH_RATIO_DEFAULT = 0.75
+const SHADOW_OPACITY_DEFAULT = 0.3
+// 그림자 종횡비(물리 높이/폭) — worldScenery.js LANDMARK_DECOR[*].shadowScale
+// 의 [wScale,hScale] 비율(hScale/wScale ≈ 0.16/0.87=0.184~0.18/0.9=0.2,
+// book-shop/my-house 등)과 PROP_PLACEMENTS 나무 그림자(shadow.hPct*
+// WORLD_ASPECT/shadow.wPct — prop-0 0.8*1.9/7.7≈0.197, prop-6 0.9*1.9/8.7≈
+// 0.197) 양쪽 실측이 같은 값(~0.2)으로 수렴한다 — 아이템별로 다르게 둘
+// 근거가 없어 메타 필드로 노출하지 않고 상수로 고정한다(스펙이 요구한
+// visualScale/groundOffset/shadowWidthPct/shadowOpacity 4개 필드만 튜닝
+// 가능하게 유지, 최소 표면적).
+const SHADOW_SQUASH_RATIO = 0.2
+
+function safeFinite(v, fallback) {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : fallback
+}
+
+/**
+ * 배치 아이템 하나의 2.5D 프레젠테이션 파생값(그림자 지오메트리 + 선택
+ * 강조에 필요한 폭) — 이 모듈이 유일하게 계산하는 지점(TownObjectLayer.jsx
+ * 등 다른 어떤 파일도 이 값을 독립적으로 다시 계산하지 않는다).
+ * @param {number} widthPct — placedItemWidthPct(footprint, y)의 결과를
+ *   호출부가 그대로 넘긴다(0~16, 이미 depthScale이 반영됨 — 이 함수는
+ *   depthScale을 다시 부르지 않는다).
+ * @param {number} y — world y(0~100), anchor.depthY(=anchor.bottomPct)와
+ *   동일한 값 — 그림자 불투명도 변조에만 재사용한다(새 depth 계산 아님,
+ *   widthPct 파생에 쓰인 것과 동일한 depthScale(y) 호출 결과를 여기서
+ *   다시 구해 재사용한다).
+ * @param {{visualScale?:number, groundOffset?:number, shadowWidthPct?:number, shadowOpacity?:number}} [meta]
+ *   townCatalog.js TOWN_ITEM_VISUAL_META[itemId] — 전부 OPTIONAL, 없으면
+ *   (또는 항목 자체가 없으면) 전부 기본값.
+ * @returns {{widthPct:number, shadowWidthPct:number, shadowHeightPct:number, shadowOpacity:number, shadowTopPct:number}}
+ */
+export function placedItemVisual(widthPct, y, meta = {}) {
+  const m = meta && typeof meta === 'object' ? meta : {}
+  const rawScale = safeFinite(m.visualScale, VISUAL_SCALE_DEFAULT)
+  const visualScale = rawScale > 0 ? rawScale : VISUAL_SCALE_DEFAULT
+  const groundOffset = safeFinite(m.groundOffset, GROUND_OFFSET_DEFAULT)
+  const shadowWidthRatio = Math.max(0, safeFinite(m.shadowWidthPct, SHADOW_WIDTH_RATIO_DEFAULT))
+  const shadowOpacityBase = Math.max(0, Math.min(1, safeFinite(m.shadowOpacity, SHADOW_OPACITY_DEFAULT)))
+
+  const baseWidthPct = Math.max(0, safeFinite(widthPct, 0))
+  // visualScale=1(기본, TOWN_ITEM_VISUAL_META가 비어 있는 한 항상)이면
+  // Math.min(cap, baseWidthPct*1) === baseWidthPct — placedItemWidthPct가
+  // 이미 그 cap으로 클램프해 뒀으므로 이 재클램프는 항등(idempotent)이다.
+  const finalWidthPct = Math.min(PLACED_ITEM_MAX_WIDTH_PCT, baseWidthPct * visualScale)
+
+  const safeY = safeFinite(y, 50)
+  const scale = depthScale(safeY) // [0.55,1.20] — placedItemWidthPct가 쓴 것과 동일한 함수의 재사용(새 계산 아님).
+  const depthFrac = Math.max(0, Math.min(1, (scale - 0.55) / (1.20 - 0.55)))
+  // 뒤(배경)는 살짝 더 흐리게, 앞(전경)은 살짝 더 또렷하게 — "restrained"
+  // 요구(과제 #2 — 하드 섀도우 아님)를 지키려 배율 폭을 좁게(0.7~1.0) 잡는다.
+  const depthOpacityFactor = 0.7 + 0.3 * depthFrac
+
+  const shadowWidthPct = finalWidthPct * shadowWidthRatio
+  const shadowHeightPct = (shadowWidthPct * SHADOW_SQUASH_RATIO) / WORLD_ASPECT
+  const shadowOpacity = Math.max(0, Math.min(1, shadowOpacityBase * depthOpacityFactor))
+  // groundOffset 기본 0이면 shadowTopPct === safeY(=anchor.bottomPct) —
+  // 아이템 자신의 앵커와 정확히 같은 지면 접점(스펙 명시 — "do NOT offset
+  // the shadow horizontally", 세로도 groundOffset이 있을 때만 보정).
+  const shadowTopPct = Math.max(0, Math.min(100, safeY - groundOffset))
+
+  return { widthPct: finalWidthPct, shadowWidthPct, shadowHeightPct, shadowOpacity, shadowTopPct }
+}
+
 // D5(2026-09-18) — 배치 모드 44px 탭 컨트롤 겹침 정정. 근본 원인: 셀 앵커는
 // world % 좌표라, 좁은 화면(예: 360px)에서는 서로 다른 두 앵커가 44 CSS px
 // 보다 더 가깝게 투영될 수 있다(예: Lv8 '1,1'과 '7,3') — TownPlacementOverlay

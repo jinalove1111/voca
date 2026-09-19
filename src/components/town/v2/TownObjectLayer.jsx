@@ -43,14 +43,21 @@ import {
   HOME_SPRITE, spriteFor, SCENE_ROWS, LOTS, lotState, districtForCell,
 } from '../../../utils/town/townScene'
 import {
-  landmarkBox, cellAnchor, worldZIndex, isFixedLandmarkId, placedItemWidthPct,
+  landmarkBox, cellAnchor, worldZIndex, isFixedLandmarkId, placedItemWidthPct, placedItemVisual,
 } from '../../../utils/town/worldRender'
 import { LANDMARK_DECOR, LOCKED_FILTER, LOCKED_VEIL } from '../../../utils/town/worldScenery'
+import { TOWN_ITEM_VISUAL_META } from '../../../utils/town/townItemVisualMeta'
 import { POPOVER_Z } from './sceneZ'
 
 // 하네스 .shadow CSS 그대로(재도출 없음, TownSceneryLayer.jsx 소품
 // 그림자와 동일 상수 — 파일당 소유권 원칙상 이 파일이 독립적으로 갖는다).
 const SHADOW_BACKGROUND = 'radial-gradient(ellipse at center, rgba(30,25,15,0.35) 0%, rgba(30,25,15,0.16) 55%, rgba(30,25,15,0) 75%)'
+
+// 배치 아이템(카탈로그, LOTS 아닌) 그림자/선택 강조 메타 — townCatalog.js
+// TOWN_ITEM_VISUAL_META에 항목이 없는(현재 전부) 아이템은 이 빈 객체로
+// 폴백해 worldRender.placedItemVisual()의 기본값만 쓴다(재생성 방지 — 매
+// 렌더마다 새 {}를 만들지 않는다).
+const EMPTY_VISUAL_META = Object.freeze({})
 
 // 랜드마크 하나의 지오메트리 스타일 — built/for-sale/hidden 세 분기 +
 // My House 전용 블록이 전부 이 함수 하나를 공유한다(정적 계약 §19가
@@ -333,42 +340,90 @@ export default function TownObjectLayer({
         // 수동 곱셈은 더 이상 쓰지 않는다 — 같은 depthScale 값을 이 함수
         // 안에서 다시 구하므로 중복이 아니다, worldRender.js 헤더 참고).
         const widthPct = placedItemWidthPct(sprite.footprint, anchor.depthY)
+        // 2026-09-20 — 그림자/선택 강조 파생(worldRender.placedItemVisual,
+        // 이 파일이 유일한 호출부). 위 widthPct(이미 계산됨)를 그대로
+        // 넘겨 depthScale을 다시 계산하지 않는다(placedItemVisual 헤더
+        // 참고) — visualScale 기본값 1이면 visual.widthPct는 widthPct와
+        // 정확히 같다(TOWN_ITEM_VISUAL_META가 현재 비어 있어 bench/tree/
+        // cat 전부 이 경로).
+        const visualMeta = TOWN_ITEM_VISUAL_META[p.itemId] || EMPTY_VISUAL_META
+        const visual = placedItemVisual(widthPct, anchor.depthY, visualMeta)
+        const z = worldZIndex('objects', anchor.depthY, p.placementId)
 
         return (
-          <div
-            key={p.placementId}
-            data-placement-id={p.placementId}
-            data-item-id={p.itemId}
-            data-cell={`${p.x},${p.y}`}
-            data-district={itemDistrict}
-            className="absolute"
-            style={{
-              left: `${anchor.leftPct}%`,
-              top: `${anchor.bottomPct}%`,
-              width: `${widthPct}%`,
-              transform: 'translate(-50%, -100%)',
-              zIndex: worldZIndex('objects', anchor.depthY, p.placementId),
-            }}
-          >
-            <button
-              type="button"
-              onClick={(e) => { if (idle) onTogglePlacement && onTogglePlacement(p.placementId, e.currentTarget) }}
-              disabled={!idle}
-              aria-label={label}
-              className="pointer-events-auto min-h-[44px] min-w-[44px] w-full flex items-center justify-center"
-            >
-              <TownSprite sprite={sprite} className="w-full h-full" />
-            </button>
-
-            <PlacementPopover
-              isOpen={isOpen}
-              verticalClass={popoverVertical}
-              alignClass={popoverAlign}
-              zIndex={POPOVER_Z}
-              onStartMove={() => onStartMove && onStartMove(p.placementId)}
-              onStore={() => onStore && onStore(p.placementId)}
+          <Fragment key={p.placementId}>
+            {/* 배치 아이템 그림자 — 본체(아래 wrapper)보다 DOM에서 먼저
+                그려 같은 z에서 항상 본체 아래 깔린다(LotShadow/
+                TownSceneryLayer.jsx PropEntry와 동일 관례). 수평은 앵커와
+                동일(leftPct) — 가로로 어긋나지 않는다, groundOffset이
+                0이 아닐 때만 세로로만 살짝 보정된다(visual.shadowTopPct).
+                pointer-events-none — 44px 탭 타깃(아래 button)을 절대
+                가로채지 않는다. */}
+            <div
+              aria-hidden="true"
+              data-shadow-for={p.placementId}
+              className="absolute rounded-full pointer-events-none"
+              style={{
+                left: `${anchor.leftPct}%`,
+                top: `${visual.shadowTopPct}%`,
+                width: `${visual.shadowWidthPct}%`,
+                height: `${visual.shadowHeightPct}%`,
+                transform: 'translate(-50%, -35%)',
+                background: SHADOW_BACKGROUND,
+                opacity: visual.shadowOpacity,
+                zIndex: z,
+              }}
             />
-          </div>
+            <div
+              data-placement-id={p.placementId}
+              data-item-id={p.itemId}
+              data-cell={`${p.x},${p.y}`}
+              data-district={itemDistrict}
+              className="absolute"
+              style={{
+                left: `${anchor.leftPct}%`,
+                top: `${anchor.bottomPct}%`,
+                width: `${visual.widthPct}%`,
+                transform: 'translate(-50%, -100%)',
+                zIndex: z,
+              }}
+            >
+              {/* 2026-09-20 — 선택(팝오버 열림) 시 미세한 lift(살짝 위로 +
+                  살짝 확대)로 강조한다. 이 transform은 버튼(스프라이트)
+                  에만 건다 — wrapper(위)에 걸면 팝오버(형제 요소, wrapper
+                  기준 절대위치)도 함께 밀려나 S9/S11의 실측 클리핑
+                  단언(±0.5px 오차)이 깨질 위험이 있다. transformOrigin을
+                  50% 100%(바닥-중앙, 곧 지면 접점)로 고정해 scale이 앵커
+                  점을 옮기지 않는다(버튼이 wrapper의 w-full h-full이라
+                  버튼 자신의 바닥-중앙 = wrapper의 바닥-중앙 = 앵커점).
+                  transition은 motion-safe:로만 걸어(prefers-reduced-motion:
+                  reduce에서 transition-duration이 0으로 남는다) 이 저장소의
+                  기존 관례(TownScreenV2.jsx motion-safe:animate-fade-in 등)
+                  를 그대로 따른다 — 새 메커니즘을 발명하지 않는다. */}
+              <button
+                type="button"
+                onClick={(e) => { if (idle) onTogglePlacement && onTogglePlacement(p.placementId, e.currentTarget) }}
+                disabled={!idle}
+                aria-label={label}
+                className="pointer-events-auto min-h-[44px] min-w-[44px] w-full flex items-center justify-center motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-out"
+                style={{
+                  transform: isOpen ? 'scale(1.05) translateY(-6%)' : 'scale(1) translateY(0%)',
+                  transformOrigin: '50% 100%',
+                }}
+              >
+                <TownSprite sprite={sprite} className="w-full h-full" />
+              </button>
+
+              <PlacementPopover
+                isOpen={isOpen}
+                verticalClass={popoverVertical}
+                alignClass={popoverAlign}
+                zIndex={POPOVER_Z}
+                onStartMove={() => onStartMove && onStartMove(p.placementId)}
+                onStore={() => onStore && onStore(p.placementId)}
+              />
+            </div>
+          </Fragment>
         )
       })}
     </div>
