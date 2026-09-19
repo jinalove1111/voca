@@ -12,8 +12,9 @@
 //
 // 실 Supabase/Vercel 요청 0건 — installMocks가 전체 네트워크를 가로챈다.
 import { installMocks } from './lib/mockRoutes.mjs'
+import { writesTo } from './lib/postgrestMock.mjs'
 import { createRecorder } from './lib/harness.mjs'
-import { QA_STUDENT_NAME, QA_LOGIN_PIN, QA_STUDENT_ID } from './fixtures/index.mjs'
+import { QA_STUDENT_NAME, QA_LOGIN_PIN, QA_STUDENT_ID, buildFixtureTables } from './fixtures/index.mjs'
 import { PILOT_A_TOWN_STUDENT_IDS } from '../../src/config/pilotTown.js'
 
 const LV_BADGE_SEL = 'span[title="누적 별(성취) — 절대 줄지 않아요"]'
@@ -549,32 +550,54 @@ export async function run(browser, baseURL) {
       const treeAt03 = await page.locator('[data-item-id="tree"][data-cell="0,3"]').waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
       r.check(`${name} — 나무가 (0,3)에 배치됨(LIMITATION: 로컬 백업 사전 시드 대신 UI로 배치)`, treeAt03)
 
-      // ── 2026-09-16 갱신 — 이 체크는 원래(2026-09-13) "안개(fog)가 objects
-      //     보다 z가 낮아야 row 4-5에 놓인 소유 아이템이 흐리게 가려지지
-      //     않는다"는 z-index 숫자 비교였다. 월드 지오메트리 확장 이후로는
-      //     안개가 더 이상 "그리드의 마지막 두 행 위에 겹쳐 그려지는 밴드"가
-      //     아니라, 현재 열린 구역 스택 맨 위(아직 열리지 않은 구역보다
-      //     위)에 있는 완전히 별도의 영역이다 — 배치 가능한 칸(SPOT_MAP)은
-      //     전부 이미 열린 구역 안에만 있으므로, 안개와 배치된 아이템이
-      //     "같은 화면 자리를 두고 z-index로 다투는" 상황 자체가 구조적으로
-      //     더 이상 생기지 않는다. 그래서 z-index 숫자 비교 대신, 더 강한
-      //     체크(두 요소의 바운딩 박스가 실제로 겹치지 않는지)로 바꿨다 —
-      //     "가려지지 않는다"는 원래 의도를 z-index 우연이 아니라 실제 화면
-      //     레이아웃으로 직접 검증한다.
+      // ── 2026-09-18 갱신(작업 지시서 STEP 7) — 2026-09-16 버전은 "안개
+      //     컨테이너와 배치 아이템의 바운딩 박스가 겹치지 않는지"를 봤다.
+      //     그 가정 자체가 이번 재작성으로 깨졌다: TownFogLayer.jsx는 이제
+      //     구역 전체를 덮던 가로 밴드가 아니라, 잠긴 랜드마크마다 개별
+      //     헤이즈 타원 + Lv.N 표지판을 그리는 컨테이너(className="absolute
+      //     inset-0" — 씬 전체 크기, 그 "안"에 절대위치 자식들이 흩어져
+      //     있음)라, data-testid="town-fog" 자체의 boundingBox()는 이제
+      //     거의 항상 씬 전체 크기로 나온다(실측: {x:0,y:13,width:390,
+      //     height:741}) — 컨테이너 바운딩 박스와 아이템 바운딩 박스의
+      //     겹침 여부는 더 이상 "실제로 가려지는가"를 말해주지 않는다(항상
+      //     겹친다고 나오지만 실제 시각적 가림과 무관). 더 강한 체크(리드
+      //     지시)로 교체 — 나무 버튼의 실제 중심 좌표에서
+      //     document.elementFromPoint()가 그 버튼(또는 자손)을 가리키는지
+      //     (다른 요소가 그 지점에서 클릭/시각적으로 우선하지 않는지),
+      //     그리고 버튼 자신의 computed opacity/filter가 그대로(헤이즈의
+      //     LOCKED_FILTER/블러가 실수로 그 버튼에까지 번지지 않았는지)를
+      //     직접 확인한다 — "가려지지 않는다"는 원래 의도를 z-index/바운딩
+      //     박스 우연이 아니라 실제 렌더 결과로 검증한다.
       const fogVisibleAtLevel3 = await page.locator('[data-testid="town-fog"]').isVisible().catch(() => false)
-      r.check(`${name} — town-fog 표시됨(레벨3, puppy/owl 아직 잠김 — 이 회귀를 재현 가능한 조건)`, fogVisibleAtLevel3)
+      r.check(`${name} — town-fog 표시됨(레벨3, book-shop 등 아직 잠김 — 이 회귀를 재현 가능한 조건)`, fogVisibleAtLevel3)
       if (fogVisibleAtLevel3) {
-        const [treeBox, fogBox] = await Promise.all([
-          page.locator('[data-item-id="tree"][data-cell="0,3"]').boundingBox(),
-          page.locator('[data-testid="town-fog"]').boundingBox(),
-        ])
-        const overlaps = !!treeBox && !!fogBox &&
-          treeBox.x < fogBox.x + fogBox.width && treeBox.x + treeBox.width > fogBox.x &&
-          treeBox.y < fogBox.y + fogBox.height && treeBox.y + treeBox.height > fogBox.y
+        const treeButton = page.locator('[data-item-id="tree"][data-cell="0,3"] button')
+        const occlusion = await treeButton.evaluate((btn) => {
+          const rect = btn.getBoundingClientRect()
+          const cx = rect.left + rect.width / 2
+          const cy = rect.top + rect.height / 2
+          const topEl = document.elementFromPoint(cx, cy)
+          const style = window.getComputedStyle(btn)
+          return {
+            hitsButtonOrDescendant: !!topEl && (topEl === btn || btn.contains(topEl)),
+            opacity: style.opacity,
+            filter: style.filter,
+          }
+        })
         r.check(
-          `${name} — 나무(lane 구역)와 안개 밴드(잠긴 구역 위)의 바운딩 박스가 겹치지 않음(가려지지 않음, 새 지오메트리는 애초에 겹칠 수 없는 구조)`,
-          !overlaps,
-          JSON.stringify({ treeBox, fogBox }),
+          `${name} — 나무(0,3) 버튼 중심점의 elementFromPoint가 그 버튼(또는 자손)을 가리킴(잠긴 랜드마크 헤이즈에 가려지지 않음)`,
+          occlusion.hitsButtonOrDescendant,
+          JSON.stringify(occlusion),
+        )
+        r.check(
+          `${name} — 나무(0,3) 버튼 computed opacity가 그대로 1(헤이즈로 흐려지지 않음)`,
+          occlusion.opacity === '1',
+          `opacity=${occlusion.opacity}`,
+        )
+        r.check(
+          `${name} — 나무(0,3) 버튼 computed filter가 none(헤이즈로 필터링되지 않음)`,
+          occlusion.filter === 'none',
+          `filter=${occlusion.filter}`,
         )
       }
 
@@ -699,6 +722,530 @@ export async function run(browser, baseURL) {
       collect(mocks)
       await context.close()
     }
+  }
+
+  // ── S8 — D1 정정 회귀 방지: 고정 랜드마크(LOTS)는 자유 배치 대상이
+  //        아니다(worldRender.isFixedLandmarkId, 2026-09-18 D1 정정 —
+  //        이전 landmarkRenderSource 기반 S8은 전면 교체됐다). 레거시
+  //        townPlacements(옛 8x6 시절 book-shop/cafe를 마을에 "배치"한
+  //        기록)가 남아 있어도: 1) 고정 로트는 항상 하나만 그려지고
+  //        (lotState만 보고 그림, 배치 데이터 무시), 2) 그 레거시 항목은
+  //        배치된 사본으로도 보이지 않으며, 3) 보관함 자유 배치 목록/
+  //        배치 후보 앵커 어디에도 나타나지 않는다 — 데이터 자체는
+  //        지우거나 다시 쓰지 않는다(마이그레이션 없음, CLAUDE.md 규칙 9).
+  {
+    const vp = { width: 390, height: 844 }
+    const name = 'S8a[390x844] D1 정정 — 레거시 배치된 고정 랜드마크는 뷰에서 걸러짐'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+    // 레거시 배치 시드 — mockRoutes.mjs installMocks()의 tables 오버라이드로
+    // student_progress.progress_data.townPlacements에 cafe/book-shop 항목을
+    // 직접 심는다(useStudent.js fetchFullProgress()가 이 정확한 shape을
+        // 읽는다, src/utils/wordLibrary.js:3209 fetchFullProgress 확인 완료) —
+    // 로그인 시 로컬이 비어있으므로(새 브라우저 컨텍스트) 이 클라우드 백업이
+    // 그대로 병합 복원된다(useStudent.js normalizeRecord 경로, 재구현 없음).
+    const legacyPlacements = [
+      { placementId: 'legacy-cafe-1', itemId: 'cafe', x: 2, y: 1, placedAt: 1, updatedAt: 1 },
+      { placementId: 'legacy-bookshop-1', itemId: 'book-shop', x: 4, y: 3, placedAt: 1, updatedAt: 1 },
+    ]
+    const tables = {
+      ...buildFixtureTables(),
+      student_progress: [
+        { student_id: QA_STUDENT_ID, progress_data: { townPlacements: legacyPlacements, townRemovedIds: [] } },
+      ],
+    }
+    const mocks = await installMocks(page, {
+      tables,
+      townState: { starsEarned: 800, dollars: { available: 999, earned: 999, spent: 0 }, owned: ['book-shop', 'cafe', 'tree'], welcomeClaimed: true },
+    })
+    const { db } = mocks
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownCard(page)
+      await card.click()
+      await waitForTownHeader(page)
+
+      // 레거시 배치가 클라우드 병합 복원으로 반영될 때까지 대기(cafe/
+      // book-shop 둘 다 ownedIds에도 있으므로 visiblePlacements를 통과해
+      // 일단 placements 배열에는 들어온다 — 이 화면이 그걸 어떻게
+      // "보이지 않게" 거르는지가 이 시나리오의 핵심).
+      await waitUntil(async () => (await page.locator('[data-lot-id="cafe"]').count()) > 0, { timeout: 10000 })
+
+      // (f) 마을을 "열기만" 해도 student_progress에 새 쓰기가 없다(저장
+      //     없음, 새 effect 없음) — 병합 복원 폴링 뒤 한 박자 더 대기.
+      await page.waitForTimeout(500)
+      const writesOnOpen = writesTo(db, 'student_progress').length
+      r.check(`${name} — 마을을 열기만 해도 student_progress 쓰기 0건(저장 부작용 없음)`, writesOnOpen === 0, `writes=${writesOnOpen}`)
+
+      // (a) cafe/book-shop 둘 다 — 아트 1개, 고정 로트 built 1개, 배치된
+      //     사본 0개(레거시 배치가 자유 배치 사본으로 이중 렌더되지 않음).
+      for (const id of ['cafe', 'book-shop']) {
+        const imgCount = await page.locator(`img[data-asset-key="buildings/${id}"]`).count()
+        r.check(`${name} — ${id} 아트 <img> 정확히 1개(레거시 배치가 있어도 중복 없음)`, imgCount === 1, `count=${imgCount}`)
+        const lotCount = await page.locator(`[data-lot-id="${id}"][data-lot-state="built"]`).count()
+        r.check(`${name} — ${id} 고정 로트(built) 정확히 1개`, lotCount === 1, `count=${lotCount}`)
+        const placedCount = await page.locator(`[data-item-id="${id}"][data-cell]`).count()
+        r.check(`${name} — ${id} 배치된 사본 0개(레거시 배치는 뷰에서 걸러짐, 데이터는 안 지움)`, placedCount === 0, `count=${placedCount}`)
+      }
+
+      // (b) 보관함에 카페/책방 "마을에 놓기" 카드가 없고, 나무는 여전히
+      //     있음 — freeCatalog(TownScreenV2.jsx)가 isFixedLandmarkId로
+      //     걸러낸 결과.
+      await page.locator('[data-testid="town-open-inventory"]').click()
+      await page.locator('[data-testid="town-sheet"]').waitFor({ state: 'visible', timeout: 10000 })
+      const placeButtons = page.getByRole('button', { name: '마을에 놓기' })
+      r.check(`${name} — 보관함 "마을에 놓기" 버튼이 정확히 1개(나무만, 카페/책방 제외)`, (await placeButtons.count()) === 1, `count=${await placeButtons.count()}`)
+      const cafeCardCount = await page.locator('div.bg-white.rounded-2xl.card-shadow', { has: page.getByText('카페', { exact: true }) }).count()
+      r.check(`${name} — 보관함에 카페 카드 없음`, cafeCardCount === 0, `count=${cafeCardCount}`)
+      const bookCardCount = await page.locator('div.bg-white.rounded-2xl.card-shadow', { has: page.getByText('책방', { exact: true }) }).count()
+      r.check(`${name} — 보관함에 책방 카드 없음`, bookCardCount === 0, `count=${bookCardCount}`)
+      const treeCardVisible = await page.locator('div.bg-white.rounded-2xl.card-shadow', { has: page.getByText('나무', { exact: true }) }).first().isVisible().catch(() => false)
+      r.check(`${name} — 보관함에 나무 카드는 여전히 보임`, treeCardVisible)
+
+      // (c)+(d) 나무는 여전히 정상적으로 배치/이동/보관 가능하고(고정
+      //     랜드마크 필터링이 일반 아이템 배치를 방해하지 않음), 레거시
+      //     cafe/book-shop 칸은 배치 후보 앵커로 제공되지 않는다(점유
+      //     판정은 occupancyPlacements, 즉 전체 목록 기준 — TownScene.jsx).
+      await placeButtons.first().click()
+      await page.locator('[data-anchor]').first().waitFor({ state: 'visible', timeout: 10000 })
+      const anchorCount = await page.locator('[data-anchor]').count()
+      r.check(`${name} — 배치 후보 앵커가 45개(47 - 레거시 점유 2칸)`, anchorCount === 45, `count=${anchorCount}`)
+      const cafeAnchorOffered = await page.locator('[data-anchor="2,1"]').count()
+      r.check(`${name} — 레거시 카페 칸(2,1)이 배치 후보 앵커로 제공되지 않음`, cafeAnchorOffered === 0, `count=${cafeAnchorOffered}`)
+      const bookshopAnchorOffered = await page.locator('[data-anchor="4,3"]').count()
+      r.check(`${name} — 레거시 책방 칸(4,3)이 배치 후보 앵커로 제공되지 않음`, bookshopAnchorOffered === 0, `count=${bookshopAnchorOffered}`)
+
+      await page.locator('[data-anchor]').first().click()
+      const treePlaced = await page.locator('[data-item-id="tree"][data-cell]').first().waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 나무가 정상적으로 배치됨`, treePlaced)
+
+      await page.locator('[data-item-id="tree"][data-cell] button').first().click()
+      const moveBtn = page.getByRole('button', { name: '이동', exact: true })
+      await moveBtn.waitFor({ state: 'visible', timeout: 5000 })
+      await moveBtn.click()
+      const anotherAnchor = page.locator('[data-anchor]').first()
+      await anotherAnchor.waitFor({ state: 'visible', timeout: 10000 })
+      await anotherAnchor.click()
+      const treeMoved = await page.locator('[data-item-id="tree"][data-cell]').first().waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 나무가 정상적으로 이동됨`, treeMoved)
+
+      await page.locator('[data-item-id="tree"][data-cell] button').first().click()
+      const storeBtn = page.getByRole('button', { name: '보관', exact: true })
+      await storeBtn.waitFor({ state: 'visible', timeout: 5000 })
+      await storeBtn.click()
+      const treeStored = await waitUntil(async () => (await page.locator('[data-item-id="tree"]').count()) === 0, { timeout: 10000 })
+      r.check(`${name} — 나무가 정상적으로 보관됨`, !!treeStored)
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] mockErrors=${JSON.stringify(db.errors.slice(0, 3))}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S8b — for-sale: 미소유 book-shop이 Lv4에서 for-sale 로트 1개 ─────────
+  {
+    const vp = { width: 390, height: 844 }
+    const name = 'S8b[390x844] for-sale — book-shop 미소유 Lv4'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+    const mocks = await installMocks(page, {
+      townState: { starsEarned: 100, dollars: { available: 0, earned: 0, spent: 0 }, owned: [], welcomeClaimed: true },
+    })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownCard(page)
+      await card.click()
+      await waitForTownHeader(page)
+
+      const lvText = await waitUntil(async () => {
+        const t = (await page.locator(LV_BADGE_SEL).textContent().catch(() => '')) || ''
+        return t.includes('Lv.4') ? t : false
+      }, { timeout: 10000 })
+      r.check(`${name} — HUD "⭐ Lv.4" 표시(starsEarned=100)`, !!lvText, lvText || '(no Lv.4)')
+
+      const forSaleCount = await page.locator('[data-lot-id="book-shop"][data-lot-state="for-sale"]').count()
+      r.check(`${name} — book-shop 로트가 for-sale 상태로 정확히 1개`, forSaleCount === 1, `count=${forSaleCount}`)
+      const builtCount = await page.locator('[data-lot-id="book-shop"][data-lot-state="built"]').count()
+      r.check(`${name} — book-shop built 로트는 0개(미소유)`, builtCount === 0, `count=${builtCount}`)
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S9 — D5 회귀 방지: 배치 모드 44px 탭 컨트롤이 좁은 화면에서도
+  //        서로 겹치지 않고 전부 탭 가능함(layoutPlacementControls,
+  //        2026-09-18) ────────────────────────────────────────────────────
+  const S9_VIEWPORTS = [{ width: 360, height: 640 }, { width: 390, height: 844 }, { width: 430, height: 932 }]
+  for (const vp of S9_VIEWPORTS) {
+    const name = `S9[${vp.width}x${vp.height}] D5 — 배치 앵커 탭 가능성`
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+    const mocks = await installMocks(page, {
+      townState: { starsEarned: 800, dollars: { available: 0, earned: 0, spent: 0 }, owned: ['tree'], welcomeClaimed: true },
+    })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownCard(page)
+      await card.click()
+      await waitForTownHeader(page)
+
+      await page.locator('[data-testid="town-open-inventory"]').click()
+      const placeBtn = page.getByRole('button', { name: '마을에 놓기' })
+      await placeBtn.waitFor({ state: 'visible', timeout: 10000 })
+      await placeBtn.click()
+      await page.locator('[data-anchor]').first().waitFor({ state: 'visible', timeout: 10000 })
+
+      const anchors = page.locator('[data-anchor]')
+      const anchorCount = await anchors.count()
+      const sceneLocator = page.locator('[data-testid="town-scene-v2"]')
+      let minW = Infinity
+      let minH = Infinity
+      let insideCount = 0
+      let hitCount = 0
+      for (let i = 0; i < anchorCount; i++) {
+        const el = anchors.nth(i)
+        // elementFromPoint/boundingBox는 실제 스크롤 뷰포트 기준이라(씬
+        // 전체가 뷰포트보다 클 수 있음), 검사 직전 이 앵커를 뷰 안으로
+        // 스크롤한 "뒤" 앵커/씬 박스 둘 다 새로 측정한다(스크롤 전
+        // 좌표를 쓰면 스크롤 위치 아티팩트로 false negative가 난다 —
+        // "겹치지 않는다"는 제품 계약과 무관).
+        await el.evaluate((btn) => btn.scrollIntoView({ block: 'center', inline: 'center' }))
+        const box = await el.boundingBox()
+        const sceneBox = await sceneLocator.boundingBox()
+        if (!box) continue
+        minW = Math.min(minW, box.width)
+        minH = Math.min(minH, box.height)
+        const inside = !!sceneBox &&
+          box.x >= sceneBox.x - 0.5 && box.y >= sceneBox.y - 0.5 &&
+          (box.x + box.width) <= (sceneBox.x + sceneBox.width + 0.5) &&
+          (box.y + box.height) <= (sceneBox.y + sceneBox.height + 0.5)
+        if (inside) insideCount++
+        const hit = await el.evaluate((btn) => {
+          const r2 = btn.getBoundingClientRect()
+          const cx = r2.left + r2.width / 2
+          const cy = r2.top + r2.height / 2
+          const top = document.elementFromPoint(cx, cy)
+          return !!top && (top === btn || btn.contains(top))
+        })
+        if (hit) hitCount++
+      }
+      console.log(`  [town-v2] ${name} — 앵커=${anchorCount} minBBox=${minW.toFixed(1)}x${minH.toFixed(1)} inside=${insideCount}/${anchorCount} elementFromPointHit=${hitCount}/${anchorCount}`)
+      r.check(`${name} — 앵커 존재(${anchorCount}개) 및 모든 앵커 bbox >= 44x44`, anchorCount > 0 && minW >= 43.5 && minH >= 43.5, `count=${anchorCount} minW=${minW} minH=${minH}`)
+      r.check(`${name} — 모든 앵커가 씬 경계 안(${insideCount}/${anchorCount})`, insideCount === anchorCount, `inside=${insideCount}/${anchorCount}`)
+      r.check(`${name} — 모든 앵커에서 elementFromPoint가 자기 자신(또는 자손)을 가리킴(겹침 없음, ${hitCount}/${anchorCount})`, hitCount === anchorCount, `hit=${hitCount}/${anchorCount}`)
+
+      if (vp.width === 360) {
+        // 명명된 회귀 — '1,1'에 배치→보관→재진입 후 '7,3'을 키보드(Enter)로
+        // 활성화해도 정확히 그 칸에 배치되는지(포인터로 클릭한 컨트롤이
+        // 실제로는 다른 앵커의 것으로 뒤바뀌지 않았는지의 반증) + 팝오버가
+        // 씬 밖으로 잘리지 않는지 + Escape/백드롭 닫기 + 포커스 복귀.
+        await page.locator('[data-anchor="1,1"]').click()
+        const treeAt11 = await page.locator('[data-item-id="tree"][data-cell="1,1"]').waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+        r.check(`${name} — '1,1' 앵커 클릭 시 나무가 정확히 (1,1)에 배치됨`, treeAt11)
+
+        await page.locator('[data-item-id="tree"][data-cell="1,1"] button').click()
+        const storeBtn = page.getByRole('button', { name: '보관', exact: true })
+        await storeBtn.waitFor({ state: 'visible', timeout: 5000 })
+        await storeBtn.click()
+        const stored = await waitUntil(async () => (await page.locator('[data-item-id="tree"]').count()) === 0, { timeout: 10000 })
+        r.check(`${name} — 보관 후 나무가 씬에서 사라짐`, !!stored)
+
+        await page.locator('[data-testid="town-open-inventory"]').click()
+        const placeBtn2 = page.getByRole('button', { name: '마을에 놓기' })
+        await placeBtn2.waitFor({ state: 'visible', timeout: 10000 })
+        await placeBtn2.click()
+        await page.locator('[data-anchor="7,3"]').waitFor({ state: 'visible', timeout: 10000 })
+        await page.locator('[data-anchor="7,3"]').focus()
+        await page.keyboard.press('Enter')
+        const treeAt73 = await page.locator('[data-item-id="tree"][data-cell="7,3"]').waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+        r.check(`${name} — '7,3' 앵커를 키보드(Enter)로 활성화해도 정확히 (7,3)에 배치됨`, treeAt73)
+
+        const itemBtn = page.locator('[data-item-id="tree"][data-cell="7,3"] button')
+        await itemBtn.click()
+        const moveBtn = page.getByRole('button', { name: '이동', exact: true })
+        await moveBtn.waitFor({ state: 'visible', timeout: 5000 })
+        const sceneBoxForPopover = await page.locator('[data-testid="town-scene-v2"]').boundingBox()
+        const moveBtnBox = await moveBtn.boundingBox()
+        const popoverInside = !!sceneBoxForPopover && !!moveBtnBox &&
+          moveBtnBox.x >= sceneBoxForPopover.x - 0.5 && moveBtnBox.y >= sceneBoxForPopover.y - 0.5 &&
+          (moveBtnBox.x + moveBtnBox.width) <= (sceneBoxForPopover.x + sceneBoxForPopover.width + 0.5) &&
+          (moveBtnBox.y + moveBtnBox.height) <= (sceneBoxForPopover.y + sceneBoxForPopover.height + 0.5)
+        r.check(`${name} — (7,3) 팝오버가 씬 박스 안에 완전히 들어옴(클리핑 없음)`, popoverInside, JSON.stringify({ sceneBoxForPopover, moveBtnBox }))
+
+        await page.keyboard.press('Escape')
+        const closedByEscape = await waitUntil(async () => (await page.getByRole('button', { name: '이동', exact: true }).count()) === 0, { timeout: 5000 })
+        r.check(`${name} — Escape로 팝오버가 닫힘`, !!closedByEscape)
+        const focusReturned = await itemBtn.evaluate((btn) => btn === document.activeElement)
+        r.check(`${name} — Escape로 닫힌 후 포커스가 트리거(아이템) 버튼으로 복귀`, focusReturned)
+
+        await itemBtn.click()
+        await page.getByRole('button', { name: '이동', exact: true }).waitFor({ state: 'visible', timeout: 5000 })
+        const backdrop = page.locator('[data-testid="town-scene-backdrop"]')
+        await backdrop.click({ position: { x: 10, y: 80 } })
+        const closedByBackdrop = await waitUntil(async () => (await page.getByRole('button', { name: '이동', exact: true }).count()) === 0, { timeout: 5000 })
+        r.check(`${name} — 백드롭 클릭으로도 팝오버가 닫힘`, !!closedByBackdrop)
+      }
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S10 — 표지판 텍스트 폭 회귀 방지: My House 표지판 <text>가 자신의
+  //        박스(<rect>, 기둥이 아니라 표지판 판) 폭 안에 여유 있게 들어맞는지
+  //        (2026-09-19 — font-size 9.5(텍스트 폭 48.92) → 7.7(텍스트 폭
+  //        39.65)로 수정, 박스 폭 44는 그대로). Georgia는 이 하네스(Windows/
+  //        Playwright Chromium)와 실제 CI(Linux, Georgia 미설치 → 시스템
+  //        세리프 폴백) 간 글리프 폭이 달라질 수 있어, 정확히 0 여유가
+  //        아니라 최소 1유닛 이상의 여유를 요구한다(폰트 폴백 흔들림 허용치).
+  //        "To the Sea" 표지판(범위 밖, 미수정)도 같은 방식으로 재봤지만
+  //        실측 마진이 ~0.94 유닛뿐이라(59.07 vs 60) 이 1유닛 마진 기준과
+  //        자연스럽게 맞지 않아 — 이미 알려진 여유이자 이번 수정과 무관한
+  //        서명에 새로운(더 느슨한 기준의) 단언을 추가하는 대신 생략한다
+  //        (지시서의 "낮은 리스크로 자연스럽게 맞을 때만" 옵션 조건 미충족).
+  {
+    const vp = { width: 390, height: 844 }
+    const name = 'S10[390x844] 표지판 텍스트 폭 <= 박스 폭'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownCard(page)
+      await card.click()
+      await page.locator('[data-testid="town-scene-v2"]').waitFor({ state: 'visible', timeout: 15000 })
+
+      // TownSceneryLayer.jsx WorldSign — role="img" aria-label=표지판 텍스트
+      // 래퍼 안의 <svg>에 <text>(표지판 카피) + 여러 <rect>(판 + 기둥)가
+      // 있다. 판은 항상 기둥보다 훨씬 넓은 rect이므로 width가 가장 큰
+      // rect를 "박스"로 취급한다(재도출 없음 — svgInner가 유일한 원천).
+      async function measureSignTextVsBox(ariaLabel) {
+        const sign = page.locator(`div[role="img"][aria-label="${ariaLabel}"]`).first()
+        await sign.waitFor({ state: 'visible', timeout: 10000 })
+        return sign.evaluate((el) => {
+          const text = el.querySelector('text')
+          const rects = Array.from(el.querySelectorAll('rect'))
+          const box = rects.reduce((widest, rectEl) => {
+            const w = parseFloat(rectEl.getAttribute('width') || '0')
+            return w > widest.w ? { w, el: rectEl } : widest
+          }, { w: 0, el: null }).el
+          return {
+            textWidth: text ? text.getComputedTextLength() : null,
+            boxWidth: box ? parseFloat(box.getAttribute('width')) : null,
+          }
+        })
+      }
+
+      const myHouse = await measureSignTextVsBox('My House')
+      r.check(
+        `${name} — My House 표지판 텍스트 폭이 박스 폭보다 최소 1 유닛 이상 작음(양쪽 여유 존재)`,
+        myHouse.textWidth != null && myHouse.boxWidth != null && myHouse.textWidth <= myHouse.boxWidth - 1,
+        JSON.stringify(myHouse),
+      )
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S11 — 배치 팝오버 수평 클리핑 정정 회귀 방지(2026-09-19,
+  //        TownObjectLayer.jsx PlacementPopover) — 47개 배치 앵커 전부 x
+  //        3개 폭(360/390/430) = 141개 조합 각각에서 이동/보관 팝오버가
+  //        씬 박스 안에 완전히 들어오는지(수평 클리핑 없음), 두 버튼이
+  //        >=44x44 실제 탭 가능 영역을 유지하는지, 라벨이 살아있는지,
+  //        elementFromPoint가 자기 자신(또는 자손)을 가리키는지, 페이지
+  //        가로 오버플로우가 없는지를 검증한다. S9(D5 겹침 회귀)와 같은
+  //        정신이지만 축이 다르다 — S9는 배치 오버레이(TownPlacementOverlay)
+  //        44px 탭 컨트롤 자체의 겹침을, 이 S11은 아이템을 실제로 배치한
+  //        뒤 여는 이동/보관 팝오버(TownObjectLayer.jsx PlacementPopover)
+  //        의 수평 위치를 검증한다 — 서로 다른 컴포넌트, 다른 버그.
+  //        141회 전부 "배치→팝오버 열기(측정)→보관(닫기+다음 앵커를 위해
+  //        빈칸으로 되돌림)"만 반복해(지시서 명시대로 열기/닫기/Escape/
+  //        백드롭을 141번 반복하지 않음) 실행 시간을 억제한다 — Escape/
+  //        바깥 탭/포커스 복귀는 대표 부분집합(확정 클리핑 3개 + 확정
+  //        정상 3개 앵커, 최악 사례인 360px 폭 하나)에서만 별도로 검증.
+  const S11_VIEWPORTS = [{ width: 360, height: 640 }, { width: 390, height: 844 }, { width: 430, height: 932 }]
+  // 확정 클리핑 3개(1,0)/(2,1)/(7,5) + 확정 정상 3개(0,0)/(5,2)/(4,5) —
+  // 이 세션의 실측 BEFORE/AFTER 표와 동일한 앵커(작업 지시서가 지정한
+  // 9개 조합의 근거 앵커).
+  const S11_CLOSURE_SUBSET = new Set(['1,0', '2,1', '7,5', '0,0', '5,2', '4,5'])
+  {
+    const geometrySummary = []
+    for (const vp of S11_VIEWPORTS) {
+      const name = `S11[${vp.width}x${vp.height}] 배치 팝오버 수평 클리핑 정정`
+      const context = await browser.newContext({ viewport: vp })
+      const page = await context.newPage()
+      await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+      const mocks = await installMocks(page, {
+        townState: { starsEarned: 800, dollars: { available: 0, earned: 0, spent: 0 }, owned: ['tree'], welcomeClaimed: true },
+      })
+      try {
+        await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+        await login(page)
+        await goToPaulTownScreen(page)
+        const card = await enterTownCard(page)
+        await card.click()
+        await waitForTownHeader(page)
+
+        // 47개 배치 앵커 id를 한 번 수집(배치는 하지 않고 취소).
+        await page.locator('[data-testid="town-open-inventory"]').click()
+        const placeBtn0 = page.getByRole('button', { name: '마을에 놓기' })
+        await placeBtn0.waitFor({ state: 'visible', timeout: 10000 })
+        await placeBtn0.click()
+        await page.locator('[data-anchor]').first().waitFor({ state: 'visible', timeout: 10000 })
+        const anchorIds = await page.locator('[data-anchor]').evaluateAll((els) => els.map((el) => el.getAttribute('data-anchor')))
+        r.check(`${name} — 47개 배치 앵커 존재`, anchorIds.length === 47, `count=${anchorIds.length}`)
+        await page.getByRole('button', { name: '취소' }).click()
+
+        let geomOkCount = 0
+        let hitOkCount = 0
+        let pointOkCount = 0
+        let labelOkCount = 0
+        let overflowOkCount = 0
+        const failedAnchors = []
+
+        for (const anchorId of anchorIds) {
+          await page.locator('[data-testid="town-open-inventory"]').click()
+          const placeBtn = page.getByRole('button', { name: '마을에 놓기' })
+          await placeBtn.waitFor({ state: 'visible', timeout: 5000 })
+          await placeBtn.click()
+          const anchorBtn = page.locator(`[data-anchor="${anchorId}"]`)
+          await anchorBtn.waitFor({ state: 'visible', timeout: 5000 })
+          await anchorBtn.click()
+
+          const itemBtn = page.locator(`[data-item-id="tree"][data-cell="${anchorId}"] button`)
+          await itemBtn.waitFor({ state: 'visible', timeout: 5000 })
+          await itemBtn.evaluate((btn) => btn.scrollIntoView({ block: 'center', inline: 'center' }))
+          await itemBtn.click()
+
+          const moveBtn = page.getByRole('button', { name: '이동', exact: true })
+          const storeBtn = page.getByRole('button', { name: '보관', exact: true })
+          await moveBtn.waitFor({ state: 'visible', timeout: 5000 })
+
+          const sceneBox = await page.locator('[data-testid="town-scene-v2"]').boundingBox()
+          const moveBox = await moveBtn.boundingBox()
+          const storeBox = await storeBtn.boundingBox()
+          // (7,3) 팝오버 검사(위 S9)와 동일한 관례 — 씬 박스 기준, ±0.5px
+          // 서브픽셀 여유(제품 계약과 무관한 반올림 아티팩트만 허용).
+          const boxInsideScene = (box) => !!sceneBox && !!box &&
+            box.x >= sceneBox.x - 0.5 && box.y >= sceneBox.y - 0.5 &&
+            (box.x + box.width) <= (sceneBox.x + sceneBox.width + 0.5) &&
+            (box.y + box.height) <= (sceneBox.y + sceneBox.height + 0.5)
+          const geomOk = boxInsideScene(moveBox) && boxInsideScene(storeBox)
+          if (geomOk) geomOkCount++
+          else failedAnchors.push({ anchorId, reason: 'geometry', sceneBox, moveBox, storeBox })
+
+          const hitOk = (moveBox && moveBox.width >= 43.5 && moveBox.height >= 43.5) &&
+            (storeBox && storeBox.width >= 43.5 && storeBox.height >= 43.5)
+          if (hitOk) hitOkCount++
+          else failedAnchors.push({ anchorId, reason: 'hit-size', moveBox, storeBox })
+
+          const moveHit = await moveBtn.evaluate((btn) => {
+            const rect = btn.getBoundingClientRect()
+            const cx = rect.left + rect.width / 2
+            const cy = rect.top + rect.height / 2
+            const top = document.elementFromPoint(cx, cy)
+            return !!top && (top === btn || btn.contains(top))
+          })
+          const storeHit = await storeBtn.evaluate((btn) => {
+            const rect = btn.getBoundingClientRect()
+            const cx = rect.left + rect.width / 2
+            const cy = rect.top + rect.height / 2
+            const top = document.elementFromPoint(cx, cy)
+            return !!top && (top === btn || btn.contains(top))
+          })
+          const elementFromPointOk = moveHit && storeHit
+          if (elementFromPointOk) pointOkCount++
+          else failedAnchors.push({ anchorId, reason: 'elementFromPoint', moveHit, storeHit })
+
+          const moveLabel = (await moveBtn.textContent() || '').trim()
+          const storeLabel = (await storeBtn.textContent() || '').trim()
+          const labelOk = moveLabel === '이동' && storeLabel === '보관'
+          if (labelOk) labelOkCount++
+          else failedAnchors.push({ anchorId, reason: 'label', moveLabel, storeLabel })
+
+          const noOverflow = await noHorizontalOverflow(page)
+          if (noOverflow) overflowOkCount++
+          else failedAnchors.push({ anchorId, reason: 'page-overflow' })
+
+          // 대표 부분집합 + 360px 폭에서만 Escape/바깥 탭/포커스 복귀 추가 검증
+          // (열기/닫기를 141번 반복하지 않는다는 지시서 제약 — 이 앵커들만
+          // 여기서 한 번 더 열어 닫기 시나리오를 검증한 뒤, 마지막엔 항상
+          // '보관'으로 닫아 다음 앵커를 위해 빈 칸으로 되돌린다).
+          if (vp.width === 360 && S11_CLOSURE_SUBSET.has(anchorId)) {
+            await page.keyboard.press('Escape')
+            const closedByEscape = await waitUntil(async () => (await page.getByRole('button', { name: '이동', exact: true }).count()) === 0, { timeout: 5000 })
+            r.check(`${name} — 앵커(${anchorId}) Escape로 팝오버가 닫힘`, !!closedByEscape)
+            const focusReturned = await itemBtn.evaluate((btn) => btn === document.activeElement)
+            r.check(`${name} — 앵커(${anchorId}) Escape로 닫힌 후 포커스가 트리거(아이템) 버튼으로 복귀`, focusReturned)
+
+            await itemBtn.click()
+            await page.getByRole('button', { name: '이동', exact: true }).waitFor({ state: 'visible', timeout: 5000 })
+            const backdrop = page.locator('[data-testid="town-scene-backdrop"]')
+            await backdrop.click({ position: { x: 10, y: 80 } })
+            const closedByBackdrop = await waitUntil(async () => (await page.getByRole('button', { name: '이동', exact: true }).count()) === 0, { timeout: 5000 })
+            r.check(`${name} — 앵커(${anchorId}) 백드롭 클릭으로도 팝오버가 닫힘`, !!closedByBackdrop)
+
+            // 백드롭으로 닫혔으니 보관하려면 다시 열어야 한다.
+            await itemBtn.click()
+            await page.getByRole('button', { name: '보관', exact: true }).waitFor({ state: 'visible', timeout: 5000 })
+          }
+
+          await storeBtn.click()
+          const stored = await waitUntil(async () => (await page.locator(`[data-item-id="tree"][data-cell="${anchorId}"]`).count()) === 0, { timeout: 10000 })
+          if (!stored) failedAnchors.push({ anchorId, reason: 'store-failed' })
+        }
+
+        console.log(`  [town-v2] ${name} — geom=${geomOkCount}/${anchorIds.length} hit=${hitOkCount}/${anchorIds.length} elementFromPoint=${pointOkCount}/${anchorIds.length} label=${labelOkCount}/${anchorIds.length} overflow=${overflowOkCount}/${anchorIds.length}`)
+        if (failedAnchors.length > 0) console.log(`  [town-v2] ${name} — 실패 상세(최대 10개): ${JSON.stringify(failedAnchors.slice(0, 10))}`)
+        geometrySummary.push({ width: vp.width, geomOkCount, hitOkCount, pointOkCount, labelOkCount, overflowOkCount, total: anchorIds.length })
+
+        r.check(`${name} — 47개 앵커 전부 팝오버가 씬 박스 안(클리핑 없음, ${geomOkCount}/${anchorIds.length})`, geomOkCount === anchorIds.length, `${geomOkCount}/${anchorIds.length}`)
+        r.check(`${name} — 47개 앵커 전부 이동/보관 버튼 >=44x44 탭 영역(${hitOkCount}/${anchorIds.length})`, hitOkCount === anchorIds.length, `${hitOkCount}/${anchorIds.length}`)
+        r.check(`${name} — 47개 앵커 전부 elementFromPoint가 자기 자신(또는 자손)을 가리킴(${pointOkCount}/${anchorIds.length})`, pointOkCount === anchorIds.length, `${pointOkCount}/${anchorIds.length}`)
+        r.check(`${name} — 47개 앵커 전부 이동/보관 라벨 표시(${labelOkCount}/${anchorIds.length})`, labelOkCount === anchorIds.length, `${labelOkCount}/${anchorIds.length}`)
+        r.check(`${name} — 47개 앵커 전부 페이지 가로 오버플로우 없음(${overflowOkCount}/${anchorIds.length})`, overflowOkCount === anchorIds.length, `${overflowOkCount}/${anchorIds.length}`)
+      } catch (err) {
+        const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+        r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+          `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+      } finally {
+        collect(mocks)
+        await context.close()
+      }
+    }
+    const totalCombos = geometrySummary.reduce((sum, s) => sum + s.total, 0)
+    const totalGeomOk = geometrySummary.reduce((sum, s) => sum + s.geomOkCount, 0)
+    console.log(`  [town-v2] S11 141-조합 요약 — geom PASS ${totalGeomOk}/${totalCombos} (${JSON.stringify(geometrySummary)})`)
+    r.check('S11 — 141개(47앵커 x 3폭) 조합 전체에서 팝오버 클리핑 PASS', totalGeomOk === totalCombos && totalCombos === 141, `${totalGeomOk}/${totalCombos}`)
   }
 
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }

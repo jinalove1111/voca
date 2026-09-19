@@ -229,11 +229,41 @@ const EXPECTED_ENV_ARTWORK_BASENAMES = [
 function isExpectedEnvArtwork(f) {
   return EXPECTED_ENV_ARTWORK_BASENAMES.some((base) => f.startsWith(`${base}-`) || f === `${base}.webp`)
 }
+// 2026-09-18(작업 지시서 STEP 4) — src/assets/town/env/index.js(TOWN_ENV_ASSETS,
+// 위 EXPECTED_ENV_ARTWORK_BASENAMES(2026-09-15b, TownGrid.jsx 전용 6개)와는
+// 완전히 별개 레지스트리, scripts/testTownEnvAssets.mjs가 그 소스 자체를
+// 이미 검증한다)의 35개 키 — TownGroundLayer.jsx/TownEnvImage.jsx가 처음
+// import해 빌드 그래프에 들어갔다. 아래 4b 섹션이 이 35개의 물리 파일
+// 인벤토리/청크 누출을 자세히 검증하고, 여기서는 "이 35개도 stray가
+// 아니다"만 알린다(같은 매칭 로직을 두 섹션이 공유).
+const ENV_ART_KEYS = [
+  'sky-hills', 'grass-base', 'grass-patch-light', 'grass-patch-dark', 'grass-patch-worn',
+  'wildflower-scatter', 'path-straight', 'path-straight-narrow', 'path-curve-gentle',
+  'path-curve-strong', 'path-fork', 'path-junction', 'path-end', 'path-end-entrance',
+  'fence-straight', 'fence-straight-short', 'fence-corner', 'fence-gate',
+  'hedge-straight', 'hedge-straight-tall', 'hedge-end',
+  'shrub-round', 'shrub-round-small', 'shrub-wide',
+  'flower-cluster-pink', 'flower-cluster-yellow', 'flower-cluster-mixed', 'flower-bed-border',
+  'flower-pot', 'flower-pot-tall',
+  'river-straight', 'river-bend', 'river-highlight', 'riverbank-reeds', 'riverbank-reeds-stones',
+]
+// basename 접두어 충돌(예: path-straight vs path-straight-narrow, Vite 해시
+// 자체에 '-'/'_' 둘 다 나올 수 있어(실측: path-curve-gentle-DsQ3-r7b.webp)
+// "접미부에 하이픈 없음"을 가정한 정규식만으로는 못 가른다, 실측으로 확인
+// 했다) — "가장 긴(가장 구체적인) 키가 이긴다"로 명확히 가른다.
+function matchEnvArtKey(filename) {
+  if (!filename.endsWith('.webp')) return null
+  let best = null
+  for (const key of ENV_ART_KEYS) {
+    if (filename.startsWith(`${key}-`) && (!best || key.length > best.length)) best = key
+  }
+  return best
+}
 const strayImages = assetFiles.filter(
-  (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f) && !isExpectedEnvArtwork(f),
+  (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f) && !isExpectedEnvArtwork(f) && !matchEnvArtKey(f),
 )
 check(
-  '마을 이미지 중 카탈로그 물리 파일 18개(Batch 1+2+3 14개 + P0 최종 아트로 추가/승격된 4개) + 환경/장식 아트워크 6개(카탈로그 아님, 2026-09-15b) 외의 예상치 못한 파일이 dist/assets에 없음',
+  '마을 이미지 중 카탈로그 물리 파일 18개(Batch 1+2+3 14개 + P0 최종 아트로 추가/승격된 4개) + 환경/장식 아트워크 6개(카탈로그 아님, 2026-09-15b) + V2 환경 아트 35개(2026-09-18, 4b 섹션에서 자세히 검증) 외의 예상치 못한 파일이 dist/assets에 없음',
   strayImages.length === 0,
   strayImages.length > 0 ? strayImages.join(', ') : undefined,
 )
@@ -289,6 +319,52 @@ check(
   '인라인된 data:image/webp;base64 URL 발생 횟수가 정확히 5건(cat 1 + owl 1 + puppy 1 + shop-lamp 1 + stone-fountain 1, 중복/누락 없음 — red-post-box/street-lamp는 2026-09-17 최종 아트로 4KB를 넘어 물리 파일로 승격)',
   totalInlinedWebpOccurrences === 5,
   `count=${totalInlinedWebpOccurrences}`,
+)
+
+// ── 4b. V2 환경(environment) 아트 — 35개 키 인벤토리 + 메인/V1 청크 누출 가드 ──
+// 2026-09-18(작업 지시서 STEP 4) — src/assets/town/env/index.js
+// (TOWN_ENV_ASSETS, 위 섹션 4의 카탈로그 물리 파일 18개/환경-장식
+// 아트워크 6개와는 완전히 별개 레지스트리, scripts/testTownEnvAssets.mjs가
+// 그 소스 자체를 이미 검증한다)가 처음으로 실제 빌드 그래프에 들어간
+// 시점 — TownGroundLayer.jsx/TownEnvImage.jsx가 이 레지스트리를
+// import한다. 이 섹션은 그 35개 키가 실제 산출물에 정확히 반영됐는지
+// (물리 파일 개수, 실측 전부 4KB 이상이라 인라인 후보가 아님)와,
+// paulTownV2 플래그가 OFF인 배포본에서 메인 청크/V1 TownScreen 청크가
+// 이 자산을 전혀 요청하지 않는지(누출 가드)를 확인한다.
+section('4b. V2 환경 아트(35개 키) — 물리 파일 인벤토리 + 메인/V1 청크 누출 가드')
+check('환경 아트 키가 정확히 35개(manifest staged 개수와 동일 — scripts/testTownEnvAssets.mjs가 그 원천을 검증)', ENV_ART_KEYS.length === 35)
+
+// ENV_ART_KEYS/matchEnvArtKey는 위 섹션 4(strayImages 계산)와 공유(중복
+// 정의 없음, 같은 접두어-충돌 매칭 로직을 여기서도 그대로 재사용).
+const envArtFilesByKey = {}
+for (const f of assetFiles) {
+  const key = matchEnvArtKey(f)
+  if (!key) continue
+  envArtFilesByKey[key] = envArtFilesByKey[key] || []
+  envArtFilesByKey[key].push(f)
+}
+const envArtPhysicalCount = Object.values(envArtFilesByKey).reduce((sum, arr) => sum + arr.length, 0)
+check(
+  '환경 아트 35개 키가 전부 정확히 물리 파일 1개씩(실측 전부 4KB 이상이라 인라인 후보가 아님)',
+  ENV_ART_KEYS.every((k) => (envArtFilesByKey[k] || []).length === 1),
+  JSON.stringify(Object.fromEntries(ENV_ART_KEYS.map((k) => [k, (envArtFilesByKey[k] || []).length]))),
+)
+check(
+  '환경 아트 물리 파일 총 개수 === 35(그 외 미분류/중복 매치 없음)',
+  envArtPhysicalCount === 35,
+  `count=${envArtPhysicalCount}`,
+)
+const envArtLeaksInMain = ENV_ART_KEYS.filter((k) => mainSrc.includes(k))
+check(
+  '메인 청크(index-*.js)에 환경 아트 키 문자열 0건(플래그 OFF 누출 가드 — env 레지스트리는 v2/*에서만 import됨)',
+  envArtLeaksInMain.length === 0,
+  JSON.stringify(envArtLeaksInMain),
+)
+const envArtLeaksInTownV1 = ENV_ART_KEYS.filter((k) => townSrc.includes(k))
+check(
+  'V1 TownScreen 청크에 환경 아트 키 문자열 0건(V1은 env 레지스트리를 import하지 않음)',
+  envArtLeaksInTownV1.length === 0,
+  JSON.stringify(envArtLeaksInTownV1),
 )
 
 // ── 5. 전체 JS 원본(raw) 크기 예산(핵심 시작 경로만, 스코프는 파일 헤더 참고) ──

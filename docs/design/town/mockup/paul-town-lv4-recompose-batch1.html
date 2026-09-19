@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Paul Town — Lv.4 recompose (Batch 1 real assets, 390x741)</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #e9e4d8;
+    font-family: -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+  }
+  .page {
+    padding: 24px 0 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .caption {
+    font-size: 13px;
+    color: #6b6153;
+    margin-bottom: 10px;
+    max-width: 390px;
+    text-align: center;
+  }
+  .stage {
+    position: relative;
+    width: 390px;
+    height: 741px;
+    overflow: hidden;
+    background: #bfe6f7; /* sky fallback */
+  }
+  .stage svg#terrain {
+    position: absolute;
+    inset: 0;
+    width: 390px;
+    height: 741px;
+    display: block;
+  }
+  .grassBase {
+    position: absolute;
+    left: 0; top: 86px; width: 390px; height: 655px;
+    background-repeat: repeat;
+    background-size: 128px 128px;
+    background-image: url('./batch1/grass-base.webp');
+  }
+  .grassBase.fallback {
+    background-image: none;
+    background: linear-gradient(180deg, #c3dd93 0%, #94c268 35%, #6ea347 70%, #4d7f34 100%);
+  }
+  .skyHills {
+    position: absolute;
+    left: 0; top: 0; width: 390px; height: 99px; /* top 12% of the world, per §1.9 */
+    overflow: hidden;
+  }
+  .skyHills img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .batchLayer {
+    position: absolute;
+    inset: 0;
+    width: 390px;
+    height: 741px;
+    pointer-events: none;
+  }
+  .objLayer {
+    position: absolute;
+    inset: 0;
+    width: 390px;
+    height: 741px;
+  }
+  .obj {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    pointer-events: none;
+  }
+  .obj img { display: block; width: 100%; height: auto; }
+  .locked img {
+    filter: grayscale(1) blur(1px) brightness(1.05);
+    opacity: .45;
+  }
+  .shadow {
+    position: absolute;
+    transform: translate(-50%, -35%);
+    border-radius: 50%;
+    background: radial-gradient(ellipse at center, rgba(30,25,15,0.35) 0%, rgba(30,25,15,0.16) 55%, rgba(30,25,15,0) 75%);
+    pointer-events: none;
+  }
+  .haze {
+    position: absolute;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(255,250,232,0.62) 0%, rgba(255,250,232,0.30) 55%, rgba(255,250,232,0) 78%);
+    filter: blur(5px);
+  }
+  .sign { position: absolute; transform: translate(-50%, -100%); pointer-events: none; }
+  .bubble {
+    position: absolute;
+    background: #fff;
+    border-radius: 14px;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #5b4a2f;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .bubble::after {
+    content: "";
+    position: absolute;
+    bottom: -6px;
+    left: 22px;
+    width: 0; height: 0;
+    border: 6px solid transparent;
+    border-top-color: #fff;
+    border-bottom: 0;
+  }
+
+  /* ---- Batch 1 piece wrapper: positioned + rotated box, img OR dashed placeholder ---- */
+  .b1piece {
+    position: absolute;
+    pointer-events: none;
+  }
+  .b1piece img { display: block; width: 100%; height: 100%; }
+  .b1piece .ph {
+    display: none;
+    width: 100%; height: 100%;
+    border: 1.5px dashed #e0303c;
+    background: rgba(224,48,60,0.07);
+    box-sizing: border-box;
+    font-size: 6px;
+    line-height: 1.1;
+    color: #c81f2b;
+    overflow: hidden;
+    padding: 1px 2px;
+    word-break: break-all;
+    font-family: "Consolas", monospace;
+  }
+
+  /* ---- legend ---- */
+  #legend {
+    position: fixed;
+    top: 6px; left: 6px;
+    z-index: 1000;
+    background: rgba(255,255,255,0.94);
+    border: 1px solid #c9bfa8;
+    border-radius: 6px;
+    padding: 6px 9px;
+    font-size: 10.5px;
+    line-height: 1.4;
+    color: #3a3226;
+    max-width: 300px;
+    max-height: 92px;
+    overflow-y: auto;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  }
+  #legend .count { font-weight: 700; }
+  #legend .missing { color: #a3382f; word-break: break-word; margin-top: 2px; }
+</style>
+</head>
+<body>
+<div id="legend">Batch 1 files present: <span class="count">…</span></div>
+<div class="page">
+  <div class="caption">Paul Town — Lv.4 recompose harness (Batch 1 real environment art) — 390 &times; 741. Grass/patches/path/fence/gate/hedge/clusters/river load from <code>./batch1/&lt;filename&gt;</code>; missing files render as labelled dashed placeholders. Buildings, Paul, signs and locked landmarks are unchanged from the mockup.</div>
+  <div class="stage" id="stage">
+
+    <!-- grass base (Batch 1 tile, CSS background; falls back to the original gradient if missing) -->
+    <div class="grassBase" id="grassBase"></div>
+
+    <!-- ============ kept SVG decorative layer (NOT Batch 1 scope): sky, hills, school hill, tower green rise, square paving, garden soil, doorstep-area, filler bg trees ============ -->
+    <svg id="terrain" viewBox="0 0 390 741" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="100" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#bfe6f7"/>
+          <stop offset="55%" stop-color="#d7ecec"/>
+          <stop offset="100%" stop-color="#fdeccb"/>
+        </linearGradient>
+        <filter id="blurS" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="5"/>
+        </filter>
+        <filter id="blurM" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2.5"/>
+        </filter>
+        <filter id="blurXS" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="1.1"/>
+        </filter>
+      </defs>
+
+      <!-- sky -->
+      <rect x="0" y="0" width="390" height="105" fill="url(#skyGrad)"/>
+      <!-- distant hills -->
+      <ellipse cx="130" cy="92" rx="220" ry="42" fill="#a9c9a6" opacity="0.55" filter="url(#blurS)"/>
+      <ellipse cx="320" cy="96" rx="190" ry="36" fill="#8fb587" opacity="0.5" filter="url(#blurS)"/>
+      <ellipse cx="40" cy="98" rx="150" ry="32" fill="#b8d3ab" opacity="0.45" filter="url(#blurS)"/>
+
+      <!-- tower green rise -->
+      <ellipse cx="296" cy="163" rx="30" ry="20" fill="#7fa25c" opacity="0.7" filter="url(#blurS)"/>
+      <ellipse cx="292" cy="168" rx="20" ry="12" fill="#93b46f" opacity="0.6" filter="url(#blurM)"/>
+
+      <!-- school hill with terraced steps -->
+      <ellipse cx="179" cy="192" rx="78" ry="36" fill="#87a862" opacity="0.65" filter="url(#blurS)"/>
+      <ellipse cx="179" cy="206" rx="62" ry="15" fill="#a6c17c" opacity="0.55" filter="url(#blurM)"/>
+      <ellipse cx="179" cy="218" rx="50" ry="12" fill="#93af6c" opacity="0.55" filter="url(#blurM)"/>
+      <ellipse cx="179" cy="228" rx="40" ry="10" fill="#7f9a5e" opacity="0.55" filter="url(#blurM)"/>
+
+      <!-- village square paving (locked, hazed via HTML overlay later) -->
+      <ellipse cx="214.5" cy="407.6" rx="52" ry="34" fill="#c8ab7e" opacity="0.4" filter="url(#blurM)"/>
+      <ellipse cx="214.5" cy="407.6" rx="44" ry="28" fill="#cbb488" opacity="0.88"/>
+
+      <!-- garden soil patches (not Batch 1 scope) -->
+      <ellipse cx="98" cy="440" rx="34" ry="16" fill="#8a6b4a" opacity="0.45" filter="url(#blurM)"/>
+      <ellipse cx="150" cy="450" rx="30" ry="14" fill="#8a6b4a" opacity="0.4" filter="url(#blurM)"/>
+      <ellipse cx="118" cy="470" rx="26" ry="12" fill="#7c5f42" opacity="0.4" filter="url(#blurM)"/>
+
+      <!-- background painted filler trees (not Batch 1 scope, distinct from the real tree asset) -->
+      <g id="bgTreeLayer"></g>
+    </svg>
+
+    <!-- sky-hills (Batch 1 §1.9, added after the new visual target): opaque distant-landscape band,
+         behind everything except the SVG sky/hills fallback underneath it (visible on error). -->
+    <div class="skyHills" id="skyHills">
+      <img src="./batch1/sky-hills.webp" alt="sky-hills" data-asset="sky-hills">
+    </div>
+
+    <!-- ============ BATCH 1 layers (grass patches, river, path, fence/hedge/gate, clusters) — all HTML/img-based, generated below ============ -->
+    <div class="batchLayer" id="grassPatchLayer"></div>
+    <div class="batchLayer" id="riverLayer"></div>
+    <div class="batchLayer" id="pathLayer"></div>
+    <div class="batchLayer" id="fenceHedgeLayer"></div>
+    <div class="batchLayer" id="clusterLayer"></div>
+
+    <!-- ============ HAZE overlays for locked regions (unchanged from mockup) ============ -->
+    <div class="haze" style="left:22%; top:0%; width:46%; height:30%; filter:blur(9px); opacity:.7;"></div>
+    <div class="haze" style="left:28%; top:5%; width:34%; height:22%;"></div>   <!-- school hill -->
+    <div class="haze" style="left:62%; top:-1%; width:42%; height:30%; filter:blur(9px); opacity:.7;"></div>
+    <div class="haze" style="left:68%; top:4%; width:32%; height:22%;"></div>   <!-- tower green -->
+    <div class="haze" style="left:60%; top:20%; width:44%; height:24%; filter:blur(9px); opacity:.65;"></div>
+    <div class="haze" style="left:66%; top:24%; width:34%; height:18%;"></div>  <!-- bridge -->
+    <div class="haze" style="left:32%; top:28%; width:56%; height:42%; filter:blur(9px); opacity:.6;"></div>
+    <div class="haze" style="left:38%; top:33%; width:46%; height:34%;"></div>  <!-- square + cafe -->
+
+    <!-- ============ LAYER A: real + locked assets, unchanged from the mockup ============ -->
+    <div class="objLayer" id="objLayer">
+
+      <!-- Lv.8 sign (tower green entry) -->
+      <div class="sign" style="left:74%; top:27%;">
+        <svg width="26" height="36" viewBox="0 0 26 36">
+          <rect x="11" y="12" width="3.4" height="24" fill="#7c5a34"/>
+          <rect x="1" y="1" width="22" height="14" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.3"/>
+          <text x="12" y="11" font-family="Georgia, serif" font-size="8" font-weight="700" fill="#4a2f16" text-anchor="middle">Lv.8</text>
+        </svg>
+      </div>
+      <!-- clock tower (locked) -->
+      <div class="obj locked" style="left:76%; top:21%; width:47px;">
+        <img src="../../../../src/assets/town/special/clock-tower@2x.webp" alt="clock tower (locked)">
+      </div>
+
+      <!-- Lv.7 sign (school entry) -->
+      <div class="sign" style="left:50%; top:28%;">
+        <svg width="26" height="36" viewBox="0 0 26 36">
+          <rect x="11" y="12" width="3.4" height="24" fill="#7c5a34"/>
+          <rect x="1" y="1" width="22" height="14" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.3"/>
+          <text x="12" y="11" font-family="Georgia, serif" font-size="8" font-weight="700" fill="#4a2f16" text-anchor="middle">Lv.7</text>
+        </svg>
+      </div>
+      <!-- english school (locked) -->
+      <div class="obj locked" style="left:46%; top:24%; width:117px;">
+        <img src="../../../../src/assets/town/special/english-school@2x.webp" alt="english school (locked)">
+      </div>
+
+      <!-- Lv.6 sign (bridge entry) -->
+      <div class="sign" style="left:80%; top:38%;">
+        <svg width="26" height="36" viewBox="0 0 26 36">
+          <rect x="11" y="12" width="3.4" height="24" fill="#7c5a34"/>
+          <rect x="1" y="1" width="22" height="14" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.3"/>
+          <text x="12" y="11" font-family="Georgia, serif" font-size="8" font-weight="700" fill="#4a2f16" text-anchor="middle">Lv.6</text>
+        </svg>
+      </div>
+      <!-- bridge (locked) -->
+      <div class="obj locked" style="left:86%; top:34%; width:78px;">
+        <img src="../../../../src/assets/town/special/bridge@2x.webp" alt="bridge (locked)">
+      </div>
+
+      <!-- background painted/real trees (upper) -->
+      <div class="shadow" style="left:4%; top:30%; width:30px; height:6px;"></div>
+      <div class="obj" style="left:4%; top:30%; width:40px;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree">
+      </div>
+      <div class="shadow" style="left:44%; top:36%; width:28px; height:6px;"></div>
+      <div class="obj" style="left:44%; top:36%; width:38px;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree">
+      </div>
+
+      <!-- loose row of smaller, desaturated trees behind the cottage -->
+      <div class="shadow" style="left:8%; top:46%; width:20px; height:4px;"></div>
+      <div class="obj" style="left:8%; top:46%; width:28px; filter:saturate(.55) brightness(1.08); opacity:.85;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree (background)">
+      </div>
+      <div class="shadow" style="left:18%; top:44%; width:18px; height:4px;"></div>
+      <div class="obj" style="left:18%; top:44%; width:26px; filter:saturate(.55) brightness(1.08); opacity:.82;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree (background)">
+      </div>
+      <div class="shadow" style="left:29%; top:45%; width:22px; height:4px;"></div>
+      <div class="obj" style="left:29%; top:45%; width:30px; filter:saturate(.55) brightness(1.08); opacity:.85;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree (background)">
+      </div>
+      <div class="shadow" style="left:39%; top:47%; width:19px; height:4px;"></div>
+      <div class="obj" style="left:39%; top:47%; width:27px; filter:saturate(.55) brightness(1.08); opacity:.82;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree (background)">
+      </div>
+
+      <!-- Lv.5 sign (square/cafe entry) -->
+      <div class="sign" style="left:52%; top:59%;">
+        <svg width="26" height="36" viewBox="0 0 26 36">
+          <rect x="11" y="12" width="3.4" height="24" fill="#7c5a34"/>
+          <rect x="1" y="1" width="22" height="14" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.3"/>
+          <text x="12" y="11" font-family="Georgia, serif" font-size="8" font-weight="700" fill="#4a2f16" text-anchor="middle">Lv.5</text>
+        </svg>
+      </div>
+      <!-- cafe (locked) -->
+      <div class="obj locked" style="left:68%; top:47%; width:78px;">
+        <img src="../../../../src/assets/town/buildings/cafe@2x.webp" alt="cafe (locked)">
+      </div>
+      <!-- stone fountain (locked) -->
+      <div class="obj locked" style="left:55%; top:55%; width:47px;">
+        <img src="../../../../src/assets/town/decorations/stone-fountain@2x.webp" alt="fountain (locked)">
+      </div>
+
+      <!-- house lawn tree (outside fence, background) -->
+      <div class="shadow" style="left:2%; top:60%; width:34px; height:7px;"></div>
+      <div class="obj" style="left:2%; top:60%; width:44px;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree">
+      </div>
+      <div class="obj" style="left:16%; top:50%; width:20px;">
+        <img src="../../../../src/assets/town/decorations/street-lamp@2x.webp" alt="street lamp">
+      </div>
+
+      <!-- two smaller trees near the book shop courtyard -->
+      <div class="shadow" style="left:66%; top:58%; width:24px; height:5px;"></div>
+      <div class="obj" style="left:66%; top:58%; width:34px;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree near shop">
+      </div>
+      <div class="shadow" style="left:72%; top:72%; width:22px; height:5px;"></div>
+      <div class="obj" style="left:72%; top:72%; width:30px;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree near shop">
+      </div>
+
+      <!-- ivy on my-house left wall -->
+      <div class="obj" style="left:14%; top:48%; width:26px;">
+        <svg width="26" height="26" viewBox="0 0 26 26">
+          <circle cx="6" cy="18" r="6" fill="#4a7a3c" opacity="0.75"/>
+          <circle cx="4" cy="10" r="4.5" fill="#568a45" opacity="0.7"/>
+          <circle cx="10" cy="6" r="3.6" fill="#4a7a3c" opacity="0.65"/>
+        </svg>
+      </div>
+
+      <!-- My House contact shadow -->
+      <div class="shadow" style="left:22%; top:53%; width:120px; height:22px;"></div>
+      <!-- My House -->
+      <div class="obj" style="left:22%; top:53%; width:133px;">
+        <img src="../../../../src/assets/town/buildings/my-house@2x.webp" alt="My House">
+      </div>
+
+      <!-- flower gardens inside fence (real catalog asset, unchanged) -->
+      <div class="obj" style="left:10%; top:58%; width:64px;">
+        <img src="../../../../src/assets/town/nature/flower-garden@2x.webp" alt="flower garden">
+      </div>
+      <div class="obj" style="left:34%; top:59%; width:60px;">
+        <img src="../../../../src/assets/town/nature/flower-garden@2x.webp" alt="flower garden">
+      </div>
+
+      <!-- bench + post box in front garden -->
+      <div class="obj" style="left:7%; top:53%; width:44px;">
+        <img src="../../../../src/assets/town/decorations/bench@2x.webp" alt="bench">
+      </div>
+      <div class="obj" style="left:39%; top:60%; width:20px;">
+        <img src="../../../../src/assets/town/decorations/red-post-box@2x.webp" alt="post box">
+      </div>
+
+      <!-- My House sign board -->
+      <div class="sign" style="left:15%; top:67%;">
+        <svg width="46" height="34" viewBox="0 0 46 34">
+          <rect x="21" y="16" width="4" height="18" fill="#7c5a34"/>
+          <rect x="1" y="1" width="44" height="17" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.4"/>
+          <text x="23" y="13" font-family="Georgia, serif" font-size="9.5" font-weight="700" fill="#4a2f16" text-anchor="middle">My House</text>
+        </svg>
+      </div>
+
+      <!-- lawn connector: lamp, bench, tree -->
+      <div class="obj" style="left:46%; top:64%; width:20px;">
+        <img src="../../../../src/assets/town/decorations/street-lamp@2x.webp" alt="street lamp">
+      </div>
+      <div class="obj" style="left:47%; top:70%; width:46px;">
+        <img src="../../../../src/assets/town/decorations/bench@2x.webp" alt="bench">
+      </div>
+      <div class="shadow" style="left:49%; top:70%; width:36px; height:7px;"></div>
+      <div class="obj" style="left:49%; top:70%; width:48px;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree">
+      </div>
+
+      <!-- Book Shop contact shadow + building -->
+      <div class="shadow" style="left:78%; top:63%; width:68px; height:14px;"></div>
+      <div class="obj" style="left:78%; top:63%; width:78px;">
+        <img src="../../../../src/assets/town/buildings/book-shop@2x.webp" alt="Book Shop">
+      </div>
+
+      <!-- signpost 4-arm -->
+      <div class="sign" style="left:42%; top:82%;">
+        <svg width="64" height="82" viewBox="0 0 64 82">
+          <rect x="29" y="14" width="5" height="66" fill="#7c5a34"/>
+          <rect x="6" y="16" width="34" height="11" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.2"/>
+          <path d="M40,16 L47,21.5 L40,27 Z" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1"/>
+          <text x="23" y="24.5" font-family="Georgia, serif" font-size="7.5" font-weight="700" fill="#4a2f16" text-anchor="middle">Learn</text>
+
+          <rect x="24" y="31" width="34" height="11" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.2"/>
+          <path d="M24,31 L17,36.5 L24,42 Z" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1"/>
+          <text x="41" y="39.5" font-family="Georgia, serif" font-size="7.5" font-weight="700" fill="#4a2f16" text-anchor="middle">Grow</text>
+
+          <rect x="6" y="46" width="38" height="11" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.2"/>
+          <path d="M44,46 L51,51.5 L44,57 Z" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1"/>
+          <text x="25" y="54.5" font-family="Georgia, serif" font-size="7" font-weight="700" fill="#4a2f16" text-anchor="middle">Be Kind</text>
+
+          <rect x="22" y="61" width="40" height="11" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.2"/>
+          <path d="M22,61 L15,66.5 L22,72 Z" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1"/>
+          <text x="42" y="69.5" font-family="Georgia, serif" font-size="6.6" font-weight="700" fill="#4a2f16" text-anchor="middle">Go Further</text>
+        </svg>
+      </div>
+
+      <!-- foreground trees -->
+      <div class="shadow" style="left:80%; top:86%; width:44px; height:9px;"></div>
+      <div class="obj" style="left:80%; top:86%; width:56px;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree">
+      </div>
+      <div class="shadow" style="left:3%; top:88%; width:46px; height:9px;"></div>
+      <div class="obj" style="left:3%; top:88%; width:58px;">
+        <img src="../../../../src/assets/town/nature/tree@2x.webp" alt="tree">
+      </div>
+
+      <!-- To the Sea sign -->
+      <div class="sign" style="left:80%; top:92%;">
+        <svg width="70" height="50" viewBox="0 0 70 50">
+          <rect x="6" y="18" width="4.5" height="30" fill="#7c5a34"/>
+          <rect x="1" y="1" width="60" height="20" rx="2" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.4"/>
+          <path d="M61,1 L69,11 L61,21 Z" fill="#c9a06a" stroke="#6e4d2a" stroke-width="1.2"/>
+          <text x="31" y="15" font-family="Georgia, serif" font-size="9" font-weight="700" fill="#4a2f16" text-anchor="middle">To the Sea &#8594;</text>
+        </svg>
+      </div>
+
+      <!-- Paul + speech bubble -->
+      <div class="bubble" style="left:1%; top:71%; max-width:104px; white-space:normal; font-size:10px; line-height:1.25;">Welcome to Paul Town!</div>
+      <div class="obj" style="left:9%; top:92%; width:96px;">
+        <img src="../../../../src/assets/paul/paul_hello.png" alt="Paul">
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var SX = 3.9;   // px per world-x unit (390 / 100)
+  var SY = 7.41;  // px per world-y unit (741 / 100), y is % of world height
+  function toPx(x, y) { return [x * SX, y * SY]; }
+  function wpx(w) { return w * SX; }
+
+  var svgNS = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs) {
+    var n = document.createElementNS(svgNS, tag);
+    for (var k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+
+  // ---------- Catmull-Rom smoothing helpers (reused from paul-town-lv4-mockup-390.html) ----------
+  function cr1(p0, p1, p2, p3, t) {
+    var t2 = t * t, t3 = t2 * t;
+    return 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
+  }
+  function sampleOpen(pts, samplesPerSeg) {
+    var out = [];
+    var n = pts.length;
+    for (var i = 0; i < n - 1; i++) {
+      var p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || pts[i + 1];
+      for (var s = 0; s < samplesPerSeg; s++) {
+        var t = s / samplesPerSeg;
+        out.push({
+          x: cr1(p0.x, p1.x, p2.x, p3.x, t),
+          y: cr1(p0.y, p1.y, p2.y, p3.y, t),
+          hw: cr1(p0.hw, p1.hw, p2.hw, p3.hw, t)
+        });
+      }
+    }
+    out.push(pts[n - 1]);
+    return out;
+  }
+  function sampleClosed(pts, samplesPerSeg) {
+    var out = [];
+    var n = pts.length;
+    for (var i = 0; i < n; i++) {
+      var p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
+      for (var s = 0; s < samplesPerSeg; s++) {
+        var t = s / samplesPerSeg;
+        out.push({
+          x: cr1(p0.x, p1.x, p2.x, p3.x, t),
+          y: cr1(p0.y, p1.y, p2.y, p3.y, t),
+          wx: cr1(p0.wx, p1.wx, p2.wx, p3.wx, t),
+          wy: cr1(p0.wy, p1.wy, p2.wy, p3.wy, t)
+        });
+      }
+    }
+    return out;
+  }
+
+  // =====================================================================
+  // BATCH 1 asset manifest — every filename the *contract* (handoff §1 + §1.9)
+  // or a *variant* of it might resolve to. This is a superset dictionary
+  // (file/size/anchor lookup only); it does NOT by itself decide what's
+  // "expected" for the legend/README — see usedAssetKeys below, which is
+  // built from what the harness actually places at runtime (coordinator
+  // follow-up 2026-09-17: "make the legend count authoritative").
+  // anchor: 'center' | 'bottom-center' | 'bottom-left' | 'top-left'
+  // =====================================================================
+  var BATCH1_FILES = {
+    'sky-hills':              { file: 'sky-hills.webp',              w2x: 1024, h2x: 260, anchor: 'top-left' },
+    'grass-base':             { file: 'grass-base.webp',              w2x: 512, h2x: 512, anchor: 'center' },
+    'grass-patch-light':      { file: 'grass-patch-light.webp',       w2x: 400, h2x: 280, anchor: 'center' },
+    'grass-patch-dark':       { file: 'grass-patch-dark.webp',        w2x: 400, h2x: 280, anchor: 'center' },
+    'grass-patch-worn':       { file: 'grass-patch-worn.webp',        w2x: 400, h2x: 200, anchor: 'center' },
+    'wildflower-scatter':     { file: 'wildflower-scatter.webp',      w2x: 320, h2x: 240, anchor: 'center' },
+    'path-straight':          { file: 'path-straight.webp',           w2x: 256, h2x: 256, anchor: 'center' },
+    'path-straight-narrow':   { file: 'path-straight-narrow.webp',    w2x: 256, h2x: 256, anchor: 'center' },
+    'path-curve-gentle':      { file: 'path-curve-gentle.webp',       w2x: 256, h2x: 256, anchor: 'center' },
+    'path-curve-strong':      { file: 'path-curve-strong.webp',       w2x: 256, h2x: 256, anchor: 'center' },
+    'path-fork':              { file: 'path-fork.webp',               w2x: 256, h2x: 256, anchor: 'center' },
+    'path-junction':          { file: 'path-junction.webp',           w2x: 256, h2x: 256, anchor: 'center' },
+    'path-end':               { file: 'path-end.webp',                w2x: 256, h2x: 160, anchor: 'bottom-center' },
+    'path-end-entrance':      { file: 'path-end-entrance.webp',       w2x: 256, h2x: 176, anchor: 'bottom-center' },
+    'fence-straight':         { file: 'fence-straight.webp',          w2x: 256, h2x: 96,  anchor: 'bottom-left' },
+    'fence-straight-short':   { file: 'fence-straight-short.webp',    w2x: 128, h2x: 96,  anchor: 'bottom-left' },
+    'fence-corner':           { file: 'fence-corner.webp',            w2x: 128, h2x: 128, anchor: 'bottom-center' },
+    'fence-post':             { file: 'fence-post.webp',              w2x: 64,  h2x: 112, anchor: 'bottom-center' },
+    'fence-gate':             { file: 'fence-gate.webp',              w2x: 192, h2x: 128, anchor: 'bottom-center' },
+    'fence-gate-closed':      { file: 'fence-gate-closed.webp',       w2x: 192, h2x: 128, anchor: 'bottom-center' },
+    'hedge-straight':         { file: 'hedge-straight.webp',          w2x: 256, h2x: 128, anchor: 'bottom-left' },
+    'hedge-straight-tall':    { file: 'hedge-straight-tall.webp',     w2x: 256, h2x: 160, anchor: 'bottom-left' },
+    'hedge-end':               { file: 'hedge-end.webp',               w2x: 128, h2x: 128, anchor: 'bottom-center' },
+    'hedge-corner':           { file: 'hedge-corner.webp',            w2x: 128, h2x: 128, anchor: 'bottom-center' },
+    'shrub-round':             { file: 'shrub-round.webp',             w2x: 160, h2x: 128, anchor: 'bottom-center' },
+    'shrub-round-small':      { file: 'shrub-round-small.webp',       w2x: 128, h2x: 96,  anchor: 'bottom-center' },
+    'shrub-wide':              { file: 'shrub-wide.webp',              w2x: 224, h2x: 112, anchor: 'bottom-center' },
+    'flower-cluster-pink':    { file: 'flower-cluster-pink.webp',     w2x: 160, h2x: 112, anchor: 'bottom-center' },
+    'flower-cluster-yellow':  { file: 'flower-cluster-yellow.webp',   w2x: 160, h2x: 112, anchor: 'bottom-center' },
+    'flower-cluster-mixed':   { file: 'flower-cluster-mixed.webp',    w2x: 192, h2x: 112, anchor: 'bottom-center' },
+    'flower-bed-border':      { file: 'flower-bed-border.webp',       w2x: 320, h2x: 112, anchor: 'bottom-left' },
+    'flower-pot':              { file: 'flower-pot.webp',              w2x: 128, h2x: 128, anchor: 'bottom-center' },
+    'flower-pot-tall':        { file: 'flower-pot-tall.webp',         w2x: 128, h2x: 128, anchor: 'bottom-center' },
+    'river-straight':          { file: 'river-straight.webp',          w2x: 256, h2x: 256, anchor: 'center' },
+    'river-bend':              { file: 'river-bend.webp',              w2x: 256, h2x: 256, anchor: 'center' },
+    'river-highlight':        { file: 'river-highlight.webp',         w2x: 256, h2x: 128, anchor: 'center' },
+    'riverbank-reeds':        { file: 'riverbank-reeds.webp',         w2x: 192, h2x: 96,  anchor: 'bottom-center' },
+    'riverbank-reeds-stones': { file: 'riverbank-reeds-stones.webp',  w2x: 192, h2x: 96,  anchor: 'bottom-center' }
+  };
+
+  // Authoritative expected-file set: every distinct assetKey the harness
+  // actually places at runtime (populated by placePx() below + sky-hills,
+  // which is placed via a dedicated <img> rather than placePx). Computed
+  // AFTER all composition code below has run (still synchronous, same
+  // script tick) — see the probe pass at the bottom of this file.
+  var usedAssetKeys = {};
+  usedAssetKeys['grass-base'] = true; // always applied via CSS background-image, never through placePx
+  var EXPECTED_KEYS = []; // finalized at the bottom of this script, after all composition code has run
+
+  var missingSet = {};
+
+  function registerResult(key, ok) {
+    if (!ok) missingSet[key] = true;
+  }
+
+  function updateLegend(expectedKeys) {
+    var legend = document.getElementById('legend');
+    var missingKeys = expectedKeys.filter(function (k) { return missingSet[k]; });
+    var present = expectedKeys.length - missingKeys.length;
+    legend.querySelector('.count').textContent = present + ' / ' + expectedKeys.length;
+    var missDiv = legend.querySelector('.missing');
+    if (!missDiv) {
+      missDiv = document.createElement('div');
+      missDiv.className = 'missing';
+      legend.appendChild(missDiv);
+    }
+    var missingFiles = missingKeys.map(function (k) { return BATCH1_FILES[k].file; });
+    missDiv.textContent = missingFiles.length ? ('missing: ' + missingFiles.join(', ')) : '(all present)';
+  }
+
+  // ---------- generic placement helper: wrapper div + <img> + dashed placeholder ----------
+  // xPx,yPx = anchor point in screen px; wPx = rendered width in screen px (height from aspect
+  // unless hPx explicit); rotationDeg optional (rotates around the piece's own center — a
+  // documented approximation for bottom-anchored tiles, see report).
+  function placePx(layerEl, assetKeyOrExtra, xPx, yPx, wPx, rotationDeg, hPxOverride) {
+    var entry = BATCH1_FILES[assetKeyOrExtra];
+    if (!entry) { return; }
+    usedAssetKeys[assetKeyOrExtra] = true;
+    var aspect = entry.h2x / entry.w2x;
+    var hPx = hPxOverride || (wPx * aspect);
+
+    var wrap = document.createElement('div');
+    wrap.className = 'b1piece';
+    wrap.style.width = wPx.toFixed(1) + 'px';
+    wrap.style.height = hPx.toFixed(1) + 'px';
+
+    var tx, ty;
+    if (entry.anchor === 'center') { tx = '-50%'; ty = '-50%'; }
+    else if (entry.anchor === 'bottom-left') { tx = '0%'; ty = '-100%'; }
+    else { tx = '-50%'; ty = '-100%'; } // bottom-center (default)
+
+    wrap.style.left = xPx.toFixed(1) + 'px';
+    wrap.style.top = yPx.toFixed(1) + 'px';
+    var transform = 'translate(' + tx + ',' + ty + ')';
+    if (rotationDeg) transform += ' rotate(' + rotationDeg.toFixed(1) + 'deg)';
+    wrap.style.transform = transform;
+
+    var img = document.createElement('img');
+    img.src = './batch1/' + entry.file;
+    img.alt = assetKeyOrExtra;
+    img.setAttribute('data-asset', assetKeyOrExtra);
+
+    var ph = document.createElement('div');
+    ph.className = 'ph';
+    ph.textContent = entry.file;
+
+    img.onerror = function () {
+      img.style.display = 'none';
+      ph.style.display = 'block';
+      registerResult(assetKeyOrExtra, false);
+      updateLegend(EXPECTED_KEYS);
+    };
+
+    wrap.appendChild(img);
+    wrap.appendChild(ph);
+    layerEl.appendChild(wrap);
+  }
+
+  function placeWorld(layerEl, assetKey, xWorld, yWorld, wPx, rotationDeg, hPxOverride) {
+    var xy = toPx(xWorld, yWorld);
+    placePx(layerEl, assetKey, xy[0], xy[1], wPx, rotationDeg, hPxOverride);
+  }
+
+  // depth scaling for path/river tiles per Deliverable 1 §3: 100% for y>66,
+  // 60% for 34<y<=66, 40% for y<=34 (world y, 0-100 scale)
+  function depthScale(worldY) {
+    if (worldY > 66) return 1.0;
+    if (worldY > 34) return 0.6;
+    return 0.4;
+  }
+
+  // ---------- generic tile walker: samples a Catmull-Rom centre-line and emits
+  // tile placements at an arc-length pitch, picking straight/curve tiles by
+  // how much the local tangent has turned since the previous placement ----------
+  function walkTiles(ptsWorld, opts) {
+    opts = opts || {};
+    var P = ptsWorld.map(function (p) { return { x: p[0] * SX, y: p[1] * SY, hw: (p[2] || 8) * SX / 2 }; });
+    var samplesPerSeg = Math.max(10, Math.ceil(60 / Math.max(1, P.length - 1)));
+    var S = sampleOpen(P, samplesPerSeg);
+    var cum = [0];
+    var i;
+    for (i = 1; i < S.length; i++) cum.push(cum[i - 1] + Math.hypot(S[i].x - S[i - 1].x, S[i].y - S[i - 1].y));
+    var total = cum[cum.length - 1];
+    function pointAtLen(L) {
+      for (var k = 1; k < cum.length; k++) {
+        if (cum[k] >= L) {
+          var t = (L - cum[k - 1]) / ((cum[k] - cum[k - 1]) || 1);
+          return { x: S[k - 1].x + (S[k].x - S[k - 1].x) * t, y: S[k - 1].y + (S[k].y - S[k - 1].y) * t, idx: k - 1 };
+        }
+      }
+      return { x: S[S.length - 1].x, y: S[S.length - 1].y, idx: S.length - 2 };
+    }
+    function tangentAt(idx) {
+      var a = S[Math.max(0, idx - 1)], b = S[Math.min(S.length - 1, idx + 1)];
+      return Math.atan2(b.x - a.x, -(b.y - a.y)) * 180 / Math.PI; // 0deg = travelling "up" (-y), matches tile default orientation
+    }
+    var placements = [];
+    var L = opts.startLen || 0;
+    var prevAngle = null;
+    var guard = 0;
+    while (L <= total && guard < 400) {
+      guard++;
+      var pt = pointAtLen(L);
+      var worldY = pt.y / SY;
+      var scale = opts.fixedPitch ? 1 : depthScale(worldY);
+      var pitch = (opts.fixedPitch || 64) * scale;
+      var angle = tangentAt(pt.idx);
+      var key = opts.straightKey;
+      if (prevAngle !== null) {
+        var d = Math.abs(((angle - prevAngle + 540) % 360) - 180);
+        if (opts.curveStrongKey && d > 60) key = opts.curveStrongKey;
+        else if (opts.curveGentleKey && d > 20) key = opts.curveGentleKey;
+      }
+      placements.push({ assetKey: key, xPx: pt.x, yPx: pt.y, renderedPx: pitch, rotationDeg: angle, worldY: worldY });
+      prevAngle = angle;
+      L += pitch;
+    }
+    return { placements: placements, sampled: S, total: total };
+  }
+
+  // =====================================================================
+  // GRASS PATCHES + WILDFLOWER SCATTERS (overlay, positions echo the
+  // mockup's tonal-patch ellipses; px given directly in the 390x741 canvas)
+  // =====================================================================
+  var grassPatchLayer = document.getElementById('grassPatchLayer');
+  var DARK_PATCHES = [[72, 245, 190], [300, 185, 195], [55, 600, 195], [320, 600, 185]];
+  var LIGHT_PATCHES = [[150, 430, 170], [250, 500, 160], [180, 620, 190]];
+  var WORN_PATCHES = [[105, 470, 150], [215, 590, 150], [300, 685, 140]]; // hug the lane edges (foreground)
+  var WILDFLOWERS = [[60, 655, 95], [335, 645, 90], [130, 700, 100], [255, 715, 95]]; // foreground + home lawn
+
+  DARK_PATCHES.forEach(function (p) { placePx(grassPatchLayer, 'grass-patch-dark', p[0], p[1], p[2]); });
+  LIGHT_PATCHES.forEach(function (p) { placePx(grassPatchLayer, 'grass-patch-light', p[0], p[1], p[2]); });
+  WORN_PATCHES.forEach(function (p) { placePx(grassPatchLayer, 'grass-patch-worn', p[0], p[1], p[2]); });
+  WILDFLOWERS.forEach(function (p) { placePx(grassPatchLayer, 'wildflower-scatter', p[0], p[1], p[2]); });
+
+  // =====================================================================
+  // COBBLESTONE PATH NETWORK (Deliverable 1 §3)
+  // trunk: door(22,53) -> doorstep -> gate(33,61) -> fork A(50,62)
+  // then square/cafe/bridge/school, book shop, sea branches
+  // =====================================================================
+  var pathLayer = document.getElementById('pathLayer');
+  var BRANCHES = {
+    trunk: [[22, 53, 6], [27, 58, 7], [33, 61, 8], [44, 65, 9], [50, 62, 9]],
+    square: [[50, 62, 9], [55, 58, 8], [62, 52, 7.5], [68, 47, 7], [78, 40, 6], [84, 34, 6], [74, 26, 5], [50, 26, 4]],
+    shop: [[50, 62, 9], [60, 68, 8], [72, 67, 7.5], [78, 63, 7]],
+    sea: [[50, 62, 9], [47, 76, 9], [52, 84, 9.5], [64, 90, 10], [80, 92, 10], [100, 96, 10]]
+  };
+
+  // trunk: straight/curve tiles, first placement forced to path-end (door),
+  // last placement forced to path-fork (fork A, where square/shop/sea all begin)
+  var trunkWalk = walkTiles(BRANCHES.trunk, { straightKey: 'path-straight', curveGentleKey: 'path-curve-gentle', curveStrongKey: 'path-curve-strong' });
+  trunkWalk.placements.forEach(function (p, idx) {
+    var key = p.assetKey;
+    var wPx = p.renderedPx;
+    if (idx === 0) { key = 'path-end'; wPx = 64; }
+    if (idx === trunkWalk.placements.length - 1) { key = 'path-fork'; wPx = 64; }
+    placePx(pathLayer, key, p.xPx, p.yPx, wPx, p.rotationDeg);
+  });
+
+  // square/shop/sea branches all start at fork A (50,62), already covered by
+  // the path-fork tile above — skip each branch's first sample (startLen =
+  // one pitch in) so we don't stack a second tile on the exact same spot.
+  // The square branch's first *remaining* sample becomes path-junction,
+  // approximating "where the shop branch leaves" (the frozen polyline has
+  // the shop branch originate at the same fork point rather than a separate
+  // T further down the square branch — see report for this assumption).
+  var squareWalk = walkTiles(BRANCHES.square, { straightKey: 'path-straight', curveGentleKey: 'path-curve-gentle', curveStrongKey: 'path-curve-strong', startLen: 64 * 0.6 });
+  squareWalk.placements.forEach(function (p, idx) {
+    var key = idx === 0 ? 'path-junction' : p.assetKey;
+    // "-narrow keeps cobble size believable at distance" (handoff §1.3) — swap it in for the
+    // farthest depth band (near the school, worldY<=34, scale 0.4) instead of just scaling path-straight down.
+    if (key === 'path-straight' && p.worldY <= 34) key = 'path-straight-narrow';
+    placePx(pathLayer, key, p.xPx, p.yPx, p.renderedPx, p.rotationDeg);
+  });
+
+  var shopWalk = walkTiles(BRANCHES.shop, { straightKey: 'path-straight', curveGentleKey: 'path-curve-gentle', curveStrongKey: 'path-curve-strong', startLen: 64 });
+  shopWalk.placements.forEach(function (p) { placePx(pathLayer, p.assetKey, p.xPx, p.yPx, p.renderedPx, p.rotationDeg); });
+
+  var seaWalk = walkTiles(BRANCHES.sea, { straightKey: 'path-straight', curveGentleKey: 'path-curve-gentle', curveStrongKey: 'path-curve-strong', startLen: 64 });
+  seaWalk.placements.forEach(function (p) { placePx(pathLayer, p.assetKey, p.xPx, p.yPx, p.renderedPx, p.rotationDeg); });
+  // sea sign / "small paved apron" entrance — explicit coordinate (80,92) per Deliverable 1 §3
+  placeWorld(pathLayer, 'path-end-entrance', 80, 92, 90, 0);
+
+  // =====================================================================
+  // FENCE (organic closed loop, same control points as the mockup) + HEDGE
+  // =====================================================================
+  var fenceHedgeLayer = document.getElementById('fenceHedgeLayer');
+  var FENCE_LOOP = [
+    [6, 55], [8, 51], [15, 50], [23, 50], [30, 51], [36, 53],
+    [40, 56], [41, 59], [38, 61.5],
+    [33, 62.5],
+    [27, 61],
+    [20, 62], [12, 62.5], [6, 61], [4, 57], [4, 55.5]
+  ];
+  var fenceCtrl = FENCE_LOOP.map(function (p) { var xy = toPx(p[0], p[1]); return { x: xy[0], y: xy[1], wx: p[0], wy: p[1] }; });
+  var fenceSamples = sampleClosed(fenceCtrl, 8);
+  var fn = fenceSamples.length;
+  var cx0 = 0, cy0 = 0;
+  fenceSamples.forEach(function (p) { cx0 += p.x; cy0 += p.y; });
+  cx0 /= fn; cy0 /= fn;
+  var gatePx = toPx(33, 61);
+  var gateIdx = 0, bestD = Infinity;
+  for (var gi = 0; gi < fn; gi++) {
+    var dd = Math.hypot(fenceSamples[gi].x - gatePx[0], fenceSamples[gi].y - gatePx[1]);
+    if (dd < bestD) { bestD = dd; gateIdx = gi; }
+  }
+  var GATE_WIN = 5;
+  function inGate(i) { var d1 = Math.abs(i - gateIdx); return Math.min(d1, fn - d1) <= GATE_WIN; }
+  function fenceNormal(i) {
+    var a = fenceSamples[(i - 1 + fn) % fn], b = fenceSamples[(i + 1) % fn];
+    var dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+    var nx = -dy / len, ny = dx / len;
+    var p = fenceSamples[i];
+    if ((p.x - cx0) * nx + (p.y - cy0) * ny < 0) { nx = -nx; ny = -ny; }
+    return [nx, ny];
+  }
+  function fenceTangentDeg(i) {
+    var a = fenceSamples[(i - 1 + fn) % fn], b = fenceSamples[(i + 1) % fn];
+    return Math.atan2(b.x - a.x, -(b.y - a.y)) * 180 / Math.PI;
+  }
+  var gapCount = 2 * GATE_WIN + 1;
+  var arcStart = (gateIdx + GATE_WIN + 1) % fn;
+  var arcLen = fn - gapCount;
+  var arcOrder = [];
+  for (var k = 0; k < arcLen; k++) arcOrder.push((arcStart + k) % fn);
+
+  // 4 approximate bend corners of the rounded garden loop — placed deterministically at their
+  // own world coordinates (not dependent on the pitch-walk below landing on the same sample).
+  var CORNER_WORLD = [[8, 51], [36, 53], [20, 62], [6, 61]];
+  var CORNER_NEAR_PX = 34; // straight segments within this px of a corner use -short instead
+  var cornerPx = CORNER_WORLD.map(function (c) {
+    var xy = toPx(c[0], c[1]);
+    placePx(fenceHedgeLayer, 'fence-corner', xy[0], xy[1], 32, 0);
+    return { x: xy[0], y: xy[1] };
+  });
+  function nearAnyCorner(x, y) {
+    for (var ci = 0; ci < cornerPx.length; ci++) {
+      if (Math.hypot(x - cornerPx[ci].x, y - cornerPx[ci].y) <= CORNER_NEAR_PX) return true;
+    }
+    return false;
+  }
+
+  // walk the open arc at a fixed 64px pitch, straight fence segments rotated to tangent.
+  // Segments that land near a corner use the -short (2-picket) variant, per the handoff's own
+  // "-short ... for corners" note on fence-straight.
+  var FENCE_PITCH = 64;
+  var acc = 0;
+  var lastP = fenceSamples[arcOrder[0]];
+  for (var ai = 1; ai < arcOrder.length; ai++) {
+    var idx = arcOrder[ai];
+    var p = fenceSamples[idx];
+    acc += Math.hypot(p.x - lastP.x, p.y - lastP.y);
+    lastP = p;
+    if (acc >= FENCE_PITCH) {
+      acc = 0;
+      var key = nearAnyCorner(p.x, p.y) ? 'fence-straight-short' : 'fence-straight';
+      placePx(fenceHedgeLayer, key, p.x, p.y, key === 'fence-straight-short' ? 32 : 64, fenceTangentDeg(idx));
+    }
+  }
+  // gate
+  placeWorld(fenceHedgeLayer, 'fence-gate', 33, 61, 48, 0);
+
+  // flower-bed-border along the inside of the front run (lower/front arc, wy>=58),
+  // inset slightly toward the garden interior using the local inward normal
+  var borderAcc = 0;
+  var borderLast = null;
+  for (var bi = 0; bi < arcOrder.length; bi++) {
+    var bidx = arcOrder[bi];
+    var bp = fenceSamples[bidx];
+    if (bp.wy < 58 || inGate(bidx)) { borderLast = null; continue; }
+    if (borderLast) borderAcc += Math.hypot(bp.x - borderLast.x, bp.y - borderLast.y);
+    borderLast = bp;
+    if (borderAcc >= 80) {
+      borderAcc = 0;
+      var n = fenceNormal(bidx);
+      placePx(fenceHedgeLayer, 'flower-bed-border', bp.x - n[0] * 6, bp.y - n[1] * 6, 80, fenceTangentDeg(bidx));
+    }
+  }
+
+  // hedge outside the left/back runs (same condition sense as the mockup), with end caps.
+  // Left run (wx<=9) uses hedge-straight; back run (wy<=51.5) uses the taller -tall variant
+  // (handoff §1.6 "-tall (256x160)") for a touch more depth behind the cottage roofline.
+  var hedgeAcc = 0;
+  var hedgeLast = null;
+  var wasHedge = false;
+  for (var hi = 0; hi < arcOrder.length; hi++) {
+    var hidx = arcOrder[hi];
+    var hp = fenceSamples[hidx];
+    var isLeftRun = hp.wx <= 9;
+    var isBackRun = hp.wy <= 51.5;
+    var isLeftOrBack = isLeftRun || isBackRun;
+    if (!isLeftOrBack) { hedgeLast = null; hedgeAcc = 0; wasHedge = false; continue; }
+    if (!wasHedge) {
+      var n0 = fenceNormal(hidx);
+      placePx(fenceHedgeLayer, 'hedge-end', hp.x + n0[0] * 5, hp.y + n0[1] * 5, 32, fenceTangentDeg(hidx));
+    }
+    wasHedge = true;
+    if (hedgeLast) hedgeAcc += Math.hypot(hp.x - hedgeLast.x, hp.y - hedgeLast.y);
+    hedgeLast = hp;
+    if (hedgeAcc >= 64) {
+      hedgeAcc = 0;
+      var n = fenceNormal(hidx);
+      var hedgeKey = isLeftRun ? 'hedge-straight' : 'hedge-straight-tall';
+      placePx(fenceHedgeLayer, hedgeKey, hp.x + n[0] * 5, hp.y + n[1] * 5, 64, fenceTangentDeg(hidx));
+    }
+  }
+
+  // =====================================================================
+  // FLOWER / SHRUB CLUSTERS (§3 counts: 6-8 cottage/fence, 4 lane, 3 shop, 4 foreground)
+  // =====================================================================
+  var clusterLayer = document.getElementById('clusterLayer');
+  var CLUSTER_TYPES = ['flower-cluster-pink', 'flower-cluster-yellow', 'flower-cluster-mixed', 'shrub-round', 'shrub-wide'];
+  var CLUSTER_SIZES = { 'flower-cluster-pink': 34, 'flower-cluster-yellow': 34, 'flower-cluster-mixed': 40, 'shrub-round': 34, 'shrub-round-small': 26, 'shrub-wide': 48 };
+  var shrubRoundCount = 0; // every 2nd shrub-round instance uses the -small variant for size variety
+  var CLUSTERS = [
+    // cottage base + fence (6)
+    [9, 65], [20, 66], [33, 64], [40, 62], [6, 58], [42, 57],
+    // lane edges (4)
+    [24, 70], [52, 66], [58, 72], [70, 66],
+    // near Book Shop (3)
+    [66, 58], [72, 72], [82, 70],
+    // foreground (4)
+    [15, 90], [62, 80], [48, 95], [88, 88]
+  ];
+  CLUSTERS.forEach(function (c, idx) {
+    var type = CLUSTER_TYPES[idx % CLUSTER_TYPES.length];
+    if (type === 'shrub-round') {
+      shrubRoundCount++;
+      if (shrubRoundCount % 2 === 0) type = 'shrub-round-small';
+    }
+    placeWorld(clusterLayer, type, c[0], c[1], CLUSTER_SIZES[type]);
+  });
+
+  // =====================================================================
+  // RIVER: bend/straight tiles along the corrected centre-line, highlight
+  // overlays x6, riverbank-reeds x5 on the near (village-facing) bank
+  // =====================================================================
+  var riverLayer = document.getElementById('riverLayer');
+  var RIVER_PTS = [[93, 12, 10], [88, 26, 10], [86, 34, 10], [91, 44, 10], [94, 60, 10], [95, 100, 10]];
+  var riverWalk = walkTiles(RIVER_PTS, { straightKey: 'river-straight', curveGentleKey: 'river-bend', curveStrongKey: 'river-bend', fixedPitch: 64 });
+  riverWalk.placements.forEach(function (p) { placePx(riverLayer, p.assetKey, p.xPx, p.yPx, p.renderedPx, p.rotationDeg); });
+
+  function riverAtT(t) {
+    var idx = Math.min(riverWalk.sampled.length - 1, Math.max(0, Math.round(t * (riverWalk.sampled.length - 1))));
+    return riverWalk.sampled[idx];
+  }
+  var HIGHLIGHT_T = [0.08, 0.24, 0.4, 0.56, 0.72, 0.88];
+  HIGHLIGHT_T.forEach(function (t, i) {
+    var rp = riverAtT(t);
+    var off = (i % 2 === 0) ? -10 : 10;
+    placePx(riverLayer, 'river-highlight', rp.x + off, rp.y, 46);
+  });
+  var REEDS_T = [0.15, 0.32, 0.48, 0.65, 0.82];
+  REEDS_T.forEach(function (t, ri) {
+    var rp = riverAtT(t);
+    var idx = Math.min(riverWalk.sampled.length - 1, Math.max(1, Math.round(t * (riverWalk.sampled.length - 1))));
+    var a = riverWalk.sampled[Math.max(0, idx - 1)], b = riverWalk.sampled[Math.min(riverWalk.sampled.length - 1, idx + 1)];
+    var dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+    var nx = -dy / len, ny = dx / len;
+    // "near bank" = the side facing the village (smaller world-x, since the river hugs the far-right edge)
+    if (rp.x + nx * 10 > rp.x - nx * 10) { nx = -nx; ny = -ny; }
+    // alternate the pebbled -stones variant in on 2 of the 5 reed spots for visual variety
+    var reedKey = (ri === 1 || ri === 3) ? 'riverbank-reeds-stones' : 'riverbank-reeds';
+    placePx(riverLayer, reedKey, rp.x + nx * 9, rp.y + ny * 9, 40);
+  });
+
+  // =====================================================================
+  // FLOWER POTS (§1.9, added after the new visual target): 4 base pots at
+  // the café terrace edge / book-shop front, 1 -tall urn near the square
+  // =====================================================================
+  placeWorld(clusterLayer, 'flower-pot', 62, 50, 24);
+  placeWorld(clusterLayer, 'flower-pot', 70, 50, 24);
+  placeWorld(clusterLayer, 'flower-pot', 74, 66, 22);
+  placeWorld(clusterLayer, 'flower-pot', 82, 66, 22);
+  placeWorld(clusterLayer, 'flower-pot-tall', 57, 60, 26);
+
+  // ---------- background painted filler trees (kept from the mockup, not Batch 1 scope) ----------
+  var bgLayer = document.getElementById('bgTreeLayer');
+  var bgTreeSpecs = [
+    [7, 15, 4.5, '#4f7a4a'], [18, 20, 3.8, '#6a9459'], [30, 14, 4.2, '#3f6a3f'],
+    [56, 30, 4, '#557f4d'], [64, 18, 3.4, '#729960'], [66, 16, 4.4, '#456e40'],
+    [62, 22, 3.6, '#638a52'], [22, 32, 3.2, '#5c8a4b'], [38, 30, 3.6, '#3f6a3f'],
+    [50, 32, 3, '#6a9459']
+  ];
+  bgTreeSpecs.forEach(function (t) {
+    var xy = toPx(t[0], t[1]);
+    var g = el('g', { filter: 'url(#blurXS)', opacity: '0.62' });
+    g.appendChild(el('ellipse', { cx: xy[0].toFixed(1), cy: (xy[1] + t[2] * 1.6).toFixed(1), rx: (t[2] * 1.1).toFixed(1), ry: (t[2] * 2.4).toFixed(1), fill: '#5c4632' }));
+    g.appendChild(el('circle', { cx: xy[0].toFixed(1), cy: xy[1].toFixed(1), r: t[2], fill: t[3] }));
+    g.appendChild(el('circle', { cx: (xy[0] - t[2] * 0.5).toFixed(1), cy: (xy[1] - t[2] * 0.3).toFixed(1), r: (t[2] * 0.55).toFixed(1), fill: '#88ab6e' }));
+    bgLayer.appendChild(g);
+  });
+
+  // =====================================================================
+  // sky-hills (§1.9): placed via a dedicated <img>, not placePx (it's an
+  // opaque full-width stretch-cover band, not an anchored/rotatable piece).
+  // Falls back to the SVG sky gradient + hills ellipses already underneath
+  // it (no extra CSS class needed — hiding the img reveals them as-is).
+  // =====================================================================
+  usedAssetKeys['sky-hills'] = true;
+  (function () {
+    var img = document.getElementById('skyHills').querySelector('img');
+    img.onerror = function () {
+      img.style.display = 'none';
+      registerResult('sky-hills', false);
+      updateLegend(EXPECTED_KEYS);
+    };
+  })();
+
+  // =====================================================================
+  // Legend/probe pass — runs LAST, after every placement call above has
+  // registered its assetKey into usedAssetKeys. EXPECTED_KEYS is therefore
+  // authoritative: exactly what this harness places, nothing hardcoded.
+  // (coordinator follow-up 2026-09-17 — "make the legend count authoritative")
+  // =====================================================================
+  EXPECTED_KEYS = Object.keys(usedAssetKeys).sort();
+
+  EXPECTED_KEYS.forEach(function (key) {
+    var entry = BATCH1_FILES[key];
+    var probe = new Image();
+    probe.onload = function () { registerResult(key, true); updateLegend(EXPECTED_KEYS); };
+    probe.onerror = function () { registerResult(key, false); updateLegend(EXPECTED_KEYS); };
+    probe.src = './batch1/' + entry.file;
+  });
+  updateLegend(EXPECTED_KEYS);
+
+  // grass-base CSS background: probed the same way (Image() onerror), toggles
+  // the fallback gradient class per Deliverable 1 point 1.
+  (function () {
+    var probe = new Image();
+    var grassDiv = document.getElementById('grassBase');
+    probe.onerror = function () { grassDiv.classList.add('fallback'); };
+    probe.src = './batch1/' + BATCH1_FILES['grass-base'].file;
+  })();
+})();
+</script>
+</body>
+</html>

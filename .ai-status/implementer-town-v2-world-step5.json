@@ -1,0 +1,28 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "town-v2-world-step5",
+  "task": "Paul Town V2 world-coordinate 렌더러 전환 STEP 5 — 강(river) + 길(path) 레이어 + shootRenderer 수정",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-17T23:40:00Z",
+  "updated_at": "2026-09-17T23:46:18Z",
+  "files_owned": [
+    "src/components/town/v2/TownEnvPlacement.jsx",
+    "src/components/town/v2/TownGroundLayer.jsx",
+    "src/components/town/v2/TownWaterLayer.jsx",
+    "src/components/town/v2/TownPathLayer.jsx",
+    "src/components/town/v2/TownScene.jsx",
+    "scripts/testTownV2Static.mjs",
+    "scripts/town-art/shootRenderer.mjs"
+  ],
+  "files_read": [
+    "docs/design/town/mockup/previews/lv8-390.png",
+    "docs/design/town/mockup/previews/lv1-390.png",
+    "src/App.jsx (SpeedBtn 위젯 셀렉터 확인용, 미수정)",
+    "tailwind.config.js (fade-in 키프레임 확인용)"
+  ],
+  "summary": "STEP 5 완료 — (1) shootRenderer.mjs 리드 지적 2건 수정: newContext에 reducedMotion:'reduce' 추가(motion-safe:animate-fade-in이 아예 안 걸리게 함) + 스크린샷 전 씬/조상 opacity 체인===1 && 모든 [data-env-asset] img.complete를 waitForFunction으로 폴링(벨트+서스펜더); App.jsx SpeedBtn(발음 재생 속도, fixed bottom-5 right-5)을 addStyleTag로 이 도구 안에서만 숨김(앱 코드 무수정). 재촬영한 lv8-390 색감이 하네스 프리뷰와 동일하게 saturated됨(확인 완료). (2) 신규 공유 컴포넌트 TownEnvPlacement.jsx — ENV_PLACEMENTS 항목 하나(anchor/rotationDeg/mirror/feather)를 절대위치+변환된 TownEnvImage로 그리는 유일한 지점(하네스 placePx() 산식 그대로 포팅, translate→rotate→scaleX(-1) 순서, feather는 wrapper에 mask-image). TownGroundLayer.jsx가 grassPatch 그룹을 이 컴포넌트로 옮기고, 레이어 래퍼 자체의 블랭킷 z-index를 제거해(스태킹 컨텍스트 방지) 안의 4개 자식에 개별 z-index(worldZIndex)를 부여하도록 리팩터(Step6/7의 y-랭킹 레이어 상호 끼어들기를 위한 선행 정리). (3) 신규 TownWaterLayer.jsx(river 그룹 25개, 오너 결정4에 따라 level 무관 항상 표시, riverbank-reeds는 depthLayer 'foregroundVegetation'). (4) TownPathLayer.jsx 전면 재작성 — 옛 district-stack SVG 스트로크(PATHS/STUBS/DISTRICTS)를 완전히 버리고 ENV_PLACEMENTS 'path' 그룹 26개를 TownEnvPlacement로 그림(level 무관, town-path-* testid는 scripts/tests 어디서도 미참조라 그대로 생략). (5) TownScene.jsx에 TownWaterLayer 배선(ground→river→path 순서), 헤더 코멘트 갱신. (6) testTownV2Static.mjs §7 파일 목록에 TownEnvPlacement.jsx/TownWaterLayer.jsx 추가(§8 스캔은 V2_FILE_NAMES 루프라 자동 포함). 검증: build 무경고, testTownV2Static 115/115, testTownUiStatic 125/125, testBundleBudget 24/24, testTownWorldScenery 206/206, testLazyChunkGuards 80/80 — 전부 PASS. shootRenderer --levels 1,8 --widths 360,390,430 6장 전부 overflow=false pageErrors=0 failedEnvRequests=0 brokenEnvImg=0. lv8-390 스크린샷을 docs/design/town/mockup/previews/lv8-390.png와 육안 대조 — 강이 연속적으로(굽이 포함) 이어지고, 자갈길이 trunk→fork→(square/shop/sea 방향 가지)로 끊김/틈 없이 연결됨을 확인. 레벨1/8 스크린샷이 픽셀상 동일(river/path가 레벨 무관이라는 설계와 일치). 랜드마크/울타리·생울타리/클러스터/소품/표지판은 Step 6/7 몫이라 이번 스크린샷엔 없음(예상된 상태).",
+  "blocker": null,
+  "next_action": "리드가 Step 5를 확인 후 STEP 6(TownSceneryLayer — fenceHedge/cluster/PROP_PLACEMENTS/SIGNS) 진행 메시지를 주면 시작한다. 이 implementer가 먼저 움직이지 않는다."
+}

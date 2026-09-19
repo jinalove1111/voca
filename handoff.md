@@ -1,5 +1,464 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-17 (161차 — PR #60 release-gate 1차 FAIL(head `d0067c8`)
+_최종 갱신: 2026-09-18 (171차 — **Paul Town V2 플래그 전 블로커 수정**: D1
+고정 랜드마크 규칙 정정 + D5 360px 배치 컨트롤 겹침 해소(브랜치
+`feat/paul-town-v2-world-contract-2026-09-17`, 로컬 커밋 1개·미push).
+`paulTownV2:false` 유지, Production WRITE 0, `npm run build` PASS(경고 0),
+`verify:all` 207/207 PASS, 브라우저 E2E 1010 PASS/0 FAIL/0 SKIP. 170차
+이하 보존)_
+
+## 2026-09-18 (171차) — Paul Town V2 플래그 전 블로커 수정: D1 고정 랜드마크 규칙 정정 + D5 360px 배치 컨트롤 겹침 해소 (paulTownV2 OFF, Production 무접촉)
+
+### 0. 안전 요약
+- 로컬 커밋 1개만(`fix(town): lock landmarks to lots and resolve mobile
+  anchor collisions`). `paulTownV2:false` 유지, Production WRITE 0,
+  Supabase/SQL 0, V1·`App.jsx`·`features.js`·`townScene.js`·
+  `townLayout.js`·`townCatalog.js`·`useStudent.js` 무변경, 저장 레이아웃
+  마이그레이션 0, push/merge/deploy/PR 없음, 보호 untracked 17개 무접촉.
+  `5c88fbf`(4방향 팻말 Learn/Grow/Be Kind/Explore, 배치 아이템 크기 규칙)는
+  그대로 보존.
+
+### 1. D1 — 고정 랜드마크 이중 렌더 수정
+- 원인: LOTS id == 카탈로그 아이템 id라 소유 랜드마크가 고정 로트 + 보관함
+  배치로 두 번 렌더됨. `5c88fbf`의 `landmarkRenderSource`(배치가 있으면
+  로트 숨김)는 잘못된 제품 규칙이라 삭제.
+- 최종 규칙: 고정 랜드마크(`worldRender.js`의 `FIXED_LANDMARK_IDS` =
+  `townScene.js` LOTS 7종 my-house/book-shop/cafe/stone-fountain/bridge/
+  english-school/clock-tower, 단일 export `isFixedLandmarkId`)는 지정
+  로트에서만 lotState(built/for-sale/hidden)로 렌더.
+- `TownScreenV2`가 뷰 모델에서 `freeCatalog`/`freeOwnedIds`/
+  `renderPlacements`를 파생해 보관함 선택기·배치 렌더에서 고정 랜드마크를
+  제외. `TownScene`은 점유 판정용 `occupancyPlacements`(전체 목록, 데이터
+  계층 `placeItem`이 점유 셀을 거부하므로)와 렌더용 placements를 분리.
+- 레거시 저장 항목 삭제·재작성 0(e2e S8a: 마을 열어도 `student_progress`
+  쓰기 0). 상점 카탈로그는 전체 유지(구매=소유).
+
+### 2. D5 — 모바일 360px 배치 컨트롤 겹침 해소
+- 원인: 앵커 1,1·7,3 화면 거리 23.8/25.8/28.4px(360/390/430) < 44px
+  컨트롤 탭 영역.
+- 해결: `worldRender.js`의 `layoutPlacementControls` 결정론적 중심-배제
+  배치(Chebyshev ≥ 24px, 진짜 앵커 우선, 고정 방향 순서, 장면 경계 안).
+  `TownPlacementOverlay`는 ResizeObserver로 장면 크기 측정, 링=탭 위치
+  (44px 버튼), 옮겨진 앵커에만 8px 점+리더선.
+- 통계(360 Lv8): 47개 중 6개 이동, 평균 30px, 최대 48px(전 매트릭스 최대
+  48px, 미해결 0). 첫 시도(AABB 완전 비겹침, 최대 393px 이동)는 리드
+  리뷰에서 기각.
+
+### 3. 검증
+- 리드 세션 순차 재실행(메모리 부족으로 1차 중단 후 오너 승인 재개).
+- 집중 13종 PASS: WorldRender 270 / WorldScenery 211 / V2Static 147 /
+  UiStatic 125 / PlacementContract 690 / WorldContract 96 / DepthOrder 62 /
+  GeometrySync 75 / EnvArtManifest 71 / validateEnvArtManifest /
+  EnvAssets 196 / SceneV2 259 / LazyChunk.
+- `npm run build` PASS(경고 0). `verify:all` ALL DOMAINS PASS 207/207.
+- 공식 E2E 전체 1010 PASS/0 FAIL/0 SKIP(신규 S8a/S8b/S9 포함, 360/390/430
+  앵커 47/47 elementFromPoint 자기 히트, 1,1↔7,3 명명 회귀).
+- 16장 매트릭스(Lv1/3/4/5/8×360/390/430+Lv4 200%) 오버플로 0·페이지 오류
+  0·env 요청 실패 0·깨진 이미지 0. 증거
+  `art-staging/renderer-previews/final/{evidence,evidence-resume}/`
+  (gitignored).
+
+### 4. 변경 파일
+`src/utils/town/worldRender.js`,
+`src/components/town/v2/{TownObjectLayer,TownScene,TownScreenV2,
+TownPlacementOverlay}.jsx`, `scripts/testTownWorldRender.mjs`,
+`scripts/testTownV2Static.mjs`, `tests/e2e/townV2.spec.mjs`,
+`scripts/town-art/shootRenderer.mjs`(`--legacy`/`--place`/`--fullpage`),
+`.ai-status/implementer-town-v2-d1-d5-correction.json`.
+
+### 5. 오너 결정 / 남은 결정
+- 반영: 화단 좌표(10,58) 이번 릴리스 승인. D2/D3/D4/for-sale 스타일 보류.
+  플래그 ON·push 미승인.
+- 남은 결정: 플래그 ON 시점, 보류 4건 착수 순서.
+
+## 2026-09-18 (170차) — Paul Town V2 렌더러 통합: 승인 월드·아트 35종을 실제 V2 렌더러에 연결 (paulTownV2 OFF, Production 무접촉)
+
+### 0. 안전 요약
+- 로컬 커밋만(push/merge/배포/PR 없음). `paulTownV2:false` 세션 내내 유지 —
+  본 세션 변경으로 학생 화면에 영향 0. Production WRITE 0, DB/SQL/RLS/auth
+  0, 경제·리워드·카탈로그·학생데이터 변경 0.
+- V1 파일(`src/components/town/TownScreen.jsx`/`TownGrid.jsx` 등)/
+  `App.jsx`/`features.js`/`townScene.js`/`townLayout.js`/`townCatalog.js`/
+  `useStudent.js`/`TownScreenV2`의 데이터 배선(카탈로그·구매·레벨 계산) 전부
+  무변경 — 이번 세션은 오직 **렌더링 계층**(월드 좌표 어댑터 + 동결 지오메트리/
+  장식 데이터 + 씬 컴포넌트)만 추가했다.
+
+### 1. 아트 교체(`d7b7214`, 본 세션보다 앞선 동일 날짜 커밋)
+- 동결 ingest 파이프라인으로 운영자 승인 교체 2건 적용: `55.png` →
+  `flower-cluster-pink`(24,372B, sha `7224f4ba…`), `57.png` →
+  `flower-cluster-yellow`(22,974B, sha `21dcca45…`).
+- `shrub-wide`는 기존 자산 유지(sha `5dc24710…`), `56.png`는 여전히 미승격
+  후보. Batch E(`fence-post`/`fence-gate-closed`/`hedge-corner`)는 계속
+  spec-only 미배치.
+- 매니페스트 staged 35/38, 하네스 34/34 실물(배너 GREEN). 프리뷰 16장
+  재촬영, 핑크/옐로 8곳 배치 외 픽셀 diff 변화 0(회귀 없음 실측).
+
+### 2. 렌더러 통합 커밋(9개, 커밋 순서대로)
+1. **`a4444cb`** — env 자산 레지스트리: `src/assets/town/env/*.webp` 35종 +
+   `env/index.js`(`TOWN_ENV_ASSETS`/`townEnvAsset`), 기존 `TOWN_ASSETS`와
+   완전 분리(격리). `scripts/testTownEnvAssets.mjs` 196단언.
+2. **`0c28670`** — `src/utils/town/worldRender.js` 어댑터: `cellAnchor`/
+   `landmarkBox`/`pxToWidthPct`/`widthPctToHeightPct`/`worldZIndex`/
+   `freeWorldAnchors`. `scripts/testTownWorldRender.mjs` 97단언.
+3. **`d5f7de5`** — `src/utils/town/worldScenery.js` 동결 장식 데이터:
+   `ENV_PLACEMENTS` 108개(grassPatch 16 / river 25 / path 26 /
+   fenceHedge 16 / cluster 25), `GROUND`, `PROP_PLACEMENTS` 20개, 표지판
+   My House / To the Sea → / Lv.N, `LANDMARK_DECOR`, `LOCKED_FILTER`/
+   `VEIL`, 이후 `BG_FILLER_TREES` 10개 추가. `scripts/testTownWorldScenery.mjs`
+   — 승인 하네스 `paul-town-recompose.html`을 **무수정 그대로** `node:vm`에서
+   재실행해 대조(허용오차 0.05, 390px 기준), 레벨 1/3/4/5/8 동일. 206단언.
+4. **`0e1a8a1`** — `TownScene` 풀블리드 전환, 고정 종횡비
+   `SCENE_ASPECT_RATIO`(100/190, V2 한정, 둥근 카드 제거). `TownGroundLayer`
+   지형 합성기, `TownEnvImage`(로드 실패 시 숨김). 신규 도구
+   `scripts/town-art/shootRenderer.mjs`(테스트 컨텍스트 스크린샷). 신규 검증
+   `testBundleBudget` §4b(env 인벤토리 + main/V1 청크 누출 가드).
+5. **`7262b35`** — `TownEnvPlacement`(공유 transform/feather/z 헬퍼),
+   `TownWaterLayer`(강 25개, Lv1부터 표시), `TownPathLayer`(자갈 타일 26개,
+   기존 SVG stroke 대체).
+6. **`f74bdda`** — `TownSceneryLayer`: 담장/생울타리/대문/꽃무리/화분/소품/
+   담쟁이 + 두 표지판(`role="img"`). 정적 계약으로 "Welcome to Paul"/
+   "Learn"/"Be Kind"/"Go Further" 문구 금지.
+7. **`13f8eda`** — 버그 수정: `tests/e2e/lib/mockRoutes.mjs`의 mock
+   `assetKey`가 `${category}/${id}`였는데 실제 폴더는 house→buildings,
+   decoration→decorations(기존 결함, 첫 랜드마크 아트 렌더로 표면화).
+8. **`2f008a3`** — `TownObjectLayer`: 랜드마크를 `LANDMARKS` 박스 위에
+   하네스와 동일한 그림자로 배치. hidden=잠금 실루엣(필터+베일, 클릭 불가),
+   for-sale=기존 점선 박스, built=실제 아트. 배치된 아이템은 `cellAnchor`로
+   저장된 8×6 id를 읽기 전용 매핑(footprint lg 12%/md 8%/sm 5.5%×깊이
+   스케일). `TownFogLayer`=랜드마크별 안개+`Lv.N` 표지판(`DISTRICTS` 잠금
+   기준, 오브젝트보다 항상 아래). `TownPlacementOverlay`는
+   `freeWorldAnchors`(배치 계약 — riverApproach 셀 3개 Lv6, `townScene.js`의
+   `freeAnchors`와 14칸 차이) 기준. `sceneZ.js`에 `BACKDROP`/`OVERLAY`/
+   `POPOVER` 계층(월드 범위보다 위). e2e S5 안개 단언을
+   `elementFromPoint` + opacity/filter 가림 확인으로 교체.
+9. **`e499e73`** — `tests/harness/registry.mjs`에 위 8개 커밋이 만든 신규
+   순수 단위 테스트 9종을 `extra:false`로 등록(`testTownWorldContract`/
+   `testTownPlacementContract`/`testTownHarnessGeometrySync`/
+   `testTownDepthOrder`/`testEnvArtManifest`/`validateEnvArtManifest`/
+   `testTownEnvAssets`/`testTownWorldRender`/`testTownWorldScenery`) —
+   작성 당시 미등록이라 `verify:all`에서 한 번도 실행되지 않고 있었다.
+   env-art-manifest 상태는 `staged`로 유지(`ALLOWED_STATUS`가
+   missing/staged/rejected뿐이라 `integrated` 같은 별도 상태 없음).
+
+### 3. 검증
+- `npm run build` **PASS**(경고 0).
+- 순수 단위 테스트(로컬 실측): `testTownV2Static` 119 / `testTownUiStatic`
+  125 / `testBundleBudget` 24 / `testTownWorldScenery` 206 /
+  `testTownSceneV2` 259(`townScene.js` 무변경 확인) / `testLazyChunkGuards`
+  80 / `testTownWorldRender` 97 / `testTownEnvAssets` 196 /
+  `testTownWorldContract` 96 / `testTownPlacementContract` 690 /
+  `testTownDepthOrder` 62 / `testEnvArtManifest` 71 /
+  `testTownHarnessGeometrySync` 75 / `validateEnvArtManifest` PASS.
+- 브라우저 E2E(`scripts/testBrowserE2E.mjs`, 전체 스펙) **974 PASS / 0
+  FAIL / 0 SKIP**(exit 0) — `[town]` V1 528 / `[town-v2]` 96 /
+  `[town-v2-artwork]` 28 / `[town-flag-xtab]` 16 /
+  `[town-pilot-allowlist]` 33 포함.
+- `shootRenderer.mjs` 스크린샷 18장(Lv1/3/4/5/8 × 360/390/430px + Lv4@390
+  200% 확대 + Lv1/Lv4 owned=none): 가로 오버플로 0, pageerror 0, env 자산
+  요청 실패 0, 깨진 env `<img>` 0.
+- 플래그 OFF 실측: e2e S1에서 V1 그리드만 렌더되고 `town-scene-v2` 요소
+  0개. env 자산 키 35개는 전부 `TownScreenV2` 청크 안에만 존재(`index-*.js`/
+  `TownScreen-*.js`에는 0개 — V1/메인 번들 무접촉 정적 증거).
+- `verify:all`: ALL DOMAINS PASS — 스크립트 207/207 PASS, FAIL 0, exit 0(신규 등록 9종 포함, 2026-09-18 리드 세션 실측).
+
+### 4. 하네스 대비 가시적 차이·다듬기 항목(의도된 결정 또는 운영자 확인 필요)
+1. 월드 안에 Paul 캐릭터/“Welcome to Paul Town!” 말풍선 없음 — 운영자
+   결정: PaulGuide가 Paul UI의 유일한 창구.
+2. 하네스의 4방향 팻말(“Learn / Grow / Be Kind / Go Further”, 월드 좌표
+   (34,84))은 렌더되지 않음 — 승인된 문구가 아니라 렌더 제외, **운영자
+   승인 필요**.
+3. for-sale 랜드마크는 기존 V2 점선 “for sale” 박스로 표시(하네스에는
+   소유 상태 개념 자체가 없음).
+4. 정원 화단(`TownAmbientLayer`)은 하네스의 flower-garden 소품 위치 월드
+   (10,58) width 16.4%에 배치 — 동결값 아님.
+5. 구매 가능 카탈로그 아이템(벤치×2, 빨간 우체통, 화단×2, 가로등×2)이
+   하네스가 그렇게 그리므로 고정 배경 소품으로 렌더됨 — 소유 여부와
+   혼동 가능성.
+6. 알려진 동결 겹침 재현: 꽃무리 일부가 My House/To the Sea 표지판 뒤로
+   가려짐, 월드 (6,58)의 shrub-wide cluster-4가 좌측 경계를 ~0.15% 침범.
+7. 하네스 강 꼬리부의 폭 대비 최대 0.21%p 드리프트는 하네스 자체 속성
+   (sync 테스트에 문서화됨).
+
+### 5. 남은 것
+- 오너 결정 필요: 4방향 팻말 문구 렌더 여부, 정원 화단 위치, 구매 아이템
+  고정배경 처리 방식, 잠금 실루엣 UX 최종 확인.
+- Paul 캐릭터/말풍선 미포함은 이미 결정됨(제외 확정, 재논의 불필요).
+- 플래그 `paulTownV2` ON 전환은 별도 결정(이번 세션 범위 아님).
+- Batch E(fence-post/fence-gate-closed/hedge-corner) 제작 여부, `56.png`
+  보류 상태는 168~169차와 동일하게 미결.
+- 롤백: 위 9개 커밋을 역순으로 revert. `paulTownV2:false`가 세션 내내
+  유지됐으므로 플래그를 켜기 전까지는 학생 화면에 어떤 변경도 없음.
+- push/PR/merge/배포 미실행.
+
+## 2026-09-18 (169차) — Paul Town Batch 1 아트 통합: 배치 A/B/C 완료 → 하네스 배치 파일 34/34 실물(배너 GREEN), staged 35/38 (잔여 3 = spec-only 미배치 E) (paulTownV2 OFF, Production 무접촉)
+
+### 0. 안전 요약
+- Production 쓰기 0, DB/SQL/RLS/auth 0, 경제/카탈로그/레벨 0, `#geometry` 무변경(sync 75/75), `src/` 무변경(렌더러 미착수), `paulTownV2:false`, Paul·V1·api 무변경, push/merge/deploy 없음(로컬 커밋만).
+
+### 1. 배치별 결과(내용 기준 매핑, 동결 계약, 강화된 alpha/bbox 검증)
+- **A(7/7)**: grass-base(33.png, 운영자 결정 flatten+q85: RGB 512², seam 6.15/8.35, q88 108KB), sky-hills(29.png, band 하단정렬 crop 규칙 `sky: 2`), grass-patch-dark/worn·wildflower-scatter(patch 128KB 결정 `patch: all128`), river-bend(35), river-highlight(36).
+- **B(7/7)**: fence-straight-short(37), fence-corner(45; 38은 alpha=1 유령층으로 인한 거짓 PASS 발견→bbox 강화 후 58% REJECT→재생성), hedge-end(44), hedge-straight-tall(40), flower-bed-border(41, seam x 6.26), riverbank-reeds(42), riverbank-reeds-stones(43). 39.png(양끝 둥근 생울타리 블록)는 어떤 키에도 억지 매핑하지 않음.
+- **C(7/7)**: shrub-round(46), shrub-round-small(47), shrub-wide(52; 39는 1.01:1로 REJECT), flower-cluster-pink(53; 48은 41.3% REJECT), flower-cluster-yellow(54; 49는 41.7% REJECT), flower-pot(51), flower-pot-tall(58; 50은 0.41:1로 REJECT).
+- 55/56/57.png: 이미 채워진 pink/shrub-wide/yellow의 대체 후보(더 회화적 마감). dry-run 전부 PASS(24.4/27.3/23.0KB). 승인 자산 덮어쓰기 없이 보류 — 운영자 `replace 55/56/57` 시 교체.
+- 운영자 지시의 50↔51 키 표기는 내용과 반대라 내용 기준 유지(계약 동일).
+
+### 2. 파이프라인 변경(모두 조임 또는 운영자 결정)
+- `alpha_bbox` 보이지 않는 알파(≤4) 무시(거짓 PASS 차단), `--dry-run` 스테이징 미기록, 거부 키 stale 산출물·필드 정리, 무-스트레치 가드, patch contain-fit, band 하단정렬 crop(`sky: 2`), 불투명 flatten(`grass: flatten`), 불투명 lossy q92→q88→q85(`grass: q85`), patch 예산 128KB(`patch: all128`), river 128KB.
+
+### 3. 검증·프리뷰
+- validator PASS(경고 0), 매니페스트 테스트 PASS, 지리 sync 75/75, 배치 계약 690/690. 프리뷰 16장(Lv1/3/4/5/8 × 360/390/430 + Lv4 200%): 오버플로 0, JS 오류 0, **34/34 실물, 배너 GREEN**.
+- 시각: 코티지 정원(담장·코너·대문·생울타리·꽃밭·관목·꽃무리) 완성, 연속 자갈 골목(직선/좁은/곡선 2종/갈림/끝/입구), 강(직선·굽이·하이라이트·갈대), 초원 바닥·하늘 언덕, 카페·북숍 화분. 잔여 시각 약점: 일부 자산(37/40/44/45)이 승인 스타일보다 매끈한 카툰 마감·아이소메트릭 각도 — 취향 판단 필요.
+- 미실행: build/verify:all/e2e(이번 회차 `src/` 무변경; CI 위임).
+
+### 4. 남은 것
+- E(spec-only, 하네스 미배치): fence-post, fence-gate-closed, hedge-corner — 생성해도 화면 변화 없음.
+- 다음 단계(운영자 승인 시): 렌더러 구현 착수 전 시각 승인, 55/56/57 교체 여부, 렌더러용 자산 등록 계획.
+
+## 2026-09-18 (168차) — 운영자 결정 21a/22b 적용 + Batch 1 전체 재검증 12/12 + 하네스 패스(강 체인·곡선 선택·학교 골목·Lv1 안개·정원 밀도) + Lv1/3/4/5/8 프리뷰 (paulTownV2 OFF, Production 무접촉)
+
+### 0. 안전 요약
+- Production 쓰기 0, DB/SQL/RLS/auth 0, 경제/카탈로그/레벨 0, `#geometry` 무변경(sync 75/75), `src/` 무변경, `paulTownV2:false`, Paul·V1·api 무변경, push/merge/deploy 없음(로컬 커밋만).
+
+### 1. 결정 적용
+- **21a**: `path-curve-strong` 소스를 20.png→21.png(좁은 띠 90° 엘보)로 교체, 동일 키/계약. 재검증: 256×256, 76,356B lossless, 알파 정상 → ACCEPT.
+- **22b**: 22.png(T자 갈림)는 `art-staging/candidates/path-junction-T-candidate.png`(gitignored)에 후보로만 보관. 매니페스트/카탈로그 미등록, 어떤 승인 자산도 덮어쓰지 않음. 별도 시각 역할이 정당화되면 새 키로 계약 추가 검토.
+- 전체 재검증: 최종 소스 12장 1회 실행 → **accepted 12 / rejected 0**. manifest: staged 12 / rejected 1(wildflower-scatter, 예산) / missing 25. validate PASS, 매니페스트 테스트 PASS.
+
+### 2. 하네스 패스(`paul-town-recompose.html`만, Sonnet 구현·본 세션 검증)
+- A 강: 타일 폭 = clamp((10+2·2)·SX/0.56, 40K, 120K), 50% 겹침, 접선 회전, `.riverTile` 페더 마스크(22/78%) → 굽이(88,26)~(91,44) 단차 제거, 연속 흐름.
+- B 곡선: |turn| ≥ 75°(`?curveStrongMin=`) → `path-curve-strong`, 45~75° → gentle, 좌회전 미러.
+- C 학교 골목 끊김 원인: 꼭짓점 (84,34)·(74,26)가 ~71px 간격인데 각자 60~83px 곡선 타일을 요구 → 안쪽 오프셋이 서로 밀어내며 실제 꼭짓점 커버 상실. 수정: 인접 곡선 꼭짓점(간격 < 자연 크기 합의 절반)을 **하나의 곡선 타일로 병합**(첫 진입→둘째 진출 회전, 호길이 중점). 타협: 실제 합산 회전 ~135°인데 90°계 아트뿐이라 진출 방향 근사.
+- D Lv1 Book Shop 안개 없음 원인: `.locked img` 필터는 동일했으나 구역 안개 타원이 `#hazeLayer`(오브젝트 뒤)에 있어 실루엣이 가장자리까지 불투명한 Book Shop엔 비쳐 보이지 않았음. 수정: 모든 잠금 랜드마크에 `.locked::after` 방사형 베일(팻말 앞이 아닌 뒤) — 범용, 개별 예외 없음. 부작용(취향): 베일이 직사각 후광으로 약간 상자처럼 보임.
+- E 정원 밀도(승인 아트만): flower-cluster-mixed ×3(울타리 안·문 앞 길 옆), hedge-straight ×2(뒷경계 이어붙임), grass-patch-light ×2(잔디). 지리·랜드마크·길·47셀 무변경, 플레이스홀더 제거 없음.
+- 배너 11/34(strong 곡선 사용으로 present·total +1; path-junction은 배치 안 함 → 미집계).
+
+### 3. 프리뷰(16장, 360/390/430 + Lv4 200%)
+- 오버플로 0, JS 오류 0(본 세션 재촬영). 지리 전 레벨 동일. Lv1: 코티지·정원 담장·대문·생울타리·꽃·초원·문 앞 골목 + 잠금 실루엣/팻말 → 작은 마을로 읽힘. 길: 직선·곡선(2종)·갈림·좁은 길로 이어진 자연스러운 골목(고속도로 아님). 강: 연속.
+- 남은 시각 약점: 바닥 grass-base·sky-hills 부재(그라데이션), 코티지 주변 미도착 키 플레이스홀더 군집(fence-corner/hedge-end/flower-cluster-pink·yellow/shrub-*), 길 끝(path-end/entrance) 부재, 강둑 디테일 부재.
+
+### 4. 검증
+- 배치 계약 690/690(`visibleMarkerStyle('idle')==='none'` 포함), 지리 sync 75/75, validate/매니페스트 PASS, shoot 16 PASS. build/기타 스위트는 167차와 동일(`src/` 무변경). verify:all·e2e 미실행(호스트 메모리 → CI 위임).
+
+### 5. 남은 아트 우선순위(25 missing + 1 예산 보류)
+1. grass-base(512×512 무이음, 바닥 전체) 2. sky-hills(1024×260) 3. path-end / path-end-entrance 4. riverbank-reeds / riverbank-reeds-stones / river-highlight / river-bend 5. shrub-round / shrub-round-small / shrub-wide 6. flower-cluster-pink / -yellow / flower-bed-border 7. fence-corner / fence-straight-short / hedge-end / hedge-straight-tall 8. grass-patch-dark / grass-patch-worn 9. flower-pot / flower-pot-tall(Lv5 구역) 10. fence-post / fence-gate-closed / hedge-corner(spec-only, 하네스 미배치) + wildflower-scatter 예산 결정(17.png 96KB).
+
+## 2026-09-17 (167차) — Batch 1 교체 아트 3장(14/15/16.png) 전부 ACCEPT → 필수 교체 세트 완성(9/9), 전체 재검증·로컬 합성·프리뷰·회귀 스위트 완료; 17.png(wildflower-scatter 후보)는 예산 FAIL
+
+### 0. 안전 요약
+- Production 쓰기 0, DB/SQL/RLS/auth 0, 경제/카탈로그/레벨 0, `#geometry` 무변경, `src/` 무변경(순수 미임포트 모듈 3개만 origin/main 대비 추가), `paulTownV2:false`, canonical Paul·V1 town 파일·`api/` 무변경, push/merge/deploy 없음.
+
+### 1. 교체 아트 결과(정사각 계약, 내용 기준 매핑)
+| 첨부 | key | 결과 |
+|---|---|---|
+| `14.png` | `path-curve-gentle` | **ACCEPT** 256×256, 61,516B lossless, 알파 정상. 아치 하단 진입 x≈37%; 하단 14px·우측 4px 못 미침(겹침 직선 타일이 메움, 프리뷰 확인) |
+| `15.png` | `path-fork` | **ACCEPT** 256×256, 74,432B, 알파 정상, 가장자리 여백 1~3% |
+| `16.png` | `river-straight` | **ACCEPT** 256×256, 92,872B(<128KB), seam 1.66/255(임계 18), 좌우 여백 18% |
+| `17.png` | `wildflower-scatter`(가장 가까운 잔여 키; 실제 내용은 촘촘한 둥근 초원 패치라 "느슨한 들꽃 산포" 역할과 완전 일치하진 않음) | **REJECT** 96,008B > patch 예산 61,440B(알파 정상). 대체 없음 |
+
+### 2. 전체 재검증(STEP 3)
+- 최종 소스 9장을 한 폴더로 모아 `ingest.py` 1회 실행 → **accepted 9 / rejected 0**(결정적, 바이트 동일). manifest: staged 9 / rejected 1(wildflower-scatter) / missing 28. validate PASS(경고 0), 매니페스트 테스트 PASS.
+- 참고: 이전 커밋의 manifest는 method=6 실험 당시 바이트(예: path-straight 75,202B)를 담고 있었고 이번 전체 재실행으로 원래 인코더 값(75,412B)으로 정합 복원. 하네스 `batch1/` 9장 갱신.
+
+### 3. 로컬 합성·프리뷰(STEP 4)
+- `previews/` 16장(Lv1/3/4/5/8 × 360/390/430 + Lv4 200%): 가로 오버플로 0, JS 오류 0, 9/33 실물.
+- 보이는 것: 코티지+대문·울타리·생울타리, 초원 패치, 꽃무리, **직선·곡선·갈림 타일로 이어진 연속 자갈 골목**(분수 옆 갈림 Y 자연, 다리 옆 곡선 아치 자연), 우측 가장자리를 따라 흐르는 실물 강.
+- 약점(정직): ① 강 타일 체인은 옛 walkTiles(맞대기 배치·단계형 depthScale)라 굽이(88,26)~(91,44)에서 타일 간 단차·회전 점프가 보임 → 길과 동일한 겹침+페더 처리 필요(하네스만) ② `path-straight-narrow`/`path-end`/`path-end-entrance`/`river-bend`/`riverbank-*`/`grass-base`/`sky-hills`/관목/화분 등 24장 부재 → 바닥이 여전히 그라데이션, 강둑 디테일 없음 ③ Lv1에서 Book Shop 안개 없음(하네스 공개 규칙 불일치, 미수정).
+
+### 4. 검증(STEP 5)
+- `npm run build` **PASS**(38s, 오류 0 — 이번 세션 첫 성공). 배치 계약 690/690, 깊이 PASS, 월드 96/96, 지리 sync 75/75, V2 static PASS, UI static PASS, 매니페스트 PASS.
+- V1 회귀: `src/components/town/TownScreen.jsx`/`TownGrid.jsx`/`src/assets/town/index.js` origin/main과 동일(diff 0) → 정적 근거로 PASS. `verify:all`/브라우저 e2e는 호스트 메모리 한계로 미실행(CI 위임, push 승인 대기).
+
+### 5. 판정
+- LV1/3/4/5/8 프리뷰: 기술 PASS(오버플로·오류 0). 사각 보드 느낌: 제거됨. 길 네트워크 자연: YES. My House 집 느낌: YES(정원 담장·대문 실물). 미래 구역 기대감: 부분(안개 실루엣+Lv.N 팻말은 있으나 Lv1 Book Shop 예외). 응집 스토리북 세계: 아직 NO(24장 부재). 운영자 시각 검토 안전: YES.
+
+### 6. 다음 결정
+1. wildflower-scatter 예산 60→128KB 확장 여부(17.png 그대로 통과 가능).
+2. 강 체인 겹침/페더 처리(하네스 docs만) 승인.
+3. 나머지 24장 제작 순서 — 시각 효과 큰 순: grass-base, sky-hills, river-bend, riverbank-reeds, path-end, path-end-entrance, shrub-round, grass-patch-dark.
+
+## 2026-09-17 (166차) — 운영자 결정: grass-patch-light 예산 128KB → 현재 아트 ACCEPT(6장 staged); river-straight 정사각 256×256 계약 복원; path-curve/path-fork 재생성 계약 확정
+
+- spec `grass-patch-light.maxBytes2x` 61440→131072(테스트 특례 반영). 10.png 재-ingest: 400×280 contain-fit(비율 차 5%, 무-스트레치), 114,648B lossless, 알파 정상 → **ACCEPTED**. staged 6: grass-patch-light, path-straight, fence-straight, fence-gate, hedge-straight, flower-cluster-mixed. 하네스 `batch1/`에 복사, `batch1-pending/`의 구 150KB 사본 제거.
+- river-straight: 임시 256×128 → 원래 **256×256** 복원(spec/manifest/하네스 표 각 1줄). 예산 131072·seamAxis y·임계 18 유지(검증 약화 없음). 지리 sync 75/75.
+- 재생성 계약(3파일 개별, 스프라이트시트 아님): path-curve-gentle 256×256(생성 1024×1024) 하단 x35%→우측 y35% 90° 시계방향 단일 아치, 자갈폭 45%, 80KB; path-fork 256×256(1024) 하단 x50% 줄기, 상단 x12%/88% 가지(±40°), 줄기 45%·가지 35~45%, 80KB; river-straight 256×256(1024) 세로 흐름, 상하 이음 열 레이아웃 동일(평균 |ΔRGB| ≤ 18/255), 물폭 56%, 좌우 ≥3% 여백, 128KB.
+- 미실행: 신규 교체 아트 ingest·합성·렌더러. Production/DB/경제 무접촉, push 없음.
+
+## 2026-09-17 (165차) — Batch 1 교체 아트 4장(10/11/12/13.png) ingest: 4장 모두 REJECT → STEP 2에서 STOP (지시대로), 기존 staged 5장 보존
+
+### 매핑(시각 내용) 및 결과
+| 첨부 | key | 알파 | 판정·정확한 사유 |
+|---|---|---|---|
+| `10.png` 초원 패치 | `grass-patch-light` | PASS(max 254, 반투명 0.7%) | **FAIL 바이트** — lossless 114,648B > patch 예산 61,440B(+87%). 400×280 contain-fit 기준 |
+| `11.png` S자 자갈길 | `path-curve-gentle` | PASS | **FAIL 규격** — 소스 1536×1024(내용 bbox 1390×987, 1.41:1)를 256×256 정사각 타일에 넣으려면 스트레치 필요 → 무-스트레치 가드가 거부. 또한 내용이 단일 ~30° 곡선이 아니라 S자(반대 방향 2회 굽음) — spec 역할과 다름 |
+| `12.png` Y 갈림 | `path-fork` | PASS | **FAIL 규격** — 소스 1536×1024(내용 1489×978, 1.52:1) vs 256×256 → 동일 사유. Y 형태 자체는 역할 일치 |
+| `13.png` 개울 구간 | `river-straight` | PASS(max 255) | **FAIL 이음** — 94,642B로 128KB 예산은 통과; 256×128 실제 비율에서 seamAxis y 이음 점수 32.97 > 18. 폭포·양안이 있는 완결 구간 그림이라 세로로 이어 붙일 수 없음(9.png와 동일 판정) |
+- 기존 staged 5장 무접촉(재생성 없음). 매니페스트 rejected 사유 갱신, 거부 키의 stagedPath/sha256/bytes2x null 처리(ingest.py 보강). validate PASS, 매니페스트 테스트 PASS.
+- STEP 3~5(전체 재검증·합성·프리뷰) 미실행 — "하나라도 FAIL이면 STOP" 지시.
+
+### 운영자 결정 필요(각 1택)
+1. grass-patch: (a) patch 예산 60→128KB 상향 (b) 1024×683 정도로 작게 재출력 후 재시도 (c) 단순화 재출력.
+2. path-curve/path-fork: (a) 정사각(1024×1024) 캔버스로 재출력(아트 내용 유지, 여백만 조정) (b) 파이프라인이 투명 타일도 contain-fit 허용(아트가 타일 안에서 작아짐, 하네스 곡선/갈림 배치 상수 재보정 필요) — 권장 (a). 곡선은 단일 굽음(≈30~90°) 1장이 spec 역할.
+3. river: (a) `river-straight`를 "1회 배치 구간 그림"(kind sprite, 512×256, seam 없음)으로 spec 재분류 — 현재 아트 그대로 사용 가능 (b) 세로 흐름·상하 이어지는 타일로 재출력. 권장 (a).
+
+## 2026-09-17 (164차) — Paul Town Batch 1: 운영자 결정 3건 적용(RGBA 재출력·강 예산 128KB·모듈 타일 길 합성) → 5 PASS / 4 FAIL, 계약 보류 3장은 별도 `batch1-pending` 프리뷰로 시각 검토 (paulTownV2 OFF, Production 무접촉)
+
+### 0. 안전 요약
+- Production 쓰기 0, DB/SQL/RLS/auth 0, 경제/카탈로그/레벨 0, 월드 지리(`#geometry`) 무변경(sync 75/75), 47셀 배치 계약 690/690, `src/` 무변경, push/merge/deploy 없음(로컬 커밋만).
+
+### 1. 결정 1 — 1/3/4.png 진짜 RGBA 변환
+- 신규 도구 `scripts/town-art/stripCheckerboard.py`(README 절 추가): 테두리 연결 flood-fill로 체커보드(무채색·밝기≥185)만 알파 0, 아트 픽셀 RGB 무수정, 경계 1px 페더. 결과: 잔디 패치 1 컴포넌트(바위·흰 데이지 보존), 곡선/갈림 길 1 컴포넌트. 임계 실험(200/10)은 노이즈 증가 → 기본값 유지.
+- 재-ingest: **투명도 PASS**, 그러나 lossless 바이트 예산 FAIL — `path-curve-gentle` 84,366B(>80KB, +3%), `path-fork` 92,062B(+12%), `grass-patch-light` 150,122B(>60KB, +144%). lossless method=6 실험은 이득 없음(되돌림). 계약대로 REJECT(매니페스트 rejected), 대체 없음.
+- 세 파일은 `docs/design/town/mockup/batch1-pending/`(README 포함)에 **계약 미통과** 상태로 두고 하네스 `?assets=batch1-pending` 모드에서만 로드(주황 배너 "+3 budget-pending files (NOT contract-passed)"). 예산 상향/lossy-alpha 허용/재출력은 운영자 결정.
+
+### 2. 결정 2 — 강 예산 128KB
+- spec `river-straight.maxBytes2x` 81920→131072, 테스트 특례 반영. 그러나 ① 파이프라인이 1774×887 소스를 256×256으로 **2배 세로 압착**하던 것을 발견 → `ingest.py`에 tile/patch/band **무-스트레치 가드**(비율 편차>40% REJECT) 추가, 강 타일 규격을 실제 비율 256×128로 변경(spec/manifest/하네스 표) ② 실제 비율에서 seamAxis y 이음 점수 28.96>18 → **REJECT**. 승인 강 아트는 폭포·양안이 포함된 완결된 "구간" 그림이지 타일이 아님. 사용 안 함(플레이스홀더 유지).
+- 부수 수정: 거부된 키의 이전 staged 산출물 자동 삭제(압착본이 남아 있던 사고 재발 방지), 투명 patch는 contain-fit(스트레치 금지).
+
+### 3. 결정 3 — 모듈 타일 길 합성(하네스만, `paul-town-recompose.html`/`shoot.mjs`)
+- 타일 폭 = 지리 폭(`2·hw/0.45`, clamp 36~110px·K), 단계형 depthScale 제거(길만); 직선 타일 50% 겹침 + 축 방향 22% 페더 마스크(`.pathTile`) → 이중 꽃테두리·쐐기 틈 제거.
+- 곡선: 원 폴리라인 꼭짓점 회전각 ≥45°(`?curveMin=`)에 `path-curve-gentle` 1장(진입 방향 정렬, 좌회전은 `scaleX(-1)` 미러, 크기 1.6×, 안쪽 0.45× 오프셋, 반경 0.55× 직선 억제). 갈림: (50,62)에 `path-fork` 1장(트렁크 진입 방향, 1.7×, 0.25× 전방, 0.6× 억제, 최상단). `path-junction`/`path-curve-strong`는 더 이상 배치 안 함(하네스 키 35→33; batch1 README 주석).
+- shoot.mjs `--assets batch1-pending --out previews-pending` 추가(기본 동작 동일), `requestfailed` 필터에 pending 폴더 제외.
+
+### 4. 프리뷰(각 16장)
+- `previews/`(엄격, 5/33): 오버플로 0·JS 오류 0. 길은 연속 직선 타일 리본; 곡선·갈림은 점선 플레이스홀더.
+- `previews-pending/`(5+3): 오버플로 0·JS 오류 0. **길이 연속 구불구불한 자갈 골목으로 읽힘**(다리 옆 곡선 타일 아치 자연 연결, 바다 골목 매끄러움, 초원 패치 자연). 약점: 갈림 부근(분수 옆) 타일 4방향 교차가 어수선(바다 가지 junction 아트 없음), `path-straight-narrow` 플레이스홀더가 학교 골목을 가림, grass-base/sky-hills 부재로 바닥은 여전히 그라데이션.
+- 하네스 발견(미수정): Lv1 프리뷰에서 Book Shop이 Lv.3 팻말과 함께 **안개 없이** 그려짐 — 레벨 공개 규칙 불일치, 렌더러 구현 시 반영 필요.
+
+### 5. 정직한 판정
+- 사각 보드 느낌 제거: YES(구불구불한 길·정원 울타리·초원 패치가 격자를 대체). 응집된 스토리북 세계: 아직 NO(28/33 부재: 잔디 베이스·하늘·강·관목·화분·길 끝). 승인 레퍼런스 근접: NO(방향은 맞음). 운영자 시각 검토 안전: YES(배너·플레이스홀더로 상태 명시).
+
+### 6. 검증
+- ingest 9장 → accepted 5 / rejected 4(결정적). `validateEnvArtManifest` PASS(경고 0), `testEnvArtManifest` 75/75, `testTownHarnessGeometrySync` 75/75, `testTownPlacementContract` 690/690, shoot ×2 PASS. `npm run build`/`verify:all` 미실행(`src/` 무변경; 호스트 메모리 압박 → CI 위임, push 승인 대기).
+
+## 2026-09-17 (163차) — Paul Town Batch 1 실물 아트 1차 ingest: 9장 수령 → 5장 staged / 4장 rejected, 로컬 Lv1/3/4/5/8 프리뷰 재촬영 (paulTownV2 OFF, Production 무접촉)
+
+### 0. 안전 요약
+- Production 쓰기 0, DB/SQL/RLS/auth 변경 0, 경제(별/XP/Paul Dollar/카탈로그/가격/해금 임계) 변경 0, `paulTownV2` OFF 유지, `src/` 무변경(렌더러 미착수), push/merge/deploy 없음(로컬 커밋만).
+- 운영자 미추적 SQL/ops 파일 17개 무접촉. 대체 아트(SVG/이모지) 생성 0.
+
+### 1. 수령·매핑(시각 내용 기준, 첨부 순서/파일명 무관)
+| 첨부 | 시각 내용 | asset key | 판정 |
+|---|---|---|---|
+| `1.png` | 들꽃·바위가 있는 잔디 밭 패치 | `grass-patch-light` | REJECT — RGB(알파 없음), 체커보드가 픽셀에 구워짐 |
+| `3.png` | 꽃 테두리 곡선 자갈길 | `path-curve-gentle` | REJECT — RGB(알파 없음) |
+| `4.png` | Y자 갈림 자갈길 | `path-fork` | REJECT — RGB(알파 없음) |
+| `5.png` | 흰 말뚝 울타리 + 장미/담쟁이 | `fence-straight` | ACCEPT 256×96 lossless 33,546B |
+| `6.png` | 돌기둥·등불 아치형 나무 대문 | `fence-gate` | ACCEPT 192×128 28,988B, 여백 4.7/8.6/5.2/4.7% |
+| `7.png` | 다듬은 생울타리 + 꽃 | `hedge-straight` | ACCEPT 256×128 37,692B |
+| `8.png` | 분홍/흰/노랑/라벤더 혼합 꽃무리 | `flower-cluster-mixed` | ACCEPT 192×112 19,038B (WARN 원본 비율 36% 차이 → crop/fit 처리, 좌우 여백 21%) |
+| `9.png` | 바위 강둑·여울·갈대 개울 | `river-straight` | REJECT — 알파는 정상이나 lossless 94,642B > 예산 81,920B (알파 보유 → lossy 폴백 없음) |
+| `826cb605-….png` | 꽃 테두리 직선 자갈길(세로) | `path-straight` | ACCEPT 256×256 75,412B, seam 0.00/255 |
+- 스테이징: `art-staging/batch1/` (gitignored) — `<key>.png`/`<key>.webp`(2x lossless)/`<key>-1x.webp` + `ingest-report.json`. 매니페스트 `docs/design/town/manifest/env-art-manifest.json`: staged 5 / rejected 4 / missing 29.
+- 하네스용 복사: `docs/design/town/mockup/batch1/<key>.webp` 5장(README의 "git에서 비어 있음" 문구 갱신).
+
+### 2. 파이프라인 결함 1건 발견·수정 (첫 실물 실행에서 드러남)
+- `scripts/town-art/ingest.py`가 매니페스트 `sha256`에 **정규화 RGBA 픽셀 해시**(중복 검사용)를 기록했으나 `scripts/validateEnvArtManifest.mjs`는 **staged WebP 파일 바이트 해시**를 대조 → staged 5건 전부 sha256 mismatch FAIL. 수정: 매니페스트 `sha256` = 파일 해시, 픽셀 해시는 `contentHash`로 분리 기록(리포트 JSON도 동일). 재실행 후 validate PASS(경고 0).
+- `scripts/testEnvArtManifest.mjs`의 "전 엔트리 missing(초기 상태)" 단언 2개는 실물 ingest 이후 구조적으로 성립 불가 → 상태 일관성 단언 4개로 교체(status ∈ {missing,staged,rejected}; missing은 null 3종; staged는 stagedPath/64hex sha/bytes2x>0; rejected는 reasons 비어있지 않음). 71/71 PASS.
+
+### 3. 프리뷰(로컬, `docs/design/town/mockup/previews/` 16장 재촬영)
+- shoot.mjs: 16컷 전부 가로 오버플로 없음, JS 오류 0, 5/35 파일 존재(빨간 "ART PLACEHOLDER — NOT PRODUCTION" 배너 유지).
+- 정직한 시각 판정: **승인 레퍼런스(village2.png)에 아직 근접하지 않음.** 30/35 파일이 점선 플레이스홀더(잔디 베이스·패치·곡선/갈림 길·강·관목·화분 전부 부재)라 세계 전체의 응집감은 판단 불가. 실물 5장의 **스타일·스케일은 P0 코티지/북숍과 일치**(대문·울타리·생울타리가 My House 정원을 실제로 감싸기 시작, 꽃무리·직선 길 색감 동일 계열).
+- 렌더링 발견(하네스 한계, 렌더러 설계에 반영 필요): 꽃 테두리가 구워진 `path-straight` 타일을 폴리라인 따라 회전 배치하면 방향이 바뀌는 이음매마다 타일이 겹쳐 테두리가 이중으로 보이고 각진 "토막" 느낌 → 최종 렌더러는 (a) 곡선/갈림 타일 확보 후 접선 각 기준 스냅 또는 (b) 길을 연속 리본(stroke)으로 그리고 테두리를 별도 패턴으로 얹는 방식 중 택일해야 함. 결정 보류(운영자).
+- Lv1/3/5/8 레벨 차이는 하네스 규칙대로(잠금 랜드마크 안개 실루엣 + Lv.N 팻말) 렌더됨 — 이번 작업에서 재검토하지 않음.
+
+### 4. 후속(운영자 결정 필요)
+1. `1.png`/`3.png`/`4.png`: 투명 배경 PNG(RGBA)로 재출력 필요 — 체커보드는 배경이 아니라 픽셀. 재출력본만 재-ingest.
+2. `9.png` 강: 아트는 계약 통과(알파 정상). 선택지 — (a) `river-straight` `maxBytes2x`를 128 KB로 상향(스펙 변경, 운영자 승인) (b) 알파 유지 lossy WebP q≥90 허용(파이프라인 옵션 추가) (c) 재출력. 자동 대체하지 않음.
+3. 나머지 26장(잔디 베이스/패치/길 변형/울타리 변형/관목/화분/강 변형/sky-hills) 제작 후 동일 파이프라인.
+4. 길 렌더링 방식(§3) 결정 후 렌더러 착수. 그 전까지 `src/` 무변경.
+
+### 5. 검증
+- `python scripts/town-art/ingest.py --src <scratch>/raw-batch1 --allow-partial` → accepted 5 / rejected 4 (2회 실행, 결정적).
+- `node scripts/validateEnvArtManifest.mjs` PASS(경고 0) · `node scripts/testEnvArtManifest.mjs` 71/71 · `node docs/design/town/mockup/shoot.mjs` PASS.
+- `npm run build`/`verify:all` 미실행: `src/` 무변경(스크립트·문서·프리뷰만). 호스트 메모리 압박(162차 참고)으로 verify:all은 CI에 위임 예정(push는 승인 대기).
+
+## 2026-09-17 (162차) — Paul Town V2 야간 엔지니어링 준비: 실물 아트 도착 즉시 검증·합성·리뷰 가능 상태 만들기 (렌더러 미출하, paulTownV2 OFF)
+
+### 0. 안전 요약
+
+Production WRITE 0 · DB/SQL/RLS/auth 변경 0 · 경제/카탈로그/가격/레벨/보상/
+학생 데이터 변경 0 · 플래그 변경 0 · merge/deploy/push 0 · 보호 미추적 SQL
+17개 무접촉 · `git reset/clean` 미사용 · package.json 무변경. `src/` 변경은
+**신규 파일 3개 추가뿐**(`git diff a97dc05..HEAD --name-status -- src/` 전부
+`A`), 어떤 컴포넌트도 임포트하지 않아 번들·V1·플래그 OFF 동작에 영향 0(독립
+qa-reviewer 코드 리뷰 8항목 전부 PASS).
+
+### 1. 시작 상태와 반복하지 않은 것
+
+이전 야간(160~161차 이후 미커밋 산출물)에서 이미 완료: 이미지 생성기 없음
+판정(도구/로컬 라이브러리/CLI 없음, 셸의 OPENAI 키는 401), Batch 1 프롬프트/
+스펙 패키지(35+3파일), 갭 분석, 와이어프레임 v2, Lv4 SVG 목업(레이아웃만
+승인), batch1 하네스+`processBatch1.py`, 47셀 충돌 분석(초안), 360/390/430
+검토. 이번 밤은 이를 재조사하지 않고 **커밋으로 확정**한 뒤 미완 항목만 진행.
+
+### 2. 이번 밤 산출물(커밋 순)
+
+| 커밋 | 내용 |
+|---|---|
+| `a2e1b1a` | 승인 월드 설계 v1 + Batch 1 아트 핸드오프 + 갭 분석 + 구현/모바일/성능/stale-chunk 리뷰 + 친구 마을·탐험 미래 아키텍처 노트(설계 전용) |
+| `8058b8b` | 와이어프레임 v2(단일 캔버스, Lv1/3/4/5/8 셀렉터) + 390px 스크린샷 4장 |
+| `9c8a08d` | Lv4 SVG 목업 + Batch 1 재구성 하네스 + 47셀 충돌 분석 + 모바일 측정 |
+| `be94058` | `src/utils/town/depthOrder.js` — 12계층 깊이 모델(콘텐츠 계층 안에서는 화면 y가 지배, 계층 경계는 ≥1000 간격), `testTownDepthOrder` 62/62 |
+| `5ca08ec` | `src/utils/town/worldContract.js` — 확정 지오메트리 계약(REGIONS/LANDMARKS/PATHS/RIVER/GARDEN/PROTECTED/NAV_SLOTS/DEPTH_BANDS, 잠금은 DISTRICTS/lotState/townLevelForStars에 위임), `testTownWorldContract` 87/87, 데이터 덤프 문서 |
+| `2e5bbee` | `scripts/town-art/ingest.py`(Pillow, fail-closed: 매직/알파/크기/비율/클리핑/중복 해시/타일 이음새/바이트 예산, 알파 자산은 무손실만, `art-staging/`에만 기록) + `env-art-batch1.spec.json`(38) + `env-art-manifest.json`(아트/렌더링 계약, 경제 필드 없음) + 검증기/테스트 69/69 |
+| `855353b` | 설계 문서에 Book Shop 강변 편차(우측 끝이 2u 둑 띠에 0.9u 진입, 물과는 1.1u 이격) 기록 |
+| `e7611a1` | `paul-town-recompose.html?level&width&zoom` 하네스(퍼센트 레이아웃, Chromium zoom 함정 3건 주석) + `shoot.mjs` + 미리보기 16장(placeholder 배너 "ART PLACEHOLDER — NOT PRODUCTION") |
+| `497393c` | `src/utils/town/placementContract.js` — 47셀 계약(SPOT_MAP id 보존, 구역/깊이/스케일/권장·제외 클래스) + 결정론적 충돌 엔진(랜드마크 박스·길 회랑·강+둑·펜스·보호점·이웃 셀·내비 밴드) + `visibleMarkerStyle('idle')==='none'`, `testTownPlacementContract` 690/690; worldContract에 등방 거리 헬퍼 append(96/96) |
+| `958abae` | `testTownHarnessGeometrySync` 75/75(하네스 JSON ↔ 코드 계약 0.5 이내), 하네스 랜드마크 id를 LOTS id로 통일, 바다 지선 종단 폭 8→10 정정 |
+
+### 3. 이번 밤 발견·정정한 결함(정직 기록)
+
+1. **단위 불일치(리드 브리핑 오류)**: x는 폭 %, y는 높이 %인데 월드가
+   100×190이라 1 y-unit = 1.9 x-unit. 초기 배치 브리핑이 랜드마크 박스 높이를
+   `w×hFactor`로 y에 그대로 써 My House 박스가 홈 구역 전체를 삼켰고 47셀이
+   전부 밀려났다. 정정: 박스 높이 ÷1.9, 모든 거리를 등방 단위로(`toUniform`
+   등 append-only 추가). 결과 46/47 셀이 자기 구역 안, 빈 권장 클래스 0.
+2. 하네스 랜드마크 id(`fountain/school/tower`)와 코드 id(LOTS) 불일치 → 하네스
+   쪽을 LOTS id로 통일(동기화 테스트가 잡음).
+3. 바다 지선 종단 폭: 코드가 8로 테이퍼했으나 지선은 전경 쪽으로 가므로 10
+   유지(코드 정정).
+4. Book Shop 강변 편차(위 `855353b`) — 앵커는 동결, 편차만 기록.
+5. 깊이 모델 브리핑의 자기모순("계층이 항상 우선" vs 동물/건물 시나리오)을
+   구현자가 올바르게 해소(콘텐츠 계층 내 y 우선) — 채택.
+
+### 4. 열린 운영자 결정 2건
+
+- `riverApproach` 셀 3개의 잠금 레벨: 현재 `RIVER_CELLS_UNLOCK = 6`(다리와
+  함께) 가정 — Lv1 잔디로 열지 결정 필요.
+- `squarePerimeter` 셀 8개: 설계 §5대로 Lv1 사용 가능(명시 상수) 유지 여부.
+
+### 5. 검증(최종 트리 `958abae`)
+
+신규 스위트: worldContract 96/96 · placement 690/690 · depthOrder 62/62 ·
+harnessSync 75/75 · envArtManifest 69/69. 기존: testTownSceneV2 259/259 ·
+testTownV2Static 112/112 · testTownUiStatic 125/125 · testTownLayout 79/79 ·
+placementsPersistence 65/65 · testTownShop 104/104 · testTownCatalog 50/50 ·
+testTownLevelLock 53/53 · welcomeExactlyOnce 87/87 · staleChunkRecovery
+102/102. `npm run build` 클린(17.2s). **`npm run verify:all`(브라우저 e2e 포함): 로컬
+미완료 — 정직 기록.** 2회 시도 모두 OS가 메모리 부족으로 프로세스를 종료
+(호스트 가용 메모리 756MB/15.9GB, 원인은 이 세션 밖의 운영자 앱: Chrome
+≈1GB·VS Code·LG 유틸·Defender). 1차 시도에서 나온 FAIL 6건은 전부 exit
+3221225794(0xC0000142, Windows 프로세스 생성 실패)로 테스트 실패가 아니라
+메모리 압박 증상. 반복 재시도는 운영자 기기를 불안정하게 하므로 중단.
+**따라서 tonight의 검증 증거는 개별 스위트(위 15개 전부 PASS) + build +
+독립 코드 리뷰이며, 전체 회귀(verify:all/e2e)는 release-gate CI가 최종
+판정**해야 한다 — push는 이번 밤 권한이 없어 운영자 승인 항목으로 남김.
+야간에 생긴 고아 `vite preview` 프로세스(우리 세션 산출)는 종료했고,
+운영자 Chrome 등 외부 프로세스는 건드리지 않았다.
+
+### 6. 실물 아트 도착 시 정확한 다음 단계
+
+```
+python scripts/town-art/ingest.py --src <원본 PNG 폴더>      # fail-closed, art-staging/batch1/
+node scripts/testEnvArtManifest.mjs                          # 매니페스트 재검증
+copy art-staging/batch1/*.webp docs/design/town/mockup/batch1/   # 하네스 스테이징
+node docs/design/town/mockup/shoot.mjs                       # Lv1/3/4/5/8 × 360/390/430 + 200%
+```
+→ 운영자 시각 승인 → 그 후에야 렌더러 구현(worldContract/placementContract/
+depthOrder 임포트, TownScene 컨테이너·Ground/Path/Water/Ambient/Fog 레이어
+교체, SPOT_MAP 앵커를 placementContract로 이관) → `paulTownV2`는 그 뒤에도
+OFF 유지.
+
+## 2026-09-17 (161차 — PR #60 release-gate 1차 FAIL(head `d0067c8`)
 → 원인 2건 중 `testBundleBudget.mjs`는 P0 아트로 바뀐 산출물 인벤토리
 계약(물리 14→18/인라인 7→5) 갱신으로 수정(`6d6d547`), `testProdCheck.mjs`
 291/292는 로그 절단으로 실패 단언 미확인·로컬/직전 게이트 PASS·이 PR

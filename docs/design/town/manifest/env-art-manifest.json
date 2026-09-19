@@ -1,0 +1,1072 @@
+{
+  "$schema_note": "Paul Town V2 environment art — ART/RENDERING contract only (NO price/level/ownership fields; those live in townCatalog.js/townLevel.js). Generated from docs/design/town/manifest/env-art-batch1.spec.json + docs/design/town/ENV_ART_BATCH1_HANDOFF_2026-09-17.md §3 composition map + docs/design/town/PAUL_TOWN_APPROVED_WORLD_DESIGN_2026-09-17.md region table. Initial state: every asset status=\"missing\". scripts/town-art/ingest.py updates status/stagedPath/sha256/bytes2x in place as raw art is ingested; nothing else in this file should be hand-edited except by re-running the generator this file came from, or by ingest.py.",
+  "generated": "2026-09-17",
+  "count": 38,
+  "assets": {
+    "sky-hills": {
+      "asset_key": "sky-hills",
+      "filename": "sky-hills.webp",
+      "category": "sky",
+      "kind": "band",
+      "px2x": [
+        1024,
+        260
+      ],
+      "px1x": [
+        512,
+        130
+      ],
+      "transparent": false,
+      "anchor": "top-left",
+      "renderedPx": "390x99 px (top 12% of the world), stretch-x to world width",
+      "depthLayer": "terrain",
+      "repeat": "none",
+      "variantFamily": "sky-hills",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/sky-hills.webp",
+      "sha256": "d1585abdedc12b9cf8b4e916c7e006d7b7d6b1c2179f131416c701de260e4b0c",
+      "bytes2x": 77814,
+      "notes": "Distant backdrop band, visible from Lv1 (handoff §1.9). Handoff literally says 'stretch-x to world width, no repeat' — encoded here as anchor=top-left/repeat=none per the fixed enum; the stretch behaviour itself is a renderer concern, not a manifest field.",
+      "contentHash": "4ca7b3fa2129668b6bd053c6e72319fcddd4d3e48cf74d71d69d2df888b28c69"
+    },
+    "grass-base": {
+      "asset_key": "grass-base",
+      "filename": "grass-base.webp",
+      "category": "terrain",
+      "kind": "tile",
+      "px2x": [
+        512,
+        512
+      ],
+      "px1x": [
+        256,
+        256
+      ],
+      "transparent": false,
+      "anchor": "fill",
+      "renderedPx": "128 px per tile (4x across the world)",
+      "depthLayer": "terrain",
+      "repeat": "xy",
+      "variantFamily": "grass-base",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/grass-base.webp",
+      "sha256": "469d89d21158bde3a0775ba8c60b84872c18046bb5671baae0a6bed17c8cfe06",
+      "bytes2x": 108316,
+      "notes": "Base terrain tiles the whole world (handoff §1.1); seamless both axes.",
+      "contentHash": "c60deace28744b9d0b6dbaa3688ee87d3e5641acf0a97407bbb5e6045459970a"
+    },
+    "grass-patch-light": {
+      "asset_key": "grass-patch-light",
+      "filename": "grass-patch-light.webp",
+      "category": "patch",
+      "kind": "patch",
+      "px2x": [
+        400,
+        280
+      ],
+      "px1x": [
+        200,
+        140
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "renderedPx": "120-200 px",
+      "depthLayer": "terrain",
+      "repeat": "none",
+      "variantFamily": "grass-patch-light",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/grass-patch-light.webp",
+      "sha256": "857d502fa16a22cc5068300017ba5b7ea350e0095ad2d87140f7195d4a0066a0",
+      "bytes2x": 114648,
+      "notes": "Sun-lit overlay patch near the lane / cottage rise (handoff §3, home region).",
+      "contentHash": "9966d0546074548af663526cd4cf58eb4649a27237144f7a7649d8f3615060fa"
+    },
+    "grass-patch-dark": {
+      "asset_key": "grass-patch-dark",
+      "filename": "grass-patch-dark.webp",
+      "category": "patch",
+      "kind": "patch",
+      "px2x": [
+        400,
+        280
+      ],
+      "px1x": [
+        200,
+        140
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "renderedPx": "120-200 px",
+      "depthLayer": "terrain",
+      "repeat": "none",
+      "variantFamily": "grass-patch-dark",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/grass-patch-dark.webp",
+      "sha256": "eba6a3a9c07fc7c25ed82ad4ce0f1fa35f5ef45a86b4eb1c27b7a4074ddfb5bf",
+      "bytes2x": 115818,
+      "notes": "Shaded overlay patch under tree groups / left edge (handoff §3).",
+      "contentHash": "b5af95b63be77d80ef7bc48ad0b6925c444e54e30c4624c66da3fb32c5a539ae"
+    },
+    "grass-patch-worn": {
+      "asset_key": "grass-patch-worn",
+      "filename": "grass-patch-worn.webp",
+      "category": "patch",
+      "kind": "patch",
+      "px2x": [
+        400,
+        200
+      ],
+      "px1x": [
+        200,
+        100
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "renderedPx": "100-160 px",
+      "depthLayer": "terrain",
+      "repeat": "none",
+      "variantFamily": "grass-patch-worn",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/grass-patch-worn.webp",
+      "sha256": "25b9bfa08c208617d8d8455d523848e403b9497a980593375f7042dfcac42d51",
+      "bytes2x": 109404,
+      "notes": "Worn-grass overlay hugging both sides of the lane in the foreground (handoff §3).",
+      "contentHash": "a0df5fee0ee88f2723a73a43bfd8214d74e99725ca28c95dc52ae409400663ff"
+    },
+    "wildflower-scatter": {
+      "asset_key": "wildflower-scatter",
+      "filename": "wildflower-scatter.webp",
+      "category": "patch",
+      "kind": "patch",
+      "px2x": [
+        320,
+        240
+      ],
+      "px1x": [
+        160,
+        120
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "renderedPx": "80-120 px",
+      "depthLayer": "terrain",
+      "repeat": "none",
+      "variantFamily": "wildflower-scatter",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/wildflower-scatter.webp",
+      "sha256": "4a198a5818ca789adadb145442e725a6962a7e10b73fc441f54561c9d5833a95",
+      "bytes2x": 96008,
+      "notes": "Wildflower overlay x4 in the foreground and home lawn (handoff §3).",
+      "contentHash": "9036edcdce06ba61590af569beae1f14cd3caf1910661726b6686e398637a056"
+    },
+    "path-straight": {
+      "asset_key": "path-straight",
+      "filename": "path-straight.webp",
+      "category": "path",
+      "kind": "tile",
+      "px2x": [
+        256,
+        256
+      ],
+      "px1x": [
+        128,
+        128
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "renderedPx": "64 px tile; path width ~40 px foreground",
+      "depthLayer": "path",
+      "repeat": "along-path",
+      "variantFamily": "path-straight",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/path-straight.webp",
+      "sha256": "441c6ed0c07a7a650a680f2a7bd852dd0fd61426f7ba6797267157ce5b0f8b55",
+      "bytes2x": 75412,
+      "notes": "Lane tile from the door through the fork (handoff §3, Lv1 \"path to fork\").",
+      "contentHash": "1360facd3b78ca6017c538b6ff332b8a3f3294019b00a13aafdc3275845b5618"
+    },
+    "path-straight-narrow": {
+      "asset_key": "path-straight-narrow",
+      "filename": "path-straight-narrow.webp",
+      "category": "path",
+      "kind": "tile",
+      "px2x": [
+        256,
+        256
+      ],
+      "px1x": [
+        128,
+        128
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "renderedPx": "64 px tile (narrow, farthest depth band)",
+      "depthLayer": "path",
+      "repeat": "along-path",
+      "variantFamily": "path-straight",
+      "fallback": "css",
+      "unlockVisibility": "region",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/path-straight-narrow.webp",
+      "sha256": "64a80e21c285770e0b5b8c80aae360bb3ca881464a1b09a761ee782dc009fa36",
+      "bytes2x": 62988,
+      "notes": "Batch1 README: \"narrower cobbles for the farthest depth band (near the school, worldY<=34)\" — English School region unlocks Lv7.",
+      "region": "school",
+      "contentHash": "b6e024b569a9de1938628e4c9d2f4c00c91297f464503db1e49ed061fe78601f"
+    },
+    "path-curve-gentle": {
+      "asset_key": "path-curve-gentle",
+      "filename": "path-curve-gentle.webp",
+      "category": "path",
+      "kind": "tile",
+      "px2x": [
+        256,
+        256
+      ],
+      "px1x": [
+        128,
+        128
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "renderedPx": "64 px",
+      "depthLayer": "path",
+      "repeat": "none",
+      "variantFamily": "path-curve-gentle",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/path-curve-gentle.webp",
+      "sha256": "f5e20a98c844c8da5f1c4eb4d49d2a391267990477e0128471939cf48c0aa9ed",
+      "bytes2x": 61516,
+      "notes": "Enters at the gate on the door-to-fork lane (handoff §3, Lv1).",
+      "contentHash": "fcebadd85016be5aecd5e0301b0ad48826ece4d67ac57cd5abf2d92f09bd5448"
+    },
+    "path-curve-strong": {
+      "asset_key": "path-curve-strong",
+      "filename": "path-curve-strong.webp",
+      "category": "path",
+      "kind": "tile",
+      "px2x": [
+        256,
+        256
+      ],
+      "px1x": [
+        128,
+        128
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "renderedPx": "64 px",
+      "depthLayer": "path",
+      "repeat": "none",
+      "variantFamily": "path-curve-strong",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/path-curve-strong.webp",
+      "sha256": "98bbb4d05c19e0a0d2a9365c85a60e5a3bb5cc69cebeb1da362bc0ba88c27ea3",
+      "bytes2x": 76356,
+      "notes": "Generic lane-network bend tile, reused across the door-to-fork run (handoff §3).",
+      "contentHash": "f1f006eac1d3809718009e60e5d8d7fb7ad2c366caec813fb85c2299c0621e44"
+    },
+    "path-fork": {
+      "asset_key": "path-fork",
+      "filename": "path-fork.webp",
+      "category": "path",
+      "kind": "tile",
+      "px2x": [
+        256,
+        256
+      ],
+      "px1x": [
+        128,
+        128
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "renderedPx": "64 px",
+      "depthLayer": "path",
+      "repeat": "none",
+      "variantFamily": "path-fork",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/path-fork.webp",
+      "sha256": "2f60ba622193e087b04e38e7d9a2684e92630248f33b71a6f0066b92631b4742",
+      "bytes2x": 74432,
+      "notes": "Fork at (50,62) = \"Lawn / connector\", Lv1 per the approved world design table.",
+      "contentHash": "df6b5a8a329683553b910fc049c16c3821e423d807002581e4fd90ae9030951a"
+    },
+    "path-junction": {
+      "asset_key": "path-junction",
+      "filename": "path-junction.webp",
+      "category": "path",
+      "kind": "tile",
+      "px2x": [
+        256,
+        256
+      ],
+      "px1x": [
+        128,
+        128
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "renderedPx": "64 px",
+      "depthLayer": "path",
+      "repeat": "none",
+      "variantFamily": "path-junction",
+      "fallback": "css",
+      "unlockVisibility": "region",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/path-junction.webp",
+      "sha256": "ecaf2d35b1f7c30b2bc60bea29ce02cebd175717504df9564ef4a922dd6fb1cc",
+      "bytes2x": 76292,
+      "notes": "Batch1 README: \"T split (approximates where the shop spur leaves)\" — the shop spur leads to Book Shop, DISTRICTS id \"lane\", unlock Lv3.",
+      "region": "lane",
+      "contentHash": "fcce7243b128ff4332c976e866a2772af81b9506a02288da127784a2a804794c"
+    },
+    "path-end": {
+      "asset_key": "path-end",
+      "filename": "path-end.webp",
+      "category": "path",
+      "kind": "tile",
+      "px2x": [
+        256,
+        160
+      ],
+      "px1x": [
+        128,
+        80
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "64 px",
+      "depthLayer": "path",
+      "repeat": "none",
+      "variantFamily": "path-end",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/path-end.webp",
+      "sha256": "1bf0efe8500f9695513e1b8cbef23e36ed78e4e48f1135725df6db6f7dec8c13",
+      "bytes2x": 39244,
+      "notes": "Doorstep at the front door (22,53), Lv1.",
+      "contentHash": "6307268db0c78054eec786755938e580d21c65c98151ec3965d7fdf8da1a77bf"
+    },
+    "path-end-entrance": {
+      "asset_key": "path-end-entrance",
+      "filename": "path-end-entrance.webp",
+      "category": "path",
+      "kind": "tile",
+      "px2x": [
+        256,
+        176
+      ],
+      "px1x": [
+        128,
+        88
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "64 px (widened apron)",
+      "depthLayer": "path",
+      "repeat": "none",
+      "variantFamily": "path-end",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/path-end-entrance.webp",
+      "sha256": "ff5de1767d7fd3a14afe0ad9e168f8a67a3048398da9ece6ec5425b0fa7c7fb8",
+      "bytes2x": 47784,
+      "notes": "Widened apron at the \"sea sign\" (80,92) — explicitly in the Lv1 always-visible list (approved world design table row 1).",
+      "contentHash": "0a8a22a4ed844fc494b4412b680007f151a216255c57371f5247d90f41a4ec04"
+    },
+    "fence-straight": {
+      "asset_key": "fence-straight",
+      "filename": "fence-straight.webp",
+      "category": "fence",
+      "kind": "tile",
+      "px2x": [
+        256,
+        96
+      ],
+      "px1x": [
+        128,
+        48
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "64 px per segment, 24 px tall",
+      "depthLayer": "scenery",
+      "repeat": "x",
+      "variantFamily": "fence-straight",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/fence-straight.webp",
+      "sha256": "191544e78704d5659c7a1cfc166f4148b8f29b5c5793a98a24b9e36812a976ee",
+      "bytes2x": 33546,
+      "notes": "Home garden fence, explicitly in the Lv1 always-visible list (\"My House, garden, fence...\"). NOTE: handoff §1.4 anchor is literally \"bottom-left\" (x-repeat alignment) but this manifest schema only allows bottom-center|center|top-left|fill; bottom-center is the closest of the four — the renderer should left-align repeat=\"x\" tile entries regardless of this field.",
+      "contentHash": "ca50b5415a61c8d9ae80e37473b52d27572d0e5f8e187e91efe2fe156b6032dc"
+    },
+    "fence-straight-short": {
+      "asset_key": "fence-straight-short",
+      "filename": "fence-straight-short.webp",
+      "category": "fence",
+      "kind": "tile",
+      "px2x": [
+        128,
+        96
+      ],
+      "px1x": [
+        64,
+        48
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "64 px per segment (2-picket filler near corners)",
+      "depthLayer": "scenery",
+      "repeat": "none",
+      "variantFamily": "fence-straight",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/fence-straight-short.webp",
+      "sha256": "e511a07bd9d393e9d906f654738b85be78a36840b94596063334d28718a4eae9",
+      "bytes2x": 7910,
+      "notes": "Variant of fence-straight, used next to each garden-curve corner (Batch1 README).",
+      "contentHash": "7fc73d87efb32d9119c887c21e7786bbf3eadec2457e114d2d5190f6d3076b10"
+    },
+    "fence-corner": {
+      "asset_key": "fence-corner",
+      "filename": "fence-corner.webp",
+      "category": "fence",
+      "kind": "sprite",
+      "px2x": [
+        128,
+        128
+      ],
+      "px1x": [
+        64,
+        64
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "32 px",
+      "depthLayer": "scenery",
+      "repeat": "none",
+      "variantFamily": "fence-corner",
+      "fallback": "hide",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/fence-corner.webp",
+      "sha256": "d4ab6bd20790191ea981118e058fc790ec4853c4d4f7a5d48cf7bbed275b7300",
+      "bytes2x": 11808,
+      "notes": "Placed at the 4 garden-curve bends (Batch1 README).",
+      "contentHash": "356f690eaabbf1c8559200feb25426f158fa82909df3e7b0b79aa70843acf479"
+    },
+    "fence-post": {
+      "asset_key": "fence-post",
+      "filename": "fence-post.webp",
+      "category": "fence",
+      "kind": "sprite",
+      "px2x": [
+        64,
+        112
+      ],
+      "px1x": [
+        32,
+        56
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "16 px",
+      "depthLayer": "scenery",
+      "repeat": "none",
+      "variantFamily": "fence-post",
+      "fallback": "hide",
+      "unlockVisibility": "always",
+      "status": "missing",
+      "stagedPath": null,
+      "sha256": null,
+      "bytes2x": null,
+      "notes": "Spec-only (handoff §1.4) — NOT placed by the Lv4 recompose harness (posts are baked into fence-straight/-corner per README); accepted into the batch for later scenes."
+    },
+    "fence-gate": {
+      "asset_key": "fence-gate",
+      "filename": "fence-gate.webp",
+      "category": "fence",
+      "kind": "sprite",
+      "px2x": [
+        192,
+        128
+      ],
+      "px1x": [
+        96,
+        64
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "48 px",
+      "depthLayer": "scenery",
+      "repeat": "none",
+      "variantFamily": "fence-gate",
+      "fallback": "hide",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/fence-gate.webp",
+      "sha256": "eeb4f4f7f193e9da2caa7a2129ed92deef3ada36a445db1ac8cca9a8b6cda3b1",
+      "bytes2x": 28988,
+      "notes": "Garden gate at (33,61) where the lane crosses the fence, Lv1.",
+      "contentHash": "050015ed5e348c998a3150b3767ac68bd71cb230c7ade9ae9b33d18335ee2be4"
+    },
+    "fence-gate-closed": {
+      "asset_key": "fence-gate-closed",
+      "filename": "fence-gate-closed.webp",
+      "category": "fence",
+      "kind": "sprite",
+      "px2x": [
+        192,
+        128
+      ],
+      "px1x": [
+        96,
+        64
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "48 px",
+      "depthLayer": "scenery",
+      "repeat": "none",
+      "variantFamily": "fence-gate",
+      "fallback": "hide",
+      "unlockVisibility": "always",
+      "status": "missing",
+      "stagedPath": null,
+      "sha256": null,
+      "bytes2x": null,
+      "notes": "Spec-only (handoff §1.5 variant) — NOT placed by the Lv4 harness (the lane passes through the open gate in this scene); accepted into the batch for later scenes."
+    },
+    "hedge-straight": {
+      "asset_key": "hedge-straight",
+      "filename": "hedge-straight.webp",
+      "category": "hedge",
+      "kind": "tile",
+      "px2x": [
+        256,
+        128
+      ],
+      "px1x": [
+        128,
+        64
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "64 px, 32 px tall",
+      "depthLayer": "scenery",
+      "repeat": "x",
+      "variantFamily": "hedge-straight",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/hedge-straight.webp",
+      "sha256": "307c39ca5b73b9299f442ae05f641bd6373031e46d7712604ce132eab3d923bf",
+      "bytes2x": 37692,
+      "notes": "Left run outside the home fence, wx<=9 (planning doc §2). Handoff §1.6 anchor is literally \"bottom-left\" — see fence-straight note, same compromise applies.",
+      "contentHash": "96e5f23aa3eedcabe73806143bb33952705f507d5254803db555d729ab6e26f0"
+    },
+    "hedge-straight-tall": {
+      "asset_key": "hedge-straight-tall",
+      "filename": "hedge-straight-tall.webp",
+      "category": "hedge",
+      "kind": "tile",
+      "px2x": [
+        256,
+        160
+      ],
+      "px1x": [
+        128,
+        80
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "64 px, taller",
+      "depthLayer": "scenery",
+      "repeat": "x",
+      "variantFamily": "hedge-straight",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/hedge-straight-tall.webp",
+      "sha256": "f38f68b390c7c4e381bb10cda03f9743ea0b42938859aaf02ad4fb1a6b4bcc89",
+      "bytes2x": 30186,
+      "notes": "Back run outside the home fence, wy<=51.5 (planning doc §2).",
+      "contentHash": "55ecfcc49a77e96fdfc4f8911fc94ff493a21ac57fbe63fad849ae7be9119745"
+    },
+    "hedge-end": {
+      "asset_key": "hedge-end",
+      "filename": "hedge-end.webp",
+      "category": "hedge",
+      "kind": "sprite",
+      "px2x": [
+        128,
+        128
+      ],
+      "px1x": [
+        64,
+        64
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "32 px",
+      "depthLayer": "scenery",
+      "repeat": "none",
+      "variantFamily": "hedge-end",
+      "fallback": "hide",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/hedge-end.webp",
+      "sha256": "a6f8257823746a3f4e41e48a9bfc0782e46d4f83c4b94e4c80a502ef35dac1e9",
+      "bytes2x": 17942,
+      "notes": "Rounded end cap for the two home hedge runs (Batch1 README).",
+      "contentHash": "4ab3809deaf03a38f28edc709c1bd05324fbf811128c69e48e3cdc9fe9c333b1"
+    },
+    "hedge-corner": {
+      "asset_key": "hedge-corner",
+      "filename": "hedge-corner.webp",
+      "category": "hedge",
+      "kind": "sprite",
+      "px2x": [
+        128,
+        128
+      ],
+      "px1x": [
+        64,
+        64
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "32 px",
+      "depthLayer": "scenery",
+      "repeat": "none",
+      "variantFamily": "hedge-corner",
+      "fallback": "hide",
+      "unlockVisibility": "always",
+      "status": "missing",
+      "stagedPath": null,
+      "sha256": null,
+      "bytes2x": null,
+      "notes": "Spec-only (handoff §1.6) — NOT placed by the Lv4 harness (the two hedge runs do not currently meet at a shared corner); accepted into the batch for later scenes."
+    },
+    "shrub-round": {
+      "asset_key": "shrub-round",
+      "filename": "shrub-round.webp",
+      "category": "cluster",
+      "kind": "sprite",
+      "px2x": [
+        160,
+        128
+      ],
+      "px1x": [
+        80,
+        64
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "24-40 px",
+      "depthLayer": "foregroundVegetation",
+      "repeat": "none",
+      "variantFamily": "shrub-round",
+      "fallback": "hide",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/shrub-round.webp",
+      "sha256": "d2de64464f51c3214d57fa2ac56893fb18162b7e93db71feff7923162c5560e7",
+      "bytes2x": 20256,
+      "notes": "Composition map (handoff §3): clusters are 6-8 around the cottage/fence + 4 along the lane + 4 in the foreground (all Lv1 always-visible areas) vs only 3 near the Book Shop (region \"lane\", Lv3) — majority-always, so this reusable filler asset is \"always\"; Book Shop instances are the documented exception.",
+      "contentHash": "ab2bc9c6d4ec40e71dffbcad0555bb0b39058c3b931feadf266c6fea4c33100a"
+    },
+    "shrub-round-small": {
+      "asset_key": "shrub-round-small",
+      "filename": "shrub-round-small.webp",
+      "category": "cluster",
+      "kind": "sprite",
+      "px2x": [
+        128,
+        96
+      ],
+      "px1x": [
+        64,
+        48
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "24-40 px (small variant)",
+      "depthLayer": "foregroundVegetation",
+      "repeat": "none",
+      "variantFamily": "shrub-round",
+      "fallback": "hide",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/shrub-round-small.webp",
+      "sha256": "3761741166dbc1c5b86d86cdc50bba1ce6d34dfa5249cfcfdf7f858a4a3d9925",
+      "bytes2x": 13618,
+      "notes": "Size-variety alternate of shrub-round, same placement pool — see shrub-round notes.",
+      "contentHash": "9a056d68a1d88e2d195049b5dfc6517924ca0c225f06a6b02bda68a9ad4ef0e1"
+    },
+    "shrub-wide": {
+      "asset_key": "shrub-wide",
+      "filename": "shrub-wide.webp",
+      "category": "cluster",
+      "kind": "sprite",
+      "px2x": [
+        224,
+        112
+      ],
+      "px1x": [
+        112,
+        56
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "40-56 px",
+      "depthLayer": "foregroundVegetation",
+      "repeat": "none",
+      "variantFamily": "shrub-wide",
+      "fallback": "hide",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/shrub-wide.webp",
+      "sha256": "5dc24710e7d164dd2d3e00782a8a7f4d5f7bdf1e3bdb9e628d96d1fffa214893",
+      "bytes2x": 24026,
+      "notes": "Same placement pool as shrub-round — see shrub-round notes.",
+      "contentHash": "dffaf13c7436e369782789fa5726fea488413b2f0a2231c539977854ab646229"
+    },
+    "flower-cluster-pink": {
+      "asset_key": "flower-cluster-pink",
+      "filename": "flower-cluster-pink.webp",
+      "category": "cluster",
+      "kind": "sprite",
+      "px2x": [
+        160,
+        112
+      ],
+      "px1x": [
+        80,
+        56
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "24-40 px",
+      "depthLayer": "foregroundVegetation",
+      "repeat": "none",
+      "variantFamily": "flower-cluster-pink",
+      "fallback": "hide",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/flower-cluster-pink.webp",
+      "sha256": "7224f4ba8c5305288cdf21792a23f96cfc0f2bb277a4b13af66bf188e3f120d5",
+      "bytes2x": 24372,
+      "notes": "Same placement pool as shrub-round — see shrub-round notes.",
+      "contentHash": "f80524a4c79ba34ca19b6e88c7dff96afa818ef26d1246695236fed401a4ae5e"
+    },
+    "flower-cluster-yellow": {
+      "asset_key": "flower-cluster-yellow",
+      "filename": "flower-cluster-yellow.webp",
+      "category": "cluster",
+      "kind": "sprite",
+      "px2x": [
+        160,
+        112
+      ],
+      "px1x": [
+        80,
+        56
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "24-40 px",
+      "depthLayer": "foregroundVegetation",
+      "repeat": "none",
+      "variantFamily": "flower-cluster-yellow",
+      "fallback": "hide",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/flower-cluster-yellow.webp",
+      "sha256": "21dcca453157a8f5dfc1febc9806b01aece4920df3f0a1eaaa99476452d4dbda",
+      "bytes2x": 22974,
+      "notes": "Same placement pool as shrub-round — see shrub-round notes.",
+      "contentHash": "1eaf636be0a085ab8082fbf9d30d36418bcdebbebb78a7a1026c811e75d53d8b"
+    },
+    "flower-cluster-mixed": {
+      "asset_key": "flower-cluster-mixed",
+      "filename": "flower-cluster-mixed.webp",
+      "category": "cluster",
+      "kind": "sprite",
+      "px2x": [
+        192,
+        112
+      ],
+      "px1x": [
+        96,
+        56
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "32-48 px",
+      "depthLayer": "foregroundVegetation",
+      "repeat": "none",
+      "variantFamily": "flower-cluster-mixed",
+      "fallback": "hide",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/flower-cluster-mixed.webp",
+      "sha256": "28c96ba4f2eda52419b09de8aaab6634d163eda7fc5431dd0d9d5539b54836d5",
+      "bytes2x": 19038,
+      "notes": "Same placement pool as shrub-round — see shrub-round notes.",
+      "contentHash": "89c92d9066df5f1affbc830c7370a1dc35cd56f0443d896b7ad1318321def42e"
+    },
+    "flower-bed-border": {
+      "asset_key": "flower-bed-border",
+      "filename": "flower-bed-border.webp",
+      "category": "cluster",
+      "kind": "tile",
+      "px2x": [
+        320,
+        112
+      ],
+      "px1x": [
+        160,
+        56
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "80 px",
+      "depthLayer": "scenery",
+      "repeat": "x",
+      "variantFamily": "flower-bed-border",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/flower-bed-border.webp",
+      "sha256": "93fe2b7d91d1a5d957e81ae1fce9b3c255980cde1253ec9b3630fe0cf1945c0e",
+      "bytes2x": 23948,
+      "notes": "Explicitly \"inside the front fence run\" (handoff §3, home region, Lv1). Handoff §1.7 anchor is literally \"bottom-left\" — see fence-straight note, same compromise applies.",
+      "contentHash": "63c60d9b4c23051175e0f107105c36a710dd803cafdb0f392527827e73049191"
+    },
+    "flower-pot": {
+      "asset_key": "flower-pot",
+      "filename": "flower-pot.webp",
+      "category": "prop",
+      "kind": "sprite",
+      "px2x": [
+        128,
+        128
+      ],
+      "px1x": [
+        64,
+        64
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "20-28 px",
+      "depthLayer": "scenery",
+      "repeat": "none",
+      "variantFamily": "flower-pot",
+      "fallback": "hide",
+      "unlockVisibility": "region",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/flower-pot.webp",
+      "sha256": "ca3e2959c920f1f1ea3be9558095d3962e5cfbf515cb88bc73ca8a90d818dc18",
+      "bytes2x": 20406,
+      "notes": "Batch1 README: \"cafe terrace edge (x2) + book-shop front (x2)\" — 100% of instances are in locked regions, none in home. Primary region set to \"square\" (cafe terrace, Village Square district, Lv5) since it is named first; ALSO used at the Book Shop front (region \"lane\", Lv3) — this asset is genuinely multi-region and this single-value field cannot express that; flagged here rather than silently picking one without explanation.",
+      "region": "square",
+      "contentHash": "2cd3e99c6a8ae1266f9e86bc25bad8ba14bae310804e42f44dc88834094cf35f"
+    },
+    "flower-pot-tall": {
+      "asset_key": "flower-pot-tall",
+      "filename": "flower-pot-tall.webp",
+      "category": "prop",
+      "kind": "sprite",
+      "px2x": [
+        128,
+        128
+      ],
+      "px1x": [
+        64,
+        64
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "20-28 px (tall urn)",
+      "depthLayer": "scenery",
+      "repeat": "none",
+      "variantFamily": "flower-pot",
+      "fallback": "hide",
+      "unlockVisibility": "region",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/flower-pot-tall.webp",
+      "sha256": "d7b65d5835b42b05e62551e58e424e304e99990943a0c9e4220ce6fda3d3c985",
+      "bytes2x": 18566,
+      "notes": "Batch1 README: \"near the square (57,60)\" — single location, Village Square district, Lv5.",
+      "region": "square",
+      "contentHash": "7ec3efc48e7405bc5c1e945d0a70e87b3e6b023054917418bb321441b0392446"
+    },
+    "river-straight": {
+      "asset_key": "river-straight",
+      "filename": "river-straight.webp",
+      "category": "river",
+      "kind": "tile",
+      "px2x": [
+        256,
+        256
+      ],
+      "px1x": [
+        128,
+        128
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "renderedPx": "64 px tile; water ~36 px",
+      "depthLayer": "water",
+      "repeat": "along-river",
+      "variantFamily": "river-straight",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/river-straight.webp",
+      "sha256": "8311b002a89f33e8f65a2625ebeff6ec79b007b15b4d08bbd2c699aa61a2f590",
+      "bytes2x": 92872,
+      "notes": "Approved world design table row 1 (Lv1) explicitly lists \"river as scenery\" as always-visible, even though the River & Stone Bridge district itself (bridge landmark) unlocks at Lv6 — only the bridge structure is gated, not the water/bank terrain in this batch.",
+      "contentHash": "841aa6d75653adef2fec255eea95289db0fbba148cdedd2f6e2051f7d6ecc3ff"
+    },
+    "river-bend": {
+      "asset_key": "river-bend",
+      "filename": "river-bend.webp",
+      "category": "river",
+      "kind": "tile",
+      "px2x": [
+        256,
+        256
+      ],
+      "px1x": [
+        128,
+        128
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "renderedPx": "64 px",
+      "depthLayer": "water",
+      "repeat": "none",
+      "variantFamily": "river-bend",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/river-bend.webp",
+      "sha256": "5e5ce95f5120232183dc689e96d57b0482b163186edf79b34a93254963a6d5d9",
+      "bytes2x": 77944,
+      "notes": "Same \"river as scenery\" Lv1 visibility as river-straight — see its notes.",
+      "contentHash": "0fb0da2cb8c3d1cc363903042dd2114895c8ac6d1f0a33365ad2389b046d2388"
+    },
+    "river-highlight": {
+      "asset_key": "river-highlight",
+      "filename": "river-highlight.webp",
+      "category": "river",
+      "kind": "patch",
+      "px2x": [
+        256,
+        128
+      ],
+      "px1x": [
+        128,
+        64
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "renderedPx": "40-64 px",
+      "depthLayer": "water",
+      "repeat": "none",
+      "variantFamily": "river-highlight",
+      "fallback": "css",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/river-highlight.webp",
+      "sha256": "81b557c8dc2461b56c345614b4bfad48f5daebaa42c9a4ad2d106503962395d2",
+      "bytes2x": 35104,
+      "notes": "Overlay on the always-visible river water — see river-straight notes.",
+      "contentHash": "bc016761735cf9df138bb5f9bdfc7761e60f3fa7ddc56627f54a2cb526ca7a26"
+    },
+    "riverbank-reeds": {
+      "asset_key": "riverbank-reeds",
+      "filename": "riverbank-reeds.webp",
+      "category": "river",
+      "kind": "sprite",
+      "px2x": [
+        192,
+        96
+      ],
+      "px1x": [
+        96,
+        48
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "32-48 px",
+      "depthLayer": "foregroundVegetation",
+      "repeat": "none",
+      "variantFamily": "riverbank-reeds",
+      "fallback": "hide",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/riverbank-reeds.webp",
+      "sha256": "98bf3a428eed0f1cf55c7894cac52c88a4c67345b8c82b29d8831af759d7d6e8",
+      "bytes2x": 16220,
+      "notes": "Near (village-side) bank, part of the always-visible river scenery — see river-straight notes.",
+      "contentHash": "d826bc2c2411f8dd757a61a401646e700776cf08e7aa495ffc0f905083a0e1f5"
+    },
+    "riverbank-reeds-stones": {
+      "asset_key": "riverbank-reeds-stones",
+      "filename": "riverbank-reeds-stones.webp",
+      "category": "river",
+      "kind": "sprite",
+      "px2x": [
+        192,
+        96
+      ],
+      "px1x": [
+        96,
+        48
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "renderedPx": "32-48 px (pebbled variant)",
+      "depthLayer": "foregroundVegetation",
+      "repeat": "none",
+      "variantFamily": "riverbank-reeds",
+      "fallback": "hide",
+      "unlockVisibility": "always",
+      "status": "staged",
+      "stagedPath": "art-staging/batch1/riverbank-reeds-stones.webp",
+      "sha256": "88d582a43d59e4cced92e2b1ca6f39f1a163c73eadbcfc736b18045a7329941e",
+      "bytes2x": 15754,
+      "notes": "Pebbled alternate of riverbank-reeds, same placement pool — see riverbank-reeds notes.",
+      "contentHash": "34572154c0b5652bb86401d9b4dbac7f0a174ce8a0918661f8baec66614ccdaa"
+    }
+  }
+}

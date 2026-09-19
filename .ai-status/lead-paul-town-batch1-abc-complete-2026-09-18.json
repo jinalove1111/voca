@@ -1,0 +1,55 @@
+{
+  "agent_name": "lead",
+  "role": "Paul Town Batch 1 아트 통합 조정(A/B/C)",
+  "task_id": "paul-town-batch1-abc-complete-2026-09-18",
+  "task": "Batch 1 환경 아트 A/B/C 전량 ingest·검증·하네스 배치·프리뷰. 렌더러 미착수, paulTownV2 OFF, Production 무접촉.",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-18T02:00:00+09:00",
+  "updated_at": "2026-09-18T12:00:00+09:00",
+  "branch": "feat/paul-town-v2-world-contract-2026-09-17 (로컬 커밋만, 미push)",
+  "assets": {
+    "staged": 35,
+    "spec_total": 38,
+    "remaining_spec_only_unplaced": [
+      "fence-post",
+      "fence-gate-closed",
+      "hedge-corner"
+    ],
+    "harness_placed_real": "34/34",
+    "replacement_candidates_held": [
+      "55.png->flower-cluster-pink",
+      "56.png->shrub-wide",
+      "57.png->flower-cluster-yellow"
+    ],
+    "unassigned": [
+      "39.png"
+    ]
+  },
+  "pipeline_hardening": [
+    "alpha_bbox ignores alpha<=4",
+    "dry-run writes nothing",
+    "rejected keys cleaned",
+    "no-stretch guard",
+    "patch contain-fit"
+  ],
+  "owner_decisions_applied": [
+    "river 128KB",
+    "patch: all128",
+    "sky: 2 band crop",
+    "grass: flatten",
+    "grass: q85"
+  ],
+  "tests": {
+    "validator": "PASS",
+    "manifestTest": "PASS",
+    "geometrySync": "75/75",
+    "placement": "690/690",
+    "shoot": "16 PASS, banner GREEN 34/34"
+  },
+  "production_write": 0,
+  "src_changed": false,
+  "geometry_changed": false,
+  "flag_paulTownV2": false,
+  "next": "운영자 시각 승인 → 렌더러 착수 계획; 55/56/57 교체 결정; E 3종은 선택"
+}

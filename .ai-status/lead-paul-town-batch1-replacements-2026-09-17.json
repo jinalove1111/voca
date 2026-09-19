@@ -1,0 +1,55 @@
+{
+  "agent_name": "lead",
+  "role": "Paul Town Batch 1 교체 아트 완료 조정",
+  "task_id": "paul-town-batch1-replacements-2026-09-17",
+  "task": "교체 아트 3장 ingest → 전체 재검증 → 로컬 합성/프리뷰 → 회귀 스위트. 렌더러 미착수, paulTownV2 OFF, Production 무접촉.",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-17T14:00:00+09:00",
+  "updated_at": "2026-09-17T16:30:00+09:00",
+  "branch": "feat/paul-town-v2-world-contract-2026-09-17 (로컬 커밋만, 미push)",
+  "assets": {
+    "staged": 9,
+    "rejected": {
+      "wildflower-scatter": "96008B > 61440B budget (alpha OK)"
+    },
+    "missing": 28,
+    "replacements": {
+      "path-curve-gentle": "PASS 61516B",
+      "path-fork": "PASS 74432B",
+      "river-straight": "PASS 92872B seam 1.66"
+    }
+  },
+  "tests": {
+    "build": "PASS 38s",
+    "placement": "690/690",
+    "depth": "PASS",
+    "world": "96/96",
+    "geometrySync": "75/75",
+    "v2Static": "PASS",
+    "uiStatic": "PASS",
+    "manifest": "PASS",
+    "shoot": "16 PASS",
+    "verifyAll_e2e": "not run (host memory) -> CI"
+  },
+  "production_write": 0,
+  "src_changed": false,
+  "geometry_changed": false,
+  "flag_paulTownV2": false,
+  "verdict": {
+    "board_feel_removed": true,
+    "path_natural": true,
+    "home_feel": true,
+    "cohesive_world": false,
+    "safe_for_owner_review": true
+  },
+  "open_owner_decisions": [
+    "wildflower-scatter 예산 128KB 확장",
+    "강 체인 겹침/페더 하네스 처리",
+    "나머지 24장 제작 순서"
+  ],
+  "harness_findings_unfixed": [
+    "river tiles butt-to-butt (steps at bends)",
+    "Lv1 Book Shop unhazed"
+  ]
+}
