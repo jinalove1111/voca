@@ -11,6 +11,7 @@
 // 다른 spec과 동시에 같은 파일을 건드리지 않게).
 //
 // 실 Supabase/Vercel 요청 0건 — installMocks가 전체 네트워크를 가로챈다.
+import zlib from 'node:zlib'
 import { installMocks } from './lib/mockRoutes.mjs'
 import { writesTo } from './lib/postgrestMock.mjs'
 import { createRecorder } from './lib/harness.mjs'
@@ -52,6 +53,85 @@ async function minVisibleButtonHeight(page) {
     }
     return { min: Number.isFinite(min) ? min : null, count }
   })
+}
+
+// 최소 PNG 디코더(8bit, colorType 2/RGB 또는 6/RGBA, non-interlaced만 지원
+// — page.screenshot()이 생성하는 형식) — S13(2026-09-20)이 실제 렌더 픽셀
+// 색을 직접 비교해야 해서 추가했다. 새 npm 패키지 없이(CLAUDE.md 규칙 6)
+// Node 내장 zlib만으로 IDAT을 inflate하고 PNG 필터(None/Sub/Up/Average/
+// Paeth, PNG 스펙 §9)를 역연산한다. 이유: document.elementFromPoint()/
+// elementsFromPoint()는 브라우저의 히트테스트 결과이고, 이 결함(z-[120]/
+// z-[130]이 씬 자체의 z-index 체계보다 낮아 씬이 시트 위로 페인트되는
+// 현상)이 있는 헤드리스 Chromium에서 실측한 결과 elementsFromPoint()는
+// 여전히 카드 요소를 최상단으로 보고했다(히트테스트와 실제 컴포지팅 페인트
+// 순서가 이 특정 케이스에서 불일치 — 아마 서로 다른 스태킹 컨텍스트에
+// 걸친 극단적인 z-index 격차의 GPU 레이어 컴포지팅 근사 때문으로 추정).
+// 그래서 elementFromPoint 기반 단언은 이 결함을 재현하지 못했고(수정 전
+// 코드로도 항상 PASS), 실제 스크린샷 픽셀 비교만 fail-then-pass를
+// 만족시켰다(아래 S13 커밋 리뷰 시 직접 재현 가능 — z-[9500]/z-[9510]을
+// 임시로 z-[120]/z-[130]으로 되돌리면 이 단언만 FAIL로 바뀐다).
+function readPngPixel(buffer, targetX, targetY) {
+  if (buffer.readUInt32BE(0) !== 0x89504e47) throw new Error('readPngPixel: PNG signature 아님')
+  let offset = 8
+  let width; let height; let bitDepth; let colorType
+  const idatChunks = []
+  while (offset < buffer.length) {
+    const len = buffer.readUInt32BE(offset)
+    const type = buffer.toString('ascii', offset + 4, offset + 8)
+    const dataStart = offset + 8
+    if (type === 'IHDR') {
+      width = buffer.readUInt32BE(dataStart)
+      height = buffer.readUInt32BE(dataStart + 4)
+      bitDepth = buffer.readUInt8(dataStart + 8)
+      colorType = buffer.readUInt8(dataStart + 9)
+    } else if (type === 'IDAT') {
+      idatChunks.push(buffer.subarray(dataStart, dataStart + len))
+    } else if (type === 'IEND') {
+      break
+    }
+    offset = dataStart + len + 4
+  }
+  if (bitDepth !== 8) throw new Error(`readPngPixel: 지원하지 않는 bitDepth ${bitDepth}`)
+  if (colorType !== 2 && colorType !== 6) throw new Error(`readPngPixel: 지원하지 않는 colorType ${colorType}`)
+  const channels = colorType === 6 ? 4 : 3
+  const raw = zlib.inflateSync(Buffer.concat(idatChunks))
+  const stride = width * channels
+  const pixels = Buffer.alloc(height * stride)
+  let rawOffset = 0
+  for (let y = 0; y < height; y++) {
+    const filterType = raw[rawOffset]
+    rawOffset += 1
+    const rowStart = y * stride
+    for (let x = 0; x < stride; x++) {
+      const rawX = raw[rawOffset + x]
+      const a = x >= channels ? pixels[rowStart + x - channels] : 0
+      const b = y > 0 ? pixels[rowStart - stride + x] : 0
+      const c = (y > 0 && x >= channels) ? pixels[rowStart - stride + x - channels] : 0
+      let value
+      switch (filterType) {
+        case 0: value = rawX; break
+        case 1: value = rawX + a; break
+        case 2: value = rawX + b; break
+        case 3: value = rawX + Math.floor((a + b) / 2); break
+        case 4: {
+          const p = a + b - c
+          const pa = Math.abs(p - a); const pb = Math.abs(p - b); const pc = Math.abs(p - c)
+          const pr = (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c)
+          value = rawX + pr
+          break
+        }
+        default: throw new Error(`readPngPixel: 지원하지 않는 filter type ${filterType}`)
+      }
+      pixels[rowStart + x] = value & 0xff
+    }
+    rawOffset += stride
+  }
+  const px = targetY * stride + targetX * channels
+  return { r: pixels[px], g: pixels[px + 1], b: pixels[px + 2] }
+}
+
+function rgbDistance(a, b) {
+  return Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2)
 }
 
 // paulEasyVoca_features localStorage 스냅샷에 flags만 심는다(그 외 플래그는
@@ -1246,6 +1326,264 @@ export async function run(browser, baseURL) {
     const totalGeomOk = geometrySummary.reduce((sum, s) => sum + s.geomOkCount, 0)
     console.log(`  [town-v2] S11 141-조합 요약 — geom PASS ${totalGeomOk}/${totalCombos} (${JSON.stringify(geometrySummary)})`)
     r.check('S11 — 141개(47앵커 x 3폭) 조합 전체에서 팝오버 클리핑 PASS', totalGeomOk === totalCombos && totalCombos === 141, `${totalGeomOk}/${totalCombos}`)
+  }
+
+  // ── S12 — 상점/보관함 시트(TownSheet.jsx)가 데스크톱 폭에서 전폭이 아니라
+  //        중앙 정렬된 고정폭 모달로 보이는지 회귀 방지(2026-09-20,
+  //        `md:left-1/2 md:-translate-x-1/2 md:top-1/2 md:-translate-y-1/2
+  //        md:w-full md:max-w-xl md:max-h-[85vh] md:rounded-3xl` 오버라이드).
+  //        수정 전 실측: 1280/1440/1920 전부 sheet.x===0 &&
+  //        sheet.width===viewport.width(전폭 하단 시트가 그대로 늘어남).
+  //        7개 뷰포트(데스크톱 1280/1440/1920, 모바일/태블릿 베이스라인
+  //        360/390/430/768 — 768은 md: 임계값을 그대로 넘으므로 데스크톱과
+  //        동일하게 중앙 모달 취급, TownSheet.jsx 코드 주석에 근거 기록)
+  //        전부에서 시트 수평 포함/오버플로우 없음을, 데스크톱 3개에서만
+  //        중앙 정렬·최대폭을 검증한다. 상품 카드 포함/같은 행 카드 간
+  //        비정상 간격 없음/오버레이 전체 커버리지/닫기 버튼 탭 가능성도
+  //        7개 전부에서, 카테고리 5탭 전환 시 포함성 유지와 잠김/구매가능
+  //        카드 혼재 렌더는 대표 뷰포트(데스크톱 1920 · 모바일 360) 1개씩만
+  //        검증한다(141콤보를 141x5로 불리지 않도록, S11과 같은 절제).
+  const S12_VIEWPORTS = [
+    { width: 1280, height: 720 }, { width: 1440, height: 900 }, { width: 1920, height: 1080 },
+    { width: 360, height: 844 }, { width: 390, height: 858 }, { width: 430, height: 946 }, { width: 768, height: 1024 },
+  ]
+  const S12_DESKTOP_WIDTHS = new Set([1280, 1440, 1920])
+  // md:max-w-xl === 576px — 몇 십 px 헤드룸을 둔 상한(전폭 버그였다면
+  // viewport 폭 그대로 1280+였을 것이므로 700은 둘을 명확히 가른다).
+  const S12_MAX_SHEET_WIDTH = 700
+  // 뷰포트 폭의 5% — 완전 중앙(0)은 서브픽셀 반올림에 너무 빡빡하고,
+  // 데스크톱 3폭 전부에서 실측 오프셋은 0~1px이므로 5%면 넉넉한 여유.
+  const S12_CENTER_TOLERANCE_RATIO = 0.05
+  // grid-cols-2 gap-2(8px)의 5배 — 정상 그리드 간격(실측 8px)과 완전
+  // 전폭-분리 버그(수백 px)를 명확히 가르는 중간 값.
+  const S12_MAX_CARD_GAP = 40
+
+  // 가로축만 검사한다(+ 위쪽 경계만) — 시트 자체가
+  // overflow-y-auto/max-h-[78vh|85vh]인 스크롤 컨테이너라, 카테고리에
+  // 아이템이 많으면(예: 장식 6개 = 3행) 마지막 행이 스크롤해야 보이는
+  // 것이 정상이고(모바일 78vh 기준 실측 확인됨, md: 변경과 무관한 기존
+  // 동작), 그 경우 getBoundingClientRect()의 y가 시트 높이를 넘는 것은
+  // 버그가 아니다. 이 회귀가 실제로 문제 삼는 축은 가로(시트가 전폭으로
+  // 늘어나며 카드가 옆으로 밀려나는 것)이므로 가로 포함 여부만 단언한다.
+  function boxesContained(outer, boxes, tol = 0.5) {
+    return !!outer && (Array.isArray(boxes) ? boxes : []).every((b) => !!b &&
+      b.x >= outer.x - tol && b.y >= outer.y - tol &&
+      (b.x + b.width) <= (outer.x + outer.width + tol))
+  }
+
+  async function readCardBoxes(page) {
+    return page.locator('[data-testid="town-sheet"] .grid.grid-cols-2 > div').evaluateAll((els) =>
+      els.map((el) => {
+        const r2 = el.getBoundingClientRect()
+        return { x: r2.x, y: r2.y, width: r2.width, height: r2.height }
+      })
+    )
+  }
+
+  for (const vp of S12_VIEWPORTS) {
+    const name = `S12[${vp.width}x${vp.height}] 상점 시트 데스크톱 컨테인먼트`
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+    // starsEarned=20 -> 마을레벨2(house 카테고리 기준: british-cottage
+    // minLevel1은 buyable, book-shop/cafe minLevel3/5는 locked) — 잠김/
+    // 구매가능 카드가 탭 전환 없이도 기본(house) 카테고리에 함께 보인다.
+    const mocks = await installMocks(page, {
+      townState: { starsEarned: 20, dollars: { available: 100, earned: 100, spent: 0 }, owned: [], welcomeClaimed: true },
+    })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownCard(page)
+      await card.click()
+      await waitForTownHeader(page)
+
+      await page.locator('[data-testid="town-open-shop"]').click()
+      const sheet = page.locator('[data-testid="town-sheet"]')
+      await sheet.waitFor({ state: 'visible', timeout: 10000 })
+      const sheetBox = await sheet.boundingBox()
+
+      const TOL = 0.5
+      const withinViewport = !!sheetBox && sheetBox.x >= -TOL && (sheetBox.x + sheetBox.width) <= vp.width + TOL
+      r.check(`${name} — 시트가 뷰포트 안에 완전히 들어옴(가로, sheet.x=${sheetBox && Math.round(sheetBox.x)} width=${sheetBox && Math.round(sheetBox.width)} vw=${vp.width})`,
+        withinViewport, JSON.stringify(sheetBox))
+
+      if (S12_DESKTOP_WIDTHS.has(vp.width)) {
+        const centerOffset = sheetBox ? Math.abs((sheetBox.x + sheetBox.width / 2) - vp.width / 2) : Infinity
+        const centerTolerance = vp.width * S12_CENTER_TOLERANCE_RATIO
+        r.check(`${name} — 데스크톱에서 시트가 수평 중앙 정렬(오프셋 ${Math.round(centerOffset)}px <= ${Math.round(centerTolerance)}px)`,
+          centerOffset <= centerTolerance, `offset=${centerOffset} tol=${centerTolerance}`)
+        r.check(`${name} — 데스크톱에서 시트가 전폭이 아니라 최대폭 이내(width=${sheetBox && Math.round(sheetBox.width)} <= ${S12_MAX_SHEET_WIDTH} && < 뷰포트폭)`,
+          !!sheetBox && sheetBox.width <= S12_MAX_SHEET_WIDTH && sheetBox.width < vp.width, JSON.stringify(sheetBox))
+      }
+
+      const cardBoxes = await readCardBoxes(page)
+      r.check(`${name} — 상품 카드가 최소 1개 렌더됨`, cardBoxes.length > 0, `count=${cardBoxes.length}`)
+      r.check(`${name} — 모든 상품 카드가 시트 박스 안에 완전히 들어옴`, boxesContained(sheetBox, cardBoxes), JSON.stringify(cardBoxes))
+
+      // 같은 행(y가 거의 같은) 인접 카드 쌍만 골라 가로 간격을 측정 —
+      // grid-cols-2라 마지막 행이 홀수 개면 다음 카드와 y가 달라 자동으로
+      // 제외된다.
+      let maxRowGap = 0
+      for (let i = 0; i < cardBoxes.length - 1; i++) {
+        const a = cardBoxes[i]; const b = cardBoxes[i + 1]
+        if (Math.abs(a.y - b.y) > 2) continue
+        const gap = b.x - (a.x + a.width)
+        if (gap > maxRowGap) maxRowGap = gap
+      }
+      r.check(`${name} — 같은 행 인접 카드 간 가로 간격이 비정상적으로 넓지 않음(${Math.round(maxRowGap)}px <= ${S12_MAX_CARD_GAP}px)`,
+        maxRowGap <= S12_MAX_CARD_GAP, `maxRowGap=${maxRowGap}`)
+
+      r.check(`${name} — 페이지 가로 오버플로우 없음`, await noHorizontalOverflow(page))
+
+      const overlayBox = await page.locator('button[aria-label="닫기"]').boundingBox()
+      const overlayFull = !!overlayBox && Math.abs(overlayBox.x) < TOL && Math.abs(overlayBox.y) < TOL &&
+        Math.abs(overlayBox.width - vp.width) < TOL && Math.abs(overlayBox.height - vp.height) < TOL
+      r.check(`${name} — 오버레이(백드롭)가 뷰포트 전체를 덮음(inset-0)`, overlayFull, JSON.stringify(overlayBox))
+
+      const closeBtn = page.locator('[data-testid="town-sheet-close"]')
+      const closeVisible = await closeBtn.isVisible().catch(() => false)
+      r.check(`${name} — 닫기 버튼이 보임`, closeVisible)
+      const closeHit = await closeBtn.evaluate((btn) => {
+        const rect = btn.getBoundingClientRect()
+        const cx = rect.left + rect.width / 2
+        const cy = rect.top + rect.height / 2
+        const top = document.elementFromPoint(cx, cy)
+        return !!top && (top === btn || btn.contains(top))
+      })
+      r.check(`${name} — 닫기 버튼이 elementFromPoint로 자기 자신(또는 자손)을 가리킴(탭 가능)`, closeHit)
+
+      // 대표 뷰포트(데스크톱 1920 · 모바일 360)에서만 카테고리 5탭 전환 +
+      // 잠김/구매가능 카드 혼재 렌더를 검증.
+      if (vp.width === 1920 || vp.width === 360) {
+        for (const cat of ['집', '자연', '동물', '장식', '특별']) {
+          await page.getByRole('button', { name: `${cat} 카테고리` }).click()
+          await page.waitForTimeout(50)
+          const sheetBoxAfterTab = await sheet.boundingBox()
+          const cardBoxesAfterTab = await readCardBoxes(page)
+          r.check(`${name} — 카테고리(${cat}) 전환 후에도 카드가 시트 안에 포함됨`,
+            boxesContained(sheetBoxAfterTab, cardBoxesAfterTab), JSON.stringify({ sheetBoxAfterTab, cardBoxesAfterTab }))
+        }
+
+        await page.getByRole('button', { name: '집 카테고리' }).click()
+        const lockedBtn = page.getByRole('button', { name: /Level \d+에서 열려요/ }).first()
+        const buyableBtn = page.getByRole('button', { name: '구매', exact: true }).first()
+        const lockedVisible = await lockedBtn.isVisible().catch(() => false)
+        const buyableVisible = await buyableBtn.isVisible().catch(() => false)
+        r.check(`${name} — 잠긴 카드(🔒 Level N에서 열려요)가 렌더됨`, lockedVisible)
+        r.check(`${name} — 구매 가능 카드가 렌더됨`, buyableVisible)
+        const sheetBoxForLock = await sheet.boundingBox()
+        const lockedBox = await lockedBtn.boundingBox()
+        const buyableBox = await buyableBtn.boundingBox()
+        r.check(`${name} — 잠김/구매가능 카드 모두 시트 안에 포함됨`,
+          boxesContained(sheetBoxForLock, [lockedBox, buyableBox]), JSON.stringify({ sheetBoxForLock, lockedBox, buyableBox }))
+      }
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S13 — TownSheet(상점/보관함) 오버레이/패널 z-index가 Paul Town V2 씬
+  //        자신의 z-index 체계(depthOrder.js LAYER_BASE, 최고값 ui=9000 /
+  //        sceneZ.js POPOVER_Z=ui+200=9200)보다 낮아 씬 콘텐츠가 시트 위로
+  //        그대로 "페인트"되어 상품 카드 영역을 가리던 결함의 회귀 방지
+  //        (2026-09-20, z-[120]/z-[130] → z-[9500]/z-[9510]).
+  //
+  //        S4/S5/S12는 전부 elementFromPoint(단수)나 boundingBox 포함
+  //        관계만 확인해 왔는데, 이 결함은 히트테스트에는 전혀 나타나지
+  //        않는다(백드롭 버튼이 여전히 전체 화면을 덮어 클릭은 항상 정확히
+  //        카드/닫기로 감) — 처음엔 elementsFromPoint(복수형)로도 시도했지만,
+  //        직접 재현·실측한 결과 이 특정 결함이 있는 헤드리스 Chromium에서는
+  //        elementsFromPoint()조차 여전히 카드 요소를 최상단으로 "잘못" 보고
+  //        했다(히트테스트 결과와 실제 컴포지팅 페인트 순서가 불일치 — 극단적
+  //        z-index 격차에 걸친 GPU 레이어 컴포지팅 근사 추정, art-staging/
+  //        renderer-previews/prefix4-debug.png에서 스크린샷은 씬이 카드를
+  //        완전히 가리는데 elementsFromPoint는 카드를 topmost로 반환하는
+  //        모순을 직접 확인함). 그래서 이 회귀는 실제 렌더 픽셀 색 비교로만
+  //        검증 가능하다(리드 지시의 "page.screenshot() + pixel sampling"
+  //        대안) — readPngPixel()(이 파일 상단, Node 내장 zlib만 사용)로
+  //        같은 뷰포트 좌표를 1) 시트가 열려 있을 때, 2) 시트를 닫았을 때
+  //        (씬만 보임) 각각 3x3 클립 스크린샷으로 찍어 중심 픽셀 RGB를
+  //        비교한다 — 결함이 있으면 시트가 "열려 있어도" 그 좌표 색이 씬만
+  //        보일 때와 완전히 같다(거리 0, 씬이 시트를 완전히 가림). 수정
+  //        후에는 그 좌표에 실제 상품 카드(흰 배경)가 그려져 색이 크게
+  //        달라진다.
+  const S13_VIEWPORTS = [
+    { width: 1920, height: 1080, label: '데스크톱' },
+    { width: 360, height: 844, label: '모바일' },
+  ]
+  // 씬(초록 들판/하늘 계열)과 카드(흰 배경) 색은 최소 이 정도는 떨어져야
+  // "실제로 카드가 그려졌다"고 볼 수 있다(실측: 수정 후 거리는 123~216,
+  // 결함 상태는 항상 정확히 0 — 그 사이 어딘가로 60을 잡아 둘을 명확히
+  // 가른다, 우연한 근접 색 매치 가능성에 대비한 여유).
+  const S13_MIN_COLOR_DISTANCE = 60
+  for (const vp of S13_VIEWPORTS) {
+    const name = `S13[${vp.width}x${vp.height},${vp.label}] 상점 시트 씬 페인트오더(paint-order) 회귀`
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
+    const page = await context.newPage()
+    // reducedMotion — 애니메이션 타이밍 우연이 아니라 z-index 자체의
+    // 문제임을 고정(원 재현도 reducedMotion:'reduce'로 확인됨).
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+    // starsEarned=800(마을레벨8, 전 구역 개방)+owned:[] — S4와 동일한
+    // "미보유 상태에서 house 카테고리 카드 여러 개 + 씬에 랜드마크/지형이
+    // 풍부하게 그려짐" 조건(원 결함이 가장 뚜렷이 보였던 조합, 리드 재현
+    // 지시와 동일).
+    const mocks = await installMocks(page, {
+      townState: { starsEarned: 800, dollars: { available: 500, earned: 500, spent: 0 }, owned: [], welcomeClaimed: true },
+    })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownCard(page)
+      await card.click()
+      await waitForTownHeader(page)
+
+      await page.locator('[data-testid="town-open-shop"]').click()
+      const sheet = page.locator('[data-testid="town-sheet"]')
+      await sheet.waitFor({ state: 'visible', timeout: 10000 })
+      await page.waitForTimeout(200)
+
+      const cardBoxes = await readCardBoxes(page)
+      r.check(`${name} — 상품 카드가 최소 1개 렌더됨(프로브 좌표 확보)`, cardBoxes.length > 0, `count=${cardBoxes.length}`)
+      if (cardBoxes.length === 0) throw new Error('프로브용 상품 카드를 찾을 수 없음')
+
+      const probe = cardBoxes[0]
+      const cx = Math.round(probe.x + probe.width / 2)
+      const cy = Math.round(probe.y + probe.height / 2)
+      const clip = { x: Math.max(0, cx - 1), y: Math.max(0, cy - 1), width: 3, height: 3 }
+
+      const withSheetBuf = await page.screenshot({ clip })
+      const withSheetPx = readPngPixel(withSheetBuf, 1, 1)
+
+      await page.locator('[data-testid="town-sheet-close"]').click()
+      await sheet.waitFor({ state: 'detached', timeout: 5000 }).catch(() => {})
+      await page.waitForTimeout(200)
+      const sceneOnlyBuf = await page.screenshot({ clip })
+      const sceneOnlyPx = readPngPixel(sceneOnlyBuf, 1, 1)
+
+      const dist = rgbDistance(withSheetPx, sceneOnlyPx)
+      r.check(
+        `${name} — 상품 카드 중심 좌표의 실제 렌더 픽셀 색이 "시트 열림"과 "씬만 보임(시트 닫힘)" 사이에 충분히 다름`
+        + `(거리=${dist.toFixed(1)} >= ${S13_MIN_COLOR_DISTANCE} — 0에 가까우면 씬이 시트를 완전히 가려 카드가 안 보이는 것)`,
+        dist >= S13_MIN_COLOR_DISTANCE,
+        `withSheetPx=${JSON.stringify(withSheetPx)} sceneOnlyPx=${JSON.stringify(sceneOnlyPx)} dist=${dist}`,
+      )
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
   }
 
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }
