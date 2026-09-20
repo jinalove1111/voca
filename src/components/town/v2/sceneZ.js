@@ -28,3 +28,10 @@ export const OVERLAY_Z = LAYER_BASE.ui + 100
 
 // 이동/보관 미니 팝오버 — 이 씬에서 항상 최상단.
 export const POPOVER_Z = LAYER_BASE.ui + 200
+
+// 드래그 중인 배치 아이템(2026-09-20, 자석 드래그 배치) — 배치 가능 칸
+// 오버레이(OVERLAY_Z)보다는 위여야 포인터를 따라다니는 동안 앵커 버튼에
+// 가려지지 않고, 이동/보관 팝오버(POPOVER_Z)보다는 아래여야 드래그 중에도
+// 팝오버/시트가 항상 그 위에 남는다(드래그 중엔 팝오버가 열려 있지 않지만,
+// 계약상 항상 아래에 있어야 한다는 순서 자체를 고정한다).
+export const DRAG_ITEM_Z = LAYER_BASE.ui + 150

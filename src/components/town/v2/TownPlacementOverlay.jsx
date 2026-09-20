@@ -37,13 +37,32 @@
 // (offset:false) 앵커에 아무것도 추가로 안 그린다(펄스 링이 이미 앵커
 // 위에 있으므로 중복 마커가 불필요). 리더 라인(오프셋일 때만, 버튼
 // 중심→앵커)은 그대로 유지.
+// 2026-09-20 — data-anchor-left-pct/data-anchor-top-pct(테스트 전용 훅,
+// data-anchor/data-cell와 같은 관례) — 참 앵커(world %) 좌표를 DOM에
+// 노출해, E2E 테스트가 (오프셋될 수 있는) 44px 컨트롤 위치가 아니라 실제
+// 스냅 판정 기준(TownScene.jsx computeNearestAnchor와 동일한 cellAnchor
+// 좌표)으로 드래그 목표를 잡을 수 있게 한다 — src/utils/town/worldRender.js
+// 를 테스트 파일에서 직접 import하면 그 내부의 확장자 없는 상대 import
+// (`from './worldContract'`)가 Vite 번들러 밖(plain Node ESM)에서 깨지므로
+// (scripts/testTownWorldRender.mjs가 esbuild로 우회하는 이유와 동일), DOM
+// data attribute로 노출하는 편이 이 저장소의 기존 테스트 훅 관례에도 맞고
+// 더 안전하다. 렌더링/상호작용에는 영향 없음(순수 읽기 전용 노출).
+//
+// 2026-09-20 — 자석 드래그 배치. highlightCell({x,y}|null, TownScene.jsx가
+// 드래그 중 가장 가까운 "유효한"(스냅 거리 이내) 앵커만 전달 — 유효하지
+// 않으면 항상 null이라 이 파일은 "초록 강조"만 신경 쓰면 된다)이 가리키는
+// 컨트롤 하나만 색을 초록으로 바꾼다. 무효(스냅 범위 밖) 상태는 별도
+// 표시를 만들지 않는다(브리프가 명시적으로 허용한 두 선택지 중 "아무것도
+// 강조하지 않음" 쪽을 택함 — 이미 펄스 원이 47개 다 떠 있는 화면에
+// 빨간 표시까지 추가하면 산만해져 "restrained" 요구에 어긋난다고 판단).
+// 기존 탭-투-앵커 onAnchorTap/44x44 클릭 판정은 전혀 바뀌지 않았다.
 import { useEffect, useRef, useState } from 'react'
 import { layoutPlacementControls } from '../../../utils/town/worldRender'
 import { OVERLAY_Z } from './sceneZ'
 
 const FALLBACK_SCENE = { w: 390, h: 741 }
 
-export default function TownPlacementOverlay({ anchors, onAnchorTap }) {
+export default function TownPlacementOverlay({ anchors, onAnchorTap, highlightCell }) {
   const list = Array.isArray(anchors) ? anchors : []
   const rootRef = useRef(null)
   const [sceneSize, setSceneSize] = useState(null)
@@ -96,20 +115,32 @@ export default function TownPlacementOverlay({ anchors, onAnchorTap }) {
 
       {/* 44x44 탭 컨트롤 — layoutPlacementControls가 정한(중심 배제) 위치.
           28px 펄스 링을 버튼 "안"에 그려(D5 이전과 동일 구조) 탭 가능한
-          자리와 보이는 자리가 항상 일치하게 한다. */}
-      {controls.map((c) => (
-        <button
-          key={c.cellId}
-          type="button"
-          onClick={() => onAnchorTap && onAnchorTap(c.x, c.y)}
-          aria-label={`여기에 놓기 (${c.x + 1}, ${c.y + 1})`}
-          data-anchor={`${c.x},${c.y}`}
-          className="absolute min-h-[44px] min-w-[44px] flex items-center justify-center bg-transparent pointer-events-auto"
-          style={{ left: `${c.controlLeftPct}%`, top: `${c.controlTopPct}%`, transform: 'translate(-50%, -50%)' }}
-        >
-          <span aria-hidden="true" className="block w-7 h-7 rounded-full border-2 border-[#e0a73a]/70 bg-[#fdebd0]/60 motion-safe:animate-pulse" />
-        </button>
-      ))}
+          자리와 보이는 자리가 항상 일치하게 한다. 드래그 중 가장 가까운
+          유효 앵커(highlightCell)만 초록 halo로 바꾼다(2026-09-20). */}
+      {controls.map((c) => {
+        const isHighlighted = !!highlightCell && highlightCell.x === c.x && highlightCell.y === c.y
+        return (
+          <button
+            key={c.cellId}
+            type="button"
+            onClick={() => onAnchorTap && onAnchorTap(c.x, c.y)}
+            aria-label={`여기에 놓기 (${c.x + 1}, ${c.y + 1})`}
+            data-anchor={`${c.x},${c.y}`}
+            data-drag-highlight={isHighlighted ? 'true' : undefined}
+            data-anchor-left-pct={c.anchorLeftPct}
+            data-anchor-top-pct={c.anchorTopPct}
+            className="absolute min-h-[44px] min-w-[44px] flex items-center justify-center bg-transparent pointer-events-auto"
+            style={{ left: `${c.controlLeftPct}%`, top: `${c.controlTopPct}%`, transform: 'translate(-50%, -50%)' }}
+          >
+            <span
+              aria-hidden="true"
+              className={isHighlighted
+                ? 'block w-9 h-9 rounded-full border-4 border-emerald-500 bg-emerald-200/70'
+                : 'block w-7 h-7 rounded-full border-2 border-[#e0a73a]/70 bg-[#fdebd0]/60 motion-safe:animate-pulse'}
+            />
+          </button>
+        )
+      })}
     </div>
   )
 }

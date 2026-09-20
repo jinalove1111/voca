@@ -36,6 +36,24 @@
 // 동일 이유 — 스태킹 컨텍스트를 만들지 않아야 y-랭킹 항목들이 다른
 // 레이어와 전역적으로 올바르게 섞인다). 팝오버 z는 sceneZ.js의
 // POPOVER_Z(씬 로컬 UI 상수, 세계 전체보다 항상 위).
+//
+// 2026-09-20 — 자석 드래그 배치(magnetic drag placement). 새 파일을
+// 만들지 않고 이 레이어의 배치 아이템 루프(list.map)에 그대로 얹는다 —
+// TownScene.jsx가 소유한 드래그 상태(drag)와 "지금 이동 모드로 선택된
+// placementId"(movingPlacementId)를 받아, 그 하나의 아이템에만 Pointer
+// Events(DiaryPage.jsx PlacedSticker와 동일 관례)를 건다. 버튼 자신의
+// disabled={!idle}은 전혀 건드리지 않는다 — 이동 모드에서는 모든 아이템
+// 버튼이 여전히 disabled인 채로 남는다(다른 아이템은 완전히 그대로 inert,
+// 회귀 없음). 처음엔 "disabled 컨트롤은 히트테스트에서 제외되므로 이벤트가
+// wrapper로 떨어질 것"이라 가정했으나, 실측(scripts/.tmp/diag_s16.mjs로
+// document.elementFromPoint 직접 확인)해 보니 disabled인 것은 <button>
+// 자신뿐이고 그 자식 <img>(TownSprite)는 자기 pointer-events:auto 기본값을
+// 그대로 유지해 elementFromPoint가 그 <img>를 반환했다 — disabled는 자손의
+// 히트테스트까지 배제하지 않는다. 그래서 핸들러는 wrapper 자체가 아니라,
+// 이동 모드로 선택된 이 아이템일 때만 렌더되는 투명 오버레이(버튼/스프라이트/
+// 팝오버 뒤 DOM 마지막 자식이라 같은 스태킹 레벨에서 항상 위에 그려짐)에
+// 건다(아래 렌더 코드의 주석 참고). 실제 드래그 계산(임계값/스냅/취소)은
+// 전부 TownScene.jsx 소유, 이 파일은 원시 이벤트를 그대로 위로 전달만 한다.
 import { Fragment, useLayoutEffect, useRef, useState } from 'react'
 import TownSprite from './TownSprite'
 import { townAsset } from '../../../assets/town'
@@ -47,7 +65,7 @@ import {
 } from '../../../utils/town/worldRender'
 import { LANDMARK_DECOR, LOCKED_FILTER, LOCKED_VEIL } from '../../../utils/town/worldScenery'
 import { TOWN_ITEM_VISUAL_META } from '../../../utils/town/townItemVisualMeta'
-import { POPOVER_Z } from './sceneZ'
+import { POPOVER_Z, DRAG_ITEM_Z } from './sceneZ'
 
 // 하네스 .shadow CSS 그대로(재도출 없음, TownSceneryLayer.jsx 소품
 // 그림자와 동일 상수 — 파일당 소유권 원칙상 이 파일이 독립적으로 갖는다).
@@ -190,6 +208,7 @@ function PlacementPopover({
 
 export default function TownObjectLayer({
   placements, itemById, modeKind, openPlacementId, onTogglePlacement, onStartMove, onStore, level, ownedIds,
+  movingPlacementId, drag, onDragPointerDown, onDragPointerMove, onDragPointerUp, onDragPointerCancel,
 }) {
   // 2026-09-18 D1 정정 — 이 필터는 부모(TownScreenV2.jsx)가 이미
   // isFixedLandmarkId로 걸러낸 renderPlacements를 넘겨줄 것으로
@@ -307,7 +326,22 @@ export default function TownObjectLayer({
       {list.map((p) => {
         const item = itemById && itemById[p.itemId]
         const sprite = spriteFor(item)
-        const anchor = cellAnchor(p.x, p.y)
+        // 2026-09-20 — 자석 드래그 배치. "이동" 모드에서 드래그 대상인
+        // 그 하나의 아이템만(movingPlacementId===p.placementId) 드래그 포착
+        // 오버레이(아래 렌더 코드, 파일 헤더 주석 참고)가 포인터 이벤트를
+        // 받는다(버튼은 여전히 disabled로 두고 건드리지 않는다, 다른 모든
+        // 아이템은 완전히 그대로 inert). isDragging(임계값을 넘어 실제로
+        // 끌리는 중)일 때만 앵커를
+        // 실시간 포인터 위치로 덮어써 아래 폭/그림자/z 계산이 전부 그
+        // 값을 그대로 재사용하게 한다(새 depth 계산을 여기서 다시 만들지
+        // 않는다 — placedItemWidthPct/placedItemVisual가 이미 하던 계산
+        // 그대로).
+        const isDraggable = movingPlacementId != null && p.placementId === movingPlacementId
+        const isDragging = isDraggable && drag && drag.phase === 'dragging' && drag.placementId === p.placementId
+        const baseAnchor = cellAnchor(p.x, p.y)
+        const anchor = isDragging
+          ? { ...baseAnchor, leftPct: drag.leftPct, topPct: drag.topPct, bottomPct: drag.topPct, depthY: drag.topPct }
+          : baseAnchor
         const itemDistrict = districtForCell(p.x, p.y)
         const isOpen = openPlacementId === p.placementId
         // 2026-09-19 정정 — 옛 "p.x(논리 배치 그리드 인덱스)가 0/1이면
@@ -348,7 +382,12 @@ export default function TownObjectLayer({
         // cat 전부 이 경로).
         const visualMeta = TOWN_ITEM_VISUAL_META[p.itemId] || EMPTY_VISUAL_META
         const visual = placedItemVisual(widthPct, anchor.depthY, visualMeta)
-        const z = worldZIndex('objects', anchor.depthY, p.placementId)
+        // 드래그 중엔 worldZIndex('objects', ...)가 아니라 sceneZ.js의
+        // DRAG_ITEM_Z(배치 오버레이 위/이동·보관 팝오버 아래로 동결된 씬
+        // 로컬 UI 상수)를 쓴다 — objects 티어(LAYER_BASE.objects~6902)는
+        // ui 티어(9000대)보다 항상 낮아 그대로 두면 드래그 중 앵커 오버레이
+        // 버튼에 가려진다.
+        const z = isDragging ? DRAG_ITEM_Z : worldZIndex('objects', anchor.depthY, p.placementId)
 
         return (
           <Fragment key={p.placementId}>
@@ -379,13 +418,16 @@ export default function TownObjectLayer({
               data-item-id={p.itemId}
               data-cell={`${p.x},${p.y}`}
               data-district={itemDistrict}
-              className="absolute"
+              className={`absolute${isDraggable ? ' motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-out' : ''}`}
               style={{
                 left: `${anchor.leftPct}%`,
                 top: `${anchor.bottomPct}%`,
                 width: `${visual.widthPct}%`,
-                transform: 'translate(-50%, -100%)',
+                minWidth: isDraggable ? 44 : undefined,
+                minHeight: isDraggable ? 44 : undefined,
+                transform: isDragging ? 'translate(-50%, -100%) scale(1.06)' : 'translate(-50%, -100%)',
                 zIndex: z,
+                userSelect: isDragging ? 'none' : undefined,
               }}
             >
               {/* 2026-09-20 — 선택(팝오버 열림) 시 미세한 lift(살짝 위로 +
@@ -422,6 +464,53 @@ export default function TownObjectLayer({
                 onStartMove={() => onStartMove && onStartMove(p.placementId)}
                 onStore={() => onStore && onStore(p.placementId)}
               />
+
+              {/* 2026-09-20 — 드래그 포착 오버레이. 처음엔 disabled 버튼이
+                  히트테스트에서 제외돼 이벤트가 wrapper로 "떨어질 것"이라고
+                  가정했으나(브리프의 두 옵션 중 하나), 실측(diag_s16.mjs)
+                  결과 disabled인 것은 <button> 자신뿐이고 그 자식 <img>
+                  (TownSprite)는 여전히 자기 pointer-events:auto 기본값을
+                  유지해 elementFromPoint가 그 <img>를 반환했다 — disabled는
+                  자손까지 히트테스트에서 배제하지 않는다(반례로 확정).
+                  그래서 옵션 1(아직 안 쓴 대안 — "여전히 활성 상태인 wrapper
+                  요소에 핸들러를 건다")을 이 wrapper 자체가 아니라, 버튼/
+                  스프라이트/팝오버보다 DOM에서 나중에 오는(같은 z 안에서
+                  나중 자식이 위에 그려짐) 이 투명 오버레이로 구현한다 —
+                  이동 모드로 선택된 이 하나의 아이템일 때만 렌더되고, 항상
+                  버튼/스프라이트보다 위에서 포인터를 가로챈다(elementFromPoint
+                  가 이제 이 오버레이를 반환함을 diag_s16.mjs로 재확인).
+                  다른 모든 아이템은 이 오버레이 자체가 렌더되지 않으므로
+                  완전히 그대로 inert(회귀 없음). */}
+              {isDraggable && (
+                <div
+                  aria-hidden="true"
+                  data-drag-surface={p.placementId}
+                  className="absolute inset-0 pointer-events-auto touch-none"
+                  style={{ userSelect: isDragging ? 'none' : undefined }}
+                  onPointerDown={(e) => {
+                    if (drag) return // 이미 다른 포인터가 드래그 중 — 두 번째 포인터 무시.
+                    e.currentTarget.setPointerCapture?.(e.pointerId)
+                    onDragPointerDown && onDragPointerDown(p.placementId, e)
+                  }}
+                  onPointerMove={(e) => {
+                    if (!drag || drag.pointerId !== e.pointerId) return
+                    onDragPointerMove && onDragPointerMove(p.placementId, e)
+                  }}
+                  onPointerUp={(e) => {
+                    if (!drag || drag.pointerId !== e.pointerId) return
+                    e.currentTarget.releasePointerCapture?.(e.pointerId)
+                    onDragPointerUp && onDragPointerUp(p.placementId, e)
+                  }}
+                  onPointerCancel={(e) => {
+                    if (!drag || drag.pointerId !== e.pointerId) return
+                    onDragPointerCancel && onDragPointerCancel(p.placementId, e)
+                  }}
+                  onLostPointerCapture={(e) => {
+                    if (!drag || drag.pointerId !== e.pointerId) return
+                    onDragPointerCancel && onDragPointerCancel(p.placementId, e)
+                  }}
+                />
+              )}
             </div>
           </Fragment>
         )

@@ -68,6 +68,21 @@
 // 실제로는 점유된 그 칸이 빈 앵커처럼 보여 탭이 조용히 실패하는
 // 회귀가 생긴다.
 
+// 2026-09-20 — 자석 드래그 배치(magnetic drag placement). 탭-투-앵커
+// 배치/이동은 그대로 두고(회귀 없음), "이동" 모드에서 아이템을 직접
+// 끌어 기존 47칸 배치 계약 앵커 중 가장 가까운 곳에 스냅하는 대안 입력을
+// 추가한다. 드래그 진행 상태는 이 컴포넌트(TownScene)가 소유한다 —
+// TownObjectLayer(드래그 대상 아이템을 그림)와 TownPlacementOverlay(가장
+// 가까운 앵커를 초록으로 강조)의 가장 가까운 공통 조상이라, 두 형제
+// 컴포넌트가 공유해야 하는 상태를 여기 한 곳에서만 계산한다(중복 계산
+// 없음). 실제 pointerdown/move/up/cancel 이벤트 배선(setPointerCapture
+// 포함)은 여전히 TownObjectLayer의 개별 아이템 wrapper가 소유하고
+// (DiaryPage.jsx PlacedSticker와 동일 Pointer Events 관례), 이 파일은
+// 그 원시 이벤트를 콜백으로 전달받아 "드래그 상태"(파생값: 씬 % 좌표,
+// 가장 가까운 앵커, 유효 여부)만 계산·보유한다. 실제 이동 커밋은 새 API를
+// 만들지 않고 기존 tap-to-anchor가 쓰는 것과 정확히 같은 경로
+// (handleAnchorTap → onCellTap → TownScreenV2.handleCellTap →
+// studentData.moveTownItem)를 그대로 재사용한다(CLAUDE.md 규칙 3).
 import { useState, useEffect, useRef } from 'react'
 import TownGroundLayer from './TownGroundLayer'
 import TownWaterLayer from './TownWaterLayer'
@@ -77,15 +92,186 @@ import TownAmbientLayer from './TownAmbientLayer'
 import TownObjectLayer from './TownObjectLayer'
 import TownFogLayer from './TownFogLayer'
 import TownPlacementOverlay from './TownPlacementOverlay'
-import { SCENE_ASPECT_RATIO, freeWorldAnchors } from '../../../utils/town/worldRender'
+import { SCENE_ASPECT_RATIO, freeWorldAnchors, cellAnchor } from '../../../utils/town/worldRender'
 import { BACKDROP_Z } from './sceneZ'
 
+const EMPTY_ANCHORS = []
+
+// 드래그 시작 판정 임계값(px) — 브리프 권장 범위(6~8px) 상단값. 이동
+// 모드에서 아이템 wrapper를 그냥 탭(움직임 없음)했을 때 드래그 시각
+// 효과가 우발적으로 번쩍이지 않도록 한다(순수 탭과 드래그 시작을 구분).
+const DRAG_THRESHOLD_PX = 8
+
+// 스냅 최대 거리(px) — worldRender.layoutPlacementControls가 쓰는 44px
+// 최소 탭 타깃(child가 직접 눌러 도달할 수 있는 반경)과 같은 값을
+// 재사용한다(새 상수를 발명하지 않고 이미 있는 접근성 기준에 묶는다) —
+// 포인터가 어떤 앵커의 실제 화면 위치로부터 44px(실 스크린 px, %가 아님
+// — 가로/세로 물리 스케일이 달라 % 거리로는 왜곡된다) 이내면 그 앵커로
+// 스냅한다.
+const MAX_SNAP_DISTANCE_PX = 44
+
 export default function TownScene({
-  placements, occupancyPlacements, itemById, mode, onCellTap, onStartMove, onStore, richness, gardenPoints, fog, level, ownedIds,
+  placements, occupancyPlacements, itemById, mode, onCellTap, onStartMove, onStore, onDragToast, richness, gardenPoints, fog, level, ownedIds,
 }) {
   const [openPlacementId, setOpenPlacementId] = useState(null)
+  const [drag, setDrag] = useState(null)
   const modeKind = (mode && mode.kind) || 'idle'
+  const movingPlacementId = modeKind === 'moving' ? ((mode && mode.placementId) ?? null) : null
   const triggerRef = useRef(null)
+  const sceneRef = useRef(null)
+  const latestPointerRef = useRef({ x: 0, y: 0 })
+  const rafIdRef = useRef(null)
+  const capturedRef = useRef(null)
+  const dragActive = drag != null
+
+  // 이동 모드일 때만 의미 있는 빈 칸 목록 — 배치 오버레이 렌더와 드래그
+  // 스냅 계산이 정확히 같은 목록(freeWorldAnchors, occupancyPlacements
+  // 기준 — 걸러지지 않은 전체 목록으로 점유 판정)을 공유한다(중복 계산/
+  // 서로 다른 결과 방지).
+  const anchors = modeKind !== 'idle' ? freeWorldAnchors(occupancyPlacements, level) : EMPTY_ANCHORS
+
+  // 포인터의 clientX/clientY → 씬 안에서 가장 가까운 유효 앵커(실 px 거리
+  // 기준, cellAnchor의 world % 좌표를 씬 실측 박스 크기로 환산). 드래그
+  // 중 rAF 플러시와 pointerup(드롭 확정) 양쪽이 이 하나의 함수만 쓴다
+  // (서로 다른 계산이 갈라지지 않도록).
+  function computeNearestAnchor(clientX, clientY) {
+    const sceneEl = sceneRef.current
+    if (!sceneEl) return { nearestAnchor: null, valid: false }
+    const rect = sceneEl.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return { nearestAnchor: null, valid: false }
+    const pointerPxX = clientX - rect.left
+    const pointerPxY = clientY - rect.top
+    let nearestAnchor = null
+    let nearestDist = Infinity
+    for (const a of anchors) {
+      const ap = cellAnchor(a.x, a.y)
+      const ax = (ap.leftPct / 100) * rect.width
+      const ay = (ap.topPct / 100) * rect.height
+      const d = Math.hypot(pointerPxX - ax, pointerPxY - ay)
+      if (d < nearestDist) { nearestDist = d; nearestAnchor = a }
+    }
+    return { nearestAnchor, valid: nearestAnchor != null && nearestDist <= MAX_SNAP_DISTANCE_PX }
+  }
+
+  function flushDrag() {
+    rafIdRef.current = null
+    setDrag((cur) => {
+      if (!cur) return cur
+      const { x: clientX, y: clientY } = latestPointerRef.current
+      const sceneEl = sceneRef.current
+      if (!sceneEl) return cur
+      const rect = sceneEl.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return cur
+      let phase = cur.phase
+      if (phase === 'pending') {
+        const dist = Math.hypot(clientX - cur.downX, clientY - cur.downY)
+        if (dist < DRAG_THRESHOLD_PX) return cur
+        phase = 'dragging'
+      }
+      const leftPct = ((clientX - rect.left) / rect.width) * 100
+      const topPct = ((clientY - rect.top) / rect.height) * 100
+      const { nearestAnchor, valid } = computeNearestAnchor(clientX, clientY)
+      return { ...cur, phase, leftPct, topPct, nearestAnchor, valid }
+    })
+  }
+
+  function scheduleFlush() {
+    if (rafIdRef.current != null) return
+    rafIdRef.current = requestAnimationFrame(flushDrag)
+  }
+
+  function cancelDrag() {
+    if (rafIdRef.current != null) { cancelAnimationFrame(rafIdRef.current); rafIdRef.current = null }
+    if (capturedRef.current) {
+      const { el, pointerId } = capturedRef.current
+      try { el && el.releasePointerCapture && el.releasePointerCapture(pointerId) } catch { /* 이미 해제됨 — 무시 */ }
+      capturedRef.current = null
+    }
+    setDrag(null)
+  }
+
+  function handleDragPointerDown(placementId, e) {
+    if (drag) return // 이미 드래그 중 — 두 번째 포인터 무시(secondary touch)
+    capturedRef.current = { el: e.currentTarget, pointerId: e.pointerId }
+    latestPointerRef.current = { x: e.clientX, y: e.clientY }
+    setDrag({
+      placementId,
+      pointerId: e.pointerId,
+      phase: 'pending',
+      downX: e.clientX,
+      downY: e.clientY,
+      leftPct: null,
+      topPct: null,
+      nearestAnchor: null,
+      valid: false,
+    })
+  }
+
+  function handleDragPointerMove(placementId, e) {
+    if (!drag || drag.placementId !== placementId || drag.pointerId !== e.pointerId) return
+    latestPointerRef.current = { x: e.clientX, y: e.clientY }
+    scheduleFlush()
+  }
+
+  function handleDragPointerUp(placementId, e) {
+    if (!drag || drag.placementId !== placementId || drag.pointerId !== e.pointerId) return
+    if (rafIdRef.current != null) { cancelAnimationFrame(rafIdRef.current); rafIdRef.current = null }
+    capturedRef.current = null
+    const wasDragging = drag.phase === 'dragging'
+    setDrag(null)
+    if (!wasDragging) return // 임계값 넘기기 전 탭/릴리즈 — 드래그 자체가 시작 안 됨, 아무 동작 없음.
+    const { nearestAnchor, valid } = computeNearestAnchor(e.clientX, e.clientY)
+    if (valid && nearestAnchor) {
+      handleAnchorTap(nearestAnchor.x, nearestAnchor.y) // tap-to-anchor와 완전히 같은 경로 재사용.
+    } else {
+      onDragToast && onDragToast('여기에는 놓을 수 없어요.')
+    }
+  }
+
+  function handleDragPointerCancel(placementId, e) {
+    if (!drag || drag.placementId !== placementId || drag.pointerId !== e.pointerId) return
+    cancelDrag()
+  }
+
+  // Escape로 드래그 취소(팝오버 Escape와 별개 effect — 서로 다른 상태를
+  // 감시한다). dragActive(boolean)에만 의존해 드래그 중 프레임마다(좌표가
+  // 바뀔 때마다) 리스너를 재등록하지 않는다.
+  useEffect(() => {
+    if (!dragActive) return undefined
+    function onKeyDown(e) { if (e.key === 'Escape') cancelDrag() }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragActive])
+
+  // 탭 전환/화면 숨김 중 드래그 방치 방지 — 다시 보일 때 이미 커밋된
+  // 상태가 없으므로(모든 커밋은 pointerup 시점에 동기적으로 끝남) 그냥
+  // 취소한다.
+  useEffect(() => {
+    if (!dragActive) return undefined
+    function onVisibility() { if (document.hidden) cancelDrag() }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragActive])
+
+  // 외부에서 모드가 바뀌면(예: TownScreenV2의 "취소" 배너 버튼, 또는 다른
+  // 경로로 이동 모드를 벗어남) 진행 중인 드래그를 취소한다 — moveTownItem
+  // 호출 없이 원래 자리로 남는다(placements 데이터 자체를 안 건드렸으므로
+  // drag state만 지우면 자동으로 원래 위치 렌더로 돌아간다).
+  useEffect(() => {
+    if (!drag) return undefined
+    if (modeKind !== 'moving' || (mode && mode.placementId) !== drag.placementId) {
+      cancelDrag()
+    }
+    return undefined
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modeKind, mode && mode.placementId])
+
+  // 언마운트 시 예약된 rAF 정리(메모리 누수/setState-after-unmount 방지).
+  useEffect(() => () => {
+    if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current)
+  }, [])
 
   function closePopover() {
     setOpenPlacementId(null)
@@ -137,6 +323,7 @@ export default function TownScene({
   return (
     <div>
       <div
+        ref={sceneRef}
         data-testid="town-scene-v2"
         role="group"
         aria-label="내 마을"
@@ -168,12 +355,19 @@ export default function TownScene({
           onStore={handleStore}
           level={level}
           ownedIds={ownedIds}
+          movingPlacementId={movingPlacementId}
+          drag={drag}
+          onDragPointerDown={handleDragPointerDown}
+          onDragPointerMove={handleDragPointerMove}
+          onDragPointerUp={handleDragPointerUp}
+          onDragPointerCancel={handleDragPointerCancel}
         />
         <TownFogLayer fog={fog} level={level} ownedIds={ownedIds} />
         {modeKind !== 'idle' && (
           <TownPlacementOverlay
-            anchors={freeWorldAnchors(occupancyPlacements, level)}
+            anchors={anchors}
             onAnchorTap={handleAnchorTap}
+            highlightCell={drag && drag.phase === 'dragging' && drag.valid ? drag.nearestAnchor : null}
           />
         )}
       </div>

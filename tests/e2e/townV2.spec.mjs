@@ -169,6 +169,107 @@ async function waitForTownHeader(page) {
   await page.locator(LV_BADGE_SEL).waitFor({ state: 'visible', timeout: 15000 })
 }
 
+// ── 자석 드래그 배치(2026-09-20) 공용 헬퍼 — S16~S19가 공유한다(로그인/
+//    내마을 진입 헬퍼처럼 파일 스코프에 둔다, 섹션마다 재정의하지 않음). ──
+// itemLabel을 보관함에서 "마을에 놓기"로 놓는다 — 앵커는 놓기 모드에
+// 진입한 뒤(오버레이가 뜬 뒤)에만 존재하므로 이 함수 안에서 직접
+// pickFreeAnchor로 고른다(호출자가 미리 고르면 앵커가 아직 없어 실패).
+async function placeFromInventoryByLabel(page, itemLabel) {
+  await page.locator('[data-testid="town-open-inventory"]').click()
+  const cardEl = page.locator('div.bg-white.rounded-2xl.card-shadow', { has: page.getByText(itemLabel, { exact: true }) }).first()
+  await cardEl.waitFor({ state: 'visible', timeout: 10000 })
+  await cardEl.getByRole('button', { name: '마을에 놓기' }).click()
+  await page.locator('[data-anchor]').first().waitFor({ state: 'visible', timeout: 10000 })
+  const anchor = await pickFreeAnchor(page, 0)
+  await page.locator(`[data-anchor="${anchor.x},${anchor.y}"]`).click()
+  return anchor
+}
+
+async function enterMovingMode(page, itemId, cell) {
+  await page.locator(`[data-item-id="${itemId}"][data-cell="${cell}"] > button`).click()
+  const moveBtn = page.getByRole('button', { name: '이동', exact: true })
+  await moveBtn.waitFor({ state: 'visible', timeout: 5000 })
+  await moveBtn.click()
+  await page.locator('[data-anchor]').first().waitFor({ state: 'visible', timeout: 10000 })
+}
+
+// 현재 배치 오버레이의 n번째 앵커(중복 없는 목록, freeWorldAnchors 결과) —
+// {x,y,box,center} 반환. center는 44px 탭 컨트롤의 렌더 위치가 아니라
+// data-anchor-left-pct/data-anchor-top-pct(TownPlacementOverlay.jsx가
+// 노출하는 참 앵커 world % 좌표, 2026-09-20)로 구한 "진짜" 앵커 화면
+// 좌표다(TownScene.jsx의 computeNearestAnchor와 정확히 같은 계산) —
+// worldRender.layoutPlacementControls가 좁은 화면에서 컨트롤을 "겹침
+// 해소"로 참 앵커 위치에서 옮길 수 있는데(worldRender.js 헤더 주석), 드래그
+// 스냅 판정은 항상 참 앵커 기준이므로 테스트도 같은 기준으로 목표 지점을
+// 잡아야 한다 — 컨트롤(버튼) 위치로 드래그하면 옮겨진 경우 스냅 범위를
+// 벗어나 false negative가 난다(src/utils/town/worldRender.js를 테스트에서
+// 직접 import하지 않는 이유는 위 data attribute 자체의 doc comment 참고 —
+// 그 파일의 확장자 없는 상대 import가 plain Node ESM에서 깨진다).
+async function pickFreeAnchor(page, index = 0) {
+  const anchors = page.locator('[data-anchor]')
+  const count = await anchors.count()
+  const el = anchors.nth(((index % count) + count) % count)
+  const attr = await el.getAttribute('data-anchor')
+  const box = await el.boundingBox()
+  const [x, y] = attr.split(',').map(Number)
+  const sceneBox = await page.locator('[data-testid="town-scene-v2"]').boundingBox()
+  const anchorLeftPct = Number(await el.getAttribute('data-anchor-left-pct'))
+  const anchorTopPct = Number(await el.getAttribute('data-anchor-top-pct'))
+  const center = sceneBox && Number.isFinite(anchorLeftPct) && Number.isFinite(anchorTopPct)
+    ? { x: sceneBox.x + (anchorLeftPct / 100) * sceneBox.width, y: sceneBox.y + (anchorTopPct / 100) * sceneBox.height }
+    : (box ? { x: box.x + box.width / 2, y: box.y + box.height / 2 } : null)
+  return { x, y, box, center }
+}
+
+// 실 마우스(page.mouse)로 wrapper 중심에서 목표 지점까지 여러 스텝으로
+// 이동(임계값을 확실히 넘기도록 첫 스텝부터 8px 이상 움직인다). mouseup은
+// 호출자가 별도로 한다(중간에 상태를 관찰할 수 있도록).
+async function mouseDragStart(page, wrapperLocator, dest, { steps = 10 } = {}) {
+  const startBox = await wrapperLocator.boundingBox()
+  const start = { x: startBox.x + startBox.width / 2, y: startBox.y + startBox.height / 2 }
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down()
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps
+    await page.mouse.move(start.x + (dest.x - start.x) * t, start.y + (dest.y - start.y) * t)
+  }
+  return start
+}
+
+// 이동 모드 배너가 떠 있으면 "취소"를 눌러 idle로 되돌린다(테스트 사이
+// 상태를 깨끗이 하기 위한 헬퍼 — 배너가 없으면 조용히 넘어간다).
+async function handleCancelIfMoving(page) {
+  const cancelBtn = page.getByRole('button', { name: '취소', exact: true })
+  if (await cancelBtn.isVisible().catch(() => false)) await cancelBtn.click().catch(() => {})
+}
+
+// 터치 드래그 시뮬레이션 — CDP Input.dispatchTouchEvent를 직접 쓴다.
+// 처음엔 locator.dispatchEvent('pointerdown', {...})로 합성 PointerEvent를
+// 만들어 시도했으나(el.dispatchEvent(new PointerEvent(...))로도 동일),
+// 실측(scripts/.tmp/diag_s17.mjs) 결과 네이티브 addEventListener는 정상
+// 수신해도(clientX/clientY/pointerId 전부 올바름) 리액트의 onPointerDown/
+// onPointerMove 핸들러 자체가 단 한 번도 호출되지 않았다 — 스크립트로
+// 만든(비신뢰, isTrusted:false) PointerEvent를 리액트의 합성 이벤트
+// 시스템이 처리하지 않는 것으로 실측 확인됨(반면 CDP로 만든 같은 흐름은
+// 리액트 핸들러가 정상 호출됨, DIAGPROD 로그로 재현·대조). page.mouse가
+// 이미 신뢰된 CDP 마우스 입력이라 S16에서 문제없이 동작했던 것과 같은
+// 이유로, 터치도 CDP 수준(Input.dispatchTouchEvent)으로 만들어야 한다.
+async function cdpTouch(cdp, type, points) {
+  await cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points })
+}
+
+async function cdpTouchDragStart(context, page, wrapperLocator, dest, { steps = 8 } = {}) {
+  const cdp = await context.newCDPSession(page)
+  const box = await wrapperLocator.boundingBox()
+  const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  await cdpTouch(cdp, 'touchStart', [{ x: start.x, y: start.y, id: 1 }])
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps
+    await cdpTouch(cdp, 'touchMove', [{ x: start.x + (dest.x - start.x) * t, y: start.y + (dest.y - start.y) * t, id: 1 }])
+  }
+  return { cdp, start }
+}
+
 export async function run(browser, baseURL) {
   const r = createRecorder('[town-v2]')
   const unmockedRequests = []
@@ -1960,6 +2061,532 @@ export async function run(browser, baseURL) {
           `${name} — no-preference에서 transition-duration이 0보다 큼(motion-safe: 클래스 적용됨, 요구사항 #7)`,
           !isZero,
           `durationClosed=${durationClosed} durationOpen=${durationOpen}`,
+        )
+      }
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S16 — 자석 드래그 배치(magnetic drag placement, 2026-09-20) 마우스
+  //        입력 회귀(390x844) — 임계값/스냅/취소/무효 드롭/기존 tap-to-
+  //        anchor 무회귀를 이 한 시나리오에서 순서대로 검증한다(S14가
+  //        depth/그림자를 이미 철저히 검증했으므로 여기서는 "드래그를
+  //        통해서도 같은 결과가 나오는가"에 집중, 전면 재검증 아님). ────
+  {
+    const vp = { width: 390, height: 844 }
+    const name = 'S16[390x844,mouse] 자석 드래그 배치'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+    const mocks = await installMocks(page, {
+      townState: {
+        starsEarned: 800,
+        dollars: { available: 0, earned: 0, spent: 0 },
+        owned: ['bench', 'tree'],
+        welcomeClaimed: true,
+      },
+    })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownCard(page)
+      await card.click()
+      await waitForTownHeader(page)
+
+      const scene = page.locator('[data-testid="town-scene-v2"]')
+
+      // ── 준비: bench를 첫 번째 자유 앵커에 배치 ──────────────────────────
+      await page.locator('[data-testid="town-open-inventory"]').click()
+      const benchInvCard = page.locator('div.bg-white.rounded-2xl.card-shadow', { has: page.getByText('벤치', { exact: true }) }).first()
+      await benchInvCard.waitFor({ state: 'visible', timeout: 10000 })
+      await benchInvCard.getByRole('button', { name: '마을에 놓기' }).click()
+      const firstAnchor = await pickFreeAnchor(page, 0)
+      await page.locator(`[data-anchor="${firstAnchor.x},${firstAnchor.y}"]`).click()
+      const originCell = `${firstAnchor.x},${firstAnchor.y}`
+      const benchVisible = await page.locator(`[data-item-id="bench"][data-cell="${originCell}"]`).waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 준비: bench가 첫 자유 앵커(${originCell})에 배치됨`, benchVisible)
+
+      // ── 항목 1 — 이동 모드에서 움직임 없는 탭은 드래그를 시작하지 않음 ──
+      await enterMovingMode(page, 'bench', originCell)
+      const wrapper1 = page.locator(`[data-item-id="bench"][data-cell="${originCell}"]`)
+      const wrapper1Box = await wrapper1.boundingBox()
+      await page.mouse.move(wrapper1Box.x + wrapper1Box.width / 2, wrapper1Box.y + wrapper1Box.height / 2)
+      await page.mouse.down()
+      await page.mouse.up()
+      await page.waitForTimeout(50)
+      const cellAfterNoMoveTap = await wrapper1.getAttribute('data-cell')
+      r.check(`${name} 항목1 — 움직임 없는 탭은 셀을 바꾸지 않음(드래그 미시작)`, cellAfterNoMoveTap === originCell, `cell=${cellAfterNoMoveTap}`)
+      const stillMovingAfterTap = await page.getByText('옮길 자리를 선택하거나', { exact: false }).isVisible().catch(() => false)
+      r.check(`${name} 항목1 — 이동 모드 배너가 여전히 표시됨(모드가 조용히 풀리지 않음)`, stillMovingAfterTap)
+
+      // ── 항목 2/3/6/11 — 실제 드래그: 근접 유효 앵커 강조 + 릴리즈까지
+      //     data-cell 불변 + 릴리즈 시점에만 스냅 + 점프 없는 연속 추종 ──
+      const targetAnchor1 = await pickFreeAnchor(page, 0) // 이동 모드 재진입 후 첫 자유 앵커(자기 자신 칸 제외).
+      const wrapper2 = page.locator(`[data-item-id="bench"][data-cell="${originCell}"]`)
+      const originBoxBeforeDrag = await wrapper2.boundingBox()
+      // 지면 접점(translate(-50%,-100%) 기준 바닥-중앙) — wrapper 박스의
+      // 중앙이 아니라 바닥-중앙이 실제 앵커점이므로 점프 거리도 이 점
+      // 기준으로 재야 한다.
+      const originGroundPoint = { x: originBoxBeforeDrag.x + originBoxBeforeDrag.width / 2, y: originBoxBeforeDrag.y + originBoxBeforeDrag.height }
+      const startPos = { x: originGroundPoint.x, y: originGroundPoint.y - originBoxBeforeDrag.height / 2 }
+      await page.mouse.move(startPos.x, startPos.y)
+      await page.mouse.down()
+      // 임계값을 살짝만 넘기는 작은 첫 이동(목표까지 한 번에 이동하지 않음)
+      // — 첫 샘플 자체가 원점 근처여야 "점프 없음"을 의미 있게 검증한다.
+      await page.mouse.move(startPos.x + 15, startPos.y + 2)
+      const wrapperAfterFirstMove = page.locator(`[data-item-id="bench"][data-cell="${originCell}"]`)
+      const boxAfterFirstMove = await wrapperAfterFirstMove.boundingBox()
+      const groundPointAfterFirstMove = boxAfterFirstMove ? { x: boxAfterFirstMove.x + boxAfterFirstMove.width / 2, y: boxAfterFirstMove.y + boxAfterFirstMove.height } : null
+      const jumpDist = groundPointAfterFirstMove
+        ? Math.hypot(groundPointAfterFirstMove.x - originGroundPoint.x, groundPointAfterFirstMove.y - originGroundPoint.y)
+        : null
+      const cellDuringDrag1 = await wrapperAfterFirstMove.getAttribute('data-cell')
+      r.check(`${name} 항목6 — 드래그 중(첫 스텝)에는 data-cell이 그대로 원래 값`, cellDuringDrag1 === originCell, `cell=${cellDuringDrag1}`)
+
+      // 목표 지점까지 세밀하게 더 이동(여러 스텝) — 매 스텝 data-cell 불변 샘플링(항목4/6).
+      const sampledCellsDuringDrag = new Set([cellDuringDrag1])
+      for (let i = 1; i <= 8; i++) {
+        const t = i / 8
+        await page.mouse.move(startPos.x + (targetAnchor1.center.x - startPos.x) * t, startPos.y + (targetAnchor1.center.y - startPos.y) * t)
+        const c = await page.locator(`[data-item-id="bench"][data-cell="${originCell}"]`).getAttribute('data-cell').catch(() => null)
+        if (c) sampledCellsDuringDrag.add(c)
+      }
+      r.check(
+        `${name} 항목4/6 — 드래그 전체 구간 동안 data-cell이 단 하나의 값(원본)만 관측됨(중간 전이 없음)`,
+        sampledCellsDuringDrag.size === 1 && sampledCellsDuringDrag.has(originCell),
+        JSON.stringify([...sampledCellsDuringDrag]),
+      )
+
+      // 목표 앵커 강조(초록) 확인(항목2).
+      const highlighted = page.locator(`[data-anchor="${targetAnchor1.x},${targetAnchor1.y}"][data-drag-highlight="true"]`)
+      const highlightVisible = await highlighted.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)
+      r.check(`${name} 항목2 — 목표 앵커(${targetAnchor1.x},${targetAnchor1.y})가 초록으로 강조됨`, highlightVisible)
+
+      await page.mouse.up()
+      const cellAfterDrop1 = await waitUntil(async () => {
+        const c = await page.locator(`[data-item-id="bench"][data-cell]`).getAttribute('data-cell').catch(() => null)
+        return c && c !== originCell ? c : false
+      }, { timeout: 10000 })
+      r.check(
+        `${name} 항목3/5 — 릴리즈 후 bench가 목표 앵커(${targetAnchor1.x},${targetAnchor1.y})로 스냅됨`,
+        cellAfterDrop1 === `${targetAnchor1.x},${targetAnchor1.y}`,
+        `cell=${cellAfterDrop1}`,
+      )
+      const [gx, gy] = String(cellAfterDrop1).split(',').map(Number)
+      r.check(
+        `${name} 항목5 — 최종 위치가 정수 그리드 좌표(임의 좌표 아님)`,
+        Number.isInteger(gx) && Number.isInteger(gy) && gx >= 0 && gx < 8 && gy >= 0 && gy < 6,
+        `cell=${cellAfterDrop1}`,
+      )
+      r.check(
+        `${name} 항목11 — 드래그 시작 직후 첫 샘플이 원래 앵커에서 크게 점프하지 않음(<40px)`,
+        jumpDist != null && jumpDist < 40,
+        `jumpDist=${jumpDist}`,
+      )
+
+      // ── 항목12 — 드롭 후 지면 접점이 탭-투-앵커로 놓은 것과 일치 ────────
+      // 같은 칸(cellC)에 "드래그로 도달"과 "탭-투-앵커로 도달" 두 방식
+      // 각각으로 놓아 렌더 위치(px)를 비교한다(반드시 같은 칸이어야 의미
+      // 있는 비교).
+      await enterMovingMode(page, 'bench', cellAfterDrop1)
+      const targetAnchorC = await pickFreeAnchor(page, 0)
+      const cellC = `${targetAnchorC.x},${targetAnchorC.y}`
+      const wrapperForDragC = page.locator(`[data-item-id="bench"][data-cell="${cellAfterDrop1}"]`)
+      await mouseDragStart(page, wrapperForDragC, targetAnchorC.center, { steps: 8 })
+      await page.mouse.up()
+      const cellCConfirmed = await waitUntil(async () => {
+        const c = await page.locator(`[data-item-id="bench"][data-cell]`).getAttribute('data-cell').catch(() => null)
+        return c === cellC ? c : false
+      }, { timeout: 10000 })
+      r.check(`${name} — bench가 드래그로 cellC(${cellC})에 도달`, !!cellCConfirmed)
+      const dragBoxAtC = await page.locator(`[data-item-id="bench"][data-cell="${cellC}"]`).boundingBox()
+
+      // cellC에서 다른 칸(elsewhere)으로 드래그해 비운 뒤, 탭-투-앵커로
+      // 다시 cellC로 이동해 같은 칸에서의 렌더 위치를 비교한다.
+      await enterMovingMode(page, 'bench', cellC)
+      const elsewhereAnchor = await pickFreeAnchor(page, 0)
+      const wrapperAtC = page.locator(`[data-item-id="bench"][data-cell="${cellC}"]`)
+      await mouseDragStart(page, wrapperAtC, elsewhereAnchor.center, { steps: 6 })
+      await page.mouse.up()
+      const cellElsewhere = await waitUntil(async () => {
+        const c = await page.locator(`[data-item-id="bench"][data-cell]`).getAttribute('data-cell').catch(() => null)
+        return c && c !== cellC ? c : false
+      }, { timeout: 10000 })
+      r.check(`${name} — bench가 cellC를 비우고 다른 칸(${cellElsewhere})으로 이동`, !!cellElsewhere)
+
+      await enterMovingMode(page, 'bench', cellElsewhere)
+      const cellCAnchorAvailable = await page.locator(`[data-anchor="${cellC}"]`).count()
+      if (cellCAnchorAvailable > 0) {
+        await page.locator(`[data-anchor="${cellC}"]`).click()
+        const tapBoxAtC = await page.locator(`[data-item-id="bench"][data-cell="${cellC}"]`).waitFor({ state: 'visible', timeout: 10000 }).then(() => page.locator(`[data-item-id="bench"][data-cell="${cellC}"]`).boundingBox())
+        const groundDelta = tapBoxAtC && dragBoxAtC
+          ? Math.hypot((tapBoxAtC.x + tapBoxAtC.width / 2) - (dragBoxAtC.x + dragBoxAtC.width / 2), (tapBoxAtC.y + tapBoxAtC.height) - (dragBoxAtC.y + dragBoxAtC.height))
+          : null
+        r.check(
+          `${name} 항목12 — 같은 칸(${cellC})에서 드래그-드롭과 탭-투-앵커의 렌더 위치가 거의 일치(delta<2px)`,
+          groundDelta != null && groundDelta < 2,
+          `groundDelta=${groundDelta}`,
+        )
+      } else {
+        r.check(`${name} 항목12 — cellC가 탭 앵커 후보로 다시 제공되지 않음(구조 문제)`, false, 'cellCAnchorAvailable===0')
+      }
+      const cellAfterGroundCheck = await page.locator(`[data-item-id="bench"][data-cell]`).getAttribute('data-cell')
+
+      // ── 항목13 — 깊이(폭)가 드래그를 통해서도 back<front로 달라짐 ───────
+      await enterMovingMode(page, 'bench', cellAfterGroundCheck)
+      const backAnchor = await pickFreeAnchor(page, 0)
+      const wrapperForDepth1 = page.locator(`[data-item-id="bench"][data-cell="${cellAfterGroundCheck}"]`)
+      await mouseDragStart(page, wrapperForDepth1, backAnchor.center, { steps: 6 })
+      await page.mouse.up()
+      const cellBack = await waitUntil(async () => {
+        const c = await page.locator(`[data-item-id="bench"][data-cell]`).getAttribute('data-cell').catch(() => null)
+        return c && c !== cellAfterGroundCheck ? c : false
+      }, { timeout: 10000 })
+      const widthBack = await (async () => {
+        const [b, s] = await Promise.all([page.locator(`[data-item-id="bench"][data-cell="${cellBack}"]`).boundingBox(), scene.boundingBox()])
+        return b && s && s.width > 0 ? (b.width / s.width) * 100 : null
+      })()
+
+      // 앵커 목록에서 y가 가장 큰(전경) 후보를 골라 확실히 다른 depth로 이동.
+      await enterMovingMode(page, 'bench', cellBack)
+      const anchorCountForDepth = await page.locator('[data-anchor]').count()
+      let frontAnchor = null
+      for (let i = 0; i < anchorCountForDepth; i++) {
+        const cand = await pickFreeAnchor(page, i)
+        if (!frontAnchor || cand.y > frontAnchor.y) frontAnchor = cand
+      }
+      const wrapperForDepth2 = page.locator(`[data-item-id="bench"][data-cell="${cellBack}"]`)
+      await mouseDragStart(page, wrapperForDepth2, frontAnchor.center, { steps: 6 })
+      await page.mouse.up()
+      const cellFront = await waitUntil(async () => {
+        const c = await page.locator(`[data-item-id="bench"][data-cell]`).getAttribute('data-cell').catch(() => null)
+        return c && c !== cellBack ? c : false
+      }, { timeout: 10000 })
+      const widthFront = await (async () => {
+        const [b, s] = await Promise.all([page.locator(`[data-item-id="bench"][data-cell="${cellFront}"]`).boundingBox(), scene.boundingBox()])
+        return b && s && s.width > 0 ? (b.width / s.width) * 100 : null
+      })()
+      r.check(
+        `${name} 항목13 — 드래그로 도달한 두 앵커의 렌더 폭이 depth에 따라 달라짐(뒤=${widthBack?.toFixed(2)}%, 앞=${widthFront?.toFixed(2)}%)`,
+        widthBack != null && widthFront != null && widthBack !== widthFront,
+        JSON.stringify({ widthBack, widthFront, cellBack, cellFront }),
+      )
+
+      // ── 항목7 — 무효 드롭(스냅 범위 밖)은 이동을 커밋하지 않고 안내 문구 ──
+      // 씬 박스 바깥(왼쪽/위로 300px)로 완전히 벗어난 지점 — 모든 앵커의
+      // world % 좌표는 씬 박스 안(0~100%)으로만 매핑되므로 이 지점은 어떤
+      // 앵커로부터도 44px 스냅 범위를 확실히 벗어난다(씬 모서리 근처
+      // 앵커와의 우연한 근접을 피하기 위해 안쪽 모서리가 아니라 바깥을 쓴다).
+      await enterMovingMode(page, 'bench', cellFront)
+      const sceneBoxForInvalid = await scene.boundingBox()
+      const wrapperForInvalid = page.locator(`[data-item-id="bench"][data-cell="${cellFront}"]`)
+      await mouseDragStart(page, wrapperForInvalid, { x: sceneBoxForInvalid.x - 300, y: sceneBoxForInvalid.y - 300 }, { steps: 8 })
+      await page.mouse.up()
+      await page.waitForTimeout(100)
+      const cellAfterInvalidDrop = await page.locator(`[data-item-id="bench"][data-cell]`).getAttribute('data-cell')
+      r.check(`${name} 항목7 — 무효 드롭 후 원래 칸(${cellFront})에 그대로 남음`, cellAfterInvalidDrop === cellFront, `cell=${cellAfterInvalidDrop}`)
+      const invalidToastShown = await page.getByText('여기에는 놓을 수 없어요', { exact: false }).isVisible().catch(() => false)
+      r.check(`${name} 항목7 — 무효 드롭 시 안내 토스트 표시됨`, invalidToastShown)
+
+      // ── 항목8 — 드래그 중 Escape는 이동을 커밋하지 않고 원래 자리로 ─────
+      // item7(무효 드롭) 후에도 이동 모드 자체는 유지되므로(모드 유지가
+      // 스펙 요구사항) enterMovingMode를 다시 호출하지 않는다 — 다시
+      // 호출하면 버튼이 여전히 disabled라 클릭이 타임아웃된다.
+      const anchorForEscape = await pickFreeAnchor(page, 0)
+      const wrapperForEscape = page.locator(`[data-item-id="bench"][data-cell="${cellFront}"]`)
+      await mouseDragStart(page, wrapperForEscape, anchorForEscape.center, { steps: 6 })
+      await page.keyboard.press('Escape')
+      await page.mouse.up()
+      await page.waitForTimeout(100)
+      const cellAfterEscape = await page.locator(`[data-item-id="bench"][data-cell]`).getAttribute('data-cell')
+      r.check(`${name} 항목8 — Escape로 드래그 취소 후 원래 칸(${cellFront})에 남음, moveTownItem 호출 없음`, cellAfterEscape === cellFront, `cell=${cellAfterEscape}`)
+      const stillMovingAfterEscape = await page.getByText('옮길 자리를 선택하거나', { exact: false }).isVisible().catch(() => false)
+      r.check(`${name} 항목8 — Escape는 드래그만 취소하고 이동 모드 자체는 유지(배너 표시)`, stillMovingAfterEscape)
+
+      // ── 항목9 — pointercancel 수신 시 안전하게 복구 ──────────────────────
+      // pointercancel은 실제 드래그 핸들러가 붙은 요소(data-drag-surface,
+      // TownObjectLayer.jsx의 드래그 포착 오버레이)에 직접 디스패치해야
+      // 한다 — wrapper 자신에는 핸들러가 없다(TownObjectLayer.jsx 헤더
+      // 주석 참고, disabled 버튼의 자손이 히트테스트를 가로채는 실측
+      // 결함 때문에 오버레이로 옮겨졌다).
+      const wrapperForCancel = page.locator(`[data-item-id="bench"][data-cell="${cellFront}"]`)
+      const dragSurfaceForCancel = page.locator('[data-drag-surface]')
+      const anchorForCancel = await pickFreeAnchor(page, 0)
+      await mouseDragStart(page, wrapperForCancel, anchorForCancel.center, { steps: 4 })
+      await dragSurfaceForCancel.dispatchEvent('pointercancel', { pointerId: 1 })
+      await page.mouse.up()
+      await page.waitForTimeout(100)
+      const cellAfterCancel = await page.locator(`[data-item-id="bench"][data-cell]`).getAttribute('data-cell')
+      r.check(`${name} 항목9 — pointercancel 후 원래 칸(${cellFront})에 안전하게 남음`, cellAfterCancel === cellFront, `cell=${cellAfterCancel}`)
+
+      await handleCancelIfMoving(page)
+
+      // ── 항목10 — 점유된 칸은 스냅 후보로 제공되지 않음 ───────────────────
+      await placeFromInventoryByLabel(page, '나무')
+      const treeCellAttr = await page.locator('[data-item-id="tree"][data-cell]').getAttribute('data-cell')
+      r.check(`${name} 항목10 준비 — tree가 배치됨(${treeCellAttr})`, !!treeCellAttr)
+      await enterMovingMode(page, 'bench', cellFront)
+      const treeAnchorStillOffered = await page.locator(`[data-anchor="${treeCellAttr}"]`).count()
+      r.check(`${name} 항목10 — 점유된 칸(tree, ${treeCellAttr})은 배치 오버레이 앵커 후보에 없음`, treeAnchorStillOffered === 0)
+      await handleCancelIfMoving(page)
+
+      // ── 항목15 — 탭-투-앵커(배치/이동) 기존 흐름 무회귀 ──────────────────
+      await page.locator('[data-testid="town-open-inventory"]').click()
+      const placeBtn15 = page.getByRole('button', { name: '마을에 놓기' })
+      const placeBtn15Visible = await placeBtn15.isVisible().catch(() => false)
+      if (placeBtn15Visible) {
+        await placeBtn15.click()
+        const anchor15 = await pickFreeAnchor(page, 0)
+        await page.locator(`[data-anchor="${anchor15.x},${anchor15.y}"]`).click()
+        const placedViaTap = await page.locator(`[data-cell="${anchor15.x},${anchor15.y}"]`).waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+        r.check(`${name} 항목15 — 탭-투-앵커 배치가 여전히 동작함(신규 드래그 코드에 영향받지 않음)`, placedViaTap)
+      } else {
+        await page.locator('[data-testid="town-sheet-close"]').click().catch(() => {})
+        r.check(`${name} 항목15 — 탭-투-앵커 배치 회귀 확인(보관함에 놓을 아이템 없음 — SKIP 취급)`, true)
+      }
+      const benchCellForTapMove = await page.locator('[data-item-id="bench"][data-cell]').getAttribute('data-cell')
+      await enterMovingMode(page, 'bench', benchCellForTapMove)
+      const anchor15b = await pickFreeAnchor(page, 0)
+      await page.locator(`[data-anchor="${anchor15b.x},${anchor15b.y}"]`).click()
+      const movedViaTap = await page.locator(`[data-item-id="bench"][data-cell="${anchor15b.x},${anchor15b.y}"]`).waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} 항목15 — 탭-투-앵커 이동이 여전히 동작함(신규 드래그 코드에 영향받지 않음)`, movedViaTap)
+
+      // ── 항목16 — 보관(store) 흐름 무회귀 ─────────────────────────────────
+      await page.locator(`[data-item-id="bench"][data-cell="${anchor15b.x},${anchor15b.y}"] > button`).click()
+      const storeBtn16 = page.getByRole('button', { name: '보관', exact: true })
+      await storeBtn16.waitFor({ state: 'visible', timeout: 5000 })
+      await storeBtn16.click()
+      const benchGone16 = await waitUntil(async () => (await page.locator('[data-item-id="bench"]').count()) === 0, { timeout: 10000 })
+      r.check(`${name} 항목16 — 보관 흐름이 여전히 동작함(신규 드래그 코드에 영향받지 않음)`, !!benchGone16)
+
+      // ── 항목17 — 드래그로 스냅된 위치가 새로고침 후에도 유지됨(드래그도
+      //     tap-to-anchor와 정확히 같은 moveTownItem/handleAnchorTap 저장
+      //     경로를 타므로, 그 새로고침 유지는 위 S4[390x844] 배치 루프의
+      //     "새로고침 후 배치 유지" 체크로 이미 증명돼 있다 — 여기서는
+      //     "드래그를 통해 도달한 경우에도" 똑같이 유지되는지만 최소로
+      //     재확인한다, 항목10에서 배치해 둔 tree를 그대로 사용). ──────────
+      const treeCellForReload = await page.locator('[data-item-id="tree"][data-cell]').getAttribute('data-cell')
+      await enterMovingMode(page, 'tree', treeCellForReload)
+      const anchor17 = await pickFreeAnchor(page, 0)
+      const wrapperForReload = page.locator(`[data-item-id="tree"][data-cell="${treeCellForReload}"]`)
+      await mouseDragStart(page, wrapperForReload, anchor17.center, { steps: 6 })
+      await page.mouse.up()
+      const cellAfterDrag17 = await waitUntil(async () => {
+        const c = await page.locator('[data-item-id="tree"][data-cell]').getAttribute('data-cell').catch(() => null)
+        return c && c !== treeCellForReload ? c : false
+      }, { timeout: 10000 })
+      r.check(`${name} 항목17 준비 — tree가 드래그로(${cellAfterDrag17})에 스냅됨`, !!cellAfterDrag17)
+
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      const backOnDashboard17 = await page.getByRole('button', { name: '구경가기' }).waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false)
+      r.check(`${name} 항목17 — 새로고침 후 세션 복원(대시보드 표시)`, backOnDashboard17)
+      await goToPaulTownScreen(page)
+      const card17 = await enterTownCard(page)
+      await card17.click()
+      const treeStillAtDragCell = await page.locator(`[data-item-id="tree"][data-cell="${cellAfterDrag17}"]`).waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false)
+      r.check(`${name} 항목17 — 새로고침 후에도 드래그로 스냅된 칸(${cellAfterDrag17})에 tree가 그대로 남음`, treeStillAtDragCell)
+
+      // ── 항목19 — 드래그 중 페이지 스크롤/텍스트 선택 없음(항목10에서 이미
+      //     배치해 둔 tree를 그대로 이동 모드로 사용 — tree는 소유 1개뿐이라
+      //     다시 "마을에 놓기"할 수 없음, already_placed). ──────────────────
+      const treeCellForScroll = await page.locator('[data-item-id="tree"][data-cell]').getAttribute('data-cell')
+      await enterMovingMode(page, 'tree', treeCellForScroll)
+      const scrollBefore = await page.evaluate(() => window.scrollY)
+      const selectionBefore = await page.evaluate(() => (document.getSelection ? document.getSelection().toString() : ''))
+      const anchor19b = await pickFreeAnchor(page, 0)
+      const wrapperForScroll = page.locator(`[data-item-id="tree"][data-cell="${treeCellForScroll}"]`)
+      await mouseDragStart(page, wrapperForScroll, anchor19b.center, { steps: 6 })
+      const scrollDuring = await page.evaluate(() => window.scrollY)
+      const selectionDuring = await page.evaluate(() => (document.getSelection ? document.getSelection().toString() : ''))
+      await page.mouse.up()
+      r.check(`${name} 항목19 — 드래그 중 페이지 스크롤 없음(scrollY 불변: ${scrollBefore} -> ${scrollDuring})`, scrollBefore === scrollDuring)
+      r.check(`${name} 항목19 — 드래그 중 텍스트 선택 없음(selection 비어있음)`, selectionBefore === '' && selectionDuring === '')
+
+      // ── 항목21 — 상점/보관함 바텀시트가 여전히 씬 전체를 덮음(회귀 없음) ──
+      await page.locator('[data-testid="town-open-shop"]').click()
+      const shopSheetS16 = page.locator('[data-testid="town-sheet"]')
+      const shopSheetVisibleS16 = await shopSheetS16.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} 항목21 — 상점 시트가 정상적으로 열림(드래그 코드 추가 후에도 무회귀)`, shopSheetVisibleS16)
+      if (shopSheetVisibleS16) await page.locator('[data-testid="town-sheet-close"]').click().catch(() => {})
+
+      // ── 항목18 — 이 뷰포트에서 가로 스크롤 없음 ──────────────────────────
+      r.check(`${name} 항목18 — 가로 스크롤 없음(390x844)`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S17 — 자석 드래그 배치, 터치/포인터 입력 회귀(1440x900 데스크톱) ──────
+  //        S16이 실 마우스(page.mouse)로 이미 핵심 항목(1~13,15,16,18,19,21)
+  //        전부를 검증했으므로(S14의 뷰포트 분담 관례와 동일 절제), 여기서는
+  //        "터치 입력으로도 같은 드래그 메커니즘이 동작하는가"에 집중한다 —
+  //        CDP Input.dispatchTouchEvent(cdpTouchDragStart 헬퍼, 파일 상단
+  //        참고)로 실제 트러스트된 터치 입력을 재현한다. 데스크톱 폭
+  //        (1440x900)에서 검증해 두 최소 뷰포트(390x844/1440x900) 요구사항을
+  //        S16과 함께 충족한다.
+  {
+    const vp = { width: 1440, height: 900 }
+    const name = 'S17[1440x900,touch] 자석 드래그 배치'
+    const context = await browser.newContext({ viewport: vp, hasTouch: true })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+    const mocks = await installMocks(page, {
+      townState: {
+        starsEarned: 800,
+        dollars: { available: 0, earned: 0, spent: 0 },
+        owned: ['bench', 'tree'],
+        welcomeClaimed: true,
+      },
+    })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownCard(page)
+      await card.click()
+      await waitForTownHeader(page)
+
+      // ── 준비: bench 배치 ─────────────────────────────────────────────
+      const originAnchor = await placeFromInventoryByLabel(page, '벤치')
+      const originCell = `${originAnchor.x},${originAnchor.y}`
+      const benchVisible = await page.locator(`[data-item-id="bench"][data-cell="${originCell}"]`).waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 준비: bench가 첫 자유 앵커(${originCell})에 배치됨`, benchVisible)
+
+      // ── 터치 드래그: 근접 유효 앵커 강조 + 릴리즈 시 스냅 ────────────────
+      await enterMovingMode(page, 'bench', originCell)
+      const targetAnchor = await pickFreeAnchor(page, 0)
+      const wrapper = page.locator(`[data-item-id="bench"][data-cell="${originCell}"]`)
+      const { cdp } = await cdpTouchDragStart(context, page, wrapper, targetAnchor.center, { steps: 8 })
+      const cellDuringTouchDrag = await page.locator(`[data-item-id="bench"][data-cell]`).getAttribute('data-cell').catch(() => null)
+      r.check(`${name} — 터치 드래그 중에는 data-cell이 그대로 원래 값`, cellDuringTouchDrag === originCell, `cell=${cellDuringTouchDrag}`)
+
+      const highlighted = page.locator(`[data-anchor="${targetAnchor.x},${targetAnchor.y}"][data-drag-highlight="true"]`)
+      const highlightVisible = await highlighted.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 터치 드래그로 목표 앵커(${targetAnchor.x},${targetAnchor.y})가 초록으로 강조됨`, highlightVisible)
+
+      await cdpTouch(cdp, 'touchEnd', [])
+      const cellAfterTouchDrop = await waitUntil(async () => {
+        const c = await page.locator(`[data-item-id="bench"][data-cell]`).getAttribute('data-cell').catch(() => null)
+        return c && c !== originCell ? c : false
+      }, { timeout: 10000 })
+      r.check(
+        `${name} — 터치 릴리즈 후 bench가 목표 앵커(${targetAnchor.x},${targetAnchor.y})로 스냅됨`,
+        cellAfterTouchDrop === `${targetAnchor.x},${targetAnchor.y}`,
+        `cell=${cellAfterTouchDrop}`,
+      )
+
+      // ── 터치 취소(touchCancel) 안전 복구 ─────────────────────────────────
+      if (cellAfterTouchDrop && cellAfterTouchDrop !== false) {
+        await enterMovingMode(page, 'bench', cellAfterTouchDrop)
+        const anchorForTouchCancel = await pickFreeAnchor(page, 0)
+        const wrapperForTouchCancel = page.locator(`[data-item-id="bench"][data-cell="${cellAfterTouchDrop}"]`)
+        const { cdp: cdp2 } = await cdpTouchDragStart(context, page, wrapperForTouchCancel, anchorForTouchCancel.center, { steps: 6 })
+        await cdpTouch(cdp2, 'touchCancel', [])
+        await page.waitForTimeout(100)
+        const cellAfterTouchCancel = await page.locator(`[data-item-id="bench"][data-cell]`).getAttribute('data-cell')
+        r.check(`${name} — touchCancel 후 원래 칸(${cellAfterTouchDrop})에 안전하게 남음`, cellAfterTouchCancel === cellAfterTouchDrop, `cell=${cellAfterTouchCancel}`)
+
+        // ── 두 번째 손가락(secondary touch) 무시 ──────────────────────────
+        await handleCancelIfMoving(page)
+        await enterMovingMode(page, 'bench', cellAfterTouchDrop)
+        const anchorForSecondary = await pickFreeAnchor(page, 0)
+        const wrapperForSecondary = page.locator(`[data-item-id="bench"][data-cell="${cellAfterTouchDrop}"]`)
+        const cdp3 = await context.newCDPSession(page)
+        const secBox = await wrapperForSecondary.boundingBox()
+        const secStart = { x: secBox.x + secBox.width / 2, y: secBox.y + secBox.height / 2 }
+        await cdpTouch(cdp3, 'touchStart', [{ x: secStart.x, y: secStart.y, id: 1 }])
+        // 이동 중간에 두 번째 손가락이 같은 화면을 추가로 터치 — touchPoints
+        // 배열에 id:2를 더해 "동시에 두 손가락이 닿아 있음"을 재현한다.
+        // 첫 포인터(id:1)에 고정된 drag state가 그대로 유지되고 두 번째는
+        // 무시돼야 한다.
+        await cdpTouch(cdp3, 'touchMove', [
+          { x: secStart.x + (anchorForSecondary.center.x - secStart.x) * 0.3, y: secStart.y + (anchorForSecondary.center.y - secStart.y) * 0.3, id: 1 },
+          { x: secStart.x + 5, y: secStart.y + 5, id: 2 },
+        ])
+        const cellDuringSecondaryTouch = await page.locator(`[data-item-id="bench"][data-cell]`).getAttribute('data-cell').catch(() => null)
+        r.check(`${name} — 두 번째 손가락 개입 중에도 data-cell 불변(무시됨)`, cellDuringSecondaryTouch === cellAfterTouchDrop, `cell=${cellDuringSecondaryTouch}`)
+        // 두 번째 손가락을 떼고, 첫 손가락으로 목표까지 이동 후 릴리즈.
+        await cdpTouch(cdp3, 'touchMove', [
+          { x: anchorForSecondary.center.x, y: anchorForSecondary.center.y, id: 1 },
+        ])
+        await cdpTouch(cdp3, 'touchEnd', [])
+        const cellAfterSecondaryTest = await waitUntil(async () => {
+          const c = await page.locator(`[data-item-id="bench"][data-cell]`).getAttribute('data-cell').catch(() => null)
+          return c && c !== cellAfterTouchDrop ? c : false
+        }, { timeout: 10000 })
+        r.check(`${name} — 첫 손가락으로 정상 완료됨(두 번째 손가락 개입에도 정확히 한 번만 이동)`, !!cellAfterSecondaryTest, `cell=${cellAfterSecondaryTest}`)
+      }
+
+      // ── 이 뷰포트에서 가로 스크롤 없음 ────────────────────────────────────
+      r.check(`${name} — 가로 스크롤 없음(1440x900)`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S18 — 자석 드래그 배치, prefers-reduced-motion 회귀(S15와 동일 패턴,
+  //        390x844) — 드래그 시작 시 살짝 lift(scale 1.06)하는 wrapper
+  //        transform 전환이 reduced-motion에서 실제로 즉시(0s) 적용되는지
+  //        확인한다(motion-safe: 클래스 게이팅, TownObjectLayer.jsx). ──────
+  for (const reduced of [false, true]) {
+    const vp = { width: 390, height: 844 }
+    const name = `S18[390x844,${reduced ? 'reduced-motion' : 'no-preference'}] 드래그 lift transition`
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    if (reduced) await page.emulateMedia({ reducedMotion: 'reduce' })
+    await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+    const mocks = await installMocks(page, {
+      townState: { starsEarned: 800, dollars: { available: 0, earned: 0, spent: 0 }, owned: ['bench'], welcomeClaimed: true },
+    })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownCard(page)
+      await card.click()
+      await waitForTownHeader(page)
+
+      const anchor = await placeFromInventoryByLabel(page, '벤치')
+      const cell = `${anchor.x},${anchor.y}`
+      await enterMovingMode(page, 'bench', cell)
+
+      const wrapper = page.locator(`[data-item-id="bench"][data-cell="${cell}"]`)
+      const durationBeforeDrag = await wrapper.evaluate((el) => window.getComputedStyle(el).transitionDuration)
+      const targetAnchor = await pickFreeAnchor(page, 0)
+      await mouseDragStart(page, wrapper, targetAnchor.center, { steps: 6 })
+      await page.waitForTimeout(50)
+      const durationDuringDrag = await page.locator(`[data-item-id="bench"][data-cell="${cell}"]`).evaluate((el) => window.getComputedStyle(el).transitionDuration).catch(() => null)
+      await page.mouse.up()
+
+      const isZero = durationDuringDrag != null && /^0s(,\s*0s)*$/.test(durationDuringDrag.trim())
+      if (reduced) {
+        r.check(
+          `${name} — reduced-motion에서 드래그 wrapper transition-duration이 사실상 0(motion-safe: 클래스 미적용)`,
+          isZero,
+          `before=${durationBeforeDrag} during=${durationDuringDrag}`,
+        )
+      } else {
+        r.check(
+          `${name} — no-preference에서 드래그 wrapper transition-duration이 0보다 큼(motion-safe: 클래스 적용됨)`,
+          !isZero,
+          `before=${durationBeforeDrag} during=${durationDuringDrag}`,
         )
       }
     } catch (err) {

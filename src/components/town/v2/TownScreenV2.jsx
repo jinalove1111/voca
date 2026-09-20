@@ -159,6 +159,12 @@ export default function TownScreenV2({ studentData, townShop, onBack, gardenPoin
     } else if (mode.kind === 'moving' && studentData && typeof studentData.moveTownItem === 'function') {
       const res = studentData.moveTownItem(mode.placementId, x, y)
       if (res && res.ok) setMode({ kind: 'idle' })
+      // 2026-09-20 — 자석 드래그 배치 요구사항(실패 시 안내) 덕분에 새로
+      // 드러난, 기존 탭-투-앵커에도 이미 있던 조용한 실패(res.ok===false,
+      // 예: cell_occupied 경쟁 상태)를 이 김에 함께 사용자에게 알린다 —
+      // 드래그 드롭도 이 같은 함수를 그대로 재사용하므로(TownScene.jsx
+      // handleDragPointerUp 참고) 별도 처리를 만들지 않는다.
+      else if (res) setToast('여기에는 놓을 수 없어요.')
     }
   }
 
@@ -212,7 +218,7 @@ export default function TownScreenV2({ studentData, townShop, onBack, gardenPoin
             <p className="text-xs font-bold text-purple-600">
               {mode.kind === 'placing'
                 ? `${(itemById[mode.itemId] && itemById[mode.itemId].name) || ''}을(를) 놓을 자리를 선택하세요`
-                : '옮길 자리를 선택하세요'}
+                : '옮길 자리를 선택하거나 아이템을 끌어서 놓으세요'}
             </p>
             <button type="button" onClick={handleCancelMode} className="min-h-[44px] px-3 text-xs font-black text-purple-400 btn-press flex-shrink-0">
               취소
@@ -228,6 +234,7 @@ export default function TownScreenV2({ studentData, townShop, onBack, gardenPoin
           onCellTap={handleCellTap}
           onStartMove={handleMoveStart}
           onStore={handleStore}
+          onDragToast={setToast}
           richness={richness}
           gardenPoints={gardenPoints}
           fog={fog}
