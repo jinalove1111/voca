@@ -1881,6 +1881,16 @@ export async function run(browser, baseURL) {
         JSON.stringify({ widthSettled, widthMiddle, widthFront }),
       )
 
+      // 2026-09-20 추가 — 방금 front로 이동시켰으므로(위 movePlacedItem),
+      // TownObjectLayer.jsx의 "정착(settle)" 1회성 애니메이션(motion-safe:
+      // animate-town-settle, 520ms)이 이 버튼에서 짧게 재생 중일 수 있다 —
+      // 그 상태에서 바로 아래 "closed" transform을 읽으면 평상시 identity
+      // 값이 아니라 오버슈트 도중 값을 잡아, 이후 선택 lift 비교가 실제
+      // 선택 효과가 아니라 정착 애니메이션과 뒤섞여 오탐한다(settle 자체는
+      // 별도로 S19가 검증). 정착이 끝날 시간을 확보한 뒤 아래 lift 검증을
+      // 시작한다.
+      await page.waitForTimeout(700)
+
       // ── 요구사항 #6 — 선택(팝오버 열림) 시 버튼 computed transform이
       //     바뀌고, 닫으면 되돌아옴. transform-origin: 50% 100%라 바닥-
       //     중앙(지면 접점) 위치는 scale/lift 후에도 거의 그대로여야 함
@@ -2195,6 +2205,23 @@ export async function run(browser, baseURL) {
       // 같은 칸(cellC)에 "드래그로 도달"과 "탭-투-앵커로 도달" 두 방식
       // 각각으로 놓아 렌더 위치(px)를 비교한다(반드시 같은 칸이어야 의미
       // 있는 비교).
+      //
+      // 2026-09-21 — 두 측정 사이의 delta를 씬(scene) 자신의 boundingBox
+      // 기준 상대 좌표로 비교한다(절대 페이지 좌표 직접 비교 아님). 진단
+      // 결과(scripts/.tmp/diag_s16.mjs 10회 반복, scrollY/sceneBox 로깅) —
+      // 드래그 경로(raw page.mouse.move/down/up)는 페이지를 스크롤시키지
+      // 않지만, 탭-투-앵커 경로의 `.click()`은 Playwright의 기본
+      // actionability 체크(대상이 뷰포트 밖이면 스크롤-into-view)를 거친다.
+      // 실측(10회 중 1회)에서 두 측정 사이 window.scrollY가 152→446(294px)
+      // 로 바뀌었고 dragBoxAtC/tapBoxAtC의 y 델타(294)와 scene 자신의
+      // boundingBox y 델타(294)가 정확히 일치했다 — 즉 아이템 자신의 렌더
+      // 위치(씬 기준 %)는 항상 동일했고(나머지 9회는 스크롤 변화 없이
+      // delta=0), 그때그때 다른 스크롤 위치에서 페이지-절대 좌표를 그대로
+      // 비교한 이 테스트의 계산 방식이 문제였다(2.5D 폴리시의 settle/glow/
+      // cat-idle 애니메이션은 원인이 아니다 — 버튼 자신의 transform에만
+      // 걸리고 이 wrapper의 boundingBox는 건드리지 않는다, 위 TownObjectLayer
+      // 헤더 주석 참고). 씬 boundingBox를 같은 시점에 함께 캡처해 두 측정을
+      // 씬 기준 상대 좌표로 변환하면 스크롤 위치 차이가 상쇄된다.
       await enterMovingMode(page, 'bench', cellAfterDrop1)
       const targetAnchorC = await pickFreeAnchor(page, 0)
       const cellC = `${targetAnchorC.x},${targetAnchorC.y}`
@@ -2207,6 +2234,7 @@ export async function run(browser, baseURL) {
       }, { timeout: 10000 })
       r.check(`${name} — bench가 드래그로 cellC(${cellC})에 도달`, !!cellCConfirmed)
       const dragBoxAtC = await page.locator(`[data-item-id="bench"][data-cell="${cellC}"]`).boundingBox()
+      const sceneBoxAtDrag = await scene.boundingBox()
 
       // cellC에서 다른 칸(elsewhere)으로 드래그해 비운 뒤, 탭-투-앵커로
       // 다시 cellC로 이동해 같은 칸에서의 렌더 위치를 비교한다.
@@ -2226,11 +2254,15 @@ export async function run(browser, baseURL) {
       if (cellCAnchorAvailable > 0) {
         await page.locator(`[data-anchor="${cellC}"]`).click()
         const tapBoxAtC = await page.locator(`[data-item-id="bench"][data-cell="${cellC}"]`).waitFor({ state: 'visible', timeout: 10000 }).then(() => page.locator(`[data-item-id="bench"][data-cell="${cellC}"]`).boundingBox())
-        const groundDelta = tapBoxAtC && dragBoxAtC
-          ? Math.hypot((tapBoxAtC.x + tapBoxAtC.width / 2) - (dragBoxAtC.x + dragBoxAtC.width / 2), (tapBoxAtC.y + tapBoxAtC.height) - (dragBoxAtC.y + dragBoxAtC.height))
+        const sceneBoxAtTap = await scene.boundingBox()
+        const groundDelta = tapBoxAtC && dragBoxAtC && sceneBoxAtTap && sceneBoxAtDrag
+          ? Math.hypot(
+            (tapBoxAtC.x - sceneBoxAtTap.x + tapBoxAtC.width / 2) - (dragBoxAtC.x - sceneBoxAtDrag.x + dragBoxAtC.width / 2),
+            (tapBoxAtC.y - sceneBoxAtTap.y + tapBoxAtC.height) - (dragBoxAtC.y - sceneBoxAtDrag.y + dragBoxAtC.height),
+          )
           : null
         r.check(
-          `${name} 항목12 — 같은 칸(${cellC})에서 드래그-드롭과 탭-투-앵커의 렌더 위치가 거의 일치(delta<2px)`,
+          `${name} 항목12 — 같은 칸(${cellC})에서 드래그-드롭과 탭-투-앵커의 렌더 위치가 거의 일치(씬 기준 상대 좌표, delta<2px)`,
           groundDelta != null && groundDelta < 2,
           `groundDelta=${groundDelta}`,
         )
@@ -2278,6 +2310,15 @@ export async function run(browser, baseURL) {
         widthBack != null && widthFront != null && widthBack !== widthFront,
         JSON.stringify({ widthBack, widthFront, cellBack, cellFront }),
       )
+
+      // 2026-09-20 추가 — 바로 위 항목13의 두 번째 드래그 이동 직후라
+      // TownObjectLayer.jsx의 정착(settle) 애니메이션(520ms)이 이 bench
+      // 버튼에서 아직 재생 중일 수 있다 — Playwright의 클릭 액션성
+      // (actionability) "stable" 판정이 그 애니메이션이 끝날 때까지
+      // enterMovingMode의 첫 클릭을 늦춰(최대 약 1초 관측) 이후 타이밍이
+      // 흔들릴 여지가 있었다(S14의 동일 원인 회귀와 같은 근거, 위 참고).
+      // 정착이 끝날 시간을 확보한 뒤 이 항목을 시작한다.
+      await page.waitForTimeout(700)
 
       // ── 항목7 — 무효 드롭(스냅 범위 밖)은 이동을 커밋하지 않고 안내 문구 ──
       // 씬 박스 바깥(왼쪽/위로 300px)로 완전히 벗어난 지점 — 모든 앵커의
@@ -2589,6 +2630,389 @@ export async function run(browser, baseURL) {
           `before=${durationBeforeDrag} during=${durationDuringDrag}`,
         )
       }
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S19 — 2.5D 폴리시 회귀(선택 glow/정착 settle/드래그 시각 합성,
+  //        2026-09-20) — 390x844. 선택 lift에 이어 추가된 rim/glow가 앵커
+  //        (data-cell)를 바꾸지 않는지, "정착" 애니메이션이 실제 이동
+  //        (탭/드래그) 후에만 발동하고 새로고침(재마운트)에서는 발동하지
+  //        않는지, 드래그로 스냅한 뒤에도 z-순서가 여전히 정확한지, 배치
+  //        오버레이가 모드에 따라 정확히 나타나고 사라지는지를 검증한다. ──
+  {
+    const vp = { width: 390, height: 844 }
+    const name = 'S19[390x844] 2.5D 폴리시(glow/settle/드래그 합성) 회귀'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+    const mocks = await installMocks(page, {
+      townState: {
+        starsEarned: 800,
+        dollars: { available: 0, earned: 0, spent: 0 },
+        owned: ['bench', 'cat'],
+        welcomeClaimed: true,
+      },
+    })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownCard(page)
+      await card.click()
+      await waitForTownHeader(page)
+
+      // ── 준비: bench를 배치 ────────────────────────────────────────────
+      const benchAnchor = await placeFromInventoryByLabel(page, '벤치')
+      const benchCell = `${benchAnchor.x},${benchAnchor.y}`
+      const bench = page.locator(`[data-item-id="bench"][data-cell="${benchCell}"]`)
+      const benchVisible = await bench.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 준비: bench 배치됨(${benchCell})`, benchVisible)
+      if (!benchVisible) throw new Error('bench 배치 실패')
+
+      // ── 선택(팝오버 열림) 시 rim/glow가 렌더되지만 앵커(data-cell)는
+      //     전혀 바뀌지 않는다(과제 지시서 Phase F 항목2). ─────────────────
+      const benchButton = bench.locator('> button')
+      await benchButton.click()
+      const moveBtn = page.getByRole('button', { name: '이동', exact: true })
+      await moveBtn.waitFor({ state: 'visible', timeout: 5000 })
+      const glow = bench.locator('> span').first()
+      const glowVisible = await glow.isVisible().catch(() => false)
+      r.check(`${name} — 선택 시 rim/glow(span) 렌더됨`, glowVisible)
+      const glowBoxShadow = glowVisible ? await glow.evaluate((el) => window.getComputedStyle(el).boxShadow) : null
+      r.check(`${name} — glow가 실제 box-shadow를 가짐(none 아님)`, !!glowBoxShadow && glowBoxShadow !== 'none', String(glowBoxShadow))
+      const cellAfterSelect = await bench.getAttribute('data-cell')
+      r.check(`${name} — 선택 후에도 data-cell 불변(앵커 안 바뀜, Phase F 항목2)`, cellAfterSelect === benchCell, `cell=${cellAfterSelect}`)
+      await page.keyboard.press('Escape')
+      await moveBtn.waitFor({ state: 'detached', timeout: 5000 }).catch(() => {})
+
+      // ── 최초 배치 자체(방금 전)에는 정착 클래스가 안 붙어 있어야 한다
+      //     (최초 배치는 "이동"이 아니다). ──────────────────────────────
+      const settleClassAfterPlace = await benchButton.evaluate((el) => el.className)
+      r.check(`${name} — 최초 배치 직후엔 정착 클래스가 안 붙어 있음(Phase F 항목5)`, !settleClassAfterPlace.includes('animate-town-settle'))
+
+      // ── bench를 탭-투-앵커로 이동 → 정착 애니메이션이 짧게 발동한다. ───
+      await enterMovingMode(page, 'bench', benchCell)
+      const targetAnchor1 = await pickFreeAnchor(page, 1)
+      await page.locator(`[data-anchor="${targetAnchor1.x},${targetAnchor1.y}"]`).click()
+      const newCell1 = `${targetAnchor1.x},${targetAnchor1.y}`
+      const benchAtNew1 = page.locator(`[data-item-id="bench"][data-cell="${newCell1}"]`)
+      const movedOk1 = await benchAtNew1.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 탭-투-앵커 이동 성공(${newCell1})`, movedOk1)
+
+      const settlePlayed = await waitUntil(async () => {
+        const cls = await benchAtNew1.locator('> button').evaluate((el) => el.className).catch(() => '')
+        return cls.includes('animate-town-settle')
+      }, { timeout: 700, interval: 40 })
+      r.check(`${name} — 탭-투-앵커 이동 직후 정착 애니메이션 클래스 발동(Phase F 항목5)`, !!settlePlayed)
+
+      const settleCleared = await waitUntil(async () => {
+        const cls = await benchAtNew1.locator('> button').evaluate((el) => el.className).catch(() => '')
+        return !cls.includes('animate-town-settle')
+      }, { timeout: 2000, interval: 100 })
+      r.check(`${name} — 정착 애니메이션이 일정 시간 후 스스로 꺼짐(무한 반복 아님)`, !!settleCleared)
+
+      // ── 새로고침(재마운트) 후에는 정착이 발동하지 않는다(prevCellsRef가
+      //     새로 시작 — Phase F 항목5의 "not fire on plain reload"). 새로고침은
+      //     대시보드로 돌아간다(S4/S16 항목17과 동일 세션 복원 관례) — 다시
+      //     Paul Town → 내 마을로 들어가야 한다. ──────────────────────────
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await goToPaulTownScreen(page)
+      const cardAfterReload = await enterTownCard(page)
+      await cardAfterReload.click()
+      await waitForTownHeader(page)
+      const benchAfterReload = page.locator(`[data-item-id="bench"][data-cell="${newCell1}"]`)
+      const stillThereAfterReload = await benchAfterReload.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 새로고침 후 이동 결과(${newCell1})가 그대로 유지됨`, stillThereAfterReload)
+      if (stillThereAfterReload) {
+        const classAfterReload = await benchAfterReload.locator('> button').evaluate((el) => el.className)
+        r.check(`${name} — 새로고침 직후엔 정착 클래스가 안 붙어 있음(재렌더/reload 오발동 없음, Phase F 항목5)`, !classAfterReload.includes('animate-town-settle'))
+      }
+
+      // ── 드래그로도(탭-투-앵커와 동일하게) 정착이 발동하고, 기존 스냅/
+      //     영속 동작은 그대로다(가장 중요한 회귀 확인). ──────────────────
+      await enterMovingMode(page, 'bench', newCell1)
+      const targetAnchor2 = await pickFreeAnchor(page, 2)
+      const wrapper2 = page.locator(`[data-item-id="bench"][data-cell="${newCell1}"]`)
+      await mouseDragStart(page, wrapper2, targetAnchor2.center, { steps: 8 })
+      await page.mouse.up()
+      const newCell2 = `${targetAnchor2.x},${targetAnchor2.y}`
+      const benchAtNew2 = page.locator(`[data-item-id="bench"][data-cell="${newCell2}"]`)
+      const draggedOk = await benchAtNew2.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 드래그 이동도 여전히 스냅/영속됨(${newCell2}, 새 시각 합성과 무회귀 — 가장 중요한 확인)`, draggedOk)
+      if (draggedOk) {
+        const settlePlayed2 = await waitUntil(async () => {
+          const cls = await benchAtNew2.locator('> button').evaluate((el) => el.className).catch(() => '')
+          return cls.includes('animate-town-settle')
+        }, { timeout: 700, interval: 40 })
+        r.check(`${name} — 드래그 이동 직후에도 정착 애니메이션 발동(Phase F 항목5)`, !!settlePlayed2)
+        const anchorsAfterDrop = await page.locator('[data-anchor]').count()
+        r.check(`${name} — 드롭 성공 후 배치 오버레이(앵커)가 전부 사라짐(모드 idle 복귀, Phase F 항목4)`, anchorsAfterDrop === 0, `count=${anchorsAfterDrop}`)
+      }
+
+      // ── 양성 대조 — 이동 모드 중엔 오버레이가 보이고, "취소"로 벗어나면
+      //     사라진다(Phase F 항목4 — "drag ends, is cancelled, or loses
+      //     pointer capture"의 명시적 취소 경로). ─────────────────────────
+      await enterMovingMode(page, 'bench', newCell2)
+      const anchorsWhileMoving = await page.locator('[data-anchor]').count()
+      r.check(`${name} — 이동 모드 중엔 배치 오버레이(앵커)가 보임(양성 대조)`, anchorsWhileMoving > 0, `count=${anchorsWhileMoving}`)
+      await handleCancelIfMoving(page)
+      const anchorsAfterCancel = await page.locator('[data-anchor]').count()
+      r.check(`${name} — "취소" 후 배치 오버레이(앵커)가 사라짐(Phase F 항목4)`, anchorsAfterCancel === 0, `count=${anchorsAfterCancel}`)
+
+      // ── 새 시각 효과가 붙은 채로도 Y-깊이 z-순서가 여전히 성립(S14가
+      //     철저히 검증했으므로 여기서는 가벼운 재확인만, Phase F 항목1). ──
+      const catAnchor = await placeFromInventoryByLabel(page, '고양이')
+      const catCell = `${catAnchor.x},${catAnchor.y}`
+      const cat = page.locator(`[data-item-id="cat"][data-cell="${catCell}"]`)
+      const catVisible = await cat.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 고양이 배치됨(${catCell})`, catVisible)
+      if (catVisible) {
+        const benchFinal = page.locator(`[data-item-id="bench"][data-cell="${newCell2}"]`)
+        const [benchTop, benchZFinal] = await Promise.all([
+          benchFinal.evaluate((el) => parseFloat(el.style.top)),
+          benchFinal.evaluate((el) => Number(window.getComputedStyle(el).zIndex)),
+        ])
+        const [catTop, catZFinal] = await Promise.all([
+          cat.evaluate((el) => parseFloat(el.style.top)),
+          cat.evaluate((el) => Number(window.getComputedStyle(el).zIndex)),
+        ])
+        const yOrderHolds = benchTop === catTop || (benchTop > catTop) === (benchZFinal > catZFinal)
+        r.check(
+          `${name} — 새 시각 효과 적용 후에도 Y-깊이 z-순서 성립(top%↑ → z-index↑, Phase F 항목1)`,
+          yOrderHolds,
+          JSON.stringify({ benchTop, benchZFinal, catTop, catZFinal }),
+        )
+
+        // ── 고양이 idle 숨쉬기 — 방금 배치돼 idle(선택/드래그 아님)이니
+        //     idle 애니메이션 클래스가 붙어 있어야 한다. bench(고양이
+        //     아님)는 음성 대조. ─────────────────────────────────────────
+        const catButton = cat.locator('> button')
+        const catIdleClass = await catButton.evaluate((el) => el.className)
+        r.check(`${name} — 고양이(idle) 버튼에 idle 숨쉬기 애니메이션 클래스 적용됨`, catIdleClass.includes('animate-town-cat-idle'))
+        const benchIdleClass = await benchFinal.locator('> button').evaluate((el) => el.className)
+        r.check(`${name} — bench(고양이 아님)는 idle 숨쉬기 클래스가 없음(음성 대조)`, !benchIdleClass.includes('animate-town-cat-idle'))
+      }
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S20 — ambient 폴리시 회귀(강 반짝임/초목 흔들림/대기 부유/고양이
+  //        idle/선택 glow pulse/씬 진입 zoom, 2026-09-20) — reduced-motion
+  //        게이팅(Phase F 항목6)과 포인터 통과(Phase F 항목7)를 검증한다. ──
+  for (const reduced of [false, true]) {
+    const vp = { width: 390, height: 844 }
+    const name = `S20[390x844,${reduced ? 'reduced-motion' : 'no-preference'}] ambient 폴리시(reduced-motion 게이팅)`
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    if (reduced) await page.emulateMedia({ reducedMotion: 'reduce' })
+    await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+    const mocks = await installMocks(page, {
+      townState: {
+        starsEarned: 800,
+        dollars: { available: 0, earned: 0, spent: 0 },
+        owned: ['bench', 'cat'],
+        welcomeClaimed: true,
+      },
+    })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownCard(page)
+      await card.click()
+      await waitForTownHeader(page)
+      const scene = page.locator('[data-testid="town-scene-v2"]')
+
+      async function animName(locator) {
+        return locator.evaluate((el) => window.getComputedStyle(el).animationName).catch(() => null)
+      }
+
+      // ── 씬 진입 settle/zoom. ─────────────────────────────────────────
+      const entranceName = await animName(scene)
+      r.check(
+        `${name} — 진입 zoom animationName이 ${reduced ? 'none(reduced-motion)' : 'townEntrance(no-preference)'}`,
+        reduced ? entranceName === 'none' : entranceName === 'townEntrance',
+        String(entranceName),
+      )
+
+      // ── 강 반짝임(river-highlight, 그룹 전체 동일 처리). ─────────────────
+      const riverHighlight = page.locator('img[data-env-asset="river-highlight"]').first()
+      const riverName = await animName(riverHighlight)
+      r.check(
+        `${name} — 강 반짝임 animationName이 ${reduced ? 'none(reduced-motion)' : 'townShimmer(no-preference)'}`,
+        reduced ? riverName === 'none' : riverName === 'townShimmer',
+        String(riverName),
+      )
+      const waterRootPE = await riverHighlight.evaluate((el) => {
+        const root = el.closest('[aria-hidden="true"]')
+        return root ? window.getComputedStyle(root).pointerEvents : null
+      })
+      r.check(`${name} — 강(water) 레이어 루트 computed pointer-events: none(Phase F 항목7)`, waterRootPE === 'none', String(waterRootPE))
+
+      // ── 초목 흔들림 — cluster-0(스웨이 대상, flower-cluster-pink 첫
+      //     인스턴스 — 렌더 순서가 배열 순서와 같다는 데이터 순서 불변식에
+      //     의존, worldScenery.js ENV_PLACEMENTS 순서 참고)만 흔들리고
+      //     cluster-5(같은 assetKey, 스웨이 대상 아님)는 흔들리지 않는다
+      //     (전체 25개가 아니라 소수만 — 과제 요구사항 그대로). ─────────────
+      const swayImgs = page.locator('img[data-env-asset="flower-cluster-pink"]')
+      const swayCount = await swayImgs.count()
+      r.check(`${name} — flower-cluster-pink 인스턴스 2개 이상 존재(스웨이 대조 전제조건)`, swayCount >= 2, `count=${swayCount}`)
+      if (swayCount >= 2) {
+        const swayName0 = await animName(swayImgs.nth(0))
+        const swayName1 = await animName(swayImgs.nth(1))
+        r.check(
+          `${name} — 스웨이 대상(cluster-0) animationName이 ${reduced ? 'none(reduced-motion)' : 'townSway(no-preference)'}`,
+          reduced ? swayName0 === 'none' : swayName0 === 'townSway',
+          String(swayName0),
+        )
+        r.check(`${name} — 스웨이 대상 아닌 같은 자산(cluster-5)은 animationName이 none(전체가 아니라 소수만)`, swayName1 === 'none', String(swayName1))
+        const sceneryRootPE = await swayImgs.nth(0).evaluate((el) => {
+          const root = el.closest('[aria-hidden="true"]')
+          return root ? window.getComputedStyle(root).pointerEvents : null
+        })
+        r.check(`${name} — 초목(scenery) 레이어 루트 computed pointer-events: none(Phase F 항목7)`, sceneryRootPE === 'none', String(sceneryRootPE))
+      }
+
+      // ── 대기 부유(atmosphere) — 결정론적 4개 중 하나로 확인. ─────────────
+      const drifter = page.locator('[data-atmosphere="butterfly-1"]')
+      const driftName = await animName(drifter)
+      r.check(
+        `${name} — 대기 부유 animationName이 ${reduced ? 'none(reduced-motion)' : 'townDrift(no-preference)'}`,
+        reduced ? driftName === 'none' : driftName === 'townDrift',
+        String(driftName),
+      )
+      const atmosphereRootPE = await drifter.evaluate((el) => {
+        const root = el.closest('[aria-hidden="true"]')
+        return root ? window.getComputedStyle(root).pointerEvents : null
+      })
+      r.check(`${name} — 대기(atmosphere) 레이어 루트 computed pointer-events: none(Phase F 항목7)`, atmosphereRootPE === 'none', String(atmosphereRootPE))
+      const atmosphereCount = await page.locator('[data-atmosphere]').count()
+      r.check(`${name} — 대기 장식 4개 결정론적으로 렌더됨`, atmosphereCount === 4, `count=${atmosphereCount}`)
+
+      // ── 고양이 idle — 배치 직후(선택/드래그 아님). ──────────────────────
+      const catAnchor = await placeFromInventoryByLabel(page, '고양이')
+      const catCell = `${catAnchor.x},${catAnchor.y}`
+      const catButton = page.locator(`[data-item-id="cat"][data-cell="${catCell}"] > button`)
+      const catButtonVisible = await catButton.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      if (catButtonVisible) {
+        const catIdleName = await animName(catButton)
+        r.check(
+          `${name} — 고양이 idle animationName이 ${reduced ? 'none(reduced-motion)' : 'townCatIdle(no-preference)'}`,
+          reduced ? catIdleName === 'none' : catIdleName === 'townCatIdle',
+          String(catIdleName),
+        )
+
+        // ── 선택 glow — reduced-motion에서도 정적 링(box-shadow, 핵심
+        //     표시)은 항상 남아야 한다(pulse만 꺼진다, Phase F 항목6). no-
+        //     preference 컨텍스트에서는 위에서 막 확인한 idle 숨쉬기
+        //     애니메이션이 버튼의 transform을 계속 미세하게 오실레이션
+        //     시키는 중이라 Playwright의 클릭 액션성(actionability)
+        //     "stable" 판정(연속 프레임 사이 바운딩박스 불변)이 이 애니메이션이
+        //     떠 있는 한 영원히 통과하지 못한다(실제 브라우저의 실제 클릭은
+        //     transform 애니메이션과 무관하게 즉시 동작 — 이건 순수하게
+        //     Playwright의 합성 안정성 휴리스틱 한계이지 앱의 실제 결함이
+        //     아니다) — force:true로 그 안정성 대기를 건너뛴다. ──────────
+        await catButton.click({ force: true })
+        const moveBtn = page.getByRole('button', { name: '이동', exact: true })
+        await moveBtn.waitFor({ state: 'visible', timeout: 5000 })
+        const glow = page.locator(`[data-item-id="cat"][data-cell="${catCell}"] > span`).first()
+        const glowBoxShadow = await glow.evaluate((el) => window.getComputedStyle(el).boxShadow).catch(() => null)
+        r.check(`${name} — 선택 glow의 정적 box-shadow는 reduced-motion과 무관하게 항상 존재(정적 링 유지)`, !!glowBoxShadow && glowBoxShadow !== 'none', String(glowBoxShadow))
+        const glowAnimName = await animName(glow)
+        r.check(
+          `${name} — 선택 glow의 pulse animationName이 ${reduced ? 'none(reduced-motion, 정적 링만)' : 'townGlow(no-preference)'}`,
+          reduced ? glowAnimName === 'none' : glowAnimName === 'townGlow',
+          String(glowAnimName),
+        )
+        await page.keyboard.press('Escape')
+      }
+
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S20b — 잠금(hidden) 랜드마크 비상호작용(Phase F 항목8). 기본 mock
+  //        레벨(starsEarned=20 → Lv.2)에서 book-shop(lane, unlock=3)이
+  //        확실히 hidden 상태가 되는 컨텍스트를 따로 쓴다(위 S20 루프는
+  //        starsEarned=800이라 대부분 레벨이 열려 있어 hidden 로트가 아예
+  //        없을 수 있다). ──────────────────────────────────────────────
+  {
+    const vp = { width: 390, height: 844 }
+    const name = 'S20b[390x844] 잠금 랜드마크 비상호작용'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownCard(page)
+      await card.click()
+      await waitForTownHeader(page)
+
+      const hiddenLot = page.locator('[data-lot-id="book-shop"][data-lot-state="hidden"]')
+      const hiddenVisible = await hiddenLot.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 준비: book-shop이 이 레벨(Lv.2)에서 hidden 상태로 렌더됨`, hiddenVisible)
+      if (hiddenVisible) {
+        const [lotPE, lotAriaHidden] = await Promise.all([
+          hiddenLot.evaluate((el) => window.getComputedStyle(el).pointerEvents),
+          hiddenLot.getAttribute('aria-hidden'),
+        ])
+        r.check(`${name} — 잠금 랜드마크 computed pointer-events: none(클릭 불가, Phase F 항목8)`, lotPE === 'none', String(lotPE))
+        r.check(`${name} — 잠금 랜드마크 aria-hidden="true"(스크린리더 제외, Phase F 항목8)`, lotAriaHidden === 'true', String(lotAriaHidden))
+      }
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S20c — 데스크톱 레이아웃(1280x720)에서도 새 ambient 레이어가 가로
+  //        스크롤을 유발하지 않는다(Phase F 항목9). ─────────────────────
+  {
+    const vp = { width: 1280, height: 720 }
+    const name = 'S20c[1280x720] ambient 레이어 레이아웃 무회귀'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+    const mocks = await installMocks(page, {
+      townState: { starsEarned: 800, dollars: { available: 0, earned: 0, spent: 0 }, owned: ['bench', 'cat', 'tree'], welcomeClaimed: true },
+    })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownCard(page)
+      await card.click()
+      await waitForTownHeader(page)
+      r.check(`${name} — 가로 스크롤 없음(Phase F 항목9)`, await noHorizontalOverflow(page))
+      const atmosphereCount = await page.locator('[data-atmosphere]').count()
+      r.check(`${name} — 대기(atmosphere) 장식 4개 렌더됨(결정론적)`, atmosphereCount === 4, `count=${atmosphereCount}`)
     } catch (err) {
       const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
       r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,

@@ -46,6 +46,7 @@
 // 준다(레이어 전체가 클릭 불가여야 한다는 지시서 요구를 그대로 지키되,
 // aria-hidden은 표지판 자신에는 주지 않는다).
 import { useEffect, useState } from 'react'
+import { useDocumentHidden } from '../../../hooks/useDocumentHidden'
 import { ENV_PLACEMENTS, PROP_PLACEMENTS, SIGNS } from '../../../utils/town/worldScenery'
 import { worldZIndex } from '../../../utils/town/worldRender'
 import { townAsset } from '../../../assets/town'
@@ -53,6 +54,15 @@ import TownEnvPlacement from './TownEnvPlacement'
 
 const FENCE_HEDGE = ENV_PLACEMENTS.filter((p) => p.group === 'fenceHedge')
 const CLUSTERS = ENV_PLACEMENTS.filter((p) => p.group === 'cluster')
+
+// 2026-09-20 — 초목 흔들림(vegetation sway) ambient 파일럿. 25개 클러스터
+// 전체가 아니라(과제 지시서 "a small explicit subset... not all ~25")
+// 자연스러운 낱개 식생(flower-cluster-*/shrub-*)만 골라 결정론적으로
+// 고정한 소수(6개) — 화분류(flower-pot*, depthLayer 'scenery', 건물 옆
+// 고정 화분이라 딱딱한 용기라는 인상이라 스웨이가 부자연스럽다)는 제외.
+// 화면 전역에 고르게 흩어지도록 id를 듬성듬성 골랐다.
+const SWAY_CLUSTER_IDS = new Set(['cluster-0', 'cluster-3', 'cluster-6', 'cluster-9', 'cluster-13', 'cluster-17'])
+const SWAY_CLASS = 'origin-bottom motion-safe:animate-town-sway'
 
 // 하네스 .shadow CSS 그대로(재도출 없음) — radial-gradient 타원.
 const SHADOW_BACKGROUND = 'radial-gradient(ellipse at center, rgba(30,25,15,0.35) 0%, rgba(30,25,15,0.16) 55%, rgba(30,25,15,0) 75%)'
@@ -160,6 +170,7 @@ function WorldSign({ sign }) {
 
 export default function TownSceneryLayer({ level }) {
   void level // 경관 전부 레벨 무관(worldScenery.js 헤더) — 시그니처만 다른 레이어와 통일.
+  const hidden = useDocumentHidden()
 
   return (
     <>
@@ -167,9 +178,17 @@ export default function TownSceneryLayer({ level }) {
         {FENCE_HEDGE.map((p) => (
           <TownEnvPlacement key={p.id} entry={p} />
         ))}
-        {CLUSTERS.map((p) => (
-          <TownEnvPlacement key={p.id} entry={p} />
-        ))}
+        {CLUSTERS.map((p) => {
+          const isSway = SWAY_CLUSTER_IDS.has(p.id)
+          return (
+            <TownEnvPlacement
+              key={p.id}
+              entry={p}
+              animationClassName={isSway ? SWAY_CLASS : undefined}
+              animationStyle={isSway ? { animationPlayState: hidden ? 'paused' : 'running' } : undefined}
+            />
+          )
+        })}
         {PROP_PLACEMENTS.map((p) => (
           <PropEntry key={p.id} prop={p} />
         ))}

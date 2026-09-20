@@ -26,22 +26,39 @@
 // 동일 이유 — 스태킹 컨텍스트를 만들지 않아야 다른 레이어와 전역적으로
 // 올바르게 섞인다).
 //
-// 하네스가 river-highlight에 애니메이션(반짝임)을 주지 않으므로(placePx
-// 호출부에 별도 transition/animation 없음, 정적 배치) 이 레이어도 정적
-// 이다 — 새 모션을 발명하지 않는다.
+// 2026-09-20 — 강 반짝임(river shimmer) ambient 파일럿. 하네스는 정적
+// 배치였지만(placePx 호출부에 transition/animation 없음), 이 세션은
+// river-highlight 타일(6개, 물 위 반짝임 오버레이)에만 은은한 opacity
+// 펄스를 추가한다 — river-straight/river-bend(물 자체) 타일은 건드리지
+// 않는다(과제 지시서 "animate the existing river-highlight tile(s) only").
+// 애니메이션은 TownEnvPlacement의 animationClassName/animationStyle을
+// 통해 내부 <img> 자신에만 걸린다(래퍼의 anchor transform과 절대 같은
+// 엘리먼트를 공유하지 않는다 — TownEnvPlacement.jsx 헤더 참고). 탭이
+// 백그라운드(document.hidden)면 useDocumentHidden으로 pause한다.
+import { useDocumentHidden } from '../../../hooks/useDocumentHidden'
 import { ENV_PLACEMENTS } from '../../../utils/town/worldScenery'
 import TownEnvPlacement from './TownEnvPlacement'
 
 const RIVER_PLACEMENTS = ENV_PLACEMENTS.filter((p) => p.group === 'river')
+const SHIMMER_CLASS = 'motion-safe:animate-town-shimmer'
 
 export default function TownWaterLayer({ level }) {
   void level // 강은 레벨 무관(항상 보임) — 시그니처만 다른 레이어와 통일(오너 결정 4).
+  const hidden = useDocumentHidden()
 
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-      {RIVER_PLACEMENTS.map((p) => (
-        <TownEnvPlacement key={p.id} entry={p} />
-      ))}
+      {RIVER_PLACEMENTS.map((p) => {
+        const isShimmer = p.assetKey === 'river-highlight'
+        return (
+          <TownEnvPlacement
+            key={p.id}
+            entry={p}
+            animationClassName={isShimmer ? SHIMMER_CLASS : undefined}
+            animationStyle={isShimmer ? { animationPlayState: hidden ? 'paused' : 'running' } : undefined}
+          />
+        )
+      })}
     </div>
   )
 }

@@ -35,3 +35,12 @@ export const POPOVER_Z = LAYER_BASE.ui + 200
 // 팝오버/시트가 항상 그 위에 남는다(드래그 중엔 팝오버가 열려 있지 않지만,
 // 계약상 항상 아래에 있어야 한다는 순서 자체를 고정한다).
 export const DRAG_ITEM_Z = LAYER_BASE.ui + 150
+
+// 대기(ambient atmosphere) 부유 장식(2026-09-20, TownAtmosphereLayer.jsx) —
+// 나비/나뭇잎/빛 알갱이는 Y-정렬 콘텐츠가 아니라(특정 아이템과 상호작용할
+// 필요가 없다) 씬 전체 위를 떠다니는 얇은 고정 오버레이라, worldZIndex의
+// y-랭킹 콘텐츠 밴드(architecture~foregroundVegetation, 6000~6903대)에
+// 넣지 않는다. LAYER_BASE.paul(8000, Y-랭킹 없음)보다 10 낮게 둬 콘텐츠
+// 밴드 전체(최대 6903)보다는 항상 위, paul/ui(8000/9000)보다는 항상 아래
+// 로 고정한다 — DRAG_ITEM_Z와 같은 정신의 작은 씬 로컬 상수.
+export const ATMOSPHERE_Z = LAYER_BASE.paul - 10

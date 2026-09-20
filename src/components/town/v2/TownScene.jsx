@@ -83,12 +83,23 @@
 // 만들지 않고 기존 tap-to-anchor가 쓰는 것과 정확히 같은 경로
 // (handleAnchorTap → onCellTap → TownScreenV2.handleCellTap →
 // studentData.moveTownItem)를 그대로 재사용한다(CLAUDE.md 규칙 3).
+
+// 2026-09-20(같은 날, 추가 패스) — 2.5D/ambient 폴리시 패스. 1) 새
+// TownAtmosphereLayer(나비/나뭇잎/빛 알갱이, 순수 장식)를 TownAmbientLayer
+// 다음(scenery류보다 위, objects/UI보다 아래)에 얹는다. 2) 씬 최초 마운트
+// 1회성 settle/zoom(투명도+scale 0.97->1, motion-safe:animate-town-entrance)
+// 을 씬 루트(ref={sceneRef}) 자신에 건다 - 이 엘리먼트는 style.transform을
+// 갖지 않으므로(aspectRatio만 인라인) 애니메이션 transform과 충돌할 기존
+// 값이 없다. TownScreenV2.jsx의 마운트 스크롤 effect(scrollIntoView)와는
+// 독립적으로 공존한다(transform은 레이아웃/스크롤 위치에 영향을 주지
+// 않는다).
 import { useState, useEffect, useRef } from 'react'
 import TownGroundLayer from './TownGroundLayer'
 import TownWaterLayer from './TownWaterLayer'
 import TownPathLayer from './TownPathLayer'
 import TownSceneryLayer from './TownSceneryLayer'
 import TownAmbientLayer from './TownAmbientLayer'
+import TownAtmosphereLayer from './TownAtmosphereLayer'
 import TownObjectLayer from './TownObjectLayer'
 import TownFogLayer from './TownFogLayer'
 import TownPlacementOverlay from './TownPlacementOverlay'
@@ -327,7 +338,7 @@ export default function TownScene({
         data-testid="town-scene-v2"
         role="group"
         aria-label="내 마을"
-        className="relative overflow-hidden -mx-4 w-[calc(100%+2rem)]"
+        className="relative overflow-hidden -mx-4 w-[calc(100%+2rem)] motion-safe:animate-town-entrance"
         style={{ aspectRatio: SCENE_ASPECT_RATIO }}
       >
         <TownGroundLayer level={level} />
@@ -335,6 +346,7 @@ export default function TownScene({
         <TownPathLayer level={level} />
         <TownSceneryLayer level={level} />
         <TownAmbientLayer richness={richness} gardenPoints={gardenPoints} level={level} />
+        <TownAtmosphereLayer />
         {openPlacementId != null && (
           <button
             type="button"

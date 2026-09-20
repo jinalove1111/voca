@@ -50,8 +50,22 @@ const FEATHER_MASK = 'linear-gradient(to bottom, transparent 0%, #000 22%, #000 
  * @param {object} props
  * @param {object} props.entry — ENV_PLACEMENTS 항목 하나(frozen).
  * @param {string} [props.imgClassName] — 내부 <TownEnvImage> className(기본 object-contain).
+ * @param {string} [props.animationClassName] — 2026-09-20 추가(강 반짝임/
+ *   초목 흔들림 ambient 파일럿) — 내부 <TownEnvImage>(래퍼 div가 아니라)
+ *   에만 병합되는 선택적 애니메이션 클래스(motion-safe:animate-* 관례).
+ *   반드시 <TownEnvImage>에 걸어야 한다 — 이 래퍼 div의 style.transform은
+ *   위에서 anchor(bottom-center 등)로 이미 정해진 위치 유지용 transform을
+ *   갖고 있어, 같은 엘리먼트에 transform 애니메이션을 더하면 애니메이션이
+ *   그 값을 완전히 대체해(브라우저는 진행 중인 애니메이션의 transform이
+ *   인라인 스타일보다 항상 우선한다) 타일이 엉뚱한 자리로 튄다. 이미지
+ *   자신은 그 anchor transform을 갖지 않으므로 독립적으로 안전하다.
+ * @param {object} [props.animationStyle] — 위와 짝을 이루는 선택적 인라인
+ *   style(예: animationDuration/animationDelay/animationPlayState) — 역시
+ *   <TownEnvImage>에만 적용된다.
  */
-export default function TownEnvPlacement({ entry, imgClassName = 'w-full h-full object-contain' }) {
+export default function TownEnvPlacement({
+  entry, imgClassName = 'w-full h-full object-contain', animationClassName = '', animationStyle,
+}) {
   if (!entry) return null
   const {
     id, assetKey, depthLayer, xPct, yPct, wPct, hPct, rotationDeg, mirror, anchor, feather,
@@ -74,9 +88,11 @@ export default function TownEnvPlacement({ entry, imgClassName = 'w-full h-full 
     style.maskImage = FEATHER_MASK
   }
 
+  const combinedImgClassName = animationClassName ? `${imgClassName} ${animationClassName}` : imgClassName
+
   return (
     <div className="absolute" style={style}>
-      <TownEnvImage assetKey={assetKey} className={imgClassName} />
+      <TownEnvImage assetKey={assetKey} className={combinedImgClassName} style={animationStyle} />
     </div>
   )
 }

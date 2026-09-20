@@ -54,8 +54,11 @@
 // 팝오버 뒤 DOM 마지막 자식이라 같은 스태킹 레벨에서 항상 위에 그려짐)에
 // 건다(아래 렌더 코드의 주석 참고). 실제 드래그 계산(임계값/스냅/취소)은
 // 전부 TownScene.jsx 소유, 이 파일은 원시 이벤트를 그대로 위로 전달만 한다.
-import { Fragment, useLayoutEffect, useRef, useState } from 'react'
+import {
+  Fragment, useEffect, useLayoutEffect, useRef, useState,
+} from 'react'
 import TownSprite from './TownSprite'
+import { useDocumentHidden } from '../../../hooks/useDocumentHidden'
 import { townAsset } from '../../../assets/town'
 import {
   HOME_SPRITE, spriteFor, SCENE_ROWS, LOTS, lotState, districtForCell,
@@ -206,6 +209,31 @@ function PlacementPopover({
   )
 }
 
+// 2026-09-20(같은 날, 추가 패스) — 2.5D/ambient 폴리시. 1) 선택(팝오버
+// 열림) 시 기존 lift(버튼 transform)에 더해 부드러운 rim/glow(box-shadow
+// 원, motion-safe:animate-town-glow)를 버튼과 형제인 별도 <span>에 건다 —
+// 버튼 자신의 hit target/transformOrigin/앵커 transform은 전혀 건드리지
+// 않는다(box-shadow는 레이아웃에 영향 없음, span 자체가 pointer-events-none).
+// 2) 배치 완료 "정착(settle)" — 새 API/콜백 스레딩 없이, 이 레이어
+// 자신이 placements의 x/y 변화를 세션 내에서 관찰해 판정한다(아래
+// prevCellsRef/settlingIds). 최초 마운트 시엔 비교 대상이 없어(Map이
+// 비어 있음) 새로고침/최초 렌더에서는 절대 발동하지 않고, 세션 중 같은
+// placementId의 좌표가 실제로 바뀔 때만(탭-투-앵커든 드래그든, 실패한
+// 이동은 좌표 자체가 안 바뀌므로 자동으로 제외) 1회성 오버슈트 바운스
+// (motion-safe:animate-town-settle)를 버튼에 건다 — 그 버튼은 wrapper의
+// 앵커 transform(translate(-50%,-100%))과 다른 엘리먼트라 애니메이션
+// transform이 앵커를 절대 건드리지 않는다. 그림자 압축/스파클 파티클은
+// 이번 세션에서 의도적으로 스킵했다(그림자 div도 자신의 anchor용
+// translate(-50%,-35%)를 갖고 있어 같은 충돌 위험이 있고, 파티클은 추가
+// DOM churn 대비 이득이 적다고 판단 — "gentle physical settle" 요구를
+// 이미 버튼 바운스 하나로 충분히 만족한다고 봄, 보고서 참고). 3) 고양이
+// idle 숨쉬기 — p.itemId==='cat'이고 선택되지 않았고(!isOpen) 드래그
+// 중이 아닐 때만(!isDragging) 버튼에 motion-safe:animate-town-cat-idle을
+// 건다(정착 애니메이션과는 상호 배타 — 정착 중이면 정착이 우선). 탭이
+// 백그라운드면(useDocumentHidden) idle 애니메이션만 pause한다(정착은
+// 1회성이라 pause 불필요).
+const SETTLE_DURATION_MS = 560
+
 export default function TownObjectLayer({
   placements, itemById, modeKind, openPlacementId, onTogglePlacement, onStartMove, onStore, level, ownedIds,
   movingPlacementId, drag, onDragPointerDown, onDragPointerMove, onDragPointerUp, onDragPointerCancel,
@@ -221,6 +249,59 @@ export default function TownObjectLayer({
   const owned = Array.isArray(ownedIds) ? ownedIds : []
   const myHouseBox = landmarkBox('my-house')
   const myHouseZ = myHouseBox ? landmarkZ(myHouseBox, 'my-house') : null
+  const hidden = useDocumentHidden()
+
+  // 배치 완료 "정착(settle)" 판정 — 위 헤더 주석 참고. prevCellsRef는
+  // "지난 렌더에서 실제로 반영된" placementId -> "x,y" 맵(리렌더마다
+  // list가 새 배열이라도, 이 판정 자체는 cellSignature가 실제로 바뀔
+  // 때만 재실행된다 — 아래 useEffect 의존성 참고).
+  const cellSignature = list.map((p) => `${p.placementId}:${p.x},${p.y}`).join('|')
+  const prevCellsRef = useRef(new Map())
+  const settleTimersRef = useRef(new Map())
+  const [settlingIds, setSettlingIds] = useState(() => new Set())
+
+  useEffect(() => {
+    const prevCells = prevCellsRef.current
+    const nextCells = new Map()
+    const newlySettled = []
+    for (const p of list) {
+      const cellKey = `${p.x},${p.y}`
+      nextCells.set(p.placementId, cellKey)
+      const prevKey = prevCells.get(p.placementId)
+      // prevKey == null(이 세션에서 이 placementId를 처음 봄 — 최초 마운트
+      // 또는 방금 배치/재배치됨)이면 정착 대상이 아니다 — "이동"만 정착
+      // 대상이라는 과제 요구(요구사항 #5) 그대로.
+      if (prevKey != null && prevKey !== cellKey) newlySettled.push(p.placementId)
+    }
+    prevCellsRef.current = nextCells
+    if (newlySettled.length === 0) return
+    setSettlingIds((cur) => {
+      const next = new Set(cur)
+      for (const id of newlySettled) next.add(id)
+      return next
+    })
+    for (const id of newlySettled) {
+      const existingTimer = settleTimersRef.current.get(id)
+      if (existingTimer) clearTimeout(existingTimer)
+      const timer = setTimeout(() => {
+        setSettlingIds((cur) => {
+          if (!cur.has(id)) return cur
+          const next = new Set(cur)
+          next.delete(id)
+          return next
+        })
+        settleTimersRef.current.delete(id)
+      }, SETTLE_DURATION_MS)
+      settleTimersRef.current.set(id, timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cellSignature])
+
+  // 언마운트 시 예약된 타이머 정리(setState-after-unmount 방지, TownScene.jsx
+  // 의 rAF cleanup effect와 동일 관례).
+  useEffect(() => () => {
+    for (const t of settleTimersRef.current.values()) clearTimeout(t)
+  }, [])
 
   // 2026-09-14 — 이 레이어의 루트는 씬 전체를 덮는 absolute inset-0라
   // (objects z-index가 배치 팝오버 바깥 탭 백드롭보다 위) 실제 스프라이트가
@@ -388,6 +469,16 @@ export default function TownObjectLayer({
         // ui 티어(9000대)보다 항상 낮아 그대로 두면 드래그 중 앵커 오버레이
         // 버튼에 가려진다.
         const z = isDragging ? DRAG_ITEM_Z : worldZIndex('objects', anchor.depthY, p.placementId)
+        // 2026-09-20 — 정착/고양이 idle 애니메이션 선택(파일 헤더 주석
+        // 참고). 상호 배타 — 정착이 재생 중이면 그 아이템은 idle을 함께
+        // 걸지 않는다(둘 다 버튼의 transform을 쓰는 animation-name이라
+        // 동시에 걸면 나중 클래스가 이긴다는 보장이 없다, 명시적으로
+        // 하나만 고른다).
+        const isSettlingThis = settlingIds.has(p.placementId)
+        const isCatIdle = !isSettlingThis && p.itemId === 'cat' && !isOpen && !isDragging
+        const buttonAnimClass = isSettlingThis
+          ? ' motion-safe:animate-town-settle'
+          : (isCatIdle ? ' motion-safe:animate-town-cat-idle' : '')
 
         return (
           <Fragment key={p.placementId}>
@@ -442,15 +533,35 @@ export default function TownObjectLayer({
                   reduce에서 transition-duration이 0으로 남는다) 이 저장소의
                   기존 관례(TownScreenV2.jsx motion-safe:animate-fade-in 등)
                   를 그대로 따른다 — 새 메커니즘을 발명하지 않는다. */}
+              {/* 2026-09-20 — 선택 rim/glow. 버튼과 형제인 별도 <span>에만
+                  건다(inset-0이라 wrapper 박스와 같은 크기, scale로 살짝
+                  키워 sprite 바깥으로 rim이 비치게 한다) — 버튼 자신의
+                  hit target/앵커 transform과는 완전히 분리된 엘리먼트라
+                  겹치지 않는다. box-shadow는 opacity만 motion-safe:animate-
+                  town-glow로 펄스하고, prefers-reduced-motion에서는
+                  펄스 없이 정적 링만 남는다(과제 지시서 요구사항 #1
+                  그대로). DOM 순서상 버튼보다 먼저 그려 항상 그 뒤에
+                  깔린다(같은 z 안에서). */}
+              {isOpen && (
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-0 rounded-full pointer-events-none motion-safe:animate-town-glow"
+                  style={{
+                    boxShadow: '0 0 0 3px rgba(167,139,250,0.55), 0 0 18px 6px rgba(167,139,250,0.35)',
+                    transform: 'scale(1.18)',
+                  }}
+                />
+              )}
               <button
                 type="button"
                 onClick={(e) => { if (idle) onTogglePlacement && onTogglePlacement(p.placementId, e.currentTarget) }}
                 disabled={!idle}
                 aria-label={label}
-                className="pointer-events-auto min-h-[44px] min-w-[44px] w-full flex items-center justify-center motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-out"
+                className={`pointer-events-auto min-h-[44px] min-w-[44px] w-full flex items-center justify-center motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-out${buttonAnimClass}`}
                 style={{
                   transform: isOpen ? 'scale(1.05) translateY(-6%)' : 'scale(1) translateY(0%)',
                   transformOrigin: '50% 100%',
+                  animationPlayState: isCatIdle ? (hidden ? 'paused' : 'running') : undefined,
                 }}
               >
                 <TownSprite sprite={sprite} className="w-full h-full" />
