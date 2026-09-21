@@ -3023,5 +3023,312 @@ export async function run(browser, baseURL) {
     }
   }
 
+  // ── S21 — 아이템 상호작용(벤치 앉기 파일럿, 2026-09-21). 탭 1회당 정확히
+  //        1번만 시작(항목1), 상태 순서 idle->walking->sitting->leaving->idle
+  //        (항목3), 실행 중 재탭 무시(중복 캐릭터/누수 타이머 없음, 항목4),
+  //        캐릭터/그림자 pointer-events:none + 클릭 통과(항목5), 벤치 좌표
+  //        무변경(항목8), 다른 아이템(나무) 탭은 트리거하지 않음(항목9)을
+  //        한 흐름에서 검증한다. ──────────────────────────────────────────
+  {
+    const vp = { width: 390, height: 844 }
+    const name = 'S21[390x844] 아이템 상호작용(벤치 앉기)'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+    const mocks = await installMocks(page, {
+      townState: {
+        starsEarned: 800,
+        dollars: { available: 0, earned: 0, spent: 0 },
+        owned: ['bench', 'tree'],
+        welcomeClaimed: true,
+      },
+    })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownCard(page)
+      await card.click()
+      await waitForTownHeader(page)
+
+      const benchAnchor = await placeFromInventoryByLabel(page, '벤치')
+      const benchCell = `${benchAnchor.x},${benchAnchor.y}`
+      const benchButton = page.locator(`[data-item-id="bench"][data-cell="${benchCell}"] > button`)
+      await benchButton.waitFor({ state: 'visible', timeout: 10000 })
+
+      const treeAnchor = await placeFromInventoryByLabel(page, '나무')
+      const treeCell = `${treeAnchor.x},${treeAnchor.y}`
+      const treeButton = page.locator(`[data-item-id="tree"][data-cell="${treeCell}"] > button`)
+      await treeButton.waitFor({ state: 'visible', timeout: 10000 })
+
+      // ── 항목1 — 탭 1회 = 캐릭터 정확히 1개, 초기 phase는 walking ────────
+      await benchButton.click()
+      const character = page.locator('[data-town-character]')
+      const appeared = await character.waitFor({ state: 'attached', timeout: 3000 }).then(() => true).catch(() => false)
+      r.check(`${name} 항목1 — 벤치 탭 1회로 캐릭터가 나타남`, appeared)
+      const countAfterFirstTap = await character.count()
+      r.check(`${name} 항목1 — 캐릭터 엘리먼트가 정확히 1개`, countAfterFirstTap === 1, `count=${countAfterFirstTap}`)
+      const initialPhase = appeared ? await character.first().getAttribute('data-character-phase') : null
+      r.check(`${name} 항목1 — 초기 phase가 walking(reduced-motion 아님)`, initialPhase === 'walking', `phase=${initialPhase}`)
+
+      // ── 항목4 — 실행 중 재탭은 무시(캐릭터 여전히 1개, 팝오버만 토글됨) ──
+      await benchButton.click({ force: true })
+      const countAfterSecondTap = await page.locator('[data-town-character]').count()
+      r.check(`${name} 항목4 — 실행 중 재탭 후에도 캐릭터가 1개 이하`, countAfterSecondTap <= 1, `count=${countAfterSecondTap}`)
+      // 팝오버가 재탭으로 닫혔을 수 있다 — 다음 단계 전에 열려 있으면 Escape로 정리.
+      await page.keyboard.press('Escape')
+
+      // ── 항목3 — phase 전이가 walking -> sitting -> leaving 순서로 관측됨,
+      //     캐릭터가 결국 사라짐(idle로 복귀). ──────────────────────────────
+      const phaseSamples = []
+      const pollStart = Date.now()
+      while (Date.now() - pollStart < 6000) {
+        const c = page.locator('[data-town-character]')
+        const cnt = await c.count().catch(() => 0)
+        if (cnt === 0) {
+          if (phaseSamples.length > 0) break
+        } else {
+          const ph = await c.first().getAttribute('data-character-phase').catch(() => null)
+          if (ph && phaseSamples[phaseSamples.length - 1] !== ph) phaseSamples.push(ph)
+        }
+        await new Promise((resolve) => setTimeout(resolve, 60))
+      }
+      r.check(
+        `${name} 항목3 — phase 전이가 정확히 [walking, sitting, leaving] 순서로 관측됨`,
+        JSON.stringify(phaseSamples) === JSON.stringify(['walking', 'sitting', 'leaving']),
+        JSON.stringify(phaseSamples),
+      )
+      const goneAfterSequence = await waitUntil(async () => (await page.locator('[data-town-character]').count()) === 0, { timeout: 3000 })
+      r.check(`${name} 항목3 — 시퀀스 종료 후 캐릭터 엘리먼트가 사라짐(idle로 복귀)`, goneAfterSequence)
+
+      // ── 항목8 — 시퀀스 완료 전후로 벤치의 저장 좌표(data-cell)가 무변경 ──
+      const benchCellAfterSequence = await page.locator('[data-item-id="bench"]').getAttribute('data-cell').catch(() => null)
+      r.check(
+        `${name} 항목8 — 벤치의 data-cell이 시퀀스 전후로 동일(${benchCell})`,
+        benchCellAfterSequence === benchCell,
+        `after=${benchCellAfterSequence}`,
+      )
+
+      // ── 항목9 — 다른 배치 아이템(나무) 탭은 벤치의 앉기를 트리거하지 않음 ──
+      await treeButton.click()
+      await page.waitForTimeout(300)
+      const characterAfterTreeTap = await page.locator('[data-town-character]').count()
+      r.check(`${name} 항목9 — 나무를 탭해도 캐릭터가 나타나지 않음`, characterAfterTreeTap === 0, `count=${characterAfterTreeTap}`)
+      await page.keyboard.press('Escape')
+
+      // ── 항목5 — 캐릭터/그림자 pointer-events:none, 클릭이 캐릭터를
+      //     통과해 아래 엘리먼트(씬/벤치)에 닿음. 새 시퀀스를 다시 시작해
+      //     walking 단계에서 검사한다(이전 시퀀스는 이미 종료됨). ──────────
+      await benchButton.click()
+      const character2 = page.locator('[data-town-character]')
+      const appeared2 = await character2.waitFor({ state: 'attached', timeout: 3000 }).then(() => true).catch(() => false)
+      r.check(`${name} 항목5 — 준비: 두 번째 시퀀스도 캐릭터가 나타남`, appeared2)
+      if (appeared2) {
+        const [rootPE, shadowPE] = await Promise.all([
+          character2.evaluate((el) => window.getComputedStyle(el).pointerEvents),
+          character2.locator('span').first().evaluate((el) => window.getComputedStyle(el).pointerEvents),
+        ])
+        r.check(`${name} 항목5 — 캐릭터 루트 computed pointer-events: none`, rootPE === 'none', String(rootPE))
+        r.check(`${name} 항목5 — 캐릭터 그림자(span) computed pointer-events: none`, shadowPE === 'none', String(shadowPE))
+        const charBox = await character2.boundingBox()
+        if (charBox) {
+          const cx = charBox.x + charBox.width / 2
+          const cy = charBox.y + charBox.height / 2
+          const throughTag = await page.evaluate(({ x, y }) => {
+            const el = document.elementFromPoint(x, y)
+            return el ? el.getAttribute('data-town-character') : null
+          }, { x: cx, y: cy })
+          r.check(
+            `${name} 항목5 — 캐릭터 중심 좌표를 클릭해도 캐릭터 자신이 아니라 아래 엘리먼트에 닿음(클릭 통과)`,
+            throughTag === null,
+            `elementFromPoint data-town-character=${throughTag}`,
+          )
+        }
+      }
+      await page.keyboard.press('Escape')
+      await handleCancelIfMoving(page)
+
+      // ── 항목2/7 — 이동(드래그) 모드에서는 드래그 자체가 추가 캐릭터를
+      //     만들지 않고, 드래그/스냅 자체도 회귀 없이 그대로 동작함
+      //     (전체 회귀 스위트는 S16이 소유 — 여기선 상호작용 추가로 인한
+      //     회귀 여부만 가볍게 재확인). 이동 모드 진입 탭 자체는 팝오버와
+      //     함께 앉기 시퀀스도 "정상적으로" 함께 시작할 수 있다(설계상
+      //     의도된 동작, 파일 헤더 주석 참고) — 이 항목이 검증하는 것은
+      //     "드래그 동작 자체"가 추가로 캐릭터를 만들지 않는다는 것. ─────
+      const cellBeforeDrag = await page.locator('[data-item-id="bench"]').getAttribute('data-cell')
+      await enterMovingMode(page, 'bench', cellBeforeDrag)
+      const dragTargetAnchor = await pickFreeAnchor(page, 0)
+      const dragWrapper = page.locator(`[data-item-id="bench"][data-cell="${cellBeforeDrag}"]`)
+      await mouseDragStart(page, dragWrapper, dragTargetAnchor.center, { steps: 6 })
+      const characterCountDuringDrag = await page.locator('[data-town-character]').count()
+      r.check(`${name} 항목2 — 드래그 진행 중 캐릭터 엘리먼트가 1개 이하(추가 생성 없음)`, characterCountDuringDrag <= 1, `count=${characterCountDuringDrag}`)
+      await page.mouse.up()
+      const cellAfterDrag = await waitUntil(async () => {
+        const c = await page.locator('[data-item-id="bench"]').getAttribute('data-cell').catch(() => null)
+        return c && c !== cellBeforeDrag ? c : false
+      }, { timeout: 10000 })
+      r.check(
+        `${name} 항목7 — 드래그/스냅 회귀 없음: 벤치가 목표 앵커(${dragTargetAnchor.x},${dragTargetAnchor.y})로 이동`,
+        cellAfterDrag === `${dragTargetAnchor.x},${dragTargetAnchor.y}`,
+        `cell=${cellAfterDrag}`,
+      )
+
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S21b — prefers-reduced-motion: reduce에서는 걷기/연속 bob을 건너뛰고
+  //        곧바로 착석 상태로 짧게 fade-in한 뒤(항목6), 같은 방식(fade)으로
+  //        사라진다. ────────────────────────────────────────────────────
+  {
+    const vp = { width: 390, height: 844 }
+    const name = 'S21b[390x844,reduced-motion] 아이템 상호작용(벤치 앉기)'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+    const mocks = await installMocks(page, {
+      townState: {
+        starsEarned: 800,
+        dollars: { available: 0, earned: 0, spent: 0 },
+        owned: ['bench'],
+        welcomeClaimed: true,
+      },
+    })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownCard(page)
+      await card.click()
+      await waitForTownHeader(page)
+
+      const benchAnchor = await placeFromInventoryByLabel(page, '벤치')
+      const benchCell = `${benchAnchor.x},${benchAnchor.y}`
+      const benchButton = page.locator(`[data-item-id="bench"][data-cell="${benchCell}"] > button`)
+      await benchButton.waitFor({ state: 'visible', timeout: 10000 })
+
+      await benchButton.click()
+      const character = page.locator('[data-town-character]')
+      const appeared = await character.waitFor({ state: 'attached', timeout: 3000 }).then(() => true).catch(() => false)
+      r.check(`${name} 항목6 — reduced-motion에서도 캐릭터가 나타남(fade로)`, appeared)
+      const phaseOnAppear = appeared ? await character.first().getAttribute('data-character-phase') : null
+      r.check(`${name} 항목6 — 초기 phase가 곧바로 sitting(걷기 단계 생략)`, phaseOnAppear === 'sitting', `phase=${phaseOnAppear}`)
+
+      // 걷기 단계가 아예 없으므로 left/top 위치가 시간에 따라 바뀌지
+      // 않아야 한다(연속 bob도 없음) — 두 시점의 렌더 위치를 비교한다.
+      const boxA = await character.boundingBox()
+      await page.waitForTimeout(300)
+      const phaseAtSecondMeasure = (await character.count()) > 0 ? await character.first().getAttribute('data-character-phase') : null
+      const boxB = phaseAtSecondMeasure ? await character.boundingBox() : null
+      const positionUnchanged = boxA && boxB
+        ? Math.abs(boxA.x - boxB.x) < 1 && Math.abs(boxA.y - boxB.y) < 1
+        : (phaseAtSecondMeasure === null) // 이미 idle로 돌아갔다면(빠른 완료) 위치 비교를 건너뛴다.
+      r.check(
+        `${name} 항목6 — reduced-motion 동안 걷기 이동/연속 bob 없음(위치 고정 또는 이미 완료)`,
+        positionUnchanged,
+        JSON.stringify({ boxA, boxB, phaseAtSecondMeasure }),
+      )
+
+      const bobAnimationName = appeared
+        ? await character.locator('div').first().evaluate((el) => window.getComputedStyle(el).animationName).catch(() => null)
+        : null
+      r.check(`${name} 항목6 — bob wrapper의 animationName이 none(reduced-motion, motion-safe: 클래스 미적용)`, bobAnimationName === 'none', String(bobAnimationName))
+
+      const goneEventually = await waitUntil(async () => (await page.locator('[data-town-character]').count()) === 0, { timeout: 4000 })
+      r.check(`${name} — reduced-motion에서도 시퀀스가 정상 종료(캐릭터 사라짐)`, goneEventually)
+
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S21c — 시퀀스 도중 화면을 벗어나도(언마운트) 콘솔 에러/잔류 DOM이
+  //        없다. 블랙박스 E2E로는 "타이머가 실제로 clearTimeout됐는지"까지
+  //        직접 증명하기 어렵다 — 이 항목은 코드 인스펙션(TownScene.jsx의
+  //        언마운트 cleanup useEffect, TownObjectLayer.jsx의 settle 타이머와
+  //        동일 관례)과 함께 상호 보완적으로만 커버리지를 주장한다(정직하게
+  //        기록). ────────────────────────────────────────────────────────
+  {
+    const vp = { width: 390, height: 844 }
+    const name = 'S21c[390x844] 시퀀스 도중 언마운트 — 콘솔 에러/잔류 DOM 없음'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    const consoleErrors = []
+    page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()) })
+    page.on('pageerror', (err) => { consoleErrors.push(String(err)) })
+    await setDeviceFlags(page, { paulTownV1: true, paulTownV2: true })
+    const mocks = await installMocks(page, {
+      townState: {
+        starsEarned: 800,
+        dollars: { available: 0, earned: 0, spent: 0 },
+        owned: ['bench'],
+        welcomeClaimed: true,
+      },
+    })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await goToPaulTownScreen(page)
+      const card = await enterTownCard(page)
+      await card.click()
+      await waitForTownHeader(page)
+
+      const benchAnchor = await placeFromInventoryByLabel(page, '벤치')
+      const benchCell = `${benchAnchor.x},${benchAnchor.y}`
+      const benchButton = page.locator(`[data-item-id="bench"][data-cell="${benchCell}"] > button`)
+      await benchButton.waitFor({ state: 'visible', timeout: 10000 })
+      await benchButton.click()
+      const appeared = await page.locator('[data-town-character]').waitFor({ state: 'attached', timeout: 3000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 준비: 시퀀스가 시작됨(캐릭터 나타남)`, appeared)
+
+      // 시퀀스가 진행 중인 동안(walking/sitting 단계) 화면을 떠난다.
+      const backBtn = page.getByRole('button', { name: '← Paul Town', exact: true })
+      await backBtn.waitFor({ state: 'visible', timeout: 5000 })
+      await backBtn.click()
+      const leftScene = await page.locator('[data-testid="town-scene-v2"]').waitFor({ state: 'detached', timeout: 5000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 뒤로가기로 씬이 언마운트됨(캐릭터 포함 전체 트리 제거)`, leftScene)
+
+      // 남은 예약 타이머가 언마운트 이후 setState를 시도했다면 React가
+      // 콘솔에 경고/에러를 남긴다 — 잠시 대기해 원래 시퀀스 길이(≈3.4초)가
+      // 다 지나가게 한 뒤 콘솔을 확인한다.
+      await page.waitForTimeout(3800)
+      const relevantErrors = consoleErrors.filter((t) => /Cannot update a component|memory leak|unmounted component/i.test(t))
+      r.check(
+        `${name} — 언마운트 후 콘솔에 setState-after-unmount류 에러/경고 없음`,
+        relevantErrors.length === 0,
+        JSON.stringify(relevantErrors.slice(0, 5)),
+      )
+
+      // 다시 들어가도 정상 렌더(잔류 DOM/깨진 상태 없이 새로 마운트).
+      const card2 = await enterTownCard(page)
+      await card2.click()
+      const reenterOk = await waitForTownHeader(page).then(() => true).catch(() => false)
+      r.check(`${name} — 재진입 시 정상 렌더(잔류 상태로 인한 크래시 없음)`, reenterOk)
+      const characterAfterReentry = await page.locator('[data-town-character]').count()
+      r.check(`${name} — 재진입 직후 캐릭터 엘리먼트 잔류 없음`, characterAfterReentry === 0, `count=${characterAfterReentry}`)
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }
 }

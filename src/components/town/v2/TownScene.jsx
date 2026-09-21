@@ -93,6 +93,20 @@
 // 값이 없다. TownScreenV2.jsx의 마운트 스크롤 effect(scrollIntoView)와는
 // 독립적으로 공존한다(transform은 레이아웃/스크롤 위치에 영향을 주지
 // 않는다).
+// 2026-09-21 — 아이템 상호작용(벤치 앉기 파일럿). 드래그 상태와 같은
+// 이유로 이 컴포넌트가 소유한다 — TownObjectLayer(탭 이벤트가 발생하는
+// 곳)와 TownCharacter(그 결과로 걷다가 앉는 캐릭터를 그리는 곳)의 가장
+// 가까운 공통 조상이라, 두 형제가 공유해야 하는 상태를 여기 한 곳에서만
+// 계산한다. 상태 머신(idle -> walking -> sitting -> leaving -> idle)은
+// townInteractions.js ITEM_INTERACTIONS 레지스트리를 조회해 등록된
+// itemId(현재 벤치)에만 반응하고, 탭 순간의 world % 좌표(anchor)만 읽을
+// 뿐 townPlacements/Supabase 등 영속 데이터는 전혀 건드리지 않는다(순수
+// 클라이언트 휘발성 UI 상태). 이미 실행 중일 때의 재탭은 무시한다(캐릭터
+// 두 개/중복 타이머가 생기지 않는 가장 단순하고 검증하기 쉬운 선택 —
+// "재시작" 대안도 가능했지만 이 상호작용은 매우 짧아(≈3초) 무시해도
+// 체감상 손해가 거의 없다). 배치가 상호작용 도중 이동/보관되면(드물지만
+// 가능 — 같은 탭이 이동/보관 팝오버도 함께 연다) 캐릭터가 낡은 앵커에
+// 붕 뜬 채 남지 않도록 즉시 취소한다(아래 정리 useEffect).
 import { useState, useEffect, useRef } from 'react'
 import TownGroundLayer from './TownGroundLayer'
 import TownWaterLayer from './TownWaterLayer'
@@ -101,12 +115,29 @@ import TownSceneryLayer from './TownSceneryLayer'
 import TownAmbientLayer from './TownAmbientLayer'
 import TownAtmosphereLayer from './TownAtmosphereLayer'
 import TownObjectLayer from './TownObjectLayer'
+import TownCharacter, { CHARACTER_WALK_MS, CHARACTER_FADE_MS } from './TownCharacter'
 import TownFogLayer from './TownFogLayer'
 import TownPlacementOverlay from './TownPlacementOverlay'
 import { SCENE_ASPECT_RATIO, freeWorldAnchors, cellAnchor } from '../../../utils/town/worldRender'
+import { interactionFor } from '../../../utils/town/townInteractions'
+import { usePrefersReducedMotion } from '../../../hooks/usePrefersReducedMotion'
 import { BACKDROP_Z } from './sceneZ'
 
 const EMPTY_ANCHORS = []
+
+// 캐릭터 시작점 오프셋(벤치 앵커의 leftPct 기준 좌우, world % 단위) —
+// 화면에 더 여유 있는 쪽(중앙에서 먼 쪽)으로 걸어 들어온다. 착석 지점
+// 오프셋은 더 작게(벤치 중심에 완전히 겹치지 않으면서도 "벤치 전체를
+// 덮지 않는다"는 스펙 요구를 만족 — 같은 방향으로 걸어와 그 방향 끝에
+// 앉는 것이 자연스럽다).
+const CHARACTER_START_OFFSET_PCT = 9
+const CHARACTER_SIT_OFFSET_PCT = 2.4
+// 착석 유지 시간 — 스펙 요구 범위(≈2~3초)의 중간값.
+const CHARACTER_SIT_HOLD_MS = 2500
+
+function clampPct(v) {
+  return Math.max(2, Math.min(98, v))
+}
 
 // 드래그 시작 판정 임계값(px) — 브리프 권장 범위(6~8px) 상단값. 이동
 // 모드에서 아이템 wrapper를 그냥 탭(움직임 없음)했을 때 드래그 시각
@@ -134,6 +165,117 @@ export default function TownScene({
   const rafIdRef = useRef(null)
   const capturedRef = useRef(null)
   const dragActive = drag != null
+
+  // 아이템 상호작용(벤치 앉기 파일럿, 파일 헤더 주석 참고) — interaction은
+  // null이거나 { seq, itemId, placementId, originX, originY, startLeftPct,
+  // startTopPct, targetLeftPct, targetTopPct, depthY, phase }. seq는
+  // "타이머 콜백이 아직 유효한 그 실행인지"를 판정하는 단조 증가 카운터
+  // (settle 타이머의 placementId 키 Map과 같은 정신이지만, 여기선 항상
+  // 최대 1개만 살아있으므로 ref 하나로 충분하다).
+  const [interaction, setInteraction] = useState(null)
+  const interactionRef = useRef(null)
+  const interactionTimerRef = useRef(null)
+  const interactionSeqRef = useRef(0)
+  const [interactionAnnouncement, setInteractionAnnouncement] = useState('')
+  const reducedMotion = usePrefersReducedMotion()
+
+  function clearInteractionTimer() {
+    if (interactionTimerRef.current != null) {
+      clearTimeout(interactionTimerRef.current)
+      interactionTimerRef.current = null
+    }
+  }
+
+  function scheduleInteractionStep(seq, delay, fn) {
+    clearInteractionTimer()
+    interactionTimerRef.current = setTimeout(fn, delay)
+  }
+
+  function setInteractionPhase(seq, phase) {
+    setInteraction((cur) => {
+      if (!cur || cur.seq !== seq) return cur
+      const updated = { ...cur, phase }
+      interactionRef.current = updated
+      return updated
+    })
+  }
+
+  function enterLeaving(seq) {
+    setInteractionPhase(seq, 'leaving')
+    scheduleInteractionStep(seq, CHARACTER_FADE_MS, () => finishInteraction(seq))
+  }
+
+  function enterSitting(seq) {
+    setInteractionPhase(seq, 'sitting')
+    setInteractionAnnouncement('작은 친구가 벤치에 앉아 쉬고 있어요.')
+    scheduleInteractionStep(seq, CHARACTER_SIT_HOLD_MS, () => enterLeaving(seq))
+  }
+
+  function finishInteraction(seq) {
+    if (interactionRef.current && interactionRef.current.seq === seq) {
+      interactionRef.current = null
+      setInteraction(null)
+    }
+  }
+
+  // TownObjectLayer.jsx의 토글 버튼 onClick이 idle 모드에서 매 탭마다
+  // "항상" 호출한다(itemId 무관 — 이 레이어는 어떤 아이템이 상호작용을
+  // 지원하는지 모른다). 여기서 townInteractions.js 레지스트리를 조회해
+  // 등록 안 된 itemId(벤치가 아닌 모든 것)는 조용히 무시한다. 이미 실행
+  // 중이면(interactionRef.current != null) 두 번째 탭은 무시한다(파일
+  // 헤더 주석 — "재시작"이 아니라 "무시"를 선택한 이유).
+  function handleItemInteract(itemId, placementId, x, y, anchor) {
+    const config = interactionFor(itemId)
+    if (!config || !anchor) return
+    if (interactionRef.current) return
+
+    const seq = ++interactionSeqRef.current
+    const dir = anchor.leftPct > 50 ? -1 : 1
+    const walking = !reducedMotion
+    const next = {
+      seq,
+      itemId,
+      placementId,
+      originX: x,
+      originY: y,
+      startLeftPct: clampPct(anchor.leftPct + dir * CHARACTER_START_OFFSET_PCT),
+      startTopPct: anchor.bottomPct,
+      targetLeftPct: clampPct(anchor.leftPct + dir * CHARACTER_SIT_OFFSET_PCT),
+      targetTopPct: anchor.bottomPct,
+      depthY: anchor.depthY,
+      phase: walking ? 'walking' : 'sitting',
+    }
+    interactionRef.current = next
+    setInteraction(next)
+    setInteractionAnnouncement('')
+
+    if (walking) {
+      scheduleInteractionStep(seq, CHARACTER_WALK_MS, () => enterSitting(seq))
+    } else {
+      setInteractionAnnouncement('작은 친구가 벤치에 앉아 쉬고 있어요.')
+      scheduleInteractionStep(seq, CHARACTER_SIT_HOLD_MS, () => enterLeaving(seq))
+    }
+  }
+
+  // 상호작용 도중 그 배치가 이동/보관되면(같은 탭이 이동/보관 팝오버도
+  // 함께 여는 구조라 드물지만 가능) 캐릭터가 낡은 앵커에 붕 뜬 채 남지
+  // 않도록 즉시 취소한다 — placements(렌더용, 걸러진 목록)에서 그
+  // placementId가 사라졌거나(보관) x/y가 원래와 달라졌으면(이동) 취소.
+  useEffect(() => {
+    if (!interaction) return
+    const current = Array.isArray(placements) ? placements.find((p) => p && p.placementId === interaction.placementId) : null
+    const invalidated = !current || current.x !== interaction.originX || current.y !== interaction.originY
+    if (invalidated) {
+      clearInteractionTimer()
+      interactionRef.current = null
+      setInteraction(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placements])
+
+  // 언마운트 시 예약된 타이머 정리(settle 타이머/rAF cleanup effect와
+  // 동일 관례 — setState-after-unmount 방지).
+  useEffect(() => () => { clearInteractionTimer() }, [])
 
   // 이동 모드일 때만 의미 있는 빈 칸 목록 — 배치 오버레이 렌더와 드래그
   // 스냅 계산이 정확히 같은 목록(freeWorldAnchors, occupancyPlacements
@@ -373,7 +515,19 @@ export default function TownScene({
           onDragPointerMove={handleDragPointerMove}
           onDragPointerUp={handleDragPointerUp}
           onDragPointerCancel={handleDragPointerCancel}
+          onItemInteract={handleItemInteract}
         />
+        {interaction && (
+          <TownCharacter
+            phase={interaction.phase}
+            startLeftPct={interaction.startLeftPct}
+            startTopPct={interaction.startTopPct}
+            targetLeftPct={interaction.targetLeftPct}
+            targetTopPct={interaction.targetTopPct}
+            depthY={interaction.depthY}
+            reducedMotion={reducedMotion}
+          />
+        )}
         <TownFogLayer fog={fog} level={level} ownedIds={ownedIds} />
         {modeKind !== 'idle' && (
           <TownPlacementOverlay
@@ -383,6 +537,10 @@ export default function TownScene({
           />
         )}
       </div>
+      {/* 벤치 앉기 상호작용의 스크린리더 안내 — 캐릭터 자신은 aria-hidden
+          장식이라(TownCharacter.jsx), 착석 시점 1회만 짧게 announce한다(매
+          탭/프레임마다 반복하지 않음 — "시끄럽지 않게"라는 스펙 요구). */}
+      <p role="status" aria-live="polite" className="sr-only">{interactionAnnouncement}</p>
       <p className="text-center text-xs text-gray-400 mt-2">🏡 My House · 아이템을 눌러 이동하거나 보관해요</p>
     </div>
   )

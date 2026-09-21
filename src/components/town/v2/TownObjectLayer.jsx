@@ -70,6 +70,17 @@ import { LANDMARK_DECOR, LOCKED_FILTER, LOCKED_VEIL } from '../../../utils/town/
 import { TOWN_ITEM_VISUAL_META } from '../../../utils/town/townItemVisualMeta'
 import { POPOVER_Z, DRAG_ITEM_Z } from './sceneZ'
 
+// 2026-09-21 — 아이템 상호작용(벤치 앉기 파일럿, townInteractions.js
+// ITEM_INTERACTIONS). idle 모드의 토글 버튼 onClick은 기존
+// onTogglePlacement 호출에 더해 새 onItemInteract(itemId, placementId, x,
+// y, anchor)를 "항상" 함께 호출한다 — 이 레이어는 어떤 itemId가 상호작용을
+// 지원하는지 전혀 모른다(그 판정은 TownScene.jsx가 townInteractions.js
+// 레지스트리로 한다, 관심사 분리 — 미래에 cat/cafe 등이 연출을 얻어도 이
+// 파일은 손대지 않는다). 드래그(이동 모드)는 완전히 별도 경로(아래
+// data-drag-surface 오버레이, 버튼 자체와 다른 엘리먼트)라 이 onClick과
+// 겹치지 않는다 — 버튼은 이동 모드에서 disabled이므로 onClick 자체가
+// 발화하지 않는다(회귀 없음, 기존 이동/보관 팝오버 로직도 전혀 안 바뀜).
+
 // 하네스 .shadow CSS 그대로(재도출 없음, TownSceneryLayer.jsx 소품
 // 그림자와 동일 상수 — 파일당 소유권 원칙상 이 파일이 독립적으로 갖는다).
 const SHADOW_BACKGROUND = 'radial-gradient(ellipse at center, rgba(30,25,15,0.35) 0%, rgba(30,25,15,0.16) 55%, rgba(30,25,15,0) 75%)'
@@ -237,6 +248,7 @@ const SETTLE_DURATION_MS = 560
 export default function TownObjectLayer({
   placements, itemById, modeKind, openPlacementId, onTogglePlacement, onStartMove, onStore, level, ownedIds,
   movingPlacementId, drag, onDragPointerDown, onDragPointerMove, onDragPointerUp, onDragPointerCancel,
+  onItemInteract,
 }) {
   // 2026-09-18 D1 정정 — 이 필터는 부모(TownScreenV2.jsx)가 이미
   // isFixedLandmarkId로 걸러낸 renderPlacements를 넘겨줄 것으로
@@ -554,7 +566,11 @@ export default function TownObjectLayer({
               )}
               <button
                 type="button"
-                onClick={(e) => { if (idle) onTogglePlacement && onTogglePlacement(p.placementId, e.currentTarget) }}
+                onClick={(e) => {
+                  if (!idle) return
+                  onTogglePlacement && onTogglePlacement(p.placementId, e.currentTarget)
+                  onItemInteract && onItemInteract(p.itemId, p.placementId, p.x, p.y, anchor)
+                }}
                 disabled={!idle}
                 aria-label={label}
                 className={`pointer-events-auto min-h-[44px] min-w-[44px] w-full flex items-center justify-center motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-out${buttonAnimClass}`}

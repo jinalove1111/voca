@@ -44,3 +44,14 @@ export const DRAG_ITEM_Z = LAYER_BASE.ui + 150
 // 밴드 전체(최대 6903)보다는 항상 위, paul/ui(8000/9000)보다는 항상 아래
 // 로 고정한다 — DRAG_ITEM_Z와 같은 정신의 작은 씬 로컬 상수.
 export const ATMOSPHERE_Z = LAYER_BASE.paul - 10
+
+// 아이템 상호작용 캐릭터(2026-09-21, 벤치 앉기 파일럿 —
+// townInteractions.js ITEM_INTERACTIONS) — Y-랭킹 콘텐츠 밴드
+// (architecture~foregroundVegetation, 최대 6903)보다는 항상 위여야 걷는/
+// 앉은 캐릭터가 배치 아이템(잠금 랜드마크 오버레이 포함)에 가려지지
+// 않고, paul/ui(8000/9000)보다는 아래여야 이 한시적 연출이 향후 실제
+// 플레이어 토큰(paul)이나 최상단 UI를 가리지 않는다 — ATMOSPHERE_Z와
+// 같은 정신의 "콘텐츠 밴드 위, paul/ui 아래" 고정 상수(Y-랭킹 콘텐츠가
+// 아니라 짧고 유한한 오버레이 연출이므로 worldZIndex로 y-랭킹하지 않는다,
+// ATMOSPHERE_Z 헤더 주석과 동일 이유).
+export const CHARACTER_Z = LAYER_BASE.paul - 500

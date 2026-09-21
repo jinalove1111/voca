@@ -29,6 +29,13 @@ export default {
         'town-drift': 'townDrift 10s ease-in-out infinite',
         'town-cat-idle': 'townCatIdle 2.4s ease-in-out infinite',
         'town-entrance': 'townEntrance 450ms ease-out 1',
+        // 벤치 앉기 상호작용(2026-09-21, TownCharacter.jsx) — 걷는 동안만
+        // 거는 미세한 걸음걸이 bob. 좌/우(left/top) 이동 transition은
+        // TownCharacter.jsx가 인라인 스타일로 걸고(reduced-motion이면 그
+        // transition 자체를 아예 안 건다 — JS 레벨 분기, usePrefersReducedMotion),
+        // 이 keyframe은 그 위에 얹는 부차적 오실레이션이라 motion-safe:로만
+        // 쓴다(다른 모든 ambient/idle 애니메이션과 동일 관례).
+        'town-walk-bob': 'townWalkBob 420ms ease-in-out infinite',
       },
       keyframes: {
         wiggle: {
@@ -92,6 +99,12 @@ export default {
         townEntrance: {
           '0%': { opacity: '0', transform: 'scale(0.97)' },
           '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        // 걷기 bob — 아주 미세한 상하 오실레이션(고양이 idle과 같은 정신,
+        // 폭만 더 크게 — "걸음걸이 인상"을 주려는 목적).
+        townWalkBob: {
+          '0%, 100%': { transform: 'translateY(0%)' },
+          '50%': { transform: 'translateY(-6%)' },
         },
       },
     },
