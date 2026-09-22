@@ -1480,3 +1480,91 @@ PASS/FAIL을 자동 판정하는 테스트도 아니지만, 가로 스크롤/페
   안에서만(`addStyleTag`) 앱의 고정 UI 크롬(발음 재생 속도 위젯) 1개를
   스크린샷 비교 편의를 위해 숨기며, 이는 이 도구의 캡처 화면에만
   적용되고 실제 학생 화면 동작에는 영향이 없다.
+
+## 관련 항목: Paul Town 2.5D 캐릭터 프로토타입 — 신규 단위/E2E 스위트 4종 + S9/testBundleBudget CI 노트 (2026-09-23, 172차)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+Paul Town 2.5D 캐릭터 프로토타입(`paulTown2_5d` 플래그, 기본 OFF,
+`handoff.md` 2026-09-23(172차)/`docs/design/town/ASTRA_HANDOFF_2026-09-21.md`
+§0 참고) Stage 1~5가 추가한 테스트 4종. 앞의 3종은 `tests/harness/registry.mjs`
+의 `attachment` 도메인에 `extra:false`로 등록돼 있어(`npm run
+verify:attachment`, 그리고 `verify:all`에 포함) 관례상 위 "새 테스트 작성
+패턴"/"4개 카테고리"를 따른다(카테고리 2 순수 로직 단위 테스트 2종 +
+esbuild 번들 필요 1종).
+
+| 스크립트 | 단언 | 대상 | 네트워크 |
+|---|---|---|---|
+| `scripts/testProto25dWalkGrid.mjs` | 28 | `walkGrid.js`(걷기 가능 격자/장애물 판정) + `pathfinding.js`(BFS+string-pulling) | 0 |
+| `scripts/testProto25dDepth.mjs` | 23 | `depthVisual.js`(Y-기반 스케일/z-index, worldContract/depthOrder 위임 확인) | 0 |
+| `scripts/testProto25dBench.mjs` | 88 | `benchInteraction.js`(벤치 도착/좌석 지점, 탭 hit-test, 좌석 sink 보정) | 0 |
+| `tests/e2e/townProto25d.spec.mjs`(`[town-proto2.5d]`, `scripts/testBrowserE2E.mjs`에 등록, `npm run verify:e2e`로 실행) | S1~S8c+S10, 160 PASS | 브라우저 E2E — 클릭투무브/장애물 회피/depth occlusion/reduced-motion/벤치 walk-to-sit/모바일 터치/44px 탭 타겟/상호작용 도중 언마운트 | 0(`installMocks` 전체 가로채기) |
+
+`walkGrid.js`/`depthVisual.js`는 `worldContract.js`/`depthOrder.js`를
+확장자 없는 상대 import로 참조하므로 plain `node`로 직접 import하면 Node
+ESM 로더가 `ERR_MODULE_NOT_FOUND`로 죽는다(`scripts/testTownWorldContract.mjs`
+와 동일 원인) — esbuild로 `scripts/.tmp/`(gitignore 대상)에 번들해 그
+산출물을 import한다. `benchInteraction.js`만 의존성이 0개(순수 상수/함수,
+어떤 것도 import하지 않음)라 이 번들링이 필요 없고 plain `node`로 직접
+import한다.
+
+**E2E spec을 단독으로 재실행하는 법(standalone runner 패턴, 이 저장소
+기존 관례)** — `npm run verify:e2e`가 여러 spec을 순차 실행하므로
+프로토타입 하나만 빠르게 확인하려면:
+
+```
+node -e "import('./tests/e2e/townProto25d.spec.mjs').then(async m => { const { chromium } = await import('playwright'); const b = await chromium.launch({headless:true}); const r = await m.run(b, 'http://localhost:4173'); console.log(r.results.filter(x=>x.status==='FAIL')); await b.close(); })"
+```
+
+(사전에 `vite preview --port 4173` 기동 필요, `scripts/testBrowserE2E.mjs`
+관례 그대로.)
+
+### S9(`tests/e2e/townV2.spec.mjs`, "배치 앵커 탭 가능성") — 미확정 CI 1회 FAIL 기록
+
+이 노트는 Paul Town 2.5D 작업이 아니라 **기존 V2 자석 드래그 배치
+기능**(`tests/e2e/townV2.spec.mjs`)의 회귀 조사 결과다 — 별도 세션이 CI
+로그를 직접 조사해 남겼다.
+
+> S9(`tests/e2e/townV2.spec.mjs`, "배치 앵커 탭 가능성")는 CI(Linux
+> Chromium)에서 1회 FAIL(run 35567109630, commit 1945eb5, 2026-09-21)
+> 했다(앵커 bbox ~43.3-43.4px, 테스트 자체의 허용치 `>=43.5`px 미달),
+> 반면 Windows Chromium(로컬, `deviceScaleFactor` 1/2 둘 다,
+> `S9_VIEWPORTS` 전체)은 매번 정확히 44.0px를 측정했다. 이후 재현 안 됨
+> (최신 실행 clean PASS). 근본 원인 미확정 — 씬 입장 줌 애니메이션
+> (`motion-safe:animate-town-entrance`) 가설은 로컬 재현으로 반증(측정
+> 시점에 이미 애니메이션 종료, `transform:none`). Linux Chromium
+> 환경이 없어 추가 조사 불가 — 재발 시 조사할 것. `e2e` 도메인은
+> `extra:true`(non-gating)이므로 이 FAIL이 Release Gate를 막지 않는다.
+
+### `scripts/testBundleBudget.mjs` — 메인 청크 판별을 `dist/index.html` 기준으로 변경
+
+이유: Proto 2.5D Stage 4(`8132dd1`)가 지연 로드되는 `Proto25DScreen`도
+기존 town 자산 레지스트리(`src/assets/town/index.js`)를 import하게
+되며, 그 모듈이 메인 엔트리 + 2개 이상의 lazy chunk에 공유돼 Rollup이
+별도 공유 청크로 분리했다 — 그 청크의 파일명이 실제 엔트리와 동일한
+`index-<hash>.js` 패턴이라, 기존 `findChunk`(파일명 정규식 매칭 +
+"짧은 이름 우선" 타이브레이크)가 `readdirSync` 열거 순서(OS/파일시스템
+의존, 보장되지 않음)에 따라 둘 중 아무 파일이나 "메인"으로 오판할 수
+있게 됐다. Windows(NTFS) 로컬은 순서상 우연히 실제 엔트리를 먼저 찾아
+통과했지만, Linux CI(ext4/overlay)는 반대 순서라 자산 registry 청크를
+"메인"으로 잘못 골라 2개 단언(`TownScreen` 청크 문자열 포함 여부/
+`paulTownV1:!1` 리터럴 포함 여부)이 FAIL했다. 수정은 메인 청크를
+`dist/index.html`의 실제 `<script type="module" src="...">` 참조로
+판별하도록 바꾼 것(파싱 실패 시에만 기존 파일명 매칭으로 안전하게
+폴백, 경고 로그와 함께) — 예산 수치(gzip 135KB/15KB, raw 1.5MB)나 다른
+단언은 무변경. 정방향 24/24 PASS, `readdirSync` 순서를 인위적으로
+뒤집은 재현 케이스도 24/24 PASS로 확인(수정 전에는 이 재현 케이스가
+CI와 동일한 2 FAIL을 재현했다 — CLAUDE.md 규칙 15 "회귀 의심 시 실제
+FAIL 확인" 적용).
+
+### `scripts/testProdCheck.mjs` — 같은 CI 실행에서 관측된 별도 FAIL(원인만 기록, 미조사)
+
+이 PR의 같은 CI 실행(`verify:all` 스텝)에서 `scripts/testProdCheck.mjs`
+(`extra:true`, non-gating — 위 "Production Safety Harness" 섹션 참고)도
+FAIL했다. Proto 2.5D/testBundleBudget과는 무관한 별개 원인 — 자체
+`--fixture` self-suite(총 292단언) 중 1건: `--show-names — INFO 절에
+원본 이름 "DriftStudentS1" 이 보인다`(CI 학생명 마스킹의 `--show-names`
+옵트아웃 플래그가 INFO 절의 마스킹까지는 해제하지 않는 것으로 보임).
+`extra:true`라 Release Gate를 막지 않는다. 이 세션은 원인 관측만 기록하고
+조사/수정은 하지 않았다(범위 밖) — 상세는
+`docs/design/town/ASTRA_HANDOFF_2026-09-21.md` §0.15.

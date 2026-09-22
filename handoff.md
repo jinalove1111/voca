@@ -1,10 +1,120 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-18 (171차 — **Paul Town V2 플래그 전 블로커 수정**: D1
-고정 랜드마크 규칙 정정 + D5 360px 배치 컨트롤 겹침 해소(브랜치
-`feat/paul-town-v2-world-contract-2026-09-17`, 로컬 커밋 1개·미push).
-`paulTownV2:false` 유지, Production WRITE 0, `npm run build` PASS(경고 0),
-`verify:all` 207/207 PASS, 브라우저 E2E 1010 PASS/0 FAIL/0 SKIP. 170차
-이하 보존)_
+_최종 갱신: 2026-09-23 (172차 — **Paul Town 2.5D 캐릭터 프로토타입 Stage
+1~5 완료 + CI(testBundleBudget) 수정 — 문서 갱신**: 브랜치
+`feat/paul-town-v2-clean-pr`, HEAD `435d6b1`(+ 이 문서 갱신 커밋).
+`paulTownV1:false`/`paulTownV2:false`/`paulTown2_5d:false` 전부 유지,
+Production WRITE 0, PR #62 OPEN/DRAFT 유지. 171차 이하 보존)_
+
+## 2026-09-23 (172차) — Paul Town 2.5D 캐릭터 프로토타입 Stage 1~5 완료 + CI(testBundleBudget) 수정 문서화 (paulTown2_5d OFF, Production 무접촉)
+
+### 0. 안전 요약
+- 이 세션은 문서(`*.md`)만 갱신했다 — `src/`/`api/`/`scripts/`/SQL/설정
+  파일 무변경(docs-maintainer 범위, CLAUDE.md 저장소 헌법). 브랜치
+  `feat/paul-town-v2-clean-pr`, HEAD `435d6b1` 기준으로 기록.
+- `paulTownV1:false`/`paulTownV2:false`/`paulTown2_5d:false` 전부 기본값
+  유지(`src/config/features.js:111-113`). Production WRITE 0(Proto 2.5D는
+  구매/저장 API를 전혀 호출하지 않음 — 마운트 스코프 로컬 state뿐). PR
+  #62 OPEN/DRAFT 유지 — 머지/undraft/배포 없음.
+
+### 1. Stage 1~5 구현 요약(2026-09-22~23, 별도 세션들 — 이 세션은 문서로 옮겨 적기만 함)
+- 커밋 체인(마지막 그린 CI `8050103` 이후): `32861bf`(V2 2.5D 폴리시,
+  Proto와 무관) → `8453140`(V2 벤치 앉기 파일럿, Proto와 무관) →
+  `1945eb5`(Astra 핸드오프 문서) → `c446a1f`(에셋 감사 문서) →
+  `5779d0d`(Proto Stage 1: 플래그+골격+클릭투무브) → `e728af4`(관리자
+  패널 카테고리 누락 수정) → `a3dcbb1`(Stage 2: 40×76 격자+BFS) →
+  `dcdb180`(Stage 3: Y 깊이 스케일/z, depthOrder `character` 레이어) →
+  `8132dd1`(Stage 4: 벤치 walk→sit→leave 상태 머신) → `544fd35`(모바일
+  시각 보정) → `cf18f5f`(좌석 sink 보정) → `d2bfb30`(Stage 5 하드닝+회귀
+  테스트) → `435d6b1`(CI 수정, testBundleBudget 메인 청크 판별).
+- 상세 아키텍처/파일지도/상태머신/테스트결과/알려진한계/롤백은
+  `docs/design/town/ASTRA_HANDOFF_2026-09-21.md` §0(2026-09-23 갱신)/
+  §0-A(캐릭터 에셋 정식 사양)에 기록했다 — 여기서는 재기술하지 않는다
+  (중복 방지).
+
+### 2. 검증(리뷰어 세션이 직접 실행·확인, 이 세션은 그 결과를 문서에 옮겨 적음)
+- 단위: `testProto25dWalkGrid.mjs` 28/28, `testProto25dDepth.mjs` 23/23,
+  `testProto25dBench.mjs` 88/88.
+- 회귀(V2/공용 계약 무변경 확인): `testTownV2Static.mjs` 147/147/0 SKIP,
+  `testTownDepthOrder.mjs` 73/73, `testTownWorldContract.mjs` 96/96.
+- E2E: `tests/e2e/townProto25d.spec.mjs`(독립 러너) 160 PASS/0 FAIL/0
+  SKIP, unmockedRequests 0건/mockErrors 0건.
+- 번들: `testBundleBudget.mjs` 24/24(정방향 + readdir 역순 재현 케이스
+  둘 다).
+- `npm run build` exit 0.
+- `npm run verify:all`/`npm run verify:e2e`: 실행 중 — 결과는 PR #62
+  코멘트로 별도 기록 예정(이 세션은 숫자를 추정하지 않는다).
+- 시각(브라우저 육안) 검증 50/50 — 아래 8절 및
+  `docs/design/town/ASTRA_HANDOFF_2026-09-21.md` §0.13 참고(이 절은 자동
+  테스트 숫자만, 시각 검증은 별도 절로 분리 기록).
+
+### 3. CI 이슈 현황
+- `scripts/testBundleBudget.mjs`(rewardSystem, gating) — Stage 4가
+  `Proto25DScreen`도 `src/assets/town/index.js`를 import하게 되며 그
+  모듈이 공유 청크로 분리, 이름이 실제 엔트리와 같은 `index-<hash>.js`
+  패턴이라 `readdirSync` 열거 순서(OS 의존)에 따라 Linux CI에서만
+  잘못된 청크를 "메인"으로 오판하던 버그 — `435d6b1`에서
+  `dist/index.html`의 실제 `<script type="module">` 참조 기반 판별로
+  수정, 예산 수치 무변경, 24/24 PASS 확인.
+- `tests/e2e/townV2.spec.mjs` S9(기존 V2 자석 드래그 배치 기능, Proto
+  2.5D 아님) — Linux CI 1회 FAIL(run 35567109630, 앵커 bbox
+  ~43.3~43.4px vs 허용치 ≥43.5px), 이후 재현 안 됨. `extra:true`
+  (non-gating). 씬 입장 애니메이션 가설은 로컬 재현으로 반증. Linux
+  Chromium 환경 부재로 추가 조사 불가 — 문서화만, 제품/테스트 변경
+  없음.
+- `scripts/testProdCheck.mjs` — CI FAIL 관측(`--show-names` 관련),
+  `extra:true`, 원인 미조사(범위 밖), 운영자 전달 권고.
+
+### 4. 준수한 제약
+- Production WRITE 0, `paulTownV1`/`paulTownV2`/`paulTown2_5d` 전부
+  false 유지, PR #62 Draft 유지, `.env` 미접근.
+- 학생 대상 신규 기능/UI/게임화가 이번 범위(개발 인프라 문서 갱신)에
+  섞이지 않음(규칙 12 — Proto 2.5D 자체는 §22가 이미 "운영자가 명시적
+  으로 요청한 신기능 개발"로 예외 분류했음을 재확인만 함, 새로 판단하지
+  않음).
+- 학생 식별 UUID 전용(해당 없음 — 이 프로토타입은 학생 식별 자체를
+  하지 않음, §22).
+
+### 5. 알려진 한계(수정 금지 대상)
+`docs/design/town/ASTRA_HANDOFF_2026-09-21.md` §0.9 참고 — 이모지
+플레이스홀더, Android 좌석 미세 오차(추가 미세조정 금지, 실제
+스프라이트로 해결), 바닥 컨테이너 aspectRatio 실효 없음(버그 아님),
+구매/저장 미연결.
+
+### 6. 다음 작업
+`ProtoCharacter.jsx`의 이모지를 §0-A 사양(idle/walk 좌우/sit, foot+seat
+앵커 매니페스트, 라이선스 기록)에 맞는 실제 스프라이트로 교체 — 상태
+머신/워크그리드 무변경, 기존 139 단위 + 160 E2E 단언 그린 유지가 완료
+기준.
+
+### 7. 변경 파일(이 세션, 문서만)
+`docs/design/town/ASTRA_HANDOFF_2026-09-21.md`(§0/§0-A 신규, 이후 §0.13~
+0.15 추가분 포함),
+`docs/design/town/ASTRA_ASSET_AUDIT_2026-09-21.md`(§16 신규),
+`TESTING.md`(신규 절 + testProdCheck 보충 단락),
+`handoff.md`(이 절 + 아래 8절 추가분).
+
+### 8. Phase 6 실측 시각 검증 + 아침 점검(2026-09-23, 리뷰어 세션 실행, 이 세션은 문서화만)
+- Vercel Preview는 Vercel SSO 뒤에 있고 이 프로토타입은 학생 로그인
+  이후에만 마운트되므로(`src/App.jsx`), Preview에서 실제 로그인하면
+  Production PIN 인증 API에 쓰기가 발생할 수 있다 — "Production WRITE 0"
+  제약을 지키기 위해 시각 검증은 동일 빌드 산출물(HEAD `435d6b1`의
+  `dist/`)을 로컬 `vite preview` + `installMocks`(네트워크 0건)로
+  실행했다.
+- 결과: 50/50 기능 체크 OK(1280x800 마우스 + 360x740/390x844/412x915
+  CDP 터치 dsf3 + 390x844 reduced-motion, idle→walking→sitting→
+  leaving→idle 전체 사이클, 모든 phase 그림자 존재, 디버그 박스 기본
+  0/0·`?proto25dDebug=1`에서 3/3, 장애물 depth 정상(건물 앞
+  charZ6409>6362, 뒤 charZ6184<6362), 가로 스크롤 없음). 착석 float
+  실측치(§0.9 허용된 한계의 수치화): 모바일 ≈15px/데스크톱 ≈29px/
+  reduced-motion ≈36px. 콘솔 경고는 무관한 기존 경고 1건(`d9be08c`,
+  `paulReactions.js`)뿐. Vercel 배포 상태(435d6b1) "success" 확인.
+- 상세는 `docs/design/town/ASTRA_HANDOFF_2026-09-21.md` §0.13(실측)/
+  §0.14(아침 점검 체크리스트, Preview URL 포함)/§0.15(`testProdCheck.mjs`
+  최초 관측 원인 — `--show-names` INFO 절 마스킹 미해제,
+  `DriftStudentS1`, `extra:true` non-gating) — 여기서는 재기술하지
+  않는다.
+- 운영자 Android 실기기 아침 점검은 SSO+로그인 제약상 원격 세션이 대신할
+  수 없다 — §0.14 체크리스트대로 운영자가 직접 수행해야 한다.
 
 ## 2026-09-18 (171차) — Paul Town V2 플래그 전 블로커 수정: D1 고정 랜드마크 규칙 정정 + D5 360px 배치 컨트롤 겹침 해소 (paulTownV2 OFF, Production 무접촉)
 
