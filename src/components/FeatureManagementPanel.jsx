@@ -76,6 +76,10 @@ const FEATURE_DETAILS = {
     label: '쓰기 답안 자동 검토 AI 보조 (관리자 전용)',
     description: '관리자 화면 "쓰기 답안 검토" 패널에 규칙 기반 + AI 자동분류 미리보기를 추가로 켭니다. 전제조건 미충족 시(SQL supabase_v3_6/v3_7 미실행, Edge Function grade-writing-answers 미배포, ANTHROPIC_API_KEY 미설정) 규칙 기반 분류만 동작하고 AI 확인은 안전하게 "검토 필요"로 표시됩니다 — 학생 화면에는 영향 없고, 실제 인정/무시는 항상 기존 수동 버튼이 처리합니다.',
   },
+  paulTown2_5d: {
+    label: 'Paul Town 2.5D Prototype',
+    description: 'Paul Town 2.5D 캐릭터 프로토타입(Stage 1). paulTownV1/paulTownV2와 완전히 독립된 별도 격리 실험(공유 상태/네트워크 없음) — 기본 OFF, 켜져 있어도 다른 Paul Town 화면에는 영향을 주지 않습니다.',
+  },
 }
 
 // 2026-09-12 Kinney Pilot A 온디바이스 진단 — localStorage에 실제로 무엇이

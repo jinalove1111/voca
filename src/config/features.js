@@ -364,7 +364,10 @@ export const getFeaturesByCategory = (category) => {
     // townShopV1(Paul Town 별 상점 V1, 2026-09-06)도 같은 이유로 여기 얹는다
     // — 새 카테고리 분리는 FeatureManagementPanel 소유 세션의 후속(이 세션은
     // 그 파일을 건드리지 않는다, 규칙 16).
-    attachment: ['attachmentHats', 'attachmentMuseum', 'attachmentAlbum', 'attachmentPaulMemory', 'attachmentWorldGarden', 'attachmentWorldFull', 'attachmentBookshelf', 'attachmentStory', 'paulMemoryV2', 'todaysDiscovery', 'starToSeed', 'hatCeremony', 'paulTownHomeBand', 'paulTownGarden', 'paulTownBuildings', 'productAnalytics', 'readingFoundation', 'readingStudentUI', 'curriculumExamplesStudentUI', 'writingCoachEnabled', 'townShopV1', 'paulTownV1', 'paulTownV2'],
+    // paulTown2_5d(Paul Town 2.5D 캐릭터 프로토타입 Stage 1, 2026-09-22)도
+    // 같은 이유로 여기 얹는다 — DEFAULT_FEATURES에는 있었지만 이 목록에서
+    // 빠져 있어 관리자 패널에 토글이 안 보였다(같은 사고 클래스).
+    attachment: ['attachmentHats', 'attachmentMuseum', 'attachmentAlbum', 'attachmentPaulMemory', 'attachmentWorldGarden', 'attachmentWorldFull', 'attachmentBookshelf', 'attachmentStory', 'paulMemoryV2', 'todaysDiscovery', 'starToSeed', 'hatCeremony', 'paulTownHomeBand', 'paulTownGarden', 'paulTownBuildings', 'productAnalytics', 'readingFoundation', 'readingStudentUI', 'curriculumExamplesStudentUI', 'writingCoachEnabled', 'townShopV1', 'paulTownV1', 'paulTownV2', 'paulTown2_5d'],
   }
   return categories[category] || []
 }
