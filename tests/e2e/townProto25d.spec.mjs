@@ -19,7 +19,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { installMocks } from './lib/mockRoutes.mjs'
 import { createRecorder } from './lib/harness.mjs'
-import { QA_STUDENT_NAME, QA_LOGIN_PIN } from './fixtures/index.mjs'
+import { QA_STUDENT_NAME, QA_LOGIN_PIN, ADMIN_PIN } from './fixtures/index.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
@@ -354,6 +354,56 @@ export async function run(browser, baseURL) {
       const captionVisible = await page.getByText('바닥을 탭하면 캐릭터가 걸어갑니다').isVisible().catch(() => false)
       r.check(`${name} — 정보 배지 자체는 정상 동작(클릭 시 캡션 토글됨)`, captionVisible)
       await infoBtn.click() // 캡션 닫기(다음 단언에 영향 없게 정리)
+
+      // ── Stage5 감사(2026-09-23) — 정보 배지 탭 타겟이 WCAG 2.5.5/iOS HIG
+      // 최소 권장(44x44px) 이상인지(Proto25DScreen.jsx min-h-[44px] 추가
+      // 수정 참고 — 수정 전 실측 높이는 ~24px였다) ──
+      const infoBtnBox = await infoBtn.boundingBox()
+      r.check(
+        `${name} — 정보 배지 탭 타겟이 ≥44x44px(WCAG 2.5.5/iOS HIG, Stage5 수정)`,
+        !!infoBtnBox && infoBtnBox.width >= 44 - 0.5 && infoBtnBox.height >= 44 - 0.5,
+        JSON.stringify(infoBtnBox),
+      )
+
+      // ── Stage5 감사 — Vercel Preview Toolbar류 고정 오버레이(바닥 위에
+      // 항상 떠 있는, 최상위 z-index의 fixed 엘리먼트)가 바닥 일부를
+      // 덮어도 그 위를 클릭하면 캐릭터가 움직이지 않는다. 실제 Vercel
+      // Toolbar를 이 테스트 환경에 주입할 수는 없으므로, 그와 동등한 조건
+      // (바닥보다 높은 z-index의 fixed 엘리먼트가 실제로 바닥 위를 덮고
+      // 있음)을 만족하는 합성 오버레이를 페이지에 직접 주입해 재현한다 —
+      // 이동 핸들러가 바닥(groundRef) 엘리먼트 자신에게만 직접 걸려 있어
+      // (요구사항13, 문서 레벨 delegation 아님) 오버레이가 실제 클릭
+      // 타겟이 되면 구조적으로 바닥 핸들러에 절대 도달할 수 없다는 사실을
+      // 검증한다(코드 변경 없이 순수 테스트로만 증명 가능 — Proto25DScreen.jsx
+      // 헤더 주석 요구사항13 참고). ──
+      await page.evaluate(() => {
+        const el = document.createElement('div')
+        el.id = 'e2e-vercel-toolbar-fixture'
+        el.style.position = 'fixed'
+        el.style.left = '0'
+        el.style.top = '0'
+        el.style.width = '100%'
+        el.style.height = '48px'
+        el.style.zIndex = '2147483647' // Vercel Toolbar류가 흔히 쓰는 최상위 z-index
+        el.style.background = 'transparent'
+        document.body.appendChild(el)
+      })
+      const overlayFixture = page.locator('#e2e-vercel-toolbar-fixture')
+      await overlayFixture.waitFor({ state: 'visible', timeout: 3000 })
+      const overlayBox = await overlayFixture.boundingBox()
+      const boxBeforeOverlayClick = await character.boundingBox()
+      // 오버레이가 실제로 바닥과 겹치는 지점(바닥 상단 근처, 오버레이가
+      // 덮는 y<48px 범위 안)을 클릭한다.
+      await page.mouse.click(overlayBox.x + overlayBox.width / 2, overlayBox.y + overlayBox.height / 2)
+      await page.waitForTimeout(200)
+      const boxAfterOverlayClick = await character.boundingBox()
+      const phaseAfterOverlayClick = await character.getAttribute('data-character-phase').catch(() => null)
+      r.check(
+        `${name} — Vercel Toolbar류 고정 오버레이(바닥 위, 최상위 z-index)를 클릭해도 캐릭터가 움직이지 않음(오버레이가 실제 클릭 타겟이라 바닥 핸들러에 도달 불가)`,
+        dist(boxCenter(boxBeforeOverlayClick), boxCenter(boxAfterOverlayClick)) < 1 && phaseAfterOverlayClick === 'idle',
+        `dist=${dist(boxCenter(boxBeforeOverlayClick), boxCenter(boxAfterOverlayClick))} phase=${phaseAfterOverlayClick}`,
+      )
+      await page.evaluate(() => document.getElementById('e2e-vercel-toolbar-fixture')?.remove())
 
       // ── 항목9 — 빠른 연속 탭에도 캐릭터 DOM이 중복 생성되지 않음 ─────────
       const rapidPoints = [0.3, 0.5, 0.65].map((f) => ({ x: groundBox.x + groundBox.width * f, y: groundBox.y + groundBox.height * 0.5 }))
@@ -875,6 +925,10 @@ export async function run(browser, baseURL) {
       const ground = page.locator('[data-testid="proto25d-ground"]')
       const groundBox = await ground.boundingBox()
       const benchArt = page.locator('[data-testid="proto25d-bench-art"]')
+      // Stage5 감사(2026-09-23) — 아래 여러 시점(sitting/leaving/idle)에서
+      // 재사용하기 위해 한 번만 선언한다(이전에는 그림자 alpha 섹션에서만
+      // 지역적으로 선언했다).
+      const shadow = page.locator('[data-proto-character-shadow]')
 
       // walkGrid.js OBSTACLES/benchInteraction.js 상수를 이 spec에도 값
       // 복제(OBSTACLES_REF/DEPTH_BANDS_REF와 동일한 이 파일의 기존 관례 —
@@ -969,6 +1023,30 @@ export async function run(browser, baseURL) {
         `char=${await readZIndex(character)} bench=${await readZIndex(benchArt)}`,
       )
 
+      // ── Stage5 감사(2026-09-23) — 그림자가 sitting(정지된 phase)에서도
+      // 좌석 앵커(seatRef)를 정확히 따라가는지. 기존 S7 항목8은 idle→idle
+      // 순간 이동 전후의 "이동 벡터"만 비교했을 뿐, sitting처럼 정지된
+      // phase에서 그림자가 실제로 그 좌표에 있는지는 검증한 적이 없었다
+      // (동어반복 없이 독립적으로 — 앱 공식이 아니라 벤치 좌표에서 이
+      // spec이 직접 재계산한 seatRef와 대조). boundingBox()는 CSS
+      // transition이 실제로 페인트한 현재 시각 위치를 읽으므로(위 항목2
+      // 주석과 동일 함정 — phase가 'sitting'으로 바뀐 시점부터도
+      // WALK_TRANSITION_MS=650ms 동안은 여전히 전이 중이라, 즉시 읽으면
+      // 중간값을 잡는다) 전이가 끝날 시간을 먼저 기다린다(이 세션이
+      // 실측으로 처음 이 값(46.5px)만큼 어긋나는 것을 확인 후 이 대기를
+      // 추가했다, CLAUDE.md 규칙 15). ──
+      await page.waitForTimeout(650 + 150)
+      await shadow.waitFor({ state: 'attached', timeout: 3000 })
+      const shadowBoxSeated = await shadow.boundingBox()
+      const shadowAnchorSeated = boxCenter(shadowBoxSeated) // 그림자 앵커 = translate(-50%,-50%) = 박스 중심
+      const expectedSeatScreenPt = toPx(seatRef)
+      const shadowSeatDist = dist(shadowAnchorSeated, expectedSeatScreenPt)
+      r.check(
+        `${name} 항목15(신규, Stage5) — sitting 단계에서 그림자가 좌석 앵커(seatRef)를 정확히 따라감(<3px)`,
+        shadowSeatDist != null && shadowSeatDist < 3,
+        `shadowAnchor=${JSON.stringify(shadowAnchorSeated)} expected=${JSON.stringify(expectedSeatScreenPt)} dist=${shadowSeatDist}`,
+      )
+
       // ── 항목8 — sitting 동안 바닥 탭은 무시됨(idle로 돌아올 때까지 입력
       // 잠금) ──
       const groundPointDuringSit = toPx({ x: 70, y: 20 })
@@ -1035,11 +1113,41 @@ export async function run(browser, baseURL) {
         `char=${zCharFrontBench} bench=${zBenchB}`,
       )
 
+      // ── Stage5 감사(2026-09-23) — 그림자가 leaving(전이 중인 phase)에도
+      // 캐릭터를 따라가는지. S7 항목8이 idle↔idle 전이(순간이동 비교)에서만
+      // 검증했던 "발 위치 추적" 계약을 leaving 단계에도 동일 기법(짧은
+      // 간격을 둔 두 샘플의 이동 벡터 비교)으로 확장한다 — leaving은
+      // WALK_TRANSITION_MS(650ms)로 짧아, 그 도중 두 지점을 샘플링한다. ──
+      await page.mouse.click(benchCentrePx.x, benchCentrePx.y)
+      const reachedLeaving = await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'leaving'
+      ), { timeout: 8000 })
+      r.check(`${name} 항목15(신규, Stage5) — 준비: leaving 단계에 도달함`, !!reachedLeaving)
+      if (reachedLeaving) {
+        const charLeaveA = await character.boundingBox()
+        const shadowLeaveA = await shadow.boundingBox()
+        await page.waitForTimeout(300)
+        const stillLeaving = (await character.getAttribute('data-character-phase').catch(() => null)) === 'leaving'
+        const charLeaveB = await character.boundingBox()
+        const shadowLeaveB = await shadow.boundingBox()
+        const charLeaveVec = { x: boxCenter(charLeaveB).x - boxCenter(charLeaveA).x, y: boxCenter(charLeaveB).y - boxCenter(charLeaveA).y }
+        const shadowLeaveVec = { x: boxCenter(shadowLeaveB).x - boxCenter(shadowLeaveA).x, y: boxCenter(shadowLeaveB).y - boxCenter(shadowLeaveA).y }
+        const leaveVecDist = Math.hypot(charLeaveVec.x - shadowLeaveVec.x, charLeaveVec.y - shadowLeaveVec.y)
+        r.check(
+          `${name} 항목15(신규, Stage5) — leaving 단계 중에도 그림자가 캐릭터와 거의 같은 벡터로 이동(발 위치 추적, 오차<20px)`,
+          leaveVecDist < 20,
+          `stillLeaving=${stillLeaving} charVec=${JSON.stringify(charLeaveVec)} shadowVec=${JSON.stringify(shadowLeaveVec)} dist=${leaveVecDist}`,
+        )
+      }
+      await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
+      ), { timeout: 8000 })
+
       // ── 항목11 — 그림자: 옅고(alpha 0.18~0.22) 납작함(타원형, 폭 대비
       // 낮은 높이) + px 하한 이상(모바일 시각 보정, 2026-09-23) ──
       // 모바일 시각 보정으로 그림자가 캐릭터 박스의 형제로 분리됨
-      // (ProtoCharacter.jsx 헤더 주석 참고) — 전용 data 속성으로 찾는다.
-      const shadow = page.locator('[data-proto-character-shadow]')
+      // (ProtoCharacter.jsx 헤더 주석 참고) — 전용 data 속성으로 찾는다
+      // (위에서 이미 선언한 shadow 재사용).
       await shadow.waitFor({ state: 'attached', timeout: 5000 })
       // alpha는 기존 0.10(<=0.12 검증)에서 0.20으로 올렸다 — 그 값 자체가
       // "모바일에서 사실상 안 보임" 회귀의 원인 중 하나였다(팀장 지시 —
@@ -1428,6 +1536,136 @@ export async function run(browser, baseURL) {
         `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
     } finally {
       collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S10 — Stage5 하드닝: 상호작용 도중 언마운트 — 잔류 콘솔 에러/DOM/
+  // 재생성 타이머 없음. 이 프로토타입엔 화면 내 내비게이션(뒤로가기 버튼
+  // 등)이 없다(App.jsx 주석 — "내비게이션 진입점이 없다") — 유일한 언마운트
+  // 경로는 paulTown2_5dEnabled 플래그가 false로 바뀌는 것뿐이다.
+  // tests/e2e/townFlagCrossTab.spec.mjs와 동일한 "같은 브라우저 컨텍스트,
+  // 두 탭" 기법(이 저장소가 실제 Kinney Pilot A 사고를 겪고 만든 기존
+  // 관례 — 같은 origin의 localStorage를 공유하는 admin 탭에서 라이브로
+  // 토글)을 재사용해, 학생 탭(pageB)이 새로고침 없이 실시간으로
+  // 언마운트되게 만든다.
+  //
+  // 순서 주의(이 세션이 실측으로 발견한 함정) — admin 로그인은 반드시
+  // 학생 로그인보다 먼저 끝내야 한다. 학생 세션(현재 학생)이 이
+  // 브라우저 컨텍스트의 localStorage에 먼저 기록되면, 그 뒤에 새로 여는
+  // 탭(pageA)은 "관리자 로그인 전 선택 화면"이 아니라 이미 그 학생으로
+  // 로그인된 대시보드를 그대로 보여준다(세션이 탭이 아니라 오리진
+  // 저장소 단위로 공유되므로) — "⚙️ 관리자" 버튼 자체가 없어 90초
+  // 타임아웃으로 FAIL했던 실제 회귀를 이 세션이 실측으로 재현했다
+  // (townFlagCrossTab.spec.mjs가 "Page B를 학생 선택 화면에 로그인 전
+  // 그대로 둔 채" pageA에서 먼저 admin 로그인을 마치는 것도 동일한 이유).
+  // 그래서 이 시나리오는 (1) pageA에서 먼저 admin 로그인 + 기능 패널 진입
+  // + paulTown2_5d를 admin UI로 직접 ON(=addInitScript 대신 실제 운영
+  // 경로 재현) → (2) 그 다음에야 pageB에서 학생 로그인(이 시점엔 이미
+  // localStorage에 paulTown2_5d=true가 있어 애초부터 프로토타입이 켜진
+  // 상태로 로드됨) → (3) 벤치 상호작용 도중 pageA(이미 admin 화면에 계속
+  // 떠 있음, 재로그인 불필요)에서 라이브로 OFF, 순서로 진행한다.
+  {
+    const name = 'S10[unmount-mid-interaction]'
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } })
+    const pageA = await context.newPage()
+    const pageB = await context.newPage()
+    const consoleErrors = []
+    pageB.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()) })
+    pageB.on('pageerror', (err) => { consoleErrors.push(String(err)) })
+    const mocksA = await installMocks(pageA)
+    const mocksB = await installMocks(pageB)
+    try {
+      // ── (1) pageA — admin 로그인 → 🎯 기능 → 애착 시스템 →
+      // paulTown2_5d ON(실제 운영자가 쓰는 경로 그대로 재현) ──
+      await pageA.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await pageA.locator('button', { hasText: '⚙️ 관리자' }).waitFor({ state: 'visible', timeout: 90000 })
+      await pageA.locator('button', { hasText: '⚙️ 관리자' }).click()
+      await pageA.getByPlaceholder('비밀번호').fill(ADMIN_PIN)
+      await pageA.locator('button', { hasText: '로그인' }).click()
+      await pageA.locator('h1', { hasText: '⚙️ 관리자' }).waitFor({ state: 'visible', timeout: 15000 })
+      await pageA.locator('button', { hasText: '🎯 기능' }).click()
+      const heading = pageA.getByText('애착 시스템 (Attachment & Growth)')
+      await heading.waitFor({ state: 'visible', timeout: 10000 })
+      const checkbox = pageA.locator('#paulTown2_5d')
+      if (!(await checkbox.isVisible().catch(() => false))) {
+        await heading.click()
+        await checkbox.waitFor({ state: 'visible', timeout: 10000 })
+      }
+      const wasCheckedInitially = await checkbox.isChecked()
+      r.check(`${name} — 사전조건: paulTown2_5d 기본값이 꺼져 있음(관리자 패널 실측)`, wasCheckedInitially === false, `wasChecked=${wasCheckedInitially}`)
+      await checkbox.click()
+      const toggledOn = await waitUntil(async () => (await checkbox.isChecked()) === true, { timeout: 5000 })
+      r.check(`${name} — admin 탭에서 paulTown2_5d를 켰음(실제 운영 경로)`, !!toggledOn)
+
+      // ── (2) pageB — admin 토글 이후 새로 로드하므로 처음부터 켜진
+      // 상태로 시작(addInitScript 불필요, 공유 localStorage가 이미 true) ──
+      await pageB.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(pageB)
+      await waitForLoggedIn(pageB)
+
+      const character = pageB.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = pageB.locator('[data-testid="proto25d-ground"]')
+      const groundBox = await ground.boundingBox()
+      const BENCH_REF = OBSTACLES_REF.find((o) => o.id === 'demo-bench')
+      const benchCentrePx = {
+        x: groundBox.x + groundBox.width * (((BENCH_REF.x0 + BENCH_REF.x1) / 2) / 100),
+        y: groundBox.y + groundBox.height * (((BENCH_REF.y0 + BENCH_REF.y1) / 2) / 100),
+      }
+      await pageB.mouse.click(benchCentrePx.x, benchCentrePx.y)
+      const reachedSitting = await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'sitting'
+      ), { timeout: 8000 })
+      r.check(`${name} — 준비: 벤치 착석 도중(sitting, holdTimerRef 예약 중)까지 도달함`, !!reachedSitting)
+
+      // ── (3) pageA(이미 admin 화면, 재로그인 불필요)에서 같은 컨텍스트의
+      // localStorage를 라이브로 다시 OFF로 토글(townFlagCrossTab.spec.mjs와
+      // 동일 기법) — 전체 페이지 새로고침 없이 pageB의 subscribeFeatures
+      // 'storage' 리스너가 반영해 App.jsx가 Proto25DScreen을 즉시
+      // 언마운트한다. ──
+      await checkbox.click()
+      const toggledOff = await waitUntil(async () => (await checkbox.isChecked()) === false, { timeout: 5000 })
+      r.check(`${name} — admin 탭에서 paulTown2_5d를 다시 껐음`, !!toggledOff)
+
+      // ── pageB — 새로고침 없이 즉시 언마운트됨(캐릭터가 sitting 단계,
+      // holdTimerRef가 아직 예약된 상태에서) ──
+      const rootDetached = await pageB.locator('[data-testid="proto25d-root"]').waitFor({ state: 'detached', timeout: 5000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 상호작용 도중(sitting)에도 플래그 OFF로 즉시 언마운트됨(리로드 없음)`, rootDetached)
+
+      // ── 남은 holdTimer(SIT_HOLD_MS=2500ms 중 일부 남음) + enterLeaving의
+      // walkPath(WALK_TRANSITION_MS=650ms)가 언마운트 후에도 발화했다면 그
+      // 시점에 setState를 시도해 React가 콘솔에 경고를 남긴다 — 원래
+      // 시퀀스가 전부 끝났을 시간(넉넉히 4초)을 기다린 뒤 확인한다.
+      await pageB.waitForTimeout(4000)
+      const relevantErrors = consoleErrors.filter((t) => /Cannot update a component|memory leak|unmounted component/i.test(t))
+      r.check(
+        `${name} — 언마운트 후 콘솔에 setState-after-unmount류 에러/경고 없음(walkTimerRef/holdTimerRef 정리 확인)`,
+        relevantErrors.length === 0,
+        JSON.stringify(relevantErrors.slice(0, 5)),
+      )
+      const charCountAfterWait = await pageB.locator('[data-proto-character]').count()
+      r.check(`${name} — 대기 후에도 캐릭터 DOM이 재생성되지 않음(잔류 타이머로 인한 재마운트 없음)`, charCountAfterWait === 0, `count=${charCountAfterWait}`)
+      const rootCountAfterWait = await pageB.locator('[data-testid="proto25d-root"]').count()
+      r.check(`${name} — 대기 후에도 proto25d-root가 여전히 DOM에 없음`, rootCountAfterWait === 0, `count=${rootCountAfterWait}`)
+
+      // ── 재진입 시나리오 — 플래그를 다시 켜면 새 캐릭터가 idle로 정상
+      // 재마운트됨(잔류 상태로 인한 크래시 없음) ──
+      await checkbox.click()
+      await waitUntil(async () => (await checkbox.isChecked()) === true, { timeout: 5000 })
+      const remounted = await pageB.locator('[data-proto-character]').waitFor({ state: 'attached', timeout: 5000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 플래그를 다시 켜면 새 캐릭터가 정상 재마운트됨(잔류 상태 없음)`, remounted)
+      const phaseAfterRemount = remounted
+        ? await pageB.locator('[data-proto-character]').getAttribute('data-character-phase').catch(() => null)
+        : null
+      r.check(`${name} — 재마운트된 캐릭터는 idle(sitting/leaving 잔류 없음)`, phaseAfterRemount === 'idle', `phase=${phaseAfterRemount}`)
+    } catch (err) {
+      const bodyText = await pageB.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocksB)
+      collect(mocksA)
       await context.close()
     }
   }

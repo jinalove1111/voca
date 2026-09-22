@@ -309,9 +309,23 @@ export default function Proto25DScreen() {
     const arrival = nearestWalkablePoint(rawArrival.x, rawArrival.y)
     const path = findPath({ x: cur.leftPct, y: cur.topPct }, arrival)
     if (!path || path.length === 0) {
-      // 도달 불가(사실상 발생하지 않음) — 그래도 phase는 leaving을 한 번
-      // 거쳐 idle로 떨어진다(상태 머신 계약 일관성, 크래시/멈춘 상태 없음).
-      applyIfActive(seq, (c) => ({ ...c, phase: 'leaving' }))
+      // 도달 불가 — Stage 5 감사(2026-09-23)로 확인: benchSeatPoint의 좌석
+      // 좌표는 findPath 내부에서 항상 nearestWalkablePoint로 먼저 보정되고,
+      // arrival도 이미 걸을 수 있는 칸(benchInteraction.js 계약)이라, 현재
+      // OBSTACLES 픽스처(walkGrid.js)로는 이 분기가 실제로 실행되지 않는다
+      // (증명 불가능한 이론상 방어 코드 — walkGrid.js OBSTACLES가 바뀌어
+      // 좌석 주변을 완전히 봉쇄하는 경우에만 도달). 이전 버전은 이 분기에서
+      // phase:'leaving'과 phase:'idle'을 두 번의 별도 setState로 나눠
+      // 호출했는데, 같은 동기 스택 안의 연속 setState는 React 18 자동
+      // 배칭으로 한 커밋에 묶여 'leaving'이 화면에 단 한 프레임도 그려지지
+      // 못하고 idle로 즉시 덮인다(walkLeg 주석의 phaseLabel 버그와 동일
+      // 클래스 — 그 버그는 실측 FAIL로 확인·수정했지만 이 분기는 현재
+      // 도달 불가라 같은 방식으로 재현할 수 없다). 이 분기가 실제로
+      // 실행되더라도 'leaving' 프레임이 안 보이는 것 자체가 사용자에게
+      // 관측 가능한 오류는 아니다(최종 idle 위치는 정확) — 그래도 실행되지
+      // 않는 setState 두 번을 남겨 미래에 혼동을 주지 않도록 단일 호출로
+      // 정리한다(동작 변화 없음, 도달 시나리오가 없어 스스로 검증도 못하는
+      // 코드를 놔두지 않는다).
       applyIfActive(seq, (c) => ({ ...c, phase: 'idle', leftPct: arrival.x, topPct: arrival.y }))
       return
     }
@@ -380,6 +394,19 @@ export default function Proto25DScreen() {
     if (pointerDownRef.current && pointerDownRef.current.pointerId === e.pointerId) pointerDownRef.current = null
   }
 
+  // Stage 5 감사(2026-09-23) 추가 — pointercancel과 동일한 정리를
+  // lostpointercapture에도 건다. 브라우저가 setPointerCapture(위
+  // handleGroundPointerDown)로 얻은 캡처를 pointerup/pointercancel 없이
+  // 스스로 회수하는 경로(예: 동시 터치 중 다른 엘리먼트가 캡처를 가로채는
+  // 드문 케이스)가 있으면, pointerDownRef가 그 down 시점 좌표를 계속 들고
+  // 있다가 나중에 무관한 pointerup과 잘못 짝지어질 수 있다 — 이 핸들러가
+  // 없어도 다음 pointerdown이 항상 pointerDownRef를 덮어써 자가 치유되긴
+  // 하지만(요구사항13 무변경, 새 이동 경로 아님), 캡처 상실 시점에 즉시
+  // 정리해 그 좁은 창을 없앤다.
+  function handleGroundLostPointerCapture(e) {
+    if (pointerDownRef.current && pointerDownRef.current.pointerId === e.pointerId) pointerDownRef.current = null
+  }
+
   // Stage 4 — 'sitting' 단계에서만 z-index 계산에 topPct 대신 벤치의 y1을
   // 넘긴다(ProtoCharacter.jsx 헤더 주석 "depthY" 항목에 이유 정리 — 좌석
   // y가 벤치 y1보다 작아 topPct 그대로 쓰면 캐릭터가 벤치보다 뒤로 밀려나
@@ -399,7 +426,12 @@ export default function Proto25DScreen() {
           type="button"
           data-testid="proto25d-info-toggle"
           onClick={() => setInfoOpen((v) => !v)}
-          className="rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-purple-500 shadow"
+          // Stage 5 감사(2026-09-23) — min-h-[44px] 추가(WCAG 2.5.5/iOS HIG
+          // 탭 타겟 하한, 이 저장소 기존 관례 — testTownV2Static.mjs가 이미
+          // V2 컴포넌트 전체 버튼에 강제하는 것과 동일 기준). 이전 px-3 py-1
+          // + text-xs만으로는 실측 높이가 ~24px로 하한 미달이었다(로직/좌표
+          // 무변경, 시각적 패딩만 조정).
+          className="min-h-[44px] flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-purple-500 shadow"
         >
           ⓘ 2.5D 프로토타입 (Stage 1+2+3+4)
         </button>
@@ -426,6 +458,7 @@ export default function Proto25DScreen() {
         onPointerDown={handleGroundPointerDown}
         onPointerUp={handleGroundPointerUp}
         onPointerCancel={handleGroundPointerCancel}
+        onLostPointerCapture={handleGroundLostPointerCapture}
       >
         {/* 장애물 디버그 플레이스홀더(Stage 2) — 실제 아트 아님, Phase E
             육안 검증(탭이 상자 안으로 들어가지 않는지/뒤로 돌아가는지)을

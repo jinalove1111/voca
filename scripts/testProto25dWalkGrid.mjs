@@ -197,6 +197,33 @@ section('부록 — 격자 해상도/셀 변환 기본 계약')
   const back = cellToWorldPoint(0, 0)
   check('cellToWorldPoint(0,0)이 WORLD_MIN 근처 셀 중심을 반환', back.x > WORLD_MIN && back.y > WORLD_MIN && back.x < WORLD_MIN + 3 && back.y < WORLD_MIN + 2, JSON.stringify(back))
   check('격자 밖 셀은 항상 isWalkableCell=false', isWalkableCell(-1, 0) === false && isWalkableCell(GRID_COLS, 0) === false)
+  // Stage 5 감사(2026-09-23) 추가 — 반대쪽 모서리(WORLD_MAX)도 대칭적으로
+  // 마지막 셀(GRID_COLS-1,GRID_ROWS-1)로 귀결되는지 직접 확인한다(이전에는
+  // WORLD_MIN 모서리만 worldToCell로 직접 검증하고, WORLD_MAX 쪽은
+  // classifyPoint(walkable 여부)만 확인해 정확한 셀 인덱스까지는 재확인하지
+  // 않고 있었다 — 순수 함수라 뷰포트와 무관하게 항상 같은 값이어야 한다).
+  const maxCell = worldToCell(WORLD_MAX, WORLD_MAX)
+  check(
+    'worldToCell(WORLD_MAX,WORLD_MAX) === {col:GRID_COLS-1,row:GRID_ROWS-1}(반대쪽 모서리도 대칭적으로 앵커링됨)',
+    maxCell.col === GRID_COLS - 1 && maxCell.row === GRID_ROWS - 1,
+    JSON.stringify(maxCell),
+  )
+  const maxBack = cellToWorldPoint(GRID_COLS - 1, GRID_ROWS - 1)
+  check(
+    'cellToWorldPoint(GRID_COLS-1,GRID_ROWS-1)이 WORLD_MAX 근처 셀 중심을 반환(격자 밖으로 나가지 않음)',
+    maxBack.x < WORLD_MAX && maxBack.y < WORLD_MAX && maxBack.x > WORLD_MAX - 3 && maxBack.y > WORLD_MAX - 2,
+    JSON.stringify(maxBack),
+  )
+  // 왕복(world -> cell -> world -> cell) — 셀 중심점을 다시 넣으면 같은
+  // 셀로 돌아와야 한다(양쪽 모서리 모두, 라운드트립 안정성).
+  const roundTripMin = worldToCell(back.x, back.y)
+  check('cellToWorldPoint(0,0) 왕복이 다시 {0,0}으로 귀결됨(라운드트립 안정)', roundTripMin.col === 0 && roundTripMin.row === 0, JSON.stringify(roundTripMin))
+  const roundTripMax = worldToCell(maxBack.x, maxBack.y)
+  check(
+    'cellToWorldPoint(GRID_COLS-1,GRID_ROWS-1) 왕복이 다시 같은 셀로 귀결됨(라운드트립 안정)',
+    roundTripMax.col === GRID_COLS - 1 && roundTripMax.row === GRID_ROWS - 1,
+    JSON.stringify(roundTripMax),
+  )
   // 경계 사각지대 회귀 방지 — 정확히 WORLD_MIN/WORLD_MAX인 점(장애물과
   // 무관한 위치)은 반드시 walkable이어야 한다(이 세션이 최초 구현에서
   // 실측으로 발견한 회귀, walkGrid.js 헤더 주석 참고).
