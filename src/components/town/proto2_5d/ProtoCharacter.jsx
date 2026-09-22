@@ -1,5 +1,31 @@
 // src/components/town/proto2_5d/ProtoCharacter.jsx — Paul Town 2.5D 캐릭터
-// 프로토타입(Stage 1 + Stage 3, 2026-09-22) 캐릭터 프레젠테이션.
+// 프로토타입(Stage 1 + Stage 3, 2026-09-22 + Stage 4, 2026-09-23) 캐릭터
+// 프레젠테이션.
+//
+// Stage 4(벤치 walk-to-sit) 추가분 — facing/depthY 두 개의 선택적 prop만
+// 얹는다(재구현 없음):
+//  - facing(1|-1, 기본 1) — 좌우 미러링. 아래 JSX의 "facing 래퍼" 전용
+//    중간 엘리먼트(새로 추가, outer 앵커/inner bob div 둘 다 아님)에만
+//    static transform:scaleX(-1)로 건다. outer 앵커에 걸면 위 Stage3 스케일
+//    증명(앵커가 항상 (0,0)으로 귀결)이 "s"가 스칼라라는 전제를 벗어나
+//    다시 검증해야 하고, inner bob div에 걸면 그 div가 이미 키프레임
+//    애니메이션으로 매 프레임 transform 전체를 새로 쓰므로(townWalkBob/
+//    townCatIdle이 둘 다 `transform:` 축약형을 씀, tailwind.config.js) 정적
+//    inline transform이 애니메이션 프레임마다 덮여 사라진다(이 파일이 원래
+//    bob을 outer 앵커와 분리해 둔 것과 같은 이유의 충돌). 그래서 outer(위치/
+//    스케일 전용)와 inner(bob 애니메이션 전용) 사이에 facing 전용 레이어를
+//    하나 더 끼워 넣는다 — 이 레이어는 static scaleX(-1)만 소유하고 절대
+//    애니메이션되지 않으므로 위 두 충돌 모두를 피한다.
+//  - depthY(number, 선택) — 주어지면 z-index 계산에 topPct 대신 이 값을
+//    쓴다(스케일은 여전히 topPct 기준 — 시각적 크기는 실제 위치를 따라야
+//    자연스럽다). Proto25DScreen.jsx가 'sitting' 단계에서만 벤치의 y1을
+//    넘겨 캐릭터가 항상 벤치보다 앞에 렌더되도록 강제한다(착석 좌표
+//    benchSeatPoint의 y가 벤치 y1보다 작아 topPct 그대로 쓰면 depthKey가
+//    더 작아져 오히려 벤치 뒤로 밀려나기 때문 — depthOrder.js는 y가 작을수록
+//    더 뒤로 배정하는 모델이라, "벤치 위에 앉아 있다"는 논리적 사실과
+//    "벤치보다 화면 앞에 그려져야 한다"는 시각 요구가 seat.y 하나만으로는
+//    동시에 만족되지 않는다. 새 depth 모델을 만들지 않고, 이미 있는
+//    characterZIndex(y)에 넣는 y 값만 상황별로 고르는 최소 변경으로 해결).
 //
 // Stage 3(Y-기반 스케일 + depth occlusion) — depthVisual.js(신규,
 // worldContract.depthScale/depthOrder.cssZIndex에 위임만 하는 순수 헬퍼)를
@@ -61,8 +87,9 @@ export const WALK_TRANSITION_MS = 650
 // 수 있어야 한다"는 스펙 요구를 깨므로, 아주 짧지만 0은 아닌 값을 쓴다.
 export const REDUCED_MOTION_TRANSITION_MS = 220
 
-export default function ProtoCharacter({ phase, leftPct, topPct, reducedMotion }) {
+export default function ProtoCharacter({ phase, leftPct, topPct, reducedMotion, facing = 1, depthY }) {
   const isWalking = phase === 'walking'
+  const isSitting = phase === 'sitting'
   const durationMs = reducedMotion ? REDUCED_MOTION_TRANSITION_MS : WALK_TRANSITION_MS
   // motion-safe: 접두사가 prefers-reduced-motion을 CSS 미디어 쿼리 레벨에서
   // 이미 걸러준다(idle 숨쉬기/걷기 bob 둘 다 reduced-motion에서 자동으로
@@ -79,12 +106,16 @@ export default function ProtoCharacter({ phase, leftPct, topPct, reducedMotion }
   // 뿐, 최종 scale/zIndex 값은 reducedMotion과 무관하게 항상 동일한 공식으로
   // 계산된 정확한 값이다.
   const scale = characterScale(topPct)
-  const zIndex = characterZIndex(topPct)
+  const zIndex = characterZIndex(depthY != null ? depthY : topPct)
   const transitionParts = [
     `left ${durationMs}ms ease-in-out`,
     `top ${durationMs}ms ease-in-out`,
     `transform ${durationMs}ms ease-in-out`,
   ]
+  // Stage 4 — ★플레이스홀더, 실제 아트 필요★. 앉은 상태를 구분할 실제
+  // 캐릭터 아트가 없어 이모지를 하나 더 바꿔 끼우는 최소 표시만 한다(위
+  // 파일 헤더의 플레이스홀더 원칙과 동일).
+  const glyph = isSitting ? '🧘' : '🚶'
 
   return (
     <div
@@ -113,13 +144,34 @@ export default function ProtoCharacter({ phase, leftPct, topPct, reducedMotion }
           결함이 실측 스크린샷에서 확인돼(2026-09-22 Phase 4 시각 게이트)
           이 방식으로 되돌렸다. */}
       <div className={`relative w-full pointer-events-none${idleOrWalkClass}`}>
-        <span aria-hidden="true" className="absolute bottom-0 left-1/2 -translate-x-1/2 w-3/4 h-2 rounded-full bg-[#1e2a5a]/15 blur-[2px]" />
-        <span
-          aria-hidden="true"
-          className="relative inline-flex items-center justify-center w-full leading-none drop-shadow-sm text-[clamp(1.4rem,7vw,2.2rem)]"
-        >
-          🚶
-        </span>
+        {/* Stage 4 — facing 전용 레이어(위 헤더 주석 참고). 이 bob div(위
+            className, 매 프레임 transform이 통째로 바뀌는 keyframe 애니메이션
+            소유)의 *자식*으로 한 겹 더 끼워, static scaleX(-1)이 애니메이션과
+            같은 엘리먼트의 transform을 두고 경합하지 않게 한다 — bob div
+            자신은 계속 "이 캐릭터의 첫 번째 div"로 남아(townProto25d.spec.mjs
+            S5의 `character.locator('div').first()` 기존 계약 무변경), 그
+            내부에서 facing만 별도로 뒤집는다. 이 div는 static이라(position
+            지정 없음) 아래 그림자 span의 absolute 기준(가장 가까운 positioned
+            조상)은 여전히 바깥 bob div 그대로다(레이아웃 영향 없음). */}
+        <div style={{ transform: facing === -1 ? 'scaleX(-1)' : undefined }}>
+          {/* Stage 4 — 그림자 정제(더 납작하고 옅고 부드럽게). foot-anchor
+              (absolute bottom-0 left-1/2 -translate-x-1/2)는 그대로 유지해
+              Stage 3 스케일을 그대로 상속한다. pointer-events-none은 조상
+              (outer/inner 둘 다 pointer-events-none)에서 이미 상속되지만,
+              "그림자를 클릭해도 바닥 이동 판정을 가로채지 않는다"는 계약을
+              이 엘리먼트 자체에도 명시적으로 걸어 둔다(상속에만 의존하지
+              않음). */}
+          <span
+            aria-hidden="true"
+            className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[85%] h-[5px] rounded-full bg-[#1e2a5a]/10 blur-[3px] pointer-events-none"
+          />
+          <span
+            aria-hidden="true"
+            className="relative inline-flex items-center justify-center w-full leading-none drop-shadow-sm text-[clamp(1.4rem,7vw,2.2rem)]"
+          >
+            {glyph}
+          </span>
+        </div>
       </div>
     </div>
   )

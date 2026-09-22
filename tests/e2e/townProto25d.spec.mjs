@@ -801,5 +801,330 @@ export async function run(browser, baseURL) {
     }
   }
 
+  // ── S8 — Stage4 핵심: 벤치 walk-to-sit(플래그 ON, 데스크톱 마우스
+  // 1280x800) — 상태 머신(walking->sitting->leaving->idle), 반복 탭 무시,
+  // walking 중 바닥 탭 재지정, sitting 중 탭 무시, z-index 역전, 그림자
+  // 정제 ──
+  {
+    const vp = { width: 1280, height: 800 }
+    const name = 'S8[1280x800,flag-ON,bench-sit]'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true })
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const groundBox = await ground.boundingBox()
+      const benchArt = page.locator('[data-testid="proto25d-bench-art"]')
+
+      // walkGrid.js OBSTACLES/benchInteraction.js 상수를 이 spec에도 값
+      // 복제(OBSTACLES_REF/DEPTH_BANDS_REF와 동일한 이 파일의 기존 관례 —
+      // import가 아니라 값 복제, Node 페이지 컨텍스트 밖 spec이라).
+      const BENCH_REF = OBSTACLES_REF.find((o) => o.id === 'demo-bench')
+      const ARRIVAL_GAP_REF = 2
+      const SIT_OFFSET_REF = 2
+      const arrivalRef = { x: (BENCH_REF.x0 + BENCH_REF.x1) / 2, y: BENCH_REF.y1 + ARRIVAL_GAP_REF }
+      const seatRef = { x: (BENCH_REF.x0 + BENCH_REF.x1) / 2, y: BENCH_REF.y1 - SIT_OFFSET_REF }
+      function toPx(pct) { return { x: groundBox.x + groundBox.width * (pct.x / 100), y: groundBox.y + groundBox.height * (pct.y / 100) } }
+      const benchCentrePct = { x: (BENCH_REF.x0 + BENCH_REF.x1) / 2, y: (BENCH_REF.y0 + BENCH_REF.y1) / 2 }
+      const benchCentrePx = toPx(benchCentrePct)
+
+      // 위상(phase) 타임라인 샘플러 — data-character-phase를 짧은 간격으로
+      // 폴링해 "연속 중복 제거"한 배열을 만든다(예: idle,walking,sitting,
+      // leaving,idle). 인덱스 비교로 순서를 단언한다.
+      async function samplePhaseTimeline({ timeoutMs = 9000, interval = 40, stopAtIdleAfter = 1 } = {}) {
+        const timeline = []
+        const deadline = Date.now() + timeoutMs
+        let lastPhase = null
+        let idleCount = 0
+        while (Date.now() < deadline) {
+          const phase = await character.getAttribute('data-character-phase').catch(() => null)
+          if (phase !== lastPhase) {
+            timeline.push(phase)
+            lastPhase = phase
+            if (phase === 'idle') idleCount++
+          }
+          if (idleCount >= stopAtIdleAfter && timeline.length > 1) break
+          await page.waitForTimeout(interval)
+        }
+        return timeline
+      }
+
+      r.check(`${name} 항목1 — 벤치 실제 아트(decorations/bench)가 렌더됨`, await benchArt.waitFor({ state: 'attached', timeout: 5000 }).then(() => true).catch(() => false))
+
+      // ── 벤치 탭 -> walking -> sitting -> leaving -> idle, 이 순서로만
+      // 관측됨(반복 탭도 함께 섞어 쏴서 "중복 사이클 없음"까지 같이 확인) ──
+      await page.mouse.click(benchCentrePx.x, benchCentrePx.y)
+      // 항목7 — 반복 벤치 탭(같은 지점, walking 도중) — 무시돼야 한다.
+      await page.waitForTimeout(60)
+      await page.mouse.click(benchCentrePx.x, benchCentrePx.y)
+      await page.mouse.click(benchCentrePx.x, benchCentrePx.y)
+
+      const timeline = await samplePhaseTimeline({ timeoutMs: 12000 })
+      const iWalk = timeline.indexOf('walking')
+      const iSit = timeline.indexOf('sitting')
+      const iLeave = timeline.indexOf('leaving')
+      const iIdleAfter = timeline.lastIndexOf('idle')
+      r.check(`${name} 항목6 — 벤치 탭 후 walking으로 전이됨`, iWalk >= 0, JSON.stringify(timeline))
+      r.check(`${name} 항목6 — walking 다음에 sitting으로 전이됨`, iSit > iWalk, JSON.stringify(timeline))
+      r.check(`${name} 항목6 — sitting 다음에 leaving으로 전이됨`, iLeave > iSit, JSON.stringify(timeline))
+      r.check(`${name} 항목6 — leaving 다음에 idle로 복귀함`, iIdleAfter > iLeave, JSON.stringify(timeline))
+      r.check(
+        `${name} 항목7 — 반복 벤치 탭에도 sitting/leaving이 정확히 1번씩만 관측됨(중복 사이클 없음)`,
+        timeline.filter((p) => p === 'sitting').length === 1 && timeline.filter((p) => p === 'leaving').length === 1,
+        JSON.stringify(timeline),
+      )
+      const charCountAfterRepeatBenchTaps = await page.locator('[data-proto-character]').count()
+      r.check(`${name} 항목7 — 반복 벤치 탭 후에도 캐릭터 엘리먼트가 정확히 1개`, charCountAfterRepeatBenchTaps === 1, `count=${charCountAfterRepeatBenchTaps}`)
+
+      // ── 착석 지점 — 논리 좌표(style.left/top)가 benchSeatPoint와 정확히
+      // 일치(발 앵커가 벤치 박스 안, 붕 뜨지 않음). 이 시점엔 이미 idle까지
+      // 끝났으므로, 별도로 다시 한 번 탭해 sitting 단계에서 직접 샘플링한다 ──
+      await page.mouse.click(benchCentrePx.x, benchCentrePx.y)
+      await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'sitting', { timeout: 6000 })
+      const pctSeated = await readCharacterPct(character)
+      r.check(
+        `${name} 항목4 — 착석 좌표(style.left/top)가 benchSeatPoint와 정확히 일치(붕 뜨지 않음)`,
+        Math.abs(pctSeated.left - seatRef.x) < 0.01 && Math.abs(pctSeated.top - seatRef.y) < 0.01,
+        `seated=${JSON.stringify(pctSeated)} expected=${JSON.stringify(seatRef)}`,
+      )
+      r.check(
+        `${name} 항목4/9 — 착석 중 캐릭터 z-index가 벤치보다 앞(depthY 오버라이드)`,
+        (await readZIndex(character)) > (await readZIndex(benchArt)),
+        `char=${await readZIndex(character)} bench=${await readZIndex(benchArt)}`,
+      )
+
+      // ── 항목8 — sitting 동안 바닥 탭은 무시됨(idle로 돌아올 때까지 입력
+      // 잠금) ──
+      const groundPointDuringSit = toPx({ x: 70, y: 20 })
+      await page.mouse.click(groundPointDuringSit.x, groundPointDuringSit.y)
+      await page.waitForTimeout(150)
+      const phaseSoonAfterGroundTapDuringSit = await character.getAttribute('data-character-phase').catch(() => null)
+      r.check(
+        `${name} 항목8 — sitting 동안 바닥 탭은 무시됨(phase가 여전히 sitting)`,
+        phaseSoonAfterGroundTapDuringSit === 'sitting',
+        `phase=${phaseSoonAfterGroundTapDuringSit}`,
+      )
+      const pctStillSeated = await readCharacterPct(character)
+      r.check(
+        `${name} 항목8 — sitting 동안 바닥 탭으로 좌표가 바뀌지 않음(좌석 그대로)`,
+        Math.abs(pctStillSeated.left - seatRef.x) < 0.01 && Math.abs(pctStillSeated.top - seatRef.y) < 0.01,
+        JSON.stringify(pctStillSeated),
+      )
+
+      // 이번 사이클이 자연스럽게 idle까지 끝나도록 기다려 둔다(다음
+      // 시나리오가 idle에서 시작하도록).
+      await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle', { timeout: 8000 })
+
+      // ── 항목8 — walking(벤치를 향해 걷는 중) 동안 바닥(비-벤치) 탭은
+      // 현재 sit 의도를 취소하고 새 목적지로 재지정한다(sitting 발생 안 함) ──
+      await page.mouse.click(benchCentrePx.x, benchCentrePx.y)
+      await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 1500 })
+      const redirectPointPct = { x: 75, y: 15 }
+      const redirectPointPx = toPx(redirectPointPct)
+      await page.mouse.click(redirectPointPx.x, redirectPointPx.y)
+      const redirectTimeline = await samplePhaseTimeline({ timeoutMs: 8000 })
+      r.check(
+        `${name} 항목8 — walking 중 바닥 탭으로 재지정되면 sitting이 전혀 발생하지 않음`,
+        !redirectTimeline.includes('sitting'),
+        JSON.stringify(redirectTimeline),
+      )
+      const pctAfterRedirect = await readCharacterPct(character)
+      r.check(
+        `${name} 항목8 — 재지정된 목적지(바닥 탭 지점) 근처에 최종 도착함(<3 world-%)`,
+        Math.hypot(pctAfterRedirect.left - redirectPointPct.x, pctAfterRedirect.top - redirectPointPct.y) < 3,
+        JSON.stringify(pctAfterRedirect),
+      )
+
+      // ── 항목9 — z-index 역전: 벤치보다 뒤(작은 y)/앞(큰 y)일 때 대소
+      // 관계가 뒤바뀜(장애물 3개 전부에서 이미 검증된 depthVisual.js 계약을
+      // 벤치 아트 엘리먼트로도 재확인) ──
+      const behindBenchPx = toPx({ x: 23.5, y: BENCH_REF.y0 - 8 })
+      await page.mouse.click(behindBenchPx.x, behindBenchPx.y)
+      await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle', { timeout: 5000 })
+      const zCharBehindBench = await readZIndex(character)
+      const zBenchA = await readZIndex(benchArt)
+      r.check(
+        `${name} 항목9 — 벤치보다 뒤(y=${BENCH_REF.y0 - 8})일 때 캐릭터 z-index가 벤치보다 작음(가려짐)`,
+        zCharBehindBench < zBenchA,
+        `char=${zCharBehindBench} bench=${zBenchA}`,
+      )
+      const frontBenchPx = toPx({ x: 23.5, y: BENCH_REF.y1 + 8 })
+      await page.mouse.click(frontBenchPx.x, frontBenchPx.y)
+      await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle', { timeout: 5000 })
+      const zCharFrontBench = await readZIndex(character)
+      const zBenchB = await readZIndex(benchArt)
+      r.check(
+        `${name} 항목9 — 벤치보다 앞(y=${BENCH_REF.y1 + 8})일 때 캐릭터 z-index가 벤치보다 큼(가림)`,
+        zCharFrontBench > zBenchB,
+        `char=${zCharFrontBench} bench=${zBenchB}`,
+      )
+
+      // ── 항목11 — 그림자 정제: 더 옅고(alpha<=0.12) 더 납작함(높이<10px) ──
+      const shadow = character.locator('span').first()
+      await shadow.waitFor({ state: 'attached', timeout: 5000 })
+      const shadowStyle = await shadow.evaluate((el) => {
+        const cs = window.getComputedStyle(el)
+        const rect = el.getBoundingClientRect()
+        return { backgroundColor: cs.backgroundColor, height: rect.height, pointerEvents: cs.pointerEvents }
+      })
+      const alphaMatch = shadowStyle.backgroundColor.match(/rgba?\(([^)]+)\)/)
+      const alphaParts = alphaMatch ? alphaMatch[1].split(',').map((s) => parseFloat(s.trim())) : []
+      const shadowAlpha = alphaParts.length === 4 ? alphaParts[3] : 1
+      r.check(
+        `${name} 항목11 — 그림자 alpha가 옅음(0<alpha<=0.12, 기존 0.15보다 낮음)`,
+        shadowAlpha > 0 && shadowAlpha <= 0.12,
+        `backgroundColor=${shadowStyle.backgroundColor} alpha=${shadowAlpha}`,
+      )
+      r.check(`${name} 항목11 — 그림자가 납작함(렌더 높이<10px)`, shadowStyle.height < 10, `height=${shadowStyle.height}`)
+      r.check(`${name} 항목11 — 그림자는 여전히 pointer-events:none`, shadowStyle.pointerEvents === 'none', shadowStyle.pointerEvents)
+
+      // ── Stage1~3 회귀 — 벤치 상호작용 도입 후에도 일반 바닥 탭/UI 클릭이
+      // 정상 동작함 ──
+      const boxBeforeUIClick = await character.boundingBox()
+      const infoBtn = page.locator('[data-testid="proto25d-info-toggle"]')
+      await infoBtn.click()
+      await page.waitForTimeout(150)
+      const boxAfterUIClick = await character.boundingBox()
+      r.check(
+        `${name} 회귀 — 정보 배지 클릭은 여전히 캐릭터를 움직이지 않음`,
+        dist(boxCenter(boxBeforeUIClick), boxCenter(boxAfterUIClick)) < 1,
+      )
+      await infoBtn.click()
+
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S8b — Stage4 reduced-motion(390x844): 걷기 transition은 스킵돼도
+  // walking->sitting->leaving->idle 4단계 모두 관측되고, sit-hold가
+  // REDUCED_MOTION_SIT_HOLD_MS(400ms)로 단축됨(생략 아님) ──
+  {
+    const vp = { width: 390, height: 844 }
+    const name = 'S8b[390x844,reduced-motion,bench-sit]'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await setDeviceFlags(page, { paulTown2_5d: true })
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const groundBox = await ground.boundingBox()
+      const BENCH_REF = OBSTACLES_REF.find((o) => o.id === 'demo-bench')
+      const benchCentrePx = {
+        x: groundBox.x + groundBox.width * (((BENCH_REF.x0 + BENCH_REF.x1) / 2) / 100),
+        y: groundBox.y + groundBox.height * (((BENCH_REF.y0 + BENCH_REF.y1) / 2) / 100),
+      }
+
+      const timeline = []
+      let lastPhase = null
+      const deadline = Date.now() + 4000
+      await page.mouse.click(benchCentrePx.x, benchCentrePx.y)
+      while (Date.now() < deadline) {
+        const phase = await character.getAttribute('data-character-phase').catch(() => null)
+        if (phase !== lastPhase) { timeline.push(phase); lastPhase = phase }
+        if (phase === 'idle' && timeline.includes('sitting')) break
+        await page.waitForTimeout(30)
+      }
+      const iWalk = timeline.indexOf('walking')
+      const iSit = timeline.indexOf('sitting')
+      const iLeave = timeline.indexOf('leaving')
+      const iIdleAfter = timeline.lastIndexOf('idle')
+      r.check(
+        `${name} 항목10 — reduced-motion에서도 4단계(walking->sitting->leaving->idle) 전부 관측됨(생략 없음)`,
+        iWalk >= 0 && iSit > iWalk && iLeave > iSit && iIdleAfter > iLeave,
+        JSON.stringify(timeline),
+      )
+      r.check(
+        `${name} 항목10 — reduced-motion에서도 매우 빠르게(4초 안) 전체 사이클 완료(sit-hold 단축, 생략 아님)`,
+        timeline[timeline.length - 1] === 'idle',
+        JSON.stringify(timeline),
+      )
+
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S8c — Stage4 모바일 터치 경로(390x844, CDP 신뢰 터치, S4와 동일
+  // 기법): 터치 탭으로도 벤치 walk-to-sit이 동작함(부분 커버리지 — S4가
+  // Stage2에 대해 그랬듯, 데스크톱 S8에서 이미 전부 검증한 항목을 터치
+  // 경로에서 전부 재검증하지 않고 핵심 전이만 확인) ──
+  {
+    const vp = { width: 390, height: 844 }
+    const name = 'S8c[390x844,flag-ON,touch,bench-sit]'
+    const context = await browser.newContext({ viewport: vp, hasTouch: true })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true })
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const groundBox = await ground.boundingBox()
+      const BENCH_REF = OBSTACLES_REF.find((o) => o.id === 'demo-bench')
+      const benchCentrePx = {
+        x: groundBox.x + groundBox.width * (((BENCH_REF.x0 + BENCH_REF.x1) / 2) / 100),
+        y: groundBox.y + groundBox.height * (((BENCH_REF.y0 + BENCH_REF.y1) / 2) / 100),
+      }
+
+      await cdpTouchTap(context, page, benchCentrePx.x, benchCentrePx.y)
+      const walkingAfterTouch = await waitUntil(async () => {
+        const p = await character.getAttribute('data-character-phase').catch(() => null)
+        return p === 'walking' ? p : false
+      }, { timeout: 1500 })
+      r.check(`${name} 항목12 — 터치 탭(CDP)으로 벤치를 향해 walking으로 전이됨`, walkingAfterTouch === 'walking', String(walkingAfterTouch))
+
+      const sittingAfterTouch = await waitUntil(async () => {
+        const p = await character.getAttribute('data-character-phase').catch(() => null)
+        return p === 'sitting' ? p : false
+      }, { timeout: 6000 })
+      r.check(`${name} 항목12 — 터치 경로에서도 sitting으로 전이됨`, sittingAfterTouch === 'sitting', String(sittingAfterTouch))
+
+      const idleAfterTouch = await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
+      ), { timeout: 6000 })
+      r.check(`${name} 항목12 — 터치 경로에서도 결국 idle로 복귀함(leaving 경유)`, !!idleAfterTouch)
+
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }
 }
