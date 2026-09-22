@@ -77,11 +77,31 @@ import { townAsset } from '../../../assets/town'
 import {
   SIT_HOLD_MS,
   REDUCED_MOTION_SIT_HOLD_MS,
+  BENCH_ASSET_MIN_WIDTH_PX,
   benchArrivalPoint,
   benchSeatPoint,
   isBenchTap,
+  benchTapPad,
   facingToward,
 } from '../../../utils/town/proto2_5d/benchInteraction'
+
+// 모바일 시각 보정(2026-09-23) — 장애물 디버그 플레이스홀더(점선 상자 +
+// "demo-…" 라벨)는 기본적으로 렌더하지 않는다(실기기 프리뷰에서 벤치 실제
+// 아트와 겹쳐 보여 상호작용을 읽기 어렵다는 회귀 보고). URL 쿼리 파라미터
+// (`?proto25dDebug=1`)로만 켠다 — localStorage 대신 쿼리를 택한 이유: 이
+// 화면 자체가 플래그(paulTown2_5d) 하나로 게이팅되는 격리 프로토타입이라,
+// "이 세션에서만 잠깐 켜고 끄기 쉬운" 쿼리 파라미터가 더 어울린다(값이
+// 세션을 넘어 남아 다음 로그인에도 실수로 디버그 오버레이가 계속 보이는
+// 사고를 피함). 장애물 히트박스(walkGrid.js OBSTACLES) 자체는 변경하지
+// 않는다 — 이 스위치는 오직 시각적 표시 여부만 제어한다.
+function readDebugOverlaysEnabled() {
+  if (typeof window === 'undefined') return false
+  try {
+    return new URLSearchParams(window.location.search).get('proto25dDebug') === '1'
+  } catch {
+    return false
+  }
+}
 
 // 탭 vs 스와이프/스크롤 제스처 구분 임계값(px) — TownScene.jsx의
 // DRAG_THRESHOLD_PX(8, 브리프 권장 범위 6~8px 상단값)와 동일 값. Stage 1은
@@ -99,6 +119,9 @@ const BENCH = OBSTACLES.find((ob) => ob.id === 'demo-bench')
 
 export default function Proto25DScreen() {
   const reducedMotion = usePrefersReducedMotion()
+  // 마운트 시점 URL 쿼리 1회만 읽는다(세션 중 쿼리가 바뀔 일이 없어
+  // useState lazy init으로 충분 — 매 렌더 재파싱 불필요).
+  const [debugOverlaysEnabled] = useState(readDebugOverlaysEnabled)
   const [character, setCharacter] = useState({
     phase: 'idle',
     leftPct: INITIAL_LEFT_PCT,
@@ -235,10 +258,15 @@ export default function Proto25DScreen() {
   // SIT_HOLD_MS(또는 reduced-motion이면 REDUCED_MOTION_SIT_HOLD_MS) 뒤
   // enterLeaving을 예약한다. depthY는 ProtoCharacter.jsx에 별도로 넘긴다
   // (아래 렌더 부분 참고 — 왜 topPct 그대로 z-index에 쓰면 안 되는지는 그
-  // 파일의 헤더 주석에 정리).
+  // 파일의 헤더 주석에 정리). 모바일 시각 보정(2026-09-23) —
+  // benchSeatPoint가 이제 바닥 엘리먼트의 실제 렌더 크기(groundWidthPx/
+  // groundHeightPx)를 받아야 한다(benchInteraction.js 헤더 주석 — 고정
+  // world 종횡비를 가정하지 않음). handleGroundPointerUp과 동일하게
+  // groundRef에서 직접 측정한다.
   function enterSitting(seq) {
     if (seq !== seqRef.current) return
-    const seat = benchSeatPoint(BENCH)
+    const groundRect = groundRef.current ? groundRef.current.getBoundingClientRect() : null
+    const seat = benchSeatPoint(BENCH, groundRect?.width, groundRect?.height)
     applyIfActive(seq, (c) => ({ ...c, phase: 'sitting', pendingSit: false, leftPct: seat.x, topPct: seat.y }))
     clearHoldTimer()
     const holdMs = reducedMotion ? REDUCED_MOTION_SIT_HOLD_MS : SIT_HOLD_MS
@@ -306,8 +334,13 @@ export default function Proto25DScreen() {
 
     // 벤치 hit-test는 항상 world 좌표로만 한다(벤치 이미지 자체는
     // pointer-events:none — 별도 onClick 경로를 만들지 않는다는 요구사항,
-    // 아래 렌더 부분 참고).
-    const tappedBench = isBenchTap(rawPoint, BENCH)
+    // 아래 렌더 부분 참고). 패딩은 고정값이 아니라 이 탭에서 이미 구한
+    // 바닥 레이어의 실제 렌더 픽셀 크기(rect)로 매번 다시 계산한다(모바일
+    // 시각 보정 — 벤치 렌더 크기가 44px 미만인 좁은 뷰포트에서도 유효 탭
+    // 타겟이 44x44px 이상이 되도록, 새 이벤트 경로 없이 이 hit-test 단계의
+    // 패딩 크기만 조정한다).
+    const tapPad = benchTapPad(BENCH, { groundWidthPx: rect.width, groundHeightPx: rect.height })
+    const tappedBench = isBenchTap(rawPoint, BENCH, tapPad)
 
     // 항목7 — 이미 벤치를 향해 걷는 중(pendingSit)에 같은 벤치를 다시 탭하면
     // 중복 시퀀스를 만들지 않고 무시한다.
@@ -385,15 +418,20 @@ export default function Proto25DScreen() {
             렌더 계산한다(depthOrder.js 'objects' 레이어, y1=바운딩 박스
             하단/지면 접점) — 캐릭터('character' 레이어, 위 Proto25DScreen
             헤더 주석 참고)와 Y 기준으로 서로 가리고 가려지게 하기 위함.
-            Stage 4 — demo-bench도 계속 그린다(팀장이 제시한 두 선택지 중
-            "숨김"을 택하지 않았다 — townProto25d.spec.mjs S6가 이미
-            "장애물 디버그 엘리먼트가 정확히 3개, OBSTACLES_REF와 좌표
-            일치"를 회귀로 고정하고 있어(항목4/5/6 사전조건), 벤치만
-            숨기면 그 기존 회귀 계약이 깨진다 — 대신 아래에 실제 벤치 아트를
+            모바일 시각 보정(2026-09-23) — 기본적으로 렌더하지 않는다
+            (debugOverlaysEnabled, 위 readDebugOverlaysEnabled 주석 참고).
+            실기기 프리뷰에서 이 점선 상자+라벨이 벤치 실제 아트와 겹쳐
+            상호작용을 읽기 어렵다는 회귀가 보고됐다 — walkGrid.js
+            OBSTACLES(히트박스 자체)는 그대로 두고 시각 표시만 끈다.
+            townProto25d.spec.mjs S6은 `?proto25dDebug=1` 쿼리로 이 스위치를
+            켠 뒤 기존 "장애물 디버그 엘리먼트가 정확히 3개, OBSTACLES_REF와
+            좌표 일치" 회귀를 그대로 재확인한다(약화 없음, 조건부 실행으로만
+            전환). demo-bench도 디버그 모드에서는 계속 그린다(팀장이 제시한
+            두 선택지 중 "숨김"을 택하지 않았다) — 아래에 실제 벤치 아트를
             같은 위치/zIndex로 겹쳐 그려 넣는다(같은 zIndex는 DOM 순서로
             타이브레이크되므로, 이 map보다 뒤에 두면 아트가 디버그 박스 위에
             그려진다). */}
-        {OBSTACLES.map((ob) => (
+        {debugOverlaysEnabled && OBSTACLES.map((ob) => (
           <div
             key={ob.id}
             aria-hidden="true"
@@ -421,7 +459,11 @@ export default function Proto25DScreen() {
             없음). pointer-events-none + alt="" + aria-hidden — 탭 판정은
             여전히 바닥 레이어의 hit-test(isBenchTap, world 좌표)만 쓰고 이
             엘리먼트 자체에는 어떤 이벤트 핸들러도 걸지 않는다(요구사항2 —
-            새 이벤트 경로를 만들지 않는다). */}
+            새 이벤트 경로를 만들지 않는다). 모바일 시각 보정(2026-09-23) —
+            width에 px 하한(44px, ProtoCharacter.jsx CHARACTER_MIN_WIDTH_PX와
+            같은 취지)을 CSS max()로 둔다 — walkGrid.js OBSTACLES 좌표(x0/x1)
+            자체는 무변경, 시각 렌더 크기만 좁은 뷰포트에서 더 이상 줄어들지
+            않게 한다. */}
         {BENCH && townAsset('decorations/bench') && (
           <img
             src={townAsset('decorations/bench')}
@@ -432,7 +474,7 @@ export default function Proto25DScreen() {
             style={{
               left: `${(BENCH.x0 + BENCH.x1) / 2}%`,
               top: `${BENCH.y1}%`,
-              width: `${BENCH.x1 - BENCH.x0}%`,
+              width: `max(${BENCH.x1 - BENCH.x0}%, ${BENCH_ASSET_MIN_WIDTH_PX}px)`,
               transform: 'translate(-50%, -100%)',
               zIndex: obstacleZIndex(BENCH.id, BENCH.y1),
             }}

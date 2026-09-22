@@ -537,13 +537,20 @@ export async function run(browser, baseURL) {
   // 않음, 장애물 뒤 목적지 우회, HUD 클릭 무이동 회귀 확인.
   {
     const vp = { width: 1280, height: 800 }
-    const name = 'S6[1280x800,flag-ON,obstacles]'
+    const name = 'S6[1280x800,flag-ON,obstacles,debug]'
     const context = await browser.newContext({ viewport: vp })
     const page = await context.newPage()
     await setDeviceFlags(page, { paulTown2_5d: true })
     const mocks = await installMocks(page)
     try {
-      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      // 모바일 시각 보정(2026-09-23) — 장애물 디버그 플레이스홀더(점선 상자
+      // +라벨)는 기본적으로 렌더하지 않는다(Proto25DScreen.jsx
+      // readDebugOverlaysEnabled 주석 참고). 이 시나리오는 그 디버그
+      // 오버레이 자체(좌표/개수)를 검증하는 게 목적이라 `?proto25dDebug=1`
+      // 쿼리로 명시적으로 켠다(기존 회귀 계약 약화 없음 — 조건부 실행으로만
+      // 전환). "기본값(디버그 미지정)일 때 안 보임"은 아래 S9에서 별도로
+      // 확인한다.
+      await page.goto(`${baseURL}?proto25dDebug=1`, { waitUntil: 'domcontentloaded' })
       await login(page)
       await waitForLoggedIn(page)
 
@@ -662,13 +669,17 @@ export async function run(browser, baseURL) {
   // 데스크톱 마우스 1280x800) ──
   {
     const vp = { width: 1280, height: 800 }
-    const name = 'S7[1280x800,flag-ON,depth-scale]'
+    const name = 'S7[1280x800,flag-ON,depth-scale,debug]'
     const context = await browser.newContext({ viewport: vp })
     const page = await context.newPage()
     await setDeviceFlags(page, { paulTown2_5d: true })
     const mocks = await installMocks(page)
     try {
-      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      // 모바일 시각 보정(2026-09-23) — 이 시나리오는 장애물 디버그
+      // 엘리먼트(demo-tree)의 z-index를 직접 읽어 occlusion을 검증하므로
+      // `?proto25dDebug=1`로 디버그 오버레이를 명시적으로 켠다(기본값은
+      // 이제 꺼짐 — S6과 동일 이유, 위 S6 주석 참고).
+      await page.goto(`${baseURL}?proto25dDebug=1`, { waitUntil: 'domcontentloaded' })
       await login(page)
       await waitForLoggedIn(page)
 
@@ -753,7 +764,10 @@ export async function run(browser, baseURL) {
 
       // ── 항목8/9 — 그림자: 발 위치를 따라가고, pointer-events:none이며,
       // 그림자를 클릭해도 바닥 이동 판정을 가로채지 않음(클릭 관통) ──
-      const shadow = character.locator('span').first()
+      // 모바일 시각 보정(2026-09-23)으로 그림자가 캐릭터 박스의 형제로
+      // 분리돼(ProtoCharacter.jsx 헤더 주석 참고) 더 이상 character의
+      // 자손이 아니다 — 전용 data 속성으로 최상위에서 직접 찾는다.
+      const shadow = page.locator('[data-proto-character-shadow]')
       await shadow.waitFor({ state: 'attached', timeout: 5000 })
       const shadowPointerEvents = await shadow.evaluate((el) => window.getComputedStyle(el).pointerEvents)
       r.check(`${name} 항목9 — 그림자 span이 pointer-events:none`, shadowPointerEvents === 'none', shadowPointerEvents)
@@ -828,9 +842,25 @@ export async function run(browser, baseURL) {
       // import가 아니라 값 복제, Node 페이지 컨텍스트 밖 spec이라).
       const BENCH_REF = OBSTACLES_REF.find((o) => o.id === 'demo-bench')
       const ARRIVAL_GAP_REF = 2
-      const SIT_OFFSET_REF = 2
+      // 모바일 시각 보정(2026-09-23) — 착석 지점은 더 이상 고정 오프셋이
+      // 아니라 벤치의 실제 렌더 기하에서 유도된다(benchInteraction.js
+      // benchSeatPoint/benchRenderedSizePx 값 복제 — SEAT_FRACTION_REF/
+      // BENCH_ASSET_ASPECT_REF/BENCH_ASSET_MIN_WIDTH_PX_REF). 이 spec은
+      // 브라우저 페이지 컨텍스트 밖 Node에서 도는 spec이라 소스 모듈을
+      // import하지 않고(OBSTACLES_REF/DEPTH_BANDS_REF와 동일한 이 파일의
+      // 기존 관례) 실측 groundBox.width/height로 직접 재계산한다.
+      const SEAT_FRACTION_REF = 0.55
+      const BENCH_ASSET_ASPECT_REF = 48 / 72
+      const BENCH_ASSET_MIN_WIDTH_PX_REF = 44
       const arrivalRef = { x: (BENCH_REF.x0 + BENCH_REF.x1) / 2, y: BENCH_REF.y1 + ARRIVAL_GAP_REF }
-      const seatRef = { x: (BENCH_REF.x0 + BENCH_REF.x1) / 2, y: BENCH_REF.y1 - SIT_OFFSET_REF }
+      const benchNominalWidthPxRef = groundBox.width * (BENCH_REF.x1 - BENCH_REF.x0) / 100
+      const benchRenderedWidthPxRef = Math.max(benchNominalWidthPxRef, BENCH_ASSET_MIN_WIDTH_PX_REF)
+      const benchRenderedHeightPxRef = benchRenderedWidthPxRef * BENCH_ASSET_ASPECT_REF
+      const benchRenderedHeightYRef = (benchRenderedHeightPxRef / groundBox.height) * 100
+      const seatRef = {
+        x: (BENCH_REF.x0 + BENCH_REF.x1) / 2,
+        y: BENCH_REF.y1 - benchRenderedHeightYRef * SEAT_FRACTION_REF,
+      }
       function toPx(pct) { return { x: groundBox.x + groundBox.width * (pct.x / 100), y: groundBox.y + groundBox.height * (pct.y / 100) } }
       const benchCentrePct = { x: (BENCH_REF.x0 + BENCH_REF.x1) / 2, y: (BENCH_REF.y0 + BENCH_REF.y1) / 2 }
       const benchCentrePx = toPx(benchCentrePct)
@@ -966,23 +996,43 @@ export async function run(browser, baseURL) {
         `char=${zCharFrontBench} bench=${zBenchB}`,
       )
 
-      // ── 항목11 — 그림자 정제: 더 옅고(alpha<=0.12) 더 납작함(높이<10px) ──
-      const shadow = character.locator('span').first()
+      // ── 항목11 — 그림자: 옅고(alpha 0.18~0.22) 납작함(타원형, 폭 대비
+      // 낮은 높이) + px 하한 이상(모바일 시각 보정, 2026-09-23) ──
+      // 모바일 시각 보정으로 그림자가 캐릭터 박스의 형제로 분리됨
+      // (ProtoCharacter.jsx 헤더 주석 참고) — 전용 data 속성으로 찾는다.
+      const shadow = page.locator('[data-proto-character-shadow]')
       await shadow.waitFor({ state: 'attached', timeout: 5000 })
+      // alpha는 기존 0.10(<=0.12 검증)에서 0.20으로 올렸다 — 그 값 자체가
+      // "모바일에서 사실상 안 보임" 회귀의 원인 중 하나였다(팀장 지시 —
+      // 가시성 목표 opacity 0.18~0.22). 높이<10px 같은 고정 px 상한 대신
+      // "폭의 절반 미만(납작한 타원)" + "px 하한 이상(완전히 사라지지
+      // 않음)"으로 바꾼 이유 — 이제 그림자 크기가 depth scale과 뷰포트에
+      // 따라 달라져(ProtoCharacter.jsx SHADOW_WIDTH_PCT_BASE/HEIGHT_PCT_BASE
+      // 참고) 고정 px 상한은 뷰포트별로 깨지기 쉽다(뷰포트별 정밀 측정은
+      // 아래 S9에서 별도로 한다).
       const shadowStyle = await shadow.evaluate((el) => {
         const cs = window.getComputedStyle(el)
         const rect = el.getBoundingClientRect()
-        return { backgroundColor: cs.backgroundColor, height: rect.height, pointerEvents: cs.pointerEvents }
+        return { backgroundColor: cs.backgroundColor, width: rect.width, height: rect.height, pointerEvents: cs.pointerEvents }
       })
       const alphaMatch = shadowStyle.backgroundColor.match(/rgba?\(([^)]+)\)/)
       const alphaParts = alphaMatch ? alphaMatch[1].split(',').map((s) => parseFloat(s.trim())) : []
       const shadowAlpha = alphaParts.length === 4 ? alphaParts[3] : 1
       r.check(
-        `${name} 항목11 — 그림자 alpha가 옅음(0<alpha<=0.12, 기존 0.15보다 낮음)`,
-        shadowAlpha > 0 && shadowAlpha <= 0.12,
+        `${name} 항목11 — 그림자 alpha가 가시성 목표 범위(0.18~0.22)`,
+        shadowAlpha >= 0.18 && shadowAlpha <= 0.22,
         `backgroundColor=${shadowStyle.backgroundColor} alpha=${shadowAlpha}`,
       )
-      r.check(`${name} 항목11 — 그림자가 납작함(렌더 높이<10px)`, shadowStyle.height < 10, `height=${shadowStyle.height}`)
+      r.check(
+        `${name} 항목11 — 그림자가 납작함(높이가 폭의 절반 미만, 타원형)`,
+        shadowStyle.height < shadowStyle.width * 0.5,
+        `width=${shadowStyle.width} height=${shadowStyle.height}`,
+      )
+      r.check(
+        `${name} 항목11 — 그림자 렌더 높이가 px 하한(6px, 오차 허용 0.5px) 이상 — 모바일에서 사실상 안 보이던 회귀 방지`,
+        shadowStyle.height >= 5.5,
+        `height=${shadowStyle.height}`,
+      )
       r.check(`${name} 항목11 — 그림자는 여전히 pointer-events:none`, shadowStyle.pointerEvents === 'none', shadowStyle.pointerEvents)
 
       // ── Stage1~3 회귀 — 벤치 상호작용 도입 후에도 일반 바닥 탭/UI 클릭이
@@ -1114,6 +1164,183 @@ export async function run(browser, baseURL) {
         (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
       ), { timeout: 6000 })
       r.check(`${name} 항목12 — 터치 경로에서도 결국 idle로 복귀함(leaving 경유)`, !!idleAfterTouch)
+
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S9 — 모바일 시각 보정(2026-09-23) 회귀: 그림자 가시성/좌석 앵커 오차/
+  // 탭 타겟 크기/최소 렌더 크기/디버그 오버레이 기본 숨김을 360x800,
+  // 390x844, 412x915(실기기 프리뷰가 보고된 뷰포트 대역) + 기존 1280x800
+  // (비교군)에서 실측한다. 팀장 지시의 "실제 측정값을 보고에 기록" 요구에
+  // 맞춰 각 단언 detail에 실측 px/opacity 값을 그대로 남긴다.
+  const S9_VIEWPORTS = [
+    { width: 360, height: 800 },
+    { width: 390, height: 844 },
+    { width: 412, height: 915 },
+    { width: 1280, height: 800 },
+  ]
+  // benchInteraction.js 상수 값 복제(이 파일의 기존 OBSTACLES_REF/
+  // DEPTH_BANDS_REF와 동일 관례) — 벤치 아트 원본 종횡비/폭 하한/좌석 비율.
+  const BENCH_ASSET_ASPECT_REF = 48 / 72
+  const BENCH_ASSET_MIN_WIDTH_PX_REF = 44
+  const SEAT_FRACTION_REF = 0.55
+  const MIN_TAP_TARGET_PX_REF = 44
+  // ProtoCharacter.jsx 상수 값 복제 — 그림자 px 하한(SHADOW_*_FLOOR_PX),
+  // 캐릭터 렌더 폭 px 하한(CHARACTER_MIN_WIDTH_PX).
+  const SHADOW_WIDTH_FLOOR_PX_REF = 22
+  const SHADOW_HEIGHT_FLOOR_PX_REF = 6
+  const CHARACTER_MIN_WIDTH_PX_REF = 40
+
+  for (const vp of S9_VIEWPORTS) {
+    const name = `S9[${vp.width}x${vp.height},mobile-visual-fix]`
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true })
+    const mocks = await installMocks(page)
+    try {
+      // ── 디버그 오버레이 기본 숨김 — 쿼리 없이(baseURL 그대로) 로그인 ──
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const groundBox = await ground.boundingBox()
+      const benchArt = page.locator('[data-testid="proto25d-bench-art"]')
+      await benchArt.waitFor({ state: 'attached', timeout: 5000 })
+
+      // ── 항목3 — 디버그 오버레이는 기본(쿼리 없음)일 때 DOM에 없음(이전
+      // S2 관례와 동일하게 부재 자체를 확인 — 숨김 CSS가 아니라 렌더 자체를
+      // 안 함, Proto25DScreen.jsx debugOverlaysEnabled 조건부 렌더) ──
+      const debugObstacleCount = await page.locator('[data-testid="proto25d-obstacle"]').count()
+      r.check(`${name} 항목3 — 기본(디버그 쿼리 없음)일 때 장애물 디버그 점선 상자/라벨이 DOM에 없음`, debugObstacleCount === 0, `count=${debugObstacleCount}`)
+
+      // ── 항목1 — 그림자 크기/가시성(idle) ──
+      const shadow = page.locator('[data-proto-character-shadow]')
+      await shadow.waitFor({ state: 'attached', timeout: 5000 })
+      const shadowMetrics = await shadow.evaluate((el) => {
+        const cs = window.getComputedStyle(el)
+        const rect = el.getBoundingClientRect()
+        return { width: rect.width, height: rect.height, opacity: cs.opacity, backgroundColor: cs.backgroundColor, display: cs.display, visibility: cs.visibility }
+      })
+      const shadowAlphaMatch = shadowMetrics.backgroundColor.match(/rgba?\(([^)]+)\)/)
+      const shadowAlphaParts = shadowAlphaMatch ? shadowAlphaMatch[1].split(',').map((s) => parseFloat(s.trim())) : []
+      const shadowAlpha = shadowAlphaParts.length === 4 ? shadowAlphaParts[3] : 1
+      r.check(
+        `${name} 항목1 — 그림자 렌더 폭이 px 하한(${SHADOW_WIDTH_FLOOR_PX_REF}px, 오차 허용 0.5px) 이상`,
+        shadowMetrics.width >= SHADOW_WIDTH_FLOOR_PX_REF - 0.5,
+        `width=${shadowMetrics.width}`,
+      )
+      r.check(
+        `${name} 항목1 — 그림자 렌더 높이가 px 하한(${SHADOW_HEIGHT_FLOOR_PX_REF}px, 오차 허용 0.5px) 이상`,
+        shadowMetrics.height >= SHADOW_HEIGHT_FLOOR_PX_REF - 0.5,
+        `height=${shadowMetrics.height}`,
+      )
+      r.check(
+        `${name} 항목1 — 그림자 alpha가 가시성 목표(0.18~0.22)이고 display/visibility가 실제로 보이는 상태`,
+        shadowAlpha >= 0.18 && shadowAlpha <= 0.22 && shadowMetrics.display !== 'none' && shadowMetrics.visibility !== 'hidden',
+        JSON.stringify(shadowMetrics),
+      )
+
+      // ── 항목4 — 캐릭터/벤치 렌더 px 크기가 하한 이상(idle 상태) ──
+      // 캐릭터는 getComputedStyle().width(레이아웃 폭, CSS max(8%,40px)가
+      // 그대로 반영됨)로 하한을 확인한다 — boundingBox()(getBoundingClientRect
+      // 기반)는 depth scale(transform: scale(s), s는 [0.55,1.20]이라 1
+      // 미만일 수 있음)까지 곱해진 "최종 시각 크기"라 하한보다 작게 보일 수
+      // 있다(팀장 지시 원문 그대로 — "depth scale(s)은 base 위에 곱으로만
+      // 적용, 하한은 base에 적용" — s<1이면 최종 시각 크기가 하한보다 작은
+      // 게 의도된 동작).
+      const charComputedWidth = await character.evaluate((el) => parseFloat(window.getComputedStyle(el).width))
+      const benchBoxIdle = await benchArt.boundingBox()
+      r.check(
+        `${name} 항목4 — 캐릭터 base 레이아웃 폭(getComputedStyle, depth scale 적용 전)이 px 하한(${CHARACTER_MIN_WIDTH_PX_REF}px, 오차 허용 0.5px) 이상`,
+        charComputedWidth >= CHARACTER_MIN_WIDTH_PX_REF - 0.5,
+        `computedWidth=${charComputedWidth}`,
+      )
+      r.check(
+        `${name} 항목4 — 벤치 아트 렌더 폭이 px 하한(${BENCH_ASSET_MIN_WIDTH_PX_REF}px, 오차 허용 0.5px) 이상`,
+        benchBoxIdle.width >= BENCH_ASSET_MIN_WIDTH_PX_REF - 0.5,
+        `width=${benchBoxIdle.width}`,
+      )
+
+      // ── 항목4 — 벤치 유효 탭 타겟 >= 44x44px, 패딩 가장자리를 탭해도
+      // walk-to-sit이 시작됨(중심 탭은 S8/S8c가 이미 검증 — 여기서는 새로
+      // 늘어난 패딩 가장자리를 탭) ──
+      const BENCH_REF = OBSTACLES_REF.find((o) => o.id === 'demo-bench')
+      const nominalWidthPxRef = groundBox.width * (BENCH_REF.x1 - BENCH_REF.x0) / 100
+      const nominalHeightPxRef = groundBox.height * (BENCH_REF.y1 - BENCH_REF.y0) / 100
+      const baseTapPadPct = 2 // benchInteraction.js BENCH_TAP_PAD_PCT 값 복제
+      const neededPadXPx = Math.max(0, (MIN_TAP_TARGET_PX_REF - nominalWidthPxRef) / 2)
+      const neededPadYPx = Math.max(0, (MIN_TAP_TARGET_PX_REF - nominalHeightPxRef) / 2)
+      const padXPct = Math.max(baseTapPadPct, groundBox.width > 0 ? (neededPadXPx / groundBox.width) * 100 : 0)
+      const padYPct = Math.max(baseTapPadPct, groundBox.height > 0 ? (neededPadYPx / groundBox.height) * 100 : 0)
+      const effectiveWidthPx = ((BENCH_REF.x1 - BENCH_REF.x0) + 2 * padXPct) / 100 * groundBox.width
+      const effectiveHeightPx = ((BENCH_REF.y1 - BENCH_REF.y0) + 2 * padYPct) / 100 * groundBox.height
+      r.check(
+        `${name} 항목4 — 벤치 유효 탭 타겟 폭이 ${MIN_TAP_TARGET_PX_REF}px 이상`,
+        effectiveWidthPx >= MIN_TAP_TARGET_PX_REF - 0.5,
+        `effectiveWidthPx=${effectiveWidthPx} padXPct=${padXPct}`,
+      )
+      r.check(
+        `${name} 항목4 — 벤치 유효 탭 타겟 높이가 ${MIN_TAP_TARGET_PX_REF}px 이상`,
+        effectiveHeightPx >= MIN_TAP_TARGET_PX_REF - 0.5,
+        `effectiveHeightPx=${effectiveHeightPx} padYPct=${padYPct}`,
+      )
+      // 패딩 가장자리(원본 rect의 x0 바로 바깥, 패딩 안쪽 지점)를 탭해도
+      // walk-to-sit 시퀀스가 시작되는지 확인.
+      const paddedEdgePct = { x: BENCH_REF.x0 - (padXPct / 2), y: (BENCH_REF.y0 + BENCH_REF.y1) / 2 }
+      const paddedEdgePx = { x: groundBox.x + groundBox.width * (paddedEdgePct.x / 100), y: groundBox.y + groundBox.height * (paddedEdgePct.y / 100) }
+      await page.mouse.click(paddedEdgePx.x, paddedEdgePx.y)
+      const walkingAfterPaddedTap = await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking'
+      ), { timeout: 1500 })
+      r.check(
+        `${name} 항목4 — 패딩 가장자리(벤치 박스 바로 바깥, 확장된 탭 여백 안)를 탭해도 walking(벤치 방향)으로 전이됨`,
+        !!walkingAfterPaddedTap,
+        `paddedEdgePct=${JSON.stringify(paddedEdgePct)}`,
+      )
+      await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'sitting', { timeout: 6000 })
+
+      // ── 항목2 — 착석 지점 오차: 캐릭터의 실제 렌더 발 앵커(px)와, 벤치
+      // 아트의 실측 boundingBox에서 독립적으로 유도한 "좌석선"(px) 사이의
+      // 거리. app 내부 공식이 아니라 DOM에서 실측한 벤치 아트 크기로 다시
+      // 계산해 앱의 seatFraction 적용이 실제 화면과 일치하는지 교차 검증
+      // 한다 ── boundingBox()는 CSS transition이 실제로 페인트한 현재
+      // 시각 위치를 읽으므로(style.left/top처럼 즉시 최종값이 되는 것과
+      // 다름), sitting phase 감지 직후가 아니라 left/top 전이(ProtoCharacter.jsx
+      // WALK_TRANSITION_MS=650ms)가 끝날 때까지 충분히 기다린 뒤 측정한다
+      // (150ms만 기다렸을 때 전이 중간값을 읽어 오차가 실제로 27~39px까지
+      // 크게 잘못 측정되는 것을 실측으로 확인 — 이 파일 세션 내 회귀 재현).
+      await page.waitForTimeout(650 + 150)
+      const benchBoxSeated = await benchArt.boundingBox()
+      const charBoxSeated = await character.boundingBox()
+      const expectedSeatPx = {
+        x: benchBoxSeated.x + benchBoxSeated.width / 2,
+        y: benchBoxSeated.y + benchBoxSeated.height - benchBoxSeated.height * SEAT_FRACTION_REF,
+      }
+      const actualFootAnchorPx = boxAnchor(charBoxSeated)
+      const seatErrorPx = dist(expectedSeatPx, actualFootAnchorPx)
+      r.check(
+        `${name} 항목2 — 착석 시 캐릭터 발 앵커와 벤치 아트 실측 기반 좌석선 사이 오차 < 3px`,
+        seatErrorPx != null && seatErrorPx < 3,
+        `expectedSeatPx=${JSON.stringify(expectedSeatPx)} actualFootAnchorPx=${JSON.stringify(actualFootAnchorPx)} errorPx=${seatErrorPx}`,
+      )
+      r.check(
+        `${name} 항목2 — 착석 지점이 벤치 아트의 세로 렌더 범위 안(붕 뜨지 않음)`,
+        actualFootAnchorPx.y >= benchBoxSeated.y && actualFootAnchorPx.y <= benchBoxSeated.y + benchBoxSeated.height,
+        `footY=${actualFootAnchorPx.y} benchTop=${benchBoxSeated.y} benchBottom=${benchBoxSeated.y + benchBoxSeated.height}`,
+      )
+
+      await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle', { timeout: 8000 })
 
       r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
     } catch (err) {

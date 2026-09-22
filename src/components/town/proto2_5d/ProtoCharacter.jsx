@@ -78,6 +78,37 @@ import { characterScale, characterZIndex } from '../../../utils/town/proto2_5d/d
 
 const CHARACTER_TRANSFORM_ORIGIN = '50% 100%'
 
+// 모바일 시각 보정(2026-09-23) — 캐릭터 기준 폭에 px 하한을 둔다(390px
+// 이하 뷰포트에서 8%는 ~30px 미만이라 글리프가 읽기 어려움). depth
+// scale(s)은 여전히 이 기준 폭 위에 곱으로만 적용된다(요구사항 — "바닥은
+// base에, depth 계약은 무변경"). CSS max()로 처리해 컨테이너 크기를 몰라도
+// (이 컴포넌트는 순수 % 좌표만 다루는 프레젠테이션이라 실제 px 폭을 알
+// 방법이 없다) 브라우저가 매 리사이즈마다 알아서 재계산한다.
+const CHARACTER_MIN_WIDTH_PX = 40
+
+// ── 그림자(모바일 시각 보정, 2026-09-23) ─────────────────────────────────
+// 이전 버전은 그림자가 depth-scale 박스 *안*에 중첩돼 있어(위 파일 헤더
+// Stage3 주석) scale(s, [0.55,1.20])로 함께 줄었는데, 그 시작 크기 자체가
+// w-[85%] h-[5px]·alpha 0.10·blur 3px로 이미 작고 옅어서, 모바일 좁은
+// 뷰포트(360~412px, 캐릭터 기준폭 8%가 실 px로 30px 안팎)에서는 더 줄어들
+// 실 렌더 높이가 2~3px까지 떨어져 사실상 안 보이는 회귀였다(2026-09-23
+// 실기기 프리뷰 실측 보고). 그림자를 depth-scale 박스의 *형제*(아래 return의
+// 최상위 두 엘리먼트 중 하나)로 분리해, scale을 CSS transform이 아니라 이
+// 컴포넌트가 이미 계산해 둔 `scale` 값으로 직접(퍼센트 폭에) 곱해 준다 —
+// 그러면 픽셀 하한(max())을 그 곱셈 결과에 적용할 수 있어, depth에 따라
+// 작아지는 건 유지하면서도 "완전히 안 보이는" 바닥까지는 가지 않는다.
+//
+// 정책(팀장 지시 — phase별로 명시) — idle/walking/leaving/sitting 전부에서
+// 항상 보이고 발/좌석 앵커(leftPct/topPct, sitting 중엔 이미 benchSeatPoint
+// 좌표)를 그대로 따라간다("sitting에서도 더 작은 그림자를 좌석 아래 유지"
+// 선택지를 택함 — phase별 분기가 없어 상태 수만큼 로직이 늘지 않고, 좌석
+// 좌표를 이미 leftPct/topPct가 그대로 담고 있어 추가 계산도 필요 없다).
+const SHADOW_WIDTH_PCT_BASE = 6.8 // 캐릭터 기준폭(8%)의 85% — 기존 w-[85%] 비율 유지
+const SHADOW_WIDTH_FLOOR_PX = 22
+const SHADOW_HEIGHT_PCT_BASE = 1.0 // height%(컨테이너 세로 기준) — 폭 대비 납작한 타원을 목표로 실측 조정
+const SHADOW_HEIGHT_FLOOR_PX = 6
+const SHADOW_BLUR_PX = 3
+
 // 걷기 이동 transition 시간 — TownCharacter.jsx의 CHARACTER_WALK_MS(650ms)와
 // 동일 값(새 타이밍을 발명하지 않는다, 두 프로토타입이 서로 다른 "걷는
 // 느낌"을 주지 않게).
@@ -117,62 +148,81 @@ export default function ProtoCharacter({ phase, leftPct, topPct, reducedMotion, 
   // 파일 헤더의 플레이스홀더 원칙과 동일).
   const glyph = isSitting ? '🧘' : '🚶'
 
+  // 모바일 시각 보정 — 그림자 크기는 depth scale(s)을 퍼센트에 직접 곱한
+  // 뒤 px 하한을 max()로 강제한다(위 파일 상단 "그림자" 주석 참고). scale이
+  // 작을수록(뒤로 갈수록) 퍼센트 값도 작아지지만, 하한 밑으로는 절대
+  // 내려가지 않는다.
+  const shadowWidthPct = SHADOW_WIDTH_PCT_BASE * scale
+  const shadowHeightPct = SHADOW_HEIGHT_PCT_BASE * scale
+  const shadowTransition = [`left ${durationMs}ms ease-in-out`, `top ${durationMs}ms ease-in-out`].join(', ')
+
   return (
-    <div
-      aria-hidden="true"
-      data-proto-character=""
-      data-character-phase={phase}
-      className="absolute pointer-events-none"
-      style={{
-        left: `${leftPct}%`,
-        top: `${topPct}%`,
-        width: '8%',
-        transform: `translate(-50%, -100%) scale(${scale})`,
-        transformOrigin: CHARACTER_TRANSFORM_ORIGIN,
-        transition: transitionParts.join(', '),
-        zIndex,
-      }}
-    >
-      {/* bob/숨쉬기는 안쪽 엘리먼트에만 건다 — 바깥 div의 transform은 앵커
-          위치(translate(-50%,-100%))를 소유하므로, 같은 엘리먼트에 keyframe
-          animation을 얹으면 그 transform을 대체해 앵커가 깨진다
-          (TownCharacter.jsx와 동일 관례). 높이를 고정하지 않는다(w-full만,
-          h-full/aspect-ratio 없음) — TownCharacter.jsx와 동일하게 글리프
-          텍스트 크기에 맞춰 상자가 저절로 줄어들어야(shrink-wrap) 그림자
-          (absolute bottom-0)가 글리프 발밑에 바로 붙는다. 고정 aspect-ratio를
-          썼더니 글리프가 상자 중앙에 뜨고 그림자만 훨씬 아래에 남는 육안
-          결함이 실측 스크린샷에서 확인돼(2026-09-22 Phase 4 시각 게이트)
-          이 방식으로 되돌렸다. */}
-      <div className={`relative w-full pointer-events-none${idleOrWalkClass}`}>
-        {/* Stage 4 — facing 전용 레이어(위 헤더 주석 참고). 이 bob div(위
-            className, 매 프레임 transform이 통째로 바뀌는 keyframe 애니메이션
-            소유)의 *자식*으로 한 겹 더 끼워, static scaleX(-1)이 애니메이션과
-            같은 엘리먼트의 transform을 두고 경합하지 않게 한다 — bob div
-            자신은 계속 "이 캐릭터의 첫 번째 div"로 남아(townProto25d.spec.mjs
-            S5의 `character.locator('div').first()` 기존 계약 무변경), 그
-            내부에서 facing만 별도로 뒤집는다. 이 div는 static이라(position
-            지정 없음) 아래 그림자 span의 absolute 기준(가장 가까운 positioned
-            조상)은 여전히 바깥 bob div 그대로다(레이아웃 영향 없음). */}
-        <div style={{ transform: facing === -1 ? 'scaleX(-1)' : undefined }}>
-          {/* Stage 4 — 그림자 정제(더 납작하고 옅고 부드럽게). foot-anchor
-              (absolute bottom-0 left-1/2 -translate-x-1/2)는 그대로 유지해
-              Stage 3 스케일을 그대로 상속한다. pointer-events-none은 조상
-              (outer/inner 둘 다 pointer-events-none)에서 이미 상속되지만,
-              "그림자를 클릭해도 바닥 이동 판정을 가로채지 않는다"는 계약을
-              이 엘리먼트 자체에도 명시적으로 걸어 둔다(상속에만 의존하지
-              않음). */}
-          <span
-            aria-hidden="true"
-            className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[85%] h-[5px] rounded-full bg-[#1e2a5a]/10 blur-[3px] pointer-events-none"
-          />
-          <span
-            aria-hidden="true"
-            className="relative inline-flex items-center justify-center w-full leading-none drop-shadow-sm text-[clamp(1.4rem,7vw,2.2rem)]"
-          >
-            {glyph}
-          </span>
+    <>
+      {/* 모바일 시각 보정 — 그림자를 depth-scale 박스(아래 data-proto-character
+          div)의 *형제*로 분리한다(위 파일 상단 "그림자" 주석 참고). leftPct/
+          topPct는 아래 캐릭터 박스와 완전히 동일한 값이라(둘 다 같은 props를
+          읽음), 발 앵커(또는 sitting 중엔 좌석 앵커)를 정확히 따라간다.
+          translate(-50%,-50%)로 이 점이 그림자 자신의 중심에 오게 한다(발
+          앵커 위에 타원 중심이 얹히는 모양 — 아래 박스의 "발 앵커 =
+          bottom-center" 앵커링과는 다른 기준점이라 -50%,-100%가 아니라
+          -50%,-50%를 쓴다). */}
+      <span
+        aria-hidden="true"
+        data-proto-character-shadow=""
+        className="absolute rounded-full bg-[#1e2a5a]/20 pointer-events-none"
+        style={{
+          left: `${leftPct}%`,
+          top: `${topPct}%`,
+          width: `max(${shadowWidthPct}%, ${SHADOW_WIDTH_FLOOR_PX}px)`,
+          height: `max(${shadowHeightPct}%, ${SHADOW_HEIGHT_FLOOR_PX}px)`,
+          filter: `blur(${SHADOW_BLUR_PX}px)`,
+          transform: 'translate(-50%, -50%)',
+          transition: shadowTransition,
+          zIndex,
+        }}
+      />
+      <div
+        aria-hidden="true"
+        data-proto-character=""
+        data-character-phase={phase}
+        className="absolute pointer-events-none"
+        style={{
+          left: `${leftPct}%`,
+          top: `${topPct}%`,
+          width: `max(8%, ${CHARACTER_MIN_WIDTH_PX}px)`,
+          transform: `translate(-50%, -100%) scale(${scale})`,
+          transformOrigin: CHARACTER_TRANSFORM_ORIGIN,
+          transition: transitionParts.join(', '),
+          zIndex,
+        }}
+      >
+        {/* bob/숨쉬기는 안쪽 엘리먼트에만 건다 — 바깥 div의 transform은 앵커
+            위치(translate(-50%,-100%))를 소유하므로, 같은 엘리먼트에 keyframe
+            animation을 얹으면 그 transform을 대체해 앵커가 깨진다
+            (TownCharacter.jsx와 동일 관례). 높이를 고정하지 않는다(w-full만,
+            h-full/aspect-ratio 없음) — TownCharacter.jsx와 동일하게 글리프
+            텍스트 크기에 맞춰 상자가 저절로 줄어들어야(shrink-wrap) 발
+            위치가 글리프 발밑에 바로 맞는다. 고정 aspect-ratio를 썼더니
+            글리프가 상자 중앙에 뜨는 육안 결함이 실측 스크린샷에서 확인돼
+            (2026-09-22 Phase 4 시각 게이트) 이 방식으로 되돌렸다. */}
+        <div className={`relative w-full pointer-events-none${idleOrWalkClass}`}>
+          {/* Stage 4 — facing 전용 레이어(위 헤더 주석 참고). 이 bob div(위
+              className, 매 프레임 transform이 통째로 바뀌는 keyframe 애니메이션
+              소유)의 *자식*으로 한 겹 더 끼워, static scaleX(-1)이 애니메이션과
+              같은 엘리먼트의 transform을 두고 경합하지 않게 한다 — bob div
+              자신은 계속 "이 캐릭터의 첫 번째 div"로 남아(townProto25d.spec.mjs
+              S5의 `character.locator('div').first()` 기존 계약 무변경), 그
+              내부에서 facing만 별도로 뒤집는다. */}
+          <div style={{ transform: facing === -1 ? 'scaleX(-1)' : undefined }}>
+            <span
+              aria-hidden="true"
+              className="relative inline-flex items-center justify-center w-full leading-none drop-shadow-sm text-[clamp(1.4rem,7vw,2.2rem)]"
+            >
+              {glyph}
+            </span>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }
