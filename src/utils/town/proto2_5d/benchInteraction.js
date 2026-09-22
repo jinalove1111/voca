@@ -74,7 +74,7 @@ export const BENCH_ASSET_MIN_WIDTH_PX = 44
 // world-y%)보다 오프셋이 더 작아 좌석이 이미지 상단(등받이 부근)에
 // 가깝게 찍혀 "붕 뜬" 것처럼 보였다(2026-09-23 모바일 실기기 프리뷰에서
 // 실측 확인된 회귀).
-const SEAT_FRACTION = 0.55
+export const SEAT_FRACTION = 0.55
 
 /**
  * 벤치가 실제로 렌더되는 px 크기(폭 하한 적용 후) — "화면에 그려지는
@@ -148,6 +148,84 @@ export function benchArrivalPoint(rect) {
 export function benchSeatPoint(rect, groundWidthPx, groundHeightPx) {
   const renderedHeightY = benchRenderedHeightYPct(rect, groundWidthPx, groundHeightPx)
   return { x: (rect.x0 + rect.x1) / 2, y: rect.y1 - renderedHeightY * SEAT_FRACTION }
+}
+
+// ── 착석 시각 보정(2026-09-23, 실기기 프리뷰 "캐릭터가 좌석 위에 붕 떠
+// 보인다" 회귀) — 좌석 접촉점 sink ──────────────────────────────────────
+//
+// 원인 — benchSeatPoint는 캐릭터 박스의 발 앵커(translate(-50%,-100%),
+// ProtoCharacter.jsx)가 놓일 좌석선(이 함수가 반환하는 y)을 정확히
+// 계산하지만, 그 앵커는 캐릭터 "박스"의 바닥일 뿐이다. 앉은 글리프(🧘)는
+// line-height:1 em 박스 안에 그려지는데, 이모지 컬러 폰트의 실제 잉크(눈에
+// 보이는 픽셀)는 보통 이 em 박스 하단에 딱 붙지 않고 그 위 어딘가에서
+// 끝난다(이모지 폰트 자체가 상하로 두는 투명 여백 — 기기/폰트마다 다름,
+// 그래서 아래 measureGlyphInk 실측은 고정 px가 아니라 매 렌더 계산). 그
+// 결과 "박스 바닥(=좌석선)"과 "잉크 하단" 사이에 빈틈이 남아 캐릭터가 좌석
+// 위에 붕 뜬 것처럼 보였다 — 이전 "좌석 오차 0.01px" 측정은 박스-바닥과
+// 좌석선을 비교했을 뿐, 이 시각적 접촉점과는 무관한 동어반복이었다.
+//
+// SEAT_CONTACT_FRACTION — 🧘(가부좌) 글리프의 "좌석에 실제로 닿는 지점"
+// (접힌 다리 바깥쪽/옷자락 바닥)이 잉크 하단에서 위로 얼마나 떨어져
+// 있는지, 잉크 전체 높이 대비 비율. 실측
+// (scripts/.tmp/measureGlyph.mjs, 2026-09-23 — Chromium 기본 이모지 폰트로
+// 🧘를 캔버스에 렌더링해 잉크 경계/스크린샷으로 육안 확인)로 근거를 잡았다
+// — 가부좌 자세는 의자에 앉은 자세와 달리 "닿는 면"이 접힌 다리 자체라
+// 잉크 최하단에 매우 가깝지만, 대부분의 이모지 렌더가 다리 아래에 옷자락/
+// 그림자로 보이는 얇은 여백을 한 겹 더 그리므로 정확히 0은 아니다.
+export const SEAT_CONTACT_FRACTION = 0.12
+
+// 좌석선-벤치 바닥 경계에 잉크가 정확히 딱 붙어 픽셀 경계에서 삐져나오는
+// 것을 막는 여유(로컬 px) — 임의로 큰 값이 아니라 "1 CSS px 미만은 육안으로
+// 구분 불가"라는 통상 기준.
+const SEAT_SINK_CLAMP_MARGIN_PX = 1
+
+/**
+ * 착석 시 안쪽(facing/glyph) 레이어에 걸 하향 시각 보정(sink) — 캐릭터의
+ * depth-scale 적용 *전* 로컬 px(ProtoCharacter.jsx 헤더 주석의 앵커 불변
+ * 조건 유지 — 바깥 앵커/스케일 엘리먼트는 이 함수가 전혀 모른다). 호출부가
+ * canvas measureText 등으로 실측한 글리프 잉크 경계를 넘기면, "잉크 하단이
+ * 박스 바닥(좌석선)까지 내려오게 하는 양" + "그 위에서 contactFraction만큼
+ * 더 내려 접촉점이 좌석선에 정확히 오게 하는 양"을 더해 반환한다.
+ *
+ * 부호 있는 중간값을 그대로 쓴다(잉크가 이미 박스 바닥을 넘어선 특수
+ * 케이스에서 과도한 추가 하강을 막기 위함) — 최종 반환값만
+ * [0, maxSinkPx]로 클램프한다. 항상 "하향 보정"만 한다(팀장 지시 원문) —
+ * 잉크가 이미 좌석선을 넘어선 경우를 끌어올리는 양방향 보정은 이 함수의
+ * 책임이 아니다(그런 입력이면 0을 반환해 기존 동작 그대로 유지).
+ *
+ * @param {object} p
+ * @param {number} p.glyphBoxHeightPx - 글리프 em 박스 높이(로컬 px,
+ *   leading-none이라 font-size와 동일).
+ * @param {number} p.inkTopPx - 박스 상단에서 잉크 상단까지 거리(로컬 px).
+ * @param {number} p.inkBottomPx - 박스 상단에서 잉크 하단까지 거리(로컬 px).
+ * @param {number} [p.benchRenderedHeightLocalPx] - 벤치 렌더 높이를 캐릭터의
+ *   depth-scale 기준 로컬 단위로 환산한 값(호출부가 scale로 나눠서 넘긴다
+ *   — 벤치 자체는 캐릭터의 depth-scale을 받지 않으므로 좌표계가 다르다,
+ *   ProtoCharacter.jsx 호출부 참고). 없으면(0/undefined) 하향 클램프를
+ *   생략한다(정보 부족 시 크래시 대신 무제한 허용 — 이 프로토타입의 다른
+ *   "측정 실패 시 안전 폴백" 관례와 동일).
+ * @param {number} p.seatFraction - 이 파일의 SEAT_FRACTION과 동일 값을
+ *   넘긴다(좌석선이 벤치 렌더 높이의 몇 %가 벤치 바닥(y1)에서 위로 떨어져
+ *   있는지) — 좌석선에서 벤치 맨 아래까지의 여유를 상한으로 쓴다.
+ * @param {number} [p.contactFraction] - 기본 SEAT_CONTACT_FRACTION.
+ * @returns {number}
+ */
+export function seatSinkLocalPx({
+  glyphBoxHeightPx,
+  inkTopPx,
+  inkBottomPx,
+  benchRenderedHeightLocalPx,
+  seatFraction,
+  contactFraction = SEAT_CONTACT_FRACTION,
+}) {
+  if (!(glyphBoxHeightPx > 0) || !(inkBottomPx > 0)) return 0
+  const inkHeightPx = Math.max(0, inkBottomPx - inkTopPx)
+  const contactAboveInkBottomPx = inkHeightPx * contactFraction
+  const rawSinkPx = (glyphBoxHeightPx - inkBottomPx) + contactAboveInkBottomPx
+  const maxSinkPx = benchRenderedHeightLocalPx > 0
+    ? Math.max(0, benchRenderedHeightLocalPx * seatFraction - SEAT_SINK_CLAMP_MARGIN_PX)
+    : Infinity
+  return Math.min(Math.max(0, rawSinkPx), maxSinkPx)
 }
 
 /**

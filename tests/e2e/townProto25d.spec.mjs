@@ -176,6 +176,45 @@ async function readZIndex(locator) {
   })
 }
 
+// 2026-09-23(좌석 접촉점 sink 보정, 두 번째 패스) — 글리프의 실제 화면(screen)
+// 잉크 상/하단을 독립적으로 실측한다. ProtoCharacter.jsx가 내부에서 계산하는
+// sinkPx 값을 읽어오는 게 아니라(그건 동어반복이 된다 — 팀장 지시가 지적한
+// 문제와 동일한 함정), canvas measureText로 "로컬(em box) 안에서 잉크가
+// 어디 있는지" 비율을 독립적으로 구한 뒤, glyph span의 실제
+// getBoundingClientRect()(브라우저가 sink/scale/bob 애니메이션까지 전부
+// 반영해 페인트한 진짜 화면 좌표)에 그 비율을 투영한다 — 앱 코드의 sink
+// 공식을 전혀 재사용하지 않는, 독립적인 화면 측정.
+async function measureGlyphInkOnScreen(glyphLocator) {
+  return glyphLocator.evaluate((el) => {
+    const cs = window.getComputedStyle(el)
+    const fontSizePx = parseFloat(cs.fontSize)
+    const rect = el.getBoundingClientRect()
+    let inkTopLocalPx = 0
+    let inkBottomLocalPx = fontSizePx
+    try {
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      ctx.font = `${fontSizePx}px ${cs.fontFamily}`
+      ctx.textBaseline = 'top'
+      const m = ctx.measureText(el.textContent || '')
+      if (m.actualBoundingBoxDescent > 0) {
+        inkTopLocalPx = Math.max(0, -m.actualBoundingBoxAscent)
+        inkBottomLocalPx = m.actualBoundingBoxDescent
+      }
+    } catch { /* 폴백(위 기본값) 유지 */ }
+    // line-height:1이라 로컬 em 박스 높이 === fontSizePx. rect.height는 그
+    // 로컬 박스가 sink/scale/bob 전부 반영돼 실제로 페인트된 화면 높이라,
+    // 이 비율(rect.height/fontSizePx)로 로컬 잉크 좌표를 화면 좌표에 투영.
+    const projectFactor = fontSizePx > 0 ? rect.height / fontSizePx : 1
+    return {
+      inkTopScreenY: rect.top + inkTopLocalPx * projectFactor,
+      inkBottomScreenY: rect.top + inkBottomLocalPx * projectFactor,
+      rectTop: rect.top,
+      rectHeight: rect.height,
+    }
+  })
+}
+
 export async function run(browser, baseURL) {
   const r = createRecorder('[town-proto2.5d]')
   const unmockedRequests = []
@@ -1193,6 +1232,10 @@ export async function run(browser, baseURL) {
   const BENCH_ASSET_MIN_WIDTH_PX_REF = 44
   const SEAT_FRACTION_REF = 0.55
   const MIN_TAP_TARGET_PX_REF = 44
+  // benchInteraction.js SEAT_CONTACT_FRACTION 값 복제(2026-09-23 좌석 접촉점
+  // sink 보정, 두 번째 패스) — 아래 measureGlyphInkOnScreen 결과에 적용해
+  // "접촉점"(잉크 하단에서 위로 이 비율만큼)을 독립적으로 유도한다.
+  const SEAT_CONTACT_FRACTION_REF = 0.12
   // ProtoCharacter.jsx 상수 값 복제 — 그림자 px 하한(SHADOW_*_FLOOR_PX),
   // 캐릭터 렌더 폭 px 하한(CHARACTER_MIN_WIDTH_PX).
   const SHADOW_WIDTH_FLOOR_PX_REF = 22
@@ -1338,6 +1381,42 @@ export async function run(browser, baseURL) {
         `${name} 항목2 — 착석 지점이 벤치 아트의 세로 렌더 범위 안(붕 뜨지 않음)`,
         actualFootAnchorPx.y >= benchBoxSeated.y && actualFootAnchorPx.y <= benchBoxSeated.y + benchBoxSeated.height,
         `footY=${actualFootAnchorPx.y} benchTop=${benchBoxSeated.y} benchBottom=${benchBoxSeated.y + benchBoxSeated.height}`,
+      )
+
+      // ── 항목2(2026-09-23 좌석 접촉점 sink 보정, 두 번째 패스) — 위 항목2
+      // 는 "캐릭터 박스 바닥"과 "좌석선"을 비교하는데, 박스 바닥은 애초에
+      // benchSeatPoint로 좌석선에 정확히 배치되는 앵커라 이 비교는 좌석선
+      // 계산 자체의 정확도만 검증할 뿐, 글리프 잉크(실제로 눈에 보이는
+      // 픽셀)가 그 좌석선에 닿는지는 검증하지 못한다(동어반복 — 팀장 지시가
+      // 지적한 "붕 뜬 것처럼 보이는" 회귀의 진짜 원인은 이 잉크-좌석선
+      // 간극이었다). 아래는 ProtoCharacter.jsx의 sink 공식을 전혀 재사용하지
+      // 않고(measureGlyphInkOnScreen — 앱 코드와 독립적으로 canvas
+      // measureText + 실제 getBoundingClientRect() 화면 좌표로 측정) 잉크
+      // 자체의 화면 위치를 직접 검증한다. ──
+      const glyph = page.locator('[data-proto-character-glyph]')
+      await glyph.waitFor({ state: 'attached', timeout: 3000 })
+      const inkMetrics = await measureGlyphInkOnScreen(glyph)
+      const contactPointScreenY = inkMetrics.inkBottomScreenY -
+        SEAT_CONTACT_FRACTION_REF * (inkMetrics.inkBottomScreenY - inkMetrics.inkTopScreenY)
+      const contactErrorPx = Math.abs(contactPointScreenY - expectedSeatPx.y)
+      r.check(
+        `${name} 항목2 — 접촉점(잉크 하단 실측 - SEAT_CONTACT_FRACTION, 앱 공식과 독립적으로 재측정)과 벤치 실측 좌석선 사이 오차 < 3px`,
+        contactErrorPx < 3,
+        `contactPointScreenY=${contactPointScreenY} expectedSeatY=${expectedSeatPx.y} errorPx=${contactErrorPx} inkMetrics=${JSON.stringify(inkMetrics)}`,
+      )
+      r.check(
+        `${name} 항목2 — 잉크 하단이 좌석선에 닿거나 겹침(빈틈 없음, "붕 뜬" 회귀 재발 방지 — 오차 허용 1px)`,
+        inkMetrics.inkBottomScreenY >= expectedSeatPx.y - 1,
+        `inkBottomScreenY=${inkMetrics.inkBottomScreenY} seatY=${expectedSeatPx.y}`,
+      )
+      r.check(
+        `${name} 항목2 — 잉크 하단이 벤치 아트 바닥 경계를 넘지 않음(파묻히지 않음 — 오차 허용 1px)`,
+        inkMetrics.inkBottomScreenY <= benchBoxSeated.y + benchBoxSeated.height + 1,
+        `inkBottomScreenY=${inkMetrics.inkBottomScreenY} benchBottom=${benchBoxSeated.y + benchBoxSeated.height}`,
+      )
+      r.check(
+        `${name} 항목2 — 착석 중에도 캐릭터 박스 z-index가 벤치보다 앞(잉크 sink 보정이 depth 순서를 깨지 않음)`,
+        (await readZIndex(character)) > (await readZIndex(benchArt)),
       )
 
       await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle', { timeout: 8000 })

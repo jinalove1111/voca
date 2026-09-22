@@ -26,6 +26,15 @@
 //    "벤치보다 화면 앞에 그려져야 한다"는 시각 요구가 seat.y 하나만으로는
 //    동시에 만족되지 않는다. 새 depth 모델을 만들지 않고, 이미 있는
 //    characterZIndex(y)에 넣는 y 값만 상황별로 고르는 최소 변경으로 해결).
+//  - sitBenchHeightPx(number, 선택, 2026-09-23 좌석 접촉점 sink 보정 추가분)
+//    — 'sitting' 동안 Proto25DScreen.jsx가 benchRenderedSizePx(BENCH,
+//    groundWidthPx).heightPx(스크린 px, 캐릭터의 depth-scale과 무관한 실제
+//    벤치 렌더 크기)를 넘긴다. 아래 seatSinkLocalPx 호출부가 이 값을
+//    scale로 나눠 "로컬(스케일 적용 전)" 단위로 환산한 뒤 sink 상한 계산에
+//    쓴다(벤치는 캐릭터처럼 depth-scale을 받지 않으므로 좌표계가 다르다 —
+//    "왜 로컬 단위인가"는 아래 measureGlyphInk 주석 참고). 없으면(walking/
+//    idle/leaving, 또는 측정 실패) sink 상한을 생략한다(seatSinkLocalPx의
+//    안전 폴백).
 //
 // Stage 3(Y-기반 스케일 + depth occlusion) — depthVisual.js(신규,
 // worldContract.depthScale/depthOrder.cssZIndex에 위임만 하는 순수 헬퍼)를
@@ -74,9 +83,45 @@
 // (-w/2,-h) = (0,0) = 박스 자신의 top-left(=CSS left/top이 배치하는 바로 그
 // 점) — s에 전혀 의존하지 않는다. 그림자(아래 JSX)는 이 스케일된 박스 안에
 // 그대로 중첩돼 있어 별도 계산 없이 캐릭터와 함께 자동으로 스케일된다.
+import { useLayoutEffect, useRef, useState } from 'react'
 import { characterScale, characterZIndex } from '../../../utils/town/proto2_5d/depthVisual'
+import { SEAT_FRACTION, SEAT_CONTACT_FRACTION, seatSinkLocalPx } from '../../../utils/town/proto2_5d/benchInteraction'
 
 const CHARACTER_TRANSFORM_ORIGIN = '50% 100%'
+
+// 착석 시각 보정(2026-09-23) — 글리프 잉크 경계 실측(로컬/depth-scale 적용
+// 전 px). canvas measureText(textBaseline='top')의 actualBoundingBoxDescent가
+// "박스 상단에서 잉크 하단까지 거리"를 직접 준다(Chromium에서 이모지 잉크
+// 경계에 신뢰할 만한 값 — 팀장 지시). font-size는 getComputedStyle에서 읽는
+// CSS 값(로컬, depth-scale transform과 무관 — transform은 레이아웃 속성을
+// 바꾸지 않는다)을 그대로 canvas 폰트로 써서, 이 함수가 반환하는 모든 값이
+// 항상 "스케일 적용 전" 좌표계로 통일되게 한다(benchInteraction.js
+// seatSinkLocalPx의 "로컬 px" 계약과 일치). 캔버스/측정 실패(구형 브라우저
+// 등)면 스펙 요구대로 span rect(font-size 자체)로 폴백 — 잉크가 박스를 거의
+// 채운다고 보수적으로 가정해(inkTop=0, inkBottom=박스높이) sink를 과도하게
+// 만들지 않는다.
+function measureGlyphInk(spanEl) {
+  if (!spanEl || typeof window === 'undefined') return null
+  const cs = window.getComputedStyle(spanEl)
+  const fontSizePx = parseFloat(cs.fontSize)
+  if (!(fontSizePx > 0)) return null
+  try {
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('no-2d-context')
+    ctx.font = `${fontSizePx}px ${cs.fontFamily}`
+    ctx.textBaseline = 'top'
+    const m = ctx.measureText(spanEl.textContent || '')
+    if (!(m.actualBoundingBoxDescent > 0)) throw new Error('no-ink-metrics')
+    return {
+      glyphBoxHeightPx: fontSizePx, // leading-none — 라인박스 높이 = font-size
+      inkTopPx: Math.max(0, -m.actualBoundingBoxAscent),
+      inkBottomPx: m.actualBoundingBoxDescent,
+    }
+  } catch {
+    return { glyphBoxHeightPx: fontSizePx, inkTopPx: 0, inkBottomPx: fontSizePx }
+  }
+}
 
 // 모바일 시각 보정(2026-09-23) — 캐릭터 기준 폭에 px 하한을 둔다(390px
 // 이하 뷰포트에서 8%는 ~30px 미만이라 글리프가 읽기 어려움). depth
@@ -118,7 +163,15 @@ export const WALK_TRANSITION_MS = 650
 // 수 있어야 한다"는 스펙 요구를 깨므로, 아주 짧지만 0은 아닌 값을 쓴다.
 export const REDUCED_MOTION_TRANSITION_MS = 220
 
-export default function ProtoCharacter({ phase, leftPct, topPct, reducedMotion, facing = 1, depthY }) {
+export default function ProtoCharacter({
+  phase,
+  leftPct,
+  topPct,
+  reducedMotion,
+  facing = 1,
+  depthY,
+  sitBenchHeightPx,
+}) {
   const isWalking = phase === 'walking'
   const isSitting = phase === 'sitting'
   const durationMs = reducedMotion ? REDUCED_MOTION_TRANSITION_MS : WALK_TRANSITION_MS
@@ -147,6 +200,43 @@ export default function ProtoCharacter({ phase, leftPct, topPct, reducedMotion, 
   // 캐릭터 아트가 없어 이모지를 하나 더 바꿔 끼우는 최소 표시만 한다(위
   // 파일 헤더의 플레이스홀더 원칙과 동일).
   const glyph = isSitting ? '🧘' : '🚶'
+
+  // 좌석 접촉점 sink(2026-09-23, "붕 뜬" 회귀 수정) — sitting에 들어갈 때(와
+  // 그 동안의 리사이즈/기기 회전마다, clamp() 폰트 크기가 뷰포트 폭에
+  // 의존하므로) 글리프 잉크 경계를 실측한다. isSitting이 아니면 측정하지
+  // 않고(불필요한 DOM 작업 회피) 이전 측정값도 버린다(다음 착석 때 stale
+  // 값을 쓰지 않도록).
+  const glyphRef = useRef(null)
+  const [inkMetrics, setInkMetrics] = useState(null)
+  useLayoutEffect(() => {
+    if (!isSitting) {
+      setInkMetrics(null)
+      return undefined
+    }
+    const measure = () => setInkMetrics(measureGlyphInk(glyphRef.current))
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [isSitting, glyph])
+
+  // benchRenderedHeightPx(스크린 px, Proto25DScreen.jsx가 측정)를 이
+  // 캐릭터의 depth-scale로 나눠 "로컬" 단위로 맞춘다(위 파일 헤더 주석
+  // "sitBenchHeightPx" 항목 참고) — scale<=0은 이론상 발생하지 않지만
+  // (characterScale이 항상 양수 범위로 클램프, depthVisual.js) 0-나눗셈
+  // 방어로 가드한다.
+  const benchRenderedHeightLocalPx = isSitting && sitBenchHeightPx > 0 && scale > 0
+    ? sitBenchHeightPx / scale
+    : undefined
+  const sinkPx = isSitting && inkMetrics
+    ? seatSinkLocalPx({
+        glyphBoxHeightPx: inkMetrics.glyphBoxHeightPx,
+        inkTopPx: inkMetrics.inkTopPx,
+        inkBottomPx: inkMetrics.inkBottomPx,
+        benchRenderedHeightLocalPx,
+        seatFraction: SEAT_FRACTION,
+        contactFraction: SEAT_CONTACT_FRACTION,
+      })
+    : 0
 
   // 모바일 시각 보정 — 그림자 크기는 depth scale(s)을 퍼센트에 직접 곱한
   // 뒤 px 하한을 max()로 강제한다(위 파일 상단 "그림자" 주석 참고). scale이
@@ -212,10 +302,25 @@ export default function ProtoCharacter({ phase, leftPct, topPct, reducedMotion, 
               같은 엘리먼트의 transform을 두고 경합하지 않게 한다 — bob div
               자신은 계속 "이 캐릭터의 첫 번째 div"로 남아(townProto25d.spec.mjs
               S5의 `character.locator('div').first()` 기존 계약 무변경), 그
-              내부에서 facing만 별도로 뒤집는다. */}
-          <div style={{ transform: facing === -1 ? 'scaleX(-1)' : undefined }}>
+              내부에서 facing만 별도로 뒤집는다.
+              2026-09-23 좌석 접촉점 sink 추가 — 이 레이어는 여전히 static(키
+              프레임 애니메이션이 아닌, 렌더마다 결정론적으로 계산되는 값)이라
+              위 문단의 "애니메이션과 경합하지 않는다" 전제가 그대로 유지된다.
+              translateY(sinkPx)와 scaleX(-1)는 서로 다른 축만 건드려(하나는
+              y, 하나는 x) 어느 순서로 합성해도 최종 결과가 같다(교환 가능) —
+              순서를 신경 쓸 필요 없음. sinkPx는 sitting에서만 0이 아니다. */}
+          <div
+            style={{
+              transform: [
+                sinkPx > 0 ? `translateY(${sinkPx}px)` : '',
+                facing === -1 ? 'scaleX(-1)' : '',
+              ].filter(Boolean).join(' ') || undefined,
+            }}
+          >
             <span
               aria-hidden="true"
+              ref={glyphRef}
+              data-proto-character-glyph=""
               className="relative inline-flex items-center justify-center w-full leading-none drop-shadow-sm text-[clamp(1.4rem,7vw,2.2rem)]"
             >
               {glyph}

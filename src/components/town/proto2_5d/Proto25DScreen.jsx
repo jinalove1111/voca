@@ -80,6 +80,7 @@ import {
   BENCH_ASSET_MIN_WIDTH_PX,
   benchArrivalPoint,
   benchSeatPoint,
+  benchRenderedSizePx,
   isBenchTap,
   benchTapPad,
   facingToward,
@@ -128,6 +129,7 @@ export default function Proto25DScreen() {
     topPct: INITIAL_TOP_PCT,
     facing: 1, // 1=기본 방향, -1=좌우 미러링(ProtoCharacter.jsx facing prop)
     pendingSit: false, // 벤치를 향해 걷는 중(walking)인지 — 항목7 반복 탭 무시 판정용
+    sitBenchHeightPx: undefined, // 2026-09-23 좌석 접촉점 sink 보정 — enterSitting에서만 채워짐(아래 참고)
   })
   const characterRef = useRef(character) // 헤더 주석 "characterRef" 참고 — setTimeout 콜백 전용 최신값 미러
   const [infoOpen, setInfoOpen] = useState(false)
@@ -263,11 +265,27 @@ export default function Proto25DScreen() {
   // groundHeightPx)를 받아야 한다(benchInteraction.js 헤더 주석 — 고정
   // world 종횡비를 가정하지 않음). handleGroundPointerUp과 동일하게
   // groundRef에서 직접 측정한다.
+  //
+  // 2026-09-23(좌석 접촉점 sink 보정, 두 번째 패스) — 같은 groundRect 측정
+  // 김에 benchRenderedSizePx(BENCH, groundRect?.width).heightPx(벤치의 실제
+  // 스크린 px 렌더 높이)도 같이 구해 character state에 실어 보낸다.
+  // ProtoCharacter.jsx가 이 값을 자신의 depth-scale로 나눠 sink 상한(좌석선
+  // ~ 벤치 바닥까지의 여유) 계산에 쓴다(그 파일 헤더 주석 "sitBenchHeightPx"
+  // 항목 참고). 벤치 좌표/기하 자체는 전혀 바꾸지 않는다 — benchSeatPoint가
+  // 이미 계산해 둔 seat.x/seat.y는 그대로.
   function enterSitting(seq) {
     if (seq !== seqRef.current) return
     const groundRect = groundRef.current ? groundRef.current.getBoundingClientRect() : null
     const seat = benchSeatPoint(BENCH, groundRect?.width, groundRect?.height)
-    applyIfActive(seq, (c) => ({ ...c, phase: 'sitting', pendingSit: false, leftPct: seat.x, topPct: seat.y }))
+    const benchHeightPx = benchRenderedSizePx(BENCH, groundRect?.width).heightPx
+    applyIfActive(seq, (c) => ({
+      ...c,
+      phase: 'sitting',
+      pendingSit: false,
+      leftPct: seat.x,
+      topPct: seat.y,
+      sitBenchHeightPx: benchHeightPx,
+    }))
     clearHoldTimer()
     const holdMs = reducedMotion ? REDUCED_MOTION_SIT_HOLD_MS : SIT_HOLD_MS
     holdTimerRef.current = setTimeout(() => {
@@ -488,6 +506,7 @@ export default function Proto25DScreen() {
           reducedMotion={reducedMotion}
           facing={character.facing}
           depthY={characterDepthY}
+          sitBenchHeightPx={character.phase === 'sitting' ? character.sitBenchHeightPx : undefined}
         />
       </div>
     </div>

@@ -21,9 +21,12 @@ import {
   BENCH_TAP_PAD_PCT,
   BENCH_ASSET_MIN_WIDTH_PX,
   MIN_TAP_TARGET_PX,
+  SEAT_FRACTION,
+  SEAT_CONTACT_FRACTION,
   benchArrivalPoint,
   benchSeatPoint,
   benchRenderedSizePx,
+  seatSinkLocalPx,
   isBenchTap,
   benchTapPad,
   facingToward,
@@ -185,6 +188,120 @@ if (BENCH) {
     Math.abs(narrow.heightPx - BENCH_ASSET_MIN_WIDTH_PX * BENCH_ASSET_ASPECT_REF) < 1e-9,
     JSON.stringify(narrow),
   )
+}
+
+// ── 3c. seatSinkLocalPx — 좌석 접촉점 sink(2026-09-23, "붕 뜬" 회귀 수정) ──
+// 순수 함수 — ProtoCharacter.jsx가 canvas measureText로 실측한 글리프 잉크
+// 경계를 넘기면 로컬(depth-scale 적용 전) px sink를 반환한다. 아래는 그
+// 실측을 흉내 낸 결정론적 입력으로 공식/클램프/비례/결정론을 검증한다.
+section('3c. seatSinkLocalPx — 좌석 접촉점 sink(2026-09-23 붕 뜬 회귀 수정)')
+
+{
+  // gap-only 케이스 — contactFraction=0이면 sink === 순수 "잉크 하단을 박스
+  // 바닥까지 내리는 양"(inkBottomGapPx)과 정확히 같아야 한다.
+  const gapOnly = seatSinkLocalPx({
+    glyphBoxHeightPx: 30,
+    inkTopPx: 5,
+    inkBottomPx: 20, // 박스 바닥(30)보다 10 위에서 잉크가 끝남 — 10px 간극
+    benchRenderedHeightLocalPx: 1000, // 클램프가 걸리지 않을 만큼 크게
+    seatFraction: SEAT_FRACTION,
+    contactFraction: 0,
+  })
+  check('gap-only(contactFraction=0) — sink === glyphBoxHeightPx - inkBottomPx', Math.abs(gapOnly - 10) < 1e-9, `sink=${gapOnly}`)
+
+  // contact fraction 단독 — 간극이 0(잉크가 박스 바닥에 정확히 닿음)이면
+  // sink === inkHeightPx * contactFraction만 남아야 한다.
+  const contactOnly = seatSinkLocalPx({
+    glyphBoxHeightPx: 30,
+    inkTopPx: 0,
+    inkBottomPx: 30, // 박스 바닥과 정확히 일치 — 간극 0
+    benchRenderedHeightLocalPx: 1000,
+    seatFraction: SEAT_FRACTION,
+    contactFraction: 0.2,
+  })
+  check('contact-only(간극 0) — sink === inkHeightPx * contactFraction(=30*0.2=6)', Math.abs(contactOnly - 6) < 1e-9, `sink=${contactOnly}`)
+
+  // 기본 contactFraction — 인자를 생략하면 SEAT_CONTACT_FRACTION을 쓴다.
+  const defaultFraction = seatSinkLocalPx({
+    glyphBoxHeightPx: 30, inkTopPx: 0, inkBottomPx: 30, benchRenderedHeightLocalPx: 1000, seatFraction: SEAT_FRACTION,
+  })
+  check(
+    'contactFraction 생략 시 SEAT_CONTACT_FRACTION 기본값 적용',
+    Math.abs(defaultFraction - 30 * SEAT_CONTACT_FRACTION) < 1e-9,
+    `sink=${defaultFraction} expected=${30 * SEAT_CONTACT_FRACTION}`,
+  )
+
+  // 클램프 — 벤치 바닥까지의 여유(benchRenderedHeightLocalPx*seatFraction)보다
+  // rawSink가 훨씬 크면 그 상한(-여유 margin)으로 잘려야 한다(벤치 아트
+  // 바닥 경계 아래로 파묻히지 않게).
+  const clamped = seatSinkLocalPx({
+    glyphBoxHeightPx: 100,
+    inkTopPx: 0,
+    inkBottomPx: 10, // 간극 90(매우 큼)
+    benchRenderedHeightLocalPx: 20, // 여유 = 20*0.55 - 1(margin) = 10
+    seatFraction: SEAT_FRACTION,
+    contactFraction: 0.5,
+  })
+  const expectedMax = 20 * SEAT_FRACTION - 1
+  const rawSinkForClampCase = (100 - 10) + 0.5 * (10 - 0) // inkBottomGapPx(90) + contactAbove(5) = 95
+  check(
+    '클램프 — rawSink가 상한을 넘으면 benchRenderedHeightLocalPx*seatFraction-margin으로 잘림(벤치 바닥 경계 보호)',
+    Math.abs(clamped - expectedMax) < 1e-9,
+    `sink=${clamped} expectedMax=${expectedMax}`,
+  )
+  check(
+    '클램프된 sink가 실제 raw(95)보다 확실히 작음(클램프가 실제로 작동)',
+    clamped < rawSinkForClampCase,
+    `sink=${clamped} raw=${rawSinkForClampCase}`,
+  )
+
+  // benchRenderedHeightLocalPx 미지정 — 클램프를 생략(정보 부족 시 크래시
+  // 대신 무제한 허용 — 이 파일의 다른 "안전 폴백" 관례와 동일).
+  const noBenchHeight = seatSinkLocalPx({
+    glyphBoxHeightPx: 100, inkTopPx: 0, inkBottomPx: 10, seatFraction: SEAT_FRACTION, contactFraction: 0.5,
+  })
+  check(
+    'benchRenderedHeightLocalPx 없이 호출하면 클램프 없이 raw sink 그대로(간극90 + 잉크높이10*0.5=95)',
+    Math.abs(noBenchHeight - 95) < 1e-9,
+    `sink=${noBenchHeight}`,
+  )
+
+  // 이미 잉크가 박스 바닥을 넘어선 특수 케이스 — 하향 보정만 한다는 계약이라
+  // 0을 반환해야 한다(끌어올리는 음수 보정은 이 함수의 책임이 아님).
+  const overflow = seatSinkLocalPx({
+    glyphBoxHeightPx: 30,
+    inkTopPx: 0,
+    inkBottomPx: 40, // 박스 바닥(30)보다 10 아래까지 잉크가 이미 내려감
+    benchRenderedHeightLocalPx: 1000,
+    seatFraction: SEAT_FRACTION,
+    contactFraction: 0, // contact 보정 없이도 이미 음수인 raw만 확인
+  })
+  check('잉크가 이미 박스 바닥을 넘어선 경우 — sink=0(양방향 보정 아님, 하향만)', overflow === 0, `sink=${overflow}`)
+
+  // 비례 — 모든 입력 치수를 2배로 늘리면(클램프가 걸리지 않는 범위에서)
+  // sink도 정확히 2배가 되어야 한다(팀장 지시 — "치수를 2배로 하면 sink도
+  // 2배").
+  const base = seatSinkLocalPx({
+    glyphBoxHeightPx: 25, inkTopPx: 3, inkBottomPx: 18, benchRenderedHeightLocalPx: 500, seatFraction: SEAT_FRACTION, contactFraction: 0.15,
+  })
+  const doubled = seatSinkLocalPx({
+    glyphBoxHeightPx: 50, inkTopPx: 6, inkBottomPx: 36, benchRenderedHeightLocalPx: 1000, seatFraction: SEAT_FRACTION, contactFraction: 0.15,
+  })
+  check(
+    '비례 스케일링 — 모든 치수를 2배로 하면 sink도 정확히 2배(클램프 미작동 범위)',
+    Math.abs(doubled - base * 2) < 1e-9,
+    `base=${base} doubled=${doubled} base*2=${base * 2}`,
+  )
+
+  // 결정론.
+  const detA = seatSinkLocalPx({ glyphBoxHeightPx: 27, inkTopPx: 2, inkBottomPx: 21, benchRenderedHeightLocalPx: 60, seatFraction: SEAT_FRACTION })
+  const detB = seatSinkLocalPx({ glyphBoxHeightPx: 27, inkTopPx: 2, inkBottomPx: 21, benchRenderedHeightLocalPx: 60, seatFraction: SEAT_FRACTION })
+  check('seatSinkLocalPx 반복 호출이 완전히 동일(결정론)', detA === detB, `a=${detA} b=${detB}`)
+
+  // 방어 — 잘못된/누락된 입력(0 이하 glyphBoxHeightPx, 음수 inkBottomPx)은
+  // 크래시 없이 0.
+  check('glyphBoxHeightPx<=0 이면 크래시 없이 0', seatSinkLocalPx({ glyphBoxHeightPx: 0, inkTopPx: 0, inkBottomPx: 10, seatFraction: SEAT_FRACTION }) === 0)
+  check('inkBottomPx<=0 이면 크래시 없이 0', seatSinkLocalPx({ glyphBoxHeightPx: 30, inkTopPx: 0, inkBottomPx: 0, seatFraction: SEAT_FRACTION }) === 0)
 }
 
 // ── 4. isBenchTap — 사각형 hit-test(안/밖/패딩) ──────────────────────────
