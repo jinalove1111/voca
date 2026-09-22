@@ -110,6 +110,7 @@ const DEFAULT_FEATURES = {
   townShopV1: false, // Paul Town 별 상점 V1(책상 램프 1개) — 서버 권위 잔액/소유(star_purchases). OFF면 UI/네트워크 호출 0
   paulTownV1: false, // Paul Town V1(2026-09-11) — 내 마을/상점/보관함/배치. OFF면 UI·네트워크 호출 0(townShopV1과 독립)
   paulTownV2: false, // Paul Town V2-A(2026-09-13) — 스토리북 마을 장면 렌더러. townV1 자격(기기 플래그 OR Pilot A 허용목록)이 있을 때만 의미 있음. OFF면 V1 격자 그대로
+  paulTown2_5d: false, // Paul Town 2.5D 캐릭터 프로토타입(Stage 1, 2026-09-22) — paulTownV1/paulTownV2와 완전히 독립된 별도 격리 실험(공유 상태/파일럿 허용목록 상호작용 없음). docs/design/town/ASTRA_HANDOFF_2026-09-21.md Phase 1. OFF면 화면/네트워크 호출 0
 
   // Reading Foundation (2026-07-23, v3.3) — 유닛별 읽기 지문(passage).
   readingFoundation: true,     // 관리자 지문 편집기(AdminScreen 반 관리 → 유닛 펼침) — 관리자 전용 화면이라 기본 ON이 안전(학생 화면에 아무 영향 없음)

@@ -123,6 +123,7 @@ async function main() {
       { name: '[town-flag-xtab]', modulePath: '../tests/e2e/townFlagCrossTab.spec.mjs' },
       { name: '[town-v2]', modulePath: '../tests/e2e/townV2.spec.mjs' },
       { name: '[town-v2-artwork]', modulePath: '../tests/e2e/townV2ArtworkPipeline.spec.mjs' },
+      { name: '[town-proto2.5d]', modulePath: '../tests/e2e/townProto25d.spec.mjs' },
       { name: '[town-pilot-allowlist]', modulePath: '../tests/e2e/townPilotAllowlist.spec.mjs' },
     ]
 
