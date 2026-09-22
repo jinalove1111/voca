@@ -44,6 +44,31 @@
 // 있다는 코디네이터 피드백에 따라 1.5MB로 상향. 러너웨이(수백 KB 단위
 // 급증)는 여전히 잡되 정상 변동엔 훨씬 넉넉한 여유를 둔다. gzip 예산
 // (메인 ≤135KB/TownScreen ≤15KB)과 다른 단언은 전부 그대로).
+//
+// ⚠ 2026-09-23 수정 — "메인 청크" 판정 방식을 파일명 패턴 매칭에서
+// dist/index.html 기반 실제 엔트리 참조로 바꿨다. 근본 원인: Stage 4
+// (feat/town proto commit 8132dd1 계열)부터 src/assets/town/index.js(마을
+// 에셋 레지스트리)가 지연 로드되는 Proto25DScreen 청크에서도 import되면서,
+// Rollup이 그 모듈을 전용 공유 청크로 분리해 이름을 "index-<hash>.js"로
+// 붙였다 — 즉 실제 엔트리 청크와 이름 패턴이 동일한 "index-*.js" 파일이
+// dist/assets에 2개 존재하게 됐다. 기존 findChunk(/^index-[\w-]+\.js$/)는
+// "여러 개 매치되면 가장 짧은 이름을 쓴다"는 임의 동률 규칙이라, 두 후보의
+// 상대적 이름 정렬 순서가 OS/파일시스템의 readdirSync 열거 순서에 의존했다
+// (Windows NTFS와 Linux ext4가 같은 순서를 보장하지 않음) — 로컬(Windows)
+// 에서는 우연히 실제 엔트리(index-B-ciJRTO.js)가 먼저 나와 통과했지만,
+// Linux CI(run 35792210920)에서는 에셋 레지스트리 청크(index-BK1aVjiB.js,
+// 24KB, TownScreen 참조도 paulTownV1 리터럴도 없음)가 선택되어 "메인 청크에
+// TownScreen 청크 파일명 문자열 존재"·"메인 청크에 paulTownV1:!1 리터럴
+// 존재" 두 단언이 FAIL했다. 진짜 불변식은 "메인 청크 = dist/index.html이
+// <script type="module"> 정적 태그로 직접 참조하는 그 파일"이므로, 이제
+// index.html을 파싱해 그 엔트리 파일명을 직접 얻는다(파일명 패턴 매칭이 아니라
+// 산출물의 실제 배선을 읽음). index.html에서 못 찾으면(예상 밖 산출물 구조)
+// 기존 이름 패턴 방식으로 안전하게 폴백하되, 그 사실을 경고로 콘솔에
+// 남긴다 — 폴백 시에도 "신선한 체크아웃(dist 자체 부재)"는 여전히
+// 0번(위쪽)에서 이미 SKIP 처리되므로 무관하다. TownScreen 청크 판정(접두어
+// "TownScreen-")과 나머지 모든 단언(예산/플래그/에셋 인벤토리)은 이 불변식
+// 변경과 무관해 손대지 않았다 — 아래에서 각 단언을 현재 dist에 대해 그대로
+// 재확인했다(모두 그 진짜 엔트리를 대상으로 여전히 성립).
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
@@ -97,16 +122,42 @@ function findChunk(pattern) {
   return matches.sort((a, b) => a.length - b.length)[0]
 }
 
-const mainFile = findChunk(/^index-[\w-]+\.js$/)
+// index.html을 먼저 읽는다 — 메인 청크 판정이 이제 이 파일의 실제 <script
+// type="module"> 엔트리 참조에 의존하기 때문에 findChunk보다 먼저 필요하다.
+let indexHtml = ''
+const indexHtmlPath = path.join(DIST, 'index.html')
+if (existsSync(indexHtmlPath)) indexHtml = readFileSync(indexHtmlPath, 'utf8')
+
+// 메인 청크 = dist/index.html이 <script type="module" ... src="/assets/…">로
+// 직접 참조하는 그 파일(진짜 엔트리, 산출물의 실제 배선). 파일명 패턴이
+// 아니라 이 배선을 읽어 판정하므로, 같은 "index-*.js" 이름 패턴을 가진
+// 무관한 공유 청크(예: 에셋 레지스트리가 분리돼 나온 청크)가 있어도 흔들리지
+// 않는다.
+function resolveMainFileFromIndexHtml(html, files) {
+  if (!html) return null
+  const m = html.match(/<script[^>]*\btype=["']module["'][^>]*\bsrc=["']\/assets\/([^"']+\.js)["']/)
+  if (!m) return null
+  const name = m[1]
+  return files.includes(name) ? name : null
+}
+
+let mainFile = resolveMainFileFromIndexHtml(indexHtml, assetFiles)
+if (!mainFile) {
+  // 폴백: index.html에서 못 찾은 경우(예상 밖 산출물 구조)만 기존 이름
+  // 패턴 방식을 쓴다 — "신선한 체크아웃"은 이미 위 0번에서 SKIP 처리됐으므로
+  // 여기 도달했다는 것 자체가 이례적인 상황이라는 신호. 조용히 넘어가지
+  // 않고 경고를 남긴다.
+  const fallback = findChunk(/^index-[\w-]+\.js$/)
+  if (fallback) {
+    console.log(`  경고  dist/index.html에서 메인 청크 엔트리를 찾지 못해 이름 패턴 폴백 사용(${fallback}) — index.html 구조 변경 여부 확인 필요`)
+  }
+  mainFile = fallback
+}
 const townFile = findChunk(/^TownScreen-[\w-]+\.js$/)
 
 if (!mainFile || !townFile) {
   skip(`필요한 청크를 찾지 못함(main=${mainFile || 'NONE'}, TownScreen=${townFile || 'NONE'}) — 빌드 산출물 구조가 예상과 다름(청크 분할 변경 등). 신선한 체크아웃 시나리오는 아니므로 회귀일 수 있으나, 이 스크립트는 dist 부재/불완전 케이스 전부를 안전하게 SKIP한다(과제 지시: "dist/assets가 없으면 SKIP").`)
 }
-
-let indexHtml = ''
-const indexHtmlPath = path.join(DIST, 'index.html')
-if (existsSync(indexHtmlPath)) indexHtml = readFileSync(indexHtmlPath, 'utf8')
 
 function readAsset(name) {
   return readFileSync(path.join(ASSETS_DIR, name), 'utf8')
