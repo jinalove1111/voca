@@ -1,11 +1,15 @@
 // tests/e2e/townProto25d.spec.mjs
 //
-// Paul Town 2.5D 캐릭터 프로토타입(paulTown2_5d, Stage 1, 2026-09-22) 회귀 —
-// src/components/town/proto2_5d/*가 기존 Paul Town V1/V2와 완전히 독립된
-// 격리 실험(공유 상태/게이팅 없음)으로 동작하는지 검증한다. townV2.spec.mjs와
-// 동일한 mock 전체 가로채기(installMocks) + 결정론 폴링(waitUntil) 관례를
-// 따르되, 새 파일이라 필요한 소규모 헬퍼는 복제한다(파일당 소유권 원칙,
-// CLAUDE.md 규칙 16 — 다른 spec과 동시에 같은 파일을 건드리지 않게).
+// Paul Town 2.5D 캐릭터 프로토타입(paulTown2_5d, Stage 1 2026-09-22 + Stage 2
+// 2026-09-22 + Stage 3 2026-09-22) 회귀 — src/components/town/proto2_5d/*가
+// 기존 Paul Town V1/V2와 완전히 독립된 격리 실험(공유 상태/게이팅 없음)으로
+// 동작하는지 검증한다. townV2.spec.mjs와 동일한 mock 전체 가로채기
+// (installMocks) + 결정론 폴링(waitUntil) 관례를 따르되, 새 파일이라 필요한
+// 소규모 헬퍼는 복제한다(파일당 소유권 원칙, CLAUDE.md 규칙 16 — 다른
+// spec과 동시에 같은 파일을 건드리지 않게). S1~S6은 Stage 1/2, S7은 Stage 3
+// (Y-기반 스케일/depth occlusion/그림자) 전용 — 기존 S1~S6은 값 변경 없이
+// 그대로 유지했다(Stage 1/2 회귀 방지, S5에는 항목12 reduced-motion 최종
+// 스케일 검증만 추가).
 //
 // 실 Supabase/Vercel 요청 0건 — installMocks가 전체 네트워크를 가로챈다.
 // 이 프로토타입 자체는 구매/저장 API를 전혀 호출하지 않으므로(마운트
@@ -121,6 +125,55 @@ async function readObstacleBoxesFromDom(page) {
     width: parseFloat(el.style.width),
     height: parseFloat(el.style.height),
   })))
+}
+
+// Stage 3 — worldContract.js DEPTH_BANDS와 정확히 같은 값을 이 spec에도
+// 그대로 옮겨왔다(OBSTACLES_REF와 동일한 이 파일의 기존 관례 — import가
+// 아니라 값 복제, 이 spec은 브라우저 페이지 컨텍스트 밖 Node에서 도는
+// spec이라 소스 모듈을 직접 import하지 않는다. 실제 렌더된 scale이 이
+// 복제값으로 재계산한 depthScaleRef와 일치하는지 DOM에서 직접 재확인한다).
+const DEPTH_BANDS_REF = [
+  { maxY: 28, scale: [0.55, 0.65] },
+  { maxY: 45, scale: [0.70, 0.82] },
+  { maxY: 66, scale: [0.85, 1.00] },
+  { maxY: 100, scale: [1.00, 1.20] },
+]
+function depthScaleRef(y) {
+  const clamped = Math.max(0, Math.min(100, Number(y) || 0))
+  let minY = 0
+  for (const band of DEPTH_BANDS_REF) {
+    if (clamped <= band.maxY) {
+      const [s0, s1] = band.scale
+      const span = band.maxY - minY
+      const frac = span === 0 ? 1 : (clamped - minY) / span
+      return s0 + (s1 - s0) * frac
+    }
+    minY = band.maxY
+  }
+  return DEPTH_BANDS_REF[DEPTH_BANDS_REF.length - 1].scale[1]
+}
+
+/** 캐릭터 엘리먼트의 computed transform matrix에서 scale 성분(a)을 읽는다
+ * (translate(-50%,-100%) scale(s)는 회전이 없어 matrix(a,b,c,d,e,f)의
+ * a===d===s로 귀결된다 — a를 읽으면 충분). transform이 없으면 null. */
+async function readCharacterScale(character) {
+  return character.evaluate((el) => {
+    const t = window.getComputedStyle(el).transform
+    if (!t || t === 'none') return null
+    const m = t.match(/^matrix\(([^)]+)\)$/)
+    if (!m) return null
+    const parts = m[1].split(',').map((s) => parseFloat(s.trim()))
+    return Number.isFinite(parts[0]) ? parts[0] : null
+  })
+}
+
+/** 엘리먼트의 computed z-index를 정수로 읽는다(파싱 불가면 null). */
+async function readZIndex(locator) {
+  return locator.evaluate((el) => {
+    const z = window.getComputedStyle(el).zIndex
+    const n = parseInt(z, 10)
+    return Number.isFinite(n) ? n : null
+  })
 }
 
 export async function run(browser, baseURL) {
@@ -456,6 +509,18 @@ export async function run(browser, baseURL) {
         JSON.stringify(pctAfterObstacleTapReducedMotion),
       )
 
+      // ── Stage3 항목12 — reduced-motion에서도 depth/scale은 절대 생략되지
+      // 않는다(운영자 지시 — "필수 정보인 depth/scale까지 제거하면 안 된다",
+      // 오직 그 사이의 보간 애니메이션만 짧아질 뿐) — idle 정착 후 최종
+      // 스케일이 depthScaleRef(y)와 정확히 일치하는지 확인한다.
+      const finalScaleReducedMotion = await readCharacterScale(character)
+      const expectedScaleReducedMotion = depthScaleRef(pctAfterObstacleTapReducedMotion.top)
+      r.check(
+        `${name} 항목12 — reduced-motion에서도 최종 스케일이 depthScaleRef(y)와 정확히 일치(오차<0.01, 생략되지 않음)`,
+        finalScaleReducedMotion != null && Math.abs(finalScaleReducedMotion - expectedScaleReducedMotion) < 0.01,
+        `scale=${finalScaleReducedMotion} expected=${expectedScaleReducedMotion} y=${pctAfterObstacleTapReducedMotion.top}`,
+      )
+
       r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
     } catch (err) {
       const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
@@ -581,6 +646,149 @@ export async function run(browser, baseURL) {
         uiClickMovedDist2 != null && uiClickMovedDist2 < 1,
         `dist=${uiClickMovedDist2}`,
       )
+
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S7 — Stage3 핵심: Y-기반 스케일/깊이 occlusion/그림자(플래그 ON,
+  // 데스크톱 마우스 1280x800) ──
+  {
+    const vp = { width: 1280, height: 800 }
+    const name = 'S7[1280x800,flag-ON,depth-scale]'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true })
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const groundBox = await ground.boundingBox()
+
+      async function tapAndSettle(xFrac, yFrac) {
+        await page.mouse.click(groundBox.x + groundBox.width * xFrac, groundBox.y + groundBox.height * yFrac)
+        await waitUntil(async () => (
+          (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking'
+        ), { timeout: 1500 })
+        await waitUntil(async () => (
+          (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
+        ), { timeout: 5000 })
+      }
+
+      // ── 항목1/2/3 — 스케일이 depthScaleRef(worldContract.js 값 복제)와
+      // 일치하고, 뒤(작은 y)보다 앞(큰 y)이 더 크며, 항상 [0.55,1.20] 범위 ──
+      await tapAndSettle(0.5, 0.1) // 뒤(작은 y) — 장애물 밖 열린 구역
+      const pctBack = await readCharacterPct(character)
+      const scaleBack = await readCharacterScale(character)
+      const expectedScaleBack = depthScaleRef(pctBack.top)
+      r.check(
+        `${name} 항목1/3 — 뒤(y=${pctBack.top.toFixed(1)}) 스케일이 depthScaleRef와 일치(오차<0.01)+[0.55,1.20] 범위`,
+        scaleBack != null && Math.abs(scaleBack - expectedScaleBack) < 0.01 && scaleBack >= 0.55 && scaleBack <= 1.20,
+        `scale=${scaleBack} expected=${expectedScaleBack}`,
+      )
+
+      await tapAndSettle(0.15, 0.92) // 앞(큰 y) — 장애물 밖 열린 구역
+      const pctFront = await readCharacterPct(character)
+      const scaleFront = await readCharacterScale(character)
+      const expectedScaleFront = depthScaleRef(pctFront.top)
+      r.check(
+        `${name} 항목1/3 — 앞(y=${pctFront.top.toFixed(1)}) 스케일이 depthScaleRef와 일치(오차<0.01)+[0.55,1.20] 범위`,
+        scaleFront != null && Math.abs(scaleFront - expectedScaleFront) < 0.01 && scaleFront >= 0.55 && scaleFront <= 1.20,
+        `scale=${scaleFront} expected=${expectedScaleFront}`,
+      )
+      r.check(
+        `${name} 항목2 — 앞(y=${pctFront.top.toFixed(1)}) 스케일이 뒤(y=${pctBack.top.toFixed(1)})보다 큼(더 가까울수록 커짐)`,
+        scaleFront != null && scaleBack != null && scaleFront > scaleBack,
+        `back=${scaleBack} front=${scaleFront}`,
+      )
+
+      // ── 항목10 — 스케일이 바뀌어도 "논리 좌표"(style.left/top, 걷기/
+      // 충돌 판정이 실제로 읽는 값)는 순수 % 문자열 그대로(스케일에 오염되지
+      // 않음 — 시각 효과가 좌표 계산으로 새어 들어가지 않는다는 요구사항) ──
+      const rawLeftTop = await character.evaluate((el) => ({ left: el.style.left, top: el.style.top }))
+      const pureLeftTopFormat = /^-?\d+(\.\d+)?%$/.test(rawLeftTop.left) && /^-?\d+(\.\d+)?%$/.test(rawLeftTop.top)
+      r.check(
+        `${name} 항목10 — 스케일 적용 중에도 style.left/top이 순수 %값 그대로(스케일이 논리 좌표에 섞이지 않음)`,
+        pureLeftTopFormat,
+        JSON.stringify(rawLeftTop),
+      )
+
+      // ── 항목5/6 — depth occlusion: 캐릭터가 장애물(demo-tree,
+      // x0:70,x1:76,y0:56,y1:62)보다 뒤/앞일 때 z-index 대소 관계가
+      // 뒤바뀜(depthOrder.js 'character' vs 'objects' 레이어, y 기준) ──
+      const treeEl = page.locator('[data-testid="proto25d-obstacle"][data-obstacle-id="demo-tree"]')
+      await treeEl.waitFor({ state: 'attached', timeout: 5000 })
+
+      await tapAndSettle(0.73, 0.50) // 나무 바로 위(더 작은 y) — 나무보다 뒤
+      const pctBehindTree = await readCharacterPct(character)
+      const zCharBehind = await readZIndex(character)
+      const zTreeA = await readZIndex(treeEl)
+      r.check(
+        `${name} 항목5 — 캐릭터(y=${pctBehindTree.top.toFixed(1)}, 나무 뒤)의 z-index가 나무보다 작음(가려짐)`,
+        zCharBehind != null && zTreeA != null && zCharBehind < zTreeA,
+        `char=${zCharBehind} tree=${zTreeA}`,
+      )
+
+      await tapAndSettle(0.73, 0.70) // 나무 바로 아래(더 큰 y) — 나무보다 앞
+      const pctFrontTree = await readCharacterPct(character)
+      const zCharFront = await readZIndex(character)
+      const zTreeB = await readZIndex(treeEl)
+      r.check(
+        `${name} 항목6 — 캐릭터(y=${pctFrontTree.top.toFixed(1)}, 나무 앞)의 z-index가 나무보다 큼(가림)`,
+        zCharFront != null && zTreeB != null && zCharFront > zTreeB,
+        `char=${zCharFront} tree=${zTreeB}`,
+      )
+
+      // ── 항목8/9 — 그림자: 발 위치를 따라가고, pointer-events:none이며,
+      // 그림자를 클릭해도 바닥 이동 판정을 가로채지 않음(클릭 관통) ──
+      const shadow = character.locator('span').first()
+      await shadow.waitFor({ state: 'attached', timeout: 5000 })
+      const shadowPointerEvents = await shadow.evaluate((el) => window.getComputedStyle(el).pointerEvents)
+      r.check(`${name} 항목9 — 그림자 span이 pointer-events:none`, shadowPointerEvents === 'none', shadowPointerEvents)
+
+      const charBoxA = await character.boundingBox()
+      const shadowBoxA = await shadow.boundingBox()
+      await tapAndSettle(0.30, 0.85)
+      const charBoxB = await character.boundingBox()
+      const shadowBoxB = await shadow.boundingBox()
+      const charMoveVec = { x: boxCenter(charBoxB).x - boxCenter(charBoxA).x, y: boxCenter(charBoxB).y - boxCenter(charBoxA).y }
+      const shadowMoveVec = { x: boxCenter(shadowBoxB).x - boxCenter(shadowBoxA).x, y: boxCenter(shadowBoxB).y - boxCenter(shadowBoxA).y }
+      const moveVecDist = Math.hypot(charMoveVec.x - shadowMoveVec.x, charMoveVec.y - shadowMoveVec.y)
+      r.check(
+        `${name} 항목8 — 그림자가 두 위치 이동 동안 캐릭터와 거의 같은 벡터로 이동(발 위치 추적, 오차<20px)`,
+        moveVecDist < 20,
+        `charVec=${JSON.stringify(charMoveVec)} shadowVec=${JSON.stringify(shadowMoveVec)} dist=${moveVecDist}`,
+      )
+
+      // 그림자 영역을 직접 클릭해도 바닥 이동 판정을 가로채지 않고 그대로
+      // 걷기가 시작됨(그림자가 클릭을 가로채 아무 일도 안 일어나는 회귀 방지).
+      const shadowBoxForClick = await shadow.boundingBox()
+      if (shadowBoxForClick) {
+        await page.mouse.click(shadowBoxForClick.x + shadowBoxForClick.width / 2, shadowBoxForClick.y + shadowBoxForClick.height / 2)
+      }
+      const walkingAfterShadowClick = await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking'
+      ), { timeout: 1500 })
+      r.check(
+        `${name} 항목9 — 그림자 영역을 클릭해도 바닥 이동 판정을 가로채지 않고 걷기가 시작됨(클릭 관통)`,
+        !!walkingAfterShadowClick,
+        `shadowBox=${JSON.stringify(shadowBoxForClick)}`,
+      )
+      await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
+      ), { timeout: 5000 })
 
       r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
     } catch (err) {

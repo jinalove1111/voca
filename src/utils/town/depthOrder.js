@@ -45,6 +45,22 @@
 // 차이만 나므로 9의 배수인 y 기여분 차이와 절대 우연히도 같아질 수 없어
 // (예: 6000+9k = 6001+9j → 9(k−j)=1은 정수해 없음) 서로 다른 레이어의
 // depthKey가 완전히 동률이 되는 경우도 없다(콜리전 없음, 테스트로 확인).
+//
+// 2026-09-22 addendum(Stage 3, Paul Town 2.5D 캐릭터 프로토타입) — 콘텐츠
+// 티어에 'character' 레이어 1개를 추가했다(위 문단의 "4개"는 이 추가
+// 이전 시점의 원본 설계 기록이라 그대로 남겨두고, 이 addendum이 최신
+// 사실을 덧붙인다 — append, 재작성 아님). ASTRA_HANDOFF_2026-09-21.md
+// §17이 명시적으로 추천한 설계("Astra는 새 'character' 레이어를 이
+// Y_RANKED_LAYERS 세트에 추가하면 된다") 그대로 — architecture/scenery/
+// objects/foregroundVegetation 4개는 값을 전혀 바꾸지 않았고(순수
+// additive), 'character'만 그 다음(foregroundVegetation 6003 다음, paul
+// 8000 이전)인 정수 6004로 추가했다. 콜리전 없음 증명은 일반형으로도
+// 그대로 성립한다: 서로 다른 두 콘텐츠 티어 레이어의 base 차이(이제
+// 1~4)는 여전히 9의 배수가 될 수 없다(0이 아닌 9 미만 정수). paul(8000)/
+// ui(9000)와의 1000 이상 경계 여유도 깨지지 않는다 — character의
+// y-랭킹 최댓값(6004+900=6904)은 sceneZ.js CHARACTER_Z(=LAYER_BASE.paul
+// -500=7500, 기존 V2 캐릭터 상호작용 오버레이가 이미 의존 중인 경계)보다
+// 작고, 그 CHARACTER_Z도 paul(8000)보다 작다.
 
 import { Z_LAYERS } from './townScene'
 
@@ -52,7 +68,8 @@ import { Z_LAYERS } from './townScene'
  * 문서화 상수(런타임 로직에서는 쓰지 않음 — 위 주석 표와 1:1). */
 export const LEGACY_Z_LAYERS_REFERENCE = Object.freeze({ ...Z_LAYERS })
 
-// 뒤(back) → 앞(front) 순서의 12개 개념 레이어.
+// 뒤(back) → 앞(front) 순서의 13개 개념 레이어(2026-09-22 Stage 3 —
+// 'character' 1개 추가, 아래 LAYER_BASE 헤더 주석의 addendum 참고).
 export const DEPTH_LAYERS = Object.freeze([
   'sky',
   'hills',
@@ -64,6 +81,7 @@ export const DEPTH_LAYERS = Object.freeze([
   'scenery',
   'objects',
   'foregroundVegetation',
+  'character',
   'paul',
   'ui',
 ])
@@ -72,7 +90,8 @@ export const DEPTH_LAYERS = Object.freeze([
 // increasing). 배경 티어(sky~path)·최상단 티어(paul/ui)·그리고 그 둘과
 // 콘텐츠 티어 사이 경계는 전부 1000 이상 떨어져 있어(y 기여분 최대 900보다
 // 항상 크므로) 그 경계를 y-랭킹이 절대 넘어가지 못한다. 콘텐츠 티어
-// 내부(architecture/scenery/objects/foregroundVegetation)만 1 단위
+// 내부(architecture/scenery/objects/foregroundVegetation/character —
+// character는 2026-09-22 Stage 3 추가, 기존 4개 값은 변경 없음)만 1 단위
 // 간격이다 — 위 설계 노트 참고(의도적, y가 그 안에서 우선하도록).
 export const LAYER_BASE = Object.freeze({
   sky: 0,
@@ -85,6 +104,7 @@ export const LAYER_BASE = Object.freeze({
   scenery: 6001,
   objects: 6002,
   foregroundVegetation: 6003,
+  character: 6004, // 2026-09-22 Stage 3 추가 — Paul Town 2.5D 캐릭터 프로토타입(격리 실험) 캐릭터 전용. 순수 additive, 나머지 11개 기존 값 무변경.
   paul: 8000,
   ui: 9000,
 })
@@ -93,8 +113,10 @@ export const LAYER_BASE = Object.freeze({
 // 앞에 그려진다"는 랭킹 보정을 받는다. 나머지 레이어(sky/hills/
 // distantLocked/terrain/water/path/paul/ui)는 레이어 자체가 이미 전역
 // 순서를 결정하므로 y를 depth 계산에 쓰지 않는다(paul/ui는 항상 최상위
-// 그룹, 배경 레이어들은 항상 최하위 그룹).
-export const Y_RANKED_LAYERS = new Set(['architecture', 'scenery', 'objects', 'foregroundVegetation'])
+// 그룹, 배경 레이어들은 항상 최하위 그룹). character(2026-09-22 Stage 3
+// 추가)도 콘텐츠 티어 소속이라 Y-랭킹을 받는다 — 데모 장애물(objects
+// 레이어로 랭킹)과 y 기준으로 서로 가리고 가려지려면 필수.
+export const Y_RANKED_LAYERS = new Set(['architecture', 'scenery', 'objects', 'foregroundVegetation', 'character'])
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v))

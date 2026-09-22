@@ -1,5 +1,16 @@
 // src/components/town/proto2_5d/Proto25DScreen.jsx — Paul Town 2.5D 캐릭터
-// 프로토타입(Stage 1 2026-09-22 + Stage 2 2026-09-22) 씬 컨테이너.
+// 프로토타입(Stage 1 2026-09-22 + Stage 2 2026-09-22 + Stage 3 2026-09-22)
+// 씬 컨테이너.
+//
+// Stage 3 — 데모 장애물(OBSTACLES)도 depthOrder.js의 Y-랭킹 콘텐츠 티어에
+// 편입한다(고정 zIndex:100 제거). 그렇지 않으면 캐릭터(ProtoCharacter.jsx가
+// 'character' 레이어로 Y-랭킹된 z-index를 계산)가 무엇과도 비교할 Y-랭킹된
+// 대상이 없어 "Y에 따라 가려지고 가린다"는 이 단계의 요구 자체를 시각적으로
+// 검증할 방법이 없다(고정 z-index 장애물은 캐릭터의 y와 무관하게 항상
+// 위거나 항상 아래에만 있게 된다). 각 장애물의 바운딩 박스 하단(y1, 지면
+// 접점)을 depth y로 쓴다 — worldRender.js의 landmarkBox/worldZIndex가
+// 랜드마크의 bottom-center y를 depth 기준으로 쓰는 것과 동일한 "바닥 접점이
+// Y-sort 기준" 관례(읽기 전용 참고, V2 코드는 import하지 않는다).
 //
 // 완전히 격리된 실험 — 기존 src/components/town/v2/* 파일을 하나도
 // import/수정하지 않는다(docs/design/town/ASTRA_HANDOFF_2026-09-21.md §12
@@ -26,6 +37,7 @@ import { usePrefersReducedMotion } from '../../../hooks/usePrefersReducedMotion'
 import { WORLD } from '../../../utils/town/worldContract'
 import { OBSTACLES } from '../../../utils/town/proto2_5d/walkGrid'
 import { findPath } from '../../../utils/town/proto2_5d/pathfinding'
+import { obstacleZIndex } from '../../../utils/town/proto2_5d/depthVisual'
 
 // 탭 vs 스와이프/스크롤 제스처 구분 임계값(px) — TownScene.jsx의
 // DRAG_THRESHOLD_PX(8, 브리프 권장 범위 6~8px 상단값)와 동일 값. Stage 1은
@@ -174,7 +186,11 @@ export default function Proto25DScreen() {
             육안 검증(탭이 상자 안으로 들어가지 않는지/뒤로 돌아가는지)을
             가능하게 하기 위한 단순 색상 사각형 + 라벨. pointer-events-none
             — 탭 핸들러는 여전히 바닥(groundRef) 엘리먼트에만 걸려 있고
-            이 오버레이는 그 판정에 관여하지 않는다(요구사항13 무변경). */}
+            이 오버레이는 그 판정에 관여하지 않는다(요구사항13 무변경).
+            zIndex(Stage 3) — 고정값이 아니라 obstacleZIndex(id, y1)로 매
+            렌더 계산한다(depthOrder.js 'objects' 레이어, y1=바운딩 박스
+            하단/지면 접점) — 캐릭터('character' 레이어, 위 Proto25DScreen
+            헤더 주석 참고)와 Y 기준으로 서로 가리고 가려지게 하기 위함. */}
         {OBSTACLES.map((ob) => (
           <div
             key={ob.id}
@@ -187,7 +203,7 @@ export default function Proto25DScreen() {
               top: `${ob.y0}%`,
               width: `${ob.x1 - ob.x0}%`,
               height: `${ob.y1 - ob.y0}%`,
-              zIndex: 100,
+              zIndex: obstacleZIndex(ob.id, ob.y1),
             }}
           >
             <span className="text-[9px] text-slate-700/80 font-bold px-0.5 text-center leading-tight">

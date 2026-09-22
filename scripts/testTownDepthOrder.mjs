@@ -1,6 +1,16 @@
 // scripts/testTownDepthOrder.mjs — Paul Town V2 월드 깊이(depth) 모델
 // (src/utils/town/depthOrder.js) 순수 단위 테스트(2026-09-17).
 //
+// 2026-09-22(Stage 3, Paul Town 2.5D 캐릭터 프로토타입) — depthOrder.js에
+// 'character' 레이어가 추가되면서(순수 additive, 기존 12개 레이어 값
+// 무변경) 이 스위트의 "정확히 12개"류 하드코딩 단언들을 13개로 갱신했다 —
+// 아래에서 값이 바뀐 지점마다 "2026-09-22"로 표시한다. 다른 11개 기존
+// 레이어(sky~foregroundVegetation, paul, ui)에 대한 단언은 단 하나도
+// 약화하지 않았다(기존 조건식 그대로, 개수/목록 리터럴만 13개로 확장).
+// randInt(12) 하드코딩(8곳)도 randInt(DEPTH_LAYERS.length)로 일반화해
+// 레이어 수가 다시 바뀌어도 이 스위트가 스스로 따라가게 했다(값 자체가
+// 아니라 "매직 넘버 12"만 제거).
+//
 // depthOrder.js만 검증 대상으로 import한다(그 파일이 다시 townScene.js의
 // Z_LAYERS를 문서화 목적으로 import하지만, 그건 depthOrder.js 내부 구현
 // 세부사항이라 이 테스트가 townScene.js를 직접 건드리지 않는다) —
@@ -70,30 +80,37 @@ section('1. DEPTH_LAYERS / LAYER_BASE 기본 계약')
 
 const EXPECTED_LAYERS = [
   'sky', 'hills', 'distantLocked', 'terrain', 'water', 'path',
-  'architecture', 'scenery', 'objects', 'foregroundVegetation', 'paul', 'ui',
+  'architecture', 'scenery', 'objects', 'foregroundVegetation', 'character', 'paul', 'ui',
 ]
-check('DEPTH_LAYERS.length === 12', DEPTH_LAYERS.length === 12, `len=${DEPTH_LAYERS.length}`)
+check('DEPTH_LAYERS.length === 13(2026-09-22, character 추가)', DEPTH_LAYERS.length === 13, `len=${DEPTH_LAYERS.length}`)
 check(
-  'DEPTH_LAYERS === 지정된 12개 레이어 순서(뒤→앞)',
+  'DEPTH_LAYERS === 지정된 13개 레이어 순서(뒤→앞, 2026-09-22 character 추가)',
   JSON.stringify(DEPTH_LAYERS) === JSON.stringify(EXPECTED_LAYERS),
   JSON.stringify(DEPTH_LAYERS),
 )
-check('Object.keys(LAYER_BASE).length === 12', Object.keys(LAYER_BASE).length === 12)
+check('Object.keys(LAYER_BASE).length === 13(2026-09-22, character 추가)', Object.keys(LAYER_BASE).length === 13)
 check(
-  'DEPTH_LAYERS 12개 전부 LAYER_BASE에 정수 키로 존재',
+  'DEPTH_LAYERS 13개 전부 LAYER_BASE에 정수 키로 존재',
   DEPTH_LAYERS.every((l) => Number.isInteger(LAYER_BASE[l])),
 )
 check(
   'LAYER_BASE는 DEPTH_LAYERS 순서대로 엄격히 증가(strictly increasing)',
   DEPTH_LAYERS.every((l, i) => i === 0 || LAYER_BASE[l] > LAYER_BASE[DEPTH_LAYERS[i - 1]]),
 )
-check('Y_RANKED_LAYERS.size === 4', Y_RANKED_LAYERS.size === 4)
+check('Y_RANKED_LAYERS.size === 5(2026-09-22, character 추가)', Y_RANKED_LAYERS.size === 5)
 check(
-  'Y_RANKED_LAYERS === {architecture, scenery, objects, foregroundVegetation}만',
+  'Y_RANKED_LAYERS === {architecture, scenery, objects, foregroundVegetation, character}만(2026-09-22 character 추가)',
   DEPTH_LAYERS.every((l) => {
-    const expected = ['architecture', 'scenery', 'objects', 'foregroundVegetation'].includes(l)
+    const expected = ['architecture', 'scenery', 'objects', 'foregroundVegetation', 'character'].includes(l)
     return Y_RANKED_LAYERS.has(l) === expected
   }),
+)
+check(
+  '기존 11개 레이어(character 제외)의 LAYER_BASE 값은 2026-09-17 원본과 완전히 동일(회귀 방지)',
+  LAYER_BASE.sky === 0 && LAYER_BASE.hills === 1000 && LAYER_BASE.distantLocked === 2000 &&
+  LAYER_BASE.terrain === 3000 && LAYER_BASE.water === 4000 && LAYER_BASE.path === 5000 &&
+  LAYER_BASE.architecture === 6000 && LAYER_BASE.scenery === 6001 && LAYER_BASE.objects === 6002 &&
+  LAYER_BASE.foregroundVegetation === 6003 && LAYER_BASE.paul === 8000 && LAYER_BASE.ui === 9000,
 )
 
 // ── 2. depthKey 기본 동작(경계값/클램프/에러) ────────────────────────────
@@ -252,7 +269,7 @@ check(
 // 큰 무작위 픽스처(레이어 골고루 섞임)로 "두 번 정렬해도 같은 결과"를 검증.
 const bigFixture = []
 for (let i = 0; i < 150; i++) {
-  const layer = DEPTH_LAYERS[randInt(12)]
+  const layer = DEPTH_LAYERS[randInt(DEPTH_LAYERS.length)]
   bigFixture.push({ id: `item${i}`, layer, y: Y_RANKED_LAYERS.has(layer) ? randInt(101) : undefined })
 }
 const sortedForward = sortByDepth(bigFixture).map((e) => e.id)
@@ -289,10 +306,10 @@ check('property A — 동일 y-ranked 레이어 내 500쌍: y가 클수록 key�
 let propBOk = true
 let propBDetail = ''
 for (let i = 0; i < 500; i++) {
-  const ai = randInt(12)
-  let bi = randInt(12)
+  const ai = randInt(DEPTH_LAYERS.length)
+  let bi = randInt(DEPTH_LAYERS.length)
   let guard = 0
-  while (bi === ai && guard < 10) { bi = randInt(12); guard++ }
+  while (bi === ai && guard < 10) { bi = randInt(DEPTH_LAYERS.length); guard++ }
   if (bi === ai) continue
   const layerA = DEPTH_LAYERS[ai]
   const layerB = DEPTH_LAYERS[bi]
@@ -310,10 +327,10 @@ check('property B — 콘텐츠 티어 둘 다가 아닌 500 교차쌍: 레이�
 let propDOk = true
 let propDDetail = ''
 for (let i = 0; i < 500; i++) {
-  const ai = randInt(12)
-  let bi = randInt(12)
+  const ai = randInt(DEPTH_LAYERS.length)
+  let bi = randInt(DEPTH_LAYERS.length)
   let guard = 0
-  while (bi === ai && guard < 10) { bi = randInt(12); guard++ }
+  while (bi === ai && guard < 10) { bi = randInt(DEPTH_LAYERS.length); guard++ }
   if (bi === ai) continue
   const layerA = DEPTH_LAYERS[ai]
   const layerB = DEPTH_LAYERS[bi]
@@ -328,7 +345,7 @@ check('property C — 서로 다른 레이어 500쌍: depthKey가 절대 충돌�
 // D) cssZIndex — 500개 무작위 엔티티 전부 [0, CSS_Z_INDEX_MAX] 범위.
 let propEOk = true
 for (let i = 0; i < 500; i++) {
-  const layer = DEPTH_LAYERS[randInt(12)]
+  const layer = DEPTH_LAYERS[randInt(DEPTH_LAYERS.length)]
   const y = Y_RANKED_LAYERS.has(layer) ? randInt(101) : undefined
   const z = cssZIndex({ id: `sa${i}`, layer, y })
   if (!(Number.isFinite(z) && z >= 0 && z <= CSS_Z_INDEX_MAX)) { propEOk = false; break }
@@ -339,6 +356,54 @@ check('property D — 500개 무작위 엔티티: cssZIndex 항상 [0, CSS_Z_IND
 const garbageLayers = ['nope', '', 'Architecture', 'OBJECTS', 42, null, undefined, {}]
 const propFOk = garbageLayers.every((g) => throws(() => depthKey({ id: 'x', layer: g, y: 10 })))
 check('property E — 알 수 없는/오타 layer 값들은 전부 Error', propFOk, JSON.stringify(garbageLayers))
+
+// ── 12. 시나리오 — 'character' 레이어(2026-09-22 Stage 3 추가) ──────────
+// Paul Town 2.5D 캐릭터 프로토타입(paulTown2_5d, 격리 실험)이 이 레이어를
+// 쓴다 — 여기서는 depthOrder.js 계약만 검증한다(캐릭터/장애물 구체 로직
+// 자체는 scripts/testProto25dDepth.mjs가 별도로 검증).
+section("12. 시나리오 — 'character' 레이어(Stage 3 추가)")
+
+check('depthKey(character, y=0) === LAYER_BASE.character', depthKey({ id: 'c0', layer: 'character', y: 0 }) === LAYER_BASE.character)
+check('depthKey(character, y=100) === LAYER_BASE.character + 900', depthKey({ id: 'c100', layer: 'character', y: 100 }) === LAYER_BASE.character + 900)
+
+const charBehind = { id: 'char-behind', layer: 'character', y: 40 }
+const objInFront = { id: 'obj-in-front', layer: 'objects', y: 53 }
+check(
+  '캐릭터(character,y=40)가 오브젝트(objects,y=53)보다 뒤: occludes(obj, char) === true',
+  occludes(objInFront, charBehind) === true,
+)
+check('반대 방향은 false', occludes(charBehind, objInFront) === false)
+
+const charFront = { id: 'char-front', layer: 'character', y: 60 }
+const objBehind = { id: 'obj-behind', layer: 'objects', y: 53 }
+check(
+  '캐릭터(character,y=60)가 오브젝트(objects,y=53)보다 앞: occludes(char, obj) === true',
+  occludes(charFront, objBehind) === true,
+)
+check('반대 방향은 false', occludes(objBehind, charFront) === false)
+
+check(
+  '캐릭터는 paul보다 항상 뒤(콘텐츠 티어 밖으로 못 넘어감): occludes(paul, character) === true',
+  occludes({ id: 'paulY', layer: 'paul' }, { id: 'charY', layer: 'character', y: 100 }) === true,
+)
+check(
+  'sky/hills 등 배경 레이어는 character(y=0)보다도 항상 뒤',
+  occludes({ id: 'charMin', layer: 'character', y: 0 }, { id: 'skyE', layer: 'sky' }) === true,
+)
+
+const charTieA = { id: 'ctb', layer: 'character', y: 50 }
+const charTieB = { id: 'cta', layer: 'character', y: 50 }
+check(
+  '동일 y의 character 두 엔티티는 id 문자열 순서로 결정론적 타이브레이크',
+  sortByDepth([charTieA, charTieB]).map((e) => e.id).join(',') === 'cta,ctb',
+)
+
+const objTie = { id: 'obj-tie', layer: 'objects', y: 50 }
+const charTie = { id: 'char-tie', layer: 'character', y: 50 }
+check(
+  'character/objects가 정확히 같은 y=50이어도 depthKey가 서로 충돌하지 않음(콜리전 없음)',
+  depthKey(objTie) !== depthKey(charTie),
+)
 
 // ── 결과 ──────────────────────────────────────────────────────────────
 console.log(`\n총 ${totalPassed + totalFailed}개 단언 — PASS ${totalPassed} / FAIL ${totalFailed}`)

@@ -1,5 +1,12 @@
 // src/components/town/proto2_5d/ProtoCharacter.jsx — Paul Town 2.5D 캐릭터
-// 프로토타입(Stage 1, 2026-09-22) 캐릭터 프레젠테이션.
+// 프로토타입(Stage 1 + Stage 3, 2026-09-22) 캐릭터 프레젠테이션.
+//
+// Stage 3(Y-기반 스케일 + depth occlusion) — depthVisual.js(신규,
+// worldContract.depthScale/depthOrder.cssZIndex에 위임만 하는 순수 헬퍼)를
+// 통해 topPct(발 앵커 y)로부터 매 렌더 스케일/z-index를 파생한다. 새 스케일
+// 공식/새 depth 모델은 없다 — 이미 배치 아이템/TownCharacter.jsx가 쓰는
+// 것과 동일한 depthScale을 재사용하고, z-index는 depthOrder.js의
+// 'character' 레이어(Stage 3에 추가, 콘텐츠 티어 내부 Y-랭킹)로 계산한다.
 //
 // 기존 src/components/town/v2/TownCharacter.jsx(벤치 앉기 파일럿)를 import도
 // 수정도 하지 않는다 — 그 파일이 쓰는 "이모지 + 흐린 그림자 타원" 폴백
@@ -21,6 +28,29 @@
 // 노드의 "첫 스타일 적용"은 절대 transition하지 않는다 — 전이할 이전 상태가
 // 없으므로). 이 캐릭터는 항상 기존 DOM 노드이므로 좌표 state가 바뀌면
 // 이미 걸려 있는 CSS transition이 그대로, 별다른 기법 없이 정상 관측된다.
+//
+// Stage 3 스케일 합성 — 왜 bob(아래 JSX 주석)과 다른 방식인가: bob은 별도
+// keyframe *애니메이션*(무한 반복, 좌표 state와 무관하게 계속 도는 CSS
+// animation)이라 그 자체가 transform을 소유해야 해서 앵커 소유 엘리먼트와
+// 분리했다. 반면 Y-기반 스케일은 좌표(topPct)에서 결정론적으로 파생되는
+// 값이고 애니메이션이 아니라 "transform 안의 값 하나"일 뿐이다 — bob처럼
+// 경쟁하는 별도 CSS animation이 아니므로, 앵커(translate(-50%,-100%))를
+// 소유한 바로 그 엘리먼트의 같은 transform 문자열에 scale()을 이어 붙여도
+// 그 앵커를 대체/충돌시키지 않는다(오히려 별도 엘리먼트로 분리하면 스케일이
+// 발 앵커가 아니라 그 하위 박스의 중심을 기준으로 일어나 발이 좌우로
+// 미끄러져 보이는 문제가 생긴다). transformOrigin을 '50% 100%'(박스 자신의
+// 하단-중앙, translate(-50%,-100%)가 겨냥하는 것과 동일한 로컬 좌표)로
+// 맞추면, CSS가 transform-origin을 "리스트 전체"에 적용하므로(개별 함수가
+// 아니라) 스케일 값이 무엇이든 이 로컬 앵커점은 항상 정확히 (left%,top%)로
+// 귀결된다(발이 고정된 채로 몸통만 자라거나 줄어든다) — 증명: 로컬 좌표
+// p=origin(박스 자신의 (w/2,h))일 때 합성 변환 결과는 origin + t(고정
+// translate 벡터, %는 박스 자신의 크기 기준이라 origin과 무관) = (w/2,h) +
+// (-w/2,-h) = (0,0) = 박스 자신의 top-left(=CSS left/top이 배치하는 바로 그
+// 점) — s에 전혀 의존하지 않는다. 그림자(아래 JSX)는 이 스케일된 박스 안에
+// 그대로 중첩돼 있어 별도 계산 없이 캐릭터와 함께 자동으로 스케일된다.
+import { characterScale, characterZIndex } from '../../../utils/town/proto2_5d/depthVisual'
+
+const CHARACTER_TRANSFORM_ORIGIN = '50% 100%'
 
 // 걷기 이동 transition 시간 — TownCharacter.jsx의 CHARACTER_WALK_MS(650ms)와
 // 동일 값(새 타이밍을 발명하지 않는다, 두 프로토타입이 서로 다른 "걷는
@@ -41,6 +71,21 @@ export default function ProtoCharacter({ phase, leftPct, topPct, reducedMotion }
   // motion-safe:가 적용되지 않으므로, TownCharacter.jsx와 동일 관례).
   const idleOrWalkClass = isWalking ? ' motion-safe:animate-town-walk-bob' : ' motion-safe:animate-town-cat-idle'
 
+  // Stage 3 — depthVisual.js(worldContract.depthScale/depthOrder.cssZIndex에
+  // 위임만 하는 순수 헬퍼)로 매 렌더 topPct(발 앵커 y)에서 스케일/z-index를
+  // 다시 계산한다. reduced-motion에서도 이 계산 자체는 절대 건너뛰지 않는다
+  // (운영자 지시 — "필수 정보인 depth/scale까지 제거하면 안 된다") — 오직
+  // 아래 transitionParts의 transform 보간 시간만 reduced-motion이면 더 짧아질
+  // 뿐, 최종 scale/zIndex 값은 reducedMotion과 무관하게 항상 동일한 공식으로
+  // 계산된 정확한 값이다.
+  const scale = characterScale(topPct)
+  const zIndex = characterZIndex(topPct)
+  const transitionParts = [
+    `left ${durationMs}ms ease-in-out`,
+    `top ${durationMs}ms ease-in-out`,
+    `transform ${durationMs}ms ease-in-out`,
+  ]
+
   return (
     <div
       aria-hidden="true"
@@ -51,9 +96,10 @@ export default function ProtoCharacter({ phase, leftPct, topPct, reducedMotion }
         left: `${leftPct}%`,
         top: `${topPct}%`,
         width: '8%',
-        transform: 'translate(-50%, -100%)',
-        transition: `left ${durationMs}ms ease-in-out, top ${durationMs}ms ease-in-out`,
-        zIndex: 500,
+        transform: `translate(-50%, -100%) scale(${scale})`,
+        transformOrigin: CHARACTER_TRANSFORM_ORIGIN,
+        transition: transitionParts.join(', '),
+        zIndex,
       }}
     >
       {/* bob/숨쉬기는 안쪽 엘리먼트에만 건다 — 바깥 div의 transform은 앵커
