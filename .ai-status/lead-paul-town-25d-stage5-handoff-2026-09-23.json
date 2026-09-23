@@ -17,7 +17,10 @@
     "F_handoff_precision": "5c2421e",
     "E_phase9_design_docs": "314971e (docs/design/town/PROTO25D_NEXT_STEPS_2026-09-23.md)",
     "G_verification_and_s8a_flake_note": "ff95bc0",
-    "H_ai_status_checkpoint": "(this file's commit — last commit before the single final push)"
+    "H_ai_status_checkpoint": "1d97f81",
+    "I_s3_drag_measure_fix": "6584b11 (tests/e2e/townProto25d.spec.mjs waitForBoxStable — CI Linux S3 항목11 dist=1.0156 측정 레이스)",
+    "J_s9_anchor_measure_fix": "d042308 (tests/e2e/townV2.spec.mjs waitForEntranceAnimationSettled — CI Linux S9 43.445px, 원인 증명: 진입 애니메이션 재생 중 읽음)",
+    "K_docs_ci_followup": "(handoff 172차 §10, TESTING.md 후속 절, ASTRA §0.16 — 이 파일과 함께 커밋)"
   },
   "files_owned": [
     "src/components/town/proto2_5d/Proto25DScreen.jsx (d2bfb30, Sonnet implementer)",
@@ -47,7 +50,7 @@
     "npm run verify:all": "ALL DOMAINS: PASS — 31 PASS / 2 SKIP(speaking, listening: 실제 오디오 도메인, 예상된 SKIP) / 0 FAIL, exit 0 (2026-09-23 08:36~09:10 KST, HEAD 435d6b1 코드 기준; e2e 도메인 PASS, 전 spec 미mock 요청 0건)",
     "npm run verify:e2e": "총 1488단언 — PASS 1487 / FAIL 1 / SKIP 0 (09:11~09:4x KST). 유일한 FAIL = [town-v2] S8a[390x844] '마을을 열기만 해도 student_progress 쓰기 0건' writes=1 — 타이밍 플레이크(useStudent.js:2043-2047의 restoreChecked 이후 2초 디바운스 sync가 병합 복원→측정 사이에 발화). 같은 코드로 townV2.spec 단독 재실행 448/448 PASS, 직전 verify:all의 e2e 도메인도 PASS. 테스트/허용치 무변경, 문서화만",
     "visual (Phase 6)": "50/50 OK — 1280/360/390/412 + reduced-motion + ?proto25dDebug=1, 로컬 vite preview(동일 dist) + installMocks; Vercel Preview는 SSO+로그인 게이트라 WRITE 0 제약상 직접 로그인 안 함",
-    "ci": "run 35799615337(2a96847) 진행 중 — 최종 push 후 완주 확인 예정(이전 run들은 연속 push로 cancelled)"
+    "ci": "run 35802684946(1d97f81, Linux): Gate 1 build ✅, Gate 2 verify:all ✅(435d6b1 효과, 이 브랜치 최근 첫 그린), Gate 3 health ✅, Gate 5 verify:e2e ❌ 2/1488(S9 43.445px + proto S3 항목11 1.0156px, 둘 다 Linux 타이밍 측정 문제 → 6584b11/d042308으로 측정 시점만 수정). 재실행 결과는 PR #62 코멘트에 기록"
   },
   "production_write": 0,
   "flags": { "paulTownV1": false, "paulTownV2": false, "paulTown2_5d": false },
