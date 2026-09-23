@@ -169,7 +169,12 @@ if (demoBuilding) {
     const frontKey = characterDepthKey(Math.min(100, ob.y1 + 5))
     if (!(behindKey < obKey && frontKey > obKey)) { allOk = false; break }
   }
-  check('OBSTACLES(3개) 전부에서 캐릭터가 장애물 y1보다 뒤/앞일 때 각각 가려짐/가림 관계가 성립', allOk, JSON.stringify(OBSTACLES))
+  // Phase 6A(2026-09-23) — OBSTACLES가 sceneFixture.js SCENE_FIXTURE에서
+  // 파생되며 3개에서 8개로 늘었다(walkGrid.js 헤더 주석 참고). 이 루프는
+  // 애초에 `for (const ob of OBSTACLES)`로 개수에 의존하지 않게 짜여 있어
+  // (하드코딩된 길이 단언 없음) 코드 변경 없이 늘어난 개수 전부를 그대로
+  // 검증한다 — 라벨 문구만 정확한 개수로 갱신(약화 없음).
+  check(`OBSTACLES(${OBSTACLES.length}개) 전부에서 캐릭터가 장애물 y1보다 뒤/앞일 때 각각 가려짐/가림 관계가 성립`, allOk, JSON.stringify(OBSTACLES))
 }
 
 // ── 5. 동일 y(정확히 장애물 y1과 같음) — 타이브레이크 결정론 ─────────────

@@ -36,6 +36,11 @@ export default {
         // 이 keyframe은 그 위에 얹는 부차적 오실레이션이라 motion-safe:로만
         // 쓴다(다른 모든 ambient/idle 애니메이션과 동일 관례).
         'town-walk-bob': 'townWalkBob 420ms ease-in-out infinite',
+        // Paul Town 2.5D 프로토타입(Phase 6A, 2026-09-23) — 바닥 탭 리플.
+        // 1회성(infinite 아님, townEntrance와 동일 정신) — transform/opacity만,
+        // motion-safe:로만 쓴다(Proto25DScreen.jsx가 reduced-motion이면 이
+        // 엘리먼트 자체를 아예 마운트하지 않아 이중으로 보호된다).
+        'town-proto-ripple': 'townProtoRipple 450ms ease-out 1',
       },
       keyframes: {
         wiggle: {
@@ -105,6 +110,15 @@ export default {
         townWalkBob: {
           '0%, 100%': { transform: 'translateY(0%)' },
           '50%': { transform: 'translateY(-6%)' },
+        },
+        // Paul Town 2.5D 프로토타입(Phase 6A) — 탭 지점 리플. scale
+        // 0.4->1 + opacity 0.5->0(요구 사양 그대로). translate(-50%,-50%)는
+        // 항상 유지해 중심점이 탭 지점에 고정되게 한다(엘리먼트 자체는
+        // left/top:tapPoint%로 배치되므로, 이 keyframe이 그 위치를
+        // 벗어나지 않는다).
+        townProtoRipple: {
+          '0%': { transform: 'translate(-50%, -50%) scale(0.4)', opacity: '0.5' },
+          '100%': { transform: 'translate(-50%, -50%) scale(1)', opacity: '0' },
         },
       },
     },

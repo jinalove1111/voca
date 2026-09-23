@@ -66,13 +66,24 @@
 // 보정된 목적지까지 장애물을 우회하는 경로(pathfinding.js)를 따라
 // 웨이포인트별로 순차 이동한다. 경로가 없으면(완전히 도달 불가) 아무 것도
 // 하지 않는다(제자리 유지, 크래시 없음).
-import { useEffect, useRef, useState } from 'react'
+//
+// Phase 6A(2026-09-23, 씬 구성) — 장애물 3개짜리 회색 점선 상자 + 벤치 하나
+// 뿐이던 "빈 마당"을 sceneFixture.js SCENE_FIXTURE(씬 구성 단일 진실
+// 원천) 기반 범용 오브젝트 레이어로 확장한다. walkGrid.js OBSTACLES는 이제
+// 이 SCENE_FIXTURE에서 파생되고(byte-identical, walkGrid.js 헤더 주석
+// 참고), 이 파일은 그 각 항목을 실제 아트(townAsset)+그림자로 렌더한다 —
+// 벤치는 기존 전용 블록(BENCH_ASSET_MIN_WIDTH_PX 등)을 그대로 두고 범용
+// 루프에서는 건너뛴다(sceneFixture.js 'demo-bench' 항목 주석 참고, 기존
+// 계약 무변경). 상태 머신/워크그리드/경로탐색/좌석 상호작용 로직은 전혀
+// 손대지 않았다(위 Stage 1~4/Stage5 감사 절 전부 그대로 유효).
+import { Fragment, useEffect, useRef, useState } from 'react'
 import ProtoCharacter, { WALK_TRANSITION_MS, REDUCED_MOTION_TRANSITION_MS } from './ProtoCharacter'
 import { usePrefersReducedMotion } from '../../../hooks/usePrefersReducedMotion'
 import { WORLD } from '../../../utils/town/worldContract'
 import { OBSTACLES, nearestWalkablePoint } from '../../../utils/town/proto2_5d/walkGrid'
 import { findPath } from '../../../utils/town/proto2_5d/pathfinding'
 import { obstacleZIndex } from '../../../utils/town/proto2_5d/depthVisual'
+import { SCENE_FIXTURE, objectRenderedWidthPx } from '../../../utils/town/proto2_5d/sceneFixture'
 import { townAsset } from '../../../assets/town'
 import {
   SIT_HOLD_MS,
@@ -118,6 +129,37 @@ const INITIAL_TOP_PCT = 62
 // 고정한다 — 이 프로토타입엔 상호작용 가능한 오브젝트가 벤치 하나뿐이다.
 const BENCH = OBSTACLES.find((ob) => ob.id === 'demo-bench')
 
+// Phase 6A — 범용 오브젝트 레이어가 그릴 SCENE_FIXTURE 항목(벤치 제외,
+// sceneFixture.js 'demo-bench' 항목 주석 참고 — 벤치는 위 BENCH 전용
+// 블록이 계속 그린다). assetKey가 없는 항목은 없지만(현재 픽스처 전부
+// 실제 아트를 가짐) 방어적으로 필터링한다(등록되지 않은 assetKey는
+// townAsset()이 null을 반환 — 그 경우도 렌더 루프에서 조용히 건너뛴다).
+const RENDER_OBJECTS = SCENE_FIXTURE.filter((obj) => obj.id !== 'demo-bench')
+
+// V2 TownObjectLayer.jsx/TownSceneryLayer.jsx의 그림자 상수를 그대로
+// 복제한다(재도출 없음 — 파일당 소유권 원칙상 이 파일이 독립적으로
+// 갖는다, 그 두 파일도 서로 각자 복제해 갖고 있는 것과 동일 관례).
+const SHADOW_BACKGROUND = 'radial-gradient(ellipse at center, rgba(30,25,15,0.35) 0%, rgba(30,25,15,0.16) 55%, rgba(30,25,15,0) 75%)'
+
+// 초목 흔들림(ambient sway) — 새 keyframe을 만들지 않고 TownSceneryLayer.jsx
+// 가 이미 쓰는 town-sway(tailwind.config.js, rotate ±1.5deg 5s)를 그대로
+// 재사용한다(팀장 지시 — "기존 sway keyframe이 있으면 그걸 쓴다"). 나무/
+// 관목 assetKey에만 적용(건물/벤치는 흔들리지 않음).
+const SWAY_ASSET_KEYS = new Set(['nature/tree', 'nature/flower-garden'])
+const SWAY_CLASS = ' origin-bottom motion-safe:animate-town-sway'
+
+// 탭 리플 — CSS 애니메이션(450ms, tailwind.config.js townProtoRipple)이
+// 끝난 뒤 DOM에서 제거할 때까지의 여유(애니메이션 종료 시점과 JS 타이머
+// 발화 시점의 시계 차를 흡수 — Astra 핸드오프 §0.16 S9/S3 교훈과 동일
+// 이유로, 애니메이션이 실제로 끝나기 전에 지워 깜빡이지 않게 살짝 더 김).
+const TAP_RIPPLE_ANIM_MS = 450
+const TAP_RIPPLE_REMOVE_MS = TAP_RIPPLE_ANIM_MS + 80
+// depthOrder.js LAYER_BASE.objects(6002)~character(6004)의 y-랭킹 최댓값
+// (6904)보다는 크고 paul(8000)보다는 작은 고정값 — 리플은 Y-랭킹 대상이
+// 아니라(바닥 오브젝트/캐릭터와 가리고 가려질 필요가 없는 순간적 UI 장식)
+// depthOrder 시스템에 참여시키지 않고 이 파일 로컬 상수로만 고정한다.
+const TAP_RIPPLE_Z = 7000
+
 export default function Proto25DScreen() {
   const reducedMotion = usePrefersReducedMotion()
   // 마운트 시점 URL 쿼리 1회만 읽는다(세션 중 쿼리가 바뀔 일이 없어
@@ -138,6 +180,53 @@ export default function Proto25DScreen() {
   const walkTimerRef = useRef(null) // 걷기 구간(leg) 전이 타이머(Stage 1부터 — 항상 최대 1개)
   const holdTimerRef = useRef(null) // Stage 4 — 착석 유지(SIT_HOLD_MS) 전용 타이머(walkTimerRef와 별개 ref)
   const seqRef = useRef(0) // 헤더 주석 "seq 카운터" 참고
+
+  // Phase 6A — 바닥의 실측 렌더 크기(px). objectRenderedWidthPx(sceneFixture.js)
+  // 가 depth-scale까지 반영한 실제 화면 px 폭을 계산하려면 매 렌더 이
+  // 값이 필요하다(고정 world 종횡비를 가정하지 않는다 — benchInteraction.js
+  // 헤더 주석과 동일 이유). TownPlacementOverlay.jsx의 ref+ResizeObserver
+  // 관례를 그대로 재사용(초기 렌더/리사이즈 모두 대응, 측정 실패 시엔
+  // {width:0,height:0} 그대로 둬 objectRenderedWidthPx가 minWidthPx(있으면)
+  // 로 안전 폴백하게 한다 — 크래시 없음).
+  const [groundSize, setGroundSize] = useState({ width: 0, height: 0 })
+  useEffect(() => {
+    const el = groundRef.current
+    if (!el) return undefined
+    function measure() {
+      const rect = el.getBoundingClientRect()
+      if (rect.width > 0 && rect.height > 0) setGroundSize({ width: rect.width, height: rect.height })
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return undefined
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // Phase 6A — 탭 리플(순수 장식, 상태 머신 seq/타이머 체계와 완전히
+  // 독립 — 위 헤더 주석 "seq 카운터"의 대상이 아니다, 걷기/착석 로직을
+  // 전혀 건드리지 않는다). 각 리플은 자기 자신의 타이머로 스스로를
+  // 제거한다(여러 개가 겹쳐도 서로 간섭하지 않음 — walkTimerRef처럼
+  // "항상 최대 1개" 제약이 이 장식에는 적용되지 않는다, 의도적으로 다른
+  // 규율). 언마운트 시 전부 정리(rippleTimersRef)만 지켜 setState-after-
+  // unmount를 피한다.
+  const [ripples, setRipples] = useState([])
+  const rippleIdRef = useRef(0)
+  const rippleTimersRef = useRef(new Set())
+  function showTapRipple(point) {
+    if (reducedMotion) return // 항목C1 — reduced-motion에서는 아예 렌더하지 않음(motion-safe: 이중 방어와 별개로 DOM 자체를 안 만듦).
+    const id = ++rippleIdRef.current
+    setRipples((cur) => [...cur, { id, x: point.x, y: point.y }])
+    const timerId = setTimeout(() => {
+      rippleTimersRef.current.delete(timerId)
+      setRipples((cur) => cur.filter((rp) => rp.id !== id))
+    }, TAP_RIPPLE_REMOVE_MS)
+    rippleTimersRef.current.add(timerId)
+  }
+  useEffect(() => () => {
+    for (const t of rippleTimersRef.current) clearTimeout(t)
+    rippleTimersRef.current.clear()
+  }, [])
 
   function clearWalkTimer() {
     if (walkTimerRef.current != null) {
@@ -383,6 +472,12 @@ export default function Proto25DScreen() {
     // findPath(일반 바닥)/nearestWalkablePoint(벤치)에 위임한다(이 컴포넌트는
     // 좌표만 계산해 넘긴다 — 소유권 분리, walkGrid.js/pathfinding.js/
     // benchInteraction.js가 유일한 진실 원천).
+    //
+    // Phase 6A — 이 지점까지 도달한 탭은(sitting/leaving 잠금·pendingSit
+    // 중복 무시를 이미 통과) "걷기를 실제로 시작시키는 유효한 탭"이므로
+    // 여기서 탭 리플을 띄운다(항목C2 — startPlainWalk/startWalkToBench와
+    // 같은 지점, 마우스/터치 공용 — 이 핸들러가 두 입력 모두를 받는다).
+    showTapRipple({ x: rawLeftPct, y: rawTopPct })
     if (tappedBench) {
       startWalkToBench()
     } else {
@@ -415,7 +510,16 @@ export default function Proto25DScreen() {
   const characterDepthY = character.phase === 'sitting' ? BENCH.y1 : undefined
 
   return (
-    <div data-testid="proto25d-root" className="fixed inset-0 z-[9999] bg-[#dff3ea] flex flex-col">
+    <div
+      data-testid="proto25d-root"
+      // Phase 6A — 장애물 개수를 하드코딩된 리터럴 없이 DOM에서 직접
+      // 읽을 수 있게 노출한다(E2E가 "OBSTACLES_REF 3개" 같은 고정 상수
+      // 대신 이 속성으로 실제 개수를 재확인 — walkGrid.js 헤더 주석의
+      // "단일 진실 원천" 원칙과 동일 정신, 값 복제가 아니라 실제 소스를
+      // 그대로 반영).
+      data-proto25d-obstacle-count={OBSTACLES.length}
+      className="fixed inset-0 z-[9999] bg-[#dff3ea] flex flex-col"
+    >
       {/* UI 배지(항목8/12 테스트용 UI 엘리먼트) — 바닥 레이어의 형제
           엘리먼트로, 그 하위에 중첩하지 않는다. 포인터 이벤트는 바닥
           레이어 엘리먼트에만 직접 걸려 있으므로(버블링 경로가 아니라 그
@@ -460,48 +564,101 @@ export default function Proto25DScreen() {
         onPointerCancel={handleGroundPointerCancel}
         onLostPointerCapture={handleGroundLostPointerCapture}
       >
-        {/* 장애물 디버그 플레이스홀더(Stage 2) — 실제 아트 아님, Phase E
-            육안 검증(탭이 상자 안으로 들어가지 않는지/뒤로 돌아가는지)을
-            가능하게 하기 위한 단순 색상 사각형 + 라벨. pointer-events-none
-            — 탭 핸들러는 여전히 바닥(groundRef) 엘리먼트에만 걸려 있고
-            이 오버레이는 그 판정에 관여하지 않는다(요구사항13 무변경).
-            zIndex(Stage 3) — 고정값이 아니라 obstacleZIndex(id, y1)로 매
-            렌더 계산한다(depthOrder.js 'objects' 레이어, y1=바운딩 박스
-            하단/지면 접점) — 캐릭터('character' 레이어, 위 Proto25DScreen
-            헤더 주석 참고)와 Y 기준으로 서로 가리고 가려지게 하기 위함.
-            모바일 시각 보정(2026-09-23) — 기본적으로 렌더하지 않는다
-            (debugOverlaysEnabled, 위 readDebugOverlaysEnabled 주석 참고).
-            실기기 프리뷰에서 이 점선 상자+라벨이 벤치 실제 아트와 겹쳐
-            상호작용을 읽기 어렵다는 회귀가 보고됐다 — walkGrid.js
-            OBSTACLES(히트박스 자체)는 그대로 두고 시각 표시만 끈다.
-            townProto25d.spec.mjs S6은 `?proto25dDebug=1` 쿼리로 이 스위치를
-            켠 뒤 기존 "장애물 디버그 엘리먼트가 정확히 3개, OBSTACLES_REF와
-            좌표 일치" 회귀를 그대로 재확인한다(약화 없음, 조건부 실행으로만
-            전환). demo-bench도 디버그 모드에서는 계속 그린다(팀장이 제시한
-            두 선택지 중 "숨김"을 택하지 않았다) — 아래에 실제 벤치 아트를
-            같은 위치/zIndex로 겹쳐 그려 넣는다(같은 zIndex는 DOM 순서로
-            타이브레이크되므로, 이 map보다 뒤에 두면 아트가 디버그 박스 위에
-            그려진다). */}
-        {debugOverlaysEnabled && OBSTACLES.map((ob) => (
-          <div
-            key={ob.id}
-            aria-hidden="true"
-            data-testid="proto25d-obstacle"
-            data-obstacle-id={ob.id}
-            className="absolute pointer-events-none border-2 border-dashed border-slate-500/70 bg-slate-500/25 flex items-center justify-center overflow-hidden"
-            style={{
-              left: `${ob.x0}%`,
-              top: `${ob.y0}%`,
-              width: `${ob.x1 - ob.x0}%`,
-              height: `${ob.y1 - ob.y0}%`,
-              zIndex: obstacleZIndex(ob.id, ob.y1),
-            }}
-          >
-            <span className="text-[9px] text-slate-700/80 font-bold px-0.5 text-center leading-tight">
-              {ob.id}
-            </span>
-          </div>
-        ))}
+        {/* Phase 6A — 정적 길/광장(path/plaza) 표시. 이미지 파일 없이 CSS
+            radial-gradient 2장만으로 스폰(50,62)에서 벤치 쪽(23.5,63)으로,
+            그리고 광장 아래(50,88 부근)로 "닳은 길" 느낌을 준다
+            (p6a_B_composition.md §2 "Path/plaza treatment" 그대로). 장애물이
+            아니다 — walkGrid.js OBSTACLES에 전혀 관여하지 않고, z-index를
+            주지 않아(auto) 아래의 모든 명시적 z-index 엘리먼트(오브젝트/
+            캐릭터/디버그 박스)보다 항상 뒤에 그려진다(DOM 순서상으로도 가장
+            먼저 — 두 조건이 함께 이를 보장). pointer-events-none — 탭
+            판정에 전혀 관여하지 않는다(요구사항13 무변경). */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage: [
+              'radial-gradient(ellipse 40% 10% at 23.5% 63%, rgba(214,196,150,0.35) 0%, rgba(214,196,150,0) 70%)',
+              'radial-gradient(ellipse 30% 45% at 50% 88%, rgba(214,196,150,0.30) 0%, rgba(214,196,150,0) 70%)',
+              'linear-gradient(180deg, rgba(214,196,150,0) 0%, rgba(214,196,150,0.22) 55%, rgba(214,196,150,0) 100%)',
+            ].join(', '),
+            backgroundRepeat: 'no-repeat',
+          }}
+        />
+
+        {/* Phase 6A — 범용 오브젝트 레이어(sceneFixture.js SCENE_FIXTURE,
+            벤치 제외 — 아래 기존 벤치 전용 블록이 계속 그린다). 각 항목을
+            bottom-center 앵커(translate(-50%,-100%))로 배치하고, shadow:true
+            면 같은 zIndex의 그림자를 본체보다 먼저(DOM 순서) 그려 항상 그
+            아래 깔리게 한다(V2 TownObjectLayer.jsx LotShadow와 동일 패턴).
+            폭은 objectRenderedWidthPx(sceneFixture.js — depth-scale +
+            minWidthPx 하한 반영, groundSize 실측), 높이는 naturalAspect로
+            역산(벤치의 기존 "width만 %, height는 이미지 종횡비" 관례와
+            동일 정신). townAsset(assetKey)가 null이면(등록 안 된 키) 조용히
+            건너뛴다(townAsset() 기존 계약 — 이미지 부재로 기능이 깨지지
+            않음). pointer-events-none — 탭 판정은 여전히 bench와 마찬가지로
+            새 이벤트 경로를 만들지 않는다. 앵커 배치(left/top/transform)는
+            래퍼 div가 전담하고 img는 안에서 100%/100%로만 채운다 — sway
+            애니메이션(motion-safe:animate-town-sway)이 자신이 걸린
+            엘리먼트의 인라인 transform을 매 프레임 통째로 덮어써서,
+            img 자신에 배치용 translate(-50%,-100%)를 같이 걸면 애니메이션이
+            그 배치를 지우고 top-left 앵커처럼 밀려 보이는 버그가 있었다
+            (나무/관목 5개, 그림자·hitbox와 어긋남) — 배치는 래퍼가,
+            흔들림 회전은 img가 따로 맡아 서로 덮어쓰지 않게 분리했다. */}
+        {RENDER_OBJECTS.map((obj) => {
+          const url = townAsset(obj.assetKey)
+          if (!url) return null
+          const collision = OBSTACLES.find((ob) => ob.id === obj.id)
+          const depthY = collision ? collision.y1 : obj.anchor.y
+          const z = obstacleZIndex(obj.id, depthY)
+          const widthPx = objectRenderedWidthPx(obj, groundSize)
+          const heightPx = widthPx * obj.naturalAspect
+          const swayClass = SWAY_ASSET_KEYS.has(obj.assetKey) ? SWAY_CLASS : ''
+          return (
+            <Fragment key={obj.id}>
+              {obj.shadow && (
+                <div
+                  aria-hidden="true"
+                  data-testid="proto25d-object-shadow"
+                  data-object-id={obj.id}
+                  className="absolute rounded-full pointer-events-none"
+                  style={{
+                    left: `${obj.anchor.x}%`,
+                    top: `${obj.anchor.y}%`,
+                    width: `${widthPx}px`,
+                    height: `${widthPx * 0.35}px`,
+                    transform: 'translate(-50%, -35%)',
+                    background: SHADOW_BACKGROUND,
+                    zIndex: z,
+                  }}
+                />
+              )}
+              <div
+                aria-hidden="true"
+                data-testid="proto25d-object"
+                data-object-id={obj.id}
+                className="absolute pointer-events-none"
+                style={{
+                  left: `${obj.anchor.x}%`,
+                  top: `${obj.anchor.y}%`,
+                  width: `${widthPx}px`,
+                  height: `${heightPx}px`,
+                  transform: 'translate(-50%, -100%)',
+                  transformOrigin: '50% 100%',
+                  zIndex: z,
+                }}
+              >
+                <img
+                  src={url}
+                  alt=""
+                  draggable={false}
+                  data-proto25d-object-img=""
+                  className={`block w-full h-full${swayClass}`}
+                />
+              </div>
+            </Fragment>
+          )
+        })}
 
         {/* Stage 4 — 실제 벤치 아트(src/assets/town/decorations/bench.webp,
             townAsset('decorations/bench')). 하단-중앙을 장애물 박스의
@@ -531,6 +688,74 @@ export default function Proto25DScreen() {
             }}
           />
         )}
+
+        {/* 장애물 디버그 플레이스홀더(Stage 2) — 실제 아트 아님, Phase E
+            육안 검증(탭이 상자 안으로 들어가지 않는지/뒤로 돌아가는지)을
+            가능하게 하기 위한 단순 색상 사각형 + 라벨. pointer-events-none
+            — 탭 핸들러는 여전히 바닥(groundRef) 엘리먼트에만 걸려 있고
+            이 오버레이는 그 판정에 관여하지 않는다(요구사항13 무변경).
+            zIndex(Stage 3) — 고정값이 아니라 obstacleZIndex(id, y1)로 매
+            렌더 계산한다(depthOrder.js 'objects' 레이어, y1=바운딩 박스
+            하단/지면 접점) — 캐릭터('character' 레이어, 위 Proto25DScreen
+            헤더 주석 참고)와 Y 기준으로 서로 가리고 가려지게 하기 위함.
+            모바일 시각 보정(2026-09-23) — 기본적으로 렌더하지 않는다
+            (debugOverlaysEnabled, 위 readDebugOverlaysEnabled 주석 참고).
+            실기기 프리뷰에서 이 점선 상자+라벨이 벤치 실제 아트와 겹쳐
+            상호작용을 읽기 어렵다는 회귀가 보고됐다 — walkGrid.js
+            OBSTACLES(히트박스 자체)는 그대로 두고 시각 표시만 끈다.
+            townProto25d.spec.mjs S6은 `?proto25dDebug=1` 쿼리로 이 스위치를
+            켠 뒤 기존 "장애물 디버그 엘리먼트가 OBSTACLES_REF와 좌표
+            일치" 회귀를 그대로 재확인한다(약화 없음, 조건부 실행으로만
+            전환).
+            Phase 6A(DOM 순서 변경) — 이 map을 범용 오브젝트 레이어/벤치
+            아트보다 "뒤"(이 위치)로 옮겼다(이전엔 오브젝트/벤치보다 앞에
+            있었다). 같은 id는 아트와 디버그 박스가 정확히 같은
+            obstacleZIndex(id,y1)를 쓰므로(zIndex 동률), DOM에서 더 뒤에
+            있는 엘리먼트가 항상 위에 그려진다 — 디버그 모드에서는 "장애물
+            히트박스가 실제 아트 위에 겹쳐 보여야 육안 검증이 쉽다"는
+            요구(팀장 지시)에 맞춰 디버그 박스가 항상 아트 위에 오도록
+            바꿨다(일반 모드는 이 블록 자체가 렌더되지 않아 영향 없음). */}
+        {debugOverlaysEnabled && OBSTACLES.map((ob) => (
+          <div
+            key={ob.id}
+            aria-hidden="true"
+            data-testid="proto25d-obstacle"
+            data-obstacle-id={ob.id}
+            className="absolute pointer-events-none border-2 border-dashed border-slate-500/70 bg-slate-500/25 flex items-center justify-center overflow-hidden"
+            style={{
+              left: `${ob.x0}%`,
+              top: `${ob.y0}%`,
+              width: `${ob.x1 - ob.x0}%`,
+              height: `${ob.y1 - ob.y0}%`,
+              zIndex: obstacleZIndex(ob.id, ob.y1),
+            }}
+          >
+            <span className="text-[9px] text-slate-700/80 font-bold px-0.5 text-center leading-tight">
+              {ob.id}
+            </span>
+          </div>
+        ))}
+
+        {/* Phase 6A — 탭 리플(항목C2). pointer-events-none, aria-hidden.
+            reduced-motion이면 showTapRipple 자체가 state를 채우지 않아
+            (컴포넌트 헤더의 ripple state 선언부 주석 참고) ripples는 항상
+            빈 배열이라 이 map은 아무것도 렌더하지 않는다(이중 방어 —
+            motion-safe: 클래스도 함께 건다). */}
+        {ripples.map((rp) => (
+          <div
+            key={rp.id}
+            aria-hidden="true"
+            data-testid="proto25d-tap-ripple"
+            className="absolute rounded-full border-2 border-purple-400/70 motion-safe:animate-town-proto-ripple pointer-events-none"
+            style={{
+              left: `${rp.x}%`,
+              top: `${rp.y}%`,
+              width: '36px',
+              height: '36px',
+              zIndex: TAP_RIPPLE_Z,
+            }}
+          />
+        ))}
 
         <ProtoCharacter
           phase={character.phase}

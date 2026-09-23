@@ -130,10 +130,37 @@ async function waitForBoxStable(locator, { samples = 3, intervalMs = 120, epsilo
 // 소스를 정규식으로 재검증하듯 이 spec도 "이 숫자가 실제로 화면에 그려진
 // 장애물과 일치하는지"를 DOM에서 직접 읽어 재확인한다 — 아래
 // readObstacleBoxesFromDom 참고, 이 하드코딩 값은 사전조건 계산에만 쓴다).
+// Phase 6A(2026-09-23) — sceneFixture.js SCENE_FIXTURE의 신규 5개
+// (house-annex/tree-plaza-nw/tree-plaza-ne/shrub-sw/shrub-se)를 추가한다.
+// 이 5개는 collisionRect가 없고 footprintRect(anchor,widthPct,
+// footprintDepthPct)로 파생되므로(sceneFixture.js deriveObstacles), 그
+// 산식(x0=anchor.x-widthPct/2, x1=anchor.x+widthPct/2, y0=anchor.y-
+// footprintDepthPct, y1=anchor.y)을 값만 복제해 손으로 계산한 리터럴이다
+// (import 대신 값 복제 — 이 파일의 기존 OBSTACLES_REF 관례와 동일,
+// scripts/testProto25dSceneFixture.mjs 항목6이 이 산식 자체를 별도로
+// 검증한다). 기존 3개(레거시)는 값 변경 없이 그대로 유지.
 const OBSTACLES_REF = [
   { id: 'demo-building', x0: 38, x1: 62, y0: 24, y1: 40 },
   { id: 'demo-bench', x0: 20, x1: 27, y0: 58, y1: 63 },
   { id: 'demo-tree', x0: 70, x1: 76, y0: 56, y1: 62 },
+  { id: 'house-annex', x0: 6, x1: 20, y0: 28, y1: 42 },
+  { id: 'tree-plaza-nw', x0: 40, x1: 46, y0: 50, y1: 56 },
+  { id: 'tree-plaza-ne', x0: 56, x1: 62, y0: 48, y1: 54 },
+  { id: 'shrub-sw', x0: 30, x1: 34, y0: 68, y1: 72 },
+  { id: 'shrub-se', x0: 64, x1: 68, y0: 68, y1: 72 },
+]
+
+// Phase 6A — sceneFixture.js SCENE_FIXTURE의 anchor(bottom-center world-%)
+// 값 복제(OBSTACLES_REF와 동일 관례) — demo-bench는 범용 오브젝트 레이어가
+// 건너뛰므로(Proto25DScreen.jsx RENDER_OBJECTS 필터) 여기 포함하지 않는다.
+const SCENE_OBJECTS_REF = [
+  { id: 'demo-building', x: 50, y: 40 },
+  { id: 'demo-tree', x: 73, y: 62 },
+  { id: 'house-annex', x: 13, y: 42 },
+  { id: 'tree-plaza-nw', x: 43, y: 56 },
+  { id: 'tree-plaza-ne', x: 59, y: 54 },
+  { id: 'shrub-sw', x: 32, y: 72 },
+  { id: 'shrub-se', x: 66, y: 72 },
 ]
 
 function pctInBox(x, y, box) {
@@ -353,6 +380,21 @@ export async function run(browser, baseURL) {
         earlyVsFinalDist != null && earlyVsFinalDist > 3,
         `dist=${earlyVsFinalDist}`,
       )
+
+      // ── Phase 6A 항목C2 — 걷기를 시작시키는 유효한 탭 직후 탭 리플이
+      // 나타났다가(one-shot) TAP_RIPPLE_REMOVE_MS(530ms) 이내에 사라짐
+      // (Proto25DScreen.jsx TAP_RIPPLE_ANIM_MS=450+80). 700ms 대기 후에는
+      // 반드시 0개여야 한다(reduced-motion 비교군은 S5에 별도로 둔다) ──
+      const rippleTapPoint = { x: groundBox.x + groundBox.width * 0.4, y: groundBox.y + groundBox.height * 0.45 }
+      await page.mouse.click(rippleTapPoint.x, rippleTapPoint.y)
+      const rippleCountJustAfterTap = await page.locator('[data-testid="proto25d-tap-ripple"]').count()
+      r.check(`${name} 항목C2 — 걷기 시작 탭 직후 탭 리플이 보임(count>=1)`, rippleCountJustAfterTap >= 1, `count=${rippleCountJustAfterTap}`)
+      await page.waitForTimeout(700)
+      const rippleCountAfterWait = await page.locator('[data-testid="proto25d-tap-ripple"]').count()
+      r.check(`${name} 항목C2 — 700ms 후에는 탭 리플이 사라짐(one-shot, count===0)`, rippleCountAfterWait === 0, `count=${rippleCountAfterWait}`)
+      await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
+      ), { timeout: 3000 })
 
       // ── 항목7 — 가장자리 근접 탭에도 목적지가 world 경계(2~98%) 안으로 clamp됨 ──
       const edgeTapPoint = { x: groundBox.x + 1, y: groundBox.y + 1 }
@@ -591,6 +633,13 @@ export async function run(browser, baseURL) {
       const tapPoint = { x: groundBox.x + groundBox.width * 0.7, y: groundBox.y + groundBox.height * 0.4 }
       await page.mouse.click(tapPoint.x, tapPoint.y)
 
+      // ── Phase 6A 항목C1 — reduced-motion에서는 탭 리플이 아예 렌더되지
+      // 않는다(Proto25DScreen.jsx showTapRipple — reducedMotion이면 즉시
+      // return, state 자체를 채우지 않음, 이중 방어로 motion-safe: 클래스도
+      // 걸려 있음). S3(비-reduced-motion) 비교군은 항목C2 참고 ──
+      const rippleCountReducedMotion = await page.locator('[data-testid="proto25d-tap-ripple"]').count()
+      r.check(`${name} 항목C1 — reduced-motion에서는 탭 리플이 전혀 렌더되지 않음(count===0)`, rippleCountReducedMotion === 0, `count=${rippleCountReducedMotion}`)
+
       // reduced-motion의 이동 transition은 훨씬 짧다(순간이동은 아님) —
       // 아주 짧은 대기 후에도 이미 목적지 근처에 도착해 있어야 한다.
       await page.waitForTimeout(400)
@@ -601,6 +650,8 @@ export async function run(browser, baseURL) {
         distSoonAfterTap != null && distSoonAfterTap < 30,
         `dist=${distSoonAfterTap}`,
       )
+      const rippleCountReducedMotionAfterWait = await page.locator('[data-testid="proto25d-tap-ripple"]').count()
+      r.check(`${name} 항목C1 — 대기 후에도 탭 리플 count가 계속 0(생성 자체가 없었음을 재확인)`, rippleCountReducedMotionAfterWait === 0, `count=${rippleCountReducedMotionAfterWait}`)
 
       const walkBobAnimationNameWhileMoving = await character.locator('div').first().evaluate((el) => window.getComputedStyle(el).animationName).catch(() => null)
       r.check(
@@ -688,10 +739,11 @@ export async function run(browser, baseURL) {
       const ground = page.locator('[data-testid="proto25d-ground"]')
       const groundBox = await ground.boundingBox()
 
-      // ── 장애물 3개가 실제로 렌더됨 + world-% 좌표가 walkGrid.js
-      // OBSTACLES와 일치함(DOM 직접 재확인, 하드코딩 값을 신뢰하지 않음) ──
+      // ── 장애물 8개가 실제로 렌더됨(Phase 6A — 레거시 3 + 신규 5) +
+      // world-% 좌표가 walkGrid.js OBSTACLES와 일치함(DOM 직접 재확인,
+      // 하드코딩 값을 신뢰하지 않음) ──
       const domObstacles = await readObstacleBoxesFromDom(page)
-      r.check(`${name} — 장애물 플레이스홀더 3개가 렌더됨`, domObstacles.length === 3, `count=${domObstacles.length}`)
+      r.check(`${name} — 장애물 플레이스홀더 8개가 렌더됨`, domObstacles.length === 8, `count=${domObstacles.length}`)
       const obstaclesMatchRef = OBSTACLES_REF.every((ref) => {
         const found = domObstacles.find((d) => d.id === ref.id)
         if (!found) return false
@@ -765,6 +817,51 @@ export async function run(browser, baseURL) {
         behindBuildingDist < 3,
         `dist=${behindBuildingDist} pct=${JSON.stringify(pctBehindBuilding)}`,
       )
+
+      // ── Phase 6A 항목16 — footprintRect로 파생된 신규 오브젝트
+      // (house-annex/tree-plaza-ne)도 collisionRect 고정값(demo-building)과
+      // 동일하게 장애물 회피 경로탐색이 적용됨 — 위 항목5/6과 정확히 같은
+      // "남쪽으로 리셋 -> 장애물 바로 북쪽을 탭 -> 이동 중 샘플링" 방식을
+      // 재사용한다(같은 x로 리셋해 수직선이 장애물 박스를 반드시 관통하게
+      // 만든다 — 이렇게 해야 직선 경로였다면 반드시 장애물을 지났을
+      // 상황이 보장된다). resetYFrac=0.9(장애물보다 훨씬 남쪽, 다른
+      // 오브젝트와 겹치지 않는 x를 목적지와 공유).
+      async function assertWalkAroundObstacle(obstacleId, xFrac, northTargetPct) {
+        const obRef = OBSTACLES_REF.find((o) => o.id === obstacleId)
+        await page.mouse.click(groundBox.x + groundBox.width * xFrac, groundBox.y + groundBox.height * 0.9)
+        await waitUntil(async () => (
+          (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
+        ), { timeout: 3000 })
+        const targetPx = { x: groundBox.x + groundBox.width * (northTargetPct.x / 100), y: groundBox.y + groundBox.height * (northTargetPct.y / 100) }
+        await page.mouse.click(targetPx.x, targetPx.y)
+        const obSamples = []
+        const obDeadline = Date.now() + 6000
+        let obSawWalking = false
+        while (Date.now() < obDeadline) {
+          const phase = await character.getAttribute('data-character-phase').catch(() => null)
+          if (phase === 'walking') obSawWalking = true
+          const pct = await readCharacterPct(character)
+          obSamples.push(pct)
+          if (phase === 'idle' && obSawWalking) break
+          await page.waitForTimeout(40)
+        }
+        const samplesInObstacle = obSamples.filter((s) => pctInBox(s.left, s.top, obRef))
+        r.check(
+          `${name} 항목16 — ${obstacleId} 우회 이동 중 어떤 샘플도 그 장애물 박스 안을 지나지 않음(${obSamples.length}개 샘플)`,
+          samplesInObstacle.length === 0,
+          samplesInObstacle.length ? JSON.stringify(samplesInObstacle) : '',
+        )
+        const finalPhaseOb = await character.getAttribute('data-character-phase').catch(() => null)
+        r.check(`${name} 항목16 — ${obstacleId} 우회 후에도 결국 idle 복귀(멈춘 상태 없음)`, finalPhaseOb === 'idle', `phase=${finalPhaseOb}`)
+        const pctAfterOb = await readCharacterPct(character)
+        r.check(
+          `${name} 항목16 — ${obstacleId} 우회 후 캐릭터의 최종 지점이 그 장애물 박스 밖`,
+          !pctInBox(pctAfterOb.left, pctAfterOb.top, obRef),
+          JSON.stringify(pctAfterOb),
+        )
+      }
+      await assertWalkAroundObstacle('house-annex', 0.13, { x: 13, y: 24 })
+      await assertWalkAroundObstacle('tree-plaza-ne', 0.59, { x: 59, y: 44 })
 
       // ── 항목9(회귀) — 이 Stage2 컨텍스트에서도 UI(정보 배지) 클릭은
       // 캐릭터를 움직이지 않음(Stage 1에서 이미 검증됐지만, 장애물
@@ -1412,6 +1509,40 @@ export async function run(browser, baseURL) {
       // 안 함, Proto25DScreen.jsx debugOverlaysEnabled 조건부 렌더) ──
       const debugObstacleCount = await page.locator('[data-testid="proto25d-obstacle"]').count()
       r.check(`${name} 항목3 — 기본(디버그 쿼리 없음)일 때 장애물 디버그 점선 상자/라벨이 DOM에 없음`, debugObstacleCount === 0, `count=${debugObstacleCount}`)
+
+      // ── Phase 6A 항목17 — 범용 오브젝트 레이어(SCENE_FIXTURE의 벤치
+      // 제외 7개)가 디버그 오버레이와 무관하게(항상, 상시 가시) 실제
+      // 아트로 렌더됨. 각 오브젝트의 bottom-center 렌더 위치(px)를
+      // world-%로 역산해 SCENE_OBJECTS_REF의 anchor와 일치하는지 확인 —
+      // 이 시나리오가 이미 반복 중인 4개 뷰포트(360/390/412/1280)
+      // 전부에서 실행된다(팀장 지시 — "at least 360-wide and 1280-wide").
+      const objectEls = page.locator('[data-testid="proto25d-object"]')
+      const objectCount = await objectEls.count()
+      r.check(`${name} 항목17 — 오브젝트(벤치 제외 7개)가 전부 렌더됨`, objectCount === 7, `count=${objectCount}`)
+      const objectsPointerEventsNone = await objectEls.evaluateAll((els) => els.every((el) => window.getComputedStyle(el).pointerEvents === 'none'))
+      r.check(`${name} 항목17 — 오브젝트 전부 pointer-events:none(탭 판정에 관여하지 않음)`, objectsPointerEventsNone)
+      const objectBoxes = await objectEls.evaluateAll((els) => els.map((el) => {
+        const r2 = el.getBoundingClientRect()
+        return { id: el.getAttribute('data-object-id'), x: r2.x, y: r2.y, width: r2.width, height: r2.height }
+      }))
+      const objectAnchorsMatch = SCENE_OBJECTS_REF.every((ref) => {
+        const box = objectBoxes.find((b) => b.id === ref.id)
+        if (!box) return false
+        const bottomCenterPct = {
+          x: ((box.x + box.width / 2) - groundBox.x) / groundBox.width * 100,
+          y: ((box.y + box.height) - groundBox.y) / groundBox.height * 100,
+        }
+        return Math.abs(bottomCenterPct.x - ref.x) <= 1.0 && Math.abs(bottomCenterPct.y - ref.y) <= 1.0
+      })
+      r.check(
+        `${name} 항목17 — 각 오브젝트의 하단-중앙 렌더 위치(world-%)가 SCENE_OBJECTS_REF anchor와 일치(오차<=1.0 world-%)`,
+        objectAnchorsMatch,
+        JSON.stringify(objectBoxes),
+      )
+      const objectShadowCount = await page.locator('[data-testid="proto25d-object-shadow"]').count()
+      r.check(`${name} 항목17 — 오브젝트 그림자(shadow:true 전부)도 7개 렌더됨`, objectShadowCount === 7, `count=${objectShadowCount}`)
+      const rootObstacleCountAttr = await page.locator('[data-testid="proto25d-root"]').getAttribute('data-proto25d-obstacle-count')
+      r.check(`${name} 항목17 — proto25d-root의 data-proto25d-obstacle-count가 "8"`, rootObstacleCountAttr === '8', `attr=${rootObstacleCountAttr}`)
 
       // ── 항목1 — 그림자 크기/가시성(idle) ──
       const shadow = page.locator('[data-proto-character-shadow]')

@@ -9,6 +9,7 @@
 // import하지 않는다 — 아래 OBSTACLES는 LANDMARKS의 "실제 게임 데이터"가
 // 아니라 이 프로토타입 자체의 픽스처다).
 import { WORLD } from '../worldContract'
+import { SCENE_FIXTURE, deriveObstacles } from './sceneFixture'
 
 // ── 좌표계 ────────────────────────────────────────────────────────────
 // world 좌표는 Proto25DScreen.jsx가 이미 쓰는 것과 동일한 0~100 %
@@ -60,21 +61,22 @@ const BOUNDS_EPS = 1e-6 // 부동소수점 곱셈 오차 방어(2.4*40처럼 정
 // ── 장애물(데모 픽스처) ───────────────────────────────────────────────
 // 실제 학생 데이터/구매 데이터가 아니다 — 마운트 스코프 로컬 상수, 영속화
 // 없음. worldContract.js LANDMARKS를 라이브 import하지 않는다(팀장 지시,
-// V2 실데이터와 결합 금지) — 아래 두 항목만 LANDMARKS의 스케일 감각을
-// "참고"해 손으로 다시 정한 좌표다(값을 그대로 복사하지 않음, import 아님):
-//   - demo-building: LANDMARKS['cafe'] = {x:67, y:47, w:20, hFactor:1.25}
-//     (worldContract.js:57)의 "건물 하나 폭 ~20 world-% 단위" 규모감만
-//     참고했다. 실제 좌표/크기는 이 프로토타입 전용으로 새로 정했다(초기
-//     캐릭터 위치(50,62)에서 곧장 위로 탭하면 반드시 우회가 필요하도록
-//     폭을 넓게 잡음).
-//   - demo-bench/demo-tree: decorations/nature 카탈로그의 "소형(sm/md)
-//     장식" 스케일 감각(~6~8 world-% 폭)만 참고했다.
-// 박스 좌표는 x0<x1, y0<y1(좌상단-우하단) 직사각형.
-export const OBSTACLES = Object.freeze([
-  Object.freeze({ id: 'demo-building', x0: 38, x1: 62, y0: 24, y1: 40 }),
-  Object.freeze({ id: 'demo-bench', x0: 20, x1: 27, y0: 58, y1: 63 }),
-  Object.freeze({ id: 'demo-tree', x0: 70, x1: 76, y0: 56, y1: 62 }),
-])
+// V2 실데이터와 결합 금지) — 원래 이 파일이 직접 들고 있던 데모 건물/벤치/
+// 나무 좌표(2026-09-22)는 LANDMARKS의 스케일 감각(건물 폭 ~20 world-%,
+// decorations/nature 소형 장식 ~6~8 world-% 폭)만 참고해 손으로 정한
+// 값이었다.
+//
+// 2026-09-23(Phase 6A, 씬 구성) — 장애물 사각형은 더 이상 이 파일이 직접
+// 정의하지 않고, sceneFixture.js의 SCENE_FIXTURE(씬 전체 구성의 단일 진실
+// 원천 — 오브젝트 시각 렌더/그림자/depth까지 포함)에서 deriveObstacles로
+// 파생한다. 기존 3개(demo-building/demo-bench/demo-tree)는 그 파일이
+// collisionRect로 이 아래 역사적 좌표를 정확히 고정(pin)해 두어(byte-
+// identical), 이 export의 값 자체는 전혀 바뀌지 않는다 — 이 파일을
+// 사용하는 pathfinding.js/depthVisual.js/Proto25DScreen.jsx나 아래
+// classifyPoint/nearestWalkablePoint 등 이 파일의 나머지 함수는 전혀
+// 손대지 않았다(회귀 없음). 박스 좌표는 x0<x1, y0<y1(좌상단-우하단)
+// 직사각형.
+export const OBSTACLES = deriveObstacles(SCENE_FIXTURE)
 
 // ── 셀 <-> world 좌표 변환 ────────────────────────────────────────────
 // 격자 원점은 WORLD_MIN이다(위 "격자 해상도" 절 참고) — 0이 아니다.
