@@ -90,6 +90,39 @@ function dist(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y)
 }
 
+// 측정용 헬퍼(2026-09-23, CI Linux Chromium run 35802684946 FAIL 대응) —
+// data-character-phase가 'idle'로 바뀌는 시점과 캐릭터 엘리먼트의 실제
+// left/top/transform CSS transition(650ms, ProtoCharacter.jsx의
+// transitionParts)이 시각적으로 완전히 멈추는 시점은 서로 다른 두 시계다.
+// walkTimerRef의 setTimeout(Proto25DScreen.jsx:193-198)은 커밋 시점에
+// 동기적으로 예약되지만, CSS transition은 그 커밋 이후 다음 페인트에서야
+// 시작하므로 setTimeout이 먼저 발화하면 phase가 idle로 읽히는 순간에도
+// 엘리먼트가 아직 잔여 이동 중일 수 있다(Windows 로컬은 프레임 예산이
+// 넉넉해 통상 그 사이 이미 정지해 residual이 0에 가깝지만, CI Linux
+// Chromium처럼 스케줄링이 더 빡빡한 환경에서는 1px 미만이 남아 있을 수
+// 있다). boundingBox()를 연속 샘플링해 값이 안정될 때까지 기다려, "드래그가
+// 실제로 캐릭터를 움직였는지"를 재는 assertion이 이 무관한 잔여 transition을
+// 오귀속하지 않게 한다 — assertion 자체(threshold/개수)는 바꾸지 않고 표본
+// 채취 시점만 안정화한다.
+async function waitForBoxStable(locator, { samples = 3, intervalMs = 120, epsilonPx = 0.05, timeout = 4000 } = {}) {
+  const start = Date.now()
+  let prev = await locator.boundingBox()
+  let stableCount = 1
+  while (Date.now() - start < timeout) {
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    const cur = await locator.boundingBox()
+    const d = dist(boxCenter(prev), boxCenter(cur))
+    if (d != null && d < epsilonPx) {
+      stableCount += 1
+      if (stableCount >= samples) return cur
+    } else {
+      stableCount = 1
+    }
+    prev = cur
+  }
+  return prev
+}
+
 // Stage 2 — walkGrid.js OBSTACLES(src/utils/town/proto2_5d/walkGrid.js)와
 // 정확히 같은 좌표를 이 spec에도 그대로 옮겨왔다(import가 아니라 값
 // 복제 — 이 파일은 브라우저 페이지 컨텍스트 밖 Node에서 도는 spec이라
@@ -420,7 +453,12 @@ export async function run(browser, baseURL) {
       // down->move->up 시퀀스를 CDP가 아니라 Playwright mouse API로 직접
       // 재현한다(마우스 경로라 CDP 트릭이 필요 없음, 모바일 터치 경로의
       // 동일 취지 비교군은 S4에 별도로 둔다).
-      const boxBeforeDrag = await character.boundingBox()
+      // waitForBoxStable — 위 항목9(빠른 연속 탭) 직후 idle로 전이된 바로
+      // 다음이라, phase가 idle을 읽어도 CSS transition이 아직 안 멈췄을 수
+      // 있다(위 헬퍼 주석, CI Linux Chromium run 35802684946 FAIL 참고).
+      // 드래그 자체가 아무것도 움직이지 않았는지를 재는 기준선이므로 여기서
+      // 안정화된 값을 써야 한다.
+      const boxBeforeDrag = await waitForBoxStable(character)
       const dragStart = { x: groundBox.x + groundBox.width * 0.2, y: groundBox.y + groundBox.height * 0.2 }
       const dragEnd = { x: dragStart.x + 60, y: dragStart.y + 60 } // 대각선 60px — 8px 임계값을 훨씬 초과
       await page.mouse.move(dragStart.x, dragStart.y)
