@@ -83,9 +83,10 @@
 // (-w/2,-h) = (0,0) = 박스 자신의 top-left(=CSS left/top이 배치하는 바로 그
 // 점) — s에 전혀 의존하지 않는다. 그림자(아래 JSX)는 이 스케일된 박스 안에
 // 그대로 중첩돼 있어 별도 계산 없이 캐릭터와 함께 자동으로 스케일된다.
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { characterScale, characterZIndex } from '../../../utils/town/proto2_5d/depthVisual'
 import { SEAT_FRACTION, SEAT_CONTACT_FRACTION, seatSinkLocalPx } from '../../../utils/town/proto2_5d/benchInteraction'
+import { validateCharacterManifest, resolveCharacterVisual, stateKeyForPhase } from '../../../utils/town/proto2_5d/characterManifest'
 
 const CHARACTER_TRANSFORM_ORIGIN = '50% 100%'
 
@@ -163,6 +164,32 @@ export const WALK_TRANSITION_MS = 650
 // 수 있어야 한다"는 스펙 요구를 깨므로, 아주 짧지만 0은 아닌 값을 쓴다.
 export const REDUCED_MOTION_TRANSITION_MS = 220
 
+// Phase 6A(2026-09-23, 캐릭터 스프라이트 어댑터, scripts/.tmp/
+// p6a_C_sprite_contract.md 설계 그대로 구현 — 새 구조 발명 없음) — 프레임
+// 애니메이션(walk 2프레임 이상) 재생용 아주 작은 훅. resolveCharacterVisual
+// (characterManifest.js)은 순수 함수라 시간을 모르므로, "지금 몇 번째
+// 프레임인지"는 이 컴포넌트 쪽에서 별도 타이머로 스테핑한다 — 기존 bob
+// keyframe 애니메이션(CSS, 무한 반복)과는 완전히 독립적인 관심사(bob은 y축
+// 흔들림, 이건 프레임 교체)라 서로 경합하지 않는다. reduced-motion이거나
+// 프레임이 1개 이하면 항상 freezeFrameIndex로 고정(정지) — Stage 3의
+// "reduced-motion에서도 depth/scale은 생략 안 함" 원칙과 같은 정신으로,
+// 정지는 하되 state 자체(sit/walk 구분)는 여전히 보인다.
+function useSpriteFrameIndex(framesLength, fps, reducedMotion, freezeFrameIndex) {
+  const [frameIndex, setFrameIndex] = useState(freezeFrameIndex || 0)
+  useEffect(() => {
+    if (reducedMotion || !(framesLength > 1) || !(fps > 0)) {
+      setFrameIndex(freezeFrameIndex || 0)
+      return undefined
+    }
+    setFrameIndex(0)
+    const id = setInterval(() => {
+      setFrameIndex((i) => (i + 1) % framesLength)
+    }, 1000 / fps)
+    return () => clearInterval(id)
+  }, [framesLength, fps, reducedMotion, freezeFrameIndex])
+  return frameIndex
+}
+
 export default function ProtoCharacter({
   phase,
   leftPct,
@@ -171,6 +198,14 @@ export default function ProtoCharacter({
   facing = 1,
   depthY,
   sitBenchHeightPx,
+  // Phase 6A — 선택적 캐릭터 스프라이트 매니페스트(characterManifest.js
+  // 계약). 기본값 undefined — 오늘 어떤 호출부(Proto25DScreen.jsx)도 이
+  // prop을 넘기지 않는다(실 스프라이트 아트 없음, ASTRA_HANDOFF_2026-09-21.md
+  // §0-A) — 즉 validateCharacterManifest(undefined).ok는 항상 false이고
+  // resolveCharacterVisual은 항상 {kind:'emoji',...}를 반환하므로, 아래
+  // "무엇도 재배선하지 않는다"는 이 prop이 실제로 쓰이는 날까지는 100%
+  // 사실이다(오늘의 DOM은 이 prop 추가 이전과 완전히 동일).
+  manifest,
 }) {
   const isWalking = phase === 'walking'
   const isSitting = phase === 'sitting'
@@ -200,6 +235,42 @@ export default function ProtoCharacter({
   // 캐릭터 아트가 없어 이모지를 하나 더 바꿔 끼우는 최소 표시만 한다(위
   // 파일 헤더의 플레이스홀더 원칙과 동일).
   const glyph = isSitting ? '🧘' : '🚶'
+
+  // Phase 6A(2026-09-23, 캐릭터 스프라이트 어댑터) — manifest가 undefined/
+  // 무효면 validation.ok는 항상 false이고 resolveCharacterVisual은 항상
+  // {kind:'emoji', glyph}를 반환한다(위 glyph 변수와 완전히 동일한 규칙 —
+  // characterManifest.js의 EMOJI_GLYPH_BY_STATE가 그 상수를 공유). 오늘
+  // 어떤 호출부도 manifest를 넘기지 않으므로(위 prop 주석 참고) 이 블록은
+  // 항상 emoji 경로로만 귀결되고 아래 렌더의 emoji 분기는 이 prop 추가
+  // 이전과 100% 동일한 DOM을 만든다.
+  const validation = useMemo(() => validateCharacterManifest(manifest), [manifest])
+  const manifestStateKey = stateKeyForPhase(phase)
+  const manifestState = validation.ok && manifest && manifest.states ? manifest.states[manifestStateKey] : null
+  const spriteFramesLength = manifestState ? manifestState.frames.length : 0
+  const spriteFps = manifestState && manifestState.fps > 0 ? manifestState.fps : 0
+  const spriteFreezeFrameIndex = (manifest && manifest.reducedMotion && manifest.reducedMotion.freezeFrameIndex) || 0
+  const spriteFrameIndex = useSpriteFrameIndex(spriteFramesLength, spriteFps, reducedMotion, spriteFreezeFrameIndex)
+  const resolvedVisual = resolveCharacterVisual({ manifest, validation, phase, frameIndex: spriteFrameIndex })
+
+  // 런타임 이미지 로드 실패 폴백(매니페스트 자체 유효성 검사와는 별도 —
+  // 네트워크/파일 문제로 특정 프레임 이미지가 깨질 수 있다) — 이 마운트
+  // 에서만 emoji로 강제한다. manifest 참조가 바뀌면(사실상 오늘은 발생하지
+  // 않음 — 정적 import) 새 매니페스트에게 다시 기회를 준다.
+  const [spriteLoadFailed, setSpriteLoadFailed] = useState(false)
+  useEffect(() => { setSpriteLoadFailed(false) }, [manifest])
+  const visual = spriteLoadFailed ? { kind: 'emoji', glyph } : resolvedVisual
+  const isSprite = visual.kind === 'sprite'
+
+  // anchor-offset 래퍼(sprite 전용) — outer 앵커(translate(-50%,-100%))는
+  // "박스 자신의 (w/2,h)가 (leftPct,topPct)로 간다"만 보장하므로, 고정
+  // 캔버스의 실제 foot/seatAnchorPx가 그 점(w/2,h)과 정확히 일치하지 않을
+  // 수 있는 차이만큼 자식 레이어에서 보정 이동한다(설계 문서 §3 그대로).
+  const spriteFrame = isSprite ? visual.frame : null
+  const spriteCanvasW = (spriteFrame && spriteFrame.w) || (manifest && manifest.frameCanvas && manifest.frameCanvas.w) || 0
+  const spriteCanvasH = (spriteFrame && spriteFrame.h) || (manifest && manifest.frameCanvas && manifest.frameCanvas.h) || 0
+  const spriteActiveAnchor = isSprite ? (isSitting ? visual.seatAnchorPx : visual.footAnchorPx) : null
+  const spriteOffsetDx = spriteActiveAnchor ? spriteCanvasW / 2 - spriteActiveAnchor.x : 0
+  const spriteOffsetDy = spriteActiveAnchor ? spriteCanvasH - spriteActiveAnchor.y : 0
 
   // 좌석 접촉점 sink(2026-09-23, "붕 뜬" 회귀 수정) — sitting에 들어갈 때(와
   // 그 동안의 리사이즈/기기 회전마다, clamp() 폰트 크기가 뷰포트 폭에
@@ -308,24 +379,58 @@ export default function ProtoCharacter({
               위 문단의 "애니메이션과 경합하지 않는다" 전제가 그대로 유지된다.
               translateY(sinkPx)와 scaleX(-1)는 서로 다른 축만 건드려(하나는
               y, 하나는 x) 어느 순서로 합성해도 최종 결과가 같다(교환 가능) —
-              순서를 신경 쓸 필요 없음. sinkPx는 sitting에서만 0이 아니다. */}
-          <div
-            style={{
-              transform: [
-                sinkPx > 0 ? `translateY(${sinkPx}px)` : '',
-                facing === -1 ? 'scaleX(-1)' : '',
-              ].filter(Boolean).join(' ') || undefined,
-            }}
-          >
-            <span
-              aria-hidden="true"
-              ref={glyphRef}
-              data-proto-character-glyph=""
-              className="relative inline-flex items-center justify-center w-full leading-none drop-shadow-sm text-[clamp(1.4rem,7vw,2.2rem)]"
+              순서를 신경 쓸 필요 없음. sinkPx는 sitting에서만 0이 아니다.
+              Phase 6A — isSprite가 true일 때만 이 자리에 다른 하위 레이어가
+              들어간다(아래 분기). isSprite는 manifest가 없으면 항상 false
+              라(위 "Phase 6A" 주석 블록 참고) 이 분기 자체가 오늘은 절대
+              타지 않는다 — emoji 쪽(else)은 이 prop 추가 이전과 완전히
+              동일한 DOM/로직이다. */}
+          {isSprite ? (
+            <div style={{ transform: facing === -1 ? 'scaleX(-1)' : undefined }}>
+              {/* anchor-offset 래퍼 — footAnchorPx/seatAnchorPx가 프레임의
+                  (w/2,h)와 정확히 일치하지 않을 수 있는 차이만큼만 보정
+                  이동한다(설계 문서 §3). seatSinkLocalPx/measureGlyphInk는
+                  이 경로에서 전혀 호출하지 않는다(§5 — sprite 모드는 매니페스트
+                  가 이미 정답(접촉점)을 알고 있어 런타임 잉크 실측이
+                  불필요해진다). */}
+              <div style={{ transform: `translate(${spriteOffsetDx}px, ${spriteOffsetDy}px)` }}>
+                <img
+                  src={visual.src}
+                  srcSet={visual.srcSet}
+                  alt=""
+                  aria-hidden="true"
+                  draggable={false}
+                  data-proto-character-sprite=""
+                  onError={() => setSpriteLoadFailed(true)}
+                  style={{
+                    display: 'block',
+                    width: spriteFrame ? spriteFrame.w : undefined,
+                    height: spriteFrame ? spriteFrame.h : undefined,
+                    objectFit: manifest && manifest.sheet ? 'none' : 'contain',
+                    objectPosition: manifest && manifest.sheet && spriteFrame ? `-${spriteFrame.x || 0}px -${spriteFrame.y || 0}px` : undefined,
+                  }}
+                />
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{
+                transform: [
+                  sinkPx > 0 ? `translateY(${sinkPx}px)` : '',
+                  facing === -1 ? 'scaleX(-1)' : '',
+                ].filter(Boolean).join(' ') || undefined,
+              }}
             >
-              {glyph}
-            </span>
-          </div>
+              <span
+                aria-hidden="true"
+                ref={glyphRef}
+                data-proto-character-glyph=""
+                className="relative inline-flex items-center justify-center w-full leading-none drop-shadow-sm text-[clamp(1.4rem,7vw,2.2rem)]"
+              >
+                {glyph}
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </>
