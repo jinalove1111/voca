@@ -1582,3 +1582,25 @@ e2e 도메인도 PASS — 회귀가 아니라 타이밍 플레이크. 메커니�
 `handoff.md` 172차 §9) — 재발 시 "디바운스 창 밖에서 재는" 방식으로
 S8a를 재설계할지는 V2 소유 세션이 결정한다. 재확인 커맨드: `vite preview`
 기동 후 `townV2.spec.mjs`만 단독 실행(위 standalone runner 패턴).
+
+### 2026-09-23 후속 — S9 원인 증명·측정 시점 수정 + Proto S3 항목11 측정 시점 수정 (Linux CI 전용 타이밍)
+
+위 S9 노트("원인 미확정")는 이후 같은 날 **증명·수정**됐다 — CI run
+35802684946(Linux)이 다시 43.445px로 FAIL했고, 프로브(`scripts/.tmp/
+s9_restart_probe.mjs`, `s9_early_read_probe.mjs`)로 (a) 배치 모드 진입 시
+애니메이션 재시작은 없음(반증), (b) 씬 루트의 1회성 `townEntrance 450ms`
+scale(0.97→1) 애니메이션이 **아직 재생 중일 때** 자손 앵커의 bbox를 읽으면
+진행률만큼 축소된다는 것을 확인(자연 실행 1/10이 367ms 시점 43.95px; 인위적
+재생 중 읽기 5/5 43.13~43.39px = CI 값; 종료 대기 후 5/5 44.00). 수정은
+`tests/e2e/townV2.spec.mjs`의 `waitForEntranceAnimationSettled(page)`를 S9
+bbox 루프 직전에 호출하는 것뿐(허용치 `>=43.5`/`>=44`·뷰포트·단언 수 448
+무변경, 제품 코드 무변경).
+
+같은 CI run의 `[town-proto2.5d] S3 항목11 드래그 dist=1.0156`도 측정
+레이스였다 — `Proto25DScreen.jsx:193-198`의 650ms `setTimeout`(커밋 시
+예약)과 650ms CSS transition(다음 페인트에 시작)이 다른 시계라 phase가
+`idle`이어도 잔여 이동이 남을 수 있고, 항목9 연속 탭 직후의 `boxBeforeDrag`가
+그 잔여를 드래그로 오귀속. 수정은 `tests/e2e/townProto25d.spec.mjs`의
+`waitForBoxStable(locator)`(연속 3표본 0.05px 이내)로 기준선 샘플만 안정화
+(허용치 `<1px`·단언 수 160 무변경). Windows 로컬 프로브 12회는 잔여 0px —
+재현은 CI 재실행으로 확정(결과는 `handoff.md` 172차 §10/PR #62 코멘트).

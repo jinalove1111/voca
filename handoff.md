@@ -145,6 +145,37 @@ Production WRITE 0, PR #62 OPEN/DRAFT 유지. 171차 이하 보존)_
   35797541708/35798064132/35799530407 전부 cancelled) 최종 push 1회 뒤
   CI 완주를 확인한다(결과는 PR #62 통합 코멘트).
 
+### 10. CI 완주 결과(`1d97f81`, run 35802684946) + Linux 전용 E2E 측정 타이밍 2건 수정
+- **Gate 1 build ✅ · Gate 2 `verify:all` ✅**(커밋 `435d6b1`로 Linux
+  testBundleBudget 실패 해소 — 이 브랜치 최근 run들 중 Gate 2 첫 그린) ·
+  Gate 3 student health ✅ · **Gate 5 `verify:e2e` ❌ 2/1488** → RELEASE
+  GATE FAIL(e2e). DB WRITE 0. 두 FAIL 모두 Windows 로컬에서는 항상 PASS인
+  **Linux 러너 타이밍 문제**로, 각각 원인을 코드/실측으로 증명한 뒤
+  **테스트 측정 시점만** 고쳤다(허용치·단언 수·제품 코드 무변경, 별도
+  커밋 2개):
+  1. `[town-v2] S9[390x844] 앵커 bbox ≥44` minW=43.445 — 원인 **증명**:
+     씬 루트의 1회성 `townEntrance 450ms ease-out scale(0.97→1)`
+     애니메이션이 아직 재생 중인 시점에 자손인 앵커 bbox를 읽음(§0.10의
+     "재시작" 가설은 프로브로 반증 — 재시작 없음; 대신 자연 실행 10회 중
+     1회가 시작 후 367ms에 읽혀 43.95px, 인위적으로 재생 중에 읽으면
+     5/5 43.13~43.39px = CI 값과 일치, 종료 대기 후 5/5 44.00). 수정:
+     `waitForEntranceAnimationSettled(page)`(`document.getAnimations()`의
+     townEntrance가 finished일 때까지, 2초 상한)를 S9 bbox 루프 직전에
+     호출(`tests/e2e/townV2.spec.mjs`). 이전 세션의 "미증명·문서화만"
+     결론은 첫 마운트 기준 505~1088ms 뒤에 읽혀 창을 벗어난 로컬 재현의
+     한계였다.
+  2. `[town-proto2.5d] S3 항목11 드래그` dist=1.0156(<1px 허용치) —
+     원인(코드): `Proto25DScreen.jsx:193-198`의 `setTimeout(650)`은 핸들러
+     커밋 시점에 예약되지만 650ms CSS transition은 다음 페인트에 시작하므로
+     phase가 `idle`로 읽히는 순간 잔여 이동이 남을 수 있고, 항목9 연속 탭
+     직후 찍은 `boxBeforeDrag`가 그 잔여를 드래그 이동으로 오귀속. 수정:
+     `waitForBoxStable(locator)`(연속 3표본 0.05px 이내)로 기준선만 안정화
+     (`tests/e2e/townProto25d.spec.mjs`). 로컬 프로브 12회는 잔여 0px
+     (Windows 프레임 예산상 재현 안 됨) — 이 수정은 코드 레이스 + CI 실측을
+     근거로 하며, 개선 증명은 아래 CI 재실행 결과로 확정한다.
+- 재검증: `townProto25d.spec` 160/160, `townV2.spec` 448/448(둘 다 단독
+  러너, 미mock 0). CI 재실행 결과는 PR #62 통합 코멘트에 기록.
+
 ## 2026-09-18 (171차) — Paul Town V2 플래그 전 블로커 수정: D1 고정 랜드마크 규칙 정정 + D5 360px 배치 컨트롤 겹침 해소 (paulTownV2 OFF, Production 무접촉)
 
 ### 0. 안전 요약
