@@ -169,6 +169,27 @@ async function waitForTownHeader(page) {
   await page.locator(LV_BADGE_SEL).waitFor({ state: 'visible', timeout: 15000 })
 }
 
+// ── S9 CI 측정 타이밍 보정(2026-09-23, CI 실행 35802684946) ────────────
+// town-scene-v2 루트는 1회성 CSS 진입 애니메이션
+// (motion-safe:animate-town-entrance = townEntrance 450ms ease-out 1,
+// scale(0.97)->scale(1), TownScene.jsx/tailwind.config.js)을 걸고 있고,
+// 배치 앵커(44px 버튼)는 그 자손이다 — 애니메이션이 아직 재생 중일 때
+// getBoundingClientRect()를 읽으면 진행률만큼 축소된 bbox가 나온다(재시작이
+// 아니라 "첫 마운트 애니메이션이 아직 안 끝난 시점에 읽음" 문제 —
+// scripts/.tmp/s9_restart_findings.md 섹션 2-3: 애니메이션 시작 후
+// ~367ms 읽음=43.95px, ~496ms+ 읽음=44.00px, CI의 43.32~43.45는 같은 커브의
+// 더 이른 샘플과 일치). 정지 후에는 항상 44px이므로 이는 실제 접근성
+// 회귀가 아니라 샘플링 타이밍 문제 — bbox를 재기 직전 이 애니메이션이
+// 끝나길 기다린다(끝난 뒤 조회면 즉시 통과, reduced-motion이면 애초에
+// 애니메이션이 없어 즉시 통과).
+async function waitForEntranceAnimationSettled(page) {
+  await page.waitForFunction(() => {
+    return document.getAnimations().every((anim) => (
+      anim.animationName !== 'townEntrance' || anim.playState === 'finished'
+    ))
+  }, { timeout: 2000 }).catch(() => {})
+}
+
 // ── 자석 드래그 배치(2026-09-20) 공용 헬퍼 — S16~S19가 공유한다(로그인/
 //    내마을 진입 헬퍼처럼 파일 스코프에 둔다, 섹션마다 재정의하지 않음). ──
 // itemLabel을 보관함에서 "마을에 놓기"로 놓는다 — 앵커는 놓기 모드에
@@ -1092,6 +1113,11 @@ export async function run(browser, baseURL) {
       await placeBtn.waitFor({ state: 'visible', timeout: 10000 })
       await placeBtn.click()
       await page.locator('[data-anchor]').first().waitFor({ state: 'visible', timeout: 10000 })
+      // bbox를 재기 전 town-scene-v2의 진입 애니메이션이 끝나길 기다린다
+      // (위 waitForEntranceAnimationSettled 정의부 주석 참고) — 그렇지
+      // 않으면 애니메이션이 아직 재생 중인 순간을 잡을 수 있어 44px 미만의
+      // 측정치(false positive 회귀)가 CI처럼 빠른 러너에서 나올 수 있다.
+      await waitForEntranceAnimationSettled(page)
 
       const anchors = page.locator('[data-anchor]')
       const anchorCount = await anchors.count()
