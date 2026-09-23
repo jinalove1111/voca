@@ -176,6 +176,30 @@ Production WRITE 0, PR #62 OPEN/DRAFT 유지. 171차 이하 보존)_
 - 재검증: `townProto25d.spec` 160/160, `townV2.spec` 448/448(둘 다 단독
   러너, 미mock 0). CI 재실행 결과는 PR #62 통합 코멘트에 기록.
 
+### 11. CI 재실행(`959b653`, run 35806849603) — 전 게이트 그린, 30분 job 캡에 Gate 5 취소 → 캡 45분
+- Gate 1 build ✅ · Gate 2 `verify:all` ✅(ALL DOMAINS PASS, e2e 도메인
+  PASS) · **Gate 3 student health ✅ — 내부 `verify:release`의 browser
+  E2E 1488/1488 PASS, "RELEASE GATE: PASS — 배포 가능", DB WRITE 0**(즉
+  §10의 두 측정 수정이 Linux에서 실제로 효과 있음: S9·S3 항목11 모두
+  PASS) · Gate 3b ✅ · Gate 4 ✅ · **Gate 5 `verify:e2e` cancelled** —
+  실패가 아니라 job `timeout-minutes: 30`에 걸림: Gate 2 20분(01:35→
+  01:55) + Gate 3 8.5분 → Gate 5가 29분 시점에 시작, 30:00에 취소.
+- 원인 판정: 마지막 그린 run 35505417592(`8050103`)도 29m19s(Gate 2
+  16분/Gate 3 6분/Gate 5 6분)로 이미 한계였고, 이후 V2/2.5D spec으로
+  E2E가 커졌다. 한 job에서 같은 browser E2E가 3회(verify:all e2e
+  도메인 · Gate 3 · Gate 5) 도는 구조적 중복이 근본 원인 — 2026-09-12에
+  운영자가 같은 이유로 20→30으로 올린 전례(`release-gate.yml` 주석)
+  그대로 캡 30→45 상향을 **권고**한다 — 단, 이 세션은 CI 워크플로 파일
+  커밋이 권한 정책(공유 자원 수정)으로 거부돼 **적용하지 않았다**. 변경
+  내용은 한 줄(`timeout-minutes: 30` → `45`) + 주석이며 패치를
+  `scripts/.tmp/release_gate_timeout_45.patch`(gitignore, 로컬 워크트리)에
+  남겼다. 적용 전까지 이 PR의 Release Gate는 Gate 5에서 매번 30분 캡
+  취소(cancelled)로 끝나지만, Gate 3 내부 E2E가 동일 스위트를 이미
+  1488/1488로 게이팅하므로 기능적으로는 전 게이트 그린이다.
+  **결정 필요(TODO, 운영자)**: (a) 캡 45분 적용, 또는 (b) Gate 5 제거
+  (Gate 3가 이미 동일 E2E를 게이팅) / Gate 2에서 e2e 도메인 제외로
+  중복 자체를 없앨지.
+
 ## 2026-09-18 (171차) — Paul Town V2 플래그 전 블로커 수정: D1 고정 랜드마크 규칙 정정 + D5 360px 배치 컨트롤 겹침 해소 (paulTownV2 OFF, Production 무접촉)
 
 ### 0. 안전 요약
