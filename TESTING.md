@@ -1568,3 +1568,17 @@ FAIL했다. Proto 2.5D/testBundleBudget과는 무관한 별개 원인 — 자체
 `extra:true`라 Release Gate를 막지 않는다. 이 세션은 원인 관측만 기록하고
 조사/수정은 하지 않았다(범위 밖) — 상세는
 `docs/design/town/ASTRA_HANDOFF_2026-09-21.md` §0.15.
+
+### S8a(`tests/e2e/townV2.spec.mjs`, "마을을 열기만 해도 student_progress 쓰기 0건") — 타이밍 의존 단언 기록(2026-09-23)
+
+`npm run verify:e2e` 전체 순차 실행(1488단언)에서 1회 FAIL(`writes=1`),
+같은 코드로 `townV2.spec.mjs` 단독 재실행 448/448 PASS, 직전 `verify:all`의
+e2e 도메인도 PASS — 회귀가 아니라 타이밍 플레이크. 메커니즘:
+`src/hooks/useStudent.js:2043-2047`의 "restoreChecked 이후 record 변경 →
+2초 디바운스 → doSync(student_progress upsert, `wordLibrary.js:3185`)"가
+정상 동작이며, S8a는 클라우드 병합 복원이 화면에 보인 뒤 +500ms에 쓰기
+수를 재므로 복원→측정 구간이 렌더 지연으로 2초를 넘기면 이 sync가 측정
+창 안에 들어온다. 이 세션은 테스트/대기시간/허용치를 바꾸지 않았다(문서화만,
+`handoff.md` 172차 §9) — 재발 시 "디바운스 창 밖에서 재는" 방식으로
+S8a를 재설계할지는 V2 소유 세션이 결정한다. 재확인 커맨드: `vite preview`
+기동 후 `townV2.spec.mjs`만 단독 실행(위 standalone runner 패턴).

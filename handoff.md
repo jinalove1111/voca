@@ -118,6 +118,33 @@ Production WRITE 0, PR #62 OPEN/DRAFT 유지. 171차 이하 보존)_
 - 운영자 Android 실기기 아침 점검은 SSO+로그인 제약상 원격 세션이 대신할
   수 없다 — §0.14 체크리스트대로 운영자가 직접 수행해야 한다.
 
+### 9. 전체 검증 최종 결과 + E2E S8a 타이밍 플레이크 기록(2026-09-23 09:10~09:50)
+- `npm run verify:all`(HEAD `435d6b1` 코드 기준, 08:36~09:10): **ALL
+  DOMAINS: PASS** — 31 PASS / 2 SKIP(speaking·listening, 실제 오디오
+  도메인의 예상된 SKIP) / 0 FAIL, exit 0. e2e 도메인 PASS(전 spec 미mock
+  요청 0건, `[town-proto2.5d]` 포함). `.env`/`.env.local` 실행 후 원위치
+  확인(`testSecurityRegressions`의 임시 rename 복구됨), 추적 안 됨.
+- `npm run verify:e2e`(09:11~09:4x): 총 1488단언 — PASS 1487 / FAIL 1 /
+  SKIP 0(보고된 exit 0). 유일한 FAIL: `[town-v2] S8a[390x844] … 마을을
+  열기만 해도 student_progress 쓰기 0건(저장 부작용 없음) writes=1`.
+  **원인(코드로 확인)**: `src/hooks/useStudent.js:2043-2047` —
+  `restoreChecked`가 true가 된 뒤 `record`가 바뀌면(클라우드 병합 복원
+  자체가 이 변경) 2초 디바운스 후 `doSync`가 `student_progress` upsert
+  (`wordLibrary.js:3185`)를 보낸다. S8a는 병합 복원이 화면에 보인 뒤
+  +500ms 시점에 쓰기 수를 재므로, 복원→측정 사이가 렌더 지연으로 2초를
+  넘기면 이 정상 sync가 창 안에 들어온다 — 즉 **타이밍 의존 단언**이며
+  이 세션의 변경(Proto 2.5D는 S8a에서 마운트되지 않음: `paulTown2_5d`
+  OFF)과 무관하다. 증거: 같은 코드로 `townV2.spec.mjs` 단독 재실행
+  **448/448 PASS**(S8a PASS, 미mock 0), 직전 `verify:all`의 e2e 도메인도
+  PASS. 테스트/허용치/대기시간 무변경(문서화만) — 재발 시 `S8a`의
+  500ms 대기를 "디바운스 창(2초) 밖" 기준으로 재설계할지는 V2 소유
+  세션이 결정할 항목(TESTING.md S8a 노트 참고).
+- 로컬 커밋 `5c2421e`(handoff 정밀화)/`314971e`(Phase 9 설계 문서
+  `docs/design/town/PROTO25D_NEXT_STEPS_2026-09-23.md`)는 이 절과 함께
+  단일 push — 연속 push가 CI Release Gate를 매번 취소시키므로(run
+  35797541708/35798064132/35799530407 전부 cancelled) 최종 push 1회 뒤
+  CI 완주를 확인한다(결과는 PR #62 통합 코멘트).
+
 ## 2026-09-18 (171차) — Paul Town V2 플래그 전 블로커 수정: D1 고정 랜드마크 규칙 정정 + D5 360px 배치 컨트롤 겹침 해소 (paulTownV2 OFF, Production 무접촉)
 
 ### 0. 안전 요약
