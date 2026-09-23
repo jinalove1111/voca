@@ -124,6 +124,33 @@ _최종 갱신: 2026-09-23 (173차 — **Paul Town 2.5D Phase 6A 인수·완결*
 - 참고: 이 세션의 CI 감시 스크립트(`gh run view` 폴링)가 30분간 이벤트를
   내지 않아 완료 후 수동 확인했다 — 스크립트 문제이지 CI 문제 아님.
 
+### 9. Phase 6A 최종 시각 검수(2026-09-24) — 운영자 실기기 Preview + 리드 세션 동일 빌드 감사
+- **운영자 실기기(모바일, Preview
+  `https://voca-git-feat-paul-town-v2-clean-pr-jina4926952s-projects.vercel.app`,
+  HEAD `e7217b1`, SSO+학생 로그인, `paulTown2_5d`만 ON) 직접 확인 결과**:
+  마을 에셋 정상 표시 / 캐릭터 이동 정상 / 집·나무·꽃·벤치와 그림자 정상 /
+  모바일 화면 배치 정상 — 전부 PASS.
+- **리드 세션 감사(로그인 없이, Production WRITE 0 유지)**: Preview가
+  서빙하는 `Proto25DScreen-DBZrSTCT.js`·`index-CDiLgYoV.js`·
+  `index-Skv2ZQJx.css`가 로컬 `dist/`와 content-hash 이름 동일(CSS는
+  바이트 일치)임을 확인한 뒤, 동일 빌드를 `vite preview` + `installMocks`
+  (실요청 0)로 1280×800(마우스)/360×740/390×844/412×915(터치, DPR 3)에서
+  검사(`scripts/.tmp/p6a_final_audit.mjs`, gitignored, 스크린샷 24장 +
+  `results.md/json`은 `scripts/.tmp/p6a-final-audit/`): ① 에셋(오브젝트
+  7+벤치 이미지 로드, 그림자 7, 배경 연녹) ② 클릭-투-워크·우회(경로 샘플
+  장애물 진입 0) ③ 오클루전·Y 스케일(건물 뒤 z 6166<6362·스케일 0.61, 앞
+  z 6418>6362·0.86) ④ 벤치 walking→sitting→leaving→idle ⑤ sway·리플
+  재생/reduced-motion 시 둘 다 off ⑥ pageerror·console.error·404·미mock
+  요청 전부 0, 장애물 카운트 8 — 4 뷰포트 × 6항목 전부 PASS. ⑦ 실제 배치
+  아이템은 설계상 미표시(INFO — `PROTO25D_NEXT_STEPS` §2.3 운영자 결정).
+- **KNOWN LIMITATION(운영자 판정, 수정 금지)**: 현재 캐릭터는 단일 이모지
+  이미지라 이동 중 다리가 움직이지 않는다. 이는 Phase 6A 결함이 아니며,
+  라이선스가 확인된 걷기 스프라이트 교체 단계(§3 어댑터 + ASTRA §0-A)로
+  이관한다. 이모지를 CSS로 분해하거나 추가 보정하지 않는다(§0.9 "착석
+  float 추가 미세조정 금지"와 같은 원칙).
+- 이 절은 문서만 변경(코드 0). Production WRITE 0, 플래그 3종 기본값 false,
+  PR #62 Draft 유지.
+
 ## 2026-09-23 (172차) — Paul Town 2.5D 캐릭터 프로토타입 Stage 1~5 완료 + CI(testBundleBudget) 수정 문서화 (paulTown2_5d OFF, Production 무접촉)
 
 ### 0. 안전 요약
