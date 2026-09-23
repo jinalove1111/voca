@@ -1,0 +1,64 @@
+{
+  "agent_name": "lead",
+  "role": "Paul Town 2.5D 캐릭터 프로토타입 Stage 5(안정화·회귀 테스트) + 최종 인수인계 조정/검수(야간 자율 세션, Opus/Fable 계획·검증, Sonnet 구현)",
+  "task_id": "paul-town-25d-stage5-handoff-2026-09-23",
+  "task": "PR #62(feat/paul-town-v2-clean-pr) — Stage 5 하드닝/회귀 테스트, CI(testBundleBudget) 수정, Astra 인수인계 문서, 전체 검증(build/verify:all/verify:e2e/CI), 시각 검증, PR 코멘트. Production WRITE 0, 플래그 전부 false, PR OPEN/Draft 유지, 머지/undraft/배포 없음.",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-23T07:30:00+09:00",
+  "updated_at": "2026-09-23T09:55:00+09:00",
+  "branch": "feat/paul-town-v2-clean-pr (worktree scratchpad/wt-clean-pr; C:\\voca 무접촉)",
+  "start_head": "cf18f5f",
+  "commits": {
+    "A_stage5_hardening_tests": "d2bfb30",
+    "B_ci_bundle_budget_fix": "435d6b1",
+    "D_registry_note_fix": "f8b5a14",
+    "C_docs_handoff": "2a96847",
+    "F_handoff_precision": "5c2421e",
+    "E_phase9_design_docs": "314971e (docs/design/town/PROTO25D_NEXT_STEPS_2026-09-23.md)",
+    "G_verification_and_s8a_flake_note": "ff95bc0",
+    "H_ai_status_checkpoint": "(this file's commit — last commit before the single final push)"
+  },
+  "files_owned": [
+    "src/components/town/proto2_5d/Proto25DScreen.jsx (d2bfb30, Sonnet implementer)",
+    "src/utils/town/proto2_5d/walkGrid.js (d2bfb30 주석)",
+    "scripts/testProto25dWalkGrid.mjs (d2bfb30)",
+    "tests/e2e/townProto25d.spec.mjs (d2bfb30)",
+    "scripts/testBundleBudget.mjs (435d6b1)",
+    "tests/harness/registry.mjs (f8b5a14 note 문자열만)",
+    "docs/design/town/ASTRA_HANDOFF_2026-09-21.md (2a96847 §0/§0-A)",
+    "docs/design/town/ASTRA_ASSET_AUDIT_2026-09-21.md (2a96847 §16)",
+    "TESTING.md (2a96847)",
+    "handoff.md (2a96847 172차)",
+    ".ai-status/lead-paul-town-25d-stage5-handoff-2026-09-23.json"
+  ],
+  "files_read": [
+    "src/App.jsx", "src/config/features.js", "src/utils/town/depthOrder.js",
+    "src/utils/town/proto2_5d/{pathfinding,depthVisual,benchInteraction}.js",
+    "src/components/town/proto2_5d/ProtoCharacter.jsx",
+    "scripts/testBrowserE2E.mjs", "tests/e2e/lib/mockRoutes.mjs", "tests/e2e/fixtures/index.mjs"
+  ],
+  "verification": {
+    "testProto25dWalkGrid": "28/28", "testProto25dDepth": "23/23", "testProto25dBench": "88/88",
+    "townProto25d.spec (standalone)": "160 PASS / 0 FAIL / 0 SKIP, unmocked 0",
+    "testTownV2Static": "147/147", "testTownDepthOrder": "73/73", "testTownWorldContract": "96/96",
+    "testBundleBudget": "24/24 (readdir 정방향·역순 둘 다; 수정 전 역순 = CI와 동일 2 FAIL 재현)",
+    "npm run build": "exit 0 (435d6b1)",
+    "npm run verify:all": "ALL DOMAINS: PASS — 31 PASS / 2 SKIP(speaking, listening: 실제 오디오 도메인, 예상된 SKIP) / 0 FAIL, exit 0 (2026-09-23 08:36~09:10 KST, HEAD 435d6b1 코드 기준; e2e 도메인 PASS, 전 spec 미mock 요청 0건)",
+    "npm run verify:e2e": "총 1488단언 — PASS 1487 / FAIL 1 / SKIP 0 (09:11~09:4x KST). 유일한 FAIL = [town-v2] S8a[390x844] '마을을 열기만 해도 student_progress 쓰기 0건' writes=1 — 타이밍 플레이크(useStudent.js:2043-2047의 restoreChecked 이후 2초 디바운스 sync가 병합 복원→측정 사이에 발화). 같은 코드로 townV2.spec 단독 재실행 448/448 PASS, 직전 verify:all의 e2e 도메인도 PASS. 테스트/허용치 무변경, 문서화만",
+    "visual (Phase 6)": "50/50 OK — 1280/360/390/412 + reduced-motion + ?proto25dDebug=1, 로컬 vite preview(동일 dist) + installMocks; Vercel Preview는 SSO+로그인 게이트라 WRITE 0 제약상 직접 로그인 안 함",
+    "ci": "run 35799615337(2a96847) 진행 중 — 최종 push 후 완주 확인 예정(이전 run들은 연속 push로 cancelled)"
+  },
+  "production_write": 0,
+  "flags": { "paulTownV1": false, "paulTownV2": false, "paulTown2_5d": false },
+  "pr": "#62 OPEN / Draft (머지·undraft·배포 없음)",
+  "known_limitations": [
+    "이모지 플레이스홀더(🚶/🧘) — 실제 스프라이트 필요(ASTRA_HANDOFF §0-A)",
+    "착석 float(모바일 ≈15px, 데스크톱 ≈29px, reduced-motion ≈36px) — 수용된 한계, 추가 미세조정 금지",
+    "바닥 컨테이너 aspectRatio 실효 없음(설계상 실측 기하 사용)",
+    "S9(townV2.spec) CI 1회 FAIL 원인 미증명 — 문서화만, extra:true",
+    "testProdCheck.mjs extra:true FAIL(--show-names INFO 절 DriftStudentS1) — 관측만"
+  ],
+  "blocker": null,
+  "next_action": "이 세션: 단일 push → CI Release Gate 완주 확인(결과는 PR #62 통합 코멘트에 기록) → STOP. 운영자: ASTRA_HANDOFF §0.14 아침 점검 5항목(Android 실기기, Preview URL + 관리자 패널 플래그 ON). 다음 에이전트 첫 작업: ProtoCharacter.jsx 이모지를 ASTRA_HANDOFF §0-A 사양의 라이선스 스프라이트로 교체(상태 머신/워크그리드 무변경, 139 단위 + 160 E2E 단언 그린 유지; 계획은 PROTO25D_NEXT_STEPS_2026-09-23.md §1)."
+}
