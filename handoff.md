@@ -1,9 +1,88 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-23 (173차 — **Paul Town 2.5D Phase 6A 인수·완결**: 씬
-픽스처(실제 아트 8종)·탭 리플·캐릭터 스프라이트 어댑터(비활성) + sway 앵커
-버그 수정, 브랜치 `feat/paul-town-v2-clean-pr`, 커밋 `2095198`·`cd73799`
-(+ 이 문서 커밋). `paulTownV1:false`/`paulTownV2:false`/`paulTown2_5d:false`
-전부 유지, Production WRITE 0, PR #62 OPEN/DRAFT 유지. 172차 이하 보존)_
+_최종 갱신: 2026-09-24 (174차 — **Paul Town 2.5D 캐릭터 스프라이트 교체
+조사·계약·판정(조건 B, 에셋 승인 대기)**: 코드 변경 0, 커밋 `91f92f4`(계약
+문서) + 이 문서 커밋, 브랜치 `feat/paul-town-v2-clean-pr`.
+`paulTownV1:false`/`paulTownV2:false`/`paulTown2_5d:false` 전부 유지,
+Production WRITE 0, PR #62 OPEN/DRAFT 유지. 173차 이하 보존)_
+
+## 2026-09-24 (174차) — Paul Town 2.5D 캐릭터 스프라이트 교체: 조사·계약·판정(조건 B, 에셋 승인 대기) — 코드 변경 0, paulTown2_5d OFF, Production 무접촉
+
+### 0. 안전 요약
+- 브랜치 `feat/paul-town-v2-clean-pr`(워크트리 `scratchpad/wt-clean-pr`),
+  시작 HEAD `b932682` → 커밋 `91f92f4`(계약 문서) + 이 문서 커밋. **소스
+  코드·에셋 변경 0**(`src/`·`api/`·`scripts/`·`tests/`·`.github/` 무접촉).
+  Production WRITE 0, Supabase/SQL 0, `paulTownV1`/`paulTownV2`/
+  `paulTown2_5d` 전부 `false`, PR #62 OPEN/Draft 유지, CI timeout 무변경.
+- 외부 이미지는 저장소에 0장 추가. 다운로드물은 세션 스크래치에만 있다.
+
+### 1. 수행 방식
+- 읽기 전용 조사 4종을 Sonnet sub-agent로 병렬 수행(sprite-asset-auditor /
+  sprite-contract-reviewer / sprite-test-designer / integration-reviewer),
+  리드가 각 보고의 근거를 직접 재검증했다: (a) 계약 검토의 3개 핵심 주장
+  (일반 보행 `startPlainWalk`가 facing 미갱신, 그림자가 depth 박스의 형제,
+  `WORLD={100,190}`)을 코드로 확인, (b) 통합 검토의 "Proto 청크 번들 예산
+  없음"을 `testBundleBudget.mjs`에서 확인, (c) 에셋 감사가 페이지 수준에서
+  탈락시킨 Kenney Toon Characters를 리드가 공식 zip으로 직접 받아(SHA-256
+  `d4c0eb31…4cace9`, 5,474,287B) `License.txt`(CC0)·포즈 45종·캔버스 96×128·
+  HD 192×256을 확인하고 프레임 알파 경계를 Playwright로 실측했다.
+- 결과 문서: `docs/design/town/SPRITE_CONTRACT_2026-09-24.md`(단일 진실
+  원천) + 부록 `docs/design/town/sprite-research/{ASSET_CANDIDATES,
+  TEST_DESIGN}_2026-09-24.md`, `kenney_malePerson_anchors.json`.
+
+### 2. 판정 — 조건 B(적합 에셋 확정 불가)
+- 저장소 내 캐릭터 스프라이트: 없음(LICENSE/NOTICE 0건, 감사 문서 §5/§13
+  재확인).
+- 외부 후보 3(전부 CC0): **Kenney Toon Characters**(정면 idle + 정면 걷기
+  8프레임 + `back`/`side` 정지 1장씩, 96×128, sit 없음 — `duck`은 쪼그림),
+  rgsdev(큐브 블롭, 사람 아님, sit 없음), GrafxKid(포즈 미문서화, 픽셀아트).
+- idle+walk+sit 3종을 객관적으로 만족하는 후보 없음 → 앱 캐릭터 무변경.
+  Kenney의 화풍(플랫 벡터) 적합성은 순수 미술 판단이라 사람 결정으로 넘긴다.
+
+### 3. 계약 확정 내용(요지, 상세는 SPRITE_CONTRACT §4)
+- states: `idle`(1) / `walkSide`(=`walk` 별칭, ≥2, 미러 적용) /
+  `walkFront`·`walkBack`(선택, 미러 미적용) / `sit`(1, `seatAnchorPx` 필수).
+- `directionForMove(dx,dy)`: WORLD 종횡비 정규화 후 `|dyN|>|dxN|`이면
+  front/back, 아니면 side. `stateKeyForPhase(phase, direction)` 하위호환.
+- 앵커: outer `translate(-50%,-100%)` + 자식 anchor-offset 래퍼(현행),
+  그림자 무변경, `seatSinkLocalPx`/`measureGlyphInk` 스프라이트 경로 미호출.
+- Kenney 실측: 전 프레임 하단 정렬 `footAnchorPx.y=128`, x≈48(걷기 프레임은
+  캔버스 중심 고정 권장).
+- 플래그 `paulTown2_5dSprite`(기본 false, attachment 카테고리 + 패널 +
+  스토어 테스트 15번), 레지스트리 `src/assets/town/character/`(공용
+  `index.js` import 금지), Proto 청크 gzip ≤60KB 예산 + 누출 검사, 테스트
+  약 75단언 추가 설계(부록).
+
+### 4. 검증(코드 무변경 확인용)
+- 단위: `testProto25dCharacterManifest` 72/72, `testProto25dBench` 88/88,
+  `testProto25dDepth` 23/23, `testProto25dWalkGrid` 28/28,
+  `testProto25dSceneFixture` 24/24, `testFeatureFlagStore` 49/49,
+  `testTownDepthOrder` 73/73, `testTownV2Static` 147/147.
+- `npm run build` exit 0, `testBundleBudget` 24/24.
+- E2E `townProto25d.spec.mjs` 단독: 190단언 190 PASS / 0 FAIL, 미mock 요청 0(코드 무변경 확인, 2026-09-24 05:2x KST)
+- `npm run verify:all`: 동일 소스(마지막 코드 커밋 `cd73799`)에 대해 173차
+  §5에서 ALL DOMAINS PASS(212/0/SKIP 2) — 이 세션은 문서만 추가했으므로
+  재실행하지 않았다. `verify:e2e`도 동일 사유로 생략(30분 캡·S8a 플레이크
+  이슈는 172차 §11 그대로).
+- 스크린샷: 에셋 미적용이라 idle/walk/sit 캡처 대상 없음. 현재 이모지
+  상태의 4뷰포트 스크린샷은 173차 §9(`scripts/.tmp/p6a-final-audit/`).
+
+### 5. 변경 파일(문서만)
+`docs/design/town/SPRITE_CONTRACT_2026-09-24.md`(신규),
+`docs/design/town/sprite-research/*`(신규 3), `docs/design/town/
+ASTRA_HANDOFF_2026-09-21.md` §0.18(포인터), `handoff.md`(이 절),
+`.ai-status/lead-paul-town-25d-sprite-2026-09-24.json`.
+
+### 6. 사람이 결정할 항목(3)
+1. Kenney Toon Characters 채택 여부 — sit 부재(duck 임시 허용 vs 별도 제작),
+   옆/뒤 걷기 프레임 부재, 플랫 벡터 화풍 적합성.
+2. 신규 제작 경로(수채화 톤 idle/walk/sit 커미션 또는 AI 생성 + 라이선스
+   문서화).
+3. 방향 세트 범위(§0-A 최소 좌/우 미러 vs walkFront/walkBack까지).
+
+### 7. 다음 작업
+결정 1 또는 2가 내려지면 SPRITE_CONTRACT §5 체크리스트 1~9를 그대로 실행
+(커밋 순서: feat 렌더러+폴백 → test → docs). 이모지 CSS 분해·보정은 계속
+금지(173차 §9 운영자 판정).
 
 ## 2026-09-23 (173차) — Paul Town 2.5D Phase 6A: 씬 구성(실제 아트 8종)·탭 리플·캐릭터 스프라이트 어댑터(비활성) 인수·완결 + 스웨이 앵커 버그 수정 (paulTown2_5d OFF, Production 무접촉)
 
