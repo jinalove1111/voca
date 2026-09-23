@@ -61,8 +61,10 @@ Production WRITE 0, PR #62 OPEN/DRAFT 유지. 171차 이하 보존)_
   (non-gating). 씬 입장 애니메이션 가설은 로컬 재현으로 반증. Linux
   Chromium 환경 부재로 추가 조사 불가 — 문서화만, 제품/테스트 변경
   없음.
-- `scripts/testProdCheck.mjs` — CI FAIL 관측(`--show-names` 관련),
-  `extra:true`, 원인 미조사(범위 밖), 운영자 전달 권고.
+- `scripts/testProdCheck.mjs` — CI FAIL 관측, 최초 관측 원인: 자체
+  `--fixture` self-suite(총 292단언) 중 1건 FAIL — `--show-names — INFO
+  절에 원본 이름 "DriftStudentS1" 이 보인다`. `extra:true`, 원인 조사/
+  수정은 하지 않음(범위 밖), 운영자 전달 권고.
 
 ### 4. 준수한 제약
 - Production WRITE 0, `paulTownV1`/`paulTownV2`/`paulTown2_5d` 전부
