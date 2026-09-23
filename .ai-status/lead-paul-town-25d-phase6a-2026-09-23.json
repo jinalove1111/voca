@@ -7,7 +7,7 @@
   "progress": 100,
   "started_at": "2026-09-23T16:55:00+09:00",
   "updated_at": "2026-09-23T17:40:00+09:00",
-  "branch": "feat/paul-town-v2-clean-pr (worktree scratchpad/wt-clean-pr; C:\voca 무접촉)",
+  "branch": "feat/paul-town-v2-clean-pr (worktree scratchpad/wt-clean-pr; C:\\voca 무접촉)",
   "start_head": "9586daa (+ 미커밋 Phase 6A 작업 6 수정/4 신규)",
   "commits": {
     "A_scene_fixture": "2095198 — sceneFixture.js/walkGrid.js/Proto25DScreen.jsx/tailwind/testProto25dSceneFixture/testProto25dDepth 라벨/E2E spec/registry(1행)",
@@ -28,6 +28,7 @@
     "npm run build": "exit 0",
     "e2e townProto25d standalone": "기준선(스펙 갱신 전) 160단언 159 PASS/1 FAIL(예상, 장애물 3→8) → 갱신 후 190/190 × 3회, 미mock 0",
     "npm run verify:all": "ALL DOMAINS PASS(exit 0, 2026-09-23 17:12~17:35 KST, 커밋 cd73799 코드 기준) — 스크립트 212 PASS / 0 FAIL, 도메인 SKIP 2(speaking/listening, 실제 오디오 도메인 — 예상된 SKIP), e2e 도메인 PASS(전 spec 미mock 요청 0·mock 내부 오류 0, [town-proto2.5d] 190 포함)",
+    "ci": "run 35838992353(30a189c): Gate 1 build ✅, Gate 2 verify:all ✅, Gate 3 cancelled at timeout-minutes:30 (Gate 3b/4/5 skipped) — 실패 아님, 캡 결정은 운영자(172차 §11)",
     "visual": "scripts/.tmp/p6a_shots.mjs 1280/390/360 + debug + flagOFF — sway 버그 발견(수정 전) → 수정 후 5개 전부 히트박스/그림자 정렬 확인"
   },
   "bug_found_and_fixed": "townSway keyframe transform이 오브젝트 <img>의 inline translate(-50%,-100%)를 덮어써 나무/꽃밭 5개가 앵커에서 한 폭·한 높이 어긋남 — 레이아웃을 애니메이션 없는 래퍼 div로 분리해 수정(2095198에 포함)",

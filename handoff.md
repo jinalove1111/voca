@@ -112,6 +112,18 @@ _최종 갱신: 2026-09-23 (173차 — **Paul Town 2.5D Phase 6A 인수·완결*
   `<ProtoCharacter manifest={...}>`로 넘기기만 하면 된다(§3 어댑터가 이미
   대기). 그때 E2E 잉크 단언 3개는 `seatAnchorPx` 투영 기준으로 재작성.
 
+### 8. CI 결과(push 후 후속, 같은 날)
+- run 35838992353(`30a189c`, Linux): Gate 1 build ✅, Gate 2 `verify:all`
+  ✅(이 브랜치의 Phase 6A 코드 기준 그린), Gate 3 student health가 job
+  `timeout-minutes: 30`에 걸려 **cancelled**, Gate 3b/4/5 skipped — 실패
+  아님. 172차 §11의 캡 문제가 그대로이며, Gate 2 안의 E2E 도메인이
+  +30단언만큼 더 길어져 이번엔 Gate 3까지 못 갔다(직전 run은 Gate 3 완주
+  후 Gate 5에서 cut). 로컬 동일 코드 `verify:all` ALL DOMAINS PASS·E2E
+  190/190은 §5 그대로. 워크플로 파일은 이 세션도 건드리지 않았다 — 캡
+  30→45 상향 또는 Gate 2 e2e 제외(중복 제거)는 운영자 결정.
+- 참고: 이 세션의 CI 감시 스크립트(`gh run view` 폴링)가 30분간 이벤트를
+  내지 않아 완료 후 수동 확인했다 — 스크립트 문제이지 CI 문제 아님.
+
 ## 2026-09-23 (172차) — Paul Town 2.5D 캐릭터 프로토타입 Stage 1~5 완료 + CI(testBundleBudget) 수정 문서화 (paulTown2_5d OFF, Production 무접촉)
 
 ### 0. 안전 요약
