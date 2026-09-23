@@ -1604,3 +1604,34 @@ bbox 루프 직전에 호출하는 것뿐(허용치 `>=43.5`/`>=44`·뷰포트·
 `waitForBoxStable(locator)`(연속 3표본 0.05px 이내)로 기준선 샘플만 안정화
 (허용치 `<1px`·단언 수 160 무변경). Windows 로컬 프로브 12회는 잔여 0px —
 재현은 CI 재실행으로 확정(결과는 `handoff.md` 172차 §10/PR #62 코멘트).
+
+## 관련 항목: Paul Town 2.5D Phase 6A — 씬 픽스처/캐릭터 매니페스트 단위 스위트 2종 + E2E 160→190 (2026-09-23, 173차)
+
+- `scripts/testProto25dSceneFixture.mjs`(24단언, gating): `sceneFixture.js`
+  id 8개 고유, 모든 `assetKey`가 `townAsset()`에서 URL로 해석, `walkGrid.js`
+  `OBSTACLES`가 `deriveObstacles(SCENE_FIXTURE)`와 deep-equal(단일 진실
+  원천), 레거시 3개 rect byte-identical, 신규 5개 rect = `footprintRect`
+  산식, 장애물 쌍 겹침 0, 스폰(50,62) walkable + 8개 장애물 옆까지 BFS
+  도달, `objectRenderedWidthPx`/`sceneUnitPx` 규칙. `src/assets/town/
+  index.js`는 `.webp`를 dataurl 로더로 번들(`testTownAssetManifest.mjs`
+  패턴).
+- `scripts/testProto25dCharacterManifest.mjs`(72단언, gating): 매니페스트
+  부재/무효 9종 → throw 없이 emoji 폴백(기존 glyph 규칙과 동일), 유효
+  매니페스트 ok, phase→state 매핑, frameIndex modulo, `isAnimated`,
+  sheet src/srcSet 전달. 의존성 0(plain import).
+- `tests/e2e/townProto25d.spec.mjs` 160→190: S6 장애물 8개 + `OBSTACLES_REF`
+  8개(5개 파생 rect를 리터럴로 복제, 이 파일의 "src import 금지" 관례) +
+  항목16 우회 2종(house-annex 탭 (13,24), tree-plaza-ne 탭 (59,44) — 박스
+  밖 4 world-% 북쪽, 경로 샘플이 박스에 진입하지 않음), S9 항목17(360/390/
+  412/1280) `proto25d-object` 7개·pointer-events:none·bottom-center가
+  `SCENE_OBJECTS_REF` 앵커와 1.0 world-% 이내·`proto25d-object-shadow` 7개·
+  `data-proto25d-obstacle-count="8"`, S3 항목C2 탭 리플 ≥1 → 700ms 후 0,
+  S5 항목C1 reduced-motion 리플 0. 스펙 갱신 전 기준선 실측: 159/160(예상
+  FAIL 1 = "장애물 3개") — 규칙 15 방식으로 회귀 확인 후 갱신. 갱신 후
+  190/190 × 3회(Windows 로컬, 단독 러너).
+- 항목17은 실제 버그를 잡는 단언이다: sway keyframe이 inline transform을
+  덮어써 나무/꽃밭이 앵커에서 한 폭·한 높이 어긋나던 문제(173차 §4)를
+  래퍼 `div` 분리로 수정한 뒤에만 통과한다.
+- 재확인 커맨드: `node scripts/testProto25dSceneFixture.mjs`,
+  `node scripts/testProto25dCharacterManifest.mjs`, E2E는 `npm run
+  verify:e2e`(전체) 또는 `vite preview` 기동 후 이 spec만 단독 실행.

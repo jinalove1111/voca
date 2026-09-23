@@ -1,0 +1,39 @@
+{
+  "agent_name": "lead",
+  "role": "Paul Town 2.5D Phase 6A 인수·완결(리드: 계획/검증/커밋, Sonnet implementer 2명: E2E 스펙 갱신 / sway 앵커 수정)",
+  "task_id": "paul-town-25d-phase6a-2026-09-23",
+  "task": "이전 세션이 커밋·체크포인트 없이 중단한 Phase 6A(sceneFixture 8종 실제 아트, 탭 리플, characterManifest 어댑터) 워크트리 상태 인수 → 단위/빌드/E2E 기준선 실측 → E2E 스펙 갱신(160→190) → 스크린샷에서 발견한 sway transform 앵커 버그 수정 → 소커밋 3개 → 문서/체크포인트. Production WRITE 0, 플래그 전부 false, PR #62 Draft 유지.",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-23T16:55:00+09:00",
+  "updated_at": "2026-09-23T17:40:00+09:00",
+  "branch": "feat/paul-town-v2-clean-pr (worktree scratchpad/wt-clean-pr; C:\voca 무접촉)",
+  "start_head": "9586daa (+ 미커밋 Phase 6A 작업 6 수정/4 신규)",
+  "commits": {
+    "A_scene_fixture": "2095198 — sceneFixture.js/walkGrid.js/Proto25DScreen.jsx/tailwind/testProto25dSceneFixture/testProto25dDepth 라벨/E2E spec/registry(1행)",
+    "B_character_manifest_adapter": "cd73799 — characterManifest.js/ProtoCharacter.jsx/testProto25dCharacterManifest/registry(1행)",
+    "C_docs": "(이 파일과 함께) handoff.md 173차, TESTING.md 173차 절, ASTRA_HANDOFF §0.17"
+  },
+  "files_owned": [
+    "tests/e2e/townProto25d.spec.mjs (e2e-spec-6a, Sonnet)",
+    "scripts/testProto25dDepth.mjs 주석 (e2e-spec-6a)",
+    "src/components/town/proto2_5d/Proto25DScreen.jsx sway 래퍼 (sway-anchor-fix, Sonnet)",
+    "handoff.md / TESTING.md / docs/design/town/ASTRA_HANDOFF_2026-09-21.md / 이 파일 (lead)",
+    "이전 세션 산출물(인수, 검증 후 그대로 커밋): sceneFixture.js, characterManifest.js, walkGrid.js, ProtoCharacter.jsx, tailwind.config.js, testProto25dSceneFixture.mjs, testProto25dCharacterManifest.mjs, registry.mjs"
+  ],
+  "verification": {
+    "testProto25dSceneFixture": "24/24", "testProto25dCharacterManifest": "72/72",
+    "testProto25dWalkGrid": "28/28", "testProto25dDepth": "23/23", "testProto25dBench": "88/88",
+    "testTownDepthOrder": "73/73", "testTownV2Static": "147/147", "testBundleBudget": "24/24",
+    "npm run build": "exit 0",
+    "e2e townProto25d standalone": "기준선(스펙 갱신 전) 160단언 159 PASS/1 FAIL(예상, 장애물 3→8) → 갱신 후 190/190 × 3회, 미mock 0",
+    "npm run verify:all": "ALL DOMAINS PASS(exit 0, 2026-09-23 17:12~17:35 KST, 커밋 cd73799 코드 기준) — 스크립트 212 PASS / 0 FAIL, 도메인 SKIP 2(speaking/listening, 실제 오디오 도메인 — 예상된 SKIP), e2e 도메인 PASS(전 spec 미mock 요청 0·mock 내부 오류 0, [town-proto2.5d] 190 포함)",
+    "visual": "scripts/.tmp/p6a_shots.mjs 1280/390/360 + debug + flagOFF — sway 버그 발견(수정 전) → 수정 후 5개 전부 히트박스/그림자 정렬 확인"
+  },
+  "bug_found_and_fixed": "townSway keyframe transform이 오브젝트 <img>의 inline translate(-50%,-100%)를 덮어써 나무/꽃밭 5개가 앵커에서 한 폭·한 높이 어긋남 — 레이아웃을 애니메이션 없는 래퍼 div로 분리해 수정(2095198에 포함)",
+  "production_write": 0,
+  "flags": { "paulTownV1": false, "paulTownV2": false, "paulTown2_5d": false },
+  "pr": "#62 OPEN / Draft",
+  "blocker": null,
+  "next_action": "리드: 문서 커밋 → push → CI 결과 확인(Gate 5는 30분 캡으로 cancelled될 수 있음, 172차 §11). 운영자 결정 3건(캡 30→45, testProto25dBench 3c 절 정책, 파일럿 배치 노출). 다음 에이전트: 라이선스 스프라이트 확보 시 character registry + manifest를 Proto25DScreen에서 넘기기(어댑터 준비됨)."
+}

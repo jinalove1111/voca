@@ -1,9 +1,116 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-23 (172차 — **Paul Town 2.5D 캐릭터 프로토타입 Stage
-1~5 완료 + CI(testBundleBudget) 수정 — 문서 갱신**: 브랜치
-`feat/paul-town-v2-clean-pr`, HEAD `435d6b1`(+ 이 문서 갱신 커밋).
-`paulTownV1:false`/`paulTownV2:false`/`paulTown2_5d:false` 전부 유지,
-Production WRITE 0, PR #62 OPEN/DRAFT 유지. 171차 이하 보존)_
+_최종 갱신: 2026-09-23 (173차 — **Paul Town 2.5D Phase 6A 인수·완결**: 씬
+픽스처(실제 아트 8종)·탭 리플·캐릭터 스프라이트 어댑터(비활성) + sway 앵커
+버그 수정, 브랜치 `feat/paul-town-v2-clean-pr`, 커밋 `2095198`·`cd73799`
+(+ 이 문서 커밋). `paulTownV1:false`/`paulTownV2:false`/`paulTown2_5d:false`
+전부 유지, Production WRITE 0, PR #62 OPEN/DRAFT 유지. 172차 이하 보존)_
+
+## 2026-09-23 (173차) — Paul Town 2.5D Phase 6A: 씬 구성(실제 아트 8종)·탭 리플·캐릭터 스프라이트 어댑터(비활성) 인수·완결 + 스웨이 앵커 버그 수정 (paulTown2_5d OFF, Production 무접촉)
+
+### 0. 안전 요약
+- 브랜치 `feat/paul-town-v2-clean-pr`(워크트리 `scratchpad/wt-clean-pr`,
+  `C:\voca` 무접촉). 커밋 3개: `2095198`(씬 픽스처) → `cd73799`(캐릭터
+  매니페스트 어댑터) → 이 문서 커밋. `paulTownV1`/`paulTownV2`/
+  `paulTown2_5d` 전부 `false` 유지, Production WRITE 0, Supabase/SQL 0,
+  V1·V2·`App.jsx`·`features.js`·`benchInteraction.js`·`pathfinding.js`·
+  `depthVisual.js` 무변경. PR #62 OPEN/Draft 유지.
+- Proto 2.5D는 여전히 구매/저장 API를 호출하지 않는다(마운트 스코프 로컬
+  state만). 학생 식별 없음.
+
+### 1. 배경 — 이전 세션의 미커밋 작업 인수
+- 172차 종료 후 같은 날 오후 별도 세션이 "Phase 6A"(설계 메모
+  `scripts/.tmp/p6a_A_assets.md`/`p6a_B_composition.md`/
+  `p6a_C_sprite_contract.md`, gitignored)를 구현하다가 커밋·체크포인트
+  없이 중단됐다(워크트리에 수정 6 + 신규 4 파일, `.ai-status` 없음). 이
+  세션은 그 상태를 그대로 인수해 (a) 단위 스위트 전부 실행, (b) 빌드,
+  (c) E2E 기준선 실측(160단언 중 159 PASS / 1 FAIL — S6 "장애물 3개"
+  개수 단언, 설계 메모 §5 위험 1이 예고한 예상 회귀), (d) 스크린샷 육안
+  검증 순으로 확인한 뒤 남은 작업(E2E 갱신 + 아래 §4 버그)을 마쳤다.
+
+### 2. 씬 픽스처(커밋 `2095198`)
+- `src/utils/town/proto2_5d/sceneFixture.js`(신규): 씬 구성의 단일 진실
+  원천. 레거시 3개(demo-building/demo-bench/demo-tree — `collisionRect`로
+  2026-09-22 좌표를 byte-identical 고정) + 신규 5개(house-annex
+  `buildings/british-cottage` (13,42) / tree-plaza-nw·ne `nature/tree`
+  (43,56)·(59,54) / shrub-sw·se `nature/flower-garden` (32,72)·(66,72)).
+  신규 5개 장애물 사각형은 `footprintRect(anchor,widthPct,
+  footprintDepthPct)`로 파생: house-annex 6–20/28–42, tree-plaza-nw
+  40–46/50–56, tree-plaza-ne 56–62/48–54, shrub-sw 30–34/68–72, shrub-se
+  64–68/68–72.
+- `walkGrid.js`: `OBSTACLES = deriveObstacles(SCENE_FIXTURE)`(3→8). 나머지
+  함수 무변경. `pathfinding.js`/`depthVisual.js` 무변경.
+- `Proto25DScreen.jsx`: 벤치 제외 7개를 항상 표시되는 실제 아트로 렌더
+  (bottom-center 앵커, `obstacleZIndex`, 타원 그림자, 나무/꽃밭에 sway),
+  CSS radial-gradient만으로 길/광장 톤, 1회성 탭 리플(450ms, reduced-motion
+  이면 DOM 자체를 안 만듦), 루트에 `data-proto25d-obstacle-count`. 디버그
+  박스 map은 아트보다 DOM 뒤로 이동(같은 z에서 히트박스가 아트 위에
+  보이도록). `tailwind.config.js`: `town-proto-ripple` keyframe.
+- 이미지 신규 0장 — 전부 기존 `src/assets/town/**` 카탈로그 재사용
+  (`townAsset()`).
+
+### 3. 캐릭터 매니페스트 어댑터(커밋 `cd73799`, 시각적으로 비활성)
+- `characterManifest.js`(신규, 의존성 0): `validateCharacterManifest`
+  (throw 없음, 오류 누적) + `resolveCharacterVisual` + `stateKeyForPhase`
+  (sitting→sit, walking·leaving→walk, idle→idle). 무효/부재 매니페스트는
+  항상 기존 이모지(🧘/🚶)로 귀결.
+- `ProtoCharacter.jsx`: 선택 prop `manifest`(기본 undefined). sprite 분기는
+  anchor-offset 래퍼 + `<img data-proto-character-sprite>`로 `footAnchorPx`/
+  `seatAnchorPx`를 직접 쓰고 `measureGlyphInk`/`seatSinkLocalPx`를 호출하지
+  않는다. 이모지 분기 DOM은 이전과 동일. 오늘 어떤 호출부도 manifest를
+  넘기지 않는다(라이선스 스프라이트 아트 없음, ASTRA §0-A).
+- 네이밍 TODO(`PROTO25D_NEXT_STEPS` §1.5)는 이 구현이 `data-proto-
+  character-sprite`(신규 이름)로 사실상 선택했다 — 이모지 셀렉터
+  `data-proto-character-glyph`는 그대로라 기존 E2E 3개 잉크 단언 무변경.
+
+### 4. 발견·수정한 버그 — sway 애니메이션이 앵커 transform을 덮어씀
+- 스크린샷(1280×800 `?proto25dDebug=1`)에서 나무/꽃밭 5개가 히트박스·
+  그림자보다 한 폭 오른쪽·한 높이 아래에 그려졌다. 원인: `townSway`
+  keyframe의 `transform: rotate(±1.5deg)`가 같은 엘리먼트의 inline
+  `translate(-50%,-100%)`를 덮어써 top-left가 앵커에 놓였다(건물은 sway가
+  없어 정상). 수정: 레이아웃(앵커/크기/z/`data-testid`)은 애니메이션 없는
+  래퍼 `div`가 갖고, `<img>`만 sway 클래스를 갖는다. 수정 후 디버그
+  스크린샷에서 5개 전부 히트박스 하단 = 아트 바닥, 그림자 바로 아래.
+- 이 버그는 E2E 신규 항목17(오브젝트 bottom-center가 앵커와 1.0 world-%
+  이내)이 그대로 잡는다 — 수정 전 dist에서 이 단언이 FAIL이었을 것(실측은
+  수정 후 dist에서만 190/190).
+
+### 5. 검증
+- 단위: `testProto25dSceneFixture` 24/24(신규), `testProto25dCharacterManifest`
+  72/72(신규), `testProto25dWalkGrid` 28/28, `testProto25dDepth` 23/23,
+  `testProto25dBench` 88/88, `testTownDepthOrder` 73/73, `testTownV2Static`
+  147/147, `testBundleBudget` 24/24(수정 전·후 둘 다).
+- `npm run build` exit 0(경고 0).
+- E2E `tests/e2e/townProto25d.spec.mjs` 단독 러너: 기준선(스펙 갱신 전)
+  160단언 159 PASS / 1 FAIL(예상) → 갱신 후 190단언 190 PASS / 0 FAIL ×
+  3회(implementer 2회 + 리드 1회, 수정된 dist), 미mock 요청 0.
+  신규 30단언: S6 장애물 8개 + OBSTACLES_REF 8개 좌표 일치 + 항목16
+  house-annex/tree-plaza-ne 우회(경로 샘플이 박스에 진입하지 않음), S9
+  항목17(4 뷰포트) 오브젝트 7개·pointer-events:none·앵커 일치·그림자 7개·
+  obstacle-count "8", S3 항목C2 리플 생성→700ms 후 제거, S5 항목C1
+  reduced-motion 리플 0.
+- `npm run verify:all`: ALL DOMAINS PASS(exit 0, 2026-09-23 17:12~17:35 KST, 커밋 cd73799 코드 기준) — 스크립트 212 PASS / 0 FAIL, 도메인 SKIP 2(speaking/listening, 실제 오디오 도메인 — 예상된 SKIP), e2e 도메인 PASS(전 spec 미mock 요청 0·mock 내부 오류 0, [town-proto2.5d] 190 포함)
+- 시각: `scripts/.tmp/p6a_shots.mjs`(gitignored) 1280/390/360 idle·walking·
+  arrived + 디버그 오버레이 + flag OFF(root 0개). 수정 후 스크린샷 리드
+  육안 확인.
+
+### 6. 변경 파일
+`src/utils/town/proto2_5d/{sceneFixture,characterManifest}.js`(신규),
+`src/utils/town/proto2_5d/walkGrid.js`, `src/components/town/proto2_5d/
+{Proto25DScreen,ProtoCharacter}.jsx`, `tailwind.config.js`,
+`scripts/testProto25d{SceneFixture,CharacterManifest}.mjs`(신규),
+`scripts/testProto25dDepth.mjs`(라벨/주석), `tests/e2e/townProto25d.spec.mjs`,
+`tests/harness/registry.mjs`(2건 등록, extra:false), 문서(`handoff.md`,
+`TESTING.md`, `docs/design/town/ASTRA_HANDOFF_2026-09-21.md` §0.17),
+`.ai-status/lead-paul-town-25d-phase6a-2026-09-23.json`.
+
+### 7. 남은 결정 / 다음 작업
+- 여전히 열린 운영자 결정: Release Gate `timeout-minutes` 30→45(172차
+  §11), `testProto25dBench.mjs` "3c" 절 유지/교체(`PROTO25D_NEXT_STEPS`
+  §1.5), 파일럿 학생 화면에 실제 배치 아이템을 보일지(§2.3).
+- 다음 에이전트: 라이선스 스프라이트 아트가 확보되면 `src/assets/town/
+  character/index.js` registry + 매니페스트 1개를 `Proto25DScreen.jsx`에서
+  `<ProtoCharacter manifest={...}>`로 넘기기만 하면 된다(§3 어댑터가 이미
+  대기). 그때 E2E 잉크 단언 3개는 `seatAnchorPx` 투영 기준으로 재작성.
 
 ## 2026-09-23 (172차) — Paul Town 2.5D 캐릭터 프로토타입 Stage 1~5 완료 + CI(testBundleBudget) 수정 문서화 (paulTown2_5d OFF, Production 무접촉)
 

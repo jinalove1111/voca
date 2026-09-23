@@ -340,6 +340,35 @@ bbox 루프 직전 호출(허용치·뷰포트·단언 수 448 무변경, 제품
 재실행이 개선 증명(결과: `handoff.md` 172차 §10, PR #62 코멘트). 상세:
 `TESTING.md` 2026-09-23 후속 절.
 
+### 0.17 Phase 6A(2026-09-23 후속, 173차) — 씬 구성·탭 리플·스프라이트 어댑터·sway 앵커 버그
+
+- 커밋 `2095198`(씬 픽스처) / `cd73799`(캐릭터 매니페스트 어댑터). 상세는
+  `handoff.md` 173차 — 여기서는 이 문서의 §0 항목 중 바뀐 사실만 적는다.
+- §0.2 파일 지도 추가: `src/utils/town/proto2_5d/sceneFixture.js`(씬 구성
+  단일 진실 원천, `deriveObstacles`→`walkGrid.OBSTACLES` 3→8개),
+  `src/utils/town/proto2_5d/characterManifest.js`(§0-A 매니페스트 계약의
+  validator/adapter, 오늘은 호출부가 manifest를 넘기지 않아 비활성).
+- §0.3 좌표: 장애물 사각형은 이제 `sceneFixture.js`에서 파생된다. 레거시
+  3개 좌표는 `collisionRect`로 byte-identical 고정, 신규 5개(house-annex/
+  tree-plaza-nw/tree-plaza-ne/shrub-sw/shrub-se)는 `footprintRect`. 격자·
+  BFS·깊이 함수 무변경.
+- §0.6 테스트: 단위 139 → 235(sceneFixture 24 + characterManifest 72 추가),
+  E2E `townProto25d.spec.mjs` 160 → 190(장애물 8개·오브젝트/그림자 앵커
+  4 뷰포트·리플 on/off·우회 2종). 전부 gating(extra:false).
+- §0.9 알려진 한계 무변경(이모지 플레이스홀더·착석 float·바닥 aspectRatio)
+  — 이 Phase는 §0.9를 건드리지 않았다.
+- 새로 기록하는 렌더 규칙: **CSS keyframe이 `transform`을 애니메이션하는
+  엘리먼트에는 inline transform 앵커를 두지 말 것** — 실행 중인 애니메이션이
+  inline `translate(-50%,-100%)`를 매 프레임 덮어써 top-left가 앵커에 놓인다
+  (Phase 6A에서 나무/꽃밭 5개가 실제로 그렇게 어긋났고 래퍼 `div`로 분리해
+  수정). `ProtoCharacter.jsx`가 bob/facing 레이어를 분리해 둔 것과 같은
+  이유다.
+- §0.12 다음 작업 갱신: 스프라이트 아트 확보 시 `src/assets/town/character/
+  index.js` registry + 매니페스트를 `Proto25DScreen.jsx`에서
+  `<ProtoCharacter manifest={...}>`로 넘기면 된다(어댑터 대기 중). 그때
+  `data-proto-character-glyph` 잉크 단언 3개를 `seatAnchorPx` 투영 기준으로
+  재작성.
+
 ## 0-A. 캐릭터 에셋 요구사항(정식 사양)
 
 다음 에이전트가 실제 스프라이트를 요청/제작/배선할 때 그대로 따를 최소
