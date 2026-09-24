@@ -2928,5 +2928,173 @@ export async function run(browser, baseURL) {
     }
   }
 
+  // ── S15 — Phase 6D(2026-09-25): @2x 실패 시 1x 강등 ───────────────────────
+  // ProtoCharacter.jsx의 2단계 이미지 강등(spriteV2SrcSetFailed →
+  // spriteV2LoadFailed, 이 파일 헤더 근처 항목10 유닛 테스트가 이미 소스
+  // 정규식으로 고정해 둔 계약)을 실제 브라우저 이미지 로드 실패로 재현해
+  // 검증한다 — deviceScaleFactor:2로 컨텍스트를 만들어 브라우저가 srcset의
+  // "2x" 후보를 실제로 선택하게 만든 뒤(installMocks 이후, 네비게이션 전에
+  // page.route로 @2x 파일명 패턴만 abort), onError → srcSet 제거 → 1x(src)
+  // 재시도가 실제로 일어나는지를 img.complete/naturalWidth/currentSrc로
+  // 확인한다. 대조군은 1x까지 함께 abort해 최종 emoji 폴백까지 도달하는지
+  // 확인한다(두 경로 다 "throw 없이 항상 값을 반환한다"는
+  // characterSpriteContract.js resolveSpriteFrame 계약의 실제 브라우저
+  // 증거).
+  {
+    const vp = { width: 390, height: 844 }
+    const name = 'S15[390x844,dpr2,2x-abort→1x-degrade]'
+    const context = await browser.newContext({ viewport: vp, deviceScaleFactor: 2 })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true })
+    const mocks = await installMocks(page)
+    try {
+      // installMocks가 등록한 라우트들 다음에(그리고 네비게이션보다 먼저)
+      // 등록한다 — Playwright는 "나중 등록 = 먼저 실행"이므로 이 abort가
+      // installMocks의 catch-all(**/*, route.continue())보다 먼저 걸려
+      // @2x 파일만 정확히 가로챈다(1x는 이 정규식에 안 걸려 정상 로드).
+      await page.route(/paul-.*@2x-[\w-]+\.png$/, (route) => route.abort())
+
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+
+      // phase/frame 계측과 동일한 이유(이 파일 헤더 2026-09-25 주석)로,
+      // img의 강등 관련 상태 전부를 단일 evaluate 안에서 원자적으로 읽는다
+      // (getAttribute/naturalWidth/complete를 따로따로 호출하면 그 사이
+      // 강등이 진행돼 "일부는 강등 전, 일부는 강등 후" 값이 섞일 수 있음).
+      async function sampleSpriteImgState() {
+        return page.evaluate(() => {
+          const img = document.querySelector('img[data-proto-character-sprite]')
+          const glyph = document.querySelector('[data-proto-character-glyph]')
+          return {
+            hasSpriteImg: !!img,
+            hasGlyph: !!glyph,
+            frame: img ? img.getAttribute('data-proto-character-sprite-frame') : null,
+            degraded: img ? img.getAttribute('data-proto-character-sprite-degraded') : null,
+            srcsetAttr: img ? img.getAttribute('srcset') : null,
+            complete: img ? img.complete : null,
+            naturalWidth: img ? img.naturalWidth : null,
+            currentSrc: img ? img.currentSrc : null,
+            shadowCount: document.querySelectorAll('[data-proto-character-shadow]').length,
+          }
+        })
+      }
+
+      const initial = await sampleSpriteImgState()
+      r.check(`${name} — 마운트 직후 v2 sprite img가 존재(spriteManifest 기본값 활성)`, initial.hasSpriteImg, JSON.stringify(initial))
+      r.check(`${name} — 마운트 직후 emoji glyph는 없음(sprite가 emoji보다 우선)`, !initial.hasGlyph, JSON.stringify(initial))
+
+      const degradedReached = await waitUntil(async () => (await sampleSpriteImgState()).degraded === '1', { timeout: 5000, interval: 100 })
+      r.check(`${name} — 5초 이내 data-proto-character-sprite-degraded="1" 도달(@2x onError → 1단계 강등)`, !!degradedReached)
+      const afterDegrade = degradedReached ? await sampleSpriteImgState() : null
+      r.check(
+        `${name} — 강등 후 srcset 속성이 없거나 빈 값(2x 후보 제거)`,
+        !!afterDegrade && (afterDegrade.srcsetAttr == null || afterDegrade.srcsetAttr === ''),
+        JSON.stringify(afterDegrade),
+      )
+      r.check(
+        `${name} — 강등 후 img.complete && naturalWidth>0(1x가 실제로 로드됨)`,
+        !!afterDegrade && afterDegrade.complete === true && afterDegrade.naturalWidth > 0,
+        JSON.stringify(afterDegrade),
+      )
+      r.check(
+        `${name} — 강등 후 currentSrc가 1x 파일명(paul-idle-front-<hash>.png, @2x 아님)과 일치`,
+        !!afterDegrade && /paul-idle-front-[\w-]+\.png$/.test(afterDegrade.currentSrc || '') && !/@2x/.test(afterDegrade.currentSrc || ''),
+        JSON.stringify(afterDegrade),
+      )
+      r.check(`${name} — 그림자 span(data-proto-character-shadow)이 정확히 1개`, (afterDegrade || initial).shadowCount === 1, JSON.stringify(afterDegrade || initial))
+
+      // 강등된(srcset 없는 1x 전용) 상태로도 걷기 프레임 교대가 정상 동작하는지 —
+      // demo-tree(x0=70,x1=76,y0=56,y1=62)를 건드리지 않는 순수 오른쪽(y=62
+      // 고정, x:50→68) 직선 이동으로 side 프레임만 나오게 한다(이 파일의
+      // OBSTACLES_REF 기반 관례와 동일 이유, S14 c/d 참고).
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const groundBox = await ground.boundingBox()
+      const target = { x: groundBox.x + groundBox.width * (68 / 100), y: groundBox.y + groundBox.height * (62 / 100) }
+      await page.mouse.click(target.x, target.y)
+      const framesSeen = new Set()
+      {
+        const deadline = Date.now() + 3000
+        while (Date.now() < deadline) {
+          const s = await sampleSpriteImgState()
+          if (s.frame) framesSeen.add(s.frame)
+          if (framesSeen.has('walk-side-a') && framesSeen.has('walk-side-b')) break
+          await page.waitForTimeout(50)
+        }
+      }
+      r.check(
+        `${name} — 강등 후에도 오른쪽 걷기 중 walk-side-a/walk-side-b 프레임 둘 다 관측(1x 전용으로도 프레임 교대 정상)`,
+        framesSeen.has('walk-side-a') && framesSeen.has('walk-side-b'),
+        JSON.stringify([...framesSeen]),
+      )
+
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S15(대조군) — @2x·1x 둘 다 실패 → 최종 emoji 폴백 ─────────────────────
+  // 위 강등 경로의 2단계(spriteV2LoadFailed)까지 실제로 도달하는지 — 1x도
+  // 깨지면 resolveSpriteFrame이 emoji로 폴백하는 것과 동일한 최종 상태에
+  // 브라우저 레벨에서도 도달해야 한다(별도 context/page — 라우트 패턴이
+  // 시나리오마다 달라 위 페이지와 공유하지 않는다).
+  {
+    const vp = { width: 390, height: 844 }
+    const name = 'S15[390x844,dpr2,2x+1x-abort→emoji-fallback]'
+    const context = await browser.newContext({ viewport: vp, deviceScaleFactor: 2 })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true })
+    const mocks = await installMocks(page)
+    try {
+      // 위 시나리오의 @2x 전용 패턴보다 넓은 슈퍼셋 — "paul-...*.png" 전부
+      // (1x·2x 파일명 둘 다)를 abort한다. Paul 감정 이미지(paul_happy 등,
+      // 밑줄 명명)는 이 정규식(하이픈 "paul-")에 걸리지 않아 영향 없음.
+      await page.route(/paul-.*\.png$/, (route) => route.abort())
+
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+
+      async function sampleFallbackState() {
+        return page.evaluate(() => {
+          const img = document.querySelector('img[data-proto-character-sprite]')
+          const glyph = document.querySelector('[data-proto-character-glyph]')
+          return {
+            hasSpriteImg: !!img,
+            hasGlyph: !!glyph,
+            glyphText: glyph ? glyph.textContent : null,
+          }
+        })
+      }
+
+      const glyphReached = await waitUntil(async () => (await sampleFallbackState()).hasGlyph === true, { timeout: 5000, interval: 100 })
+      r.check(`${name} — 5초 이내 emoji glyph 폴백 도달(@2x·1x 둘 다 로드 실패 → 2단계 강등)`, !!glyphReached)
+      const afterFallback = glyphReached ? await sampleFallbackState() : null
+      r.check(`${name} — 폴백 glyph 텍스트가 '🚶'(idle 상태 이모지)`, !!afterFallback && afterFallback.glyphText === '🚶', JSON.stringify(afterFallback))
+      r.check(`${name} — 최종 폴백 후 sprite img는 더 이상 존재하지 않음(isSpriteV2:false)`, !!afterFallback && afterFallback.hasSpriteImg === false, JSON.stringify(afterFallback))
+
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }
 }
