@@ -231,6 +231,70 @@ section('부록 — 격자 해상도/셀 변환 기본 계약')
   check('정확히 (WORLD_MAX,WORLD_MAX)인 점(장애물 밖)은 walkable로 분류됨(경계 사각지대 회귀 방지)', classifyPoint(WORLD_MAX, WORLD_MAX) === 'walkable')
 }
 
+// ── 9. sub-cell 오프셋 + 장애물 모서리 인접 시나리오(회귀 방지) ──────────
+// 2026-09-25 — findPath의 string-pulling이 "시작/도착 셀의 정수 좌표"
+// 기준으로 시야를 검증하던 버그(정확한 sub-cell 오프셋 좌표를 무시)를
+// 고쳤다(pathfinding.js hasLineOfSightWorld 헤더 주석 참고). demo-building
+// 모서리 바로 옆(모서리에서 0.1~0.9 world-% 떨어진, 즉 셀 중심이 아니라
+// 코너 쪽으로 크게 치우친 sub-cell 오프셋) 지점을 start/target으로 각각
+// 써서, 수정된 로직이 실제로 "정확한 좌표"를 기준으로 시야를 검증하는지
+// scripts/testProto25dPathRandom.mjs와 동일한 촘촘한 점 샘플링으로 확인.
+section('9. sub-cell 오프셋 + 장애물 모서리 인접 시나리오(회귀 방지)')
+{
+  const building = OBSTACLES.find((o) => o.id === 'demo-building')
+
+  function assertPathClear(label, start, end) {
+    check(`${label} — 시작점은 walkable(사전조건)`, classifyPoint(start.x, start.y) === 'walkable', JSON.stringify(start))
+    const path = findPath(start, end)
+    check(`${label} — 경로가 존재함`, Array.isArray(path) && path.length > 0, JSON.stringify(path))
+    if (!Array.isArray(path)) return
+    let allClear = true
+    let prev = start
+    for (const wp of path) {
+      const steps = 200 // 이 회귀 자체가 샘플 간격보다 좁은 침입이었으므로 촘촘히 샘플링.
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps
+        const x = prev.x + (wp.x - prev.x) * t
+        const y = prev.y + (wp.y - prev.y) * t
+        if (pointInAnyObstacle(x, y, OBSTACLES)) { allClear = false; break }
+      }
+      if (!allClear) break
+      prev = wp
+    }
+    check(`${label} — 경로가 장애물을 침범하지 않음(0.5% 간격 샘플링)`, allClear)
+    return path
+  }
+
+  // (a) 시작점이 건물 우하단 모서리(x1,y1) 바로 밖, 셀 중심이 아니라
+  // 모서리 쪽으로 크게 치우친 sub-cell 오프셋 — 건물을 지나 반대편(좌상단
+  // 방향, 6번 섹션과 동일한 우회 목적지)으로 이동.
+  const cornerStart = { x: building.x1 + 0.1, y: building.y1 + 0.1 }
+  assertPathClear('(a) 코너 인접 시작점', cornerStart, { x: 15, y: 15 })
+
+  // (b) 도착점이 건물 좌상단 모서리(x0,y0) 바로 밖, 마찬가지로 모서리
+  // 쪽으로 치우친 sub-cell 오프셋 — 먼 시작점에서 그 도착점으로 이동.
+  const cornerTarget = { x: building.x0 - 0.1, y: building.y0 - 0.1 }
+  const startFar = { x: 90, y: 80 }
+  const pathB = assertPathClear('(b) 코너 인접 도착점', startFar, cornerTarget)
+  if (Array.isArray(pathB)) {
+    const correctedCornerTarget = nearestWalkablePoint(cornerTarget.x, cornerTarget.y)
+    check(
+      '(b) 코너 인접 도착점 — 마지막 웨이포인트가 도착점의 정확한 좌표(보정 불필요, 이미 walkable)',
+      Math.abs(pathB[pathB.length - 1].x - correctedCornerTarget.x) <= 1e-9 &&
+        Math.abs(pathB[pathB.length - 1].y - correctedCornerTarget.y) <= 1e-9,
+      JSON.stringify(pathB[pathB.length - 1]),
+    )
+  }
+
+  // (c) 결정론 — 위 코너 인접 케이스들도 동일 입력 -> 동일 경로(반복 호출).
+  const pathA1 = JSON.stringify(findPath(cornerStart, { x: 15, y: 15 }))
+  const pathA2 = JSON.stringify(findPath(cornerStart, { x: 15, y: 15 }))
+  check('(c) 코너 인접 시작점 시나리오도 결정론적(재호출 deep-equal)', pathA1 === pathA2)
+  const pathB1 = JSON.stringify(findPath(startFar, cornerTarget))
+  const pathB2 = JSON.stringify(findPath(startFar, cornerTarget))
+  check('(c) 코너 인접 도착점 시나리오도 결정론적(재호출 deep-equal)', pathB1 === pathB2)
+}
+
 // ── 결과 ──────────────────────────────────────────────────────────────
 console.log(`\n총 ${totalPassed + totalFailed}개 단언 — PASS ${totalPassed} / FAIL ${totalFailed}`)
 if (failures.length > 0) {
