@@ -14,6 +14,44 @@
 
 ---
 
+## 0-B. 2026-09-24 갱신 — Phase 6B 어댑터 완료 후 상태
+
+_이 절은 §1(아래 설계 제안)이 실제로 부분 착수된 뒤의 상태 갱신이다 —
+§1 원문은 재작성하지 않는다._
+
+- §1.1(매니페스트 형태)의 제안대로 v2 계약 모듈
+  `src/utils/town/proto2_5d/characterSpriteContract.js`가 구현됐다
+  (`handoff.md` 2026-09-24(175차)). 다만 이 제안 문서가 스케치한
+  3-state(idle/walk/sit) 대신, 그 사이 확정된 `docs/design/town/
+  PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md` §2.1을 따라
+  **5-state**(`idle`/`walkFront`/`walkBack`/`walkSide`/`sit`, 8프레임)로
+  구현됐다 — 매니페스트 형태의 정신(§1.1)은 유지하되 세부 shape은 이
+  갱신이 우선한다.
+- §1.2(앵커 매핑, glyph span 치환)도 그대로 착수됐다 —
+  `ProtoCharacter.jsx`에 v2 렌더 분기가 추가됐지만 **휴면**이다(오늘
+  어떤 호출부도 `spriteManifest`를 넘기지 않는다, `App.jsx` 무변경).
+  §1.4의 "결정 필요" 항목 중 data-attribute 네이밍은 기존
+  `data-proto-character-glyph`를 그대로 두고(교체 안 함) 신규
+  `data-character-direction` 속성을 추가하는 쪽으로 실제 구현됐다.
+- §1.3(레지스트리 격리)은 아직 착수 전이다 — `src/assets/town/
+  character/` 디렉터리 자체가 존재하지 않는다(실 이미지 0장, 운영자
+  방침: Kenney/GrafxKid/rgsdev 전부 미채택, Paul Town 전용 커스텀
+  캐릭터로만 진행, 아직 승인/생성 안 됨).
+- `paulTown2_5dSprite` 플래그는 **이번 Phase에서 의도적으로 추가하지
+  않았다**(리드 결정) — 게이팅할 프로덕션 매니페스트가 아직 없기
+  때문이다. 플래그 추가는 실 이미지 승인 이후로 미뤄졌다(`handoff.md`
+  175차 §5).
+- §2(구매/보관함 연결)/§3(파일럿 관찰 지표)는 이 세션에서 손대지
+  않았다 — 여전히 아래 설계 제안 상태 그대로다.
+- 어댑터 SSR 단위 테스트(50단언, `scripts/testProto25dSpriteAdapter.mjs`)와
+  E2E S11(+16, `[town-proto2.5d]` 190→206)도 같은 세션 커밋
+  `78125bf`로 착륙했다 — 전부 PASS(`handoff.md` 175차 §6).
+- 상세: `handoff.md` 2026-09-24(175차), `docs/design/town/
+  SPRITE_CONTRACT_2026-09-24.md` §4/§5, `docs/design/town/
+  PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md`.
+
+---
+
 ## 1. 실제 캐릭터 교체 계획
 
 ### 1.1 매니페스트 형태

@@ -1,9 +1,187 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-24 (174차 — **Paul Town 2.5D 캐릭터 스프라이트 교체
-조사·계약·판정(조건 B, 에셋 승인 대기)**: 코드 변경 0, 커밋 `91f92f4`(계약
-문서) + 이 문서 커밋, 브랜치 `feat/paul-town-v2-clean-pr`.
-`paulTownV1:false`/`paulTownV2:false`/`paulTown2_5d:false` 전부 유지,
-Production WRITE 0, PR #62 OPEN/DRAFT 유지. 173차 이하 보존)_
+_최종 갱신: 2026-09-24 (175차 — **Paul Town 2.5D 캐릭터 스프라이트 v2
+어댑터 구현 완료(Phase 6B, 전부 휴면)**: 커스텀 8프레임 계약
+(`characterSpriteContract.js`, 172단언) + `ProtoCharacter.jsx`/
+`Proto25DScreen.jsx` 휴면 배선 + SSR 어댑터 테스트(50단언) + E2E S11
+(+16, proto 스펙 206단언), 커밋 `d3321de`→`be54279`→`11c3883`→
+`be5e7fb`→`78125bf`, 브랜치 `feat/paul-town-v2-clean-pr`. 실 스프라이트
+이미지 0장, `paulTown2_5dSprite` 플래그 미추가(`paulTownV1:false`/
+`paulTownV2:false`/`paulTown2_5d:false` 전부 유지), Production WRITE 0,
+`npm run verify:all` ALL DOMAINS PASS, PR #62 OPEN/DRAFT 유지. 174차
+이하 보존)_
+
+## 2026-09-24 (175차) — Paul Town 2.5D 캐릭터 스프라이트 v2 어댑터 구현 완료(Phase 6B): 계약·테스트·휴면 배선·SSR 어댑터 테스트·E2E S11 완료, 실 이미지 0장, `paulTown2_5dSprite` 플래그 미추가 (Production 무접촉)
+
+### 0. 안전 요약
+- 브랜치 `feat/paul-town-v2-clean-pr`(워크트리 `scratchpad/wt-clean-pr`),
+  시작 HEAD `3e2404f`. 커밋 5개: `d3321de`(스프라이트 사양 문서) →
+  `be54279`(v2 계약 모듈) → `11c3883`(계약 단위 테스트 172단언) →
+  `be5e7fb`(어댑터 휴면 배선) → `78125bf`(어댑터 SSR 테스트 50단언 +
+  E2E S11 +16). **소스 코드 변경은 `ProtoCharacter.jsx`/
+  `Proto25DScreen.jsx` 2개 파일뿐**이고 전부 옵션 prop 추가 방식 —
+  호출부(`App.jsx`)가 아무것도 넘기지 않아 오늘의 이모지 렌더는 한
+  글자도 바뀌지 않았다.
+- Production WRITE 0, Supabase/SQL 0, `paulTownV1`/`paulTownV2`/
+  `paulTown2_5d` 전부 `false` 유지, PR #62 OPEN/Draft 유지, CI
+  `timeout-minutes` 30 무변경, `.github/workflows/` diff 0.
+- 실제 캐릭터 이미지(PNG/WebP) 0장 — `src/assets/town/character/`는
+  아직 존재하지 않는다. 승인·생성 둘 다 이 세션에서 하지 않았다(운영자
+  확정 방침, 아래 §1).
+- 세션 형태: 8h 자율 세션, 리드 = Fable, Sonnet sub-agent 4종(audit/
+  spec/impl/tests)을 조율해 순차 구현, docs sub-agent가 이 절을
+  마무리.
+
+### 1. 운영자 확정 방침(재논의하지 않음)
+- Kenney Toon Characters / GrafxKid / rgsdev 전부 **미채택**(174차 §6가
+  넘긴 결정 1·3, 운영자가 이번 세션에서 확정) — 추가 무료 에셋 검색도
+  하지 않는다.
+- **Paul Town 전용 커스텀 아동 캐릭터**로만 간다(174차 §6 결정 2, 신규
+  제작).
+- 최종 이미지는 **아직 승인되지 않았고 생성되지도 않았다** — 이
+  세션도 이미지를 만들지 않았다.
+- 승인 전까지 이모지 폴백(🚶 idle/walk, 🧘 sit)을 그대로 유지한다.
+- 이모지 다리 움직임 부재는 알려진 한계이며 CSS로 흉내 내지 않는다
+  (계속 금지, 173차 §9 운영자 판정 유지).
+
+### 2. 리드 결정(이번 세션에서 새로 확정)
+- v2 매니페스트는 **신규 모듈**(`characterSpriteContract.js`)로 간다 —
+  v1(`characterManifest.js`, 72단언)은 한 글자도 건드리지 않는다.
+- **8프레임 전부 필수** — 매니페스트에 하나라도 빠지면 부분 폴백 없이
+  캐릭터 전체가 이모지로 폴백한다.
+- 미러링은 **`walkSide` + 좌측 방향에만** 적용(정면/후면은 미러 없음).
+- 앵커는 **퍼센트 기반 오프셋**(해상도 독립) — 절대 px가 아니다.
+- 프레임 파일은 **개별 파일 8개**(스프라이트 시트 1장 방식은 채택하지
+  않음).
+- 이번 Phase에서는 **`paulTown2_5dSprite` 플래그를 추가하지 않는다** —
+  게이팅할 프로덕션 매니페스트가 아직 없고, 플래그 등록은 관리자
+  패널 노출을 동반하므로 승인된 매니페스트가 생기는 시점에 추가한다
+  (`Proto25DScreen.jsx`는 선택적 `spriteManifest` prop만 받고
+  `App.jsx`는 아무것도 넘기지 않는다).
+- 스프라이트 모드 DOM 검증은 **React SSR 단위 테스트**로 한다(브라우저
+  E2E에 테스트 훅을 프로덕션 코드에 심지 않는다) — 커밋 `78125bf`
+  (50단언)로 완료.
+
+### 3. 변경 파일
+- 신규 문서: `docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md`
+  (459줄, 8프레임 사양/프롬프트 팩/일관성 검수표/라이선스 기록 규칙).
+- 신규 계약 모듈: `src/utils/town/proto2_5d/characterSpriteContract.js`
+  (순수 함수 — `validateSpriteManifest`/`directionForMove`/
+  `facingForMove`/`spriteStateForPhase`/`frameIndexAt`/
+  `anchorOffsetPct`/`resolveSpriteFrame`/`spriteFrameSources`, v1 공유
+  상수 1개만 import).
+- 신규 테스트: `scripts/testProto25dSpriteContract.mjs`(172단언),
+  `tests/fixtures/proto2_5d/spriteManifest.example.mjs`(테스트 전용
+  1x1 투명 데이터 URI, 프로덕션 import 0), `tests/harness/registry.mjs`
+  1줄(attachment 도메인, `extra:false`).
+- 휴면 배선(옵션 prop, 오늘 아무 호출부도 값 전달 안 함):
+  `src/components/town/proto2_5d/ProtoCharacter.jsx`(+115/-9,
+  `spriteManifest`/`direction` prop + v2 렌더 분기), `src/components/
+  town/proto2_5d/Proto25DScreen.jsx`(+65/-6, 이동 구간마다 `direction`
+  계산 + v2 매니페스트가 실제로 유효할 때만 `facing` 갱신).
+- 어댑터 검증(커밋 `78125bf`): `scripts/testProto25dSpriteAdapter.mjs`
+  (50단언, React SSR via esbuild + `react-dom/server` — emoji 기본
+  DOM/무효 매니페스트 시 무매니페스트와 byte-identical/phase·direction·
+  facing별 v2 프레임 선택/`walkSide`+좌측 전용 미러/착석 seat-anchor
+  퍼센트/reduced-motion 정지/커스텀 foot anchor 퍼센트/outer anchor·
+  z-index·scale·그림자·min-width가 이모지·스프라이트 모드 간 동일/
+  `img` src·srcSet/v1 매니페스트 여전히 동작 + 둘 다 넘기면 v2 우선/
+  direction pass-through), `tests/e2e/townProto25d.spec.mjs` S11(+16,
+  proto 스펙 190→206) — 기본 렌더는 여전히 이모지·스프라이트 마크업
+  없음, direction 속성이 우/하/상 탭을 따라 side/front/back으로
+  갱신됨, 일반 걷기는 이모지를 절대 뒤집지 않음, 도착 후에도 direction
+  유지, `tests/harness/registry.mjs` 2번째 줄(어댑터 스위트 등록).
+
+### 4. 8프레임 목록
+`idle-front` / `walk-front-a` / `walk-front-b` / `walk-back-a` /
+`walk-back-b` / `walk-side-a` / `walk-side-b` / `sit`
+(`PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md` §2). 좌측 이동은
+`walk-side-*`를 `scaleX(-1)`로 재사용하고 별도 좌측 프레임은 만들지
+않는다.
+
+### 5. 실제 스프라이트 승인 후 연결 절차
+§1 방침(Paul Town 전용 커스텀 캐릭터 신규 제작)에 따른 실제 8프레임
+이미지가 완성·승인되면 아래 순서로 연결한다(상세는
+`SPRITE_CONTRACT_2026-09-24.md` §5 체크리스트, 이 절은 그 요지):
+
+1. 승인된 8프레임 → `src/assets/town/character/<stem>.webp` +
+   `<stem>@2x.webp`(+ `.png` 트윈 2장, 4파일 계약) + `LICENSE.txt` +
+   `NOTICE.md`(출처/제작자/라이선스/다운로드 날짜/SHA-256/변환 절차).
+2. 레지스트리 `src/assets/town/character/index.js`(`env/index.js`
+   패턴, `Proto25DScreen.jsx`에서만 import — 공용
+   `src/assets/town/index.js`에서는 절대 import하지 않는다, §0.10
+   회귀 재발 방지).
+3. `src/utils/town/proto2_5d/characterSpriteManifest.default.js`
+   (version 2, 앵커는 알파 채널 실측값, `frameDurationMs` 확정값).
+4. 플래그 `paulTown2_5dSprite`를 `SPRITE_CONTRACT_2026-09-24.md` §5-1의
+   4곳(`DEFAULT_FEATURES`/`getFeaturesByCategory('attachment')`/
+   `FeatureManagementPanel.jsx`/`testFeatureFlagStore.mjs` 15번)에
+   등록하고, 매니페스트는 `Proto25DScreen`이 플래그 ON일 때만 넘긴다.
+5. Proto 청크 번들 예산 단언 + 누출 검사(`SPRITE_CONTRACT_2026-09-24.md`
+   §5-6).
+6. E2E S8/S9의 좌석 sink 단언을 이모지 조건부로 전환.
+7. 아래 §6 검증 명령을 전부 재실행.
+
+### 6. 검증
+전부 리드가 HEAD `78125bf`(워크트리 `wt-clean-pr`)에서
+2026-09-24 18:08–18:45 KST에 실행.
+
+| 스위트 | 결과 |
+|---|---|
+| `node scripts/testProto25dSpriteContract.mjs` | 172/172 PASS |
+| `node scripts/testProto25dSpriteAdapter.mjs` | 50/50 PASS(React SSR) |
+| `node scripts/testProto25dCharacterManifest.mjs` | 72/72 PASS(v1 무변경) |
+| `node scripts/testProto25dBench.mjs` | 88/88 PASS |
+| `node scripts/testProto25dDepth.mjs` | 23/23 PASS |
+| `node scripts/testProto25dWalkGrid.mjs` | 28/28 PASS |
+| `node scripts/testProto25dSceneFixture.mjs` | 24/24 PASS |
+| `node scripts/testTownDepthOrder.mjs` | 73/73 PASS |
+| `node scripts/testTownV2Static.mjs` | 147/147 PASS |
+| `node scripts/testFeatureFlagStore.mjs` | 49/49 PASS |
+| `npm run build` | PASS, 경고 0 |
+| `npm run verify:e2e` | 1534 PASS / 0 FAIL / 0 SKIP, 미mock 요청 0, mock 에러 0, `[town-proto2.5d]` 206(190+S11 16), 약 11분 |
+| `npm run verify:all` | "ALL DOMAINS: PASS", 스위트 단위 PASS 139 / FAIL 0(신규 2종 포함해 통과), 약 25분, 타임아웃/취소 없음 |
+| CI Release Gate | 이 세션에서 미실행(push는 이 문서 커밋 이후) — 30분 캡 무변경 |
+
+### 7. 알려진 한계
+- 이모지 다리는 움직이지 않는다(§1, 의도적으로 CSS 보정 안 함).
+- 스프라이트 모드는 SSR 단위 테스트(50단언) + E2E DOM 속성 검증(S11,
+  16단언)까지만 확인됐고, **실제 이미지가 없으므로** 실 브라우저에서
+  실제 프레임 이미지를 렌더해 눈으로 확인한 적은 아직 없다(에셋 부재
+  때문 — 코드 경로 자체는 SSR+E2E로 이미 검증됨).
+- 다중 웨이포인트 경로에서 다리별 facing이 벤치 걷기의
+  `facingToward` 판정과 달라질 수 있다(스프라이트 모드 한정).
+- 착석 seat-sink(이모지 잉크 실측 기반)는 스프라이트 모드에서 설계상
+  우회된다.
+- 방향은 구간(leg)마다 개별 판정되므로, 대각선 탭 1회가 world-정규화
+  비율에 따라 'side'/'front' 어느 쪽으로든 결정될 수 있다.
+
+### 8. Preview에서 사람이 확인할 항목
+- 기본 2.5D 화면은 여전히 이모지(🚶/🧘)로 보여야 한다.
+- 일반 걷기가 이모지를 뒤집지 않아야 한다(기존 동작 무변경).
+- 벤치 walk-to-sit 흐름은 173차와 동일해야 한다.
+- (실 스프라이트 연결 후에만 추가 확인) 옆걷기 미러링, 4개 뷰포트에서
+  발이 지면에 닿는지, 벤치 좌석 접촉, reduced-motion 정지.
+
+### 9. 다음 작업
+§1의 운영자 방침(Paul Town 전용 커스텀 캐릭터 신규 제작)에 따라 실제
+이미지 제작이 시작되면 §5 절차를 그대로 따른다. 코드/테스트 쪽은 이
+Phase(6B)로 완결됐다 — 남은 작업은 §10 참고.
+
+### 10. 최종 보고 요약
+- 워크트리 `scratchpad/wt-clean-pr`, 브랜치
+  `feat/paul-town-v2-clean-pr`. 시작 HEAD `3e2404f` → 최종 HEAD = 이
+  문서를 포함한 커밋(해시는 커밋 후에만 확정되므로 여기 기록 불가 —
+  다음 세션이 `git log`로 확인).
+- 최종 캐릭터 PNG 존재 여부: **NO**(`src/assets/town/character/`
+  디렉터리 자체가 없음).
+- Production WRITE 0. `paulTownV1`/`paulTownV2`/`paulTown2_5d` 전부
+  `false`(3개 플래그 모두 false 유지). PR #62 OPEN/Draft.
+- 남은 작업은 정확히 1개: **승인된 Paul Town 전용 8프레임 PNG 제작 후
+  매니페스트에 연결**(§5 절차 1~7 그대로 실행).
+- 다음 세션 첫 명령:
+  ```
+  git -C <worktree> log --oneline -8 && node scripts/testProto25dSpriteAdapter.mjs
+  ```
 
 ## 2026-09-24 (174차) — Paul Town 2.5D 캐릭터 스프라이트 교체: 조사·계약·판정(조건 B, 에셋 승인 대기) — 코드 변경 0, paulTown2_5d OFF, Production 무접촉
 

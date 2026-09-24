@@ -1635,3 +1635,40 @@ bbox 루프 직전에 호출하는 것뿐(허용치 `>=43.5`/`>=44`·뷰포트·
 - 재확인 커맨드: `node scripts/testProto25dSceneFixture.mjs`,
   `node scripts/testProto25dCharacterManifest.mjs`, E2E는 `npm run
   verify:e2e`(전체) 또는 `vite preview` 기동 후 이 spec만 단독 실행.
+
+## 관련 항목: Paul Town 2.5D 캐릭터 스프라이트 v2 계약 — 신규 단위 스위트 2종 + E2E S11 (2026-09-24, 175차 Phase 6B)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._ 위쪽 172차 절의
+"160 PASS", 173차 절의 "160→190"은 그 시점 기준 기록이며, 이 절이
+추가한 S11(+16)로 현재 `[town-proto2.5d]` 총 단언은 206이다 — 옛
+기록은 append-only 원칙에 따라 고치지 않고 이 절이 최신 값을 남긴다.
+
+Paul Town 2.5D 캐릭터 스프라이트 v2 계약(`characterSpriteContract.js`,
+`handoff.md` 2026-09-24(175차)/`docs/design/town/
+SPRITE_CONTRACT_2026-09-24.md` §4 참고)이 추가한 순수 함수 단위
+테스트 + 그 어댑터 배선을 검증하는 SSR 단위 테스트 + E2E 확장.
+`paulTown2_5dSprite` 플래그는 이번 Phase에서 추가되지 않았고, 어떤
+프로덕션 파일도 이 계약 모듈을 아직 실제 매니페스트로 import하지
+않는다(오늘은 전부 휴면 — `ProtoCharacter.jsx`/`Proto25DScreen.jsx`는
+선택적 prop만 받고, 유일한 호출부인 `App.jsx`는 값을 넘기지 않는다).
+
+| 스크립트 | 단언 | 대상 | 네트워크 | 결과 |
+|---|---|---|---|---|
+| `scripts/testProto25dSpriteContract.mjs`(`tests/harness/registry.mjs` attachment 도메인, `extra:false`) | 172 | `characterSpriteContract.js`(매니페스트 validator — 8프레임 전부 필수, 누락 시 개별 폴백 없이 전체 거부 / `directionForMove`·`facingForMove`·`spriteStateForPhase` / `frameIndexAt` / `anchorOffsetPct`(퍼센트 앵커) / `resolveSpriteFrame`의 `walkSide`+좌측 전용 미러링과 이모지 폴백) | 0 | 172/172 PASS |
+| `scripts/testProto25dSpriteAdapter.mjs`(`tests/harness/registry.mjs` attachment 도메인, `extra:false`) | 50 | `ProtoCharacter.jsx`/`Proto25DScreen.jsx`의 v2 렌더 분기 — 브라우저 E2E가 아니라 React SSR(esbuild + `react-dom/server`) 기반 DOM 검증(프로덕션 코드에 테스트 훅을 심지 않는 방식). 이모지 기본 DOM/무효 매니페스트 시 무매니페스트와 byte-identical, phase·direction·facing별 v2 프레임 선택, 미러는 `walkSide`+좌측만, 착석 seat-anchor 퍼센트, reduced-motion 정지, 커스텀 foot anchor 퍼센트, outer anchor·z-index·scale·그림자·min-width가 이모지·스프라이트 모드 간 동일, `img` src/srcSet, v1 매니페스트 하위호환 + 둘 다 넘기면 v2 우선, direction pass-through | 0 | 50/50 PASS |
+| `tests/e2e/townProto25d.spec.mjs` S11(+16, `[town-proto2.5d]` 190→206) | 16 | 기본 렌더는 여전히 이모지·스프라이트 마크업 없음, `direction` 속성이 우/하/상 탭에 따라 side/front/back으로 갱신, 일반 걷기는 이모지를 절대 뒤집지 않음, 도착 후에도 direction 유지 | 0 | 포함 통과(§verify:e2e 총계) |
+
+의존성: `characterSpriteContract.js`는 v1(`characterManifest.js`,
+72단언, 무변경)의 공유 이모지 glyph 상수 하나만 import한다 — 나머지는
+재구현하지 않는다. `tests/fixtures/proto2_5d/spriteManifest.example.mjs`
+(테스트 전용, 1x1 투명 데이터 URI)는 어떤 프로덕션 파일도 import하지
+않는다.
+
+전체 회귀(2026-09-24 18:08–18:45 KST, HEAD `78125bf`): `npm run
+verify:e2e` 1534 PASS / 0 FAIL / 0 SKIP(미mock 요청 0), `npm run
+verify:all` "ALL DOMAINS: PASS"(스위트 단위 PASS 139 / FAIL 0, 약
+25분, 타임아웃/취소 없음), `npm run build` PASS(경고 0).
+
+재확인 커맨드: `node scripts/testProto25dSpriteContract.mjs`,
+`node scripts/testProto25dSpriteAdapter.mjs`, 전체 회귀는 `npm run
+verify:e2e`/`npm run verify:all`.
