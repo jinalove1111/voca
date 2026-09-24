@@ -2989,14 +2989,37 @@ export async function run(browser, baseURL) {
 
       const degradedReached = await waitUntil(async () => (await sampleSpriteImgState()).degraded === '1', { timeout: 5000, interval: 100 })
       r.check(`${name} — 5초 이내 data-proto-character-sprite-degraded="1" 도달(@2x onError → 1단계 강등)`, !!degradedReached)
-      const afterDegrade = degradedReached ? await sampleSpriteImgState() : null
+
+      // 강등(srcset 제거) 속성이 뜬 직후 곧바로 읽으면 브라우저가 아직 1x
+      // 후보를 재선택/로딩하는 중일 수 있다(2026-09-25 팀장 실측 — 전체
+      // verify:e2e 러너에서 degraded="1" 직후 {complete:false, naturalWidth:0,
+      // currentSrc:""}로 FAIL 2건 발생, standalone 단독 실행은 우연히 이미
+      // 1x가 브라우저 캐시에 있어 통과했을 뿐 — 진짜 타이밍 경쟁이었다).
+      // degraded 도달 확인과 별개로 "1x가 실제로 로드 완료"될 때까지 최대
+      // 5초 추가로 폴링한다 — 매 폴링마다 sampleSpriteImgState 단일
+      // evaluate로 원자 스냅샷을 읽어(이 파일 헤더의 2026-09-25 계측 경쟁
+      // 교훈과 동일 이유) "일부 필드는 로드 전, 일부는 로드 후" 값이 섞이지
+      // 않게 한다. 폴링 중 실패해도(5초 타임아웃) 마지막 스냅샷을 그대로
+      // 아래 단언에 넘겨 실패 detail이 비어있지 않게 한다.
+      let afterDegrade = null
+      if (degradedReached) {
+        const pollDeadline = Date.now() + 5000
+        afterDegrade = await sampleSpriteImgState()
+        while (Date.now() < pollDeadline) {
+          const ready = afterDegrade.complete === true && afterDegrade.naturalWidth > 0 &&
+            /paul-idle-front-[\w-]+\.png$/.test(afterDegrade.currentSrc || '') && !/@2x/.test(afterDegrade.currentSrc || '')
+          if (ready) break
+          await page.waitForTimeout(100)
+          afterDegrade = await sampleSpriteImgState()
+        }
+      }
       r.check(
         `${name} — 강등 후 srcset 속성이 없거나 빈 값(2x 후보 제거)`,
         !!afterDegrade && (afterDegrade.srcsetAttr == null || afterDegrade.srcsetAttr === ''),
         JSON.stringify(afterDegrade),
       )
       r.check(
-        `${name} — 강등 후 img.complete && naturalWidth>0(1x가 실제로 로드됨)`,
+        `${name} — 강등 후 5초 이내 img.complete && naturalWidth>0(1x가 실제로 로드됨, 폴링)`,
         !!afterDegrade && afterDegrade.complete === true && afterDegrade.naturalWidth > 0,
         JSON.stringify(afterDegrade),
       )
