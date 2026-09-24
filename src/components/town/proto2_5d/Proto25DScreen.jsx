@@ -112,6 +112,7 @@
 // 새 플래그는 추가하지 않았다 — 기존 `paulTown2_5d` 플래그 게이팅 하나로만
 // 계속 제어된다. `spriteManifest`를 명시적으로 넘기면(예: 테스트) 여전히
 // 그 값이 기본값을 덮어쓴다.
+// - Phase 6C-1(2026-09-25): facing 갱신 조건 — side 구간 & |dx|≥1.0%만.
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import ProtoCharacter, { WALK_TRANSITION_MS, REDUCED_MOTION_TRANSITION_MS } from './ProtoCharacter'
 import { usePrefersReducedMotion } from '../../../hooks/usePrefersReducedMotion'
@@ -197,6 +198,14 @@ const TAP_RIPPLE_REMOVE_MS = TAP_RIPPLE_ANIM_MS + 80
 // 아니라(바닥 오브젝트/캐릭터와 가리고 가려질 필요가 없는 순간적 UI 장식)
 // depthOrder 시스템에 참여시키지 않고 이 파일 로컬 상수로만 고정한다.
 const TAP_RIPPLE_Z = 7000
+
+// Phase 6C-1(2026-09-25, 경로 종료 지점 facing 깜빡임 수정) — 긴 LEFT 이동
+// 경로(예: (90,20)→(20,20))의 마지막 구간이 pathfinding/walkGrid 스냅으로
+// 아주 작은(때로는 반대 부호) dx를 가질 수 있다. 그 결과 idle 전환 직전
+// ~한 프레임 동안 facing이 반대로 튀었다가 되돌아오는 깜빡임이 E2E로
+// 재현됐다. 수/세로 이동(direction!=='side')이거나 dx가 이 임계값보다
+// 작은 미세 스냅 구간은 facing을 갱신하지 않는다(직전 값 유지).
+const FACING_MIN_DX_PCT = 1.0
 
 // Phase 6B — spriteManifest는 선택적 prop이다.
 // Phase 6C(2026-09-24) — 기본값이 이제 `PAUL_SPRITE_MANIFEST`(승인된 Paul
@@ -339,7 +348,11 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST }
       const dy = target.y - cur.topPct
       const direction = directionForMove(dx, dy, cur.direction, WORLD)
       const next = { ...cur, phase: phaseLabel, leftPct: target.x, topPct: target.y, direction }
-      if (isSpriteV2ManifestActive) next.facing = facingForMove(dx, cur.facing)
+      // Phase 6C-1 — 진짜 좌우 이동 구간에서만 facing 갱신(위 파일 상단
+      // FACING_MIN_DX_PCT 주석 참고). 세로/미세 스냅 구간은 직전 facing 유지.
+      if (isSpriteV2ManifestActive && direction === 'side' && Math.abs(dx) >= FACING_MIN_DX_PCT) {
+        next.facing = facingForMove(dx, cur.facing)
+      }
       return next
     })
     walkTimerRef.current = setTimeout(() => {
@@ -368,7 +381,10 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST }
         const dy = dest.y - cur.topPct
         const direction = directionForMove(dx, dy, cur.direction, WORLD)
         const next = { ...cur, phase: phaseLabel, leftPct: dest.x, topPct: dest.y, direction }
-        if (isSpriteV2ManifestActive) next.facing = facingForMove(dx, cur.facing)
+        // Phase 6C-1 — walkLeg와 동일 가드(위 파일 상단 FACING_MIN_DX_PCT 주석 참고).
+        if (isSpriteV2ManifestActive && direction === 'side' && Math.abs(dx) >= FACING_MIN_DX_PCT) {
+          next.facing = facingForMove(dx, cur.facing)
+        }
         return next
       })
       walkTimerRef.current = setTimeout(() => {

@@ -15,7 +15,7 @@ import paulWalkFrontB from './paul-walk-front-b.png'
 import paulWalkBackA from './paul-walk-back-a.png'
 import paulWalkBackB from './paul-walk-back-b.png'
 import paulWalkSideA from './paul-walk-side-a.png'
-import paulWalkSideB from './paul-walk-side-b.png'
+import paulWalkSideB from './paul-walk-side-b-v2.png'
 import paulSit from './paul-sit.png'
 import paulIdleFront2x from './paul-idle-front@2x.png'
 import paulWalkFrontA2x from './paul-walk-front-a@2x.png'
@@ -23,7 +23,7 @@ import paulWalkFrontB2x from './paul-walk-front-b@2x.png'
 import paulWalkBackA2x from './paul-walk-back-a@2x.png'
 import paulWalkBackB2x from './paul-walk-back-b@2x.png'
 import paulWalkSideA2x from './paul-walk-side-a@2x.png'
-import paulWalkSideB2x from './paul-walk-side-b@2x.png'
+import paulWalkSideB2x from './paul-walk-side-b-v2@2x.png'
 import paulSit2x from './paul-sit@2x.png'
 
 export const PAUL_SPRITE_SOURCES = Object.freeze({
@@ -108,5 +108,5 @@ export const PAUL_SPRITE_MEASURED = Object.freeze({
       }
     }
   },
-  "measuredAt": "2026-09-24T11:48:52.030Z"
+  "measuredAt": "2026-09-24T16:08:53.585Z"
 })

@@ -87,6 +87,49 @@ for (const { frameId, file1x, file2x } of FRAME_FILES) {
   }
 }
 
+// ── 1b. walk-side-b-v2 원-프레임 스왑(2026-09-25) — 레거시 보존 + import
+// 격리 ─────────────────────────────────────────────────────────────────
+// install2 세션(이 세션이 소유하지 않음, CLAUDE.md 규칙 16)이
+// paulSpriteManifest.js의 PAUL_SPRITE_FILES['walk-side-b']를
+// 'paul-walk-side-b-v2.png'로 바꾸고, index.js의 import/PAUL_SPRITE_SOURCES
+// 도 그 v2 파일을 가리키도록 갱신한다 — 레거시 원본
+// paul-walk-side-b.png/@2x.png는 디스크에서 지우지 않고 "보존되지만
+// import 안 됨" 상태로 남긴다. 위 섹션 1의 루프는 이미 PAUL_SPRITE_FILES를
+// 그대로 재사용하므로(재구현 없음) walk-side-b가 v2 파일로 자동
+// 치환되어 검증된다 — 여기서는 그 스왑이 남기는 별도 계약(레거시 보존 +
+// 미import + NOTICE 갱신)만 추가로 검증한다.
+section('1b. walk-side-b-v2 스왑 — 레거시 원본 보존(디코딩 가능) + index.js에서 미import')
+{
+  const legacyFrames = [
+    { file: 'paul-walk-side-b.png', w: 96, h: 128 },
+    { file: 'paul-walk-side-b@2x.png', w: 192, h: 256 },
+  ]
+  for (const { file, w, h } of legacyFrames) {
+    const p = path.join(CHARACTER_DIR, file)
+    if (check(`${file}(레거시, 보존) 존재`, existsSync(p))) {
+      try {
+        const d = decodePng(readFileSync(p))
+        check(`${file}(레거시) — ${w}x${h} RGBA(colorType=6)로 디코딩됨`, d.width === w && d.height === h && d.colorType === 6, `${d.width}x${d.height} colorType=${d.colorType}`)
+      } catch (e) {
+        check(`${file}(레거시) — decodePng 성공`, false, e.message)
+      }
+    }
+  }
+
+  const indexPath = path.join(CHARACTER_DIR, 'index.js')
+  if (check('index.js 존재(레거시 import 격리 검사 대상)', existsSync(indexPath))) {
+    const indexSrc = readFileSync(indexPath, 'utf8')
+    const legacyImport1xCount = (indexSrc.match(/['"]\.\/paul-walk-side-b\.png['"]/g) || []).length
+    const legacyImport2xCount = (indexSrc.match(/['"]\.\/paul-walk-side-b@2x\.png['"]/g) || []).length
+    check("index.js — './paul-walk-side-b.png' import 0건(레거시 미참조)", legacyImport1xCount === 0, `count=${legacyImport1xCount}`)
+    check("index.js — './paul-walk-side-b@2x.png' import 0건(레거시 미참조)", legacyImport2xCount === 0, `count=${legacyImport2xCount}`)
+    const v2Import1xCount = (indexSrc.match(/['"]\.\/paul-walk-side-b-v2\.png['"]/g) || []).length
+    const v2Import2xCount = (indexSrc.match(/['"]\.\/paul-walk-side-b-v2@2x\.png['"]/g) || []).length
+    check("index.js — './paul-walk-side-b-v2.png' import 정확히 1건(PAUL_SPRITE_SOURCES['walk-side-b']가 이 소스를 가리킴)", v2Import1xCount === 1, `count=${v2Import1xCount}`)
+    check("index.js — './paul-walk-side-b-v2@2x.png' import 정확히 1건", v2Import2xCount === 1, `count=${v2Import2xCount}`)
+  }
+}
+
 // ── 2. 1x 프레임 — 실제 alpha/네 귀퉁이 투명/발 접지선/중심축 실측 ────────
 section('2. 1x 프레임(8장) — 실제 alpha + 투명 귀퉁이 + 발 접지선(최하단 행=127) + 중심축(±1px)')
 for (const { frameId, file1x } of FRAME_FILES) {
@@ -133,6 +176,13 @@ section('4. LICENSE.txt / NOTICE.md — 존재 + NOTICE.md가 8개 파일명 + s
     const missingNames = FRAME_FILES.filter(({ file1x }) => !notice.includes(file1x)).map(({ file1x }) => file1x)
     check('NOTICE.md가 8개 프레임 파일명(1x)을 전부 언급함', missingNames.length === 0, JSON.stringify(missingNames))
     check("NOTICE.md가 'sha256' 문자열을 포함함", notice.includes('sha256'))
+    // 2026-09-25(paul-walk-side-b-v2 스왑) — NOTICE.md가 새 v2 파일명과
+    // 그 원본 sha256(접두 23c4a79fe28a…)을 출처 기록으로 언급하는지 확인
+    // (위 8개 프레임 언급 확인은 PAUL_SPRITE_FILES 경유라 자동으로 v2
+    // 파일명을 검사하지만, sha256 접두 확인은 그 루프가 커버하지 않는
+    // 별도 계약이라 명시적으로 추가한다).
+    check("NOTICE.md가 'paul-walk-side-b-v2.png'를 출처 표로 언급함", notice.includes('paul-walk-side-b-v2.png'))
+    check("NOTICE.md가 walk-side-b-v2 원본 sha256 접두 '23c4a79fe28a'를 포함함", notice.includes('23c4a79fe28a'))
   }
 }
 
@@ -297,7 +347,8 @@ section('8. 번들 누출(guarded — dist/assets 존재할 때만) — Paul 스
   } else {
     const distIndexHtmlPath = path.join(ROOT, 'dist', 'index.html')
     const indexHtml = existsSync(distIndexHtmlPath) ? readFileSync(distIndexHtmlPath, 'utf8') : ''
-    const assetFiles = readdirSync(distAssetsDir).filter((f) => /\.m?js$/.test(f))
+    const allDistAssetFiles = readdirSync(distAssetsDir)
+    const assetFiles = allDistAssetFiles.filter((f) => /\.m?js$/.test(f))
     function resolveMainFileFromIndexHtml(html, files) {
       const m = html.match(/<script[^>]*\btype=["']module["'][^>]*\bsrc=["']\/assets\/([^"']+\.js)["']/)
       if (!m) return null
@@ -329,6 +380,21 @@ section('8. 번들 누출(guarded — dist/assets 존재할 때만) — Paul 스
       check(`TownScreen 청크(${tf})에 Paul 스프라이트 파일명 마커가 없음`, !chunkHasSpriteMarker(tf))
     }
     if (townFiles.length === 0) console.log('INFO  TownScreen-*.js 청크를 찾지 못함(V1 플래그 OFF로 트리 셰이킹됐을 수 있음) — 관련 단언 0건.')
+
+    // 2026-09-25(paul-walk-side-b-v2 스왑) — v2 파일명 마커가 실제로
+    // Proto25DScreen 청크에 실렸는지 + 레거시(미import) 원본이 해시드
+    // 물리 파일로 dist/assets에 새어나오지 않았는지(빌드가 실제로 import
+    // 안 된 자산을 트리 셰이킹했는지) 확인.
+    if (chunksWithMarker.length === 1) {
+      const chunkSrc = readFileSync(path.join(distAssetsDir, chunksWithMarker[0]), 'utf8')
+      check("Proto25DScreen 청크에 'paul-walk-side-b-v2' 문자열 존재(스왑된 프레임이 실제로 이 청크에서 참조됨)", chunkSrc.includes('paul-walk-side-b-v2'))
+    }
+    const legacyHashedSideB = allDistAssetFiles.filter((f) => /^paul-walk-side-b-(?!v2)/.test(f))
+    check(
+      "dist/assets — 'paul-walk-side-b-'로 시작하되 v2가 아닌(=레거시, 미import) 해시드 물리 파일 0건",
+      legacyHashedSideB.length === 0,
+      JSON.stringify(legacyHashedSideB),
+    )
   }
 }
 

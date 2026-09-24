@@ -321,7 +321,13 @@ function matchEnvArtKey(filename) {
 // 개수/청크 격리/gzip 예산의 실제 검증은 아래 4c 섹션이 전담한다(중복
 // 검증 없음, scripts/testPaulSpriteAssets.mjs가 이미 검증한 소스단
 // 배선/픽셀 계약은 여기서 재구현하지 않는다).
-const PAUL_SPRITE_FILE_RE = /^paul-(idle-front|walk-(front|back|side)-[ab]|sit)(@2x)?-[\w-]+\.png$/
+// 2026-09-25(paul-walk-side-b-v2 원-프레임 스왑) — walk-side-b 프레임 하나가
+// 'paul-walk-side-b-v2.png'로 교체됐다(install2 세션, 이 세션은 소유하지
+// 않음) — 그 해시드 산출물 파일명(예: paul-walk-side-b-v2-<hash>.png)도
+// 여전히 "정상 Paul 스프라이트"로 인식하도록 선택적 `-v숫자` 접미부를
+// 허용한다(다른 7개 프레임의 정규식/개수 계약은 그대로 — CLAUDE.md 규칙 3,
+// 재구현 없음).
+const PAUL_SPRITE_FILE_RE = /^paul-(idle-front|walk-(front|back|side)-[ab](-v\d+)?|sit)(@2x)?-[\w-]+\.png$/
 function isPaulSpriteAsset(filename) {
   return PAUL_SPRITE_FILE_RE.test(filename)
 }

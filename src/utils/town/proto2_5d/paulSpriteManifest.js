@@ -58,7 +58,10 @@ const PAUL_SPRITE_FILENAME_BY_FRAME_ID = Object.freeze({
   'walk-back-a': 'paul-walk-back-a.png',
   'walk-back-b': 'paul-walk-back-b.png',
   'walk-side-a': 'paul-walk-side-a.png',
-  'walk-side-b': 'paul-walk-side-b.png',
+  // v2가 walk-side-b 아트를 대체한다(2026-09-25 운영자 결정). 레거시 파일
+  // (paul-walk-side-b.png/@2x)은 디스크에 보존되지만 더 이상 등록하지
+  // 않는다 — frameId('walk-side-b')는 변경 없음.
+  'walk-side-b': 'paul-walk-side-b-v2.png',
   sit: 'paul-sit.png',
 })
 

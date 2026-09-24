@@ -1,25 +1,186 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-24 (177차 — **Paul 캐릭터 8프레임 스프라이트
-실장(Phase 6C)**: 운영자가 ChatGPT로 생성한 PNG 8프레임을 정규화·설치
-(`src/assets/town/character/paul-*.png`+`@2x`, 16파일)하고
-`characterSpriteManifest.default.js`(`PAUL_SPRITE_MANIFEST`)를
-`Proto25DScreen.jsx` 기본 매니페스트로 배선. **신규 플래그 없음** —
-기존 `paulTown2_5d` 하나로만 게이팅(운영자 요청). 이모지는 런타임
-폴백으로 유지, 청크 격리 확인(`paul-*`는 `Proto25DScreen-*.js`
-청크에만 존재). `paulTownV1`/`paulTownV2`/`paulTown2_5d` 플래그 전부
-`false` 유지, Production WRITE 0, PR #62 OPEN/Draft 유지, 준비
-스캐폴딩은 176차 커밋 `212538d1`로 이미 분리, 이번 자산·배선 변경은
-별도 커밋 1개 예정(이 문서 작성 시점 미커밋). 전체 회귀 완료(2026-09-24
-21:47–22:27 KST): `npm run build` PASS, `npm run verify:all` ALL
-DOMAINS PASS(141 스위트), `npm run verify:e2e` 1598 PASS/0 FAIL,
-`townProto25d.spec.mjs` standalone 270/270 PASS(S12/S13 신규 포함),
-`testPaulSpriteAssets` 112/112·`testPaulSpriteIngest` 132/132(이미지
-존재 케이스로 조정) 등 신규/조정 스위트 전부 PASS. 로컬 뷰포트
-스크린샷 12장 리드 검수 완료. 전체 회귀 중 실제 버그 3건 발견·수정
-(§7 참고). Vercel Preview 로그인 없이 확인 완료(커밋 `8be6ba99` push,
-배포 `6638989777` success, 16개 `paul-*` 자산 200 OK, 청크 격리 실측
-확인 — §7).
-176차 이하 보존)_
+_최종 갱신: 2026-09-25 (178차 — **Paul 스프라이트 walk-side-b 프레임
+교체(v2)**: 운영자가 2026-09-25 새로 전달한 측면 걷기 렌더 2장 중 1장
+(`12_54_37 AM (1)`)은 art/composition 판단으로 미채택(**정정**: 초기
+보고의 "좌측/하단 잘림" 클리핑 근거는 PIL `Image.getbbox()`를 RGBA에
+그대로 적용해 alpha=0 픽셀까지 포함한 결과였고, alpha>16 잉크 bbox
+기준으로는 (80,18)–(1004,1431)로 여백 좌80/우20/하105px 확보 — 실제
+클리핑 아님. 운영자가 walk-side-a를 유지하고 (2)를 채택한 결정은
+구도상 판단으로 유효), 나머지 1장(`12_54_38 AM (2)`, sha256
+`23c4a79f…`)이
+한쪽 발 지지 + 반대쪽 다리를 뒤로 굽혀 든 중간 스트라이드 자세로
+신규 `walk-side-b` 채택. 기존 `walk-side-a`(08_25_58, 넓은 스트라이드)
+는 무변경 — 새 페어링은 a↔b-v2이며 신규 두 장끼리의 페어링이 아니다.
+신규 파일 `paul-walk-side-b-v2.png`+`@2x`를 동일 고정 스케일
+`0.08384`/발 접지선 y=127/중심 x=48로 정규화해 설치, 기존
+`paul-walk-side-b.png`+`@2x`는 디스크에 보존하되 레지스트리에서 더 이상
+import되지 않아 dist에는 미포함. 코드 변경은
+`PAUL_SPRITE_FILES['walk-side-b']` 매핑 값 1줄뿐 — frame id
+`walk-side-b`, 앵커(`footAnchor {48,128}`), `frameDurationMs 150`,
+미러 규칙(facing=left만 `scaleX(-1)`) 전부 무변경. 정면/후면 걷기,
+벤치, pathfinding, depth/shadow, 캐릭터 크기 무변경. 플래그
+`paulTownV1`/`paulTownV2`/`paulTown2_5d` 전부 `false` 유지, Production
+WRITE 0, PR #62 OPEN/Draft 유지, 체크 전부 통과 후 단일 커밋 예정.
+`testPaulSpriteAssets`/`testPaulSpriteIngest`/`testBundleBudget`을 v2
+파일명 기준으로 조정하고 레거시 보존 케이스를 추가, E2E S12를 확장해
+좌/우 걷기에서 frame id와 src 파일명이 a↔b-v2로 교대하는지 및
+크기/발선 안정성을 검사, S13에 측면 걷기 프레임 정지 케이스 추가.
+검증 완료(2026-09-25 01:55–02:42 KST): `npm run build` PASS,
+`npm run verify:all` ALL DOMAINS PASS(141 스위트), `npm run verify:e2e`
+1655 PASS/0 FAIL, `townProto25d.spec.mjs` standalone 327/327
+PASS(S12/S13 포함), `testPaulSpriteAssets` 125/125·
+`testPaulSpriteIngest` 132/132·`testBundleBudget` 32/32 등 전부 PASS.
+로컬 뷰포트 스크린샷 리드 검수 완료. Vercel Preview 확인은 push 후
+예정(§7 참고).
+177차 이하 보존)_
+
+## 2026-09-25 (178차) — Paul 스프라이트 walk-side-b 프레임 교체(v2): 기존 a 유지 + 신규 무릎 굽힘 자세 b-v2, 원본 보존
+
+### 0. 안전 요약
+- 이 세션(문서 담당)은 코드/이미지를 만들지 않았다 — `handoff.md`/
+  `TESTING.md`/스펙 문서/`.ai-status/` 상태 파일만 갱신했다. git 명령
+  0회.
+- 자산·코드 실장 자체는 병행 작업하는 다른 에이전트가 수행했고, 이
+  절은 그 결과를 문서로 기록한다(아래 §1~§7). §7 검증은 2026-09-25
+  01:55–02:42 KST에 lead가 워크트리 `wt-clean-pr`에서 직접 실행한
+  최종 결과다 — 전부 PASS. Vercel Preview만 push 후 확인 예정(§7).
+- 플래그 무변경: `paulTownV1`/`paulTownV2`/`paulTown2_5d` 전부
+  `false`. PR #62 OPEN/Draft 유지. 모든 체크가 PASS한 뒤 단일 커밋으로
+  예정돼 있다(이 문서 작성 시점 미커밋).
+- **정정(2026-09-25, lead)**: 최초 보고에서 `12_54_37 AM (1)`을
+  "좌측·하단 잘림"으로 기록했던 것은 PIL `Image.getbbox()`를 RGBA에
+  그대로 적용해 alpha=0(완전 투명) 픽셀까지 잉크로 잡은 결과였다.
+  alpha>16 기준 잉크 bbox로 재측정하면 (1)은 (80,18)–(1004,1431)로
+  좌/우/하단 여백이 각각 80/20/105px 확보돼 **클리핑이 아니다**.
+  운영자가 `walk-side-a`를 유지하고 (2)를 `walk-side-b-v2`로 채택,
+  (1)은 미사용으로 둔 결정 자체는 구도(art/composition) 판단으로
+  그대로 유효하다 — (1)은 여전히 저장소 밖에 남는다. 아울러 (2)의
+  alpha>16 잉크 bbox는 (151,17)–(901,1463)이 맞는 값이며(§1 표의
+  (65,14)–(1000,1472)는 동일하게 non-alpha `getbbox()`로 잰 잘못된
+  값), 식별 키는 sha256 `23c4a79f…`다. §1 표를 이 값으로 갱신했다.
+- **정정(2026-09-25, lead) — 6C-1은 제품 버그가 아니라 테스트 측정
+  아티팩트였다**: E2E 초기 관측에서 "긴 LEFT 걷기에서 idle 직전 미러가
+  약 100ms 순간 해제"로 보였던 현상은 lead가 재조사한 결과 실제 제품
+  결함이 아니었다. `findPath`로 확인한 (90,20)→(20,20) 경로는
+  dx=−70, dy=0인 `side` 방향 **단일 leg**다 — 원인은 E2E 샘플러가
+  phase/mirror/facing 값을 서로 다른 Playwright 호출로 순차 읽었고, 두
+  호출 사이에 걷기가 끝나 idle로 전환되면서 값이 어긋난 것이었다.
+  샘플러는 샘플당 phase/mirror/facing을 한 번에 캡처하는 atomic
+  `page.evaluate` 스냅샷으로 교체 중이다. 다만 조사 과정에서
+  `Proto25DScreen.jsx`에 도입한 `FACING_MIN_DX_PCT = 1.0`(world-%)은
+  **예방적 가드(관측된 결함에 대한 수정이 아님)** 로 그대로 유지한다 —
+  실제 path-snap 시나리오(예: (65,62)→(20,62)의 마지막 leg는 dx=0,
+  dy=−3.8인 순수 수직 `walkBack` leg)에서 facing이 잘못 뒤집히는 진짜
+  위험을 막기 위함이며, `side` 방향이면서 `|dx| ≥ 1.0`인 진짜 수평
+  leg에서만 facing을 갱신한다. pathfinding, 벤치(`facingToward`),
+  depth, shadow, 캐릭터 크기는 무변경. 상세는 §3-1 참고.
+
+### 1. 운영자 원본 판정(2026-09-25)
+- 운영자가 새로 생성한 측면(side) 걷기 렌더 2장을 전달했다(둘 다
+  1024×1536 RGBA, 오른쪽을 바라봄 — 기존 프레임과 동일한 방향
+  규칙).
+
+| 원본 파일명(타임스탬프) | 판정 | 사유 |
+|---|---|---|
+| `12_54_37 AM (1)` | **REJECTED**(구도 판단) — 미사용 | alpha>16 잉크 bbox (80,18)–(1004,1431), 여백 좌80/우20/하105px — 클리핑 아님(§0 정정 참고). 운영자가 walk-side-a 유지 + (2) 채택을 선택 |
+| `12_54_38 AM (2)` | **ACCEPTED** — 신규 `walk-side-b` | alpha>16 잉크 bbox (151,17)–(901,1463), 한쪽 발로 지지하고 반대쪽 다리를 뒤로 굽혀 든 중간 스트라이드 자세. sha256 `23c4a79fe28a2030081f13192d74e1c2bf8fad5bfb595a5ebebe82ccca67ad60`(식별 키) |
+
+- **페어링 확정**: 기존 `walk-side-a`(08_25_58, 넓은 스트라이드,
+  무변경) ↔ 신규 채택본(b-v2). 새로 전달된 두 장을 서로 짝짓는 것이
+  아니다.
+
+### 2. 설치 예정 파일
+- 신규: `src/assets/town/character/paul-walk-side-b-v2.png` +
+  `@2x.png`. 모든 프레임과 동일한 고정 스케일 `0.08384`, 발 접지선
+  1x 기준 y=127, 좌우 중심 x=48로 정규화. 잉크 높이 약 122px(기존
+  `walk-side-a` 약 121px과 거의 동일 — 크기 점프 없음).
+- 레거시: `paul-walk-side-b.png` + `@2x.png`는 디스크에 **보존**하되
+  레지스트리에서 더 이상 import되지 않아 빌드 산출물(dist)에는
+  포함되지 않는다.
+
+### 3. 코드 배선(변경 범위 — 최소)
+- `PAUL_SPRITE_FILES['walk-side-b']` 매핑 값만
+  `'paul-walk-side-b-v2.png'`로 변경.
+- frame id `walk-side-b` 자체는 무변경(계약/state/미러 규칙 그대로).
+- 매니페스트 앵커 무변경: `footAnchor {x:48,y:128}`@1x,
+  `frameDurationMs 150`.
+- 미러 규칙 무변경: facing=left일 때만 동일 페어에 `scaleX(-1)`.
+- 그 외 코드/게이트 무변경: 정면/후면 걷기(`walk-front-*`/
+  `walk-back-*`), `sit`, 벤치, pathfinding, depth/shadow, 캐릭터
+  렌더 크기 전부 이번 변경 범위 밖.
+
+### 3-1. Proto25DScreen.jsx 예방적 facing 가드(2026-09-25, 관측된 결함 아님)
+- **초기 관측(정정됨)**: E2E 검증 중 여러 leg로 이어지는 긴 LEFT 걷기
+  경로에서, idle로 전환되기 직전 약 100ms 동안 미러
+  (`data-proto-character-sprite-mirror` 속성/`scaleX(-1)`)가
+  무미러(오른쪽 방향)로 되돌아가는 것처럼 관측됐다.
+- **재조사 결과(정정, lead)**: 이는 **제품 버그가 아니라 테스트 측정
+  아티팩트**였다. `findPath`로 확인한 (90,20)→(20,20) 경로는 dx=−70,
+  dy=0인 `side` 방향 **단일 leg**이고, 방향이 도중에 바뀌지 않는다.
+  실제 원인은 E2E 샘플러가 phase/mirror/facing 값을 서로 다른
+  Playwright 호출로 순차적으로 읽었고, 두 호출 사이에 걷기가 끝나
+  idle로 전환되면서 읽은 값이 어긋난 레이스였다.
+- **테스트 수정**: `tests/e2e/townProto25d.spec.mjs`의 S12 샘플러를
+  phase/mirror/facing을 한 번에 캡처하는 단일 atomic `page.evaluate`
+  스냅샷 방식으로 교체 중이다(샘플 간 레이스 제거).
+- **예방적 가드로 유지(제품 코드, 관측된 결함에 대한 수정이 아님)**:
+  재조사 과정에서, `walkLeg`가 leg마다 그 leg 자신의 `dx`만으로
+  facing을 재계산하는 기존 로직이 실제 path-snap 시나리오에서는
+  위험할 수 있다는 점을 별도로 확인했다 — 예: (65,62)→(20,62) 경로의
+  마지막 leg는 dx=0, dy=−3.8(순수 수직, `walkBack`)인데, 이런 leg에서
+  facing을 재계산하면 방향이 잘못 뒤집힐 수 있다. 이를 막기 위해
+  `src/components/town/proto2_5d/Proto25DScreen.jsx` 1개 파일에 신규
+  상수 `FACING_MIN_DX_PCT = 1.0`(world-% 단위)을 예방적으로
+  도입했다(하드닝) — 스프라이트 모드에서, leg의 이동 방향이 `side`이고
+  `|dx| ≥ 1.0`인 **진짜 수평 leg**에서만 facing을 갱신하고, 수직/미세
+  leg는 이전 facing을 그대로 유지한다. `walkLeg` 본 루프와
+  reduced-motion 점프 경로 양쪽에 동일하게 적용했다.
+- **무변경 확인**: pathfinding 로직, 벤치 착석 방향(`facingToward`),
+  depth 정렬, shadow, 캐릭터 렌더 크기는 전부 이번 변경 범위 밖.
+- **테스트**: 위 atomic 샘플러 교체 외에, S12의 발 접지선(foot-line)
+  검사에 기존에 존재하던 walk-bob CSS 애니메이션(크기에 비례해 진폭이
+  커짐)을 반영한 허용 오차를 추가했다 — 키의 8% 또는 최소 4.5px 중 큰
+  값.
+
+### 4. 테스트 갱신(예정)
+- `scripts/testPaulSpriteAssets.mjs` — v2 파일명 기준 검사 + 레거시
+  파일 보존(디스크에는 존재하되 레지스트리/dist 미포함) 케이스 추가.
+- `scripts/testPaulSpriteIngest.mjs` — 동일.
+- `scripts/testBundleBudget.mjs` — v2 파일명 기준 인벤토리 조정,
+  레거시 파일이 청크에 새지 않는지 확인.
+- `tests/e2e/townProto25d.spec.mjs` S12 — 좌/우 측면 걷기에서 frame id
+  **와** `src` 파일명(basename)이 a ↔ b-v2로 교대하는지, 크기/발
+  접지선 안정성을 확장 검사.
+- 동 파일 S13 — 측면 걷기 프레임 정지(reduced-motion) 케이스 추가.
+
+### 5. Preview 정책
+177차 §6과 동일 — Vercel Preview는 로그인 없이(배포 생존 + 자산 서빙
+여부만) 확인하고, 실제 시각 검증(데스크톱/모바일)은 Production PIN
+API를 호출하지 않는 로컬 Playwright + 네트워크 mock으로 수행한다
+(Production WRITE 0 원칙).
+
+### 6. 제약 확인
+Production WRITE 0, `paulTownV1`/`paulTownV2`/`paulTown2_5d` 플래그
+전부 `false` 유지, PR #62 OPEN/Draft 유지, 모든 체크(build/verify/
+E2E/스크린샷/Preview) PASS 후 단일 커밋 예정.
+
+### 7. 검증(2026-09-25 01:55–02:42 KST, 워크트리 `wt-clean-pr`, lead 실행)
+
+| 항목 | 결과 |
+|---|---|
+| `npm run build` | PASS, 경고 0 |
+| `npm run verify:all` | "ALL DOMAINS: PASS", 스위트 141 PASS / 0 FAIL, 약 32분, 타임아웃/취소 없음 |
+| `npm run verify:e2e` | 1655 PASS / 0 FAIL / 0 SKIP, 미mock 요청 0 |
+| `tests/e2e/townProto25d.spec.mjs` standalone | 327/327 PASS(S12: 좌/우 걷기 frame id **와** `src` 파일명이 `walk-side-a` ↔ `paul-walk-side-b-v2`로 교대, LEFT 걷기의 모든 샘플에서 미러 `'1'`, 크기/발 접지선이 bob 허용 오차 안에서 안정, 4뷰포트; S13: `walk-side-a` 기준 측면 걷기 reduced-motion 프레임 정지; atomic 샘플러 적용) |
+| `scripts/testPaulSpriteAssets.mjs` | 125/125 PASS |
+| `scripts/testPaulSpriteIngest.mjs` | 132/132 PASS |
+| `scripts/testBundleBudget.mjs` | 32/32 PASS |
+| `scripts/testProto25dSpriteAdapter.mjs` | 50/50 PASS |
+| `scripts/testProto25dSpriteContract.mjs` | 172/172 PASS |
+| `scripts/testTownEnvAssets.mjs` | 196/196 PASS |
+| `node scripts/spriteIngestPaul.mjs --check` | PASS=68 FAIL=0 BLOCKED_BY_ASSET=0 |
+| 로컬 뷰포트 스크린샷(lead 리뷰 완료) | `preview-local/side-{360x640,390x844,412x915,1280x800}-{a,b}.png` — a/b-v2 프레임이 동일한 크기·발 접지선을 유지, 검은 배경 없음, 클리핑 없음 |
+| Vercel Preview 확인(로그인 없이) | push 후 확인(로그인 없음) — 이 절 작성 시점에는 아직 push 전. push 후 Preview GET-only 확인 → PR #62 코멘트 예정 |
 
 ## 2026-09-24 (177차) — Paul 캐릭터 8프레임 스프라이트 실장(Phase 6C): 이모지 → Paul 스프라이트 교체, paulTown2_5d 게이트만, 신규 플래그 0
 

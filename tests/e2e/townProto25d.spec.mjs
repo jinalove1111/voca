@@ -37,6 +37,37 @@ async function noHorizontalOverflow(page) {
   return page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
 }
 
+// 2026-09-25(paul-walk-side-b-v2 원-프레임 스왑 — S12/S13 프레임/mirror/
+// facing 계측) — 팀장이 소스 쪽에서 진단한 근본 원인: 이전 샘플러가
+// phase/frame/mirror/facing-transform/src를 각각 별도의 Playwright
+// 호출(getAttribute/evaluate/locator 재질의)로 읽었다 — 매 호출이 별도
+// CDP 왕복이라, 그 사이에 걷기가 끝나(phase가 idle로 바뀌고 mirror/
+// scaleX가 리셋) "phase='walking'으로 읽은 같은 샘플"인데 mirror/facing은
+// 이미 도착 후 값을 읽는 경쟁이 생길 수 있었다(findPath가 이 좌표들에
+// 대해 실제로는 단일 leg만 반환해 leg별 facing 재계산 자체가 이 시나리오
+// 에서는 애초에 일어나지 않는다는 것도 팀장이 확인함 — 즉 이전 FAIL은
+// 제품 결함이 아니라 이 세션의 계측 경쟁 조건이었다). 이 헬퍼는 phase/
+// direction/frame/mirror/facingTransform/src/box를 단일
+// `page.evaluate(...)` 안에서 한 번의 동기 DOM 스냅샷으로 읽어, 그
+// 경쟁을 구조적으로 제거한다(호출 하나 = 결과 전체가 같은 순간의 상태).
+async function sampleCharacterState(page) {
+  return page.evaluate(() => {
+    const root = document.querySelector('[data-proto-character]')
+    const img = document.querySelector('img[data-proto-character-sprite]')
+    const facingLayer = document.querySelector('[data-proto-character-facing-layer]')
+    const rect = img ? img.getBoundingClientRect() : null
+    return {
+      phase: root ? root.getAttribute('data-character-phase') : null,
+      direction: root ? root.getAttribute('data-character-direction') : null,
+      frame: img ? img.getAttribute('data-proto-character-sprite-frame') : null,
+      mirror: img ? img.getAttribute('data-proto-character-sprite-mirror') : null,
+      facingTransform: facingLayer ? facingLayer.style.transform : '',
+      src: img ? img.src : null,
+      box: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
+    }
+  })
+}
+
 // Phase 6C(2026-09-24) — install 세션이 실측해 기록한
 // paul-sprite-measured.json(캔버스/앵커, scripts/spriteIngestPaul.mjs
 // writeRegistry가 생성)을 테스트 시점에 읽는다. 하드코딩된 기대값 대신 이
@@ -2189,22 +2220,184 @@ export async function run(browser, baseURL) {
       await page.screenshot({ path: path.join(SCREENSHOT_DIR, `${vp.label}-idle.png`), clip: groundBox }).catch(() => {})
 
       // 프레임 알파벳(a/b) 교대 — 65,62(항목1과 동일한 안전 좌표, side 방향
-      // 유발)로 걷게 한 뒤 ~500ms 동안 최소 3회 샘플링해 'a'/'b' 프레임이
+      // 유발)로 걷게 한 뒤 ~700ms 동안 최소 6회 샘플링해 'a'/'b' 프레임이
       // 둘 다 관측되는지 확인. 같은 걷기 구간 중 스크린샷도 1장 남긴다.
+      //
+      // 2026-09-25(paul-walk-side-b-v2 원-프레임 스왑) — 이 RIGHT walk
+      // 샘플링을 확장해 img src의 해시드 basename까지 함께 기록한다 —
+      // walk-side-a는 여전히 'paul-walk-side-a-*'를, walk-side-b는 이제
+      // 레거시 'paul-walk-side-b-*'가 아니라 새 'paul-walk-side-b-v2-*'를
+      // 가리켜야 한다(install2 세션의 매니페스트/레지스트리 스왑 — 이
+      // 세션은 그 파일들을 소유하지 않고 읽기만 한다, CLAUDE.md 규칙 16).
+      // 각 프레임 id가 처음 관측되는 순간을 리뷰용 스크린샷으로 남긴다
+      // (폴링 겸 캡처).
+      //
+      // 2026-09-25 — 팀장 진단 반영: phase/frame/src/box를 각각 별도
+      // Playwright 호출로 읽던 것을 sampleCharacterState(하나의 evaluate)
+      // 로 교체해 계측 경쟁을 제거한다(위 헬퍼 주석 참고).
       const sideTarget = worldToPx(65, 62)
       await page.mouse.click(sideTarget.x, sideTarget.y)
       await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 2000 })
-      const frameSamples = []
-      for (let i = 0; i < 5; i++) {
-        const f = await spriteImg.getAttribute('data-proto-character-sprite-frame').catch(() => null)
-        frameSamples.push(f)
+      const samplesRight = []
+      let capturedSideA = false
+      let capturedSideB = false
+      for (let i = 0; i < 7; i++) {
+        const s = await sampleCharacterState(page)
+        samplesRight.push(s)
+        if (s.frame === 'walk-side-a' && !capturedSideA) {
+          await page.screenshot({ path: path.join(SCREENSHOT_DIR, `side-${vp.label}-a.png`), clip: groundBox }).catch(() => {})
+          capturedSideA = true
+        }
+        if (s.frame === 'walk-side-b' && !capturedSideB) {
+          await page.screenshot({ path: path.join(SCREENSHOT_DIR, `side-${vp.label}-b.png`), clip: groundBox }).catch(() => {})
+          capturedSideB = true
+        }
         if (i === 2) await page.screenshot({ path: path.join(SCREENSHOT_DIR, `${vp.label}-mid-walk.png`), clip: groundBox }).catch(() => {})
-        await page.waitForTimeout(120)
+        await page.waitForTimeout(100)
       }
-      const sawA = frameSamples.some((f) => typeof f === 'string' && f.endsWith('-a'))
-      const sawB = frameSamples.some((f) => typeof f === 'string' && f.endsWith('-b'))
-      r.check(`${name} — 걷는 동안 프레임이 실제로 교대됨(a/b 둘 다 관측)`, sawA && sawB, JSON.stringify(frameSamples))
+      const frameSamples = samplesRight.map((s) => s.frame)
+      const srcSamplesRight = samplesRight.map((s) => s.src)
+      const boxSamplesRight = samplesRight.map((s) => s.box).filter(Boolean)
+      // 2026-09-25 — 이 구간(원래 회귀 재현과 무관, 별개 실측) 15
+      // world-% 거리도 종종 700ms 샘플링 창이 끝나기 전에 도착해버린다
+      // (1280x800에서 1회 재현 — RIGHT walk 3개 walking 샘플 모두
+      // 'walk-side-a'만 보이고 이후 idle-front로 전이, LEFT walk와 같은
+      // "고정 폴링 창 vs 실제 걷기 지속시간" 종류의 타이밍 문제). LEFT
+      // walk에서 이미 검증한 것과 동일한 처방 — phase==='walking'이었던
+      // 샘플만 걸러서 프레임 교대/basename을 확인한다(도착 후 idle-front
+      // 샘플이 섞여 들어와 'walk-side-b'를 못 본 것처럼 보이는 오탐 방지).
+      const walkingIdxRight = samplesRight.map((s, i) => (s.phase === 'walking' ? i : -1)).filter((i) => i >= 0)
+      const frameSamplesWalkingRight = walkingIdxRight.map((i) => frameSamples[i])
+      const srcSamplesWalkingRight = walkingIdxRight.map((i) => srcSamplesRight[i])
+      const sawA = frameSamplesWalkingRight.some((f) => typeof f === 'string' && f.endsWith('-a'))
+      const sawB = frameSamplesWalkingRight.some((f) => typeof f === 'string' && f.endsWith('-b'))
+      r.check(`${name} — 걷는 동안(phase==='walking'이었던 샘플, ${walkingIdxRight.length}/7) 프레임이 실제로 교대됨(a/b 둘 다 관측)`, sawA && sawB, JSON.stringify(frameSamplesWalkingRight))
+      r.check(`${name} — RIGHT walk 샘플 개수가 6회 이상(≈700ms 폴링)`, frameSamples.length >= 6, `count=${frameSamples.length}`)
+      r.check(
+        `${name} — RIGHT walk 중(phase==='walking') 프레임 id에 'walk-side-a'와 'walk-side-b' 둘 다 포함`,
+        frameSamplesWalkingRight.includes('walk-side-a') && frameSamplesWalkingRight.includes('walk-side-b'),
+        JSON.stringify(frameSamplesWalkingRight),
+      )
+      const srcBasenamesRight = [...new Set(srcSamplesWalkingRight.filter(Boolean).map((s) => s.split('/').pop()))]
+      r.check(
+        `${name} — RIGHT walk 중(phase==='walking') src basename 중 'paul-walk-side-a-'에 매치하는 것이 1개 이상`,
+        srcBasenamesRight.some((b) => /paul-walk-side-a-/.test(b)),
+        JSON.stringify(srcBasenamesRight),
+      )
+      r.check(
+        `${name} — RIGHT walk 중(phase==='walking') src basename 중 'paul-walk-side-b-v2-'에 매치하는 것이 1개 이상이고, 레거시 'paul-walk-side-b-[^v]'(v2 아닌 원본)에 매치하는 것은 0개`,
+        srcBasenamesRight.some((b) => /paul-walk-side-b-v2-/.test(b)) && !srcBasenamesRight.some((b) => /paul-walk-side-b-[^v]/.test(b)),
+        JSON.stringify(srcBasenamesRight),
+      )
+      const heightsRight = boxSamplesRight.map((b) => b.height)
+      r.check(
+        `${name} — RIGHT walk 중 img 박스 높이가 샘플 전체에서 ±2px 이내(크기 점프 없음)`,
+        heightsRight.length > 0 && Math.max(...heightsRight) - Math.min(...heightsRight) <= 2,
+        `heights=${JSON.stringify(heightsRight)}`,
+      )
+      // 실측 결과(2026-09-25, 4개 뷰포트 전부, 2회 독립 실행) — 첫 샘플
+      // 대비 ±1.5px는 매 뷰포트에서 일관되게 초과했다(랜덤 아님 — 재현
+      // 100%). 원인은 이 스왑과 무관한 기존 계약: 걷는 동안
+      // ProtoCharacter.jsx가 `motion-safe:animate-town-walk-bob`을 적용해
+      // 발 위치가 작게 상하로 bob한다(S5 항목10이 이 애니메이션 자체를
+      // 이미 검증). bob 진폭은 렌더 크기에 비례한다 — 모바일 3종은
+      // ≈2.4~2.5px, 데스크톱(1280x800, 렌더 폭이 [40,120]px로 더 큼)은
+      // ≈6.7px까지 실측됐다(고정 px가 아니라 스케일 비례). 그래서 고정
+      // px 대신 박스 높이의 비율로 허용치를 잡는다 — 실측 최대 비율
+      // (6.7/약127≈5.3%)에 여유를 두고 8%로, 프레임 캔버스 오분류 같은
+      // 실제 결함(수십% 대 점프)은 계속 잡아낸다 — CLAUDE.md 규칙 15
+      // (회귀 의심 시 재현 후 확정), 여기서는 반대로 "내 단언이 실측과
+      // 안 맞음"을 두 차례 재현으로 확인하고 그 실측에 맞춰 고쳤다.
+      const bottomsRight = boxSamplesRight.map((b) => b.y + b.height)
+      const bottomSpreadRight = bottomsRight.length > 0 ? Math.max(...bottomsRight) - Math.min(...bottomsRight) : 0
+      const avgHeightRight = heightsRight.length > 0 ? heightsRight.reduce((a, b) => a + b, 0) / heightsRight.length : 0
+      const bottomSpreadToleranceRight = Math.max(4.5, avgHeightRight * 0.08)
+      r.check(
+        `${name} — RIGHT walk 중 박스 하단(y) 좌표 스프레드가 렌더 높이의 8%(최소 4.5px) 이내(walk-bob 진폭 감안, 발 접지선 대형 점프 없음)`,
+        bottomsRight.length > 0 && bottomSpreadRight <= bottomSpreadToleranceRight,
+        `bottoms=${JSON.stringify(bottomsRight)} spread=${bottomSpreadRight.toFixed(2)} tolerance=${bottomSpreadToleranceRight.toFixed(2)}`,
+      )
       await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle', { timeout: 3000 })
+
+      // 2026-09-25 — LEFT walk(미러) 동일 계약. S11 항목4와 동일 기법으로
+      // 먼저 y=20 행(장애물 전 구간이 비어 있음)으로 재배치한 뒤 먼
+      // 거리를 확실히 왼쪽으로만 걷게 한다 —
+      // data-proto-character-sprite-mirror='1' + facing layer scaleX(-1),
+      // RIGHT walk와 동일한 두 basename 계약, 도착 후 프레임이 idle-front로
+      // 복귀하는지까지 확인한다.
+      const repositionTarget = worldToPx(90, 20)
+      await page.mouse.click(repositionTarget.x, repositionTarget.y)
+      await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle', { timeout: 5000 })
+      const leftTarget = worldToPx(20, 20)
+      await page.mouse.click(leftTarget.x, leftTarget.y)
+      await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 2000 })
+      // 실측(2026-09-25, 4개 뷰포트 전부 재현) — 이 재배치(90,20)→(20,20)
+      // 왼쪽 걷기는 매번 700ms 고정 샘플링 창이 끝나기 전(대략 5번째
+      // 샘플 부근)에 이미 도착해 idle로 전이됐다 — 즉 걷기 지속시간이
+      // dx 거리에 비례하지 않는다(이 파일의 walkPath/walkLeg 구현이
+      // 거리와 무관하게 완료되는 걷기 계약을 이미 갖고 있음, 이 세션이
+      // 새로 발견한 것일 뿐 바꾸지 않는다 — CLAUDE.md 규칙 3). 그래서
+      // mirror/facing scaleX(-1)처럼 "걷는 동안에만" 성립해야 하는
+      // 단언은 고정 7회 전부가 아니라 phase==='walking'이었던 샘플만
+      // 걸러서 확인한다(도착 후 mirror가 '0'으로 리셋되는 것은 회귀가
+      // 아니라 idle 전이의 정상 동작 — 재현으로 확정, CLAUDE.md 규칙 15).
+      //
+      // 2026-09-25(팀장 근본 원인 진단) — findPath((90,20)→(20,20))는
+      // 실제로 leg 1개(dx=-70, dy=0, direction='side')만 반환한다 — 즉
+      // walkLeg의 leg별 facing 재계산 자체가 이 시나리오에서는 일어나지
+      // 않는다. 이 세션이 앞서 보고한 "마지막 leg 1틱 예외"는 제품 결함이
+      // 아니라, phase/mirror/facingTransform을 각각 별도 Playwright
+      // 호출로 읽던 이전 샘플러의 계측 경쟁(그 사이 걷기가 끝나버림)
+      // 이었다 — sampleCharacterState(단일 evaluate, 위 헬퍼)로 교체해
+      // 그 경쟁을 제거했으므로, "과반수" 완화 없이 원래 팀장 스펙대로
+      // phase==='walking'인 샘플 전부에서 mirror='1'/scaleX(-1)을 엄격히
+      // 요구한다.
+      const samplesLeft = []
+      for (let i = 0; i < 7; i++) {
+        samplesLeft.push(await sampleCharacterState(page))
+        await page.waitForTimeout(100)
+      }
+      const frameSamplesLeft = samplesLeft.map((s) => s.frame)
+      const srcSamplesLeft = samplesLeft.map((s) => s.src)
+      const mirrorSamplesLeft = samplesLeft.map((s) => s.mirror)
+      const facingTransformSamplesLeft = samplesLeft.map((s) => s.facingTransform)
+      const phaseSamplesLeft = samplesLeft.map((s) => s.phase)
+      r.check(
+        `${name} — LEFT walk 프레임 id에 'walk-side-a'와 'walk-side-b' 둘 다 포함`,
+        frameSamplesLeft.includes('walk-side-a') && frameSamplesLeft.includes('walk-side-b'),
+        JSON.stringify(frameSamplesLeft),
+      )
+      const walkingIdxLeft = phaseSamplesLeft.map((p, i) => (p === 'walking' ? i : -1)).filter((i) => i >= 0)
+      const mirrorWhileWalkingLeft = walkingIdxLeft.map((i) => mirrorSamplesLeft[i])
+      r.check(
+        `${name} — LEFT walk 중(phase==='walking'이었던 샘플, ${walkingIdxLeft.length}/7) 전부 data-proto-character-sprite-mirror='1'`,
+        mirrorWhileWalkingLeft.length > 0 && mirrorWhileWalkingLeft.every((m) => m === '1'),
+        `phase=${JSON.stringify(phaseSamplesLeft)} mirror=${JSON.stringify(mirrorSamplesLeft)}`,
+      )
+      const facingWhileWalkingLeft = walkingIdxLeft.map((i) => facingTransformSamplesLeft[i])
+      r.check(
+        `${name} — LEFT walk 중(phase==='walking'이었던 샘플) 전부 facing layer에 scaleX(-1) 존재(좌우 미러)`,
+        facingWhileWalkingLeft.length > 0 && facingWhileWalkingLeft.every((t) => (t || '').includes('scaleX(-1)')),
+        `phase=${JSON.stringify(phaseSamplesLeft)} facing=${JSON.stringify(facingTransformSamplesLeft)}`,
+      )
+      const srcBasenamesLeft = [...new Set(srcSamplesLeft.filter(Boolean).map((s) => s.split('/').pop()))]
+      r.check(
+        `${name} — LEFT walk src basename 중 'paul-walk-side-a-'에 매치하는 것이 1개 이상`,
+        srcBasenamesLeft.some((b) => /paul-walk-side-a-/.test(b)),
+        JSON.stringify(srcBasenamesLeft),
+      )
+      r.check(
+        `${name} — LEFT walk src basename 중 'paul-walk-side-b-v2-'에 매치하는 것이 1개 이상이고, 레거시 'paul-walk-side-b-[^v]'(v2 아닌 원본)에 매치하는 것은 0개`,
+        srcBasenamesLeft.some((b) => /paul-walk-side-b-v2-/.test(b)) && !srcBasenamesLeft.some((b) => /paul-walk-side-b-[^v]/.test(b)),
+        JSON.stringify(srcBasenamesLeft),
+      )
+      const reachedIdleAfterLeft = await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle', { timeout: 5000 })
+      r.check(`${name} — LEFT walk 도착 후 idle phase로 정상 전이`, !!reachedIdleAfterLeft)
+      if (reachedIdleAfterLeft) {
+        const idleSampleAfterLeft = await sampleCharacterState(page)
+        r.check(`${name} — LEFT walk 도착 후 프레임이 idle-front로 전이됨`, idleSampleAfterLeft.frame === 'idle-front', `frame=${idleSampleAfterLeft.frame}`)
+        r.check(`${name} — LEFT walk 도착 후 mirror='0'으로 리셋됨`, idleSampleAfterLeft.mirror === '0', `mirror=${idleSampleAfterLeft.mirror}`)
+      }
 
       // UI 컨트롤(정보 배지)을 탭해도 idle phase가 바뀌지 않음(바닥 레이어
       // 밖 엘리먼트 — S3/S8 기존 계약과 동일 정신, 여기선 phase 불변만 확인).
@@ -2282,18 +2475,31 @@ export async function run(browser, baseURL) {
         // 상태 전환 자체를 포착해 오탐한다. 그래서 phase==='walking'인
         // 동안만(인위적 대기 없이, CDP 왕복 지연만으로) 최대 6개까지 빠르게
         // 폴링한다.
-        const frameSamplesWalking = []
+        //
+        // 2026-09-25(팀장 진단 반영) — phase와 frame을 별도 호출로 읽으면
+        // 그 사이 걷기가 끝나 phase='walking'으로 읽었는데 frame은 이미
+        // 도착 후 값인 경쟁이 생길 수 있다(S12 LEFT walk에서 실측 확인된
+        // 것과 동일 종류의 문제) — sampleCharacterState(단일 evaluate)로
+        // phase/frame을 같은 스냅샷에서 함께 읽어 이 경쟁을 제거한다.
+        const samplesWalking = []
         const sampleDeadline = Date.now() + 600
-        while (Date.now() < sampleDeadline && frameSamplesWalking.length < 6) {
-          const phaseNow = await character.getAttribute('data-character-phase').catch(() => null)
-          if (phaseNow !== 'walking') break
-          frameSamplesWalking.push(await spriteImg.getAttribute('data-proto-character-sprite-frame').catch(() => null))
+        while (Date.now() < sampleDeadline && samplesWalking.length < 6) {
+          const s = await sampleCharacterState(page)
+          if (s.phase !== 'walking') break
+          samplesWalking.push(s)
         }
+        const frameSamplesWalking = samplesWalking.map((s) => s.frame)
         r.check(`${name} — walking phase 동안 프레임 샘플을 1개 이상 포착함(폴링이 충분히 빠름)`, frameSamplesWalking.length > 0, JSON.stringify(frameSamplesWalking))
         const allSameWalking = frameSamplesWalking.length > 0 && frameSamplesWalking.every((f) => f != null && f === frameSamplesWalking[0])
         r.check(`${name} — walking phase 동안 프레임이 alternation 없이 고정됨(reduced-motion)`, allSameWalking, JSON.stringify(frameSamplesWalking))
         const isAFrame = typeof frameSamplesWalking[0] === 'string' && frameSamplesWalking[0].endsWith('-a')
         r.check(`${name} — 고정된 프레임이 'a' 변형(freezeFrameIndex 기본값)`, isAFrame, JSON.stringify(frameSamplesWalking))
+        // 2026-09-25(paul-walk-side-b-v2 원-프레임 스왑) — 이 시나리오의
+        // 이동 좌표(65,62)는 side 방향을 유발하므로(S12/S11 항목1과 동일),
+        // reduced-motion에서 고정되는 프레임이 'a' 변형일 뿐 아니라
+        // 정확히 'walk-side-a'여야 한다(다른 방향 프레임으로 잘못
+        // 고정되는 회귀를 막는 구체적 단언).
+        r.check(`${name} — 고정된 프레임이 정확히 'walk-side-a'`, frameSamplesWalking[0] === 'walk-side-a', JSON.stringify(frameSamplesWalking))
 
         const reachedIdle = await waitUntil(async () => (
           (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'

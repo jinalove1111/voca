@@ -1718,3 +1718,80 @@ PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md` §14.6). 아래 결과는
 상세 배경은
 `docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md` §14와
 `handoff.md` 2026-09-24(177차) 참고.
+
+## 관련 항목: Paul 스프라이트 walk-side-b 프레임 교체(v2) (2026-09-25, 178차)
+
+177차가 설치한 8프레임 중 `walk-side-b` 한 프레임만 새 렌더로 교체하는
+작업이다(상세 판정·페어링은 `handoff.md` 2026-09-25(178차) §1 참고).
+
+**정정(2026-09-25, lead)**: 초기 보고에서 후보 원본 `12_54_37 AM
+(1)`을 "좌측·하단 잘림(클리핑)"으로 기록했던 것은 PIL
+`Image.getbbox()`를 RGBA에 그대로 적용해 alpha=0 픽셀까지 잉크로 잡은
+결과였다. alpha>16 기준 잉크 bbox로는 (80,18)–(1004,1431)로 여백이
+충분해 실제로는 클리핑이 아니다. 운영자가 `walk-side-a`를 유지하고
+`12_54_38 AM (2)`(alpha>16 잉크 bbox (151,17)–(901,1463), sha256
+`23c4a79f…`가 식별 키)를 `walk-side-b-v2`로 채택, (1)을 미사용으로 둔
+결정은 구도(art/composition) 판단으로 그대로 유효하다. 상세는
+`handoff.md` 178차 §0 정정,
+`docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md`
+§15.1 정정 참고.
+
+`walk-side-a`를 포함한 나머지 7프레임, 앵커, 타이밍, 미러 규칙은
+무변경이다. 기존 `paul-walk-side-b.png`(+`@2x`)는 디스크에 보존되되
+레지스트리에서 빠지므로, 기존 `testPaulSpriteAssets`/
+`testPaulSpriteIngest`/`testBundleBudget`가 v2 파일명
+(`paul-walk-side-b-v2.png`)과 레거시 파일 보존을 함께 검사하도록
+조정된다. `tests/e2e/townProto25d.spec.mjs` S12는 좌/우 측면 걷기에서
+frame id와 `src` 파일명이 a ↔ b-v2로 정확히 교대하는지, 렌더 크기와
+발 접지선이 흔들리지 않는지를 추가로 검사하고, S13은 측면 걷기
+프레임 정지(reduced-motion) 케이스를 포함한다.
+
+**정정(2026-09-25, lead) — 예방적 facing 가드, 관측된 결함 아님**: 위
+walk-side-b v2 교체와는 별개로, E2E 검증 중 여러 leg로 이어지는 긴
+LEFT 걷기에서 idle 전환 직전 약 100ms 동안 미러
+(`data-proto-character-sprite-mirror`/`scaleX(-1)`)가 무미러로 순간
+해제되는 것처럼 관측됐으나, lead 재조사 결과 **제품 버그가 아니라
+테스트 측정 아티팩트**였다. `findPath`로 확인한 (90,20)→(20,20)
+경로는 dx=−70, dy=0인 `side` 방향 단일 leg이고, 실제 원인은 E2E
+샘플러가 phase/mirror/facing 값을 서로 다른 Playwright 호출로 순차
+읽었고 두 호출 사이에 걷기가 끝나 idle로 전환되며 값이 어긋난
+레이스였다. S12 샘플러를 phase/mirror/facing을 한 번에 캡처하는
+atomic `page.evaluate` 스냅샷 방식으로 교체 중이다(LEFT 걷기 단언
+자체를 강화한 것이 아니라 측정 방식을 고친 것). 다만 재조사 과정에서
+`walkLeg`가 leg마다 그 leg 자신의 `dx`로만 facing을 재계산하는 기존
+로직이 실제 path-snap 시나리오(예: (65,62)→(20,62)의 마지막 leg는
+dx=0, dy=−3.8인 순수 수직 `walkBack` leg)에서는 facing이 잘못
+뒤집힐 위험이 있음을 확인했고, `Proto25DScreen.jsx` 1개 파일에 신규
+상수 `FACING_MIN_DX_PCT = 1.0`(world-%)을 **예방적 가드(하드닝,
+관측된 결함에 대한 수정 아님)** 로 도입했다 — 스프라이트 모드에서
+leg의 이동 방향이 `side`이고 `|dx| ≥ 1.0`인 진짜 수평 leg에서만
+facing을 갱신(`walkLeg`와 reduced-motion 점프 양쪽)하고, 수직/미세
+leg는 이전 facing을 유지한다. pathfinding, 벤치(`facingToward`),
+depth, shadow, 크기는 무변경. S12의 발 접지선 검사에는 기존부터 있던
+walk-bob CSS 애니메이션(크기에 비례해 진폭 증가)을 반영한 허용
+오차(키의 8% 또는 최소 4.5px 중 큰 값)를 추가했다.
+
+검증 결과(2026-09-25 01:55–02:42 KST, 워크트리 `wt-clean-pr`, lead
+실행):
+
+| 스크립트/스펙 | 대상 | 결과 |
+|---|---|---|
+| `scripts/testPaulSpriteAssets.mjs`(조정) | v2 파일명 + 레거시 보존 | 125/125 PASS |
+| `scripts/testPaulSpriteIngest.mjs`(조정) | v2 파일명 반영 | 132/132 PASS |
+| `scripts/testBundleBudget.mjs`(조정) | v2 인벤토리 + 레거시 미누출 | 32/32 PASS |
+| `scripts/testProto25dSpriteAdapter.mjs`(회귀 재확인) | 175차 스위트 회귀 | 50/50 PASS |
+| `scripts/testProto25dSpriteContract.mjs`(회귀 재확인) | 175차 스위트 회귀 | 172/172 PASS |
+| `scripts/testTownEnvAssets.mjs`(회귀 재확인) | 스프라이트 신규 변경이 town 자산 매니페스트 검사에 영향 없는지 | 196/196 PASS |
+| `node scripts/spriteIngestPaul.mjs --check` | 실제 이미지 재검사 | PASS=68 FAIL=0 BLOCKED_BY_ASSET=0 |
+| `tests/e2e/townProto25d.spec.mjs` S12(확장, atomic 샘플러 교체 포함) | 좌/우 걷기 frame id **와** `src` 파일명이 `walk-side-a` ↔ `paul-walk-side-b-v2`로 교대, LEFT 걷기 모든 샘플에서 미러 `'1'`, 크기/발선이 bob 허용 오차 안에서 안정, 4뷰포트 | 포함 통과(아래 standalone 327/327에 합산) |
+| `tests/e2e/townProto25d.spec.mjs` S13(확장) | `walk-side-a` 기준 측면 걷기 reduced-motion 프레임 정지 | 포함 통과 |
+| `tests/e2e/townProto25d.spec.mjs` standalone(vite preview) | S12/S13 포함 전체 | 327/327 PASS |
+| `npm run build` | 전체 회귀 | PASS, 경고 0 |
+| `npm run verify:all` | 전체 회귀 | "ALL DOMAINS: PASS", 141 스위트 PASS / 0 FAIL, 약 32분 |
+| `npm run verify:e2e` | 전체 회귀 | 1655 PASS / 0 FAIL / 0 SKIP, 미mock 요청 0 |
+| 로컬 뷰포트 스크린샷 리드 검수 | `preview-local/side-{360x640,390x844,412x915,1280x800}-{a,b}.png` | lead 리뷰 완료 — a/b-v2 프레임 동일 크기·발 접지선, 검은 배경/클리핑 없음 |
+| Vercel Preview 확인(로그인 없이) | 배포 생존 + 자산 서빙 | push 후 확인(로그인 없음) — 아직 push 전, push 후 Preview GET-only 확인 → PR #62 코멘트 예정 |
+
+상세 배경은 `handoff.md` 2026-09-25(178차) §7,
+`docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md` §15.7
+참고.

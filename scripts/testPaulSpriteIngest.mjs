@@ -136,10 +136,14 @@ section('1. 대응표(PAUL_SPRITE_FILES / SPRITE_FRAME_IDS / PAUL_SPRITE_DIR)')
     'walk-back-a': 'paul-walk-back-a.png',
     'walk-back-b': 'paul-walk-back-b.png',
     'walk-side-a': 'paul-walk-side-a.png',
-    'walk-side-b': 'paul-walk-side-b.png',
+    // 2026-09-25(paul-walk-side-b-v2 원-프레임 스왑, install2 세션 —
+    // paulSpriteManifest.js는 이 세션이 소유하지 않는다, CLAUDE.md 규칙
+    // 16) — walk-side-b가 의도적으로 v2 파일을 가리키도록 바뀌었으므로
+    // 이 기대값도 함께 갱신한다(그 외 7개 파일명은 그대로).
+    'walk-side-b': 'paul-walk-side-b-v2.png',
     sit: 'paul-sit.png',
   }
-  check('PAUL_SPRITE_FILES 값이 운영자 8개 파일명과 정확히 일치', deepEqual(PAUL_SPRITE_FILES, expectedFilenames), JSON.stringify(PAUL_SPRITE_FILES))
+  check('PAUL_SPRITE_FILES 값이 운영자 8개 파일명과 정확히 일치(walk-side-b는 2026-09-25 v2 스왑 반영)', deepEqual(PAUL_SPRITE_FILES, expectedFilenames), JSON.stringify(PAUL_SPRITE_FILES))
 
   check('PAUL_SPRITE_FILES 모든 값이 .png로 끝남', Object.values(PAUL_SPRITE_FILES).every((f) => f.endsWith('.png')))
   check('PAUL_SPRITE_FILES 값이 전부 고유(8개)', new Set(Object.values(PAUL_SPRITE_FILES)).size === 8)
@@ -450,9 +454,16 @@ section('6. character 디렉터리 내용 — 예상 파일 집합과 정확히 
       expected.push(PAUL_SPRITE_FILES[frameId].replace(/\.png$/, '@2x.png'))
     }
     expected.push('README.md', 'LICENSE.txt', 'NOTICE.md', 'index.js', 'paul-sprite-measured.json')
+    // 2026-09-25(paul-walk-side-b-v2 원-프레임 스왑, install2 세션 — 이
+    // 세션은 소유하지 않음) — PAUL_SPRITE_FILES가 이제 walk-side-b를
+    // 'paul-walk-side-b-v2.png'로 가리키므로 위 루프는 그 v2 파일만
+    // 포함한다. 레거시 원본(paul-walk-side-b.png/@2x.png)은 디스크에서
+    // 삭제되지 않고 "보존되지만 import되지 않음" 계약으로 남으므로(고아
+    // 파일이 아니라 의도된 보존), 예상 집합에 명시적으로 더한다.
+    expected.push('paul-walk-side-b.png', 'paul-walk-side-b@2x.png')
     const actual = readdirSync(CHARACTER_DIR)
     check(
-      `character 디렉터리 내용이 예상 ${expected.length}개 파일(8프레임x1x/2x 16장 + README/LICENSE/NOTICE/index.js/paul-sprite-measured.json)과 정확히 일치(고아 파일 없음)`,
+      `character 디렉터리 내용이 예상 ${expected.length}개 파일(8프레임x1x/2x 16장[walk-side-b는 v2] + README/LICENSE/NOTICE/index.js/paul-sprite-measured.json + 보존된 레거시 walk-side-b 원본 2장)과 정확히 일치(고아 파일 없음)`,
       deepEqual([...actual].sort(), [...expected].sort()),
       `actual=${JSON.stringify([...actual].sort())} expected=${JSON.stringify([...expected].sort())}`,
     )
