@@ -304,6 +304,85 @@ section('항목10 — Phase 6D 계약 잠금(cadence/degradation/overlay)')
   check('SOURCE — srcSet이 spriteV2SrcSetFailed일 때 undefined로 치환(1x 전용 재시도)', protoCharacterSrc.includes('srcSet={spriteV2SrcSetFailed ? undefined : spriteVisual.srcSet}'))
 }
 
+// ── 항목11 — Phase 6C 코멘트 드리프트 정리(2026-09-25 Q4 코드 품질 정리) ──
+// characterSpriteContract.js:16-18/paulSpriteManifest.js:10-26/
+// ProtoCharacter.jsx:202-206,237-239,302-306,470-482가 "v2 spriteManifest
+// 분기가 오늘 절대 타지 않는다/아무도 참조하지 않는다"고 적었던 것은 Phase
+// 6C(2026-09-24, Proto25DScreen.jsx가 spriteManifest 기본값을
+// PAUL_SPRITE_MANIFEST로 바꾼 시점)부터 더 이상 사실이 아니었다 — 이 정리
+// 작업에서 그 주장을 담았던 정확한 문구를 제거했다. 소스 문자열에 더 이상
+// 등장하지 않음을 회귀 가드로 고정한다.
+section('항목11 — Phase 6C 코멘트 드리프트 정리(stale 문구 제거 + 새 상수 사용 회귀 가드)')
+{
+  const protoCharacterSrc2 = fs.readFileSync(
+    path.resolve('src/components/town/proto2_5d/ProtoCharacter.jsx'), 'utf8',
+  )
+  const protoScreenSrc2 = fs.readFileSync(
+    path.resolve('src/components/town/proto2_5d/Proto25DScreen.jsx'), 'utf8',
+  )
+  const spriteContractSrc = fs.readFileSync(
+    path.resolve('src/utils/town/proto2_5d/characterSpriteContract.js'), 'utf8',
+  )
+  const paulSpriteManifestSrc = fs.readFileSync(
+    path.resolve('src/utils/town/proto2_5d/paulSpriteManifest.js'), 'utf8',
+  )
+
+  check(
+    'SOURCE — ProtoCharacter.jsx에 stale 문구 "v2 분기는 실제로는 항상 타지 않는다" 없음',
+    !protoCharacterSrc2.includes('v2 분기는 실제로는 항상 타지 않는다'),
+  )
+  check(
+    'SOURCE — ProtoCharacter.jsx에 stale 문구 "이 분기도\\n              오늘은 절대 타지 않는다" 없음(Phase 6B 문단)',
+    !protoCharacterSrc2.includes('spriteManifest가 없으면 항상 false라(위 "Phase 6B" 주석 블록 참고) 이 분기도'),
+  )
+  check(
+    'SOURCE — characterSpriteContract.js에 stale 문구 "오늘 기준 어떤 프로덕션 파일도 이 모듈을 import하지 않는다" 없음',
+    !spriteContractSrc.includes('오늘 기준 어떤 프로덕션 파일도 이 모듈을 import하지 않는다'),
+  )
+  check(
+    'SOURCE — paulSpriteManifest.js에 stale 문구 "오늘 어떤 프로덕션 파일도 아래 어댑터를" 없음',
+    !paulSpriteManifestSrc.includes('오늘 어떤 프로덕션 파일도 아래 어댑터를'),
+  )
+  // v1(manifest prop, Phase 6A)의 "아직 아무도 넘기지 않는다"는 지금도
+  // 사실이므로(Proto25DScreen.jsx가 기본값을 주는 건 spriteManifest뿐) 그
+  // 문단은 이 정리에서 건드리지 않았다 — 여전히 존재해야 한다(과잉 삭제
+  // 회귀 가드).
+  check(
+    'SOURCE — v1 manifest(Phase 6A) 문단은 그대로 남아 있음(isSprite는 오늘도 절대 타지 않음)',
+    protoCharacterSrc2.includes('isSprite는 manifest가 없으면 항상 false'),
+  )
+
+  check(
+    'SOURCE — Proto25DScreen.jsx에 SCENE_OBJECT_SHADOW_HEIGHT_RATIO 상수 선언 존재',
+    /const SCENE_OBJECT_SHADOW_HEIGHT_RATIO = 0\.35/.test(protoScreenSrc2),
+  )
+  const shadowRatioUsages = protoScreenSrc2.match(/SCENE_OBJECT_SHADOW_HEIGHT_RATIO/g) || []
+  check(
+    'SOURCE — SCENE_OBJECT_SHADOW_HEIGHT_RATIO가 선언 포함 정확히 3회 등장(선언 1 + 사용 2)',
+    shadowRatioUsages.length === 3, `matches=${shadowRatioUsages.length}`,
+  )
+  check(
+    'SOURCE — 씬 오브젝트 그림자 높이에 리터럴 0.35 대신 상수 사용',
+    protoScreenSrc2.includes('widthPx * SCENE_OBJECT_SHADOW_HEIGHT_RATIO'),
+  )
+  check(
+    'SOURCE — 씬 오브젝트 그림자 translate에도 상수 사용(에밋 결과는 -35%로 기존과 동일)',
+    protoScreenSrc2.includes('translate(-50%, -${SCENE_OBJECT_SHADOW_HEIGHT_RATIO * 100}%)'),
+  )
+
+  // 실제 렌더 문자열이 기존과 byte-identical한지(상수화가 순수 리팩터라는
+  // 증거) — objectRenderedWidthPx가 없어 widthPx를 직접 계산할 수 없으므로,
+  // 대신 공식 자체(0.35 → SCENE_OBJECT_SHADOW_HEIGHT_RATIO)가 수치적으로
+  // 동일함만 단언한다(100 * 0.35 === 35).
+  check(
+    'SCENE_OBJECT_SHADOW_HEIGHT_RATIO * 100 === 35(기존 -35% 문자열과 동일 출력)',
+    (() => {
+      const m = protoScreenSrc2.match(/const SCENE_OBJECT_SHADOW_HEIGHT_RATIO = ([0-9.]+)/)
+      return !!m && Number(m[1]) * 100 === 35
+    })(),
+  )
+}
+
 // ── 결과 ──────────────────────────────────────────────────────────────
 console.log(`\n총 ${totalPassed + totalFailed}개 단언 — PASS ${totalPassed} / FAIL ${totalFailed}`)
 if (failures.length > 0) {

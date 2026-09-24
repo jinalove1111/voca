@@ -180,6 +180,12 @@ const RENDER_OBJECTS = SCENE_FIXTURE.filter((obj) => obj.id !== 'demo-bench')
 // 갖는다, 그 두 파일도 서로 각자 복제해 갖고 있는 것과 동일 관례).
 const SHADOW_BACKGROUND = 'radial-gradient(ellipse at center, rgba(30,25,15,0.35) 0%, rgba(30,25,15,0.16) 55%, rgba(30,25,15,0) 75%)'
 
+// 씬 오브젝트 그림자의 세로 비율 — 그림자 높이(widthPx 대비)와 세로 중심
+// 보정(translate의 y%) 양쪽에 같은 0.35를 쓴다(납작한 타원 그림자를 만드는
+// 의도적 비율, ProtoCharacter.jsx의 SHADOW_* 상수와 동일한 관례로 이름을
+// 붙여둔다).
+const SCENE_OBJECT_SHADOW_HEIGHT_RATIO = 0.35
+
 // 초목 흔들림(ambient sway) — 새 keyframe을 만들지 않고 TownSceneryLayer.jsx
 // 가 이미 쓰는 town-sway(tailwind.config.js, rotate ±1.5deg 5s)를 그대로
 // 재사용한다(팀장 지시 — "기존 sway keyframe이 있으면 그걸 쓴다"). 나무/
@@ -716,8 +722,8 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST }
                     left: `${obj.anchor.x}%`,
                     top: `${obj.anchor.y}%`,
                     width: `${widthPx}px`,
-                    height: `${widthPx * 0.35}px`,
-                    transform: 'translate(-50%, -35%)',
+                    height: `${widthPx * SCENE_OBJECT_SHADOW_HEIGHT_RATIO}px`,
+                    transform: `translate(-50%, -${SCENE_OBJECT_SHADOW_HEIGHT_RATIO * 100}%)`,
                     background: SHADOW_BACKGROUND,
                     zIndex: z,
                   }}

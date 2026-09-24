@@ -12,6 +12,7 @@ import {
   SPRITE_DIRECTIONS,
   FRAME_SEQUENCE_BY_STATE,
   EXPECTED_FRAME_META,
+  SPRITE_MANIFEST_VERSION,
   validateSpriteManifest,
   directionForMove,
   facingForMove,
@@ -25,6 +26,7 @@ import {
   EMOJI_GLYPH_BY_STATE,
   stateKeyForPhase,
 } from '../src/utils/town/proto2_5d/characterManifest.js'
+import { buildPaulSpriteManifest } from '../src/utils/town/proto2_5d/paulSpriteManifest.js'
 import {
   EXAMPLE_SPRITE_MANIFEST,
   makeSpriteManifest,
@@ -613,6 +615,31 @@ section('항목14 — v1 characterManifest.js 무변경(회귀 가드)')
   check("EMOJI_GLYPH_BY_STATE 여전히 {idle:'🚶',walk:'🚶',sit:'🧘'}",
     deepEqual(EMOJI_GLYPH_BY_STATE, { idle: '🚶', walk: '🚶', sit: '🧘' }), JSON.stringify(EMOJI_GLYPH_BY_STATE))
   check("stateKeyForPhase('leaving') === 'walk'", stateKeyForPhase('leaving') === 'walk')
+}
+
+// ── 항목15 — SPRITE_MANIFEST_VERSION 상수 사용(2026-09-25 Q4 코드 품질 정리) ──
+// validateSpriteManifest는 이제 리터럴 2가 아니라 SPRITE_MANIFEST_VERSION을
+// 참조한다(동작은 그대로, 매직넘버만 제거) — 상수 값 자체가 바뀌어도 검사
+// 로직이 자동으로 따라가는지, 그리고 빌드된 Paul manifest의 version이 같은
+// 상수를 쓰는지 확인한다.
+section('항목15 — SPRITE_MANIFEST_VERSION 상수 사용(리터럴 2 제거 회귀 가드)')
+{
+  check('SPRITE_MANIFEST_VERSION === 2', SPRITE_MANIFEST_VERSION === 2, `got ${SPRITE_MANIFEST_VERSION}`)
+
+  const validWithConstant = makeSpriteManifest({ version: SPRITE_MANIFEST_VERSION })
+  const vOk = validateSpriteManifest(validWithConstant)
+  check('version: SPRITE_MANIFEST_VERSION → ok:true', vOk.ok === true, JSON.stringify(vOk))
+
+  const rejectedV3 = makeSpriteManifest({ version: 3 })
+  const vRejected = validateSpriteManifest(rejectedV3)
+  check('version: 3(SPRITE_MANIFEST_VERSION과 다름) → ok:false', vRejected.ok === false, JSON.stringify(vRejected))
+  check('version: 3 → errors에 SPRITE_MANIFEST_VERSION 값 언급', vRejected.errors.some(e => e.includes(String(SPRITE_MANIFEST_VERSION))), JSON.stringify(vRejected))
+
+  // buildPaulSpriteManifest(paulSpriteManifest.js)도 리터럴 2가 아니라 같은
+  // 상수를 써서 만든다 — 두 파일이 상수를 공유하지 않고 각자 리터럴을
+  // 하드코딩했다면 이 단언이 상수 값 변경 시 깨져서 드리프트를 잡아낸다.
+  const built = buildPaulSpriteManifest()
+  check('buildPaulSpriteManifest().version === SPRITE_MANIFEST_VERSION', built.version === SPRITE_MANIFEST_VERSION, `got ${built.version}`)
 }
 
 // ── 결과 ──────────────────────────────────────────────────────────────

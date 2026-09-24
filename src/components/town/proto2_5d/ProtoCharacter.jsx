@@ -199,11 +199,14 @@ function useSpriteFrameIndex(framesLength, fps, reducedMotion, freezeFrameIndex)
 
 // Phase 6B(2026-09-24, v2 스프라이트 어댑터) — characterSpriteContract.js(v2,
 // idle/walk-front/walk-back/walk-side/sit 8프레임 + 방향 계약)를 이 컴포넌트에
-// "휴면" 상태로 연결한다. 오늘 어떤 프로덕션 호출부도 `spriteManifest` prop을
-// 넘기지 않으므로(App.jsx는 Proto25DScreen에 어떤 prop도 넘기지 않는다) 아래
-// v2 분기는 실제로는 항상 타지 않는다 — validateSpriteManifest(undefined).ok는
-// 항상 false이고, resolveSpriteFrame은 그 경우 항상 {kind:'emoji',...}로
-// 폴백한다(characterSpriteContract.js resolveSpriteFrame 헤더 주석).
+// 연결한다. 당시(Phase 6B 시점)는 어떤 프로덕션 호출부도 `spriteManifest`
+// prop을 넘기지 않아 아래 v2 분기가 "휴면" 상태였다. Phase 6C(2026-09-24)부터
+// Proto25DScreen.jsx가 `spriteManifest` 기본값을 `PAUL_SPRITE_MANIFEST`(운영자
+// 승인 Paul 스프라이트 8장)로 바꿔, 지금은 이 v2 분기가 활성 기본 렌더
+// 경로다 — validateSpriteManifest(...).ok가 false이거나(매니페스트 자체가
+// 무효) 런타임 이미지 로드가 실패할 때만 resolveSpriteFrame이
+// {kind:'emoji',...}로 폴백한다(characterSpriteContract.js resolveSpriteFrame
+// 헤더 주석) — emoji는 이제 "기본"이 아니라 "폴백"이다.
 //
 // 우선순위 — v2(spriteManifest 유효) > v1(manifest 유효, Phase 6A) > emoji.
 // v1 분기(아래 `isSprite`)와 emoji 분기는 이 작업에서 한 줄도 바꾸지 않는다
@@ -235,8 +238,9 @@ export default function ProtoCharacter({
   // 사실이다(오늘의 DOM은 이 prop 추가 이전과 완전히 동일).
   manifest,
   // Phase 6B — 선택적 v2 스프라이트 매니페스트(characterSpriteContract.js
-  // 계약, 위 파일 헤더 "Phase 6B" 주석 참고). 기본값 undefined — 오늘 어떤
-  // 호출부도 넘기지 않는다.
+  // 계약, 위 파일 헤더 "Phase 6B" 주석 참고). 당시(Phase 6B) 기본값은
+  // undefined였다 — Phase 6C(2026-09-24)부터 이 컴포넌트의 유일한 프로덕션
+  // 호출부(Proto25DScreen.jsx)가 `PAUL_SPRITE_MANIFEST`를 기본값으로 넘긴다.
   spriteManifest,
   // Phase 6B — 논리 방향('front'|'back'|'side', 기본 'front'). emoji/v1
   // 분기에서는 전혀 읽지 않는다(v2 렌더 분기 전용) — Proto25DScreen.jsx는
@@ -301,10 +305,13 @@ export default function ProtoCharacter({
 
   // Phase 6B — v2 스프라이트(characterSpriteContract.js). validateSpriteManifest
   // 는 절대 throw하지 않고(계약), spriteManifest가 undefined/무효면 ok는 항상
-  // false다 — 오늘 어떤 호출부도 spriteManifest를 넘기지 않으므로 이 블록
-  // 전체가 실제로는 항상 emoji 폴백으로 귀결된다(위 파일 헤더 "Phase 6B"
-  // 주석). 훅은 조건부로 호출하지 않는다 — framesLength/fps를 "비활성일 때
-  // 0"으로 계산해 항상 같은 순서로 useSpriteFrameIndex를 호출한다.
+  // false다. Phase 6C(2026-09-24)부터 Proto25DScreen.jsx가 유효한
+  // `PAUL_SPRITE_MANIFEST`를 기본값으로 넘기므로 이 블록은 보통 활성 v2
+  // 경로로 귀결된다 — spriteManifest가 명시적으로 undefined/무효로 넘어오거나
+  // (위 파일 헤더 "Phase 6B/6C" 주석) 런타임 이미지 로드가 실패할 때만
+  // emoji로 폴백한다. 훅은 조건부로 호출하지 않는다 — framesLength/fps를
+  // "비활성일 때 0"으로 계산해 항상 같은 순서로 useSpriteFrameIndex를
+  // 호출한다.
   const spriteValidation = useMemo(() => validateSpriteManifest(spriteManifest), [spriteManifest])
   const spriteV2StateKey = spriteStateForPhase(phase, direction)
   const spriteV2FramesLength = FRAME_SEQUENCE_BY_STATE[spriteV2StateKey]
@@ -476,10 +483,13 @@ export default function ProtoCharacter({
               타지 않는다 — emoji 쪽(else)은 이 prop 추가 이전과 완전히
               동일한 DOM/로직이다.
               Phase 6B — isSpriteV2가 true일 때는 v1/emoji보다 우선해서 이
-              자리에 v2 스프라이트 레이어가 들어간다(맨 위 새 분기). spriteManifest
-              가 없으면 항상 false라(위 "Phase 6B" 주석 블록 참고) 이 분기도
-              오늘은 절대 타지 않는다 — v1/emoji 두 분기는 한 글자도 바뀌지
-              않았다. */}
+              자리에 v2 스프라이트 레이어가 들어간다(맨 위 새 분기). 당시
+              (Phase 6B)는 spriteManifest가 없으면 항상 false라 이 분기가
+              오늘은 절대 타지 않는다고 적었다 — Phase 6C(2026-09-24)부터는
+              Proto25DScreen.jsx의 기본값(`PAUL_SPRITE_MANIFEST`) 덕에 이
+              분기가 활성 기본 경로다(위 "Phase 6B/6C" 주석 블록 참고).
+              v1/emoji 두 분기 자체의 코드는 한 글자도 바뀌지 않았다 —
+              emoji는 이제 매니페스트 무효/이미지 로드 실패 시의 폴백이다. */}
           {isSpriteV2 ? (
             <div
               style={{ transform: spriteVisual.mirrorX ? 'scaleX(-1)' : undefined }}

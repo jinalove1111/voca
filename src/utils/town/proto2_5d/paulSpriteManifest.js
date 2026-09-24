@@ -7,23 +7,28 @@
 // 고정해두는 얇은 어댑터다 — 계약 자체(validateSpriteManifest 등)는
 // 재구현하지 않고 그대로 가져다 쓴다(CLAUDE.md 규칙 3).
 //
-// 이미지 import 0 — 이 파일 어디에도 `.png`/`.webp` import가 없다. 즉
-// 실제 스프라이트 PNG 8장이 아직 `src/assets/town/character/`에 없는
-// 동안에도 이 모듈은 정상적으로 로드되고, `npm run build`에 아무 영향을
-// 주지 않는다(이미지가 없으면 `buildPaulSpriteManifest`가 만드는 manifest의
-// `frames.*.src`가 비어 있을 뿐 — `validateSpriteManifest`가 그 매니페스트를
-// 무효 판정하고, 호출부(`resolveSpriteFrame`)가 항상 하던 대로 이모지로
-// 폴백한다. 이것이 "의도된 안전망"이다 — throw도, 빌드 실패도 없다).
+// 이미지 import 0 — 이 파일 어디에도 `.png`/`.webp` import가 없다(이 사실은
+// 지금도 그대로다 — 아래 §2 실측 결과와는 무관하게, 이 파일 자신은 여전히
+// 순수 데이터 어댑터로 남는다). 작성 당시(Phase 6B)는 실제 스프라이트
+// PNG 8장이 아직 `src/assets/town/character/`에 없어, 이미지가 없으면
+// `buildPaulSpriteManifest`가 만드는 manifest의 `frames.*.src`가 비어 있고
+// `validateSpriteManifest`가 그 매니페스트를 무효 판정해 호출부
+// (`resolveSpriteFrame`)가 이모지로 폴백하는 것이 "의도된 안전망"이었다
+// (throw도, 빌드 실패도 없음 — 이 안전망 설계 자체는 지금도 유효하다).
 //
-// 흐름(전부 미래형 — 오늘 어떤 프로덕션 파일도 아래 어댑터를 참조하지
-// 않는다): (미래) `src/assets/town/character/index.js`(에셋 레지스트리,
-// env 레지스트리(V2 환경 아트 index.js)와 동일한 격리 패턴 — PNG 8장을 import해
-// `PAUL_SPRITE_SOURCES` 맵으로 노출)
-//   → `buildPaulSpriteManifest({ sources: PAUL_SPRITE_SOURCES, ... })`
-//   → 완성된 v2 manifest를 `Proto25DScreen.jsx`의 (아직 존재하지 않는,
-//     선택적) `spriteManifest` prop으로 전달.
-// 이 파일은 그 경로의 가운데 단계만 구현한다 — 레지스트리도, prop 배선도
-// 이 작업 범위 밖이다(`PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md` §10).
+// 흐름(작성 당시엔 전부 미래형이었다 — 지금은 실현된 상태): 16장의 PNG(8
+// 프레임 × 1x/@2x, walk-side-b는 2026-09-25 운영자 결정으로 v2 파일로 교체)
+// 가 `src/assets/town/character/`에 존재하고, 그 디렉터리의
+// `index.js`(에셋 레지스트리, env 레지스트리(V2 환경 아트 index.js)와 동일한
+// 격리 패턴)가 이를 import해 `PAUL_SPRITE_SOURCES`/`PAUL_SPRITE_SOURCES_2X`
+// 맵으로 노출한다
+//   → `characterSpriteManifest.default.js`가 `buildPaulSpriteManifest({
+//     sources: PAUL_SPRITE_SOURCES, ... })`를 호출해 `PAUL_SPRITE_MANIFEST`를
+//     만들고
+//   → `Proto25DScreen.jsx`가 이를 `spriteManifest` prop의 프로덕션 기본값으로
+//     쓴다(Phase 6C, 2026-09-24).
+// 이 파일 자신은 그 경로의 가운데 단계(순수 빌더 함수)만 구현한다 —
+// 레지스트리/prop 배선은 다른 파일이 소유한다.
 //
 // PROPOSED 표시가 붙은 수치(캔버스 크기, 프레임 지속시간, footAnchor,
 // sitSeatAnchor)는 전부 스펙 §4/§5의 제안값을 그대로 가져온 것으로, 실제
@@ -32,7 +37,7 @@
 // seatAnchor는 스펙 §5.2가 "기본값 없음, 사람 확정 필요"라고 명시)
 // 실측값으로 교체해야 한다.
 
-import { SPRITE_FRAME_IDS, EXPECTED_FRAME_META } from './characterSpriteContract.js'
+import { SPRITE_FRAME_IDS, EXPECTED_FRAME_META, SPRITE_MANIFEST_VERSION } from './characterSpriteContract.js'
 
 // PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md §10 "v2 매니페스트 최소
 // 필드" 표의 characterId 관례(카탈로그 캐릭터 하나당 안정적 문자열 id) —
@@ -146,7 +151,7 @@ export function buildPaulSpriteManifest(p) {
   }
 
   return {
-    version: 2,
+    version: SPRITE_MANIFEST_VERSION,
     characterId: PAUL_CHARACTER_ID,
     license: safeLicense,
     canvas: safeCanvas,

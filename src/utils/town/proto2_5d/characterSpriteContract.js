@@ -13,9 +13,12 @@
 // 등)가 미구현이었다 — v1의 `states`/`REQUIRED_STATES` shape을 건드리지
 // 않고 그 확장을 별도 모듈로 구현해 v1 회귀 위험을 0으로 만든다.
 //
-// 오늘 기준 어떤 프로덕션 파일도 이 모듈을 import하지 않는다(실 스프라이트
-// 아트 없음 — 위 스펙 문서 §0 "최종 이미지는 아직 승인되지 않았다"). 즉 이
-// 파일은 전부 미사용 코드이며 `scripts/`의 별도 테스트로만 검증된다.
+// 작성 당시(Phase 6B, 2026-09-24)는 어떤 프로덕션 파일도 이 모듈을 import하지
+// 않았다(실 스프라이트 아트 없음 — 위 스펙 문서 §0 "최종 이미지는 아직
+// 승인되지 않았다"). Phase 6C(2026-09-24 후반)부터는
+// `characterSpriteManifest.default.js`(Proto25DScreen.jsx의 프로덕션 기본
+// `spriteManifest`를 만드는 파일)가 이 모듈의 `validateSpriteManifest`를
+// import해 쓴다 — 즉 지금은 이 파일이 프로덕션 렌더 경로의 일부다.
 //
 // v1과 동일한 관례를 그대로 따른다: 순수 데이터 + validator/adapter
 // 함수만(React/DOM 의존 없음), import는 v1의 공유 상수/함수
@@ -165,8 +168,8 @@ export function validateSpriteManifest(m) {
   }
   const errors = []
 
-  if (m.version !== 2) {
-    errors.push(`version은 2여야 함(got ${JSON.stringify(m.version)})`)
+  if (m.version !== SPRITE_MANIFEST_VERSION) {
+    errors.push(`version은 ${SPRITE_MANIFEST_VERSION}여야 함(got ${JSON.stringify(m.version)})`)
   }
   if (!isNonEmptyString(m.characterId)) {
     errors.push('characterId는 비어있지 않은 문자열이어야 함')
