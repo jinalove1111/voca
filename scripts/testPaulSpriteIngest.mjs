@@ -15,7 +15,7 @@
 // 의존성 0(CLAUDE.md 규칙 6).
 
 import { spawnSync } from 'node:child_process'
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
 import { fileURLToPath } from 'node:url'
@@ -388,40 +388,75 @@ section('4h. footLineConsistency / alphaAt / classifyCanvasSizes 경계값')
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// 5. CLI — spriteIngestPaul.mjs --check / --write (자식 프로세스로 실행)
+// 5. CLI — spriteIngestPaul.mjs --check (자식 프로세스로 실행, Phase 6C —
+// 2026-09-24 이미지 8장(x1x/2x 16장) 도착 후 상태)
 // ══════════════════════════════════════════════════════════════════════
-section('5. CLI(spriteIngestPaul.mjs --check / --write, 실제 이미지 0장 상태)')
+// 2026-09-24(Phase 6C) — 이 섹션은 원래 "이미지 0장" 전제(위 파일 헤더 원본
+// 주석)로 작성됐다. install 세션이 실제 PNG 16장 + LICENSE.txt/NOTICE.md +
+// index.js를 src/assets/town/character/에 드롭한 뒤에는 그 전제 자체가
+// 깨지므로, 이 섹션만 실측(모든 프레임 존재 + --check 전항목 PASS)으로
+// 갱신한다. 픽셀 단위 자산 품질 검증(96x128/192x256 치수, 발 접지선,
+// 중심축, LICENSE/NOTICE 내용, index.js exports, 프로덕션 기본 매니페스트)
+// 은 재구현하지 않고 별도 스위트(scripts/testPaulSpriteAssets.mjs, 신규)로
+// 옮겼다 — 그 스위트가 유일한 검증 경로다(CLAUDE.md 규칙 3, 중복 없음).
+// --write는 이 스위트가 실행하지 않는다(install 세션이 이미 실행해 index.js
+// 를 만들어 뒀고, 이 세션은 그 파일을 소유하지 않으므로 재실행/덮어쓰기
+// 위험을 만들지 않는다 — CLAUDE.md 규칙 16).
+section('5. CLI(spriteIngestPaul.mjs --check, 이미지 8장(x1x/2x 16장) 도착 후 상태)')
 {
-  check('사전 확인 — src/assets/town/character/에 실제 PNG 0장(README.md만)', existsSync(CHARACTER_DIR) && readdirSync(CHARACTER_DIR).every((f) => !/\.(png|webp|svg)$/i.test(f)))
+  const sitAt2xPath = path.join(CHARACTER_DIR, 'paul-sit@2x.png')
+  if (!check('사전 확인 — src/assets/town/character/paul-sit@2x.png 존재(install 세션 완료 신호)', existsSync(sitAt2xPath))) {
+    console.log('\ninstall 세션의 산출물이 아직 도착하지 않음 — 5절 나머지 단언을 건너뜀.')
+  } else {
+    const indexJsPath = path.join(CHARACTER_DIR, 'index.js')
+    const indexJsBefore = existsSync(indexJsPath) ? readFileSync(indexJsPath, 'utf8') : null
 
-  const checkResult = spawnSync(process.execPath, ['scripts/spriteIngestPaul.mjs', '--check'], { cwd: ROOT, encoding: 'utf8' })
-  check('spriteIngestPaul.mjs --check — exit code 1', checkResult.status === 1, `status=${checkResult.status}, stderr=${checkResult.stderr}`)
-  const stdout = checkResult.stdout || ''
-  const lines = stdout.split('\n')
-  const blockedLines = lines.filter((l) => l.startsWith('BLOCKED_BY_ASSET'))
-  check('stdout에 BLOCKED_BY_ASSET로 시작하는 줄이 정확히 8개', blockedLines.length === 8, `got ${blockedLines.length}: ${JSON.stringify(blockedLines)}`)
-  check("stdout에 '결론' 포함", stdout.includes('결론'))
-  check("stdout에 'Error' 문자열 없음", !stdout.includes('Error'))
-  check("stdout에 스택트레이스 줄(' at ') 없음", !lines.some((l) => l.trim().startsWith('at ')))
-  check('stderr 비어있음(예외로 죽지 않음)', (checkResult.stderr || '').trim() === '', checkResult.stderr)
+    const checkResult = spawnSync(process.execPath, ['scripts/spriteIngestPaul.mjs', '--check'], { cwd: ROOT, encoding: 'utf8' })
+    check('spriteIngestPaul.mjs --check — exit code 0(전항목 PASS)', checkResult.status === 0, `status=${checkResult.status}, stderr=${checkResult.stderr}`)
+    const stdout = checkResult.stdout || ''
+    const lines = stdout.split('\n')
+    check("stdout 결과 줄에 'FAIL=0' 포함", /FAIL=0(\s|$)/.test(stdout), stdout.split('\n').find((l) => l.startsWith('결과:')) || '(결과 줄 없음)')
+    check("stdout 결과 줄에 'BLOCKED_BY_ASSET=0' 포함", stdout.includes('BLOCKED_BY_ASSET=0'), stdout.split('\n').find((l) => l.startsWith('결과:')) || '(결과 줄 없음)')
+    check("stdout에 '결론' 포함", stdout.includes('결론'))
+    check("stdout에 'Error' 문자열 없음", !stdout.includes('Error'))
+    check("stdout에 스택트레이스 줄(' at ') 없음", !lines.some((l) => l.trim().startsWith('at ')))
+    check('stderr 비어있음(예외로 죽지 않음)', (checkResult.stderr || '').trim() === '', checkResult.stderr)
 
-  const beforeWriteFiles = readdirSync(CHARACTER_DIR)
-  const writeResult = spawnSync(process.execPath, ['scripts/spriteIngestPaul.mjs', '--write'], { cwd: ROOT, encoding: 'utf8' })
-  check('spriteIngestPaul.mjs --write(체크 미통과 상태) — exit code 1', writeResult.status === 1, `status=${writeResult.status}`)
-  check('--write 실행 후에도 index.js가 생성되지 않음', !existsSync(path.join(CHARACTER_DIR, 'index.js')))
-  const afterWriteFiles = readdirSync(CHARACTER_DIR)
-  check('--write 실행 후 character 디렉터리 내용이 README.md 하나뿐', deepEqual(afterWriteFiles, ['README.md']), JSON.stringify(afterWriteFiles))
-  check('--write 실행 전후로 디렉터리 파일 목록 무변경', deepEqual(beforeWriteFiles, afterWriteFiles))
+    // --check는 읽기 전용이어야 한다(헤더 주석 — "이 스크립트는 어떤
+    // 이미지도 만들지 않는다" + main()의 mode==='write' 분기에서만
+    // writeRegistry 호출) — index.js가 이미 존재한다면(install --write
+    // 완료 후) 이 --check 실행으로 내용이 바뀌지 않아야 한다.
+    const indexJsAfter = existsSync(indexJsPath) ? readFileSync(indexJsPath, 'utf8') : null
+    check('spriteIngestPaul.mjs --check 실행 전후로 index.js 내용 무변경(읽기 전용 계약)', indexJsBefore === indexJsAfter)
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// 6. 이미지 부재 안전 — 8장 도착 전 상태를 실측으로 재확인
+// 6. 디렉터리 내용 실측 — 8프레임 x 1x/2x 16장 + 라이선스 문서 + 레지스트리
 // ══════════════════════════════════════════════════════════════════════
-section('6. 이미지 부재 안전(character 디렉터리 실측)')
+// 2026-09-24(Phase 6C) — 원래 "README.md 하나뿐"이던 전제(이미지 0장)를
+// "install 세션이 다 드롭한 뒤"로 갱신한다. 픽셀 품질/exports 내용 검증은
+// scripts/testPaulSpriteAssets.mjs가 전담하므로(위 5절 주석 참고), 여기서는
+// "이 디렉터리 안에 예상 파일 집합 외 다른 것이 섞여 있지 않은지"만
+// 재확인한다(고아 파일/오타 파일명 방지).
+section('6. character 디렉터리 내용 — 예상 파일 집합과 정확히 일치(고아 파일 없음)')
 {
-  const files = readdirSync(CHARACTER_DIR)
-  check('character 디렉터리에 .png/.webp/.svg 파일이 0개', files.filter((f) => /\.(png|webp|svg)$/i.test(f)).length === 0, JSON.stringify(files))
-  check('character 디렉터리에 index.js 없음', !existsSync(path.join(CHARACTER_DIR, 'index.js')))
+  if (!existsSync(path.join(CHARACTER_DIR, 'paul-sit@2x.png'))) {
+    console.log('SKIP — install 세션의 산출물이 아직 도착하지 않음(5절과 동일 사전조건).')
+  } else {
+    const expected = []
+    for (const frameId of SPRITE_FRAME_IDS) {
+      expected.push(PAUL_SPRITE_FILES[frameId])
+      expected.push(PAUL_SPRITE_FILES[frameId].replace(/\.png$/, '@2x.png'))
+    }
+    expected.push('README.md', 'LICENSE.txt', 'NOTICE.md', 'index.js', 'paul-sprite-measured.json')
+    const actual = readdirSync(CHARACTER_DIR)
+    check(
+      `character 디렉터리 내용이 예상 ${expected.length}개 파일(8프레임x1x/2x 16장 + README/LICENSE/NOTICE/index.js/paul-sprite-measured.json)과 정확히 일치(고아 파일 없음)`,
+      deepEqual([...actual].sort(), [...expected].sort()),
+      `actual=${JSON.stringify([...actual].sort())} expected=${JSON.stringify([...expected].sort())}`,
+    )
+  }
 }
 
 // ── 결과 ──────────────────────────────────────────────────────────────

@@ -1672,3 +1672,49 @@ verify:all` "ALL DOMAINS: PASS"(스위트 단위 PASS 139 / FAIL 0, 약
 재확인 커맨드: `node scripts/testProto25dSpriteContract.mjs`,
 `node scripts/testProto25dSpriteAdapter.mjs`, 전체 회귀는 `npm run
 verify:e2e`/`npm run verify:all`.
+
+## 관련 항목: Paul 캐릭터 8프레임 스프라이트 실장 — `testPaulSpriteAssets` 신규 + E2E S12/S13 신규 (2026-09-24, 177차 Phase 6C)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._ 175차 절이 검증한
+v2 계약/어댑터는 그때까지 휴면(이모지만 실제 렌더)이었다. 177차는
+운영자가 ChatGPT로 생성한 실제 PNG 8프레임을
+`src/assets/town/character/`에 설치하고
+`characterSpriteManifest.default.js`(`PAUL_SPRITE_MANIFEST`)를
+`Proto25DScreen.jsx` 기본 매니페스트로 배선해, `paulTown2_5d` 플래그가
+켜지면 처음으로 이모지 대신 실제 스프라이트가 렌더된다(신규 게이팅
+플래그는 추가하지 않았다 — `docs/design/town/
+PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md` §14.6). 아래 결과는
+2026-09-24 21:47–22:27 KST, 워크트리 `wt-clean-pr`에서 lead가 직접
+실행한 최종 전체 회귀 기준이다.
+
+| 스크립트/스펙 | 대상 | 결과 |
+|---|---|---|
+| `scripts/testPaulSpriteAssets.mjs`(신규) | 설치된 8프레임 PNG의 정적/레지스트리/청크 격리/번들 누출 검사(파일 존재, `index.js` export 형태, `Proto25DScreen-*.js` 청크에만 `paul-` 문자열 존재하고 메인/TownScreen 청크에는 없음 등) | 112/112 PASS |
+| `scripts/testPaulSpriteIngest.mjs` §5–6(기존 135단언 중 "이미지 부재" 전제였던 절을 "이미지 존재" 케이스로 조정) | `spriteIngestPaul.mjs --check`/`--write`가 실제 8프레임 PNG를 만났을 때의 동작 | 132/132 PASS |
+| `tests/e2e/townProto25d.spec.mjs` S8/S9/S11(스프라이트 모드로 조정) | 175차가 이모지 전제로 작성한 항목을 실제 스프라이트 렌더 기준으로 갱신 | 포함 통과(아래 standalone 270/270에 합산) |
+| `tests/e2e/townProto25d.spec.mjs` S12(신규, 뷰포트 360/390/412/1280) | 스프라이트 이미지 로드, 렌더 크기 밴드, 클리핑 없음, 프레임 교대(`walk-*-a`↔`walk-*-b`), 그림자, 검은 배경 없음, UI 탭이 캐릭터를 이동시키지 않음 | 포함 통과 |
+| `tests/e2e/townProto25d.spec.mjs` S13(신규) | `prefers-reduced-motion`에서 프레임 정지(`freezeFrameIndex`) | 포함 통과 |
+| `tests/e2e/townProto25d.spec.mjs` standalone(vite preview) | S8/S9/S11/S12/S13 포함 전체 | 270/270 PASS |
+| `scripts/testProto25dSpriteAdapter.mjs` / `testProto25dSpriteContract.mjs` / `testProto25dCharacterManifest.mjs`(회귀 재확인) | 175차 스위트가 실 이미지 배선 후에도 그대로 통과하는지 | 50/50, 172/172, 72/72 전부 PASS |
+| `scripts/testTownEnvAssets.mjs`(회귀 재확인) | 스프라이트 신규 주석이 town 자산 매니페스트 검사에 영향 없는지 | 196/196 PASS(최초 실행에서 신규 주석 문구 충돌로 실패 → 수정 후 PASS, 아래 참고) |
+| `scripts/testBundleBudget.mjs`(§4c 신규 항목) | 스프라이트 16파일 인벤토리 + 누출 가드(main/V1/V2 청크에 `paul-` 없음), `Proto25DScreen` 청크 예산 | 32/32 PASS — 청크 누출 0, gzip 11.3KB ≤ 60KB |
+| `node scripts/spriteIngestPaul.mjs --check` | 실제 이미지 존재 상태에서 재실행 | PASS=68 FAIL=0 BLOCKED_BY_ASSET=0 |
+| 로컬 뷰포트 스크린샷(360/390/412/1280, Playwright + 네트워크 mock, 12장: {viewport}×{idle,mid-walk,sitting}) | Production PIN API를 호출하지 않는 로컬 검증(Production WRITE 0 원칙, 173차 §8과 동일 방식 — `handoff.md` 177차 §6) | lead 리뷰 완료 — 스프라이트 정상 렌더, 클리핑/검은 배경 없음, 프레임 교대·방향·착석·그림자·reduced-motion·UI 탭 무이동 전부 확인 |
+| Vercel Preview 확인(로그인 없이) | 배포 생존 + Proto 청크/`paul-*` 자산 서빙 여부만 | push 후 확인(로그인 없음) — 아직 미완료 |
+| `npm run build` | 전체 회귀 | PASS, 경고 0 |
+| `npm run verify:all` | 전체 회귀 | "ALL DOMAINS: PASS", 141 스위트 PASS / 0 FAIL, 약 27분 |
+| `npm run verify:e2e` | 전체 회귀 | 1598 PASS / 0 FAIL / 0 SKIP, 미mock 요청 0 |
+
+최종 PASS에 이르기 전 1차 전체 체인 실행에서 실제 버그 3건이
+드러났고 전부 수정 후 재실행으로 확인됐다:
+
+1. `testTownEnvAssets` — 신규 주석 3곳의 리터럴 문자열
+   `"assets/town/env"`가 매니처 검사에 걸림 → 문구 변경으로 수정.
+2. `testBundleBudget` §4 — 신규 PNG 16장이 "예기치 않은 파일"로
+   판정 → §4c 인벤토리 항목 + 누출 가드로 등록.
+3. E2E S12 `[412x915]` — `naturalWidth` 1회성 읽기가 전체 러너
+   안에서 간헐적으로 flaky → 최대 5초 폴링으로 수정.
+
+상세 배경은
+`docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md` §14와
+`handoff.md` 2026-09-24(177차) 참고.

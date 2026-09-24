@@ -17,7 +17,7 @@
 //
 // 흐름(전부 미래형 — 오늘 어떤 프로덕션 파일도 아래 어댑터를 참조하지
 // 않는다): (미래) `src/assets/town/character/index.js`(에셋 레지스트리,
-// `src/assets/town/env/index.js`와 동일한 격리 패턴 — PNG 8장을 import해
+// env 레지스트리(V2 환경 아트 index.js)와 동일한 격리 패턴 — PNG 8장을 import해
 // `PAUL_SPRITE_SOURCES` 맵으로 노출)
 //   → `buildPaulSpriteManifest({ sources: PAUL_SPRITE_SOURCES, ... })`
 //   → 완성된 v2 manifest를 `Proto25DScreen.jsx`의 (아직 존재하지 않는,
@@ -105,6 +105,7 @@ function isPlainObject(v) {
  * 판정해 호출부가 이모지로 폴백하는 것이 의도된 안전망이다.
  * @param {object} [p]
  * @param {Record<string,string>} [p.sources] - frameId -> url(미래의 에셋 레지스트리가 공급). 비어있거나 일부 누락이어도 안전.
+ * @param {Record<string,string>} [p.sources2x] - frameId -> @2x url(선택, 2026-09-24 추가). 생략하면 frame.src2x는 기존과 동일하게 undefined — 기존 호출부(sources2x 없이 호출하던 모든 곳)는 동작이 전혀 바뀌지 않는다.
  * @param {{w:number,h:number}} [p.canvas]
  * @param {Record<string,{footAnchor?:{x:number,y:number},seatAnchor?:{x:number,y:number}}>} [p.anchors] - frameId -> 앵커 override.
  * @param {number} [p.frameDurationMs]
@@ -114,8 +115,9 @@ function isPlainObject(v) {
  */
 export function buildPaulSpriteManifest(p) {
   const opts = isPlainObject(p) ? p : {}
-  const { sources, canvas, anchors, frameDurationMs, license, pixelRatio } = opts
+  const { sources, sources2x, canvas, anchors, frameDurationMs, license, pixelRatio } = opts
   const safeSources = isPlainObject(sources) ? sources : {}
+  const safeSources2x = isPlainObject(sources2x) ? sources2x : {}
   const safeAnchors = isPlainObject(anchors) ? anchors : {}
   const safeCanvas = isPlainObject(canvas) ? canvas : PAUL_SPRITE_DEFAULTS.canvas
   const safeLicense = isPlainObject(license)
@@ -128,6 +130,7 @@ export function buildPaulSpriteManifest(p) {
     const anchorOverride = isPlainObject(safeAnchors[frameId]) ? safeAnchors[frameId] : {}
     const frame = {
       src: safeSources[frameId],
+      src2x: safeSources2x[frameId],
       state: meta.state,
       direction: meta.direction,
       footAnchor: anchorOverride.footAnchor || PAUL_SPRITE_DEFAULTS.footAnchor,

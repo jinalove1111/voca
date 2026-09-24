@@ -310,11 +310,26 @@ function matchEnvArtKey(filename) {
   }
   return best
 }
+// 2026-09-24(Phase 6C) — Paul 캐릭터 스프라이트 PNG 16개(8프레임 x 1x/2x,
+// src/assets/town/character/, characterSpriteManifest.default.js가
+// Proto25DScreen.jsx의 spriteManifest 기본값으로 배선)가 처음으로 빌드
+// 그래프에 들어와 dist/assets에 나타났다. 이 파일들은 §4가 검사하는
+// townCatalog.js 구매 카탈로그(EXPECTED_BATCH1_IMAGE_BASENAMES)나
+// TownGrid.jsx 전용 환경/장식(EXPECTED_ENV_ARTWORK_BASENAMES)이나 V2 환경
+// 아트(ENV_ART_KEYS)와는 완전히 다른 별개 레지스트리라 그 목록들에 섞지
+// 않고 독립된 매칭 함수로 strayImages 제외 집합에만 등록한다 — 정확한
+// 개수/청크 격리/gzip 예산의 실제 검증은 아래 4c 섹션이 전담한다(중복
+// 검증 없음, scripts/testPaulSpriteAssets.mjs가 이미 검증한 소스단
+// 배선/픽셀 계약은 여기서 재구현하지 않는다).
+const PAUL_SPRITE_FILE_RE = /^paul-(idle-front|walk-(front|back|side)-[ab]|sit)(@2x)?-[\w-]+\.png$/
+function isPaulSpriteAsset(filename) {
+  return PAUL_SPRITE_FILE_RE.test(filename)
+}
 const strayImages = assetFiles.filter(
-  (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f) && !isExpectedEnvArtwork(f) && !matchEnvArtKey(f),
+  (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f) && !isExpectedEnvArtwork(f) && !matchEnvArtKey(f) && !isPaulSpriteAsset(f),
 )
 check(
-  '마을 이미지 중 카탈로그 물리 파일 18개(Batch 1+2+3 14개 + P0 최종 아트로 추가/승격된 4개) + 환경/장식 아트워크 6개(카탈로그 아님, 2026-09-15b) + V2 환경 아트 35개(2026-09-18, 4b 섹션에서 자세히 검증) 외의 예상치 못한 파일이 dist/assets에 없음',
+  '마을 이미지 중 카탈로그 물리 파일 18개(Batch 1+2+3 14개 + P0 최종 아트로 추가/승격된 4개) + 환경/장식 아트워크 6개(카탈로그 아님, 2026-09-15b) + V2 환경 아트 35개(2026-09-18, 4b 섹션에서 자세히 검증) + Paul 캐릭터 스프라이트 16개(2026-09-24 Phase 6C, 4c 섹션에서 자세히 검증) 외의 예상치 못한 파일이 dist/assets에 없음',
   strayImages.length === 0,
   strayImages.length > 0 ? strayImages.join(', ') : undefined,
 )
@@ -417,6 +432,63 @@ check(
   envArtLeaksInTownV1.length === 0,
   JSON.stringify(envArtLeaksInTownV1),
 )
+
+// ── 4c. Paul 캐릭터 스프라이트(2026-09-24, Phase 6C) — 16개 물리 파일
+// 인벤토리 + 메인/V1/V2 청크 누출 가드 ────────────────────────────────────
+// Phase 6C — install 세션이 src/assets/town/character/에 Paul 캐릭터
+// 스프라이트 PNG 16장(8프레임: idle-front/walk-front-a·b/walk-back-a·b/
+// walk-side-a·b/sit, 각 1x+@2x)을 드롭하고 characterSpriteManifest.default.js
+// (PAUL_SPRITE_MANIFEST)가 Proto25DScreen.jsx의 spriteManifest 기본값으로
+// 배선됐다(그 소스단 계약/픽셀 실측은 scripts/testPaulSpriteAssets.mjs가
+// 이미 전담 검증 — 여기서는 재구현하지 않는다, CLAUDE.md 규칙 3). 이
+// 섹션은 그 결과가 실제 빌드 산출물에 기대한 모양으로만 반영됐는지 —
+// 정확히 16개 물리 파일 + Proto25DScreen 청크(지연 로드) 하나에만 격리 +
+// gzip 예산 — 를 확인한다. Proto25DScreen 청크가 §1(TownScreen)과 마찬가지로
+// dist/index.html이 직접 참조하지 않는 지연 로드 청크라는 사실 자체는
+// scripts/testPaulSpriteAssets.mjs §8(번들 누출 가드)이 이미 확인했으므로
+// (그 스위트가 유일한 검증 경로) 여기서 다시 확인하지 않고, 이 파일
+// 고유의 관심사(gzip 예산 + 이 파일이 이미 읽어둔 main/townSrc 대비 재확인)
+// 만 추가한다.
+section('4c. Paul 캐릭터 스프라이트(2026-09-24, Phase 6C) — 16개 물리 파일 인벤토리 + 메인/V1/V2 청크 누출 가드')
+const paulSpriteFiles = assetFiles.filter(isPaulSpriteAsset)
+check(
+  'Paul 캐릭터 스프라이트 물리 파일이 정확히 16개(8프레임 x 1x/2x)',
+  paulSpriteFiles.length === 16,
+  `count=${paulSpriteFiles.length}, files=${JSON.stringify(paulSpriteFiles)}`,
+)
+
+const protoFile = findChunk(/^Proto25DScreen-[\w-]+\.js$/)
+if (check('Proto25DScreen 청크가 별도 파일로 존재(React.lazy 분할, paulTown2_5d 프로토타입)', !!protoFile)) {
+  const protoBuf = readAssetBuf(protoFile)
+  const protoSrc = protoBuf.toString('utf8')
+  const protoGzip = gzipBytes(protoBuf)
+  const PROTO_GZIP_BUDGET_BYTES = 60 * 1000 // SPRITE_CONTRACT §5-6 예산(2026-09-24 실측 ≈11.2KB, 러너웨이만 잡는 넉넉한 여유)
+
+  check(`'paul-idle-front' 문자열이 Proto25DScreen 청크(${protoFile})에 존재(스프라이트가 실제로 이 청크에서 참조됨)`, protoSrc.includes('paul-idle-front'))
+  check(`'paul-sit' 문자열이 Proto25DScreen 청크(${protoFile})에 존재`, protoSrc.includes('paul-sit'))
+  check(
+    "메인 청크(index-*.js)에 'paul-idle-front'/'paul-sit' 문자열 0건(항상 지연 로드 — 누출 가드)",
+    !mainSrc.includes('paul-idle-front') && !mainSrc.includes('paul-sit'),
+  )
+  check(
+    "V1 TownScreen 청크에 'paul-idle-front'/'paul-sit' 문자열 0건(V1은 Proto25DScreen을 import하지 않는 완전 격리 실험)",
+    !townSrc.includes('paul-idle-front') && !townSrc.includes('paul-sit'),
+  )
+  const townV2File = findChunk(/^TownScreenV2-[\w-]+\.js$/)
+  if (townV2File) {
+    const townV2Src = readAsset(townV2File)
+    check(
+      `V2 TownScreenV2 청크(${townV2File})에 'paul-idle-front'/'paul-sit' 문자열 0건(V2도 Proto25DScreen을 import하지 않음)`,
+      !townV2Src.includes('paul-idle-front') && !townV2Src.includes('paul-sit'),
+    )
+  } else {
+    console.log('  정보  TownScreenV2 청크를 찾지 못함(산출물 구조가 예상과 다름) — 이 청크 대상 누출 가드만 건너뜀(다른 단언과 무관, 신선한 체크아웃이 아니므로 전체 SKIP은 하지 않음).')
+  }
+
+  check(`Proto25DScreen 청크 gzip ≤ 60KB (실측 ${fmtKB(protoGzip)}KB)`, protoGzip <= PROTO_GZIP_BUDGET_BYTES)
+} else {
+  console.log('  정보  Proto25DScreen 청크 부재로 이 섹션의 나머지 청크-격리/gzip 단언을 건너뜀(바로 위 존재 여부 FAIL이 이미 문제를 보고함).')
+}
 
 // ── 5. 전체 JS 원본(raw) 크기 예산(핵심 시작 경로만, 스코프는 파일 헤더 참고) ──
 section('5. JS 원본(raw) 크기 — 핵심 시작 경로')

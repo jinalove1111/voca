@@ -414,22 +414,42 @@ function writeRegistry(decodedByFrame, canvasInfo) {
   console.log('\n-- --write: 레지스트리 파일 생성 --')
   mkdirSync(CHARACTER_DIR, { recursive: true })
 
+  const varNameFor = (frameId) =>
+    'paul' + frameId.split('-').map((s) => s[0].toUpperCase() + s.slice(1)).join('')
+  const file2xFor = (frameId) => PAUL_SPRITE_FILES[frameId].replace(/\.png$/, '@2x.png')
+
   const importLines = SPRITE_FRAME_IDS
-    .map((frameId) => {
-      const varName = 'paul' + frameId.split('-').map((s) => s[0].toUpperCase() + s.slice(1)).join('')
-      return `import ${varName} from './${PAUL_SPRITE_FILES[frameId]}'`
-    })
+    .map((frameId) => `import ${varNameFor(frameId)} from './${PAUL_SPRITE_FILES[frameId]}'`)
+    .join('\n')
+  const importLines2x = SPRITE_FRAME_IDS
+    .map((frameId) => `import ${varNameFor(frameId)}2x from './${file2xFor(frameId)}'`)
     .join('\n')
   const sourceEntries = SPRITE_FRAME_IDS
-    .map((frameId) => {
-      const varName = 'paul' + frameId.split('-').map((s) => s[0].toUpperCase() + s.slice(1)).join('')
-      return `  '${frameId}': ${varName},`
-    })
+    .map((frameId) => `  '${frameId}': ${varNameFor(frameId)},`)
     .join('\n')
+  const sourceEntries2x = SPRITE_FRAME_IDS
+    .map((frameId) => `  '${frameId}': ${varNameFor(frameId)}2x,`)
+    .join('\n')
+
+  // §5 실측 앵커 — footAnchor는 normalize-report.json 실측(캔버스 하단
+  // 접지, 모든 프레임 공통 {x:48,y:128})을 그대로 쓴다. sit의 seatAnchor는
+  // §5.2가 "기본값 없음, 사람 확정 필요"라고 명시한 PROPOSED 값이었으나,
+  // 팀장 지시(2026-09-24)로 {x:48,y:85}가 운영자 확정값으로 확정됐다 —
+  // classifyCanvasSizes/checkCenterAxis 등 --check 로직은 이 함수가 건드리지
+  // 않으므로 위 INFO 라인의 PROPOSED 출력 자체는 그대로 유지된다(계약
+  // 안전망, CLAUDE.md 규칙 15 정신 — 실측은 실측대로 보고하고 확정은 확정대로
+  // 별도 기록).
+  const footAnchor = { x: 48, y: 128 }
+  const seatAnchor = { x: 48, y: 85 }
+  const anchors = {}
+  for (const frameId of SPRITE_FRAME_IDS) {
+    anchors[frameId] = frameId === 'sit' ? { footAnchor, seatAnchor } : { footAnchor }
+  }
 
   const measured = {
     canvas: canvasInfo.canvas1x,
     pixelRatio: canvasInfo.pixelRatio,
+    anchors,
     measuredAt: new Date().toISOString(),
   }
 
@@ -437,15 +457,22 @@ function writeRegistry(decodedByFrame, canvasInfo) {
 // 레지스트리(scripts/spriteIngestPaul.mjs --write가 실측 통과 후 생성,
 // ${new Date().toISOString().slice(0, 10)}).
 //
-// import 제약: src/assets/town/env/index.js와 동일한 격리 규칙 — 이
-// 레지스트리는 Proto25DScreen.jsx 또는
+// import 제약: env 레지스트리(V2 환경 아트 index.js)와 동일한 격리 규칙 — 이
+// 레지스트리는 오직
 // src/utils/town/proto2_5d/characterSpriteManifest.default.js에서만
-// import한다. src/assets/town/index.js(V1 TOWN_ASSETS)는 이 파일을
-// import하지 않고, 이 파일도 그쪽을 import하지 않는다.
+// import한다(절대 src/assets/town/index.js에서 import하지 않고, 절대
+// V1/V2 town 화면 파일에서 직접 import하지 않는다 — 청크 격리 규칙,
+// ASTRA_HANDOFF §0.10). src/assets/town/index.js(V1 TOWN_ASSETS)는 이
+// 파일을 import하지 않고, 이 파일도 그쪽을 import하지 않는다.
 ${importLines}
+${importLines2x}
 
 export const PAUL_SPRITE_SOURCES = Object.freeze({
 ${sourceEntries}
+})
+
+export const PAUL_SPRITE_SOURCES_2X = Object.freeze({
+${sourceEntries2x}
 })
 
 export const PAUL_SPRITE_MEASURED = Object.freeze(${JSON.stringify(measured, null, 2)})

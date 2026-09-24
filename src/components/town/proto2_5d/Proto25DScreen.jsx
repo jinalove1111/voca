@@ -100,6 +100,18 @@
 // 루프에서는 건너뛴다(sceneFixture.js 'demo-bench' 항목 주석 참고, 기존
 // 계약 무변경). 상태 머신/워크그리드/경로탐색/좌석 상호작용 로직은 전혀
 // 손대지 않았다(위 Stage 1~4/Stage5 감사 절 전부 그대로 유효).
+//
+// Phase 6C(2026-09-24, 기본 매니페스트 배선) — 운영자 승인 Paul 캐릭터
+// 스프라이트 8장(+@2x)이 도착해 `scripts/spriteIngestPaul.mjs --check`
+// 68개 항목 전부 PASS했다. `spriteManifest` prop이 이제
+// `characterSpriteManifest.default.js`의 `PAUL_SPRITE_MANIFEST`를
+// 기본값으로 갖는다 — 즉 이 파일 위 Phase 6B 주석의 "오늘 모든 프로덕션
+// 호출부에서 spriteManifest는 undefined"라는 전제가 더 이상 참이 아니며,
+// `isSpriteV2ManifestActive`가 기본적으로 true가 된다(App.jsx가 여전히
+// prop을 넘기지 않아도 이 기본값이 적용된다 — App.jsx는 수정하지 않음).
+// 새 플래그는 추가하지 않았다 — 기존 `paulTown2_5d` 플래그 게이팅 하나로만
+// 계속 제어된다. `spriteManifest`를 명시적으로 넘기면(예: 테스트) 여전히
+// 그 값이 기본값을 덮어쓴다.
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import ProtoCharacter, { WALK_TRANSITION_MS, REDUCED_MOTION_TRANSITION_MS } from './ProtoCharacter'
 import { usePrefersReducedMotion } from '../../../hooks/usePrefersReducedMotion'
@@ -121,6 +133,7 @@ import {
   benchTapPad,
   facingToward,
 } from '../../../utils/town/proto2_5d/benchInteraction'
+import { PAUL_SPRITE_MANIFEST } from '../../../utils/town/proto2_5d/characterSpriteManifest.default'
 
 // 모바일 시각 보정(2026-09-23) — 장애물 디버그 플레이스홀더(점선 상자 +
 // "demo-…" 라벨)는 기본적으로 렌더하지 않는다(실기기 프리뷰에서 벤치 실제
@@ -185,11 +198,14 @@ const TAP_RIPPLE_REMOVE_MS = TAP_RIPPLE_ANIM_MS + 80
 // depthOrder 시스템에 참여시키지 않고 이 파일 로컬 상수로만 고정한다.
 const TAP_RIPPLE_Z = 7000
 
-// Phase 6B — spriteManifest는 선택적 prop(기본 undefined)이다. App.jsx는
-// Proto25DScreen에 어떤 prop도 넘기지 않으므로(현재 유일한 프로덕션 호출부)
-// 이 prop은 오늘 항상 undefined다 — 아래 모든 v2 관련 분기는 실제로는 절대
-// 실행되지 않는다.
-export default function Proto25DScreen({ spriteManifest } = {}) {
+// Phase 6B — spriteManifest는 선택적 prop이다.
+// Phase 6C(2026-09-24) — 기본값이 이제 `PAUL_SPRITE_MANIFEST`(승인된 Paul
+// 스프라이트 8장 기반)다. App.jsx는 여전히 어떤 prop도 넘기지 않으므로
+// (현재 유일한 프로덕션 호출부) 이 기본값이 그대로 적용되어
+// `isSpriteV2ManifestActive`가 true가 된다 — 아래 모든 v2 관련 분기가 이제
+// 실제로 실행된다(위 파일 헤더 "Phase 6C" 주석 참고). 호출부가 명시적으로
+// `spriteManifest={undefined}` 등 다른 값을 넘기면 그 값이 우선한다.
+export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST } = {}) {
   const reducedMotion = usePrefersReducedMotion()
   // 마운트 시점 URL 쿼리 1회만 읽는다(세션 중 쿼리가 바뀔 일이 없어
   // useState lazy init으로 충분 — 매 렌더 재파싱 불필요).

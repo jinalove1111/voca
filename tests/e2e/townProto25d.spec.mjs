@@ -37,6 +37,22 @@ async function noHorizontalOverflow(page) {
   return page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
 }
 
+// Phase 6C(2026-09-24) — install 세션이 실측해 기록한
+// paul-sprite-measured.json(캔버스/앵커, scripts/spriteIngestPaul.mjs
+// writeRegistry가 생성)을 테스트 시점에 읽는다. 하드코딩된 기대값 대신 이
+// 파일을 진실 원천으로 삼아, 이 세션이 소유하지 않는 install 세션의 실측
+// 결과가 바뀌어도(앵커 재측정 등) 이 spec을 다시 손대지 않고 그대로
+// 추적한다. 파일이 없거나(구 emoji 전용 상태) 형식이 다르면 null을
+// 반환한다(throw 없음 — 호출부가 스킵/폴백 여부를 정함).
+function readPaulSpriteMeasured() {
+  try {
+    const raw = fs.readFileSync(path.join(ROOT, 'src/assets/town/character/paul-sprite-measured.json'), 'utf8')
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
 // townV2.spec.mjs의 setDeviceFlags와 동일 패턴(paulEasyVoca_features
 // localStorage 스냅샷에 flags만 심는다 — 나머지는 features.js의
 // DEFAULT_FEATURES가 채운다).
@@ -1670,29 +1686,72 @@ export async function run(browser, baseURL) {
       // 않고(measureGlyphInkOnScreen — 앱 코드와 독립적으로 canvas
       // measureText + 실제 getBoundingClientRect() 화면 좌표로 측정) 잉크
       // 자체의 화면 위치를 직접 검증한다. ──
+      // Phase 6C(2026-09-24) — install 세션이 Paul 스프라이트를
+      // characterSpriteManifest.default.js로 기본 배선하면 ProtoCharacter.jsx
+      // 는 emoji 글리프(data-proto-character-glyph) 대신 v2 스프라이트
+      // (data-proto-character-sprite)를 렌더한다(isSpriteV2 분기, 그
+      // 파일 헤더 "Phase 6B/6C" 주석). 두 렌더 모드가 서로 다른 계약을
+      // 쓰므로(emoji=캔버스 measureText 잉크 실측, sprite=매니페스트
+      // seatAnchor 직접 사용) 글리프 부재 여부로 분기해 각 모드에 맞는
+      // 검증을 한다 — 어느 쪽이 마운트돼 있든 "붕 뜬" 회귀 재발 방지
+      // 계약 자체는 계속 커버된다.
       const glyph = page.locator('[data-proto-character-glyph]')
-      await glyph.waitFor({ state: 'attached', timeout: 3000 })
-      const inkMetrics = await measureGlyphInkOnScreen(glyph)
-      const contactPointScreenY = inkMetrics.inkBottomScreenY -
-        SEAT_CONTACT_FRACTION_REF * (inkMetrics.inkBottomScreenY - inkMetrics.inkTopScreenY)
-      const contactErrorPx = Math.abs(contactPointScreenY - expectedSeatPx.y)
+      const glyphCount = await glyph.count()
+      if (glyphCount > 0) {
+        await glyph.waitFor({ state: 'attached', timeout: 3000 })
+        const inkMetrics = await measureGlyphInkOnScreen(glyph)
+        const contactPointScreenY = inkMetrics.inkBottomScreenY -
+          SEAT_CONTACT_FRACTION_REF * (inkMetrics.inkBottomScreenY - inkMetrics.inkTopScreenY)
+        const contactErrorPx = Math.abs(contactPointScreenY - expectedSeatPx.y)
+        r.check(
+          `${name} 항목2 — 접촉점(잉크 하단 실측 - SEAT_CONTACT_FRACTION, 앱 공식과 독립적으로 재측정)과 벤치 실측 좌석선 사이 오차 < 3px`,
+          contactErrorPx < 3,
+          `contactPointScreenY=${contactPointScreenY} expectedSeatY=${expectedSeatPx.y} errorPx=${contactErrorPx} inkMetrics=${JSON.stringify(inkMetrics)}`,
+        )
+        r.check(
+          `${name} 항목2 — 잉크 하단이 좌석선에 닿거나 겹침(빈틈 없음, "붕 뜬" 회귀 재발 방지 — 오차 허용 1px)`,
+          inkMetrics.inkBottomScreenY >= expectedSeatPx.y - 1,
+          `inkBottomScreenY=${inkMetrics.inkBottomScreenY} seatY=${expectedSeatPx.y}`,
+        )
+        r.check(
+          `${name} 항목2 — 잉크 하단이 벤치 아트 바닥 경계를 넘지 않음(파묻히지 않음 — 오차 허용 1px)`,
+          inkMetrics.inkBottomScreenY <= benchBoxSeated.y + benchBoxSeated.height + 1,
+          `inkBottomScreenY=${inkMetrics.inkBottomScreenY} benchBottom=${benchBoxSeated.y + benchBoxSeated.height}`,
+        )
+      } else {
+        // sprite 모드 — resolveSpriteFrame이 emoji의 sink 공식을 전혀
+        // 쓰지 않고 manifest.frames.sit.seatAnchor를 anchorOffsetPct로
+        // 직접 변환한다(characterSpriteContract.js). 그 기대값을
+        // paul-sprite-measured.json(install 세션 실측 기록, 진실 원천)
+        // 에서 테스트 시점에 유도한다 — 하드코딩 없음.
+        const spriteImg = page.locator('[data-proto-character-sprite]')
+        await spriteImg.waitFor({ state: 'attached', timeout: 3000 })
+        const frameId = await spriteImg.getAttribute('data-proto-character-sprite-frame')
+        r.check(`${name} 항목2(스프라이트) — sitting 중 스프라이트 프레임이 'sit'`, frameId === 'sit', `frameId=${frameId}`)
+
+        const measured = readPaulSpriteMeasured()
+        if (measured && measured.canvas && measured.anchors && measured.anchors.sit && measured.anchors.sit.seatAnchor) {
+          const { canvas } = measured
+          const { seatAnchor } = measured.anchors.sit
+          const expectedDxPct = ((canvas.w / 2 - seatAnchor.x) / canvas.w) * 100
+          const expectedDyPct = ((canvas.h - seatAnchor.y) / canvas.h) * 100
+          const anchorLayer = page.locator('[data-proto-character-anchor-layer]')
+          await anchorLayer.waitFor({ state: 'attached', timeout: 3000 })
+          const transformStr = (await anchorLayer.evaluate((el) => el.style.transform)) || ''
+          const m = /translate\(([-\d.]+)%,\s*([-\d.]+)%\)/.exec(transformStr)
+          const actualDxPct = m ? parseFloat(m[1]) : null
+          const actualDyPct = m ? parseFloat(m[2]) : null
+          r.check(
+            `${name} 항목2(스프라이트) — 앵커 레이어 translate가 paul-sprite-measured.json의 sit.seatAnchor에서 유도한 값과 일치(±0.5%, "붕 뜬" 회귀 재발 방지의 sprite 버전)`,
+            actualDxPct != null && actualDyPct != null && Math.abs(actualDxPct - expectedDxPct) < 0.5 && Math.abs(actualDyPct - expectedDyPct) < 0.5,
+            `actual=(${actualDxPct}%, ${actualDyPct}%) expected=(${expectedDxPct}%, ${expectedDyPct}%) transform=${transformStr} canvas=${JSON.stringify(canvas)} seatAnchor=${JSON.stringify(seatAnchor)}`,
+          )
+        } else {
+          r.check(`${name} 항목2(스프라이트) — paul-sprite-measured.json에서 sit.seatAnchor를 읽음`, false, 'src/assets/town/character/paul-sprite-measured.json 없음 또는 형식 불일치')
+        }
+      }
       r.check(
-        `${name} 항목2 — 접촉점(잉크 하단 실측 - SEAT_CONTACT_FRACTION, 앱 공식과 독립적으로 재측정)과 벤치 실측 좌석선 사이 오차 < 3px`,
-        contactErrorPx < 3,
-        `contactPointScreenY=${contactPointScreenY} expectedSeatY=${expectedSeatPx.y} errorPx=${contactErrorPx} inkMetrics=${JSON.stringify(inkMetrics)}`,
-      )
-      r.check(
-        `${name} 항목2 — 잉크 하단이 좌석선에 닿거나 겹침(빈틈 없음, "붕 뜬" 회귀 재발 방지 — 오차 허용 1px)`,
-        inkMetrics.inkBottomScreenY >= expectedSeatPx.y - 1,
-        `inkBottomScreenY=${inkMetrics.inkBottomScreenY} seatY=${expectedSeatPx.y}`,
-      )
-      r.check(
-        `${name} 항목2 — 잉크 하단이 벤치 아트 바닥 경계를 넘지 않음(파묻히지 않음 — 오차 허용 1px)`,
-        inkMetrics.inkBottomScreenY <= benchBoxSeated.y + benchBoxSeated.height + 1,
-        `inkBottomScreenY=${inkMetrics.inkBottomScreenY} benchBottom=${benchBoxSeated.y + benchBoxSeated.height}`,
-      )
-      r.check(
-        `${name} 항목2 — 착석 중에도 캐릭터 박스 z-index가 벤치보다 앞(잉크 sink 보정이 depth 순서를 깨지 않음)`,
+        `${name} 항목2 — 착석 중에도 캐릭터 박스 z-index가 벤치보다 앞(잉크/앵커 sink 보정이 depth 순서를 깨지 않음)`,
         (await readZIndex(character)) > (await readZIndex(benchArt)),
       )
 
@@ -1839,17 +1898,20 @@ export async function run(browser, baseURL) {
     }
   }
 
-  // ── S11 — Phase 6B 방향 판정·이모지 기본 렌더 무변경 ────────────────────
-  // Proto25DScreen.jsx는 App.jsx가 spriteManifest prop을 넘기지 않으므로
-  // 오늘도 v2 스프라이트는 항상 비활성(isSpriteV2ManifestActive===false,
-  // 위 파일 헤더 "Phase 6B" 주석과 동일 전제) — 그런데도 character.direction
-  // 계산은 모든 모드에서 항상 갱신된다(directionForMove, Proto25DScreen.jsx
-  // walkLeg/walkPath). 이 섹션은 (a) 그 direction 값이 실제로 탭 방향에 맞게
-  // front/side/back으로 바뀌는지, (b) v2가 비활성인 이 이모지 렌더에서는
-  // facing이 갱신되지 않아 어떤 방향으로 걸어도 좌우 미러(scaleX(-1))가
-  // 걸리지 않는지, (c) 이 작업이 emoji 폴백 렌더(글리프 자체)를 전혀
-  // 바꾸지 않았는지를 실제 브라우저에서 검증한다. S3와 동일한 데스크톱
-  // 마우스 경로/플래그 ON 마운트 패턴을 그대로 따른다.
+  // ── S11 — Phase 6B/6C 방향 판정 + facing/스프라이트 프레임(또는 emoji
+  // 폴백) 렌더 ──────────────────────────────────────────────────────────
+  // 원래(Phase 6B, 2026-09-24 오전) 이 섹션은 App.jsx가 spriteManifest prop
+  // 을 전혀 넘기지 않아 v2 스프라이트가 항상 비활성이라는 전제로 작성됐다
+  // (isSpriteV2ManifestActive===false 고정) — facing이 절대 갱신되지 않고
+  // emoji 글리프만 렌더된다고 가정했다. Phase 6C(같은 날 오후, install
+  // 세션이 characterSpriteManifest.default.js를 Proto25DScreen.jsx의
+  // spriteManifest 기본값으로 배선)부터 그 전제가 깨질 수 있다 — 매니페스트가
+  // 유효하면 isSpriteV2ManifestActive===true가 되어 facing도 매 일반 걷기마다
+  // 갱신된다(Proto25DScreen.jsx walkLeg/walkPath). 이 섹션은 마운트 직후
+  // DOM에 data-proto-character-sprite가 있는지로 모드를 한 번만 판정하고
+  // (spriteModeActive), 이후 모든 단언을 그 모드에 맞게 분기한다 — 어느
+  // 쪽이든 direction 판정(front/side/back) 자체는 공통 계약이라 무조건
+  // 검증한다.
   {
     const vp = { width: 1280, height: 800 }
     const name = 'S11[phase6b-direction]'
@@ -1875,7 +1937,24 @@ export async function run(browser, baseURL) {
       const initialDirection = await character.getAttribute('data-character-direction').catch(() => null)
       r.check(`${name} — 마운트 직후 direction 기본값이 front`, initialDirection === 'front', `direction=${initialDirection}`)
       const spriteMarkupAtMount = await character.evaluate((el) => el.outerHTML).catch(() => '')
-      r.check(`${name} — v2 스프라이트 비활성(spriteManifest 미전달) — data-proto-character-sprite 없음`, !spriteMarkupAtMount.includes('data-proto-character-sprite'))
+      const spriteModeActive = spriteMarkupAtMount.includes('data-proto-character-sprite')
+      console.log(`  INFO  ${name} — 감지된 렌더 모드: ${spriteModeActive ? 'sprite(v2 활성)' : 'emoji(v2 비활성 또는 매니페스트 무효)'}`)
+      if (spriteModeActive) {
+        r.check(`${name} — 마운트 직후 idle 프레임이 'idle-front'`, (await page.locator('[data-proto-character-sprite]').getAttribute('data-proto-character-sprite-frame').catch(() => null)) === 'idle-front')
+      } else {
+        r.check(`${name} — 마운트 직후 emoji 글리프가 렌더됨(data-proto-character-glyph 존재)`, (await page.locator('[data-proto-character-glyph]').count()) > 0)
+      }
+
+      async function spriteFrameNow() {
+        return page.locator('[data-proto-character-sprite]').getAttribute('data-proto-character-sprite-frame').catch(() => null)
+      }
+      async function spriteMirrorNow() {
+        return page.locator('[data-proto-character-sprite]').getAttribute('data-proto-character-sprite-mirror').catch(() => null)
+      }
+      async function facingLayerHasMirrorTransform() {
+        const t = await page.locator('[data-proto-character-facing-layer]').evaluate((el) => el.style.transform).catch(() => '')
+        return (t || '').includes('scaleX(-1)')
+      }
 
       // ── 캐릭터 스폰(50,62, Proto25DScreen.jsx INITIAL_LEFT_PCT/TOP_PCT)에서
       // 시작해, 매 구간 장애물(OBSTACLES_REF)을 벗어난 지점만 골라 dx/dy가
@@ -1891,11 +1970,18 @@ export async function run(browser, baseURL) {
       r.check(`${name} 항목1 — 오른쪽 탭 직후 phase가 walking으로 전이됨`, !!walkingAfterRight)
       const directionRight = await character.getAttribute('data-character-direction').catch(() => null)
       r.check(`${name} 항목1 — 오른쪽(dx>0, dy=0) 탭 → direction이 side`, directionRight === 'side', `direction=${directionRight}`)
-      const markupWhileWalkingRight = await character.evaluate((el) => el.outerHTML).catch(() => '')
-      r.check(
-        `${name} 항목1 — v2가 비활성이라 일반 걷기는 facing이 갱신되지 않음(scaleX(-1) 없음, 이모지 모드는 좌우 미러 안 함)`,
-        !markupWhileWalkingRight.includes('scaleX(-1)'),
-      )
+      if (spriteModeActive) {
+        const frameRight = await spriteFrameNow()
+        r.check(`${name} 항목1(스프라이트) — 오른쪽 탭 중 프레임이 walk-side-a/b 중 하나`, frameRight === 'walk-side-a' || frameRight === 'walk-side-b', `frameId=${frameRight}`)
+        r.check(`${name} 항목1(스프라이트) — 오른쪽 이동(facing 유지=1)은 mirror='0'`, (await spriteMirrorNow()) === '0')
+        r.check(`${name} 항목1(스프라이트) — facing layer에 scaleX(-1) 없음(미러 안 함)`, !(await facingLayerHasMirrorTransform()))
+      } else {
+        const markupWhileWalkingRight = await character.evaluate((el) => el.outerHTML).catch(() => '')
+        r.check(
+          `${name} 항목1(emoji) — v2가 비활성이라 일반 걷기는 facing이 갱신되지 않음(scaleX(-1) 없음, 이모지 모드는 좌우 미러 안 함)`,
+          !markupWhileWalkingRight.includes('scaleX(-1)'),
+        )
+      }
       const idleAfterRight = await waitUntil(async () => (
         (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
       ), { timeout: 3000 })
@@ -1911,6 +1997,10 @@ export async function run(browser, baseURL) {
       r.check(`${name} 항목2 — 아래쪽 탭 직후 phase가 walking으로 전이됨`, !!walkingAfterBelow)
       const directionBelow = await character.getAttribute('data-character-direction').catch(() => null)
       r.check(`${name} 항목2 — 아래(dx=0, dy>0) 탭 → direction이 front`, directionBelow === 'front', `direction=${directionBelow}`)
+      if (spriteModeActive) {
+        const frameBelow = await spriteFrameNow()
+        r.check(`${name} 항목2(스프라이트) — 아래쪽 탭 중 프레임이 walk-front-a/b 중 하나`, frameBelow === 'walk-front-a' || frameBelow === 'walk-front-b', `frameId=${frameBelow}`)
+      }
       const idleAfterBelow = await waitUntil(async () => (
         (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
       ), { timeout: 3000 })
@@ -1926,25 +2016,298 @@ export async function run(browser, baseURL) {
       r.check(`${name} 항목3 — 위쪽 탭 직후 phase가 walking으로 전이됨`, !!walkingAfterAbove)
       const directionAbove = await character.getAttribute('data-character-direction').catch(() => null)
       r.check(`${name} 항목3 — 위(dx=0, dy<0) 탭 → direction이 back`, directionAbove === 'back', `direction=${directionAbove}`)
+      if (spriteModeActive) {
+        const frameAbove = await spriteFrameNow()
+        r.check(`${name} 항목3(스프라이트) — 위쪽 탭 중 프레임이 walk-back-a/b 중 하나`, frameAbove === 'walk-back-a' || frameAbove === 'walk-back-b', `frameId=${frameAbove}`)
+      }
       const idleAfterAbove = await waitUntil(async () => (
         (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
       ), { timeout: 3000 })
       r.check(`${name} 항목3 — 도착 후 phase가 idle로 복귀`, !!idleAfterAbove)
+      if (spriteModeActive) {
+        r.check(`${name} 항목3(스프라이트) — 도착 후 프레임이 idle-front로 복귀`, (await spriteFrameNow()) === 'idle-front', `frameId=${await spriteFrameNow()}`)
+      }
 
       // ── 도착(idle) 후에도 direction은 걷기 중 마지막 값을 그대로 유지
       // (onArrive는 phase만 idle로 바꿀 뿐 direction을 건드리지 않음) ──
       const directionAfterArrival = await character.getAttribute('data-character-direction').catch(() => null)
       r.check(`${name} — 도착 후에도 direction이 마지막 걷기 방향(back)을 그대로 유지`, directionAfterArrival === 'back', `direction=${directionAfterArrival}`)
 
-      // ── 이 작업(direction/facing 배선)이 emoji 폴백 글리프 자체는 전혀
-      // 바꾸지 않았음을 재확인(회귀 가드) ──
-      const glyphText = await page.locator('[data-proto-character-glyph]').textContent().catch(() => null)
-      r.check(`${name} — 세 번의 방향 전환 후에도 emoji 글리프는 여전히 🚶(idle/walking 공통)`, glyphText === '🚶', `glyph=${JSON.stringify(glyphText)}`)
+      // (4, 스프라이트 모드 전용) 왼쪽(dx<0, dy=0) — mirror='1' + facing
+      // layer scaleX(-1). y=20 행은 walkGrid.js/OBSTACLES_REF 전부(가장 이른
+      // y0=24)보다 위라 x 전 구간[2,98]이 비어 있다 — 큰 dx로 먼 거리를
+      // 확실히 왼쪽으로만 이동시킨다(경로탐색이 우회하지 않는 직선 구간).
+      if (spriteModeActive) {
+        const repositionTarget = worldToPx(90, 20)
+        await page.mouse.click(repositionTarget.x, repositionTarget.y)
+        await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle', { timeout: 5000 })
+
+        const leftTarget = worldToPx(20, 20)
+        await page.mouse.click(leftTarget.x, leftTarget.y)
+        const walkingAfterLeft = await waitUntil(async () => (
+          (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking'
+        ), { timeout: 2000 })
+        r.check(`${name} 항목4(스프라이트) — 왼쪽 탭 직후 phase가 walking으로 전이됨`, !!walkingAfterLeft)
+        const directionLeft = await character.getAttribute('data-character-direction').catch(() => null)
+        r.check(`${name} 항목4(스프라이트) — 왼쪽(dx<0, dy=0) 탭 → direction이 side`, directionLeft === 'side', `direction=${directionLeft}`)
+        const frameLeft = await spriteFrameNow()
+        r.check(`${name} 항목4(스프라이트) — 왼쪽 탭 중 프레임이 walk-side-a/b 중 하나`, frameLeft === 'walk-side-a' || frameLeft === 'walk-side-b', `frameId=${frameLeft}`)
+        r.check(`${name} 항목4(스프라이트) — 왼쪽 이동(facing=-1)은 mirror='1'`, (await spriteMirrorNow()) === '1')
+        r.check(`${name} 항목4(스프라이트) — facing layer에 scaleX(-1) 있음(좌우 미러)`, await facingLayerHasMirrorTransform())
+        await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle', { timeout: 5000 })
+      }
+
+      // ── 이 작업(direction/facing 배선)이 emoji 폴백 렌더(sprite 비활성일
+      // 때) 자체는 전혀 바꾸지 않았음을 재확인(회귀 가드) — sprite 모드에선
+      // 애초에 이 엘리먼트가 없으므로 조건부로만 확인한다 ──
+      if (!spriteModeActive) {
+        const glyphText = await page.locator('[data-proto-character-glyph]').textContent().catch(() => null)
+        r.check(`${name} — 방향 전환 후에도 emoji 글리프는 여전히 🚶(idle/walking 공통)`, glyphText === '🚶', `glyph=${JSON.stringify(glyphText)}`)
+      }
 
       r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
     } catch (err) {
       r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
         `${err?.message || err}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S12 — Phase 6C: Paul 스프라이트 렌더·뷰포트 ──────────────────────────
+  // install 세션이 characterSpriteManifest.default.js를 Proto25DScreen.jsx
+  // 의 spriteManifest 기본값으로 배선한 뒤, V1/V2를 켜지 않고 paulTown2_5d
+  // 하나만 켠 상태(App.jsx가 spriteManifest prop을 여전히 넘기지 않아도
+  // Proto25DScreen.jsx 자체의 기본값 배선이 적용됨)에서 4개 대표 뷰포트
+  // (모바일 3종 + 데스크톱 비교군)에 걸쳐 실제 <img> 스프라이트가 로드/
+  // 렌더되는지, 프레임 애니메이션이 실제로 교대되는지, 시각적으로 눈에
+  // 띄는 회귀(검은 배경 상자, 클리핑, 그림자 소실)가 없는지를 확인한다.
+  const S12_VIEWPORTS = [
+    { width: 360, height: 640, label: '360x640' },
+    { width: 390, height: 844, label: '390x844' },
+    { width: 412, height: 915, label: '412x915' },
+    { width: 1280, height: 800, label: '1280x800' },
+  ]
+  // 캐릭터 렌더 폭 기대 범위(px) — CHARACTER_MIN_WIDTH_PX(40) 하한 +
+  // depthVisual.js depth-scale 범위([0.55,1.20], 이 파일의 기존
+  // DEPTH_BANDS_REF와 동일 값 복제)를 근거로 유도한 범위. 모바일 3종은
+  // 8%(기준폭)가 40px 미만이라 하한(40px)이 거의 항상 지배해 스케일만
+  // 곱해진 결과(40*[0.55,1.20]=[22,48], 마운트 직후 idle 위치(topPct=62)의
+  // 실측 scale(~0.97)로는 ~38.8px)가 나온다 — 실측 여유를 두고 [36,64]로
+  // 잡는다(팀장 지시 값 그대로). 데스크톱(1280)은 8%가 40px보다 훨씬 커서
+  // 그 자체가 기준폭이 되므로 범위가 넓어진다([40,120], 팀장 지시 값).
+  const SPRITE_RENDER_WIDTH_RANGE_PHONE = [36, 64]
+  const SPRITE_RENDER_WIDTH_RANGE_DESKTOP = [40, 120]
+  const SCREENSHOT_DIR = 'C:\\Users\\jinal\\AppData\\Local\\Temp\\claude\\C--voca\\5791e355-621a-4b91-b7b8-9329cd6d40e7\\scratchpad\\preview-local'
+  try { fs.mkdirSync(SCREENSHOT_DIR, { recursive: true }) } catch { /* 이미 존재 — 무시 */ }
+
+  for (const vp of S12_VIEWPORTS) {
+    const name = `S12[${vp.label},sprite-render]`
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true })
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const groundBox = await ground.boundingBox()
+      const worldToPx = (x, y) => ({ x: groundBox.x + groundBox.width * (x / 100), y: groundBox.y + groundBox.height * (y / 100) })
+
+      const glyphCountMount = await page.locator('[data-proto-character-glyph]').count()
+      r.check(`${name} — 이모지 글리프(data-proto-character-glyph)가 DOM에 없음(스프라이트 기본 배선)`, glyphCountMount === 0, `count=${glyphCountMount}`)
+
+      const spriteImg = page.locator('img[data-proto-character-sprite]')
+      const spriteAttached = await spriteImg.waitFor({ state: 'attached', timeout: 5000 }).then(() => true).catch(() => false)
+      r.check(`${name} — img[data-proto-character-sprite]가 DOM에 존재`, spriteAttached)
+      if (!spriteAttached) {
+        r.check(`${name} 시나리오 나머지 단언(스프라이트 부재로 건너뜀)`, false, 'img[data-proto-character-sprite]를 찾지 못함')
+        // try 블록의 finally가 정리(collect+close)를 맡는다(JS의 finally는
+        // continue로 제어가 빠져나가기 전에도 항상 먼저 실행됨) — 여기서
+        // 수동으로 collect/close를 또 부르면 이중 정리(context.close 재호출/
+        // unmockedRequests 중복 push)가 된다.
+        continue
+      }
+
+      // 실제로 이미지가 로드됐는지(complete && naturalWidth>0) — src가 존재
+      // 한다고 실제로 디코딩까지 성공했다는 보장은 아니다(네트워크/디코드
+      // 지연으로 마운트 직후 단일 스냅샷 읽기가 아직 false/0을 볼 수 있음
+      // — verify:all 풀 러너 안에서 412x915 1회 실측 FAIL로 확인, CLAUDE.md
+      // 규칙 15) — 그래서 최대 5s 동안 폴링한다. spriteImg는 Locator라 매
+      // evaluate 호출마다 "지금 DOM에 있는" img를 다시 찾으므로(프레임
+      // 교체로 엘리먼트 자체가 바뀌어도) 스냅샷 고정 문제가 없다.
+      async function readSpriteLoadState() {
+        return spriteImg.evaluate((el) => ({ complete: el.complete, naturalWidth: el.naturalWidth, src: el.src, srcset: el.getAttribute('srcset') || '' })).catch(() => null)
+      }
+      let loadState = await waitUntil(async () => {
+        const s = await readSpriteLoadState()
+        return s && s.complete === true && s.naturalWidth > 0 ? s : false
+      }, { timeout: 5000 })
+      if (!loadState) loadState = (await readSpriteLoadState()) || { complete: false, naturalWidth: 0, src: '', srcset: '' }
+      r.check(`${name} — 스프라이트 이미지가 실제로 로드됨(complete && naturalWidth>0, 최대 5s 폴링)`, loadState.complete === true && loadState.naturalWidth > 0, JSON.stringify(loadState))
+      r.check(`${name} — img src가 .png로 끝남`, /\.png(\?.*)?$/.test(loadState.src) || loadState.src.startsWith('data:image/png'), loadState.src.slice(0, 80))
+      r.check(`${name} — img srcset에 '@2x' 포함`, loadState.srcset.includes('@2x') || loadState.srcset.includes('2x'), loadState.srcset.slice(0, 120))
+
+      // 렌더 폭/클리핑 단언도 이미지 로드 완료를 기다린 뒤에만 읽는다(위와
+      // 같은 이유 — 로드 전 박스 치수는 아직 안정화되지 않았을 수 있음).
+      const [wMin, wMax] = vp.width === 1280 ? SPRITE_RENDER_WIDTH_RANGE_DESKTOP : SPRITE_RENDER_WIDTH_RANGE_PHONE
+      const spriteBox = await spriteImg.boundingBox()
+      r.check(
+        `${name} — 렌더 폭이 기대 범위[${wMin},${wMax}]px 안`,
+        !!spriteBox && spriteBox.width >= wMin && spriteBox.width <= wMax,
+        spriteBox ? `width=${spriteBox.width}` : '(boundingBox null)',
+      )
+
+      // 클리핑 없음 — img 박스가 씬 컨테이너(ground) 경계 안에 있음(위/아래
+      // 잘림 없음, 약간의 여유 2px).
+      r.check(
+        `${name} — 스프라이트 img 박스가 씬 컨테이너(ground) 경계 안(위/아래 클리핑 없음)`,
+        !!spriteBox && spriteBox.y >= groundBox.y - 2 && spriteBox.y + spriteBox.height <= groundBox.y + groundBox.height + 2,
+        spriteBox ? `imgTop=${spriteBox.y} imgBottom=${spriteBox.y + spriteBox.height} groundTop=${groundBox.y} groundBottom=${groundBox.y + groundBox.height}` : '(boundingBox null)',
+      )
+
+      // 검은 배경 상자 없음 — img 자신 + 조상 3개의 computed backgroundColor
+      // 어디에도 완전 불투명 검정(rgb(0, 0, 0))이 없어야 한다.
+      const bgColors = await spriteImg.evaluate((el) => {
+        const chain = [el, el.parentElement, el.parentElement?.parentElement, el.parentElement?.parentElement?.parentElement].filter(Boolean)
+        return chain.map((n) => window.getComputedStyle(n).backgroundColor)
+      })
+      r.check(`${name} — 캐릭터 밑에 완전 불투명 검정 배경 엘리먼트 없음`, !bgColors.some((c) => c === 'rgb(0, 0, 0)'), JSON.stringify(bgColors))
+
+      // 그림자 — 항상 보임(S9 계약과 동일), 렌더 높이 6px 이상.
+      const shadow = page.locator('[data-proto-character-shadow]')
+      await shadow.waitFor({ state: 'attached', timeout: 3000 })
+      const shadowBox = await shadow.boundingBox()
+      r.check(`${name} — 그림자(data-proto-character-shadow)가 6px 이상 높이로 보임`, !!shadowBox && shadowBox.height >= 6, shadowBox ? `height=${shadowBox.height}` : '(boundingBox null)')
+
+      // idle 스크린샷(마운트 직후) — 리뷰용, 씬(ground)만 클립.
+      await page.screenshot({ path: path.join(SCREENSHOT_DIR, `${vp.label}-idle.png`), clip: groundBox }).catch(() => {})
+
+      // 프레임 알파벳(a/b) 교대 — 65,62(항목1과 동일한 안전 좌표, side 방향
+      // 유발)로 걷게 한 뒤 ~500ms 동안 최소 3회 샘플링해 'a'/'b' 프레임이
+      // 둘 다 관측되는지 확인. 같은 걷기 구간 중 스크린샷도 1장 남긴다.
+      const sideTarget = worldToPx(65, 62)
+      await page.mouse.click(sideTarget.x, sideTarget.y)
+      await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 2000 })
+      const frameSamples = []
+      for (let i = 0; i < 5; i++) {
+        const f = await spriteImg.getAttribute('data-proto-character-sprite-frame').catch(() => null)
+        frameSamples.push(f)
+        if (i === 2) await page.screenshot({ path: path.join(SCREENSHOT_DIR, `${vp.label}-mid-walk.png`), clip: groundBox }).catch(() => {})
+        await page.waitForTimeout(120)
+      }
+      const sawA = frameSamples.some((f) => typeof f === 'string' && f.endsWith('-a'))
+      const sawB = frameSamples.some((f) => typeof f === 'string' && f.endsWith('-b'))
+      r.check(`${name} — 걷는 동안 프레임이 실제로 교대됨(a/b 둘 다 관측)`, sawA && sawB, JSON.stringify(frameSamples))
+      await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle', { timeout: 3000 })
+
+      // UI 컨트롤(정보 배지)을 탭해도 idle phase가 바뀌지 않음(바닥 레이어
+      // 밖 엘리먼트 — S3/S8 기존 계약과 동일 정신, 여기선 phase 불변만 확인).
+      const infoBtn = page.locator('[data-testid="proto25d-info-toggle"]')
+      await infoBtn.click()
+      await page.waitForTimeout(150)
+      const phaseAfterUiTap = await character.getAttribute('data-character-phase').catch(() => null)
+      r.check(`${name} — UI 컨트롤(정보 배지) 탭은 idle phase를 바꾸지 않음`, phaseAfterUiTap === 'idle', `phase=${phaseAfterUiTap}`)
+      await infoBtn.click()
+
+      // sitting 스크린샷 — 벤치를 탭해 앉힌 뒤 캡처.
+      const BENCH_REF_S12 = OBSTACLES_REF.find((o) => o.id === 'demo-bench')
+      const benchCentrePx = worldToPx((BENCH_REF_S12.x0 + BENCH_REF_S12.x1) / 2, (BENCH_REF_S12.y0 + BENCH_REF_S12.y1) / 2)
+      await page.mouse.click(benchCentrePx.x, benchCentrePx.y)
+      const reachedSitting = await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'sitting', { timeout: 8000 })
+      r.check(`${name} — 벤치 탭 후 sitting에 도달(스크린샷 사전조건)`, !!reachedSitting)
+      if (reachedSitting) {
+        await page.waitForTimeout(650 + 150) // 좌석 전이 완료 대기(S8과 동일 관례)
+        await page.screenshot({ path: path.join(SCREENSHOT_DIR, `${vp.label}-sitting.png`), clip: groundBox }).catch(() => {})
+      }
+      await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle', { timeout: 8000 })
+
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S13 — Phase 6C: reduced-motion에서 스프라이트 프레임 고정 ───────────
+  // prefers-reduced-motion:reduce에서는 useSpriteFrameIndex(ProtoCharacter.jsx)
+  // 가 reducedMotion===true일 때 항상 freezeFrameIndex로 고정한다(위 파일
+  // 헤더 "Phase 6A" 주석 — 애니메이션 프레임 교체 자체가 멈춤). 이 섹션은
+  // 그 계약을 실제 브라우저에서 확인한다 — S5(Stage1/2 reduced-motion)와
+  // 동일한 emulateMedia 기법을 재사용.
+  {
+    const vp = { width: 390, height: 844 }
+    const name = 'S13[reduced-motion,sprite-frame-freeze]'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await setDeviceFlags(page, { paulTown2_5d: true })
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const groundBox = await ground.boundingBox()
+      const worldToPx = (x, y) => ({ x: groundBox.x + groundBox.width * (x / 100), y: groundBox.y + groundBox.height * (y / 100) })
+
+      const spriteImg = page.locator('img[data-proto-character-sprite]')
+      const spriteAttached = await spriteImg.waitFor({ state: 'attached', timeout: 5000 }).then(() => true).catch(() => false)
+      r.check(`${name} — img[data-proto-character-sprite]가 DOM에 존재(reduced-motion에서도 스프라이트 모드 유지)`, spriteAttached)
+      if (!spriteAttached) {
+        r.check(`${name} 시나리오 나머지 단언(스프라이트 부재로 건너뜀)`, false, 'img[data-proto-character-sprite]를 찾지 못함')
+      } else {
+        const target = worldToPx(65, 62)
+        await page.mouse.click(target.x, target.y)
+        await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 2000 })
+
+        // reduced-motion에서는 걷기 전체가 REDUCED_MOTION_TRANSITION_MS
+        // (220ms) 단일 전이로 끝난다(Proto25DScreen.jsx walkPath — 경유지별
+        // 순차 애니메이션이 아니라 마지막 웨이포인트로 즉시 이동) — 그래서
+        // "동안" 창이 매우 짧다. 고정 간격(예: 100ms x 4=400ms)으로 샘플링
+        // 하면 이 세션이 실측으로 FAIL을 재현했듯(CLAUDE.md 규칙 15) 중간에
+        // idle로 넘어가 버려 "walking phase 동안 고정" 계약과 무관한
+        // 상태 전환 자체를 포착해 오탐한다. 그래서 phase==='walking'인
+        // 동안만(인위적 대기 없이, CDP 왕복 지연만으로) 최대 6개까지 빠르게
+        // 폴링한다.
+        const frameSamplesWalking = []
+        const sampleDeadline = Date.now() + 600
+        while (Date.now() < sampleDeadline && frameSamplesWalking.length < 6) {
+          const phaseNow = await character.getAttribute('data-character-phase').catch(() => null)
+          if (phaseNow !== 'walking') break
+          frameSamplesWalking.push(await spriteImg.getAttribute('data-proto-character-sprite-frame').catch(() => null))
+        }
+        r.check(`${name} — walking phase 동안 프레임 샘플을 1개 이상 포착함(폴링이 충분히 빠름)`, frameSamplesWalking.length > 0, JSON.stringify(frameSamplesWalking))
+        const allSameWalking = frameSamplesWalking.length > 0 && frameSamplesWalking.every((f) => f != null && f === frameSamplesWalking[0])
+        r.check(`${name} — walking phase 동안 프레임이 alternation 없이 고정됨(reduced-motion)`, allSameWalking, JSON.stringify(frameSamplesWalking))
+        const isAFrame = typeof frameSamplesWalking[0] === 'string' && frameSamplesWalking[0].endsWith('-a')
+        r.check(`${name} — 고정된 프레임이 'a' 변형(freezeFrameIndex 기본값)`, isAFrame, JSON.stringify(frameSamplesWalking))
+
+        const reachedIdle = await waitUntil(async () => (
+          (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
+        ), { timeout: 5000 })
+        r.check(`${name} — 프레임이 고정돼도 phase는 결국 idle로 정상 전이됨(reduced-motion transition은 짧아질 뿐 생략 아님)`, !!reachedIdle)
+        if (reachedIdle) {
+          const idleFrame = await spriteImg.getAttribute('data-proto-character-sprite-frame').catch(() => null)
+          r.check(`${name} — 도착 후 프레임이 idle-front로 전이됨(다른 상태 시퀀스로의 정상 전환 — walking 중 alternation 없음과는 별개 계약)`, idleFrame === 'idle-front', `frame=${idleFrame}`)
+        }
+      }
+
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false, `${err?.message || err}`)
     } finally {
       collect(mocks)
       await context.close()

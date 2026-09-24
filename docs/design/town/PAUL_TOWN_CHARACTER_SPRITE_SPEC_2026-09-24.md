@@ -449,6 +449,19 @@ v2 매니페스트 최소 필드:
 | 생성 파라미터(도구/해상도/시드 전략) | §6.4 권고 | 도구 의존 | 실제 생성 담당자 |
 | `NOTICE.md` 필드 포맷 | §8 표 | 신규 제안(저장소 선례 없음) | 사람 — 첫 커밋 시 확정 |
 
+**177차(Phase 6C) 갱신 — 위 표는 작성 당시 기록 보존을 위해 고치지
+않고, 실측 결과만 이 노트로 남긴다(§14 참고):** `walk 프레임 지속시간
+(fps)` → `frameDurationMs 150`으로 CONFIRMED(§3 제안 범위 125–166ms
+안쪽, lead 실장 결정). `footAnchorPx` 값 → `{x:48,y:128}`@1x 그대로
+CONFIRMED(모든 프레임 실측 일치, 흔들림 없음). `seatAnchorPx` 값·측정
+절차 → `{x:48,y:85}`(잉크 높이의 65%)로 실측 CONFIRMED, 단 좌석 접촉이
+자연스러운지는 스크린샷만으로 판단했고 실제 벤치 렌더 재확인이
+남아있다(§14 "알려진 한계"). `NOTICE.md` 필드 포맷 → §14 설치
+과정에서 실제로 채워져 CONFIRMED. `잉크 영역 여백/비율`과 `생성
+파라미터(도구/해상도/시드 전략)`는 여전히 미확정이다 — 실제 생성은
+운영자가 ChatGPT로 직접 진행했고 §6.4의 권고(레퍼런스 고정/시드 전략)
+대신 육안 판정으로 8프레임을 골랐다(§14).
+
 ## 12. 변경 이력
 
 - 2026-09-24: 최초 작성. `SPRITE_CONTRACT_2026-09-24.md`(조건 B 판정)
@@ -461,6 +474,10 @@ v2 매니페스트 최소 필드:
   지시로 ChatGPT 제작 확정). 이미지 0장 상태에서 경로/매핑/ingest
   스크립트/135단언 테스트를 준비해 합성·구조 검사로 검증 완료(§13.7),
   버그 1건 발견·수정(`buildPaulSpriteManifest(null)` throw).
+- 2026-09-24 177차(Phase 6C) — §14 추가(실장 기록): 운영자가 ChatGPT로
+  생성한 8프레임 PNG를 정규화·설치하고 `paulTown2_5d` 플래그 단독
+  게이트로 `Proto25DScreen.jsx` 기본 매니페스트에 배선. §11 일부
+  PROPOSED 항목을 CONFIRMED로 전환하는 노트 추가(표는 무변경).
 
 ## 13. 최종 Paul 캐릭터 파일명·경로 대응 (2026-09-24 추가)
 
@@ -564,6 +581,172 @@ frame id는 §2 표와 **완전히 동일**(v2 계약에서 변경 없음). 아�
 | E2E `[town-proto2.5d]` | 206/206 PASS, 0 FAIL, 0 SKIP(standalone 러너, vite preview 대상, 2026-09-24 20:2x KST) |
 | `npm run build` | PASS |
 | `node scripts/spriteIngestPaul.mjs --check` | BLOCKED_BY_ASSET 8건 / 구조 검사(h) 11 PASS / exit 1(이미지 부재 상태에서 예상된 결과) |
+
+## 14. 실장 기록 (2026-09-24, Phase 6C)
+
+> §13이 준비한 경로/파일명/manifest 대응과 ingest 스크립트를 실제
+> 운영자 제공 PNG로 채운 기록. §0~§13의 계약(8프레임 필수, state 키,
+> 앵커 정의, 개별 파일 8개 원칙)은 그대로다 — 이 절은 그 계약을
+> **실제 이미지로 실장**한 사실만 기록한다.
+
+### 14.1 원본 수령·매핑 판정
+
+운영자가 ChatGPT로 생성한 PNG 11장을 2026-09-24 약 20:23 KST에
+전달했다(1024×1536, RGBA, 투명 배경). 그중 2장이 바이트 단위 중복이라
+실제로는 9장 unique. lead가 다리 스트라이드 쌍을 기준으로 육안 판정해
+8프레임에 매핑했다(§6.4의 "레퍼런스/시드 고정" 권고 대신 사후 육안
+선별 방식 채택 — §11 177차 노트 참고):
+
+| frame id | 원본 파일명(ChatGPT 타임스탬프) |
+|---|---|
+| `idle-front` | `ChatGPT Image Sep 24, 2026, 08_23_24 PM.png` |
+| `walk-front-a` | `08_23_31` |
+| `walk-front-b` | `08_23_28` |
+| `walk-back-a` | `08_23_43` |
+| `walk-back-b` | `08_23_35` |
+| `walk-side-a` | `08_25_58`(오른쪽을 바라봄, §2 규칙과 일치) |
+| `walk-side-b` | `08_23_39` |
+| `sit` | `08_25_51` |
+
+여분 1장(`08_23_20`)은 `walk-front-a`와 동일한 스트라이드라 미사용.
+원본 파일은 저장소 밖(세션 스크래치패드 `ingest/raw/` +
+`PROVENANCE.json`)에 보관하고, 원본별 SHA-256을
+`src/assets/town/character/NOTICE.md`에 기록했다(§8 요건 충족).
+
+### 14.2 정규화(저장소 밖 스크립트, PIL, 리페인트 없음)
+
+- 균일 스케일 `0.08384`(= `124/1479`, `sit`를 제외한 프레임 중 가장
+  키가 큰 잉크 높이 기준), 원본에서 LANCZOS 리샘플.
+- 출력: 96×128 @1x + 192×256 @2x(§4 CONFIRMED 캔버스와 일치).
+- 발 접지선: 모든 프레임에서 불투명 픽셀 최하단 행이 1x 기준 y=127에
+  정렬(§4 규칙 그대로 적용).
+- 좌우 중앙 정렬: 잉크 bbox 기준 x=48 ±0.5px.
+- `sit`: 동일 스케일, 발이 바닥선에 오도록 정렬.
+- 리페인트(그림을 다시 그리거나 손보는 작업)는 하지 않았다 — 순수
+  스케일·크롭·정렬만.
+
+### 14.3 검사 결과
+
+§7 일관성 검수표 + §13.4 `--check` 항목(a–h) 전부 PASS: 저장소 밖
+스크래치 검사 125/125, 저장소 안 `node scripts/spriteIngestPaul.mjs
+--check` PASS 68 / FAIL 0 / BLOCKED 0(§13.6의 BLOCKED_BY_ASSET 8건이
+전부 해소됨).
+
+### 14.4 설치된 파일
+
+`src/assets/town/character/`에 다음을 설치했다:
+
+- `paul-<frame-id>.png` + `paul-<frame-id>@2x.png` × 8프레임(총 16
+  파일, 약 404KB).
+- `index.js` — `--write`가 생성한 레지스트리(`PAUL_SPRITE_SOURCES`/
+  `PAUL_SPRITE_SOURCES_2X`/`PAUL_SPRITE_MEASURED` export, §10
+  "`env/index.js` 패턴 복제" 요건 충족).
+- `paul-sprite-measured.json` — 실측 앵커.
+- `LICENSE.txt`/`NOTICE.md` — §8 요건대로 채워짐(생성 도구/모델/날짜/
+  원본 SHA-256/편집 절차/승인자 필드).
+
+### 14.5 앵커·타이밍 실측값(CONFIRMED, §11 177차 노트와 동일 값)
+
+- `footAnchor`: 모든 프레임 `{x:48, y:128}`@1x(캔버스 중심 고정, §5.1
+  원칙과 일치 — 실측에서도 흔들림 없이 일치).
+- `seatAnchor`(`sit` 전용): `{x:48, y:85}`@1x(잉크 높이의 65% 지점에서
+  실측). 좌석 접촉이 벤치 렌더에서 자연스러운지는 아직 스크린샷만으로
+  판단했다 — §14.7 한계 참고.
+- `frameDurationMs`: `150`(§3 제안 범위 125–166ms 안쪽, 한 이동 구간
+  650ms 동안 약 4회 프레임 교대).
+
+### 14.6 코드 연결·게이트
+
+- 신규: `src/utils/town/proto2_5d/characterSpriteManifest.default.js`
+  — `buildPaulSpriteManifest`(신규 선택 인자 `sources2x` 추가)로
+  `PAUL_SPRITE_MANIFEST`를 만든다.
+- `Proto25DScreen.jsx`: `spriteManifest` prop 기본값이
+  `PAUL_SPRITE_MANIFEST`로 바뀌었다(1줄 변경 + 헤더 주석 갱신).
+- **신규 플래그를 추가하지 않았다** — 게이트는 기존
+  `paulTown2_5d`(기본 `false`) 하나뿐이다(lead 결정, 운영자가 "우선
+  `paulTown2_5d` 하나로 검증"을 요청). §10이 미래 항목으로 남긴
+  `paulTown2_5dSprite`(`SPRITE_CONTRACT_2026-09-24.md` §5-1)는 이번
+  Phase에서도 추가하지 않았다.
+- 이모지는 런타임 폴백으로 그대로 남는다(무효 매니페스트 또는 이미지
+  로드 실패 시).
+- 번들 청크 격리 확인: `paul-` 문자열이 `Proto25DScreen-*.js` 청크
+  (raw 31.1kB / gzip 11.2kB)에만 존재하고, 메인 `index` 청크와
+  `TownScreen` 청크에는 없다(§5.5/§5-6 "번들 예산" 요건과 정합 —
+  이모지 전용 화면에는 스프라이트 자산이 섞이지 않는다).
+
+### 14.7 알려진 한계
+
+- `sit` 좌석 접촉이 자연스러운지는 스크린샷으로만 판단했다 — 실제
+  벤치 렌더에서 사람 재확인 필요.
+- 스프라이트 모드에서 다리별(per-leg) facing 미세 조정은 하지 않았다.
+- 프레임 교대가 실제 이동 거리(stride length)에 동기화되지 않는다 —
+  `frameDurationMs` 고정 간격일 뿐.
+- `@3x`는 제공되지 않는다 — DPR 3 기기는 `@2x`를 업스케일한다.
+- 자산이 지연 로드 청크에 약 404KB를 추가한다(DPR당 1x 또는 2x 세트
+  8파일만 실제로 받아간다).
+- 이모지 폴백 경로는 여전히 존재한다(무효 매니페스트/로드 실패 시).
+
+### 14.8 Preview 정책
+
+Vercel Preview(브랜치 alias
+`https://voca-git-feat-paul-town-v2-clean-pr-jina4926952s-projects.vercel.app`)는
+SSO 차단 없이 렌더되지만, 2.5D 화면은 학생 로그인 이후에만 마운트되고
+로그인은 Production PIN API(WRITE)를 호출한다. 따라서 "Production
+WRITE 0" 원칙에 따라 실제 시각 검증(데스크톱/모바일)은 동일 빌드를
+로컬에서 네트워크 mock으로(Playwright, 360/390/412/1280) 수행하고,
+Preview는 로그인 없이(배포가 살아있는지, Proto 청크와 `paul-*` 자산이
+서빙되는지만) 확인한다. 173차 §8 선례와 동일한 방식이다. 운영자가
+WRITE를 감수하면 실제 기기에서 로그인 후 확인할 수 있다.
+
+### 14.9 제약 확인
+
+`paulTownV1`/`paulTownV2`/`paulTown2_5d` 플래그 전부 `false` 유지, V1/V2
+전용 파일 무변경, depth/shadow/pathfinding/bench 코드 무변경,
+`.github/workflows/` 무변경, PR #62 OPEN/Draft 유지. 준비 스캐폴딩은
+176차에서 이미 커밋 `212538d1`로 분리 커밋됐고, 이번 자산·배선 변경은
+별도 커밋 1개로 예정돼 있다(이 문서 작성 시점 기준 아직 미커밋).
+
+### 14.10 검증 결과(2026-09-24 21:47–22:27 KST, 워크트리 `wt-clean-pr`, lead 실행)
+
+| 항목 | 결과 |
+|---|---|
+| `testPaulSpriteAssets`(신규) | 112/112 PASS |
+| `testPaulSpriteIngest` §5–6(이미지 존재 케이스로 조정, 132단언) | 132/132 PASS |
+| `testProto25dSpriteAdapter` / `testProto25dSpriteContract` /
+  `testProto25dCharacterManifest`(175차 스위트 회귀 재확인) | 50/50, 172/172, 72/72 전부 PASS |
+| `testTownEnvAssets`(회귀 재확인) | 196/196 PASS(최초 실행 실패 → 수정 후 PASS, 아래 참고) |
+| `testBundleBudget` §4c(신규: 스프라이트 16파일 인벤토리 + 누출
+  가드) | 32/32 PASS — main/V1/V2 청크 누출 0, `Proto25DScreen` 청크
+  gzip 11.3KB ≤ 60KB 예산 |
+| E2E S8/S9/S11(스프라이트 모드로 조정) | 포함 통과 |
+| E2E S12(신규, 360/390/412/1280 뷰포트: 스프라이트 로드/크기 밴드/
+  클리핑 없음/프레임 교대/그림자/검은 배경 없음/UI 탭이 캐릭터를
+  움직이지 않음) | 포함 통과 |
+| E2E S13(신규, reduced-motion 정지) | 포함 통과 |
+| `tests/e2e/townProto25d.spec.mjs` standalone(vite preview) | 270/270 PASS |
+| `node scripts/spriteIngestPaul.mjs --check` | PASS=68 FAIL=0 BLOCKED_BY_ASSET=0 |
+| `npm run build` | PASS, 경고 0 |
+| `npm run verify:all` | "ALL DOMAINS: PASS", 141 스위트 PASS / 0 FAIL, 약 27분 |
+| `npm run verify:e2e` | 1598 PASS / 0 FAIL / 0 SKIP, 미mock 요청 0 |
+| 로컬 뷰포트 스크린샷(360/390/412/1280, 12장) | lead 리뷰 완료 — 스프라이트
+  정상 렌더, 클리핑/검은 배경 없음, 프레임 교대·방향·착석·그림자·
+  reduced-motion·UI 탭 무이동 전부 확인(§14.4 자산 참고) |
+| Vercel Preview 확인(로그인 없이) | push 후 확인(로그인 없음) — 아직
+  미완료, PR 코멘트에 URL 포함 예정 |
+
+1차 전체 체인 실행에서 실제 버그 3건이 드러났고 전부 수정 후
+재실행으로 확인됐다:
+
+1. `testTownEnvAssets` — §14의 신규 주석 3곳에 리터럴 문자열
+   `"assets/town/env"`가 그대로 들어가 매니처 검사에 걸림 → 문구
+   변경으로 수정.
+2. `testBundleBudget` §4 — 신규 PNG 16장이 "예기치 않은 파일"로
+   판정됨 → §4c 인벤토리 항목 + 누출 가드로 등록.
+3. E2E S12 `[412x915]` — `naturalWidth` 1회성 읽기가 전체 러너 안에서
+   간헐적으로 flaky → 최대 5초 폴링으로 수정.
+
+상세 배경은 `handoff.md` 2026-09-24(177차) §7,
+`TESTING.md`의 177차 "관련 항목" 절 참고.
 
 `tests/harness/registry.mjs`에 `testPaulSpriteIngest` 1줄 등록됨.
 자세한 세션 로그는 `handoff.md` 176차 §5 참고.
