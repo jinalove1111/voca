@@ -50,6 +50,14 @@ async function noHorizontalOverflow(page) {
 // direction/frame/mirror/facingTransform/src/box를 단일
 // `page.evaluate(...)` 안에서 한 번의 동기 DOM 스냅샷으로 읽어, 그
 // 경쟁을 구조적으로 제거한다(호출 하나 = 결과 전체가 같은 순간의 상태).
+// Phase 7(2026-09-25, 상태 전이 매트릭스 S14) — leftPct/topPct 필드 추가
+// (순수 추가, 기존 필드는 한 글자도 안 바꿈 — S1~S13은 이 두 필드를 전혀
+// 읽지 않으므로 영향 없음). root(`[data-proto-character]`)의 인라인
+// style.left/top은 Proto25DScreen.jsx가 정확히 그 순간의 world-% 좌표로
+// 세팅하는 값 그 자체(readCharacterPct 헬퍼가 이미 같은 값을 별도 호출로
+// 읽던 것과 동일 소스) — 이 값을 phase/frame과 같은 단일 evaluate 안에서
+// 함께 읽어, "좌표를 따로 읽었더니 그 사이 걷기가 끝나버리는" 계측 경쟁을
+// 이 필드에도 구조적으로 없앤다(이 헬퍼의 기존 존재 이유와 동일 정신).
 async function sampleCharacterState(page) {
   return page.evaluate(() => {
     const root = document.querySelector('[data-proto-character]')
@@ -64,6 +72,8 @@ async function sampleCharacterState(page) {
       facingTransform: facingLayer ? facingLayer.style.transform : '',
       src: img ? img.src : null,
       box: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
+      leftPct: root ? parseFloat(root.style.left) : null,
+      topPct: root ? parseFloat(root.style.top) : null,
     }
   })
 }
@@ -2514,6 +2524,404 @@ export async function run(browser, baseURL) {
       r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
     } catch (err) {
       r.check(`${name} 시나리오 실행 완료(예외 없음)`, false, `${err?.message || err}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S14 — Phase 7(2026-09-25): 상태 전이 매트릭스 ────────────────────────
+  // 팀장 지시 범위 — Proto25DScreen.jsx의 idle/walking/sitting/leaving
+  // 상태머신을 프레임/방향/미러/좌표 수준까지 촘촘하게 확인한다. 기존
+  // S1~S13은 값 변경 없이 그대로(위 sampleCharacterState의 leftPct/topPct
+  // 추가만 예외 — 순수 추가 필드, 기존 필드 무변경). 모든 좌표 읽기는
+  // sampleCharacterState 단일 evaluate로만(팀장 지시 — 2026-09-25
+  // paul-walk-side-b-v2 계측 경쟁 교훈, 이 파일 헤더 주석 참고). 이동 목표
+  // 좌표는 전부 walkGrid.js OBSTACLES(이 파일의 OBSTACLES_REF 값 복제)와
+  // 대조해 미리 장애물 없는 구간으로 골랐다(의도한 obstacle-avoidance
+  // 시나리오 f 제외) — "방향이 순수하게 유지돼야 하는" 시나리오(a/b/c/d)가
+  // 경로탐색의 우회 웨이포인트로 오염되지 않게 하기 위함(예: y=45 행은
+  // OBSTACLES_REF 8개 전부와 겹치지 않는 완전히 빈 행 — 계산으로 확인).
+  {
+    const vp = { width: 390, height: 844 }
+    const name = 'S14[390x844,state-matrix]'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true })
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const groundBox = await ground.boundingBox()
+      const worldToPx = (x, y) => ({ x: groundBox.x + groundBox.width * (x / 100), y: groundBox.y + groundBox.height * (y / 100) })
+
+      // phase가 targetPhase인 동안(첫 샘플부터) 계속 폴링해 배열로 반환 —
+      // targetPhase가 아닌 첫 샘플(경계 샘플)까지 포함해서 반환한다(마지막
+      // 원소가 "다음 상태로 넘어간 바로 그 원자 스냅샷" — 항목h가 바로 이
+      // 경계 샘플의 frame을 검사한다).
+      async function collectWhilePhase(targetPhase, { intervalMs = 50, maxMs = 4000 } = {}) {
+        const out = []
+        const deadline = Date.now() + maxMs
+        while (Date.now() < deadline) {
+          const s = await sampleCharacterState(page)
+          out.push(s)
+          if (s.phase !== targetPhase) break
+          await new Promise((resolve) => setTimeout(resolve, intervalMs))
+        }
+        return out
+      }
+      async function waitForPhase(targetPhase, timeout = 3000) {
+        return waitUntil(async () => (await sampleCharacterState(page)).phase === targetPhase, { timeout })
+      }
+      // 바닥 탭 -> walking 전이 대기 -> walking phase 동안 샘플 전체 수집(마지막
+      // 원소는 전이 직후의 idle 경계 샘플).
+      async function walkAndCollect(targetX, targetY) {
+        const px = worldToPx(targetX, targetY)
+        await page.mouse.click(px.x, px.y)
+        await waitForPhase('walking', 2000)
+        return collectWhilePhase('walking')
+      }
+
+      // 사전조건 — 스폰(sceneFixture.js/Proto25DScreen.jsx INITIAL_LEFT_PCT=50,
+      // INITIAL_TOP_PCT=62)에서 idle-front로 마운트됐는지.
+      const initSample = await sampleCharacterState(page)
+      r.check(
+        `${name} — 사전조건: 스폰(50,62)에서 idle-front로 마운트`,
+        initSample.phase === 'idle' && initSample.frame === 'idle-front' &&
+          Math.abs(initSample.leftPct - 50) < 0.5 && Math.abs(initSample.topPct - 62) < 0.5,
+        JSON.stringify(initSample),
+      )
+
+      // ── a. idle → front walk(아래 탭) → idle ──────────────────────────
+      {
+        const samples = await walkAndCollect(50, 75)
+        const frames = samples.map((s) => s.frame)
+        const walkingDirections = samples.filter((s) => s.phase === 'walking').map((s) => s.direction)
+        r.check(`${name} a — walk-front-a/walk-front-b 둘 다 관측`, frames.includes('walk-front-a') && frames.includes('walk-front-b'), JSON.stringify(frames))
+        r.check(`${name} a — 걷는 동안 direction이 전부 'front'`, walkingDirections.length > 0 && walkingDirections.every((d) => d === 'front'), JSON.stringify(walkingDirections))
+        const last = samples[samples.length - 1]
+        r.check(`${name} a — 도착 후 idle-front`, last.phase === 'idle' && last.frame === 'idle-front', JSON.stringify(last))
+        r.check(`${name} a — 목적지(50,75) 근처 도착(±2 world-%)`, Math.abs(last.leftPct - 50) <= 2 && Math.abs(last.topPct - 75) <= 2, JSON.stringify(last))
+      }
+
+      // ── b. idle → back walk(위 탭) → idle ─────────────────────────────
+      {
+        const samples = await walkAndCollect(50, 45)
+        const frames = samples.map((s) => s.frame)
+        const walkingDirections = samples.filter((s) => s.phase === 'walking').map((s) => s.direction)
+        r.check(`${name} b — walk-back-a/walk-back-b 둘 다 관측`, frames.includes('walk-back-a') && frames.includes('walk-back-b'), JSON.stringify(frames))
+        r.check(`${name} b — 걷는 동안 direction이 전부 'back'`, walkingDirections.length > 0 && walkingDirections.every((d) => d === 'back'), JSON.stringify(walkingDirections))
+        const last = samples[samples.length - 1]
+        r.check(`${name} b — 도착 후 idle-front`, last.phase === 'idle' && last.frame === 'idle-front', JSON.stringify(last))
+        r.check(`${name} b — 목적지(50,45) 근처 도착(±2 world-%)`, Math.abs(last.leftPct - 50) <= 2 && Math.abs(last.topPct - 45) <= 2, JSON.stringify(last))
+      }
+
+      // ── c. idle → right walk → idle, idle → left walk → idle ─────────
+      // y=45 행(OBSTACLES_REF 8개 전부와 무관) 위에서만 이동해 경로탐색의
+      // 우회 웨이포인트 없이 순수 좌우 이동만 나오게 한다.
+      {
+        const samplesRight = await walkAndCollect(65, 45)
+        const framesR = samplesRight.map((s) => s.frame)
+        const mirrorsRWalking = samplesRight.filter((s) => s.phase === 'walking').map((s) => s.mirror)
+        r.check(`${name} c — RIGHT: walk-side-a/walk-side-b 둘 다 관측`, framesR.includes('walk-side-a') && framesR.includes('walk-side-b'), JSON.stringify(framesR))
+        r.check(`${name} c — RIGHT: 걷는 동안 mirror가 전부 '0'`, mirrorsRWalking.length > 0 && mirrorsRWalking.every((m) => m === '0'), JSON.stringify(mirrorsRWalking))
+        const lastR = samplesRight[samplesRight.length - 1]
+        r.check(`${name} c — RIGHT 도착 후 idle-front, mirror '0'`, lastR.phase === 'idle' && lastR.frame === 'idle-front' && lastR.mirror === '0', JSON.stringify(lastR))
+
+        const samplesLeft = await walkAndCollect(38, 45)
+        const framesL = samplesLeft.map((s) => s.frame)
+        const mirrorsLWalking = samplesLeft.filter((s) => s.phase === 'walking').map((s) => s.mirror)
+        r.check(`${name} c — LEFT: walk-side-a/walk-side-b 둘 다 관측`, framesL.includes('walk-side-a') && framesL.includes('walk-side-b'), JSON.stringify(framesL))
+        r.check(`${name} c — LEFT: 걷는 동안 mirror가 전부 '1'`, mirrorsLWalking.length > 0 && mirrorsLWalking.every((m) => m === '1'), JSON.stringify(mirrorsLWalking))
+        const lastL = samplesLeft[samplesLeft.length - 1]
+        r.check(`${name} c — LEFT 도착 후 idle-front, mirror '0'(리셋)`, lastL.phase === 'idle' && lastL.frame === 'idle-front' && lastL.mirror === '0', JSON.stringify(lastL))
+      }
+
+      // ── d. right ↔ left 연속(걷는 도중 재지정, idle 깜빡임 없음) ────────
+      // 여전히 y=45 행에서만 재지정한다(direction이 순수 'side'로만 유지돼야
+      // 하는 전제, 위 c와 동일 이유).
+      {
+        const t1 = worldToPx(60, 45)
+        const t2 = worldToPx(25, 45)
+        const t3 = worldToPx(50, 45)
+        const allSamples = []
+        await page.mouse.click(t1.x, t1.y)
+        await waitForPhase('walking', 2000)
+        // t1 leg(650ms) 진행 중(~30% 지점)에 t2로 재지정.
+        for (let i = 0; i < 3; i++) { allSamples.push(await sampleCharacterState(page)); await page.waitForTimeout(65) }
+        await page.mouse.click(t2.x, t2.y)
+        // t2 leg 진행 중(~20% 지점)에 t3로 재지정.
+        for (let i = 0; i < 2; i++) { allSamples.push(await sampleCharacterState(page)); await page.waitForTimeout(65) }
+        await page.mouse.click(t3.x, t3.y)
+        // t3부터 최종 idle 도착까지 계속 샘플링.
+        {
+          const deadline = Date.now() + 4000
+          while (Date.now() < deadline) {
+            const s = await sampleCharacterState(page)
+            allSamples.push(s)
+            if (s.phase === 'idle') break
+            await page.waitForTimeout(50)
+          }
+        }
+        const phases = allSamples.map((s) => s.phase)
+        const idleIdx = phases.indexOf('idle')
+        const beforeIdle = idleIdx === -1 ? phases : phases.slice(0, idleIdx)
+        r.check(`${name} d — t1/t2/t3 재지정 전체 구간(도착 전)에서 phase가 계속 'walking'(idle 깜빡임 없음)`, beforeIdle.length > 0 && beforeIdle.every((p) => p === 'walking'), JSON.stringify(phases))
+        const directionsBeforeIdle = (idleIdx === -1 ? allSamples : allSamples.slice(0, idleIdx)).map((s) => s.direction)
+        r.check(`${name} d — 전체 구간 direction이 계속 'side'`, directionsBeforeIdle.length > 0 && directionsBeforeIdle.every((dd) => dd === 'side'), JSON.stringify(directionsBeforeIdle))
+        r.check(`${name} d — idle로 최종 도달`, idleIdx !== -1, JSON.stringify(phases))
+        const last = allSamples[allSamples.length - 1]
+        r.check(`${name} d — 최종 idle-front`, last.phase === 'idle' && last.frame === 'idle-front', JSON.stringify(last))
+        r.check(`${name} d — 최종 위치가 마지막 목표(t3=50,45) 근처(±1.5 world-%)`, Math.abs(last.leftPct - 50) <= 1.5 && Math.abs(last.topPct - 45) <= 1.5, JSON.stringify(last))
+        // mirror가 각 재지정 후 2샘플 이내에 새 dx 부호를 따라간다 — 위 수집
+        // 루프 구조상 인덱스[0,3)=t1 구간, [3,5)=t2 구간, [5,7)=t3 구간 시작.
+        const t1Window = allSamples.slice(0, 3)
+        r.check(`${name} d — t1(오른쪽, dx>0) 재지정 후 2샘플 이내 mirror '0' 관측`, t1Window.slice(0, 2).some((s) => s.mirror === '0'), JSON.stringify(t1Window.map((s) => s.mirror)))
+        const t2Window = allSamples.slice(3, 5)
+        r.check(`${name} d — t2(왼쪽, dx<0) 재지정 후 2샘플 이내 mirror '1' 관측`, t2Window.some((s) => s.mirror === '1'), JSON.stringify(t2Window.map((s) => s.mirror)))
+        const t3Window = allSamples.slice(5, 7)
+        r.check(`${name} d — t3(오른쪽, dx>0) 재지정 후 2샘플 이내 mirror '0' 재관측`, t3Window.some((s) => s.mirror === '0'), JSON.stringify(t3Window.map((s) => s.mirror)))
+      }
+
+      // ── e. 빠른 연속 탭(5회, 60ms 간격, 서로 다른 5개 지점) ─────────────
+      {
+        const points = [[70, 45], [55, 70], [33, 45], [75, 75], [45, 65]]
+        const pxPoints = points.map(([x, y]) => worldToPx(x, y))
+        for (const p of pxPoints) {
+          await page.mouse.click(p.x, p.y)
+          await page.waitForTimeout(60)
+        }
+        const afterTapsSample = await sampleCharacterState(page)
+        r.check(`${name} e — 빠른 연속 5탭 후에도 예외 없이 상태를 읽을 수 있음(크래시 없음)`, afterTapsSample.phase === 'walking' || afterTapsSample.phase === 'idle', JSON.stringify(afterTapsSample))
+        const reachedIdle = await waitForPhase('idle', 4000)
+        r.check(`${name} e — 최종적으로 idle에 도달`, !!reachedIdle)
+        const finalSample = await sampleCharacterState(page)
+        r.check(`${name} e — 최종 위치가 마지막 탭 지점(45,65) 근처(±2 world-%)`, Math.abs(finalSample.leftPct - 45) <= 2 && Math.abs(finalSample.topPct - 65) <= 2, JSON.stringify(finalSample))
+        await page.waitForTimeout(1200)
+        const afterWaitSample = await sampleCharacterState(page)
+        r.check(`${name} e — idle 후 1200ms 대기해도 phase가 계속 idle(잔여 타이머 없음)`, afterWaitSample.phase === 'idle', JSON.stringify(afterWaitSample))
+        r.check(
+          `${name} e — idle 후 1200ms 대기해도 위치가 그대로(잔여 타이머로 인한 이동 없음)`,
+          Math.abs(afterWaitSample.leftPct - finalSample.leftPct) < 0.1 && Math.abs(afterWaitSample.topPct - finalSample.topPct) < 0.1,
+          JSON.stringify({ finalSample, afterWaitSample }),
+        )
+      }
+
+      // ── f. 걷는 도중 장애물(demo-building) 반대편으로 목적지 재지정 ─────
+      // x=45 열(38<=45<=62, demo-building의 x구간 안)로 먼 아래(85) ->
+      // 먼 위(20) 재지정 — 직선 경로가 반드시 건물 박스(y24~40)를 관통해야
+      // 하는 구성(대칭 열 선택으로 재지정 타이밍 지터와 무관하게 항상 교차).
+      {
+        const buildingRef = OBSTACLES_REF.find((o) => o.id === 'demo-building')
+        const t1 = worldToPx(45, 85)
+        await page.mouse.click(t1.x, t1.y)
+        await waitForPhase('walking', 2000)
+        await page.waitForTimeout(200) // t1 leg(650ms) 진행 중, 아직 도착 전
+        const t2 = worldToPx(45, 20)
+        await page.mouse.click(t2.x, t2.y)
+
+        const samples = []
+        {
+          const deadline = Date.now() + 4000
+          while (Date.now() < deadline) {
+            const s = await sampleCharacterState(page)
+            samples.push(s)
+            if (s.phase === 'idle') break
+            await page.waitForTimeout(50)
+          }
+        }
+        const walkingSamples = samples.filter((s) => s.phase === 'walking')
+        const overlapping = walkingSamples.filter((s) => pctInBox(s.leftPct, s.topPct, buildingRef))
+        r.check(
+          `${name} f — 재지정 목적지(45,20)까지 걷는 동안 캐릭터 좌표가 demo-building 박스와 한 번도 겹치지 않음`,
+          walkingSamples.length > 0 && overlapping.length === 0,
+          JSON.stringify({ overlapCount: overlapping.length, samples: walkingSamples.map((s) => ({ x: s.leftPct, y: s.topPct })) }),
+        )
+        const last = samples[samples.length - 1]
+        r.check(`${name} f — 최종 idle-front`, last.phase === 'idle' && last.frame === 'idle-front', JSON.stringify(last))
+        r.check(
+          `${name} f — 최종 위치가 재지정 목적지(45,20) 근처(±2 world-%, 이미 걸을 수 있는 칸이라 별도 보정 없음)`,
+          Math.abs(last.leftPct - 45) <= 2 && Math.abs(last.topPct - 20) <= 2,
+          JSON.stringify(last),
+        )
+      }
+
+      // ── g. 벤치: walking → sitting(frame 'sit', mirror '0') → leaving(걷기 프레임) → idle-front ──
+      {
+        const BENCH_REF = OBSTACLES_REF.find((o) => o.id === 'demo-bench')
+        const benchCenterPct = { x: (BENCH_REF.x0 + BENCH_REF.x1) / 2, y: (BENCH_REF.y0 + BENCH_REF.y1) / 2 }
+        const benchCenterPx = worldToPx(benchCenterPct.x, benchCenterPct.y)
+        await page.mouse.click(benchCenterPx.x, benchCenterPx.y)
+        const reachedWalking = await waitForPhase('walking', 2000)
+        r.check(`${name} g — 벤치 탭 후 walking으로 전이`, !!reachedWalking)
+
+        const reachedSitting = await waitForPhase('sitting', 8000)
+        r.check(`${name} g — walking 다음 sitting에 도달`, !!reachedSitting)
+        const sittingSample = reachedSitting ? await sampleCharacterState(page) : null
+        r.check(`${name} g — sitting 중 frame이 'sit', mirror가 '0'`, !!sittingSample && sittingSample.frame === 'sit' && sittingSample.mirror === '0', JSON.stringify(sittingSample))
+
+        // 착석 지점 기대값 — benchInteraction.js benchSeatPoint 공식 값 복제
+        // (이 파일의 기존 OBSTACLES_REF/DEPTH_BANDS_REF 값 복제 관례와 동일
+        // — import 대신 상수/공식만 옮겨온다. BENCH_ASSET_ASPECT=48/72,
+        // BENCH_ASSET_MIN_WIDTH_PX=44, SEAT_FRACTION=0.55).
+        const nominalWidthPx = groundBox.width * (BENCH_REF.x1 - BENCH_REF.x0) / 100
+        const widthPx = Math.max(nominalWidthPx, 44)
+        const heightPx = widthPx * (48 / 72)
+        const renderedHeightYPct = groundBox.height > 0 ? (heightPx / groundBox.height) * 100 : 0
+        const expectedSeat = { x: benchCenterPct.x, y: BENCH_REF.y1 - renderedHeightYPct * 0.55 }
+        r.check(
+          `${name} g — sitting 위치가 기대 좌석 지점과 ±1 world-% 이내 일치`,
+          !!sittingSample && Math.abs(sittingSample.leftPct - expectedSeat.x) <= 1 && Math.abs(sittingSample.topPct - expectedSeat.y) <= 1,
+          JSON.stringify({ sittingSample, expectedSeat }),
+        )
+
+        const reachedLeaving = await waitForPhase('leaving', 5000)
+        r.check(`${name} g — SIT_HOLD_MS 경과 후 leaving으로 전이`, !!reachedLeaving)
+        const leavingSamples = reachedLeaving ? await collectWhilePhase('leaving', { maxMs: 1500 }) : []
+        const leavingFrames = leavingSamples.filter((s) => s.phase === 'leaving').map((s) => s.frame)
+        r.check(
+          `${name} g — leaving 동안 frame이 걷기 프레임(walk-*)`,
+          leavingFrames.length > 0 && leavingFrames.every((f) => typeof f === 'string' && f.startsWith('walk-')),
+          JSON.stringify(leavingFrames),
+        )
+
+        const reachedIdleAfterLeaving = await waitForPhase('idle', 5000)
+        r.check(`${name} g — leaving 다음 idle로 정상 전이`, !!reachedIdleAfterLeaving)
+        const idleAfterLeaving = await sampleCharacterState(page)
+        r.check(`${name} g — 최종 idle-front`, idleAfterLeaving.frame === 'idle-front', JSON.stringify(idleAfterLeaving))
+        const expectedArrival = { x: benchCenterPct.x, y: BENCH_REF.y1 + 2 } // BENCH_ARRIVAL_GAP_PCT
+        r.check(
+          `${name} g — leaving이 도착 지점(벤치 앞, ±1.5 world-%)에서 끝남`,
+          Math.abs(idleAfterLeaving.leftPct - expectedArrival.x) <= 1.5 && Math.abs(idleAfterLeaving.topPct - expectedArrival.y) <= 1.5,
+          JSON.stringify({ idleAfterLeaving, expectedArrival }),
+        )
+      }
+
+      // ── h. 마지막 걷기 프레임이 잔류하지 않음(첫 idle 샘플에서 이미 idle-front) ──
+      {
+        const samples = await walkAndCollect(23.5, 75) // 벤치 도착 지점 근처에서 아래로 짧은 걷기(front)
+        const idleIdx = samples.findIndex((s) => s.phase === 'idle')
+        r.check(`${name} h — 걷기 후 idle 경계 샘플을 포착함`, idleIdx !== -1, JSON.stringify(samples.map((s) => s.phase)))
+        if (idleIdx !== -1) {
+          const firstIdleSample = samples[idleIdx]
+          r.check(
+            `${name} h — phase가 처음 'idle'로 읽힌 바로 그 원자 스냅샷에서 frame이 이미 'idle-front'(잔류 없음)`,
+            firstIdleSample.frame === 'idle-front',
+            JSON.stringify(firstIdleSample),
+          )
+        }
+      }
+
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── i. 리마운트 리셋 — 플래그 off/on 토글 + reload 후 스폰 위치로 복귀 ──
+  // 별도 context/섹션 — 위 a~h와 달리 페이지를 reload하므로(로그인 세션이
+  // 이 앱에서 실제로 영속화되는지 이 세션은 확인하지 않았다 — 로그인 폼이
+  // 다시 보이면 재로그인하는 방어적 분기로 양쪽 경우 모두 처리한다).
+  {
+    const vp = { width: 390, height: 844 }
+    const name = 'S14[390x844,remount-reset]'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true })
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const groundBox = await ground.boundingBox()
+      const worldToPx = (x, y) => ({ x: groundBox.x + groundBox.width * (x / 100), y: groundBox.y + groundBox.height * (y / 100) })
+
+      // (70,62)까지 걷게 해 스폰과 다른 위치로 옮겨 둔다(리마운트 후 "스폰
+      // 으로 되돌아옴"을 실제로 구분 가능하게 하는 사전조건).
+      const target = worldToPx(70, 62)
+      await page.mouse.click(target.x, target.y)
+      await waitUntil(async () => (await sampleCharacterState(page)).phase === 'walking', { timeout: 2000 })
+      const movedIdle = await waitUntil(async () => (await sampleCharacterState(page)).phase === 'idle', { timeout: 4000 })
+      r.check(`${name} — 사전조건: (70,62) 방향 걷기 후 idle 도달`, !!movedIdle)
+      const beforeReload = await sampleCharacterState(page)
+      r.check(
+        `${name} — 사전조건: 스폰(50,62)에서 벗어나 있음`,
+        Math.abs(beforeReload.leftPct - 50) > 3 || Math.abs(beforeReload.topPct - 62) > 3,
+        JSON.stringify(beforeReload),
+      )
+
+      // 플래그를 끈 뒤 새로고침 — 프로토타입 게이팅 자체가 리로드 경로에서도
+      // 성립해야 한다(S2와 동일 계약).
+      //
+      // 이 섹션 시작 시점에 호출한 setDeviceFlags(true)는 page.addInitScript로
+      // 등록되므로 이 page의 "모든 향후 네비게이션"(이 reload 포함)에
+      // 계속 재실행된다 — 그래서 여기서 page.evaluate로 localStorage를 직접
+      // false로 덮어써도, reload 시점에 그 먼저 등록된 addInitScript(true)가
+      // 다시 실행돼 즉시 되돌려버린다(등록 순서상 새 document의 초기화
+      // 스크립트 목록에 그대로 남아있음 — reload 전용 API가 아니라 페이지가
+      // 살아있는 한 계속 적용). 최초 구현에서 이 방식으로 실측 FAIL
+      // (maxCount=1 — 플래그가 실제로는 계속 true였다)을 재현해 확인한 테스트
+      // 저작 실수 — page.evaluate 대신 setDeviceFlags를 다시 호출해 새
+      // addInitScript(false)를 뒤에 추가한다(등록 순서대로 실행되므로 나중에
+      // 등록한 것이 최종값을 이긴다, CLAUDE.md 규칙 15 — 회귀 의심 시 재현
+      // 후 확정).
+      await setDeviceFlags(page, { paulTown2_5d: false })
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      const loginFormBackOff = await page.getByPlaceholder('이름 입력...').waitFor({ state: 'visible', timeout: 4000 }).then(() => true).catch(() => false)
+      if (loginFormBackOff) {
+        await login(page)
+        await waitForLoggedIn(page)
+      }
+      let rootCountOff = 0
+      for (let i = 0; i < 3; i++) {
+        rootCountOff = Math.max(rootCountOff, await page.locator('[data-testid="proto25d-root"]').count())
+        await page.waitForTimeout(300)
+      }
+      r.check(`${name} — 플래그 OFF 리로드 후 proto25d-root가 없음(3회 샘플)`, rootCountOff === 0, `maxCount=${rootCountOff}`)
+
+      // 플래그를 다시 켠 뒤 새로고침 — 동일 이유로 setDeviceFlags(true)를
+      // 다시 호출해 새 addInitScript를 맨 뒤에 추가한다(위 주석 참고).
+      await setDeviceFlags(page, { paulTown2_5d: true })
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      const loginFormBackOn = await page.getByPlaceholder('이름 입력...').waitFor({ state: 'visible', timeout: 4000 }).then(() => true).catch(() => false)
+      if (loginFormBackOn) {
+        await login(page)
+        await waitForLoggedIn(page)
+      }
+      const characterAfter = page.locator('[data-proto-character]')
+      const attachedAfter = await characterAfter.waitFor({ state: 'attached', timeout: 5000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 플래그 재-ON 리로드 후 캐릭터가 다시 마운트됨`, attachedAfter)
+      if (attachedAfter) {
+        const afterSample = await sampleCharacterState(page)
+        r.check(
+          `${name} — 리마운트 후 캐릭터가 스폰 위치(50,62)로 리셋됨(±0.5 world-%, 이전 위치 유지 없음)`,
+          Math.abs(afterSample.leftPct - 50) < 0.5 && Math.abs(afterSample.topPct - 62) < 0.5,
+          JSON.stringify(afterSample),
+        )
+        r.check(`${name} — 리마운트 후 phase가 idle`, afterSample.phase === 'idle', JSON.stringify(afterSample))
+        r.check(`${name} — 리마운트 후 direction이 'front'`, afterSample.direction === 'front', JSON.stringify(afterSample))
+        r.check(`${name} — 리마운트 후 frame이 'idle-front'`, afterSample.frame === 'idle-front', JSON.stringify(afterSample))
+      }
+
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
     } finally {
       collect(mocks)
       await context.close()
