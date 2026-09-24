@@ -731,8 +731,17 @@ WRITE를 감수하면 실제 기기에서 로그인 후 확인할 수 있다.
 | 로컬 뷰포트 스크린샷(360/390/412/1280, 12장) | lead 리뷰 완료 — 스프라이트
   정상 렌더, 클리핑/검은 배경 없음, 프레임 교대·방향·착석·그림자·
   reduced-motion·UI 탭 무이동 전부 확인(§14.4 자산 참고) |
-| Vercel Preview 확인(로그인 없이) | push 후 확인(로그인 없음) — 아직
-  미완료, PR 코멘트에 URL 포함 예정 |
+| Vercel Preview 확인(로그인 없이) | **완료.** 커밋 `8be6ba99`
+  (2026-09-24 22:30 KST) push, GitHub 배포 `6638989777` → success.
+  Preview URL
+  `https://voca-rs10ezhb4-jina4926952s-projects.vercel.app`(브랜치
+  alias `https://voca-git-feat-paul-town-v2-clean-pr-jina4926952s-projects.vercel.app`).
+  로그인 없이 GET만(Production WRITE 0): 로그인 화면 렌더, 메인 청크
+  스프라이트 참조 0, `Proto25DScreen-*.js` 청크에만 `paul-*` 포함,
+  `/assets/paul-*.png` 16개 전부 200 `image/png`, `paulEasyVoca_features`
+  localStorage 부재(플래그 기본값 유지). 2.5D 화면 자체는 학생 로그인이
+  필요해(Production PIN API WRITE) 열지 않았고, 시각 검증은 위 로컬
+  mock 스크린샷이 대신한다. |
 
 1차 전체 체인 실행에서 실제 버그 3건이 드러났고 전부 수정 후
 재실행으로 확인됐다:

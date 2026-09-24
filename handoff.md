@@ -16,7 +16,9 @@ DOMAINS PASS(141 스위트), `npm run verify:e2e` 1598 PASS/0 FAIL,
 `testPaulSpriteAssets` 112/112·`testPaulSpriteIngest` 132/132(이미지
 존재 케이스로 조정) 등 신규/조정 스위트 전부 PASS. 로컬 뷰포트
 스크린샷 12장 리드 검수 완료. 전체 회귀 중 실제 버그 3건 발견·수정
-(§7 참고). Vercel Preview는 push 후 로그인 없이 확인 예정(미완료).
+(§7 참고). Vercel Preview 로그인 없이 확인 완료(커밋 `8be6ba99` push,
+배포 `6638989777` success, 16개 `paul-*` 자산 200 OK, 청크 격리 실측
+확인 — §7).
 176차 이하 보존)_
 
 ## 2026-09-24 (177차) — Paul 캐릭터 8프레임 스프라이트 실장(Phase 6C): 이모지 → Paul 스프라이트 교체, paulTown2_5d 게이트만, 신규 플래그 0
@@ -153,8 +155,18 @@ SSO 차단 없이 렌더되지만, 2.5D 화면은 학생 로그인 이후에만 
   검은 배경/테두리 없음, 걷기 프레임 교대 확인, 이동 방향에 따라
   방향/미러 정확, 벤치에 발이 앞으로 나오게 착석, CSS 그림자 존재,
   reduced-motion 프레임 정지, UI 탭이 캐릭터를 이동시키지 않음 |
-| Vercel Preview 확인(로그인 없이) | push 후 확인(로그인 없음) — 아직
-  미완료, PR 코멘트에 URL 포함 예정 |
+| Vercel Preview 확인(로그인 없이) | **완료.** 커밋 `8be6ba99` 2026-09-24
+  22:30 KST push, GitHub 배포 `6638989777` → success. Preview URL
+  `https://voca-rs10ezhb4-jina4926952s-projects.vercel.app`(브랜치
+  alias `https://voca-git-feat-paul-town-v2-clean-pr-jina4926952s-projects.vercel.app`).
+  Chrome에서 로그인 없이 확인(GET만, Production WRITE 0): 로그인
+  화면 렌더, 메인 청크 `index-Bg682rhx.js`에 스프라이트 참조 0개,
+  `Proto25DScreen-Dt_NUpVc.js`에만 `paul-idle-front`/`paul-sit` 등
+  포함, `/assets/paul-*.png` 16개 전부 200 `image/png`(1x 약
+  10.6–13.3KB, `@2x` 약 34–37KB), `localStorage`에 `paulEasyVoca_features`
+  없음(플래그 기본값 유지). 2.5D 화면 자체는 학생 로그인이 필요해
+  (Production PIN API WRITE 동반) Preview에서 열지 않았다 — 시각
+  검증은 §7의 로컬 mock 스크린샷 12장이 대신한다. |
 
 전체 회귀 과정에서 실제 버그 3건을 발견·수정했다(1차 전체 체인
 실행에서 실패, 아래 수정 후 최종 재실행에서 전부 PASS):

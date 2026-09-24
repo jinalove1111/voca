@@ -1700,7 +1700,7 @@ PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md` §14.6). 아래 결과는
 | `scripts/testBundleBudget.mjs`(§4c 신규 항목) | 스프라이트 16파일 인벤토리 + 누출 가드(main/V1/V2 청크에 `paul-` 없음), `Proto25DScreen` 청크 예산 | 32/32 PASS — 청크 누출 0, gzip 11.3KB ≤ 60KB |
 | `node scripts/spriteIngestPaul.mjs --check` | 실제 이미지 존재 상태에서 재실행 | PASS=68 FAIL=0 BLOCKED_BY_ASSET=0 |
 | 로컬 뷰포트 스크린샷(360/390/412/1280, Playwright + 네트워크 mock, 12장: {viewport}×{idle,mid-walk,sitting}) | Production PIN API를 호출하지 않는 로컬 검증(Production WRITE 0 원칙, 173차 §8과 동일 방식 — `handoff.md` 177차 §6) | lead 리뷰 완료 — 스프라이트 정상 렌더, 클리핑/검은 배경 없음, 프레임 교대·방향·착석·그림자·reduced-motion·UI 탭 무이동 전부 확인 |
-| Vercel Preview 확인(로그인 없이) | 배포 생존 + Proto 청크/`paul-*` 자산 서빙 여부만 | push 후 확인(로그인 없음) — 아직 미완료 |
+| Vercel Preview 확인(로그인 없이) | 배포 생존 + Proto 청크/`paul-*` 자산 서빙 여부만 | **완료.** 커밋 `8be6ba99`(2026-09-24 22:30 KST) 배포 `6638989777` success. 메인 청크 스프라이트 참조 0, `Proto25DScreen-*.js` 청크에만 `paul-*` 포함, `/assets/paul-*.png` 16개 전부 200 `image/png`, `paulEasyVoca_features` localStorage 부재(기본값 유지). 로그인 없이 GET만 수행(Production WRITE 0) — 상세는 `handoff.md` 177차 §7 |
 | `npm run build` | 전체 회귀 | PASS, 경고 0 |
 | `npm run verify:all` | 전체 회귀 | "ALL DOMAINS: PASS", 141 스위트 PASS / 0 FAIL, 약 27분 |
 | `npm run verify:e2e` | 전체 회귀 | 1598 PASS / 0 FAIL / 0 SKIP, 미mock 요청 0 |
