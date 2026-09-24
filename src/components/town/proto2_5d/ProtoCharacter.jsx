@@ -327,8 +327,16 @@ export default function ProtoCharacter({
   // 런타임 이미지 로드 실패 폴백(v1의 spriteLoadFailed와 동일 정신, 별도
   // state — v1/v2가 서로 다른 이미지 소스를 쓰므로 실패 여부도 독립적이어야
   // 한다). spriteManifest 참조가 바뀌면 새 매니페스트에게 다시 기회를 준다.
+  //
+  // Phase 6D(2026-09-25): @2x 실패 시 1x 강등 → 그다음 이모지. 2단계
+  // 폴백이라 state도 2개(spriteV2SrcSetFailed → srcSet 제거, spriteV2LoadFailed
+  // → 이모지 최종 폴백)로 분리한다 — 아래 img onError 참고.
+  const [spriteV2SrcSetFailed, setSpriteV2SrcSetFailed] = useState(false)
   const [spriteV2LoadFailed, setSpriteV2LoadFailed] = useState(false)
-  useEffect(() => { setSpriteV2LoadFailed(false) }, [spriteManifest])
+  useEffect(() => {
+    setSpriteV2SrcSetFailed(false)
+    setSpriteV2LoadFailed(false)
+  }, [spriteManifest])
   const isSpriteV2 = !spriteV2LoadFailed && spriteVisual.kind === 'sprite'
 
   // 프리로드(a/b 프레임 교대 시 빈 프레임이 보이지 않도록) — DOM에 삽입하지
@@ -483,7 +491,7 @@ export default function ProtoCharacter({
               >
                 <img
                   src={spriteVisual.src}
-                  srcSet={spriteVisual.srcSet}
+                  srcSet={spriteV2SrcSetFailed ? undefined : spriteVisual.srcSet}
                   alt=""
                   aria-hidden="true"
                   draggable={false}
@@ -491,7 +499,19 @@ export default function ProtoCharacter({
                   data-proto-character-sprite-frame={spriteVisual.frameId}
                   data-proto-character-sprite-state={spriteVisual.state}
                   data-proto-character-sprite-mirror={spriteVisual.mirrorX ? '1' : '0'}
-                  onError={() => setSpriteV2LoadFailed(true)}
+                  {...(spriteV2SrcSetFailed ? { 'data-proto-character-sprite-degraded': '1' } : {})}
+                  onError={() => {
+                    // 1단계: srcSet(@2x 후보 포함)이 있고 아직 강등 전이면
+                    // srcSet만 제거하고 1x(src)로 재시도(같은 엘리먼트, 같은
+                    // onError 재사용). 2단계: srcSet이 애초에 없었거나 이미
+                    // 강등된 뒤에도 또 실패하면(1x도 깨짐) 최종적으로 이모지로
+                    // 폴백한다.
+                    if (!spriteV2SrcSetFailed && spriteVisual.srcSet) {
+                      setSpriteV2SrcSetFailed(true)
+                    } else {
+                      setSpriteV2LoadFailed(true)
+                    }
+                  }}
                   style={{ display: 'block', width: '100%', height: 'auto', imageRendering: 'auto' }}
                 />
               </div>

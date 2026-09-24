@@ -9,6 +9,7 @@
 // scripts/testPaulTownProgression.mjs의 EnglishGarden.jsx SSR 구간과 동일
 // 기법(새 하네스 기법 발명 없음). jsdom/브라우저 없이 문자열 마크업만
 // 검증하므로 네트워크 0, DOM API 0.
+import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -252,6 +253,55 @@ section('항목9 — direction prop이 data-character-direction으로 그대로 
     const html = render({ phase: 'idle', direction })
     check(`direction:'${direction}' → data-character-direction="${direction}"`, html.includes(`data-character-direction="${direction}"`), html)
   }
+}
+
+// ── 항목10 — Phase 6D(2026-09-25) 계약 잠금 ────────────────────────────
+// 런타임 cadence(프레임 간격 = frameDurationMs), @2x→1x→이모지 2단계 강등,
+// overlay role/aria-label을 소스 정규식 + SSR로 고정한다. 새 하네스 기법
+// 발명 없음 — 이 파일이 이미 import/사용 중인 fs/path로 소스 문자열을 직접
+// 읽어 regex로 단언한다(react-dom/server는 hooks 내부 setInterval 실행 시점
+// 값을 관측할 방법이 없어 SSR로는 검증 불가능한 항목이라 SOURCE 방식을 쓴다).
+section('항목10 — Phase 6D 계약 잠금(cadence/degradation/overlay)')
+{
+  const protoCharacterSrc = fs.readFileSync(
+    path.resolve('src/components/town/proto2_5d/ProtoCharacter.jsx'), 'utf8',
+  )
+  const protoScreenSrc = fs.readFileSync(
+    path.resolve('src/components/town/proto2_5d/Proto25DScreen.jsx'), 'utf8',
+  )
+
+  // (a) 런타임 cadence — spriteV2Fps = 1000 / frameDurationMs, 재생 간격도
+  // 동일 공식(1000 / fps) → 결과적으로 간격 == frameDurationMs.
+  const fpsFormulaMatches = protoCharacterSrc.match(/1000\s*\/\s*spriteManifest\.frameDurationMs/g) || []
+  check('SOURCE — spriteV2Fps = 1000 / spriteManifest.frameDurationMs 가 정확히 1회 등장', fpsFormulaMatches.length === 1, `matches=${fpsFormulaMatches.length}`)
+
+  const intervalMatches = protoCharacterSrc.match(/setInterval\(\(\) => \{[\s\S]*?\}, 1000 \/ fps\)/g) || []
+  check('SOURCE — useSpriteFrameIndex의 setInterval(…, 1000 / fps)가 정확히 1회 등장(간격 = frameDurationMs)', intervalMatches.length === 1, `matches=${intervalMatches.length}`)
+
+  // (b) SSR — walking+side, t=0(마운트 직후, useEffect 미실행) → 항상
+  // frameIndex 0(freeze 기본값과 동일) → 'walk-side-a'. 정상 렌더에는
+  // degraded 속성이 없어야 한다(2단계 강등 이전 상태).
+  {
+    const html = render({ phase: 'walking', spriteManifest: EXAMPLE_SPRITE_MANIFEST, direction: 'side', facing: 1 })
+    check("SSR — walking+side(t=0) → frameId 'walk-side-a'(index 0)", html.includes('data-proto-character-sprite-frame="walk-side-a"'), html)
+    check('SSR — 정상(비강등) 렌더에는 data-proto-character-sprite-degraded 속성 없음', !html.includes('data-proto-character-sprite-degraded'), html)
+  }
+
+  // (c) Proto25DScreen.jsx SSR은 hooks/DOM 의존이라 이 하네스로 렌더하지
+  // 않는다(파일 헤더 주석 그대로) — overlay root 근처(data-testid=
+  // "proto25d-root" 이후 900자, 그 사이의 긴 한글 주석 블록을 포함해도
+  // role="region"/aria-label까지 닿도록 여유를 둔다)에 role="region"/
+  // aria-label이 있는지 정규식으로만 확인한다.
+  const overlayRootMatch = protoScreenSrc.match(/data-testid="proto25d-root"[\s\S]{0,900}/)
+  check('SOURCE — overlay root(data-testid="proto25d-root") 근처에 role="region"', !!overlayRootMatch && /role="region"/.test(overlayRootMatch[0]), overlayRootMatch ? overlayRootMatch[0] : '(no match)')
+  check('SOURCE — overlay root 근처에 aria-label="Paul Town 2.5D 프로토타입"', !!overlayRootMatch && overlayRootMatch[0].includes('aria-label="Paul Town 2.5D 프로토타입"'), overlayRootMatch ? overlayRootMatch[0] : '(no match)')
+
+  // (d) v2 img의 onError 핸들러 + 2단계 강등 state 이름 존재.
+  check('SOURCE — v2 sprite 2단계 강등 state: spriteV2SrcSetFailed 존재', protoCharacterSrc.includes('spriteV2SrcSetFailed'))
+  check('SOURCE — v2 sprite 2단계 강등 state: spriteV2LoadFailed 존재', protoCharacterSrc.includes('spriteV2LoadFailed'))
+  const v2ImgBlockMatch = protoCharacterSrc.match(/data-proto-character-sprite-mirror=\{spriteVisual\.mirrorX[\s\S]{0,500}/)
+  check('SOURCE — v2 <img>에 onError 핸들러 존재', !!v2ImgBlockMatch && /onError=\{/.test(v2ImgBlockMatch[0]), v2ImgBlockMatch ? v2ImgBlockMatch[0] : '(no match)')
+  check('SOURCE — srcSet이 spriteV2SrcSetFailed일 때 undefined로 치환(1x 전용 재시도)', protoCharacterSrc.includes('srcSet={spriteV2SrcSetFailed ? undefined : spriteVisual.srcSet}'))
 }
 
 // ── 결과 ──────────────────────────────────────────────────────────────

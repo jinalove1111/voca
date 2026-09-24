@@ -605,6 +605,9 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST }
       // "단일 진실 원천" 원칙과 동일 정신, 값 복제가 아니라 실제 소스를
       // 그대로 반영).
       data-proto25d-obstacle-count={OBSTACLES.length}
+      // Phase 6D(2026-09-25) — 오버레이 역할/이름만 부여(포커스 관리 없음).
+      role="region"
+      aria-label="Paul Town 2.5D 프로토타입"
       className="fixed inset-0 z-[9999] bg-[#dff3ea] flex flex-col"
     >
       {/* UI 배지(항목8/12 테스트용 UI 엘리먼트) — 바닥 레이어의 형제
