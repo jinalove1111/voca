@@ -457,3 +457,117 @@ v2 매니페스트 최소 필드:
 - 2026-09-24 lead 검토 — §2.1/§5.4/§9/§10 정정(v2 계약 8프레임 필수,
   퍼센트 앵커 오프셋, 개별 파일 확정), §10 플래그 항목을 미래 항목으로
   명시.
+- 2026-09-24 176차 — §13 추가(최종 Paul 캐릭터 파일명·경로 대응, 운영자
+  지시로 ChatGPT 제작 확정). 이미지 0장 상태에서 경로/매핑/ingest
+  스크립트/135단언 테스트를 준비해 합성·구조 검사로 검증 완료(§13.7),
+  버그 1건 발견·수정(`buildPaulSpriteManifest(null)` throw).
+
+## 13. 최종 Paul 캐릭터 파일명·경로 대응 (2026-09-24 추가)
+
+> 운영자 지시(고정): 최종 8프레임은 ChatGPT로 제작한다. 아래는 §0~§12의
+> 계약(8프레임 필수, state 키, 앵커, 개별 파일 8개 원칙)을 그대로 둔
+> 채, 실제로 도착할 파일의 **이름·경로·검사 절차**만 확정한 것이다.
+> 이 절 작성 시점에도 이미지는 **0장**이며, 이 절 자체가 이미지를
+> 생성·채택하는 근거가 되지 않는다(§0 원칙 불변).
+
+### 13.1 캐릭터 비주얼 스펙(아트 브리프 원본, art brief of record)
+
+- Paul 얼굴과 파란 눈.
+- 약간 통통한 상체와 배.
+- 얇은 다리.
+- 금색 Paul 문장이 있는 짙은 남색 실크해트.
+- 네이비 몽클레어 반팔 티셔츠와 반바지.
+- 검정·회색 Air Max 95.
+- 투명 배경 PNG.
+- 모든 프레임에서 동일한 크기·발 접지선·중심축 유지(§4/§5의 캔버스·
+  앵커 규칙을 그대로 따른다는 뜻 — 이 항목이 §4/§5를 대체하지 않는다).
+
+### 13.2 드롭 폴더
+
+`src/assets/town/character/`(`SPRITE_CONTRACT_2026-09-24.md` §5 항목 2
+근거). 176차 세션에서 이 폴더와 `README.md`가 생성됐다 — 이미지는
+여전히 0장이다(BLOCKED_BY_ASSET, §13.6).
+
+### 13.3 프레임 id ↔ 파일명 ↔ state ↔ 방향 ↔ 미러 대응표
+
+frame id는 §2 표와 **완전히 동일**(v2 계약에서 변경 없음). 아래는 실제
+도착할 파일명만 새로 고정한다.
+
+| frame id(§2) | 파일명 | state(§2.1) | 방향 | 미러 |
+|---|---|---|---|---|
+| `idle-front` | `paul-idle-front.png` | `idle` | 정면 | 없음 |
+| `walk-front-a` | `paul-walk-front-a.png` | `walkFront` | 정면 | 없음 |
+| `walk-front-b` | `paul-walk-front-b.png` | `walkFront` | 정면 | 없음 |
+| `walk-back-a` | `paul-walk-back-a.png` | `walkBack` | 뒷모습 | 없음 |
+| `walk-back-b` | `paul-walk-back-b.png` | `walkBack` | 뒷모습 | 없음 |
+| `walk-side-a` | `paul-walk-side-a.png` | `walkSide` | 측면(오른쪽 향함으로 그림) | facing이 left일 때만 `scaleX(-1)`(§2.1) |
+| `walk-side-b` | `paul-walk-side-b.png` | `walkSide` | 측면(오른쪽 향함으로 그림) | facing이 left일 때만 `scaleX(-1)`(§2.1) |
+| `sit` | `paul-sit.png` | `sit` | 정면(또는 3/4) | 없음 |
+
+### 13.4 도착 후 단일 명령과 검사 항목
+
+1. `node scripts/spriteIngestPaul.mjs --check`(읽기 전용, 아무것도 쓰지
+   않음): 프레임 누락 / PNG 디코딩 가능 여부 / 실제 알파 채널(투명
+   배경) 존재 / 8프레임 동일 캔버스 크기 / 발 접지선 정렬(§4) /
+   중심축(앵커) 정합(§5) / 모바일 최소 렌더 크기(§5.5,
+   `CHARACTER_MIN_WIDTH_PX=40px`)에서 식별 가능 여부 / 걷기·앉기 state
+   연결(§2.1 매핑) 검사.
+2. `node scripts/spriteIngestPaul.mjs --write`(검사 통과 후에만):
+   `src/assets/town/character/index.js` 레지스트리와
+   `paul-sprite-measured.json`(실측 앵커)을 쓴다. `LICENSE.txt`/
+   `NOTICE.md`(§8)는 쓰지 않고, `Proto25DScreen.jsx`/`App.jsx` 배선도
+   건드리지 않는다 — 둘 다 사람이 하는 남은 단계(§13.6).
+
+### 13.5 관련 신규 모듈(순수 함수, 이미지 0장 상태에서도 동작)
+
+`src/utils/town/proto2_5d/paulSpriteManifest.js`(176차 세션에서 실제
+생성 확인) — `PAUL_SPRITE_FILES`(§13.3 매핑 상수),
+`PAUL_SPRITE_DEFAULTS`(PROPOSED: 캔버스 96×128, `footAnchorPx
+{x:48,y:128}`, `seatAnchorPx {x:48,y:96}`, `frameDurationMs 150` —
+§4/§5/§3의 PROPOSED 값과 정합), 및 `buildPaulSpriteManifest(sources…)`/
+`paulSpriteBlockers` 헬퍼. 이미지 import가 전혀 없는 순수 모듈이라
+이미지가 없어도 빌드와 이모지 폴백에 영향을 주지 않는다(§13.7로
+검증됨). 176차 세션 중 `buildPaulSpriteManifest(null)`이 throw하는
+버그를 발견·수정했다(구조 분해 기본값은 `undefined`만 커버, `null`은
+커버하지 않음 — `isPlainObject` 가드 추가, `null`/`'x'`/`[]`/`42`/
+`undefined` 5종 입력에 대해 never-throw를 테스트로 단언).
+
+`scripts/spriteIngestPaul.mjs`(176차 세션에서 실제 생성 확인) — 순수
+검사 함수 9개(§13.4의 프레임 누락/디코딩/알파/캔버스/발 접지선/앵커/
+모바일 크기/state 연결 각 항목에 대응) + CLI `--check`/`--write`
+진입점.
+
+### 13.6 BLOCKED_BY_ASSET 항목(PNG 8장 도착 전까지 진행 불가)
+
+- §13.4의 `--check` 중 실제 이미지가 있어야만 판정 가능한 8개 항목
+  (§13.7의 "BLOCKED_BY_ASSET 8건" — 파일 존재/경로 등 구조 검사 11개는
+  이미지 없이도 이미 PASS).
+- `src/assets/town/character/index.js` 레지스트리 생성(`--write`).
+- `paul-sprite-measured.json`(실측 앵커) 생성.
+- 실제 브라우저 렌더 확인(모바일 최소 크기 포함).
+- `LICENSE.txt`/`NOTICE.md`(§8) 작성 — 이미지 출처가 있어야 채울 수
+  있음.
+- `characterSpriteManifest.default.js`(§10) 생성 — 실측 앵커 확정 후.
+- `paulTown2_5dSprite` 플래그 추가(§10 — 승인된 프로덕션 매니페스트가
+  생기는 시점).
+- `Proto25DScreen.jsx`에서 매니페스트를 실제로 넘기는 배선(플래그 ON
+  시에만).
+
+### 13.7 검증 결과(176차, 이미지 0장 상태의 합성/구조 검사)
+
+| 항목 | 결과 |
+|---|---|
+| `testPaulSpriteIngest`(신규, 135단언) | 135/135 PASS — 인메모리 합성 PNG만 사용, 디스크에 아무것도 쓰지 않음 |
+| `testProto25dSpriteContract` | 172/172 PASS |
+| `testProto25dSpriteAdapter` | 50/50 PASS |
+| `testProto25dCharacterManifest` | 72/72 PASS |
+| E2E `[town-proto2.5d]` | 206/206 PASS, 0 FAIL, 0 SKIP(standalone 러너, vite preview 대상, 2026-09-24 20:2x KST) |
+| `npm run build` | PASS |
+| `node scripts/spriteIngestPaul.mjs --check` | BLOCKED_BY_ASSET 8건 / 구조 검사(h) 11 PASS / exit 1(이미지 부재 상태에서 예상된 결과) |
+
+`tests/harness/registry.mjs`에 `testPaulSpriteIngest` 1줄 등록됨.
+자세한 세션 로그는 `handoff.md` 176차 §5 참고.
+- `paulTown2_5dSprite` 플래그 추가(§10 — 승인된 프로덕션 매니페스트가
+  생기는 시점).
+- `Proto25DScreen.jsx`에서 매니페스트를 실제로 넘기는 배선(플래그 ON
+  시에만).

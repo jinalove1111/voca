@@ -1,14 +1,135 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-24 (175차 — **Paul Town 2.5D 캐릭터 스프라이트 v2
-어댑터 구현 완료(Phase 6B, 전부 휴면)**: 커스텀 8프레임 계약
-(`characterSpriteContract.js`, 172단언) + `ProtoCharacter.jsx`/
-`Proto25DScreen.jsx` 휴면 배선 + SSR 어댑터 테스트(50단언) + E2E S11
-(+16, proto 스펙 206단언), 커밋 `d3321de`→`be54279`→`11c3883`→
-`be5e7fb`→`78125bf`, 브랜치 `feat/paul-town-v2-clean-pr`. 실 스프라이트
-이미지 0장, `paulTown2_5dSprite` 플래그 미추가(`paulTownV1:false`/
-`paulTownV2:false`/`paulTown2_5d:false` 전부 유지), Production WRITE 0,
-`npm run verify:all` ALL DOMAINS PASS, PR #62 OPEN/DRAFT 유지. 174차
-이하 보존)_
+_최종 갱신: 2026-09-24 (176차 — **Paul 캐릭터 8프레임 PNG 수령 준비**:
+운영자 지시로 최종 스프라이트를 ChatGPT가 제작하기로 확정, 경로·
+파일명·manifest 대응표·ingest 스크립트(`spriteIngestPaul.mjs
+--check`/`--write`, 순수 검사 함수 9개)·135단언 테스트를 준비하고
+합성/구조 검사로 전부 통과 확인(`--check`는 이미지 부재로 여전히
+BLOCKED_BY_ASSET 8건·exit 1, 예상된 결과). 버그 1건 발견·수정
+(`buildPaulSpriteManifest(null)` throw). 이미지 0장, 아무것도 커밋·
+푸시하지 않음(Production WRITE 0, DB/Supabase/Vercel env 0,
+`paulTownV1`/`paulTownV2`/`paulTown2_5d` 플래그 전부 `false` 유지, PR
+#62 OPEN/Draft 유지, git 명령 실행 없음). 175차 이하 보존)_
+
+## 2026-09-24 (176차) — Paul 캐릭터 8프레임 PNG 수령 준비: 경로·파일명·manifest 대응·ingest 검사 명령 (이미지 0장, 미커밋)
+
+### 0. 안전 요약
+- 이 세션은 **문서 준비만** 수행했다 — git 명령 0회(커밋/스테이징/체크아웃
+  전부 없음), 이미지 파일 0장, Production DB/Supabase/Vercel env 접촉
+  0회.
+- 플래그 상태 무변경: `paulTownV1`/`paulTownV2`/`paulTown2_5d` 전부
+  `false`(관리자 패널 노출 없음). `paulTown2_5dSprite` 플래그는 여전히
+  **미추가**(175차 §2 결정 유지 — 승인된 프로덕션 매니페스트가 생기는
+  시점에 추가).
+- PR #62는 OPEN/Draft 그대로다. 이번 세션에서 브랜치/PR 상태를 바꾸지
+  않았다.
+- 이번 세션에서 실제 버그 1건을 발견·수정했다:
+  `buildPaulSpriteManifest(null)`이 throw했다(구조 분해 기본값은
+  `undefined`만 커버하고 `null`은 커버하지 않음) — `isPlainObject` 가드로
+  수정, 테스트가 `null`/`'x'`/`[]`/`42`/`undefined` 5종 입력에 대해
+  never-throw를 단언하도록 갱신됐다(§5 `testPaulSpriteIngest`에 포함).
+- **아무것도 커밋·푸시하지 않았다**(운영자 지시 — 준비·보고만). 이
+  워크트리의 현재 미커밋 변경: `M docs/design/town/
+  PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md`, `M handoff.md`,
+  `M tests/harness/registry.mjs`, `?? scripts/spriteIngestPaul.mjs`,
+  `?? scripts/testPaulSpriteIngest.mjs`, `?? src/assets/town/character/`
+  (README.md만), `?? src/utils/town/proto2_5d/paulSpriteManifest.js`.
+
+### 1. 운영자 지시(고정)
+- 최종 8프레임 스프라이트는 **ChatGPT로 제작**하기로 확정(운영자
+  직접 지시). 캐릭터 비주얼 스펙(아트 브리프 원본): Paul 얼굴과 파란
+  눈, 약간 통통한 상체와 배, 얇은 다리, 금색 Paul 문장이 있는 짙은
+  남색 실크해트, 네이비 몽클레어 반팔 티셔츠와 반바지, 검정·회색
+  Air Max 95, 투명 배경 PNG, 모든 프레임에서 동일한 크기·발 접지선·
+  중심축 유지. 전문은
+  `docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md`
+  §13.1에 아트 브리프 원본으로 기록했다.
+- 드롭 폴더는 `src/assets/town/character/`(README.md가 이미 지정) —
+  이 세션 시점에는 폴더 자체가 저장소에 없다(BLOCKED_BY_ASSET, §6).
+
+### 2. 준비된 구조(파일 목록)
+- 갱신: `docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md`
+  §13(신규 섹션) — 파일명·경로 대응표, ingest 명령, BLOCKED_BY_ASSET
+  목록. §12 변경 이력에 176차 한 줄 추가. 코드/이미지 변경 없음.
+- 갱신: 이 `handoff.md`(본 절, append-only).
+- 병행 작업(다른 에이전트, 이 세션 종료 시점에는 이 워크트리에 확인됨):
+  - `src/utils/town/proto2_5d/paulSpriteManifest.js` — 순수 모듈
+    (`PAUL_SPRITE_FILES` 매핑 상수, `PAUL_SPRITE_DEFAULTS`,
+    `buildPaulSpriteManifest`/`paulSpriteBlockers`).
+  - `scripts/spriteIngestPaul.mjs` — 순수 검사 함수 9개 + CLI
+    `--check`/`--write` 진입점.
+  - `src/assets/town/character/README.md` — 드롭 폴더 생성(README만,
+    이미지 0장).
+  - `scripts/testPaulSpriteIngest.mjs` — 135단언(§5).
+  - `tests/harness/registry.mjs` — 위 테스트 등록 1줄 추가.
+
+### 3. frame id ↔ 파일명 ↔ state ↔ 방향 ↔ 미러 대응표
+frame id는 175차가 확정한 v2 계약(`characterSpriteContract.js`) 프레임
+id와 완전히 동일 — 새로 고정한 것은 파일명뿐이다.
+
+| frame id | 파일명 | state | 방향 | 미러 |
+|---|---|---|---|---|
+| `idle-front` | `paul-idle-front.png` | `idle` | 정면 | 없음 |
+| `walk-front-a` | `paul-walk-front-a.png` | `walkFront` | 정면 | 없음 |
+| `walk-front-b` | `paul-walk-front-b.png` | `walkFront` | 정면 | 없음 |
+| `walk-back-a` | `paul-walk-back-a.png` | `walkBack` | 뒷모습 | 없음 |
+| `walk-back-b` | `paul-walk-back-b.png` | `walkBack` | 뒷모습 | 없음 |
+| `walk-side-a` | `paul-walk-side-a.png` | `walkSide` | 측면(오른쪽 향함) | facing=left일 때만 `scaleX(-1)` |
+| `walk-side-b` | `paul-walk-side-b.png` | `walkSide` | 측면(오른쪽 향함) | facing=left일 때만 `scaleX(-1)` |
+| `sit` | `paul-sit.png` | `sit` | 정면(또는 3/4) | 없음 |
+
+전문은 스펙 §13.3 참고.
+
+### 4. 도착 후 단일 명령과 검사 항목
+1. `node scripts/spriteIngestPaul.mjs --check`(읽기 전용): 프레임 누락
+   / PNG 디코딩 가능 / 실제 알파(투명 배경) 존재 / 8프레임 동일 캔버스
+   / 발 접지선 정렬 / 중심축(앵커) 정합 / 모바일 최소 렌더 크기
+   (`CHARACTER_MIN_WIDTH_PX=40px`) / 걷기·앉기 state 연결 검사.
+2. `node scripts/spriteIngestPaul.mjs --write`(검사 통과 후에만):
+   `src/assets/town/character/index.js` 레지스트리 +
+   `paul-sprite-measured.json`(실측 앵커) 생성. `LICENSE.txt`/
+   `NOTICE.md`(스펙 §8), `Proto25DScreen.jsx`/`App.jsx` 배선은 쓰지
+   않는다 — 사람이 할 남은 단계(§7).
+
+### 5. 검증
+
+| 항목 | 결과 |
+|---|---|
+| `testPaulSpriteIngest` | 135/135 PASS(인메모리 합성 PNG만 사용, 디스크에 아무것도 쓰지 않음) |
+| `testProto25dSpriteContract` | 172/172 PASS |
+| `testProto25dSpriteAdapter` | 50/50 PASS |
+| `testProto25dCharacterManifest` | 72/72 PASS |
+| E2E `[town-proto2.5d]` | 206/206 PASS, 0 FAIL, 0 SKIP(standalone 러너, vite preview 대상, 2026-09-24 20:2x KST) |
+| `npm run build` | PASS |
+| `node scripts/spriteIngestPaul.mjs --check` | BLOCKED_BY_ASSET 8건 / 구조 검사(h) 11 PASS / exit 1(이미지 부재 상태에서 예상된 결과) |
+
+위 결과는 전부 실제 이미지 없이(합성/구조 검사만) 확보한 것이다. PNG
+8장 도착 후 `--check`를 재실행해 BLOCKED_BY_ASSET 8건이 실제로
+해소되는지 확인하고 이 표를 갱신한다.
+
+### 6. BLOCKED_BY_ASSET 목록(PNG 8장 도착 전까지 진행 불가)
+- §4의 `--check` 중 실제 이미지가 있어야만 판정 가능한 8개 항목(§5의
+  "BLOCKED_BY_ASSET 8건" — 구조 검사 11개는 이미지 없이도 이미 PASS).
+- `src/assets/town/character/index.js` 레지스트리 생성(`--write`).
+- `paul-sprite-measured.json`(실측 앵커) 생성.
+- 실제 브라우저 렌더 확인(모바일 최소 크기 포함).
+- `LICENSE.txt`/`NOTICE.md`(스펙 §8) 작성.
+- `characterSpriteManifest.default.js`(스펙 §10) 생성.
+- `paulTown2_5dSprite` 플래그 추가.
+- `Proto25DScreen.jsx`에서 매니페스트를 실제로 넘기는 배선(플래그 ON
+  시에만).
+
+### 7. 사람이 할 남은 단계(`--write` 이후)
+1. `LICENSE.txt` + `NOTICE.md` 작성(스펙 §8 — 생성 도구/모델/날짜/
+   프롬프트 해시/편집 도구/승인자/승인일).
+2. `--write`가 실측한 앵커(`paul-sprite-measured.json`) 검토.
+3. 레지스트리로부터 `characterSpriteManifest.default.js`를
+   `buildPaulSpriteManifest`로 생성.
+4. `paulTown2_5dSprite` 플래그 등록(스펙 §5-1, 관리자 패널 노출 동반).
+5. 플래그 ON일 때만 `Proto25DScreen`에서 매니페스트를 넘기도록 배선.
+6. 번들 예산 확인(스펙 §5-6).
+7. E2E S8/S9 이모지-조건부 케이스 갱신.
+8. §5의 검증 명령 전부 실행 후 이 절의 RESULTS-TBD 표를 실제 결과로
+   갱신.
 
 ## 2026-09-24 (175차) — Paul Town 2.5D 캐릭터 스프라이트 v2 어댑터 구현 완료(Phase 6B): 계약·테스트·휴면 배선·SSR 어댑터 테스트·E2E S11 완료, 실 이미지 0장, `paulTown2_5dSprite` 플래그 미추가 (Production 무접촉)
 
