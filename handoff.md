@@ -30,8 +30,10 @@ WRITE 0, PR #62 OPEN/Draft 유지, 체크 전부 통과 후 단일 커밋 예정
 1655 PASS/0 FAIL, `townProto25d.spec.mjs` standalone 327/327
 PASS(S12/S13 포함), `testPaulSpriteAssets` 125/125·
 `testPaulSpriteIngest` 132/132·`testBundleBudget` 32/32 등 전부 PASS.
-로컬 뷰포트 스크린샷 리드 검수 완료. Vercel Preview 확인은 push 후
-예정(§7 참고).
+로컬 뷰포트 스크린샷 리드 검수 완료. Vercel Preview 로그인 없이
+확인 완료(커밋 `5d2faf29` push, 배포 `6644346180` success, 16개
+`paul-*` 자산 200 OK, `paul-walk-side-b-v2` 청크 격리·레거시 자산
+미참조 실측 확인 — §7).
 177차 이하 보존)_
 
 ## 2026-09-25 (178차) — Paul 스프라이트 walk-side-b 프레임 교체(v2): 기존 a 유지 + 신규 무릎 굽힘 자세 b-v2, 원본 보존
@@ -180,7 +182,7 @@ E2E/스크린샷/Preview) PASS 후 단일 커밋 예정.
 | `scripts/testTownEnvAssets.mjs` | 196/196 PASS |
 | `node scripts/spriteIngestPaul.mjs --check` | PASS=68 FAIL=0 BLOCKED_BY_ASSET=0 |
 | 로컬 뷰포트 스크린샷(lead 리뷰 완료) | `preview-local/side-{360x640,390x844,412x915,1280x800}-{a,b}.png` — a/b-v2 프레임이 동일한 크기·발 접지선을 유지, 검은 배경 없음, 클리핑 없음 |
-| Vercel Preview 확인(로그인 없이) | push 후 확인(로그인 없음) — 이 절 작성 시점에는 아직 push 전. push 후 Preview GET-only 확인 → PR #62 코멘트 예정 |
+| Vercel Preview 확인(로그인 없이) | **완료.** 커밋 `5d2faf29` 2026-09-25 약 02:45 KST push, GitHub 배포 `6644346180` → success. Preview URL `https://voca-ktrsbm4ct-jina4926952s-projects.vercel.app`(브랜치 alias `https://voca-git-feat-paul-town-v2-clean-pr-jina4926952s-projects.vercel.app`). Chrome에서 로그인 없이 GET만 확인(Production WRITE 0): 로그인 화면 렌더, `Proto25DScreen-Dk3K-cwh.js` 청크에 `paul-walk-side-b-v2` 참조 있고 레거시 `paul-walk-side-b-<hash>.png` 참조는 없음, `/assets/paul-*.png` 16개 전부 200 `image/png`(v2 + `@2x` 포함), 메인 청크에는 스프라이트 프레임 참조 없음(번들 가드), `localStorage`에 `paulEasyVoca_features` 없음(플래그 기본값 유지). 2.5D 화면 자체는 학생 로그인(Production PIN API WRITE)이 필요해 Preview에서 열지 않았다 |
 
 ## 2026-09-24 (177차) — Paul 캐릭터 8프레임 스프라이트 실장(Phase 6C): 이모지 → Paul 스프라이트 교체, paulTown2_5d 게이트만, 신규 플래그 0
 

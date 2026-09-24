@@ -918,7 +918,7 @@ CSS 애니메이션(크기에 비례해 진폭 증가)을 반영한 허용 오�
 | `npm run verify:all` | "ALL DOMAINS: PASS", 141 스위트 PASS / 0 FAIL, 약 32분 |
 | `npm run verify:e2e` | 1655 PASS / 0 FAIL / 0 SKIP, 미mock 요청 0 |
 | 로컬 뷰포트 스크린샷(lead 리뷰 완료) | `preview-local/side-{360x640,390x844,412x915,1280x800}-{a,b}.png` — a/b-v2 프레임 동일 크기·발 접지선, 검은 배경/클리핑 없음 |
-| Vercel Preview 확인(로그인 없이) | push 후 확인(로그인 없음) — 이 절 작성 시점 기준 아직 push 전. push 후 Preview GET-only 확인 → PR #62 코멘트, 운영자 실기기 확인은 선택 |
+| Vercel Preview 확인(로그인 없이) | **완료.** 커밋 `5d2faf29`(2026-09-25 약 02:45 KST) push, GitHub 배포 `6644346180` success. Preview URL `https://voca-ktrsbm4ct-jina4926952s-projects.vercel.app`(브랜치 alias `https://voca-git-feat-paul-town-v2-clean-pr-jina4926952s-projects.vercel.app`). 로그인 없이 GET만(Production WRITE 0): 로그인 화면 렌더, `Proto25DScreen-Dk3K-cwh.js` 청크에 `paul-walk-side-b-v2` 참조하고 레거시 `paul-walk-side-b-<hash>.png` 참조 없음, `/assets/paul-*.png` 16개 전부 200 `image/png`(v2+`@2x` 포함), 메인 청크에 스프라이트 참조 없음(번들 가드), `paulEasyVoca_features` localStorage 부재(플래그 기본값 유지). 2.5D 화면은 학생 로그인(Production PIN API WRITE)이 필요해 Preview에서 열지 않았다 |
 
 상세 배경은 `handoff.md` 2026-09-25(178차) §7,
 `TESTING.md`의 178차 "관련 항목" 절 참고.
