@@ -1839,5 +1839,117 @@ export async function run(browser, baseURL) {
     }
   }
 
+  // ── S11 — Phase 6B 방향 판정·이모지 기본 렌더 무변경 ────────────────────
+  // Proto25DScreen.jsx는 App.jsx가 spriteManifest prop을 넘기지 않으므로
+  // 오늘도 v2 스프라이트는 항상 비활성(isSpriteV2ManifestActive===false,
+  // 위 파일 헤더 "Phase 6B" 주석과 동일 전제) — 그런데도 character.direction
+  // 계산은 모든 모드에서 항상 갱신된다(directionForMove, Proto25DScreen.jsx
+  // walkLeg/walkPath). 이 섹션은 (a) 그 direction 값이 실제로 탭 방향에 맞게
+  // front/side/back으로 바뀌는지, (b) v2가 비활성인 이 이모지 렌더에서는
+  // facing이 갱신되지 않아 어떤 방향으로 걸어도 좌우 미러(scaleX(-1))가
+  // 걸리지 않는지, (c) 이 작업이 emoji 폴백 렌더(글리프 자체)를 전혀
+  // 바꾸지 않았는지를 실제 브라우저에서 검증한다. S3와 동일한 데스크톱
+  // 마우스 경로/플래그 ON 마운트 패턴을 그대로 따른다.
+  {
+    const vp = { width: 1280, height: 800 }
+    const name = 'S11[phase6b-direction]'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true })
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const groundBox = await ground.boundingBox()
+      // world-%(0..100) -> 화면 px(S3의 fraction 관례와 동일, groundBox가
+      // world 0..100 전체를 담는다).
+      const worldToPx = (x, y) => ({ x: groundBox.x + groundBox.width * (x / 100), y: groundBox.y + groundBox.height * (y / 100) })
+
+      const initialPhase = await character.getAttribute('data-character-phase').catch(() => null)
+      r.check(`${name} — 마운트 직후 phase가 idle`, initialPhase === 'idle', `phase=${initialPhase}`)
+      const initialDirection = await character.getAttribute('data-character-direction').catch(() => null)
+      r.check(`${name} — 마운트 직후 direction 기본값이 front`, initialDirection === 'front', `direction=${initialDirection}`)
+      const spriteMarkupAtMount = await character.evaluate((el) => el.outerHTML).catch(() => '')
+      r.check(`${name} — v2 스프라이트 비활성(spriteManifest 미전달) — data-proto-character-sprite 없음`, !spriteMarkupAtMount.includes('data-proto-character-sprite'))
+
+      // ── 캐릭터 스폰(50,62, Proto25DScreen.jsx INITIAL_LEFT_PCT/TOP_PCT)에서
+      // 시작해, 매 구간 장애물(OBSTACLES_REF)을 벗어난 지점만 골라 dx/dy가
+      // 하나의 축으로만 뚜렷하게 갈리게 한다(직교 이동 — direction 판정이
+      // "명백히" 그 방향인지 헷갈리지 않게). ──
+      // (1) 오른쪽(dy=0) — 62행은 x∈[27,70] 구간이 OBSTACLES_REF 전부와 겹치지
+      //     않는다(bench x0=27 밖, tree x0=70 밖) — 50→65는 그 구간 안.
+      const rightTarget = worldToPx(65, 62)
+      await page.mouse.click(rightTarget.x, rightTarget.y)
+      const walkingAfterRight = await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking'
+      ), { timeout: 2000 })
+      r.check(`${name} 항목1 — 오른쪽 탭 직후 phase가 walking으로 전이됨`, !!walkingAfterRight)
+      const directionRight = await character.getAttribute('data-character-direction').catch(() => null)
+      r.check(`${name} 항목1 — 오른쪽(dx>0, dy=0) 탭 → direction이 side`, directionRight === 'side', `direction=${directionRight}`)
+      const markupWhileWalkingRight = await character.evaluate((el) => el.outerHTML).catch(() => '')
+      r.check(
+        `${name} 항목1 — v2가 비활성이라 일반 걷기는 facing이 갱신되지 않음(scaleX(-1) 없음, 이모지 모드는 좌우 미러 안 함)`,
+        !markupWhileWalkingRight.includes('scaleX(-1)'),
+      )
+      const idleAfterRight = await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
+      ), { timeout: 3000 })
+      r.check(`${name} 항목1 — 도착 후 phase가 idle로 복귀`, !!idleAfterRight)
+
+      // (2) 아래(dx=0, x=65 유지) — x=65 열은 y∈[62,68) 구간이 shrub-se
+      //     (x0=64,y0=68)보다 위쪽이라 전부 비어 있다 — 62→66은 그 구간 안.
+      const belowTarget = worldToPx(65, 66)
+      await page.mouse.click(belowTarget.x, belowTarget.y)
+      const walkingAfterBelow = await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking'
+      ), { timeout: 2000 })
+      r.check(`${name} 항목2 — 아래쪽 탭 직후 phase가 walking으로 전이됨`, !!walkingAfterBelow)
+      const directionBelow = await character.getAttribute('data-character-direction').catch(() => null)
+      r.check(`${name} 항목2 — 아래(dx=0, dy>0) 탭 → direction이 front`, directionBelow === 'front', `direction=${directionBelow}`)
+      const idleAfterBelow = await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
+      ), { timeout: 3000 })
+      r.check(`${name} 항목2 — 도착 후 phase가 idle로 복귀`, !!idleAfterBelow)
+
+      // (3) 위(dx=0, x=65 유지) — x=65 열은 y∈[50,66] 구간에 어떤 장애물도
+      //     없다(tree-plaza-ne x1=62, demo-tree x0=70 둘 다 65를 비껴감).
+      const aboveTarget = worldToPx(65, 50)
+      await page.mouse.click(aboveTarget.x, aboveTarget.y)
+      const walkingAfterAbove = await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking'
+      ), { timeout: 2000 })
+      r.check(`${name} 항목3 — 위쪽 탭 직후 phase가 walking으로 전이됨`, !!walkingAfterAbove)
+      const directionAbove = await character.getAttribute('data-character-direction').catch(() => null)
+      r.check(`${name} 항목3 — 위(dx=0, dy<0) 탭 → direction이 back`, directionAbove === 'back', `direction=${directionAbove}`)
+      const idleAfterAbove = await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
+      ), { timeout: 3000 })
+      r.check(`${name} 항목3 — 도착 후 phase가 idle로 복귀`, !!idleAfterAbove)
+
+      // ── 도착(idle) 후에도 direction은 걷기 중 마지막 값을 그대로 유지
+      // (onArrive는 phase만 idle로 바꿀 뿐 direction을 건드리지 않음) ──
+      const directionAfterArrival = await character.getAttribute('data-character-direction').catch(() => null)
+      r.check(`${name} — 도착 후에도 direction이 마지막 걷기 방향(back)을 그대로 유지`, directionAfterArrival === 'back', `direction=${directionAfterArrival}`)
+
+      // ── 이 작업(direction/facing 배선)이 emoji 폴백 글리프 자체는 전혀
+      // 바꾸지 않았음을 재확인(회귀 가드) ──
+      const glyphText = await page.locator('[data-proto-character-glyph]').textContent().catch(() => null)
+      r.check(`${name} — 세 번의 방향 전환 후에도 emoji 글리프는 여전히 🚶(idle/walking 공통)`, glyphText === '🚶', `glyph=${JSON.stringify(glyphText)}`)
+
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }
 }
