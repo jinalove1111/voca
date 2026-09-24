@@ -1795,3 +1795,64 @@ walk-bob CSS 애니메이션(크기에 비례해 진폭 증가)을 반영한 허
 상세 배경은 `handoff.md` 2026-09-25(178차) §7,
 `docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md` §15.7
 참고.
+
+## 관련 항목: Paul Town 2.5D 학생 파일럿 직전 품질 정리 신규 스위트 (2026-09-25, 179차)
+
+179차 세션이 랜덤 경로 property 테스트에서 실제 pathfinding 결함(D1
+— string-pulling이 셀 인덱스 공간에서 직선시야를 판정해 지름길 leg가
+장애물 모서리를 최대 ~0.3% world-% 스칠 수 있던 문제)을 발견·수정한
+과정에서 신규/확장된 스위트다. 상세 근본원인·수정 내용은 `handoff.md`
+2026-09-25(179차) §2 참고.
+
+| 스크립트/스펙 | 단언 수 | 성격 |
+|---|---|---|
+| `scripts/testProto25dPathRandom.mjs`(신규) | 16 | mulberry32 결정론적 시드(20260925) 랜덤 (start,target) 100쌍 + 스트레스 1000쌍(시드+1)으로 `walkGrid.js`/`pathfinding.js`를 property 테스트. 각 leg를 1% 간격(101샘플)으로 세그먼트 샘플링해 장애물 엄격 내부 침입 0건을 기대하고, 994번 쌍(스트레스 i=994) 고정 좌표 결정적 회귀 케이스를 포함한다. `characterSpriteContract.js`의 방향-미러 계약도 함께 검증. |
+| `scripts/testProto25dWalkGrid.mjs`(확장, 28→37) | 37 | 기존 28단언(정상 목적지 보존/clamp/장애물 회피/결정론 등)에 sub-cell 오프셋 + 장애물 모서리 인접 시나리오 9단언을 추가 — 위 `testProto25dPathRandom.mjs`가 찾은 world-space LOS 버그와 같은 근본 원인을 다른 고정 좌표로 재현하는 회귀 방지 케이스. |
+| `scripts/testProto25dSpriteAdapter.mjs`(회귀 재확인, 50→70) | 70 | 2026-09-24 등록 당시 50단언이었으나, 179차 Q1(프레임 cadence 단위 시간 락) + Q2(@2x 실패 시 1x 강등 재시도 후 이모지 폴백) 수정으로 관련 SOURCE 단언이 추가돼 70단언으로 늘었다(커밋 `09fe5a62`). 2026-09-25 본 세션에서 `node scripts/testProto25dSpriteAdapter.mjs` 직접 실행해 70/70 PASS 재확인. |
+| `scripts/testProto25dSpriteContract.mjs`(회귀 재확인) | 177 | 179차 변경(캐릭터 cadence/degrade 로직 수정)이 기존 스프라이트 계약을 깨지 않는지 회귀 재확인. |
+| `tests/e2e/townProto25d.spec.mjs` S14(전환 행렬, 신규) | 52 | 179차 Phase 2, 커밋 `4982d933`. |
+| `tests/e2e/townProto25d.spec.mjs` S15(@2x 강등 실측, 신규) | 13 | 179차 Phase 7, 커밋 `b5430e9e` — Q2에서 단위 테스트로만 검증됐던 "@2x만 실패 → 1x 강등 렌더"/"@2x+1x 모두 실패 → 이모지"의 두 경로를 실제 브라우저에서 검증. |
+
+측정 방법 메모: 위 랜덤/property 테스트는 Math.random이 아니라
+mulberry32 PRNG를 고정 시드로 사용해 실패 시에도 100% 재현 가능하다
+(시드+쌍 번호만 기록하면 동일 입력을 재생성할 수 있음) — 이 저장소의
+기존 결정론적 테스트 관례(`CLAUDE.md` 규칙 15 "회귀가 의심되면 먼저
+FAIL을 재현해 확인")를 property 테스트에도 동일하게 적용한 것이다.
+`testProto25dPathRandom.mjs`가 994번 쌍에서 실측으로 결함을 재현·확정한
+사례가 정확히 이 패턴이다.
+
+Flake 재현성 분석(179차 Phase 5): 수정 후 dist에서
+`tests/e2e/townProto25d.spec.mjs`를 독립적으로 5회 연속 재실행 —
+매회 379/379 PASS, 0 FAIL(재현 가능한 flake 없음). S14 개발 중
+S12에서 1회 관측된 Playwright 타임아웃은 5회 재실행 어디에서도
+재현되지 않아 일회성 인프라 이슈로 분류했다(코드/테스트 수정 없음).
+S14(52) 포함 379개 + S15(13) = 프로토타입 E2E standalone 합계
+392/392 PASS.
+
+Phase 3(모바일 실기기 대응 측정, 4개 뷰포트 11/11 PASS)은 별도 신규
+스위트가 아니라 기존 `tests/e2e/townProto25d.spec.mjs`의 뷰포트별
+측정 섹션을 재확인한 것이며, 측정값은
+`docs/design/town/PROTO25D_PILOT_READINESS_2026-09-25.md` §3과
+`handoff.md` 2026-09-25(179차) §4에 기록했다.
+
+Phase 6 코드품질 리뷰(11건 발견, 행동 변화 없는 정리 5건 적용, 커밋
+`193b1e42`)와 Phase 8 독립 검토(pathfinding 수정/degrade 로직/aria
+배치/assertion 무결성/레지스트리 일치/작업 범위 전부 CONFIRMED) 상세는
+`handoff.md` 2026-09-25(179차) §3.1 참고.
+
+전체 회귀 결과(179차): `npm run build`(HEAD `b5430e9e`/`01450a0d`)
+PASS·경고 0. `npm run verify:all`(HEAD `b5430e9e`) "ALL DOMAINS:
+PASS", 142 스위트 PASS/0 FAIL(약 28분, 위 신규 스위트 전부 포함).
+`npm run verify:e2e`(전체 1720단언 기준) — run 1(`b5430e9e`)
+1718/1720(S15 타이밍 이슈 2건, 커밋 `01450a0d`로 수정 — 제품 코드
+무변경), run 2(`01450a0d`) 1718/1720(S15는 PASS로 전환, 대신
+`[town-v2] S16[390x844,mouse] 자석 드래그 배치 항목17`에서 간헐 FAIL
+2건 — 179차가 손대지 않은 기존 V2 코드, `handoff.md` 179차 §6.1과
+`BLOCKERS.md` 참고), run 3(`01450a0d`, 2026-09-25 05:38–05:53 KST)
+**1720/1720 PASS, 0 FAIL, 0 SKIP, 미mock 요청 0** — S15 PASS, V2
+S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
+`DECISIONS_PENDING.md`로 이관). 3회 전부 완료. Vercel Preview(HEAD
+`b5430e9e`, 배포 `6646333620`) 에이전트 GET-only 확인 완료 — 200,
+로그인 화면 렌더, v2 스프라이트/degrade 속성/region 라벨 포함 청크,
+`paul-*.png` 16개 200 `image/png`, 저장된 플래그
+없음. 상세는 `handoff.md` 179차 §6에 기록했다.

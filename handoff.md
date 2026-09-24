@@ -1,42 +1,320 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-25 (178차 — **Paul 스프라이트 walk-side-b 프레임
-교체(v2)**: 운영자가 2026-09-25 새로 전달한 측면 걷기 렌더 2장 중 1장
-(`12_54_37 AM (1)`)은 art/composition 판단으로 미채택(**정정**: 초기
-보고의 "좌측/하단 잘림" 클리핑 근거는 PIL `Image.getbbox()`를 RGBA에
-그대로 적용해 alpha=0 픽셀까지 포함한 결과였고, alpha>16 잉크 bbox
-기준으로는 (80,18)–(1004,1431)로 여백 좌80/우20/하105px 확보 — 실제
-클리핑 아님. 운영자가 walk-side-a를 유지하고 (2)를 채택한 결정은
-구도상 판단으로 유효), 나머지 1장(`12_54_38 AM (2)`, sha256
-`23c4a79f…`)이
-한쪽 발 지지 + 반대쪽 다리를 뒤로 굽혀 든 중간 스트라이드 자세로
-신규 `walk-side-b` 채택. 기존 `walk-side-a`(08_25_58, 넓은 스트라이드)
-는 무변경 — 새 페어링은 a↔b-v2이며 신규 두 장끼리의 페어링이 아니다.
-신규 파일 `paul-walk-side-b-v2.png`+`@2x`를 동일 고정 스케일
-`0.08384`/발 접지선 y=127/중심 x=48로 정규화해 설치, 기존
-`paul-walk-side-b.png`+`@2x`는 디스크에 보존하되 레지스트리에서 더 이상
-import되지 않아 dist에는 미포함. 코드 변경은
-`PAUL_SPRITE_FILES['walk-side-b']` 매핑 값 1줄뿐 — frame id
-`walk-side-b`, 앵커(`footAnchor {48,128}`), `frameDurationMs 150`,
-미러 규칙(facing=left만 `scaleX(-1)`) 전부 무변경. 정면/후면 걷기,
-벤치, pathfinding, depth/shadow, 캐릭터 크기 무변경. 플래그
-`paulTownV1`/`paulTownV2`/`paulTown2_5d` 전부 `false` 유지, Production
-WRITE 0, PR #62 OPEN/Draft 유지, 체크 전부 통과 후 단일 커밋 예정.
-`testPaulSpriteAssets`/`testPaulSpriteIngest`/`testBundleBudget`을 v2
-파일명 기준으로 조정하고 레거시 보존 케이스를 추가, E2E S12를 확장해
-좌/우 걷기에서 frame id와 src 파일명이 a↔b-v2로 교대하는지 및
-크기/발선 안정성을 검사, S13에 측면 걷기 프레임 정지 케이스 추가.
-검증 완료(2026-09-25 01:55–02:42 KST): `npm run build` PASS,
-`npm run verify:all` ALL DOMAINS PASS(141 스위트), `npm run verify:e2e`
-1655 PASS/0 FAIL, `townProto25d.spec.mjs` standalone 327/327
-PASS(S12/S13 포함), `testPaulSpriteAssets` 125/125·
-`testPaulSpriteIngest` 132/132·`testBundleBudget` 32/32 등 전부 PASS.
-로컬 뷰포트 스크린샷 리드 검수 완료. Vercel Preview 에이전트 GET-only
-확인 완료(커밋 `5d2faf29` push, 배포 `6644346180` success, 16개
-`paul-*` 자산 200 OK, `paul-walk-side-b-v2` 청크 격리·레거시 자산
-미참조 실측 확인 — §7), **이어서 운영자가 실기기에서 직접 로그인해
-`paulTown2_5d` ON 상태로 좌/우 걷기 `walk-side-a`↔`paul-walk-side-b-v2`
-전환을 육안 확인 완료(§8)**.
-177차 이하 보존)_
+_최종 갱신: 2026-09-25 (179차 — **Paul Town 2.5D 프로토타입 학생 파일럿
+직전 품질 정리(8h 자율 세션, 완료)**: `paulTown2_5d`(기본 `false`)
+프로토타입을 학생 파일럿에 앞서 다각도로 재검토했다. read-only 코드
+리뷰(Phase 1)에서 0 결함/1 리스크(Q1), 코드품질 감사(Phase 4)에서 0
+결함/5 리스크를 확인하고 그중 3건(Q1 프레임 cadence 단위 시간 락, Q2
+@2x 실패 시 이모지 전 1x 강등 재시도, Q3 오버레이
+`role="region"`+`aria-label`)을 커밋 `09fe5a62`로 즉시 수정, 접근성
+2건(키보드 경로, 포커스 트랩)은 `DECISIONS_PENDING.md`로 이관, 나머지
+2건(비메모이즈 recompute, preload 미취소)은 알려진 한계로 기록했다.
+랜덤 경로 property 테스트(Phase 5)에서 **실제 결함 D1**을
+발견·수정했다(커밋 `a3824b1f`) — pathfinding string-pulling이 셀
+인덱스 공간이 아니라 world 좌표 공간에서 직선시야를 판정하도록
+교체했고, 회귀 방지로 `testProto25dPathRandom`(신규 16단언) +
+`testProto25dWalkGrid`(28→37단언)를 등록했다. 모바일 실기기 대응
+측정(Phase 3, 4개 뷰포트)은 11/11 PASS, 관측 2건[O1 HUD 탭 흡수, O2
+상단 경계 넘침]을 기록했다. E2E 전환 행렬(Phase 2, S14, 52단언)을
+커밋 `4982d933`으로 추가했고, `@2x` 실패 시 1x 강등 → 그마저 실패
+시 이모지 폴백 로직을 실제 브라우저에서 검증하는 E2E S15(13단언)를
+커밋 `b5430e9e`로 추가해 Q2 수정을 E2E 레벨에서 실측 확인했다.
+코드품질 리뷰(Phase 6)는 11건을 찾아 행동 변화 없는 정리 5건을 커밋
+`193b1e42`(스테일 주석 정리, 매직 넘버를 named 상수
+`SPRITE_MANIFEST_VERSION`/`SCENE_OBJECT_SHADOW_HEIGHT_RATIO`로 추출
+등)로 적용했고, 의도된 중복(의존성 0 모듈 간, `frameIndexAt`)은
+문서화한 채 그대로 유지했다. Phase 5 flake 재현성 분석: 수정 후
+dist에서 프로토타입 E2E 스펙을 독립적으로 5회 연속 재실행해 매번
+379/379 PASS·0 FAIL(재현 가능한 flake 없음) — S14 개발 중 S12에서
+관측된 Playwright 타임아웃 1건은 5회 재실행 어디서도 재현되지 않아
+일회성 인프라 이슈로 분류했다. Phase 8 독립 검토(별도 에이전트)가
+pathfinding 수정(방향/경계/코너/범위/결정론/null 계약 전부), degrade
+로직(무한루프 없음, 한 번 @2x가 실패하면 세션 내내 전역으로 유지되는
+"sticky-global" 폴백 — 의도된 안전장치로 확인, 알려진 한계로
+문서화), aria 배치, assertion 약화/스킵 0건, 레지스트리 단언 수와
+실행 결과 일치, 작업 범위 청결을 전부 CONFIRMED 판정했고, 문서 수정
+2건(SpriteAdapter 단언 수 60→70 정정, 파일럿 준비 문서에 @2x
+강등이 S15로 E2E 검증됐음을 명시)을 지시해 이 갱신에 반영했다. 최종
+스위트 수치: `testProto25dSpriteAdapter` 70, `testProto25dSpriteContract`
+177, `testProto25dPathRandom` 16, `testProto25dWalkGrid` 37,
+`testPaulSpriteIngest` 132, `testPaulSpriteAssets` 125,
+`testBundleBudget` 32, 프로토타입 E2E standalone 392/392(379 + S15
+13). 커밋 `01450a0d`(테스트 전용, S15 타이밍 수정)를 이어서 추가했다
+— 제품 코드 변경 없음. `npm run build`(HEAD `b5430e9e`/`01450a0d`)
+PASS·경고 0, `npm run verify:all`(HEAD `b5430e9e`) "ALL DOMAINS:
+PASS" 142 스위트 PASS/0 FAIL(약 28분), `npm run verify:e2e`는 run
+1(`b5430e9e`) 1718/1720(S15 타이밍 이슈 2건, `01450a0d`로 수정),
+run 2(`01450a0d`) 1718/1720(S15는 PASS로 전환, 대신 이 세션이
+손대지 않은 V2 자석 드래그 배치 테스트에서 간헐 FAIL 2건 — §6.1
+"기존 CI/E2E 알려진 간헐 실패" 참고), run 3(`01450a0d`,
+05:38–05:53 KST) **1720/1720 PASS·0 FAIL·0 SKIP·미mock 요청 0** —
+S15 PASS, V2 S16도 PASS해 run 2의 실패가 간헐적이었음을 확인했다
+(§6.1). 3회 전부 완료. Vercel Preview(HEAD `b5430e9e`,
+배포 `6646333620`) 에이전트 GET-only 확인 완료 — 200, 로그인 화면
+렌더, v2 스프라이트/degrade 속성/region 라벨 포함, `paul-*.png` 16개
+200 `image/png`, 저장된 플래그 없음. Production WRITE 0, DB 변경 0,
+플래그 전부 `false` 유지, PR #62 OPEN/Draft 유지(origin 최신 커밋
+`01450a0d`), 보호 대상 17개 미추적 파일 무변경, GitHub Actions
+워크플로 무변경, 기존 assertion 약화 0건. 신규 문서
+`docs/design/town/PROTO25D_PILOT_READINESS_2026-09-25.md`(기능/한계/
+모바일 확인표/에셋출처/롤백/운영자 5분 체크리스트), 저장소 루트
+`DECISIONS_PENDING.md`(결정 대기 10항목 — V2 S16 자석 드래그 간헐
+실패 재현/분리 항목 신규 추가)·`BLOCKERS.md`(활성 블로커 없음, V2
+간헐 실패는 "블로커 아님 — 기록"으로 별도 기재) 신설. 남은 것은
+`npm run verify:e2e` run 3 결과 한 칸뿐이다(§6). 상세는 아래 179차
+섹션. 178차 이하 보존)_
+
+## 2026-09-25 (179차) — Paul Town 2.5D 프로토타입 학생 파일럿 직전 품질 정리(8h 자율 세션)
+
+### 0. 안전 요약
+
+- 세션 시작 HEAD `81f853e5`, 워크트리 `wt-clean-pr`, 브랜치
+  `feat/paul-town-v2-clean-pr`, PR #62 OPEN/Draft 확인(Phase 0).
+- Production DB WRITE 0, DDL 0. 플래그
+  `paulTownV1`/`paulTownV2`/`paulTown2_5d` 전부 `false` 무변경.
+- 세션 시작 시점 보호 대상(다른 작업의 미추적 파일) 17개는 이 세션
+  동안 손대지 않았다.
+- Vercel Preview 정책 무변경(SSO 유지, 에이전트는 GET-only). 운영자가
+  2026-09-25 실기기에서 Preview 접근 + leg 애니메이션을 직접 확인한
+  기록은 178차 §8에 이미 있다(이 세션이 새로 확인한 것 아님).
+- GitHub Actions 워크플로 파일 무변경. 기존 assertion을 완화/삭제한
+  케이스 0건 — 이번 세션에서 발견한 문제는 모두 assertion 강화 또는
+  실제 코드 수정으로 대응했다(§2).
+- 이 절을 쓴 문서 담당 에이전트는 코드/이미지를 직접 만들지 않았다 —
+  `handoff.md`/`TESTING.md`/신규 설계 문서/`DECISIONS_PENDING.md`/
+  `BLOCKERS.md`/`.ai-status/` 상태 파일만 갱신했고 git 명령은
+  실행하지 않았다. 아래 §1~§7의 구현/검증 작업 자체는 같은 세션에서
+  병행한 다른 에이전트(리뷰/E2E/모바일 측정/감사/수정 담당)가
+  수행했다.
+
+### 1. 진행 현황(Phase별)
+
+| Phase | 내용 | 상태 |
+|---|---|---|
+| Phase 0 | 워크트리/브랜치/PR 상태 확인, 베이스라인 스위트 14종 PASS, build PASS, 보호 대상 17개 미추적 파일 무변경 확인 | 완료 |
+| Phase 1 | read-only 코드 리뷰 | 완료 — 0 결함, 1 리스크(런타임 프레임 cadence가 단위 시간에 고정 락 없음) → Q1로 처리, 커밋 `09fe5a62`로 수정 |
+| Phase 2 | E2E 전환 행렬(S14) | 완료 — 52단언, 커밋 `4982d933` |
+| Phase 3 | 모바일 실기기 대응 측정(4 뷰포트) | 완료 — §4 |
+| Phase 4 | read-only 코드품질 감사 | 완료 — 0 결함, 5 리스크 → §3 |
+| Phase 5 | 랜덤 경로 property 테스트 + flake 재현성 분석 | 완료 — 실결함 D1 발견·수정(커밋 `a3824b1f`) → §2, flake 분석 §6 |
+| Phase 6 | 코드품질 리뷰 | 완료 — 11건 발견, 행동 변화 없는 정리 5건 적용(커밋 `193b1e42`) → §3.1 |
+| Phase 7 | E2E 추가 검증(S15) — @2x 강등 로직 실측 검증 | 완료 — 13단언, 커밋 `b5430e9e` |
+| Phase 8 | 독립 검토(별도 에이전트) | 완료 — 전 항목 CONFIRMED, 문서 수정 2건 지시(이 갱신에 반영) |
+
+### 2. 결함 D1 — pathfinding 지름길이 장애물 모서리를 스칠 수 있던 문제
+
+Phase 5(랜덤 경로 property 테스트, `testProto25dPathRandom.mjs`
+신규)가 mulberry32 결정론적 시드(20260925) 무작위 (start,target)
+100쌍 + 스트레스 1000쌍(시드+1)을 넣어 각 leg를 1% 간격 101샘플로
+세그먼트 샘플링해 장애물 침입을 검사한 결과, 스트레스 1000쌍 중 10개
+샘플이 장애물(`tree-plaza-ne`, x:[56,62] y:[48,54])을 최대 ~0.3%
+world-% 얕게 침입했다(결정적 재현: 시드 고정, stress i=994,
+start≈{x:62.2329,y:33.2526}, target≈{x:68.0868,y:97.3811}).
+
+근본 원인: `walkGrid.js`의 `nearestWalkablePoint`는 정상 좌표를 그대로
+보존(셀 중심으로 스냅하지 않음, 설계 의도대로 정상)하는데,
+`pathfinding.js`의 `simplifyCellPath`/`hasLineOfSight`는 오직 셀
+인덱스 공간(정수 col/row)에서만 직선시야를 판정했다. 실제로 걷는
+첫/끝 구간(`correctedStart`/`correctedEnd`의 정확한 좌표)은 자기 셀
+중심에서 최대 절반 셀까지 벗어나 있을 수 있어, 인덱스 공간 직선과
+실제 world 직선이 달라질 수 있었다.
+
+수정(커밋 `a3824b1f`, 같은 날): string-pulling을 셀 인덱스 공간이
+아니라 WORLD 좌표 공간(정확한 보정 시작/도착점 + 중간 셀 중심으로
+구성한 점 목록)에서 수행하도록 변경하고, 직선시야 판정 자체도 점
+샘플링이 아니라 선분–사각형(Liang-Barsky 슬랩 클리핑) 대수적 정확
+교차 계산으로 교체했다(경계 접촉은 허용). 1차로 고정 간격 world 점
+샘플링을 시도했으나 실측으로 더 좁은(~0.03% world-%) 별도 코너 스침
+회귀가 새로 드러나, 샘플 간격에 의존하지 않는 정확 계산으로 최종
+정정했다(`pathfinding.js`의 `hasLineOfSightWorld` 헤더 주석 참고).
+
+회귀 방지: `testProto25dPathRandom.mjs`(신규, 16단언 — 100쌍 검증
+10 + 스트레스 2 + 994번 쌍 결정적 회귀 4) + `testProto25dWalkGrid.mjs`
+(9단언 추가, 총 37단언 — 코너 인접 시작점/도착점 시나리오). 둘 다
+`tests/harness/registry.mjs`에 `extra:false`로 등록돼
+`npm run verify:all` 기본 실행에 포함된다. pathfinding/walkGrid 외
+depth/shadow/벤치/캐릭터 크기는 무변경.
+
+### 3. Phase 4 코드품질 감사 — 0 결함, 5 리스크 및 조치
+
+| 리스크 | 내용 | 조치 |
+|---|---|---|
+| 키보드 경로 없음 | 탭/클릭 전용, 키보드로 이동 불가 | `DECISIONS_PENDING.md`로 이관(파일럿 전 결정 필요) |
+| 오버레이 미고지/포커스 트랩 없음 | 스크린리더에 오버레이가 알려지지 않고, 포커스가 밖으로 샐 수 있음 | 전자는 Q3로 즉시 수정(아래), 포커스 트랩은 `DECISIONS_PENDING.md`로 이관 |
+| @2x 실패 시 즉시 이모지 폴백 | 2x 로드 실패 시 1x 재시도 없이 바로 이모지로 대체 | Q2로 즉시 수정(아래) |
+| scene layer recompute 비메모이즈 | 매 렌더마다 씬 레이어를 다시 계산 | 알려진 한계로 기록(파일럿 규모에서는 성능 영향 미미 판단) |
+| preload 취소 없음 | 프리로드 요청이 취소되지 않음 | 알려진 한계로 기록 |
+
+**Q1**: 런타임 프레임 cadence(스프라이트 애니메이션 프레임 전환
+주기)에 단위 시간 락을 추가(커밋 `09fe5a62`) — Phase 1에서 식별된
+"고정 락 없음" 리스크를 수정한 것이며 알려진 한계로만 남겨두지
+않았다. `testProto25dSpriteAdapter.mjs`에 관련 단언이 추가돼 단언
+수가 50→70으로 늘었다(Q1 cadence lock + Q2 degrade 관련 단언 포함,
+2026-09-25 본 세션에서 직접 실행해 70/70 PASS 확인).
+
+**Q2**: 스프라이트 @2x 이미지 로드 실패 시 즉시 이모지로 넘어가던
+것을, 먼저 1x로 한 단계 강등해 재시도하고 그래도 실패하면 이모지로
+대체하도록 수정(커밋 `09fe5a62`). 처음에는 단위 테스트로만
+검증됐으나, 이후 E2E S15(커밋 `b5430e9e`, 13단언)가 실제 브라우저에서
+"@2x만 실패 → 강등된 1x 렌더", "@2x+1x 모두 실패 → 이모지"의 두
+경로를 실측 검증했다(§7). Phase 8 독립 검토가 이 강등 로직에
+무한루프가 없음과, 한 번 @2x가 실패하면 세션 내내 전역으로 강등
+상태가 유지되는("sticky-global") 폴백 동작이 의도된 안전장치임을
+확인했다 — 새로운 결함이 아니라 알려진 한계로
+`docs/design/town/PROTO25D_PILOT_READINESS_2026-09-25.md` §2에
+추가했다.
+
+**Q3**: 프로토타입 오버레이에 `role="region"`+`aria-label`을 추가해
+스크린리더에 최소한의 영역 정보를 제공(같은 커밋 `09fe5a62`). 포커스
+트랩은 별도이며 미구현 — `DECISIONS_PENDING.md`.
+
+### 3.1 Phase 6 코드품질 리뷰 — 11건 발견, 행동 변화 없는 정리 5건 적용
+
+코드품질 리뷰(Phase 6)가 11개 항목을 찾았다. 그중 동작을 바꾸지 않는
+정리 5건을 커밋 `193b1e42`로 적용했다 — 스테일 주석 정리, 매직
+넘버를 named 상수(`SPRITE_MANIFEST_VERSION`,
+`SCENE_OBJECT_SHADOW_HEIGHT_RATIO`)로 추출 등. 나머지 항목 중 의존성
+0 모듈 간 의도된 중복과 `frameIndexAt`의 의도된 중복은 리뷰에서
+"제거하지 않는 편이 낫다"(중복 제거가 모듈 간 불필요한 결합을
+만든다는 판단)고 결론 내려 코드에 그대로 두고 그 의도를 문서화했다.
+
+### 4. Phase 3 모바일 실기기 대응 측정 — 11/11 PASS × 4 뷰포트
+
+측정 뷰포트: 360×640, 390×844, 412×915, 1280×800(데스크톱 대조군).
+4개 전부 11/11 PASS. 수치:
+
+- 도착 오차 0(모든 뷰포트).
+- 프레임 지속 시간 ≤141ms(bob/걷기 프레임 전환).
+- A/B 프레임 전환 횟수: side 걷기에서 12/8회(경로별 측정).
+- depth scale: 0.9714(360×640) / 0.5643(390×844) / 1.1765(412×915) —
+  전부 `depthScale(y)` 계산식과 정확히 일치.
+- 발 접지선 vs 그림자 중심 Δ0px(4개 뷰포트 전부).
+- z-index가 depthKey 기준 뒤/앞 배치와 정확히 일치.
+- 앉기 `seatPct`가 벤치 seat 기준 소수점 4자리까지 일치.
+- 가장자리 탭이 `[2,98]` world-%로 clamp.
+- 뷰포트 높이 변화(모바일 주소창 접힘/펼침 등)에도 world-% 위치 유지.
+- reduced-motion에서 side 걷기가 단일 프레임(`walk-side-a`)으로
+  고정, bob 애니메이션 없음.
+
+관측(결함 아님, 기록용):
+
+- **[O1]** 모바일 정보 토글 HUD 버튼(대략 x 12–231, y 12–56px)이 그
+  영역의 탭을 이동이 아닌 HUD 열기로 흡수한다.
+- **[O2]** world y≈4 부근에서 캐릭터 bounding box가 뷰포트 상단을
+  넘어선다(하단 기준 앵커 스케일 특성).
+
+두 관측 모두 `docs/design/town/PROTO25D_PILOT_READINESS_2026-09-25.md`
+§2와 `DECISIONS_PENDING.md`에 기록했다.
+
+### 5. 커밋
+
+| 커밋 | 내용 |
+|---|---|
+| `a3824b1f` | pathfinding world-space LOS 수정(D1 결함 수정) — §2 |
+| `09fe5a62` | Q1(cadence 단위 시간 락)/Q2(@2x→1x 강등 재시도)/Q3(오버레이 region 라벨) — §3 |
+| `4982d933` | E2E S14(전환 행렬, 52단언) — Phase 2 |
+| `193b1e42` | Q4 정리 — 스테일 주석, `SPRITE_MANIFEST_VERSION`/`SCENE_OBJECT_SHADOW_HEIGHT_RATIO` 상수화 등 행동 변화 없는 정리 5건(Phase 6) — §3.1 |
+| `b5430e9e` | E2E S15(@2x 강등 실측 검증, 13단언) — Phase 7 |
+| `01450a0d` | test: S15가 1x 재로드를 기다리도록 타이밍 수정(제품 코드 무변경) — §6 run 1 FAIL 원인 조치 |
+
+세션 종료 시점 이후 추가 커밋이 발생하면 이 표에 이어서 기록한다
+(append). HEAD `01450a0d`가 origin 최신(push 완료).
+
+### 6. 검증 결과
+
+Phase 5 flake 재현성 분석: 수정 후 dist에서
+`tests/e2e/townProto25d.spec.mjs`를 독립적으로 5회 연속 재실행 —
+매회 379/379 PASS, 0 FAIL(재현 가능한 flake 없음). S14 개발 중 S12에서
+1회 관측된 Playwright 타임아웃은 5회 재실행 어디에서도 재현되지
+않아 일회성 인프라 이슈로 분류했다(코드/테스트 수정 없음).
+
+| 스위트 | 단언/결과 |
+|---|---|
+| `testProto25dPathRandom.mjs`(신규) | 16단언 PASS |
+| `testProto25dWalkGrid.mjs`(28→37) | 37단언 PASS |
+| `testProto25dSpriteAdapter.mjs`(50→70, Q1 cadence lock + Q2 degrade 단언 반영) | 70단언 PASS |
+| `testProto25dSpriteContract.mjs` | 177단언 PASS |
+| `testPaulSpriteIngest.mjs` | 132단언 PASS |
+| `testPaulSpriteAssets.mjs` | 125단언 PASS |
+| `testBundleBudget.mjs` | 32단언 PASS |
+| `tests/e2e/townProto25d.spec.mjs` S1–S14(전환 행렬 신규 52 포함) | 379/379 PASS(5회 연속 재실행 전부) |
+| `tests/e2e/townProto25d.spec.mjs` S15(신규, @2x 강등 실측) | 13/13 PASS(run 2부터, run 1 원인은 아래) |
+| 프로토타입 E2E standalone 합계 | **392/392 PASS**(379 + 13) |
+
+**`npm run build`**(HEAD `b5430e9e`/`01450a0d`): PASS, 경고 0.
+
+**`npm run verify:all`**(HEAD `b5430e9e`): "ALL DOMAINS: PASS", 스위트
+142 PASS / 0 FAIL(위 표의 `testProto25dPathRandom` 등 신규 스위트
+포함), 약 28분.
+
+**`npm run verify:e2e`** — 전체 회귀 스위트(1720개 단언 기준) 3회
+실행 결과를 있는 그대로 기록한다(선택적 재실행으로 숨기지 않음):
+
+| 실행 | HEAD | 결과 | FAIL 내역 |
+|---|---|---|---|
+| run 1 | `b5430e9e` | 1718/1720, 2 FAIL | S15에서 @2x 강등 직후 1x 재로드가 끝나기 전에 스냅샷을 읽음 — 테스트 타이밍 문제(제품 코드 결함 아님), `01450a0d`로 수정 |
+| run 2 | `01450a0d` | 1718/1720, 2 FAIL | `[town-v2] S16[390x844,mouse] 자석 드래그 배치 항목17`(V2 자석 드래그 배치) — **이번 세션에서 손대지 않은 V2 코드**이고 run 1에서는 동일 코드가 PASS했음. 기존에 간헐적으로 관측되던 실패(아래 "기존 CI/E2E 알려진 간헐 실패" 참고), run 2에서는 S15가 PASS로 전환됨 |
+| run 3 | `01450a0d` | 1720/1720, 0 FAIL, 0 SKIP, 미mock 요청 0(2026-09-25 05:38–05:53 KST) | 없음 — S15 PASS, `[town-v2] S16[390x844,mouse] 자석 드래그 배치 항목17`도 PASS해 run 2의 FAIL이 간헐적이었음을 확인 |
+
+3회 실행 결과를 종합하면: 179차가 수정한 항목(S14/S15/pathfinding/
+cadence/degrade)은 3회 전부 안정적으로 PASS했고, V2 S16만 run 2에서
+1회 간헐 FAIL했다가 run 3에서 재현 없이 PASS했다 — 근본 원인 조사는
+`DECISIONS_PENDING.md`의 "V2 S16 항목17 자석 드래그 간헐 실패" 항목에
+남겨뒀다(§6.1).
+
+#### 6.1 기존 CI/E2E 알려진 간헐 실패(179차 세션 범위 밖, 신규 결함 아님)
+
+`[town-v2] S16[390x844,mouse] 자석 드래그 배치 항목17`이 run 2에서
+FAIL했다. 이 테스트는 Paul Town **V2**(`paulTown2_5d`와 완전히
+독립된 별도 실험, `src/config/features.js` 격리 주석 참고)의 자석
+드래그 배치 기능을 검사하며, 179차 세션은 V2 코드를 전혀 수정하지
+않았다 — 동일 코드가 run 1에서는 PASS했다(간헐적, 재현 조건 불명).
+`TESTING.md`의 기존 V2 드래그 측정 관련 노트에도 이 계열의 간헐성이
+이미 기록돼 있다. 이 결함을 179차 세션 범위에서 조사·수정하지 않는다
+— V2 무변경 원칙(`paulTown2_5d`와 독립된 별도 실험이므로 이 세션의
+파일럿 준비 범위 밖) 때문이다. `BLOCKERS.md`에 "활성 블로커 아님 —
+기록"으로, `DECISIONS_PENDING.md`에 별도 세션에서 재현/분리하기 위한
+결정 대기 항목으로 추가했다(§8).
+
+**Vercel Preview**(HEAD `b5430e9e`, 배포 `6646333620`):
+`https://voca-660dzpcs1-jina4926952s-projects.vercel.app` — GET-only
+확인(로그인 없음, Production WRITE 0): 200 응답, 로그인 화면 렌더,
+`Proto25DScreen-BOHDiVxF.js` 청크가 로컬 빌드와 동일하며 v2 스프라이트
+참조 + degrade 속성 + region 라벨을 포함, `/assets/paul-*.png` 16개
+전부 200 `image/png`, `localStorage`에 저장된 플래그 없음(기본값
+유지). `01450a0d`(테스트 전용 변경)용 새 배포가 별도로 존재하며,
+문서 커밋 이후 최종 HEAD 기준으로 재확인 예정.
+
+### 7. 다음 세션 인수 — 첫 명령
+
+```
+cd C:\voca   # 또는 이어서 작업 중인 워크트리
+git log --oneline -7
+```
+
+179차 세션은 build/verify:all/verify:e2e(3회)/Vercel Preview까지
+전부 완료했고 문서화(§0~§8, §6.1)도 전부 마무리됐다 — 다음 세션이
+당장 실행할 검증 명령은 없다. 남은 것은 운영자 결정/확인뿐이다:
+`DECISIONS_PENDING.md`의 10개 항목 중 운영자가 결정한 것이 있으면
+해당 행을 "결정됨"으로 갱신하고 이 절 아래 새 섹션으로 결정
+내용/일시를 append한다. `PROTO25D_PILOT_READINESS_2026-09-25.md` §6의
+운영자 5분 Preview 체크리스트와 §3의 모바일 실기기 확인표(실기기
+열)도 운영자 확인 대상으로 남아 있다.
+
+### 8. 미결정 사항
+
+파일럿 시작 전 운영자 결정이 필요한 10개 항목은 저장소 루트
+`DECISIONS_PENDING.md`에 모아뒀다 — 키보드/스크린리더 경로, 포커스
+트랩, 모바일 HUD 탭 영역 처리, 학생 진입점 + 파일럿 반 지정 시점(및
+기존 Pilot 허용목록과의 상호작용), @3x 자산 여부, cadence 동기화,
+레거시 `walk-side-b` 파일 삭제 여부, Vercel Preview 공유 가능 링크
+여부를 포함한다. sticky-global @2x 강등 폴백은 결정 대기가 아니라
+"알려진 한계"로
+`docs/design/town/PROTO25D_PILOT_READINESS_2026-09-25.md` §2에
+기록했다(§3 Q2 참고). §6에서 발견된 `[town-v2] S16 자석 드래그
+배치 항목17` 간헐 FAIL은 179차 세션이 만든 결함이 아니고 V2는
+`paulTown2_5d`와 독립된 별도 실험이라 이번 세션 범위 밖이므로,
+"V2 S16 항목17 자석 드래그 간헐 실패 — 별도 세션에서 5회 재현/분리"
+항목을 `DECISIONS_PENDING.md`에 10번째로 신규 추가했다(§6.1 참고).
 
 ## 2026-09-25 (178차) — Paul 스프라이트 walk-side-b 프레임 교체(v2): 기존 a 유지 + 신규 무릎 굽힘 자세 b-v2, 원본 보존
 
@@ -484,8 +762,10 @@ id와 완전히 동일 — 새로 고정한 것은 파일명뿐이다.
 5. 플래그 ON일 때만 `Proto25DScreen`에서 매니페스트를 넘기도록 배선.
 6. 번들 예산 확인(스펙 §5-6).
 7. E2E S8/S9 이모지-조건부 케이스 갱신.
-8. §5의 검증 명령 전부 실행 후 이 절의 RESULTS-TBD 표를 실제 결과로
-   갱신.
+8. §5의 검증 명령 전부 실행 후 이 절의 결과표를 실제 결과로 갱신.
+   (실제 이미지 도착 후의 최종 결과는 아래 177차 §7 "검증"에 기록됨 —
+   이 절 §5는 이미지 0장 상태의 구조 검사 결과로 append-only 원칙에
+   따라 그대로 보존한다.)
 
 ## 2026-09-24 (175차) — Paul Town 2.5D 캐릭터 스프라이트 v2 어댑터 구현 완료(Phase 6B): 계약·테스트·휴면 배선·SSR 어댑터 테스트·E2E S11 완료, 실 이미지 0장, `paulTown2_5dSprite` 플래그 미추가 (Production 무접촉)
 
