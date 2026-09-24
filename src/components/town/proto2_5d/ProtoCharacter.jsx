@@ -87,6 +87,13 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { characterScale, characterZIndex } from '../../../utils/town/proto2_5d/depthVisual'
 import { SEAT_FRACTION, SEAT_CONTACT_FRACTION, seatSinkLocalPx } from '../../../utils/town/proto2_5d/benchInteraction'
 import { validateCharacterManifest, resolveCharacterVisual, stateKeyForPhase } from '../../../utils/town/proto2_5d/characterManifest'
+import {
+  validateSpriteManifest,
+  resolveSpriteFrame,
+  spriteFrameSources,
+  spriteStateForPhase,
+  FRAME_SEQUENCE_BY_STATE,
+} from '../../../utils/town/proto2_5d/characterSpriteContract'
 
 const CHARACTER_TRANSFORM_ORIGIN = '50% 100%'
 
@@ -190,6 +197,27 @@ function useSpriteFrameIndex(framesLength, fps, reducedMotion, freezeFrameIndex)
   return frameIndex
 }
 
+// Phase 6B(2026-09-24, v2 스프라이트 어댑터) — characterSpriteContract.js(v2,
+// idle/walk-front/walk-back/walk-side/sit 8프레임 + 방향 계약)를 이 컴포넌트에
+// "휴면" 상태로 연결한다. 오늘 어떤 프로덕션 호출부도 `spriteManifest` prop을
+// 넘기지 않으므로(App.jsx는 Proto25DScreen에 어떤 prop도 넘기지 않는다) 아래
+// v2 분기는 실제로는 항상 타지 않는다 — validateSpriteManifest(undefined).ok는
+// 항상 false이고, resolveSpriteFrame은 그 경우 항상 {kind:'emoji',...}로
+// 폴백한다(characterSpriteContract.js resolveSpriteFrame 헤더 주석).
+//
+// 우선순위 — v2(spriteManifest 유효) > v1(manifest 유효, Phase 6A) > emoji.
+// v1 분기(아래 `isSprite`)와 emoji 분기는 이 작업에서 한 줄도 바꾸지 않는다
+// (재구현 금지 — 이미 72개 유닛 테스트로 검증된 v1 계약을 그대로 둔다).
+//
+// 퍼센트 앵커(anchorOffsetPct) — v1의 spriteOffsetDx/Dy(px, 캔버스 크기를
+// 알아야 계산 가능)와 달리, v2는 characterSpriteContract.js의
+// anchorOffsetPct()가 이미 "캔버스 자신의 크기 대비 %"로 환산해 반환한다.
+// 아래 v2 렌더 분기의 앵커 래퍼가 shrink-wrap된 <img>(width:100%, height:auto)
+// 를 감싸므로, translate(dxPct%, dyPct%)의 %가 그 img 자신의 렌더 크기를
+// 기준으로 계산돼 뷰포트/캔버스 원본 px와 무관하게 항상 정확하다(위 파일
+// 헤더의 Stage 3 스케일 증명과 같은 "퍼센트는 항상 자기 자신의 박스 기준"
+// 원리).
+
 export default function ProtoCharacter({
   phase,
   leftPct,
@@ -206,6 +234,16 @@ export default function ProtoCharacter({
   // "무엇도 재배선하지 않는다"는 이 prop이 실제로 쓰이는 날까지는 100%
   // 사실이다(오늘의 DOM은 이 prop 추가 이전과 완전히 동일).
   manifest,
+  // Phase 6B — 선택적 v2 스프라이트 매니페스트(characterSpriteContract.js
+  // 계약, 위 파일 헤더 "Phase 6B" 주석 참고). 기본값 undefined — 오늘 어떤
+  // 호출부도 넘기지 않는다.
+  spriteManifest,
+  // Phase 6B — 논리 방향('front'|'back'|'side', 기본 'front'). emoji/v1
+  // 분기에서는 전혀 읽지 않는다(v2 렌더 분기 전용) — Proto25DScreen.jsx는
+  // 모든 모드에서 이 prop을 계산해 넘기지만(방향 계산 자체는 이동 로직
+  // 소관이라 항상 최신으로 유지), 시각적으로는 v2가 비활성일 때 아무 효과가
+  // 없다.
+  direction = 'front',
 }) {
   const isWalking = phase === 'walking'
   const isSitting = phase === 'sitting'
@@ -260,6 +298,49 @@ export default function ProtoCharacter({
   useEffect(() => { setSpriteLoadFailed(false) }, [manifest])
   const visual = spriteLoadFailed ? { kind: 'emoji', glyph } : resolvedVisual
   const isSprite = visual.kind === 'sprite'
+
+  // Phase 6B — v2 스프라이트(characterSpriteContract.js). validateSpriteManifest
+  // 는 절대 throw하지 않고(계약), spriteManifest가 undefined/무효면 ok는 항상
+  // false다 — 오늘 어떤 호출부도 spriteManifest를 넘기지 않으므로 이 블록
+  // 전체가 실제로는 항상 emoji 폴백으로 귀결된다(위 파일 헤더 "Phase 6B"
+  // 주석). 훅은 조건부로 호출하지 않는다 — framesLength/fps를 "비활성일 때
+  // 0"으로 계산해 항상 같은 순서로 useSpriteFrameIndex를 호출한다.
+  const spriteValidation = useMemo(() => validateSpriteManifest(spriteManifest), [spriteManifest])
+  const spriteV2StateKey = spriteStateForPhase(phase, direction)
+  const spriteV2FramesLength = FRAME_SEQUENCE_BY_STATE[spriteV2StateKey]
+    ? FRAME_SEQUENCE_BY_STATE[spriteV2StateKey].length
+    : 0
+  const spriteV2Active = Boolean(spriteManifest) && spriteValidation.ok === true
+  const spriteV2Fps = spriteV2Active && spriteManifest.frameDurationMs > 0 ? 1000 / spriteManifest.frameDurationMs : 0
+  const spriteV2FreezeFrameIndex = (spriteV2Active && spriteManifest.reducedMotion && spriteManifest.reducedMotion.freezeFrameIndex) || 0
+  const spriteV2FrameIndex = useSpriteFrameIndex(spriteV2FramesLength, spriteV2Fps, reducedMotion, spriteV2FreezeFrameIndex)
+  const spriteVisual = resolveSpriteFrame({
+    manifest: spriteManifest,
+    validation: spriteValidation,
+    phase,
+    direction,
+    facing,
+    frameIndex: spriteV2FrameIndex,
+    reducedMotion,
+  })
+
+  // 런타임 이미지 로드 실패 폴백(v1의 spriteLoadFailed와 동일 정신, 별도
+  // state — v1/v2가 서로 다른 이미지 소스를 쓰므로 실패 여부도 독립적이어야
+  // 한다). spriteManifest 참조가 바뀌면 새 매니페스트에게 다시 기회를 준다.
+  const [spriteV2LoadFailed, setSpriteV2LoadFailed] = useState(false)
+  useEffect(() => { setSpriteV2LoadFailed(false) }, [spriteManifest])
+  const isSpriteV2 = !spriteV2LoadFailed && spriteVisual.kind === 'sprite'
+
+  // 프리로드(a/b 프레임 교대 시 빈 프레임이 보이지 않도록) — DOM에 삽입하지
+  // 않는다(new Image()는 오프스크린 엘리먼트, 브라우저 캐시에만 적재).
+  useEffect(() => {
+    if (!spriteV2Active || typeof Image === 'undefined') return undefined
+    spriteFrameSources(spriteManifest).forEach((src) => {
+      const img = new Image()
+      img.src = src
+    })
+    return undefined
+  }, [spriteV2Active, spriteManifest])
 
   // anchor-offset 래퍼(sprite 전용) — outer 앵커(translate(-50%,-100%))는
   // "박스 자신의 (w/2,h)가 (leftPct,topPct)로 간다"만 보장하므로, 고정
@@ -346,6 +427,7 @@ export default function ProtoCharacter({
         aria-hidden="true"
         data-proto-character=""
         data-character-phase={phase}
+        data-character-direction={direction}
         className="absolute pointer-events-none"
         style={{
           left: `${leftPct}%`,
@@ -384,8 +466,37 @@ export default function ProtoCharacter({
               들어간다(아래 분기). isSprite는 manifest가 없으면 항상 false
               라(위 "Phase 6A" 주석 블록 참고) 이 분기 자체가 오늘은 절대
               타지 않는다 — emoji 쪽(else)은 이 prop 추가 이전과 완전히
-              동일한 DOM/로직이다. */}
-          {isSprite ? (
+              동일한 DOM/로직이다.
+              Phase 6B — isSpriteV2가 true일 때는 v1/emoji보다 우선해서 이
+              자리에 v2 스프라이트 레이어가 들어간다(맨 위 새 분기). spriteManifest
+              가 없으면 항상 false라(위 "Phase 6B" 주석 블록 참고) 이 분기도
+              오늘은 절대 타지 않는다 — v1/emoji 두 분기는 한 글자도 바뀌지
+              않았다. */}
+          {isSpriteV2 ? (
+            <div
+              style={{ transform: spriteVisual.mirrorX ? 'scaleX(-1)' : undefined }}
+              data-proto-character-facing-layer=""
+            >
+              <div
+                style={{ transform: `translate(${spriteVisual.anchorOffsetPct.dxPct}%, ${spriteVisual.anchorOffsetPct.dyPct}%)` }}
+                data-proto-character-anchor-layer=""
+              >
+                <img
+                  src={spriteVisual.src}
+                  srcSet={spriteVisual.srcSet}
+                  alt=""
+                  aria-hidden="true"
+                  draggable={false}
+                  data-proto-character-sprite=""
+                  data-proto-character-sprite-frame={spriteVisual.frameId}
+                  data-proto-character-sprite-state={spriteVisual.state}
+                  data-proto-character-sprite-mirror={spriteVisual.mirrorX ? '1' : '0'}
+                  onError={() => setSpriteV2LoadFailed(true)}
+                  style={{ display: 'block', width: '100%', height: 'auto', imageRendering: 'auto' }}
+                />
+              </div>
+            </div>
+          ) : isSprite ? (
             <div style={{ transform: facing === -1 ? 'scaleX(-1)' : undefined }}>
               {/* anchor-offset 래퍼 — footAnchorPx/seatAnchorPx가 프레임의
                   (w/2,h)와 정확히 일치하지 않을 수 있는 차이만큼만 보정

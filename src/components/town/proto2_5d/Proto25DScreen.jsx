@@ -67,6 +67,30 @@
 // 웨이포인트별로 순차 이동한다. 경로가 없으면(완전히 도달 불가) 아무 것도
 // 하지 않는다(제자리 유지, 크래시 없음).
 //
+// Phase 6B(2026-09-24, v2 스프라이트 방향/facing 어댑터) — 두 가지를
+// 추가한다:
+//  1. `character.direction`('front'|'back'|'side', 기본 'front') — 모든
+//     걷기 구간(walkLeg, 그리고 walkPath의 reduced-motion 점프)에서 이동
+//     벡터(dx,dy)로부터 characterSpriteContract.js `directionForMove`를
+//     불러 매 구간마다 갱신한다. **모드와 무관하게(emoji든 v2든) 항상
+//     계산**한다 — 방향 계산 자체는 순수 이동 로직 소관이라 항상 최신으로
+//     유지해 두고, emoji 모드에서는 ProtoCharacter.jsx가 이 값을 전혀
+//     읽지 않으므로(v2 렌더 분기 전용) 시각적으로 아무 효과가 없다.
+//  2. `character.facing` 갱신을 일반 바닥 탭(startPlainWalk가 부르는
+//     walkLeg/walkPath)에도 추가하되, **v2 스프라이트 매니페스트가 실제로
+//     유효할 때만**(`spriteManifest` prop + validateSpriteManifest(...).ok)
+//     `facingForMove`를 적용한다. 게이팅 이유 — 오늘 emoji 모드에서 일반
+//     걷기 중 facing이 전혀 바뀌지 않는 게 기존 동작이고(벤치 접근
+//     startWalkToBench만 facingToward로 facing을 세팅, 아래 그 함수 그대로
+//     유지), 왼쪽으로 걷는 순간 이모지가 좌우 반전되면 오늘 시각적으로
+//     눈에 띄는 변화가 생긴다 — spriteManifest가 없는 한(오늘 모든
+//     프로덕션 호출부) 이 게이트가 항상 막아 emoji 모드의 기존 렌더가
+//     100% 그대로 유지된다.
+// facingToward(벤치 접근 전용, benchInteraction.js)는 이 작업이 손대지
+// 않는다 — 그 함수가 세팅하는 pendingSit walking 구간의 facing과 이번에
+// 새로 추가한 "일반 걷기 facing"은 서로 다른 코드 경로(startWalkToBench vs
+// startPlainWalk)라 충돌하지 않는다.
+//
 // Phase 6A(2026-09-23, 씬 구성) — 장애물 3개짜리 회색 점선 상자 + 벤치 하나
 // 뿐이던 "빈 마당"을 sceneFixture.js SCENE_FIXTURE(씬 구성 단일 진실
 // 원천) 기반 범용 오브젝트 레이어로 확장한다. walkGrid.js OBSTACLES는 이제
@@ -76,7 +100,7 @@
 // 루프에서는 건너뛴다(sceneFixture.js 'demo-bench' 항목 주석 참고, 기존
 // 계약 무변경). 상태 머신/워크그리드/경로탐색/좌석 상호작용 로직은 전혀
 // 손대지 않았다(위 Stage 1~4/Stage5 감사 절 전부 그대로 유효).
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import ProtoCharacter, { WALK_TRANSITION_MS, REDUCED_MOTION_TRANSITION_MS } from './ProtoCharacter'
 import { usePrefersReducedMotion } from '../../../hooks/usePrefersReducedMotion'
 import { WORLD } from '../../../utils/town/worldContract'
@@ -85,6 +109,7 @@ import { findPath } from '../../../utils/town/proto2_5d/pathfinding'
 import { obstacleZIndex } from '../../../utils/town/proto2_5d/depthVisual'
 import { SCENE_FIXTURE, objectRenderedWidthPx } from '../../../utils/town/proto2_5d/sceneFixture'
 import { townAsset } from '../../../assets/town'
+import { validateSpriteManifest, directionForMove, facingForMove } from '../../../utils/town/proto2_5d/characterSpriteContract'
 import {
   SIT_HOLD_MS,
   REDUCED_MOTION_SIT_HOLD_MS,
@@ -160,16 +185,28 @@ const TAP_RIPPLE_REMOVE_MS = TAP_RIPPLE_ANIM_MS + 80
 // depthOrder 시스템에 참여시키지 않고 이 파일 로컬 상수로만 고정한다.
 const TAP_RIPPLE_Z = 7000
 
-export default function Proto25DScreen() {
+// Phase 6B — spriteManifest는 선택적 prop(기본 undefined)이다. App.jsx는
+// Proto25DScreen에 어떤 prop도 넘기지 않으므로(현재 유일한 프로덕션 호출부)
+// 이 prop은 오늘 항상 undefined다 — 아래 모든 v2 관련 분기는 실제로는 절대
+// 실행되지 않는다.
+export default function Proto25DScreen({ spriteManifest } = {}) {
   const reducedMotion = usePrefersReducedMotion()
   // 마운트 시점 URL 쿼리 1회만 읽는다(세션 중 쿼리가 바뀔 일이 없어
   // useState lazy init으로 충분 — 매 렌더 재파싱 불필요).
   const [debugOverlaysEnabled] = useState(readDebugOverlaysEnabled)
+  // Phase 6B — v2 스프라이트 매니페스트가 실제로 유효한지(spriteManifest가
+  // 있고 validateSpriteManifest(...).ok===true) 한 번만 계산해 아래 facing
+  // 게이팅에 재사용한다(위 파일 헤더 "Phase 6B" 주석 참고).
+  const isSpriteV2ManifestActive = useMemo(
+    () => Boolean(spriteManifest) && validateSpriteManifest(spriteManifest).ok === true,
+    [spriteManifest],
+  )
   const [character, setCharacter] = useState({
     phase: 'idle',
     leftPct: INITIAL_LEFT_PCT,
     topPct: INITIAL_TOP_PCT,
     facing: 1, // 1=기본 방향, -1=좌우 미러링(ProtoCharacter.jsx facing prop)
+    direction: 'front', // Phase 6B — 논리 방향('front'|'back'|'side'), v2 스프라이트 전용(위 파일 헤더 참고)
     pendingSit: false, // 벤치를 향해 걷는 중(walking)인지 — 항목7 반복 탭 무시 판정용
     sitBenchHeightPx: undefined, // 2026-09-23 좌석 접촉점 sink 보정 — enterSitting에서만 채워짐(아래 참고)
   })
@@ -278,7 +315,17 @@ export default function Proto25DScreen() {
   function walkLeg(path, index, seq, phaseLabel, onArrive) {
     const target = path[index]
     const isLast = index === path.length - 1
-    applyIfActive(seq, (cur) => ({ ...cur, phase: phaseLabel, leftPct: target.x, topPct: target.y }))
+    // Phase 6B — direction은 모든 모드에서 항상 갱신(위 파일 헤더 참고).
+    // facing은 v2 스프라이트 매니페스트가 실제로 유효할 때만 갱신한다(게이트
+    // — emoji 모드의 기존 "일반 걷기는 facing을 바꾸지 않는다" 동작 보존).
+    applyIfActive(seq, (cur) => {
+      const dx = target.x - cur.leftPct
+      const dy = target.y - cur.topPct
+      const direction = directionForMove(dx, dy, cur.direction, WORLD)
+      const next = { ...cur, phase: phaseLabel, leftPct: target.x, topPct: target.y, direction }
+      if (isSpriteV2ManifestActive) next.facing = facingForMove(dx, cur.facing)
+      return next
+    })
     walkTimerRef.current = setTimeout(() => {
       walkTimerRef.current = null
       if (seq !== seqRef.current) return // 스테일 타이머 — 그 사이 새 명령이 들어옴(헤더 주석 seq 카운터).
@@ -299,7 +346,15 @@ export default function Proto25DScreen() {
     if (!path || path.length === 0) { onArrive(); return }
     if (reducedMotion) {
       const dest = path[path.length - 1]
-      applyIfActive(seq, (cur) => ({ ...cur, phase: phaseLabel, leftPct: dest.x, topPct: dest.y }))
+      // Phase 6B — walkLeg와 동일한 direction/facing 갱신(위 주석 참고).
+      applyIfActive(seq, (cur) => {
+        const dx = dest.x - cur.leftPct
+        const dy = dest.y - cur.topPct
+        const direction = directionForMove(dx, dy, cur.direction, WORLD)
+        const next = { ...cur, phase: phaseLabel, leftPct: dest.x, topPct: dest.y, direction }
+        if (isSpriteV2ManifestActive) next.facing = facingForMove(dx, cur.facing)
+        return next
+      })
       walkTimerRef.current = setTimeout(() => {
         walkTimerRef.current = null
         if (seq !== seqRef.current) return
@@ -765,6 +820,8 @@ export default function Proto25DScreen() {
           facing={character.facing}
           depthY={characterDepthY}
           sitBenchHeightPx={character.phase === 'sitting' ? character.sitBenchHeightPx : undefined}
+          spriteManifest={spriteManifest}
+          direction={character.direction}
         />
       </div>
     </div>
