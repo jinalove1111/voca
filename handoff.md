@@ -1,5 +1,40 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-26 (181차 — **Paul Town 2.5D [O2] 상단 경계 스프라이트 잘림 수정(협의체 라이브 드라이런 → 운영자 승인 → 구현·검증·커밋)**: `walkGrid.js`에 행 경계로 스냅한 정적 상수 `WORLD_MIN_Y`=12.105263(1280x800 실측 worst case 9.51% 기반)을 추가해 `clampToWorldBounds` y 하한과 `isWalkableCell` 상단 차단에만 적용, 격자 기하·이동·장애물·벤치·depth·애니메이션 무변경. 4뷰포트 잘림 16.91/12.84/11.41/60.06px → 0. 단위 5스위트 PASS(walkGrid 44, pathRandom 19), build 0 경고, verify:all ALL DOMAINS PASS, verify:e2e 1744/1744(신규 S16 24단언). 독립 코드리뷰 APPROVE, QA PASS. 3개 커밋으로 PR #62 브랜치 push. 아래 181차 섹션 참고.)_
+_최종 갱신: 2026-09-26 (182차 — **Paul Town 2.5D "산책 모드" v1 — 월드 확장 + 카메라 추적(운영자 지정 설계, 협의체 구현 결과 재검토), 검증 완료·미커밋**: 신규 `camera.js`(순수 카메라 수학, 단위 76단언), `Proto25DScreen.jsx`에 뷰포트 래퍼·산책 모드 토글(기본 ON, localStorage)·rAF lerp 카메라(월드 경계 clamp), E2E S17(4뷰포트 ×21/18단언). 기존 이동·충돌·벤치·depth·애니메이션·O2 무변경, 플래그 3개 false. 단위 6스위트 PASS, build 0 경고, verify:e2e 1825/1825, verify:all 필수 도메인 ALL DOMAINS PASS(부가 내장 E2E는 메모리 부족으로 하네스가 중단 — 환경 문제, 단독 E2E로 대체 확인). 코드리뷰 APPROVE, UX APPROVE, 게임 SIMPLIFY(가장자리 시각 단서 → 운영자 후속), QA PASS. 커밋/push/PR 댓글은 운영자 지시 대기. 아래 182차 섹션 참고.)_
+
+## 2026-09-26 (182차) — Paul Town 2.5D "산책 모드" v1: 월드 확장 + 카메라 추적 (검증 완료, 미커밋, PR #62 worktree)
+
+### 0. 범위와 확인 사항
+
+- 작업 트리: `feat/paul-town-v2-clean-pr` worktree, 시작 HEAD `5a2f6c71`(clean). `C:\voca` 무접촉. 플래그 `paulTownV1/paulTownV2/paulTown2_5d` 전부 false 유지. DB/SQL/Supabase/Production WRITE 0. 상점·구매·저장 미구현(운영자 지시).
+- 등급 C(새 Paul Town 게임플레이). 설계는 운영자가 확정("한 가지 방식만")했으므로 협의체 설계 파도는 운영자 결정으로 생략, 엔지니어링 계획(planner) → 구현 → 독립 코드리뷰 → QA → 구현 결과 UX/게임 재검토(Class C 필수)만 수행. 결정 기록 `docs/agent-decisions/0010-proto25d-walk-mode-v1-2026-09-26.md`.
+- 변경(미커밋) 5: 신규 `src/utils/town/proto2_5d/camera.js`, 신규 `scripts/testProto25dCamera.mjs`, `tests/harness/registry.mjs`(+1 등록, extra:false), `src/components/town/proto2_5d/Proto25DScreen.jsx`(+182/−5), `tests/e2e/townProto25d.spec.mjs`(+290). 무변경: `pathfinding.js`, `walkGrid.js`(O2 WORLD_MIN_Y 포함), `benchInteraction.js`, `sceneFixture.js`, `ProtoCharacter.jsx`, `depthVisual.js`, `worldContract.js`, `features.js`.
+
+### 1. 설계(운영자 지정 + planner 구체화, Product Lead 확정)
+
+- ground(`proto25d-ground`)를 그대로 월드 엘리먼트로 유지(모든 world-% 좌표·오브젝트·캐릭터·리플·탭→월드 변환 무변경). 바깥에 뷰포트 래퍼 `proto25d-viewport`(flex-1, overflow hidden, touch-none)를 항상 렌더.
+- 산책 모드 ON: 월드 px = `unit = min(vw, vh/1.9) × 1.6`, 100:190 상자(360x640 → 539×1024, 390x844 → 624×1186, 412x915 → 659×1253, 1280x800 → 674×1281). 캐릭터 폭은 ground 폭의 8%라 절대 크기가 비정상적으로 커지지 않는다. 데스크톱은 월드가 뷰포트보다 좁아 가로 중앙 정렬(x=−303)·세로만 팬 — 알려진 한계.
+- 카메라: `camera.js` 순수 함수 — `computeWorldSizePx`, `computeCameraTarget`(축별 clamp[0, world−viewport], 월드≤뷰포트면 (world−viewport)/2로 중앙), `stepCamera`(lerp 0.15, |Δ|<0.5px 스냅), 산책 모드 선호 read/write(localStorage `paulEasyVoca_proto25dWalkMode`, 기본 ON, try/catch). `Proto25DScreen`은 rAF 루프에서 캐릭터/ground rect를 읽어 `translate3d(−camX, −camY, 0)`를 ground에 ref로 직접 기록(React 상태 아님), `data-camera-x/y` 노출, 첫 프레임 즉시 스냅, reduced-motion은 t=1, 토글 OFF/언마운트 시 cancel + transform none. OFF 모드 ground className/style은 이전과 바이트 동일(코드리뷰·QA 확인).
+- HUD 토글 `proto25d-walkmode-toggle`("산책 모드 ON/OFF", min-h 44px, 좌상단 배지 컬럼).
+- "지정된 길" = 기존 BFS 걷기 격자(새 도로 제약 없음, Product Lead 해석).
+- E2E: `setDeviceFlags`가 산책 모드 키를 'off'로 함께 심어 S1–S16은 단일 화면 월드 계약 그대로; 신규 S17(산책 모드 ON)이 4뷰포트 검증.
+
+### 2. 검증 결과
+
+- 단위: camera 76/76(신규), walkGrid 44, pathRandom PASS, sceneFixture 24, depth 23, bench 88. `npm run build` 0 에러/0 경고. 새 외부 의존성 0.
+- `npm run verify:e2e`: 총 1825단언 PASS 1825/FAIL 0/SKIP 0(이전 1744 + S17 81). town-proto2.5d 416→497. S17 항목: 토글 ON·카메라 루프 시작·월드>뷰포트(모바일 가로/전부 세로)·초기 및 도착 후 4방향 경계 유지·walking→idle·카메라 이동·캐릭터 발 앵커 뷰포트 안·가로 스크롤 없음·장애물 탭 시 도착 보정·벤치 탭 시 sitting. 스킵 경로 0건(실제 검사). 미mock 요청 0/mock 오류 0.
+- `npm run verify:all`: 필수 도메인 `ALL DOMAINS: PASS` 출력. 이후 부가(extra) 내장 E2E 실행 중 시스템 메모리 부족으로 하네스가 강제 종료("Target crashed" 7건, extra 항목, 단독 E2E로 대체 확인). `testEntranceRosterMinbyungchun.mjs`는 모든 단언 통과 후 Node 종료 시 libuv 단언 크래시(exit 3221226505) — 단독 재실행 PASS exit 0, 환경 문제. 제품 결함 0.
+- 스크린샷/경계 실측(스크래치 `scripts/.tmp/walkShow.mjs`, 헤드리스, 4뷰포트 ×3단계): boundsOk 전부 true, 캐릭터 항상 뷰포트 안, 콘솔 에러 0, 미mock 0. 예: 360x640 카메라 (89,315) → 우하단 이동 후 (178,384)=양축 최대 경계 → 좌상단 복귀 (44,186); 1280x800 x=−303 고정(중앙), y 394→480(하한)→258.
+- 독립 코드리뷰 APPROVE(차단 0; should-fix: rAF 프레임마다 `querySelector` — ref 캐시 권장, 프로토타입 범위에서 수용; nit: 스킵 경로는 실제 실행에서 0건으로 해소; `window.localStorage` 직접 접근은 저장소 기존 패턴). UX 구현 결과 재검토 APPROVE(데스크톱 레터박스 경계 시각 구분은 선택적 코스메틱). 게임 구현 결과 재검토 SIMPLIFY — 산책 메커닉은 그대로 출시 가능, 월드 네 방향 끝에 시각 단서(비네트/울타리/헤이즈) 요청 → Product Lead 판단: 이번 단계는 "산책과 카메라 이동만"(운영자 범위)이고 O2 협의체에서도 경계 아트는 DEFER였으므로 미구현, 운영자 후속 결정 항목으로 기록. QA PASS.
+
+### 3. 메모리 이슈 기록(환경)
+
+E2E 1차 실행과 verify:all이 각각 시스템 메모리 부족으로 하네스에 의해 강제 종료됨(여유 0.8~1.9GB/15.5GB, 상위 소비자는 운영자 앱). 운영자가 메모리 확보 후 E2E 재실행 → 정상 통과. 하네스 지침에 따라 강제 종료된 실행은 임의 재시작하지 않았고, 중단 실행이 남긴 프리뷰 서버(vite preview :4173, 내 프로세스)는 정리. verify:all 완전 재실행은 운영자 지시 시 수행.
+
+### 4. 다음 세션 인수
+
+- 커밋·push·PR #62 댓글은 운영자 지시 대기(권장 분할: ① camera.js+단위테스트+registry ② Proto25DScreen ③ E2E S17 ④ 문서·ADR·체크포인트).
+- 운영자 결정 후보: 월드 가장자리 시각 단서(게임/UX 요청, 시각 전용), 데스크톱 월드 폭(현재 674px 중앙 정렬 — 더 넓게 원하면 데스크톱 전용 overscan 필요), rAF 캐릭터 ref 캐시(should-fix), 다음 단계(학습 연결/오브젝트 밀도/상점 연결은 `PROTO25D_NEXT_STEPS_2026-09-23.md` §2 계획).
+- 기존 `DECISIONS_PENDING.md` 10건 그대로 대기.
 
 ## 2026-09-26 (181차) — Paul Town 2.5D [O2] 상단 경계 스프라이트 잘림 수정 (협의체 라이브 드라이런 → 운영자 승인 → 구현·검증·커밋, PR #62)
 

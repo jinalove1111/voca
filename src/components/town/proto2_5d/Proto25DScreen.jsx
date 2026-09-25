@@ -135,6 +135,25 @@ import {
   facingToward,
 } from '../../../utils/town/proto2_5d/benchInteraction'
 import { PAUL_SPRITE_MANIFEST } from '../../../utils/town/proto2_5d/characterSpriteManifest.default'
+import {
+  computeWorldSizePx,
+  computeCameraTarget,
+  stepCamera,
+  readWalkModePreference,
+  writeWalkModePreference,
+} from '../../../utils/town/proto2_5d/camera'
+
+// 2026-09-26 — "산책 모드" v1(신규, 팀장 지시). 지금까지 바닥(ground)은 항상
+// 뷰포트 전체와 정확히 같은 크기였다(WORLD 종횡비를 그대로 aspectRatio로
+// 강제) — 세계=화면이라 카메라 개념 자체가 없었다. 산책 모드는 세계를
+// 뷰포트보다 크게 그리고(camera.js computeWorldSizePx, WALK_OVERSCAN=1.6)
+// 캐릭터를 부드럽게 뒤따라가는 카메라(camera.js stepCamera)를 도입한다.
+// 걷기/충돌/좌석/깊이/스프라이트 등 기존 로직은 전부 world-% 좌표 기준이라
+// (walkGrid.js/pathfinding.js/benchInteraction.js/depthVisual.js 순수 함수)
+// 이 기능은 그 위에 "바닥을 얼마나 크게 그리고 어디로 이동시킬지"만
+// 얹는다 — 재구현 없음(CLAUDE.md 규칙 3). 기본 ON(camera.js
+// readWalkModePreference 기본값), HUD 토글로 언제든 끌 수 있고(끄면 이전
+// 동작과 완전히 동일 — 아래 walkMode 분기 참고) localStorage에 남는다.
 
 // 모바일 시각 보정(2026-09-23) — 장애물 디버그 플레이스홀더(점선 상자 +
 // "demo-…" 라벨)는 기본적으로 렌더하지 않는다(실기기 프리뷰에서 벤치 실제
@@ -243,6 +262,21 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST }
   })
   const characterRef = useRef(character) // 헤더 주석 "characterRef" 참고 — setTimeout 콜백 전용 최신값 미러
   const [infoOpen, setInfoOpen] = useState(false)
+
+  // 2026-09-26 — 산책 모드 on/off. 마운트 시점 저장된 선호를 1회만 읽는다
+  // (localStorage 부재/예외 환경에서도 camera.js readWalkModePreference가
+  // 항상 안전한 기본값(true)을 반환 — 위 파일 헤더 "산책 모드" 주석 참고).
+  const [walkMode, setWalkMode] = useState(() => (
+    readWalkModePreference(typeof window !== 'undefined' ? window.localStorage : undefined)
+  ))
+  function toggleWalkMode() {
+    setWalkMode((prev) => {
+      const next = !prev
+      writeWalkModePreference(typeof window !== 'undefined' ? window.localStorage : undefined, next)
+      return next
+    })
+  }
+
   const groundRef = useRef(null)
   const pointerDownRef = useRef(null) // { pointerId, downX, downY } | null
   const walkTimerRef = useRef(null) // 걷기 구간(leg) 전이 타이머(Stage 1부터 — 항상 최대 1개)
@@ -270,6 +304,106 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST }
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
+
+  // 2026-09-26 — 산책 모드 뷰포트 측정. groundSize와 별개 ref/state다(위
+  // groundSize 주석 참고 — groundSize는 "바닥 자신의 렌더 크기"를 재는
+  // 반면, 이 값은 "그 바닥을 담는 창(뷰포트)의 크기"를 잰다 — 산책 모드
+  // ON이면 두 값이 서로 다르다: 바닥은 세계 전체 크기(worldSize)로 커지고
+  // 뷰포트는 여전히 화면 크기다). 동일한 ref+ResizeObserver 관례 재사용
+  // (재구현 없음).
+  const viewportRef = useRef(null)
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 })
+  useEffect(() => {
+    const el = viewportRef.current
+    if (!el) return undefined
+    function measure() {
+      const rect = el.getBoundingClientRect()
+      if (rect.width > 0 && rect.height > 0) setViewportSize({ width: rect.width, height: rect.height })
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return undefined
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // 세계(바닥) px 크기 — 뷰포트 크기가 바뀔 때만 다시 계산한다(camera.js
+  // computeWorldSizePx, 순수 함수 — 매 렌더 재계산해도 비용이 없지만
+  // useMemo로 참조 안정성까지 얻어 아래 rAF effect의 의존성 배열이 불필요한
+  // 재시작을 하지 않게 한다).
+  const worldSize = useMemo(
+    () => computeWorldSizePx({ viewportW: viewportSize.width, viewportH: viewportSize.height }),
+    [viewportSize.width, viewportSize.height],
+  )
+
+  // 2026-09-26 — 산책 모드 카메라 rAF 루프. React state가 아니라 ref(카메라
+  // 현재 위치)+DOM 직접 쓰기(transform)로 구현한다 — 매 프레임 React
+  // setState/재렌더를 거치면(60fps 기준 프레임당 수백 개 엘리먼트 재조정)
+  // 불필요한 비용이 크다는 점은 이 저장소의 다른 "매 프레임 값" 관례
+  // (ProtoCharacter.jsx bob/숨쉬기 CSS keyframe, 이 파일 자체의 walkLeg
+  // CSS transition)와 동일한 이유 — camera.js가 순수 계산만 맡고 이
+  // effect가 그 결과를 어디에 쓸지(imperative DOM)만 오케스트레이션한다.
+  const cameraPosRef = useRef(null) // null=아직 초기화 전(다음 프레임에 target으로 즉시 스냅, 부드러운 팬 없이 모드 진입).
+  useEffect(() => {
+    // OFF로 전환(또는 애초에 OFF) — 다음에 다시 켜질 때 항상 새로 스냅하도록
+    // 리셋하고, 바닥의 transform을 명시적으로 되돌려 전환 잔상이 남지 않게
+    // 한다(이 효과가 없으면 ON→OFF 전환 시 마지막 translate3d가 인라인
+    // style에 그대로 남아, OFF 전용 렌더 분기(transform 미지정)와 실제
+    // DOM이 어긋난다).
+    if (!walkMode) {
+      cameraPosRef.current = null
+      if (groundRef.current) groundRef.current.style.transform = 'none'
+      return undefined
+    }
+    // 뷰포트/세계 크기를 아직 측정하지 못했으면(마운트 직후 ResizeObserver
+    // 발화 전) 루프를 시작하지 않는다 — 위 groundSize 패턴과 동일하게
+    // 크기가 갱신되면 이 effect가 재실행(의존성 배열)돼 그때 시작한다.
+    if (viewportSize.width <= 0 || viewportSize.height <= 0) return undefined
+    if (worldSize.worldW <= 0 || worldSize.worldH <= 0) return undefined
+
+    let rafId = null
+    cameraPosRef.current = null // 모드 진입/뷰포트 변경마다 첫 프레임은 항상 즉시 스냅.
+
+    function frame() {
+      const groundEl = groundRef.current
+      const charEl = groundEl ? groundEl.querySelector('[data-proto-character]') : null
+      if (groundEl && charEl) {
+        // charWorldPx — ProtoCharacter.jsx의 앵커 관례(translate(-50%,-100%),
+        // 이 파일 헤더 "characterRef" 주석 근처 참고)상 실제 렌더 박스의
+        // 가로 중심 = world-x 앵커, 세로 하단 = world-y(발) 앵커. 바닥 자신은
+        // transform(translate만, scale 없음)만 받으므로 groundRect도 이미
+        // 카메라가 적용된 화면 좌표다 — 두 rect를 빼면 카메라 오프셋이
+        // 상쇄되어 "카메라와 무관한 세계 고정 px 좌표"가 남는다(설계 그대로).
+        const groundRect = groundEl.getBoundingClientRect()
+        const charRect = charEl.getBoundingClientRect()
+        const charWorldX = charRect.left + charRect.width / 2 - groundRect.left
+        const charWorldY = charRect.bottom - groundRect.top
+        const target = computeCameraTarget({
+          charX: charWorldX,
+          charY: charWorldY,
+          viewportW: viewportSize.width,
+          viewportH: viewportSize.height,
+          worldW: worldSize.worldW,
+          worldH: worldSize.worldH,
+        })
+        const next = cameraPosRef.current == null
+          ? target // 첫 프레임 — 부드러운 팬 없이 즉시 목표 위치로(모드 진입/리사이즈 직후 어색한 장거리 팬 방지).
+          : stepCamera(cameraPosRef.current, target, reducedMotion ? 1 : undefined) // reduced-motion이면 t=1(매 프레임 즉시 스냅).
+        cameraPosRef.current = next
+        groundEl.style.transform = `translate3d(${-next.x}px, ${-next.y}px, 0)`
+        // 테스트 계측용(townProto25d.spec.mjs S17) — 카메라 현재 위치를
+        // DOM 속성으로도 노출한다(반올림 — px 서브픽셀 차이로 단언이
+        // 흔들리지 않게).
+        groundEl.dataset.cameraX = String(Math.round(next.x))
+        groundEl.dataset.cameraY = String(Math.round(next.y))
+      }
+      rafId = requestAnimationFrame(frame)
+    }
+    rafId = requestAnimationFrame(frame)
+    return () => {
+      if (rafId != null) cancelAnimationFrame(rafId)
+    }
+  }, [walkMode, viewportSize.width, viewportSize.height, worldSize.worldW, worldSize.worldH, reducedMotion])
 
   // Phase 6A — 탭 리플(순수 장식, 상태 머신 seq/타이머 체계와 완전히
   // 독립 — 위 헤더 주석 "seq 카운터"의 대상이 아니다, 걷기/착석 로직을
@@ -635,6 +769,19 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST }
         >
           ⓘ 2.5D 프로토타입 (Stage 1+2+3+4)
         </button>
+        {/* 2026-09-26 — 산책 모드 HUD 토글. 기존 정보 배지와 같은 컬럼(항상
+            좌상단, 바닥 중앙을 가리지 않음)에 둔다 — 이 배지 컬럼 자체가
+            바닥 pointer 핸들러의 형제 엘리먼트라(위 "UI 배지" 주석 참고)
+            이 버튼을 눌러도 구조적으로 바닥의 이동 핸들러에는 닿지 않는다.
+            min-h-[44px] — 위 정보 배지와 동일한 탭 타겟 하한 관례. */}
+        <button
+          type="button"
+          data-testid="proto25d-walkmode-toggle"
+          onClick={toggleWalkMode}
+          className="min-h-[44px] flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-emerald-600 shadow"
+        >
+          산책 모드 {walkMode ? 'ON' : 'OFF'}
+        </button>
         {infoOpen && (
           <p className="rounded-xl bg-white/90 px-3 py-2 text-[11px] text-gray-500 shadow max-w-[220px]">
             바닥을 탭하면 캐릭터가 걸어갑니다. 회색 상자를 탭하면 안까지
@@ -645,16 +792,40 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST }
         )}
       </div>
 
-      {/* 바닥/씬 레이어 — 이동 핸들러가 붙는 유일한 엘리먼트(요구사항13).
-          world % 좌표계는 worldContract.js WORLD(100 x 190)를 그대로
-          가져다 쓴다(새 좌표계 재정의 금지). */}
+      {/* 2026-09-26 — 뷰포트 래퍼(신규, 산책 모드 전용 새 엘리먼트). 항상
+          렌더된다(walkMode와 무관 — 뷰포트 크기를 모드 전환 전에도 미리
+          알고 있어야 토글 즉시 카메라가 정확한 값으로 시작할 수 있다).
+          바닥이 예전처럼 이 컬럼의 flex-1 아이템 역할을 그대로 하도록
+          "flex flex-col"도 추가한다(OFF 모드에서 바닥 자신의 flex-1
+          유틸리티가 여전히 효과를 내려면 부모가 flex 컨테이너여야 한다 —
+          안 그러면 flex-1은 아무 것도 하지 않는 클래스가 된다) — 이
+          래퍼가 root의 flex-col 안에서 flex-1로 남은 세로 공간 전체를
+          차지하고(이전에 바닥이 하던 역할 그대로), 그 안에서 다시
+          flex-col을 열어 바닥 하나를 자식으로 꽉 채운다 — 순수하게
+          레이아웃을 보존하기 위한 중간 계층일 뿐 시각적으로 아무 것도
+          그리지 않는다(배경/테두리 없음). overflow-hidden — 산책 모드에서
+          세계가 이 창보다 커도 창 밖은 잘려서 보이지 않는다(요구사항 —
+          "world larger than viewport"). */}
+      <div ref={viewportRef} data-testid="proto25d-viewport" className="relative flex-1 overflow-hidden touch-none flex flex-col">
+        {/* 바닥/씬 레이어 — 이동 핸들러가 붙는 유일한 엘리먼트(요구사항13).
+            world % 좌표계는 worldContract.js WORLD(100 x 190)를 그대로
+            가져다 쓴다(새 좌표계 재정의 금지).
+            2026-09-26 — walkMode OFF는 예전과 완전히 동일한 className/
+            style(같은 문자열, transform 없음) — S1~S16이 이 렌더 분기에서
+            byte-equivalent임을 보장한다. walkMode ON은 흐름에서 빠져
+            (absolute) 세계 전체 크기(worldSize, computeWorldSizePx)로
+            그려지고, 매 프레임 transform만 위 rAF effect가 imperative하게
+            쓴다(React style에는 transform을 아예 넣지 않는다 — effect가
+            유일한 소유자). */}
       <div
         ref={groundRef}
         data-testid="proto25d-ground"
         role="group"
         aria-label="2.5D 프로토타입 바닥"
-        className="relative flex-1 overflow-hidden touch-none"
-        style={{ aspectRatio: `${WORLD.w} / ${WORLD.h}`, background: 'linear-gradient(180deg, #eaf7f0 0%, #cdebd8 100%)' }}
+        className={walkMode ? 'absolute top-0 left-0 touch-none' : 'relative flex-1 overflow-hidden touch-none'}
+        style={walkMode
+          ? { width: `${worldSize.worldW}px`, height: `${worldSize.worldH}px`, willChange: 'transform', background: 'linear-gradient(180deg, #eaf7f0 0%, #cdebd8 100%)' }
+          : { aspectRatio: `${WORLD.w} / ${WORLD.h}`, background: 'linear-gradient(180deg, #eaf7f0 0%, #cdebd8 100%)' }}
         onPointerDown={handleGroundPointerDown}
         onPointerUp={handleGroundPointerUp}
         onPointerCancel={handleGroundPointerCancel}
@@ -864,6 +1035,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST }
           spriteManifest={spriteManifest}
           direction={character.direction}
         />
+      </div>
       </div>
     </div>
   )

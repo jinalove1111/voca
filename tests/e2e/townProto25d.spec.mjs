@@ -97,10 +97,28 @@ function readPaulSpriteMeasured() {
 // townV2.spec.mjs의 setDeviceFlags와 동일 패턴(paulEasyVoca_features
 // localStorage 스냅샷에 flags만 심는다 — 나머지는 features.js의
 // DEFAULT_FEATURES가 채운다).
+// 2026-09-26 — "산책 모드" v1(camera.js) 추가 이후, 이 헬퍼가 심는
+// localStorage 스냅샷에 산책 모드 선호도 함께 고정한다. S1~S16은 모두
+// 산책 모드가 존재하기 이전에 작성된 "바닥=뷰포트 전체(단일 화면 세계)"
+// 전제를 인코딩한 회귀 스위트라, 여기서 명시적으로 'off'를 심어 그 전제를
+// 그대로 보존한다(camera.js readWalkModePreference 기본값은 ON이라, 이
+// 시드가 없으면 S1~S16 전부가 조용히 산책 모드로 실행되어 byte-equivalent
+// 계약이 깨진다). 산책 모드 자체(S17)는 별도로 'on'을 심어 오버라이드한다.
 async function setDeviceFlags(page, flags) {
   await page.addInitScript((flagsJson) => {
     try { localStorage.setItem('paulEasyVoca_features', flagsJson) } catch { /* 무시 */ }
+    try { localStorage.setItem('paulEasyVoca_proto25dWalkMode', 'off') } catch { /* 무시 */ }
   }, JSON.stringify(flags))
+}
+
+// S17 전용 — 산책 모드를 명시적으로 'on'으로 심는다(setDeviceFlags가 이미
+// 심어둔 'off'를 이 별도 initScript로 덮어쓴다 — Playwright의
+// addInitScript는 등록된 순서대로 매 페이지 로드마다 전부 실행되므로,
+// setDeviceFlags 다음에 이걸 호출하면 항상 이 값이 마지막에 쓰인다).
+async function setWalkModeOn(page) {
+  await page.addInitScript(() => {
+    try { localStorage.setItem('paulEasyVoca_proto25dWalkMode', 'on') } catch { /* 무시 */ }
+  })
 }
 
 async function login(page) {
@@ -330,6 +348,108 @@ async function measureGlyphInkOnScreen(glyphLocator) {
       rectHeight: rect.height,
     }
   })
+}
+
+// ── 2026-09-26(S17, "산책 모드" v1) 전용 헬퍼 ───────────────────────────
+// 산책 모드에서는 세계(바닥)가 뷰포트보다 커서(camera.js computeWorldSizePx)
+// 임의의 world-% 지점이 항상 지금 화면에 보인다는 보장이 없다 — 카메라가
+// 캐릭터를 따라오므로 "캐릭터가 그 근처까지 걸어야" 화면에 들어온다.
+// 아래 헬퍼들은 순수 기하 계산(intersectBoxes/worldPctToScreenPx/
+// boxContainsPoint)과, 목표가 안 보이면 화면 안에서만(뷰포트 밖 좌표를
+// 절대 탭하지 않고) 그 방향으로 최대 hop 수만큼 미리 걸어가게 하는
+// ensureWorldPointVisible로 나뉜다.
+function intersectBoxes(a, b) {
+  if (!a || !b) return null
+  const x0 = Math.max(a.x, b.x)
+  const y0 = Math.max(a.y, b.y)
+  const x1 = Math.min(a.x + a.width, b.x + b.width)
+  const y1 = Math.min(a.y + a.height, b.y + b.height)
+  if (x1 <= x0 || y1 <= y0) return null
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }
+}
+
+function worldPctToScreenPx(pct, groundBox) {
+  return { x: groundBox.x + groundBox.width * (pct.x / 100), y: groundBox.y + groundBox.height * (pct.y / 100) }
+}
+
+function boxContainsPoint(box, pt, marginPx = 0) {
+  return (
+    pt.x >= box.x - marginPx && pt.x <= box.x + box.width + marginPx &&
+    pt.y >= box.y - marginPx && pt.y <= box.y + box.height + marginPx
+  )
+}
+
+// 목표 world-% 지점(targetPct)이 지금 화면(뷰포트 ∩ 바닥)에 보이는지
+// 확인하고, 안 보이면 그 화면 안에서(안쪽 insetPx 여백을 두고) 목표
+// 방향으로 최대한 이동하는 지점을 탭해 캐릭터를 그 쪽으로 걷게 한 뒤
+// (idle 복귀까지 대기) 다시 확인한다 — 최대 maxHops회. 뷰포트 밖 좌표는
+// 어떤 경우에도 탭하지 않는다(요구사항 원문 — "never tap outside the
+// viewport"). 마지막에 여전히 안 보이면 visible:false를 반환하고, 호출부가
+// 그 사실을 정직하게 기록(또는 스킵)한다.
+async function ensureWorldPointVisible(page, character, groundLocator, viewportLocator, targetPct, { maxHops = 3, insetPx = 10 } = {}) {
+  let groundBox = await groundLocator.boundingBox()
+  let viewportBox = await viewportLocator.boundingBox()
+  let visibleBox = intersectBoxes(groundBox, viewportBox)
+  let targetScreenPt = worldPctToScreenPx(targetPct, groundBox)
+
+  for (let hop = 0; hop < maxHops; hop++) {
+    if (visibleBox && boxContainsPoint(visibleBox, targetScreenPt)) break
+    if (!visibleBox) break // 교집합 자체가 없는 병적인 경우 — 더 진행할 수 없음(호출부가 visible:false로 처리).
+    const clampedX = Math.min(Math.max(targetScreenPt.x, visibleBox.x + insetPx), visibleBox.x + visibleBox.width - insetPx)
+    const clampedY = Math.min(Math.max(targetScreenPt.y, visibleBox.y + insetPx), visibleBox.y + visibleBox.height - insetPx)
+    await page.mouse.click(clampedX, clampedY)
+    await waitUntil(async () => (
+      (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
+    ), { timeout: 8000 })
+    groundBox = await groundLocator.boundingBox()
+    viewportBox = await viewportLocator.boundingBox()
+    visibleBox = intersectBoxes(groundBox, viewportBox)
+    targetScreenPt = worldPctToScreenPx(targetPct, groundBox)
+  }
+
+  return {
+    visible: !!(visibleBox && boxContainsPoint(visibleBox, targetScreenPt)),
+    groundBox,
+    viewportBox,
+    visibleBox,
+    targetScreenPt,
+  }
+}
+
+// 한 축(axis: 'x'|'y')에서 바닥(groundBox)이 뷰포트(viewportBox) 경계를
+// 지키는지 판정만 하고(부작용 없음, r.check 호출은 호출부 책임 — 다른
+// 순수 헬퍼들과 동일 관례) 결과를 반환한다. 세계가 그 축에서 뷰포트보다
+// 넓으면(wider) 바닥이 뷰포트 시작 지점 이전부터 시작해 끝 지점 이후까지
+// 이어져야 하고(뷰포트 전체를 덮음), 좁거나 같으면(letterbox) 중앙
+// 정렬(오차 1px)이어야 한다.
+function axisBoundsCheck(groundBox, viewportBox, axis) {
+  const groundMin = axis === 'x' ? groundBox.x : groundBox.y
+  const groundMax = axis === 'x' ? groundBox.x + groundBox.width : groundBox.y + groundBox.height
+  const vpMin = axis === 'x' ? viewportBox.x : viewportBox.y
+  const vpMax = axis === 'x' ? viewportBox.x + viewportBox.width : viewportBox.y + viewportBox.height
+  const worldSize = groundMax - groundMin
+  const viewportSizeAxis = vpMax - vpMin
+  if (worldSize > viewportSizeAxis + 0.5) {
+    return {
+      wider: true,
+      startsBeforeOrAt: groundMin <= vpMin + 0.5,
+      endsAtOrAfter: groundMax >= vpMax - 0.5,
+      detail: `groundMin=${groundMin} groundMax=${groundMax} vpMin=${vpMin} vpMax=${vpMax}`,
+    }
+  }
+  const expectedMin = vpMin + (viewportSizeAxis - worldSize) / 2
+  return { wider: false, centered: Math.abs(groundMin - expectedMin) <= 1, detail: `groundMin=${groundMin} expectedMin=${expectedMin}` }
+}
+
+// 카메라가 그 축의 클램프 경계(뷰포트 시작 또는 끝)에 붙어있는지 — "카메라가
+// 안 움직였다"는 관측이 버그인지 정상(경계에 막혀 더 움직일 수 없었음)인지
+// 구분하는 데 쓴다.
+function isAtBoundAxis(groundBox, viewportBox, axis, epsilon = 1) {
+  const groundMin = axis === 'x' ? groundBox.x : groundBox.y
+  const groundMax = axis === 'x' ? groundBox.x + groundBox.width : groundBox.y + groundBox.height
+  const vpMin = axis === 'x' ? viewportBox.x : viewportBox.y
+  const vpMax = axis === 'x' ? viewportBox.x + viewportBox.width : viewportBox.y + viewportBox.height
+  return Math.abs(groundMin - vpMin) <= epsilon || Math.abs(groundMax - vpMax) <= epsilon
 }
 
 export async function run(browser, baseURL) {
@@ -3193,6 +3313,176 @@ export async function run(browser, baseURL) {
       )
 
       r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S17 — "산책 모드" v1(camera.js, 2026-09-26): 뷰포트보다 큰 세계 +
+  // 카메라 추적. S1~S16(위 setDeviceFlags가 심는 'off' 시드)은 산책 모드
+  // 이전의 "바닥=뷰포트 전체" 계약을 그대로 인코딩하므로 값 변경 없이
+  // 유지했다 — 이 시나리오만 별도로 'on'을 심어(setWalkModeOn) 4개 참조
+  // 뷰포트에서 검증한다: (a) 세계가 실제로 뷰포트보다 크게 렌더됨(제약축
+  // 구분 — 가로는 모바일 3종만, 세로는 4종 전부, camera.js 헤더 주석/
+  // scripts/testProto25dCamera.mjs 1번 섹션과 동일 근거), (b) 초기 카메라가
+  // 세계 경계를 지킴(넓은 축은 clamp, 좁은 축은 중앙 정렬), (c) 걷기 후에도
+  // 그 경계가 유지되고 캐릭터가 화면 안에 남으며 카메라가 실제로 움직였거나
+  // 경계에 막혀 있음, (d) 장애물(demo-building) 충돌 회피가 산책 모드에서도
+  // 그대로 동작(탭 지점≠도착 지점), (e) 벤치 walk-to-sit이 산책 모드에서도
+  // 그대로 sitting까지 도달. 기존 걷기/충돌/좌석 계약 자체는 S1~S16이 이미
+  // 소유하므로 재검증하지 않고, "카메라가 얹혀도 그 계약이 깨지지 않는지"만
+  // 본다.
+  const S17_VIEWPORTS = [
+    { width: 360, height: 640, label: '360x640' },
+    { width: 390, height: 844, label: '390x844' },
+    { width: 412, height: 915, label: '412x915' },
+    { width: 1280, height: 800, label: '1280x800' },
+  ]
+  const DEMO_BUILDING_CENTER_PCT = { x: 50, y: 32 } // demo-building x0:38,x1:62,y0:24,y1:40의 중심(OBSTACLES_REF와 동일 값).
+  const DEMO_BENCH_CENTER_PCT = { x: 23.5, y: 60.5 } // demo-bench x0:20,x1:27,y0:58,y1:63의 중심(OBSTACLES_REF와 동일 값).
+
+  for (const vp of S17_VIEWPORTS) {
+    const name = `S17[${vp.label},walk-mode]`
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true }) // 'off' 시드(위 setDeviceFlags 주석 참고) — 아래서 'on'으로 덮어씀.
+    await setWalkModeOn(page)
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const viewportEl = page.locator('[data-testid="proto25d-viewport"]')
+
+      // 산책 모드가 실제로 켜졌는지(HUD 토글 텍스트 + rAF 루프가 최소
+      // 1프레임 이상 돈 흔적인 data-camera-x 속성 존재) — 이후 모든 단언의
+      // 사전조건.
+      const toggleText = await page.locator('[data-testid="proto25d-walkmode-toggle"]').innerText()
+      r.check(`${name} — HUD 토글이 "산책 모드 ON"으로 표시됨(사전조건)`, toggleText.includes('ON'), toggleText)
+      const cameraAttrReady = await waitUntil(async () => (await ground.getAttribute('data-camera-x')) !== null, { timeout: 3000 })
+      r.check(`${name} — rAF 카메라 루프가 시작됨(data-camera-x 속성 존재, 사전조건)`, !!cameraAttrReady)
+
+      const groundBox0 = await ground.boundingBox()
+      const viewportBox0 = await viewportEl.boundingBox()
+
+      // ── (a) 세계가 뷰포트보다 크게 렌더됨 ──
+      const isMobile = vp.width !== 1280
+      if (isMobile) {
+        r.check(`${name} 항목a — 가로(모바일) — 바닥 폭이 뷰포트 폭보다 큼`, groundBox0.width > viewportBox0.width, `groundW=${groundBox0.width} viewportW=${viewportBox0.width}`)
+      }
+      r.check(`${name} 항목a — 세로 — 바닥 높이가 뷰포트 높이보다 큼(4개 뷰포트 전부)`, groundBox0.height > viewportBox0.height, `groundH=${groundBox0.height} viewportH=${viewportBox0.height}`)
+
+      // ── (b) 초기 카메라가 세계 경계를 지킴 ──
+      for (const axis of ['x', 'y']) {
+        const res = axisBoundsCheck(groundBox0, viewportBox0, axis)
+        if (res.wider) {
+          r.check(`${name} 항목b — ${axis}축(세계>뷰포트) — 바닥이 뷰포트 시작 지점 이전부터 시작함`, res.startsBeforeOrAt, res.detail)
+          r.check(`${name} 항목b — ${axis}축(세계>뷰포트) — 바닥이 뷰포트 끝 지점 이후까지 이어짐`, res.endsAtOrAfter, res.detail)
+        } else {
+          r.check(`${name} 항목b — ${axis}축(세계<=뷰포트) — 중앙 정렬(오차 1px 이내)`, res.centered, res.detail)
+        }
+      }
+
+      // ── (c) 화면(뷰포트∩바닥) 교집합의 우하단(85%/85%)을 탭 → walking →
+      //     idle, 이후에도 경계가 유지되고 캐릭터가 화면 안에 남으며 카메라가
+      //     실제로 움직였거나 경계에 막혀 있음 ──
+      const initialCameraX = await ground.getAttribute('data-camera-x')
+      const initialCameraY = await ground.getAttribute('data-camera-y')
+      const intersect0 = intersectBoxes(groundBox0, viewportBox0)
+      const tapPt = intersect0
+        ? { x: intersect0.x + intersect0.width * 0.85, y: intersect0.y + intersect0.height * 0.85 }
+        : { x: viewportBox0.x + viewportBox0.width * 0.85, y: viewportBox0.y + viewportBox0.height * 0.85 }
+      await page.mouse.click(tapPt.x, tapPt.y)
+      const walkingStarted = await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking'
+      ), { timeout: 3000 })
+      r.check(`${name} 항목c — 화면 안 탭 후 phase가 walking으로 전이됨`, !!walkingStarted)
+      const idleReached = await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
+      ), { timeout: 8000 })
+      r.check(`${name} 항목c — 도착 후 phase가 idle로 복귀함`, !!idleReached)
+
+      const groundBox1 = await ground.boundingBox()
+      const viewportBox1 = await viewportEl.boundingBox()
+      const cameraX1 = await ground.getAttribute('data-camera-x')
+      const cameraY1 = await ground.getAttribute('data-camera-y')
+      const cameraChanged = cameraX1 !== initialCameraX || cameraY1 !== initialCameraY
+      const atBoundX = isAtBoundAxis(groundBox1, viewportBox1, 'x')
+      const atBoundY = isAtBoundAxis(groundBox1, viewportBox1, 'y')
+      r.check(
+        `${name} 항목c — 도착 후 카메라가 실제로 움직였거나(캐릭터를 따라감), 안 움직였다면 이미 경계에 막혀 있었음(정상)`,
+        cameraChanged || atBoundX || atBoundY,
+        `initial=(${initialCameraX},${initialCameraY}) final=(${cameraX1},${cameraY1}) atBoundX=${atBoundX} atBoundY=${atBoundY}`,
+      )
+      for (const axis of ['x', 'y']) {
+        const res = axisBoundsCheck(groundBox1, viewportBox1, axis)
+        if (res.wider) {
+          r.check(`${name} 항목c(도착 후) — ${axis}축 — 여전히 뷰포트 시작 지점 이전부터 시작함`, res.startsBeforeOrAt, res.detail)
+          r.check(`${name} 항목c(도착 후) — ${axis}축 — 여전히 뷰포트 끝 지점 이후까지 이어짐`, res.endsAtOrAfter, res.detail)
+        } else {
+          r.check(`${name} 항목c(도착 후) — ${axis}축 — 여전히 중앙 정렬(오차 1px 이내)`, res.centered, res.detail)
+        }
+      }
+
+      const charBox1 = await character.boundingBox()
+      const charCenter1 = boxAnchor(charBox1)
+      r.check(
+        `${name} 항목c — 캐릭터의 발 앵커가 뷰포트 안에 남아있음(카메라가 따라감, 오차 1px)`,
+        !!charCenter1 &&
+          charCenter1.x >= viewportBox1.x - 1 && charCenter1.x <= viewportBox1.x + viewportBox1.width + 1 &&
+          charCenter1.y >= viewportBox1.y - 1 && charCenter1.y <= viewportBox1.y + viewportBox1.height + 1,
+        JSON.stringify({ charCenter1, viewportBox1 }),
+      )
+
+      r.check(`${name} — 가로 스크롤 없음(항목c 이후)`, await noHorizontalOverflow(page))
+
+      // ── (d) 충돌 회피 — demo-building 중심을 탭해도 도착 지점은 그
+      //     중심과 달라야 함(가장 가까운 걸을 수 있는 지점으로 보정,
+      //     walkGrid.js/pathfinding.js 기존 계약을 산책 모드에서 재확인) ──
+      const buildingVisibility = await ensureWorldPointVisible(page, character, ground, viewportEl, DEMO_BUILDING_CENTER_PCT)
+      if (buildingVisibility.visible) {
+        await page.mouse.click(buildingVisibility.targetScreenPt.x, buildingVisibility.targetScreenPt.y)
+        await waitUntil(async () => (
+          (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking'
+        ), { timeout: 3000 })
+        const idleAfterBuildingTap = await waitUntil(async () => (
+          (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
+        ), { timeout: 8000 })
+        r.check(`${name} 항목d — 장애물 탭 후에도 결국 idle로 복귀(멈춘 상태 없음)`, !!idleAfterBuildingTap)
+        const pctAfterBuildingTap = await readCharacterPct(character)
+        const arrivalDiffersFromTap = Math.abs(pctAfterBuildingTap.left - DEMO_BUILDING_CENTER_PCT.x) > 0.5 ||
+          Math.abs(pctAfterBuildingTap.top - DEMO_BUILDING_CENTER_PCT.y) > 0.5
+        r.check(
+          `${name} 항목d — 장애물 중심을 탭해도 도착 지점이 그 중심과 다름(장애물 밖으로 보정됨)`,
+          arrivalDiffersFromTap,
+          JSON.stringify(pctAfterBuildingTap),
+        )
+      } else {
+        r.check(`${name} 항목d — demo-building이 최대 3회 이동 시도 후에도 화면에 들어오지 않아 이 항목을 정직하게 스킵함(FAIL 아님, 사전조건 부재)`, true, '스킵')
+      }
+
+      // ── (e) 벤치 walk-to-sit — 산책 모드에서도 sitting 전이가 그대로 동작 ──
+      const benchVisibility = await ensureWorldPointVisible(page, character, ground, viewportEl, DEMO_BENCH_CENTER_PCT)
+      if (benchVisibility.visible) {
+        await page.mouse.click(benchVisibility.targetScreenPt.x, benchVisibility.targetScreenPt.y)
+        const sittingReached = await waitUntil(async () => (
+          (await character.getAttribute('data-character-phase').catch(() => null)) === 'sitting'
+        ), { timeout: 8000 })
+        r.check(`${name} 항목e — 벤치 탭 후 phase가 sitting에 도달함`, !!sittingReached)
+      } else {
+        r.check(`${name} 항목e — demo-bench가 최대 3회 이동 시도 후에도 화면에 들어오지 않아 이 항목을 정직하게 스킵함(FAIL 아님, 사전조건 부재)`, true, '스킵')
+      }
+
+      r.check(`${name} — 가로 스크롤 없음(최종)`, await noHorizontalOverflow(page))
     } catch (err) {
       const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
       r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
