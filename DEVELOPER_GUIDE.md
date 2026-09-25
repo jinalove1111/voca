@@ -574,3 +574,56 @@ pre값과 달랐던** 2차 문제까지 실제로 발생했다.
 잡지 못한 채 "PASS"만 보고하는 가짜 안전망이 된다. 새 스위트는 원칙적으로
 `extra:false`(required)로 등록하고, 정말 "13개 필수 도메인 밖 보너스
 커버리지"인 경우에만 명시적으로 `extra:true`를 붙인다.
+
+## 에이전트 협의체 사용 안내 (2026-09-25, 180차 신규 — ADR 0008)
+
+_"AI 개발 운영체제 사용 안내"의 확장. 역할 14개(기존 12 + game-designer,
+devils-advocate), 작업 등급 A/B/C/D, 작업 봉투, 야간 안전 큐가 추가됐다.
+원본은 `docs/agent-architecture.md`(역할 매핑), `MULTI_AGENT_WORKFLOW.md`
+(절차), `docs/agent-decisions/TEMPLATE.md`(결정 기록),
+`docs/agent-decisions/0008-agent-council-design-2026-09-25.md`(설계 근거)._
+
+### 운영자는 이렇게 쓴다
+
+자연어로 요청하면 된다. 예: "Paul Town에서 아이들이 단어를 외운 뒤
+마을에서 그 단어를 써볼 수 있게 만들어줘." 메인 세션(orchestrator 겸임)이:
+
+1. 등급을 판정한다(이 예는 새 아동 상호작용 → **Class C**, 학생 노출이므로
+   운영자 승인 필요).
+2. `handoff.md` 최신 섹션/`DECISIONS_PENDING.md`/`PROJECT_BOARD.md`로
+   중복·충돌을 확인한다.
+3. Class C면 파도 1(child-experience-designer / game-designer / planner
+   독립 평가, 병렬) → 파도 2(교차 비평 1회) → 파도 3(devils-advocate) →
+   결정 1회를 돌리고 ADR을 만든다.
+4. 결정이 ACCEPT이고 운영자 승인이 있으면 구현 → `/code-review` →
+   qa-reviewer → 구현 결과 재검토 → 회귀 → 운영자 검토 패키지(handoff +
+   ADR + 결정대기 행).
+
+### 명시적으로 요청할 수 있는 것
+
+- **"FULL COUNCIL REVIEW"** — 등급과 무관하게 Class C 흐름(협의체 전체)을
+  돌린다.
+- **"FAST PATH"** — Class A/B 흐름으로 간다. 단 **Class D 경계(인증/PIN/
+  RLS, 학생 데이터, SQL 실행, 배포, main 머지, CI, 플래그 기본값,
+  worktree/브랜치 삭제)는 FAST PATH로도 우회되지 않는다** — 해당 항목은
+  항상 운영자 승인에서 멈춘다.
+- **"야간 작업"** — `PROJECT_BOARD.md` READY 큐만 순회한다. 큐가 비면
+  멈추고 보고한다. 큐에 넣는 것은 운영자(또는 운영자 승인을 받은
+  orchestrator)다.
+
+### 다른 에이전트가 이 질문에 답하는 곳
+
+| 질문 | 보는 곳 |
+|---|---|
+| 지금 무엇을 하는가 | `PROJECT_BOARD.md` IN_PROGRESS + `.ai-status/`(status=working) |
+| 왜 | 해당 ADR(`docs/agent-decisions/000N`) 또는 handoff 섹션 |
+| 누가 소유하는가 | `.ai-status` `agent_name`/`files_owned`, 작업 봉투 ALLOWED_PATHS |
+| 무엇이 막혔는가 | `BLOCKERS.md` |
+| 다음은 무엇인가 | `PROJECT_BOARD.md` READY 큐 |
+| 운영자 승인이 필요한 것 | `DECISIONS_PENDING.md` + `MULTI_AGENT_WORKFLOW.md` "운영자 승인 필수 행동" |
+| 어느 브랜치/worktree가 활성인가 | `PROJECT_BOARD.md` "활성 브랜치/worktree" |
+
+### 강제 수준(정직한 표기)
+
+훅으로 실제 강제되는 것은 여전히 SQL 파괴 패턴 차단뿐이다. 협의체 절차·
+봉투 대조·정지 규칙은 역할 문서의 자율 준수다.
