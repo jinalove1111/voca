@@ -1,5 +1,54 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-25 (180차 — **에이전트 협의체(Agent Council) Phase 1 감사 + Phase 2 구현(개발 인프라 문서만, 미커밋)**: 활성 worktree(`feat/paul-town-v2-clean-pr`, HEAD `3c26a5bb`, PR #62 Draft)를 검증하고 기존 12역할 거버넌스 위에 `game-designer`/`devils-advocate` 2역할, 작업 등급 A/B/C/D, 작업 봉투, 야간 안전 큐(READY), 결정 템플릿을 추가했다(ADR 0008). 드라이런 3종(Class C 우편함 → OWNER_DECISION_REQUIRED, Class A 오타 → 협의체 미소집, Class D RLS → 운영자 승인 하드스톱) 통과. 제품 코드/SQL/CI/배포 변경 0, 커밋 0. 다음: 운영자 검토 후 커밋 여부 결정. 아래 180차 섹션 참고.)_
+_최종 갱신: 2026-09-26 (181차 — **Paul Town 2.5D [O2] 상단 경계 스프라이트 잘림 수정(협의체 라이브 드라이런 → 운영자 승인 → 구현·검증·커밋)**: `walkGrid.js`에 행 경계로 스냅한 정적 상수 `WORLD_MIN_Y`=12.105263(1280x800 실측 worst case 9.51% 기반)을 추가해 `clampToWorldBounds` y 하한과 `isWalkableCell` 상단 차단에만 적용, 격자 기하·이동·장애물·벤치·depth·애니메이션 무변경. 4뷰포트 잘림 16.91/12.84/11.41/60.06px → 0. 단위 5스위트 PASS(walkGrid 44, pathRandom 19), build 0 경고, verify:all ALL DOMAINS PASS, verify:e2e 1744/1744(신규 S16 24단언). 독립 코드리뷰 APPROVE, QA PASS. 3개 커밋으로 PR #62 브랜치 push. 아래 181차 섹션 참고.)_
+
+## 2026-09-26 (181차) — Paul Town 2.5D [O2] 상단 경계 스프라이트 잘림 수정 (협의체 라이브 드라이런 → 운영자 승인 → 구현·검증·커밋, PR #62)
+
+### 0. 범위와 확인 사항
+
+- 작업 트리: `feat/paul-town-v2-clean-pr` worktree(`…/scratchpad/wt-clean-pr`), 시작 HEAD `d0308b75`, 시작 시 clean. `C:\voca`는 접근·수정하지 않았다(운영자 지시).
+- 등급 B(운영자 요청으로 FULL COUNCIL REVIEW). 운영자 승인 2026-09-26. 결정 기록 `docs/agent-decisions/0009-proto25d-o2-top-edge-clip-2026-09-26.md`.
+- 변경 파일 5 + 신규 2: `src/utils/town/proto2_5d/walkGrid.js`, `scripts/testProto25dWalkGrid.mjs`, `scripts/testProto25dPathRandom.mjs`, `tests/e2e/townProto25d.spec.mjs`, `docs/design/town/PROTO25D_PILOT_READINESS_2026-09-25.md`(§3.1 신설), ADR 0009, `.ai-status/orchestrator-o2-top-edge-clip.json`. **SQL/DB/CI/배포/RLS/인증 변경 0, SQL 실행 0, merge/rebase/브랜치 전환/worktree 삭제 0, O2 외 기능 확장 0.**
+
+### 1. 협의체 라이브 드라이런(Phase 3, 2026-09-25) 요약
+
+파도 1 독립 평가(병렬 3 에이전트): child-experience-designer REVISE(동적 y-min), game-designer SIMPLIFY(여백+시각 단서), planner SIMPLIFY(단일 파일 정적 상수). 파도 2 교차 비평: 엔지니어링이 orchestrator 사실 노트(격자 유도식이 y 원점에 의존)를 받아 격자 원점 이동안을 스스로 축소; UX↔Game은 시각 단서 필요성에서 갈림. 파도 3 devils-advocate: "진입점 없는 프리파일럿에서 우선순위 미검증" 이의, OWNER_DECISION_REQUIRED. Product Lead 결정: 동적 계산 REJECT(순수 함수 계약·E2E 결정성), 시각 단서 DEFER(보이지 않는 벽은 y=2에 이미 존재), 정적 상수 채택, 구현 착수는 운영자 승인으로 이관 → 승인됨. 구현 계획은 코드 리뷰 1차 CHANGES_REQUIRED(상수의 행 경계 미정렬 실제 결함) → 스냅 채택, QA 2차 BLOCK(사전 측정 가드) → 3차 PASS. 판정 COUNCIL_WORKING(단, B 규모에는 무거움).
+
+### 2. 구현 중 STOP-RETURN 1건과 Product Lead 해소
+
+사전 측정(스크래치 `scripts/.tmp/o2Measure.mjs`, gitignore) 결과 필요 원시 여백이 모바일 3.2~4.6%인데 데스크톱 1280x800은 9.508%로, 협의체가 정한 상한(원시 ≤8.74, 스냅 후 ≤10)을 초과해 측정 에이전트가 STOP-RETURN. 그 상한은 데스크톱 측정 전 내부 기준이었고 운영자 지시는 "1280 포함 모든 지원 뷰포트에서 잘림 없음 + 최악 뷰포트 기준 정적 상수"로 명시적이라, Product Lead가 상한을 실측에 맞춰 조정하고 `MEASURED_TOP_MARGIN_PCT=9.51` → `WORLD_MIN_Y = 2 + ceil(9.51/CELL_H_PCT)×CELL_H_PCT = 12.105263`(행 8 y0)을 채택. 모바일은 12.1%로 과보정되지만 씬 오브젝트 최상단 y0=24라 실질 손실 없음(의도된 트레이드오프, ADR 0009·readiness §3.1 기록).
+
+### 3. 수정 전/후 측정(4뷰포트, x=10/50/90% 동일)
+
+| 뷰포트 | 수정 전 잘림(px) | 수정 후 잘림(px) | 수정 후 상단 여유(px) | 도착 y |
+|---|---|---|---|---|
+| 360x640 | 16.91 | 0 | +45.83 | 12.1053 |
+| 390x844 | 12.84 | 0 | +70.52 | 12.1053 |
+| 412x915 | 11.41 | 0 | +79.11 | 12.1053 |
+| 1280x800 | 60.06 | 0 | +15.84 | 12.1053 |
+
+데스크톱 상단 여유는 15.84px(≈1.98 world-%)로 얇다 — 캐릭터 아트 높이가 커지면 재측정 필요(잠금 단언이 상수 변경을 잡는다).
+
+### 4. 검증 결과
+
+- 단위(수정 전 → 후): walkGrid 37→44 PASS(신규 절 "10. O2 상단 여백": 3040셀 전수 y0≥WORLD_MIN_Y, 상수 잠금 `WORLD_MIN_Y === WORLD_MIN + 8×CELL_H_PCT`, x 무영향, nearestWalkablePoint/clamp), pathRandom 18→19 PASS(차단 대역 시작점 결정적 케이스), sceneFixture 24, depth 23, bench 88 PASS(무변경).
+- `npm run build` 0 에러/0 경고. `npm run verify:all` ALL DOMAINS PASS(EXIT 0). `npm run verify:e2e` 총 1744단언 PASS 1744/FAIL 0/SKIP 0, [town-proto2.5d] 392→416(+24 = 신규 S16 4뷰포트×6), 미mock 요청 0/mock 오류 0.
+- 갱신한 기존 단언 2건(`testProto25dWalkGrid.mjs` 옛 71·230행): 옛 대칭 clamp(y=WORLD_MIN)를 그대로 부호화한 것이라 사유를 주석에 명시하고 `WORLD_MIN_Y` 기준으로 교체 + (50, WORLD_MIN)이 blocked임을 추가 단언.
+- 독립 코드 리뷰(별도 에이전트): APPROVE, 결함 0 — 스냅 상수가 cellBounds와 동일 연산 순서로 행 8 y0와 비트 동일, rows 0~7 차단/8+ 유지, pathfinding.js:163 경계는 느슨하나 무해, 초기 위치 y=62·벤치 무영향. QA(별도 에이전트, 단위 5스위트·build 직접 재실행 + 두 로그 검독): PASS.
+
+### 5. 기록용 — 활성 블로커 아님: verify:all 내장 E2E의 S12 간헐 실패
+
+`verify:all`은 `scripts/testBrowserE2E.mjs`를 `extra:true`(13개 필수 도메인 밖)로 한 번 더 돌린다. 그 내장 실행에서 `[town-proto2.5d] S12[1280x800,sprite-render]` 3단언(걷는 동안 프레임 교대 샘플 3/7, walk-side-a/b 프레임 id, side-b-v2 basename)이 FAIL해 그 항목만 exit 1이 났다 — 필수 도메인이 아니라 `ALL DOMAINS: PASS`에는 영향 없음. 같은 세션의 단독 `verify:e2e`에서는 S12[1280x800] 27단언 전부 PASS였고, 이번 diff는 스프라이트/애니메이션 코드(`ProtoCharacter.jsx`, 매니페스트)를 건드리지 않았다. 다른 단위 스위트가 병렬로 CPU를 쓰는 verify:all 안에서만 나타난 타이밍 플레이크로 판단(178차의 걷기 프레임 교대 단언은 샘플링 기반). `TESTING.md`/`handoff.md`에 이전 기록 없음 → 새 간헐 관측. 운영자가 원하면 `DECISIONS_PENDING.md`의 "V2 S16 자석 드래그" 항목처럼 별도 재현 세션 항목으로 등재(이번 세션은 그 파일을 건드리지 않음).
+
+### 6. 커밋(3개, 소커밋 원칙)
+
+① `fix(town-proto25d): O2 top-edge sprite clip — WORLD_MIN_Y` (walkGrid.js + 단위 테스트 2) ② `test(e2e): S16 O2 top-edge tap on 4 viewports` ③ `docs: 181차 handoff, ADR 0009, readiness §3.1, checkpoint`. push 후 PR #62 댓글에 검토 결과·측정표·커밋 목록 게시. 해시는 PR #62 댓글 참고.
+
+### 7. 다음 세션 인수
+
+- PR #62 머지는 Class D(운영자 전용). Vercel Preview는 push로 재빌드됨 — 운영자 실기기 5분 체크리스트(readiness §6)에 "화면 최상단 탭 → 머리까지 보이는지" 1항목 추가 권장.
+- O2 후속 후보(모두 미착수·미결정): 상단 경계 시각 단서(경계 아트) — 협의체 DEFER; 모바일 과보정 완화(뷰포트별 상수)는 운영자가 필요하다고 판단할 때만.
+- §5의 S12 간헐 실패 재현 여부는 운영자 결정.
+- 학생 진입점·파일럿 반 등 `DECISIONS_PENDING.md` 10건은 그대로 대기.
 
 ## 2026-09-25 (180차) — 에이전트 협의체(Agent Council) Phase 1 감사 + Phase 2 구현 (개발 인프라 문서만, 제품 무접촉, 미커밋)
 

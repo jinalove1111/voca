@@ -92,6 +92,23 @@ depthKey 기준 뒤/앞 정확히 일치, 앉기 seatPct가 벤치 seat 기준
 `tests/e2e/townProto25d.spec.mjs`의 해당 섹션과 `handoff.md`
 2026-09-25(179차) §4 참고.
 
+### 3.1 [O2] 상단 경계 스프라이트 잘림 — 수정 전/후 측정 (2026-09-26, ADR 0009)
+
+측정 방법: 스크래치 Playwright 스크립트(`scripts/.tmp/o2Measure.mjs`, gitignore, 커밋 대상 아님)가 `vite preview`(:4179) + 기존 E2E 헬퍼(installMocks, QA 로그인 픽스처, `setDeviceFlags` paulTown2_5d ON)로 부팅해, ground(`[data-testid="proto25d-ground"]`) 최상단(y=ground.top+1)을 x=10/50/90%에서 탭 → `data-character-phase` idle 복귀 대기 → 스프라이트(`img[data-proto-character-sprite]`)와 ground의 `getBoundingClientRect()` 비교. x 위치별 차이는 0.01px 이내라 뷰포트당 1행.
+
+| 뷰포트 | 수정 전 도착 y(world-%) | 수정 전 잘림(px) | 스프라이트 높이(px) | ground 높이(px) | 필요 원시 여백(%) | 수정 후 도착 y | 수정 후 잘림(px) | 수정 후 상단 여유(px) |
+|---|---|---|---|---|---|---|---|---|
+| 360x640 | 2 | 16.91 | 29.71 | 640 | 4.643 | 12.1053 | 0 | +45.83 |
+| 390x844 | 2 | 12.84 | 29.71 | 844 | 3.520 | 12.1053 | 0 | +70.52 |
+| 412x915 | 2 | 11.41 | 29.71 | 915 | 3.247 | 12.1053 | 0 | +79.11 |
+| 1280x800 | 2 | 60.06 | 76.06 | 800 | 9.508 | 12.1053 | 0 | +15.84 |
+
+- 채택 상수: `MEASURED_TOP_MARGIN_PCT = 9.51`(데스크톱 1280x800 worst case), `WORLD_MIN_Y = WORLD_MIN + ceil(9.51 / CELL_H_PCT) × CELL_H_PCT = 12.105263`(행 8의 y0에 정확히 스냅, `src/utils/town/proto2_5d/walkGrid.js`).
+- 협의체가 사전에 정한 상한(원시 ≤ 8.74, 스냅 후 ≤ 10)은 데스크톱 측정 전 값이라 초과했고(9.508), 운영자 지시("1280 포함 모든 지원 뷰포트에서 잘림 없음, 최악 뷰포트 기준 정적 상수")에 따라 Product Lead가 상한을 실측에 맞춰 조정했다(ADR 0009). 모바일 3종은 필요 여백 3.2~4.6%에 대해 12.1%로 과보정되지만, 씬 오브젝트 최상단 y0=24라 실질 손실 없음(의도된 트레이드오프).
+- 수정 후 데스크톱 상단 여유는 15.84px(≈1.98 world-%)로 얇은 편이다 — 스프라이트가 y=12.1에서 depth-scale 0.593으로 y=2(0.557)보다 조금 크게 렌더되기 때문. 향후 캐릭터 아트 높이가 커지면 `MEASURED_TOP_MARGIN_PCT` 재측정이 필요하다(잠금 단언: `testProto25dWalkGrid.mjs` "O2 상단 여백" 절).
+- 회귀 잠금: `testProto25dWalkGrid.mjs` 44단언(신규 10), `testProto25dPathRandom.mjs` 19단언(신규 1, 차단 대역 시작점), E2E `townProto25d.spec.mjs` S16(4뷰포트 bbox 안 + 도착 y≈WORLD_MIN_Y).
+- 변경하지 않은 것: 이동/장애물 회피/벤치 착석/depth ordering/스프라이트 애니메이션 코드(`pathfinding.js`, `benchInteraction.js`, `ProtoCharacter.jsx`, `Proto25DScreen.jsx`, `sceneFixture.js` 무변경). §2의 [O2] 항목은 append-only 원칙으로 원문을 유지하며, 이 절로 해소 상태를 기록한다.
+
 ## 4. 에셋/라이선스 출처
 
 Paul 캐릭터 스프라이트 8종(프레임당 1x+@2x, 총 18개 PNG — 원본
