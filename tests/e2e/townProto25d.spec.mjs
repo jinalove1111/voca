@@ -3119,5 +3119,89 @@ export async function run(browser, baseURL) {
     }
   }
 
+  // ── S16 — O2 상단 경계 탭 — 스프라이트 잘림 없음(2026-09-26) ──────────────
+  // O2(walkGrid.js WORLD_MIN_Y 상단 걷기 여백) 수정 후, 실제 브라우저에서
+  // 화면 최상단 근처를 탭해도 캐릭터 스프라이트가 ground 위로 잘려 보이지
+  // 않는지, 그리고 캐릭터가 WORLD_MIN_Y로 정확히 clamp되는지 확인한다.
+  // WORLD_MIN_Y 값은 이 파일의 기존 OBSTACLES_REF/DEPTH_BANDS_REF와 동일한
+  // 관례로 값 복제한다(import 대신 — 이 spec은 브라우저 밖 Node에서 도는
+  // spec). WORLD_MIN=2, CELL_H_PCT=96/76(GRID_ROWS=76, walkGrid.js 격자
+  // 해상도 절), WORLD_MIN_Y=WORLD_MIN+8*CELL_H_PCT(row 8의 y0 — 씬 최상단
+  // 오브젝트 demo-building의 y0=24보다 작아 걷기 공간을 잃지 않는다, 정확한
+  // 유도 근거는 walkGrid.js WORLD_MIN_Y 정의부 주석 참고).
+  const WORLD_MIN_REF_S16 = 2
+  const CELL_H_PCT_REF_S16 = 96 / 76
+  const WORLD_MIN_Y_REF = WORLD_MIN_REF_S16 + 8 * CELL_H_PCT_REF_S16 // ≈12.105263157894736
+
+  const S16_VIEWPORTS = [
+    { width: 360, height: 640, label: '360x640' },
+    { width: 390, height: 844, label: '390x844' },
+    { width: 412, height: 915, label: '412x915' },
+    { width: 1280, height: 800, label: '1280x800' },
+  ]
+
+  for (const vp of S16_VIEWPORTS) {
+    const name = `S16[${vp.label},O2-top-edge]`
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true })
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const groundBox = await ground.boundingBox()
+
+      // ground 최상단에서 1px 안쪽, x=50% — Proto25DScreen.jsx의
+      // rawTopPct=((clientY-rect.top)/rect.height)*100 변환을 거치면
+      // world-y가 0에 가까워(WORLD_MIN=2보다도 작음) clampToWorldBounds가
+      // 반드시 WORLD_MIN_Y로 보정해야 하는 케이스가 된다(위 node 스크립트
+      // 실측 — nearestWalkablePoint(50,~0) === {x:50,y:WORLD_MIN_Y}, x=50
+      // 열은 demo-building(y0=24)보다 한참 위라 장애물과도 안 겹침).
+      const tapX = groundBox.x + groundBox.width * 0.5
+      const tapY = groundBox.y + 1
+      await page.mouse.click(tapX, tapY)
+
+      const walkingStarted = await waitUntil(async () => (await sampleCharacterState(page)).phase === 'walking', { timeout: 2000 })
+      r.check(`${name} — 탭 직후 phase가 walking으로 전이됨`, !!walkingStarted)
+
+      const idleReached = await waitUntil(async () => (await sampleCharacterState(page)).phase === 'idle', { timeout: 5000 })
+      r.check(`${name} — 도착 후 phase가 idle로 복귀함`, !!idleReached)
+
+      const finalState = await sampleCharacterState(page)
+      const spriteImg = page.locator('img[data-proto-character-sprite]')
+      const spriteBox = await spriteImg.boundingBox()
+
+      r.check(
+        `${name} — 스프라이트 img 박스 상단이 ground 상단 안(잘림 없음, 0.5px 여유)`,
+        !!spriteBox && spriteBox.y >= groundBox.y - 0.5,
+        spriteBox ? `spriteTop=${spriteBox.y} groundTop=${groundBox.y}` : '(boundingBox null)',
+      )
+      r.check(
+        `${name} — 스프라이트 img 박스 하단이 ground 하단 안(잘림 없음, 0.5px 여유)`,
+        !!spriteBox && spriteBox.y + spriteBox.height <= groundBox.y + groundBox.height + 0.5,
+        spriteBox ? `spriteBottom=${spriteBox.y + spriteBox.height} groundBottom=${groundBox.y + groundBox.height}` : '(boundingBox null)',
+      )
+      r.check(
+        `${name} — 캐릭터 root style.top(world-%)이 WORLD_MIN_Y(≈${WORLD_MIN_Y_REF.toFixed(6)})와 ±0.01 이내로 일치(상단 여백에 정확히 clamp됨)`,
+        typeof finalState.topPct === 'number' && Math.abs(finalState.topPct - WORLD_MIN_Y_REF) <= 0.01,
+        `topPct=${finalState.topPct}`,
+      )
+
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }
 }
