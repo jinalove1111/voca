@@ -35,10 +35,12 @@ await esbuild.build({
   outfile: GRID_BUNDLE_PATH,
 })
 const {
-  WORLD_MIN, WORLD_MAX, GRID_COLS, GRID_ROWS, OBSTACLES,
+  WORLD_MIN, WORLD_MIN_Y, WORLD_MAX, GRID_COLS, GRID_ROWS, CELL_H_PCT, OBSTACLES,
   classifyPoint, clampToWorldBounds, nearestWalkablePoint,
   isWalkableCell, worldToCell, cellToWorldPoint,
 } = await import(`${pathToFileURL(GRID_BUNDLE_PATH).href}?t=${Date.now()}`)
+
+const EPS = 1e-6 // walkGrid.js BOUNDS_EPS와 동일 스케일 — 부동소수점 비교 여유
 
 let totalPassed = 0
 let totalFailed = 0
@@ -68,7 +70,11 @@ section('1. nearestWalkablePoint — 정상 in-bounds 목적지는 그대로 보
 section('2/3. clampToWorldBounds — 범위 밖 좌표 clamp')
 {
   const neg = clampToWorldBounds(-50, -999)
-  check('음수 좌표가 최소 경계(WORLD_MIN)로 clamp됨', neg.x === WORLD_MIN && neg.y === WORLD_MIN, JSON.stringify(neg))
+  // 2026-09-26(O2) — y 하한은 더 이상 WORLD_MIN이 아니라 WORLD_MIN_Y다(상단
+  // 스프라이트 clip 방지 여백, walkGrid.js WORLD_MIN_Y 정의 주석 참고). 이
+  // 단언은 O2 이전엔 "대칭적인 clamp(x/y 모두 WORLD_MIN)"를 인코딩했었다 —
+  // O2 이후 y축만 별도 하한을 갖는 비대칭 clamp로 바뀌었다.
+  check('음수 좌표가 최소 경계로 clamp됨(x=WORLD_MIN, y=WORLD_MIN_Y)', neg.x === WORLD_MIN && neg.y === WORLD_MIN_Y, JSON.stringify(neg))
   const over = clampToWorldBounds(500, 1000)
   check('초과 좌표가 최대 경계(WORLD_MAX)로 clamp됨', over.x === WORLD_MAX && over.y === WORLD_MAX, JSON.stringify(over))
   const mixed = clampToWorldBounds(-10, 250)
@@ -227,8 +233,15 @@ section('부록 — 격자 해상도/셀 변환 기본 계약')
   // 경계 사각지대 회귀 방지 — 정확히 WORLD_MIN/WORLD_MAX인 점(장애물과
   // 무관한 위치)은 반드시 walkable이어야 한다(이 세션이 최초 구현에서
   // 실측으로 발견한 회귀, walkGrid.js 헤더 주석 참고).
-  check('정확히 (WORLD_MIN,WORLD_MIN)인 점(장애물 밖)은 walkable로 분류됨(경계 사각지대 회귀 방지)', classifyPoint(WORLD_MIN, WORLD_MIN) === 'walkable')
+  // 2026-09-26(O2) — (WORLD_MIN,WORLD_MIN) 모서리는 이제 상단 여백(row
+  // 0~7) 안이라 blocked다. 코너 사각지대 회귀 의도(x축 경계 정확성)는
+  // y=WORLD_MIN_Y로 옮겨 그대로 유지한다.
+  check('정확히 (WORLD_MIN,WORLD_MIN_Y)인 점(장애물 밖, O2 상단 여백 바로 아래)은 walkable로 분류됨(경계 사각지대 회귀 방지)', classifyPoint(WORLD_MIN, WORLD_MIN_Y) === 'walkable')
   check('정확히 (WORLD_MAX,WORLD_MAX)인 점(장애물 밖)은 walkable로 분류됨(경계 사각지대 회귀 방지)', classifyPoint(WORLD_MAX, WORLD_MAX) === 'walkable')
+  // O2 회귀 방지 — (50,WORLD_MIN)은 이제 상단 여백 안이라 blocked여야 한다
+  // (x=50은 어떤 장애물과도 안 겹치는 열린 열이라, blocked라면 오직 O2
+  // 상단 여백 때문이어야 한다).
+  check('(50,WORLD_MIN)은 O2 상단 여백 안이라 blocked로 분류됨', classifyPoint(50, WORLD_MIN) === 'blocked')
 }
 
 // ── 9. sub-cell 오프셋 + 장애물 모서리 인접 시나리오(회귀 방지) ──────────
@@ -293,6 +306,66 @@ section('9. sub-cell 오프셋 + 장애물 모서리 인접 시나리오(회귀 
   const pathB1 = JSON.stringify(findPath(startFar, cornerTarget))
   const pathB2 = JSON.stringify(findPath(startFar, cornerTarget))
   check('(c) 코너 인접 도착점 시나리오도 결정론적(재호출 deep-equal)', pathB1 === pathB2)
+}
+
+// ── 10. O2 상단 여백 — WORLD_MIN_Y가 실제로 상단을 막고, x축은 무관함 ──
+// 2026-09-26 — 캐릭터 스프라이트가 world-y=WORLD_MIN 근처에서 화면 상단에
+// 잘려 보이던 문제(O2)를 walkGrid.js가 WORLD_MIN_Y(상단 걷기 여백)로
+// 고쳤다. 여기서는 (a) 걸을 수 있는 모든 칸이 실제로 이 여백 아래에
+// 있는지 전수(exhaustive) 검사, (b) WORLD_MIN_Y 값 자체가 문서화된 유도
+// 공식(row 8의 y0)에 정확히 고정(lock)돼 있는지, (c) 이 여백이 y축
+// 전용이고 x축 여백(WORLD_MIN)은 전혀 건드리지 않았는지, (d)/(e)
+// nearestWalkablePoint/clampToWorldBounds도 이 여백을 존중하는지 확인한다.
+section('10. O2 상단 여백 — WORLD_MIN_Y가 실제로 상단을 막고, x축은 무관함')
+{
+  // (a) 전수 검사 — 걸을 수 있다고 판정된 모든 셀은 반드시 WORLD_MIN_Y
+  // 이상의 y0을 가져야 한다(격자 3040칸 전부, 비용 무시할 만함 — 이 파일
+  // 헤더 주석의 "매 탭마다 전수 BFS도 무시할 만함" 논리와 동일).
+  let allAboveMargin = true
+  let firstViolation = null
+  for (let row = 0; row < GRID_ROWS && allAboveMargin; row++) {
+    for (let col = 0; col < GRID_COLS; col++) {
+      if (isWalkableCell(col, row)) {
+        const y0 = WORLD_MIN + row * CELL_H_PCT
+        if (y0 < WORLD_MIN_Y - EPS) { allAboveMargin = false; firstViolation = { col, row, y0 }; break }
+      }
+    }
+  }
+  check('걸을 수 있는 모든 셀의 y0 >= WORLD_MIN_Y(상단 여백 밖)', allAboveMargin, JSON.stringify(firstViolation))
+
+  // (b) WORLD_MIN_Y 값 자체가 문서화된 유도 공식(row 8의 y0)에 정확히
+  // 고정돼 있는지 — 24는 SCENE_FIXTURE에서 가장 위쪽 오브젝트(demo-building)
+  // 의 collisionRect.y0(sceneFixture.js)로, walkGrid.js가 이 값을 export하지
+  // 않아 여기 하드코딩한다(사양 문서 명시 허용).
+  const TOPMOST_SCENE_OBJECT_Y0 = 24
+  check(
+    'WORLD_MIN_Y는 WORLD_MIN보다 크고 씬 최상단 오브젝트(y0=24)보다 작음(과보정이되 걷기 공간을 잃지 않음)',
+    WORLD_MIN_Y > WORLD_MIN && WORLD_MIN_Y < TOPMOST_SCENE_OBJECT_Y0,
+    `WORLD_MIN_Y=${WORLD_MIN_Y}`,
+  )
+  check(
+    'WORLD_MIN_Y === WORLD_MIN + 8*CELL_H_PCT(row 8의 y0과 완전히 동일한 연산, lock)',
+    Math.abs(WORLD_MIN_Y - (WORLD_MIN + 8 * CELL_H_PCT)) < EPS,
+    `WORLD_MIN_Y=${WORLD_MIN_Y}, row8 y0=${WORLD_MIN + 8 * CELL_H_PCT}`,
+  )
+
+  // (c) x축 여백은 O2와 무관 — WORLD_MIN에 딱 붙은 x좌표도(장애물과 안
+  // 겹치는 y라면) 여전히 walkable이어야 한다.
+  check('x=WORLD_MIN(O2와 무관한 축), y=50(장애물 밖)은 walkable', classifyPoint(WORLD_MIN, 50) === 'walkable')
+
+  // (d) nearestWalkablePoint — 상단 여백 안(장애물이 아니라 여백 자체)의
+  // 목적지도 안전하게 여백 밖(y>=WORLD_MIN_Y)으로 보정돼야 한다.
+  const correctedTop = nearestWalkablePoint(50, WORLD_MIN)
+  check(
+    'nearestWalkablePoint(50,WORLD_MIN)이 반환하는 y가 WORLD_MIN_Y 이상(상단 여백 밖으로 보정됨)',
+    correctedTop.y >= WORLD_MIN_Y - EPS,
+    JSON.stringify(correctedTop),
+  )
+
+  // (e) clampToWorldBounds — y=0(범위 밖) 입력이 WORLD_MIN이 아니라
+  // WORLD_MIN_Y로 clamp돼야 한다(O2 이전 동작과의 회귀 방지).
+  const clampedTop = clampToWorldBounds(50, 0)
+  check('clampToWorldBounds(50,0).y === WORLD_MIN_Y', clampedTop.y === WORLD_MIN_Y, JSON.stringify(clampedTop))
 }
 
 // ── 결과 ──────────────────────────────────────────────────────────────

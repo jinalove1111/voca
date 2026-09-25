@@ -44,7 +44,7 @@ await esbuild.build({
   outfile: GRID_BUNDLE_PATH,
 })
 const {
-  WORLD_MIN, WORLD_MAX, OBSTACLES,
+  WORLD_MIN, WORLD_MIN_Y, WORLD_MAX, CELL_H_PCT, OBSTACLES,
   classifyPoint, nearestWalkablePoint,
 } = await import(`${pathToFileURL(GRID_BUNDLE_PATH).href}?t=${Date.now()}`)
 
@@ -294,6 +294,30 @@ section('8. 결정적 회귀 — 994번 쌍(고정 좌표, sub-cell 오프셋 LO
       wp.y >= WORLD_MIN - 1e-6 && wp.y <= WORLD_MAX + 1e-6 &&
       classifyPoint(wp.x, wp.y) === 'walkable')
     check('994번 쌍 — 모든 웨이포인트가 walkable이고 경계 안', allValid994)
+  }
+}
+
+// ── 9. O2 고정 케이스 — 상단 여백(blocked band) 안 시작점도 안전하게 처리 ──
+// 2026-09-26 — start가 O2 상단 여백(WORLD_MIN_Y 미만, walkGrid.js
+// WORLD_MIN_Y 정의 주석 참고) 안에 있는 경우를 고정 좌표로 회귀 방지한다
+// (무작위 100/1000쌍은 randomWalkableStart가 항상 nearestWalkablePoint로
+// 보정해 이 대역을 우연히 표본화하지 않으므로 별도 고정 케이스가 필요).
+section('9. O2 고정 케이스 — 상단 여백 안 시작점(sub-cell 오프셋)도 안전하게 처리')
+{
+  const start = { x: 50, y: WORLD_MIN + CELL_H_PCT / 2 } // 여백 안(row 0 중간) — walkGrid.js가 findPath 호출 전 보정 없이 그대로 넘김
+  const end = { x: 50, y: 90 } // 무작위 스위트가 이미 즐겨 쓰는 먼 walkable 목적지
+  let threw = false
+  let path
+  try {
+    path = findPath(start, end)
+  } catch (err) {
+    threw = true
+  }
+  check('상단 여백 안 시작점 호출이 예외를 던지지 않음', !threw)
+  check('상단 여백 안 시작점에서도 경로가 존재함(비어있지 않음)', Array.isArray(path) && path.length > 0, JSON.stringify(path))
+  if (Array.isArray(path)) {
+    const allAboveMargin = path.every((wp) => wp.y >= WORLD_MIN_Y - 1e-6)
+    check('경로의 모든 웨이포인트가 상단 여백 밖(y >= WORLD_MIN_Y)', allAboveMargin, JSON.stringify(path))
   }
 }
 

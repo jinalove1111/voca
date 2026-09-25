@@ -8,6 +8,10 @@
 // WORLD 상수 하나만 좌표계 원점으로 가져다 쓴다(그 외 LANDMARKS/REGIONS 등은
 // import하지 않는다 — 아래 OBSTACLES는 LANDMARKS의 "실제 게임 데이터"가
 // 아니라 이 프로토타입 자체의 픽스처다).
+//
+// (O2, 2026-09-26) 상단 걷기 여백(WORLD_MIN_Y) 추가 — 캐릭터가 world-y가
+// WORLD_MIN(2)에 가까울 때 스프라이트 머리가 ground 상단 밖으로 잘려
+// 보이던 문제를 고쳤다. 상세 유도 근거는 WORLD_MIN_Y 정의부 주석 참고.
 import { WORLD } from '../worldContract'
 import { SCENE_FIXTURE, deriveObstacles } from './sceneFixture'
 
@@ -57,6 +61,30 @@ const USABLE_PCT = WORLD_MAX - WORLD_MIN // 96 — 격자가 실제로 덮는 �
 export const CELL_W_PCT = USABLE_PCT / GRID_COLS // 2.4
 export const CELL_H_PCT = USABLE_PCT / GRID_ROWS // ≈1.2632
 const BOUNDS_EPS = 1e-6 // 부동소수점 곱셈 오차 방어(2.4*40처럼 정확히 96이 아닐 수 있음)
+
+// 2026-09-26(O2, 상단 여백 clip 수정) — 캐릭터 스프라이트가 world-y=WORLD_MIN(2)
+// 근처를 걸을 때 화면 상단에서 잘려 보이는 문제(스프라이트 anchor가 발 기준이라
+// 머리 부분이 ground 위로 넘어감)를 고쳤다. 측정 스크립트(scratch
+// scripts/.tmp/o2Measure.mjs, 2026-09-26, sprite scale 0.557 @ y=2)로 4개
+// 뷰포트의 "잘리지 않기 위해 필요한 최소 top 여백(ground 세로 기준 %)"을
+// 실측한 결과 360x640=4.643%, 390x844=3.520%, 412x915=3.247%,
+// 1280x800=9.508%(스프라이트 76.06px / ground 800px)였다 — 데스크톱
+// 1280x800이 압도적 worst case다. 이 파일은 순수 함수/DOM 비의존 계약이라
+// (헤더 주석, E2E 결정론 요구) 뷰포트별 동적 여백 대신 전 뷰포트 공용
+// 정적 상수 하나를 채택한다: MEASURED_TOP_MARGIN_PCT=9.51(위 worst case에
+// 여유를 더한 값, 데스크톱 1280x800 실측 기준). 이 %를 CELL_H_PCT 단위로
+// 올림(ceil)해 "행(row) 경계"에 정확히 맞춰 스냅한다 — cellBounds의 y0
+// 계산(WORLD_MIN + row*CELL_H_PCT)과 완전히 동일한 연산 순서를 써서, 아래
+// isWalkableCell의 방어 로직이 절대 "칸의 일부만 걸치는" 애매한 경계를
+// 만들지 않게 한다(이 파일 44-53행 주석이 이미 경고한 것과 같은 종류의
+// 버그 — 격자 경계가 셀 크기와 어긋나면 사각지대가 생긴다). 모바일
+// 3개 뷰포트는 이 상수로 명백히 과보정된다(필요 여백이 4.643% 이하인데
+// 9.51%를 적용) — 의도된 트레이드오프다: 상단 ~12.1% 대역이 모바일에서는
+// 아예 도달 불가능해지지만, SCENE_FIXTURE에서 가장 위쪽 오브젝트도
+// y0=24(demo-building collisionRect, sceneFixture.js)라 그보다 훨씬
+// 아래라서 실질적으로 잃는 걷기 공간이 없다.
+const MEASURED_TOP_MARGIN_PCT = 9.51
+export const WORLD_MIN_Y = WORLD_MIN + Math.ceil(MEASURED_TOP_MARGIN_PCT / CELL_H_PCT) * CELL_H_PCT // ≈12.105263 (row 8의 y0과 동일)
 
 // ── 장애물(데모 픽스처) ───────────────────────────────────────────────
 // 실제 학생 데이터/구매 데이터가 아니다 — 마운트 스코프 로컬 상수, 영속화
@@ -108,14 +136,20 @@ function rectsOverlap(a, b) {
  * 장애물과 겹침 검사하는 이유 — 중심점만 보면 셀 면적 대부분이 장애물에
  * 덮여도 중심이 우연히 밖이면 통과로 오판할 수 있어("장애물을 절대
  * 통과하지 않는다" 요구사항에 더 보수적으로 부합).
+ *
+ * 2026-09-26(O2) — y0 하한 체크는 이제 부동소수점 방어용 epsilon이 아니라
+ * 실제 상단 여백(row 0~7, WORLD_MIN_Y 미만)을 막는 본 로직이다(위
+ * WORLD_MIN_Y 정의 주석 참고). x0/x1/y1 하한·상한은 O2와 무관해 그대로
+ * WORLD_MIN/WORLD_MAX epsilon 방어를 유지한다.
  */
 export function isWalkableCell(col, row, obstacles = OBSTACLES) {
   if (col < 0 || col >= GRID_COLS || row < 0 || row >= GRID_ROWS) return false
   const bounds = cellBounds(col, row)
   // 격자가 이미 [WORLD_MIN,WORLD_MAX]에 정확히 맞춰 앵커링돼 있어 정상
-  // 케이스에서는 절대 밖으로 나가지 않는다 — 부동소수점 오차만 방어.
+  // 케이스에서는 x축이 절대 밖으로 나가지 않는다 — x0/x1은 부동소수점
+  // 오차만 방어. y0은 WORLD_MIN_Y(O2 상단 여백)로 실제 차단을 수행한다.
   if (bounds.x0 < WORLD_MIN - BOUNDS_EPS || bounds.x1 > WORLD_MAX + BOUNDS_EPS ||
-      bounds.y0 < WORLD_MIN - BOUNDS_EPS || bounds.y1 > WORLD_MAX + BOUNDS_EPS) return false
+      bounds.y0 < WORLD_MIN_Y - BOUNDS_EPS || bounds.y1 > WORLD_MAX + BOUNDS_EPS) return false
   for (const ob of obstacles) {
     if (rectsOverlap(bounds, ob)) return false
   }
@@ -128,10 +162,14 @@ export function classifyPoint(x, y, obstacles = OBSTACLES) {
   return isWalkableCell(col, row, obstacles) ? 'walkable' : 'blocked'
 }
 
-/** [WORLD_MIN, WORLD_MAX] 경계로 clamp — Stage 1의 clampPct(2~98)와 동일 여백. */
+/**
+ * [WORLD_MIN, WORLD_MAX] 경계로 clamp — Stage 1의 clampPct(2~98)와 동일 여백.
+ * 2026-09-26(O2) — y 하한은 WORLD_MIN_Y(상단 스프라이트 clip 방지 여백)로
+ * 올렸다. x 하한은 O2와 무관해 WORLD_MIN 그대로 둔다.
+ */
 export function clampToWorldBounds(x, y) {
   const cx = Math.max(WORLD_MIN, Math.min(WORLD_MAX, Number(x) || 0))
-  const cy = Math.max(WORLD_MIN, Math.min(WORLD_MAX, Number(y) || 0))
+  const cy = Math.max(WORLD_MIN_Y, Math.min(WORLD_MAX, Number(y) || 0))
   return { x: cx, y: cy }
 }
 
