@@ -1,67 +1,69 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-25 (179차 — **Paul Town 2.5D 프로토타입 학생 파일럿
-직전 품질 정리(8h 자율 세션, 완료)**: `paulTown2_5d`(기본 `false`)
-프로토타입을 학생 파일럿에 앞서 다각도로 재검토했다. read-only 코드
-리뷰(Phase 1)에서 0 결함/1 리스크(Q1), 코드품질 감사(Phase 4)에서 0
-결함/5 리스크를 확인하고 그중 3건(Q1 프레임 cadence 단위 시간 락, Q2
-@2x 실패 시 이모지 전 1x 강등 재시도, Q3 오버레이
-`role="region"`+`aria-label`)을 커밋 `09fe5a62`로 즉시 수정, 접근성
-2건(키보드 경로, 포커스 트랩)은 `DECISIONS_PENDING.md`로 이관, 나머지
-2건(비메모이즈 recompute, preload 미취소)은 알려진 한계로 기록했다.
-랜덤 경로 property 테스트(Phase 5)에서 **실제 결함 D1**을
-발견·수정했다(커밋 `a3824b1f`) — pathfinding string-pulling이 셀
-인덱스 공간이 아니라 world 좌표 공간에서 직선시야를 판정하도록
-교체했고, 회귀 방지로 `testProto25dPathRandom`(신규 16단언) +
-`testProto25dWalkGrid`(28→37단언)를 등록했다. 모바일 실기기 대응
-측정(Phase 3, 4개 뷰포트)은 11/11 PASS, 관측 2건[O1 HUD 탭 흡수, O2
-상단 경계 넘침]을 기록했다. E2E 전환 행렬(Phase 2, S14, 52단언)을
-커밋 `4982d933`으로 추가했고, `@2x` 실패 시 1x 강등 → 그마저 실패
-시 이모지 폴백 로직을 실제 브라우저에서 검증하는 E2E S15(13단언)를
-커밋 `b5430e9e`로 추가해 Q2 수정을 E2E 레벨에서 실측 확인했다.
-코드품질 리뷰(Phase 6)는 11건을 찾아 행동 변화 없는 정리 5건을 커밋
-`193b1e42`(스테일 주석 정리, 매직 넘버를 named 상수
-`SPRITE_MANIFEST_VERSION`/`SCENE_OBJECT_SHADOW_HEIGHT_RATIO`로 추출
-등)로 적용했고, 의도된 중복(의존성 0 모듈 간, `frameIndexAt`)은
-문서화한 채 그대로 유지했다. Phase 5 flake 재현성 분석: 수정 후
-dist에서 프로토타입 E2E 스펙을 독립적으로 5회 연속 재실행해 매번
-379/379 PASS·0 FAIL(재현 가능한 flake 없음) — S14 개발 중 S12에서
-관측된 Playwright 타임아웃 1건은 5회 재실행 어디서도 재현되지 않아
-일회성 인프라 이슈로 분류했다. Phase 8 독립 검토(별도 에이전트)가
-pathfinding 수정(방향/경계/코너/범위/결정론/null 계약 전부), degrade
-로직(무한루프 없음, 한 번 @2x가 실패하면 세션 내내 전역으로 유지되는
-"sticky-global" 폴백 — 의도된 안전장치로 확인, 알려진 한계로
-문서화), aria 배치, assertion 약화/스킵 0건, 레지스트리 단언 수와
-실행 결과 일치, 작업 범위 청결을 전부 CONFIRMED 판정했고, 문서 수정
-2건(SpriteAdapter 단언 수 60→70 정정, 파일럿 준비 문서에 @2x
-강등이 S15로 E2E 검증됐음을 명시)을 지시해 이 갱신에 반영했다. 최종
-스위트 수치: `testProto25dSpriteAdapter` 70, `testProto25dSpriteContract`
-177, `testProto25dPathRandom` 16, `testProto25dWalkGrid` 37,
-`testPaulSpriteIngest` 132, `testPaulSpriteAssets` 125,
-`testBundleBudget` 32, 프로토타입 E2E standalone 392/392(379 + S15
-13). 커밋 `01450a0d`(테스트 전용, S15 타이밍 수정)를 이어서 추가했다
-— 제품 코드 변경 없음. `npm run build`(HEAD `b5430e9e`/`01450a0d`)
-PASS·경고 0, `npm run verify:all`(HEAD `b5430e9e`) "ALL DOMAINS:
-PASS" 142 스위트 PASS/0 FAIL(약 28분), `npm run verify:e2e`는 run
-1(`b5430e9e`) 1718/1720(S15 타이밍 이슈 2건, `01450a0d`로 수정),
-run 2(`01450a0d`) 1718/1720(S15는 PASS로 전환, 대신 이 세션이
-손대지 않은 V2 자석 드래그 배치 테스트에서 간헐 FAIL 2건 — §6.1
-"기존 CI/E2E 알려진 간헐 실패" 참고), run 3(`01450a0d`,
-05:38–05:53 KST) **1720/1720 PASS·0 FAIL·0 SKIP·미mock 요청 0** —
-S15 PASS, V2 S16도 PASS해 run 2의 실패가 간헐적이었음을 확인했다
-(§6.1). 3회 전부 완료. Vercel Preview(HEAD `b5430e9e`,
-배포 `6646333620`) 에이전트 GET-only 확인 완료 — 200, 로그인 화면
-렌더, v2 스프라이트/degrade 속성/region 라벨 포함, `paul-*.png` 16개
-200 `image/png`, 저장된 플래그 없음. Production WRITE 0, DB 변경 0,
-플래그 전부 `false` 유지, PR #62 OPEN/Draft 유지(origin 최신 커밋
-`01450a0d`), 보호 대상 17개 미추적 파일 무변경, GitHub Actions
-워크플로 무변경, 기존 assertion 약화 0건. 신규 문서
-`docs/design/town/PROTO25D_PILOT_READINESS_2026-09-25.md`(기능/한계/
-모바일 확인표/에셋출처/롤백/운영자 5분 체크리스트), 저장소 루트
-`DECISIONS_PENDING.md`(결정 대기 10항목 — V2 S16 자석 드래그 간헐
-실패 재현/분리 항목 신규 추가)·`BLOCKERS.md`(활성 블로커 없음, V2
-간헐 실패는 "블로커 아님 — 기록"으로 별도 기재) 신설. 남은 것은
-`npm run verify:e2e` run 3 결과 한 칸뿐이다(§6). 상세는 아래 179차
-섹션. 178차 이하 보존)_
+_최종 갱신: 2026-09-25 (180차 — **에이전트 협의체(Agent Council) Phase 1 감사 + Phase 2 구현(개발 인프라 문서만, 미커밋)**: 활성 worktree(`feat/paul-town-v2-clean-pr`, HEAD `3c26a5bb`, PR #62 Draft)를 검증하고 기존 12역할 거버넌스 위에 `game-designer`/`devils-advocate` 2역할, 작업 등급 A/B/C/D, 작업 봉투, 야간 안전 큐(READY), 결정 템플릿을 추가했다(ADR 0008). 드라이런 3종(Class C 우편함 → OWNER_DECISION_REQUIRED, Class A 오타 → 협의체 미소집, Class D RLS → 운영자 승인 하드스톱) 통과. 제품 코드/SQL/CI/배포 변경 0, 커밋 0. 다음: 운영자 검토 후 커밋 여부 결정. 아래 180차 섹션 참고.)_
+
+## 2026-09-25 (180차) — 에이전트 협의체(Agent Council) Phase 1 감사 + Phase 2 구현 (개발 인프라 문서만, 제품 무접촉, 미커밋)
+
+### 0. 범위와 확인 사항
+
+- 작업 트리: `feat/paul-town-v2-clean-pr` worktree(`…/d95369ce-…/scratchpad/wt-clean-pr`), 시작 HEAD `3c26a5bb`(PR #62 Draft, base main), 시작 시 clean. `C:\voca` 메인 체크아웃(`feat/paul-town-v2-world-contract-2026-09-17`, `c7632737`)은 OBSOLETE로 판정하고 건드리지 않았다(미추적 SQL 17개 그대로).
+- 변경 범위: `.claude/agents/*.md`, `docs/agent-decisions/*.md`, `docs/agent-architecture.md`, `MULTI_AGENT_WORKFLOW.md`, `DEVELOPER_GUIDE.md`, `PROJECT_BOARD.md`, `.ai-status/README.md` + 체크포인트 JSON, `handoff.md`. **`src/`/`api/`/`*.sql`/`.github/`/배포 설정 변경 0, SQL 실행 0, DB 작업 0, 브랜치 전환/merge/rebase 0, worktree 삭제 0, 배포 0, commit/push 0.** 기존 파일은 전부 append(삭제 0줄, `git diff --numstat` 확인).
+- 라우팅 훅이 지시한 `masterplan-agent` 스킬은 전역 vibe-claude 플러그인 소속으로 프로젝트 스킬 목록에 없어 호출하지 않았다. `docs/agent-architecture.md`(2026-07-20)의 "전역 Head/Sub 계층을 저장소에 중복 생성하지 않는다" 결정을 그대로 따랐다.
+
+### 1. Phase 1 감사 결과(읽기 전용, sub-agent 3개 병렬)
+
+- Paul Town 2.5D(`paulTown2_5d`, 기본 false): 179차 기준 파일럿 준비 완료, 스프라이트 8프레임 제작 완료, 활성 블로커 0, 운영자 결정 10건 대기(`DECISIONS_PENDING.md`). 학생 진입점 UI 없음.
+- CI 30분 취소: 미해결(`.github/workflows/release-gate.yml:75` `timeout-minutes: 30`, 45분 패치는 gitignore된 `scripts/.tmp`에만, 172차에 권한 정책으로 미적용). 운영자 결정 대기.
+- SQL: 2.5D는 DDL 0. v3_47~v3_50은 운영자가 이미 적용·종결(127차 적용, 129차 POST 검증 PASS). `PROJECT_BOARD.md`/`ROADMAP.md`의 "v3_50 미실행" 표기는 125차 옛 카드가 append-only로 남은 표류 — 상태 판단은 handoff 최신 섹션이 우선한다는 규칙을 이번에 문서화했다.
+- `C:\voca` 미추적 SQL 17개: Paul Town 관련 3개(v3_49/v3_50 post-verify, 파일럿 진단)는 종결 이력/재사용 도구, v3_38·v3_39b·초등 45명 패키지는 무관한 운영자 결정 대기, v3_39와 그 롤백은 가드가 더 이상 통과할 수 없어 실행 금지로 기록됨. 현재 Paul Town 작업을 막는 것 없음.
+- 기존 거버넌스: `.claude/agents/` 12역할, `docs/agent-architecture.md`+`MULTI_AGENT_WORKFLOW.md`(1라운드 challenge, 활성 4명 상한, 정지 조건), ADR `docs/agent-decisions/0001~0007`, `DECISIONS_PENDING.md`/`BLOCKERS.md`, `.ai-status/`(284개), 실제 강제 훅은 SQL 파괴 패턴 차단 1개. 빠진 것: game-designer, devils-advocate, 구현과 분리된 코드 리뷰 명시, 작업 등급, 작업 봉투, 야간 안전 큐. 최근 `.ai-status` 파일들의 `agent_name: "lead"` 표류 발견.
+
+### 2. Phase 2 변경 파일
+
+신규 5: `.claude/agents/game-designer.md`(91줄, 읽기 전용 자문), `.claude/agents/devils-advocate.md`(71줄, 읽기 전용, 거부권 없음), `docs/agent-decisions/TEMPLATE.md`(81줄), `docs/agent-decisions/0008-agent-council-design-2026-09-25.md`(설계 근거, Phase 1 산출), `.ai-status/orchestrator-agent-council-phase1.json` + `-phase2.json`.
+
+append 확장 9(삽입 440줄, 삭제 0): `.claude/agents/orchestrator.md`(+57, Product Lead: 등급 판정·수용 기준·봉투·결정값 6종·독립성·가짜 합의 금지·정지 규칙·우회 불가), `implementer.md`(+43, 봉투 검증·승인 범위만·STOP-반환·자기승인 금지·git 범위), `qa-reviewer.md`(+42, 판정 4값 PASS/FAIL_FIX_REQUIRED/BLOCKED/OWNER_DECISION_REQUIRED·체크리스트 10항목·Class별 최소 범위), `child-experience-designer.md`(+36, 핵심 질문·13개 평가 항목·구현 결과 재검토), `docs/agent-architecture.md`(+38, 개념→역할 매핑·권한 경계), `MULTI_AGENT_WORKFLOW.md`(+118, 작업 등급 표·Class C/D 파도 3회 흐름·가짜 합의 금지·작업 봉투·야간 안전 큐·운영자 승인 필수 행동·토큰 규율·훅 vs 문서), `.ai-status/README.md`(+28, 선택 필드 7개·agent_name 14개 등록명·status 2값 추가), `PROJECT_BOARD.md`(+25, "활성 브랜치/worktree" 표 + "READY 큐" 섹션, 현재 비어 있음), `DEVELOPER_GUIDE.md`(+53, 운영자 사용 안내·FULL COUNCIL REVIEW/FAST PATH/야간 작업·질문별 참조 위치·강제 수준).
+
+### 3. 최종 역할 구성
+
+| 개념 | 역할 | 권한 |
+|---|---|---|
+| Owner | 운영자 | 최종 |
+| Product Lead | orchestrator | 등급 판정, 봉투 발급, 결정 1회. 승인 경계 우회 불가 |
+| Kids UX | child-experience-designer | 입장만(Read/Grep/Glob) |
+| Game Design | game-designer(신규) | 입장만 |
+| Engineering | planner | 입장만 |
+| Devil's Advocate | devils-advocate(신규) | 입장만, 거부권 없음 |
+| Implementer | implementer | 유일한 코드 Write/Edit, 자기승인 불가 |
+| Code Review | `/code-review` 스킬(다른 컨텍스트) + Class D security-reviewer | 판정 |
+| QA | qa-reviewer | PASS/FAIL_FIX_REQUIRED/BLOCKED/OWNER_DECISION_REQUIRED — 반려는 운영자만 뒤집음 |
+| Release | deployment-engineer | 검증 |
+| Docs | docs-maintainer | *.md/.ai-status만 |
+| Overnight | 전담 없음 | 메인 세션이 READY 큐 순회, 비면 정지 |
+
+### 4. 드라이런 결과(가상 요청, 제품 코드 무변경, `DECISIONS_PENDING.md`에 행 추가 안 함)
+
+**드라이런 C — "Paul Town에 장식용 우편함 탭 반응 추가"**: orchestrator 등급 판정 Class C(새 아동 상호작용, 학생 노출 → 운영자 승인 필요). 파도 1(독립 평가, 병렬 3건 — 서로의 답을 못 봄): child-experience-designer REVISE(저마찰·온보딩 친화적이나 O1 HUD 탭 영역 겹침 미해결 상태의 새 탭 타깃, 반복 탭 변주/쿨다운 미정의), game-designer OWNER_DECISION_REQUIRED(학습 연결 없음 → 동기 루프 없음, 랜덤 페이로드는 슬롯머신 패턴), planner EXPERIMENT(벤치 상태기계·스프라이트 어댑터 재사용, DDL 0, 2~4h). 파도 2(교차 비평 1회): 물질적 이견 기록 — game↔ux/eng("학습 연결이 게이트인가"), ux→eng(비용 추정에 검증 부채 누락), eng→game(학습 루프는 제품 범위 질문이지 엔지니어링 REJECT 근거 아님). 파도 3 devils-advocate: 사전 예측 5개 중 4개 적중, 권고 OWNER_DECISION_REQUIRED, 최저 복잡도 옵션 "변주·쿨다운·페이로드 없는 고정 단일 반응". **orchestrator 결정(1회): OWNER_DECISION_REQUIRED** — 학습 연결 게이트 여부는 `PROJECT_PAUL_GOAL.md` 가이드레일에 대한 제품 범위 판단이라 orchestrator가 단독으로 뒤집지 않음. 추가 라운드 없이 종료(토론 종결 확인). 구현 시 봉투 범위는 `src/utils/town/proto2_5d/sceneFixture.js`, `src/components/town/proto2_5d/Proto25DScreen.jsx`, 스프라이트 자산 1종, `scripts/testProto25dSceneFixture.mjs`로 한정 가능. QA 반려 경로 확인: 히트박스 44px 미만이면 FAIL_FIX_REQUIRED.
+  - **드라이런에서 실제로 잡힌 결함 1건**: 엔지니어링 리뷰어(planner)가 첫 응답에서 "이 worktree에 2.5D 코드가 없다"고 보고했으나, orchestrator가 worktree 루트에서 직접 확인한 결과 `src/components/town/proto2_5d/`·`src/utils/town/proto2_5d/`·Proto25d 스위트 9건이 존재했다. 리뷰어의 grep이 `C:\voca`(구 브랜치)에서 실행된 것. 교차 비평에서 리뷰어가 정정을 수용하고 "호스트 시스템 미확정" 우려를 철회했다. 교훈: 작업 봉투 대조는 수정 권한 에이전트뿐 아니라 **읽기 전용 리뷰어의 첫 명령**이어야 한다 — `MULTI_AGENT_WORKFLOW.md` "작업 봉투" 절에 1문단 추가.
+
+**드라이런 A — "사용되지 않는 mock 라벨의 오타 수정"**: orchestrator 등급 판정 Class A(오타, 비제품, 결정적). 흐름: 봉투(ALLOWED_PATHS = 해당 mock 파일 1개) → implementer → qa-reviewer(build + 해당 verify 도메인). 협의체·ADR·DA 미소집, handoff 1줄. **협의체가 소집되지 않음을 확인.**
+
+**드라이런 D — "프로덕션 RLS 정책 변경"**: orchestrator 등급 판정 Class D(RLS = CLAUDE.md 규칙 8/11 영역, 운영자 승인 필수 목록). 흐름: planner + security-reviewer 입장 → ADR + `DECISIONS_PENDING.md` 행 → **OWNER APPROVAL REQUIRED에서 하드스톱**. 승인 전에는 implementer가 멱등 `supabase_v3_NN_*.sql` 파일 준비까지만 가능(파괴 패턴은 PreToolUse 훅이 실제 차단), 실행은 운영자가 SQL Editor에서, 그 뒤 post-verify + 2차 운영자 체크포인트. FAST PATH 요청으로도 우회 불가. **하드스톱 동작을 확인.**
+
+### 5. 역할 경계 검증
+
+designer/game-designer/devils-advocate: `tools: Read, Grep, Glob`(Write/Edit 없음) → 조용한 구현 불가. devils-advocate: 정의상 거부권 없음, 결정은 orchestrator. implementer: 자기승인 금지 명문화, 코드 리뷰는 다른 컨텍스트. qa-reviewer: 4값 판정, 반려는 운영자만 뒤집음. orchestrator: 운영자 승인 경계 우회 불가, FAST PATH도 Class D 유지. overnight: READY 큐(현재 비어 있음)만, 비면 정지. 미검증 worktree: 봉투 대조 규칙(문서 강제) — 드라이런에서 읽기 전용 리뷰어 미대조 사례가 실제로 발생해 규칙을 확장함(§4).
+
+### 6. 강제 수준(규칙 18, 정직한 표기)
+
+훅으로 실제 강제되는 것은 여전히 SQL 파괴 패턴 차단뿐. 파도 횟수, 자기승인 금지, 큐 소진 시 정지, 봉투 대조는 문서 규칙(자율 준수). 봉투 대조의 PreToolUse 훅 강제(`scripts/hooks/checkTaskEnvelope.mjs`)는 운영자가 원하면 별도 작업(Phase 3 후보).
+
+### 7. 다음 세션 인수
+
+- 운영자 검토 대기: 이 세션의 변경은 **미커밋**이다. 검토 후 커밋 여부/분할(신규 역할 2파일 / 기존 역할 확장 4파일 / 거버넌스 문서 5파일 / handoff·ADR·체크포인트) 결정. 커밋 시 `git add`는 위 §2 파일만(규칙 16). **2026-09-26 갱신**: 운영자가 최종 독립 검토(qa-reviewer sub-agent + orchestrator 직접 diff 검토, 결함 5건 수정: game-designer 경로 `docs/GAME_REWARD_RULES.md`, qa-reviewer 산출물/체크포인트 계약 4값, implementer 소커밋 권한 관계, orchestrator ADR 작성 위임 명시, 활성 상한 4명과 협의체 관계) 후 커밋·push를 지시해 3개 커밋으로 분할했다 — ① 역할 신규/확장 `cea6c6fc`, ② 워크플로·거버넌스·결정 규칙 `34b5155e`, ③ handoff·ADR·체크포인트(이 커밋). 커밋 목록과 검토 결과는 PR #62 댓글 참고. merge/배포/브랜치 전환/worktree 삭제/SQL 실행 없음.
+- 활성 worktree가 세션 임시 경로(`…/scratchpad/wt-clean-pr`)에 있다 — 고정 경로 이전 여부 운영자 결정.
+- 새 역할(`game-designer`/`devils-advocate`)은 Claude Code 세션 재시작 후 subagent_type으로 직접 소집 가능. 이번 드라이런은 general-purpose 에이전트가 worktree의 역할 파일을 읽고 따르는 방식으로 실행했다(세션 시작 시 로드된 정의는 `C:\voca`의 구 파일이기 때문).
+- Paul Town 실제 기능 작업은 시작하지 않았다(지시대로). Paul Town 2.5D의 다음 단계는 여전히 `DECISIONS_PENDING.md` 10건의 운영자 결정이며, 결정 후 orchestrator가 `PROJECT_BOARD.md` READY 큐에 항목을 넣는다.
+- Phase 3 후보(운영자 결정): 봉투 대조 훅, `.ai-status` `agent_name` 표류 파일 정정 여부(기존 파일은 이번에 수정하지 않음), CI 30분 상한 결정, PR #62 머지 판단.
 
 ## 2026-09-25 (179차) — Paul Town 2.5D 프로토타입 학생 파일럿 직전 품질 정리(8h 자율 세션)
 
