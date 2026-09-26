@@ -70,3 +70,41 @@ ORCHESTRATOR
 없음 — 기존 5개 전부 명확하고 겹치지 않는 책임을 갖고 있어 폐기 대상이
 아니다(사용자 지시 "Do not delete working agents unless they are clearly
 duplicated"와 일치).
+
+## 협의체(Agent Council) 확장 — 2026-09-25 (ADR 0008)
+
+_기존 12역할 위에 2개 역할과 4개 규칙만 추가한다. 새 조직/새 상태 시스템
+없음. 전역 vibe-claude 플러그인(Head/Sub, masterplan-agent, critic-lead)은
+위 "중요한 사실 확인"의 결정대로 편입하지 않는다._
+
+### 개념 → 실제 역할
+
+| 협의체 개념 | 실제 역할(파일) | 조치 |
+|---|---|---|
+| OWNER | 운영자 | 최종 권한 |
+| PRODUCT LEAD | `orchestrator.md` | 확장(등급 판정·수용 기준·봉투·결정 기록) |
+| KIDS UX / DESIGN | `child-experience-designer.md` | 확장(구현 결과 재검토) |
+| GAME DESIGN | `game-designer.md` | **신규**(읽기 전용, 자문) |
+| ENGINEERING | `planner.md` | 재사용(영향/복잡도/비용 입장) |
+| DEVIL'S ADVOCATE | `devils-advocate.md` | **신규**(읽기 전용, 거부권 없음) |
+| IMPLEMENTER | `implementer.md` | 확장(봉투 검증·STOP 반환·자기승인 금지) |
+| CODE REVIEW | 내장 `/code-review` 스킬(구현과 다른 컨텍스트) + Class D는 `security-reviewer.md` | 재사용 |
+| QA / REGRESSION | `qa-reviewer.md` | 확장(판정 4값·체크리스트) |
+| RELEASE | `deployment-engineer.md` | 재사용 |
+| DOCS | `docs-maintainer.md` | 재사용 |
+| MISSION 게이트 | `mission-guardian.md`, `product-guardian.md`, `learning-designer.md` | 재사용(Class C/D 후속 판정) |
+| OVERNIGHT | 전담 없음 | 메인 세션이 orchestrator 겸임, READY 큐 순회 |
+
+### 권한 경계 요약
+
+- 구현(Write/Edit on `src/`/`api/`/`scripts/`/`*.sql`): implementer만.
+- `*.md`/`.ai-status/*.json`: docs-maintainer(및 자기 카드 이동은 각
+  역할).
+- 판정: qa-reviewer(PASS/FAIL_FIX_REQUIRED/BLOCKED/OWNER_DECISION_REQUIRED),
+  security-reviewer(등급), 나머지 전문가는 입장만.
+- 결정: orchestrator 1회. 운영자 승인 경계는 누구도 우회 불가.
+- devils-advocate: 단독 거부권 없음. child-experience-designer/
+  game-designer: 조용히 구현 불가.
+
+절차/등급/봉투/야간 큐는 `MULTI_AGENT_WORKFLOW.md` 같은 날짜 섹션, 결정
+템플릿은 `docs/agent-decisions/TEMPLATE.md`.

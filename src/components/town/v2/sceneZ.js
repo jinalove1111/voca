@@ -1,0 +1,57 @@
+// src/components/town/v2/sceneZ.js — Paul Town V2 씬 로컬 UI z-index 상수
+// (순수, 2026-09-18, 작업 지시서 STEP 7).
+//
+// TownScene.jsx 자신이 그리는 상호작용 UI(팝오버 바깥 탭 백드롭/배치
+// 오버레이/이동·보관 미니 팝오버)는 세계 오브젝트(worldZIndex 기반,
+// depthOrder.js LAYER_BASE 최대 ui=9000)와 같은 z 공간을 공유해야 한다 —
+// 옛 townScene.js Z_LAYERS(0~100)는 depthOrder.js 값보다 훨씬 작아 Step
+// 4~6 동안 세계 오브젝트에 항상 가려졌다(과도기 붕괴, 이번 Step 7의
+// TownObjectLayer/TownFogLayer/TownPlacementOverlay 전환으로 해소된다).
+// townScene.js 자체는 수정하지 않는다(이 상수들의 소유자가 아니고, 다른
+// 아직 옛 체계를 쓰는 코드가 있을 수도 있다) — 대신 이 작은 씬 전용
+// 파일이 depthOrder.js의 LAYER_BASE에서 "세계 전체보다 항상 위"인 UI
+// 전용 상수 3개만 파생한다.
+import { LAYER_BASE } from '../../../utils/town/depthOrder'
+
+// 팝오버 바깥 탭 백드롭 — 모든 오브젝트(architecture/scenery/objects/
+// foregroundVegetation, 최저값 LAYER_BASE.architecture=6000)보다 낮아야
+// 아이템 버튼 자체는 여전히 클릭된다(그 버튼만 pointer-events-auto라
+// 백드롭 자신의 z가 그 외 pointer-events-none 배경/장식 레이어들과
+// 어떤 관계든 클릭 판정에는 영향이 없다 — 오직 "버튼보다 낮은가"만
+// 중요하다).
+export const BACKDROP_Z = LAYER_BASE.architecture - 1
+
+// 배치 가능 칸 오버레이(TownPlacementOverlay) — 모든 세계 오브젝트(paul
+// 포함, 최고값 LAYER_BASE.paul=8000대)보다 위, UI 티어(9000) 안에서도
+// 팝오버보다는 아래.
+export const OVERLAY_Z = LAYER_BASE.ui + 100
+
+// 이동/보관 미니 팝오버 — 이 씬에서 항상 최상단.
+export const POPOVER_Z = LAYER_BASE.ui + 200
+
+// 드래그 중인 배치 아이템(2026-09-20, 자석 드래그 배치) — 배치 가능 칸
+// 오버레이(OVERLAY_Z)보다는 위여야 포인터를 따라다니는 동안 앵커 버튼에
+// 가려지지 않고, 이동/보관 팝오버(POPOVER_Z)보다는 아래여야 드래그 중에도
+// 팝오버/시트가 항상 그 위에 남는다(드래그 중엔 팝오버가 열려 있지 않지만,
+// 계약상 항상 아래에 있어야 한다는 순서 자체를 고정한다).
+export const DRAG_ITEM_Z = LAYER_BASE.ui + 150
+
+// 대기(ambient atmosphere) 부유 장식(2026-09-20, TownAtmosphereLayer.jsx) —
+// 나비/나뭇잎/빛 알갱이는 Y-정렬 콘텐츠가 아니라(특정 아이템과 상호작용할
+// 필요가 없다) 씬 전체 위를 떠다니는 얇은 고정 오버레이라, worldZIndex의
+// y-랭킹 콘텐츠 밴드(architecture~foregroundVegetation, 6000~6903대)에
+// 넣지 않는다. LAYER_BASE.paul(8000, Y-랭킹 없음)보다 10 낮게 둬 콘텐츠
+// 밴드 전체(최대 6903)보다는 항상 위, paul/ui(8000/9000)보다는 항상 아래
+// 로 고정한다 — DRAG_ITEM_Z와 같은 정신의 작은 씬 로컬 상수.
+export const ATMOSPHERE_Z = LAYER_BASE.paul - 10
+
+// 아이템 상호작용 캐릭터(2026-09-21, 벤치 앉기 파일럿 —
+// townInteractions.js ITEM_INTERACTIONS) — Y-랭킹 콘텐츠 밴드
+// (architecture~foregroundVegetation, 최대 6903)보다는 항상 위여야 걷는/
+// 앉은 캐릭터가 배치 아이템(잠금 랜드마크 오버레이 포함)에 가려지지
+// 않고, paul/ui(8000/9000)보다는 아래여야 이 한시적 연출이 향후 실제
+// 플레이어 토큰(paul)이나 최상단 UI를 가리지 않는다 — ATMOSPHERE_Z와
+// 같은 정신의 "콘텐츠 밴드 위, paul/ui 아래" 고정 상수(Y-랭킹 콘텐츠가
+// 아니라 짧고 유한한 오버레이 연출이므로 worldZIndex로 y-랭킹하지 않는다,
+// ATMOSPHERE_Z 헤더 주석과 동일 이유).
+export const CHARACTER_Z = LAYER_BASE.paul - 500

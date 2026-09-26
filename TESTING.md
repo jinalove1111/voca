@@ -1413,3 +1413,446 @@ reject 캐시로 "그냥 다시 시도"로는 복구 불가하던 문제의 자�
   `testPronunciationRewardOnce` 54/54 · `testRegistryCoverage` 8/8 ·
   `testBundleBudget` 10/10 · `rewardSystem` 도메인 47개 스크립트 PASS.
   로컬 PASS이며 최종 판정은 CI Release Gate(PR 생성 후)에서 한다.
+
+## 관련 항목: Paul Town V2 세계 좌표 렌더러 — 순수 단위 테스트 9종 등록 + 스크린샷 도구 (2026-09-18, 170차)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+Paul Town V2 렌더러 통합(`handoff.md` 2026-09-18(170차) 참고, 플래그
+`paulTownV2` OFF)이 만든 순수 단위 테스트 9종을
+`tests/harness/registry.mjs`(`attachment` 도메인, `npm run
+verify:attachment`로 함께 실행)에 `extra:false`로 등록했다 — 그중 6종
+(`testTownWorldContract`/`testTownPlacementContract`/
+`testTownHarnessGeometrySync`/`testTownDepthOrder`/`testEnvArtManifest`/
+`validateEnvArtManifest`)은 2026-09-17 작성분, 3종(`testTownEnvAssets`/
+`testTownWorldRender`/`testTownWorldScenery`)은 2026-09-18 신규 작성이며,
+9종 전부 이번 세션 이전에는 registry 미등록이라 `verify:all`에서 한 번도
+실행되지 않고 있었다(단독 실행으로 전부 PASS 확인 후 등록).
+
+| 스크립트 | 단언 | 대상 | 네트워크 |
+|---|---|---|---|
+| `scripts/testTownWorldContract.mjs` | 96 | `worldContract.js`(동결 월드 지오메트리) — `townLevel.js`/`townScene.js`(`DISTRICTS[*].unlock`/`lotState`)에 실제로 위임하는지(재구현 아님) | 0 |
+| `scripts/testTownPlacementContract.mjs` | 690 | `placementContract.js`(47칸 배치 계약) — 콜리전/SPOT_MAP 일치/존 배분/tree·bench 배제(시드 고정 LCG 퍼징) | 0 |
+| `scripts/testTownHarnessGeometrySync.mjs` | 75 | 디자인 목업 하네스(`paul-town-recompose.html` `#geometry`)와 `worldContract.js` 대조 | 0 |
+| `scripts/testTownDepthOrder.mjs` | 62 | `depthOrder.js`(월드 깊이/z-index 모델) — 계약+property 테스트 | 0 |
+| `scripts/testEnvArtManifest.mjs` | 71 | `validateEnvArtManifest.mjs` 자체의 회귀 스위트(결함 주입 4종 포함) | 0 |
+| `scripts/validateEnvArtManifest.mjs` | — | env 아트 매니페스트 검증 CLI(스키마/중복 키/px1x=px2x/2/열거값), 인자 없이 실행 시 실제 manifest/spec 검사 | 0 |
+| `scripts/testTownEnvAssets.mjs`(신규) | 196 | `src/assets/town/env/*.webp` 35개 + `index.js`(`TOWN_ENV_ASSETS`) — manifest와 파일 집합/sha256/bytes 일치, "assets/town/env" 참조가 V2 밖(0건)인지 | 0 |
+| `scripts/testTownWorldRender.mjs`(신규) | 97 | `worldRender.js`(세계 좌표 렌더 어댑터) — `cellAnchor`/`landmarkBox`/`worldZIndex`/`freeWorldAnchors`/`pxToWidthPct`/`widthPctToHeightPct`가 기존 계약을 그대로 변환만 하는지 | 0 |
+| `scripts/testTownWorldScenery.mjs`(신규) | 206 | `worldScenery.js`(동결 배경/장식 데이터) — 아래 참고 | 0 |
+
+**`testTownWorldScenery.mjs`의 `node:vm` 동기화 방식** — 이 테스트는
+승인 디자인 하네스(`docs/design/town/mockup/paul-town-recompose.html`)의
+합성 스크립트를 **한 글자도 수정하지 않고** `node:vm` 샌드박스 안에서
+그대로 실행한다. 하네스가 기대하는 `document`/캔버스류 API 대신 값을
+그대로 기록만 하는 가짜 DOM(recording fake DOM)을 주입해, 하네스가
+평소처럼 동작하며 계산해내는 `ENV_PLACEMENTS`(108개)/`GROUND`/
+`PROP_PLACEMENTS`(20개)/`SIGNS`/`LANDMARK_DECOR`/`BG_FILLER_TREES`(10개)
+수치를 그대로 뽑아내 `worldScenery.js`의 동결 상수와 대조한다(허용오차
+0.05, 390px 기준) — 하네스 로직을 테스트 파일에 손으로 베끼지 않는다는
+이 저장소의 "핵심 원칙"(§ 문서 상단)을 프론트엔드 하네스에도 그대로
+적용한 사례. 해상도(360/390/430px) 무관성, 레벨(1/3/4/5/8) 무관성,
+`worldScenery.js` 자체의 모듈 순수성(fetch/localStorage/Math.random/
+document/window/supabase/`isFeatureEnabled` 없음, import는
+`./worldContract` 하나뿐)까지 함께 고정한다.
+
+**`scripts/town-art/shootRenderer.mjs`(신규, verify:* 미등록 — 사람이
+눈으로 보는 QA 보조 도구)** — Paul Town V2 렌더러를 실제 브라우저
+(Playwright chromium)로 띄워 스크린샷을 찍는 도구다.
+`scripts/testBrowserE2E.mjs`와 동일하게 `dist/`가 없으면 먼저
+`npm run build`한 뒤 vite preview로 띄우고, `tests/e2e/lib/mockRoutes.mjs`
+의 전체 네트워크 mock(실 Supabase/Vercel 요청 0건)으로 QA 픽스처 학생을
+로그인시킨다. `npm run verify:*`/`verify:all`에는 등록돼 있지 않고
+PASS/FAIL을 자동 판정하는 테스트도 아니지만, 가로 스크롤/페이지
+에러/환경 자산 요청 실패 같은 명백한 구조적 결함은 exit code 1 +
+콘솔 로그로 fail-closed 신호를 준다.
+
+- **CLI**: `node scripts/town-art/shootRenderer.mjs --levels 1,3,4,5,8
+  --widths 360,390,430 [--zoom2] [--owned all|none] [--out <dir>]`.
+  기본값은 `--levels 4 --widths 390 --owned all --out
+  art-staging/renderer-previews/`(`.gitignore`의 `art-staging/` 아래라
+  산출물은 커밋되지 않는다).
+- **보장하는 것**: Playwright 컨텍스트를 `reducedMotion:'reduce'`로 열어
+  `motion-safe:` 페이드인 애니메이션이 아예 걸리지 않게 하고, 벨트+
+  서스펜더로 씬과 조상 체인의 computed opacity가 전부 1이 되고
+  `img[data-env-asset]` 전부가 `.complete`될 때까지 폴링한 뒤에만
+  셔터를 누른다(색 바랜 스크린샷 방지). 이 도구의 Playwright 페이지
+  안에서만(`addStyleTag`) 앱의 고정 UI 크롬(발음 재생 속도 위젯) 1개를
+  스크린샷 비교 편의를 위해 숨기며, 이는 이 도구의 캡처 화면에만
+  적용되고 실제 학생 화면 동작에는 영향이 없다.
+
+## 관련 항목: Paul Town 2.5D 캐릭터 프로토타입 — 신규 단위/E2E 스위트 4종 + S9/testBundleBudget CI 노트 (2026-09-23, 172차)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._
+
+Paul Town 2.5D 캐릭터 프로토타입(`paulTown2_5d` 플래그, 기본 OFF,
+`handoff.md` 2026-09-23(172차)/`docs/design/town/ASTRA_HANDOFF_2026-09-21.md`
+§0 참고) Stage 1~5가 추가한 테스트 4종. 앞의 3종은 `tests/harness/registry.mjs`
+의 `attachment` 도메인에 `extra:false`로 등록돼 있어(`npm run
+verify:attachment`, 그리고 `verify:all`에 포함) 관례상 위 "새 테스트 작성
+패턴"/"4개 카테고리"를 따른다(카테고리 2 순수 로직 단위 테스트 2종 +
+esbuild 번들 필요 1종).
+
+| 스크립트 | 단언 | 대상 | 네트워크 |
+|---|---|---|---|
+| `scripts/testProto25dWalkGrid.mjs` | 28 | `walkGrid.js`(걷기 가능 격자/장애물 판정) + `pathfinding.js`(BFS+string-pulling) | 0 |
+| `scripts/testProto25dDepth.mjs` | 23 | `depthVisual.js`(Y-기반 스케일/z-index, worldContract/depthOrder 위임 확인) | 0 |
+| `scripts/testProto25dBench.mjs` | 88 | `benchInteraction.js`(벤치 도착/좌석 지점, 탭 hit-test, 좌석 sink 보정) | 0 |
+| `tests/e2e/townProto25d.spec.mjs`(`[town-proto2.5d]`, `scripts/testBrowserE2E.mjs`에 등록, `npm run verify:e2e`로 실행) | S1~S8c+S10, 160 PASS | 브라우저 E2E — 클릭투무브/장애물 회피/depth occlusion/reduced-motion/벤치 walk-to-sit/모바일 터치/44px 탭 타겟/상호작용 도중 언마운트 | 0(`installMocks` 전체 가로채기) |
+
+`walkGrid.js`/`depthVisual.js`는 `worldContract.js`/`depthOrder.js`를
+확장자 없는 상대 import로 참조하므로 plain `node`로 직접 import하면 Node
+ESM 로더가 `ERR_MODULE_NOT_FOUND`로 죽는다(`scripts/testTownWorldContract.mjs`
+와 동일 원인) — esbuild로 `scripts/.tmp/`(gitignore 대상)에 번들해 그
+산출물을 import한다. `benchInteraction.js`만 의존성이 0개(순수 상수/함수,
+어떤 것도 import하지 않음)라 이 번들링이 필요 없고 plain `node`로 직접
+import한다.
+
+**E2E spec을 단독으로 재실행하는 법(standalone runner 패턴, 이 저장소
+기존 관례)** — `npm run verify:e2e`가 여러 spec을 순차 실행하므로
+프로토타입 하나만 빠르게 확인하려면:
+
+```
+node -e "import('./tests/e2e/townProto25d.spec.mjs').then(async m => { const { chromium } = await import('playwright'); const b = await chromium.launch({headless:true}); const r = await m.run(b, 'http://localhost:4173'); console.log(r.results.filter(x=>x.status==='FAIL')); await b.close(); })"
+```
+
+(사전에 `vite preview --port 4173` 기동 필요, `scripts/testBrowserE2E.mjs`
+관례 그대로.)
+
+### S9(`tests/e2e/townV2.spec.mjs`, "배치 앵커 탭 가능성") — 미확정 CI 1회 FAIL 기록
+
+이 노트는 Paul Town 2.5D 작업이 아니라 **기존 V2 자석 드래그 배치
+기능**(`tests/e2e/townV2.spec.mjs`)의 회귀 조사 결과다 — 별도 세션이 CI
+로그를 직접 조사해 남겼다.
+
+> S9(`tests/e2e/townV2.spec.mjs`, "배치 앵커 탭 가능성")는 CI(Linux
+> Chromium)에서 1회 FAIL(run 35567109630, commit 1945eb5, 2026-09-21)
+> 했다(앵커 bbox ~43.3-43.4px, 테스트 자체의 허용치 `>=43.5`px 미달),
+> 반면 Windows Chromium(로컬, `deviceScaleFactor` 1/2 둘 다,
+> `S9_VIEWPORTS` 전체)은 매번 정확히 44.0px를 측정했다. 이후 재현 안 됨
+> (최신 실행 clean PASS). 근본 원인 미확정 — 씬 입장 줌 애니메이션
+> (`motion-safe:animate-town-entrance`) 가설은 로컬 재현으로 반증(측정
+> 시점에 이미 애니메이션 종료, `transform:none`). Linux Chromium
+> 환경이 없어 추가 조사 불가 — 재발 시 조사할 것. `e2e` 도메인은
+> `extra:true`(non-gating)이므로 이 FAIL이 Release Gate를 막지 않는다.
+
+### `scripts/testBundleBudget.mjs` — 메인 청크 판별을 `dist/index.html` 기준으로 변경
+
+이유: Proto 2.5D Stage 4(`8132dd1`)가 지연 로드되는 `Proto25DScreen`도
+기존 town 자산 레지스트리(`src/assets/town/index.js`)를 import하게
+되며, 그 모듈이 메인 엔트리 + 2개 이상의 lazy chunk에 공유돼 Rollup이
+별도 공유 청크로 분리했다 — 그 청크의 파일명이 실제 엔트리와 동일한
+`index-<hash>.js` 패턴이라, 기존 `findChunk`(파일명 정규식 매칭 +
+"짧은 이름 우선" 타이브레이크)가 `readdirSync` 열거 순서(OS/파일시스템
+의존, 보장되지 않음)에 따라 둘 중 아무 파일이나 "메인"으로 오판할 수
+있게 됐다. Windows(NTFS) 로컬은 순서상 우연히 실제 엔트리를 먼저 찾아
+통과했지만, Linux CI(ext4/overlay)는 반대 순서라 자산 registry 청크를
+"메인"으로 잘못 골라 2개 단언(`TownScreen` 청크 문자열 포함 여부/
+`paulTownV1:!1` 리터럴 포함 여부)이 FAIL했다. 수정은 메인 청크를
+`dist/index.html`의 실제 `<script type="module" src="...">` 참조로
+판별하도록 바꾼 것(파싱 실패 시에만 기존 파일명 매칭으로 안전하게
+폴백, 경고 로그와 함께) — 예산 수치(gzip 135KB/15KB, raw 1.5MB)나 다른
+단언은 무변경. 정방향 24/24 PASS, `readdirSync` 순서를 인위적으로
+뒤집은 재현 케이스도 24/24 PASS로 확인(수정 전에는 이 재현 케이스가
+CI와 동일한 2 FAIL을 재현했다 — CLAUDE.md 규칙 15 "회귀 의심 시 실제
+FAIL 확인" 적용).
+
+### `scripts/testProdCheck.mjs` — 같은 CI 실행에서 관측된 별도 FAIL(원인만 기록, 미조사)
+
+이 PR의 같은 CI 실행(`verify:all` 스텝)에서 `scripts/testProdCheck.mjs`
+(`extra:true`, non-gating — 위 "Production Safety Harness" 섹션 참고)도
+FAIL했다. Proto 2.5D/testBundleBudget과는 무관한 별개 원인 — 자체
+`--fixture` self-suite(총 292단언) 중 1건: `--show-names — INFO 절에
+원본 이름 "DriftStudentS1" 이 보인다`(CI 학생명 마스킹의 `--show-names`
+옵트아웃 플래그가 INFO 절의 마스킹까지는 해제하지 않는 것으로 보임).
+`extra:true`라 Release Gate를 막지 않는다. 이 세션은 원인 관측만 기록하고
+조사/수정은 하지 않았다(범위 밖) — 상세는
+`docs/design/town/ASTRA_HANDOFF_2026-09-21.md` §0.15.
+
+### S8a(`tests/e2e/townV2.spec.mjs`, "마을을 열기만 해도 student_progress 쓰기 0건") — 타이밍 의존 단언 기록(2026-09-23)
+
+`npm run verify:e2e` 전체 순차 실행(1488단언)에서 1회 FAIL(`writes=1`),
+같은 코드로 `townV2.spec.mjs` 단독 재실행 448/448 PASS, 직전 `verify:all`의
+e2e 도메인도 PASS — 회귀가 아니라 타이밍 플레이크. 메커니즘:
+`src/hooks/useStudent.js:2043-2047`의 "restoreChecked 이후 record 변경 →
+2초 디바운스 → doSync(student_progress upsert, `wordLibrary.js:3185`)"가
+정상 동작이며, S8a는 클라우드 병합 복원이 화면에 보인 뒤 +500ms에 쓰기
+수를 재므로 복원→측정 구간이 렌더 지연으로 2초를 넘기면 이 sync가 측정
+창 안에 들어온다. 이 세션은 테스트/대기시간/허용치를 바꾸지 않았다(문서화만,
+`handoff.md` 172차 §9) — 재발 시 "디바운스 창 밖에서 재는" 방식으로
+S8a를 재설계할지는 V2 소유 세션이 결정한다. 재확인 커맨드: `vite preview`
+기동 후 `townV2.spec.mjs`만 단독 실행(위 standalone runner 패턴).
+
+### 2026-09-23 후속 — S9 원인 증명·측정 시점 수정 + Proto S3 항목11 측정 시점 수정 (Linux CI 전용 타이밍)
+
+위 S9 노트("원인 미확정")는 이후 같은 날 **증명·수정**됐다 — CI run
+35802684946(Linux)이 다시 43.445px로 FAIL했고, 프로브(`scripts/.tmp/
+s9_restart_probe.mjs`, `s9_early_read_probe.mjs`)로 (a) 배치 모드 진입 시
+애니메이션 재시작은 없음(반증), (b) 씬 루트의 1회성 `townEntrance 450ms`
+scale(0.97→1) 애니메이션이 **아직 재생 중일 때** 자손 앵커의 bbox를 읽으면
+진행률만큼 축소된다는 것을 확인(자연 실행 1/10이 367ms 시점 43.95px; 인위적
+재생 중 읽기 5/5 43.13~43.39px = CI 값; 종료 대기 후 5/5 44.00). 수정은
+`tests/e2e/townV2.spec.mjs`의 `waitForEntranceAnimationSettled(page)`를 S9
+bbox 루프 직전에 호출하는 것뿐(허용치 `>=43.5`/`>=44`·뷰포트·단언 수 448
+무변경, 제품 코드 무변경).
+
+같은 CI run의 `[town-proto2.5d] S3 항목11 드래그 dist=1.0156`도 측정
+레이스였다 — `Proto25DScreen.jsx:193-198`의 650ms `setTimeout`(커밋 시
+예약)과 650ms CSS transition(다음 페인트에 시작)이 다른 시계라 phase가
+`idle`이어도 잔여 이동이 남을 수 있고, 항목9 연속 탭 직후의 `boxBeforeDrag`가
+그 잔여를 드래그로 오귀속. 수정은 `tests/e2e/townProto25d.spec.mjs`의
+`waitForBoxStable(locator)`(연속 3표본 0.05px 이내)로 기준선 샘플만 안정화
+(허용치 `<1px`·단언 수 160 무변경). Windows 로컬 프로브 12회는 잔여 0px —
+재현은 CI 재실행으로 확정(결과는 `handoff.md` 172차 §10/PR #62 코멘트).
+
+## 관련 항목: Paul Town 2.5D Phase 6A — 씬 픽스처/캐릭터 매니페스트 단위 스위트 2종 + E2E 160→190 (2026-09-23, 173차)
+
+- `scripts/testProto25dSceneFixture.mjs`(24단언, gating): `sceneFixture.js`
+  id 8개 고유, 모든 `assetKey`가 `townAsset()`에서 URL로 해석, `walkGrid.js`
+  `OBSTACLES`가 `deriveObstacles(SCENE_FIXTURE)`와 deep-equal(단일 진실
+  원천), 레거시 3개 rect byte-identical, 신규 5개 rect = `footprintRect`
+  산식, 장애물 쌍 겹침 0, 스폰(50,62) walkable + 8개 장애물 옆까지 BFS
+  도달, `objectRenderedWidthPx`/`sceneUnitPx` 규칙. `src/assets/town/
+  index.js`는 `.webp`를 dataurl 로더로 번들(`testTownAssetManifest.mjs`
+  패턴).
+- `scripts/testProto25dCharacterManifest.mjs`(72단언, gating): 매니페스트
+  부재/무효 9종 → throw 없이 emoji 폴백(기존 glyph 규칙과 동일), 유효
+  매니페스트 ok, phase→state 매핑, frameIndex modulo, `isAnimated`,
+  sheet src/srcSet 전달. 의존성 0(plain import).
+- `tests/e2e/townProto25d.spec.mjs` 160→190: S6 장애물 8개 + `OBSTACLES_REF`
+  8개(5개 파생 rect를 리터럴로 복제, 이 파일의 "src import 금지" 관례) +
+  항목16 우회 2종(house-annex 탭 (13,24), tree-plaza-ne 탭 (59,44) — 박스
+  밖 4 world-% 북쪽, 경로 샘플이 박스에 진입하지 않음), S9 항목17(360/390/
+  412/1280) `proto25d-object` 7개·pointer-events:none·bottom-center가
+  `SCENE_OBJECTS_REF` 앵커와 1.0 world-% 이내·`proto25d-object-shadow` 7개·
+  `data-proto25d-obstacle-count="8"`, S3 항목C2 탭 리플 ≥1 → 700ms 후 0,
+  S5 항목C1 reduced-motion 리플 0. 스펙 갱신 전 기준선 실측: 159/160(예상
+  FAIL 1 = "장애물 3개") — 규칙 15 방식으로 회귀 확인 후 갱신. 갱신 후
+  190/190 × 3회(Windows 로컬, 단독 러너).
+- 항목17은 실제 버그를 잡는 단언이다: sway keyframe이 inline transform을
+  덮어써 나무/꽃밭이 앵커에서 한 폭·한 높이 어긋나던 문제(173차 §4)를
+  래퍼 `div` 분리로 수정한 뒤에만 통과한다.
+- 재확인 커맨드: `node scripts/testProto25dSceneFixture.mjs`,
+  `node scripts/testProto25dCharacterManifest.mjs`, E2E는 `npm run
+  verify:e2e`(전체) 또는 `vite preview` 기동 후 이 spec만 단독 실행.
+
+## 관련 항목: Paul Town 2.5D 캐릭터 스프라이트 v2 계약 — 신규 단위 스위트 2종 + E2E S11 (2026-09-24, 175차 Phase 6B)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._ 위쪽 172차 절의
+"160 PASS", 173차 절의 "160→190"은 그 시점 기준 기록이며, 이 절이
+추가한 S11(+16)로 현재 `[town-proto2.5d]` 총 단언은 206이다 — 옛
+기록은 append-only 원칙에 따라 고치지 않고 이 절이 최신 값을 남긴다.
+
+Paul Town 2.5D 캐릭터 스프라이트 v2 계약(`characterSpriteContract.js`,
+`handoff.md` 2026-09-24(175차)/`docs/design/town/
+SPRITE_CONTRACT_2026-09-24.md` §4 참고)이 추가한 순수 함수 단위
+테스트 + 그 어댑터 배선을 검증하는 SSR 단위 테스트 + E2E 확장.
+`paulTown2_5dSprite` 플래그는 이번 Phase에서 추가되지 않았고, 어떤
+프로덕션 파일도 이 계약 모듈을 아직 실제 매니페스트로 import하지
+않는다(오늘은 전부 휴면 — `ProtoCharacter.jsx`/`Proto25DScreen.jsx`는
+선택적 prop만 받고, 유일한 호출부인 `App.jsx`는 값을 넘기지 않는다).
+
+| 스크립트 | 단언 | 대상 | 네트워크 | 결과 |
+|---|---|---|---|---|
+| `scripts/testProto25dSpriteContract.mjs`(`tests/harness/registry.mjs` attachment 도메인, `extra:false`) | 172 | `characterSpriteContract.js`(매니페스트 validator — 8프레임 전부 필수, 누락 시 개별 폴백 없이 전체 거부 / `directionForMove`·`facingForMove`·`spriteStateForPhase` / `frameIndexAt` / `anchorOffsetPct`(퍼센트 앵커) / `resolveSpriteFrame`의 `walkSide`+좌측 전용 미러링과 이모지 폴백) | 0 | 172/172 PASS |
+| `scripts/testProto25dSpriteAdapter.mjs`(`tests/harness/registry.mjs` attachment 도메인, `extra:false`) | 50 | `ProtoCharacter.jsx`/`Proto25DScreen.jsx`의 v2 렌더 분기 — 브라우저 E2E가 아니라 React SSR(esbuild + `react-dom/server`) 기반 DOM 검증(프로덕션 코드에 테스트 훅을 심지 않는 방식). 이모지 기본 DOM/무효 매니페스트 시 무매니페스트와 byte-identical, phase·direction·facing별 v2 프레임 선택, 미러는 `walkSide`+좌측만, 착석 seat-anchor 퍼센트, reduced-motion 정지, 커스텀 foot anchor 퍼센트, outer anchor·z-index·scale·그림자·min-width가 이모지·스프라이트 모드 간 동일, `img` src/srcSet, v1 매니페스트 하위호환 + 둘 다 넘기면 v2 우선, direction pass-through | 0 | 50/50 PASS |
+| `tests/e2e/townProto25d.spec.mjs` S11(+16, `[town-proto2.5d]` 190→206) | 16 | 기본 렌더는 여전히 이모지·스프라이트 마크업 없음, `direction` 속성이 우/하/상 탭에 따라 side/front/back으로 갱신, 일반 걷기는 이모지를 절대 뒤집지 않음, 도착 후에도 direction 유지 | 0 | 포함 통과(§verify:e2e 총계) |
+
+의존성: `characterSpriteContract.js`는 v1(`characterManifest.js`,
+72단언, 무변경)의 공유 이모지 glyph 상수 하나만 import한다 — 나머지는
+재구현하지 않는다. `tests/fixtures/proto2_5d/spriteManifest.example.mjs`
+(테스트 전용, 1x1 투명 데이터 URI)는 어떤 프로덕션 파일도 import하지
+않는다.
+
+전체 회귀(2026-09-24 18:08–18:45 KST, HEAD `78125bf`): `npm run
+verify:e2e` 1534 PASS / 0 FAIL / 0 SKIP(미mock 요청 0), `npm run
+verify:all` "ALL DOMAINS: PASS"(스위트 단위 PASS 139 / FAIL 0, 약
+25분, 타임아웃/취소 없음), `npm run build` PASS(경고 0).
+
+재확인 커맨드: `node scripts/testProto25dSpriteContract.mjs`,
+`node scripts/testProto25dSpriteAdapter.mjs`, 전체 회귀는 `npm run
+verify:e2e`/`npm run verify:all`.
+
+## 관련 항목: Paul 캐릭터 8프레임 스프라이트 실장 — `testPaulSpriteAssets` 신규 + E2E S12/S13 신규 (2026-09-24, 177차 Phase 6C)
+
+_이 섹션부터는 append — 위 내용은 원본 그대로 보존._ 175차 절이 검증한
+v2 계약/어댑터는 그때까지 휴면(이모지만 실제 렌더)이었다. 177차는
+운영자가 ChatGPT로 생성한 실제 PNG 8프레임을
+`src/assets/town/character/`에 설치하고
+`characterSpriteManifest.default.js`(`PAUL_SPRITE_MANIFEST`)를
+`Proto25DScreen.jsx` 기본 매니페스트로 배선해, `paulTown2_5d` 플래그가
+켜지면 처음으로 이모지 대신 실제 스프라이트가 렌더된다(신규 게이팅
+플래그는 추가하지 않았다 — `docs/design/town/
+PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md` §14.6). 아래 결과는
+2026-09-24 21:47–22:27 KST, 워크트리 `wt-clean-pr`에서 lead가 직접
+실행한 최종 전체 회귀 기준이다.
+
+| 스크립트/스펙 | 대상 | 결과 |
+|---|---|---|
+| `scripts/testPaulSpriteAssets.mjs`(신규) | 설치된 8프레임 PNG의 정적/레지스트리/청크 격리/번들 누출 검사(파일 존재, `index.js` export 형태, `Proto25DScreen-*.js` 청크에만 `paul-` 문자열 존재하고 메인/TownScreen 청크에는 없음 등) | 112/112 PASS |
+| `scripts/testPaulSpriteIngest.mjs` §5–6(기존 135단언 중 "이미지 부재" 전제였던 절을 "이미지 존재" 케이스로 조정) | `spriteIngestPaul.mjs --check`/`--write`가 실제 8프레임 PNG를 만났을 때의 동작 | 132/132 PASS |
+| `tests/e2e/townProto25d.spec.mjs` S8/S9/S11(스프라이트 모드로 조정) | 175차가 이모지 전제로 작성한 항목을 실제 스프라이트 렌더 기준으로 갱신 | 포함 통과(아래 standalone 270/270에 합산) |
+| `tests/e2e/townProto25d.spec.mjs` S12(신규, 뷰포트 360/390/412/1280) | 스프라이트 이미지 로드, 렌더 크기 밴드, 클리핑 없음, 프레임 교대(`walk-*-a`↔`walk-*-b`), 그림자, 검은 배경 없음, UI 탭이 캐릭터를 이동시키지 않음 | 포함 통과 |
+| `tests/e2e/townProto25d.spec.mjs` S13(신규) | `prefers-reduced-motion`에서 프레임 정지(`freezeFrameIndex`) | 포함 통과 |
+| `tests/e2e/townProto25d.spec.mjs` standalone(vite preview) | S8/S9/S11/S12/S13 포함 전체 | 270/270 PASS |
+| `scripts/testProto25dSpriteAdapter.mjs` / `testProto25dSpriteContract.mjs` / `testProto25dCharacterManifest.mjs`(회귀 재확인) | 175차 스위트가 실 이미지 배선 후에도 그대로 통과하는지 | 50/50, 172/172, 72/72 전부 PASS |
+| `scripts/testTownEnvAssets.mjs`(회귀 재확인) | 스프라이트 신규 주석이 town 자산 매니페스트 검사에 영향 없는지 | 196/196 PASS(최초 실행에서 신규 주석 문구 충돌로 실패 → 수정 후 PASS, 아래 참고) |
+| `scripts/testBundleBudget.mjs`(§4c 신규 항목) | 스프라이트 16파일 인벤토리 + 누출 가드(main/V1/V2 청크에 `paul-` 없음), `Proto25DScreen` 청크 예산 | 32/32 PASS — 청크 누출 0, gzip 11.3KB ≤ 60KB |
+| `node scripts/spriteIngestPaul.mjs --check` | 실제 이미지 존재 상태에서 재실행 | PASS=68 FAIL=0 BLOCKED_BY_ASSET=0 |
+| 로컬 뷰포트 스크린샷(360/390/412/1280, Playwright + 네트워크 mock, 12장: {viewport}×{idle,mid-walk,sitting}) | Production PIN API를 호출하지 않는 로컬 검증(Production WRITE 0 원칙, 173차 §8과 동일 방식 — `handoff.md` 177차 §6) | lead 리뷰 완료 — 스프라이트 정상 렌더, 클리핑/검은 배경 없음, 프레임 교대·방향·착석·그림자·reduced-motion·UI 탭 무이동 전부 확인 |
+| Vercel Preview 확인(로그인 없이) | 배포 생존 + Proto 청크/`paul-*` 자산 서빙 여부만 | **완료.** 커밋 `8be6ba99`(2026-09-24 22:30 KST) 배포 `6638989777` success. 메인 청크 스프라이트 참조 0, `Proto25DScreen-*.js` 청크에만 `paul-*` 포함, `/assets/paul-*.png` 16개 전부 200 `image/png`, `paulEasyVoca_features` localStorage 부재(기본값 유지). 로그인 없이 GET만 수행(Production WRITE 0) — 상세는 `handoff.md` 177차 §7 |
+| `npm run build` | 전체 회귀 | PASS, 경고 0 |
+| `npm run verify:all` | 전체 회귀 | "ALL DOMAINS: PASS", 141 스위트 PASS / 0 FAIL, 약 27분 |
+| `npm run verify:e2e` | 전체 회귀 | 1598 PASS / 0 FAIL / 0 SKIP, 미mock 요청 0 |
+
+최종 PASS에 이르기 전 1차 전체 체인 실행에서 실제 버그 3건이
+드러났고 전부 수정 후 재실행으로 확인됐다:
+
+1. `testTownEnvAssets` — 신규 주석 3곳의 리터럴 문자열
+   `"assets/town/env"`가 매니처 검사에 걸림 → 문구 변경으로 수정.
+2. `testBundleBudget` §4 — 신규 PNG 16장이 "예기치 않은 파일"로
+   판정 → §4c 인벤토리 항목 + 누출 가드로 등록.
+3. E2E S12 `[412x915]` — `naturalWidth` 1회성 읽기가 전체 러너
+   안에서 간헐적으로 flaky → 최대 5초 폴링으로 수정.
+
+상세 배경은
+`docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md` §14와
+`handoff.md` 2026-09-24(177차) 참고.
+
+## 관련 항목: Paul 스프라이트 walk-side-b 프레임 교체(v2) (2026-09-25, 178차)
+
+177차가 설치한 8프레임 중 `walk-side-b` 한 프레임만 새 렌더로 교체하는
+작업이다(상세 판정·페어링은 `handoff.md` 2026-09-25(178차) §1 참고).
+
+**정정(2026-09-25, lead)**: 초기 보고에서 후보 원본 `12_54_37 AM
+(1)`을 "좌측·하단 잘림(클리핑)"으로 기록했던 것은 PIL
+`Image.getbbox()`를 RGBA에 그대로 적용해 alpha=0 픽셀까지 잉크로 잡은
+결과였다. alpha>16 기준 잉크 bbox로는 (80,18)–(1004,1431)로 여백이
+충분해 실제로는 클리핑이 아니다. 운영자가 `walk-side-a`를 유지하고
+`12_54_38 AM (2)`(alpha>16 잉크 bbox (151,17)–(901,1463), sha256
+`23c4a79f…`가 식별 키)를 `walk-side-b-v2`로 채택, (1)을 미사용으로 둔
+결정은 구도(art/composition) 판단으로 그대로 유효하다. 상세는
+`handoff.md` 178차 §0 정정,
+`docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md`
+§15.1 정정 참고.
+
+`walk-side-a`를 포함한 나머지 7프레임, 앵커, 타이밍, 미러 규칙은
+무변경이다. 기존 `paul-walk-side-b.png`(+`@2x`)는 디스크에 보존되되
+레지스트리에서 빠지므로, 기존 `testPaulSpriteAssets`/
+`testPaulSpriteIngest`/`testBundleBudget`가 v2 파일명
+(`paul-walk-side-b-v2.png`)과 레거시 파일 보존을 함께 검사하도록
+조정된다. `tests/e2e/townProto25d.spec.mjs` S12는 좌/우 측면 걷기에서
+frame id와 `src` 파일명이 a ↔ b-v2로 정확히 교대하는지, 렌더 크기와
+발 접지선이 흔들리지 않는지를 추가로 검사하고, S13은 측면 걷기
+프레임 정지(reduced-motion) 케이스를 포함한다.
+
+**정정(2026-09-25, lead) — 예방적 facing 가드, 관측된 결함 아님**: 위
+walk-side-b v2 교체와는 별개로, E2E 검증 중 여러 leg로 이어지는 긴
+LEFT 걷기에서 idle 전환 직전 약 100ms 동안 미러
+(`data-proto-character-sprite-mirror`/`scaleX(-1)`)가 무미러로 순간
+해제되는 것처럼 관측됐으나, lead 재조사 결과 **제품 버그가 아니라
+테스트 측정 아티팩트**였다. `findPath`로 확인한 (90,20)→(20,20)
+경로는 dx=−70, dy=0인 `side` 방향 단일 leg이고, 실제 원인은 E2E
+샘플러가 phase/mirror/facing 값을 서로 다른 Playwright 호출로 순차
+읽었고 두 호출 사이에 걷기가 끝나 idle로 전환되며 값이 어긋난
+레이스였다. S12 샘플러를 phase/mirror/facing을 한 번에 캡처하는
+atomic `page.evaluate` 스냅샷 방식으로 교체 중이다(LEFT 걷기 단언
+자체를 강화한 것이 아니라 측정 방식을 고친 것). 다만 재조사 과정에서
+`walkLeg`가 leg마다 그 leg 자신의 `dx`로만 facing을 재계산하는 기존
+로직이 실제 path-snap 시나리오(예: (65,62)→(20,62)의 마지막 leg는
+dx=0, dy=−3.8인 순수 수직 `walkBack` leg)에서는 facing이 잘못
+뒤집힐 위험이 있음을 확인했고, `Proto25DScreen.jsx` 1개 파일에 신규
+상수 `FACING_MIN_DX_PCT = 1.0`(world-%)을 **예방적 가드(하드닝,
+관측된 결함에 대한 수정 아님)** 로 도입했다 — 스프라이트 모드에서
+leg의 이동 방향이 `side`이고 `|dx| ≥ 1.0`인 진짜 수평 leg에서만
+facing을 갱신(`walkLeg`와 reduced-motion 점프 양쪽)하고, 수직/미세
+leg는 이전 facing을 유지한다. pathfinding, 벤치(`facingToward`),
+depth, shadow, 크기는 무변경. S12의 발 접지선 검사에는 기존부터 있던
+walk-bob CSS 애니메이션(크기에 비례해 진폭 증가)을 반영한 허용
+오차(키의 8% 또는 최소 4.5px 중 큰 값)를 추가했다.
+
+검증 결과(2026-09-25 01:55–02:42 KST, 워크트리 `wt-clean-pr`, lead
+실행):
+
+| 스크립트/스펙 | 대상 | 결과 |
+|---|---|---|
+| `scripts/testPaulSpriteAssets.mjs`(조정) | v2 파일명 + 레거시 보존 | 125/125 PASS |
+| `scripts/testPaulSpriteIngest.mjs`(조정) | v2 파일명 반영 | 132/132 PASS |
+| `scripts/testBundleBudget.mjs`(조정) | v2 인벤토리 + 레거시 미누출 | 32/32 PASS |
+| `scripts/testProto25dSpriteAdapter.mjs`(회귀 재확인) | 175차 스위트 회귀 | 50/50 PASS |
+| `scripts/testProto25dSpriteContract.mjs`(회귀 재확인) | 175차 스위트 회귀 | 172/172 PASS |
+| `scripts/testTownEnvAssets.mjs`(회귀 재확인) | 스프라이트 신규 변경이 town 자산 매니페스트 검사에 영향 없는지 | 196/196 PASS |
+| `node scripts/spriteIngestPaul.mjs --check` | 실제 이미지 재검사 | PASS=68 FAIL=0 BLOCKED_BY_ASSET=0 |
+| `tests/e2e/townProto25d.spec.mjs` S12(확장, atomic 샘플러 교체 포함) | 좌/우 걷기 frame id **와** `src` 파일명이 `walk-side-a` ↔ `paul-walk-side-b-v2`로 교대, LEFT 걷기 모든 샘플에서 미러 `'1'`, 크기/발선이 bob 허용 오차 안에서 안정, 4뷰포트 | 포함 통과(아래 standalone 327/327에 합산) |
+| `tests/e2e/townProto25d.spec.mjs` S13(확장) | `walk-side-a` 기준 측면 걷기 reduced-motion 프레임 정지 | 포함 통과 |
+| `tests/e2e/townProto25d.spec.mjs` standalone(vite preview) | S12/S13 포함 전체 | 327/327 PASS |
+| `npm run build` | 전체 회귀 | PASS, 경고 0 |
+| `npm run verify:all` | 전체 회귀 | "ALL DOMAINS: PASS", 141 스위트 PASS / 0 FAIL, 약 32분 |
+| `npm run verify:e2e` | 전체 회귀 | 1655 PASS / 0 FAIL / 0 SKIP, 미mock 요청 0 |
+| 로컬 뷰포트 스크린샷 리드 검수 | `preview-local/side-{360x640,390x844,412x915,1280x800}-{a,b}.png` | lead 리뷰 완료 — a/b-v2 프레임 동일 크기·발 접지선, 검은 배경/클리핑 없음 |
+| Vercel Preview 확인(로그인 없이) | 배포 생존 + 자산 서빙 | **완료.** 커밋 `5d2faf29`(2026-09-25 약 02:45 KST) push, GitHub 배포 `6644346180` success. 로그인 없이 GET만(Production WRITE 0): 로그인 화면 렌더, `Proto25DScreen-Dk3K-cwh.js` 청크에 `paul-walk-side-b-v2` 참조, 레거시 `paul-walk-side-b-<hash>.png` 참조 없음, `/assets/paul-*.png` 16개 전부 200 `image/png`(v2+`@2x` 포함), 메인 청크 스프라이트 참조 0, `paulEasyVoca_features` localStorage 부재. 2.5D 화면은 학생 로그인(Production PIN API WRITE) 필요해 미오픈 |
+
+상세 배경은 `handoff.md` 2026-09-25(178차) §7,
+`docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md` §15.7
+참고.
+
+## 관련 항목: Paul Town 2.5D 학생 파일럿 직전 품질 정리 신규 스위트 (2026-09-25, 179차)
+
+179차 세션이 랜덤 경로 property 테스트에서 실제 pathfinding 결함(D1
+— string-pulling이 셀 인덱스 공간에서 직선시야를 판정해 지름길 leg가
+장애물 모서리를 최대 ~0.3% world-% 스칠 수 있던 문제)을 발견·수정한
+과정에서 신규/확장된 스위트다. 상세 근본원인·수정 내용은 `handoff.md`
+2026-09-25(179차) §2 참고.
+
+| 스크립트/스펙 | 단언 수 | 성격 |
+|---|---|---|
+| `scripts/testProto25dPathRandom.mjs`(신규) | 16 | mulberry32 결정론적 시드(20260925) 랜덤 (start,target) 100쌍 + 스트레스 1000쌍(시드+1)으로 `walkGrid.js`/`pathfinding.js`를 property 테스트. 각 leg를 1% 간격(101샘플)으로 세그먼트 샘플링해 장애물 엄격 내부 침입 0건을 기대하고, 994번 쌍(스트레스 i=994) 고정 좌표 결정적 회귀 케이스를 포함한다. `characterSpriteContract.js`의 방향-미러 계약도 함께 검증. |
+| `scripts/testProto25dWalkGrid.mjs`(확장, 28→37) | 37 | 기존 28단언(정상 목적지 보존/clamp/장애물 회피/결정론 등)에 sub-cell 오프셋 + 장애물 모서리 인접 시나리오 9단언을 추가 — 위 `testProto25dPathRandom.mjs`가 찾은 world-space LOS 버그와 같은 근본 원인을 다른 고정 좌표로 재현하는 회귀 방지 케이스. |
+| `scripts/testProto25dSpriteAdapter.mjs`(회귀 재확인, 50→70) | 70 | 2026-09-24 등록 당시 50단언이었으나, 179차 Q1(프레임 cadence 단위 시간 락) + Q2(@2x 실패 시 1x 강등 재시도 후 이모지 폴백) 수정으로 관련 SOURCE 단언이 추가돼 70단언으로 늘었다(커밋 `09fe5a62`). 2026-09-25 본 세션에서 `node scripts/testProto25dSpriteAdapter.mjs` 직접 실행해 70/70 PASS 재확인. |
+| `scripts/testProto25dSpriteContract.mjs`(회귀 재확인) | 177 | 179차 변경(캐릭터 cadence/degrade 로직 수정)이 기존 스프라이트 계약을 깨지 않는지 회귀 재확인. |
+| `tests/e2e/townProto25d.spec.mjs` S14(전환 행렬, 신규) | 52 | 179차 Phase 2, 커밋 `4982d933`. |
+| `tests/e2e/townProto25d.spec.mjs` S15(@2x 강등 실측, 신규) | 13 | 179차 Phase 7, 커밋 `b5430e9e` — Q2에서 단위 테스트로만 검증됐던 "@2x만 실패 → 1x 강등 렌더"/"@2x+1x 모두 실패 → 이모지"의 두 경로를 실제 브라우저에서 검증. |
+
+측정 방법 메모: 위 랜덤/property 테스트는 Math.random이 아니라
+mulberry32 PRNG를 고정 시드로 사용해 실패 시에도 100% 재현 가능하다
+(시드+쌍 번호만 기록하면 동일 입력을 재생성할 수 있음) — 이 저장소의
+기존 결정론적 테스트 관례(`CLAUDE.md` 규칙 15 "회귀가 의심되면 먼저
+FAIL을 재현해 확인")를 property 테스트에도 동일하게 적용한 것이다.
+`testProto25dPathRandom.mjs`가 994번 쌍에서 실측으로 결함을 재현·확정한
+사례가 정확히 이 패턴이다.
+
+Flake 재현성 분석(179차 Phase 5): 수정 후 dist에서
+`tests/e2e/townProto25d.spec.mjs`를 독립적으로 5회 연속 재실행 —
+매회 379/379 PASS, 0 FAIL(재현 가능한 flake 없음). S14 개발 중
+S12에서 1회 관측된 Playwright 타임아웃은 5회 재실행 어디에서도
+재현되지 않아 일회성 인프라 이슈로 분류했다(코드/테스트 수정 없음).
+S14(52) 포함 379개 + S15(13) = 프로토타입 E2E standalone 합계
+392/392 PASS.
+
+Phase 3(모바일 실기기 대응 측정, 4개 뷰포트 11/11 PASS)은 별도 신규
+스위트가 아니라 기존 `tests/e2e/townProto25d.spec.mjs`의 뷰포트별
+측정 섹션을 재확인한 것이며, 측정값은
+`docs/design/town/PROTO25D_PILOT_READINESS_2026-09-25.md` §3과
+`handoff.md` 2026-09-25(179차) §4에 기록했다.
+
+Phase 6 코드품질 리뷰(11건 발견, 행동 변화 없는 정리 5건 적용, 커밋
+`193b1e42`)와 Phase 8 독립 검토(pathfinding 수정/degrade 로직/aria
+배치/assertion 무결성/레지스트리 일치/작업 범위 전부 CONFIRMED) 상세는
+`handoff.md` 2026-09-25(179차) §3.1 참고.
+
+전체 회귀 결과(179차): `npm run build`(HEAD `b5430e9e`/`01450a0d`)
+PASS·경고 0. `npm run verify:all`(HEAD `b5430e9e`) "ALL DOMAINS:
+PASS", 142 스위트 PASS/0 FAIL(약 28분, 위 신규 스위트 전부 포함).
+`npm run verify:e2e`(전체 1720단언 기준) — run 1(`b5430e9e`)
+1718/1720(S15 타이밍 이슈 2건, 커밋 `01450a0d`로 수정 — 제품 코드
+무변경), run 2(`01450a0d`) 1718/1720(S15는 PASS로 전환, 대신
+`[town-v2] S16[390x844,mouse] 자석 드래그 배치 항목17`에서 간헐 FAIL
+2건 — 179차가 손대지 않은 기존 V2 코드, `handoff.md` 179차 §6.1과
+`BLOCKERS.md` 참고), run 3(`01450a0d`, 2026-09-25 05:38–05:53 KST)
+**1720/1720 PASS, 0 FAIL, 0 SKIP, 미mock 요청 0** — S15 PASS, V2
+S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
+`DECISIONS_PENDING.md`로 이관). 3회 전부 완료. Vercel Preview(HEAD
+`b5430e9e`, 배포 `6646333620`) 에이전트 GET-only 확인 완료 — 200,
+로그인 화면 렌더, v2 스프라이트/degrade 속성/region 라벨 포함 청크,
+`paul-*.png` 16개 200 `image/png`, 저장된 플래그
+없음. 상세는 `handoff.md` 179차 §6에 기록했다.

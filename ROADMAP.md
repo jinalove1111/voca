@@ -1,5 +1,54 @@
 # Paul Easy Voca — 로드맵
 
+_(2026-09-18 170차 추가) Paul Town V2 렌더러 통합 — 브랜치
+`feat/paul-town-v2-world-contract-2026-09-17`, 로컬 커밋만·미push,
+`paulTownV2` OFF, Production WRITE 0. 상세는 `handoff.md`
+2026-09-18(170차) 섹션._
+
+## 2026-09-18 (170차) — Paul Town V2 렌더러 통합: 승인 월드·아트 35종을 실제 V2 렌더러에 연결 — 상태: 렌더러 코드 완료 ✅(플래그 OFF, push/PR/merge/배포 미실행)
+
+169차(Paul Town Batch 1 아트 통합 A/B/C, 하네스 34/34 실물·staged 35/38)
+직후 같은 날, 승인된 월드 지오메트리·동결 장식 데이터·아트 35종을 실제
+V2 렌더러 컴포넌트에 배선했다. 새 화폐·가격·레벨 규칙 0(기존 `townScene.js`/
+`townLayout.js`/`townCatalog.js`/`townLevel.js`/`useStudent.js` 전부
+무변경) — 이번 작업은 **렌더링 계층만** 새로 추가했다: 세계 좌표 어댑터
+(`worldRender.js`), 동결 지오메트리(`worldContract.js`)와 배치 계약
+(`placementContract.js`)·깊이 모델(`depthOrder.js`)에 이미 확정돼 있던
+값을 그대로 참조해 좌표·앵커·z-index로 변환할 뿐 새 규칙을 만들지
+않는다(CLAUDE.md 규칙 3), 동결 장식 데이터(`worldScenery.js`, 승인
+디자인 하네스 `paul-town-recompose.html`과 `node:vm`으로 직접 대조),
+env 아트 35종 전용 자산 레지스트리(`src/assets/town/env/`, 기존
+`TOWN_ASSETS`와 완전 분리), 씬 컴포넌트 8개(`TownScene`/
+`TownGroundLayer`/`TownWaterLayer`/`TownPathLayer`/`TownSceneryLayer`/
+`TownObjectLayer`/`TownFogLayer`/`TownPlacementOverlay`).
+
+**"완료"의 의미** — 렌더러 코드는 `paulTownV2:true`로 켰을 때 학생이
+실제로 보게 될 화면을 이미 그린다(로컬 스크린샷 18장으로 확인). 다만
+플래그는 세션 내내 `false`였고 push/PR/merge/배포가 전혀 없었으므로,
+아직 "배포됐다"/"공개됐다"는 의미가 아니다 — 코드가 준비됐고 검증까지
+끝났다는 뜻이다.
+
+**검증** — `npm run build` PASS(경고 0). 신규 순수 단위 테스트 9종
+(`testTownWorldContract`/`testTownPlacementContract`/
+`testTownHarnessGeometrySync`/`testTownDepthOrder`/`testEnvArtManifest`/
+`validateEnvArtManifest`/`testTownEnvAssets`/`testTownWorldRender`/
+`testTownWorldScenery`)이 이번 세션에 `tests/harness/registry.mjs`에
+`extra:false`로 처음 등록됐다(작성 당시 미등록이라 `verify:all`에서
+한 번도 실행되지 않고 있었다). 브라우저 E2E 전체 스펙 974 PASS/0 FAIL/
+0 SKIP(exit 0). 플래그 OFF 상태에서 V1/메인 번들이 env 자산을 전혀
+요청하지 않는다는 정적 증거까지 확인. 상세 수치는 `handoff.md`
+2026-09-18(170차) 3절.
+
+**남은 것** — ① 플래그 `paulTownV2` ON 전환 시점은 이번 세션 범위 밖의
+별도 운영자 결정. ② 다듬기 항목(오너 확인 필요): 4방향 팻말
+("Learn/Grow/Be Kind/Go Further") 문구 렌더 여부(현재 미렌더), 정원
+화단 위치가 동결값이 아님, 구매 가능 카탈로그 아이템(벤치/우체통/화단/
+가로등)이 하네스처럼 고정 배경 소품으로 그려져 소유 여부와 혼동 가능,
+잠금 실루엣 UX 최종 확인. ③ Batch E 아트(fence-post/fence-gate-closed/
+hedge-corner)는 여전히 spec-only 제작 여부 미결(제작해도 화면 변화
+없음). ④ `56.png`(shrub-wide 대체 후보)는 여전히 미승격 보류. 상세는
+`handoff.md` 2026-09-18(170차) 4·5절.
+
 _(2026-09-11 125차 추가) Paul Town V1 구현 — 마을 상점 확장(신규 아이템
 16종·레벨 잠금·8×6 배치·신규 학생 웰컴 크레딧), 브랜치
 `feat/paul-town-v1`, 플래그 `paulTownV1` OFF, `supabase_v3_50_town_v1.sql`

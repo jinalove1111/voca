@@ -1,0 +1,44 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "town-v2-preflag-corrections",
+  "task": "Paul Town V2 사전 보정 패스 — D1(소유 랜드마크 중복 표시) 수정, 4-arm 안내판(Explore 카피) 추가, 플레이어 배치 아이템 스케일 보정",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-18T00:45:00Z",
+  "updated_at": "2026-09-18T01:39:14Z",
+  "files_owned": [
+    "scripts/town-art/shootRenderer.mjs",
+    "src/utils/town/worldRender.js",
+    "src/utils/town/worldScenery.js",
+    "src/components/town/v2/TownObjectLayer.jsx",
+    "src/components/town/v2/TownSceneryLayer.jsx",
+    "scripts/testTownWorldRender.mjs",
+    "scripts/testTownWorldScenery.mjs",
+    "scripts/testTownV2Static.mjs",
+    "tests/e2e/townV2.spec.mjs"
+  ],
+  "files_read": [
+    "src/components/town/TownShopPanel.jsx(실제 카테고리 라벨 확인 — 지시서의 '건물 카테고리'는 오기, 실제는 '집')",
+    "src/components/town/TownInventory.jsx",
+    "src/utils/town/townCatalog.js",
+    "docs/design/town/mockup/paul-town-recompose.html(4-arm 안내판 원본 마크업)",
+    "docs/design/town/mockup/previews/lv8-390.png, lv4-390.png"
+  ],
+  "summary": "0) shootRenderer.mjs에 --place \"<x>,<y>=<itemId>,...\"(실제 상점/보관함 UI로 구매→배치, townCatalog.js TOWN_ITEM_META/TOWN_CATEGORIES 재사용) + --fullpage 추가, 배치마다 item/cell/wCss/hCss/xPct/yPct/z 출력. BEFORE 스크린샷 확보(art-staging/renderer-previews/before/, D1 버그 육안 확인 — book-shop/cafe 각각 2번 그려짐). 1) D1 수정 — worldRender.landmarkRenderSource(lotId, state, placements)(순수, 'lot'|'placement'|'none') 신규 + TownObjectLayer.jsx가 built 로트마다 이 함수로 'placement'면 고정 로트(+그림자) 렌더를 건너뜀(landmarkGeometryStyle/landmarkZ 공유 헬퍼는 그대로, 리터럴 카운트 갱신). 헤이즈/Lv.N 표지판은 그대로 lotState()만 본다(무변경). 2) 4-arm 안내판 — worldScenery.js SIGNS.fourWay 신규(하네스 리터럴 그대로 포팅, 'Go Further'만 'Explore'로 단일 치환, 나머지 좌표/폰트/색 무변경), TownSceneryLayer.jsx에 <WorldSign sign={SIGNS.fourWay} /> 한 줄 추가(기존 WorldSign 컴포넌트가 role=img/aria-label/depthLayer scenery/y=84를 전부 데이터 기반으로 이미 처리 — 추가 로직 불필요). 3) 플레이어 배치 아이템 스케일 — worldRender.placedItemWidthPct(footprint, y) = BASE[footprint]*depthScale(y)(worldContract, 재구현 없음) 최대 16% 클램프, BASE={lg:13,md:10,sm:6.5}(지시서 값). TownObjectLayer.jsx가 옛 WORLD_FOOTPRINT_WIDTH_PCT({12,8,5.5}+anchor.scale 수동곱)를 완전히 대체(px 캡/clamp() 없음, %만). 테스트: testTownWorldRender.mjs +100단언(LOTS 7개x상태3x배치유무 전수 + null-safe + garbage-safe + placedItemWidthPct 단조성/순서/16캡/y=0..100 샘플, 197 PASS). testTownWorldScenery.mjs +5단언(SIGNS.fourWay를 'Explore'->'Go Further' 역치환한 결과가 하네스 실측과 바이트 단위 일치 — 그 한 글자만 바뀌었음을 증명, 211 PASS). testTownV2Static.mjs — forbidden-string을 'Welcome to Paul'+'Go Further'만으로 축소(Learn/Be Kind 금지 해제, 대신 4개 라벨 존재 + WorldSign 렌더 양성 확인 추가) + D1/스케일 관련 신규 단언 다수(130 PASS, count=4 landmarkGeometryStyle 정정 포함). tests/e2e/townV2.spec.mjs — 신규 S8(Lv8, owned=['book-shop'], 배치 전/후/보관 후 img[data-asset-key] 카운트+data-lot-id 유무+data-item-id 유무 9단언, town-v2 스펙 96->105). e2e 5개 스펙 전체(임시 러너) 720/720 PASS. shootRenderer AFTER 스크린샷: 16장(레벨1/3/4/5/8 x 폭360/390/430 + zoom2) 전부 overflow=0/pageerror=0/failedEnvRequest=0/brokenImg=0. --place 조합은 폭390/430 성공(전부 clean), 폭360만 사전에 존재하던 별개 이슈(D2/D3/D4 영역으로 추정, 이번 수정과 무관)로 실패 — 아래 blocker 참고. before/after 크롭(art-staging/renderer-previews/after/crops/) 다수 확보해 D1(책방/카페 중복->단일), 배치 나무 크기 증가(28.8px->36.0px @390, 8/10=0.8 비율 정확히 일치), 4-arm 안내판(하네스 대비 'Go Further'->'Explore' 외 완전 동일), Lv4 전체 씬(랜드마크 박스 크기 불변 확인 — 배치 스케일 수정이 고정 로트에 영향 안 줌) 전부 시각 확인 완료.",
+  "verify_results": {
+    "build": "PASS, 0 warnings",
+    "testTownWorldRender": "197/197 PASS(+100 신규)",
+    "testTownWorldScenery": "211/211 PASS(+5 신규)",
+    "testTownV2Static": "130/130 PASS(+11 신규, 2건 갱신)",
+    "testTownUiStatic": "125/125 PASS(무변경)",
+    "testBundleBudget": "24/24 PASS(무변경)",
+    "testTownSceneV2": "259/259 PASS(무변경, townScene.js 미수정)",
+    "testLazyChunkGuards": "80/80 PASS(무변경)",
+    "e2e_전체_5스펙": "720/720 PASS([town]528/[town-v2]105(+9 신규 S8)/[town-v2-artwork]28/[town-flag-xtab]16/[town-pilot-allowlist]33)",
+    "shootRenderer_after": "16/16(레벨x폭 조합+zoom2) clean, --place 조합 폭390/430 clean, 폭360은 별개 사전 이슈로 실패(아래 blocker)"
+  },
+  "blocker": null,
+  "observed_but_not_fixed": "shootRenderer --place 시 width=360에서만 [data-anchor=\"1,1\"] 클릭이 [data-anchor=\"7,3\"]에 계속 가로채임(Playwright pointer-interception 타임아웃) — 이 세션의 D1/사인/스케일 수정과 무관한 배치 오버레이 앵커 겹침 사전 이슈로 보인다(D2/D3/D4 영역 추정, 리드 지시대로 손대지 않음). 리드에게 보고만 함.",
+  "next_action": "리드 리뷰 대기. 이 implementer가 먼저 움직이지 않는다. 리드가 커밋."
+}

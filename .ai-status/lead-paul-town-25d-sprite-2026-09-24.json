@@ -1,0 +1,40 @@
+{
+  "agent_name": "lead",
+  "role": "Paul Town 2.5D 캐릭터 스프라이트 교체(단일 목표, 최대 8h 자율) — 리드: 계획/재검증/커밋, Sonnet sub-agent 4종 읽기 전용 조사",
+  "task_id": "paul-town-25d-sprite-2026-09-24",
+  "task": "임시 이모지 캐릭터를 라이선스 명확한 걷기·앉기 스프라이트로 교체할 수 있는 구조·테스트·문서 완성. 실제 에셋 적용은 라이선스+품질 조건 충족 시에만(조건 A), 아니면 문서화 후 '에셋 승인 대기' STOP(조건 B).",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-24T05:00:00+09:00",
+  "updated_at": "2026-09-24T06:10:00+09:00",
+  "branch": "feat/paul-town-v2-clean-pr (worktree scratchpad/wt-clean-pr)",
+  "start_head": "b932682",
+  "commits": {
+    "1_docs_contract": "91f92f4 — docs/design/town/SPRITE_CONTRACT_2026-09-24.md + sprite-research/{ASSET_CANDIDATES,TEST_DESIGN}_2026-09-24.md, kenney_malePerson_anchors.json",
+    "2_feat_renderer": "N/A (조건 B — 에셋 미확정, 코드 변경 0)",
+    "3_test_sprite": "N/A (조건 B — 설계만, 부록 TEST_DESIGN)",
+    "4_docs_handoff": "(이 파일과 함께) handoff.md 174차, ASTRA_HANDOFF §0.18"
+  },
+  "verdict": "조건 B — idle+walk+sit 3종을 객관적으로 만족하는 라이선스 명확 에셋 없음. 최유력 Kenney Toon Characters(CC0, zip SHA-256 d4c0eb31f9d9af074315af251a53e8c74925dec84fbd53703c91c9ed4a4cace9, 96x128, 정면 idle + 정면 walk 8프레임 + back/side 정지 1장)는 sit 부재(duck=쪼그림)·옆/뒤 걷기 프레임 부재·플랫 벡터 화풍(사람 판단). 앱 캐릭터 무변경, 외부 이미지 저장소 추가 0.",
+  "lead_reverification": [
+    "계약 검토 주장 3건 코드 확인: startPlainWalk facing 미갱신(Proto25DScreen.jsx:315), 그림자 형제 요소(ProtoCharacter.jsx:330-344), WORLD={100,190}(worldContract.js:24)",
+    "통합 검토: testBundleBudget.mjs에 Proto25DScreen 청크 예산 부재 확인, release-gate.yml timeout-minutes:30 기록만",
+    "에셋 감사 보강: Kenney 공식 zip 직접 다운로드·해시·License.txt(CC0)·포즈 45종·SD 96x128/HD 192x256 확인, Playwright 알파 실측으로 foot anchor(y=128, x≈48) 산출",
+    "CC0 원문 creativecommons.org 직접 확인"
+  ],
+  "verification": {
+    "testProto25dCharacterManifest": "72/72", "testProto25dBench": "88/88", "testProto25dDepth": "23/23",
+    "testProto25dWalkGrid": "28/28", "testProto25dSceneFixture": "24/24", "testFeatureFlagStore": "49/49",
+    "testTownDepthOrder": "73/73", "testTownV2Static": "147/147",
+    "npm run build": "exit 0", "testBundleBudget": "24/24",
+    "e2e townProto25d standalone": "190단언 190 PASS / 0 FAIL, 미mock 요청 0(코드 무변경 확인, 2026-09-24 05:2x KST)",
+    "npm run verify:all": "동일 소스(cd73799 코드)에 대해 173차 ALL DOMAINS PASS(212/0/SKIP 2) — 문서만 변경이라 재실행 생략",
+    "screenshots": "에셋 미적용이라 idle/walk/sit 캡처 없음(173차 §9 이모지 상태 24장 그대로)"
+  },
+  "production_write": 0,
+  "flags": { "paulTownV1": false, "paulTownV2": false, "paulTown2_5d": false, "paulTown2_5dSprite": "미추가(설계만, 기본 false 예정)" },
+  "pr": "#62 OPEN / Draft",
+  "ci": "워크플로 무변경. push 후 Release Gate는 30분 캡으로 cancelled될 수 있음(172차 §11)",
+  "blocker": "에셋 승인 대기 — SPRITE_CONTRACT §7 결정 3건(Kenney 채택/신규 제작/방향 세트 범위)",
+  "next_action": "운영자 결정 후 SPRITE_CONTRACT §5 체크리스트 1~9 실행(feat 렌더러+폴백 → test → docs). 이모지 CSS 분해·보정 금지 유지."
+}

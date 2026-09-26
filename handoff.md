@@ -1,5 +1,2040 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-17 (161차 — PR #60 release-gate 1차 FAIL(head `d0067c8`)
+_최종 갱신: 2026-09-26 (186차 — **Paul Town 2.5D 경제 단계 A: 코인 잔액 읽기 전용 표시(PR #62)**: 대시보드 지갑과 같은 게이트·출처(`useTownShop` 조회 상태)를 2.5D 화면 HUD의 누를 수 없는 배지로 표시, 새 네트워크 요청·쓰기 경로 0. verify:e2e 1965/1965, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 186차 섹션 참고.)_
+
+## 2026-09-26 (186차) — 경제 단계 A: 코인 잔액 읽기 전용 표시 (PR #62, 워크트리 `C:\voca-wt\paul-town-v2`)
+
+### 0. 범위와 안전 조건
+
+운영자 지시: 코인 잔액을 읽기 전용으로 화면에 표시하는 범위만. 구매 차감·보상 지급·환영 코인 수령·인벤토리 저장·DB·SQL·Production 변경 0. 플래그 3개(paulTownV1/paulTownV2/paulTown2_5d) false 유지. 설계 근거 `docs/design/town/PROTO25D_ECONOMY_NEXT_DESIGN_2026-09-26.md` §8 단계 A. 결정 기록 ADR 0012.
+
+### 1. 조사 결과(구현 전 보고)
+
+- 단일 진실 공급원: 서버 Paul Dollar 원장. 클라이언트는 `src/hooks/useTownShop.js`(App.jsx에서 이미 1회 마운트)가 `get_town_shop_state`(조회)로 받아 대시보드 지갑 표시에 사용 중. 훅의 마운트 효과는 조회만 수행하고, 환영 코인 수령(`claimWelcome`)과 구매(`purchase`)는 TownScreen/TownScreenV2가 명시적으로 부를 때만 실행 — 2.5D 화면은 이들을 가져오지 않음(orchestrator 코드 직접 확인).
+- 조회 게이트: `townShopV1 || paulTownV1`. `paulTown2_5d`만 켠 현재 파일럿 학생은 잔액이 조회되지 않아 배지가 숨겨짐 — 게이트 변경은 경제 설계 문서 §9의 운영자 결정 사항이라 이번 범위 밖.
+
+### 2. 변경 파일과 이유
+
+- `src/App.jsx`: `<Proto25DScreen />`에 `wallet={townShopEnabled && townShop.state ? { dollarsAvailable: townShop.state.dollars.available } : null}` 전달 — 대시보드 wallet과 같은 게이트·출처, 새 fetch 0.
+- `src/components/town/proto2_5d/Proto25DScreen.jsx`: `wallet` prop(기본 null) → 좌상단 HUD 열(산책 모드 토글 아래)에 누를 수 없는 배지 `proto25d-coin-badge`(role=status, aria-label, pointer-events-none). 값이 없으면 렌더하지 않음.
+- `src/utils/town/proto2_5d/coinDisplay.js`(신규): `coinBadgeText`(null/NaN/음수/비숫자 → null, 그 외 기존 `formatDollars` 재사용, 0은 유효), `coinBadgeAriaLabel`. 순수 함수, import는 `formatDollars` 하나.
+- `scripts/testProto25dCoin.mjs`(신규, 27단언, registry extra:false): 경계값, 포맷, aria 라벨, 소스에 네트워크/쓰기 토큰 없음.
+- `tests/e2e/townProto25d.spec.mjs`: S20(360x640·1280x800 각 11단언) — townShopV1 없으면 배지 없음 / townShopV1 + mock 잔액 37 → 배지 "$37"·role=status·뷰포트 안·HUD/입장 버튼과 비겹침 / 가게 열고 Buy 후 닫아도 잔액 불변 / 쓰기 액션(purchase_town_item, claim_town_welcome) 0건·REST POST/PATCH/DELETE 0건·조회 get_town_shop_state ≥1 / 가로 스크롤 없음.
+
+### 3. 검증
+
+- 단위: coin 27/27, shop 44/44, camera 76/76 · build 0 경고.
+- 가게 스펙 단독 639/639.
+- `npm run verify:e2e`: 총 1965단언 PASS 1965 / FAIL 0 / SKIP 0, 미mock 0.
+- `npm run verify:all`: ALL DOMAINS PASS, EXIT 0, 내장 E2E PASS. 기록: 부가(extra:true) `testRewardFlow.mjs` 테스트 8의 1단언이 병렬 부하 중 FAIL — 단독 재실행 55/55 PASS, 이 스위트는 `useStudent` 레이스 번들과 스텁만 불러와 이번 변경 파일과 무관. 184차에 이어 두 번째 관측 → 별도 조사 항목.
+- 독립 코드리뷰 APPROVE(쓰기 경로가 구조적으로 없음: 2.5D 화면은 숫자만 받음), 독립 QA PASS.
+
+### 4. 알려진 한계 / 운영자 결정 후보
+
+- 용어 불일치: 배지는 "🪙"와 aria "코인 N개", 앱의 다른 화면은 같은 화폐를 "💵 Paul Dollar"로 표시(코드리뷰 비차단 지적). 운영자가 "코인"으로 지시했으므로 유지, 통일 여부는 운영자 결정.
+- 현재 파일럿(paulTown2_5d만 ON)에는 배지가 보이지 않음 — 조회 게이트에 paulTown2_5d 포함 여부는 운영자 결정(§9).
+- 가게 화면 헤더의 잔액 표시는 범위 축소로 미구현(후속 A.1 후보).
+- `testRewardFlow` 병렬 부하 간헐 실패 원인 조사 필요.
+
+### 5. 다음 단계
+
+경제 설계 문서의 단계 B(구매, 플래그 뒤) 이후는 운영자 승인 전 미착수.
+
+## 2026-09-26 (185차) — Paul Town 2.5D Phase 3: 회귀검사·하드닝·테스트 공백 보완 (PR #62, 워크트리 `C:\voca-wt\paul-town-v2`)
+
+### 0. 범위
+
+운영자 8h 자율 세션 스펙 Phase 3(1 전체 diff 검토, 2 미사용 코드/중복 상태/리스너 누수, 3 키보드·터치 충돌과 연속 탭, 4 reduced-motion, 5 모바일 세로 HUD·버튼 겹침, 6 테스트 누락 보완, 7 handoff 기록, 8 다음 단계는 문서로만 설계, 9 코인·구매·인벤토리·배치·Supabase 저장 미구현). 대상 diff `5a2f6c71..214bd5a4`의 src 4파일(Proto25DScreen.jsx, ProtoShopScreen.jsx, camera.js, shopInteraction.js). 플래그 3개 false, DB/SQL/Production WRITE 0, C:\voca·기존 임시 worktree 무접촉.
+
+### 1. 감사 결과
+
+- 코드 감사(읽기 전용): 미사용 import/상태/함수 없음(camera.js·shopInteraction.js export는 전부 소비됨). 중복 상태 없음(shopBusyRef/shopClosing/shopReentryBlocked는 ref=동기 가드, state=UI 반영으로 각각 필요). 리스너·타이머·ResizeObserver·rAF 전부 해제 짝 확인, 언마운트 후 setState 위험 없음. reduced-motion: 새 모션 경로(카메라)는 t=1 스냅으로 준수. **should-fix 1건**: 산책 모드 rAF 루프가 매 프레임 `querySelector('[data-proto-character]')` 호출. nit: 전역 Escape keydown이 `e.target`을 보지 않음(전체 화면 오버레이라 저위험, 한계로 기록), `enterLeaving` 무경로 분기는 의도된 방어 코드.
+- 실제 동작 감사(스크래치 `scripts/.tmp/p3RuntimeAudit.mjs`, mock 하네스, 결과 `scripts/.tmp/p3RuntimeAudit.out.json`): A 세로 360/390/412에서 정보 배지·산책 토글·가게 입장 버튼·캐릭터 쌍별 겹침 0, 전부 ≥44px·뷰포트 안. B 터치 탭 1회=이동 1회, 토글/입장 탭이 바닥으로 새지 않음. C 95ms 안 5연타 → 마지막 목표에 idle 도착, 걷기 고착 없음; 이동 중 산책 모드 ON/OFF/ON → transform NaN 없음·경계 유지; 입장/Escape 연타 → 닫힘·히스토리 1칸. D 가게 닫힘 상태에서 Escape/Enter/Space 무반응, 열림 상태 Tab이 Buy→Back 순환, Escape로 닫힘. E reduced-motion에서 카메라 즉시 스냅(도착 직후=300ms 후), 리플 미렌더, bob 애니메이션 none. F 콘솔/페이지 오류·미mock·mock 오류 0.
+
+### 2. 변경 파일과 이유
+
+- `src/components/town/proto2_5d/Proto25DScreen.jsx`: rAF 카메라 루프에서 캐릭터 엘리먼트를 이펙트 클로저 변수 `charElCache`에 캐시, null·ground 부재·`!groundEl.contains()`일 때만 재조회(프레임당 DOM 조회 제거, 동작 불변). 이펙트 재실행마다 null로 초기화되고 ProtoCharacter는 키 없는 고정 위치라 재마운트되지 않음(코드리뷰 확인).
+- `tests/e2e/townProto25d.spec.mjs`: 신규 `S19[360x640|1280x800,phase3]` 각 13단언 — (a) 가게 닫힌 직후 입장 버튼 disabled/aria-disabled(150ms 내) → 600ms 후 사용 가능·1회 클릭으로 재입장, (b) 이동 중 산책 모드 토글 → ground transform none·OFF 표기·idle 도달·카메라 속성 갱신 중단, (c) 빠른 두 번 토글 → 시작 상태로 복귀(상태 무관 비교)·NaN 없음·경계·카메라 유한값, 가로 스크롤 없음. 테스트 작성 오류 2건(HUD 위 탭 좌표, 두 번 토글 기대값)을 수정 사이클 1/2에서 바로잡음(제품 결함 아님).
+
+### 3. 테스트 결과
+
+- 단위: camera 76/76, shop 44/44 · `npm run build` 0 경고.
+- 가게 스펙 단독(스크래치 러너): 617/617.
+- `npm run verify:e2e`: 총 1943단언 PASS 1943 / FAIL 0 / SKIP 0, 미mock 0.
+- `npm run verify:all`: ALL DOMAINS PASS, EXIT 0, 실패 줄 0(내장 E2E PASS, 184차에 간헐 실패했던 extra `testRewardFlow`도 통과).
+- 독립 코드리뷰 APPROVE, 독립 QA PASS.
+- 관측: `S12[1280x800,sprite-render]` 걷기 프레임 교대 단언이 부하 중 1회 간헐 실패(재실행 통과, 산책 모드 OFF 경로라 이번 변경과 무관) — 181차 §5와 같은 부류.
+
+### 4. 스크린샷 위치(커밋 대상 아님, gitignore)
+
+- Phase 3 실제 동작 감사: `C:\voca-wt\paul-town-v2\scripts\.tmp\` 의 p3_A_portrait_360x640.png, p3_A_portrait_390x844.png, p3_A_portrait_412x915.png, p3_E_reduced_motion_360x640.png
+- 이전 세션 산책/가게 스크린샷(walk_*.png, shop_*.png)은 기존 임시 worktree `…\scratchpad\wt-clean-pr\scripts\.tmp\`에 있었으며 임시 폴더 정리 대상이라 보존이 보장되지 않음.
+
+### 5. 알려진 한계
+
+- 가게를 닫은 뒤 키보드 포커스가 입장 버튼이 아니라 body로 돌아감, 가게 오버레이 포커스 트랩 없음(`DECISIONS_PENDING.md` "포커스 트랩/aria-modal" 항목과 같은 결정 대기).
+- 전역 Escape 리스너가 입력 대상(target)을 확인하지 않음(전체 화면 오버레이라 현재 영향 없음).
+- 뒤로가기 버튼 `aria-busy` 상태는 수 ms만 유지돼 E2E로 안정적으로 단언하지 않음(불안정 테스트 방지).
+- 데스크톱 월드 폭 674px 중앙 정렬, 월드 가장자리 시각 단서 없음, 코인 표시/Buy 비활성 표현 없음, 화분은 꽃밭 이미지 자리표시자(183·184차와 동일).
+
+### 6. 다음 단계(문서로만 설계, 이번 세션 미구현)
+
+코인·실제 구매·인벤토리·마을 물건 배치·Supabase 저장은 `docs/design/town/PROTO25D_ECONOMY_NEXT_DESIGN_2026-09-26.md`(커밋 214bd5a4 포함)에 5단계(A 코인 표시 read-only → B 구매(플래그) → C 인벤토리 → D 배치 → E 저장)로 설계돼 있다. 기존 Paul Dollar 원장·Town Shop RPC·Town V1 배치 규칙 재사용, 신규 DDL 0 목표. 착수는 운영자 결정(플래그 전략, 파일럿 반, 아트 라이선스).
+
+## 2026-09-26 (184차) — 가게 체험 프로토타입 v1 검증 완료·커밋 + 임시 worktree 삭제 사고 복구 (PR #62)
+
+### 0. 사고와 복구
+
+- 2026-09-26 15:58경 기존 활성 worktree(`AppData\Local\Temp\claude\…\scratchpad\wt-clean-pr`)에서 추적 파일 1,449개 중 1,332개와 `node_modules`가 삭제됨(verify:e2e 실행 중). 최근 수정 파일만 생존한 패턴으로 OS 임시 파일 정리로 판단. 커밋 이력은 `C:\voca\.git`와 origin(667df575)에 안전.
+- 미커밋 가게 작업 9파일을 `C:\Users\jinal\voca-wip-backup-2026-09-26\`에 백업(패치 + 사본) → 운영자 승인 후 고정 worktree `C:\voca-wt\paul-town-v2`를 origin 667df575에서 **detached HEAD**로 생성(같은 브랜치가 기존 worktree에 체크아웃돼 있어서). push는 `HEAD:feat/paul-town-v2-clean-pr` 명시. 복원 9/9 크기·sha256 일치, git diff가 백업 패치와 동일. 기존 임시 worktree는 삭제하지 않고 보존.
+- 새 worktree에 gitignore된 `.env`가 없어 앱이 로그인 화면조차 렌더하지 않음(E2E 전면 타임아웃) → 운영자 허가로 `C:\voca\.env`를 읽기 전용 복사(값 미출력, 해시 일치, gitignore·git status 미표시 확인). CI는 secrets로 `.env`를 만든다.
+
+### 1. 더블클릭 재진입 결함 — 수정 3사이클
+
+- verify:e2e 첫 실행: S18 항목 f(뒤로가기 빠른 더블클릭 후 가게가 닫혀야 함) 4뷰포트 FAIL. 뒤로가기 버튼(하단 전체 폭 52px)과 가게 입장 버튼(하단 중앙, bottom 24px)이 같은 위치에 겹침.
+- 수정 2차(운영자 지정): 닫힌 직후 400ms 입장 버튼 클릭·탭·키보드 차단(`SHOP_REENTRY_GUARD_MS`, `shopReentryBlockedUntilRef`, `shopReentryBlocked` + disabled/aria-disabled/pointer-events-none, `handleEnterShop` 시간 가드) → 결과 동일 FAIL.
+- 진단(운영자 승인 3번째 사이클, 스크래치 `scripts/.tmp/diagS18f.mjs`, 이벤트·히스토리 계측): 첫 클릭 → history.back → popstate → 닫힘 → 31ms 뒤 두 번째 클릭이 `disabled:false`인 입장 버튼에 도달 → 재오픈. 원인: `closeShopNow`가 함수형 업데이터 `setShopOpen((cur)=>…)` 안에서 `didClose`를 세우고 바로 다음 줄에서 읽었는데, React 18 배칭에서 업데이터가 나중에 실행돼 가드가 죽은 코드였음.
+- 수정 3차: 가드를 무조건 실행(이미 닫힌 상태의 중복 호출에서도 400ms 차단은 무해). 진단 재실행 V1/V3 모두 닫힘 유지·히스토리 1칸 소비, 가게 스펙 591/591.
+
+### 2. 최종 검증
+
+- 단위: shop 44/44, camera 76/76, walkGrid 44, pathRandom 19, sceneFixture 24, depth 23, bench 88. `npm run build` 0 경고.
+- `npm run verify:e2e`: 총 1917단언 PASS 1917 / FAIL 0 / SKIP 0(S18 4뷰포트 a–h 전부), 미mock 0.
+- `npm run verify:all`: ALL DOMAINS PASS, EXIT 0, 내장 E2E PASS. 기록: 부가(extra:true) `testRewardFlow.mjs` 1단언이 병렬 부하 중 간헐 FAIL — 단독 재실행 55/55 PASS, 보상 코드는 이번 diff에 없음.
+- 독립 코드리뷰 APPROVE(수정 3차 포함, 타이머 누수 없음, S18 f 비동어반복). 독립 QA PASS(운영자 범위 9항목 전부 증거 매핑).
+- 기능 요약: 가게 = `demo-building`, 입구 타원 반경(2×CELL), 상품 3개(Bench/Flower Pot 자리표시자/Street Lamp, 기존 라이선스 자산), Buy → 중앙 토스트 "구매 기능 준비 중", 이동 잠금, pushState/popstate/Escape, 복귀 위치·방향 보존. 플래그 3개 false, 네트워크·저장 0.
+
+### 3. 다음 세션 인수
+
+- Phase 3(전체 diff 검토, 누수/입력 충돌/reduced-motion/HUD 겹침, 테스트 보완)은 운영자 지시로 이번에 시작하지 않음.
+- 후속 후보(운영자 결정): 코인 잔액 스텁·Buy 비활성 표현(게임 재검토), 화분 전용 이미지, 월드 가장자리 시각 단서, `testRewardFlow` 병렬 부하 간헐 실패 조사.
+- 활성 worktree는 이제 `C:\voca-wt\paul-town-v2`(detached). 기존 임시 worktree는 보존 상태이며 정리 여부는 운영자 결정.
+
+## 2026-09-26 (183차) — 8h 자율 세션: Phase 1 마감(산책 모드 커밋) + Phase 2 가게 체험 프로토타입(구현·경량 검증 완료, 전체 검증 메모리 보류, 미커밋, STOP)
+
+### 0. 시작 상태와 안전 조건
+
+- 시작 07:15 KST, worktree `…/scratchpad/wt-clean-pr`, 브랜치 `feat/paul-town-v2-clean-pr`, HEAD `5a2f6c71` = origin. `C:\voca` 무접촉. 플래그 3개 false. DB/SQL/Supabase/Production WRITE 0. PR merge 없음. 실제 결제/코인/인벤토리 저장 없음.
+
+### 1. Phase 1 — 산책 모드 마감 (완료)
+
+- 직전 세션(182차) 검증 결과를 근거로 산책 모드 변경(코드+테스트+문서+체크포인트 9파일)을 단일 커밋 `667df575`로 정리·push(HEAD=origin). PR #62 댓글 게시(테스트 수치·커밋·범위·알려진 한계).
+- verify:all 재실행은 시도하지 않음: 여유 메모리 0.8GB(원인: 운영자 Chrome 2.7GB 등), 하네스는 이미 직렬 실행이라 줄일 worker 없음, `runAll.mjs`에 부가 항목 제외 옵션 없음. 182차의 필수 도메인 `ALL DOMAINS: PASS` 판정 + 단독 `verify:e2e` 1825/1825를 근거로 마감했고 커밋 메시지·PR 댓글에 그 사실을 명시.
+
+### 2. Phase 2 — 가게 체험 프로토타입 (구현·경량 검증 완료, 미커밋)
+
+- 계획(planner): 가게 = `demo-building`(anchor {50,40}, collisionRect x 38–62, y 24–40, 스폰 바로 북쪽). 입구 = 충돌 상자 하단 중앙 + gap 2 → `nearestWalkablePoint`로 해석. 상호작용 반경은 셀이 비정방형이라 타원(2×CELL_W_PCT=4.8, 2×CELL_H_PCT≈2.53). 자산은 메인 레지스트리(`src/assets/town/index.js`)의 `decorations/bench`, `nature/flower-garden`(화분 자리표시자, placeholder:true), `decorations/street-lamp` 재사용 — `src/assets/town/env/*`는 V2 전용 격리라 사용 금지.
+- 구현(implementer, 미커밋 6파일): 신규 `src/utils/town/proto2_5d/shopInteraction.js`(순수: SHOP_ID/입구/타원/상품 3개, 기하는 walkGrid OBSTACLES에서 파생), 신규 `src/components/town/proto2_5d/ProtoShopScreen.jsx`(dialog 오버레이, 상품 카드 3개, Buy ≥44px → 중앙 토스트 "구매 기능 준비 중" 2초, "🏘️ 마을로 돌아가기" ≥52px), `Proto25DScreen.jsx`(+190: `shopOpen`/`shopClosing`, 재진입 가드 ref, 입장 버튼 `proto25d-shop-enter` 하단 중앙 ≥52px — `!shopOpen && 타원 안 && phase!=='sitting'`, pushState/popstate/Escape, 가게 열림 중 바닥 탭 무시, 닫을 때 카메라 재스냅, root `data-shop-open`), 신규 `scripts/testProto25dShop.mjs`(44단언, registry extra:false), E2E S18 4뷰포트(각 ≤23단언: 스폰 시 버튼 없음 → 입구 이동 후 버튼 표시·크기·HUD 비겹침 → 입장·상품 3개 → 바닥 탭 무시 → Buy 안내 → 뒤로가기 더블탭 안전(히스토리 마커 보존 단언) → 복귀 위치·방향 보존 → 멀어지면 버튼 숨김·카메라 추적·오버플로 없음).
+- 검토: 코드 리뷰 1차 CHANGES_REQUIRED — 실제 결함: 뒤로가기 가드가 `history.back()`의 popstate보다 먼저 풀려 빠른 더블탭 시 히스토리 2단계 후퇴 가능 → 수정 사이클 1/2: 가드를 `closeShopNow`(popstate 또는 600ms 폴백)에서만 해제, 닫는 동안 back 버튼 `disabled`+`aria-busy`, S18(f)에 히스토리 마커 단언 추가 → 재검토 APPROVE. UX 재검토 1차 REVISE(상품 카드 아래 text-xs 안내는 놓치기 쉬움) → 중앙 토스트(≥16px, role=status)로 수정 → APPROVE. 게임 재검토 ACCEPT(물질적 이슈 없음; 후속 후보: 코인 잔액 스텁, Buy 비활성 표현).
+- 경량 검증: 단위 shop 44/44·camera 76/76·walkGrid 44·pathRandom 19·sceneFixture 24·depth 23·bench 88 PASS, `npm run build` 0 경고, 4뷰포트 실측(스크래치 `scripts/.tmp/shopShow.mjs`, 스크린샷 `scripts/.tmp/shop_<vp>_{0_spawn,1_near,2_shop,3_notice,4_back}.png` 20장): 입장/상품 3개/안내/복귀/멀어지면 숨김 전부 OK, 콘솔·페이지 오류 0, 미mock 0.
+- **미실행**: `npm run verify:e2e`(S1–S18 전체), `npm run verify:all`, QA 최종 판정. 사유: 07:15~08:05 사이 4회 폴링(각 10분) 동안 여유 메모리 0.8~1.7GB(운영자 Chrome 1.3~2.7GB, old_Code 0.75GB, Evernote 0.5GB, Dropbox 등)로 3.5GB 기준에 도달하지 못함. 하네스는 이 상태에서 백그라운드 실행을 강제 종료하며(직전 세션 2회 실측), 운영자 지시("메모리 부족이 안전하게 해결되지 않는 경우 STOP")에 따라 반복 실행하지 않음. 따라서 **Phase 2는 미커밋 상태로 보류**, Phase 3 미착수.
+
+### 3. 이번 세션에 만든 문서(미커밋)
+
+- `docs/design/town/PROTO25D_ECONOMY_NEXT_DESIGN_2026-09-26.md`(180줄, Phase 3 항목 8 선행 작성: 코인=Paul Dollar 원장 재사용, 구매=기존 Town Shop RPC, 인벤토리/배치=Town V1 placements + townLayout 규칙, 저장=기존 sync 경로, 5단계 A–E 분할, DDL 0, 운영자 결정 항목). 설계만, 구현 없음.
+
+### 4. 다음 세션 인수 — 운영자 결정 1건
+
+- **메모리 확보 후 재개 지시**: Chrome/VS Code(old_Code)/Evernote 등을 닫아 여유 ≥3.5GB를 만든 뒤 "Phase 2 검증 재개"라고 지시하면 `verify:e2e` → `verify:all` → QA 판정 → handoff/ADR 0011/체크포인트 → 가게 프로토타입 단일 커밋·push·PR #62 댓글 → Phase 3(전체 diff 검토, 누수/입력 충돌/reduced-motion/HUD 겹침 점검, 테스트 보완, 문서) 순으로 이어간다. 대안: `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1`로 Claude Code를 재시작(강제 종료 비활성화, 단 메모리 부족 시 브라우저 크래시 위험은 남음).
+- 미커밋 변경은 worktree에 그대로 있다(`git status`로 확인). 커밋 전 반드시 전체 E2E·verify:all 통과 필요.
+
+## 2026-09-26 (182차) — Paul Town 2.5D "산책 모드" v1: 월드 확장 + 카메라 추적 (검증 완료, 미커밋, PR #62 worktree)
+
+### 0. 범위와 확인 사항
+
+- 작업 트리: `feat/paul-town-v2-clean-pr` worktree, 시작 HEAD `5a2f6c71`(clean). `C:\voca` 무접촉. 플래그 `paulTownV1/paulTownV2/paulTown2_5d` 전부 false 유지. DB/SQL/Supabase/Production WRITE 0. 상점·구매·저장 미구현(운영자 지시).
+- 등급 C(새 Paul Town 게임플레이). 설계는 운영자가 확정("한 가지 방식만")했으므로 협의체 설계 파도는 운영자 결정으로 생략, 엔지니어링 계획(planner) → 구현 → 독립 코드리뷰 → QA → 구현 결과 UX/게임 재검토(Class C 필수)만 수행. 결정 기록 `docs/agent-decisions/0010-proto25d-walk-mode-v1-2026-09-26.md`.
+- 변경(미커밋) 5: 신규 `src/utils/town/proto2_5d/camera.js`, 신규 `scripts/testProto25dCamera.mjs`, `tests/harness/registry.mjs`(+1 등록, extra:false), `src/components/town/proto2_5d/Proto25DScreen.jsx`(+182/−5), `tests/e2e/townProto25d.spec.mjs`(+290). 무변경: `pathfinding.js`, `walkGrid.js`(O2 WORLD_MIN_Y 포함), `benchInteraction.js`, `sceneFixture.js`, `ProtoCharacter.jsx`, `depthVisual.js`, `worldContract.js`, `features.js`.
+
+### 1. 설계(운영자 지정 + planner 구체화, Product Lead 확정)
+
+- ground(`proto25d-ground`)를 그대로 월드 엘리먼트로 유지(모든 world-% 좌표·오브젝트·캐릭터·리플·탭→월드 변환 무변경). 바깥에 뷰포트 래퍼 `proto25d-viewport`(flex-1, overflow hidden, touch-none)를 항상 렌더.
+- 산책 모드 ON: 월드 px = `unit = min(vw, vh/1.9) × 1.6`, 100:190 상자(360x640 → 539×1024, 390x844 → 624×1186, 412x915 → 659×1253, 1280x800 → 674×1281). 캐릭터 폭은 ground 폭의 8%라 절대 크기가 비정상적으로 커지지 않는다. 데스크톱은 월드가 뷰포트보다 좁아 가로 중앙 정렬(x=−303)·세로만 팬 — 알려진 한계.
+- 카메라: `camera.js` 순수 함수 — `computeWorldSizePx`, `computeCameraTarget`(축별 clamp[0, world−viewport], 월드≤뷰포트면 (world−viewport)/2로 중앙), `stepCamera`(lerp 0.15, |Δ|<0.5px 스냅), 산책 모드 선호 read/write(localStorage `paulEasyVoca_proto25dWalkMode`, 기본 ON, try/catch). `Proto25DScreen`은 rAF 루프에서 캐릭터/ground rect를 읽어 `translate3d(−camX, −camY, 0)`를 ground에 ref로 직접 기록(React 상태 아님), `data-camera-x/y` 노출, 첫 프레임 즉시 스냅, reduced-motion은 t=1, 토글 OFF/언마운트 시 cancel + transform none. OFF 모드 ground className/style은 이전과 바이트 동일(코드리뷰·QA 확인).
+- HUD 토글 `proto25d-walkmode-toggle`("산책 모드 ON/OFF", min-h 44px, 좌상단 배지 컬럼).
+- "지정된 길" = 기존 BFS 걷기 격자(새 도로 제약 없음, Product Lead 해석).
+- E2E: `setDeviceFlags`가 산책 모드 키를 'off'로 함께 심어 S1–S16은 단일 화면 월드 계약 그대로; 신규 S17(산책 모드 ON)이 4뷰포트 검증.
+
+### 2. 검증 결과
+
+- 단위: camera 76/76(신규), walkGrid 44, pathRandom PASS, sceneFixture 24, depth 23, bench 88. `npm run build` 0 에러/0 경고. 새 외부 의존성 0.
+- `npm run verify:e2e`: 총 1825단언 PASS 1825/FAIL 0/SKIP 0(이전 1744 + S17 81). town-proto2.5d 416→497. S17 항목: 토글 ON·카메라 루프 시작·월드>뷰포트(모바일 가로/전부 세로)·초기 및 도착 후 4방향 경계 유지·walking→idle·카메라 이동·캐릭터 발 앵커 뷰포트 안·가로 스크롤 없음·장애물 탭 시 도착 보정·벤치 탭 시 sitting. 스킵 경로 0건(실제 검사). 미mock 요청 0/mock 오류 0.
+- `npm run verify:all`: 필수 도메인 `ALL DOMAINS: PASS` 출력. 이후 부가(extra) 내장 E2E 실행 중 시스템 메모리 부족으로 하네스가 강제 종료("Target crashed" 7건, extra 항목, 단독 E2E로 대체 확인). `testEntranceRosterMinbyungchun.mjs`는 모든 단언 통과 후 Node 종료 시 libuv 단언 크래시(exit 3221226505) — 단독 재실행 PASS exit 0, 환경 문제. 제품 결함 0.
+- 스크린샷/경계 실측(스크래치 `scripts/.tmp/walkShow.mjs`, 헤드리스, 4뷰포트 ×3단계): boundsOk 전부 true, 캐릭터 항상 뷰포트 안, 콘솔 에러 0, 미mock 0. 예: 360x640 카메라 (89,315) → 우하단 이동 후 (178,384)=양축 최대 경계 → 좌상단 복귀 (44,186); 1280x800 x=−303 고정(중앙), y 394→480(하한)→258.
+- 독립 코드리뷰 APPROVE(차단 0; should-fix: rAF 프레임마다 `querySelector` — ref 캐시 권장, 프로토타입 범위에서 수용; nit: 스킵 경로는 실제 실행에서 0건으로 해소; `window.localStorage` 직접 접근은 저장소 기존 패턴). UX 구현 결과 재검토 APPROVE(데스크톱 레터박스 경계 시각 구분은 선택적 코스메틱). 게임 구현 결과 재검토 SIMPLIFY — 산책 메커닉은 그대로 출시 가능, 월드 네 방향 끝에 시각 단서(비네트/울타리/헤이즈) 요청 → Product Lead 판단: 이번 단계는 "산책과 카메라 이동만"(운영자 범위)이고 O2 협의체에서도 경계 아트는 DEFER였으므로 미구현, 운영자 후속 결정 항목으로 기록. QA PASS.
+
+### 3. 메모리 이슈 기록(환경)
+
+E2E 1차 실행과 verify:all이 각각 시스템 메모리 부족으로 하네스에 의해 강제 종료됨(여유 0.8~1.9GB/15.5GB, 상위 소비자는 운영자 앱). 운영자가 메모리 확보 후 E2E 재실행 → 정상 통과. 하네스 지침에 따라 강제 종료된 실행은 임의 재시작하지 않았고, 중단 실행이 남긴 프리뷰 서버(vite preview :4173, 내 프로세스)는 정리. verify:all 완전 재실행은 운영자 지시 시 수행.
+
+### 4. 다음 세션 인수
+
+- 커밋·push·PR #62 댓글은 운영자 지시 대기(권장 분할: ① camera.js+단위테스트+registry ② Proto25DScreen ③ E2E S17 ④ 문서·ADR·체크포인트).
+- 운영자 결정 후보: 월드 가장자리 시각 단서(게임/UX 요청, 시각 전용), 데스크톱 월드 폭(현재 674px 중앙 정렬 — 더 넓게 원하면 데스크톱 전용 overscan 필요), rAF 캐릭터 ref 캐시(should-fix), 다음 단계(학습 연결/오브젝트 밀도/상점 연결은 `PROTO25D_NEXT_STEPS_2026-09-23.md` §2 계획).
+- 기존 `DECISIONS_PENDING.md` 10건 그대로 대기.
+
+## 2026-09-26 (181차) — Paul Town 2.5D [O2] 상단 경계 스프라이트 잘림 수정 (협의체 라이브 드라이런 → 운영자 승인 → 구현·검증·커밋, PR #62)
+
+### 0. 범위와 확인 사항
+
+- 작업 트리: `feat/paul-town-v2-clean-pr` worktree(`…/scratchpad/wt-clean-pr`), 시작 HEAD `d0308b75`, 시작 시 clean. `C:\voca`는 접근·수정하지 않았다(운영자 지시).
+- 등급 B(운영자 요청으로 FULL COUNCIL REVIEW). 운영자 승인 2026-09-26. 결정 기록 `docs/agent-decisions/0009-proto25d-o2-top-edge-clip-2026-09-26.md`.
+- 변경 파일 5 + 신규 2: `src/utils/town/proto2_5d/walkGrid.js`, `scripts/testProto25dWalkGrid.mjs`, `scripts/testProto25dPathRandom.mjs`, `tests/e2e/townProto25d.spec.mjs`, `docs/design/town/PROTO25D_PILOT_READINESS_2026-09-25.md`(§3.1 신설), ADR 0009, `.ai-status/orchestrator-o2-top-edge-clip.json`. **SQL/DB/CI/배포/RLS/인증 변경 0, SQL 실행 0, merge/rebase/브랜치 전환/worktree 삭제 0, O2 외 기능 확장 0.**
+
+### 1. 협의체 라이브 드라이런(Phase 3, 2026-09-25) 요약
+
+파도 1 독립 평가(병렬 3 에이전트): child-experience-designer REVISE(동적 y-min), game-designer SIMPLIFY(여백+시각 단서), planner SIMPLIFY(단일 파일 정적 상수). 파도 2 교차 비평: 엔지니어링이 orchestrator 사실 노트(격자 유도식이 y 원점에 의존)를 받아 격자 원점 이동안을 스스로 축소; UX↔Game은 시각 단서 필요성에서 갈림. 파도 3 devils-advocate: "진입점 없는 프리파일럿에서 우선순위 미검증" 이의, OWNER_DECISION_REQUIRED. Product Lead 결정: 동적 계산 REJECT(순수 함수 계약·E2E 결정성), 시각 단서 DEFER(보이지 않는 벽은 y=2에 이미 존재), 정적 상수 채택, 구현 착수는 운영자 승인으로 이관 → 승인됨. 구현 계획은 코드 리뷰 1차 CHANGES_REQUIRED(상수의 행 경계 미정렬 실제 결함) → 스냅 채택, QA 2차 BLOCK(사전 측정 가드) → 3차 PASS. 판정 COUNCIL_WORKING(단, B 규모에는 무거움).
+
+### 2. 구현 중 STOP-RETURN 1건과 Product Lead 해소
+
+사전 측정(스크래치 `scripts/.tmp/o2Measure.mjs`, gitignore) 결과 필요 원시 여백이 모바일 3.2~4.6%인데 데스크톱 1280x800은 9.508%로, 협의체가 정한 상한(원시 ≤8.74, 스냅 후 ≤10)을 초과해 측정 에이전트가 STOP-RETURN. 그 상한은 데스크톱 측정 전 내부 기준이었고 운영자 지시는 "1280 포함 모든 지원 뷰포트에서 잘림 없음 + 최악 뷰포트 기준 정적 상수"로 명시적이라, Product Lead가 상한을 실측에 맞춰 조정하고 `MEASURED_TOP_MARGIN_PCT=9.51` → `WORLD_MIN_Y = 2 + ceil(9.51/CELL_H_PCT)×CELL_H_PCT = 12.105263`(행 8 y0)을 채택. 모바일은 12.1%로 과보정되지만 씬 오브젝트 최상단 y0=24라 실질 손실 없음(의도된 트레이드오프, ADR 0009·readiness §3.1 기록).
+
+### 3. 수정 전/후 측정(4뷰포트, x=10/50/90% 동일)
+
+| 뷰포트 | 수정 전 잘림(px) | 수정 후 잘림(px) | 수정 후 상단 여유(px) | 도착 y |
+|---|---|---|---|---|
+| 360x640 | 16.91 | 0 | +45.83 | 12.1053 |
+| 390x844 | 12.84 | 0 | +70.52 | 12.1053 |
+| 412x915 | 11.41 | 0 | +79.11 | 12.1053 |
+| 1280x800 | 60.06 | 0 | +15.84 | 12.1053 |
+
+데스크톱 상단 여유는 15.84px(≈1.98 world-%)로 얇다 — 캐릭터 아트 높이가 커지면 재측정 필요(잠금 단언이 상수 변경을 잡는다).
+
+### 4. 검증 결과
+
+- 단위(수정 전 → 후): walkGrid 37→44 PASS(신규 절 "10. O2 상단 여백": 3040셀 전수 y0≥WORLD_MIN_Y, 상수 잠금 `WORLD_MIN_Y === WORLD_MIN + 8×CELL_H_PCT`, x 무영향, nearestWalkablePoint/clamp), pathRandom 18→19 PASS(차단 대역 시작점 결정적 케이스), sceneFixture 24, depth 23, bench 88 PASS(무변경).
+- `npm run build` 0 에러/0 경고. `npm run verify:all` ALL DOMAINS PASS(EXIT 0). `npm run verify:e2e` 총 1744단언 PASS 1744/FAIL 0/SKIP 0, [town-proto2.5d] 392→416(+24 = 신규 S16 4뷰포트×6), 미mock 요청 0/mock 오류 0.
+- 갱신한 기존 단언 2건(`testProto25dWalkGrid.mjs` 옛 71·230행): 옛 대칭 clamp(y=WORLD_MIN)를 그대로 부호화한 것이라 사유를 주석에 명시하고 `WORLD_MIN_Y` 기준으로 교체 + (50, WORLD_MIN)이 blocked임을 추가 단언.
+- 독립 코드 리뷰(별도 에이전트): APPROVE, 결함 0 — 스냅 상수가 cellBounds와 동일 연산 순서로 행 8 y0와 비트 동일, rows 0~7 차단/8+ 유지, pathfinding.js:163 경계는 느슨하나 무해, 초기 위치 y=62·벤치 무영향. QA(별도 에이전트, 단위 5스위트·build 직접 재실행 + 두 로그 검독): PASS.
+
+### 5. 기록용 — 활성 블로커 아님: verify:all 내장 E2E의 S12 간헐 실패
+
+`verify:all`은 `scripts/testBrowserE2E.mjs`를 `extra:true`(13개 필수 도메인 밖)로 한 번 더 돌린다. 그 내장 실행에서 `[town-proto2.5d] S12[1280x800,sprite-render]` 3단언(걷는 동안 프레임 교대 샘플 3/7, walk-side-a/b 프레임 id, side-b-v2 basename)이 FAIL해 그 항목만 exit 1이 났다 — 필수 도메인이 아니라 `ALL DOMAINS: PASS`에는 영향 없음. 같은 세션의 단독 `verify:e2e`에서는 S12[1280x800] 27단언 전부 PASS였고, 이번 diff는 스프라이트/애니메이션 코드(`ProtoCharacter.jsx`, 매니페스트)를 건드리지 않았다. 다른 단위 스위트가 병렬로 CPU를 쓰는 verify:all 안에서만 나타난 타이밍 플레이크로 판단(178차의 걷기 프레임 교대 단언은 샘플링 기반). `TESTING.md`/`handoff.md`에 이전 기록 없음 → 새 간헐 관측. 운영자가 원하면 `DECISIONS_PENDING.md`의 "V2 S16 자석 드래그" 항목처럼 별도 재현 세션 항목으로 등재(이번 세션은 그 파일을 건드리지 않음).
+
+### 6. 커밋(3개, 소커밋 원칙)
+
+① `fix(town-proto25d): O2 top-edge sprite clip — WORLD_MIN_Y` (walkGrid.js + 단위 테스트 2) ② `test(e2e): S16 O2 top-edge tap on 4 viewports` ③ `docs: 181차 handoff, ADR 0009, readiness §3.1, checkpoint`. push 후 PR #62 댓글에 검토 결과·측정표·커밋 목록 게시. 해시는 PR #62 댓글 참고.
+
+### 7. 다음 세션 인수
+
+- PR #62 머지는 Class D(운영자 전용). Vercel Preview는 push로 재빌드됨 — 운영자 실기기 5분 체크리스트(readiness §6)에 "화면 최상단 탭 → 머리까지 보이는지" 1항목 추가 권장.
+- O2 후속 후보(모두 미착수·미결정): 상단 경계 시각 단서(경계 아트) — 협의체 DEFER; 모바일 과보정 완화(뷰포트별 상수)는 운영자가 필요하다고 판단할 때만.
+- §5의 S12 간헐 실패 재현 여부는 운영자 결정.
+- 학생 진입점·파일럿 반 등 `DECISIONS_PENDING.md` 10건은 그대로 대기.
+
+## 2026-09-25 (180차) — 에이전트 협의체(Agent Council) Phase 1 감사 + Phase 2 구현 (개발 인프라 문서만, 제품 무접촉, 미커밋)
+
+### 0. 범위와 확인 사항
+
+- 작업 트리: `feat/paul-town-v2-clean-pr` worktree(`…/d95369ce-…/scratchpad/wt-clean-pr`), 시작 HEAD `3c26a5bb`(PR #62 Draft, base main), 시작 시 clean. `C:\voca` 메인 체크아웃(`feat/paul-town-v2-world-contract-2026-09-17`, `c7632737`)은 OBSOLETE로 판정하고 건드리지 않았다(미추적 SQL 17개 그대로).
+- 변경 범위: `.claude/agents/*.md`, `docs/agent-decisions/*.md`, `docs/agent-architecture.md`, `MULTI_AGENT_WORKFLOW.md`, `DEVELOPER_GUIDE.md`, `PROJECT_BOARD.md`, `.ai-status/README.md` + 체크포인트 JSON, `handoff.md`. **`src/`/`api/`/`*.sql`/`.github/`/배포 설정 변경 0, SQL 실행 0, DB 작업 0, 브랜치 전환/merge/rebase 0, worktree 삭제 0, 배포 0, commit/push 0.** 기존 파일은 전부 append(삭제 0줄, `git diff --numstat` 확인).
+- 라우팅 훅이 지시한 `masterplan-agent` 스킬은 전역 vibe-claude 플러그인 소속으로 프로젝트 스킬 목록에 없어 호출하지 않았다. `docs/agent-architecture.md`(2026-07-20)의 "전역 Head/Sub 계층을 저장소에 중복 생성하지 않는다" 결정을 그대로 따랐다.
+
+### 1. Phase 1 감사 결과(읽기 전용, sub-agent 3개 병렬)
+
+- Paul Town 2.5D(`paulTown2_5d`, 기본 false): 179차 기준 파일럿 준비 완료, 스프라이트 8프레임 제작 완료, 활성 블로커 0, 운영자 결정 10건 대기(`DECISIONS_PENDING.md`). 학생 진입점 UI 없음.
+- CI 30분 취소: 미해결(`.github/workflows/release-gate.yml:75` `timeout-minutes: 30`, 45분 패치는 gitignore된 `scripts/.tmp`에만, 172차에 권한 정책으로 미적용). 운영자 결정 대기.
+- SQL: 2.5D는 DDL 0. v3_47~v3_50은 운영자가 이미 적용·종결(127차 적용, 129차 POST 검증 PASS). `PROJECT_BOARD.md`/`ROADMAP.md`의 "v3_50 미실행" 표기는 125차 옛 카드가 append-only로 남은 표류 — 상태 판단은 handoff 최신 섹션이 우선한다는 규칙을 이번에 문서화했다.
+- `C:\voca` 미추적 SQL 17개: Paul Town 관련 3개(v3_49/v3_50 post-verify, 파일럿 진단)는 종결 이력/재사용 도구, v3_38·v3_39b·초등 45명 패키지는 무관한 운영자 결정 대기, v3_39와 그 롤백은 가드가 더 이상 통과할 수 없어 실행 금지로 기록됨. 현재 Paul Town 작업을 막는 것 없음.
+- 기존 거버넌스: `.claude/agents/` 12역할, `docs/agent-architecture.md`+`MULTI_AGENT_WORKFLOW.md`(1라운드 challenge, 활성 4명 상한, 정지 조건), ADR `docs/agent-decisions/0001~0007`, `DECISIONS_PENDING.md`/`BLOCKERS.md`, `.ai-status/`(284개), 실제 강제 훅은 SQL 파괴 패턴 차단 1개. 빠진 것: game-designer, devils-advocate, 구현과 분리된 코드 리뷰 명시, 작업 등급, 작업 봉투, 야간 안전 큐. 최근 `.ai-status` 파일들의 `agent_name: "lead"` 표류 발견.
+
+### 2. Phase 2 변경 파일
+
+신규 5: `.claude/agents/game-designer.md`(91줄, 읽기 전용 자문), `.claude/agents/devils-advocate.md`(71줄, 읽기 전용, 거부권 없음), `docs/agent-decisions/TEMPLATE.md`(81줄), `docs/agent-decisions/0008-agent-council-design-2026-09-25.md`(설계 근거, Phase 1 산출), `.ai-status/orchestrator-agent-council-phase1.json` + `-phase2.json`.
+
+append 확장 9(삽입 440줄, 삭제 0): `.claude/agents/orchestrator.md`(+57, Product Lead: 등급 판정·수용 기준·봉투·결정값 6종·독립성·가짜 합의 금지·정지 규칙·우회 불가), `implementer.md`(+43, 봉투 검증·승인 범위만·STOP-반환·자기승인 금지·git 범위), `qa-reviewer.md`(+42, 판정 4값 PASS/FAIL_FIX_REQUIRED/BLOCKED/OWNER_DECISION_REQUIRED·체크리스트 10항목·Class별 최소 범위), `child-experience-designer.md`(+36, 핵심 질문·13개 평가 항목·구현 결과 재검토), `docs/agent-architecture.md`(+38, 개념→역할 매핑·권한 경계), `MULTI_AGENT_WORKFLOW.md`(+118, 작업 등급 표·Class C/D 파도 3회 흐름·가짜 합의 금지·작업 봉투·야간 안전 큐·운영자 승인 필수 행동·토큰 규율·훅 vs 문서), `.ai-status/README.md`(+28, 선택 필드 7개·agent_name 14개 등록명·status 2값 추가), `PROJECT_BOARD.md`(+25, "활성 브랜치/worktree" 표 + "READY 큐" 섹션, 현재 비어 있음), `DEVELOPER_GUIDE.md`(+53, 운영자 사용 안내·FULL COUNCIL REVIEW/FAST PATH/야간 작업·질문별 참조 위치·강제 수준).
+
+### 3. 최종 역할 구성
+
+| 개념 | 역할 | 권한 |
+|---|---|---|
+| Owner | 운영자 | 최종 |
+| Product Lead | orchestrator | 등급 판정, 봉투 발급, 결정 1회. 승인 경계 우회 불가 |
+| Kids UX | child-experience-designer | 입장만(Read/Grep/Glob) |
+| Game Design | game-designer(신규) | 입장만 |
+| Engineering | planner | 입장만 |
+| Devil's Advocate | devils-advocate(신규) | 입장만, 거부권 없음 |
+| Implementer | implementer | 유일한 코드 Write/Edit, 자기승인 불가 |
+| Code Review | `/code-review` 스킬(다른 컨텍스트) + Class D security-reviewer | 판정 |
+| QA | qa-reviewer | PASS/FAIL_FIX_REQUIRED/BLOCKED/OWNER_DECISION_REQUIRED — 반려는 운영자만 뒤집음 |
+| Release | deployment-engineer | 검증 |
+| Docs | docs-maintainer | *.md/.ai-status만 |
+| Overnight | 전담 없음 | 메인 세션이 READY 큐 순회, 비면 정지 |
+
+### 4. 드라이런 결과(가상 요청, 제품 코드 무변경, `DECISIONS_PENDING.md`에 행 추가 안 함)
+
+**드라이런 C — "Paul Town에 장식용 우편함 탭 반응 추가"**: orchestrator 등급 판정 Class C(새 아동 상호작용, 학생 노출 → 운영자 승인 필요). 파도 1(독립 평가, 병렬 3건 — 서로의 답을 못 봄): child-experience-designer REVISE(저마찰·온보딩 친화적이나 O1 HUD 탭 영역 겹침 미해결 상태의 새 탭 타깃, 반복 탭 변주/쿨다운 미정의), game-designer OWNER_DECISION_REQUIRED(학습 연결 없음 → 동기 루프 없음, 랜덤 페이로드는 슬롯머신 패턴), planner EXPERIMENT(벤치 상태기계·스프라이트 어댑터 재사용, DDL 0, 2~4h). 파도 2(교차 비평 1회): 물질적 이견 기록 — game↔ux/eng("학습 연결이 게이트인가"), ux→eng(비용 추정에 검증 부채 누락), eng→game(학습 루프는 제품 범위 질문이지 엔지니어링 REJECT 근거 아님). 파도 3 devils-advocate: 사전 예측 5개 중 4개 적중, 권고 OWNER_DECISION_REQUIRED, 최저 복잡도 옵션 "변주·쿨다운·페이로드 없는 고정 단일 반응". **orchestrator 결정(1회): OWNER_DECISION_REQUIRED** — 학습 연결 게이트 여부는 `PROJECT_PAUL_GOAL.md` 가이드레일에 대한 제품 범위 판단이라 orchestrator가 단독으로 뒤집지 않음. 추가 라운드 없이 종료(토론 종결 확인). 구현 시 봉투 범위는 `src/utils/town/proto2_5d/sceneFixture.js`, `src/components/town/proto2_5d/Proto25DScreen.jsx`, 스프라이트 자산 1종, `scripts/testProto25dSceneFixture.mjs`로 한정 가능. QA 반려 경로 확인: 히트박스 44px 미만이면 FAIL_FIX_REQUIRED.
+  - **드라이런에서 실제로 잡힌 결함 1건**: 엔지니어링 리뷰어(planner)가 첫 응답에서 "이 worktree에 2.5D 코드가 없다"고 보고했으나, orchestrator가 worktree 루트에서 직접 확인한 결과 `src/components/town/proto2_5d/`·`src/utils/town/proto2_5d/`·Proto25d 스위트 9건이 존재했다. 리뷰어의 grep이 `C:\voca`(구 브랜치)에서 실행된 것. 교차 비평에서 리뷰어가 정정을 수용하고 "호스트 시스템 미확정" 우려를 철회했다. 교훈: 작업 봉투 대조는 수정 권한 에이전트뿐 아니라 **읽기 전용 리뷰어의 첫 명령**이어야 한다 — `MULTI_AGENT_WORKFLOW.md` "작업 봉투" 절에 1문단 추가.
+
+**드라이런 A — "사용되지 않는 mock 라벨의 오타 수정"**: orchestrator 등급 판정 Class A(오타, 비제품, 결정적). 흐름: 봉투(ALLOWED_PATHS = 해당 mock 파일 1개) → implementer → qa-reviewer(build + 해당 verify 도메인). 협의체·ADR·DA 미소집, handoff 1줄. **협의체가 소집되지 않음을 확인.**
+
+**드라이런 D — "프로덕션 RLS 정책 변경"**: orchestrator 등급 판정 Class D(RLS = CLAUDE.md 규칙 8/11 영역, 운영자 승인 필수 목록). 흐름: planner + security-reviewer 입장 → ADR + `DECISIONS_PENDING.md` 행 → **OWNER APPROVAL REQUIRED에서 하드스톱**. 승인 전에는 implementer가 멱등 `supabase_v3_NN_*.sql` 파일 준비까지만 가능(파괴 패턴은 PreToolUse 훅이 실제 차단), 실행은 운영자가 SQL Editor에서, 그 뒤 post-verify + 2차 운영자 체크포인트. FAST PATH 요청으로도 우회 불가. **하드스톱 동작을 확인.**
+
+### 5. 역할 경계 검증
+
+designer/game-designer/devils-advocate: `tools: Read, Grep, Glob`(Write/Edit 없음) → 조용한 구현 불가. devils-advocate: 정의상 거부권 없음, 결정은 orchestrator. implementer: 자기승인 금지 명문화, 코드 리뷰는 다른 컨텍스트. qa-reviewer: 4값 판정, 반려는 운영자만 뒤집음. orchestrator: 운영자 승인 경계 우회 불가, FAST PATH도 Class D 유지. overnight: READY 큐(현재 비어 있음)만, 비면 정지. 미검증 worktree: 봉투 대조 규칙(문서 강제) — 드라이런에서 읽기 전용 리뷰어 미대조 사례가 실제로 발생해 규칙을 확장함(§4).
+
+### 6. 강제 수준(규칙 18, 정직한 표기)
+
+훅으로 실제 강제되는 것은 여전히 SQL 파괴 패턴 차단뿐. 파도 횟수, 자기승인 금지, 큐 소진 시 정지, 봉투 대조는 문서 규칙(자율 준수). 봉투 대조의 PreToolUse 훅 강제(`scripts/hooks/checkTaskEnvelope.mjs`)는 운영자가 원하면 별도 작업(Phase 3 후보).
+
+### 7. 다음 세션 인수
+
+- 운영자 검토 대기: 이 세션의 변경은 **미커밋**이다. 검토 후 커밋 여부/분할(신규 역할 2파일 / 기존 역할 확장 4파일 / 거버넌스 문서 5파일 / handoff·ADR·체크포인트) 결정. 커밋 시 `git add`는 위 §2 파일만(규칙 16). **2026-09-26 갱신**: 운영자가 최종 독립 검토(qa-reviewer sub-agent + orchestrator 직접 diff 검토, 결함 5건 수정: game-designer 경로 `docs/GAME_REWARD_RULES.md`, qa-reviewer 산출물/체크포인트 계약 4값, implementer 소커밋 권한 관계, orchestrator ADR 작성 위임 명시, 활성 상한 4명과 협의체 관계) 후 커밋·push를 지시해 3개 커밋으로 분할했다 — ① 역할 신규/확장 `cea6c6fc`, ② 워크플로·거버넌스·결정 규칙 `34b5155e`, ③ handoff·ADR·체크포인트(이 커밋). 커밋 목록과 검토 결과는 PR #62 댓글 참고. merge/배포/브랜치 전환/worktree 삭제/SQL 실행 없음.
+- 활성 worktree가 세션 임시 경로(`…/scratchpad/wt-clean-pr`)에 있다 — 고정 경로 이전 여부 운영자 결정.
+- 새 역할(`game-designer`/`devils-advocate`)은 Claude Code 세션 재시작 후 subagent_type으로 직접 소집 가능. 이번 드라이런은 general-purpose 에이전트가 worktree의 역할 파일을 읽고 따르는 방식으로 실행했다(세션 시작 시 로드된 정의는 `C:\voca`의 구 파일이기 때문).
+- Paul Town 실제 기능 작업은 시작하지 않았다(지시대로). Paul Town 2.5D의 다음 단계는 여전히 `DECISIONS_PENDING.md` 10건의 운영자 결정이며, 결정 후 orchestrator가 `PROJECT_BOARD.md` READY 큐에 항목을 넣는다.
+- Phase 3 후보(운영자 결정): 봉투 대조 훅, `.ai-status` `agent_name` 표류 파일 정정 여부(기존 파일은 이번에 수정하지 않음), CI 30분 상한 결정, PR #62 머지 판단.
+
+## 2026-09-25 (179차) — Paul Town 2.5D 프로토타입 학생 파일럿 직전 품질 정리(8h 자율 세션)
+
+### 0. 안전 요약
+
+- 세션 시작 HEAD `81f853e5`, 워크트리 `wt-clean-pr`, 브랜치
+  `feat/paul-town-v2-clean-pr`, PR #62 OPEN/Draft 확인(Phase 0).
+- Production DB WRITE 0, DDL 0. 플래그
+  `paulTownV1`/`paulTownV2`/`paulTown2_5d` 전부 `false` 무변경.
+- 세션 시작 시점 보호 대상(다른 작업의 미추적 파일) 17개는 이 세션
+  동안 손대지 않았다.
+- Vercel Preview 정책 무변경(SSO 유지, 에이전트는 GET-only). 운영자가
+  2026-09-25 실기기에서 Preview 접근 + leg 애니메이션을 직접 확인한
+  기록은 178차 §8에 이미 있다(이 세션이 새로 확인한 것 아님).
+- GitHub Actions 워크플로 파일 무변경. 기존 assertion을 완화/삭제한
+  케이스 0건 — 이번 세션에서 발견한 문제는 모두 assertion 강화 또는
+  실제 코드 수정으로 대응했다(§2).
+- 이 절을 쓴 문서 담당 에이전트는 코드/이미지를 직접 만들지 않았다 —
+  `handoff.md`/`TESTING.md`/신규 설계 문서/`DECISIONS_PENDING.md`/
+  `BLOCKERS.md`/`.ai-status/` 상태 파일만 갱신했고 git 명령은
+  실행하지 않았다. 아래 §1~§7의 구현/검증 작업 자체는 같은 세션에서
+  병행한 다른 에이전트(리뷰/E2E/모바일 측정/감사/수정 담당)가
+  수행했다.
+
+### 1. 진행 현황(Phase별)
+
+| Phase | 내용 | 상태 |
+|---|---|---|
+| Phase 0 | 워크트리/브랜치/PR 상태 확인, 베이스라인 스위트 14종 PASS, build PASS, 보호 대상 17개 미추적 파일 무변경 확인 | 완료 |
+| Phase 1 | read-only 코드 리뷰 | 완료 — 0 결함, 1 리스크(런타임 프레임 cadence가 단위 시간에 고정 락 없음) → Q1로 처리, 커밋 `09fe5a62`로 수정 |
+| Phase 2 | E2E 전환 행렬(S14) | 완료 — 52단언, 커밋 `4982d933` |
+| Phase 3 | 모바일 실기기 대응 측정(4 뷰포트) | 완료 — §4 |
+| Phase 4 | read-only 코드품질 감사 | 완료 — 0 결함, 5 리스크 → §3 |
+| Phase 5 | 랜덤 경로 property 테스트 + flake 재현성 분석 | 완료 — 실결함 D1 발견·수정(커밋 `a3824b1f`) → §2, flake 분석 §6 |
+| Phase 6 | 코드품질 리뷰 | 완료 — 11건 발견, 행동 변화 없는 정리 5건 적용(커밋 `193b1e42`) → §3.1 |
+| Phase 7 | E2E 추가 검증(S15) — @2x 강등 로직 실측 검증 | 완료 — 13단언, 커밋 `b5430e9e` |
+| Phase 8 | 독립 검토(별도 에이전트) | 완료 — 전 항목 CONFIRMED, 문서 수정 2건 지시(이 갱신에 반영) |
+
+### 2. 결함 D1 — pathfinding 지름길이 장애물 모서리를 스칠 수 있던 문제
+
+Phase 5(랜덤 경로 property 테스트, `testProto25dPathRandom.mjs`
+신규)가 mulberry32 결정론적 시드(20260925) 무작위 (start,target)
+100쌍 + 스트레스 1000쌍(시드+1)을 넣어 각 leg를 1% 간격 101샘플로
+세그먼트 샘플링해 장애물 침입을 검사한 결과, 스트레스 1000쌍 중 10개
+샘플이 장애물(`tree-plaza-ne`, x:[56,62] y:[48,54])을 최대 ~0.3%
+world-% 얕게 침입했다(결정적 재현: 시드 고정, stress i=994,
+start≈{x:62.2329,y:33.2526}, target≈{x:68.0868,y:97.3811}).
+
+근본 원인: `walkGrid.js`의 `nearestWalkablePoint`는 정상 좌표를 그대로
+보존(셀 중심으로 스냅하지 않음, 설계 의도대로 정상)하는데,
+`pathfinding.js`의 `simplifyCellPath`/`hasLineOfSight`는 오직 셀
+인덱스 공간(정수 col/row)에서만 직선시야를 판정했다. 실제로 걷는
+첫/끝 구간(`correctedStart`/`correctedEnd`의 정확한 좌표)은 자기 셀
+중심에서 최대 절반 셀까지 벗어나 있을 수 있어, 인덱스 공간 직선과
+실제 world 직선이 달라질 수 있었다.
+
+수정(커밋 `a3824b1f`, 같은 날): string-pulling을 셀 인덱스 공간이
+아니라 WORLD 좌표 공간(정확한 보정 시작/도착점 + 중간 셀 중심으로
+구성한 점 목록)에서 수행하도록 변경하고, 직선시야 판정 자체도 점
+샘플링이 아니라 선분–사각형(Liang-Barsky 슬랩 클리핑) 대수적 정확
+교차 계산으로 교체했다(경계 접촉은 허용). 1차로 고정 간격 world 점
+샘플링을 시도했으나 실측으로 더 좁은(~0.03% world-%) 별도 코너 스침
+회귀가 새로 드러나, 샘플 간격에 의존하지 않는 정확 계산으로 최종
+정정했다(`pathfinding.js`의 `hasLineOfSightWorld` 헤더 주석 참고).
+
+회귀 방지: `testProto25dPathRandom.mjs`(신규, 16단언 — 100쌍 검증
+10 + 스트레스 2 + 994번 쌍 결정적 회귀 4) + `testProto25dWalkGrid.mjs`
+(9단언 추가, 총 37단언 — 코너 인접 시작점/도착점 시나리오). 둘 다
+`tests/harness/registry.mjs`에 `extra:false`로 등록돼
+`npm run verify:all` 기본 실행에 포함된다. pathfinding/walkGrid 외
+depth/shadow/벤치/캐릭터 크기는 무변경.
+
+### 3. Phase 4 코드품질 감사 — 0 결함, 5 리스크 및 조치
+
+| 리스크 | 내용 | 조치 |
+|---|---|---|
+| 키보드 경로 없음 | 탭/클릭 전용, 키보드로 이동 불가 | `DECISIONS_PENDING.md`로 이관(파일럿 전 결정 필요) |
+| 오버레이 미고지/포커스 트랩 없음 | 스크린리더에 오버레이가 알려지지 않고, 포커스가 밖으로 샐 수 있음 | 전자는 Q3로 즉시 수정(아래), 포커스 트랩은 `DECISIONS_PENDING.md`로 이관 |
+| @2x 실패 시 즉시 이모지 폴백 | 2x 로드 실패 시 1x 재시도 없이 바로 이모지로 대체 | Q2로 즉시 수정(아래) |
+| scene layer recompute 비메모이즈 | 매 렌더마다 씬 레이어를 다시 계산 | 알려진 한계로 기록(파일럿 규모에서는 성능 영향 미미 판단) |
+| preload 취소 없음 | 프리로드 요청이 취소되지 않음 | 알려진 한계로 기록 |
+
+**Q1**: 런타임 프레임 cadence(스프라이트 애니메이션 프레임 전환
+주기)에 단위 시간 락을 추가(커밋 `09fe5a62`) — Phase 1에서 식별된
+"고정 락 없음" 리스크를 수정한 것이며 알려진 한계로만 남겨두지
+않았다. `testProto25dSpriteAdapter.mjs`에 관련 단언이 추가돼 단언
+수가 50→70으로 늘었다(Q1 cadence lock + Q2 degrade 관련 단언 포함,
+2026-09-25 본 세션에서 직접 실행해 70/70 PASS 확인).
+
+**Q2**: 스프라이트 @2x 이미지 로드 실패 시 즉시 이모지로 넘어가던
+것을, 먼저 1x로 한 단계 강등해 재시도하고 그래도 실패하면 이모지로
+대체하도록 수정(커밋 `09fe5a62`). 처음에는 단위 테스트로만
+검증됐으나, 이후 E2E S15(커밋 `b5430e9e`, 13단언)가 실제 브라우저에서
+"@2x만 실패 → 강등된 1x 렌더", "@2x+1x 모두 실패 → 이모지"의 두
+경로를 실측 검증했다(§7). Phase 8 독립 검토가 이 강등 로직에
+무한루프가 없음과, 한 번 @2x가 실패하면 세션 내내 전역으로 강등
+상태가 유지되는("sticky-global") 폴백 동작이 의도된 안전장치임을
+확인했다 — 새로운 결함이 아니라 알려진 한계로
+`docs/design/town/PROTO25D_PILOT_READINESS_2026-09-25.md` §2에
+추가했다.
+
+**Q3**: 프로토타입 오버레이에 `role="region"`+`aria-label`을 추가해
+스크린리더에 최소한의 영역 정보를 제공(같은 커밋 `09fe5a62`). 포커스
+트랩은 별도이며 미구현 — `DECISIONS_PENDING.md`.
+
+### 3.1 Phase 6 코드품질 리뷰 — 11건 발견, 행동 변화 없는 정리 5건 적용
+
+코드품질 리뷰(Phase 6)가 11개 항목을 찾았다. 그중 동작을 바꾸지 않는
+정리 5건을 커밋 `193b1e42`로 적용했다 — 스테일 주석 정리, 매직
+넘버를 named 상수(`SPRITE_MANIFEST_VERSION`,
+`SCENE_OBJECT_SHADOW_HEIGHT_RATIO`)로 추출 등. 나머지 항목 중 의존성
+0 모듈 간 의도된 중복과 `frameIndexAt`의 의도된 중복은 리뷰에서
+"제거하지 않는 편이 낫다"(중복 제거가 모듈 간 불필요한 결합을
+만든다는 판단)고 결론 내려 코드에 그대로 두고 그 의도를 문서화했다.
+
+### 4. Phase 3 모바일 실기기 대응 측정 — 11/11 PASS × 4 뷰포트
+
+측정 뷰포트: 360×640, 390×844, 412×915, 1280×800(데스크톱 대조군).
+4개 전부 11/11 PASS. 수치:
+
+- 도착 오차 0(모든 뷰포트).
+- 프레임 지속 시간 ≤141ms(bob/걷기 프레임 전환).
+- A/B 프레임 전환 횟수: side 걷기에서 12/8회(경로별 측정).
+- depth scale: 0.9714(360×640) / 0.5643(390×844) / 1.1765(412×915) —
+  전부 `depthScale(y)` 계산식과 정확히 일치.
+- 발 접지선 vs 그림자 중심 Δ0px(4개 뷰포트 전부).
+- z-index가 depthKey 기준 뒤/앞 배치와 정확히 일치.
+- 앉기 `seatPct`가 벤치 seat 기준 소수점 4자리까지 일치.
+- 가장자리 탭이 `[2,98]` world-%로 clamp.
+- 뷰포트 높이 변화(모바일 주소창 접힘/펼침 등)에도 world-% 위치 유지.
+- reduced-motion에서 side 걷기가 단일 프레임(`walk-side-a`)으로
+  고정, bob 애니메이션 없음.
+
+관측(결함 아님, 기록용):
+
+- **[O1]** 모바일 정보 토글 HUD 버튼(대략 x 12–231, y 12–56px)이 그
+  영역의 탭을 이동이 아닌 HUD 열기로 흡수한다.
+- **[O2]** world y≈4 부근에서 캐릭터 bounding box가 뷰포트 상단을
+  넘어선다(하단 기준 앵커 스케일 특성).
+
+두 관측 모두 `docs/design/town/PROTO25D_PILOT_READINESS_2026-09-25.md`
+§2와 `DECISIONS_PENDING.md`에 기록했다.
+
+### 5. 커밋
+
+| 커밋 | 내용 |
+|---|---|
+| `a3824b1f` | pathfinding world-space LOS 수정(D1 결함 수정) — §2 |
+| `09fe5a62` | Q1(cadence 단위 시간 락)/Q2(@2x→1x 강등 재시도)/Q3(오버레이 region 라벨) — §3 |
+| `4982d933` | E2E S14(전환 행렬, 52단언) — Phase 2 |
+| `193b1e42` | Q4 정리 — 스테일 주석, `SPRITE_MANIFEST_VERSION`/`SCENE_OBJECT_SHADOW_HEIGHT_RATIO` 상수화 등 행동 변화 없는 정리 5건(Phase 6) — §3.1 |
+| `b5430e9e` | E2E S15(@2x 강등 실측 검증, 13단언) — Phase 7 |
+| `01450a0d` | test: S15가 1x 재로드를 기다리도록 타이밍 수정(제품 코드 무변경) — §6 run 1 FAIL 원인 조치 |
+
+세션 종료 시점 이후 추가 커밋이 발생하면 이 표에 이어서 기록한다
+(append). HEAD `01450a0d`가 origin 최신(push 완료).
+
+### 6. 검증 결과
+
+Phase 5 flake 재현성 분석: 수정 후 dist에서
+`tests/e2e/townProto25d.spec.mjs`를 독립적으로 5회 연속 재실행 —
+매회 379/379 PASS, 0 FAIL(재현 가능한 flake 없음). S14 개발 중 S12에서
+1회 관측된 Playwright 타임아웃은 5회 재실행 어디에서도 재현되지
+않아 일회성 인프라 이슈로 분류했다(코드/테스트 수정 없음).
+
+| 스위트 | 단언/결과 |
+|---|---|
+| `testProto25dPathRandom.mjs`(신규) | 16단언 PASS |
+| `testProto25dWalkGrid.mjs`(28→37) | 37단언 PASS |
+| `testProto25dSpriteAdapter.mjs`(50→70, Q1 cadence lock + Q2 degrade 단언 반영) | 70단언 PASS |
+| `testProto25dSpriteContract.mjs` | 177단언 PASS |
+| `testPaulSpriteIngest.mjs` | 132단언 PASS |
+| `testPaulSpriteAssets.mjs` | 125단언 PASS |
+| `testBundleBudget.mjs` | 32단언 PASS |
+| `tests/e2e/townProto25d.spec.mjs` S1–S14(전환 행렬 신규 52 포함) | 379/379 PASS(5회 연속 재실행 전부) |
+| `tests/e2e/townProto25d.spec.mjs` S15(신규, @2x 강등 실측) | 13/13 PASS(run 2부터, run 1 원인은 아래) |
+| 프로토타입 E2E standalone 합계 | **392/392 PASS**(379 + 13) |
+
+**`npm run build`**(HEAD `b5430e9e`/`01450a0d`): PASS, 경고 0.
+
+**`npm run verify:all`**(HEAD `b5430e9e`): "ALL DOMAINS: PASS", 스위트
+142 PASS / 0 FAIL(위 표의 `testProto25dPathRandom` 등 신규 스위트
+포함), 약 28분.
+
+**`npm run verify:e2e`** — 전체 회귀 스위트(1720개 단언 기준) 3회
+실행 결과를 있는 그대로 기록한다(선택적 재실행으로 숨기지 않음):
+
+| 실행 | HEAD | 결과 | FAIL 내역 |
+|---|---|---|---|
+| run 1 | `b5430e9e` | 1718/1720, 2 FAIL | S15에서 @2x 강등 직후 1x 재로드가 끝나기 전에 스냅샷을 읽음 — 테스트 타이밍 문제(제품 코드 결함 아님), `01450a0d`로 수정 |
+| run 2 | `01450a0d` | 1718/1720, 2 FAIL | `[town-v2] S16[390x844,mouse] 자석 드래그 배치 항목17`(V2 자석 드래그 배치) — **이번 세션에서 손대지 않은 V2 코드**이고 run 1에서는 동일 코드가 PASS했음. 기존에 간헐적으로 관측되던 실패(아래 "기존 CI/E2E 알려진 간헐 실패" 참고), run 2에서는 S15가 PASS로 전환됨 |
+| run 3 | `01450a0d` | 1720/1720, 0 FAIL, 0 SKIP, 미mock 요청 0(2026-09-25 05:38–05:53 KST) | 없음 — S15 PASS, `[town-v2] S16[390x844,mouse] 자석 드래그 배치 항목17`도 PASS해 run 2의 FAIL이 간헐적이었음을 확인 |
+
+3회 실행 결과를 종합하면: 179차가 수정한 항목(S14/S15/pathfinding/
+cadence/degrade)은 3회 전부 안정적으로 PASS했고, V2 S16만 run 2에서
+1회 간헐 FAIL했다가 run 3에서 재현 없이 PASS했다 — 근본 원인 조사는
+`DECISIONS_PENDING.md`의 "V2 S16 항목17 자석 드래그 간헐 실패" 항목에
+남겨뒀다(§6.1).
+
+#### 6.1 기존 CI/E2E 알려진 간헐 실패(179차 세션 범위 밖, 신규 결함 아님)
+
+`[town-v2] S16[390x844,mouse] 자석 드래그 배치 항목17`이 run 2에서
+FAIL했다. 이 테스트는 Paul Town **V2**(`paulTown2_5d`와 완전히
+독립된 별도 실험, `src/config/features.js` 격리 주석 참고)의 자석
+드래그 배치 기능을 검사하며, 179차 세션은 V2 코드를 전혀 수정하지
+않았다 — 동일 코드가 run 1에서는 PASS했다(간헐적, 재현 조건 불명).
+`TESTING.md`의 기존 V2 드래그 측정 관련 노트에도 이 계열의 간헐성이
+이미 기록돼 있다. 이 결함을 179차 세션 범위에서 조사·수정하지 않는다
+— V2 무변경 원칙(`paulTown2_5d`와 독립된 별도 실험이므로 이 세션의
+파일럿 준비 범위 밖) 때문이다. `BLOCKERS.md`에 "활성 블로커 아님 —
+기록"으로, `DECISIONS_PENDING.md`에 별도 세션에서 재현/분리하기 위한
+결정 대기 항목으로 추가했다(§8).
+
+**Vercel Preview**(HEAD `b5430e9e`, 배포 `6646333620`):
+`https://voca-660dzpcs1-jina4926952s-projects.vercel.app` — GET-only
+확인(로그인 없음, Production WRITE 0): 200 응답, 로그인 화면 렌더,
+`Proto25DScreen-BOHDiVxF.js` 청크가 로컬 빌드와 동일하며 v2 스프라이트
+참조 + degrade 속성 + region 라벨을 포함, `/assets/paul-*.png` 16개
+전부 200 `image/png`, `localStorage`에 저장된 플래그 없음(기본값
+유지). `01450a0d`(테스트 전용 변경)용 새 배포가 별도로 존재하며,
+문서 커밋 이후 최종 HEAD 기준으로 재확인 예정.
+
+### 7. 다음 세션 인수 — 첫 명령
+
+```
+cd C:\voca   # 또는 이어서 작업 중인 워크트리
+git log --oneline -7
+```
+
+179차 세션은 build/verify:all/verify:e2e(3회)/Vercel Preview까지
+전부 완료했고 문서화(§0~§8, §6.1)도 전부 마무리됐다 — 다음 세션이
+당장 실행할 검증 명령은 없다. 남은 것은 운영자 결정/확인뿐이다:
+`DECISIONS_PENDING.md`의 10개 항목 중 운영자가 결정한 것이 있으면
+해당 행을 "결정됨"으로 갱신하고 이 절 아래 새 섹션으로 결정
+내용/일시를 append한다. `PROTO25D_PILOT_READINESS_2026-09-25.md` §6의
+운영자 5분 Preview 체크리스트와 §3의 모바일 실기기 확인표(실기기
+열)도 운영자 확인 대상으로 남아 있다.
+
+### 8. 미결정 사항
+
+파일럿 시작 전 운영자 결정이 필요한 10개 항목은 저장소 루트
+`DECISIONS_PENDING.md`에 모아뒀다 — 키보드/스크린리더 경로, 포커스
+트랩, 모바일 HUD 탭 영역 처리, 학생 진입점 + 파일럿 반 지정 시점(및
+기존 Pilot 허용목록과의 상호작용), @3x 자산 여부, cadence 동기화,
+레거시 `walk-side-b` 파일 삭제 여부, Vercel Preview 공유 가능 링크
+여부를 포함한다. sticky-global @2x 강등 폴백은 결정 대기가 아니라
+"알려진 한계"로
+`docs/design/town/PROTO25D_PILOT_READINESS_2026-09-25.md` §2에
+기록했다(§3 Q2 참고). §6에서 발견된 `[town-v2] S16 자석 드래그
+배치 항목17` 간헐 FAIL은 179차 세션이 만든 결함이 아니고 V2는
+`paulTown2_5d`와 독립된 별도 실험이라 이번 세션 범위 밖이므로,
+"V2 S16 항목17 자석 드래그 간헐 실패 — 별도 세션에서 5회 재현/분리"
+항목을 `DECISIONS_PENDING.md`에 10번째로 신규 추가했다(§6.1 참고).
+
+## 2026-09-25 (178차) — Paul 스프라이트 walk-side-b 프레임 교체(v2): 기존 a 유지 + 신규 무릎 굽힘 자세 b-v2, 원본 보존
+
+### 0. 안전 요약
+- 이 세션(문서 담당)은 코드/이미지를 만들지 않았다 — `handoff.md`/
+  `TESTING.md`/스펙 문서/`.ai-status/` 상태 파일만 갱신했다. git 명령
+  0회.
+- 자산·코드 실장 자체는 병행 작업하는 다른 에이전트가 수행했고, 이
+  절은 그 결과를 문서로 기록한다(아래 §1~§7). §7 검증은 2026-09-25
+  01:55–02:42 KST에 lead가 워크트리 `wt-clean-pr`에서 직접 실행한
+  최종 결과다 — 전부 PASS. Vercel Preview만 push 후 확인 예정(§7).
+- 플래그 무변경: `paulTownV1`/`paulTownV2`/`paulTown2_5d` 전부
+  `false`. PR #62 OPEN/Draft 유지. 모든 체크가 PASS한 뒤 단일 커밋으로
+  예정돼 있다(이 문서 작성 시점 미커밋).
+- **정정(2026-09-25, lead)**: 최초 보고에서 `12_54_37 AM (1)`을
+  "좌측·하단 잘림"으로 기록했던 것은 PIL `Image.getbbox()`를 RGBA에
+  그대로 적용해 alpha=0(완전 투명) 픽셀까지 잉크로 잡은 결과였다.
+  alpha>16 기준 잉크 bbox로 재측정하면 (1)은 (80,18)–(1004,1431)로
+  좌/우/하단 여백이 각각 80/20/105px 확보돼 **클리핑이 아니다**.
+  운영자가 `walk-side-a`를 유지하고 (2)를 `walk-side-b-v2`로 채택,
+  (1)은 미사용으로 둔 결정 자체는 구도(art/composition) 판단으로
+  그대로 유효하다 — (1)은 여전히 저장소 밖에 남는다. 아울러 (2)의
+  alpha>16 잉크 bbox는 (151,17)–(901,1463)이 맞는 값이며(§1 표의
+  (65,14)–(1000,1472)는 동일하게 non-alpha `getbbox()`로 잰 잘못된
+  값), 식별 키는 sha256 `23c4a79f…`다. §1 표를 이 값으로 갱신했다.
+- **정정(2026-09-25, lead) — 6C-1은 제품 버그가 아니라 테스트 측정
+  아티팩트였다**: E2E 초기 관측에서 "긴 LEFT 걷기에서 idle 직전 미러가
+  약 100ms 순간 해제"로 보였던 현상은 lead가 재조사한 결과 실제 제품
+  결함이 아니었다. `findPath`로 확인한 (90,20)→(20,20) 경로는
+  dx=−70, dy=0인 `side` 방향 **단일 leg**다 — 원인은 E2E 샘플러가
+  phase/mirror/facing 값을 서로 다른 Playwright 호출로 순차 읽었고, 두
+  호출 사이에 걷기가 끝나 idle로 전환되면서 값이 어긋난 것이었다.
+  샘플러는 샘플당 phase/mirror/facing을 한 번에 캡처하는 atomic
+  `page.evaluate` 스냅샷으로 교체 중이다. 다만 조사 과정에서
+  `Proto25DScreen.jsx`에 도입한 `FACING_MIN_DX_PCT = 1.0`(world-%)은
+  **예방적 가드(관측된 결함에 대한 수정이 아님)** 로 그대로 유지한다 —
+  실제 path-snap 시나리오(예: (65,62)→(20,62)의 마지막 leg는 dx=0,
+  dy=−3.8인 순수 수직 `walkBack` leg)에서 facing이 잘못 뒤집히는 진짜
+  위험을 막기 위함이며, `side` 방향이면서 `|dx| ≥ 1.0`인 진짜 수평
+  leg에서만 facing을 갱신한다. pathfinding, 벤치(`facingToward`),
+  depth, shadow, 캐릭터 크기는 무변경. 상세는 §3-1 참고.
+
+### 1. 운영자 원본 판정(2026-09-25)
+- 운영자가 새로 생성한 측면(side) 걷기 렌더 2장을 전달했다(둘 다
+  1024×1536 RGBA, 오른쪽을 바라봄 — 기존 프레임과 동일한 방향
+  규칙).
+
+| 원본 파일명(타임스탬프) | 판정 | 사유 |
+|---|---|---|
+| `12_54_37 AM (1)` | **REJECTED**(구도 판단) — 미사용 | alpha>16 잉크 bbox (80,18)–(1004,1431), 여백 좌80/우20/하105px — 클리핑 아님(§0 정정 참고). 운영자가 walk-side-a 유지 + (2) 채택을 선택 |
+| `12_54_38 AM (2)` | **ACCEPTED** — 신규 `walk-side-b` | alpha>16 잉크 bbox (151,17)–(901,1463), 한쪽 발로 지지하고 반대쪽 다리를 뒤로 굽혀 든 중간 스트라이드 자세. sha256 `23c4a79fe28a2030081f13192d74e1c2bf8fad5bfb595a5ebebe82ccca67ad60`(식별 키) |
+
+- **페어링 확정**: 기존 `walk-side-a`(08_25_58, 넓은 스트라이드,
+  무변경) ↔ 신규 채택본(b-v2). 새로 전달된 두 장을 서로 짝짓는 것이
+  아니다.
+
+### 2. 설치 예정 파일
+- 신규: `src/assets/town/character/paul-walk-side-b-v2.png` +
+  `@2x.png`. 모든 프레임과 동일한 고정 스케일 `0.08384`, 발 접지선
+  1x 기준 y=127, 좌우 중심 x=48로 정규화. 잉크 높이 약 122px(기존
+  `walk-side-a` 약 121px과 거의 동일 — 크기 점프 없음).
+- 레거시: `paul-walk-side-b.png` + `@2x.png`는 디스크에 **보존**하되
+  레지스트리에서 더 이상 import되지 않아 빌드 산출물(dist)에는
+  포함되지 않는다.
+
+### 3. 코드 배선(변경 범위 — 최소)
+- `PAUL_SPRITE_FILES['walk-side-b']` 매핑 값만
+  `'paul-walk-side-b-v2.png'`로 변경.
+- frame id `walk-side-b` 자체는 무변경(계약/state/미러 규칙 그대로).
+- 매니페스트 앵커 무변경: `footAnchor {x:48,y:128}`@1x,
+  `frameDurationMs 150`.
+- 미러 규칙 무변경: facing=left일 때만 동일 페어에 `scaleX(-1)`.
+- 그 외 코드/게이트 무변경: 정면/후면 걷기(`walk-front-*`/
+  `walk-back-*`), `sit`, 벤치, pathfinding, depth/shadow, 캐릭터
+  렌더 크기 전부 이번 변경 범위 밖.
+
+### 3-1. Proto25DScreen.jsx 예방적 facing 가드(2026-09-25, 관측된 결함 아님)
+- **초기 관측(정정됨)**: E2E 검증 중 여러 leg로 이어지는 긴 LEFT 걷기
+  경로에서, idle로 전환되기 직전 약 100ms 동안 미러
+  (`data-proto-character-sprite-mirror` 속성/`scaleX(-1)`)가
+  무미러(오른쪽 방향)로 되돌아가는 것처럼 관측됐다.
+- **재조사 결과(정정, lead)**: 이는 **제품 버그가 아니라 테스트 측정
+  아티팩트**였다. `findPath`로 확인한 (90,20)→(20,20) 경로는 dx=−70,
+  dy=0인 `side` 방향 **단일 leg**이고, 방향이 도중에 바뀌지 않는다.
+  실제 원인은 E2E 샘플러가 phase/mirror/facing 값을 서로 다른
+  Playwright 호출로 순차적으로 읽었고, 두 호출 사이에 걷기가 끝나
+  idle로 전환되면서 읽은 값이 어긋난 레이스였다.
+- **테스트 수정**: `tests/e2e/townProto25d.spec.mjs`의 S12 샘플러를
+  phase/mirror/facing을 한 번에 캡처하는 단일 atomic `page.evaluate`
+  스냅샷 방식으로 교체 중이다(샘플 간 레이스 제거).
+- **예방적 가드로 유지(제품 코드, 관측된 결함에 대한 수정이 아님)**:
+  재조사 과정에서, `walkLeg`가 leg마다 그 leg 자신의 `dx`만으로
+  facing을 재계산하는 기존 로직이 실제 path-snap 시나리오에서는
+  위험할 수 있다는 점을 별도로 확인했다 — 예: (65,62)→(20,62) 경로의
+  마지막 leg는 dx=0, dy=−3.8(순수 수직, `walkBack`)인데, 이런 leg에서
+  facing을 재계산하면 방향이 잘못 뒤집힐 수 있다. 이를 막기 위해
+  `src/components/town/proto2_5d/Proto25DScreen.jsx` 1개 파일에 신규
+  상수 `FACING_MIN_DX_PCT = 1.0`(world-% 단위)을 예방적으로
+  도입했다(하드닝) — 스프라이트 모드에서, leg의 이동 방향이 `side`이고
+  `|dx| ≥ 1.0`인 **진짜 수평 leg**에서만 facing을 갱신하고, 수직/미세
+  leg는 이전 facing을 그대로 유지한다. `walkLeg` 본 루프와
+  reduced-motion 점프 경로 양쪽에 동일하게 적용했다.
+- **무변경 확인**: pathfinding 로직, 벤치 착석 방향(`facingToward`),
+  depth 정렬, shadow, 캐릭터 렌더 크기는 전부 이번 변경 범위 밖.
+- **테스트**: 위 atomic 샘플러 교체 외에, S12의 발 접지선(foot-line)
+  검사에 기존에 존재하던 walk-bob CSS 애니메이션(크기에 비례해 진폭이
+  커짐)을 반영한 허용 오차를 추가했다 — 키의 8% 또는 최소 4.5px 중 큰
+  값.
+
+### 4. 테스트 갱신(예정)
+- `scripts/testPaulSpriteAssets.mjs` — v2 파일명 기준 검사 + 레거시
+  파일 보존(디스크에는 존재하되 레지스트리/dist 미포함) 케이스 추가.
+- `scripts/testPaulSpriteIngest.mjs` — 동일.
+- `scripts/testBundleBudget.mjs` — v2 파일명 기준 인벤토리 조정,
+  레거시 파일이 청크에 새지 않는지 확인.
+- `tests/e2e/townProto25d.spec.mjs` S12 — 좌/우 측면 걷기에서 frame id
+  **와** `src` 파일명(basename)이 a ↔ b-v2로 교대하는지, 크기/발
+  접지선 안정성을 확장 검사.
+- 동 파일 S13 — 측면 걷기 프레임 정지(reduced-motion) 케이스 추가.
+
+### 5. Preview 정책
+177차 §6과 동일 — Vercel Preview는 로그인 없이(배포 생존 + 자산 서빙
+여부만) 확인하고, 실제 시각 검증(데스크톱/모바일)은 Production PIN
+API를 호출하지 않는 로컬 Playwright + 네트워크 mock으로 수행한다
+(Production WRITE 0 원칙).
+
+### 6. 제약 확인
+Production WRITE 0, `paulTownV1`/`paulTownV2`/`paulTown2_5d` 플래그
+전부 `false` 유지, PR #62 OPEN/Draft 유지, 모든 체크(build/verify/
+E2E/스크린샷/Preview) PASS 후 단일 커밋 예정.
+
+### 7. 검증(2026-09-25 01:55–02:42 KST, 워크트리 `wt-clean-pr`, lead 실행)
+
+| 항목 | 결과 |
+|---|---|
+| `npm run build` | PASS, 경고 0 |
+| `npm run verify:all` | "ALL DOMAINS: PASS", 스위트 141 PASS / 0 FAIL, 약 32분, 타임아웃/취소 없음 |
+| `npm run verify:e2e` | 1655 PASS / 0 FAIL / 0 SKIP, 미mock 요청 0 |
+| `tests/e2e/townProto25d.spec.mjs` standalone | 327/327 PASS(S12: 좌/우 걷기 frame id **와** `src` 파일명이 `walk-side-a` ↔ `paul-walk-side-b-v2`로 교대, LEFT 걷기의 모든 샘플에서 미러 `'1'`, 크기/발 접지선이 bob 허용 오차 안에서 안정, 4뷰포트; S13: `walk-side-a` 기준 측면 걷기 reduced-motion 프레임 정지; atomic 샘플러 적용) |
+| `scripts/testPaulSpriteAssets.mjs` | 125/125 PASS |
+| `scripts/testPaulSpriteIngest.mjs` | 132/132 PASS |
+| `scripts/testBundleBudget.mjs` | 32/32 PASS |
+| `scripts/testProto25dSpriteAdapter.mjs` | 50/50 PASS |
+| `scripts/testProto25dSpriteContract.mjs` | 172/172 PASS |
+| `scripts/testTownEnvAssets.mjs` | 196/196 PASS |
+| `node scripts/spriteIngestPaul.mjs --check` | PASS=68 FAIL=0 BLOCKED_BY_ASSET=0 |
+| 로컬 뷰포트 스크린샷(lead 리뷰 완료) | `preview-local/side-{360x640,390x844,412x915,1280x800}-{a,b}.png` — a/b-v2 프레임이 동일한 크기·발 접지선을 유지, 검은 배경 없음, 클리핑 없음 |
+| Vercel Preview 확인(로그인 없이) | **완료(에이전트 GET-only).** 커밋 `5d2faf29` 2026-09-25 약 02:45 KST push, GitHub 배포 `6644346180` → success. Preview URL `https://voca-ktrsbm4ct-jina4926952s-projects.vercel.app`(브랜치 alias `https://voca-git-feat-paul-town-v2-clean-pr-jina4926952s-projects.vercel.app`). Chrome에서 로그인 없이 GET만 확인(Production WRITE 0): 로그인 화면 렌더, `Proto25DScreen-Dk3K-cwh.js` 청크에 `paul-walk-side-b-v2` 참조 있고 레거시 `paul-walk-side-b-<hash>.png` 참조는 없음, `/assets/paul-*.png` 16개 전부 200 `image/png`(v2 + `@2x` 포함), 메인 청크에는 스프라이트 프레임 참조 없음(번들 가드), `localStorage`에 `paulEasyVoca_features` 없음(플래그 기본값 유지). 2.5D 화면 자체는 학생 로그인(Production PIN API WRITE)이 필요해 에이전트는 Preview에서 열지 않았다 — **운영자가 실기기에서 직접 로그인해 육안 확인을 완료했다(§8)** |
+
+### 8. 운영자 실기기 Preview 확인(2026-09-25)
+
+- 운영자가 2026-09-25 Preview
+  `https://voca-q33hznaug-jina4926952s-projects.vercel.app`(HEAD
+  `96e90ef8`, Vercel SSO 보호)를 실제 모바일 기기에서 직접 열었다.
+  앞서 모바일에서 관측됐던 404 `DEPLOYMENT_NOT_FOUND`는 배포 누락이
+  아니라 SSO/미인가 응답이었던 것으로 확인됐다.
+- 운영자가 본인 기기에서 직접 로그인하고, 관리자 패널에서
+  `paulTown2_5d`를 켰다. 확인 결과: 접속 정상, 좌/우 걷기에서 다리
+  애니메이션이 `walk-side-a` ↔ `paul-walk-side-b-v2`로 정확히
+  전환되는 것을 확인.
+- 이 로그인·플래그 토글은 **운영자 본인의 기기·계정에서의 행위**다 —
+  lead/에이전트는 Production WRITE 0 원칙을 그대로 지켜 이 세션에서
+  로그인하지 않았다(§7의 GET-only 확인이 에이전트 측 검증의 전부).
+- 코드 변경·재배포·merge 없음. 플래그
+  `paulTownV1`/`paulTownV2`/`paulTown2_5d`는 여전히 기본값 `false`,
+  PR #62 OPEN/Draft 유지.
+
+## 2026-09-24 (177차) — Paul 캐릭터 8프레임 스프라이트 실장(Phase 6C): 이모지 → Paul 스프라이트 교체, paulTown2_5d 게이트만, 신규 플래그 0
+
+### 0. 안전 요약
+- 이 세션(문서 담당)은 코드/이미지를 만들지 않았다 — `handoff.md`/
+  `TESTING.md`/스펙 문서/`.ai-status/` 상태 파일만 갱신했다. git 명령
+  0회.
+- 자산·코드 실장 자체는 병행 작업하는 다른 에이전트가 수행했고, 이
+  절은 그 결과를 문서로 기록한다(아래 §1~§7). 이 워크트리
+  (`scratchpad/wt-clean-pr`) 기준 현재 미커밋 변경:
+  - 수정: `scripts/spriteIngestPaul.mjs`, `scripts/testPaulSpriteIngest.mjs`,
+    `src/components/town/proto2_5d/Proto25DScreen.jsx`,
+    `src/utils/town/proto2_5d/paulSpriteManifest.js`,
+    `tests/harness/registry.mjs`.
+  - 신규: `scripts/testPaulSpriteAssets.mjs`,
+    `src/assets/town/character/{LICENSE.txt,NOTICE.md,index.js,
+    paul-sprite-measured.json,paul-*.png,paul-*@2x.png}`(16개 이미지 +
+    4개 메타 파일), `src/utils/town/proto2_5d/
+    characterSpriteManifest.default.js`.
+- 준비 스캐폴딩(경로/매핑/ingest 스크립트/135단언 테스트, 이미지 0장
+  상태)은 176차에서 이미 별도 커밋 `212538d1`로 분리됐다. 이번
+  자산·배선 변경은 **별도 커밋 1개로 예정**돼 있으며, 이 문서 작성
+  시점에는 아직 커밋되지 않았다.
+- 플래그 무변경: `paulTownV1`/`paulTownV2`/`paulTown2_5d` 전부
+  `false`. V1/V2 전용 파일, depth/shadow/pathfinding/bench 코드,
+  `.github/workflows/` 전부 무변경. PR #62 OPEN/Draft 유지.
+
+### 1. 원본 수령·매핑 판정
+- 운영자가 ChatGPT로 생성한 PNG 11장을 2026-09-24 약 20:23 KST에
+  전달(1024×1536 RGBA, 투명 배경). 2장이 바이트 단위 중복 → 실제
+  9장 unique.
+- lead가 다리 스트라이드 쌍을 기준으로 육안 판정해 8프레임에 매핑:
+
+| frame id | 원본 파일명(ChatGPT 타임스탬프) |
+|---|---|
+| `idle-front` | `ChatGPT Image Sep 24, 2026, 08_23_24 PM.png` |
+| `walk-front-a` | `08_23_31` |
+| `walk-front-b` | `08_23_28` |
+| `walk-back-a` | `08_23_43` |
+| `walk-back-b` | `08_23_35` |
+| `walk-side-a` | `08_25_58`(오른쪽을 바라봄) |
+| `walk-side-b` | `08_23_39` |
+| `sit` | `08_25_51` |
+
+- 여분 1장(`08_23_20`, `walk-front-a`와 동일 스트라이드)은 미사용.
+- 원본은 저장소 밖(세션 스크래치패드 `ingest/raw/` +
+  `PROVENANCE.json`)에 보관, 원본별 SHA-256은
+  `src/assets/town/character/NOTICE.md`에 기록.
+
+### 2. 정규화(저장소 밖 스크립트, PIL, 리페인트 없음)
+- 균일 스케일 `0.08384`(=`124/1479`, `sit` 제외 최고 잉크 높이 기준),
+  LANCZOS 리샘플.
+- 출력 96×128 @1x + 192×256 @2x.
+- 발 접지선: 모든 프레임 최하단 잉크 행이 1x 기준 y=127.
+- 좌우 중앙: 잉크 bbox 기준 x=48 ±0.5px.
+- `sit`: 동일 스케일, 발이 바닥선에 정렬.
+- 검사(§7 일관성 검수표 + a–h): 저장소 밖 스크래치 검사 125/125,
+  저장소 안 `node scripts/spriteIngestPaul.mjs --check` → **PASS 68 /
+  FAIL 0 / BLOCKED 0**(176차의 BLOCKED_BY_ASSET 8건 전부 해소).
+
+### 3. 설치된 파일·앵커
+- `src/assets/town/character/paul-<frame-id>.png` + `@2x.png` × 8
+  프레임(16파일, 약 404KB).
+- `index.js` — `--write`가 생성한 레지스트리(`PAUL_SPRITE_SOURCES`/
+  `PAUL_SPRITE_SOURCES_2X`/`PAUL_SPRITE_MEASURED`).
+- `paul-sprite-measured.json` — 실측 앵커.
+- `LICENSE.txt`/`NOTICE.md` — 생성 도구/모델/날짜/원본 SHA-256/편집
+  절차/승인자 필드로 채워짐(스펙 §8 요건 충족).
+- 앵커·타이밍 실측값(CONFIRMED): `footAnchor {x:48,y:128}`@1x 전
+  프레임 동일(캔버스 중심 고정 — 실측에서도 흔들림 없음),
+  `seatAnchor {x:48,y:85}`@1x(`sit` 전용, 잉크 높이의 65% 지점 실측 —
+  좌석 접촉이 자연스러운지는 스크린샷만으로 판단, §6 한계 참고),
+  `frameDurationMs 150`(§3 제안 범위 125–166ms 안쪽, 한 이동 구간
+  650ms당 약 4회 프레임 교대).
+
+### 4. 코드 배선(게이트)
+- 신규 `src/utils/town/proto2_5d/characterSpriteManifest.default.js`
+  — `buildPaulSpriteManifest`(신규 선택 인자 `sources2x` 추가)로
+  `PAUL_SPRITE_MANIFEST` 생성.
+- `Proto25DScreen.jsx`: `spriteManifest` prop 기본값이
+  `PAUL_SPRITE_MANIFEST`로 변경(1줄 + 헤더 주석 갱신).
+- **신규 플래그를 추가하지 않았다** — 게이트는 기존
+  `paulTown2_5d`(기본 `false`) 하나뿐이다(lead 결정, 운영자가 "우선
+  `paulTown2_5d` 하나로 검증"을 요청). `SPRITE_CONTRACT_2026-09-24.md`
+  §5-1의 `paulTown2_5dSprite`는 이번 Phase에서도 추가하지 않았다.
+- 이모지는 런타임 폴백으로 그대로 남는다(무효 매니페스트 또는 이미지
+  로드 실패 시).
+- 번들 청크 격리 확인: `paul-` 문자열이 `Proto25DScreen-*.js` 청크
+  (raw 31.1kB / gzip 11.2kB)에만 존재, 메인 `index` 청크와
+  `TownScreen` 청크에는 없음.
+
+### 5. 알려진 한계
+- `sit` 좌석 접촉이 자연스러운지는 스크린샷으로만 판단 — 실제 벤치
+  렌더 사람 재확인 필요.
+- 스프라이트 모드에서 다리별(per-leg) facing 미세 조정 없음.
+- 프레임 교대가 실제 이동 거리(stride length)에 동기화되지 않음 —
+  `frameDurationMs` 고정 간격.
+- `@3x` 미제공 — DPR 3 기기는 `@2x` 업스케일.
+- 지연 로드 청크에 자산 약 404KB 추가(DPR당 1x 또는 2x 세트 8파일만
+  실제 전송).
+- 이모지 폴백 경로 여전히 존재.
+
+### 6. Preview 정책
+Vercel Preview(브랜치 alias
+`https://voca-git-feat-paul-town-v2-clean-pr-jina4926952s-projects.vercel.app`)는
+SSO 차단 없이 렌더되지만, 2.5D 화면은 학생 로그인 이후에만 마운트되고
+로그인은 Production PIN API(WRITE)를 호출한다. "Production WRITE 0"
+원칙에 따라 실제 시각 검증(데스크톱/모바일)은 동일 빌드를 로컬에서
+네트워크 mock으로(Playwright, 360/390/412/1280) 수행하고, Preview는
+로그인 없이(배포 생존/Proto 청크·`paul-*` 자산 서빙 여부만) 확인한다
+— 173차 §8과 동일 방식. 운영자가 WRITE를 감수하면 실제 기기 로그인 후
+확인 가능.
+
+### 7. 검증(2026-09-24 21:47–22:27 KST, 워크트리 `wt-clean-pr`, lead 실행)
+
+| 항목 | 결과 |
+|---|---|
+| `npm run build` | PASS, 경고 0 |
+| `npm run verify:all` | "ALL DOMAINS: PASS", 스위트 141 PASS / 0 FAIL, 약 27분, 타임아웃/취소 없음 |
+| `npm run verify:e2e` | 1598 PASS / 0 FAIL / 0 SKIP, 미mock 요청 0(저장소 러너 안 11-spec 전체 실행) |
+| `tests/e2e/townProto25d.spec.mjs` standalone(vite preview) | 270/270 PASS(S8/S9/S11 스프라이트 모드로 조정, S12 4뷰포트 360/390/412/1280 신규, S13 reduced-motion 신규) |
+| `scripts/testPaulSpriteAssets.mjs`(신규) | 112/112 PASS |
+| `scripts/testPaulSpriteIngest.mjs`(§5–6 "이미지 존재" 케이스로 조정) | 132/132 PASS |
+| `testProto25dSpriteAdapter` | 50/50 PASS |
+| `testProto25dSpriteContract` | 172/172 PASS |
+| `testProto25dCharacterManifest` | 72/72 PASS |
+| `testTownEnvAssets` | 196/196 PASS |
+| `testBundleBudget`(신규 §4c: 스프라이트 16파일 인벤토리 + 누출 가드) | 32/32 PASS — main/V1/V2 청크 누출 0, `Proto25DScreen` 청크 gzip 11.3KB ≤ 60KB 예산 |
+| `node scripts/spriteIngestPaul.mjs --check` | PASS=68 FAIL=0 BLOCKED_BY_ASSET=0 |
+| 로컬 뷰포트 스크린샷(Playwright + mock, 12장:
+  {360×640,390×844,412×915,1280×800}×{idle,mid-walk,sitting}) | lead
+  리뷰 완료 — 이모지 아닌 실제 스프라이트 렌더, 모자/신발 클리핑 없음,
+  검은 배경/테두리 없음, 걷기 프레임 교대 확인, 이동 방향에 따라
+  방향/미러 정확, 벤치에 발이 앞으로 나오게 착석, CSS 그림자 존재,
+  reduced-motion 프레임 정지, UI 탭이 캐릭터를 이동시키지 않음 |
+| Vercel Preview 확인(로그인 없이) | **완료.** 커밋 `8be6ba99` 2026-09-24
+  22:30 KST push, GitHub 배포 `6638989777` → success. Preview URL
+  `https://voca-rs10ezhb4-jina4926952s-projects.vercel.app`(브랜치
+  alias `https://voca-git-feat-paul-town-v2-clean-pr-jina4926952s-projects.vercel.app`).
+  Chrome에서 로그인 없이 확인(GET만, Production WRITE 0): 로그인
+  화면 렌더, 메인 청크 `index-Bg682rhx.js`에 스프라이트 참조 0개,
+  `Proto25DScreen-Dt_NUpVc.js`에만 `paul-idle-front`/`paul-sit` 등
+  포함, `/assets/paul-*.png` 16개 전부 200 `image/png`(1x 약
+  10.6–13.3KB, `@2x` 약 34–37KB), `localStorage`에 `paulEasyVoca_features`
+  없음(플래그 기본값 유지). 2.5D 화면 자체는 학생 로그인이 필요해
+  (Production PIN API WRITE 동반) Preview에서 열지 않았다 — 시각
+  검증은 §7의 로컬 mock 스크린샷 12장이 대신한다. |
+
+전체 회귀 과정에서 실제 버그 3건을 발견·수정했다(1차 전체 체인
+실행에서 실패, 아래 수정 후 최종 재실행에서 전부 PASS):
+
+1. `testTownEnvAssets` — 신규 주석 3곳에 리터럴 문자열
+   `"assets/town/env"`가 그대로 들어가 있어 매니처 검사에 걸림 → 문구
+   변경으로 수정.
+2. `testBundleBudget` §4 — 신규 PNG 16장이 "예기치 않은 파일"로
+   판정됨 → §4c 인벤토리 항목으로 등록하고 누출 가드를 추가.
+3. E2E S12 `[412x915]` — `naturalWidth` 1회성 읽기가 전체 러너
+   안에서 간헐적으로 flaky → 최대 5초까지 폴링하도록 수정.
+
+상세 배경은
+`docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md` §14
+참고.
+
+## 2026-09-24 (176차) — Paul 캐릭터 8프레임 PNG 수령 준비: 경로·파일명·manifest 대응·ingest 검사 명령 (이미지 0장, 미커밋)
+
+### 0. 안전 요약
+- 이 세션은 **문서 준비만** 수행했다 — git 명령 0회(커밋/스테이징/체크아웃
+  전부 없음), 이미지 파일 0장, Production DB/Supabase/Vercel env 접촉
+  0회.
+- 플래그 상태 무변경: `paulTownV1`/`paulTownV2`/`paulTown2_5d` 전부
+  `false`(관리자 패널 노출 없음). `paulTown2_5dSprite` 플래그는 여전히
+  **미추가**(175차 §2 결정 유지 — 승인된 프로덕션 매니페스트가 생기는
+  시점에 추가).
+- PR #62는 OPEN/Draft 그대로다. 이번 세션에서 브랜치/PR 상태를 바꾸지
+  않았다.
+- 이번 세션에서 실제 버그 1건을 발견·수정했다:
+  `buildPaulSpriteManifest(null)`이 throw했다(구조 분해 기본값은
+  `undefined`만 커버하고 `null`은 커버하지 않음) — `isPlainObject` 가드로
+  수정, 테스트가 `null`/`'x'`/`[]`/`42`/`undefined` 5종 입력에 대해
+  never-throw를 단언하도록 갱신됐다(§5 `testPaulSpriteIngest`에 포함).
+- **아무것도 커밋·푸시하지 않았다**(운영자 지시 — 준비·보고만). 이
+  워크트리의 현재 미커밋 변경: `M docs/design/town/
+  PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md`, `M handoff.md`,
+  `M tests/harness/registry.mjs`, `?? scripts/spriteIngestPaul.mjs`,
+  `?? scripts/testPaulSpriteIngest.mjs`, `?? src/assets/town/character/`
+  (README.md만), `?? src/utils/town/proto2_5d/paulSpriteManifest.js`.
+
+### 1. 운영자 지시(고정)
+- 최종 8프레임 스프라이트는 **ChatGPT로 제작**하기로 확정(운영자
+  직접 지시). 캐릭터 비주얼 스펙(아트 브리프 원본): Paul 얼굴과 파란
+  눈, 약간 통통한 상체와 배, 얇은 다리, 금색 Paul 문장이 있는 짙은
+  남색 실크해트, 네이비 몽클레어 반팔 티셔츠와 반바지, 검정·회색
+  Air Max 95, 투명 배경 PNG, 모든 프레임에서 동일한 크기·발 접지선·
+  중심축 유지. 전문은
+  `docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md`
+  §13.1에 아트 브리프 원본으로 기록했다.
+- 드롭 폴더는 `src/assets/town/character/`(README.md가 이미 지정) —
+  이 세션 시점에는 폴더 자체가 저장소에 없다(BLOCKED_BY_ASSET, §6).
+
+### 2. 준비된 구조(파일 목록)
+- 갱신: `docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md`
+  §13(신규 섹션) — 파일명·경로 대응표, ingest 명령, BLOCKED_BY_ASSET
+  목록. §12 변경 이력에 176차 한 줄 추가. 코드/이미지 변경 없음.
+- 갱신: 이 `handoff.md`(본 절, append-only).
+- 병행 작업(다른 에이전트, 이 세션 종료 시점에는 이 워크트리에 확인됨):
+  - `src/utils/town/proto2_5d/paulSpriteManifest.js` — 순수 모듈
+    (`PAUL_SPRITE_FILES` 매핑 상수, `PAUL_SPRITE_DEFAULTS`,
+    `buildPaulSpriteManifest`/`paulSpriteBlockers`).
+  - `scripts/spriteIngestPaul.mjs` — 순수 검사 함수 9개 + CLI
+    `--check`/`--write` 진입점.
+  - `src/assets/town/character/README.md` — 드롭 폴더 생성(README만,
+    이미지 0장).
+  - `scripts/testPaulSpriteIngest.mjs` — 135단언(§5).
+  - `tests/harness/registry.mjs` — 위 테스트 등록 1줄 추가.
+
+### 3. frame id ↔ 파일명 ↔ state ↔ 방향 ↔ 미러 대응표
+frame id는 175차가 확정한 v2 계약(`characterSpriteContract.js`) 프레임
+id와 완전히 동일 — 새로 고정한 것은 파일명뿐이다.
+
+| frame id | 파일명 | state | 방향 | 미러 |
+|---|---|---|---|---|
+| `idle-front` | `paul-idle-front.png` | `idle` | 정면 | 없음 |
+| `walk-front-a` | `paul-walk-front-a.png` | `walkFront` | 정면 | 없음 |
+| `walk-front-b` | `paul-walk-front-b.png` | `walkFront` | 정면 | 없음 |
+| `walk-back-a` | `paul-walk-back-a.png` | `walkBack` | 뒷모습 | 없음 |
+| `walk-back-b` | `paul-walk-back-b.png` | `walkBack` | 뒷모습 | 없음 |
+| `walk-side-a` | `paul-walk-side-a.png` | `walkSide` | 측면(오른쪽 향함) | facing=left일 때만 `scaleX(-1)` |
+| `walk-side-b` | `paul-walk-side-b.png` | `walkSide` | 측면(오른쪽 향함) | facing=left일 때만 `scaleX(-1)` |
+| `sit` | `paul-sit.png` | `sit` | 정면(또는 3/4) | 없음 |
+
+전문은 스펙 §13.3 참고.
+
+### 4. 도착 후 단일 명령과 검사 항목
+1. `node scripts/spriteIngestPaul.mjs --check`(읽기 전용): 프레임 누락
+   / PNG 디코딩 가능 / 실제 알파(투명 배경) 존재 / 8프레임 동일 캔버스
+   / 발 접지선 정렬 / 중심축(앵커) 정합 / 모바일 최소 렌더 크기
+   (`CHARACTER_MIN_WIDTH_PX=40px`) / 걷기·앉기 state 연결 검사.
+2. `node scripts/spriteIngestPaul.mjs --write`(검사 통과 후에만):
+   `src/assets/town/character/index.js` 레지스트리 +
+   `paul-sprite-measured.json`(실측 앵커) 생성. `LICENSE.txt`/
+   `NOTICE.md`(스펙 §8), `Proto25DScreen.jsx`/`App.jsx` 배선은 쓰지
+   않는다 — 사람이 할 남은 단계(§7).
+
+### 5. 검증
+
+| 항목 | 결과 |
+|---|---|
+| `testPaulSpriteIngest` | 135/135 PASS(인메모리 합성 PNG만 사용, 디스크에 아무것도 쓰지 않음) |
+| `testProto25dSpriteContract` | 172/172 PASS |
+| `testProto25dSpriteAdapter` | 50/50 PASS |
+| `testProto25dCharacterManifest` | 72/72 PASS |
+| E2E `[town-proto2.5d]` | 206/206 PASS, 0 FAIL, 0 SKIP(standalone 러너, vite preview 대상, 2026-09-24 20:2x KST) |
+| `npm run build` | PASS |
+| `node scripts/spriteIngestPaul.mjs --check` | BLOCKED_BY_ASSET 8건 / 구조 검사(h) 11 PASS / exit 1(이미지 부재 상태에서 예상된 결과) |
+
+위 결과는 전부 실제 이미지 없이(합성/구조 검사만) 확보한 것이다. PNG
+8장 도착 후 `--check`를 재실행해 BLOCKED_BY_ASSET 8건이 실제로
+해소되는지 확인하고 이 표를 갱신한다.
+
+### 6. BLOCKED_BY_ASSET 목록(PNG 8장 도착 전까지 진행 불가)
+- §4의 `--check` 중 실제 이미지가 있어야만 판정 가능한 8개 항목(§5의
+  "BLOCKED_BY_ASSET 8건" — 구조 검사 11개는 이미지 없이도 이미 PASS).
+- `src/assets/town/character/index.js` 레지스트리 생성(`--write`).
+- `paul-sprite-measured.json`(실측 앵커) 생성.
+- 실제 브라우저 렌더 확인(모바일 최소 크기 포함).
+- `LICENSE.txt`/`NOTICE.md`(스펙 §8) 작성.
+- `characterSpriteManifest.default.js`(스펙 §10) 생성.
+- `paulTown2_5dSprite` 플래그 추가.
+- `Proto25DScreen.jsx`에서 매니페스트를 실제로 넘기는 배선(플래그 ON
+  시에만).
+
+### 7. 사람이 할 남은 단계(`--write` 이후)
+1. `LICENSE.txt` + `NOTICE.md` 작성(스펙 §8 — 생성 도구/모델/날짜/
+   프롬프트 해시/편집 도구/승인자/승인일).
+2. `--write`가 실측한 앵커(`paul-sprite-measured.json`) 검토.
+3. 레지스트리로부터 `characterSpriteManifest.default.js`를
+   `buildPaulSpriteManifest`로 생성.
+4. `paulTown2_5dSprite` 플래그 등록(스펙 §5-1, 관리자 패널 노출 동반).
+5. 플래그 ON일 때만 `Proto25DScreen`에서 매니페스트를 넘기도록 배선.
+6. 번들 예산 확인(스펙 §5-6).
+7. E2E S8/S9 이모지-조건부 케이스 갱신.
+8. §5의 검증 명령 전부 실행 후 이 절의 결과표를 실제 결과로 갱신.
+   (실제 이미지 도착 후의 최종 결과는 아래 177차 §7 "검증"에 기록됨 —
+   이 절 §5는 이미지 0장 상태의 구조 검사 결과로 append-only 원칙에
+   따라 그대로 보존한다.)
+
+## 2026-09-24 (175차) — Paul Town 2.5D 캐릭터 스프라이트 v2 어댑터 구현 완료(Phase 6B): 계약·테스트·휴면 배선·SSR 어댑터 테스트·E2E S11 완료, 실 이미지 0장, `paulTown2_5dSprite` 플래그 미추가 (Production 무접촉)
+
+### 0. 안전 요약
+- 브랜치 `feat/paul-town-v2-clean-pr`(워크트리 `scratchpad/wt-clean-pr`),
+  시작 HEAD `3e2404f`. 커밋 5개: `d3321de`(스프라이트 사양 문서) →
+  `be54279`(v2 계약 모듈) → `11c3883`(계약 단위 테스트 172단언) →
+  `be5e7fb`(어댑터 휴면 배선) → `78125bf`(어댑터 SSR 테스트 50단언 +
+  E2E S11 +16). **소스 코드 변경은 `ProtoCharacter.jsx`/
+  `Proto25DScreen.jsx` 2개 파일뿐**이고 전부 옵션 prop 추가 방식 —
+  호출부(`App.jsx`)가 아무것도 넘기지 않아 오늘의 이모지 렌더는 한
+  글자도 바뀌지 않았다.
+- Production WRITE 0, Supabase/SQL 0, `paulTownV1`/`paulTownV2`/
+  `paulTown2_5d` 전부 `false` 유지, PR #62 OPEN/Draft 유지, CI
+  `timeout-minutes` 30 무변경, `.github/workflows/` diff 0.
+- 실제 캐릭터 이미지(PNG/WebP) 0장 — `src/assets/town/character/`는
+  아직 존재하지 않는다. 승인·생성 둘 다 이 세션에서 하지 않았다(운영자
+  확정 방침, 아래 §1).
+- 세션 형태: 8h 자율 세션, 리드 = Fable, Sonnet sub-agent 4종(audit/
+  spec/impl/tests)을 조율해 순차 구현, docs sub-agent가 이 절을
+  마무리.
+
+### 1. 운영자 확정 방침(재논의하지 않음)
+- Kenney Toon Characters / GrafxKid / rgsdev 전부 **미채택**(174차 §6가
+  넘긴 결정 1·3, 운영자가 이번 세션에서 확정) — 추가 무료 에셋 검색도
+  하지 않는다.
+- **Paul Town 전용 커스텀 아동 캐릭터**로만 간다(174차 §6 결정 2, 신규
+  제작).
+- 최종 이미지는 **아직 승인되지 않았고 생성되지도 않았다** — 이
+  세션도 이미지를 만들지 않았다.
+- 승인 전까지 이모지 폴백(🚶 idle/walk, 🧘 sit)을 그대로 유지한다.
+- 이모지 다리 움직임 부재는 알려진 한계이며 CSS로 흉내 내지 않는다
+  (계속 금지, 173차 §9 운영자 판정 유지).
+
+### 2. 리드 결정(이번 세션에서 새로 확정)
+- v2 매니페스트는 **신규 모듈**(`characterSpriteContract.js`)로 간다 —
+  v1(`characterManifest.js`, 72단언)은 한 글자도 건드리지 않는다.
+- **8프레임 전부 필수** — 매니페스트에 하나라도 빠지면 부분 폴백 없이
+  캐릭터 전체가 이모지로 폴백한다.
+- 미러링은 **`walkSide` + 좌측 방향에만** 적용(정면/후면은 미러 없음).
+- 앵커는 **퍼센트 기반 오프셋**(해상도 독립) — 절대 px가 아니다.
+- 프레임 파일은 **개별 파일 8개**(스프라이트 시트 1장 방식은 채택하지
+  않음).
+- 이번 Phase에서는 **`paulTown2_5dSprite` 플래그를 추가하지 않는다** —
+  게이팅할 프로덕션 매니페스트가 아직 없고, 플래그 등록은 관리자
+  패널 노출을 동반하므로 승인된 매니페스트가 생기는 시점에 추가한다
+  (`Proto25DScreen.jsx`는 선택적 `spriteManifest` prop만 받고
+  `App.jsx`는 아무것도 넘기지 않는다).
+- 스프라이트 모드 DOM 검증은 **React SSR 단위 테스트**로 한다(브라우저
+  E2E에 테스트 훅을 프로덕션 코드에 심지 않는다) — 커밋 `78125bf`
+  (50단언)로 완료.
+
+### 3. 변경 파일
+- 신규 문서: `docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md`
+  (459줄, 8프레임 사양/프롬프트 팩/일관성 검수표/라이선스 기록 규칙).
+- 신규 계약 모듈: `src/utils/town/proto2_5d/characterSpriteContract.js`
+  (순수 함수 — `validateSpriteManifest`/`directionForMove`/
+  `facingForMove`/`spriteStateForPhase`/`frameIndexAt`/
+  `anchorOffsetPct`/`resolveSpriteFrame`/`spriteFrameSources`, v1 공유
+  상수 1개만 import).
+- 신규 테스트: `scripts/testProto25dSpriteContract.mjs`(172단언),
+  `tests/fixtures/proto2_5d/spriteManifest.example.mjs`(테스트 전용
+  1x1 투명 데이터 URI, 프로덕션 import 0), `tests/harness/registry.mjs`
+  1줄(attachment 도메인, `extra:false`).
+- 휴면 배선(옵션 prop, 오늘 아무 호출부도 값 전달 안 함):
+  `src/components/town/proto2_5d/ProtoCharacter.jsx`(+115/-9,
+  `spriteManifest`/`direction` prop + v2 렌더 분기), `src/components/
+  town/proto2_5d/Proto25DScreen.jsx`(+65/-6, 이동 구간마다 `direction`
+  계산 + v2 매니페스트가 실제로 유효할 때만 `facing` 갱신).
+- 어댑터 검증(커밋 `78125bf`): `scripts/testProto25dSpriteAdapter.mjs`
+  (50단언, React SSR via esbuild + `react-dom/server` — emoji 기본
+  DOM/무효 매니페스트 시 무매니페스트와 byte-identical/phase·direction·
+  facing별 v2 프레임 선택/`walkSide`+좌측 전용 미러/착석 seat-anchor
+  퍼센트/reduced-motion 정지/커스텀 foot anchor 퍼센트/outer anchor·
+  z-index·scale·그림자·min-width가 이모지·스프라이트 모드 간 동일/
+  `img` src·srcSet/v1 매니페스트 여전히 동작 + 둘 다 넘기면 v2 우선/
+  direction pass-through), `tests/e2e/townProto25d.spec.mjs` S11(+16,
+  proto 스펙 190→206) — 기본 렌더는 여전히 이모지·스프라이트 마크업
+  없음, direction 속성이 우/하/상 탭을 따라 side/front/back으로
+  갱신됨, 일반 걷기는 이모지를 절대 뒤집지 않음, 도착 후에도 direction
+  유지, `tests/harness/registry.mjs` 2번째 줄(어댑터 스위트 등록).
+
+### 4. 8프레임 목록
+`idle-front` / `walk-front-a` / `walk-front-b` / `walk-back-a` /
+`walk-back-b` / `walk-side-a` / `walk-side-b` / `sit`
+(`PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md` §2). 좌측 이동은
+`walk-side-*`를 `scaleX(-1)`로 재사용하고 별도 좌측 프레임은 만들지
+않는다.
+
+### 5. 실제 스프라이트 승인 후 연결 절차
+§1 방침(Paul Town 전용 커스텀 캐릭터 신규 제작)에 따른 실제 8프레임
+이미지가 완성·승인되면 아래 순서로 연결한다(상세는
+`SPRITE_CONTRACT_2026-09-24.md` §5 체크리스트, 이 절은 그 요지):
+
+1. 승인된 8프레임 → `src/assets/town/character/<stem>.webp` +
+   `<stem>@2x.webp`(+ `.png` 트윈 2장, 4파일 계약) + `LICENSE.txt` +
+   `NOTICE.md`(출처/제작자/라이선스/다운로드 날짜/SHA-256/변환 절차).
+2. 레지스트리 `src/assets/town/character/index.js`(`env/index.js`
+   패턴, `Proto25DScreen.jsx`에서만 import — 공용
+   `src/assets/town/index.js`에서는 절대 import하지 않는다, §0.10
+   회귀 재발 방지).
+3. `src/utils/town/proto2_5d/characterSpriteManifest.default.js`
+   (version 2, 앵커는 알파 채널 실측값, `frameDurationMs` 확정값).
+4. 플래그 `paulTown2_5dSprite`를 `SPRITE_CONTRACT_2026-09-24.md` §5-1의
+   4곳(`DEFAULT_FEATURES`/`getFeaturesByCategory('attachment')`/
+   `FeatureManagementPanel.jsx`/`testFeatureFlagStore.mjs` 15번)에
+   등록하고, 매니페스트는 `Proto25DScreen`이 플래그 ON일 때만 넘긴다.
+5. Proto 청크 번들 예산 단언 + 누출 검사(`SPRITE_CONTRACT_2026-09-24.md`
+   §5-6).
+6. E2E S8/S9의 좌석 sink 단언을 이모지 조건부로 전환.
+7. 아래 §6 검증 명령을 전부 재실행.
+
+### 6. 검증
+전부 리드가 HEAD `78125bf`(워크트리 `wt-clean-pr`)에서
+2026-09-24 18:08–18:45 KST에 실행.
+
+| 스위트 | 결과 |
+|---|---|
+| `node scripts/testProto25dSpriteContract.mjs` | 172/172 PASS |
+| `node scripts/testProto25dSpriteAdapter.mjs` | 50/50 PASS(React SSR) |
+| `node scripts/testProto25dCharacterManifest.mjs` | 72/72 PASS(v1 무변경) |
+| `node scripts/testProto25dBench.mjs` | 88/88 PASS |
+| `node scripts/testProto25dDepth.mjs` | 23/23 PASS |
+| `node scripts/testProto25dWalkGrid.mjs` | 28/28 PASS |
+| `node scripts/testProto25dSceneFixture.mjs` | 24/24 PASS |
+| `node scripts/testTownDepthOrder.mjs` | 73/73 PASS |
+| `node scripts/testTownV2Static.mjs` | 147/147 PASS |
+| `node scripts/testFeatureFlagStore.mjs` | 49/49 PASS |
+| `npm run build` | PASS, 경고 0 |
+| `npm run verify:e2e` | 1534 PASS / 0 FAIL / 0 SKIP, 미mock 요청 0, mock 에러 0, `[town-proto2.5d]` 206(190+S11 16), 약 11분 |
+| `npm run verify:all` | "ALL DOMAINS: PASS", 스위트 단위 PASS 139 / FAIL 0(신규 2종 포함해 통과), 약 25분, 타임아웃/취소 없음 |
+| CI Release Gate | 이 세션에서 미실행(push는 이 문서 커밋 이후) — 30분 캡 무변경 |
+
+### 7. 알려진 한계
+- 이모지 다리는 움직이지 않는다(§1, 의도적으로 CSS 보정 안 함).
+- 스프라이트 모드는 SSR 단위 테스트(50단언) + E2E DOM 속성 검증(S11,
+  16단언)까지만 확인됐고, **실제 이미지가 없으므로** 실 브라우저에서
+  실제 프레임 이미지를 렌더해 눈으로 확인한 적은 아직 없다(에셋 부재
+  때문 — 코드 경로 자체는 SSR+E2E로 이미 검증됨).
+- 다중 웨이포인트 경로에서 다리별 facing이 벤치 걷기의
+  `facingToward` 판정과 달라질 수 있다(스프라이트 모드 한정).
+- 착석 seat-sink(이모지 잉크 실측 기반)는 스프라이트 모드에서 설계상
+  우회된다.
+- 방향은 구간(leg)마다 개별 판정되므로, 대각선 탭 1회가 world-정규화
+  비율에 따라 'side'/'front' 어느 쪽으로든 결정될 수 있다.
+
+### 8. Preview에서 사람이 확인할 항목
+- 기본 2.5D 화면은 여전히 이모지(🚶/🧘)로 보여야 한다.
+- 일반 걷기가 이모지를 뒤집지 않아야 한다(기존 동작 무변경).
+- 벤치 walk-to-sit 흐름은 173차와 동일해야 한다.
+- (실 스프라이트 연결 후에만 추가 확인) 옆걷기 미러링, 4개 뷰포트에서
+  발이 지면에 닿는지, 벤치 좌석 접촉, reduced-motion 정지.
+
+### 9. 다음 작업
+§1의 운영자 방침(Paul Town 전용 커스텀 캐릭터 신규 제작)에 따라 실제
+이미지 제작이 시작되면 §5 절차를 그대로 따른다. 코드/테스트 쪽은 이
+Phase(6B)로 완결됐다 — 남은 작업은 §10 참고.
+
+### 10. 최종 보고 요약
+- 워크트리 `scratchpad/wt-clean-pr`, 브랜치
+  `feat/paul-town-v2-clean-pr`. 시작 HEAD `3e2404f` → 최종 HEAD = 이
+  문서를 포함한 커밋(해시는 커밋 후에만 확정되므로 여기 기록 불가 —
+  다음 세션이 `git log`로 확인).
+- 최종 캐릭터 PNG 존재 여부: **NO**(`src/assets/town/character/`
+  디렉터리 자체가 없음).
+- Production WRITE 0. `paulTownV1`/`paulTownV2`/`paulTown2_5d` 전부
+  `false`(3개 플래그 모두 false 유지). PR #62 OPEN/Draft.
+- 남은 작업은 정확히 1개: **승인된 Paul Town 전용 8프레임 PNG 제작 후
+  매니페스트에 연결**(§5 절차 1~7 그대로 실행).
+- 다음 세션 첫 명령:
+  ```
+  git -C <worktree> log --oneline -8 && node scripts/testProto25dSpriteAdapter.mjs
+  ```
+
+## 2026-09-24 (174차) — Paul Town 2.5D 캐릭터 스프라이트 교체: 조사·계약·판정(조건 B, 에셋 승인 대기) — 코드 변경 0, paulTown2_5d OFF, Production 무접촉
+
+### 0. 안전 요약
+- 브랜치 `feat/paul-town-v2-clean-pr`(워크트리 `scratchpad/wt-clean-pr`),
+  시작 HEAD `b932682` → 커밋 `91f92f4`(계약 문서) + 이 문서 커밋. **소스
+  코드·에셋 변경 0**(`src/`·`api/`·`scripts/`·`tests/`·`.github/` 무접촉).
+  Production WRITE 0, Supabase/SQL 0, `paulTownV1`/`paulTownV2`/
+  `paulTown2_5d` 전부 `false`, PR #62 OPEN/Draft 유지, CI timeout 무변경.
+- 외부 이미지는 저장소에 0장 추가. 다운로드물은 세션 스크래치에만 있다.
+
+### 1. 수행 방식
+- 읽기 전용 조사 4종을 Sonnet sub-agent로 병렬 수행(sprite-asset-auditor /
+  sprite-contract-reviewer / sprite-test-designer / integration-reviewer),
+  리드가 각 보고의 근거를 직접 재검증했다: (a) 계약 검토의 3개 핵심 주장
+  (일반 보행 `startPlainWalk`가 facing 미갱신, 그림자가 depth 박스의 형제,
+  `WORLD={100,190}`)을 코드로 확인, (b) 통합 검토의 "Proto 청크 번들 예산
+  없음"을 `testBundleBudget.mjs`에서 확인, (c) 에셋 감사가 페이지 수준에서
+  탈락시킨 Kenney Toon Characters를 리드가 공식 zip으로 직접 받아(SHA-256
+  `d4c0eb31…4cace9`, 5,474,287B) `License.txt`(CC0)·포즈 45종·캔버스 96×128·
+  HD 192×256을 확인하고 프레임 알파 경계를 Playwright로 실측했다.
+- 결과 문서: `docs/design/town/SPRITE_CONTRACT_2026-09-24.md`(단일 진실
+  원천) + 부록 `docs/design/town/sprite-research/{ASSET_CANDIDATES,
+  TEST_DESIGN}_2026-09-24.md`, `kenney_malePerson_anchors.json`.
+
+### 2. 판정 — 조건 B(적합 에셋 확정 불가)
+- 저장소 내 캐릭터 스프라이트: 없음(LICENSE/NOTICE 0건, 감사 문서 §5/§13
+  재확인).
+- 외부 후보 3(전부 CC0): **Kenney Toon Characters**(정면 idle + 정면 걷기
+  8프레임 + `back`/`side` 정지 1장씩, 96×128, sit 없음 — `duck`은 쪼그림),
+  rgsdev(큐브 블롭, 사람 아님, sit 없음), GrafxKid(포즈 미문서화, 픽셀아트).
+- idle+walk+sit 3종을 객관적으로 만족하는 후보 없음 → 앱 캐릭터 무변경.
+  Kenney의 화풍(플랫 벡터) 적합성은 순수 미술 판단이라 사람 결정으로 넘긴다.
+
+### 3. 계약 확정 내용(요지, 상세는 SPRITE_CONTRACT §4)
+- states: `idle`(1) / `walkSide`(=`walk` 별칭, ≥2, 미러 적용) /
+  `walkFront`·`walkBack`(선택, 미러 미적용) / `sit`(1, `seatAnchorPx` 필수).
+- `directionForMove(dx,dy)`: WORLD 종횡비 정규화 후 `|dyN|>|dxN|`이면
+  front/back, 아니면 side. `stateKeyForPhase(phase, direction)` 하위호환.
+- 앵커: outer `translate(-50%,-100%)` + 자식 anchor-offset 래퍼(현행),
+  그림자 무변경, `seatSinkLocalPx`/`measureGlyphInk` 스프라이트 경로 미호출.
+- Kenney 실측: 전 프레임 하단 정렬 `footAnchorPx.y=128`, x≈48(걷기 프레임은
+  캔버스 중심 고정 권장).
+- 플래그 `paulTown2_5dSprite`(기본 false, attachment 카테고리 + 패널 +
+  스토어 테스트 15번), 레지스트리 `src/assets/town/character/`(공용
+  `index.js` import 금지), Proto 청크 gzip ≤60KB 예산 + 누출 검사, 테스트
+  약 75단언 추가 설계(부록).
+
+### 4. 검증(코드 무변경 확인용)
+- 단위: `testProto25dCharacterManifest` 72/72, `testProto25dBench` 88/88,
+  `testProto25dDepth` 23/23, `testProto25dWalkGrid` 28/28,
+  `testProto25dSceneFixture` 24/24, `testFeatureFlagStore` 49/49,
+  `testTownDepthOrder` 73/73, `testTownV2Static` 147/147.
+- `npm run build` exit 0, `testBundleBudget` 24/24.
+- E2E `townProto25d.spec.mjs` 단독: 190단언 190 PASS / 0 FAIL, 미mock 요청 0(코드 무변경 확인, 2026-09-24 05:2x KST)
+- `npm run verify:all`: 동일 소스(마지막 코드 커밋 `cd73799`)에 대해 173차
+  §5에서 ALL DOMAINS PASS(212/0/SKIP 2) — 이 세션은 문서만 추가했으므로
+  재실행하지 않았다. `verify:e2e`도 동일 사유로 생략(30분 캡·S8a 플레이크
+  이슈는 172차 §11 그대로).
+- 스크린샷: 에셋 미적용이라 idle/walk/sit 캡처 대상 없음. 현재 이모지
+  상태의 4뷰포트 스크린샷은 173차 §9(`scripts/.tmp/p6a-final-audit/`).
+
+### 5. 변경 파일(문서만)
+`docs/design/town/SPRITE_CONTRACT_2026-09-24.md`(신규),
+`docs/design/town/sprite-research/*`(신규 3), `docs/design/town/
+ASTRA_HANDOFF_2026-09-21.md` §0.18(포인터), `handoff.md`(이 절),
+`.ai-status/lead-paul-town-25d-sprite-2026-09-24.json`.
+
+### 6. 사람이 결정할 항목(3)
+1. Kenney Toon Characters 채택 여부 — sit 부재(duck 임시 허용 vs 별도 제작),
+   옆/뒤 걷기 프레임 부재, 플랫 벡터 화풍 적합성.
+2. 신규 제작 경로(수채화 톤 idle/walk/sit 커미션 또는 AI 생성 + 라이선스
+   문서화).
+3. 방향 세트 범위(§0-A 최소 좌/우 미러 vs walkFront/walkBack까지).
+
+### 7. 다음 작업
+결정 1 또는 2가 내려지면 SPRITE_CONTRACT §5 체크리스트 1~9를 그대로 실행
+(커밋 순서: feat 렌더러+폴백 → test → docs). 이모지 CSS 분해·보정은 계속
+금지(173차 §9 운영자 판정).
+
+## 2026-09-23 (173차) — Paul Town 2.5D Phase 6A: 씬 구성(실제 아트 8종)·탭 리플·캐릭터 스프라이트 어댑터(비활성) 인수·완결 + 스웨이 앵커 버그 수정 (paulTown2_5d OFF, Production 무접촉)
+
+### 0. 안전 요약
+- 브랜치 `feat/paul-town-v2-clean-pr`(워크트리 `scratchpad/wt-clean-pr`,
+  `C:\voca` 무접촉). 커밋 3개: `2095198`(씬 픽스처) → `cd73799`(캐릭터
+  매니페스트 어댑터) → 이 문서 커밋. `paulTownV1`/`paulTownV2`/
+  `paulTown2_5d` 전부 `false` 유지, Production WRITE 0, Supabase/SQL 0,
+  V1·V2·`App.jsx`·`features.js`·`benchInteraction.js`·`pathfinding.js`·
+  `depthVisual.js` 무변경. PR #62 OPEN/Draft 유지.
+- Proto 2.5D는 여전히 구매/저장 API를 호출하지 않는다(마운트 스코프 로컬
+  state만). 학생 식별 없음.
+
+### 1. 배경 — 이전 세션의 미커밋 작업 인수
+- 172차 종료 후 같은 날 오후 별도 세션이 "Phase 6A"(설계 메모
+  `scripts/.tmp/p6a_A_assets.md`/`p6a_B_composition.md`/
+  `p6a_C_sprite_contract.md`, gitignored)를 구현하다가 커밋·체크포인트
+  없이 중단됐다(워크트리에 수정 6 + 신규 4 파일, `.ai-status` 없음). 이
+  세션은 그 상태를 그대로 인수해 (a) 단위 스위트 전부 실행, (b) 빌드,
+  (c) E2E 기준선 실측(160단언 중 159 PASS / 1 FAIL — S6 "장애물 3개"
+  개수 단언, 설계 메모 §5 위험 1이 예고한 예상 회귀), (d) 스크린샷 육안
+  검증 순으로 확인한 뒤 남은 작업(E2E 갱신 + 아래 §4 버그)을 마쳤다.
+
+### 2. 씬 픽스처(커밋 `2095198`)
+- `src/utils/town/proto2_5d/sceneFixture.js`(신규): 씬 구성의 단일 진실
+  원천. 레거시 3개(demo-building/demo-bench/demo-tree — `collisionRect`로
+  2026-09-22 좌표를 byte-identical 고정) + 신규 5개(house-annex
+  `buildings/british-cottage` (13,42) / tree-plaza-nw·ne `nature/tree`
+  (43,56)·(59,54) / shrub-sw·se `nature/flower-garden` (32,72)·(66,72)).
+  신규 5개 장애물 사각형은 `footprintRect(anchor,widthPct,
+  footprintDepthPct)`로 파생: house-annex 6–20/28–42, tree-plaza-nw
+  40–46/50–56, tree-plaza-ne 56–62/48–54, shrub-sw 30–34/68–72, shrub-se
+  64–68/68–72.
+- `walkGrid.js`: `OBSTACLES = deriveObstacles(SCENE_FIXTURE)`(3→8). 나머지
+  함수 무변경. `pathfinding.js`/`depthVisual.js` 무변경.
+- `Proto25DScreen.jsx`: 벤치 제외 7개를 항상 표시되는 실제 아트로 렌더
+  (bottom-center 앵커, `obstacleZIndex`, 타원 그림자, 나무/꽃밭에 sway),
+  CSS radial-gradient만으로 길/광장 톤, 1회성 탭 리플(450ms, reduced-motion
+  이면 DOM 자체를 안 만듦), 루트에 `data-proto25d-obstacle-count`. 디버그
+  박스 map은 아트보다 DOM 뒤로 이동(같은 z에서 히트박스가 아트 위에
+  보이도록). `tailwind.config.js`: `town-proto-ripple` keyframe.
+- 이미지 신규 0장 — 전부 기존 `src/assets/town/**` 카탈로그 재사용
+  (`townAsset()`).
+
+### 3. 캐릭터 매니페스트 어댑터(커밋 `cd73799`, 시각적으로 비활성)
+- `characterManifest.js`(신규, 의존성 0): `validateCharacterManifest`
+  (throw 없음, 오류 누적) + `resolveCharacterVisual` + `stateKeyForPhase`
+  (sitting→sit, walking·leaving→walk, idle→idle). 무효/부재 매니페스트는
+  항상 기존 이모지(🧘/🚶)로 귀결.
+- `ProtoCharacter.jsx`: 선택 prop `manifest`(기본 undefined). sprite 분기는
+  anchor-offset 래퍼 + `<img data-proto-character-sprite>`로 `footAnchorPx`/
+  `seatAnchorPx`를 직접 쓰고 `measureGlyphInk`/`seatSinkLocalPx`를 호출하지
+  않는다. 이모지 분기 DOM은 이전과 동일. 오늘 어떤 호출부도 manifest를
+  넘기지 않는다(라이선스 스프라이트 아트 없음, ASTRA §0-A).
+- 네이밍 TODO(`PROTO25D_NEXT_STEPS` §1.5)는 이 구현이 `data-proto-
+  character-sprite`(신규 이름)로 사실상 선택했다 — 이모지 셀렉터
+  `data-proto-character-glyph`는 그대로라 기존 E2E 3개 잉크 단언 무변경.
+
+### 4. 발견·수정한 버그 — sway 애니메이션이 앵커 transform을 덮어씀
+- 스크린샷(1280×800 `?proto25dDebug=1`)에서 나무/꽃밭 5개가 히트박스·
+  그림자보다 한 폭 오른쪽·한 높이 아래에 그려졌다. 원인: `townSway`
+  keyframe의 `transform: rotate(±1.5deg)`가 같은 엘리먼트의 inline
+  `translate(-50%,-100%)`를 덮어써 top-left가 앵커에 놓였다(건물은 sway가
+  없어 정상). 수정: 레이아웃(앵커/크기/z/`data-testid`)은 애니메이션 없는
+  래퍼 `div`가 갖고, `<img>`만 sway 클래스를 갖는다. 수정 후 디버그
+  스크린샷에서 5개 전부 히트박스 하단 = 아트 바닥, 그림자 바로 아래.
+- 이 버그는 E2E 신규 항목17(오브젝트 bottom-center가 앵커와 1.0 world-%
+  이내)이 그대로 잡는다 — 수정 전 dist에서 이 단언이 FAIL이었을 것(실측은
+  수정 후 dist에서만 190/190).
+
+### 5. 검증
+- 단위: `testProto25dSceneFixture` 24/24(신규), `testProto25dCharacterManifest`
+  72/72(신규), `testProto25dWalkGrid` 28/28, `testProto25dDepth` 23/23,
+  `testProto25dBench` 88/88, `testTownDepthOrder` 73/73, `testTownV2Static`
+  147/147, `testBundleBudget` 24/24(수정 전·후 둘 다).
+- `npm run build` exit 0(경고 0).
+- E2E `tests/e2e/townProto25d.spec.mjs` 단독 러너: 기준선(스펙 갱신 전)
+  160단언 159 PASS / 1 FAIL(예상) → 갱신 후 190단언 190 PASS / 0 FAIL ×
+  3회(implementer 2회 + 리드 1회, 수정된 dist), 미mock 요청 0.
+  신규 30단언: S6 장애물 8개 + OBSTACLES_REF 8개 좌표 일치 + 항목16
+  house-annex/tree-plaza-ne 우회(경로 샘플이 박스에 진입하지 않음), S9
+  항목17(4 뷰포트) 오브젝트 7개·pointer-events:none·앵커 일치·그림자 7개·
+  obstacle-count "8", S3 항목C2 리플 생성→700ms 후 제거, S5 항목C1
+  reduced-motion 리플 0.
+- `npm run verify:all`: ALL DOMAINS PASS(exit 0, 2026-09-23 17:12~17:35 KST, 커밋 cd73799 코드 기준) — 스크립트 212 PASS / 0 FAIL, 도메인 SKIP 2(speaking/listening, 실제 오디오 도메인 — 예상된 SKIP), e2e 도메인 PASS(전 spec 미mock 요청 0·mock 내부 오류 0, [town-proto2.5d] 190 포함)
+- 시각: `scripts/.tmp/p6a_shots.mjs`(gitignored) 1280/390/360 idle·walking·
+  arrived + 디버그 오버레이 + flag OFF(root 0개). 수정 후 스크린샷 리드
+  육안 확인.
+
+### 6. 변경 파일
+`src/utils/town/proto2_5d/{sceneFixture,characterManifest}.js`(신규),
+`src/utils/town/proto2_5d/walkGrid.js`, `src/components/town/proto2_5d/
+{Proto25DScreen,ProtoCharacter}.jsx`, `tailwind.config.js`,
+`scripts/testProto25d{SceneFixture,CharacterManifest}.mjs`(신규),
+`scripts/testProto25dDepth.mjs`(라벨/주석), `tests/e2e/townProto25d.spec.mjs`,
+`tests/harness/registry.mjs`(2건 등록, extra:false), 문서(`handoff.md`,
+`TESTING.md`, `docs/design/town/ASTRA_HANDOFF_2026-09-21.md` §0.17),
+`.ai-status/lead-paul-town-25d-phase6a-2026-09-23.json`.
+
+### 7. 남은 결정 / 다음 작업
+- 여전히 열린 운영자 결정: Release Gate `timeout-minutes` 30→45(172차
+  §11), `testProto25dBench.mjs` "3c" 절 유지/교체(`PROTO25D_NEXT_STEPS`
+  §1.5), 파일럿 학생 화면에 실제 배치 아이템을 보일지(§2.3).
+- 다음 에이전트: 라이선스 스프라이트 아트가 확보되면 `src/assets/town/
+  character/index.js` registry + 매니페스트 1개를 `Proto25DScreen.jsx`에서
+  `<ProtoCharacter manifest={...}>`로 넘기기만 하면 된다(§3 어댑터가 이미
+  대기). 그때 E2E 잉크 단언 3개는 `seatAnchorPx` 투영 기준으로 재작성.
+
+### 8. CI 결과(push 후 후속, 같은 날)
+- run 35838992353(`30a189c`, Linux): Gate 1 build ✅, Gate 2 `verify:all`
+  ✅(이 브랜치의 Phase 6A 코드 기준 그린), Gate 3 student health가 job
+  `timeout-minutes: 30`에 걸려 **cancelled**, Gate 3b/4/5 skipped — 실패
+  아님. 172차 §11의 캡 문제가 그대로이며, Gate 2 안의 E2E 도메인이
+  +30단언만큼 더 길어져 이번엔 Gate 3까지 못 갔다(직전 run은 Gate 3 완주
+  후 Gate 5에서 cut). 로컬 동일 코드 `verify:all` ALL DOMAINS PASS·E2E
+  190/190은 §5 그대로. 워크플로 파일은 이 세션도 건드리지 않았다 — 캡
+  30→45 상향 또는 Gate 2 e2e 제외(중복 제거)는 운영자 결정.
+- 참고: 이 세션의 CI 감시 스크립트(`gh run view` 폴링)가 30분간 이벤트를
+  내지 않아 완료 후 수동 확인했다 — 스크립트 문제이지 CI 문제 아님.
+
+### 9. Phase 6A 최종 시각 검수(2026-09-24) — 운영자 실기기 Preview + 리드 세션 동일 빌드 감사
+- **운영자 실기기(모바일, Preview
+  `https://voca-git-feat-paul-town-v2-clean-pr-jina4926952s-projects.vercel.app`,
+  HEAD `e7217b1`, SSO+학생 로그인, `paulTown2_5d`만 ON) 직접 확인 결과**:
+  마을 에셋 정상 표시 / 캐릭터 이동 정상 / 집·나무·꽃·벤치와 그림자 정상 /
+  모바일 화면 배치 정상 — 전부 PASS.
+- **리드 세션 감사(로그인 없이, Production WRITE 0 유지)**: Preview가
+  서빙하는 `Proto25DScreen-DBZrSTCT.js`·`index-CDiLgYoV.js`·
+  `index-Skv2ZQJx.css`가 로컬 `dist/`와 content-hash 이름 동일(CSS는
+  바이트 일치)임을 확인한 뒤, 동일 빌드를 `vite preview` + `installMocks`
+  (실요청 0)로 1280×800(마우스)/360×740/390×844/412×915(터치, DPR 3)에서
+  검사(`scripts/.tmp/p6a_final_audit.mjs`, gitignored, 스크린샷 24장 +
+  `results.md/json`은 `scripts/.tmp/p6a-final-audit/`): ① 에셋(오브젝트
+  7+벤치 이미지 로드, 그림자 7, 배경 연녹) ② 클릭-투-워크·우회(경로 샘플
+  장애물 진입 0) ③ 오클루전·Y 스케일(건물 뒤 z 6166<6362·스케일 0.61, 앞
+  z 6418>6362·0.86) ④ 벤치 walking→sitting→leaving→idle ⑤ sway·리플
+  재생/reduced-motion 시 둘 다 off ⑥ pageerror·console.error·404·미mock
+  요청 전부 0, 장애물 카운트 8 — 4 뷰포트 × 6항목 전부 PASS. ⑦ 실제 배치
+  아이템은 설계상 미표시(INFO — `PROTO25D_NEXT_STEPS` §2.3 운영자 결정).
+- **KNOWN LIMITATION(운영자 판정, 수정 금지)**: 현재 캐릭터는 단일 이모지
+  이미지라 이동 중 다리가 움직이지 않는다. 이는 Phase 6A 결함이 아니며,
+  라이선스가 확인된 걷기 스프라이트 교체 단계(§3 어댑터 + ASTRA §0-A)로
+  이관한다. 이모지를 CSS로 분해하거나 추가 보정하지 않는다(§0.9 "착석
+  float 추가 미세조정 금지"와 같은 원칙).
+- 이 절은 문서만 변경(코드 0). Production WRITE 0, 플래그 3종 기본값 false,
+  PR #62 Draft 유지.
+
+## 2026-09-23 (172차) — Paul Town 2.5D 캐릭터 프로토타입 Stage 1~5 완료 + CI(testBundleBudget) 수정 문서화 (paulTown2_5d OFF, Production 무접촉)
+
+### 0. 안전 요약
+- 이 세션은 문서(`*.md`)만 갱신했다 — `src/`/`api/`/`scripts/`/SQL/설정
+  파일 무변경(docs-maintainer 범위, CLAUDE.md 저장소 헌법). 브랜치
+  `feat/paul-town-v2-clean-pr`, HEAD `435d6b1` 기준으로 기록.
+- `paulTownV1:false`/`paulTownV2:false`/`paulTown2_5d:false` 전부 기본값
+  유지(`src/config/features.js:111-113`). Production WRITE 0(Proto 2.5D는
+  구매/저장 API를 전혀 호출하지 않음 — 마운트 스코프 로컬 state뿐). PR
+  #62 OPEN/DRAFT 유지 — 머지/undraft/배포 없음.
+
+### 1. Stage 1~5 구현 요약(2026-09-22~23, 별도 세션들 — 이 세션은 문서로 옮겨 적기만 함)
+- 커밋 체인(마지막 그린 CI `8050103` 이후): `32861bf`(V2 2.5D 폴리시,
+  Proto와 무관) → `8453140`(V2 벤치 앉기 파일럿, Proto와 무관) →
+  `1945eb5`(Astra 핸드오프 문서) → `c446a1f`(에셋 감사 문서) →
+  `5779d0d`(Proto Stage 1: 플래그+골격+클릭투무브) → `e728af4`(관리자
+  패널 카테고리 누락 수정) → `a3dcbb1`(Stage 2: 40×76 격자+BFS) →
+  `dcdb180`(Stage 3: Y 깊이 스케일/z, depthOrder `character` 레이어) →
+  `8132dd1`(Stage 4: 벤치 walk→sit→leave 상태 머신) → `544fd35`(모바일
+  시각 보정) → `cf18f5f`(좌석 sink 보정) → `d2bfb30`(Stage 5 하드닝+회귀
+  테스트) → `435d6b1`(CI 수정, testBundleBudget 메인 청크 판별).
+- 상세 아키텍처/파일지도/상태머신/테스트결과/알려진한계/롤백은
+  `docs/design/town/ASTRA_HANDOFF_2026-09-21.md` §0(2026-09-23 갱신)/
+  §0-A(캐릭터 에셋 정식 사양)에 기록했다 — 여기서는 재기술하지 않는다
+  (중복 방지).
+
+### 2. 검증(리뷰어 세션이 직접 실행·확인, 이 세션은 그 결과를 문서에 옮겨 적음)
+- 단위: `testProto25dWalkGrid.mjs` 28/28, `testProto25dDepth.mjs` 23/23,
+  `testProto25dBench.mjs` 88/88.
+- 회귀(V2/공용 계약 무변경 확인): `testTownV2Static.mjs` 147/147/0 SKIP,
+  `testTownDepthOrder.mjs` 73/73, `testTownWorldContract.mjs` 96/96.
+- E2E: `tests/e2e/townProto25d.spec.mjs`(독립 러너) 160 PASS/0 FAIL/0
+  SKIP, unmockedRequests 0건/mockErrors 0건.
+- 번들: `testBundleBudget.mjs` 24/24(정방향 + readdir 역순 재현 케이스
+  둘 다).
+- `npm run build` exit 0.
+- `npm run verify:all`/`npm run verify:e2e`: 실행 중 — 결과는 PR #62
+  코멘트로 별도 기록 예정(이 세션은 숫자를 추정하지 않는다).
+- 시각(브라우저 육안) 검증 50/50 — 아래 8절 및
+  `docs/design/town/ASTRA_HANDOFF_2026-09-21.md` §0.13 참고(이 절은 자동
+  테스트 숫자만, 시각 검증은 별도 절로 분리 기록).
+
+### 3. CI 이슈 현황
+- `scripts/testBundleBudget.mjs`(rewardSystem, gating) — Stage 4가
+  `Proto25DScreen`도 `src/assets/town/index.js`를 import하게 되며 그
+  모듈이 공유 청크로 분리, 이름이 실제 엔트리와 같은 `index-<hash>.js`
+  패턴이라 `readdirSync` 열거 순서(OS 의존)에 따라 Linux CI에서만
+  잘못된 청크를 "메인"으로 오판하던 버그 — `435d6b1`에서
+  `dist/index.html`의 실제 `<script type="module">` 참조 기반 판별로
+  수정, 예산 수치 무변경, 24/24 PASS 확인.
+- `tests/e2e/townV2.spec.mjs` S9(기존 V2 자석 드래그 배치 기능, Proto
+  2.5D 아님) — Linux CI 1회 FAIL(run 35567109630, 앵커 bbox
+  ~43.3~43.4px vs 허용치 ≥43.5px), 이후 재현 안 됨. `extra:true`
+  (non-gating). 씬 입장 애니메이션 가설은 로컬 재현으로 반증. Linux
+  Chromium 환경 부재로 추가 조사 불가 — 문서화만, 제품/테스트 변경
+  없음.
+- `scripts/testProdCheck.mjs` — CI FAIL 관측, 최초 관측 원인: 자체
+  `--fixture` self-suite(총 292단언) 중 1건 FAIL — `--show-names — INFO
+  절에 원본 이름 "DriftStudentS1" 이 보인다`. `extra:true`, 원인 조사/
+  수정은 하지 않음(범위 밖), 운영자 전달 권고.
+
+### 4. 준수한 제약
+- Production WRITE 0, `paulTownV1`/`paulTownV2`/`paulTown2_5d` 전부
+  false 유지, PR #62 Draft 유지, `.env` 미접근.
+- 학생 대상 신규 기능/UI/게임화가 이번 범위(개발 인프라 문서 갱신)에
+  섞이지 않음(규칙 12 — Proto 2.5D 자체는 §22가 이미 "운영자가 명시적
+  으로 요청한 신기능 개발"로 예외 분류했음을 재확인만 함, 새로 판단하지
+  않음).
+- 학생 식별 UUID 전용(해당 없음 — 이 프로토타입은 학생 식별 자체를
+  하지 않음, §22).
+
+### 5. 알려진 한계(수정 금지 대상)
+`docs/design/town/ASTRA_HANDOFF_2026-09-21.md` §0.9 참고 — 이모지
+플레이스홀더, Android 좌석 미세 오차(추가 미세조정 금지, 실제
+스프라이트로 해결), 바닥 컨테이너 aspectRatio 실효 없음(버그 아님),
+구매/저장 미연결.
+
+### 6. 다음 작업
+`ProtoCharacter.jsx`의 이모지를 §0-A 사양(idle/walk 좌우/sit, foot+seat
+앵커 매니페스트, 라이선스 기록)에 맞는 실제 스프라이트로 교체 — 상태
+머신/워크그리드 무변경, 기존 139 단위 + 160 E2E 단언 그린 유지가 완료
+기준.
+
+### 7. 변경 파일(이 세션, 문서만)
+`docs/design/town/ASTRA_HANDOFF_2026-09-21.md`(§0/§0-A 신규, 이후 §0.13~
+0.15 추가분 포함),
+`docs/design/town/ASTRA_ASSET_AUDIT_2026-09-21.md`(§16 신규),
+`TESTING.md`(신규 절 + testProdCheck 보충 단락),
+`handoff.md`(이 절 + 아래 8절 추가분).
+
+### 8. Phase 6 실측 시각 검증 + 아침 점검(2026-09-23, 리뷰어 세션 실행, 이 세션은 문서화만)
+- Vercel Preview는 Vercel SSO 뒤에 있고 이 프로토타입은 학생 로그인
+  이후에만 마운트되므로(`src/App.jsx`), Preview에서 실제 로그인하면
+  Production PIN 인증 API에 쓰기가 발생할 수 있다 — "Production WRITE 0"
+  제약을 지키기 위해 시각 검증은 동일 빌드 산출물(HEAD `435d6b1`의
+  `dist/`)을 로컬 `vite preview` + `installMocks`(네트워크 0건)로
+  실행했다.
+- 결과: 50/50 기능 체크 OK(1280x800 마우스 + 360x740/390x844/412x915
+  CDP 터치 dsf3 + 390x844 reduced-motion, idle→walking→sitting→
+  leaving→idle 전체 사이클, 모든 phase 그림자 존재, 디버그 박스 기본
+  0/0·`?proto25dDebug=1`에서 3/3, 장애물 depth 정상(건물 앞
+  charZ6409>6362, 뒤 charZ6184<6362), 가로 스크롤 없음). 착석 float
+  실측치(§0.9 허용된 한계의 수치화): 모바일 ≈15px/데스크톱 ≈29px/
+  reduced-motion ≈36px. 콘솔 경고는 무관한 기존 경고 1건(`d9be08c`,
+  `paulReactions.js`)뿐. Vercel 배포 상태(435d6b1) "success" 확인.
+- 상세는 `docs/design/town/ASTRA_HANDOFF_2026-09-21.md` §0.13(실측)/
+  §0.14(아침 점검 체크리스트, Preview URL 포함)/§0.15(`testProdCheck.mjs`
+  최초 관측 원인 — `--show-names` INFO 절 마스킹 미해제,
+  `DriftStudentS1`, `extra:true` non-gating) — 여기서는 재기술하지
+  않는다.
+- 운영자 Android 실기기 아침 점검은 SSO+로그인 제약상 원격 세션이 대신할
+  수 없다 — §0.14 체크리스트대로 운영자가 직접 수행해야 한다.
+
+### 9. 전체 검증 최종 결과 + E2E S8a 타이밍 플레이크 기록(2026-09-23 09:10~09:50)
+- `npm run verify:all`(HEAD `435d6b1` 코드 기준, 08:36~09:10): **ALL
+  DOMAINS: PASS** — 31 PASS / 2 SKIP(speaking·listening, 실제 오디오
+  도메인의 예상된 SKIP) / 0 FAIL, exit 0. e2e 도메인 PASS(전 spec 미mock
+  요청 0건, `[town-proto2.5d]` 포함). `.env`/`.env.local` 실행 후 원위치
+  확인(`testSecurityRegressions`의 임시 rename 복구됨), 추적 안 됨.
+- `npm run verify:e2e`(09:11~09:4x): 총 1488단언 — PASS 1487 / FAIL 1 /
+  SKIP 0(보고된 exit 0). 유일한 FAIL: `[town-v2] S8a[390x844] … 마을을
+  열기만 해도 student_progress 쓰기 0건(저장 부작용 없음) writes=1`.
+  **원인(코드로 확인)**: `src/hooks/useStudent.js:2043-2047` —
+  `restoreChecked`가 true가 된 뒤 `record`가 바뀌면(클라우드 병합 복원
+  자체가 이 변경) 2초 디바운스 후 `doSync`가 `student_progress` upsert
+  (`wordLibrary.js:3185`)를 보낸다. S8a는 병합 복원이 화면에 보인 뒤
+  +500ms 시점에 쓰기 수를 재므로, 복원→측정 사이가 렌더 지연으로 2초를
+  넘기면 이 정상 sync가 창 안에 들어온다 — 즉 **타이밍 의존 단언**이며
+  이 세션의 변경(Proto 2.5D는 S8a에서 마운트되지 않음: `paulTown2_5d`
+  OFF)과 무관하다. 증거: 같은 코드로 `townV2.spec.mjs` 단독 재실행
+  **448/448 PASS**(S8a PASS, 미mock 0), 직전 `verify:all`의 e2e 도메인도
+  PASS. 테스트/허용치/대기시간 무변경(문서화만) — 재발 시 `S8a`의
+  500ms 대기를 "디바운스 창(2초) 밖" 기준으로 재설계할지는 V2 소유
+  세션이 결정할 항목(TESTING.md S8a 노트 참고).
+- 로컬 커밋 `5c2421e`(handoff 정밀화)/`314971e`(Phase 9 설계 문서
+  `docs/design/town/PROTO25D_NEXT_STEPS_2026-09-23.md`)는 이 절과 함께
+  단일 push — 연속 push가 CI Release Gate를 매번 취소시키므로(run
+  35797541708/35798064132/35799530407 전부 cancelled) 최종 push 1회 뒤
+  CI 완주를 확인한다(결과는 PR #62 통합 코멘트).
+
+### 10. CI 완주 결과(`1d97f81`, run 35802684946) + Linux 전용 E2E 측정 타이밍 2건 수정
+- **Gate 1 build ✅ · Gate 2 `verify:all` ✅**(커밋 `435d6b1`로 Linux
+  testBundleBudget 실패 해소 — 이 브랜치 최근 run들 중 Gate 2 첫 그린) ·
+  Gate 3 student health ✅ · **Gate 5 `verify:e2e` ❌ 2/1488** → RELEASE
+  GATE FAIL(e2e). DB WRITE 0. 두 FAIL 모두 Windows 로컬에서는 항상 PASS인
+  **Linux 러너 타이밍 문제**로, 각각 원인을 코드/실측으로 증명한 뒤
+  **테스트 측정 시점만** 고쳤다(허용치·단언 수·제품 코드 무변경, 별도
+  커밋 2개):
+  1. `[town-v2] S9[390x844] 앵커 bbox ≥44` minW=43.445 — 원인 **증명**:
+     씬 루트의 1회성 `townEntrance 450ms ease-out scale(0.97→1)`
+     애니메이션이 아직 재생 중인 시점에 자손인 앵커 bbox를 읽음(§0.10의
+     "재시작" 가설은 프로브로 반증 — 재시작 없음; 대신 자연 실행 10회 중
+     1회가 시작 후 367ms에 읽혀 43.95px, 인위적으로 재생 중에 읽으면
+     5/5 43.13~43.39px = CI 값과 일치, 종료 대기 후 5/5 44.00). 수정:
+     `waitForEntranceAnimationSettled(page)`(`document.getAnimations()`의
+     townEntrance가 finished일 때까지, 2초 상한)를 S9 bbox 루프 직전에
+     호출(`tests/e2e/townV2.spec.mjs`). 이전 세션의 "미증명·문서화만"
+     결론은 첫 마운트 기준 505~1088ms 뒤에 읽혀 창을 벗어난 로컬 재현의
+     한계였다.
+  2. `[town-proto2.5d] S3 항목11 드래그` dist=1.0156(<1px 허용치) —
+     원인(코드): `Proto25DScreen.jsx:193-198`의 `setTimeout(650)`은 핸들러
+     커밋 시점에 예약되지만 650ms CSS transition은 다음 페인트에 시작하므로
+     phase가 `idle`로 읽히는 순간 잔여 이동이 남을 수 있고, 항목9 연속 탭
+     직후 찍은 `boxBeforeDrag`가 그 잔여를 드래그 이동으로 오귀속. 수정:
+     `waitForBoxStable(locator)`(연속 3표본 0.05px 이내)로 기준선만 안정화
+     (`tests/e2e/townProto25d.spec.mjs`). 로컬 프로브 12회는 잔여 0px
+     (Windows 프레임 예산상 재현 안 됨) — 이 수정은 코드 레이스 + CI 실측을
+     근거로 하며, 개선 증명은 아래 CI 재실행 결과로 확정한다.
+- 재검증: `townProto25d.spec` 160/160, `townV2.spec` 448/448(둘 다 단독
+  러너, 미mock 0). CI 재실행 결과는 PR #62 통합 코멘트에 기록.
+
+### 11. CI 재실행(`959b653`, run 35806849603) — 전 게이트 그린, 30분 job 캡에 Gate 5 취소 → 캡 45분
+- Gate 1 build ✅ · Gate 2 `verify:all` ✅(ALL DOMAINS PASS, e2e 도메인
+  PASS) · **Gate 3 student health ✅ — 내부 `verify:release`의 browser
+  E2E 1488/1488 PASS, "RELEASE GATE: PASS — 배포 가능", DB WRITE 0**(즉
+  §10의 두 측정 수정이 Linux에서 실제로 효과 있음: S9·S3 항목11 모두
+  PASS) · Gate 3b ✅ · Gate 4 ✅ · **Gate 5 `verify:e2e` cancelled** —
+  실패가 아니라 job `timeout-minutes: 30`에 걸림: Gate 2 20분(01:35→
+  01:55) + Gate 3 8.5분 → Gate 5가 29분 시점에 시작, 30:00에 취소.
+- 원인 판정: 마지막 그린 run 35505417592(`8050103`)도 29m19s(Gate 2
+  16분/Gate 3 6분/Gate 5 6분)로 이미 한계였고, 이후 V2/2.5D spec으로
+  E2E가 커졌다. 한 job에서 같은 browser E2E가 3회(verify:all e2e
+  도메인 · Gate 3 · Gate 5) 도는 구조적 중복이 근본 원인 — 2026-09-12에
+  운영자가 같은 이유로 20→30으로 올린 전례(`release-gate.yml` 주석)
+  그대로 캡 30→45 상향을 **권고**한다 — 단, 이 세션은 CI 워크플로 파일
+  커밋이 권한 정책(공유 자원 수정)으로 거부돼 **적용하지 않았다**. 변경
+  내용은 한 줄(`timeout-minutes: 30` → `45`) + 주석이며 패치를
+  `scripts/.tmp/release_gate_timeout_45.patch`(gitignore, 로컬 워크트리)에
+  남겼다. 적용 전까지 이 PR의 Release Gate는 Gate 5에서 매번 30분 캡
+  취소(cancelled)로 끝나지만, Gate 3 내부 E2E가 동일 스위트를 이미
+  1488/1488로 게이팅하므로 기능적으로는 전 게이트 그린이다.
+  **결정 필요(TODO, 운영자)**: (a) 캡 45분 적용, 또는 (b) Gate 5 제거
+  (Gate 3가 이미 동일 E2E를 게이팅) / Gate 2에서 e2e 도메인 제외로
+  중복 자체를 없앨지.
+
+## 2026-09-18 (171차) — Paul Town V2 플래그 전 블로커 수정: D1 고정 랜드마크 규칙 정정 + D5 360px 배치 컨트롤 겹침 해소 (paulTownV2 OFF, Production 무접촉)
+
+### 0. 안전 요약
+- 로컬 커밋 1개만(`fix(town): lock landmarks to lots and resolve mobile
+  anchor collisions`). `paulTownV2:false` 유지, Production WRITE 0,
+  Supabase/SQL 0, V1·`App.jsx`·`features.js`·`townScene.js`·
+  `townLayout.js`·`townCatalog.js`·`useStudent.js` 무변경, 저장 레이아웃
+  마이그레이션 0, push/merge/deploy/PR 없음, 보호 untracked 17개 무접촉.
+  `5c88fbf`(4방향 팻말 Learn/Grow/Be Kind/Explore, 배치 아이템 크기 규칙)는
+  그대로 보존.
+
+### 1. D1 — 고정 랜드마크 이중 렌더 수정
+- 원인: LOTS id == 카탈로그 아이템 id라 소유 랜드마크가 고정 로트 + 보관함
+  배치로 두 번 렌더됨. `5c88fbf`의 `landmarkRenderSource`(배치가 있으면
+  로트 숨김)는 잘못된 제품 규칙이라 삭제.
+- 최종 규칙: 고정 랜드마크(`worldRender.js`의 `FIXED_LANDMARK_IDS` =
+  `townScene.js` LOTS 7종 my-house/book-shop/cafe/stone-fountain/bridge/
+  english-school/clock-tower, 단일 export `isFixedLandmarkId`)는 지정
+  로트에서만 lotState(built/for-sale/hidden)로 렌더.
+- `TownScreenV2`가 뷰 모델에서 `freeCatalog`/`freeOwnedIds`/
+  `renderPlacements`를 파생해 보관함 선택기·배치 렌더에서 고정 랜드마크를
+  제외. `TownScene`은 점유 판정용 `occupancyPlacements`(전체 목록, 데이터
+  계층 `placeItem`이 점유 셀을 거부하므로)와 렌더용 placements를 분리.
+- 레거시 저장 항목 삭제·재작성 0(e2e S8a: 마을 열어도 `student_progress`
+  쓰기 0). 상점 카탈로그는 전체 유지(구매=소유).
+
+### 2. D5 — 모바일 360px 배치 컨트롤 겹침 해소
+- 원인: 앵커 1,1·7,3 화면 거리 23.8/25.8/28.4px(360/390/430) < 44px
+  컨트롤 탭 영역.
+- 해결: `worldRender.js`의 `layoutPlacementControls` 결정론적 중심-배제
+  배치(Chebyshev ≥ 24px, 진짜 앵커 우선, 고정 방향 순서, 장면 경계 안).
+  `TownPlacementOverlay`는 ResizeObserver로 장면 크기 측정, 링=탭 위치
+  (44px 버튼), 옮겨진 앵커에만 8px 점+리더선.
+- 통계(360 Lv8): 47개 중 6개 이동, 평균 30px, 최대 48px(전 매트릭스 최대
+  48px, 미해결 0). 첫 시도(AABB 완전 비겹침, 최대 393px 이동)는 리드
+  리뷰에서 기각.
+
+### 3. 검증
+- 리드 세션 순차 재실행(메모리 부족으로 1차 중단 후 오너 승인 재개).
+- 집중 13종 PASS: WorldRender 270 / WorldScenery 211 / V2Static 147 /
+  UiStatic 125 / PlacementContract 690 / WorldContract 96 / DepthOrder 62 /
+  GeometrySync 75 / EnvArtManifest 71 / validateEnvArtManifest /
+  EnvAssets 196 / SceneV2 259 / LazyChunk.
+- `npm run build` PASS(경고 0). `verify:all` ALL DOMAINS PASS 207/207.
+- 공식 E2E 전체 1010 PASS/0 FAIL/0 SKIP(신규 S8a/S8b/S9 포함, 360/390/430
+  앵커 47/47 elementFromPoint 자기 히트, 1,1↔7,3 명명 회귀).
+- 16장 매트릭스(Lv1/3/4/5/8×360/390/430+Lv4 200%) 오버플로 0·페이지 오류
+  0·env 요청 실패 0·깨진 이미지 0. 증거
+  `art-staging/renderer-previews/final/{evidence,evidence-resume}/`
+  (gitignored).
+
+### 4. 변경 파일
+`src/utils/town/worldRender.js`,
+`src/components/town/v2/{TownObjectLayer,TownScene,TownScreenV2,
+TownPlacementOverlay}.jsx`, `scripts/testTownWorldRender.mjs`,
+`scripts/testTownV2Static.mjs`, `tests/e2e/townV2.spec.mjs`,
+`scripts/town-art/shootRenderer.mjs`(`--legacy`/`--place`/`--fullpage`),
+`.ai-status/implementer-town-v2-d1-d5-correction.json`.
+
+### 5. 오너 결정 / 남은 결정
+- 반영: 화단 좌표(10,58) 이번 릴리스 승인. D2/D3/D4/for-sale 스타일 보류.
+  플래그 ON·push 미승인.
+- 남은 결정: 플래그 ON 시점, 보류 4건 착수 순서.
+
+## 2026-09-18 (170차) — Paul Town V2 렌더러 통합: 승인 월드·아트 35종을 실제 V2 렌더러에 연결 (paulTownV2 OFF, Production 무접촉)
+
+### 0. 안전 요약
+- 로컬 커밋만(push/merge/배포/PR 없음). `paulTownV2:false` 세션 내내 유지 —
+  본 세션 변경으로 학생 화면에 영향 0. Production WRITE 0, DB/SQL/RLS/auth
+  0, 경제·리워드·카탈로그·학생데이터 변경 0.
+- V1 파일(`src/components/town/TownScreen.jsx`/`TownGrid.jsx` 등)/
+  `App.jsx`/`features.js`/`townScene.js`/`townLayout.js`/`townCatalog.js`/
+  `useStudent.js`/`TownScreenV2`의 데이터 배선(카탈로그·구매·레벨 계산) 전부
+  무변경 — 이번 세션은 오직 **렌더링 계층**(월드 좌표 어댑터 + 동결 지오메트리/
+  장식 데이터 + 씬 컴포넌트)만 추가했다.
+
+### 1. 아트 교체(`d7b7214`, 본 세션보다 앞선 동일 날짜 커밋)
+- 동결 ingest 파이프라인으로 운영자 승인 교체 2건 적용: `55.png` →
+  `flower-cluster-pink`(24,372B, sha `7224f4ba…`), `57.png` →
+  `flower-cluster-yellow`(22,974B, sha `21dcca45…`).
+- `shrub-wide`는 기존 자산 유지(sha `5dc24710…`), `56.png`는 여전히 미승격
+  후보. Batch E(`fence-post`/`fence-gate-closed`/`hedge-corner`)는 계속
+  spec-only 미배치.
+- 매니페스트 staged 35/38, 하네스 34/34 실물(배너 GREEN). 프리뷰 16장
+  재촬영, 핑크/옐로 8곳 배치 외 픽셀 diff 변화 0(회귀 없음 실측).
+
+### 2. 렌더러 통합 커밋(9개, 커밋 순서대로)
+1. **`a4444cb`** — env 자산 레지스트리: `src/assets/town/env/*.webp` 35종 +
+   `env/index.js`(`TOWN_ENV_ASSETS`/`townEnvAsset`), 기존 `TOWN_ASSETS`와
+   완전 분리(격리). `scripts/testTownEnvAssets.mjs` 196단언.
+2. **`0c28670`** — `src/utils/town/worldRender.js` 어댑터: `cellAnchor`/
+   `landmarkBox`/`pxToWidthPct`/`widthPctToHeightPct`/`worldZIndex`/
+   `freeWorldAnchors`. `scripts/testTownWorldRender.mjs` 97단언.
+3. **`d5f7de5`** — `src/utils/town/worldScenery.js` 동결 장식 데이터:
+   `ENV_PLACEMENTS` 108개(grassPatch 16 / river 25 / path 26 /
+   fenceHedge 16 / cluster 25), `GROUND`, `PROP_PLACEMENTS` 20개, 표지판
+   My House / To the Sea → / Lv.N, `LANDMARK_DECOR`, `LOCKED_FILTER`/
+   `VEIL`, 이후 `BG_FILLER_TREES` 10개 추가. `scripts/testTownWorldScenery.mjs`
+   — 승인 하네스 `paul-town-recompose.html`을 **무수정 그대로** `node:vm`에서
+   재실행해 대조(허용오차 0.05, 390px 기준), 레벨 1/3/4/5/8 동일. 206단언.
+4. **`0e1a8a1`** — `TownScene` 풀블리드 전환, 고정 종횡비
+   `SCENE_ASPECT_RATIO`(100/190, V2 한정, 둥근 카드 제거). `TownGroundLayer`
+   지형 합성기, `TownEnvImage`(로드 실패 시 숨김). 신규 도구
+   `scripts/town-art/shootRenderer.mjs`(테스트 컨텍스트 스크린샷). 신규 검증
+   `testBundleBudget` §4b(env 인벤토리 + main/V1 청크 누출 가드).
+5. **`7262b35`** — `TownEnvPlacement`(공유 transform/feather/z 헬퍼),
+   `TownWaterLayer`(강 25개, Lv1부터 표시), `TownPathLayer`(자갈 타일 26개,
+   기존 SVG stroke 대체).
+6. **`f74bdda`** — `TownSceneryLayer`: 담장/생울타리/대문/꽃무리/화분/소품/
+   담쟁이 + 두 표지판(`role="img"`). 정적 계약으로 "Welcome to Paul"/
+   "Learn"/"Be Kind"/"Go Further" 문구 금지.
+7. **`13f8eda`** — 버그 수정: `tests/e2e/lib/mockRoutes.mjs`의 mock
+   `assetKey`가 `${category}/${id}`였는데 실제 폴더는 house→buildings,
+   decoration→decorations(기존 결함, 첫 랜드마크 아트 렌더로 표면화).
+8. **`2f008a3`** — `TownObjectLayer`: 랜드마크를 `LANDMARKS` 박스 위에
+   하네스와 동일한 그림자로 배치. hidden=잠금 실루엣(필터+베일, 클릭 불가),
+   for-sale=기존 점선 박스, built=실제 아트. 배치된 아이템은 `cellAnchor`로
+   저장된 8×6 id를 읽기 전용 매핑(footprint lg 12%/md 8%/sm 5.5%×깊이
+   스케일). `TownFogLayer`=랜드마크별 안개+`Lv.N` 표지판(`DISTRICTS` 잠금
+   기준, 오브젝트보다 항상 아래). `TownPlacementOverlay`는
+   `freeWorldAnchors`(배치 계약 — riverApproach 셀 3개 Lv6, `townScene.js`의
+   `freeAnchors`와 14칸 차이) 기준. `sceneZ.js`에 `BACKDROP`/`OVERLAY`/
+   `POPOVER` 계층(월드 범위보다 위). e2e S5 안개 단언을
+   `elementFromPoint` + opacity/filter 가림 확인으로 교체.
+9. **`e499e73`** — `tests/harness/registry.mjs`에 위 8개 커밋이 만든 신규
+   순수 단위 테스트 9종을 `extra:false`로 등록(`testTownWorldContract`/
+   `testTownPlacementContract`/`testTownHarnessGeometrySync`/
+   `testTownDepthOrder`/`testEnvArtManifest`/`validateEnvArtManifest`/
+   `testTownEnvAssets`/`testTownWorldRender`/`testTownWorldScenery`) —
+   작성 당시 미등록이라 `verify:all`에서 한 번도 실행되지 않고 있었다.
+   env-art-manifest 상태는 `staged`로 유지(`ALLOWED_STATUS`가
+   missing/staged/rejected뿐이라 `integrated` 같은 별도 상태 없음).
+
+### 3. 검증
+- `npm run build` **PASS**(경고 0).
+- 순수 단위 테스트(로컬 실측): `testTownV2Static` 119 / `testTownUiStatic`
+  125 / `testBundleBudget` 24 / `testTownWorldScenery` 206 /
+  `testTownSceneV2` 259(`townScene.js` 무변경 확인) / `testLazyChunkGuards`
+  80 / `testTownWorldRender` 97 / `testTownEnvAssets` 196 /
+  `testTownWorldContract` 96 / `testTownPlacementContract` 690 /
+  `testTownDepthOrder` 62 / `testEnvArtManifest` 71 /
+  `testTownHarnessGeometrySync` 75 / `validateEnvArtManifest` PASS.
+- 브라우저 E2E(`scripts/testBrowserE2E.mjs`, 전체 스펙) **974 PASS / 0
+  FAIL / 0 SKIP**(exit 0) — `[town]` V1 528 / `[town-v2]` 96 /
+  `[town-v2-artwork]` 28 / `[town-flag-xtab]` 16 /
+  `[town-pilot-allowlist]` 33 포함.
+- `shootRenderer.mjs` 스크린샷 18장(Lv1/3/4/5/8 × 360/390/430px + Lv4@390
+  200% 확대 + Lv1/Lv4 owned=none): 가로 오버플로 0, pageerror 0, env 자산
+  요청 실패 0, 깨진 env `<img>` 0.
+- 플래그 OFF 실측: e2e S1에서 V1 그리드만 렌더되고 `town-scene-v2` 요소
+  0개. env 자산 키 35개는 전부 `TownScreenV2` 청크 안에만 존재(`index-*.js`/
+  `TownScreen-*.js`에는 0개 — V1/메인 번들 무접촉 정적 증거).
+- `verify:all`: ALL DOMAINS PASS — 스크립트 207/207 PASS, FAIL 0, exit 0(신규 등록 9종 포함, 2026-09-18 리드 세션 실측).
+
+### 4. 하네스 대비 가시적 차이·다듬기 항목(의도된 결정 또는 운영자 확인 필요)
+1. 월드 안에 Paul 캐릭터/“Welcome to Paul Town!” 말풍선 없음 — 운영자
+   결정: PaulGuide가 Paul UI의 유일한 창구.
+2. 하네스의 4방향 팻말(“Learn / Grow / Be Kind / Go Further”, 월드 좌표
+   (34,84))은 렌더되지 않음 — 승인된 문구가 아니라 렌더 제외, **운영자
+   승인 필요**.
+3. for-sale 랜드마크는 기존 V2 점선 “for sale” 박스로 표시(하네스에는
+   소유 상태 개념 자체가 없음).
+4. 정원 화단(`TownAmbientLayer`)은 하네스의 flower-garden 소품 위치 월드
+   (10,58) width 16.4%에 배치 — 동결값 아님.
+5. 구매 가능 카탈로그 아이템(벤치×2, 빨간 우체통, 화단×2, 가로등×2)이
+   하네스가 그렇게 그리므로 고정 배경 소품으로 렌더됨 — 소유 여부와
+   혼동 가능성.
+6. 알려진 동결 겹침 재현: 꽃무리 일부가 My House/To the Sea 표지판 뒤로
+   가려짐, 월드 (6,58)의 shrub-wide cluster-4가 좌측 경계를 ~0.15% 침범.
+7. 하네스 강 꼬리부의 폭 대비 최대 0.21%p 드리프트는 하네스 자체 속성
+   (sync 테스트에 문서화됨).
+
+### 5. 남은 것
+- 오너 결정 필요: 4방향 팻말 문구 렌더 여부, 정원 화단 위치, 구매 아이템
+  고정배경 처리 방식, 잠금 실루엣 UX 최종 확인.
+- Paul 캐릭터/말풍선 미포함은 이미 결정됨(제외 확정, 재논의 불필요).
+- 플래그 `paulTownV2` ON 전환은 별도 결정(이번 세션 범위 아님).
+- Batch E(fence-post/fence-gate-closed/hedge-corner) 제작 여부, `56.png`
+  보류 상태는 168~169차와 동일하게 미결.
+- 롤백: 위 9개 커밋을 역순으로 revert. `paulTownV2:false`가 세션 내내
+  유지됐으므로 플래그를 켜기 전까지는 학생 화면에 어떤 변경도 없음.
+- push/PR/merge/배포 미실행.
+
+## 2026-09-18 (169차) — Paul Town Batch 1 아트 통합: 배치 A/B/C 완료 → 하네스 배치 파일 34/34 실물(배너 GREEN), staged 35/38 (잔여 3 = spec-only 미배치 E) (paulTownV2 OFF, Production 무접촉)
+
+### 0. 안전 요약
+- Production 쓰기 0, DB/SQL/RLS/auth 0, 경제/카탈로그/레벨 0, `#geometry` 무변경(sync 75/75), `src/` 무변경(렌더러 미착수), `paulTownV2:false`, Paul·V1·api 무변경, push/merge/deploy 없음(로컬 커밋만).
+
+### 1. 배치별 결과(내용 기준 매핑, 동결 계약, 강화된 alpha/bbox 검증)
+- **A(7/7)**: grass-base(33.png, 운영자 결정 flatten+q85: RGB 512², seam 6.15/8.35, q88 108KB), sky-hills(29.png, band 하단정렬 crop 규칙 `sky: 2`), grass-patch-dark/worn·wildflower-scatter(patch 128KB 결정 `patch: all128`), river-bend(35), river-highlight(36).
+- **B(7/7)**: fence-straight-short(37), fence-corner(45; 38은 alpha=1 유령층으로 인한 거짓 PASS 발견→bbox 강화 후 58% REJECT→재생성), hedge-end(44), hedge-straight-tall(40), flower-bed-border(41, seam x 6.26), riverbank-reeds(42), riverbank-reeds-stones(43). 39.png(양끝 둥근 생울타리 블록)는 어떤 키에도 억지 매핑하지 않음.
+- **C(7/7)**: shrub-round(46), shrub-round-small(47), shrub-wide(52; 39는 1.01:1로 REJECT), flower-cluster-pink(53; 48은 41.3% REJECT), flower-cluster-yellow(54; 49는 41.7% REJECT), flower-pot(51), flower-pot-tall(58; 50은 0.41:1로 REJECT).
+- 55/56/57.png: 이미 채워진 pink/shrub-wide/yellow의 대체 후보(더 회화적 마감). dry-run 전부 PASS(24.4/27.3/23.0KB). 승인 자산 덮어쓰기 없이 보류 — 운영자 `replace 55/56/57` 시 교체.
+- 운영자 지시의 50↔51 키 표기는 내용과 반대라 내용 기준 유지(계약 동일).
+
+### 2. 파이프라인 변경(모두 조임 또는 운영자 결정)
+- `alpha_bbox` 보이지 않는 알파(≤4) 무시(거짓 PASS 차단), `--dry-run` 스테이징 미기록, 거부 키 stale 산출물·필드 정리, 무-스트레치 가드, patch contain-fit, band 하단정렬 crop(`sky: 2`), 불투명 flatten(`grass: flatten`), 불투명 lossy q92→q88→q85(`grass: q85`), patch 예산 128KB(`patch: all128`), river 128KB.
+
+### 3. 검증·프리뷰
+- validator PASS(경고 0), 매니페스트 테스트 PASS, 지리 sync 75/75, 배치 계약 690/690. 프리뷰 16장(Lv1/3/4/5/8 × 360/390/430 + Lv4 200%): 오버플로 0, JS 오류 0, **34/34 실물, 배너 GREEN**.
+- 시각: 코티지 정원(담장·코너·대문·생울타리·꽃밭·관목·꽃무리) 완성, 연속 자갈 골목(직선/좁은/곡선 2종/갈림/끝/입구), 강(직선·굽이·하이라이트·갈대), 초원 바닥·하늘 언덕, 카페·북숍 화분. 잔여 시각 약점: 일부 자산(37/40/44/45)이 승인 스타일보다 매끈한 카툰 마감·아이소메트릭 각도 — 취향 판단 필요.
+- 미실행: build/verify:all/e2e(이번 회차 `src/` 무변경; CI 위임).
+
+### 4. 남은 것
+- E(spec-only, 하네스 미배치): fence-post, fence-gate-closed, hedge-corner — 생성해도 화면 변화 없음.
+- 다음 단계(운영자 승인 시): 렌더러 구현 착수 전 시각 승인, 55/56/57 교체 여부, 렌더러용 자산 등록 계획.
+
+## 2026-09-18 (168차) — 운영자 결정 21a/22b 적용 + Batch 1 전체 재검증 12/12 + 하네스 패스(강 체인·곡선 선택·학교 골목·Lv1 안개·정원 밀도) + Lv1/3/4/5/8 프리뷰 (paulTownV2 OFF, Production 무접촉)
+
+### 0. 안전 요약
+- Production 쓰기 0, DB/SQL/RLS/auth 0, 경제/카탈로그/레벨 0, `#geometry` 무변경(sync 75/75), `src/` 무변경, `paulTownV2:false`, Paul·V1·api 무변경, push/merge/deploy 없음(로컬 커밋만).
+
+### 1. 결정 적용
+- **21a**: `path-curve-strong` 소스를 20.png→21.png(좁은 띠 90° 엘보)로 교체, 동일 키/계약. 재검증: 256×256, 76,356B lossless, 알파 정상 → ACCEPT.
+- **22b**: 22.png(T자 갈림)는 `art-staging/candidates/path-junction-T-candidate.png`(gitignored)에 후보로만 보관. 매니페스트/카탈로그 미등록, 어떤 승인 자산도 덮어쓰지 않음. 별도 시각 역할이 정당화되면 새 키로 계약 추가 검토.
+- 전체 재검증: 최종 소스 12장 1회 실행 → **accepted 12 / rejected 0**. manifest: staged 12 / rejected 1(wildflower-scatter, 예산) / missing 25. validate PASS, 매니페스트 테스트 PASS.
+
+### 2. 하네스 패스(`paul-town-recompose.html`만, Sonnet 구현·본 세션 검증)
+- A 강: 타일 폭 = clamp((10+2·2)·SX/0.56, 40K, 120K), 50% 겹침, 접선 회전, `.riverTile` 페더 마스크(22/78%) → 굽이(88,26)~(91,44) 단차 제거, 연속 흐름.
+- B 곡선: |turn| ≥ 75°(`?curveStrongMin=`) → `path-curve-strong`, 45~75° → gentle, 좌회전 미러.
+- C 학교 골목 끊김 원인: 꼭짓점 (84,34)·(74,26)가 ~71px 간격인데 각자 60~83px 곡선 타일을 요구 → 안쪽 오프셋이 서로 밀어내며 실제 꼭짓점 커버 상실. 수정: 인접 곡선 꼭짓점(간격 < 자연 크기 합의 절반)을 **하나의 곡선 타일로 병합**(첫 진입→둘째 진출 회전, 호길이 중점). 타협: 실제 합산 회전 ~135°인데 90°계 아트뿐이라 진출 방향 근사.
+- D Lv1 Book Shop 안개 없음 원인: `.locked img` 필터는 동일했으나 구역 안개 타원이 `#hazeLayer`(오브젝트 뒤)에 있어 실루엣이 가장자리까지 불투명한 Book Shop엔 비쳐 보이지 않았음. 수정: 모든 잠금 랜드마크에 `.locked::after` 방사형 베일(팻말 앞이 아닌 뒤) — 범용, 개별 예외 없음. 부작용(취향): 베일이 직사각 후광으로 약간 상자처럼 보임.
+- E 정원 밀도(승인 아트만): flower-cluster-mixed ×3(울타리 안·문 앞 길 옆), hedge-straight ×2(뒷경계 이어붙임), grass-patch-light ×2(잔디). 지리·랜드마크·길·47셀 무변경, 플레이스홀더 제거 없음.
+- 배너 11/34(strong 곡선 사용으로 present·total +1; path-junction은 배치 안 함 → 미집계).
+
+### 3. 프리뷰(16장, 360/390/430 + Lv4 200%)
+- 오버플로 0, JS 오류 0(본 세션 재촬영). 지리 전 레벨 동일. Lv1: 코티지·정원 담장·대문·생울타리·꽃·초원·문 앞 골목 + 잠금 실루엣/팻말 → 작은 마을로 읽힘. 길: 직선·곡선(2종)·갈림·좁은 길로 이어진 자연스러운 골목(고속도로 아님). 강: 연속.
+- 남은 시각 약점: 바닥 grass-base·sky-hills 부재(그라데이션), 코티지 주변 미도착 키 플레이스홀더 군집(fence-corner/hedge-end/flower-cluster-pink·yellow/shrub-*), 길 끝(path-end/entrance) 부재, 강둑 디테일 부재.
+
+### 4. 검증
+- 배치 계약 690/690(`visibleMarkerStyle('idle')==='none'` 포함), 지리 sync 75/75, validate/매니페스트 PASS, shoot 16 PASS. build/기타 스위트는 167차와 동일(`src/` 무변경). verify:all·e2e 미실행(호스트 메모리 → CI 위임).
+
+### 5. 남은 아트 우선순위(25 missing + 1 예산 보류)
+1. grass-base(512×512 무이음, 바닥 전체) 2. sky-hills(1024×260) 3. path-end / path-end-entrance 4. riverbank-reeds / riverbank-reeds-stones / river-highlight / river-bend 5. shrub-round / shrub-round-small / shrub-wide 6. flower-cluster-pink / -yellow / flower-bed-border 7. fence-corner / fence-straight-short / hedge-end / hedge-straight-tall 8. grass-patch-dark / grass-patch-worn 9. flower-pot / flower-pot-tall(Lv5 구역) 10. fence-post / fence-gate-closed / hedge-corner(spec-only, 하네스 미배치) + wildflower-scatter 예산 결정(17.png 96KB).
+
+## 2026-09-17 (167차) — Batch 1 교체 아트 3장(14/15/16.png) 전부 ACCEPT → 필수 교체 세트 완성(9/9), 전체 재검증·로컬 합성·프리뷰·회귀 스위트 완료; 17.png(wildflower-scatter 후보)는 예산 FAIL
+
+### 0. 안전 요약
+- Production 쓰기 0, DB/SQL/RLS/auth 0, 경제/카탈로그/레벨 0, `#geometry` 무변경, `src/` 무변경(순수 미임포트 모듈 3개만 origin/main 대비 추가), `paulTownV2:false`, canonical Paul·V1 town 파일·`api/` 무변경, push/merge/deploy 없음.
+
+### 1. 교체 아트 결과(정사각 계약, 내용 기준 매핑)
+| 첨부 | key | 결과 |
+|---|---|---|
+| `14.png` | `path-curve-gentle` | **ACCEPT** 256×256, 61,516B lossless, 알파 정상. 아치 하단 진입 x≈37%; 하단 14px·우측 4px 못 미침(겹침 직선 타일이 메움, 프리뷰 확인) |
+| `15.png` | `path-fork` | **ACCEPT** 256×256, 74,432B, 알파 정상, 가장자리 여백 1~3% |
+| `16.png` | `river-straight` | **ACCEPT** 256×256, 92,872B(<128KB), seam 1.66/255(임계 18), 좌우 여백 18% |
+| `17.png` | `wildflower-scatter`(가장 가까운 잔여 키; 실제 내용은 촘촘한 둥근 초원 패치라 "느슨한 들꽃 산포" 역할과 완전 일치하진 않음) | **REJECT** 96,008B > patch 예산 61,440B(알파 정상). 대체 없음 |
+
+### 2. 전체 재검증(STEP 3)
+- 최종 소스 9장을 한 폴더로 모아 `ingest.py` 1회 실행 → **accepted 9 / rejected 0**(결정적, 바이트 동일). manifest: staged 9 / rejected 1(wildflower-scatter) / missing 28. validate PASS(경고 0), 매니페스트 테스트 PASS.
+- 참고: 이전 커밋의 manifest는 method=6 실험 당시 바이트(예: path-straight 75,202B)를 담고 있었고 이번 전체 재실행으로 원래 인코더 값(75,412B)으로 정합 복원. 하네스 `batch1/` 9장 갱신.
+
+### 3. 로컬 합성·프리뷰(STEP 4)
+- `previews/` 16장(Lv1/3/4/5/8 × 360/390/430 + Lv4 200%): 가로 오버플로 0, JS 오류 0, 9/33 실물.
+- 보이는 것: 코티지+대문·울타리·생울타리, 초원 패치, 꽃무리, **직선·곡선·갈림 타일로 이어진 연속 자갈 골목**(분수 옆 갈림 Y 자연, 다리 옆 곡선 아치 자연), 우측 가장자리를 따라 흐르는 실물 강.
+- 약점(정직): ① 강 타일 체인은 옛 walkTiles(맞대기 배치·단계형 depthScale)라 굽이(88,26)~(91,44)에서 타일 간 단차·회전 점프가 보임 → 길과 동일한 겹침+페더 처리 필요(하네스만) ② `path-straight-narrow`/`path-end`/`path-end-entrance`/`river-bend`/`riverbank-*`/`grass-base`/`sky-hills`/관목/화분 등 24장 부재 → 바닥이 여전히 그라데이션, 강둑 디테일 없음 ③ Lv1에서 Book Shop 안개 없음(하네스 공개 규칙 불일치, 미수정).
+
+### 4. 검증(STEP 5)
+- `npm run build` **PASS**(38s, 오류 0 — 이번 세션 첫 성공). 배치 계약 690/690, 깊이 PASS, 월드 96/96, 지리 sync 75/75, V2 static PASS, UI static PASS, 매니페스트 PASS.
+- V1 회귀: `src/components/town/TownScreen.jsx`/`TownGrid.jsx`/`src/assets/town/index.js` origin/main과 동일(diff 0) → 정적 근거로 PASS. `verify:all`/브라우저 e2e는 호스트 메모리 한계로 미실행(CI 위임, push 승인 대기).
+
+### 5. 판정
+- LV1/3/4/5/8 프리뷰: 기술 PASS(오버플로·오류 0). 사각 보드 느낌: 제거됨. 길 네트워크 자연: YES. My House 집 느낌: YES(정원 담장·대문 실물). 미래 구역 기대감: 부분(안개 실루엣+Lv.N 팻말은 있으나 Lv1 Book Shop 예외). 응집 스토리북 세계: 아직 NO(24장 부재). 운영자 시각 검토 안전: YES.
+
+### 6. 다음 결정
+1. wildflower-scatter 예산 60→128KB 확장 여부(17.png 그대로 통과 가능).
+2. 강 체인 겹침/페더 처리(하네스 docs만) 승인.
+3. 나머지 24장 제작 순서 — 시각 효과 큰 순: grass-base, sky-hills, river-bend, riverbank-reeds, path-end, path-end-entrance, shrub-round, grass-patch-dark.
+
+## 2026-09-17 (166차) — 운영자 결정: grass-patch-light 예산 128KB → 현재 아트 ACCEPT(6장 staged); river-straight 정사각 256×256 계약 복원; path-curve/path-fork 재생성 계약 확정
+
+- spec `grass-patch-light.maxBytes2x` 61440→131072(테스트 특례 반영). 10.png 재-ingest: 400×280 contain-fit(비율 차 5%, 무-스트레치), 114,648B lossless, 알파 정상 → **ACCEPTED**. staged 6: grass-patch-light, path-straight, fence-straight, fence-gate, hedge-straight, flower-cluster-mixed. 하네스 `batch1/`에 복사, `batch1-pending/`의 구 150KB 사본 제거.
+- river-straight: 임시 256×128 → 원래 **256×256** 복원(spec/manifest/하네스 표 각 1줄). 예산 131072·seamAxis y·임계 18 유지(검증 약화 없음). 지리 sync 75/75.
+- 재생성 계약(3파일 개별, 스프라이트시트 아님): path-curve-gentle 256×256(생성 1024×1024) 하단 x35%→우측 y35% 90° 시계방향 단일 아치, 자갈폭 45%, 80KB; path-fork 256×256(1024) 하단 x50% 줄기, 상단 x12%/88% 가지(±40°), 줄기 45%·가지 35~45%, 80KB; river-straight 256×256(1024) 세로 흐름, 상하 이음 열 레이아웃 동일(평균 |ΔRGB| ≤ 18/255), 물폭 56%, 좌우 ≥3% 여백, 128KB.
+- 미실행: 신규 교체 아트 ingest·합성·렌더러. Production/DB/경제 무접촉, push 없음.
+
+## 2026-09-17 (165차) — Batch 1 교체 아트 4장(10/11/12/13.png) ingest: 4장 모두 REJECT → STEP 2에서 STOP (지시대로), 기존 staged 5장 보존
+
+### 매핑(시각 내용) 및 결과
+| 첨부 | key | 알파 | 판정·정확한 사유 |
+|---|---|---|---|
+| `10.png` 초원 패치 | `grass-patch-light` | PASS(max 254, 반투명 0.7%) | **FAIL 바이트** — lossless 114,648B > patch 예산 61,440B(+87%). 400×280 contain-fit 기준 |
+| `11.png` S자 자갈길 | `path-curve-gentle` | PASS | **FAIL 규격** — 소스 1536×1024(내용 bbox 1390×987, 1.41:1)를 256×256 정사각 타일에 넣으려면 스트레치 필요 → 무-스트레치 가드가 거부. 또한 내용이 단일 ~30° 곡선이 아니라 S자(반대 방향 2회 굽음) — spec 역할과 다름 |
+| `12.png` Y 갈림 | `path-fork` | PASS | **FAIL 규격** — 소스 1536×1024(내용 1489×978, 1.52:1) vs 256×256 → 동일 사유. Y 형태 자체는 역할 일치 |
+| `13.png` 개울 구간 | `river-straight` | PASS(max 255) | **FAIL 이음** — 94,642B로 128KB 예산은 통과; 256×128 실제 비율에서 seamAxis y 이음 점수 32.97 > 18. 폭포·양안이 있는 완결 구간 그림이라 세로로 이어 붙일 수 없음(9.png와 동일 판정) |
+- 기존 staged 5장 무접촉(재생성 없음). 매니페스트 rejected 사유 갱신, 거부 키의 stagedPath/sha256/bytes2x null 처리(ingest.py 보강). validate PASS, 매니페스트 테스트 PASS.
+- STEP 3~5(전체 재검증·합성·프리뷰) 미실행 — "하나라도 FAIL이면 STOP" 지시.
+
+### 운영자 결정 필요(각 1택)
+1. grass-patch: (a) patch 예산 60→128KB 상향 (b) 1024×683 정도로 작게 재출력 후 재시도 (c) 단순화 재출력.
+2. path-curve/path-fork: (a) 정사각(1024×1024) 캔버스로 재출력(아트 내용 유지, 여백만 조정) (b) 파이프라인이 투명 타일도 contain-fit 허용(아트가 타일 안에서 작아짐, 하네스 곡선/갈림 배치 상수 재보정 필요) — 권장 (a). 곡선은 단일 굽음(≈30~90°) 1장이 spec 역할.
+3. river: (a) `river-straight`를 "1회 배치 구간 그림"(kind sprite, 512×256, seam 없음)으로 spec 재분류 — 현재 아트 그대로 사용 가능 (b) 세로 흐름·상하 이어지는 타일로 재출력. 권장 (a).
+
+## 2026-09-17 (164차) — Paul Town Batch 1: 운영자 결정 3건 적용(RGBA 재출력·강 예산 128KB·모듈 타일 길 합성) → 5 PASS / 4 FAIL, 계약 보류 3장은 별도 `batch1-pending` 프리뷰로 시각 검토 (paulTownV2 OFF, Production 무접촉)
+
+### 0. 안전 요약
+- Production 쓰기 0, DB/SQL/RLS/auth 0, 경제/카탈로그/레벨 0, 월드 지리(`#geometry`) 무변경(sync 75/75), 47셀 배치 계약 690/690, `src/` 무변경, push/merge/deploy 없음(로컬 커밋만).
+
+### 1. 결정 1 — 1/3/4.png 진짜 RGBA 변환
+- 신규 도구 `scripts/town-art/stripCheckerboard.py`(README 절 추가): 테두리 연결 flood-fill로 체커보드(무채색·밝기≥185)만 알파 0, 아트 픽셀 RGB 무수정, 경계 1px 페더. 결과: 잔디 패치 1 컴포넌트(바위·흰 데이지 보존), 곡선/갈림 길 1 컴포넌트. 임계 실험(200/10)은 노이즈 증가 → 기본값 유지.
+- 재-ingest: **투명도 PASS**, 그러나 lossless 바이트 예산 FAIL — `path-curve-gentle` 84,366B(>80KB, +3%), `path-fork` 92,062B(+12%), `grass-patch-light` 150,122B(>60KB, +144%). lossless method=6 실험은 이득 없음(되돌림). 계약대로 REJECT(매니페스트 rejected), 대체 없음.
+- 세 파일은 `docs/design/town/mockup/batch1-pending/`(README 포함)에 **계약 미통과** 상태로 두고 하네스 `?assets=batch1-pending` 모드에서만 로드(주황 배너 "+3 budget-pending files (NOT contract-passed)"). 예산 상향/lossy-alpha 허용/재출력은 운영자 결정.
+
+### 2. 결정 2 — 강 예산 128KB
+- spec `river-straight.maxBytes2x` 81920→131072, 테스트 특례 반영. 그러나 ① 파이프라인이 1774×887 소스를 256×256으로 **2배 세로 압착**하던 것을 발견 → `ingest.py`에 tile/patch/band **무-스트레치 가드**(비율 편차>40% REJECT) 추가, 강 타일 규격을 실제 비율 256×128로 변경(spec/manifest/하네스 표) ② 실제 비율에서 seamAxis y 이음 점수 28.96>18 → **REJECT**. 승인 강 아트는 폭포·양안이 포함된 완결된 "구간" 그림이지 타일이 아님. 사용 안 함(플레이스홀더 유지).
+- 부수 수정: 거부된 키의 이전 staged 산출물 자동 삭제(압착본이 남아 있던 사고 재발 방지), 투명 patch는 contain-fit(스트레치 금지).
+
+### 3. 결정 3 — 모듈 타일 길 합성(하네스만, `paul-town-recompose.html`/`shoot.mjs`)
+- 타일 폭 = 지리 폭(`2·hw/0.45`, clamp 36~110px·K), 단계형 depthScale 제거(길만); 직선 타일 50% 겹침 + 축 방향 22% 페더 마스크(`.pathTile`) → 이중 꽃테두리·쐐기 틈 제거.
+- 곡선: 원 폴리라인 꼭짓점 회전각 ≥45°(`?curveMin=`)에 `path-curve-gentle` 1장(진입 방향 정렬, 좌회전은 `scaleX(-1)` 미러, 크기 1.6×, 안쪽 0.45× 오프셋, 반경 0.55× 직선 억제). 갈림: (50,62)에 `path-fork` 1장(트렁크 진입 방향, 1.7×, 0.25× 전방, 0.6× 억제, 최상단). `path-junction`/`path-curve-strong`는 더 이상 배치 안 함(하네스 키 35→33; batch1 README 주석).
+- shoot.mjs `--assets batch1-pending --out previews-pending` 추가(기본 동작 동일), `requestfailed` 필터에 pending 폴더 제외.
+
+### 4. 프리뷰(각 16장)
+- `previews/`(엄격, 5/33): 오버플로 0·JS 오류 0. 길은 연속 직선 타일 리본; 곡선·갈림은 점선 플레이스홀더.
+- `previews-pending/`(5+3): 오버플로 0·JS 오류 0. **길이 연속 구불구불한 자갈 골목으로 읽힘**(다리 옆 곡선 타일 아치 자연 연결, 바다 골목 매끄러움, 초원 패치 자연). 약점: 갈림 부근(분수 옆) 타일 4방향 교차가 어수선(바다 가지 junction 아트 없음), `path-straight-narrow` 플레이스홀더가 학교 골목을 가림, grass-base/sky-hills 부재로 바닥은 여전히 그라데이션.
+- 하네스 발견(미수정): Lv1 프리뷰에서 Book Shop이 Lv.3 팻말과 함께 **안개 없이** 그려짐 — 레벨 공개 규칙 불일치, 렌더러 구현 시 반영 필요.
+
+### 5. 정직한 판정
+- 사각 보드 느낌 제거: YES(구불구불한 길·정원 울타리·초원 패치가 격자를 대체). 응집된 스토리북 세계: 아직 NO(28/33 부재: 잔디 베이스·하늘·강·관목·화분·길 끝). 승인 레퍼런스 근접: NO(방향은 맞음). 운영자 시각 검토 안전: YES(배너·플레이스홀더로 상태 명시).
+
+### 6. 검증
+- ingest 9장 → accepted 5 / rejected 4(결정적). `validateEnvArtManifest` PASS(경고 0), `testEnvArtManifest` 75/75, `testTownHarnessGeometrySync` 75/75, `testTownPlacementContract` 690/690, shoot ×2 PASS. `npm run build`/`verify:all` 미실행(`src/` 무변경; 호스트 메모리 압박 → CI 위임, push 승인 대기).
+
+## 2026-09-17 (163차) — Paul Town Batch 1 실물 아트 1차 ingest: 9장 수령 → 5장 staged / 4장 rejected, 로컬 Lv1/3/4/5/8 프리뷰 재촬영 (paulTownV2 OFF, Production 무접촉)
+
+### 0. 안전 요약
+- Production 쓰기 0, DB/SQL/RLS/auth 변경 0, 경제(별/XP/Paul Dollar/카탈로그/가격/해금 임계) 변경 0, `paulTownV2` OFF 유지, `src/` 무변경(렌더러 미착수), push/merge/deploy 없음(로컬 커밋만).
+- 운영자 미추적 SQL/ops 파일 17개 무접촉. 대체 아트(SVG/이모지) 생성 0.
+
+### 1. 수령·매핑(시각 내용 기준, 첨부 순서/파일명 무관)
+| 첨부 | 시각 내용 | asset key | 판정 |
+|---|---|---|---|
+| `1.png` | 들꽃·바위가 있는 잔디 밭 패치 | `grass-patch-light` | REJECT — RGB(알파 없음), 체커보드가 픽셀에 구워짐 |
+| `3.png` | 꽃 테두리 곡선 자갈길 | `path-curve-gentle` | REJECT — RGB(알파 없음) |
+| `4.png` | Y자 갈림 자갈길 | `path-fork` | REJECT — RGB(알파 없음) |
+| `5.png` | 흰 말뚝 울타리 + 장미/담쟁이 | `fence-straight` | ACCEPT 256×96 lossless 33,546B |
+| `6.png` | 돌기둥·등불 아치형 나무 대문 | `fence-gate` | ACCEPT 192×128 28,988B, 여백 4.7/8.6/5.2/4.7% |
+| `7.png` | 다듬은 생울타리 + 꽃 | `hedge-straight` | ACCEPT 256×128 37,692B |
+| `8.png` | 분홍/흰/노랑/라벤더 혼합 꽃무리 | `flower-cluster-mixed` | ACCEPT 192×112 19,038B (WARN 원본 비율 36% 차이 → crop/fit 처리, 좌우 여백 21%) |
+| `9.png` | 바위 강둑·여울·갈대 개울 | `river-straight` | REJECT — 알파는 정상이나 lossless 94,642B > 예산 81,920B (알파 보유 → lossy 폴백 없음) |
+| `826cb605-….png` | 꽃 테두리 직선 자갈길(세로) | `path-straight` | ACCEPT 256×256 75,412B, seam 0.00/255 |
+- 스테이징: `art-staging/batch1/` (gitignored) — `<key>.png`/`<key>.webp`(2x lossless)/`<key>-1x.webp` + `ingest-report.json`. 매니페스트 `docs/design/town/manifest/env-art-manifest.json`: staged 5 / rejected 4 / missing 29.
+- 하네스용 복사: `docs/design/town/mockup/batch1/<key>.webp` 5장(README의 "git에서 비어 있음" 문구 갱신).
+
+### 2. 파이프라인 결함 1건 발견·수정 (첫 실물 실행에서 드러남)
+- `scripts/town-art/ingest.py`가 매니페스트 `sha256`에 **정규화 RGBA 픽셀 해시**(중복 검사용)를 기록했으나 `scripts/validateEnvArtManifest.mjs`는 **staged WebP 파일 바이트 해시**를 대조 → staged 5건 전부 sha256 mismatch FAIL. 수정: 매니페스트 `sha256` = 파일 해시, 픽셀 해시는 `contentHash`로 분리 기록(리포트 JSON도 동일). 재실행 후 validate PASS(경고 0).
+- `scripts/testEnvArtManifest.mjs`의 "전 엔트리 missing(초기 상태)" 단언 2개는 실물 ingest 이후 구조적으로 성립 불가 → 상태 일관성 단언 4개로 교체(status ∈ {missing,staged,rejected}; missing은 null 3종; staged는 stagedPath/64hex sha/bytes2x>0; rejected는 reasons 비어있지 않음). 71/71 PASS.
+
+### 3. 프리뷰(로컬, `docs/design/town/mockup/previews/` 16장 재촬영)
+- shoot.mjs: 16컷 전부 가로 오버플로 없음, JS 오류 0, 5/35 파일 존재(빨간 "ART PLACEHOLDER — NOT PRODUCTION" 배너 유지).
+- 정직한 시각 판정: **승인 레퍼런스(village2.png)에 아직 근접하지 않음.** 30/35 파일이 점선 플레이스홀더(잔디 베이스·패치·곡선/갈림 길·강·관목·화분 전부 부재)라 세계 전체의 응집감은 판단 불가. 실물 5장의 **스타일·스케일은 P0 코티지/북숍과 일치**(대문·울타리·생울타리가 My House 정원을 실제로 감싸기 시작, 꽃무리·직선 길 색감 동일 계열).
+- 렌더링 발견(하네스 한계, 렌더러 설계에 반영 필요): 꽃 테두리가 구워진 `path-straight` 타일을 폴리라인 따라 회전 배치하면 방향이 바뀌는 이음매마다 타일이 겹쳐 테두리가 이중으로 보이고 각진 "토막" 느낌 → 최종 렌더러는 (a) 곡선/갈림 타일 확보 후 접선 각 기준 스냅 또는 (b) 길을 연속 리본(stroke)으로 그리고 테두리를 별도 패턴으로 얹는 방식 중 택일해야 함. 결정 보류(운영자).
+- Lv1/3/5/8 레벨 차이는 하네스 규칙대로(잠금 랜드마크 안개 실루엣 + Lv.N 팻말) 렌더됨 — 이번 작업에서 재검토하지 않음.
+
+### 4. 후속(운영자 결정 필요)
+1. `1.png`/`3.png`/`4.png`: 투명 배경 PNG(RGBA)로 재출력 필요 — 체커보드는 배경이 아니라 픽셀. 재출력본만 재-ingest.
+2. `9.png` 강: 아트는 계약 통과(알파 정상). 선택지 — (a) `river-straight` `maxBytes2x`를 128 KB로 상향(스펙 변경, 운영자 승인) (b) 알파 유지 lossy WebP q≥90 허용(파이프라인 옵션 추가) (c) 재출력. 자동 대체하지 않음.
+3. 나머지 26장(잔디 베이스/패치/길 변형/울타리 변형/관목/화분/강 변형/sky-hills) 제작 후 동일 파이프라인.
+4. 길 렌더링 방식(§3) 결정 후 렌더러 착수. 그 전까지 `src/` 무변경.
+
+### 5. 검증
+- `python scripts/town-art/ingest.py --src <scratch>/raw-batch1 --allow-partial` → accepted 5 / rejected 4 (2회 실행, 결정적).
+- `node scripts/validateEnvArtManifest.mjs` PASS(경고 0) · `node scripts/testEnvArtManifest.mjs` 71/71 · `node docs/design/town/mockup/shoot.mjs` PASS.
+- `npm run build`/`verify:all` 미실행: `src/` 무변경(스크립트·문서·프리뷰만). 호스트 메모리 압박(162차 참고)으로 verify:all은 CI에 위임 예정(push는 승인 대기).
+
+## 2026-09-17 (162차) — Paul Town V2 야간 엔지니어링 준비: 실물 아트 도착 즉시 검증·합성·리뷰 가능 상태 만들기 (렌더러 미출하, paulTownV2 OFF)
+
+### 0. 안전 요약
+
+Production WRITE 0 · DB/SQL/RLS/auth 변경 0 · 경제/카탈로그/가격/레벨/보상/
+학생 데이터 변경 0 · 플래그 변경 0 · merge/deploy/push 0 · 보호 미추적 SQL
+17개 무접촉 · `git reset/clean` 미사용 · package.json 무변경. `src/` 변경은
+**신규 파일 3개 추가뿐**(`git diff a97dc05..HEAD --name-status -- src/` 전부
+`A`), 어떤 컴포넌트도 임포트하지 않아 번들·V1·플래그 OFF 동작에 영향 0(독립
+qa-reviewer 코드 리뷰 8항목 전부 PASS).
+
+### 1. 시작 상태와 반복하지 않은 것
+
+이전 야간(160~161차 이후 미커밋 산출물)에서 이미 완료: 이미지 생성기 없음
+판정(도구/로컬 라이브러리/CLI 없음, 셸의 OPENAI 키는 401), Batch 1 프롬프트/
+스펙 패키지(35+3파일), 갭 분석, 와이어프레임 v2, Lv4 SVG 목업(레이아웃만
+승인), batch1 하네스+`processBatch1.py`, 47셀 충돌 분석(초안), 360/390/430
+검토. 이번 밤은 이를 재조사하지 않고 **커밋으로 확정**한 뒤 미완 항목만 진행.
+
+### 2. 이번 밤 산출물(커밋 순)
+
+| 커밋 | 내용 |
+|---|---|
+| `a2e1b1a` | 승인 월드 설계 v1 + Batch 1 아트 핸드오프 + 갭 분석 + 구현/모바일/성능/stale-chunk 리뷰 + 친구 마을·탐험 미래 아키텍처 노트(설계 전용) |
+| `8058b8b` | 와이어프레임 v2(단일 캔버스, Lv1/3/4/5/8 셀렉터) + 390px 스크린샷 4장 |
+| `9c8a08d` | Lv4 SVG 목업 + Batch 1 재구성 하네스 + 47셀 충돌 분석 + 모바일 측정 |
+| `be94058` | `src/utils/town/depthOrder.js` — 12계층 깊이 모델(콘텐츠 계층 안에서는 화면 y가 지배, 계층 경계는 ≥1000 간격), `testTownDepthOrder` 62/62 |
+| `5ca08ec` | `src/utils/town/worldContract.js` — 확정 지오메트리 계약(REGIONS/LANDMARKS/PATHS/RIVER/GARDEN/PROTECTED/NAV_SLOTS/DEPTH_BANDS, 잠금은 DISTRICTS/lotState/townLevelForStars에 위임), `testTownWorldContract` 87/87, 데이터 덤프 문서 |
+| `2e5bbee` | `scripts/town-art/ingest.py`(Pillow, fail-closed: 매직/알파/크기/비율/클리핑/중복 해시/타일 이음새/바이트 예산, 알파 자산은 무손실만, `art-staging/`에만 기록) + `env-art-batch1.spec.json`(38) + `env-art-manifest.json`(아트/렌더링 계약, 경제 필드 없음) + 검증기/테스트 69/69 |
+| `855353b` | 설계 문서에 Book Shop 강변 편차(우측 끝이 2u 둑 띠에 0.9u 진입, 물과는 1.1u 이격) 기록 |
+| `e7611a1` | `paul-town-recompose.html?level&width&zoom` 하네스(퍼센트 레이아웃, Chromium zoom 함정 3건 주석) + `shoot.mjs` + 미리보기 16장(placeholder 배너 "ART PLACEHOLDER — NOT PRODUCTION") |
+| `497393c` | `src/utils/town/placementContract.js` — 47셀 계약(SPOT_MAP id 보존, 구역/깊이/스케일/권장·제외 클래스) + 결정론적 충돌 엔진(랜드마크 박스·길 회랑·강+둑·펜스·보호점·이웃 셀·내비 밴드) + `visibleMarkerStyle('idle')==='none'`, `testTownPlacementContract` 690/690; worldContract에 등방 거리 헬퍼 append(96/96) |
+| `958abae` | `testTownHarnessGeometrySync` 75/75(하네스 JSON ↔ 코드 계약 0.5 이내), 하네스 랜드마크 id를 LOTS id로 통일, 바다 지선 종단 폭 8→10 정정 |
+
+### 3. 이번 밤 발견·정정한 결함(정직 기록)
+
+1. **단위 불일치(리드 브리핑 오류)**: x는 폭 %, y는 높이 %인데 월드가
+   100×190이라 1 y-unit = 1.9 x-unit. 초기 배치 브리핑이 랜드마크 박스 높이를
+   `w×hFactor`로 y에 그대로 써 My House 박스가 홈 구역 전체를 삼켰고 47셀이
+   전부 밀려났다. 정정: 박스 높이 ÷1.9, 모든 거리를 등방 단위로(`toUniform`
+   등 append-only 추가). 결과 46/47 셀이 자기 구역 안, 빈 권장 클래스 0.
+2. 하네스 랜드마크 id(`fountain/school/tower`)와 코드 id(LOTS) 불일치 → 하네스
+   쪽을 LOTS id로 통일(동기화 테스트가 잡음).
+3. 바다 지선 종단 폭: 코드가 8로 테이퍼했으나 지선은 전경 쪽으로 가므로 10
+   유지(코드 정정).
+4. Book Shop 강변 편차(위 `855353b`) — 앵커는 동결, 편차만 기록.
+5. 깊이 모델 브리핑의 자기모순("계층이 항상 우선" vs 동물/건물 시나리오)을
+   구현자가 올바르게 해소(콘텐츠 계층 내 y 우선) — 채택.
+
+### 4. 열린 운영자 결정 2건
+
+- `riverApproach` 셀 3개의 잠금 레벨: 현재 `RIVER_CELLS_UNLOCK = 6`(다리와
+  함께) 가정 — Lv1 잔디로 열지 결정 필요.
+- `squarePerimeter` 셀 8개: 설계 §5대로 Lv1 사용 가능(명시 상수) 유지 여부.
+
+### 5. 검증(최종 트리 `958abae`)
+
+신규 스위트: worldContract 96/96 · placement 690/690 · depthOrder 62/62 ·
+harnessSync 75/75 · envArtManifest 69/69. 기존: testTownSceneV2 259/259 ·
+testTownV2Static 112/112 · testTownUiStatic 125/125 · testTownLayout 79/79 ·
+placementsPersistence 65/65 · testTownShop 104/104 · testTownCatalog 50/50 ·
+testTownLevelLock 53/53 · welcomeExactlyOnce 87/87 · staleChunkRecovery
+102/102. `npm run build` 클린(17.2s). **`npm run verify:all`(브라우저 e2e 포함): 로컬
+미완료 — 정직 기록.** 2회 시도 모두 OS가 메모리 부족으로 프로세스를 종료
+(호스트 가용 메모리 756MB/15.9GB, 원인은 이 세션 밖의 운영자 앱: Chrome
+≈1GB·VS Code·LG 유틸·Defender). 1차 시도에서 나온 FAIL 6건은 전부 exit
+3221225794(0xC0000142, Windows 프로세스 생성 실패)로 테스트 실패가 아니라
+메모리 압박 증상. 반복 재시도는 운영자 기기를 불안정하게 하므로 중단.
+**따라서 tonight의 검증 증거는 개별 스위트(위 15개 전부 PASS) + build +
+독립 코드 리뷰이며, 전체 회귀(verify:all/e2e)는 release-gate CI가 최종
+판정**해야 한다 — push는 이번 밤 권한이 없어 운영자 승인 항목으로 남김.
+야간에 생긴 고아 `vite preview` 프로세스(우리 세션 산출)는 종료했고,
+운영자 Chrome 등 외부 프로세스는 건드리지 않았다.
+
+### 6. 실물 아트 도착 시 정확한 다음 단계
+
+```
+python scripts/town-art/ingest.py --src <원본 PNG 폴더>      # fail-closed, art-staging/batch1/
+node scripts/testEnvArtManifest.mjs                          # 매니페스트 재검증
+copy art-staging/batch1/*.webp docs/design/town/mockup/batch1/   # 하네스 스테이징
+node docs/design/town/mockup/shoot.mjs                       # Lv1/3/4/5/8 × 360/390/430 + 200%
+```
+→ 운영자 시각 승인 → 그 후에야 렌더러 구현(worldContract/placementContract/
+depthOrder 임포트, TownScene 컨테이너·Ground/Path/Water/Ambient/Fog 레이어
+교체, SPOT_MAP 앵커를 placementContract로 이관) → `paulTownV2`는 그 뒤에도
+OFF 유지.
+
+## 2026-09-17 (161차 — PR #60 release-gate 1차 FAIL(head `d0067c8`)
 → 원인 2건 중 `testBundleBudget.mjs`는 P0 아트로 바뀐 산출물 인벤토리
 계약(물리 14→18/인라인 7→5) 갱신으로 수정(`6d6d547`), `testProdCheck.mjs`
 291/292는 로그 절단으로 실패 단언 미확인·로컬/직전 게이트 PASS·이 PR

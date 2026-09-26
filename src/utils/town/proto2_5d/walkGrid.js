@@ -1,0 +1,213 @@
+// src/utils/town/proto2_5d/walkGrid.js — Paul Town 2.5D 캐릭터 프로토타입
+// (Stage 2, 2026-09-22) 걷기 가능 영역(walkable area) + 장애물 기하 계약.
+//
+// 순수 함수/데이터만 — React/DOM 의존 없음, Math.random/Date.now 없음
+// (전부 결정론). 기존 src/components/town/v2/*, src/utils/town/townLayout.js,
+// placementContract.js는 import하지 않는다(격리 유지,
+// docs/design/town/ASTRA_HANDOFF_2026-09-21.md §12/§19). worldContract.js의
+// WORLD 상수 하나만 좌표계 원점으로 가져다 쓴다(그 외 LANDMARKS/REGIONS 등은
+// import하지 않는다 — 아래 OBSTACLES는 LANDMARKS의 "실제 게임 데이터"가
+// 아니라 이 프로토타입 자체의 픽스처다).
+//
+// (O2, 2026-09-26) 상단 걷기 여백(WORLD_MIN_Y) 추가 — 캐릭터가 world-y가
+// WORLD_MIN(2)에 가까울 때 스프라이트 머리가 ground 상단 밖으로 잘려
+// 보이던 문제를 고쳤다. 상세 유도 근거는 WORLD_MIN_Y 정의부 주석 참고.
+import { WORLD } from '../worldContract'
+import { SCENE_FIXTURE, deriveObstacles } from './sceneFixture'
+
+// ── 좌표계 ────────────────────────────────────────────────────────────
+// world 좌표는 Proto25DScreen.jsx가 이미 쓰는 것과 동일한 0~100 %
+// (leftPct/topPct, WORLD.w=100 가로 % 폭, 컨테이너는 aspect-ratio
+// WORLD.w:WORLD.h(100:190)로 세로가 물리적으로 더 길다 — worldContract.js
+// 헤더 주석 "좌표 자체(x/y)는 항상 0~100 스케일" 그대로, y도 0~100
+// 스케일이지 WORLD.h(190) 자체가 y의 상한이 아니다).
+export const WORLD_MIN = 2
+export const WORLD_MAX = 98
+
+// ── 격자 해상도 ───────────────────────────────────────────────────────
+// GRID_COLS=40을 기준으로 GRID_ROWS = GRID_COLS * (WORLD.h/WORLD.w)로
+// 유도한다 — WORLD.h/WORLD.w(190/100=1.9)는 원래 "컨테이너가 항상 이
+// 물리 종횡비를 유지해 셀이 화면상 정사각형에 가깝게 보인다"는 가정에서
+// 고른 비율이었지만, 이 가정은 틀렸다(Stage 5 감사, 2026-09-23 정정 —
+// benchInteraction.js 헤더 주석 참고): 바닥 엘리먼트(`proto25d-ground`)는
+// `fixed inset-0 flex-col` 루트의 유일한 `flex-1` 자식이라 실제로는
+// 뷰포트를 그대로 채우고(가로=뷰포트 폭 100%, 세로=flex-grow로 남은 공간
+// 전부), style의 `aspectRatio: WORLD.w/WORLD.h`는 두 축이 이미 다른
+// 이유로 확정돼 있어 실효가 없다 — 따라서 world-x%/world-y%의 실제 화면
+// px 비율은 뷰포트마다 다르며(데스크톱 1280x800 실측 ≈1.6, 모바일
+// 412x915 실측 ≈0.45, benchInteraction.js 헤더 주석의 실측값과 동일),
+// 이 격자의 셀은 "항상 정사각형"이 아니라 뷰포트에 따라 눌리거나 늘어난
+// 직사각형으로 렌더된다. GRID_ROWS 유도 공식 자체(및 그 하위 상수
+// CELL_W_PCT/CELL_H_PCT/모든 걷기·경로탐색 로직)는 순수 world-% 좌표만
+// 다뤄 이 사실과 무관하게 그대로 올바르다(로직 변경 없음, 이 절은 주석
+// 정정만) — 다만 40:GRID_ROWS 비율을 "물리적 정사각형을 겨냥한 값"으로
+// 오해하면 안 된다는 점만 남긴다. 40은 "충분히 세밀하면서도 BFS가 빠른"
+// 절충값 — 47칸짜리 아이템 배치 격자(townLayout.js TOWN_GRID 8x6)보다
+// 훨씬 곱지만, 3000여 셀 규모라 매 탭마다 전수 BFS를 돌려도 비용이
+// 무시할 만하다(신규 의존성/캐시 불필요).
+//
+// 격자는 world 전체 [0,100]이 아니라 걷기 가능한 실사용 구간
+// [WORLD_MIN,WORLD_MAX](=[2,98], Stage 1 clampPct와 동일 여백)에 정확히
+// 맞춰 앵커링한다 — 만약 [0,100] 위에 격자를 얹고 나서 여백 밖 셀만 별도로
+// "blocked" 처리했다면, 격자 칸 크기가 여백 폭(2)보다 커서 경계에 딱 붙은
+// 점(예: 정확히 x=2)조차 "여백에 걸친 칸"으로 오분류돼 불필요하게
+// 보정되는 사각지대가 생긴다(이 세션이 최초 구현에서 실측으로 발견해
+// 수정함 — worldToCell(2,2)가 부정확하게 'blocked' 셀로 귀결되는 회귀를
+// 유닛 테스트로 재현 후 이 앵커링으로 고쳤다). [WORLD_MIN,WORLD_MAX]에
+// 정확히 맞춰 격자를 앵커링하면 이 사각지대가 구조적으로 사라진다.
+export const GRID_COLS = 40
+export const GRID_ROWS = Math.round(GRID_COLS * (WORLD.h / WORLD.w)) // 76
+const USABLE_PCT = WORLD_MAX - WORLD_MIN // 96 — 격자가 실제로 덮는 폭(x/y 공용, clampPct 여백과 동일)
+export const CELL_W_PCT = USABLE_PCT / GRID_COLS // 2.4
+export const CELL_H_PCT = USABLE_PCT / GRID_ROWS // ≈1.2632
+const BOUNDS_EPS = 1e-6 // 부동소수점 곱셈 오차 방어(2.4*40처럼 정확히 96이 아닐 수 있음)
+
+// 2026-09-26(O2, 상단 여백 clip 수정) — 캐릭터 스프라이트가 world-y=WORLD_MIN(2)
+// 근처를 걸을 때 화면 상단에서 잘려 보이는 문제(스프라이트 anchor가 발 기준이라
+// 머리 부분이 ground 위로 넘어감)를 고쳤다. 측정 스크립트(scratch
+// scripts/.tmp/o2Measure.mjs, 2026-09-26, sprite scale 0.557 @ y=2)로 4개
+// 뷰포트의 "잘리지 않기 위해 필요한 최소 top 여백(ground 세로 기준 %)"을
+// 실측한 결과 360x640=4.643%, 390x844=3.520%, 412x915=3.247%,
+// 1280x800=9.508%(스프라이트 76.06px / ground 800px)였다 — 데스크톱
+// 1280x800이 압도적 worst case다. 이 파일은 순수 함수/DOM 비의존 계약이라
+// (헤더 주석, E2E 결정론 요구) 뷰포트별 동적 여백 대신 전 뷰포트 공용
+// 정적 상수 하나를 채택한다: MEASURED_TOP_MARGIN_PCT=9.51(위 worst case에
+// 여유를 더한 값, 데스크톱 1280x800 실측 기준). 이 %를 CELL_H_PCT 단위로
+// 올림(ceil)해 "행(row) 경계"에 정확히 맞춰 스냅한다 — cellBounds의 y0
+// 계산(WORLD_MIN + row*CELL_H_PCT)과 완전히 동일한 연산 순서를 써서, 아래
+// isWalkableCell의 방어 로직이 절대 "칸의 일부만 걸치는" 애매한 경계를
+// 만들지 않게 한다(이 파일 44-53행 주석이 이미 경고한 것과 같은 종류의
+// 버그 — 격자 경계가 셀 크기와 어긋나면 사각지대가 생긴다). 모바일
+// 3개 뷰포트는 이 상수로 명백히 과보정된다(필요 여백이 4.643% 이하인데
+// 9.51%를 적용) — 의도된 트레이드오프다: 상단 ~12.1% 대역이 모바일에서는
+// 아예 도달 불가능해지지만, SCENE_FIXTURE에서 가장 위쪽 오브젝트도
+// y0=24(demo-building collisionRect, sceneFixture.js)라 그보다 훨씬
+// 아래라서 실질적으로 잃는 걷기 공간이 없다.
+const MEASURED_TOP_MARGIN_PCT = 9.51
+export const WORLD_MIN_Y = WORLD_MIN + Math.ceil(MEASURED_TOP_MARGIN_PCT / CELL_H_PCT) * CELL_H_PCT // ≈12.105263 (row 8의 y0과 동일)
+
+// ── 장애물(데모 픽스처) ───────────────────────────────────────────────
+// 실제 학생 데이터/구매 데이터가 아니다 — 마운트 스코프 로컬 상수, 영속화
+// 없음. worldContract.js LANDMARKS를 라이브 import하지 않는다(팀장 지시,
+// V2 실데이터와 결합 금지) — 원래 이 파일이 직접 들고 있던 데모 건물/벤치/
+// 나무 좌표(2026-09-22)는 LANDMARKS의 스케일 감각(건물 폭 ~20 world-%,
+// decorations/nature 소형 장식 ~6~8 world-% 폭)만 참고해 손으로 정한
+// 값이었다.
+//
+// 2026-09-23(Phase 6A, 씬 구성) — 장애물 사각형은 더 이상 이 파일이 직접
+// 정의하지 않고, sceneFixture.js의 SCENE_FIXTURE(씬 전체 구성의 단일 진실
+// 원천 — 오브젝트 시각 렌더/그림자/depth까지 포함)에서 deriveObstacles로
+// 파생한다. 기존 3개(demo-building/demo-bench/demo-tree)는 그 파일이
+// collisionRect로 이 아래 역사적 좌표를 정확히 고정(pin)해 두어(byte-
+// identical), 이 export의 값 자체는 전혀 바뀌지 않는다 — 이 파일을
+// 사용하는 pathfinding.js/depthVisual.js/Proto25DScreen.jsx나 아래
+// classifyPoint/nearestWalkablePoint 등 이 파일의 나머지 함수는 전혀
+// 손대지 않았다(회귀 없음). 박스 좌표는 x0<x1, y0<y1(좌상단-우하단)
+// 직사각형.
+export const OBSTACLES = deriveObstacles(SCENE_FIXTURE)
+
+// ── 셀 <-> world 좌표 변환 ────────────────────────────────────────────
+// 격자 원점은 WORLD_MIN이다(위 "격자 해상도" 절 참고) — 0이 아니다.
+export function worldToCell(x, y) {
+  const col = Math.min(GRID_COLS - 1, Math.max(0, Math.floor((x - WORLD_MIN) / CELL_W_PCT)))
+  const row = Math.min(GRID_ROWS - 1, Math.max(0, Math.floor((y - WORLD_MIN) / CELL_H_PCT)))
+  return { col, row }
+}
+
+/** 셀의 world-% 중심점(웨이포인트 좌표로 쓰인다). */
+export function cellToWorldPoint(col, row) {
+  return { x: WORLD_MIN + (col + 0.5) * CELL_W_PCT, y: WORLD_MIN + (row + 0.5) * CELL_H_PCT }
+}
+
+function cellBounds(col, row) {
+  const x0 = WORLD_MIN + col * CELL_W_PCT
+  const y0 = WORLD_MIN + row * CELL_H_PCT
+  return { x0, x1: x0 + CELL_W_PCT, y0, y1: y0 + CELL_H_PCT }
+}
+
+function rectsOverlap(a, b) {
+  return a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0
+}
+
+/**
+ * 셀 (col,row) 전체가 걸을 수 있는지 — 격자 밖이거나, world 여백
+ * (WORLD_MIN~WORLD_MAX) 밖으로 조금이라도 걸치거나, 장애물 박스와
+ * 조금이라도 겹치면 false. "셀 중심점만" 검사하지 않고 셀 전체 사각형을
+ * 장애물과 겹침 검사하는 이유 — 중심점만 보면 셀 면적 대부분이 장애물에
+ * 덮여도 중심이 우연히 밖이면 통과로 오판할 수 있어("장애물을 절대
+ * 통과하지 않는다" 요구사항에 더 보수적으로 부합).
+ *
+ * 2026-09-26(O2) — y0 하한 체크는 이제 부동소수점 방어용 epsilon이 아니라
+ * 실제 상단 여백(row 0~7, WORLD_MIN_Y 미만)을 막는 본 로직이다(위
+ * WORLD_MIN_Y 정의 주석 참고). x0/x1/y1 하한·상한은 O2와 무관해 그대로
+ * WORLD_MIN/WORLD_MAX epsilon 방어를 유지한다.
+ */
+export function isWalkableCell(col, row, obstacles = OBSTACLES) {
+  if (col < 0 || col >= GRID_COLS || row < 0 || row >= GRID_ROWS) return false
+  const bounds = cellBounds(col, row)
+  // 격자가 이미 [WORLD_MIN,WORLD_MAX]에 정확히 맞춰 앵커링돼 있어 정상
+  // 케이스에서는 x축이 절대 밖으로 나가지 않는다 — x0/x1은 부동소수점
+  // 오차만 방어. y0은 WORLD_MIN_Y(O2 상단 여백)로 실제 차단을 수행한다.
+  if (bounds.x0 < WORLD_MIN - BOUNDS_EPS || bounds.x1 > WORLD_MAX + BOUNDS_EPS ||
+      bounds.y0 < WORLD_MIN_Y - BOUNDS_EPS || bounds.y1 > WORLD_MAX + BOUNDS_EPS) return false
+  for (const ob of obstacles) {
+    if (rectsOverlap(bounds, ob)) return false
+  }
+  return true
+}
+
+/** world-% 점 하나가 걸을 수 있는 칸에 속하는지 — 셀 판정에 위임(단일 진실 원천). */
+export function classifyPoint(x, y, obstacles = OBSTACLES) {
+  const { col, row } = worldToCell(x, y)
+  return isWalkableCell(col, row, obstacles) ? 'walkable' : 'blocked'
+}
+
+/**
+ * [WORLD_MIN, WORLD_MAX] 경계로 clamp — Stage 1의 clampPct(2~98)와 동일 여백.
+ * 2026-09-26(O2) — y 하한은 WORLD_MIN_Y(상단 스프라이트 clip 방지 여백)로
+ * 올렸다. x 하한은 O2와 무관해 WORLD_MIN 그대로 둔다.
+ */
+export function clampToWorldBounds(x, y) {
+  const cx = Math.max(WORLD_MIN, Math.min(WORLD_MAX, Number(x) || 0))
+  const cy = Math.max(WORLD_MIN_Y, Math.min(WORLD_MAX, Number(y) || 0))
+  return { x: cx, y: cy }
+}
+
+/**
+ * (col,row)에서 시작해 바깥으로 정사각 "링"을 반지름 1,2,3...순으로 훑어
+ * 가장 먼저 발견되는 걸을 수 있는 셀을 반환한다(자기 자신이 이미 걸을 수
+ * 있으면 그대로 반환). 각 링 내부는 항상 같은 순서(위쪽 행부터 왼쪽 열부터)
+ * 로 훑어 완전히 결정론적이다. 격자 전체가 막혀있는 병적인 경우에만 null
+ * (기본 OBSTACLES로는 발생하지 않는다 — 유닛 테스트가 커스텀 obstacles로
+ * 이 경로를 검증한다).
+ */
+export function nearestWalkableCell(col, row, obstacles = OBSTACLES) {
+  if (isWalkableCell(col, row, obstacles)) return { col, row }
+  const maxRadius = GRID_COLS + GRID_ROWS
+  for (let radius = 1; radius <= maxRadius; radius++) {
+    for (let dRow = -radius; dRow <= radius; dRow++) {
+      for (let dCol = -radius; dCol <= radius; dCol++) {
+        if (Math.max(Math.abs(dRow), Math.abs(dCol)) !== radius) continue // 링 테두리만
+        const r = row + dRow
+        const c = col + dCol
+        if (isWalkableCell(c, r, obstacles)) return { col: c, row: r }
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * 목적지 좌표 보정 — 이미 걸을 수 있으면 원래 좌표를 그대로 반환한다
+ * (격자 중심으로 스냅하지 않음 — "정상 목적지는 그대로 보존" 요구사항).
+ * 장애물 안이면 nearestWalkableCell로 보정한 셀의 중심점을 반환한다.
+ * 항상 먼저 clampToWorldBounds를 적용한다(범위 밖 좌표 방어).
+ */
+export function nearestWalkablePoint(x, y, obstacles = OBSTACLES) {
+  const clamped = clampToWorldBounds(x, y)
+  if (classifyPoint(clamped.x, clamped.y, obstacles) === 'walkable') return clamped
+  const cell = worldToCell(clamped.x, clamped.y)
+  const corrected = nearestWalkableCell(cell.col, cell.row, obstacles)
+  if (!corrected) return clamped // 병적으로 전부 막힌 경우의 안전한 폴백
+  return cellToWorldPoint(corrected.col, corrected.row)
+}

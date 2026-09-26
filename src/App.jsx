@@ -91,6 +91,11 @@ const TownScreen = React.lazy(() => import('./components/town/TownScreen'))
 // 형제 렌더러, V1 대체 아님). 플래그 OFF(기본)면 townV2Active가 항상
 // false라 아래 screen==='town' 블록은 기존 TownScreen 분기만 탄다.
 const TownScreenV2 = React.lazy(() => import('./components/town/v2/TownScreenV2'))
+// Paul Town 2.5D 캐릭터 프로토타입(paulTown2_5d, Stage 1, 2026-09-22) —
+// paulTownV1/paulTownV2와 완전히 독립된 별도 격리 실험(공유 상태/게이팅
+// 없음, docs/design/town/ASTRA_HANDOFF_2026-09-21.md). 플래그 OFF(기본)면
+// 아래 paulTown2_5dEnabled가 항상 false라 이 청크는 로드조차 안 된다.
+const Proto25DScreen = React.lazy(() => import('./components/town/proto2_5d/Proto25DScreen'))
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -271,6 +276,10 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 허용목록 학생(기기 플래그 OFF)에게서 V2가 조용히 사라지지 않게 한다.
   const paulTownV2Enabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('paulTownV2'), () => false)
   const townV2Active = townV1Enabled && paulTownV2Enabled
+  // Paul Town 2.5D 프로토타입(paulTown2_5d, Stage 1) — 단독 플래그, townV1
+  // 자격/파일럿 허용목록/paulTownV2와 절대 결합하지 않는다(기존 Town V1/V2
+  // 게이팅과 완전히 무관한 독립 dev/QA 서피스).
+  const paulTown2_5dEnabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('paulTown2_5d'), () => false)
   const townShop = useTownShop(studentId, (townShopEnabled || townV1Enabled) && !!studentId)
 
   // 선물상자를 닫은 직후, 오늘 틀린 스펠링 단어나 영구 복습 대기열
@@ -1081,6 +1090,16 @@ function AppInner({ studentId, studentName, onLogout }) {
           실측 회귀가 있어 대시보드에서는 렌더하지 않는다. 다른 모든 화면은
           불변. */}
       {screen !== 'dashboard' && <SpeedBtn />}
+      {/* Paul Town 2.5D 프로토타입(paulTown2_5d, Stage 1, 2026-09-22) — 기존
+          `screen` 상태 머신/네비게이션과 완전히 무관한 독립 dev/QA 서피스.
+          내비게이션 진입점이 없다(운영자 스펙에 "학생이 진입"하는 요구
+          자체가 없음) — 플래그 하나로만 게이팅되는 오버레이. */}
+      {paulTown2_5dEnabled && (
+        <React.Suspense fallback={null}>
+          {/* 경제 단계 A(2026-09-26) — Dashboard의 wallet prop과 정확히 같은 게이트/소스(읽기 전용, 새 fetch 없음). */}
+          <Proto25DScreen wallet={townShopEnabled && townShop.state ? { dollarsAvailable: townShop.state.dollars.available } : null} />
+        </React.Suspense>
+      )}
     </>
   )
 }

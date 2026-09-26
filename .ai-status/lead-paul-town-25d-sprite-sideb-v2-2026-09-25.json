@@ -1,0 +1,60 @@
+{
+  "agent_name": "lead",
+  "role": "Paul Town 2.5D 캐릭터 스프라이트 walk-side-b 프레임 교체(v2) 총괄",
+  "task_id": "paul-town-25d-sprite-sideb-v2-2026-09-25",
+  "task": "운영자가 2026-09-25 전달한 측면 걷기 렌더 2장 중 1장을 채택해 walk-side-b를 v2로 교체(walk-side-a 등 나머지 7프레임/앵커/타이밍/미러 규칙 무변경), 관련 테스트/문서 갱신 후 build/verify/E2E/스크린샷/Preview 전부 PASS 확인하고 단일 커밋",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-25T00:00:00Z",
+  "updated_at": "2026-09-25T03:10:00+09:00",
+  "files_owned": [
+    "handoff.md",
+    "TESTING.md",
+    "docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md"
+  ],
+  "files_read": [
+    "handoff.md",
+    "TESTING.md",
+    "docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md",
+    ".ai-status/lead-paul-town-25d-sprite-phase6c-2026-09-24.json",
+    ".ai-status/TEMPLATE.json"
+  ],
+  "summary": "177차(Phase 6C, 8프레임 전체 실장) 이후, 운영자가 새 측면 걷기 렌더 2장을 전달했다. `12_54_38 AM (2)`(한쪽 발 지지 + 반대쪽 다리를 뒤로 굽혀 든 중간 스트라이드, sha256 23c4a79f…)를 신규 walk-side-b로 채택, `12_54_37 AM (1)`은 미사용으로 뒀다(alpha>16 잉크 bbox 재측정으로 클리핑 아님을 확인, art/composition 판단으로 유효 — §1/§15.1 정정). 기존 walk-side-a(08_25_58, 넓은 스트라이드)는 무변경 — 새 페어링은 a↔b-v2이며 신규 두 장끼리의 페어링이 아니다. 코드 변경 범위는 PAUL_SPRITE_FILES['walk-side-b'] 매핑 값 1개뿐(frame id/앵커/frameDurationMs/미러 규칙 전부 무변경), 레거시 paul-walk-side-b.png(+@2x)는 디스크 보존하되 레지스트리 미포함. 별도로, E2E가 관측한 '긴 LEFT 걷기에서 idle 직전 미러 순간 해제' 현상은 재조사 결과 제품 버그가 아니라 테스트 샘플러의 비-atomic 측정(phase/mirror/facing을 서로 다른 Playwright 호출로 읽던 레이스) 아티팩트로 판명됐다 — S12 샘플러를 atomic page.evaluate 스냅샷으로 교체했고, 조사 중 발견한 실제 path-snap 위험(순수 수직 leg에서 facing 오반전)에 대비해 Proto25DScreen.jsx에 FACING_MIN_DX_PCT=1.0(world-%) 예방적 가드(하드닝, 관측된 결함 수정 아님)를 추가했다. 이 세션(문서 담당, git 명령 0회, 코드/이미지 미접촉)은 handoff.md 178차 절 전체(§0~§7), TESTING.md 178차 '관련 항목' 절, 스펙 문서 §15(§15.1~§15.7) + §12 변경 이력을 작성·정정·최종 결과로 갱신 완료했다. lead가 2026-09-25 01:55–02:42 KST 워크트리 wt-clean-pr에서 직접 실행한 최종 회귀는 전부 PASS(세부는 verification 참고). 커밋 5d2faf29 push(약 02:45 KST) 후 Vercel Preview(배포 6644346180 success)를 로그인 없이 GET만으로 확인 완료 — paul-walk-side-b-v2 청크 참조/레거시 미참조/16개 자산 200 OK/번들 가드/플래그 기본값 유지 전부 실측 확인, 세 문서(§7/TESTING 178차/스펙 §15.7)에 반영했다. Production WRITE 0, 세 플래그(paulTownV1/paulTownV2/paulTown2_5d) false, PR #62 OPEN/Draft 유지 원칙을 문서 전체에서 재확인했다.",
+  "blocker": null,
+  "next_action": "없음 — 운영자 실기기 확인 완료; merge/Production 반영은 별도 결정",
+  "verification": {
+    "verified_at": "2026-09-25T02:42:00+09:00",
+    "verified_by": "lead",
+    "worktree": "scratchpad/wt-clean-pr",
+    "verified_window": "2026-09-25T01:55:00+09:00 ~ 2026-09-25T02:42:00+09:00",
+    "results": {
+      "npm run build": "PASS, 경고 0",
+      "npm run verify:all": "ALL DOMAINS: PASS, 141 스위트 PASS / 0 FAIL, 약 32분, 타임아웃/취소 없음",
+      "npm run verify:e2e": "1655 PASS / 0 FAIL / 0 SKIP, 미mock 요청 0",
+      "tests/e2e/townProto25d.spec.mjs standalone": "327/327 PASS (S12: 좌/우 걷기 frame id와 src basename이 walk-side-a ↔ paul-walk-side-b-v2로 교대, LEFT 걷기 모든 샘플에서 미러 '1', 크기/발 접지선이 bob 허용 오차 안에서 안정, 4뷰포트; S13: walk-side-a 기준 측면 걷기 reduced-motion 프레임 정지; atomic 샘플러 적용)",
+      "scripts/testPaulSpriteAssets.mjs": "125/125 PASS",
+      "scripts/testPaulSpriteIngest.mjs": "132/132 PASS",
+      "scripts/testBundleBudget.mjs": "32/32 PASS",
+      "scripts/testProto25dSpriteAdapter.mjs": "50/50 PASS",
+      "scripts/testProto25dSpriteContract.mjs": "172/172 PASS",
+      "scripts/testTownEnvAssets.mjs": "196/196 PASS",
+      "node scripts/spriteIngestPaul.mjs --check": "PASS=68 FAIL=0 BLOCKED_BY_ASSET=0",
+      "local viewport screenshots": "preview-local/side-{360x640,390x844,412x915,1280x800}-{a,b}.png, lead 리뷰 완료 — a/b-v2 프레임 동일 크기·발 접지선, 검은 배경 없음, 클리핑 없음",
+      "Vercel Preview (no login)": "완료. 커밋 5d2faf29(2026-09-25 약 02:45 KST) push, GitHub 배포 6644346180 success. Preview URL https://voca-ktrsbm4ct-jina4926952s-projects.vercel.app(브랜치 alias https://voca-git-feat-paul-town-v2-clean-pr-jina4926952s-projects.vercel.app). 로그인 없이 GET만(Production WRITE 0): 로그인 화면 렌더, Proto25DScreen-Dk3K-cwh.js 청크에 paul-walk-side-b-v2 참조하고 레거시 paul-walk-side-b-<hash>.png 참조 없음, /assets/paul-*.png 16개 전부 200 image/png(v2+@2x 포함), 메인 청크 스프라이트 참조 0(번들 가드), paulEasyVoca_features localStorage 부재(플래그 기본값 유지). 2.5D 화면은 학생 로그인(Production PIN API WRITE) 필요해 Preview에서 열지 않았다."
+    },
+    "corrections_applied": [
+      "walk-side-b 원본 판정: '12_54_37 AM (1)이 좌측/하단 잘림(클리핑)'이라는 초기 보고는 PIL Image.getbbox()를 RGBA에 그대로 적용해 alpha=0 픽셀까지 잉크로 잡은 오측정 — alpha>16 잉크 bbox 기준으로는 (80,18)-(1004,1431), 여백 충분, 클리핑 아님. (2)의 잉크 bbox도 (151,17)-(901,1463)로 정정(이전 (65,14)-(1000,1472)는 동일 오측정). 운영자의 (2) 채택/(1) 미사용 결정은 구도(art/composition) 판단으로 유효.",
+      "긴 LEFT 걷기 미러 순간 해제: 최초 'Phase 6C-1 버그 발견·수정'으로 기록했던 것을 '제품 버그가 아니라 테스트 샘플러의 비-atomic 측정 레이스'로 재서술. FACING_MIN_DX_PCT=1.0 가드는 관측된 결함에 대한 수정이 아니라 예방적 하드닝으로 재분류(실제 path-snap 위험인 순수 수직 leg 오반전을 예방)."
+    ]
+  },
+  "operator_device_check": {
+    "checked_at": "2026-09-25",
+    "checked_by": "operator (실기기, 본인 로그인)",
+    "preview_url": "https://voca-q33hznaug-jina4926952s-projects.vercel.app",
+    "preview_head": "96e90ef8",
+    "notes": "Preview는 Vercel SSO로 보호돼 있다 — 이전에 모바일에서 관측됐던 404 DEPLOYMENT_NOT_FOUND는 배포 누락이 아니라 SSO/미인가 응답이었던 것으로 확인됐다. 운영자가 실제 모바일 기기에서 Preview를 열고 본인 계정으로 직접 로그인, 관리자 패널에서 paulTown2_5d를 켠 뒤 확인: 접속 정상, 좌/우 걷기에서 다리 애니메이션이 walk-side-a ↔ paul-walk-side-b-v2로 정확히 전환. 이 로그인·플래그 토글은 운영자 본인의 기기·계정에서의 행위이며, lead/에이전트는 Production WRITE 0 원칙을 유지해 이 세션에서 로그인하지 않았다(에이전트 측 검증은 verification.results의 GET-only Preview 확인이 전부). 코드 변경/재배포/merge 없음 — 플래그(paulTownV1/paulTownV2/paulTown2_5d)는 여전히 기본값 false, PR #62 OPEN/Draft 유지.",
+    "recorded_in": [
+      "handoff.md 178차 §7(Preview 행) + §8(신규 절) + 상단 이탤릭 헤더"
+    ]
+  }
+}
