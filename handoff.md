@@ -1,5 +1,46 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-26 (184차 — **Paul Town 2.5D 가게 체험 프로토타입 v1 검증 완료·커밋(PR #62)**: 임시 폴더 worktree 대량 삭제 사고 후 고정 worktree `C:\voca-wt\paul-town-v2`로 복구(가게 작업 9파일 해시 일치 복원), `.env` 운영자 허가로 복사(값 미출력, gitignore 확인). verify:e2e 1917/1917, verify:all ALL DOMAINS PASS. 더블클릭 재진입 결함을 진단 스크립트로 확정해 수정 3사이클 끝에 해결. 코드리뷰 APPROVE, QA PASS. 아래 184차 섹션 참고.)_
+_최종 갱신: 2026-09-26 (185차 — **Paul Town 2.5D Phase 3 회귀검사·하드닝 완료(PR #62)**: 산책 모드+가게 전체 diff 감사(누수·중복 상태·미사용 코드 없음), 실제 브라우저 동작 감사(세로 HUD 겹침 0, 터치/연타/키보드/reduced-motion 정상), rAF 루프의 프레임당 DOM 조회를 캐시로 교체, 테스트 공백 보완(E2E S19). verify:e2e 1943/1943, verify:all ALL DOMAINS PASS(실패 0). 코드리뷰 APPROVE, QA PASS. 아래 185차 섹션 참고.)_
+
+## 2026-09-26 (185차) — Paul Town 2.5D Phase 3: 회귀검사·하드닝·테스트 공백 보완 (PR #62, 워크트리 `C:\voca-wt\paul-town-v2`)
+
+### 0. 범위
+
+운영자 8h 자율 세션 스펙 Phase 3(1 전체 diff 검토, 2 미사용 코드/중복 상태/리스너 누수, 3 키보드·터치 충돌과 연속 탭, 4 reduced-motion, 5 모바일 세로 HUD·버튼 겹침, 6 테스트 누락 보완, 7 handoff 기록, 8 다음 단계는 문서로만 설계, 9 코인·구매·인벤토리·배치·Supabase 저장 미구현). 대상 diff `5a2f6c71..214bd5a4`의 src 4파일(Proto25DScreen.jsx, ProtoShopScreen.jsx, camera.js, shopInteraction.js). 플래그 3개 false, DB/SQL/Production WRITE 0, C:\voca·기존 임시 worktree 무접촉.
+
+### 1. 감사 결과
+
+- 코드 감사(읽기 전용): 미사용 import/상태/함수 없음(camera.js·shopInteraction.js export는 전부 소비됨). 중복 상태 없음(shopBusyRef/shopClosing/shopReentryBlocked는 ref=동기 가드, state=UI 반영으로 각각 필요). 리스너·타이머·ResizeObserver·rAF 전부 해제 짝 확인, 언마운트 후 setState 위험 없음. reduced-motion: 새 모션 경로(카메라)는 t=1 스냅으로 준수. **should-fix 1건**: 산책 모드 rAF 루프가 매 프레임 `querySelector('[data-proto-character]')` 호출. nit: 전역 Escape keydown이 `e.target`을 보지 않음(전체 화면 오버레이라 저위험, 한계로 기록), `enterLeaving` 무경로 분기는 의도된 방어 코드.
+- 실제 동작 감사(스크래치 `scripts/.tmp/p3RuntimeAudit.mjs`, mock 하네스, 결과 `scripts/.tmp/p3RuntimeAudit.out.json`): A 세로 360/390/412에서 정보 배지·산책 토글·가게 입장 버튼·캐릭터 쌍별 겹침 0, 전부 ≥44px·뷰포트 안. B 터치 탭 1회=이동 1회, 토글/입장 탭이 바닥으로 새지 않음. C 95ms 안 5연타 → 마지막 목표에 idle 도착, 걷기 고착 없음; 이동 중 산책 모드 ON/OFF/ON → transform NaN 없음·경계 유지; 입장/Escape 연타 → 닫힘·히스토리 1칸. D 가게 닫힘 상태에서 Escape/Enter/Space 무반응, 열림 상태 Tab이 Buy→Back 순환, Escape로 닫힘. E reduced-motion에서 카메라 즉시 스냅(도착 직후=300ms 후), 리플 미렌더, bob 애니메이션 none. F 콘솔/페이지 오류·미mock·mock 오류 0.
+
+### 2. 변경 파일과 이유
+
+- `src/components/town/proto2_5d/Proto25DScreen.jsx`: rAF 카메라 루프에서 캐릭터 엘리먼트를 이펙트 클로저 변수 `charElCache`에 캐시, null·ground 부재·`!groundEl.contains()`일 때만 재조회(프레임당 DOM 조회 제거, 동작 불변). 이펙트 재실행마다 null로 초기화되고 ProtoCharacter는 키 없는 고정 위치라 재마운트되지 않음(코드리뷰 확인).
+- `tests/e2e/townProto25d.spec.mjs`: 신규 `S19[360x640|1280x800,phase3]` 각 13단언 — (a) 가게 닫힌 직후 입장 버튼 disabled/aria-disabled(150ms 내) → 600ms 후 사용 가능·1회 클릭으로 재입장, (b) 이동 중 산책 모드 토글 → ground transform none·OFF 표기·idle 도달·카메라 속성 갱신 중단, (c) 빠른 두 번 토글 → 시작 상태로 복귀(상태 무관 비교)·NaN 없음·경계·카메라 유한값, 가로 스크롤 없음. 테스트 작성 오류 2건(HUD 위 탭 좌표, 두 번 토글 기대값)을 수정 사이클 1/2에서 바로잡음(제품 결함 아님).
+
+### 3. 테스트 결과
+
+- 단위: camera 76/76, shop 44/44 · `npm run build` 0 경고.
+- 가게 스펙 단독(스크래치 러너): 617/617.
+- `npm run verify:e2e`: 총 1943단언 PASS 1943 / FAIL 0 / SKIP 0, 미mock 0.
+- `npm run verify:all`: ALL DOMAINS PASS, EXIT 0, 실패 줄 0(내장 E2E PASS, 184차에 간헐 실패했던 extra `testRewardFlow`도 통과).
+- 독립 코드리뷰 APPROVE, 독립 QA PASS.
+- 관측: `S12[1280x800,sprite-render]` 걷기 프레임 교대 단언이 부하 중 1회 간헐 실패(재실행 통과, 산책 모드 OFF 경로라 이번 변경과 무관) — 181차 §5와 같은 부류.
+
+### 4. 스크린샷 위치(커밋 대상 아님, gitignore)
+
+- Phase 3 실제 동작 감사: `C:\voca-wt\paul-town-v2\scripts\.tmp\` 의 p3_A_portrait_360x640.png, p3_A_portrait_390x844.png, p3_A_portrait_412x915.png, p3_E_reduced_motion_360x640.png
+- 이전 세션 산책/가게 스크린샷(walk_*.png, shop_*.png)은 기존 임시 worktree `…\scratchpad\wt-clean-pr\scripts\.tmp\`에 있었으며 임시 폴더 정리 대상이라 보존이 보장되지 않음.
+
+### 5. 알려진 한계
+
+- 가게를 닫은 뒤 키보드 포커스가 입장 버튼이 아니라 body로 돌아감, 가게 오버레이 포커스 트랩 없음(`DECISIONS_PENDING.md` "포커스 트랩/aria-modal" 항목과 같은 결정 대기).
+- 전역 Escape 리스너가 입력 대상(target)을 확인하지 않음(전체 화면 오버레이라 현재 영향 없음).
+- 뒤로가기 버튼 `aria-busy` 상태는 수 ms만 유지돼 E2E로 안정적으로 단언하지 않음(불안정 테스트 방지).
+- 데스크톱 월드 폭 674px 중앙 정렬, 월드 가장자리 시각 단서 없음, 코인 표시/Buy 비활성 표현 없음, 화분은 꽃밭 이미지 자리표시자(183·184차와 동일).
+
+### 6. 다음 단계(문서로만 설계, 이번 세션 미구현)
+
+코인·실제 구매·인벤토리·마을 물건 배치·Supabase 저장은 `docs/design/town/PROTO25D_ECONOMY_NEXT_DESIGN_2026-09-26.md`(커밋 214bd5a4 포함)에 5단계(A 코인 표시 read-only → B 구매(플래그) → C 인벤토리 → D 배치 → E 저장)로 설계돼 있다. 기존 Paul Dollar 원장·Town Shop RPC·Town V1 배치 규칙 재사용, 신규 DDL 0 목표. 착수는 운영자 결정(플래그 전략, 파일럿 반, 아트 라이선스).
 
 ## 2026-09-26 (184차) — 가게 체험 프로토타입 v1 검증 완료·커밋 + 임시 worktree 삭제 사고 복구 (PR #62)
 

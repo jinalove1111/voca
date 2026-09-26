@@ -3689,5 +3689,211 @@ export async function run(browser, baseURL) {
     }
   }
 
+  // ── S19 — Phase 3 하드닝(2026-09-26): 가게 재진입 가드(SHOP_REENTRY_GUARD_MS
+  // =400ms, Proto25DScreen.jsx shopReentryBlocked/aria-disabled)와 산책 모드
+  // 토글의 rAF 카메라 루프 정지/재개(이 세션의 rAF querySelector 캐싱
+  // 수정과 직접 관련)를 좁혀서 확인한다. 실행 시간을 짧게 유지하려고
+  // 참조 뷰포트 4종(S17_VIEWPORTS) 중 모바일 1종(360x640)+데스크톱
+  // 1종(1280x800)만 돈다 — S17/S18이 이미 4종 전부에서 산책 모드/가게
+  // 기본 계약을 검증했으므로 이 스위트는 "재검증"이 아니라 Phase 3에서
+  // 새로 만진 두 지점만의 회귀 고정이다. S18과 동일하게 SHOP_ENTRANCE_PCT_REF
+  // /axisBoundsCheck/ensureWorldPointVisible을 그대로 재사용한다(값
+  // 변경 없음).
+  const S19_VIEWPORTS = S17_VIEWPORTS.filter((vp) => vp.width === 360 || vp.width === 1280)
+
+  for (const vp of S19_VIEWPORTS) {
+    const name = `S19[${vp.label},phase3]`
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
+    const page = await context.newPage()
+    const consoleErrors = []
+    page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()) })
+    page.on('pageerror', (err) => { consoleErrors.push(String(err)) })
+    await setDeviceFlags(page, { paulTown2_5d: true })
+    await setWalkModeOn(page)
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const viewportEl = page.locator('[data-testid="proto25d-viewport"]')
+      const enterBtn = page.locator('[data-testid="proto25d-shop-enter"]')
+      const shopOverlay = page.locator('[data-testid="proto25d-shop"]')
+      const backBtn = page.locator('[data-testid="proto25d-shop-back"]')
+      const walkToggle = page.locator('[data-testid="proto25d-walkmode-toggle"]')
+
+      // ── (a) 가게 재진입 가드 — 뒤로가기 1회 클릭 직후(오버레이가 사라진
+      //     순간부터 최대 150ms 폴링) 입장 버튼이 disabled 또는
+      //     aria-disabled="true"여야 하고(SHOP_REENTRY_GUARD_MS=400ms
+      //     창 안), 그 가드가 풀리는 600ms 뒤에는 다시 활성화되어 클릭
+      //     한 번으로 재입장돼야 한다 ──
+      const entranceVisibility = await ensureWorldPointVisible(page, character, ground, viewportEl, SHOP_ENTRANCE_PCT_REF)
+      if (!entranceVisibility.visible) {
+        r.check(`${name} — 가게 입장 지점이 최대 3회 이동 시도 후에도 화면에 들어오지 않아 이 시나리오를 정직하게 스킵함(FAIL 아님, 사전조건 부재)`, true, '스킵')
+        collect(mocks)
+        await context.close()
+        continue
+      }
+      await page.mouse.click(entranceVisibility.targetScreenPt.x, entranceVisibility.targetScreenPt.y)
+      await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
+      ), { timeout: 8000 })
+      const enterVisible = await enterBtn.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)
+      let shopVisible = false
+      let overlayHidden = false
+      if (enterVisible) {
+        await enterBtn.click()
+        shopVisible = await shopOverlay.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)
+        if (shopVisible) {
+          await backBtn.click()
+          overlayHidden = await waitUntil(async () => (await shopOverlay.count()) === 0, { timeout: 3000 })
+        }
+      }
+      r.check(`${name} 항목a — 사전조건(입장 버튼 노출 → 가게 열림 → 뒤로가기로 닫힘)이 모두 성립함`, enterVisible && shopVisible && overlayHidden, JSON.stringify({ enterVisible, shopVisible, overlayHidden }))
+      if (enterVisible && shopVisible && overlayHidden) {
+        const disabledSeen = await waitUntil(async () => {
+          const disabledAttr = await enterBtn.getAttribute('disabled')
+          const ariaDisabledAttr = await enterBtn.getAttribute('aria-disabled')
+          return disabledAttr !== null || ariaDisabledAttr === 'true'
+        }, { timeout: 150, interval: 20 })
+        r.check(`${name} 항목a — 오버레이가 사라진 직후(≤150ms 폴링) 입장 버튼이 disabled 또는 aria-disabled="true"임(재진입 가드)`, !!disabledSeen)
+
+        await page.waitForTimeout(600)
+        const disabledAttrAfter = await enterBtn.getAttribute('disabled')
+        const ariaDisabledAttrAfter = await enterBtn.getAttribute('aria-disabled')
+        r.check(
+          `${name} 항목a — 600ms 뒤 입장 버튼이 다시 활성화됨(disabled 해제, aria-disabled!="true")`,
+          disabledAttrAfter === null && ariaDisabledAttrAfter !== 'true',
+          JSON.stringify({ disabledAttrAfter, ariaDisabledAttrAfter }),
+        )
+
+        await enterBtn.click()
+        const reopened = await shopOverlay.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)
+        r.check(`${name} 항목a — 재활성화 후 클릭 한 번으로 가게가 다시 열림`, reopened)
+        if (reopened) {
+          await backBtn.click()
+          await waitUntil(async () => (await shopOverlay.count()) === 0, { timeout: 3000 })
+        }
+      } else {
+        r.check(`${name} 항목a — disabled/aria-disabled 및 재활성화 검증(사전조건 부재로 스킵, FAIL 아님)`, true, '스킵')
+        r.check(`${name} 항목a — 재입장 검증(사전조건 부재로 스킵, FAIL 아님)`, true, '스킵')
+      }
+
+      // ── (b) 걷는 도중 산책 모드 토글 — 카메라 rAF 루프가 즉시 멈추고
+      //     (바닥 transform이 300ms 이내 초기화, HUD가 OFF로 바뀜), 걷기
+      //     자체는 방해받지 않고 계속 진행돼 idle에 도달하며, 정지 후
+      //     300ms를 더 기다려도 data-camera-x가 그대로임(루프가 실제로
+      //     멈췄다는 증거) ──
+      const groundBoxB = await ground.boundingBox()
+      const viewportBoxB = await viewportEl.boundingBox()
+      const intersectB = intersectBoxes(groundBoxB, viewportBoxB)
+      // 2026-09-26 Phase 3 수정 1차 — S17/S18과 동일하게 뷰포트∩바닥
+      // 교집합의 우하단(85%/85%)을 탭한다. 좌상단은 HUD 토글 배지(정보/
+      // 산책모드)가 항상 그 자리에 떠 있어(위 "UI 배지" 주석 참고), 그
+      // 근처를 탭하면 바닥이 아니라 그 버튼을 눌러버려 걷기가 시작되지
+      // 않는 회귀가 있었다(이 세션 첫 실행에서 360x640 항목b가 이 이유로
+      // FAIL).
+      const farTapPt = intersectB
+        ? { x: intersectB.x + intersectB.width * 0.85, y: intersectB.y + intersectB.height * 0.85 }
+        : { x: viewportBoxB.x + viewportBoxB.width * 0.85, y: viewportBoxB.y + viewportBoxB.height * 0.85 }
+      await page.mouse.click(farTapPt.x, farTapPt.y)
+      const walkingStartedB = await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking'
+      ), { timeout: 3000 })
+      r.check(`${name} 항목b — 사전조건(먼 지점 탭 후 phase가 walking으로 전이됨)`, !!walkingStartedB)
+      if (walkingStartedB) {
+        await walkToggle.click()
+        const transformCleared = await waitUntil(async () => {
+          const t = await ground.evaluate((el) => el.style.transform)
+          return t === '' || t === 'none'
+        }, { timeout: 300, interval: 20 })
+        const toggleTextOff = await walkToggle.innerText()
+        r.check(
+          `${name} 항목b — 걷는 도중 토글 클릭 후 300ms 이내 바닥 transform이 초기화되고('' 또는 'none') HUD가 "산책 모드 OFF"로 바뀜`,
+          !!transformCleared && toggleTextOff.includes('OFF'),
+          JSON.stringify({ transformCleared: !!transformCleared, toggleTextOff }),
+        )
+        const idleAfterToggle = await waitUntil(async () => (
+          (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
+        ), { timeout: 8000 })
+        r.check(
+          `${name} 항목b — 토글 이후에도 걷기가 방해받지 않고 결국 idle에 도달하며, 그 동안 콘솔 오류가 0건임`,
+          !!idleAfterToggle && consoleErrors.length === 0,
+          JSON.stringify({ idleAfterToggle: !!idleAfterToggle, consoleErrors: consoleErrors.slice(0, 5) }),
+        )
+        const cameraXSnapshot = await ground.getAttribute('data-camera-x')
+        await page.waitForTimeout(300)
+        const cameraXAfterWait = await ground.getAttribute('data-camera-x')
+        r.check(
+          `${name} 항목b — OFF 상태에서 300ms를 더 기다려도 data-camera-x가 그대로임(rAF 루프가 실제로 멈춤)`,
+          cameraXAfterWait === cameraXSnapshot,
+          JSON.stringify({ cameraXSnapshot, cameraXAfterWait }),
+        )
+      } else {
+        r.check(`${name} 항목b — 토글/카메라 정지 검증(사전조건 부재로 스킵, FAIL 아님)`, true, '스킵')
+      }
+
+      // ── (c) 빠른 연속(더블) 토글 — 2026-09-26 Phase 3 수정 1차: toggleWalkMode
+      //     (Proto25DScreen.jsx 330행)는 디바운스 없는 단순 flip이라, 두 번
+      //     누르면 항상 시작 상태로 되돌아온다(OFF→ON→OFF든 ON→OFF→ON이든).
+      //     그래서 "ON으로 수렴"이 아니라 "시작 상태와 최종 상태가 같음"을
+      //     상태 무관(state-independent)하게 검증한다 — 시작이 OFF였으면
+      //     바닥 transform도 되돌아가 있어야 하고('' 또는 'none'), ON이었으면
+      //     S17 항목b 경계 규칙을 그대로 지켜야 한다. NaN 손상값 부재와
+      //     카메라 좌표 유한성은 상태와 무관하게 항상 확인한다. ──
+      const toggleTextBefore = await walkToggle.innerText()
+      await walkToggle.click()
+      await walkToggle.click()
+      await page.waitForTimeout(500)
+      const toggleTextFinal = await walkToggle.innerText()
+      r.check(
+        `${name} 항목c — 빠른 연속 더블 토글 후 500ms 뒤 HUD가 시작 상태(${toggleTextBefore})로 되돌아옴(두 번 flip = 원상태, 디바운스 없는 단순 토글)`,
+        toggleTextFinal === toggleTextBefore,
+        JSON.stringify({ toggleTextBefore, toggleTextFinal }),
+      )
+      const groundTransformFinal = await ground.evaluate((el) => el.style.transform)
+      r.check(`${name} 항목c — 더블 토글 후 바닥 transform에 NaN이 없음`, !groundTransformFinal.includes('NaN'), groundTransformFinal)
+      if (toggleTextBefore.includes('OFF')) {
+        r.check(
+          `${name} 항목c — 시작 상태가 OFF였으므로 더블 토글 후에도 바닥 transform이 초기화 상태('' 또는 'none')임`,
+          groundTransformFinal === '' || groundTransformFinal === 'none',
+          groundTransformFinal,
+        )
+      } else {
+        const groundBoxFinal = await ground.boundingBox()
+        const viewportBoxFinal = await viewportEl.boundingBox()
+        const axisResultsFinal = ['x', 'y'].map((axis) => ({ axis, res: axisBoundsCheck(groundBoxFinal, viewportBoxFinal, axis) }))
+        const boundsOk = axisResultsFinal.every(({ res }) => (res.wider ? (res.startsBeforeOrAt && res.endsAtOrAfter) : res.centered))
+        r.check(
+          `${name} 항목c — 시작 상태가 ON이었으므로 더블 토글 후에도 세계가 여전히 S17 항목b 경계 규칙을 지킴(뷰포트 커버/중앙 정렬)`,
+          boundsOk,
+          JSON.stringify(axisResultsFinal.map(({ axis, res }) => ({ axis, ...res }))),
+        )
+      }
+      const cameraXFinal = await ground.getAttribute('data-camera-x')
+      const cameraYFinal = await ground.getAttribute('data-camera-y')
+      r.check(
+        `${name} 항목c — data-camera-x/data-camera-y가 모두 유한한 숫자임(카메라 좌표 복구)`,
+        Number.isFinite(Number(cameraXFinal)) && Number.isFinite(Number(cameraYFinal)),
+        JSON.stringify({ cameraXFinal, cameraYFinal }),
+      )
+
+      // ── (d) 가로 스크롤 없음 + 실 네트워크 요청 0건(installMocks가 전체
+      //     가로채므로 unmockedRequests는 이 파일의 다른 시나리오들과
+      //     동일하게 하네스 레벨(collect)에서 최종 집계된다) ──
+      r.check(`${name} — 가로 스크롤 없음(최종)`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }
 }

@@ -421,10 +421,20 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST }
 
     let rafId = null
     cameraPosRef.current = null // 모드 진입/뷰포트 변경마다 첫 프레임은 항상 즉시 스냅.
+    // 2026-09-26 Phase 3 — 캐릭터 엘리먼트를 이 effect 실행(walkMode ON
+    // 구간) 동안 클로저 변수에 캐시한다. querySelector는 DOM 서브트리를
+    // 매 프레임 순회하므로(60fps) 매번 다시 찾을 이유가 없다 — 캐릭터
+    // 엘리먼트는 바닥(groundEl) 아래에서 리마운트되지 않는 한 동일 노드다.
+    // groundEl.contains 체크로 리마운트(예: 좌석 전환 등으로 노드 교체)
+    // 시에는 다시 조회하도록 방어한다.
+    let charElCache = null
 
     function frame() {
       const groundEl = groundRef.current
-      const charEl = groundEl ? groundEl.querySelector('[data-proto-character]') : null
+      if (!charElCache || !groundEl || !groundEl.contains(charElCache)) {
+        charElCache = groundEl ? groundEl.querySelector('[data-proto-character]') : null
+      }
+      const charEl = charElCache
       if (groundEl && charEl) {
         // charWorldPx — ProtoCharacter.jsx의 앵커 관례(translate(-50%,-100%),
         // 이 파일 헤더 "characterRef" 주석 근처 참고)상 실제 렌더 박스의
