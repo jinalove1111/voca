@@ -1,5 +1,62 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-26 (182차 — **Paul Town 2.5D "산책 모드" v1 — 월드 확장 + 카메라 추적(운영자 지정 설계, 협의체 구현 결과 재검토), 검증 완료·미커밋**: 신규 `camera.js`(순수 카메라 수학, 단위 76단언), `Proto25DScreen.jsx`에 뷰포트 래퍼·산책 모드 토글(기본 ON, localStorage)·rAF lerp 카메라(월드 경계 clamp), E2E S17(4뷰포트 ×21/18단언). 기존 이동·충돌·벤치·depth·애니메이션·O2 무변경, 플래그 3개 false. 단위 6스위트 PASS, build 0 경고, verify:e2e 1825/1825, verify:all 필수 도메인 ALL DOMAINS PASS(부가 내장 E2E는 메모리 부족으로 하네스가 중단 — 환경 문제, 단독 E2E로 대체 확인). 코드리뷰 APPROVE, UX APPROVE, 게임 SIMPLIFY(가장자리 시각 단서 → 운영자 후속), QA PASS. 커밋/push/PR 댓글은 운영자 지시 대기. 아래 182차 섹션 참고.)_
+_최종 갱신: 2026-09-26 (184차 — **Paul Town 2.5D 가게 체험 프로토타입 v1 검증 완료·커밋(PR #62)**: 임시 폴더 worktree 대량 삭제 사고 후 고정 worktree `C:\voca-wt\paul-town-v2`로 복구(가게 작업 9파일 해시 일치 복원), `.env` 운영자 허가로 복사(값 미출력, gitignore 확인). verify:e2e 1917/1917, verify:all ALL DOMAINS PASS. 더블클릭 재진입 결함을 진단 스크립트로 확정해 수정 3사이클 끝에 해결. 코드리뷰 APPROVE, QA PASS. 아래 184차 섹션 참고.)_
+
+## 2026-09-26 (184차) — 가게 체험 프로토타입 v1 검증 완료·커밋 + 임시 worktree 삭제 사고 복구 (PR #62)
+
+### 0. 사고와 복구
+
+- 2026-09-26 15:58경 기존 활성 worktree(`AppData\Local\Temp\claude\…\scratchpad\wt-clean-pr`)에서 추적 파일 1,449개 중 1,332개와 `node_modules`가 삭제됨(verify:e2e 실행 중). 최근 수정 파일만 생존한 패턴으로 OS 임시 파일 정리로 판단. 커밋 이력은 `C:\voca\.git`와 origin(667df575)에 안전.
+- 미커밋 가게 작업 9파일을 `C:\Users\jinal\voca-wip-backup-2026-09-26\`에 백업(패치 + 사본) → 운영자 승인 후 고정 worktree `C:\voca-wt\paul-town-v2`를 origin 667df575에서 **detached HEAD**로 생성(같은 브랜치가 기존 worktree에 체크아웃돼 있어서). push는 `HEAD:feat/paul-town-v2-clean-pr` 명시. 복원 9/9 크기·sha256 일치, git diff가 백업 패치와 동일. 기존 임시 worktree는 삭제하지 않고 보존.
+- 새 worktree에 gitignore된 `.env`가 없어 앱이 로그인 화면조차 렌더하지 않음(E2E 전면 타임아웃) → 운영자 허가로 `C:\voca\.env`를 읽기 전용 복사(값 미출력, 해시 일치, gitignore·git status 미표시 확인). CI는 secrets로 `.env`를 만든다.
+
+### 1. 더블클릭 재진입 결함 — 수정 3사이클
+
+- verify:e2e 첫 실행: S18 항목 f(뒤로가기 빠른 더블클릭 후 가게가 닫혀야 함) 4뷰포트 FAIL. 뒤로가기 버튼(하단 전체 폭 52px)과 가게 입장 버튼(하단 중앙, bottom 24px)이 같은 위치에 겹침.
+- 수정 2차(운영자 지정): 닫힌 직후 400ms 입장 버튼 클릭·탭·키보드 차단(`SHOP_REENTRY_GUARD_MS`, `shopReentryBlockedUntilRef`, `shopReentryBlocked` + disabled/aria-disabled/pointer-events-none, `handleEnterShop` 시간 가드) → 결과 동일 FAIL.
+- 진단(운영자 승인 3번째 사이클, 스크래치 `scripts/.tmp/diagS18f.mjs`, 이벤트·히스토리 계측): 첫 클릭 → history.back → popstate → 닫힘 → 31ms 뒤 두 번째 클릭이 `disabled:false`인 입장 버튼에 도달 → 재오픈. 원인: `closeShopNow`가 함수형 업데이터 `setShopOpen((cur)=>…)` 안에서 `didClose`를 세우고 바로 다음 줄에서 읽었는데, React 18 배칭에서 업데이터가 나중에 실행돼 가드가 죽은 코드였음.
+- 수정 3차: 가드를 무조건 실행(이미 닫힌 상태의 중복 호출에서도 400ms 차단은 무해). 진단 재실행 V1/V3 모두 닫힘 유지·히스토리 1칸 소비, 가게 스펙 591/591.
+
+### 2. 최종 검증
+
+- 단위: shop 44/44, camera 76/76, walkGrid 44, pathRandom 19, sceneFixture 24, depth 23, bench 88. `npm run build` 0 경고.
+- `npm run verify:e2e`: 총 1917단언 PASS 1917 / FAIL 0 / SKIP 0(S18 4뷰포트 a–h 전부), 미mock 0.
+- `npm run verify:all`: ALL DOMAINS PASS, EXIT 0, 내장 E2E PASS. 기록: 부가(extra:true) `testRewardFlow.mjs` 1단언이 병렬 부하 중 간헐 FAIL — 단독 재실행 55/55 PASS, 보상 코드는 이번 diff에 없음.
+- 독립 코드리뷰 APPROVE(수정 3차 포함, 타이머 누수 없음, S18 f 비동어반복). 독립 QA PASS(운영자 범위 9항목 전부 증거 매핑).
+- 기능 요약: 가게 = `demo-building`, 입구 타원 반경(2×CELL), 상품 3개(Bench/Flower Pot 자리표시자/Street Lamp, 기존 라이선스 자산), Buy → 중앙 토스트 "구매 기능 준비 중", 이동 잠금, pushState/popstate/Escape, 복귀 위치·방향 보존. 플래그 3개 false, 네트워크·저장 0.
+
+### 3. 다음 세션 인수
+
+- Phase 3(전체 diff 검토, 누수/입력 충돌/reduced-motion/HUD 겹침, 테스트 보완)은 운영자 지시로 이번에 시작하지 않음.
+- 후속 후보(운영자 결정): 코인 잔액 스텁·Buy 비활성 표현(게임 재검토), 화분 전용 이미지, 월드 가장자리 시각 단서, `testRewardFlow` 병렬 부하 간헐 실패 조사.
+- 활성 worktree는 이제 `C:\voca-wt\paul-town-v2`(detached). 기존 임시 worktree는 보존 상태이며 정리 여부는 운영자 결정.
+
+## 2026-09-26 (183차) — 8h 자율 세션: Phase 1 마감(산책 모드 커밋) + Phase 2 가게 체험 프로토타입(구현·경량 검증 완료, 전체 검증 메모리 보류, 미커밋, STOP)
+
+### 0. 시작 상태와 안전 조건
+
+- 시작 07:15 KST, worktree `…/scratchpad/wt-clean-pr`, 브랜치 `feat/paul-town-v2-clean-pr`, HEAD `5a2f6c71` = origin. `C:\voca` 무접촉. 플래그 3개 false. DB/SQL/Supabase/Production WRITE 0. PR merge 없음. 실제 결제/코인/인벤토리 저장 없음.
+
+### 1. Phase 1 — 산책 모드 마감 (완료)
+
+- 직전 세션(182차) 검증 결과를 근거로 산책 모드 변경(코드+테스트+문서+체크포인트 9파일)을 단일 커밋 `667df575`로 정리·push(HEAD=origin). PR #62 댓글 게시(테스트 수치·커밋·범위·알려진 한계).
+- verify:all 재실행은 시도하지 않음: 여유 메모리 0.8GB(원인: 운영자 Chrome 2.7GB 등), 하네스는 이미 직렬 실행이라 줄일 worker 없음, `runAll.mjs`에 부가 항목 제외 옵션 없음. 182차의 필수 도메인 `ALL DOMAINS: PASS` 판정 + 단독 `verify:e2e` 1825/1825를 근거로 마감했고 커밋 메시지·PR 댓글에 그 사실을 명시.
+
+### 2. Phase 2 — 가게 체험 프로토타입 (구현·경량 검증 완료, 미커밋)
+
+- 계획(planner): 가게 = `demo-building`(anchor {50,40}, collisionRect x 38–62, y 24–40, 스폰 바로 북쪽). 입구 = 충돌 상자 하단 중앙 + gap 2 → `nearestWalkablePoint`로 해석. 상호작용 반경은 셀이 비정방형이라 타원(2×CELL_W_PCT=4.8, 2×CELL_H_PCT≈2.53). 자산은 메인 레지스트리(`src/assets/town/index.js`)의 `decorations/bench`, `nature/flower-garden`(화분 자리표시자, placeholder:true), `decorations/street-lamp` 재사용 — `src/assets/town/env/*`는 V2 전용 격리라 사용 금지.
+- 구현(implementer, 미커밋 6파일): 신규 `src/utils/town/proto2_5d/shopInteraction.js`(순수: SHOP_ID/입구/타원/상품 3개, 기하는 walkGrid OBSTACLES에서 파생), 신규 `src/components/town/proto2_5d/ProtoShopScreen.jsx`(dialog 오버레이, 상품 카드 3개, Buy ≥44px → 중앙 토스트 "구매 기능 준비 중" 2초, "🏘️ 마을로 돌아가기" ≥52px), `Proto25DScreen.jsx`(+190: `shopOpen`/`shopClosing`, 재진입 가드 ref, 입장 버튼 `proto25d-shop-enter` 하단 중앙 ≥52px — `!shopOpen && 타원 안 && phase!=='sitting'`, pushState/popstate/Escape, 가게 열림 중 바닥 탭 무시, 닫을 때 카메라 재스냅, root `data-shop-open`), 신규 `scripts/testProto25dShop.mjs`(44단언, registry extra:false), E2E S18 4뷰포트(각 ≤23단언: 스폰 시 버튼 없음 → 입구 이동 후 버튼 표시·크기·HUD 비겹침 → 입장·상품 3개 → 바닥 탭 무시 → Buy 안내 → 뒤로가기 더블탭 안전(히스토리 마커 보존 단언) → 복귀 위치·방향 보존 → 멀어지면 버튼 숨김·카메라 추적·오버플로 없음).
+- 검토: 코드 리뷰 1차 CHANGES_REQUIRED — 실제 결함: 뒤로가기 가드가 `history.back()`의 popstate보다 먼저 풀려 빠른 더블탭 시 히스토리 2단계 후퇴 가능 → 수정 사이클 1/2: 가드를 `closeShopNow`(popstate 또는 600ms 폴백)에서만 해제, 닫는 동안 back 버튼 `disabled`+`aria-busy`, S18(f)에 히스토리 마커 단언 추가 → 재검토 APPROVE. UX 재검토 1차 REVISE(상품 카드 아래 text-xs 안내는 놓치기 쉬움) → 중앙 토스트(≥16px, role=status)로 수정 → APPROVE. 게임 재검토 ACCEPT(물질적 이슈 없음; 후속 후보: 코인 잔액 스텁, Buy 비활성 표현).
+- 경량 검증: 단위 shop 44/44·camera 76/76·walkGrid 44·pathRandom 19·sceneFixture 24·depth 23·bench 88 PASS, `npm run build` 0 경고, 4뷰포트 실측(스크래치 `scripts/.tmp/shopShow.mjs`, 스크린샷 `scripts/.tmp/shop_<vp>_{0_spawn,1_near,2_shop,3_notice,4_back}.png` 20장): 입장/상품 3개/안내/복귀/멀어지면 숨김 전부 OK, 콘솔·페이지 오류 0, 미mock 0.
+- **미실행**: `npm run verify:e2e`(S1–S18 전체), `npm run verify:all`, QA 최종 판정. 사유: 07:15~08:05 사이 4회 폴링(각 10분) 동안 여유 메모리 0.8~1.7GB(운영자 Chrome 1.3~2.7GB, old_Code 0.75GB, Evernote 0.5GB, Dropbox 등)로 3.5GB 기준에 도달하지 못함. 하네스는 이 상태에서 백그라운드 실행을 강제 종료하며(직전 세션 2회 실측), 운영자 지시("메모리 부족이 안전하게 해결되지 않는 경우 STOP")에 따라 반복 실행하지 않음. 따라서 **Phase 2는 미커밋 상태로 보류**, Phase 3 미착수.
+
+### 3. 이번 세션에 만든 문서(미커밋)
+
+- `docs/design/town/PROTO25D_ECONOMY_NEXT_DESIGN_2026-09-26.md`(180줄, Phase 3 항목 8 선행 작성: 코인=Paul Dollar 원장 재사용, 구매=기존 Town Shop RPC, 인벤토리/배치=Town V1 placements + townLayout 규칙, 저장=기존 sync 경로, 5단계 A–E 분할, DDL 0, 운영자 결정 항목). 설계만, 구현 없음.
+
+### 4. 다음 세션 인수 — 운영자 결정 1건
+
+- **메모리 확보 후 재개 지시**: Chrome/VS Code(old_Code)/Evernote 등을 닫아 여유 ≥3.5GB를 만든 뒤 "Phase 2 검증 재개"라고 지시하면 `verify:e2e` → `verify:all` → QA 판정 → handoff/ADR 0011/체크포인트 → 가게 프로토타입 단일 커밋·push·PR #62 댓글 → Phase 3(전체 diff 검토, 누수/입력 충돌/reduced-motion/HUD 겹침 점검, 테스트 보완, 문서) 순으로 이어간다. 대안: `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1`로 Claude Code를 재시작(강제 종료 비활성화, 단 메모리 부족 시 브라우저 크래시 위험은 남음).
+- 미커밋 변경은 worktree에 그대로 있다(`git status`로 확인). 커밋 전 반드시 전체 E2E·verify:all 통과 필요.
 
 ## 2026-09-26 (182차) — Paul Town 2.5D "산책 모드" v1: 월드 확장 + 카메라 추적 (검증 완료, 미커밋, PR #62 worktree)
 

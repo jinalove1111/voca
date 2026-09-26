@@ -142,6 +142,15 @@ import {
   readWalkModePreference,
   writeWalkModePreference,
 } from '../../../utils/town/proto2_5d/camera'
+import { isNearShopEntrance, SHOP_PRODUCTS } from '../../../utils/town/proto2_5d/shopInteraction'
+import ProtoShopScreen from './ProtoShopScreen'
+
+// 2026-09-26(Phase 2, 가게 경험 v1) — 마을 산책 -> 가게 발견 -> 가게 내부
+// -> 마을로 복귀 흐름. shopInteraction.js가 입장 지점/반경/상품 데이터를
+// 소유하고(재구현 없음), 이 파일은 그 위에 "언제 입장 버튼을 보여줄지"와
+// "오버레이 열기/닫기를 브라우저 뒤로가기와 어떻게 맞물릴지"만 오케스트
+// 레이션한다. 새 씬 오브젝트/걷기/충돌 로직 없음 — 기존 데모 건물(가게로
+// 재해석)에 입장 반경만 얹는다.
 
 // 2026-09-26 — "산책 모드" v1(신규, 팀장 지시). 지금까지 바닥(ground)은 항상
 // 뷰포트 전체와 정확히 같은 크기였다(WORLD 종횡비를 그대로 aspectRatio로
@@ -218,6 +227,12 @@ const SWAY_CLASS = ' origin-bottom motion-safe:animate-town-sway'
 // 이유로, 애니메이션이 실제로 끝나기 전에 지워 깜빡이지 않게 살짝 더 김).
 const TAP_RIPPLE_ANIM_MS = 450
 const TAP_RIPPLE_REMOVE_MS = TAP_RIPPLE_ANIM_MS + 80
+// 2026-09-26(가게 경험 v1, 오버레이 재등장 더블클릭 수정) — 가게가 닫힌
+// 직후 "가게 들어가기" 버튼이 같은 화면 위치(하단-중앙)에 다시 나타나는데,
+// 뒤로가기 버튼과 겹쳐 있어 빠른 더블클릭의 두 번째 클릭이 이 버튼에
+// 떨어져 가게가 곧바로 재오픈되는 문제(verify:e2e S18 항목f)가 있었다.
+// 닫힘 직후 이 시간(ms) 동안은 클릭/탭/키보드 활성화를 전부 무시한다.
+const SHOP_REENTRY_GUARD_MS = 400
 // depthOrder.js LAYER_BASE.objects(6002)~character(6004)의 y-랭킹 최댓값
 // (6904)보다는 크고 paul(8000)보다는 작은 고정값 — 리플은 Y-랭킹 대상이
 // 아니라(바닥 오브젝트/캐릭터와 가리고 가려질 필요가 없는 순간적 UI 장식)
@@ -262,6 +277,49 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST }
   })
   const characterRef = useRef(character) // 헤더 주석 "characterRef" 참고 — setTimeout 콜백 전용 최신값 미러
   const [infoOpen, setInfoOpen] = useState(false)
+
+  // 2026-09-26(Phase 2, 가게 경험 v1) — 가게 오버레이 열림 여부. shopBusyRef
+  // 는 open/close 두 액션 모두가 공유하는 재진입 가드(seqRef와 같은 정신 —
+  // "진행 중인 전이가 있으면 새 명령을 무시"). 열기(handleEnterShop)는
+  // 다음 tick에 곧바로 풀린다(같은 tick 안의 중복 클릭만 막음). 닫기
+  // (requestCloseShop)는 history.back()이 비동기(popstate)로 도착할 때까지
+  // 계속 걸어둔다 — 아래 requestCloseShop/closeShopNow 주석 참고(리뷰 수정
+  // 1차 — 이전엔 여기도 setTimeout(0)로 즉시 풀어 popstate 도착 전 빠른
+  // 재탭/Escape가 history.back()을 한 번 더 호출해 히스토리 엔트리를
+  // 이중으로 소비하는 경쟁이 있었다).
+  const [shopOpen, setShopOpen] = useState(false)
+  const shopBusyRef = useRef(false)
+  // 뒤로가기가 실제로 닫힐 때까지의 비동기 창(리뷰 수정 1차) — React state로
+  // 노출해 ProtoShopScreen의 뒤로가기 버튼을 그 사이 disabled+aria-busy로
+  // 보여준다(shopBusyRef는 ref라 렌더에 반영되지 않으므로 별도 state 필요).
+  const [shopClosing, setShopClosing] = useState(false)
+  // requestCloseShop이 history.back()을 호출한 뒤 popstate가 끝내 도착하지
+  // 않는 드문 환경(히스토리 API가 부분적으로만 동작하는 브라우저/기기 등)을
+  // 대비한 세이프티 타이머 — closeShopNow가 이미 닫았으면(popstate가
+  // 정상 도착) 이 타이머는 이 ref를 통해 취소된다.
+  const shopCloseFallbackTimerRef = useRef(null)
+  function clearShopCloseFallbackTimer() {
+    if (shopCloseFallbackTimerRef.current != null) {
+      clearTimeout(shopCloseFallbackTimerRef.current)
+      shopCloseFallbackTimerRef.current = null
+    }
+  }
+  // 2026-09-26(가게 경험 v1, 재진입 가드) — closeShopNow가 실제로 닫히는
+  // 순간에 세팅되는 타임스탬프(performance.now() 기준, SHOP_REENTRY_GUARD_MS
+  // 동안 유효). handleEnterShop이 ref로 즉시 비교해 클릭/키보드 어느 경로로
+  // 오든 막고, shopReentryBlocked(state)는 버튼을 disabled+inert로 보이게
+  // 렌더링하는 용도(ref만으로는 재렌더가 안 돼 시각적으로 눌리는 것처럼
+  // 보일 수 있음 — shopClosing과 같은 이유).
+  const shopReentryBlockedUntilRef = useRef(0)
+  const [shopReentryBlocked, setShopReentryBlocked] = useState(false)
+  const shopReentryTimerRef = useRef(null)
+  function clearShopReentryTimer() {
+    if (shopReentryTimerRef.current != null) {
+      clearTimeout(shopReentryTimerRef.current)
+      shopReentryTimerRef.current = null
+    }
+  }
+  useEffect(() => clearShopReentryTimer, [])
 
   // 2026-09-26 — 산책 모드 on/off. 마운트 시점 저장된 선호를 1회만 읽는다
   // (localStorage 부재/예외 환경에서도 camera.js readWalkModePreference가
@@ -654,8 +712,10 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST }
 
   // 언마운트 시 예약된 타이머 정리(setState-after-unmount 방지, TownScene.jsx
   // interactionTimerRef cleanup과 동일 관례) — walkTimerRef/holdTimerRef
-  // 둘 다 정리한다(Stage 4 — 착석 유지 타이머가 새로 추가됨).
-  useEffect(() => () => { clearWalkTimer(); clearHoldTimer() }, [])
+  // 둘 다 정리한다(Stage 4 — 착석 유지 타이머가 새로 추가됨). 리뷰 수정
+  // 1차 — shopCloseFallbackTimerRef(가게 닫기 세이프티 타이머)도 함께
+  // 정리한다.
+  useEffect(() => () => { clearWalkTimer(); clearHoldTimer(); clearShopCloseFallbackTimer() }, [])
 
   function handleGroundPointerDown(e) {
     e.currentTarget.setPointerCapture?.(e.pointerId)
@@ -667,6 +727,12 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST }
     pointerDownRef.current = null
     if (!start || start.pointerId !== e.pointerId) return
     try { e.currentTarget.releasePointerCapture?.(e.pointerId) } catch { /* 이미 해제됨 — 무시 */ }
+    // 2026-09-26(Phase 2, 가게 경험 v1) — 가게가 열려있는 동안은 바닥 탭이
+    // 이동을 전혀 일으키지 않는다(요구사항 — 오버레이가 위에 떠 있어도
+    // 바닥 포인터 핸들러 자체는 여전히 등록돼 있으므로 여기서 명시적으로
+    // 막는다). 캐릭터 위치/방향은 이 return으로 인해 전혀 갱신되지 않아
+    // 그대로 보존된다.
+    if (shopOpen) return
     const dist = Math.hypot(e.clientX - start.downX, e.clientY - start.downY)
     if (dist >= DRAG_THRESHOLD_PX) return // 스와이프/스크롤 제스처로 판정 — 걷기 시작 안 함.
     const rect = groundRef.current ? groundRef.current.getBoundingClientRect() : null
@@ -729,12 +795,135 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST }
     if (pointerDownRef.current && pointerDownRef.current.pointerId === e.pointerId) pointerDownRef.current = null
   }
 
+  // 2026-09-26(Phase 2, 가게 경험 v1) — 가게 열기. shopBusyRef로 같은 tick
+  // 안의 중복 호출(빠른 더블클릭)만 막는다 — 정상적인 "닫았다가 다시
+  // 열기"는 막지 않는다(다음 tick에 자동 해제). history.pushState로 "가게
+  // 화면"이라는 새 히스토리 항목을 만들어, 브라우저/기기의 뒤로가기로도
+  // 가게가 닫히게 한다(모바일 하드웨어 백 버튼 등). pushState 자체가
+  // 실패해도(사설/구식 환경) 오버레이는 그대로 연다 — history 연동은
+  // "있으면 더 좋은" 부가 기능이지 열기 자체의 전제조건이 아니다.
+  function handleEnterShop() {
+    if (shopBusyRef.current || shopOpen || performance.now() < shopReentryBlockedUntilRef.current) return
+    shopBusyRef.current = true
+    setShopOpen(true)
+    try { window.history.pushState({ proto25dShop: true }, '') } catch { /* 무시 — 오버레이 자체는 그대로 열린다 */ }
+    setTimeout(() => { shopBusyRef.current = false }, 0)
+  }
+
+  // 실제로 오버레이를 닫는 지점 — popstate 경로와 직접 호출 경로(+ 세이프티
+  // 타이머 경로, 리뷰 수정 1차)가 모두 이 함수 하나로 수렴한다(여러 갈래가
+  // 각자 setShopOpen을 부르면 상태가 갈라질 위험이 있어 단일 통로로 합침).
+  // cameraPosRef를 null로 리셋해 "산책 모드" rAF 루프가 다음 프레임에 즉시
+  // 재스냅하게 한다(walkMode OFF 전환 effect와 동일한 이유 — 인라인
+  // transform 잔상 방지, 위 walkMode effect 주석 참고). 함수형 업데이터로
+  // 이미 닫혀있으면 아무 것도 하지 않는다(멱등 — popstate가 중복 발화해도
+  // 안전). 리뷰 수정 1차 — 재진입 가드(shopBusyRef)는 이제 "실제로 닫히는
+  // 시점"(이 함수가 cur:true -> false로 전이시킬 때)에만 풀린다 — 열기
+  // (handleEnterShop)는 그대로 다음 tick에 풀리므로 무관.
+  function closeShopNow() {
+    clearShopCloseFallbackTimer()
+    setShopOpen((cur) => {
+      if (!cur) return cur
+      cameraPosRef.current = null
+      shopBusyRef.current = false
+      return false
+    })
+    setShopClosing(false)
+    // 2026-09-26 수정 3차 — 위 setShopOpen 함수형 업데이터 내부에서 세팅한
+    // 지역 변수(예: didClose)는 React 18 배칭 하에서 업데이터가 나중에(이
+    // 호출이 끝난 뒤) 실행되므로, 그 결과를 이 자리에서 동기적으로 읽을 수
+    // 없다 — 그렇게 짜여 있던 이전 버전은 재진입 가드가 죽은 코드였다(항상
+    // false로 보여 아래 블록이 실행되지 않음, verify:e2e S18 항목f 회귀).
+    // 그래서 이 블록을 조건 없이 매번 실행한다. closeShopNow가 이미 닫힌
+    // 상태에서 중복 호출돼도(popstate 중복 발화 등) 400ms 입장 차단을 한 번
+    // 더 거는 것은 무해하다(가게가 이미 닫혀 있으니 재진입을 막는 것 자체가
+    // 목적에 부합, 창만 살짝 늘어날 뿐).
+    shopReentryBlockedUntilRef.current = performance.now() + SHOP_REENTRY_GUARD_MS
+    setShopReentryBlocked(true)
+    clearShopReentryTimer()
+    shopReentryTimerRef.current = setTimeout(() => {
+      shopReentryTimerRef.current = null
+      setShopReentryBlocked(false)
+    }, SHOP_REENTRY_GUARD_MS)
+  }
+
+  // 뒤로가기 버튼(ProtoShopScreen)/Escape 키가 공유하는 닫기 요청 — 우리가
+  // pushState로 쌓아둔 히스토리 항목이 여전히 맨 위(history.state에 우리
+  // 마커가 있음)면 history.back()으로 "진짜 뒤로가기"를 흉내내(popstate가
+  // 발화해 closeShopNow를 부른다) 다음에 사용자가 또 뒤로가도 엉뚱한
+  // 화면으로 튀지 않게 한다. 마커가 없으면(예: pushState가 애초에 실패한
+  // 환경) history.back() 없이 바로 닫는다(직접 닫기).
+  //
+  // 리뷰 수정 1차(코드 리뷰 지적 — history.back()이 비동기 popstate로
+  // 도착하는데 이전엔 shopBusyRef를 setTimeout(0)로 즉시 풀어버려, popstate
+  // 도착 전에 빠른 재탭/Escape가 history.back()을 한 번 더 호출해 히스토리
+  // 엔트리를 이중으로 소비하는 경쟁이 있었다) — history.back() 분기에서는
+  // shopBusyRef를 여기서 풀지 않는다. 대신 popstate가 실제로 도착해
+  // closeShopNow가 닫힐 때(위 함수)에만 풀린다. popstate가 끝내 오지 않는
+  // 드문 환경을 대비해 ~600ms 세이프티 타이머로 강제로 직접 닫는다(그
+  // 시점에도 closeShopNow를 거치므로 busy 해제는 여전히 그 함수 하나가
+  // 담당 — 두 갈래가 각자 풀지 않음). 동기적으로 끝나는 나머지 두 경로
+  // (마커 없음/history.back() 자체가 throw)는 closeShopNow를 이 자리에서
+  // 바로 호출하므로 busy도 그 즉시 풀린다(비동기 창이 없어 추가 처리 불필요).
+  function requestCloseShop() {
+    if (shopBusyRef.current || !shopOpen) return
+    shopBusyRef.current = true
+    let ourStateOnTop = false
+    try { ourStateOnTop = !!(window.history.state && window.history.state.proto25dShop) } catch { ourStateOnTop = false }
+    if (ourStateOnTop) {
+      try {
+        window.history.back()
+        setShopClosing(true)
+        clearShopCloseFallbackTimer()
+        shopCloseFallbackTimerRef.current = setTimeout(() => {
+          shopCloseFallbackTimerRef.current = null
+          closeShopNow() // popstate가 안 왔다 — 세이프티 폴백(위 주석 참고). busy/closing 해제는 closeShopNow가 담당.
+        }, 600)
+      } catch {
+        closeShopNow() // history.back() 자체가 던짐 — 동기 폴백, busy는 closeShopNow가 즉시 해제.
+      }
+    } else {
+      closeShopNow() // 히스토리 마커 없음 — 동기 직접 닫기, busy는 closeShopNow가 즉시 해제.
+    }
+  }
+
+  // popstate(브라우저/기기 뒤로가기, 또는 위 requestCloseShop의
+  // history.back() 호출) — 항상 "닫기"만 한다(새 pushState 없음, 요구사항
+  // 그대로). 의존성 배열 없이 마운트 시 1회만 등록 — closeShopNow가 함수형
+  // setShopOpen 업데이터를 쓰므로 클로저가 최신 shopOpen을 몰라도 안전하다
+  // (updateCharacter/applyIfActive와 동일한 "최신값은 업데이터 인자로"
+  // 원칙).
+  useEffect(() => {
+    function onPopState() { closeShopNow() }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  // Escape 키 — 가게가 열려있을 때만 닫기를 요청한다(요구사항). shopOpen에
+  // 의존해 매번 최신 requestCloseShop 클로저로 다시 배선한다(리스너 자체는
+  // 가벼워 재등록 비용이 무시할 만함, 이 파일의 다른 effect들과 동일 관례
+  // 수준).
+  useEffect(() => {
+    if (!shopOpen) return undefined
+    function onKeyDown(e) {
+      if (e.key === 'Escape') requestCloseShop()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [shopOpen])
+
   // Stage 4 — 'sitting' 단계에서만 z-index 계산에 topPct 대신 벤치의 y1을
   // 넘긴다(ProtoCharacter.jsx 헤더 주석 "depthY" 항목에 이유 정리 — 좌석
   // y가 벤치 y1보다 작아 topPct 그대로 쓰면 캐릭터가 벤치보다 뒤로 밀려나
   // 보인다). walking/leaving/idle에서는 undefined(=topPct 그대로, 기존
   // Stage 3 동작 무변경).
   const characterDepthY = character.phase === 'sitting' ? BENCH.y1 : undefined
+
+  // 2026-09-26(Phase 2, 가게 경험 v1) — 입장 버튼 표시 여부(shopInteraction.js
+  // isNearShopEntrance가 유일한 판정 로직, 재구현 없음). sitting 중엔 굳이
+  // 보여줄 필요가 없다(요구사항 — 벤치와 가게 입장 반경이 겹칠 이론상
+  // 경우까지 방어).
+  const nearShop = isNearShopEntrance(character.leftPct, character.topPct)
 
   return (
     <div
@@ -745,6 +934,12 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST }
       // "단일 진실 원천" 원칙과 동일 정신, 값 복제가 아니라 실제 소스를
       // 그대로 반영).
       data-proto25d-obstacle-count={OBSTACLES.length}
+      // 2026-09-26(Phase 2, 가게 경험 v1) — 가게 오버레이가 열려있는지
+      // 테스트가 DOM에서 직접 읽을 수 있게 노출(state 재질의 대신 단일
+      // 진실 원천, 위 data-proto25d-obstacle-count와 동일 정신). 닫혀
+      // 있을 때는 속성 자체를 안 붙인다(값이 "false"인 채로 남는 것보다
+      // "속성 부재"가 더 명확한 계약).
+      {...(shopOpen ? { 'data-shop-open': 'true' } : {})}
       // Phase 6D(2026-09-25) — 오버레이 역할/이름만 부여(포커스 관리 없음).
       role="region"
       aria-label="Paul Town 2.5D 프로토타입"
@@ -1036,7 +1231,41 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST }
           direction={character.direction}
         />
       </div>
+
+      {/* 2026-09-26(Phase 2, 가게 경험 v1) — "가게 들어가기" 버튼. 뷰포트
+          래퍼의 형제(바닥의 형제, 바닥 안이 아님)라 산책 모드의 카메라
+          transform(바닥에만 걸림)에 영향받지 않고 항상 화면(뷰포트) 기준
+          하단-중앙에 고정된다. pointer-events-auto — 부모 뷰포트 래퍼가
+          touch-none이라도 이 버튼 자체는 눌려야 한다. z는 바닥 내부
+          최댓값(TAP_RIPPLE_Z=7000)보다 낮아도 무방 — DOM상 바닥의 형제로
+          이후에 그려지므로 항상 그 위에 쌓인다(stacking context가 같은
+          가장 가까운 z:auto가 아닌 조상 기준이라 안전, 이 파일의 UI 배지
+          컬럼과 동일 원리). */}
+      {!shopOpen && nearShop && character.phase !== 'sitting' && (
+        <button
+          type="button"
+          data-testid="proto25d-shop-enter"
+          onClick={handleEnterShop}
+          disabled={shopReentryBlocked}
+          aria-disabled={shopReentryBlocked ? 'true' : undefined}
+          className={
+            'absolute left-1/2 bottom-6 z-20 -translate-x-1/2 min-h-[52px] px-6 rounded-full bg-emerald-500 text-white text-sm font-black shadow-lg pointer-events-auto'
+            + (shopReentryBlocked ? ' pointer-events-none' : '')
+          }
+        >
+          🏪 가게 들어가기
+        </button>
+      )}
       </div>
+
+      {/* 2026-09-26(Phase 2, 가게 경험 v1) — 가게 내부 오버레이. root(이
+          fixed inset-0 z-[9999] 전체 화면)의 형제 레벨 마지막 자식으로 둬
+          DOM 순서만으로 항상 최상단에 그려지고(뷰포트/바닥/HUD 배지 전부
+          이 오버레이보다 먼저 등장), ProtoShopScreen 자신도 absolute
+          inset-0 + 명시적 z-index로 이중 방어한다. */}
+      {shopOpen && (
+        <ProtoShopScreen products={SHOP_PRODUCTS} onBack={requestCloseShop} closing={shopClosing} />
+      )}
     </div>
   )
 }

@@ -3493,5 +3493,201 @@ export async function run(browser, baseURL) {
     }
   }
 
+  // ── S18 — Phase 2(2026-09-26) "가게 경험" v1: 마을 산책 -> 가게 발견 ->
+  // 가게 내부 -> 마을로 복귀. shopInteraction.js가 입장 지점/반경/상품
+  // 데이터의 유일한 진실 원천(scripts/testProto25dShop.mjs가 순수 로직을
+  // 이미 44단언으로 검증) — 이 E2E는 "그 로직이 실제 화면/입력/브라우저
+  // 히스토리와 맞물려도 깨지지 않는지"만 본다(재검증 아님). S17과 동일하게
+  // 산책 모드를 켜고(setWalkModeOn) 4개 참조 뷰포트에서 확인한다.
+  //
+  // 가게 입장 지점(shopInteraction.js SHOP_ENTRANCE) — OBSTACLES_REF와 동일
+  // 관례로 값을 복제한다(이 spec은 Node에서 도는 spec이라 소스 모듈을
+  // 직접 import하지 않음). 가게(=demo-building) 콜리전 박스(x0:38,x1:62,
+  // y0:24,y1:40) 하단-중앙 + gap(2) = (50,42)가 이미 걷기 가능 칸이라
+  // nearestWalkablePoint가 그대로 통과시켜(scripts/testProto25dShop.mjs
+  // 5절이 이 사실 자체를 별도로 검증) 입장 지점은 정확히 (50,42)다.
+  const SHOP_ENTRANCE_PCT_REF = { x: 50, y: 42 }
+  // 스폰(50,62)과 입장 지점(50,42)의 y 거리(20)는 shopInteraction.js
+  // SHOP_RADIUS.y(≈2.53, 격자 셀 2칸)보다 훨씬 커서, 스폰 시점에는 항상
+  // 입장 반경 밖(항목a)이고 스폰으로 되돌아가면 항상 반경 밖으로 벗어난다
+  // (항목h).
+  const SPAWN_PCT_REF = { x: 50, y: 62 }
+
+  for (const vp of S17_VIEWPORTS) {
+    const name = `S18[${vp.label},shop]`
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
+    const page = await context.newPage()
+    const consoleErrors = []
+    page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()) })
+    page.on('pageerror', (err) => { consoleErrors.push(String(err)) })
+    await setDeviceFlags(page, { paulTown2_5d: true })
+    await setWalkModeOn(page)
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const viewportEl = page.locator('[data-testid="proto25d-viewport"]')
+      const root = page.locator('[data-testid="proto25d-root"]')
+      const enterBtn = page.locator('[data-testid="proto25d-shop-enter"]')
+      const shopOverlay = page.locator('[data-testid="proto25d-shop"]')
+      const backBtn = page.locator('[data-testid="proto25d-shop-back"]')
+      const infoToggle = page.locator('[data-testid="proto25d-info-toggle"]')
+      const walkToggle = page.locator('[data-testid="proto25d-walkmode-toggle"]')
+
+      // ── (a) 스폰 시점 — 입장 반경 밖이라 입장 버튼이 없음 ──
+      r.check(`${name} 항목a — 스폰 시점(입장 반경 밖)엔 가게 입장 버튼이 없음`, await enterBtn.count() === 0)
+
+      // ── (b) 입장 지점까지 걸어감(화면 밖이면 최대 3회 hop, S17과 동일
+      //     헬퍼) -> idle -> 입장 버튼이 나타나고 탭 타겟/HUD 배지와 계약
+      //     을 지킴 ──
+      const entranceVisibility = await ensureWorldPointVisible(page, character, ground, viewportEl, SHOP_ENTRANCE_PCT_REF)
+      if (!entranceVisibility.visible) {
+        r.check(`${name} — 가게 입장 지점이 최대 3회 이동 시도 후에도 화면에 들어오지 않아 이 시나리오를 정직하게 스킵함(FAIL 아님, 사전조건 부재)`, true, '스킵')
+        collect(mocks)
+        await context.close()
+        continue
+      }
+      await page.mouse.click(entranceVisibility.targetScreenPt.x, entranceVisibility.targetScreenPt.y)
+      const idleAtEntrance = await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
+      ), { timeout: 8000 })
+      r.check(`${name} 항목b — 입장 지점 도착 후 phase가 idle로 복귀함`, !!idleAtEntrance)
+
+      const enterVisible = await enterBtn.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)
+      r.check(`${name} 항목b — 입장 지점 근처에서 가게 입장 버튼이 나타남`, enterVisible)
+
+      const enterBox = await enterBtn.boundingBox()
+      const viewportBox = await viewportEl.boundingBox()
+      r.check(`${name} 항목b — 입장 버튼 탭 타겟 높이가 44px 이상`, !!enterBox && enterBox.height >= 44, JSON.stringify(enterBox))
+      r.check(
+        `${name} 항목b — 입장 버튼이 뷰포트 안에 완전히 들어옴`,
+        !!enterBox && !!viewportBox &&
+          enterBox.x >= viewportBox.x - 1 && enterBox.x + enterBox.width <= viewportBox.x + viewportBox.width + 1 &&
+          enterBox.y >= viewportBox.y - 1 && enterBox.y + enterBox.height <= viewportBox.y + viewportBox.height + 1,
+        JSON.stringify({ enterBox, viewportBox }),
+      )
+      const infoBox = await infoToggle.boundingBox()
+      const walkBox = await walkToggle.boundingBox()
+      const overlapsHud = !!enterBox && ((infoBox && intersectBoxes(enterBox, infoBox)) || (walkBox && intersectBoxes(enterBox, walkBox)))
+      r.check(`${name} 항목b — 입장 버튼이 HUD 배지(정보/산책모드 토글)와 겹치지 않음`, !overlapsHud, JSON.stringify({ enterBox, infoBox, walkBox }))
+
+      // 이후 (g)에서 "닫은 뒤 위치/방향이 보존됨"을 비교할 기준 스냅샷.
+      const preOpenState = await sampleCharacterState(page)
+
+      // 리뷰 수정 1차 — 가게 진입 직전에 마커 히스토리 엔트리를 미리 쌓아
+      // 둔다. (f)에서 "뒤로가기 빠른 연속 클릭이 history.back()을 정확히
+      // 한 번만 소비했는지"를 이 마커의 생존 여부로 검증한다(두 번
+      // 소비됐다면 이 마커까지 지나쳐 그 아래 엔트리로 떨어져 marker가
+      // 없어진다).
+      await page.evaluate(() => window.history.pushState({ marker: true }, ''))
+
+      // ── (c) 입장 버튼 클릭 -> 가게 내부(상품 3개) + data-shop-open ──
+      await enterBtn.click()
+      const shopVisible = await shopOverlay.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)
+      r.check(`${name} 항목c — 입장 버튼 클릭 후 가게 오버레이가 보임`, shopVisible)
+      const productCount = await page.locator('[data-testid="proto25d-shop-product"]').count()
+      r.check(`${name} 항목c — 상품 카드가 정확히 3개 렌더됨`, productCount === 3, String(productCount))
+      const shopOpenAttr = await root.getAttribute('data-shop-open')
+      r.check(`${name} 항목c — root에 data-shop-open이 세팅됨`, shopOpenAttr === 'true', String(shopOpenAttr))
+
+      // ── (d) 가게가 열려있는 동안 화면(바닥) 탭 -> 이동 없음, phase 그대로 idle ──
+      const beforeTapState = await sampleCharacterState(page)
+      await page.mouse.click(viewportBox.x + viewportBox.width * 0.3, viewportBox.y + viewportBox.height * 0.3)
+      await page.waitForTimeout(300) // 이동이 "일어나지 않았음"을 확인하려면 걷기 transition 시간만큼은 기다려봐야 의미가 있다.
+      const afterTapState = await sampleCharacterState(page)
+      r.check(
+        `${name} 항목d — 가게가 열려있는 동안 바닥 탭이 캐릭터 위치를 바꾸지 않음`,
+        Math.abs(afterTapState.leftPct - beforeTapState.leftPct) < 0.01 && Math.abs(afterTapState.topPct - beforeTapState.topPct) < 0.01,
+        JSON.stringify({ beforeTapState, afterTapState }),
+      )
+      r.check(`${name} 항목d — phase가 여전히 idle(걷기로 전이되지 않음)`, afterTapState.phase === 'idle', String(afterTapState.phase))
+
+      // ── (e) Buy 클릭 -> 안내 문구 노출 ──
+      await page.locator('[data-testid="proto25d-shop-buy"]').first().click()
+      const noticeVisible = await page.locator('[data-testid="proto25d-shop-notice"]').first().waitFor({ state: 'visible', timeout: 1000 }).then(() => true).catch(() => false)
+      r.check(`${name} 항목e — Buy 클릭 후 안내 문구("구매 기능 준비 중")가 보임`, noticeVisible)
+
+      // ── (f) 빠른 연속(더블)클릭 — 뒤로가기 재진입 가드 회귀 고정(리뷰
+      //     수정 1차). Proto25DScreen.jsx requestCloseShop이 history.back()
+      //     비동기(popstate) 창 동안 shopBusyRef를 계속 걸어두므로(이전엔
+      //     setTimeout(0)로 즉시 풀어 두 번째 클릭이 history.back()을 한
+      //     번 더 호출하는 경쟁이 있었다), 더블클릭이 history 엔트리를
+      //     정확히 한 칸만 소비해야 한다 — 위에서 미리 쌓아둔 마커
+      //     엔트리(history.state.marker)가 살아있는지로 이를 검증한다
+      //     (두 칸 소비됐다면 마커까지 지나쳐 사라진다). 고정 sleep 대신
+      //     waitUntil로 "오버레이가 실제로 사라짐"을 기다린다. ──
+      await backBtn.dblclick({ delay: 30 }).catch(() => {})
+      const overlayHiddenAfterRapid = await waitUntil(async () => (await shopOverlay.count()) === 0, { timeout: 3000 })
+      r.check(`${name} 항목f — 빠른 연속(더블)클릭 후 가게 오버레이가 결국 사라짐(중복 스택 없이 정확히 한 번만 닫힘)`, !!overlayHiddenAfterRapid)
+      if (overlayHiddenAfterRapid) {
+        const markerSurvived = await page.evaluate(() => !!(window.history.state && window.history.state.marker === true))
+        r.check(`${name} 항목f — history.back()이 정확히 한 칸만 소비됨(마커 히스토리 엔트리 생존 확인)`, markerSurvived)
+        const enterVisibleAfterRapid = await enterBtn.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)
+        r.check(`${name} 항목f — 빠른 연속 클릭 후 입장 버튼이 다시 보임`, enterVisibleAfterRapid)
+      } else {
+        r.check(`${name} 항목f — 마커 생존 확인(사전조건 부재로 스킵, FAIL 아님)`, true, '가게가 안 닫혀 스킵')
+      }
+      r.check(`${name} 항목f — 빠른 연속 클릭 동안 콘솔 오류가 0건`, consoleErrors.length === 0, JSON.stringify(consoleErrors.slice(0, 5)))
+      // 다음 단계(g)가 "가게가 열린 상태에서 뒤로가기"를 깨끗하게 재현할
+      // 수 있도록 상태를 정규화한다(항목f 자체의 판정에는 영향 없음 —
+      // 위 단언들은 이미 기록됐다). 닫혀 있으면 다시 열고, 이미 열려
+      // 있으면(사전조건 부재로 위가 스킵된 경우) 그대로 둔다.
+      if (overlayHiddenAfterRapid) {
+        await enterBtn.click()
+        await shopOverlay.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {})
+      }
+
+      // ── (g) 뒤로가기 클릭 -> 가게 닫힘, 위치/방향 보존, 입장 버튼 재등장 ──
+      await backBtn.click()
+      const shopHidden = await waitUntil(async () => (await shopOverlay.count()) === 0, { timeout: 5000 })
+      r.check(`${name} 항목g — 뒤로가기 클릭 후 가게 오버레이가 사라짐`, !!shopHidden)
+      const postCloseState = await sampleCharacterState(page)
+      r.check(
+        `${name} 항목g — 닫은 뒤 위치가 입장 직전(preOpenState)과 0.01 이내로 보존됨`,
+        Math.abs(postCloseState.leftPct - preOpenState.leftPct) < 0.01 && Math.abs(postCloseState.topPct - preOpenState.topPct) < 0.01,
+        JSON.stringify({ preOpenState, postCloseState }),
+      )
+      r.check(
+        `${name} 항목g — 닫은 뒤 방향(direction/mirror/facing)이 입장 직전과 완전히 동일`,
+        postCloseState.direction === preOpenState.direction && postCloseState.mirror === preOpenState.mirror && postCloseState.facingTransform === preOpenState.facingTransform,
+        JSON.stringify({ preOpenState, postCloseState }),
+      )
+      const enterVisibleAgain = await enterBtn.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)
+      r.check(`${name} 항목g — 뒤로가기 후 입장 버튼이 다시 보임(여전히 반경 안)`, enterVisibleAgain)
+
+      // ── (h) 멀리 걸어감(스폰으로 복귀) -> 입장 버튼 숨김, 카메라는 여전히
+      //     캐릭터를 따라감, 가로 스크롤 없음 ──
+      const cameraBeforeWalkAway = { x: await ground.getAttribute('data-camera-x'), y: await ground.getAttribute('data-camera-y') }
+      const spawnVisibility = await ensureWorldPointVisible(page, character, ground, viewportEl, SPAWN_PCT_REF)
+      if (spawnVisibility.visible) {
+        await page.mouse.click(spawnVisibility.targetScreenPt.x, spawnVisibility.targetScreenPt.y)
+        await waitUntil(async () => (
+          (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
+        ), { timeout: 8000 })
+      }
+      const enterHiddenAfterWalkAway = await waitUntil(async () => (await enterBtn.count()) === 0, { timeout: 3000 })
+      r.check(`${name} 항목h — 멀리 걸어간 뒤 입장 버튼이 사라짐(반경 밖)`, !!enterHiddenAfterWalkAway)
+      const cameraAfterWalkAway = { x: await ground.getAttribute('data-camera-x'), y: await ground.getAttribute('data-camera-y') }
+      r.check(
+        `${name} 항목h — 카메라가 여전히 캐릭터를 따라감(위치가 실제로 바뀜)`,
+        cameraAfterWalkAway.x !== cameraBeforeWalkAway.x || cameraAfterWalkAway.y !== cameraBeforeWalkAway.y,
+        JSON.stringify({ cameraBeforeWalkAway, cameraAfterWalkAway }),
+      )
+      r.check(`${name} — 가로 스크롤 없음(최종)`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }
 }
