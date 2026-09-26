@@ -1096,7 +1096,8 @@ function AppInner({ studentId, studentName, onLogout }) {
           자체가 없음) — 플래그 하나로만 게이팅되는 오버레이. */}
       {paulTown2_5dEnabled && (
         <React.Suspense fallback={null}>
-          <Proto25DScreen />
+          {/* 경제 단계 A(2026-09-26) — Dashboard의 wallet prop과 정확히 같은 게이트/소스(읽기 전용, 새 fetch 없음). */}
+          <Proto25DScreen wallet={townShopEnabled && townShop.state ? { dollarsAvailable: townShop.state.dollars.available } : null} />
         </React.Suspense>
       )}
     </>

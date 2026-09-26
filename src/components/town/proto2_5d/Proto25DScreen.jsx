@@ -144,6 +144,7 @@ import {
 } from '../../../utils/town/proto2_5d/camera'
 import { isNearShopEntrance, SHOP_PRODUCTS } from '../../../utils/town/proto2_5d/shopInteraction'
 import ProtoShopScreen from './ProtoShopScreen'
+import { coinBadgeText, coinBadgeAriaLabel } from '../../../utils/town/proto2_5d/coinDisplay'
 
 // 2026-09-26(Phase 2, 가게 경험 v1) — 마을 산책 -> 가게 발견 -> 가게 내부
 // -> 마을로 복귀 흐름. shopInteraction.js가 입장 지점/반경/상품 데이터를
@@ -254,7 +255,7 @@ const FACING_MIN_DX_PCT = 1.0
 // `isSpriteV2ManifestActive`가 true가 된다 — 아래 모든 v2 관련 분기가 이제
 // 실제로 실행된다(위 파일 헤더 "Phase 6C" 주석 참고). 호출부가 명시적으로
 // `spriteManifest={undefined}` 등 다른 값을 넘기면 그 값이 우선한다.
-export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST } = {}) {
+export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, wallet = null } = {}) {
   const reducedMotion = usePrefersReducedMotion()
   // 마운트 시점 URL 쿼리 1회만 읽는다(세션 중 쿼리가 바뀔 일이 없어
   // useState lazy init으로 충분 — 매 렌더 재파싱 불필요).
@@ -987,6 +988,22 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST }
         >
           산책 모드 {walkMode ? 'ON' : 'OFF'}
         </button>
+        {/* 경제 단계 A(2026-09-26) — 읽기 전용 코인 잔액 배지. wallet이
+            null이거나 coinDisplay.js가 표시 불가로 판단하면(coinBadgeText
+            null) 아무 것도 렌더하지 않는다. 클릭 핸들러 없음(비인터랙티브)
+            + pointer-events-none — 바닥 위에 얹혀도 그 아래 탭 핸들러를
+            가로채지 않는다(위 "UI 배지" 주석과 동일 정신, 이 배지는 그
+            컬럼의 세 번째 자식일 뿐 바닥의 형제 트리 밖으로 나가지 않음). */}
+        {coinBadgeText(wallet) !== null && (
+          <div
+            data-testid="proto25d-coin-badge"
+            role="status"
+            aria-label={coinBadgeAriaLabel(wallet)}
+            className="pointer-events-none min-h-[44px] flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-amber-600 shadow"
+          >
+            🪙 {coinBadgeText(wallet)}
+          </div>
+        )}
         {infoOpen && (
           <p className="rounded-xl bg-white/90 px-3 py-2 text-[11px] text-gray-500 shadow max-w-[220px]">
             바닥을 탭하면 캐릭터가 걸어갑니다. 회색 상자를 탭하면 안까지

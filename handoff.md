@@ -1,5 +1,43 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-26 (185차 — **Paul Town 2.5D Phase 3 회귀검사·하드닝 완료(PR #62)**: 산책 모드+가게 전체 diff 감사(누수·중복 상태·미사용 코드 없음), 실제 브라우저 동작 감사(세로 HUD 겹침 0, 터치/연타/키보드/reduced-motion 정상), rAF 루프의 프레임당 DOM 조회를 캐시로 교체, 테스트 공백 보완(E2E S19). verify:e2e 1943/1943, verify:all ALL DOMAINS PASS(실패 0). 코드리뷰 APPROVE, QA PASS. 아래 185차 섹션 참고.)_
+_최종 갱신: 2026-09-26 (186차 — **Paul Town 2.5D 경제 단계 A: 코인 잔액 읽기 전용 표시(PR #62)**: 대시보드 지갑과 같은 게이트·출처(`useTownShop` 조회 상태)를 2.5D 화면 HUD의 누를 수 없는 배지로 표시, 새 네트워크 요청·쓰기 경로 0. verify:e2e 1965/1965, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 186차 섹션 참고.)_
+
+## 2026-09-26 (186차) — 경제 단계 A: 코인 잔액 읽기 전용 표시 (PR #62, 워크트리 `C:\voca-wt\paul-town-v2`)
+
+### 0. 범위와 안전 조건
+
+운영자 지시: 코인 잔액을 읽기 전용으로 화면에 표시하는 범위만. 구매 차감·보상 지급·환영 코인 수령·인벤토리 저장·DB·SQL·Production 변경 0. 플래그 3개(paulTownV1/paulTownV2/paulTown2_5d) false 유지. 설계 근거 `docs/design/town/PROTO25D_ECONOMY_NEXT_DESIGN_2026-09-26.md` §8 단계 A. 결정 기록 ADR 0012.
+
+### 1. 조사 결과(구현 전 보고)
+
+- 단일 진실 공급원: 서버 Paul Dollar 원장. 클라이언트는 `src/hooks/useTownShop.js`(App.jsx에서 이미 1회 마운트)가 `get_town_shop_state`(조회)로 받아 대시보드 지갑 표시에 사용 중. 훅의 마운트 효과는 조회만 수행하고, 환영 코인 수령(`claimWelcome`)과 구매(`purchase`)는 TownScreen/TownScreenV2가 명시적으로 부를 때만 실행 — 2.5D 화면은 이들을 가져오지 않음(orchestrator 코드 직접 확인).
+- 조회 게이트: `townShopV1 || paulTownV1`. `paulTown2_5d`만 켠 현재 파일럿 학생은 잔액이 조회되지 않아 배지가 숨겨짐 — 게이트 변경은 경제 설계 문서 §9의 운영자 결정 사항이라 이번 범위 밖.
+
+### 2. 변경 파일과 이유
+
+- `src/App.jsx`: `<Proto25DScreen />`에 `wallet={townShopEnabled && townShop.state ? { dollarsAvailable: townShop.state.dollars.available } : null}` 전달 — 대시보드 wallet과 같은 게이트·출처, 새 fetch 0.
+- `src/components/town/proto2_5d/Proto25DScreen.jsx`: `wallet` prop(기본 null) → 좌상단 HUD 열(산책 모드 토글 아래)에 누를 수 없는 배지 `proto25d-coin-badge`(role=status, aria-label, pointer-events-none). 값이 없으면 렌더하지 않음.
+- `src/utils/town/proto2_5d/coinDisplay.js`(신규): `coinBadgeText`(null/NaN/음수/비숫자 → null, 그 외 기존 `formatDollars` 재사용, 0은 유효), `coinBadgeAriaLabel`. 순수 함수, import는 `formatDollars` 하나.
+- `scripts/testProto25dCoin.mjs`(신규, 27단언, registry extra:false): 경계값, 포맷, aria 라벨, 소스에 네트워크/쓰기 토큰 없음.
+- `tests/e2e/townProto25d.spec.mjs`: S20(360x640·1280x800 각 11단언) — townShopV1 없으면 배지 없음 / townShopV1 + mock 잔액 37 → 배지 "$37"·role=status·뷰포트 안·HUD/입장 버튼과 비겹침 / 가게 열고 Buy 후 닫아도 잔액 불변 / 쓰기 액션(purchase_town_item, claim_town_welcome) 0건·REST POST/PATCH/DELETE 0건·조회 get_town_shop_state ≥1 / 가로 스크롤 없음.
+
+### 3. 검증
+
+- 단위: coin 27/27, shop 44/44, camera 76/76 · build 0 경고.
+- 가게 스펙 단독 639/639.
+- `npm run verify:e2e`: 총 1965단언 PASS 1965 / FAIL 0 / SKIP 0, 미mock 0.
+- `npm run verify:all`: ALL DOMAINS PASS, EXIT 0, 내장 E2E PASS. 기록: 부가(extra:true) `testRewardFlow.mjs` 테스트 8의 1단언이 병렬 부하 중 FAIL — 단독 재실행 55/55 PASS, 이 스위트는 `useStudent` 레이스 번들과 스텁만 불러와 이번 변경 파일과 무관. 184차에 이어 두 번째 관측 → 별도 조사 항목.
+- 독립 코드리뷰 APPROVE(쓰기 경로가 구조적으로 없음: 2.5D 화면은 숫자만 받음), 독립 QA PASS.
+
+### 4. 알려진 한계 / 운영자 결정 후보
+
+- 용어 불일치: 배지는 "🪙"와 aria "코인 N개", 앱의 다른 화면은 같은 화폐를 "💵 Paul Dollar"로 표시(코드리뷰 비차단 지적). 운영자가 "코인"으로 지시했으므로 유지, 통일 여부는 운영자 결정.
+- 현재 파일럿(paulTown2_5d만 ON)에는 배지가 보이지 않음 — 조회 게이트에 paulTown2_5d 포함 여부는 운영자 결정(§9).
+- 가게 화면 헤더의 잔액 표시는 범위 축소로 미구현(후속 A.1 후보).
+- `testRewardFlow` 병렬 부하 간헐 실패 원인 조사 필요.
+
+### 5. 다음 단계
+
+경제 설계 문서의 단계 B(구매, 플래그 뒤) 이후는 운영자 승인 전 미착수.
 
 ## 2026-09-26 (185차) — Paul Town 2.5D Phase 3: 회귀검사·하드닝·테스트 공백 보완 (PR #62, 워크트리 `C:\voca-wt\paul-town-v2`)
 

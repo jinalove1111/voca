@@ -1,0 +1,47 @@
+{
+  "agent_name": "orchestrator",
+  "role": "docs-maintainer",
+  "task_id": "proto25d-economy-stage-a",
+  "task": "Paul Town 2.5D 경제 단계 A: 코인 잔액 읽기 전용 표시 (PR #62)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-26T13:50:00Z",
+  "updated_at": "2026-09-26T14:45:00Z",
+  "worktree": "C:/voca-wt/paul-town-v2",
+  "branch": "feat/paul-town-v2-clean-pr",
+  "base_commit": "3911d1e7",
+  "task_class": "B",
+  "decision_id": "0012",
+  "owner_approval_required": false,
+  "allowed_paths": [
+    "src/App.jsx",
+    "src/components/town/proto2_5d/Proto25DScreen.jsx",
+    "src/utils/town/proto2_5d/coinDisplay.js",
+    "scripts/testProto25dCoin.mjs",
+    "tests/e2e/townProto25d.spec.mjs",
+    "tests/harness/registry.mjs",
+    "handoff.md",
+    "docs/agent-decisions/0012-proto25d-economy-stage-a-2026-09-26.md",
+    ".ai-status/orchestrator-proto25d-economy-stage-a.json"
+  ],
+  "files_owned": [
+    "src/App.jsx",
+    "src/components/town/proto2_5d/Proto25DScreen.jsx",
+    "src/utils/town/proto2_5d/coinDisplay.js",
+    "scripts/testProto25dCoin.mjs",
+    "tests/e2e/townProto25d.spec.mjs",
+    "tests/harness/registry.mjs",
+    "handoff.md",
+    "docs/agent-decisions/0012-proto25d-economy-stage-a-2026-09-26.md",
+    ".ai-status/orchestrator-proto25d-economy-stage-a.json"
+  ],
+  "files_read": [
+    "src/App.jsx",
+    "src/hooks/useTownShop.js",
+    "src/components/town/proto2_5d/Proto25DScreen.jsx",
+    "docs/design/town/PROTO25D_ECONOMY_NEXT_DESIGN_2026-09-26.md"
+  ],
+  "summary": "대시보드 지갑과 같은 게이트·출처(useTownShop 조회 상태)를 재사용해 2.5D 화면 HUD에 코인 잔액을 누를 수 없는 배지로 표시했다. 새 네트워크 요청이나 쓰기 경로는 추가하지 않았고, 값이 없으면 배지를 렌더하지 않아 잘못된 잔액 표시 위험을 없앴다. verify:e2e 1965/1965, verify:all ALL DOMAINS PASS, 독립 코드리뷰 APPROVE와 독립 QA PASS로 마감했다.",
+  "blocker": null,
+  "next_action": "운영자: 용어(코인 vs Paul Dollar) 통일, 조회 게이트에 paulTown2_5d 포함 여부, 단계 B 착수 여부, testRewardFlow 간헐 실패 조사."
+}

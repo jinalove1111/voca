@@ -3895,5 +3895,179 @@ export async function run(browser, baseURL) {
     }
   }
 
+  // ── S20 — 경제 단계 A(2026-09-26, 읽기 전용 코인 잔액 표시 v1) — App.jsx가
+  // Dashboard의 wallet prop과 완전히 같은 게이트(townShopEnabled &&
+  // townShop.state)로 Proto25DScreen에 { dollarsAvailable }를 넘기고,
+  // coinDisplay.js(scripts/testProto25dCoin.mjs가 이미 27단언으로 순수
+  // 로직을 검증)가 그 값을 배지 텍스트/aria-label로 바꾼다 — 이 E2E는
+  // "그 값이 실제 화면(HUD 다른 배지/가게 입장 버튼과 안 겹침, 가게를
+  // 열고 닫아도 안 바뀜, 어떤 쓰기 API도 안 부름)에서 안전한지"만 본다
+  // (순수 로직 재검증 아님). S18/S19와 동일하게 참조 뷰포트 4종 중 모바일
+  // 1종(360x640)+데스크톱 1종(1280x800)만 돈다(새로 만진 지점만의 회귀
+  // 고정).
+  const S20_VIEWPORTS = S17_VIEWPORTS.filter((vp) => vp.width === 360 || vp.width === 1280)
+
+  for (const vp of S20_VIEWPORTS) {
+    const name = `S20[${vp.label},coin]`
+
+    // ── (a) 기본 기기 플래그(townShopV1 없음, paulTown2_5d만) — Dashboard와
+    //     동일한 게이트가 false이므로 wallet이 null로 넘어가 배지 자체가
+    //     렌더되지 않아야 한다(구매/보상 관련 상태 없음, townState 주입 없음). ──
+    {
+      const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
+      const page = await context.newPage()
+      await setDeviceFlags(page, { paulTown2_5d: true })
+      const mocks = await installMocks(page)
+      try {
+        await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+        await login(page)
+        await waitForLoggedIn(page)
+        const character = page.locator('[data-proto-character]')
+        await character.waitFor({ state: 'attached', timeout: 5000 })
+        const coinBadgeAbsent = page.locator('[data-testid="proto25d-coin-badge"]')
+        r.check(`${name} 항목a — townShopV1 기기 플래그가 없으면(기본값) 코인 배지가 렌더되지 않음`, await coinBadgeAbsent.count() === 0)
+      } catch (err) {
+        const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+        r.check(`${name} 항목a 시나리오 실행 완료(예외 없음)`, false,
+          `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+      } finally {
+        collect(mocks)
+        await context.close()
+      }
+    }
+
+    // ── (b)~(e) townShopV1 on + 지갑 잔액 37 — 배지가 나타나고, HUD/가게
+    //     입장 버튼과 안 겹치고, 가게를 열고 사고(안내만) 닫아도 값이
+    //     그대로 유지되며, 어떤 쓰기 API도 호출하지 않음. ──
+    {
+      const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
+      const page = await context.newPage()
+      await setDeviceFlags(page, { paulTown2_5d: true, townShopV1: true })
+      // mockRoutes.mjs getTownMockState() 기본 시드(starsEarned:20, dollars:
+      // {available:0,earned:0,spent:0}, owned:[], welcomeClaimed:false)와
+      // 동일한 필드 집합을 유지하되 dollars.available/earned만 37로 바꾼다
+      // (spent은 구매를 전혀 안 하므로 0 그대로 — 필드 누락 없이 그 셰이프를
+      // 그대로 복제).
+      const mocks = await installMocks(page, { townState: { starsEarned: 20, dollars: { available: 37, earned: 37, spent: 0 }, owned: [], welcomeClaimed: false } })
+      try {
+        await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+        await login(page)
+        await waitForLoggedIn(page)
+
+        const character = page.locator('[data-proto-character]')
+        await character.waitFor({ state: 'attached', timeout: 5000 })
+        const ground = page.locator('[data-testid="proto25d-ground"]')
+        const viewportEl = page.locator('[data-testid="proto25d-viewport"]')
+        const infoToggle = page.locator('[data-testid="proto25d-info-toggle"]')
+        const walkToggle = page.locator('[data-testid="proto25d-walkmode-toggle"]')
+        const coinBadge = page.locator('[data-testid="proto25d-coin-badge"]')
+        const enterBtn = page.locator('[data-testid="proto25d-shop-enter"]')
+        const shopOverlay = page.locator('[data-testid="proto25d-shop"]')
+        const backBtn = page.locator('[data-testid="proto25d-shop-back"]')
+
+        // ── (b) 스폰 시점 — 배지가 role=status로 보이고 텍스트/aria-label에
+        //     37원 잔액이 정확히 반영됨 ──
+        const badgeVisibleAtSpawn = await coinBadge.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)
+        let badgeSnapshot = { role: null, text: '', ariaLabel: null }
+        if (badgeVisibleAtSpawn) {
+          badgeSnapshot = await coinBadge.evaluate((el) => ({ role: el.getAttribute('role'), text: el.textContent || '', ariaLabel: el.getAttribute('aria-label') }))
+        }
+        r.check(
+          `${name} 항목b — townShopV1 on + 잔액 37 상태에서 스폰 시점에 코인 배지가 role="status"로 보이고 텍스트에 "37" 포함, aria-label="코인 37개"`,
+          badgeVisibleAtSpawn && badgeSnapshot.role === 'status' && badgeSnapshot.text.includes('37') && badgeSnapshot.ariaLabel === '코인 37개',
+          JSON.stringify({ badgeVisibleAtSpawn, badgeSnapshot }),
+        )
+
+        // ── (b) 배지가 뷰포트 안에 완전히 들어오고, 정보/산책모드 HUD
+        //     배지와 겹치지 않음(같은 컬럼의 flex-col 형제 — 겹칠 이유가
+        //     없어야 정상) ──
+        const badgeBox = await coinBadge.boundingBox()
+        const viewportBoxB = await viewportEl.boundingBox()
+        const infoBox = await infoToggle.boundingBox()
+        const walkBox = await walkToggle.boundingBox()
+        const insideViewport = !!badgeBox && !!viewportBoxB &&
+          badgeBox.x >= viewportBoxB.x - 1 && badgeBox.x + badgeBox.width <= viewportBoxB.x + viewportBoxB.width + 1 &&
+          badgeBox.y >= viewportBoxB.y - 1 && badgeBox.y + badgeBox.height <= viewportBoxB.y + viewportBoxB.height + 1
+        const overlapsHud = !!badgeBox && ((infoBox && intersectBoxes(badgeBox, infoBox)) || (walkBox && intersectBoxes(badgeBox, walkBox)))
+        r.check(
+          `${name} 항목b — 코인 배지가 뷰포트 안에 완전히 들어오고 정보/산책모드 HUD 배지와 겹치지 않음`,
+          insideViewport && !overlapsHud,
+          JSON.stringify({ badgeBox, viewportBoxB, infoBox, walkBox }),
+        )
+
+        // ── (c) 가게 입장 지점까지 걸어가 입장 버튼이 나타난 뒤에도 배지가
+        //     여전히 보이고 입장 버튼과 겹치지 않음(화면 밖이면 최대 3회
+        //     hop, S18/S19와 동일 헬퍼 — 도달 못 하면 이 이후 (c)~(e) 전체를
+        //     정직하게 스킵) ──
+        const entranceVisibility = await ensureWorldPointVisible(page, character, ground, viewportEl, SHOP_ENTRANCE_PCT_REF)
+        let enteredShop = false
+        if (entranceVisibility.visible) {
+          await page.mouse.click(entranceVisibility.targetScreenPt.x, entranceVisibility.targetScreenPt.y)
+          await waitUntil(async () => (
+            (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
+          ), { timeout: 8000 })
+          const enterVisible = await enterBtn.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)
+          const badgeStillVisible = enterVisible && await coinBadge.isVisible().catch(() => false)
+          const enterBox = enterVisible ? await enterBtn.boundingBox() : null
+          const badgeBoxNearShop = await coinBadge.boundingBox()
+          const overlapsEnter = !!badgeBoxNearShop && !!enterBox && !!intersectBoxes(badgeBoxNearShop, enterBox)
+          r.check(
+            `${name} 항목c — 가게 입장 지점 도착 후 입장 버튼이 나타나도 코인 배지가 계속 보이고 입장 버튼과 겹치지 않음`,
+            enterVisible && badgeStillVisible && !overlapsEnter,
+            JSON.stringify({ enterVisible, badgeStillVisible, overlapsEnter }),
+          )
+
+          // ── (d) 가게 열기 -> Buy -> 안내 문구 -> 뒤로가기로 닫기 -> 배지
+          //     값 불변("37") ──
+          if (enterVisible) {
+            await enterBtn.click()
+            const shopVisible = await shopOverlay.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)
+            r.check(`${name} 항목d — 입장 버튼 클릭 후 가게 오버레이가 보임`, shopVisible)
+            if (shopVisible) {
+              await page.locator('[data-testid="proto25d-shop-buy"]').first().click()
+              const noticeVisible = await page.locator('[data-testid="proto25d-shop-notice"]').first().waitFor({ state: 'visible', timeout: 1000 }).then(() => true).catch(() => false)
+              r.check(`${name} 항목d — Buy 클릭 후 안내 문구("구매 기능 준비 중")가 보임(실제 구매/쓰기 없음)`, noticeVisible)
+              await backBtn.click()
+              const shopHidden = await waitUntil(async () => (await shopOverlay.count()) === 0, { timeout: 3000 })
+              r.check(`${name} 항목d — 뒤로가기 클릭 후 가게 오버레이가 사라짐`, !!shopHidden)
+              const badgeTextAfterClose = shopHidden ? await coinBadge.textContent().catch(() => '') : ''
+              r.check(`${name} 항목d — 가게를 열고(Buy 클릭 포함) 닫아도 코인 배지 텍스트가 여전히 "37"을 포함함(값 불변)`, shopHidden && badgeTextAfterClose.includes('37'), badgeTextAfterClose)
+              enteredShop = true
+            } else {
+              r.check(`${name} 항목d — Buy/뒤로가기/값 불변 검증(가게가 안 열려 스킵, FAIL 아님)`, true, '스킵')
+            }
+          } else {
+            r.check(`${name} 항목d — 가게 열기/Buy/뒤로가기/값 불변 검증(입장 버튼 미노출로 스킵, FAIL 아님)`, true, '스킵')
+          }
+        } else {
+          r.check(`${name} 항목c — 입장 지점 도달 + 입장 버튼 겹침 검증(사전조건 부재로 스킵, FAIL 아님)`, true, '스킵')
+          r.check(`${name} 항목d — 가게 열기/Buy/뒤로가기/값 불변 검증(사전조건 부재로 스킵, FAIL 아님)`, true, '스킵')
+        }
+
+        // ── (e) 네트워크 — 이 시나리오 동안 구매/보상 쓰기 액션 0건 +
+        //     /rest/v1/에 대한 쓰기(POST/PATCH/DELETE) 0건. get_town_shop_state
+        //     읽기 호출은 최소 1건 있어야 함(App.jsx useTownShop 마운트
+        //     effect가 실제로 동작했다는 증거). ──
+        const writeActionCalls = mocks.apiCallLog.filter((c) => c.body && ['purchase_town_item', 'claim_town_welcome'].includes(c.body.action))
+        const restWriteCalls = mocks.apiCallLog.filter((c) => c.url.includes('/rest/v1/') && ['POST', 'PATCH', 'DELETE'].includes(c.method))
+        r.check(
+          `${name} 항목e — 이 시나리오 동안 구매/보상 쓰기 액션(purchase_town_item/claim_town_welcome) 호출 0건 + /rest/v1/에 대한 POST/PATCH/DELETE 0건`,
+          writeActionCalls.length === 0 && restWriteCalls.length === 0,
+          JSON.stringify({ writeActionCalls, restWriteCalls }),
+        )
+        r.check(`${name} 항목e — get_town_shop_state 읽기 호출이 최소 1건 있음(허용 — 상태 조회는 쓰기가 아님)`, mocks.db._townCalls.get_town_shop_state >= 1, String(mocks.db._townCalls.get_town_shop_state))
+
+        r.check(`${name} — 가로 스크롤 없음(최종, enteredShop=${enteredShop})`, await noHorizontalOverflow(page))
+      } catch (err) {
+        const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+        r.check(`${name} 항목b~e 시나리오 실행 완료(예외 없음)`, false,
+          `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+      } finally {
+        collect(mocks)
+        await context.close()
+      }
+    }
+  }
+
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }
 }
