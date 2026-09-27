@@ -307,6 +307,14 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   const [placements, setPlacements] = useState([]) // [{ itemId, slotId }]
   const placementsRef = useRef(placements)
   const [placingItemId, setPlacingItemId] = useState(null)
+  // F1(2026-09-28) — 배치 모드도 가게처럼 히스토리 항목(proto25dPlace)을 쌓아
+  // 뒤로가기가 페이지 이탈 대신 배치 취소가 되게 한다. placingRef는 마운트 1회
+  // 등록된 popstate 리스너용 최신값 미러, placeBackPendingRef는 우리가 부른
+  // history.back()의 popstate 도착 전 창(아래 endPlacement 주석).
+  const placingRef = useRef(null)
+  placingRef.current = placingItemId
+  const placeBackPendingRef = useRef(false)
+  const placeBackFallbackTimerRef = useRef(null)
   const inventory = SHOP_PRODUCTS.filter((p) => purchasedIds.has(p.id) && !placements.some((pl) => pl.itemId === p.id))
   const balance = wallet && Number.isFinite(wallet.dollarsAvailable) ? wallet.dollarsAvailable - spent : null
   // 뒤로가기가 실제로 닫힐 때까지의 비동기 창(리뷰 수정 1차) — React state로
@@ -747,7 +755,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // 둘 다 정리한다(Stage 4 — 착석 유지 타이머가 새로 추가됨). 리뷰 수정
   // 1차 — shopCloseFallbackTimerRef(가게 닫기 세이프티 타이머)도 함께
   // 정리한다.
-  useEffect(() => () => { clearWalkTimer(); clearHoldTimer(); clearShopCloseFallbackTimer() }, [])
+  useEffect(() => () => { clearWalkTimer(); clearHoldTimer(); clearShopCloseFallbackTimer(); releasePlaceBack() }, [])
 
   function handleGroundPointerDown(e) {
     e.currentTarget.setPointerCapture?.(e.pointerId)
@@ -781,8 +789,9 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     // Phase C — 배치 모드에서 빈 슬롯 탭(벤치와 같은 world 좌표 hit-test,
     // 44px 하한 패딩). idle이고 캐릭터가 그 슬롯 rect 밖에 있을 때만 배치하고,
     // 아니면 일반 걷기로 흘려보낸다(캐릭터가 배치물 안에 갇히지 않게).
+    // F1 — walking 중에도 배치(sitting/leaving은 위에서 이미 return).
     // 같은 tick 두 번째 탭: placingItemId(렌더 값)가 아직 남아 있어도 ref로 이미 배치된 아이템이면 건너뜀.
-    if (placingItemId && cur.phase === 'idle' && !placementsRef.current.some((pl) => pl.itemId === placingItemId)) {
+    if (placingItemId && !placementsRef.current.some((pl) => pl.itemId === placingItemId)) {
       const groundPx = { groundWidthPx: rect.width, groundHeightPx: rect.height }
       const slot = PLACEMENT_SLOTS.find((sl) => {
         if (placementsRef.current.some((pl) => pl.slotId === sl.id)) return false // ref — 같은 tick 연속 탭 이중 배치 방지
@@ -793,7 +802,16 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
         const next = [...placementsRef.current, { itemId: placingItemId, slotId: slot.id }]
         placementsRef.current = next
         setPlacements(next)
-        setPlacingItemId(null)
+        endPlacement()
+        if (cur.phase === 'walking') {
+          // F1 — 걷는 중 배치: 진행 중 경로는 새 장애물을 모르므로 걷기를 끊고
+          // 현재 논리 위치(구간 목표점 — 위에서 슬롯 rect 밖임을 확인)에서 idle.
+          // ponytail: 이미 시작된 CSS 구간 전이는 끝까지 그려져 그 구간이 슬롯을
+          // 스치면 시각적으로 잠깐 겹칠 수 있음 — 필요 시 구간/rect 교차 검사 추가.
+          seqRef.current += 1
+          clearWalkTimer()
+          updateCharacter((c) => ({ ...c, phase: 'idle', pendingSit: false }))
+        }
         return
       }
     }
@@ -945,8 +963,46 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // setShopOpen 업데이터를 쓰므로 클로저가 최신 shopOpen을 몰라도 안전하다
   // (updateCharacter/applyIfActive와 동일한 "최신값은 업데이터 인자로"
   // 원칙).
+  // F1 — 배치 모드 히스토리 항목. 열기/닫기 모두 shopBusyRef를 함께 본다
+  // (가게 닫기 back()이나 배치 back()이 도착하기 전 새 pushState가 끼어들어
+  // 엔트리를 엇갈리게 소비하는 것 방지 — 두 모드는 화면상 동시에 열리지 않는다).
+  function enterPlacement(itemId) {
+    if (shopBusyRef.current || shopOpen) return
+    setPlacingItemId(itemId)
+    try { window.history.pushState({ proto25dPlace: true }, '') } catch { /* 무시 — 배치 모드 자체는 그대로 */ }
+  }
+  function releasePlaceBack() {
+    if (placeBackFallbackTimerRef.current != null) {
+      clearTimeout(placeBackFallbackTimerRef.current)
+      placeBackFallbackTimerRef.current = null
+    }
+    if (!placeBackPendingRef.current) return
+    placeBackPendingRef.current = false
+    shopBusyRef.current = false
+  }
+  // 취소 버튼/Escape/배치 성공 공용 종료 — requestCloseShop과 같은 방식으로
+  // 우리 마커가 맨 위면 history.back()으로 소비하고, popstate(또는 600ms
+  // 세이프티 타이머)가 올 때까지 shopBusyRef를 걸어둔다. 화면 상태는 즉시 종료.
+  function endPlacement() {
+    setPlacingItemId(null)
+    if (placeBackPendingRef.current) return
+    let ourStateOnTop = false
+    try { ourStateOnTop = !!(window.history.state && window.history.state.proto25dPlace) } catch { ourStateOnTop = false }
+    if (!ourStateOnTop) return
+    try {
+      window.history.back()
+      placeBackPendingRef.current = true
+      shopBusyRef.current = true
+      placeBackFallbackTimerRef.current = setTimeout(releasePlaceBack, 600)
+    } catch { /* 무시 — 배치 모드는 이미 종료됨 */ }
+  }
+
   useEffect(() => {
-    function onPopState() { closeShopNow() }
+    function onPopState() {
+      if (placeBackPendingRef.current) { releasePlaceBack(); return } // 우리가 부른 back() — 배치 항목 소비 완료
+      if (placingRef.current) { setPlacingItemId(null); return } // 기기/브라우저 뒤로가기 — 배치만 취소
+      closeShopNow()
+    }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
@@ -955,14 +1011,17 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // 의존해 매번 최신 requestCloseShop 클로저로 다시 배선한다(리스너 자체는
   // 가벼워 재등록 비용이 무시할 만함, 이 파일의 다른 effect들과 동일 관례
   // 수준).
+  // F1 — 배치 모드에서도 Escape = 배치 취소(뒤로가기와 같은 종료 경로).
   useEffect(() => {
-    if (!shopOpen) return undefined
+    if (!shopOpen && !placingItemId) return undefined
     function onKeyDown(e) {
-      if (e.key === 'Escape') requestCloseShop()
+      if (e.key !== 'Escape') return
+      if (shopOpen) requestCloseShop()
+      else endPlacement()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [shopOpen])
+  }, [shopOpen, placingItemId])
 
   // Stage 4 — 'sitting' 단계에서만 z-index 계산에 topPct 대신 벤치의 y1을
   // 넘긴다(ProtoCharacter.jsx 헤더 주석 "depthY" 항목에 이유 정리 — 좌석
@@ -1079,7 +1138,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
         <button
           type="button"
           data-testid="proto25d-place-open"
-          onClick={() => setPlacingItemId(inventory[0].id)}
+          onClick={() => enterPlacement(inventory[0].id)}
           className="absolute top-[4.25rem] right-3 z-10 min-h-[44px] flex items-center rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-white shadow"
         >
           🪑 배치하기
@@ -1412,7 +1471,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
         <button
           type="button"
           data-testid="proto25d-place-cancel"
-          onClick={() => setPlacingItemId(null)}
+          onClick={endPlacement}
           className="absolute left-1/2 bottom-6 z-20 -translate-x-1/2 min-h-[52px] px-6 rounded-full bg-white text-gray-700 text-sm font-black shadow-lg pointer-events-auto"
         >
           ✕ 배치 취소

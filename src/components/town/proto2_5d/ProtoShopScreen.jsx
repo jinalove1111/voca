@@ -109,6 +109,9 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
           const purchased = purchasedIds.has(item.id)
           // ↑ purchasedIds는 부모 prop(가게를 닫아도 유지) — 이 컴포넌트
           // 자체 state가 아니다(2026-09-27 실기기 결함 수정).
+          // F1(2026-09-28) — 잔액 미확인(null)이면 Buy를 막는다(이전엔 눌리고
+          // tryPurchase가 null을 잔액 부족으로 판정해 거짓 "부족해요"가 떴다).
+          const balanceUnknown = balance === null
           return (
             <div
               key={item.id}
@@ -135,10 +138,11 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
                 data-testid="proto25d-shop-buy"
                 data-product-id={item.id}
                 onClick={() => handleBuy(item)}
-                disabled={purchased}
+                disabled={purchased || balanceUnknown}
+                aria-busy={!purchased && balanceUnknown ? 'true' : undefined}
                 className="min-h-[44px] w-full rounded-xl bg-purple-500 text-white text-sm font-black shadow btn-press disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {purchased ? '구매 완료' : 'Buy'}
+                {purchased ? '구매 완료' : balanceUnknown ? '잔액 확인 중' : 'Buy'}
               </button>
             </div>
           )
