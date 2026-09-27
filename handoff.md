@@ -1,5 +1,5 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
+_최종 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
 
 ## 2026-09-28 (189차) — 경제 단계 B 실기기 결함 수정: 재입장 후 재구매 차단 (PR #62, 워크트리 `C:\voca-wt\paul-town-v2`)
@@ -15,7 +15,11 @@ _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1�
 
 ### 2. 검증
 - `npm run verify:all` 1회(가용 메모리 2.09GB 확인 후 실행): ALL DOMAINS PASS, EXIT 0. extra 1건 `testEntranceRosterMinbyungchun.mjs`는 단언 전부 PASS 뒤 Windows libuv 종료 assertion(`UV_HANDLE_CLOSING`, exit 3221226505)으로 FAIL — 이번 변경과 무관한 환경성 종료.
-- 정직한 기록: verify:all의 내장 E2E에는 `townProto25d.spec.mjs` S22가 포함되지 않는다(로그에 S22 0건). 운영자 지시("verify:all 1회만")에 따라 `verify:e2e`는 이번 세션에서 실행하지 않았으므로 **S22 자체는 아직 로컬 실행 이력이 없다** — CI/다음 세션의 verify:e2e에서 확인 필요.
+- S22 실행 근거(2026-09-28 정정 — 최초 기록의 "S22 로컬 미실행"은 사실과 달랐다. 그 세션은 verify:all 로그만 보고 앞선 세션의 로그를 확인하지 않았다): verify:all의 내장 E2E에는 S22가 없지만, 2026-09-27 앞선 세션에서 이미 실행했다. 워크트리의 gitignored `scripts/.tmp/` 로그 기준:
+  - `proto_spec_fix_before.log`(09-27 18:06, 수정 전 코드): 764단언 중 FAIL 12, S22 항목c(재입장 후 "구매 완료" 유지·재클릭 무효)가 뷰포트마다 FAIL → 규칙 15의 "수정 전 FAIL" 재현 확인.
+  - `proto_spec_fix_after.log`(09-27 18:15, 수정 후 스펙 단독): 776단언 중 FAIL 3 — S22는 전부 PASS, FAIL은 S12[1280x800] 걷기 프레임 교대 샘플링(기존 간헐 실패, 188차 §5).
+  - `verify_e2e_econBfix.log`(09-27 19:17): 2102단언 중 FAIL 2 — town-v2 S16[390x844] 자석 드래그 항목17(이번 변경과 무관한 스위트), S22 전부 PASS.
+  - `verify_e2e_econBfix2.log`(09-27 19:56, 수정 파일 최종 변경 18:07 이후): **`npm run verify:e2e` 2102/2102 PASS, EXIT 0. S22 4뷰포트(360x640/390x844/412x915/1280x800) × 10건 = 40건 전부 PASS.**
 
 ### 3. 범위 밖(손대지 않음)
 DB·RPC·Supabase·Production 쓰기 0, 경제 단계 C(서버 구매·인벤토리) 착수 안 함.
