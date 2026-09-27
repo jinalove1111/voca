@@ -142,7 +142,7 @@ import {
   readWalkModePreference,
   writeWalkModePreference,
 } from '../../../utils/town/proto2_5d/camera'
-import { isNearShopEntrance, SHOP_PRODUCTS } from '../../../utils/town/proto2_5d/shopInteraction'
+import { isNearShopEntrance, SHOP_PRODUCTS, tryPurchase } from '../../../utils/town/proto2_5d/shopInteraction'
 import ProtoShopScreen from './ProtoShopScreen'
 import { coinBadgeText, coinBadgeAriaLabel } from '../../../utils/town/proto2_5d/coinDisplay'
 
@@ -290,6 +290,11 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // 이중으로 소비하는 경쟁이 있었다).
   const [shopOpen, setShopOpen] = useState(false)
   const shopBusyRef = useRef(false)
+  // 경제 단계 B(2026-09-27) — 화면 상태만 차감(서버/DB 쓰기 없음). wallet의
+  // dollarsAvailable에서 이 세션 동안 산 만큼만 빼서 보여준다(단일 세션
+  // 로컬 잔액 — 새로고침하면 초기화됨, 이번 단계 의도적 범위).
+  const [spent, setSpent] = useState(0)
+  const balance = wallet && Number.isFinite(wallet.dollarsAvailable) ? wallet.dollarsAvailable - spent : null
   // 뒤로가기가 실제로 닫힐 때까지의 비동기 창(리뷰 수정 1차) — React state로
   // 노출해 ProtoShopScreen의 뒤로가기 버튼을 그 사이 disabled+aria-busy로
   // 보여준다(shopBusyRef는 ref라 렌더에 반영되지 않으므로 별도 state 필요).
@@ -1015,14 +1020,16 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
           — 밑에 뭔가 있어도 항상 통과시킨다). wallet이 null이거나
           coinDisplay.js가 표시 불가로 판단하면(coinBadgeText null) 아무
           것도 렌더하지 않는다. */}
-      {coinBadgeText(wallet) !== null && (
+      {/* 경제 단계 B(2026-09-27) — balance!==null이면 지금까지 산 만큼 뺀
+          값을 배지에도 반영한다(가게 화면과 같은 숫자, 단일 표시 소스). */}
+      {coinBadgeText(balance !== null ? { dollarsAvailable: balance } : wallet) !== null && (
         <div
           data-testid="proto25d-coin-badge"
           role="status"
-          aria-label={coinBadgeAriaLabel(wallet)}
+          aria-label={coinBadgeAriaLabel(balance !== null ? { dollarsAvailable: balance } : wallet)}
           className="absolute top-3 right-3 z-10 pointer-events-none min-h-[44px] flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-amber-600 shadow"
         >
-          💵 {coinBadgeText(wallet)}
+          💵 {coinBadgeText(balance !== null ? { dollarsAvailable: balance } : wallet)}
         </div>
       )}
 
@@ -1303,7 +1310,17 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
           이 오버레이보다 먼저 등장), ProtoShopScreen 자신도 absolute
           inset-0 + 명시적 z-index로 이중 방어한다. */}
       {shopOpen && (
-        <ProtoShopScreen products={SHOP_PRODUCTS} onBack={requestCloseShop} closing={shopClosing} />
+        <ProtoShopScreen
+          products={SHOP_PRODUCTS}
+          onBack={requestCloseShop}
+          closing={shopClosing}
+          balance={balance}
+          onPurchase={(price) => {
+            const r = tryPurchase(balance, price)
+            if (r.ok) setSpent((s) => s + price)
+            return r
+          }}
+        />
       )}
     </div>
   )

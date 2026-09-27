@@ -15,7 +15,8 @@
 //
 // 이 프로토타입엔 상호작용 가능한 건물이 데모 건물(sceneFixture.js
 // 'demo-building', assetKey buildings/my-house) 하나뿐이다 — 그 건물을
-// "가게"로 재해석해 입장 지점/반경/상품 3종만 이 파일이 신규로 소유한다.
+// "가게"로 재해석해 입장 지점/반경/상품 1종(+tryPurchase)만 이 파일이
+// 신규로 소유한다.
 // walkGrid.js/sceneFixture.js/pathfinding.js는 전혀 손대지 않는다(팀장
 // 지시 — 씬 지오메트리 재정의 아님, CLAUDE.md 규칙 3).
 import { OBSTACLES, CELL_W_PCT, CELL_H_PCT, nearestWalkablePoint } from './walkGrid'
@@ -77,37 +78,32 @@ export function isNearShopEntrance(charX, charY) {
   return (dx / SHOP_RADIUS.x) ** 2 + (dy / SHOP_RADIUS.y) ** 2 <= 1
 }
 
-// 상품 3종(임시 — 실 구매/저장/네트워크 없음, 화면 표시 전용). assetKey는
-// src/assets/town/index.js TOWN_ASSETS에 실제로 등록된 키만 쓴다(townAsset()
-// 이 null을 반환하지 않도록 이 파일 작성 시 그 레지스트리를 직접 읽어
-// 확인했다 — decorations/bench·nature/flower-garden·decorations/street-lamp
-// 전부 기존 23개 키 안에 있음). flower-pot은 아직 전용 아트가 없어 기존
-// 'nature/flower-garden'(화단) 자산을 자리표시자로 재사용한다 — 실제
-// 자산이 없어서가 아니라(있음) "이름(꽃 화분)과 그림(화단)이 정확히
-// 일치하지 않는 임시 대역"이라는 뜻으로 placeholder:true를 표시한다.
+// 상품 1종(경제 단계 B, 2026-09-27 — 화면 상태만 차감, 서버/DB 쓰기 없음).
+// assetKey는 src/assets/town/index.js TOWN_ASSETS에 실제로 등록된 키만
+// 쓴다(decorations/bench, 기존 23개 키 안에 있음).
 export const SHOP_PRODUCTS = Object.freeze([
   Object.freeze({
     id: 'bench',
     nameEn: 'Bench',
     descEn: 'A cozy bench to rest on.',
-    pricePlaceholder: '$5',
+    price: 5,
     assetKey: 'decorations/bench',
     placeholder: false,
   }),
-  Object.freeze({
-    id: 'flower-pot',
-    nameEn: 'Flower Pot',
-    descEn: 'Pretty flowers for your town.',
-    pricePlaceholder: '$8',
-    assetKey: 'nature/flower-garden',
-    placeholder: true,
-  }),
-  Object.freeze({
-    id: 'street-lamp',
-    nameEn: 'Street Lamp',
-    descEn: 'A bright lamp for the street.',
-    pricePlaceholder: '$6',
-    assetKey: 'decorations/street-lamp',
-    placeholder: false,
-  }),
 ])
+
+/**
+ * 구매 시도(순수 함수, 네트워크/DB 쓰기 없음 — 경제 단계 B, 2026-09-27:
+ * 화면 상태만 차감). balance/price가 둘 다 유한수이고 price>0이고
+ * balance>=price일 때만 성공. 그 외(null/NaN/음수/미지의 balance 등)는
+ * 항상 실패이며 balance를 절대 깎지 않는다.
+ * @param {number} balance
+ * @param {number} price
+ * @returns {{ ok: true, balance: number } | { ok: false, reason: 'insufficient', balance: number }}
+ */
+export function tryPurchase(balance, price) {
+  if (!Number.isFinite(balance) || !Number.isFinite(price) || price <= 0 || balance < price) {
+    return { ok: false, reason: 'insufficient', balance }
+  }
+  return { ok: true, balance: balance - price }
+}

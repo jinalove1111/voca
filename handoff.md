@@ -1,5 +1,38 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-27 (187차 — **경제 단계 A2: 2.5D 코인 배지 조회 조건에 paulTown2_5d 포함 + "💵 Paul Dollar" 용어 통일 + 배지 우상단 분리(PR #62)**: 서버 조회 get_town_shop_state가 SELECT 전용임을 코드로 확인 후 조건 확장. 첫 시도에서 배지가 HUD 열을 키워 탭을 가로챈 회귀 8건 → 배지를 우상단 별도 요소로 분리해 해소. 정적 테스트 약속 갱신. verify:e2e 1995/1995, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 187차 섹션 참고.)_
+_최종 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-09-27 (188차) — 경제 단계 B: 상품 1개 로컬 구매 프로토타입 (PR #62, 워크트리 `C:\voca-wt\paul-town-v2`)
+
+### 0. 범위와 안전 조건
+운영자 지시(Ponytail full): 기존 가게 진입·오버레이 재사용, 테스트 상품 1개, 상점에도 같은 문구·값의 잔액, 확인창, 충분하면 화면 상태에서만 차감, 부족하면 차감 없이 안내, 중복 탭 방지, 닫은 뒤 복구, 4뷰포트, 플래그 false 회귀. 실제 DB 구매 기록·RPC·Supabase/Production 쓰기 0, 새 라이브러리·라우트·전역 상태 없음, 인벤토리·다중 상품·환불·내역 없음. 플래그 3개 false.
+
+### 1. 변경 파일과 이유
+- `src/utils/town/proto2_5d/shopInteraction.js`: `SHOP_PRODUCTS`를 Bench 1개(`price: 5` 숫자)로 축소(나머지 2개 삭제), 순수 함수 `tryPurchase(balance, price)` 추가 — 잔액·가격이 유한수이고 잔액≥가격일 때만 성공, 그 외(null/NaN/음수/부족)는 차감 없는 실패.
+- `src/components/town/proto2_5d/Proto25DScreen.jsx`: `spent` 상태 1개, 잔액 = 조회값 − spent. HUD 배지와 가게가 같은 잔액 사용. `onPurchase` → tryPurchase 후 성공 시에만 spent 증가.
+- `src/components/town/proto2_5d/ProtoShopScreen.jsx`: 잔액 줄(배지와 같은 "💵 $N"·"Paul Dollar N개", 잔액을 모르면 숨김), 상품 카드, Buy → 오버레이 안 확인창(취소/확인, 44px 이상), 결과 토스트("구매 완료!" / "Paul Dollar가 부족해요"), 구매 성공 시 버튼 "구매 완료" 비활성. 옛 "구매 기능 준비 중" 문구 삭제.
+- `scripts/testProto25dShop.mjs`: 상품 1개·숫자 가격으로 갱신, tryPurchase 절 추가(48단언).
+- `tests/e2e/townProto25d.spec.mjs`: S18(상품 수 1, Buy→확인창→취소), S20(Buy→취소로 잔액 불변) 갱신, 신규 S21 4뷰포트 + flag-off.
+
+### 2. 중복 탭 방지의 실제 근거(코드리뷰 확인)
+확인 핸들러는 동기라 처리 중 ref는 아무것도 막지 못하는 죽은 코드였음 → 삭제. 실제 방지는 React 18이 한 번의 클릭에서 나온 상태 변경을 다음 이벤트 전에 모두 반영하는 것: 확인창이 사라져 두 번째 탭이 닿을 버튼이 없고, 같은 커밋에서 Buy가 "구매 완료"로 비활성. S21이 dblclick과 모바일 연속 터치 모두 $37→$32(두 번 차감이면 $27)로 실증. `ponytail:` 주석: 구매가 비동기가 되면 가게 닫기와 같은 ref 패턴 필요.
+
+### 3. 검증
+- 단위: shop 48, coin 27, camera 76, testTownUiStatic 126 · build 0 경고.
+- 가게 스펙 단독: 736/736. 리뷰 지적 반영 직후 1회 S9·S11 타이밍 단언 4건 FAIL(가용 메모리 0.52GB, 가게를 열지 않는 시나리오) → 메모리 확보 후 재실행 736/736로 부하 원인 확인.
+- `npm run verify:e2e`: 총 2062단언 PASS 2062 / FAIL 0 / SKIP 0.
+- `npm run verify:all`: ALL DOMAINS PASS, EXIT 0. 기록: 부가(extra) 내장 E2E에서 S12[412x915] 왼쪽 걷기 프레임 교대 2단언이 간헐 FAIL — 같은 코드의 단독 verify:e2e에서는 통과, 181차부터 관측된 부하 중 샘플링 flake 부류.
+- 4뷰포트 스크린샷(스크래치 `scripts/.tmp/shopB_<vp>_{shop-open,confirm-open,after-success,after-insufficient}.png` 16장, `shopB_bboxes.json`): 확인창·버튼·토스트 전부 화면 안, 44px 이상, 뒤로가기 버튼과 비겹침.
+- S21: 잔액 부족($0, 차감 없음·Buy 유지), 성공($37→$32, 배지·가게 동일, "구매 완료" 비활성), 중복 탭 1회 차감, 닫은 뒤 걷기·카메라 이동·재입장, 쓰기 호출 0(purchase_town_item/claim/REST POST·PATCH·DELETE), flag-off 시 2.5D 화면·배지 없음·조회 0건·대시보드 정상.
+- 독립 코드리뷰 APPROVE, 독립 QA PASS.
+- 테스트 수정 1건: 상품 3→1로 가게 높이가 줄어 S18(d)의 고정 비율 탭이 Buy 위에 떨어짐 → 상호작용 없는 제목 영역 중심을 탭하도록 변경(원래 의도 유지).
+
+### 4. 알려진 한계
+- 차감은 화면 상태뿐이라 새로고침하면 원래 잔액으로 돌아옴(의도된 범위).
+- 구매한 물건은 어디에도 저장·배치되지 않음(인벤토리는 다음 단계).
+
+### 5. 다음 결정 후보
+- 경제 단계 C(서버 구매·인벤토리) 착수 여부 — 실제 쓰기(RPC `purchase_town_item`)는 Class D, 운영자 승인 필요.
+- 부가 스위트·S12 샘플링 간헐 실패 조사.
 
 ## 2026-09-27 (187차) — 경제 단계 A2: 조회 조건 확장·Paul Dollar 용어 통일·배지 위치 분리 (PR #62, 워크트리 `C:\voca-wt\paul-town-v2`)
 

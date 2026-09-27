@@ -31,7 +31,7 @@ await esbuild.build({
 })
 const {
   SHOP_ID, SHOP_COLLISION_RECT, SHOP_ENTRANCE_RAW, SHOP_ENTRANCE, getShopEntrance,
-  SHOP_RADIUS, isNearShopEntrance, SHOP_PRODUCTS,
+  SHOP_RADIUS, isNearShopEntrance, SHOP_PRODUCTS, tryPurchase,
 } = await import(`${pathToFileURL(SHOP_BUNDLE_PATH).href}?t=${Date.now()}`)
 
 const GRID_BUNDLE_PATH = path.join(TMP_DIR, 'proto25dWalkGridForShop.bundle.mjs')
@@ -67,9 +67,9 @@ function check(label, cond, detail = '') {
 function section(name) { console.log(`\n-- ${name} --`) }
 
 // ── 1. SHOP_PRODUCTS — 개수/필드/고유성 ─────────────────────────────────
-section('1. SHOP_PRODUCTS — 정확히 3개, 필수 필드, id 고유')
+section('1. SHOP_PRODUCTS — 정확히 1개, 필수 필드, price는 양수')
 {
-  check('SHOP_PRODUCTS가 정확히 3개', Array.isArray(SHOP_PRODUCTS) && SHOP_PRODUCTS.length === 3, JSON.stringify(SHOP_PRODUCTS))
+  check('SHOP_PRODUCTS가 정확히 1개', Array.isArray(SHOP_PRODUCTS) && SHOP_PRODUCTS.length === 1, JSON.stringify(SHOP_PRODUCTS))
   const ids = SHOP_PRODUCTS.map((p) => p.id)
   check('모든 id가 서로 다름(중복 없음)', new Set(ids).size === ids.length, JSON.stringify(ids))
   let allFieldsOk = true
@@ -78,11 +78,11 @@ section('1. SHOP_PRODUCTS — 정확히 3개, 필수 필드, id 고유')
     const ok = typeof p.id === 'string' && p.id.length > 0 &&
       typeof p.nameEn === 'string' && p.nameEn.length > 0 &&
       typeof p.descEn === 'string' && p.descEn.length > 0 &&
-      typeof p.pricePlaceholder === 'string' && p.pricePlaceholder.length > 0 &&
+      Number.isFinite(p.price) && p.price > 0 &&
       typeof p.assetKey === 'string' && p.assetKey.length > 0
     if (!ok) { allFieldsOk = false; missing.push(p.id) }
   }
-  check('모든 상품이 id/nameEn/descEn/pricePlaceholder/assetKey를 non-empty 문자열로 가짐', allFieldsOk, JSON.stringify(missing))
+  check('모든 상품이 id/nameEn/descEn/assetKey를 non-empty 문자열로, price를 양수로 가짐', allFieldsOk, JSON.stringify(missing))
   check('SHOP_PRODUCTS(배열)가 frozen', Object.isFrozen(SHOP_PRODUCTS))
   check('SHOP_PRODUCTS 각 항목이 frozen', SHOP_PRODUCTS.every((p) => Object.isFrozen(p)))
 }
@@ -93,9 +93,6 @@ section('2. SHOP_PRODUCTS — descEn이 8단어 이하')
   for (const p of SHOP_PRODUCTS) {
     const wordCount = p.descEn.trim().split(/\s+/).filter(Boolean).length
     check(`${p.id} — descEn("${p.descEn}") 단어 수(${wordCount})가 8 이하`, wordCount <= 8, String(wordCount))
-  }
-  for (const p of SHOP_PRODUCTS) {
-    check(`${p.id} — pricePlaceholder("${p.pricePlaceholder}")가 "$"로 시작`, p.pricePlaceholder.startsWith('$'))
   }
 }
 
@@ -110,10 +107,8 @@ section('3. SHOP_PRODUCTS — assetKey가 townAsset()에서 URL로 해석됨(또
       resolved || p.placeholder === true,
       `resolved=${resolved} placeholder=${p.placeholder}`,
     )
-    // 이 세 assetKey는 실제로 TOWN_ASSETS에 이미 등록돼 있어(decorations/bench,
-    // nature/flower-garden, decorations/street-lamp) 셋 다 실제 URL로
-    // 해석돼야 한다(placeholder:true는 "이름/그림 불일치" 표시일 뿐 자산
-    // 자체의 부재가 아니다 — shopInteraction.js 헤더 주석 참고).
+    // decorations/bench는 TOWN_ASSETS에 이미 등록돼 있어 실제 URL로
+    // 해석돼야 한다.
     check(`${p.id} — 실제로 townAsset()이 non-empty URL을 반환함(플레이스홀더 이미지가 아니라 실제 등록된 자산)`, resolved, `url=${JSON.stringify(url)}`)
   }
 }
@@ -206,6 +201,28 @@ section('7. isNearShopEntrance — (dx/rx)²+(dy/ry)²<=1 타원 판정(중심/�
   check('둘 다 문자열("50","40") — 예외 없이 false(안전 폴백, Number.isFinite가 문자열을 거부)', isNearShopEntrance('50', '40') === false)
 
   check('결정론 — 같은 입력을 두 번 호출해도 같은 결과', isNearShopEntrance(ex + 1, ey + 1) === isNearShopEntrance(ex + 1, ey + 1))
+}
+
+// ── 8. tryPurchase — 순수 구매 판정(성공/부족/비정상 입력, 입력 불변) ────
+section('8. tryPurchase — balance/price 조합별 성공/실패, 입력 불변')
+{
+  check('성공(37,5) — ok:true, balance:32', JSON.stringify(tryPurchase(37, 5)) === JSON.stringify({ ok: true, balance: 32 }))
+  check('정확히 딱 맞음(5,5) — ok:true, balance:0', JSON.stringify(tryPurchase(5, 5)) === JSON.stringify({ ok: true, balance: 0 }))
+  check('부족(0,5) — ok:false, reason:insufficient, balance 그대로(0)', JSON.stringify(tryPurchase(0, 5)) === JSON.stringify({ ok: false, reason: 'insufficient', balance: 0 }))
+  check('부족(4,5) — ok:false, balance 그대로(4)', JSON.stringify(tryPurchase(4, 5)) === JSON.stringify({ ok: false, reason: 'insufficient', balance: 4 }))
+
+  for (const bad of [null, undefined, NaN, -1, Infinity]) {
+    const r = tryPurchase(bad, 5)
+    check(`비정상 balance(${bad}) — ok:false, 차감 없음(balance는 원본 그대로)`, r.ok === false && r.reason === 'insufficient' && Object.is(r.balance, bad), JSON.stringify(r))
+  }
+  for (const bad of [0, -5, NaN]) {
+    const r = tryPurchase(37, bad)
+    check(`비정상 price(${bad}) — ok:false`, r.ok === false && r.reason === 'insufficient', JSON.stringify(r))
+  }
+
+  const before = 37
+  tryPurchase(before, 5)
+  check('입력(balance 원시값)이 호출 후에도 변하지 않음', before === 37)
 }
 
 // ── 결과 ──────────────────────────────────────────────────────────────
