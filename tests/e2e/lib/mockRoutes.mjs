@@ -135,6 +135,10 @@ export async function installMocks(page, { tables, townWelcomeDisabled = false, 
     const headers = await req.allHeaders()
     let postDataJSON = null
     try { postDataJSON = req.postDataJSON() } catch { /* GET/HEAD엔 body 없음 */ }
+    // 2026-09-28 — REST 요청도 apiCallLog에 남긴다(이전엔 빠져 있어 spec의
+    // "REST POST/PATCH/DELETE 0건" 류 단언이 항상 공허하게 통과했다).
+    // 엔트리 모양은 /api/ 쪽과 동일({url,method,body}).
+    apiCallLog.push({ url: req.url(), method: req.method(), body: postDataJSON })
     try {
       const { status, body } = handleRestRequest(db, { url: req.url(), method: req.method(), headers, postDataJSON })
       await route.fulfill({ status, contentType: 'application/json', body: body === null ? '' : JSON.stringify(body) })

@@ -251,6 +251,33 @@ async function readCharacterPct(character) {
   return character.evaluate((el) => ({ left: parseFloat(el.style.left), top: parseFloat(el.style.top) }))
 }
 
+// 2026-09-28 — 쓰기 가드 공용 헬퍼. mockRoutes.mjs가 이제 /rest/v1/ 요청도
+// apiCallLog에 남기므로(이전엔 누락 — "REST 쓰기 0건" 단언이 항상 공허하게
+// 통과했다) 로그인 직후 앱이 원래 하는 진도 동기화 쓰기가 실제로 보인다.
+// 허용목록은 상점/구매/배치 없이 로그인만으로 생기는 쓰기(S23 새로고침 후
+// 재로그인 구간 — 구매·배치 없음 — 에서 동일하게 재현, phaseC_spec_run2.log
+// [diag])로 한정한다. 그 외 REST 쓰기(PATCH/PUT/DELETE 포함)나 /api/의
+// purchase_town_item/claim_town_welcome 액션은 전부 위반으로 잡는다.
+const LOGIN_SYNC_REST_WRITES = Object.freeze([
+  Object.freeze({ method: 'POST', path: '/rest/v1/product_events' }), // 익명 사용 이벤트(로그인/화면 진입)
+  Object.freeze({ method: 'POST', path: '/rest/v1/student_progress' }), // 진도 upsert(on_conflict=student_id)
+  Object.freeze({ method: 'POST', path: '/rest/v1/student_daily_progress' }), // 일일 진도 upsert(on_conflict=student_id,date)
+])
+const SHOP_WRITE_ACTIONS = Object.freeze(['purchase_town_item', 'claim_town_welcome'])
+function urlPath(u) {
+  try { return new URL(u).pathname } catch { return String(u).split('?')[0] }
+}
+function classifyWrites(calls) {
+  const restWrites = calls.filter((c) => c.url.includes('/rest/v1/') && ['POST', 'PATCH', 'PUT', 'DELETE'].includes(c.method))
+  const unexpectedRest = restWrites
+    .filter((c) => !LOGIN_SYNC_REST_WRITES.some((a) => a.method === c.method && a.path === urlPath(c.url)))
+    .map((c) => `${c.method} ${urlPath(c.url)}`)
+  const shopActions = calls
+    .filter((c) => c.url.includes('/api/') && c.body && SHOP_WRITE_ACTIONS.includes(c.body.action))
+    .map((c) => `${c.method} ${urlPath(c.url)} ${c.body.action}`)
+  return { unexpectedRest, shopActions, allowedRestSeen: restWrites.map((c) => `${c.method} ${urlPath(c.url)}`) }
+}
+
 /** 실제 DOM에 그려진 장애물 박스(proto25d-obstacle)를 world-%로 재확인. */
 async function readObstacleBoxesFromDom(page) {
   return page.locator('[data-testid="proto25d-obstacle"]').evaluateAll((els) => els.map((el) => ({
@@ -4157,9 +4184,9 @@ export async function run(browser, baseURL) {
         //     읽기 호출은 최소 1건 있어야 함(App.jsx useTownShop 마운트
         //     effect가 실제로 동작했다는 증거). ──
         const writeActionCalls = mocks.apiCallLog.filter((c) => c.body && ['purchase_town_item', 'claim_town_welcome'].includes(c.body.action))
-        const restWriteCalls = mocks.apiCallLog.filter((c) => c.url.includes('/rest/v1/') && ['POST', 'PATCH', 'DELETE'].includes(c.method))
+        const restWriteCalls = classifyWrites(mocks.apiCallLog).unexpectedRest
         r.check(
-          `${name} 항목d — 이 시나리오 동안 구매/보상 쓰기 액션(purchase_town_item/claim_town_welcome) 호출 0건 + /rest/v1/에 대한 POST/PATCH/DELETE 0건`,
+          `${name} 항목d — 이 시나리오 동안 구매/보상 쓰기 액션(purchase_town_item/claim_town_welcome) 호출 0건 + 로그인 진도 동기화 허용목록 외 /rest/v1/ 쓰기 0건`,
           writeActionCalls.length === 0 && restWriteCalls.length === 0,
           JSON.stringify({ writeActionCalls, restWriteCalls }),
         )
@@ -4362,10 +4389,10 @@ export async function run(browser, baseURL) {
 
           // ── (e) 쓰기 API 0건 — 화면 상태만 차감, 서버/DB 쓰기 없음 ──
           const writeActionCallsE = mocks.apiCallLog.filter((c) => c.body && ['purchase_town_item', 'claim_town_welcome'].includes(c.body.action))
-          const restWriteCallsE = mocks.apiCallLog.filter((c) => c.url.includes('/rest/v1/') && ['POST', 'PATCH', 'DELETE'].includes(c.method))
+          const restWriteCallsE = classifyWrites(mocks.apiCallLog).unexpectedRest
           const purchaseRpcCountE = Object.keys(mocks.db._townCalls.purchase_town_item || {}).length
           r.check(
-            `${name} 항목e — purchase_town_item/claim_town_welcome RPC 호출 0건 + REST POST/PATCH/DELETE 0건(화면 상태만 차감, 서버 쓰기 없음)`,
+            `${name} 항목e — purchase_town_item/claim_town_welcome RPC 호출 0건 + 허용목록 외 REST 쓰기 0건(화면 상태만 차감, 서버 쓰기 없음)`,
             writeActionCallsE.length === 0 && restWriteCallsE.length === 0 && purchaseRpcCountE === 0 && mocks.db._townCalls.claim_town_welcome === 0,
             JSON.stringify({ writeActionCallsE, restWriteCallsE, purchaseRpcCountE, claimCount: mocks.db._townCalls.claim_town_welcome }),
           )
@@ -4643,9 +4670,9 @@ export async function run(browser, baseURL) {
 
           // ── (g) 쓰기 API 0건(S21 항목e와 동일 확인, 재검증 아님) ──
           const writeActionCallsG = mocks.apiCallLog.filter((c) => c.body && ['purchase_town_item', 'claim_town_welcome'].includes(c.body.action))
-          const restWriteCallsG = mocks.apiCallLog.filter((c) => c.url.includes('/rest/v1/') && ['POST', 'PATCH', 'DELETE'].includes(c.method))
+          const restWriteCallsG = classifyWrites(mocks.apiCallLog).unexpectedRest
           r.check(
-            `${name} 항목g — 이 시나리오 동안 구매/보상 쓰기 액션 호출 0건 + REST POST/PATCH/DELETE 0건`,
+            `${name} 항목g — 이 시나리오 동안 구매/보상 쓰기 액션 호출 0건 + 허용목록 외 REST 쓰기 0건`,
             writeActionCallsG.length === 0 && restWriteCallsG.length === 0,
             JSON.stringify({ writeActionCallsG, restWriteCallsG }),
           )
@@ -4719,6 +4746,237 @@ export async function run(browser, baseURL) {
         collect(mocks)
         await context.close()
       }
+    }
+  }
+
+  // ── S23 — Phase C(2026-09-28): 구매한 Bench를 고정 슬롯에 1회 배치(로컬
+  // state만, 새로고침하면 리셋). S22와 같은 뷰포트/헬퍼 구조를 재사용한다.
+  // 슬롯 rect는 placementSlots.js(anchor 기준 7x5 발자국)의 값 고정 복제.
+  const PLACEMENT_SLOTS_REF = [
+    { id: 'A', x0: 26.5, x1: 33.5, y0: 45, y1: 50 },
+    { id: 'B', x0: 68.5, x1: 75.5, y0: 41, y1: 46 },
+    { id: 'C', x0: 46.5, x1: 53.5, y0: 75, y1: 80 },
+  ]
+  const slotCenterPct = (s) => ({ x: (s.x0 + s.x1) / 2, y: (s.y0 + s.y1) / 2 })
+  // 화면 좌표가 바닥에 직접 닿는지(HUD/버튼에 가려지지 않았는지) 확인.
+  async function groundHitAt(page, pt) {
+    return page.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y)
+      return !!(el && el.closest('[data-testid="proto25d-ground"]'))
+    }, pt)
+  }
+  const idleOf = (character) => waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle', { timeout: 8000 })
+
+  for (const vp of S17_VIEWPORTS) {
+    const name = `S23[${vp.label},place-once]`
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true, townShopV1: true })
+    await setWalkModeOn(page)
+    const mocks = await installMocks(page, { townState: { starsEarned: 20, dollars: { available: 37, earned: 37, spent: 0 }, owned: [], welcomeClaimed: false } })
+    // 구간 표시(apiCallLog 인덱스) — 가게 입장 직전(windowStart)~새로고침 직전(windowEnd).
+    let windowStart = -1
+    let windowEnd = -1
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+      let character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      let ground = page.locator('[data-testid="proto25d-ground"]')
+      let viewportEl = page.locator('[data-testid="proto25d-viewport"]')
+      let enterBtn = page.locator('[data-testid="proto25d-shop-enter"]')
+      const root = page.locator('[data-testid="proto25d-root"]')
+      const shopOverlay = page.locator('[data-testid="proto25d-shop"]')
+      const backBtn = page.locator('[data-testid="proto25d-shop-back"]')
+      const buyBtn = page.locator('[data-testid="proto25d-shop-buy"]')
+      const confirmPanel = page.locator('[data-testid="proto25d-shop-confirm"]')
+      const confirmYes = page.locator('[data-testid="proto25d-shop-confirm-yes"]')
+      const shopBalance = page.locator('[data-testid="proto25d-shop-balance"]')
+      const placeOpen = page.locator('[data-testid="proto25d-place-open"]')
+      const placeCancel = page.locator('[data-testid="proto25d-place-cancel"]')
+      const slotMarkers = page.locator('[data-testid="proto25d-place-slot"]')
+      const placedItem = page.locator('[data-testid="proto25d-placed-item"]')
+
+      r.check(`${name} 항목a — 구매 전에는 배치하기 버튼 없음, placed-count "0"`,
+        (await placeOpen.count()) === 0 && (await root.getAttribute('data-proto25d-placed-count')) === '0')
+
+      const entranceVis = await ensureWorldPointVisible(page, character, ground, viewportEl, SHOP_ENTRANCE_PCT_REF)
+      if (!entranceVis.visible) {
+        r.check(`${name} — 가게 입장 지점이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님, 사전조건 부재)`, true, '스킵')
+      } else {
+        // ── (b) 구매 → 뒤로 → 재입장 시 Buy 여전히 비활성 → 뒤로 ──
+        await page.mouse.click(entranceVis.targetScreenPt.x, entranceVis.targetScreenPt.y)
+        await idleOf(character)
+        await enterBtn.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {})
+        windowStart = mocks.apiCallLog.length
+        await enterBtn.click()
+        await shopOverlay.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {})
+        await buyBtn.click()
+        await confirmPanel.waitFor({ state: 'visible', timeout: 1000 }).catch(() => {})
+        await confirmYes.click()
+        await page.waitForTimeout(150)
+        const balanceB = (await shopBalance.textContent().catch(() => '')) || ''
+        await backBtn.click()
+        await waitUntil(async () => (await shopOverlay.count()) === 0, { timeout: 3000 })
+        await enterBtn.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {})
+        await enterBtn.click()
+        await shopOverlay.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {})
+        const buyDisabledB = await buyBtn.isDisabled().catch(() => false)
+        r.check(`${name} 항목b — 구매($32) 후 재입장해도 Buy 비활성`, balanceB.includes('$32') && buyDisabledB, JSON.stringify({ balanceB, buyDisabledB }))
+        await backBtn.click()
+        const shopClosedB = await waitUntil(async () => (await shopOverlay.count()) === 0, { timeout: 3000 })
+
+        // ── (c) 배치하기 → 취소(가게 버튼 숨김/복귀) ──
+        const placeOpenVisC = await placeOpen.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)
+        // 새 버튼 레이아웃 — 높이 ≥44, 화면 안에 완전히 들어옴, 배치하기 버튼은
+        // 코인 배지/좌상단 HUD(정보·산책모드 토글과 그 컬럼)와 겹치지 않음(S18 항목b와 같은 판정).
+        const screenBox = { x: 0, y: 0, width: vp.width, height: vp.height }
+        const insideScreen = (b) => !!b && b.x >= -1 && b.y >= -1 && b.x + b.width <= screenBox.width + 1 && b.y + b.height <= screenBox.height + 1
+        const openBox = await placeOpen.boundingBox()
+        const coinBox = await page.locator('[data-testid="proto25d-coin-badge"]').boundingBox()
+        const infoToggle = page.locator('[data-testid="proto25d-info-toggle"]')
+        const infoBox = await infoToggle.boundingBox()
+        const walkBox = await page.locator('[data-testid="proto25d-walkmode-toggle"]').boundingBox()
+        const hudColBox = await infoToggle.locator('xpath=..').boundingBox()
+        const openOverlaps = [['coin', coinBox], ['info', infoBox], ['walk', walkBox], ['hudColumn', hudColBox]]
+          .filter(([, b]) => b && openBox && intersectBoxes(openBox, b)).map(([k]) => k)
+        r.check(`${name} 항목c — 배치하기 버튼 높이 ≥44px, 화면 안, 코인 배지/HUD 컬럼과 겹치지 않음`,
+          !!openBox && openBox.height >= 44 && insideScreen(openBox) && !!coinBox && openOverlaps.length === 0,
+          JSON.stringify({ openBox, coinBox, infoBox, walkBox, hudColBox, openOverlaps }))
+        await placeOpen.click()
+        const placingC = (await root.getAttribute('data-placing')) === 'true'
+        const slotCountC = await slotMarkers.count()
+        await page.waitForTimeout(450) // 가게 재진입 가드(400ms) 경과 후 가게 버튼 숨김을 판정
+        const enterHiddenC = (await enterBtn.count()) === 0
+        const cancelVisC = await placeCancel.isVisible().catch(() => false)
+        const cancelBox = await placeCancel.boundingBox()
+        r.check(`${name} 항목c — 배치 취소 버튼 높이 ≥44px, 화면 안`, !!cancelBox && cancelBox.height >= 44 && insideScreen(cancelBox), JSON.stringify({ cancelBox }))
+        await placeCancel.click()
+        const cancelledC = (await root.getAttribute('data-placing')) === 'false' && (await slotMarkers.count()) === 0
+        const enterBackC = await enterBtn.waitFor({ state: 'visible', timeout: 2000 }).then(() => true).catch(() => false)
+        const placeOpenBackC = await placeOpen.isVisible().catch(() => false)
+        r.check(`${name} 항목c — 배치하기 → data-placing="true" + 슬롯 3개 + 가게 버튼 숨김 + 취소 버튼 표시`,
+          shopClosedB && placeOpenVisC && placingC && slotCountC === 3 && enterHiddenC && cancelVisC,
+          JSON.stringify({ shopClosedB, placeOpenVisC, placingC, slotCountC, enterHiddenC, cancelVisC }))
+        r.check(`${name} 항목c — 취소 → 배치 모드 종료, 가게 버튼/배치하기 버튼 복귀`, cancelledC && enterBackC && placeOpenBackC,
+          JSON.stringify({ cancelledC, enterBackC, placeOpenBackC }))
+
+        // ── (d) 다시 배치하기 → 화면에 보이고 바닥에 직접 닿는 슬롯 탭 ──
+        await placeOpen.click()
+        let chosen = null
+        let tapPt = null
+        for (const s of PLACEMENT_SLOTS_REF) {
+          const gb = await ground.boundingBox()
+          const vb = await viewportEl.boundingBox()
+          const visible = intersectBoxes(gb, vb)
+          const pt = worldPctToScreenPx(slotCenterPct(s), gb)
+          if (visible && boxContainsPoint(visible, pt, -12) && await groundHitAt(page, pt)) { chosen = s; tapPt = pt; break }
+        }
+        if (!chosen) {
+          // 바로 보이는 슬롯이 없으면 C 쪽으로 걸어가 본다(배치 모드 중 빈 바닥 탭 = 일반 걷기).
+          const s = PLACEMENT_SLOTS_REF[2]
+          const vis = await ensureWorldPointVisible(page, character, ground, viewportEl, slotCenterPct(s))
+          if ((await root.getAttribute('data-proto25d-placed-count')) === '0' && vis.visible && await groundHitAt(page, vis.targetScreenPt)) {
+            chosen = s
+            tapPt = vis.targetScreenPt
+          }
+        }
+        if (!chosen) {
+          r.check(`${name} 항목d~f — 탭 가능한 슬롯을 화면에 가져오지 못해 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+        } else {
+          await page.mouse.click(tapPt.x, tapPt.y)
+          await waitUntil(async () => (await root.getAttribute('data-proto25d-placed-count')) === '1', { timeout: 2000 })
+          const placedCountD = await root.getAttribute('data-proto25d-placed-count')
+          const placedVisD = await placedItem.isVisible().catch(() => false)
+          const placedSlotD = await placedItem.getAttribute('data-slot-id').catch(() => null)
+          const placeOpenGoneD = (await placeOpen.count()) === 0
+          const obstacleCountD = await root.getAttribute('data-proto25d-obstacle-count')
+          const placingD = await root.getAttribute('data-placing')
+          const markersGoneD = (await slotMarkers.count()) === 0
+          const objectCountD = await page.locator('[data-testid="proto25d-object"]').count()
+          const benchArtD = await page.locator('[data-testid="proto25d-bench-art"]').count()
+          r.check(`${name} 항목d — 슬롯 ${chosen.id} 탭 → placed-count "1", 배치물 표시, 배치하기 버튼 사라짐, 배치 모드 종료`,
+            placedCountD === '1' && placedVisD && placedSlotD === chosen.id && placeOpenGoneD && placingD === 'false' && markersGoneD,
+            JSON.stringify({ placedCountD, placedVisD, placedSlotD, placeOpenGoneD, placingD, markersGoneD }))
+          r.check(`${name} 항목d — 정적 계약 유지(obstacle-count "8", proto25d-object 7, bench-art 1)`,
+            obstacleCountD === '8' && objectCountD === 7 && benchArtD === 1, JSON.stringify({ obstacleCountD, objectCountD, benchArtD }))
+
+          // ── (e) 배치물 중심 탭 → idle 후 캐릭터가 그 rect 안에 있지 않음 ──
+          const gbE = await ground.boundingBox()
+          const ptE = worldPctToScreenPx(slotCenterPct(chosen), gbE)
+          await page.mouse.click(ptE.x, ptE.y)
+          await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 1500 })
+          await idleOf(character)
+          const posE = await readCharacterPct(character)
+          const insideE = posE.left > chosen.x0 && posE.left < chosen.x1 && posE.top > chosen.y0 && posE.top < chosen.y1
+          r.check(`${name} 항목e — 배치물 중심 탭 후 캐릭터가 배치물 rect 안에 멈추지 않음`, !insideE, JSON.stringify({ posE, chosen }))
+
+          // ── (f) 가게 입구로 걸어가면 입장 버튼이 다시 나타남(경로 유지) ──
+          const entranceVisF = await ensureWorldPointVisible(page, character, ground, viewportEl, SHOP_ENTRANCE_PCT_REF)
+          let enterVisF = false
+          if (entranceVisF.visible) {
+            await page.mouse.click(entranceVisF.targetScreenPt.x, entranceVisF.targetScreenPt.y)
+            await idleOf(character)
+            enterVisF = await enterBtn.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)
+          }
+          r.check(`${name} 항목f — 배치 후에도 가게 입구까지 걸어가 입장 버튼 표시`, entranceVisF.visible && enterVisF, JSON.stringify({ visible: entranceVisF.visible, enterVisF }))
+        }
+
+        // ── (g) 새로고침 → 배치/구매 리셋 ──
+        windowEnd = mocks.apiCallLog.length
+        await page.reload({ waitUntil: 'domcontentloaded' })
+        const needsLogin = await page.getByPlaceholder('이름 입력...').waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false)
+        if (needsLogin) {
+          await login(page)
+          await waitForLoggedIn(page)
+        }
+        character = page.locator('[data-proto-character]')
+        await character.waitFor({ state: 'attached', timeout: 5000 }).catch(() => {})
+        ground = page.locator('[data-testid="proto25d-ground"]')
+        viewportEl = page.locator('[data-testid="proto25d-viewport"]')
+        enterBtn = page.locator('[data-testid="proto25d-shop-enter"]')
+        const placedCountG = await root.getAttribute('data-proto25d-placed-count').catch(() => null)
+        const placeOpenG = await placeOpen.count()
+        const placedItemsG = await placedItem.count()
+        const entranceVisG = await ensureWorldPointVisible(page, character, ground, viewportEl, SHOP_ENTRANCE_PCT_REF)
+        let buyEnabledG = false
+        if (entranceVisG.visible) {
+          await page.mouse.click(entranceVisG.targetScreenPt.x, entranceVisG.targetScreenPt.y)
+          await idleOf(character)
+          await enterBtn.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {})
+          await enterBtn.click()
+          if (await shopOverlay.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)) {
+            buyEnabledG = !(await buyBtn.isDisabled().catch(() => true))
+          }
+        }
+        r.check(`${name} 항목g — 새로고침 후 placed-count "0", 배치물/배치하기 버튼 없음, Buy 다시 활성`,
+          placedCountG === '0' && placeOpenG === 0 && placedItemsG === 0 && entranceVisG.visible && buyEnabledG,
+          JSON.stringify({ placedCountG, placeOpenG, placedItemsG, visible: entranceVisG.visible, buyEnabledG }))
+
+        // ── (h) 쓰기 API 0건(S22 항목g와 동일 확인) ──
+        const writeActionCalls = mocks.apiCallLog.filter((c) => c.body && ['purchase_town_item', 'claim_town_welcome'].includes(c.body.action))
+        const restWriteCalls = classifyWrites(mocks.apiCallLog).unexpectedRest
+        r.check(`${name} 항목h — 구매/보상 쓰기 액션 0건 + 허용목록 외 REST 쓰기 0건`,
+          writeActionCalls.length === 0 && restWriteCalls.length === 0, JSON.stringify({ writeActionCalls, restWriteCalls }))
+        // 구간(가게 입장~새로고침 직전) 쓰기 — 같은 허용목록 헬퍼로 판정. 새로고침 후
+        // 구간(구매·배치 없음)은 허용목록의 대조군으로 진단 detail/로그에만 남긴다.
+        const wIn = classifyWrites(mocks.apiCallLog.slice(windowStart, windowEnd))
+        const wPre = classifyWrites(mocks.apiCallLog.slice(0, windowStart))
+        const wPost = classifyWrites(mocks.apiCallLog.slice(windowEnd))
+        console.log(`  [diag] ${name} REST writes pre=${JSON.stringify(wPre.allowedRestSeen)} window=${JSON.stringify(wIn.allowedRestSeen)} post(control)=${JSON.stringify(wPost.allowedRestSeen)}`)
+        r.check(`${name} 항목h — 가게 입장~새로고침 직전 구간: 구매/보상 액션 0건 + 로그인 진도 동기화 허용목록 외 REST 쓰기 0건`,
+          windowStart >= 0 && windowEnd >= windowStart && wIn.shopActions.length === 0 && wIn.unexpectedRest.length === 0,
+          JSON.stringify({ window: wIn, diagnosticPre: wPre.allowedRestSeen, diagnosticPostControl: wPost.allowedRestSeen }))
+      }
+      r.check(`${name} — 가로 스크롤 없음(최종)`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
     }
   }
 
