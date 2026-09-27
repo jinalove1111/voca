@@ -2392,28 +2392,50 @@ export async function run(browser, baseURL) {
       // 2026-09-25 — 팀장 진단 반영: phase/frame/src/box를 각각 별도
       // Playwright 호출로 읽던 것을 sampleCharacterState(하나의 evaluate)
       // 로 교체해 계측 경쟁을 제거한다(위 헬퍼 주석 참고).
+      //
+      // 2026-09-28(F3, S12[1280x800] 플레이크 근본 원인) — 걷기는 ~650ms,
+      // 프레임 교대 주기는 150ms(a/b)인데, 이전 샘플러는 루프 안 스크린샷
+      // 때문에 샘플 간격이 ~130–340ms로 늘어나 walking 샘플이 3개뿐이었고,
+      // 그 3개가 모두 'a' 창에 떨어지는 앨리어싱이 생겼다(진단: 제품은
+      // a@24→b@187→a@338→b@477→a@630→idle@677ms로 정상 교대, 샘플러는
+      // a,a,a — scripts/.tmp/f3_diag_s12_load.log). 그래서 프레임 교대/
+      // basename 단언은 탭 직전에 설치한 in-page MutationObserver 기록
+      // (걷기 전체 구간의 모든 프레임 변화, {t, frameId, src, phase})으로
+      // 판정하고, 걷기 프레임 스크린샷(side-a/side-b/mid-walk)은 측정 창을
+      // 흔들지 않도록 제거했다(리뷰용 산출물이었고 단언과 무관 — idle/
+      // sitting 스크린샷은 그대로). 아래 7회 샘플 루프는 박스 높이/하단
+      // 스프레드/샘플 개수 단언용으로 그대로 유지한다.
+      await page.evaluate(() => {
+        const t0 = performance.now()
+        const log = []
+        const rec = () => {
+          const root = document.querySelector('[data-proto-character]')
+          const img = document.querySelector('img[data-proto-character-sprite]')
+          const e = {
+            t: Math.round(performance.now() - t0),
+            phase: root ? root.getAttribute('data-character-phase') : null,
+            frameId: img ? img.getAttribute('data-proto-character-sprite-frame') : null,
+            src: img ? img.src : null,
+          }
+          const last = log[log.length - 1]
+          if (!last || last.phase !== e.phase || last.frameId !== e.frameId || last.src !== e.src) log.push(e)
+        }
+        const obs = new MutationObserver(rec)
+        obs.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-proto-character-sprite-frame', 'src', 'data-character-phase'] })
+        rec()
+        window.__s12FrameRecorder = { stop: () => { obs.disconnect(); return log } }
+      })
       const sideTarget = worldToPx(65, 62)
       await page.mouse.click(sideTarget.x, sideTarget.y)
       await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 2000 })
       const samplesRight = []
-      let capturedSideA = false
-      let capturedSideB = false
       for (let i = 0; i < 7; i++) {
-        const s = await sampleCharacterState(page)
-        samplesRight.push(s)
-        if (s.frame === 'walk-side-a' && !capturedSideA) {
-          await page.screenshot({ path: path.join(SCREENSHOT_DIR, `side-${vp.label}-a.png`), clip: groundBox }).catch(() => {})
-          capturedSideA = true
-        }
-        if (s.frame === 'walk-side-b' && !capturedSideB) {
-          await page.screenshot({ path: path.join(SCREENSHOT_DIR, `side-${vp.label}-b.png`), clip: groundBox }).catch(() => {})
-          capturedSideB = true
-        }
-        if (i === 2) await page.screenshot({ path: path.join(SCREENSHOT_DIR, `${vp.label}-mid-walk.png`), clip: groundBox }).catch(() => {})
+        samplesRight.push(await sampleCharacterState(page))
         await page.waitForTimeout(100)
       }
+      await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle', { timeout: 3000 })
+      const frameLogRight = await page.evaluate(() => (window.__s12FrameRecorder ? window.__s12FrameRecorder.stop() : []))
       const frameSamples = samplesRight.map((s) => s.frame)
-      const srcSamplesRight = samplesRight.map((s) => s.src)
       const boxSamplesRight = samplesRight.map((s) => s.box).filter(Boolean)
       // 2026-09-25 — 이 구간(원래 회귀 재현과 무관, 별개 실측) 15
       // world-% 거리도 종종 700ms 샘플링 창이 끝나기 전에 도착해버린다
@@ -2423,17 +2445,19 @@ export async function run(browser, baseURL) {
       // walk에서 이미 검증한 것과 동일한 처방 — phase==='walking'이었던
       // 샘플만 걸러서 프레임 교대/basename을 확인한다(도착 후 idle-front
       // 샘플이 섞여 들어와 'walk-side-b'를 못 본 것처럼 보이는 오탐 방지).
-      const walkingIdxRight = samplesRight.map((s, i) => (s.phase === 'walking' ? i : -1)).filter((i) => i >= 0)
-      const frameSamplesWalkingRight = walkingIdxRight.map((i) => frameSamples[i])
-      const srcSamplesWalkingRight = walkingIdxRight.map((i) => srcSamplesRight[i])
+      // (F3) 위 in-page 기록 중 phase==='walking'이었던 항목만 사용.
+      const walkingLogRight = frameLogRight.filter((e) => e.phase === 'walking')
+      const frameSamplesWalkingRight = walkingLogRight.map((e) => e.frameId)
+      const srcSamplesWalkingRight = walkingLogRight.map((e) => e.src)
+      const frameLogDetailRight = JSON.stringify(frameLogRight.map((e) => [e.t, e.phase, e.frameId]))
       const sawA = frameSamplesWalkingRight.some((f) => typeof f === 'string' && f.endsWith('-a'))
       const sawB = frameSamplesWalkingRight.some((f) => typeof f === 'string' && f.endsWith('-b'))
-      r.check(`${name} — 걷는 동안(phase==='walking'이었던 샘플, ${walkingIdxRight.length}/7) 프레임이 실제로 교대됨(a/b 둘 다 관측)`, sawA && sawB, JSON.stringify(frameSamplesWalkingRight))
+      r.check(`${name} — 걷는 동안(phase==='walking'이었던 in-page 기록 ${walkingLogRight.length}건) 프레임이 실제로 교대됨(a/b 둘 다 관측)`, sawA && sawB, frameLogDetailRight)
       r.check(`${name} — RIGHT walk 샘플 개수가 6회 이상(≈700ms 폴링)`, frameSamples.length >= 6, `count=${frameSamples.length}`)
       r.check(
         `${name} — RIGHT walk 중(phase==='walking') 프레임 id에 'walk-side-a'와 'walk-side-b' 둘 다 포함`,
         frameSamplesWalkingRight.includes('walk-side-a') && frameSamplesWalkingRight.includes('walk-side-b'),
-        JSON.stringify(frameSamplesWalkingRight),
+        frameLogDetailRight,
       )
       const srcBasenamesRight = [...new Set(srcSamplesWalkingRight.filter(Boolean).map((s) => s.split('/').pop()))]
       r.check(
