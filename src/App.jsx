@@ -280,7 +280,13 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 자격/파일럿 허용목록/paulTownV2와 절대 결합하지 않는다(기존 Town V1/V2
   // 게이팅과 완전히 무관한 독립 dev/QA 서피스).
   const paulTown2_5dEnabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('paulTown2_5d'), () => false)
-  const townShop = useTownShop(studentId, (townShopEnabled || townV1Enabled) && !!studentId)
+  // 2026-09-27 경제 단계 A2 — paulTown2_5d 단독 플래그(townShopV1/townV1
+  // 자격 없이)로도 코인 배지가 실제 서버 잔액을 읽을 수 있도록 훅 게이트를
+  // 넓힌다. 위 STEP 0 안전성 검토(get_town_shop_state RPC는 순수 SELECT,
+  // 쓰기/lazy row 생성 없음)로 다른 소비자(TownScreen/TownScreenV2/
+  // PaulTown/Dashboard wallet)의 게이팅은 전부 그대로 townShopEnabled/
+  // townV1Enabled 기준이라 이 변경으로 새로 노출되는 화면은 없다.
+  const townShop = useTownShop(studentId, (townShopEnabled || townV1Enabled || paulTown2_5dEnabled) && !!studentId)
 
   // 선물상자를 닫은 직후, 오늘 틀린 스펠링 단어나 영구 복습 대기열
   // (Writing MVP, 2026-07-20 — 적어도 하루 전에 놓친 단어)이 남아있으면
@@ -1096,8 +1102,11 @@ function AppInner({ studentId, studentName, onLogout }) {
           자체가 없음) — 플래그 하나로만 게이팅되는 오버레이. */}
       {paulTown2_5dEnabled && (
         <React.Suspense fallback={null}>
-          {/* 경제 단계 A(2026-09-26) — Dashboard의 wallet prop과 정확히 같은 게이트/소스(읽기 전용, 새 fetch 없음). */}
-          <Proto25DScreen wallet={townShopEnabled && townShop.state ? { dollarsAvailable: townShop.state.dollars.available } : null} />
+          {/* 경제 단계 A2(2026-09-27) — Dashboard wallet(townShopEnabled 게이트)과
+              달리, 이 프로토타입은 paulTown2_5d 플래그 자체가 이미 렌더 조건이므로
+              같은 플래그로 지갑도 게이팅한다(townShopV1이 꺼져 있어도 코인 배지가
+              보여야 함) — 소스는 여전히 townShop.state 하나(읽기 전용, 새 fetch 없음). */}
+          <Proto25DScreen wallet={paulTown2_5dEnabled && townShop.state ? { dollarsAvailable: townShop.state.dollars.available } : null} />
         </React.Suspense>
       )}
     </>

@@ -1,5 +1,41 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-26 (186차 — **Paul Town 2.5D 경제 단계 A: 코인 잔액 읽기 전용 표시(PR #62)**: 대시보드 지갑과 같은 게이트·출처(`useTownShop` 조회 상태)를 2.5D 화면 HUD의 누를 수 없는 배지로 표시, 새 네트워크 요청·쓰기 경로 0. verify:e2e 1965/1965, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 186차 섹션 참고.)_
+_최종 갱신: 2026-09-27 (187차 — **경제 단계 A2: 2.5D 코인 배지 조회 조건에 paulTown2_5d 포함 + "💵 Paul Dollar" 용어 통일 + 배지 우상단 분리(PR #62)**: 서버 조회 get_town_shop_state가 SELECT 전용임을 코드로 확인 후 조건 확장. 첫 시도에서 배지가 HUD 열을 키워 탭을 가로챈 회귀 8건 → 배지를 우상단 별도 요소로 분리해 해소. 정적 테스트 약속 갱신. verify:e2e 1995/1995, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 187차 섹션 참고.)_
+
+## 2026-09-27 (187차) — 경제 단계 A2: 조회 조건 확장·Paul Dollar 용어 통일·배지 위치 분리 (PR #62, 워크트리 `C:\voca-wt\paul-town-v2`)
+
+### 0. 운영자 결정과 안전 조건
+
+- 운영자 지시: 잔액 조회 조건에 `paulTown2_5d` 포함, 배지 용어를 "Paul Dollar"로 통일. 이후 회귀 발생 시 권장안 1(배지를 HUD 열 밖 우상단 `absolute top-3 right-3`, 배지만 pointer-events-none) 승인, 정적 테스트 정규식 갱신 승인.
+- 구매 차감·보상 지급·환영 코인 수령·인벤토리 저장·DB·SQL·Production 변경 0. 플래그 3개 false.
+
+### 1. 조건 확장 전 안전성 확인
+
+- 서버 `get_town_shop_state`: `api/grant-xp.js:95-188`은 RPC 1회 + `town_items` SELECT 폴백뿐, RPC 본문 `supabase_v3_49_paul_dollar.sql:304-349`는 `reward_totals`/`dollar_balances`/`star_purchases`/`town_purchases` SELECT만 — 쓰기·지연 행 생성 없음(구현 에이전트 확인 + 코드리뷰 독립 확인).
+- 다른 `townShop` 소비자: 대시보드 지갑과 PaulTown shop prop은 각자 `townShopEnabled`로 다시 게이트, 구매·수령 함수가 있는 TownScreen/TownScreenV2는 `townV1Enabled`로만 진입 가능 → `paulTown2_5d`만 켠 학생에게 새로 보이는 화면·쓰기 경로 없음.
+
+### 2. 회귀와 수정
+
+- 1차 구현(조건 확장 + 문구 변경) 후 가게 스펙 623 중 8 FAIL(360x640의 S12 왼쪽 걷기 5, S18 입장 2, S19 1). 구현 에이전트가 "기존 실패"로 잘못 분류했으나 직전 커밋 기준 639/639였음 → 회귀로 확정.
+- 원인: 배지가 모든 시나리오에 나타나게 되면서 좌상단 HUD 열(`absolute top-3 left-3 flex flex-col`, pointer-events-none 아님)의 세 번째 항목(44px)이 되어 열 상자가 커졌고, 그 상자가 바닥 탭을 가로챔.
+- 수정: 배지를 HUD 열에서 빼 우상단 독립 요소(`absolute top-3 right-3 z-10 pointer-events-none`)로 분리. HUD 열과 버튼은 무변경. 가게 스펙 669/669.
+- 정적 테스트 `scripts/testTownUiStatic.mjs`(필수 스위트): `useTownShop` 조건 정규식이 예전 글자 형태를 고정해 verify:all에서 1단언 FAIL → 정규식이 선택적 `|| paulTown2_5dEnabled`를 허용하도록 갱신(순서 의도 유지) + `paulTown2_5dEnabled` 포함을 명시적으로 확인하는 단언 1개 추가(126/126). 제품 코드 무변경.
+
+### 3. 변경 파일
+
+`src/App.jsx`(조회 조건에 `paulTown2_5dEnabled`, 2.5D wallet 게이트를 `paulTown2_5dEnabled`로, 대시보드 wallet 무변경), `src/components/town/proto2_5d/Proto25DScreen.jsx`(배지 💵·우상단 분리), `src/utils/town/proto2_5d/coinDisplay.js`(aria "Paul Dollar N개"), `scripts/testProto25dCoin.mjs`(27), `tests/e2e/townProto25d.spec.mjs`(S20 4뷰포트 각 13단언: paulTown2_5d만으로 기본 $0 표시·조회 ≥1·쓰기 0, townShopV1+37 → "$37"·"Paul Dollar 37개", HUD 열에 배지 없음·열 높이 불변, 배지 중심 탭 시 캐릭터 이동(탭 통과), 겹침·잘림 없음, Buy 후 불변), `scripts/testTownUiStatic.mjs`.
+
+### 4. 검증
+
+- 단위: coin 27, shop 44, camera 76, testTownUiStatic 126 · build 0 경고.
+- `npm run verify:e2e`: 총 1995단언 PASS 1995 / FAIL 0 / SKIP 0.
+- `npm run verify:all`: ALL DOMAINS PASS, EXIT 0, testTownUiStatic PASS, 내장 E2E PASS. 기록: 부가(extra) `testEntranceRosterMinbyungchun.mjs`가 전 단언 통과 후 Windows Node 종료 시 libuv 크래시(exit 3221226505) — 182차와 동일 환경 문제. 이 스위트는 실제 DB를 읽기 전용으로 대조하므로 불필요한 운영 조회를 피하려 단독 재실행하지 않음.
+- 이전 verify:all 1회(A3 코드 기준)는 마지막 부가 항목 실행 중 판정 없이 종료 — 원인 미확인, 이후 재실행(A4)으로 대체.
+- 독립 코드리뷰 APPROVE(A2 본체 + 정적 테스트 변경분, 정규식을 합성 문자열로 검증), 독립 QA PASS.
+
+### 5. 다음 결정 후보
+
+- 경제 단계 B(구매, 플래그 뒤) 착수 여부.
+- `testRewardFlow`·`testEntranceRosterMinbyungchun` 간헐/종료 크래시 조사 여부.
 
 ## 2026-09-26 (186차) — 경제 단계 A: 코인 잔액 읽기 전용 표시 (PR #62, 워크트리 `C:\voca-wt\paul-town-v2`)
 

@@ -988,22 +988,6 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
         >
           산책 모드 {walkMode ? 'ON' : 'OFF'}
         </button>
-        {/* 경제 단계 A(2026-09-26) — 읽기 전용 코인 잔액 배지. wallet이
-            null이거나 coinDisplay.js가 표시 불가로 판단하면(coinBadgeText
-            null) 아무 것도 렌더하지 않는다. 클릭 핸들러 없음(비인터랙티브)
-            + pointer-events-none — 바닥 위에 얹혀도 그 아래 탭 핸들러를
-            가로채지 않는다(위 "UI 배지" 주석과 동일 정신, 이 배지는 그
-            컬럼의 세 번째 자식일 뿐 바닥의 형제 트리 밖으로 나가지 않음). */}
-        {coinBadgeText(wallet) !== null && (
-          <div
-            data-testid="proto25d-coin-badge"
-            role="status"
-            aria-label={coinBadgeAriaLabel(wallet)}
-            className="pointer-events-none min-h-[44px] flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-amber-600 shadow"
-          >
-            🪙 {coinBadgeText(wallet)}
-          </div>
-        )}
         {infoOpen && (
           <p className="rounded-xl bg-white/90 px-3 py-2 text-[11px] text-gray-500 shadow max-w-[220px]">
             바닥을 탭하면 캐릭터가 걸어갑니다. 회색 상자를 탭하면 안까지
@@ -1013,6 +997,34 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
           </p>
         )}
       </div>
+
+      {/* 경제 단계 A(2026-09-26)/A2(2026-09-27)/A3(2026-09-27, 배지 위치
+          수정) — 읽기 전용 Paul Dollar 잔액 배지. 이전에는 좌상단 HUD
+          컬럼(정보/산책모드 토글이 있는 그 flex-col)의 세 번째 자식으로
+          두었는데, 그 컬럼 div 자체가 pointer-events-none이 아니라서
+          배지가 늘려놓은 세로 공간만큼 그 div의 절대 배치 박스가 커졌고,
+          그 박스가 바닥(ground) 위에 겹쳐 앉으면서 안쪽 빈 공간을 탭해도
+          바닥의 onPointerDown/onPointerUp까지 이벤트가 도달하지 못했다
+          (S12 LEFT-walk 프레임/미러 회귀 + S18/S19 가게 입장 지점 탭 실패
+          — orchestrator가 이전 HEAD 639/639 로그와 비교해 이번에 추가된
+          배지가 원인임을 확인). 그래서 이 배지를 그 컬럼 밖으로 완전히
+          꺼내 독립된 형제 엘리먼트로 만들고(컬럼 자신의 박스 크기는
+          이제 배지와 무관하게 이전과 동일), 반대편(top-3 right-3)에 둔다
+          — 정보/산책모드 버튼과 같은 줄에 나란히 놓여 서로의 탭 영역을
+          넓히는 일도 없다. pointer-events-none은 그대로 유지(비인터랙티브
+          — 밑에 뭔가 있어도 항상 통과시킨다). wallet이 null이거나
+          coinDisplay.js가 표시 불가로 판단하면(coinBadgeText null) 아무
+          것도 렌더하지 않는다. */}
+      {coinBadgeText(wallet) !== null && (
+        <div
+          data-testid="proto25d-coin-badge"
+          role="status"
+          aria-label={coinBadgeAriaLabel(wallet)}
+          className="absolute top-3 right-3 z-10 pointer-events-none min-h-[44px] flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-amber-600 shadow"
+        >
+          💵 {coinBadgeText(wallet)}
+        </div>
+      )}
 
       {/* 2026-09-26 — 뷰포트 래퍼(신규, 산책 모드 전용 새 엘리먼트). 항상
           렌더된다(walkMode와 무관 — 뷰포트 크기를 모드 전환 전에도 미리

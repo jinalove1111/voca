@@ -5,10 +5,15 @@
 // 읽기 전용 — 이 파일은 지갑 값을 어디서도 fetch/구매/보상하지 않는다.
 // 이미 계산된 wallet 객체(App.jsx가 useTownShop.state에서 파생한 것)를
 // 받아 "화면에 어떻게 보일지"만 결정하는 순수 함수 2개다(React/DOM/
-// 네트워크 없음). App.jsx가 이미 Dashboard의 wallet prop과 정확히 같은
-// 게이트(townShopEnabled && townShop.state)로 만든 { dollarsAvailable }
-// 만 넘겨준다는 전제 — 새 fetch/구독을 만들지 않는다(진실 원천 1개,
-// Dashboard와 동일한 소스 재사용).
+// 네트워크 없음). App.jsx가 만든 { dollarsAvailable }만 넘겨준다는
+// 전제 — 새 fetch/구독을 만들지 않는다(진실 원천 1개, Dashboard/
+// TownHeader와 동일한 townShop.state 소스 재사용).
+//
+// 경제 단계 A2(2026-09-27) — 표기를 앱 전역 관례("Paul Dollar", 💵,
+// Dashboard.jsx/TownHeader.jsx의 "사용 가능한 Paul Dollar")와 통일한다.
+// 이전 "코인"/🪙 표기는 이 프로토타입 전용 임시 이름이었을 뿐 다른 화면과
+// 일치하지 않아 혼동을 줄 수 있었다 — 값 자체(dollarsAvailable)는 그대로,
+// 문구만 바꾼다.
 //
 // 통화 표시는 src/utils/townShop.js의 formatDollars를 그대로 재사용한다
 // (그 파일은 자신도 어떤 것도 import하지 않는 순수 함수 모듈 — 값 복제
@@ -46,5 +51,5 @@ export function coinBadgeAriaLabel(wallet) {
   const text = coinBadgeText(wallet)
   if (text === null) return null
   const n = Math.max(0, Math.round(Number(wallet.dollarsAvailable) || 0))
-  return `코인 ${n}개`
+  return `Paul Dollar ${n}개`
 }

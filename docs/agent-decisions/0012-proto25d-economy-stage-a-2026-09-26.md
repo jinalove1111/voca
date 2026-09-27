@@ -42,3 +42,10 @@ ACCEPT. 용어 통일과 조회 게이트 확장은 운영자 결정 대기.
 
 ## FINAL STATUS
 ACCEPTED → IMPLEMENTED → VERIFIED (2026-09-26, PR #62 커밋)
+
+## 추가 결정 A2 (2026-09-27)
+
+- 운영자 결정: 조회 조건에 `paulTown2_5d` 포함(서버 조회 SELECT 전용 확인 후), 용어 "💵 Paul Dollar"로 통일(기존 "코인" 불일치 해소), 배지를 우상단 독립 요소로 분리(HUD 열 확장이 탭을 가로챈 회귀 8건 해소), 정적 테스트 약속 갱신.
+- 결과: verify:e2e 1995/1995, verify:all ALL DOMAINS PASS, 코드리뷰 APPROVE, QA PASS. 상세 `handoff.md` 187차.
+- 교훈: 기존 레이아웃 컨테이너 안에 요소를 추가하면 컨테이너 히트 영역이 커질 수 있다 — 새 비대화형 요소는 독립 absolute + pointer-events-none으로 두고, 실패는 직전 실행 로그와 비교하기 전에는 "기존 실패"로 분류하지 않는다.
+- FINAL STATUS: VERIFIED (A2, 2026-09-27, PR #62 커밋).

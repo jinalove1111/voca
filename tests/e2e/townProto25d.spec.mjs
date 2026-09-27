@@ -3895,26 +3895,45 @@ export async function run(browser, baseURL) {
     }
   }
 
-  // ── S20 — 경제 단계 A(2026-09-26, 읽기 전용 코인 잔액 표시 v1) — App.jsx가
-  // Dashboard의 wallet prop과 완전히 같은 게이트(townShopEnabled &&
-  // townShop.state)로 Proto25DScreen에 { dollarsAvailable }를 넘기고,
-  // coinDisplay.js(scripts/testProto25dCoin.mjs가 이미 27단언으로 순수
-  // 로직을 검증)가 그 값을 배지 텍스트/aria-label로 바꾼다 — 이 E2E는
-  // "그 값이 실제 화면(HUD 다른 배지/가게 입장 버튼과 안 겹침, 가게를
-  // 열고 닫아도 안 바뀜, 어떤 쓰기 API도 안 부름)에서 안전한지"만 본다
-  // (순수 로직 재검증 아님). S18/S19와 동일하게 참조 뷰포트 4종 중 모바일
-  // 1종(360x640)+데스크톱 1종(1280x800)만 돈다(새로 만진 지점만의 회귀
-  // 고정).
-  const S20_VIEWPORTS = S17_VIEWPORTS.filter((vp) => vp.width === 360 || vp.width === 1280)
-
-  for (const vp of S20_VIEWPORTS) {
+  // ── S20 — 경제 단계 A(2026-09-26)/A2(2026-09-27)/A3(2026-09-27, 배지
+  // 위치 수정 후 회귀 고정) — App.jsx가 useTownShop 훅을 (townShopEnabled
+  // || townV1Enabled || paulTown2_5dEnabled) && !!studentId로 넓게
+  // 게이팅하고, Proto25DScreen의 wallet prop은 paulTown2_5dEnabled &&
+  // townShop.state로 { dollarsAvailable }를 받는다. 즉 paulTown2_5d 플래그
+  // 단독으로도(townShopV1/townV1 없이) 배지가 실제 서버 상태를 반영한다
+  // (항목a). coinDisplay.js(scripts/testProto25dCoin.mjs가 이미 27단언으로
+  // 순수 로직을 검증, "Paul Dollar N개" 문구 포함)가 그 값을 배지 텍스트/
+  // aria-label로 바꾼다. A3(2026-09-27) — 배지는 이제 좌상단 HUD 컬럼(정보/
+  // 산책모드 토글) 밖으로 나와 독립된 top-3 right-3 형제 엘리먼트다(그
+  // 컬럼 안에 있을 때는 컬럼 div 자체가 pointer-events-none이 아니라서
+  // 늘어난 박스가 바닥 탭을 가로채 S12 LEFT-walk/S18/S19 가게 입장 시나리오
+  // 를 깨뜨렸다 — HEAD b8423a34 기준 639/639였던 로그와 diff로 확인). 이
+  // E2E는 "그 값이 실제 화면(HUD 두 토글/가게 입장 버튼과 안 겹침, 뷰포트
+  // 밖으로 잘리지 않음, HUD 컬럼 크기를 더 이상 늘리지 않음, 배지 아래
+  // 바닥 탭이 여전히 통과함, 가게를 열고 닫아도 안 바뀜, 어떤 쓰기 API도
+  // 안 부름)에서 안전한지"만 본다(순수 로직 재검증 아님). S17 참조 뷰포트
+  // 4종 전체(360x640/390x844/412x915/1280x800)를 돈다(배지 이동이 좌우
+  // 여유가 좁은 모바일 뷰포트에서 특히 위험하므로 필터링하지 않음). 모바일
+  // 3종은 hasTouch:true 컨텍스트 + cdpTouchTap(이 파일 상단 헬퍼, 합성
+  // PointerEvent가 아니라 CDP Input.dispatchTouchEvent를 씀 — 이유는 그
+  // 헬퍼 헤더 주석 참고, S4/townV2.spec.mjs와 동일 관례 재사용)로 통과
+  // 탭을 검증하고, 데스크톱 1종은 일반 마우스 클릭으로 검증한다.
+  for (const vp of S17_VIEWPORTS) {
     const name = `S20[${vp.label},coin]`
+    const isMobile = vp.width !== 1280
 
-    // ── (a) 기본 기기 플래그(townShopV1 없음, paulTown2_5d만) — Dashboard와
-    //     동일한 게이트가 false이므로 wallet이 null로 넘어가 배지 자체가
-    //     렌더되지 않아야 한다(구매/보상 관련 상태 없음, townState 주입 없음). ──
+    // ── (a) 경제 단계 A2(2026-09-27) — 기본 기기 플래그(townShopV1/townV1
+    //     없음, paulTown2_5d만). App.jsx의 useTownShop 게이트가
+    //     paulTown2_5dEnabled도 OR로 포함하도록 넓어졌으므로, 이 조합에서도
+    //     훅이 실제로 fetch하고 지갑 배지가 뜬다 — mockRoutes.mjs
+    //     getTownMockState() 기본 시드(starsEarned:20, dollars.available:0)
+    //     그대로(townState 주입 없음) → coinBadgeText(0)==="$0"이 보여야
+    //     한다("0"도 유효한 잔액, coinDisplay.js 계약). 이 mock에는
+    //     get_town_shop_state를 실패시키는 옵션이 없어(installMocks에 그런
+    //     파라미터가 없음) "상태 조회 실패 시 배지 숨김" 케이스는 이 스위트
+    //     에서 검증하지 못한다 — 드롭하고 여기 기록만 남긴다. ──
     {
-      const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
+      const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, ...(isMobile ? { hasTouch: true } : {}) })
       const page = await context.newPage()
       await setDeviceFlags(page, { paulTown2_5d: true })
       const mocks = await installMocks(page)
@@ -3924,8 +3943,20 @@ export async function run(browser, baseURL) {
         await waitForLoggedIn(page)
         const character = page.locator('[data-proto-character]')
         await character.waitFor({ state: 'attached', timeout: 5000 })
-        const coinBadgeAbsent = page.locator('[data-testid="proto25d-coin-badge"]')
-        r.check(`${name} 항목a — townShopV1 기기 플래그가 없으면(기본값) 코인 배지가 렌더되지 않음`, await coinBadgeAbsent.count() === 0)
+        const coinBadge = page.locator('[data-testid="proto25d-coin-badge"]')
+        const badgeVisible = await coinBadge.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)
+        let badgeSnapshot = { text: '', ariaLabel: null }
+        if (badgeVisible) {
+          badgeSnapshot = await coinBadge.evaluate((el) => ({ text: el.textContent || '', ariaLabel: el.getAttribute('aria-label') }))
+        }
+        r.check(
+          `${name} 항목a — townShopV1 기기 플래그가 없어도(paulTown2_5d만) 훅이 넓은 게이트로 fetch해 기본 잔액 배지("$0")가 보임`,
+          badgeVisible && badgeSnapshot.text.includes('0') && badgeSnapshot.ariaLabel === 'Paul Dollar 0개',
+          JSON.stringify({ badgeVisible, badgeSnapshot }),
+        )
+        r.check(`${name} 항목a — get_town_shop_state 읽기 호출이 최소 1건 있음(paulTown2_5d 단독으로도 훅이 fetch)`, mocks.db._townCalls.get_town_shop_state >= 1, String(mocks.db._townCalls.get_town_shop_state))
+        const writeActionCallsA = mocks.apiCallLog.filter((c) => c.body && ['purchase_town_item', 'claim_town_welcome'].includes(c.body.action))
+        r.check(`${name} 항목a — 구매/보상 쓰기 액션(purchase_town_item/claim_town_welcome) 호출 0건`, writeActionCallsA.length === 0, JSON.stringify(writeActionCallsA))
       } catch (err) {
         const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
         r.check(`${name} 항목a 시나리오 실행 완료(예외 없음)`, false,
@@ -3936,11 +3967,13 @@ export async function run(browser, baseURL) {
       }
     }
 
-    // ── (b)~(e) townShopV1 on + 지갑 잔액 37 — 배지가 나타나고, HUD/가게
-    //     입장 버튼과 안 겹치고, 가게를 열고 사고(안내만) 닫아도 값이
-    //     그대로 유지되며, 어떤 쓰기 API도 호출하지 않음. ──
+    // ── (b)~(d) townShopV1 on + 지갑 잔액 37 — 배지가 나타나고, HUD 두
+    //     토글/가게 입장 버튼과 안 겹치고, 뷰포트 밖으로 잘리지 않고, HUD
+    //     컬럼을 더 이상 늘리지 않고, 바닥 탭이 배지를 통과하고, 가게를
+    //     열고 사고(안내만) 닫아도 값이 그대로 유지되며, 어떤 쓰기 API도
+    //     호출하지 않음. ──
     {
-      const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
+      const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, ...(isMobile ? { hasTouch: true } : {}) })
       const page = await context.newPage()
       await setDeviceFlags(page, { paulTown2_5d: true, townShopV1: true })
       // mockRoutes.mjs getTownMockState() 기본 시드(starsEarned:20, dollars:
@@ -3964,6 +3997,10 @@ export async function run(browser, baseURL) {
         const enterBtn = page.locator('[data-testid="proto25d-shop-enter"]')
         const shopOverlay = page.locator('[data-testid="proto25d-shop"]')
         const backBtn = page.locator('[data-testid="proto25d-shop-back"]')
+        // HUD 컬럼(정보/산책모드 토글의 실제 부모, A3에서 배지가 빠져나간
+        // 그 div) — 새 testid를 추가하지 않고(컨테이너/버튼 무변경 지시)
+        // 기존 버튼의 부모를 그대로 찾는다.
+        const hudColumn = infoToggle.locator('xpath=..')
 
         // ── (b) 스폰 시점 — 배지가 role=status로 보이고 텍스트/aria-label에
         //     37원 잔액이 정확히 반영됨 ──
@@ -3973,14 +4010,14 @@ export async function run(browser, baseURL) {
           badgeSnapshot = await coinBadge.evaluate((el) => ({ role: el.getAttribute('role'), text: el.textContent || '', ariaLabel: el.getAttribute('aria-label') }))
         }
         r.check(
-          `${name} 항목b — townShopV1 on + 잔액 37 상태에서 스폰 시점에 코인 배지가 role="status"로 보이고 텍스트에 "37" 포함, aria-label="코인 37개"`,
-          badgeVisibleAtSpawn && badgeSnapshot.role === 'status' && badgeSnapshot.text.includes('37') && badgeSnapshot.ariaLabel === '코인 37개',
+          `${name} 항목b — townShopV1 on + 잔액 37 상태에서 스폰 시점에 코인 배지가 role="status"로 보이고 텍스트에 "37" 포함, aria-label="Paul Dollar 37개"`,
+          badgeVisibleAtSpawn && badgeSnapshot.role === 'status' && badgeSnapshot.text.includes('37') && badgeSnapshot.ariaLabel === 'Paul Dollar 37개',
           JSON.stringify({ badgeVisibleAtSpawn, badgeSnapshot }),
         )
 
-        // ── (b) 배지가 뷰포트 안에 완전히 들어오고, 정보/산책모드 HUD
-        //     배지와 겹치지 않음(같은 컬럼의 flex-col 형제 — 겹칠 이유가
-        //     없어야 정상) ──
+        // ── (b) 배지가 뷰포트 안에 완전히 들어오고(잘리지 않음), 정보/
+        //     산책모드 HUD 토글과 겹치지 않음(A3부터는 반대편 모서리라
+        //     겹칠 이유가 없어야 정상) ──
         const badgeBox = await coinBadge.boundingBox()
         const viewportBoxB = await viewportEl.boundingBox()
         const infoBox = await infoToggle.boundingBox()
@@ -3990,14 +4027,55 @@ export async function run(browser, baseURL) {
           badgeBox.y >= viewportBoxB.y - 1 && badgeBox.y + badgeBox.height <= viewportBoxB.y + viewportBoxB.height + 1
         const overlapsHud = !!badgeBox && ((infoBox && intersectBoxes(badgeBox, infoBox)) || (walkBox && intersectBoxes(badgeBox, walkBox)))
         r.check(
-          `${name} 항목b — 코인 배지가 뷰포트 안에 완전히 들어오고 정보/산책모드 HUD 배지와 겹치지 않음`,
+          `${name} 항목b — 코인 배지가 뷰포트 안에 완전히 들어오고(잘리지 않음) 정보/산책모드 HUD 토글과 겹치지 않음`,
           insideViewport && !overlapsHud,
           JSON.stringify({ badgeBox, viewportBoxB, infoBox, walkBox }),
         )
 
+        // ── (b) A3 회귀 고정 — HUD 컬럼 안에 코인 배지가 더 이상 없고,
+        //     컬럼 높이가 두 토글 높이 + gap-1(4px)과 일치함(배지가 그
+        //     컬럼의 절대 배치 박스를 더 이상 늘리지 않음 — 이 늘어난
+        //     박스가 바닥 탭을 가로채던 것이 이번 회귀의 원인이었다). ──
+        const hudColumnBox = await hudColumn.boundingBox()
+        const badgeInsideHudColumn = await hudColumn.locator('[data-testid="proto25d-coin-badge"]').count()
+        const expectedHudHeight = (infoBox?.height || 0) + (walkBox?.height || 0) + 4
+        const hudHeightMatches = !!hudColumnBox && Math.abs(hudColumnBox.height - expectedHudHeight) <= 3
+        r.check(
+          `${name} 항목b — HUD 컬럼 안에 코인 배지가 없고(독립 형제로 이동) 컬럼 높이가 두 토글 높이+gap과 일치함(더 이상 늘어나지 않음)`,
+          badgeInsideHudColumn === 0 && hudHeightMatches,
+          JSON.stringify({ badgeInsideHudColumn, hudColumnBox, expectedHudHeight }),
+        )
+
+        // ── (b) A3 회귀 고정 — 배지 중심점을 탭해도 이벤트가 통과해
+        //     바닥 탭 핸들러가 여전히 동작함(pointer-events-none이 실제로
+        //     효과가 있고, 이 배지가 놓인 위치의 바닥 영역이 죽지 않음)임을
+        //     phase 전이 또는 실제 위치 이동으로 증명 ──
+        const boxBeforeTouchThrough = await character.boundingBox()
+        const badgeCenter = boxCenter(badgeBox)
+        if (isMobile) {
+          await cdpTouchTap(context, page, badgeCenter.x, badgeCenter.y)
+        } else {
+          await page.mouse.click(badgeCenter.x, badgeCenter.y)
+        }
+        const wentWalkingThroughBadge = await waitUntil(async () => (
+          (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking'
+        ), { timeout: 1500 })
+        if (wentWalkingThroughBadge) {
+          await waitUntil(async () => (
+            (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
+          ), { timeout: 5000 })
+        }
+        const boxAfterTouchThrough = await character.boundingBox()
+        const movedThroughBadge = dist(boxCenter(boxBeforeTouchThrough), boxCenter(boxAfterTouchThrough))
+        r.check(
+          `${name} 항목b — 코인 배지 중심점을 탭해도(${isMobile ? 'CDP 터치' : '마우스'}) 이벤트가 통과해 캐릭터가 걷기 시작하거나 위치가 바뀜(배지가 바닥 탭을 가로채지 않음)`,
+          wentWalkingThroughBadge || (movedThroughBadge != null && movedThroughBadge > 5),
+          JSON.stringify({ wentWalkingThroughBadge, movedThroughBadge }),
+        )
+
         // ── (c) 가게 입장 지점까지 걸어가 입장 버튼이 나타난 뒤에도 배지가
         //     여전히 보이고 입장 버튼과 겹치지 않음(화면 밖이면 최대 3회
-        //     hop, S18/S19와 동일 헬퍼 — 도달 못 하면 이 이후 (c)~(e) 전체를
+        //     hop, S18/S19와 동일 헬퍼 — 도달 못 하면 이 이후 (c) 나머지를
         //     정직하게 스킵) ──
         const entranceVisibility = await ensureWorldPointVisible(page, character, ground, viewportEl, SHOP_ENTRANCE_PCT_REF)
         let enteredShop = false
@@ -4017,50 +4095,51 @@ export async function run(browser, baseURL) {
             JSON.stringify({ enterVisible, badgeStillVisible, overlapsEnter }),
           )
 
-          // ── (d) 가게 열기 -> Buy -> 안내 문구 -> 뒤로가기로 닫기 -> 배지
+          // ── (c) 가게 열기 -> Buy -> 안내 문구 -> 뒤로가기로 닫기 -> 배지
           //     값 불변("37") ──
           if (enterVisible) {
             await enterBtn.click()
             const shopVisible = await shopOverlay.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)
-            r.check(`${name} 항목d — 입장 버튼 클릭 후 가게 오버레이가 보임`, shopVisible)
+            let noticeVisible = false
+            let shopHidden = false
+            let badgeTextAfterClose = ''
             if (shopVisible) {
               await page.locator('[data-testid="proto25d-shop-buy"]').first().click()
-              const noticeVisible = await page.locator('[data-testid="proto25d-shop-notice"]').first().waitFor({ state: 'visible', timeout: 1000 }).then(() => true).catch(() => false)
-              r.check(`${name} 항목d — Buy 클릭 후 안내 문구("구매 기능 준비 중")가 보임(실제 구매/쓰기 없음)`, noticeVisible)
+              noticeVisible = await page.locator('[data-testid="proto25d-shop-notice"]').first().waitFor({ state: 'visible', timeout: 1000 }).then(() => true).catch(() => false)
               await backBtn.click()
-              const shopHidden = await waitUntil(async () => (await shopOverlay.count()) === 0, { timeout: 3000 })
-              r.check(`${name} 항목d — 뒤로가기 클릭 후 가게 오버레이가 사라짐`, !!shopHidden)
-              const badgeTextAfterClose = shopHidden ? await coinBadge.textContent().catch(() => '') : ''
-              r.check(`${name} 항목d — 가게를 열고(Buy 클릭 포함) 닫아도 코인 배지 텍스트가 여전히 "37"을 포함함(값 불변)`, shopHidden && badgeTextAfterClose.includes('37'), badgeTextAfterClose)
-              enteredShop = true
-            } else {
-              r.check(`${name} 항목d — Buy/뒤로가기/값 불변 검증(가게가 안 열려 스킵, FAIL 아님)`, true, '스킵')
+              shopHidden = await waitUntil(async () => (await shopOverlay.count()) === 0, { timeout: 3000 })
+              badgeTextAfterClose = shopHidden ? await coinBadge.textContent().catch(() => '') : ''
             }
+            r.check(`${name} 항목c — 입장 버튼 클릭 후 가게 오버레이가 보이고 Buy 클릭 시 안내 문구("구매 기능 준비 중")가 보임(실제 구매/쓰기 없음)`, shopVisible && noticeVisible, JSON.stringify({ shopVisible, noticeVisible }))
+            r.check(`${name} 항목c — 뒤로가기로 가게를 닫아도 코인 배지 텍스트가 여전히 "37"을 포함함(값 불변)`, shopHidden && badgeTextAfterClose.includes('37'), badgeTextAfterClose)
+            enteredShop = shopVisible && shopHidden
           } else {
-            r.check(`${name} 항목d — 가게 열기/Buy/뒤로가기/값 불변 검증(입장 버튼 미노출로 스킵, FAIL 아님)`, true, '스킵')
+            r.check(`${name} 항목c — 가게 열기/Buy/값 불변 검증(입장 버튼 미노출로 스킵, FAIL 아님)`, true, '스킵')
+            r.check(`${name} 항목c — 뒤로가기/값 불변 검증(입장 버튼 미노출로 스킵, FAIL 아님)`, true, '스킵')
           }
         } else {
           r.check(`${name} 항목c — 입장 지점 도달 + 입장 버튼 겹침 검증(사전조건 부재로 스킵, FAIL 아님)`, true, '스킵')
-          r.check(`${name} 항목d — 가게 열기/Buy/뒤로가기/값 불변 검증(사전조건 부재로 스킵, FAIL 아님)`, true, '스킵')
+          r.check(`${name} 항목c — 가게 열기/Buy/값 불변 검증(사전조건 부재로 스킵, FAIL 아님)`, true, '스킵')
+          r.check(`${name} 항목c — 뒤로가기/값 불변 검증(사전조건 부재로 스킵, FAIL 아님)`, true, '스킵')
         }
 
-        // ── (e) 네트워크 — 이 시나리오 동안 구매/보상 쓰기 액션 0건 +
+        // ── (d) 네트워크 — 이 시나리오 동안 구매/보상 쓰기 액션 0건 +
         //     /rest/v1/에 대한 쓰기(POST/PATCH/DELETE) 0건. get_town_shop_state
         //     읽기 호출은 최소 1건 있어야 함(App.jsx useTownShop 마운트
         //     effect가 실제로 동작했다는 증거). ──
         const writeActionCalls = mocks.apiCallLog.filter((c) => c.body && ['purchase_town_item', 'claim_town_welcome'].includes(c.body.action))
         const restWriteCalls = mocks.apiCallLog.filter((c) => c.url.includes('/rest/v1/') && ['POST', 'PATCH', 'DELETE'].includes(c.method))
         r.check(
-          `${name} 항목e — 이 시나리오 동안 구매/보상 쓰기 액션(purchase_town_item/claim_town_welcome) 호출 0건 + /rest/v1/에 대한 POST/PATCH/DELETE 0건`,
+          `${name} 항목d — 이 시나리오 동안 구매/보상 쓰기 액션(purchase_town_item/claim_town_welcome) 호출 0건 + /rest/v1/에 대한 POST/PATCH/DELETE 0건`,
           writeActionCalls.length === 0 && restWriteCalls.length === 0,
           JSON.stringify({ writeActionCalls, restWriteCalls }),
         )
-        r.check(`${name} 항목e — get_town_shop_state 읽기 호출이 최소 1건 있음(허용 — 상태 조회는 쓰기가 아님)`, mocks.db._townCalls.get_town_shop_state >= 1, String(mocks.db._townCalls.get_town_shop_state))
+        r.check(`${name} 항목d — get_town_shop_state 읽기 호출이 최소 1건 있음(허용 — 상태 조회는 쓰기가 아님)`, mocks.db._townCalls.get_town_shop_state >= 1, String(mocks.db._townCalls.get_town_shop_state))
 
         r.check(`${name} — 가로 스크롤 없음(최종, enteredShop=${enteredShop})`, await noHorizontalOverflow(page))
       } catch (err) {
         const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
-        r.check(`${name} 항목b~e 시나리오 실행 완료(예외 없음)`, false,
+        r.check(`${name} 항목b~d 시나리오 실행 완료(예외 없음)`, false,
           `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
       } finally {
         collect(mocks)

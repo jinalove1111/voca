@@ -63,15 +63,16 @@ section('2. coinBadgeText — 유효한 잔액(0 포함)은 formatDollars(n)과 
   check('결정론 — 같은 입력을 두 번 호출해도 같은 결과', coinBadgeText({ dollarsAvailable: 37 }) === coinBadgeText({ dollarsAvailable: 37 }))
 }
 
-// ── 3. coinBadgeAriaLabel — text가 null이면 label도 null, 아니면 "코인 N개" ──
-section('3. coinBadgeAriaLabel — coinBadgeText와 표시 여부 계약이 일치, 유효 시 "코인 N개"')
+// ── 3. coinBadgeAriaLabel — text가 null이면 label도 null, 아니면
+//    "Paul Dollar N개"(2026-09-27 경제 단계 A2 — 앱 전역 관례와 통일) ──
+section('3. coinBadgeAriaLabel — coinBadgeText와 표시 여부 계약이 일치, 유효 시 "Paul Dollar N개"')
 {
   check('wallet=null — null(배지가 없으니 label도 없음)', coinBadgeAriaLabel(null) === null)
   check('dollarsAvailable=NaN — null', coinBadgeAriaLabel({ dollarsAvailable: NaN }) === null)
   check('dollarsAvailable=-1 — null', coinBadgeAriaLabel({ dollarsAvailable: -1 }) === null)
-  check('dollarsAvailable=0 — "코인 0개"', coinBadgeAriaLabel({ dollarsAvailable: 0 }) === '코인 0개', coinBadgeAriaLabel({ dollarsAvailable: 0 }))
-  check('dollarsAvailable=37 — "코인 37개"', coinBadgeAriaLabel({ dollarsAvailable: 37 }) === '코인 37개', coinBadgeAriaLabel({ dollarsAvailable: 37 }))
-  check('dollarsAvailable=1234567 — "코인 1234567개"', coinBadgeAriaLabel({ dollarsAvailable: 1234567 }) === '코인 1234567개', coinBadgeAriaLabel({ dollarsAvailable: 1234567 }))
+  check('dollarsAvailable=0 — "Paul Dollar 0개"', coinBadgeAriaLabel({ dollarsAvailable: 0 }) === 'Paul Dollar 0개', coinBadgeAriaLabel({ dollarsAvailable: 0 }))
+  check('dollarsAvailable=37 — "Paul Dollar 37개"', coinBadgeAriaLabel({ dollarsAvailable: 37 }) === 'Paul Dollar 37개', coinBadgeAriaLabel({ dollarsAvailable: 37 }))
+  check('dollarsAvailable=1234567 — "Paul Dollar 1234567개"', coinBadgeAriaLabel({ dollarsAvailable: 1234567 }) === 'Paul Dollar 1234567개', coinBadgeAriaLabel({ dollarsAvailable: 1234567 }))
 }
 
 // ── 4. import 그래프 — 네트워크/쓰기 경로 부재 확인 ──────────────────────
