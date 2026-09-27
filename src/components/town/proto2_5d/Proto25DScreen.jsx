@@ -117,7 +117,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import ProtoCharacter, { WALK_TRANSITION_MS, REDUCED_MOTION_TRANSITION_MS } from './ProtoCharacter'
 import { usePrefersReducedMotion } from '../../../hooks/usePrefersReducedMotion'
 import { WORLD } from '../../../utils/town/worldContract'
-import { OBSTACLES, nearestWalkablePoint } from '../../../utils/town/proto2_5d/walkGrid'
+import { OBSTACLES, nearestWalkablePoint, classifyPoint } from '../../../utils/town/proto2_5d/walkGrid'
 import { findPath } from '../../../utils/town/proto2_5d/pathfinding'
 import { obstacleZIndex } from '../../../utils/town/proto2_5d/depthVisual'
 import { SCENE_FIXTURE, objectRenderedWidthPx } from '../../../utils/town/proto2_5d/sceneFixture'
@@ -145,6 +145,7 @@ import {
 import { isNearShopEntrance, SHOP_PRODUCTS, tryPurchase } from '../../../utils/town/proto2_5d/shopInteraction'
 import ProtoShopScreen from './ProtoShopScreen'
 import { coinBadgeText, coinBadgeAriaLabel } from '../../../utils/town/proto2_5d/coinDisplay'
+import { PLACEMENT_SLOTS, placedObstacleRect, obstaclesWithPlacements } from '../../../utils/town/proto2_5d/placementSlots'
 
 // 2026-09-26(Phase 2, 가게 경험 v1) — 마을 산책 -> 가게 발견 -> 가게 내부
 // -> 마을로 복귀 흐름. shopInteraction.js가 입장 지점/반경/상품 데이터를
@@ -300,6 +301,13 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // 유지되게 하고, 공용 구매 함수(onPurchase)에서 재구매를 차단한다
   // (새로고침 시엔 이 컴포넌트 자체가 다시 마운트되므로 정책대로 리셋).
   const [purchasedIds, setPurchasedIds] = useState(() => new Set())
+  // Phase C(2026-09-28) — 구매한 아이템을 고정 슬롯(placementSlots.js)에
+  // 1회 배치. 로컬 state만(새로고침하면 리셋). placementsRef는 타이머
+  // 콜백(enterLeaving)이 최신 배치물 장애물을 보도록 동기 미러(characterRef와 동일).
+  const [placements, setPlacements] = useState([]) // [{ itemId, slotId }]
+  const placementsRef = useRef(placements)
+  const [placingItemId, setPlacingItemId] = useState(null)
+  const inventory = SHOP_PRODUCTS.filter((p) => purchasedIds.has(p.id) && !placements.some((pl) => pl.itemId === p.id))
   const balance = wallet && Number.isFinite(wallet.dollarsAvailable) ? wallet.dollarsAvailable - spent : null
   // 뒤로가기가 실제로 닫힐 때까지의 비동기 창(리뷰 수정 1차) — React state로
   // 노출해 ProtoShopScreen의 뒤로가기 버튼을 그 사이 disabled+aria-busy로
@@ -621,7 +629,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // idle로 복귀한다.
   function startPlainWalk(rawPoint) {
     const cur = characterRef.current
-    const path = findPath({ x: cur.leftPct, y: cur.topPct }, rawPoint)
+    const path = findPath({ x: cur.leftPct, y: cur.topPct }, rawPoint, obstaclesWithPlacements(placementsRef.current))
     if (!path || path.length === 0) return // 경로 없음(완전히 도달 불가) — 제자리 유지, 크래시 없음.
     const seq = ++seqRef.current
     clearWalkTimer()
@@ -636,8 +644,9 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   function startWalkToBench() {
     const cur = characterRef.current
     const rawArrival = benchArrivalPoint(BENCH)
-    const arrival = nearestWalkablePoint(rawArrival.x, rawArrival.y)
-    const path = findPath({ x: cur.leftPct, y: cur.topPct }, arrival)
+    const obstacles = obstaclesWithPlacements(placementsRef.current) // Phase C — 배치물도 장애물
+    const arrival = nearestWalkablePoint(rawArrival.x, rawArrival.y, obstacles)
+    const path = findPath({ x: cur.leftPct, y: cur.topPct }, arrival, obstacles)
     if (!path || path.length === 0) return
     const seq = ++seqRef.current
     clearWalkTimer()
@@ -702,8 +711,9 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     if (seq !== seqRef.current) return
     const cur = characterRef.current
     const rawArrival = benchArrivalPoint(BENCH)
-    const arrival = nearestWalkablePoint(rawArrival.x, rawArrival.y)
-    const path = findPath({ x: cur.leftPct, y: cur.topPct }, arrival)
+    const obstacles = obstaclesWithPlacements(placementsRef.current) // Phase C — 배치물도 장애물
+    const arrival = nearestWalkablePoint(rawArrival.x, rawArrival.y, obstacles)
+    const path = findPath({ x: cur.leftPct, y: cur.topPct }, arrival, obstacles)
     if (!path || path.length === 0) {
       // 도달 불가 — Stage 5 감사(2026-09-23)로 확인: benchSeatPoint의 좌석
       // 좌표는 findPath 내부에서 항상 nearestWalkablePoint로 먼저 보정되고,
@@ -767,6 +777,26 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     // 탭을 무시한다(idle로 돌아올 때까지 입력 잠금).
     const cur = characterRef.current
     if (cur.phase === 'sitting' || cur.phase === 'leaving') return
+
+    // Phase C — 배치 모드에서 빈 슬롯 탭(벤치와 같은 world 좌표 hit-test,
+    // 44px 하한 패딩). idle이고 캐릭터가 그 슬롯 rect 밖에 있을 때만 배치하고,
+    // 아니면 일반 걷기로 흘려보낸다(캐릭터가 배치물 안에 갇히지 않게).
+    // 같은 tick 두 번째 탭: placingItemId(렌더 값)가 아직 남아 있어도 ref로 이미 배치된 아이템이면 건너뜀.
+    if (placingItemId && cur.phase === 'idle' && !placementsRef.current.some((pl) => pl.itemId === placingItemId)) {
+      const groundPx = { groundWidthPx: rect.width, groundHeightPx: rect.height }
+      const slot = PLACEMENT_SLOTS.find((sl) => {
+        if (placementsRef.current.some((pl) => pl.slotId === sl.id)) return false // ref — 같은 tick 연속 탭 이중 배치 방지
+        const r = placedObstacleRect(sl)
+        return isBenchTap(rawPoint, r, benchTapPad(r, groundPx)) && classifyPoint(cur.leftPct, cur.topPct, [r]) === 'walkable'
+      })
+      if (slot) {
+        const next = [...placementsRef.current, { itemId: placingItemId, slotId: slot.id }]
+        placementsRef.current = next
+        setPlacements(next)
+        setPlacingItemId(null)
+        return
+      }
+    }
 
     // 벤치 hit-test는 항상 world 좌표로만 한다(벤치 이미지 자체는
     // pointer-events:none — 별도 onClick 경로를 만들지 않는다는 요구사항,
@@ -962,6 +992,9 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
       // 있을 때는 속성 자체를 안 붙인다(값이 "false"인 채로 남는 것보다
       // "속성 부재"가 더 명확한 계약).
       {...(shopOpen ? { 'data-shop-open': 'true' } : {})}
+      // Phase C — 배치 개수/배치 모드 여부(테스트 계측용).
+      data-proto25d-placed-count={placements.length}
+      data-placing={placingItemId ? 'true' : 'false'}
       // Phase 6D(2026-09-25) — 오버레이 역할/이름만 부여(포커스 관리 없음).
       role="region"
       aria-label="Paul Town 2.5D 프로토타입"
@@ -1037,6 +1070,20 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
         >
           💵 {coinBadgeText(balance !== null ? { dollarsAvailable: balance } : wallet)}
         </div>
+      )}
+
+      {/* Phase C — "배치하기" 버튼. 좌상단 HUD 컬럼에 넣지 않는다(위 코인
+          배지 주석 — 컬럼 박스가 커지면 바닥 탭을 가린다). 독립 형제로 코인
+          배지 아래에 둔다. */}
+      {inventory.length > 0 && !placingItemId && !shopOpen && (
+        <button
+          type="button"
+          data-testid="proto25d-place-open"
+          onClick={() => setPlacingItemId(inventory[0].id)}
+          className="absolute top-[4.25rem] right-3 z-10 min-h-[44px] flex items-center rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-white shadow"
+        >
+          🪑 배치하기
+        </button>
       )}
 
       {/* 2026-09-26 — 뷰포트 래퍼(신규, 산책 모드 전용 새 엘리먼트). 항상
@@ -1203,6 +1250,58 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
           />
         )}
 
+        {/* Phase C — 배치된 아이템(벤치 아트와 같은 앵커/폭 규칙, 그림자 없음). */}
+        {placements.map((pl) => {
+          const slot = PLACEMENT_SLOTS.find((sl) => sl.id === pl.slotId)
+          const item = SHOP_PRODUCTS.find((p) => p.id === pl.itemId)
+          const url = item ? townAsset(item.assetKey) : null
+          if (!slot || !url) return null
+          const r = placedObstacleRect(slot)
+          return (
+            <img
+              key={pl.slotId}
+              src={url}
+              alt=""
+              aria-hidden="true"
+              data-testid="proto25d-placed-item"
+              data-item-id={pl.itemId}
+              data-slot-id={pl.slotId}
+              className="absolute pointer-events-none"
+              style={{
+                left: `${(r.x0 + r.x1) / 2}%`,
+                top: `${r.y1}%`,
+                width: `max(${r.x1 - r.x0}%, ${BENCH_ASSET_MIN_WIDTH_PX}px)`,
+                transform: 'translate(-50%, -100%)',
+                zIndex: obstacleZIndex(r.id, r.y1),
+              }}
+            />
+          )
+        })}
+
+        {/* Phase C — 배치 모드 슬롯 표시(시각 전용 — 바닥이 포인터 캡처를
+            하므로 탭 판정은 handleGroundPointerUp의 world 좌표 hit-test). */}
+        {placingItemId && PLACEMENT_SLOTS.filter((sl) => !placements.some((pl) => pl.slotId === sl.id)).map((sl) => {
+          const r = placedObstacleRect(sl)
+          return (
+            <div
+              key={sl.id}
+              aria-hidden="true"
+              data-testid="proto25d-place-slot"
+              data-slot-id={sl.id}
+              className="absolute pointer-events-none rounded-lg border-2 border-dashed border-amber-500 bg-amber-300/30 motion-safe:animate-pulse"
+              style={{
+                left: `${r.x0}%`,
+                top: `${r.y0}%`,
+                width: `${r.x1 - r.x0}%`,
+                height: `${r.y1 - r.y0}%`,
+                minWidth: '44px',
+                minHeight: '44px',
+                zIndex: TAP_RIPPLE_Z,
+              }}
+            />
+          )
+        })}
+
         {/* 장애물 디버그 플레이스홀더(Stage 2) — 실제 아트 아님, Phase E
             육안 검증(탭이 상자 안으로 들어가지 않는지/뒤로 돌아가는지)을
             가능하게 하기 위한 단순 색상 사각형 + 라벨. pointer-events-none
@@ -1293,7 +1392,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
           이후에 그려지므로 항상 그 위에 쌓인다(stacking context가 같은
           가장 가까운 z:auto가 아닌 조상 기준이라 안전, 이 파일의 UI 배지
           컬럼과 동일 원리). */}
-      {!shopOpen && nearShop && character.phase !== 'sitting' && (
+      {!shopOpen && !placingItemId && nearShop && character.phase !== 'sitting' && (
         <button
           type="button"
           data-testid="proto25d-shop-enter"
@@ -1306,6 +1405,17 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
           }
         >
           🏪 가게 들어가기
+        </button>
+      )}
+      {/* Phase C — 배치 취소(배치 모드 동안만, 가게 버튼 자리). */}
+      {placingItemId && (
+        <button
+          type="button"
+          data-testid="proto25d-place-cancel"
+          onClick={() => setPlacingItemId(null)}
+          className="absolute left-1/2 bottom-6 z-20 -translate-x-1/2 min-h-[52px] px-6 rounded-full bg-white text-gray-700 text-sm font-black shadow-lg pointer-events-auto"
+        >
+          ✕ 배치 취소
         </button>
       )}
       </div>
