@@ -72,7 +72,7 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
     const result = onPurchase(item)
     setConfirmProduct(null)
     if (result.ok) {
-      showNotice('구매 완료!')
+      showNotice('구매 완료! 마을에서 🪑 배치하기를 눌러요') // F2 — 다음 행동 안내("구매 완료" 문구 유지)
     } else if (result.reason === 'purchased') {
       showNotice('이미 구매했어요')
     } else {

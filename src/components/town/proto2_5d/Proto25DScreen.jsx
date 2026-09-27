@@ -240,6 +240,11 @@ const SHOP_REENTRY_GUARD_MS = 400
 // 아니라(바닥 오브젝트/캐릭터와 가리고 가려질 필요가 없는 순간적 UI 장식)
 // depthOrder 시스템에 참여시키지 않고 이 파일 로컬 상수로만 고정한다.
 const TAP_RIPPLE_Z = 7000
+// F2(2026-09-28) — 배치 안내 배너의 빗나간 탭 힌트/배치 성공 토스트 표시 시간(약 2초).
+// ponytail: 문구가 벤치 고정 — 상품이 늘면 이름(조사 포함) 매핑 추가.
+const PLACE_HINT_MS = 2000
+const PLACE_TOAST_MS = 2000
+const PLACE_BANNER_TEXT = '🪑 노란 칸을 눌러 벤치를 놓아요'
 
 // Phase 6C-1(2026-09-25, 경로 종료 지점 facing 깜빡임 수정) — 긴 LEFT 이동
 // 경로(예: (90,20)→(20,20))의 마지막 구간이 pathfinding/walkGrid 스냅으로
@@ -315,6 +320,24 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   placingRef.current = placingItemId
   const placeBackPendingRef = useRef(false)
   const placeBackFallbackTimerRef = useRef(null)
+  // F2 — 빗나간 탭 힌트(배너 문구 대체)/배치 성공 토스트, 각자 타이머 1개.
+  const [placeHint, setPlaceHint] = useState(null)
+  const [placeToast, setPlaceToast] = useState(null)
+  const placeHintTimerRef = useRef(null)
+  const placeToastTimerRef = useRef(null)
+  function flash(setter, timerRef, value, ms) {
+    clearTimeout(timerRef.current)
+    setter(value)
+    timerRef.current = setTimeout(() => setter(null), ms)
+  }
+  useEffect(() => () => { clearTimeout(placeHintTimerRef.current); clearTimeout(placeToastTimerRef.current) }, [])
+  // F2 — 포커스 이동 대상(배치 진입 → 취소 버튼, 종료 → 배치하기 버튼 또는 root,
+  // 가게 닫힘 → root → 재입장 가드가 풀리면 가게 들어가기 버튼).
+  const rootRef = useRef(null)
+  const placeOpenRef = useRef(null)
+  const placeCancelRef = useRef(null)
+  const shopEnterRef = useRef(null)
+  const pendingShopFocusRef = useRef(false) // 가게 닫힘 → 재입장 가드 해제 시 가게 버튼 포커스 예약
   const inventory = SHOP_PRODUCTS.filter((p) => purchasedIds.has(p.id) && !placements.some((pl) => pl.itemId === p.id))
   const balance = wallet && Number.isFinite(wallet.dollarsAvailable) ? wallet.dollarsAvailable - spent : null
   // 뒤로가기가 실제로 닫힐 때까지의 비동기 창(리뷰 수정 1차) — React state로
@@ -758,6 +781,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   useEffect(() => () => { clearWalkTimer(); clearHoldTimer(); clearShopCloseFallbackTimer(); releasePlaceBack() }, [])
 
   function handleGroundPointerDown(e) {
+    pendingShopFocusRef.current = false // F2 — 아이가 이미 바닥을 눌렀으면 가게 버튼으로 포커스를 옮기지 않는다
     e.currentTarget.setPointerCapture?.(e.pointerId)
     pointerDownRef.current = { pointerId: e.pointerId, downX: e.clientX, downY: e.clientY }
   }
@@ -793,16 +817,21 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     // 같은 tick 두 번째 탭: placingItemId(렌더 값)가 아직 남아 있어도 ref로 이미 배치된 아이템이면 건너뜀.
     if (placingItemId && !placementsRef.current.some((pl) => pl.itemId === placingItemId)) {
       const groundPx = { groundWidthPx: rect.width, groundHeightPx: rect.height }
-      const slot = PLACEMENT_SLOTS.find((sl) => {
+      const tappedSlots = PLACEMENT_SLOTS.filter((sl) => {
         if (placementsRef.current.some((pl) => pl.slotId === sl.id)) return false // ref — 같은 tick 연속 탭 이중 배치 방지
         const r = placedObstacleRect(sl)
-        return isBenchTap(rawPoint, r, benchTapPad(r, groundPx)) && classifyPoint(cur.leftPct, cur.topPct, [r]) === 'walkable'
+        return isBenchTap(rawPoint, r, benchTapPad(r, groundPx))
       })
+      const slot = tappedSlots.find((sl) => classifyPoint(cur.leftPct, cur.topPct, [placedObstacleRect(sl)]) === 'walkable')
+      // F2 — 배치 안 된 탭은 부드러운 힌트만(아래 일반 걷기는 그대로 진행).
+      if (!slot) flash(setPlaceHint, placeHintTimerRef, tappedSlots.length ? '캐릭터가 서 있는 칸이에요. 다른 칸을 눌러요' : '노란 칸을 눌러 주세요', PLACE_HINT_MS)
       if (slot) {
         const next = [...placementsRef.current, { itemId: placingItemId, slotId: slot.id }]
         placementsRef.current = next
         setPlacements(next)
         endPlacement()
+        showTapRipple(slot.anchor) // F2 — 배치 지점 리플(reduced-motion이면 showTapRipple이 건너뜀)
+        flash(setPlaceToast, placeToastTimerRef, '벤치를 놓았어요! 🎉', PLACE_TOAST_MS)
         if (cur.phase === 'walking') {
           // F1 — 걷는 중 배치: 진행 중 경로는 새 장애물을 모르므로 걷기를 끊고
           // 현재 논리 위치(구간 목표점 — 위에서 슬롯 rect 밖임을 확인)에서 idle.
@@ -968,6 +997,8 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // 엔트리를 엇갈리게 소비하는 것 방지 — 두 모드는 화면상 동시에 열리지 않는다).
   function enterPlacement(itemId) {
     if (shopBusyRef.current || shopOpen) return
+    setPlaceHint(null)
+    pendingShopFocusRef.current = false
     setPlacingItemId(itemId)
     try { window.history.pushState({ proto25dPlace: true }, '') } catch { /* 무시 — 배치 모드 자체는 그대로 */ }
   }
@@ -1023,6 +1054,31 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [shopOpen, placingItemId])
 
+  // F2 — 포커스 이동. prev ref로 "상태가 실제로 바뀐 때"만 움직여 마운트 시엔 가져가지 않는다.
+  const prevPlacingRef = useRef(null)
+  useEffect(() => {
+    const was = prevPlacingRef.current
+    prevPlacingRef.current = placingItemId
+    if (placingItemId) placeCancelRef.current?.focus()
+    else if (was) (placeOpenRef.current || rootRef.current)?.focus()
+  }, [placingItemId])
+  const prevShopOpenRef = useRef(false)
+  useEffect(() => {
+    const was = prevShopOpenRef.current
+    prevShopOpenRef.current = shopOpen
+    if (was && !shopOpen) {
+      rootRef.current?.focus() // 가게 들어가기 버튼은 400ms 비활성 — 우선 root
+      pendingShopFocusRef.current = true
+    }
+  }, [shopOpen])
+  useEffect(() => {
+    // 재입장 가드 해제 시 예약이 남아 있으면(그 사이 바닥 탭/배치 진입 없음) 가게 버튼으로.
+    // (activeElement 비교는 못 쓴다 — 바닥 mousedown도 tabIndex=-1 root에 포커스를 준다.)
+    if (shopReentryBlocked || shopOpen || !pendingShopFocusRef.current) return
+    pendingShopFocusRef.current = false
+    shopEnterRef.current?.focus()
+  }, [shopReentryBlocked])
+
   // Stage 4 — 'sitting' 단계에서만 z-index 계산에 topPct 대신 벤치의 y1을
   // 넘긴다(ProtoCharacter.jsx 헤더 주석 "depthY" 항목에 이유 정리 — 좌석
   // y가 벤치 y1보다 작아 topPct 그대로 쓰면 캐릭터가 벤치보다 뒤로 밀려나
@@ -1057,7 +1113,9 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
       // Phase 6D(2026-09-25) — 오버레이 역할/이름만 부여(포커스 관리 없음).
       role="region"
       aria-label="Paul Town 2.5D 프로토타입"
-      className="fixed inset-0 z-[9999] bg-[#dff3ea] flex flex-col"
+      ref={rootRef}
+      tabIndex={-1} // F2 — 포커스 복귀 대상(배치하기/가게 버튼이 없을 때)
+      className="fixed inset-0 z-[9999] bg-[#dff3ea] flex flex-col outline-none"
     >
       {/* UI 배지(항목8/12 테스트용 UI 엘리먼트) — 바닥 레이어의 형제
           엘리먼트로, 그 하위에 중첩하지 않는다. 포인터 이벤트는 바닥
@@ -1091,7 +1149,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
         >
           산책 모드 {walkMode ? 'ON' : 'OFF'}
         </button>
-        {infoOpen && (
+        {infoOpen && !placingItemId && ( // F2 — 배치 중엔 접어 안내 배너와 겹치지 않게
           <p className="rounded-xl bg-white/90 px-3 py-2 text-[11px] text-gray-500 shadow max-w-[220px]">
             바닥을 탭하면 캐릭터가 걸어갑니다. 회색 상자를 탭하면 안까지
             들어가지 않고 앞에서 멈추거나 돌아갑니다. 벤치를 탭하면 걸어가
@@ -1138,6 +1196,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
         <button
           type="button"
           data-testid="proto25d-place-open"
+          ref={placeOpenRef}
           onClick={() => enterPlacement(inventory[0].id)}
           className="absolute top-[4.25rem] right-3 z-10 min-h-[44px] flex items-center rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-white shadow"
         >
@@ -1455,6 +1514,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
         <button
           type="button"
           data-testid="proto25d-shop-enter"
+          ref={shopEnterRef}
           onClick={handleEnterShop}
           disabled={shopReentryBlocked}
           aria-disabled={shopReentryBlocked ? 'true' : undefined}
@@ -1466,17 +1526,41 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
           🏪 가게 들어가기
         </button>
       )}
-      {/* Phase C — 배치 취소(배치 모드 동안만, 가게 버튼 자리). */}
+      {/* Phase C — 배치 취소(배치 모드 동안만). F2 — 하단 가운데(가게 버튼 자리)는 짧은 화면에서
+          슬롯 C를 가려 "배치하기" 버튼 자리(우상단, 코인 배지 아래)로 옮겼다 — 같은 자리에서 켜고 끈다. */}
       {placingItemId && (
         <button
           type="button"
           data-testid="proto25d-place-cancel"
+          ref={placeCancelRef}
           onClick={endPlacement}
-          className="absolute left-1/2 bottom-6 z-20 -translate-x-1/2 min-h-[52px] px-6 rounded-full bg-white text-gray-700 text-sm font-black shadow-lg pointer-events-auto"
+          className="absolute top-[4.25rem] right-3 z-20 min-h-[52px] px-4 rounded-full bg-white text-gray-700 text-sm font-black shadow-lg pointer-events-auto"
         >
           ✕ 배치 취소
         </button>
       )}
+      {/* F2 — 배치 안내 배너(빗나간 탭이면 ~2초 힌트로 대체)와 배치 성공 토스트. 같은 자리:
+          HUD 컬럼(top-3, 44+4+44px)과 우상단 취소 버튼(4.25rem+52px) 아래 가운데.
+          pointer-events-none이라 아래 슬롯/바닥 탭을 막지 않는다. 라이브 영역(role=status)은
+          항상 마운트해 두고 안의 내용만 바꾼다 — 이미 채워진 채로 새로 마운트된 영역은
+          스크린리더가 읽지 않을 수 있다. 보여줄 게 없으면 빈 채로 둔다. */}
+      <div data-testid="proto25d-place-live" role="status" className="absolute top-32 inset-x-3 z-20 flex justify-center pointer-events-none">
+          {placingItemId ? (
+            <p
+              data-testid="proto25d-place-banner"
+              className="rounded-2xl bg-white/95 border-2 border-amber-400 text-amber-700 text-sm font-black px-4 py-2 shadow text-center"
+            >
+              {placeHint || PLACE_BANNER_TEXT}
+            </p>
+          ) : placeToast ? (
+            <p
+              data-testid="proto25d-place-toast"
+              className="rounded-2xl bg-orange-50 border-2 border-orange-300 text-orange-600 text-base font-black px-5 py-3 shadow-lg text-center"
+            >
+              {placeToast}
+            </p>
+          ) : null}
+      </div>
       </div>
 
       {/* 2026-09-26(Phase 2, 가게 경험 v1) — 가게 내부 오버레이. root(이
