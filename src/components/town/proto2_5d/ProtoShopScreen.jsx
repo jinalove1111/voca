@@ -23,11 +23,9 @@ import { coinBadgeText, coinBadgeAriaLabel } from '../../../utils/town/proto2_5d
 // 안내 토스트가 화면에 머무는 시간(ms) — 요구사항 "약 2초" 그대로.
 const PURCHASE_NOTICE_MS = 2000
 
-export default function ProtoShopScreen({ products, onBack, closing, balance, onPurchase }) {
+export default function ProtoShopScreen({ products, onBack, closing, balance, purchasedIds, onPurchase }) {
   const [noticeText, setNoticeText] = useState(null)
   const [confirmProduct, setConfirmProduct] = useState(null)
-  // 경제 단계 B — 어떤 상품 id를 이미 샀는지(로컬 UI 상태뿐, 재고/DB 없음).
-  const [purchasedIds, setPurchasedIds] = useState(() => new Set())
   const noticeTimerRef = useRef(null)
 
   // 언마운트 시 예약된 안내 타이머 정리(setState-after-unmount 방지 —
@@ -63,14 +61,20 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, on
   // 확인). ponytail: sync handler relies on unmount; if onPurchase becomes
   // async, hold a ref until it resolves(같은 패턴을 Proto25DScreen.jsx의
   // shopBusyRef가 가게 닫기 경로에서 이미 씀).
+  //
+  // 2026-09-27(실기기 결함 수정) — purchasedIds는 이제 부모(Proto25DScreen)
+  // state이므로 여기선 setState하지 않는다. onPurchase가 이미 산 상품이면
+  // { ok:false, reason:'purchased' }를 돌려주고(재차감 없음), 그 외
+  // 실패는 기존과 동일하게 잔액 부족으로 취급한다.
   function handleConfirmYes() {
     if (!confirmProduct) return
     const item = confirmProduct
-    const result = onPurchase(item.price)
+    const result = onPurchase(item)
     setConfirmProduct(null)
     if (result.ok) {
-      setPurchasedIds((prev) => new Set(prev).add(item.id))
       showNotice('구매 완료!')
+    } else if (result.reason === 'purchased') {
+      showNotice('이미 구매했어요')
     } else {
       showNotice('Paul Dollar가 부족해요')
     }
@@ -103,6 +107,8 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, on
         {products.map((item) => {
           const url = townAsset(item.assetKey)
           const purchased = purchasedIds.has(item.id)
+          // ↑ purchasedIds는 부모 prop(가게를 닫아도 유지) — 이 컴포넌트
+          // 자체 state가 아니다(2026-09-27 실기기 결함 수정).
           return (
             <div
               key={item.id}

@@ -294,6 +294,12 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // dollarsAvailable에서 이 세션 동안 산 만큼만 빼서 보여준다(단일 세션
   // 로컬 잔액 — 새로고침하면 초기화됨, 이번 단계 의도적 범위).
   const [spent, setSpent] = useState(0)
+  // 2026-09-27 실기기 결함 수정 — purchasedIds가 ProtoShopScreen 내부
+  // state였던 탓에 가게를 닫으면(언마운트) 재입장 시 리셋돼 재구매가
+  // 성공하고 잔액이 계속 깎였다. 부모로 끌어올려 가게를 열고 닫아도
+  // 유지되게 하고, 공용 구매 함수(onPurchase)에서 재구매를 차단한다
+  // (새로고침 시엔 이 컴포넌트 자체가 다시 마운트되므로 정책대로 리셋).
+  const [purchasedIds, setPurchasedIds] = useState(() => new Set())
   const balance = wallet && Number.isFinite(wallet.dollarsAvailable) ? wallet.dollarsAvailable - spent : null
   // 뒤로가기가 실제로 닫힐 때까지의 비동기 창(리뷰 수정 1차) — React state로
   // 노출해 ProtoShopScreen의 뒤로가기 버튼을 그 사이 disabled+aria-busy로
@@ -1315,9 +1321,14 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
           onBack={requestCloseShop}
           closing={shopClosing}
           balance={balance}
-          onPurchase={(price) => {
-            const r = tryPurchase(balance, price)
-            if (r.ok) setSpent((s) => s + price)
+          purchasedIds={purchasedIds}
+          onPurchase={(item) => {
+            if (purchasedIds.has(item.id)) return { ok: false, reason: 'purchased', balance }
+            const r = tryPurchase(balance, item.price)
+            if (r.ok) {
+              setSpent((s) => s + item.price)
+              setPurchasedIds((prev) => new Set(prev).add(item.id))
+            }
             return r
           }}
         />
