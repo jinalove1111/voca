@@ -1,6 +1,33 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
+_최종 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
+_189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-09-28 (190차) — Phase C: 구매한 벤치를 허용 위치에 1회 배치 (PR #62, 워크트리 `C:\voca-wt\paul-town-v2`)
+
+### 0. 범위와 운영자 결정
+운영자 승인으로 Phase C 착수. 목표: 산책 → 가게 입장 → 1회 구매 → 마을에 배치. 운영자 결정: 저장 정책은 "새로고침 시 초기화"(단계 B와 동일, 로컬 React state만). DB·RPC·Supabase·Production 쓰기 0, `useStudent`/`townLayout.js`/`useTownShop.js`/`placementContract.js`/V1·V2/`ProtoShopScreen.jsx`/플래그 기본값 무변경. 설계 문서 `PROTO25D_ECONOMY_NEXT_DESIGN_2026-09-26.md` §5·§6(C 인벤토리·D 배치)을 DB 없이 축소한 형태 — 서버 저장(E)은 미착수.
+
+### 1. 변경 파일
+- `src/utils/town/proto2_5d/placementSlots.js`(신규): 고정 슬롯 3개 A(30,50)/B(72,46)/C(50,80)(벤치와 같은 7x5 발자국, 하단 중앙 앵커), `placedObstacleRect`(sceneFixture `footprintRect` 재사용, id `placed-<slotId>`), `obstaclesWithPlacements`(배치 없으면 `OBSTACLES` 동일 참조 반환 → 기존 동작 불변).
+- `src/components/town/proto2_5d/Proto25DScreen.jsx`: `placements`/`placingItemId` state + 동기 미러 `placementsRef`, 보관함 = 구매∖배치. `findPath`/`nearestWalkablePoint` 호출 5곳에 배치 반영 장애물 전달(모듈 상수 BENCH/SHOP_ENTRANCE/obstacle-count는 정적 OBSTACLES 유지). 슬롯 판정은 `handleGroundPointerUp`에서 `isBenchTap`+`benchTapPad`(≥44px) 재사용 — 캐릭터가 idle이고 슬롯 안에 서 있지 않을 때만, 아니면 일반 걷기로 통과. 같은 tick 두 번째 탭은 ref 기준으로 재배치 차단. "배치하기" 버튼(코인 배지 아래 독립 요소), 하단 취소 버튼, 배치 중 가게 입장 버튼 숨김, 루트 `data-proto25d-placed-count`/`data-placing`.
+- `scripts/testProto25dPlacedObstacles.mjs`(신규, 48단언) + `tests/harness/registry.mjs` 1줄(extra:false).
+- `tests/e2e/townProto25d.spec.mjs`: S23(4뷰포트 × 14단언) — 구매 → 재입장 시 Buy 비활성 → 배치 모드 진입/취소 → 슬롯 배치(count 1, obstacle-count "8" 유지) → 배치물 중심 탭 시 캐릭터가 그 안에 서지 않음 → 가게 입구 재도달 → 새로고침 초기화 → 쓰기 검사 → 새 버튼 ≥44px·뷰포트 안·HUD 비겹침.
+- `tests/e2e/lib/mockRoutes.mjs`(+4줄): REST 요청도 `apiCallLog`에 기록. **원인**: 기존 `**/rest/v1/**` 핸들러가 기록을 남기지 않아 S20d/S21e/S22g의 "REST POST/PATCH/DELETE 0건" 단언이 항상 공허하게 통과했다. spec에 `classifyWrites` + `LOGIN_SYNC_REST_WRITES` 허용목록(POST `product_events`/`student_progress`/`student_daily_progress`)을 두고 4곳 모두 "허용목록 외 REST 쓰기 0건 + purchase/claim 액션 0건"으로 교체. 허용목록 근거: 구매·배치 없는 대조 구간(S23 새로고침 후)에서도 동일 3종이 로그인만으로 발생. `apiCallLog` 소비자 전수 확인(townProto25d/townV2 두 spec뿐, 길이 의존 없음).
+
+### 2. 검증 (전부 순차 실행)
+- 단위: 신규 48/48 + 기존 proto 스위트 10종 전부 PASS, build PASS.
+- 대상 스펙 단독(`scripts/.tmp/runProtoSpec.mjs`): 832/832(`scripts/.tmp/phaseC_spec_run4.log`). townV2 단독 450/450.
+- **S12 판정**: 대상 스펙 run2·run3에서 S12[1280x800] 걷기 프레임 교대 3단언 FAIL → S12만 단독 실행 시 4뷰포트 110/110 PASS(`phaseC_s12_only_run1.log`), 동일 3단언이 Phase C 이전 로그(`proto_spec_fix_after.log`, `proto_spec_p3.log`)에도 FAIL → **Phase C와 무관한 기존 flaky**. 추정 원인(미증명): 전체 스위트 부하에서 걷는 동안 샘플이 3개뿐이고 간격이 a/b 한 주기(300ms)와 맞물려 frame a만 관측. S12 테스트는 수정하지 않음.
+- `npm run verify:e2e`: **2158/2158 PASS, EXIT 0**(S23 56건 포함, `phaseC_verify_e2e2.log`).
+- `npm run verify:all`: **ALL DOMAINS PASS, EXIT 0**(`phaseC_verify_all2.log`). extra `testEntranceRosterMinbyungchun.mjs`만 단언 전부 PASS 후 Windows libuv 종료 assertion(exit 3221226505)으로 FAIL — 189차와 동일, 무관. verify:all 내장 E2E에는 townProto25d(S23)가 없다(S23은 위 verify:e2e가 담당).
+- 환경 기록: 이 세션에서 verify:e2e 1회·verify:all 1회가 시스템 메모리 부족으로 Claude Code에 의해 강제 종료됐다. 강제 종료된 verify:all의 러너가 고아로 남아 이후 스크립트가 전부 `0xC0000142`(프로세스 초기화 실패)로 FAIL 처리된 적이 있다 — 테스트 결과가 아니다. 무거운 테스트는 반드시 단독·순차로, 실행 전후 `vite preview --port 4173`/`runAll.mjs` 고아 프로세스를 확인할 것.
+- 독립 기획 검토 → 구현 → 코드리뷰 APPROVE(낮음 5건 중 ref 읽기 1건 반영) → QA PASS(공허한 REST 단언 지적 → 위 mock 수정으로 반영).
+
+### 3. 알려진 한계 / 다음 결정
+- 브라우저 E2E는 슬롯 A만 사용(B/C는 단위 테스트로만 검증). 키보드로 배치 불가(산책과 동일 포인터 전용), 배치 후 포커스 이동 없음. 상품이 2개 이상이면 선택 UI 없음(`inventory[0]` 배치). 짧은 화면에서 취소 버튼이 슬롯 C를 가릴 수 있음. 배치물 앉기/이동/회수 없음.
+- 서버 저장(설계 §7 단계 E, 실제 구매 RPC 포함 — Class D)은 운영자 결정.
+- 실기기 확인 대기.
 
 ## 2026-09-28 (189차) — 경제 단계 B 실기기 결함 수정: 재입장 후 재구매 차단 (PR #62, 워크트리 `C:\voca-wt\paul-town-v2`)
 
