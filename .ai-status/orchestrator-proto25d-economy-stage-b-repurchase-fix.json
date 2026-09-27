@@ -1,0 +1,25 @@
+{
+  "agent_name": "orchestrator",
+  "role": "implementer",
+  "task_id": "proto25d-economy-stage-b-repurchase-fix",
+  "task": "Paul Town 2.5D 경제 단계 B 실기기 결함 수정: 가게 재입장 후 재구매·재차감 차단 (PR #62)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-27T00:00:00Z",
+  "updated_at": "2026-09-28T00:00:00Z",
+  "worktree": "C:/voca-wt/paul-town-v2",
+  "branch": "feat/paul-town-v2-clean-pr",
+  "base_commit": "ee1be6f3",
+  "task_class": "C",
+  "owner_approval_required": false,
+  "files_owned": [
+    "src/components/town/proto2_5d/Proto25DScreen.jsx",
+    "src/components/town/proto2_5d/ProtoShopScreen.jsx",
+    "tests/e2e/townProto25d.spec.mjs",
+    "handoff.md",
+    ".ai-status/orchestrator-proto25d-economy-stage-b-repurchase-fix.json"
+  ],
+  "summary": "purchasedIds를 ProtoShopScreen 내부 state에서 Proto25DScreen으로 올리고 onPurchase에서 재구매를 차단했다. E2E S22 추가. verify:all 1회 ALL DOMAINS PASS(extra testEntranceRosterMinbyungchun은 libuv 종료 assertion, 무관). S22는 verify:all에 포함되지 않아 로컬 미실행. DB/RPC/Supabase/Production 쓰기 0.",
+  "blocker": null,
+  "next_action": "verify:e2e(또는 CI)에서 S22 실행 결과 확인. 경제 단계 C 착수 여부는 운영자 결정."
+}

@@ -1,5 +1,24 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+_최종 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
+_이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-09-28 (189차) — 경제 단계 B 실기기 결함 수정: 재입장 후 재구매 차단 (PR #62, 워크트리 `C:\voca-wt\paul-town-v2`)
+
+### 0. 결함
+2026-09-27 운영자 실기기 확인: Bench 구매 후 가게를 닫고 다시 열면 "구매 완료" 상태가 사라져 다시 살 수 있었고, 살 때마다 잔액이 계속 줄었다.
+근본 원인: `purchasedIds`가 `ProtoShopScreen` 내부 state라 가게를 닫을 때(언마운트) 초기화됐고, 부모의 `onPurchase`는 잔액만 보고 이미 샀는지는 확인하지 않았다.
+
+### 1. 변경 파일
+- `src/components/town/proto2_5d/Proto25DScreen.jsx`: `purchasedIds` state를 부모로 올림. `onPurchase(item)`이 이미 산 상품이면 `{ ok:false, reason:'purchased' }`를 돌려주고 차감하지 않음. 새로고침하면 화면 전체가 다시 마운트되므로 기존 정책대로 초기화됨.
+- `src/components/town/proto2_5d/ProtoShopScreen.jsx`: `purchasedIds`를 prop으로 받음(자체 state 삭제), `reason:'purchased'`이면 "이미 구매했어요" 안내.
+- `tests/e2e/townProto25d.spec.mjs`: S22 추가(S17 4뷰포트 × 2컨텍스트, 14개 check). 1회 구매 → 지연 재클릭(force+evaluate) 무효 → 닫고 재입장해도 "구매 완료"·$32 유지 → 재클릭 무효 → 닫은 뒤 걷기·카메라 정상 → 새로고침 시에만 $37로 초기화 → 쓰기 API 0건, 잔액 부족 경로 불변.
+
+### 2. 검증
+- `npm run verify:all` 1회(가용 메모리 2.09GB 확인 후 실행): ALL DOMAINS PASS, EXIT 0. extra 1건 `testEntranceRosterMinbyungchun.mjs`는 단언 전부 PASS 뒤 Windows libuv 종료 assertion(`UV_HANDLE_CLOSING`, exit 3221226505)으로 FAIL — 이번 변경과 무관한 환경성 종료.
+- 정직한 기록: verify:all의 내장 E2E에는 `townProto25d.spec.mjs` S22가 포함되지 않는다(로그에 S22 0건). 운영자 지시("verify:all 1회만")에 따라 `verify:e2e`는 이번 세션에서 실행하지 않았으므로 **S22 자체는 아직 로컬 실행 이력이 없다** — CI/다음 세션의 verify:e2e에서 확인 필요.
+
+### 3. 범위 밖(손대지 않음)
+DB·RPC·Supabase·Production 쓰기 0, 경제 단계 C(서버 구매·인벤토리) 착수 안 함.
 
 ## 2026-09-27 (188차) — 경제 단계 B: 상품 1개 로컬 구매 프로토타입 (PR #62, 워크트리 `C:\voca-wt\paul-town-v2`)
 
