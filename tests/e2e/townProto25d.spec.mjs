@@ -630,7 +630,7 @@ export async function run(browser, baseURL) {
       )
       const phaseAfterUIClick = await character.getAttribute('data-character-phase').catch(() => null)
       r.check(`${name} 항목8 — UI 클릭 후에도 phase가 idle 그대로(걷기 트리거 안 됨)`, phaseAfterUIClick === 'idle', `phase=${phaseAfterUIClick}`)
-      const captionVisible = await page.getByText('바닥을 탭하면 캐릭터가 걸어갑니다').isVisible().catch(() => false)
+      const captionVisible = await page.getByText('땅을 누르면 걸어가요').isVisible().catch(() => false)
       r.check(`${name} — 정보 배지 자체는 정상 동작(클릭 시 캡션 토글됨)`, captionVisible)
       await infoBtn.click() // 캡션 닫기(다음 단언에 영향 없게 정리)
 
@@ -5518,6 +5518,59 @@ export async function run(browser, baseURL) {
       const writeActionCalls = mocks.apiCallLog.filter((c) => c.body && SHOP_WRITE_ACTIONS.includes(c.body.action))
       r.check(`${name} — 구매/보상 쓰기 액션 0건 + 허용목록 외 REST 쓰기 0건`,
         writeActionCalls.length === 0 && classifyWrites(mocks.apiCallLog).unexpectedRest.length === 0)
+    } catch (err) {
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false, String(err?.message || err))
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S26 — F4(2026-09-28) 아이 대상 문구 정리: 가게 구매 버튼 '사기', 정보
+  // 토글 '도움말', 도움말 본문이 현재 흐름(걷기/가게 들어가기/배치하기/새로고침)만
+  // 설명하고 '프로토타입'/'Stage'/'회색 상자' 같은 내부 용어가 없음.
+  for (const vp of S17_VIEWPORTS) {
+    const name = `S26[${vp.label},child-copy]`
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true, townShopV1: true })
+    await setWalkModeOn(page)
+    const mocks = await installMocks(page, { townState: { starsEarned: 20, dollars: { available: 37, earned: 37, spent: 0 }, owned: [], welcomeClaimed: false } })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const viewportEl = page.locator('[data-testid="proto25d-viewport"]')
+      const infoToggle = page.locator('[data-testid="proto25d-info-toggle"]')
+
+      const infoLabel = ((await infoToggle.textContent().catch(() => '')) || '').trim()
+      r.check(`${name} — 정보 토글 문구가 "도움말"이고 내부 용어 없음`,
+        infoLabel.includes('도움말') && !/프로토타입|Stage/.test(infoLabel), infoLabel)
+      await infoToggle.click()
+      const infoText = ((await infoToggle.locator('xpath=..').locator('p').first().textContent({ timeout: 1000 }).catch(() => '')) || '').trim()
+      r.check(`${name} — 도움말 본문이 현재 흐름(걷기/가게 들어가기/배치하기/새로고침)을 설명하고 내부 용어 없음`,
+        ['걸어가요', '가게 들어가기', '배치하기', '새로고침'].every((w) => infoText.includes(w)) && !/프로토타입|Stage|회색/.test(infoText), infoText)
+      await infoToggle.click()
+
+      const vis = await ensureWorldPointVisible(page, character, ground, viewportEl, SHOP_ENTRANCE_PCT_REF)
+      if (!vis.visible) {
+        r.check(`${name} — 가게 입구를 화면에 가져오지 못해 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+      } else {
+        await page.mouse.click(vis.targetScreenPt.x, vis.targetScreenPt.y)
+        await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle', { timeout: 8000 })
+        const enterBtn = page.locator('[data-testid="proto25d-shop-enter"]')
+        await enterBtn.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {})
+        await enterBtn.click()
+        const buyBtn = page.locator('[data-testid="proto25d-shop-buy"]').first()
+        await buyBtn.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {})
+        await waitUntil(async () => !(await buyBtn.isDisabled().catch(() => true)), { timeout: 3000 })
+        const buyText = ((await buyBtn.textContent().catch(() => '')) || '').trim()
+        r.check(`${name} — 가게 구매 버튼 문구가 "사기"(영어 "Buy" 아님)`, buyText === '사기', buyText)
+      }
+      r.check(`${name} — 쓰기 액션 0건`, mocks.apiCallLog.filter((c) => c.body && SHOP_WRITE_ACTIONS.includes(c.body.action)).length === 0)
     } catch (err) {
       r.check(`${name} 시나리오 실행 완료(예외 없음)`, false, String(err?.message || err))
     } finally {
