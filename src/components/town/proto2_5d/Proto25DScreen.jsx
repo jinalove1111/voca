@@ -1134,7 +1134,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
           // 무변경, 시각적 패딩만 조정).
           className="min-h-[44px] flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-purple-500 shadow"
         >
-          ⓘ 2.5D 프로토타입 (Stage 1+2+3+4)
+          ⓘ 도움말
         </button>
         {/* 2026-09-26 — 산책 모드 HUD 토글. 기존 정보 배지와 같은 컬럼(항상
             좌상단, 바닥 중앙을 가리지 않음)에 둔다 — 이 배지 컬럼 자체가
@@ -1151,10 +1151,9 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
         </button>
         {infoOpen && !placingItemId && ( // F2 — 배치 중엔 접어 안내 배너와 겹치지 않게
           <p className="rounded-xl bg-white/90 px-3 py-2 text-[11px] text-gray-500 shadow max-w-[220px]">
-            바닥을 탭하면 캐릭터가 걸어갑니다. 회색 상자를 탭하면 안까지
-            들어가지 않고 앞에서 멈추거나 돌아갑니다. 벤치를 탭하면 걸어가
-            잠시 앉았다가 다시 일어납니다. 실제 아트/저장 기능 없는 내부
-            프로토타입입니다.
+            {/* F4(2026-09-28) — 아이 대상 문구: 현재 흐름만 짧게(내부 용어 없음). */}
+            땅을 누르면 걸어가요. 가게 앞에서 '가게 들어가기'를 눌러 물건을 사고,
+            '배치하기'로 마을에 놓아 보세요. 새로고침하면 처음으로 돌아가요.
           </p>
         )}
       </div>

@@ -142,7 +142,7 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
                 aria-busy={!purchased && balanceUnknown ? 'true' : undefined}
                 className="min-h-[44px] w-full rounded-xl bg-purple-500 text-white text-sm font-black shadow btn-press disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {purchased ? '구매 완료' : balanceUnknown ? '잔액 확인 중' : 'Buy'}
+                {purchased ? '구매 완료' : balanceUnknown ? '잔액 확인 중' : '사기'}
               </button>
             </div>
           )
