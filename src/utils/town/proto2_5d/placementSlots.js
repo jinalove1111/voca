@@ -37,3 +37,30 @@ export function obstaclesWithPlacements(placements) {
   }
   return [...OBSTACLES, ...rects]
 }
+
+// F5(2026-09-29, 옮기기/넣기) — 순수 배열 헬퍼 2개. 둘 다 잘못된 입력(모르는
+// slotId, 이미 찬 slotId — 자기 자신이 이미 차지한 slotId 포함, 없는
+// itemId)이면 원본 배열 레퍼런스를 그대로 반환한다(불변, 실패는 조용히
+// no-op). 호출부(Proto25DScreen.jsx)가 이 함수들로만 배치 배열을 바꾼다.
+
+/** itemId가 가리키는 배치물의 slotId만 바꾼다(배열 길이/다른 항목 불변). */
+export function movePlacement(placements, itemId, slotId) {
+  if (!Array.isArray(placements)) return placements
+  if (!PLACEMENT_SLOTS.some((s) => s.id === slotId)) return placements // 모르는 slot
+  if (placements.some((pl) => pl.slotId === slotId)) return placements // 이미 찬 slot(자기 자신의 현재 slot 포함)
+  const idx = placements.findIndex((pl) => pl.itemId === itemId)
+  if (idx === -1) return placements // 없는 itemId
+  const next = placements.slice()
+  next[idx] = { ...next[idx], slotId }
+  return next
+}
+
+/** itemId의 배치물을 제거한다(배열 길이 -1). 없는 itemId는 원본 그대로. */
+export function removePlacement(placements, itemId) {
+  if (!Array.isArray(placements)) return placements
+  const idx = placements.findIndex((pl) => pl.itemId === itemId)
+  if (idx === -1) return placements
+  const next = placements.slice()
+  next.splice(idx, 1)
+  return next
+}

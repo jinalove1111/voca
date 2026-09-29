@@ -33,7 +33,7 @@ await esbuild.build({
   outfile: BUNDLE,
 })
 const {
-  PLACEMENT_SLOTS, placedObstacleRect, obstaclesWithPlacements,
+  PLACEMENT_SLOTS, placedObstacleRect, obstaclesWithPlacements, movePlacement, removePlacement,
   OBSTACLES, classifyPoint, nearestWalkablePoint, findPath, SHOP_ENTRANCE, benchArrivalPoint,
 } = await import(`${pathToFileURL(BUNDLE).href}?t=${Date.now()}`)
 
@@ -105,6 +105,30 @@ for (const r of rects) {
   check(`${r.id} 중심 탭 → 보정점이 rect 밖`, !(np.x > r.x0 && np.x < r.x1 && np.y > r.y0 && np.y < r.y1), JSON.stringify(np))
   check(`${r.id} 스폰에서 중심 탭까지 경로 존재`, (findPath(SPAWN, { x: cx, y: cy }, obs) || []).length > 0)
 }
+
+console.log('\n-- 6. movePlacement/removePlacement(순수 배열 헬퍼, F5 2026-09-29) --')
+const baseA = [{ itemId: 'bench', slotId: 'A' }]
+const movedAB = movePlacement(baseA, 'bench', 'B')
+check('이동 성공 — 배열 길이 불변', movedAB.length === baseA.length)
+check('이동 성공 — slotId만 바뀜', movedAB[0].itemId === 'bench' && movedAB[0].slotId === 'B')
+check('이동 성공 — 새 배열(원본과 다른 레퍼런스)', movedAB !== baseA)
+check('원본 배열 자체는 불변(순수 함수)', baseA[0].slotId === 'A')
+check('모르는 slotId → 원본 레퍼런스 그대로', movePlacement(baseA, 'bench', 'ZZ') === baseA)
+const twoItems = [{ itemId: 'bench', slotId: 'A' }, { itemId: 'x', slotId: 'B' }]
+check('이미 찬 slot(다른 아이템) → 원본 레퍼런스 그대로', movePlacement(twoItems, 'bench', 'B') === twoItems)
+check('이미 찬 slot(자기 자신의 현재 slot) → 원본 레퍼런스 그대로', movePlacement(baseA, 'bench', 'A') === baseA)
+check('없는 itemId → 원본 레퍼런스 그대로', movePlacement(baseA, 'ghost', 'B') === baseA)
+check('빈 배열 → 원본 레퍼런스 그대로', movePlacement([], 'bench', 'A').length === 0)
+check('배열 아닌 입력 → 그대로 반환(크래시 없음)', movePlacement(null, 'bench', 'A') === null)
+
+const removedA = removePlacement(baseA, 'bench')
+check('회수 성공 — 배열 길이 -1(빈 배열)', removedA.length === baseA.length - 1 && removedA.length === 0)
+check('회수 성공 — 새 배열(원본과 다른 레퍼런스)', removedA !== baseA)
+check('원본 배열 자체는 불변(순수 함수)', baseA.length === 1)
+check('없는 itemId → 원본 레퍼런스 그대로', removePlacement(baseA, 'ghost') === baseA)
+const removedFromTwo = removePlacement(twoItems, 'bench')
+check('다른 아이템은 남고 대상만 제거', removedFromTwo.length === 1 && removedFromTwo[0].itemId === 'x')
+check('배열 아닌 입력 → 그대로 반환(크래시 없음)', removePlacement(undefined, 'bench') === undefined)
 
 console.log(`\n${failed === 0 ? 'PASS' : 'FAIL'} — ${passed} passed, ${failed} failed`)
 process.exit(failed === 0 ? 0 : 1)
