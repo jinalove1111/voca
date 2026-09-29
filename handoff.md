@@ -1,7 +1,66 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
+_최종 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 선별 반영(전부 KEEP, 코드리뷰 APPROVE, QA PASS) + non-force push `b79681bb..56c8dd13`, 이어서 F5 "내 물건"(옮기기/넣기/놓기, 로컬 state만) 구현·검증(미push)**. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`, 브랜치 `audit/paul-town-v2-2026-09-29`. DB·SQL·네트워크 쓰기 0. 아래 192차 섹션 참고.)_
+_190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-09-29 (192차) — PR #62 야간 감사: 로컬 7커밋 선별 반영 + 내 물건(이동/회수/재배치)
+
+### 0. 배경
+- 이전 세션이 `C:\voca-wt\paul-town-v2`에 origin(`b79681bb`) 이후 로컬 커밋 7개 + 미커밋 `handoff.md`(191차 초안)를 남김.
+- 기존 worktree 3곳(`C:\voca`, `C:\voca-wt\paul-town-v2`, %TEMP% 아래)은 증거 보존을 위해 무접촉(읽기만).
+- 감사는 새 worktree `C:\voca-wt\paul-town-v2-night-audit`(브랜치 `audit/paul-town-v2-2026-09-29`)에서 수행.
+
+### 1. 로컬 7커밋 감사 — 전부 KEEP (독립 코드리뷰 APPROVE, QA PASS)
+| 커밋 | 내용 |
+|---|---|
+| `eb7dcd74` | fix: 배치 모드 뒤로가기/Escape, 걷는 중 배치, 잔액 미상일 때 Buy 비활성 |
+| `e0782d7c` | test: S24 |
+| `95dccdd4` | feat: 배치 안내·토스트·포커스 |
+| `1b2e0d4f` | test: S25/S24e |
+| `d9ffd5d3` | test: S12 플레이크 수정(단언 삭제 없음, 스크린샷 3장만 제거) |
+| `46fd7e8a` | feat: 문구 Buy→사기, ⓘ 도움말 |
+| `d78697aa` | test: S26/S3 |
+
+- cherry-pick 충돌 0, 결과 트리가 `d78697aa`와 동일.
+- 세부 내용은 기존 worktree의 191차 초안이 정확하다. 다만 그 초안의 "후속 후보"에는 `46fd7e8a`가 이미 처리한 Buy→사기/정보패널 문구 정리가 남아 있었고(오래된 항목), 검증 절은 VERIFY_PENDING 상태였다. 그래서 이 섹션에는 사실 부분만 요약해 반영했다(초안 파일은 커밋하지 않음).
+
+### 2. 검증 (`56c8dd13`)
+- `npm run build` PASS(경고 0).
+- 관련 단위/계약/자산 테스트 17종 전부 PASS.
+- verify:all: 도메인을 3배치로 나눠 실행, `.env`는 테스트 프로세스에 read-only로 주입 → 전부 PASS. 단 testSecurityRegressions §8은 실제 `.env` 파일이 필요해, 운영자 승인 하에 gitignored 임시 복사 → 35/35 PASS → 즉시 삭제(git 흔적 0).
+- E2E 스펙 단독 실행: townProto25d 964/964, townV2 448, townV1 528, townV2ArtworkPipeline 28, townFlagCrossTab 16, townPilotAllowlist 33, mobileViewports 178 전부 PASS. verify:e2e 전체 exit 0, FAIL 0.
+- 콘솔/404: HTTP 4xx/5xx 0건. requestfailed는 spec 3126/3255행의 의도적 `route.abort()` 폴백과 townV1 ERR_ABORTED 6건. mobileViewports 콘솔 256건은 헤드리스 getUserMedia NotSupported(환경 요인).
+
+### 3. push
+- 2026-09-29 non-force `b79681bb..56c8dd13` → `origin/feat/paul-town-v2-clean-pr`. PR #62는 OPEN/Draft 유지.
+
+### 4. F5 "내 물건" (이동/회수/재배치) — 이 브랜치, `56c8dd13` 이후
+| 커밋 | 내용 |
+|---|---|
+| `fcbfc929` | 헬퍼 `movePlacement`/`removePlacement` |
+| `3812e1ba` | test: S27 |
+| `dc204152` | feat: 내 물건 패널 |
+| `d92cc33d` / `5debea93` | 1차 리뷰 수정: S27 성공 플래그·겹침·뒤로가기 검사, 패널 히스토리를 proto25dMyItems로 통합, replaceState 전환, `enterPlacement`가 boolean 반환 |
+| `7bbe4fd3` / `8d30025b` | 2차 리뷰 수정: 토스트 겹침, 잔여 히스토리 마커, f3 강화, 버튼 `top-[12.5rem]`, replaceState 판정을 `history.state` 기준으로 |
+
+- 동작: 🎒 내 물건 → 목록("마을에 있어요"/"가방에 있어요") → 옮기기/넣기/놓기. 로컬 state만 사용(새로고침하면 초기화). DB/SQL/네트워크 쓰기 0.
+
+### 5. F5 검증
+- 테스트가 먼저 FAIL하는지 확인함(단위 테스트 크래시, S27 4/4 뷰포트 FAIL, 패널 뒤로가기 시 about:blank로 이탈하는 것 실측). 이후 PASS.
+- 단위 testProto25dPlacedObstacles 64/64. 전체 townProto25d 1091/1091(구현자 실행). build 경고 0.
+- verify:all: 배치2·3 PASS. 배치1은 환경 FAIL 2건 — §8(실제 `.env` 필요), testEntranceRosterMinbyungchun(모든 단언 통과 후 Node libuv 종료 assertion 크래시, exit 3221226505, 3회 재현, 이번 diff와 무관).
+- verify:e2e 전체 exit 0 / 2397 PASS / FAIL 0.
+- 부하 관측: 기준 커밋 `56c8dd13`도 메모리 부족 부하에서 townProto25d 7건 FAIL(S3/S8b/S9/S24) → 타이밍 플레이크.
+
+### 6. push 상태
+- F5 커밋은 이 문서를 쓰는 시점에 **미push**(§8·roster 판정과 QA 대기).
+
+### 7. 남은 항목
+- F5 push 전 §8 재확인(실제 `.env` 필요).
+- roster 종료 크래시(Node v24.17 Windows) 조사.
+- 상품을 여러 개로 늘리면 패널 스크롤 필요(ponytail 주석으로 표시).
+- 걷는 중 이동 시 CSS 구간 전이가 1구간 겹침(기존 한계와 동일).
 
 ## 2026-09-28 (190차) — Phase C: 구매한 벤치를 허용 위치에 1회 배치 (PR #62, 워크트리 `C:\voca-wt\paul-town-v2`)
 
