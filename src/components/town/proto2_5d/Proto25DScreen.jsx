@@ -281,6 +281,14 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     direction: 'front', // Phase 6B — 논리 방향('front'|'back'|'side'), v2 스프라이트 전용(위 파일 헤더 참고)
     pendingSit: false, // 벤치를 향해 걷는 중(walking)인지 — 항목7 반복 탭 무시 판정용
     sitBenchHeightPx: undefined, // 2026-09-23 좌석 접촉점 sink 보정 — enterSitting에서만 채워짐(아래 참고)
+    // S28(2026-09-30, 배치 의자 착석) — 지금 걸어가는 중(pendingSit)이거나
+    // 앉아있는 좌석이 "무엇"인지. 'bench'(고정 벤치) | `placed:${itemId}`
+    // (배치 의자) | null. sitRect는 그 좌석의 장애물 rect(고정 벤치는 BENCH,
+    // 배치 의자는 placedObstacleRect(slot)) — enterSitting/enterLeaving/
+    // characterDepthY가 BENCH를 하드코딩하는 대신 이 값을 쓴다(재구현 없이
+    // 기존 benchInteraction.js의 rect 매개변수화를 그대로 재사용).
+    sitTargetKey: null,
+    sitRect: null,
   })
   const characterRef = useRef(character) // 헤더 주석 "characterRef" 참고 — setTimeout 콜백 전용 최신값 미러
   const [infoOpen, setInfoOpen] = useState(false)
@@ -694,12 +702,17 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     walkPath(path, seq, 'walking', () => applyIfActive(seq, (c) => ({ ...c, phase: 'idle' })))
   }
 
-  // Stage 4 — 벤치 탭. 벤치 앞 도착 지점까지 걸어간 뒤 enterSitting으로
-  // 넘어간다. 도착 지점이 도달 불가면(병적인 경우) 아무 것도 하지 않는다
-  // (Stage 2와 동일한 "안전한 no-op" 원칙).
-  function startWalkToBench() {
+  // Stage 4 — 벤치(또는 S28부터, 배치 의자) 탭. 좌석 앞 도착 지점까지
+  // 걸어간 뒤 enterSitting으로 넘어간다. 도착 지점이 도달 불가면(병적인
+  // 경우) 아무 것도 하지 않는다(Stage 2와 동일한 "안전한 no-op" 원칙).
+  // rect/sitTargetKey — S28(2026-09-30)에서 고정 벤치 전용이던 이 함수를
+  // 일반화했다(benchInteraction.js 자체는 처음부터 rect 매개변수를 받는
+  // 순수 함수였다, 그 파일 헤더 주석 참고 — 재구현이 아니라 이미 있던
+  // 매개변수화를 실제로 활용). sitTargetKey는 "무엇에 앉으려는지"
+  // (character.sitTargetKey) — 'bench' 또는 `placed:${itemId}`.
+  function startWalkToSeat(rect, sitTargetKey) {
     const cur = characterRef.current
-    const rawArrival = benchArrivalPoint(BENCH)
+    const rawArrival = benchArrivalPoint(rect)
     const obstacles = obstaclesWithPlacements(placementsRef.current) // Phase C — 배치물도 장애물
     const arrival = nearestWalkablePoint(rawArrival.x, rawArrival.y, obstacles)
     const path = findPath({ x: cur.leftPct, y: cur.topPct }, arrival, obstacles)
@@ -713,8 +726,16 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     // 같다. dx===0이면 facingToward가 0을 반환해 기존 facing을 그대로 둔다
     // — "벤치가 정확히 위에 있으면 현재 방향 유지" 요구 그대로).
     const dir = facingToward({ x: cur.leftPct, y: cur.topPct }, arrival)
-    updateCharacter((c) => ({ ...c, pendingSit: true, facing: dir !== 0 ? dir : c.facing }))
+    updateCharacter((c) => ({ ...c, pendingSit: true, sitTargetKey, sitRect: rect, facing: dir !== 0 ? dir : c.facing }))
     walkPath(path, seq, 'walking', () => enterSitting(seq))
+  }
+  function startWalkToBench() {
+    startWalkToSeat(BENCH, 'bench')
+  }
+  // S28 — 배치 의자 walk-to-sit(요구사항2). pl은 placements 배열의 항목
+  // ({itemId,slotId}), rect는 그 슬롯의 장애물 rect(placedObstacleRect).
+  function startWalkToPlacedSeat(pl, rect) {
+    startWalkToSeat(rect, `placed:${pl.itemId}`)
   }
 
   // Stage 4 — 착석. 논리 좌표를 좌석 지점(benchSeatPoint)으로 옮기고
@@ -736,9 +757,13 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // 이미 계산해 둔 seat.x/seat.y는 그대로.
   function enterSitting(seq) {
     if (seq !== seqRef.current) return
+    // S28 — sitRect(walk-to-seat 시작 시 세팅된 목표 좌석 rect, characterRef
+    // 미러) 기준으로 계산한다. BENCH 폴백은 이론상 도달 불가(startWalkToSeat이
+    // 항상 sitRect를 함께 세팅) — 방어적 안전망일 뿐.
+    const rect = characterRef.current.sitRect || BENCH
     const groundRect = groundRef.current ? groundRef.current.getBoundingClientRect() : null
-    const seat = benchSeatPoint(BENCH, groundRect?.width, groundRect?.height)
-    const benchHeightPx = benchRenderedSizePx(BENCH, groundRect?.width).heightPx
+    const seat = benchSeatPoint(rect, groundRect?.width, groundRect?.height)
+    const benchHeightPx = benchRenderedSizePx(rect, groundRect?.width).heightPx
     applyIfActive(seq, (c) => ({
       ...c,
       phase: 'sitting',
@@ -763,10 +788,14 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // 보정할 필요가 없다. 경로를 못 찾는 병적인 경우에도(사실상 발생하지
   // 않음 — arrival은 항상 걸을 수 있는 점) 도착 지점으로 좌표만 맞추고
   // idle로 안전하게 떨어진다(크래시/멈춘 상태 없음).
-  function enterLeaving(seq) {
+  // S28 — onIdle(선택) — idle 도착 직후 실행할 콜백(요구사항4 "다른 곳
+  // 탭" 재지정용: 배치 의자에서 일어난 뒤 그 탭 지점으로 곧장 걷는다).
+  // 기존 호출부(holdTimer 만료)는 onIdle 없이 그대로 호출해 동작 무변경.
+  function enterLeaving(seq, onIdle) {
     if (seq !== seqRef.current) return
     const cur = characterRef.current
-    const rawArrival = benchArrivalPoint(BENCH)
+    const rect = cur.sitRect || BENCH
+    const rawArrival = benchArrivalPoint(rect)
     const obstacles = obstaclesWithPlacements(placementsRef.current) // Phase C — 배치물도 장애물
     const arrival = nearestWalkablePoint(rawArrival.x, rawArrival.y, obstacles)
     const path = findPath({ x: cur.leftPct, y: cur.topPct }, arrival, obstacles)
@@ -788,14 +817,62 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
       // 않는 setState 두 번을 남겨 미래에 혼동을 주지 않도록 단일 호출로
       // 정리한다(동작 변화 없음, 도달 시나리오가 없어 스스로 검증도 못하는
       // 코드를 놔두지 않는다).
-      applyIfActive(seq, (c) => ({ ...c, phase: 'idle', leftPct: arrival.x, topPct: arrival.y }))
+      applyIfActive(seq, (c) => ({ ...c, phase: 'idle', leftPct: arrival.x, topPct: arrival.y, sitTargetKey: null, sitRect: null }))
+      if (onIdle) onIdle()
       return
     }
     // phase:'leaving'은 walkPath의 phaseLabel 인자로만 세팅한다(walkLeg 주석
     // 참고 — 별도로 미리 setState하면 곧바로 뒤따르는 walkPath의 setState와
     // 같은 배치로 묶여 화면에 한 번도 그려지지 못하고 덮이는 버그가 있었다,
     // 실측 FAIL로 발견).
-    walkPath(path, seq, 'leaving', () => applyIfActive(seq, (c) => ({ ...c, phase: 'idle' })))
+    walkPath(path, seq, 'leaving', () => {
+      applyIfActive(seq, (c) => ({ ...c, phase: 'idle', sitTargetKey: null, sitRect: null }))
+      if (onIdle) onIdle()
+    })
+  }
+
+  // S28(2026-09-30, 요구사항4) — 배치 의자 착석 중 탭. 고정 벤치는 착석
+  // 중 모든 탭을 무시하는 기존 규칙을 그대로 유지한다(요구사항6, 이 함수는
+  // sitTargetKey가 'placed:'로 시작할 때만 호출된다) — 배치 의자만 다른
+  // 규칙: 같은 의자 재탭이면 그냥 일어나고(redirectPoint 없음), 그 외
+  // 탭이면 일어난 뒤 그 지점으로 곧장 걷는다(leaving→idle→walking).
+  // phase가 이미 'leaving'(기립 중)이면 아무 것도 하지 않는다(기립 도중
+  // 재탭에 대한 재지정은 이번 최소 구현 범위 밖 — 기립이 끝나면 idle이라
+  // 그 다음 탭부터는 정상 동작).
+  function standUpFromPlacedSeat(redirectPoint) {
+    if (characterRef.current.phase !== 'sitting') return
+    clearHoldTimer()
+    const seq = seqRef.current
+    enterLeaving(seq, redirectPoint ? () => startPlainWalk(redirectPoint) : undefined)
+  }
+
+  // S28(요구사항5) — 지금 걷고 있거나(pendingSit) 앉아있는 좌석이 바로
+  // itemId(배치 의자)면 즉시 해제하고 idle로 되돌린다. seqRef를 증가시켜
+  // 이미 예약된 walk-to-seat/leaving 타이머를 전부 무효화한다(헤더 주석
+  // "seq 카운터" 참고) — 떠 있는 캐릭터/좀비 타이머가 남지 않는다. 대상이
+  // 아니면 완전히 no-op(고정 벤치는 sitTargetKey가 'bench'라 절대 매치되지
+  // 않음 — 요구사항6 무변경).
+  function interruptSitIfTargeting(itemId) {
+    const cur = characterRef.current
+    if (cur.sitTargetKey !== `placed:${itemId}`) return
+    seqRef.current += 1
+    clearWalkTimer()
+    clearHoldTimer()
+    updateCharacter((c) => ({ ...c, phase: 'idle', pendingSit: false, sitTargetKey: null, sitRect: null }))
+  }
+
+  // S28(요구사항2) — 탭 지점이 배치 의자 하나의 rect(+ 44px 하한 패딩) 안인지.
+  // 고정 벤치와 동일한 hit-test(isBenchTap/benchTapPad)를 rect만 바꿔
+  // 재사용한다(새 판정 로직 없음). 슬롯은 겹치지 않으므로(testProto25dPlacedObstacles.mjs
+  // "슬롯끼리 겹치지 않음") 최대 1개만 매치된다.
+  function findTappedPlacedSlot(point, groundPx) {
+    for (const pl of placementsRef.current) {
+      const slot = PLACEMENT_SLOTS.find((sl) => sl.id === pl.slotId)
+      if (!slot) continue
+      const r = placedObstacleRect(slot)
+      if (isBenchTap(point, r, benchTapPad(r, groundPx))) return { pl, rect: r }
+    }
+    return null
   }
 
   // 언마운트 시 예약된 타이머 정리(setState-after-unmount 방지, TownScene.jsx
@@ -833,21 +910,27 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     const rawTopPct = ((e.clientY - rect.top) / rect.height) * 100
     const rawPoint = { x: rawLeftPct, y: rawTopPct }
 
-    // Stage 4 정책(헤더 주석 참고, 항목7/8) — sitting/leaving 동안은 모든
-    // 탭을 무시한다(idle로 돌아올 때까지 입력 잠금).
     const cur = characterRef.current
-    if (cur.phase === 'sitting' || cur.phase === 'leaving') return
 
     // Phase C — 배치 모드에서 빈 슬롯 탭(벤치와 같은 world 좌표 hit-test,
     // 44px 하한 패딩). idle이고 캐릭터가 그 슬롯 rect 밖에 있을 때만 배치하고,
     // 아니면 일반 걷기로 흘려보낸다(캐릭터가 배치물 안에 갇히지 않게).
-    // F1 — walking 중에도 배치(sitting/leaving은 위에서 이미 return).
+    // F1 — walking 중에도 배치.
     // F5(2026-09-29, 옮기기) — placingItemId가 가리키는 아이템이 이미
     // placements에 있으면 "이동"이다(같은 슬롯 탭 판정을 그대로 재사용해
     // 다른 빈 슬롯으로 옮긴다). 같은 tick 두 번째 탭(빠른 재탭) 방지는
     // placeActionDoneRef(이 배치 세션에서 이미 슬롯 탭 1건을 처리했는지)로
     // 판정한다 — 이전의 멤버십 기반 가드는 "이동"에서 시작부터 항상 참이라
     // 이동 자체를 막아버렸다(위 placeActionDoneRef 선언부 주석 참고).
+    // S28(요구사항5, 순서 변경) — 이 배치 모드 블록을 sitting/leaving 게이트
+    // 보다 앞으로 옮겼다("절차" 참고) — 그렇지 않으면 "앉아 있는 채로 내 물건
+    // 패널에서 옮기기"가 슬롯 탭 자체를 게이트에 가로채여 절대 완료되지
+    // 못한다(이 세션이 repro로 직접 재현). 이 블록이 실제로 슬롯을 찾아
+    // 처리하는 경우에만 return하고, 그 외(배치 모드가 아니거나 슬롯을
+    // 못 찾음)엔 아래로 흘러 sitting/leaving 게이트를 그대로 통과한다 —
+    // placingItemId가 없는 모든 기존 시나리오(S8/S9/S13 등)는 이 블록이
+    // 조건 자체를 타지 않아(`if (placingItemId ...)`가 false) 동작이
+    // 100% 그대로다.
     if (placingItemId && !placeActionDoneRef.current) {
       const groundPx = { groundWidthPx: rect.width, groundHeightPx: rect.height }
       const tappedSlots = PLACEMENT_SLOTS.filter((sl) => {
@@ -866,20 +949,46 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
           : [...placementsRef.current, { itemId: placingItemId, slotId: slot.id }]
         placementsRef.current = next
         setPlacements(next)
+        // S28(요구사항5) — 이동 중인 바로 그 아이템에 지금 앉아있거나(sitting)
+        // 그리로 걸어가는 중(pendingSit)이면 즉시 해제(idle) — 옮긴 뒤에도
+        // 캐릭터가 옛 자리에 떠 있지 않게 한다. moving이 아니면(새 배치) 그
+        // itemId는 아직 어디에도 앉을 수 없었으므로 항상 no-op.
+        if (moving) interruptSitIfTargeting(placingItemId)
         endPlacement()
         showTapRipple(slot.anchor) // F2 — 배치 지점 리플(reduced-motion이면 showTapRipple이 건너뜀)
         flash(setPlaceToast, placeToastTimerRef, moving ? '벤치를 옮겼어요!' : '벤치를 놓았어요! 🎉', PLACE_TOAST_MS)
-        if (cur.phase === 'walking') {
+        if (characterRef.current.phase === 'walking') {
           // F1 — 걷는 중 배치: 진행 중 경로는 새 장애물을 모르므로 걷기를 끊고
           // 현재 논리 위치(구간 목표점 — 위에서 슬롯 rect 밖임을 확인)에서 idle.
           // ponytail: 이미 시작된 CSS 구간 전이는 끝까지 그려져 그 구간이 슬롯을
           // 스치면 시각적으로 잠깐 겹칠 수 있음 — 필요 시 구간/rect 교차 검사 추가.
+          // characterRef.current로 다시 읽는다 — 바로 위 interruptSitIfTargeting이
+          // 이미 idle로 바꿨을 수 있어(seq도 증가) cur(이 핸들러 시작 시점의 스냅샷)는
+          // 그 갱신을 반영하지 못한다.
           seqRef.current += 1
           clearWalkTimer()
-          updateCharacter((c) => ({ ...c, phase: 'idle', pendingSit: false }))
+          updateCharacter((c) => ({ ...c, phase: 'idle', pendingSit: false, sitTargetKey: null, sitRect: null }))
         }
         return
       }
+    }
+
+    // Stage 4 정책(헤더 주석 참고, 항목7/8) — sitting/leaving 동안은 모든
+    // 탭을 무시한다(idle로 돌아올 때까지 입력 잠금). S28(요구사항4) — 배치
+    // 의자(sitTargetKey가 'placed:'로 시작)에 앉아 있을 때만 예외: 어떤
+    // 탭이든 일어나게 한다(같은 의자 재탭은 제자리에서만, 다른 곳 탭은
+    // 일어난 뒤 그 지점으로 재지정). 고정 벤치(sitTargetKey==='bench')는
+    // 이 분기를 타지 않아 기존 규칙 그대로(요구사항6). 이 게이트를 위 배치
+    // 모드 블록보다 뒤로 옮긴 이유는 그 블록의 새 주석(S28, 요구사항5)
+    // 참고.
+    if (cur.phase === 'sitting' || cur.phase === 'leaving') {
+      if (cur.phase === 'sitting' && cur.sitTargetKey && cur.sitTargetKey.startsWith('placed:')) {
+        const groundPxSit = { groundWidthPx: rect.width, groundHeightPx: rect.height }
+        const tappedSameChair = findTappedPlacedSlot(rawPoint, groundPxSit)
+        const sameChair = !!tappedSameChair && `placed:${tappedSameChair.pl.itemId}` === cur.sitTargetKey
+        standUpFromPlacedSeat(sameChair ? null : rawPoint)
+      }
+      return
     }
 
     // 벤치 hit-test는 항상 world 좌표로만 한다(벤치 이미지 자체는
@@ -889,12 +998,17 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     // 시각 보정 — 벤치 렌더 크기가 44px 미만인 좁은 뷰포트에서도 유효 탭
     // 타겟이 44x44px 이상이 되도록, 새 이벤트 경로 없이 이 hit-test 단계의
     // 패딩 크기만 조정한다).
-    const tapPad = benchTapPad(BENCH, { groundWidthPx: rect.width, groundHeightPx: rect.height })
+    const groundPx = { groundWidthPx: rect.width, groundHeightPx: rect.height }
+    const tapPad = benchTapPad(BENCH, groundPx)
     const tappedBench = isBenchTap(rawPoint, BENCH, tapPad)
+    // S28(요구사항2) — 배치 의자 탭(벤치가 아닐 때만 검사 — 슬롯은 벤치와
+    // 겹치지 않지만 우선순위를 명확히 고정).
+    const tappedPlaced = tappedBench ? null : findTappedPlacedSlot(rawPoint, groundPx)
+    const tappedSeatKey = tappedBench ? 'bench' : (tappedPlaced ? `placed:${tappedPlaced.pl.itemId}` : null)
 
-    // 항목7 — 이미 벤치를 향해 걷는 중(pendingSit)에 같은 벤치를 다시 탭하면
-    // 중복 시퀀스를 만들지 않고 무시한다.
-    if (cur.phase === 'walking' && cur.pendingSit && tappedBench) return
+    // 항목7 — 이미 좌석(벤치든 배치 의자든)을 향해 걷는 중(pendingSit)에
+    // 같은 좌석을 다시 탭하면 중복 시퀀스를 만들지 않고 무시한다.
+    if (cur.phase === 'walking' && cur.pendingSit && tappedSeatKey && tappedSeatKey === cur.sitTargetKey) return
 
     // 그 외의 모든 경우(idle에서의 첫 탭이든, walking 중 재지정이든) — 새
     // 탭이 항상 우선한다: clamp(월드 경계) + 장애물 보정 + 경로탐색은
@@ -909,6 +1023,8 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     showTapRipple({ x: rawLeftPct, y: rawTopPct })
     if (tappedBench) {
       startWalkToBench()
+    } else if (tappedPlaced) {
+      startWalkToPlacedSeat(tappedPlaced.pl, tappedPlaced.rect)
     } else {
       startPlainWalk(rawPoint)
     }
@@ -1079,6 +1195,10 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     if (next === placementsRef.current) return // 알 수 없는 itemId — no-op
     placementsRef.current = next
     setPlacements(next)
+    // S28(요구사항5) — 회수하는 바로 그 아이템에 지금 앉아있거나 그리로
+    // 걸어가는 중이면 즉시 해제(idle) — 치워진 의자 위에 캐릭터가 떠 있지
+    // 않게 한다(interruptSitIfTargeting 헤더 주석 참고).
+    interruptSitIfTargeting(itemId)
     requestCloseMyItems()
     flash(setPlaceToast, placeToastTimerRef, '벤치를 가방에 넣었어요', PLACE_TOAST_MS)
   }
@@ -1213,12 +1333,14 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     shopEnterRef.current?.focus()
   }, [shopReentryBlocked])
 
-  // Stage 4 — 'sitting' 단계에서만 z-index 계산에 topPct 대신 벤치의 y1을
-  // 넘긴다(ProtoCharacter.jsx 헤더 주석 "depthY" 항목에 이유 정리 — 좌석
-  // y가 벤치 y1보다 작아 topPct 그대로 쓰면 캐릭터가 벤치보다 뒤로 밀려나
-  // 보인다). walking/leaving/idle에서는 undefined(=topPct 그대로, 기존
-  // Stage 3 동작 무변경).
-  const characterDepthY = character.phase === 'sitting' ? BENCH.y1 : undefined
+  // Stage 4 — 'sitting' 단계에서만 z-index 계산에 topPct 대신 좌석 rect의
+  // y1을 넘긴다(ProtoCharacter.jsx 헤더 주석 "depthY" 항목에 이유 정리 —
+  // 좌석 y가 rect.y1보다 작아 topPct 그대로 쓰면 캐릭터가 그 좌석보다
+  // 뒤로 밀려나 보인다). walking/leaving/idle에서는 undefined(=topPct
+  // 그대로, 기존 Stage 3 동작 무변경). S28 — character.sitRect(고정
+  // 벤치든 배치 의자든 startWalkToSeat이 세팅)를 쓴다 — BENCH 폴백은
+  // 이론상 도달 불가(enterSitting과 동일한 방어적 안전망).
+  const characterDepthY = character.phase === 'sitting' ? (character.sitRect || BENCH).y1 : undefined
 
   // 2026-09-26(Phase 2, 가게 경험 v1) — 입장 버튼 표시 여부(shopInteraction.js
   // isNearShopEntrance가 유일한 판정 로직, 재구현 없음). sitting 중엔 굳이
