@@ -5929,30 +5929,38 @@ export async function run(browser, baseURL) {
   r.check('S27 — 최소 한 뷰포트에서 이동(옮기기)이 실제로 성공함', anyMovedS27)
   r.check('S27 — 최소 한 뷰포트에서 회수(넣기) 후 재배치가 실제로 성공함', anyRetrievedReplacedS27)
 
-  // ── S28(2026-09-30) — 배치 의자(벤치) 걷기 충돌 + 착석 상호작용. 단일
-  // 결함 수정 회귀 — "배치한 의자를 캐릭터가 통과", "배치한 의자에는 앉을
-  // 수 없음". PLACEMENT_SLOTS_REF/slotCenterPct/groundHitAt/idleOf(S23)와
-  // ensureWorldPointVisible/SHOP_ENTRANCE_PCT_REF(S18)를 그대로 재사용해
-  // 구매→배치까지는 S23 (b)~(d)와 동일한 흐름으로 진행한다.
+  // ── S28(2026-09-30, 독립 리뷰 수정 2026-09-30) — 배치 의자(벤치) 걷기
+  // 충돌 + 착석 상호작용. 단일 결함 수정 회귀 — "배치한 의자를 캐릭터가
+  // 통과", "배치한 의자에는 앉을 수 없음". PLACEMENT_SLOTS_REF/
+  // slotCenterPct/groundHitAt/idleOf(S23)와 ensureWorldPointVisible/
+  // SHOP_ENTRANCE_PCT_REF(S18)를 그대로 재사용해 구매→배치까지는 S23
+  // (b)~(d)와 동일한 흐름으로 진행한다.
+  //
+  // 리뷰 수정(2026-09-30, 독립 검토) — 핵심 항목(충돌/착석 정렬/기립 2종/
+  // 착석 중 옮기기·넣기)이 4개 뷰포트 전부에서 실제로 "스킵되지 않고"
+  // 실행됐는지를 뷰포트별로 개별 단언한다(요구사항7). anyXxxS28(최소 1개
+  // 뷰포트) 집계는 그대로 유지하되, 이 executedByViewport가 더 강한
+  // 계약이다.
   let anyRanS28 = false
   let anySatS28 = false
   let anyRedirectedS28 = false
+  let anySameChairStandS28 = false
   let anyMovedWhileSittingS28 = false
   let anyRetrievedWhileSittingS28 = false
-  const BENCH_REF_S28 = OBSTACLES_REF.find((o) => o.id === 'demo-bench')
-  // benchInteraction.js 값 복제(S8과 동일한 이 spec의 기존 관례) — 벤치와
-  // 배치 의자가 같은 아트(decorations/bench, 72x48)를 공유하므로 rect만
-  // 바꿔 그대로 재사용한다.
-  function seatRefFor(rectRef, groundBox) {
-    const SEAT_FRACTION_REF = 0.55
-    const BENCH_ASSET_ASPECT_REF = 48 / 72
-    const BENCH_ASSET_MIN_WIDTH_PX_REF = 44
-    const nominalWidthPx = groundBox.width * (rectRef.x1 - rectRef.x0) / 100
-    const renderedWidthPx = Math.max(nominalWidthPx, BENCH_ASSET_MIN_WIDTH_PX_REF)
-    const renderedHeightPx = renderedWidthPx * BENCH_ASSET_ASPECT_REF
-    const renderedHeightYPct = (renderedHeightPx / groundBox.height) * 100
-    return { x: (rectRef.x0 + rectRef.x1) / 2, y: rectRef.y1 - renderedHeightYPct * SEAT_FRACTION_REF }
+  let anyBenchIgnoreVerifiedS28 = false
+  const executedByViewport = {}
+  for (const v of S17_VIEWPORTS) {
+    executedByViewport[v.label] = {
+      collision: false, sitAlign: false, standSameChair: false, standRedirect: false,
+      moveWhileSeated: false, storeWhileSeated: false,
+    }
   }
+  const BENCH_REF_S28 = OBSTACLES_REF.find((o) => o.id === 'demo-bench')
+  // 좌석면 비율(benchInteraction.js SEAT_FRACTION 값 복제) — 실제 렌더된
+  // 배치물/벤치 아트 boundingBox에 곱해 좌석선을 유도한다(S9와 동일 관례,
+  // "논리 좌표 공식 복제"가 아니라 화면에 실제로 그려진 박스 자체를 기준).
+  // SEAT_FRACTION_REF 상수 자체는 S9가 이미 run() 스코프에 선언해 둔 것을
+  // 그대로 재사용한다(재선언하면 SyntaxError — 같은 스코프 중복 const).
   async function samplePhaseTimelineS28(page, character, { timeoutMs = 9000, interval = 40, stopAtIdleAfter = 1 } = {}) {
     const timeline = []
     const deadline = Date.now() + timeoutMs
@@ -5969,6 +5977,49 @@ export async function run(browser, baseURL) {
       await page.waitForTimeout(interval)
     }
     return timeline
+  }
+  // 점 하나가 rect 밖으로 얼마나 떨어져 있는지(world-%, 안이면 0) — "겹치지
+  // 않았다"만이 아니라 "얼마나 여유 있게 피했는지"까지 보고에 남기기 위함
+  // (팀장 지시 — 뷰포트별 실측 최소 거리를 보고에 기록).
+  function distOutsideRect(px, py, rect) {
+    const dx = Math.max(rect.x0 - px, 0, px - rect.x1)
+    const dy = Math.max(rect.y0 - py, 0, py - rect.y1)
+    return Math.hypot(dx, dy)
+  }
+  // 리뷰 수정 — 걷는 동안 캐릭터의 "실제로 렌더된"(브라우저가 매 프레임
+  // 페인트하는 CSS transition 보간 값, style.left/top이 아님 — 그 값은
+  // 구간 시작 시 목표로 즉시 점프한다) 발 위치를 requestAnimationFrame으로
+  // 연속 기록한다(S12 프레임 레코더와 동일한 "탭 직전 in-page recorder
+  // 설치 → 걷기 끝나면 회수" 패턴, 다만 S12는 MutationObserver로 이산
+  // 속성 변화를, 이건 rAF로 연속 기하 변화를 기록한다는 차이만 있다).
+  // ground 엘리먼트의 getBoundingClientRect()도 매 프레임 다시 읽어
+  // (walkMode ON이라 카메라가 패닝 중일 수 있음) 월드-% 환산이 항상 그
+  // 순간의 실제 카메라 위치를 반영하게 한다.
+  async function recordRenderedFootDuringWalk(page, character, targetScreenPt) {
+    await page.evaluate(() => {
+      const g = document.querySelector('[data-testid="proto25d-ground"]')
+      const c = document.querySelector('[data-proto-character]')
+      const samples = []
+      let raf
+      function tick() {
+        const gb = g.getBoundingClientRect()
+        const cb = c.getBoundingClientRect()
+        const footX = cb.x + cb.width / 2
+        const footY = cb.y + cb.height
+        samples.push({
+          worldX: gb.width > 0 ? ((footX - gb.x) / gb.width) * 100 : null,
+          worldY: gb.height > 0 ? ((footY - gb.y) / gb.height) * 100 : null,
+          phase: c.getAttribute('data-character-phase'),
+        })
+        raf = requestAnimationFrame(tick)
+      }
+      raf = requestAnimationFrame(tick)
+      window.__s28FootRecorder = { stop: () => { cancelAnimationFrame(raf); return samples } }
+    })
+    await page.mouse.click(targetScreenPt.x, targetScreenPt.y)
+    await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 1500 })
+    await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle', { timeout: 8000 })
+    return page.evaluate(() => (window.__s28FootRecorder ? window.__s28FootRecorder.stop() : []))
   }
 
   for (const vp of S17_VIEWPORTS) {
@@ -6029,24 +6080,42 @@ export async function run(browser, baseURL) {
       await page.waitForTimeout(150)
       await backBtn.click()
       await waitUntil(async () => (await shopOverlay.count()) === 0, { timeout: 3000 })
-      await placeOpen.waitFor({ state: 'visible', timeout: 3000 })
-      await placeOpen.click()
+      // 리뷰 수정(요구사항7) — 슬롯 선택용 카메라 패닝은 배치 모드에
+      // 들어가기 *전에* 끝낸다(placingItemId===null인 평범한 idle 상태에서
+      // ensureWorldPointVisible의 hop-탭은 그냥 걷기일 뿐이라 안전). 배치
+      // 모드가 이미 열린 뒤에 hop-탭을 하면, 그 탭 좌표가 우연히 어떤 빈
+      // 슬롯 판정 범위에 들어가는 순간 "탐색 중인 패닝 탭"이 아니라 실제
+      // 배치로 처리돼 버릴 수 있다(handleGroundPointerUp이 배치 모드에선
+      // 모든 탭을 슬롯 판정부터 먼저 검사) — 그래서 이전엔 안 보이면 슬롯
+      // C 하나만 폴백해 좁은 뷰포트에서 종종 "탭 가능한 슬롯 없음"으로
+      // 스킵됐던 것을, 3개 슬롯 전부를 "배치 모드 밖에서" 순서대로
+      // 시도하도록 바꿨다(요구사항7 — 핵심 항목이 4개 뷰포트 전부에서
+      // 실행돼야 함). 슬롯 자체가 이미 보이면 ensureWorldPointVisible이
+      // 0회 패닝으로 즉시 반환하므로(그 함수 정의 참고) 기존 동작과 비용
+      // 차가 없다.
       let chosen = null
-      let tapPt = null
       for (const s of PLACEMENT_SLOTS_REF) {
-        const gb = await ground.boundingBox()
-        const vb = await viewportEl.boundingBox()
-        const visible = intersectBoxes(gb, vb)
-        const pt = worldPctToScreenPx(slotCenterPct(s), gb)
-        if (visible && boxContainsPoint(visible, pt, -12) && await groundHitAt(page, pt)) { chosen = s; tapPt = pt; break }
-      }
-      if (!chosen) {
-        const s = PLACEMENT_SLOTS_REF[2]
         const vis = await ensureWorldPointVisible(page, character, ground, viewportEl, slotCenterPct(s))
-        if (vis.visible && await groundHitAt(page, vis.targetScreenPt)) { chosen = s; tapPt = vis.targetScreenPt }
+        if (vis.visible) { chosen = s; break }
       }
       if (!chosen) {
         r.check(`${name} — 탭 가능한 슬롯을 화면에 가져오지 못해 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+        collect(mocks)
+        await context.close()
+        continue
+      }
+      await placeOpen.waitFor({ state: 'visible', timeout: 3000 })
+      await placeOpen.click()
+      // 배치 모드가 열리며 배너/버튼 레이아웃이 바뀔 수 있어(F2 배치 안내
+      // 배너) ground/좌표를 다시 측정한다 — 카메라 위치 자체는 위에서 이미
+      // 확정됐으므로 재패닝 없이 탭 지점만 재계산.
+      const gbChoose = await ground.boundingBox()
+      const vbChoose = await viewportEl.boundingBox()
+      const visibleChoose = intersectBoxes(gbChoose, vbChoose)
+      const tapPt = worldPctToScreenPx(slotCenterPct(chosen), gbChoose)
+      if (!(visibleChoose && boxContainsPoint(visibleChoose, tapPt, -12) && await groundHitAt(page, tapPt))) {
+        r.check(`${name} — 배치 모드 진입 후 선택한 슬롯이 더 이상 탭 가능하지 않아 정직하게 스킵함(FAIL 아님)`, true,
+          JSON.stringify({ chosen, tapPt, visibleChoose }))
         collect(mocks)
         await context.close()
         continue
@@ -6055,38 +6124,44 @@ export async function run(browser, baseURL) {
       await waitUntil(async () => (await placedItem.count()) === 1, { timeout: 2000 })
       anyRanS28 = true
 
-      // ── (b, 요구사항1) — 배치 의자 양옆으로 걷기: 걷는 동안 캐릭터 발
-      // 좌표가 chosen rect 안(엄격히)에 한 번도 들지 않음 ──
-      const groundBoxB = await ground.boundingBox()
-      const leftPct = { x: Math.max(3, chosen.x0 - 6), y: (chosen.y0 + chosen.y1) / 2 }
-      const rightPct = { x: Math.min(97, chosen.x1 + 6), y: (chosen.y0 + chosen.y1) / 2 }
-      const leftVis = await ensureWorldPointVisible(page, character, ground, viewportEl, leftPct)
-      let collisionOk = null
-      if (leftVis.visible) {
-        await page.mouse.click(leftVis.targetScreenPt.x, leftVis.targetScreenPt.y)
+      // ── (b, 요구사항1) — 배치 의자를 가로지르는 두 구간(좌↔우 "옆",
+      // 위↔아래 "뒤↔앞")을 걷는 동안, 캐릭터의 *렌더된* 발 위치(논리
+      // 좌표가 아니라 recordRenderedFootDuringWalk의 rAF 실측, 위 헬퍼
+      // 헤더 주석 참고)가 chosen rect 안(엄격히)에 한 번도 들지 않는지.
+      // 리뷰 수정 — 이전 버전은 findPath가 반환하는 논리 웨이포인트를
+      // 샘플링했는데, 그 값은 애초에 절대 rect 안에 들어갈 수 없게
+      // 설계돼 있어(경로탐색 자체가 그렇게 보정) 이 단언이 항상 공허하게
+      // 참이었다(무엇을 해도 통과) — 이제 브라우저가 실제로 페인트하는
+      // CSS transition 보간 값을 rAF로 잡아, 렌더된 캐릭터 박스가 실제
+      // 화면에서 그 사각형을 가로지르는지까지 검증한다.
+      const chosenMidX = (chosen.x0 + chosen.x1) / 2
+      const chosenMidY = (chosen.y0 + chosen.y1) / 2
+      const leftPct = { x: Math.max(3, chosen.x0 - 6), y: chosenMidY }
+      const rightPct = { x: Math.min(97, chosen.x1 + 6), y: chosenMidY }
+      const abovePct = { x: chosenMidX, y: Math.max(3, chosen.y0 - 6) } // "뒤"(behind, 작은 y)
+      const belowPct = { x: chosenMidX, y: Math.min(97, chosen.y1 + 6) } // "앞"(in-front, 큰 y)
+      async function crossingCheck(fromPct, toPct, label) {
+        const fromVis = await ensureWorldPointVisible(page, character, ground, viewportEl, fromPct)
+        if (!fromVis.visible) return { ran: false, reason: 'from-not-visible' }
+        await page.mouse.click(fromVis.targetScreenPt.x, fromVis.targetScreenPt.y)
         await idleOf(character)
-        const rightVis = await ensureWorldPointVisible(page, character, ground, viewportEl, rightPct)
-        if (rightVis.visible) {
-          await page.mouse.click(rightVis.targetScreenPt.x, rightVis.targetScreenPt.y)
-          const reachedWalking = await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 1500 })
-          const samples = []
-          const deadlineB = Date.now() + 3000
-          while (Date.now() < deadlineB) {
-            const pct = await readCharacterPct(character)
-            samples.push(pct)
-            if ((await character.getAttribute('data-character-phase').catch(() => null)) === 'idle' && samples.length > 2) break
-            await page.waitForTimeout(50)
-          }
-          await idleOf(character)
-          const anyInsideRect = samples.some((s) => s.left > chosen.x0 && s.left < chosen.x1 && s.top > chosen.y0 && s.top < chosen.y1)
-          collisionOk = reachedWalking && !anyInsideRect
-          r.check(`${name} 항목b(요구사항1) — 배치 의자 옆으로 걷는 동안 캐릭터 발 좌표가 그 rect 안에 들지 않음`,
-            collisionOk, JSON.stringify({ reachedWalking, anyInsideRect, sampleCount: samples.length }))
-        }
+        const toVis = await ensureWorldPointVisible(page, character, ground, viewportEl, toPct)
+        if (!toVis.visible) return { ran: false, reason: 'to-not-visible' }
+        const samples = await recordRenderedFootDuringWalk(page, character, toVis.targetScreenPt)
+        const walkingSamples = samples.filter((s) => s.phase === 'walking' && s.worldX != null && s.worldY != null)
+        const distances = walkingSamples.map((s) => distOutsideRect(s.worldX, s.worldY, chosen))
+        const minDistPct = distances.length ? Math.min(...distances) : null
+        const anyInside = walkingSamples.some((s) => s.worldX > chosen.x0 && s.worldX < chosen.x1 && s.worldY > chosen.y0 && s.worldY < chosen.y1)
+        const ok = walkingSamples.length > 0 && !anyInside
+        r.check(`${name} 항목b(요구사항1) — 배치 의자 ${label} 구간(렌더된 발 위치, ${walkingSamples.length}샘플, 최소 이격 ${minDistPct != null ? minDistPct.toFixed(3) : 'n/a'} world-%)이 그 rect 안에 들지 않음`,
+          ok, JSON.stringify({ walkingSampleCount: walkingSamples.length, totalSamples: samples.length, minDistPct, anyInside }))
+        return { ran: true, ok, minDistPct }
       }
-      if (collisionOk == null) {
-        r.check(`${name} 항목b — 충돌 확인 지점이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
-      }
+      const horiz = await crossingCheck(leftPct, rightPct, '좌↔우(옆)')
+      const vert = await crossingCheck(abovePct, belowPct, '위↔아래(뒤↔앞)')
+      if (!horiz.ran) r.check(`${name} 항목b — 좌↔우 구간 확인 지점이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, JSON.stringify(horiz))
+      if (!vert.ran) r.check(`${name} 항목b — 위↔아래 구간 확인 지점이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, JSON.stringify(vert))
+      if (horiz.ran && vert.ran) executedByViewport[vp.label].collision = true
 
       // ── (c, 요구사항2/3) — idle에서 떨어져 있다가 배치 의자 탭 → 걸어가
       // 착석. 좌석 좌표가 seatRefFor(chosen)와 정확히 일치, 프레임 'sit',
@@ -6103,15 +6178,63 @@ export async function run(browser, baseURL) {
         r.check(`${name} 항목c — 배치 의자 탭 → 걸어가 착석함`, !!reachedSitting)
         if (reachedSitting) {
           anySatS28 = true
-          const groundBoxC = await ground.boundingBox()
-          const seatRef = seatRefFor(chosen, groundBoxC)
-          const pctSeated = await readCharacterPct(character)
-          r.check(`${name} 항목c(요구사항3) — 착석 좌표가 seatRefFor(chosen)와 정확히 일치(오차<0.05 world-%)`,
-            Math.abs(pctSeated.left - seatRef.x) < 0.05 && Math.abs(pctSeated.top - seatRef.y) < 0.05,
-            JSON.stringify({ pctSeated, seatRef }))
-          const frame = await page.locator('img[data-proto-character-sprite]').getAttribute('data-proto-character-sprite-frame').catch(() => null)
-          const spriteState = await page.locator('img[data-proto-character-sprite]').getAttribute('data-proto-character-sprite-state').catch(() => null)
-          r.check(`${name} 항목c(요구사항3) — 스프라이트 프레임 'sit'`, frame === 'sit', `frame=${frame} state=${spriteState}`)
+          executedByViewport[vp.label].sitAlign = true
+          // 리뷰 수정(요구사항3) — "논리 좌표 대 앱과 동일한 공식의
+          // 복제"(seatRefFor)는 앱 공식 자체가 틀려도 항상 자기 자신과
+          // 일치해 버그를 못 잡는다는 지적을 반영, S9 항목2와 동일하게
+          // 실제로 화면에 그려진 배치물 아트 boundingBox를 좌석선의
+          // 진실 원천으로 삼는다(재구현 아님 — S9가 이미 쓰는 기법을
+          // benchArt 대신 placedItem에 재적용). CSS transition(650ms)이
+          // 끝날 때까지 기다린 뒤 측정한다(S9 항목2 주석 — 150ms만
+          // 기다리면 전이 중간값을 읽어 오차가 27~39px까지 잘못
+          // 측정된다는 실측 교훈 그대로).
+          await page.waitForTimeout(650 + 150)
+          const placedItemBoxC = await placedItem.boundingBox()
+          const charBoxSeatedC = await character.boundingBox()
+          const expectedSeatPxC = {
+            x: placedItemBoxC.x + placedItemBoxC.width / 2,
+            y: placedItemBoxC.y + placedItemBoxC.height - placedItemBoxC.height * SEAT_FRACTION_REF,
+          }
+          const actualFootAnchorPxC = boxAnchor(charBoxSeatedC)
+          const seatErrorPxC = dist(expectedSeatPxC, actualFootAnchorPxC)
+          r.check(`${name} 항목c(요구사항3) — 착석 시 캐릭터 발 앵커와 배치물 실측 좌석선 사이 오차 < 3px(실측 ${seatErrorPxC != null ? seatErrorPxC.toFixed(2) : 'n/a'}px)`,
+            seatErrorPxC != null && seatErrorPxC < 3,
+            `expectedSeatPx=${JSON.stringify(expectedSeatPxC)} actualFootAnchorPx=${JSON.stringify(actualFootAnchorPxC)} errorPx=${seatErrorPxC}`)
+          r.check(`${name} 항목c(요구사항3) — 착석 지점이 배치물 아트의 세로 렌더 범위 안(붕 뜨지 않음)`,
+            actualFootAnchorPxC.y >= placedItemBoxC.y && actualFootAnchorPxC.y <= placedItemBoxC.y + placedItemBoxC.height,
+            `footY=${actualFootAnchorPxC.y} top=${placedItemBoxC.y} bottom=${placedItemBoxC.y + placedItemBoxC.height}`)
+
+          const glyphC = page.locator('[data-proto-character-glyph]')
+          const glyphCountC = await glyphC.count()
+          if (glyphCountC > 0) {
+            // emoji 모드 — S9 항목2(잉크 접촉점)와 동일한 measureGlyphInkOnScreen 재사용.
+            const inkMetricsC = await measureGlyphInkOnScreen(glyphC)
+            const contactPointScreenYC = inkMetricsC.inkBottomScreenY - 0.12 * (inkMetricsC.inkBottomScreenY - inkMetricsC.inkTopScreenY)
+            const contactErrorPxC = Math.abs(contactPointScreenYC - expectedSeatPxC.y)
+            r.check(`${name} 항목c(요구사항3, 이모지) — 접촉점과 배치물 실측 좌석선 사이 오차 < 3px`,
+              contactErrorPxC < 3, `contactPointScreenY=${contactPointScreenYC} expectedSeatY=${expectedSeatPxC.y} errorPx=${contactErrorPxC}`)
+          } else {
+            const spriteImgC = page.locator('img[data-proto-character-sprite]')
+            const frameIdC = await spriteImgC.getAttribute('data-proto-character-sprite-frame').catch(() => null)
+            r.check(`${name} 항목c(요구사항3) — 스프라이트 프레임 'sit'`, frameIdC === 'sit', `frameId=${frameIdC}`)
+            const measuredC = readPaulSpriteMeasured()
+            if (measuredC && measuredC.canvas && measuredC.anchors && measuredC.anchors.sit && measuredC.anchors.sit.seatAnchor) {
+              const { canvas } = measuredC
+              const { seatAnchor } = measuredC.anchors.sit
+              const expectedDxPctC = ((canvas.w / 2 - seatAnchor.x) / canvas.w) * 100
+              const expectedDyPctC = ((canvas.h - seatAnchor.y) / canvas.h) * 100
+              const anchorLayerC = page.locator('[data-proto-character-anchor-layer]')
+              const transformStrC = (await anchorLayerC.evaluate((el) => el.style.transform).catch(() => '')) || ''
+              const mC = /translate\(([-\d.]+)%,\s*([-\d.]+)%\)/.exec(transformStrC)
+              const actualDxPctC = mC ? parseFloat(mC[1]) : null
+              const actualDyPctC = mC ? parseFloat(mC[2]) : null
+              r.check(`${name} 항목c(요구사항3) — 앵커 레이어 translate가 paul-sprite-measured.json의 sit.seatAnchor에서 유도한 값과 일치(±0.5%)`,
+                actualDxPctC != null && actualDyPctC != null && Math.abs(actualDxPctC - expectedDxPctC) < 0.5 && Math.abs(actualDyPctC - expectedDyPctC) < 0.5,
+                `actual=(${actualDxPctC}%, ${actualDyPctC}%) expected=(${expectedDxPctC}%, ${expectedDyPctC}%) transform=${transformStrC}`)
+            } else {
+              r.check(`${name} 항목c(요구사항3) — paul-sprite-measured.json에서 sit.seatAnchor를 읽음`, false, '측정 파일 없음 또는 형식 불일치')
+            }
+          }
           const zChar = await readZIndex(character)
           const zItem = await readZIndex(placedItem)
           r.check(`${name} 항목c(요구사항3) — 캐릭터 z-index가 그 배치물보다 앞`, zChar > zItem, `char=${zChar} item=${zItem}`)
@@ -6140,6 +6263,7 @@ export async function run(browser, baseURL) {
           const redirectScreenPt = worldPctToScreenPx(redirectPct, groundBoxD)
           const redirectVisibleD = !!(visibleBoxD && boxContainsPoint(visibleBoxD, redirectScreenPt))
           if (redirectVisibleD) {
+            executedByViewport[vp.label].standRedirect = true
             await page.mouse.click(redirectScreenPt.x, redirectScreenPt.y)
             const timelineD = await samplePhaseTimelineS28(page, character, { timeoutMs: 10000 })
             const iLeave = timelineD.indexOf('leaving')
@@ -6156,33 +6280,69 @@ export async function run(browser, baseURL) {
           }
 
           // ── (e, 요구사항4) — 다시 착석 → 같은 의자 재탭 → leaving→idle만
-          // (walking 없음, 제자리에서 일어남) ──
+          // (walking 없음, 제자리에서 일어남). 리뷰 수정 — 재탭 지점 가시성
+          // 판정도 항목d와 동일 이유로 ensureWorldPointVisible을 쓰지 않는다
+          // (캐릭터가 이미 그 의자에 앉아있는 순간에 그 헬퍼를 부르면, 안
+          // 보일 때 스스로 바닥을 탭해 기립+재지정을 먼저 트리거해 버릴
+          // 수 있다 — 항목d에서 실측으로 확인한 것과 동일 클래스의 위험,
+          // 여기서는 목표가 이미 앉아있는 바로 그 좌표라 실제로 안 보일
+          // 가능성은 낮지만 안전하게 통일한다) — 카메라 이동 없는 순수
+          // 가시성 판정만 쓰고, 스킵/실패 분기 전부에 r.check을 남긴다
+          // (팀장 지시 — "skip branches have no r.check"). ──
           const resitVis = await ensureWorldPointVisible(page, character, ground, viewportEl, slotCenterPct(chosen))
-          if (resitVis.visible) {
+          if (!resitVis.visible) {
+            r.check(`${name} 항목e — 재착석 지점이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+          } else {
             await page.mouse.click(resitVis.targetScreenPt.x, resitVis.targetScreenPt.y)
             const reachedSitting2 = await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'sitting', { timeout: 10000 })
-            if (reachedSitting2) {
-              const chosenVis2 = await ensureWorldPointVisible(page, character, ground, viewportEl, slotCenterPct(chosen))
-              if (chosenVis2.visible) {
-                await page.mouse.click(chosenVis2.targetScreenPt.x, chosenVis2.targetScreenPt.y)
+            if (!reachedSitting2) {
+              r.check(`${name} 항목e — 재착석 자체가 실패해 정직하게 스킵함(FAIL 아님, 항목c에서 이미 착석 성공을 확인했으므로 별도 FAIL 아님)`, true, '스킵')
+            } else {
+              const gbE = await ground.boundingBox()
+              const visE = intersectBoxes(gbE, await viewportEl.boundingBox())
+              const retapPtE = worldPctToScreenPx(slotCenterPct(chosen), gbE)
+              const retapVisibleE = !!(visE && boxContainsPoint(visE, retapPtE))
+              if (!retapVisibleE) {
+                r.check(`${name} 항목e — 재탭 지점이 카메라 이동 없이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+              } else {
+                executedByViewport[vp.label].standSameChair = true
+                await page.mouse.click(retapPtE.x, retapPtE.y)
                 const timelineE = await samplePhaseTimelineS28(page, character, { timeoutMs: 8000 })
-                r.check(`${name} 항목e(요구사항4) — 같은 의자 재탭 → leaving→idle만(재지정 없음)`,
-                  timelineE.includes('leaving') && timelineE.lastIndexOf('idle') > timelineE.indexOf('leaving') && !timelineE.includes('walking'),
-                  JSON.stringify(timelineE))
+                const standSameChairOkE = timelineE.includes('leaving') && timelineE.lastIndexOf('idle') > timelineE.indexOf('leaving') && !timelineE.includes('walking')
+                r.check(`${name} 항목e(요구사항4) — 같은 의자 재탭 → leaving→idle만(재지정 없음)`, standSameChairOkE, JSON.stringify(timelineE))
+                if (standSameChairOkE) anySameChairStandS28 = true
               }
             }
           }
 
           // ── (f, 요구사항5) — 다시 착석 → "내 물건" 옮기기 → 다른 빈 슬롯
-          // 탭 → 즉시 idle(떠 있지 않음), 배치물 slotId 갱신 ──
+          // 탭 → 즉시 idle(떠 있지 않음), 배치물 slotId 갱신. 리뷰 수정 —
+          // (1) 착석이 실제로 됐는지 자체를 별도 r.check으로 남긴다(이전엔
+          // sat3가 false여도 침묵하고 그냥 지나갔다). (2) 클릭~판정 사이
+          // 경과 시간(elapsedMs)을 실측해 SIT_HOLD_MS(2500ms, benchInteraction.js)
+          // 보다 한참 짧다는 것까지 단언한다 — 그래야 이 결과가 "우연히
+          // 자동 기립 타이머가 만료된 것"이 아니라 옮기기 액션 자체가
+          // 낸 결과임을 시간상으로도 배제할 수 있다. (3) 옮긴 뒤 예전
+          // 자리는 다시 걸을 수 있게(구멍이 메워짐), 새 자리는 여전히
+          // 막혀있는지(collision이 실제로 갱신됐는지)까지 확인한다 ──
+          const oldChosenRectF = chosen
           const resitVis2 = await ensureWorldPointVisible(page, character, ground, viewportEl, slotCenterPct(chosen))
-          if (resitVis2.visible) {
+          if (!resitVis2.visible) {
+            r.check(`${name} 항목f — 재착석 지점이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+          } else {
             await page.mouse.click(resitVis2.targetScreenPt.x, resitVis2.targetScreenPt.y)
             const sat3 = await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'sitting', { timeout: 10000 })
-            if (sat3 && (await myItemsOpenBtn.count())) {
+            r.check(`${name} 항목f — 옮기기 시도 전 실제로 착석함(사전조건)`, !!sat3)
+            if (!sat3) {
+              r.check(`${name} 항목f — 착석 실패로 정직하게 스킵함(FAIL 아님, 항목c에서 이미 별도로 착석 성공을 확인했음)`, true, '스킵')
+            } else if (!(await myItemsOpenBtn.count())) {
+              r.check(`${name} 항목f — "내 물건" 버튼이 없어 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+            } else {
               await myItemsOpenBtn.click()
               await page.waitForTimeout(150)
-              if (await myItemsMoveBtn.count()) {
+              if (!(await myItemsMoveBtn.count())) {
+                r.check(`${name} 항목f — 옮기기 버튼이 없어 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+              } else {
                 await myItemsMoveBtn.click()
                 await page.waitForTimeout(150)
                 let targetSlot = null
@@ -6195,42 +6355,97 @@ export async function run(browser, baseURL) {
                   const pt2 = worldPctToScreenPx(slotCenterPct(s), gb2)
                   if (visible2 && boxContainsPoint(visible2, pt2, -12) && await groundHitAt(page, pt2)) { targetSlot = s; targetPt = pt2; break }
                 }
-                if (targetSlot) {
+                if (!targetSlot) {
+                  r.check(`${name} 항목f — 옮길 빈 슬롯이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+                } else {
+                  executedByViewport[vp.label].moveWhileSeated = true
+                  const moveClickAtF = Date.now()
                   await page.mouse.click(targetPt.x, targetPt.y)
                   await page.waitForTimeout(300)
+                  const elapsedMsF = Date.now() - moveClickAtF
                   const phaseAfterMove = await character.getAttribute('data-character-phase').catch(() => null)
                   const slotAfterMove = await placedItem.getAttribute('data-slot-id').catch(() => null)
-                  r.check(`${name} 항목f(요구사항5) — 착석 중 옮기기 → 즉시 idle(떠 있지 않음) + 슬롯 갱신`,
-                    phaseAfterMove === 'idle' && slotAfterMove === targetSlot.id,
-                    JSON.stringify({ phaseAfterMove, slotAfterMove, targetSlot: targetSlot.id }))
-                  if (phaseAfterMove === 'idle' && slotAfterMove === targetSlot.id) anyMovedWhileSittingS28 = true
+                  const moveOkF = phaseAfterMove === 'idle' && slotAfterMove === targetSlot.id && elapsedMsF < 2500
+                  r.check(`${name} 항목f(요구사항5) — 착석 중 옮기기 → 즉시(경과 ${elapsedMsF}ms, SIT_HOLD_MS 2500ms보다 한참 짧음) idle(떠 있지 않음) + 슬롯 갱신`,
+                    moveOkF, JSON.stringify({ phaseAfterMove, slotAfterMove, targetSlot: targetSlot.id, elapsedMsF }))
+                  if (moveOkF) anyMovedWhileSittingS28 = true
                   chosen = targetSlot // 이후(g) 회수 확인은 새 위치 기준
-                } else {
-                  r.check(`${name} 항목f — 옮길 빈 슬롯이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+
+                  // 옮긴 뒤 collision 갱신 확인 — 예전 자리(oldChosenRectF)는
+                  // 다시 걸을 수 있고(정확히 그 중심을 탭하면 보정 없이
+                  // 그 좌표 그대로 도착), 새 자리(chosen, 위에서 갱신됨)는
+                  // 여전히 막혀있다(item b와 동일한 렌더 샘플링 크로싱).
+                  const oldCentrePctF = { x: (oldChosenRectF.x0 + oldChosenRectF.x1) / 2, y: (oldChosenRectF.y0 + oldChosenRectF.y1) / 2 }
+                  const oldCentreVisF = await ensureWorldPointVisible(page, character, ground, viewportEl, oldCentrePctF)
+                  if (oldCentreVisF.visible) {
+                    await page.mouse.click(oldCentreVisF.targetScreenPt.x, oldCentreVisF.targetScreenPt.y)
+                    await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 1500 })
+                    await idleOf(character)
+                    const pctAfterOldF = await readCharacterPct(character)
+                    const landedExactlyF = Math.abs(pctAfterOldF.left - oldCentrePctF.x) < 0.5 && Math.abs(pctAfterOldF.top - oldCentrePctF.y) < 0.5
+                    r.check(`${name} 항목f — 옮긴 뒤 예전 자리가 다시 걸을 수 있음(중심 탭이 보정 없이 그 좌표 그대로 도착)`,
+                      landedExactlyF, JSON.stringify({ pctAfterOldF, oldCentrePctF }))
+                  } else {
+                    r.check(`${name} 항목f — 예전 자리 확인 지점이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+                  }
+                  const newCrossF = await crossingCheck(
+                    { x: Math.max(3, chosen.x0 - 6), y: (chosen.y0 + chosen.y1) / 2 },
+                    { x: Math.min(97, chosen.x1 + 6), y: (chosen.y0 + chosen.y1) / 2 },
+                    '옮긴 뒤 새 자리(옆)',
+                  )
+                  if (!newCrossF.ran) r.check(`${name} 항목f — 새 자리 충돌 확인 지점이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, JSON.stringify(newCrossF))
                 }
               }
             }
           }
 
           // ── (g, 요구사항5) — 다시 착석 → "내 물건" 넣기(회수) → 즉시
-          // idle, placed-count 감소, 배치물 DOM 사라짐 ──
+          // idle, placed-count 감소, 배치물 DOM 사라짐 + 그 자리가 다시
+          // 걸을 수 있게 됨. (f)와 동일한 리뷰 수정(사전조건/타이밍/collision) ──
+          const oldChosenRectG = chosen
           const resitVis3 = await ensureWorldPointVisible(page, character, ground, viewportEl, slotCenterPct(chosen))
-          if (resitVis3.visible) {
+          if (!resitVis3.visible) {
+            r.check(`${name} 항목g — 재착석 지점이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+          } else {
             await page.mouse.click(resitVis3.targetScreenPt.x, resitVis3.targetScreenPt.y)
             const sat4 = await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'sitting', { timeout: 10000 })
-            if (sat4 && (await myItemsOpenBtn.count())) {
+            r.check(`${name} 항목g — 회수 시도 전 실제로 착석함(사전조건)`, !!sat4)
+            if (!sat4) {
+              r.check(`${name} 항목g — 착석 실패로 정직하게 스킵함(FAIL 아님, 항목c에서 이미 별도로 착석 성공을 확인했음)`, true, '스킵')
+            } else if (!(await myItemsOpenBtn.count())) {
+              r.check(`${name} 항목g — "내 물건" 버튼이 없어 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+            } else {
               await myItemsOpenBtn.click()
               await page.waitForTimeout(150)
-              if (await myItemsRetrieveBtn.count()) {
+              if (!(await myItemsRetrieveBtn.count())) {
+                r.check(`${name} 항목g — 넣기 버튼이 없어 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+              } else {
+                executedByViewport[vp.label].storeWhileSeated = true
+                const retrieveClickAtG = Date.now()
                 await myItemsRetrieveBtn.click()
                 await page.waitForTimeout(300)
+                const elapsedMsG = Date.now() - retrieveClickAtG
                 const phaseAfterRetrieve = await character.getAttribute('data-character-phase').catch(() => null)
                 const placedCountAfter = await page.locator('[data-testid="proto25d-root"]').getAttribute('data-proto25d-placed-count')
                 const itemGone = (await placedItem.count()) === 0
-                r.check(`${name} 항목g(요구사항5) — 착석 중 회수(넣기) → 즉시 idle(떠 있지 않음) + 배치물 사라짐`,
-                  phaseAfterRetrieve === 'idle' && placedCountAfter === '0' && itemGone,
-                  JSON.stringify({ phaseAfterRetrieve, placedCountAfter, itemGone }))
-                if (phaseAfterRetrieve === 'idle' && placedCountAfter === '0' && itemGone) anyRetrievedWhileSittingS28 = true
+                const storeOkG = phaseAfterRetrieve === 'idle' && placedCountAfter === '0' && itemGone && elapsedMsG < 2500
+                r.check(`${name} 항목g(요구사항5) — 착석 중 회수(넣기) → 즉시(경과 ${elapsedMsG}ms, SIT_HOLD_MS 2500ms보다 한참 짧음) idle(떠 있지 않음) + 배치물 사라짐`,
+                  storeOkG, JSON.stringify({ phaseAfterRetrieve, placedCountAfter, itemGone, elapsedMsG }))
+                if (storeOkG) anyRetrievedWhileSittingS28 = true
+
+                const oldCentrePctG = { x: (oldChosenRectG.x0 + oldChosenRectG.x1) / 2, y: (oldChosenRectG.y0 + oldChosenRectG.y1) / 2 }
+                const oldCentreVisG = await ensureWorldPointVisible(page, character, ground, viewportEl, oldCentrePctG)
+                if (oldCentreVisG.visible) {
+                  await page.mouse.click(oldCentreVisG.targetScreenPt.x, oldCentreVisG.targetScreenPt.y)
+                  await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 1500 })
+                  await idleOf(character)
+                  const pctAfterOldG = await readCharacterPct(character)
+                  const landedExactlyG = Math.abs(pctAfterOldG.left - oldCentrePctG.x) < 0.5 && Math.abs(pctAfterOldG.top - oldCentrePctG.y) < 0.5
+                  r.check(`${name} 항목g — 회수한 뒤 그 자리가 다시 걸을 수 있음(중심 탭이 보정 없이 그 좌표 그대로 도착)`,
+                    landedExactlyG, JSON.stringify({ pctAfterOldG, oldCentrePctG }))
+                } else {
+                  r.check(`${name} 항목g — 회수한 자리 확인 지점이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+                }
               }
             }
           }
@@ -6241,20 +6456,79 @@ export async function run(browser, baseURL) {
 
       // ── (h) 고정 벤치 회귀 — S28의 새 상호작용(배치 의자 착석 중 임의
       // 탭으로 기립)이 고정 벤치의 "착석 중 모든 탭 무시" 규칙(요구사항6)을
-      // 깨지 않았는지 재확인 ──
+      // 깨지 않았는지 재확인. 리뷰 수정 — 스킵 분기 전부에 r.check을
+      // 남기고(팀장 지시), 재확인 탭의 가시성 판정도 ensureWorldPointVisible
+      // 대신 카메라 이동 없는 순수 판정을 쓴다(고정 벤치 착석 중 탭은 항상
+      // 무시되므로 안전하긴 하지만, 안 보이는 경우 hop-탭마다 8초
+      // waitUntil(idle)이 전부 타임아웃까지 헛되이 도는 성능 낭비가 있어
+      // — 항목d/e와 동일하게 통일) ──
       await idleOf(character)
-      const benchVis = await ensureWorldPointVisible(page, character, ground, viewportEl, { x: (BENCH_REF_S28.x0 + BENCH_REF_S28.x1) / 2, y: (BENCH_REF_S28.y0 + BENCH_REF_S28.y1) / 2 })
-      if (benchVis.visible) {
+      const benchCentrePctH = { x: (BENCH_REF_S28.x0 + BENCH_REF_S28.x1) / 2, y: (BENCH_REF_S28.y0 + BENCH_REF_S28.y1) / 2 }
+      const benchVis = await ensureWorldPointVisible(page, character, ground, viewportEl, benchCentrePctH)
+      if (!benchVis.visible) {
+        r.check(`${name} 항목h — 고정 벤치가 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+      } else {
         await page.mouse.click(benchVis.targetScreenPt.x, benchVis.targetScreenPt.y)
         const reachedBenchSitting = await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'sitting', { timeout: 10000 })
-        if (reachedBenchSitting) {
-          const groundPointVis = await ensureWorldPointVisible(page, character, ground, viewportEl, SPAWN_PCT_REF)
-          if (groundPointVis.visible) {
+        if (!reachedBenchSitting) {
+          r.check(`${name} 항목h — 고정 벤치 착석 자체가 실패해 정직하게 스킵함(FAIL 아님, S8이 이미 별도로 검증함)`, true, '스킵')
+        } else {
+          // ── (i, 팀장 지시 "report note") — 고정 벤치 착석 중에도 배치
+          // 모드 슬롯 탭은 이제 처리된다(이 세션의 핸들러 순서 변경 — 예전엔
+          // sitting 게이트가 먼저라 무시됐었다). 그 성공 자체와, 그 동안
+          // 착석 상태(phase/좌표)가 전혀 건드려지지 않는지를 확인한다.
+          // g에서 회수한 아이템이 다시 inventory에 들어가 있어(퇴치→재구매
+          // 아님, 이미 보유) 재배치 흐름을 그대로 재사용할 수 있다 — g가
+          // 스킵돼 회수가 안 됐으면(아이템이 여전히 배치 상태) 이 항목도
+          // 정직하게 스킵한다. ──
+          const pctBeforeI = await readCharacterPct(character)
+          const placedCountBeforeI = await page.locator('[data-testid="proto25d-root"]').getAttribute('data-proto25d-placed-count')
+          if (placedCountBeforeI !== '0' || !(await placeOpen.count())) {
+            r.check(`${name} 항목i(보고 항목) — g에서 회수가 안 돼(또는 배치하기 버튼 없음) 정직하게 스킵함(FAIL 아님)`, true,
+              JSON.stringify({ placedCountBeforeI, placeOpenCount: await placeOpen.count() }))
+          } else {
+            await placeOpen.click()
+            await page.waitForTimeout(150)
+            let slotI = null
+            let slotPtI = null
+            for (const s of PLACEMENT_SLOTS_REF) {
+              const gbI = await ground.boundingBox()
+              const vbI = await viewportEl.boundingBox()
+              const visI = intersectBoxes(gbI, vbI)
+              const ptI = worldPctToScreenPx(slotCenterPct(s), gbI)
+              if (visI && boxContainsPoint(visI, ptI, -12) && await groundHitAt(page, ptI)) { slotI = s; slotPtI = ptI; break }
+            }
+            if (!slotI) {
+              r.check(`${name} 항목i(보고 항목) — 배치할 빈 슬롯이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+            } else {
+              await page.mouse.click(slotPtI.x, slotPtI.y)
+              await page.waitForTimeout(300)
+              const phaseAfterI = await character.getAttribute('data-character-phase').catch(() => null)
+              const pctAfterI = await readCharacterPct(character)
+              const placedCountAfterI = await page.locator('[data-testid="proto25d-root"]').getAttribute('data-proto25d-placed-count')
+              const stateUnchangedI = phaseAfterI === 'sitting' && Math.abs(pctAfterI.left - pctBeforeI.left) < 0.01 && Math.abs(pctAfterI.top - pctBeforeI.top) < 0.01
+              r.check(`${name} 항목i(보고 항목, 요구사항6) — 고정 벤치 착석 중 배치 모드 슬롯 탭 → 배치 성공 + 착석 상태(phase/좌표) 불변`,
+                placedCountAfterI === '1' && stateUnchangedI,
+                JSON.stringify({ phaseAfterI, pctBeforeI, pctAfterI, placedCountAfterI, slotI: slotI.id }))
+            }
+          }
+
+          const groundPointVis = { visible: false, targetScreenPt: null }
+          const gbH = await ground.boundingBox()
+          const visH = intersectBoxes(gbH, await viewportEl.boundingBox())
+          const spawnPtH = worldPctToScreenPx(SPAWN_PCT_REF, gbH)
+          groundPointVis.visible = !!(visH && boxContainsPoint(visH, spawnPtH))
+          groundPointVis.targetScreenPt = spawnPtH
+          if (!groundPointVis.visible) {
+            r.check(`${name} 항목h — 재확인 탭 지점이 카메라 이동 없이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+          } else {
             await page.mouse.click(groundPointVis.targetScreenPt.x, groundPointVis.targetScreenPt.y)
             await page.waitForTimeout(150)
             const phaseStillSitting = await character.getAttribute('data-character-phase').catch(() => null)
-            r.check(`${name} 항목h(요구사항6) — 고정 벤치 착석 중엔 여전히 모든 탭 무시(S8 규칙 무변경)`,
-              phaseStillSitting === 'sitting', `phase=${phaseStillSitting}`)
+            const benchIgnoreOkH = phaseStillSitting === 'sitting'
+            r.check(`${name} 항목h(요구사항6) — 고정 벤치 착석 중엔 여전히 모든 탭 무시(S8 항목8 규칙 무변경)`,
+              benchIgnoreOkH, `phase=${phaseStillSitting}`)
+            if (benchIgnoreOkH) anyBenchIgnoreVerifiedS28 = true
           }
           await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle', { timeout: 8000 })
         }
@@ -6262,7 +6536,7 @@ export async function run(browser, baseURL) {
 
       const writeActionCallsS28 = mocks.apiCallLog.filter((c) => c.body && SHOP_WRITE_ACTIONS.includes(c.body.action))
       const restWriteCallsS28 = classifyWrites(mocks.apiCallLog).unexpectedRest
-      r.check(`${name} 항목i — 구매/보상 쓰기 액션 0건 + 허용목록 외 REST 쓰기 0건`,
+      r.check(`${name} 항목j — 구매/보상 쓰기 액션 0건 + 허용목록 외 REST 쓰기 0건`,
         writeActionCallsS28.length === 0 && restWriteCallsS28.length === 0, JSON.stringify({ writeActionCallsS28, restWriteCallsS28 }))
       r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
     } catch (err) {
@@ -6277,8 +6551,133 @@ export async function run(browser, baseURL) {
   r.check('S28 — 최소 한 뷰포트는 전 과정이 실제로 실행됨(전부 스킵 아님)', anyRanS28)
   r.check('S28 — 최소 한 뷰포트에서 배치 의자 착석이 실제로 성공함', anySatS28)
   r.check('S28 — 최소 한 뷰포트에서 착석 중 다른 곳 탭 → 기립+재지정이 실제로 성공함', anyRedirectedS28)
+  r.check('S28 — 최소 한 뷰포트에서 같은 의자 재탭 → 기립(재지정 없음)이 실제로 성공함', anySameChairStandS28)
   r.check('S28 — 최소 한 뷰포트에서 착석 중 옮기기가 실제로 성공함', anyMovedWhileSittingS28)
   r.check('S28 — 최소 한 뷰포트에서 착석 중 회수(넣기)가 실제로 성공함', anyRetrievedWhileSittingS28)
+  r.check('S28 — 최소 한 뷰포트에서 고정 벤치 착석 중 탭 무시(항목h)가 실제로 재확인됨', anyBenchIgnoreVerifiedS28)
+
+  // ── 요구사항7 — 핵심 항목(충돌/착석 정렬/기립 2종/착석 중 옮기기·
+  // 넣기)이 360x640/390x844/412x915/1280x800 전부에서 "스킵되지 않고"
+  // 실제로 실행됐는지(통과 여부와 별개 — 실행 자체) 뷰포트별로 개별
+  // 단언한다. anyXxxS28(최소 1개 뷰포트, 위) 집계보다 강한 계약 —
+  // 팀장 지시: "must each have actually executed ... on ALL FOUR
+  // viewports". ──
+  const CORE_ITEM_LABELS = {
+    collision: '충돌(항목b, 좌↔우+위↔아래 렌더 샘플링)',
+    sitAlign: '착석 정렬(항목c, 실측 픽셀)',
+    standSameChair: '같은 의자 재탭 기립(항목e)',
+    standRedirect: '다른 곳 탭 기립+재지정(항목d)',
+    moveWhileSeated: '착석 중 옮기기(항목f)',
+    storeWhileSeated: '착석 중 넣기(항목g)',
+  }
+  for (const [key, label] of Object.entries(CORE_ITEM_LABELS)) {
+    for (const vp of S17_VIEWPORTS) {
+      r.check(`S28 요구사항7 — [${vp.label}] 핵심 항목 "${label}"이 스킵되지 않고 실제로 실행됨`,
+        executedByViewport[vp.label][key] === true, JSON.stringify(executedByViewport[vp.label]))
+    }
+  }
+
+  // ── S29(2026-09-30, 독립 리뷰 발견) — startPlainWalk이 pendingSit는
+  // 지우면서 sitTargetKey/sitRect는 지우지 않는 결함(제품 버그, 이번 리뷰
+  // 라운드에서 지적됨). 재현 순서: 배치 의자 탭(walk-to-seat 시작,
+  // sitTargetKey='placed:bench') → 도착 전에 빈 바닥 탭(재지정 — 기존
+  // "walking 중 재지정" 규칙, Stage2/Phase6A) → startPlainWalk이 pendingSit
+  // 만 false로 바꾸고 sitTargetKey는 그대로 둔 채 새 일반 걷기가 시작됨
+  // (버그) → 그 걷기 도중(전혀 무관한 목적지로 향하는 중) "내 물건"에서
+  // 그 의자를 넣기(회수)하면, interruptSitIfTargeting이 남은 stale
+  // sitTargetKey를 보고 "지금 그 의자에 앉으려던 중"으로 오판해 무관한
+  // 걷기를 즉시 중단시켜 버린다. 수정 후에는 startPlainWalk이 두 필드도
+  // 함께 지워 넣기가 이 걷기에 전혀 영향을 주지 않는다.
+  {
+    const vp = { width: 1280, height: 800 }
+    const name = 'S29[1280x800,stale-sitTargetKey]'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true, townShopV1: true }) // walk mode 기본 off(setDeviceFlags 주석 참고) — ground=viewport, 좌표 계산 단순화.
+    const mocks = await installMocks(page, { townState: { starsEarned: 20, dollars: { available: 37, earned: 37, spent: 0 }, owned: [], welcomeClaimed: false } })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const enterBtn = page.locator('[data-testid="proto25d-shop-enter"]')
+      const shopOverlay = page.locator('[data-testid="proto25d-shop"]')
+      const backBtn = page.locator('[data-testid="proto25d-shop-back"]')
+      const buyBtn = page.locator('[data-testid="proto25d-shop-buy"]')
+      const confirmYes = page.locator('[data-testid="proto25d-shop-confirm-yes"]')
+      const placeOpen = page.locator('[data-testid="proto25d-place-open"]')
+      const placedItem = page.locator('[data-testid="proto25d-placed-item"]')
+      const myItemsOpenBtn = page.locator('[data-testid="proto25d-myitems-open"]')
+      const myItemsRetrieveBtn = page.locator('[data-testid="proto25d-myitems-retrieve"]').first()
+      const root = page.locator('[data-testid="proto25d-root"]')
+      const idleOfS29 = () => waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle', { timeout: 8000 })
+
+      const gb = await ground.boundingBox()
+      const toPx = (pct) => ({ x: gb.x + gb.width * (pct.x / 100), y: gb.y + gb.height * (pct.y / 100) })
+
+      // 구매 + 배치(슬롯 A) — walk mode off라 전부 직접 보임(S8/S9와 동일
+      // 전제), 카메라 패닝 헬퍼 불필요.
+      const entrancePtS29 = toPx({ x: 50, y: 42 })
+      await page.mouse.click(entrancePtS29.x, entrancePtS29.y)
+      await idleOfS29()
+      await enterBtn.waitFor({ state: 'visible', timeout: 3000 })
+      await enterBtn.click()
+      await shopOverlay.waitFor({ state: 'visible', timeout: 3000 })
+      await buyBtn.click()
+      await page.locator('[data-testid="proto25d-shop-confirm"]').waitFor({ state: 'visible', timeout: 1000 })
+      await confirmYes.click()
+      await page.waitForTimeout(150)
+      await backBtn.click()
+      await waitUntil(async () => (await shopOverlay.count()) === 0, { timeout: 3000 })
+      await placeOpen.waitFor({ state: 'visible', timeout: 3000 })
+      await placeOpen.click()
+      const slotAPt = toPx({ x: 30, y: 47.5 }) // PLACEMENT_SLOTS_REF[0]('A') 중심
+      await page.mouse.click(slotAPt.x, slotAPt.y)
+      await waitUntil(async () => (await placedItem.count()) === 1, { timeout: 2000 })
+
+      // 배치 의자 탭(walk-to-seat 시작) → 도착 전(≈150ms, 단일 구간
+      // 650ms보다 한참 짧음) 빈 바닥 재지정 탭 → 그 걷기 도중(≈200ms 후,
+      // 남은 구간 안) 그 의자를 "내 물건"에서 넣기(회수).
+      await page.mouse.click(slotAPt.x, slotAPt.y)
+      await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 1500 })
+      await page.waitForTimeout(150)
+      const redirectPct = { x: 80, y: 20 }
+      const redirectPx = toPx(redirectPct)
+      await page.mouse.click(redirectPx.x, redirectPx.y)
+      const redirectedToWalking = await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 1500 })
+      r.check(`${name} 사전조건 — 재지정 탭 직후 여전히(새 목적지로) walking`, !!redirectedToWalking)
+      await page.waitForTimeout(200)
+      const phaseBeforeRetrieve = await character.getAttribute('data-character-phase').catch(() => null)
+      r.check(`${name} 사전조건 — 넣기 시점에 아직 재지정된 걷기 도중(walking, leg 650ms 중 ≈350ms 경과)`, phaseBeforeRetrieve === 'walking', `phase=${phaseBeforeRetrieve}`)
+      await myItemsOpenBtn.click()
+      await page.waitForTimeout(150)
+      await myItemsRetrieveBtn.click()
+      await page.waitForTimeout(60)
+      const phaseRightAfterRetrieve = await character.getAttribute('data-character-phase').catch(() => null)
+
+      await idleOfS29()
+      const finalPct = await readCharacterPct(character)
+      const distToRedirect = Math.hypot(finalPct.left - redirectPct.x, finalPct.top - redirectPct.y)
+      const placedCountAfter = await root.getAttribute('data-proto25d-placed-count')
+
+      r.check(`${name} — 넣기 직후에도 무관한 걷기가 중단되지 않음(phase가 즉시 idle로 떨어지지 않음)`,
+        phaseRightAfterRetrieve !== 'idle', `phase=${phaseRightAfterRetrieve}`)
+      r.check(`${name} — 넣기와 무관하게 재지정된 목적지(80,20)에 그대로 도착함(<3 world-%, 오차 ${distToRedirect.toFixed(3)})`,
+        distToRedirect < 3, JSON.stringify({ finalPct, redirectPct, distToRedirect }))
+      r.check(`${name} — 넣기 자체는 정상적으로 성공함(placed-count "0")`, placedCountAfter === '0', `placedCountAfter=${placedCountAfter}`)
+
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
 
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }
 }
