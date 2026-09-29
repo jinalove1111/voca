@@ -145,7 +145,7 @@ import {
 import { isNearShopEntrance, SHOP_PRODUCTS, tryPurchase } from '../../../utils/town/proto2_5d/shopInteraction'
 import ProtoShopScreen from './ProtoShopScreen'
 import { coinBadgeText, coinBadgeAriaLabel } from '../../../utils/town/proto2_5d/coinDisplay'
-import { PLACEMENT_SLOTS, placedObstacleRect, obstaclesWithPlacements } from '../../../utils/town/proto2_5d/placementSlots'
+import { PLACEMENT_SLOTS, placedObstacleRect, obstaclesWithPlacements, movePlacement, removePlacement } from '../../../utils/town/proto2_5d/placementSlots'
 
 // 2026-09-26(Phase 2, 가게 경험 v1) — 마을 산책 -> 가게 발견 -> 가게 내부
 // -> 마을로 복귀 흐름. shopInteraction.js가 입장 지점/반경/상품 데이터를
@@ -320,6 +320,18 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   placingRef.current = placingItemId
   const placeBackPendingRef = useRef(false)
   const placeBackFallbackTimerRef = useRef(null)
+  // F5(2026-09-29, 옮기기) — 이 배치 세션(enterPlacement 호출부터 다음
+  // enterPlacement까지)에서 이미 슬롯 탭 1건을 처리했는지. handleGroundPointerUp
+  // 안의 "같은 tick 두 번째 탭" 가드를 이전엔 placementsRef 멤버십(그 아이템이
+  // 이미 배치돼 있는지)으로 판정했는데, "옮기기"는 시작부터 그 아이템이 항상
+  // 이미 배치돼 있어(멤버십이 항상 참) 그 가드가 이동 자체를 막아버린다.
+  // enterPlacement가 false로 초기화하고, 유효한 슬롯 탭을 실제로 처리하는
+  // 순간에만 true로 바꾼다 — 새 배치/이동 두 흐름 모두에서 동일하게 동작.
+  const placeActionDoneRef = useRef(false)
+  // F5 — 보유 물건 목록("🎒 내 물건") 패널. 로컬 state만(placements와 동일 정책).
+  const [myItemsOpen, setMyItemsOpen] = useState(false)
+  const myItemsOpenBtnRef = useRef(null)
+  const myItemsCloseRef = useRef(null)
   // F2 — 빗나간 탭 힌트(배너 문구 대체)/배치 성공 토스트, 각자 타이머 1개.
   const [placeHint, setPlaceHint] = useState(null)
   const [placeToast, setPlaceToast] = useState(null)
@@ -339,6 +351,9 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   const shopEnterRef = useRef(null)
   const pendingShopFocusRef = useRef(false) // 가게 닫힘 → 재입장 가드 해제 시 가게 버튼 포커스 예약
   const inventory = SHOP_PRODUCTS.filter((p) => purchasedIds.has(p.id) && !placements.some((pl) => pl.itemId === p.id))
+  // F5 — "🎒 내 물건" 패널 목록(구매한 물건 전부, 배치 여부 무관 — inventory와
+  // 달리 이미 배치된 물건도 보여준다). SHOP_PRODUCTS 순서 그대로(안정적 표시 순서).
+  const ownedItems = SHOP_PRODUCTS.filter((p) => purchasedIds.has(p.id))
   const balance = wallet && Number.isFinite(wallet.dollarsAvailable) ? wallet.dollarsAvailable - spent : null
   // 뒤로가기가 실제로 닫힐 때까지의 비동기 창(리뷰 수정 1차) — React state로
   // 노출해 ProtoShopScreen의 뒤로가기 버튼을 그 사이 disabled+aria-busy로
@@ -796,7 +811,10 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     // 바닥 포인터 핸들러 자체는 여전히 등록돼 있으므로 여기서 명시적으로
     // 막는다). 캐릭터 위치/방향은 이 return으로 인해 전혀 갱신되지 않아
     // 그대로 보존된다.
-    if (shopOpen) return
+    // F5 — "내 물건" 패널이 열려있는 동안도 가게와 동일하게 바닥 탭을 무시한다
+    // (패널이 전체 화면 오버레이라 실제로는 겹쳐 닿지 않지만, 명시적으로 막아
+    // 이 화면의 기존 shopOpen 관례와 동일하게 방어한다).
+    if (shopOpen || myItemsOpen) return
     const dist = Math.hypot(e.clientX - start.downX, e.clientY - start.downY)
     if (dist >= DRAG_THRESHOLD_PX) return // 스와이프/스크롤 제스처로 판정 — 걷기 시작 안 함.
     const rect = groundRef.current ? groundRef.current.getBoundingClientRect() : null
@@ -814,11 +832,16 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     // 44px 하한 패딩). idle이고 캐릭터가 그 슬롯 rect 밖에 있을 때만 배치하고,
     // 아니면 일반 걷기로 흘려보낸다(캐릭터가 배치물 안에 갇히지 않게).
     // F1 — walking 중에도 배치(sitting/leaving은 위에서 이미 return).
-    // 같은 tick 두 번째 탭: placingItemId(렌더 값)가 아직 남아 있어도 ref로 이미 배치된 아이템이면 건너뜀.
-    if (placingItemId && !placementsRef.current.some((pl) => pl.itemId === placingItemId)) {
+    // F5(2026-09-29, 옮기기) — placingItemId가 가리키는 아이템이 이미
+    // placements에 있으면 "이동"이다(같은 슬롯 탭 판정을 그대로 재사용해
+    // 다른 빈 슬롯으로 옮긴다). 같은 tick 두 번째 탭(빠른 재탭) 방지는
+    // placeActionDoneRef(이 배치 세션에서 이미 슬롯 탭 1건을 처리했는지)로
+    // 판정한다 — 이전의 멤버십 기반 가드는 "이동"에서 시작부터 항상 참이라
+    // 이동 자체를 막아버렸다(위 placeActionDoneRef 선언부 주석 참고).
+    if (placingItemId && !placeActionDoneRef.current) {
       const groundPx = { groundWidthPx: rect.width, groundHeightPx: rect.height }
       const tappedSlots = PLACEMENT_SLOTS.filter((sl) => {
-        if (placementsRef.current.some((pl) => pl.slotId === sl.id)) return false // ref — 같은 tick 연속 탭 이중 배치 방지
+        if (placementsRef.current.some((pl) => pl.slotId === sl.id)) return false // ref — 같은 tick 연속 탭 이중 배치 방지(이동 중엔 자기 자신의 현재 slot도 제외)
         const r = placedObstacleRect(sl)
         return isBenchTap(rawPoint, r, benchTapPad(r, groundPx))
       })
@@ -826,12 +849,16 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
       // F2 — 배치 안 된 탭은 부드러운 힌트만(아래 일반 걷기는 그대로 진행).
       if (!slot) flash(setPlaceHint, placeHintTimerRef, tappedSlots.length ? '캐릭터가 서 있는 칸이에요. 다른 칸을 눌러요' : '노란 칸을 눌러 주세요', PLACE_HINT_MS)
       if (slot) {
-        const next = [...placementsRef.current, { itemId: placingItemId, slotId: slot.id }]
+        placeActionDoneRef.current = true
+        const moving = placementsRef.current.some((pl) => pl.itemId === placingItemId)
+        const next = moving
+          ? movePlacement(placementsRef.current, placingItemId, slot.id)
+          : [...placementsRef.current, { itemId: placingItemId, slotId: slot.id }]
         placementsRef.current = next
         setPlacements(next)
         endPlacement()
         showTapRipple(slot.anchor) // F2 — 배치 지점 리플(reduced-motion이면 showTapRipple이 건너뜀)
-        flash(setPlaceToast, placeToastTimerRef, '벤치를 놓았어요! 🎉', PLACE_TOAST_MS)
+        flash(setPlaceToast, placeToastTimerRef, moving ? '벤치를 옮겼어요!' : '벤치를 놓았어요! 🎉', PLACE_TOAST_MS)
         if (cur.phase === 'walking') {
           // F1 — 걷는 중 배치: 진행 중 경로는 새 장애물을 모르므로 걷기를 끊고
           // 현재 논리 위치(구간 목표점 — 위에서 슬롯 rect 밖임을 확인)에서 idle.
@@ -999,8 +1026,23 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     if (shopBusyRef.current || shopOpen) return
     setPlaceHint(null)
     pendingShopFocusRef.current = false
+    placeActionDoneRef.current = false // F5 — 이 배치 세션은 아직 슬롯 탭을 처리하지 않았다(새 배치/이동 공통).
     setPlacingItemId(itemId)
     try { window.history.pushState({ proto25dPlace: true }, '') } catch { /* 무시 — 배치 모드 자체는 그대로 */ }
+  }
+  // F5(2026-09-29, 넣기) — 배치된 아이템을 가방으로 회수(placements에서
+  // 제거). 배치 모드로 들어가지 않는다(되돌릴 수 있는 즉시 동작이라 확인창
+  // 없음, 요구사항 그대로) — endPlacement/enterPlacement와 무관한 별도 통로.
+  // 패널도 함께 닫는다(요구사항3 — "🪑 배치하기가 다시 보임"이 넣기의 직접
+  // 결과여야 한다. 패널을 열어 두면 그 버튼이 myItemsOpen 게이트에 가려
+  // 보이지 않는다 — 재배치는 그 표준 배치하기 흐름을 다시 쓰면 된다).
+  function handleRetrieve(itemId) {
+    const next = removePlacement(placementsRef.current, itemId)
+    if (next === placementsRef.current) return // 알 수 없는 itemId — no-op
+    placementsRef.current = next
+    setPlacements(next)
+    setMyItemsOpen(false)
+    flash(setPlaceToast, placeToastTimerRef, '벤치를 가방에 넣었어요', PLACE_TOAST_MS)
   }
   function releasePlaceBack() {
     if (placeBackFallbackTimerRef.current != null) {
@@ -1043,16 +1085,34 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // 가벼워 재등록 비용이 무시할 만함, 이 파일의 다른 effect들과 동일 관례
   // 수준).
   // F1 — 배치 모드에서도 Escape = 배치 취소(뒤로가기와 같은 종료 경로).
+  // F5 — "내 물건" 패널이 열려있을 때도 Escape로 닫는다(요구사항6).
   useEffect(() => {
-    if (!shopOpen && !placingItemId) return undefined
+    if (!shopOpen && !placingItemId && !myItemsOpen) return undefined
     function onKeyDown(e) {
       if (e.key !== 'Escape') return
       if (shopOpen) requestCloseShop()
-      else endPlacement()
+      else if (placingItemId) endPlacement()
+      else setMyItemsOpen(false)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [shopOpen, placingItemId])
+  }, [shopOpen, placingItemId, myItemsOpen])
+
+  // F5 — "내 물건" 패널 포커스 이동(요구사항6, F2와 동일한 prev-ref 관례).
+  // 이 effect를 아래 prevPlacingRef effect보다 먼저 선언해 둔다 — 패널의
+  // "놓기"/"옮기기" 버튼이 myItemsOpen=false와 placingItemId=itemId를 같은
+  // 클릭 핸들러 안에서 동시에 세팅할 때, React가 effect를 선언 순서대로
+  // 실행하므로 이 effect(먼저 실행, root/myItemsOpenBtnRef로 보내려 함)를
+  // 아래 배치 effect(나중에 실행, placeCancelRef로 보냄)가 항상 덮어써
+  // 최종적으로 취소 버튼에 포커스가 남는다(의도한 순서 — 패널을 거쳐 배치
+  // 모드로 들어간 경우 배치 모드의 포커스 규칙이 우선해야 한다).
+  const prevMyItemsOpenRef = useRef(false)
+  useEffect(() => {
+    const was = prevMyItemsOpenRef.current
+    prevMyItemsOpenRef.current = myItemsOpen
+    if (myItemsOpen && !was) (myItemsCloseRef.current || rootRef.current)?.focus()
+    else if (!myItemsOpen && was) myItemsOpenBtnRef.current?.focus()
+  }, [myItemsOpen])
 
   // F2 — 포커스 이동. prev ref로 "상태가 실제로 바뀐 때"만 움직여 마운트 시엔 가져가지 않는다.
   const prevPlacingRef = useRef(null)
@@ -1190,8 +1250,10 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
 
       {/* Phase C — "배치하기" 버튼. 좌상단 HUD 컬럼에 넣지 않는다(위 코인
           배지 주석 — 컬럼 박스가 커지면 바닥 탭을 가린다). 독립 형제로 코인
-          배지 아래에 둔다. */}
-      {inventory.length > 0 && !placingItemId && !shopOpen && (
+          배지 아래에 둔다. F5 — myItemsOpen 중엔 숨긴다(패널이 전체 화면을
+          덮으므로 그 아래 트리거 버튼이 탭 가능한 상태로 남지 않게 — 가게/배치
+          모드에도 이미 적용된 동일 관례). */}
+      {inventory.length > 0 && !placingItemId && !shopOpen && !myItemsOpen && (
         <button
           type="button"
           data-testid="proto25d-place-open"
@@ -1201,6 +1263,104 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
         >
           🪑 배치하기
         </button>
+      )}
+
+      {/* F5(2026-09-29) — "🎒 내 물건" 버튼. 구매한 물건이 1개 이상이면 등장,
+          배치 모드/가게/자기 자신의 패널이 열려있는 동안엔 숨긴다(요구사항1).
+          좌하단(bottom-6 left-3) — 우상단 코인/배치하기 버튼, 좌상단 HUD
+          컬럼(정보/산책모드 토글), 하단-중앙 가게 입장 버튼과 전부 분리된
+          자리라 겹치지 않는다(슬롯 A/B/C는 이 버튼이 보이는 동안 렌더되지
+          않으므로 — placingItemId가 false일 때만 이 버튼이 보이고, 슬롯은
+          placingItemId가 true일 때만 보임 — 겹칠 일이 없다). */}
+      {purchasedIds.size > 0 && !placingItemId && !shopOpen && !myItemsOpen && (
+        <button
+          type="button"
+          data-testid="proto25d-myitems-open"
+          ref={myItemsOpenBtnRef}
+          onClick={() => setMyItemsOpen(true)}
+          className="absolute left-3 bottom-6 z-10 min-h-[44px] flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-emerald-700 shadow"
+        >
+          🎒 내 물건
+        </button>
+      )}
+
+      {/* F5 — "내 물건" 패널. ProtoShopScreen과 같은 전체 화면 오버레이 +
+          가운데 카드 관례(구매 확인 다이얼로그, 위 참고). 물건마다 이름
+          (item.nameEn — 가게 카드와 동일한 표시 소스, 새 한국어 이름 필드
+          발명 없음) + 상태 + 상태별 버튼(가방: 놓기 / 마을: 옮기기·넣기).
+          ponytail: 상품이 1종(벤치)뿐이라 리스트가 항상 한 줄 — 여러 종으로
+          늘면 스크롤 영역(overflow-y-auto)이 필요할 수 있음. */}
+      {myItemsOpen && (
+        <div
+          data-testid="proto25d-myitems-panel"
+          role="dialog"
+          aria-label="내 물건"
+          className="absolute inset-0 z-[8900] bg-black/30 flex items-center justify-center px-6"
+        >
+          <div className="w-full max-w-xs rounded-2xl bg-white shadow-lg p-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-black text-gray-800">🎒 내 물건</h2>
+              <button
+                type="button"
+                data-testid="proto25d-myitems-close"
+                ref={myItemsCloseRef}
+                onClick={() => setMyItemsOpen(false)}
+                className="min-h-[44px] px-3 rounded-xl bg-gray-200 text-gray-700 text-xs font-black"
+              >
+                닫기
+              </button>
+            </div>
+            {ownedItems.map((item) => {
+              const placedEntry = placements.find((pl) => pl.itemId === item.id)
+              return (
+                <div
+                  key={item.id}
+                  data-testid="proto25d-myitems-item"
+                  data-item-id={item.id}
+                  className="flex items-center justify-between gap-2 rounded-xl bg-emerald-50 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-gray-800 overflow-hidden text-ellipsis whitespace-nowrap">{item.nameEn}</p>
+                    <p data-testid="proto25d-myitems-status" className="text-[11px] text-gray-500">
+                      {placedEntry ? '마을에 있어요' : '가방에 있어요'}
+                    </p>
+                  </div>
+                  <div className="flex gap-1 flex-shrink-0">
+                    {placedEntry ? (
+                      <>
+                        <button
+                          type="button"
+                          data-testid="proto25d-myitems-move"
+                          onClick={() => { setMyItemsOpen(false); enterPlacement(item.id) }}
+                          className="min-h-[44px] px-2 rounded-lg bg-amber-500 text-white text-[11px] font-black"
+                        >
+                          옮기기
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="proto25d-myitems-retrieve"
+                          onClick={() => handleRetrieve(item.id)}
+                          className="min-h-[44px] px-2 rounded-lg bg-gray-300 text-gray-700 text-[11px] font-black"
+                        >
+                          넣기
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        data-testid="proto25d-myitems-place"
+                        onClick={() => { setMyItemsOpen(false); enterPlacement(item.id) }}
+                        className="min-h-[44px] px-2 rounded-lg bg-emerald-500 text-white text-[11px] font-black"
+                      >
+                        놓기
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       )}
 
       {/* 2026-09-26 — 뷰포트 래퍼(신규, 산책 모드 전용 새 엘리먼트). 항상
@@ -1509,7 +1669,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
           이후에 그려지므로 항상 그 위에 쌓인다(stacking context가 같은
           가장 가까운 z:auto가 아닌 조상 기준이라 안전, 이 파일의 UI 배지
           컬럼과 동일 원리). */}
-      {!shopOpen && !placingItemId && nearShop && character.phase !== 'sitting' && (
+      {!shopOpen && !placingItemId && !myItemsOpen && nearShop && character.phase !== 'sitting' && (
         <button
           type="button"
           data-testid="proto25d-shop-enter"
