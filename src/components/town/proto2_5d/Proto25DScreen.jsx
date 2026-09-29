@@ -329,7 +329,17 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // 순간에만 true로 바꾼다 — 새 배치/이동 두 흐름 모두에서 동일하게 동작.
   const placeActionDoneRef = useRef(false)
   // F5 — 보유 물건 목록("🎒 내 물건") 패널. 로컬 state만(placements와 동일 정책).
+  // 리뷰 수정(2026-09-29, 항목3) — 가게/배치 모드와 동일하게 히스토리 항목
+  // (proto25dMyItems)을 쌓아 뒤로가기가 페이지 이탈 대신 패널 닫기가 되게
+  // 한다. myItemsOpenRef는 placingRef와 동일한 이유로 필요(마운트 1회
+  // 등록된 popstate 리스너가 최신값을 봐야 함). myItemsBackPendingRef/
+  // myItemsBackFallbackTimerRef는 placeBackPendingRef/placeBackFallbackTimerRef와
+  // 동일한 역할(아래 releaseMyItemsBack/requestCloseMyItems 참고).
   const [myItemsOpen, setMyItemsOpen] = useState(false)
+  const myItemsOpenRef = useRef(false)
+  myItemsOpenRef.current = myItemsOpen
+  const myItemsBackPendingRef = useRef(false)
+  const myItemsBackFallbackTimerRef = useRef(null)
   const myItemsOpenBtnRef = useRef(null)
   const myItemsCloseRef = useRef(null)
   // F2 — 빗나간 탭 힌트(배너 문구 대체)/배치 성공 토스트, 각자 타이머 1개.
@@ -793,7 +803,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // 둘 다 정리한다(Stage 4 — 착석 유지 타이머가 새로 추가됨). 리뷰 수정
   // 1차 — shopCloseFallbackTimerRef(가게 닫기 세이프티 타이머)도 함께
   // 정리한다.
-  useEffect(() => () => { clearWalkTimer(); clearHoldTimer(); clearShopCloseFallbackTimer(); releasePlaceBack() }, [])
+  useEffect(() => () => { clearWalkTimer(); clearHoldTimer(); clearShopCloseFallbackTimer(); releasePlaceBack(); releaseMyItemsBack() }, [])
 
   function handleGroundPointerDown(e) {
     pendingShopFocusRef.current = false // F2 — 아이가 이미 바닥을 눌렀으면 가게 버튼으로 포커스를 옮기지 않는다
@@ -1022,13 +1032,30 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // F1 — 배치 모드 히스토리 항목. 열기/닫기 모두 shopBusyRef를 함께 본다
   // (가게 닫기 back()이나 배치 back()이 도착하기 전 새 pushState가 끼어들어
   // 엔트리를 엇갈리게 소비하는 것 방지 — 두 모드는 화면상 동시에 열리지 않는다).
+  // 리뷰 수정(2026-09-29, 항목4) — shopBusyRef가 아직 걸려있으면(직전
+  // 배치/가게/패널 닫기의 history.back()이 popstate로 도착하기 전, ≤600ms
+  // 창) 이 호출은 조용히 no-op였다. 호출부(특히 패널의 "놓기"/"옮기기")가
+  // 성공 여부를 몰라 무조건 패널을 닫아버리면, 탭은 아무 효과가 없는데
+  // 패널만 사라지는 유령 상태가 된다. boolean을 반환해 호출부가 실제
+  // 성공했을 때만 패널을 닫도록 한다(아래 JSX 참고).
   function enterPlacement(itemId) {
-    if (shopBusyRef.current || shopOpen) return
+    if (shopBusyRef.current || shopOpen) return false
     setPlaceHint(null)
     pendingShopFocusRef.current = false
     placeActionDoneRef.current = false // F5 — 이 배치 세션은 아직 슬롯 탭을 처리하지 않았다(새 배치/이동 공통).
     setPlacingItemId(itemId)
-    try { window.history.pushState({ proto25dPlace: true }, '') } catch { /* 무시 — 배치 모드 자체는 그대로 */ }
+    try {
+      // 리뷰 수정(항목3) — "내 물건" 패널에서 곧바로 배치 모드로 들어가는
+      // 경우, 패널이 이미 자신의 히스토리 항목(proto25dMyItems)을 쌓아 둔
+      // 상태다. 여기서 또 pushState하면 스택이 2단으로 깊어져 뒤로가기 한
+      // 번으로 배치 모드만 취소되고 패널이 떠 있던 것처럼 남는 엇갈림이
+      // 생긴다 — 대신 같은 항목의 표식만 배치 모드로 바꿔치기한다
+      // (replaceState). 표준 "🪑 배치하기" 버튼(패널 밖)에서 호출될 때는
+      // myItemsOpen이 이미 false이므로 기존과 동일하게 새 항목을 쌓는다.
+      if (myItemsOpen) window.history.replaceState({ proto25dPlace: true }, '')
+      else window.history.pushState({ proto25dPlace: true }, '')
+    } catch { /* 무시 — 배치 모드 자체는 그대로 */ }
+    return true
   }
   // F5(2026-09-29, 넣기) — 배치된 아이템을 가방으로 회수(placements에서
   // 제거). 배치 모드로 들어가지 않는다(되돌릴 수 있는 즉시 동작이라 확인창
@@ -1036,13 +1063,49 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // 패널도 함께 닫는다(요구사항3 — "🪑 배치하기가 다시 보임"이 넣기의 직접
   // 결과여야 한다. 패널을 열어 두면 그 버튼이 myItemsOpen 게이트에 가려
   // 보이지 않는다 — 재배치는 그 표준 배치하기 흐름을 다시 쓰면 된다).
+  // requestCloseMyItems를 써서(원시 setMyItemsOpen(false) 아님) 패널의
+  // 히스토리 항목도 함께 정리한다(리뷰 수정 항목3).
   function handleRetrieve(itemId) {
     const next = removePlacement(placementsRef.current, itemId)
     if (next === placementsRef.current) return // 알 수 없는 itemId — no-op
     placementsRef.current = next
     setPlacements(next)
-    setMyItemsOpen(false)
+    requestCloseMyItems()
     flash(setPlaceToast, placeToastTimerRef, '벤치를 가방에 넣었어요', PLACE_TOAST_MS)
+  }
+  // 리뷰 수정(2026-09-29, 항목3) — "내 물건" 패널도 가게/배치 모드와 동일한
+  // 히스토리 소비 패턴(endPlacement/releasePlaceBack과 동형)을 쓴다.
+  function releaseMyItemsBack() {
+    if (myItemsBackFallbackTimerRef.current != null) {
+      clearTimeout(myItemsBackFallbackTimerRef.current)
+      myItemsBackFallbackTimerRef.current = null
+    }
+    if (!myItemsBackPendingRef.current) return
+    myItemsBackPendingRef.current = false
+    shopBusyRef.current = false
+  }
+  function openMyItems() {
+    if (shopBusyRef.current || shopOpen || placingItemId) return
+    setMyItemsOpen(true)
+    try { window.history.pushState({ proto25dMyItems: true }, '') } catch { /* 무시 — 패널 자체는 그대로 */ }
+  }
+  // 닫기 버튼/Escape/넣기(회수) 공용 종료 — endPlacement와 동일한 모양
+  // (우리 마커가 맨 위면 history.back()으로 소비, popstate/600ms 세이프티
+  // 타이머까지 shopBusyRef를 걸어둔다). 패널이 배치 모드로 전환되는 경우
+  // (놓기/옮기기)는 이 함수를 거치지 않는다 — enterPlacement가 같은 항목을
+  // replaceState로 바꿔치기하므로 여기서 또 back()을 부르면 안 된다.
+  function requestCloseMyItems() {
+    setMyItemsOpen(false)
+    if (myItemsBackPendingRef.current) return
+    let ourStateOnTop = false
+    try { ourStateOnTop = !!(window.history.state && window.history.state.proto25dMyItems) } catch { ourStateOnTop = false }
+    if (!ourStateOnTop) return
+    try {
+      window.history.back()
+      myItemsBackPendingRef.current = true
+      shopBusyRef.current = true
+      myItemsBackFallbackTimerRef.current = setTimeout(releaseMyItemsBack, 600)
+    } catch { /* 무시 — 패널은 이미 닫힘 */ }
   }
   function releasePlaceBack() {
     if (placeBackFallbackTimerRef.current != null) {
@@ -1073,7 +1136,9 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   useEffect(() => {
     function onPopState() {
       if (placeBackPendingRef.current) { releasePlaceBack(); return } // 우리가 부른 back() — 배치 항목 소비 완료
+      if (myItemsBackPendingRef.current) { releaseMyItemsBack(); return } // 우리가 부른 back() — 패널 항목 소비 완료
       if (placingRef.current) { setPlacingItemId(null); return } // 기기/브라우저 뒤로가기 — 배치만 취소
+      if (myItemsOpenRef.current) { setMyItemsOpen(false); return } // 기기/브라우저 뒤로가기 — 패널만 취소(리뷰 수정 항목3)
       closeShopNow()
     }
     window.addEventListener('popstate', onPopState)
@@ -1092,7 +1157,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
       if (e.key !== 'Escape') return
       if (shopOpen) requestCloseShop()
       else if (placingItemId) endPlacement()
-      else setMyItemsOpen(false)
+      else requestCloseMyItems() // 리뷰 수정 항목3 — 패널 히스토리 항목도 함께 정리
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -1267,18 +1332,21 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
 
       {/* F5(2026-09-29) — "🎒 내 물건" 버튼. 구매한 물건이 1개 이상이면 등장,
           배치 모드/가게/자기 자신의 패널이 열려있는 동안엔 숨긴다(요구사항1).
-          좌하단(bottom-6 left-3) — 우상단 코인/배치하기 버튼, 좌상단 HUD
-          컬럼(정보/산책모드 토글), 하단-중앙 가게 입장 버튼과 전부 분리된
-          자리라 겹치지 않는다(슬롯 A/B/C는 이 버튼이 보이는 동안 렌더되지
-          않으므로 — placingItemId가 false일 때만 이 버튼이 보이고, 슬롯은
-          placingItemId가 true일 때만 보임 — 겹칠 일이 없다). */}
+          리뷰 수정(항목2) — 원래 좌하단(left-3 bottom-6)에 뒀는데 360px
+          폭에서 "🏪 가게 들어가기"(하단-중앙, -translate-x-1/2로 폭의 절반
+          가까이 차지)와 실측 겹침이 있었다(S27 항목b 바운딩박스 확인).
+          우상단 열(코인 배지 → 배치하기 버튼)의 연장으로 옮겨 하단-중앙
+          가게 버튼과는 아예 다른 사분면에 두고, 슬롯 A/B/C는 이 버튼이
+          보이는 동안 렌더되지 않으므로(placingItemId가 false일 때만 이
+          버튼이 보이고, 슬롯은 true일 때만 보임) 구조적으로 겹치지 않는다.
+          openMyItems — 자체 히스토리 항목(proto25dMyItems)을 쌓는다(항목3). */}
       {purchasedIds.size > 0 && !placingItemId && !shopOpen && !myItemsOpen && (
         <button
           type="button"
           data-testid="proto25d-myitems-open"
           ref={myItemsOpenBtnRef}
-          onClick={() => setMyItemsOpen(true)}
-          className="absolute left-3 bottom-6 z-10 min-h-[44px] flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-emerald-700 shadow"
+          onClick={openMyItems}
+          className="absolute top-[9rem] right-3 z-10 min-h-[44px] flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-emerald-700 shadow"
         >
           🎒 내 물건
         </button>
@@ -1304,7 +1372,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
                 type="button"
                 data-testid="proto25d-myitems-close"
                 ref={myItemsCloseRef}
-                onClick={() => setMyItemsOpen(false)}
+                onClick={requestCloseMyItems}
                 className="min-h-[44px] px-3 rounded-xl bg-gray-200 text-gray-700 text-xs font-black"
               >
                 닫기
@@ -1331,7 +1399,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
                         <button
                           type="button"
                           data-testid="proto25d-myitems-move"
-                          onClick={() => { setMyItemsOpen(false); enterPlacement(item.id) }}
+                          onClick={() => { if (enterPlacement(item.id)) setMyItemsOpen(false) }}
                           className="min-h-[44px] px-2 rounded-lg bg-amber-500 text-white text-[11px] font-black"
                         >
                           옮기기
@@ -1349,7 +1417,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
                       <button
                         type="button"
                         data-testid="proto25d-myitems-place"
-                        onClick={() => { setMyItemsOpen(false); enterPlacement(item.id) }}
+                        onClick={() => { if (enterPlacement(item.id)) setMyItemsOpen(false) }}
                         className="min-h-[44px] px-2 rounded-lg bg-emerald-500 text-white text-[11px] font-black"
                       >
                         놓기
