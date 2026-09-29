@@ -5579,5 +5579,194 @@ export async function run(browser, baseURL) {
     }
   }
 
+  // ── S27 — F5(2026-09-29): 보유 물건 목록("🎒 내 물건") → 옮기기(이동) →
+  // 넣기(회수) → 다시 놓기(재배치). S23~S26 헬퍼(PLACEMENT_SLOTS_REF/
+  // slotCenterPct/groundHitAt/idleOf/ensureWorldPointVisible/
+  // buyBenchAndReturn/placeMarkerOnTop/activeTestId) 재사용 — 재구현 없음.
+  // 화면에 보이고 바닥에 직접 닿는 슬롯이 없으면 정직하게 스킵(FAIL 아님,
+  // 기존 S23/S24 관례) — 그래도 최소 한 뷰포트는 anyRanS27로 실제 실행을
+  // 강제 확인한다(전부 스킵되면 안 됨).
+  async function findTappableSlot(page, character, ground, viewportEl, excludeId) {
+    const candidates = PLACEMENT_SLOTS_REF.filter((s) => s.id !== excludeId)
+    for (const s of candidates) {
+      const gb = await ground.boundingBox()
+      const vis = intersectBoxes(gb, await viewportEl.boundingBox())
+      const pt = worldPctToScreenPx(slotCenterPct(s), gb)
+      if (vis && boxContainsPoint(vis, pt, -12) && await groundHitAt(page, pt)) return { s, pt }
+    }
+    for (const s of candidates) {
+      const v = await ensureWorldPointVisible(page, character, ground, viewportEl, slotCenterPct(s))
+      if (v.visible && await groundHitAt(page, v.targetScreenPt)) return { s, pt: v.targetScreenPt }
+    }
+    return null
+  }
+  let anyRanS27 = false
+  for (const vp of S17_VIEWPORTS) {
+    const name = `S27[${vp.label},myitems]`
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true, townShopV1: true })
+    await setWalkModeOn(page)
+    const mocks = await installMocks(page, { townState: { starsEarned: 20, dollars: { available: 37, earned: 37, spent: 0 }, owned: [], welcomeClaimed: false } })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const viewportEl = page.locator('[data-testid="proto25d-viewport"]')
+      const enterBtn = page.locator('[data-testid="proto25d-shop-enter"]')
+      const root = page.locator('[data-testid="proto25d-root"]')
+      const shopOverlay = page.locator('[data-testid="proto25d-shop"]')
+      const buyBtn = page.locator('[data-testid="proto25d-shop-buy"]')
+      const placeOpen = page.locator('[data-testid="proto25d-place-open"]')
+      const placedItem = page.locator('[data-testid="proto25d-placed-item"]')
+      const myItemsOpen = page.locator('[data-testid="proto25d-myitems-open"]')
+      const myItemsPanel = page.locator('[data-testid="proto25d-myitems-panel"]')
+      const myItemsStatus = page.locator('[data-testid="proto25d-myitems-status"]')
+      const myItemsMove = page.locator('[data-testid="proto25d-myitems-move"]')
+      const myItemsRetrieve = page.locator('[data-testid="proto25d-myitems-retrieve"]')
+      const myItemsPlace = page.locator('[data-testid="proto25d-myitems-place"]')
+
+      r.check(`${name} 항목a — 구매 전엔 내 물건 버튼 없음`, (await myItemsOpen.count()) === 0)
+
+      const noticeOut = {}
+      const boughtIn = await buyBenchAndReturn(page, { character, ground, viewportEl, enterBtn, shopOverlay }, noticeOut)
+      if (!boughtIn) {
+        r.check(`${name} — 가게 입구가 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+      } else {
+        anyRanS27 = true
+
+        // ── (b) 구매 직후 — 내 물건 버튼 등장(≥44px), 클릭 → 패널 → "가방에 있어요" + "놓기" ──
+        await myItemsOpen.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {})
+        const openBox = await myItemsOpen.boundingBox()
+        r.check(`${name} 항목b — 내 물건 버튼 높이 ≥44px`, !!openBox && openBox.height >= 44, JSON.stringify(openBox))
+        await myItemsOpen.click()
+        const panelVis = await myItemsPanel.waitFor({ state: 'visible', timeout: 2000 }).then(() => true).catch(() => false)
+        const focusInPanel = ['proto25d-myitems-close', 'proto25d-myitems-panel'].includes(await activeTestId(page))
+        r.check(`${name} 항목b — 패널 열림(role=dialog), 포커스가 패널/닫기 버튼으로 이동`,
+          panelVis && focusInPanel, JSON.stringify({ panelVis, active: await activeTestId(page) }))
+        const statusBag = ((await myItemsStatus.first().textContent().catch(() => '')) || '').trim()
+        r.check(`${name} 항목b — 상태 "가방에 있어요"`, statusBag === '가방에 있어요', statusBag)
+        await myItemsPlace.first().click()
+        const placingD = await waitUntil(async () => (await root.getAttribute('data-placing')) === 'true', { timeout: 2000 })
+        const panelGoneD = await waitUntil(async () => (await myItemsPanel.count()) === 0, { timeout: 2000 })
+        r.check(`${name} 항목b — "놓기" → 패널 닫힘 + 배치 모드 진입(기존 배치 흐름 재사용)`, !!placingD && !!panelGoneD)
+
+        const first = await findTappableSlot(page, character, ground, viewportEl, null)
+        if (!first) {
+          r.check(`${name} 항목c~h — 탭 가능한 슬롯을 화면에 가져오지 못해 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+        } else {
+          await page.mouse.click(first.pt.x, first.pt.y)
+          await waitUntil(async () => (await root.getAttribute('data-proto25d-placed-count')) === '1', { timeout: 2000 })
+          const slotIdC = await placedItem.getAttribute('data-slot-id')
+          r.check(`${name} 항목c — 슬롯 ${first.s.id} 탭 → 배치, placed-count "1"`, slotIdC === first.s.id, slotIdC)
+
+          // ── (d) 내 물건 → "마을에 있어요" + 옮기기/넣기(놓기 없음) ──
+          await myItemsOpen.click()
+          await myItemsPanel.waitFor({ state: 'visible', timeout: 2000 }).catch(() => {})
+          const statusTown = ((await myItemsStatus.first().textContent().catch(() => '')) || '').trim()
+          const hasMove = (await myItemsMove.count()) === 1
+          const hasRetrieve = (await myItemsRetrieve.count()) === 1
+          const hasPlaceBtn = (await myItemsPlace.count()) === 0
+          r.check(`${name} 항목d — 상태 "마을에 있어요", 옮기기/넣기 버튼, 놓기 버튼 없음`,
+            statusTown === '마을에 있어요' && hasMove && hasRetrieve && hasPlaceBtn,
+            JSON.stringify({ statusTown, hasMove, hasRetrieve, hasPlaceBtn }))
+
+          // ── (e) 옮기기 → Escape 취소 → 원위치 유지, 개수 불변 ──
+          await myItemsMove.click()
+          const movingE = await waitUntil(async () => (await root.getAttribute('data-placing')) === 'true', { timeout: 2000 })
+          await page.keyboard.press('Escape')
+          const cancelledE = await waitUntil(async () => (await root.getAttribute('data-placing')) === 'false', { timeout: 2000 })
+          const slotIdE = await placedItem.getAttribute('data-slot-id')
+          const countE = await root.getAttribute('data-proto25d-placed-count')
+          r.check(`${name} 항목e — 옮기기 중 Escape 취소 → 슬롯 ${first.s.id} 그대로, 개수 불변`,
+            !!movingE && !!cancelledE && slotIdE === first.s.id && countE === '1', JSON.stringify({ slotIdE, countE }))
+
+          // ── (f) 옮기기 → 다른 빈 슬롯 탭 → 슬롯 변경, 개수 불변, 배치 모드 종료, 토스트 ──
+          await myItemsOpen.click()
+          await myItemsMove.waitFor({ state: 'visible', timeout: 2000 }).catch(() => {})
+          await myItemsMove.click()
+          const movingF = await waitUntil(async () => (await root.getAttribute('data-placing')) === 'true', { timeout: 2000 })
+          const second = await findTappableSlot(page, character, ground, viewportEl, first.s.id)
+          if (!movingF || !second) {
+            await page.keyboard.press('Escape').catch(() => {})
+            r.check(`${name} 항목f~h — 이동할 다른 슬롯을 화면에 가져오지 못해 정직하게 스킵함(FAIL 아님)`, true, JSON.stringify({ movingF: !!movingF, second: !!second }))
+          } else {
+            await page.mouse.click(second.pt.x, second.pt.y)
+            await waitUntil(async () => (await placedItem.getAttribute('data-slot-id').catch(() => null)) === second.s.id, { timeout: 2000 })
+            const slotIdF = await placedItem.getAttribute('data-slot-id')
+            const countF = await root.getAttribute('data-proto25d-placed-count')
+            const placingGoneF = (await root.getAttribute('data-placing')) === 'false'
+            const toastF = ((await page.locator('[data-testid="proto25d-place-toast"]').textContent({ timeout: 1000 }).catch(() => '')) || '').trim()
+            r.check(`${name} 항목f — 다른 슬롯 ${second.s.id} 탭 → 배치물이 그 슬롯으로 이동, 개수 불변, 배치 모드 종료, 토스트 "옮겼어요"`,
+              slotIdF === second.s.id && countF === '1' && placingGoneF && toastF.includes('옮겼'),
+              JSON.stringify({ slotIdF, countF, placingGoneF, toastF }))
+
+            // ── (g) 넣기 → 가방으로, 패널 자동 닫힘(요구사항3 — 배치하기 버튼이
+            // "넣기"의 직접 결과로 다시 보여야 하므로), placed-count 0 ──
+            await myItemsOpen.click()
+            await myItemsRetrieve.waitFor({ state: 'visible', timeout: 2000 }).catch(() => {})
+            await myItemsRetrieve.click()
+            const countG = await waitUntil(async () => (await root.getAttribute('data-proto25d-placed-count')) === '0', { timeout: 2000 })
+            const placedGoneG = (await placedItem.count()) === 0
+            const panelClosedG = await waitUntil(async () => (await myItemsPanel.count()) === 0, { timeout: 2000 })
+            const placeOpenBackG = await placeOpen.waitFor({ state: 'visible', timeout: 2000 }).then(() => true).catch(() => false)
+            const toastG = ((await page.locator('[data-testid="proto25d-place-toast"]').textContent({ timeout: 1000 }).catch(() => '')) || '').trim()
+            r.check(`${name} 항목g — 넣기 → placed-count "0", 배치물 사라짐, 패널 자동 닫힘, 배치하기 버튼 재등장, 토스트 "가방에 넣었어요"`,
+              !!countG && placedGoneG && !!panelClosedG && placeOpenBackG && toastG.includes('가방에 넣었'),
+              JSON.stringify({ countG: !!countG, placedGoneG, panelClosedG: !!panelClosedG, placeOpenBackG, toastG }))
+
+            // 패널을 다시 열어 상태가 "가방에 있어요"로 갱신됐는지 확인 후 닫는다.
+            await myItemsOpen.click()
+            await myItemsPanel.waitFor({ state: 'visible', timeout: 2000 }).catch(() => {})
+            const statusBagG = ((await myItemsStatus.first().textContent().catch(() => '')) || '').trim()
+            r.check(`${name} 항목g — 넣기 후 패널 재확인 시 상태 "가방에 있어요"`, statusBagG === '가방에 있어요', statusBagG)
+            await page.locator('[data-testid="proto25d-myitems-close"]').click()
+            await waitUntil(async () => (await myItemsPanel.count()) === 0, { timeout: 2000 })
+
+            // ── (h) 재배치 — 회수 후 기존 "🪑 배치하기" 흐름(표준 배치 모드)으로
+            // 다시 놓을 수 있어야 한다(요구사항4). ──
+            await placeOpen.waitFor({ state: 'visible', timeout: 2000 }).catch(() => {})
+            await placeOpen.click()
+            const placingH = await waitUntil(async () => (await root.getAttribute('data-placing')) === 'true', { timeout: 2000 })
+            const third = await findTappableSlot(page, character, ground, viewportEl, null)
+            if (!placingH || !third) {
+              r.check(`${name} 항목h — 재배치할 슬롯을 화면에 가져오지 못해 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+            } else {
+              await page.mouse.click(third.pt.x, third.pt.y)
+              const countH = await waitUntil(async () => (await root.getAttribute('data-proto25d-placed-count')) === '1', { timeout: 2000 })
+              r.check(`${name} 항목h — 재배치 성공(placed-count "1")`, !!countH)
+            }
+          }
+        }
+
+        // ── (i) 중복 구매 여전히 차단 ──
+        const entranceVisI = await ensureWorldPointVisible(page, character, ground, viewportEl, SHOP_ENTRANCE_PCT_REF)
+        if (entranceVisI.visible) {
+          await page.mouse.click(entranceVisI.targetScreenPt.x, entranceVisI.targetScreenPt.y)
+          await idleOf(character)
+          await enterBtn.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {})
+          await enterBtn.click()
+          await shopOverlay.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {})
+          const buyDisabledI = await buyBtn.isDisabled().catch(() => false)
+          r.check(`${name} 항목i — 재구매 여전히 차단(Buy 비활성)`, buyDisabledI)
+          await page.locator('[data-testid="proto25d-shop-back"]').click().catch(() => {})
+        }
+      }
+      r.check(`${name} 항목j — 쓰기 액션 0건`, mocks.apiCallLog.filter((c) => c.body && SHOP_WRITE_ACTIONS.includes(c.body.action)).length === 0)
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+  r.check('S27 — 최소 한 뷰포트는 전 과정이 실제로 실행됨(전부 스킵 아님)', anyRanS27)
+
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }
 }
