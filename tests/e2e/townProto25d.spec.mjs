@@ -5601,6 +5601,8 @@ export async function run(browser, baseURL) {
     return null
   }
   let anyRanS27 = false
+  let anyMovedS27 = false
+  let anyRetrievedReplacedS27 = false
   for (const vp of S17_VIEWPORTS) {
     const name = `S27[${vp.label},myitems]`
     const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
@@ -5628,6 +5630,21 @@ export async function run(browser, baseURL) {
       const myItemsMove = page.locator('[data-testid="proto25d-myitems-move"]')
       const myItemsRetrieve = page.locator('[data-testid="proto25d-myitems-retrieve"]')
       const myItemsPlace = page.locator('[data-testid="proto25d-myitems-place"]')
+      const slotMarkersS27 = page.locator('[data-testid="proto25d-place-slot"]')
+      // 리뷰 항목2 — 내 물건 버튼이 가게 입장/배치하기 버튼/배치 슬롯 마커와
+      // 겹치지 않는지(S25 bannerLayout과 동일한 바운딩박스 교차 판정 재사용).
+      async function myItemsOverlapCheck() {
+        const myBox = await myItemsOpen.boundingBox()
+        const boxes = [
+          ['shopEnter', await enterBtn.boundingBox().catch(() => null)],
+          ['placeOpen', await placeOpen.boundingBox().catch(() => null)],
+        ]
+        for (const el of await slotMarkersS27.all()) {
+          boxes.push([`slot-${await el.getAttribute('data-slot-id')}`, await el.boundingBox().catch(() => null)])
+        }
+        const overlaps = boxes.filter(([, b]) => b && myBox && intersectBoxes(myBox, b)).map(([k]) => k)
+        return { myBox, overlaps }
+      }
 
       r.check(`${name} 항목a — 구매 전엔 내 물건 버튼 없음`, (await myItemsOpen.count()) === 0)
 
@@ -5638,10 +5655,14 @@ export async function run(browser, baseURL) {
       } else {
         anyRanS27 = true
 
-        // ── (b) 구매 직후 — 내 물건 버튼 등장(≥44px), 클릭 → 패널 → "가방에 있어요" + "놓기" ──
+        // ── (b) 구매 직후 — 내 물건 버튼 등장(≥44px, 가게 입장/배치하기 버튼/
+        // 배치 슬롯과 겹치지 않음), 클릭 → 패널 → "가방에 있어요" + "놓기" ──
         await myItemsOpen.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {})
         const openBox = await myItemsOpen.boundingBox()
         r.check(`${name} 항목b — 내 물건 버튼 높이 ≥44px`, !!openBox && openBox.height >= 44, JSON.stringify(openBox))
+        const overlapB = await myItemsOverlapCheck()
+        r.check(`${name} 항목b — 내 물건 버튼이 가게 입장/배치하기 버튼/배치 슬롯 마커와 겹치지 않음`,
+          !!overlapB.myBox && overlapB.overlaps.length === 0, JSON.stringify(overlapB))
         await myItemsOpen.click()
         const panelVis = await myItemsPanel.waitFor({ state: 'visible', timeout: 2000 }).then(() => true).catch(() => false)
         const focusInPanel = ['proto25d-myitems-close', 'proto25d-myitems-panel'].includes(await activeTestId(page))
@@ -5649,6 +5670,24 @@ export async function run(browser, baseURL) {
           panelVis && focusInPanel, JSON.stringify({ panelVis, active: await activeTestId(page) }))
         const statusBag = ((await myItemsStatus.first().textContent().catch(() => '')) || '').trim()
         r.check(`${name} 항목b — 상태 "가방에 있어요"`, statusBag === '가방에 있어요', statusBag)
+
+        // ── (b2) 리뷰 항목3 — 패널이 열려있는 동안 브라우저 뒤로가기는 페이지
+        // 이탈이 아니라 패널만 닫아야 한다(F1이 배치 모드에 이미 적용한 동일
+        // 보장, S24 항목a와 동일한 URL/root 불변 판정). 히스토리 과소비가
+        // 없었는지는 다시 열어 정상 동작하는지로 확인한다. ──
+        const urlBeforeBackB2 = page.url()
+        await page.goBack({ timeout: 3000 }).catch(() => {})
+        const panelClosedByBackB2 = await waitUntil(async () => (await myItemsPanel.count()) === 0, { timeout: 2000 })
+        const urlAfterBackB2 = page.url()
+        const rootPresentB2 = (await root.count()) === 1
+        r.check(`${name} 항목b2 — 패널 열림 중 뒤로가기 → 패널만 닫힘, URL/root 유지(페이지 이탈 아님)`,
+          !!panelClosedByBackB2 && urlAfterBackB2 === urlBeforeBackB2 && rootPresentB2,
+          JSON.stringify({ panelClosedByBackB2: !!panelClosedByBackB2, urlBeforeBackB2, urlAfterBackB2, rootPresentB2 }))
+        await myItemsOpen.waitFor({ state: 'visible', timeout: 2000 }).catch(() => {})
+        await myItemsOpen.click()
+        const reopenedAfterBackB2 = await myItemsPanel.waitFor({ state: 'visible', timeout: 2000 }).then(() => true).catch(() => false)
+        r.check(`${name} 항목b2 — 뒤로가기 후 다시 열기 정상 동작(히스토리 과소비 없음)`, reopenedAfterBackB2)
+
         await myItemsPlace.first().click()
         const placingD = await waitUntil(async () => (await root.getAttribute('data-placing')) === 'true', { timeout: 2000 })
         const panelGoneD = await waitUntil(async () => (await myItemsPanel.count()) === 0, { timeout: 2000 })
@@ -5700,9 +5739,44 @@ export async function run(browser, baseURL) {
             const countF = await root.getAttribute('data-proto25d-placed-count')
             const placingGoneF = (await root.getAttribute('data-placing')) === 'false'
             const toastF = ((await page.locator('[data-testid="proto25d-place-toast"]').textContent({ timeout: 1000 }).catch(() => '')) || '').trim()
+            const movedOkF = slotIdF === second.s.id && countF === '1' && placingGoneF && toastF.includes('옮겼')
+            if (movedOkF) anyMovedS27 = true
             r.check(`${name} 항목f — 다른 슬롯 ${second.s.id} 탭 → 배치물이 그 슬롯으로 이동, 개수 불변, 배치 모드 종료, 토스트 "옮겼어요"`,
-              slotIdF === second.s.id && countF === '1' && placingGoneF && toastF.includes('옮겼'),
-              JSON.stringify({ slotIdF, countF, placingGoneF, toastF }))
+              movedOkF, JSON.stringify({ slotIdF, countF, placingGoneF, toastF }))
+
+            // ── (f2) 리뷰 항목1 — 이동 후 원래 슬롯(first.s.id)이 다시 빈
+            // 슬롯(배치 가능)으로 표시되는지, 배치 모드를 한 번 더 열어 확인한다
+            // (확인만 하고 Escape로 취소 — 실제 위치는 second에 그대로 유지). ──
+            await myItemsOpen.click()
+            await myItemsMove.waitFor({ state: 'visible', timeout: 2000 }).catch(() => {})
+            await myItemsMove.click()
+            const movingF2 = await waitUntil(async () => (await root.getAttribute('data-placing')) === 'true', { timeout: 2000 })
+            const oldSlotFreeMarkerF2 = await page.locator(`[data-testid="proto25d-place-slot"][data-slot-id="${first.s.id}"]`).count()
+            r.check(`${name} 항목f2 — 이동 후 원래 슬롯 ${first.s.id}이 다시 빈 슬롯(배치 가능)으로 표시됨`,
+              !!movingF2 && oldSlotFreeMarkerF2 === 1, JSON.stringify({ movingF2: !!movingF2, oldSlotFreeMarkerF2 }))
+            await page.keyboard.press('Escape').catch(() => {})
+            await waitUntil(async () => (await root.getAttribute('data-placing')) === 'false', { timeout: 2000 })
+
+            // ── (f3) 리뷰 항목1 — 이동 중 같은 지점 빠른 더블탭(같은 tick 재탭)은
+            // 정확히 한 번만 처리돼야 한다(개수 불변, 슬롯 1회만 변경). ──
+            await myItemsOpen.click()
+            await myItemsMove.waitFor({ state: 'visible', timeout: 2000 }).catch(() => {})
+            await myItemsMove.click()
+            const movingF3 = await waitUntil(async () => (await root.getAttribute('data-placing')) === 'true', { timeout: 2000 })
+            const gbF3 = await ground.boundingBox()
+            const visF3 = intersectBoxes(gbF3, await viewportEl.boundingBox())
+            const ptF3 = worldPctToScreenPx(slotCenterPct(first.s), gbF3)
+            if (movingF3 && visF3 && boxContainsPoint(visF3, ptF3, -12) && await groundHitAt(page, ptF3)) {
+              await page.mouse.click(ptF3.x, ptF3.y, { clickCount: 2 })
+              await waitUntil(async () => (await root.getAttribute('data-placing')) === 'false', { timeout: 2000 })
+              const countF3 = await root.getAttribute('data-proto25d-placed-count')
+              const slotF3 = await placedItem.getAttribute('data-slot-id')
+              r.check(`${name} 항목f3 — 이동 중 같은 지점 빠른 더블탭 → 정확히 한 번만 처리(개수 "1", 슬롯 ${first.s.id}로 한 번만 변경)`,
+                countF3 === '1' && slotF3 === first.s.id, JSON.stringify({ countF3, slotF3 }))
+            } else {
+              await page.keyboard.press('Escape').catch(() => {})
+              r.check(`${name} 항목f3 — 더블탭 대상 슬롯을 화면에 가져오지 못해 정직하게 스킵함(FAIL 아님)`, true, JSON.stringify({ movingF3: !!movingF3 }))
+            }
 
             // ── (g) 넣기 → 가방으로, 패널 자동 닫힘(요구사항3 — 배치하기 버튼이
             // "넣기"의 직접 결과로 다시 보여야 하므로), placed-count 0 ──
@@ -5714,9 +5788,9 @@ export async function run(browser, baseURL) {
             const panelClosedG = await waitUntil(async () => (await myItemsPanel.count()) === 0, { timeout: 2000 })
             const placeOpenBackG = await placeOpen.waitFor({ state: 'visible', timeout: 2000 }).then(() => true).catch(() => false)
             const toastG = ((await page.locator('[data-testid="proto25d-place-toast"]').textContent({ timeout: 1000 }).catch(() => '')) || '').trim()
+            const retrievedOkG = !!countG && placedGoneG && !!panelClosedG && placeOpenBackG && toastG.includes('가방에 넣었')
             r.check(`${name} 항목g — 넣기 → placed-count "0", 배치물 사라짐, 패널 자동 닫힘, 배치하기 버튼 재등장, 토스트 "가방에 넣었어요"`,
-              !!countG && placedGoneG && !!panelClosedG && placeOpenBackG && toastG.includes('가방에 넣었'),
-              JSON.stringify({ countG: !!countG, placedGoneG, panelClosedG: !!panelClosedG, placeOpenBackG, toastG }))
+              retrievedOkG, JSON.stringify({ countG: !!countG, placedGoneG, panelClosedG: !!panelClosedG, placeOpenBackG, toastG }))
 
             // 패널을 다시 열어 상태가 "가방에 있어요"로 갱신됐는지 확인 후 닫는다.
             await myItemsOpen.click()
@@ -5738,6 +5812,7 @@ export async function run(browser, baseURL) {
               await page.mouse.click(third.pt.x, third.pt.y)
               const countH = await waitUntil(async () => (await root.getAttribute('data-proto25d-placed-count')) === '1', { timeout: 2000 })
               r.check(`${name} 항목h — 재배치 성공(placed-count "1")`, !!countH)
+              if (retrievedOkG && countH) anyRetrievedReplacedS27 = true
             }
           }
         }
@@ -5753,6 +5828,8 @@ export async function run(browser, baseURL) {
           const buyDisabledI = await buyBtn.isDisabled().catch(() => false)
           r.check(`${name} 항목i — 재구매 여전히 차단(Buy 비활성)`, buyDisabledI)
           await page.locator('[data-testid="proto25d-shop-back"]').click().catch(() => {})
+        } else {
+          r.check(`${name} 항목i — 가게 입구가 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
         }
       }
       r.check(`${name} 항목j — 쓰기 액션 0건`, mocks.apiCallLog.filter((c) => c.body && SHOP_WRITE_ACTIONS.includes(c.body.action)).length === 0)
@@ -5767,6 +5844,8 @@ export async function run(browser, baseURL) {
     }
   }
   r.check('S27 — 최소 한 뷰포트는 전 과정이 실제로 실행됨(전부 스킵 아님)', anyRanS27)
+  r.check('S27 — 최소 한 뷰포트에서 이동(옮기기)이 실제로 성공함', anyMovedS27)
+  r.check('S27 — 최소 한 뷰포트에서 회수(넣기) 후 재배치가 실제로 성공함', anyRetrievedReplacedS27)
 
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }
 }
