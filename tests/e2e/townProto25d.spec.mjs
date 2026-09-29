@@ -5631,19 +5631,45 @@ export async function run(browser, baseURL) {
       const myItemsRetrieve = page.locator('[data-testid="proto25d-myitems-retrieve"]')
       const myItemsPlace = page.locator('[data-testid="proto25d-myitems-place"]')
       const slotMarkersS27 = page.locator('[data-testid="proto25d-place-slot"]')
-      // 리뷰 항목2 — 내 물건 버튼이 가게 입장/배치하기 버튼/배치 슬롯 마커와
-      // 겹치지 않는지(S25 bannerLayout과 동일한 바운딩박스 교차 판정 재사용).
+      const placeToastS27 = page.locator('[data-testid="proto25d-place-toast"]')
+      // 리뷰 항목2(1차)/항목1(2차) — 내 물건 버튼이 가게 입장/배치하기 버튼/
+      // 배치 슬롯 마커/배치·이동·회수 성공 토스트와 겹치지 않는지(S25
+      // bannerLayout과 동일한 바운딩박스 교차 판정 재사용). myBox가 null이면
+      // (버튼이 현재 안 보임 — 배치 모드 중 등) overlaps는 항상 빈 배열이지만
+      // boxes는 그대로 반환해 호출부가 "이 순간 수집된 박스 자체"를
+      // 별도로 검증할 수 있게 한다(2차 리뷰 항목1 — 배치 모드 중에 호출해
+      // 슬롯 비교가 실제로 뭔가를 수집하는지 확인하는 용도).
       async function myItemsOverlapCheck() {
-        const myBox = await myItemsOpen.boundingBox()
+        const myBox = await myItemsOpen.boundingBox().catch(() => null)
         const boxes = [
           ['shopEnter', await enterBtn.boundingBox().catch(() => null)],
           ['placeOpen', await placeOpen.boundingBox().catch(() => null)],
+          ['toast', await placeToastS27.boundingBox().catch(() => null)],
         ]
         for (const el of await slotMarkersS27.all()) {
           boxes.push([`slot-${await el.getAttribute('data-slot-id')}`, await el.boundingBox().catch(() => null)])
         }
         const overlaps = boxes.filter(([, b]) => b && myBox && intersectBoxes(myBox, b)).map(([k]) => k)
-        return { myBox, overlaps }
+        return { myBox, boxes, overlaps }
+      }
+      // 리뷰 항목3(2차) — 닫기/Escape/넣기/이동 성공/취소 후 히스토리에
+      // 잔여 마커(proto25dMyItems/proto25dPlace)가 없고, 스택 깊이(index/len)
+      // 가 세션 시작 전 기준선으로 정확히 돌아왔는지 확인하는 공용 헬퍼.
+      // navigation API는 Chromium 전용이라 실패하면 index는 null(그 경우
+      // index 비교는 건너뛰고 len/마커만 본다 — 아래 호출부에서 처리).
+      const readNavS27 = () => page.evaluate(() => ({
+        len: history.length,
+        index: (typeof navigation !== 'undefined' && navigation.currentEntry) ? navigation.currentEntry.index : null,
+        hasPlaceMarker: !!(history.state && history.state.proto25dPlace),
+        hasMyItemsMarker: !!(history.state && history.state.proto25dMyItems),
+      })).catch(() => null)
+      function checkNoLeftoverMarker(label, navBefore, navAfter) {
+        const markerFree = !!navAfter && !navAfter.hasPlaceMarker && !navAfter.hasMyItemsMarker
+        const depthOk = !navBefore || !navAfter || navBefore.index == null || navAfter.index == null
+          ? (!!navBefore && !!navAfter && navBefore.len === navAfter.len) // index 미지원 환경 — len만 비교
+          : navBefore.index === navAfter.index && navBefore.len === navAfter.len
+        r.check(`${name} ${label} — 히스토리에 잔여 마커 없음 + 스택 깊이가 세션 시작 전으로 복귀`,
+          markerFree && depthOk, JSON.stringify({ navBefore, navAfter }))
       }
 
       r.check(`${name} 항목a — 구매 전엔 내 물건 버튼 없음`, (await myItemsOpen.count()) === 0)
@@ -5654,6 +5680,10 @@ export async function run(browser, baseURL) {
         r.check(`${name} — 가게 입구가 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
       } else {
         anyRanS27 = true
+        // 리뷰 항목3(2차) 기준선 — 이 시점부터 모든 내 물건/배치 세션은
+        // 제대로 닫히면 정확히 이 히스토리 깊이로 돌아와야 한다(위
+        // checkNoLeftoverMarker 헤더 주석 참고).
+        const navBaseline0 = await readNavS27()
 
         // ── (b) 구매 직후 — 내 물건 버튼 등장(≥44px, 가게 입장/배치하기 버튼/
         // 배치 슬롯과 겹치지 않음), 클릭 → 패널 → "가방에 있어요" + "놓기" ──
@@ -5683,6 +5713,7 @@ export async function run(browser, baseURL) {
         r.check(`${name} 항목b2 — 패널 열림 중 뒤로가기 → 패널만 닫힘, URL/root 유지(페이지 이탈 아님)`,
           !!panelClosedByBackB2 && urlAfterBackB2 === urlBeforeBackB2 && rootPresentB2,
           JSON.stringify({ panelClosedByBackB2: !!panelClosedByBackB2, urlBeforeBackB2, urlAfterBackB2, rootPresentB2 }))
+        checkNoLeftoverMarker('항목b2(뒤로가기)', navBaseline0, await readNavS27())
         await myItemsOpen.waitFor({ state: 'visible', timeout: 2000 }).catch(() => {})
         await myItemsOpen.click()
         const reopenedAfterBackB2 = await myItemsPanel.waitFor({ state: 'visible', timeout: 2000 }).then(() => true).catch(() => false)
@@ -5693,6 +5724,20 @@ export async function run(browser, baseURL) {
         const panelGoneD = await waitUntil(async () => (await myItemsPanel.count()) === 0, { timeout: 2000 })
         r.check(`${name} 항목b — "놓기" → 패널 닫힘 + 배치 모드 진입(기존 배치 흐름 재사용)`, !!placingD && !!panelGoneD)
 
+        // 리뷰 항목1(2차) — 배치 모드 중(슬롯 마커가 실제로 렌더된 순간) 같은
+        // 겹침 헬퍼를 한 번 더 호출해 슬롯 비교 분기가 실제로 뭔가를
+        // 수집하는지 확인한다(placingItemId일 때 이 버튼 자체는 숨어
+        // myBox가 null이라 overlaps는 항상 빈 배열 — 대신 boxes에 모인
+        // slot-* 항목 개수가 실제 슬롯 마커 개수와 일치하는지로 판정).
+        if (placingD) {
+          const slotCountNow = await slotMarkersS27.count()
+          const overlapDuringPlacement = await myItemsOverlapCheck()
+          const collectedSlotBoxes = overlapDuringPlacement.boxes.filter(([k, b]) => k.startsWith('slot-') && b)
+          r.check(`${name} 항목b(배치 모드 중) — 겹침 헬퍼가 실제 슬롯 마커를 수집함(버튼은 숨어 myBox 없음)`,
+            overlapDuringPlacement.myBox === null && slotCountNow > 0 && collectedSlotBoxes.length === slotCountNow,
+            JSON.stringify({ slotCountNow, collectedSlotBoxes: collectedSlotBoxes.length, myBox: overlapDuringPlacement.myBox }))
+        }
+
         const first = await findTappableSlot(page, character, ground, viewportEl, null)
         if (!first) {
           r.check(`${name} 항목c~h — 탭 가능한 슬롯을 화면에 가져오지 못해 정직하게 스킵함(FAIL 아님)`, true, '스킵')
@@ -5701,6 +5746,15 @@ export async function run(browser, baseURL) {
           await waitUntil(async () => (await root.getAttribute('data-proto25d-placed-count')) === '1', { timeout: 2000 })
           const slotIdC = await placedItem.getAttribute('data-slot-id')
           r.check(`${name} 항목c — 슬롯 ${first.s.id} 탭 → 배치, placed-count "1"`, slotIdC === first.s.id, slotIdC)
+
+          // 리뷰 항목1(2차) — 배치 성공 토스트가 떠 있는 동안(배치 모드가
+          // 막 끝나 내 물건 버튼이 다시 보이는 시점) 겹침 검사에 토스트도
+          // 포함해 확인한다(코디네이터 실측 — top-[9rem] 위치가 top-32 토스트
+          // 영역과 실제로 겹쳤다).
+          const toastVisibleC = await placeToastS27.waitFor({ state: 'visible', timeout: 1000 }).then(() => true).catch(() => false)
+          const overlapC = await myItemsOverlapCheck()
+          r.check(`${name} 항목c — 배치 성공 토스트가 떠 있는 동안 내 물건 버튼이 토스트/가게입장/배치하기 버튼/슬롯과 겹치지 않음`,
+            toastVisibleC && !!overlapC.myBox && overlapC.overlaps.length === 0, JSON.stringify(overlapC))
 
           // ── (d) 내 물건 → "마을에 있어요" + 옮기기/넣기(놓기 없음) ──
           await myItemsOpen.click()
@@ -5722,6 +5776,7 @@ export async function run(browser, baseURL) {
           const countE = await root.getAttribute('data-proto25d-placed-count')
           r.check(`${name} 항목e — 옮기기 중 Escape 취소 → 슬롯 ${first.s.id} 그대로, 개수 불변`,
             !!movingE && !!cancelledE && slotIdE === first.s.id && countE === '1', JSON.stringify({ slotIdE, countE }))
+          checkNoLeftoverMarker('항목e(Escape 취소)', navBaseline0, await readNavS27())
 
           // ── (f) 옮기기 → 다른 빈 슬롯 탭 → 슬롯 변경, 개수 불변, 배치 모드 종료, 토스트 ──
           await myItemsOpen.click()
@@ -5743,6 +5798,7 @@ export async function run(browser, baseURL) {
             if (movedOkF) anyMovedS27 = true
             r.check(`${name} 항목f — 다른 슬롯 ${second.s.id} 탭 → 배치물이 그 슬롯으로 이동, 개수 불변, 배치 모드 종료, 토스트 "옮겼어요"`,
               movedOkF, JSON.stringify({ slotIdF, countF, placingGoneF, toastF }))
+            checkNoLeftoverMarker('항목f(이동 성공)', navBaseline0, await readNavS27())
 
             // ── (f2) 리뷰 항목1 — 이동 후 원래 슬롯(first.s.id)이 다시 빈
             // 슬롯(배치 가능)으로 표시되는지, 배치 모드를 한 번 더 열어 확인한다
@@ -5773,6 +5829,26 @@ export async function run(browser, baseURL) {
               const slotF3 = await placedItem.getAttribute('data-slot-id')
               r.check(`${name} 항목f3 — 이동 중 같은 지점 빠른 더블탭 → 정확히 한 번만 처리(개수 "1", 슬롯 ${first.s.id}로 한 번만 변경)`,
                 countF3 === '1' && slotF3 === first.s.id, JSON.stringify({ countF3, slotF3 }))
+              checkNoLeftoverMarker('항목f3(더블탭 이동 성공)', navBaseline0, await readNavS27())
+
+              // 리뷰 항목4(2차) — 더블탭이 "정확히 한 번만" 적용됐는지 더 강하게
+              // 확인한다: 방금 비운 slot(second.s.id)이 여전히 빈 슬롯(=배치
+              // 가능한 타깃)으로 남아 있어야 한다 — 만약 더블탭이 두 번
+              // 적용돼 어딘가 다른 슬롯으로 한 번 더 옮겨졌다면 이 슬롯이
+              // 이상 상태(예: 계속 점유된 것처럼 안 뜸)일 수 있다. 확인만
+              // 하고 이번엔 취소 버튼(✕, Escape 아님)으로 닫아 "cancel"
+              // 이벤트 경로도 마커/기준선 검사로 함께 덮는다(리뷰 항목3).
+              await myItemsOpen.click()
+              await myItemsMove.waitFor({ state: 'visible', timeout: 2000 }).catch(() => {})
+              await myItemsMove.click()
+              const movingF3b = await waitUntil(async () => (await root.getAttribute('data-placing')) === 'true', { timeout: 2000 })
+              const otherSlotStillFreeF3 = await page.locator(`[data-testid="proto25d-place-slot"][data-slot-id="${second.s.id}"]`).count()
+              r.check(`${name} 항목f3 — 더블탭 후 다른 슬롯 ${second.s.id}은 여전히 빈 슬롯(정확히 하나만 바뀌었음)`,
+                !!movingF3b && otherSlotStillFreeF3 === 1, JSON.stringify({ movingF3b: !!movingF3b, otherSlotStillFreeF3 }))
+              const cancelBtnF3 = page.locator('[data-testid="proto25d-place-cancel"]')
+              await cancelBtnF3.click().catch(() => {})
+              await waitUntil(async () => (await root.getAttribute('data-placing')) === 'false', { timeout: 2000 })
+              checkNoLeftoverMarker('항목f3(취소 버튼)', navBaseline0, await readNavS27())
             } else {
               await page.keyboard.press('Escape').catch(() => {})
               r.check(`${name} 항목f3 — 더블탭 대상 슬롯을 화면에 가져오지 못해 정직하게 스킵함(FAIL 아님)`, true, JSON.stringify({ movingF3: !!movingF3 }))
@@ -5791,6 +5867,11 @@ export async function run(browser, baseURL) {
             const retrievedOkG = !!countG && placedGoneG && !!panelClosedG && placeOpenBackG && toastG.includes('가방에 넣었')
             r.check(`${name} 항목g — 넣기 → placed-count "0", 배치물 사라짐, 패널 자동 닫힘, 배치하기 버튼 재등장, 토스트 "가방에 넣었어요"`,
               retrievedOkG, JSON.stringify({ countG: !!countG, placedGoneG, panelClosedG: !!panelClosedG, placeOpenBackG, toastG }))
+            checkNoLeftoverMarker('항목g(넣기)', navBaseline0, await readNavS27())
+            // 리뷰 항목1(2차) — 넣기 토스트가 떠 있는 동안에도 내 물건 버튼과 겹치지 않음.
+            const overlapG = await myItemsOverlapCheck()
+            r.check(`${name} 항목g — 넣기 토스트가 떠 있는 동안 내 물건 버튼이 겹치지 않음`,
+              !!overlapG.myBox && overlapG.overlaps.length === 0, JSON.stringify(overlapG))
 
             // 패널을 다시 열어 상태가 "가방에 있어요"로 갱신됐는지 확인 후 닫는다.
             await myItemsOpen.click()
@@ -5799,6 +5880,7 @@ export async function run(browser, baseURL) {
             r.check(`${name} 항목g — 넣기 후 패널 재확인 시 상태 "가방에 있어요"`, statusBagG === '가방에 있어요', statusBagG)
             await page.locator('[data-testid="proto25d-myitems-close"]').click()
             await waitUntil(async () => (await myItemsPanel.count()) === 0, { timeout: 2000 })
+            checkNoLeftoverMarker('항목g(닫기 버튼)', navBaseline0, await readNavS27())
 
             // ── (h) 재배치 — 회수 후 기존 "🪑 배치하기" 흐름(표준 배치 모드)으로
             // 다시 놓을 수 있어야 한다(요구사항4). ──
