@@ -5936,6 +5936,7 @@ export async function run(browser, baseURL) {
   // 구매→배치까지는 S23 (b)~(d)와 동일한 흐름으로 진행한다.
   let anyRanS28 = false
   let anySatS28 = false
+  let anyRedirectedS28 = false
   let anyMovedWhileSittingS28 = false
   let anyRetrievedWhileSittingS28 = false
   const BENCH_REF_S28 = OBSTACLES_REF.find((o) => o.id === 'demo-bench')
@@ -6116,22 +6117,42 @@ export async function run(browser, baseURL) {
           r.check(`${name} 항목c(요구사항3) — 캐릭터 z-index가 그 배치물보다 앞`, zChar > zItem, `char=${zChar} item=${zItem}`)
 
           // ── (d, 요구사항4) — 착석 중 다른 곳 탭 → leaving→idle→walking,
-          // 탭 지점 근처에 도착 ──
-          const redirectPct = { x: chosen.x0 > 50 ? 15 : 85, y: 62 }
-          const redirectVis = await ensureWorldPointVisible(page, character, ground, viewportEl, redirectPct)
-          if (redirectVis.visible) {
-            await page.mouse.click(redirectVis.targetScreenPt.x, redirectVis.targetScreenPt.y)
+          // 탭 지점 근처에 도착. ensureWorldPointVisible은 여기서 쓸 수
+          // 없다(그 헬퍼는 목표가 안 보이면 스스로 바닥을 탭해 카메라를
+          // 옮기는데, 지금 캐릭터가 "앉아있는" 상태라 그 탭 자체가 이미
+          // "다른 곳 탭 → 기립+재지정"을 트리거해 버려 — 실측으로 확인—
+          // 우리가 재려는 leaving 구간을 그 헬퍼 내부에서 미리 소모해
+          // 버린다. 그래서 카메라를 옮기지 않는 단순 가시성 판정만 쓰고,
+          // 안 보이면(카메라 이동 없이는 닿지 않으면) 정직하게 스킵한다.
+          // 재지정 지점도 맵 반대편(고정 15/85%)이 아니라 chosen 근처
+          // (중심에서 x±18/y+15, 좁은 모바일 카메라 시야에서도 벗어나지
+          // 않도록 실측으로 고른 오프셋 — scripts/.tmp 리포 스크립트로
+          // 390x844에서 카메라 이동 없이 보임을 직접 확인)로 좁혔다 — 좌석
+          // 밖이기만 하면 되고(요구사항4는 "다른 곳"이지 "먼 곳"이 아니다),
+          // 4개 뷰포트 전부에서 실제로 검증되는 쪽이 더 중요하다 ──
+          const chosenCenterD = { x: (chosen.x0 + chosen.x1) / 2, y: (chosen.y0 + chosen.y1) / 2 }
+          const redirectPct = {
+            x: Math.min(97, Math.max(3, chosenCenterD.x + (chosenCenterD.x > 50 ? -18 : 18))),
+            y: Math.min(97, Math.max(3, chosenCenterD.y + 15)),
+          }
+          const groundBoxD = await ground.boundingBox()
+          const visibleBoxD = intersectBoxes(groundBoxD, await viewportEl.boundingBox())
+          const redirectScreenPt = worldPctToScreenPx(redirectPct, groundBoxD)
+          const redirectVisibleD = !!(visibleBoxD && boxContainsPoint(visibleBoxD, redirectScreenPt))
+          if (redirectVisibleD) {
+            await page.mouse.click(redirectScreenPt.x, redirectScreenPt.y)
             const timelineD = await samplePhaseTimelineS28(page, character, { timeoutMs: 10000 })
             const iLeave = timelineD.indexOf('leaving')
             const iWalk = timelineD.indexOf('walking', iLeave)
             const iIdle = timelineD.lastIndexOf('idle')
-            r.check(`${name} 항목d(요구사항4) — 다른 곳 탭 → leaving→walking→idle(재지정)`,
-              iLeave >= 0 && iWalk > iLeave && iIdle > iWalk, JSON.stringify(timelineD))
+            const redirectedD = iLeave >= 0 && iWalk > iLeave && iIdle > iWalk
+            r.check(`${name} 항목d(요구사항4) — 다른 곳 탭 → leaving→walking→idle(재지정)`, redirectedD, JSON.stringify(timelineD))
             const pctAfterD = await readCharacterPct(character)
-            r.check(`${name} 항목d — 재지정된 탭 지점 근처에 도착(<3 world-%)`,
-              Math.hypot(pctAfterD.left - redirectPct.x, pctAfterD.top - redirectPct.y) < 3, JSON.stringify(pctAfterD))
+            const arrivedD = Math.hypot(pctAfterD.left - redirectPct.x, pctAfterD.top - redirectPct.y) < 3
+            r.check(`${name} 항목d — 재지정된 탭 지점 근처에 도착(<3 world-%)`, arrivedD, JSON.stringify(pctAfterD))
+            if (redirectedD && arrivedD) anyRedirectedS28 = true
           } else {
-            r.check(`${name} 항목d — 재지정 지점이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+            r.check(`${name} 항목d — 재지정 지점이 카메라 이동 없이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
           }
 
           // ── (e, 요구사항4) — 다시 착석 → 같은 의자 재탭 → leaving→idle만
@@ -6255,6 +6276,7 @@ export async function run(browser, baseURL) {
   }
   r.check('S28 — 최소 한 뷰포트는 전 과정이 실제로 실행됨(전부 스킵 아님)', anyRanS28)
   r.check('S28 — 최소 한 뷰포트에서 배치 의자 착석이 실제로 성공함', anySatS28)
+  r.check('S28 — 최소 한 뷰포트에서 착석 중 다른 곳 탭 → 기립+재지정이 실제로 성공함', anyRedirectedS28)
   r.check('S28 — 최소 한 뷰포트에서 착석 중 옮기기가 실제로 성공함', anyMovedWhileSittingS28)
   r.check('S28 — 최소 한 뷰포트에서 착석 중 회수(넣기)가 실제로 성공함', anyRetrievedWhileSittingS28)
 
