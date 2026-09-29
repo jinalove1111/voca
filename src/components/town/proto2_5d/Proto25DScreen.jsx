@@ -698,7 +698,17 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     const seq = ++seqRef.current
     clearWalkTimer()
     clearHoldTimer()
-    updateCharacter({ pendingSit: false })
+    // S29(2026-09-30, 독립 리뷰 발견) — pendingSit뿐 아니라 sitTargetKey/
+    // sitRect도 함께 지운다. 이 셋은 항상 "지금 걸어가는 중이거나 앉아있는
+    // 좌석이 무엇인지"를 함께 나타내는 한 묶음이다(character 초기 state
+    // 주석 참고) — pendingSit만 지우고 sitTargetKey를 남기면, 좌석으로
+    // 걷던 중 다른 곳을 탭해 재지정됐을 때(이 함수가 바로 그 경로) 이제
+    // 이 걷기는 그 좌석과 전혀 무관한데도 character.sitTargetKey는 옛
+    // 좌석을 계속 가리키는 상태(stale)로 남는다 — 그 뒤 그 좌석 아이템을
+    // 옮기거나(movePlacement) 회수하면(interruptSitIfTargeting) stale key가
+    // 우연히 일치해, 지금 진행 중인 전혀 무관한 걷기를 즉시 중단시켜
+    // 버린다(이 세션이 S29로 직접 재현·확인).
+    updateCharacter({ pendingSit: false, sitTargetKey: null, sitRect: null })
     walkPath(path, seq, 'walking', () => applyIfActive(seq, (c) => ({ ...c, phase: 'idle' })))
   }
 
@@ -962,9 +972,18 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
           // 현재 논리 위치(구간 목표점 — 위에서 슬롯 rect 밖임을 확인)에서 idle.
           // ponytail: 이미 시작된 CSS 구간 전이는 끝까지 그려져 그 구간이 슬롯을
           // 스치면 시각적으로 잠깐 겹칠 수 있음 — 필요 시 구간/rect 교차 검사 추가.
-          // characterRef.current로 다시 읽는다 — 바로 위 interruptSitIfTargeting이
-          // 이미 idle로 바꿨을 수 있어(seq도 증가) cur(이 핸들러 시작 시점의 스냅샷)는
-          // 그 갱신을 반영하지 못한다.
+          // characterRef.current로 다시 읽는다(리뷰 수정 — 이전 주석은 "바로 위
+          // interruptSitIfTargeting의 setState가 이 시점에 이미 반영돼 있다"고
+          // 단정했는데 부정확했다: React의 배치 처리 타이밍상 그 setState의
+          // updater가 이 동기 코드 안에서 이미 실행됐다는 보장은 없다 — 즉 이
+          // 시점의 characterRef.current.phase가 interruptSitIfTargeting 이전
+          // 값(stale)일 수도, 이후 값(idle)일 수도 있다. 어느 쪽이든 안전하다:
+          // interruptSitIfTargeting이 실제로 발동했다면 목표 phase는 이미
+          // 'idle'이라 아래 블록이 도는지 여부와 무관하게 최종 phase는 'idle'로
+          // 수렴하고, 발동하지 않았다면(sitTargetKey 불일치) 이 read는 cur(핸들러
+          // 시작 시점 스냅샷)와 사실상 같은 값이다 — 최악의 경우도 idle을 한 번
+          // 더(무해하게) 세팅하는 정도라, cur 대신 이 ref를 쓰는 것 자체가
+          // "정확한 동기 반영"을 전제하지 않고도 더 안전한 선택이다.
           seqRef.current += 1
           clearWalkTimer()
           updateCharacter((c) => ({ ...c, phase: 'idle', pendingSit: false, sitTargetKey: null, sitRect: null }))
