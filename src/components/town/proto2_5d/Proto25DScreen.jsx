@@ -1052,7 +1052,16 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
       // 생긴다 — 대신 같은 항목의 표식만 배치 모드로 바꿔치기한다
       // (replaceState). 표준 "🪑 배치하기" 버튼(패널 밖)에서 호출될 때는
       // myItemsOpen이 이미 false이므로 기존과 동일하게 새 항목을 쌓는다.
-      if (myItemsOpen) window.history.replaceState({ proto25dPlace: true }, '')
+      // 리뷰 수정(2026-09-29, 항목2 — 2차 리뷰) — myItemsOpen(React state)만
+      // 보고 판단하면, 그 state와 실제 브라우저 히스토리 최상단이 어긋난
+      // 드문 경우(예: 다른 코드 경로가 먼저 그 항목을 소비했는데 아직
+      // setMyItemsOpen(false) 렌더가 반영되지 않은 순간)에도 무조건
+      // replaceState를 시도해 남의 히스토리 항목을 배치 모드로 바꿔치기하는
+      // 사고가 날 수 있다. 실제로 지금 최상단 항목이 proto25dMyItems인지
+      // 히스토리 자체에서 다시 확인한다.
+      let topIsMyItems = false
+      try { topIsMyItems = !!(window.history.state && window.history.state.proto25dMyItems) } catch { topIsMyItems = false }
+      if (topIsMyItems) window.history.replaceState({ proto25dPlace: true }, '')
       else window.history.pushState({ proto25dPlace: true }, '')
     } catch { /* 무시 — 배치 모드 자체는 그대로 */ }
     return true
@@ -1332,13 +1341,17 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
 
       {/* F5(2026-09-29) — "🎒 내 물건" 버튼. 구매한 물건이 1개 이상이면 등장,
           배치 모드/가게/자기 자신의 패널이 열려있는 동안엔 숨긴다(요구사항1).
-          리뷰 수정(항목2) — 원래 좌하단(left-3 bottom-6)에 뒀는데 360px
+          리뷰 수정(항목2, 1차) — 원래 좌하단(left-3 bottom-6)에 뒀는데 360px
           폭에서 "🏪 가게 들어가기"(하단-중앙, -translate-x-1/2로 폭의 절반
           가까이 차지)와 실측 겹침이 있었다(S27 항목b 바운딩박스 확인).
-          우상단 열(코인 배지 → 배치하기 버튼)의 연장으로 옮겨 하단-중앙
-          가게 버튼과는 아예 다른 사분면에 두고, 슬롯 A/B/C는 이 버튼이
-          보이는 동안 렌더되지 않으므로(placingItemId가 false일 때만 이
-          버튼이 보이고, 슬롯은 true일 때만 보임) 구조적으로 겹치지 않는다.
+          리뷰 수정(항목1, 2차) — top-[9rem](144px)으로 옮긴 자리가 이번엔
+          배치/이동/회수 성공 토스트(proto25d-place-live, top-32=128px,
+          2초간 표시)와 실측 겹쳤다. 토스트 표시 구간(top-32 + 실측 최대
+          높이)보다 확실히 아래인 top-[12.5rem](200px)로 한 번 더 내린다 —
+          우상단 열(코인 배지 → 배치하기 버튼 → 이 버튼)의 연장, 하단-중앙
+          가게 버튼과는 아예 다른 사분면. 슬롯 A/B/C는 이 버튼이 보이는
+          동안 렌더되지 않으므로(placingItemId가 false일 때만 이 버튼이
+          보이고, 슬롯은 true일 때만 보임) 구조적으로 겹치지 않는다.
           openMyItems — 자체 히스토리 항목(proto25dMyItems)을 쌓는다(항목3). */}
       {purchasedIds.size > 0 && !placingItemId && !shopOpen && !myItemsOpen && (
         <button
@@ -1346,7 +1359,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
           data-testid="proto25d-myitems-open"
           ref={myItemsOpenBtnRef}
           onClick={openMyItems}
-          className="absolute top-[9rem] right-3 z-10 min-h-[44px] flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-emerald-700 shadow"
+          className="absolute top-[12.5rem] right-3 z-10 min-h-[44px] flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-emerald-700 shadow"
         >
           🎒 내 물건
         </button>
