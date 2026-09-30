@@ -142,6 +142,9 @@ export function findTappedShop(rawPoint, groundPx) {
 export const SHOP_PRODUCTS = Object.freeze([
   Object.freeze({
     id: 'bench',
+    // 2026-10-01 모바일 감사 — 한국어 주 표기(영어는 보조 줄로 유지).
+    nameKo: '벤치',
+    descKo: '쉬어 갈 수 있는 포근한 벤치예요',
     nameEn: 'Bench',
     descEn: 'A cozy bench to rest on.',
     price: 5,
@@ -149,6 +152,17 @@ export const SHOP_PRODUCTS = Object.freeze([
     placeholder: false,
   }),
 ])
+
+/**
+ * 목적격 조사(2026-10-01 모바일 감사) — 마지막 글자가 받침 있는 한글이면
+ * '을', 그 외(받침 없음/한글 아님)는 '를'.
+ * @param {string} name
+ * @returns {'을'|'를'}
+ */
+export function objParticle(name) {
+  const c = String(name ?? '').slice(-1).charCodeAt(0)
+  return c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 ? '을' : '를'
+}
 
 /**
  * 구매 시도(순수 함수, 네트워크/DB 쓰기 없음 — 경제 단계 B, 2026-09-27:

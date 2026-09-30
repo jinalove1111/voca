@@ -31,7 +31,7 @@ await esbuild.build({
 })
 const {
   SHOP_ID, SHOP_COLLISION_RECT, SHOP_ENTRANCE_RAW, SHOP_ENTRANCE, getShopEntrance,
-  SHOP_RADIUS, isNearShopEntrance, SHOP_PRODUCTS, tryPurchase,
+  SHOP_RADIUS, isNearShopEntrance, SHOP_PRODUCTS, tryPurchase, objParticle,
   SHOP_BUILDINGS, shopArrivalOk, findTappedShop,
 } = await import(`${pathToFileURL(SHOP_BUNDLE_PATH).href}?t=${Date.now()}`)
 
@@ -314,6 +314,13 @@ section('11. findTappedShop(rawPoint,groundPx) — 건물 rect 안/밖, 좁은 �
   check('반경 바로 바깥 + 콜리전 박스 안(ex+rx*1.01, y1) — 건물 탭으로 히트',
     !shopArrivalOk(shop, outsideRingInBox.x, outsideRingInBox.y) && !!hitRing && hitRing.id === SHOP_ID, JSON.stringify(hitRing))
 }
+
+// ── 모바일 감사(2026-10-01) — 한국어 상품명/조사 ─────────────────────────
+section('한국어 nameKo/descKo + objParticle')
+check('모든 상품에 nameKo/descKo 존재', SHOP_PRODUCTS.every((p) => p.nameKo && p.descKo))
+check('objParticle(벤치) === 를', objParticle('벤치') === '를')
+check('objParticle(책상) === 을', objParticle('책상') === '을')
+check('objParticle(Bench) === 를(한글 아님)', objParticle('Bench') === '를')
 
 // ── 결과 ──────────────────────────────────────────────────────────────
 console.log(`\n총 ${totalPassed + totalFailed}개 단언 — PASS ${totalPassed} / FAIL ${totalFailed}`)
