@@ -294,7 +294,8 @@ section('항목10 — Phase 6D 계약 잠금(cadence/degradation/overlay)')
   // aria-label이 있는지 정규식으로만 확인한다.
   const overlayRootMatch = protoScreenSrc.match(/data-testid="proto25d-root"[\s\S]{0,900}/)
   check('SOURCE — overlay root(data-testid="proto25d-root") 근처에 role="region"', !!overlayRootMatch && /role="region"/.test(overlayRootMatch[0]), overlayRootMatch ? overlayRootMatch[0] : '(no match)')
-  check('SOURCE — overlay root 근처에 aria-label="Paul Town 2.5D 프로토타입"', !!overlayRootMatch && overlayRootMatch[0].includes('aria-label="Paul Town 2.5D 프로토타입"'), overlayRootMatch ? overlayRootMatch[0] : '(no match)')
+  // 2026-10-01 모바일 감사(A10) — 아이가 듣는 이름으로 변경("Paul Town 2.5D 프로토타입" → "폴 마을").
+  check('SOURCE — overlay root 근처에 aria-label="폴 마을"', !!overlayRootMatch && overlayRootMatch[0].includes('aria-label="폴 마을"'), overlayRootMatch ? overlayRootMatch[0] : '(no match)')
 
   // (d) v2 img의 onError 핸들러 + 2단계 강등 state 이름 존재.
   check('SOURCE — v2 sprite 2단계 강등 state: spriteV2SrcSetFailed 존재', protoCharacterSrc.includes('spriteV2SrcSetFailed'))

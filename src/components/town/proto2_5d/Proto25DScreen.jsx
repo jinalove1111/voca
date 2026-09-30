@@ -313,6 +313,9 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // 이중으로 소비하는 경쟁이 있었다).
   const [shopOpen, setShopOpen] = useState(false)
   const shopBusyRef = useRef(false)
+  // A8(2026-10-01 모바일 감사) — popstate 리스너(마운트 1회)용 최신값 미러(placingRef와 동일 패턴).
+  const shopOpenRef = useRef(false)
+  shopOpenRef.current = shopOpen
   // 경제 단계 B(2026-09-27) — 화면 상태만 차감(서버/DB 쓰기 없음). wallet의
   // dollarsAvailable에서 이 세션 동안 산 만큼만 빼서 보여준다(단일 세션
   // 로컬 잔액 — 새로고침하면 초기화됨, 이번 단계 의도적 범위).
@@ -949,7 +952,16 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // 둘 다 정리한다(Stage 4 — 착석 유지 타이머가 새로 추가됨). 리뷰 수정
   // 1차 — shopCloseFallbackTimerRef(가게 닫기 세이프티 타이머)도 함께
   // 정리한다.
-  useEffect(() => () => { clearWalkTimer(); clearHoldTimer(); clearShopCloseFallbackTimer(); releasePlaceBack(); releaseMyItemsBack() }, [])
+  // A8(2026-10-01 모바일 감사) — 언마운트 시 우리 마커(가게/배치/내 물건)가 히스토리
+  // 맨 위에 남아 있으면 제자리 교체(replaceState, 이동 없음)로 지운다 — 고아 마커를
+  // 남기면 이후 뒤로가기가 다른 화면의 popstate로 잘못 읽힌다.
+  useEffect(() => () => {
+    clearWalkTimer(); clearHoldTimer(); clearShopCloseFallbackTimer(); releasePlaceBack(); releaseMyItemsBack()
+    try {
+      const s = window.history.state
+      if (s && (s.proto25dShop || s.proto25dPlace || s.proto25dMyItems)) window.history.replaceState(null, '')
+    } catch { /* 무시 */ }
+  }, [])
 
   // 탭 지점 분류 — 벤치 > 배치 의자 > 건물 순(예전엔 handleGroundPointerUp
   // 본문에 인라인). 리뷰 대응(2026-10-01, F4)으로 추출: 앉아 있다 일어난 뒤
@@ -989,7 +1001,13 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   function handleGroundPointerDown(e) {
     pendingShopFocusRef.current = false // F2 — 아이가 이미 바닥을 눌렀으면 가게 버튼으로 포커스를 옮기지 않는다
     e.currentTarget.setPointerCapture?.(e.pointerId)
-    pointerDownRef.current = { pointerId: e.pointerId, downX: e.clientX, downY: e.clientY }
+    // 2026-10-01 모바일 감사(A1) — 누른 순간의 바닥 rect도 함께 저장한다.
+    // 산책 모드에선 바닥이 카메라 transform을 달고 있어 press 동안에도 계속
+    // 움직이는데(~150–200px/s), pointerup 시점의 rect로 world %를 계산하면
+    // 100–150ms 눌림에 15–30px 오차가 생겨 44px 타겟을 빗나간다(걷는 중
+    // 재지정에서 특히). 아이가 "누른" 위치는 down 좌표+down rect다.
+    const downRect = groundRef.current ? groundRef.current.getBoundingClientRect() : null
+    pointerDownRef.current = { pointerId: e.pointerId, downX: e.clientX, downY: e.clientY, downRect }
   }
 
   function handleGroundPointerUp(e) {
@@ -1010,8 +1028,10 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     if (dist >= DRAG_THRESHOLD_PX) return // 스와이프/스크롤 제스처로 판정 — 걷기 시작 안 함.
     const rect = groundRef.current ? groundRef.current.getBoundingClientRect() : null
     if (!rect || rect.width <= 0 || rect.height <= 0) return
-    const rawLeftPct = ((e.clientX - rect.left) / rect.width) * 100
-    const rawTopPct = ((e.clientY - rect.top) / rect.height) * 100
+    // A1 — 점 좌표는 down 스냅샷(좌표+rect)에서, 크기(groundPx)는 fresh rect에서.
+    const pr = start.downRect && start.downRect.width > 0 && start.downRect.height > 0 ? start.downRect : rect
+    const rawLeftPct = ((start.downX - pr.left) / pr.width) * 100
+    const rawTopPct = ((start.downY - pr.top) / pr.height) * 100
     const rawPoint = { x: rawLeftPct, y: rawTopPct }
 
     const cur = characterRef.current
@@ -1044,7 +1064,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
       })
       const slot = tappedSlots.find((sl) => classifyPoint(cur.leftPct, cur.topPct, [placedObstacleRect(sl)]) === 'walkable')
       // F2 — 배치 안 된 탭은 부드러운 힌트만(아래 일반 걷기는 그대로 진행).
-      if (!slot) flash(setPlaceHint, placeHintTimerRef, tappedSlots.length ? '캐릭터가 서 있는 칸이에요. 다른 칸을 눌러요' : '노란 칸을 눌러 주세요', PLACE_HINT_MS)
+      if (!slot) flash(setPlaceHint, placeHintTimerRef, tappedSlots.length ? '내가 서 있는 칸이에요. 다른 칸을 눌러요' : '노란 칸을 눌러요. 안 보이면 땅을 눌러 걸어가요', PLACE_HINT_MS)
       if (slot) {
         placeActionDoneRef.current = true
         const moving = placementsRef.current.some((pl) => pl.itemId === placingItemId)
@@ -1110,6 +1130,9 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
         const tappedSameChair = findTappedPlacedSlot(rawPoint, groundPxSit)
         const sameChair = !!tappedSameChair && `placed:${tappedSameChair.pl.itemId}` === cur.sitTargetKey
         standUpFromPlacedSeat(sameChair ? null : () => dispatchTap(rawPoint, classifyTap(rawPoint, groundPxSit)))
+      } else if (cur.sitTargetKey === 'bench') {
+        // 2026-10-01 모바일 감사(A4) — 규칙(탭 무시)은 그대로, 피드백만 추가.
+        flash(setPlaceHint, placeHintTimerRef, '앉아 있어요. 잠깐만요', PLACE_HINT_MS)
       }
       return
     }
@@ -1303,6 +1326,10 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // 성공했을 때만 패널을 닫도록 한다(아래 JSX 참고).
   function enterPlacement(itemId) {
     if (shopBusyRef.current || shopOpen) return false
+    if (placingRef.current) return false // A9 — Enter 길게 누름 auto-repeat이 마커를 또 쌓지 않게
+    // A9 — 2초 미만 토스트가 배치 취소 뒤 다시 뜨지 않게
+    clearTimeout(placeToastTimerRef.current)
+    setPlaceToast(null)
     setPlaceHint(null)
     pendingShopFocusRef.current = false
     placeActionDoneRef.current = false // F5 — 이 배치 세션은 아직 슬롯 탭을 처리하지 않았다(새 배치/이동 공통).
@@ -1361,7 +1388,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     shopBusyRef.current = false
   }
   function openMyItems() {
-    if (shopBusyRef.current || shopOpen || placingItemId) return
+    if (shopBusyRef.current || shopOpen || placingItemId || myItemsOpenRef.current) return // A9 — 중복 pushState 방지
     setMyItemsOpen(true)
     try { window.history.pushState({ proto25dMyItems: true }, '') } catch { /* 무시 — 패널 자체는 그대로 */ }
   }
@@ -1415,6 +1442,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
       if (myItemsBackPendingRef.current) { releaseMyItemsBack(); return } // 우리가 부른 back() — 패널 항목 소비 완료
       if (placingRef.current) { setPlacingItemId(null); return } // 기기/브라우저 뒤로가기 — 배치만 취소
       if (myItemsOpenRef.current) { setMyItemsOpen(false); return } // 기기/브라우저 뒤로가기 — 패널만 취소(리뷰 수정 항목3)
+      if (!shopOpenRef.current) return // A8 — 열린 게 없으면 무관한 popstate: closeShopNow의 400ms 재진입 차단을 걸지 않는다
       closeShopNow()
     }
     window.addEventListener('popstate', onPopState)
@@ -1522,7 +1550,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
       // a11y 속성은 data-* 앞에 둔다 — testProto25dSpriteAdapter가 root 뒤 900자 창에서 role/aria-label을 찾는다(data-* 추가로 밀려나지 않게).
       // Phase 6D(2026-09-25) — 오버레이 역할/이름만 부여(포커스 관리 없음).
       role="region"
-      aria-label="Paul Town 2.5D 프로토타입"
+      aria-label="폴 마을" // 2026-10-01 모바일 감사(A10) — 아이가 듣는 이름(내부 용어 제거)
       // Phase 6A — 장애물 개수를 하드코딩된 리터럴 없이 DOM에서 직접
       // 읽을 수 있게 노출한다(E2E가 "OBSTACLES_REF 3개" 같은 고정 상수
       // 대신 이 속성으로 실제 개수를 재확인 — walkGrid.js 헤더 주석의
@@ -1545,7 +1573,8 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
       data-placing={placingItemId ? 'true' : 'false'}
       ref={rootRef}
       tabIndex={-1} // F2 — 포커스 복귀 대상(배치하기/가게 버튼이 없을 때)
-      className="fixed inset-0 z-[9999] bg-[#dff3ea] flex flex-col outline-none"
+      // 2026-10-01 모바일 감사(A2) — touch-manipulation: iOS Safari 더블탭 확대 방지(바닥/뷰포트만 touch-none이라 가게/다이얼로그/HUD 버튼은 무방비였다).
+      className="fixed inset-0 z-[9999] bg-[#dff3ea] flex flex-col outline-none touch-manipulation"
     >
       {/* UI 배지(항목8/12 테스트용 UI 엘리먼트) — 바닥 레이어의 형제
           엘리먼트로, 그 하위에 중첩하지 않는다. 포인터 이벤트는 바닥
@@ -1579,11 +1608,10 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
         >
           산책 모드 {walkMode ? 'ON' : 'OFF'}
         </button>
-        {infoOpen && !placingItemId && ( // F2 — 배치 중엔 접어 안내 배너와 겹치지 않게
-          <p className="rounded-xl bg-white/90 px-3 py-2 text-[11px] text-gray-500 shadow max-w-[220px]">
-            {/* F4(2026-09-28) — 아이 대상 문구: 현재 흐름만 짧게(내부 용어 없음). */}
-            땅을 누르면 걸어가요. 가게 앞에서 '가게 들어가기'를 눌러 물건을 사고,
-            '배치하기'로 마을에 놓아 보세요. 새로고침하면 처음으로 돌아가요.
+        {infoOpen && !placingItemId && !placeToast && ( // F2 — 배치 중엔 접어 안내 배너와 겹치지 않게 / A6(2026-10-01 모바일 감사) — 토스트와도 겹치지 않게(360px)
+          <p className="rounded-xl bg-white/90 px-3 py-2 text-xs text-gray-500 shadow max-w-[220px]">
+            {/* F4(2026-09-28) — 아이 대상 문구: 현재 흐름만 짧게(내부 용어 없음). A5(2026-10-01) — 더 짧게/아이 말투. */}
+            땅을 누르면 걸어가요. 가게 앞에서 🏪를 눌러 물건을 사요. 🪑로 마을에 놓아요. 새로고침하면 처음부터예요.
           </p>
         )}
       </div>
@@ -1629,7 +1657,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
           data-testid="proto25d-place-open"
           ref={placeOpenRef}
           onClick={() => enterPlacement(inventory[0].id)}
-          className="absolute top-[4.25rem] right-3 z-10 min-h-[44px] flex items-center rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-white shadow"
+          className="absolute top-[4.25rem] right-3 z-10 min-h-[44px] flex items-center rounded-full bg-amber-600 px-3 py-1 text-xs font-bold text-white shadow"
         >
           🪑 배치하기
         </button>
@@ -1697,19 +1725,20 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
                   className="flex items-center justify-between gap-2 rounded-xl bg-emerald-50 px-3 py-2"
                 >
                   <div className="min-w-0">
-                    <p className="text-xs font-black text-gray-800 overflow-hidden text-ellipsis whitespace-nowrap">{item.nameEn}</p>
+                    <p className="text-xs font-black text-gray-800 overflow-hidden text-ellipsis whitespace-nowrap">{item.nameKo || item.nameEn}</p>
                     <p data-testid="proto25d-myitems-status" className="text-[11px] text-gray-500">
                       {placedEntry ? '마을에 있어요' : '가방에 있어요'}
                     </p>
                   </div>
-                  <div className="flex gap-1 flex-shrink-0">
+                  {/* A7(2026-10-01 모바일 감사) — 버튼 min-w 44 / text-xs / gap-2 (탭 타겟·가독성) */}
+                  <div className="flex gap-2 flex-shrink-0">
                     {placedEntry ? (
                       <>
                         <button
                           type="button"
                           data-testid="proto25d-myitems-move"
                           onClick={() => { if (enterPlacement(item.id)) setMyItemsOpen(false) }}
-                          className="min-h-[44px] px-2 rounded-lg bg-amber-500 text-white text-[11px] font-black"
+                          className="min-h-[44px] min-w-[44px] px-2 rounded-lg bg-amber-600 text-white text-xs font-black"
                         >
                           옮기기
                         </button>
@@ -1717,7 +1746,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
                           type="button"
                           data-testid="proto25d-myitems-retrieve"
                           onClick={() => handleRetrieve(item.id)}
-                          className="min-h-[44px] px-2 rounded-lg bg-gray-300 text-gray-700 text-[11px] font-black"
+                          className="min-h-[44px] min-w-[44px] px-2 rounded-lg bg-gray-300 text-gray-700 text-xs font-black"
                         >
                           넣기
                         </button>
@@ -1727,7 +1756,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
                         type="button"
                         data-testid="proto25d-myitems-place"
                         onClick={() => { if (enterPlacement(item.id)) setMyItemsOpen(false) }}
-                        className="min-h-[44px] px-2 rounded-lg bg-emerald-500 text-white text-[11px] font-black"
+                        className="min-h-[44px] min-w-[44px] px-2 rounded-lg bg-emerald-600 text-white text-xs font-black"
                       >
                         놓기
                       </button>
@@ -1769,7 +1798,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
         ref={groundRef}
         data-testid="proto25d-ground"
         role="group"
-        aria-label="2.5D 프로토타입 바닥"
+        aria-label="마을 바닥" // 2026-10-01 모바일 감사(A10)
         className={walkMode ? 'absolute top-0 left-0 touch-none' : 'relative flex-1 overflow-hidden touch-none'}
         style={walkMode
           ? { width: `${worldSize.worldW}px`, height: `${worldSize.worldH}px`, willChange: 'transform', background: 'linear-gradient(180deg, #eaf7f0 0%, #cdebd8 100%)' }
@@ -2055,7 +2084,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
           disabled={shopReentryBlocked}
           aria-disabled={shopReentryBlocked ? 'true' : undefined}
           className={
-            'absolute left-1/2 bottom-6 z-20 -translate-x-1/2 min-h-[52px] px-6 rounded-full bg-emerald-500 text-white text-sm font-black shadow-lg pointer-events-auto'
+            'absolute left-1/2 bottom-6 z-20 -translate-x-1/2 min-h-[52px] px-6 rounded-full bg-emerald-600 text-white text-sm font-black shadow-lg pointer-events-auto'
             + (shopReentryBlocked ? ' pointer-events-none' : '')
           }
         >
@@ -2094,6 +2123,22 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
               className="rounded-2xl bg-orange-50 border-2 border-orange-300 text-orange-600 text-base font-black px-5 py-3 shadow-lg text-center"
             >
               {placeToast}
+            </p>
+          ) : placeHint ? (
+            // A4 — 배치 모드 밖에서도 힌트가 보여야 한다(고정 벤치에 앉아 있는 동안 탭 피드백).
+            <p
+              data-testid="proto25d-place-hint"
+              className="rounded-2xl bg-white/95 border-2 border-amber-400 text-amber-700 text-sm font-black px-4 py-2 shadow text-center"
+            >
+              {placeHint}
+            </p>
+          ) : character.pendingShop && character.shopTargetKey ? (
+            // 2026-10-01 모바일 감사(A3) — 가게로 걷는 중 상태 문구(토스트/힌트가 있으면 그쪽이 우선).
+            <p
+              data-testid="proto25d-shop-walking"
+              className="rounded-2xl bg-white/95 border-2 border-emerald-400 text-emerald-700 text-sm font-black px-4 py-2 shadow text-center"
+            >
+              🏪 가게로 가고 있어요…
             </p>
           ) : null}
       </div>
