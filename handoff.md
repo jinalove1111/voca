@@ -1,10 +1,53 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-01 (194차 — **"마을 산책형 상점 방문 경험" 단계 4~6: 전 여정 통합 테스트(S32) + 독립 코드리뷰(NEEDS-WORK, Medium 3/Low 4) + 수정 F1~F7 + QA, 이전 세션의 미push 6커밋 검증 포함**. 기준선 e2e에서 구매 "확인" 더블탭이 안내를 지우는 실제 결함(stage 3 회귀) 발견·수정. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 194차 섹션 참고.)_
+_최종 갱신: 2026-10-01 (195차 — **모바일 품질 감사(상태/타이머/a11y + 아동 UX) → 수정 배치 A/B → 독립 리뷰 PASS → e2e S34/S35 신규, 커밋 4개(`35a9e91b`/`d3192980`/`c5ccefc7`/`3a66ff97`)**. 탭 지점 카메라 드리프트(실측 92~119px), 포커스 관리, 한국어 상품명/문구 수정. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 195차 섹션 참고.)_
+_194차 갱신: 2026-10-01 (194차 — **"마을 산책형 상점 방문 경험" 단계 4~6: 전 여정 통합 테스트(S32) + 독립 코드리뷰(NEEDS-WORK, Medium 3/Low 4) + 수정 F1~F7 + QA, 이전 세션의 미push 6커밋 검증 포함**. 기준선 e2e에서 구매 "확인" 더블탭이 안내를 지우는 실제 결함(stage 3 회귀) 발견·수정. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 194차 섹션 참고.)_
 _193차 갱신: 2026-09-30 (193차 — **PR #62 F5 "내 물건" push `56c8dd13..dd4d0fdc` + 배치 의자 착석 결함("의자를 통과하며 앉을 수 없다") 수정 push `dd4d0fdc..77a4ff5d`(커밋 6개, 변경 파일 2개)**. 원인은 착석 상호작용이 고정 벤치에만 있었던 것 — 배치 의자 탭이 startPlainWalk로 흘러 의자 아트와 겹쳐 가려짐. 착석을 sitTargetKey/sitRect로 일반화, benchInteraction.js 재사용. verify:e2e 2548/0 FAIL, 최종 스펙 1232 PASS, 코드리뷰 3회 APPROVE, QA PASS, 실기기 정상. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 193차 섹션 참고.)_
 _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 선별 반영(전부 KEEP, 코드리뷰 APPROVE, QA PASS) + non-force push `b79681bb..56c8dd13`, 이어서 F5 "내 물건"(옮기기/넣기/놓기, 로컬 state만) 구현·검증(미push)**. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`, 브랜치 `audit/paul-town-v2-2026-09-29`. DB·SQL·네트워크 쓰기 0. 아래 192차 섹션 참고.)_
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-01 (195차) — PR #62 모바일 품질 감사 + 수정 배치 A/B + e2e S34/S35 (워크트리 `C:\voca-wt\paul-town-v2-night-audit`)
+
+### 0. 배경
+- 운영자 8시간 자율 세션 2단계: "실제 학생이 안정적으로 쓸 수 있는 모바일 품질". 읽기 전용 감사 2종(qa-reviewer 상태/타이머/a11y, child-experience-designer 아동 UX) → 수정 배치 A/B → 독립 리뷰(PASS) → e2e S34/S35 신규 → 커밋 4개(`35a9e91b`, `d3192980`, `c5ccefc7`, `3a66ff97`).
+- `C:\voca`·다른 worktree·DB·SQL·API·Production 무접촉. 실 `.env` 미복사.
+
+### 1. 감사 결과 요약
+- **상태 감사(qa-reviewer)**: Critical 0. High 3(A1 탭 지점 카메라 드리프트, A2 iOS 더블탭 확대, B4 포커스 관리 부재). Medium: idle rAF 매 프레임 forced layout(수용), 상점 안내 live region이 텍스트와 동시 마운트(수용), 놓기/넣기 44px 미만 폭(수정), 고정 벤치 3.2초 무반응(힌트 추가), 고아 히스토리 마커(수정), 문구. Low 다수 — 수정: enterPlacement/openMyItems 중복 가드, 토스트 잔류, Buy 닫힘 중 활성, Escape가 확인창 대신 가게를 닫음, 대비, SR 라벨 개발 용어 / 수용: 600ms 폴백 vs 늦은 popstate, 착석 중 회전, walkLeg 코너, 이모지 aria-hidden, nearShop 깜빡임(도달 불가), 도달 불가 목표 무피드백.
+- verified OK: 중복 구매/중복 배치 불가, 재지정 키 5종 항상 함께 정리, 언마운트 정리 완전, 포인터 캡처/리사이즈/reduced-motion 정상.
+- **아동 UX 감사**: High 3(걷는 중 "가게로 가는 중" 표시 없음, 구매 안내가 가게 안에 없는 버튼(🪑 배치하기)을 가리킴, 상품명이 영어 "Bench"뿐). Medium 6(패널 닫은 뒤 다음 행동 안내, 노란 칸 화면 밖 안내, 400ms 가드 무반응, 고정 벤치 착석 중 무반응, 360px infoOpen+토스트 겹침, 도움말 문구/11px). Low 4(부족 문구 다음 행동, "캐릭터" 단어, 11px 버튼, 영어 제목).
+- 수용/보류: 🪑 버튼 이름 변경(테스트 다수 영향, 이득 적음), "Paul's Shop" 영어 제목(영어 노출 의도).
+
+### 2. 수정 (커밋별)
+| 커밋 | 파일 | 내용 |
+|---|---|---|
+| `35a9e91b` | shopInteraction.js, testProto25dShop.mjs | SHOP_PRODUCTS에 nameKo '벤치'/descKo 추가(nameEn/descEn 유지), objParticle(을/를) 헬퍼 + 단위 4단언(80/80) |
+| `d3192980` | ProtoShopScreen.jsx | 가게 root aria-modal+tabIndex -1+열릴 때 포커스, 확인창 aria-modal+취소에 포커스, 성공 안내 → "계속 쇼핑하기" 포커스, 닫으면 돌아가기/root로, 실패 안내 후 root로(리뷰 후속). Escape는 확인창만 닫음(onKeyDown stopPropagation). closing 중 사기/확인 비활성. 문구: "구매 완료! 🎒 내 물건 보기를 눌러 놓아요", "내 돈 확인 중", "Paul Dollar가 부족해요. 더 모아서 다시 와요", 카드/확인창 한국어 이름("벤치를 $5에 살까요?"). emerald-500→600 |
+| `c5ccefc7` | Proto25DScreen.jsx, testProto25dSpriteAdapter.mjs | A1 탭 지점을 pointer-DOWN 좌표+rect로(산책 모드 카메라 드리프트 실측 92~119px), A2 touch-manipulation, A3 "🏪 가게로 가고 있어요…" live 문구, A4 고정 벤치 착석 중 탭 힌트 "앉아 있어요. 잠깐만요"(규칙 불변), A5 문구("내가 서 있는 칸이에요…", "노란 칸을 눌러요. 안 보이면 땅을 눌러 걸어가요", 도움말 "땅을 누르면 걸어가요. 가게 앞에서 🏪를 눌러 물건을 사요. 🪑로 마을에 놓아요. 새로고침하면 처음부터예요." text-xs), A6 토스트 중 도움말 숨김, A7 패널 버튼 min-w 44/text-xs/gap-2 + nameKo, A8 언마운트 시 우리 마커 replaceState + 가게 안 열렸으면 popstate 무시(shopOpenRef), A9 enterPlacement/openMyItems 중복 가드 + 토스트 정리, A10 aria-label "폴 마을"/"마을 바닥"(SOURCE 검사 갱신), A11 대비 -600 |
+| `3a66ff97` | townProto25d.spec.mjs | S34 press-drift(390x844, 150/350ms, 카메라 이동 중 건물 윗변 press → 도착 시 자동 오픈), S35 confirm-escape-and-focus(1280x800), 문구 단언 갱신(S25 G2/G4, S26, S27 항목d, S31 항목a), closeShopIfOpen 헬퍼로 S6/S17 정리·ensureWorldPointVisible hop 후 정리 |
+
+### 3. 규칙 15 증거
+- S35: 구 dist에서 FAIL(포커스 BODY/사기 버튼, aria-modal 없음, Escape가 가게를 닫음 → shopVisible:false) → 수정 후 8/8 PASS.
+- S34: 구 dist에서 동일 press(150/350ms)로 data-walk-target=null 실측(건물 빗나감) → 수정 후 shop 자동 오픈 PASS. 최초 작성 S34는 수정 후에도 FAIL했는데 원인은 테스트(입구 근처라 도착까지 ~100ms, 의도 속성이 즉시 해제되어 600ms 폴링이 경쟁) — 판정을 "도착 시 가게가 열림"으로 변경. 최종 S34의 구 dist FAIL은 같은 press가 의도를 만들지 못한 실측에서 전이적으로 성립(재빌드 없이 추론, 명시).
+- S17[360x640] 플레이크: 전체 실행 3회 중 2회 FAIL — 호출 로그로 원인 확정: 위치 조정 hop 클릭이 도착 자동 오픈 뒤 "사기"에 떨어져 확인창이 돌아가기 버튼을 가림. 제품 결함 아님(잘못 닿은 탭이 확인창으로 보호됨). closeShopIfOpen로 테스트 정비, 격리 3회 S6+S17 4뷰포트 전부 PASS(플레이크 자체는 재현 안 됨 — 회귀 없음 확인).
+
+### 4. 검증
+- build 경고 0. 단위: testProto25dShop 80, SpriteAdapter 70, Bench, PlacedObstacles, BundleBudget, LazyChunkGuards, RegistryCoverage, TownShop 104 — 전부 PASS.
+- proto25d 단독(수정 후, S34/S35 포함): 1489단언 — 1488 PASS / 1 FAIL(S17[360x640] 위 플레이크, 이후 정비) / 미mock 0.
+- 독립 코드리뷰(배치 A/B diff): PASS — 회귀 0, Low 2건 반영(도움말 새로고침 안내 복원, 실패 안내 후 포커스).
+- verify:e2e 전체(4커밋 후): 9스펙([student]/[admin]/[mobile]/[entrance]/[town]/[stale-chunk]/[town-flag-xtab]/[town-v2]/[town-v2-artwork]) + [town-proto2.5d] 일부까지 **2310 PASS / 0 FAIL** 진행 중 Claude Code가 시스템 메모리 부족(free ≈2.8GB)으로 실행을 강제 종료(2회째) — [town-proto2.5d] 후반·[town-pilot-allowlist] 미도달. 도구 정책상 자동 재시작 금지. 같은 빌드의 proto25d 단독 전체는 위 1488/1489(유일 FAIL은 이후 정비한 S17 플레이크).
+- push: **보류** — "검증 전부 통과한 커밋만 push" 지시에 따라 verify:e2e 완주 전에는 phase 2 커밋 4개(`35a9e91b`..`3a66ff97`)를 push하지 않는다. 운영자가 재실행을 지시하면 `npm run verify:e2e` 완주 → FAIL 0 확인 → non-force push → Preview 확인 순으로 마감. 원격은 `b3def43b`(phase 1) 그대로.
+
+### 5. 알려진 한계 / 수용 근거 (수정하지 않음)
+- idle 중 rAF 루프 매 프레임 getBoundingClientRect(카메라 계약 테스트 위험, O(1)) — 후속 후보.
+- 상점 안내 role=status가 텍스트와 동시에 마운트(SR이 안 읽을 수 있음) — 테스트가 count()===0 계약이라 보류.
+- 고정 벤치 착석 중 입력 잠금(Stage 4 규칙 6) 유지 — 힌트만 추가.
+- 600ms 폴백 vs 늦은 popstate, 착석 중 회전, walkLeg 코너 스침, 이모지 aria-hidden 미적용, "Paul's Shop" 영어 제목, 🪑 배치하기 버튼명.
+- CTA/재진입 400ms 가드 동안 탭 무시(의도).
+
+### 6. 다음 안전 작업 1개
+- idle rAF 루프 settle-stop(카메라 테스트 testProto25dCamera에 settle 술어 추가 후) — 배터리/발열, 기능 무변경.
 
 ## 2026-10-01 (194차) — PR #62 마을 산책형 상점 방문 경험: 전 여정 통합 테스트 + 리뷰 + 수정 F1~F7 (워크트리 `C:\voca-wt\paul-town-v2-night-audit`)
 
@@ -66,6 +109,7 @@ Critical/High 0.
 ### 6. 커밋/push (예정)
 - 리드가 파일 단위 소커밋 후 non-force push `origin/feat/paul-town-v2-clean-pr`, PR #62 Draft 유지. 예정 분할: (1) fix ProtoShopScreen F3+F6, (2) fix Proto25DScreen F1/F2/F4/F7, (3) test unit F5, (4) test e2e S32, (5) test e2e S33 + S30y/S31 조정, (6) docs 194차 + `.ai-status`.
 - 실제 커밋 해시와 push 범위는 리드가 이후 이 절에 추가한다.
+- 실제: 커밋 `93bfff8a`(F3+F6) / `406136e9`(F1/F2/F4/F7) / `725b92e6`(F5) / `79d5e5c3`(S32/S33/S30y·S31) / `b3def43b`(docs). non-force push `77a4ff5d..b3def43b` → origin/feat/paul-town-v2-clean-pr(2026-10-01), PR #62 OPEN/Draft, Vercel Preview success(https://vercel.com/jina4926952s-projects/voca/Eo95tiz7sgQUbGE4qiXoVJvd1jtZ). push 전 재검증: proto25d 단독 무부하 1481/1481 PASS, verify:all e2e 도메인 PASS, 비-e2e 648 PASS/41 env FAIL(.env 부재).
 
 ### 7. 알려진 한계 / 후속 후보
 - 가게 닫고 400ms 내 입구 근처에서 건물 재탭 시 미오픈(재진입 가드, 의도).
