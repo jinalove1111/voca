@@ -977,6 +977,19 @@ export async function run(browser, baseURL) {
         !pctInAnyObstacle(pctAfterObstacleTap.left, pctAfterObstacleTap.top),
         JSON.stringify(pctAfterObstacleTap),
       )
+      // 마을 산책형 상점 방문 1단계(2026-09-30) — demo-building은 이제
+      // shopInteraction.js가 "가게" 콜리전 박스로도 쓴다(이 파일 헤더
+      // 주석). 이 항목이 방금 탭한 buildingCenterPct(50,32)는 가게 입구
+      // 반경 밖이라 findTappedShop이 그대로 매치해, 이 탭은 위 두 단언과는
+      // 무관하게(둘 다 여전히 그대로 성립 — idle 복귀/장애물 밖 착지) 도착
+      // 시 상점이 자동으로 열린다(S30이 이 동작 자체를 검증). 열려있으면
+      // 이어지는 항목5/6(장애물 회피, 이 항목의 원래 목적)의 바닥 탭이
+      // 전부 무시돼 버리므로, 여기서 닫아 원래 검증 흐름을 그대로 이어간다
+      // (기존 단언 약화 없음 — 새로 생긴 부작용을 정리하는 셋업 스텝만 추가).
+      if (await page.locator('[data-testid="proto25d-shop"]').count() > 0) {
+        await page.locator('[data-testid="proto25d-shop-back"]').click()
+        await waitUntil(async () => (await page.locator('[data-testid="proto25d-shop"]').count()) === 0, { timeout: 3000 })
+      }
 
       // ── 항목5/6 — 장애물 바로 뒤(반대편) 목적지를 탭하면 직선이 아니라
       // 우회 경로로 이동하고, 이동 중 어떤 샘플도 장애물 박스 안을 지나지
@@ -3517,6 +3530,14 @@ export async function run(browser, baseURL) {
           arrivalDiffersFromTap,
           JSON.stringify(pctAfterBuildingTap),
         )
+        // 마을 산책형 상점 방문 1단계(2026-09-30) — 위 S6 항목4 주석과 동일
+        // 이유. DEMO_BUILDING_CENTER_PCT 탭이 가게 입구 반경 밖이라 도착 시
+        // 상점이 자동으로 열린다 — 위 두 단언은 그대로 성립, 다음 항목(e,
+        // 벤치)이 막히지 않게 여기서 닫아 원래 검증 흐름을 이어간다.
+        if (await page.locator('[data-testid="proto25d-shop"]').count() > 0) {
+          await page.locator('[data-testid="proto25d-shop-back"]').click()
+          await waitUntil(async () => (await page.locator('[data-testid="proto25d-shop"]').count()) === 0, { timeout: 3000 })
+        }
       } else {
         r.check(`${name} 항목d — demo-building이 최대 3회 이동 시도 후에도 화면에 들어오지 않아 이 항목을 정직하게 스킵함(FAIL 아님, 사전조건 부재)`, true, '스킵')
       }
@@ -6807,6 +6828,233 @@ export async function run(browser, baseURL) {
       r.check(`${name} — 넣기 자체는 정상적으로 성공함(placed-count "0")`, placedCountAfter === '0', `placedCountAfter=${placedCountAfter}`)
 
       r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S30(2026-09-30, 마을 산책형 상점 방문 1단계+2단계) — 건물 탭 → 입구
+  // 접근 지점까지 걷기 → 도착 시 기존 상점창이(버튼을 누르지 않아도)
+  // 자동으로 열림. shopInteraction.js SHOP_BUILDINGS/findTappedShop/
+  // shopArrivalOk가 순수 로직의 유일한 진실 원천(scripts/testProto25dShop.mjs
+  // 9~11절이 67단언으로 이미 검증) — 이 E2E는 그 로직이 실제 탭/카메라/
+  // 히스토리와 맞물려도 깨지지 않는지만 본다(재검증 아님).
+  //
+  // 카메라 사전 위치 — S18과 동일하게 ensureWorldPointVisible(target=
+  // SHOP_ENTRANCE_PCT_REF, 건물 rect 밖의 안전한 지점)로 "건물이 화면에
+  // 들어오는 지점까지"만 캐릭터를 데려간다. 건물 자체를 사전 위치 단계의
+  // hop 목표로 쓰면, 그 hop이 실제 클릭하는 좌표가 우연히 건물 rect 안에
+  // 떨어져 이 시나리오가 시작되기도 전에(사전조건 스냅샷을 뜨기도 전에)
+  // 상점이 자동으로 열려버릴 위험이 있다(위 SHOP_ENTRANCE_PCT_REF 주석과
+  // 동일 이유로 entrance 자체는 건물 rect 밖이라 안전).
+  for (const vp of S17_VIEWPORTS) {
+    const name = `S30[${vp.label},walk-to-shop]`
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
+    const page = await context.newPage()
+    const consoleErrors = []
+    page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()) })
+    page.on('pageerror', (err) => { consoleErrors.push(String(err)) })
+    await setDeviceFlags(page, { paulTown2_5d: true })
+    await setWalkModeOn(page)
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const viewportEl = page.locator('[data-testid="proto25d-viewport"]')
+      const root = page.locator('[data-testid="proto25d-root"]')
+      const enterBtn = page.locator('[data-testid="proto25d-shop-enter"]')
+      const shopOverlay = page.locator('[data-testid="proto25d-shop"]')
+      const backBtn = page.locator('[data-testid="proto25d-shop-back"]')
+
+      const entranceVisibility = await ensureWorldPointVisible(page, character, ground, viewportEl, SHOP_ENTRANCE_PCT_REF)
+      if (!entranceVisibility.visible) {
+        r.check(`${name} — 사전조건(입장 지점이 화면에 들어옴)을 충족하지 못해 이 시나리오를 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+        collect(mocks)
+        await context.close()
+        continue
+      }
+      const buildingScreenPt = worldPctToScreenPx(DEMO_BUILDING_CENTER_PCT, entranceVisibility.groundBox)
+      if (!boxContainsPoint(entranceVisibility.visibleBox, buildingScreenPt)) {
+        r.check(`${name} — 건물 중심이 화면에 들어오지 않아 이 시나리오를 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+        collect(mocks)
+        await context.close()
+        continue
+      }
+
+      // ── (a) 건물 탭 — 즉시 열리지 않고 phase가 walking으로 전이 + 목적지
+      //     의도(data-walk-target)가 노출됨 ──
+      r.check(`${name} 항목a — 건물 탭 전엔 상점이 열려있지 않음`, await shopOverlay.count() === 0)
+      const historyLenBeforeTap = await page.evaluate(() => window.history.length)
+      await page.mouse.click(buildingScreenPt.x, buildingScreenPt.y)
+      const walkingToShop = await waitUntil(async () => (
+        (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking'
+      ), { timeout: 1500 })
+      r.check(`${name} 항목a — 건물 탭 후 phase가 walking으로 전이됨(즉시 열리지 않음)`, !!walkingToShop)
+      r.check(`${name} 항목a — 걷는 동안엔 아직 상점이 열려있지 않음`, await shopOverlay.count() === 0)
+      const walkTargetDuring = walkingToShop ? await root.getAttribute('data-walk-target') : null
+      r.check(`${name} 항목a — root에 data-walk-target="shop:demo-building" 노출`, walkTargetDuring === 'shop:demo-building', String(walkTargetDuring))
+
+      // ── (b) 도착 → 버튼을 누르지 않아도 기존 상점창이 자동으로 열림,
+      //     phase idle 복귀, data-walk-target 해제, 히스토리 +1(pushState 1회) ──
+      const shopAutoOpened = await shopOverlay.waitFor({ state: 'visible', timeout: 8000 }).then(() => true).catch(() => false)
+      r.check(`${name} 항목b — 도착 시 "가게 들어가기" 버튼을 누르지 않아도 상점 오버레이가 자동으로 열림`, shopAutoOpened)
+      const afterArriveState = shopAutoOpened ? await sampleCharacterState(page) : null
+      r.check(`${name} 항목b — 도착 후 phase가 idle`, afterArriveState?.phase === 'idle', String(afterArriveState?.phase))
+      const walkTargetAfterOpen = await root.getAttribute('data-walk-target')
+      r.check(`${name} 항목b — 상점이 열리면 data-walk-target이 해제됨`, walkTargetAfterOpen === null, String(walkTargetAfterOpen))
+      const shopOpenAttr = await root.getAttribute('data-shop-open')
+      r.check(`${name} 항목b — root에 data-shop-open이 세팅됨`, shopOpenAttr === 'true', String(shopOpenAttr))
+      const historyLenAfterOpen = await page.evaluate(() => window.history.length)
+      r.check(`${name} 항목b — pushState 1회만(히스토리 길이가 정확히 +1)`,
+        historyLenAfterOpen === historyLenBeforeTap + 1, `before=${historyLenBeforeTap} after=${historyLenAfterOpen}`)
+
+      // ── (c) 열린 동안 바닥 탭 → 무시(기존 S18 항목d와 동일 계약 재확인) ──
+      const floorPtWhileOpen = await groundPointAt(page, ground, viewportEl, 0.15)
+      if (!shopAutoOpened || !floorPtWhileOpen) {
+        r.check(`${name} 항목c — 탭 가능한 바닥 지점을 화면에서 못 찾아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+      } else {
+        const beforeTapState = await sampleCharacterState(page)
+        await page.mouse.click(floorPtWhileOpen.x, floorPtWhileOpen.y)
+        await page.waitForTimeout(300)
+        const afterTapState = await sampleCharacterState(page)
+        r.check(`${name} 항목c — 상점이 열려있는 동안 바닥 탭이 캐릭터를 움직이지 않음`,
+          Math.abs(afterTapState.leftPct - beforeTapState.leftPct) < 0.01 && Math.abs(afterTapState.topPct - beforeTapState.topPct) < 0.01,
+          JSON.stringify({ beforeTapState, afterTapState }))
+      }
+
+      // ── (d) 닫기(버튼) → 입구 앞 idle 복귀, 바닥 탭 → 정상 보행 재개 ──
+      if (shopAutoOpened) {
+        await backBtn.click()
+        const closed = await shopOverlay.waitFor({ state: 'hidden', timeout: 3000 }).then(() => true).catch(() => false)
+        r.check(`${name} 항목d — 뒤로가기 버튼으로 상점이 닫힘`, closed)
+        const idleAfterClose = closed ? await idleOf(character) : false
+        r.check(`${name} 항목d — 닫은 뒤 캐릭터가 idle(입구 앞)`, !!idleAfterClose)
+        const shopOpenAfterClose = await root.getAttribute('data-shop-open')
+        r.check(`${name} 항목d — 닫은 뒤 data-shop-open이 해제됨`, shopOpenAfterClose === null, String(shopOpenAfterClose))
+
+        const floorPtAfterClose = await groundPointAt(page, ground, viewportEl, 0.85)
+        if (!floorPtAfterClose) {
+          r.check(`${name} 항목d — 재개 확인용 바닥 지점을 화면에서 못 찾아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+        } else {
+          await page.mouse.click(floorPtAfterClose.x, floorPtAfterClose.y)
+          const resumedWalking = await waitUntil(async () => (
+            (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking'
+          ), { timeout: 1500 })
+          r.check(`${name} 항목d — 닫은 뒤 바닥 탭으로 정상 보행이 재개됨`, !!resumedWalking)
+          await idleOf(character)
+        }
+      }
+
+      const writeActionCalls = mocks.apiCallLog.filter((c) => c.body && SHOP_WRITE_ACTIONS.includes(c.body.action))
+      const restWriteCalls = classifyWrites(mocks.apiCallLog).unexpectedRest
+      r.check(`${name} — 구매/보상 쓰기 액션 0건 + 허용목록 외 REST 쓰기 0건`,
+        writeActionCalls.length === 0 && restWriteCalls.length === 0, JSON.stringify({ writeActionCalls, restWriteCalls }))
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+      r.check(`${name} — 콘솔/페이지 에러 없음`, consoleErrors.length === 0, JSON.stringify(consoleErrors.slice(0, 5)))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+
+  // ── S30 확장(2026-09-30, 단일 뷰포트 — S29와 동일하게 walk mode OFF로
+  // 좌표 계산을 단순화, 카메라 패닝은 위 메인 루프가 이미 4개 뷰포트로
+  // 커버) — 동시성/경합 케이스: 취소, 더블탭, 도착 직후 버튼 경합, 브라우저
+  // 뒤로가기, 열린 채 리사이즈. ──
+  {
+    const vp = { width: 1280, height: 800 }
+    const name = 'S30x[1280x800,concurrency]'
+    const context = await browser.newContext({ viewport: vp })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true }) // walk mode 기본 off(setDeviceFlags 주석 참고) — ground=viewport.
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const root = page.locator('[data-testid="proto25d-root"]')
+      const shopOverlay = page.locator('[data-testid="proto25d-shop"]')
+      const backBtn = page.locator('[data-testid="proto25d-shop-back"]')
+      const gb = await ground.boundingBox()
+      const toPx = (pct) => ({ x: gb.x + gb.width * (pct.x / 100), y: gb.y + gb.height * (pct.y / 100) })
+      const buildingPt = toPx(DEMO_BUILDING_CENTER_PCT)
+      const entrancePt = toPx(SHOP_ENTRANCE_PCT_REF)
+      const farFloorPt = toPx({ x: 80, y: 62 }) // 스폰과 같은 y, 건물/벤치 밖(건물 x0:38~x1:62 밖).
+
+      // ── (i) 이동 중 취소 — 건물 탭 직후(도착 전) 다른 곳 탭 → 상점 목적지
+      //     취소(data-walk-target 해제), 상점이 열리지 않고 새 목적지로 재지정 ──
+      await page.mouse.click(buildingPt.x, buildingPt.y)
+      const walkingI = await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 1500 })
+      r.check(`${name} 항목i 사전조건 — 건물 탭 직후 walking`, !!walkingI)
+      await page.mouse.click(farFloorPt.x, farFloorPt.y)
+      await page.waitForTimeout(60)
+      const walkTargetAfterCancel = await root.getAttribute('data-walk-target')
+      r.check(`${name} 항목i — 도착 전 다른 곳 탭 → data-walk-target이 즉시 해제됨(상점 목적지 취소)`, walkTargetAfterCancel === null, String(walkTargetAfterCancel))
+      await idleOf(character)
+      const shopOpenedAfterCancel = await shopOverlay.count() > 0
+      r.check(`${name} 항목i — 취소됐으므로 상점이 열리지 않음`, !shopOpenedAfterCancel)
+      const posAfterCancel = await readCharacterPct(character)
+      r.check(`${name} 항목i — 새 목적지(80,62)로 재지정되어 그리로 도착함(<3 world-%)`,
+        Math.hypot(posAfterCancel.left - 80, posAfterCancel.top - 62) < 3, JSON.stringify(posAfterCancel))
+
+      // ── (ii) 건물 더블탭 — 같은 건물을 걷는 도중 다시 탭해도 중복
+      //     시퀀스 없이 그대로 원래 목적지로 도착, 도착 시 상점 1개만 열림 ──
+      await page.mouse.click(buildingPt.x, buildingPt.y)
+      await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 1500 })
+      await page.waitForTimeout(80)
+      const walkTargetBeforeDoubleTap = await root.getAttribute('data-walk-target')
+      await page.mouse.click(buildingPt.x, buildingPt.y) // 같은 건물 재탭 — 무시돼야 함(항목7과 동일 정신).
+      await page.waitForTimeout(60)
+      const walkTargetAfterDoubleTap = await root.getAttribute('data-walk-target')
+      r.check(`${name} 항목ii — 걷는 중 같은 건물 재탭이 목적지를 그대로 유지함(중복 시퀀스 없음)`,
+        walkTargetBeforeDoubleTap === 'shop:demo-building' && walkTargetAfterDoubleTap === 'shop:demo-building')
+      const shopOpenedIi = await shopOverlay.waitFor({ state: 'visible', timeout: 8000 }).then(() => true).catch(() => false)
+      r.check(`${name} 항목ii — 더블탭 후에도 도착하면 상점이 (한 번만) 자동으로 열림`, shopOpenedIi)
+      const shopCountIi = await shopOverlay.count()
+      r.check(`${name} 항목ii — 상점 오버레이가 정확히 1개`, shopCountIi === 1, String(shopCountIi))
+
+      // ── (iii) 브라우저 뒤로가기 — 자동으로 열린 상점도 back으로 닫힘 ──
+      await page.goBack({ timeout: 3000 }).catch(() => {})
+      const closedByBack = await shopOverlay.waitFor({ state: 'hidden', timeout: 3000 }).then(() => true).catch(() => false)
+      r.check(`${name} 항목iii — 자동으로 열린 상점도 브라우저 뒤로가기로 닫힘`, closedByBack)
+      await idleOf(character)
+
+      // ── (iv) 리사이즈 — 상점이 열린 채로 뷰포트를 바꿔도 상태 유지 ──
+      await page.mouse.click(entrancePt.x, entrancePt.y)
+      await idleOf(character)
+      await page.mouse.click(buildingPt.x, buildingPt.y)
+      const shopOpenedIv = await shopOverlay.waitFor({ state: 'visible', timeout: 8000 }).then(() => true).catch(() => false)
+      r.check(`${name} 항목iv 사전조건 — 리사이즈 전 상점이 열림`, shopOpenedIv)
+      await page.setViewportSize({ width: 412, height: 915 })
+      await page.waitForTimeout(150)
+      const shopStillOpenAfterResize = await shopOverlay.count() > 0
+      const shopOpenAttrAfterResize = await root.getAttribute('data-shop-open')
+      r.check(`${name} 항목iv — 뷰포트 리사이즈(1280x800→412x915) 후에도 상점이 열린 채로 유지됨`,
+        shopStillOpenAfterResize && shopOpenAttrAfterResize === 'true')
+      await backBtn.click()
+      await shopOverlay.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {})
+
+      const writeActionCallsX = mocks.apiCallLog.filter((c) => c.body && SHOP_WRITE_ACTIONS.includes(c.body.action))
+      const restWriteCallsX = classifyWrites(mocks.apiCallLog).unexpectedRest
+      r.check(`${name} — 구매/보상 쓰기 액션 0건 + 허용목록 외 REST 쓰기 0건`,
+        writeActionCallsX.length === 0 && restWriteCallsX.length === 0, JSON.stringify({ writeActionCallsX, restWriteCallsX }))
     } catch (err) {
       const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
       r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
