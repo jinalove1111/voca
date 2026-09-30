@@ -4830,6 +4830,21 @@ export async function run(browser, baseURL) {
     await page.locator('[data-testid="proto25d-shop-confirm-yes"]').click()
   }
 
+  // 리뷰 대응(2026-09-30, 2차, S31) 공용 헬퍼 — walk-mode-ON 컨텍스트에서
+  // S18/S20/S21/S22와 동일한 "입구까지 걸어가 입장 버튼을 누른다" 서두를
+  // 재사용한다(재구현 아님). 화면 밖이면 최대 3회 hop, 도달 못 하면
+  // visible:false를 그대로 반환 — 호출부가 정직하게 스킵 처리.
+  async function walkToEntranceAndOpenShop(page, character, ground, viewportEl) {
+    const entranceVisibility = await ensureWorldPointVisible(page, character, ground, viewportEl, SHOP_ENTRANCE_PCT_REF)
+    if (!entranceVisibility.visible) return false
+    await page.mouse.click(entranceVisibility.targetScreenPt.x, entranceVisibility.targetScreenPt.y)
+    await idleOf(character)
+    const enterBtn = page.locator('[data-testid="proto25d-shop-enter"]')
+    await enterBtn.waitFor({ state: 'visible', timeout: 3000 })
+    await enterBtn.click()
+    return page.locator('[data-testid="proto25d-shop"]').waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)
+  }
+
   for (const vp of S17_VIEWPORTS) {
     const name = `S23[${vp.label},place-once]`
     const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
@@ -7281,6 +7296,197 @@ export async function run(browser, baseURL) {
     } finally {
       collect(mocks)
       await context.close()
+    }
+  }
+  // ── S31(2026-09-30, 2차 리뷰 — Part 2 "구매 경험 연결") — 구매 성공
+  // 안내에 다음 행동 버튼 2개("🎒 내 물건 보기"/"계속 쇼핑하기")를 더한다.
+  // tryPurchase(shopInteraction.js) 순수 판정과 기존 확인/취소/연타 가드는
+  // 전혀 손대지 않는다(S21/S22 재검증 아님, 그대로 통과해야 함) — 이 E2E는
+  // 새 버튼 2개가 실제 화면(레이아웃/히스토리)과 맞물려도 안전한지만 본다.
+  for (const vp of S17_VIEWPORTS) {
+    const isMobile = vp.width !== 1280
+
+    // ── (a) "계속 쇼핑하기" — 안내+버튼 2개(≥44px, 뒤로가기/Buy와 안
+    //     겹침) → 안내만 사라지고 가게는 그대로 열린 채, Buy는 "구매
+    //     완료" 비활성 유지. 더블클릭 확인으로 연타에도 정확히 1회만
+    //     차감됨을 같은 흐름 안에서 재확인(S21/S22와 동일 가드, 재검증
+    //     아님 — 이 새 UI가 그 가드를 깨지 않는지만 본다). ──
+    {
+      const name = `S31[${vp.label},continue-shopping]`
+      const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, ...(isMobile ? { hasTouch: true } : {}) })
+      const page = await context.newPage()
+      await setDeviceFlags(page, { paulTown2_5d: true, townShopV1: true })
+      await setWalkModeOn(page)
+      const mocks = await installMocks(page, { townState: { starsEarned: 20, dollars: { available: 37, earned: 37, spent: 0 }, owned: [], welcomeClaimed: false } })
+      try {
+        await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+        await login(page)
+        await waitForLoggedIn(page)
+        const character = page.locator('[data-proto-character]')
+        await character.waitFor({ state: 'attached', timeout: 5000 })
+        const ground = page.locator('[data-testid="proto25d-ground"]')
+        const viewportEl = page.locator('[data-testid="proto25d-viewport"]')
+        const shopOverlay = page.locator('[data-testid="proto25d-shop"]')
+        const backBtn = page.locator('[data-testid="proto25d-shop-back"]')
+        const buyBtn = page.locator('[data-testid="proto25d-shop-buy"]')
+        const confirmYes = page.locator('[data-testid="proto25d-shop-confirm-yes"]')
+        const notice = page.locator('[data-testid="proto25d-shop-notice"]')
+        const viewItemsBtn = page.locator('[data-testid="proto25d-shop-notice-viewitems"]')
+        const continueBtn = page.locator('[data-testid="proto25d-shop-notice-continue"]')
+
+        const opened = await walkToEntranceAndOpenShop(page, character, ground, viewportEl)
+        if (!opened) {
+          r.check(`${name} — 가게 입장 지점이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+        } else {
+          await buyBtn.click()
+          await page.locator('[data-testid="proto25d-shop-confirm"]').waitFor({ state: 'visible', timeout: 1000 })
+          // 더블클릭 하나로 성공 경로 + 연타 가드를 함께 고정(S21/S22와
+          // 동일 관례) — onPurchase가 두 번 불렸다면 잔액이 $27로 떨어짐.
+          await confirmYes.dblclick({ delay: 20 })
+
+          const noticeVisible = await notice.waitFor({ state: 'visible', timeout: 1000 }).then(() => true).catch(() => false)
+          const noticeText = noticeVisible ? ((await notice.textContent().catch(() => '')) || '') : ''
+          r.check(`${name} 항목a — 구매 성공 안내 문구가 그대로("구매 완료! 마을에서 🪑 배치하기를 눌러요")`,
+            noticeText.includes('구매 완료') && noticeText.includes('배치하기'), noticeText)
+          const noticeRole = noticeVisible ? await notice.getAttribute('role') : null
+          const noticeAriaLive = noticeVisible ? await notice.getAttribute('aria-live') : null
+          r.check(`${name} 항목a — 안내가 role="status" + aria-live="polite"로 공지됨`, noticeRole === 'status' && noticeAriaLive === 'polite', JSON.stringify({ noticeRole, noticeAriaLive }))
+
+          const viewItemsVisible = await viewItemsBtn.waitFor({ state: 'visible', timeout: 1000 }).then(() => true).catch(() => false)
+          const continueVisible = await continueBtn.waitFor({ state: 'visible', timeout: 1000 }).then(() => true).catch(() => false)
+          const viewItemsBox = viewItemsVisible ? await viewItemsBtn.boundingBox() : null
+          const continueBox = continueVisible ? await continueBtn.boundingBox() : null
+          r.check(`${name} 항목a — "🎒 내 물건 보기"/"계속 쇼핑하기" 버튼 둘 다 보이고 높이 44px 이상`,
+            viewItemsVisible && continueVisible && !!viewItemsBox && viewItemsBox.height >= 44 && !!continueBox && continueBox.height >= 44,
+            JSON.stringify({ viewItemsVisible, continueVisible, viewItemsBox, continueBox }))
+
+          const backBox = await backBtn.boundingBox()
+          const buyBox = await buyBtn.boundingBox()
+          const overlapsBack = (!!viewItemsBox && !!backBox && intersectBoxes(viewItemsBox, backBox)) || (!!continueBox && !!backBox && intersectBoxes(continueBox, backBox))
+          const overlapsBuy = (!!viewItemsBox && !!buyBox && intersectBoxes(viewItemsBox, buyBox)) || (!!continueBox && !!buyBox && intersectBoxes(continueBox, buyBox))
+          r.check(`${name} 항목a — 새 버튼 2개가 뒤로가기 버튼과 겹치지 않음`, !overlapsBack, JSON.stringify({ viewItemsBox, continueBox, backBox }))
+          r.check(`${name} 항목a — 새 버튼 2개가 Buy 버튼과 겹치지 않음`, !overlapsBuy, JSON.stringify({ viewItemsBox, continueBox, buyBox }))
+
+          const balanceAfterBuy = (await page.locator('[data-testid="proto25d-shop-balance"]').textContent().catch(() => '')) || ''
+          r.check(`${name} 항목a — 더블클릭에도 정확히 한 번만 차감됨("$32", "$27" 아님)`,
+            balanceAfterBuy.includes('$32') && !balanceAfterBuy.includes('$27'), balanceAfterBuy)
+
+          await continueBtn.click()
+          const noticeGone = await waitUntil(async () => (await notice.count()) === 0, { timeout: 500 })
+          const viewItemsGone = (await viewItemsBtn.count()) === 0
+          r.check(`${name} 항목a — "계속 쇼핑하기" 클릭 후 안내/버튼이 사라짐`, !!noticeGone && viewItemsGone)
+          const shopStillOpen = (await shopOverlay.count()) === 1
+          r.check(`${name} 항목a — 가게는 계속 열린 채로 남음`, shopStillOpen)
+          const buyDisabledAfter = await buyBtn.isDisabled().catch(() => false)
+          const buyTextAfter = (await buyBtn.textContent().catch(() => '')) || ''
+          r.check(`${name} 항목a — Buy 버튼이 "구매 완료" 비활성 그대로`, buyDisabledAfter && buyTextAfter.includes('구매 완료'), JSON.stringify({ buyDisabledAfter, buyTextAfter }))
+
+          const writeActionCallsA = mocks.apiCallLog.filter((c) => c.body && SHOP_WRITE_ACTIONS.includes(c.body.action))
+          const restWriteCallsA = classifyWrites(mocks.apiCallLog).unexpectedRest
+          r.check(`${name} 항목a — 구매/보상 쓰기 액션 0건 + 허용목록 외 REST 쓰기 0건`,
+            writeActionCallsA.length === 0 && restWriteCallsA.length === 0, JSON.stringify({ writeActionCallsA, restWriteCallsA }))
+        }
+        r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+      } catch (err) {
+        const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+        r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+          `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+      } finally {
+        collect(mocks)
+        await context.close()
+      }
+    }
+
+    // ── (b) "내 물건 보기" — 가게가 닫히고("돌아가기"와 동일한
+    //     requestCloseShop 경로), 닫힘이 실제로 끝난 뒤에만 "내 물건"
+    //     패널이 열림. 패널에 방금 산 물건이 정확히 1개(구매 전 더블클릭
+    //     연타로도 purchasedIds가 단일 진실 원천이라 중복 없음). 뒤로가기
+    //     정확히 1회로 패널이 닫히고 기본 화면으로 돌아옴. 패널을 닫은
+    //     뒤 바닥 탭으로 걷기가 정상 동작. ──
+    {
+      const name = `S31[${vp.label},view-my-items]`
+      const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, ...(isMobile ? { hasTouch: true } : {}) })
+      const page = await context.newPage()
+      await setDeviceFlags(page, { paulTown2_5d: true, townShopV1: true })
+      await setWalkModeOn(page)
+      const mocks = await installMocks(page, { townState: { starsEarned: 20, dollars: { available: 37, earned: 37, spent: 0 }, owned: [], welcomeClaimed: false } })
+      try {
+        await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+        await login(page)
+        await waitForLoggedIn(page)
+        const character = page.locator('[data-proto-character]')
+        await character.waitFor({ state: 'attached', timeout: 5000 })
+        const ground = page.locator('[data-testid="proto25d-ground"]')
+        const viewportEl = page.locator('[data-testid="proto25d-viewport"]')
+        const root = page.locator('[data-testid="proto25d-root"]')
+        const shopOverlay = page.locator('[data-testid="proto25d-shop"]')
+        const buyBtn = page.locator('[data-testid="proto25d-shop-buy"]')
+        const confirmYes = page.locator('[data-testid="proto25d-shop-confirm-yes"]')
+        const viewItemsBtn = page.locator('[data-testid="proto25d-shop-notice-viewitems"]')
+        const myItemsPanel = page.locator('[data-testid="proto25d-myitems-panel"]')
+        const myItemsItem = page.locator('[data-testid="proto25d-myitems-item"]')
+        const myItemsClose = page.locator('[data-testid="proto25d-myitems-close"]')
+
+        const opened = await walkToEntranceAndOpenShop(page, character, ground, viewportEl)
+        if (!opened) {
+          r.check(`${name} — 가게 입장 지점이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+        } else {
+          await buyBtn.click()
+          await page.locator('[data-testid="proto25d-shop-confirm"]').waitFor({ state: 'visible', timeout: 1000 })
+          await confirmYes.dblclick({ delay: 20 }) // 요구사항2 — 연타 창에도 purchasedIds는 여전히 단일 진실 원천.
+          await viewItemsBtn.waitFor({ state: 'visible', timeout: 1000 })
+
+          const historyLenBeforeViewItems = await page.evaluate(() => window.history.length)
+          await viewItemsBtn.click()
+          const shopClosed = await shopOverlay.waitFor({ state: 'hidden', timeout: 3000 }).then(() => true).catch(() => false)
+          r.check(`${name} 항목b — "내 물건 보기" 클릭 후 가게가 닫힘(정상 닫기 경로)`, shopClosed)
+          const panelOpened = await myItemsPanel.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)
+          r.check(`${name} 항목b — 가게가 닫힌 뒤(닫기 완료 후) "내 물건" 패널이 열림`, panelOpened)
+          const itemCount = await myItemsItem.count()
+          r.check(`${name} 항목b — 방금 산 물건이 패널에 정확히 1개(연타 창에도 중복 없음)`, itemCount === 1, String(itemCount))
+
+          // 히스토리 깊이 불변 — requestCloseShop()의 history.back()이 "가게"
+          // 항목을 소비해 base로 되돌아간 뒤(길이 자체는 줄지 않음, 포인터만
+          // 이동), openMyItems()의 pushState가 그 base 위치에서 새로
+          // 밀어 넣는다 — tip이 아닌 위치에서의 pushState는 그 앞에 있던
+          // "가게" 항목을 잘라내고 새 항목("내 물건")으로 대체하므로,
+          // 순증가는 0이다(가게 1개가 내 물건 패널 1개로 자리만 바뀜 —
+          // "back 1회로 패널이 닫히고 기본 화면"이라는 요구사항과 정확히
+          // 대응). +1이 아니라 불변이어야 "깊이가 일관됨"의 실제 의미.
+          const historyLenAfterViewItems = await page.evaluate(() => window.history.length)
+          r.check(`${name} 항목b — 히스토리 깊이가 불변(가게 항목이 내 물건 패널 항목으로 자리만 바뀜, 순증 없음)`,
+            historyLenAfterViewItems === historyLenBeforeViewItems, `before=${historyLenBeforeViewItems} after=${historyLenAfterViewItems}`)
+
+          await page.goBack({ timeout: 3000 }).catch(() => {})
+          const panelClosedByOneBack = await waitUntil(async () => (await myItemsPanel.count()) === 0, { timeout: 2000 })
+          r.check(`${name} 항목b — 뒤로가기 정확히 1회로 패널이 닫히고 기본 화면으로 돌아옴`, !!panelClosedByOneBack)
+          const stillInApp = (await root.count()) === 1 && (await shopOverlay.count()) === 0
+          r.check(`${name} 항목b — 앱을 떠나지 않음`, stillInApp)
+
+          // 패널을 다시 열고 이번엔 "닫기" 버튼으로 닫은 뒤 바닥 탭 걷기 확인.
+          const purchasedIdsBtn = page.locator('[data-testid="proto25d-myitems-open"]')
+          await purchasedIdsBtn.click()
+          await myItemsPanel.waitFor({ state: 'visible', timeout: 2000 })
+          await myItemsClose.click()
+          await myItemsPanel.waitFor({ state: 'hidden', timeout: 2000 })
+          const spawnVisibility = await ensureWorldPointVisible(page, character, ground, viewportEl, SPAWN_PCT_REF)
+          let walkedAfterClose = false
+          if (spawnVisibility.visible) {
+            await page.mouse.click(spawnVisibility.targetScreenPt.x, spawnVisibility.targetScreenPt.y)
+            walkedAfterClose = !!(await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 1500 }))
+            await idleOf(character)
+          }
+          r.check(`${name} 항목b — 패널을 닫기 버튼으로 닫은 뒤 바닥 탭으로 걷기가 정상 동작`, walkedAfterClose || !spawnVisibility.visible, String(walkedAfterClose))
+        }
+        r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+      } catch (err) {
+        const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+        r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+          `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+      } finally {
+        collect(mocks)
+        await context.close()
+      }
     }
   }
 

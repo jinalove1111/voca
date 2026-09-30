@@ -23,8 +23,17 @@ import { coinBadgeText, coinBadgeAriaLabel } from '../../../utils/town/proto2_5d
 // 안내 토스트가 화면에 머무는 시간(ms) — 요구사항 "약 2초" 그대로.
 const PURCHASE_NOTICE_MS = 2000
 
-export default function ProtoShopScreen({ products, onBack, closing, balance, purchasedIds, onPurchase }) {
+export default function ProtoShopScreen({ products, onBack, closing, balance, purchasedIds, onPurchase, onViewMyItems }) {
   const [noticeText, setNoticeText] = useState(null)
+  // 리뷰 대응(2026-09-30, 2차, stage 3 "구매 경험 연결") — 지금 뜬 안내가
+  // "구매 성공" 안내일 때만 true(부족/이미 구매 안내에는 false) — 이
+  // 값만으로 아래 두 다음-행동 버튼("🎒 내 물건 보기"/"계속 쇼핑하기")의
+  // 노출을 제어한다. 별도 타이머 없음 — 기존 noticeTimerRef가 noticeText를
+  // null로 되돌리는 순간(PURCHASE_NOTICE_MS 뒤) 렌더 조건(`noticeText &&
+  // purchaseNoticeActive`)이 자동으로 false가 되어 버튼도 함께 사라진다
+  // (새 타이머를 안 만드는 게 재구현보다 낫다는 ponytail 원칙 — 기존
+  // noticeText 생명주기를 그대로 얹어 쓴다).
+  const [purchaseNoticeActive, setPurchaseNoticeActive] = useState(false)
   const [confirmProduct, setConfirmProduct] = useState(null)
   const noticeTimerRef = useRef(null)
 
@@ -73,11 +82,22 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
     setConfirmProduct(null)
     if (result.ok) {
       showNotice('구매 완료! 마을에서 🪑 배치하기를 눌러요') // F2 — 다음 행동 안내("구매 완료" 문구 유지)
+      setPurchaseNoticeActive(true)
     } else if (result.reason === 'purchased') {
       showNotice('이미 구매했어요')
+      setPurchaseNoticeActive(false)
     } else {
       showNotice('Paul Dollar가 부족해요')
+      setPurchaseNoticeActive(false)
     }
+  }
+
+  // 리뷰 대응(stage 3, 요구사항4) — "계속 쇼핑하기": 안내만 즉시 지우고
+  // 가게에는 그대로 남는다(다른 부수효과 없음 — 새 구매/닫기 없음).
+  function handleDismissNotice() {
+    if (noticeTimerRef.current != null) { clearTimeout(noticeTimerRef.current); noticeTimerRef.current = null }
+    setNoticeText(null)
+    setPurchaseNoticeActive(false)
   }
 
   const balanceWallet = { dollarsAvailable: balance }
@@ -190,9 +210,16 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
           단일 토스트. role="status"+aria-live="polite" — 스크린리더가
           문구 등장을 조용히 알림(포커스 강탈 없음). pointer-events-none —
           토스트 자체를 눌러도 아무 동작이 없어야 하고, 뒤의 카드/뒤로가기
-          버튼 탭도 막지 않는다. */}
+          버튼 탭도 막지 않는다.
+          리뷰 대응(stage 3, 요구사항4) — 구매 성공 안내일 때만(purchaseNoticeActive)
+          다음 행동 버튼 2개를 그 아래 덧붙인다. bottom-16(=64px)만큼 아래
+          여백을 비워(inset-0 대신 inset-x-0 top-0 bottom-16) 하단 고정
+          "🏘️ 마을로 돌아가기" 버튼(52px)과 절대 겹치지 않는다(기하학적으로
+          보장 — 뷰포트 높이와 무관). 버튼 2개만 pointer-events-auto로
+          되돌린다(컨테이너 자체는 여전히 none — 문구 아래 빈 공간을 눌러도
+          가게 배경/카드로 그대로 전달됨). */}
       {noticeText && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none px-6">
+        <div className="absolute inset-x-0 top-0 bottom-16 z-10 flex flex-col items-center justify-center gap-3 pointer-events-none px-6">
           <p
             data-testid="proto25d-shop-notice"
             role="status"
@@ -201,6 +228,26 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
           >
             {noticeText}
           </p>
+          {purchaseNoticeActive && (
+            <div className="flex flex-wrap gap-2 justify-center pointer-events-auto">
+              <button
+                type="button"
+                data-testid="proto25d-shop-notice-viewitems"
+                onClick={onViewMyItems}
+                className="min-h-[44px] px-4 rounded-xl bg-emerald-500 text-white text-sm font-black shadow btn-press"
+              >
+                🎒 내 물건 보기
+              </button>
+              <button
+                type="button"
+                data-testid="proto25d-shop-notice-continue"
+                onClick={handleDismissNotice}
+                className="min-h-[44px] px-4 rounded-xl bg-white text-gray-700 text-sm font-black shadow btn-press"
+              >
+                계속 쇼핑하기
+              </button>
+            </div>
+          )}
         </div>
       )}
 

@@ -377,6 +377,15 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   const placeCancelRef = useRef(null)
   const shopEnterRef = useRef(null)
   const pendingShopFocusRef = useRef(false) // 가게 닫힘 → 재입장 가드 해제 시 가게 버튼 포커스 예약
+  // 리뷰 대응(2026-09-30, 2차, stage 3 요구사항4) — "🎒 내 물건 보기" 클릭
+  // 시 true로 세팅. 가게가 "실제로 닫히는" 전이(아래 prevShopOpenRef
+  // effect, shopOpen true→false)를 감지하는 순간에만 소비해 openMyItems()
+  // 를 부른다 — 닫기 자체는 requestCloseShop()의 기존 경로(history.back()
+  // → popstate → closeShopNow, shopBusyRef 가드 전부 그대로)를 그대로
+  // 거치므로 "닫기 먼저, popstate/폴백까지 기다린 뒤에만 열기"가 저절로
+  // 보장된다(별도 폴링/타이머 불필요 — 기존 shopOpen state 전이 자체가
+  // 신호).
+  const pendingOpenMyItemsAfterCloseRef = useRef(false)
   const inventory = SHOP_PRODUCTS.filter((p) => purchasedIds.has(p.id) && !placements.some((pl) => pl.itemId === p.id))
   // F5 — "🎒 내 물건" 패널 목록(구매한 물건 전부, 배치 여부 무관 — inventory와
   // 달리 이미 배치된 물건도 보여준다). SHOP_PRODUCTS 순서 그대로(안정적 표시 순서).
@@ -1435,10 +1444,26 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     const was = prevShopOpenRef.current
     prevShopOpenRef.current = shopOpen
     if (was && !shopOpen) {
-      rootRef.current?.focus() // 가게 들어가기 버튼은 400ms 비활성 — 우선 root
-      pendingShopFocusRef.current = true
+      // 리뷰 대응(stage 3, 요구사항4) — "내 물건 보기" 예약이 있으면 가게
+      // 버튼 포커스 대신 그쪽을 우선한다(같은 "닫힘 완료" 신호를 서로 다른
+      // 두 다음 동작이 다투지 않게 배타적으로 분기).
+      if (pendingOpenMyItemsAfterCloseRef.current) {
+        pendingOpenMyItemsAfterCloseRef.current = false
+        openMyItems()
+      } else {
+        rootRef.current?.focus() // 가게 들어가기 버튼은 400ms 비활성 — 우선 root
+        pendingShopFocusRef.current = true
+      }
     }
   }, [shopOpen])
+  // 리뷰 대응(stage 3, 요구사항4) — ProtoShopScreen의 "🎒 내 물건 보기".
+  // requestCloseShop()과 완전히 동일한 닫기 경로를 그대로 태운다(뒤로가기
+  // 버튼과 다른 동작을 만들지 않는다) — 다음 열기는 위 effect가 닫힘
+  // 완료를 감지한 뒤에만 한다.
+  function handleViewMyItemsFromShop() {
+    pendingOpenMyItemsAfterCloseRef.current = true
+    requestCloseShop()
+  }
   useEffect(() => {
     // 재입장 가드 해제 시 예약이 남아 있으면(그 사이 바닥 탭/배치 진입 없음) 가게 버튼으로.
     // (activeElement 비교는 못 쓴다 — 바닥 mousedown도 tabIndex=-1 root에 포커스를 준다.)
@@ -2053,6 +2078,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
         <ProtoShopScreen
           products={SHOP_PRODUCTS}
           onBack={requestCloseShop}
+          onViewMyItems={handleViewMyItemsFromShop}
           closing={shopClosing}
           balance={balance}
           purchasedIds={purchasedIds}
