@@ -7106,7 +7106,9 @@ export async function run(browser, baseURL) {
   // 히스토리 항목을 쌓아 둔 상태에서 가게가 그 위에 또 pushState하면, 배치
   // 취소(뒤로가기 1회)가 배치만 지우고 가게는 그대로 남아 다음에 가게를
   // 닫을 때 자기 마커를 못 찾는 고아 히스토리 항목이 생긴다. 아래 두
-  // 블록(A1/A2)이 실측으로 이 결함을 재현한다.
+  // 블록(A1/A2)이 실측으로 이 결함을 재현한다. (A1은 2026-10-01 F1 이후
+  // "건물 탭 → 걷는 중 🪑 배치하기" 순서로 재구성 — 배치 모드 중 건물 탭은
+  // 더는 상점 의도를 만들지 않는다.)
   {
     const vp = { width: 1280, height: 800 }
     const context = await browser.newContext({ viewport: vp })
@@ -7139,13 +7141,19 @@ export async function run(browser, baseURL) {
       await page.mouse.click(farFloorPt.x, farFloorPt.y)
       await idleOf(character)
 
-      await placeOpenBtn.click()
-      const placingActive = (await root.getAttribute('data-placing')) === 'true'
-      r.check(`${name} 사전조건 — 배치 모드 진입(data-placing "true")`, placingActive)
-      const historyLenBeforeArrival = await page.evaluate(() => window.history.length)
+      // 2026-10-01 F1 — 배치 모드 중 건물 탭은 이제 상점 의도 없는 일반 걷기라
+      // (S33-F1이 고정) 이 시나리오의 대상(걷는 중 상점 의도가 있는데 배치
+      // 모드가 열림)에 더는 그 순서로 도달할 수 없다. 건물을 먼저 탭해 상점
+      // 의도를 세팅한 뒤, 걷는 동안 🪑 배치하기를 눌러 같은 상태를 만든다.
       await page.mouse.click(buildingPt.x, buildingPt.y)
       const walking = await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 1500 })
-      r.check(`${name} 사전조건 — 배치 모드 중에도 건물 탭이 걷기를 시작시킴(walking)`, !!walking)
+      r.check(`${name} 사전조건 — 건물 탭 후 walking`, !!walking)
+      const walkTargetBeforePlacing = await root.getAttribute('data-walk-target')
+      r.check(`${name} 사전조건 — data-walk-target="shop:demo-building"(걷는 중)`, walkTargetBeforePlacing === 'shop:demo-building', String(walkTargetBeforePlacing))
+      await placeOpenBtn.click()
+      const placingActive = (await root.getAttribute('data-placing')) === 'true'
+      r.check(`${name} 사전조건 — 걷는 중 배치 모드 진입(data-placing "true")`, placingActive)
+      const historyLenBeforeArrival = await page.evaluate(() => window.history.length)
       await idleOf(character)
       const shopOpenedAfterArrival = (await shopOverlay.count()) > 0
       r.check(`${name} — 배치 모드가 열려 있으면 도착해도 상점이 열리지 않음`, !shopOpenedAfterArrival)
@@ -7239,7 +7247,7 @@ export async function run(browser, baseURL) {
   // sitTargetKey류만 지우고 pendingShop/shopTargetKey는 안 지워 data-
   // walk-target이 고장난 채 남는 결함(handleGroundPointerUp의 "걷는 중
   // 배치" 분기, ~구 1033행 근처). 건물로 걷는 중에 배치를 완료해 정확히
-  // 이 분기를 taps다.
+  // 이 분기를 taps다. (2026-10-01 F1 이후엔 건물 탭 → 걷는 중 배치 순서.)
   {
     const vp = { width: 1280, height: 800 }
     const context = await browser.newContext({ viewport: vp })
@@ -7271,12 +7279,15 @@ export async function run(browser, baseURL) {
       await page.mouse.click(farFloorPt.x, farFloorPt.y)
       await idleOf(character)
 
-      await placeOpenBtn.click()
-      await page.mouse.click(buildingPt.x, buildingPt.y) // 배치 모드 중 건물 탭 — 슬롯이 아니라 걷기로 흘러 상점 목적지가 세팅됨.
+      // 2026-10-01 F1 — 배치 모드 중 건물 탭은 더는 상점 의도를 세팅하지
+      // 않으므로(S33-F1), 건물을 먼저 탭해 걷는 동안 🪑 배치하기를 누른다.
+      await page.mouse.click(buildingPt.x, buildingPt.y)
       const walking = await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 1500 })
       r.check(`${name} 사전조건 — 건물 탭 후 walking`, !!walking)
       const walkTargetDuring = await root.getAttribute('data-walk-target')
       r.check(`${name} 사전조건 — data-walk-target="shop:demo-building"(걷는 중)`, walkTargetDuring === 'shop:demo-building', String(walkTargetDuring))
+      await placeOpenBtn.click()
+      r.check(`${name} 사전조건 — 걷는 중 배치 모드 진입(data-placing "true")`, (await root.getAttribute('data-placing')) === 'true')
       await page.waitForTimeout(150) // 단일 구간 650ms 중간 지점 — 아직 도착 전.
       const phaseBeforePlace = await character.getAttribute('data-character-phase').catch(() => null)
       r.check(`${name} 사전조건 — 슬롯 탭 시점에 아직 walking(도착 전)`, phaseBeforePlace === 'walking', `phase=${phaseBeforePlace}`)
@@ -7371,6 +7382,7 @@ export async function run(browser, baseURL) {
           r.check(`${name} 항목a — 더블클릭에도 정확히 한 번만 차감됨("$32", "$27" 아님)`,
             balanceAfterBuy.includes('$32') && !balanceAfterBuy.includes('$27'), balanceAfterBuy)
 
+          await page.waitForTimeout(450) // F6 CTA 가드(ProtoShopScreen.jsx CTA_GUARD_MS=400) — 안내 등장 직후 탭은 무시됨.
           await continueBtn.click()
           const noticeGone = await waitUntil(async () => (await notice.count()) === 0, { timeout: 500 })
           const viewItemsGone = (await viewItemsBtn.count()) === 0
@@ -7437,6 +7449,7 @@ export async function run(browser, baseURL) {
           await viewItemsBtn.waitFor({ state: 'visible', timeout: 1000 })
 
           const historyLenBeforeViewItems = await page.evaluate(() => window.history.length)
+          await page.waitForTimeout(450) // F6 CTA 가드(ProtoShopScreen.jsx CTA_GUARD_MS=400) — 안내 등장 직후 탭은 무시됨.
           await viewItemsBtn.click()
           const shopClosed = await shopOverlay.waitFor({ state: 'hidden', timeout: 3000 }).then(() => true).catch(() => false)
           r.check(`${name} 항목b — "내 물건 보기" 클릭 후 가게가 닫힘(정상 닫기 경로)`, shopClosed)
@@ -7487,6 +7500,351 @@ export async function run(browser, baseURL) {
         collect(mocks)
         await context.close()
       }
+    }
+  }
+
+  // ── S32(2026-10-01, 마을 산책형 상점 방문 전 여정) — 한 페이지 세션에서
+  // 건물 탭 → 걷기 → 도착 자동 열림 → 구매 → 내 물건 보기 → 배치 → 옮기기 →
+  // 넣기 → 재배치까지 전체 체인을 이어서 돌린다. S30(걷기/자동열림)·S31(구매
+  // 후 버튼)·S27(내 물건/이동/회수) 각각의 내부 계약은 재검증하지 않고, 단계
+  // 사이의 "이음매"(히스토리 마커/깊이, phase, 토스트, 상태 텍스트)가 연속
+  // 사용에서도 유지되는지만 본다. 화면에 못 가져오는 사전조건은 S30/S27과 같이
+  // 정직하게 스킵(FAIL 아님) — 그래도 최소 한 뷰포트는 끝까지 실행돼야 한다.
+  let anyRanS32 = false
+  let anyMovedS32 = false
+  let anyRetrievedReplacedS32 = false
+  for (const vp of S17_VIEWPORTS) {
+    const isMobile = vp.width !== 1280
+    const name = `S32[${vp.label},full-journey]`
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, ...(isMobile ? { hasTouch: true } : {}) })
+    const page = await context.newPage()
+    const consoleErrors = []
+    page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()) })
+    page.on('pageerror', (err) => { consoleErrors.push(String(err)) })
+    await setDeviceFlags(page, { paulTown2_5d: true, townShopV1: true })
+    await setWalkModeOn(page)
+    const mocks = await installMocks(page, { townState: { starsEarned: 20, dollars: { available: 37, earned: 37, spent: 0 }, owned: [], welcomeClaimed: false } })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const viewportEl = page.locator('[data-testid="proto25d-viewport"]')
+      const root = page.locator('[data-testid="proto25d-root"]')
+      const tid = (id) => page.locator(`[data-testid="${id}"]`)
+      const shopOverlay = tid('proto25d-shop')
+      const myItemsPanel = tid('proto25d-myitems-panel')
+      const myItemsOpen = tid('proto25d-myitems-open')
+      const placedItem = tid('proto25d-placed-item')
+      const toastText = async () => ((await tid('proto25d-place-toast').textContent({ timeout: 1000 }).catch(() => '')) || '').trim()
+      const phaseIs = (p) => waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === p, { timeout: 1500 })
+      const attrIs = (attr, v) => waitUntil(async () => (await root.getAttribute(attr)) === v, { timeout: 2000 })
+      const statusOf = async () => ((await tid('proto25d-myitems-status').first().textContent().catch(() => '')) || '').trim()
+      const readNav = () => page.evaluate(() => ({
+        len: history.length,
+        index: (typeof navigation !== 'undefined' && navigation.currentEntry) ? navigation.currentEntry.index : null,
+        markers: !!(history.state && (history.state.proto25dPlace || history.state.proto25dMyItems || history.state.proto25dShop)),
+      })).catch(() => null)
+
+      const entranceVis = await ensureWorldPointVisible(page, character, ground, viewportEl, SHOP_ENTRANCE_PCT_REF)
+      const buildingPt = entranceVis.visible ? worldPctToScreenPx(DEMO_BUILDING_CENTER_PCT, entranceVis.groundBox) : null
+      if (!entranceVis.visible || !boxContainsPoint(entranceVis.visibleBox, buildingPt)) {
+        r.check(`${name} — 입장 지점/건물 중심이 화면에 들어오지 않아 이 시나리오를 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+        continue
+      }
+      const navBase = await readNav()
+      const lenBeforeTap = navBase?.len
+
+      // ── (1) 건물 탭 → walking + 목적지 의도, 아직 안 열림 ──
+      await page.mouse.click(buildingPt.x, buildingPt.y)
+      const walking = await phaseIs('walking')
+      r.check(`${name} 항목1 — 건물 탭 → walking + data-walk-target="shop:demo-building", 상점은 아직 닫힘`,
+        !!walking && (await root.getAttribute('data-walk-target')) === 'shop:demo-building' && (await shopOverlay.count()) === 0)
+
+      // ── (2) 도착 → 자동 열림, idle, walk-target 해제, 히스토리 +1 ──
+      const autoOpened = await shopOverlay.waitFor({ state: 'visible', timeout: 8000 }).then(() => true).catch(() => false)
+      const state2 = autoOpened ? await sampleCharacterState(page) : null
+      const lenAfterOpen = await page.evaluate(() => history.length)
+      r.check(`${name} 항목2 — 도착 시 버튼 없이 상점 자동 열림 + idle + walk-target 해제 + 히스토리 +1`,
+        autoOpened && state2?.phase === 'idle' && (await root.getAttribute('data-walk-target')) === null && lenAfterOpen === lenBeforeTap + 1,
+        JSON.stringify({ autoOpened, phase: state2?.phase, lenBeforeTap, lenAfterOpen }))
+      if (!autoOpened) continue
+      anyRanS32 = true
+
+      // ── (3) 구매 ──
+      await tid('proto25d-shop-buy').click()
+      await tid('proto25d-shop-confirm').waitFor({ state: 'visible', timeout: 1000 })
+      await tid('proto25d-shop-confirm-yes').click()
+      const viewItemsBtn = tid('proto25d-shop-notice-viewitems')
+      await viewItemsBtn.waitFor({ state: 'visible', timeout: 2000 })
+      const balance = (await tid('proto25d-shop-balance').textContent().catch(() => '')) || ''
+      r.check(`${name} 항목3 — 구매 후 잔액 $32`, balance.includes('$32'), balance)
+
+      // ── (4) 내 물건 보기 → 가게 닫힘 + 패널(1개, 가방에 있어요), 히스토리 깊이 불변 ──
+      const lenBeforeView = await page.evaluate(() => history.length)
+      await page.waitForTimeout(450) // F6 CTA 가드(CTA_GUARD_MS=400) — 안내 등장 직후 탭은 무시됨.
+      await viewItemsBtn.click()
+      const shopGone = await shopOverlay.waitFor({ state: 'hidden', timeout: 3000 }).then(() => true).catch(() => false)
+      const panelUp = await myItemsPanel.waitFor({ state: 'visible', timeout: 3000 }).then(() => true).catch(() => false)
+      const lenAfterView = await page.evaluate(() => history.length)
+      r.check(`${name} 항목4 — 가게 닫힘 + 내 물건 패널(물건 1개, "가방에 있어요", 놓기 버튼), 히스토리 깊이 불변`,
+        shopGone && panelUp && (await tid('proto25d-myitems-item').count()) === 1 && (await statusOf()) === '가방에 있어요'
+          && (await tid('proto25d-myitems-place').count()) >= 1 && lenAfterView === lenBeforeView,
+        JSON.stringify({ shopGone, panelUp, status: await statusOf(), lenBeforeView, lenAfterView }))
+
+      // ── (5) 배치 ──
+      await tid('proto25d-myitems-place').first().click()
+      const placing5 = await attrIs('data-placing', 'true')
+      const panelGone5 = await waitUntil(async () => (await myItemsPanel.count()) === 0, { timeout: 2000 })
+      const first = placing5 ? await findTappableSlot(page, character, ground, viewportEl, null) : null
+      if (!first) {
+        r.check(`${name} 항목5~8 — 탭 가능한 슬롯을 화면에 가져오지 못해 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+        continue
+      }
+      await page.mouse.click(first.pt.x, first.pt.y)
+      await attrIs('data-proto25d-placed-count', '1')
+      const toast5 = await toastText()
+      r.check(`${name} 항목5 — 놓기 → 패널 닫힘, placed-count "1", 슬롯 ${first.s.id}, 토스트 "놓았어요", 배치 종료`,
+        !!panelGone5 && (await placedItem.getAttribute('data-slot-id')) === first.s.id && toast5.includes('놓았어요') && (await root.getAttribute('data-placing')) === 'false',
+        JSON.stringify({ toast5, slot: await placedItem.getAttribute('data-slot-id') }))
+
+      // ── (6) 옮기기 ──
+      await myItemsOpen.click()
+      await myItemsPanel.waitFor({ state: 'visible', timeout: 2000 }).catch(() => {})
+      const statusTown = await statusOf()
+      await tid('proto25d-myitems-move').click()
+      const moving = await attrIs('data-placing', 'true')
+      const second = moving ? await findTappableSlot(page, character, ground, viewportEl, first.s.id) : null
+      let movedOk = false
+      if (!second) {
+        await page.keyboard.press('Escape').catch(() => {})
+        r.check(`${name} 항목6 — 옮길 다른 슬롯을 화면에 가져오지 못해 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+      } else {
+        await page.mouse.click(second.pt.x, second.pt.y)
+        await waitUntil(async () => (await placedItem.getAttribute('data-slot-id').catch(() => null)) === second.s.id, { timeout: 2000 })
+        const toast6 = await toastText()
+        movedOk = statusTown === '마을에 있어요' && (await placedItem.getAttribute('data-slot-id')) === second.s.id
+          && (await root.getAttribute('data-proto25d-placed-count')) === '1' && toast6.includes('옮겼')
+        if (movedOk) anyMovedS32 = true
+        r.check(`${name} 항목6 — "마을에 있어요" → 옮기기 → 슬롯 ${second.s.id}, 개수 "1", 토스트 "옮겼"`, movedOk, JSON.stringify({ statusTown, toast6 }))
+      }
+
+      // ── (7) 보관(넣기) ──
+      await myItemsOpen.click()
+      await tid('proto25d-myitems-retrieve').click()
+      const count0 = await attrIs('data-proto25d-placed-count', '0')
+      const toast7 = await toastText()
+      const placeOpenBack = await tid('proto25d-place-open').waitFor({ state: 'visible', timeout: 2000 }).then(() => true).catch(() => false)
+      const retrievedOk = !!count0 && (await placedItem.count()) === 0 && (await myItemsPanel.count()) === 0 && toast7.includes('넣었어요') && placeOpenBack
+      r.check(`${name} 항목7 — 넣기 → placed-count "0", 배치물 0, 패널 닫힘, 토스트 "넣었어요", 🪑 배치하기 재등장`, retrievedOk, JSON.stringify({ toast7, placeOpenBack }))
+
+      // ── (8) 재배치 ──
+      await myItemsOpen.click()
+      await myItemsPanel.waitFor({ state: 'visible', timeout: 2000 }).catch(() => {})
+      const statusBag = await statusOf()
+      await tid('proto25d-myitems-place').first().click()
+      const placing8 = await attrIs('data-placing', 'true')
+      const third = placing8 ? await findTappableSlot(page, character, ground, viewportEl, null) : null
+      let replacedOk = false
+      if (!third) {
+        r.check(`${name} 항목8 — 재배치할 슬롯을 화면에 가져오지 못해 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+        await page.keyboard.press('Escape').catch(() => {})
+      } else {
+        await page.mouse.click(third.pt.x, third.pt.y)
+        replacedOk = statusBag === '가방에 있어요' && !!(await attrIs('data-proto25d-placed-count', '1'))
+        if (replacedOk && retrievedOk) anyRetrievedReplacedS32 = true
+        r.check(`${name} 항목8 — 넣은 뒤 "가방에 있어요" → 재배치 성공(placed-count "1")`, replacedOk, statusBag)
+      }
+
+      // ── (9) 여정 종료 불변식 — 잔여 마커 없음 + 스택 깊이 기준선 복귀,
+      //     바닥 탭 보행 정상, 에러/쓰기/오버플로 없음 ──
+      await attrIs('data-placing', 'false')
+      const navEnd = await readNav()
+      const depthOk = navBase?.index == null || navEnd?.index == null ? navBase?.len === navEnd?.len : navBase.index === navEnd.index
+      r.check(`${name} 항목9 — 히스토리 잔여 마커 없음 + 스택 깊이가 여정 시작 전으로 복귀`,
+        !!navEnd && !navEnd.markers && depthOk, JSON.stringify({ navBase, navEnd }))
+      const floorPt = await groundPointAt(page, ground, viewportEl, 0.85)
+      if (!floorPt) {
+        r.check(`${name} 항목9 — 바닥 지점을 화면에서 못 찾아 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+      } else {
+        await page.mouse.click(floorPt.x, floorPt.y)
+        const walked = await phaseIs('walking')
+        const idled = await idleOf(character)
+        r.check(`${name} 항목9 — 여정 뒤 바닥 탭 → walking → idle(캐릭터 조작 가능)`, !!walked && !!idled)
+      }
+      const writeActionCalls = mocks.apiCallLog.filter((c) => c.body && SHOP_WRITE_ACTIONS.includes(c.body.action))
+      const restWriteCalls = classifyWrites(mocks.apiCallLog).unexpectedRest
+      r.check(`${name} — 구매/보상 쓰기 액션 0건 + 허용목록 외 REST 쓰기 0건`,
+        writeActionCalls.length === 0 && restWriteCalls.length === 0, JSON.stringify({ writeActionCalls, restWriteCalls }))
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+      r.check(`${name} — 콘솔/페이지 에러 없음`, consoleErrors.length === 0, JSON.stringify(consoleErrors.slice(0, 5)))
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
+    } finally {
+      collect(mocks)
+      await context.close()
+    }
+  }
+  r.check('S32 — 최소 한 뷰포트는 전 여정이 실제로 실행됨(전부 스킵 아님)', anyRanS32)
+  r.check('S32 — 최소 한 뷰포트에서 이동(옮기기)이 실제로 성공함', anyMovedS32)
+  r.check('S32 — 최소 한 뷰포트에서 회수(넣기) 후 재배치가 실제로 성공함', anyRetrievedReplacedS32)
+
+  // ── S33(2026-10-01, 리뷰 대응 F1~F6) — 아래 여섯 수정의 회귀 고정. 각
+  // 시나리오는 수정 전 코드에서 실제로 FAIL함을 별도 repro로 확인했다(규칙 15).
+  //  F1 배치 모드 중 건물 탭은 상점 의도 없는 일반 걷기(data-walk-target 미설정)
+  //  F2 가게 닫기가 진행 중(busy)일 때 "내 물건 보기"가 예약 플래그를 남기지 않음
+  //  F3 구매 성공 안내는 sticky, 오류 안내만 ~2초 자동 숨김
+  //  F4 배치 의자에 앉은 채 건물 탭 → 일어나 걸어가 상점 자동 열림
+  //  F5 입구 타원 경계 포함(<=1) 계약 — 순수 로직이라 E2E가 아니라
+  //     scripts/testProto25dShop.mjs가 고정(여기엔 시나리오 없음)
+  //  F6 성공 안내 CTA 버튼은 뜬 직후 400ms(CTA_GUARD_MS) 동안 탭 무시 — 구매
+  //     확인 더블탭의 두 번째 탭이 "내 물건 보기"/"계속 쇼핑하기"를 오발하지 않음
+  // walk mode OFF 1280x800 단일 뷰포트(S30y와 동일 관례), 기존 헬퍼 재사용.
+  {
+    const phaseOf = (character) => character.getAttribute('data-character-phase').catch(() => null)
+    async function newPageS33(dollars) {
+      const context = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+      const page = await context.newPage()
+      await setDeviceFlags(page, { paulTown2_5d: true, townShopV1: true }) // walk mode OFF
+      const mocks = await installMocks(page, { townState: { starsEarned: 20, dollars: { available: dollars, earned: dollars, spent: 0 }, owned: [], welcomeClaimed: false } })
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const viewportEl = page.locator('[data-testid="proto25d-viewport"]')
+      const root = page.locator('[data-testid="proto25d-root"]')
+      const shopOverlay = page.locator('[data-testid="proto25d-shop"]')
+      const gb = await ground.boundingBox()
+      const toPx = (pct) => ({ x: gb.x + gb.width * (pct.x / 100), y: gb.y + gb.height * (pct.y / 100) })
+      return { context, page, mocks, character, ground, viewportEl, root, shopOverlay, toPx }
+    }
+    const failS33 = (name, err) => r.check(`${name} 시나리오 실행 완료(예외 없음)`, false, String(err?.message || err))
+
+    {
+      const name = 'S33-F1[1280x800,placing-building-tap-plain-walk]'
+      const { context, page, mocks, character, ground, root, shopOverlay, toPx } = await newPageS33(37)
+      try {
+        await buyBenchViaShop(page, character, ground)
+        await page.locator('[data-testid="proto25d-shop-back"]').click()
+        await waitUntil(async () => (await shopOverlay.count()) === 0, { timeout: 3000 })
+        await idleOf(character)
+        const far = toPx({ x: 80, y: 62 })
+        await page.mouse.click(far.x, far.y)
+        await idleOf(character)
+        await page.locator('[data-testid="proto25d-place-open"]').click()
+        const bp = toPx(DEMO_BUILDING_CENTER_PCT)
+        await page.mouse.click(bp.x, bp.y)
+        const walking = await waitUntil(async () => (await phaseOf(character)) === 'walking', { timeout: 1500 })
+        r.check(`${name} 사전조건 — walking`, !!walking)
+        const wt = await root.getAttribute('data-walk-target')
+        r.check(`${name} — 걷는 동안 data-walk-target 미설정(상점 의도 없음)`, wt === null, String(wt))
+        await idleOf(character)
+        r.check(`${name} — 도착해도 상점 안 열림`, (await shopOverlay.count()) === 0)
+      } catch (err) { failS33(name, err) } finally { collect(mocks); await context.close() }
+    }
+
+    {
+      const name = 'S33-F2[1280x800,viewitems-while-closing-no-stale-flag]'
+      const { context, page, mocks, character, ground, shopOverlay } = await newPageS33(37)
+      try {
+        await buyBenchViaShop(page, character, ground)
+        await page.locator('[data-testid="proto25d-shop-notice-viewitems"]').waitFor({ state: 'visible', timeout: 1500 })
+        // 같은 task 안에서 뒤로가기 → 내 물건 보기 — 뒤로가기가 busy를 잡은 뒤의 호출.
+        // (F6 가드 400ms 안이라 viewitems 자체가 무시될 수도 있지만 어느 쪽이든
+        // "패널이 열리지 않음"이 계약이다.)
+        await page.evaluate(() => {
+          document.querySelector('[data-testid="proto25d-shop-back"]').click()
+          document.querySelector('[data-testid="proto25d-shop-notice-viewitems"]')?.click()
+        })
+        const closed = await shopOverlay.waitFor({ state: 'hidden', timeout: 3000 }).then(() => true).catch(() => false)
+        r.check(`${name} 사전조건 — 가게 닫힘`, closed)
+        await page.waitForTimeout(800)
+        r.check(`${name} — 뒤로가기 의도였으므로 내 물건 패널이 열리지 않음`, (await page.locator('[data-testid="proto25d-myitems-panel"]').count()) === 0)
+      } catch (err) { failS33(name, err) } finally { collect(mocks); await context.close() }
+    }
+
+    {
+      const name = 'S33-F3[1280x800,success-notice-sticky]'
+      const { context, page, mocks, character, ground } = await newPageS33(37)
+      try {
+        await buyBenchViaShop(page, character, ground)
+        const vi = page.locator('[data-testid="proto25d-shop-notice-viewitems"]')
+        await vi.waitFor({ state: 'visible', timeout: 1500 })
+        await page.waitForTimeout(2600)
+        r.check(`${name} — 2.6초 뒤에도 "내 물건 보기" 버튼이 남아 있음`, (await vi.count()) === 1 && (await vi.isVisible()))
+        await page.locator('[data-testid="proto25d-shop-notice-continue"]').click()
+        r.check(`${name} — 계속 쇼핑하기로 안내 제거`, (await page.locator('[data-testid="proto25d-shop-notice"]').count()) === 0)
+      } catch (err) { failS33(name, err) } finally { collect(mocks); await context.close() }
+    }
+    {
+      const name = 'S33-F3b[1280x800,error-notice-autohides]'
+      const { context, page, mocks, character, ground } = await newPageS33(3)
+      try {
+        await buyBenchViaShop(page, character, ground)
+        const notice = page.locator('[data-testid="proto25d-shop-notice"]')
+        await notice.waitFor({ state: 'visible', timeout: 1500 })
+        const txt = (await notice.textContent()) || ''
+        r.check(`${name} 사전조건 — 부족 안내`, txt.includes('부족'), txt)
+        const gone = await waitUntil(async () => (await notice.count()) === 0, { timeout: 2800 })
+        r.check(`${name} — 오류 안내는 ~2초 뒤 사라짐`, !!gone)
+      } catch (err) { failS33(name, err) } finally { collect(mocks); await context.close() }
+    }
+
+    {
+      const name = 'S33-F4[1280x800,sitting-tap-building-opens-shop]'
+      const { context, page, mocks, character, ground, viewportEl, shopOverlay, toPx } = await newPageS33(37)
+      try {
+        await buyBenchViaShop(page, character, ground)
+        await page.locator('[data-testid="proto25d-shop-back"]').click()
+        await waitUntil(async () => (await shopOverlay.count()) === 0, { timeout: 3000 })
+        await idleOf(character)
+        await page.locator('[data-testid="proto25d-place-open"]').click()
+        const slot = await findTappableSlot(page, character, ground, viewportEl, null)
+        r.check(`${name} 사전조건 — 탭 가능한 슬롯`, !!slot)
+        if (slot) {
+          await page.mouse.click(slot.pt.x, slot.pt.y)
+          await waitUntil(async () => (await page.locator('[data-testid="proto25d-placed-item"]').count()) === 1, { timeout: 2000 })
+          await idleOf(character)
+          await page.mouse.click(slot.pt.x, slot.pt.y) // 배치된 의자 탭 → 앉으러 감
+          const sat = await waitUntil(async () => (await phaseOf(character)) === 'sitting', { timeout: 10000 })
+          r.check(`${name} 사전조건 — 앉음(sitting)`, !!sat)
+          const bp = toPx(DEMO_BUILDING_CENTER_PCT)
+          await page.mouse.click(bp.x, bp.y)
+          const opened = await shopOverlay.waitFor({ state: 'visible', timeout: 9000 }).then(() => true).catch(() => false)
+          r.check(`${name} — 앉은 채 건물 탭 → 일어나 걸어가 상점이 자동으로 열림`, opened)
+        }
+      } catch (err) { failS33(name, err) } finally { collect(mocks); await context.close() }
+    }
+
+    // F6 — 구매 확인 더블탭의 두 번째 탭은 CTA 가드(400ms)에 막힌다.
+    {
+      const name = 'S33-F6[1280x800,cta-guard-double-tap]'
+      const { context, page, mocks, character, shopOverlay, toPx } = await newPageS33(37)
+      try {
+        const entrancePt = toPx(SHOP_ENTRANCE_PCT_REF)
+        await page.mouse.click(entrancePt.x, entrancePt.y)
+        await idleOf(character)
+        await page.locator('[data-testid="proto25d-shop-enter"]').click()
+        await shopOverlay.waitFor({ state: 'visible', timeout: 3000 })
+        await page.locator('[data-testid="proto25d-shop-buy"]').first().click()
+        await page.locator('[data-testid="proto25d-shop-confirm"]').waitFor({ state: 'visible', timeout: 1000 })
+        await page.locator('[data-testid="proto25d-shop-confirm-yes"]').dblclick({ delay: 20 })
+        await page.waitForTimeout(100)
+        const notice = page.locator('[data-testid="proto25d-shop-notice"]')
+        const vi = page.locator('[data-testid="proto25d-shop-notice-viewitems"]')
+        const cont = page.locator('[data-testid="proto25d-shop-notice-continue"]')
+        r.check(`${name} — 더블탭 ~100ms 뒤에도 성공 안내 + CTA 2개가 그대로 보임(두 번째 탭 무시)`,
+          (await notice.isVisible()) && (await vi.isVisible()) && (await cont.isVisible()) && (await shopOverlay.count()) === 1)
+        await page.waitForTimeout(450)
+        await cont.click()
+        r.check(`${name} — 가드(400ms) 경과 후 "계속 쇼핑하기"가 정상 동작`, !!(await waitUntil(async () => (await notice.count()) === 0, { timeout: 1000 })))
+      } catch (err) { failS33(name, err) } finally { collect(mocks); await context.close() }
     }
   }
 
