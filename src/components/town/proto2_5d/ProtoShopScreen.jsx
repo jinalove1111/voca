@@ -23,12 +23,22 @@ import { coinBadgeText, coinBadgeAriaLabel } from '../../../utils/town/proto2_5d
 // 안내 토스트가 화면에 머무는 시간(ms) — 요구사항 "약 2초" 그대로.
 const PURCHASE_NOTICE_MS = 2000
 
+// 리뷰 대응(2026-10-01, F6) — 성공 안내의 다음 행동 버튼이 뜬 직후 이 시간(ms)
+// 동안은 그 버튼 클릭을 무시한다. 버튼들이 바로 직전 프레임의 구매 확인
+// 다이얼로그 "확인" 버튼과 거의 같은 화면 위치에 떠서, 아이가 "확인"을
+// 더블탭하면 두 번째 탭이 "계속 쇼핑하기"(안내 닫힘)/"내 물건 보기"(가게
+// 닫힘)에 떨어졌다(S21 항목b 실측 FAIL). 레이아웃을 옮겨도 더블탭은 어디든
+// 닿을 수 있어 가드가 근본 수정 — Proto25DScreen SHOP_REENTRY_GUARD_MS와 같은 400.
+const CTA_GUARD_MS = 400
+
 export default function ProtoShopScreen({ products, onBack, closing, balance, purchasedIds, onPurchase, onViewMyItems }) {
   const [noticeText, setNoticeText] = useState(null)
   // 리뷰 대응(2026-09-30, 2차, stage 3 "구매 경험 연결") — 지금 뜬 안내가
   // "구매 성공" 안내일 때만 true(부족/이미 구매 안내에는 false) — 이
   // 값만으로 아래 두 다음-행동 버튼("🎒 내 물건 보기"/"계속 쇼핑하기")의
-  // 노출을 제어한다. 별도 타이머 없음 — 기존 noticeTimerRef가 noticeText를
+  // 노출을 제어한다. 성공 안내는 자동 숨김 없이 sticky(2026-10-01 F3 —
+  // 아래 showNotice 참고), 오류 안내의 타이머가 이 값도 함께 내린다.
+  // 아래 원문 주석은 당시(2초 자동 숨김) 기준이다 — 기존 noticeTimerRef가 noticeText를
   // null로 되돌리는 순간(PURCHASE_NOTICE_MS 뒤) 렌더 조건(`noticeText &&
   // purchaseNoticeActive`)이 자동으로 false가 되어 버튼도 함께 사라진다
   // (새 타이머를 안 만드는 게 재구현보다 낫다는 ponytail 원칙 — 기존
@@ -36,6 +46,7 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
   const [purchaseNoticeActive, setPurchaseNoticeActive] = useState(false)
   const [confirmProduct, setConfirmProduct] = useState(null)
   const noticeTimerRef = useRef(null)
+  const ctaArmedAtRef = useRef(0)
 
   // 언마운트 시 예약된 안내 타이머 정리(setState-after-unmount 방지 —
   // Proto25DScreen.jsx의 기존 타이머 정리 관례와 동일).
@@ -43,12 +54,21 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
     if (noticeTimerRef.current != null) clearTimeout(noticeTimerRef.current)
   }, [])
 
-  function showNotice(text) {
+  // 리뷰 대응(2026-10-01, F3) — 구매 성공 안내(다음 행동 버튼 포함)는 sticky:
+  // 2초 뒤 자동으로 사라지면 아이가 읽고 누르기 전에 버튼이 없어지고
+  // 키보드 포커스도 증발한다. "계속 쇼핑하기"(handleDismissNotice)나 가게
+  // 언마운트로만 사라진다. 오류 안내는 기존대로 2초 자동 숨김 — 타이머가
+  // 안내 텍스트와 purchaseNoticeActive를 함께 내려 둘이 어긋나지 않게 한다.
+  function showNotice(text, { sticky = false } = {}) {
     if (noticeTimerRef.current != null) clearTimeout(noticeTimerRef.current)
+    noticeTimerRef.current = null
     setNoticeText(text)
+    setPurchaseNoticeActive(sticky)
+    if (sticky) { ctaArmedAtRef.current = performance.now(); return }
     noticeTimerRef.current = setTimeout(() => {
       noticeTimerRef.current = null
       setNoticeText(null)
+      setPurchaseNoticeActive(false)
     }, PURCHASE_NOTICE_MS)
   }
 
@@ -81,20 +101,18 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
     const result = onPurchase(item)
     setConfirmProduct(null)
     if (result.ok) {
-      showNotice('구매 완료! 마을에서 🪑 배치하기를 눌러요') // F2 — 다음 행동 안내("구매 완료" 문구 유지)
-      setPurchaseNoticeActive(true)
+      showNotice('구매 완료! 마을에서 🪑 배치하기를 눌러요', { sticky: true }) // F2 — 다음 행동 안내("구매 완료" 문구 유지)
     } else if (result.reason === 'purchased') {
       showNotice('이미 구매했어요')
-      setPurchaseNoticeActive(false)
     } else {
       showNotice('Paul Dollar가 부족해요')
-      setPurchaseNoticeActive(false)
     }
   }
 
   // 리뷰 대응(stage 3, 요구사항4) — "계속 쇼핑하기": 안내만 즉시 지우고
   // 가게에는 그대로 남는다(다른 부수효과 없음 — 새 구매/닫기 없음).
   function handleDismissNotice() {
+    if (performance.now() - ctaArmedAtRef.current < CTA_GUARD_MS) return // F6
     if (noticeTimerRef.current != null) { clearTimeout(noticeTimerRef.current); noticeTimerRef.current = null }
     setNoticeText(null)
     setPurchaseNoticeActive(false)
@@ -233,7 +251,7 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
               <button
                 type="button"
                 data-testid="proto25d-shop-notice-viewitems"
-                onClick={onViewMyItems}
+                onClick={() => { if (performance.now() - ctaArmedAtRef.current >= CTA_GUARD_MS) onViewMyItems() }} // F6
                 className="min-h-[44px] px-4 rounded-xl bg-emerald-500 text-white text-sm font-black shadow btn-press"
               >
                 🎒 내 물건 보기
