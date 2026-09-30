@@ -20,6 +20,12 @@
 // walkGrid.js/sceneFixture.js/pathfinding.js는 전혀 손대지 않는다(팀장
 // 지시 — 씬 지오메트리 재정의 아님, CLAUDE.md 규칙 3).
 import { OBSTACLES, CELL_W_PCT, CELL_H_PCT, nearestWalkablePoint } from './walkGrid'
+// 마을 산책형 상점 방문 1단계(2026-09-30) — 건물 탭 hit-test에 기존
+// 벤치 탭과 동일한 (point,rect,pad) 판정(isBenchTap/benchTapPad)을 그대로
+// 재사용한다(새 히트박스 판정 로직 없음, 팀장 지시 그대로). 두 함수 모두
+// rect 매개변수를 받는 순수 함수라 "벤치 전용"이 아니다(startWalkToSeat이
+// 벤치/배치 의자에 재사용한 것과 동일한 매개변수화).
+import { isBenchTap, benchTapPad } from './benchInteraction'
 
 // 가게로 쓰는 씬 오브젝트 id — sceneFixture.js/walkGrid.js의 기존 데모
 // 건물(집 한 채)을 그대로 재사용한다(새 씬 오브젝트 추가 없음).
@@ -72,10 +78,62 @@ export const SHOP_RADIUS = Object.freeze({ x: 2 * CELL_W_PCT, y: 2 * CELL_H_PCT 
  * @returns {boolean}
  */
 export function isNearShopEntrance(charX, charY) {
-  if (!Number.isFinite(charX) || !Number.isFinite(charY)) return false
-  const dx = charX - SHOP_ENTRANCE.x
-  const dy = charY - SHOP_ENTRANCE.y
-  return (dx / SHOP_RADIUS.x) ** 2 + (dy / SHOP_RADIUS.y) ** 2 <= 1
+  return shopArrivalOk(SHOP_BUILDINGS[0], charX, charY)
+}
+
+// 마을 산책형 상점 방문 1단계(2026-09-30, 팀장 지시) — 건물별 접근
+// 지점/반경/콜리전을 데이터로 분리한다. 지금은 데모 건물 1개뿐이지만
+// 목록으로 만들어 두면 건물이 늘어도 findTappedShop/shopArrivalOk가
+// 그대로 동작한다(호출부가 화면별 고정 픽셀값을 갖지 않는다). 기존
+// SHOP_ID/SHOP_ENTRANCE/SHOP_RADIUS/SHOP_COLLISION_RECT export는 그대로
+// 유지한다(재구현 없음, scripts/testProto25dShop.mjs 기존 단언 호환).
+export const SHOP_BUILDINGS = Object.freeze([
+  Object.freeze({ id: SHOP_ID, entrance: SHOP_ENTRANCE, radius: SHOP_RADIUS, collisionRect: SHOP_COLLISION_RECT }),
+])
+
+/**
+ * 좌표(x,y)가 shop.entrance 중심의 shop.radius 타원 반경 안인지 —
+ * isNearShopEntrance와 동일한 (dx/rx)²+(dy/ry)²<=1 판정(경계 포함)을
+ * 특정 shop 하나에 일반화한다. 비정상 입력은 크래시 대신 false로 폴백.
+ * @param {{entrance:{x:number,y:number},radius:{x:number,y:number}}} shop
+ * @param {number} x
+ * @param {number} y
+ * @returns {boolean}
+ */
+export function shopArrivalOk(shop, x, y) {
+  if (!shop || !Number.isFinite(x) || !Number.isFinite(y)) return false
+  const dx = x - shop.entrance.x
+  const dy = y - shop.entrance.y
+  return (dx / shop.radius.x) ** 2 + (dy / shop.radius.y) ** 2 <= 1
+}
+
+/**
+ * 탭 지점(world-%)이 SHOP_BUILDINGS 중 어느 건물의 콜리전 박스(+44px 하한
+ * 패딩) 안인지 — Proto25DScreen.jsx의 기존 벤치/배치 의자 탭 판정과 동일한
+ * hit-test(isBenchTap/benchTapPad)를 그대로 쓴다(새 판정 로직 없음).
+ * 목록 순서대로 첫 매치를 반환(오늘은 건물이 1개뿐이라 겹침 걱정 없음).
+ *
+ * 입구 반경(shopArrivalOk) 안의 탭은 건물 탭으로 치지 않는다 — 회귀로 실측
+ * 발견: 이 건물의 44px 하한 패딩(최소 BENCH_TAP_PAD_PCT=2)과 입구 지점의
+ * 간격(SHOP_ENTRANCE_GAP_PCT=2)이 우연히 같은 값이라, 콜리전 박스의 패딩된
+ * y1 경계(40+2=42)가 입구 지점(y=42)과 정확히 맞닿는다 — 정확히 입구 지점을
+ * 탭하면(기존 S18 e2e가 이미 이 정확한 좌표를 탭해 "버튼이 뜨고 자동으로는
+ * 안 열림"을 검증) 부동소수점 반올림에 따라 건물 탭으로도, 아닌 것으로도
+ * 판정될 수 있었다(뷰포트별로 갈림 — verify:e2e S18[390x844]에서 실측
+ * FAIL, CLAUDE.md 규칙15 "회귀 의심 시 실제 FAIL 확인"으로 원인 확정).
+ * 이미 입구 반경 안이면 "건물을 보고 그리로 걸어가야 하는" 상황이 아니라
+ * 이미 도착해 있거나 도착 직전이므로, 그 탭은 원래 계약대로(재구현 없이)
+ * 일반 걷기/좌석 탭 경로로 그대로 흘려보낸다.
+ * @param {{x:number,y:number}} rawPoint
+ * @param {{groundWidthPx:number,groundHeightPx:number}} groundPx
+ * @returns {object|null} 매치한 SHOP_BUILDINGS 항목, 없으면 null
+ */
+export function findTappedShop(rawPoint, groundPx) {
+  for (const shop of SHOP_BUILDINGS) {
+    if (shopArrivalOk(shop, rawPoint?.x, rawPoint?.y)) continue
+    if (isBenchTap(rawPoint, shop.collisionRect, benchTapPad(shop.collisionRect, groundPx))) return shop
+  }
+  return null
 }
 
 // 상품 1종(경제 단계 B, 2026-09-27 — 화면 상태만 차감, 서버/DB 쓰기 없음).

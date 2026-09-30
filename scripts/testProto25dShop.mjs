@@ -32,6 +32,7 @@ await esbuild.build({
 const {
   SHOP_ID, SHOP_COLLISION_RECT, SHOP_ENTRANCE_RAW, SHOP_ENTRANCE, getShopEntrance,
   SHOP_RADIUS, isNearShopEntrance, SHOP_PRODUCTS, tryPurchase,
+  SHOP_BUILDINGS, shopArrivalOk, findTappedShop,
 } = await import(`${pathToFileURL(SHOP_BUNDLE_PATH).href}?t=${Date.now()}`)
 
 const GRID_BUNDLE_PATH = path.join(TMP_DIR, 'proto25dWalkGridForShop.bundle.mjs')
@@ -223,6 +224,68 @@ section('8. tryPurchase — balance/price 조합별 성공/실패, 입력 불변
   const before = 37
   tryPurchase(before, 5)
   check('입력(balance 원시값)이 호출 후에도 변하지 않음', before === 37)
+}
+
+// ── 9. SHOP_BUILDINGS — 건물별 접근 지점 목록(값 복제 아님) ─────────────
+section('9. SHOP_BUILDINGS — 정확히 1개, 기존 export와 동일 값 참조(재도출 아님)')
+{
+  check('SHOP_BUILDINGS가 정확히 1개', Array.isArray(SHOP_BUILDINGS) && SHOP_BUILDINGS.length === 1, JSON.stringify(SHOP_BUILDINGS))
+  const shop = SHOP_BUILDINGS[0]
+  check('SHOP_BUILDINGS[0].id === SHOP_ID', shop.id === SHOP_ID)
+  check('SHOP_BUILDINGS[0].entrance === SHOP_ENTRANCE(동일 값)', JSON.stringify(shop.entrance) === JSON.stringify(SHOP_ENTRANCE))
+  check('SHOP_BUILDINGS[0].radius === SHOP_RADIUS(동일 값)', JSON.stringify(shop.radius) === JSON.stringify(SHOP_RADIUS))
+  check('SHOP_BUILDINGS[0].collisionRect === SHOP_COLLISION_RECT(동일 값)', JSON.stringify(shop.collisionRect) === JSON.stringify(SHOP_COLLISION_RECT))
+  check('SHOP_BUILDINGS가 frozen', Object.isFrozen(SHOP_BUILDINGS))
+  check('SHOP_BUILDINGS[0]이 frozen', Object.isFrozen(shop))
+}
+
+// ── 10. shopArrivalOk — isNearShopEntrance와 동치(일반화가 회귀 없음) ────
+section('10. shopArrivalOk(shop,x,y) — SHOP_BUILDINGS[0]에 대해 isNearShopEntrance와 항상 동일 결과')
+{
+  const shop = SHOP_BUILDINGS[0]
+  const { x: ex, y: ey } = SHOP_ENTRANCE
+  const { x: rx, y: ry } = SHOP_RADIUS
+  const samples = [
+    [ex, ey], [ex + rx * 0.5, ey + ry * 0.5], [ex + rx * 1.05, ey], [ex, ey + ry * 1.05],
+    [0, 0], [NaN, ey], [ex, undefined],
+  ]
+  for (const [x, y] of samples) {
+    check(`shopArrivalOk(shop,${x},${y}) === isNearShopEntrance(${x},${y})`, shopArrivalOk(shop, x, y) === isNearShopEntrance(x, y))
+  }
+  check('shopArrivalOk(null,0,0) — 예외 없이 false(안전 폴백)', shopArrivalOk(null, 0, 0) === false)
+}
+
+// ── 11. findTappedShop — 건물 콜리전 박스(+44px 하한 패딩) hit-test ──────
+section('11. findTappedShop(rawPoint,groundPx) — 건물 rect 안/밖, 좁은 뷰포트 44px 패딩, 도달 불가 시 null')
+{
+  const wideGroundPx = { groundWidthPx: 2000, groundHeightPx: 2000 } // 여유 충분 — nominal rect 그대로 44px 이상.
+  const center = { x: (SHOP_COLLISION_RECT.x0 + SHOP_COLLISION_RECT.x1) / 2, y: (SHOP_COLLISION_RECT.y0 + SHOP_COLLISION_RECT.y1) / 2 }
+  const hit = findTappedShop(center, wideGroundPx)
+  check('건물 중심 탭 — SHOP_BUILDINGS[0]을 반환', !!hit && hit.id === SHOP_ID, JSON.stringify(hit))
+  check('건물에서 한참 먼 지점(0,0) 탭 — null', findTappedShop({ x: 0, y: 0 }, wideGroundPx) === null)
+  // 좁은 뷰포트 — nominal rect가 44px 미만이 되도록 groundWidthPx/HeightPx를
+  // 아주 작게 줘서, 콜리전 박스 바로 바깥(원본 rect 밖)의 점도 44px 하한
+  // 패딩 덕분에 여전히 히트해야 한다(benchTapPad와 동일 계약).
+  const narrowGroundPx = { groundWidthPx: 100, groundHeightPx: 100 }
+  const justOutside = { x: SHOP_COLLISION_RECT.x1 + 0.5, y: center.y } // rect 밖 0.5%p, 44px 패딩이면 커버되어야 함
+  check(
+    '좁은 뷰포트에서 콜리전 박스 바로 바깥 탭도 44px 하한 패딩으로 히트(narrow viewport)',
+    findTappedShop(justOutside, narrowGroundPx) !== null,
+  )
+  check('같은 지점, 매우 넓은 뷰포트(패딩이 원본 크기 대비 작음)에서는 원본 rect를 벗어나면 미스일 수 있음(계약 확인용, 결정론만 체크)', findTappedShop(justOutside, wideGroundPx) === findTappedShop(justOutside, wideGroundPx))
+
+  // 회귀 고정(2026-09-30, verify:e2e S18[390x844] 실측 FAIL로 발견) — 건물
+  // 콜리전 박스의 44px 하한 패딩(최소 BENCH_TAP_PAD_PCT=2)이 입구 지점 간격
+  // (SHOP_ENTRANCE_GAP_PCT=2)과 우연히 같은 값이라 패딩된 y1 경계(40+2=42)가
+  // 입구 지점(y=42)과 정확히 맞닿는다 — 입구 지점 자체를 탭하면 건물 탭이
+  // 아니라 null이어야 한다(기존 S18 e2e "정확히 입구를 탭하면 자동으로 안
+  // 열리고 버튼이 뜬다" 계약).
+  check('입구 지점(SHOP_ENTRANCE) 자체를 탭 — 건물 탭이 아님(null), 부동소수점 경계 이슈 없이 항상 결정론적으로 제외됨',
+    findTappedShop(SHOP_ENTRANCE, wideGroundPx) === null)
+  check('입구 지점 좁은 뷰포트(44px 패딩 커짐)에서도 여전히 건물 탭이 아님(null)',
+    findTappedShop(SHOP_ENTRANCE, narrowGroundPx) === null)
+  check('건물 중심(입구 반경 밖)은 여전히 정상적으로 건물 탭으로 히트함(과도한 제외 아님)',
+    !!findTappedShop(center, wideGroundPx))
 }
 
 // ── 결과 ──────────────────────────────────────────────────────────────
