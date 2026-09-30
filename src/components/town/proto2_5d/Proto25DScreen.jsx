@@ -904,11 +904,15 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // phase가 이미 'leaving'(기립 중)이면 아무 것도 하지 않는다(기립 도중
   // 재탭에 대한 재지정은 이번 최소 구현 범위 밖 — 기립이 끝나면 idle이라
   // 그 다음 탭부터는 정상 동작).
-  function standUpFromPlacedSeat(redirectPoint) {
+  // 리뷰 대응(2026-10-01, F4) — 인자를 좌표가 아니라 onIdle 콜백으로 바꿨다:
+  // 이전엔 기립 후 무조건 startPlainWalk(탭 지점)이라, 앉은 채 건물/다른
+  // 의자를 탭하면 그 앞까지만 걷고 상점이 안 열리거나 안 앉았다. 호출부가
+  // idle 탭과 같은 4분기 분류(dispatchTap)를 넘긴다.
+  function standUpFromPlacedSeat(onIdle) {
     if (characterRef.current.phase !== 'sitting') return
     clearHoldTimer()
     const seq = seqRef.current
-    enterLeaving(seq, redirectPoint ? () => startPlainWalk(redirectPoint) : undefined)
+    enterLeaving(seq, onIdle || undefined)
   }
 
   // S28(요구사항5) — 지금 걷고 있거나(pendingSit) 앉아있는 좌석이 바로
@@ -946,6 +950,41 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // 1차 — shopCloseFallbackTimerRef(가게 닫기 세이프티 타이머)도 함께
   // 정리한다.
   useEffect(() => () => { clearWalkTimer(); clearHoldTimer(); clearShopCloseFallbackTimer(); releasePlaceBack(); releaseMyItemsBack() }, [])
+
+  // 탭 지점 분류 — 벤치 > 배치 의자 > 건물 순(예전엔 handleGroundPointerUp
+  // 본문에 인라인). 리뷰 대응(2026-10-01, F4)으로 추출: 앉아 있다 일어난 뒤
+  // 재지정(standUpFromPlacedSeat onIdle)도 idle 탭과 똑같이 분류해야 해서 두
+  // 경로가 이 함수 하나를 공유한다. 배치 모드 여부는 onIdle 클로저가 낡은
+  // 렌더의 placingItemId를 잡지 않도록 placingRef.current로 읽는다.
+  function classifyTap(rawPoint, groundPx) {
+    const tapPad = benchTapPad(BENCH, groundPx)
+    const tappedBench = isBenchTap(rawPoint, BENCH, tapPad)
+    // S28(요구사항2) — 배치 의자 탭(벤치가 아닐 때만 검사 — 슬롯은 벤치와
+    // 겹치지 않지만 우선순위를 명확히 고정).
+    const tappedPlaced = tappedBench ? null : findTappedPlacedSlot(rawPoint, groundPx)
+    // 마을 산책형 상점 방문 1단계(2026-09-30) — 건물 탭(벤치/배치 의자가
+    // 아닐 때만 검사 — 씬 상 겹치지 않지만 우선순위를 명확히 고정, 위
+    // tappedPlaced와 동일한 관례).
+    // 리뷰 대응(2026-10-01, F1) — 배치 모드 중엔 건물 탭을 상점 의도로 치지
+    // 않는다(일반 걷기). 이전엔 입구까지 걸어가 놓고 도착 시 handleEnterShop의
+    // placingRef 가드에 막혀 아무 것도 안 열려, 캐릭터가 문 앞에서 그냥 멈추는
+    // 막다른 길이었다. 가드 자체는 이중 방어선으로 그대로 둔다.
+    const tappedShop = (tappedBench || tappedPlaced || placingRef.current) ? null : findTappedShop(rawPoint, groundPx)
+    return { tappedBench, tappedPlaced, tappedShop }
+  }
+
+  // 분류된 탭 하나를 실제 걷기로 옮기는 4분기 — idle 탭과 기립 후 재지정 공용.
+  function dispatchTap(rawPoint, { tappedBench, tappedPlaced, tappedShop }) {
+    if (tappedBench) {
+      startWalkToBench()
+    } else if (tappedPlaced) {
+      startWalkToPlacedSeat(tappedPlaced.pl, tappedPlaced.rect)
+    } else if (tappedShop) {
+      startWalkToShop(tappedShop)
+    } else {
+      startPlainWalk(rawPoint)
+    }
+  }
 
   function handleGroundPointerDown(e) {
     pendingShopFocusRef.current = false // F2 — 아이가 이미 바닥을 눌렀으면 가게 버튼으로 포커스를 옮기지 않는다
@@ -1070,7 +1109,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
         const groundPxSit = { groundWidthPx: rect.width, groundHeightPx: rect.height }
         const tappedSameChair = findTappedPlacedSlot(rawPoint, groundPxSit)
         const sameChair = !!tappedSameChair && `placed:${tappedSameChair.pl.itemId}` === cur.sitTargetKey
-        standUpFromPlacedSeat(sameChair ? null : rawPoint)
+        standUpFromPlacedSeat(sameChair ? null : () => dispatchTap(rawPoint, classifyTap(rawPoint, groundPxSit)))
       }
       return
     }
@@ -1083,16 +1122,8 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     // 타겟이 44x44px 이상이 되도록, 새 이벤트 경로 없이 이 hit-test 단계의
     // 패딩 크기만 조정한다).
     const groundPx = { groundWidthPx: rect.width, groundHeightPx: rect.height }
-    const tapPad = benchTapPad(BENCH, groundPx)
-    const tappedBench = isBenchTap(rawPoint, BENCH, tapPad)
-    // S28(요구사항2) — 배치 의자 탭(벤치가 아닐 때만 검사 — 슬롯은 벤치와
-    // 겹치지 않지만 우선순위를 명확히 고정).
-    const tappedPlaced = tappedBench ? null : findTappedPlacedSlot(rawPoint, groundPx)
+    const { tappedBench, tappedPlaced, tappedShop } = classifyTap(rawPoint, groundPx)
     const tappedSeatKey = tappedBench ? 'bench' : (tappedPlaced ? `placed:${tappedPlaced.pl.itemId}` : null)
-    // 마을 산책형 상점 방문 1단계(2026-09-30) — 건물 탭(벤치/배치 의자가
-    // 아닐 때만 검사 — 씬 상 겹치지 않지만 우선순위를 명확히 고정, 위
-    // tappedPlaced와 동일한 관례).
-    const tappedShop = (tappedBench || tappedPlaced) ? null : findTappedShop(rawPoint, groundPx)
 
     // 항목7 — 이미 좌석(벤치든 배치 의자든)을 향해 걷는 중(pendingSit)에
     // 같은 좌석을 다시 탭하면 중복 시퀀스를 만들지 않고 무시한다.
@@ -1113,15 +1144,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     // 여기서 탭 리플을 띄운다(항목C2 — startPlainWalk/startWalkToBench와
     // 같은 지점, 마우스/터치 공용 — 이 핸들러가 두 입력 모두를 받는다).
     showTapRipple({ x: rawLeftPct, y: rawTopPct })
-    if (tappedBench) {
-      startWalkToBench()
-    } else if (tappedPlaced) {
-      startWalkToPlacedSeat(tappedPlaced.pl, tappedPlaced.rect)
-    } else if (tappedShop) {
-      startWalkToShop(tappedShop)
-    } else {
-      startPlainWalk(rawPoint)
-    }
+    dispatchTap(rawPoint, { tappedBench, tappedPlaced, tappedShop })
   }
 
   function handleGroundPointerCancel(e) {
@@ -1166,6 +1189,7 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     // 취소되고 나머지는 평소와 동일".
     if (shopBusyRef.current || shopOpen || placingRef.current || myItemsOpenRef.current || performance.now() < shopReentryBlockedUntilRef.current) return
     shopBusyRef.current = true
+    pendingOpenMyItemsAfterCloseRef.current = false // F2 — 새 가게 세션은 이전 "내 물건 보기" 예약을 물려받지 않는다.
     // 마을 산책형 상점 방문 2단계(요구사항1) — 걷는 중(walking)에 열리면
     // (도착 콜백 경로는 이미 idle이라 여기선 무해한 재확인, 버튼을 직접
     // 눌렀는데 마침 이동 경로가 입구 반경을 스쳐 지나가는 드문 경우가
@@ -1460,7 +1484,12 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // requestCloseShop()과 완전히 동일한 닫기 경로를 그대로 태운다(뒤로가기
   // 버튼과 다른 동작을 만들지 않는다) — 다음 열기는 위 effect가 닫힘
   // 완료를 감지한 뒤에만 한다.
+  // 리뷰 대응(2026-10-01, F2) — requestCloseShop이 조용히 no-op인 조건(닫기
+  // 진행 중/이미 닫힘)에선 예약 플래그도 세팅하지 않는다. 이전엔 플래그만
+  // 남아 있다가 나중의 평범한 닫기(뒤로가기 등)가 내 물건 패널을 뜬금없이
+  // 열었다. handleEnterShop도 새 가게 세션 시작 시 플래그를 비운다.
   function handleViewMyItemsFromShop() {
+    if (shopBusyRef.current || !shopOpen) return
     pendingOpenMyItemsAfterCloseRef.current = true
     requestCloseShop()
   }
@@ -1490,6 +1519,10 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   return (
     <div
       data-testid="proto25d-root"
+      // a11y 속성은 data-* 앞에 둔다 — testProto25dSpriteAdapter가 root 뒤 900자 창에서 role/aria-label을 찾는다(data-* 추가로 밀려나지 않게).
+      // Phase 6D(2026-09-25) — 오버레이 역할/이름만 부여(포커스 관리 없음).
+      role="region"
+      aria-label="Paul Town 2.5D 프로토타입"
       // Phase 6A — 장애물 개수를 하드코딩된 리터럴 없이 DOM에서 직접
       // 읽을 수 있게 노출한다(E2E가 "OBSTACLES_REF 3개" 같은 고정 상수
       // 대신 이 속성으로 실제 개수를 재확인 — walkGrid.js 헤더 주석의
@@ -1510,9 +1543,6 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
       // Phase C — 배치 개수/배치 모드 여부(테스트 계측용).
       data-proto25d-placed-count={placements.length}
       data-placing={placingItemId ? 'true' : 'false'}
-      // Phase 6D(2026-09-25) — 오버레이 역할/이름만 부여(포커스 관리 없음).
-      role="region"
-      aria-label="Paul Town 2.5D 프로토타입"
       ref={rootRef}
       tabIndex={-1} // F2 — 포커스 복귀 대상(배치하기/가게 버튼이 없을 때)
       className="fixed inset-0 z-[9999] bg-[#dff3ea] flex flex-col outline-none"
