@@ -406,6 +406,27 @@ function boxContainsPoint(box, pt, marginPx = 0) {
   )
 }
 
+// 셋업 정리용 — 열려 있는 가게를(구매 확인/성공 안내가 떠 있어도) 안전하게
+// 닫는다. 위치 잡기용 hop 클릭이 도착 직후 자동으로 열린 가게의 "사기" 위에
+// 떨어져 확인창이 열리는 경쟁(2026-10-01 S17 플레이크)을 셋업 단계에서 정리한다.
+// 제품 동작은 정상(확인창이 뒤 탭을 막음) — 테스트 셋업 견고성만 보강.
+async function closeShopIfOpen(page) {
+  const tid = (id) => page.locator(`[data-testid="${id}"]`)
+  if ((await tid('proto25d-shop').count()) === 0) return
+  if ((await tid('proto25d-shop-confirm').count()) > 0) {
+    await tid('proto25d-shop-confirm-no').click().catch(() => {})
+    await waitUntil(async () => (await tid('proto25d-shop-confirm').count()) === 0, { timeout: 2000 })
+  }
+  if ((await tid('proto25d-shop-notice-continue').count()) > 0) {
+    await page.waitForTimeout(450) // CTA 가드(CTA_GUARD_MS=400)
+    await tid('proto25d-shop-notice-continue').click().catch(() => {})
+  }
+  if ((await tid('proto25d-shop').count()) > 0) {
+    await tid('proto25d-shop-back').click().catch(() => {})
+    await waitUntil(async () => (await tid('proto25d-shop').count()) === 0, { timeout: 3000 })
+  }
+}
+
 // 목표 world-% 지점(targetPct)이 지금 화면(뷰포트 ∩ 바닥)에 보이는지
 // 확인하고, 안 보이면 그 화면 안에서(안쪽 insetPx 여백을 두고) 목표
 // 방향으로 최대한 이동하는 지점을 탭해 캐릭터를 그 쪽으로 걷게 한 뒤
@@ -428,6 +449,7 @@ async function ensureWorldPointVisible(page, character, groundLocator, viewportL
     await waitUntil(async () => (
       (await character.getAttribute('data-character-phase').catch(() => null)) === 'idle'
     ), { timeout: 8000 })
+    await closeShopIfOpen(page) // hop이 입구/건물에 도착해 가게가 자동으로 열렸다면 다음 클릭 전에 닫는다.
     groundBox = await groundLocator.boundingBox()
     viewportBox = await viewportLocator.boundingBox()
     visibleBox = intersectBoxes(groundBox, viewportBox)
@@ -986,10 +1008,7 @@ export async function run(browser, baseURL) {
       // 이어지는 항목5/6(장애물 회피, 이 항목의 원래 목적)의 바닥 탭이
       // 전부 무시돼 버리므로, 여기서 닫아 원래 검증 흐름을 그대로 이어간다
       // (기존 단언 약화 없음 — 새로 생긴 부작용을 정리하는 셋업 스텝만 추가).
-      if (await page.locator('[data-testid="proto25d-shop"]').count() > 0) {
-        await page.locator('[data-testid="proto25d-shop-back"]').click()
-        await waitUntil(async () => (await page.locator('[data-testid="proto25d-shop"]').count()) === 0, { timeout: 3000 })
-      }
+      await closeShopIfOpen(page)
 
       // ── 항목5/6 — 장애물 바로 뒤(반대편) 목적지를 탭하면 직선이 아니라
       // 우회 경로로 이동하고, 이동 중 어떤 샘플도 장애물 박스 안을 지나지
@@ -3534,10 +3553,7 @@ export async function run(browser, baseURL) {
         // 이유. DEMO_BUILDING_CENTER_PCT 탭이 가게 입구 반경 밖이라 도착 시
         // 상점이 자동으로 열린다 — 위 두 단언은 그대로 성립, 다음 항목(e,
         // 벤치)이 막히지 않게 여기서 닫아 원래 검증 흐름을 이어간다.
-        if (await page.locator('[data-testid="proto25d-shop"]').count() > 0) {
-          await page.locator('[data-testid="proto25d-shop-back"]').click()
-          await waitUntil(async () => (await page.locator('[data-testid="proto25d-shop"]').count()) === 0, { timeout: 3000 })
-        }
+        await closeShopIfOpen(page)
       } else {
         r.check(`${name} 항목d — demo-building이 최대 3회 이동 시도 후에도 화면에 들어오지 않아 이 항목을 정직하게 스킵함(FAIL 아님, 사전조건 부재)`, true, '스킵')
       }
@@ -5288,8 +5304,8 @@ export async function run(browser, baseURL) {
             await page.waitForTimeout(150)
           }
           const noticeD = ((await page.locator('[data-testid="proto25d-shop-notice"]').textContent({ timeout: 500 }).catch(() => '')) || '')
-          r.check(`${name} 항목d — 잔액 미확인(null): 잔액 줄 없음, Buy 비활성("잔액 확인 중"), "부족해요" 안내 없음`,
-            stateCalls >= 1 && balanceLineD === 0 && buyDisabledD && buyTextD.includes('잔액 확인 중') && !noticeD.includes('부족해요'),
+          r.check(`${name} 항목d — 잔액 미확인(null): 잔액 줄 없음, Buy 비활성("내 돈 확인 중"), "부족해요" 안내 없음`,
+            stateCalls >= 1 && balanceLineD === 0 && buyDisabledD && buyTextD.includes('내 돈 확인 중') && !noticeD.includes('부족해요'),
             JSON.stringify({ stateCalls, balanceLineD, buyDisabledD, buyTextD, noticeD }))
         }
         const writeActionCalls = mocks.apiCallLog.filter((c) => c.body && SHOP_WRITE_ACTIONS.includes(c.body.action))
@@ -5405,8 +5421,8 @@ export async function run(browser, baseURL) {
       if (!(await buyBenchAndReturn(page, { character, ground, viewportEl, enterBtn, shopOverlay }, notice))) {
         r.check(`${name} — 가게 입장 지점이 화면에 들어오지 않아 정직하게 스킵함(FAIL 아님, 사전조건 부재)`, true, '스킵')
       } else {
-        r.check(`${name} G4 — 구매 성공 안내가 "구매 완료" + 마을에서 배치하기 안내`,
-          notice.text.includes('구매 완료') && notice.text.includes('마을에서') && notice.text.includes('배치하기'), notice.text)
+        r.check(`${name} G4 — 구매 성공 안내가 "구매 완료" + 내 물건 보기로 놓기 안내`,
+          notice.text.includes('구매 완료') && notice.text.includes('내 물건 보기') && notice.text.includes('놓아요'), notice.text)
         // G5 — 가게 닫힘 → (재입장 가드 400ms 뒤) 가게 들어가기 버튼으로 포커스 복귀.
         const focusShopClose = await waitUntil(async () => (await activeTestId(page)) === 'proto25d-shop-enter', { timeout: 1500 })
         r.check(`${name} G5 — 가게를 닫으면 가게 들어가기 버튼으로 포커스 복귀`, !!focusShopClose, String(await activeTestId(page)))
@@ -5445,26 +5461,26 @@ export async function run(browser, baseURL) {
         const focusCancel = await waitUntil(async () => (await activeTestId(page)) === 'proto25d-place-open', { timeout: 1500 })
         r.check(`${name} G5 — 취소 버튼으로 배치 종료 → 배치하기 버튼으로 포커스`, placing2 && !!focusCancel, JSON.stringify({ placing2, focus: await activeTestId(page) }))
 
-        // G2 — 빗나간 탭: 힌트 "노란 칸을 눌러 주세요" 잠깐 → 사라짐, 걷기는 그대로.
+        // G2 — 빗나간 탭: 힌트 "노란 칸을 눌러요. 안 보이면 땅을 눌러 걸어가요" 잠깐 → 사라짐, 걷기는 그대로.
         const placing3 = await openPlacement(page, root, placeOpen)
         const missPt = await groundPointAt(page, ground, viewportEl, 0.2)
         if (!placing3 || !missPt) {
           r.check(`${name} G2 — 빈 바닥 지점을 찾지 못해 정직하게 스킵함(FAIL 아님)`, true, JSON.stringify({ placing3, missPt }))
         } else {
           await page.mouse.click(missPt.x, missPt.y)
-          const hintShown = await waitUntil(async () => (await bannerText(page)).includes('노란 칸을 눌러 주세요'), { timeout: 800, interval: 30 })
+          const hintShown = await waitUntil(async () => (await bannerText(page)).includes('노란 칸을 눌러요. 안 보이면 땅을 눌러 걸어가요'), { timeout: 800, interval: 30 })
           const walkedMiss = await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 1500 })
           const hintGone = await waitUntil(async () => {
             const t = await bannerText(page)
             return t.includes(BANNER_TEXT) && !t.includes('주세요')
           }, { timeout: 3500 })
           await idleOf(character)
-          r.check(`${name} G2 — 빗나간 탭 → 힌트 "노란 칸을 눌러 주세요" 표시 후 ~2초 뒤 안내로 복귀, 탭은 그대로 걷기`,
+          r.check(`${name} G2 — 빗나간 탭 → 힌트 "노란 칸을 눌러요. 안 보이면 땅을 눌러 걸어가요" 표시 후 ~2초 뒤 안내로 복귀, 탭은 그대로 걷기`,
             !!hintShown && !!walkedMiss && !!hintGone && (await root.getAttribute('data-placing')) === 'true',
             JSON.stringify({ hintShown: !!hintShown, walkedMiss: !!walkedMiss, hintGone: !!hintGone }))
         }
 
-        // G2 — 캐릭터가 서 있는 슬롯 탭 → "캐릭터가 서 있는 칸이에요. 다른 칸을 눌러요"(배치 안 됨).
+        // G2 — 캐릭터가 서 있는 슬롯 탭 → "내가 서 있는 칸이에요. 다른 칸을 눌러요"(배치 안 됨).
         let standing = null
         const vs = await visibleSlot(page, ground, viewportEl)
         if (vs) {
@@ -5481,8 +5497,8 @@ export async function run(browser, baseURL) {
         } else {
           const pt = worldPctToScreenPx(slotCenterPct(standing), await ground.boundingBox())
           await page.mouse.click(pt.x, pt.y)
-          const standHint = await waitUntil(async () => (await bannerText(page)).includes('캐릭터가 서 있는 칸이에요. 다른 칸을 눌러요'), { timeout: 800, interval: 30 })
-          r.check(`${name} G2 — 캐릭터가 선 슬롯 ${standing.id} 탭 → "캐릭터가 서 있는 칸이에요. 다른 칸을 눌러요", 배치 안 됨`,
+          const standHint = await waitUntil(async () => (await bannerText(page)).includes('내가 서 있는 칸이에요. 다른 칸을 눌러요'), { timeout: 800, interval: 30 })
+          r.check(`${name} G2 — 캐릭터가 선 슬롯 ${standing.id} 탭 → "내가 서 있는 칸이에요. 다른 칸을 눌러요", 배치 안 됨`,
             !!standHint && (await root.getAttribute('data-proto25d-placed-count')) === '0', String(await bannerText(page)))
           await idleOf(character)
           // 슬롯 밖으로 걸어 나간다(배치 모드 유지 — 빗나간 탭).
@@ -5605,8 +5621,8 @@ export async function run(browser, baseURL) {
         infoLabel.includes('도움말') && !/프로토타입|Stage/.test(infoLabel), infoLabel)
       await infoToggle.click()
       const infoText = ((await infoToggle.locator('xpath=..').locator('p').first().textContent({ timeout: 1000 }).catch(() => '')) || '').trim()
-      r.check(`${name} — 도움말 본문이 현재 흐름(걷기/가게 들어가기/배치하기/새로고침)을 설명하고 내부 용어 없음`,
-        ['걸어가요', '가게 들어가기', '배치하기', '새로고침'].every((w) => infoText.includes(w)) && !/프로토타입|Stage|회색/.test(infoText), infoText)
+      r.check(`${name} — 도움말 본문이 현재 흐름(걷기/🏪 가게/🪑 배치)을 설명하고 내부 용어 없음`,
+        ['걸어가요', '🏪', '🪑'].every((w) => infoText.includes(w)) && !/프로토타입|Stage|회색/.test(infoText), infoText)
       await infoToggle.click()
 
       const vis = await ensureWorldPointVisible(page, character, ground, viewportEl, SHOP_ENTRANCE_PCT_REF)
@@ -7357,8 +7373,8 @@ export async function run(browser, baseURL) {
 
           const noticeVisible = await notice.waitFor({ state: 'visible', timeout: 1000 }).then(() => true).catch(() => false)
           const noticeText = noticeVisible ? ((await notice.textContent().catch(() => '')) || '') : ''
-          r.check(`${name} 항목a — 구매 성공 안내 문구가 그대로("구매 완료! 마을에서 🪑 배치하기를 눌러요")`,
-            noticeText.includes('구매 완료') && noticeText.includes('배치하기'), noticeText)
+          r.check(`${name} 항목a — 구매 성공 안내 문구("구매 완료! 🎒 내 물건 보기를 눌러 놓아요")`,
+            noticeText.includes('구매 완료') && noticeText.includes('내 물건 보기'), noticeText)
           const noticeRole = noticeVisible ? await notice.getAttribute('role') : null
           const noticeAriaLive = noticeVisible ? await notice.getAttribute('aria-live') : null
           r.check(`${name} 항목a — 안내가 role="status" + aria-live="polite"로 공지됨`, noticeRole === 'status' && noticeAriaLive === 'polite', JSON.stringify({ noticeRole, noticeAriaLive }))
@@ -7846,6 +7862,121 @@ export async function run(browser, baseURL) {
         r.check(`${name} — 가드(400ms) 경과 후 "계속 쇼핑하기"가 정상 동작`, !!(await waitUntil(async () => (await notice.count()) === 0, { timeout: 1000 })))
       } catch (err) { failS33(name, err) } finally { collect(mocks); await context.close() }
     }
+  }
+
+  // ── S34(2026-10-01, 모바일 감사 A1) — 산책 모드에선 바닥이 카메라 transform을
+  // 달고 press 동안에도 계속 움직인다(~150–200px/s). 탭 지점을 pointer-UP 시점의
+  // rect로 계산하면 100–350ms 눌림에 수십 px가 밀려 44px 건물 타겟을 빗나간다
+  // (→ 상점 의도 없는 일반 걷기). 수정 후엔 pointer-DOWN 좌표+rect 기준. 건물
+  // 윗변 안쪽(y0+0.3%)을 "누른 순간의 현재 rect"로 계산해 눌렀다 떼고, 눌림 동안
+  // 세계가 움직였어도 건물 탭으로 인식돼 도착 시 상점이 열려야 한다(일반 걷기는 안 엶).
+  // 카메라가 안 움직이거나 그 순간을 못 잡으면 정직하게 스킵(FAIL 아님).
+  for (const holdMs of [150, 350]) {
+    const name = `S34[390x844,press-drift,hold=${holdMs}ms]`
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true, townShopV1: true })
+    await setWalkModeOn(page)
+    const mocks = await installMocks(page, { townState: { starsEarned: 20, dollars: { available: 37, earned: 37, spent: 0 }, owned: [], welcomeClaimed: false } })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const viewportEl = page.locator('[data-testid="proto25d-viewport"]')
+      const root = page.locator('[data-testid="proto25d-root"]')
+      const vb = await viewportEl.boundingBox()
+      await page.mouse.click(vb.x + vb.width / 2, vb.y + 12) // 위쪽(건물 방향) 바닥 탭 → 긴 걷기 + 카메라 패닝
+      let pressed = false
+      let driftPx = 0
+      const t0 = Date.now()
+      while (Date.now() - t0 < 8000 && !pressed) {
+        await page.waitForTimeout(50)
+        if ((await character.getAttribute('data-character-phase').catch(() => null)) !== 'walking') continue
+        const g1 = await ground.boundingBox()
+        await page.waitForTimeout(100)
+        const gb = await ground.boundingBox()
+        if (Math.abs(gb.y - g1.y) < 1 && Math.abs(gb.x - g1.x) < 1) continue // 카메라가 안 움직임 — 재시도
+        const pt = { x: gb.x + gb.width * 0.5, y: gb.y + gb.height * ((DEMO_BUILDING_CENTER_PCT.y - 8 + 0.3) / 100) } // 건물 윗변(y0=24) 안쪽
+        if (pt.y < vb.y + 70 || pt.y > vb.y + vb.height - 90) continue // HUD/가게 버튼 회피
+        await page.mouse.move(pt.x, pt.y)
+        await page.mouse.down()
+        await page.waitForTimeout(holdMs)
+        driftPx = Math.abs((await ground.boundingBox()).y - gb.y) // 눌린 동안 바닥이 실제로 밀린 양(실측 ~100px/150ms)
+        await page.mouse.up()
+        pressed = true
+      }
+      if (!pressed || driftPx < 20) {
+        r.check(`${name} — 카메라가 움직이는 동안 건물 윗변을 누른 순간을 못 잡아(또는 눌림 중 이동 20px 미만) 정직하게 스킵함(FAIL 아님)`, true, `스킵 pressed=${pressed} drift=${driftPx.toFixed(1)}`)
+      } else {
+        // data-walk-target은 입구가 가까우면 100ms 안에 해제될 수 있어(경쟁) 최종 결과로
+        // 판정한다: 건물 탭으로 인식됐다면 도착 시 상점이 자동으로 열린다. 일반
+        // 걷기(수정 전 — up 시점 rect로 계산해 건물 밖으로 빗나감)는 절대 안 연다.
+        const opened = await page.locator('[data-testid="proto25d-shop"]').waitFor({ state: 'visible', timeout: 8000 }).then(() => true).catch(() => false)
+        r.check(`${name} — 눌린 동안 바닥이 ${driftPx.toFixed(0)}px 밀려도 down 기준으로 건물 탭이 판정됨(도착 시 상점 자동 열림)`, opened, `drift=${driftPx.toFixed(1)}`)
+      }
+    } catch (err) {
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false, String(err?.message || err))
+    } finally { collect(mocks); await context.close() }
+  }
+
+  // ── S35(2026-10-01, 모바일 감사 a11y) — 가게 모달의 포커스/Escape 계약:
+  // 열리면 포커스가 가게 안으로, 구매 확인이 열리면 "취소"에, Escape는 확인창만
+  // 닫고 가게는 유지(수정 전엔 가게 전체가 닫힘), 성공 안내가 뜨면 "계속
+  // 쇼핑하기"에 포커스, 안내를 닫으면 뒤로가기(비활성이면 가게 root)로. 두
+  // 다이얼로그 모두 aria-modal="true". walk mode OFF 1280x800.
+  {
+    const name = 'S35[1280x800,confirm-escape-and-focus]'
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true, townShopV1: true })
+    const mocks = await installMocks(page, { townState: { starsEarned: 20, dollars: { available: 37, earned: 37, spent: 0 }, owned: [], welcomeClaimed: false } })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const shopOverlay = page.locator('[data-testid="proto25d-shop"]')
+      const confirmBox = page.locator('[data-testid="proto25d-shop-confirm"]')
+      const gb = await ground.boundingBox()
+      await page.mouse.click(gb.x + gb.width * (SHOP_ENTRANCE_PCT_REF.x / 100), gb.y + gb.height * (SHOP_ENTRANCE_PCT_REF.y / 100))
+      await idleOf(character)
+      await page.locator('[data-testid="proto25d-shop-enter"]').click()
+      await shopOverlay.waitFor({ state: 'visible', timeout: 3000 })
+      const focusInShop = await waitUntil(() => page.evaluate(() => !!document.activeElement?.closest('[data-testid="proto25d-shop"]')), { timeout: 1000 })
+      r.check(`${name} — 가게가 열리면 포커스가 가게 안(root 또는 자식)으로 이동`, !!focusInShop, String(await activeTestId(page)))
+      r.check(`${name} — 가게 root aria-modal="true"`, (await shopOverlay.getAttribute('aria-modal')) === 'true')
+
+      await page.locator('[data-testid="proto25d-shop-buy"]').first().click()
+      await confirmBox.waitFor({ state: 'visible', timeout: 1000 })
+      const focusNo = await waitUntil(async () => (await activeTestId(page)) === 'proto25d-shop-confirm-no', { timeout: 1000 })
+      r.check(`${name} — 구매 확인이 열리면 포커스가 "취소"로(Enter 한 번에 구매되지 않음)`, !!focusNo, String(await activeTestId(page)))
+      r.check(`${name} — 구매 확인 aria-modal="true"`, (await confirmBox.getAttribute('aria-modal')) === 'true')
+
+      await page.keyboard.press('Escape')
+      const confirmGone = await waitUntil(async () => (await confirmBox.count()) === 0, { timeout: 1000 })
+      await page.waitForTimeout(700) // 가게 닫기 폴백(600ms)까지 지나도 유지되는지
+      r.check(`${name} — Escape는 확인창만 닫고 가게는 그대로 열려 있음`, !!confirmGone && (await shopOverlay.isVisible().catch(() => false)),
+        JSON.stringify({ confirmGone: !!confirmGone, shopVisible: await shopOverlay.isVisible().catch(() => false) }))
+
+      await page.locator('[data-testid="proto25d-shop-buy"]').first().click()
+      await confirmBox.waitFor({ state: 'visible', timeout: 1000 })
+      await page.locator('[data-testid="proto25d-shop-confirm-yes"]').click()
+      const focusContinue = await waitUntil(async () => (await activeTestId(page)) === 'proto25d-shop-notice-continue', { timeout: 1500 })
+      r.check(`${name} — 성공 안내가 뜨면 포커스가 "계속 쇼핑하기"로`, !!focusContinue, String(await activeTestId(page)))
+      await page.waitForTimeout(450) // F6 CTA 가드(CTA_GUARD_MS=400)
+      await page.keyboard.press('Enter')
+      const noticeGone = await waitUntil(async () => (await page.locator('[data-testid="proto25d-shop-notice"]').count()) === 0, { timeout: 1000 })
+      const activeAfter = await activeTestId(page)
+      r.check(`${name} — Enter로 안내를 닫으면 안내 제거 + 포커스가 뒤로가기(비활성이면 가게 root)로`,
+        !!noticeGone && ['proto25d-shop-back', 'proto25d-shop'].includes(activeAfter), String(activeAfter))
+    } catch (err) {
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false, String(err?.message || err))
+    } finally { collect(mocks); await context.close() }
   }
 
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }
