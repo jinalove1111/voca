@@ -142,7 +142,7 @@ import {
   readWalkModePreference,
   writeWalkModePreference,
 } from '../../../utils/town/proto2_5d/camera'
-import { isNearShopEntrance, SHOP_PRODUCTS, tryPurchase } from '../../../utils/town/proto2_5d/shopInteraction'
+import { isNearShopEntrance, SHOP_PRODUCTS, tryPurchase, findTappedShop, shopArrivalOk } from '../../../utils/town/proto2_5d/shopInteraction'
 import ProtoShopScreen from './ProtoShopScreen'
 import { coinBadgeText, coinBadgeAriaLabel } from '../../../utils/town/proto2_5d/coinDisplay'
 import { PLACEMENT_SLOTS, placedObstacleRect, obstaclesWithPlacements, movePlacement, removePlacement } from '../../../utils/town/proto2_5d/placementSlots'
@@ -289,6 +289,15 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     // 기존 benchInteraction.js의 rect 매개변수화를 그대로 재사용).
     sitTargetKey: null,
     sitRect: null,
+    // 마을 산책형 상점 방문 1단계(2026-09-30) — 건물을 향해 걷는 중인지와
+    // "어느 건물인지"(예: 'shop:demo-building'). pendingSit/sitTargetKey와
+    // 동일한 목적지-의도 패턴(재구현 아님) — 다만 도착 후에는 앉지 않고
+    // (idle 복귀 + 반경 안이면 상점 오픈) 전혀 다른 결과로 이어지므로
+    // 별도 필드 쌍을 둔다(하나의 필드로 sitTargetKey='shop:x'를 섞으면
+    // "이게 좌석인지 건물인지"를 매번 문자열 prefix로 구분해야 해서 오히려
+    // 더 복잡해진다).
+    pendingShop: false,
+    shopTargetKey: null,
   })
   const characterRef = useRef(character) // 헤더 주석 "characterRef" 참고 — setTimeout 콜백 전용 최신값 미러
   const [infoOpen, setInfoOpen] = useState(false)
@@ -707,8 +716,11 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     // 좌석을 계속 가리키는 상태(stale)로 남는다 — 그 뒤 그 좌석 아이템을
     // 옮기거나(movePlacement) 회수하면(interruptSitIfTargeting) stale key가
     // 우연히 일치해, 지금 진행 중인 전혀 무관한 걷기를 즉시 중단시켜
-    // 버린다(이 세션이 S29로 직접 재현·확인).
-    updateCharacter({ pendingSit: false, sitTargetKey: null, sitRect: null })
+    // 버린다(이 세션이 S29로 직접 재현·확인). 마을 산책형 상점 방문
+    // 1단계(2026-09-30) — 같은 이유로 pendingShop/shopTargetKey도 함께
+    // 지운다(건물로 걷던 중 다른 곳을 탭하면 그 상점 목적지도 취소되어야
+    // 한다 — "새 탭이 항상 우선" 원칙, S29와 동일한 stale-key 위험).
+    updateCharacter({ pendingSit: false, sitTargetKey: null, sitRect: null, pendingShop: false, shopTargetKey: null })
     walkPath(path, seq, 'walking', () => applyIfActive(seq, (c) => ({ ...c, phase: 'idle' })))
   }
 
@@ -736,7 +748,9 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     // 같다. dx===0이면 facingToward가 0을 반환해 기존 facing을 그대로 둔다
     // — "벤치가 정확히 위에 있으면 현재 방향 유지" 요구 그대로).
     const dir = facingToward({ x: cur.leftPct, y: cur.topPct }, arrival)
-    updateCharacter((c) => ({ ...c, pendingSit: true, sitTargetKey, sitRect: rect, facing: dir !== 0 ? dir : c.facing }))
+    // 마을 산책형 상점 방문 1단계 — 좌석으로 재지정되면 이전 상점 목적지도
+    // 취소한다(위 startPlainWalk 주석과 동일한 stale-key 방지 이유).
+    updateCharacter((c) => ({ ...c, pendingSit: true, sitTargetKey, sitRect: rect, pendingShop: false, shopTargetKey: null, facing: dir !== 0 ? dir : c.facing }))
     walkPath(path, seq, 'walking', () => enterSitting(seq))
   }
   function startWalkToBench() {
@@ -746,6 +760,38 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // ({itemId,slotId}), rect는 그 슬롯의 장애물 rect(placedObstacleRect).
   function startWalkToPlacedSeat(pl, rect) {
     startWalkToSeat(rect, `placed:${pl.itemId}`)
+  }
+
+  // 마을 산책형 상점 방문 1단계(2026-09-30, 팀장 지시) — 건물 탭 → 입구
+  // 접근 지점까지 걷기. startWalkToSeat과 동일한 패턴(목적지까지 findPath
+  // → pendingX/xTargetKey 세팅 → 도착 시 콜백)이지만 도착 후 결과가
+  // 다르다(앉지 않고, idle 복귀 + 반경 안이면 handleEnterShop()). 도착
+  // 지점은 shop.entrance를 매번 obstaclesWithPlacements로 다시
+  // nearestWalkablePoint 보정한다(정적 SHOP_ENTRANCE가 아니라) — 플레이어가
+  // 배치물(F1 구매 의자 등)을 입구 근처에 놓아 그 정적 지점이 막혔을 수
+  // 있기 때문(startWalkToSeat이 rawArrival을 매번 보정하는 것과 동일 이유).
+  // 경로가 없으면(완전히 도달 불가) 그대로 no-op(Stage 2와 동일 원칙).
+  function startWalkToShop(shop) {
+    const cur = characterRef.current
+    const obstacles = obstaclesWithPlacements(placementsRef.current)
+    const arrival = nearestWalkablePoint(shop.entrance.x, shop.entrance.y, obstacles)
+    const path = findPath({ x: cur.leftPct, y: cur.topPct }, arrival, obstacles)
+    if (!path || path.length === 0) return
+    const seq = ++seqRef.current
+    clearWalkTimer()
+    clearHoldTimer()
+    updateCharacter({
+      pendingSit: false, sitTargetKey: null, sitRect: null,
+      pendingShop: true, shopTargetKey: `shop:${shop.id}`,
+    })
+    walkPath(path, seq, 'walking', () => {
+      applyIfActive(seq, (c) => ({ ...c, phase: 'idle', pendingShop: false, shopTargetKey: null }))
+      // 요구사항 — 장애물/경계로 입구 반경에 못 들어오면(예: 위 arrival이
+      // 배치물에 막혀 반경 밖으로 보정됨) 열지 않는다. 이동 중 다른 탭으로
+      // 이 걷기 자체가 취소됐으면(seq 불일치) applyIfActive가 이미 아무 것도
+      // 안 했으므로 여기서도 열지 않는다(seqRef 재확인).
+      if (seq === seqRef.current && shopArrivalOk(shop, arrival.x, arrival.y)) handleEnterShop()
+    })
   }
 
   // Stage 4 — 착석. 논리 좌표를 좌석 지점(benchSeatPoint)으로 옮기고
@@ -1024,10 +1070,18 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     // 겹치지 않지만 우선순위를 명확히 고정).
     const tappedPlaced = tappedBench ? null : findTappedPlacedSlot(rawPoint, groundPx)
     const tappedSeatKey = tappedBench ? 'bench' : (tappedPlaced ? `placed:${tappedPlaced.pl.itemId}` : null)
+    // 마을 산책형 상점 방문 1단계(2026-09-30) — 건물 탭(벤치/배치 의자가
+    // 아닐 때만 검사 — 씬 상 겹치지 않지만 우선순위를 명확히 고정, 위
+    // tappedPlaced와 동일한 관례).
+    const tappedShop = (tappedBench || tappedPlaced) ? null : findTappedShop(rawPoint, groundPx)
 
     // 항목7 — 이미 좌석(벤치든 배치 의자든)을 향해 걷는 중(pendingSit)에
     // 같은 좌석을 다시 탭하면 중복 시퀀스를 만들지 않고 무시한다.
     if (cur.phase === 'walking' && cur.pendingSit && tappedSeatKey && tappedSeatKey === cur.sitTargetKey) return
+    // 마을 산책형 상점 방문 2단계(요구사항4) — 같은 건물로 걷는 중에 그
+    // 건물을 다시 탭하면(더블탭) 위와 동일하게 중복 시퀀스를 만들지 않고
+    // 무시한다(목록 기반이라 건물이 늘어도 그대로 동작).
+    if (cur.phase === 'walking' && cur.pendingShop && tappedShop && `shop:${tappedShop.id}` === cur.shopTargetKey) return
 
     // 그 외의 모든 경우(idle에서의 첫 탭이든, walking 중 재지정이든) — 새
     // 탭이 항상 우선한다: clamp(월드 경계) + 장애물 보정 + 경로탐색은
@@ -1044,6 +1098,8 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
       startWalkToBench()
     } else if (tappedPlaced) {
       startWalkToPlacedSeat(tappedPlaced.pl, tappedPlaced.rect)
+    } else if (tappedShop) {
+      startWalkToShop(tappedShop)
     } else {
       startPlainWalk(rawPoint)
     }
@@ -1076,6 +1132,20 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   function handleEnterShop() {
     if (shopBusyRef.current || shopOpen || performance.now() < shopReentryBlockedUntilRef.current) return
     shopBusyRef.current = true
+    // 마을 산책형 상점 방문 2단계(요구사항1) — 걷는 중(walking)에 열리면
+    // (도착 콜백 경로는 이미 idle이라 여기선 무해한 재확인, 버튼을 직접
+    // 눌렀는데 마침 이동 경로가 입구 반경을 스쳐 지나가는 드문 경우가
+    // 실제 대상) 그 즉시 지금 leg 목표 지점에서 멈춰 idle로 고정한다 —
+    // 열려있는 동안 캐릭터가 계속 걷는 것처럼 보이지 않게 한다. seqRef를
+    // 올려 이미 예약된 걷기 타이머를 전부 무효화한다(헤더 주석 "seq
+    // 카운터"와 동일 원칙). ponytail: sitting/leaving 중엔 "가게 들어가기"
+    // 버튼 자체가 안 보여 이 경로에 들어오지 않음 — 필요해지면 동일하게 확장.
+    if (characterRef.current.phase === 'walking') {
+      seqRef.current += 1
+      clearWalkTimer()
+      clearHoldTimer()
+      updateCharacter((c) => ({ ...c, phase: 'idle', pendingSit: false, sitTargetKey: null, sitRect: null, pendingShop: false, shopTargetKey: null }))
+    }
     setShopOpen(true)
     try { window.history.pushState({ proto25dShop: true }, '') } catch { /* 무시 — 오버레이 자체는 그대로 열린다 */ }
     setTimeout(() => { shopBusyRef.current = false }, 0)
@@ -1382,6 +1452,11 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
       // 있을 때는 속성 자체를 안 붙인다(값이 "false"인 채로 남는 것보다
       // "속성 부재"가 더 명확한 계약).
       {...(shopOpen ? { 'data-shop-open': 'true' } : {})}
+      // 마을 산책형 상점 방문 1단계(2026-09-30) — 건물로 걷는 중일 때만
+      // 목적지 의도를 노출(예: "shop:demo-building"). 위 data-shop-open과
+      // 동일 관례("속성 부재"가 곧 "해당 없음") — 걷는 중이 아니면 속성
+      // 자체를 안 붙인다.
+      {...(character.pendingShop && character.shopTargetKey ? { 'data-walk-target': character.shopTargetKey } : {})}
       // Phase C — 배치 개수/배치 모드 여부(테스트 계측용).
       data-proto25d-placed-count={placements.length}
       data-placing={placingItemId ? 'true' : 'false'}
