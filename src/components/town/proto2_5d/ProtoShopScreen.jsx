@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { townAsset } from '../../../assets/town'
 import { formatDollars } from '../../../utils/townShop'
+import { objParticle } from '../../../utils/town/proto2_5d/shopInteraction'
 import { coinBadgeText, coinBadgeAriaLabel } from '../../../utils/town/proto2_5d/coinDisplay'
 
 // 안내 토스트가 화면에 머무는 시간(ms) — 요구사항 "약 2초" 그대로.
@@ -47,6 +48,28 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
   const [confirmProduct, setConfirmProduct] = useState(null)
   const noticeTimerRef = useRef(null)
   const ctaArmedAtRef = useRef(0)
+  // 2026-10-01 모바일 감사(a11y) — 포커스 이동 대상들. aria-modal 다이얼로그는
+  // 열릴 때 포커스가 안으로 들어와야 키보드/스크린리더 사용자가 배경에 갇히지
+  // 않는다. (inert는 쓰지 않기로 문서화된 결정 — 추가하지 않는다.)
+  const rootRef = useRef(null)
+  const confirmNoRef = useRef(null)
+  const continueRef = useRef(null)
+  const backRef = useRef(null)
+
+  // (a) 가게 열림 — 안쪽에 이미 포커스가 있으면 건드리지 않는다.
+  useEffect(() => {
+    const el = rootRef.current
+    if (el && !el.contains(document.activeElement)) el.focus()
+  }, [])
+  // (b) 구매 확인 열림 — 취소 버튼에 포커스(Enter 한 번에 구매되지 않게 "확인"이 아님).
+  useEffect(() => {
+    if (confirmProduct) confirmNoRef.current?.focus()
+  }, [confirmProduct])
+  // (c) 성공 안내 등장 — "계속 쇼핑하기"에 포커스. CTA_GUARD_MS 안의 Enter는
+  // handleDismissNotice가 무시하므로 확인 더블탭/Enter 연타로 바로 닫히지 않는다.
+  useEffect(() => {
+    if (purchaseNoticeActive) continueRef.current?.focus()
+  }, [purchaseNoticeActive])
 
   // 언마운트 시 예약된 안내 타이머 정리(setState-after-unmount 방지 —
   // Proto25DScreen.jsx의 기존 타이머 정리 관례와 동일).
@@ -96,16 +119,18 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
   // { ok:false, reason:'purchased' }를 돌려주고(재차감 없음), 그 외
   // 실패는 기존과 동일하게 잔액 부족으로 취급한다.
   function handleConfirmYes() {
-    if (!confirmProduct) return
+    if (!confirmProduct || closing) return // B6 — 닫히는 600ms 동안 구매되면 sticky 안내가 사라진다
     const item = confirmProduct
     const result = onPurchase(item)
     setConfirmProduct(null)
+    if (!result.ok) rootRef.current?.focus() // B8 — 실패 안내엔 버튼이 없어 확인 버튼 언마운트 시 포커스가 body로 빠진다
     if (result.ok) {
-      showNotice('구매 완료! 마을에서 🪑 배치하기를 눌러요', { sticky: true }) // F2 — 다음 행동 안내("구매 완료" 문구 유지)
+      // 2026-10-01 모바일 감사 — 가게 안에 실제로 보이는 CTA(🎒 내 물건 보기)를 안내("구매 완료" 접두 유지).
+      showNotice('구매 완료! 🎒 내 물건 보기를 눌러 놓아요', { sticky: true })
     } else if (result.reason === 'purchased') {
       showNotice('이미 구매했어요')
     } else {
-      showNotice('Paul Dollar가 부족해요')
+      showNotice('Paul Dollar가 부족해요. 더 모아서 다시 와요')
     }
   }
 
@@ -114,6 +139,9 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
   function handleDismissNotice() {
     if (performance.now() - ctaArmedAtRef.current < CTA_GUARD_MS) return // F6
     if (noticeTimerRef.current != null) { clearTimeout(noticeTimerRef.current); noticeTimerRef.current = null }
+    // (d) 안내 버튼이 사라지기 전에 포커스를 돌려놓는다(body로 증발 방지).
+    if (backRef.current && !backRef.current.disabled) backRef.current.focus()
+    else rootRef.current?.focus()
     setNoticeText(null)
     setPurchaseNoticeActive(false)
   }
@@ -122,10 +150,13 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
 
   return (
     <div
+      ref={rootRef}
       data-testid="proto25d-shop"
       role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
       aria-label="가게"
-      className="absolute inset-0 z-[9000] bg-[#dff3ea] flex flex-col"
+      className="absolute inset-0 z-[9000] bg-[#dff3ea] flex flex-col outline-none"
     >
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
         <h2 className="text-center text-lg font-black text-emerald-700">🏪 Paul's Shop</h2>
@@ -166,8 +197,9 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
                   )}
                 </div>
                 <div className="flex-1 min-w-0 overflow-hidden">
-                  <p className="text-sm font-black text-gray-800 overflow-hidden text-ellipsis whitespace-nowrap">{item.nameEn}</p>
-                  <p className="text-xs text-gray-500">{item.descEn}</p>
+                  <p className="text-sm font-black text-gray-800 overflow-hidden text-ellipsis whitespace-nowrap">{item.nameKo || item.nameEn}</p>
+                  {item.nameKo && <p className="text-[11px] text-gray-400">{item.nameEn}</p>}
+                  <p className="text-xs text-gray-500">{item.descKo || item.descEn}</p>
                   <p className="text-xs font-bold text-emerald-600">{formatDollars(item.price)}</p>
                 </div>
               </div>
@@ -176,11 +208,11 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
                 data-testid="proto25d-shop-buy"
                 data-product-id={item.id}
                 onClick={() => handleBuy(item)}
-                disabled={purchased || balanceUnknown}
+                disabled={purchased || balanceUnknown || closing}
                 aria-busy={!purchased && balanceUnknown ? 'true' : undefined}
                 className="min-h-[44px] w-full rounded-xl bg-purple-500 text-white text-sm font-black shadow btn-press disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {purchased ? '구매 완료' : balanceUnknown ? '잔액 확인 중' : '사기'}
+                {purchased ? '구매 완료' : balanceUnknown ? '내 돈 확인 중' : '사기'}
               </button>
             </div>
           )
@@ -197,14 +229,20 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
             data-testid="proto25d-shop-confirm"
             role="dialog"
             aria-label="구매 확인"
+            aria-modal="true"
+            // B5 — 포커스가 다이얼로그 안(취소 버튼)에 있으므로 Escape는 여기서 받아
+            // 이 패널만 닫는다. React 합성 stopPropagation은 루트 컨테이너에서 네이티브
+            // 전파를 끊어 window keydown(Proto25DScreen)에 도달하지 않는다.
+            onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); handleConfirmCancel() } }}
             className="w-full max-w-xs rounded-2xl bg-white shadow-lg p-4 flex flex-col gap-3"
           >
             <p className="text-sm font-black text-gray-800 text-center">
-              {confirmProduct.nameEn}를 {formatDollars(confirmProduct.price)}에 살까요?
+              {confirmProduct.nameKo || confirmProduct.nameEn}{objParticle(confirmProduct.nameKo || confirmProduct.nameEn)} {formatDollars(confirmProduct.price)}에 살까요?
             </p>
             <div className="flex gap-2">
               <button
                 type="button"
+                ref={confirmNoRef}
                 data-testid="proto25d-shop-confirm-no"
                 onClick={handleConfirmCancel}
                 className="min-h-[44px] flex-1 rounded-xl bg-gray-200 text-gray-700 text-sm font-black shadow btn-press"
@@ -215,7 +253,8 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
                 type="button"
                 data-testid="proto25d-shop-confirm-yes"
                 onClick={handleConfirmYes}
-                className="min-h-[44px] flex-1 rounded-xl bg-emerald-500 text-white text-sm font-black shadow btn-press"
+                disabled={closing}
+                className="min-h-[44px] flex-1 rounded-xl bg-emerald-600 text-white text-sm font-black shadow btn-press disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 확인
               </button>
@@ -252,12 +291,13 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
                 type="button"
                 data-testid="proto25d-shop-notice-viewitems"
                 onClick={() => { if (performance.now() - ctaArmedAtRef.current >= CTA_GUARD_MS) onViewMyItems() }} // F6
-                className="min-h-[44px] px-4 rounded-xl bg-emerald-500 text-white text-sm font-black shadow btn-press"
+                className="min-h-[44px] px-4 rounded-xl bg-emerald-600 text-white text-sm font-black shadow btn-press"
               >
                 🎒 내 물건 보기
               </button>
               <button
                 type="button"
+                ref={continueRef}
                 data-testid="proto25d-shop-notice-continue"
                 onClick={handleDismissNotice}
                 className="min-h-[44px] px-4 rounded-xl bg-white text-gray-700 text-sm font-black shadow btn-press"
@@ -276,11 +316,12 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
           렌더되기 전의 아주 짧은 창에서는 ref 가드가 유일한 방어선). */}
       <button
         type="button"
+        ref={backRef}
         data-testid="proto25d-shop-back"
         onClick={onBack}
         disabled={closing}
         aria-busy={closing ? 'true' : 'false'}
-        className="min-h-[52px] w-full bg-emerald-500 text-white text-base font-black shadow-inner disabled:opacity-60 disabled:cursor-not-allowed"
+        className="min-h-[52px] w-full bg-emerald-600 text-white text-base font-black shadow-inner disabled:opacity-60 disabled:cursor-not-allowed"
       >
         🏘️ 마을로 돌아가기
       </button>
