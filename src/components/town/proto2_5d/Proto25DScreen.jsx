@@ -1030,9 +1030,19 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
           // 시작 시점 스냅샷)와 사실상 같은 값이다 — 최악의 경우도 idle을 한 번
           // 더(무해하게) 세팅하는 정도라, cur 대신 이 ref를 쓰는 것 자체가
           // "정확한 동기 반영"을 전제하지 않고도 더 안전한 선택이다.
+          // 리뷰 대응(2026-09-30, 2차) — 걷는 중이 좌석 목적지(pendingSit)만이
+          // 아니라 상점 목적지(pendingShop)일 수도 있다(건물로 걷는 중에도
+          // 배치가 가능 — 위 handleGroundPointerUp 배치 블록은 phase를
+          // 검사하지 않는다). pendingSit/sitTargetKey/sitRect만 지우고
+          // pendingShop/shopTargetKey를 안 지우면, data-walk-target이
+          // "shop:demo-building"로 고장난 채 남는다 — 이 캐릭터는 이제
+          // idle이고 상점과 전혀 무관한데도 DOM은 여전히 "건물로 걷는
+          // 중"이라고 거짓 신호를 낸다(startPlainWalk/startWalkToSeat이
+          // 새 탭마다 이 두 필드를 함께 지우는 것과 동일한 이유 — S29
+          // stale-key 패턴과 동형). 실측 재현 — S30y-B.
           seqRef.current += 1
           clearWalkTimer()
-          updateCharacter((c) => ({ ...c, phase: 'idle', pendingSit: false, sitTargetKey: null, sitRect: null }))
+          updateCharacter((c) => ({ ...c, phase: 'idle', pendingSit: false, sitTargetKey: null, sitRect: null, pendingShop: false, shopTargetKey: null }))
         }
         return
       }
@@ -1130,7 +1140,22 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // 실패해도(사설/구식 환경) 오버레이는 그대로 연다 — history 연동은
   // "있으면 더 좋은" 부가 기능이지 열기 자체의 전제조건이 아니다.
   function handleEnterShop() {
-    if (shopBusyRef.current || shopOpen || performance.now() < shopReentryBlockedUntilRef.current) return
+    // 리뷰 대응(2026-09-30, 2차) — 도착 콜백(startWalkToShop)이 이 함수를
+    // 직접 호출해 "가게 들어가기" 버튼의 JSX 렌더 게이트(!placingItemId &&
+    // !myItemsOpen)를 우회한다. 배치 모드/"내 물건" 패널이 이미 자기
+    // 히스토리 항목(proto25dPlace/proto25dMyItems)을 쌓아 둔 상태에서 그
+    // 위에 가게가 또 pushState하면, 배치 취소(뒤로가기 1회)가 배치만
+    // 지우고 가게는 그대로 남아 다음에 가게를 닫을 때 자기 마커를 못 찾는
+    // 고아 히스토리 항목이 생긴다(실측 재현 — S30y-A1/A2). placingRef/
+    // myItemsOpenRef(둘 다 popstate 리스너용으로 이미 최신값을 미러링 중)
+    // 를 그대로 재사용해 이 가드에도 추가한다 — 배치/패널이 열려 있으면
+    // 도착해도 열지 않는다. 걷기 의도(pendingShop/shopTargetKey)는
+    // startWalkToShop의 도착 콜백이 이 함수 호출 여부와 무관하게 항상
+    // 먼저 지우므로(이 함수 위 호출부 참고), 이 가드에 걸려 열리지
+    // 않아도 캐릭터는 정상적으로 idle로 남고 다음 탭으로 자유롭게
+    // 재지정된다 — "그 자리에서 멈추고 조용히 실패"가 아니라 "의도만
+    // 취소되고 나머지는 평소와 동일".
+    if (shopBusyRef.current || shopOpen || placingRef.current || myItemsOpenRef.current || performance.now() < shopReentryBlockedUntilRef.current) return
     shopBusyRef.current = true
     // 마을 산책형 상점 방문 2단계(요구사항1) — 걷는 중(walking)에 열리면
     // (도착 콜백 경로는 이미 idle이라 여기선 무해한 재확인, 버튼을 직접
