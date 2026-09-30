@@ -1,8 +1,57 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 선별 반영(전부 KEEP, 코드리뷰 APPROVE, QA PASS) + non-force push `b79681bb..56c8dd13`, 이어서 F5 "내 물건"(옮기기/넣기/놓기, 로컬 state만) 구현·검증(미push)**. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`, 브랜치 `audit/paul-town-v2-2026-09-29`. DB·SQL·네트워크 쓰기 0. 아래 192차 섹션 참고.)_
+_최종 갱신: 2026-09-30 (193차 — **PR #62 F5 "내 물건" push `56c8dd13..dd4d0fdc` + 배치 의자 착석 결함("의자를 통과하며 앉을 수 없다") 수정 push `dd4d0fdc..77a4ff5d`(커밋 6개, 변경 파일 2개)**. 원인은 착석 상호작용이 고정 벤치에만 있었던 것 — 배치 의자 탭이 startPlainWalk로 흘러 의자 아트와 겹쳐 가려짐. 착석을 sitTargetKey/sitRect로 일반화, benchInteraction.js 재사용. verify:e2e 2548/0 FAIL, 최종 스펙 1232 PASS, 코드리뷰 3회 APPROVE, QA PASS, 실기기 정상. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 193차 섹션 참고.)_
+_192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 선별 반영(전부 KEEP, 코드리뷰 APPROVE, QA PASS) + non-force push `b79681bb..56c8dd13`, 이어서 F5 "내 물건"(옮기기/넣기/놓기, 로컬 state만) 구현·검증(미push)**. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`, 브랜치 `audit/paul-town-v2-2026-09-29`. DB·SQL·네트워크 쓰기 0. 아래 192차 섹션 참고.)_
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-09-30 (193차) — PR #62 배치 의자 착석 결함 수정 + F5 push 완료 (워크트리 `C:\voca-wt\paul-town-v2-night-audit`)
+
+### 0. F5 "내 물건" push
+- 2026-09-30 non-force `56c8dd13..dd4d0fdc`. 사전 검증: 실 `.env` 임시복사로 testSecurityRegressions 35/35 PASS, testEntranceRosterMinbyungchun exit 0 확인. 임시 `.env` 즉시 삭제, git 흔적 0.
+
+### 1. 의자 결함 수정 — push `dd4d0fdc..77a4ff5d`, PR #62 Draft 유지
+- 증상(실기기): "배치한 의자를 캐릭터가 통과하며 앉을 수 없다".
+- 변경 파일 2개: `src/components/town/proto2_5d/Proto25DScreen.jsx`, `tests/e2e/townProto25d.spec.mjs`.
+
+| 커밋 | 내용 |
+|---|---|
+| `3bf60751` | test: S28 재현(수정 전 7 FAIL) |
+| `fbb8c7ba` | fix: 배치 의자 walk-to-sit |
+| `6ce157ea` | test: S28 항목d 오탐 수정 |
+| `88c5af50` | test: S28 강화 + S29 신규 |
+| `15e16f97` | fix: startPlainWalk의 stale sitTargetKey/sitRect 정리 |
+| `77a4ff5d` | test: S28 재리뷰 반영 |
+
+### 2. 원인
+- 배치 슬롯 충돌(`obstaclesWithPlacements`)은 이미 정확했음 — 통과 자체는 없었다.
+- 착석 상호작용이 고정 벤치(`demo-bench`)에만 있어, 배치 의자를 탭하면 `startPlainWalk`로 흘러 footprint 바로 옆 칸에 flush로 서게 됨. 의자 아트(72x48)가 5% footprint보다 커서 캐릭터와 22×24px 겹치고, z가 낮아 의자 뒤로 가려짐 → 이것이 "통과"로 보인 정체. "앉을 수 없음"은 사실.
+
+### 3. 수정
+- `startWalkToBench`/`enterSitting`/`enterLeaving`/`characterDepthY`를 `character.sitTargetKey`/`sitRect`로 일반화(`startWalkToSeat(rect, key)` + 래퍼). `benchInteraction.js` 순수 함수 재사용(재구현 없음).
+- 배치 의자만: `standUpFromPlacedSeat`(재탭=제자리 기립, 다른 곳 탭=leaving→idle→걷기), `interruptSitIfTargeting(itemId)`로 옮기기/넣기 시 착석·접근 즉시 해제.
+- 배치 모드 슬롯탭 블록을 sitting/leaving 게이트 앞으로 이동(앉은 채 옮기기 완료 가능).
+- 고정 벤치(key `'bench'`) 경로 불변. 단 배치 모드 중 고정 벤치 착석 시 슬롯 탭이 이전엔 무시되다 이제 배치/이동됨(캐릭터 상태 불변, QA 판정: 착석 동작 변경 아님).
+- 자동 기립 타이머(`SIT_HOLD_MS`)는 배치 의자에도 상속.
+
+### 4. 검증
+- `npm run build` 경고 0.
+- 단위: testProto25dPlacedObstacles 65, testProto25dBench 88, testBundleBudget 32, testLazyChunkGuards 84, testProto25dSpriteAdapter 70, testProto25dWalkGrid 44 전부 PASS.
+- verify:e2e 전체(제품 코드 최종 `15e16f97`): exit 0 / 2548 PASS / 0 FAIL.
+- 최종 스펙 단독(`77a4ff5d`, 메모리 확보 후): 1232 PASS / 0 FAIL / 0 SKIP. S28 104/104, S29 6/6. 360/390/412/1280 전부 실제 실행.
+- 실측: 좌석선 오차 0.01~0.13px, 캐릭터 z > 의자 z, 걷기 샘플 footprint 진입 0.
+- 메모리 0.7GB 부하 시 S25 G3(390)·S27 h(412/1280) 6건 FAIL → 메모리 확보 후 재실행에서 미재현. 환경 부하, 코드 결함 아님.
+- 코드리뷰 3회 APPROVE, QA PASS.
+- 실기기(운영자 보고): 앉기·일어나기·옮기기·보관 정상. 걷는 동안 의자 중앙으로 일부 겹쳐 보이는 현상은 수용된 시각적 한계(진행 중 CSS 구간 전이가 슬롯을 스칠 때, F1 ponytail 주석과 동일).
+- CI: 해당 push의 GitHub Release Gate는 CANCELLED(기존 30분 cap 이슈). Vercel Preview success(https://vercel.com/jina4926952s-projects/voca/7NhTrpAStwChvMhqRBMaspKKQMCp).
+
+### 5. 알려진 한계
+- 다른 배치 의자에 앉은 채 또 다른 의자 탭 시 옆까지만 걷고 안 앉음.
+- 토스트 문구 "벤치" 고정.
+- leaving 도중 재탭 재지정 없음.
+
+### 6. 다음 작업
+- "마을 산책형 상점 방문 경험"(건물 탭 → 입구까지 걷기 → 도착 시 상점 열림). 이 워크트리에서 진행 예정.
 
 ## 2026-09-29 (192차) — PR #62 야간 감사: 로컬 7커밋 선별 반영 + 내 물건(이동/회수/재배치)
 
