@@ -253,6 +253,13 @@ section('10. shopArrivalOk(shop,x,y) — SHOP_BUILDINGS[0]에 대해 isNearShopE
     check(`shopArrivalOk(shop,${x},${y}) === isNearShopEntrance(${x},${y})`, shopArrivalOk(shop, x, y) === isNearShopEntrance(x, y))
   }
   check('shopArrivalOk(null,0,0) — 예외 없이 false(안전 폴백)', shopArrivalOk(null, 0, 0) === false)
+  // 리뷰 대응(2026-10-01, F5) — 타원 경계 포함(<=1) 계약 고정. 위 samples는
+  // 경계 바로 바깥(1.05배)만 있어 "<"로 바뀌어도 통과했다.
+  check('타원 경계 위 [ex+rx, ey] — 안(경계 포함)', shopArrivalOk(shop, ex + rx, ey) === true)
+  // [ex, ey+ry]는 부동소수점 덧셈(42+ry, ulp≈7e-15)이 (y-ey)를 ry보다 살짝 크게
+  // 만들어 "정확히 경계"를 표현할 수 없다 — 부동소수점 잡음 한 칸 안쪽으로 고정.
+  check('타원 경계 위(부동소수점 잡음 안쪽) [ex, ey+ry*(1-1e-12)] — 안', shopArrivalOk(shop, ex, ey + ry * (1 - 1e-12)) === true)
+  check('경계 바로 바깥 [ex+rx*1.01, ey] — 밖', shopArrivalOk(shop, ex + rx * 1.01, ey) === false)
 }
 
 // ── 11. findTappedShop — 건물 콜리전 박스(+44px 하한 패딩) hit-test ──────
@@ -272,7 +279,13 @@ section('11. findTappedShop(rawPoint,groundPx) — 건물 rect 안/밖, 좁은 �
     '좁은 뷰포트에서 콜리전 박스 바로 바깥 탭도 44px 하한 패딩으로 히트(narrow viewport)',
     findTappedShop(justOutside, narrowGroundPx) !== null,
   )
-  check('같은 지점, 매우 넓은 뷰포트(패딩이 원본 크기 대비 작음)에서는 원본 rect를 벗어나면 미스일 수 있음(계약 확인용, 결정론만 체크)', findTappedShop(justOutside, wideGroundPx) === findTappedShop(justOutside, wideGroundPx))
+  // 리뷰 대응(2026-10-01, F5) — 이전 단언은 `f(x) === f(x)` 항진식이었다.
+  // 패딩 하한이 최소 BENCH_TAP_PAD_PCT(2)%p라 0.5%p 바깥은 넓은 뷰포트에서도
+  // 여전히 히트여야 하고, 패딩을 한참 넘는 지점은 미스여야 한다.
+  const hitWide = findTappedShop(justOutside, wideGroundPx)
+  check('같은 지점, 매우 넓은 뷰포트에서도 최소 패딩 덕에 히트(SHOP_ID)', !!hitWide && hitWide.id === SHOP_ID, JSON.stringify(hitWide))
+  const farOutside = { x: SHOP_COLLISION_RECT.x1 + 10, y: center.y } // 최소 패딩(%p)을 훌쩍 넘는 바깥
+  check('패딩을 훌쩍 넘는 바깥 지점 — 넓은 뷰포트에서 null', findTappedShop(farOutside, wideGroundPx) === null)
 
   // 회귀 고정(2026-09-30, verify:e2e S18[390x844] 실측 FAIL로 발견) — 건물
   // 콜리전 박스의 44px 하한 패딩(최소 BENCH_TAP_PAD_PCT=2)이 입구 지점 간격
@@ -286,6 +299,20 @@ section('11. findTappedShop(rawPoint,groundPx) — 건물 rect 안/밖, 좁은 �
     findTappedShop(SHOP_ENTRANCE, narrowGroundPx) === null)
   check('건물 중심(입구 반경 밖)은 여전히 정상적으로 건물 탭으로 히트함(과도한 제외 아님)',
     !!findTappedShop(center, wideGroundPx))
+
+  // 리뷰 대응(2026-10-01, F5) — 입구 타원 경계 양쪽 샘플.
+  const shop = SHOP_BUILDINGS[0]
+  const { x: ex, y: ey } = SHOP_ENTRANCE
+  const { x: rx } = SHOP_RADIUS
+  const insideRing = { x: ex + rx * 0.99, y: ey }
+  check('입구 반경 바로 안쪽(ex+rx*0.99, ey) — 건물 탭이 아님(null)',
+    shopArrivalOk(shop, insideRing.x, insideRing.y) && findTappedShop(insideRing, wideGroundPx) === null)
+  // 반경 밖이면서 콜리전 박스 안인 점이 실제로 존재한다: 박스 하단 경계선
+  // (y = y1)에서 입구 x로부터 rx*1.01 떨어진 점 — dy=-게이트 간격이라 타원 밖.
+  const outsideRingInBox = { x: ex + rx * 1.01, y: SHOP_COLLISION_RECT.y1 }
+  const hitRing = findTappedShop(outsideRingInBox, wideGroundPx)
+  check('반경 바로 바깥 + 콜리전 박스 안(ex+rx*1.01, y1) — 건물 탭으로 히트',
+    !shopArrivalOk(shop, outsideRingInBox.x, outsideRingInBox.y) && !!hitRing && hitRing.id === SHOP_ID, JSON.stringify(hitRing))
 }
 
 // ── 결과 ──────────────────────────────────────────────────────────────
