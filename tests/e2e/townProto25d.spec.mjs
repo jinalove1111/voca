@@ -7979,5 +7979,133 @@ export async function run(browser, baseURL) {
     } finally { collect(mocks); await context.close() }
   }
 
+  // ── S36(2026-10-01 idle rAF settle-stop) — 산책 모드 카메라 rAF 루프가
+  // 캐릭터/카메라가 멈추면 스스로 멈추는지(대기 중 CPU/배터리 낭비 제거) 측정.
+  // 앱의 requestAnimationFrame을 페이지 로드 전에 래핑(addInitScript)해
+  // 앱 루프의 호출 수만 센다(측정 루프 자신은 세지 않음). 창 단위 delta/시간으로
+  // calls/sec 환산. 고정 동작: (a) 마운트 후 idle ≤5/s, (b) 걷는 중 ≥30/s,
+  // (c) idle 복귀 +500ms 후 ≤5/s, (d) data-camera-loop='idle', 리사이즈/모드
+  // 토글 시 다시 돌고 다시 멈춤, reduced-motion도 멈춤. S17_VIEWPORTS 4종.
+  const RAF_IDLE_MAX = 5
+  const RAF_WALK_MIN = 30
+  const rafRate = async (page, ms) => {
+    const c0 = await page.evaluate(() => window.__rafCalls)
+    const t0 = Date.now()
+    await page.waitForTimeout(ms)
+    const c1 = await page.evaluate(() => window.__rafCalls)
+    return Math.round(((c1 - c0) * 1000) / (Date.now() - t0))
+  }
+  const installRafCounter = (page) => page.addInitScript(() => {
+    window.__rafCalls = 0
+    const o = window.requestAnimationFrame.bind(window)
+    window.requestAnimationFrame = (cb) => o((t) => { window.__rafCalls++; cb(t) })
+  })
+  for (const vp of S17_VIEWPORTS) {
+    const name = `S36[${vp.label},raf-settle]`
+    const isMobile = vp.width !== 1280
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, hasTouch: isMobile })
+    const page = await context.newPage()
+    await setDeviceFlags(page, { paulTown2_5d: true })
+    await setWalkModeOn(page)
+    await installRafCounter(page)
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const viewportEl = page.locator('[data-testid="proto25d-viewport"]')
+      const walkToggle = page.locator('[data-testid="proto25d-walkmode-toggle"]')
+      await waitUntil(async () => (await ground.getAttribute('data-camera-x')) !== null, { timeout: 3000 })
+      await idleOf(character)
+      const loopAttr = () => ground.getAttribute('data-camera-loop')
+      const nums = {}
+
+      // (a) 마운트 후 idle (정착 여유 600ms 뒤 1000ms 창)
+      await page.waitForTimeout(600)
+      nums.a = await rafRate(page, 1000)
+      nums.aAttr = await loopAttr()
+      r.check(`${name} 항목a — 마운트 후 idle rAF ≤${RAF_IDLE_MAX}/s`, nums.a <= RAF_IDLE_MAX, JSON.stringify(nums))
+      r.check(`${name} 항목d — idle일 때 data-camera-loop="idle"`, nums.aAttr === 'idle', String(nums.aAttr))
+
+      // (b) 걷는 중 — 뷰포트∩바닥 우하단(85%/85%) 탭(S17과 동일 지점)
+      const gb = await ground.boundingBox()
+      const vb = await viewportEl.boundingBox()
+      const ix = intersectBoxes(gb, vb)
+      const tap = ix
+        ? { x: ix.x + ix.width * 0.85, y: ix.y + ix.height * 0.85 }
+        : { x: vb.x + vb.width * 0.85, y: vb.y + vb.height * 0.85 }
+      if (isMobile) await page.touchscreen.tap(tap.x, tap.y); else await page.mouse.click(tap.x, tap.y)
+      const walking = await waitUntil(async () => (await character.getAttribute('data-character-phase').catch(() => null)) === 'walking', { timeout: 3000 })
+      nums.b = await rafRate(page, 400)
+      nums.bAttr = await loopAttr()
+      r.check(`${name} 항목b — 걷는 중 rAF ≥${RAF_WALK_MIN}/s(카메라가 따라감)`, !!walking && nums.b >= RAF_WALK_MIN, JSON.stringify(nums))
+
+      // (c) idle 복귀 +500ms
+      await idleOf(character)
+      await page.waitForTimeout(500)
+      nums.c = await rafRate(page, 1000)
+      nums.cAttr = await loopAttr()
+      r.check(`${name} 항목c — 걷기 후 idle 복귀 +500ms 뒤 rAF ≤${RAF_IDLE_MAX}/s 이고 data-camera-loop="idle"`,
+        nums.c <= RAF_IDLE_MAX && nums.cAttr === 'idle', JSON.stringify(nums))
+
+      // (e) 뷰포트 크기 변경 — 잠깐 돌며 카메라 재스냅 후 다시 멈춤
+      const camBefore = `${await ground.getAttribute('data-camera-x')},${await ground.getAttribute('data-camera-y')}`
+      await page.setViewportSize({ width: vp.width - 24, height: vp.height - 40 })
+      nums.eRun = await rafRate(page, 400)
+      await page.waitForTimeout(600)
+      nums.e = await rafRate(page, 1000)
+      nums.eAttr = await loopAttr()
+      const camAfter = `${await ground.getAttribute('data-camera-x')},${await ground.getAttribute('data-camera-y')}`
+      r.check(`${name} 항목e — 리사이즈 직후 루프가 돌고(≥5/s) 다시 멈춤(≤${RAF_IDLE_MAX}/s, "idle")`,
+        nums.eRun >= 5 && nums.e <= RAF_IDLE_MAX && nums.eAttr === 'idle', `${JSON.stringify(nums)} cam ${camBefore}->${camAfter}`)
+
+      // (f) 산책 모드 OFF → ON — ON 직후 돌고 다시 멈춤
+      await walkToggle.click()
+      await page.waitForTimeout(300)
+      await walkToggle.click()
+      nums.fRun = await rafRate(page, 400)
+      await page.waitForTimeout(600)
+      nums.f = await rafRate(page, 1000)
+      nums.fAttr = await loopAttr()
+      r.check(`${name} 항목f — 토글 OFF→ON 직후 루프가 돌고(≥5/s) 다시 멈춤(≤${RAF_IDLE_MAX}/s, "idle")`,
+        nums.fRun >= 5 && nums.f <= RAF_IDLE_MAX && nums.fAttr === 'idle', JSON.stringify(nums))
+      console.log(`  [S36 ${vp.label}] ${JSON.stringify(nums)}`)
+    } catch (err) {
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false, String(err?.message || err))
+    } finally { collect(mocks); await context.close() }
+  }
+
+  // S36 reduced-motion 1종(390x844) — t=1 스냅이어도 멈춤
+  {
+    const name = 'S36[390x844,raf-settle-reduced-motion]'
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true })
+    const page = await context.newPage()
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await setDeviceFlags(page, { paulTown2_5d: true })
+    await setWalkModeOn(page)
+    await installRafCounter(page)
+    const mocks = await installMocks(page)
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      await waitUntil(async () => (await ground.getAttribute('data-camera-x')) !== null, { timeout: 3000 })
+      await idleOf(character)
+      await page.waitForTimeout(600)
+      const a = await rafRate(page, 1000)
+      const attr = await ground.getAttribute('data-camera-loop')
+      r.check(`${name} — reduced-motion에서도 idle rAF ≤${RAF_IDLE_MAX}/s 이고 "idle"`, a <= RAF_IDLE_MAX && attr === 'idle', JSON.stringify({ a, attr }))
+      console.log(`  [S36 reduced] ${JSON.stringify({ a, attr })}`)
+    } catch (err) {
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false, String(err?.message || err))
+    } finally { collect(mocks); await context.close() }
+  }
+
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }
 }
