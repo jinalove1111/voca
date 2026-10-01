@@ -24,6 +24,7 @@
 import { installMocks } from './lib/mockRoutes.mjs'
 import { createRecorder } from './lib/harness.mjs'
 import { buildFixtureTables, QA_STUDENT_NAME, QA_LOGIN_PIN, TB_A } from './fixtures/index.mjs'
+import { enterVocaFromHome } from './lib/studentHome.mjs'
 
 // student.spec.mjs와 동일한 결정론적 폴링 헬퍼(고정 sleep 대신 조건 자체를
 // 반복 확인) — 새 파일이라 재정의(다른 에이전트 소유 파일인 student.spec을
@@ -52,6 +53,7 @@ async function login(page) {
   await page.getByPlaceholder('이름 입력...').fill(QA_STUDENT_NAME)
   await page.getByPlaceholder('PIN 4자리').fill(QA_LOGIN_PIN)
   await page.getByRole('button', { name: '시작하기!' }).click()
+  await enterVocaFromHome(page)
 }
 
 // TB_A 소유 반에 active 입실시험 1건을 심은 fixture 테이블 세트를 만든다.

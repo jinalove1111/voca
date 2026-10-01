@@ -117,6 +117,7 @@ async function main() {
       { name: '[student]', modulePath: '../tests/e2e/student.spec.mjs' },
       { name: '[admin]', modulePath: '../tests/e2e/admin.spec.mjs' },
       { name: '[mobile]', modulePath: '../tests/e2e/mobileViewports.spec.mjs' },
+      { name: '[student-home]', modulePath: '../tests/e2e/studentHome.spec.mjs' },
       { name: '[entrance]', modulePath: '../tests/e2e/entranceInputLoss.spec.mjs' },
       { name: '[town]', modulePath: '../tests/e2e/townV1.spec.mjs' },
       { name: '[stale-chunk]', modulePath: '../tests/e2e/staleChunk.spec.mjs' },

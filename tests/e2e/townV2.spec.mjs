@@ -16,6 +16,7 @@ import { installMocks } from './lib/mockRoutes.mjs'
 import { writesTo } from './lib/postgrestMock.mjs'
 import { createRecorder } from './lib/harness.mjs'
 import { QA_STUDENT_NAME, QA_LOGIN_PIN, QA_STUDENT_ID, buildFixtureTables } from './fixtures/index.mjs'
+import { enterVocaFromHome } from './lib/studentHome.mjs'
 import { PILOT_A_TOWN_STUDENT_IDS } from '../../src/config/pilotTown.js'
 
 const LV_BADGE_SEL = 'span[title="누적 별(성취) — 절대 줄지 않아요"]'
@@ -149,6 +150,7 @@ async function login(page) {
   await page.getByPlaceholder('이름 입력...').fill(QA_STUDENT_NAME)
   await page.getByPlaceholder('PIN 4자리').fill(QA_LOGIN_PIN)
   await page.getByRole('button', { name: '시작하기!' }).click()
+  await enterVocaFromHome(page)
 }
 
 async function goToPaulTownScreen(page) {
@@ -592,6 +594,7 @@ export async function run(browser, baseURL) {
 
       // ── 새로고침 후 배치 유지 ────────────────────────────────────────────
       await page.reload({ waitUntil: 'domcontentloaded' })
+      await enterVocaFromHome(page)
       const backOnDashboard = await page.getByRole('button', { name: '구경가기' }).waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false)
       r.check(`${name} — 새로고침 후 세션 복원(대시보드 표시)`, backOnDashboard)
       await goToPaulTownScreen(page)
@@ -2452,6 +2455,7 @@ export async function run(browser, baseURL) {
       r.check(`${name} 항목17 준비 — tree가 드래그로(${cellAfterDrag17})에 스냅됨`, !!cellAfterDrag17)
 
       await page.reload({ waitUntil: 'domcontentloaded' })
+      await enterVocaFromHome(page)
       const backOnDashboard17 = await page.getByRole('button', { name: '구경가기' }).waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false)
       r.check(`${name} 항목17 — 새로고침 후 세션 복원(대시보드 표시)`, backOnDashboard17)
       await goToPaulTownScreen(page)
@@ -2749,6 +2753,7 @@ export async function run(browser, baseURL) {
       //     대시보드로 돌아간다(S4/S16 항목17과 동일 세션 복원 관례) — 다시
       //     Paul Town → 내 마을로 들어가야 한다. ──────────────────────────
       await page.reload({ waitUntil: 'domcontentloaded' })
+      await enterVocaFromHome(page)
       await goToPaulTownScreen(page)
       const cardAfterReload = await enterTownCard(page)
       await cardAfterReload.click()

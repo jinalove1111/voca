@@ -17,6 +17,7 @@
 import { installMocks } from './lib/mockRoutes.mjs'
 import { createRecorder } from './lib/harness.mjs'
 import { QA_STUDENT_NAME, QA_LOGIN_PIN } from './fixtures/index.mjs'
+import { enterVocaFromHome } from './lib/studentHome.mjs'
 import { STALE_CHUNK_GUARD_KEY } from '../../src/utils/staleChunkRecovery.js'
 
 async function waitUntil(fn, { timeout = 15000, interval = 200 } = {}) {
@@ -36,6 +37,7 @@ async function login(page) {
   await page.getByPlaceholder('이름 입력...').fill(QA_STUDENT_NAME)
   await page.getByPlaceholder('PIN 4자리').fill(QA_LOGIN_PIN)
   await page.getByRole('button', { name: '시작하기!' }).click()
+  await enterVocaFromHome(page)
 }
 
 async function goToPaulTownButton(page) {
@@ -82,9 +84,10 @@ export async function run(browser, baseURL) {
       const usableAfterReload = await waitUntil(async () => {
         const nameInput = await page.getByPlaceholder('이름 입력...').count()
         const dashboardBtn = await page.getByRole('button', { name: '구경가기' }).count()
-        return nameInput > 0 || dashboardBtn > 0
+        const homeCount = await page.locator('[data-testid="student-home"]').count()
+        return nameInput > 0 || dashboardBtn > 0 || homeCount > 0
       }, { timeout: 15000 })
-      r.check('S1 새로고침 후 앱 사용 가능(재로그인 화면 또는 대시보드가 보임)', usableAfterReload === true)
+      r.check('S1 새로고침 후 앱 사용 가능(재로그인 화면, 학생 홈 또는 대시보드가 보임)', usableAfterReload === true)
 
       const crashTextCount = await page.getByText('앱 오류가 발생했어요').count()
       r.check('S1 새로고침 후 크래시 문구가 남아있지 않음', crashTextCount === 0, `count=${crashTextCount}`)
@@ -129,6 +132,7 @@ export async function run(browser, baseURL) {
 
       // 재로그인 없이 대시보드로 복귀 — 같은 버튼을 다시 눌러 청크 로드를
       // 재시도시킨다(여전히 실패하도록 mock 유지 중).
+      await enterVocaFromHome(page) // 새로고침 후 세션 복원 → 학생 홈이 첫 화면이므로 대시보드로 진입
       await (await goToPaulTownButton(page)).click()
 
       const staleTextShown = await waitUntil(async () => (
