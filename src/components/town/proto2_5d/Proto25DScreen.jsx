@@ -139,6 +139,7 @@ import {
   computeWorldSizePx,
   computeCameraTarget,
   stepCamera,
+  cameraSettled,
   readWalkModePreference,
   writeWalkModePreference,
 } from '../../../utils/town/proto2_5d/camera'
@@ -506,6 +507,10 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
   // (ProtoCharacter.jsx bob/숨쉬기 CSS keyframe, 이 파일 자체의 walkLeg
   // CSS transition)와 동일한 이유 — camera.js가 순수 계산만 맡고 이
   // effect가 그 결과를 어디에 쓸지(imperative DOM)만 오케스트레이션한다.
+  // 2026-10-01 idle rAF settle-stop — 정착 후 멈춘 루프를 다시 깨우는 진입점.
+  // effect가 설정/정리한다(OFF·미측정이면 null). 아래 재시작 effect/closeShopNow가 호출.
+  const cameraLoopStartRef = useRef(null)
+  const CAMERA_SETTLE_FRAMES = 10
   const cameraPosRef = useRef(null) // null=아직 초기화 전(다음 프레임에 target으로 즉시 스냅, 부드러운 팬 없이 모드 진입).
   useEffect(() => {
     // OFF로 전환(또는 애초에 OFF) — 다음에 다시 켜질 때 항상 새로 스냅하도록
@@ -515,7 +520,10 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     // DOM이 어긋난다).
     if (!walkMode) {
       cameraPosRef.current = null
-      if (groundRef.current) groundRef.current.style.transform = 'none'
+      if (groundRef.current) {
+        groundRef.current.style.transform = 'none'
+        delete groundRef.current.dataset.cameraLoop
+      }
       return undefined
     }
     // 뷰포트/세계 크기를 아직 측정하지 못했으면(마운트 직후 ResizeObserver
@@ -533,6 +541,9 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
     // groundEl.contains 체크로 리마운트(예: 좌석 전환 등으로 노드 교체)
     // 시에는 다시 조회하도록 방어한다.
     let charElCache = null
+    // 2026-10-01 idle rAF settle-stop — 이전 프레임 측정값과 연속 정착 프레임 수.
+    let prevSample = null
+    let settledFrames = 0
 
     function frame() {
       const groundEl = groundRef.current
@@ -569,14 +580,47 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
         // 흔들리지 않게).
         groundEl.dataset.cameraX = String(Math.round(next.x))
         groundEl.dataset.cameraY = String(Math.round(next.y))
+        // 2026-10-01 idle rAF settle-stop — 캐릭터 world 위치와 카메라가 모두
+        // 그대로인 프레임이 CAMERA_SETTLE_FRAMES(10 ≈ 160ms) 연속이면 루프를
+        // 멈춘다. 10프레임인 이유: 걷기는 CSS transition(650ms)이라 상태 변경
+        // 직후 첫 프레임에 아직 rect가 안 움직였을 수 있는데, transition이
+        // 시작되면 rect는 매 프레임 움직이므로 160ms 안에 반드시 감지된다.
+        // 걷기 시작 등 상태 변화는 아래 재시작 effect가 start()로 다시 깨운다.
+        const sample = { charX: charWorldX, charY: charWorldY, camX: next.x, camY: next.y }
+        settledFrames = cameraSettled(prevSample, sample) ? settledFrames + 1 : 0
+        prevSample = sample
+        if (settledFrames >= CAMERA_SETTLE_FRAMES) {
+          rafId = null
+          groundEl.dataset.cameraLoop = 'idle'
+          return
+        }
       }
       rafId = requestAnimationFrame(frame)
     }
-    rafId = requestAnimationFrame(frame)
+    // 멱등 — 이미 프레임이 예약돼 있으면 정착 카운터만 리셋하고, 멈춰 있으면
+    // 카운터를 리셋한 채 루프를 다시 시작한다.
+    function start() {
+      settledFrames = 0
+      if (rafId != null) return
+      prevSample = null
+      if (groundRef.current) groundRef.current.dataset.cameraLoop = 'running'
+      rafId = requestAnimationFrame(frame)
+    }
+    cameraLoopStartRef.current = start
+    start()
     return () => {
+      cameraLoopStartRef.current = null
       if (rafId != null) cancelAnimationFrame(rafId)
+      rafId = null
     }
   }, [walkMode, viewportSize.width, viewportSize.height, worldSize.worldW, worldSize.worldH, reducedMotion])
+
+  // 2026-10-01 idle rAF settle-stop — 정착으로 멈춘 카메라 루프를 깨우는 재시작
+  // 트리거: 캐릭터를 움직이거나(새 걷기 구간 = leftPct/topPct 변경, phase/좌석
+  // 전환) 크기를 바꾸는(placements) 상태 변화. 루프가 이미 돌고 있으면 no-op.
+  useEffect(() => {
+    cameraLoopStartRef.current?.()
+  }, [character.leftPct, character.topPct, character.phase, character.sitTargetKey, placements])
 
   // Phase 6A — 탭 리플(순수 장식, 상태 머신 seq/타이머 체계와 완전히
   // 독립 — 위 헤더 주석 "seq 카운터"의 대상이 아니다, 걷기/착석 로직을
@@ -1250,6 +1294,8 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
       shopBusyRef.current = false
       return false
     })
+    // 2026-10-01 idle rAF settle-stop — 멈춘 루프를 깨워 재스냅(업데이터 밖: 렌더 중/이중 호출 안전, start()는 멱등).
+    cameraLoopStartRef.current?.()
     setShopClosing(false)
     // 2026-09-26 수정 3차 — 위 setShopOpen 함수형 업데이터 내부에서 세팅한
     // 지역 변수(예: didClose)는 React 18 배칭 하에서 업데이터가 나중에(이

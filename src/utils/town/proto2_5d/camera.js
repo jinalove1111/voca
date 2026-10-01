@@ -93,6 +93,21 @@ export function stepCamera(prev, target, t = CAMERA_LERP) {
   return next
 }
 
+// 2026-10-01 idle rAF settle-stop — 카메라 rAF 루프가 "멈춰도 되는지" 판정하는
+// 순수 술어. prev/next는 {charX, charY, camX, camY}(한 프레임의 캐릭터 world px
+// + 카메라 위치). 네 값이 모두 eps(px) 미만으로만 변했으면 정착(true) —
+// 호출부가 이 결과가 연속 N프레임 true일 때 rAF를 멈춘다. prev가 없으면
+// (첫 프레임) 비교 대상이 없으므로 항상 false.
+export function cameraSettled(prev, next, eps = 0.01) {
+  if (!prev || !next) return false
+  return (
+    Math.abs(next.charX - prev.charX) < eps &&
+    Math.abs(next.charY - prev.charY) < eps &&
+    Math.abs(next.camX - prev.camX) < eps &&
+    Math.abs(next.camY - prev.camY) < eps
+  )
+}
+
 // 산책 모드 on/off 사용자 선호 — localStorage에 남기되(세션을 넘어 유지,
 // HUD 토글이 값을 직접 쓴다) 값이 없거나(최초 방문) 손상된 값이면 항상
 // ON으로 기본값을 잡는다(팀장 지시 — "기본 ON"). 저장소 접근은 항상

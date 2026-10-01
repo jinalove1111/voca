@@ -25,7 +25,7 @@ await esbuild.build({
 })
 const {
   WALK_OVERSCAN, CAMERA_LERP, WALK_MODE_STORAGE_KEY,
-  computeWorldSizePx, computeCameraTarget, lerp, stepCamera,
+  computeWorldSizePx, computeCameraTarget, lerp, stepCamera, cameraSettled,
   readWalkModePreference, writeWalkModePreference,
 } = await import(`${pathToFileURL(BUNDLE_PATH).href}?t=${Date.now()}`)
 
@@ -315,6 +315,18 @@ section('9. 산책 모드 선호(localStorage) — 기본 ON, off 저장, 예외
   let writeThrew = false
   try { writeWalkModePreference(throwingStorage, false) } catch { writeThrew = true }
   check('storage.setItem이 던져도 writeWalkModePreference가 예외를 전파하지 않음(조용히 무시)', !writeThrew)
+}
+
+// ── 10. cameraSettled — 2026-10-01 idle rAF settle-stop 정착 판정 ──────
+section('10. cameraSettled — idle rAF settle-stop 정착 술어')
+{
+  const f = { charX: 100, charY: 200, camX: 30, camY: 40 }
+  check('prev가 null이면 false(첫 프레임은 비교 대상 없음)', cameraSettled(null, f) === false)
+  check('완전히 동일하면 true', cameraSettled(f, { ...f }) === true)
+  check('eps(0.01) 미만 지터는 true', cameraSettled(f, { ...f, charX: f.charX + 0.005, camY: f.camY - 0.009 }) === true)
+  check('캐릭터가 eps 이상 움직이면 false', cameraSettled(f, { ...f, charX: f.charX + 0.5 }) === false)
+  check('카메라만 eps 이상 움직여도 false', cameraSettled(f, { ...f, camX: f.camX + 1 }) === false)
+  check('eps 인자 지정 가능(1px 허용이면 0.5px 이동도 true)', cameraSettled(f, { ...f, charY: f.charY + 0.5 }, 1) === true)
 }
 
 // ── 결과 ──────────────────────────────────────────────────────────────
