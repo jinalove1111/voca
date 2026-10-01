@@ -1,11 +1,56 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-01 (195차 — **모바일 품질 감사(상태/타이머/a11y + 아동 UX) → 수정 배치 A/B → 독립 리뷰 PASS → e2e S34/S35 신규, 커밋 4개(`35a9e91b`/`d3192980`/`c5ccefc7`/`3a66ff97`)**. 탭 지점 카메라 드리프트(실측 92~119px), 포커스 관리, 한국어 상품명/문구 수정. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 195차 섹션 참고.)_
+_최종 갱신: 2026-10-01 (196차 — **PR #62 산책 모드 카메라 rAF 루프 idle settle-stop 최적화 1건(커밋 `3f9d5d9b` perf / `7ff69bea` test), 독립 리뷰 PASS, e2e S36 신규**. 정지 후 rAF 60/s → 0/s. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 196차 섹션 참고.)_
+_195차 갱신: 2026-10-01 (195차 — **모바일 품질 감사(상태/타이머/a11y + 아동 UX) → 수정 배치 A/B → 독립 리뷰 PASS → e2e S34/S35 신규, 커밋 4개(`35a9e91b`/`d3192980`/`c5ccefc7`/`3a66ff97`)**. 탭 지점 카메라 드리프트(실측 92~119px), 포커스 관리, 한국어 상품명/문구 수정. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 195차 섹션 참고.)_
 _194차 갱신: 2026-10-01 (194차 — **"마을 산책형 상점 방문 경험" 단계 4~6: 전 여정 통합 테스트(S32) + 독립 코드리뷰(NEEDS-WORK, Medium 3/Low 4) + 수정 F1~F7 + QA, 이전 세션의 미push 6커밋 검증 포함**. 기준선 e2e에서 구매 "확인" 더블탭이 안내를 지우는 실제 결함(stage 3 회귀) 발견·수정. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 194차 섹션 참고.)_
 _193차 갱신: 2026-09-30 (193차 — **PR #62 F5 "내 물건" push `56c8dd13..dd4d0fdc` + 배치 의자 착석 결함("의자를 통과하며 앉을 수 없다") 수정 push `dd4d0fdc..77a4ff5d`(커밋 6개, 변경 파일 2개)**. 원인은 착석 상호작용이 고정 벤치에만 있었던 것 — 배치 의자 탭이 startPlainWalk로 흘러 의자 아트와 겹쳐 가려짐. 착석을 sitTargetKey/sitRect로 일반화, benchInteraction.js 재사용. verify:e2e 2548/0 FAIL, 최종 스펙 1232 PASS, 코드리뷰 3회 APPROVE, QA PASS, 실기기 정상. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 193차 섹션 참고.)_
 _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 선별 반영(전부 KEEP, 코드리뷰 APPROVE, QA PASS) + non-force push `b79681bb..56c8dd13`, 이어서 F5 "내 물건"(옮기기/넣기/놓기, 로컬 state만) 구현·검증(미push)**. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`, 브랜치 `audit/paul-town-v2-2026-09-29`. DB·SQL·네트워크 쓰기 0. 아래 192차 섹션 참고.)_
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-01 (196차) — PR #62 idle rAF settle-stop (산책 모드 카메라 루프)
+
+### 0. 범위
+운영자 지시 단일 작업: "idle rAF settle-stop 최적화 하나만". 워크트리 HEAD=origin `418c1bbb`, clean. `C:\voca`·다른 worktree·DB·SQL·실 `.env` 무접촉, Production WRITE 0, 플래그 기본값 false(`paulTown2_5d`), PR #62 Draft 유지.
+
+### 1. 변경 이유
+산책 모드 ON 동안 카메라 rAF 루프가 캐릭터·카메라가 멈춘 뒤에도 매 프레임 `getBoundingClientRect` 2회 + transform/dataset 쓰기를 계속함(배터리/발열, 아이 기기). 194/195차 감사 Medium 항목.
+
+### 2. 수정 전 측정 (S36 계측: `addInitScript`로 `requestAnimationFrame`을 감싸 앱 루프만 집계)
+360x640/390x844/412x915/1280x800 전부 idle 60/s, 걷는 중 60~61/s, 정지 후 500ms 60~61/s; reduced-motion(390) idle 60/s. `data-camera-loop` 속성 없음. S36 수정 전 26단언 중 21 FAIL(규칙 15 증거).
+
+### 3. 수정 (`3f9d5d9b` perf, `7ff69bea` test)
+- `camera.js` `cameraSettled(prev,next,eps=0.01)` 순수 술어(단위 6단언, testProto25dCamera 82/82).
+- `Proto25DScreen.jsx` 카메라 effect: frame()이 캐릭터 world 좌표+카메라 위치를 직전 프레임과 비교, `CAMERA_SETTLE_FRAMES=10`(≈160ms) 연속 정착 시 rAF 예약 중단 + `data-camera-loop="idle"`; 멱등 `start()`(`cameraLoopStartRef`)가 재시작, `data-camera-loop="running"`.
+- 재시작 트리거: (i) 새 effect deps `[character.leftPct, topPct, phase, sitTargetKey, placements]`(걷기 구간·착석/기립·배치물), (ii) `closeShopNow` 재스냅(updater 밖, 리뷰 반영), (iii) 기존 walkMode/뷰포트 크기/reduced-motion effect 재실행.
+- OFF 전환 시 transform 'none' + 속성 삭제, 언마운트 cleanup이 예약 프레임 취소·ref null. `computeCameraTarget`/`stepCamera`·`data-camera-x/y` 불변.
+- 왜 10프레임: 걷기는 CSS transition(650ms)이라 커밋 직후 첫 프레임엔 rect가 안 움직였을 수 있으나 시작되면 매 프레임 이동(ease-in-out 16ms에 ≈0.1px > eps 0.01) → 160ms 안에 반드시 감지. 스프라이트 박스 크기 변화(@2x→1x, 지연 로드)는 outer 앵커 `translate(-50%,-100%)` 때문에 center-x/bottom 불변 → 카메라 잔류 없음.
+
+### 4. 수정 후 측정 / 회귀
+| 항목 | 결과 |
+|---|---|
+| idle (4뷰포트 + reduced-motion) | 0/s |
+| 걷는 중 | 58~59/s |
+| 리사이즈 직후 | 26~27/s 잠깐 → idle |
+| 산책 모드 OFF→ON 직후 | 24~25/s → idle |
+| S36 | 26/26 PASS |
+| 회귀 격리 S17/S19/S23/S30 | 0 FAIL (S30 69/69) |
+| 단위 testProto25dCamera / BundleBudget / LazyChunkGuards / SpriteAdapter | 82 / 32 / 83 / 70 PASS |
+| build | 경고 0 |
+
+### 5. 독립 리뷰 — PASS
+지적: `closeShopNow` 재시작 호출이 setState updater 안(StrictMode 이중 호출) → updater 밖으로 이동(반영). 정착 오탐 불가 근거·rafId 생명주기·effect 순서·언마운트 정리 "verified OK". 선택 지적(미반영): 뷰포트 0 크기 early-return 시 stale 속성(테스트만 영향), S36 (b) 400ms 창이 짧은 구간과 겹칠 가능성(플레이크 시 창 축소).
+
+### 6. 검증 한계
+전체 `verify:e2e`: **미완주** — 단독 실행이 [student]/[admin]/[mobile]/[entrance]/[town]/[stale-chunk]/[town-flag-xtab]/[town-v2]/[town-v2-artwork] 9스펙 + [town-proto2.5d] 일부까지 **2339 PASS / 0 FAIL**로 진행하던 중 Claude Code가 시스템 메모리 부족(free ≈0.6GB, 사용자 Chrome/Edge 약 5GB 점유)으로 강제 종료(도구 정책상 자동 재시작 금지). 고아 프로세스 0. 같은 빌드에서 S36 26/26, 회귀 격리 S17/S19/S23/S30 0 FAIL, 단위 전부 PASS는 확인됨. 운영자가 메모리 확보 후 재실행을 지시하면 `npm run verify:e2e` 완주 → FAIL 0 → push 순으로 마감. 메모리 free ≈0.9~1.1GB 환경에서 실행 — 강제 종료 시 완주로 보고하지 않음. `verify:all` 비-e2e는 이번 변경과 무관(town 단위 스크립트 직접 실행으로 대체, 4절). 실기기 측정(배터리) 없음 — 계측은 headless Chromium rAF 호출 수.
+
+### 7. push/Preview
+**보류** — 운영자 지시("검증 통과 후 커밋·non-force push")에 따라 전체 verify:e2e 완주 전에는 push하지 않음. 로컬 커밋 `3f9d5d9b`(perf) · `7ff69bea`(S36) · 이 문서 커밋만 존재, 원격은 `418c1bbb` 그대로, PR #62 OPEN/Draft
+
+### 8. 다음 안전 작업 1개
+상점 안내 `role=status`를 항상 마운트된 live region으로 전환(테스트의 `count()===0` 계약을 텍스트 비어있음 계약으로 함께 교체).
+
+---
 
 ## 2026-10-01 (195차) — PR #62 모바일 품질 감사 + 수정 배치 A/B + e2e S34/S35 (워크트리 `C:\voca-wt\paul-town-v2-night-audit`)
 
