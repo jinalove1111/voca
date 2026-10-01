@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-01 (196차 — **PR #62 산책 모드 카메라 rAF 루프 idle settle-stop 최적화 1건(커밋 `3f9d5d9b` perf / `7ff69bea` test), 독립 리뷰 PASS, e2e S36 신규**. 정지 후 rAF 60/s → 0/s. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 196차 섹션 참고.)_
+_최종 갱신: 2026-10-02 (197차 — **PR #62 구매·배치 흐름 안정화(6시간 자율 세션): 상점 안내 live region 항상 마운트(커밋 `f9c1b027`) + 반복 개폐 스트레스 S37(커밋 `e3115738`) + S38**. 구 빌드에서도 S37 PASS(누적·중복 없음). 실제 스크린리더 미검증. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 197차 섹션 참고.)_
+_196차 갱신: 2026-10-01 (196차 — **PR #62 산책 모드 카메라 rAF 루프 idle settle-stop 최적화 1건(커밋 `3f9d5d9b` perf / `7ff69bea` test), 독립 리뷰 PASS, e2e S36 신규**. 정지 후 rAF 60/s → 0/s. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 196차 섹션 참고.)_
 _195차 갱신: 2026-10-01 (195차 — **모바일 품질 감사(상태/타이머/a11y + 아동 UX) → 수정 배치 A/B → 독립 리뷰 PASS → e2e S34/S35 신규, 커밋 4개(`35a9e91b`/`d3192980`/`c5ccefc7`/`3a66ff97`)**. 탭 지점 카메라 드리프트(실측 92~119px), 포커스 관리, 한국어 상품명/문구 수정. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 195차 섹션 참고.)_
 _194차 갱신: 2026-10-01 (194차 — **"마을 산책형 상점 방문 경험" 단계 4~6: 전 여정 통합 테스트(S32) + 독립 코드리뷰(NEEDS-WORK, Medium 3/Low 4) + 수정 F1~F7 + QA, 이전 세션의 미push 6커밋 검증 포함**. 기준선 e2e에서 구매 "확인" 더블탭이 안내를 지우는 실제 결함(stage 3 회귀) 발견·수정. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 194차 섹션 참고.)_
 _193차 갱신: 2026-09-30 (193차 — **PR #62 F5 "내 물건" push `56c8dd13..dd4d0fdc` + 배치 의자 착석 결함("의자를 통과하며 앉을 수 없다") 수정 push `dd4d0fdc..77a4ff5d`(커밋 6개, 변경 파일 2개)**. 원인은 착석 상호작용이 고정 벤치에만 있었던 것 — 배치 의자 탭이 startPlainWalk로 흘러 의자 아트와 겹쳐 가려짐. 착석을 sitTargetKey/sitRect로 일반화, benchInteraction.js 재사용. verify:e2e 2548/0 FAIL, 최종 스펙 1232 PASS, 코드리뷰 3회 APPROVE, QA PASS, 실기기 정상. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 193차 섹션 참고.)_
@@ -7,6 +8,50 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-02 (197차) — PR #62 구매·배치 흐름 안정화(6시간 자율 세션): 상점 안내 live region + 반복 개폐 스트레스
+
+### 0. 범위/보호
+- 운영자 승인 범위: A 상점 안내 접근성, B 구매→재배치 사용자 흐름 점검, C 모바일 사용성·성능 점검.
+- 시작 HEAD=origin=PR #62 head `2639b814`, clean, dist=HEAD 코드, free RAM 3.66GB, 테스트 프로세스 0.
+- `C:\voca`·다른 worktree·DB·SQL·Supabase·Production·실 `.env` 무접촉, 플래그 기본값 false, PR Draft, merge/force/reset/clean 없음.
+- 에이전트 분리: impl-notice(ProtoShopScreen.jsx), impl-spec2(spec), qa-reviewer(읽기 전용), Product Lead(Fable) 계획·검증·조정. 브라우저 테스트는 항상 1개.
+
+### 1. A — 상점 안내 live region (커밋 `f9c1b027`)
+- 기획 의도: `proto25d-shop-notice`(role=status, aria-live=polite)가 텍스트와 함께 삽입돼 스크린리더가 안 읽을 수 있음(195차 §5 보류 항목). 항상 마운트하고, 안내가 없으면 빈 텍스트+박스 클래스 제거(높이 0, pointer-events-none, 레이아웃·화면 동일), aria-atomic 추가, role/aria-live 토글 없음. CTA 행은 `noticeText && purchaseNoticeActive`(이전과 동치). 타이머·CTA 가드·포커스·Escape·문구 불변.
+- 검증 구분: **DOM 검증만 수행**(속성 상수, 요소 동일성, 빈 상태 비가시). **실제 스크린리더 검증은 수행하지 않음** — 통과로 기록하지 않음.
+- 테스트 계약: "안내 없음" = count()===0 → `noticeCleared()`(비가시 AND 빈 텍스트, 더 엄격). 변경 단언 5곳(S31 항목a, S33-F3/F3b/F6, S35), 타임아웃 불변(500/2800/1000/1000).
+- 규칙 15: S38(신규, 1280x800) — 구 빌드 FAIL(구매 전 요소 부재 → count 0, role/aria null) → 신 빌드 PASS.
+- S38 내용: 구매 전 count 1·role=status·aria-live=polite·aria-atomic=true·비가시·빈 텍스트 → 구매 성공 문구가 같은 DOM 노드(`__id` 확장 속성) → 계속 쇼핑하기 후 빈 텍스트·같은 노드 → 닫고 다시 열어도 빈 안내·Buy "구매 완료" 비활성·재구매 없음 → (b) 잔액 $3: 부족 안내 → ≤2.8s 자동 소거·같은 노드. 쓰기 0.
+
+### 2. B/C — 반복 개폐 스트레스 S37 (커밋 `e3115738`, 4뷰포트, 산책 모드 ON)
+- 내용: 가게 5회 열고 닫기(버튼/Escape/브라우저 뒤로 순환) → 구매 1회 → 계속 쇼핑하기 → 닫고 재열기(Buy 비활성 "구매 완료", 잔액 $32 1회 차감) → 내 물건 5회 → 배치 진입/취소 5회 → 놓기→옮기기→넣기→재배치.
+- 단언: 히스토리 index 기준선 복귀·잔여 마커 0, window 리스너 순증가(popstate/resize 0, keydown ≤+1; add/removeEventListener 래핑, once 미추적 한계 명시), churn 후 rAF ≤5/s + data-camera-loop idle, placed-count 1, 콘솔 에러 0, 가로 스크롤 0, 쓰기 0. 재열기는 입장 버튼 enabled(400ms 재진입 가드) 대기.
+
+| 빌드 | 결과 |
+|---|---|
+| 구 빌드 `2639b814` | 390/412/1280 전부 PASS (360x640은 아래 참고) → 리스너·타이머·rAF 누적 없음, 중복 구매·중복 차감·아이템 유실·오래된 안내·막다른 화면 없음(실측 net popstate 1→1, keydown 0→0, resize 0→0, rAF 0/s) |
+| 신 빌드 | 4뷰포트 57/57 (S37+S38) |
+
+- S37[360x640] 1회 FAIL(구 빌드 격리 1회차, `locator.waitFor 3000ms` — 호출 로그 미보존) → 2회차 PASS. flake로 단정하지 않음: 원인 후보(브라우저 뒤로 닫기 직후 400ms 재진입 가드로 입장 버튼 disabled)에 대해 enabled 대기를 추가(기준·타임아웃 완화 없음). 전체 E2E에서 재관찰.
+- "배치 중 상점 선택"은 S33-F1이 고정(중복 안 함). 새로고침 전후: 구매·배치는 로컬 React state(새로고침 시 초기화, S23이 고정) — 저장 기능 없음, DB 연결하지 않음, 현재 한계로 유지. 의자 통과·이동 경로는 수용된 한계라 미수정.
+
+### 3. 모바일/성능(C) 확인
+- S37 4뷰포트에서 버튼 가림·화면 밖 메뉴·포커스 복귀는 기존 S25/S27/S35 계약 + S37 churn 통과로 확인; 정지 시 rAF 0/s·재시작은 S36(196차)과 S37 항목8로 확인. 재현된 결함 없음 → 리팩터링 없음.
+
+### 4. 검증
+- build 경고 0; 단위 testBundleBudget 32/LazyChunkGuards/Proto25dShop 80/SpriteAdapter 70/Camera 82 PASS; 격리 회귀(S21/S22/S27/S31/S33/S35) **328/328**; 독립 리뷰 PASS(nit: noticeCleared textContent 타임아웃 500 반영; once 리스너 미추적 한계 문서화).
+- 전체 verify:e2e(최종 코드 1회): **2899 / 2899 PASS, FAIL 0, SKIP 0, 11스펙 미mock 0**(S37[360x640] 12/12 — 1회성 대기 실패 재발 없음).
+- verify:all: 비-e2e 32도메인은 변경 파일(ProtoShopScreen.jsx, spec)과 무관 — 실행 결과 PASS 스크립트 186개(기준선과 동일 집합), 로직 FAIL 0; 환경 의존 미실행(`.env` 부재) = 빌드 스텝 25 + testStudentSelectPinStatus/testRlsSecurity/testClassDeleteCascade/dbIntegrityAudit/testRewardPostQueue/testRewardRetryExactlyOneRow(변경 파일과 무관); e2e 도메인은 verify:e2e와 동일 스크립트(중복) → 단독 완주로 대체.
+
+### 5. push/PR
+- 검증 완료 후 non-force push `2639b814..HEAD`(`f9c1b027` a11y, `e3115738` test, docs/status 커밋) → origin/feat/paul-town-v2-clean-pr, PR #62 결과 댓글, 최신 HEAD Preview — 결과는 아래 추기 참조.
+
+### 6. 수용 한계
+- 실제 스크린리더 미검증; S37 리스너 래퍼는 once 미추적; 구매·배치 미저장(프로토타입 계약); 의자 통과·이동 경로(수용). 학습 효과 주장 없음(논문 인용 불필요).
+
+### 7. 다음 안전 작업 1개
+- 실기기(iOS VoiceOver/Android TalkBack)로 구매 안내·CTA 포커스 수동 검증 체크리스트 작성(코드 변경 없음).
 
 ## 2026-10-01 (196차) — PR #62 idle rAF settle-stop (산책 모드 카메라 루프)
 
