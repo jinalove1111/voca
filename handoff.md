@@ -49,6 +49,7 @@ _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1�
 ### 7. push/Preview
 **보류** — 운영자 지시("검증 통과 후 커밋·non-force push")에 따라 전체 verify:e2e 완주 전에는 push하지 않음. 로컬 커밋 `3f9d5d9b`(perf) · `7ff69bea`(S36) · 이 문서 커밋만 존재, 원격은 `418c1bbb` 그대로, PR #62 OPEN/Draft
 - (추기) 완주 FAIL 0 확인 후 non-force push `418c1bbb..HEAD`(`3f9d5d9b` perf, `7ff69bea` S36, `a8ae42bf`/`06404ff8`/이 커밋 docs) → origin/feat/paul-town-v2-clean-pr. PR/Preview 결과는 아래 197차 또는 이 절 다음 추기 참조.
+- (추기 2) push `418c1bbb..78772953` 완료, HEAD=origin `78772953`, worktree clean, PR #62 OPEN/**Draft 유지**, Vercel Preview **success**(https://vercel.com/jina4926952s-projects/voca/3kCCN1cm1R3R6aTrNhV64VjdsNeD).
 
 ### 8. 다음 안전 작업 1개
 상점 안내 `role=status`를 항상 마운트된 live region으로 전환(테스트의 `count()===0` 계약을 텍스트 비어있음 계약으로 함께 교체).
