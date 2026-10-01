@@ -388,7 +388,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   const [textbookAssignments, setTextbookAssignments] = useState([])
   useEffect(() => {
     let cancelled = false
-    getStudentClassAssignments(studentId).then((list) => {
+    getStudentClassAssignments(studentId, { cached: true }).then((list) => {
       if (!cancelled) {
         setTextbookAssignments(list)
         // 콜드스타트 수정(2026-08-06) — 배정 캐시 예열 완료 후
