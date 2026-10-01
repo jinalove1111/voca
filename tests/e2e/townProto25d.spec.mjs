@@ -427,6 +427,14 @@ async function closeShopIfOpen(page) {
   }
 }
 
+// 안내(notice)는 항상 마운트된 live region이다 — "안내 없음" = 박스 없음(not
+// visible) + 텍스트 ''. (이전 계약 count()===0은 더 이상 성립하지 않는다.)
+async function noticeCleared(page) {
+  const n = page.locator('[data-testid="proto25d-shop-notice"]')
+  if (await n.isVisible()) return false
+  return (((await n.textContent({ timeout: 500 }).catch(() => '')) || '').trim()) === ''
+}
+
 // 목표 world-% 지점(targetPct)이 지금 화면(뷰포트 ∩ 바닥)에 보이는지
 // 확인하고, 안 보이면 그 화면 안에서(안쪽 insetPx 여백을 두고) 목표
 // 방향으로 최대한 이동하는 지점을 탭해 캐릭터를 그 쪽으로 걷게 한 뒤
@@ -7400,7 +7408,7 @@ export async function run(browser, baseURL) {
 
           await page.waitForTimeout(450) // F6 CTA 가드(ProtoShopScreen.jsx CTA_GUARD_MS=400) — 안내 등장 직후 탭은 무시됨.
           await continueBtn.click()
-          const noticeGone = await waitUntil(async () => (await notice.count()) === 0, { timeout: 500 })
+          const noticeGone = await waitUntil(() => noticeCleared(page), { timeout: 500 })
           const viewItemsGone = (await viewItemsBtn.count()) === 0
           r.check(`${name} 항목a — "계속 쇼핑하기" 클릭 후 안내/버튼이 사라짐`, !!noticeGone && viewItemsGone)
           const shopStillOpen = (await shopOverlay.count()) === 1
@@ -7795,7 +7803,7 @@ export async function run(browser, baseURL) {
         await page.waitForTimeout(2600)
         r.check(`${name} — 2.6초 뒤에도 "내 물건 보기" 버튼이 남아 있음`, (await vi.count()) === 1 && (await vi.isVisible()))
         await page.locator('[data-testid="proto25d-shop-notice-continue"]').click()
-        r.check(`${name} — 계속 쇼핑하기로 안내 제거`, (await page.locator('[data-testid="proto25d-shop-notice"]').count()) === 0)
+        r.check(`${name} — 계속 쇼핑하기로 안내 제거`, !!(await noticeCleared(page)))
       } catch (err) { failS33(name, err) } finally { collect(mocks); await context.close() }
     }
     {
@@ -7807,7 +7815,7 @@ export async function run(browser, baseURL) {
         await notice.waitFor({ state: 'visible', timeout: 1500 })
         const txt = (await notice.textContent()) || ''
         r.check(`${name} 사전조건 — 부족 안내`, txt.includes('부족'), txt)
-        const gone = await waitUntil(async () => (await notice.count()) === 0, { timeout: 2800 })
+        const gone = await waitUntil(() => noticeCleared(page), { timeout: 2800 })
         r.check(`${name} — 오류 안내는 ~2초 뒤 사라짐`, !!gone)
       } catch (err) { failS33(name, err) } finally { collect(mocks); await context.close() }
     }
@@ -7859,7 +7867,7 @@ export async function run(browser, baseURL) {
           (await notice.isVisible()) && (await vi.isVisible()) && (await cont.isVisible()) && (await shopOverlay.count()) === 1)
         await page.waitForTimeout(450)
         await cont.click()
-        r.check(`${name} — 가드(400ms) 경과 후 "계속 쇼핑하기"가 정상 동작`, !!(await waitUntil(async () => (await notice.count()) === 0, { timeout: 1000 })))
+        r.check(`${name} — 가드(400ms) 경과 후 "계속 쇼핑하기"가 정상 동작`, !!(await waitUntil(() => noticeCleared(page), { timeout: 1000 })))
       } catch (err) { failS33(name, err) } finally { collect(mocks); await context.close() }
     }
   }
@@ -7970,7 +7978,7 @@ export async function run(browser, baseURL) {
       r.check(`${name} — 성공 안내가 뜨면 포커스가 "계속 쇼핑하기"로`, !!focusContinue, String(await activeTestId(page)))
       await page.waitForTimeout(450) // F6 CTA 가드(CTA_GUARD_MS=400)
       await page.keyboard.press('Enter')
-      const noticeGone = await waitUntil(async () => (await page.locator('[data-testid="proto25d-shop-notice"]').count()) === 0, { timeout: 1000 })
+      const noticeGone = await waitUntil(() => noticeCleared(page), { timeout: 1000 })
       const activeAfter = await activeTestId(page)
       r.check(`${name} — Enter로 안내를 닫으면 안내 제거 + 포커스가 뒤로가기(비활성이면 가게 root)로`,
         !!noticeGone && ['proto25d-shop-back', 'proto25d-shop'].includes(activeAfter), String(activeAfter))
@@ -8104,6 +8112,348 @@ export async function run(browser, baseURL) {
       console.log(`  [S36 reduced] ${JSON.stringify({ a, attr })}`)
     } catch (err) {
       r.check(`${name} 시나리오 실행 완료(예외 없음)`, false, String(err?.message || err))
+    } finally { collect(mocks); await context.close() }
+  }
+
+  // ── S38(2026-10-02, 안내 live region) — 안내(notice)는 가게 안에 항상
+  // 마운트된 role=status/aria-live=polite/aria-atomic=true 요소다(스크린리더가
+  // "처음 등장하는" live region은 읽지 않는 문제 대응). 구매 전엔 count 1 +
+  // 보이지 않음 + 텍스트 '' 이고, 구매 성공/부족 안내는 "같은 요소"의 텍스트만
+  // 바뀐다(요소 identity 불변). 수정 전 빌드에서는 구매 전 count 0이라 FAIL
+  // (규칙 15 증거). walk mode OFF 1280x800.
+  {
+    const name = 'S38[1280x800,notice-live-region]'
+    const tidOf = (page, id) => page.locator(`[data-testid="${id}"]`)
+    const newPageS38 = async (dollars) => {
+      const context = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+      const page = await context.newPage()
+      await setDeviceFlags(page, { paulTown2_5d: true, townShopV1: true })
+      const mocks = await installMocks(page, { townState: { starsEarned: 20, dollars: { available: dollars, earned: dollars, spent: 0 }, owned: [], welcomeClaimed: false } })
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      return { context, page, mocks, character, ground: tidOf(page, 'proto25d-ground') }
+    }
+    const openShopS38 = async (page, character, ground, walk) => {
+      if (walk) {
+        const gb = await ground.boundingBox()
+        await page.mouse.click(gb.x + gb.width * (SHOP_ENTRANCE_PCT_REF.x / 100), gb.y + gb.height * (SHOP_ENTRANCE_PCT_REF.y / 100))
+        await idleOf(character)
+      }
+      await tidOf(page, 'proto25d-shop-enter').waitFor({ state: 'visible', timeout: 3000 })
+      await waitUntil(() => tidOf(page, 'proto25d-shop-enter').isEnabled().catch(() => false), { timeout: 1500 })
+      await tidOf(page, 'proto25d-shop-enter').click()
+      await tidOf(page, 'proto25d-shop').waitFor({ state: 'visible', timeout: 3000 })
+    }
+    const markId = (loc) => loc.evaluate((el) => { el.__id ??= Math.random(); return el.__id })
+    const textOf = async (loc) => (((await loc.textContent().catch(() => '')) || '').trim())
+    let ctx1 = null
+    try {
+      // (a) 구매 성공 경로 — 같은 요소가 구매 전/중/후 내내 마운트돼 있다.
+      ctx1 = await newPageS38(37)
+      const { page, character, ground } = ctx1
+      await openShopS38(page, character, ground, true)
+      const notice = tidOf(page, 'proto25d-shop-notice')
+      const attrs = {
+        count: await notice.count(),
+        role: await notice.getAttribute('role'),
+        live: await notice.getAttribute('aria-live'),
+        atomic: await notice.getAttribute('aria-atomic'),
+        visible: await notice.isVisible(),
+        text: await textOf(notice),
+      }
+      r.check(`${name} 항목a — 구매 전: 안내 요소가 이미 마운트(count 1) + role=status/aria-live=polite/aria-atomic=true + 보이지 않음 + 텍스트 ''`,
+        attrs.count === 1 && attrs.role === 'status' && attrs.live === 'polite' && attrs.atomic === 'true' && !attrs.visible && attrs.text === '', JSON.stringify(attrs))
+      const id0 = await markId(notice)
+
+      await tidOf(page, 'proto25d-shop-buy').first().click()
+      await tidOf(page, 'proto25d-shop-confirm').waitFor({ state: 'visible', timeout: 1000 })
+      await tidOf(page, 'proto25d-shop-confirm-yes').click()
+      await notice.waitFor({ state: 'visible', timeout: 1500 })
+      const txtBuy = await textOf(notice)
+      const id1 = await markId(notice)
+      r.check(`${name} 항목b — 구매 후 안내 텍스트에 "구매 완료" + 같은 요소가 그대로 마운트(identity 불변)`,
+        txtBuy.includes('구매 완료') && id1 === id0 && (await notice.count()) === 1, JSON.stringify({ txtBuy, id0, id1 }))
+
+      await page.waitForTimeout(450) // CTA 가드(CTA_GUARD_MS=400)
+      await tidOf(page, 'proto25d-shop-notice-continue').click()
+      const cleared = await waitUntil(() => noticeCleared(page), { timeout: 1000 })
+      const id2 = await markId(notice)
+      r.check(`${name} 항목c — "계속 쇼핑하기" 후 텍스트 '' + 보이지 않음 + 같은 요소(identity 불변)`,
+        !!cleared && id2 === id0 && (await notice.count()) === 1, JSON.stringify({ cleared: !!cleared, id0, id2 }))
+
+      await tidOf(page, 'proto25d-shop-back').click()
+      await tidOf(page, 'proto25d-shop').waitFor({ state: 'hidden', timeout: 3000 })
+      await openShopS38(page, character, ground, false)
+      const reNotice = tidOf(page, 'proto25d-shop-notice')
+      r.check(`${name} 항목d — 닫았다 다시 열면 안내가 비어 있음(이전 문구 잔존 없음)`,
+        (await reNotice.count()) === 1 && !!(await noticeCleared(page)), await textOf(reNotice))
+
+      const buy = tidOf(page, 'proto25d-shop-buy').first()
+      const buyText = (await buy.textContent().catch(() => '')) || ''
+      await buy.click({ force: true, timeout: 500 }).catch(() => {}) // 비활성 — 아무 일도 없어야 함
+      await page.waitForTimeout(150)
+      r.check(`${name} 항목e — 재방문 시 Buy는 "구매 완료" 비활성이고 재구매 시도에 확인창/안내 없음`,
+        (await buy.isDisabled()) && buyText.includes('구매 완료') && (await tidOf(page, 'proto25d-shop-confirm').count()) === 0 && !!(await noticeCleared(page)),
+        buyText)
+      const w = classifyWrites(ctx1.mocks.apiCallLog)
+      r.check(`${name} — 구매/보상 쓰기 액션 0건 + 허용목록 외 REST 쓰기 0건`,
+        !ctx1.mocks.apiCallLog.some((c) => c.body && SHOP_WRITE_ACTIONS.includes(c.body.action)) && w.unexpectedRest.length === 0, JSON.stringify(w))
+    } catch (err) {
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false, String(err?.message || err))
+    } finally { if (ctx1) { collect(ctx1.mocks); await ctx1.context.close() } }
+
+    // (b) 잔액 부족 — 오류 안내가 같은 요소에서 ~2초 뒤 지워진다.
+    let ctx2 = null
+    try {
+      ctx2 = await newPageS38(3)
+      const { page, character, ground } = ctx2
+      await openShopS38(page, character, ground, true)
+      const notice = tidOf(page, 'proto25d-shop-notice')
+      const idB0 = await markId(notice)
+      await tidOf(page, 'proto25d-shop-buy').first().click()
+      await tidOf(page, 'proto25d-shop-confirm').waitFor({ state: 'visible', timeout: 1000 })
+      await tidOf(page, 'proto25d-shop-confirm-yes').click()
+      await notice.waitFor({ state: 'visible', timeout: 1500 })
+      const t0 = Date.now()
+      const txtB = await textOf(notice)
+      r.check(`${name} 항목f — 잔액 부족 안내 텍스트("부족")가 같은 요소에 표시됨`, txtB.includes('부족') && (await markId(notice)) === idB0, txtB)
+      const goneB = await waitUntil(() => noticeCleared(page), { timeout: 2800 })
+      r.check(`${name} 항목g — 오류 안내가 ≤2.8초 안에 지워지고(텍스트 '' + 보이지 않음) 같은 요소 유지`,
+        !!goneB && Date.now() - t0 <= 3000 && (await markId(notice)) === idB0 && (await notice.count()) === 1,
+        JSON.stringify({ ms: Date.now() - t0 }))
+    } catch (err) {
+      r.check(`${name} (b) 시나리오 실행 완료(예외 없음)`, false, String(err?.message || err))
+    } finally { if (ctx2) { collect(ctx2.mocks); await ctx2.context.close() } }
+  }
+
+  // ── S37(2026-10-02, 모달 churn 스트레스) — 가게/내 물건/배치 모드를 번갈아
+  // 열고 닫는(버튼/Escape/브라우저 뒤로가기) 반복 뒤에도 (1) 히스토리 깊이가
+  // 기준선으로 복귀, (2) window 리스너가 누적되지 않음(popstate/resize 순증가
+  // 0, keydown ≤ +1 — 무언가 열려 있을 때만), (3) rAF 루프가 다시 멈춤(≤5/s,
+  // data-camera-loop="idle"), (4) 구매는 정확히 1회 — 를 고정한다. 리스너
+  // 추적은 window.addEventListener/removeEventListener 래핑(type·listener·
+  // capture 단위 중복 제거 — DOM과 같은 의미; `once` 자동 해제는 추적하지
+  // 않음). 배치 중 건물 탭은 상점 의도 없음 → S33-F1이 고정(여기선 중복 안 함).
+  // S32와 같은 정직한 스킵 규칙(화면에 슬롯/입구가 안 들어오면 FAIL 아님).
+  for (const vp of S17_VIEWPORTS) {
+    const isMobile = vp.width !== 1280
+    const name = `S37[${vp.label},modal-churn]`
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, ...(isMobile ? { hasTouch: true } : {}) })
+    const page = await context.newPage()
+    const consoleErrors = []
+    page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()) })
+    page.on('pageerror', (err) => { consoleErrors.push(String(err)) })
+    await setDeviceFlags(page, { paulTown2_5d: true, townShopV1: true })
+    await setWalkModeOn(page)
+    await installRafCounter(page)
+    await page.addInitScript(() => {
+      const net = { popstate: 0, keydown: 0, resize: 0 }
+      window.__listenerNet = net
+      const seen = new Map() // `${type}|${capture}` -> Set(listener)
+      const keyOf = (type, o) => `${type}|${typeof o === 'boolean' ? o : !!(o && o.capture)}`
+      const oa = window.addEventListener.bind(window)
+      const orm = window.removeEventListener.bind(window)
+      window.addEventListener = (type, fn, o) => {
+        if (fn && type in net) {
+          const k = keyOf(type, o)
+          if (!seen.has(k)) seen.set(k, new Set())
+          if (!seen.get(k).has(fn)) { seen.get(k).add(fn); net[type]++ }
+        }
+        return oa(type, fn, o)
+      }
+      window.removeEventListener = (type, fn, o) => {
+        if (fn && type in net) {
+          const s = seen.get(keyOf(type, o))
+          if (s && s.delete(fn)) net[type]--
+        }
+        return orm(type, fn, o)
+      }
+    })
+    const mocks = await installMocks(page, { townState: { starsEarned: 20, dollars: { available: 37, earned: 37, spent: 0 }, owned: [], welcomeClaimed: false } })
+    try {
+      await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
+      await login(page)
+      await waitForLoggedIn(page)
+      const character = page.locator('[data-proto-character]')
+      await character.waitFor({ state: 'attached', timeout: 5000 })
+      const ground = page.locator('[data-testid="proto25d-ground"]')
+      const viewportEl = page.locator('[data-testid="proto25d-viewport"]')
+      const root = page.locator('[data-testid="proto25d-root"]')
+      const tid = (id) => page.locator(`[data-testid="${id}"]`)
+      const shopOverlay = tid('proto25d-shop')
+      const myItemsPanel = tid('proto25d-myitems-panel')
+      const placedItem = tid('proto25d-placed-item')
+      const attrIs = (attr, v) => waitUntil(async () => (await root.getAttribute(attr)) === v, { timeout: 2000 })
+      const readNav = () => page.evaluate(() => ({
+        len: history.length,
+        index: (typeof navigation !== 'undefined' && navigation.currentEntry) ? navigation.currentEntry.index : null,
+        markers: !!(history.state && (history.state.proto25dPlace || history.state.proto25dMyItems || history.state.proto25dShop)),
+      })).catch(() => null)
+      const readNet = () => page.evaluate(() => ({ ...window.__listenerNet }))
+      await waitUntil(async () => (await ground.getAttribute('data-camera-x')) !== null, { timeout: 3000 })
+      await idleOf(character)
+      const navBase = await readNav()
+      const netBase = await readNet()
+      const atBaseline = async () => {
+        const n = await readNav()
+        return !!n && !n.markers && (navBase?.index == null || n.index == null ? n.len === navBase?.len : n.index === navBase.index)
+      }
+      // 닫기 후 히스토리 정착까지 기다린 뒤 다음 단계로(popstate 비동기 도착 전
+      // 재열기는 앱의 busy 가드가 막는 정상 동작이라, 테스트 경쟁을 피한다).
+      const settle = async (label, closedWaiter) => {
+        const closed = await closedWaiter
+        const nav = await waitUntil(atBaseline, { timeout: 3000 })
+        return { label, closed: !!closed, nav: !!nav }
+      }
+
+      const entranceVis = await ensureWorldPointVisible(page, character, ground, viewportEl, SHOP_ENTRANCE_PCT_REF)
+      if (!entranceVis.visible) {
+        r.check(`${name} — 입장 지점이 화면에 들어오지 않아 이 시나리오를 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+        continue
+      }
+      await page.mouse.click(entranceVis.targetScreenPt.x, entranceVis.targetScreenPt.y)
+      await idleOf(character)
+      const enterBtn = tid('proto25d-shop-enter')
+      const openShop = async () => {
+        await enterBtn.waitFor({ state: 'visible', timeout: 3000 })
+        // 재진입 가드(400ms) 동안은 비활성 — 활성화될 때까지 대기(≤1500ms).
+        await waitUntil(() => enterBtn.isEnabled().catch(() => false), { timeout: 1500 })
+        await enterBtn.click()
+        await shopOverlay.waitFor({ state: 'visible', timeout: 3000 })
+      }
+      const closeShop = async (mode) => {
+        if (mode === 'back') await tid('proto25d-shop-back').click()
+        else if (mode === 'esc') await page.keyboard.press('Escape')
+        else await page.goBack()
+        return settle(`shop-${mode}`, shopOverlay.waitFor({ state: 'hidden', timeout: 3000 }).then(() => true).catch(() => false))
+      }
+      const bad = []
+      const noteBad = (s) => { if (!s.closed || !s.nav) bad.push(s) }
+
+      // ── (1) 가게 5회 open/close(뒤로가기 버튼/Escape/브라우저 뒤로 교대) ──
+      const shopModes = ['back', 'esc', 'nav']
+      for (let i = 0; i < 5; i++) {
+        await openShop()
+        noteBad(await closeShop(shopModes[i % 3]))
+      }
+      r.check(`${name} 항목1 — 가게 5회 열고 닫기 후 매번 닫힘 + 히스토리 기준선 복귀`, bad.length === 0, JSON.stringify(bad))
+
+      // ── (2) 구매 1회(단일 클릭) → 계속 쇼핑하기 → 닫기 → 재열기 → Buy 비활성 ──
+      await openShop()
+      await tid('proto25d-shop-buy').first().click()
+      await tid('proto25d-shop-confirm').waitFor({ state: 'visible', timeout: 1000 })
+      await tid('proto25d-shop-confirm-yes').click()
+      await tid('proto25d-shop-notice-continue').waitFor({ state: 'visible', timeout: 2000 })
+      await page.waitForTimeout(450) // CTA 가드(CTA_GUARD_MS=400)
+      await tid('proto25d-shop-notice-continue').click()
+      noteBad(await closeShop('back'))
+      await openShop()
+      const buy = tid('proto25d-shop-buy').first()
+      const buyText = (await buy.textContent().catch(() => '')) || ''
+      const balance = (await tid('proto25d-shop-balance').textContent().catch(() => '')) || ''
+      r.check(`${name} 항목2 — 재열기 시 Buy "구매 완료" 비활성 + 잔액 $32(한 번만 차감)`,
+        (await buy.isDisabled()) && buyText.includes('구매 완료') && balance.includes('$32') && !balance.includes('$27'), JSON.stringify({ buyText, balance }))
+      noteBad(await closeShop('esc'))
+
+      // ── (3) 내 물건 5회 open/close(버튼/Escape/브라우저 뒤로 교대) ──
+      const myItemsOpen = tid('proto25d-myitems-open')
+      const itemsBad = []
+      for (let i = 0; i < 5; i++) {
+        await myItemsOpen.waitFor({ state: 'visible', timeout: 3000 })
+        await myItemsOpen.click()
+        await myItemsPanel.waitFor({ state: 'visible', timeout: 2000 })
+        const mode = shopModes[i % 3]
+        if (mode === 'back') await tid('proto25d-myitems-close').click()
+        else if (mode === 'esc') await page.keyboard.press('Escape')
+        else await page.goBack()
+        const s = await settle(`myitems-${mode}`, myItemsPanel.waitFor({ state: 'hidden', timeout: 3000 }).then(() => true).catch(() => false))
+        if (!s.closed || !s.nav) itemsBad.push(s)
+      }
+      r.check(`${name} 항목3 — 내 물건 5회 열고 닫기 후 매번 닫힘 + 히스토리 기준선 복귀`, itemsBad.length === 0, JSON.stringify(itemsBad))
+
+      // ── (4) 배치 모드 5회 진입/취소(취소 버튼/Escape/브라우저 뒤로 교대) ──
+      const placeOpen = tid('proto25d-place-open')
+      const placeBad = []
+      for (let i = 0; i < 5; i++) {
+        await placeOpen.waitFor({ state: 'visible', timeout: 3000 })
+        await placeOpen.click()
+        const on = await attrIs('data-placing', 'true')
+        const mode = shopModes[i % 3]
+        if (mode === 'back') await tid('proto25d-place-cancel').click()
+        else if (mode === 'esc') await page.keyboard.press('Escape')
+        else await page.goBack()
+        const s = await settle(`place-${mode}`, attrIs('data-placing', 'false'))
+        if (!on || !s.closed || !s.nav) placeBad.push({ ...s, on: !!on })
+      }
+      r.check(`${name} 항목4 — 배치 5회 진입/취소 후 매번 종료 + 히스토리 기준선 복귀`, placeBad.length === 0, JSON.stringify(placeBad))
+
+      // ── (5) 배치 → 이동 → 회수 → 재배치(S32 항목5~8 패턴) ──
+      let journey = 'skip'
+      await placeOpen.click()
+      await attrIs('data-placing', 'true')
+      const first = await findTappableSlot(page, character, ground, viewportEl, null)
+      if (!first) {
+        r.check(`${name} 항목5 — 탭 가능한 슬롯을 화면에 가져오지 못해 정직하게 스킵함(FAIL 아님)`, true, '스킵')
+        await page.keyboard.press('Escape').catch(() => {})
+      } else {
+        await page.mouse.click(first.pt.x, first.pt.y)
+        const placed1 = await attrIs('data-proto25d-placed-count', '1')
+        await myItemsOpen.click()
+        await myItemsPanel.waitFor({ state: 'visible', timeout: 2000 })
+        await tid('proto25d-myitems-move').click()
+        await attrIs('data-placing', 'true')
+        const second = await findTappableSlot(page, character, ground, viewportEl, first.s.id)
+        if (second) {
+          await page.mouse.click(second.pt.x, second.pt.y)
+          await waitUntil(async () => (await placedItem.getAttribute('data-slot-id').catch(() => null)) === second.s.id, { timeout: 2000 })
+        } else {
+          await page.keyboard.press('Escape').catch(() => {})
+        }
+        await attrIs('data-placing', 'false')
+        await myItemsOpen.click()
+        await tid('proto25d-myitems-retrieve').click()
+        const count0 = await attrIs('data-proto25d-placed-count', '0')
+        await myItemsOpen.click()
+        await myItemsPanel.waitFor({ state: 'visible', timeout: 2000 })
+        await tid('proto25d-myitems-place').first().click()
+        await attrIs('data-placing', 'true')
+        const third = await findTappableSlot(page, character, ground, viewportEl, null)
+        if (third) await page.mouse.click(third.pt.x, third.pt.y)
+        else await page.keyboard.press('Escape').catch(() => {})
+        const placed2 = third ? await attrIs('data-proto25d-placed-count', '1') : false
+        journey = `placed1=${!!placed1} moved=${!!second} retrieved=${!!count0} placed2=${!!placed2}`
+        r.check(`${name} 항목5 — 배치 → 이동(가능 시) → 회수 → 재배치 성공`, !!placed1 && !!count0 && (!third || !!placed2), journey)
+      }
+
+      // ── (6) 종료 불변식 ──
+      await attrIs('data-placing', 'false')
+      await idleOf(character)
+      const navEnd = await readNav()
+      r.check(`${name} 항목6 — 히스토리 잔여 마커 없음 + 스택 깊이 기준선 복귀`, !!navEnd && !navEnd.markers && (await atBaseline()), JSON.stringify({ navBase, navEnd }))
+      const netEnd = await readNet()
+      r.check(`${name} 항목7 — 리스너 누적 없음: popstate/resize 순증가 0, keydown ≤ +1`,
+        netEnd.popstate === netBase.popstate && netEnd.resize === netBase.resize && netEnd.keydown <= netBase.keydown + 1, JSON.stringify({ netBase, netEnd }))
+      await page.waitForTimeout(500)
+      const rate = await rafRate(page, 1000)
+      const loop = await ground.getAttribute('data-camera-loop')
+      r.check(`${name} 항목8 — churn 후 rAF ≤${RAF_IDLE_MAX}/s + data-camera-loop="idle"`, rate <= RAF_IDLE_MAX && loop === 'idle', JSON.stringify({ rate, loop }))
+      if (journey !== 'skip') {
+        r.check(`${name} 항목9 — 최종 placed-count "1"`, (await root.getAttribute('data-proto25d-placed-count')) === '1')
+      }
+      const writeActionCalls = mocks.apiCallLog.filter((c) => c.body && SHOP_WRITE_ACTIONS.includes(c.body.action))
+      const restWriteCalls = classifyWrites(mocks.apiCallLog).unexpectedRest
+      r.check(`${name} — 구매/보상 쓰기 액션 0건 + 허용목록 외 REST 쓰기 0건`,
+        writeActionCalls.length === 0 && restWriteCalls.length === 0, JSON.stringify({ writeActionCalls, restWriteCalls }))
+      r.check(`${name} — 가로 스크롤 없음`, await noHorizontalOverflow(page))
+      r.check(`${name} — 콘솔/페이지 에러 없음`, consoleErrors.length === 0, JSON.stringify(consoleErrors.slice(0, 5)))
+      console.log(`  [S37 ${vp.label}] net ${JSON.stringify(netBase)} -> ${JSON.stringify(netEnd)} raf ${rate}/s ${journey}`)
+    } catch (err) {
+      const bodyText = await page.locator('body').innerText().catch(() => '(body 읽기 실패)')
+      r.check(`${name} 시나리오 실행 완료(예외 없음)`, false,
+        `${err?.message || err}\n  [진단] body(앞 300자)=${JSON.stringify(bodyText.slice(0, 300))}`)
     } finally { collect(mocks); await context.close() }
   }
 
