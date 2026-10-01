@@ -275,39 +275,50 @@ export default function ProtoShopScreen({ products, onBack, closing, balance, pu
           보장 — 뷰포트 높이와 무관). 버튼 2개만 pointer-events-auto로
           되돌린다(컨테이너 자체는 여전히 none — 문구 아래 빈 공간을 눌러도
           가게 배경/카드로 그대로 전달됨). */}
-      {noticeText && (
-        <div className="absolute inset-x-0 top-0 bottom-16 z-10 flex flex-col items-center justify-center gap-3 pointer-events-none px-6">
-          <p
-            data-testid="proto25d-shop-notice"
-            role="status"
-            aria-live="polite"
-            className="pointer-events-none rounded-2xl bg-orange-50 border-2 border-orange-300 text-orange-600 text-base font-black px-5 py-3 shadow-lg text-center"
-          >
-            {noticeText}
-          </p>
-          {purchaseNoticeActive && (
-            <div className="flex flex-wrap gap-2 justify-center pointer-events-auto">
-              <button
-                type="button"
-                data-testid="proto25d-shop-notice-viewitems"
-                onClick={() => { if (performance.now() - ctaArmedAtRef.current >= CTA_GUARD_MS) onViewMyItems() }} // F6
-                className="min-h-[44px] px-4 rounded-xl bg-emerald-600 text-white text-sm font-black shadow btn-press"
-              >
-                🎒 내 물건 보기
-              </button>
-              <button
-                type="button"
-                ref={continueRef}
-                data-testid="proto25d-shop-notice-continue"
-                onClick={handleDismissNotice}
-                className="min-h-[44px] px-4 rounded-xl bg-white text-gray-700 text-sm font-black shadow btn-press"
-              >
-                계속 쇼핑하기
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+      {/* 2026-10-02 상점 안내 live region — 알림 영역(<p>)은 항상 마운트해 둔다.
+          live region이 텍스트와 함께 DOM에 새로 삽입되면 스크린리더가 그 문구를
+          읽지 않는 경우가 흔하다(Proto25DScreen의 place toast가 이미 같은
+          패턴). 문구가 없을 땐 빈 텍스트 + 박스 클래스 없음(padding/border/
+          background/shadow 전부 제거 → 높이 0, Playwright isVisible()=false)이라
+          화면은 이전과 동일하고, role/aria-live/aria-atomic은 절대 토글하지 않는다.
+          테스트 계약 변경: 안내 없음 상태가 count()===0 에서 "count()===1 이지만
+          텍스트 비어 있음/보이지 않음"으로 바뀐다. CTA 버튼은 여전히
+          purchaseNoticeActive일 때만 DOM에 존재한다. DOM 수준 변경일 뿐이며
+          실제 스크린리더로 검증하지는 않았다. */}
+      <div className="absolute inset-x-0 top-0 bottom-16 z-10 flex flex-col items-center justify-center gap-3 pointer-events-none px-6">
+        <p
+          data-testid="proto25d-shop-notice"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className={noticeText
+            ? 'pointer-events-none rounded-2xl bg-orange-50 border-2 border-orange-300 text-orange-600 text-base font-black px-5 py-3 shadow-lg text-center'
+            : 'pointer-events-none'}
+        >
+          {noticeText}
+        </p>
+        {noticeText && purchaseNoticeActive && (
+          <div className="flex flex-wrap gap-2 justify-center pointer-events-auto">
+            <button
+              type="button"
+              data-testid="proto25d-shop-notice-viewitems"
+              onClick={() => { if (performance.now() - ctaArmedAtRef.current >= CTA_GUARD_MS) onViewMyItems() }} // F6
+              className="min-h-[44px] px-4 rounded-xl bg-emerald-600 text-white text-sm font-black shadow btn-press"
+            >
+              🎒 내 물건 보기
+            </button>
+            <button
+              type="button"
+              ref={continueRef}
+              data-testid="proto25d-shop-notice-continue"
+              onClick={handleDismissNotice}
+              className="min-h-[44px] px-4 rounded-xl bg-white text-gray-700 text-sm font-black shadow btn-press"
+            >
+              계속 쇼핑하기
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* 리뷰 수정 1차 — history.back() popstate가 도착할 때까지(비동기
           창) 뒤로가기 버튼을 disabled+aria-busy로 보여준다(연타 방지의
