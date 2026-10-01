@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import StudentSelect from './components/StudentSelect'
 import Dashboard from './components/Dashboard'
+import StudentHome, { resetStudentHomeState } from './components/StudentHome'
+import StudentGrowth from './components/StudentGrowth'
+import WritingCoach from './components/WritingCoach'
 import WordBrowser from './components/WordBrowser'
 import WordDetail from './components/WordDetail'
 import QuizGame from './components/QuizGame'
@@ -25,7 +28,7 @@ import { trackEvent, EV } from './utils/productEvents'
 import { assignDirections } from './utils/entranceTest'
 import { resolveSessionSpellingDirection } from './utils/writePracticeDirection'
 import { logSpellingReview } from './utils/spellingReviewApi'
-import { setSessionToken, getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, refreshTextbooks, refreshAllForLogin, invalidateStudentAssignmentsCache, revalidateUnitWords, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getStudentSpellingSettings, extendStableDirections, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentClassId, getTextbookById, getStudentPrimaryTextbook, getClassNames, getClassIdByName } from './utils/wordLibrary'
+import { setSessionToken, getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, refreshTextbooks, refreshAllForLogin, invalidateStudentAssignmentsCache, revalidateUnitWords, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getStudentSpellingSettings, extendStableDirections, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentClassId, getTextbookById, getStudentPrimaryTextbook, getClassNames, getClassIdByName, getTodaysAssignmentWordIds } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech } from './utils/speech'
 import { shouldRefreshOnForeground } from './utils/foregroundRefreshGate'
 // Curriculum Engine Phase 0(2026-08-01, docs/CURRICULUM_ENGINE.md §8) —
@@ -221,7 +224,21 @@ function SpeedBtn() {
 // (표시/legacy 마이그레이션용)을 따로 받는다 — 이름만으로는 더 이상 학생을
 // 유일하게 식별할 수 없다(동명이인 허용).
 function AppInner({ studentId, studentName, onLogout }) {
-  const [screen, setScreen]         = useState('dashboard')
+  // 2026-10-02 학생 홈 개편 — 플래그(기기 로컬 kill switch)가 켜져 있으면 첫
+  // 화면이 4메뉴 홈. 초기값만 결정(이미 로그인 중 플래그가 바뀌면 다음
+  // 마운트부터 적용). 하위 화면들의 onBack('dashboard')는 그대로 둔다.
+  const studentHomeEnabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('studentHomeMenu'), () => false)
+  // 2026-10-02 학생 홈 개편 — 홈/나의 성장에서 연 기록 화면(캘린더/앨범/모자/
+  // 박물관/정원/마을)은 뒤로가기 시 출발지로 돌아가야 한다. 출발지는 goFrom이
+  // 기록하고, Dashboard는 setScreen을 직접 부르므로 ref가 null → 기존대로
+  // 'dashboard'로 복귀(Dashboard 출발 동작 불변).
+  const returnToRef = useRef(null)
+  const RETURN_SCREENS = ['studyCalendar', 'growthAlbum', 'hatCollection', 'wordMuseum', 'englishGarden', 'paulTown']
+  const goFrom = (origin, target) => { returnToRef.current = RETURN_SCREENS.includes(target) ? origin : null; setScreen(target) }
+  const backToOrigin = () => { const t = returnToRef.current || 'dashboard'; returnToRef.current = null; setScreen(t) }
+  // 로그아웃/세션 만료 등 어떤 경로로든 AppInner가 내려가면 홈 포커스 기억을 비운다.
+  useEffect(() => () => resetStudentHomeState(), [])
+  const [screen, setScreen]         = useState(() => (isFeatureEnabled('studentHomeMenu') ? 'home' : 'dashboard'))
   const [selectedWord, setWord]     = useState(null)
   const [selectedWordIdx, setWordIdx] = useState(0)
   const [pendingNextIdx, setPendingNextIdx] = useState(0)
@@ -235,7 +252,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 익명 관찰(2026-07-23) — 화면 열람 이벤트. trackEvent는 (이벤트,날짜)당
   // 1회 dedupe + fire-and-forget이라 이 effect가 몇 번 돌아도 무해.
   useEffect(() => {
-    const m = { dashboard: EV.appOpened, paulTown: EV.paulTownOpened, englishGarden: EV.gardenOpened, bookshelf: EV.bookshelfOpened, timeMachine: EV.timeMachineOpened, wordMuseum: EV.museumOpened }
+    const m = { dashboard: EV.appOpened, home: EV.appOpened, paulTown: EV.paulTownOpened, englishGarden: EV.gardenOpened, bookshelf: EV.bookshelfOpened, timeMachine: EV.timeMachineOpened, wordMuseum: EV.museumOpened }
     if (m[screen]) trackEvent(studentId, m[screen])
   }, [screen, studentId])
   const [currentGameId, setCurrentGameId] = useState('balloon')
@@ -806,6 +823,30 @@ function AppInner({ studentId, studentName, onLogout }) {
           최상단에 떠 있는 소형 토스트. 모달 아님(다른 화면 입력을 막지
           않음), 큐가 비어있으면 RewardToast 자체가 null을 반환. */}
       <RewardToast entries={rewardFeedback} onDismiss={dismissRewardFeedback} />
+      {screen === 'home' && (
+        <StudentHome studentName={studentName} studentData={studentData} classWords={classWords}
+          hasTodaysHomework={!!getStudentClass(studentId) && getTodaysAssignmentWordIds(getStudentClass(studentId)).length > 0}
+          onStartGuided={startGuidedSession} onGo={(t) => goFrom('home', t)} onLogout={onLogout}
+          canEnterTown={isFeatureEnabled('paulTownHomeBand') && !!attachment.stats}
+          writingEnabled={isFeatureEnabled('writingCoachEnabled')} />
+      )}
+      {screen === 'growth' && (
+        <StudentGrowth studentData={studentData} classWords={classWords}
+          wallet={townShopEnabled && townShop.state ? { starsEarned: townShop.state.starsEarned } : null}
+          starsDisplay={studentData.starsDisplay}
+          onBack={() => setScreen('home')} onGo={(t) => goFrom('growth', t)} onStartGuided={startGuidedSession} />
+      )}
+      {screen === 'writingCoach' && (
+        // 2026-10-02 학생 홈 개편 — Dashboard 로컬 state였던 WritingCoach를
+        // 그대로 옮김(props 동일). 저장 없음(MVP), 닫으면 홈.
+        <WritingCoach
+          targetWords={(studentData?.round?.wordsViewed || [])
+            .slice(-2)
+            .map((id) => attachment.wordTextById?.get?.(id))
+            .filter(Boolean)}
+          onBack={() => setScreen('home')}
+          onComplete={() => setScreen('home')} />
+      )}
       {screen === 'dashboard'     && (
         <Dashboard studentId={studentId} studentName={studentName} studentData={studentData} classWords={classWords}
           onGo={setScreen} onLogout={onLogout} onPlayGame={startRandomGame}
@@ -818,6 +859,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           pendingCeremonyHat={attachment.pendingCeremonyHat} onDismissCeremony={attachment.dismissCeremony}
           textbookOptions={textbookOptions} currentTextbookId={currentTextbookOptionId}
           onTextbookSwitch={handleTextbookSwitch}
+          onHome={studentHomeEnabled ? () => setScreen('home') : undefined}
           wallet={townShopEnabled && townShop.state ? { starsEarned: townShop.state.starsEarned, dollarsAvailable: townShop.state.dollars.available } : null} />
       )}
       {screen === 'guidedSession' && (
@@ -941,7 +983,7 @@ function AppInner({ studentId, studentName, onLogout }) {
       )}
       {screen === 'levelUpMission' && <LevelUpMission missions={missions} words={classWords} onAnswer={handleAnswerMission} onBack={() => setScreen('dashboard')} />}
       {screen === 'diary'         && <DiaryPage studentData={studentData} onBack={() => setScreen('dashboard')} />}
-      {screen === 'studyCalendar' && <StudyCalendar studentData={studentData} onBack={() => setScreen('dashboard')} />}
+      {screen === 'studyCalendar' && <StudyCalendar studentData={studentData} onBack={backToOrigin} />}
       {/* 애착 시스템(2026-07-22) — 4개 화면 전부 lazy(공유 fallback), 진입은
           Dashboard "더 많은 메뉴"의 feature flag 게이트를 거친다. */}
       {(screen === 'hatCollection' || screen === 'wordMuseum' || screen === 'growthAlbum' || screen === 'englishGarden' || screen === 'paulTown' || screen === 'bookshelf' || screen === 'timeMachine') && (
@@ -956,18 +998,18 @@ function AppInner({ studentId, studentName, onLogout }) {
           {screen === 'hatCollection' && (
             <HatCollection studentName={studentName} hatInventory={studentData.hatInventory}
               equippedHatId={studentData.equippedHatId} onEquip={(id) => { studentData.equipHat(id); trackEvent(studentId, EV.hatEquipped) }}
-              onBack={() => setScreen('dashboard')} />
+              onBack={backToOrigin} />
           )}
           {screen === 'wordMuseum' && (
             <WordMuseum studentId={studentId} stats={attachment.stats} lib={attachment.lib}
-              onBack={() => setScreen('dashboard')} />
+              onBack={backToOrigin} />
           )}
           {screen === 'growthAlbum' && (
             <GrowthAlbum milestones={studentData.milestones} stats={attachment.stats}
-              onBack={() => setScreen('dashboard')} />
+              onBack={backToOrigin} />
           )}
           {screen === 'englishGarden' && (
-            <EnglishGarden stats={attachment.stats} onBack={() => setScreen('dashboard')} />
+            <EnglishGarden stats={attachment.stats} onBack={backToOrigin} />
           )}
           {/* Paul Town v2.0 — 순수 파생 마을 화면. 읽는 영속 상태는 기존
               사실 2가지(hatInventory/equippedHatId)뿐, 장착은 기존 equipHat
@@ -975,7 +1017,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           {screen === 'paulTown' && (
             <PaulTown stats={attachment.stats} hatInventory={studentData.hatInventory}
               equippedHatId={studentData.equippedHatId} onEquip={studentData.equipHat}
-              onGo={setScreen} onBack={() => setScreen('dashboard')}
+              onGo={setScreen} onBack={backToOrigin}
               shop={townShopEnabled ? townShop : null} shopEnabled={townShopEnabled}
               onGoTown={townV1Enabled ? () => setScreen('town') : null} />
           )}
@@ -1095,7 +1137,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           고정 버튼이 히어로 CTA("▶ 오늘의 학습 시작")를 덮어 탭을 가로채는
           실측 회귀가 있어 대시보드에서는 렌더하지 않는다. 다른 모든 화면은
           불변. */}
-      {screen !== 'dashboard' && <SpeedBtn />}
+      {screen !== 'dashboard' && screen !== 'home' && screen !== 'growth' && <SpeedBtn />}
       {/* Paul Town 2.5D 프로토타입(paulTown2_5d, Stage 1, 2026-09-22) — 기존
           `screen` 상태 머신/네비게이션과 완전히 무관한 독립 dev/QA 서피스.
           내비게이션 진입점이 없다(운영자 스펙에 "학생이 진입"하는 요구

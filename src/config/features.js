@@ -134,6 +134,11 @@ const DEFAULT_FEATURES = {
   // 미실행이어도 이 기능은 DB 접근 0이라 완전히 동작한다.
   writingCoachEnabled: false,
 
+  // 2026-10-02 학생 홈 개편 — 로그인 직후 4메뉴(단어/문장/말하기/성장) 홈.
+  // 운영자 승인 범위. 기기 로컬 kill switch: 끄면 기존 Dashboard가 첫
+  // 화면이다(localStorage 오버라이드로 기기별 즉시 롤백).
+  studentHomeMenu: true,
+
   // 쓰기 답안 검토 AI 보조(Task 2, 2026-07-23, docs/operations/task2-writing-
   // analysis.md + task2-writing-report.md) — SpellingReviewQueuePanel(관리자
   // 전용)의 "AI 자동분류 미리보기" 버튼을 게이팅. 기본 OFF: (1) supabase_v3_6_
