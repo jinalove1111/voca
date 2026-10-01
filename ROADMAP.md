@@ -5,6 +5,12 @@ _(2026-09-18 170차 추가) Paul Town V2 렌더러 통합 — 브랜치
 `paulTownV2` OFF, Production WRITE 0. 상세는 `handoff.md`
 2026-09-18(170차) 섹션._
 
+## 2026-10-02 (198차) — 학생 홈 4메뉴 + 로그인 중복 fetch 제거 + Writing/Speaking 설계 문서 — 상태: 학생 홈·fetch 코드 완료 ✅(PR #62 브랜치, Draft), 설계 문서 완료·구현 미착수
+
+- 학생 홈 4메뉴(Voca/나의 성장/문장 쓰기/말하기 + 내 마을) 완료 — 플래그 `studentHomeMenu`(기기 로컬 kill switch), 커밋 `02d546cb`/`7220740f`, e2e `[student-home]` 191 PASS/0 FAIL/1 SKIP.
+- 로그인 중복 fetch 제거 완료(커밋 `3238df49`): 로그인→홈 요청 14~19건 → 6건, 중복 0. 수용 한계: 60초 창 내 관리자 변경은 다음 재검증까지 미반영.
+- Writing 파일럿/Speaking 설계 문서 완료(`docs/design/WRITING_PILOT_DESIGN_2026-10-02.md`, `docs/design/SPEAKING_DESIGN_2026-10-02.md`) — **구현 미착수**, 운영자 결정(모델·동의·호스팅·반 선정·보관 정책) 대기. DB·SQL·Production 변경 없음. 상세: `handoff.md` 198차.
+
 ## 2026-09-18 (170차) — Paul Town V2 렌더러 통합: 승인 월드·아트 35종을 실제 V2 렌더러에 연결 — 상태: 렌더러 코드 완료 ✅(플래그 OFF, push/PR/merge/배포 미실행)
 
 169차(Paul Town Batch 1 아트 통합 A/B/C, 하네스 34/34 실물·staged 35/38)

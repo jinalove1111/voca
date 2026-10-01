@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-02 (197차 — **PR #62 구매·배치 흐름 안정화(6시간 자율 세션): 상점 안내 live region 항상 마운트(커밋 `f9c1b027`) + 반복 개폐 스트레스 S37(커밋 `e3115738`) + S38**. 구 빌드에서도 S37 PASS(누적·중복 없음). 실제 스크린리더 미검증. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 197차 섹션 참고.)_
+_최종 갱신: 2026-10-02 (198차 — **학생 홈 4메뉴 개편(커밋 `02d546cb`/`7220740f`, 플래그 `studentHomeMenu`) + 로그인 중복 fetch 제거(커밋 `3238df49`) + Writing/Speaking 설계 문서 2건(구현 없음)**. DB·SQL·Supabase·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 198차 섹션 참고.)_
+_197차 갱신: 2026-10-02 (197차 — **PR #62 구매·배치 흐름 안정화(6시간 자율 세션): 상점 안내 live region 항상 마운트(커밋 `f9c1b027`) + 반복 개폐 스트레스 S37(커밋 `e3115738`) + S38**. 구 빌드에서도 S37 PASS(누적·중복 없음). 실제 스크린리더 미검증. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 197차 섹션 참고.)_
 _196차 갱신: 2026-10-01 (196차 — **PR #62 산책 모드 카메라 rAF 루프 idle settle-stop 최적화 1건(커밋 `3f9d5d9b` perf / `7ff69bea` test), 독립 리뷰 PASS, e2e S36 신규**. 정지 후 rAF 60/s → 0/s. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 196차 섹션 참고.)_
 _195차 갱신: 2026-10-01 (195차 — **모바일 품질 감사(상태/타이머/a11y + 아동 UX) → 수정 배치 A/B → 독립 리뷰 PASS → e2e S34/S35 신규, 커밋 4개(`35a9e91b`/`d3192980`/`c5ccefc7`/`3a66ff97`)**. 탭 지점 카메라 드리프트(실측 92~119px), 포커스 관리, 한국어 상품명/문구 수정. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 195차 섹션 참고.)_
 _194차 갱신: 2026-10-01 (194차 — **"마을 산책형 상점 방문 경험" 단계 4~6: 전 여정 통합 테스트(S32) + 독립 코드리뷰(NEEDS-WORK, Medium 3/Low 4) + 수정 F1~F7 + QA, 이전 세션의 미push 6커밋 검증 포함**. 기준선 e2e에서 구매 "확인" 더블탭이 안내를 지우는 실제 결함(stage 3 회귀) 발견·수정. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 194차 섹션 참고.)_
@@ -8,6 +9,65 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-02 (198차) — 학생 홈 4메뉴 개편 + 로그인 중복 fetch 제거 + Writing/Speaking 설계 문서
+
+### 0. 범위/보호
+- 운영자 승인 범위: P1 학생 홈 개편, P2 보카 속도, P3 Writing 설계, P4 Speaking 설계.
+- 시작 HEAD=origin=PR #62 head `90631279`. 로컬 브랜치 `audit/paul-town-v2-2026-09-29`(push 대상 origin/feat/paul-town-v2-clean-pr).
+- `C:\voca`·다른 worktree·DB·SQL·Supabase·Production·실 `.env` 무접촉. 기존 플래그 기본값 유지. 신규 플래그 `studentHomeMenu=true` 1개 추가 — **기기 로컬 kill switch이며 관리자 토글은 학생 기기에 전파되지 않음**. PR Draft, merge/force/reset/clean 없음.
+- 사고 기록: 구현 서브에이전트가 지시 위반으로 `git stash`/`stash pop`을 1회 실행. pop으로 전부 복원, 트리 무결성은 리드가 검증(stash 목록 0). 재발 방지로 이후 브리프에 금지 명시.
+
+### 1. 모델/역할
+- Product Lead = Claude Fable 5.1(이 세션). 운영자 지시의 "Opus" 역할을 Fable이 수행 — 하네스가 Opus를 제공하지 않음(가정 아님, 실측). 서브에이전트는 Agent tool `model:"sonnet"`로 요청(하네스 별칭, 정확한 Sonnet 버전은 하네스 미표시).
+- 역할: explore-flow/explore-features(읽기 전용 조사), ux-home(아동 UX 설계), perf-baseline(성능 측정), impl-home(src: StudentHome/StudentGrowth/App/Dashboard/features), impl-home-spec(tests), impl-perf(wordLibrary+단위), review-home/review-perf(독립 리뷰, 구현 미참여), plan-writing/plan-speaking(설계 문서), 리드 최종 검토. 파일별 단일 편집 담당, 브라우저 테스트 1개씩.
+
+### 2. P1 학생 홈 (커밋 `02d546cb` feat / `7220740f` test)
+- 문제: 로그인 직후 Dashboard가 복잡. 구조 선택: 라우터가 없어 `screen` 상태에 `'home'` 추가, Dashboard는 "Voca 영역"으로 보존 → 테스트 계약·Node 하네스 6종 유지.
+
+| 메뉴 | 동작 |
+|---|---|
+| 시작 버튼 | 배정 있으면 "▶ 오늘 연습 시작하기"(`getTodaysAssignmentWordIds`), 없으면 "▶ 단어 연습 시작하기" → 기존 `startGuidedSession`. 단어 0개면 "단어가 아직 없어요" |
+| Voca | Dashboard("← 홈"으로 복귀) |
+| 나의 성장 | `StudentGrowth`: 연속 일수/모은 별/공부한 날 + 캘린더(항상)·앨범·모자·박물관·정원(플래그) 링크, 빈 상태 문구 |
+| 문장 쓰기 | `writingCoachEnabled` ON이면 WritingCoach 화면, 아니면 "준비 중" |
+| 말하기 | "준비 중" — 독립 기능 없음(녹음·재생은 단어 상세 안) |
+| 🏘️ 내 마을 | 기존 `paulTownHomeBand`+stats 조건 → Paul Town 허브 |
+
+- 준비 중 카드: `aria-disabled`(포커스 가능)+배지+항상 마운트된 `role=status` 안내 줄(4초/다음 탭에 소거), 가짜 시작 없음.
+- 되돌아가기: 성장/홈 내 마을에서 연 화면은 출발지로(`returnToRef`), Dashboard에서 연 화면은 Dashboard로.
+- 변경 파일: `src/config/features.js`, `src/components/StudentHome.jsx`(신규), `StudentGrowth.jsx`(신규), `src/App.jsx`(screen 초기값·3 블록·SpeedBtn 게이트·WritingCoach 승격·returnToRef·unmount 리셋·analytics home→appOpened), `src/components/Dashboard.jsx`(← 홈, 로그아웃 우측, 헤더 flex-wrap, 문장 만들기→`onGo('writingCoach')`).
+- 독립 리뷰 NEEDS-WORK → 반영: `testSpeakingPathNoPermanentDisable`이 `handleLogout` 원문을 고정 → 리셋을 AppInner unmount effect로 이동; 360px 헤더 겹침(지갑 배지) → flex-wrap; 되돌아가기 출발지; 내 마을 포커스 복귀.
+
+### 3. P1 검증
+- 신규 `tests/e2e/studentHome.spec.mjs` 12 시나리오 × 360/390/412/1280 — 최종 192단언 **191 PASS / 0 FAIL / 1 SKIP**(360 헤더 streak>0 — fixture로 시드 불가, 정직 SKIP). DOM 검증만, VoiceOver/TalkBack 실검증 없음.
+- 실행 이력: 1차 152/156(Playwright가 `aria-disabled`를 disabled로 취급 → 테스트를 force click으로 수정, 제품 변경 없음), 2차 187/190(테스트 중복 클릭), 3차 191/192.
+- 기존 student.spec 34/34, mobileViewports 178/178(홈 인지 login 헬퍼 `enterVocaFromHome` 적용 7스펙). Dashboard import 하네스 6종 PASS(testGamificationSettings는 `.env` 의존으로 환경 미실행). build 경고 0.
+
+### 4. P2 보카 속도 (커밋 `3238df49`)
+- 측정: Playwright chromium headless, 전체 네트워크 mock, 같은 기기, 390/1280 × 3회, in-page `performance.now`. 마커: 로그인 폼→홈(로그아웃+교과서/유닛 select+히어로) / Voca 진입 `h1.word-text-hero`.
+- BEFORE: 로그인→홈 103ms(390)/200ms(1280), Voca 진입 5ms(요청 0·청크 0 → 병목 아님). 로그인→홈 요청 14~19건 중 8건이 init이 방금 받은 동일 GET 재요청 + SCA ×2. 원인: `handleSelect`가 `refreshAllForLogin`을 await(콜드 분기 사실상 사장).
+- 수정: 60초 이내면 students만 재조회(+SCA 캐시 무효화), 초과 시 전체 4종. `getStudentClassAssignments` in-flight 중복 제거 + 학생 로그인 effect만 `{cached:true}`(관리자 화면은 항상 재조회), 오류 결과 미캐시, `writeStudentUnit` 캐시 삭제.
+- AFTER: 요청 6건·중복 0, 로그인→홈 87ms(390)/87ms(1280), like-for-like 로그인→구 Dashboard 99/95ms, Voca 진입 불변. 해석: mock이라 시간 이득은 과소평가 — 요청 수 감소가 신뢰 지표. 신규 `scripts/testLoginRefreshDedupe.mjs`.
+- 독립 리뷰 NEEDS-WORK(관리자 재조회·오류 캐시) → 반영.
+- 수용 한계: 로그인 60초 창 안의 관리자 변경(단어/교재/반설정)은 다음 포그라운드 재검증까지 미반영(students는 항상 신선).
+- 미수정: 로그인 전 750KB JS·롱태스크(병목 근거 부족), product_events ×3(원인 미추적). DB 변경 없음.
+
+### 5. P3/P4 설계 문서 (구현 없음)
+- `docs/design/WRITING_PILOT_DESIGN_2026-10-02.md`(305줄, 13절), `docs/design/SPEAKING_DESIGN_2026-10-02.md`(186줄, 11절).
+- 논문 근거는 리드가 웹 검색으로 서지 검증: Kang&Han 2015 MLJ 99(1) 1–18 / Bitchener&Knoch 2010 JSLW 19(4) 207–217(미국 대학 상급 63명 — 초안의 "NZ" 오류 정정) / Graham,Hebert&Harris 2015 ESJ 115(4) 523–547(1~8학년 L1, 컴퓨터 피드백 d=0.38) / Lee,Jang&Plonsky 2015 Applied Linguistics 36(3) 345–366 / arXiv:2502.08587(아동 ASR WER 성인 대비 ~5배, 프리프린트).
+- 초등 EFL 아동 대상 AI 힌트 효과는 "미확인"으로 유지. 모델 정확도·비용 미확정.
+- 발견: `writingReview*` 플래그는 문장 쓰기가 아니라 철자 답안 검토 큐용; `grade-writing-answers` Edge Function 선례 존재.
+
+### 6. 최종 검증/푸시
+- 전체 verify:e2e(최종 코드 1회): **미완주** — 12스펙 중 [student]/[admin]/[mobile]/[student-home]/[entrance]/[town]/[stale-chunk]/[town-flag-xtab]/[town-v2]/[town-v2-artwork] 완료 + [town-proto2.5d] 진행 중 Claude Code 메모리 가드가 강제 종료(free ≈1.5~1.8GB, 사용자 Chrome 등 상주; 가드는 끄지 않음, 다른 프로세스 미종료). 그 시점 집계 **1635 PASS / 7 FAIL**. FAIL 7건은 이번 변경과 무관한 마을 애니메이션 타이밍 스위트(town-v2 S9[430] 클릭 타임아웃, S21/S21b[390] 벤치 착석 phase 시퀀스 관측 누락·reduced-motion 종료, town-proto2.5d S9[1280] 좌석선 px 오차 2건)로, 전날 동일 코드에서 1481/1481·2899/2899 PASS였던 항목이나 **메모리 압박 하 실패를 flake로 단정하지 않음 — 여유 메모리에서 완주 재실행으로 판정 필요**. [student-home] 스펙은 이 실행에서 FAIL 0. 격리 결과: studentHome 191/192(1 SKIP), student 34/34, mobileViewports 178/178, 단위·하네스 전부 PASS.
+- push/PR/Preview: **보류** — 운영자 규칙("필수 검사 실패 또는 미완주가 남으면 push하지 않고 체크포인트") 적용. 로컬 커밋: `02d546cb`(feat 홈), `7220740f`(test), `3238df49`(perf), + 이 문서/설계/상태 커밋. 원격은 `90631279` 그대로, PR #62 OPEN/Draft. 남은 작업: 여유 메모리(≥3GB, 상주 앱 종료) 확보 후 `npm run verify:e2e` 완주 → FAIL 0(또는 7건이 실제 결함이면 조사·수정) → non-force push → PR #62 결과 댓글 → Preview 확인.
+
+### 7. 운영자 확인 항목
+- 홈 플래그 전역 토글 불가(기기 로컬) 수용 여부.
+- Writing 파일럿: 모델 사용·동의·호스팅·반 선정. Speaking: 동의·보관 정책.
+- 실기기 VoiceOver/TalkBack 검증.
+- 로그인 60초 창(관리자 변경 지연 반영) 수용 여부.
 
 ## 2026-10-02 (197차) — PR #62 구매·배치 흐름 안정화(6시간 자율 세션): 상점 안내 live region + 반복 개폐 스트레스
 

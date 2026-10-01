@@ -1,0 +1,23 @@
+{
+  "agent_name": "product-lead",
+  "role": "학생 홈 개편(4메뉴) + 보카 성능 개선 + Writing/Speaking 설계 — 자율 세션 조정",
+  "task_id": "student-home-voca-perf-2026-10-02",
+  "status": "checkpoint",
+  "progress": 85,
+  "started_at": "2026-10-02T03:30:00+09:00",
+  "updated_at": "2026-10-02T03:40:00+09:00",
+  "worktree": "C:\\voca-wt\\paul-town-v2-night-audit",
+  "branch_local": "audit/paul-town-v2-2026-09-29 (push 대상 origin/feat/paul-town-v2-clean-pr)",
+  "head_start": "90631279 (= origin = PR #62 head, clean)",
+  "models": "Product Lead = Claude Fable 5.1(이 세션; Opus 아님, 하네스 지정). 서브에이전트 = Agent tool model:\"sonnet\" 요청(하네스가 실제 실행한 모델명은 결과 보고 시 기록). 에이전트별 모델 지정은 Agent tool의 model 파라미터로 가능(opus/sonnet/haiku).",
+  "priorities": [
+    { "id": "P1", "title": "학생 첫 화면 4메뉴(Voca/Writing/Speaking/나의 성장) + 내 마을 버튼", "status": "discovery" },
+    { "id": "P2", "title": "보카 속도 개선(전후 측정)", "status": "baseline_measuring" },
+    { "id": "P3", "title": "Writing 파일럿 설계 문서", "status": "pending" },
+    { "id": "P4", "title": "Speaking 설계 문서", "status": "pending" }
+  ],
+  "completed": { "P1": "02d546cb feat + 7220740f test — studentHome 191/192(1 SKIP), student 34/34, mobile 178/178, 리뷰 반영", "P2": "3238df49 — 요청 14~19→6, 로그인→홈 103→87ms(390)/200→87ms(1280), 리뷰 반영", "P3": "docs/design/WRITING_PILOT_DESIGN_2026-10-02.md 305줄(서지 검증)", "P4": "docs/design/SPEAKING_DESIGN_2026-10-02.md 186줄(서지 검증)", "docs": "handoff 198차, TESTING/ARCHITECTURE/ROADMAP append" },
+  "rules": "DB/SQL/Supabase/Production/실 .env 무접촉, 플래그 기본값 유지, 학생 답안·음성 외부 AI 전송 금지, 마을 신기능·의자 경로·배치 저장 제외, 브라우저 테스트 1개씩, 메모리 가드 유지, 전체 E2E 최종 1회",
+  "blocker": "최종 전체 verify:e2e 미완주 — 메모리 가드 강제 종료(free ≈1.5~1.8GB). 종료 시점 1635 PASS / 7 FAIL(town-v2 S9/S21/S21b, proto25d S9 — 변경 무관 애니메이션 타이밍 스위트, 압박 하 실패라 flake 단정 안 함). push 보류.",
+  "next_action": "운영자: 메모리 확보(상주 앱 종료) 후 재실행 지시 → verify:e2e 완주 → FAIL 0(7건 재발 시 조사) → non-force push 90631279..HEAD → PR #62 댓글 → Preview(모바일 확인용 URL). 운영자 결정: 홈 플래그 기기 로컬 한계 수용, Writing/Speaking 파일럿 결정 항목(문서 §13/§10)."
+}

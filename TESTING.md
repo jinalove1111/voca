@@ -1207,6 +1207,7 @@ _append. 초등 5개 반/45명 확장 production readiness 점검, 브랜치
 | `scripts/testHomeworkPipeline45.mjs` | 183 | 아니오 | homework |
 | `scripts/testWritingPolicyFiveClasses.mjs` | 90 | 아니오 | writing |
 | `tests/e2e/mobileViewports.spec.mjs`(확장) | 112→178 | 아니오 | e2e `[mobile]` |
+| `tests/e2e/studentHome.spec.mjs`(신규, 198차) | 192단언(191 PASS/1 SKIP: 360 헤더 streak>0 fixture 시드 불가), 12 시나리오 × 360/390/412/1280 | 아니오 | e2e `[student-home]` |
 | `scripts/testSpeakingPathNoPermanentDisable.mjs` | 90 | 예 — 수정 전 FAIL 2건(A1/A2), `speech.js` `playAudioUrl()` 실패 경로가 `onError`+`advance()`(→`onEnd`)를 이중 호출하던 결함(P1) 수정 후 90/90 | speech |
 
 - `verify:e2e` 253/253 ×2연속(student 34/admin 21/entrance 12 불변 +
@@ -1856,3 +1857,10 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 로그인 화면 렌더, v2 스프라이트/degrade 속성/region 라벨 포함 청크,
 `paul-*.png` 16개 200 `image/png`, 저장된 플래그
 없음. 상세는 `handoff.md` 179차 §6에 기록했다.
+
+## 관련 항목: 학생 홈 4메뉴 + 로그인 중복 fetch 제거 테스트 (2026-10-02, 198차)
+
+- `tests/e2e/studentHome.spec.mjs`(`[student-home]`): 위 e2e 표 행 참고(12 시나리오 × 4뷰포트, 191 PASS/0 FAIL/1 SKIP). DOM 검증만 — VoiceOver/TalkBack 실검증 없음.
+- `tests/e2e/lib/studentHome.mjs`의 `enterVocaFromHome`: 학생 홈(`studentHomeMenu`)이 로그인 직후 첫 화면이 되어, 기존 Dashboard 전제 e2e 7스펙(student/mobile 등)의 login 헬퍼가 홈에서 "Voca" 메뉴를 눌러 Dashboard에 진입하도록 한 공용 헬퍼다. student.spec 34/34, mobileViewports 178/178 유지.
+- Playwright는 `aria-disabled` 요소를 disabled로 취급해 일반 click이 대기하므로, "준비 중" 카드 탭 테스트는 force click을 쓴다(제품 변경 아님).
+- `scripts/testLoginRefreshDedupe.mjs`(단위/하네스, `testStaleCacheRevalidation`과 같은 로그인·캐시 재검증 계열): 로그인 60초 이내 students만 재조회, in-flight 중복 제거, 관리자 화면 재조회, 오류 결과 미캐시. 참고: `testStaleCacheRevalidation`은 이 문서에 별도 항목이 없어 여기서 함께 언급만 한다.
