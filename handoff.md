@@ -45,7 +45,8 @@ _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1�
 - verify:all: 비-e2e 32도메인은 변경 파일(ProtoShopScreen.jsx, spec)과 무관 — 실행 결과 PASS 스크립트 186개(기준선과 동일 집합), 로직 FAIL 0; 환경 의존 미실행(`.env` 부재) = 빌드 스텝 25 + testStudentSelectPinStatus/testRlsSecurity/testClassDeleteCascade/dbIntegrityAudit/testRewardPostQueue/testRewardRetryExactlyOneRow(변경 파일과 무관); e2e 도메인은 verify:e2e와 동일 스크립트(중복) → 단독 완주로 대체.
 
 ### 5. push/PR
-- 검증 완료 후 non-force push `2639b814..HEAD`(`f9c1b027` a11y, `e3115738` test, docs/status 커밋) → origin/feat/paul-town-v2-clean-pr, PR #62 결과 댓글, 최신 HEAD Preview — 결과는 아래 추기 참조.
+- 검증 완료 후 non-force push `2639b814..HEAD`(`f9c1b027` a11y, `e3115738` test, docs/status 커밋) → origin/feat/paul-town-v2-clean-pr, PR #62 결과 댓글, 최신 HEAD Preview — 결과는 아래 추기 참조
+- (추기) push `2639b814..f8ea1e0b` 완료, HEAD=origin `f8ea1e0b`, worktree clean, PR #62 OPEN/Draft, 결과 댓글 https://github.com/jinalove1111/voca/pull/62#issuecomment-5939385933, Vercel Preview **success**(https://vercel.com/jina4926952s-projects/voca/D8x7n6c2JHkAhZPdTrTrCfhL9MM1). 승인 범위(A/B/C) 전부 완료 — 남은 시간에 새 기능·DB 작업은 시작하지 않고 종료..
 
 ### 6. 수용 한계
 - 실제 스크린리더 미검증; S37 리스너 래퍼는 once 미추적; 구매·배치 미저장(프로토타입 계약); 의자 통과·이동 경로(수용). 학습 효과 주장 없음(논문 인용 불필요).
