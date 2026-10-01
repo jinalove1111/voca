@@ -38,6 +38,7 @@ _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1�
 - 독립 코드리뷰(배치 A/B diff): PASS — 회귀 0, Low 2건 반영(도움말 새로고침 안내 복원, 실패 안내 후 포커스).
 - verify:e2e 전체(4커밋 후): 9스펙([student]/[admin]/[mobile]/[entrance]/[town]/[stale-chunk]/[town-flag-xtab]/[town-v2]/[town-v2-artwork]) + [town-proto2.5d] 일부까지 **2310 PASS / 0 FAIL** 진행 중 Claude Code가 시스템 메모리 부족(free ≈2.8GB)으로 실행을 강제 종료(2회째) — [town-proto2.5d] 후반·[town-pilot-allowlist] 미도달. 도구 정책상 자동 재시작 금지. 같은 빌드의 proto25d 단독 전체는 위 1488/1489(유일 FAIL은 이후 정비한 S17 플레이크).
 - push: **보류** — "검증 전부 통과한 커밋만 push" 지시에 따라 verify:e2e 완주 전에는 phase 2 커밋 4개(`35a9e91b`..`3a66ff97`)를 push하지 않는다. 운영자가 재실행을 지시하면 `npm run verify:e2e` 완주 → FAIL 0 확인 → non-force push → Preview 확인 순으로 마감. 원격은 `b3def43b`(phase 1) 그대로.
+- (추기, 운영자 재실행 지시 후) 고아 프로세스 0 확인(사용자 Chrome/Edge만 점유, 미종료). `verify:e2e` 단독 완주: **2818 / 2818 PASS, FAIL 0, 미mock 0**(11스펙). 이어 `verify:all` 순차 실행: 비-e2e 32도메인 전부 완료 — PASS 스크립트 186개(기준선과 동일 집합), FAIL은 전부 `.env` 부재 환경(빌드 스텝 25 + testStudentSelectPinStatus/testRlsSecurity/testClassDeleteCascade/dbIntegrityAudit/testRewardPostQueue/testRewardRetryExactlyOneRow); 마지막 e2e 도메인(동일 스크립트) 재실행 중 메모리 부족으로 강제 종료 — 직전 단독 완주 결과로 대체. non-force push `b3def43b..d7341dd3` → origin/feat/paul-town-v2-clean-pr, HEAD=origin, worktree clean, PR #62 OPEN/Draft, Vercel Preview success(https://vercel.com/jina4926952s-projects/voca/5Hg1eFA3NMH182L3atATQpgeiWW5).
 
 ### 5. 알려진 한계 / 수용 근거 (수정하지 않음)
 - idle 중 rAF 루프 매 프레임 getBoundingClientRect(카메라 계약 테스트 위험, O(1)) — 후속 후보.
