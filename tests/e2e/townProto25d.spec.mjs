@@ -19,6 +19,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { installMocks } from './lib/mockRoutes.mjs'
 import { createRecorder } from './lib/harness.mjs'
+import { enterVocaFromHome } from './lib/studentHome.mjs'
 import { QA_STUDENT_NAME, QA_LOGIN_PIN, ADMIN_PIN } from './fixtures/index.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -4554,7 +4555,10 @@ export async function run(browser, baseURL) {
       await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
       await login(page)
       await waitForLoggedIn(page)
-      const dashboardVisible = await page.getByRole('button', { name: '구경가기' }).waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false)
+      const homeVisible = await page.locator('[data-testid="student-home"]').waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false)
+      r.check(`${name} — 플래그 OFF여도 첫 화면은 학생 홈(student-home)`, homeVisible)
+      await enterVocaFromHome(page)
+      const dashboardVisible =await page.getByRole('button', { name: '구경가기' }).waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false)
       r.check(`${name} — 기존 대시보드가 정상 렌더됨("구경가기" 버튼)`, dashboardVisible)
       const rootCount = await page.locator('[data-testid="proto25d-root"]').count()
       r.check(`${name} — proto25d-root가 DOM에 없음`, rootCount === 0, String(rootCount))
