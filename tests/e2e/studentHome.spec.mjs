@@ -273,15 +273,30 @@ export async function run(browser, baseURL) {
     await eligibleTownChecks(page, name, { fullRoundTrip: false })
   })
 
+  // ── n. 그림 시험 바로 가기(Speaking UX v2) — 두 플래그 ON일 때만 ──────
+  await scenario('n 시험 바로 가기 ON', MAIN_VP, {}, async ({ page, name }) => {
+    await waitHome(page)
+    const b = page.locator('[data-testid="student-home-speaking-exam"]')
+    r.check(`${name} 두 플래그 ON → 시험 바로 가기 버튼 보임`, await b.isVisible().catch(() => false))
+    r.check(`${name} 버튼 높이 >=44px`, ((await b.boundingBox())?.height ?? 0) >= 43.5)
+    r.check(`${name} 메인 4카드는 그대로(nav 안 버튼 4개)`, (await page.locator('nav[aria-label="메인 메뉴"] button').count()) === 4)
+  })
+  for (const [label, flags] of [['situationRecallV1 OFF', { situationRecallV1: false }], ['speakingPracticeV1 OFF', { speakingPracticeV1: false }]]) {
+    await scenario(`n 시험 바로 가기 ${label}`, MAIN_VP, { flags }, async ({ page, name }) => {
+      await waitHome(page)
+      r.check(`${name} 시험 바로 가기 버튼 없음`, (await page.locator('[data-testid="student-home-speaking-exam"]').count()) === 0)
+    })
+  }
+
   // ── g. 키보드 ───────────────────────────────────────────────────────
   await scenario('g 키보드', MAIN_VP, {}, async ({ page, name }) => {
     await waitHome(page)
     await page.locator('[data-testid="student-home-town"]').waitFor({ state: 'visible', timeout: 15000 }).catch(() => {})
     await page.locator(`${HOME} h1`).click() // 순차 포커스 시작점을 h1로
     const seq = []
-    for (let i = 0; i < 7; i++) { await page.keyboard.press('Tab'); seq.push(await activeTestId(page)) }
-    const expected = ['로그아웃', '▶ 단어 연습 시작하기', 'student-home-menu-voca', 'student-home-menu-writing', 'student-home-menu-speaking', 'student-home-menu-growth', 'student-home-town']
-    r.check(`${name} Tab 순서 = 로그아웃 → 시작 → 카드4 → 내 마을`, JSON.stringify(seq) === JSON.stringify(expected), JSON.stringify(seq))
+    for (let i = 0; i < 8; i++) { await page.keyboard.press('Tab'); seq.push(await activeTestId(page)) }
+    const expected = ['로그아웃', '▶ 단어 연습 시작하기', 'student-home-menu-voca', 'student-home-menu-writing', 'student-home-menu-speaking', 'student-home-menu-growth', 'student-home-speaking-exam', 'student-home-town']
+    r.check(`${name} Tab 순서 = 로그아웃 → 시작 → 카드4 → 그림 시험 바로 가기 → 내 마을`, JSON.stringify(seq) === JSON.stringify(expected), JSON.stringify(seq))
     await card(page, 'voca').focus()
     await page.keyboard.press('Enter')
     r.check(`${name} 단어 카드에서 Enter → 대시보드`, await waitDashboard(page))
