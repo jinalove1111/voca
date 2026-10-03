@@ -7,6 +7,8 @@
 import { installMocks } from './lib/mockRoutes.mjs'
 import { createRecorder } from './lib/harness.mjs'
 import { QA_STUDENT_NAME, QA_LOGIN_PIN } from './fixtures/index.mjs'
+// 승인 UUID는 진실 원천(src/config/pilotTown.js)을 그대로 읽는다(townPilotAllowlist.spec 동일).
+import { PILOT_A_TOWN_STUDENT_IDS } from '../../src/config/pilotTown.js'
 
 const VIEWPORTS = [
   { width: 360, height: 640 },
@@ -77,7 +79,7 @@ export async function run(browser, baseURL) {
   // 시나리오 하나 = 독립 context/page/mock. 콘솔/페이지 오류 0, (writeGuard)
   // 로그인 외 REST 쓰기 0을 공통 단언한다. 본문에서 던진 예외는 FAIL로 기록
   // (나머지 시나리오는 계속).
-  async function scenario(label, vp, { flags, writeGuard = true, dialogAccept = false, townState } = {}, body) {
+  async function scenario(label, vp, { flags, writeGuard = true, dialogAccept = false, townState, studentId } = {}, body) {
     const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height } })
     const page = await context.newPage()
     const errors = []
@@ -87,7 +89,7 @@ export async function run(browser, baseURL) {
     const dialogs = []
     page.on('dialog', async (d) => { dialogs.push(d.message()); if (dialogAccept) await d.accept(); else await d.dismiss() })
     if (flags) await setDeviceFlags(page, flags)
-    const { db, unmockedRequests: u, ttsFallbackRequests: t, apiCallLog } = await installMocks(page, townState ? { townState } : {})
+    const { db, unmockedRequests: u, ttsFallbackRequests: t, apiCallLog } = await installMocks(page, { ...(townState ? { townState } : {}), ...(studentId ? { studentId } : {}) })
     const name = `${label} ${vpName(vp)}`
     try {
       await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
@@ -232,10 +234,42 @@ export async function run(browser, baseURL) {
     const visible = await town.waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false)
     r.check(`${name} 내 마을 버튼 표시(paulTownHomeBand 기본 ON + stats 로드)`, visible)
     if (!visible) return
+    // 비승인 학생(기본 QA, paulTownV1 OFF) — 라벨이 "내 마을"이면 허브에 내 마을 카드가 없어 오해를 부른다.
+    r.check(`${name} 비자격 학생 — 버튼 라벨 "🏘️ Paul Town 구경가기"`, ((await town.textContent()) || '').trim() === '🏘️ Paul Town 구경가기', ((await town.textContent()) || '').trim())
+    r.check(`${name} 비자격 학생 — data-town-eligible="false"`, (await town.getAttribute('data-town-eligible')) === 'false', String(await town.getAttribute('data-town-eligible')))
     await town.click()
     r.check(`${name} 내 마을 → Paul Town 허브(h1 "Paul Town")`, await page.getByRole('heading', { name: 'Paul Town', level: 1 }).waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false))
+    r.check(`${name} 비자격 학생 — 허브에 "내 마을 — Welcome to Paul Town" 카드 없음(Pilot A 게이팅)`, !(await page.getByText('내 마을 — Welcome to Paul Town').isVisible().catch(() => false)))
     await page.getByRole('button', { name: '← 홈으로' }).click()
     r.check(`${name} 홈의 내 마을에서 연 허브 back → 학생 홈`, await waitHome(page))
+  })
+
+  // ── m. 내 마을 자격 ON — 라벨 "🏘️ 내 마을" + 허브 카드 ────────────────
+  const LV_BADGE = 'span[title="누적 별(성취) — 절대 줄지 않아요"]'
+  const eligibleTownChecks = async (page, name, { fullRoundTrip }) => {
+    await waitHome(page)
+    const town = page.locator('[data-testid="student-home-town"]')
+    const visible = await town.waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false)
+    r.check(`${name} 내 마을 버튼 표시`, visible)
+    if (!visible) return
+    r.check(`${name} 자격 학생 — 버튼 라벨 "🏘️ 내 마을"`, ((await town.textContent()) || '').trim() === '🏘️ 내 마을', ((await town.textContent()) || '').trim())
+    r.check(`${name} 자격 학생 — data-town-eligible="true"`, (await town.getAttribute('data-town-eligible')) === 'true', String(await town.getAttribute('data-town-eligible')))
+    await town.click()
+    r.check(`${name} 허브에 "내 마을 — Welcome to Paul Town" 카드 표시`, await page.getByText('내 마을 — Welcome to Paul Town').waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false))
+    if (!fullRoundTrip) return
+    await page.locator('button', { hasText: '들어가기' }).click()
+    r.check(`${name} 카드 → Town V1 화면(⭐ 레벨 배지)`, await page.locator(LV_BADGE).waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false))
+    await page.getByRole('button', { name: /← Paul Town/ }).click()
+    r.check(`${name} Town back → 허브`, await page.getByRole('heading', { name: 'Paul Town', level: 1 }).waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false))
+    await page.getByRole('button', { name: '← 홈으로' }).click()
+    r.check(`${name} 허브 back → 학생 홈`, await waitHome(page))
+  }
+  await scenario('m(i) 자격 ON(paulTownV1 플래그)', MAIN_VP, { flags: { paulTownV1: true } }, async ({ page, name }) => {
+    await eligibleTownChecks(page, name, { fullRoundTrip: true })
+  })
+  // 플래그 기본값 + 승인 UUID 로그인(townPilotAllowlist.spec P1과 동일 메커니즘: installMocks({ studentId }))
+  await scenario('m(ii) 자격 ON(Pilot A UUID)', MAIN_VP, { studentId: [...PILOT_A_TOWN_STUDENT_IDS][0] }, async ({ page, name }) => {
+    await eligibleTownChecks(page, name, { fullRoundTrip: false })
   })
 
   // ── g. 키보드 ───────────────────────────────────────────────────────
