@@ -142,6 +142,7 @@
     "verify:spelling-review-index": "node scripts/testSpellingReviewIndex.mjs",
     "verify:speech-btn-stall": "node scripts/buildSpeechBundle.mjs && node scripts/testSpeechBtnSpeakingStall.mjs",
     "verify:speaking-session": "node scripts/testSpeakingSession.mjs",
+    "verify:situation-recall": "node scripts/testSituationRecall.mjs",
     "verify:pilot-student-diag": "node scripts/testPilotStudentDiag.mjs",
     "watch:claude-stall": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/watchClaudeStall.ps1"
   },
