@@ -1871,3 +1871,8 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 - `tests/e2e/lib/studentHome.mjs`의 `enterVocaFromHome`: 학생 홈(`studentHomeMenu`)이 로그인 직후 첫 화면이 되어, 기존 Dashboard 전제 e2e 7스펙(student/mobile 등)의 login 헬퍼가 홈에서 "Voca" 메뉴를 눌러 Dashboard에 진입하도록 한 공용 헬퍼다. student.spec 34/34, mobileViewports 178/178 유지.
 - Playwright는 `aria-disabled` 요소를 disabled로 취급해 일반 click이 대기하므로, "준비 중" 카드 탭 테스트는 force click을 쓴다(제품 변경 아님).
 - `scripts/testLoginRefreshDedupe.mjs`(단위/하네스, `testStaleCacheRevalidation`과 같은 로그인·캐시 재검증 계열): 로그인 60초 이내 students만 재조회, in-flight 중복 제거, 관리자 화면 재조회, 오류 결과 미캐시. 참고: `testStaleCacheRevalidation`은 이 문서에 별도 항목이 없어 여기서 함께 언급만 한다.
+
+## 관련 항목: testTextbookIsolation 5f 정적 마커 드리프트 (2026-10-04, 203차)
+
+- `scripts/testTextbookIsolation.mjs` 5f(`getStudentClassAssignments 어디도 .eq('name')로 학생을 찾지 않음`)가 verify:all에서 `not-found`로 FAIL했다. 원인은 198차 커밋 `3238df49`가 함수를 `export async function getStudentClassAssignments(studentId)`에서 동기 캐시 래퍼 `export function getStudentClassAssignments(studentId, { cached = false } = {})`로 바꿨는데 정적 마커가 옛 `async` 형태를 찾아 함수 본문 검사가 건너뛰어진 것이다(테스트 계약 표류, 제품 결함 아님). 커밋 `2510d13c`가 마커 1줄만 새 시그니처로 맞췄고 단언은 불변, 스위트 43/43.
+- 규칙: 정적 마커(`fnMarkers`)가 추적하는 함수의 시그니처(`async` 여부, 인자)를 바꾸면 같은 변경에서 해당 마커도 함께 고친다. 마커가 함수를 못 찾으면 본문 단언이 조용히 건너뛰어지므로 FAIL(`not-found`)을 정상 신호로 취급한다.

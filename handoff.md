@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-04 (202차 — **Speaking UX v2: 회화 연습 / 그림 보고 말하기 시험 분리**(201차 SpeakingPractice+SituationRecall 통합, 우회 버튼 제거, 홈 시험 직진입). 시험은 답 확인 전 문장·뜻·음성 미마운트, 정답·합격·숙달·점수 생성 0. 전용 일러스트 10장 제작 명세(제작 기능 없음 → 명세·프롬프트·검수 기준만). DB·SQL·Production·유료 API 0. 아래 202차 섹션 참고.)_
+_최종 갱신: 2026-10-04 (203차 — **PR #62 마을 회귀 검증 재개: S37 modal-churn BLOCKED 해소(단독 48/48) + `[town-proto2.5d]` 전체 1572/1572 + verify:all(e2e 제외) + 5f 정적 마커 드리프트 수정(커밋 `2510d13c`)**. `[harness:e2e]`(학생/관리자 브라우저 스펙)는 메모리 압박으로 종료되어 이 HEAD에서 미실행. DB·SQL·Supabase·Production·.env 접촉 0. PR #62 Draft 유지. 아래 203차 섹션 참고.)_
+_202차 갱신: 2026-10-04 (202차 — **Speaking UX v2: 회화 연습 / 그림 보고 말하기 시험 분리**(201차 SpeakingPractice+SituationRecall 통합, 우회 버튼 제거, 홈 시험 직진입). 시험은 답 확인 전 문장·뜻·음성 미마운트, 정답·합격·숙달·점수 생성 0. 전용 일러스트 10장 제작 명세(제작 기능 없음 → 명세·프롬프트·검수 기준만). DB·SQL·Production·유료 API 0. 아래 202차 섹션 참고.)_
 _201차 갱신: 2026-10-04 (201차 — **상황 그림으로 이해·회상 연습(회화 표현 5개, Speaking 화면 → 🖼️ 상황 보고 말하기, 플래그 `situationRecallV1`)**. 그림 10장은 기존 에셋 합성 임시(최종 제작 목록 §6). 버튼 클릭은 기억/숙달 판정에 쓰지 않고 교사 확인표가 증거. DB·SQL·Production·유료 API 0. 아래 201차 섹션 참고.)_
 _200차 갱신: 2026-10-04 (200차 — **Speaking 첫 체험(녹음·재생만, 커밋 `11e1e89e`/`4aef6b7b`, 플래그 `speakingPracticeV1`) + 2.5D 마을 시각 보정(제한 범위, 커밋 895ec4cd)**. DB·SQL·Production·유료 API 0. 실제 마이크는 운영자 Preview 확인 대기. 아래 200차 섹션 참고.)_
 _199차 갱신: 2026-10-03 (199차 — **홈 "내 마을" 버튼 라벨을 Town 자격(Pilot A 허용목록/paulTownV1)에 따라 구분(커밋 `d1bad7ef` fix / `ebd9d808` test)**. 운영자 보고(비파일럿 계정이 홈에서 마을 진입 불가) 조사 결과 코드 결함이 아닌 설계된 파일럿 게이팅 + 홈 라벨 오표기. 전 학생 활성화 없음, Kinney 경로 불변. 아래 199차 섹션 참고.)_
@@ -13,6 +14,44 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-04 (203차) — PR #62 마을 회귀 검증 재개 — S37 modal-churn BLOCKED 해소 + townProto25d 전체 1572/1572 + verify:all(e2e 제외) + 5f 정적 마커 드리프트 수정
+
+### 0. 범위/기준
+
+2026-10-04 약 04:00~05:30 KST. 리드=Claude Fable 5.1, 구현 서브에이전트=Sonnet. 운영자가 메모리를 확보해 free RAM 2.94 GB → 4.32 GB(기준 3 GB). 워크트리 재확인: `C:\voca-wt\paul-town-v2-night-audit`, 로컬 브랜치 `audit/paul-town-v2-2026-09-29` 유지, HEAD = `origin/feat/paul-town-v2-clean-pr` = PR #62 head `e0690c3f`, status clean, stash 없음. dist가 마지막 src 커밋(`6002861d`)보다 오래돼 재빌드: 첫 재빌드는 env 없이 해 페이지 공백·`Error: supabaseUrl is required.`로 S37 4/4가 로그인에서 FAIL(환경 문제, 제품 아님 — 워크트리는 의도적으로 `.env` 없음). 인라인 더미 `VITE_SUPABASE_URL`/`ANON_KEY`로 재빌드(200~202차와 동일 관행), 빌드 경고 0.
+
+### 1. S37 단독 재실행 (202차 §4-추기 BLOCKED 해소)
+
+스펙 파일은 수정하지 않고, scratchpad에 S37 블록과 그것이 쓰는 in-run 헬퍼만 담은 사본을 만들어 기존 scratch runner로 실행(브라우저 1개, 포트 4193, free 4.38 GB). **48/48 PASS, 4 뷰포트(360/390/412/1280), 미mock 0, mock 오류 0.** 202차에서 FAIL한 지점(가게를 닫은 뒤 `proto25d-shop-enter`가 3000 ms 안에 안 보임, 412x915/1280x800)이 4뷰포트 모두 통과. 단언 제거 0, 타임아웃 변경 0. 202차 실패를 "메모리 탓"으로 단정하지 않는다 — 확립된 사실은 같은 코드·같은 스펙이 free ≥3 GB에서 단독과 전체 실행 양쪽 모두 통과했고 제품 결함이 재현되지 않았다는 것뿐이다. 202차 §4-추기 BLOCKED(재실행 대기)는 해소.
+
+### 2. `[town-proto2.5d]` 전체 (tests/e2e/townProto25d.spec.mjs)
+
+브라우저 1개. **1572/1572 PASS, FAIL 0, SKIP 0, 미mock 0, mock 오류 0.** 04:30:59 → 05:05:22 KST(34분), free RAM 4.39 → 4.67 GB.
+
+### 3. `npm run verify:all`
+
+33 하네스 섹션 / 220 스위트 실행. 마지막 섹션 `[harness:e2e]`(`scripts/testBrowserE2E.mjs`, extra:true, 학생/관리자 브라우저 스펙)는 끝나기 전에 Claude Code 호스트가 시스템 메모리 압박으로 종료했고, **재시작하지 않았다**(호스트 지침: 운영자가 요청할 때만 재시작). 따라서 학생/관리자 브라우저 E2E 스펙은 이 세션에서 이 HEAD에 대해 미실행이다(마지막 전체 실행: 2026-10-03, 제품 코드 `3238df49` 시점, Speaking 커밋 이전). 완료된 구간의 실패:
+
+- (a) `ENOENT ... \.env` 14건 + 같은 원인의 "build step failed" 항목 — `.env`를 읽는 DB-live 환경 의존 하네스: testStudentLogin, testStudentSelectPinStatus, testRlsSecurity, testMultiClass, testRenameClass, testClassDeleteCascade, testRealClassNames, testDashboard, testSpellingSettings, testSpellingV2Db, testGamificationSettings, testEntranceTestDb, testUnitNameNormalization, testEntranceClassScope, testDailyAssignment, testFutureAssignment, testSyncProgress, testUnitPersistence, testUnitNaturalSort, testStudentUnitDecouple, testStudentSelectUnitSwitch, testMultiDeviceMerge, testFullProgressBackup, testResetWordStatusBackup, dbIntegrityAudit, testXpLedgerDb, testComputeWordKingApi, testRewardPostQueue, testRewardRetryExactlyOneRow. 198~202차에 이미 기록된 "환경 의존 미실행 하네스(.env)"와 같은 패턴이며 제품 실패가 아니다.
+- (b) **실제 실패 1건**: `scripts/testTextbookIsolation.mjs` 5f `[정적] ... getStudentClassAssignments 어디도 .eq('name')로 학생을 찾지 않음` → reason `not-found`. 아래 §4.
+
+### 4. 5f 정적 마커 드리프트 수정
+
+원인: 커밋 `3238df49`(198차 perf(login))가 `export async function getStudentClassAssignments(studentId)`를 동기 캐시 래퍼 `export function getStudentClassAssignments(studentId, { cached = false } = {})`로 바꿨는데, 정적 마커는 옛 `async` 형태를 계속 찾아 함수 본문 검사가 건너뛰어졌다. **테스트 계약 표류이지 제품 결함이 아니다**(함수는 존재하고 여전히 id 기반 조회). 수정: 커밋 **`2510d13c`** `test(textbook-isolation): follow getStudentClassAssignments sync signature in 5f static marker` — `scripts/testTextbookIsolation.mjs` 1줄, 단언 불변, 스위트 43/43. 수정 전 FAIL은 verify:all 로그에서 재현됨(규칙 15 충족). 구현은 Sonnet 서브에이전트, 리드가 재검증.
+
+### 5. Preview / push
+
+브랜치 별칭 https://voca-git-feat-paul-town-v2-clean-pr-jina4926952s-projects.vercel.app . `e0690c3f` 배포(Vercel success, 2026-10-03T18:36Z): https://voca-awl8yvael-jina4926952s-projects.vercel.app . `2510d13c` + 이 docs 커밋 push 후 새 배포가 생성될 예정이며 URL은 push 뒤 운영자가 확인한다.
+
+### 6. 무변경 / 남은 일
+
+무변경: `C:\voca`(SQL 복구/삭제는 운영자가 명시적으로 보류), 다른 모든 워크트리, 저장 안 된 에디터, DB, SQL, Supabase, Production, `.env`. PR #62 Draft 유지. force push·reset·clean·stash 없음.
+
+남은 일:
+
+- (a) 메모리 여유가 있고 운영자가 요청하면 이 HEAD에서 `[harness:e2e]`(학생/관리자 브라우저 스펙) 재실행.
+- (b) `C:\voca`의 손상된 SQL 파일 처리 결정은 여전히 운영자에게 있음.
 
 ## 2026-10-04 (202차) — Speaking UX v2: 회화 연습 / 그림 보고 말하기 시험 분리
 
