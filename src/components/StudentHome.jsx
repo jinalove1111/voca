@@ -16,7 +16,7 @@ const CARD = 'relative min-h-[9rem] rounded-3xl p-4 flex flex-col items-center j
 const SOON = 'bg-gray-300 text-gray-600'
 const ACTIVE = 'text-white bg-gradient-to-br'
 
-export default function StudentHome({ studentName, studentData, classWords, hasTodaysHomework, onStartGuided, onGo, onLogout, canEnterTown, townEligible, writingEnabled }) {
+export default function StudentHome({ studentName, studentData, classWords, hasTodaysHomework, onStartGuided, onGo, onLogout, canEnterTown, townEligible, writingEnabled, speakingEnabled }) {
   const [notice, setNotice] = useState('')
   const timerRef = useRef(null)
   const cardRefs = useRef({})
@@ -43,7 +43,10 @@ export default function StudentHome({ studentName, studentData, classWords, hasT
     writingEnabled
       ? { id: 'writing', emoji: '✍️', ko: '문장 쓰기', en: 'Writing', grad: 'from-teal-400 to-emerald-600', label: '문장 쓰기, 라이팅', onPress: () => go('writing', 'writingCoach') }
       : { id: 'writing', emoji: '✍️', ko: '문장 쓰기', en: 'Writing', soon: true, label: '문장 쓰기, 라이팅. 준비 중', onPress: () => showNotice('문장 쓰기는 곧 열려요! 조금만 기다려요') },
-    { id: 'speaking', emoji: '🎤', ko: '말하기', en: 'Speaking', soon: true, label: '말하기, 스피킹. 준비 중', onPress: () => showNotice('말하기는 곧 열려요! 조금만 기다려요') },
+    // 2026-10-04 Speaking 첫 체험 — 플래그가 꺼져 있으면 기존 준비 중 카드 유지
+    speakingEnabled
+      ? { id: 'speaking', emoji: '🎤', ko: '말하기', en: 'Speaking', grad: 'from-sky-400 to-blue-600', label: '말하기, 스피킹', onPress: () => go('speaking', 'speaking') }
+      : { id: 'speaking', emoji: '🎤', ko: '말하기', en: 'Speaking', soon: true, label: '말하기, 스피킹. 준비 중', onPress: () => showNotice('말하기는 곧 열려요! 조금만 기다려요') },
     { id: 'growth', emoji: '🌱', ko: '나의 성장', en: 'My Growth', grad: 'from-amber-400 to-orange-500', label: '나의 성장, 마이 그로스', onPress: () => go('growth', 'growth') },
   ]
 

@@ -4,6 +4,7 @@ import Dashboard from './components/Dashboard'
 import StudentHome, { resetStudentHomeState } from './components/StudentHome'
 import StudentGrowth from './components/StudentGrowth'
 import WritingCoach from './components/WritingCoach'
+import SpeakingPractice from './components/SpeakingPractice'
 import WordBrowser from './components/WordBrowser'
 import WordDetail from './components/WordDetail'
 import QuizGame from './components/QuizGame'
@@ -829,7 +830,12 @@ function AppInner({ studentId, studentName, onLogout }) {
           onStartGuided={startGuidedSession} onGo={(t) => goFrom('home', t)} onLogout={onLogout}
           canEnterTown={isFeatureEnabled('paulTownHomeBand') && !!attachment.stats}
           townEligible={townV1Enabled}
-          writingEnabled={isFeatureEnabled('writingCoachEnabled')} />
+          writingEnabled={isFeatureEnabled('writingCoachEnabled')}
+          speakingEnabled={isFeatureEnabled('speakingPracticeV1')} />
+      )}
+      {screen === 'speaking' && (
+        // 2026-10-04 Speaking 첫 체험 — 저장 없는 녹음 연습, 닫으면 홈
+        <SpeakingPractice onBack={() => setScreen('home')} />
       )}
       {screen === 'growth' && (
         <StudentGrowth studentData={studentData} classWords={classWords}
@@ -1138,7 +1144,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           고정 버튼이 히어로 CTA("▶ 오늘의 학습 시작")를 덮어 탭을 가로채는
           실측 회귀가 있어 대시보드에서는 렌더하지 않는다. 다른 모든 화면은
           불변. */}
-      {screen !== 'dashboard' && screen !== 'home' && screen !== 'growth' && <SpeedBtn />}
+      {screen !== 'dashboard' && screen !== 'home' && screen !== 'growth' && screen !== 'speaking' && <SpeedBtn />}
       {/* Paul Town 2.5D 프로토타입(paulTown2_5d, Stage 1, 2026-09-22) — 기존
           `screen` 상태 머신/네비게이션과 완전히 무관한 독립 dev/QA 서피스.
           내비게이션 진입점이 없다(운영자 스펙에 "학생이 진입"하는 요구
