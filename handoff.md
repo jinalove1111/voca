@@ -91,7 +91,7 @@ review-situation NEEDS-WORK(Medium 2/Low 4), 전부 반영: ① 3일 규칙이 �
 
 ### 9. push/PR/Preview
 
-(아래 추기)
+**non-force push `246845da..6a66c414`(커밋 4개: `8c000a51` content/store/unit · `2804f44a` 화면+훅 · `1ddd36d0` e2e · `6a66c414` docs), HEAD=origin `6a66c414`, worktree clean, PR #62 OPEN/Draft, 댓글 https://github.com/jinalove1111/voca/pull/62#issuecomment-5971361631, Vercel Preview **success**(https://vercel.com/jina4926952s-projects/voca/HvRvcBv2CM1rgKxSCwFf7xLBAX52), 앱 주소 **https://voca-9xcwwcwxg-jina4926952s-projects.vercel.app**(Vercel SSO 로그인 후 학생 이름+PIN). 기존 플래그 기본값 변경 0, DB·SQL·Production 변경 0.**
 
 ## 2026-10-04 (200차) — Speaking 첫 체험 + 2.5D 마을 시각 보정(제한 범위)
 
