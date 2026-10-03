@@ -74,7 +74,7 @@ Roediger & Karpicke 2006 *Psych Sci* 17(3) 249–255(그림 보고 먼저 말한
 
 ### 8. push/PR/Preview
 
-(아래 추기)
+**non-force push `67cfea44..978814c3`(커밋 4개: `21c72816` content/store · `6002861d` 화면 · `7927e71b` e2e · `978814c3` docs), HEAD=origin `978814c3`, worktree clean, PR #62 OPEN/Draft, 댓글 https://github.com/jinalove1111/voca/pull/62#issuecomment-5971884089, Vercel Preview **success**, 앱 주소 **https://voca-4xrq0e753-jina4926952s-projects.vercel.app**(Vercel SSO 로그인 후 학생 이름+PIN). 최종 이미지 준비 상태: 10/10 임시(최종본 0). 미완주 검증: `[town-proto2.5d]`(§4).**
 
 ## 2026-10-04 (201차) — 상황 그림을 통한 이해와 회상 연습(회화 표현 5개)
 
