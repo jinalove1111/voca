@@ -122,6 +122,10 @@ import { findPath } from '../../../utils/town/proto2_5d/pathfinding'
 import { obstacleZIndex } from '../../../utils/town/proto2_5d/depthVisual'
 import { SCENE_FIXTURE, objectRenderedWidthPx } from '../../../utils/town/proto2_5d/sceneFixture'
 import { townAsset } from '../../../assets/town'
+// 2026-10-04 마을 시각 보정(제한 범위) — V1 TownGrid.jsx와 동일한 import 패턴.
+import cobblestoneTile from '../../../assets/town/backgrounds/village-cobblestone-tile.webp'
+import gardenAccent1 from '../../../assets/town/backgrounds/garden-accent-1.webp'
+import gardenAccent2 from '../../../assets/town/backgrounds/garden-accent-2.webp'
 import { validateSpriteManifest, directionForMove, facingForMove } from '../../../utils/town/proto2_5d/characterSpriteContract'
 import {
   SIT_HOLD_MS,
@@ -1876,6 +1880,75 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
           }}
         />
 
+        {/* 2026-10-04 마을 시각 보정(제한 범위) — 정적 장식 그룹(잔디 질감/
+            자갈길/화단/건물 접지 패치). 전부 pointer-events-none/aria-hidden,
+            애니메이션 없음. z-index 5000 = depthOrder.js의 path 베이스
+            (오브젝트 6002+ 보다 항상 아래, 슬롯 마커 7000 보다 아래).
+            충돌/앵커/슬롯 데이터는 건드리지 않는다. */}
+        {(() => {
+          const gw = groundSize.width || 412
+          const gh = groundSize.height || 560
+          const stone = Math.max(10, gw * 0.04)
+          const cobble = {
+            backgroundImage: `url(${cobblestoneTile})`,
+            backgroundRepeat: 'repeat',
+            backgroundSize: `${stone}px ${stone * (2 / 3)}px`,
+            opacity: 0.72,
+            borderRadius: '9999px',
+            filter: 'blur(0.3px)',
+          }
+          const mk = (g) => ({ WebkitMaskImage: g, maskImage: g })
+          const maskX = mk('linear-gradient(to right, transparent, black 18%, black 82%, transparent)')
+          const maskY = mk('linear-gradient(to bottom, transparent, black 18%, black 82%, transparent)')
+          const maskR = mk('radial-gradient(ellipse at center, black 55%, transparent 100%)')
+          const house = SCENE_FIXTURE.find((o) => o.id === 'demo-building')
+          const houseW = house ? objectRenderedWidthPx(house, groundSize) : 0
+          const flower = townAsset('nature/flower-garden')
+          const bed = (x, y, key) => (flower && (
+            <img key={key} src={flower} alt="" loading="lazy" decoding="async" draggable={false}
+              className="absolute pointer-events-none"
+              style={{ left: `${x}%`, top: `${y}%`, width: 'max(5%, 28px)', transform: 'translate(-50%, -100%)' }} />
+          ))
+          const accent = (src, x, y) => (
+            <img key={src} src={src} alt="" loading="lazy" decoding="async" draggable={false}
+              className="absolute pointer-events-none"
+              style={{ left: `${x}%`, top: `${y}%`, width: 'max(2.5%, 14px)', transform: 'translate(-50%, -100%)' }} />
+          )
+          return (
+            <div data-testid="proto25d-decor" aria-hidden="true" className="absolute inset-0 pointer-events-none" style={{ zIndex: 5000 }}>
+              <div className="absolute inset-0" style={{
+                backgroundImage: [
+                  'radial-gradient(ellipse 22% 9% at 15% 80%, rgba(60,125,85,0.07), transparent 100%)',
+                  'radial-gradient(ellipse 22% 9% at 82% 30%, rgba(60,125,85,0.07), transparent 100%)',
+                  'radial-gradient(ellipse 22% 9% at 30% 22%, rgba(150,210,160,0.07), transparent 100%)',
+                  'radial-gradient(ellipse 22% 9% at 80% 88%, rgba(150,210,160,0.07), transparent 100%)',
+                  'radial-gradient(circle at 3px 4px, rgba(86,150,110,0.05) 1px, transparent 1.6px)',
+                  'radial-gradient(circle at 8px 5px, rgba(70,130,95,0.045) 1px, transparent 1.6px)',
+                  'linear-gradient(180deg, rgba(40,90,60,0) 70%, rgba(40,90,60,0.07) 100%)',
+                ].join(', '),
+                backgroundSize: '100% 100%, 100% 100%, 100% 100%, 100% 100%, 11px 11px, 17px 17px, 100% 100%',
+                backgroundRepeat: 'no-repeat, no-repeat, no-repeat, no-repeat, repeat, repeat, no-repeat',
+              }} />
+              {/* 2026-10-04 시각 보정 2차 — 길 가장자리 feather(mask), 입구 착지 패드, 벤치 끝 패드 */}
+              <div className="absolute" style={{ ...cobble, ...maskX, left: '47.5%', top: '42%', width: '5%', height: '50%' }} />
+              <div className="absolute" style={{ ...cobble, ...maskY, left: '23.5%', top: '64.5%', width: '26.5%', height: '3.5%' }} />
+              <div className="absolute" style={{ ...cobble, ...maskR, left: '44%', top: '41.5%', width: '12%', height: '4%' }} />
+              <div className="absolute" style={{ ...cobble, ...maskR, left: '21%', top: '64.2%', width: '5%', height: '3.6%' }} />
+              {houseW > 0 && (
+                <div className="absolute" style={{
+                  left: '50%', top: '40.6%', width: `${houseW * 0.9}px`, height: `${gh * 0.022}px`,
+                  transform: 'translate(-50%, -50%)',
+                  background: 'radial-gradient(ellipse at center, rgba(30,25,15,0.28) 0%, rgba(30,25,15,0) 70%)',
+                }} />
+              )}
+              {bed(39.5, 39.5, 'bed-l')}
+              {bed(60.5, 39.5, 'bed-r')}
+              {accent(gardenAccent1, 37.5, 41)}
+              {accent(gardenAccent2, 62.5, 41)}
+            </div>
+          )
+        })()}
+
         {/* Phase 6A — 범용 오브젝트 레이어(sceneFixture.js SCENE_FIXTURE,
             벤치 제외 — 아래 기존 벤치 전용 블록이 계속 그린다). 각 항목을
             bottom-center 앵커(translate(-50%,-100%))로 배치하고, shadow:true
@@ -1944,6 +2017,9 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
                   draggable={false}
                   data-proto25d-object-img=""
                   className={`block w-full h-full${swayClass}`}
+                  // 2026-10-04 마을 시각 보정(제한 범위) — my-house.png 하단 투명
+                  // 여백(5%) 때문에 떠 보이는 문제: 내부 img만 내려 접지(래퍼 불변).
+                  style={obj.id === 'demo-building' ? { transform: 'translateY(5%)' } : undefined}
                 />
               </div>
             </Fragment>
