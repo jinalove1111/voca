@@ -74,6 +74,8 @@ Roediger & Karpicke 2006 *Psych Sci* 17(3) 249–255(그림 보고 먼저 말한
 
 ### 8. push/PR/Preview
 
+**§4-추기(03:00~03:34, 운영자 지시로 `[town-proto2.5d]` 단독 재실행 1회, 브라우저 1개, 다른 에이전트 없음)**: 시작 free 1.84 GB → 실행 중 0.87 GB까지 하락(스왑). 완주함(가드 중단 없음): **1528단언 — PASS 1524 / FAIL 4 / SKIP 0, 미mock 0**. FAIL 4건은 전부 `S37[412x915,modal-churn]`·`S37[1280x800,modal-churn]`의 같은 지점 — 가게를 닫은 뒤 `proto25d-shop-enter`가 3000 ms 안에 보이지 않음(진단 body에 가게 오버레이가 아직 열려 있음 = 닫힘 전파가 3 s를 넘김). 360×640은 S37 포함 전부 PASS. 이번 push 범위(`67cfea44..fc67c220`)의 소스 변경은 Speaking 11파일뿐이고 `src/components/town/**`·상점·히스토리 코드는 0건(`git diff --stat`), 200차에서 같은 스펙이 ≥3 GB free에서 1572/1572였다. 그러나 "메모리 탓"으로 단정하지 않는다 — 원인 확정에는 ≥3 GB free에서의 단독 재실행이 필요하고, 운영자 규칙(메모리 부족 시 반복 금지)에 따라 **BLOCKED(재실행 대기)** 로 기록한다. 코드·스펙 수정 없음(타임아웃 완화는 증상 가리기라 하지 않음). 재실행 명령: `$env:E2E_PREVIEW_PORT=4193; node <scratch>/runProto25dSpec.mjs tests/e2e/townProto25d.spec.mjs`.
+
 **non-force push `67cfea44..978814c3`(커밋 4개: `21c72816` content/store · `6002861d` 화면 · `7927e71b` e2e · `978814c3` docs), HEAD=origin `978814c3`, worktree clean, PR #62 OPEN/Draft, 댓글 https://github.com/jinalove1111/voca/pull/62#issuecomment-5971884089, Vercel Preview **success**, 앱 주소 **https://voca-4xrq0e753-jina4926952s-projects.vercel.app**(Vercel SSO 로그인 후 학생 이름+PIN). 최종 이미지 준비 상태: 10/10 임시(최종본 0). 미완주 검증: `[town-proto2.5d]`(§4).**
 
 ## 2026-10-04 (201차) — 상황 그림을 통한 이해와 회상 연습(회화 표현 5개)
