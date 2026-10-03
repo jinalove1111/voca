@@ -5,6 +5,12 @@ _(2026-09-18 170차 추가) Paul Town V2 렌더러 통합 — 브랜치
 `paulTownV2` OFF, Production WRITE 0. 상세는 `handoff.md`
 2026-09-18(170차) 섹션._
 
+## 2026-10-04 (200차) — Speaking 첫 체험(녹음·재생만) + 2.5D 마을 시각 보정(제한 범위) — 상태: 코드 완료 ✅(PR #62 브랜치, Draft), 실기기 마이크 확인은 운영자 대기
+
+- Speaking 첫 체험 완료 — 홈 🎤 카드 → 질문 3개 듣기/녹음/들어보기/다시 녹음. 플래그 `speakingPracticeV1`(기본 true, 기기 로컬 kill switch). 브라우저 메모리 전용(업로드·STT·점수·보상 0), 커밋 `11e1e89e`/`4aef6b7b`, 단위 32/32·e2e 93/93. 실제 마이크·iOS 공유 스트림 영향은 미검증.
+- 2.5D 마을 시각 보정 완료 — 장식 레이어(잔디/자갈길/화단/건물 접지), 구매·배치·이동 로직 무변경, 커밋 895ec4cd.
+- 남음: Speaking ②~④(평가·발음)는 운영자 결정 후, 마을 나머지 객체 접지 점검. DB·SQL·Production 변경 없음. 상세: `handoff.md` 200차.
+
 ## 2026-10-02 (198차) — 학생 홈 4메뉴 + 로그인 중복 fetch 제거 + Writing/Speaking 설계 문서 — 상태: 학생 홈·fetch 코드 완료 ✅(PR #62 브랜치, Draft), 설계 문서 완료·구현 미착수
 
 - 학생 홈 4메뉴(Voca/나의 성장/문장 쓰기/말하기 + 내 마을) 완료 — 플래그 `studentHomeMenu`(기기 로컬 kill switch), 커밋 `02d546cb`/`7220740f`, e2e `[student-home]` 191 PASS/0 FAIL/1 SKIP.

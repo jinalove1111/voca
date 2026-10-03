@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-03 (199차 — **홈 "내 마을" 버튼 라벨을 Town 자격(Pilot A 허용목록/paulTownV1)에 따라 구분(커밋 `d1bad7ef` fix / `ebd9d808` test)**. 운영자 보고(비파일럿 계정이 홈에서 마을 진입 불가) 조사 결과 코드 결함이 아닌 설계된 파일럿 게이팅 + 홈 라벨 오표기. 전 학생 활성화 없음, Kinney 경로 불변. 아래 199차 섹션 참고.)_
+_최종 갱신: 2026-10-04 (200차 — **Speaking 첫 체험(녹음·재생만, 커밋 `11e1e89e`/`4aef6b7b`, 플래그 `speakingPracticeV1`) + 2.5D 마을 시각 보정(제한 범위, 커밋 895ec4cd)**. DB·SQL·Production·유료 API 0. 실제 마이크는 운영자 Preview 확인 대기. 아래 200차 섹션 참고.)_
+_199차 갱신: 2026-10-03 (199차 — **홈 "내 마을" 버튼 라벨을 Town 자격(Pilot A 허용목록/paulTownV1)에 따라 구분(커밋 `d1bad7ef` fix / `ebd9d808` test)**. 운영자 보고(비파일럿 계정이 홈에서 마을 진입 불가) 조사 결과 코드 결함이 아닌 설계된 파일럿 게이팅 + 홈 라벨 오표기. 전 학생 활성화 없음, Kinney 경로 불변. 아래 199차 섹션 참고.)_
 _198차 갱신: 2026-10-02 (198차 — **학생 홈 4메뉴 개편(커밋 `02d546cb`/`7220740f`, 플래그 `studentHomeMenu`) + 로그인 중복 fetch 제거(커밋 `3238df49`) + Writing/Speaking 설계 문서 2건(구현 없음)**. DB·SQL·Supabase·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 198차 섹션 참고.)_
 _197차 갱신: 2026-10-02 (197차 — **PR #62 구매·배치 흐름 안정화(6시간 자율 세션): 상점 안내 live region 항상 마운트(커밋 `f9c1b027`) + 반복 개폐 스트레스 S37(커밋 `e3115738`) + S38**. 구 빌드에서도 S37 PASS(누적·중복 없음). 실제 스크린리더 미검증. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 197차 섹션 참고.)_
 _196차 갱신: 2026-10-01 (196차 — **PR #62 산책 모드 카메라 rAF 루프 idle settle-stop 최적화 1건(커밋 `3f9d5d9b` perf / `7ff69bea` test), 독립 리뷰 PASS, e2e S36 신규**. 정지 후 rAF 60/s → 0/s. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 196차 섹션 참고.)_
@@ -10,6 +11,70 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-04 (200차) — Speaking 첫 체험 + 2.5D 마을 시각 보정(제한 범위)
+
+### 0. 범위/역할
+
+운영자 승인: 1순위 Speaking 첫 체험, 2순위 마을 시각 개선(제한 범위). 시작 HEAD=origin=PR #62 head `a1c4acf7`(운영자가 Preview에서 2.5D 마을 정상 작동 확인). 에이전트는 순차(동시 1명): Lead(Claude Fable 5.1) 범위 확정 → impl-speaking → 독립 리뷰(review-speaking) → QA(impl-home-spec, e2e) → explore-town-assets(읽기 전용 조사) → impl-townvisual → 리드 스크린샷 검토 2회 → 독립 리뷰(review-townvisual) → QA(proto25d 스펙) → docs. 브라우저 테스트는 1개씩, 병행 없음. DB·SQL·Production·유료 API·보호 파일 접촉 0.
+
+### 1. Speaking 첫 체험 (커밋 `11e1e89e` feat, `4aef6b7b` test)
+
+| 항목 | 내용 |
+|---|---|
+| 기획 | 홈 🎤 카드 → 별도 화면 `speaking`(`SpeakingPractice.jsx`). 초등 질문 3개(영어+한국어 힌트; 정확한 문구는 `src/utils/speaking/speakingSession.js` `SPEAKING_QUESTIONS`: What is your name? / What is your favorite color? / What do you like to eat?). "🔊 질문 듣기"는 기존 `speak()` 재사용 |
+| 흐름 | 🎤 녹음 시작 → ⏹ 그만(20초 안전 상한) → ▶ 들어보기 → 🔁 다시 녹음, 이전/다음 |
+| 플래그 | `speakingPracticeV1` 기본 true(기기 로컬 kill switch). OFF면 카드가 "준비 중" |
+| 리듀서 | 순수 `speakingSession.js`: idle/requesting/recording/recorded/playing/error. 빈 녹음 = size 0 또는 <500ms. 오류 매핑 denied/nodevice/busy/unknown. MIME 우선순위 webm;opus → webm → mp4(iOS Safari) → ogg |
+| 컴포넌트 | 자체 getUserMedia 스트림(첫 녹음 시 획득, 화면 방문 동안 재사용 = 권한 프롬프트 방문당 1회) + MediaRecorder. 단어 학습의 공유 캐시 스트림 `getMicStreamOnce`는 건드리지 않음 |
+| 데이터 | Blob/objectURL은 브라우저 메모리 전용 — 업로드·저장·STT·발음 점수·보상 없음(설계 문서 §2 원칙). 서버·DB 0 |
+| 해제 | 뒤로/언마운트/탭 숨김/pagehide/오류 시 recorder.stop + tracks.stop + URL.revoke + 타이머·리스너 정리. 요청 중 떠나면 늦게 온 스트림 즉시 정지. 요청 중에도 "← 홈" 가능 |
+| UX/a11y | 인앱 브라우저는 `InAppBrowserNotice`. role=status 상시 마운트, 44px 타겟, 아동 문구 |
+| 범위 이유 | 설계 문서 ①녹음 단계만 구현. ②~④(평가)는 범위 밖 |
+
+- 독립 리뷰 NEEDS-WORK(minor) → 8건 반영: 재생 중 이전/다음 시 pause, requesting 중 뒤로 허용, 스트림 방문당 1회 보유, audio onPause/onError→PLAY_END, requesting 문구, 숨김 중 시작 방지, "최대 20초" 안내, 단위 테스트 등록(`verify:speaking-session`, registry audioTts).
+- 검증: 단위 `testSpeakingSession` 32/32, LazyChunkGuards 83, BundleBudget 32(정적 import, 예산 내), build 경고 0. e2e `tests/e2e/speaking.spec.mjs`(합성 getUserMedia — AudioContext 오실레이터 → MediaStream, 거부/장치 없음/점유/무응답은 DOMException 이름으로 모사): a 진입(390/1280), b 녹음→재생→다시 녹음→다음/이전, c 빈 녹음, d denied/nodevice/busy, e 떠날 때 트랙 ended, f 탭 숨김 중 정지, g 무응답 중 뒤로, h 플래그 OFF, i 인앱 브라우저, j 업로드/STT 요청 0·콘솔 0 → **93/93**. studentHome 201/202(1 SKIP streak).
+- **자동 테스트와 실제 마이크 확인은 별개.** 실제 마이크·스피커 동작은 운영자가 Preview에서 확인(§5). 미수행 항목은 PASS로 기록하지 않음.
+- 지원 범위(코드 기준): HTTPS 필수(http면 "녹음을 시작할 수 없어요"); Chrome/Edge/Firefox 데스크톱 webm/opus; iOS Safari audio/mp4(탭 핸들러 안 play()라 자동재생 제한 무관), Android Chrome webm; 카카오톡 등 인앱 브라우저는 차단 안내.
+- **iOS 위험(미검증)**: 이 화면의 별도 캡처가 단어 학습의 공유 스트림을 mute할 수 있음 → 운영자 확인 항목.
+
+### 2. 2.5D 마을 시각 보정 (커밋 895ec4cd)
+
+- 조사(읽기 전용): 바닥은 단색 그라디언트 + 희미한 CSS path wash, 객체는 발 앵커 `translate(-50%,-100%)` + 별도 그림자 div. **건물 '떠 보임' 원인 실측**: `my-house.png`(128×160) 하단 8px(5%)가 투명 여백이라 보이는 밑면이 앵커보다 위, 그림자는 앵커 중심 → 접지 어긋남. `env/*` 에셋은 validator가 V2 외부 import 금지, `backgrounds/*`·`TOWN_ASSETS` 기존 키만 사용 가능. e2e가 ground 크기·객체 7개 앵커(±1%)·그림자 7개·장애물 8·슬롯·z순서를 고정.
+- 수정(`Proto25DScreen.jsx` +76줄, 다른 파일 0): path wash 뒤·객체 앞에 장식 그룹 `proto25d-decor`(absolute inset-0, pointer-events-none, aria-hidden, z 5000 < 객체 6002).
+
+| 요소 | 내용 |
+|---|---|
+| 잔디 | CSS 전용 점 패턴 2겹(11/17px, α .05/.045) + 소프트 패치 4개 + 하단 깊이 밴드 |
+| 자갈길 | `backgrounds/village-cobblestone-tile.webp`(V1 재사용). 메인 x 47.5–52.5 y 42–92, 벤치 가지 y 64.5–68, 입구 랜딩 x 44–56 y 41.5–45.5, 벤치 패드 (23.5,66), 타일 4%, α .72, 마스크 페더링(Webkit/표준) |
+| 화단 | `TOWN_ASSETS` nature/flower-garden 2개 (39.5,39.5)/(60.5,39.5) + garden-accent-1/2 (37.5,41)/(62.5,41) — 장애물 rect 안·아트 밖 띠(보행·슬롯·입구 셀 불침범) |
+| 접지 | 건물 inner img만 translateY(5%)(래퍼 박스 불변) + 접지 패치 (50,40.6) |
+
+- 새 건물 내부·NPC·구매 없음. 구매·배치·이동·앉기 로직 무변경.
+- 리드 스크린샷 검토 2회(390 전체뷰/1280 산책 모드): 1차 — 길이 테이프처럼 딱딱·과도한 폭, 잔디 점 격자 모아레 → 2차 수정(페더링·폭 축소·랜딩/패드·비정형 잔디) 후 수용.
+- 독립 리뷰 PASS(비차단 3건: wash 주석 보강 권고, groundSize 폴백은 타일 크기만, 화단과 shrub 동일 에셋 — 위치 멀어 문제 없음). 정적: SpriteAdapter 70/70, SceneFixture 24/24, TownEnvAssets 196/196, TownV2Static 147/147, BundleBudget 32/32(Proto25DScreen 19.16KB gzip/60KB), LazyChunkGuards 83/83. e2e townProto25d 전체 1회: **1572 / 1572 PASS, FAIL 0, 미mock 0(장식 레이어 추가 후 기하·z순서·그림자·구매/배치/착석 전부 불변)**.
+
+### 3. 교육적 효과 주장
+
+없음(기능 체험 단계) — 논문 인용 불필요. Speaking 설계 문서 §11의 근거는 평가 단계용이며 이번 범위에 적용하지 않음.
+
+### 4. push/PR/Preview
+
+**{{PUSH_200}}**
+
+### 5. 운영자 확인 체크리스트 (실기기)
+
+1. Preview 로그인 → 홈 🎤 말하기 → 질문 1 → 녹음 시작(권한 허용) → 말하기 → 그만 → 들어보기(소리 확인) → 다시 녹음 → 다음.
+2. 권한 거부 시 안내 문구.
+3. iOS: 말하기 화면 다녀온 뒤 단어 상세 "따라 말하기" 녹음·재생이 정상인지(공유 스트림 mute 위험).
+4. 안드로이드 Chrome.
+5. 2.5D 마을: 길/잔디/화단/집 접지 육안, 구매·배치·앉기 정상.
+
+### 6. 남은 일
+
+- Speaking ②~④(ASR/평가/발음)는 설계 문서의 운영자 결정 후.
+- 마을: 나머지 객체(별채 cottage 3px 여백 등) 접지 점검, 경로 분기 확장은 후속.
+- iOS 공유 스트림 검증.
 
 ## 2026-10-03 (199차) — 비파일럿 계정 마을 진입 불가 보고 조사 + 홈 "내 마을" 라벨 수정
 

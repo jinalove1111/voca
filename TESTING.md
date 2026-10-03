@@ -1208,6 +1208,8 @@ _append. 초등 5개 반/45명 확장 production readiness 점검, 브랜치
 | `scripts/testWritingPolicyFiveClasses.mjs` | 90 | 아니오 | writing |
 | `tests/e2e/mobileViewports.spec.mjs`(확장) | 112→178 | 아니오 | e2e `[mobile]` |
 | `tests/e2e/studentHome.spec.mjs`(신규, 198차) | 192단언(191 PASS/1 SKIP: 360 헤더 streak>0 fixture 시드 불가), 12 시나리오 × 360/390/412/1280 | 아니오 | e2e `[student-home]` |
+| `tests/e2e/speaking.spec.mjs`(신규, 200차) | 93 PASS/0 FAIL — 합성 getUserMedia(AudioContext 오실레이터)로 진입·녹음→재생→다시 녹음·빈 녹음·거부/장치 없음/점유/무응답·트랙 해제·탭 숨김·플래그 OFF·인앱 브라우저·업로드/STT 0 | 아니오 | e2e `[speaking]` (실제 마이크는 운영자 Preview 확인) |
+| `scripts/testSpeakingSession.mjs`(신규, 200차) | 32 | 아니오 | `npm run verify:speaking-session`(registry audioTts) |
 | `scripts/testSpeakingPathNoPermanentDisable.mjs` | 90 | 예 — 수정 전 FAIL 2건(A1/A2), `speech.js` `playAudioUrl()` 실패 경로가 `onError`+`advance()`(→`onEnd`)를 이중 호출하던 결함(P1) 수정 후 90/90 | speech |
 
 - `verify:e2e` 253/253 ×2연속(student 34/admin 21/entrance 12 불변 +

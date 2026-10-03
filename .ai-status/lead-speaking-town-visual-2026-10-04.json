@@ -1,0 +1,15 @@
+{
+  "agent_name": "product-lead",
+  "role": "Speaking 첫 체험 구현(1순위) + 마을 시각 개선(2순위, 제한 범위) — 역할별 순차 조정(동시 1명)",
+  "task_id": "speaking-town-visual-2026-10-04",
+  "status": "completed",
+  "updated_at": "2026-10-04T00:30:00+09:00",
+  "worktree": "C:\\voca-wt\\paul-town-v2-night-audit",
+  "head_start": "a1c4acf7 (= origin = PR #62 head, clean; Preview에서 2.5D 마을 정상 작동 운영자 확인)",
+  "scope_speaking": "홈 Speaking 카드 → 별도 화면 'speaking'(SpeakingPractice.jsx). 질문 3개(초등, en+ko) → 🎤 녹음 시작/⏹ 그만 → ▶ 들어보기 → 🔁 다시 녹음. 자체 getUserMedia 스트림 + MediaRecorder(수동 정지, 20초 안전 상한), Blob/objectURL 브라우저 메모리 전용(업로드·저장·채점·STT·발음 점수·보상 없음). 오류: 권한 거부/마이크 없음/점유/빈 녹음/인앱 브라우저(InAppBrowserNotice 재사용). 화면 이탈·언마운트·탭 숨김 시 recorder.stop + tracks.stop + URL.revoke. 플래그 speakingPracticeV1(기본 true, 기기 로컬 kill switch). Voca/Writing/마을 진입 불변.",
+  "scope_town_visual": "기존 에셋 조사·재사용 → 흙/돌길·잔디 질감·건물 주변 화단으로 공간 연결(시각 레이어만, pointer-events none, 보행 그리드·장애물·배치 슬롯·측정 DOM 불변) → 건물 '떠 보임'은 이미지 여백·그림자·접지 위치 조사 후 최소 보정. 새 건물 내부·NPC·구매 기능 없음. 구매·배치·이동·앉기 동작 유지.",
+  "sequence": ["Lead 범위 확정(완료)", "impl-speaking(구현+단위)", "독립 리뷰", "QA(e2e: 합성 getUserMedia로 happy/denied/nodevice/empty/leave)", "impl-town-visual", "독립 리뷰", "QA(proto25d 스펙 회귀)", "docs", "커밋→push→Preview"],
+  "verification_policy": "브라우저 테스트 1개씩·병행 없음, 메모리 가드 유지, 실행 못 한 항목 PASS 금지, 자동 테스트와 실제 마이크 확인(운영자 Preview) 분리 기록",
+  "blocker": null,
+  "next_action": "완료: Speaking 11e1e89e/4aef6b7b, 마을 시각 895ec4cd, 검증(speaking 93/93, studentHome 201/202, proto25d 1572/1572, 단위·하네스 PASS, 리뷰 2회) → push → PR 댓글 → Preview → 운영자 실기기 체크리스트(handoff 200차 §5)"
+}
