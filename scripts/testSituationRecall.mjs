@@ -1,6 +1,6 @@
 // 2026-10-04 상황 보고 말하기 — 콘텐츠/힌트/로컬 기록/복습 휴리스틱 단위 테스트(순수, 번들·네트워크 불필요)
 import fs from 'node:fs'
-import { SITUATION_EXPRESSIONS as EX, SITUATION_SCENES as SC, MAX_HINT, hintText, sceneFor } from '../src/utils/situation/situationContent.js'
+import { SITUATION_EXPRESSIONS as EX, SITUATION_SCENES as SC, sceneFor } from '../src/utils/situation/situationContent.js'
 import { loadRecords, saveSession, dueForReview, storeKey, MAX_SESSIONS } from '../src/utils/situation/situationStore.js'
 
 let fail = 0
@@ -22,18 +22,12 @@ const townSrc = fs.readFileSync(new URL('../src/assets/town/index.js', import.me
 const paulSrc = fs.readFileSync(new URL('../src/assets/paul/index.js', import.meta.url), 'utf8')
 check('backdrop/partner 키가 TOWN_ASSETS에 존재', SC.every((s) => townSrc.includes(`'${s.backdrop}':`) && townSrc.includes(`'${s.partner}':`)))
 check('paulSticker가 paul/index.js export에 존재', SC.every((s) => new RegExp(`as ${s.paulSticker} `).test(paulSrc)))
+const FORBID = /인사|만나|미안|사과|고마|감사|선물|도와|도움|곤란|놀자|같이 놀|안녕/
+check('examAlt: 10장면 모두 있고 말하기 행위 단어/표현 문장 없음', SC.every((x) => x.examAlt && x.examAlt.length > 5 && !FORBID.test(x.examAlt) && !/[A-Za-z]/.test(x.examAlt)
+  && EX.every((e) => !x.examAlt.includes(e.ko.replace(/[.!?]/g, '')) && !x.examAlt.includes(e.ko))))
+check('시험은 examAlt 사용(SceneCard exam)', /<SceneCard exam /.test(fs.readFileSync(new URL('../src/components/SpeakingExam.jsx', import.meta.url), 'utf8')) && /scene\.examAlt/.test(fs.readFileSync(new URL('../src/components/SceneCard.jsx', import.meta.url), 'utf8')))
 check('cue 이모지 있음', SC.every((s) => s.cue))
-
-// 힌트
-check('MAX_HINT === 3', MAX_HINT === 3)
-check('힌트1: Can ___ ___ ___ ___', hintText('Can you help me, please?', 1) === 'Can ___ ___ ___ ___')
-check("힌트1: I'm ___", hintText("I'm sorry.", 1) === "I'm ___")
-check('힌트2: EN 전체', hintText('Thank you so much!', 2) === 'Thank you so much!')
-check('힌트0: 빈 문자열', hintText('Thank you so much!', 0) === '')
-check('힌트1: 5개 표현 모두 첫 단어 + 단어 수만큼', EX.every((e) => {
-  const w = e.en.split(/\s+/); const h = hintText(e.en, 1).split(' ')
-  return h.length === w.length && h[0] === w[0] && h.slice(1).every((x) => x === '___')
-}))
+check('alternatives: 표현마다 비어있지 않은 문자열 배열', EX.every((e) => Array.isArray(e.alternatives) && e.alternatives.length >= 2 && e.alternatives.every((a) => typeof a === 'string' && a.trim())))
 
 // 저장소
 const s = mem()
@@ -77,11 +71,21 @@ check('빈/이상한 레코드 안전', dueForReview({}, '2026-10-04').length ==
 const srcs = ['situationContent.js', 'situationStore.js'].map((f) => fs.readFileSync(new URL(`../src/utils/situation/${f}`, import.meta.url), 'utf8').replace(/\/\/.*$/gm, '')).join('\n')
 check("저장 코드/콘텐츠에 mastered/completed/score 필드 없음", !/mastered|completed|score|stars?\b/i.test(srcs))
 check('저장된 JSON에 mastered 키 없음', !/mastered|completed/i.test(JSON.stringify([...s._m.values()])))
-const ui = fs.readFileSync(new URL('../src/components/SituationRecall.jsx', import.meta.url), 'utf8')
-check('persist가 무활동이면 저장 안 함(가드 존재)', /if \(!\(hintLevel > 0 \|\| selfReport \|\| recorded\)\) return/.test(ui))
-check('알 수 없는 id는 steps에 못 들어감(EXPR 필터)', ui.includes('.filter((id) => EXPR[id])'))
-check('무상호작용 통과 시 기록 없음(저장 호출 0)', JSON.stringify(loadRecords(mem(), U1)) === '{}')
-check('UI 문구에 ✅/완료/숙달/점수/별 없음', !/✅|완료|숙달|마스터|점수|⭐/.test(ui.replace(/\/\/.*$/gm, '')))
+const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+const read = (f) => fs.readFileSync(new URL(`../src/components/${f}`, import.meta.url), 'utf8')
+const exam = read('SpeakingExam.jsx'); const practice = read('SpeakingPractice.jsx'); const item = read('SpeakingPracticeItem.jsx')
+check('SituationRecall.jsx 삭제됨', !fs.existsSync(new URL('../src/components/SituationRecall.jsx', import.meta.url)))
+check('시험이 세션을 stage exam으로, 공개 후 자기확인/녹음일 때만 저장', /if \(!expr \|\| !revealed \|\| !\(selfReport \|\| recorded\)\) return/.test(exam) && /stage: 'exam'/.test(exam))
+check('stage exam/practice 저장 허용', (saveSession(many, U2, 'help', sess('2026-10-02', 'can', 'exam')), loadRecords(many, U2).help.sessions[0].stage === 'exam'))
+const nextBody = (exam.match(/const next = \(\) => \{[\s\S]*?\n  \}/) || [''])[0]
+check('시험 next(): 공개/다시 연습 상태를 초기화(setRevealed(false), setRetrying(false))', nextBody.includes('setRevealed(false)') && nextBody.includes('setRetrying(false)'))
+const tern = exam.indexOf('{!revealed ? ('); const retryAt = exam.indexOf('exam-retry')
+check('exam-retry는 revealed 분기(else)에만 렌더', tern > 0 && retryAt > exam.indexOf(') : (', tern) && exam.indexOf('exam-retry') === exam.lastIndexOf('exam-retry') && exam.indexOf('exam-reveal') < retryAt)
+check('UI 문구에 ✅/정답/합격/완료/숙달/점수/별 없음', [exam, practice, item].every((t) => !/✅|정답|합격|완료|숙달|마스터|점수|⭐/.test(strip(t))))
+check('시험: EN/KO/듣기는 revealed 조건부 마운트(hidden 금지)', /\{revealed && \(\s*<div[^>]*>\s*<p data-testid="exam-answer"[\s\S]*?exam-meaning[\s\S]*?exam-listen/.test(exam) && !/hidden[^"]*"[^>]*exam-answer/.test(exam))
+check('시험: 자기 확인은 revealed 조건부', /\{revealed && \(\s*<div[^>]*role="group"/.test(exam))
+check('시험: 공개 전 EN 소스(expr.en)는 exam-answer 블록에서만 사용', (strip(exam).match(/expr\.en/g) || []).length === 2) // exam-answer 표시 + exam-listen
+check('시험 요약 외 EN 노출(summary)은 summary 분기에서만', /summary \? \(/.test(exam))
 
 console.log(fail ? `\nFAILED ${fail}` : '\nALL PASS')
 process.exit(fail ? 1 : 0)

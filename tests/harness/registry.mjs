@@ -263,7 +263,7 @@ export const DOMAINS = {
     checks: [
       { script: 'scripts/testTtsSingleton.mjs', builders: ['speech'] },
       { script: 'scripts/testSpeakingSession.mjs', builders: [], extra: false, note: '2026-10-04 Speaking 첫 체험 — speakingReducer 상태 전이/빈 녹음 규칙/mapMediaError/pickMimeType/질문 형태(순수 함수, 번들 불필요). 저장·네트워크 0.' },
-      { script: 'scripts/testSituationRecall.mjs', builders: [], extra: false, note: '2026-10-04 상황 보고 말하기 — 표현 5/장면 10 콘텐츠 형태, 힌트 단계, UUID 키 로컬 기록 round-trip/이름 키 거부, 복습 1일/3일 휴리스틱, 숙달·완료 필드 부재(순수 함수). 저장·네트워크 0.' },
+      { script: 'scripts/testSituationRecall.mjs', builders: [], extra: false, note: '2026-10-04 Speaking v2 콘텐츠·스토어 — 표현 5/장면 10(alternatives·examAlt 무단서 검사), UUID 키 로컬 기록 round-trip/이름 키 거부, 복습 1일/3일 휴리스틱(UI 미사용), SpeakingExam 소스 핀(답 확인 전 EN/KO/듣기 조건부 마운트, 정답·합격·숙달·점수 문구 부재, next 리셋). 저장·네트워크 0.' },
       { script: 'scripts/testSpeechBtnSpeakingStall.mjs', builders: ['speech'], extra: false, note: '2026-09-10 — 따라 말하기 SpeechBtn speaking 단계 10초 워치독 회귀(fakeReact 동적 재현: TTS 슈퍼시드/콜백 미도착 시 idle 복구, 정상 onEnd 경로·에코 가드 억제 동작 불변) 19단언. Presentation 6 Yaeji 제보. 네트워크 0.' },
       { script: 'scripts/testSpeakingPathNoPermanentDisable.mjs', builders: ['speech'], extra: false, note: '2026-09-11 — 발음/듣기/녹음 경로 영구고착 없음 증명(SpeechBtn/PronounceStep/PronStep) 12개 시나리오 90단언, 전부 PASS. 검증 중 실제 결함 발견 후 즉시 수정(P1 승인): playAudioUrl()의 실패 경로(onerror/play().catch)가 advance()를 타면서 무조건 onEnd까지 호출해, times:2(실제 SpeechBtn/PronounceStep 설정)에서 저장 mp3 로드 실패 시 onEnd가 3회·getMicStream이 3회 중복 발화(마이크 반복 재요청/녹음 반복 재시작 — 영구 고착은 아니었음, 각 시도가 자체 hangTimer로 복구)되던 문제를 fail() 헬퍼로 분리해 onError/onEnd 중 정확히 1회만 발화하도록 수정(성공 경로·times 기반 반복 재생은 무변경). 회귀 고정: A1/A2/A1b/B4b가 수정 전 실측 FAIL(규칙 15) 확인 후 전부 PASS로 전환. 네트워크 0.' },
     ],

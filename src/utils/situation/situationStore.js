@@ -28,7 +28,7 @@ export function saveSession(storage, studentId, exprId, session) {
       sessions: [...prev, {
         date: session.date,
         scene: session.scene,
-        stage: session.stage === 'transfer' ? 'transfer' : 'recall',
+        stage: ['transfer', 'exam', 'practice'].includes(session.stage) ? session.stage : 'recall',
         hintLevel: session.hintLevel,
         selfReport: session.selfReport === 'can' || session.selfReport === 'hard' ? session.selfReport : null,
         recorded: !!session.recorded,

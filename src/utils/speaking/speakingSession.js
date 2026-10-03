@@ -2,11 +2,8 @@
 // 있고 저장/채점/전송이 없다. 상태 전이를 reducer로 분리한 이유: 마이크/MediaRecorder
 // 없이도 node 단위 테스트로 전이 규칙을 고정하기 위해서다.
 
-export const SPEAKING_QUESTIONS = [
-  { id: 'q1', en: 'What is your name?', ko: '내 이름은 뭐예요?' },
-  { id: 'q2', en: 'What is your favorite color?', ko: '내가 좋아하는 색은?' },
-  { id: 'q3', en: 'What do you like to eat?', ko: '내가 좋아하는 음식은?' },
-]
+// v2: 문항은 situationContent의 표현 5개(연습·시험 공통). 열린 질문 3개는 제거(SPEAKING_UX_V2 §1).
+export const SPEAKING_ITEM_COUNT = 5
 
 // 안전 타이머 상한 / 너무 짧은 녹음(실수 탭)은 빈 녹음으로 취급하는 하한
 export const MAX_RECORD_MS = 20000
@@ -24,7 +21,7 @@ export const initialSpeakingState = {
   index: 0, status: 'idle', errorCode: null, durationMs: 0, hasAudio: false,
 }
 
-const lastIndex = SPEAKING_QUESTIONS.length - 1
+const lastIndex = SPEAKING_ITEM_COUNT - 1
 
 export function speakingReducer(state, action) {
   switch (action.type) {
