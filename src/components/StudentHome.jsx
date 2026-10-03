@@ -16,7 +16,7 @@ const CARD = 'relative min-h-[9rem] rounded-3xl p-4 flex flex-col items-center j
 const SOON = 'bg-gray-300 text-gray-600'
 const ACTIVE = 'text-white bg-gradient-to-br'
 
-export default function StudentHome({ studentName, studentData, classWords, hasTodaysHomework, onStartGuided, onGo, onLogout, canEnterTown, townEligible, writingEnabled, speakingEnabled }) {
+export default function StudentHome({ studentName, studentData, classWords, hasTodaysHomework, onStartGuided, onGo, onLogout, canEnterTown, townEligible, writingEnabled, speakingEnabled, speakingExamEnabled }) {
   const [notice, setNotice] = useState('')
   const timerRef = useRef(null)
   const cardRefs = useRef({})
@@ -108,6 +108,14 @@ export default function StudentHome({ studentName, studentData, classWords, hasT
             </button>
           ))}
         </nav>
+
+        {/* 2026-10-04 Speaking UX v2 — 시험 바로 가기(보조). 4카드 레이아웃은 그대로 둔다 */}
+        {speakingEnabled && speakingExamEnabled && (
+          <button data-testid="student-home-speaking-exam" onClick={() => go('speaking', 'speakingExam')}
+            className="w-full min-h-[44px] py-3 text-base font-black bg-white text-sky-700 border-2 border-sky-200 rounded-2xl btn-press">
+            🖼️ 그림 시험 바로 가기
+          </button>
+        )}
 
         <p data-testid="student-home-notice" role="status" aria-live="polite" className="text-center text-sm font-bold text-purple-700 min-h-[1.25rem]">{notice}</p>
 

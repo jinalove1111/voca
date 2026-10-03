@@ -69,7 +69,6 @@ const AdminScreen = React.lazy(() => import('./components/AdminScreen'))
 // 코드를 학생 메인 번들에 얹지 않는다.
 const ParentScreen = React.lazy(() => import('./components/ParentScreen'))
 // 2026-10-04 상황 보고 말하기 — 타운 에셋(TOWN_ASSETS)을 물고 있어 메인 번들에 얹지 않는다(lazy).
-const SituationRecall = React.lazy(() => import('./components/SituationRecall'))
 // 입실시험 응시 화면도 같은 이유로 lazy — 학생이 홈 화면 배너를 보는 것과
 // 별개로, "참여하기"를 눌러 실제로 들어갈 때만 로드(Phase 3 성능,
 // 2026-07-18). 배너는 이제 별도 파일(EntranceTestBanner.jsx)이라 이 lazy
@@ -242,6 +241,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 로그아웃/세션 만료 등 어떤 경로로든 AppInner가 내려가면 홈 포커스 기억을 비운다.
   useEffect(() => () => resetStudentHomeState(), [])
   const [screen, setScreen]         = useState(() => (isFeatureEnabled('studentHomeMenu') ? 'home' : 'dashboard'))
+  const [speakingMode, setSpeakingMode] = useState('menu') // 홈의 "그림 시험 바로 가기"가 Speaking을 시험 모드로 연다
   const [selectedWord, setWord]     = useState(null)
   const [selectedWordIdx, setWordIdx] = useState(0)
   const [pendingNextIdx, setPendingNextIdx] = useState(0)
@@ -829,22 +829,18 @@ function AppInner({ studentId, studentName, onLogout }) {
       {screen === 'home' && (
         <StudentHome studentName={studentName} studentData={studentData} classWords={classWords}
           hasTodaysHomework={!!getStudentClass(studentId) && getTodaysAssignmentWordIds(getStudentClass(studentId)).length > 0}
-          onStartGuided={startGuidedSession} onGo={(t) => goFrom('home', t)} onLogout={onLogout}
+          onStartGuided={startGuidedSession} onLogout={onLogout}
+          onGo={(t) => { setSpeakingMode(t === 'speakingExam' ? 'exam' : 'menu'); goFrom('home', t === 'speakingExam' ? 'speaking' : t) }}
           canEnterTown={isFeatureEnabled('paulTownHomeBand') && !!attachment.stats}
           townEligible={townV1Enabled}
           writingEnabled={isFeatureEnabled('writingCoachEnabled')}
-          speakingEnabled={isFeatureEnabled('speakingPracticeV1')} />
+          speakingEnabled={isFeatureEnabled('speakingPracticeV1')}
+          speakingExamEnabled={isFeatureEnabled('situationRecallV1')} />
       )}
       {screen === 'speaking' && (
-        // 2026-10-04 Speaking 첫 체험 — 저장 없는 녹음 연습, 닫으면 홈
-        <SpeakingPractice onBack={() => setScreen('home')}
-          onGoSituation={isFeatureEnabled('situationRecallV1') ? () => setScreen('situation') : null} />
-      )}
-      {screen === 'situation' && (
-        // 2026-10-04 상황 보고 말하기 — 기기 로컬 기록만, 닫으면 Speaking 화면
-        <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
-          <SituationRecall studentId={studentId} onBack={() => setScreen('speaking')} />
-        </React.Suspense>
+        // 2026-10-04 Speaking UX v2 — 메뉴(회화 연습/그림 시험), 닫으면 홈. 시험 기록은 기기 로컬뿐
+        <SpeakingPractice studentId={studentId} initialMode={speakingMode} examEnabled={isFeatureEnabled('situationRecallV1')}
+          onBack={() => setScreen('home')} />
       )}
       {screen === 'growth' && (
         <StudentGrowth studentData={studentData} classWords={classWords}
@@ -1153,7 +1149,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           고정 버튼이 히어로 CTA("▶ 오늘의 학습 시작")를 덮어 탭을 가로채는
           실측 회귀가 있어 대시보드에서는 렌더하지 않는다. 다른 모든 화면은
           불변. */}
-      {screen !== 'dashboard' && screen !== 'home' && screen !== 'growth' && screen !== 'speaking' && screen !== 'situation' && <SpeedBtn />}
+      {screen !== 'dashboard' && screen !== 'home' && screen !== 'growth' && screen !== 'speaking' && <SpeedBtn />}
       {/* Paul Town 2.5D 프로토타입(paulTown2_5d, Stage 1, 2026-09-22) — 기존
           `screen` 상태 머신/네비게이션과 완전히 무관한 독립 dev/QA 서피스.
           내비게이션 진입점이 없다(운영자 스펙에 "학생이 진입"하는 요구

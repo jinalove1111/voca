@@ -9,11 +9,13 @@ const FINAL_ART = Object.fromEntries(
     .map(([path, url]) => [path.split('/').pop().replace(/\.webp$/, ''), url]),
 )
 
-export default function SceneCard({ scene, final = FINAL_ART[scene.id] }) {
+// exam: 시험 화면 — 표현 의미를 풀어 쓰지 않는 examAlt를 읽어 준다
+export default function SceneCard({ scene, exam = false, final = FINAL_ART[scene.id] }) {
+  const alt = exam && scene.examAlt ? scene.examAlt : scene.alt
   const backdrop = townAsset(scene.backdrop)
   const partner = townAsset(scene.partner)
   return (
-    <div role="img" aria-label={final ? scene.alt : `임시 그림. ${scene.alt}`} data-testid="scene-card" data-final={final ? 'true' : 'false'}
+    <div role="img" aria-label={final ? alt : `임시 그림. ${alt}`} data-testid="scene-card" data-scene={scene.id} data-final={final ? 'true' : 'false'}
       className="relative w-full max-w-lg aspect-[4/3] min-h-[40vh] mx-auto rounded-3xl overflow-hidden card-shadow bg-gradient-to-b from-sky-100 to-amber-50">
       {final ? (
         <img src={final} alt="" aria-hidden="true" className="w-full h-full object-contain" />
