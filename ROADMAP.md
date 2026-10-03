@@ -5,6 +5,12 @@ _(2026-09-18 170차 추가) Paul Town V2 렌더러 통합 — 브랜치
 `paulTownV2` OFF, Production WRITE 0. 상세는 `handoff.md`
 2026-09-18(170차) 섹션._
 
+## 2026-10-04 (201차) — 상황 그림으로 이해·회상 연습(회화 표현 5개) — 상태: 코드 완료 ✅(PR #62 브랜치, Draft), 최종 그림 10장은 임시 합성(제작 목록 대기), 학습 효과는 교사 확인표로만 판단
+
+- Speaking 화면 → 🖼️ 상황 보고 말하기. 보기(그림+음성+EN/KO) → 회상(그림만, 힌트 1/2/3 요청식) → 다른 상황 → 요약; 다음 진입 시 도래 표현은 복습(회상부터). 플래그 `situationRecallV1`(기본 true, 기기 로컬 kill switch). 기록은 localStorage(UUID 키), 완료/숙달/보상 없음. 단위 48/48·e2e 94/94, speaking 93/93 회귀 유지.
+- 그림 10장은 기존 마을/Paul 에셋 합성 + "🖼️ 임시 그림" 배지. `src/assets/situations/<scene-id>.webp`를 넣으면 자동 교체(코드 변경 불필요). 유료 생성 0.
+- 남음: 최종 그림 제작(운영자/수작업), 복습 간격 1일/3일 파일럿 후 조정, 서버 동기화(교사 열람)는 별도 DDL 결정. 상세: `handoff.md` 201차, `docs/design/SITUATION_RECALL_DESIGN_2026-10-04.md`, `docs/teacher/SITUATION_RECALL_CHECKLIST_2026-10-04.md`.
+
 ## 2026-10-04 (200차) — Speaking 첫 체험(녹음·재생만) + 2.5D 마을 시각 보정(제한 범위) — 상태: 코드 완료 ✅(PR #62 브랜치, Draft), 실기기 마이크 확인은 운영자 대기
 
 - Speaking 첫 체험 완료 — 홈 🎤 카드 → 질문 3개 듣기/녹음/들어보기/다시 녹음. 플래그 `speakingPracticeV1`(기본 true, 기기 로컬 kill switch). 브라우저 메모리 전용(업로드·STT·점수·보상 0), 커밋 `11e1e89e`/`4aef6b7b`, 단위 32/32·e2e 93/93. 실제 마이크·iOS 공유 스트림 영향은 미검증.

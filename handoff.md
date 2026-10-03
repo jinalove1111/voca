@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-04 (200차 — **Speaking 첫 체험(녹음·재생만, 커밋 `11e1e89e`/`4aef6b7b`, 플래그 `speakingPracticeV1`) + 2.5D 마을 시각 보정(제한 범위, 커밋 895ec4cd)**. DB·SQL·Production·유료 API 0. 실제 마이크는 운영자 Preview 확인 대기. 아래 200차 섹션 참고.)_
+_최종 갱신: 2026-10-04 (201차 — **상황 그림으로 이해·회상 연습(회화 표현 5개, Speaking 화면 → 🖼️ 상황 보고 말하기, 플래그 `situationRecallV1`)**. 그림 10장은 기존 에셋 합성 임시(최종 제작 목록 §6). 버튼 클릭은 기억/숙달 판정에 쓰지 않고 교사 확인표가 증거. DB·SQL·Production·유료 API 0. 아래 201차 섹션 참고.)_
+_200차 갱신: 2026-10-04 (200차 — **Speaking 첫 체험(녹음·재생만, 커밋 `11e1e89e`/`4aef6b7b`, 플래그 `speakingPracticeV1`) + 2.5D 마을 시각 보정(제한 범위, 커밋 895ec4cd)**. DB·SQL·Production·유료 API 0. 실제 마이크는 운영자 Preview 확인 대기. 아래 200차 섹션 참고.)_
 _199차 갱신: 2026-10-03 (199차 — **홈 "내 마을" 버튼 라벨을 Town 자격(Pilot A 허용목록/paulTownV1)에 따라 구분(커밋 `d1bad7ef` fix / `ebd9d808` test)**. 운영자 보고(비파일럿 계정이 홈에서 마을 진입 불가) 조사 결과 코드 결함이 아닌 설계된 파일럿 게이팅 + 홈 라벨 오표기. 전 학생 활성화 없음, Kinney 경로 불변. 아래 199차 섹션 참고.)_
 _198차 갱신: 2026-10-02 (198차 — **학생 홈 4메뉴 개편(커밋 `02d546cb`/`7220740f`, 플래그 `studentHomeMenu`) + 로그인 중복 fetch 제거(커밋 `3238df49`) + Writing/Speaking 설계 문서 2건(구현 없음)**. DB·SQL·Supabase·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 198차 섹션 참고.)_
 _197차 갱신: 2026-10-02 (197차 — **PR #62 구매·배치 흐름 안정화(6시간 자율 세션): 상점 안내 live region 항상 마운트(커밋 `f9c1b027`) + 반복 개폐 스트레스 S37(커밋 `e3115738`) + S38**. 구 빌드에서도 S37 PASS(누적·중복 없음). 실제 스크린리더 미검증. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 197차 섹션 참고.)_
@@ -11,6 +12,86 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-04 (201차) — 상황 그림을 통한 이해와 회상 연습(회화 표현 5개)
+
+### 0. 범위/역할
+
+운영자 지시: 회화 표현 5개에 "상황 그림 → 음성+문장 → 문장 숨기고 그림만 보고 말하기 → 다른 상황 적용 → 다음 학습 복습" 흐름 적용. 시작 HEAD=origin=PR #62 head `246845da`(clean). 순차(동시 브라우저 1개): Lead(Claude Fable 5.1) 설계 문서 → impl-situation(Sonnet) 구현+단위 → review-situation(qa-reviewer, 정적 읽기) → 수정 반영 → impl-situation-spec(e2e) → Lead 정적 하네스·문서. DB·SQL·Supabase·Production·.env·유료 API·`C:\voca`·다른 워크트리 접촉 0. 기존 플래그 기본값 불변, 기존 Speaking 녹음·단어 학습 경로 불변(speaking.spec 93/93 유지).
+
+### 1. 기획 (설계 문서 `docs/design/SITUATION_RECALL_DESIGN_2026-10-04.md`)
+
+| 항목 | 내용 |
+|---|---|
+| 표현 5개 | hello "Hello! Nice to meet you." / help "Can you help me, please?" / sorry "I'm sorry." / thanks "Thank you so much!" / play "Let's play together!" (`src/utils/situation/situationContent.js`) |
+| 흐름 | 보기(그림 A + 🔊 듣기 + EN/KO + 🎤 따라 말하기) → 회상(그림 A만, EN/KO DOM에서 제거, 💡 힌트 1=첫 단어+밑줄 → 2=EN → 3=KO 순차 요청식) → 다른 상황(그림 B, 같은 힌트 규칙) → 다음 표현 … → 요약(5행, 자기 보고 라벨 또는 "미기록") |
+| 복습 | 진입 시 기기 기록에서 도래한 표현(≥1일, 마지막 recall 자기 보고 2건이 모두 '말할 수 있었어요'면 ≥3일, 같은 날 제외)을 복습으로 먼저 배치 — 보기 단계 없이 회상(A)→전이(B). 수치는 연구 도출값 아님(파일럿 후 조정) |
+| 그림 원칙 | 장식이 아닌 상황 설명: 장소 배경 + 폴 스티커(표정) + 상대 동물 + 상황 단서 이모지. 한 화면 그림 1개 + 표현 1개. alt는 한국어 상황 묘사만(EN 미노출) |
+| 판정 원칙 | 버튼 클릭·자기 보고(🙂 말할 수 있었어요 / 🌱 아직 어려워요)는 기억·숙달 판정에 쓰지 않음. 완료/숙달/✅/점수/⭐ 문구·플래그·보상 없음(단위 테스트가 소스를 grep). 증거는 교사 확인표 §5 |
+
+### 2. 구조
+
+| 파일 | 역할 |
+|---|---|
+| `src/components/SituationRecall.jsx`(신규, `React.lazy`) | 단계 머신(idx/hintLevel/selfReport/recorded), 복습 배치, h1 포커스 + sr-only 단계 라벨, role=status 안내, 녹음 버튼 |
+| `src/components/SceneCard.jsx`(신규) | 4:3 카드. `import.meta.glob('../assets/situations/*.webp', {eager, import:'default'})` — 최종 webp가 있으면 그것만 표시, 없으면 `TOWN_ASSETS` 배경 + Paul 스티커 + 동물 + 단서 이모지 합성 + "🖼️ 임시 그림" 배지(aria-label 앞에 "임시 그림. ") |
+| `src/utils/situation/situationContent.js` | 표현 5 × 장면 10(에셋 키 문자열만), `hintText` |
+| `src/utils/situation/situationStore.js` | 키 `paulEasyVoca_situationRecall_<students.id UUID>`(UUID 아니면 저장 안 함, 이름 키 금지 — 규칙 4), 표현별 `{lastPracticedDate, sessions[≤10]{date, scene, stage, hintLevel, selfReport, recorded}}`, `dueForReview`. 손상 JSON/비배열 `sessions`/미지 id 무해 |
+| `src/hooks/useLocalRecorder.js`(신규) | `SpeakingPractice.jsx`의 getUserMedia+MediaRecorder+objectURL 해제 로직을 그대로 추출(리뷰: 줄 단위 동일 확인). 두 화면이 각자 인스턴스, 모듈 상태 없음 |
+| `src/components/SpeakingPractice.jsx` | 훅 사용으로 전환 + `speaking-go-situation` "🖼️ 상황 보고 말하기"(플래그 ON일 때만) |
+| `src/App.jsx` | `screen==='situation'`(Suspense), 뒤로는 speaking, SpeedBtn 숨김 |
+| `src/config/features.js` | `situationRecallV1: true`(기기 로컬 kill switch, 기존 플래그 기본값 불변) |
+
+### 3. 독립 리뷰 → 수정
+
+review-situation NEEDS-WORK(Medium 2/Low 4), 전부 반영: ① 3일 규칙이 같은 날 recall+transfer 쌍으로 켜지던 문제 → 세션에 `stage` 기록, recall만 집계 ② 미지 저장 id/문자열 `sessions`로 화면 crash → `EXPR` 필터 + `Array.isArray` ③ 아무것도 안 한 단계도 "다음"이 세션을 쓰던 것 → 힌트/자기 보고/녹음 중 하나라도 있어야 저장(다음은 항상 활성 유지) ④ 임시 배지가 `role=img` 안이라 스크린리더에 안 읽힘 → aria-label 접두 ⑤ 설계 §6과 키/값/구조 drift → 설계 문서에 "구현 반영 메모" append ⑥ h1이 단계마다 같은 문구 → sr-only 단계 라벨. 훅 리팩터링 회귀 없음(정적).
+
+### 4. 검증 (실행 완료분만)
+
+- 단위 `testSituationRecall` 48/48(`verify:situation-recall`), `testSpeakingSession` ALL PASS, RegistryCoverage 8/8, LazyChunkGuards PASS, BundleBudget PASS(SituationRecall 청크 ≈4.9 kB gzip), StudentPathContracts 61/61, SpeakingPathNoPermanentDisable PASS. build 경고 0(인라인 더미 env, .env 파일 없음).
+- e2e(1개씩 순차, 메모리 가드 중단 0): `tests/e2e/situation.spec.mjs` **94/94**(시나리오 10종, TESTING.md 참고), `speaking.spec.mjs` **93/93**(훅 리팩터링 회귀 없음), `studentHome.spec.mjs` 201 PASS/1 SKIP(기존 streak fixture SKIP). 미mock 0·mock오류 0.
+- **자동 테스트가 못 보는 것**: 학생이 실제로 떠올려 말했는가, 알아들을 수 있는가, 다음 수업에 기억하는가, 임시 그림이 상황을 설명하는가 — 전부 교사 확인표(§5)·Preview 실기기로만. 전체 `verify:e2e`·`verify:all`은 이번 세션에서 실행하지 않음(메모리 사정으로 영향 스펙 3종만 직렬 실행).
+
+### 5. 교사용 확인표
+
+`docs/teacher/SITUATION_RECALL_CHECKLIST_2026-10-04.md` — 열: 학생 | 표현 | ① 즉시 따라하기(명확/부분/불가) | ② 다음 수업 회상(힌트 없음/힌트 1/힌트 2–3/불가) | ③ 새 상황 사용(자발/유도/불가) | 비고. ①②③은 서로 다른 시점에 측정하고 같은 날 몰아 판정하지 않는다. 앱 자기 보고와 교사 관찰의 불일치 자체가 정보.
+
+### 6. 최종 그림 제작 목록(임시 → 최종, 유료 생성 금지)
+
+파일명 `src/assets/situations/<scene-id>.webp`(4:3, 긴 변 ≤ 1024px 권장)를 넣으면 코드 변경 없이 교체되고 배지가 사라진다. 장면 설명(각 장면의 alt와 동일 의도):
+
+| id | 장면 |
+|---|---|
+| hello-a | 학교 앞, 폴이 처음 만난 강아지 친구에게 손 흔들며 인사 |
+| hello-b | 다리 위, 처음 보는 고양이 친구에게 인사 |
+| help-a | 서점, 책을 못 찾아 곤란한 폴 + 부엉이 |
+| help-b | 표지판 앞, 길을 몰라 곤란한 폴 + 지나가는 고양이 |
+| sorry-a | 화단, 화분을 쓰러뜨린 폴이 고양이에게 미안해함 |
+| sorry-b | 카페, 컵을 엎지른 폴이 강아지에게 미안해함 |
+| thanks-a | 집 앞, 부엉이가 선물을 건네고 폴이 활짝 웃음 |
+| thanks-b | 카페, 고양이가 폴 앞에 쿠키를 놓아줌 |
+| play-a | 나무 아래, 공을 가진 강아지에게 폴이 같이 놀자고 다가감 |
+| play-b | 분수 옆, 폴이 고양이에게 같이 놀자고 손짓 |
+
+### 7. 연구 근거와 한계 (설계 문서 §10, 서지 웹 검색 확인)
+
+- 회상 연습(문장 숨기고 떠올리기 우선): Roediger & Karpicke 2006, *Psychological Science* 17(3) 249–255 — 대학생·산문 대상, 아동·외국어 구어 아님.
+- 간격 두고 재방문: Cepeda et al. 2006, *Psychological Bulletin* 132(3) 354–380 — 성인 언어 회상 메타분석, 1일/3일 값은 여기서 도출되지 않음(휴리스틱).
+- 그림+말 > 말만(multimedia principle): Mayer, *Cambridge Handbook of Multimedia Learning* 2005 / *Multimedia Learning* 2판 2009 — 설명형 자료 중심, "그림은 장식이 아닌 설명"이라는 원칙의 근거로만 사용.
+- 아동·EFL 그림 어휘 학습, 연습 다양성→언어 전이: **미확인**, 근거로 쓰지 않음. 효과 크기를 이 앱에 이식하지 않으며 UI에 연구 결과를 단정하지 않는다.
+
+### 8. 운영자 확인 순서 (Preview, §9에 주소)
+
+1. Vercel SSO 로그인 → 학생 이름+PIN → 홈 🎤 Speaking → **🖼️ 상황 보고 말하기**.
+2. 보기 단계: 그림(임시 배지)·EN/KO·🔊 듣기 → 🎤 따라 말하기 → ⏹ → ▶ 들어보기 → 다음.
+3. 회상 단계: 문장이 없는지, 💡 힌트 1 → 2 → 3이 순서대로만 열리는지, 🙂/🌱 자기 보고가 완료/숙달로 표시되지 않는지.
+4. 다른 상황(그림 B) → 다음 표현 반복 → 요약 → 돌아가기(Speaking 녹음 화면 정상).
+5. 다음 날 같은 기기·같은 학생으로 재진입 → "🔁 오늘은 복습부터 해요" + 회상부터 시작.
+6. 그림 10장이 상황을 설명하는지(§6 제작 목록 우선순위 판단), 360px 기기에서 버튼·글자 크기.
+
+### 9. push/PR/Preview
+
+(아래 추기)
 
 ## 2026-10-04 (200차) — Speaking 첫 체험 + 2.5D 마을 시각 보정(제한 범위)
 

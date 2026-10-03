@@ -1210,6 +1210,8 @@ _append. 초등 5개 반/45명 확장 production readiness 점검, 브랜치
 | `tests/e2e/studentHome.spec.mjs`(신규, 198차) | 192단언(191 PASS/1 SKIP: 360 헤더 streak>0 fixture 시드 불가), 12 시나리오 × 360/390/412/1280 | 아니오 | e2e `[student-home]` |
 | `tests/e2e/speaking.spec.mjs`(신규, 200차) | 93 PASS/0 FAIL — 합성 getUserMedia(AudioContext 오실레이터)로 진입·녹음→재생→다시 녹음·빈 녹음·거부/장치 없음/점유/무응답·트랙 해제·탭 숨김·플래그 OFF·인앱 브라우저·업로드/STT 0 | 아니오 | e2e `[speaking]` (실제 마이크는 운영자 Preview 확인) |
 | `scripts/testSpeakingSession.mjs`(신규, 200차) | 32 | 아니오 | `npm run verify:speaking-session`(registry audioTts) |
+| `scripts/testSituationRecall.mjs`(신규, 201차) | 48 — 힌트 생성(5표현 첫 단어+밑줄), 스토어(UUID 키·이름 키 금지·10개 절삭·손상 JSON/비배열 sessions 무해), 복습 휴리스틱(같은 날 제외·1일/3일·같은 날 recall+transfer 쌍은 3일 규칙 미발동·오래된 순), UI 소스에 완료/숙달/✅/점수/⭐ 부재, `persist` 가드·`EXPR` 필터 소스 패턴 | 아니오 | `npm run verify:situation-recall` |
+| `tests/e2e/situation.spec.mjs`(신규, 201차) | 94 PASS/0 FAIL — 진입/뒤로, 보기 단계 EN+KO·임시 배지·aria-label "임시 그림.", 회상 단계 EN/KO DOM 부재→힌트 1/2/3 순차, 다음 항상 활성·자기 보고 aria-pressed·완료/숙달 문구 부재, 합성 마이크 녹음→재생→다시 녹음·녹음 중 다음/뒤로 비활성·해제, UUID별 복습 시드(어제 → 배너+recall 시작, 세션 키 집합 고정, 다른 UUID 무영향), 같은 날 재진입 미복습·same-day 쌍 1일·recall 'can'×2 → 3일, 무상호작용 15회 다음 → 요약 "미기록" 5행·기록 0, 360×640 가로 스크롤 0·44px·h1 포커스·reduced-motion 애니메이션 0, 손상 시드 무충돌 | 아니오 | e2e `[situation]` |
 | `scripts/testSpeakingPathNoPermanentDisable.mjs` | 90 | 예 — 수정 전 FAIL 2건(A1/A2), `speech.js` `playAudioUrl()` 실패 경로가 `onError`+`advance()`(→`onEnd`)를 이중 호출하던 결함(P1) 수정 후 90/90 | speech |
 
 - `verify:e2e` 253/253 ×2연속(student 34/admin 21/entrance 12 불변 +
