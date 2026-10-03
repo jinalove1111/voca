@@ -828,6 +828,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           hasTodaysHomework={!!getStudentClass(studentId) && getTodaysAssignmentWordIds(getStudentClass(studentId)).length > 0}
           onStartGuided={startGuidedSession} onGo={(t) => goFrom('home', t)} onLogout={onLogout}
           canEnterTown={isFeatureEnabled('paulTownHomeBand') && !!attachment.stats}
+          townEligible={townV1Enabled}
           writingEnabled={isFeatureEnabled('writingCoachEnabled')} />
       )}
       {screen === 'growth' && (

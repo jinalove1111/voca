@@ -16,7 +16,7 @@ const CARD = 'relative min-h-[9rem] rounded-3xl p-4 flex flex-col items-center j
 const SOON = 'bg-gray-300 text-gray-600'
 const ACTIVE = 'text-white bg-gradient-to-br'
 
-export default function StudentHome({ studentName, studentData, classWords, hasTodaysHomework, onStartGuided, onGo, onLogout, canEnterTown, writingEnabled }) {
+export default function StudentHome({ studentName, studentData, classWords, hasTodaysHomework, onStartGuided, onGo, onLogout, canEnterTown, townEligible, writingEnabled }) {
   const [notice, setNotice] = useState('')
   const timerRef = useRef(null)
   const cardRefs = useRef({})
@@ -108,13 +108,18 @@ export default function StudentHome({ studentName, studentData, classWords, hasT
 
         <p data-testid="student-home-notice" role="status" aria-live="polite" className="text-center text-sm font-bold text-purple-700 min-h-[1.25rem]">{notice}</p>
 
+        {/* 2026-10-03 홈 내 마을 라벨(파일럿 자격): 허브의 '내 마을' 카드는 Town 자격
+            (townEligible)이 있을 때만 보인다. 자격 없는 학생에게 '내 마을'이라고 쓰면
+            없는 것을 약속하므로 기존 Dashboard 밴드처럼 '구경가기'로 표기한다. */}
         {canEnterTown && (
           <button
             data-testid="student-home-town"
+            data-town-eligible={townEligible ? 'true' : 'false'}
+            aria-label={townEligible ? '내 마을' : 'Paul Town 구경가기'}
             ref={(el) => { cardRefs.current.town = el }}
             onClick={() => go('town', 'paulTown')}
             className="w-full h-14 text-base font-black bg-white text-purple-700 border-2 border-purple-200 rounded-2xl btn-press">
-            🏘️ 내 마을
+            {townEligible ? '🏘️ 내 마을' : '🏘️ Paul Town 구경가기'}
           </button>
         )}
       </div>
