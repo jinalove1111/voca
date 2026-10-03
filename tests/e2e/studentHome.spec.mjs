@@ -22,7 +22,6 @@ const HOME = '[data-testid="student-home"]'
 const NOTICE = '[data-testid="student-home-notice"]'
 const card = (page, id) => page.locator(`[data-testid="student-home-menu-${id}"]`)
 const WRITING_SOON = '문장 쓰기는 곧 열려요! 조금만 기다려요'
-const SPEAKING_SOON = '말하기는 곧 열려요! 조금만 기다려요'
 
 function vpName(vp) { return `[${vp.width}x${vp.height}]` }
 
@@ -178,7 +177,8 @@ export async function run(browser, baseURL) {
       const notice = page.locator(NOTICE)
       r.check(`${name} notice는 role=status이고 처음엔 비어 있음`,
         (await notice.getAttribute('role')) === 'status' && ((await notice.textContent()) || '').trim() === '')
-      for (const [id, text] of [['writing', WRITING_SOON], ['speaking', SPEAKING_SOON]]) {
+      // 말하기는 speakingPracticeV1 기본 ON이라 활성 카드 — 준비 중 계약은 speaking.spec(h, 플래그 OFF)에서 검증.
+      for (const [id, text] of [['writing', WRITING_SOON]]) {
         const c = card(page, id)
         r.check(`${name} ${id} aria-disabled="true"`, (await c.getAttribute('aria-disabled')) === 'true')
         // Playwright는 aria-disabled="true"를 disabled로 취급(isDisabled()=true, click()은 enabled를 영원히 대기)하므로
@@ -191,6 +191,7 @@ export async function run(browser, baseURL) {
         const shown = await waitUntil(async () => ((await notice.textContent()) || '').trim() === text, { timeout: 2000, interval: 100 })
         r.check(`${name} ${id} 누르면 안내문 "${text}"`, !!shown, ((await notice.textContent()) || '').trim())
       }
+      r.check(`${name} speaking 카드는 활성(aria-disabled 없음, 준비 중 배지 없음)`, (await card(page, 'speaking').getAttribute('aria-disabled')) === null && !((await card(page, 'speaking').textContent()) || '').includes('준비 중'))
       // 안내가 떠 있는 상태에서 방치 → 약 4초 후 자동으로 비워짐
       const cleared = await waitUntil(async () => ((await notice.textContent()) || '').trim() === '', { timeout: 5500, interval: 150 })
       r.check(`${name} 안내문이 ~4.5초 안에 자동으로 사라짐`, !!cleared)
