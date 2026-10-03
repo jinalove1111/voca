@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-02 (198차 — **학생 홈 4메뉴 개편(커밋 `02d546cb`/`7220740f`, 플래그 `studentHomeMenu`) + 로그인 중복 fetch 제거(커밋 `3238df49`) + Writing/Speaking 설계 문서 2건(구현 없음)**. DB·SQL·Supabase·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 198차 섹션 참고.)_
+_최종 갱신: 2026-10-03 (199차 — **홈 "내 마을" 버튼 라벨을 Town 자격(Pilot A 허용목록/paulTownV1)에 따라 구분(커밋 `d1bad7ef` fix / `ebd9d808` test)**. 운영자 보고(비파일럿 계정이 홈에서 마을 진입 불가) 조사 결과 코드 결함이 아닌 설계된 파일럿 게이팅 + 홈 라벨 오표기. 전 학생 활성화 없음, Kinney 경로 불변. 아래 199차 섹션 참고.)_
+_198차 갱신: 2026-10-02 (198차 — **학생 홈 4메뉴 개편(커밋 `02d546cb`/`7220740f`, 플래그 `studentHomeMenu`) + 로그인 중복 fetch 제거(커밋 `3238df49`) + Writing/Speaking 설계 문서 2건(구현 없음)**. DB·SQL·Supabase·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 198차 섹션 참고.)_
 _197차 갱신: 2026-10-02 (197차 — **PR #62 구매·배치 흐름 안정화(6시간 자율 세션): 상점 안내 live region 항상 마운트(커밋 `f9c1b027`) + 반복 개폐 스트레스 S37(커밋 `e3115738`) + S38**. 구 빌드에서도 S37 PASS(누적·중복 없음). 실제 스크린리더 미검증. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 197차 섹션 참고.)_
 _196차 갱신: 2026-10-01 (196차 — **PR #62 산책 모드 카메라 rAF 루프 idle settle-stop 최적화 1건(커밋 `3f9d5d9b` perf / `7ff69bea` test), 독립 리뷰 PASS, e2e S36 신규**. 정지 후 rAF 60/s → 0/s. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 196차 섹션 참고.)_
 _195차 갱신: 2026-10-01 (195차 — **모바일 품질 감사(상태/타이머/a11y + 아동 UX) → 수정 배치 A/B → 독립 리뷰 PASS → e2e S34/S35 신규, 커밋 4개(`35a9e91b`/`d3192980`/`c5ccefc7`/`3a66ff97`)**. 탭 지점 카메라 드리프트(실측 92~119px), 포커스 관리, 한국어 상품명/문구 수정. DB·SQL·API·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 195차 섹션 참고.)_
@@ -9,6 +10,36 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-03 (199차) — 비파일럿 계정 마을 진입 불가 보고 조사 + 홈 "내 마을" 라벨 수정
+
+### 0. 보고와 범위
+- 운영자: Kinney 계정은 마을 진입·동작 정상(이전 확인), Barry 계정은 홈은 열리지만 마을에 들어가지 못함. 지시: PR #62 활성 worktree와 최신 Preview HEAD 확인 → 두 계정의 진입 조건 비교 → mock 테스트로 재현 → 코드 결함이면 최소 수정+회귀, 설정/계정 문제면 조치와 메뉴 경로 보고. Kinney 정상 동작 유지, 전 학생 활성화 금지, DB·SQL·Production·C:\voca 무접촉.
+- 확인: worktree `C:\voca-wt\paul-town-v2-night-audit`, HEAD=origin=PR #62 head `353af1e8`(= 최신 Preview https://voca-8okkcha9v-jina4926952s-projects.vercel.app 배포 커밋), clean.
+
+### 1. 계획 — 코드 추적(읽기 전용) → 조건 비교 → 기존 mock e2e로 재현(townPilotAllowlist N1/N2 = 비파일럿 → 카드 없음) → 결함 분류 → 최소 수정 + 회귀.
+
+### 2. 원인 (코드 사실)
+| 단계 | 조건 | 근거 |
+|---|---|---|
+| 홈 "🏘️ 내 마을" 버튼 표시 | `paulTownHomeBand`(기본 true) && attachment.stats | `App.jsx:830`, `StudentHome.jsx:111` |
+| 버튼 → 화면 | Paul Town 허브(`'paulTown'`) | `StudentHome.jsx:115` |
+| 허브의 "내 마을 — Welcome to Paul Town" 카드 | `onGoTown` 비null ⇔ `townV1Enabled` | `App.jsx:1022`, `PaulTown.jsx:231-238` |
+| `townV1Enabled` | 기기 플래그 `paulTownV1`(기본 false) **또는** `isPilotTownStudent(studentId)` — Pilot A UUID 5개 허용목록 | `App.jsx:285-289`, `src/config/pilotTown.js` |
+| `paulTown2_5d` | 별도 2.5D 오버레이(기본 false). ON이면 홈 자체를 덮으므로, "홈이 열렸다"는 보고로 그 기기에서 OFF임이 확인됨 | `App.jsx:1103` |
+- **Kinney**: Pilot A 허용목록 UUID(142차 기록) → 기기 플래그와 무관하게 카드 표시·진입. **Barry**: 허용목록에 없고 그 기기 `paulTownV1` OFF → 허브는 열리나 카드 없음 → "마을에 못 들어감". 이는 설계된 Pilot A 게이팅(코드 결함 아님). 클릭 시 콘솔 오류·실패 네트워크 요청은 이 경로에 없음(허브 렌더만; mock 재현 townPilotAllowlist N1/N2 콘솔 0·미mock 0).
+- **홈 라벨 결함(198차 P1에서 생김)**: 홈 버튼이 자격과 무관하게 "🏘️ 내 마을"이라 적혀 비자격 학생에게 없는 것을 약속(기존 Dashboard 띠는 "구경가기"). 이것만 수정 대상.
+
+### 3. 수정 (`d1bad7ef`, 2 파일 +7줄) — App이 `townEligible={townV1Enabled}`를 StudentHome에 전달; 버튼은 testid·게이트·이동(허브) 동일, 라벨만 `자격 ? '🏘️ 내 마을' : '🏘️ Paul Town 구경가기'`(aria-label 동일 규칙, `data-town-eligible`). 자격 로직·허용목록·허브·플래그 기본값 불변 → 전 학생 활성화 없음, Kinney 경로 불변.
+
+### 4. 검증 — 리드 코드 리뷰(7줄). e2e `ebd9d808`: studentHome f(비파일럿 기본: 라벨 "구경가기"·`data-town-eligible=false`·허브 열림·카드 없음 = Barry 재현), m(i)(`paulTownV1` ON: 라벨 "내 마을"·카드·들어가기→Town V1→허브→홈 왕복), m(ii)(Pilot A UUID 로그인, 플래그 기본: 라벨 "내 마을"·카드). 결과 **209 PASS / 0 FAIL / 1 SKIP**(k streak 헤더, fixture 한계). 회귀: townPilotAllowlist **33/33**, townV1 **528/528**(1회차는 포트 4196 preview 충돌 ERR_CONNECTION_REFUSED → 4198 단독 재실행). FAIL-before: dist가 먼저 재빌드돼 실측 불가 → 구 소스(`353af1e8` StudentHome.jsx:111-117 무조건 "🏘️ 내 마을", 속성 없음)로 추론 기록. build 경고 0.
+
+### 5. Barry를 들여보내려면(운영자 조치, 전 학생 활성화 아님)
+- (A) **계정 허용(권장, 배포 필요)**: `src/config/pilotTown.js`의 `PILOT_A_TOWN_STUDENT_IDS`에 Barry의 `students.id` UUID 추가(이름 아님 — CLAUDE.md 규칙 4). UUID 확인: 관리자 로그인 → 학생 목록에서 Barry 카드/상세의 ID(또는 Supabase 대시보드 students 테이블 — DB 조회만, 변경 아님). 운영자가 UUID를 주면 1줄 커밋 + push로 처리.
+- (B) **기기 단위 임시 허용(배포 불필요)**: Barry가 쓰는 그 기기에서 학생 선택 화면 → "⚙️ 관리자" → PIN → **기능 관리** → `paulTownV1` ON → 로그아웃 후 Barry 재로그인 → 허브에 "내 마을" 카드. 그 기기의 모든 학생에게 적용되고 다른 기기엔 영향 없음.
+- (C) 현재 그대로 두면 Barry는 "🏘️ Paul Town 구경가기"(허브 구경)만 가능.
+
+### 6. push/Preview — 아래 추기 참조.
 
 ## 2026-10-02 (198차) — 학생 홈 4메뉴 개편 + 로그인 중복 fetch 제거 + Writing/Speaking 설계 문서
 
