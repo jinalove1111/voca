@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-04 (201차 — **상황 그림으로 이해·회상 연습(회화 표현 5개, Speaking 화면 → 🖼️ 상황 보고 말하기, 플래그 `situationRecallV1`)**. 그림 10장은 기존 에셋 합성 임시(최종 제작 목록 §6). 버튼 클릭은 기억/숙달 판정에 쓰지 않고 교사 확인표가 증거. DB·SQL·Production·유료 API 0. 아래 201차 섹션 참고.)_
+_최종 갱신: 2026-10-04 (202차 — **Speaking UX v2: 회화 연습 / 그림 보고 말하기 시험 분리**(201차 SpeakingPractice+SituationRecall 통합, 우회 버튼 제거, 홈 시험 직진입). 시험은 답 확인 전 문장·뜻·음성 미마운트, 정답·합격·숙달·점수 생성 0. 전용 일러스트 10장 제작 명세(제작 기능 없음 → 명세·프롬프트·검수 기준만). DB·SQL·Production·유료 API 0. 아래 202차 섹션 참고.)_
+_201차 갱신: 2026-10-04 (201차 — **상황 그림으로 이해·회상 연습(회화 표현 5개, Speaking 화면 → 🖼️ 상황 보고 말하기, 플래그 `situationRecallV1`)**. 그림 10장은 기존 에셋 합성 임시(최종 제작 목록 §6). 버튼 클릭은 기억/숙달 판정에 쓰지 않고 교사 확인표가 증거. DB·SQL·Production·유료 API 0. 아래 201차 섹션 참고.)_
 _200차 갱신: 2026-10-04 (200차 — **Speaking 첫 체험(녹음·재생만, 커밋 `11e1e89e`/`4aef6b7b`, 플래그 `speakingPracticeV1`) + 2.5D 마을 시각 보정(제한 범위, 커밋 895ec4cd)**. DB·SQL·Production·유료 API 0. 실제 마이크는 운영자 Preview 확인 대기. 아래 200차 섹션 참고.)_
 _199차 갱신: 2026-10-03 (199차 — **홈 "내 마을" 버튼 라벨을 Town 자격(Pilot A 허용목록/paulTownV1)에 따라 구분(커밋 `d1bad7ef` fix / `ebd9d808` test)**. 운영자 보고(비파일럿 계정이 홈에서 마을 진입 불가) 조사 결과 코드 결함이 아닌 설계된 파일럿 게이팅 + 홈 라벨 오표기. 전 학생 활성화 없음, Kinney 경로 불변. 아래 199차 섹션 참고.)_
 _198차 갱신: 2026-10-02 (198차 — **학생 홈 4메뉴 개편(커밋 `02d546cb`/`7220740f`, 플래그 `studentHomeMenu`) + 로그인 중복 fetch 제거(커밋 `3238df49`) + Writing/Speaking 설계 문서 2건(구현 없음)**. DB·SQL·Supabase·Production 쓰기 0. PR #62 Draft 유지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`. 아래 198차 섹션 참고.)_
@@ -12,6 +13,68 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-04 (202차) — Speaking UX v2: 회화 연습 / 그림 보고 말하기 시험 분리
+
+### 0. 범위/역할
+
+운영자가 Speaking UX 요구를 수정(연습·시험 명확 분리, 연습은 그림+문장 동시, 시험은 답 확인 전 비노출, 그림 품질 명세, 중복 기능 금지). 시작 HEAD=origin=PR #62 head `67cfea44`(clean). 순차: Lead(Claude Fable 5.1) 설계 `docs/design/SPEAKING_UX_V2_2026-10-04.md` → impl-speaking-v2(Sonnet) 구현+단위+빌드 → review-speaking-v2(정적, 읽기 전용) ∥ impl-speaking-v2-spec(e2e 재작성; 파일 겹침 없음) → 리뷰 반영·1회 재빌드 → e2e 직렬 최종 → Lead 회귀 스펙 직렬 → docs. 브라우저 1개씩. DB·SQL·Supabase·Production·.env·보호 파일·유료 API 접촉 0. 플래그 기본값 변경 0.
+
+### 1. 기획 변경 이유 (설계 §1)
+
+| 201차 | 문제 | v2 |
+|---|---|---|
+| 열린 질문 3개 녹음 + 하단 작은 "🖼️ 상황 보고 말하기" 우회 버튼 | 연습/시험 구분 없음, 시험 진입 숨김, 열린 질문은 목표 문장이 없어 시험과 ID·표현 공유 불가 | Speaking 진입 = 동일 중요도 큰 메뉴 2개(🗣️ 회화 연습 / 🖼️ 그림 보고 말하기 시험). 연습·시험 모두 `SITUATION_EXPRESSIONS` 5개(id 동일). 열린 질문 3개 제거 |
+| 보기→회상(힌트 1~3)→전이 한 줄기 | 첫 단어 힌트가 시험 성격을 흐림, 그림 보려면 단계 이동 | 연습: 그림+EN+KO+🔊(en-GB) 처음부터 함께, 듣기→따라 말하기→선택 녹음→다음. 시험: 그림+진행 상태만 → [답 확인] 후 문장·뜻·음성, [다시 연습]/[다음 문제] |
+
+### 2. 구조
+
+| 파일 | 역할 |
+|---|---|
+| `SpeakingPractice.jsx` | Speaking 루트: `mode` menu/practice/exam, `initialMode`(홈 직진입), `examEnabled`(`situationRecallV1`), 시험은 `key`로 진입마다 재마운트(항상 1번·미공개) |
+| `SpeakingPracticeMode.jsx`(lazy) | 연습 5문항(scene A), 완료 패널 [🖼️ 그림 시험 시작](큰 버튼, 플래그 OFF면 미렌더) + [메뉴로] |
+| `SpeakingPracticeItem.jsx` | 공유 문항 뷰(SceneCard → EN → KO → 🔊 `speak(en,{source:'speaking'})` → 녹음 컨트롤). 인앱 브라우저면 녹음 영역만 `InAppBrowserNotice compact`로 교체(메뉴·연습·시험은 동작) |
+| `SpeakingExam.jsx`(lazy) | 시험 5문항(scene B, `EXAM_SCENE='b'`). 공개 전: `exam-progress`·SceneCard(`examAlt` — 발화 의도 단어 없는 중립 묘사)·선택 녹음·[답 확인]. EN/KO/듣기/자기 확인/다시 연습은 `revealed` 분기 안에서만 마운트. [다음 문제]는 공개 후 활성, 문항 전환 시 revealed/자기 확인/녹음 리셋. 요약 5행(자기 확인 라벨 또는 "미기록") |
+| `SceneCard.jsx` | `data-scene` 추가, `exam` prop → `scene.examAlt` 사용. 최종 webp 교체 경로 불변 |
+| `situationContent.js` | 표현별 `alternatives`(교사용, 화면 미표시), 장면별 `examAlt`. 힌트 함수 삭제 |
+| `situationStore.js` | stage `exam`/`practice` 허용. 저장 조건: 답 확인 후 자기 확인 또는 녹음이 있을 때만. `dueForReview` 유지(UI 미사용) |
+| `speakingSession.js` | `SPEAKING_QUESTIONS` 제거 → `SPEAKING_ITEM_COUNT=5`; reducer/메시지/상수 불변 |
+| `StudentHome.jsx` | Speaking 카드 아래 보조 버튼 `student-home-speaking-exam` "🖼️ 그림 시험 바로 가기"(두 플래그 모두 ON일 때만, 4카드 구조 불변, Tab 순서 8단계) |
+| `App.jsx` | `screen==='situation'` 삭제, `speakingMode` state, `onGo('speakingExam')` |
+| 삭제 | `SituationRecall.jsx`, `tests/e2e/situation.spec.mjs` |
+
+번들: 연습/시험을 lazy로 분리(SceneCard가 끌어오는 마을 에셋 인덱스가 main에 들어가 150.9 KB로 예산 초과 → 분리 후 127.4 KB/135 KB). 청크 `SpeakingExam` 4.86 kB, `situationContent` 10.55 kB.
+
+### 3. 독립 리뷰 → 반영
+
+review-speaking-v2 NEEDS-WORK(Medium 2/Low 4; 답 노출 결함 0): ① 플래그 OFF에서도 "그림 시험 시작" 패널이 렌더 → 미렌더 ② 시험 scene alt가 뜻을 패러프레이즈("미안해해요" 등) → 스크린리더에 답 노출 → `examAlt`(장소·인물·보이는 사건만; 단위 테스트가 인사/미안/고마/도와/곤란/놀자 등 금칙어·영문·KO 문장 부재 검사) ③ 다시 연습 시 `scene-card` 2개 → e2e 스코프 ④ 인앱 브라우저가 메뉴·시험까지 차단 → 녹음 영역만 교체 ⑤ `data-expr` id는 허용(텍스트만 검사) ⑥ 단위 테스트 소스 핀 2개 추가(next 리셋, exam-retry는 revealed 분기). 녹음 로직·testid·해제 의미는 HEAD와 동일(리뷰 PASS). 스펙 작성자가 발견한 계약 누락 `data-scene` 추가.
+
+### 4. 검증 (실행 완료분만, 브라우저 1개 직렬, 메모리 가드 중단 0)
+
+- 단위: `testSituationRecall` 51/51, `testSpeakingSession` ALL PASS, StudentPathContracts 61/61, SpeakingPathNoPermanentDisable 90/90, RegistryCoverage, LazyChunkGuards 83/83, BundleBudget 32/32, build 경고 0(인라인 더미 env, .env 없음).
+- e2e 신규/재작성: `speakingExam.spec.mjs`(`[speaking-exam]`) **148/148** — 공개 전 body에 EN 5문장·KO 5뜻 없음, exam-answer/meaning/listen/self/retry/panel DOM 부재, 시험 alt 금칙어 없음, speak 호출 0; 답 확인 후 표시·듣기 1회·자기 확인 aria-pressed; 다시 연습 인라인(scene A); 다음 문제 → 미공개·리셋; 마이크 없이 완주·요약 "미기록"·정답/합격/숙달/점수/⭐/완료 부재; UUID 저장(stage exam, 키 집합 고정, recorded만/자기 확인만/없음 케이스, 다른 UUID 무영향); 녹음 중 답 확인/다음/뒤로 비활성·이탈 시 해제; 권한 거부에도 완주; 뒤로→메뉴→재진입 1번 미공개; 홈 직진입·플래그 OFF(메뉴·홈 버튼·시험 시작 부재); 인앱 브라우저에서 시험 완주; 360/390/412/1280 가로 스크롤 0·44px·h1 포커스·reduced-motion; 손상 시드 무충돌. `speaking.spec.mjs` **200/200** — 메뉴 2버튼 동일 높이·전폭, 연습 문항 그림→문장→뜻→듣기 동시 표시(360/390/412 y순서, EN ≥24px), 듣기 호출 텍스트=EN, 기존 녹음 시나리오(빈 녹음/거부/장치 없음/점유/이탈 해제/탭 숨김/무응답/플래그 OFF/인앱/업로드·STT 0) 유지, 5문항 후 큰 시험 시작 버튼, 재진입 1번. `studentHome.spec.mjs` 212 PASS/1 SKIP(기존 streak) — 시나리오 n(시험 버튼 두 플래그 조합) 추가.
+- 회귀(리드가 직렬 실행, free RAM 1.0~1.4 GB): `[student]` 34/34, `[mobile]` 178/178, `[entrance]` 12/12, `[stale-chunk]` 8/8, `[town]`(townV1) 528/528 — FAIL 0, 미mock 0. **`[town-proto2.5d]`는 02:45 시작 직후 Claude Code 메모리 가드가 백그라운드 명령을 종료해 미완주(결과 없음, PASS 아님).** 이번 변경은 마을 코드(`Proto25DScreen`/town/*)를 건드리지 않고 `App.jsx` 변경도 speaking 화면 분기뿐이지만, 해당 스펙은 운영자 메모리 확보 후 재실행이 필요하다: `$env:E2E_PREVIEW_PORT=4191; node <scratch>/runProto25dSpec.mjs tests/e2e/townProto25d.spec.mjs` 또는 `npm run verify:e2e`. 또한 스펙 작성 에이전트의 최종 3스펙 재실행(02:42~)이 리드의 회귀 실행(02:39~)과 수 분 겹쳐 브라우저 2개가 동시에 돈 구간이 있었다(둘 다 FAIL 0, 가드 중단 없음) — "브라우저 1개씩" 규칙 위반으로 기록. 전체 `verify:all` 미실행.
+- **자동 테스트가 못 보는 것**: 학생이 실제로 말했는가, 알아들을 수 있는가, 임시 그림의 설명력 — 교사 확인표·Preview 실기기. 자동 채점 없음 → 앱은 정오를 모른다.
+
+### 5. 그림 제작 명세와 준비 상태
+
+`docs/design/SPEAKING_UX_V2_2026-10-04.md` §6: 10장(연습 A 5 + 시험 B 5) 각각 파일명 `src/assets/situations/<scene-id>.webp`, 1024×768 4:3 ≤120 KB, 공통 프롬프트 접두 + 장면 프롬프트, 목표 의미, 허용 가능한 대체 표현(교사용, `alternatives`로 코드 보관·화면 미표시), 검수 5항목(글자 0 / 360px 식별 / 발화 이유 설명 가능 / 동일 캐릭터·팔레트 / 고정관념 없음). **현재 준비 상태: 10/10 임시 합성, 최종본 0.** 이 저장소에 이미지 생성 기능이 없고 유료 API를 연결하지 않으므로 임시 그림을 재조합해 완료 처리하지 않았다. 교체 경로(`SceneCard` glob)와 데이터 연결은 그대로.
+
+### 6. 연구 근거와 한계 (설계 §8, 서지 웹 검색 확인)
+
+Roediger & Karpicke 2006 *Psych Sci* 17(3) 249–255(그림 보고 먼저 말한 뒤 답 확인 = 인출 우선) · Bjork 1994 in Metcalfe & Shimamura (Eds.) *Metacognition* pp. 185–205 MIT Press(연습=지원 전부, 시험=지원 제거의 "바람직한 어려움"; 과하면 역효과 → 시험 직후 다시 연습 제공) · Mayer 2005/2009 multimedia principle(연습의 그림+문장+음성 동시, 장식 최소) · Cepeda et al. 2006 *Psych Bull* 132(3) 354–380(연습과 다른 시점의 시험이 유리 — 앱은 간격을 강제하지 않음). 한계: 전부 성인·설명 자료 대상, 아동 EFL 전이 미확인; 자동 채점 없음 → 답 확인은 학습 활동이지 평가 아님; 임시 그림의 설명력 미검증.
+
+### 7. 운영자 확인 순서 (Preview)
+
+1. 홈 🎤 Speaking → 메뉴 2개 크기 동일 → **회화 연습**: 그림·문장·뜻·🔊가 한 화면(360px에서 그림 위·문장 아래) → 듣기(영국 영어) → 🎤 따라 말하기 → 들어보기 → 다음 ×5 → 큰 **그림 시험 시작**.
+2. **시험**: 그림 B + "1 / 5"만 보이는지(문장·뜻·듣기 없음) → 말해 보기 → **답 확인** → 문장·뜻·🔊 → 🙂/🌱 → **다시 연습**(그림 A + 문장) → **다음 문제** → 미공개 상태로 시작하는지 → 5문항 → 요약(정답/점수 없음) → 돌아가기.
+3. 시험 도중 ← 뒤로 → 메뉴 → 다시 시험 → 1번·미공개. 홈 "🖼️ 그림 시험 바로 가기" 직진입.
+4. 마이크 거부/카카오톡 인앱에서도 시험 완주. 360/390/412/데스크톱.
+5. Voca 단어 학습 따라 말하기·Writing·마을 정상.
+
+### 8. push/PR/Preview
+
+(아래 추기)
 
 ## 2026-10-04 (201차) — 상황 그림을 통한 이해와 회상 연습(회화 표현 5개)
 
