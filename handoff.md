@@ -39,7 +39,7 @@ _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1�
 - (B) **기기 단위 임시 허용(배포 불필요)**: Barry가 쓰는 그 기기에서 학생 선택 화면 → "⚙️ 관리자" → PIN → **기능 관리** → `paulTownV1` ON → 로그아웃 후 Barry 재로그인 → 허브에 "내 마을" 카드. 그 기기의 모든 학생에게 적용되고 다른 기기엔 영향 없음.
 - (C) 현재 그대로 두면 Barry는 "🏘️ Paul Town 구경가기"(허브 구경)만 가능.
 
-### 6. push/Preview — 아래 추기 참조.
+### 6. push/Preview — non-force push `353af1e8..dd97b613`, HEAD=origin, worktree clean, PR #62 OPEN/Draft, 댓글 https://github.com/jinalove1111/voca/pull/62#issuecomment-5970292830. Vercel Preview **success**(https://vercel.com/jina4926952s-projects/voca/4ro5LuJqmRcnNL67tVt72iawySkh), 앱 주소 **https://voca-nktk4wgm4-jina4926952s-projects.vercel.app**(Vercel SSO 보호 — 로그인 후 학생 이름+PIN).
 
 ## 2026-10-02 (198차) — 학생 홈 4메뉴 개편 + 로그인 중복 fetch 제거 + Writing/Speaking 설계 문서
 
