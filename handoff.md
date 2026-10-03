@@ -60,7 +60,7 @@ _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1�
 
 ### 4. push/PR/Preview
 
-**{{PUSH_200}}**
+**non-force push `a1c4acf7..93bb667f`, HEAD=origin `93bb667f`, worktree clean, PR #62 OPEN/Draft, 댓글 https://github.com/jinalove1111/voca/pull/62#issuecomment-5970955684, Vercel Preview **success**(https://vercel.com/jina4926952s-projects/voca/32zhjuugMVrnymqULieYQ6DKba8T), 앱 주소 **https://voca-jzxrjc8kb-jina4926952s-projects.vercel.app**(Vercel SSO 로그인 후 학생 이름+PIN)**
 
 ### 5. 운영자 확인 체크리스트 (실기기)
 
