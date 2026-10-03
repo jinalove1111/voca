@@ -119,6 +119,7 @@ async function main() {
       { name: '[mobile]', modulePath: '../tests/e2e/mobileViewports.spec.mjs' },
       { name: '[student-home]', modulePath: '../tests/e2e/studentHome.spec.mjs' },
       { name: '[speaking]', modulePath: '../tests/e2e/speaking.spec.mjs' },
+      { name: '[situation]', modulePath: '../tests/e2e/situation.spec.mjs' },
       { name: '[entrance]', modulePath: '../tests/e2e/entranceInputLoss.spec.mjs' },
       { name: '[town]', modulePath: '../tests/e2e/townV1.spec.mjs' },
       { name: '[stale-chunk]', modulePath: '../tests/e2e/staleChunk.spec.mjs' },
