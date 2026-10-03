@@ -143,6 +143,10 @@ const DEFAULT_FEATURES = {
   // 녹음은 브라우저 메모리 전용(저장/채점/전송 없음, DB·서버 접근 0).
   speakingPracticeV1: true,
 
+  // 2026-10-04 상황 보고 말하기 — Speaking 화면의 진입 버튼 게이트. 기기 로컬 kill switch.
+  // 기록은 기기 localStorage(키에 students.id UUID)만, DB·서버·보상 연동 없음.
+  situationRecallV1: true,
+
   // 쓰기 답안 검토 AI 보조(Task 2, 2026-07-23, docs/operations/task2-writing-
   // analysis.md + task2-writing-report.md) — SpellingReviewQueuePanel(관리자
   // 전용)의 "AI 자동분류 미리보기" 버튼을 게이팅. 기본 OFF: (1) supabase_v3_6_

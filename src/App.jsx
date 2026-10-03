@@ -68,6 +68,8 @@ const AdminScreen = React.lazy(() => import('./components/AdminScreen'))
 // 학부모 화면도 같은 이유로 lazy — 학생/관리자 어느 쪽도 매일 안 쓰는
 // 코드를 학생 메인 번들에 얹지 않는다.
 const ParentScreen = React.lazy(() => import('./components/ParentScreen'))
+// 2026-10-04 상황 보고 말하기 — 타운 에셋(TOWN_ASSETS)을 물고 있어 메인 번들에 얹지 않는다(lazy).
+const SituationRecall = React.lazy(() => import('./components/SituationRecall'))
 // 입실시험 응시 화면도 같은 이유로 lazy — 학생이 홈 화면 배너를 보는 것과
 // 별개로, "참여하기"를 눌러 실제로 들어갈 때만 로드(Phase 3 성능,
 // 2026-07-18). 배너는 이제 별도 파일(EntranceTestBanner.jsx)이라 이 lazy
@@ -835,7 +837,14 @@ function AppInner({ studentId, studentName, onLogout }) {
       )}
       {screen === 'speaking' && (
         // 2026-10-04 Speaking 첫 체험 — 저장 없는 녹음 연습, 닫으면 홈
-        <SpeakingPractice onBack={() => setScreen('home')} />
+        <SpeakingPractice onBack={() => setScreen('home')}
+          onGoSituation={isFeatureEnabled('situationRecallV1') ? () => setScreen('situation') : null} />
+      )}
+      {screen === 'situation' && (
+        // 2026-10-04 상황 보고 말하기 — 기기 로컬 기록만, 닫으면 Speaking 화면
+        <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
+          <SituationRecall studentId={studentId} onBack={() => setScreen('speaking')} />
+        </React.Suspense>
       )}
       {screen === 'growth' && (
         <StudentGrowth studentData={studentData} classWords={classWords}
@@ -1144,7 +1153,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           고정 버튼이 히어로 CTA("▶ 오늘의 학습 시작")를 덮어 탭을 가로채는
           실측 회귀가 있어 대시보드에서는 렌더하지 않는다. 다른 모든 화면은
           불변. */}
-      {screen !== 'dashboard' && screen !== 'home' && screen !== 'growth' && screen !== 'speaking' && <SpeedBtn />}
+      {screen !== 'dashboard' && screen !== 'home' && screen !== 'growth' && screen !== 'speaking' && screen !== 'situation' && <SpeedBtn />}
       {/* Paul Town 2.5D 프로토타입(paulTown2_5d, Stage 1, 2026-09-22) — 기존
           `screen` 상태 머신/네비게이션과 완전히 무관한 독립 dev/QA 서피스.
           내비게이션 진입점이 없다(운영자 스펙에 "학생이 진입"하는 요구
