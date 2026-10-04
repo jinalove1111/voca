@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-04 (204차 — **PR #62 남은 브라우저 E2E 13스펙 완료: `verify:all`의 `[harness:e2e]` 구간 보완, 전 스펙 FAIL 0, 제품·테스트 수정 0**. 13스펙 합계 1866 PASS / 0 FAIL / 1 SKIP(알려진 fixture 한계), townProto25d는 203차 1572/1572로 갈음. 미mock 0, DB·SQL·Supabase·Production·.env 접촉 0. PR #62 Draft 유지. 아래 204차 섹션 참고.)_
+_최종 갱신: 2026-10-04 (205차 — **테스트 전용 화면 QA 게이트 + 2.5D 마을 홈 내비게이션 통합**(커밋 `66047a57` feat / `81595e64` test). 홈·Speaking·그림 시험·성장·2.5D 마을은 `students.id` UUID 허용목록(Paul·Cookie·Jinaa + e2e 픽스처)만 진입, 일반 학생은 기존 대시보드. 브라우저 14스펙 FAIL 0. QA UUID의 실DB 일치는 **미확인**. DB·SQL·Production 0, PR #62 Draft. 아래 205차 섹션 참고.)_
+_204차 갱신: 2026-10-04 (204차 — **PR #62 남은 브라우저 E2E 13스펙 완료: `verify:all`의 `[harness:e2e]` 구간 보완, 전 스펙 FAIL 0, 제품·테스트 수정 0**. 13스펙 합계 1866 PASS / 0 FAIL / 1 SKIP(알려진 fixture 한계), townProto25d는 203차 1572/1572로 갈음. 미mock 0, DB·SQL·Supabase·Production·.env 접촉 0. PR #62 Draft 유지. 아래 204차 섹션 참고.)_
 _203차 갱신: 2026-10-04 (203차 — **PR #62 마을 회귀 검증 재개: S37 modal-churn BLOCKED 해소(단독 48/48) + `[town-proto2.5d]` 전체 1572/1572 + verify:all(e2e 제외) + 5f 정적 마커 드리프트 수정(커밋 `2510d13c`)**. `[harness:e2e]`(학생/관리자 브라우저 스펙)는 메모리 압박으로 종료되어 이 HEAD에서 미실행. DB·SQL·Supabase·Production·.env 접촉 0. PR #62 Draft 유지. 아래 203차 섹션 참고.)_
 _202차 갱신: 2026-10-04 (202차 — **Speaking UX v2: 회화 연습 / 그림 보고 말하기 시험 분리**(201차 SpeakingPractice+SituationRecall 통합, 우회 버튼 제거, 홈 시험 직진입). 시험은 답 확인 전 문장·뜻·음성 미마운트, 정답·합격·숙달·점수 생성 0. 전용 일러스트 10장 제작 명세(제작 기능 없음 → 명세·프롬프트·검수 기준만). DB·SQL·Production·유료 API 0. 아래 202차 섹션 참고.)_
 _201차 갱신: 2026-10-04 (201차 — **상황 그림으로 이해·회상 연습(회화 표현 5개, Speaking 화면 → 🖼️ 상황 보고 말하기, 플래그 `situationRecallV1`)**. 그림 10장은 기존 에셋 합성 임시(최종 제작 목록 §6). 버튼 클릭은 기억/숙달 판정에 쓰지 않고 교사 확인표가 증거. DB·SQL·Production·유료 API 0. 아래 201차 섹션 참고.)_
@@ -15,6 +16,43 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-04 (205차) — 테스트 전용 화면 QA 게이트 + 2.5D 마을 홈 내비게이션 통합
+
+### 0. 배경/범위
+운영자 보고: 최신 Preview를 휴대폰에서 열면 학생 홈이 아니라 2.5D 마을로 바로 들어가고 빠져나올 수 없음. 원인: `Proto25DScreen`이 기기 로컬 플래그 `paulTown2_5d` ON이면 `screen` 상태와 무관한 `fixed inset-0 z-[9999]` 오버레이로 항상 렌더(나가기 없음). 관리자 진입은 로그인 화면에만 있어 세션이 남은 기기는 앱 안에서 탈출 불가. 추가 운영자 지시: 홈·Speaking·그림 시험·마을은 테스트 전용 — 승인 QA 계정만, 메뉴 숨김 + 직접 진입 차단, 이름 아닌 실제 식별자, Kinney(Pilot A) 미포함, 기존 Voca 유지, main merge/Production 배포/전체 활성화 금지. 워크트리 `C:\voca-wt\paul-town-v2-night-audit`, 시작 HEAD = origin = `33b2f1a6`.
+
+### 1. 변경(새 메뉴 없음)
+- `src/App.jsx`: 2.5D 마을을 `screen === 'proto25d'` 목적지로 전환. 진입은 기존 홈 🏘️ 버튼(플래그 ON이면 `paulTown`→`proto25d` 매핑)과 PaulTown 허브 '내 마을' 카드. `onBack` → 홈(홈 플래그 OFF면 대시보드). SpeedBtn 제외 목록에 `proto25d` 추가.
+- `src/components/town/proto2_5d/Proto25DScreen.jsx`: `onBack` prop + `🏠 홈` 버튼(`data-testid="proto25d-home"`). 위치는 HUD 컬럼의 **absolute 자식, ⓘ 오른쪽**(flex 흐름 밖이라 컬럼 박스 불변). 가게·내 물건·배치 중 숨김. 배치 시행착오(실측): 상단 중앙 → S30/S32 건물 탭 지점과 겹침(360/1280), 컬럼 안 행 래퍼 → S20 항목b 컬럼 높이·S26 도움말 `p`·G1 계약 깨짐, 좌하단 → S37 modal-churn 4/4 FAIL(같은 빌드에서 CSS로 숨기면 48/48 → 버튼 위치가 원인으로 확정, QA 게이트 무관).
+- `src/config/qaTestAccounts.js`(신규, `pilotTown.js`와 같은 형태): `QA_TEST_STUDENT_IDS` + `isQaTestStudent(id)`(소문자 비교). App에서 `studentHomeEnabled`/초기 화면/`paulTown2_5dEnabled`를 `qaTestStudent`와 AND, `QA_ONLY_SCREENS = ['home','speaking','growth','proto25d']` 진입 시 비QA면 `dashboard`로 되돌리는 effect + 각 렌더 조건에 `qaTestStudent &&`. 이름 기반 `TEST_ACCOUNT_NAMES` 미사용. Pilot A(`pilotTown.js`) 무변경, `writingCoach` 무변경.
+
+### 2. QA UUID 출처와 확인 수준
+| 계정 | UUID | 출처 | 확인 수준 |
+|---|---|---|---|
+| Paul | `335a9560-d1f1-4628-bd8d-26bcaa8eaee7` | `supabase_v3_43_ghost_sca_reassign.sql` `_protect` 목록(운영자 실행 SQL) | 문서·SQL 교차 기재만. **실 students 테이블 조회로 확인 안 함** |
+| Cookie | `a63923a1-473d-4ba1-bca6-6b8685848cd3` | 같은 파일 | 같음(미확인) |
+| Jinaa | `738443f3-2676-4b89-9f17-cc7f22aa993c` | 같은 파일 + `handoff.md` 테스트 계정 집계 항목 + `supabase_v3_35` 주석 | 3곳 일치, 실DB 미확인 |
+| e2e 픽스처 | `e2e00000-0000-4000-8000-00000000a001` | `tests/e2e/fixtures/index.mjs` | 합성 id, 프로덕션에 없음 |
+Kinney·Pilot A 5명은 포함하지 않음. **운영자 확인 필요**: Supabase에서 `select id, name from students where id in (...)` 읽기 1회로 세 id가 의도한 계정인지 확인(이 세션은 DB 접근 0).
+
+### 3. 검증(브라우저 1개, 더미 env 빌드, mock 전용, 실 로그인·DB 쓰기 0)
+- 14스펙 FAIL 0: student 34, admin 21, mobile 178, speaking 200, speaking-exam 148, entrance 12, town 528, stale-chunk 8, town-flag-xtab 16, town-v2 448, town-v2-artwork 28, town-pilot-allowlist 33(이상 최종 App.jsx·게이트 빌드), town-proto2.5d **1572/1572**, student-home **226 PASS / 1 SKIP**(기존 streak fixture 한계)(이 둘은 최종 🏠 위치 빌드). 미mock 0.
+- 일반 학생 차단(student-home q): 첫 화면 대시보드, 새로고침 후에도 대시보드, 허브 경로로도 2.5D/홈 미노출, '들어가기' 0, 대시보드 '단어 공부' 유지 — 모두 PASS. 플래그 `studentHomeMenu`·`paulTown2_5d`를 켠 상태에서 검증.
+- Pilot A(m(ii)): 대시보드 첫 화면, 홈 미노출, Town V1(⭐ 레벨 배지) 진입 유지 PASS.
+- QA 접근: 픽스처 UUID로 홈 첫 화면(q), Speaking 200/200, 그림 시험 148/148, 2.5D 마을 홈 🏘️ 진입·새로고침 재진입(townProto25d 1572/1572) PASS.
+- 정적: testQaGate 17/17(신규, verify:all 등록), testTownUiStatic, SpriteAdapter, DepthOrder, StudentPathContracts, NavHistoryModel, LazyChunkGuards, BundleBudget, FeatureFlagStore, Proto25dCoin 전부 PASS. build 경고 0.
+- 중간 사고(기록): env 없이 빌드된 dist로 1회 공회전(빈 화면) → 더미 env 재빌드. 중단한 러너 1개가 고아로 남아 병행 실행 → 해당 트리만 종료, 그 결과는 집계 제외.
+
+### 4. 노출 상태
+- Production(main): 이 브랜치 미병합 → 실제 학생 노출 0. 배포·merge 없음.
+- Preview: Vercel SSO 뒤. 그 위에 UUID 게이트로 실학생 계정은 기존 대시보드만.
+- DB·SQL·Supabase·Production 설정 변경 필요 없음, 변경 0.
+- 휴대폰 즉시 우회(코드와 무관): 이전 alias origin에 남은 기기 플래그 때문이었음 — 이번 배포 후에는 QA 계정이 아니면 플래그가 켜져 있어도 대시보드로 열린다.
+
+### 5. 남은 일
+(a) QA UUID 3개 실DB 일치 확인(운영자, 읽기 1회). (b) Speaking 최종 그림 10장 — **미완료** 유지. (c) 실기기 마이크·🏠 버튼 확인. (d) `C:\voca` SQL 파일 결정. (e) CI 30분 상한.
+
 
 ## 2026-10-04 (204차) — PR #62 남은 브라우저 E2E 13스펙 완료 — verify:all [harness:e2e] 구간 보완, 전 스펙 FAIL 0, 제품·테스트 수정 0
 
