@@ -49,3 +49,22 @@
 ## 이 표로 알 수 없는 것
 
 장기 기억 여부, 실제 대화에서의 사용, 임시 그림의 학습 효과. 파일럿 결과(이 표의 누적)로만 판단한다. 설계 근거와 한계는 설계 문서 §10.
+
+## 부록 (2026-10-04 추가) — 장면별 인정 표현
+
+모범 답과 다르다는 이유로 "못 함"으로 적지 않는다. 그림 상황에 맞는 자연스러운 영어면 인정한다. 아래는 예시이며, 목록에 없는 답도 의도가 맞으면 인정한다. 이 표는 교사용이며 학생 화면에는 나오지 않는다. 앱은 자동 채점·점수·숙달 판정을 하지 않는다. 설계 문서: `docs/design/SPEAKING_UX_V2_2026-10-04.md` §9.6.
+
+| 장면 | 모범 답 | 인정(예시) | 단독이면 목표 의미 아님(교사 판단) |
+|---|---|---|---|
+| hello-a 학교 앞, 처음 본 반 친구 | Hello! Nice to meet you. | Hi! / Hello! / Hi, I'm Paul. / Nice to meet you. / Hi, what's your name? | Bye. |
+| hello-b 공원 다리, 강아지 산책하는 아이 | Hello! Nice to meet you. | Hi there! / Hello! / Hi, nice to meet you. / Hello! Is that your dog? | — |
+| help-a 책방, 높은 책장 | Can you help me, please? | Can you help me? / Excuse me, can you help me? / Could you help me, please? / I can't reach it. Can you help? / Can you get that book for me? | I can't reach it. |
+| help-b 길모퉁이, 길 잃음 | Can you help me, please? | Excuse me, can you help me? / I'm lost. Can you help me? / Could you help me, please? / Where is the station? | I'm lost. |
+| sorry-a 정원, 쓰러진 화분 | I'm sorry. | Sorry! / I'm so sorry. / Oops, sorry! / Oh no, I'm sorry. | Oops. |
+| sorry-b 카페, 친구 옷에 쏟음 | I'm sorry. | Sorry! / I'm so sorry! / Oh no, sorry! / I'm sorry. Are you okay? | Are you okay? |
+| thanks-a 현관, 선물 받음 | Thank you so much! | Thank you! / Thanks! / Thanks a lot! / Wow, thank you! / Thank you for the gift! | I love it. |
+| thanks-b 카페, 쿠키 받음 | Thank you so much! | Thank you! / Thanks! / Thanks a lot! / That's so kind. Thank you! | Yummy! |
+| play-a 나무 아래, 공 가진 친구 | Let's play together! | Let's play! / Can I play too? / Can I join you? / Do you want to play? | — |
+| play-b 분수 옆, 혼자 있는 친구 | Let's play together! | Do you want to play? / Let's play! / Come and play with me! / Let's play ball! | — |
+
+임시 그림(`🖼️ 임시 그림` 배지)으로 본 장면에서 엉뚱한 표현이 나오면, 학생 실력보다 그림 혼동일 가능성을 먼저 비고에 적는다.
