@@ -268,9 +268,67 @@ export async function run(browser, baseURL) {
   await scenario('m(i) 자격 ON(paulTownV1 플래그)', MAIN_VP, { flags: { paulTownV1: true } }, async ({ page, name }) => {
     await eligibleTownChecks(page, name, { fullRoundTrip: true })
   })
-  // 플래그 기본값 + 승인 UUID 로그인(townPilotAllowlist.spec P1과 동일 메커니즘: installMocks({ studentId }))
+  // 205차 QA 게이트 — Pilot A는 QA 계정이 아니므로 홈 미노출, Town V1 자격은 대시보드 경로로 그대로
+  // (townPilotAllowlist.spec P1과 동일 메커니즘/시퀀스: installMocks({ studentId }) → 구경가기 → 내 마을 카드 → 들어가기 → ⭐ 배지)
   await scenario('m(ii) 자격 ON(Pilot A UUID)', MAIN_VP, { studentId: [...PILOT_A_TOWN_STUDENT_IDS][0] }, async ({ page, name }) => {
-    await eligibleTownChecks(page, name, { fullRoundTrip: false })
+    r.check(`${name} Pilot A — 대시보드가 첫 화면`, await waitDashboard(page))
+    let homeSeen = 0, noticeSeen = 0
+    for (let i = 0; i < 3; i++) {
+      homeSeen += await page.locator(HOME).count()
+      noticeSeen += await page.locator(NOTICE).count()
+      await page.waitForTimeout(300)
+    }
+    r.check(`${name} Pilot A — 홈/안내 3회 샘플 모두 0`, homeSeen === 0 && noticeSeen === 0, `${homeSeen}/${noticeSeen}`)
+    await page.getByRole('button', { name: '구경가기' }).click()
+    r.check(`${name} Pilot A — "내 마을 — Welcome to Paul Town" 카드 표시`, await page.getByText('내 마을 — Welcome to Paul Town').waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false))
+    await page.locator('button', { hasText: '들어가기' }).click()
+    r.check(`${name} Pilot A — Town V1 화면(⭐ 레벨 배지)`, await page.locator(LV_BADGE).waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false))
+  })
+
+  // ── q. 205차 QA 게이트 — non-QA UUID는 두 플래그 ON이어도 홈/2.5D 미노출 ──
+  // installMocks({ studentId })는 같은 이름/PIN으로 다른 UUID를 내려준다(Pilot A 케이스와 동일 메커니즘).
+  await scenario('q non-QA 학생 → 홈/Speaking 미노출(대시보드 첫 화면)', MAIN_VP, { flags: { studentHomeMenu: true, paulTown2_5d: true }, studentId: 'e2e00000-0000-4000-8000-00000000b002' }, async ({ page, name }) => {
+    r.check(`${name} 대시보드가 첫 화면`, await waitDashboard(page))
+    let homeSeen = 0, noticeSeen = 0, protoSeen = 0
+    for (let i = 0; i < 3; i++) {
+      homeSeen += await page.locator(HOME).count()
+      noticeSeen += await page.locator(NOTICE).count()
+      protoSeen += await page.locator('[data-testid="proto25d-root"]').count()
+      await page.waitForTimeout(300)
+    }
+    r.check(`${name} 홈/안내/2.5D 루트 3회 샘플 모두 0`, homeSeen === 0 && noticeSeen === 0 && protoSeen === 0, `${homeSeen}/${noticeSeen}/${protoSeen}`)
+    const sample = async () => {
+      let h = 0, n = 0, p = 0
+      for (let i = 0; i < 3; i++) {
+        h += await page.locator(HOME).count()
+        n += await page.locator(NOTICE).count()
+        p += await page.locator('[data-testid="proto25d-root"]').count()
+        await page.waitForTimeout(300)
+      }
+      return { h, n, p }
+    }
+    // 1. 새로고침 후에도 동일
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    if (await page.getByPlaceholder('이름 입력...').isVisible({ timeout: 5000 }).catch(() => false)) await loginOnly(page)
+    r.check(`${name} 새로고침 후에도 대시보드`, await waitDashboard(page))
+    const s1 = await sample()
+    r.check(`${name} 새로고침 후 홈/안내/2.5D 루트 0`, s1.h === 0 && s1.n === 0 && s1.p === 0, `${s1.h}/${s1.n}/${s1.p}`)
+    // 2. 허브 경로 직접 진입 시도 — 기존 계약(f): 비자격 학생은 허브(h1 "Paul Town")까지만, 내 마을 카드/들어가기 없음
+    await page.getByRole('button', { name: '구경가기' }).click()
+    r.check(`${name} 구경가기 → Paul Town 허브(h1)`, await page.getByRole('heading', { name: 'Paul Town', level: 1 }).waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false))
+    const s2 = await sample()
+    r.check(`${name} 허브 경로로도 2.5D 마을/홈 미노출`, s2.h === 0 && s2.p === 0, `${s2.h}/${s2.p}`)
+    r.check(`${name} 비자격 학생에게 내 마을 들어가기 없음`, (await page.locator('button', { hasText: '들어가기' }).count()) === 0)
+    // 3. 기존 Voca 유지
+    await page.getByRole('button', { name: '← 홈으로' }).click()
+    r.check(`${name} 허브 back → 대시보드`, await waitDashboard(page))
+    const moreSummary = page.locator('summary', { hasText: '🧭 더 많은 메뉴' })
+    const moreDetails = page.locator('details', { has: moreSummary })
+    if (!(await moreDetails.evaluate((el) => el.hasAttribute('open')).catch(() => false))) await moreSummary.click()
+    r.check(`${name} 대시보드 단어 공부 진입 유지`, await page.locator('button', { hasText: '단어 공부' }).first().isVisible().catch(() => false))
+  })
+  await scenario('q QA fixture 학생은 홈이 첫 화면', MAIN_VP, { flags: { studentHomeMenu: true, paulTown2_5d: true } }, async ({ page, name }) => {
+    r.check(`${name} 학생 홈이 첫 화면`, await waitHome(page))
   })
 
   // ── n. 그림 시험 바로 가기(Speaking UX v2) — 두 플래그 ON일 때만 ──────

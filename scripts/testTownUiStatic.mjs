@@ -223,7 +223,9 @@ check("App.jsx — screen==='town' 블록이 React.Suspense로 감싸짐", /scre
 check(
   "App.jsx — onGoTown이 paulTownV1Enabled/townV1Enabled로 게이팅됨(OFF면 null)",
   /onGoTown=\{paulTownV1Enabled \? \(\) => setScreen\('town'\) : null\}/.test(appCode) ||
-  /onGoTown=\{townV1Enabled \? \(\) => setScreen\('town'\) : null\}/.test(appCode)
+  /onGoTown=\{townV1Enabled \? \(\) => setScreen\('town'\) : null\}/.test(appCode) ||
+  // 2026-10-04(205차) — 2.5D 통합: paulTown2_5dEnabled면 proto25d, 아니면 기존 townV1 게이팅 유지
+  /onGoTown=\{paulTown2_5dEnabled \? \(\) => setScreen\('proto25d'\) : townV1Enabled \? \(\) => setScreen\('town'\) : null\}/.test(appCode)
 )
 check('App.jsx — TownScreen에 studentData/townShop/onBack 전달', /<TownScreen\s+studentData=\{studentData\}\s+townShop=\{townShop\}\s+onBack=/.test(appCode))
 

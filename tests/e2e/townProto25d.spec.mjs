@@ -129,12 +129,24 @@ async function login(page) {
   await page.getByRole('button', { name: '시작하기!' }).click()
 }
 
+// 2026-10-04(205차) — 2.5D 마을은 더 이상 자동 오버레이가 아니라 홈 🏘️ 버튼으로 진입하는 screen이다.
+// 플래그 ON 기기에서만 홈 버튼을 눌러 진입(플래그 OFF 시나리오 S2/S21은 그대로 홈에 머문다).
+// 리로드 시 세션이 유지되어 로그인 폼이 없어도 재진입해야 하므로 별도 헬퍼로 분리.
+async function enterTownFromHome(page) {
+  const flagOn = await page.evaluate(() => { try { return JSON.parse(localStorage.getItem('paulEasyVoca_features') || '{}').paulTown2_5d === true } catch { return false } })
+  if (!flagOn) return
+  const townBtn = page.locator('[data-testid="student-home-town"]')
+  await townBtn.waitFor({ state: 'visible', timeout: 15000 })
+  await townBtn.click()
+}
+
 // 로그인 후 대시보드가 실제로 그려질 때까지 대기(화면 전환 안정화) —
 // "오늘의 학습 시작"류 CTA 대신, 이 저장소 다른 spec들이 이미 쓰는 관례와
 // 달리 이 프로토타입은 screen 상태와 무관하므로 body에 로그인 폼이 사라진
 // 시점만 확인하면 충분하다.
 async function waitForLoggedIn(page) {
   await page.getByPlaceholder('이름 입력...').waitFor({ state: 'detached', timeout: 20000 })
+  await enterTownFromHome(page)
 }
 
 // 터치 탭(이동 없는 touchStart -> touchEnd) — townV2.spec.mjs의 cdpTouch/
@@ -581,7 +593,7 @@ export async function run(browser, baseURL) {
 
       const root = page.locator('[data-testid="proto25d-root"]')
       const rootVisible = await root.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
-      r.check(`${name} 항목3 — 플래그 ON이면 proto25d-root가 (진입 없이) 즉시 보임`, rootVisible)
+      r.check(`${name} 항목3 — 플래그 ON이면 proto25d-root가 (홈 🏘️ 진입 후) 보임`, rootVisible)
 
       const character = page.locator('[data-proto-character]')
       const charAttached = await character.waitFor({ state: 'attached', timeout: 5000 }).then(() => true).catch(() => false)
@@ -3097,7 +3109,7 @@ export async function run(browser, baseURL) {
       if (loginFormBackOff) {
         await login(page)
         await waitForLoggedIn(page)
-      }
+      } else await enterTownFromHome(page)
       let rootCountOff = 0
       for (let i = 0; i < 3; i++) {
         rootCountOff = Math.max(rootCountOff, await page.locator('[data-testid="proto25d-root"]').count())
@@ -3113,7 +3125,7 @@ export async function run(browser, baseURL) {
       if (loginFormBackOn) {
         await login(page)
         await waitForLoggedIn(page)
-      }
+      } else await enterTownFromHome(page)
       const characterAfter = page.locator('[data-proto-character]')
       const attachedAfter = await characterAfter.waitFor({ state: 'attached', timeout: 5000 }).then(() => true).catch(() => false)
       r.check(`${name} — 플래그 재-ON 리로드 후 캐릭터가 다시 마운트됨`, attachedAfter)
@@ -4712,7 +4724,7 @@ export async function run(browser, baseURL) {
           if (needsLoginE) {
             await login(page)
             await waitForLoggedIn(page)
-          }
+          } else await enterTownFromHome(page)
           character = page.locator('[data-proto-character]')
           await character.waitFor({ state: 'attached', timeout: 5000 }).catch(() => {})
           ground = page.locator('[data-testid="proto25d-ground"]')
@@ -5036,7 +5048,7 @@ export async function run(browser, baseURL) {
         if (needsLogin) {
           await login(page)
           await waitForLoggedIn(page)
-        }
+        } else await enterTownFromHome(page)
         character = page.locator('[data-proto-character]')
         await character.waitFor({ state: 'attached', timeout: 5000 }).catch(() => {})
         ground = page.locator('[data-testid="proto25d-ground"]')
