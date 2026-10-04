@@ -117,12 +117,16 @@ async function main() {
       { name: '[student]', modulePath: '../tests/e2e/student.spec.mjs' },
       { name: '[admin]', modulePath: '../tests/e2e/admin.spec.mjs' },
       { name: '[mobile]', modulePath: '../tests/e2e/mobileViewports.spec.mjs' },
+      { name: '[student-home]', modulePath: '../tests/e2e/studentHome.spec.mjs' },
+      { name: '[speaking]', modulePath: '../tests/e2e/speaking.spec.mjs' },
+      { name: '[speaking-exam]', modulePath: '../tests/e2e/speakingExam.spec.mjs' },
       { name: '[entrance]', modulePath: '../tests/e2e/entranceInputLoss.spec.mjs' },
       { name: '[town]', modulePath: '../tests/e2e/townV1.spec.mjs' },
       { name: '[stale-chunk]', modulePath: '../tests/e2e/staleChunk.spec.mjs' },
       { name: '[town-flag-xtab]', modulePath: '../tests/e2e/townFlagCrossTab.spec.mjs' },
       { name: '[town-v2]', modulePath: '../tests/e2e/townV2.spec.mjs' },
       { name: '[town-v2-artwork]', modulePath: '../tests/e2e/townV2ArtworkPipeline.spec.mjs' },
+      { name: '[town-proto2.5d]', modulePath: '../tests/e2e/townProto25d.spec.mjs' },
       { name: '[town-pilot-allowlist]', modulePath: '../tests/e2e/townPilotAllowlist.spec.mjs' },
     ]
 

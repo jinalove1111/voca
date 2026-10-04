@@ -1,0 +1,353 @@
+[
+  {
+    "width": 360,
+    "level": 1,
+    "overflow1": {
+      "scrollWidth": 360,
+      "clientWidth": 360,
+      "overflow": false
+    },
+    "worldBox": {
+      "width": 360,
+      "height": 684,
+      "top": 58,
+      "left": 0
+    },
+    "navVsCottage": {
+      "nav": {
+        "top": 857,
+        "bottom": 900,
+        "left": 0,
+        "right": 360
+      },
+      "house": {
+        "top": 267.30401611328125,
+        "bottom": 510.0159912109375,
+        "left": -1.0800002813339233,
+        "right": 154.80000460147858
+      },
+      "overlap": false
+    },
+    "signsInBounds": [
+      {
+        "text": "Lv.8",
+        "inBounds": true
+      },
+      {
+        "text": "Lv.7",
+        "inBounds": true
+      },
+      {
+        "text": "Lv.6",
+        "inBounds": true
+      },
+      {
+        "text": "Lv.5",
+        "inBounds": true
+      },
+      {
+        "text": "Lv.3",
+        "inBounds": true
+      },
+      {
+        "text": "To the Sea →",
+        "inBounds": true
+      }
+    ],
+    "screenshotPath": "C:\\voca\\docs\\design\\town\\analysis\\wf-v2-360-lv1.png"
+  },
+  {
+    "width": 360,
+    "level": 8,
+    "overflow1": {
+      "scrollWidth": 360,
+      "clientWidth": 360,
+      "overflow": false
+    },
+    "worldBox": {
+      "width": 360,
+      "height": 684,
+      "top": 58,
+      "left": 0
+    },
+    "navVsCottage": {
+      "nav": {
+        "top": 857,
+        "bottom": 900,
+        "left": 0,
+        "right": 360
+      },
+      "house": {
+        "top": 267.30401611328125,
+        "bottom": 510.0159912109375,
+        "left": -1.0800002813339233,
+        "right": 154.80000460147858
+      },
+      "overlap": false
+    },
+    "signsInBounds": [
+      {
+        "text": "Lv.8",
+        "inBounds": false
+      },
+      {
+        "text": "Lv.7",
+        "inBounds": false
+      },
+      {
+        "text": "Lv.6",
+        "inBounds": false
+      },
+      {
+        "text": "Lv.5",
+        "inBounds": false
+      },
+      {
+        "text": "Lv.3",
+        "inBounds": false
+      },
+      {
+        "text": "To the Sea →",
+        "inBounds": true
+      }
+    ],
+    "screenshotPath": "C:\\voca\\docs\\design\\town\\analysis\\wf-v2-360-lv8.png"
+  },
+  {
+    "width": 390,
+    "level": 1,
+    "overflow1": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "overflow": false
+    },
+    "worldBox": {
+      "width": 390,
+      "height": 741,
+      "top": 58,
+      "left": 0
+    },
+    "navVsCottage": {
+      "nav": {
+        "top": 857,
+        "bottom": 900,
+        "left": 0,
+        "right": 390
+      },
+      "house": {
+        "top": 284.7460021972656,
+        "bottom": 547.6839599609375,
+        "left": -1.1700003147125244,
+        "right": 167.69999480247498
+      },
+      "overlap": false
+    },
+    "signsInBounds": [
+      {
+        "text": "Lv.8",
+        "inBounds": true
+      },
+      {
+        "text": "Lv.7",
+        "inBounds": true
+      },
+      {
+        "text": "Lv.6",
+        "inBounds": true
+      },
+      {
+        "text": "Lv.5",
+        "inBounds": true
+      },
+      {
+        "text": "Lv.3",
+        "inBounds": true
+      },
+      {
+        "text": "To the Sea →",
+        "inBounds": true
+      }
+    ],
+    "screenshotPath": "C:\\voca\\docs\\design\\town\\analysis\\wf-v2-390-lv1.png"
+  },
+  {
+    "width": 390,
+    "level": 8,
+    "overflow1": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "overflow": false
+    },
+    "worldBox": {
+      "width": 390,
+      "height": 741,
+      "top": 58,
+      "left": 0
+    },
+    "navVsCottage": {
+      "nav": {
+        "top": 857,
+        "bottom": 900,
+        "left": 0,
+        "right": 390
+      },
+      "house": {
+        "top": 284.7460021972656,
+        "bottom": 547.6839599609375,
+        "left": -1.1700003147125244,
+        "right": 167.69999480247498
+      },
+      "overlap": false
+    },
+    "signsInBounds": [
+      {
+        "text": "Lv.8",
+        "inBounds": false
+      },
+      {
+        "text": "Lv.7",
+        "inBounds": false
+      },
+      {
+        "text": "Lv.6",
+        "inBounds": false
+      },
+      {
+        "text": "Lv.5",
+        "inBounds": false
+      },
+      {
+        "text": "Lv.3",
+        "inBounds": false
+      },
+      {
+        "text": "To the Sea →",
+        "inBounds": true
+      }
+    ],
+    "screenshotPath": "C:\\voca\\docs\\design\\town\\analysis\\wf-v2-390-lv8.png"
+  },
+  {
+    "width": 430,
+    "level": 1,
+    "overflow1": {
+      "scrollWidth": 430,
+      "clientWidth": 430,
+      "overflow": false
+    },
+    "worldBox": {
+      "width": 390,
+      "height": 741,
+      "top": 58,
+      "left": 20
+    },
+    "navVsCottage": {
+      "nav": {
+        "top": 857,
+        "bottom": 900,
+        "left": 20,
+        "right": 410
+      },
+      "house": {
+        "top": 284.7460021972656,
+        "bottom": 547.6839599609375,
+        "left": 18.829999923706055,
+        "right": 187.69999504089355
+      },
+      "overlap": false
+    },
+    "signsInBounds": [
+      {
+        "text": "Lv.8",
+        "inBounds": true
+      },
+      {
+        "text": "Lv.7",
+        "inBounds": true
+      },
+      {
+        "text": "Lv.6",
+        "inBounds": true
+      },
+      {
+        "text": "Lv.5",
+        "inBounds": true
+      },
+      {
+        "text": "Lv.3",
+        "inBounds": true
+      },
+      {
+        "text": "To the Sea →",
+        "inBounds": true
+      }
+    ],
+    "screenshotPath": "C:\\voca\\docs\\design\\town\\analysis\\wf-v2-430-lv1.png"
+  },
+  {
+    "width": 430,
+    "level": 8,
+    "overflow1": {
+      "scrollWidth": 430,
+      "clientWidth": 430,
+      "overflow": false
+    },
+    "worldBox": {
+      "width": 390,
+      "height": 741,
+      "top": 58,
+      "left": 20
+    },
+    "navVsCottage": {
+      "nav": {
+        "top": 857,
+        "bottom": 900,
+        "left": 20,
+        "right": 410
+      },
+      "house": {
+        "top": 284.7460021972656,
+        "bottom": 547.6839599609375,
+        "left": 18.829999923706055,
+        "right": 187.69999504089355
+      },
+      "overlap": false
+    },
+    "signsInBounds": [
+      {
+        "text": "Lv.8",
+        "inBounds": false
+      },
+      {
+        "text": "Lv.7",
+        "inBounds": false
+      },
+      {
+        "text": "Lv.6",
+        "inBounds": false
+      },
+      {
+        "text": "Lv.5",
+        "inBounds": false
+      },
+      {
+        "text": "Lv.3",
+        "inBounds": false
+      },
+      {
+        "text": "To the Sea →",
+        "inBounds": true
+      }
+    ],
+    "screenshotPath": "C:\\voca\\docs\\design\\town\\analysis\\wf-v2-430-lv8.png"
+  },
+  {
+    "zoomCheck": true,
+    "width": 390,
+    "zoomOverflow": {
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "overflow": false
+    }
+  }
+]

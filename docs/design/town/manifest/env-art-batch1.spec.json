@@ -1,0 +1,729 @@
+{
+  "$schema_note": "Paul Town V2 environment art — Batch 1 expected-file spec (engineering ingest contract). Source of truth for filenames/canvases/bytes budgets: docs/design/town/ENV_ART_BATCH1_HANDOFF_2026-09-17.md §1 + §1.9, cross-checked against docs/design/town/mockup/batch1/README.md (38 total: 35 placed by the Lv4 recompose harness + 3 spare/spec-only). Consumed by scripts/town-art/ingest.py.",
+  "generated": "2026-09-17",
+  "count": 38,
+  "assets": {
+    "sky-hills": {
+      "asset_key": "sky-hills",
+      "filename": "sky-hills.webp",
+      "category": "sky",
+      "kind": "band",
+      "px2x": [
+        1024,
+        260
+      ],
+      "transparent": false,
+      "anchor": "top-left",
+      "repeat": "none",
+      "renderedPx": "390x99 px (top 12% of the world), stretch-x to world width",
+      "variantFamily": "sky-hills",
+      "depthLayer": "terrain",
+      "maxBytes2x": 204800,
+      "marginPctMin": 0,
+      "seamAxis": null
+    },
+    "grass-base": {
+      "asset_key": "grass-base",
+      "filename": "grass-base.webp",
+      "category": "terrain",
+      "kind": "tile",
+      "px2x": [
+        512,
+        512
+      ],
+      "transparent": false,
+      "anchor": "fill",
+      "repeat": "xy",
+      "renderedPx": "128 px per tile (4x across the world)",
+      "variantFamily": "grass-base",
+      "depthLayer": "terrain",
+      "maxBytes2x": 122880,
+      "marginPctMin": 0,
+      "seamAxis": "xy"
+    },
+    "grass-patch-light": {
+      "asset_key": "grass-patch-light",
+      "filename": "grass-patch-light.webp",
+      "category": "patch",
+      "kind": "patch",
+      "px2x": [
+        400,
+        280
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "repeat": "none",
+      "renderedPx": "120-200 px",
+      "variantFamily": "grass-patch-light",
+      "depthLayer": "terrain",
+      "maxBytes2x": 131072,
+      "marginPctMin": 0,
+      "seamAxis": null
+    },
+    "grass-patch-dark": {
+      "asset_key": "grass-patch-dark",
+      "filename": "grass-patch-dark.webp",
+      "category": "patch",
+      "kind": "patch",
+      "px2x": [
+        400,
+        280
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "repeat": "none",
+      "renderedPx": "120-200 px",
+      "variantFamily": "grass-patch-dark",
+      "depthLayer": "terrain",
+      "maxBytes2x": 131072,
+      "marginPctMin": 0,
+      "seamAxis": null
+    },
+    "grass-patch-worn": {
+      "asset_key": "grass-patch-worn",
+      "filename": "grass-patch-worn.webp",
+      "category": "patch",
+      "kind": "patch",
+      "px2x": [
+        400,
+        200
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "repeat": "none",
+      "renderedPx": "100-160 px",
+      "variantFamily": "grass-patch-worn",
+      "depthLayer": "terrain",
+      "maxBytes2x": 131072,
+      "marginPctMin": 0,
+      "seamAxis": null
+    },
+    "wildflower-scatter": {
+      "asset_key": "wildflower-scatter",
+      "filename": "wildflower-scatter.webp",
+      "category": "patch",
+      "kind": "patch",
+      "px2x": [
+        320,
+        240
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "repeat": "none",
+      "renderedPx": "80-120 px",
+      "variantFamily": "wildflower-scatter",
+      "depthLayer": "terrain",
+      "maxBytes2x": 131072,
+      "marginPctMin": 0,
+      "seamAxis": null
+    },
+    "path-straight": {
+      "asset_key": "path-straight",
+      "filename": "path-straight.webp",
+      "category": "path",
+      "kind": "tile",
+      "px2x": [
+        256,
+        256
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "repeat": "along-path",
+      "renderedPx": "64 px tile; path width ~40 px foreground",
+      "variantFamily": "path-straight",
+      "depthLayer": "path",
+      "maxBytes2x": 81920,
+      "marginPctMin": 0,
+      "seamAxis": "y"
+    },
+    "path-straight-narrow": {
+      "asset_key": "path-straight-narrow",
+      "filename": "path-straight-narrow.webp",
+      "category": "path",
+      "kind": "tile",
+      "px2x": [
+        256,
+        256
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "repeat": "along-path",
+      "renderedPx": "64 px tile (narrow, farthest depth band)",
+      "variantFamily": "path-straight",
+      "depthLayer": "path",
+      "maxBytes2x": 81920,
+      "marginPctMin": 0,
+      "seamAxis": "y"
+    },
+    "path-curve-gentle": {
+      "asset_key": "path-curve-gentle",
+      "filename": "path-curve-gentle.webp",
+      "category": "path",
+      "kind": "tile",
+      "px2x": [
+        256,
+        256
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "repeat": "none",
+      "renderedPx": "64 px",
+      "variantFamily": "path-curve-gentle",
+      "depthLayer": "path",
+      "maxBytes2x": 81920,
+      "marginPctMin": 0,
+      "seamAxis": null
+    },
+    "path-curve-strong": {
+      "asset_key": "path-curve-strong",
+      "filename": "path-curve-strong.webp",
+      "category": "path",
+      "kind": "tile",
+      "px2x": [
+        256,
+        256
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "repeat": "none",
+      "renderedPx": "64 px",
+      "variantFamily": "path-curve-strong",
+      "depthLayer": "path",
+      "maxBytes2x": 81920,
+      "marginPctMin": 0,
+      "seamAxis": null
+    },
+    "path-fork": {
+      "asset_key": "path-fork",
+      "filename": "path-fork.webp",
+      "category": "path",
+      "kind": "tile",
+      "px2x": [
+        256,
+        256
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "repeat": "none",
+      "renderedPx": "64 px",
+      "variantFamily": "path-fork",
+      "depthLayer": "path",
+      "maxBytes2x": 81920,
+      "marginPctMin": 0,
+      "seamAxis": null
+    },
+    "path-junction": {
+      "asset_key": "path-junction",
+      "filename": "path-junction.webp",
+      "category": "path",
+      "kind": "tile",
+      "px2x": [
+        256,
+        256
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "repeat": "none",
+      "renderedPx": "64 px",
+      "variantFamily": "path-junction",
+      "depthLayer": "path",
+      "maxBytes2x": 81920,
+      "marginPctMin": 0,
+      "seamAxis": null
+    },
+    "path-end": {
+      "asset_key": "path-end",
+      "filename": "path-end.webp",
+      "category": "path",
+      "kind": "tile",
+      "px2x": [
+        256,
+        160
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "none",
+      "renderedPx": "64 px",
+      "variantFamily": "path-end",
+      "depthLayer": "path",
+      "maxBytes2x": 81920,
+      "marginPctMin": 0,
+      "seamAxis": null
+    },
+    "path-end-entrance": {
+      "asset_key": "path-end-entrance",
+      "filename": "path-end-entrance.webp",
+      "category": "path",
+      "kind": "tile",
+      "px2x": [
+        256,
+        176
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "none",
+      "renderedPx": "64 px (widened apron)",
+      "variantFamily": "path-end",
+      "depthLayer": "path",
+      "maxBytes2x": 81920,
+      "marginPctMin": 0,
+      "seamAxis": null
+    },
+    "fence-straight": {
+      "asset_key": "fence-straight",
+      "filename": "fence-straight.webp",
+      "category": "fence",
+      "kind": "tile",
+      "px2x": [
+        256,
+        96
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "x",
+      "renderedPx": "64 px per segment, 24 px tall",
+      "variantFamily": "fence-straight",
+      "depthLayer": "scenery",
+      "maxBytes2x": 81920,
+      "marginPctMin": 0,
+      "seamAxis": null
+    },
+    "fence-straight-short": {
+      "asset_key": "fence-straight-short",
+      "filename": "fence-straight-short.webp",
+      "category": "fence",
+      "kind": "tile",
+      "px2x": [
+        128,
+        96
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "none",
+      "renderedPx": "64 px per segment (2-picket filler near corners)",
+      "variantFamily": "fence-straight",
+      "depthLayer": "scenery",
+      "maxBytes2x": 81920,
+      "marginPctMin": 0,
+      "seamAxis": null
+    },
+    "fence-corner": {
+      "asset_key": "fence-corner",
+      "filename": "fence-corner.webp",
+      "category": "fence",
+      "kind": "sprite",
+      "px2x": [
+        128,
+        128
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "none",
+      "renderedPx": "32 px",
+      "variantFamily": "fence-corner",
+      "depthLayer": "scenery",
+      "maxBytes2x": 40960,
+      "marginPctMin": 4,
+      "seamAxis": null
+    },
+    "fence-post": {
+      "asset_key": "fence-post",
+      "filename": "fence-post.webp",
+      "category": "fence",
+      "kind": "sprite",
+      "px2x": [
+        64,
+        112
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "none",
+      "renderedPx": "16 px",
+      "variantFamily": "fence-post",
+      "depthLayer": "scenery",
+      "maxBytes2x": 40960,
+      "marginPctMin": 4,
+      "seamAxis": null
+    },
+    "fence-gate": {
+      "asset_key": "fence-gate",
+      "filename": "fence-gate.webp",
+      "category": "fence",
+      "kind": "sprite",
+      "px2x": [
+        192,
+        128
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "none",
+      "renderedPx": "48 px",
+      "variantFamily": "fence-gate",
+      "depthLayer": "scenery",
+      "maxBytes2x": 40960,
+      "marginPctMin": 4,
+      "seamAxis": null
+    },
+    "fence-gate-closed": {
+      "asset_key": "fence-gate-closed",
+      "filename": "fence-gate-closed.webp",
+      "category": "fence",
+      "kind": "sprite",
+      "px2x": [
+        192,
+        128
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "none",
+      "renderedPx": "48 px",
+      "variantFamily": "fence-gate",
+      "depthLayer": "scenery",
+      "maxBytes2x": 40960,
+      "marginPctMin": 4,
+      "seamAxis": null
+    },
+    "hedge-straight": {
+      "asset_key": "hedge-straight",
+      "filename": "hedge-straight.webp",
+      "category": "hedge",
+      "kind": "tile",
+      "px2x": [
+        256,
+        128
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "x",
+      "renderedPx": "64 px, 32 px tall",
+      "variantFamily": "hedge-straight",
+      "depthLayer": "scenery",
+      "maxBytes2x": 81920,
+      "marginPctMin": 0,
+      "seamAxis": null
+    },
+    "hedge-straight-tall": {
+      "asset_key": "hedge-straight-tall",
+      "filename": "hedge-straight-tall.webp",
+      "category": "hedge",
+      "kind": "tile",
+      "px2x": [
+        256,
+        160
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "x",
+      "renderedPx": "64 px, taller",
+      "variantFamily": "hedge-straight",
+      "depthLayer": "scenery",
+      "maxBytes2x": 81920,
+      "marginPctMin": 0,
+      "seamAxis": null
+    },
+    "hedge-end": {
+      "asset_key": "hedge-end",
+      "filename": "hedge-end.webp",
+      "category": "hedge",
+      "kind": "sprite",
+      "px2x": [
+        128,
+        128
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "none",
+      "renderedPx": "32 px",
+      "variantFamily": "hedge-end",
+      "depthLayer": "scenery",
+      "maxBytes2x": 40960,
+      "marginPctMin": 4,
+      "seamAxis": null
+    },
+    "hedge-corner": {
+      "asset_key": "hedge-corner",
+      "filename": "hedge-corner.webp",
+      "category": "hedge",
+      "kind": "sprite",
+      "px2x": [
+        128,
+        128
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "none",
+      "renderedPx": "32 px",
+      "variantFamily": "hedge-corner",
+      "depthLayer": "scenery",
+      "maxBytes2x": 40960,
+      "marginPctMin": 4,
+      "seamAxis": null
+    },
+    "shrub-round": {
+      "asset_key": "shrub-round",
+      "filename": "shrub-round.webp",
+      "category": "cluster",
+      "kind": "sprite",
+      "px2x": [
+        160,
+        128
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "none",
+      "renderedPx": "24-40 px",
+      "variantFamily": "shrub-round",
+      "depthLayer": "foregroundVegetation",
+      "maxBytes2x": 40960,
+      "marginPctMin": 4,
+      "seamAxis": null
+    },
+    "shrub-round-small": {
+      "asset_key": "shrub-round-small",
+      "filename": "shrub-round-small.webp",
+      "category": "cluster",
+      "kind": "sprite",
+      "px2x": [
+        128,
+        96
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "none",
+      "renderedPx": "24-40 px (small variant)",
+      "variantFamily": "shrub-round",
+      "depthLayer": "foregroundVegetation",
+      "maxBytes2x": 40960,
+      "marginPctMin": 4,
+      "seamAxis": null
+    },
+    "shrub-wide": {
+      "asset_key": "shrub-wide",
+      "filename": "shrub-wide.webp",
+      "category": "cluster",
+      "kind": "sprite",
+      "px2x": [
+        224,
+        112
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "none",
+      "renderedPx": "40-56 px",
+      "variantFamily": "shrub-wide",
+      "depthLayer": "foregroundVegetation",
+      "maxBytes2x": 40960,
+      "marginPctMin": 4,
+      "seamAxis": null
+    },
+    "flower-cluster-pink": {
+      "asset_key": "flower-cluster-pink",
+      "filename": "flower-cluster-pink.webp",
+      "category": "cluster",
+      "kind": "sprite",
+      "px2x": [
+        160,
+        112
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "none",
+      "renderedPx": "24-40 px",
+      "variantFamily": "flower-cluster-pink",
+      "depthLayer": "foregroundVegetation",
+      "maxBytes2x": 40960,
+      "marginPctMin": 4,
+      "seamAxis": null
+    },
+    "flower-cluster-yellow": {
+      "asset_key": "flower-cluster-yellow",
+      "filename": "flower-cluster-yellow.webp",
+      "category": "cluster",
+      "kind": "sprite",
+      "px2x": [
+        160,
+        112
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "none",
+      "renderedPx": "24-40 px",
+      "variantFamily": "flower-cluster-yellow",
+      "depthLayer": "foregroundVegetation",
+      "maxBytes2x": 40960,
+      "marginPctMin": 4,
+      "seamAxis": null
+    },
+    "flower-cluster-mixed": {
+      "asset_key": "flower-cluster-mixed",
+      "filename": "flower-cluster-mixed.webp",
+      "category": "cluster",
+      "kind": "sprite",
+      "px2x": [
+        192,
+        112
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "none",
+      "renderedPx": "32-48 px",
+      "variantFamily": "flower-cluster-mixed",
+      "depthLayer": "foregroundVegetation",
+      "maxBytes2x": 40960,
+      "marginPctMin": 4,
+      "seamAxis": null
+    },
+    "flower-bed-border": {
+      "asset_key": "flower-bed-border",
+      "filename": "flower-bed-border.webp",
+      "category": "cluster",
+      "kind": "tile",
+      "px2x": [
+        320,
+        112
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "x",
+      "renderedPx": "80 px",
+      "variantFamily": "flower-bed-border",
+      "depthLayer": "scenery",
+      "maxBytes2x": 81920,
+      "marginPctMin": 0,
+      "seamAxis": null
+    },
+    "flower-pot": {
+      "asset_key": "flower-pot",
+      "filename": "flower-pot.webp",
+      "category": "prop",
+      "kind": "sprite",
+      "px2x": [
+        128,
+        128
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "none",
+      "renderedPx": "20-28 px",
+      "variantFamily": "flower-pot",
+      "depthLayer": "scenery",
+      "maxBytes2x": 40960,
+      "marginPctMin": 4,
+      "seamAxis": null
+    },
+    "flower-pot-tall": {
+      "asset_key": "flower-pot-tall",
+      "filename": "flower-pot-tall.webp",
+      "category": "prop",
+      "kind": "sprite",
+      "px2x": [
+        128,
+        128
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "none",
+      "renderedPx": "20-28 px (tall urn)",
+      "variantFamily": "flower-pot",
+      "depthLayer": "scenery",
+      "maxBytes2x": 40960,
+      "marginPctMin": 4,
+      "seamAxis": null
+    },
+    "river-straight": {
+      "asset_key": "river-straight",
+      "filename": "river-straight.webp",
+      "category": "river",
+      "kind": "tile",
+      "px2x": [
+        256,
+        256
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "repeat": "along-river",
+      "renderedPx": "64 px tile; water ~36 px",
+      "variantFamily": "river-straight",
+      "depthLayer": "water",
+      "maxBytes2x": 131072,
+      "marginPctMin": 0,
+      "seamAxis": "y"
+    },
+    "river-bend": {
+      "asset_key": "river-bend",
+      "filename": "river-bend.webp",
+      "category": "river",
+      "kind": "tile",
+      "px2x": [
+        256,
+        256
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "repeat": "none",
+      "renderedPx": "64 px",
+      "variantFamily": "river-bend",
+      "depthLayer": "water",
+      "maxBytes2x": 81920,
+      "marginPctMin": 0,
+      "seamAxis": null
+    },
+    "river-highlight": {
+      "asset_key": "river-highlight",
+      "filename": "river-highlight.webp",
+      "category": "river",
+      "kind": "patch",
+      "px2x": [
+        256,
+        128
+      ],
+      "transparent": true,
+      "anchor": "center",
+      "repeat": "none",
+      "renderedPx": "40-64 px",
+      "variantFamily": "river-highlight",
+      "depthLayer": "water",
+      "maxBytes2x": 131072,
+      "marginPctMin": 0,
+      "seamAxis": null
+    },
+    "riverbank-reeds": {
+      "asset_key": "riverbank-reeds",
+      "filename": "riverbank-reeds.webp",
+      "category": "river",
+      "kind": "sprite",
+      "px2x": [
+        192,
+        96
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "none",
+      "renderedPx": "32-48 px",
+      "variantFamily": "riverbank-reeds",
+      "depthLayer": "foregroundVegetation",
+      "maxBytes2x": 40960,
+      "marginPctMin": 4,
+      "seamAxis": null
+    },
+    "riverbank-reeds-stones": {
+      "asset_key": "riverbank-reeds-stones",
+      "filename": "riverbank-reeds-stones.webp",
+      "category": "river",
+      "kind": "sprite",
+      "px2x": [
+        192,
+        96
+      ],
+      "transparent": true,
+      "anchor": "bottom-center",
+      "repeat": "none",
+      "renderedPx": "32-48 px (pebbled variant)",
+      "variantFamily": "riverbank-reeds",
+      "depthLayer": "foregroundVegetation",
+      "maxBytes2x": 40960,
+      "marginPctMin": 4,
+      "seamAxis": null
+    }
+  }
+}

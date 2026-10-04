@@ -514,12 +514,27 @@ export function initWordLibrary() {
 // 웜(이미 한 번 완료된 뒤) 상태에서만 4종 전체 refresh를 하고, 이 학생의
 // SCA 캐시도 함께 무효화해 다음 getStudentClassAssignments가 최신을 읽게
 // 한다(네트워크 0 — Map.delete뿐, 실제 재조회는 다음 호출이 함).
+//
+// 2026-10-02 로그인 중복 fetch 제거(P2) — 로그인 화면은 init 완료 후에만
+// 렌더되므로 위 "콜드" 분기는 사실상 죽은 코드였고, 첫 로그인마다 init이
+// 방금 받은 8개 GET을 그대로 또 받아 홈 렌더(handleSelect가 await)를 막았다.
+// 마지막 전체 refresh(init 완료 시각 = _initCompletedAt, 이후엔 이 함수의 전체
+// refresh 시각)가 60초 이내면 콜드 의도 그대로 refreshStudents 단독 + SCA
+// 캐시 무효화만 한다. 60초 넘게 켜둔 뒤의 재로그인은 기존대로 4종 전체 refresh
+// (관리자 변경 반영 유지). App.jsx의 visibility/focus 재검증은 그대로다.
+export const LOGIN_FULL_REFRESH_MIN_AGE_MS = 60_000
 export async function refreshAllForLogin(studentId) {
   if (_initCompletedAt == null) {
     await refreshStudents()
     return
   }
+  if (Date.now() - _initCompletedAt < LOGIN_FULL_REFRESH_MIN_AGE_MS) {
+    invalidateStudentAssignmentsCache(studentId)
+    await refreshStudents()
+    return
+  }
   await Promise.all([refreshWordLibrary(), refreshStudents(), refreshClassSettings(), refreshTextbooks()])
+  _initCompletedAt = Date.now()
   invalidateStudentAssignmentsCache(studentId)
 }
 
@@ -2342,6 +2357,8 @@ async function writeStudentUnit(studentId, unit) {
     throw new Error('유닛 변경이 저장되지 않았어요(영향 행 0) — 화면을 새로고침한 뒤 다시 시도해주세요.')
   }
   await refreshStudents()
+  // 배정 캐시의 primary.unitId가 이 쓰기로 stale해지므로 비운다(P2, cached 반환 경로 보호).
+  _studentAssignmentsCache.delete(studentId)
 }
 
 // Bulk reassignment (admin "일괄 이동") — one Supabase write + one refresh for
@@ -2440,8 +2457,9 @@ const _studentAssignmentsCache = new Map()
 // 캐시 위에서 동작하는, 그 옵션의 "무효화만" 부분을 독립 export로 재사용
 // 가능하게 뽑은 것 — 로직 중복 없음, 캐시는 하나뿐).
 export function invalidateStudentAssignmentsCache(studentId) {
-  if (studentId) _studentAssignmentsCache.delete(studentId)
-  else _studentAssignmentsCache.clear()
+  // 2026-10-02 로그인 중복 fetch 제거(P2) — in-flight도 비워 새 호출이 낡은 Promise에 합류하지 않게 한다.
+  if (studentId) { _studentAssignmentsCache.delete(studentId); _studentAssignmentsInflight.delete(studentId) }
+  else { _studentAssignmentsCache.clear(); _studentAssignmentsInflight.clear() }
 }
 
 // 내부(2026-07-22, 레거시 다중 교재 버그 수정) — "반 배정"(단일 반 전환)
@@ -2559,8 +2577,29 @@ function syntheticPrimaryAssignment(studentId) {
 // syntheticPrimaryAssignment로 폴백하므로, 호출부는 "테이블이 있는지"를
 // 절대 스스로 분기할 필요가 없다(이 함수가 그 분기를 흡수하는 게 핵심
 // 계약). getStudentWords의 classId override 검증용 캐시도 여기서 채운다.
-export async function getStudentClassAssignments(studentId) {
-  if (!studentId) return []
+//
+// 2026-10-02 로그인 중복 fetch 제거(P2) — 기본은 항상 재조회(관리자 화면 등 기존
+// 호출부 의미 유지). 진행 중인 동일 학생 조회는 한 Promise로 합친다(실패/완료 시
+// in-flight 해제). { cached: true }일 때만 캐시 항목이 있으면 그대로 반환한다
+// (App.jsx 로그인 직후 studentId effect 전용).
+const _studentAssignmentsInflight = new Map()
+export function getStudentClassAssignments(studentId, { cached = false } = {}) {
+  if (!studentId) return Promise.resolve([])
+  if (cached) {
+    const hit = _studentAssignmentsCache.get(studentId)
+    if (hit) return Promise.resolve(hit)
+  }
+  let p = _studentAssignmentsInflight.get(studentId)
+  if (!p) {
+    p = fetchStudentClassAssignments(studentId).finally(() => {
+      if (_studentAssignmentsInflight.get(studentId) === p) _studentAssignmentsInflight.delete(studentId)
+    })
+    _studentAssignmentsInflight.set(studentId, p)
+  }
+  return p
+}
+
+async function fetchStudentClassAssignments(studentId) {
   // v3.1 — textbook_id 컬럼은 마이그레이션 전이면 없다: 컬럼 포함 조회를
   // 먼저 시도하고 42703(undefined column)이면 기존 컬럼 셋으로 재시도
   // (refreshStudents의 current_unit_id/house_id cascading 폴백과 동일 관례).
@@ -2577,8 +2616,10 @@ export async function getStudentClassAssignments(studentId) {
       .order('is_primary', { ascending: false }))
   }
   let result
+  let transientError = false
   if (error) {
     if (!isMissingTableError(error)) {
+      transientError = true
       // 테이블은 있는데 다른 이유(네트워크 등)로 실패 — 이 파일 전역 원칙
       // (읽기 함수는 학생 화면을 절대 깨뜨리지 않음, fetchXpTotal과 동일
       // 정신)대로 조용히 단일 반 폴백으로 처리하되 콘솔에는 남긴다.
@@ -2679,7 +2720,8 @@ export async function getStudentClassAssignments(studentId) {
       }
     }
   }
-  _studentAssignmentsCache.set(studentId, result)
+  // 일시 오류의 합성 폴백은 캐시하지 않는다 — 다음 호출이 새로 조회해 복구(P2).
+  if (!transientError) _studentAssignmentsCache.set(studentId, result)
   return result
 }
 

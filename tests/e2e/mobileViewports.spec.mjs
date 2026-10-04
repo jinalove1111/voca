@@ -12,6 +12,7 @@
 import { installMocks } from './lib/mockRoutes.mjs'
 import { createRecorder } from './lib/harness.mjs'
 import { QA_STUDENT_NAME, QA_LOGIN_PIN } from './fixtures/index.mjs'
+import { enterVocaFromHome } from './lib/studentHome.mjs'
 
 const VIEWPORTS = [
   { width: 360, height: 640 },
@@ -27,6 +28,7 @@ async function login(page) {
   await page.getByPlaceholder('이름 입력...').fill(QA_STUDENT_NAME)
   await page.getByPlaceholder('PIN 4자리').fill(QA_LOGIN_PIN)
   await page.getByRole('button', { name: '시작하기!' }).click()
+  await enterVocaFromHome(page)
 }
 
 async function openMoreMenu(page) {

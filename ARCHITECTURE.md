@@ -178,3 +178,11 @@ v3.1 백필(`supabase_v3_1_textbooks.sql`, 2026-07-22 1회성)은 그 시점에 
 ### 관련 파일
 
 `C:\voca\src\App.jsx`(`textbookOptions`/`handleTextbookSwitch`/`currentTextbookOptionId`), `C:\voca\src\components\TextbookSelector.jsx`, `C:\voca\src\components\Dashboard.jsx`, `C:\voca\src\utils\wordLibrary.js`(`setPrimaryTextbook`/`ensureTextbookLayerBackfilled`/`createClass`/`mergeSyntheticForUncoveredClasses`), `C:\voca\src\components\StudentSelect.jsx`(PIN 만들기 반 목록 — 소속 반만, 45~49차), `C:\voca\src\components\admin\TextbookAssignmentPanel.jsx`, `C:\voca\supabase_v3_17_textbook_backfill_new_classes.sql`, `C:\voca\handoff.md` 2026-08-06(42~46차)/2026-08-07(48~51차) 섹션.
+
+## 학생 홈(2026-10-02, 198차)
+
+- 라우터가 없어 `App.jsx`의 `screen` 상태에 `'home'`을 추가했다. 플래그 `studentHomeMenu`(기기 로컬 kill switch, 기본 true)가 켜져 있으면 학생 로그인 후 초기 `screen`이 `'home'`(`StudentHome.jsx`: Voca / 나의 성장 / 문장 쓰기 / 말하기 / 내 마을)이고, 꺼지면 종전처럼 Dashboard.
+- `Dashboard`는 "Voca 영역"으로 그대로 보존된다("← 홈"으로 복귀). 그래서 Dashboard 기반 테스트 계약·Node 하네스가 유지된다. 나의 성장은 `StudentGrowth.jsx`.
+- 되돌아가기: `returnToRef`가 출발지를 기억한다 — 성장/홈 내 마을에서 연 화면은 출발지로, Dashboard에서 연 화면은 Dashboard로 돌아간다. 리셋은 `AppInner` unmount effect에서 한다(`handleLogout` 원문에 의존하지 않음).
+- `WritingCoach`는 Dashboard 하위가 아니라 `App.jsx`의 독립 screen으로 승격됐다(`onGo('writingCoach')`; `writingCoachEnabled` OFF면 홈 카드는 "준비 중"). 말하기는 독립 화면 없음("준비 중").
+- 로그인 중복 fetch 제거: `handleSelect`가 60초 이내면 students만 재조회하고, `getStudentClassAssignments`는 in-flight 중복 제거 + 학생 로그인 effect만 `{cached:true}`를 쓴다(`src/utils/wordLibrary.js`). 상세는 `handoff.md` 198차 §4.

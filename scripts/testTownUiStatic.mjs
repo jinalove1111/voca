@@ -199,8 +199,23 @@ check(
 // 확인하므로, 여기서는 두 변수명 중 하나만 있으면 통과하도록 완화한다.
 check(
   'App.jsx — useTownShop enabled 조건에 paulTownV1Enabled/townV1Enabled 포함',
-  /useTownShop\(\s*studentId\s*,\s*\(townShopEnabled\s*\|\|\s*paulTownV1Enabled\)/.test(appCode) ||
-  /useTownShop\(\s*studentId\s*,\s*\(townShopEnabled\s*\|\|\s*townV1Enabled\)/.test(appCode)
+  // 2026-09-27 경제 단계 A2(운영자 승인) — paulTown2_5d 단독 플래그로도
+  // 2.5D 프로토타입 코인 배지가 실제 서버 잔액을 읽도록 게이트를
+  // `(townShopEnabled || townV1Enabled || paulTown2_5dEnabled) && !!studentId`로
+  // 넓혔다(get_town_shop_state는 조회 전용 SELECT RPC — 쓰기/lazy row 생성
+  // 없음, 안전성 검토 완료). 이 체크의 원래 의도(townShopEnabled 먼저,
+  // 그 다음 paulTownV1Enabled 또는 townV1Enabled)는 그대로 유지하고, 닫는
+  // 괄호 앞에 선택적으로 오는 `|| paulTown2_5dEnabled)`만 추가로 허용한다.
+  /useTownShop\(\s*studentId\s*,\s*\(townShopEnabled\s*\|\|\s*paulTownV1Enabled(?:\s*\|\|\s*paulTown2_5dEnabled)?\)/.test(appCode) ||
+  /useTownShop\(\s*studentId\s*,\s*\(townShopEnabled\s*\|\|\s*townV1Enabled(?:\s*\|\|\s*paulTown2_5dEnabled)?\)/.test(appCode)
+)
+// 2026-09-27 경제 단계 A2(운영자 승인) — 위 체크가 paulTown2_5dEnabled
+// 존재를 "선택"으로만 허용하므로, 실제로 그 항이 게이트에 있는지는 이
+// 별도 체크로 명시적으로 확인한다(위 체크만으로는 paulTown2_5dEnabled가
+// 빠져도 통과할 수 있음 — false negative 방지).
+check(
+  'App.jsx — useTownShop enabled 조건에 paulTown2_5dEnabled 포함(2026-09-27 경제 단계 A2, 2.5D 코인 배지 조회)',
+  /useTownShop\(\s*studentId\s*,\s*\([^)]*paulTown2_5dEnabled[^)]*\)\s*&&\s*!!studentId/.test(appCode)
 )
 check("App.jsx — TownScreen React.lazy import (components/town/TownScreen)", /React\.lazy\(\s*\(\)\s*=>\s*import\(\s*['"]\.\/components\/town\/TownScreen['"]\s*\)\s*\)/.test(appCode))
 check("App.jsx — screen === 'town' 렌더 분기 존재", /screen\s*===\s*['"]town['"]/.test(appCode))

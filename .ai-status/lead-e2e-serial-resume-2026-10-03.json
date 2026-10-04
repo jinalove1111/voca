@@ -1,0 +1,25 @@
+{
+  "agent_name": "product-lead",
+  "role": "최종 E2E 직렬(스펙 단위) 재개 기록 — 메모리 부족 대응",
+  "task_id": "e2e-serial-resume-2026-10-03",
+  "status": "completed",
+  "updated_at": "2026-10-03T14:40:00+09:00",
+  "worktree": "C:\\voca-wt\\paul-town-v2-night-audit",
+  "head_final": "c2c8a856 (= origin/feat/paul-town-v2-clean-pr); 제품 코드는 3238df49 기준 dist, 이후 커밋은 테스트·문서만",
+  "build": "dist/index.html 2026-10-02 05:41:16 — 최종 src 기준, 재빌드 불필요",
+  "full_runs_on_this_build": [
+    "run1(HEAD d70360fc): 11/12 스펙 진행 중 메모리 가드 종료, 1635 PASS / 7 FAIL(town-v2 S9/S21/S21b, proto25d S9) → 7건 격리 재실행 전부 PASS(37/37, 81/81)",
+    "run2: 2517 PASS / 1 FAIL(proto25d S21[flag-off] 홈 미인지 → 8012d819 수정) 후 종료",
+    "run3(HEAD 8012d819): 2501 PASS / 0 FAIL — proto25d S27[412] 진행 중 종료; town-flag-xtab는 2 PASS 후 로그인 예외(요약 미출력으로 집계 누락, 리드 정정)"
+  ],
+  "serial_completion": {
+    "student": "34/0", "admin": "21/0", "mobile": "178/0", "student-home": "191/0 (+1 SKIP streak 헤더 fixture 한계)", "entrance": "12/0", "town": "528/0", "stale-chunk": "8/0",
+    "town-flag-xtab": "16/0 (3d24efc5 수정 후 단독)", "town-v2": "448/0", "town-v2-artwork": "28/0",
+    "town-proto2.5d": "run3 1051/0 + 꼬리(S27[412/1280]+S29~S38) 436/0 + S28 단독 136/0 (복사본 결함 26건은 제품 무관)",
+    "town-pilot-allowlist": "33/0 (3d24efc5 수정 후 단독)"
+  },
+  "remaining": [],
+  "rules": "브라우저 1개, 이 작업의 preview/브라우저만 정리, 사용자 Chrome/VS Code/타 세션 프로세스 미종료, 메모리 가드 우회 금지, 중단 실행 PASS 기록 금지",
+  "blocker": null,
+  "next_action": "push 완료(90631279..c2c8a856) → PR #62 댓글 → Preview 확인 → 최종 보고"
+}

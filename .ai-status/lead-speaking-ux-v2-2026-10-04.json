@@ -1,0 +1,14 @@
+{
+  "agent_name": "product-lead",
+  "role": "Speaking UX v2 — 회화 연습/그림 보고 말하기 시험 분리, 기존 SpeakingPractice+SituationRecall 통합, 일러스트 제작 명세 10장(제작 기능 없음 → 명세만)",
+  "task_id": "speaking-ux-v2-2026-10-04",
+  "status": "completed_with_gap",
+  "updated_at": "2026-10-04T03:10:00+09:00",
+  "worktree": "C:\\voca-wt\\paul-town-v2-night-audit",
+  "head_start": "67cfea44 (= origin = PR #62 head, clean)",
+  "commits": ["21c72816 content/store", "6002861d screens", "7927e71b e2e", "(docs commit 뒤따름)"],
+  "verified": "단위 51/51 등 정적 전부 PASS; e2e 직렬: speakingExam 148/148, speaking 200/200, studentHome 212/1 SKIP, student 34, mobile 178, entrance 12, stale-chunk 8, townV1 528 — FAIL 0",
+  "gap": "[town-proto2.5d] 단독 재실행(03:00~03:34, free 1.84→0.87 GB) 완주: 1524 PASS / 4 FAIL — S37[412]/S37[1280] 가게 닫힘 후 enter 버튼 3 s 미표시. 이번 범위에 town 소스 변경 0. 메모리 탓으로 단정하지 않음.",
+  "blocker": "BLOCKED — ≥3 GB free에서 [town-proto2.5d] 단독 재실행으로 S37 원인 확정 필요(운영자 규칙: 메모리 부족 시 반복 금지)",
+  "next_action": "운영자가 메모리 확보 후 '재실행' 지시 → 단독 재실행 → FAIL 재현 시 S37 닫힘 경로 조사"
+}

@@ -1,0 +1,21 @@
+{
+  "agent_name": "orchestrator",
+  "role": "PR #62 idle rAF settle-stop 단일 과제 조정",
+  "task_id": "town-raf-settle-2026-10-01",
+  "task": "산책 모드 카메라 rAF 루프를 캐릭터·카메라 정착 시 중단, 이동/리사이즈/모드 전환 시 재시작 — 측정 → 최소 수정 → 독립 리뷰 → 테스트 → 전체 E2E → push",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-01T08:00:00+09:00",
+  "updated_at": "2026-10-01T08:40:00+09:00",
+  "worktree": "C:\\voca-wt\\paul-town-v2-night-audit",
+  "branch": "audit/paul-town-v2-2026-09-29",
+  "head_start": "418c1bbb (= origin)",
+  "commits_local_unpushed": ["3f9d5d9b perf: camera rAF settle-stop (camera.js cameraSettled + Proto25DScreen start/restart)", "7ff69bea test: S36 raf-settle 4뷰포트+reduced-motion", "(docs 196차 커밋 예정)"],
+  "measurement": { "before_idle_raf_per_s": "60 (360/390/412/1280, reduced-motion 60)", "after_idle_raf_per_s": "0 (전부)", "after_walking": "58~59", "after_resize_window": "26~27 → idle", "after_walkmode_toggle_window": "24~25 → idle" },
+  "verification": "S36 수정 전 21/26 FAIL → 후 26/26 PASS; 회귀 격리 S17/S19/S23/S30 0 FAIL; testProto25dCamera 82/82(신규 6), BundleBudget/LazyChunkGuards/SpriteAdapter PASS; build 경고 0; 독립 리뷰 PASS(updater 밖 호출 반영). 전체 verify:e2e: 9스펙 + proto25d 일부 2339 PASS/0 FAIL 진행 중 메모리 부족(free ≈0.6GB)으로 강제 종료 — 미완주.",
+  "blocker": null,
+  "next_action": "push 후 PR #62 Draft·Vercel Preview 확인 → 196차 §7 추기. 다음 안전 작업: 상점 안내 role=status 상시 마운트 live region 전환(count()===0 계약 동반 교체).",
+  "untouched": "C:\\voca, 다른 worktree, DB/Supabase/SQL/API/Production, 실 .env, 플래그 기본값(false) 불변",
+  "task_class": "B",
+  "owner_approval_required": false
+}

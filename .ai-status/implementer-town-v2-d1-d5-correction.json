@@ -1,0 +1,64 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "town-v2-d1-d5-correction",
+  "task": "Paul Town V2 최종 pre-flag 블로커 — D1 오너 정정(landmarkRenderSource 전면 교체 -> isFixedLandmarkId/FIXED_LANDMARK_IDS, LOTS 파생) + D5(360px 44px 배치 컨트롤 겹침 해소, layoutPlacementControls 리졸버, 2차 오너 리뷰로 AABB 전체-비겹침 -> 중심 배제 규칙 + 시각 어포던스 정정)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-18T02:10:00Z",
+  "updated_at": "2026-09-18T05:20:00Z",
+  "files_owned": [
+    "src/utils/town/worldRender.js",
+    "src/components/town/v2/TownObjectLayer.jsx",
+    "src/components/town/v2/TownScene.jsx",
+    "src/components/town/v2/TownScreenV2.jsx",
+    "src/components/town/v2/TownPlacementOverlay.jsx",
+    "scripts/testTownWorldRender.mjs",
+    "scripts/testTownV2Static.mjs",
+    "tests/e2e/townV2.spec.mjs",
+    "scripts/town-art/shootRenderer.mjs"
+  ],
+  "files_read": [
+    "src/utils/town/townLayout.js(placeItem/moveItem cell_occupied 규칙, visiblePlacements — occupancyPlacements 설계 근거)",
+    "src/hooks/useStudent.js(정확히 400-450/860-920줄 — fetchFullProgress 병합 복원 경로, normalizeRecord)",
+    "src/utils/wordLibrary.js(fetchFullProgress/fetchProgressBackupStrict 정확한 student_progress.progress_data REST shape)",
+    "src/utils/town/townScene.js(LOTS 7개 id 재확인)",
+    "tests/e2e/lib/mockRoutes.mjs, tests/e2e/fixtures/index.mjs(installMocks tables/townState 레거시 시딩 경로 조사)",
+    "tests/e2e/lib/postgrestMock.mjs(writesTo 헬퍼)",
+    "tests/e2e/student.spec.mjs(writesTo 사용 관례)"
+  ],
+  "summary": "A(D1 정정) — 이전 세션의 landmarkRenderSource(placements 유무로 고정 로트 숨김)는 오너가 '틀린 규칙'으로 정정 지시, 전면 삭제. worldRender.js에 townScene.LOTS에서 파생한 FIXED_LANDMARK_IDS(frozen Set, 7개: my-house/book-shop/cafe/stone-fountain/bridge/english-school/clock-tower)와 isFixedLandmarkId(id) 신규 export(모듈 헤더에 판정 원천/이유 문서화). TownObjectLayer.jsx — landmarkRenderSource 기반 'placement'면 return null 분기 삭제(고정 로트는 항상 lotState()만 보고 built/for-sale/hidden 그림, 배치 데이터 무시로 복귀), 배치 루프 list를 placements.filter(p=>p&&!isFixedLandmarkId(p.itemId))로 자체 방어 필터링. TownScreenV2.jsx(이번 작업 한정 편집 허용) — isFixedLandmarkId import, freeCatalog/freeOwnedIds/renderPlacements 3개 파생 memo 추가, unplacedCount를 freeOwnedIds/renderPlacements 기준으로, <TownScene placements={renderPlacements} occupancyPlacements={placements}>(신규 prop), <TownInventory items={freeCatalog} placements={renderPlacements}>로 교체, <TownShopPanel items={catalog}>는 무변경(구매=소유권, 전체 카탈로그 유지) — 다른 데이터배선/effect/핸들러 무변경. TownScene.jsx — occupancyPlacements 신규 prop 추가, freeWorldAnchors(occupancyPlacements, level) 호출로 변경(placements는 렌더용 그대로 TownObjectLayer에), 헤더에 왜 두 목록이 분리돼야 하는지(townLayout.placeItem의 cell_occupied가 전체 목록 기준) 문서화. 레거시 townPlacements 데이터는 마이그레이션/삭제 없이 그대로 두고 뷰에서만 걸러냄(CLAUDE.md 규칙 9/13 정신) — student_progress.progress_data.townPlacements에 book-shop/cafe 레거시 항목이 남아 있어도(fetchFullProgress 경로로 병합 복원) 중복 렌더/배치 후보 노출이 없음을 e2e S8a로 실증. B(D5 1차) — 근본 원인: cellAnchor는 world% 좌표라 360/390/430px 전부에서 Lv8 '1,1'-'7,3' 거리가 44px 미만(360px dist=23.8/390px dist=25.8/430px dist=28.4)이라 겹침. 1차 구현은 AABB 전체-비겹침 규칙으로 layoutPlacementControls()를 작성, 3링 고정으로는 47개 동시 표시 구간에서 실제로 못 찾는 사례가 있어 ring 상한을 씬 전체를 덮도록 동적 확장 — 하지만 오너 재검토(stats: 360 Lv8 30/47 offset, 평균 124px/최대 393px 이동)로 '불필요한 이동' 기준 위반 판정. B(D5 2차, 오너 지시로 정정) — 실제 수용 기준은 AABB 전체-비겹침보다 약함: 각 컨트롤 ≥44x44, 중심이 elementFromPoint로 자기 자신에 해석, 어느 컨트롤도 완전히 가려지지 않으면 충분(모서리 일부 겹침 허용). aabbOverlaps를 Chebyshev '중심 배제(center-exclusion)' 테스트로 교체 — 후보 중심과 이미 배치된 모든 중심의 Chebyshev 거리가 minCenterDist(=size/2+margin=24, size=44/margin=2 기본값)를 넘으면 통과(24>22=반박스폭이라 양쪽 중심이 서로의 박스 밖에 남음을 보장). 탐색 step도 size+gap(46)에서 minCenterDist(24)로 축소, 같은 ring/각도순 확장 로직은 유지. 재측정 결과: 360 Lv8 offset 30->6, 평균 124px->5.5px, 최대 393px->48px(전 매트릭스 공통 최대 48px, 오너 하드캡 100px 이내) — stats 테이블 아래 참고. 시각 어포던스도 오너 지시로 정정: 28px 펄스 링을 44x44 버튼 '안'(옮겨진 자리, D5 이전 구조로 복귀)에 그려 탭 가능한 자리와 보이는 자리를 일치시키고, 참 앵커에는 오프셋된 경우에만 8px 점(같은 amber, pointer-events-none)을 남겨 원래 칸을 표시(오프셋 아니면 앵커에 추가로 아무것도 안 그림 — 펄스 링이 이미 앵커 위). 리더 라인(오프셋일 때만, 버튼 중심→앵커)은 그대로 유지.",
+  "test_and_verify_results": {
+    "testTownWorldRender": "270/270 PASS(FIXED_LANDMARK_IDS/isFixedLandmarkId 섹션9, layoutPlacementControls 중심배제+이동거리stats+하드캡+고립앵커+명명회귀+garbage-safe 섹션11 재작성, landmarkRenderSource 테스트 완전 삭제)",
+    "testTownV2Static": "147/147 PASS(landmarkRenderSource 참조 0 확인 + isFixedLandmarkId 배선 확인 섹션19, TownScreenV2 뷰모델 필터링 배선 확인 섹션22, TownScene occupancyPlacements 확인 섹션23, TownPlacementOverlay 리졸버 배선 확인 섹션24 — 2차 정정 후에도 그대로 통과)",
+    "testTownWorldScenery": "211/211 PASS(무변경)",
+    "testTownUiStatic": "125/125 PASS(무변경)",
+    "testBundleBudget": "24/24 PASS(무변경)",
+    "testTownSceneV2": "259/259 PASS(무변경)",
+    "testLazyChunkGuards": "80/80 PASS(무변경)",
+    "testTownEnvAssets": "196/196 PASS(무변경)",
+    "build": "PASS, 0 warnings",
+    "e2e_5스펙_임시러너": "747/747 PASS([town]528/[town-v2]132(S8 전면 재작성 S8a+S8b, 신규 S9 D5)/[town-v2-artwork]28/[town-flag-xtab]16/[town-pilot-allowlist]33), 미mock 요청 0/mock 내부 오류 0 — 2차 정정 후 재확인 완료",
+    "d5_root_cause_distances_px": { "360": { "dx": 22.3, "dy": 8.2, "dist": 23.8 }, "390": { "dx": 24.2, "dy": 8.9, "dist": 25.8 }, "430": { "dx": 26.7, "dy": 9.8, "dist": 28.4 } },
+    "d5_stats_table_center_exclusion": {
+      "Lv1": { "360x684": "anchors=32 offset=4 mean=32.5 max=48.0", "390x741": "anchors=32 offset=4 mean=32.5 max=48.0", "430x817": "anchors=32 offset=1 mean=24.0 max=24.0" },
+      "Lv3": { "360x684": "anchors=36 offset=4 mean=32.5 max=48.0", "390x741": "anchors=36 offset=4 mean=32.5 max=48.0", "430x817": "anchors=36 offset=1 mean=24.0 max=24.0" },
+      "Lv4": { "360x684": "anchors=36 offset=4 mean=32.5 max=48.0", "390x741": "anchors=36 offset=4 mean=32.5 max=48.0", "430x817": "anchors=36 offset=1 mean=24.0 max=24.0" },
+      "Lv5": { "360x684": "anchors=39 offset=6 mean=29.7 max=48.0", "390x741": "anchors=39 offset=5 mean=30.8 max=48.0", "430x817": "anchors=39 offset=2 mean=24.0 max=24.0" },
+      "Lv8": { "360x684": "anchors=47 offset=6 mean=29.7 max=48.0", "390x741": "anchors=47 offset=5 mean=30.8 max=48.0", "430x817": "anchors=47 offset=2 mean=24.0 max=24.0" },
+      "global_max_displacement_px": 48.0,
+      "owner_hard_cap_px": 100,
+      "unresolved_count": 0
+    },
+    "s9_tappability": {
+      "360x640": { "anchors": 47, "minBBox": "44.0x44.0", "insideScene": "47/47", "elementFromPointHit": "47/47" },
+      "390x844": { "anchors": 47, "minBBox": "44.0x44.0", "insideScene": "47/47", "elementFromPointHit": "47/47" },
+      "430x932": { "anchors": 47, "minBBox": "44.0x44.0", "insideScene": "47/47", "elementFromPointHit": "47/47" },
+      "note": "1차/2차 정정 모두 동일 — 47/47 유지"
+    },
+    "shootRenderer_final_matrix": "16/16(레벨1/3/4/5/8 x 폭360/390/430 + zoom2@lv4/390) clean, art-staging/renderer-previews/final/ — 2차 정정 후 재실행 완료",
+    "evidence_screenshots": "art-staging/renderer-previews/final/evidence/ — 1(Lv8 레거시 cafe/book-shop 중복없음, art count 각 1/배치사본 각 0), 2(보관함 카페/책방 없음, 나무 있음), 3(나무 정상 배치), 4a+4b(360/390/430px 배치모드 — 28px 펄스링이 버튼 안, 오프셋된 앵커만 8px 점+리더라인, 1,1/7,3 크롭 3종), 5(Lv4 for-sale owned none) — 전부 스크래치 러너(scripts/.tmp/evidenceD1D5.mjs)로 2차 정정 반영해 재캡처, 커밋 대상 아님(gitignore art-staging/)"
+  },
+  "blocker": null,
+  "next_action": "리드 리뷰 대기. 이 implementer가 먼저 움직이지 않는다. 리드가 커밋(git add/commit은 implementer 금지 범위)."
+}

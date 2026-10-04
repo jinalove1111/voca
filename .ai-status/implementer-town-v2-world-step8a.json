@@ -1,0 +1,36 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "town-v2-world-step8a",
+  "task": "Paul Town V2 세계 좌표 계약 순수 테스트 9종 registry 등록 + env-art-manifest.json 'registered' 상태 지원 여부 조사",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-18T00:33:00Z",
+  "updated_at": "2026-09-18T00:37:56Z",
+  "files_owned": [
+    "tests/harness/registry.mjs"
+  ],
+  "files_read": [
+    "tests/harness/runAll.mjs",
+    "tests/harness/runDomain.mjs",
+    "scripts/testTownWorldContract.mjs",
+    "scripts/testTownPlacementContract.mjs",
+    "scripts/testTownHarnessGeometrySync.mjs",
+    "scripts/testTownDepthOrder.mjs",
+    "scripts/testEnvArtManifest.mjs",
+    "scripts/validateEnvArtManifest.mjs",
+    "scripts/testTownEnvAssets.mjs",
+    "scripts/testTownWorldRender.mjs",
+    "scripts/testTownWorldScenery.mjs",
+    "docs/design/town/manifest/env-art-manifest.json",
+    "package.json(verify:attachment/verify:all 스크립트 매핑 확인용)"
+  ],
+  "summary": "STEP 8a 완료 — 2개 작업. (1) tests/harness/registry.mjs의 attachment 도메인(testTownV2Static.mjs 바로 뒤)에 9개 신규 테스트 등록(전부 builders:[], extra:false, 등록 전 grep으로 중복 없음 확인, 등록 전 9개 전부 standalone exit=0 확인): testTownWorldContract.mjs(96단언)/testTownPlacementContract.mjs(690단언)/testTownHarnessGeometrySync.mjs(75단언)/testTownDepthOrder.mjs(62단언)/testEnvArtManifest.mjs(71단언)/validateEnvArtManifest.mjs(CLI, PASS 경고0)/testTownEnvAssets.mjs(196단언)/testTownWorldRender.mjs(97단언)/testTownWorldScenery.mjs(206단언) — 모두 pure/esbuild-inline-bundle이라 builder 불필요(testBundleBudget.mjs와 동일 관례로 확인), validateEnvArtManifest.mjs는 실패 시 process.exitCode=1(다른 등록 스크립트와 동일 패턴). runAll.mjs는 단일 도메인 실행 CLI가 없어(전체 순회만) scripts/.tmp/runAttachmentDomain.mjs(임시, 커밋 대상 아님)로 registry.mjs의 runDomainHarness('attachment')를 직접 호출해 실제 러너 경로로 9개 전부 재확인(전부 PASS exit 0, attachment 도메인 전체 27개 스크립트 DOMAIN PASS). (2) env-art-manifest.json의 'registered'/'shipped' 상태 지원 여부 — validateEnvArtManifest.mjs의 ALLOWED_STATUS = new Set(['missing','staged','rejected'])가 유일한 스키마 원천이고 그 3개 뿐, $schema_note/testEnvArtManifest.mjs/ingest.py 어디에도 'registered'/'shipped' 문자열이 0건 — 명시적으로 지원되지 않음을 확인, 지시대로 스키마/검증기/매니페스트 무수정(35개 staged 상태 그대로 유지).",
+  "verify_results": {
+    "registry_9_new_standalone": "9/9 exit=0 (개별 실행)",
+    "registry_9_new_via_runner": "9/9 PASS (runDomainHarness('attachment') 경유, attachment 도메인 27개 스크립트 전체 DOMAIN PASS)",
+    "manifest_schema_check": "ALLOWED_STATUS=['missing','staged','rejected']만 존재 — 'registered' 미지원 확인, 매니페스트 무변경"
+  },
+  "blocker": null,
+  "next_action": "리드 리뷰 대기. registry.mjs만 변경(git status 확인 완료, 다른 파일 무접촉). 이 implementer가 먼저 움직이지 않는다."
+}

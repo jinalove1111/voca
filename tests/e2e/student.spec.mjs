@@ -8,6 +8,7 @@ import { installMocks } from './lib/mockRoutes.mjs'
 import { createRecorder } from './lib/harness.mjs'
 import { writesTo } from './lib/postgrestMock.mjs'
 import { QA_STUDENT_NAME, QA_LOGIN_PIN, TB_A, TB_B, TB_A_UNIT2_WORD_COUNT } from './fixtures/index.mjs'
+import { enterVocaFromHome } from './lib/studentHome.mjs'
 
 // 2026-09-09 야간 QA — 고정 sleep(waitForTimeout) 제거용 결정론적 폴링
 // 헬퍼. 이 파일이 대기해 온 것들(2초 디바운스 동기화, 700/1700ms 정답
@@ -42,6 +43,7 @@ async function login(page) {
   await page.getByPlaceholder('이름 입력...').fill(QA_STUDENT_NAME)
   await page.getByPlaceholder('PIN 4자리').fill(QA_LOGIN_PIN)
   await page.getByRole('button', { name: '시작하기!' }).click()
+  await enterVocaFromHome(page)
 }
 
 async function openMoreMenu(page) {

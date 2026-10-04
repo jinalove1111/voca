@@ -243,8 +243,22 @@ loginDataset.student_class_assignments = [
 
 check('재로그인 시뮬레이션 전 — 여전히 스테일(전제 확인)', libWarm.getWordsByUnitId(U3).length === 20)
 
-const callsBeforeWarmLogin = callCount()
+// E2 (2026-10-02 로그인 중복 fetch 제거 P2) — init 완료 60초 이내 로그인은 students만 재조회.
+// 이 단계에서 단어/반설정은 여전히 스테일이어야 하고(전체 refresh 안 함), 아래 E는 시계를 당겨 검증.
+const e2Before = stub.__getCalls().length
 await libWarm.refreshAllForLogin(STU2)
+const e2Tables = stub.__getCalls().slice(e2Before).map((c) => c.table)
+check('E2 — 60초 이내 로그인은 students 조회만(나머지 7개 테이블 0)',
+  e2Tables.length > 0 && e2Tables.every((t) => t === 'students'), e2Tables)
+check('E2 — 60초 이내 로그인은 단어 캐시를 건드리지 않음(여전히 20)', libWarm.getWordsByUnitId(U3).length === 20)
+
+// 60초 넘게 켜둔 뒤 재로그인(갭 ② 계약) — 시계를 LOGIN_FULL_REFRESH_MIN_AGE_MS 이상 당긴다.
+const realNowE = Date.now
+Date.now = () => realNowE() + libWarm.LOGIN_FULL_REFRESH_MIN_AGE_MS + 1
+const callsBeforeWarmLogin = callCount()
+try {
+  await libWarm.refreshAllForLogin(STU2)
+} finally { Date.now = realNowE }
 perf.warmLoginCallDelta = callCount() - callsBeforeWarmLogin
 await libWarm.getStudentClassAssignments(STU2) // App.jsx handleSelect가 refreshAllForLogin 다음에도 이미 이 호출을 한다(콜드스타트 수정 기존 라인) — 캐시 최종 반영 확인용
 check('웜 재로그인은 4종 refresh를 전부 수행(콜드 refreshStudents 1건보다 호출 수가 많음)',

@@ -25,6 +25,7 @@ import { mergeCatalog } from '../../../utils/town/townCatalog'
 import { visiblePlacements, unplacedOwnedIds } from '../../../utils/town/townLayout'
 import { paulGuide, TOWN_PHRASES } from '../../../utils/town/townMessages'
 import { gardenRichness, fogState, nearGoal } from '../../../utils/town/townScene'
+import { isFixedLandmarkId } from '../../../utils/town/worldRender'
 
 export default function TownScreenV2({ studentData, townShop, onBack, gardenPoints }) {
   const [sheet, setSheet] = useState(null)
@@ -54,9 +55,26 @@ export default function TownScreenV2({ studentData, townShop, onBack, gardenPoin
     townRemovedIds: Array.isArray(studentData && studentData.townRemovedIds) ? studentData.townRemovedIds : [],
   }), [studentData && studentData.townPlacements, studentData && studentData.townRemovedIds])
   const placements = useMemo(() => visiblePlacements(rawLayout, ownedIds), [rawLayout, ownedIds])
+
+  // 2026-09-18 D1 정정 — LOTS(고정 랜드마크) id는 townCatalog.js에도
+  // ownedIds에도 섞여 있지만(구매 대상이라), 자유 배치 뷰 모델(상점은
+  // 예외 — 구매는 소유권이라 그대로 전체 카탈로그를 쓴다, 아래
+  // TownShopPanel 참고)에서는 전부 걸러낸다 — worldRender.isFixedLandmarkId
+  // 가 유일한 판정 창구(재구현 금지). placements(TownScene 렌더용)도
+  // 마찬가지로 걸러진 renderPlacements만 쓴다 — occupancyPlacements(칸
+  // 점유 판정용, 걸러지지 않은 전체)는 TownScene에 별도로 그대로 넘긴다
+  // (TownScene.jsx 헤더 주석 참고, townLayout.placeItem의 cell_occupied
+  // 규칙이 전체 목록 기준이라).
+  const freeCatalog = useMemo(() => catalog.filter((it) => !isFixedLandmarkId(it.id)), [catalog])
+  const freeOwnedIds = useMemo(() => ownedIds.filter((id) => !isFixedLandmarkId(id)), [ownedIds])
+  const renderPlacements = useMemo(() => placements.filter((p) => p && !isFixedLandmarkId(p.itemId)), [placements])
+
   // 2026-09-15 — V1 TownScreen.jsx와 동일한 최소 수정(구매 직후/재방문 시
   // "다음엔 마을에 놓아야 한다"는 것을 놓치기 쉬운 문제) — 새 상태 없음.
-  const unplacedCount = useMemo(() => unplacedOwnedIds(ownedIds, placements).length, [ownedIds, placements])
+  // 2026-09-18 D1 정정 — 고정 랜드마크는 애초에 "놓아야 할 대상"이
+  // 아니므로(항상 고정 박스에서만 그려짐) freeOwnedIds/renderPlacements
+  // 기준으로 계산한다.
+  const unplacedCount = useMemo(() => unplacedOwnedIds(freeOwnedIds, renderPlacements).length, [freeOwnedIds, renderPlacements])
 
   function showGuide(event, ctx) {
     setGuide(paulGuide(event, ctx))
@@ -141,6 +159,12 @@ export default function TownScreenV2({ studentData, townShop, onBack, gardenPoin
     } else if (mode.kind === 'moving' && studentData && typeof studentData.moveTownItem === 'function') {
       const res = studentData.moveTownItem(mode.placementId, x, y)
       if (res && res.ok) setMode({ kind: 'idle' })
+      // 2026-09-20 — 자석 드래그 배치 요구사항(실패 시 안내) 덕분에 새로
+      // 드러난, 기존 탭-투-앵커에도 이미 있던 조용한 실패(res.ok===false,
+      // 예: cell_occupied 경쟁 상태)를 이 김에 함께 사용자에게 알린다 —
+      // 드래그 드롭도 이 같은 함수를 그대로 재사용하므로(TownScene.jsx
+      // handleDragPointerUp 참고) 별도 처리를 만들지 않는다.
+      else if (res) setToast('여기에는 놓을 수 없어요.')
     }
   }
 
@@ -194,7 +218,7 @@ export default function TownScreenV2({ studentData, townShop, onBack, gardenPoin
             <p className="text-xs font-bold text-purple-600">
               {mode.kind === 'placing'
                 ? `${(itemById[mode.itemId] && itemById[mode.itemId].name) || ''}을(를) 놓을 자리를 선택하세요`
-                : '옮길 자리를 선택하세요'}
+                : '옮길 자리를 선택하거나 아이템을 끌어서 놓으세요'}
             </p>
             <button type="button" onClick={handleCancelMode} className="min-h-[44px] px-3 text-xs font-black text-purple-400 btn-press flex-shrink-0">
               취소
@@ -203,12 +227,14 @@ export default function TownScreenV2({ studentData, townShop, onBack, gardenPoin
         )}
 
         <TownScene
-          placements={placements}
+          placements={renderPlacements}
+          occupancyPlacements={placements}
           itemById={itemById}
           mode={mode}
           onCellTap={handleCellTap}
           onStartMove={handleMoveStart}
           onStore={handleStore}
+          onDragToast={setToast}
           richness={richness}
           gardenPoints={gardenPoints}
           fog={fog}
@@ -233,9 +259,9 @@ export default function TownScreenV2({ studentData, townShop, onBack, gardenPoin
 
       <TownSheet open={sheet === 'inventory'} title="🎁 보관함" onClose={() => setSheet(null)}>
         <TownInventory
-          items={catalog}
+          items={freeCatalog}
           ownedIds={ownedIds}
-          placements={placements}
+          placements={renderPlacements}
           onPlaceStart={(id) => { setSheet(null); handlePlaceStart(id) }}
           onMoveStart={(pid) => { setSheet(null); handleMoveStart(pid) }}
           onGoShop={() => setSheet('shop')}

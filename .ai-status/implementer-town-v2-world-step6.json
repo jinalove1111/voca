@@ -1,0 +1,22 @@
+{
+  "agent_name": "implementer",
+  "role": "코드 구현",
+  "task_id": "town-v2-world-step6",
+  "task": "Paul Town V2 world-coordinate 렌더러 전환 STEP 6 — 경관(scenery) 레이어(울타리/생울타리/클러스터/소품/표지판)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-17T23:50:00Z",
+  "updated_at": "2026-09-17T23:55:58Z",
+  "files_owned": [
+    "src/components/town/v2/TownSceneryLayer.jsx",
+    "src/components/town/v2/TownScene.jsx",
+    "scripts/testTownV2Static.mjs"
+  ],
+  "files_read": [
+    "docs/design/town/mockup/paul-town-recompose.html (renderLandmark/scene/sceneShadow/ivy/sign 코드 블록, .obj/.shadow/.sign CSS)",
+    "docs/design/town/mockup/previews/lv8-390.png"
+  ],
+  "summary": "STEP 6 완료 — 신규 TownSceneryLayer.jsx: ENV_PLACEMENTS 'fenceHedge'(16개)+'cluster'(25개) 그룹은 TownEnvPlacement로(재구현 없음), PROP_PLACEMENTS(20개, kind:'townAsset'|'ivy')는 하네스 scene()/sceneShadow() 산식 그대로(bottom-center 앵커 translate(-50%,-100%), 그림자는 별도 translate(-50%,-35%)+방사형 그라디언트, 그림자와 본체가 같은 worldZIndex('scenery',...) 값을 쓰고 그림자를 먼저 렌더해 DOM tie-break로 항상 본체 아래), SIGNS.myHouse/SIGNS.sea는 승인된 카피만 role=img+aria-label로 접근성 노출(그 외 레이어는 통째로 aria-hidden — signs는 그 aria-hidden 래퍼 '밖'의 형제로 렌더해야 접근성 트리에서 안 지워짐, TownAmbientLayer.jsx의 sr-only 패턴과 동일 이유). PROP_PLACEMENTS/SIGNS에는 depthLayer 필드가 없어(ENV_PLACEMENTS와 다른 셰이프) 이 파일이 'scenery'로 고정(y-랭킹, worldZIndex 위임). townAsset(townAssetKey) 이미지는 로컬 TownPropImage 서브컴포넌트(등록 안 됨/로드 실패 시 조용히 숨김, 이모지 폴백 없음 — TownEnvImage.jsx와 동일 계약이지만 레지스트리가 다름). 4-arm 안내판/Paul 본체/환영 말풍선은 worldScenery.js에 애초에 없어 렌더 안 함(오너 결정 재확인) — testTownV2Static.mjs에 신규 기계적 단언 2개 추가(v2/*+worldScenery.js에 'Welcome to Paul' 없음, 'Learn'/'Be Kind'/'Go Further' 없음). TownScene.jsx에 TownSceneryLayer를 path 다음(하네스 DOM 순서 grassPatch→river→path→fenceHedge→cluster→objLayer와 동일 취지)에 배선. testTownV2Static.mjs §7 파일 목록에 추가. 검증: build 무경고, testTownV2Static 118/118, testTownUiStatic 125/125, testBundleBudget 24/24, testTownWorldScenery 206/206(데이터 무변경), testLazyChunkGuards 80/80 — 전부 PASS. shootRenderer --levels 1,4,8 --widths 390 3장 전부 overflow=false pageErrors=0 failedEnvRequests=0 brokenEnvImg=0, 레벨1/4/8 스크린샷 픽셀 대조(level1 vs level4는 완전 동일, level4 vs level8은 122픽셀/최대 diff 11(255 중) — 안티앨리어싱 수준 노이즈로 판단, 실질적으로 레벨 무관 확인). lv8-390 스크린샷을 docs/design/town/mockup/previews/lv8-390.png와 육안 대조(전체 + 정원 영역 확대 크롭 2장): 흰 피켓 펜스 구간, 생울타리 블록, 나무 문(gate), 벤치 2개, 가로등 2개, 빨간 우체통, 꽃 클러스터(핑크/노랑/혼합), 관목, 화분(책방/카페 쪽 경로 근처), My House/To the Sea 표지판 전부 정상 배치 확인 — 랜드마크(집/책방/카페 등 건물 이미지) 자체만 Step 7 몫이라 없음(예상된 상태, 지시대로 무시). 육안상 가려짐/겹침 이상 없음(펜스가 화단 위에 겹쳐 보이는 등 '알려진 겹침'도 지시대로 그대로 재현됨) — z 값을 임의로 조정하지 않았다.",
+  "blocker": null,
+  "next_action": "리드가 Step 6을 확인 후 STEP 7(랜드마크/건물 — architecture 레이어, 옛 townScene.js 좌표계 최종 퇴역) 진행 메시지를 주면 시작한다. 이 implementer가 먼저 움직이지 않는다."
+}

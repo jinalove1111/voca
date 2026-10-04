@@ -1,0 +1,61 @@
+{
+  "agent_name": "lead",
+  "role": "Paul Town 2.5D 캐릭터 스프라이트 v2 어댑터 구현(Phase 6B, 8h 자율) — 리드: 계획/재검증/커밋, Sonnet sub-agent로 audit/spec/impl/tests/docs 순차 위임",
+  "task_id": "paul-town-25d-sprite-phase6b-2026-09-24",
+  "task": "174차가 확정한 v2 스프라이트 계약(SPRITE_CONTRACT_2026-09-24.md §4)을 실제 코드(계약 모듈 + 단위 테스트 + ProtoCharacter/Proto25DScreen 휴면 배선)로 구현. 실 이미지는 여전히 미승인이라 전부 휴면 상태로 유지, paulTown2_5dSprite 플래그는 이번 Phase에서 추가하지 않음.",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-09-24T17:30:00+09:00",
+  "updated_at": "2026-09-24T18:45:00+09:00",
+  "branch": "feat/paul-town-v2-clean-pr (worktree scratchpad/wt-clean-pr)",
+  "start_head": "3e2404f",
+  "commits": {
+    "1_docs_spec": "d3321de — docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md",
+    "2_feat_contract": "be54279 — src/utils/town/proto2_5d/characterSpriteContract.js",
+    "3_test_contract": "11c3883 — scripts/testProto25dSpriteContract.mjs(172단언) + tests/harness/registry.mjs",
+    "4_feat_adapter": "be5e7fb — ProtoCharacter.jsx/Proto25DScreen.jsx 휴면 배선",
+    "5_test_adapter": "78125bf — scripts/testProto25dSpriteAdapter.mjs(50단언, React SSR) + tests/e2e/townProto25d.spec.mjs S11(+16) + tests/harness/registry.mjs",
+    "6_docs_handoff": "(이 파일과 함께) handoff.md 175차, TESTING.md 관련 항목, PROTO25D_NEXT_STEPS_2026-09-23.md §0-B"
+  },
+  "decision": "8프레임 전부 필수(부분 폴백 없음), 미러는 walkSide+좌측만, 퍼센트 앵커, 시트 대신 개별 파일 8개, paulTown2_5dSprite 플래그 미추가(승인된 매니페스트 생길 때까지 보류), 스프라이트 DOM 검증은 React SSR 단위 테스트로(브라우저 E2E에 테스트 훅 미주입).",
+  "operator_fixed": "Kenney/GrafxKid/rgsdev 전부 미채택(추가 무료 에셋 검색 없음), Paul Town 전용 커스텀 아동 캐릭터로만 진행, 최종 이미지 미승인·미생성, 이모지 폴백 유지, 이모지 다리 움직임 부재는 알려진 한계(CSS로 흉내 내지 않음).",
+  "verification": {
+    "testProto25dSpriteContract": "172/172 PASS",
+    "testProto25dSpriteAdapter_SSR": "50/50 PASS(React SSR)",
+    "e2e S11": "16/16 PASS(`[town-proto2.5d]` 190→206)",
+    "testProto25dCharacterManifest": "72/72 PASS(v1 무변경)",
+    "testProto25dBench/Depth/WalkGrid/SceneFixture/testTownDepthOrder/testTownV2Static/testFeatureFlagStore": "88/23/28/24/73/147/49 전부 PASS",
+    "npm run build": "PASS, 경고 0",
+    "npm run verify:e2e": "1534 PASS / 0 FAIL / 0 SKIP, 미mock 요청 0, mock 에러 0, 약 11분",
+    "npm run verify:all": "ALL DOMAINS: PASS, 스위트 단위 PASS 139 / FAIL 0, 약 25분, 타임아웃/취소 없음",
+    "run_context": "리드가 HEAD 78125bf에서 2026-09-24 18:08–18:45 KST 실행. CI Release Gate는 이 세션에서 미실행(push는 문서 커밋 이후)."
+  },
+  "production_write": 0,
+  "flags": {
+    "paulTownV1": false,
+    "paulTownV2": false,
+    "paulTown2_5d": false,
+    "paulTown2_5dSprite": "미추가(이번 Phase 범위 밖, 리드 결정)"
+  },
+  "pr": "#62 OPEN / Draft",
+  "ci": "워크플로 무변경. .github/workflows/ diff 0.",
+  "blocker": null,
+  "next_action": "승인된 Paul Town 전용 8프레임 PNG 제작 후 매니페스트에 연결(SPRITE_CONTRACT_2026-09-24.md §5 체크리스트 1~7 그대로 실행) — 코드/테스트 쪽은 Phase 6B로 완결.",
+  "files_owned": [
+    "docs/design/town/PAUL_TOWN_CHARACTER_SPRITE_SPEC_2026-09-24.md",
+    "src/utils/town/proto2_5d/characterSpriteContract.js",
+    "scripts/testProto25dSpriteContract.mjs",
+    "tests/fixtures/proto2_5d/spriteManifest.example.mjs",
+    "tests/harness/registry.mjs",
+    "src/components/town/proto2_5d/ProtoCharacter.jsx",
+    "src/components/town/proto2_5d/Proto25DScreen.jsx",
+    "handoff.md",
+    "TESTING.md",
+    "docs/design/town/PROTO25D_NEXT_STEPS_2026-09-23.md"
+  ],
+  "files_read": [
+    "docs/design/town/SPRITE_CONTRACT_2026-09-24.md",
+    "docs/design/town/ASTRA_HANDOFF_2026-09-21.md",
+    "C:/Users/jinal/AppData/Local/Temp/claude/C--voca/5791e355-621a-4b91-b7b8-9329cd6d40e7/scratchpad/phase1/AUDIT_PROTO25D_2026-09-24.md"
+  ]
+}

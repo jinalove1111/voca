@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import StudentSelect from './components/StudentSelect'
 import Dashboard from './components/Dashboard'
+import StudentHome, { resetStudentHomeState } from './components/StudentHome'
+import StudentGrowth from './components/StudentGrowth'
+import WritingCoach from './components/WritingCoach'
+import SpeakingPractice from './components/SpeakingPractice'
 import WordBrowser from './components/WordBrowser'
 import WordDetail from './components/WordDetail'
 import QuizGame from './components/QuizGame'
@@ -25,7 +29,7 @@ import { trackEvent, EV } from './utils/productEvents'
 import { assignDirections } from './utils/entranceTest'
 import { resolveSessionSpellingDirection } from './utils/writePracticeDirection'
 import { logSpellingReview } from './utils/spellingReviewApi'
-import { setSessionToken, getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, refreshTextbooks, refreshAllForLogin, invalidateStudentAssignmentsCache, revalidateUnitWords, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getStudentSpellingSettings, extendStableDirections, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentClassId, getTextbookById, getStudentPrimaryTextbook, getClassNames, getClassIdByName } from './utils/wordLibrary'
+import { setSessionToken, getStudentWords, initWordLibrary, refreshWordLibrary, refreshStudents, refreshClassSettings, refreshTextbooks, refreshAllForLogin, invalidateStudentAssignmentsCache, revalidateUnitWords, getStudentById, getStudentClass, getStudentUnit, getStudentUnitId, setStudentUnit, getStudentSpellingSettings, extendStableDirections, filterWordsByScope, getStudentClassAssignments, setPrimaryAssignment, isTextbookMode, setPrimaryTextbook, getClassTextbooks, getStudentClassId, getTextbookById, getStudentPrimaryTextbook, getClassNames, getClassIdByName, getTodaysAssignmentWordIds } from './utils/wordLibrary'
 import { getSpeechRate, setSpeechRate, unlockAudio, primeSpeech } from './utils/speech'
 import { shouldRefreshOnForeground } from './utils/foregroundRefreshGate'
 // Curriculum Engine Phase 0(2026-08-01, docs/CURRICULUM_ENGINE.md §8) —
@@ -64,6 +68,7 @@ const AdminScreen = React.lazy(() => import('./components/AdminScreen'))
 // 학부모 화면도 같은 이유로 lazy — 학생/관리자 어느 쪽도 매일 안 쓰는
 // 코드를 학생 메인 번들에 얹지 않는다.
 const ParentScreen = React.lazy(() => import('./components/ParentScreen'))
+// 2026-10-04 상황 보고 말하기 — 타운 에셋(TOWN_ASSETS)을 물고 있어 메인 번들에 얹지 않는다(lazy).
 // 입실시험 응시 화면도 같은 이유로 lazy — 학생이 홈 화면 배너를 보는 것과
 // 별개로, "참여하기"를 눌러 실제로 들어갈 때만 로드(Phase 3 성능,
 // 2026-07-18). 배너는 이제 별도 파일(EntranceTestBanner.jsx)이라 이 lazy
@@ -91,6 +96,11 @@ const TownScreen = React.lazy(() => import('./components/town/TownScreen'))
 // 형제 렌더러, V1 대체 아님). 플래그 OFF(기본)면 townV2Active가 항상
 // false라 아래 screen==='town' 블록은 기존 TownScreen 분기만 탄다.
 const TownScreenV2 = React.lazy(() => import('./components/town/v2/TownScreenV2'))
+// Paul Town 2.5D 캐릭터 프로토타입(paulTown2_5d, Stage 1, 2026-09-22) —
+// paulTownV1/paulTownV2와 완전히 독립된 별도 격리 실험(공유 상태/게이팅
+// 없음, docs/design/town/ASTRA_HANDOFF_2026-09-21.md). 플래그 OFF(기본)면
+// 아래 paulTown2_5dEnabled가 항상 false라 이 청크는 로드조차 안 된다.
+const Proto25DScreen = React.lazy(() => import('./components/town/proto2_5d/Proto25DScreen'))
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -216,7 +226,22 @@ function SpeedBtn() {
 // (표시/legacy 마이그레이션용)을 따로 받는다 — 이름만으로는 더 이상 학생을
 // 유일하게 식별할 수 없다(동명이인 허용).
 function AppInner({ studentId, studentName, onLogout }) {
-  const [screen, setScreen]         = useState('dashboard')
+  // 2026-10-02 학생 홈 개편 — 플래그(기기 로컬 kill switch)가 켜져 있으면 첫
+  // 화면이 4메뉴 홈. 초기값만 결정(이미 로그인 중 플래그가 바뀌면 다음
+  // 마운트부터 적용). 하위 화면들의 onBack('dashboard')는 그대로 둔다.
+  const studentHomeEnabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('studentHomeMenu'), () => false)
+  // 2026-10-02 학생 홈 개편 — 홈/나의 성장에서 연 기록 화면(캘린더/앨범/모자/
+  // 박물관/정원/마을)은 뒤로가기 시 출발지로 돌아가야 한다. 출발지는 goFrom이
+  // 기록하고, Dashboard는 setScreen을 직접 부르므로 ref가 null → 기존대로
+  // 'dashboard'로 복귀(Dashboard 출발 동작 불변).
+  const returnToRef = useRef(null)
+  const RETURN_SCREENS = ['studyCalendar', 'growthAlbum', 'hatCollection', 'wordMuseum', 'englishGarden', 'paulTown']
+  const goFrom = (origin, target) => { returnToRef.current = RETURN_SCREENS.includes(target) ? origin : null; setScreen(target) }
+  const backToOrigin = () => { const t = returnToRef.current || 'dashboard'; returnToRef.current = null; setScreen(t) }
+  // 로그아웃/세션 만료 등 어떤 경로로든 AppInner가 내려가면 홈 포커스 기억을 비운다.
+  useEffect(() => () => resetStudentHomeState(), [])
+  const [screen, setScreen]         = useState(() => (isFeatureEnabled('studentHomeMenu') ? 'home' : 'dashboard'))
+  const [speakingMode, setSpeakingMode] = useState('menu') // 홈의 "그림 시험 바로 가기"가 Speaking을 시험 모드로 연다
   const [selectedWord, setWord]     = useState(null)
   const [selectedWordIdx, setWordIdx] = useState(0)
   const [pendingNextIdx, setPendingNextIdx] = useState(0)
@@ -230,7 +255,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 익명 관찰(2026-07-23) — 화면 열람 이벤트. trackEvent는 (이벤트,날짜)당
   // 1회 dedupe + fire-and-forget이라 이 effect가 몇 번 돌아도 무해.
   useEffect(() => {
-    const m = { dashboard: EV.appOpened, paulTown: EV.paulTownOpened, englishGarden: EV.gardenOpened, bookshelf: EV.bookshelfOpened, timeMachine: EV.timeMachineOpened, wordMuseum: EV.museumOpened }
+    const m = { dashboard: EV.appOpened, home: EV.appOpened, paulTown: EV.paulTownOpened, englishGarden: EV.gardenOpened, bookshelf: EV.bookshelfOpened, timeMachine: EV.timeMachineOpened, wordMuseum: EV.museumOpened }
     if (m[screen]) trackEvent(studentId, m[screen])
   }, [screen, studentId])
   const [currentGameId, setCurrentGameId] = useState('balloon')
@@ -271,7 +296,17 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 허용목록 학생(기기 플래그 OFF)에게서 V2가 조용히 사라지지 않게 한다.
   const paulTownV2Enabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('paulTownV2'), () => false)
   const townV2Active = townV1Enabled && paulTownV2Enabled
-  const townShop = useTownShop(studentId, (townShopEnabled || townV1Enabled) && !!studentId)
+  // Paul Town 2.5D 프로토타입(paulTown2_5d, Stage 1) — 단독 플래그, townV1
+  // 자격/파일럿 허용목록/paulTownV2와 절대 결합하지 않는다(기존 Town V1/V2
+  // 게이팅과 완전히 무관한 독립 dev/QA 서피스).
+  const paulTown2_5dEnabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('paulTown2_5d'), () => false)
+  // 2026-09-27 경제 단계 A2 — paulTown2_5d 단독 플래그(townShopV1/townV1
+  // 자격 없이)로도 코인 배지가 실제 서버 잔액을 읽을 수 있도록 훅 게이트를
+  // 넓힌다. 위 STEP 0 안전성 검토(get_town_shop_state RPC는 순수 SELECT,
+  // 쓰기/lazy row 생성 없음)로 다른 소비자(TownScreen/TownScreenV2/
+  // PaulTown/Dashboard wallet)의 게이팅은 전부 그대로 townShopEnabled/
+  // townV1Enabled 기준이라 이 변경으로 새로 노출되는 화면은 없다.
+  const townShop = useTownShop(studentId, (townShopEnabled || townV1Enabled || paulTown2_5dEnabled) && !!studentId)
 
   // 선물상자를 닫은 직후, 오늘 틀린 스펠링 단어나 영구 복습 대기열
   // (Writing MVP, 2026-07-20 — 적어도 하루 전에 놓친 단어)이 남아있으면
@@ -356,7 +391,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   const [textbookAssignments, setTextbookAssignments] = useState([])
   useEffect(() => {
     let cancelled = false
-    getStudentClassAssignments(studentId).then((list) => {
+    getStudentClassAssignments(studentId, { cached: true }).then((list) => {
       if (!cancelled) {
         setTextbookAssignments(list)
         // 콜드스타트 수정(2026-08-06) — 배정 캐시 예열 완료 후
@@ -791,6 +826,39 @@ function AppInner({ studentId, studentName, onLogout }) {
           최상단에 떠 있는 소형 토스트. 모달 아님(다른 화면 입력을 막지
           않음), 큐가 비어있으면 RewardToast 자체가 null을 반환. */}
       <RewardToast entries={rewardFeedback} onDismiss={dismissRewardFeedback} />
+      {screen === 'home' && (
+        <StudentHome studentName={studentName} studentData={studentData} classWords={classWords}
+          hasTodaysHomework={!!getStudentClass(studentId) && getTodaysAssignmentWordIds(getStudentClass(studentId)).length > 0}
+          onStartGuided={startGuidedSession} onLogout={onLogout}
+          onGo={(t) => { setSpeakingMode(t === 'speakingExam' ? 'exam' : 'menu'); goFrom('home', t === 'speakingExam' ? 'speaking' : t) }}
+          canEnterTown={isFeatureEnabled('paulTownHomeBand') && !!attachment.stats}
+          townEligible={townV1Enabled}
+          writingEnabled={isFeatureEnabled('writingCoachEnabled')}
+          speakingEnabled={isFeatureEnabled('speakingPracticeV1')}
+          speakingExamEnabled={isFeatureEnabled('situationRecallV1')} />
+      )}
+      {screen === 'speaking' && (
+        // 2026-10-04 Speaking UX v2 — 메뉴(회화 연습/그림 시험), 닫으면 홈. 시험 기록은 기기 로컬뿐
+        <SpeakingPractice studentId={studentId} initialMode={speakingMode} examEnabled={isFeatureEnabled('situationRecallV1')}
+          onBack={() => setScreen('home')} />
+      )}
+      {screen === 'growth' && (
+        <StudentGrowth studentData={studentData} classWords={classWords}
+          wallet={townShopEnabled && townShop.state ? { starsEarned: townShop.state.starsEarned } : null}
+          starsDisplay={studentData.starsDisplay}
+          onBack={() => setScreen('home')} onGo={(t) => goFrom('growth', t)} onStartGuided={startGuidedSession} />
+      )}
+      {screen === 'writingCoach' && (
+        // 2026-10-02 학생 홈 개편 — Dashboard 로컬 state였던 WritingCoach를
+        // 그대로 옮김(props 동일). 저장 없음(MVP), 닫으면 홈.
+        <WritingCoach
+          targetWords={(studentData?.round?.wordsViewed || [])
+            .slice(-2)
+            .map((id) => attachment.wordTextById?.get?.(id))
+            .filter(Boolean)}
+          onBack={() => setScreen('home')}
+          onComplete={() => setScreen('home')} />
+      )}
       {screen === 'dashboard'     && (
         <Dashboard studentId={studentId} studentName={studentName} studentData={studentData} classWords={classWords}
           onGo={setScreen} onLogout={onLogout} onPlayGame={startRandomGame}
@@ -803,6 +871,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           pendingCeremonyHat={attachment.pendingCeremonyHat} onDismissCeremony={attachment.dismissCeremony}
           textbookOptions={textbookOptions} currentTextbookId={currentTextbookOptionId}
           onTextbookSwitch={handleTextbookSwitch}
+          onHome={studentHomeEnabled ? () => setScreen('home') : undefined}
           wallet={townShopEnabled && townShop.state ? { starsEarned: townShop.state.starsEarned, dollarsAvailable: townShop.state.dollars.available } : null} />
       )}
       {screen === 'guidedSession' && (
@@ -926,7 +995,7 @@ function AppInner({ studentId, studentName, onLogout }) {
       )}
       {screen === 'levelUpMission' && <LevelUpMission missions={missions} words={classWords} onAnswer={handleAnswerMission} onBack={() => setScreen('dashboard')} />}
       {screen === 'diary'         && <DiaryPage studentData={studentData} onBack={() => setScreen('dashboard')} />}
-      {screen === 'studyCalendar' && <StudyCalendar studentData={studentData} onBack={() => setScreen('dashboard')} />}
+      {screen === 'studyCalendar' && <StudyCalendar studentData={studentData} onBack={backToOrigin} />}
       {/* 애착 시스템(2026-07-22) — 4개 화면 전부 lazy(공유 fallback), 진입은
           Dashboard "더 많은 메뉴"의 feature flag 게이트를 거친다. */}
       {(screen === 'hatCollection' || screen === 'wordMuseum' || screen === 'growthAlbum' || screen === 'englishGarden' || screen === 'paulTown' || screen === 'bookshelf' || screen === 'timeMachine') && (
@@ -941,18 +1010,18 @@ function AppInner({ studentId, studentName, onLogout }) {
           {screen === 'hatCollection' && (
             <HatCollection studentName={studentName} hatInventory={studentData.hatInventory}
               equippedHatId={studentData.equippedHatId} onEquip={(id) => { studentData.equipHat(id); trackEvent(studentId, EV.hatEquipped) }}
-              onBack={() => setScreen('dashboard')} />
+              onBack={backToOrigin} />
           )}
           {screen === 'wordMuseum' && (
             <WordMuseum studentId={studentId} stats={attachment.stats} lib={attachment.lib}
-              onBack={() => setScreen('dashboard')} />
+              onBack={backToOrigin} />
           )}
           {screen === 'growthAlbum' && (
             <GrowthAlbum milestones={studentData.milestones} stats={attachment.stats}
-              onBack={() => setScreen('dashboard')} />
+              onBack={backToOrigin} />
           )}
           {screen === 'englishGarden' && (
-            <EnglishGarden stats={attachment.stats} onBack={() => setScreen('dashboard')} />
+            <EnglishGarden stats={attachment.stats} onBack={backToOrigin} />
           )}
           {/* Paul Town v2.0 — 순수 파생 마을 화면. 읽는 영속 상태는 기존
               사실 2가지(hatInventory/equippedHatId)뿐, 장착은 기존 equipHat
@@ -960,7 +1029,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           {screen === 'paulTown' && (
             <PaulTown stats={attachment.stats} hatInventory={studentData.hatInventory}
               equippedHatId={studentData.equippedHatId} onEquip={studentData.equipHat}
-              onGo={setScreen} onBack={() => setScreen('dashboard')}
+              onGo={setScreen} onBack={backToOrigin}
               shop={townShopEnabled ? townShop : null} shopEnabled={townShopEnabled}
               onGoTown={townV1Enabled ? () => setScreen('town') : null} />
           )}
@@ -1080,7 +1149,20 @@ function AppInner({ studentId, studentName, onLogout }) {
           고정 버튼이 히어로 CTA("▶ 오늘의 학습 시작")를 덮어 탭을 가로채는
           실측 회귀가 있어 대시보드에서는 렌더하지 않는다. 다른 모든 화면은
           불변. */}
-      {screen !== 'dashboard' && <SpeedBtn />}
+      {screen !== 'dashboard' && screen !== 'home' && screen !== 'growth' && screen !== 'speaking' && <SpeedBtn />}
+      {/* Paul Town 2.5D 프로토타입(paulTown2_5d, Stage 1, 2026-09-22) — 기존
+          `screen` 상태 머신/네비게이션과 완전히 무관한 독립 dev/QA 서피스.
+          내비게이션 진입점이 없다(운영자 스펙에 "학생이 진입"하는 요구
+          자체가 없음) — 플래그 하나로만 게이팅되는 오버레이. */}
+      {paulTown2_5dEnabled && (
+        <React.Suspense fallback={null}>
+          {/* 경제 단계 A2(2026-09-27) — Dashboard wallet(townShopEnabled 게이트)과
+              달리, 이 프로토타입은 paulTown2_5d 플래그 자체가 이미 렌더 조건이므로
+              같은 플래그로 지갑도 게이팅한다(townShopV1이 꺼져 있어도 코인 배지가
+              보여야 함) — 소스는 여전히 townShop.state 하나(읽기 전용, 새 fetch 없음). */}
+          <Proto25DScreen wallet={paulTown2_5dEnabled && townShop.state ? { dollarsAvailable: townShop.state.dollars.available } : null} />
+        </React.Suspense>
+      )}
     </>
   )
 }

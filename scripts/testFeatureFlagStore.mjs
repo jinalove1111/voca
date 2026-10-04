@@ -83,6 +83,7 @@ const {
   getAllFeatures,
   subscribeFeatures,
   refreshFeaturesFromStorage,
+  getFeaturesByCategory,
 } = mod
 
 function currentRaw() {
@@ -286,6 +287,37 @@ console.log('\n13. 리스너 예외 격리 — 하나가 throw해도 나머지�
   check('정상 리스너는 그대로 호출됨', goodCalls === 1, goodCalls)
   unsubBad()
   unsubGood()
+}
+
+// ── 14. paulTown2_5d — 관리자 패널 "attachment" 카테고리 가시성 + 영속 회귀
+// (PR #62 관리자 패널에 toggle이 안 보이던 버그: DEFAULT_FEATURES에는
+// 있었지만 getFeaturesByCategory('attachment') 배열에서 빠져 있었다.) ────
+console.log('\n14. paulTown2_5d — attachment 카테고리 가시성 + 영속')
+{
+  check(
+    "getFeaturesByCategory('attachment')에 paulTown2_5d 포함",
+    getFeaturesByCategory('attachment').includes('paulTown2_5d')
+  )
+
+  resetFeatures()
+  check('사전조건: paulTown2_5d 기본값 false', isFeatureEnabled('paulTown2_5d') === false)
+
+  const onResult = setFeatureEnabled('paulTown2_5d', true)
+  check('setFeatureEnabled(true) ok:true', onResult && onResult.ok === true, onResult)
+  check('켠 뒤 isFeatureEnabled true', isFeatureEnabled('paulTown2_5d') === true)
+  const rawOn = currentRaw()
+  check('저장된 JSON에 paulTown2_5d: true(리로드 시뮬레이션)', !!rawOn && rawOn.paulTown2_5d === true, rawOn)
+
+  const offResult = setFeatureEnabled('paulTown2_5d', false)
+  check('setFeatureEnabled(false) ok:true', offResult && offResult.ok === true, offResult)
+  check('끈 뒤 isFeatureEnabled false', isFeatureEnabled('paulTown2_5d') === false)
+  const rawOff = currentRaw()
+  check('저장된 JSON에 paulTown2_5d: false(리로드 시뮬레이션)', !!rawOff && rawOff.paulTown2_5d === false, rawOff)
+
+  check(
+    '다른 플래그(paulTownV1) 값은 영향받지 않음(여전히 false)',
+    isFeatureEnabled('paulTownV1') === false
+  )
 }
 
 console.log(`\n${checks - failures}/${checks} passed`)

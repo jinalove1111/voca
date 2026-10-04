@@ -1,0 +1,62 @@
+{
+  "canvas": {
+    "w": 96,
+    "h": 128
+  },
+  "pixelRatio": 1,
+  "anchors": {
+    "idle-front": {
+      "footAnchor": {
+        "x": 48,
+        "y": 128
+      }
+    },
+    "walk-front-a": {
+      "footAnchor": {
+        "x": 48,
+        "y": 128
+      }
+    },
+    "walk-front-b": {
+      "footAnchor": {
+        "x": 48,
+        "y": 128
+      }
+    },
+    "walk-back-a": {
+      "footAnchor": {
+        "x": 48,
+        "y": 128
+      }
+    },
+    "walk-back-b": {
+      "footAnchor": {
+        "x": 48,
+        "y": 128
+      }
+    },
+    "walk-side-a": {
+      "footAnchor": {
+        "x": 48,
+        "y": 128
+      }
+    },
+    "walk-side-b": {
+      "footAnchor": {
+        "x": 48,
+        "y": 128
+      }
+    },
+    "sit": {
+      "footAnchor": {
+        "x": 48,
+        "y": 128
+      },
+      "seatAnchor": {
+        "x": 48,
+        "y": 85
+      }
+    }
+  },
+  "measuredAt": "2026-09-24T16:08:53.585Z"
+}
