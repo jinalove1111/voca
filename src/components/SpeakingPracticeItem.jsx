@@ -53,7 +53,7 @@ export function RecorderControls({ rec, idleText = '' }) {
 
 // 2026-10-04(207차) 한글 상황 안내 카드 — 누가 누구에게 왜 말하는지(scene.situationKo).
 // 연습·한글 보고 말하기·다시 연습이 같이 쓴다. 최종 그림이 있는 장면만 그림을 함께 보여 준다(SceneCard.hasFinalArt).
-export function SituationGuide({ scene, exam = false }) {
+export function SituationGuide({ scene, exam = false, roleKo = null }) {
   return (
     <div className="space-y-3">
       {hasFinalArt(scene.id) && <SceneCard scene={scene} exam={exam} />}
@@ -61,22 +61,43 @@ export function SituationGuide({ scene, exam = false }) {
         className="bg-amber-50 border-2 border-amber-200 rounded-3xl p-5 space-y-1">
         <p className="text-sm font-black text-amber-700">상황</p>
         <p data-testid="situation-text" className="text-xl font-bold text-gray-900 leading-relaxed break-keep">{scene.situationKo}</p>
+        {roleKo && <p data-testid="situation-role" className="text-base font-bold text-amber-800 break-keep">🙋 내 역할: {roleKo}</p>}
       </div>
     </div>
   )
 }
 
-export default function SpeakingPracticeItem({ expr, scene, rec }) {
+const SPEAKER_KO = { Paul: '폴 선생님', Jamie: 'Jamie', Mia: 'Mia', Cookie: 'Cookie', Shopkeeper: '가게 직원', Guest: '손님' }
+
+// 상대방 대사 — 연습 화면과 시험 공개 후 모범 대화가 같이 쓴다
+export function ReplyBubble({ reply, testid, listenTestid, busy = false }) {
+  const who = SPEAKER_KO[reply.speaker] || reply.speaker
+  return (
+    <div data-testid={testid} className="bg-sky-50 border-2 border-sky-200 rounded-3xl p-4 space-y-1">
+      <p className="text-base font-black text-gray-900">{who}: {reply.en}</p>
+      <p className="text-sm text-gray-600">{reply.ko}</p>
+      {reply.speaker !== 'Cookie' && listenTestid && (
+        <button data-testid={listenTestid} onClick={() => speak(reply.en, { source: 'speaking' })} disabled={busy}
+          className={`${BTN} bg-sky-100 text-sky-700 text-base`}>🔊 듣기</button>
+      )}
+    </div>
+  )
+}
+
+export default function SpeakingPracticeItem({ item, rec }) {
+  const expr = item
   const busy = rec.st.status === 'recording'
   return (
     <div className="space-y-4">
-      <SituationGuide scene={scene} />
+      <SituationGuide scene={item.practiceScene} roleKo={item.roleKo} />
       <div className="bg-white rounded-3xl p-5 card-shadow space-y-2">
+        {item.reply && <p className="text-sm font-black text-sky-700">나</p>}
         <p data-testid="practice-sentence" className="text-2xl font-black text-gray-900">{expr.en}</p>
         <p data-testid="practice-meaning" className="text-base text-gray-600">{expr.ko}</p>
         <button data-testid="practice-listen" onClick={() => speak(expr.en, { source: 'speaking' })} disabled={busy}
           className={`${BTN} bg-sky-100 text-sky-700 text-base`}>🔊 듣기</button>
       </div>
+      {item.reply && <ReplyBubble reply={item.reply} testid="practice-reply" listenTestid="practice-reply-listen" busy={busy} />}
       <RecorderControls rec={rec} />
     </div>
   )

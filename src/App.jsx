@@ -4,7 +4,8 @@ import Dashboard from './components/Dashboard'
 import StudentHome, { resetStudentHomeState } from './components/StudentHome'
 import StudentGrowth from './components/StudentGrowth'
 import WritingCoach from './components/WritingCoach'
-import SpeakingPractice from './components/SpeakingPractice'
+// 208차 — Speaking(이야기 10화 데이터 포함)은 QA 전용 화면이라 lazy 로드: 메인 청크(gzip ≤135KB 예산)에 이야기 데이터가 실리지 않게.
+const SpeakingPractice = React.lazy(() => import('./components/SpeakingPractice'))
 import WordBrowser from './components/WordBrowser'
 import WordDetail from './components/WordDetail'
 import QuizGame from './components/QuizGame'
@@ -846,8 +847,10 @@ function AppInner({ studentId, studentName, onLogout }) {
       )}
       {qaTestStudent && screen === 'speaking' && (
         // 2026-10-04 Speaking UX v2 — 메뉴(회화 연습/그림 시험), 닫으면 홈. 시험 기록은 기기 로컬뿐
-        <SpeakingPractice studentId={studentId} initialMode={speakingMode} examEnabled={isFeatureEnabled('situationRecallV1')}
-          onBack={() => setScreen('home')} />
+        <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
+          <SpeakingPractice studentId={studentId} initialMode={speakingMode} examEnabled={isFeatureEnabled('situationRecallV1')}
+            onBack={() => setScreen('home')} />
+        </React.Suspense>
       )}
       {qaTestStudent && screen === 'growth' && (
         <StudentGrowth studentData={studentData} classWords={classWords}

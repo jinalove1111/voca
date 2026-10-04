@@ -1,4 +1,5 @@
 import { Suspense, lazy, useState } from 'react'
+import { BASIC_SET_ID, listSets } from '../utils/situation/speakingSets'
 
 // 2026-10-04 Speaking UX v2 — Speaking 영역 루트: 메뉴 / 회화 연습 / 시험(SpeakingExam, lazy).
 // 설계: docs/design/SPEAKING_UX_V2_2026-10-04.md. 녹음은 브라우저 메모리에만 있고 저장/전송 없음.
@@ -14,14 +15,15 @@ export default function SpeakingPractice({ onBack, studentId, initialMode = 'men
   const [mode, setMode] = useState(initialMode === 'exam' && examEnabled ? 'exam' : 'menu')
   // 시험은 들어갈 때마다 새로 마운트(key) — 항상 1번 문항·미공개로 시작
   const [examKey, setExamKey] = useState(0)
+  const [setId, setSetId] = useState(BASIC_SET_ID)
   const goMenu = () => setMode('menu')
   const startExam = () => { setExamKey((k) => k + 1); setMode('exam') }
 
-  if (mode === 'practice') return <Suspense fallback={FALLBACK}><SpeakingPracticeMode onMenu={goMenu} onStartExam={examEnabled ? startExam : null} /></Suspense>
+  if (mode === 'practice') return <Suspense fallback={FALLBACK}><SpeakingPracticeMode setId={setId} onMenu={goMenu} onStartExam={examEnabled ? startExam : null} /></Suspense>
   if (mode === 'exam') {
     return (
       <Suspense fallback={FALLBACK}>
-        <SpeakingExam key={examKey} studentId={studentId} onMenu={goMenu} />
+        <SpeakingExam key={examKey} setId={setId} studentId={studentId} onMenu={goMenu} />
       </Suspense>
     )
   }
@@ -29,6 +31,15 @@ export default function SpeakingPractice({ onBack, studentId, initialMode = 'men
     <div data-testid="speaking-menu" className="min-h-screen p-4 pb-24">
       <div className="max-w-lg mx-auto space-y-4">
         <h1 className="text-xl font-black text-sky-700 pt-2">말하기</h1>
+        <div role="group" aria-labelledby="speaking-set-title" className="space-y-2">
+          <p id="speaking-set-title" className="text-base font-black text-gray-800">무엇을 연습할까요?</p>
+          <div className="flex flex-wrap gap-2">
+            {listSets().map((s) => (
+              <button key={s.id} data-testid={`speaking-set-${s.id}`} aria-pressed={setId === s.id} onClick={() => setSetId(s.id)}
+                className={`min-h-[44px] px-3 py-2 rounded-2xl font-black text-base btn-press ${setId === s.id ? 'bg-sky-500 text-white' : 'bg-white card-shadow text-gray-700'}`}>{s.labelKo}</button>
+            ))}
+          </div>
+        </div>
         <button data-testid="speaking-menu-practice" onClick={() => setMode('practice')} className={`${MENU_CARD} from-sky-400 to-blue-600`}>🗣️ 회화 연습</button>
         {examEnabled && (
           <button data-testid="speaking-menu-exam" onClick={startExam} className={`${MENU_CARD} from-amber-400 to-orange-500`}>📝 한글 보고 말하기</button>

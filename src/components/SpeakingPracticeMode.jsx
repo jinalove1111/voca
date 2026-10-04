@@ -1,28 +1,30 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import useLocalRecorder from '../hooks/useLocalRecorder'
 import SpeakingPracticeItem, { BTN } from './SpeakingPracticeItem'
-import { SITUATION_EXPRESSIONS, sceneFor } from '../utils/situation/situationContent'
+import { BASIC_SET_ID, itemsForSet, setLabel } from '../utils/situation/speakingSets'
 
 // 2026-10-04 Speaking UX v2 — 회화 연습 모드(SpeakingPractice 루트에서 lazy 로드: 그림 에셋이 메인 청크에 들어가지 않게).
-export default function SpeakingPracticeMode({ onMenu, onStartExam }) {
+export default function SpeakingPracticeMode({ setId = BASIC_SET_ID, onMenu, onStartExam }) {
   const rec = useLocalRecorder()
   const [idx, setIdx] = useState(0)
   const [done, setDone] = useState(false)
   const headingRef = useRef(null)
-  const last = SITUATION_EXPRESSIONS.length - 1
+  const items = useMemo(() => itemsForSet(setId), [setId])
+  const last = items.length - 1
   const busy = rec.st.status === 'recording'
   useEffect(() => { headingRef.current?.focus() }, [idx, done])
 
   const move = (fn) => { rec.reset('RESET'); fn() }
-  const expr = SITUATION_EXPRESSIONS[idx]
+  const item = items[idx]
 
   return (
-    <div data-testid="speaking-practice" data-expr={expr.id} data-index={idx} data-mic-state={rec.mic} className="min-h-screen p-4 pb-24">
+    <div data-testid="speaking-practice" data-expr={item.exprId} data-index={idx} data-mic-state={rec.mic} className="min-h-screen p-4 pb-24">
       <div className="max-w-lg mx-auto space-y-4">
         <div className="flex items-center gap-2 pt-2">
           <button data-testid="speaking-back" onClick={onMenu} disabled={busy} className="min-h-[44px] px-2 font-black text-gray-600 btn-press disabled:opacity-40">← 메뉴</button>
           <h1 ref={headingRef} tabIndex={-1} className="text-xl font-black text-sky-700 outline-none">회화 연습{!done && ` ${idx + 1}/${last + 1}`}</h1>
         </div>
+        {setId !== BASIC_SET_ID && <p data-testid="speaking-set-label" className="text-sm font-bold text-sky-600">{setLabel(setId)}</p>}
         <p className="text-sm text-gray-600">🎙️ 녹음은 저장되지 않아요. 연습만 해요</p>
         {done ? (
           <div data-testid="practice-done" className="bg-white rounded-3xl p-5 card-shadow space-y-3">
@@ -38,7 +40,7 @@ export default function SpeakingPracticeMode({ onMenu, onStartExam }) {
           </div>
         ) : (
           <>
-            <SpeakingPracticeItem key={expr.id} expr={expr} scene={sceneFor(expr.id, 'a')} rec={rec} />
+            <SpeakingPracticeItem key={item.id} item={item} rec={rec} />
             <div className="flex justify-between gap-2">
               <button data-testid="practice-prev" onClick={() => move(() => setIdx(idx - 1))} disabled={busy || idx === 0}
                 className={`${BTN} bg-white card-shadow text-gray-700`}>← 이전</button>
