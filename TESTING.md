@@ -1876,3 +1876,10 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 
 - `scripts/testTextbookIsolation.mjs` 5f(`getStudentClassAssignments 어디도 .eq('name')로 학생을 찾지 않음`)가 verify:all에서 `not-found`로 FAIL했다. 원인은 198차 커밋 `3238df49`가 함수를 `export async function getStudentClassAssignments(studentId)`에서 동기 캐시 래퍼 `export function getStudentClassAssignments(studentId, { cached = false } = {})`로 바꿨는데 정적 마커가 옛 `async` 형태를 찾아 함수 본문 검사가 건너뛰어진 것이다(테스트 계약 표류, 제품 결함 아님). 커밋 `2510d13c`가 마커 1줄만 새 시그니처로 맞췄고 단언은 불변, 스위트 43/43.
 - 규칙: 정적 마커(`fnMarkers`)가 추적하는 함수의 시그니처(`async` 여부, 인자)를 바꾸면 같은 변경에서 해당 마커도 함께 고친다. 마커가 함수를 못 찾으면 본문 단언이 조용히 건너뛰어지므로 FAIL(`not-found`)을 정상 신호로 취급한다.
+
+## 관련 항목: Speaking 이야기 세트 테스트 + e2e 빌드 env 주의 (2026-10-05, 208차)
+
+- `scripts/testSpeakingSets.mjs`(정적, 레지스트리 등록 `extra:false`, 저장·네트워크 0): 기본 세트 5개 정규화(id·exprId 보존), 이야기 10회차 존재·새 목표 정확히 100개·en 유일(대소문자/문장부호 무시)·기본 5문장과 다름, `situationKo`/`roleKo` ≤60자·영어 0·자기 뜻 미포함, `reply.speaker` 허용 목록, `alternatives`/`level`, 복습 `reviewOf`↔`reuseIn` 양방향, 복습 en = 원문 en. 208차 49 PASS.
+- `tests/e2e/speaking.spec.mjs` s1~s3(세트 선택 aria-pressed·44px, 1화 연습 상황/역할/문장/뜻/상대 대사/듣기 2종/10문항 완주, 기본 세트 회귀), `tests/e2e/speakingExam.spec.mjs` e1~e5(1화 공개 전 정답·뜻·듣기·상대 대사 DOM 부재 + speak 0, 공개 후 라벨·EN·KO·reply, 내비게이션·재진입, 다시 연습, 저장 시 기본 hello 기록 무영향). **이야기는 1화만 브라우저 커버** — 2~10화는 위 정적 검사만.
+- **브라우저 스펙용 build는 더미 Supabase env 필수**: env 없는 dist는 `createClient(undefined, undefined)`가 첫 청크에서 throw → 빈 화면 → 전 시나리오가 로그인 입력칸 대기 타임아웃으로 FAIL(208차 실측 26 FAIL, 제품 결함 아님). 프로세스 env로만 `VITE_SUPABASE_URL=https://e2e-dummy.supabase.co VITE_SUPABASE_ANON_KEY=dummy npm run build`. `.env` 생성·실제 키 사용 금지 — mock 패턴(`**/rest/v1/**` 등)은 호스트 무관이지만, mock 밖 요청은 catch-all이 `route.continue()`로 실제 호스트에 보내므로 실제 키면 Production에 닿을 수 있다.
+- 메모리: 브라우저 스펙은 여유 RAM ≥3 GB에서 스펙 1개씩 단독 실행(208차: 5스펙 각 26~157초, 실행 전후 2.8~4.3 GB 측정).
