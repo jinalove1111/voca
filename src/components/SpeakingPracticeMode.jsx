@@ -29,9 +29,9 @@ export default function SpeakingPracticeMode({ onMenu, onStartExam }) {
             <h2 className="text-lg font-black text-gray-900">다 연습했어요!</h2>
             {onStartExam && (
               <>
-                <p className="text-base text-gray-600">그림을 보고 말해 보는 시험을 해 볼까요?</p>
+                <p className="text-base text-gray-600">이번엔 한글 상황만 보고 영어로 말해 볼까요?</p>
                 <button data-testid="practice-start-exam" onClick={onStartExam}
-                  className="w-full min-h-[64px] px-4 py-4 rounded-2xl font-black text-xl btn-press bg-amber-500 text-white">🖼️ 그림 시험 시작</button>
+                  className="w-full min-h-[64px] px-4 py-4 rounded-2xl font-black text-xl btn-press bg-amber-500 text-white">📝 한글 보고 말하기 시작</button>
               </>
             )}
             <button data-testid="practice-back-menu" onClick={onMenu} className={`${BTN} w-full bg-gray-200 text-gray-700`}>메뉴로</button>

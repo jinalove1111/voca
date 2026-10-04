@@ -113,7 +113,7 @@ export default function StudentHome({ studentName, studentData, classWords, hasT
         {speakingEnabled && speakingExamEnabled && (
           <button data-testid="student-home-speaking-exam" onClick={() => go('speaking', 'speakingExam')}
             className="w-full min-h-[44px] py-3 text-base font-black bg-white text-sky-700 border-2 border-sky-200 rounded-2xl btn-press">
-            🖼️ 그림 시험 바로 가기
+            📝 한글 보고 말하기 바로 가기
           </button>
         )}
 

@@ -10,6 +10,10 @@ const FINAL_ART = Object.fromEntries(
 )
 
 // exam: 시험 화면 — 표현 의미를 풀어 쓰지 않는 examAlt를 읽어 준다
+// 2026-10-04(207차) — 한글 상황 기반 Speaking: 임시 합성 그림은 화면에 내지 않는다. 최종 일러스트 파일
+// (src/assets/situations/<scene-id>.webp)이 있는 장면만 그림을 보여 준다 — 파일만 넣으면 자동으로 다시 나타난다.
+export const hasFinalArt = (sceneId) => Boolean(FINAL_ART[sceneId])
+
 export default function SceneCard({ scene, exam = false, final = FINAL_ART[scene.id] }) {
   const alt = exam && scene.examAlt ? scene.examAlt : scene.alt
   const backdrop = townAsset(scene.backdrop)

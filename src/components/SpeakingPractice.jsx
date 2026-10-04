@@ -31,7 +31,7 @@ export default function SpeakingPractice({ onBack, studentId, initialMode = 'men
         <h1 className="text-xl font-black text-sky-700 pt-2">말하기</h1>
         <button data-testid="speaking-menu-practice" onClick={() => setMode('practice')} className={`${MENU_CARD} from-sky-400 to-blue-600`}>🗣️ 회화 연습</button>
         {examEnabled && (
-          <button data-testid="speaking-menu-exam" onClick={startExam} className={`${MENU_CARD} from-amber-400 to-orange-500`}>🖼️ 그림 보고 말하기 시험</button>
+          <button data-testid="speaking-menu-exam" onClick={startExam} className={`${MENU_CARD} from-amber-400 to-orange-500`}>📝 한글 보고 말하기</button>
         )}
         <button data-testid="speaking-menu-home" onClick={onBack} className="min-h-[44px] px-2 font-black text-gray-600 btn-press">← 홈</button>
       </div>
