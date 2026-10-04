@@ -38,6 +38,7 @@ import { shouldRefreshOnForeground } from './utils/foregroundRefreshGate'
 // (readingStudentUI와 동일한 게이팅 메커니즘, GuidedSession.jsx 기존 관례).
 import { isFeatureEnabled, subscribeFeatures } from './config/features'
 import { isPilotTownStudent } from './config/pilotTown'
+import { isQaTestStudent } from './config/qaTestAccounts'
 import { fetchApprovedExamplesForWords } from './utils/curriculum/exampleLibrary'
 // Wave 4 학생 경험 폴리시(2026-08-02) — GuidedSession 완료 카드의 "오늘
 // 씨앗 심음" 안내용. 기존 Paul Town 홈 밴드(Dashboard.jsx)가 쓰는 것과
@@ -226,10 +227,14 @@ function SpeedBtn() {
 // (표시/legacy 마이그레이션용)을 따로 받는다 — 이름만으로는 더 이상 학생을
 // 유일하게 식별할 수 없다(동명이인 허용).
 function AppInner({ studentId, studentName, onLogout }) {
+  // 2026-10-04 205차 — 개발 중 테스트 전용 화면(home/speaking/growth/proto25d)은
+  // students.id UUID 허용목록(config/qaTestAccounts.js)의 QA 계정만 진입한다.
+  // 메뉴 숨김 + 직접 진입 차단. Pilot A/Voca/대시보드는 무관. Production에는 이 브랜치 코드가 없다.
+  const qaTestStudent = isQaTestStudent(studentId)
   // 2026-10-02 학생 홈 개편 — 플래그(기기 로컬 kill switch)가 켜져 있으면 첫
   // 화면이 4메뉴 홈. 초기값만 결정(이미 로그인 중 플래그가 바뀌면 다음
   // 마운트부터 적용). 하위 화면들의 onBack('dashboard')는 그대로 둔다.
-  const studentHomeEnabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('studentHomeMenu'), () => false)
+  const studentHomeEnabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('studentHomeMenu'), () => false) && qaTestStudent
   // 2026-10-02 학생 홈 개편 — 홈/나의 성장에서 연 기록 화면(캘린더/앨범/모자/
   // 박물관/정원/마을)은 뒤로가기 시 출발지로 돌아가야 한다. 출발지는 goFrom이
   // 기록하고, Dashboard는 setScreen을 직접 부르므로 ref가 null → 기존대로
@@ -240,7 +245,9 @@ function AppInner({ studentId, studentName, onLogout }) {
   const backToOrigin = () => { const t = returnToRef.current || 'dashboard'; returnToRef.current = null; setScreen(t) }
   // 로그아웃/세션 만료 등 어떤 경로로든 AppInner가 내려가면 홈 포커스 기억을 비운다.
   useEffect(() => () => resetStudentHomeState(), [])
-  const [screen, setScreen]         = useState(() => (isFeatureEnabled('studentHomeMenu') ? 'home' : 'dashboard'))
+  const [screen, setScreen]         = useState(() => (isFeatureEnabled('studentHomeMenu') && isQaTestStudent(studentId) ? 'home' : 'dashboard'))
+  const QA_ONLY_SCREENS = ['home', 'speaking', 'growth', 'proto25d']
+  useEffect(() => { if (!qaTestStudent && QA_ONLY_SCREENS.includes(screen)) setScreen('dashboard') }, [qaTestStudent, screen])
   const [speakingMode, setSpeakingMode] = useState('menu') // 홈의 "그림 시험 바로 가기"가 Speaking을 시험 모드로 연다
   const [selectedWord, setWord]     = useState(null)
   const [selectedWordIdx, setWordIdx] = useState(0)
@@ -299,7 +306,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   // Paul Town 2.5D 프로토타입(paulTown2_5d, Stage 1) — 단독 플래그, townV1
   // 자격/파일럿 허용목록/paulTownV2와 절대 결합하지 않는다(기존 Town V1/V2
   // 게이팅과 완전히 무관한 독립 dev/QA 서피스).
-  const paulTown2_5dEnabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('paulTown2_5d'), () => false)
+  const paulTown2_5dEnabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('paulTown2_5d'), () => false) && qaTestStudent
   // 2026-09-27 경제 단계 A2 — paulTown2_5d 단독 플래그(townShopV1/townV1
   // 자격 없이)로도 코인 배지가 실제 서버 잔액을 읽을 수 있도록 훅 게이트를
   // 넓힌다. 위 STEP 0 안전성 검토(get_town_shop_state RPC는 순수 SELECT,
@@ -826,23 +833,23 @@ function AppInner({ studentId, studentName, onLogout }) {
           최상단에 떠 있는 소형 토스트. 모달 아님(다른 화면 입력을 막지
           않음), 큐가 비어있으면 RewardToast 자체가 null을 반환. */}
       <RewardToast entries={rewardFeedback} onDismiss={dismissRewardFeedback} />
-      {screen === 'home' && (
+      {qaTestStudent && screen === 'home' && (
         <StudentHome studentName={studentName} studentData={studentData} classWords={classWords}
           hasTodaysHomework={!!getStudentClass(studentId) && getTodaysAssignmentWordIds(getStudentClass(studentId)).length > 0}
           onStartGuided={startGuidedSession} onLogout={onLogout}
-          onGo={(t) => { setSpeakingMode(t === 'speakingExam' ? 'exam' : 'menu'); goFrom('home', t === 'speakingExam' ? 'speaking' : t) }}
-          canEnterTown={isFeatureEnabled('paulTownHomeBand') && !!attachment.stats}
+          onGo={(t) => { setSpeakingMode(t === 'speakingExam' ? 'exam' : 'menu'); goFrom('home', t === 'speakingExam' ? 'speaking' : (paulTown2_5dEnabled && t === 'paulTown') ? 'proto25d' : t) }}
+          canEnterTown={(isFeatureEnabled('paulTownHomeBand') && !!attachment.stats) || paulTown2_5dEnabled}
           townEligible={townV1Enabled}
           writingEnabled={isFeatureEnabled('writingCoachEnabled')}
           speakingEnabled={isFeatureEnabled('speakingPracticeV1')}
           speakingExamEnabled={isFeatureEnabled('situationRecallV1')} />
       )}
-      {screen === 'speaking' && (
+      {qaTestStudent && screen === 'speaking' && (
         // 2026-10-04 Speaking UX v2 — 메뉴(회화 연습/그림 시험), 닫으면 홈. 시험 기록은 기기 로컬뿐
         <SpeakingPractice studentId={studentId} initialMode={speakingMode} examEnabled={isFeatureEnabled('situationRecallV1')}
           onBack={() => setScreen('home')} />
       )}
-      {screen === 'growth' && (
+      {qaTestStudent && screen === 'growth' && (
         <StudentGrowth studentData={studentData} classWords={classWords}
           wallet={townShopEnabled && townShop.state ? { starsEarned: townShop.state.starsEarned } : null}
           starsDisplay={studentData.starsDisplay}
@@ -1031,7 +1038,7 @@ function AppInner({ studentId, studentName, onLogout }) {
               equippedHatId={studentData.equippedHatId} onEquip={studentData.equipHat}
               onGo={setScreen} onBack={backToOrigin}
               shop={townShopEnabled ? townShop : null} shopEnabled={townShopEnabled}
-              onGoTown={townV1Enabled ? () => setScreen('town') : null} />
+              onGoTown={paulTown2_5dEnabled ? () => setScreen('proto25d') : townV1Enabled ? () => setScreen('town') : null} />
           )}
           {/* Paul Town 월드 — 도서관/시계탑. 마을 건물 카드로만 진입하므로
               뒤로 가기는 마을(paulTown)로. 전부 파생 화면 — 저장 0. */}
@@ -1149,18 +1156,20 @@ function AppInner({ studentId, studentName, onLogout }) {
           고정 버튼이 히어로 CTA("▶ 오늘의 학습 시작")를 덮어 탭을 가로채는
           실측 회귀가 있어 대시보드에서는 렌더하지 않는다. 다른 모든 화면은
           불변. */}
-      {screen !== 'dashboard' && screen !== 'home' && screen !== 'growth' && screen !== 'speaking' && <SpeedBtn />}
+      {screen !== 'dashboard' && screen !== 'home' && screen !== 'growth' && screen !== 'speaking' && screen !== 'proto25d' && <SpeedBtn />}
       {/* Paul Town 2.5D 프로토타입(paulTown2_5d, Stage 1, 2026-09-22) — 기존
           `screen` 상태 머신/네비게이션과 완전히 무관한 독립 dev/QA 서피스.
           내비게이션 진입점이 없다(운영자 스펙에 "학생이 진입"하는 요구
-          자체가 없음) — 플래그 하나로만 게이팅되는 오버레이. */}
-      {paulTown2_5dEnabled && (
+          자체가 없음) — 플래그 하나로만 게이팅되는 오버레이.
+          2026-10-04(205차) — 운영자 지시로 기존 내비게이션에 통합: 홈 🏘️ 버튼 → screen 'proto25d', 🏠 홈 버튼 → onBack. 플래그는 여전히 렌더 조건(OFF면 청크 로드 0). */}
+      {paulTown2_5dEnabled && screen === 'proto25d' && (
         <React.Suspense fallback={null}>
           {/* 경제 단계 A2(2026-09-27) — Dashboard wallet(townShopEnabled 게이트)과
               달리, 이 프로토타입은 paulTown2_5d 플래그 자체가 이미 렌더 조건이므로
               같은 플래그로 지갑도 게이팅한다(townShopV1이 꺼져 있어도 코인 배지가
               보여야 함) — 소스는 여전히 townShop.state 하나(읽기 전용, 새 fetch 없음). */}
-          <Proto25DScreen wallet={paulTown2_5dEnabled && townShop.state ? { dollarsAvailable: townShop.state.dollars.available } : null} />
+          <Proto25DScreen wallet={paulTown2_5dEnabled && townShop.state ? { dollarsAvailable: townShop.state.dollars.available } : null}
+            onBack={() => setScreen(studentHomeEnabled ? 'home' : 'dashboard')} />
         </React.Suspense>
       )}
     </>

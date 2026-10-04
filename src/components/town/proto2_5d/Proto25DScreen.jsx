@@ -266,7 +266,7 @@ const FACING_MIN_DX_PCT = 1.0
 // `isSpriteV2ManifestActive`가 true가 된다 — 아래 모든 v2 관련 분기가 이제
 // 실제로 실행된다(위 파일 헤더 "Phase 6C" 주석 참고). 호출부가 명시적으로
 // `spriteManifest={undefined}` 등 다른 값을 넘기면 그 값이 우선한다.
-export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, wallet = null } = {}) {
+export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, wallet = null, onBack = null } = {}) {
   const reducedMotion = usePrefersReducedMotion()
   // 마운트 시점 URL 쿼리 1회만 읽는다(세션 중 쿼리가 바뀔 일이 없어
   // useState lazy init으로 충분 — 매 렌더 재파싱 불필요).
@@ -1663,6 +1663,18 @@ export default function Proto25DScreen({ spriteManifest = PAUL_SPRITE_MANIFEST, 
             {/* F4(2026-09-28) — 아이 대상 문구: 현재 흐름만 짧게(내부 용어 없음). A5(2026-10-01) — 더 짧게/아이 말투. */}
             땅을 누르면 걸어가요. 가게 앞에서 🏪를 눌러 물건을 사요. 🪑로 마을에 놓아요. 새로고침하면 처음부터예요.
           </p>
+        )}
+        {/* 2026-10-04(205차) — 홈 복귀 버튼(운영자 지시: 기존 내비게이션에 통합, 새 메뉴 없음).
+            배치 변천: 상단 중앙은 360/1280에서 데모 건물 탭 지점과 겹쳐 폐기(S30/S32),
+            컬럼 안 행 래퍼는 컬럼 부모/높이가 바뀌어 폐기(S20/S26/G1), 좌하단은 S37
+            modal-churn이 4/4 실패(숨기면 48/48 통과)해 폐기. 채택: 컬럼의 absolute 자식,
+            ⓘ 오른쪽 — flex 흐름 밖이라 컬럼 박스(높이=info+walk+4px)에 영향이 없다.
+            가게/내 물건/배치 중엔 다른 트리거와 같은 관례로 숨긴다. */}
+        {typeof onBack === 'function' && !shopOpen && !myItemsOpen && !placingItemId && (
+          <button type="button" data-testid="proto25d-home" aria-label="홈으로 돌아가기" onClick={onBack}
+            className="absolute left-full top-0 ml-1 min-h-[44px] whitespace-nowrap flex items-center rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-purple-700 shadow">
+            🏠 홈
+          </button>
         )}
       </div>
 
