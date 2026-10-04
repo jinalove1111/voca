@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-04 (206차 — **Speaking 그림 품질·상황 식별성 진단 + 전용 일러스트 명세 보완(문서만)**. 360px 실캡처로 임시 그림 10장 원인 진단, 장면별 프롬프트·구도·검수, 대표 장면 sorry-b 우선, 시험 한국어 상황 안내 설계(미구현), 교사용 장면별 인정 표현. 이미지 생성 도구 없음 → 제작 대기. 코드·DB·Production 0, PR #62 Draft. 아래 206차 섹션 참고.)_
+_최종 갱신: 2026-10-04 (207차 — **한글 상황 기반 Speaking**: 회화 연습 = 한글 상황+문장+뜻+듣기+녹음, '그림 보고 말하기 시험' → '한글 보고 말하기'(공개 전 한글 상황+진행만, 공개 후 "이렇게 말할 수 있어요"). 임시 그림 숨김(최종본 파일 있을 때만 표시). e2e speaking 203·speaking-exam 154·student-home 226+1·student 34·mobile 178 FAIL 0. DB·Production 0, PR #62 Draft. 아래 207차 섹션 참고.)_
+_206차 갱신: 2026-10-04 (206차 — **Speaking 그림 품질·상황 식별성 진단 + 전용 일러스트 명세 보완(문서만)**. 360px 실캡처로 임시 그림 10장 원인 진단, 장면별 프롬프트·구도·검수, 대표 장면 sorry-b 우선, 시험 한국어 상황 안내 설계(미구현), 교사용 장면별 인정 표현. 이미지 생성 도구 없음 → 제작 대기. 코드·DB·Production 0, PR #62 Draft. 아래 206차 섹션 참고.)_
 _205차 갱신: 2026-10-04 (205차 — **테스트 전용 화면 QA 게이트 + 2.5D 마을 홈 내비게이션 통합**(커밋 `66047a57` feat / `81595e64` test). 홈·Speaking·그림 시험·성장·2.5D 마을은 `students.id` UUID 허용목록(Paul·Cookie·Jinaa + e2e 픽스처)만 진입, 일반 학생은 기존 대시보드. 브라우저 14스펙 FAIL 0. QA UUID의 실DB 일치는 **미확인**. DB·SQL·Production 0, PR #62 Draft. 아래 205차 섹션 참고.)_
 _204차 갱신: 2026-10-04 (204차 — **PR #62 남은 브라우저 E2E 13스펙 완료: `verify:all`의 `[harness:e2e]` 구간 보완, 전 스펙 FAIL 0, 제품·테스트 수정 0**. 13스펙 합계 1866 PASS / 0 FAIL / 1 SKIP(알려진 fixture 한계), townProto25d는 203차 1572/1572로 갈음. 미mock 0, DB·SQL·Supabase·Production·.env 접촉 0. PR #62 Draft 유지. 아래 204차 섹션 참고.)_
 _203차 갱신: 2026-10-04 (203차 — **PR #62 마을 회귀 검증 재개: S37 modal-churn BLOCKED 해소(단독 48/48) + `[town-proto2.5d]` 전체 1572/1572 + verify:all(e2e 제외) + 5f 정적 마커 드리프트 수정(커밋 `2510d13c`)**. `[harness:e2e]`(학생/관리자 브라우저 스펙)는 메모리 압박으로 종료되어 이 HEAD에서 미실행. DB·SQL·Supabase·Production·.env 접촉 0. PR #62 Draft 유지. 아래 203차 섹션 참고.)_
@@ -17,6 +18,18 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-04 (207차) — 한글 상황 기반 Speaking(회화 연습 + 한글 보고 말하기), 이미지 보류
+
+운영자 지시: 이미지 제작·교체 보류, 한글 상황 기반 Speaking을 기존 구현에 통합해 먼저 완성. 시작 HEAD = origin = PR #62 head `5734219f`(clean), 워크트리 `C:\voca-wt\paul-town-v2-night-audit`.
+
+- **구조**: `SITUATION_SCENES` 10개에 `situationKo`(한글 상황 안내) 추가. `SpeakingPracticeItem.jsx`에 공유 `SituationGuide`(`situation-guide`/`situation-text`). 연습 = 한글 상황 → 영어 문장 → 뜻 → 🔊(기존 en-GB) → 따라 말하기·선택 녹음·재생 → 다음. 시험 이름 '그림 보고 말하기 시험' → **'한글 보고 말하기'**(메뉴·제목·연습 완료 버튼·홈 보조 버튼 일괄). 공개 전 = 한글 상황 + 진행 상태(+선택 녹음·답 확인), 영어·뜻·첫 단어·모범 음성 미마운트. 공개 후 "이렇게 말할 수 있어요" + 문장·뜻·🔊 + "상황에 맞으면 다른 말로 말해도 좋아요." + 자기 확인·다시 연습·다음 문제.
+- **그림**: `SceneCard.hasFinalArt(id)` — 최종 일러스트 파일이 있는 장면만 표시. 지금 0장 → 그림 영역 없음. 연결 구조(`alt`/`examAlt`/에셋 키/`import.meta.glob`) 보존, 파일 추가만으로 자동 복귀. 이미지 준비는 완료 조건 아님.
+- 표현 5개·콘텐츠 id·플래그·저장 키 무변경. 새 DB·업로드·유료 API 0. 자동 채점·점수·합격·숙달 없음. `alternatives`(교사용) 학생 화면 미표시 유지. QA 전용 게이트 유지.
+- **검증**: 정적 `testSituationRecall` ALL PASS(신규 11단언: situationKo 10개·45자 이하·영어 0·금지 어간 0·뜻 문장 미포함·hasFinalArt 게이트·연습 순서·이름 변경·"그림 보고/그림 시험" 문구 0·공개 후 라벨·alternatives 미표시. 기존 2단언은 의도된 계약 변경으로 갱신 — 시험의 SceneCard→SituationGuide, 공개 블록 첫 줄 라벨), testSpeakingSession·StudentPathContracts·SpeakingPathNoPermanentDisable·LazyChunkGuards 83/83·BundleBudget 32/32·RegistryCoverage PASS, build 경고 0(더미 env). e2e(브라우저 1개, mock, 360/390/412/1280): `[speaking]` 203/203, `[speaking-exam]` 154/154(공개 전 EN/KO·speak 0, 공개 후 라벨, 이동·뒤로·재진입 시 미공개), `[student-home]` 226+1 SKIP, `[student]` 34/34, `[mobile]` 178/178. 360px 실화면 캡처로 레이아웃 육안 확인(스크래치).
+- 문서: `docs/design/SPEAKING_UX_V2_2026-10-04.md` §10(이유·구조·10문장·달라진 점·근거·검증). DB·SQL·Production 0. PR #62 Draft.
+- 남은 일: 실기기 마이크·듣기 확인(운영자), 그림 제작은 보류 상태(§9 명세 유지), 파일럿 교사 관찰.
+
 
 ## 2026-10-04 (206차) — Speaking 그림 품질·상황 식별성 진단 + 전용 일러스트 명세 보완 (문서만)
 
