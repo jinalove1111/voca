@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-04 (203차 — **PR #62 마을 회귀 검증 재개: S37 modal-churn BLOCKED 해소(단독 48/48) + `[town-proto2.5d]` 전체 1572/1572 + verify:all(e2e 제외) + 5f 정적 마커 드리프트 수정(커밋 `2510d13c`)**. `[harness:e2e]`(학생/관리자 브라우저 스펙)는 메모리 압박으로 종료되어 이 HEAD에서 미실행. DB·SQL·Supabase·Production·.env 접촉 0. PR #62 Draft 유지. 아래 203차 섹션 참고.)_
+_최종 갱신: 2026-10-04 (204차 — **PR #62 남은 브라우저 E2E 13스펙 완료: `verify:all`의 `[harness:e2e]` 구간 보완, 전 스펙 FAIL 0, 제품·테스트 수정 0**. 13스펙 합계 1866 PASS / 0 FAIL / 1 SKIP(알려진 fixture 한계), townProto25d는 203차 1572/1572로 갈음. 미mock 0, DB·SQL·Supabase·Production·.env 접촉 0. PR #62 Draft 유지. 아래 204차 섹션 참고.)_
+_203차 갱신: 2026-10-04 (203차 — **PR #62 마을 회귀 검증 재개: S37 modal-churn BLOCKED 해소(단독 48/48) + `[town-proto2.5d]` 전체 1572/1572 + verify:all(e2e 제외) + 5f 정적 마커 드리프트 수정(커밋 `2510d13c`)**. `[harness:e2e]`(학생/관리자 브라우저 스펙)는 메모리 압박으로 종료되어 이 HEAD에서 미실행. DB·SQL·Supabase·Production·.env 접촉 0. PR #62 Draft 유지. 아래 203차 섹션 참고.)_
 _202차 갱신: 2026-10-04 (202차 — **Speaking UX v2: 회화 연습 / 그림 보고 말하기 시험 분리**(201차 SpeakingPractice+SituationRecall 통합, 우회 버튼 제거, 홈 시험 직진입). 시험은 답 확인 전 문장·뜻·음성 미마운트, 정답·합격·숙달·점수 생성 0. 전용 일러스트 10장 제작 명세(제작 기능 없음 → 명세·프롬프트·검수 기준만). DB·SQL·Production·유료 API 0. 아래 202차 섹션 참고.)_
 _201차 갱신: 2026-10-04 (201차 — **상황 그림으로 이해·회상 연습(회화 표현 5개, Speaking 화면 → 🖼️ 상황 보고 말하기, 플래그 `situationRecallV1`)**. 그림 10장은 기존 에셋 합성 임시(최종 제작 목록 §6). 버튼 클릭은 기억/숙달 판정에 쓰지 않고 교사 확인표가 증거. DB·SQL·Production·유료 API 0. 아래 201차 섹션 참고.)_
 _200차 갱신: 2026-10-04 (200차 — **Speaking 첫 체험(녹음·재생만, 커밋 `11e1e89e`/`4aef6b7b`, 플래그 `speakingPracticeV1`) + 2.5D 마을 시각 보정(제한 범위, 커밋 895ec4cd)**. DB·SQL·Production·유료 API 0. 실제 마이크는 운영자 Preview 확인 대기. 아래 200차 섹션 참고.)_
@@ -14,6 +15,65 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-04 (204차) — PR #62 남은 브라우저 E2E 13스펙 완료 — verify:all [harness:e2e] 구간 보완, 전 스펙 FAIL 0, 제품·테스트 수정 0
+
+### 0. 범위/기준
+
+2026-10-04 11:50~12:15 KST, 리드=Claude Fable 5.1. 운영자가 메모리를 확보해 시작 시 free RAM 4.56 GB(기준 3 GB), 내내 4.35~4.54 GB 유지. 워크트리 재확인: HEAD = `origin/feat/paul-town-v2-clean-pr` = PR #62 head `e0a0dffa`, 로컬 브랜치 `audit/paul-town-v2-2026-09-29` 유지, status clean, stash 없음, 잔존 node/브라우저 프로세스 없음. dist를 HEAD `e0a0dffa`에서 인라인 더미 `VITE_SUPABASE_URL`/`ANON_KEY`로 재빌드(200~203차와 동일 관행, 워크트리는 의도적으로 `.env` 없음), 빌드 경고 0. `e0a0dffa`의 제품 코드는 `e0690c3f`와 동일(이후 2커밋은 테스트 마커 `2510d13c` + 문서 `e0a0dffa`, `git diff e0690c3f..e0a0dffa -- src` 비어 있음).
+
+### 1. 방법
+
+`scripts/testBrowserE2E.mjs`를 이루는 스펙 중 townProto25d를 뺀 13개를 203차와 같은 scratch runner로 하나씩, 브라우저 1개, 포트 4193에서 실행(저장소 파일 변경 없음). townProto25d는 반복하지 않음: 같은 제품 코드에서 203차에 1572/1572 PASS했고 이후 src 변경이 없다. mock 환경만 사용(installMocks, PostgREST 에뮬레이터). 실제 학생 로그인 0, Production/DB 쓰기 0, 미mock 요청 0.
+
+### 2. 결과
+
+기준선 = 202차에 기록된 2026-10-03 전체 실행(제품 코드 `3238df49`) 또는 해당 스펙의 최신 카운트.
+
+| 스펙 | PASS/전체 | 기준선 |
+|---|---|---|
+| [student] | 34/34 | 34 |
+| [admin] | 21/21 | 21 |
+| [mobile] | 178/178 | 178 |
+| [student-home] | 212 PASS / 1 SKIP (213) | 191+1 SKIP |
+| [speaking] | 200/200 | 200 (202차) |
+| [speaking-exam] | 148/148 | 148 |
+| [entrance] | 12/12 | 12 |
+| [town] | 528/528 | 528 |
+| [stale-chunk] | 8/8 | 8 |
+| [town-flag-xtab] | 16/16 | 16 |
+| [town-v2] | 448/448 | 448 |
+| [town-v2-artwork] | 28/28 | 28 |
+| [town-pilot-allowlist] | 33/33 | 33 |
+
+- 합계: **1866 PASS / 0 FAIL / 1 SKIP**, 미mock 0, mock 오류 0, 소요 11:57:02 → 12:10:16(13분).
+- student-home 카운트 증가는 200~202차 Speaking 커밋이 스펙을 확장했기 때문. 단일 SKIP은 알려진 fixture 한계("360x640 헤더에 🔥 streak 배지 — fixture로 streak>0 시드 불가")로 기준선과 동일.
+- 환경 miss 없음(더미 env 재빌드로 203차의 공백 페이지 실패 방지). 제품 결함 재현 없음. 테스트 수정 필요 없음.
+
+### 3. `PR #62 head e0a0dffa` 최종 검증 상태 정리
+
+제품 코드 = `e0690c3f` = `3238df49` 계통 + Speaking 커밋 `21c72816`/`6002861d`.
+
+- **verify:all 비-e2e**: 203차에서 `e0690c3f` 기준 33섹션/220스위트 실행. 실제 FAIL은 testTextbookIsolation 5f 1건뿐이며 `2510d13c`로 수정, 43/43 재검증. 나머지 FAIL은 `.env` 의존 하네스(환경, 203차 §3 기록). 이후 소스 불변이므로 `e0a0dffa`에도 203차 결과가 유효.
+- **[harness:e2e] 구간**(203차에서 호스트 메모리 압박으로 종료): 이제 보완됨. townProto25d 1572/1572(203차, 같은 dist 제품 코드) + 위 13스펙 1866/1866(+1 SKIP). 합쳐 브라우저 스펙 14개 전부 `e0a0dffa`에서 FAIL 0.
+- **로컬 미실행**: `.env`가 필요한 DB-live 하네스(운영자 `.env` 필요, CI Release Gate가 secrets로 커버).
+
+### 4. Push / Preview
+
+이 세션이 추가하는 것은 이 docs 커밋과 체크포인트뿐이다(이 세션 docs 커밋). 이 커밋 이전 `e0a0dffa`의 Preview: https://voca-qo1uswt9j-jina4926952s-projects.vercel.app , 브랜치 별칭 https://voca-git-feat-paul-town-v2-clean-pr-jina4926952s-projects.vercel.app . `e0a0dffa`의 Release Gate CI는 203차 종료 시점에 pending이었다.
+
+CI 추기: `e0a0dffa`의 GitHub Release Gate(run 37150922832)는 실패가 아니라 **CANCELLED**로 끝났다. job이 `.github/workflows/release-gate.yml:75`의 `timeout-minutes: 30`에 걸려 "Gate 2 — npm run verify:all" 도중 취소됐고, 취소 전 Gate 2 로그에 FAIL 줄은 0건이었다. 앞의 두 실행(`e0690c3f` run 37144796539, `fc67c220` run 37142343043)도 모두 정확히 30분에 취소됐다. 이는 아직 해소되지 않은 기존 CI 30분 상한 문제이며(172차 이전 handoff 참고, 워크플로 파일 변경은 정책상 운영자 전용, 이 세션의 `.github/workflows/` diff 0) 제품·테스트 실패가 아니다. `e0a0dffa`의 Vercel Preview는 pass.
+
+### 5. 무변경
+
+`C:\voca`(손상된 추적 SQL 7개 + 쓰레기 비추적 SQL 3개, 복구/삭제는 운영자가 계속 보류), 다른 모든 워크트리, 저장 안 된 에디터, DB, SQL, Supabase, Production, `.env`. PR #62 Draft 유지. force push·reset·clean·stash 없음.
+
+### 6. 남은 일
+
+- (a) Speaking UX v2 최종 일러스트 10장(`docs/design/SPEAKING_UX_V2_2026-10-04.md` §6) — **미완료**. 제작 기능이 없어 운영자 제작/검수 대기.
+- (b) `C:\voca` SQL 파일 처리 결정은 운영자에게 있음.
+- (c) 운영자 실기기 Preview에서 Speaking 마이크 흐름 확인(200~202차 대기 항목) — 대기 중이며 완료로 주장하지 않는다.
+- (d) CI 30분 상한 해소(운영자 결정) — Release Gate가 Gate 2 도중 30분 상한으로 취소되는 문제.
 
 ## 2026-10-04 (203차) — PR #62 마을 회귀 검증 재개 — S37 modal-churn BLOCKED 해소 + townProto25d 전체 1572/1572 + verify:all(e2e 제외) + 5f 정적 마커 드리프트 수정
 
