@@ -1,6 +1,6 @@
 // tests/e2e/speakingExam.spec.mjs
 //
-// 그림 보고 말하기 시험(SpeakingExam.jsx, Speaking UX v2 2026-10-04) 회귀 스펙 — situation.spec 대체.
+// 한글 보고 말하기(207차: 그림 보고 말하기 시험에서 변경, SpeakingExam.jsx, Speaking UX v2 2026-10-04) 회귀 스펙 — situation.spec 대체.
 // 설계: docs/design/SPEAKING_UX_V2_2026-10-04.md §4/§5/§7. 핵심 계약: 공개 전엔 EN 문장/KO 뜻/듣기/
 // 자기 확인이 DOM에 아예 없고(숨김 렌더 금지) speak 호출도 0, 자기 확인은 UUID 키 localStorage에만 저장.
 // 마이크는 addInitScript로 합성 MediaStream, 기기 로컬 기록은 localStorage 시드. 실제 네트워크 0건.
@@ -18,7 +18,7 @@ const OTHER_ID = 'e2e00000-0000-4000-8000-00000000b002'
 const E = SITUATION_EXPRESSIONS
 const N = E.length
 const FORBIDDEN = ['정답', '합격', '숙달', '점수', '⭐', '완료', '별']
-const EXAM_ONLY_IDS = ['exam-answer', 'exam-meaning', 'exam-listen', 'exam-self-can', 'exam-self-hard', 'exam-retry', 'exam-practice-panel']
+const EXAM_ONLY_IDS = ['exam-answer-label', 'exam-answer', 'exam-meaning', 'exam-other-ways', 'exam-listen', 'exam-self-can', 'exam-self-hard', 'exam-retry', 'exam-practice-panel']
 
 const ymd0 = () => {
   const d = new Date()
@@ -183,11 +183,14 @@ export async function run(browser, baseURL) {
     await openExam()
     r.check(`${name} data-index=0 / data-revealed=false`, (await index(page)) === '0' && (await revealed(page)) === 'false')
     r.check(`${name} exam-progress "1 / 5"`, (await txt(page, 'exam-progress')) === `1 / ${N}`, await txt(page, 'exam-progress'))
-    r.check(`${name} scene-card data-scene="hello-b"(전이 장면)`, (await T(page, 'scene-card').getAttribute('data-scene')) === 'hello-b', String(await T(page, 'scene-card').getAttribute('data-scene')))
-    const label = (await T(page, 'scene-card').getAttribute('aria-label')) || ''
-    r.check(`${name} scene-card 상황 묘사 = hello-b examAlt(뜻을 풀어 쓰지 않는 묘사)`, label.includes(sceneFor('hello', 'b').examAlt), label)
-    const speechActs = ['인사', '미안', '사과', '고마', '도와', '곤란', '놀자', '같이 놀'].filter((w) => label.includes(w))
-    r.check(`${name} scene-card aria-label에 말하기 행위 단어 없음`, speechActs.length === 0, speechActs.join(','))
+    r.check(`${name} 제목 = 한글 보고 말하기`, ((await page.getByRole('heading', { level: 1 }).textContent()) || '').trim() === '한글 보고 말하기')
+    r.check(`${name} situation-guide data-scene="hello-b"(전이 장면)`, (await T(page, 'situation-guide').getAttribute('data-scene')) === 'hello-b', String(await T(page, 'situation-guide').getAttribute('data-scene')))
+    const label = await txt(page, 'situation-text')
+    r.check(`${name} 한글 상황 = hello-b situationKo(누가 누구에게 왜)`, label === sceneFor('hello', 'b').situationKo, label)
+    const speechActs = ['인사', '반가', '미안', '사과', '고마', '감사', '도와', '부탁', '놀자', '같이 놀'].filter((w) => label.includes(w))
+    r.check(`${name} 한글 상황에 목표 뜻/말하기 행위 단어 없음`, speechActs.length === 0, speechActs.join(','))
+    r.check(`${name} 한글 상황에 영어 글자 없음(첫 단어 힌트 없음)`, !/[A-Za-z]/.test(label), label)
+    r.check(`${name} 임시 그림(scene-card) 없음`, (await T(page, 'scene-card').count()) === 0)
     const leaks = await answerLeaks(page)
     r.check(`${name} 본문/속성 어디에도 EN 5문장·KO 5뜻 없음`, leaks.length === 0, leaks.join(' | '))
     const inner = await bodyText(page)
@@ -210,6 +213,9 @@ export async function run(browser, baseURL) {
     r.check(`${name} data-revealed=true`, (await revealed(page)) === 'true')
     r.check(`${name} exam-answer = EN`, (await txt(page, 'exam-answer')) === E[0].en, await txt(page, 'exam-answer'))
     r.check(`${name} exam-meaning = KO`, (await txt(page, 'exam-meaning')) === E[0].ko, await txt(page, 'exam-meaning'))
+    r.check(`${name} 안내 라벨 "이렇게 말할 수 있어요"(정답 표현 아님)`, (await txt(page, 'exam-answer-label')) === '이렇게 말할 수 있어요', await txt(page, 'exam-answer-label'))
+    r.check(`${name} 다른 표현 허용 문구 보임`, await T(page, 'exam-other-ways').isVisible())
+    r.check(`${name} 공개 후에도 한글 상황 유지`, (await txt(page, 'situation-text')) === sceneFor('hello', 'b').situationKo)
     r.check(`${name} exam-reveal 사라지고 exam-retry 보임`, (await T(page, 'exam-reveal').count()) === 0 && (await T(page, 'exam-retry').isVisible()))
     r.check(`${name} 공개만으로는 speak 호출 0`, (await speakLog(page)).length === 0)
     await T(page, 'exam-listen').click()
@@ -235,8 +241,8 @@ export async function run(browser, baseURL) {
     const panel = T(page, 'exam-practice-panel')
     r.check(`${name} exam-practice-panel 보임`, await panel.isVisible().catch(() => false))
     r.check(`${name} 패널 안 practice-sentence = EN, practice-listen 보임`, ((await panel.locator('[data-testid="practice-sentence"]').textContent()) || '').trim() === E[0].en && (await panel.locator('[data-testid="practice-listen"]').isVisible()))
-    r.check(`${name} 패널 안 scene-card = 연습 장면 hello-a`, (await panel.locator('[data-testid="scene-card"]').getAttribute('data-scene')) === 'hello-a', String(await panel.locator('[data-testid="scene-card"]').getAttribute('data-scene')))
-    r.check(`${name} 시험 그림(hello-b)도 그대로`, (await T(page, 'scene-card').first().getAttribute('data-scene')) === 'hello-b')
+    r.check(`${name} 패널 안 situation-guide = 연습 장면 hello-a`, (await panel.locator('[data-testid="situation-guide"]').getAttribute('data-scene')) === 'hello-a', String(await panel.locator('[data-testid="situation-guide"]').getAttribute('data-scene')))
+    r.check(`${name} 시험 상황(hello-b)도 그대로`, (await T(page, 'situation-guide').first().getAttribute('data-scene')) === 'hello-b')
     r.check(`${name} 다시 연습 버튼 비활성(중복 방지)`, await T(page, 'exam-retry').isDisabled())
     r.check(`${name} 녹음 UI 1세트만(중복 마운트 없음)`, (await T(page, 'speaking-record').count()) === 1 && (await T(page, 'speaking-status').count()) === 1)
     await T(page, 'practice-listen').click()
@@ -257,7 +263,7 @@ export async function run(browser, baseURL) {
     await next()
     r.check(`${name} data-index=1 / data-revealed=false`, (await index(page)) === '1' && (await revealed(page)) === 'false')
     r.check(`${name} exam-progress "2 / 5"`, (await txt(page, 'exam-progress')) === `2 / ${N}`, await txt(page, 'exam-progress'))
-    r.check(`${name} data-expr="${E[1].id}", scene-card data-scene="help-b"`, (await attr(page, 'data-expr')) === E[1].id && (await T(page, 'scene-card').getAttribute('data-scene')) === 'help-b', String(await T(page, 'scene-card').getAttribute('data-scene')))
+    r.check(`${name} data-expr="${E[1].id}", situation-guide data-scene="help-b"`, (await attr(page, 'data-expr')) === E[1].id && (await T(page, 'situation-guide').getAttribute('data-scene')) === 'help-b', String(await T(page, 'situation-guide').getAttribute('data-scene')))
     const leaks = await answerLeaks(page)
     r.check(`${name} 2번 문항에서도 EN/KO 5+5 전부 본문에 없음`, leaks.length === 0, leaks.join(' | '))
     r.check(`${name} 정답/자기 확인 요소 없음`, (await Promise.all(EXAM_ONLY_IDS.map((id) => T(page, id).count()))).every((c) => c === 0))
@@ -407,7 +413,7 @@ export async function run(browser, baseURL) {
     await T(page, 'speaking-practice').waitFor({ state: 'visible', timeout: 10000 })
     for (let i = 0; i < N; i++) await T(page, 'practice-next').click()
     await T(page, 'practice-done').waitFor({ state: 'visible', timeout: 5000 })
-    r.check(`${name} 완료 화면에 그림 시험 시작 버튼 없음(킬 스위치)`, (await T(page, 'practice-start-exam').count()) === 0)
+    r.check(`${name} 완료 화면에 한글 보고 말하기 시작 버튼 없음(킬 스위치)`, (await T(page, 'practice-start-exam').count()) === 0)
     await T(page, 'practice-back-menu').click()
     r.check(`${name} 메뉴로 → 시험 아닌 메뉴`, !!(await waitUntil(() => T(page, 'speaking-menu').isVisible(), { timeout: 5000 })) && (await root(page).count()) === 0)
   })

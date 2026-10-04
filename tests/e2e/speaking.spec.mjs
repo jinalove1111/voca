@@ -195,22 +195,22 @@ export async function run(browser, baseURL) {
     })
   }
 
-  // ── b. 연습 문항: 그림+문장+뜻+듣기 한 화면 ──────────────────────────
+  // ── b. 연습 문항: 한글 상황+문장+뜻+듣기 한 화면(207차: 임시 그림 숨김) ──────────────────────────
   for (const vp of VPS) {
     await scenario('b 연습 문항', vp, {}, async ({ page, name, openPractice }) => {
       await openPractice()
       const root = T(page, 'speaking-practice')
       r.check(`${name} data-index=0 / data-expr=${E[0].id}`, (await root.getAttribute('data-index')) === '0' && (await root.getAttribute('data-expr')) === E[0].id)
-      const vis = await Promise.all(['scene-card', 'practice-sentence', 'practice-meaning', 'practice-listen'].map((id) => T(page, id).isVisible()))
-      r.check(`${name} 그림/문장/뜻/듣기 추가 클릭 없이 모두 보임`, vis.every(Boolean), JSON.stringify(vis))
-      r.check(`${name} scene-card data-scene="hello-a"`, (await T(page, 'scene-card').getAttribute('data-scene')) === 'hello-a', String(await T(page, 'scene-card').getAttribute('data-scene')))
-      const label = (await T(page, 'scene-card').getAttribute('aria-label')) || ''
-      r.check(`${name} scene-card 상황 묘사 = 연습 장면 A(hello-a alt)`, label.includes(sceneFor('hello', 'a').alt), label)
+      const vis = await Promise.all(['situation-guide', 'practice-sentence', 'practice-meaning', 'practice-listen'].map((id) => T(page, id).isVisible()))
+      r.check(`${name} 상황/문장/뜻/듣기 추가 클릭 없이 모두 보임`, vis.every(Boolean), JSON.stringify(vis))
+      r.check(`${name} situation-guide data-scene="hello-a"`, (await T(page, 'situation-guide').getAttribute('data-scene')) === 'hello-a', String(await T(page, 'situation-guide').getAttribute('data-scene')))
+      r.check(`${name} 한글 상황 = 연습 장면 A situationKo`, (await txt(page, 'situation-text')) === sceneFor('hello', 'a').situationKo, await txt(page, 'situation-text'))
+      r.check(`${name} 임시 그림(scene-card) 없음 — 최종 일러스트 전까지 숨김`, (await T(page, 'scene-card').count()) === 0)
       r.check(`${name} 문장 = EN`, (await txt(page, 'practice-sentence')) === E[0].en, await txt(page, 'practice-sentence'))
       r.check(`${name} 뜻 = KO`, (await txt(page, 'practice-meaning')) === E[0].ko, await txt(page, 'practice-meaning'))
-      const sc = await T(page, 'scene-card').boundingBox()
+      const sc = await T(page, 'situation-guide').boundingBox()
       const se = await T(page, 'practice-sentence').boundingBox()
-      r.check(`${name} 그림이 영어 문장보다 위(y 순서)`, !!sc && !!se && sc.y + sc.height <= se.y + 1, `${sc?.y}+${sc?.height} vs ${se?.y}`)
+      r.check(`${name} 한글 상황이 영어 문장보다 위(y 순서)`, !!sc && !!se && sc.y + sc.height <= se.y + 1, `${sc?.y}+${sc?.height} vs ${se?.y}`)
       const fs = await T(page, 'practice-sentence').evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
       r.check(`${name} 영어 문장 font-size >=24px`, fs >= 24, String(fs))
       r.check(`${name} 가로 스크롤 없음`, await noOverflow(page))
@@ -222,8 +222,8 @@ export async function run(browser, baseURL) {
   }
   await scenario('b 연습 문항 1280', { width: 1280, height: 800 }, {}, async ({ page, name, openPractice }) => {
     await openPractice()
-    const vis = await Promise.all(['scene-card', 'practice-sentence', 'practice-meaning', 'practice-listen'].map((id) => T(page, id).isVisible()))
-    r.check(`${name} 그림/문장/뜻/듣기 모두 보임`, vis.every(Boolean))
+    const vis = await Promise.all(['situation-guide', 'practice-sentence', 'practice-meaning', 'practice-listen'].map((id) => T(page, id).isVisible()))
+    r.check(`${name} 상황/문장/뜻/듣기 모두 보임`, vis.every(Boolean))
     r.check(`${name} 가로 스크롤 없음`, await noOverflow(page))
   })
 
@@ -275,7 +275,7 @@ export async function run(browser, baseURL) {
     await T(page, 'practice-next').click()
     r.check(`${name} 다음 → 2번 문항(data-index=1, 문장=2번 EN)`, (await T(page, 'speaking-practice').getAttribute('data-index')) === '1' && (await txt(page, 'practice-sentence')) === E[1].en)
     r.check(`${name} 다음 → src 비워짐 + status 초기화`, (await audioSrc(page)) === '' && (await statusText(page)) === '')
-    r.check(`${name} 다음 → scene-card data-scene="help-a"`, (await T(page, 'scene-card').getAttribute('data-scene')) === 'help-a', String(await T(page, 'scene-card').getAttribute('data-scene')))
+    r.check(`${name} 다음 → situation-guide data-scene="help-a"`, (await T(page, 'situation-guide').getAttribute('data-scene')) === 'help-a', String(await T(page, 'situation-guide').getAttribute('data-scene')))
     await T(page, 'practice-prev').click()
     r.check(`${name} 이전 → 1번 문항`, (await T(page, 'speaking-practice').getAttribute('data-index')) === '0' && (await txt(page, 'practice-sentence')) === E[0].en)
     r.check(`${name} 1번에서 이전 비활성`, await T(page, 'practice-prev').isDisabled())
@@ -303,7 +303,7 @@ export async function run(browser, baseURL) {
       await T(page, 'speaking-record').click()
       r.check(`${name} status = "${SPEAKING_MESSAGES[mic]}"`, !!(await waitUntil(async () => (await statusText(page)) === SPEAKING_MESSAGES[mic], { timeout: 8000 })), await statusText(page))
       r.check(`${name} data-mic-state가 live 아님`, (await state(page)) !== 'live', String(await state(page)))
-      r.check(`${name} 오류에도 그림/문장/듣기 그대로 보임`, (await T(page, 'scene-card').isVisible()) && (await T(page, 'practice-sentence').isVisible()) && (await T(page, 'practice-listen').isEnabled()))
+      r.check(`${name} 오류에도 상황/문장/듣기 그대로 보임`, (await T(page, 'situation-guide').isVisible()) && (await T(page, 'practice-sentence').isVisible()) && (await T(page, 'practice-listen').isEnabled()))
       const retake = T(page, 'speaking-retake')
       r.check(`${name} 다시 녹음 버튼 사용 가능`, await retake.isEnabled().catch(() => false))
       await retake.click()
@@ -386,7 +386,7 @@ export async function run(browser, baseURL) {
     await T(page, 'speaking-practice').waitFor({ state: 'visible', timeout: 15000 })
     r.check(`${name} 연습: 인앱 브라우저 안내 표시`, await page.getByText(NOTICE).isVisible().catch(() => false))
     r.check(`${name} 연습: 녹음 시작 버튼 없음`, (await T(page, 'speaking-record').count()) === 0)
-    r.check(`${name} 연습: 그림/문장/뜻/듣기는 그대로 보임`, (await Promise.all(['scene-card', 'practice-sentence', 'practice-meaning', 'practice-listen'].map((id) => T(page, id).isVisible()))).every(Boolean))
+    r.check(`${name} 연습: 상황/문장/뜻/듣기는 그대로 보임`, (await Promise.all(['situation-guide', 'practice-sentence', 'practice-meaning', 'practice-listen'].map((id) => T(page, id).isVisible()))).every(Boolean))
     await T(page, 'practice-next').click()
     r.check(`${name} 연습: 다음 문항으로 진행 가능`, (await T(page, 'speaking-practice').getAttribute('data-index')) === '1')
     await T(page, 'speaking-back').click()
@@ -402,7 +402,7 @@ export async function run(browser, baseURL) {
     r.check(`${name} 메뉴 "← 홈" → 학생 홈`, await home())
   })
 
-  // ── m. 5문항 끝 → 큰 "그림 시험 시작" → 시험 1번 ─────────────────────
+  // ── m. 5문항 끝 → 큰 "한글 보고 말하기 시작" → 시험 1번 ─────────────────────
   await scenario('m 연습 완료', VP, {}, async ({ page, name, openPractice }) => {
     await openPractice()
     const seen = []
@@ -416,8 +416,8 @@ export async function run(browser, baseURL) {
     r.check(`${name} practice-done 보임 + 문항 UI 사라짐`, (await T(page, 'practice-sentence').count()) === 0)
     const bs = await T(page, 'practice-start-exam').boundingBox()
     const parentW = await T(page, 'practice-start-exam').evaluate((el) => { const p = el.parentElement; const cs = getComputedStyle(p); return p.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) })
-    r.check(`${name} 그림 시험 시작 버튼 높이 >=56px`, !!bs && bs.height >= 55.5, String(bs?.height))
-    r.check(`${name} 그림 시험 시작 버튼 카드 안 전체 너비`, !!bs && bs.width >= parentW - 1, `${bs?.width} vs ${parentW}`)
+    r.check(`${name} 한글 보고 말하기 시작 버튼 높이 >=56px`, !!bs && bs.height >= 55.5, String(bs?.height))
+    r.check(`${name} 한글 보고 말하기 시작 버튼 카드 안 전체 너비`, !!bs && bs.width >= parentW - 1, `${bs?.width} vs ${parentW}`)
     const bb = await T(page, 'practice-back-menu').boundingBox()
     r.check(`${name} 시험 시작이 메뉴로 버튼보다 큼`, !!bs && !!bb && bs.height > bb.height, `${bs?.height} vs ${bb?.height}`)
     r.check(`${name} 완료 화면 가로 스크롤 없음 + 버튼 >=44px`, (await noOverflow(page)) && (await smallButtons(page, 'speaking-practice')).length === 0)
