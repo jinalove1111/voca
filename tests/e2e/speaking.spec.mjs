@@ -11,6 +11,7 @@ import { createRecorder } from './lib/harness.mjs'
 import { QA_STUDENT_NAME, QA_LOGIN_PIN } from './fixtures/index.mjs'
 import { SPEAKING_MESSAGES } from '../../src/utils/speaking/speakingSession.js'
 import { SITUATION_EXPRESSIONS, sceneFor } from '../../src/utils/situation/situationContent.js'
+import { itemsForSet } from '../../src/utils/situation/speakingSets.js'
 
 const VP = { width: 390, height: 844 }
 const VPS = [{ width: 360, height: 640 }, VP, { width: 412, height: 915 }]
@@ -447,6 +448,69 @@ export async function run(browser, baseURL) {
     await T(page, 'speaking-practice').waitFor({ state: 'visible', timeout: 10000 })
     r.check(`${name} 재진입 → 1번 문항(data-index=0, EN=${E[0].id})`, (await T(page, 'speaking-practice').getAttribute('data-index')) === '0' && (await txt(page, 'practice-sentence')) === E[0].en)
     r.check(`${name} 재진입 → 마이크 idle`, (await state(page)) === 'idle')
+  })
+
+  // ── s. 세트 선택(기본 / 이야기 회차) ─────────────────────────────────
+  const EP = itemsForSet('ep01')
+  const pressed = (page, id) => T(page, `speaking-set-${id}`).getAttribute('aria-pressed')
+  const selectEp = async (page) => { await T(page, 'speaking-set-ep01').click() }
+  for (const vp of [...VPS, { width: 1280, height: 800 }]) {
+    await scenario('s1 세트 선택', vp, {}, async ({ page, name, openMenu }) => {
+      await openMenu()
+      r.check(`${name} 기본: basic aria-pressed=true / ep01 false`, (await pressed(page, 'basic')) === 'true' && (await pressed(page, 'ep01')) === 'false')
+      await selectEp(page)
+      r.check(`${name} ep01 클릭 → ep01 true / basic false`, (await pressed(page, 'ep01')) === 'true' && (await pressed(page, 'basic')) === 'false')
+      const small = await page.locator('[data-testid^="speaking-set-"]').evaluateAll((els) =>
+        els.filter((el) => { const b = el.getBoundingClientRect(); return b.width > 0 && b.height < 44 - 0.5 }).map((el) => el.textContent.trim()))
+      r.check(`${name} 세트 버튼 전부 높이 >=44px`, small.length === 0, small.join(','))
+      r.check(`${name} 가로 스크롤 없음`, await noOverflow(page))
+    })
+  }
+  for (const vp of [...VPS, { width: 1280, height: 800 }]) {
+    await scenario('s2 이야기 연습 ep01', vp, {}, async ({ page, name, openMenu }) => {
+      await openMenu()
+      await selectEp(page)
+      await T(page, 'speaking-menu-practice').click()
+      await T(page, 'speaking-practice').waitFor({ state: 'visible', timeout: 15000 })
+      const N = EP.length
+      const it = EP[0]
+      const root = T(page, 'speaking-practice')
+      r.check(`${name} 헤더 1/${N}`, ((await page.getByRole('heading', { level: 1 }).textContent()) || '').includes(`1/${N}`))
+      r.check(`${name} speaking-set-label 보임`, await T(page, 'speaking-set-label').isVisible())
+      r.check(`${name} data-expr=${it.exprId}`, (await root.getAttribute('data-expr')) === it.exprId)
+      r.check(`${name} 상황 = situationKo`, (await txt(page, 'situation-text')) === it.practiceScene.situationKo, await txt(page, 'situation-text'))
+      r.check(`${name} 역할에 roleKo 포함`, (await txt(page, 'situation-role')).includes(it.roleKo), await txt(page, 'situation-role'))
+      r.check(`${name} 문장 = EN`, (await txt(page, 'practice-sentence')) === it.en, await txt(page, 'practice-sentence'))
+      r.check(`${name} 뜻 = KO`, (await txt(page, 'practice-meaning')) === it.ko, await txt(page, 'practice-meaning'))
+      const reply = await txt(page, 'practice-reply')
+      r.check(`${name} 상대 대사 보임 + reply EN/KO 포함`, (await T(page, 'practice-reply').isVisible()) && reply.includes(it.reply.en) && reply.includes(it.reply.ko), reply)
+      r.check(`${name} scene-card 없음`, (await T(page, 'scene-card').count()) === 0)
+      await T(page, 'practice-listen').click()
+      const l1 = await waitUntil(async () => { const l = await speakLog(page); return l.length >= 1 ? l : null }, { timeout: 3000 })
+      r.check(`${name} 내 문장 듣기 → speak EN`, !!l1 && l1[l1.length - 1] === it.en, JSON.stringify(l1))
+      await T(page, 'practice-reply-listen').click()
+      const l2 = await waitUntil(async () => { const l = await speakLog(page); return l.length >= 2 ? l : null }, { timeout: 3000 })
+      r.check(`${name} 상대 대사 듣기 → speak reply EN`, !!l2 && l2[l2.length - 1] === it.reply.en, JSON.stringify(l2))
+      r.check(`${name} 가로 스크롤 없음`, await noOverflow(page))
+      const small = await smallButtons(page, 'speaking-practice')
+      r.check(`${name} 보이는 버튼 전부 높이 >=44px`, small.length === 0, small.join(','))
+      await T(page, 'practice-next').click()
+      r.check(`${name} 다음 → data-index=1 / data-expr=${EP[1].exprId}`, (await root.getAttribute('data-index')) === '1' && (await root.getAttribute('data-expr')) === EP[1].exprId)
+      r.check(`${name} 다음 → 상황 갱신`, (await txt(page, 'situation-text')) === EP[1].practiceScene.situationKo, await txt(page, 'situation-text'))
+      for (let i = 1; i < N; i++) await T(page, 'practice-next').click()
+      r.check(`${name} ${N}문항 끝 → practice-done`, !!(await waitUntil(() => T(page, 'practice-done').isVisible(), { timeout: 5000 })))
+    })
+  }
+  await scenario('s3 기본 세트 회귀', VP, {}, async ({ page, name, openMenu }) => {
+    await openMenu()
+    await selectEp(page)
+    await T(page, 'speaking-set-basic').click()
+    r.check(`${name} basic 다시 선택 → true`, (await pressed(page, 'basic')) === 'true' && (await pressed(page, 'ep01')) === 'false')
+    await T(page, 'speaking-menu-practice').click()
+    await T(page, 'speaking-practice').waitFor({ state: 'visible', timeout: 15000 })
+    r.check(`${name} 헤더 1/${E.length}`, ((await page.getByRole('heading', { level: 1 }).textContent()) || '').includes(`1/${E.length}`))
+    r.check(`${name} data-expr=${E[0].id}`, (await T(page, 'speaking-practice').getAttribute('data-expr')) === E[0].id)
+    r.check(`${name} 세트 라벨/상대 대사/역할 없음`, (await T(page, 'speaking-set-label').count()) === 0 && (await T(page, 'practice-reply').count()) === 0 && (await T(page, 'situation-role').count()) === 0)
   })
 
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }

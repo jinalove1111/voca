@@ -98,7 +98,7 @@ check('situationKo: 목표 표현 뜻/말하기 행위 어간 없음', SC.every(
 check('situationKo: 한국어 뜻 문장 자체를 포함하지 않음', SC.every((s) => !EX.some((e) => s.situationKo.includes(e.ko.replace(/[.!?]$/, '')))))
 const sceneCardSrc = read('SceneCard.jsx')
 check('그림은 최종 일러스트가 있을 때만(hasFinalArt) — 임시 합성은 화면에 안 나옴', /export const hasFinalArt = \(sceneId\) => Boolean\(FINAL_ART\[sceneId\]\)/.test(sceneCardSrc) && /\{hasFinalArt\(scene\.id\) && <SceneCard /.test(item))
-check('연습 문항은 SituationGuide로 시작(문장/뜻/듣기 앞)', item.indexOf('<SituationGuide scene={scene} />') > 0 && item.indexOf('<SituationGuide scene={scene} />') < item.indexOf('data-testid="practice-sentence"'))
+check('연습 문항은 SituationGuide로 시작(문장/뜻/듣기 앞)', item.indexOf('<SituationGuide scene={item.practiceScene}') > 0 && item.indexOf('<SituationGuide scene={item.practiceScene}') < item.indexOf('data-testid="practice-sentence"'))
 check('이름 변경: 메뉴/시험 제목/완료 버튼/홈 바로 가기 = 한글 보고 말하기', practice.includes('📝 한글 보고 말하기') && exam.includes('>한글 보고 말하기</h1>') && read('SpeakingPracticeMode.jsx').includes('📝 한글 보고 말하기 시작') && read('StudentHome.jsx').includes('📝 한글 보고 말하기 바로 가기'))
 check('학생 UI에 "그림 보고"/"그림 시험" 문구 없음', ['SpeakingExam.jsx', 'SpeakingPractice.jsx', 'SpeakingPracticeMode.jsx', 'SpeakingPracticeItem.jsx', 'StudentHome.jsx'].every((f) => !/그림 보고|그림 시험/.test(strip(read(f)))))
 check('공개 후 안내 = "이렇게 말할 수 있어요" + 다른 표현 허용 문구', /data-testid="exam-answer-label"[^>]*>이렇게 말할 수 있어요</.test(exam) && /data-testid="exam-other-ways"/.test(exam))

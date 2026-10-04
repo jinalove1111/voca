@@ -9,6 +9,7 @@ import { installMocks } from './lib/mockRoutes.mjs'
 import { createRecorder } from './lib/harness.mjs'
 import { QA_STUDENT_NAME, QA_LOGIN_PIN, QA_STUDENT_ID } from './fixtures/index.mjs'
 import { SITUATION_EXPRESSIONS, sceneFor } from '../../src/utils/situation/situationContent.js'
+import { itemsForSet } from '../../src/utils/situation/speakingSets.js'
 
 const VP = { width: 390, height: 844 }
 const VIEWPORTS = [{ width: 360, height: 640 }, VP, { width: 412, height: 915 }, { width: 1280, height: 800 }]
@@ -481,6 +482,90 @@ export async function run(browser, baseURL) {
     await next()
     const store = await readStore(page)
     r.check(`${name} 깨진 JSON도 크래시 없이 새 기록으로 덮어씀`, store?.hello?.sessions?.length === 1 && (await index(page)) === '1', JSON.stringify(store))
+  })
+
+  // ── e. 이야기 회차(ep01) 한글 보고 말하기 ────────────────────────────
+  const EP = itemsForSet('ep01')
+  const EPN = EP.length
+  const GONE_IDS = ['exam-answer', 'exam-meaning', 'exam-listen', 'exam-reply', 'exam-answer-label', 'exam-other-ways', 'practice-reply']
+  const epTexts = EP.flatMap((i) => [i.en, i.ko, i.reply.en, i.reply.ko])
+  const openEpExam = async (page, openMenu) => {
+    await openMenu()
+    await T(page, 'speaking-set-ep01').click()
+    await T(page, 'speaking-menu-exam').click()
+    await root(page).waitFor({ state: 'visible', timeout: 15000 })
+  }
+  const epLeaks = async (page, items = EP) => {
+    const inner = await bodyText(page)
+    return items.flatMap((i) => [i.en, i.ko, i.reply.en, i.reply.ko]).filter((s) => inner.includes(s))
+  }
+  for (const vp of VIEWPORTS) {
+    await scenario('e1 ep01 공개 전', vp, {}, async ({ page, name, openMenu }) => {
+      await openEpExam(page, openMenu)
+      r.check(`${name} exam-progress "1 / ${EPN}"`, (await txt(page, 'exam-progress')) === `1 / ${EPN}`, await txt(page, 'exam-progress'))
+      r.check(`${name} situation-text = examScene.situationKo`, (await txt(page, 'situation-text')) === EP[0].examScene.situationKo, await txt(page, 'situation-text'))
+      r.check(`${name} situation-role 보임`, await T(page, 'situation-role').isVisible())
+      const present = []
+      for (const id of GONE_IDS) if ((await T(page, id).count()) > 0) present.push(id)
+      r.check(`${name} 공개 전 DOM에 정답/뜻/듣기/상대 대사 없음`, present.length === 0, present.join(','))
+      const leaks = await epLeaks(page)
+      r.check(`${name} body에 ep01 전 문항 EN/KO/상대 대사 없음`, leaks.length === 0, leaks.join(' | '))
+      r.check(`${name} speak 호출 0`, (await speakLog(page)).length === 0, JSON.stringify(await speakLog(page)))
+      r.check(`${name} 가로 스크롤 없음`, await noOverflow(page))
+    })
+  }
+  await scenario('e2 ep01 공개', VP, {}, async ({ page, name, openMenu, reveal }) => {
+    await openEpExam(page, openMenu)
+    await reveal()
+    const it = EP[0]
+    r.check(`${name} 라벨 "이렇게 말할 수 있어요"`, (await txt(page, 'exam-answer-label')) === '이렇게 말할 수 있어요')
+    r.check(`${name} exam-answer = EN`, (await txt(page, 'exam-answer')) === it.en, await txt(page, 'exam-answer'))
+    r.check(`${name} exam-meaning = KO`, (await txt(page, 'exam-meaning')) === it.ko, await txt(page, 'exam-meaning'))
+    r.check(`${name} exam-reply에 reply EN 포함`, (await txt(page, 'exam-reply')).includes(it.reply.en), await txt(page, 'exam-reply'))
+    r.check(`${name} 공개만으로는 speak 0`, (await speakLog(page)).length === 0)
+    await T(page, 'exam-listen').click()
+    const log = await waitUntil(async () => { const l = await speakLog(page); return l.length >= 1 ? l : null }, { timeout: 3000 })
+    r.check(`${name} 듣기 → speak 1회 = EN`, !!log && log.length === 1 && log[0] === it.en, JSON.stringify(log))
+    r.check(`${name} exam-other-ways 보임`, await T(page, 'exam-other-ways').isVisible())
+  })
+  await scenario('e3 ep01 내비게이션', VP, {}, async ({ page, name, openMenu, reveal, next }) => {
+    await openEpExam(page, openMenu)
+    await reveal()
+    await next()
+    r.check(`${name} 다음 → data-index=1 / data-revealed=false`, (await index(page)) === '1' && (await revealed(page)) === 'false')
+    const present = []
+    for (const id of GONE_IDS) if ((await T(page, id).count()) > 0) present.push(id)
+    r.check(`${name} 다음 문항에 정답 요소 없음`, present.length === 0, present.join(','))
+    const inner = await bodyText(page)
+    r.check(`${name} body에 2번 EN/상대 대사 없음`, !inner.includes(EP[1].en) && !inner.includes(EP[1].reply.en))
+    await T(page, 'exam-back').click()
+    await T(page, 'speaking-menu').waitFor({ state: 'visible', timeout: 10000 })
+    r.check(`${name} 메뉴에서 ep01 선택 유지`, (await T(page, 'speaking-set-ep01').getAttribute('aria-pressed')) === 'true')
+    await T(page, 'speaking-menu-exam').click()
+    await root(page).waitFor({ state: 'visible', timeout: 10000 })
+    r.check(`${name} 재진입 → data-index=0 / 미공개`, (await index(page)) === '0' && (await revealed(page)) === 'false')
+  })
+  await scenario('e4 ep01 다시 연습', VP, {}, async ({ page, name, openMenu, reveal }) => {
+    await openEpExam(page, openMenu)
+    await reveal()
+    await T(page, 'exam-retry').click()
+    const panel = T(page, 'exam-practice-panel')
+    r.check(`${name} 패널 보임`, await panel.isVisible().catch(() => false))
+    r.check(`${name} 패널 practice-sentence = EN`, ((await panel.locator('[data-testid="practice-sentence"]').textContent()) || '').trim() === EP[0].en)
+    r.check(`${name} 패널 practice-reply 보임`, await panel.locator('[data-testid="practice-reply"]').isVisible().catch(() => false))
+    r.check(`${name} exam-next 활성`, await T(page, 'exam-next').isEnabled())
+  })
+  const basicSeed = JSON.stringify({ hello: { lastPracticedDate: '2026-01-01', sessions: [{ date: '2026-01-01', scene: 'hello-a', stage: 'recall', hintLevel: 1, selfReport: 'hard', recorded: false }] } })
+  await scenario('e5 ep01 저장', VP, { seed: { [KEY(QA_STUDENT_ID)]: basicSeed } }, async ({ page, name, openMenu, reveal, next }) => {
+    await openEpExam(page, openMenu)
+    await reveal()
+    await T(page, 'exam-self-can').click()
+    await next()
+    const store = await readStore(page)
+    const rec = store?.[EP[0].id]
+    const last = (rec?.sessions || []).slice(-1)[0] || {}
+    r.check(`${name} ${EP[0].id} 기록 stage='exam', selfReport='can'`, last.stage === 'exam' && last.selfReport === 'can', JSON.stringify(store))
+    r.check(`${name} 기존 basic(hello) 기록 무영향`, JSON.stringify(store?.hello) === JSON.stringify(JSON.parse(basicSeed).hello))
   })
 
   return { results: r.results, unmockedRequests, mockErrors, ttsFallbackRequests }
