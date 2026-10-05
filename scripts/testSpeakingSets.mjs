@@ -52,7 +52,7 @@ check('복습 대사는 원래 문항(또는 기본 표현)과 같은 영어', I
 check('10회차 모두 존재, 새 목표 정확히 100개', EPS.length === 10 && ITEMS.filter((i) => i.kind === 'new').length === 100)
 // 2026-10-05 오늘 기억할 한 문장(ep02 QA 전용)
 const ks = keySentenceFor('ep02')
-check('keySentenceFor: basic/ep01 null, ep02 있음', keySentenceFor('basic') === null && keySentenceFor('ep01') === null && !!ks)
+check('keySentenceFor: basic·4화 null, 1·2·3화 있음', keySentenceFor('basic') === null && keySentenceFor('ep04') === null && ['ep01', 'ep02', 'ep03'].every((id) => !!keySentenceFor(id)) && !!ks)
 const ksItem = ITEMS.find((i) => i.id === ks?.itemId)
 check('keySentence.itemId 문항의 en/ko가 keySentence와 같음', !!ksItem && ksItem.en === ks.en && ksItem.ko === ks.ko && ks.en === 'Can I borrow a pencil?')
 check('흐름 상대는 미아 한 명(recall·transfer·reply·짧은 대화), transfer는 recall과 다른 상황', ks.recall.partner === 'Mia' && ks.transfer.partner === 'Mia' && ks.transfer.reply.speaker === 'Mia' && ks.transfer.situationKo !== ks.recall.situationKo && ks.introIds.length > 0 && ks.introIds.every((id) => ITEMS.find((i) => i.id === id)?.reply.speaker === 'Mia'))
@@ -80,6 +80,12 @@ const EP2I = ITEMS.filter((i) => i.episode === 2)
 check('2화 문항에 제이미 없음(상황·역할·영어·상대)', EP2I.every((i) => !/제이미|Jamie/.test(i.situationKo + i.roleKo + i.en + i.reply.en) && i.reply.speaker !== 'Jamie') && !/제이미/.test(EPS[1].summaryKo))
 const STILL = { 's02-01': 'spoon/spoon', 's02-02': 'spoon/ask', 's02-03': 'spoon/ask', 's02-09': 'ask/ask', 's02-10': 'forgot/forgot' }
 check('2화 정지 장면 연결 5문항(itemsForSet scene.pencil)', itemsForSet('ep02').filter((x) => x.practiceScene.pencil).map((x) => `${x.id}=${x.practiceScene.pencil.variant}/${x.practiceScene.pencil.still}`).join(',') === Object.entries(STILL).map(([k, v]) => `${k}=${v}`).join(',') && itemsForSet('ep01').every((x) => !x.practiceScene.pencil))
+// 217차 1·3화 확장 — 핵심 문장이 있는 모든 회차 공통 규칙(2화 전용 규칙은 아래 그대로)
+const KS_ALL = EPS.filter((e) => e.keySentence)
+const SCENE_NAMES = ['spoon', 'ask', 'handover-mia', 'forgot', 'handover-forgot', 'whisper', 'quiet', 'quiet-loud', 'noisy', 'noisy-loud', 'idea', 'poster', 'poster-yes', 'snack', 'snack-yes']
+check('핵심 문장 공통: itemId 문항(같은 회차)의 en/ko와 일치, 상대 미아, 장면 이름 유효', KS_ALL.every((e) => { const k = e.keySentence; const it = ITEMS.find((i) => i.id === k.itemId); return it && it.episode === e.n && it.en === k.en && it.ko === k.ko && k.recall.partner === 'Mia' && k.transfer.partner === 'Mia' && k.transfer.reply.speaker === 'Mia' && [k.scenes.watch, ...k.scenes.recall, ...k.scenes.transfer].every((v) => SCENE_NAMES.includes(v)) }))
+check('핵심 문장 공통: 공개 전 한글(상황·역할) ≤60자·영어 없음·답 어간/자기 뜻 없음, recall≠transfer 상황', KS_ALL.every((e) => { const k = e.keySentence; const t = [k.watch.situationKo, k.recall.situationKo, k.recall.roleKo, k.transfer.situationKo, k.transfer.roleKo]; return k.recall.situationKo !== k.transfer.situationKo && t.every((x) => x && x.length <= 60 && !/[A-Za-z]/.test(x) && !STEMS.some((w) => x.includes(w)) && !x.includes(stripEnd(k.ko))) }))
+check('핵심 문장 공통: 짧은 대화(introIds)는 같은 회차 미아 문항이고 핵심 문장과 다른 영어', KS_ALL.every((e) => e.keySentence.introIds.every((id) => { const it = ITEMS.find((i) => i.id === id); return it && it.episode === e.n && it.reply.speaker === 'Mia' && norm(it.en) !== norm(e.keySentence.en) && norm(it.reply.en) !== norm(e.keySentence.en) })))
 console.log(`INFO new 목표 ${newCount}개, 복습 문항 ${reviewCount}개`)
 
 if (fail) { console.log(`\nFAILED ${fail}`); process.exit(1) }

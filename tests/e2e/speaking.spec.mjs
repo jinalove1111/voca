@@ -561,13 +561,13 @@ export async function run(browser, baseURL) {
     r.check(`${name} 회화 연습·한글 보고 말하기 버튼 유지`, (await T(page, 'speaking-menu-practice').isVisible()) && (await T(page, 'speaking-menu-exam').isVisible()))
     r.check(`${name} 10화 + 기본 세트 칩 전부 보임`, (await page.locator('[data-testid^="speaking-set-"]').count()) === 11)
     r.check(`${name} 메뉴 가로 스크롤 없음/버튼 >=44px`, (await noOverflow(page)) && (await smallButtons(page, 'speaking-menu')).length === 0)
-    await T(page, 'speaking-set-ep01').click()
-    r.check(`${name} ep01 선택: 카드 사라짐(핵심 문장 없음), ep01 선택 유지`, (await T(page, 'speaking-menu-key').count()) === 0 && (await T(page, 'speaking-set-ep01').getAttribute('aria-pressed')) === 'true')
-    r.check(`${name} 선택은 UUID 키로만 기록`, (await page.evaluate((k) => localStorage.getItem(k), lastSetKey(QA_STUDENT_ID))) === 'ep01' && !(await page.evaluate((n) => Object.keys(localStorage).some((k) => k.includes(n)), QA_STUDENT_NAME)))
+    await T(page, 'speaking-set-ep04').click()
+    r.check(`${name} ep04 선택: 카드 사라짐(핵심 문장 없음), ep04 선택 유지`, (await T(page, 'speaking-menu-key').count()) === 0 && (await T(page, 'speaking-set-ep04').getAttribute('aria-pressed')) === 'true')
+    r.check(`${name} 선택은 UUID 키로만 기록`, (await page.evaluate((k) => localStorage.getItem(k), lastSetKey(QA_STUDENT_ID))) === 'ep04' && !(await page.evaluate((n) => Object.keys(localStorage).some((k) => k.includes(n)), QA_STUDENT_NAME)))
     // 홈으로 나갔다가 다시 진입 — SpeakingPractice가 새로 마운트되어 저장된 선택을 읽는다
     await T(page, 'speaking-menu-home').click()
     await openMenu()
-    r.check(`${name} 다시 들어와도 ep01 선택 존중(2화로 되돌리지 않음)`, (await T(page, 'speaking-set-ep01').getAttribute('aria-pressed')) === 'true' && (await T(page, 'speaking-menu-key').count()) === 0)
+    r.check(`${name} 다시 들어와도 ep04 선택 존중(2화로 되돌리지 않음)`, (await T(page, 'speaking-set-ep04').getAttribute('aria-pressed')) === 'true' && (await T(page, 'speaking-menu-key').count()) === 0)
     await T(page, 'speaking-set-ep02').click()
     r.check(`${name} 2화 다시 고르면 카드 다시 보임`, await T(page, 'speaking-menu-key').isVisible())
   })
@@ -693,6 +693,35 @@ export async function run(browser, baseURL) {
     await T(page, 'exam-reveal').click()
     r.check(`${name} 2화 시험 1번: 공개 후 모범 표현·미아 대사`, (await txt(page, 'exam-answer')) === first.en && (await txt(page, 'speaking-exam')).includes(first.reply.en))
   })
+
+  // ── k9. 217차 1·3화 오늘 기억할 한 문장(기존 Paul·미아 그림만) — 보기 → 영어 숨기고 회상 → 다른 상황 → 끝 ─────────────
+  for (const [epId, ex] of [['ep01', { watch: 'whisper', recall: ['quiet', 'quiet-loud'], transfer: ['noisy', 'noisy-loud'], asking: true }], ['ep03', { watch: 'idea', recall: ['poster', 'poster-yes'], transfer: ['snack', 'snack-yes'], asking: false }]]) {
+    const K = keySentenceFor(epId)
+    await scenario(`k9 ${epId} 한 문장`, { width: 360, height: 640 }, {}, async ({ page, name, openMenu }) => {
+      await openMenu()
+      await T(page, `speaking-set-${epId}`).click()
+      const card = await txt(page, 'speaking-menu-key-card')
+      r.check(`${name} 메뉴 카드: 한글 목표만(영어 없음)`, card.includes(K.goalKo) && !/[A-Za-z]/.test(card), card)
+      await T(page, 'speaking-menu-key').click()
+      await T(page, 'key-flow').waitFor({ state: 'visible', timeout: 15000 })
+      r.check(`${name} 보기: 장면 ${ex.watch}·상황·EN/KO`, (await sceneAttr(page, 'data-variant')) === ex.watch && (await txt(page, 'situation-text')) === K.watch.situationKo && (await txt(page, 'key-sentence')).includes(K.en) && (await txt(page, 'key-sentence')).includes(K.ko))
+      r.check(`${name} 보기: 장면 끝까지 재생(미아 그림 로드)·장면에 영어 없음`, !!(await waitUntil(async () => (await sceneAttr(page, 'data-phase')) === (ex.watch === 'whisper' ? 'loud' : 'go'), { timeout: 5000 })) && (await partner(page)).ok && !/[A-Za-z]/.test((await T(page, 'key-scene').textContent()) || ''))
+      r.check(`${name} 보기: 듣기 누르기 전 speak 0회`, (await speakLog(page)).length === 0)
+      for (const [step, sc, part] of [['recall', ex.recall, K.recall], ['transfer', ex.transfer, K.transfer]]) {
+        await T(page, 'key-next').click()
+        r.check(`${name} ${step}: 장면 ${sc[0]}·상황/역할`, (await flowStep(page)) === step && (await sceneAttr(page, 'data-variant')) === sc[0] && (await txt(page, 'situation-text')) === part.situationKo && (await txt(page, 'situation-role')).includes(part.roleKo))
+        r.check(`${name} ${step}: 묻는 말풍선 ${ex.asking ? '있음' : '없음'}`, (await T(page, 'key-scene-asking').count()) === (ex.asking ? 1 : 0))
+        r.check(`${name} ${step}: 공개 전 DOM에 영어 문장·듣기·답 없음, 다음 비활성`, !(await page.evaluate((en) => document.documentElement.outerHTML.includes(en), K.en)) && (await T(page, 'key-listen').count()) === 0 && (await T(page, 'key-answer').count()) === 0 && (await T(page, 'key-next').isDisabled()))
+        await T(page, 'key-reveal').click()
+        const rep = part.reply || itemsForSet(epId).find((i) => i.id === K.itemId).reply
+        r.check(`${name} ${step}: 공개 후 모범 표현·미아 대사·장면 ${sc[1]}`, (await txt(page, 'key-answer-en')) === K.en && (await txt(page, 'key-reply')).includes(rep.en) && (await txt(page, 'key-reply')).includes('미아') && !!(await waitUntil(async () => (await sceneAttr(page, 'data-variant')) === sc[1], { timeout: 3000 })))
+        r.check(`${name} ${step}: 가로 스크롤 없음`, await noOverflow(page))
+      }
+      await T(page, 'key-next').click()
+      const t = await bodyText(page)
+      r.check(`${name} 끝: 연습≠기억 문구, 금지 문구 없음`, (await T(page, 'key-end').isVisible()) && t.includes('연습을 마쳤어요') && !FORBID_K.test(t))
+    })
+  }
 
   for (const vp of [{ width: 360, height: 640 }, { width: 412, height: 915 }, { width: 1280, height: 800 }]) {
     await scenario('k7 레이아웃', vp, {}, async ({ page, name, openMenu }) => {

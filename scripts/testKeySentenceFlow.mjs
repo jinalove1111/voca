@@ -12,7 +12,9 @@ const menu = strip(read('SpeakingPractice.jsx'))
 // PencilCaseScene
 const texts = [...scene.matchAll(/<text\b[^>]*>([\s\S]*?)<\/text>/g)].map((m) => m[1])
 check('Scene: <text> 존재(한글 이름표)하고 영어 글자 없음', texts.length > 0 && texts.every((t) => !/[A-Za-z]/.test(t.replace(/\{[^}]*\}/g, ''))))
-check('Scene: aria-label 문구에 영어 글자 없음', [...scene.matchAll(/^\s+(?:spoon|ask|'handover-mia'|forgot|'handover-forgot'): '([^']*)'/gm)].every((m) => !/[A-Za-z]/.test(m[1])))
+const labelBlock = scene.slice(scene.indexOf('const LABEL = {'), scene.indexOf('\n}\n', scene.indexOf('const LABEL = {')))
+const labelTexts = [...labelBlock.matchAll(/:\s*'([^']*)'/g)].map((m) => m[1])
+check('Scene: aria-label 문구(1·2·3화 변형 전부)에 영어 글자 없음', labelTexts.length >= 15 && labelTexts.every((t) => !/[A-Za-z]/.test(t)))
 check('Scene: reduced motion 처리(matchMedia + CSS 미디어쿼리)', /matchMedia\??\.?\(['"]\(prefers-reduced-motion: reduce\)['"]\)/.test(scene) && /@media \(prefers-reduced-motion: reduce\)/.test(scene))
 check('Scene: 타이머 정리(clearTimeout)·반복 애니메이션 없음', /clearTimeout/.test(scene) && !/infinite/.test(scene))
 check('Scene: Paul은 운영자 제공 기준 그림(assets/speaking/paul_speaking.png) 한 장 — 이전 저화질 마스코트 import 없음, 묻는 순간 ? 말풍선', scene.includes("../assets/speaking/paul_speaking.png") && !/from '\.\.\/assets\/paul'/.test(scene) && /const ASKING = \['ask', 'forgot', 'offer'\]/.test(scene) && scene.includes('key-scene-asking'))
@@ -38,6 +40,7 @@ check('Menu: key 카드는 keySentenceFor 있을 때만, 한글 목표만 표시
 const item = strip(read('SpeakingPracticeItem.jsx'))
 check('PracticeItem: 정지 장면은 연습에서만(!exam && scene.pencil), lazy 로드', /\{!exam && scene\.pencil && <Suspense/.test(item) && /const PencilCaseScene = lazy\(\(\) => import\('\.\/PencilCaseScene'\)\)/.test(item))
 check('화자 이름표: SPEAKER_KO 한 곳(PracticeItem)에서 Mia=미아, KeySentenceFlow는 가져다 씀', /export const SPEAKER_KO = \{[^}]*Mia: '미아'/.test(item) && /SPEAKER_KO \} from '\.\/SpeakingPracticeItem'/.test(flow) && !/const SPEAKER_KO/.test(flow))
+check('Flow: 장면 변형은 하드코딩 없이 keySentence.scenes에서(보기 포함)', flow.includes('<PencilCaseScene variant={ks.scenes.watch} />') && !/variant="(spoon|whisper|idea)"/.test(flow))
 check('Menu: KeySentenceFlow lazy 로드', /const KeySentenceFlow = lazy\(\(\) => import\('\.\/KeySentenceFlow'\)\)/.test(menu))
 
 if (fail) { console.log(`\nFAILED ${fail}`); process.exit(1) }
