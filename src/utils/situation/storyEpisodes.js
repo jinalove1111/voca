@@ -10,6 +10,7 @@
 //     keySentence(선택, 현재 2화만): { itemId, en, ko, goalKo, watch:{situationKo}, introIds:[회상 전 짧은 대화 문항 id], recall:{situationKo,roleKo,partner}, transfer:{situationKo,roleKo,partner,reply} }
 //     — 기억할 한 문장 흐름 전용. transfer는 STORY_ITEMS에 넣지 않는다
 // - STORY_ITEMS: { id: 'sEE-OO', episode, order, situationKo, roleKo, en, ko,
+//     pencilScene?: { variant, still } — 2화 일부 문항의 정지 장면(PencilCaseScene, 영어 없음)
 //     reply: { speaker: 'Jamie'|'Mia'|'Paul'|'Cookie'|'Shopkeeper'|'Guest', en, ko }
 //       (Cookie는 'Woof!' 같은 소리·행동으로만 답한다. Shopkeeper=가게 주인, Guest=축제 손님),
 //     alternatives(교사용 허용 표현, 학생 화면 비표시),
@@ -37,7 +38,7 @@ export const STORY_EPISODES = [
     n: 2,
     id: 'ep02',
     titleKo: '숟가락이 든 필통',
-    summaryKo: '미술 시간, 제이미의 필통에서 연필 대신 숟가락이 나와요. 칠판에는 처음 보는 단어가 적혀 있고, 점심시간에는 제이미의 도시락 통에서 수상한 소리가 나요.',
+    summaryKo: '미술 시간, 내 필통에서 연필 대신 숟가락이 나와요. 앞자리 미아에게 연필을 빌리고, 칠판의 처음 보는 단어를 알아봐요. 다음 날엔 필통을 통째로 두고 와요.',
     nextHookKo: '하교 전, 교실 문에 종이로 가린 포스터가 붙었어요. 내일 큰 소식이 있대요.',
     // 오늘 기억할 한 문장(QA 전용 KeySentenceFlow). 이 흐름은 Paul(나)과 미아 두 사람만 나오는 시범 장면이다(212차 이후 운영자 정정 —
     // 오른쪽 상대는 승인된 여성 캐릭터 = 미아로 통일, 제이미 없음). watch/recall/transfer 텍스트는 공개 전 화면에 보이므로 영어·"빌려/빌리"·답 어간 금지
@@ -234,29 +235,32 @@ export const STORY_ITEMS = [
   // ── 2화 숟가락이 든 필통 (화요일) ──
   {
     id: 's02-01', episode: 2, order: 1,
-    situationKo: '미술 시간, 제이미가 필통을 열자 연필 대신 숟가락이 굴러 나왔어요.',
-    roleKo: '이상한 물건이 왜 거기 있는지 제이미에게 물어봐요.',
-    en: 'Why is there a spoon in your pencil case?', ko: '왜 네 필통에 숟가락이 있어?',
-    reply: { speaker: 'Jamie', en: 'I packed in the dark!', ko: '깜깜할 때 가방을 쌌거든!' },
-    alternatives: ['Why have you got a spoon?', 'Is that a spoon?', 'Why is your spoon in there?'],
+    situationKo: '미술 시간, 내 필통을 열었더니 연필 대신 숟가락이 굴러 나왔어요.',
+    roleKo: '이상한 물건이 왜 거기 있는지 앞자리 미아 앞에서 궁금해해요.',
+    en: 'Why is there a spoon in my pencil case?', ko: '왜 내 필통에 숟가락이 있지?',
+    reply: { speaker: 'Mia', en: 'Did you pack in the dark?', ko: '깜깜할 때 가방 쌌어?' },
+    alternatives: ['Why is there a spoon in here?', 'Is that a spoon?', "Where's my pencil?"],
+    pencilScene: { variant: 'spoon', still: 'spoon' },
     level: 3, func: 'asking', kind: 'new', reviewOf: null, reuseIn: [],
   },
   {
     id: 's02-02', episode: 2, order: 2,
-    situationKo: '제이미는 숟가락만 들고 멍하니 있어요. 내 필통에는 연필이 딱 한 자루 있어요.',
-    roleKo: '그릴 도구가 없는 제이미에게 내 것을 내밀어요.',
-    en: 'You can use my pencil.', ko: '내 연필 써도 돼.',
-    reply: { speaker: 'Jamie', en: "Really? You're the best!", ko: '정말? 네가 최고야!' },
-    alternatives: ['Here, take my pencil.', 'You can have this one.', 'Use my pencil.'],
-    level: 1, func: 'offering', kind: 'new', reviewOf: null, reuseIn: [],
+    situationKo: '필통을 다 뒤져도 숟가락뿐이에요. 미아가 무슨 일이냐는 듯 쳐다봐요.',
+    roleKo: '지금 나에게 무엇이 없는지 미아에게 알려요.',
+    en: "I haven't got a pencil.", ko: '나 연필이 없어.',
+    reply: { speaker: 'Mia', en: "Oh no! I've got lots.", ko: '저런! 나는 많아.' },
+    alternatives: ["I don't have a pencil.", "I've got no pencil.", "My pencil isn't here."],
+    pencilScene: { variant: 'spoon', still: 'ask' },
+    level: 1, func: 'stating-problem', kind: 'new', reviewOf: null, reuseIn: [],
   },
   {
     id: 's02-03', episode: 2, order: 3,
-    situationKo: '내 연필은 제이미에게 줬어요. 이제 그릴 도구가 없는데 앞자리 미아 필통에는 연필이 여러 자루 있어요.',
+    situationKo: '내 필통에는 숟가락뿐이라 그릴 도구가 없어요. 앞자리 미아 필통에는 연필이 여러 자루 있어요.',
     roleKo: '미아에게 하나 써도 되는지 물어봐요.',
     en: 'Can I borrow a pencil?', ko: '연필 좀 빌려도 돼?',
     reply: { speaker: 'Mia', en: 'Sure! Here you are.', ko: '그럼! 여기 있어.' },
     alternatives: ['Could I borrow a pencil?', 'Can I use one of your pencils?', 'Have you got a spare pencil?'],
+    pencilScene: { variant: 'spoon', still: 'ask' },
     level: 1, func: 'borrowing', kind: 'new', reviewOf: null, reuseIn: [],
   },
   {
@@ -326,21 +330,23 @@ export const STORY_ITEMS = [
   },
   {
     id: 's02-09', episode: 2, order: 9,
-    situationKo: '점심시간, 제이미가 도시락 통을 흔들자 안에서 덜그럭 소리가 났어요.',
-    roleKo: '통 안에서 무슨 일이 생긴 건지 제이미에게 확인해요.',
-    en: "Jamie, what's in your lunch box?", ko: '제이미, 네 도시락 통에 뭐가 들었어?',
-    reply: { speaker: 'Jamie', en: 'Sandwiches. And... yoghurt?', ko: '샌드위치. 그리고… 요구르트?' },
-    alternatives: ["What's in there, Jamie?", "What's in your lunchbox?", "Jamie, what's that noise?"],
-    level: 2, func: 'asking', kind: 'new', reviewOf: null, reuseIn: [],
+    situationKo: '단어를 공책에 옮겨 적는데 뚝 소리와 함께 연필 끝이 동강 났어요.',
+    roleKo: '방금 생긴 일을 앞자리 미아에게 알려요.',
+    en: 'Oh no, my pencil broke!', ko: '아 이런, 내 연필이 부러졌어!',
+    reply: { speaker: 'Mia', en: 'Here, take another one.', ko: '자, 하나 더 가져가.' },
+    alternatives: ["My pencil's broken!", 'Oh no, my pencil snapped!', 'My pencil broke.'],
+    pencilScene: { variant: 'ask', still: 'ask' },
+    level: 2, func: 'reporting', kind: 'new', reviewOf: null, reuseIn: [],
   },
   {
     id: 's02-10', episode: 2, order: 10,
-    situationKo: '제이미는 아침에 분명히 챙겼다고 우겨요. 필통엔 숟가락이 있었죠. 짐작 가는 곳이 있어요.',
-    roleKo: '아침에 사라진 물건이 어디 있을지 내 생각을 말해요.',
-    en: 'Maybe your pencil is in your lunch box.', ko: '네 연필은 도시락 통에 있을지도 몰라.',
-    reply: { speaker: 'Jamie', en: "Let me look... You're right!", ko: '어디 보자… 네 말이 맞아!' },
-    alternatives: ['I think your pencil is in there.', "Maybe it's in your lunch box.", 'Check your lunch box!'],
-    level: 2, func: 'guessing', kind: 'new', reviewOf: null, reuseIn: [],
+    situationKo: '다음 날 아침, 가방을 아무리 뒤져도 필통이 없어요. 어젯밤 책상 위에 둔 게 떠올라요.',
+    roleKo: '필통이 지금 어디 있는지 미아에게 털어놓아요.',
+    en: 'I left my pencil case at home.', ko: '필통을 집에 두고 왔어.',
+    reply: { speaker: 'Mia', en: "Again? Don't worry.", ko: '또? 걱정 마.' },
+    alternatives: ['I forgot my pencil case.', 'My pencil case is at home.', "I haven't got my pencil case."],
+    pencilScene: { variant: 'forgot', still: 'forgot' },
+    level: 2, func: 'explaining', kind: 'new', reviewOf: null, reuseIn: [],
   },
 
   // ── 3화 축제 팀을 만들자 (수요일) ──
