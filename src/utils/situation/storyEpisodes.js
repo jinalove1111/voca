@@ -7,7 +7,7 @@
 //
 // 스키마
 // - STORY_EPISODES: { n, id: 'epNN', titleKo, summaryKo, nextHookKo, keySentence? }
-//     keySentence(선택, 현재 2화만): { itemId, en, ko, goalKo, watch:{situationKo}, introIds:[회상 전 짧은 대화 문항 id], recall:{situationKo,roleKo,partner}, transfer:{situationKo,roleKo,partner,reply} }
+//     keySentence(선택, 1·2·3화): { itemId, en, ko, goalKo, scenes:{watch, recall:[공개 전, 공개 후], transfer:[공개 전, 공개 후]}(PencilCaseScene 변형), watch:{situationKo}, introIds:[회상 전 짧은 대화 문항 id], recall:{situationKo,roleKo,partner,reply?(없으면 itemId 문항의 reply)}, transfer:{situationKo,roleKo,partner,reply} }
 //     — 기억할 한 문장 흐름 전용. transfer는 STORY_ITEMS에 넣지 않는다
 // - STORY_ITEMS: { id: 'sEE-OO', episode, order, situationKo, roleKo, en, ko,
 //     pencilScene?: { variant, still } — 2화 일부 문항의 정지 장면(PencilCaseScene, 영어 없음)
@@ -33,6 +33,27 @@ export const STORY_EPISODES = [
     titleKo: '첫날의 빈자리',
     summaryKo: '9일 월요일, 영국 학교로 전학 온 첫날이에요. 폴 선생님과 반 친구들을 만나고 제이미 옆 빈자리에 앉아요. 앞자리 미아는 목소리가 아주 작아요.',
     nextHookKo: '내일 첫 시간은 미술이에요. 준비물을 묻자 제이미가 연필을 꼭 챙기라고 해요. 그런데 정작 제이미는…?',
+    // 217차 1화 오늘 기억할 한 문장(QA 전용, 운영자 승인 전 임시 선정 — 미아가 등장하고 다음 회차 복습(s03-11)이 있는 문장)
+    keySentence: {
+      itemId: 's01-08',
+      en: 'Could you speak a bit louder?', ko: '조금 더 크게 말해 줄래?',
+      goalKo: '크게 말해 달라고 하는 말',
+      scenes: { watch: 'whisper', recall: ['quiet', 'quiet-loud'], transfer: ['noisy', 'noisy-loud'] },
+      watch: { situationKo: '수업 중에 앞자리 미아가 돌아보며 뭐라고 속삭였어요. 소리가 너무 작아서 안 들려요.' },
+      introIds: ['s01-11'],
+      recall: {
+        situationKo: '수학 시간, 미아가 또 아주 작은 목소리로 속삭였어요. 무슨 말인지 하나도 안 들려요.',
+        roleKo: '미아의 말을 제대로 들을 수 있게 미아에게 요청해요.',
+        partner: 'Mia',
+        reply: { speaker: 'Mia', en: 'Art is first tomorrow!', ko: '내일 첫 시간은 미술이래!' },
+      },
+      transfer: {
+        situationKo: '하교 종이 울리고 교실이 시끌시끌해요. 미아가 뭐라고 외치는데 잘 안 들려요.',
+        roleKo: '미아의 말을 제대로 들을 수 있게 미아에게 요청해요.',
+        partner: 'Mia',
+        reply: { speaker: 'Mia', en: 'See you tomorrow!', ko: '내일 봐!' },
+      },
+    },
   },
   {
     n: 2,
@@ -46,6 +67,7 @@ export const STORY_EPISODES = [
       itemId: 's02-03',
       en: 'Can I borrow a pencil?', ko: '연필 좀 빌려도 돼?',
       goalKo: '연필을 빌리는 말',
+      scenes: { watch: 'spoon', recall: ['ask', 'handover-mia'], transfer: ['forgot', 'handover-forgot'] },
       watch: { situationKo: '미술 시간, 내 필통을 열었더니 연필 대신 숟가락이 나왔어요! 앞자리 미아는 연필이 많아요.' },
       introIds: ['s02-11'],
       recall: {
@@ -67,6 +89,27 @@ export const STORY_EPISODES = [
     titleKo: '축제 팀을 만들자',
     summaryKo: '포스터가 공개됐어요. 다음 주 금요일(20일) 3시 반, 운동장에서 학교 축제가 열려요. 셋이 한 팀이 되어 공연과 간식 가게를 정하고 역할을 나눠요.',
     nextHookKo: '리더가 된 미아가 내일 방과 후 음악실에서 첫 연습을 하자고 해요. 그런데 셋 다 춤은 처음이에요.',
+    // 217차 3화 오늘 기억할 한 문장(QA 전용, 운영자 승인 전 임시 선정 — 미아가 상대이고 5화·8화 복습(s05-11, s08-11)이 있는 문장)
+    keySentence: {
+      itemId: 's03-06',
+      en: "That's a great idea!", ko: '그거 좋은 생각이다!',
+      goalKo: '좋은 생각이라고 맞장구치는 말',
+      scenes: { watch: 'idea', recall: ['poster', 'poster-yes'], transfer: ['snack', 'snack-yes'] },
+      watch: { situationKo: '미아가 춤 중간에 내가 노래를 조금 부르면 어떠냐고 했어요. 멋질 것 같아요.' },
+      introIds: ['s03-08'],
+      recall: {
+        situationKo: '포스터를 다 그리자 미아가 복도 문 옆에 붙이자고 했어요. 딱 좋은 자리예요.',
+        roleKo: '미아의 제안에 기쁘게 찬성해요.',
+        partner: 'Mia',
+        reply: { speaker: 'Mia', en: "Great! Let's put it up.", ko: '좋아! 붙이자.' },
+      },
+      transfer: {
+        situationKo: '팀 이름을 정하기 전에 미아가 간식부터 먹자고 했어요. 마침 배가 고팠어요.',
+        roleKo: '미아의 제안에 기쁘게 찬성해요.',
+        partner: 'Mia',
+        reply: { speaker: 'Mia', en: 'Yay! Snacks first!', ko: '야호! 간식 먼저!' },
+      },
+    },
   },
   {
     n: 4,

@@ -41,8 +41,9 @@ export default function KeySentenceFlow({ setId, onMenu }) {
   const idx = STEPS.indexOf(step)
   const part = step === 'recall' ? ks.recall : ks.transfer
   const key = step === 'recall' ? 'recall' : 'transfer'
-  const reply = step === 'recall' ? item.reply : ks.transfer.reply
-  const scene = step === 'watch' ? 'spoon' : step === 'recall' ? (revealed ? 'handover-mia' : 'ask') : (revealed ? 'handover-forgot' : 'forgot')
+  const reply = step === 'recall' ? (ks.recall.reply || item.reply) : ks.transfer.reply
+  // 회차별 장면 이름은 데이터(keySentence.scenes)에서 — [공개 전, 공개 후]
+  const scene = step === 'watch' ? ks.scenes.watch : ks.scenes[key][revealed ? 1 : 0]
 
   return (
     <div data-testid="key-flow" data-step={step} data-mic-state={rec.mic} className="min-h-screen p-4 pb-24">
@@ -68,7 +69,7 @@ export default function KeySentenceFlow({ setId, onMenu }) {
 
             {step === 'watch' ? (
               <>
-                <PencilCaseScene variant="spoon" />
+                <PencilCaseScene variant={ks.scenes.watch} />
                 <SituationGuide scene={{ id: 'key-watch', situationKo: ks.watch.situationKo }} />
                 <div data-testid="key-sentence" className="bg-white rounded-3xl p-5 card-shadow space-y-2">
                   <p className="text-sm font-black text-sky-700">오늘 기억할 한 문장</p>

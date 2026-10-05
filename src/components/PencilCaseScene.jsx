@@ -15,14 +15,24 @@ import miaGivePencil from '../assets/speaking/mia_give_pencil.png'
 // 미아 손에서 Paul 앞 책상으로 호를 그리며 온다(미아는 빈 손 인사로 바뀜). 빈 자리는 점선 윤곽으로 보여 준다.
 // data-phase·data-hero-pose·data-partner-pose·data-my-spot으로 현재 모습을 노출한다. 부족 에셋은 설계 문서 §13.6/§15.
 // 한 번만 재생하고 마지막 장면에서 멈춘다. prefers-reduced-motion이면 애니메이션 없이 마지막 장면을 바로 그린다.
-const FINAL = { spoon: 'handed', ask: 'ask', 'handover-mia': 'handed', forgot: 'forgot', 'handover-forgot': 'handed' }
-const START = { spoon: 'closed', 'handover-mia': 'offer', 'handover-forgot': 'offer' }
+// 2화(필통) 변형 + 217차 1화(속삭임: whisper/quiet/noisy)·3화(제안: idea/poster/snack) 변형 — 같은 Paul·미아·책상을 쓴다
+const EP2 = ['spoon', 'ask', 'handover-mia', 'forgot', 'handover-forgot']
+const FINAL = {
+  spoon: 'handed', ask: 'ask', 'handover-mia': 'handed', forgot: 'forgot', 'handover-forgot': 'handed',
+  whisper: 'loud', quiet: 'ask', 'quiet-loud': 'loud', noisy: 'ask', 'noisy-loud': 'loud',
+  idea: 'go', poster: 'suggest', 'poster-yes': 'go', snack: 'suggest', 'snack-yes': 'go',
+}
+const START = { spoon: 'closed', 'handover-mia': 'offer', 'handover-forgot': 'offer', whisper: 'quiet', 'quiet-loud': 'ask', 'noisy-loud': 'ask', idea: 'suggest', 'poster-yes': 'suggest', 'snack-yes': 'suggest' }
 const OFFER_MS = 700
 const SPOON_STEPS = [['open', 600], ['spoon', 1300], ['ask', 2400], ['offer', 3100], ['handed', 3800]]
+const STEPS = { spoon: SPOON_STEPS, whisper: [['ask', 1200], ['loud', 2400]], idea: [['agree', 1300], ['go', 2300]] }
 // Paul 기준 그림은 한 포즈(엄지 척)뿐 — 단계 구분은 미아 표정·소품·'?' 말풍선(묻는 순간)으로 한다. 원본에 없는 표정은 만들지 않는다
 const ASKING = ['ask', 'forgot', 'offer']
 // 미아: 생각(think) → 놀람(surprise) → 연필 건네기(give) → 빈 손 인사(greet)
 const MIA_POSE = { closed: 'think', open: 'think', spoon: 'surprise', ask: 'think', forgot: 'think', offer: 'give', handed: 'greet' }
+// 1화: 속삭이며 말함(greet, 말풍선 작게) → 크게 다시 말함(surprise — 두 손 들고 입 크게). 3화: 제안(think) → 함께 하자(greet)
+const MIA_POSE_EP = { quiet: 'greet', ask: 'greet', loud: 'surprise', suggest: 'think', agree: 'think', go: 'greet' }
+const miaPoseFor = (variant, phase) => (EP2.includes(variant) ? MIA_POSE[phase] : MIA_POSE_EP[phase])
 // Paul: 분리본도 모자 챙 160px로 정규화 → 미아와 같은 배율 0.5(챙 80단위)로 그려 얼굴 크기를 맞춘다. 모자 중심 x 82, 꼭대기 y 30(미아와 같음)
 const PAUL = { src: paulSpeaking, w: 327, h: 491, cx: 170, top: 25 }
 const PAUL_S = 0.5
@@ -40,6 +50,16 @@ const MIA_ART = {
   greet: { src: miaGreet, w: 407, h: 317, cx: 182, top: 2 },
 }
 const LABEL = {
+  whisper: '앞자리 미아가 돌아보며 아주 작게 속삭여요. 나(폴)는 잘 안 들려 물음표를 띄우고, 미아가 두 손을 들고 크게 다시 말해요.',
+  quiet: '미아가 아주 작은 목소리로 속삭여요. 말풍선 속 점이 희미해요. 나(폴)는 물음표를 띄우고 있어요.',
+  'quiet-loud': '미아가 두 손을 들고 크게 다시 말해요. 말풍선이 커지고 소리 물결이 퍼져요.',
+  noisy: '하교 종이 울리고 교실이 시끌시끌해요. 미아가 뭐라고 말하는데 잘 안 들려요. 나(폴)는 물음표를 띄우고 있어요.',
+  'noisy-loud': '시끌시끌한 교실에서 미아가 두 손을 들고 크게 다시 말해요.',
+  idea: '미아가 생각에 잠겨 음표가 든 말풍선을 띄워요. 나(폴)는 엄지를 들고, 미아가 활짝 웃으며 손을 펴요.',
+  poster: '책상 위에 다 그린 포스터가 있어요. 미아가 복도 쪽을 가리키는 화살표 말풍선을 띄우고 생각에 잠겨 있어요.',
+  'poster-yes': '포스터가 벽에 붙었어요. 미아가 활짝 웃으며 손을 펴요.',
+  snack: '책상 위에 쿠키 접시가 있어요. 미아가 쿠키가 든 말풍선을 띄우고 생각에 잠겨 있어요.',
+  'snack-yes': '미아가 활짝 웃으며 손을 펴요. 쿠키 접시가 그대로 있어요.',
   spoon: '내 필통 뚜껑이 열리고 연필 대신 숟가락이 나와요. 나(폴)와 미아가 깜짝 놀라요. 미아가 연필 한 자루를 내밀고, 그 연필이 내 책상 위로 와요. 나는 엄지를 들며 좋아해요.',
   ask: '그림을 그리다 내 연필심이 부러졌어요. 앞자리 미아는 연필이 여러 자루 꽂힌 필통 앞에서 생각에 잠겨 있어요. 나(폴)는 손가락 하나를 들고 있어요.',
   'handover-mia': '미아가 연필 한 자루를 내밀고, 그 연필이 내 책상 위로 와요. 미아는 빈 손을 펴 보이고, 나(폴)는 엄지를 들며 좋아해요.',
@@ -134,13 +154,64 @@ function Mia({ pose }) {
 }
 
 // still: 연습 문항용 정지 장면 — 해당 단계 하나만 움직임 없이 그린다
+// 미아 머리 오른쪽 위 말풍선(영어 글자 없음): 속삭임(희미한 점) / 큰 소리(진한 점 + 소리 물결) / 생각 내용(그림)
+function MiaBubble({ kind }) {
+  const big = kind === 'loud'
+  return (
+    <g data-testid="key-scene-mia-bubble" data-kind={kind}>
+      <path d={big ? 'M286 6 h66 a8 8 0 0 1 8 8 v30 a8 8 0 0 1 -8 8 h-50 l-12 10 l2 -10 h-6 a8 8 0 0 1 -8 -8 v-30 a8 8 0 0 1 8 -8 z' : 'M296 14 h46 a8 8 0 0 1 8 8 v20 a8 8 0 0 1 -8 8 h-34 l-10 8 l2 -8 h-4 a8 8 0 0 1 -8 -8 v-20 a8 8 0 0 1 8 -8 z'}
+        fill="#fff" stroke={kind === 'whisper' ? '#cbd5e1' : '#64748b'} strokeWidth="2" strokeDasharray={kind === 'whisper' ? '3 3' : undefined} />
+      {kind === 'whisper' && [308, 319, 330].map((x) => <circle key={x} cx={x} cy="32" r="2" fill="#cbd5e1" />)}
+      {big && (
+        <>
+          {[302, 319, 336].map((x) => <circle key={x} cx={x} cy="30" r="5" fill="#0f172a" />)}
+          <path d="M276 18 q-8 12 0 24 M268 12 q-12 18 0 36" stroke="#f59e0b" strokeWidth="3" fill="none" strokeLinecap="round" />
+        </>
+      )}
+      {kind === 'idea' && (
+        <>
+          <circle cx="310" cy="28" r="8" fill="#fde047" stroke="#ca8a04" strokeWidth="2" /><rect x="306" y="36" width="8" height="5" fill="#94a3b8" />
+          <path d="M330 38 v-16 l10 -3 v16" stroke="#7c3aed" strokeWidth="3" fill="none" /><circle cx="327" cy="38" r="4" fill="#7c3aed" /><circle cx="337" cy="35" r="4" fill="#7c3aed" />
+        </>
+      )}
+      {kind === 'poster' && (
+        <>
+          <rect x="305" y="20" width="16" height="20" fill="#fef9c3" stroke="#ca8a04" strokeWidth="2" />
+          <path d="M325 30 h14 m-5 -5 l5 5 l-5 5" stroke="#0369a1" strokeWidth="3" fill="none" strokeLinecap="round" />
+        </>
+      )}
+      {kind === 'snack' && <Cookie x={320} y={31} r={11} />}
+    </g>
+  )
+}
+
+function Cookie({ x, y, r }) {
+  return (
+    <g>
+      <circle cx={x} cy={y} r={r} fill="#d97706" stroke="#92400e" strokeWidth="2" />
+      {[[-0.4, -0.3], [0.35, -0.2], [0, 0.4], [-0.3, 0.35]].map(([dx, dy]) => <circle key={`${dx}${dy}`} cx={x + dx * r} cy={y + dy * r} r={r * 0.13} fill="#451a03" />)}
+    </g>
+  )
+}
+
+// 3화 포스터 — 영어 글자 없이 별 하나만
+function Poster({ x, y, w, h }) {
+  const pt = (fx, fy) => `${x + w * fx},${y + h * fy}`
+  return (
+    <g data-testid="key-scene-poster">
+      <rect x={x} y={y} width={w} height={h} fill="#fef9c3" stroke="#ca8a04" strokeWidth="2" />
+      <polygon points={[pt(0.5, 0.15), pt(0.6, 0.42), pt(0.88, 0.42), pt(0.65, 0.6), pt(0.75, 0.88), pt(0.5, 0.72), pt(0.25, 0.88), pt(0.35, 0.6), pt(0.12, 0.42), pt(0.4, 0.42)].join(' ')} fill="#f472b6" />
+    </g>
+  )
+}
+
 export default function PencilCaseScene({ variant = 'spoon', still = null }) {
   const [phase, setPhase] = useState(() => still || (prefersReduced() ? FINAL[variant] : START[variant] || FINAL[variant]))
   useEffect(() => {
     if (still) { setPhase(still); return undefined }
     if (prefersReduced()) { setPhase(FINAL[variant]); return undefined }
     setPhase(START[variant] || FINAL[variant])
-    const steps = variant === 'spoon' ? SPOON_STEPS : START[variant] ? [['handed', OFFER_MS]] : []
+    const steps = STEPS[variant] || (START[variant] ? [[FINAL[variant], OFFER_MS]] : [])
     const ids = steps.map(([p, ms]) => setTimeout(() => setPhase(p), ms))
     return () => ids.forEach(clearTimeout)
   }, [variant, still])
@@ -152,23 +223,33 @@ export default function PencilCaseScene({ variant = 'spoon', still = null }) {
   const animate = !prefersReduced()
   const lidOpen = !isSpoon || phase !== 'closed'
   const spoonUp = isSpoon ? !['closed', 'open'].includes(phase) : recall
-  const mySpot = handed ? 'pencil' : recall ? 'broken' : 'empty'
+  const ep2 = EP2.includes(variant)
+  const mySpot = !ep2 ? 'none' : handed ? 'pencil' : recall ? 'broken' : 'empty'
+  const miaPose = miaPoseFor(variant, phase)
+  const ep1 = ['whisper', 'quiet', 'quiet-loud', 'noisy', 'noisy-loud'].includes(variant)
+  const ep3Kind = variant.startsWith('poster') ? 'poster' : variant.startsWith('snack') ? 'snack' : variant === 'idea' ? 'idea' : null
+  const bubble = ep1 ? (phase === 'loud' ? 'loud' : 'whisper') : ep3Kind && phase !== 'go' ? ep3Kind : null
 
   return (
     <div className="w-full">
       <style>{CSS}</style>
-      <svg data-testid="key-scene" data-variant={variant} data-still={still || undefined} data-phase={phase} data-hero-pose={ASKING.includes(phase) ? 'asking' : 'paul'} data-partner-pose={MIA_POSE[phase]} data-my-spot={mySpot}
+      <svg data-testid="key-scene" data-variant={variant} data-still={still || undefined} data-phase={phase} data-hero-pose={ASKING.includes(phase) ? 'asking' : 'paul'} data-partner-pose={miaPose} data-my-spot={mySpot} data-mia-bubble={bubble || 'none'}
         viewBox="0 0 360 240" role="img" aria-label={LABEL[variant]} className="pcs-scene w-full h-auto rounded-3xl bg-sky-50 block">
         <Hero asking={ASKING.includes(phase)} />
-        <Mia pose={MIA_POSE[phase]} />
+        {/* 1화 시끌시끌한 교실: 배경 위 소음 물결(흔들림 없음) */}
+        {variant.startsWith('noisy') && <path data-testid="key-scene-noise" d="M140 20 l8 -6 l8 6 l8 -6 l8 6 M190 100 l8 -6 l8 6 l8 -6 M120 120 l6 -5 l6 5 l6 -5" stroke="#f97316" strokeWidth="3" fill="none" strokeLinecap="round" />}
+        {/* 3화 포스터: 제안 전에는 책상 위, 찬성 뒤에는 벽에 */}
+        {ep3Kind === 'poster' && (phase === 'go' ? <Poster x={150} y={14} w={52} h={62} /> : <Poster x={150} y={150} w={44} h={24} />)}
+        <Mia pose={miaPose} />
+        {bubble && <MiaBubble kind={bubble} />}
         {/* 미아의 필통(가슴 앞 낮게) — 건넨 뒤 한 자루 줄어든다 */}
-        <g>
+        {ep2 && <g>
           {[MIA_CASE - 18, MIA_CASE - 6, MIA_CASE + 6, MIA_CASE + 18].slice(0, handed ? 3 : 4).map((x) => <UprightPencil key={x} x={x} y={150} />)}
           <rect x={MIA_CASE - 30} y="152" width="60" height={DESK - 152} rx="8" fill="#c4b5fd" stroke="#6d28d9" strokeWidth="3" />
           <circle cx={MIA_CASE} cy="163" r="5" fill="#ede9fe" stroke="#6d28d9" strokeWidth="2" />
-        </g>
+        </g>}
         {/* 내 필통(Paul 앞): 숟가락이 든 채 열려 있음. 다음 날(forgot)은 집에 두고 와서 점선 자리만 */}
-        {forgot ? (
+        {!ep2 ? null : forgot ? (
           <rect data-testid="key-scene-no-case" x={PC - 32} y="146" width="64" height={DESK - 146} rx="7" fill="none" stroke="#78716c" strokeWidth="2" strokeDasharray="5 3" />
         ) : (
           <g>
@@ -189,6 +270,7 @@ export default function PencilCaseScene({ variant = 'spoon', still = null }) {
         <line x1="0" y1={DESK} x2="360" y2={DESK} stroke="#c08a3e" strokeWidth="3" />
         {mySpot === 'empty' && <rect data-testid="key-scene-empty-spot" x={ME[0] - 30} y={ME[1] - 7.5} width="60" height="15" rx="4" fill="#fef3c7" stroke="#78716c" strokeWidth="2" strokeDasharray="5 3" />}
         {mySpot === 'broken' && <BrokenPencil />}
+        {ep3Kind === 'snack' && <g data-testid="key-scene-snack"><ellipse cx="190" cy="182" rx="26" ry="7" fill="#fff" stroke="#94a3b8" strokeWidth="2" /><Cookie x={180} y={176} r={8} /><Cookie x={198} y={177} r={8} /></g>}
         <Tag cx={HEAD_X}>나</Tag>
         <Tag cx={MIA_X}>미아</Tag>
         {handed && <g className={`pcs-at-me${animate ? ' pcs-fly-mia' : ''}`}><FlatPencil /></g>}
