@@ -543,7 +543,7 @@ export async function run(browser, baseURL) {
   }
   // 장면(key-scene) 안 애니메이션만 센다 — 앱 공통 btn-press 버튼의 opacity 전환은 이 장면과 무관
   // 주인공 = 승인된 Paul 마스코트(src/assets/paul) — 단계별 포즈와 실제 로드된 이미지 확인
-  const hero = async (page) => T(page, 'key-scene-hero').evaluate((el) => { const href = el.getAttribute('href') || ''; const img = new Image(); img.src = href; return new Promise((res) => { const done = () => res({ pose: el.closest('svg').getAttribute('data-hero-pose'), href, ok: img.naturalWidth > 0, h: el.getBoundingClientRect().height }); if (img.complete) done(); else { img.onload = done; img.onerror = done } }) })
+  const hero = async (page) => T(page, 'key-scene-hero').evaluate((el) => { const href = el.getAttribute('href') || ''; const img = new Image(); img.src = href; return new Promise((res) => { const done = () => res({ pose: el.closest('[data-testid="key-scene"]').getAttribute('data-hero-pose'), href, ok: img.naturalWidth > 0, h: el.getBoundingClientRect().height }); if (img.complete) done(); else { img.onload = done; img.onerror = done } }) })
   const heroIs = async (page, pose) => { const h = await hero(page); return h.pose === pose && h.href.includes(`paul_${pose}`) && h.ok }
   const running = (page) => page.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.target?.closest?.('[data-testid="key-scene"]')).length)
   const runningNames = (page) => page.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running').map((a) => `${a.animationName || a.transitionProperty || '?'}@${a.effect?.target?.getAttribute?.('class') || a.effect?.target?.tagName}`).join(','))
@@ -575,7 +575,8 @@ export async function run(browser, baseURL) {
     r.check(`${name} 장면 variant=spoon`, (await sceneAttr(page, 'data-variant')) === 'spoon')
     const done = await waitUntil(async () => (await sceneAttr(page, 'data-phase')) === 'given', { timeout: 6000 })
     r.check(`${name} 6초 안에 data-phase=given`, !!done, await sceneAttr(page, 'data-phase'))
-    r.check(`${name} 주인공 Paul: 전달 후 빈 손 포즈(hello) 이미지 로드`, await heroIs(page, 'hello'), JSON.stringify(await hero(page)))
+    r.check(`${name} 주인공 Paul: 연필을 준 뒤 난처한 포즈(ponder) 이미지 로드 + 내 책상 자리 빈 윤곽`, (await heroIs(page, 'ponder')) && (await sceneAttr(page, 'data-my-spot')) === 'empty' && (await T(page, 'key-scene-empty-spot').count()) === 1, JSON.stringify(await hero(page)))
+    r.check(`${name} 보기 단계: 한국어 상황 + 영어 + 뜻이 함께 보임`, (await txt(page, 'situation-text')) === KS.watch.situationKo && (await txt(page, 'key-sentence')).includes(KS.en) && (await txt(page, 'key-sentence')).includes(KS.ko))
     r.check(`${name} 장면 안에 영어 글자 없음`, !(await T(page, 'key-scene').evaluate((el) => /[A-Za-z]/.test(el.textContent || ''))))
     r.check(`${name} 기억할 문장 카드 EN/KO 보임`, (await txt(page, 'key-sentence')).includes(KS.en) && (await txt(page, 'key-sentence')).includes(KS.ko))
     r.check(`${name} 듣기 누르기 전 speak 0회`, (await speakLog(page)).length === 0, JSON.stringify(await speakLog(page)))
@@ -600,7 +601,7 @@ export async function run(browser, baseURL) {
     r.check(`${name} 공개 후 라벨/EN/KO/다른 말 문구`, (await txt(page, 'key-answer-label')) === '이렇게 말할 수 있어요' && (await txt(page, 'key-answer-en')) === KS.en && (await txt(page, 'key-answer')).includes(KS.ko) && (await txt(page, 'key-other-ways')).includes('다른 말로 말해도'))
     r.check(`${name} 공개 후 미아 대사`, (await txt(page, 'key-reply')).includes('Sure! Here you are.'))
     r.check(`${name} 공개 후 장면 variant=handover-mia`, !!(await waitUntil(async () => (await sceneAttr(page, 'data-variant')) === 'handover-mia', { timeout: 3000 })))
-    r.check(`${name} 연필 받은 뒤 Paul 기쁨 포즈(happy)`, !!(await waitUntil(() => heroIs(page, 'happy'), { timeout: 3000 })), JSON.stringify(await hero(page)))
+    r.check(`${name} 연필 받은 뒤 Paul 기쁨 포즈(happy) + 연필이 내 책상 자리로`, !!(await waitUntil(async () => (await heroIs(page, 'happy')) && (await sceneAttr(page, 'data-my-spot')) === 'pencil', { timeout: 3000 })), JSON.stringify(await hero(page)))
     const before = (await speakLog(page)).length
     await T(page, 'key-listen').click()
     const l = await waitUntil(async () => { const x = await speakLog(page); return x.length >= 1 ? x : null }, { timeout: 3000 })
@@ -641,13 +642,14 @@ export async function run(browser, baseURL) {
   await scenario('k6 모션 감소', VP, { reduced: true }, async ({ page, name, openMenu }) => {
     await openKey(page, openMenu)
     r.check(`${name} spoon 장면 즉시 data-phase=given`, (await sceneAttr(page, 'data-phase')) === 'given' && (await sceneAttr(page, 'data-variant')) === 'spoon')
+    r.check(`${name} 모션 없이도 같은 결과 장면: 숟가락·제이미 손의 연필·Paul 난처·내 자리 빈 윤곽`, (await heroIs(page, 'ponder')) && (await sceneAttr(page, 'data-my-spot')) === 'empty')
     r.check(`${name} 실행 중 애니메이션/전환 0개`, (await running(page)) === 0)
     await T(page, 'key-next').click()
     await T(page, 'key-reveal').click()
     r.check(`${name} 공개 후 handover도 즉시 최종 장면(애니메이션 0)`, (await sceneAttr(page, 'data-phase')) === 'handed' && (await running(page)) === 0, `${await sceneAttr(page, 'data-phase')} ${await runningNames(page)}`)
   })
 
-  for (const vp of [{ width: 360, height: 640 }, { width: 412, height: 915 }]) {
+  for (const vp of [{ width: 360, height: 640 }, { width: 412, height: 915 }, { width: 1280, height: 800 }]) {
     await scenario('k7 레이아웃', vp, {}, async ({ page, name, openMenu }) => {
       await openKey(page, openMenu)
       for (const step of ['watch', 'recall', 'transfer']) {
