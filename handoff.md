@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-05 (211차 — **2화 Speaking 장면 주인공을 승인된 Paul 마스코트(src/assets/paul, 원본 그대로)로 교체**: 궁금(thinking) → 깜짝(almost) → 빈 손(hello) → 손가락 들고 묻기(lets_learn) → 연필 받고 엄지(happy). 2화만, 연습·시험·정답 숨김 무변경. 부족 에셋 6항목 보고. e2e speaking 403/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 211차 섹션 참고.)_
+_최종 갱신: 2026-10-05 (212차 — **Speaking 2화 Paul 중심 완성**: 2화 상대 "폴 선생님" → Mia(5~7번, 교사 행동 제거·뜻 반말, id·en 유지), Paul 장면 개선(책상 위 연필·호 건넴·빈 자리 윤곽, 크기 정규화, 포즈 thinking→almost→ponder→lets_learn→happy), 보기 단계 한국어 상황 추가. 콘텐츠·시각 리뷰 → 구현 → 독립 QA PASS. e2e speaking 422/0·speaking-exam 216/0(mock, 360/390/412/1280). 학습 효과 미검증. DB·SQL·Production 0, PR #62 Draft. 아래 212차 섹션 참고.)_
+_211차 갱신: 2026-10-05 (211차 — **2화 Speaking 장면 주인공을 승인된 Paul 마스코트(src/assets/paul, 원본 그대로)로 교체**: 궁금(thinking) → 깜짝(almost) → 빈 손(hello) → 손가락 들고 묻기(lets_learn) → 연필 받고 엄지(happy). 2화만, 연습·시험·정답 숨김 무변경. 부족 에셋 6항목 보고. e2e speaking 403/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 211차 섹션 참고.)_
 _210차 갱신: 2026-10-05 (210차 — **Speaking 진입 시 오늘의 이야기 카드(2화) 바로 표시 + 학생이 고른 세트 기억**(UUID 키 localStorage). 209차 3커밋 + 이번 2커밋 PR #62 non-force push. build PASS, testSpeakingSets 61/0, e2e speaking 392/0·speaking-exam 216/0(mock). 9화 확대 보류. 실제 마이크·아이 이해·기억 효과 미확인. DB·SQL·Production 0, PR #62 Draft. 아래 210차 섹션 참고.)_
 _209차 갱신: 2026-10-05 (209차 — **Speaking 2화 "오늘 기억할 한 문장" — Can I borrow a pencil?**: 메뉴에서 2화 선택 시 카드(한글 목표만) → ① 필통 장면(열림→숟가락→제이미 놀람→내 연필 전달) + 듣고 따라 말하기 ② 영어 숨기고 상황만 보고 말하기(미아) ③ 상대가 바뀐 상황(제이미)에서 다시 말하기 → 끝("연습을 마쳤어요", 판정·저장 없음). 나머지 9화 무변경. build PASS, 정적 testKeySentenceFlow 15/0·testSpeakingSets 56/0, e2e speaking 388/0·speaking-exam 216/0(mock). **미push**(로컬 커밋), DB·SQL·Production 0, PR #62 Draft. 아래 209차 섹션 참고.)_
 _208차 갱신: 2026-10-05 (208차 — **Speaking 연결된 이야기 10화(새 목표 표현 100 + 복습 14)**: 메뉴에서 기본 5개/1~10화 세트 선택, 연습·한글 보고 말하기에 역할·상대방 대사 추가. 기본 5 id·저장 키 유지. QA 전용 유지. build·정적 PASS, 브라우저 mock 5스펙 speaking-exam 218·speaking 307·student-home 228+1 SKIP·student 36·mobile 180 FAIL 0. QA UUID 3개 실DB 일치(운영자 SQL Editor 조회). **실기기 마이크 미확인, 이야기 2~10화 브라우저 미확인(1화만)**. DB·SQL·Production 0, PR #62 Draft. 아래 208차 섹션 참고.)_
@@ -22,6 +23,21 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-05 (212차) — Speaking 2화 "숟가락이 든 필통" Paul 중심 완성 (3시간 자율 세션)
+
+운영자 지시: 2화를 Paul 중심으로 자연스럽게 완성 — 역할 충돌(주인공 Paul vs 상대 "폴 선생님") 정리, Paul 장면 인과·크기·소품 개선, 핵심 한 문장 흐름 점검, 독립 QA 후 소커밋·non-force push. 시작 HEAD = 원격 = `c1592f12`, 미커밋 0, 여유 RAM 2.3~3.0 GB(브라우저 1개씩).
+
+- **역할 분배**: 콘텐츠 리뷰어(읽기 전용) · 시각 UX 리뷰어(읽기 전용) 병렬 → 구현 1명(메인 세션)이 취합 → 독립 QA(읽기 전용 + 테스트 실행) PASS.
+- **콘텐츠**(`storyEpisodes.js`, 2화만): s02-05~07 상대 Paul → Mia(대사 "Me too! Look at the board." / "I heard it's a day of music, food and fun!" / "Yes! A big school party."), 상황·역할에서 교사 행동 제거, `ko` 존댓말 → 반말. s02-08 "어느새 칠판이 지워졌어요". nextHook 주어 제거. s02-03 "앞자리 미아"·"잠깐" 제거. keySentence `watch.situationKo` 신설, recall "잠깐" 제거, transfer "내 연필은 제이미가 쓰는 중인데, 제이미가 도시락 통에서 연필을 또 찾았어요". **id·`en`·kind/level/func·복습 연결 불변 → 학습 기록 키(문항 id) 호환**. 다른 9화 diff 0(QA 확인).
+- **장면**(`PencilCaseScene.jsx`): Paul 원본 무가공·같은 배율 + 모자 기준 정렬(lets_learn만 1.48배·전구 표시 영역 밖), 포즈 thinking → almost → ponder → lets_learn → happy(hello=인사, one_more=눈물이라 제외). 책상 도입, 연필은 책상 위에 눕혀 두고 호를 그리며 건넴, 빈 자리 점선 윤곽(`data-my-spot`), 뚜껑은 뒤로 젖힌 사다리꼴, 숟가락 위 "!" 하나. 1회 재생·소리/반짝임 없음, reduced-motion은 최종 장면 즉시. 원본에 없는 손·표정은 그리지 않음.
+- **흐름**(`KeySentenceFlow.jsx`): 보기 단계에 한국어 상황 추가(①상황+영어+뜻+en-GB 듣기+선택 녹음). 회상·새 상황의 공개 전 숨김, 자동 재생 없음, 판정·저장 없음은 그대로.
+- **검증**: build PASS(경고 0, 더미 env 프로세스 한정). 정적 testSpeakingSets·testKeySentenceFlow(포즈·책상 연필·빈 자리·보기 상황 핀 추가)·testSituationRecall·testSpeakingSession·testQaGate 17/0·testLazyChunkGuards·testBundleBudget·testRegistryCoverage·testStudentPathContracts PASS. 브라우저(mock, 1개씩): `[speaking]` 422/0(k2 포즈 ponder+빈 자리+보기 상황, k3/k4 포즈 lets_learn→happy+연필이 내 자리로, k6 reduced-motion 결과 장면, k7 360/412/**1280** 레이아웃), `[speaking-exam]` 216/0. 독립 QA 재실행도 동일(422/0, 216/0). 360/390/412/1280 캡처 확인. QA 지적 1건(aria 문구 "옆자리" 잔존) 수정 후 정적·build 재확인.
+- **테스트 수정 기록**: e2e `hero()`가 `closest('svg')`로 포즈를 읽어 중첩 svg 도입 후 null → `closest('[data-testid="key-scene"]')`로 수정(제품 결함 아님, 수정 전 6 FAIL 실측).
+- **미검증(정직 기록)**: 실제 마이크 녹음·재생, TTS 실청취, 학생의 장면 이해(특히 almost를 '놀람'으로, ponder를 '연필이 없어 난처'로 읽는지), 기억 효과, 로그인한 Preview 실화면. 학습 효과는 설계 가설(§13.5).
+- **부족 에셋**: 설계 문서 §13.6(놀람·연필 건네기·빈 손·손 들고 묻기·연필 받기 + 선택 제이미/미아, 파일명·크기·프롬프트).
+- **남은 결정**: 1화·3화 이후의 교사 Paul과 주인공 Paul 모습 충돌(2화만 정리).
+- DB·SQL·Production·`.env`·`C:oca`·다른 worktree 접촉 0. QA 게이트 무변경, PR #62 Draft. 체크포인트 `.ai-status/orchestrator-speaking-ep02-paul-complete-2026-10-05.json`.
 
 ## 2026-10-05 (211차) — 2화 Speaking 시각 파일럿 주인공 → 승인된 Paul 마스코트
 
