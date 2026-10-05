@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
 import { paulAlmost, paulHappy, paulLetsLearn, paulPonder, paulThinking } from '../assets/paul'
+import miaGreet from '../assets/speaking/mia_greet.png'
+import miaThink from '../assets/speaking/mia_think.png'
+import miaGivePencil from '../assets/speaking/mia_give_pencil.png'
 
 // 2026-10-05 QA 전용 "오늘 기억할 한 문장" 장면 — SVG + CSS(네트워크/소리 없음, SVG 글자는 한글 이름표뿐).
 // 왼쪽 주인공 '나' = 승인된 Paul 마스코트(src/assets/paul 원본 파일 그대로 — 모자·얼굴·체형·의상 무가공),
@@ -7,9 +10,12 @@ import { paulAlmost, paulHappy, paulLetsLearn, paulPonder, paulThinking } from '
 // Paul 마스코트에는 연필을 쥐는/건네는 손 포즈가 없다 — 손을 그려 넣지 않고, 연필은 책상 위(내 자리)에 눕혀 두고
 // 건넬 때 책상 위로 호를 그리며 상대 손으로 간다. 연필이 떠난 자리는 점선 윤곽으로 "내 손이 빔"을 보여 준다.
 // 부족 에셋 목록·제작 프롬프트는 docs/design/SPEAKING_UX_V2_2026-10-04.md §13.
+// 2화 미아(여성 상대) = 운영자 제공 4포즈 시트에서 분리한 src/assets/speaking/mia_*.png(모자 챙 160px로 같은 얼굴 크기).
+// 미아 장면: 묻기 전 생각(think) → 답 확인 후 연필 내밀기(give, 그림 속 연필) → 연필이 내 책상으로 간 뒤 인사(greet, 빈 손).
 // spoon은 한 번만 재생하고 마지막 장면에서 멈춘다. prefers-reduced-motion이면 애니메이션 없이 마지막 장면을 바로 그린다.
 const FINAL = { spoon: 'given', ask: 'ask', 'handover-mia': 'handed', 'handover-jamie': 'handed', lunchbox: 'lunchbox' }
 const START = { spoon: 'closed', 'handover-mia': 'offer', 'handover-jamie': 'offer' }
+const OFFER_MS = 700
 const SPOON_STEPS = [['open', 600], ['spoon', 1300], ['surprised', 2000], ['given', 2900]]
 const ORDER = ['closed', 'open', 'spoon', 'surprised', 'given']
 const PARTNER = { spoon: ['제이미', '#f87171'], lunchbox: ['제이미', '#f87171'], 'handover-jamie': ['제이미', '#f87171'], ask: ['미아', '#c084fc'], 'handover-mia': ['미아', '#c084fc'] }
@@ -28,10 +34,23 @@ const POSE_ART = {
   lets_learn: { src: paulLetsLearn, w: 134, h: 129, cx: 55, top: 6, scale: 1.48, cropW: 100 },
   happy: { src: paulHappy, w: 144, h: 193, cx: 78, top: 8 },
 }
+// 미아: 표시 배율 0.5(챙 80단위 — Paul 87과 비슷한 얼굴 크기), 모자 중심 x 245, 모자 꼭대기 y 30 — 몸 아래는 책상에 가려진다.
+// 필통은 미아 가슴 앞 낮게 두어 연필 끝이 턱 아래에 머문다(얼굴을 가리지 않음)
+const MIA_S = 0.5
+const MIA_X = 245
+const MIA_TOP = 30
+const MIA_ART = {
+  think: { src: miaThink, w: 222, h: 328, cx: 85, top: 3 },
+  give: { src: miaGivePencil, w: 269, h: 311, cx: 116, top: 4 },
+  greet: { src: miaGreet, w: 407, h: 317, cx: 182, top: 2 },
+}
+const MIA_POSE = { ask: 'think', offer: 'give', handed: 'greet' }
+const MIA_HAND = [205, 138]
+const MIA_CASE = 248
 const LABEL = {
   spoon: '제이미의 필통 뚜껑이 열리고 연필 대신 숟가락이 나와요. 나(폴)와 제이미가 깜짝 놀라요. 나는 책상 위 내 연필을 제이미에게 건네요. 내 자리는 비어요.',
-  ask: '내 책상 위 연필 자리는 비어 있어요. 앞자리 미아의 열린 필통에는 연필이 여러 자루 있어요. 나(폴)는 손가락 하나를 들고 있어요.',
-  'handover-mia': '미아가 연필 한 자루를 내 책상 위에 건네 줘요. 나(폴)는 엄지를 들며 좋아해요.',
+  ask: '내 책상 위 연필 자리는 비어 있어요. 앞자리 미아는 연필이 여러 자루 꽂힌 필통 앞에서 생각에 잠겨 있어요. 나(폴)는 손가락 하나를 들고 있어요.',
+  'handover-mia': '미아가 연필 한 자루를 내밀고, 그 연필이 내 책상 위로 와요. 미아는 빈 손을 펴 보이고, 나(폴)는 엄지를 들며 좋아해요.',
   lunchbox: '내 책상 위 연필 자리는 비어 있어요. 제이미가 열린 도시락 통에서 찾은 연필을 들고 있어요. 연필에 요구르트가 조금 묻었어요.',
   'handover-jamie': '제이미가 도시락 통에서 찾은 연필을 내 책상 위에 건네 줘요. 나(폴)는 엄지를 들며 좋아해요.',
 }
@@ -50,6 +69,8 @@ const CSS = `
 .pcs-fly-give{animation:pcs-give .9s ease-in-out}
 .pcs-fly-back{animation:pcs-back .9s ease-in-out}
 @keyframes pcs-give{0%{transform:translate(${ME[0]}px,${ME[1]}px)}50%{transform:translate(${PEAK[0]}px,${PEAK[1]}px)}100%{transform:translate(${THEM[0]}px,${THEM[1]}px)}}
+.pcs-fly-mia{animation:pcs-mia .9s ease-in-out}
+@keyframes pcs-mia{0%{transform:translate(${MIA_HAND[0]}px,${MIA_HAND[1]}px)}50%{transform:translate(${PEAK[0] - 20}px,${PEAK[1]}px)}100%{transform:translate(${ME[0]}px,${ME[1]}px)}}
 @keyframes pcs-back{0%{transform:translate(${THEM[0]}px,${THEM[1]}px)}50%{transform:translate(${PEAK[0]}px,${PEAK[1]}px)}100%{transform:translate(${ME[0]}px,${ME[1]}px)}}
 @media (prefers-reduced-motion: reduce){.pcs-scene *{animation:none!important;transition:none!important}}
 `
@@ -69,9 +90,9 @@ function FlatPencil({ className, dab = false }) {
 }
 
 // 필통 안에 세워 꽂힌 연필(미아의 필통)
-function UprightPencil({ x }) {
+function UprightPencil({ x, y = 86 }) {
   return (
-    <g transform={`translate(${x} 86)`}>
+    <g transform={`translate(${x} ${y})`}>
       <rect x="-6" y="0" width="12" height="58" fill="#facc15" stroke="#a16207" strokeWidth="2" />
       <polygon points="-6,0 0,-18 6,0" fill="#fcd9a8" stroke="#a16207" strokeWidth="2" />
       <polygon points="-2.5,-8 0,-18 2.5,-8" fill="#374151" />
@@ -100,7 +121,13 @@ function Hero({ pose }) {
   )
 }
 
-// 상대(제이미/미아) — 단순 SVG 인물, 오른쪽에서 왼쪽을 향하고 손이 책상 위로 나온다
+// 미아 — 운영자 제공 그림(원본 분리본) 그대로, 표시 영역만 정한다
+function Mia({ pose }) {
+  const a = MIA_ART[pose]
+  return <image data-testid="key-scene-partner" href={a.src} x={MIA_X - a.cx * MIA_S} y={MIA_TOP - a.top * MIA_S} width={a.w * MIA_S} height={a.h * MIA_S} />
+}
+
+// 상대(제이미) — 단순 SVG 인물, 오른쪽에서 왼쪽을 향하고 손이 책상 위로 나온다
 function Partner({ cx, shirt, surprised = false }) {
   const arm = [[cx - 22, 165], [cx - 43, 150]]
   return (
@@ -130,7 +157,7 @@ export default function PencilCaseScene({ variant = 'spoon' }) {
   useEffect(() => {
     if (prefersReduced()) { setPhase(FINAL[variant]); return undefined }
     setPhase(START[variant] || FINAL[variant])
-    const steps = variant === 'spoon' ? SPOON_STEPS : START[variant] ? [['handed', 300]] : []
+    const steps = variant === 'spoon' ? SPOON_STEPS : START[variant] ? [['handed', OFFER_MS]] : []
     const ids = steps.map(([p, ms]) => setTimeout(() => setPhase(p), ms))
     return () => ids.forEach(clearTimeout)
   }, [variant])
@@ -139,24 +166,33 @@ export default function PencilCaseScene({ variant = 'spoon' }) {
   const at = ORDER.indexOf(phase)
   const isSpoon = variant === 'spoon'
   const lunch = variant === 'lunchbox' || variant === 'handover-jamie'
+  const mia = variant === 'ask' || variant === 'handover-mia'
+  const miaPose = mia ? MIA_POSE[phase] : null
   const animate = !prefersReduced()
   const lidOpen = !isSpoon || at >= 1
   const pose = POSE[phase]
   // 연필 위치: spoon은 내 연필(내 책상 → 제이미 손), 그 외는 상대 연필(상대 손 → 내 책상). 건네는 순간에만 한 번 움직인다
   let pen = null
   if (isSpoon) pen = at >= 4 ? `pcs-at-partner${animate ? ' pcs-fly-give' : ''}` : 'pcs-at-me'
-  else if (variant !== 'ask') pen = phase === 'handed' ? `pcs-at-me${animate ? ' pcs-fly-back' : ''}` : 'pcs-at-partner'
+  else if (mia) pen = phase === 'handed' ? `pcs-at-me${animate ? ' pcs-fly-mia' : ''}` : null
+  else pen = phase === 'handed' ? `pcs-at-me${animate ? ' pcs-fly-back' : ''}` : 'pcs-at-partner'
   const mySpotEmpty = isSpoon ? at >= 4 : phase !== 'handed'
 
   return (
     <div className="w-full">
       <style>{CSS}</style>
-      <svg data-testid="key-scene" data-variant={variant} data-phase={phase} data-hero-pose={pose} data-my-spot={mySpotEmpty ? 'empty' : 'pencil'}
+      <svg data-testid="key-scene" data-variant={variant} data-phase={phase} data-hero-pose={pose} data-my-spot={mySpotEmpty ? 'empty' : 'pencil'} data-partner-pose={miaPose || 'svg'}
         viewBox="0 0 360 240" role="img" aria-label={LABEL[variant]} className="pcs-scene w-full h-auto rounded-3xl bg-sky-50 block">
         <Hero pose={pose} />
-        <Partner cx={318} shirt={partnerShirt} surprised={isSpoon && at >= 3} />
+        {mia ? <Mia pose={miaPose} /> : <Partner cx={318} shirt={partnerShirt} surprised={isSpoon && at >= 3} />}
         {/* 가운데: 필통(spoon/ask/handover-mia) 또는 도시락 통(lunchbox/handover-jamie). 뚜껑은 위로 세워 열린다 */}
-        {lunch ? (
+        {mia ? (
+          <g>
+            {[MIA_CASE - 18, MIA_CASE - 6, MIA_CASE + 6, MIA_CASE + 18].slice(0, phase === 'handed' ? 3 : 4).map((x) => <UprightPencil key={x} x={x} y={150} />)}
+            <rect x={MIA_CASE - 30} y="152" width="60" height={DESK - 152} rx="8" fill="#2dd4bf" stroke="#0f766e" strokeWidth="3" />
+            <circle cx={MIA_CASE} cy="163" r="5" fill="#99f6e4" stroke="#0f766e" strokeWidth="2" />
+          </g>
+        ) : lunch ? (
           <g>
             <polygon points={`${C - 50},140 ${C + 50},140 ${C + 40},106 ${C - 40},106`} fill="#fed7aa" stroke="#c2410c" strokeWidth="2.5" strokeLinejoin="round" />
             <rect x={C - 50} y="140" width="100" height={DESK - 140} rx="10" fill="#fb923c" stroke="#c2410c" strokeWidth="3" />
@@ -166,9 +202,6 @@ export default function PencilCaseScene({ variant = 'spoon' }) {
           <g>
             <polygon className={`pcs-lid-up${lidOpen ? '' : ' pcs-hide'}`} points={`${C - 45},136 ${C + 45},136 ${C + 36},100 ${C - 36},100`} fill="#5eead4" stroke="#0f766e" strokeWidth="2.5" strokeLinejoin="round" />
             <rect className={`pcs-lid${lidOpen ? ' pcs-hide' : ''}`} x={C - 45} y="122" width="90" height="14" rx="5" fill="#14b8a6" stroke="#0f766e" strokeWidth="2" />
-            {variant === 'ask' || variant === 'handover-mia'
-              ? [C - 27, C - 9, C + 9, C + 27].slice(0, variant === 'ask' ? 4 : 3).map((x) => <UprightPencil key={x} x={x} />)
-              : null}
             {isSpoon && <g className={`pcs-spoon${at >= 2 ? ' pcs-spoon-up' : ''}`}>
               <rect x="-5" y="20" width="10" height="80" rx="4" fill="#cbd5e1" stroke="#64748b" strokeWidth="3" />
               <ellipse cx="0" cy="0" rx="18" ry="26" fill="#e2e8f0" stroke="#64748b" strokeWidth="3" />
@@ -184,7 +217,7 @@ export default function PencilCaseScene({ variant = 'spoon' }) {
         <line x1="0" y1={DESK} x2="360" y2={DESK} stroke="#c08a3e" strokeWidth="3" />
         {mySpotEmpty && <rect data-testid="key-scene-empty-spot" x={ME[0] - 30} y={ME[1] - 7.5} width="60" height="15" rx="4" fill="#fef3c7" stroke="#78716c" strokeWidth="2" strokeDasharray="5 3" />}
         <Tag cx={82}>나</Tag>
-        <Tag cx={318}>{partnerName}</Tag>
+        <Tag cx={mia ? MIA_X : 318}>{partnerName}</Tag>
         {pen && <g className={pen}><FlatPencil dab={lunch} /></g>}
       </svg>
     </div>
