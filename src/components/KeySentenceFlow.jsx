@@ -69,6 +69,7 @@ export default function KeySentenceFlow({ setId, onMenu }) {
             {step === 'watch' ? (
               <>
                 <PencilCaseScene variant="spoon" />
+                <SituationGuide scene={{ id: 'key-watch', situationKo: ks.watch.situationKo }} />
                 <div data-testid="key-sentence" className="bg-white rounded-3xl p-5 card-shadow space-y-2">
                   <p className="text-sm font-black text-sky-700">오늘 기억할 한 문장</p>
                   <p data-testid="key-sentence-en" className="text-2xl font-black text-gray-900">{ks.en}</p>
