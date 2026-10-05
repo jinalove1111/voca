@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-05 (212차 — **Speaking 2화 Paul 중심 완성**: 2화 상대 "폴 선생님" → Mia(5~7번, 교사 행동 제거·뜻 반말, id·en 유지), Paul 장면 개선(책상 위 연필·호 건넴·빈 자리 윤곽, 크기 정규화, 포즈 thinking→almost→ponder→lets_learn→happy), 보기 단계 한국어 상황 추가. 콘텐츠·시각 리뷰 → 구현 → 독립 QA PASS. e2e speaking 422/0·speaking-exam 216/0(mock, 360/390/412/1280). 학습 효과 미검증. DB·SQL·Production 0, PR #62 Draft. 아래 212차 섹션 참고.)_
+_최종 갱신: 2026-10-05 (213차 — **2화 미아를 운영자 제공 여성 캐릭터로 교체**: 4포즈 분리(알파 실측: 검은 배경 없음, 내부 알파 250~253 → 255), 모자 챙 기준 얼굴 크기 통일, 미아 장면 생각 → 연필 내밀기 → 인사. Paul 무변경. e2e speaking 424/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 213차 섹션 참고.)_
+_212차 갱신: 2026-10-05 (212차 — **Speaking 2화 Paul 중심 완성**: 2화 상대 "폴 선생님" → Mia(5~7번, 교사 행동 제거·뜻 반말, id·en 유지), Paul 장면 개선(책상 위 연필·호 건넴·빈 자리 윤곽, 크기 정규화, 포즈 thinking→almost→ponder→lets_learn→happy), 보기 단계 한국어 상황 추가. 콘텐츠·시각 리뷰 → 구현 → 독립 QA PASS. e2e speaking 422/0·speaking-exam 216/0(mock, 360/390/412/1280). 학습 효과 미검증. DB·SQL·Production 0, PR #62 Draft. 아래 212차 섹션 참고.)_
 _211차 갱신: 2026-10-05 (211차 — **2화 Speaking 장면 주인공을 승인된 Paul 마스코트(src/assets/paul, 원본 그대로)로 교체**: 궁금(thinking) → 깜짝(almost) → 빈 손(hello) → 손가락 들고 묻기(lets_learn) → 연필 받고 엄지(happy). 2화만, 연습·시험·정답 숨김 무변경. 부족 에셋 6항목 보고. e2e speaking 403/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 211차 섹션 참고.)_
 _210차 갱신: 2026-10-05 (210차 — **Speaking 진입 시 오늘의 이야기 카드(2화) 바로 표시 + 학생이 고른 세트 기억**(UUID 키 localStorage). 209차 3커밋 + 이번 2커밋 PR #62 non-force push. build PASS, testSpeakingSets 61/0, e2e speaking 392/0·speaking-exam 216/0(mock). 9화 확대 보류. 실제 마이크·아이 이해·기억 효과 미확인. DB·SQL·Production 0, PR #62 Draft. 아래 210차 섹션 참고.)_
 _209차 갱신: 2026-10-05 (209차 — **Speaking 2화 "오늘 기억할 한 문장" — Can I borrow a pencil?**: 메뉴에서 2화 선택 시 카드(한글 목표만) → ① 필통 장면(열림→숟가락→제이미 놀람→내 연필 전달) + 듣고 따라 말하기 ② 영어 숨기고 상황만 보고 말하기(미아) ③ 상대가 바뀐 상황(제이미)에서 다시 말하기 → 끝("연습을 마쳤어요", 판정·저장 없음). 나머지 9화 무변경. build PASS, 정적 testKeySentenceFlow 15/0·testSpeakingSets 56/0, e2e speaking 388/0·speaking-exam 216/0(mock). **미push**(로컬 커밋), DB·SQL·Production 0, PR #62 Draft. 아래 209차 섹션 참고.)_
@@ -23,6 +24,18 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-05 (213차) — Speaking 2화 미아 = 운영자 제공 여성 캐릭터(4포즈 분리)
+
+운영자 지시: 첨부 이미지(`여자폴.png`)를 Speaking 여성 대화 상대로, 남자 Paul 유지, 네 포즈 분리(인사/생각/놀람/연필 건네기), 투명 유지·잘림 없음, 알파 실측·검은 배경 보고, 모바일 얼굴 크기 일정, 2화 대화 상대에만, 이름·역할 일치. 시작 HEAD = 원격 = `112ed2f1`, 미커밋 0.
+
+- **알파**: 배경 알파 0(검은 배경 없음). 인물 내부 알파 250~253(완전 불투명 아님, 약 1~2% 비침) → ≥240만 255로 올림(가장자리 유지). 상세 설계 문서 §14.
+- **분리·정규화**: 연결 성분 + 이음매 규칙, 모자 챙 160px 기준 리사이즈 → `src/assets/speaking/mia_{greet,think,surprise,give_pencil}.png`(100~133KB). 체크무늬 대조로 모자·손 잘림 없음 확인.
+- **적용**(`PencilCaseScene.jsx`): 미아 변형(ask/handover-mia)만 그림 사용 — 생각(think) → 연필 내밀기(give, 0.7초, SVG 연필 없음) → 인사(greet) + 연필이 미아 손에서 내 책상으로 호. 배율 0.5(얼굴 Paul과 비슷), 미아 필통 가슴 앞 낮게. 이름표 "미아" 위치를 미아 머리 아래로. 제이미 SVG·Paul·흐름·숨김 무변경. 놀람 포즈는 보관만(미사용 → 번들 제외).
+- **테스트**: `testKeySentenceFlow`에 미아 포즈 매핑 핀, e2e k3에 공개 전 상대=미아 생각 포즈·이름표, 공개 후 인사 포즈 확인, `testBundleBudget` 이미지 허용 접두에 `mia_` 추가(같은 파일에 `paul_` 선례).
+- **검증**: build PASS(경고 0). 정적 testSpeakingSets·testKeySentenceFlow·testQaGate 17/0·testLazyChunkGuards·testBundleBudget·testRegistryCoverage·testStudentPathContracts PASS. 브라우저(mock, 여유 RAM 약 2GB라 스펙당 1회만): `[speaking]` 424/0, `[speaking-exam]` 216/0. 360px 캡처(묻기 전/내밀기/건넨 뒤) 확인.
+- **미검증**: 실기기·로그인 Preview 실화면, 마이크·TTS, 아이들의 인물 식별·이해·기억 효과.
+- DB·SQL·Production·`.env`·`C:oca` 접촉 0. QA 게이트 무변경, PR #62 Draft. 체크포인트 `.ai-status/orchestrator-speaking-mia-art-2026-10-05.json`.
 
 ## 2026-10-05 (212차) — Speaking 2화 "숟가락이 든 필통" Paul 중심 완성 (3시간 자율 세션)
 
