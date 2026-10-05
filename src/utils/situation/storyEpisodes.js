@@ -7,7 +7,7 @@
 //
 // 스키마
 // - STORY_EPISODES: { n, id: 'epNN', titleKo, summaryKo, nextHookKo, keySentence? }
-//     keySentence(선택, 현재 2화만): { itemId, en, ko, goalKo, watch:{situationKo}, recall:{situationKo,roleKo,partner}, transfer:{situationKo,roleKo,partner,reply} }
+//     keySentence(선택, 현재 2화만): { itemId, en, ko, goalKo, watch:{situationKo}, introIds:[회상 전 짧은 대화 문항 id], recall:{situationKo,roleKo,partner}, transfer:{situationKo,roleKo,partner,reply} }
 //     — 기억할 한 문장 흐름 전용. transfer는 STORY_ITEMS에 넣지 않는다
 // - STORY_ITEMS: { id: 'sEE-OO', episode, order, situationKo, roleKo, en, ko,
 //     reply: { speaker: 'Jamie'|'Mia'|'Paul'|'Cookie'|'Shopkeeper'|'Guest', en, ko }
@@ -39,22 +39,24 @@ export const STORY_EPISODES = [
     titleKo: '숟가락이 든 필통',
     summaryKo: '미술 시간, 제이미의 필통에서 연필 대신 숟가락이 나와요. 칠판에는 처음 보는 단어가 적혀 있고, 점심시간에는 제이미의 도시락 통에서 수상한 소리가 나요.',
     nextHookKo: '하교 전, 교실 문에 종이로 가린 포스터가 붙었어요. 내일 큰 소식이 있대요.',
-    // 오늘 기억할 한 문장(QA 전용 KeySentenceFlow). recall/transfer 텍스트는 공개 전 화면에 보이므로 영어·"빌려/빌리"·답 어간 금지
+    // 오늘 기억할 한 문장(QA 전용 KeySentenceFlow). 이 흐름은 Paul(나)과 미아 두 사람만 나오는 시범 장면이다(212차 이후 운영자 정정 —
+    // 오른쪽 상대는 승인된 여성 캐릭터 = 미아로 통일, 제이미 없음). watch/recall/transfer 텍스트는 공개 전 화면에 보이므로 영어·"빌려/빌리"·답 어간 금지
     keySentence: {
       itemId: 's02-03',
       en: 'Can I borrow a pencil?', ko: '연필 좀 빌려도 돼?',
       goalKo: '연필을 빌리는 말',
-      watch: { situationKo: '제이미 필통에서 연필 대신 숟가락이 나왔어요. 하나뿐인 내 연필을 줬더니 이제 나도 없어요.' },
+      watch: { situationKo: '미술 시간, 내 필통을 열었더니 연필 대신 숟가락이 나왔어요! 앞자리 미아는 연필이 많아요.' },
+      introIds: ['s02-11'],
       recall: {
-        situationKo: '미술 시간이에요. 내 연필은 제이미에게 줘서 손에 아무것도 없어요. 미아 필통에는 연필이 여러 자루 있어요.',
-        roleKo: '미아에게 연필 하나를 써도 되는지 물어봐요.',
+        situationKo: '그림을 그리다 연필심이 뚝 부러졌어요. 미아 필통에는 아직 연필이 여러 자루 있어요.',
+        roleKo: '미아에게 연필 하나를 더 써도 되는지 물어봐요.',
         partner: 'Mia',
       },
       transfer: {
-        situationKo: '마지막 수업이에요. 내 연필은 제이미가 쓰는 중인데, 제이미가 도시락 통에서 연필을 또 찾았어요.',
-        roleKo: '제이미에게 찾은 연필을 써도 되는지 물어봐요.',
-        partner: 'Jamie',
-        reply: { speaker: 'Jamie', en: "Sure! It's a bit sticky.", ko: '그럼! 좀 끈적하긴 해.' },
+        situationKo: '다음 날 아침, 이번엔 필통을 통째로 집에 두고 왔어요. 옆자리에 미아가 있어요.',
+        roleKo: '미아에게 연필 하나를 써도 되는지 물어봐요.',
+        partner: 'Mia',
+        reply: { speaker: 'Mia', en: 'Of course! Take this one.', ko: '물론이지! 이거 써.' },
       },
     },
   },
