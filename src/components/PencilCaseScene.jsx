@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import { paulAlmost, paulHappy, paulLetsLearn, paulThinking } from '../assets/paul'
+import paulSpeaking from '../assets/speaking/paul_speaking.png'
 import miaGreet from '../assets/speaking/mia_greet.png'
 import miaThink from '../assets/speaking/mia_think.png'
 import miaSurprise from '../assets/speaking/mia_surprise.png'
 import miaGivePencil from '../assets/speaking/mia_give_pencil.png'
 
 // 2026-10-05 QA 전용 "오늘 기억할 한 문장" 장면 — SVG + CSS(네트워크/소리 없음, SVG 글자는 한글 이름표뿐).
-// 등장인물은 두 명뿐: 왼쪽 '나' = 승인된 Paul 마스코트(src/assets/paul 원본 그대로), 오른쪽 '미아' = 운영자 제공 여성 캐릭터
+// 등장인물은 두 명뿐: 왼쪽 '나' = 운영자 제공 Paul 기준 얼굴(src/assets/speaking/paul_speaking.png, 216차 — 이전 저화질 마스코트 4포즈 대체),
+// 오른쪽 '미아' = 운영자 제공 여성 캐릭터
 // (src/assets/speaking/mia_*.png, 4포즈 분리본). 임시 SVG 인물(제이미)은 213차 운영자 정정으로 없앴다.
 // 이야기: ① 내 필통에서 연필 대신 숟가락 → 둘 다 놀람 → 내가 묻고 → 미아가 연필을 건넴
 //        ② 연필심이 부러짐 → 미아에게 다시 ③ 다음 날 필통을 통째로 두고 옴 → 미아에게 다시.
@@ -18,20 +19,15 @@ const FINAL = { spoon: 'handed', ask: 'ask', 'handover-mia': 'handed', forgot: '
 const START = { spoon: 'closed', 'handover-mia': 'offer', 'handover-forgot': 'offer' }
 const OFFER_MS = 700
 const SPOON_STEPS = [['open', 600], ['spoon', 1300], ['ask', 2400], ['offer', 3100], ['handed', 3800]]
-// Paul: 궁금(thinking) → 깜짝(almost) → 손가락 들고 묻기(lets_learn) → 받아서 엄지(happy)
-const POSE = { closed: 'thinking', open: 'thinking', spoon: 'almost', ask: 'lets_learn', forgot: 'lets_learn', offer: 'lets_learn', handed: 'happy' }
+// Paul 기준 그림은 한 포즈(엄지 척)뿐 — 단계 구분은 미아 표정·소품·'?' 말풍선(묻는 순간)으로 한다. 원본에 없는 표정은 만들지 않는다
+const ASKING = ['ask', 'forgot', 'offer']
 // 미아: 생각(think) → 놀람(surprise) → 연필 건네기(give) → 빈 손 인사(greet)
 const MIA_POSE = { closed: 'think', open: 'think', spoon: 'surprise', ask: 'think', forgot: 'think', offer: 'give', handed: 'greet' }
-// Paul 원본은 같은 배율(K)로 그리고 모자 중심·꼭대기를 맞춘다(실측 챙 폭 91~96px). lets_learn만 인물이 작아 1.48배, 전구는 표시 영역 밖.
-const K = 0.92
+// Paul: 분리본도 모자 챙 160px로 정규화 → 미아와 같은 배율 0.5(챙 80단위)로 그려 얼굴 크기를 맞춘다. 모자 중심 x 82, 꼭대기 y 30(미아와 같음)
+const PAUL = { src: paulSpeaking, w: 327, h: 491, cx: 170, top: 25 }
+const PAUL_S = 0.5
 const HEAD_X = 82
-const HAT_TOP = 16
-const POSE_ART = {
-  thinking: { src: paulThinking, w: 140, h: 184, cx: 66, top: 8 },
-  almost: { src: paulAlmost, w: 184, h: 181, cx: 92, top: 8 },
-  lets_learn: { src: paulLetsLearn, w: 134, h: 129, cx: 55, top: 6, scale: 1.48, cropW: 100 },
-  happy: { src: paulHappy, w: 144, h: 193, cx: 78, top: 8 },
-}
+const HAT_TOP = 30
 // 미아: 분리본은 모자 챙 160px로 정규화. 표시 배율 0.5(챙 80단위 — Paul 87과 비슷한 얼굴 크기), 모자 중심 x 245, 꼭대기 y 30.
 // 몸 아래는 책상에 가려지고, 미아 필통은 가슴 앞 낮게 두어 연필 끝이 턱 아래에 머문다(얼굴을 가리지 않음)
 const MIA_S = 0.5
@@ -116,15 +112,18 @@ function Tag({ cx, children }) {
   )
 }
 
-function Hero({ pose }) {
-  const a = POSE_ART[pose]
-  const s = K * (a.scale || 1)
-  const cropW = a.cropW || a.w
-  // 중첩 svg: 원본 이미지를 그대로 두고 표시 영역만 정한다(lets_learn 전구 잘라내기)
+function Hero({ asking }) {
   return (
-    <svg x={HEAD_X - a.cx * s} y={HAT_TOP - a.top * s} width={cropW * s} height={a.h * s} viewBox={`0 0 ${cropW} ${a.h}`} overflow="hidden">
-      <image data-testid="key-scene-hero" href={a.src} x="0" y="0" width={a.w} height={a.h} />
-    </svg>
+    <g>
+      <image data-testid="key-scene-hero" href={PAUL.src} x={HEAD_X - PAUL.cx * PAUL_S} y={HAT_TOP - PAUL.top * PAUL_S} width={PAUL.w * PAUL_S} height={PAUL.h * PAUL_S} />
+      {/* 묻는 순간: 머리 옆 말풍선 '?'(영어 글자 없음 — 정답·첫 글자 힌트 아님) */}
+      {asking && (
+        <g data-testid="key-scene-asking">
+          <path d="M150 42 h34 a8 8 0 0 1 8 8 v18 a8 8 0 0 1 -8 8 h-20 l-10 9 l2 -9 h-6 a8 8 0 0 1 -8 -8 v-18 a8 8 0 0 1 8 -8 z" fill="#fff" stroke="#64748b" strokeWidth="2" />
+          <text x="167" y="67" textAnchor="middle" fontSize="20" fontWeight="900" fill="#0369a1">?</text>
+        </g>
+      )}
+    </g>
   )
 }
 
@@ -158,9 +157,9 @@ export default function PencilCaseScene({ variant = 'spoon', still = null }) {
   return (
     <div className="w-full">
       <style>{CSS}</style>
-      <svg data-testid="key-scene" data-variant={variant} data-still={still || undefined} data-phase={phase} data-hero-pose={POSE[phase]} data-partner-pose={MIA_POSE[phase]} data-my-spot={mySpot}
+      <svg data-testid="key-scene" data-variant={variant} data-still={still || undefined} data-phase={phase} data-hero-pose={ASKING.includes(phase) ? 'asking' : 'paul'} data-partner-pose={MIA_POSE[phase]} data-my-spot={mySpot}
         viewBox="0 0 360 240" role="img" aria-label={LABEL[variant]} className="pcs-scene w-full h-auto rounded-3xl bg-sky-50 block">
-        <Hero pose={POSE[phase]} />
+        <Hero asking={ASKING.includes(phase)} />
         <Mia pose={MIA_POSE[phase]} />
         {/* 미아의 필통(가슴 앞 낮게) — 건넨 뒤 한 자루 줄어든다 */}
         <g>
