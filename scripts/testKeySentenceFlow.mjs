@@ -15,6 +15,7 @@ check('Scene: <text> 존재(한글 이름표)하고 영어 글자 없음', texts
 check('Scene: aria-label 문구에 영어 글자 없음', [...scene.matchAll(/^\s+(?:spoon|ask|'handover-mia'|lunchbox|'handover-jamie'): '([^']*)'/gm)].every((m) => !/[A-Za-z]/.test(m[1])))
 check('Scene: reduced motion 처리(matchMedia + CSS 미디어쿼리)', /matchMedia\??\.?\(['"]\(prefers-reduced-motion: reduce\)['"]\)/.test(scene) && /@media \(prefers-reduced-motion: reduce\)/.test(scene))
 check('Scene: 타이머 정리(clearTimeout)·반복 애니메이션 없음', /clearTimeout/.test(scene) && !/infinite/.test(scene))
+check('Scene: 주인공은 승인된 Paul 마스코트(assets/paul index)만, 5포즈 전부 매핑', /from '\.\.\/assets\/paul'/.test(scene) && ['paulThinking', 'paulAlmost', 'paulHello', 'paulLetsLearn', 'paulHappy'].every((n) => scene.includes(n)) && !/paul_study|paul_reading|paulStudy|paulReading/.test(scene))
 check('Scene: data-testid/data-variant/data-phase 노출', ['key-scene', 'data-variant', 'data-phase'].every((w) => scene.includes(w)))
 
 // KeySentenceFlow

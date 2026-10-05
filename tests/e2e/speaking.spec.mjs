@@ -542,6 +542,9 @@ export async function run(browser, baseURL) {
     r.check(`${name} 공개 전 DOM 어디에도 영어 문장 없음(숨김 렌더 금지)`, !(await page.evaluate((en) => document.documentElement.outerHTML.includes(en), KS.en)))
   }
   // 장면(key-scene) 안 애니메이션만 센다 — 앱 공통 btn-press 버튼의 opacity 전환은 이 장면과 무관
+  // 주인공 = 승인된 Paul 마스코트(src/assets/paul) — 단계별 포즈와 실제 로드된 이미지 확인
+  const hero = async (page) => T(page, 'key-scene-hero').evaluate((el) => { const href = el.getAttribute('href') || ''; const img = new Image(); img.src = href; return new Promise((res) => { const done = () => res({ pose: el.closest('svg').getAttribute('data-hero-pose'), href, ok: img.naturalWidth > 0, h: el.getBoundingClientRect().height }); if (img.complete) done(); else { img.onload = done; img.onerror = done } }) })
+  const heroIs = async (page, pose) => { const h = await hero(page); return h.pose === pose && h.href.includes(`paul_${pose}`) && h.ok }
   const running = (page) => page.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.target?.closest?.('[data-testid="key-scene"]')).length)
   const runningNames = (page) => page.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running').map((a) => `${a.animationName || a.transitionProperty || '?'}@${a.effect?.target?.getAttribute?.('class') || a.effect?.target?.tagName}`).join(','))
 
@@ -572,6 +575,7 @@ export async function run(browser, baseURL) {
     r.check(`${name} 장면 variant=spoon`, (await sceneAttr(page, 'data-variant')) === 'spoon')
     const done = await waitUntil(async () => (await sceneAttr(page, 'data-phase')) === 'given', { timeout: 6000 })
     r.check(`${name} 6초 안에 data-phase=given`, !!done, await sceneAttr(page, 'data-phase'))
+    r.check(`${name} 주인공 Paul: 전달 후 빈 손 포즈(hello) 이미지 로드`, await heroIs(page, 'hello'), JSON.stringify(await hero(page)))
     r.check(`${name} 장면 안에 영어 글자 없음`, !(await T(page, 'key-scene').evaluate((el) => /[A-Za-z]/.test(el.textContent || ''))))
     r.check(`${name} 기억할 문장 카드 EN/KO 보임`, (await txt(page, 'key-sentence')).includes(KS.en) && (await txt(page, 'key-sentence')).includes(KS.ko))
     r.check(`${name} 듣기 누르기 전 speak 0회`, (await speakLog(page)).length === 0, JSON.stringify(await speakLog(page)))
@@ -589,12 +593,14 @@ export async function run(browser, baseURL) {
     r.check(`${name} data-step=recall, 진행 2 / 3`, (await flowStep(page)) === 'recall' && (await txt(page, 'key-progress')) === '2 / 3')
     r.check(`${name} 짧은 대화 + 상황/역할 보임`, (await txt(page, 'key-intro')).includes('짧은 대화') && (await txt(page, 'situation-text')) === KS.recall.situationKo && (await txt(page, 'situation-role')).includes(KS.recall.roleKo))
     r.check(`${name} 장면 variant=ask`, (await sceneAttr(page, 'data-variant')) === 'ask')
+    r.check(`${name} 공개 전 Paul 묻는 포즈(lets_learn)`, await heroIs(page, 'lets_learn'), JSON.stringify(await hero(page)))
     await hiddenBeforeReveal(page, name)
     r.check(`${name} 공개 전 다음 버튼 비활성`, await T(page, 'key-next').isDisabled())
     await T(page, 'key-reveal').click()
     r.check(`${name} 공개 후 라벨/EN/KO/다른 말 문구`, (await txt(page, 'key-answer-label')) === '이렇게 말할 수 있어요' && (await txt(page, 'key-answer-en')) === KS.en && (await txt(page, 'key-answer')).includes(KS.ko) && (await txt(page, 'key-other-ways')).includes('다른 말로 말해도'))
     r.check(`${name} 공개 후 미아 대사`, (await txt(page, 'key-reply')).includes('Sure! Here you are.'))
     r.check(`${name} 공개 후 장면 variant=handover-mia`, !!(await waitUntil(async () => (await sceneAttr(page, 'data-variant')) === 'handover-mia', { timeout: 3000 })))
+    r.check(`${name} 연필 받은 뒤 Paul 기쁨 포즈(happy)`, !!(await waitUntil(() => heroIs(page, 'happy'), { timeout: 3000 })), JSON.stringify(await hero(page)))
     const before = (await speakLog(page)).length
     await T(page, 'key-listen').click()
     const l = await waitUntil(async () => { const x = await speakLog(page); return x.length >= 1 ? x : null }, { timeout: 3000 })
@@ -607,8 +613,10 @@ export async function run(browser, baseURL) {
     await toStep(page, 'transfer')
     r.check(`${name} data-step=transfer, 진행 3 / 3, 안내 문구`, (await flowStep(page)) === 'transfer' && (await txt(page, 'key-progress')) === '3 / 3' && (await bodyText(page)).includes('이번엔 다른 친구에게'))
     r.check(`${name} 상황/역할 = transfer 텍스트, variant=lunchbox`, (await txt(page, 'situation-text')) === KS.transfer.situationKo && (await txt(page, 'situation-role')).includes(KS.transfer.roleKo) && (await sceneAttr(page, 'data-variant')) === 'lunchbox')
+    r.check(`${name} 공개 전 Paul 묻는 포즈(lets_learn)`, await heroIs(page, 'lets_learn'))
     await hiddenBeforeReveal(page, name)
     await T(page, 'key-reveal').click()
+    r.check(`${name} 연필 받은 뒤 Paul 기쁨 포즈(happy)`, !!(await waitUntil(() => heroIs(page, 'happy'), { timeout: 3000 })))
     r.check(`${name} 공개 후 라벨/EN/다른 말 문구`, (await txt(page, 'key-answer-label')) === '이렇게 말할 수 있어요' && (await txt(page, 'key-answer-en')) === KS.en && (await txt(page, 'key-other-ways')).includes('다른 말로 말해도'))
     r.check(`${name} 공개 후 제이미 대사 + variant=handover-jamie`, (await txt(page, 'key-reply')).includes(KS.transfer.reply.en) && !!(await waitUntil(async () => (await sceneAttr(page, 'data-variant')) === 'handover-jamie', { timeout: 3000 })))
     r.check(`${name} 가로 스크롤 없음`, await noOverflow(page))
@@ -647,6 +655,7 @@ export async function run(browser, baseURL) {
         r.check(`${name} ${step} 가로 스크롤 없음`, await noOverflow(page))
         r.check(`${name} ${step} 버튼 전부 높이 >=44px`, (await smallButtons(page, 'key-flow')).length === 0, (await smallButtons(page, 'key-flow')).join(','))
         const sw = await T(page, 'key-scene').boundingBox()
+        r.check(`${name} ${step} Paul 이미지 로드·높이 >=140px(얼굴·손 식별)`, await hero(page).then((h) => h.ok && h.h >= 140), JSON.stringify(await hero(page)))
         r.check(`${name} ${step} 장면이 화면 안에서 충분히 큼(>=300px)`, !!sw && sw.width >= 300 && sw.x >= 0 && sw.x + sw.width <= vp.width + 1, JSON.stringify(sw))
         if (step !== 'watch') {
           await T(page, 'key-reveal').click()
