@@ -1883,3 +1883,9 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 - `tests/e2e/speaking.spec.mjs` s1~s3(세트 선택 aria-pressed·44px, 1화 연습 상황/역할/문장/뜻/상대 대사/듣기 2종/10문항 완주, 기본 세트 회귀), `tests/e2e/speakingExam.spec.mjs` e1~e5(1화 공개 전 정답·뜻·듣기·상대 대사 DOM 부재 + speak 0, 공개 후 라벨·EN·KO·reply, 내비게이션·재진입, 다시 연습, 저장 시 기본 hello 기록 무영향). **이야기는 1화만 브라우저 커버** — 2~10화는 위 정적 검사만.
 - **브라우저 스펙용 build는 더미 Supabase env 필수**: env 없는 dist는 `createClient(undefined, undefined)`가 첫 청크에서 throw → 빈 화면 → 전 시나리오가 로그인 입력칸 대기 타임아웃으로 FAIL(208차 실측 26 FAIL, 제품 결함 아님). 프로세스 env로만 `VITE_SUPABASE_URL=https://e2e-dummy.supabase.co VITE_SUPABASE_ANON_KEY=dummy npm run build`. `.env` 생성·실제 키 사용 금지 — mock 패턴(`**/rest/v1/**` 등)은 호스트 무관이지만, mock 밖 요청은 catch-all이 `route.continue()`로 실제 호스트에 보내므로 실제 키면 Production에 닿을 수 있다.
 - 메모리: 브라우저 스펙은 여유 RAM ≥3 GB에서 스펙 1개씩 단독 실행(208차: 5스펙 각 26~157초, 실행 전후 2.8~4.3 GB 측정).
+
+## 관련 항목: 오늘 기억할 한 문장(2화) 테스트 (2026-10-05, 209차)
+
+- `scripts/testKeySentenceFlow.mjs`(정적 소스 핀, 레지스트리 `extra:false`, 저장·네트워크 0): PencilCaseScene SVG `<text>`·aria-label 영어 0, reduced-motion(matchMedia + CSS) 처리, clearTimeout·무한 애니메이션 없음 / KeySentenceFlow speak는 onClick 안에서만(자동 재생 0), `ks.en`은 watch와 `{revealed && <Answer`에서만, 금지 문구(정답·합격·완료·숙달·점수 등)·storage·supabase·fetch 없음 / 메뉴 카드는 `keySentenceFor` 있을 때만, 영어 직접 렌더 없음. 209차 15 PASS.
+- `scripts/testSpeakingSets.mjs` keySentence 7단언 추가(basic/ep01 null, itemId 문항 en/ko 일치, transfer 상대≠recall 상대, 한글 텍스트 ≤60자·영어 0·"빌려/빌리"·답 어간 금지, 키 문장 유일). 209차 56 PASS.
+- `tests/e2e/speaking.spec.mjs` k1~k7: 메뉴 카드(2화만, 한글만), watch(spoon → given ≤6초, 듣기 전 speak 0), recall/transfer **공개 전 `documentElement.outerHTML`에 영어 문장 없음**(숨김 렌더 금지), 공개 후 라벨·EN·상대 대사·handover 장면, 끝(금지 문구·localStorage 키 변화 0), reduced-motion(장면 즉시 최종, `key-scene` 안 애니메이션 0 — 앱 공통 버튼 전환은 집계 제외), 360/412 레이아웃(가로 스크롤 0, 버튼 ≥44px, 장면 폭 ≥300px). `toStep`은 [답 확인]이 있을 때만 누른다(이미 공개된 단계 재클릭 → 타임아웃 방지). 209차 388/0.
