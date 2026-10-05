@@ -29,3 +29,6 @@ export function itemsForSet(setId) {
 }
 
 export const setLabel = (setId) => listSets().find((s) => s.id === setId)?.labelKo || ''
+
+// 오늘 기억할 한 문장(QA 전용) — 기본 세트와 해당 없는 회차는 null
+export const keySentenceFor = (setId) => STORY_EPISODES.find((e) => e.id === setId)?.keySentence || null

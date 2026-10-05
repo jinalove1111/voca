@@ -6,7 +6,9 @@
 // → 5화 금 방과 후 → 6화 둘째 주 월 → 7화 수 → 8화 목(장소를 강당으로) → 9·10화 20일 금요일.
 //
 // 스키마
-// - STORY_EPISODES: { n, id: 'epNN', titleKo, summaryKo, nextHookKo }
+// - STORY_EPISODES: { n, id: 'epNN', titleKo, summaryKo, nextHookKo, keySentence? }
+//     keySentence(선택, 현재 2화만): { itemId, en, ko, goalKo, recall:{situationKo,roleKo,partner}, transfer:{situationKo,roleKo,partner,reply} }
+//     — 기억할 한 문장 흐름 전용. transfer는 STORY_ITEMS에 넣지 않는다
 // - STORY_ITEMS: { id: 'sEE-OO', episode, order, situationKo, roleKo, en, ko,
 //     reply: { speaker: 'Jamie'|'Mia'|'Paul'|'Cookie'|'Shopkeeper'|'Guest', en, ko }
 //       (Cookie는 'Woof!' 같은 소리·행동으로만 답한다. Shopkeeper=가게 주인, Guest=축제 손님),
@@ -37,6 +39,23 @@ export const STORY_EPISODES = [
     titleKo: '숟가락이 든 필통',
     summaryKo: '미술 시간, 제이미의 필통에서 연필 대신 숟가락이 나와요. 칠판에는 처음 보는 단어가 적혀 있고, 점심시간에는 제이미의 도시락 통에서 수상한 소리가 나요.',
     nextHookKo: '하교 전, 폴 선생님이 교실 문에 종이로 가린 포스터를 붙이며 내일 큰 소식이 있다고 해요.',
+    // 오늘 기억할 한 문장(QA 전용 KeySentenceFlow). recall/transfer 텍스트는 공개 전 화면에 보이므로 영어·"빌려/빌리"·답 어간 금지
+    keySentence: {
+      itemId: 's02-03',
+      en: 'Can I borrow a pencil?', ko: '연필 좀 빌려도 돼?',
+      goalKo: '연필을 빌리는 말',
+      recall: {
+        situationKo: '미술 시간이에요. 내 연필은 제이미에게 줘서 손에 아무것도 없어요. 미아 필통에는 연필이 여러 자루 있어요.',
+        roleKo: '미아에게 연필 하나를 잠깐 써도 되는지 물어봐요.',
+        partner: 'Mia',
+      },
+      transfer: {
+        situationKo: '마지막 수업이에요. 받아 적을 낱말이 있는데 연필이 없어요. 제이미가 도시락 통에서 연필을 찾았어요.',
+        roleKo: '제이미에게 연필을 잠깐 써도 되는지 물어봐요.',
+        partner: 'Jamie',
+        reply: { speaker: 'Jamie', en: "Sure! It's a bit sticky.", ko: '그럼! 좀 끈적하긴 해.' },
+      },
+    },
   },
   {
     n: 3,
@@ -221,7 +240,7 @@ export const STORY_ITEMS = [
   },
   {
     id: 's02-02', episode: 2, order: 2,
-    situationKo: '제이미는 숟가락만 들고 멍하니 있어요. 내 필통에는 연필이 두 자루 있어요.',
+    situationKo: '제이미는 숟가락만 들고 멍하니 있어요. 내 필통에는 연필이 딱 한 자루 있어요.',
     roleKo: '그릴 도구가 없는 제이미에게 내 것을 내밀어요.',
     en: 'You can use my pencil.', ko: '내 연필 써도 돼.',
     reply: { speaker: 'Jamie', en: "Really? You're the best!", ko: '정말? 네가 최고야!' },
@@ -230,16 +249,16 @@ export const STORY_ITEMS = [
   },
   {
     id: 's02-03', episode: 2, order: 3,
-    situationKo: '그림을 그리다 선을 잘못 그었어요. 필통을 뒤졌는데 지울 것이 없어요.',
-    roleKo: '필요한 물건이 없다는 걸 깨닫고 혼잣말을 해요.',
-    en: 'Oh no, I forgot my rubber.', ko: '아 이런, 지우개를 안 챙겼어.',
-    reply: { speaker: 'Jamie', en: "Me too! I've got a spoon.", ko: '나도! 난 숟가락 있어.' },
-    alternatives: ['Oh no, I forgot my eraser.', "Oh no, I haven't got a rubber.", "I don't have my rubber."],
-    level: 2, func: 'noticing', kind: 'new', reviewOf: null, reuseIn: [],
+    situationKo: '내 연필은 제이미에게 줬어요. 이제 그릴 도구가 없는데 옆자리 미아 필통에는 연필이 여러 자루 있어요.',
+    roleKo: '미아에게 하나 잠깐 써도 되는지 물어봐요.',
+    en: 'Can I borrow a pencil?', ko: '연필 좀 빌려도 돼?',
+    reply: { speaker: 'Mia', en: 'Sure! Here you are.', ko: '그럼! 여기 있어.' },
+    alternatives: ['Could I borrow a pencil?', 'Can I use one of your pencils?', 'Have you got a spare pencil?'],
+    level: 1, func: 'borrowing', kind: 'new', reviewOf: null, reuseIn: [],
   },
   {
     id: 's02-04', episode: 2, order: 4,
-    situationKo: '앞자리 미아의 책상 위에 지우개가 두 개 있어요. 하나만 잠깐 쓰고 싶어요.',
+    situationKo: '선을 잘못 그었는데 지울 것이 없어요. 앞자리 미아의 책상 위에는 지우개가 두 개 있어요.',
     roleKo: '미아의 물건을 잠깐 써도 되는지 허락을 받아요.',
     en: 'Can I borrow your rubber?', ko: '지우개 좀 빌려도 돼?',
     reply: { speaker: 'Mia', en: 'Sure. Here you go.', ko: '그럼. 여기 있어.' },

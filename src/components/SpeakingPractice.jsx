@@ -1,5 +1,5 @@
 import { Suspense, lazy, useState } from 'react'
-import { BASIC_SET_ID, listSets } from '../utils/situation/speakingSets'
+import { BASIC_SET_ID, keySentenceFor, listSets } from '../utils/situation/speakingSets'
 
 // 2026-10-04 Speaking UX v2 — Speaking 영역 루트: 메뉴 / 회화 연습 / 시험(SpeakingExam, lazy).
 // 설계: docs/design/SPEAKING_UX_V2_2026-10-04.md. 녹음은 브라우저 메모리에만 있고 저장/전송 없음.
@@ -8,6 +8,7 @@ import { BASIC_SET_ID, listSets } from '../utils/situation/speakingSets'
 // 이 화면을 다녀온 뒤 WordDetail 따라 말하기가 정상인지 실기기에서 확인할 것.
 const SpeakingPracticeMode = lazy(() => import('./SpeakingPracticeMode'))
 const SpeakingExam = lazy(() => import('./SpeakingExam'))
+const KeySentenceFlow = lazy(() => import('./KeySentenceFlow'))
 const FALLBACK = <div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>
 const MENU_CARD = 'w-full min-h-[96px] px-4 py-5 rounded-3xl font-black text-xl btn-press card-shadow text-white bg-gradient-to-br'
 
@@ -17,9 +18,11 @@ export default function SpeakingPractice({ onBack, studentId, initialMode = 'men
   const [examKey, setExamKey] = useState(0)
   const [setId, setSetId] = useState(BASIC_SET_ID)
   const goMenu = () => setMode('menu')
+  const key = keySentenceFor(setId)
   const startExam = () => { setExamKey((k) => k + 1); setMode('exam') }
 
   if (mode === 'practice') return <Suspense fallback={FALLBACK}><SpeakingPracticeMode setId={setId} onMenu={goMenu} onStartExam={examEnabled ? startExam : null} /></Suspense>
+  if (mode === 'key') return <Suspense fallback={FALLBACK}><KeySentenceFlow setId={setId} onMenu={goMenu} /></Suspense>
   if (mode === 'exam') {
     return (
       <Suspense fallback={FALLBACK}>
@@ -40,6 +43,13 @@ export default function SpeakingPractice({ onBack, studentId, initialMode = 'men
             ))}
           </div>
         </div>
+        {key && (
+          <div data-testid="speaking-menu-key-card" className="bg-white rounded-3xl p-4 card-shadow space-y-3">
+            <p className="text-lg font-black text-gray-900">📌 오늘 기억할 한 문장</p>
+            <p className="text-base font-bold text-gray-700">{key.goalKo}</p>
+            <button data-testid="speaking-menu-key" onClick={() => setMode('key')} className={`${MENU_CARD} from-emerald-400 to-teal-600`}>🧠 한 문장 이야기 시작</button>
+          </div>
+        )}
         <button data-testid="speaking-menu-practice" onClick={() => setMode('practice')} className={`${MENU_CARD} from-sky-400 to-blue-600`}>🗣️ 회화 연습</button>
         {examEnabled && (
           <button data-testid="speaking-menu-exam" onClick={startExam} className={`${MENU_CARD} from-amber-400 to-orange-500`}>📝 한글 보고 말하기</button>
