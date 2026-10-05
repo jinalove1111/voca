@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-06 (216차 — **Speaking Paul 기준 얼굴 교체**: 운영자 제공 `폴얼굴.png`(이미 투명 배경)를 모자 챙 기준 미아와 같은 크기로 정규화해 `src/assets/speaking/paul_speaking.png`, Speaking 장면의 저화질 마스코트 4포즈 대체. 한 포즈뿐이라 묻는 순간 "?" 말풍선으로 보완. e2e speaking 434/0·speaking-exam 216/0(mock). 로그인 Preview 실화면 미확인. DB·SQL·Production 0, PR #62 Draft. 아래 216차 섹션 참고.)_
+_최종 갱신: 2026-10-06 (217차 — **2화 완성도 점검 → 수정 + 1·3화 "오늘 기억할 한 문장" 확장(기존 에셋만)**. 2화: 시간선(nextHook·요약·회상 시점·앞자리), 역할 힌트 완화, 화자 이름표 한글 통일. 1화 "Could you speak a bit louder?"(속삭임 장면), 3화 "That's a great idea!"(제안 장면) — 임시 선정, 운영자 확인 필요. 장면 이름을 데이터로 옮기며 보기 단계 하드코딩 결함 발견·수정. e2e speaking 468/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 217차 섹션 참고.)_
+_216차 갱신: 2026-10-06 (216차 — **Speaking Paul 기준 얼굴 교체**: 운영자 제공 `폴얼굴.png`(이미 투명 배경)를 모자 챙 기준 미아와 같은 크기로 정규화해 `src/assets/speaking/paul_speaking.png`, Speaking 장면의 저화질 마스코트 4포즈 대체. 한 포즈뿐이라 묻는 순간 "?" 말풍선으로 보완. e2e speaking 434/0·speaking-exam 216/0(mock). 로그인 Preview 실화면 미확인. DB·SQL·Production 0, PR #62 Draft. 아래 216차 섹션 참고.)_
 _215차 갱신: 2026-10-05 (215차 — **2화 일반 회화 연습도 Paul·미아 이야기로**: 운영자 결정(4문항 영어 최소 교체) — s02-01 my pencil case / 02 I haven't got a pencil. / 09 Oh no, my pencil broke! / 10 I left my pencil case at home., 03 상황 정합, 상대 전부 미아, 2화 제이미 0. 5문항에 흐름 장면 정지 그림 연결(연습만, 시험 제외). ID 유지. e2e speaking 434/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 215차 섹션 참고.)_
 _214차 갱신: 2026-10-05 (214차 — **운영자 정정: 핵심 한 문장 흐름의 임시 제이미 그림 → 승인된 여성 캐릭터 = 미아로 통일**. 흐름 이야기를 Paul+미아 두 사람으로 재구성(내 필통의 숟가락 → 미아가 연필, 연필심 부러짐 → 다시, 다음 날 필통 두고 옴 → 다시), 미아 4포즈 전부 사용, 제이미·SVG 임시 인물 제거. 키 문장·id·정답 숨김 유지. e2e speaking 429/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 214차 섹션 참고.)_
 _213차 갱신: 2026-10-05 (213차 — **2화 미아를 운영자 제공 여성 캐릭터로 교체**: 4포즈 분리(알파 실측: 검은 배경 없음, 내부 알파 250~253 → 255), 모자 챙 기준 얼굴 크기 통일, 미아 장면 생각 → 연필 내밀기 → 인사. Paul 무변경. e2e speaking 424/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 213차 섹션 참고.)_
@@ -27,6 +28,18 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-06 (217차) — 2화 완성도 점검·수정 + 1·3화 한 문장 흐름 확장(기존 에셋)
+
+운영자 지시: Paul 교체(0d3e54b3) 재작업 금지, 2화 완성도 점검부터, 추가 포즈 없이 기존 에셋으로 1·3화 확장, 미완료는 기록. 시작 HEAD = 원격 = `0d3e54b3`.
+
+- **2화 점검**: 독립 리뷰(읽기 전용) — 인물·소품 일관성·정답 숨김 complete, 시간선·이름표·역할 힌트 needs-fix. 수정 커밋 `532c4c51`(nextHook "내일" 제거, 요약에 연필 부러짐, 회상 시점 = s02-09, 앞자리 통일, s02-01/04/08 역할, `SPEAKER_KO` 하나로 Mia=미아·Jamie=제이미·Cookie=쿠키) + `b2920745`(이름표 핀). 영어·ID 무변경. s02-10 "Again?"은 의도적으로 유지.
+- **1·3화 확장**(`storyEpisodes.js` ep01/ep03 `keySentence`, `PencilCaseScene.jsx` 변형 whisper/quiet/noisy·idea/poster/snack + 미아 말풍선·소음·포스터·쿠키, `KeySentenceFlow.jsx` 장면 이름을 `keySentence.scenes`에서·회상 reply 선택): 1화 s01-08 "Could you speak a bit louder?", 3화 s03-06 "That's a great idea!"(둘 다 상대 미아, 다음 회차 복습 문항 있음 — 임시 선정). 문항·ID·영어 무변경. 메뉴 카드는 1·2·3화 선택 시 표시(4화부터 없음).
+- **발견·수정한 결함**: 보기 단계가 `variant="spoon"`으로 하드코딩돼 1·3화 보기에 2화 필통 장면이 나옴 — 360px 캡처로 발견, `ks.scenes.watch`로 수정 + 정적 핀.
+- **테스트**: testSpeakingSets(핵심 문장 공통 규칙 — 같은 회차 문항 일치·상대 미아·장면 이름 유효·공개 전 한글 ≤60자/영어·답 어간·자기 뜻 없음·짧은 대화 영어 다름, 4화 null), testKeySentenceFlow(aria-label 전 변형 영어 없음, 장면 하드코딩 없음), e2e k1(핵심 문장 없는 예시 ep01 → ep04), k9(1·3화 보기 → 회상 → 다른 상황 → 끝: 장면 변형, 공개 전 DOM에 영어·듣기·답 없음, 공개 후 모범 표현·미아 대사, 1화만 "?" 말풍선, 가로 스크롤 없음).
+- **검증**: build PASS(경고 0). 정적 9종 PASS. 브라우저(mock, 여유 RAM 약 2GB라 스펙당 1회): `[speaking]` 468/0, `[speaking-exam]` 216/0. 360px 1·3화 장면 14프레임 캡처 확인.
+- **미완료(기록, 설계 §18.3)**: 1·3화 핵심 문장 운영자 확인, 1화 교사 "폴 선생님"과 주인공 Paul 이름 겹침, 1·3화 연습 문항 정지 장면 미연결, Paul 추가 포즈 미제공, 4~10화 미확장, 로그인 Preview·마이크·TTS·아이 이해·기억 효과 미확인.
+- DB·SQL·Production·`.env`·`C:\voca` 접촉 0. QA 게이트 무변경, PR #62 Draft. 체크포인트 `.ai-status/orchestrator-speaking-ep2-audit-ep13-2026-10-06.json`.
 
 ## 2026-10-06 (216차) — Speaking Paul 기준 얼굴(운영자 제공 고화질) 교체
 
