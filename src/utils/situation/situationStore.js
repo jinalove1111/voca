@@ -2,7 +2,7 @@
 // 키에는 students.id(UUID)만 쓴다(규칙 4 — 이름 키 금지). 오디오/점수/완료·숙달 플래그는 저장하지 않는다.
 // 레코드: { [exprId]: { lastPracticedDate: 'YYYY-MM-DD', sessions: [{date, scene, hintLevel, stage: 'recall'|'transfer', selfReport, recorded}] } }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export const MAX_SESSIONS = 10
 
 export const storeKey = (studentId) => (UUID_RE.test(studentId || '') ? `paulEasyVoca_situationRecall_${studentId}` : null)
