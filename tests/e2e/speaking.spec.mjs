@@ -546,7 +546,8 @@ export async function run(browser, baseURL) {
   const hero = async (page) => T(page, 'key-scene-hero').evaluate((el) => { const href = el.getAttribute('href') || ''; const img = new Image(); img.src = href; return new Promise((res) => { const done = () => res({ pose: el.closest('[data-testid="key-scene"]').getAttribute('data-hero-pose'), href, ok: img.naturalWidth > 0, h: el.getBoundingClientRect().height }); if (img.complete) done(); else { img.onload = done; img.onerror = done } }) })
   const partner = async (page) => T(page, 'key-scene-partner').evaluate((el) => { const href = el.getAttribute('href') || ''; const img = new Image(); img.src = href; return new Promise((res) => { const done = () => res({ pose: el.closest('[data-testid="key-scene"]').getAttribute('data-partner-pose'), href, ok: img.naturalWidth > 0, h: el.getBoundingClientRect().height }); if (img.complete) done(); else { img.onload = done; img.onerror = done } }) })
   const partnerIs = async (page, pose, file) => { const p = await partner(page); return p.pose === pose && p.href.includes(file) && p.ok }
-  const heroIs = async (page, pose) => { const h = await hero(page); return h.pose === pose && h.href.includes(`paul_${pose}`) && h.ok }
+  // 216차: Paul은 기준 그림 한 장(paul_speaking) — 'asking'(묻는 순간 '?' 말풍선) / 'paul'(그 외)
+  const heroIs = async (page, pose) => { const h = await hero(page); return h.pose === pose && h.href.includes('paul_speaking') && h.ok && ((await T(page, 'key-scene-asking').count()) === (pose === 'asking' ? 1 : 0)) }
   const running = (page) => page.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.target?.closest?.('[data-testid="key-scene"]')).length)
   const runningNames = (page) => page.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running').map((a) => `${a.animationName || a.transitionProperty || '?'}@${a.effect?.target?.getAttribute?.('class') || a.effect?.target?.tagName}`).join(','))
 
@@ -577,10 +578,10 @@ export async function run(browser, baseURL) {
     r.check(`${name} 장면 variant=spoon`, (await sceneAttr(page, 'data-variant')) === 'spoon')
     r.check(`${name} 시작: 내 자리 빈 윤곽(연필 없음)·미아 생각 포즈`, (await sceneAttr(page, 'data-my-spot')) === 'empty' && (await T(page, 'key-scene-empty-spot').count()) === 1 && (await partnerIs(page, 'think', 'mia_think')))
     const surprised = await waitUntil(async () => (await sceneAttr(page, 'data-phase')) === 'spoon', { timeout: 3000 })
-    r.check(`${name} 숟가락 순간: Paul 깜짝(almost)·미아 놀람(surprise)`, !!surprised && (await heroIs(page, 'almost')) && (await partnerIs(page, 'surprise', 'mia_surprise')), JSON.stringify(await partner(page)))
+    r.check(`${name} 숟가락 순간: Paul(기준 그림)·미아 놀람(surprise)`, !!surprised && (await heroIs(page, 'paul')) && (await partnerIs(page, 'surprise', 'mia_surprise')), JSON.stringify(await partner(page)))
     const done = await waitUntil(async () => (await sceneAttr(page, 'data-phase')) === 'handed', { timeout: 7000 })
     r.check(`${name} 7초 안에 data-phase=handed`, !!done, await sceneAttr(page, 'data-phase'))
-    r.check(`${name} 끝 장면: Paul 엄지(happy)·내 책상에 연필·미아 빈 손 인사(greet)`, (await heroIs(page, 'happy')) && (await sceneAttr(page, 'data-my-spot')) === 'pencil' && (await partnerIs(page, 'greet', 'mia_greet')), JSON.stringify([await hero(page), await partner(page)]))
+    r.check(`${name} 끝 장면: Paul 엄지·내 책상에 연필·미아 빈 손 인사(greet)`, (await heroIs(page, 'paul')) && (await sceneAttr(page, 'data-my-spot')) === 'pencil' && (await partnerIs(page, 'greet', 'mia_greet')), JSON.stringify([await hero(page), await partner(page)]))
     r.check(`${name} 이름표 나/미아, 임시 인물(제이미) 없음`, ((await T(page, 'key-scene').textContent()) || '').replace(/\s/g, '') === '나미아' && !(await txt(page, 'key-flow')).includes('제이미'))
     r.check(`${name} 보기 단계: 한국어 상황 + 영어 + 뜻이 함께 보임`, (await txt(page, 'situation-text')) === KS.watch.situationKo && (await txt(page, 'key-sentence')).includes(KS.en) && (await txt(page, 'key-sentence')).includes(KS.ko))
     r.check(`${name} 장면 안에 영어 글자 없음`, !(await T(page, 'key-scene').evaluate((el) => /[A-Za-z]/.test(el.textContent || ''))))
@@ -601,7 +602,7 @@ export async function run(browser, baseURL) {
     r.check(`${name} 짧은 대화 + 상황/역할 보임`, (await txt(page, 'key-intro')).includes('짧은 대화') && (await txt(page, 'situation-text')) === KS.recall.situationKo && (await txt(page, 'situation-role')).includes(KS.recall.roleKo))
     r.check(`${name} 장면 variant=ask`, (await sceneAttr(page, 'data-variant')) === 'ask')
     r.check(`${name} 짧은 대화 상대 이름 = 미아(제이미 없음)·내 자리 부러진 연필`, (await txt(page, 'key-intro')).includes('미아:') && !(await txt(page, 'key-intro')).includes('제이미') && (await sceneAttr(page, 'data-my-spot')) === 'broken' && (await T(page, 'key-scene-broken').count()) === 1)
-    r.check(`${name} 공개 전 Paul 묻는 포즈(lets_learn)`, await heroIs(page, 'lets_learn'), JSON.stringify(await hero(page)))
+    r.check(`${name} 공개 전 Paul 묻기 '?' 말풍선`, await heroIs(page, 'asking'), JSON.stringify(await hero(page)))
     r.check(`${name} 공개 전 상대 = 미아 그림(생각 포즈)·이름표 미아`, (await partnerIs(page, 'think', 'mia_think')) && (await T(page, 'key-scene').textContent()).includes('미아'), JSON.stringify(await partner(page)))
     await hiddenBeforeReveal(page, name)
     r.check(`${name} 공개 전 다음 버튼 비활성`, await T(page, 'key-next').isDisabled())
@@ -609,7 +610,7 @@ export async function run(browser, baseURL) {
     r.check(`${name} 공개 후 라벨/EN/KO/다른 말 문구`, (await txt(page, 'key-answer-label')) === '이렇게 말할 수 있어요' && (await txt(page, 'key-answer-en')) === KS.en && (await txt(page, 'key-answer')).includes(KS.ko) && (await txt(page, 'key-other-ways')).includes('다른 말로 말해도'))
     r.check(`${name} 공개 후 미아 대사`, (await txt(page, 'key-reply')).includes('Sure! Here you are.'))
     r.check(`${name} 공개 후 장면 variant=handover-mia`, !!(await waitUntil(async () => (await sceneAttr(page, 'data-variant')) === 'handover-mia', { timeout: 3000 })))
-    r.check(`${name} 연필 받은 뒤 Paul 기쁨 포즈(happy) + 연필이 내 책상 자리로`, !!(await waitUntil(async () => (await heroIs(page, 'happy')) && (await sceneAttr(page, 'data-my-spot')) === 'pencil', { timeout: 3000 })), JSON.stringify(await hero(page)))
+    r.check(`${name} 연필 받은 뒤 Paul 엄지(기준 그림) + 연필이 내 책상 자리로`, !!(await waitUntil(async () => (await heroIs(page, 'paul')) && (await sceneAttr(page, 'data-my-spot')) === 'pencil', { timeout: 3000 })), JSON.stringify(await hero(page)))
     r.check(`${name} 건넨 뒤 미아 인사 포즈(빈 손)`, await partnerIs(page, 'greet', 'mia_greet'), JSON.stringify(await partner(page)))
     const before = (await speakLog(page)).length
     await T(page, 'key-listen').click()
@@ -623,10 +624,10 @@ export async function run(browser, baseURL) {
     await toStep(page, 'transfer')
     r.check(`${name} data-step=transfer, 진행 3 / 3, 안내 문구`, (await flowStep(page)) === 'transfer' && (await txt(page, 'key-progress')) === '3 / 3' && (await bodyText(page)).includes('이번엔 다른 상황에서'))
     r.check(`${name} 상황/역할 = transfer 텍스트, variant=forgot(필통 없는 점선 자리)·미아 생각`, (await txt(page, 'situation-text')) === KS.transfer.situationKo && (await txt(page, 'situation-role')).includes(KS.transfer.roleKo) && (await sceneAttr(page, 'data-variant')) === 'forgot' && (await T(page, 'key-scene-no-case').count()) === 1 && (await partnerIs(page, 'think', 'mia_think')))
-    r.check(`${name} 공개 전 Paul 묻는 포즈(lets_learn)`, await heroIs(page, 'lets_learn'))
+    r.check(`${name} 공개 전 Paul 묻기 '?' 말풍선`, await heroIs(page, 'asking'))
     await hiddenBeforeReveal(page, name)
     await T(page, 'key-reveal').click()
-    r.check(`${name} 연필 받은 뒤 Paul 기쁨 포즈(happy)`, !!(await waitUntil(() => heroIs(page, 'happy'), { timeout: 3000 })))
+    r.check(`${name} 연필 받은 뒤 Paul 엄지(기준 그림)`, !!(await waitUntil(() => heroIs(page, 'paul'), { timeout: 3000 })))
     r.check(`${name} 공개 후 라벨/EN/다른 말 문구`, (await txt(page, 'key-answer-label')) === '이렇게 말할 수 있어요' && (await txt(page, 'key-answer-en')) === KS.en && (await txt(page, 'key-other-ways')).includes('다른 말로 말해도'))
     r.check(`${name} 공개 후 미아 대사 + variant=handover-forgot + 미아 인사`, (await txt(page, 'key-reply')).includes(KS.transfer.reply.en) && !!(await waitUntil(async () => (await sceneAttr(page, 'data-variant')) === 'handover-forgot' && (await partnerIs(page, 'greet', 'mia_greet')), { timeout: 3000 })))
     r.check(`${name} 3단계 전체에 제이미 없음`, !(await txt(page, 'key-flow')).includes('제이미'))
@@ -652,7 +653,7 @@ export async function run(browser, baseURL) {
   await scenario('k6 모션 감소', VP, { reduced: true }, async ({ page, name, openMenu }) => {
     await openKey(page, openMenu)
     r.check(`${name} spoon 장면 즉시 data-phase=handed`, (await sceneAttr(page, 'data-phase')) === 'handed' && (await sceneAttr(page, 'data-variant')) === 'spoon')
-    r.check(`${name} 모션 없이도 같은 결과 장면: 열린 필통 속 숟가락·내 책상의 연필·Paul 엄지·미아 빈 손`, (await heroIs(page, 'happy')) && (await sceneAttr(page, 'data-my-spot')) === 'pencil' && (await partnerIs(page, 'greet', 'mia_greet')))
+    r.check(`${name} 모션 없이도 같은 결과 장면: 열린 필통 속 숟가락·내 책상의 연필·Paul 엄지·미아 빈 손`, (await heroIs(page, 'paul')) && (await sceneAttr(page, 'data-my-spot')) === 'pencil' && (await partnerIs(page, 'greet', 'mia_greet')))
     r.check(`${name} 실행 중 애니메이션/전환 0개`, (await running(page)) === 0)
     await T(page, 'key-next').click()
     await T(page, 'key-reveal').click()
@@ -701,7 +702,7 @@ export async function run(browser, baseURL) {
         r.check(`${name} ${step} 가로 스크롤 없음`, await noOverflow(page))
         r.check(`${name} ${step} 버튼 전부 높이 >=44px`, (await smallButtons(page, 'key-flow')).length === 0, (await smallButtons(page, 'key-flow')).join(','))
         const sw = await T(page, 'key-scene').boundingBox()
-        r.check(`${name} ${step} Paul 이미지 로드·높이 >=140px(얼굴·손 식별)`, await hero(page).then((h) => h.ok && h.h >= 140), JSON.stringify(await hero(page)))
+        r.check(`${name} ${step} Paul 기준 그림 로드·높이 >=140px(얼굴·손 식별)`, await hero(page).then((h) => h.ok && h.h >= 140), JSON.stringify(await hero(page)))
         r.check(`${name} ${step} 장면이 화면 안에서 충분히 큼(>=300px)`, !!sw && sw.width >= 300 && sw.x >= 0 && sw.x + sw.width <= vp.width + 1, JSON.stringify(sw))
         if (step !== 'watch') {
           await T(page, 'key-reveal').click()
