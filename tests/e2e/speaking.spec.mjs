@@ -659,6 +659,40 @@ export async function run(browser, baseURL) {
     r.check(`${name} 공개 후 handover도 즉시 최종 장면(애니메이션 0)`, (await sceneAttr(page, 'data-phase')) === 'handed' && (await running(page)) === 0, `${await sceneAttr(page, 'data-phase')} ${await runningNames(page)}`)
   })
 
+  // ── k8. 2화 일반 회화 연습·시험이 Paul·미아 이야기와 일치(제이미 없음), 정지 장면은 연습에만 ─────────────
+  const EP2 = itemsForSet('ep02')
+  await scenario('k8 2화 연습·시험 연결', { width: 360, height: 640 }, {}, async ({ page, name, openMenu }) => {
+    await openMenu()
+    await T(page, 'speaking-set-ep02').click()
+    await T(page, 'speaking-menu-practice').click()
+    await T(page, 'speaking-practice').waitFor({ state: 'visible', timeout: 15000 })
+    const bad = []
+    for (let i = 0; i < EP2.length; i++) {
+      const it = EP2[i]
+      const root = T(page, 'speaking-practice')
+      await waitUntil(async () => (await root.getAttribute('data-expr')) === it.exprId, { timeout: 3000 })
+      const t = await txt(page, 'speaking-practice')
+      if (/제이미|Jamie/.test(t)) bad.push(`${it.id}:jamie`)
+      if ((await txt(page, 'situation-text')) !== it.practiceScene.situationKo || (await txt(page, 'practice-sentence')) !== it.en) bad.push(`${it.id}:text`)
+      if (!(await txt(page, 'practice-reply')).includes(it.reply.en)) bad.push(`${it.id}:reply`)
+      const sc = T(page, 'key-scene')
+      if (it.practiceScene.pencil) {
+        const ok = await waitUntil(async () => (await sc.count()) === 1 && (await sc.getAttribute('data-still')) === it.practiceScene.pencil.still && (await sc.getAttribute('data-variant')) === it.practiceScene.pencil.variant, { timeout: 5000 })
+        if (!ok) bad.push(`${it.id}:scene`)
+        else if (/[A-Za-z]/.test((await sc.textContent()) || '')) bad.push(`${it.id}:scene-english`)
+      } else if ((await sc.count()) !== 0) bad.push(`${it.id}:unexpected-scene`)
+      if (i < EP2.length - 1) await T(page, 'practice-next').click()
+    }
+    r.check(`${name} 2화 연습 12문항: 상황·문장·미아 대사 일치, 제이미 없음, 정지 장면 5문항(s02-01·02·03·09·10)만`, bad.length === 0 && EP2.filter((it) => it.practiceScene.pencil).map((it) => it.id).join(',') === 's02-01,s02-02,s02-03,s02-09,s02-10', bad.join(' '))
+    await T(page, 'speaking-back').click()
+    await T(page, 'speaking-menu-exam').click()
+    await T(page, 'exam-progress').waitFor({ state: 'visible', timeout: 15000 })
+    const first = EP2[0]
+    r.check(`${name} 2화 시험 1번: 공개 전 정지 장면·영어 문장·듣기 없음(한국어 상황만)`, (await T(page, 'key-scene').count()) === 0 && (await T(page, 'exam-listen').count()) === 0 && !(await page.evaluate((en) => document.documentElement.outerHTML.includes(en), first.en)) && (await txt(page, 'situation-text')) === first.examScene.situationKo)
+    await T(page, 'exam-reveal').click()
+    r.check(`${name} 2화 시험 1번: 공개 후 모범 표현·미아 대사`, (await txt(page, 'exam-answer')) === first.en && (await txt(page, 'speaking-exam')).includes(first.reply.en))
+  })
+
   for (const vp of [{ width: 360, height: 640 }, { width: 412, height: 915 }, { width: 1280, height: 800 }]) {
     await scenario('k7 레이아웃', vp, {}, async ({ page, name, openMenu }) => {
       await openKey(page, openMenu)

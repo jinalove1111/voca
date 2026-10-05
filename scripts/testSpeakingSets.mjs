@@ -75,6 +75,11 @@ st.setItem(lastSetKey(UID), 'ep99')
 check('진입 세트: 없는 세트 값은 기본값, 없는 세트 저장 거부', loadLastSet(st, UID) === 'ep02' && !saveLastSet(st, UID, 'ep99'))
 const boom = { getItem: () => { throw new Error('x') }, setItem: () => { throw new Error('x') } }
 check('진입 세트: storage 예외는 기본값/false(화면 계속 동작)', loadLastSet(boom, UID) === 'ep02' && saveLastSet(boom, UID, 'ep01') === false)
+// 2026-10-05(215차) 2화 일반 연습도 Paul·미아 이야기 — 제이미 없음, 정지 장면 5문항
+const EP2I = ITEMS.filter((i) => i.episode === 2)
+check('2화 문항에 제이미 없음(상황·역할·영어·상대)', EP2I.every((i) => !/제이미|Jamie/.test(i.situationKo + i.roleKo + i.en + i.reply.en) && i.reply.speaker !== 'Jamie') && !/제이미/.test(EPS[1].summaryKo))
+const STILL = { 's02-01': 'spoon/spoon', 's02-02': 'spoon/ask', 's02-03': 'spoon/ask', 's02-09': 'ask/ask', 's02-10': 'forgot/forgot' }
+check('2화 정지 장면 연결 5문항(itemsForSet scene.pencil)', itemsForSet('ep02').filter((x) => x.practiceScene.pencil).map((x) => `${x.id}=${x.practiceScene.pencil.variant}/${x.practiceScene.pencil.still}`).join(',') === Object.entries(STILL).map(([k, v]) => `${k}=${v}`).join(',') && itemsForSet('ep01').every((x) => !x.practiceScene.pencil))
 console.log(`INFO new 목표 ${newCount}개, 복습 문항 ${reviewCount}개`)
 
 if (fail) { console.log(`\nFAILED ${fail}`); process.exit(1) }
