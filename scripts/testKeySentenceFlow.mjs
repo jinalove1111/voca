@@ -37,6 +37,7 @@ check('Flow: 연습≠기억 문구', flow.includes('연습을 마쳤어요') &&
 check('Menu: key 카드는 keySentenceFor 있을 때만, 한글 목표만 표시, 영어 문장 직접 없음', /\{key && \(/.test(menu) && menu.includes('key.goalKo') && !/Can I borrow/.test(menu) && !/\{key\.en\}/.test(menu))
 const item = strip(read('SpeakingPracticeItem.jsx'))
 check('PracticeItem: 정지 장면은 연습에서만(!exam && scene.pencil), lazy 로드', /\{!exam && scene\.pencil && <Suspense/.test(item) && /const PencilCaseScene = lazy\(\(\) => import\('\.\/PencilCaseScene'\)\)/.test(item))
+check('화자 이름표: SPEAKER_KO 한 곳(PracticeItem)에서 Mia=미아, KeySentenceFlow는 가져다 씀', /export const SPEAKER_KO = \{[^}]*Mia: '미아'/.test(item) && /SPEAKER_KO \} from '\.\/SpeakingPracticeItem'/.test(flow) && !/const SPEAKER_KO/.test(flow))
 check('Menu: KeySentenceFlow lazy 로드', /const KeySentenceFlow = lazy\(\(\) => import\('\.\/KeySentenceFlow'\)\)/.test(menu))
 
 if (fail) { console.log(`\nFAILED ${fail}`); process.exit(1) }
