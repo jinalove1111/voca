@@ -12,13 +12,13 @@ const menu = strip(read('SpeakingPractice.jsx'))
 // PencilCaseScene
 const texts = [...scene.matchAll(/<text\b[^>]*>([\s\S]*?)<\/text>/g)].map((m) => m[1])
 check('Scene: <text> 존재(한글 이름표)하고 영어 글자 없음', texts.length > 0 && texts.every((t) => !/[A-Za-z]/.test(t.replace(/\{[^}]*\}/g, ''))))
-check('Scene: aria-label 문구에 영어 글자 없음', [...scene.matchAll(/^\s+(?:spoon|ask|'handover-mia'|lunchbox|'handover-jamie'): '([^']*)'/gm)].every((m) => !/[A-Za-z]/.test(m[1])))
+check('Scene: aria-label 문구에 영어 글자 없음', [...scene.matchAll(/^\s+(?:spoon|ask|'handover-mia'|forgot|'handover-forgot'): '([^']*)'/gm)].every((m) => !/[A-Za-z]/.test(m[1])))
 check('Scene: reduced motion 처리(matchMedia + CSS 미디어쿼리)', /matchMedia\??\.?\(['"]\(prefers-reduced-motion: reduce\)['"]\)/.test(scene) && /@media \(prefers-reduced-motion: reduce\)/.test(scene))
 check('Scene: 타이머 정리(clearTimeout)·반복 애니메이션 없음', /clearTimeout/.test(scene) && !/infinite/.test(scene))
-check('Scene: 주인공은 승인된 Paul 마스코트(assets/paul index)만, 5포즈 전부 매핑', /from '\.\.\/assets\/paul'/.test(scene) && ['paulThinking', 'paulAlmost', 'paulPonder', 'paulLetsLearn', 'paulHappy'].every((n) => scene.includes(n)) && !/paul_study|paul_reading|paulStudy|paulReading|paulOneMore|paulHello/.test(scene))
+check('Scene: 주인공은 승인된 Paul 마스코트(assets/paul index)만, 4포즈 매핑', /from '\.\.\/assets\/paul'/.test(scene) && ['paulThinking', 'paulAlmost', 'paulLetsLearn', 'paulHappy'].every((n) => scene.includes(n)) && !/paul_study|paul_reading|paulStudy|paulReading|paulOneMore|paulHello/.test(scene))
 check('Scene: 연필은 책상 위(FlatPencil)·빈 자리 점선 윤곽(data-my-spot)으로 표현, 손 그림 추가 없음', /function FlatPencil/.test(scene) && scene.includes('key-scene-empty-spot') && scene.includes('data-my-spot') && !/function (Hand|PaulHand)/.test(scene))
 check('Flow: 보기 단계에 한국어 상황(ks.watch) 표시', /SituationGuide scene=\{\{ id: 'key-watch', situationKo: ks\.watch\.situationKo \}\}/.test(flow))
-check('Scene: 2화 미아는 운영자 제공 분리본(assets/speaking/mia_*) — 생각/연필 내밀기/인사 포즈, 미아 장면에서만 사용', ['mia_think.png', 'mia_give_pencil.png', 'mia_greet.png'].every((f) => scene.includes(`../assets/speaking/${f}`)) && /const MIA_POSE = \{ ask: 'think', offer: 'give', handed: 'greet' \}/.test(scene) && /const mia = variant === 'ask' \|\| variant === 'handover-mia'/.test(scene))
+check('Scene: 상대는 미아 한 명 — 운영자 제공 분리본 4포즈(생각/놀람/연필 건네기/인사), 임시 SVG 인물·제이미 없음', ['mia_think.png', 'mia_surprise.png', 'mia_give_pencil.png', 'mia_greet.png'].every((f) => scene.includes(`../assets/speaking/${f}`)) && /spoon: 'surprise'/.test(scene) && /offer: 'give', handed: 'greet'/.test(scene) && !/function Partner|제이미|Jamie|lunchbox/.test(scene))
 check('Scene: data-testid/data-variant/data-phase 노출', ['key-scene', 'data-variant', 'data-phase'].every((w) => scene.includes(w)))
 
 // KeySentenceFlow

@@ -55,7 +55,9 @@ const ks = keySentenceFor('ep02')
 check('keySentenceFor: basic/ep01 null, ep02 있음', keySentenceFor('basic') === null && keySentenceFor('ep01') === null && !!ks)
 const ksItem = ITEMS.find((i) => i.id === ks?.itemId)
 check('keySentence.itemId 문항의 en/ko가 keySentence와 같음', !!ksItem && ksItem.en === ks.en && ksItem.ko === ks.ko && ks.en === 'Can I borrow a pencil?')
-check('transfer.partner가 recall.partner와 다름', ks.transfer.partner !== ks.recall.partner && SPEAKERS.includes(ks.transfer.reply.speaker) && ks.transfer.reply.speaker === ks.transfer.partner)
+check('흐름 상대는 미아 한 명(recall·transfer·reply·짧은 대화), transfer는 recall과 다른 상황', ks.recall.partner === 'Mia' && ks.transfer.partner === 'Mia' && ks.transfer.reply.speaker === 'Mia' && ks.transfer.situationKo !== ks.recall.situationKo && ks.introIds.length > 0 && ks.introIds.every((id) => ITEMS.find((i) => i.id === id)?.reply.speaker === 'Mia'))
+check('흐름 한글 텍스트에 제이미 없음', ![ks.watch.situationKo, ks.recall.situationKo, ks.recall.roleKo, ks.transfer.situationKo, ks.transfer.roleKo].some((t) => t.includes('제이미')))
+check('짧은 대화 문항의 영어가 키 문장 틀(Can I/borrow)을 담지 않음', ks.introIds.every((id) => !/can i|borrow/i.test(ITEMS.find((i) => i.id === id).en + ' ' + ITEMS.find((i) => i.id === id).reply.en)))
 const KS_TEXTS = [ks.goalKo, ks.watch?.situationKo, ks.recall.situationKo, ks.recall.roleKo, ks.transfer.situationKo, ks.transfer.roleKo, ksItem.situationKo, ksItem.roleKo]
 const STEMS = ['인사', '안녕', '반가', '미안', '사과', '고마', '감사', '도와', '도움', '부탁', '다시 말해']
 check('keySentence 한글 텍스트 ≤60자·영어 글자 없음', KS_TEXTS.every((t) => t && t.length <= 60 && !/[A-Za-z]/.test(t)))
