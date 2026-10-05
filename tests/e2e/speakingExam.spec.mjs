@@ -9,7 +9,7 @@ import { installMocks } from './lib/mockRoutes.mjs'
 import { createRecorder } from './lib/harness.mjs'
 import { QA_STUDENT_NAME, QA_LOGIN_PIN, QA_STUDENT_ID } from './fixtures/index.mjs'
 import { SITUATION_EXPRESSIONS, sceneFor } from '../../src/utils/situation/situationContent.js'
-import { itemsForSet } from '../../src/utils/situation/speakingSets.js'
+import { itemsForSet, lastSetKey } from '../../src/utils/situation/speakingSets.js'
 
 const VP = { width: 390, height: 844 }
 const VIEWPORTS = [{ width: 360, height: 640 }, VP, { width: 412, height: 915 }, { width: 1280, height: 800 }]
@@ -129,13 +129,15 @@ export async function run(browser, baseURL) {
   const mockErrors = []
   const ttsFallbackRequests = []
 
-  async function scenario(label, vp, { seed, flags, reduced = false } = {}, body) {
+  async function scenario(label, vp, { seed, flags, reduced = false, fresh = false } = {}, body) {
     const context = await browser.newContext({ viewport: vp })
     const page = await context.newPage()
     const errors = []
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
     page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`console: ${m.text()}`) })
     await installMic(page)
+    // 기존 시나리오 = '기본 표현 5개'를 이전에 고른 학생(첫 방문 기본값 2화는 fresh:true 시나리오가 검사). 이미 값이 있으면 덮지 않는다(새로고침 유지 검사용)
+    if (!fresh) await page.addInitScript((k) => { try { if (localStorage.getItem(k) === null) localStorage.setItem(k, 'basic') } catch { /* 무시 */ } }, lastSetKey(QA_STUDENT_ID))
     if (seed) await seedStorage(page, seed)
     if (flags) await setDeviceFlags(page, flags)
     if (reduced) await page.emulateMedia({ reducedMotion: 'reduce' })

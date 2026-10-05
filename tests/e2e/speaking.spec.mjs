@@ -8,10 +8,10 @@
 // 파일당 소유권 원칙(규칙 16)에 따라 다른 spec의 헬퍼는 복제한다.
 import { installMocks } from './lib/mockRoutes.mjs'
 import { createRecorder } from './lib/harness.mjs'
-import { QA_STUDENT_NAME, QA_LOGIN_PIN } from './fixtures/index.mjs'
+import { QA_STUDENT_NAME, QA_LOGIN_PIN, QA_STUDENT_ID } from './fixtures/index.mjs'
 import { SPEAKING_MESSAGES } from '../../src/utils/speaking/speakingSession.js'
 import { SITUATION_EXPRESSIONS, sceneFor } from '../../src/utils/situation/situationContent.js'
-import { itemsForSet, keySentenceFor } from '../../src/utils/situation/speakingSets.js'
+import { itemsForSet, keySentenceFor, lastSetKey, DEFAULT_SET_ID } from '../../src/utils/situation/speakingSets.js'
 
 const VP = { width: 390, height: 844 }
 const VPS = [{ width: 360, height: 640 }, VP, { width: 412, height: 915 }]
@@ -110,10 +110,12 @@ export async function run(browser, baseURL) {
   const mockErrors = []
   const ttsFallbackRequests = []
 
-  async function scenario(label, vp, { mic = 'synth', flags, userAgent, writeGuard = true, reduced = false } = {}, body) {
+  async function scenario(label, vp, { mic = 'synth', flags, userAgent, writeGuard = true, reduced = false, fresh = false } = {}, body) {
     const context = await browser.newContext({ viewport: vp, ...(userAgent ? { userAgent } : {}) })
     const page = await context.newPage()
     if (reduced) await page.emulateMedia({ reducedMotion: 'reduce' })
+    // 기존 시나리오 = '기본 표현 5개'를 이전에 고른 학생(첫 방문 기본값 2화는 fresh:true 시나리오가 검사). 이미 값이 있으면 덮지 않는다(새로고침 유지 검사용)
+    if (!fresh) await page.addInitScript((k) => { try { if (localStorage.getItem(k) === null) localStorage.setItem(k, 'basic') } catch { /* 무시 */ } }, lastSetKey(QA_STUDENT_ID))
     const errors = []
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
     page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`console: ${m.text()}`) })
@@ -543,18 +545,25 @@ export async function run(browser, baseURL) {
   const running = (page) => page.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.target?.closest?.('[data-testid="key-scene"]')).length)
   const runningNames = (page) => page.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running').map((a) => `${a.animationName || a.transitionProperty || '?'}@${a.effect?.target?.getAttribute?.('class') || a.effect?.target?.tagName}`).join(','))
 
-  await scenario('k1 메뉴 카드', VP, {}, async ({ page, name, openMenu }) => {
+  await scenario('k1 메뉴 카드(첫 방문 2화 기본·선택 기억)', VP, { fresh: true }, async ({ page, name, openMenu }) => {
     await openMenu()
-    r.check(`${name} basic: key 버튼 없음`, (await T(page, 'speaking-menu-key').count()) === 0)
-    await T(page, 'speaking-set-ep01').click()
-    r.check(`${name} ep01: key 버튼 없음`, (await T(page, 'speaking-menu-key').count()) === 0)
-    await T(page, 'speaking-set-ep02').click()
-    r.check(`${name} ep02: key 버튼 보임`, await T(page, 'speaking-menu-key').isVisible())
+    r.check(`${name} 첫 방문: ${DEFAULT_SET_ID} 선택됨 + 오늘의 이야기 카드 바로 보임`, DEFAULT_SET_ID === 'ep02' && (await T(page, 'speaking-set-ep02').getAttribute('aria-pressed')) === 'true' && (await T(page, 'speaking-menu-key').isVisible()))
+    const box = async (id) => (await T(page, id).boundingBox())?.y ?? -1
+    r.check(`${name} 카드가 세트 선택보다 위`, (await box('speaking-menu-key-card')) < (await box('speaking-set-basic')))
     const card = await txt(page, 'speaking-menu-key-card')
-    r.check(`${name} 카드에 한글 목표 있고 영어 글자 없음`, card.includes(KS.goalKo) && !/[A-Za-z]/.test(card), card)
+    r.check(`${name} 카드에 오늘의 이야기·2화 제목·한글 목표 있고 영어 글자 없음`, card.includes('오늘의 이야기') && card.includes('2화 숟가락이 든 필통') && card.includes(KS.goalKo) && !/[A-Za-z]/.test(card), card)
+    r.check(`${name} 회화 연습·한글 보고 말하기 버튼 유지`, (await T(page, 'speaking-menu-practice').isVisible()) && (await T(page, 'speaking-menu-exam').isVisible()))
+    r.check(`${name} 10화 + 기본 세트 칩 전부 보임`, (await page.locator('[data-testid^="speaking-set-"]').count()) === 11)
     r.check(`${name} 메뉴 가로 스크롤 없음/버튼 >=44px`, (await noOverflow(page)) && (await smallButtons(page, 'speaking-menu')).length === 0)
-    await T(page, 'speaking-set-basic').click()
-    r.check(`${name} basic으로 돌아가면 key 버튼 사라짐`, (await T(page, 'speaking-menu-key').count()) === 0)
+    await T(page, 'speaking-set-ep01').click()
+    r.check(`${name} ep01 선택: 카드 사라짐(핵심 문장 없음), ep01 선택 유지`, (await T(page, 'speaking-menu-key').count()) === 0 && (await T(page, 'speaking-set-ep01').getAttribute('aria-pressed')) === 'true')
+    r.check(`${name} 선택은 UUID 키로만 기록`, (await page.evaluate((k) => localStorage.getItem(k), lastSetKey(QA_STUDENT_ID))) === 'ep01' && !(await page.evaluate((n) => Object.keys(localStorage).some((k) => k.includes(n)), QA_STUDENT_NAME)))
+    // 홈으로 나갔다가 다시 진입 — SpeakingPractice가 새로 마운트되어 저장된 선택을 읽는다
+    await T(page, 'speaking-menu-home').click()
+    await openMenu()
+    r.check(`${name} 다시 들어와도 ep01 선택 존중(2화로 되돌리지 않음)`, (await T(page, 'speaking-set-ep01').getAttribute('aria-pressed')) === 'true' && (await T(page, 'speaking-menu-key').count()) === 0)
+    await T(page, 'speaking-set-ep02').click()
+    r.check(`${name} 2화 다시 고르면 카드 다시 보임`, await T(page, 'speaking-menu-key').isVisible())
   })
 
   await scenario('k2 보기 단계', VP, {}, async ({ page, name, openMenu }) => {

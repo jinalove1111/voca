@@ -1,7 +1,7 @@
 // 2026-10-04 Speaking 세트(기본 5개 + 이야기 회차) — 정규화 항목과 이야기 콘텐츠 정적 검사(순수, 번들·네트워크 불필요)
 import { SITUATION_EXPRESSIONS as EX } from '../src/utils/situation/situationContent.js'
 import { STORY_EPISODES as EPS, STORY_ITEMS as ITEMS } from '../src/utils/situation/storyEpisodes.js'
-import { listSets, itemsForSet, keySentenceFor, BASIC_SET_ID } from '../src/utils/situation/speakingSets.js'
+import { listSets, itemsForSet, keySentenceFor, BASIC_SET_ID, DEFAULT_SET_ID, lastSetKey, loadLastSet, saveLastSet } from '../src/utils/situation/speakingSets.js'
 
 let fail = 0
 const check = (name, ok) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if (!ok) fail++ }
@@ -62,6 +62,17 @@ check('keySentence 한글 텍스트 ≤60자·영어 글자 없음', KS_TEXTS.ev
 check('keySentence 상황·역할 텍스트에 빌려/빌리·답 어간·자기 뜻 없음(goalKo는 라벨이라 빌리는 말 허용)', KS_TEXTS.every((t) => (t === ks.goalKo || !/빌려|빌리/.test(t)) && !STEMS.some((w) => t.includes(w)) && !t.includes(stripEnd(ks.ko))))
 check('다른 문항에 같은 영어 문장 없음(키 문장은 s02-03 하나)', ITEMS.filter((i) => norm(i.en) === norm(ks.en)).length === 1)
 check('ep02 situationKo/roleKo에 빌려/빌리 없음(키 문장 문항)', !/빌려|빌리/.test(ksItem.situationKo + ksItem.roleKo))
+// 2026-10-05 진입 세트: 첫 방문 2화, 고른 세트 기억(UUID 키만), 잘못된 값·저장 실패는 기본값
+const mem = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), m } }
+const UID = 'e2e00000-0000-4000-8000-00000000a001'
+const st = mem()
+check('진입 세트: 첫 방문은 ep02이고 keySentence 있음', DEFAULT_SET_ID === 'ep02' && loadLastSet(st, UID) === 'ep02' && !!keySentenceFor(DEFAULT_SET_ID))
+check('진입 세트: 고른 세트 기억(ep05, basic)', saveLastSet(st, UID, 'ep05') && loadLastSet(st, UID) === 'ep05' && saveLastSet(st, UID, BASIC_SET_ID) && loadLastSet(st, UID) === BASIC_SET_ID)
+check('진입 세트: 키는 UUID만(이름·빈 값은 저장 안 함, 키 null)', lastSetKey('Paul') === null && lastSetKey('') === null && !saveLastSet(st, 'Paul', 'ep01') && lastSetKey(UID).endsWith(UID) && [...st.m.keys()].every((k) => k.endsWith(UID)))
+st.setItem(lastSetKey(UID), 'ep99')
+check('진입 세트: 없는 세트 값은 기본값, 없는 세트 저장 거부', loadLastSet(st, UID) === 'ep02' && !saveLastSet(st, UID, 'ep99'))
+const boom = { getItem: () => { throw new Error('x') }, setItem: () => { throw new Error('x') } }
+check('진입 세트: storage 예외는 기본값/false(화면 계속 동작)', loadLastSet(boom, UID) === 'ep02' && saveLastSet(boom, UID, 'ep01') === false)
 console.log(`INFO new 목표 ${newCount}개, 복습 문항 ${reviewCount}개`)
 
 if (fail) { console.log(`\nFAILED ${fail}`); process.exit(1) }
