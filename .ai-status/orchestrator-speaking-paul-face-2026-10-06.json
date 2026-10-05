@@ -1,0 +1,14 @@
+{
+  "agent_name": "orchestrator",
+  "role": "에셋 정규화·구현·검증·문서·push",
+  "task_id": "speaking-paul-face-2026-10-06",
+  "task": "운영자 제공 Paul 기준 얼굴로 Speaking 장면 Paul 교체",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-06T00:10:00+09:00",
+  "updated_at": "2026-10-06T00:50:00+09:00",
+  "files_owned": ["src/assets/speaking/paul_speaking.png", "src/components/PencilCaseScene.jsx", "scripts/testKeySentenceFlow.mjs", "tests/e2e/speaking.spec.mjs", "docs/design/SPEAKING_UX_V2_2026-10-04.md", "handoff.md"],
+  "summary": "[mock 기반] 원본 이미 투명. 챙 160px 정규화, 미아와 같은 배율. 한 포즈뿐 → ? 말풍선 보완. e2e speaking 434/0, speaking-exam 216/0.",
+  "blocker": null,
+  "next_action": "운영자: 로그인한 모바일 Preview에서 확인, 추가 Paul 포즈(놀람·묻기·생각·받기) 제공 여부"
+}

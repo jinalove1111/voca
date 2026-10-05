@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-05 (215차 — **2화 일반 회화 연습도 Paul·미아 이야기로**: 운영자 결정(4문항 영어 최소 교체) — s02-01 my pencil case / 02 I haven't got a pencil. / 09 Oh no, my pencil broke! / 10 I left my pencil case at home., 03 상황 정합, 상대 전부 미아, 2화 제이미 0. 5문항에 흐름 장면 정지 그림 연결(연습만, 시험 제외). ID 유지. e2e speaking 434/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 215차 섹션 참고.)_
+_최종 갱신: 2026-10-06 (216차 — **Speaking Paul 기준 얼굴 교체**: 운영자 제공 `폴얼굴.png`(이미 투명 배경)를 모자 챙 기준 미아와 같은 크기로 정규화해 `src/assets/speaking/paul_speaking.png`, Speaking 장면의 저화질 마스코트 4포즈 대체. 한 포즈뿐이라 묻는 순간 "?" 말풍선으로 보완. e2e speaking 434/0·speaking-exam 216/0(mock). 로그인 Preview 실화면 미확인. DB·SQL·Production 0, PR #62 Draft. 아래 216차 섹션 참고.)_
+_215차 갱신: 2026-10-05 (215차 — **2화 일반 회화 연습도 Paul·미아 이야기로**: 운영자 결정(4문항 영어 최소 교체) — s02-01 my pencil case / 02 I haven't got a pencil. / 09 Oh no, my pencil broke! / 10 I left my pencil case at home., 03 상황 정합, 상대 전부 미아, 2화 제이미 0. 5문항에 흐름 장면 정지 그림 연결(연습만, 시험 제외). ID 유지. e2e speaking 434/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 215차 섹션 참고.)_
 _214차 갱신: 2026-10-05 (214차 — **운영자 정정: 핵심 한 문장 흐름의 임시 제이미 그림 → 승인된 여성 캐릭터 = 미아로 통일**. 흐름 이야기를 Paul+미아 두 사람으로 재구성(내 필통의 숟가락 → 미아가 연필, 연필심 부러짐 → 다시, 다음 날 필통 두고 옴 → 다시), 미아 4포즈 전부 사용, 제이미·SVG 임시 인물 제거. 키 문장·id·정답 숨김 유지. e2e speaking 429/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 214차 섹션 참고.)_
 _213차 갱신: 2026-10-05 (213차 — **2화 미아를 운영자 제공 여성 캐릭터로 교체**: 4포즈 분리(알파 실측: 검은 배경 없음, 내부 알파 250~253 → 255), 모자 챙 기준 얼굴 크기 통일, 미아 장면 생각 → 연필 내밀기 → 인사. Paul 무변경. e2e speaking 424/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 213차 섹션 참고.)_
 _212차 갱신: 2026-10-05 (212차 — **Speaking 2화 Paul 중심 완성**: 2화 상대 "폴 선생님" → Mia(5~7번, 교사 행동 제거·뜻 반말, id·en 유지), Paul 장면 개선(책상 위 연필·호 건넴·빈 자리 윤곽, 크기 정규화, 포즈 thinking→almost→ponder→lets_learn→happy), 보기 단계 한국어 상황 추가. 콘텐츠·시각 리뷰 → 구현 → 독립 QA PASS. e2e speaking 422/0·speaking-exam 216/0(mock, 360/390/412/1280). 학습 효과 미검증. DB·SQL·Production 0, PR #62 Draft. 아래 212차 섹션 참고.)_
@@ -26,6 +27,17 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-06 (216차) — Speaking Paul 기준 얼굴(운영자 제공 고화질) 교체
+
+운영자 지시: 두 번째 첨부 이미지를 Speaking Paul 기준 얼굴로, 투명 PNG, 얼굴·모자·색감 유지, 미아와 얼굴 크기 맞춤, 기존 저화질 Paul 교체, 대화·시험 유지, 모바일 Preview 확인. 시작 HEAD = 원격 = `1b59687d`.
+
+- **에셋**: 원본은 이미 배경 알파 0(배경 제거 불필요). 모자 챙 501px → 160px로 축소(미아와 같은 기준), 내부 알파 ≥240 → 255. `src/assets/speaking/paul_speaking.png` 327×491(번들 `paul_` 접두 허용 범위).
+- **적용**(`PencilCaseScene.jsx`): Paul 4포즈 매핑 삭제 → 기준 그림 한 장, 배율 0.5·모자 꼭대기 y 30(미아와 동일). 묻는 단계(ask/forgot/offer)에 "?" 말풍선(`key-scene-asking`, 영어 없음). `data-hero-pose`는 `asking`/`paul`. 마스코트 라이브러리(`src/assets/paul`)는 다른 화면용으로 유지.
+- **테스트**: testKeySentenceFlow(기준 그림 사용·마스코트 import 없음·말풍선), e2e heroIs(기준 그림 로드 + 말풍선 유무).
+- **검증**: build PASS(경고 0). 정적 testSpeakingSets·testKeySentenceFlow·testSituationRecall·testQaGate 17/0·testLazyChunkGuards·testBundleBudget·testRegistryCoverage·testStudentPathContracts PASS. 브라우저(mock, 여유 RAM 약 1.8GB라 스펙당 1회): `[speaking]` 434/0, `[speaking-exam]` 216/0. 360px 장면 8프레임·연습 1번 캡처로 두 얼굴 크기 일치 확인.
+- **미확인**: 로그인한 모바일 Preview 실화면(Vercel SSO + QA 계정 PIN 필요 — 이 세션은 mock 빌드의 360px 화면으로 대신 확인), 실기기 마이크·TTS, 아이들의 이해.
+- DB·SQL·Production·`.env`·`C:oca` 접촉 0. QA 게이트 무변경, PR #62 Draft. 체크포인트 `.ai-status/orchestrator-speaking-paul-face-2026-10-06.json`.
 
 ## 2026-10-05 (215차) — 2화 일반 회화 연습을 Paul·미아 이야기와 일치
 
