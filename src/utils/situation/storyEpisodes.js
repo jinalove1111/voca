@@ -7,7 +7,7 @@
 //
 // 스키마
 // - STORY_EPISODES: { n, id: 'epNN', titleKo, summaryKo, nextHookKo, keySentence? }
-//     keySentence(선택, 현재 2화만): { itemId, en, ko, goalKo, recall:{situationKo,roleKo,partner}, transfer:{situationKo,roleKo,partner,reply} }
+//     keySentence(선택, 현재 2화만): { itemId, en, ko, goalKo, watch:{situationKo}, recall:{situationKo,roleKo,partner}, transfer:{situationKo,roleKo,partner,reply} }
 //     — 기억할 한 문장 흐름 전용. transfer는 STORY_ITEMS에 넣지 않는다
 // - STORY_ITEMS: { id: 'sEE-OO', episode, order, situationKo, roleKo, en, ko,
 //     reply: { speaker: 'Jamie'|'Mia'|'Paul'|'Cookie'|'Shopkeeper'|'Guest', en, ko }
@@ -38,20 +38,21 @@ export const STORY_EPISODES = [
     id: 'ep02',
     titleKo: '숟가락이 든 필통',
     summaryKo: '미술 시간, 제이미의 필통에서 연필 대신 숟가락이 나와요. 칠판에는 처음 보는 단어가 적혀 있고, 점심시간에는 제이미의 도시락 통에서 수상한 소리가 나요.',
-    nextHookKo: '하교 전, 폴 선생님이 교실 문에 종이로 가린 포스터를 붙이며 내일 큰 소식이 있다고 해요.',
+    nextHookKo: '하교 전, 교실 문에 종이로 가린 포스터가 붙었어요. 내일 큰 소식이 있대요.',
     // 오늘 기억할 한 문장(QA 전용 KeySentenceFlow). recall/transfer 텍스트는 공개 전 화면에 보이므로 영어·"빌려/빌리"·답 어간 금지
     keySentence: {
       itemId: 's02-03',
       en: 'Can I borrow a pencil?', ko: '연필 좀 빌려도 돼?',
       goalKo: '연필을 빌리는 말',
+      watch: { situationKo: '제이미 필통에서 연필 대신 숟가락이 나왔어요. 하나뿐인 내 연필을 줬더니 이제 나도 없어요.' },
       recall: {
         situationKo: '미술 시간이에요. 내 연필은 제이미에게 줘서 손에 아무것도 없어요. 미아 필통에는 연필이 여러 자루 있어요.',
-        roleKo: '미아에게 연필 하나를 잠깐 써도 되는지 물어봐요.',
+        roleKo: '미아에게 연필 하나를 써도 되는지 물어봐요.',
         partner: 'Mia',
       },
       transfer: {
-        situationKo: '마지막 수업이에요. 받아 적을 낱말이 있는데 연필이 없어요. 제이미가 도시락 통에서 연필을 찾았어요.',
-        roleKo: '제이미에게 연필을 잠깐 써도 되는지 물어봐요.',
+        situationKo: '마지막 수업이에요. 내 연필은 제이미가 쓰는 중인데, 제이미가 도시락 통에서 연필을 또 찾았어요.',
+        roleKo: '제이미에게 찾은 연필을 써도 되는지 물어봐요.',
         partner: 'Jamie',
         reply: { speaker: 'Jamie', en: "Sure! It's a bit sticky.", ko: '그럼! 좀 끈적하긴 해.' },
       },
@@ -249,8 +250,8 @@ export const STORY_ITEMS = [
   },
   {
     id: 's02-03', episode: 2, order: 3,
-    situationKo: '내 연필은 제이미에게 줬어요. 이제 그릴 도구가 없는데 옆자리 미아 필통에는 연필이 여러 자루 있어요.',
-    roleKo: '미아에게 하나 잠깐 써도 되는지 물어봐요.',
+    situationKo: '내 연필은 제이미에게 줬어요. 이제 그릴 도구가 없는데 앞자리 미아 필통에는 연필이 여러 자루 있어요.',
+    roleKo: '미아에게 하나 써도 되는지 물어봐요.',
     en: 'Can I borrow a pencil?', ko: '연필 좀 빌려도 돼?',
     reply: { speaker: 'Mia', en: 'Sure! Here you are.', ko: '그럼! 여기 있어.' },
     alternatives: ['Could I borrow a pencil?', 'Can I use one of your pencils?', 'Have you got a spare pencil?'],
@@ -277,34 +278,34 @@ export const STORY_ITEMS = [
   },
   {
     id: 's02-05', episode: 2, order: 5,
-    situationKo: '그림을 다 그렸는데 다른 친구들은 아직 그리고 있어요. 남은 시간이 많아요.',
-    roleKo: '선생님께 내 상황을 알리고 다음 할 일을 받아요.',
-    en: "I've finished. What should I do now?", ko: '다 했어요. 이제 뭐 하면 돼요?',
-    reply: { speaker: 'Paul', en: 'Well done! Look at the board.', ko: '잘했어! 칠판을 보렴.' },
+    situationKo: '그림을 다 그렸는데 남은 시간이 많아요. 먼저 끝낸 미아가 칠판 쪽을 보고 있어요.',
+    roleKo: '미아에게 내 상황을 알리고 다음에 무엇을 할지 알아봐요.',
+    en: "I've finished. What should I do now?", ko: '다 했어. 이제 뭐 하면 돼?',
+    reply: { speaker: 'Mia', en: 'Me too! Look at the board.', ko: '나도! 칠판을 봐.' },
     alternatives: ["I'm done. What can I do now?", "Finished! What's next?", "I've finished. Can I do something else?"],
     level: 3, func: 'asking-task', kind: 'new', reviewOf: null, reuseIn: [],
   },
   {
     id: 's02-06', episode: 2, order: 6,
-    situationKo: '칠판에 처음 보는 영어 단어가 하나 적혀 있어요. 읽을 수는 있는데 모르겠어요.',
-    roleKo: '처음 보는 단어를 이해하고 싶어서 선생님께 물어요.',
-    en: 'What does this word mean?', ko: '이 단어는 무슨 뜻이에요?',
-    reply: { speaker: 'Paul', en: "It's a day of music, food and fun!", ko: '음악, 음식, 재미가 있는 날이야!' },
+    situationKo: '칠판에 처음 보는 영어 단어가 있어요. 미아는 아까 선생님 설명을 들었어요.',
+    roleKo: '처음 보는 단어를 이해하고 싶어서 미아에게 물어요.',
+    en: 'What does this word mean?', ko: '이 단어는 무슨 뜻이야?',
+    reply: { speaker: 'Mia', en: "I heard it's a day of music, food and fun!", ko: '음악, 음식, 재미가 있는 날이래!' },
     alternatives: ['What does it mean?', "What's the meaning of this word?", 'What does that word mean?'],
     level: 1, func: 'meaning', kind: 'new', reviewOf: null, reuseIn: [],
   },
   {
     id: 's02-07', episode: 2, order: 7,
-    situationKo: '선생님 설명을 들으니 친구들이 모여 신나게 즐기는 날 같아요. 짐작이 맞는지 궁금해요.',
-    roleKo: '선생님 설명이 내가 아는 어떤 행사 얘기인지 확인해요.',
-    en: 'Is it like a party?', ko: '그거 파티 같은 거예요?',
-    reply: { speaker: 'Paul', en: 'Yes! A big school party.', ko: '맞아! 학교 전체가 여는 큰 파티야.' },
+    situationKo: '미아 설명을 들으니 친구들이 모여 신나게 즐기는 날 같아요. 짐작이 맞는지 궁금해요.',
+    roleKo: '미아 설명이 내가 아는 어떤 행사 얘기인지 확인해요.',
+    en: 'Is it like a party?', ko: '그거 파티 같은 거야?',
+    reply: { speaker: 'Mia', en: 'Yes! A big school party.', ko: '맞아! 학교 전체가 여는 큰 파티래.' },
     alternatives: ['Is it a party?', 'Like a big party?', "So it's a kind of party?"],
     level: 1, func: 'checking', kind: 'new', reviewOf: null, reuseIn: [],
   },
   {
     id: 's02-08', episode: 2, order: 8,
-    situationKo: '선생님이 칠판을 지워 버렸어요. 공책에 그 단어를 옮겨 적어야 하는데 막혔어요.',
+    situationKo: '어느새 칠판이 지워졌어요. 공책에 그 단어를 옮겨 적어야 하는데 막혔어요.',
     roleKo: '글자를 하나씩 알고 싶어서 꼼꼼한 미아에게 물어요.',
     en: 'How do you spell it?', ko: '그거 철자가 어떻게 돼?',
     reply: { speaker: 'Mia', en: 'F-E-S-T-I-V-A-L.', ko: '에프, 이, 에스, 티, 아이, 브이, 에이, 엘.' },
