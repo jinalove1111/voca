@@ -1889,3 +1889,8 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 - `scripts/testKeySentenceFlow.mjs`(정적 소스 핀, 레지스트리 `extra:false`, 저장·네트워크 0): PencilCaseScene SVG `<text>`·aria-label 영어 0, reduced-motion(matchMedia + CSS) 처리, clearTimeout·무한 애니메이션 없음 / KeySentenceFlow speak는 onClick 안에서만(자동 재생 0), `ks.en`은 watch와 `{revealed && <Answer`에서만, 금지 문구(정답·합격·완료·숙달·점수 등)·storage·supabase·fetch 없음 / 메뉴 카드는 `keySentenceFor` 있을 때만, 영어 직접 렌더 없음. 209차 15 PASS.
 - `scripts/testSpeakingSets.mjs` keySentence 7단언 추가(basic/ep01 null, itemId 문항 en/ko 일치, transfer 상대≠recall 상대, 한글 텍스트 ≤60자·영어 0·"빌려/빌리"·답 어간 금지, 키 문장 유일). 209차 56 PASS.
 - `tests/e2e/speaking.spec.mjs` k1~k7: 메뉴 카드(2화만, 한글만), watch(spoon → given ≤6초, 듣기 전 speak 0), recall/transfer **공개 전 `documentElement.outerHTML`에 영어 문장 없음**(숨김 렌더 금지), 공개 후 라벨·EN·상대 대사·handover 장면, 끝(금지 문구·localStorage 키 변화 0), reduced-motion(장면 즉시 최종, `key-scene` 안 애니메이션 0 — 앱 공통 버튼 전환은 집계 제외), 360/412 레이아웃(가로 스크롤 0, 버튼 ≥44px, 장면 폭 ≥300px). `toStep`은 [답 확인]이 있을 때만 누른다(이미 공개된 단계 재클릭 → 타임아웃 방지). 209차 388/0.
+
+## 관련 항목: Speaking 진입 세트 기본값·기억 (2026-10-05, 210차)
+
+- `scripts/testSpeakingSets.mjs` 진입 세트 5단언(첫 방문 ep02, 선택 기억, UUID 키만, 없는 세트 값/저장 거부, storage 예외 폴백). 210차 61 PASS.
+- e2e `speaking.spec.mjs`/`speakingExam.spec.mjs` `scenario()`는 기본으로 `lastSetKey(QA_STUDENT_ID)`='basic'을 **값이 없을 때만** 시드한다(기존 시나리오 = 기본 5개를 고른 학생). 첫 방문 동작은 `{ fresh: true }`로 검사(k1). 새 시나리오가 기본 5개를 전제하면 시드 그대로, 2화 기본을 검사하면 `fresh: true`.

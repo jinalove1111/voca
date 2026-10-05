@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-05 (209차 — **Speaking 2화 "오늘 기억할 한 문장" — Can I borrow a pencil?**: 메뉴에서 2화 선택 시 카드(한글 목표만) → ① 필통 장면(열림→숟가락→제이미 놀람→내 연필 전달) + 듣고 따라 말하기 ② 영어 숨기고 상황만 보고 말하기(미아) ③ 상대가 바뀐 상황(제이미)에서 다시 말하기 → 끝("연습을 마쳤어요", 판정·저장 없음). 나머지 9화 무변경. build PASS, 정적 testKeySentenceFlow 15/0·testSpeakingSets 56/0, e2e speaking 388/0·speaking-exam 216/0(mock). **미push**(로컬 커밋), DB·SQL·Production 0, PR #62 Draft. 아래 209차 섹션 참고.)_
+_최종 갱신: 2026-10-05 (210차 — **Speaking 진입 시 오늘의 이야기 카드(2화) 바로 표시 + 학생이 고른 세트 기억**(UUID 키 localStorage). 209차 3커밋 + 이번 2커밋 PR #62 non-force push. build PASS, testSpeakingSets 61/0, e2e speaking 392/0·speaking-exam 216/0(mock). 9화 확대 보류. 실제 마이크·아이 이해·기억 효과 미확인. DB·SQL·Production 0, PR #62 Draft. 아래 210차 섹션 참고.)_
+_209차 갱신: 2026-10-05 (209차 — **Speaking 2화 "오늘 기억할 한 문장" — Can I borrow a pencil?**: 메뉴에서 2화 선택 시 카드(한글 목표만) → ① 필통 장면(열림→숟가락→제이미 놀람→내 연필 전달) + 듣고 따라 말하기 ② 영어 숨기고 상황만 보고 말하기(미아) ③ 상대가 바뀐 상황(제이미)에서 다시 말하기 → 끝("연습을 마쳤어요", 판정·저장 없음). 나머지 9화 무변경. build PASS, 정적 testKeySentenceFlow 15/0·testSpeakingSets 56/0, e2e speaking 388/0·speaking-exam 216/0(mock). **미push**(로컬 커밋), DB·SQL·Production 0, PR #62 Draft. 아래 209차 섹션 참고.)_
 _208차 갱신: 2026-10-05 (208차 — **Speaking 연결된 이야기 10화(새 목표 표현 100 + 복습 14)**: 메뉴에서 기본 5개/1~10화 세트 선택, 연습·한글 보고 말하기에 역할·상대방 대사 추가. 기본 5 id·저장 키 유지. QA 전용 유지. build·정적 PASS, 브라우저 mock 5스펙 speaking-exam 218·speaking 307·student-home 228+1 SKIP·student 36·mobile 180 FAIL 0. QA UUID 3개 실DB 일치(운영자 SQL Editor 조회). **실기기 마이크 미확인, 이야기 2~10화 브라우저 미확인(1화만)**. DB·SQL·Production 0, PR #62 Draft. 아래 208차 섹션 참고.)_
 _207차 갱신: 2026-10-04 (207차 — **한글 상황 기반 Speaking**: 회화 연습 = 한글 상황+문장+뜻+듣기+녹음, '그림 보고 말하기 시험' → '한글 보고 말하기'(공개 전 한글 상황+진행만, 공개 후 "이렇게 말할 수 있어요"). 임시 그림 숨김(최종본 파일 있을 때만 표시). e2e speaking 203·speaking-exam 154·student-home 226+1·student 34·mobile 178 FAIL 0. DB·Production 0, PR #62 Draft. 아래 207차 섹션 참고.)_
 _206차 갱신: 2026-10-04 (206차 — **Speaking 그림 품질·상황 식별성 진단 + 전용 일러스트 명세 보완(문서만)**. 360px 실캡처로 임시 그림 10장 원인 진단, 장면별 프롬프트·구도·검수, 대표 장면 sorry-b 우선, 시험 한국어 상황 안내 설계(미구현), 교사용 장면별 인정 표현. 이미지 생성 도구 없음 → 제작 대기. 코드·DB·Production 0, PR #62 Draft. 아래 206차 섹션 참고.)_
@@ -20,6 +21,18 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-05 (210차) — Speaking 진입 시 오늘의 이야기 카드 기본 표시 + 세트 선택 기억, PR #62 push
+
+운영자 지시: 209차 로컬 3커밋 non-force push, Speaking 진입 시 오늘의 이야기 카드를 바로 표시(첫 방문 2화 기본, 다른 이야기 선택 시 존중), 회화 연습·한글 보고 말하기·전체 이야기 접근 유지, 나머지 9화 확대 보류(운영자가 2화 실사용 후 판단).
+
+- **push**: fetch로 원격 = `85a968f1`(새 원격 변경 없음) 확인 후 `85a968f1..dfe27af6` non-force. 이어서 이번 2커밋 + 문서 커밋 push.
+- **구현**: `speakingSets.js` `DEFAULT_SET_ID='ep02'`, `lastSetKey(studentId)`(`paulEasyVoca_speakingSet_<UUID>`, UUID 아니면 null — 규칙 4), `loadLastSet`/`saveLastSet`(주입 storage, 없는 세트·예외 → ep02/false). `situationStore.js`는 `UUID_RE` export만. `SpeakingPractice.jsx` 초기 세트 = 저장된 선택 ?? ep02, 칩 클릭 시 저장, 카드("📌 오늘의 이야기" + "2화 숟가락이 든 필통" + 한글 목표, 영어 0)를 세트 선택 **위**로 이동. 핵심 문장이 없는 회차를 고르면 카드는 사라지고 그 선택이 다음 진입에도 유지된다.
+- **동작 변화(주의)**: 첫 방문 기본 세트가 기본 5개 → 2화로 바뀌므로 홈에서 한글 보고 말하기로 바로 들어가는 경우도 첫 방문엔 2화 문항으로 시작한다. 기본 5개는 칩에서 고르면 되고 그 선택이 기억된다.
+- **테스트**: `testSpeakingSets` +5(첫 방문 ep02, 선택 기억, 키 UUID만, 잘못된 값/저장 거부, storage 예외) 61/0. e2e 기존 시나리오는 "이전에 기본 5개를 고른 학생"으로 시드(값이 없을 때만, `fresh:true`면 시드 안 함) — 기존 단언 의미 유지. `k1` 재작성: 첫 방문 ep02 선택·카드 즉시·세트 칩 위, 연습/시험 버튼 유지, 11개 칩, ep01 선택 시 카드 사라짐·UUID 키 기록·이름 키 없음, 홈 → 재진입 시 ep01 유지, 2화 재선택 시 카드 복귀.
+- **검증**: build PASS(경고 0, 더미 env 프로세스 한정). 정적 testSpeakingSets 61/0, testKeySentenceFlow 15/0, testSituationRecall·testSpeakingSession·testQaGate 17/0·testLazyChunkGuards·testBundleBudget·testRegistryCoverage·testStudentPathContracts PASS. 브라우저(mock, 포트 4193, 스펙 1개씩): `[speaking]` 392/0, `[speaking-exam]` 216/0, 미mock 0. 360x640 캡처(메뉴/시작 장면/회상/미아 전달)로 가로 넘침·겹침 없음 확인(임시 probe 스펙은 삭제).
+- **미확인(정직 기록)**: 실제 마이크 녹음·재생과 TTS 듣기, 아이들의 장면·흐름 이해, 기억 효과(§12.5 다음 수업 확인 전). Preview 실기기 화면은 운영자 로그인 필요(이 세션은 mock 캡처만).
+- DB·SQL·Production·`.env` 접촉 0. QA 전용 게이트 무변경, PR #62 Draft 유지. 체크포인트 `.ai-status/orchestrator-speaking-entry-default-2026-10-05.json`.
 
 ## 2026-10-05 (209차) — Speaking 2화 "오늘 기억할 한 문장"(Can I borrow a pencil?) 시범 + 필통 장면, mock 검증
 
