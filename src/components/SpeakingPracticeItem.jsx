@@ -71,7 +71,8 @@ export function SituationGuide({ scene, exam = false, roleKo = null }) {
   )
 }
 
-const SPEAKER_KO = { Paul: '폴 선생님', Jamie: 'Jamie', Mia: 'Mia', Cookie: 'Cookie', Shopkeeper: '가게 직원', Guest: '손님' }
+// 화자 이름표 — 장면 이름표(나/미아)와 같은 한글 표기로 통일(217차). KeySentenceFlow도 이것을 쓴다
+export const SPEAKER_KO = { Paul: '폴 선생님', Jamie: '제이미', Mia: '미아', Cookie: '쿠키', Shopkeeper: '가게 직원', Guest: '손님' }
 
 // 상대방 대사 — 연습 화면과 시험 공개 후 모범 대화가 같이 쓴다
 export function ReplyBubble({ reply, testid, listenTestid, busy = false }) {

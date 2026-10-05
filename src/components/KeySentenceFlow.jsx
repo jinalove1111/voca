@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { speak } from '../utils/speech'
 import useLocalRecorder from '../hooks/useLocalRecorder'
-import { RecorderControls, ReplyBubble, SituationGuide, BTN } from './SpeakingPracticeItem'
+import { RecorderControls, ReplyBubble, SituationGuide, BTN, SPEAKER_KO } from './SpeakingPracticeItem'
 import PencilCaseScene from './PencilCaseScene'
 import { STORY_ITEMS } from '../utils/situation/storyEpisodes'
 import { keySentenceFor } from '../utils/situation/speakingSets'
@@ -10,8 +10,6 @@ import { keySentenceFor } from '../utils/situation/speakingSets'
 // 연습을 마친 것과 기억한 것은 다르다 — 이 화면은 누르기만으로 "기억했다"고 판정하지 않고, 점수·기록·저장이 없다.
 // 공개 전에는 영어 문장/듣기/첫 글자 힌트를 마운트하지 않는다(숨김 렌더 금지). 소리는 학생이 🔊를 누를 때만 난다(자동 재생 없음).
 const STEPS = ['watch', 'recall', 'transfer']
-// 짧은 대화의 상대 이름표(장면 이름표와 같은 한글 이름)
-const SPEAKER_KO = { Mia: '미아', Jamie: '제이미', Paul: '폴 선생님' }
 const MIC_IDLE = '말해 봐요. 마이크 없이도 할 수 있어요'
 
 function Answer({ ks, reply, testPrefix }) {
