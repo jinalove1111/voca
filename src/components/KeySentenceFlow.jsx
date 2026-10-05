@@ -10,6 +10,8 @@ import { keySentenceFor } from '../utils/situation/speakingSets'
 // 연습을 마친 것과 기억한 것은 다르다 — 이 화면은 누르기만으로 "기억했다"고 판정하지 않고, 점수·기록·저장이 없다.
 // 공개 전에는 영어 문장/듣기/첫 글자 힌트를 마운트하지 않는다(숨김 렌더 금지). 소리는 학생이 🔊를 누를 때만 난다(자동 재생 없음).
 const STEPS = ['watch', 'recall', 'transfer']
+// 짧은 대화의 상대 이름표(장면 이름표와 같은 한글 이름)
+const SPEAKER_KO = { Mia: '미아', Jamie: '제이미', Paul: '폴 선생님' }
 const MIC_IDLE = '말해 봐요. 마이크 없이도 할 수 있어요'
 
 function Answer({ ks, reply, testPrefix }) {
@@ -36,13 +38,13 @@ export default function KeySentenceFlow({ setId, onMenu }) {
   if (!ks) return null
 
   const item = STORY_ITEMS.find((i) => i.id === ks.itemId)
-  const intro = STORY_ITEMS.filter((i) => i.id === 's02-01' || i.id === 's02-02')
+  const intro = (ks.introIds || []).map((id) => STORY_ITEMS.find((i) => i.id === id)).filter(Boolean)
   const go = (s) => { rec.reset('RESET'); setRevealed(false); setStep(s) }
   const idx = STEPS.indexOf(step)
   const part = step === 'recall' ? ks.recall : ks.transfer
   const key = step === 'recall' ? 'recall' : 'transfer'
   const reply = step === 'recall' ? item.reply : ks.transfer.reply
-  const scene = step === 'watch' ? 'spoon' : step === 'recall' ? (revealed ? 'handover-mia' : 'ask') : (revealed ? 'handover-jamie' : 'lunchbox')
+  const scene = step === 'watch' ? 'spoon' : step === 'recall' ? (revealed ? 'handover-mia' : 'ask') : (revealed ? 'handover-forgot' : 'forgot')
 
   return (
     <div data-testid="key-flow" data-step={step} data-mic-state={rec.mic} className="min-h-screen p-4 pb-24">
@@ -64,7 +66,7 @@ export default function KeySentenceFlow({ setId, onMenu }) {
         ) : (
           <>
             <p data-testid="key-progress" className="text-sm font-bold text-sky-600">{idx + 1} / 3</p>
-            {step === 'transfer' && <p className="text-base font-black text-gray-800">이번엔 다른 친구에게</p>}
+            {step === 'transfer' && <p className="text-base font-black text-gray-800">이번엔 다른 상황에서</p>}
 
             {step === 'watch' ? (
               <>
@@ -85,7 +87,7 @@ export default function KeySentenceFlow({ setId, onMenu }) {
                     <p className="text-sm font-black text-gray-700">짧은 대화</p>
                     {intro.map((i) => (
                       <p key={i.id} className="text-base text-gray-900"><span className="font-black">나:</span> {i.en} <span className="text-sm text-gray-600">({i.ko})</span><br />
-                        <span className="font-black">제이미:</span> {i.reply.en} <span className="text-sm text-gray-600">({i.reply.ko})</span></p>
+                        <span className="font-black">{SPEAKER_KO[i.reply.speaker] || i.reply.speaker}:</span> {i.reply.en} <span className="text-sm text-gray-600">({i.reply.ko})</span></p>
                     ))}
                   </div>
                 )}
