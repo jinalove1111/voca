@@ -1,7 +1,7 @@
 // 2026-10-04 Speaking 세트(기본 5개 + 이야기 회차) — 정규화 항목과 이야기 콘텐츠 정적 검사(순수, 번들·네트워크 불필요)
 import { SITUATION_EXPRESSIONS as EX } from '../src/utils/situation/situationContent.js'
 import { STORY_EPISODES as EPS, STORY_ITEMS as ITEMS } from '../src/utils/situation/storyEpisodes.js'
-import { listSets, itemsForSet, BASIC_SET_ID } from '../src/utils/situation/speakingSets.js'
+import { listSets, itemsForSet, keySentenceFor, BASIC_SET_ID } from '../src/utils/situation/speakingSets.js'
 
 let fail = 0
 const check = (name, ok) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if (!ok) fail++ }
@@ -50,6 +50,18 @@ const storyReviews = ITEMS.filter((i) => i.kind === 'review' && /^s\d{2}-\d{2}$/
 check('이야기 문항을 복습하면 원래 문항 reuseIn에 역방향 기록', storyReviews.every((rv) => (ITEMS.find((s) => s.id === rv.reviewOf)?.reuseIn || []).includes(rv.id)), storyReviews.filter((rv) => !(ITEMS.find((s) => s.id === rv.reviewOf)?.reuseIn || []).includes(rv.id)).map((rv) => rv.id).join(','))
 check('복습 대사는 원래 문항(또는 기본 표현)과 같은 영어', ITEMS.filter((i) => i.kind === 'review').every((rv) => { const src = ITEMS.find((s) => s.id === rv.reviewOf) || EX.find((b) => b.id === rv.reviewOf); return !!src && src.en === rv.en }))
 check('10회차 모두 존재, 새 목표 정확히 100개', EPS.length === 10 && ITEMS.filter((i) => i.kind === 'new').length === 100)
+// 2026-10-05 오늘 기억할 한 문장(ep02 QA 전용)
+const ks = keySentenceFor('ep02')
+check('keySentenceFor: basic/ep01 null, ep02 있음', keySentenceFor('basic') === null && keySentenceFor('ep01') === null && !!ks)
+const ksItem = ITEMS.find((i) => i.id === ks?.itemId)
+check('keySentence.itemId 문항의 en/ko가 keySentence와 같음', !!ksItem && ksItem.en === ks.en && ksItem.ko === ks.ko && ks.en === 'Can I borrow a pencil?')
+check('transfer.partner가 recall.partner와 다름', ks.transfer.partner !== ks.recall.partner && SPEAKERS.includes(ks.transfer.reply.speaker) && ks.transfer.reply.speaker === ks.transfer.partner)
+const KS_TEXTS = [ks.goalKo, ks.recall.situationKo, ks.recall.roleKo, ks.transfer.situationKo, ks.transfer.roleKo, ksItem.situationKo, ksItem.roleKo]
+const STEMS = ['인사', '안녕', '반가', '미안', '사과', '고마', '감사', '도와', '도움', '부탁', '다시 말해']
+check('keySentence 한글 텍스트 ≤60자·영어 글자 없음', KS_TEXTS.every((t) => t && t.length <= 60 && !/[A-Za-z]/.test(t)))
+check('keySentence 상황·역할 텍스트에 빌려/빌리·답 어간·자기 뜻 없음(goalKo는 라벨이라 빌리는 말 허용)', KS_TEXTS.every((t) => (t === ks.goalKo || !/빌려|빌리/.test(t)) && !STEMS.some((w) => t.includes(w)) && !t.includes(stripEnd(ks.ko))))
+check('다른 문항에 같은 영어 문장 없음(키 문장은 s02-03 하나)', ITEMS.filter((i) => norm(i.en) === norm(ks.en)).length === 1)
+check('ep02 situationKo/roleKo에 빌려/빌리 없음(키 문장 문항)', !/빌려|빌리/.test(ksItem.situationKo + ksItem.roleKo))
 console.log(`INFO new 목표 ${newCount}개, 복습 문항 ${reviewCount}개`)
 
 if (fail) { console.log(`\nFAILED ${fail}`); process.exit(1) }
