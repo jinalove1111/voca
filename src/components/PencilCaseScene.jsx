@@ -134,15 +134,17 @@ function Mia({ pose }) {
   return <image data-testid="key-scene-partner" href={a.src} x={MIA_X - a.cx * MIA_S} y={MIA_TOP - a.top * MIA_S} width={a.w * MIA_S} height={a.h * MIA_S} />
 }
 
-export default function PencilCaseScene({ variant = 'spoon' }) {
-  const [phase, setPhase] = useState(() => (prefersReduced() ? FINAL[variant] : START[variant] || FINAL[variant]))
+// still: 연습 문항용 정지 장면 — 해당 단계 하나만 움직임 없이 그린다
+export default function PencilCaseScene({ variant = 'spoon', still = null }) {
+  const [phase, setPhase] = useState(() => still || (prefersReduced() ? FINAL[variant] : START[variant] || FINAL[variant]))
   useEffect(() => {
+    if (still) { setPhase(still); return undefined }
     if (prefersReduced()) { setPhase(FINAL[variant]); return undefined }
     setPhase(START[variant] || FINAL[variant])
     const steps = variant === 'spoon' ? SPOON_STEPS : START[variant] ? [['handed', OFFER_MS]] : []
     const ids = steps.map(([p, ms]) => setTimeout(() => setPhase(p), ms))
     return () => ids.forEach(clearTimeout)
-  }, [variant])
+  }, [variant, still])
 
   const isSpoon = variant === 'spoon'
   const recall = variant === 'ask' || variant === 'handover-mia'
@@ -156,7 +158,7 @@ export default function PencilCaseScene({ variant = 'spoon' }) {
   return (
     <div className="w-full">
       <style>{CSS}</style>
-      <svg data-testid="key-scene" data-variant={variant} data-phase={phase} data-hero-pose={POSE[phase]} data-partner-pose={MIA_POSE[phase]} data-my-spot={mySpot}
+      <svg data-testid="key-scene" data-variant={variant} data-still={still || undefined} data-phase={phase} data-hero-pose={POSE[phase]} data-partner-pose={MIA_POSE[phase]} data-my-spot={mySpot}
         viewBox="0 0 360 240" role="img" aria-label={LABEL[variant]} className="pcs-scene w-full h-auto rounded-3xl bg-sky-50 block">
         <Hero pose={POSE[phase]} />
         <Mia pose={MIA_POSE[phase]} />

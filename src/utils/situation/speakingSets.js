@@ -24,7 +24,7 @@ export function itemsForSet(setId) {
   return STORY_ITEMS.filter((i) => i.episode === ep.n)
     .sort((a, b) => a.order - b.order)
     .map((i) => {
-      const scene = { id: i.id, situationKo: i.situationKo }
+      const scene = { id: i.id, situationKo: i.situationKo, pencil: i.pencilScene || null }
       return { id: i.id, exprId: i.id, en: i.en, ko: i.ko, practiceScene: scene, examScene: scene, roleKo: i.roleKo, reply: i.reply }
     })
 }

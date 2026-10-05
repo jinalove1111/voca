@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react'
 import { speak } from '../utils/speech'
 import SceneCard, { hasFinalArt } from './SceneCard'
 import InAppBrowserNotice from './InAppBrowserNotice'
@@ -6,6 +7,8 @@ import { SPEAKING_MESSAGES } from '../utils/speaking/speakingSession'
 
 // 2026-10-04 Speaking UX v2 — 연습 문항(한글 상황+문장+뜻+듣기+녹음)과 녹음 버튼 묶음.
 // 연습 모드와 시험의 "다시 연습" 패널이 같이 쓴다. 녹음은 메모리 전용(useLocalRecorder).
+// 2화 일부 문항의 정지 장면(Paul·미아, 영어 없음) — 연습에서만 보이고 시험(공개 전 한국어 상황·역할·진행만)에는 내지 않는다
+const PencilCaseScene = lazy(() => import('./PencilCaseScene'))
 export const BTN = 'min-h-[44px] px-4 py-3 rounded-2xl font-black text-lg btn-press disabled:opacity-40'
 
 // 상태 문구는 기존 speaking-status 문자열 그대로
@@ -57,6 +60,7 @@ export function SituationGuide({ scene, exam = false, roleKo = null }) {
   return (
     <div className="space-y-3">
       {hasFinalArt(scene.id) && <SceneCard scene={scene} exam={exam} />}
+      {!exam && scene.pencil && <Suspense fallback={null}><PencilCaseScene variant={scene.pencil.variant} still={scene.pencil.still} /></Suspense>}
       <div data-testid="situation-guide" data-scene={scene.id}
         className="bg-amber-50 border-2 border-amber-200 rounded-3xl p-5 space-y-1">
         <p className="text-sm font-black text-amber-700">상황</p>
