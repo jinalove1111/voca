@@ -466,3 +466,17 @@ menu ─ [회화 연습] ▶ practice ─ 5문항 ─ 끝 ─ [그림 시험 시
 - **장면**: 미아 4포즈 모두 사용(생각 → 놀람 → 연필 건네기 → 인사). 미아 필통은 보라색(내 필통 청록과 구분), 부러진 연필·필통 없는 점선 자리로 각 단계의 이유를 그림으로 보인다. 임시 SVG 인물·도시락 통 장면 삭제.
 - **유지**: 키 문장 "Can I borrow a pencil?", 문항 id·영어, 정답 숨김, 연습/시험. 
 - **남은 불일치(운영자 결정)**: 2화 **연습 문항** s02-01·02·03·09·10은 여전히 "제이미 필통의 숟가락·도시락 통" 줄거리다(그림 없음, 이름만). 흐름(내 필통)과 줄거리가 다르다 — 연습 문항까지 맞출지는 별도 결정.
+
+## 16. 2화 일반 회화 연습도 Paul·미아 이야기로 (2026-10-05, 215차 — append-only, §15 "남은 불일치" 해소)
+
+- **운영자 결정**: 목표 영어를 지키면 맞출 수 없는 4문항(s02-01·02·09·10)은 **영어만 최소 교체**(ID·순서·나머지 8문항 영어 유지). 나중 회차의 복습 문항이 이 4개를 참조하지 않음을 확인했고, 저장 키는 문항 id라 기록 호환은 유지된다(바뀐 문장에 대한 이전 연습 기록은 이전 문장 기준).
+| id | 이전 | 지금 | 상대 반응 |
+|---|---|---|---|
+| s02-01 | Why is there a spoon in **your** pencil case? (제이미) | Why is there a spoon in **my** pencil case? | Mia: Did you pack in the dark? |
+| s02-02 | You can use my pencil. (제이미) | I haven't got a pencil. | Mia: Oh no! I've got lots. |
+| s02-03 | Can I borrow a pencil? (유지) | 상황만 "내 필통에는 숟가락뿐이라…" | Mia: Sure! Here you are. |
+| s02-09 | Jamie, what's in your lunch box? | Oh no, my pencil broke! | Mia: Here, take another one. |
+| s02-10 | Maybe your pencil is in your lunch box. | I left my pencil case at home. | Mia: Again? Don't worry. |
+- 줄거리: 내 필통에서 숟가락(01) → 연필이 없다고 알림(02) → 미아에게 빌리기(03) → … 칠판 단어(05~08) → 옮겨 적다 연필이 부러짐(09) → 다음 날 필통을 두고 옴(10). 2화 요약도 같은 줄거리로. 2화 안에 제이미 0.
+- **그림 연결**: 01·02·03·09·10에 `pencilScene`(흐름의 `PencilCaseScene` 정지 장면: 숟가락 순간 / 연필 없음 / 부러진 연필 / 필통 없음). **연습에서만** 보이고, 시험은 공개 전 한국어 상황·역할·진행만(그림·영어·듣기 없음) 규칙을 지킨다. 장면에는 영어 글자가 없다.
+- 1화·3화 이후 제이미·교사 Paul은 무변경.

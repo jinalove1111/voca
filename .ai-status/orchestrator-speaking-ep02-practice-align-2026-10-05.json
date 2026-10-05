@@ -1,0 +1,14 @@
+{
+  "agent_name": "orchestrator",
+  "role": "구현·검증·문서·push",
+  "task_id": "speaking-ep02-practice-align-2026-10-05",
+  "task": "2화 일반 회화 연습(s02-01·02·03·09·10)을 Paul·미아 이야기와 일치, 그림 연결",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-05T19:40:00+09:00",
+  "updated_at": "2026-10-05T20:20:00+09:00",
+  "files_owned": ["src/utils/situation/storyEpisodes.js", "src/utils/situation/speakingSets.js", "src/components/SpeakingPracticeItem.jsx", "src/components/PencilCaseScene.jsx", "scripts/testSpeakingSets.mjs", "scripts/testKeySentenceFlow.mjs", "tests/e2e/speaking.spec.mjs", "docs/design/SPEAKING_UX_V2_2026-10-04.md", "handoff.md"],
+  "summary": "[mock 기반] 운영자 선택: 4문항 영어 최소 교체. 2화 제이미 0, 정지 장면 5문항(연습만). e2e speaking 434/0, speaking-exam 216/0, 정적 PASS.",
+  "blocker": null,
+  "next_action": "운영자: Preview에서 2화 연습·시험·한 문장 흐름 실사용 확인"
+}

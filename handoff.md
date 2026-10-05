@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-05 (214차 — **운영자 정정: 핵심 한 문장 흐름의 임시 제이미 그림 → 승인된 여성 캐릭터 = 미아로 통일**. 흐름 이야기를 Paul+미아 두 사람으로 재구성(내 필통의 숟가락 → 미아가 연필, 연필심 부러짐 → 다시, 다음 날 필통 두고 옴 → 다시), 미아 4포즈 전부 사용, 제이미·SVG 임시 인물 제거. 키 문장·id·정답 숨김 유지. e2e speaking 429/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 214차 섹션 참고.)_
+_최종 갱신: 2026-10-05 (215차 — **2화 일반 회화 연습도 Paul·미아 이야기로**: 운영자 결정(4문항 영어 최소 교체) — s02-01 my pencil case / 02 I haven't got a pencil. / 09 Oh no, my pencil broke! / 10 I left my pencil case at home., 03 상황 정합, 상대 전부 미아, 2화 제이미 0. 5문항에 흐름 장면 정지 그림 연결(연습만, 시험 제외). ID 유지. e2e speaking 434/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 215차 섹션 참고.)_
+_214차 갱신: 2026-10-05 (214차 — **운영자 정정: 핵심 한 문장 흐름의 임시 제이미 그림 → 승인된 여성 캐릭터 = 미아로 통일**. 흐름 이야기를 Paul+미아 두 사람으로 재구성(내 필통의 숟가락 → 미아가 연필, 연필심 부러짐 → 다시, 다음 날 필통 두고 옴 → 다시), 미아 4포즈 전부 사용, 제이미·SVG 임시 인물 제거. 키 문장·id·정답 숨김 유지. e2e speaking 429/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 214차 섹션 참고.)_
 _213차 갱신: 2026-10-05 (213차 — **2화 미아를 운영자 제공 여성 캐릭터로 교체**: 4포즈 분리(알파 실측: 검은 배경 없음, 내부 알파 250~253 → 255), 모자 챙 기준 얼굴 크기 통일, 미아 장면 생각 → 연필 내밀기 → 인사. Paul 무변경. e2e speaking 424/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 213차 섹션 참고.)_
 _212차 갱신: 2026-10-05 (212차 — **Speaking 2화 Paul 중심 완성**: 2화 상대 "폴 선생님" → Mia(5~7번, 교사 행동 제거·뜻 반말, id·en 유지), Paul 장면 개선(책상 위 연필·호 건넴·빈 자리 윤곽, 크기 정규화, 포즈 thinking→almost→ponder→lets_learn→happy), 보기 단계 한국어 상황 추가. 콘텐츠·시각 리뷰 → 구현 → 독립 QA PASS. e2e speaking 422/0·speaking-exam 216/0(mock, 360/390/412/1280). 학습 효과 미검증. DB·SQL·Production 0, PR #62 Draft. 아래 212차 섹션 참고.)_
 _211차 갱신: 2026-10-05 (211차 — **2화 Speaking 장면 주인공을 승인된 Paul 마스코트(src/assets/paul, 원본 그대로)로 교체**: 궁금(thinking) → 깜짝(almost) → 빈 손(hello) → 손가락 들고 묻기(lets_learn) → 연필 받고 엄지(happy). 2화만, 연습·시험·정답 숨김 무변경. 부족 에셋 6항목 보고. e2e speaking 403/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 211차 섹션 참고.)_
@@ -25,6 +26,17 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-05 (215차) — 2화 일반 회화 연습을 Paul·미아 이야기와 일치
+
+운영자 지시: s02-01·02·03·09·10의 제이미 필통·도시락 설정을 흐름(Paul 필통 숟가락 → 미아에게 빌리기 → 연필심 부러짐 → 다음 날 필통 두고 옴)에 맞추고 상황·역할·반응·이미지 연결까지. ID·목표 영어 유지 지시와 충돌하는 4문항은 운영자에게 질문 → **"4문항 영어만 최소 교체"** 선택. 시작 HEAD = 원격 = `bfac3354`.
+
+- **콘텐츠**(`storyEpisodes.js`): 표는 설계 문서 §16. s02-01/02/09/10 영어·뜻·상황·역할·상대(Mia)·교사용 대안·func 교체, s02-03 상황 정합, 2화 요약 갱신. ID·순서·kind/level 유지, 나중 회차 복습 참조 없음 확인.
+- **그림 연결**: `pencilScene` 필드 → `speakingSets.itemsForSet`가 `practiceScene.pencil`로 전달 → `SpeakingPracticeItem.SituationGuide`가 연습에서만(`!exam`) `PencilCaseScene`(lazy, `still` 정지 장면)을 그린다. `PencilCaseScene`에 `still` prop(타이머 없음, `data-still`).
+- **테스트**: testSpeakingSets(2화 제이미 0, 정지 장면 5문항 매핑, 1화 무연결), testKeySentenceFlow(연습에서만·lazy 핀), e2e k8(2화 연습 12문항 상황·문장·미아 대사 일치·제이미 없음·정지 장면 5문항, 시험 1번 공개 전 그림·영어·듣기 없음 → 공개 후 모범 표현·미아 대사).
+- **검증**: build PASS(경고 0). 정적 testSpeakingSets·testKeySentenceFlow·testSituationRecall·testSpeakingSession·testQaGate 17/0·testLazyChunkGuards·testBundleBudget·testRegistryCoverage·testStudentPathContracts PASS. 브라우저(mock, 스펙당 1회): `[speaking]` 434/0, `[speaking-exam]` 216/0. 360px 연습 1·2·9·10번과 시험 1번 캡처 확인.
+- **미검증**: 로그인 Preview 실화면, 마이크·TTS, 아이들의 이해·기억 효과. 바뀐 4문항의 이전 연습 기록(기기 로컬)은 이전 문장 기준으로 남는다.
+- DB·SQL·Production·`.env`·`C:oca` 접촉 0. QA 게이트 무변경, PR #62 Draft. 체크포인트 `.ai-status/orchestrator-speaking-ep02-practice-align-2026-10-05.json`.
 
 ## 2026-10-05 (214차) — 운영자 정정: 흐름의 오른쪽 상대 = 미아 한 명(임시 제이미 그림 제거)
 
