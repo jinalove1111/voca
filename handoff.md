@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-05 (210차 — **Speaking 진입 시 오늘의 이야기 카드(2화) 바로 표시 + 학생이 고른 세트 기억**(UUID 키 localStorage). 209차 3커밋 + 이번 2커밋 PR #62 non-force push. build PASS, testSpeakingSets 61/0, e2e speaking 392/0·speaking-exam 216/0(mock). 9화 확대 보류. 실제 마이크·아이 이해·기억 효과 미확인. DB·SQL·Production 0, PR #62 Draft. 아래 210차 섹션 참고.)_
+_최종 갱신: 2026-10-05 (211차 — **2화 Speaking 장면 주인공을 승인된 Paul 마스코트(src/assets/paul, 원본 그대로)로 교체**: 궁금(thinking) → 깜짝(almost) → 빈 손(hello) → 손가락 들고 묻기(lets_learn) → 연필 받고 엄지(happy). 2화만, 연습·시험·정답 숨김 무변경. 부족 에셋 6항목 보고. e2e speaking 403/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 211차 섹션 참고.)_
+_210차 갱신: 2026-10-05 (210차 — **Speaking 진입 시 오늘의 이야기 카드(2화) 바로 표시 + 학생이 고른 세트 기억**(UUID 키 localStorage). 209차 3커밋 + 이번 2커밋 PR #62 non-force push. build PASS, testSpeakingSets 61/0, e2e speaking 392/0·speaking-exam 216/0(mock). 9화 확대 보류. 실제 마이크·아이 이해·기억 효과 미확인. DB·SQL·Production 0, PR #62 Draft. 아래 210차 섹션 참고.)_
 _209차 갱신: 2026-10-05 (209차 — **Speaking 2화 "오늘 기억할 한 문장" — Can I borrow a pencil?**: 메뉴에서 2화 선택 시 카드(한글 목표만) → ① 필통 장면(열림→숟가락→제이미 놀람→내 연필 전달) + 듣고 따라 말하기 ② 영어 숨기고 상황만 보고 말하기(미아) ③ 상대가 바뀐 상황(제이미)에서 다시 말하기 → 끝("연습을 마쳤어요", 판정·저장 없음). 나머지 9화 무변경. build PASS, 정적 testKeySentenceFlow 15/0·testSpeakingSets 56/0, e2e speaking 388/0·speaking-exam 216/0(mock). **미push**(로컬 커밋), DB·SQL·Production 0, PR #62 Draft. 아래 209차 섹션 참고.)_
 _208차 갱신: 2026-10-05 (208차 — **Speaking 연결된 이야기 10화(새 목표 표현 100 + 복습 14)**: 메뉴에서 기본 5개/1~10화 세트 선택, 연습·한글 보고 말하기에 역할·상대방 대사 추가. 기본 5 id·저장 키 유지. QA 전용 유지. build·정적 PASS, 브라우저 mock 5스펙 speaking-exam 218·speaking 307·student-home 228+1 SKIP·student 36·mobile 180 FAIL 0. QA UUID 3개 실DB 일치(운영자 SQL Editor 조회). **실기기 마이크 미확인, 이야기 2~10화 브라우저 미확인(1화만)**. DB·SQL·Production 0, PR #62 Draft. 아래 208차 섹션 참고.)_
 _207차 갱신: 2026-10-04 (207차 — **한글 상황 기반 Speaking**: 회화 연습 = 한글 상황+문장+뜻+듣기+녹음, '그림 보고 말하기 시험' → '한글 보고 말하기'(공개 전 한글 상황+진행만, 공개 후 "이렇게 말할 수 있어요"). 임시 그림 숨김(최종본 파일 있을 때만 표시). e2e speaking 203·speaking-exam 154·student-home 226+1·student 34·mobile 178 FAIL 0. DB·Production 0, PR #62 Draft. 아래 207차 섹션 참고.)_
@@ -21,6 +22,20 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-05 (211차) — 2화 Speaking 시각 파일럿 주인공 → 승인된 Paul 마스코트
+
+운영자 지시: 주인공을 승인된 Paul 캐릭터로 교체(모자·얼굴·체형·의상 유지, 모바일에서 얼굴·손동작 식별), 필통 열기 → 숟가락 발견 → 놀람 → "Can I borrow a pencil?" → 친구에게 연필 받기 흐름 유지, 부족 에셋 보고, 2화만.
+
+- **에셋 선택**: "승인된 Paul" = `src/assets/paul/`(index.js "Project Paul 공식 브랜드 캐릭터", 21종 상반신). `src/assets/town/character/paul-*`(마을 스프라이트)는 의상(반팔·반바지)과 크기(96x128)가 달라 제외. 원본 PNG 무가공(`<image>`로 그대로 표시, 자르기·색 보정 없음).
+- **단계별 포즈**(`PencilCaseScene.jsx` `POSE`): 닫힘/열림 `thinking`(궁금) → 숟가락/놀람 `almost`(두 손 들고 떨림 — 깜짝) → 전달 후 `hello`(빈 손바닥) → 묻기(recall/transfer 공개 전, 전달 시작) `lets_learn`(손가락 하나 들고 미소) → 받음 `happy`(엄지). `one_more`(두 손 모음)는 눈물이 있어 '부탁'보다 '슬픔'으로 읽혀(360 캡처 확인) 제외. `study`/`reading`은 영어 글자(ENGLISH)가 있어 사용 금지(정적 핀).
+- **레이아웃**: 주인공 이미지 0~150(높이 183 단위, 360px에서 실측 ≥140px), 물건 중심 x 160→195, 상대 cx 305→312, 이름표 "나" 유지(상황 문장 "내 연필…"과 일치). 연필은 SVG로 Paul 옆(138,100)에 그림.
+- **흐름 대응**: 필통 열기(thinking) → 숟가락(almost) → 제이미도 놀람 + 내 연필을 제이미에게(hello, 빈 손) → [회상] 미아에게 묻기(lets_learn, 영어 숨김) → 답 확인 후 미아가 건넴(happy) → [새 상황] 제이미에게 묻기 → 받음(happy). 이야기 텍스트·문항·정답 숨김·연습/시험 무변경.
+- **부족 에셋(운영자 제작 필요)**: ① 놀람 전용 표정(입 벌림·눈 크게 — 현재 `almost`는 '아이고/당황'에 가까움) ② 연필을 쥔 손/건네는 손/받는 손 포즈(현재 SVG 연필을 옆에 둠) ③ 필통을 여는 동작 ④ 손을 들고 말하는(묻는) 포즈 — `lets_learn`은 캐릭터가 다른 포즈보다 작게 그려져 단계 사이 크기가 조금 튐 ⑤ 고해상도 원본(현재 약 180px 높이 → 2~3배 화면에서 약간 흐림) ⑥ 같은 그림체의 제이미·미아(현재 단순 SVG 인물과 그림체 차이).
+- **결정 필요(운영자)**: 이야기 속 "Paul 선생님"(2화 5~7번 상대)과 주인공 Paul이 같은 얼굴 — 학생이 두 Paul을 혼동할 수 있음. 이름표는 "나"로 유지했다.
+- **검증**: build PASS(경고 0, 더미 env 프로세스 한정). 정적 `testKeySentenceFlow` 16/0(Paul 5포즈 매핑·assets/paul 경유·영어 그림 금지 핀 추가), testSpeakingSets·testBundleBudget·testLazyChunkGuards·testQaGate 17/0·testStudentPathContracts·testRegistryCoverage PASS. 브라우저(mock, 포트 4193): `[speaking]` 403/0(단계별 포즈+이미지 실제 로드, 360/412에서 높이 ≥140px), `[speaking-exam]` 216/0. 360px 캡처 8장면 확인(임시 probe 스펙 삭제).
+- **미확인**: 실제 마이크·TTS, 아이들의 장면 이해(특히 `almost`를 '놀람'으로 읽는지), 기억 효과, 로그인한 Preview 실화면.
+- DB·SQL·Production·`.env`·`C:oca` 접촉 0. QA 게이트 무변경, PR #62 Draft. 체크포인트 `.ai-status/orchestrator-speaking-paul-hero-2026-10-05.json`.
 
 ## 2026-10-05 (210차) — Speaking 진입 시 오늘의 이야기 카드 기본 표시 + 세트 선택 기억, PR #62 push
 

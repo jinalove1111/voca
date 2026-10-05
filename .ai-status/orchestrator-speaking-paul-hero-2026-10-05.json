@@ -1,0 +1,14 @@
+{
+  "agent_name": "orchestrator",
+  "role": "구현·검증·문서·push — 2화 장면 주인공 Paul 마스코트 교체",
+  "task_id": "speaking-paul-hero-2026-10-05",
+  "task": "PencilCaseScene 주인공을 승인된 Paul 마스코트(src/assets/paul)로 교체, 2화만",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-05T15:20:00+09:00",
+  "updated_at": "2026-10-05T16:20:00+09:00",
+  "files_owned": ["src/components/PencilCaseScene.jsx", "scripts/testKeySentenceFlow.mjs", "tests/e2e/speaking.spec.mjs", "handoff.md"],
+  "summary": "[mock 기반] Paul 5포즈(thinking/almost/hello/lets_learn/happy) 단계 매핑, 원본 무가공. one_more는 눈물로 슬픔처럼 읽혀 제외. testKeySentenceFlow 16/0, e2e speaking 403/0, speaking-exam 216/0, 360px 캡처 확인. 부족 에셋 6항목 handoff 211차.",
+  "blocker": null,
+  "next_action": "운영자: Preview에서 2화 실사용 확인, 부족 에셋 제작 여부·'Paul 선생님' 중복 결정"
+}
