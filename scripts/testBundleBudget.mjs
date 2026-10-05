@@ -247,7 +247,8 @@ section('4. 마을 이미지 에셋 — Batch 1+2+3 21개만 번들, 그 외 0�
 const TOWN_ASSET_URL_RE = /assets\/town\//
 check('메인 청크에 assets/town/ 경로 문자열 0건(Vite가 소스 폴더 구조를 산출물 URL에 남기지 않음)', !TOWN_ASSET_URL_RE.test(mainSrc))
 check('TownScreen 청크에 assets/town/ 경로 문자열 0건(위와 동일 이유)', !TOWN_ASSET_URL_RE.test(townSrc))
-const KNOWN_SAFE_IMAGE_PREFIX = /^(paul_|favicon\.)/
+// 2026-10-05 Speaking 2화 미아 캐릭터(src/assets/speaking/mia_*.png, KeySentenceFlow lazy 청크 전용) — paul_ 마스코트와 같은 취급
+const KNOWN_SAFE_IMAGE_PREFIX = /^(paul_|mia_|favicon\.)/
 // 2026-09-17 갱신(P0 최종 아트 7종 드롭인, PR #60) — 전제가 다시 바뀌었다:
 // (a) nature/flower-garden·decorations/bench가 TOWN_ASSETS에 신규 등록돼
 // 23개 키, (b) 최종 아트로 교체된 red-post-box.webp(8644B)·street-lamp.webp

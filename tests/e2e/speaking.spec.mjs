@@ -544,6 +544,8 @@ export async function run(browser, baseURL) {
   // 장면(key-scene) 안 애니메이션만 센다 — 앱 공통 btn-press 버튼의 opacity 전환은 이 장면과 무관
   // 주인공 = 승인된 Paul 마스코트(src/assets/paul) — 단계별 포즈와 실제 로드된 이미지 확인
   const hero = async (page) => T(page, 'key-scene-hero').evaluate((el) => { const href = el.getAttribute('href') || ''; const img = new Image(); img.src = href; return new Promise((res) => { const done = () => res({ pose: el.closest('[data-testid="key-scene"]').getAttribute('data-hero-pose'), href, ok: img.naturalWidth > 0, h: el.getBoundingClientRect().height }); if (img.complete) done(); else { img.onload = done; img.onerror = done } }) })
+  const partner = async (page) => T(page, 'key-scene-partner').evaluate((el) => { const href = el.getAttribute('href') || ''; const img = new Image(); img.src = href; return new Promise((res) => { const done = () => res({ pose: el.closest('[data-testid="key-scene"]').getAttribute('data-partner-pose'), href, ok: img.naturalWidth > 0, h: el.getBoundingClientRect().height }); if (img.complete) done(); else { img.onload = done; img.onerror = done } }) })
+  const partnerIs = async (page, pose, file) => { const p = await partner(page); return p.pose === pose && p.href.includes(file) && p.ok }
   const heroIs = async (page, pose) => { const h = await hero(page); return h.pose === pose && h.href.includes(`paul_${pose}`) && h.ok }
   const running = (page) => page.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.target?.closest?.('[data-testid="key-scene"]')).length)
   const runningNames = (page) => page.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running').map((a) => `${a.animationName || a.transitionProperty || '?'}@${a.effect?.target?.getAttribute?.('class') || a.effect?.target?.tagName}`).join(','))
@@ -595,6 +597,7 @@ export async function run(browser, baseURL) {
     r.check(`${name} 짧은 대화 + 상황/역할 보임`, (await txt(page, 'key-intro')).includes('짧은 대화') && (await txt(page, 'situation-text')) === KS.recall.situationKo && (await txt(page, 'situation-role')).includes(KS.recall.roleKo))
     r.check(`${name} 장면 variant=ask`, (await sceneAttr(page, 'data-variant')) === 'ask')
     r.check(`${name} 공개 전 Paul 묻는 포즈(lets_learn)`, await heroIs(page, 'lets_learn'), JSON.stringify(await hero(page)))
+    r.check(`${name} 공개 전 상대 = 미아 그림(생각 포즈)·이름표 미아`, (await partnerIs(page, 'think', 'mia_think')) && (await T(page, 'key-scene').textContent()).includes('미아'), JSON.stringify(await partner(page)))
     await hiddenBeforeReveal(page, name)
     r.check(`${name} 공개 전 다음 버튼 비활성`, await T(page, 'key-next').isDisabled())
     await T(page, 'key-reveal').click()
@@ -602,6 +605,7 @@ export async function run(browser, baseURL) {
     r.check(`${name} 공개 후 미아 대사`, (await txt(page, 'key-reply')).includes('Sure! Here you are.'))
     r.check(`${name} 공개 후 장면 variant=handover-mia`, !!(await waitUntil(async () => (await sceneAttr(page, 'data-variant')) === 'handover-mia', { timeout: 3000 })))
     r.check(`${name} 연필 받은 뒤 Paul 기쁨 포즈(happy) + 연필이 내 책상 자리로`, !!(await waitUntil(async () => (await heroIs(page, 'happy')) && (await sceneAttr(page, 'data-my-spot')) === 'pencil', { timeout: 3000 })), JSON.stringify(await hero(page)))
+    r.check(`${name} 건넨 뒤 미아 인사 포즈(빈 손)`, await partnerIs(page, 'greet', 'mia_greet'), JSON.stringify(await partner(page)))
     const before = (await speakLog(page)).length
     await T(page, 'key-listen').click()
     const l = await waitUntil(async () => { const x = await speakLog(page); return x.length >= 1 ? x : null }, { timeout: 3000 })
