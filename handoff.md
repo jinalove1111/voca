@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-06 (217차 — **2화 완성도 점검 → 수정 + 1·3화 "오늘 기억할 한 문장" 확장(기존 에셋만)**. 2화: 시간선(nextHook·요약·회상 시점·앞자리), 역할 힌트 완화, 화자 이름표 한글 통일. 1화 "Could you speak a bit louder?"(속삭임 장면), 3화 "That's a great idea!"(제안 장면) — 임시 선정, 운영자 확인 필요. 장면 이름을 데이터로 옮기며 보기 단계 하드코딩 결함 발견·수정. e2e speaking 468/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 217차 섹션 참고.)_
+_최종 갱신: 2026-10-06 (218차 — **2화 상대(미아) 역할 녹음**: 폴 문장 듣기 → [내 대답 녹음] → [녹음 끝내기] → [내 목소리 듣기]/[다시 녹음], 예시 대답 "Sure. Here you are!"(글+영국 영어 TTS). 기존 `useLocalRecorder`·`RecorderControls` 재사용(마이크 스트림 공유), 시험은 답 확인 뒤 블록·[예시 대답 듣기] 전 예시 미마운트. 업로드·인식·채점·DB 0. mock e2e speaking 497/0·speaking-exam 216/0, **실제 마이크 미검증**. PR #62 Draft. 아래 218차 섹션 참고.)_
+_217차 갱신: 2026-10-06 (217차 — **2화 완성도 점검 → 수정 + 1·3화 "오늘 기억할 한 문장" 확장(기존 에셋만)**. 2화: 시간선(nextHook·요약·회상 시점·앞자리), 역할 힌트 완화, 화자 이름표 한글 통일. 1화 "Could you speak a bit louder?"(속삭임 장면), 3화 "That's a great idea!"(제안 장면) — 임시 선정, 운영자 확인 필요. 장면 이름을 데이터로 옮기며 보기 단계 하드코딩 결함 발견·수정. e2e speaking 468/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 217차 섹션 참고.)_
 _216차 갱신: 2026-10-06 (216차 — **Speaking Paul 기준 얼굴 교체**: 운영자 제공 `폴얼굴.png`(이미 투명 배경)를 모자 챙 기준 미아와 같은 크기로 정규화해 `src/assets/speaking/paul_speaking.png`, Speaking 장면의 저화질 마스코트 4포즈 대체. 한 포즈뿐이라 묻는 순간 "?" 말풍선으로 보완. e2e speaking 434/0·speaking-exam 216/0(mock). 로그인 Preview 실화면 미확인. DB·SQL·Production 0, PR #62 Draft. 아래 216차 섹션 참고.)_
 _215차 갱신: 2026-10-05 (215차 — **2화 일반 회화 연습도 Paul·미아 이야기로**: 운영자 결정(4문항 영어 최소 교체) — s02-01 my pencil case / 02 I haven't got a pencil. / 09 Oh no, my pencil broke! / 10 I left my pencil case at home., 03 상황 정합, 상대 전부 미아, 2화 제이미 0. 5문항에 흐름 장면 정지 그림 연결(연습만, 시험 제외). ID 유지. e2e speaking 434/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 215차 섹션 참고.)_
 _214차 갱신: 2026-10-05 (214차 — **운영자 정정: 핵심 한 문장 흐름의 임시 제이미 그림 → 승인된 여성 캐릭터 = 미아로 통일**. 흐름 이야기를 Paul+미아 두 사람으로 재구성(내 필통의 숟가락 → 미아가 연필, 연필심 부러짐 → 다시, 다음 날 필통 두고 옴 → 다시), 미아 4포즈 전부 사용, 제이미·SVG 임시 인물 제거. 키 문장·id·정답 숨김 유지. e2e speaking 429/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 214차 섹션 참고.)_
@@ -28,6 +29,16 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-06 (218차) — 2화 상대(미아) 역할 녹음·내 목소리 다시 듣기
+
+운영자 지시: 아이가 대화 상대 역할도 녹음하고 자기 목소리를 다시 듣기, 기존 녹음 재사용, 2화 먼저, 연습은 예시 공개·시험은 답 확인 전 예시 숨김, 녹음 선택·메모리만·이동/종료 시 정리, 인식·채점·유료 API·새 DB·판정 없음. 시작 HEAD = 원격 = `f1538ac7`.
+
+- **구현**: `useLocalRecorder`에 `sharedStreamRef` 선택 인자(스트림 공유), `RecorderControls`에 `prefix`/`labels`/`blocked` 선택 인자(기본값 = 기존 동작·testid), `SpeakingPracticeItem`에 `PartnerRole`(상대 역할 녹음 + 예시 대답, 시험은 버튼 전 미마운트), `SpeakingPracticeMode`·`SpeakingExam`에 두 번째 녹음기와 정리, `speakingSets` `partnerRole`(2화만), s02-03 예시 대답 "Sure. Here you are!". 설계 문서 §19.
+- **발견·수정**: 다른 녹음기 사용 중에 녹음 버튼이 숨겨지던 문제(e2e k10이 발견) → 숨기지 않고 비활성으로 표시.
+- **검증 — mock(헤드리스 합성 마이크·TTS 스텁)**: build PASS(경고 0). 정적 testSpeakingSets·testKeySentenceFlow(Partner 5단언)·testSituationRecall·testSpeakingSession·testQaGate 17/0·testLazyChunkGuards·testBundleBudget·testRegistryCoverage·testStudentPathContracts PASS. 브라우저(여유 RAM 1.4~2GB라 스펙당 1회, 수정 후 speaking만 재실행): `[speaking]` 497/0(k10 3시나리오 포함), `[speaking-exam]` 216/0. 360px 캡처(연습 대기·녹음 후, 시험 답 확인 후·예시 공개).
+- **검증 — 실제 마이크: 미실시**. 실기기 녹음·재생 음질, iOS/안드로이드에서 두 녹음기 전환, 영국 영어 TTS 실청취, 아이 반응은 확인하지 않았다.
+- DB·SQL·Production·`.env`·`C:\voca` 접촉 0. QA 게이트 무변경, PR #62 Draft. 체크포인트 `.ai-status/orchestrator-speaking-partner-role-2026-10-06.json`.
 
 ## 2026-10-06 (217차) — 2화 완성도 점검·수정 + 1·3화 한 문장 흐름 확장(기존 에셋)
 

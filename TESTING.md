@@ -1894,3 +1894,10 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 
 - `scripts/testSpeakingSets.mjs` 진입 세트 5단언(첫 방문 ep02, 선택 기억, UUID 키만, 없는 세트 값/저장 거부, storage 예외 폴백). 210차 61 PASS.
 - e2e `speaking.spec.mjs`/`speakingExam.spec.mjs` `scenario()`는 기본으로 `lastSetKey(QA_STUDENT_ID)`='basic'을 **값이 없을 때만** 시드한다(기존 시나리오 = 기본 5개를 고른 학생). 첫 방문 동작은 `{ fresh: true }`로 검사(k1). 새 시나리오가 기본 5개를 전제하면 시드 그대로, 2화 기본을 검사하면 `fresh: true`.
+
+## 관련 항목: 상대(미아) 역할 녹음 (2026-10-06, 218차)
+
+- `scripts/testKeySentenceFlow.mjs` Partner 5단언: 훅 재사용(`sharedStreamRef`, 연습·시험 각각 녹음기 2개가 스트림 공유), 연습 예시 처음부터·시험 [예시 대답 듣기] 전 미마운트, 시험 블록은 `revealed && partner && !retrying`, 이동·다시 연습에서 두 녹음기 reset, 판정 문구·storage·fetch·업로드·SpeechRecognition 없음.
+- `scripts/testSpeakingSets.mjs`: `partnerRole`은 2화 문항만, s02-03 예시 대답 "Sure. Here you are!".
+- e2e `speaking.spec.mjs` k10(mock 합성 마이크): 연습 s02-03 — 폴 문장 듣기 → 내 문장 녹음 중 내 대답 녹음 비활성 → 내 대답 녹음/녹음 끝내기/blob/내 목소리 듣기/다시 녹음, `window.__micTracks.length === 1`(스트림 공유), 예시 대답 듣기 speak, 다음 문항에서 두 녹음 비움, localStorage 흔적 없음, 화면을 떠나면 트랙 ended. 마이크 거부 시 안내·예시·이동 유지. 시험: 답 확인 전 블록·예시 글 DOM 없음 → 답 확인 후 블록만 → [예시 대답 듣기] 후 글+speak → 다음 문제에서 숨김. 1화 연습에는 블록 없음. k8 시험 단언은 예시 대답 버튼 뒤로 이동.
+- 실제 마이크·실기기는 이 하네스로 확인할 수 없다(`verify:speaking`은 정직한 SKIP 유지).
