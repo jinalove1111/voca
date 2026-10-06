@@ -41,6 +41,15 @@ const item = strip(read('SpeakingPracticeItem.jsx'))
 check('PracticeItem: 정지 장면은 연습에서만(!exam && scene.pencil), lazy 로드', /\{!exam && scene\.pencil && <Suspense/.test(item) && /const PencilCaseScene = lazy\(\(\) => import\('\.\/PencilCaseScene'\)\)/.test(item))
 check('화자 이름표: SPEAKER_KO 한 곳(PracticeItem)에서 Mia=미아, KeySentenceFlow는 가져다 씀', /export const SPEAKER_KO = \{[^}]*Mia: '미아'/.test(item) && /SPEAKER_KO \} from '\.\/SpeakingPracticeItem'/.test(flow) && !/const SPEAKER_KO/.test(flow))
 check('Flow: 장면 변형은 하드코딩 없이 keySentence.scenes에서(보기 포함)', flow.includes('<PencilCaseScene variant={ks.scenes.watch} />') && !/variant="(spoon|whisper|idea)"/.test(flow))
+// 218차 상대(미아) 역할 녹음 — 기존 녹음기 재사용, 메모리만, 시험은 예시 숨김
+const hook = fs.readFileSync(new URL('../src/hooks/useLocalRecorder.js', import.meta.url), 'utf8')
+const pmode = strip(read('SpeakingPracticeMode.jsx'))
+const exam = strip(read('SpeakingExam.jsx'))
+check('Partner: 훅 재사용 — sharedStreamRef로 마이크 스트림 하나 공유(새 녹음 구현 없음)', /sharedStreamRef = null/.test(hook) && /const streamRef = sharedStreamRef \|\| ownStreamRef/.test(hook) && [pmode, exam].every((t) => (t.match(/useLocalRecorder\(\{ sharedStreamRef: streamRef \}\)/g) || []).length === 2))
+check('Partner: 연습은 예시 처음부터, 시험은 [예시 대답 듣기] 전 미마운트', /const \[shown, setShown\] = useState\(!exam\)/.test(item) && /\{shown \? \(\s*<ReplyBubble/.test(item) && /data-testid="partner-example"/.test(item))
+check('Partner: 시험에서는 답 확인 뒤에만 블록, 답 카드의 상대 대사는 상대 역할 문항이 아닐 때만', /\{revealed && partner && !retrying && <PartnerRole/.test(exam) && /\{expr\.reply && !partner && <ReplyBubble/.test(exam))
+check('Partner: 문항 이동·다시 연습에서 두 녹음기 모두 정리', /rec\.reset\('RESET'\); partnerRec\.reset\('RESET'\)/.test(pmode) && (exam.match(/rec\.reset\('RESET'\); partnerRec\.reset\('RESET'\)/g) || []).length === 2)
+check('Partner: 판정·저장·전송 없음(칭찬/정답/숙달 문구, storage, fetch, 업로드)', !/PARTNER_REC_LABELS = \{[^}]*(잘했|정답|숙달|점수)/.test(item) && ![item, hook].some((t) => /localStorage|sessionStorage|fetch\(|supabase|upload|SpeechRecognition/.test(t)))
 check('Menu: KeySentenceFlow lazy 로드', /const KeySentenceFlow = lazy\(\(\) => import\('\.\/KeySentenceFlow'\)\)/.test(menu))
 
 if (fail) { console.log(`\nFAILED ${fail}`); process.exit(1) }
