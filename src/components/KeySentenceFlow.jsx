@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { speak } from '../utils/speech'
+import { speak, stopSpeaking } from '../utils/speech'
 import useLocalRecorder from '../hooks/useLocalRecorder'
 import { RecorderControls, ReplyBubble, SituationGuide, BTN, SPEAKER_KO } from './SpeakingPracticeItem'
 import PencilCaseScene from './PencilCaseScene'
@@ -33,11 +33,12 @@ export default function KeySentenceFlow({ setId, onMenu }) {
   const headingRef = useRef(null)
   const busy = rec.st.status === 'recording'
   useEffect(() => { headingRef.current?.focus() }, [step])
+  useEffect(() => stopSpeaking, []) // 화면을 떠나면 재생 중인 듣기를 끊는다(220차)
   if (!ks) return null
 
   const item = STORY_ITEMS.find((i) => i.id === ks.itemId)
   const intro = (ks.introIds || []).map((id) => STORY_ITEMS.find((i) => i.id === id)).filter(Boolean)
-  const go = (s) => { rec.reset('RESET'); setRevealed(false); setStep(s) }
+  const go = (s) => { stopSpeaking(); rec.reset('RESET'); setRevealed(false); setStep(s) }
   const idx = STEPS.indexOf(step)
   const part = step === 'recall' ? ks.recall : ks.transfer
   const key = step === 'recall' ? 'recall' : 'transfer'

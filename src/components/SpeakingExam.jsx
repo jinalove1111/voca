@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { speak } from '../utils/speech'
+import { speak, stopSpeaking } from '../utils/speech'
 import useLocalRecorder from '../hooks/useLocalRecorder'
-import SpeakingPracticeItem, { PartnerRole, RecorderControls, ReplyBubble, SituationGuide, BTN } from './SpeakingPracticeItem'
+import SpeakingPracticeItem, { BUSY, PartnerRole, RecorderControls, ReplyBubble, SituationGuide, BTN } from './SpeakingPracticeItem'
 import { BASIC_SET_ID, itemsForSet, setLabel } from '../utils/situation/speakingSets'
 import { saveSession } from '../utils/situation/situationStore'
 
@@ -37,10 +37,11 @@ export default function SpeakingExam({ setId = BASIC_SET_ID, studentId, onMenu }
   const total = items.length
   const summary = idx >= total
   const expr = summary ? null : items[idx]
-  const busy = st.status === 'recording' || partnerRec.st.status === 'recording'
+  const busy = st.status === 'recording' || partnerRec.st.status === 'recording' // 이동·뒤로는 녹음 중만 막는다
   const partner = !!(expr?.partnerRole && expr.reply)
 
   useEffect(() => { headingRef.current?.focus() }, [idx])
+  useEffect(() => stopSpeaking, []) // 화면을 떠나면 재생 중인 듣기를 끊는다(220차)
   useEffect(() => { if (st.status === 'recorded') setRecorded(true) }, [st.status])
 
   // 답을 확인한 뒤 자기 확인이나 녹음이 있을 때만 저장한다(보기만 한 문항은 기록 없음)
@@ -52,13 +53,14 @@ export default function SpeakingExam({ setId = BASIC_SET_ID, studentId, onMenu }
     if (selfReport) setResults((r) => ({ ...r, [expr.exprId]: selfReport }))
   }
   const next = () => {
+    stopSpeaking()
     persist()
     rec.reset('RESET'); partnerRec.reset('RESET')
     setRevealed(false); setRetrying(false); setSelfReport(null); setRecorded(false)
     setIdx((i) => i + 1)
   }
-  const back = () => { persist(); onMenu() }
-  const retry = () => { rec.reset('RESET'); partnerRec.reset('RESET'); setRetrying(true) }
+  const back = () => { stopSpeaking(); persist(); onMenu() }
+  const retry = () => { stopSpeaking(); rec.reset('RESET'); partnerRec.reset('RESET'); setRetrying(true) }
 
   return (
     <div data-testid="speaking-exam" data-expr={expr?.exprId || ''} data-index={idx} data-revealed={revealed ? 'true' : 'false'}
@@ -102,13 +104,13 @@ export default function SpeakingExam({ setId = BASIC_SET_ID, studentId, onMenu }
 
             {retrying ? (
               <div data-testid="exam-practice-panel" className="space-y-4 border-t border-gray-200 pt-4">
-                <SpeakingPracticeItem item={expr} rec={rec} />
+                <SpeakingPracticeItem item={expr} rec={rec} partnerRec={partnerRec} />
               </div>
             ) : (
-              <RecorderControls rec={rec} blocked={partnerRec.st.status === 'recording'} idleText="상황을 읽고 영어로 말해 봐요. 마이크 없이도 할 수 있어요" />
+              <RecorderControls rec={rec} blocked={BUSY(partnerRec.st)} idleText="상황을 읽고 영어로 말해 봐요. 마이크 없이도 할 수 있어요" />
             )}
 
-            {revealed && partner && !retrying && <PartnerRole key={expr.id} item={expr} rec={partnerRec} exam blocked={st.status === 'recording'} />}
+            {revealed && partner && !retrying && <PartnerRole key={expr.id} item={expr} rec={partnerRec} exam blocked={BUSY(st)} />}
 
             {revealed && (
               <div className="flex flex-wrap gap-2" role="group" aria-label="말해 본 느낌">

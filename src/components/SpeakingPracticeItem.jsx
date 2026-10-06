@@ -1,5 +1,8 @@
 import { Suspense, lazy, useState } from 'react'
 import { speak } from '../utils/speech'
+
+// 녹음 중이거나 마이크 허용을 기다리는 중 — 다른 녹음기·이동·듣기를 막는다(220차: requesting도 포함해 getUserMedia 중복 방지)
+export const BUSY = (st) => st.status === 'recording' || st.status === 'requesting'
 import SceneCard, { hasFinalArt } from './SceneCard'
 import InAppBrowserNotice from './InAppBrowserNotice'
 import { isInAppBrowser } from '../utils/browserDetect'
@@ -100,7 +103,7 @@ export function ReplyBubble({ reply, testid, listenTestid, busy = false, listenL
 export function PartnerRole({ item, rec, exam = false, blocked = false }) {
   const [shown, setShown] = useState(!exam)
   const who = SPEAKER_KO[item.reply.speaker] || item.reply.speaker
-  const busy = blocked || rec.st.status === 'recording'
+  const busy = blocked || BUSY(rec.st)
   const open = () => { setShown(true); speak(item.reply.en, { source: 'speaking' }) }
   return (
     <div data-testid="partner-role" className="bg-violet-50 border-2 border-violet-200 rounded-3xl p-4 space-y-3">
@@ -119,7 +122,7 @@ export function PartnerRole({ item, rec, exam = false, blocked = false }) {
 export default function SpeakingPracticeItem({ item, rec, partnerRec = null }) {
   const expr = item
   const partner = !!(partnerRec && item.partnerRole && item.reply)
-  const busy = rec.st.status === 'recording' || (partner && partnerRec.st.status === 'recording')
+  const busy = BUSY(rec.st) || (partner && BUSY(partnerRec.st))
   return (
     <div className="space-y-4">
       <SituationGuide scene={item.practiceScene} roleKo={item.roleKo} />
@@ -131,8 +134,8 @@ export default function SpeakingPracticeItem({ item, rec, partnerRec = null }) {
           className={`${BTN} bg-sky-100 text-sky-700 text-base`}>🔊 듣기</button>
       </div>
       {item.reply && !partner && <ReplyBubble reply={item.reply} testid="practice-reply" listenTestid="practice-reply-listen" busy={busy} />}
-      <RecorderControls rec={rec} blocked={partner && partnerRec.st.status === 'recording'} />
-      {partner && <PartnerRole item={item} rec={partnerRec} blocked={rec.st.status === 'recording'} />}
+      <RecorderControls rec={rec} blocked={partner && BUSY(partnerRec.st)} />
+      {partner && <PartnerRole item={item} rec={partnerRec} blocked={BUSY(rec.st)} />}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import useLocalRecorder from '../hooks/useLocalRecorder'
+import { stopSpeaking } from '../utils/speech'
 import SpeakingPracticeItem, { BTN } from './SpeakingPracticeItem'
 import { BASIC_SET_ID, itemsForSet, setLabel } from '../utils/situation/speakingSets'
 
@@ -14,10 +15,11 @@ export default function SpeakingPracticeMode({ setId = BASIC_SET_ID, onMenu, onS
   const headingRef = useRef(null)
   const items = useMemo(() => itemsForSet(setId), [setId])
   const last = items.length - 1
-  const busy = rec.st.status === 'recording' || partnerRec.st.status === 'recording'
+  const busy = rec.st.status === 'recording' || partnerRec.st.status === 'recording' // 이동·뒤로는 녹음 중만 막는다(허용 대기 중엔 떠날 수 있음)
   useEffect(() => { headingRef.current?.focus() }, [idx, done])
+  useEffect(() => stopSpeaking, []) // 화면을 떠나면 재생 중인 듣기를 끊는다(220차)
 
-  const move = (fn) => { rec.reset('RESET'); partnerRec.reset('RESET'); fn() }
+  const move = (fn) => { stopSpeaking(); rec.reset('RESET'); partnerRec.reset('RESET'); fn() }
   const item = items[idx]
 
   return (
@@ -45,9 +47,9 @@ export default function SpeakingPracticeMode({ setId = BASIC_SET_ID, onMenu, onS
           <>
             <SpeakingPracticeItem key={item.id} item={item} rec={rec} partnerRec={partnerRec} />
             <div className="flex justify-between gap-2">
-              <button data-testid="practice-prev" onClick={() => move(() => setIdx(idx - 1))} disabled={busy || idx === 0}
+              <button data-testid="practice-prev" onClick={() => move(() => setIdx((i) => i - 1))} disabled={busy || idx === 0}
                 className={`${BTN} bg-white card-shadow text-gray-700`}>← 이전</button>
-              <button data-testid="practice-next" onClick={() => move(() => (idx === last ? setDone(true) : setIdx(idx + 1)))} disabled={busy}
+              <button data-testid="practice-next" onClick={() => move(() => (idx === last ? setDone(true) : setIdx((i) => i + 1)))} disabled={busy}
                 className={`${BTN} bg-white card-shadow text-gray-700`}>다음 →</button>
             </div>
           </>

@@ -184,6 +184,9 @@ export function stopCurrentAudio() {
 let _ttsCallSeq = 0
 let _activeTtsCallId = 0
 
+// 220차: Speaking 화면이 문항 이동·뒤로·녹음 시작 때 재생 중인 듣기(TTS/mp3)를 끊는 데 쓴다
+export const stopSpeaking = () => stopAllPlayback()
+
 function stopAllPlayback() {
   stopCurrentAudio()
   stopReactionSound()

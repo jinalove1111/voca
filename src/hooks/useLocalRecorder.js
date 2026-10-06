@@ -1,4 +1,5 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
+import { stopSpeaking } from '../utils/speech'
 import {
   MAX_RECORD_MS, MIN_RECORD_MS, initialSpeakingState, speakingReducer, mapMediaError, pickMimeType,
 } from '../utils/speaking/speakingSession'
@@ -70,6 +71,7 @@ export default function useLocalRecorder({ maxMs = MAX_RECORD_MS, minMs = MIN_RE
   }, [])
 
   const start = async () => {
+    stopSpeaking() // 듣기가 마이크에 같이 녹음되지 않게(220차)
     clearUrl()
     const seq = ++reqSeqRef.current
     dispatch({ type: 'REQUEST' })
@@ -81,6 +83,9 @@ export default function useLocalRecorder({ maxMs = MAX_RECORD_MS, minMs = MIN_RE
         if (mountedRef.current && seq === reqSeqRef.current) dispatch({ type: 'FAIL', code: mapMediaError(err) })
         return
       }
+      // 허용을 기다리는 사이 다른 녹음기(공유 ref)가 먼저 스트림을 얻었으면 새 것은 놓고 그것을 쓴다(중복 getUserMedia 누수 방지, 220차)
+      const live = streamRef.current
+      if (live && live !== stream && live.getTracks().some((t) => t.readyState === 'live')) { stream.getTracks().forEach((t) => t.stop()); stream = live }
       streamRef.current = stream
       // 허용을 기다리는 사이 떠났거나 백그라운드로 갔으면 녹음을 시작하지 않고 놓는다
       if (!mountedRef.current || document.visibilityState === 'hidden') { releaseStream(); return }
