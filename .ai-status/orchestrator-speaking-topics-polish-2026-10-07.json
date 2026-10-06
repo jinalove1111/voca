@@ -1,0 +1,14 @@
+{
+  "agent_name": "orchestrator",
+  "role": "리드(우선순위·소유·통합·구현) — 콘텐츠/검증 담당은 읽기 전용 서브에이전트",
+  "task_id": "speaking-topics-polish-2026-10-07",
+  "task": "주제별 구성 다듬기: 10화 핵심 표현 확정, 카드 영어 접힘·버튼 설명, 듣기 정지·중복 getUserMedia 결함 수정",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-07T05:06:00+09:00",
+  "updated_at": "2026-10-07T05:25:00+09:00",
+  "files_owned": ["src/utils/situation/speakingTopics.js", "src/components/SpeakingTopics.jsx", "src/components/SpeakingPracticeItem.jsx", "src/components/SpeakingPracticeMode.jsx", "src/components/SpeakingExam.jsx", "src/components/KeySentenceFlow.jsx", "src/hooks/useLocalRecorder.js", "src/utils/speech.js", "scripts/testKeySentenceFlow.mjs", "tests/e2e/speaking.spec.mjs", "docs/design/SPEAKING_UX_V2_2026-10-04.md", "TESTING.md", "handoff.md"],
+  "summary": "[mock 기반] 핵심 표현 10개(10화 변경, 5·6·10 임시), 카드 영어 접힘, 결함 4건 수정. e2e speaking 540/0, speaking-exam 216/0, 정적 11종 PASS. 실기기 TTS 정지·마이크·아이 효과 미검증.",
+  "blocker": null,
+  "next_action": "운영자: Preview 로그인 후 주제→이야기→연습→한글 보고 말하기 실사용, 임시 핵심 표현(5·6·10화) 확정, 다음 수업 관찰 항목(§21.5) 기록"
+}

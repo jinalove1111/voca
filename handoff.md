@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-07 (219차 — **Speaking 주제별 탐색**: 첫 화면 주제 카드 6개 → 이야기 카드(제목·상황 한 줄·핵심 표현·연습 시작) → 기존 연습/시험/한 문장 흐름. id 연결만(새 콘텐츠·저장 0), 7화는 의도적 미분류, "길 찾기와 외출" → "물건·장소 찾기". 콘텐츠 리뷰 + 독립 QA. mock e2e speaking 535/0·speaking-exam 216/0. PR #62 Draft·QA 전용. 아래 219차 섹션 참고.)_
+_최종 갱신: 2026-10-07 (220차 — **주제별 구성 다듬기(아이 피드백 전 상태)**: 10화 핵심 표현 표(10화 s10-04 → s10-02, 5·6·10화 임시), 카드 영어 핵심 표현을 접힘으로·버튼 설명 추가, 결함 수정(이동·녹음 시작 시 듣기 정지, 허용 대기 중 중복 getUserMedia 차단·스트림 재사용, 시험 다시 연습에 상대 역할). mock e2e speaking 540/0·speaking-exam 216/0. 실기기·아이 효과 미검증. PR #62 Draft·QA 전용. 아래 220차 섹션 참고.)_
+_219차 갱신: 2026-10-07 (219차 — **Speaking 주제별 탐색**: 첫 화면 주제 카드 6개 → 이야기 카드(제목·상황 한 줄·핵심 표현·연습 시작) → 기존 연습/시험/한 문장 흐름. id 연결만(새 콘텐츠·저장 0), 7화는 의도적 미분류, "길 찾기와 외출" → "물건·장소 찾기". 콘텐츠 리뷰 + 독립 QA. mock e2e speaking 535/0·speaking-exam 216/0. PR #62 Draft·QA 전용. 아래 219차 섹션 참고.)_
 _218차 갱신: 2026-10-06 (218차 — **2화 상대(미아) 역할 녹음**: 폴 문장 듣기 → [내 대답 녹음] → [녹음 끝내기] → [내 목소리 듣기]/[다시 녹음], 예시 대답 "Sure. Here you are!"(글+영국 영어 TTS). 기존 `useLocalRecorder`·`RecorderControls` 재사용(마이크 스트림 공유), 시험은 답 확인 뒤 블록·[예시 대답 듣기] 전 예시 미마운트. 업로드·인식·채점·DB 0. mock e2e speaking 497/0·speaking-exam 216/0, **실제 마이크 미검증**. PR #62 Draft. 아래 218차 섹션 참고.)_
 _217차 갱신: 2026-10-06 (217차 — **2화 완성도 점검 → 수정 + 1·3화 "오늘 기억할 한 문장" 확장(기존 에셋만)**. 2화: 시간선(nextHook·요약·회상 시점·앞자리), 역할 힌트 완화, 화자 이름표 한글 통일. 1화 "Could you speak a bit louder?"(속삭임 장면), 3화 "That's a great idea!"(제안 장면) — 임시 선정, 운영자 확인 필요. 장면 이름을 데이터로 옮기며 보기 단계 하드코딩 결함 발견·수정. e2e speaking 468/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 217차 섹션 참고.)_
 _216차 갱신: 2026-10-06 (216차 — **Speaking Paul 기준 얼굴 교체**: 운영자 제공 `폴얼굴.png`(이미 투명 배경)를 모자 챙 기준 미아와 같은 크기로 정규화해 `src/assets/speaking/paul_speaking.png`, Speaking 장면의 저화질 마스코트 4포즈 대체. 한 포즈뿐이라 묻는 순간 "?" 말풍선으로 보완. e2e speaking 434/0·speaking-exam 216/0(mock). 로그인 Preview 실화면 미확인. DB·SQL·Production 0, PR #62 Draft. 아래 216차 섹션 참고.)_
@@ -30,6 +31,18 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-07 (220차) — Speaking 주제별 구성 다듬기(3시간 자율 세션, 05:06~)
+
+운영자 지시: 주제 → 이야기 → 연습 → 한글 보고 말하기 흐름 완성, 4~10화 핵심 표현 선정, 카드의 영어 핵심 표현을 접힘으로, 실제 결함만 수정, 영상·AI 채점·새 녹음·대규모 개편 금지, 최대 3명·브라우저 1개. 시작 HEAD = 원격 = `610586d8`, 미커밋 0.
+
+- **역할**: 리드(우선순위·소유·통합·구현) / 콘텐츠 담당(읽기 전용, Sonnet): 4~10화 핵심 표현·카드 문구 / 검증 담당(읽기 전용, Sonnet): 사용 흐름·녹음·숨김 결함 리뷰. 동시 파일 수정 없음.
+- **우선순위 1(핵심 표현)**: 설계 §21.1 표. 변경은 10화 s10-04 → s10-02 "I'll keep singing!"(문제 해결 대사 기준), 9화 카드 한 줄 교체. 5·6·10화 임시 표시.
+- **우선순위 2(화면)**: `SpeakingTopics.jsx` — 카드 순서 제목·한 줄·[연습 시작]+설명·(1~3화)[한 문장 이야기]+설명·접힌 "오늘 기억할 한 문장 보기"(네이티브 `<details>`, 열면 영어+뜻). 주제·전체 이야기·7화 미분류·origin 복귀는 219차 그대로.
+- **우선순위 3(결함)**: 독립 리뷰 6건 중 4건 수정(설계 §21.3) — `speech.stopSpeaking`(이동·뒤로·답 확인·녹음 시작·언마운트에서 듣기 정지), `BUSY`(requesting 포함)를 다른 녹음기·듣기에만, 허용 대기 중 중복 스트림 재사용, 시험 다시 연습에 `partnerRec`, setIdx 함수형. 리뷰 제안대로 이동 버튼까지 requesting에 막았더니 기존 e2e i("허용 대기 중에도 ← 메뉴")와 충돌 → 이동은 recording만 막도록 되돌림. 미수정 2건은 §21.3에 사유.
+- **검증(mock)**: build PASS(경고 0). 정적 testKeySentenceFlow(+5)·testSpeakingSets·testSituationRecall·testSpeakingSession·testSpeechBtnSpeakingStall·testSpeakingPathNoPermanentDisable·testLazyChunkGuards·testBundleBudget·testRegistryCoverage·testStudentPathContracts·testQaGate PASS. 브라우저(여유 RAM 3.6GB 확인 후 1개씩): `[speaking]` 540/0(k11 접힘 카드, k10 허용 대기, 360/390/412/1280 레이아웃 포함), `[speaking-exam]` 216/0. 360 캡처: 카드 접힘/열림·기분 주제 4카드. Voca·Writing·마을: 변경 파일이 Speaking+speech.js export 추가뿐이라 경로·청크 계약(testStudentPathContracts·testLazyChunkGuards)과 SpeechBtn 회귀 2종으로 대신함.
+- **미검증(구분)**: 실기기 마이크·TTS 정지 체감(mock 스텁은 재생 상태를 못 만듦), 로그인 Preview 실화면, 아이의 시작·한 문장 말하기·기억(§21.5 관찰 항목).
+- DB·SQL·Production·`.env`·`C:\voca` 접촉 0. PR #62 Draft·QA 전용. 체크포인트 `.ai-status/orchestrator-speaking-topics-polish-2026-10-07.json`.
 
 ## 2026-10-07 (219차) — Speaking 주제별 탐색(주제 → 이야기 카드 → 기존 연습)
 

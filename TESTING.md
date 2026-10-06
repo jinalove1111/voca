@@ -1907,3 +1907,9 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 - `scripts/testSpeakingSets.mjs` 주제 7단언: 주제 전부 이야기 ≥1·id 유일·회차 id 실재, 카드 핵심 표현 = 같은 회차 기존 문항(복사 없음), 1~3화 keyItemId = keySentence.itemId, 제목 ≤12자·한 줄 ≤30자·영어/답 어간 없음, 주제 설명 규칙, 미분류 = ep07, 여러 주제의 같은 회차 = 같은 카드.
 - `scripts/testKeySentenceFlow.mjs` Topics 3단언: 루트 첫 화면 topics·origin 복귀·전체 이야기 버튼, 화면은 speakingTopics만 참조(저장·네트워크·콘텐츠 import 없음)·회차별 썸네일, 판정 문구 없음.
 - e2e `speaking.spec.mjs`/`speakingExam.spec.mjs`: `openMenu`는 주제 화면 → [전체 이야기]로 기존 메뉴를 연다(기존 단언 유지). k11: 주제 카드 수·영어 없음, 학교생활 → 1·2화 카드 내용·썸네일 차이, 연습 시작 → s02-01…s02-03 같은 id, ← 메뉴 → 들어온 주제, 한 문장 이야기 → 1화 흐름, ← 주제, 전체 이야기 → 메뉴(마지막 세트 기억), 홈 재진입 → 주제; 쇼핑 → 5화 연습 끝 → 한글 보고 말하기 → 답 확인 전 영어 없음 → ← 메뉴 → 쇼핑 카드; 360/390/412/1280 레이아웃(주제·기분 4카드).
+
+## 관련 항목: 주제별 구성 다듬기·결함 수정 (2026-10-07, 220차)
+
+- `scripts/testKeySentenceFlow.mjs` +5: 카드 영어 핵심 표현은 `<details>` 안(접힘)·버튼 설명 문구, `stopSpeaking` export와 호출 위치(연습 move·시험 next/back/retry·흐름 go·녹음 start·언마운트), `BUSY`(recording||requesting)는 다른 녹음기·듣기에만 쓰고 이동·뒤로는 recording만, 허용 대기 중 중복 스트림 재사용, 시험 다시 연습 패널 partnerRec.
+- e2e `speaking.spec.mjs`: k11 2화 카드 단언을 "핵심 표현 접힘 → 열면 영어+뜻"으로 교체, k10 "허용 대기 중 중복 요청 금지"(mic hang: 내 대답 녹음 비활성·← 메뉴 가능·getUserMedia 1회). 220차 speaking 540/0, speaking-exam 216/0.
+- TTS 정지는 mock(speechSynthesis 스텁이 항상 onerror)으로 재생 상태를 만들 수 없어 e2e로 검증하지 않음 — 정적 핀 + 실기기 확인 대상.
