@@ -46,17 +46,24 @@ export default function SpeakingTopics({ topicId = null, onTopic, onStart, onKey
               <StoryThumb epId={s.id} />
               <p className="text-lg font-black text-gray-900">{s.n}화 {s.titleKo}</p>
               <p data-testid="story-line" className="text-base text-gray-700 break-keep">{s.lineKo}</p>
-              <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl px-4 py-3">
-                <p className="text-xs font-black text-amber-700">오늘 기억할 핵심 표현</p>
-                <p data-testid="story-key" className="text-lg font-black text-gray-900">{s.keyEn}</p>
-                <p className="text-sm text-gray-600">{s.keyKo}</p>
+              <div className="space-y-1">
+                <button data-testid={`story-start-${s.id}`} onClick={() => onStart(s.id)} className="w-full min-h-[52px] px-4 py-3 rounded-2xl font-black text-lg btn-press text-white bg-gradient-to-br from-sky-400 to-blue-600">🗣️ 연습 시작</button>
+                <p className="text-xs text-gray-500 break-keep">이야기 속 문장들을 듣고 따라 말한 뒤, 한글만 보고 말해 봐요.</p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button data-testid={`story-start-${s.id}`} onClick={() => onStart(s.id)} className="min-h-[52px] flex-1 px-4 py-3 rounded-2xl font-black text-lg btn-press text-white bg-gradient-to-br from-sky-400 to-blue-600">🗣️ 연습 시작</button>
-                {s.hasKeyFlow && (
-                  <button data-testid={`story-key-${s.id}`} onClick={() => onKeyFlow(s.id)} className="min-h-[52px] px-4 py-3 rounded-2xl font-black text-base btn-press text-emerald-800 bg-emerald-100">🧠 한 문장 이야기</button>
-                )}
-              </div>
+              {s.hasKeyFlow && (
+                <div className="space-y-1">
+                  <button data-testid={`story-key-${s.id}`} onClick={() => onKeyFlow(s.id)} className="w-full min-h-[52px] px-4 py-3 rounded-2xl font-black text-base btn-press text-emerald-800 bg-emerald-100">🧠 한 문장 이야기</button>
+                  <p className="text-xs text-gray-500 break-keep">핵심 문장 하나만 그림을 보며 듣고, 영어를 숨기고 떠올려 말해요.</p>
+                </div>
+              )}
+              {/* 220차: 핵심 표현(영어)은 접어 둔다 — 카드에서 답을 미리 보여 주지 않고, 열어 보는 아이에게만 */}
+              <details className="rounded-2xl bg-amber-50 border-2 border-amber-200">
+                <summary data-testid={`story-key-toggle-${s.id}`} className="min-h-[44px] px-4 py-2 flex items-center text-sm font-black text-amber-800 cursor-pointer list-none">💡 오늘 기억할 한 문장 보기</summary>
+                <div className="px-4 pb-3">
+                  <p data-testid="story-key" className="text-lg font-black text-gray-900">{s.keyEn}</p>
+                  <p className="text-sm text-gray-600">{s.keyKo}</p>
+                </div>
+              </details>
             </div>
           ))}
         </div>
