@@ -16,6 +16,7 @@ export const SPEAKING_TOPICS = [
 // 미분류(의도): ep07(상상 속 초대장 쓰기 — 어느 주제에도 맞지 않아 '전체 이야기'에서만). 콘텐츠 리뷰 결과는 설계 문서 §20.
 
 // 회차 카드: 짧은 제목(≤12자)·상황 한 줄(≤30자)·오늘 기억할 핵심 표현(기존 문항 id). 1~3화는 keySentence.itemId와 같아야 한다.
+// 4~10화 선정 이유·확정/임시 구분은 설계 문서 §21(220차 콘텐츠 리뷰). 임시: ep05(s05-05와 근접), ep06(s06-01과 근접), ep10(s10-04와 근접).
 export const STORY_CARDS = {
   ep01: { titleKo: '작게 속삭이는 미아', lineKo: '전학 첫날, 앞자리 미아의 목소리가 너무 작아요.', keyItemId: 's01-08' },
   ep02: { titleKo: '필통에 숟가락이?!', lineKo: '미술 시간, 필통을 열었더니 연필이 하나도 없어요.', keyItemId: 's02-03' },
@@ -25,8 +26,8 @@ export const STORY_CARDS = {
   ep06: { titleKo: '쿠키가 가져간 리본', lineKo: '강아지 쿠키가 물고 간 리본을 찾아요.', keyItemId: 's06-03' },
   ep07: { titleKo: '가수에게 쓰는 초대장', lineKo: '상상 속 가수에게 날짜·시간·장소를 써요.', keyItemId: 's07-05' },
   ep08: { titleKo: '축제 전날의 문제', lineKo: '제이미 목이 아프고 내일 비가 와요.', keyItemId: 's08-04' },
-  ep09: { titleKo: '간식 가게 열기', lineKo: '손님을 맞고 주문을 받아요.', keyItemId: 's09-02' },
-  ep10: { titleKo: '음악이 멈춰도', lineKo: '공연 중에 갑자기 음악이 꺼져요.', keyItemId: 's10-04' },
+  ep09: { titleKo: '간식 가게 열기', lineKo: '손님이 몰려오는 강당 간식 가게예요.', keyItemId: 's09-02' },
+  ep10: { titleKo: '음악이 멈춰도', lineKo: '공연 중에 갑자기 음악이 꺼져요.', keyItemId: 's10-02' },
 }
 
 const episodeById = (id) => STORY_EPISODES.find((e) => e.id === id)
