@@ -12,6 +12,7 @@ import { QA_STUDENT_NAME, QA_LOGIN_PIN, QA_STUDENT_ID } from './fixtures/index.m
 import { SPEAKING_MESSAGES } from '../../src/utils/speaking/speakingSession.js'
 import { SITUATION_EXPRESSIONS, sceneFor } from '../../src/utils/situation/situationContent.js'
 import { itemsForSet, keySentenceFor, lastSetKey, DEFAULT_SET_ID } from '../../src/utils/situation/speakingSets.js'
+import { listTopics } from '../../src/utils/situation/speakingTopics.js'
 
 const VP = { width: 390, height: 844 }
 const VPS = [{ width: 360, height: 640 }, VP, { width: 412, height: 915 }]
@@ -125,9 +126,15 @@ export async function run(browser, baseURL) {
     await installSpeakCounter(page)
     const name = `${label} [${vp.width}x${vp.height}]`
     // 홈 → 말하기 카드 → 메뉴
-    const openMenu = async () => {
+    // 219차: 첫 화면은 주제 카드 — 기존 세트 메뉴는 [전체 이야기]로 연다(기존 시나리오 계약 유지)
+    const openTopics = async () => {
       await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
       await T(page, 'student-home-menu-speaking').click()
+      await T(page, 'speaking-topics').waitFor({ state: 'visible', timeout: 15000 })
+    }
+    const openMenu = async () => {
+      await openTopics()
+      await T(page, 'speaking-topics-all').click()
       await T(page, 'speaking-menu').waitFor({ state: 'visible', timeout: 15000 })
     }
     const openPractice = async () => {
@@ -146,7 +153,7 @@ export async function run(browser, baseURL) {
     try {
       await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
       await loginOnly(page)
-      await body({ page, name, openMenu, openPractice, home, leaveToHome, tts: t })
+      await body({ page, name, openMenu, openTopics, openPractice, home, leaveToHome, tts: t })
       r.check(`${name} 콘솔/페이지 오류 0건`, errors.length === 0, errors.slice(0, 3).join(' | '))
       if (writeGuard) {
         const bad = badWrites(apiCallLog)
@@ -329,6 +336,7 @@ export async function run(browser, baseURL) {
     await home()
     // 녹음 도중 이탈: 녹음 중엔 ← 메뉴가 비활성이라 홈 화면 전환(메뉴 홈)으로는 갈 수 없다 — 그만 후 이탈
     await T(page, 'student-home-menu-speaking').click()
+    await T(page, 'speaking-topics-all').click() // 219차: 첫 화면은 주제 카드
     await T(page, 'speaking-menu-practice').click()
     await T(page, 'speaking-practice').waitFor({ state: 'visible', timeout: 15000 })
     await T(page, 'speaking-record').click()
@@ -807,6 +815,71 @@ export async function run(browser, baseURL) {
     await T(page, 'speaking-practice').waitFor({ state: 'visible', timeout: 15000 })
     r.check(`${name} 1화 연습에는 상대 역할 녹음 없음(2화만), 기존 상대 대사 그대로`, (await T(page, 'partner-role').count()) === 0 && (await T(page, 'practice-reply').isVisible()))
   })
+
+  // ── k11. 219차 주제별 탐색: 주제 → 이야기 카드 → 기존 연습/한 문장/시험, 뒤로·재진입, 같은 id ─────────────
+  const TOPICS = listTopics()
+  const SCHOOL = TOPICS.find((t) => t.id === 'school')
+  await scenario('k11 주제 탐색', VP, {}, async ({ page, name, openTopics }) => {
+    await openTopics()
+    r.check(`${name} 첫 화면 = 주제 카드 ${TOPICS.length}개(빈 주제 없음), 각 카드에 이야기 수`, (await page.locator('[data-testid^="topic-"]').count()) === TOPICS.length && TOPICS.every((t) => t.stories.length > 0) && (await txt(page, 'topic-school')).includes(`이야기 ${SCHOOL.stories.length}개`))
+    r.check(`${name} 주제 카드에 영어 없음`, !/[A-Za-z]/.test(await page.locator('[data-testid^="topic-"]').allTextContents().then((a) => a.join(' '))))
+    await T(page, 'topic-school').click()
+    await T(page, 'speaking-stories').waitFor({ state: 'visible', timeout: 5000 })
+    r.check(`${name} 학교생활 → 이야기 카드 ${SCHOOL.stories.length}개(1·2화)`, (await T(page, 'speaking-stories').getAttribute('data-topic')) === 'school' && (await page.locator('[data-testid^="story-card-"]').count()) === SCHOOL.stories.length)
+    const c2 = SCHOOL.stories.find((x) => x.id === 'ep02')
+    const card2 = await txt(page, 'story-card-ep02')
+    r.check(`${name} 2화 카드: 짧은 제목·상황 한 줄·핵심 표현(영어+뜻)·연습 시작·한 문장 이야기`, card2.includes(c2.titleKo) && card2.includes(c2.lineKo) && card2.includes(c2.keyEn) && card2.includes(c2.keyKo) && (await T(page, 'story-start-ep02').isVisible()) && (await T(page, 'story-key-ep02').isVisible()))
+    r.check(`${name} 1·2화 썸네일이 서로 다른 장면(whisper/spoon)`, (await page.locator('[data-testid="story-card-ep01"] [data-testid="key-scene"]').getAttribute('data-variant')) === 'whisper' && (await page.locator('[data-testid="story-card-ep02"] [data-testid="key-scene"]').getAttribute('data-variant')) === 'spoon')
+    await T(page, 'story-start-ep02').click()
+    await T(page, 'speaking-practice').waitFor({ state: 'visible', timeout: 15000 })
+    r.check(`${name} 연습 시작 → 기존 회화 연습 2화 1번(상황·영어·뜻·듣기·상대 역할 녹음)`, (await T(page, 'speaking-practice').getAttribute('data-expr')) === 's02-01' && (await T(page, 'practice-listen').isVisible()) && (await T(page, 'partner-role').isVisible()) && (await T(page, 'speaking-record').isVisible()))
+    await T(page, 'practice-next').click(); await T(page, 'practice-next').click()
+    r.check(`${name} 3번 문항 id = 메뉴 경로와 같은 s02-03`, (await T(page, 'speaking-practice').getAttribute('data-expr')) === 's02-03')
+    await T(page, 'speaking-back').click()
+    r.check(`${name} 연습 ← 메뉴 → 들어온 주제의 이야기 카드로 복귀`, !!(await waitUntil(() => T(page, 'speaking-stories').isVisible(), { timeout: 5000 })) && (await T(page, 'speaking-stories').getAttribute('data-topic')) === 'school')
+    await T(page, 'story-key-ep01').click()
+    await T(page, 'key-flow').waitFor({ state: 'visible', timeout: 15000 })
+    r.check(`${name} 한 문장 이야기 → 1화 흐름(whisper)`, (await sceneAttr(page, 'data-variant')) === 'whisper')
+    await T(page, 'key-back').click()
+    r.check(`${name} 흐름 ← 메뉴 → 이야기 카드`, !!(await waitUntil(() => T(page, 'speaking-stories').isVisible(), { timeout: 5000 })))
+    await T(page, 'stories-back').click()
+    r.check(`${name} ← 주제 → 주제 카드`, await T(page, 'speaking-topics').isVisible())
+    await T(page, 'speaking-topics-all').click()
+    r.check(`${name} 전체 이야기 → 기존 메뉴(세트 칩·오늘의 이야기 카드), 마지막으로 연 1화가 선택됨(같은 세트 기억)`, (await T(page, 'speaking-menu').isVisible()) && (await T(page, 'speaking-set-ep01').getAttribute('aria-pressed')) === 'true' && (await T(page, 'speaking-menu-key').isVisible()))
+    await T(page, 'speaking-menu-topics').click()
+    r.check(`${name} 메뉴 ← 주제 → 주제 카드`, await T(page, 'speaking-topics').isVisible())
+    await T(page, 'speaking-topics-home').click()
+    await T(page, 'student-home').waitFor({ state: 'visible', timeout: 10000 })
+    await T(page, 'student-home-menu-speaking').click()
+    r.check(`${name} 홈에서 재진입 → 주제 카드`, !!(await waitUntil(() => T(page, 'speaking-topics').isVisible(), { timeout: 10000 })))
+  })
+
+  await scenario('k11 주제 → 연습 → 시험 연결', VP, {}, async ({ page, name, openTopics }) => {
+    await openTopics()
+    await T(page, 'topic-shopping').click()
+    await T(page, 'story-start-ep05').click()
+    await T(page, 'speaking-practice').waitFor({ state: 'visible', timeout: 15000 })
+    const n = itemsForSet('ep05').length
+    for (let i = 0; i < n; i++) await T(page, 'practice-next').click()
+    r.check(`${name} 5화 연습 끝 → 기존 '한글 보고 말하기 시작'`, await T(page, 'practice-start-exam').isVisible())
+    await T(page, 'practice-start-exam').click()
+    await T(page, 'exam-progress').waitFor({ state: 'visible', timeout: 15000 })
+    const first = itemsForSet('ep05')[0]
+    r.check(`${name} 시험 1번: 답 확인 전 영어·듣기 없음(한국어 상황만)`, (await T(page, 'exam-listen').count()) === 0 && !(await page.evaluate((en) => document.documentElement.outerHTML.includes(en), first.en)) && (await txt(page, 'situation-text')) === first.examScene.situationKo)
+    await T(page, 'exam-back').click()
+    r.check(`${name} 시험 ← 메뉴 → 들어온 주제(쇼핑)의 이야기 카드`, !!(await waitUntil(() => T(page, 'speaking-stories').isVisible(), { timeout: 5000 })) && (await T(page, 'speaking-stories').getAttribute('data-topic')) === 'shopping')
+    r.check(`${name} 5화 썸네일은 필통 장면이 아닌 인물 그림`, (await page.locator('[data-testid="story-card-ep05"] [data-testid="story-thumb"]').count()) === 1 && (await page.locator('[data-testid="story-card-ep05"] [data-testid="key-scene"]').count()) === 0)
+  })
+
+  for (const vp of [{ width: 360, height: 640 }, { width: 390, height: 844 }, { width: 412, height: 915 }, { width: 1280, height: 800 }]) {
+    await scenario('k11 주제 레이아웃', vp, {}, async ({ page, name, openTopics }) => {
+      await openTopics()
+      r.check(`${name} 주제 화면 가로 스크롤 없음/버튼 >=44px`, (await noOverflow(page)) && (await smallButtons(page, 'speaking-topics')).length === 0, (await smallButtons(page, 'speaking-topics')).join(','))
+      await T(page, 'topic-feelings').click()
+      await T(page, 'speaking-stories').waitFor({ state: 'visible', timeout: 5000 })
+      r.check(`${name} 이야기 화면(기분·4개) 가로 스크롤 없음/버튼 >=44px`, (await page.locator('[data-testid^="story-card-"]').count()) === 4 && (await noOverflow(page)) && (await smallButtons(page, 'speaking-stories')).length === 0)
+    })
+  }
 
   for (const vp of [{ width: 360, height: 640 }, { width: 412, height: 915 }, { width: 1280, height: 800 }]) {
     await scenario('k7 레이아웃', vp, {}, async ({ page, name, openMenu }) => {

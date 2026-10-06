@@ -2,6 +2,7 @@
 import { SITUATION_EXPRESSIONS as EX } from '../src/utils/situation/situationContent.js'
 import { STORY_EPISODES as EPS, STORY_ITEMS as ITEMS } from '../src/utils/situation/storyEpisodes.js'
 import { listSets, itemsForSet, keySentenceFor, BASIC_SET_ID, DEFAULT_SET_ID, lastSetKey, loadLastSet, saveLastSet } from '../src/utils/situation/speakingSets.js'
+import { SPEAKING_TOPICS, STORY_CARDS, listTopics, storyCard, unclassifiedEpisodes } from '../src/utils/situation/speakingTopics.js'
 
 let fail = 0
 const check = (name, ok) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`); if (!ok) fail++ }
@@ -87,6 +88,15 @@ check('핵심 문장 공통: itemId 문항(같은 회차)의 en/ko와 일치, �
 check('핵심 문장 공통: 공개 전 한글(상황·역할) ≤60자·영어 없음·답 어간/자기 뜻 없음, recall≠transfer 상황', KS_ALL.every((e) => { const k = e.keySentence; const t = [k.watch.situationKo, k.recall.situationKo, k.recall.roleKo, k.transfer.situationKo, k.transfer.roleKo]; return k.recall.situationKo !== k.transfer.situationKo && t.every((x) => x && x.length <= 60 && !/[A-Za-z]/.test(x) && !STEMS.some((w) => x.includes(w)) && !x.includes(stripEnd(k.ko))) }))
 check('핵심 문장 공통: 짧은 대화(introIds)는 같은 회차 미아 문항이고 핵심 문장과 다른 영어', KS_ALL.every((e) => e.keySentence.introIds.every((id) => { const it = ITEMS.find((i) => i.id === id); return it && it.episode === e.n && it.reply.speaker === 'Mia' && norm(it.en) !== norm(e.keySentence.en) && norm(it.reply.en) !== norm(e.keySentence.en) })))
 check('상대 역할 녹음은 2화 문항만(partnerRole), s02-03 예시 대답 "Sure. Here you are!"', itemsForSet('ep02').every((x) => x.partnerRole) && ['basic', 'ep01', 'ep03'].every((id) => itemsForSet(id).every((x) => !x.partnerRole)) && ITEMS.find((i) => i.id === 's02-03').reply.en === 'Sure. Here you are!')
+// 2026-10-07(219차) 주제별 탐색 — 복사 없이 id 연결만, 빈 주제 없음, 카드 문구 규칙
+const TOPICS = listTopics()
+check('주제: 전부 이야기 1개 이상(빈 카드 없음), id 유일, 회차 id는 실제 회차', TOPICS.length === SPEAKING_TOPICS.length && TOPICS.every((t) => t.stories.length > 0) && new Set(TOPICS.map((t) => t.id)).size === TOPICS.length && SPEAKING_TOPICS.every((t) => t.episodes.every((id) => EPS.some((e) => e.id === id)) && new Set(t.episodes).size === t.episodes.length))
+check('카드: 모든 회차에 카드가 있고 핵심 표현은 같은 회차의 기존 문항(복사 없음)', EPS.every((e) => { const c = storyCard(e.id); const it = ITEMS.find((i) => i.id === STORY_CARDS[e.id]?.keyItemId); return c && it && it.episode === e.n && c.keyEn === it.en && c.keyKo === it.ko }))
+check('카드: 1~3화 핵심 표현 = 한 문장 흐름의 keySentence.itemId', EPS.filter((e) => e.keySentence).every((e) => STORY_CARDS[e.id].keyItemId === e.keySentence.itemId && storyCard(e.id).hasKeyFlow) && EPS.filter((e) => !e.keySentence).every((e) => !storyCard(e.id).hasKeyFlow))
+check('카드: 제목 ≤12자·한 줄 ≤30자·영어 없음·핵심 표현 뜻/답 어간 없음', EPS.every((e) => { const c = storyCard(e.id); return c.titleKo.length <= 12 && c.lineKo.length <= 30 && !/[A-Za-z]/.test(c.titleKo + c.lineKo) && !c.lineKo.includes(stripEnd(c.keyKo)) && !/빌려|빌리/.test(c.lineKo) }))
+check('주제 설명: 영어 없음·≤24자', SPEAKING_TOPICS.every((t) => !/[A-Za-z]/.test(t.titleKo + t.descKo) && t.descKo.length <= 24 && t.titleKo.length <= 10))
+check('미분류 회차는 ep07 하나(의도, 설계 §20)', unclassifiedEpisodes().join(',') === 'ep07')
+check('한 회차가 여러 주제에 있어도 같은 카드 객체 내용(복사본 아님)', TOPICS.every((t) => t.stories.every((s) => JSON.stringify(s) === JSON.stringify(storyCard(s.id)))))
 console.log(`INFO new 목표 ${newCount}개, 복습 문항 ${reviewCount}개`)
 
 if (fail) { console.log(`\nFAILED ${fail}`); process.exit(1) }

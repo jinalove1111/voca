@@ -50,6 +50,11 @@ check('Partner: 연습은 예시 처음부터, 시험은 [예시 대답 듣기] 
 check('Partner: 시험에서는 답 확인 뒤에만 블록, 답 카드의 상대 대사는 상대 역할 문항이 아닐 때만', /\{revealed && partner && !retrying && <PartnerRole/.test(exam) && /\{expr\.reply && !partner && <ReplyBubble/.test(exam))
 check('Partner: 문항 이동·다시 연습에서 두 녹음기 모두 정리', /rec\.reset\('RESET'\); partnerRec\.reset\('RESET'\)/.test(pmode) && (exam.match(/rec\.reset\('RESET'\); partnerRec\.reset\('RESET'\)/g) || []).length === 2)
 check('Partner: 판정·저장·전송 없음(칭찬/정답/숙달 문구, storage, fetch, 업로드)', !/PARTNER_REC_LABELS = \{[^}]*(잘했|정답|숙달|점수)/.test(item) && ![item, hook].some((t) => /localStorage|sessionStorage|fetch\(|supabase|upload|SpeechRecognition/.test(t)))
+// 219차 주제별 탐색 — 첫 화면 topics, 기존 화면 연결만, 저장·네트워크 없음
+const topics = strip(read('SpeakingTopics.jsx'))
+check('Topics: 루트 첫 화면 = topics(홈 시험 직진입은 exam), 전체 이야기 버튼으로 기존 메뉴, origin으로 복귀', /useState\(initialMode === 'exam' && examEnabled \? 'exam' : 'topics'\)/.test(menu) && menu.includes('speaking-menu-topics') && /const goMenu = \(\) => setMode\(origin === 'stories' && topicId \? 'stories' : 'menu'\)/.test(menu))
+check('Topics: 화면은 listTopics/topicById만 쓰고 콘텐츠·저장·네트워크 없음, 같은 필통 그림 금지(회차별 THUMB)', /from '\.\.\/utils\/situation\/speakingTopics'/.test(topics) && !/localStorage|sessionStorage|fetch\(|supabase|STORY_ITEMS|situationContent/.test(topics) && /ep01: \{ scene: 'whisper'/.test(topics) && /ep02: \{ scene: 'spoon'/.test(topics) && /ep03: \{ scene: 'idea'/.test(topics) && (topics.match(/mia(Think|Greet|Surprise)/g) || []).length >= 8)
+check('Topics: 판정·점수 문구 없음', !/정답|숙달|점수|합격|⭐/.test(topics))
 check('Menu: KeySentenceFlow lazy 로드', /const KeySentenceFlow = lazy\(\(\) => import\('\.\/KeySentenceFlow'\)\)/.test(menu))
 
 if (fail) { console.log(`\nFAILED ${fail}`); process.exit(1) }

@@ -144,9 +144,15 @@ export async function run(browser, baseURL) {
     const { db, unmockedRequests: u, ttsFallbackRequests: t, apiCallLog } = await installMocks(page)
     await installSpeakCounter(page)
     const name = `${label} [${vp.width}x${vp.height}]`
-    const openMenu = async () => {
+    // 219차: 첫 화면은 주제 카드 — 기존 세트 메뉴는 [전체 이야기]로 연다(기존 시나리오 계약 유지)
+    const openTopics = async () => {
       await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
       await T(page, 'student-home-menu-speaking').click()
+      await T(page, 'speaking-topics').waitFor({ state: 'visible', timeout: 15000 })
+    }
+    const openMenu = async () => {
+      await openTopics()
+      await T(page, 'speaking-topics-all').click()
       await T(page, 'speaking-menu').waitFor({ state: 'visible', timeout: 15000 })
     }
     const openExam = async () => {
@@ -404,6 +410,7 @@ export async function run(browser, baseURL) {
     r.check(`${name} 직진입→뒤로→메뉴 홈 → 포커스가 말하기 카드로 복귀`, !!(await waitUntil(async () => (await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))) === 'student-home-menu-speaking', { timeout: 3000 })), String(await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))))
     // 메뉴에서 연 뒤 홈으로 나와, 홈 직진입을 한 번 더 — 모드가 메뉴에 고정되지 않아야 한다
     await T(page, 'student-home-menu-speaking').click()
+    await T(page, 'speaking-topics-all').click() // 219차: 첫 화면은 주제 카드
     await T(page, 'speaking-menu').waitFor({ state: 'visible', timeout: 10000 })
     r.check(`${name} 말하기 카드는 여전히 메뉴로 진입`, (await root(page).count()) === 0)
   })
