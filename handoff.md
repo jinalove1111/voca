@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
-_최종 갱신: 2026-10-06 (218차 — **2화 상대(미아) 역할 녹음**: 폴 문장 듣기 → [내 대답 녹음] → [녹음 끝내기] → [내 목소리 듣기]/[다시 녹음], 예시 대답 "Sure. Here you are!"(글+영국 영어 TTS). 기존 `useLocalRecorder`·`RecorderControls` 재사용(마이크 스트림 공유), 시험은 답 확인 뒤 블록·[예시 대답 듣기] 전 예시 미마운트. 업로드·인식·채점·DB 0. mock e2e speaking 497/0·speaking-exam 216/0, **실제 마이크 미검증**. PR #62 Draft. 아래 218차 섹션 참고.)_
+_최종 갱신: 2026-10-07 (219차 — **Speaking 주제별 탐색**: 첫 화면 주제 카드 6개 → 이야기 카드(제목·상황 한 줄·핵심 표현·연습 시작) → 기존 연습/시험/한 문장 흐름. id 연결만(새 콘텐츠·저장 0), 7화는 의도적 미분류, "길 찾기와 외출" → "물건·장소 찾기". 콘텐츠 리뷰 + 독립 QA. mock e2e speaking 535/0·speaking-exam 216/0. PR #62 Draft·QA 전용. 아래 219차 섹션 참고.)_
+_218차 갱신: 2026-10-06 (218차 — **2화 상대(미아) 역할 녹음**: 폴 문장 듣기 → [내 대답 녹음] → [녹음 끝내기] → [내 목소리 듣기]/[다시 녹음], 예시 대답 "Sure. Here you are!"(글+영국 영어 TTS). 기존 `useLocalRecorder`·`RecorderControls` 재사용(마이크 스트림 공유), 시험은 답 확인 뒤 블록·[예시 대답 듣기] 전 예시 미마운트. 업로드·인식·채점·DB 0. mock e2e speaking 497/0·speaking-exam 216/0, **실제 마이크 미검증**. PR #62 Draft. 아래 218차 섹션 참고.)_
 _217차 갱신: 2026-10-06 (217차 — **2화 완성도 점검 → 수정 + 1·3화 "오늘 기억할 한 문장" 확장(기존 에셋만)**. 2화: 시간선(nextHook·요약·회상 시점·앞자리), 역할 힌트 완화, 화자 이름표 한글 통일. 1화 "Could you speak a bit louder?"(속삭임 장면), 3화 "That's a great idea!"(제안 장면) — 임시 선정, 운영자 확인 필요. 장면 이름을 데이터로 옮기며 보기 단계 하드코딩 결함 발견·수정. e2e speaking 468/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 217차 섹션 참고.)_
 _216차 갱신: 2026-10-06 (216차 — **Speaking Paul 기준 얼굴 교체**: 운영자 제공 `폴얼굴.png`(이미 투명 배경)를 모자 챙 기준 미아와 같은 크기로 정규화해 `src/assets/speaking/paul_speaking.png`, Speaking 장면의 저화질 마스코트 4포즈 대체. 한 포즈뿐이라 묻는 순간 "?" 말풍선으로 보완. e2e speaking 434/0·speaking-exam 216/0(mock). 로그인 Preview 실화면 미확인. DB·SQL·Production 0, PR #62 Draft. 아래 216차 섹션 참고.)_
 _215차 갱신: 2026-10-05 (215차 — **2화 일반 회화 연습도 Paul·미아 이야기로**: 운영자 결정(4문항 영어 최소 교체) — s02-01 my pencil case / 02 I haven't got a pencil. / 09 Oh no, my pencil broke! / 10 I left my pencil case at home., 03 상황 정합, 상대 전부 미아, 2화 제이미 0. 5문항에 흐름 장면 정지 그림 연결(연습만, 시험 제외). ID 유지. e2e speaking 434/0·speaking-exam 216/0(mock). DB·SQL·Production 0, PR #62 Draft. 아래 215차 섹션 참고.)_
@@ -29,6 +30,19 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-07 (219차) — Speaking 주제별 탐색(주제 → 이야기 카드 → 기존 연습)
+
+운영자 지시: 긴 에피소드 목록 전에 익숙한 주제로 진입, 기존 스토리·연습·시험·녹음 재사용·중복 생성 금지, 실제 내용 기준 분류·빈 주제 금지·억지 분류 금지, id·기록 유지, 영상·새 이미지 없이. 시작 HEAD = 원격 = `b8674c4b`, 미커밋 0.
+
+- **역할**: 리드(범위·데이터 연결) → 콘텐츠 리뷰어(읽기 전용, Sonnet): 초안 매핑 검토 → 구현(리드) → 독립 QA(읽기 전용 + 테스트 실행). 같은 파일 동시 수정 없음, 브라우저 1개씩.
+- **콘텐츠 리뷰 반영**: 주제 설명을 실제 func 기준으로("도움 요청·거절·약속" 제외), "길 찾기와 외출" → "물건·장소 찾기"(외출 이야기 없음, 길 안내 1문항), 7화 미분류(상상 속 초대장), 카드 한 줄에서 답 어간 제거("빌려요"·"다시 맞춰요"·"끝까지 해내요"), 7화 제목 "보내는" → "쓰는"(가상 초대장). 카드의 영어 핵심 표현은 운영자 사양대로 유지(리뷰어 우려는 설계 §20.4에 기록).
+- **구현**: `speakingTopics.js`(주제 6·카드 10·헬퍼, 순수), `SpeakingTopics.jsx`(lazy, 주제/이야기 화면, 썸네일 = 1~3화 장면 정지 / 그 외 Paul+미아 포즈), `SpeakingPractice.jsx`(첫 화면 topics, origin 복귀, [전체 이야기]·[← 주제]). `storyEpisodes.js`·`SpeakingExam.jsx`·`App.jsx`·게이트 무변경.
+- **연결 스토리 수**: 주제 6개에 9화(1·2 / 3·4·10 / 9 / 5 / 6 / 4·6·8·10 — 4·6·10화는 두 주제에 같은 원본). 미분류 7화(전체 이야기에서만). 기본 표현 5개는 [전체 이야기 · 기본 표현 5개]로.
+- **테스트**: 정적 +10단언(TESTING 참고). e2e `openMenu` 헬퍼가 주제 화면을 거쳐 기존 메뉴를 열도록(기존 단언 삭제·완화 0; 재진입 2곳에 [전체 이야기] 클릭 추가), k11 3종 + 레이아웃 4뷰포트. 내 k11 초안 단언 1개가 틀려(한 문장 이야기 뒤엔 1화가 마지막 세트) 기대값 수정.
+- **검증(mock)**: build PASS(경고 0, SpeakingTopics 청크 6.4KB). 정적 testSpeakingSets·testKeySentenceFlow·testSituationRecall·testLazyChunkGuards·testBundleBudget·testRegistryCoverage·testStudentPathContracts·testQaGate PASS. 브라우저(여유 RAM 1.5GB라 스펙당 1회·순차): `[speaking]` 535/0, `[speaking-exam]` 216/0. 360·1280 캡처(주제/학교생활/기분) 확인. Voca·Writing·마을은 변경 파일이 Speaking뿐이라 재실행 안 함(testStudentPathContracts·testLazyChunkGuards로 경로·청크 계약만 확인).
+- **미검증**: 로그인 Preview 실화면, 실기기 마이크, 아이 피드백 항목(설계 §20.5), 4~10화 핵심 표현 선정(운영자 확인).
+- DB·SQL·Production·`.env`·`C:\voca` 접촉 0. PR #62 Draft·QA 전용. 체크포인트 `.ai-status/orchestrator-speaking-topics-2026-10-07.json`.
 
 ## 2026-10-06 (218차) — 2화 상대(미아) 역할 녹음·내 목소리 다시 듣기
 

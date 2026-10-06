@@ -1901,3 +1901,9 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 - `scripts/testSpeakingSets.mjs`: `partnerRole`은 2화 문항만, s02-03 예시 대답 "Sure. Here you are!".
 - e2e `speaking.spec.mjs` k10(mock 합성 마이크): 연습 s02-03 — 폴 문장 듣기 → 내 문장 녹음 중 내 대답 녹음 비활성 → 내 대답 녹음/녹음 끝내기/blob/내 목소리 듣기/다시 녹음, `window.__micTracks.length === 1`(스트림 공유), 예시 대답 듣기 speak, 다음 문항에서 두 녹음 비움, localStorage 흔적 없음, 화면을 떠나면 트랙 ended. 마이크 거부 시 안내·예시·이동 유지. 시험: 답 확인 전 블록·예시 글 DOM 없음 → 답 확인 후 블록만 → [예시 대답 듣기] 후 글+speak → 다음 문제에서 숨김. 1화 연습에는 블록 없음. k8 시험 단언은 예시 대답 버튼 뒤로 이동.
 - 실제 마이크·실기기는 이 하네스로 확인할 수 없다(`verify:speaking`은 정직한 SKIP 유지).
+
+## 관련 항목: Speaking 주제별 탐색 (2026-10-07, 219차)
+
+- `scripts/testSpeakingSets.mjs` 주제 7단언: 주제 전부 이야기 ≥1·id 유일·회차 id 실재, 카드 핵심 표현 = 같은 회차 기존 문항(복사 없음), 1~3화 keyItemId = keySentence.itemId, 제목 ≤12자·한 줄 ≤30자·영어/답 어간 없음, 주제 설명 규칙, 미분류 = ep07, 여러 주제의 같은 회차 = 같은 카드.
+- `scripts/testKeySentenceFlow.mjs` Topics 3단언: 루트 첫 화면 topics·origin 복귀·전체 이야기 버튼, 화면은 speakingTopics만 참조(저장·네트워크·콘텐츠 import 없음)·회차별 썸네일, 판정 문구 없음.
+- e2e `speaking.spec.mjs`/`speakingExam.spec.mjs`: `openMenu`는 주제 화면 → [전체 이야기]로 기존 메뉴를 연다(기존 단언 유지). k11: 주제 카드 수·영어 없음, 학교생활 → 1·2화 카드 내용·썸네일 차이, 연습 시작 → s02-01…s02-03 같은 id, ← 메뉴 → 들어온 주제, 한 문장 이야기 → 1화 흐름, ← 주제, 전체 이야기 → 메뉴(마지막 세트 기억), 홈 재진입 → 주제; 쇼핑 → 5화 연습 끝 → 한글 보고 말하기 → 답 확인 전 영어 없음 → ← 메뉴 → 쇼핑 카드; 360/390/412/1280 레이아웃(주제·기분 4카드).
