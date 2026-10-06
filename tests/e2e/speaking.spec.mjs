@@ -793,6 +793,13 @@ export async function run(browser, baseURL) {
     r.check(`${name} 다음 문항 이동 가능`, (await T(page, 'speaking-practice').getAttribute('data-expr')) === 's02-04')
   })
 
+  await scenario('k10 허용 대기 중 중복 요청 금지', { width: 360, height: 640 }, { mic: 'hang' }, async ({ page, name, openMenu }) => {
+    await toItem3(page, openMenu)
+    await T(page, 'speaking-record').click()
+    r.check(`${name} 내 문장 녹음 허용 대기 중: 내 대답 녹음 비활성, ← 메뉴는 가능`, !!(await waitUntil(async () => (await statusText(page)) === MSG.requesting, { timeout: 5000 })) && (await T(page, 'partner-record').isDisabled()) && (await T(page, 'speaking-back').isEnabled()))
+    r.check(`${name} getUserMedia 호출 1회뿐`, (await page.evaluate(() => window.__micTracks.length)) === 0)
+  })
+
   await scenario('k10 상대 역할(시험·다른 회차)', { width: 360, height: 640 }, {}, async ({ page, name, openMenu }) => {
     await openMenu()
     await T(page, 'speaking-set-ep02').click()
@@ -828,7 +835,9 @@ export async function run(browser, baseURL) {
     r.check(`${name} 학교생활 → 이야기 카드 ${SCHOOL.stories.length}개(1·2화)`, (await T(page, 'speaking-stories').getAttribute('data-topic')) === 'school' && (await page.locator('[data-testid^="story-card-"]').count()) === SCHOOL.stories.length)
     const c2 = SCHOOL.stories.find((x) => x.id === 'ep02')
     const card2 = await txt(page, 'story-card-ep02')
-    r.check(`${name} 2화 카드: 짧은 제목·상황 한 줄·핵심 표현(영어+뜻)·연습 시작·한 문장 이야기`, card2.includes(c2.titleKo) && card2.includes(c2.lineKo) && card2.includes(c2.keyEn) && card2.includes(c2.keyKo) && (await T(page, 'story-start-ep02').isVisible()) && (await T(page, 'story-key-ep02').isVisible()))
+    r.check(`${name} 2화 카드: 짧은 제목·상황 한 줄·연습 시작·한 문장 이야기, 핵심 표현(영어)은 접혀서 안 보임`, card2.includes(c2.titleKo) && card2.includes(c2.lineKo) && (await T(page, 'story-start-ep02').isVisible()) && (await T(page, 'story-key-ep02').isVisible()) && !(await page.locator('[data-testid="story-card-ep02"] [data-testid="story-key"]').isVisible()))
+    await T(page, 'story-key-toggle-ep02').click()
+    r.check(`${name} 2화 카드: 한 문장 보기를 열면 영어+뜻`, (await page.locator('[data-testid="story-card-ep02"] [data-testid="story-key"]').isVisible()) && (await txt(page, 'story-card-ep02')).includes(c2.keyEn) && (await txt(page, 'story-card-ep02')).includes(c2.keyKo))
     r.check(`${name} 1·2화 썸네일이 서로 다른 장면(whisper/spoon)`, (await page.locator('[data-testid="story-card-ep01"] [data-testid="key-scene"]').getAttribute('data-variant')) === 'whisper' && (await page.locator('[data-testid="story-card-ep02"] [data-testid="key-scene"]').getAttribute('data-variant')) === 'spoon')
     await T(page, 'story-start-ep02').click()
     await T(page, 'speaking-practice').waitFor({ state: 'visible', timeout: 15000 })
