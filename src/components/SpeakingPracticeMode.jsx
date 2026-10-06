@@ -5,16 +5,19 @@ import { BASIC_SET_ID, itemsForSet, setLabel } from '../utils/situation/speaking
 
 // 2026-10-04 Speaking UX v2 — 회화 연습 모드(SpeakingPractice 루트에서 lazy 로드: 그림 에셋이 메인 청크에 들어가지 않게).
 export default function SpeakingPracticeMode({ setId = BASIC_SET_ID, onMenu, onStartExam }) {
-  const rec = useLocalRecorder()
+  // 218차: 상대 역할 녹음기는 같은 마이크 스트림을 쓴다. 문항 이동·화면 종료 시 두 녹음기 모두 정리(언마운트 시 훅이 스트림 해제)
+  const streamRef = useRef(null)
+  const rec = useLocalRecorder({ sharedStreamRef: streamRef })
+  const partnerRec = useLocalRecorder({ sharedStreamRef: streamRef })
   const [idx, setIdx] = useState(0)
   const [done, setDone] = useState(false)
   const headingRef = useRef(null)
   const items = useMemo(() => itemsForSet(setId), [setId])
   const last = items.length - 1
-  const busy = rec.st.status === 'recording'
+  const busy = rec.st.status === 'recording' || partnerRec.st.status === 'recording'
   useEffect(() => { headingRef.current?.focus() }, [idx, done])
 
-  const move = (fn) => { rec.reset('RESET'); fn() }
+  const move = (fn) => { rec.reset('RESET'); partnerRec.reset('RESET'); fn() }
   const item = items[idx]
 
   return (
@@ -40,7 +43,7 @@ export default function SpeakingPracticeMode({ setId = BASIC_SET_ID, onMenu, onS
           </div>
         ) : (
           <>
-            <SpeakingPracticeItem key={item.id} item={item} rec={rec} />
+            <SpeakingPracticeItem key={item.id} item={item} rec={rec} partnerRec={partnerRec} />
             <div className="flex justify-between gap-2">
               <button data-testid="practice-prev" onClick={() => move(() => setIdx(idx - 1))} disabled={busy || idx === 0}
                 className={`${BTN} bg-white card-shadow text-gray-700`}>← 이전</button>

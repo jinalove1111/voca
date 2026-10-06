@@ -11,12 +11,15 @@ import {
 // 반환: st(reducer 상태), dispatch(문제 전환 등 외부 액션), audioUrl, mic(data-mic-state 값),
 // elapsed(초), start/stop/play/retake, reset(type)(요청 무효화 + 녹음 폐기 후 액션),
 // audioProps(<audio {...audioProps}/>에 펼친다).
-export default function useLocalRecorder({ maxMs = MAX_RECORD_MS, minMs = MIN_RECORD_MS } = {}) {
+// sharedStreamRef(선택, 218차): 같은 화면의 두 번째 녹음기(상대 역할 녹음)가 첫 녹음기와 마이크 스트림 하나를 같이 쓴다 —
+// getUserMedia를 두 번 열면 iOS에서 앞 스트림이 음소거될 수 있다. 녹음·재생 상태와 녹음 파일은 녹음기마다 따로다.
+export default function useLocalRecorder({ maxMs = MAX_RECORD_MS, minMs = MIN_RECORD_MS, sharedStreamRef = null } = {}) {
   const [st, dispatch] = useReducer(speakingReducer, initialSpeakingState)
   const [audioUrl, setAudioUrl] = useState('')
   const [mic, setMic] = useState('idle') // idle(미획득) | live(보유 중) | released
   const [elapsed, setElapsed] = useState(0)
-  const streamRef = useRef(null)
+  const ownStreamRef = useRef(null)
+  const streamRef = sharedStreamRef || ownStreamRef
   const recRef = useRef(null)
   const chunksRef = useRef([])
   const urlRef = useRef('')

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { speak } from '../utils/speech'
 import useLocalRecorder from '../hooks/useLocalRecorder'
-import SpeakingPracticeItem, { RecorderControls, ReplyBubble, SituationGuide, BTN } from './SpeakingPracticeItem'
+import SpeakingPracticeItem, { PartnerRole, RecorderControls, ReplyBubble, SituationGuide, BTN } from './SpeakingPracticeItem'
 import { BASIC_SET_ID, itemsForSet, setLabel } from '../utils/situation/speakingSets'
 import { saveSession } from '../utils/situation/situationStore'
 
@@ -27,14 +27,18 @@ export default function SpeakingExam({ setId = BASIC_SET_ID, studentId, onMenu }
   const [selfReport, setSelfReport] = useState(null)
   const [recorded, setRecorded] = useState(false)
   const [results, setResults] = useState({}) // 이번 실행의 표현별 자기 확인(요약용)
-  const rec = useLocalRecorder()
+  // 218차: 상대 역할 녹음기(같은 마이크 스트림) — 답 확인 뒤에만 보이고, 문항 이동·다시 연습·화면 종료 시 정리
+  const streamRef = useRef(null)
+  const rec = useLocalRecorder({ sharedStreamRef: streamRef })
+  const partnerRec = useLocalRecorder({ sharedStreamRef: streamRef })
   const { st } = rec
   const headingRef = useRef(null)
   const items = useMemo(() => itemsForSet(setId), [setId])
   const total = items.length
   const summary = idx >= total
   const expr = summary ? null : items[idx]
-  const busy = st.status === 'recording'
+  const busy = st.status === 'recording' || partnerRec.st.status === 'recording'
+  const partner = !!(expr?.partnerRole && expr.reply)
 
   useEffect(() => { headingRef.current?.focus() }, [idx])
   useEffect(() => { if (st.status === 'recorded') setRecorded(true) }, [st.status])
@@ -49,12 +53,12 @@ export default function SpeakingExam({ setId = BASIC_SET_ID, studentId, onMenu }
   }
   const next = () => {
     persist()
-    rec.reset('RESET')
+    rec.reset('RESET'); partnerRec.reset('RESET')
     setRevealed(false); setRetrying(false); setSelfReport(null); setRecorded(false)
     setIdx((i) => i + 1)
   }
   const back = () => { persist(); onMenu() }
-  const retry = () => { rec.reset('RESET'); setRetrying(true) }
+  const retry = () => { rec.reset('RESET'); partnerRec.reset('RESET'); setRetrying(true) }
 
   return (
     <div data-testid="speaking-exam" data-expr={expr?.exprId || ''} data-index={idx} data-revealed={revealed ? 'true' : 'false'}
@@ -92,7 +96,7 @@ export default function SpeakingExam({ setId = BASIC_SET_ID, studentId, onMenu }
                 <button data-testid="exam-listen" onClick={() => speak(expr.en, { source: 'speaking' })} disabled={busy}
                   className={`${BTN} bg-sky-100 text-sky-700 text-base`}>🔊 듣기</button>
                 <p data-testid="exam-other-ways" className="text-sm text-gray-500">상황에 맞으면 다른 말로 말해도 좋아요.</p>
-                {expr.reply && <ReplyBubble reply={expr.reply} testid="exam-reply" />}
+                {expr.reply && !partner && <ReplyBubble reply={expr.reply} testid="exam-reply" />}
               </div>
             )}
 
@@ -101,8 +105,10 @@ export default function SpeakingExam({ setId = BASIC_SET_ID, studentId, onMenu }
                 <SpeakingPracticeItem item={expr} rec={rec} />
               </div>
             ) : (
-              <RecorderControls rec={rec} idleText="상황을 읽고 영어로 말해 봐요. 마이크 없이도 할 수 있어요" />
+              <RecorderControls rec={rec} blocked={partnerRec.st.status === 'recording'} idleText="상황을 읽고 영어로 말해 봐요. 마이크 없이도 할 수 있어요" />
             )}
+
+            {revealed && partner && !retrying && <PartnerRole key={expr.id} item={expr} rec={partnerRec} exam blocked={st.status === 'recording'} />}
 
             {revealed && (
               <div className="flex flex-wrap gap-2" role="group" aria-label="말해 본 느낌">

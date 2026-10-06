@@ -59,6 +59,7 @@ export const STORY_EPISODES = [
     n: 2,
     id: 'ep02',
     titleKo: '숟가락이 든 필통',
+    partnerRole: true, // 218차: 상대(미아) 역할 녹음 — 먼저 2화에만
     summaryKo: '미술 시간, 내 필통에서 연필 대신 숟가락이 나와요. 앞자리 미아에게 연필을 빌리고, 칠판의 처음 보는 단어를 옮겨 적다 연필이 부러져요. 다음 날엔 필통을 통째로 두고 와요.',
     nextHookKo: '필통을 두고 온 그날, 하교 전 교실 문에 종이로 가린 포스터가 붙었어요. 곧 큰 소식이 있대요.',
     // 오늘 기억할 한 문장(QA 전용 KeySentenceFlow). 이 흐름은 Paul(나)과 미아 두 사람만 나오는 시범 장면이다(212차 이후 운영자 정정 —
@@ -301,7 +302,7 @@ export const STORY_ITEMS = [
     situationKo: '내 필통에는 숟가락뿐이라 그릴 도구가 없어요. 앞자리 미아 필통에는 연필이 여러 자루 있어요.',
     roleKo: '미아에게 하나 써도 되는지 물어봐요.',
     en: 'Can I borrow a pencil?', ko: '연필 좀 빌려도 돼?',
-    reply: { speaker: 'Mia', en: 'Sure! Here you are.', ko: '그럼! 여기 있어.' },
+    reply: { speaker: 'Mia', en: 'Sure. Here you are!', ko: '그럼. 여기 있어!' },
     alternatives: ['Could I borrow a pencil?', 'Can I use one of your pencils?', 'Have you got a spare pencil?'],
     pencilScene: { variant: 'spoon', still: 'ask' },
     level: 1, func: 'borrowing', kind: 'new', reviewOf: null, reuseIn: [],
