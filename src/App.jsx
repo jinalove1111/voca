@@ -6,6 +6,8 @@ import StudentGrowth from './components/StudentGrowth'
 import WritingCoach from './components/WritingCoach'
 // 208차 — Speaking(이야기 10화 데이터 포함)은 QA 전용 화면이라 lazy 로드: 메인 청크(gzip ≤135KB 예산)에 이야기 데이터가 실리지 않게.
 const SpeakingPractice = React.lazy(() => import('./components/SpeakingPractice'))
+// 2026-10-07(222차) Writing 첫 버전(주제 → 상황 → 직접 쓰기 → 예시 비교) — QA 계정 홈의 ✍️ 카드에서만 연다
+const WritingPractice = React.lazy(() => import('./components/WritingPractice'))
 import WordBrowser from './components/WordBrowser'
 import WordDetail from './components/WordDetail'
 import QuizGame from './components/QuizGame'
@@ -250,6 +252,8 @@ function AppInner({ studentId, studentName, onLogout }) {
   const QA_ONLY_SCREENS = ['home', 'speaking', 'growth', 'proto25d']
   useEffect(() => { if (!qaTestStudent && QA_ONLY_SCREENS.includes(screen)) setScreen('dashboard') }, [qaTestStudent, screen])
   const [speakingMode, setSpeakingMode] = useState('menu') // 홈의 "그림 시험 바로 가기"가 Speaking을 시험 모드로 연다
+  // Speaking 연습 끝 → [이 표현 써보기] → Writing 문항 → ← 목록이면 원래 Speaking(그 세트의 연습 끝 화면)으로
+  const [writingLink, setWritingLink] = useState(null) // { writingItemId, setId } | null
   const [selectedWord, setWord]     = useState(null)
   const [selectedWordIdx, setWordIdx] = useState(0)
   const [pendingNextIdx, setPendingNextIdx] = useState(0)
@@ -838,18 +842,19 @@ function AppInner({ studentId, studentName, onLogout }) {
         <StudentHome studentName={studentName} studentData={studentData} classWords={classWords}
           hasTodaysHomework={!!getStudentClass(studentId) && getTodaysAssignmentWordIds(getStudentClass(studentId)).length > 0}
           onStartGuided={startGuidedSession} onLogout={onLogout}
-          onGo={(t) => { setSpeakingMode(t === 'speakingExam' ? 'exam' : 'menu'); goFrom('home', t === 'speakingExam' ? 'speaking' : (paulTown2_5dEnabled && t === 'paulTown') ? 'proto25d' : t) }}
+          onGo={(t) => { setSpeakingMode(t === 'speakingExam' ? 'exam' : 'menu'); if (t === 'writingCoach') setWritingLink(null); goFrom('home', t === 'speakingExam' ? 'speaking' : (paulTown2_5dEnabled && t === 'paulTown') ? 'proto25d' : t) }}
           canEnterTown={(isFeatureEnabled('paulTownHomeBand') && !!attachment.stats) || paulTown2_5dEnabled}
           townEligible={townV1Enabled}
-          writingEnabled={isFeatureEnabled('writingCoachEnabled')}
+          writingEnabled={isFeatureEnabled('writingCoachEnabled') || qaTestStudent}
           speakingEnabled={isFeatureEnabled('speakingPracticeV1')}
           speakingExamEnabled={isFeatureEnabled('situationRecallV1')} />
       )}
       {qaTestStudent && screen === 'speaking' && (
         // 2026-10-04 Speaking UX v2 — 메뉴(회화 연습/그림 시험), 닫으면 홈. 시험 기록은 기기 로컬뿐
         <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
-          <SpeakingPractice studentId={studentId} initialMode={speakingMode} examEnabled={isFeatureEnabled('situationRecallV1')}
-            onBack={() => setScreen('home')} />
+          <SpeakingPractice studentId={studentId} initialMode={speakingMode} initialSetId={writingLink?.setId || null} examEnabled={isFeatureEnabled('situationRecallV1')}
+            onBack={() => setScreen('home')}
+            onWrite={(writingItemId, setId) => { setWritingLink({ writingItemId, setId }); setScreen('writingCoach') }} />
         </React.Suspense>
       )}
       {qaTestStudent && screen === 'growth' && (
@@ -858,7 +863,15 @@ function AppInner({ studentId, studentName, onLogout }) {
           starsDisplay={studentData.starsDisplay}
           onBack={() => setScreen('home')} onGo={(t) => goFrom('growth', t)} onStartGuided={startGuidedSession} />
       )}
-      {screen === 'writingCoach' && (
+      {qaTestStudent && screen === 'writingCoach' && (
+        // 2026-10-07(222차) QA 계정: 주제별 문장 쓰기(Speaking 문항 재사용). ← 홈 / Speaking에서 왔으면 그 세트의 연습 끝 화면으로
+        <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
+          <WritingPractice studentId={studentId} startItemId={writingLink?.writingItemId || null}
+            onBack={() => { if (writingLink) { setSpeakingMode('practiceDone'); setScreen('speaking') } else setScreen('home') }}
+            onHome={() => { setWritingLink(null); setScreen('home') }} />
+        </React.Suspense>
+      )}
+      {!qaTestStudent && screen === 'writingCoach' && (
         // 2026-10-02 학생 홈 개편 — Dashboard 로컬 state였던 WritingCoach를
         // 그대로 옮김(props 동일). 저장 없음(MVP), 닫으면 홈.
         <WritingCoach

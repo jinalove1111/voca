@@ -3,15 +3,21 @@ import useLocalRecorder from '../hooks/useLocalRecorder'
 import { stopSpeaking } from '../utils/speech'
 import SpeakingPracticeItem, { BTN } from './SpeakingPracticeItem'
 import { BASIC_SET_ID, itemsForSet, setLabel } from '../utils/situation/speakingSets'
+import { keySentenceFor } from '../utils/situation/speakingSets'
+import { STORY_CARDS } from '../utils/situation/speakingTopics'
+import { writingItemForSpeaking } from '../utils/writing/writingItems'
 
 // 2026-10-04 Speaking UX v2 — 회화 연습 모드(SpeakingPractice 루트에서 lazy 로드: 그림 에셋이 메인 청크에 들어가지 않게).
-export default function SpeakingPracticeMode({ setId = BASIC_SET_ID, onMenu, onStartExam }) {
+// startDone: Writing에서 돌아올 때 연습 끝 화면부터. onWrite(writingItemId): 이 세트의 핵심 표현에 Writing 문항이 있을 때만 [이 표현 써보기](222차)
+export default function SpeakingPracticeMode({ setId = BASIC_SET_ID, startDone = false, onMenu, onStartExam, onWrite = null }) {
   // 218차: 상대 역할 녹음기는 같은 마이크 스트림을 쓴다. 문항 이동·화면 종료 시 두 녹음기 모두 정리(언마운트 시 훅이 스트림 해제)
   const streamRef = useRef(null)
   const rec = useLocalRecorder({ sharedStreamRef: streamRef })
   const partnerRec = useLocalRecorder({ sharedStreamRef: streamRef })
   const [idx, setIdx] = useState(0)
-  const [done, setDone] = useState(false)
+  const [done, setDone] = useState(startDone)
+  const keyItemId = keySentenceFor(setId)?.itemId || STORY_CARDS[setId]?.keyItemId || null
+  const writing = onWrite && keyItemId ? writingItemForSpeaking(keyItemId) : null
   const headingRef = useRef(null)
   const items = useMemo(() => itemsForSet(setId), [setId])
   const last = items.length - 1
@@ -40,6 +46,9 @@ export default function SpeakingPracticeMode({ setId = BASIC_SET_ID, onMenu, onS
                 <button data-testid="practice-start-exam" onClick={onStartExam}
                   className="w-full min-h-[64px] px-4 py-4 rounded-2xl font-black text-xl btn-press bg-amber-500 text-white">📝 한글 보고 말하기 시작</button>
               </>
+            )}
+            {writing && (
+              <button data-testid="practice-write" onClick={() => onWrite(writing.id)} className={`${BTN} w-full bg-gradient-to-br from-teal-400 to-emerald-600 text-white`}>✍️ 이 표현 써보기</button>
             )}
             <button data-testid="practice-back-menu" onClick={onMenu} className={`${BTN} w-full bg-gray-200 text-gray-700`}>메뉴로</button>
           </div>
