@@ -1,0 +1,14 @@
+{
+  "agent_name": "orchestrator",
+  "role": "리드(설계안 대조·범위·구현·통합) — 교육 설계 담당은 읽기 전용 서브에이전트, 독립 QA는 하네스로 대체",
+  "task_id": "pilot-unit-2026-10-08",
+  "task": "통합 과정 공통 데이터 구조 + 회화 C1 시범 Unit(교실에서 물건 빌리기) 학생 화면",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-08T05:06:00+09:00",
+  "updated_at": "2026-10-08T05:40:00+09:00",
+  "files_owned": ["src/utils/curriculum/courseModel.js", "src/utils/curriculum/unitRecords.js", "src/utils/curriculum/unitBorrow.js", "src/components/UnitScreen.jsx", "src/App.jsx", "src/components/StudentHome.jsx", "src/components/SpeakingPractice.jsx", "scripts/testPilotUnit.mjs", "scripts/testQaGate.mjs", "scripts/testWritingPractice.mjs", "scripts/testKeySentenceFlow.mjs", "scripts/testBrowserE2E.mjs", "tests/e2e/unit.spec.mjs", "tests/harness/registry.mjs", "docs/design/INTEGRATED_CURRICULUM_IMPL_2026-10-08.md", "TESTING.md", "handoff.md"],
+  "summary": "[mock 기반] 공통 구조(과정·블록·지원 단계·기록 플래그·Unit 계약)+시범 Unit 1개(어휘·듣기·읽기·문형·복습 신규, 말하기·쓰기 기존 연결). e2e unit 54/0, 회귀 4종 PASS, 정적 10종 PASS. 교사 화면·다른 과정·교사 검수·실기기 미완.",
+  "blocker": null,
+  "next_action": "운영자: Preview 로그인 후 [오늘의 학습] 7활동 실사용·지문/문항 검수, 설계안 §16 정보 제공; 다음 구현 우선순위는 handoff 224차"
+}

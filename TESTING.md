@@ -1924,3 +1924,10 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 ## 관련 항목: 자체 커리큘럼 목표 매핑·교재 독립성 (2026-10-08, 223차)
 
 - `scripts/testCommGoals.mjs`(speaking 도메인, extra:false): func 69종 → 목표 정확히 한 번(누락·중복·stale 0), 114문항+기본 5 전부 목표 보유, 목표 id 유일·레벨 1~3·제목 ≤10자·영어 없음, 레벨 3개, 목표당 문항 ≥3, itemsForGoal 합계, 목표→회차 연결, 콘텐츠 모듈 9개에 특정 교재 브랜드·권/단원 번호 체계 없음(설명 주석의 낱말 '교재'는 허용), 회차 제목·요약에 단원 번호 없음, 설계 문서 필수 섹션. 223차 ALL PASS.
+
+## 관련 항목: 통합 과정 공통 구조·시범 Unit (2026-10-08, 224차)
+
+- `scripts/testPilotUnit.mjs`(speaking 도메인): 공통 구조(과정 5·회화 블록 6·목표 id 실재, 기간 "가안"·영국 학년/CEFR/권수 필드 없음, 지원 단계 4·영역 2, 기록 플래그 5 중 앱 설정 2), 시범 Unit 계약(validateUnit, 활동 7종 순서, 기존 말하기/쓰기 연결, 핵심 표현 s02-03, 어휘=텍스트 안, 듣기 ≤45단어·읽기 ≤70단어·문장 ≤9단어, 복습 상황 영어/빌려 없음, Could I… 비오답, 출처 kind 구분, 교재 브랜드 없음), 기록(UUID 키·앱은 completed/selfChecked만·플래그 아닌 값 거부·다음 활동·영역별 지원 단계·깨진 JSON·점수/숙달 값 없음), 화면·App·Speaking 루트 핀. 224차 ALL PASS.
+- e2e `tests/e2e/unit.spec.mjs`(`[unit]`): a 개요(제목·활동 7·다음=어휘·안내) → 어휘 🔊 speak → 듣기(대본 숨김·버튼 재생·문항·근거·자기 확인) → 읽기(틀린 보기도 근거만) → 문형(관찰 확인 전 숨김·정답 2개 문항) → 기록(UUID, completed/selfChecked만, teacherObserved false, 이름 키 없음); b 복습(공개 전 모범·듣기·speak 없음 → 확인 후 모범·대체) → 도움 정도(말하기/읽기·쓰기 따로) → 재진입 복원; c 말하기(2화 한 문장 흐름 spoon) ← 메뉴 → Unit, 쓰기(w-s02-03) ← 목록 → Unit, 홈 재진입 시 링크 초기화; d 360/390/412/1280 레이아웃. 224차 54/0. 1차 3 FAIL은 테스트 환경 문제(speak 카운터 등록 순서, 정답 배열 id).
+- 영향 회귀: studentHome 218/0/1, speaking 540/0, speaking-exam 216/0, writing 63/0(홈 진입 1개 추가·Speaking 루트 initialMode 확장 뒤 재실행).
+- `scripts/testQaGate.mjs` QA_ONLY_SCREENS 5개(unit 추가)로 갱신.
