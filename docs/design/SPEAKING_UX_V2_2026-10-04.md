@@ -603,3 +603,39 @@ menu ─ [회화 연습] ▶ practice ─ 5문항 ─ 끝 ─ [그림 시험 시
 2. 한 문장 말하는지: 연습·한 문장 이야기 뒤 그 회차의 핵심 표현(§21.1)을 소리 내어 말하는지(녹음 여부와 무관).
 3. 다음 수업에도 기억하는지: 영어 없이 한국어 상황만 듣고 같은 문장(또는 같은 뜻의 변형)을 말하는지(§12.5 절차).
 4. 도움을 요청한 위치: 어떤 화면·버튼에서 "이거 뭐예요?"가 나왔는지(주제 이름, 접힌 한 문장, 상대 역할 녹음 등).
+
+## 22. 대표 장면 일러스트 제작 패키지 — 5화 "가게에서 장보기" 1장 (2026-10-07, 221차 — append-only)
+
+### 22.1 이 세션의 도구 확인 결과 (제작 안 함)
+- **이미지 생성 도구: 없음.** 세션 도구 목록·지연 도구 검색(ToolSearch "image generate draw edit") 결과 이미지 생성·AI 편집 도구가 없다(검색에 걸린 것은 NotebookEdit, Chrome 업로드, Artifact 댓글/DB, Docs 편집뿐).
+- **로컬 편집 도구: Pillow 12.3만 있음**(자르기·크기 조정·기존 PNG 합성). ImageMagick(`magick`)·Inkscape·rsvg·ffmpeg 없음(`convert`는 Windows 파일시스템 명령). 기존 Paul·미아 PNG를 합성할 수는 있지만 **같은 그림체의 진열대·장바구니·계산대를 새로 그릴 수 없다** → 요청한 장면은 여기서 만들지 못했다. 새 유료 서비스·API는 연결하지 않았다.
+
+### 22.2 참조 이미지(승인본, 저장소 안)
+| 용도 | 파일 | 크기 |
+|---|---|---|
+| Paul 기준 얼굴(엄지 척, 투명) | `src/assets/speaking/paul_speaking.png` | 327×491 |
+| 미아 생각 | `src/assets/speaking/mia_think.png` | 222×328 |
+| 미아 인사(빈 손) | `src/assets/speaking/mia_greet.png` | 407×317 |
+| 미아 놀람 | `src/assets/speaking/mia_surprise.png` | 374×319 |
+| 미아 연필 건네기 | `src/assets/speaking/mia_give_pencil.png` | 269×311 |
+| 원본(운영자 제공) | `폴얼굴.png`(1024×1536), `여자폴.png`(1312×1199, 4포즈 시트) — Downloads | — |
+그림체 특징: 두꺼운 외곽선의 디지털 카툰, 검은/남색 탑햇(Paul은 금색 배지, 미아는 닻 자수), 남색 반팔 티셔츠, 큰 눈·밝은 피부톤, 부드러운 셀 셰이딩.
+
+### 22.3 장면 사양(1장 먼저)
+- **이야기 맞춤 주의**: 5화에서 가격을 답하는 사람은 **가게 주인**(s05-03 Shopkeeper "That one's fifteen pounds.")이고, 미아는 지갑(20파운드)을 든 팀 리더(s05-01)다. "폴이 미아에게 가격을 묻는" 구성은 줄거리와 어긋나므로 두 가지 중 운영자가 고른다: (A) 폴이 리본 묶음을 들고 **계산대의 가게 주인**에게 묻고, 미아는 지갑을 들고 옆에서 함께 보는 구성(이야기와 일치, 권장) / (B) 운영자 지시대로 폴이 미아에게 묻는 구성(s05-03의 상대가 가게 주인이라 연습 화면의 대사와 그림이 어긋남 — 쓰려면 s05-03 상황·상대를 바꾸는 콘텐츠 결정이 먼저 필요).
+- **프롬프트(A 기준, 영어 — 생성 도구용)**:
+  > Children's picture-book digital cartoon, thick clean outlines, soft cel shading, bright colours. Inside a small corner shop near a school. Left: PAUL — the exact character from reference image 1 (same face, navy top hat with gold badge, navy T-shirt) — standing at the counter holding up a bundle of shiny gold ribbons whose paper price tag has fallen to the floor, head tilted, asking. Centre-right: MIA — the exact character from reference image 2 (same face, navy top hat with gold anchor, navy T-shirt) — standing beside him holding a small purple wallet and a wire shopping basket with a popcorn bag and a lemonade bottle. Background: a shelf display with red, blue and gold ribbon rolls, snack boxes; a wooden checkout counter with a till; a shopkeeper seen from behind or in soft focus (no detailed face). Eye-level, characters large (faces at least one quarter of the image height), simple uncluttered background, no text, no letters, no numbers, no speech bubbles, no price signs with digits, 4:3 landscape.
+  - 금지: 글자·숫자·말풍선·가격표의 숫자(가격표는 빈 종이나 뒷면), 정답 힌트가 되는 요소(파운드 기호 등).
+  - 미아 표정은 `mia_think` 또는 `mia_greet` 참조 중 하나로 고정(새 표정 만들지 않음). 폴은 `paul_speaking` 얼굴 그대로(엄지 포즈 대신 리본을 든 손 — 손 포즈는 새로 그려야 하므로 결과물 검수 필요).
+- **크기·형식**: 1600×1200(4:3) 제작 → `webp` 품질 85 → 보통 150~250KB. 화면에서 `SceneCard`가 4:3·최대 512px 폭·`object-contain`으로 보여 주고, 360px 폰에서는 약 328×246으로 축소되므로 소품은 크게, 세부는 적게.
+- **파일명·경로**: `src/assets/situations/s05-03.webp` — **파일만 넣으면 코드 수정 없이** 5화 3번 문항의 연습 화면에 자동 표시된다(`SceneCard.FINAL_ART`가 `src/assets/situations/*.webp`를 문항 id로 읽음). 같은 그림을 시험(한글 보고 말하기)에서도 보여 주므로 **그림 안에 답 힌트가 없어야 한다**(현재 시험은 답 확인 전 한국어 상황만 보이는데, 최종 그림이 있으면 그림이 함께 보인다 — 22.5 주의).
+- **접근성 문구(그림을 넣을 때 함께)**: 이야기 문항 scene에는 `alt`/`examAlt`가 없어 `SceneCard`의 aria-label이 비게 된다 → 넣을 때 `speakingSets.itemsForSet`의 scene에 `alt: '가게 계산대에서 폴이 리본 묶음을 들고 가격을 물어요. 미아가 지갑과 장바구니를 들고 옆에 서 있어요.'`, `examAlt: '가게 계산대에서 폴이 물건을 들고 있어요. 미아가 옆에 있어요.'`를 추가하는 작은 코드 변경이 필요하다(이번에는 하지 않음).
+
+### 22.4 나머지 9장(아직 제작하지 않음 — 1장 검수 후)
+한 회차당 대표 장면 1장, 파일명은 그 회차 핵심 문항 id: `s01-08`(미아가 속삭이고 폴이 귀 기울임) · `s02-03`(필통의 숟가락, 미아 필통의 연필들) · `s03-06`(셋이 축제 포스터 앞) · `s04-04`(음악실 거울 앞 엉킨 춤) · `s06-03`(복도 의자 밑 쿠키와 리본) · `s07-05`(책상 위 초대장 쓰기) · `s08-04`(목을 감싼 제이미, 물병) · `s09-02`(강당 간식 가게 계산대) · `s10-02`(멈춘 스피커, 무대). 제이미·쿠키·가게 주인은 승인된 참조가 없으므로 1장 검수 때 그림체 기준을 정한 뒤 진행.
+
+### 22.5 앱에 넣기 전 확인
+- 그림에 글자·숫자·말풍선이 없는지(시험 화면에도 보이므로).
+- 360px에서 폴·미아 얼굴과 들고 있는 물건이 식별되는지(`SceneCard` 캡처).
+- 주제 카드 썸네일에도 쓰려면 `SpeakingTopics.jsx`의 `THUMB.ep05`에 `img` 항목을 추가하는 작은 코드 변경이 필요(현재는 Paul+미아 인물 그림).
+- DB·Production 무관(정적 에셋). PR #62 Draft·QA 전용 유지.
