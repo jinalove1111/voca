@@ -89,7 +89,7 @@ export const UNIT_LOST_BAG = {
     { kind: 'official', what: '듣기·말하기·읽기·쓰기를 한 Unit에서 연결하는 방향', basis: 'England English programmes of study — 방향 참고(원문 미확인, 224차와 동일 상태). 한국 EFL 진도에 직접 이식하지 않음' },
     { kind: 'research', what: '회상 때 모범 숨기기, 물건 바꾸기 뒤 모범 없이 말하기', basis: 'Karpicke & Roediger 2008(초록 확인). 대학생 단어 실험이라 초등 회화 직접 입증 아님' },
     { kind: 'research', what: '선택지 3개, 한 단계에 위치 말 1~2개만', basis: 'Sweller et al. 2019(미확인·방향만). 이 UI의 효과를 검증한 것은 아님' },
-    { kind: 'own', what: 'C1에 정보 묻기(asking-info) 두 번째 Unit 배치, under·in 핵심 + on 확장', basis: '설계안 v1 §3·§5(운영 가안) + 2026-10-08 리드 결정' },
+    { kind: 'own', what: 'C1에 정보 묻기(asking-info) 두 번째 Unit 배치, under·in 핵심 + on 확장', basis: '설계안 v1 §3·§5(운영 가안)에서 위치 표현은 원래 C3 블록이지만, 운영자가 두 번째 시범 Unit으로 지정(2026-10-08) — 템플릿 재사용 검증 목적. 교육 설계 담당 메모' },
     { kind: 'own', what: '이야기(폴의 가방·필통 찾기)·듣기 대화·읽기 지문·이해/문형 문항·말하기 3단계·복습 상황', basis: '2026-10-08 신규 작성(교육 설계 담당 초안 → 리드 확정), 교사 검수 전. 기존 이야기 회차(ep06 물건 찾기)와는 별개 문장' },
   ],
 }
