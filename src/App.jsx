@@ -8,6 +8,9 @@ import WritingCoach from './components/WritingCoach'
 const SpeakingPractice = React.lazy(() => import('./components/SpeakingPractice'))
 // 2026-10-07(222차) Writing 첫 버전(주제 → 상황 → 직접 쓰기 → 예시 비교) — QA 계정 홈의 ✍️ 카드에서만 연다
 const WritingPractice = React.lazy(() => import('./components/WritingPractice'))
+// 2026-10-08(224차) 통합 과정 시범 Unit(교실에서 물건 빌리기) — QA 계정 홈 [오늘의 학습]에서만
+const UnitScreen = React.lazy(() => import('./components/UnitScreen'))
+const loadPilotUnit = () => import('./utils/curriculum/unitBorrow')
 import WordBrowser from './components/WordBrowser'
 import WordDetail from './components/WordDetail'
 import QuizGame from './components/QuizGame'
@@ -249,11 +252,14 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 로그아웃/세션 만료 등 어떤 경로로든 AppInner가 내려가면 홈 포커스 기억을 비운다.
   useEffect(() => () => resetStudentHomeState(), [])
   const [screen, setScreen]         = useState(() => (isFeatureEnabled('studentHomeMenu') && isQaTestStudent(studentId) ? 'home' : 'dashboard'))
-  const QA_ONLY_SCREENS = ['home', 'speaking', 'growth', 'proto25d']
+  const QA_ONLY_SCREENS = ['home', 'speaking', 'growth', 'proto25d', 'unit']
   useEffect(() => { if (!qaTestStudent && QA_ONLY_SCREENS.includes(screen)) setScreen('dashboard') }, [qaTestStudent, screen])
   const [speakingMode, setSpeakingMode] = useState('menu') // 홈의 "그림 시험 바로 가기"가 Speaking을 시험 모드로 연다
   // Speaking 연습 끝 → [이 표현 써보기] → Writing 문항 → ← 목록이면 원래 Speaking(그 세트의 연습 끝 화면)으로
   const [writingLink, setWritingLink] = useState(null) // { writingItemId, setId } | null
+  // 시범 Unit에서 말하기/쓰기로 나갔다가 돌아올 때(224차). unitLink가 있으면 Speaking/Writing의 뒤로는 Unit 화면으로
+  const [unitLink, setUnitLink] = useState(null) // { speakingMode?: 'key'|'practice', setId?, writingItemId? } | null
+  const [pilotUnit, setPilotUnit] = useState(null)
   const [selectedWord, setWord]     = useState(null)
   const [selectedWordIdx, setWordIdx] = useState(0)
   const [pendingNextIdx, setPendingNextIdx] = useState(0)
@@ -842,7 +848,7 @@ function AppInner({ studentId, studentName, onLogout }) {
         <StudentHome studentName={studentName} studentData={studentData} classWords={classWords}
           hasTodaysHomework={!!getStudentClass(studentId) && getTodaysAssignmentWordIds(getStudentClass(studentId)).length > 0}
           onStartGuided={startGuidedSession} onLogout={onLogout}
-          onGo={(t) => { setSpeakingMode(t === 'speakingExam' ? 'exam' : 'menu'); if (t === 'writingCoach') setWritingLink(null); goFrom('home', t === 'speakingExam' ? 'speaking' : (paulTown2_5dEnabled && t === 'paulTown') ? 'proto25d' : t) }}
+          onGo={(t) => { setSpeakingMode(t === 'speakingExam' ? 'exam' : 'menu'); if (t === 'writingCoach') setWritingLink(null); setUnitLink(null); if (t === 'unit') { loadPilotUnit().then((m) => setPilotUnit(m.UNIT_BORROW)) } goFrom('home', t === 'speakingExam' ? 'speaking' : (paulTown2_5dEnabled && t === 'paulTown') ? 'proto25d' : t) }}
           canEnterTown={(isFeatureEnabled('paulTownHomeBand') && !!attachment.stats) || paulTown2_5dEnabled}
           townEligible={townV1Enabled}
           writingEnabled={isFeatureEnabled('writingCoachEnabled') || qaTestStudent}
@@ -852,8 +858,8 @@ function AppInner({ studentId, studentName, onLogout }) {
       {qaTestStudent && screen === 'speaking' && (
         // 2026-10-04 Speaking UX v2 — 메뉴(회화 연습/그림 시험), 닫으면 홈. 시험 기록은 기기 로컬뿐
         <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
-          <SpeakingPractice studentId={studentId} initialMode={speakingMode} initialSetId={writingLink?.setId || null} examEnabled={isFeatureEnabled('situationRecallV1')}
-            onBack={() => setScreen('home')}
+          <SpeakingPractice studentId={studentId} initialMode={unitLink?.speakingMode || speakingMode} initialSetId={unitLink?.setId || writingLink?.setId || null} examEnabled={isFeatureEnabled('situationRecallV1')}
+            menuExits={!!unitLink} onBack={() => setScreen(unitLink ? 'unit' : 'home')}
             onWrite={(writingItemId, setId) => { setWritingLink({ writingItemId, setId }); setScreen('writingCoach') }} />
         </React.Suspense>
       )}
@@ -866,9 +872,16 @@ function AppInner({ studentId, studentName, onLogout }) {
       {qaTestStudent && screen === 'writingCoach' && (
         // 2026-10-07(222차) QA 계정: 주제별 문장 쓰기(Speaking 문항 재사용). ← 홈 / Speaking에서 왔으면 그 세트의 연습 끝 화면으로
         <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
-          <WritingPractice studentId={studentId} startItemId={writingLink?.writingItemId || null}
-            onBack={() => { if (writingLink) { setSpeakingMode('practiceDone'); setScreen('speaking') } else setScreen('home') }}
-            onHome={() => { setWritingLink(null); setScreen('home') }} />
+          <WritingPractice studentId={studentId} startItemId={unitLink?.writingItemId || writingLink?.writingItemId || null}
+            onBack={() => { if (unitLink) setScreen('unit'); else if (writingLink) { setSpeakingMode('practiceDone'); setScreen('speaking') } else setScreen('home') }}
+            onHome={() => { setWritingLink(null); setUnitLink(null); setScreen('home') }} />
+        </React.Suspense>
+      )}
+      {qaTestStudent && screen === 'unit' && pilotUnit && (
+        <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
+          <UnitScreen unit={pilotUnit} studentId={studentId} onBack={() => { setUnitLink(null); setScreen('home') }}
+            onSpeaking={(a) => { setUnitLink({ speakingMode: a.flow === 'key' ? 'key' : 'practice', setId: a.setId }); setScreen('speaking') }}
+            onWriting={(a) => { setUnitLink({ writingItemId: a.writingItemId }); setScreen('writingCoach') }} />
         </React.Suspense>
       )}
       {!qaTestStudent && screen === 'writingCoach' && (
@@ -1172,7 +1185,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           고정 버튼이 히어로 CTA("▶ 오늘의 학습 시작")를 덮어 탭을 가로채는
           실측 회귀가 있어 대시보드에서는 렌더하지 않는다. 다른 모든 화면은
           불변. */}
-      {screen !== 'dashboard' && screen !== 'home' && screen !== 'growth' && screen !== 'speaking' && screen !== 'proto25d' && <SpeedBtn />}
+      {screen !== 'dashboard' && screen !== 'home' && screen !== 'growth' && screen !== 'speaking' && screen !== 'proto25d' && screen !== 'unit' && <SpeedBtn />}
       {/* Paul Town 2.5D 프로토타입(paulTown2_5d, Stage 1, 2026-09-22) — 기존
           `screen` 상태 머신/네비게이션과 완전히 무관한 독립 dev/QA 서피스.
           내비게이션 진입점이 없다(운영자 스펙에 "학생이 진입"하는 요구

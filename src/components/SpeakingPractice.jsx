@@ -16,20 +16,21 @@ const FALLBACK = <div className="min-h-screen flex items-center justify-center">
 const safeStorage = () => { try { return window.localStorage } catch { return { getItem: () => null, setItem: () => {} } } }
 const MENU_CARD = 'w-full min-h-[96px] px-4 py-5 rounded-3xl font-black text-xl btn-press card-shadow text-white bg-gradient-to-br'
 
-export default function SpeakingPractice({ onBack, studentId, initialMode = 'menu', initialSetId = null, examEnabled = false, onWrite = null }) {
+// initialMode 'key'|'practice' + initialSetId: 시범 Unit에서 바로 한 문장 흐름/연습을 연다. menuExits: 그 화면의 '← 메뉴'가 곧 onBack(Unit으로)(224차)
+export default function SpeakingPractice({ onBack, studentId, initialMode = 'menu', initialSetId = null, examEnabled = false, onWrite = null, menuExits = false }) {
   // initialMode 'practiceDone' + initialSetId: Writing [이 표현 써보기]에서 돌아온 경우 — 그 세트의 연습 끝 화면을 다시 연다(222차)
-  const [mode, setMode] = useState(initialMode === 'exam' && examEnabled ? 'exam' : initialMode === 'practiceDone' && initialSetId ? 'practice' : 'topics')
+  const [mode, setMode] = useState(initialMode === 'exam' && examEnabled ? 'exam' : (initialMode === 'practiceDone' || initialMode === 'practice') && initialSetId ? 'practice' : initialMode === 'key' && initialSetId ? 'key' : 'topics')
   // 연습/시험/흐름에서 '← 메뉴'로 돌아갈 화면: 'menu'(기존 세트 메뉴·홈 시험 직진입) 또는 'stories'(주제의 이야기 카드)
   const [origin, setOrigin] = useState('menu')
   const [topicId, setTopicId] = useState(null)
   // 시험은 들어갈 때마다 새로 마운트(key) — 항상 1번 문항·미공개로 시작
   const [examKey, setExamKey] = useState(0)
   // 첫 방문은 오늘의 이야기(2화), 이후엔 학생이 마지막으로 고른 세트(speakingSets.loadLastSet)
-  const [setId, setSetId] = useState(() => (initialMode === 'practiceDone' && initialSetId) || loadLastSet(safeStorage(), studentId))
+  const [setId, setSetId] = useState(() => (['practiceDone', 'practice', 'key'].includes(initialMode) && initialSetId) || loadLastSet(safeStorage(), studentId))
   // Writing에서 돌아온 직후 한 번만 연습 끝 화면을 연다 — 메뉴로 나가거나 세트를 바꾸면 해제(다시 연습은 1번부터)
   const [resume, setResume] = useState(initialMode === 'practiceDone' && !!initialSetId)
   const pickSet = (id) => { setResume(false); setSetId(id); saveLastSet(safeStorage(), studentId, id) }
-  const goMenu = () => { setResume(false); setMode(origin === 'stories' && topicId ? 'stories' : 'menu') }
+  const goMenu = () => { if (menuExits) { onBack(); return } setResume(false); setMode(origin === 'stories' && topicId ? 'stories' : 'menu') }
   const key = keySentenceFor(setId)
   const startExam = () => { setExamKey((k) => k + 1); setMode('exam') }
   // 이야기 카드 → 기존 연습/한 문장 흐름(세트 선택·기억은 기존 pickSet 그대로)

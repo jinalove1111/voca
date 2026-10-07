@@ -133,6 +133,12 @@ export default function StudentHome({ studentName, studentData, classWords, hasT
             {townEligible ? '🏘️ 내 마을' : '🏘️ Paul Town 구경가기'}
           </button>
         )}
+        {/* 2026-10-08(224차) 통합 과정 시범 Unit(QA 전용) — 기존 Tab 순서(로그아웃→시작→카드4→그림 시험→내 마을) 뒤에 둔다 */}
+        <button data-testid="student-home-unit" onClick={() => go('unit', 'unit')}
+          className="w-full min-h-[56px] px-4 py-3 rounded-3xl text-left btn-press card-shadow text-white bg-gradient-to-br from-teal-500 to-emerald-700">
+          <span className="block text-xs font-bold opacity-90">오늘의 학습 (시범)</span>
+          <span className="block text-lg font-black">📚 교실에서 물건 빌리기</span>
+        </button>
       </div>
     </div>
   )
