@@ -1920,3 +1920,7 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 - e2e `tests/e2e/writing.spec.mjs`(`testBrowserE2E` 목록 `[writing]`): a 주제 2개·문항 5·안내, b 쓰기 흐름(예시·대체 답안·듣기 DOM 없음 → 공백 비활성 → 도움 단어만 → 비교 → 고치기 → 수정 전/후 → localStorage UUID 키/필드 → 다음 문항 예시 숨김 → 재진입 복원), c 혼자 쓰기·다른 UUID 초안 미노출·무변경, d Speaking 2화 연습 끝 [이 표현 써보기] → w-s02-03 → ← 목록 → 2화 연습 끝 복귀, 홈 재진입 시 주제 화면, 3화에는 버튼 없음, e 360/390/412/1280 레이아웃(긴 문장 포함).
 - `tests/e2e/studentHome.spec.mjs`: QA 계정 홈의 문장 쓰기 카드는 플래그와 무관하게 활성(App 게이트 `|| qaTestStudent`), 클릭 → `writing-topics`. '준비 중' 계약은 비QA 대시보드 경로에만 남는다.
 - `scripts/testBundleBudget.mjs`: raw 합계 예산 1.5MB → 1.6MB(파일 주석에 사유 — lazy 청크 포함 총량 감시용, 메인 gzip ≤135KB 단언은 그대로).
+
+## 관련 항목: 자체 커리큘럼 목표 매핑·교재 독립성 (2026-10-08, 223차)
+
+- `scripts/testCommGoals.mjs`(speaking 도메인, extra:false): func 69종 → 목표 정확히 한 번(누락·중복·stale 0), 114문항+기본 5 전부 목표 보유, 목표 id 유일·레벨 1~3·제목 ≤10자·영어 없음, 레벨 3개, 목표당 문항 ≥3, itemsForGoal 합계, 목표→회차 연결, 콘텐츠 모듈 9개에 특정 교재 브랜드·권/단원 번호 체계 없음(설명 주석의 낱말 '교재'는 허용), 회차 제목·요약에 단원 번호 없음, 설계 문서 필수 섹션. 223차 ALL PASS.
