@@ -879,7 +879,7 @@ function AppInner({ studentId, studentName, onLogout }) {
       )}
       {qaTestStudent && screen === 'unit' && pilotUnits && (
         <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
-          <UnitScreen units={pilotUnits} initialUnitId={unitLink?.unitId || null} studentId={studentId} onBack={() => { setUnitLink(null); setScreen('home') }}
+          <UnitScreen units={pilotUnits} initialUnitId={unitLink?.unitId || null} returnedFrom={unitLink ? (unitLink.writingItemId ? 'writing' : 'speaking') : null} studentId={studentId} onBack={() => { setUnitLink(null); setScreen('home') }}
             onSpeaking={(unitId, a) => { setUnitLink({ unitId, speakingMode: a.flow === 'key' ? 'key' : 'practice', setId: a.setId }); setScreen('speaking') }}
             onWriting={(unitId, a) => { setUnitLink({ unitId, writingItemId: a.writingItemId }); setScreen('writingCoach') }} />
         </React.Suspense>

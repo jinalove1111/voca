@@ -23,7 +23,7 @@ function Choice({ q, idx, testid, onAnswered }) {
       <p className="text-base font-black text-gray-900 break-keep">{idx + 1}. {q.promptKo}</p>
       <div className="flex flex-wrap gap-2">
         {q.options.map((o, i) => (
-          <button key={o} data-testid={`${testid}-${idx}-opt-${i}`} onClick={() => { setPicked(i); onAnswered?.() }} aria-pressed={picked === i}
+          <button key={o} data-testid={`${testid}-${idx}-opt-${i}`} onClick={() => { if (picked === null) onAnswered?.(); setPicked(i) }} aria-pressed={picked === i}
             className={`${BTN} text-base ${picked === i ? (isOk(q, i) ? 'bg-emerald-500 text-white' : 'bg-amber-200 text-gray-800') : 'bg-white card-shadow text-gray-700'}`}>{o}</button>
         ))}
       </div>
@@ -41,7 +41,7 @@ function TrueFalse({ q, idx, testid, onAnswered }) {
       <p className="text-base font-black text-gray-900 break-keep">{idx + 1}. {q.promptKo}</p>
       <div className="flex gap-2">
         {[true, false].map((v) => (
-          <button key={String(v)} data-testid={`${testid}-${idx}-opt-${v ? 1 : 0}`} onClick={() => { setPicked(v); onAnswered?.() }} aria-pressed={picked === v}
+          <button key={String(v)} data-testid={`${testid}-${idx}-opt-${v ? 1 : 0}`} onClick={() => { if (picked === null) onAnswered?.(); setPicked(v) }} aria-pressed={picked === v}
             className={`${BTN} ${picked === v ? (v === q.answer ? 'bg-emerald-500 text-white' : 'bg-amber-200 text-gray-800') : 'bg-white card-shadow text-gray-700'}`}>{v ? '맞아요' : '틀려요'}</button>
         ))}
       </div>
@@ -72,11 +72,13 @@ function ListeningActivity({ unit, onAllAnswered }) {
   const L = unit.listening
   useEffect(() => { if (answered >= L.questions.length) onAllAnswered() }, [answered, L.questions.length, onAllAnswered])
   // 대화를 문장 TTS로 차례로 읽는다(기존 speak, 자동 재생 없음 — 버튼으로만)
-  const playAll = () => { let i = 0; const next = () => { if (i < L.turns.length) speak(L.turns[i++].en, { source: 'unit', onEnd: next }) }; next() }
+  const alive = useRef(true)
+  useEffect(() => () => { alive.current = false }, [])
+  const playAll = () => { let i = 0; const next = () => { if (alive.current && i < L.turns.length) speak(L.turns[i++].en, { source: 'unit', onEnd: next }) }; next() }
   return (
     <div className="space-y-4">
       <div className={CARD}>
-        <p className="text-sm font-black text-teal-700">대화를 듣고, 폴에게 무엇이 필요한지 찾아요</p>
+        <p className="text-sm font-black text-teal-700">대화를 먼저 듣고 질문에 답해요</p>
         <button data-testid="unit-listen-play" onClick={playAll} className={`${BTN} bg-sky-100 text-sky-700`}>🔊 대화 듣기</button>
         {shown ? (
           <div data-testid="unit-listen-script" className="space-y-1">
@@ -174,19 +176,22 @@ function ReviewActivity({ unit, onAllRevealed }) {
   )
 }
 
-function UnitView({ unit, studentId, onBack, onSpeaking, onWriting }) {
+function UnitView({ unit, studentId, onBack, onSpeaking, onWriting, returnedFrom = null }) {
   const storage = useMemo(safeStorage, [])
   const [records, setRecords] = useState(() => loadUnitRecords(storage, studentId))
   const [activeId, setActiveId] = useState(null)
+  const [selfPicked, setSelfPicked] = useState({})
   const headingRef = useRef(null)
   const ids = unit.activities.map((a) => a.id)
   const nextId = nextActivityId(records, unit.id, ids)
   const active = unit.activities.find((a) => a.id === activeId) || null
   useEffect(() => { headingRef.current?.focus() }, [activeId])
   useEffect(() => () => stopSpeaking(), [])
+  // 기존 화면(말하기/쓰기)에서 돌아오면 그 활동을 '해 봤다'로만 기록(점수·숙달 아님)
+  useEffect(() => { const a = returnedFrom && unit.activities.find((x) => x.kind === returnedFrom); if (a && !activityState(loadUnitRecords(storage, studentId), unit.id, a.id).completed) { markActivity(storage, studentId, unit.id, a.id, { completed: true }); setRecords(loadUnitRecords(storage, studentId)) } }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const refresh = () => setRecords(loadUnitRecords(storage, studentId))
   const complete = (id) => { markActivity(storage, studentId, unit.id, id, { completed: true }); refresh() }
-  const selfCheck = (id, v) => { markActivity(storage, studentId, unit.id, id, { selfChecked: v }); refresh() }
+  const selfCheck = (id, v) => { markActivity(storage, studentId, unit.id, id, { selfChecked: v }); setSelfPicked((o) => ({ ...o, [id]: v })); refresh() }
   const support = records[unit.id]?.support || { speaking: null, literacy: null }
   const pickSupport = (area, stageId) => { setSupportStage(storage, studentId, unit.id, area, stageId); refresh() }
   const open = (a) => { stopSpeaking(); if (a.kind === 'speaking' && !a.steps) onSpeaking(a); else if (a.kind === 'writing') onWriting(a); else setActiveId(a.id) }
@@ -214,10 +219,10 @@ function UnitView({ unit, studentId, onBack, onSpeaking, onWriting }) {
               <button data-testid="unit-activity-done" onClick={() => { complete(active.id); back() }} className={`${BTN} w-full bg-gradient-to-br from-teal-400 to-emerald-600 text-white`}>다 봤어요 → 단원으로</button>
             ) : (
               <>
-                <p data-testid="unit-activity-status" className="text-sm font-bold text-gray-700">{st.completed ? '이 활동을 끝냈어요.' : '문항을 모두 해 보면 끝나요.'}</p>
+                <p data-testid="unit-activity-status" className="text-sm font-bold text-gray-700">{st.completed ? '이 활동을 해 봤어요.' : '문항을 모두 해 보면 기록돼요.'}</p>
                 <div className="flex flex-wrap gap-2" role="group" aria-label="자기 확인">
                   <button data-testid="unit-self-ok" onClick={() => selfCheck(active.id, true)} aria-pressed={st.selfChecked} className={`${BTN} text-base ${st.selfChecked ? 'bg-sky-500 text-white' : 'bg-white card-shadow text-gray-700'}`}>🙂 할 수 있었어요</button>
-                  <button data-testid="unit-self-hard" onClick={() => selfCheck(active.id, false)} aria-pressed={!st.selfChecked} className={`${BTN} text-base ${!st.selfChecked ? 'bg-sky-500 text-white' : 'bg-white card-shadow text-gray-700'}`}>🌱 아직 어려워요</button>
+                  <button data-testid="unit-self-hard" onClick={() => selfCheck(active.id, false)} aria-pressed={selfPicked[active.id] === false} className={`${BTN} text-base ${selfPicked[active.id] === false ? 'bg-sky-500 text-white' : 'bg-white card-shadow text-gray-700'}`}>🌱 아직 어려워요</button>
                 </div>
                 <button data-testid="unit-activity-return" onClick={back} className={`${BTN} w-full bg-white card-shadow text-gray-700`}>← 단원으로</button>
               </>
@@ -256,7 +261,7 @@ function UnitView({ unit, studentId, onBack, onSpeaking, onWriting }) {
               <li key={a.id}>
                 <button data-testid={`unit-act-${a.id}`} data-completed={st.completed ? 'true' : 'false'} onClick={() => open(a)} className={`w-full text-left min-h-[56px] px-4 py-3 rounded-2xl btn-press card-shadow ${a.id === nextId ? 'bg-emerald-50 border-2 border-emerald-300' : 'bg-white'}`}>
                   <span className="text-base font-black text-gray-900">{i + 1}. {KIND_EMOJI[a.kind]} {KIND_KO[a.kind]} — {a.titleKo}</span>
-                  <span className="block text-xs text-gray-500">{st.completed ? (st.selfChecked ? '끝냈어요 · 할 수 있었어요' : '끝냈어요') : a.id === nextId ? '다음 활동' : '아직'}</span>
+                  <span className="block text-xs text-gray-500">{st.completed ? (st.selfChecked ? '해 봤어요 · 할 수 있었어요' : '해 봤어요') : a.id === nextId ? '다음 활동' : '아직'}</span>
                 </button>
               </li>
             )
@@ -366,11 +371,11 @@ function UnitSpeaking({ activity, onDone }) {
 }
 
 // Unit 선택(시범 목록) → UnitView. unitLink로 돌아온 경우 그 Unit을 바로 연다
-export default function UnitScreen({ units, initialUnitId = null, studentId, onBack, onSpeaking, onWriting }) {
+export default function UnitScreen({ units, initialUnitId = null, returnedFrom = null, studentId, onBack, onSpeaking, onWriting }) {
   const [unitId, setUnitId] = useState(initialUnitId || (units.length === 1 ? units[0].id : null))
   const unit = units.find((u) => u.id === unitId) || null
   if (unit) {
-    return <UnitView key={unit.id} unit={unit} studentId={studentId} onBack={units.length > 1 ? () => setUnitId(null) : onBack}
+    return <UnitView key={unit.id} unit={unit} studentId={studentId} returnedFrom={returnedFrom} onBack={units.length > 1 ? () => setUnitId(null) : onBack}
       onSpeaking={(a) => onSpeaking(unit.id, a)} onWriting={(a) => onWriting(unit.id, a)} />
   }
   return (

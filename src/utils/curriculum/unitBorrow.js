@@ -16,6 +16,8 @@ export const UNIT_BORROW = {
     { en: 'borrow', ko: '빌리다' },
     { en: "haven't got", ko: '(나는) 없어' },
     { en: 'Here you are', ko: '여기 있어' },
+    { en: 'ruler', ko: '자' },
+    { en: 'ball', ko: '공' },
   ],
   listening: {
     turns: [
@@ -27,7 +29,7 @@ export const UNIT_BORROW = {
       { speaker: 'Mia', en: 'Sure. Here you go.' },
     ],
     questions: [
-      { promptKo: '들은 대화에서 폴이 처음에 없다고 말한 물건은?', options: ['연필', '지우개', '숟가락'], correct: 0, whyKo: '첫 번째 말에서 폴이 "I haven\'t got a pencil."이라고 했어요.' },
+      { promptKo: '들은 대화에서 미아는 연필이 얼마나 있다고 했나요?', options: ['하나도 없어요', '하나 있어요', '많이 있어요'], correct: 2, whyKo: '두 번째 말에서 미아가 "I\'ve got lots."(많이 있어)라고 했어요.' },
       { promptKo: '들은 대화에서 폴이 연필 다음으로 필요한 물건은?', options: ['연필', '지우개', '숟가락'], correct: 1, whyKo: '다섯 번째 말에서 폴이 "Can I borrow your rubber?"라고 했어요.' },
     ],
   },
@@ -46,7 +48,7 @@ export const UNIT_BORROW = {
     ],
     items: [
       { promptKo: '빈칸에 알맞은 말은? Can I borrow ___?', options: ['a pencil', 'pencil', 'a pencils'], correct: 0, whyKo: '연필 한 자루를 말할 때는 a pencil이라고 해요. → Can I borrow a pencil?' },
-      { promptKo: '친구에게 연필을 빌려 달라고 하는 알맞은 문장은?', options: ['Can I borrow a pencil?', 'Can I borrowing a pencil?', 'I can borrow a pencil?'], correct: 0, whyKo: '물어볼 때는 Can I borrow …? 순서로 말해요. → Can I borrow a pencil?' },
+      { promptKo: '친구에게 연필을 빌려 달라고 하는 알맞은 문장은?', options: ['Can I borrow a pencil?', 'Can I borrowing a pencil?', 'Can borrow I a pencil?'], correct: 0, whyKo: '물어볼 때는 Can I borrow …? 순서로 말해요. → Can I borrow a pencil?' },
       { promptKo: '지우개를 빌려 달라고 할 때 알맞은 문장은? (맞는 것이 둘이에요)', options: ['Could I borrow your rubber?', 'Can I borrow your rubber?', 'Can borrow I your rubber?'], correct: [0, 1], whyKo: 'Could I …?도 Can I …?처럼 정중한 부탁이에요. 단어 순서가 바뀐 문장은 어색해요.' },
     ],
   },
@@ -68,8 +70,8 @@ export const UNIT_BORROW = {
     { id: 'review', kind: 'review', titleKo: '다른 물건, 다른 곳에서', goalKo: '자·공처럼 물건이 바뀌어도 같은 부탁을 말해 봐요.' },
   ],
   review: [
-    { situationKo: '수학 시간에 자가 필요한데 내 필통에 없어요. 짝에게 말해요.', hintEn: 'ruler', model: 'Can I borrow your ruler?', alternatives: ['Could I borrow your ruler?', 'Can I use your ruler?'] },
-    { situationKo: '쉬는 시간에 놀고 싶은데 공이 없어요. 공 가진 친구에게 말해요.', hintEn: 'ball', model: 'Can I borrow your ball?', alternatives: ['Could I borrow your ball?', 'Can I play with your ball?'] },
+    { situationKo: '수학 시간에 자가 필요한데 내 필통에 없어요. 짝에게 말해요.', hintEn: 'ruler', model: 'Can I borrow your ruler?', alternatives: ['Could I borrow your ruler?', 'Can I borrow a ruler?', 'Can I use your ruler?'] },
+    { situationKo: '쉬는 시간에 놀고 싶은데 공이 없어요. 공 가진 친구에게 말해요.', hintEn: 'ball', model: 'Can I borrow your ball?', alternatives: ['Could I borrow your ball?', 'Can I borrow a ball?', 'Can I use your ball?', 'Can I play with your ball?'] },
   ],
   observation: [
     '혼자: 모범을 숨겨도 Can I borrow …?로 시작해 요청을 말하거나 쓸 수 있는가.',

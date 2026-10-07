@@ -45,7 +45,7 @@ function ItemList({ topic, drafts, onPick, onBack }) {
           const d = drafts[it.id]
           return (
             <button key={it.id} data-testid={`writing-item-${it.id}`} onClick={() => onPick(it.id)} className="w-full text-left bg-white rounded-3xl p-4 card-shadow btn-press space-y-1">
-              <p className="text-sm font-black text-teal-700">{i + 1}. {it.episode}화</p>
+              <p className="text-sm font-black text-teal-700">{i + 1}. {it.episode ? `${it.episode}화` : '오늘의 학습'}</p>
               <p className="text-base font-bold text-gray-900 break-keep">{it.promptKo}</p>
               {d && hasContent(d.first) && <p data-testid="writing-item-saved" className="text-xs text-gray-500">📝 쓴 문장 있음{d.compared ? ' · 예시와 비교했어요' : ''}</p>}
             </button>
