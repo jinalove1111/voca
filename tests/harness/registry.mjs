@@ -411,6 +411,7 @@ export const DOMAINS = {
   writingCoach: {
     label: 'Writing Coach — 오류 taxonomy/규칙 검사/세션 상태 머신 (verify:writing-coach와 동일 실행)',
     checks: [
+      { script: 'scripts/testWritingPractice.mjs', builders: [], extra: false, note: '2026-10-07(222차) Writing 첫 버전 — 문항 10개가 기존 Speaking 문항 id만 가리킴(학교생활·쇼핑 5개씩, 빈 주제 없음), promptKo 답 미노출, 단어 도움 규칙, 초안 저장 UUID 키·라운드트립·깨진 값 방어·판정 값 없음, 화면 핀(예시는 비교 후에만, 공백 입력 완료 불가, 수정 전/후 구분, 채점 문구 없음, 임시 저장 안내, QA 전용·Speaking 링크). 저장·네트워크 0.' },
       { script: 'scripts/testWritingCoach.mjs', builders: [], note: '운영자 시나리오 축어 재현("I go to park yesterday." 2오류→자가 수정 인정→완료) + 오탐 방어(무관사 관용 school/home 예외 등) + 3회 후 공개 게이트 — 74단언.' },
     ],
   },

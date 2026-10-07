@@ -21,7 +21,6 @@ const MAIN_VP = VIEWPORTS[1]
 const HOME = '[data-testid="student-home"]'
 const NOTICE = '[data-testid="student-home-notice"]'
 const card = (page, id) => page.locator(`[data-testid="student-home-menu-${id}"]`)
-const WRITING_SOON = '문장 쓰기는 곧 열려요! 조금만 기다려요'
 
 function vpName(vp) { return `[${vp.width}x${vp.height}]` }
 
@@ -178,7 +177,9 @@ export async function run(browser, baseURL) {
       r.check(`${name} notice는 role=status이고 처음엔 비어 있음`,
         (await notice.getAttribute('role')) === 'status' && ((await notice.textContent()) || '').trim() === '')
       // 말하기는 speakingPracticeV1 기본 ON이라 활성 카드 — 준비 중 계약은 speaking.spec(h, 플래그 OFF)에서 검증.
-      for (const [id, text] of [['writing', WRITING_SOON]]) {
+      // 2026-10-07(222차): QA 계정 홈에서는 문장 쓰기도 플래그와 무관하게 활성(Writing 첫 버전) — '준비 중' 계약은 비QA 경로(대시보드, 플래그 OFF)에만 남는다.
+      r.check(`${name} writing 카드는 QA 계정에서 활성(aria-disabled 없음, 준비 중 배지 없음)`, (await card(page, 'writing').getAttribute('aria-disabled')) === null && !((await card(page, 'writing').textContent()) || '').includes('준비 중'))
+      for (const [id, text] of [/* 222차: QA 홈에 '준비 중' 카드 없음 — 루프는 비QA 계약용 자리만 남김 */]) {
         const c = card(page, id)
         r.check(`${name} ${id} aria-disabled="true"`, (await c.getAttribute('aria-disabled')) === 'true')
         // Playwright는 aria-disabled="true"를 disabled로 취급(isDisabled()=true, click()은 enabled를 영원히 대기)하므로
@@ -383,9 +384,10 @@ export async function run(browser, baseURL) {
     r.check(`${name} 문장 쓰기 카드 aria-disabled 없음`, (await c.getAttribute('aria-disabled')) === null)
     r.check(`${name} "준비 중" 배지 없음`, !((await c.textContent()) || '').includes('준비 중'))
     await c.click()
-    r.check(`${name} 클릭 → Writing Coach(← 돌아가기)`, await page.getByRole('button', { name: '← 돌아가기' }).waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false))
-    await page.getByRole('button', { name: '← 돌아가기' }).click()
-    r.check(`${name} Writing Coach back → 학생 홈`, await waitHome(page))
+    // 222차: QA 계정은 주제별 문장 쓰기(WritingPractice)로 연다
+    r.check(`${name} 클릭 → 문장 쓰기 주제 화면`, await page.locator('[data-testid="writing-topics"]').waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false))
+    await page.locator('[data-testid="writing-home"]').click()
+    r.check(`${name} 문장 쓰기 ← 홈 → 학생 홈`, await waitHome(page))
   })
 
   // ── k. 360폭 대시보드 헤더(홈/별/달러/로그아웃) — 상점 지갑 배지 ON ─────
