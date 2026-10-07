@@ -1913,3 +1913,10 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 - `scripts/testKeySentenceFlow.mjs` +5: 카드 영어 핵심 표현은 `<details>` 안(접힘)·버튼 설명 문구, `stopSpeaking` export와 호출 위치(연습 move·시험 next/back/retry·흐름 go·녹음 start·언마운트), `BUSY`(recording||requesting)는 다른 녹음기·듣기에만 쓰고 이동·뒤로는 recording만, 허용 대기 중 중복 스트림 재사용, 시험 다시 연습 패널 partnerRec.
 - e2e `speaking.spec.mjs`: k11 2화 카드 단언을 "핵심 표현 접힘 → 열면 영어+뜻"으로 교체, k10 "허용 대기 중 중복 요청 금지"(mic hang: 내 대답 녹음 비활성·← 메뉴 가능·getUserMedia 1회). 220차 speaking 540/0, speaking-exam 216/0.
 - TTS 정지는 mock(speechSynthesis 스텁이 항상 onerror)으로 재생 상태를 만들 수 없어 e2e로 검증하지 않음 — 정적 핀 + 실기기 확인 대상.
+
+## 관련 항목: Writing 첫 버전(주제별 문장 쓰기) (2026-10-07, 222차)
+
+- `scripts/testWritingPractice.mjs`(레지스트리 `writingCoach` 도메인, `verify:writing-coach`): 문항 10개가 기존 Speaking 문항 id만 가리킴·학교생활/쇼핑 5개씩·빈 주제 없음·회차-주제 일치, 화면용 문항 값이 원본과 동일, promptKo ≤45자·영어 없음·뜻 문장 미포함, hintWords 1~3개·문장 안 조각, noteKo/acceptNoteKo 길이, Speaking 링크(2·5화만); 초안 저장 UUID 키·라운드트립·계정 분리·판정 값 없음·깨진 JSON/예외 폴백, hasContent/sameSentence; 소스 핀(예시는 비교 후에만, 공백 입력 비교 불가, 수정 전/후 구분, 채점 문구 없음, 임시 저장·미전송 안내, DB/AI 없음, App QA 게이트·링크·복귀, Speaking [이 표현 써보기]·startDone, 비QA 경로 무변경·플래그 OFF).
+- e2e `tests/e2e/writing.spec.mjs`(`testBrowserE2E` 목록 `[writing]`): a 주제 2개·문항 5·안내, b 쓰기 흐름(예시·대체 답안·듣기 DOM 없음 → 공백 비활성 → 도움 단어만 → 비교 → 고치기 → 수정 전/후 → localStorage UUID 키/필드 → 다음 문항 예시 숨김 → 재진입 복원), c 혼자 쓰기·다른 UUID 초안 미노출·무변경, d Speaking 2화 연습 끝 [이 표현 써보기] → w-s02-03 → ← 목록 → 2화 연습 끝 복귀, 홈 재진입 시 주제 화면, 3화에는 버튼 없음, e 360/390/412/1280 레이아웃(긴 문장 포함).
+- `tests/e2e/studentHome.spec.mjs`: QA 계정 홈의 문장 쓰기 카드는 플래그와 무관하게 활성(App 게이트 `|| qaTestStudent`), 클릭 → `writing-topics`. '준비 중' 계약은 비QA 대시보드 경로에만 남는다.
+- `scripts/testBundleBudget.mjs`: raw 합계 예산 1.5MB → 1.6MB(파일 주석에 사유 — lazy 청크 포함 총량 감시용, 메인 gzip ≤135KB 단언은 그대로).

@@ -1,0 +1,31 @@
+{
+  "agent_name": "orchestrator",
+  "role": "리드(기존 확인·범위·통합·구현) — 콘텐츠/리서치/독립 리뷰는 서브에이전트",
+  "task_id": "writing-v1-2026-10-07",
+  "task": "Writing 첫 버전: 주제 → 상황 → 직접 쓰기 → 예시 비교 → 고치기(QA 전용), Speaking 2·5화 연결",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-07T20:24:00+09:00",
+  "updated_at": "2026-10-08T01:20:00+09:00",
+  "files_owned": [
+    "src/utils/writing/writingItems.js",
+    "src/utils/writing/writingDrafts.js",
+    "src/components/WritingPractice.jsx",
+    "src/App.jsx",
+    "src/components/SpeakingPractice.jsx",
+    "src/components/SpeakingPracticeMode.jsx",
+    "scripts/testWritingPractice.mjs",
+    "scripts/testKeySentenceFlow.mjs",
+    "scripts/testBundleBudget.mjs",
+    "scripts/testBrowserE2E.mjs",
+    "tests/e2e/writing.spec.mjs",
+    "tests/e2e/studentHome.spec.mjs",
+    "tests/harness/registry.mjs",
+    "docs/design/WRITING_PRACTICE_2026-10-07.md",
+    "docs/WRITING_COACH.md",
+    "TESTING.md"
+  ],
+  "summary": "[mock 기반] 구현·정적 10종·독립 리뷰 결함 수정 완료. e2e writing 63/0, student-home 218/0/1, speaking 540/0, speaking-exam 216/0(2026-10-08, RAM 4.3GB). 1차 writing 7 FAIL 중 제품 1건(같은 문장 표시 기준) 수정.",
+  "blocker": null,
+  "next_action": "운영자: Preview 로그인 후 홈 ✍️ → 학교생활 → 연필 빌리기 문항 실사용(키보드·입력창), Speaking 2화 연습 끝 [이 표현 써보기] 왕복, 10문항 안내 문구 검토, 교사 확인 저장 방식 결정"
+}
