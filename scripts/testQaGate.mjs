@@ -36,7 +36,7 @@ check('App.jsx가 isQaTestStudent import', /import \{ isQaTestStudent \} from '\
 check('studentHomeEnabled가 qaTestStudent와 AND', /const studentHomeEnabled =.*&& qaTestStudent/.test(lineOf(/const studentHomeEnabled =/)))
 check('초기 screen useState가 isQaTestStudent(studentId) 사용', /const \[screen, setScreen\].*isQaTestStudent\(studentId\)/.test(lineOf(/const \[screen, setScreen\]/)))
 check('paulTown2_5dEnabled가 qaTestStudent와 AND', /&& qaTestStudent/.test(lineOf(/const paulTown2_5dEnabled =/)))
-check('QA_ONLY_SCREENS 4개', /const QA_ONLY_SCREENS = \['home', 'speaking', 'growth', 'proto25d'\]/.test(app))
+check('QA_ONLY_SCREENS 5개(224차 unit 추가)', /const QA_ONLY_SCREENS = \['home', 'speaking', 'growth', 'proto25d', 'unit'\]/.test(app))
 check('직접 진입 차단 effect', /useEffect\(\(\) => \{ if \(!qaTestStudent && QA_ONLY_SCREENS\.includes\(screen\)\) setScreen\('dashboard'\) \}, \[qaTestStudent, screen\]\)/.test(app))
 for (const k of ['home', 'speaking', 'growth']) {
   check(`screen === '${k}' 렌더가 qaTestStudent로 게이팅`, new RegExp(`qaTestStudent && screen === '${k}' &&`).test(app))

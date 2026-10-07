@@ -121,6 +121,7 @@ async function main() {
       { name: '[speaking]', modulePath: '../tests/e2e/speaking.spec.mjs' },
       { name: '[speaking-exam]', modulePath: '../tests/e2e/speakingExam.spec.mjs' },
       { name: '[writing]', modulePath: '../tests/e2e/writing.spec.mjs' },
+      { name: '[unit]', modulePath: '../tests/e2e/unit.spec.mjs' },
       { name: '[entrance]', modulePath: '../tests/e2e/entranceInputLoss.spec.mjs' },
       { name: '[town]', modulePath: '../tests/e2e/townV1.spec.mjs' },
       { name: '[stale-chunk]', modulePath: '../tests/e2e/staleChunk.spec.mjs' },
