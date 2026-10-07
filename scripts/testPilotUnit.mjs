@@ -4,6 +4,8 @@ import { COURSES, CONVERSATION_BLOCKS, SUPPORT_STAGES, SUPPORT_AREAS, RECORD_FLA
 import { recordsKey, loadUnitRecords, markActivity, setSupportStage, activityState, nextActivityId } from '../src/utils/curriculum/unitRecords.js'
 import { COMM_GOALS } from '../src/utils/curriculum/commGoals.js'
 import { UNIT_BORROW } from '../src/utils/curriculum/unitBorrow.js'
+import { UNIT_LOST_BAG } from '../src/utils/curriculum/unitLostBag.js'
+import { UNITS } from '../src/utils/curriculum/units.js'
 import { STORY_ITEMS } from '../src/utils/situation/storyEpisodes.js'
 import { WRITING_ITEMS } from '../src/utils/writing/writingItems.js'
 
@@ -31,6 +33,22 @@ check('복습 상황에 영어·"빌려/빌리" 없음(회상 과제: 공개 전
 check('문형 문항: 정답 보기 외에 자연스러운 대체(Could I…)를 오답으로 두지 않음', UNIT_BORROW.grammar.items.every((q) => q.options.every((o, i) => (Array.isArray(q.correct) ? q.correct.includes(i) : i === q.correct) || !/^could i borrow/i.test(o))))
 check('출처 기록: 공식 목표·연구 근거·자체 결정 구분 표기', UNIT_BORROW.sources.length >= 3 && UNIT_BORROW.sources.every((s) => ['official', 'research', 'own'].includes(s.kind) && s.what && s.basis))
 check('Unit 텍스트에 특정 교재 브랜드·단원 번호 없음', !/let'?s ?smile|\bunit ?\d|lesson ?\d|\d\s*권/i.test(JSON.stringify(UNIT_BORROW)))
+
+// ── 225차: 두 번째 Unit(잃어버린 물건 위치 묻기) — 공통 템플릿 재사용 검증 ──
+const U2 = UNIT_LOST_BAG
+const errs2 = validateUnit(U2)
+check('Unit 2가 같은 데이터 계약을 통과(validateUnit), UNITS 목록 2개·id 유일', errs2.length === 0 && UNITS.length === 2 && new Set(UNITS.map((u) => u.id)).size === 2 && UNITS[1] === U2, errs2.join(','))
+check('Unit 2: 목표 asking-info(실재), 활동 7종 같은 순서, 말하기는 Unit 안 3단계(따라 하기→물건 바꾸기→모범 없이)', U2.goalId === 'asking-info' && COMM_GOALS.some((g) => g.id === 'asking-info') && U2.activities.map((a) => a.kind).join() === ACTIVITY_KINDS.join() && U2.activities.find((a) => a.kind === 'speaking').steps.map((s) => s.kind).join() === 'repeat,swap,recall')
+check('Unit 2 말하기: 물건 바꾸기 틀에 ___ 1개·칩 ≥2, 모범 없이 단계는 한국어 상황만(영어 없음)·모범·대답·대체 있음', (() => { const [, sw, rc] = U2.speaking.steps; return sw.frameEn.split('___').length === 2 && sw.slots.length >= 2 && sw.replyFrame.split('___').length === 2 && !/[A-Za-z]/.test(rc.situationKo + rc.roleKo) && rc.model && rc.reply?.en && rc.alternatives.length >= 1 })())
+check('Unit 2 쓰기는 inline 문항 w-u2-under(이야기 회차 없음)로 연결, 주제 finding', (() => { const w = WRITING_ITEMS.find((x) => x.id === U2.activities.find((a) => a.kind === 'writing').writingItemId); return !!w?.inline && w.topic === 'finding' && !w.itemId })())
+const allEn2 = [...U2.listening.turns.map((t) => t.en), U2.reading.text, ...U2.review.map((r) => r.model), ...U2.speaking.steps.flatMap((s) => [...(s.lines || []).map((l) => l.en), ...(s.slots || []).map((x) => x.en), ...(s.replySlots || []).map((x) => x.en)])].join(' ').toLowerCase()
+check('Unit 2 어휘는 Unit 텍스트에 실제로 나오는 말만, 위치 말은 under·in·on 3개 이하', U2.vocab.every((v) => allEn2.includes(v.en.toLowerCase())) && U2.vocab.filter((v) => /^(under|in|on)$/.test(v.en)).length <= 3, U2.vocab.filter((v) => !allEn2.includes(v.en.toLowerCase())).map((v) => v.en).join(','))
+check('Unit 2 듣기 ≤45단어·Paul/Mia만, 읽기 ≤70단어·문장 ≤9단어', U2.listening.turns.reduce((n, t) => n + t.en.split(/\s+/).length, 0) <= 45 && U2.listening.turns.every((t) => ['Paul', 'Mia'].includes(t.speaker)) && U2.reading.text.split(/\s+/).length <= 70 && U2.reading.text.split(/[.!?]["']?\s+/).every((s) => s.trim().split(/\s+/).length <= 9))
+check('Unit 2 복습·회상 상황에 영어 없음, 읽기 근거는 본문에 그대로', U2.review.every((r) => !/[A-Za-z]/.test(r.situationKo)) && U2.reading.items.every((q) => U2.reading.text.includes(q.evidence)))
+check('Unit 2 문형: Where is…(대체)를 오답으로 두지 않음, 출처 official/research/own 구분, 교재 브랜드·단원 번호 없음', U2.grammar.items.every((q) => q.options.every((o, i) => (Array.isArray(q.correct) ? q.correct.includes(i) : i === q.correct) || !/^where is my/i.test(o))) && U2.sources.every((s) => ['official', 'research', 'own'].includes(s.kind) && s.what && s.basis) && !/let'?s ?smile|\bunit ?\d|lesson ?\d|\d\s*권/i.test(JSON.stringify(U2)))
+check('두 Unit의 문장·문항이 서로 섞이지 않음(핵심 문장이 다른 Unit 텍스트에 없음)', !JSON.stringify(U2).includes('Can I borrow') && !JSON.stringify(UNIT_BORROW).includes("Where's my"))
+const uSrc = strip(read('src/components/UnitScreen.jsx'))
+check('화면: Unit 목록(unit-list/unit-pick)·Unit 안 말하기 3단계(repeat/swap/recall)·답 확인 전 모범 미마운트·녹음기 재사용', ['data-testid="unit-list"', 'unit-pick-${u.id}', "st.kind === 'repeat'", "st.kind === 'swap'", "st.kind === 'recall'", 'RecorderControls rec={rec}', 'useLocalRecorder()'].every((t) => uSrc.includes(t)) && /revealed \? \(\s*<div data-testid="unit-speaking-answer"/.test(uSrc) && /a\.kind === 'speaking' && !a\.steps\) onSpeaking/.test(uSrc))
 
 // ── 기록 저장 ──
 const mem = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)) } }

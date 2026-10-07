@@ -176,7 +176,7 @@ function ReviewActivity({ unit, onAllRevealed }) {
   )
 }
 
-function UnitView({ unit, studentId, onBack, onSpeaking, onWriting, returnedFrom = null }) {
+function UnitView({ unit, studentId, onBack, backLabel = '← 홈', onSpeaking, onWriting, returnedFrom = null }) {
   const storage = useMemo(safeStorage, [])
   const [records, setRecords] = useState(() => loadUnitRecords(storage, studentId))
   const [activeId, setActiveId] = useState(null)
@@ -238,7 +238,7 @@ function UnitView({ unit, studentId, onBack, onSpeaking, onWriting, returnedFrom
     <div data-testid="unit-screen" data-unit={unit.id} data-next={nextId || 'done'} className="min-h-screen p-4 pb-24">
       <div className="max-w-lg mx-auto space-y-4">
         <div className="flex items-center gap-2 pt-2">
-          <button data-testid="unit-home" onClick={() => { stopSpeaking(); onBack() }} className="min-h-[44px] px-2 font-black text-gray-600 btn-press">← 홈</button>
+          <button data-testid="unit-home" onClick={() => { stopSpeaking(); onBack() }} className="min-h-[44px] px-2 font-black text-gray-600 btn-press">{backLabel}</button>
           <h1 ref={headingRef} tabIndex={-1} className="text-xl font-black text-teal-700 outline-none">오늘의 학습</h1>
         </div>
         <div className="bg-amber-50 border-2 border-amber-200 rounded-3xl p-5 space-y-1">
@@ -375,7 +375,7 @@ export default function UnitScreen({ units, initialUnitId = null, returnedFrom =
   const [unitId, setUnitId] = useState(initialUnitId || (units.length === 1 ? units[0].id : null))
   const unit = units.find((u) => u.id === unitId) || null
   if (unit) {
-    return <UnitView key={unit.id} unit={unit} studentId={studentId} returnedFrom={returnedFrom} onBack={units.length > 1 ? () => setUnitId(null) : onBack}
+    return <UnitView key={unit.id} unit={unit} studentId={studentId} returnedFrom={returnedFrom} backLabel={units.length > 1 ? '← 목록' : '← 홈'} onBack={units.length > 1 ? () => setUnitId(null) : onBack}
       onSpeaking={(a) => onSpeaking(unit.id, a)} onWriting={(a) => onWriting(unit.id, a)} />
   }
   return (

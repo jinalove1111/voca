@@ -16,6 +16,9 @@ export const WRITING_ITEMS = [
   { id: 'w-s05-03', itemId: 's05-03', topic: 'shopping', promptKo: '가격표가 떨어졌어요. 가게 주인에게 값을 묻는 말을 써 보세요.', hintWords: ['how much', 'this'], noteKo: '물건을 들고 값을 물을 때 써요. 앞에 Excuse me를 붙이면 더 공손해요.', acceptNoteKo: 'How much does this cost?도 돼요.' },
   { id: 'w-s05-04', itemId: 's05-04', topic: 'shopping', promptKo: '리본이 너무 비싸요. 친구들에게 이 값으론 안 된다고 써 보세요.', hintWords: ['too', 'expensive'], noteKo: 'too는 "너무 지나치게"라는 느낌이에요. 질문이 아니라 내 생각을 말해요.', acceptNoteKo: "We can't buy that.도 돼요." },
   { id: 'w-s05-05', itemId: 's05-05', topic: 'shopping', promptKo: '리본은 꼭 필요해요. 가게 주인에게 값이 더 낮은 것이 있는지 써 보세요.', hintWords: ['cheaper', 'one'], noteKo: 'cheaper는 "더 싼"이에요. one은 앞에서 말한 물건을 대신해요.', acceptNoteKo: 'Do you have…?로 시작해도 돼요.' },
+  // 225차: 통합 Unit "잃어버린 물건 위치 묻기" 전용(이야기 회차에 없는 문장 → inline). 주제는 Speaking '물건·장소 찾기'와 같은 id
+  { id: 'w-u2-under', topic: 'finding', inline: { situationKo: '미술 시간이 끝났는데 폴의 가방이 안 보여요. 미아가 의자 밑에 있는 가방을 봤어요.', roleKo: '미아가 되어 폴에게 가방이 있는 곳을 알려 줘요.', en: "It's under the chair.", ko: '의자 밑에 있어.', alternatives: ['It is under the chair.', 'Your bag is under the chair.'], reply: null, episode: null },
+    promptKo: '폴이 가방을 찾고 있어요. 가방이 의자 밑에 있다고 알려 주는 말을 써 보세요.', hintWords: ['under', 'chair'], noteKo: "있는 곳을 말할 때 It's 뒤에 위치 말(under·in·on)과 장소를 붙여요.", acceptNoteKo: 'It is …나 Your bag is …로 써도 돼요.' },
   { id: 'w-s05-09', itemId: 's05-09', topic: 'shopping', promptKo: '바구니를 들고 계산대 앞이에요. 주인에게 값을 치르겠다고 써 보세요.', hintWords: ['pay', 'please'], noteKo: '계산할 준비가 됐을 때 써요. please를 붙이면 공손한 부탁이 돼요.', acceptNoteKo: 'Can I pay…?로 써도 돼요.' },
 ]
 
