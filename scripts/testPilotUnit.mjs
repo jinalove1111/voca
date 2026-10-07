@@ -51,8 +51,8 @@ const app = strip(read('src/App.jsx'))
 const home = strip(read('src/components/StudentHome.jsx'))
 check('화면: 다음 활동 강조(unit-next)·활동 순서 목록·도움 정도(영역별)·임시 저장 안내', ['data-testid="unit-next"', 'unit-act-', 'unit-support-', 'unit-storage-note', '점수나 진급은 아니에요'].every((t) => u.includes(t)))
 check('화면: 복습은 공개 전 영어·음성 미마운트(revealed 조건), 듣기 대화는 버튼으로만 재생(자동 재생 없음)', /\{revealed\[i\] \? \(/.test(u) && !/useEffect\([^)]*speak\(/.test(u) && /onClick=\{playAll\}/.test(u))
-check('화면: 말하기·쓰기는 기존 화면으로(onSpeaking/onWriting), 채점·숙달·진급 문구 없음', /a\.kind === 'speaking'\) onSpeaking\(a\)/.test(u) && /a\.kind === 'writing'\) onWriting\(a\)/.test(u) && !/점수를|숙달|진급했|합격|정답률/.test(u))
-check('App: unit 화면은 QA 계정만(QA_ONLY_SCREENS 포함), 홈 [오늘의 학습] 진입, Speaking/Writing은 unitLink로 복귀', /QA_ONLY_SCREENS = \[[^\]]*'unit'/.test(app) && /\{qaTestStudent && screen === 'unit' && pilotUnit && \(/.test(app) && /menuExits=\{!!unitLink\}/.test(app) && /if \(unitLink\) setScreen\('unit'\)/.test(app) && home.includes('student-home-unit'))
+check('화면: 말하기·쓰기는 기존 화면으로(onSpeaking/onWriting), 채점·숙달·진급 문구 없음', /a\.kind === 'speaking' && !a\.steps\) onSpeaking\(a\)/.test(u) && /a\.kind === 'writing'\) onWriting\(a\)/.test(u) && !/점수를|숙달|진급했|합격|정답률/.test(u))
+check('App: unit 화면은 QA 계정만(QA_ONLY_SCREENS 포함), 홈 [오늘의 학습] 진입, Speaking/Writing은 unitLink로 복귀', /QA_ONLY_SCREENS = \[[^\]]*'unit'/.test(app) && /\{qaTestStudent && screen === 'unit' && pilotUnits && \(/.test(app) && /menuExits=\{!!unitLink\}/.test(app) && /if \(unitLink\) setScreen\('unit'\)/.test(app) && home.includes('student-home-unit'))
 check('Speaking 루트: initialMode key/practice + menuExits', /initialMode === 'key' && initialSetId \? 'key'/.test(strip(read('src/components/SpeakingPractice.jsx'))) && /if \(menuExits\) \{ onBack\(\); return \}/.test(strip(read('src/components/SpeakingPractice.jsx'))))
 
 if (fail) { console.log(`\nFAILED ${fail}`); process.exit(1) }

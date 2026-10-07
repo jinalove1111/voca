@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { speak, stopSpeaking } from '../utils/speech'
 import { SUPPORT_STAGES } from '../utils/curriculum/courseModel'
 import { loadUnitRecords, markActivity, setSupportStage, activityState, nextActivityId } from '../utils/curriculum/unitRecords'
-import { SPEAKER_KO, BTN } from './SpeakingPracticeItem'
+import { SPEAKER_KO, BTN, RecorderControls, BUSY } from './SpeakingPracticeItem'
+import useLocalRecorder from '../hooks/useLocalRecorder'
 
 // 2026-10-08(224차) 통합 과정 시범 Unit 화면(QA 전용) — 한 Unit의 활동을 설계안 §3 순서로 보여 주고, 현재 활동과 다음 행동을 한 화면에서 분명히 한다.
 // 어휘·듣기·읽기·문법·복습은 이 파일의 작은 활동 화면, 말하기·쓰기는 기존 화면(KeySentenceFlow/연습·WritingPractice)으로 나갔다가 돌아온다.
@@ -173,7 +174,7 @@ function ReviewActivity({ unit, onAllRevealed }) {
   )
 }
 
-export default function UnitScreen({ unit, studentId, onBack, onSpeaking, onWriting }) {
+function UnitView({ unit, studentId, onBack, onSpeaking, onWriting }) {
   const storage = useMemo(safeStorage, [])
   const [records, setRecords] = useState(() => loadUnitRecords(storage, studentId))
   const [activeId, setActiveId] = useState(null)
@@ -188,7 +189,7 @@ export default function UnitScreen({ unit, studentId, onBack, onSpeaking, onWrit
   const selfCheck = (id, v) => { markActivity(storage, studentId, unit.id, id, { selfChecked: v }); refresh() }
   const support = records[unit.id]?.support || { speaking: null, literacy: null }
   const pickSupport = (area, stageId) => { setSupportStage(storage, studentId, unit.id, area, stageId); refresh() }
-  const open = (a) => { stopSpeaking(); if (a.kind === 'speaking') onSpeaking(a); else if (a.kind === 'writing') onWriting(a); else setActiveId(a.id) }
+  const open = (a) => { stopSpeaking(); if (a.kind === 'speaking' && !a.steps) onSpeaking(a); else if (a.kind === 'writing') onWriting(a); else setActiveId(a.id) }
   const back = () => { stopSpeaking(); setActiveId(null) }
 
   if (active) {
@@ -207,6 +208,7 @@ export default function UnitScreen({ unit, studentId, onBack, onSpeaking, onWrit
           {active.kind === 'reading' && <ReadingActivity unit={unit} onAllAnswered={onDone} />}
           {active.kind === 'grammar' && <GrammarActivity unit={unit} onAllAnswered={onDone} />}
           {active.kind === 'review' && <ReviewActivity unit={unit} onAllRevealed={onDone} />}
+          {active.kind === 'speaking' && active.steps && <UnitSpeaking activity={active} onDone={onDone} />}
           <div className={CARD}>
             {active.kind === 'vocab' ? (
               <button data-testid="unit-activity-done" onClick={() => { complete(active.id); back() }} className={`${BTN} w-full bg-gradient-to-br from-teal-400 to-emerald-600 text-white`}>다 봤어요 → 단원으로</button>
@@ -275,6 +277,114 @@ export default function UnitScreen({ unit, studentId, onBack, onSpeaking, onWrit
           ))}
         </div>
         <p data-testid="unit-storage-note" className="text-xs text-gray-500 break-keep">기록은 이 기기에만 임시로 저장되고 선생님에게 자동 전송되지 않아요. 활동을 끝낸 것이 점수나 진급은 아니에요.</p>
+      </div>
+    </div>
+  )
+}
+
+// 225차: Unit 안 말하기 활동(이야기 회차에 없는 문장용) — 기존 녹음기·녹음 버튼·TTS 재사용. ① 따라 하기(모범 듣고 선택 녹음)
+// ② 물건 바꾸기(틀에 단어 칩을 끼워 문장을 만들고 듣기·녹음) ③ 모범 없이 묻고 답하기(한국어 상황만, 답 확인 전 영어·음성 미마운트).
+// 녹음·답 확인으로 점수·숙달을 만들지 않는다. 화면을 나가면 녹음기(언마운트)와 TTS(stopSpeaking)가 정리된다.
+function UnitSpeaking({ activity, onDone }) {
+  const rec = useLocalRecorder()
+  const [step, setStep] = useState(0)
+  const [slot, setSlot] = useState(0)
+  const [replySlot, setReplySlot] = useState(0)
+  const [revealed, setRevealed] = useState(false)
+  const st = activity.steps[step]
+  const busy = BUSY(rec.st)
+  const go = (i) => { stopSpeaking(); rec.reset('RESET'); setRevealed(false); setStep(i) }
+  const fill = (frame, word) => frame.replace('___', word)
+  const says = (sp) => SPEAKER_KO[sp] || sp
+  return (
+    <div data-testid="unit-speaking" data-step={st.kind} className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        {activity.steps.map((x, i) => <span key={x.kind} data-testid={`unit-speaking-tab-${x.kind}`} aria-current={i === step ? 'step' : undefined} className={`text-sm font-black px-3 py-1 rounded-full ${i === step ? 'bg-teal-500 text-white' : 'bg-white card-shadow text-gray-600'}`}>{i + 1}. {x.titleKo}</span>)}
+      </div>
+      {st.kind === 'repeat' && (
+        <div className={CARD}>
+          <p className="text-sm font-black text-teal-700">듣고 따라 말해요</p>
+          {st.lines.map((l, i) => (
+            <div key={i} className="flex items-center justify-between gap-2">
+              <p className="text-base text-gray-900"><span className="font-black">{says(l.speaker)}:</span> <span data-testid={`unit-speaking-line-${i}`} className="font-black">{l.en}</span> <span className="text-sm text-gray-600">({l.ko})</span></p>
+              <button data-testid={`unit-speaking-listen-${i}`} onClick={() => speak(l.en, { source: 'unit' })} disabled={busy} className={`${BTN} bg-sky-100 text-sky-700 text-base`}>🔊</button>
+            </div>
+          ))}
+          <RecorderControls rec={rec} idleText="들은 문장을 따라 말해 봐요. 녹음은 안 해도 돼요" />
+        </div>
+      )}
+      {st.kind === 'swap' && (
+        <div className={CARD}>
+          <p className="text-sm font-black text-teal-700">물건을 바꿔서 말해요</p>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="물건 고르기">
+            {st.slots.map((w, i) => <button key={w.en} data-testid={`unit-speaking-slot-${i}`} onClick={() => setSlot(i)} aria-pressed={slot === i} className={`${BTN} text-base ${slot === i ? 'bg-teal-500 text-white' : 'bg-white card-shadow text-gray-700'}`}>{w.en} <span className="text-xs opacity-80">{w.ko}</span></button>)}
+          </div>
+          <p data-testid="unit-speaking-swap-en" className="text-xl font-black text-gray-900">{fill(st.frameEn, st.slots[slot].en)}</p>
+          {st.replyFrame && (
+            <>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="장소 고르기">
+                {st.replySlots.map((w, i) => <button key={w.en} data-testid={`unit-speaking-rslot-${i}`} onClick={() => setReplySlot(i)} aria-pressed={replySlot === i} className={`${BTN} text-base ${replySlot === i ? 'bg-violet-500 text-white' : 'bg-white card-shadow text-gray-700'}`}>{w.en} <span className="text-xs opacity-80">{w.ko}</span></button>)}
+              </div>
+              <p data-testid="unit-speaking-swap-reply" className="text-lg font-black text-gray-800"><span className="text-sm text-gray-600">{says(st.replySpeaker || 'Mia')}:</span> {fill(st.replyFrame, st.replySlots[replySlot].en)}</p>
+            </>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <button data-testid="unit-speaking-swap-listen" onClick={() => speak(fill(st.frameEn, st.slots[slot].en), { source: 'unit' })} disabled={busy} className={`${BTN} bg-sky-100 text-sky-700 text-base`}>🔊 질문 듣기</button>
+            {st.replyFrame && <button data-testid="unit-speaking-swap-listen-reply" onClick={() => speak(fill(st.replyFrame, st.replySlots[replySlot].en), { source: 'unit' })} disabled={busy} className={`${BTN} bg-sky-100 text-sky-700 text-base`}>🔊 대답 듣기</button>}
+          </div>
+          <RecorderControls rec={rec} idleText="바꾼 문장을 말해 봐요. 녹음은 안 해도 돼요" />
+        </div>
+      )}
+      {st.kind === 'recall' && (
+        <div className="space-y-4">
+          <div className="bg-amber-50 border-2 border-amber-200 rounded-3xl p-5 space-y-1">
+            <p className="text-sm font-black text-amber-700">상황</p>
+            <p className="text-lg font-bold text-gray-900 break-keep">{st.situationKo}</p>
+            <p className="text-base font-bold text-amber-800 break-keep">🙋 내 역할: {st.roleKo}</p>
+          </div>
+          {revealed ? (
+            <div data-testid="unit-speaking-answer" className="bg-sky-50 border-2 border-sky-200 rounded-3xl p-5 space-y-2">
+              <p className="text-sm font-black text-sky-700">이렇게 말할 수 있어요</p>
+              <p data-testid="unit-speaking-answer-en" className="text-xl font-black text-gray-900">{st.model}</p>
+              <button data-testid="unit-speaking-answer-listen" onClick={() => speak(st.model, { source: 'unit' })} disabled={busy} className={`${BTN} bg-sky-100 text-sky-700 text-base`}>🔊 듣기</button>
+              {st.alternatives?.length > 0 && <p className="text-sm text-gray-600">이렇게 말해도 좋아요: {st.alternatives.join(' / ')}</p>}
+              {st.reply && <p data-testid="unit-speaking-answer-reply" className="text-base text-gray-800"><span className="font-black">{says(st.reply.speaker)}:</span> {st.reply.en} <span className="text-sm text-gray-600">({st.reply.ko})</span></p>}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-600">먼저 소리 내어 말해 보고(녹음은 선택), 그 다음에 답을 확인해요.</p>
+          )}
+          <RecorderControls rec={rec} idleText="말해 봐요. 마이크 없이도 할 수 있어요" />
+          {!revealed && <button data-testid="unit-speaking-reveal" onClick={() => { setRevealed(true); onDone() }} disabled={busy} className={`${BTN} bg-amber-500 text-white`}>답 확인</button>}
+        </div>
+      )}
+      <div className="flex flex-wrap justify-between gap-2">
+        {step > 0 ? <button data-testid="unit-speaking-prev" onClick={() => go(step - 1)} disabled={busy} className={`${BTN} bg-white card-shadow text-gray-700`}>← 이전</button> : <span />}
+        {step < activity.steps.length - 1 && <button data-testid="unit-speaking-next" onClick={() => go(step + 1)} disabled={busy} className={`${BTN} bg-white card-shadow text-gray-700`}>다음 →</button>}
+      </div>
+    </div>
+  )
+}
+
+// Unit 선택(시범 목록) → UnitView. unitLink로 돌아온 경우 그 Unit을 바로 연다
+export default function UnitScreen({ units, initialUnitId = null, studentId, onBack, onSpeaking, onWriting }) {
+  const [unitId, setUnitId] = useState(initialUnitId || (units.length === 1 ? units[0].id : null))
+  const unit = units.find((u) => u.id === unitId) || null
+  if (unit) {
+    return <UnitView key={unit.id} unit={unit} studentId={studentId} onBack={units.length > 1 ? () => setUnitId(null) : onBack}
+      onSpeaking={(a) => onSpeaking(unit.id, a)} onWriting={(a) => onWriting(unit.id, a)} />
+  }
+  return (
+    <div data-testid="unit-list" className="min-h-screen p-4 pb-24">
+      <div className="max-w-lg mx-auto space-y-4">
+        <h1 className="text-xl font-black text-teal-700 pt-2">오늘의 학습</h1>
+        <p className="text-base font-black text-gray-800">어떤 단원을 할까요?</p>
+        {units.map((u) => (
+          <button key={u.id} data-testid={`unit-pick-${u.id}`} onClick={() => setUnitId(u.id)} className="w-full min-h-[72px] px-4 py-4 rounded-3xl text-left btn-press card-shadow text-white bg-gradient-to-br from-teal-400 to-emerald-600">
+            <span className="block text-xs font-bold opacity-90">{u.courseKo} · {u.block} · {u.goalTitleKo}</span>
+            <span className="block text-lg font-black">{u.titleKo}</span>
+          </button>
+        ))}
+        <button data-testid="unit-list-home" onClick={onBack} className="min-h-[44px] px-2 font-black text-gray-600 btn-press">← 홈</button>
       </div>
     </div>
   )

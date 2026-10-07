@@ -10,7 +10,7 @@ const SpeakingPractice = React.lazy(() => import('./components/SpeakingPractice'
 const WritingPractice = React.lazy(() => import('./components/WritingPractice'))
 // 2026-10-08(224차) 통합 과정 시범 Unit(교실에서 물건 빌리기) — QA 계정 홈 [오늘의 학습]에서만
 const UnitScreen = React.lazy(() => import('./components/UnitScreen'))
-const loadPilotUnit = () => import('./utils/curriculum/unitBorrow')
+const loadPilotUnits = () => import('./utils/curriculum/units')
 import WordBrowser from './components/WordBrowser'
 import WordDetail from './components/WordDetail'
 import QuizGame from './components/QuizGame'
@@ -259,7 +259,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   const [writingLink, setWritingLink] = useState(null) // { writingItemId, setId } | null
   // 시범 Unit에서 말하기/쓰기로 나갔다가 돌아올 때(224차). unitLink가 있으면 Speaking/Writing의 뒤로는 Unit 화면으로
   const [unitLink, setUnitLink] = useState(null) // { speakingMode?: 'key'|'practice', setId?, writingItemId? } | null
-  const [pilotUnit, setPilotUnit] = useState(null)
+  const [pilotUnits, setPilotUnits] = useState(null)
   const [selectedWord, setWord]     = useState(null)
   const [selectedWordIdx, setWordIdx] = useState(0)
   const [pendingNextIdx, setPendingNextIdx] = useState(0)
@@ -848,7 +848,7 @@ function AppInner({ studentId, studentName, onLogout }) {
         <StudentHome studentName={studentName} studentData={studentData} classWords={classWords}
           hasTodaysHomework={!!getStudentClass(studentId) && getTodaysAssignmentWordIds(getStudentClass(studentId)).length > 0}
           onStartGuided={startGuidedSession} onLogout={onLogout}
-          onGo={(t) => { setSpeakingMode(t === 'speakingExam' ? 'exam' : 'menu'); if (t === 'writingCoach') setWritingLink(null); setUnitLink(null); if (t === 'unit') { loadPilotUnit().then((m) => setPilotUnit(m.UNIT_BORROW)) } goFrom('home', t === 'speakingExam' ? 'speaking' : (paulTown2_5dEnabled && t === 'paulTown') ? 'proto25d' : t) }}
+          onGo={(t) => { setSpeakingMode(t === 'speakingExam' ? 'exam' : 'menu'); if (t === 'writingCoach') setWritingLink(null); setUnitLink(null); if (t === 'unit') { loadPilotUnits().then((m) => setPilotUnits(m.UNITS)) } goFrom('home', t === 'speakingExam' ? 'speaking' : (paulTown2_5dEnabled && t === 'paulTown') ? 'proto25d' : t) }}
           canEnterTown={(isFeatureEnabled('paulTownHomeBand') && !!attachment.stats) || paulTown2_5dEnabled}
           townEligible={townV1Enabled}
           writingEnabled={isFeatureEnabled('writingCoachEnabled') || qaTestStudent}
@@ -877,11 +877,11 @@ function AppInner({ studentId, studentName, onLogout }) {
             onHome={() => { setWritingLink(null); setUnitLink(null); setScreen('home') }} />
         </React.Suspense>
       )}
-      {qaTestStudent && screen === 'unit' && pilotUnit && (
+      {qaTestStudent && screen === 'unit' && pilotUnits && (
         <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
-          <UnitScreen unit={pilotUnit} studentId={studentId} onBack={() => { setUnitLink(null); setScreen('home') }}
-            onSpeaking={(a) => { setUnitLink({ speakingMode: a.flow === 'key' ? 'key' : 'practice', setId: a.setId }); setScreen('speaking') }}
-            onWriting={(a) => { setUnitLink({ writingItemId: a.writingItemId }); setScreen('writingCoach') }} />
+          <UnitScreen units={pilotUnits} initialUnitId={unitLink?.unitId || null} studentId={studentId} onBack={() => { setUnitLink(null); setScreen('home') }}
+            onSpeaking={(unitId, a) => { setUnitLink({ unitId, speakingMode: a.flow === 'key' ? 'key' : 'practice', setId: a.setId }); setScreen('speaking') }}
+            onWriting={(unitId, a) => { setUnitLink({ unitId, writingItemId: a.writingItemId }); setScreen('writingCoach') }} />
         </React.Suspense>
       )}
       {!qaTestStudent && screen === 'writingCoach' && (

@@ -21,9 +21,11 @@ export const WRITING_ITEMS = [
 
 const itemById = (id) => STORY_ITEMS.find((i) => i.id === id)
 
-// 화면용 문항: Speaking 문항의 상황·역할·영어·뜻·대체 답안·상대 대답을 그대로 붙인다. 원본이 없으면 null
+// 화면용 문항: Speaking 문항의 상황·역할·영어·뜻·대체 답안·상대 대답을 그대로 붙인다. 원본이 없으면 null.
+// 225차: 이야기 문항이 없는 통합 Unit 전용 문항은 `inline`(situationKo/roleKo/en/ko/alternatives/reply/episode)을 직접 가진다
 export function writingItem(wId) {
   const w = WRITING_ITEMS.find((x) => x.id === wId)
+  if (w && w.inline) return { ...w, ...w.inline, alternatives: w.inline.alternatives || [], reply: w.inline.reply || null }
   const src = w && itemById(w.itemId)
   if (!w || !src) return null
   return { ...w, situationKo: src.situationKo, roleKo: src.roleKo, en: src.en, ko: src.ko, alternatives: src.alternatives || [], reply: src.reply || null, episode: src.episode }
