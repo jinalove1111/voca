@@ -1,0 +1,14 @@
+{
+  "agent_name": "orchestrator",
+  "role": "리드(첫 Unit 독립 검수 반영·두 번째 Unit 통합·격리 검증) — 독립 QA·교육 설계·참고문헌 검증·교사 가이드·파닉스 스펙은 읽기 전용 서브에이전트",
+  "task_id": "pilot-unit2-2026-10-08",
+  "task": "첫 Unit 독립 검수 → 결함 수정, 두 번째 통합 Unit(잃어버린 물건 위치 묻기, asking-info), Unit 간·계정 간 격리 검증, 문서·커밋·push",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-08T05:38:00+09:00",
+  "updated_at": "2026-10-08T06:25:00+09:00",
+  "files_owned": ["src/utils/curriculum/units.js", "src/utils/curriculum/unitLostBag.js", "src/utils/curriculum/unitBorrow.js", "src/components/UnitScreen.jsx", "src/components/WritingPractice.jsx", "src/utils/writing/writingItems.js", "src/App.jsx", "scripts/testPilotUnit.mjs", "scripts/testWritingPractice.mjs", "tests/e2e/unit.spec.mjs", "docs/design/INTEGRATED_CURRICULUM_IMPL_2026-10-08.md", "docs/design/TEACHER_GUIDE_PILOT_UNITS_2026-10-08.md", "docs/design/PHONICS_PILOT_SPEC_2026-10-08.md", "TESTING.md", "handoff.md"],
+  "summary": "[정적·mock 기반] 커밋 9개(04cc3f0f 배선, 1a397226 QA 결함 6+콘텐츠 4 수정, 0e534738 Unit 2, 22de04eb e2e 스펙, 741632d8 출처, 882b438e 파닉스 스펙, 9ecdbf2c 설계 §8–§9·TESTING, 0ab5969b 교사 가이드, handoff). 빌드 PASS, 정적 핀 7종 PASS. 브라우저 e2e 5스펙 미실행(여유 RAM 1.37~2.41GB <3GB, 20분 감시 미회복) — handoff 225차에 재실행 명령. 서브에이전트 산출 3종 문서화. 원격 135f5b91 = 베이스 확인 후 non-force push.",
+  "blocker": null,
+  "next_action": "운영자: ① 파닉스 철자 순서 원칙 결정 ② Bell 약관 현행 PDF 확인 ③ RAM ≥3GB에서 e2e 5스펙 재실행 + Preview 로그인 실화면 확인. (이 next_action은 2026-10-08 06:25 기준이며, 이후 세션은 handoff 최신 섹션을 우선한다)"
+}
