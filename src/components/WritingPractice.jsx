@@ -57,7 +57,8 @@ function ItemList({ topic, drafts, onPick, onBack }) {
 }
 
 // 쓰기 흐름 한 문항. step: write(예시 숨김) → compare(예시 공개, 내 문장 유지) → revise(고치기)
-function WriteFlow({ item, index, total, draft, onSave, onNext, onBack }) {
+// nextLabel: 통합 Unit에서 들어온 문항은 '다음 문장' 대신 Unit 복귀(226차) — 독립 Writing·Speaking 링크는 그대로
+function WriteFlow({ item, index, total, draft, onSave, onNext, onBack, nextLabel = null }) {
   // ← 목록: 비교 전에 쓰던 문장도 버리지 않고 보관(compared는 그대로 false)
   const [step, setStep] = useState(() => (draft?.compared ? 'compare' : 'write'))
   const [text, setText] = useState(draft?.first || '')
@@ -131,7 +132,7 @@ function WriteFlow({ item, index, total, draft, onSave, onNext, onBack }) {
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-2">
                   <button data-testid="writing-revise" onClick={startRevise} className={`${BTN} bg-amber-500 text-white`}>✏️ 내 문장 고치기</button>
-                  <button data-testid="writing-next" onClick={onNext} className={`${BTN} bg-white card-shadow text-gray-700`}>{index + 1 < total ? '다음 문장 →' : '목록으로'}</button>
+                  <button data-testid="writing-next" onClick={onNext} className={`${BTN} bg-white card-shadow text-gray-700`}>{nextLabel || (index + 1 < total ? '다음 문장 →' : '목록으로')}</button>
                 </div>
                 <p data-testid="writing-teacher-note" className="text-xs text-gray-500 break-keep">✅ 예시와 비교했어요. 선생님 확인은 수업에서 받아요 — 이 앱은 확인 기록을 저장하지 않아요.</p>
               </div>
@@ -154,7 +155,8 @@ function WriteFlow({ item, index, total, draft, onSave, onNext, onBack }) {
 
 // startItemId: Speaking [이 표현 써보기]로 들어온 문항(w-…) — 그 문항부터 열고, ← 목록은 onBack(원래 Speaking 위치)
 // onBack: 링크(Speaking)로 들어온 문항의 ← 목록 → 원래 Speaking. onHome: 주제 화면의 ← 홈(항상 홈)
-export default function WritingPractice({ studentId, startItemId = null, onBack, onHome }) {
+// linkLabel: 통합 Unit 링크일 때만(App이 unitLink 있으면 전달) — 시작 문항의 비교 뒤 버튼이 '다음 문장' 대신 이 라벨로 onBack(Unit 복귀)
+export default function WritingPractice({ studentId, startItemId = null, onBack, onHome, linkLabel = null }) {
   const storage = useMemo(safeStorage, [])
   const topics = useMemo(listWritingTopics, [])
   const startItem = startItemId ? writingItem(startItemId) : null
@@ -168,7 +170,8 @@ export default function WritingPractice({ studentId, startItemId = null, onBack,
   const save = (patch) => { saveDraft(storage, studentId, itemId, patch); setDrafts(loadDrafts(storage, studentId)) }
   const next = () => { if (idx + 1 < topic.items.length) setItemId(topic.items[idx + 1].id); else setItemId(null) }
 
-  if (item) return <WriteFlow key={item.id} item={item} index={idx} total={topic.items.length} draft={drafts[item.id]} onSave={save} onNext={next} onBack={() => (startItem && item.id === startItem.id ? onBack() : setItemId(null))} />
+  const linked = !!(startItem && item && item.id === startItem.id)
+  if (item) return <WriteFlow key={item.id} item={item} index={idx} total={topic.items.length} draft={drafts[item.id]} onSave={save} onNext={linked && linkLabel ? onBack : next} nextLabel={linked && linkLabel ? linkLabel : null} onBack={() => (linked ? onBack() : setItemId(null))} />
   if (topic) return <ItemList topic={topic} drafts={drafts} onPick={setItemId} onBack={() => setTopicId(null)} />
   return <TopicList topics={topics} onTopic={setTopicId} onBack={onHome || onBack} />
 }
