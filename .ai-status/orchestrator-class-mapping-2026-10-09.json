@@ -1,0 +1,20 @@
+{
+  "agent_name": "orchestrator",
+  "role": "orchestrator",
+  "task_id": "class-mapping-2026-10-09",
+  "task": "Unit 3 teacher review sheet + academy class name to app level mapping tables (confirmed vs proposed); candidate B content held",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-09T03:25:00+09:00",
+  "updated_at": "2026-10-09T03:45:00+09:00",
+  "files_owned": [
+    "docs/design/TEACHER_REVIEW_SHEET_PILOT_UNITS_2026-10-08.md",
+    "docs/design/CURRICULUM_STAGES_2026-10-08.md",
+    "handoff.md",
+    ".ai-status/orchestrator-class-mapping-2026-10-09.json"
+  ],
+  "files_read": [],
+  "summary": "Unit 3 review sheet appended (status unreviewed). CURRICULUM_STAGES section 11 maps academy class names to app levels with confirmed/proposed/unconfirmed labels and separates distributed stories from level-designed units.\nTwelve operator questions consolidated in section 11.9. Candidate B new content held per operator; no level names confirmed.\nDocs only (no src change); static testCommGoals and testPilotUnit pass. Commits 934631ef and b4567f30.",
+  "blocker": null,
+  "next_action": "운영자가 §11.9 12개 질문에 답하면 레벨 라벨 확정·'(제안)' 제거·회차 재배치; 그 전까지 후보 B 보류"
+}
