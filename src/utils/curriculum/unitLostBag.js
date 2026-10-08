@@ -24,6 +24,18 @@ export const UNIT_LOST_BAG = {
   titleKo: '잃어버린 물건 위치 묻기',
   situationKo: '미술 시간이 끝났는데 폴의 가방이 보이지 않아요. 옆자리 미아에게 물어봐요.',
   keyItemId: null,
+  // 227차: 수행 수준(말하기·쓰기 따로) + 교육 프로필. 말하기는 묻고 답하는 짝이 있어 기초~발전 사이지만, 모범 없이 단계가 한 문장(묻기)이라 기초로 둔다
+  performance: { speaking: 'basic', writing: 'basic' },
+  profile: {
+    prerequisitesKo: ['가방·의자·책상 같은 교실 물건·가구 이름을 듣고 알아볼 수 있다', '1단계 "물건 빌리기"처럼 한 문장 부탁을 말해 본 경험(권장, 필수 아님)'],
+    canDoKo: ['물건이 안 보일 때 Where\'s my …?로 어디 있는지 묻는다', '상대가 알려 준 위치(under / in)를 듣고 그 자리로 간다', '미아 역할로 It\'s under the chair.처럼 위치를 한 문장으로 알려 준다·쓴다'],
+    languageKo: ['어휘: 가방·필통·의자·책상, 밑에(under)·안에(in)·위에(on, 확장)', '핵심 표현: Where\'s my bag? / It\'s under the chair.', '문법 관찰: Where\'s = Where is, It\'s + 위치 말 + 장소'],
+    activitiesKo: ['듣기: 5턴 대화에서 가방 위치와 먼저 물어본 곳 찾기', '읽기: 44단어 이야기(필통 찾기) + 근거 있는 3문항', '말하기: 따라 하기 → 물건·위치 칩 바꾸기 → 모범 없이 묻고 답하기(Unit 안 3단계)', '쓰기: 미아 역할로 위치 알려 주는 한 문장 → 예시 비교 → 고치기'],
+    teacherCheckKo: ['모범 없이 Where\'s my …?로 묻는가', '모범 없이 It\'s under/in …으로 대답하는가(묻기와 대답하기를 따로 봄)', '상대 대답을 듣고 실제로 그 자리로 가거나 Thank you로 반응하는가; under/in/on 정확성은 별도 칸'],
+    supportKo: ['실물을 의자 밑·책상 안에 실제로 놓고 가리키며 under·in 둘만 다룬다(on은 나중)', '판서 틀 Where\'s my ___? / It\'s ___ the ___.와 칩만 보고 완성하게 한다', '복습 2번(대답하기)은 "이번엔 네가 미아"라고 먼저 알려 준다'],
+    extensionKo: ['on까지 세 위치 말로 숨기기 놀이(묻기 → 대답 → 찾아가기, 역할 교대)', 'Is it in your desk? / No, it isn\'t.처럼 확인 질문과 짧은 부정 대답까지 맡아 본다', '모자·책처럼 연습하지 않은 물건과 교실 다른 장소로 새 상황에서 말한다'],
+    recycleKo: ['1단계 "물건 빌리기"의 교실 물건 어휘(필통)와 Thank you 반응 재사용', '회화 3단계(하루·시간·집·위치)에서 Where\'s …? / It\'s … 틀을 집 안 위치로 다시 쓴다(미제작)'],
+  },
   vocab: [
     { en: 'bag', ko: '가방' },
     { en: 'pencil case', ko: '필통' },

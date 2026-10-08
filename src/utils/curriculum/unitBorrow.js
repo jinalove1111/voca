@@ -8,6 +8,18 @@ export const UNIT_BORROW = {
   titleKo: '교실에서 필요한 물건 빌리기',
   situationKo: '미술 시간, 폴의 필통을 열었더니 연필 대신 숟가락이 나왔어요. 앞자리 미아에게 필요한 물건을 빌려요.',
   keyItemId: 's02-03',
+  // 227차: 수행 수준(말하기·쓰기 따로) + 교육 프로필(운영자 지시 8항목). 기초 = 한 문장 말하기 / 문장 틀 완성·한 문장
+  performance: { speaking: 'basic', writing: 'basic' },
+  profile: {
+    prerequisitesKo: ['교실 물건 이름(연필·지우개·필통) 몇 개를 듣고 알아볼 수 있다', '폴·미아 두 사람의 짧은 대화를 끝까지 들을 수 있다'],
+    canDoKo: ['필요한 물건이 없을 때 짝에게 한 문장으로 빌려 달라고 말한다', '상대의 Sure. Here you are!에 Thank you로 반응한다', '같은 부탁을 다른 물건으로 바꿔 말하거나 쓴다'],
+    languageKo: ['어휘: 연필·지우개·필통·숟가락·자·공, 없어·여기 있어', '핵심 표현: Can I borrow a pencil? / Can I borrow your rubber?', '문법 관찰: Can I …? 부탁 틀, 물건 말만 바뀜(관사·소유는 가볍게)'],
+    activitiesKo: ['듣기: 6턴 대화를 듣고 미아의 연필 수·다음 물건 찾기', '읽기: 43단어 이야기 + 근거 있는 3문항', '말하기: 따라 하기 → 영어 숨기고 회상 → 새 상황(기존 2화 흐름)', '쓰기: 상황만 보고 한 문장 쓰기 → 예시 비교 → 고치기'],
+    teacherCheckKo: ['모범을 숨겨도 Can I borrow …?로 시작해 말하는가', '물건이 바뀌어도 앞부분을 유지하는가(Could I / Can I use도 인정)', '상대 응답을 알아듣고 반응하는가(전달 성공과 문형 정확성은 따로)'],
+    supportKo: ['판서 틀 Can I borrow ___?와 물건 카드만 보고 완성하게 한다(지원 단계: 단서로)', '실물 연필·지우개를 들고 짝과 주고받기부터 시작한다', '읽기 지문의 There is / hasn\'t got은 뜻만 확인하고 넘어간다'],
+    extensionKo: ['빌린 물건을 돌려주며 한 문장 더(Here you are. Thank you!)', '교실 밖 물건(공·자)으로 같은 부탁을 새 상황에서 말한다', '미아 역할로 응답(Sure. / Sorry, I need it.)까지 맡아 본다'],
+    recycleKo: ['2화 이야기의 상황(필통 속 숟가락)과 기존 말하기 연습 s02-03·s02-04 재사용', '다음 단계(2단계 교실 물건 주인 묻기)에서 Can I borrow …?를 되묻기와 함께 다시 쓴다'],
+  },
   vocab: [
     { en: 'pencil', ko: '연필' },
     { en: 'rubber', ko: '지우개' },
