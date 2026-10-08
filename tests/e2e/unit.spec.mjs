@@ -5,6 +5,7 @@ import { createRecorder } from './lib/harness.mjs'
 import { QA_STUDENT_NAME, QA_LOGIN_PIN, QA_STUDENT_ID } from './fixtures/index.mjs'
 import { UNIT_BORROW } from '../../src/utils/curriculum/unitBorrow.js'
 import { UNIT_LOST_BAG } from '../../src/utils/curriculum/unitLostBag.js'
+import { UNIT_FIND_AGAIN } from '../../src/utils/curriculum/unitFindAgain.js'
 import { recordsKey } from '../../src/utils/curriculum/unitRecords.js'
 
 const VP = { width: 390, height: 844 }
@@ -35,6 +36,7 @@ const LOGIN_WRITES = ['/rest/v1/product_events', '/rest/v1/student_progress', '/
 const badWrites = (log) => log.filter((c) => c.url.includes('/rest/v1/') && ['POST', 'PATCH', 'PUT', 'DELETE'].includes(c.method)).filter((c) => { try { return !LOGIN_WRITES.includes(new URL(c.url).pathname) } catch { return true } }).map((c) => c.method + ' ' + c.url)
 const U = UNIT_BORROW
 const U2 = UNIT_LOST_BAG
+const U3 = UNIT_FIND_AGAIN
 const act = (kind) => U.activities.find((a) => a.kind === kind)
 const act2 = (kind) => U2.activities.find((a) => a.kind === kind)
 
@@ -52,7 +54,7 @@ export async function run(browser, baseURL) {
     await installSpeakCounter(page) // mockRoutes의 speechSynthesis 스텁 뒤에 등록해야 센다
     const name = `${label} [${vp.width}x${vp.height}]`
     const openUnit = async (unitId = U.id) => {
-      const u = [U, U2].find((x) => x.id === unitId)
+      const u = [U, U2, U3].find((x) => x.id === unitId)
       await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
       await T(page, 'student-home-unit').click()
       await T(page, 'unit-list').waitFor({ state: 'visible', timeout: 15000 })
@@ -175,7 +177,7 @@ export async function run(browser, baseURL) {
     await T(page, 'unit-list').waitFor({ state: 'visible', timeout: 15000 })
     r.check(`${name} 과정 선택: 회화만 열림, 나머지 4과정은 '미제작'(비활성)`, (await T(page, 'unit-list').getAttribute('data-level')) === 'course' && (await T(page, 'unit-course-conversation').isEnabled()) && (await page.locator('[data-testid^="unit-course-"][aria-disabled="true"]').count()) === 4 && (await txt(page, 'unit-course-phonics')).includes('미제작'))
     await T(page, 'unit-course-conversation').click()
-    r.check(`${name} 단계 선택: 1단계만 열림(단원 2개), 2~6단계 '미제작', 기간은 운영 계획 안내`, (await T(page, 'unit-list').getAttribute('data-level')) === 'block' && (await txt(page, 'unit-block-C1')).includes('단원 2개') && (await page.locator('[data-testid^="unit-block-"][aria-disabled="true"]').count()) === 5 && (await txt(page, 'unit-list')).includes('운영 계획'))
+    r.check(`${name} 단계 선택: 1단계(단원 2개)·2단계(단원 1개) 열림, 3~6단계 '미제작', 기간은 운영 계획 안내`, (await T(page, 'unit-list').getAttribute('data-level')) === 'block' && (await txt(page, 'unit-block-C1')).includes('단원 2개') && (await page.locator('[data-testid^="unit-block-"][aria-disabled="true"]').count()) === 4 && (await txt(page, 'unit-block-C2')).includes('단원 1개') && (await txt(page, 'unit-list')).includes('운영 계획'))
     await T(page, 'unit-block-C1').click()
     r.check(`${name} 목록: Unit 2개(빌리기·위치 묻기) + 말하기·쓰기 수행 수준 표기`, (await page.locator('[data-testid^="unit-pick-"]').count()) === 2 && (await txt(page, `unit-pick-${U2.id}`)).includes(U2.titleKo) && (await txt(page, `unit-pick-${U2.id}`)).includes('말하기 기초 · 쓰기 기초'))
     await T(page, `unit-pick-${U2.id}`).click()
@@ -251,6 +253,48 @@ export async function run(browser, baseURL) {
       r.check(`${name} 물건 바꾸기 단계 가로 스크롤 없음/버튼 >=44px`, (await noOverflow(page)) && (await smallButtons(page, 'unit-activity')).length === 0, (await smallButtons(page, 'unit-activity')).join(','))
     })
   }
+
+  await scenario('h 인접 단계: C1 기초(Unit 2) vs C2 발전(Unit 3) — 같은 목표, 다른 수행', VP, async ({ page, name, openUnit, goHome }) => {
+    await openUnit(U3.id)
+    r.check(`${name} Unit 3 개요: C2·궁금한 것 묻기·말하기 발전·쓰기 발전`, (await txt(page, 'unit-title')) === U3.titleKo && (await txt(page, 'unit-screen')).includes('2단계') && (await txt(page, 'unit-screen')).includes(U3.goalTitleKo))
+    await T(page, 'unit-act-speaking').click()
+    const st3 = U3.speaking.steps
+    r.check(`${name} 1단계 따라 하기: 3턴(질문→짧은 답→되묻기)`, (await page.locator('[data-testid^="unit-speaking-line-"]').count()) === 3 && (await txt(page, 'unit-speaking-line-1')).startsWith("No, it isn't"))
+    await T(page, 'unit-speaking-next').click()
+    r.check(`${name} 2단계: Is it ___? 틀 + 되묻기 틀`, (await txt(page, 'unit-speaking-swap-en')).startsWith('Is it ') && (await txt(page, 'unit-speaking-swap-reply')).includes('What about'))
+    await T(page, 'unit-speaking-next').click()
+    const rc = st3[2]
+    r.check(`${name} 3단계: 한국어 상황만, 모범·대답·후속 답 영어 전부 DOM 없음`, !(await inDom(page, rc.model)) && !(await inDom(page, rc.reply.en)) && !(await inDom(page, rc.followUp.model)) && (await T(page, 'unit-speaking-followup').count()) === 0)
+    await T(page, 'unit-speaking-reveal').click()
+    r.check(`${name} 1차 답 확인: 모범·미아 되묻기 보임, 후속 답은 아직 숨김`, (await txt(page, 'unit-speaking-answer-en')) === rc.model && (await txt(page, 'unit-speaking-answer-reply')).includes(rc.reply.en) && (await T(page, 'unit-speaking-followup').getAttribute('data-revealed')) === 'false' && !(await inDom(page, rc.followUp.model)))
+    await T(page, 'unit-speaking-followup-reveal').click()
+    r.check(`${name} 2차 답 확인: 되물음에 대한 답 + 대체`, (await txt(page, 'unit-speaking-followup-en')) === rc.followUp.model && (await txt(page, 'unit-speaking-followup')).includes(rc.followUp.alternatives[0]))
+    await T(page, 'unit-speaking-to-writing').click()
+    await T(page, 'writing-flow').waitFor({ state: 'visible', timeout: 15000 })
+    r.check(`${name} 쓰기: Unit 3 전용 문항(2~3문장), Unit 2 문항 아님`, (await T(page, 'writing-flow').getAttribute('data-item')) === 'w-c2-find' && (await txt(page, 'writing-flow')).includes('2~3문장'))
+    await T(page, 'writing-input').fill("It isn't under the desk. It's in the bag.")
+    await T(page, 'writing-compare').click()
+    r.check(`${name} 비교: 예시는 비교용 하나, 판정 없음`, (await txt(page, 'writing-flow')).includes(U3.activities.find((a) => a.kind === 'writing') ? "It isn't under the desk." : '') && !/점수|합격|틀렸/.test(await txt(page, 'writing-flow')))
+    await T(page, 'writing-next').click()
+    await waitUntil(() => T(page, 'unit-screen').isVisible(), { timeout: 10000 })
+    r.check(`${name} '← 이 단원으로' → Unit 3, 쓰기 '해 봤어요'`, (await T(page, 'unit-screen').getAttribute('data-unit')) === U3.id && (await T(page, 'unit-act-writing').getAttribute('data-completed')) === 'true')
+    // 같은 상황 가족의 C1 Unit 2는 그대로(기록·문항 안 섞임)
+    await T(page, 'unit-home').click()
+    await T(page, 'unit-list-back').click()
+    await T(page, 'unit-block-C1').click()
+    await T(page, `unit-pick-${U2.id}`).click()
+    await T(page, 'unit-screen').waitFor({ state: 'visible', timeout: 15000 })
+    r.check(`${name} Unit 2(C1 기초) 화면: 말하기·쓰기 미완료, 목록 표기 기초`, (await T(page, 'unit-act-speaking').getAttribute('data-completed')) === 'false' && (await T(page, 'unit-act-writing').getAttribute('data-completed')) === 'false')
+    await T(page, 'unit-act-speaking').click()
+    await T(page, 'unit-speaking-next').click(); await T(page, 'unit-speaking-next').click()
+    r.check(`${name} Unit 2 회상: Where's my …? 한 문장, followUp 없음(기초)`, (await T(page, 'unit-speaking-followup').count()) === 0 && !(await inDom(page, U3.speaking.steps[2].model)))
+    await T(page, 'unit-speaking-reveal').click()
+    r.check(`${name} Unit 2 모범은 Unit 2 것`, (await txt(page, 'unit-speaking-answer-en')) === U2.speaking.steps[2].model && (await T(page, 'unit-speaking-followup').count()) === 0)
+    const rec = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) || '{}'), recordsKey(QA_STUDENT_ID))
+    r.check(`${name} 기록은 Unit별 분리(Unit 3 쓰기·Unit 2 말하기만)`, !!rec[U3.id]?.activities?.writing?.completed && !rec[U3.id]?.activities?.speaking?.completed === false && !!rec[U2.id]?.activities?.speaking?.completed && !rec[U2.id]?.activities?.writing)
+    await T(page, 'unit-activity-return').click()
+    await goHome()
+  })
 
   await scenario('g Unit 청크 로드 실패 → 안내·홈 복귀', VP, async ({ page, name }) => {
     await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
