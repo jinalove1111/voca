@@ -880,8 +880,12 @@ function AppInner({ studentId, studentName, onLogout }) {
       )}
       {qaTestStudent && screen === 'unit' && !pilotUnits && (
         <div data-testid={pilotUnitsFailed ? 'unit-load-failed' : 'unit-loading'} className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
-          <p className="text-gray-700 font-bold break-keep">{pilotUnitsFailed ? '오늘의 학습을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 열어 주세요.' : '불러오는 중...'}</p>
-          <button data-testid="unit-load-home" onClick={() => { setUnitLink(null); setScreen('home') }} className="min-h-[44px] px-5 rounded-2xl font-black bg-white card-shadow text-gray-700 btn-press">← 홈으로</button>
+          {/* 한 번 실패한 import()는 브라우저가 새로고침 전까지 실패로 기억하므로 "다시 열기"가 아니라 새로고침을 안내한다(226차 e2e g) */}
+          <p className="text-gray-700 font-bold break-keep">{pilotUnitsFailed ? '오늘의 학습을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.' : '불러오는 중...'}</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {pilotUnitsFailed && <button data-testid="unit-load-reload" onClick={() => window.location.reload()} className="min-h-[44px] px-5 rounded-2xl font-black bg-teal-500 text-white btn-press">🔄 새로고침</button>}
+            <button data-testid="unit-load-home" onClick={() => { setUnitLink(null); setScreen('home') }} className="min-h-[44px] px-5 rounded-2xl font-black bg-white card-shadow text-gray-700 btn-press">← 홈으로</button>
+          </div>
         </div>
       )}
       {qaTestStudent && screen === 'unit' && pilotUnits && (
