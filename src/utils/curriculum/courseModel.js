@@ -5,11 +5,15 @@ import { COMM_GOALS } from './commGoals.js'
 // 기간·블록 범위는 설계안이 밝힌 대로 "운영 가안"이며 자동 진급·기간 보장과 무관하다. 영국 학년·CEFR·교재 권수를
 // 자체 레벨에 자동 대응시키지 않는다(필드 자체가 없다).
 export const COURSES = [
-  { id: 'phonics', titleKo: '파닉스', monthsKo: '9~12개월(가안)', focusKo: '음소 인식·소리-철자·합성·분절·초기 해독', blocks: ['P1', 'P2', 'P3', 'P4', 'P5'] },
-  { id: 'conversation', titleKo: '회화', monthsKo: '18개월(가안)', focusKo: '질문·대답·되묻기·요청·선택·경험 말하기', blocks: ['C1', 'C2', 'C3', 'C4', 'C5', 'C6'] },
-  { id: 'presentation', titleKo: '발표', monthsKo: '9개월(가안)', focusKo: '설명·이야기·비교·이유·청중 질문 응답', blocks: ['PR1', 'PR2', 'PR3'] },
-  { id: 'readingGrammar', titleKo: '독해·문법', monthsKo: '12개월(가안)', focusKo: '내용 이해·추론·근거·요약, 문법의 의미와 사용', blocks: ['RG1', 'RG2', 'RG3', 'RG4'] },
-  { id: 'middle', titleKo: '중등 연결', monthsKo: '입학 시점에 맞춤', focusKo: '교과 독해·듣기·서술형·문법·수행평가', blocks: ['MB'] },
+  { id: 'phonics', titleEn: 'Phonics', titleKo: '파닉스', monthsKo: '9~12개월(가안)', focusKo: '음소 인식·소리-철자·합성·분절·초기 해독', blocks: ['P1', 'P2', 'P3', 'P4', 'P5'] },
+  { id: 'conversation', titleEn: 'Conversation', titleKo: '회화', monthsKo: '18개월(가안)', focusKo: '질문·대답·되묻기·요청·선택·경험 말하기', blocks: ['C1', 'C2', 'C3', 'C4', 'C5', 'C6'] },
+  { id: 'presentation', titleEn: 'Presentation', titleKo: '발표', monthsKo: '9개월(가안)', focusKo: '설명·이야기·비교·이유·청중 질문 응답', blocks: ['PR1', 'PR2', 'PR3'] },
+  // 228차: 문법은 과정이 아니라 각 과정 Unit 안에 연결한다(id readingGrammar → reading)
+  { id: 'reading', titleEn: 'Reading', titleKo: '독해', monthsKo: '12개월(가안)', focusKo: '내용 이해·추론·근거·요약 (문법은 각 단원 안에서)', blocks: ['RG1', 'RG2', 'RG3', 'RG4'] },
+  // PM = Pre-Middle 브리지, M1~M3 = 중1~중3 (실제 반 이름 'Pre-middle school', 'MS 중1/2/3'에서 가져옴)
+  { id: 'middle', titleEn: 'Middle School', titleKo: '중등', monthsKo: '입학 시점에 맞춤', focusKo: '교과 독해·듣기·서술형·문법·수행평가', blocks: ['PM', 'M1', 'M2', 'M3'] },
+  // 뉴스 수업은 다른 과정과 병행 수강할 수 있다
+  { id: 'news', titleEn: 'News Class', titleKo: '뉴스', monthsKo: '병행 수강(가안)', focusKo: '기사 읽기: 지문 길이·어휘·이해·추론·요약', blocks: ['N1', 'N2', 'N3'], parallel: true },
 ]
 
 // 회화 블록(설계안 §5) — 중심 기능·주제만. 문법 예시는 설계 순서이지 교재 단원이 아니다
@@ -34,8 +38,29 @@ export const PERFORMANCE_LEVELS = [
 export const performanceById = (id) => PERFORMANCE_LEVELS.find((p) => p.id === id) || null
 // 과정의 단계(블록) 목록 — 화면의 과정 → 단계 → Unit 선택에 쓴다. 단계에 Unit이 없으면 화면은 '미제작'으로 표시한다
 export const blocksForCourse = (courseId) => (COURSES.find((c) => c.id === courseId) || { blocks: [] }).blocks
-// 블록 한국어 라벨(짧게): 회화 C1 → '1단계'
-export const blockLabelKo = (blockId) => { const m = /^[A-Z]+(\d+)$/.exec(blockId); return m ? `${m[1]}단계` : blockId }
+// 중등·뉴스 블록의 이름·설명(번호만으로는 뜻을 알 수 없는 블록)
+export const COURSE_BLOCK_META = {
+  middle: {
+    PM: { labelKo: '중등 준비', descKo: '독해 4단계와 겹치는 8~12주 브리지' },
+    M1: { labelKo: '중1', descKo: '' },
+    M2: { labelKo: '중2', descKo: '' },
+    M3: { labelKo: '중3', descKo: '' },
+  },
+  news: {
+    N1: { labelKo: '뉴스 1', descKo: '짧은 기사(≤150단어)·고빈도 어휘·사실 찾기' },
+    N2: { labelKo: '뉴스 2', descKo: '150~250단어·주제어·원인·결과 추론' },
+    N3: { labelKo: '뉴스 3', descKo: '250~350단어·추상어·요약과 의견 구분' },
+  },
+}
+export const blockMeta = (courseId, blockId) => (COURSE_BLOCK_META[courseId] || {})[blockId] || null
+// 학원이 확정한 단계 번호·이름이 아직 없으므로 모든 블록이 '제안'이다(확정되면 여기서 false로 바꾼다)
+export const isBlockProposed = () => true
+// 블록 한국어 라벨(짧게): 회화 C1 → '1단계'. 번호형이 아니면(PM) META 라벨, 없으면 id
+export const blockLabelKo = (blockId) => {
+  const m = /^[A-Z]+(\d+)$/.exec(blockId)
+  if (m) { const meta = Object.values(COURSE_BLOCK_META).map((c) => c[blockId]).find(Boolean); return meta ? meta.labelKo : `${m[1]}단계` }
+  return Object.values(COURSE_BLOCK_META).map((c) => c[blockId]).find(Boolean)?.labelKo || blockId
+}
 
 // Unit 교육 프로필(운영자 지시 8항목) — 선택 필드지만 있으면 전부 한국어 배열이어야 한다. validateUnit이 함께 검사한다
 export const UNIT_PROFILE_KEYS = ['prerequisitesKo', 'canDoKo', 'languageKo', 'activitiesKo', 'teacherCheckKo', 'supportKo', 'extensionKo', 'recycleKo']

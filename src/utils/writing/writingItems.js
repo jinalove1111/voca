@@ -37,6 +37,9 @@ export function writingItem(wId) {
   return { ...w, situationKo: src.situationKo, roleKo: src.roleKo, en: src.en, ko: src.ko, alternatives: src.alternatives || [], reply: src.reply || null, episode: src.episode }
 }
 
+// 228차: 이야기 회차 번호(1~10)에 속한 Writing 문항(inline 전용 문항 제외). 통합 카탈로그가 쓴다
+export const writingItemsForEpisode = (epNumber) => WRITING_ITEMS.filter((w) => w.itemId && itemById(w.itemId)?.episode === epNumber)
+
 // Speaking 문항 id → Writing 문항(없으면 null). Speaking 연습 끝 화면의 [이 표현 써보기]가 쓴다
 export const writingItemForSpeaking = (itemId) => { const w = WRITING_ITEMS.find((x) => x.itemId === itemId); return w ? writingItem(w.id) : null }
 
