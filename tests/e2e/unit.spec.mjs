@@ -377,6 +377,64 @@ export async function run(browser, baseURL) {
     r.check(`${name} 이름·선택 키 없음(localStorage)`, !(await page.evaluate((n) => Object.keys(localStorage).some((k) => k.includes(n) || /level|block|course|selection/i.test(k)), QA_STUDENT_NAME)))
   })
 
+  const toGrammarList = async (page) => {
+    await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
+    await T(page, 'student-home-grammar').click()
+    await T(page, 'unit-list').waitFor({ state: 'visible', timeout: 15000 })
+  }
+
+  await scenario('k 문법 진입(홈 📘 → 과정 → 레벨 → 단원 → 문형 활동 바로)', VP, async ({ page, name }) => {
+    await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
+    const keysBefore = await page.evaluate(() => Object.keys(localStorage).sort())
+    await toGrammarList(page)
+    r.check(`${name} 문법 선택기: data-intent=grammar, 과정 단계, 제목 '문법'`, (await T(page, 'unit-list').getAttribute('data-intent')) === 'grammar' && (await T(page, 'unit-list').getAttribute('data-level')) === 'course' && (await txt(page, 'unit-list')).includes('문법'))
+    r.check(`${name} 회화 과정만 활성`, await T(page, 'unit-course-conversation').isEnabled())
+    for (const c of EMPTY_COURSES) {
+      r.check(`${name} 과정 ${c}: 비활성 + '${EMPTY_LABEL_KO}'`, (await T(page, `unit-course-${c}`).isDisabled()) && (await txt(page, `unit-course-${c}`)).includes(EMPTY_LABEL_KO))
+    }
+    r.check(`${name} 비활성 과정이 5개`, EMPTY_COURSES.length === 5, String(EMPTY_COURSES.length))
+    await T(page, 'unit-course-conversation').click()
+    r.check(`${name} 레벨 C1·C2 활성`, (await T(page, 'unit-block-C1').isEnabled()) && (await T(page, 'unit-block-C2').isEnabled()))
+    for (const b of ['C3', 'C4', 'C5', 'C6']) {
+      r.check(`${name} 레벨 ${b}: 비활성 + '${EMPTY_LABEL_KO}'(이야기는 문법에서 제외)`, (await T(page, `unit-block-${b}`).isDisabled()) && (await txt(page, `unit-block-${b}`)).includes(EMPTY_LABEL_KO))
+    }
+    await T(page, 'unit-block-C1').click()
+    r.check(`${name} 단원 목록 안내 문구 '어떤 단원의 문법을 볼까요?'`, (await txt(page, 'unit-list')).includes('어떤 단원의 문법을 볼까요?'))
+    const picks = await page.locator('[data-testid^="unit-pick-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')))
+    r.check(`${name} C1 목록은 Unit 2개만(이야기 카드 없음)`, JSON.stringify([...picks].sort()) === JSON.stringify([`unit-pick-${U.id}`, `unit-pick-${U2.id}`].sort()) && (await page.locator('[data-kind="story"]').count()) === 0, picks.join(','))
+    const sub = await txt(page, `unit-pick-${U.id}`)
+    r.check(`${name} 보조 줄: 📘 문형 제목 · 관찰 ${U.grammar.noticing.length} · 문항 ${U.grammar.items.length}`, sub.includes('📘') && sub.includes(act("grammar").titleKo) && sub.includes(`관찰 ${U.grammar.noticing.length}`) && sub.includes(`문항 ${U.grammar.items.length}`) && sub.includes('Can I borrow'), sub)
+    await T(page, `unit-pick-${U.id}`).click()
+    await T(page, 'unit-activity').waitFor({ state: 'visible', timeout: 15000 })
+    r.check(`${name} 단원 선택 → 개요 없이 문형 활동(data-kind=grammar)`, (await T(page, 'unit-activity').getAttribute('data-kind')) === 'grammar' && (await T(page, 'unit-screen').count()) === 0)
+    r.check(`${name} 진짜 GrammarActivity: 관찰 ${U.grammar.noticing.length}개 + 문항 ${U.grammar.items.length}개`, (await page.locator('[data-testid^="unit-grammar-notice-"][data-testid$="-open"]').count()) === U.grammar.noticing.length && (await page.locator('[data-testid^="unit-grammar-q-"][data-answered]').count()) === U.grammar.items.length)
+    await T(page, 'unit-grammar-q-0-opt-0').click()
+    r.check(`${name} 문항 1개 답하면 data-answered=true + 해설 표시`, (await T(page, 'unit-grammar-q-0').getAttribute('data-answered')) === 'true' && (await T(page, 'unit-grammar-q-0-why').isVisible()))
+    await T(page, 'unit-activity-back').click()
+    await T(page, 'unit-screen').waitFor({ state: 'visible', timeout: 10000 })
+    r.check(`${name} ← 단원 → 개요(data-unit=${U.id}), 활동 다시 열리지 않음`, (await T(page, 'unit-screen').getAttribute('data-unit')) === U.id && (await T(page, 'unit-activity').count()) === 0)
+    await T(page, 'unit-home').click()
+    await T(page, 'unit-list').waitFor({ state: 'visible', timeout: 10000 })
+    const crumb = await txt(page, 'unit-list-crumb')
+    r.check(`${name} ← 목록 → 같은 선택(회화 1단계), 의도 grammar 유지`, (await T(page, 'unit-list').getAttribute('data-level')) === 'unit' && (await T(page, 'unit-list').getAttribute('data-intent')) === 'grammar' && crumb.includes('Conversation') && crumb.includes('1단계'), crumb)
+    await T(page, 'unit-list-home').click()
+    await T(page, 'student-home').waitFor({ state: 'visible', timeout: 10000 })
+    r.check(`${name} ← 홈 → 학생 홈`, await T(page, 'student-home-grammar').isVisible())
+    const keysAfter = await page.evaluate(() => Object.keys(localStorage).sort())
+    const added = keysAfter.filter((k) => !keysBefore.includes(k))
+    r.check(`${name} localStorage 새 키는 Unit 기록 키뿐(선택 저장 없음)`, added.every((k) => k === recordsKey(QA_STUDENT_ID)) && !keysAfter.some((k) => /level|block|course|selection/i.test(k)), added.join(','))
+  })
+
+  for (const vp of [{ width: 360, height: 640 }, { width: 412, height: 915 }]) {
+    await scenario('k 문법 선택기 레이아웃', vp, async ({ page, name }) => {
+      await toGrammarList(page)
+      const check = async (label) => r.check(`${name} ${label} 가로 스크롤 없음/버튼 >=44px`, (await noOverflow(page)) && (await smallButtons(page, 'unit-list')).length === 0, (await smallButtons(page, 'unit-list')).join(','))
+      await check('과정')
+      await T(page, 'unit-course-conversation').click(); await check('레벨')
+      await T(page, 'unit-block-C1').click(); await check('단원(문법 보조 줄)')
+    })
+  }
+
   await scenario('g Unit 청크 로드 실패 → 안내·홈 복귀', VP, async ({ page, name }) => {
     await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
     await page.route('**/assets/units-*.js', (route) => route.abort())

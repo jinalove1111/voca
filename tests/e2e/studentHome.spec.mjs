@@ -297,6 +297,7 @@ export async function run(browser, baseURL) {
       protoSeen += await page.locator('[data-testid="proto25d-root"]').count()
       await page.waitForTimeout(300)
     }
+    r.check(`${name} 문법 진입 버튼 없음(QA 전용)`, (await page.locator('[data-testid="student-home-grammar"]').count()) === 0)
     r.check(`${name} 홈/안내/2.5D 루트 3회 샘플 모두 0`, homeSeen === 0 && noticeSeen === 0 && protoSeen === 0, `${homeSeen}/${noticeSeen}/${protoSeen}`)
     const sample = async () => {
       let h = 0, n = 0, p = 0
@@ -346,6 +347,17 @@ export async function run(browser, baseURL) {
       r.check(`${name} 시험 바로 가기 버튼 없음`, (await page.locator('[data-testid="student-home-speaking-exam"]').count()) === 0)
     })
   }
+
+  // ── r. 문법 진입(QA 전용 📘 버튼) — QA 홈에서만 보이고 non-QA(대시보드)에는 없음 ──
+  await scenario('r QA 홈에 문법 진입 버튼(📘)', MAIN_VP, { flags: { studentHomeMenu: true, paulTown2_5d: true } }, async ({ page, name }) => {
+    await waitHome(page)
+    const g = page.locator('[data-testid="student-home-grammar"]')
+    await g.waitFor({ state: 'visible', timeout: 15000 })
+    const gt = ((await g.textContent()) || '').trim()
+    r.check(`${name} student-home-grammar 보임 + '문법' 포함`, (await g.isVisible()) && gt.includes('문법'), gt)
+    const order = await page.evaluate(() => [...document.querySelectorAll('[data-testid="student-home"] [data-testid]')].map((e) => e.getAttribute('data-testid')).filter((t) => ['student-home-town', 'student-home-unit', 'student-home-grammar'].includes(t)))
+    r.check(`${name} DOM 순서: 내 마을 → unit → grammar(Tab 8정거장 뒤)`, JSON.stringify(order) === JSON.stringify(['student-home-town', 'student-home-unit', 'student-home-grammar']), JSON.stringify(order))
+  })
 
   // ── g. 키보드 ───────────────────────────────────────────────────────
   await scenario('g 키보드', MAIN_VP, {}, async ({ page, name }) => {
