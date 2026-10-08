@@ -1,0 +1,14 @@
+{
+  "agent_name": "orchestrator",
+  "role": "리드(현황·데이터 계약·화면·통합·판정) — 교육 설계 담당 3명(읽기 전용)이 단계표·다른 과정 개요·C2 Unit 초안",
+  "task_id": "level-structure-2026-10-08",
+  "task": "레벨별 교육과정 세분화(전 과정 단계표·사다리·매핑) + QA 화면 과정→단계→Unit 선택 + 인접 두 단계 Speaking·Writing 난이도 실증(Unit 3)",
+  "status": "in_progress",
+  "progress": 85,
+  "started_at": "2026-10-08T19:30:00+09:00",
+  "updated_at": "2026-10-08T20:25:00+09:00",
+  "files_owned": ["src/utils/curriculum/courseModel.js", "src/utils/curriculum/units.js", "src/utils/curriculum/unitBorrow.js", "src/utils/curriculum/unitLostBag.js", "src/utils/curriculum/unitFindAgain.js", "src/components/UnitScreen.jsx", "src/utils/writing/writingItems.js", "scripts/testPilotUnit.mjs", "scripts/testWritingPractice.mjs", "tests/e2e/unit.spec.mjs", "docs/design/CURRICULUM_STAGES_2026-10-08.md", "ROADMAP.md", "TESTING.md", "handoff.md"],
+  "summary": "[정적 PASS·브라우저 미실행] 로컬 커밋 9개(32d01df0…25f07560)+문서. 설계 완료(단계표·사다리·매핑), 화면 구현 완료(3단 선택·수행 표기·followUp·말하기→쓰기), 콘텐츠 제작 완료 3 Unit(C1 2+C2 1), 교사 검수 대기 전부, 미구현 회화 15 Unit·파닉스·발표·RG·중등. 브라우저 e2e(unit·writing·student-home)는 RAM 1.0~2.3GB(<3GB)로 미실행 → push 보류.",
+  "blocker": "RAM <3GB → 브라우저 e2e 미실행 → push 보류",
+  "next_action": "RAM ≥3GB 시 unit → writing → studentHome e2e(브라우저 1개) → handoff 수치 확정 → 커밋 → non-force push → Vercel 확인. (2026-10-08 20:25 기준; 이후 세션은 handoff 최신 섹션 우선)"
+}
