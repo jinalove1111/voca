@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { speak, stopSpeaking } from '../utils/speech'
-import { SUPPORT_STAGES } from '../utils/curriculum/courseModel'
+import { SUPPORT_STAGES, COURSES, CONVERSATION_BLOCKS, blocksForCourse, blockLabelKo, performanceById } from '../utils/curriculum/courseModel'
+const CONV_BLOCK_META = (b) => CONVERSATION_BLOCKS.find((x) => x.id === b) || null
 import { loadUnitRecords, markActivity, setSupportStage, activityState, nextActivityId } from '../utils/curriculum/unitRecords'
 import { SPEAKER_KO, BTN, RecorderControls, BUSY } from './SpeakingPracticeItem'
 import useLocalRecorder from '../hooks/useLocalRecorder'
@@ -213,7 +214,7 @@ function UnitView({ unit, studentId, onBack, backLabel = '← 홈', onSpeaking, 
           {active.kind === 'reading' && <ReadingActivity unit={unit} onAllAnswered={onDone} />}
           {active.kind === 'grammar' && <GrammarActivity unit={unit} onAllAnswered={onDone} />}
           {active.kind === 'review' && <ReviewActivity unit={unit} onAllRevealed={onDone} />}
-          {active.kind === 'speaking' && active.steps && <UnitSpeaking activity={active} onDone={onDone} />}
+          {active.kind === 'speaking' && active.steps && <UnitSpeaking activity={active} onDone={onDone} onWrite={unit.activities.some((x) => x.kind === 'writing') ? () => open(unit.activities.find((x) => x.kind === 'writing')) : null} />}
           <div className={CARD}>
             {active.kind === 'vocab' ? (
               <button data-testid="unit-activity-done" onClick={() => { complete(active.id); back() }} className={`${BTN} w-full bg-gradient-to-br from-teal-400 to-emerald-600 text-white`}>다 봤어요 → 단원으로</button>
@@ -290,7 +291,7 @@ function UnitView({ unit, studentId, onBack, backLabel = '← 홈', onSpeaking, 
 // 225차: Unit 안 말하기 활동(이야기 회차에 없는 문장용) — 기존 녹음기·녹음 버튼·TTS 재사용. ① 따라 하기(모범 듣고 선택 녹음)
 // ② 물건 바꾸기(틀에 단어 칩을 끼워 문장을 만들고 듣기·녹음) ③ 모범 없이 묻고 답하기(한국어 상황만, 답 확인 전 영어·음성 미마운트).
 // 녹음·답 확인으로 점수·숙달을 만들지 않는다. 화면을 나가면 녹음기(언마운트)와 TTS(stopSpeaking)가 정리된다.
-function UnitSpeaking({ activity, onDone }) {
+function UnitSpeaking({ activity, onDone, onWrite = null }) {
   const rec = useLocalRecorder()
   const [step, setStep] = useState(0)
   const [slot, setSlot] = useState(0)
@@ -354,6 +355,7 @@ function UnitSpeaking({ activity, onDone }) {
               <button data-testid="unit-speaking-answer-listen" onClick={() => speak(st.model, { source: 'unit' })} disabled={busy} className={`${BTN} bg-sky-100 text-sky-700 text-base`}>🔊 듣기</button>
               {st.alternatives?.length > 0 && <p className="text-sm text-gray-600">이렇게 말해도 좋아요: {st.alternatives.join(' / ')}</p>}
               {st.reply && <p data-testid="unit-speaking-answer-reply" className="text-base text-gray-800"><span className="font-black">{says(st.reply.speaker)}:</span> {st.reply.en} <span className="text-sm text-gray-600">({st.reply.ko})</span></p>}
+              {onWrite && <button data-testid="unit-speaking-to-writing" onClick={onWrite} disabled={busy} className={`${BTN} bg-amber-100 text-amber-800 text-base`}>✍️ 이 표현 써보기</button>}
             </div>
           ) : (
             <p className="text-sm text-gray-600">먼저 소리 내어 말해 보고(녹음은 선택), 그 다음에 답을 확인해요.</p>
@@ -370,29 +372,72 @@ function UnitSpeaking({ activity, onDone }) {
   )
 }
 
-// Unit 선택(시범 목록) → UnitView. unitLink로 돌아온 경우 그 Unit을 바로 연다
+// 227차: 과정 → 단계 → Unit 선택(QA 전용). 선택은 화면 상태일 뿐 저장하지 않는다(학생별 영구 레벨·자동 배정·자동 승급 없음).
+// Unit이 없는 과정·단계는 '미제작'으로 표시만 한다. unitLink로 돌아온 경우 그 Unit을 바로 연다.
+const PERF_KO = (u) => (u.performance ? `말하기 ${performanceById(u.performance.speaking)?.titleKo} · 쓰기 ${performanceById(u.performance.writing)?.titleKo}` : null)
 export default function UnitScreen({ units, initialUnitId = null, returnedFrom = null, studentId, onBack, onSpeaking, onWriting }) {
-  const [unitId, setUnitId] = useState(initialUnitId || (units.length === 1 ? units[0].id : null))
+  const initial = units.find((u) => u.id === initialUnitId) || null
+  const [courseId, setCourseId] = useState(initial ? initial.course : null)
+  const [blockId, setBlockId] = useState(initial ? initial.block : null)
+  const [unitId, setUnitId] = useState(initial ? initial.id : null)
   // 복귀 기록(returnedFrom)은 돌아온 그 Unit(initialUnitId)에만 1회 적용 — 목록에서 다른 Unit을 열 때 새어 나가면 안 된다(225차 e2e e에서 발견)
   const [pendingReturn, setPendingReturn] = useState(returnedFrom)
   const pick = (id) => { setPendingReturn(null); setUnitId(id) }
   const unit = units.find((u) => u.id === unitId) || null
   if (unit) {
-    return <UnitView key={unit.id} unit={unit} studentId={studentId} returnedFrom={unit.id === initialUnitId ? pendingReturn : null} backLabel={units.length > 1 ? '← 목록' : '← 홈'} onBack={units.length > 1 ? () => pick(null) : onBack}
+    return <UnitView key={unit.id} unit={unit} studentId={studentId} returnedFrom={unit.id === initialUnitId ? pendingReturn : null} backLabel="← 목록" onBack={() => pick(null)}
       onSpeaking={(a) => onSpeaking(unit.id, a)} onWriting={(a) => onWriting(unit.id, a)} />
   }
+  const level = !courseId ? 'course' : !blockId ? 'block' : 'unit'
+  const course = COURSES.find((c) => c.id === courseId) || null
+  const inCourse = (cid) => units.filter((u) => u.course === cid)
+  const inBlock = (cid, bid) => units.filter((u) => u.course === cid && u.block === bid)
+  const ITEM = 'w-full min-h-[64px] px-4 py-3 rounded-3xl text-left btn-press card-shadow'
+  const back = level === 'course' ? null : level === 'block' ? () => setCourseId(null) : () => setBlockId(null)
   return (
-    <div data-testid="unit-list" className="min-h-screen p-4 pb-24">
+    <div data-testid="unit-list" data-level={level} className="min-h-screen p-4 pb-24">
       <div className="max-w-lg mx-auto space-y-4">
-        <h1 className="text-xl font-black text-teal-700 pt-2">오늘의 학습</h1>
-        <p className="text-base font-black text-gray-800">어떤 단원을 할까요?</p>
-        {units.map((u) => (
-          <button key={u.id} data-testid={`unit-pick-${u.id}`} onClick={() => pick(u.id)} className="w-full min-h-[72px] px-4 py-4 rounded-3xl text-left btn-press card-shadow text-white bg-gradient-to-br from-teal-400 to-emerald-600">
-            <span className="block text-xs font-bold opacity-90">{u.courseKo} · {u.block} · {u.goalTitleKo}</span>
-            <span className="block text-lg font-black">{u.titleKo}</span>
-          </button>
-        ))}
-        <button data-testid="unit-list-home" onClick={onBack} className="min-h-[44px] px-2 font-black text-gray-600 btn-press">← 홈</button>
+        <div className="flex items-center gap-2 pt-2">
+          <button data-testid="unit-list-home" onClick={onBack} className="min-h-[44px] px-2 font-black text-gray-600 btn-press">← 홈</button>
+          <h1 className="text-xl font-black text-teal-700">오늘의 학습</h1>
+        </div>
+        {level !== 'course' && (
+          <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-gray-600">
+            <button data-testid="unit-list-back" onClick={back} className="min-h-[44px] px-2 font-black text-gray-600 btn-press">{level === 'block' ? '← 과정' : '← 단계'}</button>
+            <span data-testid="unit-list-crumb">{course?.titleKo}{blockId ? ` · ${blockLabelKo(blockId)}` : ''}</span>
+          </div>
+        )}
+        {level === 'course' && (
+          <>
+            <p className="text-base font-black text-gray-800">어떤 과정을 할까요?</p>
+            {COURSES.map((c) => { const n = inCourse(c.id).length; return (
+              <button key={c.id} data-testid={`unit-course-${c.id}`} onClick={() => setCourseId(c.id)} disabled={n === 0} aria-disabled={n === 0} className={`${ITEM} ${n ? 'text-white bg-gradient-to-br from-teal-400 to-emerald-600' : 'bg-white text-gray-400'}`}>
+                <span className="block text-lg font-black">{c.titleKo} <span className="text-xs font-bold opacity-80">{c.monthsKo}</span></span>
+                <span className="block text-xs font-bold opacity-90">{n ? `${c.focusKo} · 단원 ${n}개` : '미제작'}</span>
+              </button>) })}
+          </>
+        )}
+        {level === 'block' && (
+          <>
+            <p className="text-base font-black text-gray-800">어느 단계를 할까요? <span className="text-xs font-bold text-gray-500">(기간은 운영 계획이에요. 단계는 선생님과 정해요)</span></p>
+            {blocksForCourse(courseId).map((b) => { const n = inBlock(courseId, b).length; const meta = courseId === 'conversation' ? CONV_BLOCK_META(b) : null; return (
+              <button key={b} data-testid={`unit-block-${b}`} onClick={() => setBlockId(b)} disabled={n === 0} aria-disabled={n === 0} className={`${ITEM} ${n ? 'text-white bg-gradient-to-br from-sky-400 to-indigo-500' : 'bg-white text-gray-400'}`}>
+                <span className="block text-lg font-black">{blockLabelKo(b)} {meta?.monthsKo && <span className="text-xs font-bold opacity-80">{meta.monthsKo}</span>}</span>
+                <span className="block text-xs font-bold opacity-90">{meta?.themeKo ? `${meta.themeKo} · ` : ''}{n ? `단원 ${n}개` : '미제작'}</span>
+              </button>) })}
+          </>
+        )}
+        {level === 'unit' && (
+          <>
+            <p className="text-base font-black text-gray-800">어떤 단원을 할까요?</p>
+            {inBlock(courseId, blockId).map((u) => (
+              <button key={u.id} data-testid={`unit-pick-${u.id}`} onClick={() => pick(u.id)} className={`${ITEM} text-white bg-gradient-to-br from-teal-400 to-emerald-600`}>
+                <span className="block text-xs font-bold opacity-90">{u.goalTitleKo}{PERF_KO(u) ? ` · ${PERF_KO(u)}` : ''}</span>
+                <span className="block text-lg font-black">{u.titleKo}</span>
+              </button>
+            ))}
+          </>
+        )}
       </div>
     </div>
   )
