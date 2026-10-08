@@ -1,5 +1,7 @@
 # 교사용 콘텐츠 검수표 — 통합 과정 시범 Unit 2종 (초안, 2026-10-08, 226차)
 
+_2026-10-09: Unit 3(C2 발전, 230차)을 이 문서 아래에 덧붙였다(append-only — 기존 Unit 1·2 내용은 그대로)._
+
 _교육 설계 담당(읽기 전용 서브에이전트) 초안 → 리드 정리. 출처: `src/utils/curriculum/unitBorrow.js`, `unitLostBag.js`, `src/utils/writing/writingItems.js`(w-s02-03, w-u2-under), `src/utils/situation/storyEpisodes.js`(ep02 s02-01~04), `INTEGRATED_CURRICULUM_IMPL_2026-10-08.md` §7.1·§8, `TEACHER_GUIDE_PILOT_UNITS_2026-10-08.md` ⑥. 영어 문장은 데이터 파일 원문 그대로. 두 Unit 모두 **교사 검수 전** 콘텐츠이며, 이 문서의 체크칸은 전부 비어 있다(검수 완료 표시 아님). 검수 결과 반영은 문구 수정만, 구조 변경 없음._
 
 **검수 상태(Unit별로 기록)**: Unit 1 ☑ 미검수 ☐ 검수 중 ☐ 검수 완료(서명/날짜: ______) · Unit 2 ☑ 미검수 ☐ 검수 중 ☐ 검수 완료(서명/날짜: ______)
@@ -99,20 +101,78 @@ _교육 설계 담당(읽기 전용 서브에이전트) 초안 → 리드 정리
 
 ---
 
-## (4) 교사 확인 항목 체크리스트 (두 Unit 공용, Unit별로 각각 표시)
+## Unit 3 · 거기 아니야, 저기는? (c2-find-together-classroom · 궁금한 것 묻기 · 레벨 2) (초안, 2026-10-09, 230차 · C2 발전 · 인접 단계 실증 Unit · 교사 검수 전)
 
-| 항목 | Unit 1 | Unit 2 |
+_출처: `src/utils/curriculum/unitFindAgain.js` 전체, `src/utils/writing/writingItems.js` w-c2-find, `CURRICULUM_STAGES_2026-10-08.md` §9. 영어 문장은 데이터 파일 원문 그대로. Unit 2(C1)와 같은 목표(asking-info)·같은 상황 가족(교실에서 물건 찾기)이며, 어려워지는 것은 어휘가 아니라 상호작용 구조다. 이 Unit의 체크칸도 전부 비어 있다(검수 완료 표시 아님)._
+
+### (1) 연결표 — 목표 표현이 한 줄로 이어지는가
+
+| 단계 | 내용(데이터 원문) | 연결 OK / 끊김? |
 |---|---|---|
-| 사실 오류 없음(지문·대화·근거 문장이 서로 모순 없음) | ☐ | ☐ |
-| 어색한 영어 없음(특히 `Here you go.`, `in the desk`, `Have you seen my bag?`) | ☐ | ☐ |
-| 한국어 안내 문구(문항·설명·상황문)를 초급 아동이 혼자 읽고 이해 가능 | ☐ | ☐ |
-| 단일 정답 문항의 정답이 유일함(다른 보기가 맞게 읽힐 여지 없음) | ☐ | ☐ |
-| 다답 문항(Unit 1 문형 ③, Unit 2 문형 ②)의 "맞는 것이 둘이에요" 안내가 적절함 | ☐ | ☐ |
-| 오답 보기가 명백히 틀림(어순·형태 오류가 아동 눈에도 보임) | ☐ | ☐ |
-| 듣기 문항이 들어야만 풀림(상황문·어휘 소거로 풀리지 않음 — Unit 1 듣기 ② 소거 가능성은 설계 문서 §8.1 #7에 기록됨) | ☐ | ☐ |
-| 복습 공개 전 모범·음성이 보이지 않음, 자동 재생 없음 | ☐ | ☐ |
-| 점수·등급 표기 없음, "해 봤어요"(참여 기록) 문구만 있음 | ☐ | ☐ |
-| 복습 상황문에 영어 없음(단어 도움 칩을 눌러야 한 단어 노출) | ☐ | ☐ |
+| 목표 표현 | `Is it under the desk?` / `No, it isn't. What about the bag?` / `Yes, it is! It's in the bag.` (Unit 안 말하기 따라 하기 3턴) | ☐ OK ☐ 끊김 |
+| 어휘(8) | pencil case, desk, bag, chair, shelf, box, isn't(아니야, 없어 (is not)), What about(…은 어때? (되묻기)) | ☐ OK ☐ 끊김 |
+| 듣기 대화(7턴) | Mia: `Oh no! Where's my pencil case?` / Paul: `Is it under the desk?` / Mia: `No, it isn't. What about the bag?` / Paul: `No, it isn't. Is it on the shelf?` / Mia: `No, it isn't. What about the box?` / Paul: `Look! Yes, it is! It's in the box.` / Mia: `Thank you, Paul!` | ☐ OK ☐ 끊김 |
+| 듣기 문항 | ① 필통의 최종 위치 → 정답 "상자 안"(보기 책상 밑 / 상자 안 / 선반 위, 근거 `It's in the box.`) ② 폴이 "책상 밑에 있어?" 물었을 때 미아의 행동 → 정답 "아니라고 하고 가방을 되물었어요"(근거 `No, it isn't. What about the bag?`) | ☐ OK ☐ 끊김 |
+| 읽기 지문 | `After art class, Mia's pencil case is gone. Paul helps her. He asks, "Is it under the desk?" Mia looks. "No, it isn't. What about the chair?" Paul looks under the chair. It isn't there. "What about the shelf?" says Mia. Paul looks on the shelf. "Yes, it is!" The pencil case is on the shelf. Mia says, "Thank you, Paul!"` | ☐ OK ☐ 끊김 |
+| 읽기 문항 | ① 폴이 가장 먼저 물어본 곳 → **책상 밑**(근거 `Is it under the desk?`) ② 필통의 최종 위치 → **선반 위**(근거 `The pencil case is on the shelf.`) ③ "필통은 의자 밑에 있었어요" → **X**(근거 `Paul looks under the chair. It isn't there.`) | ☐ OK ☐ 끊김 |
+| 문형 관찰 | ① `Is it under the desk?`(확인 질문은 Is it …?로 시작, 대답 Yes, it is. / No, it isn't.) ② `No, it isn't. What about the bag?`(isn't = is not, What about the …?으로 되묻기) | ☐ OK ☐ 끊김 |
+| 문형 문항 | ① 선반 위에 있는지 묻기 → **Is it on the shelf?** / It is on the shelf? / Is on the shelf it? ② 짧게 아니라고 대답 → **No, it isn't.** / No, it is. / No, isn't it. ③ (정답 둘) **What about the shelf?** / **Is it on the shelf?** / What the shelf about? | ☐ OK ☐ 끊김 |
+| 말하기 3단계 | 따라 하기(Paul `Is it under the desk?` → Mia `No, it isn't. What about the bag?` → Paul `Yes, it is! It's in the bag.`) → 장소 바꿔 묻고 되묻기(`Is it ___ the desk?` 칩 under·in·on, 미아 답 `No, it isn't. What about the ___?` 칩 bag·shelf·box) → 모범 없이(상황 "미아의 필통이 안 보여요. 책상 밑을 가리키며 거기 있는지 미아에게 물어요.", 모범 `Is it under the desk?`, 미아 답 `No, it isn't. What about the bag?`) + 후속 답(followUp: "미아가 되물었어요. 가방을 보고 대답해요(필통이 가방 안에 있어요).", 모범 `Yes, it is! It's in the bag.`) | ☐ OK ☐ 끊김 |
+| 쓰기 w-c2-find | 상황 "미술 시간 뒤 미아의 필통을 함께 찾았어요. 책상 밑에도 의자 위에도 없었고, 가방 안에 있었어요." · 역할 "폴이 되어 어디에 없었고 어디에 있었는지 써요." · 문항 "필통이 어디에 없고 어디에 있는지 2~3문장으로 써 보세요." · 모범 `It isn't under the desk. It isn't on the chair. It's in the bag!` · 대체 `It is not under the desk. It is not on the chair. It is in the bag.` · 단어 도움 isn't, in | ☐ OK ☐ 끊김 |
+| 복습 ① | "체육 시간 뒤 미아의 모자가 없어요. 의자 밑에 있는지 물어요." · 모범 `Is it under the chair?` · 대체 `Is it under your chair?` / `Is the hat under the chair?` / `Is your hat under the chair?` | ☐ OK ☐ 끊김 |
+| 복습 ② | "폴이 책이 책상 안에 있냐고 물어요. 없어요. 선반을 되물어요." · 모범 `No, it isn't. What about the shelf?` · 대체 `No. What about the shelf?` / `No, it isn't. Is it on the shelf?` / `It isn't. What about the shelf?` | ☐ OK ☐ 끊김 |
+
+검수자 주의점(데이터 구조상 사실): 필통의 최종 위치가 듣기는 상자, 읽기는 선반, 말하기·쓰기는 가방으로 서로 다르다. 활동 간 답 이월을 막으려는 의도다(`unitFindAgain.js` sources, CURRICULUM_STAGES §9). 읽기 지문 근거 문장 3개는 모두 지문에서 그대로 찾아졌다. 쓰기 상황문은 "의자 위에도 없었고"인데 읽기 지문은 "의자 밑"을 확인한다(위치 말이 다름). 듣기 4턴에서 폴이 "No, it isn't."으로 대답하는 것은 미아가 되물은 `What about the bag?`에 대한 답이다. 복습 hat·book은 어휘 목록에 없다. 읽기 지문은 61단어(직접 센 값, profile의 "61단어"와 일치).
+
+### (2) 초급 학생이 막힐 지점
+
+_Unit 2(C1) 대비 발전 요구: ① Yes/No 질문을 직접 만든다(Is it …?) ② 줄인 부정으로 짧게 답한다(No, it isn't.) ③ What about the …?으로 되묻는다 ④ 되물음에 두 번째로 답한다(followUp) ⑤ isn't/It's를 섞어 2~3문장을 쓴다._
+
+| 위치 | 표현 | 왜 어려운가 | 제안 | 교사 의견 |
+|---|---|---|---|---|
+| 말하기 모범 없이 | `Is it under the desk?` | Unit 2는 Where's my bag?(의문사 + 틀)을 말했는데 여기서는 It is를 뒤집어 Yes/No 질문을 스스로 만들어야 함 | ☐ 유지 ☐ 교체 ☐ 삭제 | |
+| 문형 ① | `Is it on the shelf?` / `It is on the shelf?` | 평서문 어순과 질문 어순 구분(오답이 평서문 어순 + 물음표) | ☐ 유지 ☐ 교체 ☐ 삭제 | |
+| 말하기·문형 ② | `No, it isn't.` | Unit 2에서는 듣기 입력으로만 나왔고 이제 직접 말해야 함. isn't 발음·축약 | ☐ 유지 ☐ 교체 ☐ 삭제 | |
+| 문형 ② 오답 | `No, it is.` / `No, isn't it.` | 틀린 문장을 읽게 됨, Yes/No와 is/isn't 짝 맞추기 | ☐ 유지 ☐ 교체 ☐ 삭제 | |
+| 말하기 2단계 | `No, it isn't. What about the ___?` | 새 문형 What about이 처음 나오고, 칩(bag·shelf·box)을 끼워 넣는 틀이 길어짐 | ☐ 유지 ☐ 교체 ☐ 삭제 | |
+| 문형 ③ | `What about the shelf?` / `Is it on the shelf?` | 정답 둘 안내("맞는 것이 둘이에요")가 있어도 What about이 아니라 Is it …?이 정답이라는 점이 낯섦. 오답 `What the shelf about?` | ☐ 유지 ☐ 교체 ☐ 삭제 | |
+| 말하기 followUp | `Yes, it is! It's in the bag.` | 질문·답·되묻기 뒤 같은 장면에서 두 번째로 대답해야 함(대화 흐름 유지). 필통이 가방에 있다는 조건을 상황문에서 읽어야 함 | ☐ 유지 ☐ 교체 ☐ 삭제 | |
+| 듣기 4턴 | `No, it isn't. Is it on the shelf?` | 폴이 먼저 아니라고 답한 뒤 곧바로 새 질문을 이어 하는 한 턴 두 동작 | ☐ 유지 ☐ 교체 ☐ 삭제 | |
+| 듣기·읽기·말하기 | 필통의 위치: 상자 / 선반 / 가방 | 같은 필통인데 활동마다 최종 위치가 달라 앞 활동의 답을 가져올 수 없음(의도된 설계, 단 헷갈릴 수 있음) | ☐ 유지 ☐ 교체 ☐ 삭제 | |
+| 쓰기 w-c2-find | `It isn't under the desk. It isn't on the chair. It's in the bag!` | isn't(부정)와 It's(긍정)를 섞어 2~3문장을 직접 써야 함. 상황문의 "의자 위"와 읽기의 "의자 밑" 차이 | ☐ 유지 ☐ 교체 ☐ 삭제 | |
+| 읽기 지문 | `gone` / `helps her` / `looks` / `says Mia` | 비목록 어휘, 도치(`says Mia`) | ☐ 유지 ☐ 교체 ☐ 삭제 | |
+| 복습 ② | 역할 전환(질문 듣기 → 답 + 되묻기) | 복습 ①은 묻는 말, ②는 No + 되묻기. 상황문의 "책상 안"은 영어 `in the desk`로 이어지지 않아 어떤 말을 해야 할지 안 보일 수 있음 | ☐ 유지 ☐ 교체 ☐ 삭제 | |
+| 복습 ① | hat | 어휘·대화·지문 어디에도 없음, 단어 도움 칩 의존 | ☐ 유지 ☐ 교체 ☐ 삭제 | |
+
+### (3) 허용 가능한 대체 답변
+
+| 문항 | 앱이 인정하는 것(데이터 그대로) | 교사가 추가로 인정할 것 |
+|---|---|---|
+| 말하기 모범 없이 질문 | `Is it in the desk?` / `Is the pencil case under the desk?` | |
+| 말하기 followUp | `Yes! It's in the bag.` / `It's in the bag.` | |
+| 쓰기 w-c2-find | `It is not under the desk. It is not on the chair. It is in the bag.` · acceptNoteKo "It is not / It's not도 맞아요. 순서는 달라도 돼요." | |
+| 복습 ① | `Is it under your chair?` / `Is the hat under the chair?` / `Is your hat under the chair?` | |
+| 복습 ② | `No. What about the shelf?` / `No, it isn't. Is it on the shelf?` / `It isn't. What about the shelf?` | |
+| 문형 ③ | 보기 0·1 둘 다 정답(`correct: [0, 1]`) | |
+
+---
+
+## (4) 교사 확인 항목 체크리스트 (Unit 공용, Unit별로 각각 표시 — 2026-10-09 Unit 3 열 추가)
+
+| 항목 | Unit 1 | Unit 2 | Unit 3 |
+|---|---|---|---|
+| 사실 오류 없음(지문·대화·근거 문장이 서로 모순 없음) | ☐ | ☐ | ☐ |
+| 어색한 영어 없음(특히 `Here you go.`, `in the desk`, `Have you seen my bag?`) | ☐ | ☐ | ☐ |
+| 한국어 안내 문구(문항·설명·상황문)를 초급 아동이 혼자 읽고 이해 가능 | ☐ | ☐ | ☐ |
+| 단일 정답 문항의 정답이 유일함(다른 보기가 맞게 읽힐 여지 없음) | ☐ | ☐ | ☐ |
+| 다답 문항(Unit 1 문형 ③, Unit 2 문형 ②, Unit 3 문형 ③)의 "맞는 것이 둘이에요" 안내가 적절함 | ☐ | ☐ | ☐ |
+| 오답 보기가 명백히 틀림(어순·형태 오류가 아동 눈에도 보임) | ☐ | ☐ | ☐ |
+| 듣기 문항이 들어야만 풀림(상황문·어휘 소거로 풀리지 않음 — Unit 1 듣기 ② 소거 가능성은 설계 문서 §8.1 #7에 기록됨) | ☐ | ☐ | ☐ |
+| 복습 공개 전 모범·음성이 보이지 않음, 자동 재생 없음 | ☐ | ☐ | ☐ |
+| 점수·등급 표기 없음, "해 봤어요"(참여 기록) 문구만 있음 | ☐ | ☐ | ☐ |
+| 복습 상황문에 영어 없음(단어 도움 칩을 눌러야 한 단어 노출) | ☐ | ☐ | ☐ |
+| (Unit 3 전용) 같은 필통의 최종 위치가 듣기(상자)·읽기(선반)·말하기(가방)에서 다른 것이 아동에게 혼란이 아닌 새 장면으로 읽힘 | — | — | ☐ |
+| (Unit 3 전용) 말하기 followUp(되물음에 두 번째 대답)이 상황문만 보고 이해 가능 | — | — | ☐ |
 
 ## (5) 수정 의견란 (자유 기술)
 
@@ -126,5 +186,11 @@ Unit 2:
 
 검수 상태 — Unit 1: ☒ 미검수 ☐ 검수 중 ☐ 검수 완료(교사 서명/날짜: ________ )
 검수 상태 — Unit 2: ☒ 미검수 ☐ 검수 중 ☐ 검수 완료(교사 서명/날짜: ________ )
+
+Unit 3 (2026-10-09 추가):
+>
+>
+
+검수 상태 — Unit 3: ☒ 미검수 ☐ 검수 중 ☐ 검수 완료(교사 서명/날짜: ________ )
 
 작성 메모: "주의점" 행은 데이터 구조에서 확인한 사실만 적었고 학습 효과 판단·교재 참조는 넣지 않았다. 두 Unit 모두 교사 검수 전 콘텐츠. 검수 결과 반영은 다음 작업(문구 수정만).
