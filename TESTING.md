@@ -1962,3 +1962,10 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 - 신규/개정 시나리오: speaking **p1**(6 과정·개수·핵심 문장 토글) · **p2**(복귀 시 선택 유지, ← 홈에서 초기화, 새 localStorage 키 없음) · **p3**(선택 화면 360/390/412/1280 레이아웃); writing **a/d** 재작성(선택 화면 경유); unit **i**(과정 6개·병행 배지·빈 과정 비활성) · **j**(기초/발전 회차·Unit 목록 + 말하기/쓰기 의도별 활동 직행); student-home **j**(쓰기 카드 → 선택 화면). 연습 시나리오는 선택 화면 → ep02로 이동.
 - 흔들림 보강: `[unit]` 1~2차에서 "복귀 직후 `data-completed`를 즉시 읽기"가 시나리오를 바꿔 가며 실패(140/1, 139/2). 추가된 선택 상태 effect와의 타이밍 경합으로 분류해 225차와 같은 방식으로 `waitUntil`(최대 5초)을 넣었고 3차 실행 통과. 제품 코드는 변경 없음.
 - **229차 결과(2026-10-09 02:40~03:20, 여유 RAM 3.9~4.7GB, 브라우저 1개 순차, vite preview 포트 4193, 더미 env 빌드 경고 0)**: `[unit]` 141/0 · `[writing]` 83/0 · `[speaking]` 608/0 · `[speaking-exam]` 216/0(진입 경로 갱신 전 4/26) · `[student-home]` 218/0/1 SKIP(기존 streak fixture 한계). 미mock 요청 0·mock 오류 0. 전부 mock 기반이며 Preview 실화면·실기기는 미검증.
+
+## 관련 항목: 홈 문법 진입 — 공용 선택기 intent 'grammar' → Unit 문형 활동 (2026-10-09, 231차)
+
+- 정적: `scripts/testPilotUnit.mjs` +3 핀(`grammarForUnit`/intent 'grammar' 필터, 선택기 문법 문구, 홈 `student-home-grammar` 버튼). `testQaGate` 17/0, `testStudentPathContracts`, `testLazyChunkGuards` 92/92, `testBundleBudget` 32/0, `testRegistryCoverage`, `testWritingPractice`, `testKeySentenceFlow` ALL PASS. 더미 env 빌드 경고 0.
+- 신규 시나리오: unit **k**(홈 문법 경로 — Conversation → 1단계 → Unit → 문형 활동 직행, 이야기·준비 중 과정 비활성, Unit 부제 `📘 … · 관찰 2 · 문항 3`, '← 단원' = 개요, unitRecords 키 외 새 localStorage 키 없음, 선택기 레이아웃 360×640·412×915 두 뷰포트만) · student-home **r**(📘 버튼 표시 + DOM 순서 town → unit → grammar) · **q**(비QA 계정은 버튼 없음).
+- 테스트 쪽 수정 2건(`[unit]` 1차 173/2, 제품 코드 무변경): ① 머리글 '어떤 단원의 문법을 볼까요?'는 단원 목록에서만 렌더되는데 과정 화면에서 단언 → 단원 목록으로 이동 후 단언. ② localStorage 기준값을 로그인 전에 캡처해 로그인 후 키와 비교됨 → 로그인 뒤로 캡처 위치 이동.
+- **231차 결과(2026-10-09 03:50~04:30, 브라우저 1개 순차, vite preview 포트 4193)**: `[writing]` 83/0 · `[speaking]` 608/0 · `[speaking-exam]` 216/0 · `[student-home]` 223/0/1 SKIP(기존 streak fixture 한계) · `[unit]` 1차 173/2 → 재실행 176/0(e2e 커밋 `fb7153e4`, 미mock 요청 0·mock 오류 0). 전부 mock 기반, Preview 실화면·실기기 미검증.

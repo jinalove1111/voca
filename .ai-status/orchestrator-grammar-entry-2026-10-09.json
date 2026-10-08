@@ -1,0 +1,20 @@
+{
+  "agent_name": "orchestrator",
+  "role": "orchestrator",
+  "task_id": "grammar-entry-2026-10-09",
+  "task": "Minimal Grammar integration: home grammar button -> shared picker intent grammar -> existing Unit grammar activity (assumptions documented, requirements text never received)",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-09T03:50:00+09:00",
+  "updated_at": "2026-10-09T04:30:00+09:00",
+  "files_owned": [
+    "handoff.md",
+    "TESTING.md",
+    "ROADMAP.md",
+    ".ai-status/orchestrator-grammar-entry-2026-10-09.json"
+  ],
+  "files_read": [],
+  "summary": "Home QA-only grammar button opens the shared picker with intent grammar; picking a unit opens the existing grammar activity directly. Stories and courses without grammar show coming soon.\nGrammar requirements text never arrived; assumptions recorded in CURRICULUM_STAGES section 12. No new grammar content, storage, grading or DB. Commits d331bdb7 and 4e757809.\nStatic checks pass; browser writing 83/0, speaking 608/0, speaking-exam 216/0, student-home 223/0/1 skip.",
+  "blocker": null,
+  "next_action": "Grammar 요구사항 원문 수신 → §12 가정 확정/수정; §11.9 답변 → 레벨 라벨 확정"
+}
