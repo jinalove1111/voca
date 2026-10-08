@@ -4,6 +4,7 @@ _228차 갱신: 2026-10-09 (228차 — 기준 확인(merge-base `19c8d951`, 10 a
 _229차 갱신: 2026-10-09 (229차 — **홈 Speaking·Writing·오늘의 학습 통합 진입: 6 과정 → 레벨(제안) → 단원/이야기 → 활동**. 주제 기반이던 이전 화면을 학원의 과정/레벨 구조로 교체. `courseModel.js` 6 과정·`catalog.js` 회차 배치(전부 제안)·`UnitScreen` 선택 화면 확장·`App.jsx` 세 진입 통합. 정적 PASS; 브라우저 mock `[unit]` 141/0, `[writing]` 83/0, `[speaking]` 608/0, `[speaking-exam]` 216/0, `[student-home]` 218/0/1 SKIP. Preview 실화면·학원 레벨명 확정·교사 검수 대기. PR #62 Draft·QA 전용. 아래 229차 섹션 참고.)_
 _230차 갱신: 2026-10-09 (230차 — **Unit 3 교사 검수표(Unit 1·2와 같은 형식, ☒ 미검수) + 학원 반 이름 ↔ 앱 레벨 대응표 `CURRICULUM_STAGES` §11**([확인]/[제안]/[미확인] 구분, 앱 C1~C6 ≠ 학원 Conversation 1~6, 기존 분배 이야기 vs 레벨 맞춤 신규 Unit 구분, 운영자 질문 12개 통합). 후보 B 신규 콘텐츠는 운영자 지시로 보류, 레벨명 확정 없음. 문서만 변경(src 0), 정적 PASS. 커밋 `934631ef`·`b4567f30`. PR #62 Draft·QA 전용. 아래 230차 섹션 참고.)_
 _231차 갱신: 2026-10-09 (231차 — **Grammar 통합(최소 범위·가정 명시): 홈 📘 단원의 문법 살펴보기 → 공용 선택기 intent 'grammar' → Unit 문형 활동 직행**. 운영자 Grammar 요구사항 원문은 3회 모두 잘려 미수신 → 이전 지시 범위로 진행하고 가정은 `CURRICULUM_STAGES` §12에 명시. 기존 Unit 문형 활동(관찰 2 + 문항 3)만 연결, 새 문법 콘텐츠·자동 채점·저장·DB 0, '(제안)' 유지. 정적 PASS, 브라우저 mock `[writing]` 83/0·`[speaking]` 608/0·`[speaking-exam]` 216/0·`[student-home]` 223/0/1 SKIP·`[unit]` 재실행 176/0. 커밋 `d331bdb7`(§12)·`4e757809`(코드)·e2e `fb7153e4`. PR #62 Draft·QA 전용. 아래 231차 섹션 참고.)_
+_232차 갱신: 2026-10-09 (232차 — **문법 초·중급 분리 + 레벨별 문제 모아 풀기 + 추가 문항 9**. 운영자 요구 수신("쓰기 말하기 처럼 문법도 초중급 나눠서 문제 풀 수 있게 만들어줘"). `PERFORMANCE_LEVELS`에 `grammarKo`, Unit `performance.grammar`(Unit 1·2 기초 / Unit 3 발전), `grammarSetForBlock`, 선택기 '모아 풀기' → GrammarSetScreen(점수·기록 없음). 문항 +9(Unit당 3, 교사 검수 전): 기초 12·발전 6. 정적 PASS, 더미 env 빌드 경고 0, 브라우저 mock `[unit]` 227/0·`[student-home]` 223/0/1 SKIP·`[writing]` 83/0·`[speaking]` 608/0. 코드 `5b25a091`. PR #62 Draft·QA 전용. 아래 232차 섹션 참고.)_
 _226차 갱신: 2026-10-08 (226차 — **A안**: 보류 결함 2건 수정(Unit에서 들어온 쓰기는 비교 뒤 '← 이 단원으로' 복귀, 독립 Writing 흐름 유지 / Unit 청크 로드 실패 시 빈 화면 대신 안내·🔄 새로고침·← 홈) + 두 Unit 교사용 콘텐츠 검수표(기본 "미검수") + ROADMAP 통합 과정 섹션(완료/다음/보류). 정적 PASS; 브라우저 e2e(RAM ≥3GB 재개) `[unit]` 99/0(1차 90/2는 환경·설계 순서 — 기존 stale-chunk 자동 새로고침이 먼저 동작·브라우저 모듈 캐시 — 로 분류, 안내 문구·새로고침 버튼 보완), `[writing]` 63/0, `[student-home]` 218/0/1 SKIP. PR #62 Draft·QA 전용. 아래 226차 섹션 참고.)_
 _225차 갱신: 2026-10-08 (225차 — **첫 Unit 독립 검수 → 결함 6건·콘텐츠 4건 수정 + 두 번째 통합 Unit "잃어버린 물건 위치 묻기"(정보 묻기, Where's my bag? / It's under the chair.) + Unit 간·계정 간 격리**. Unit 선택 목록, Unit 안 말하기 3단계(따라 하기 → 물건 바꾸기 → 모범 없이 묻고 답하기, 답 확인 전 영어·음성 미마운트), inline 쓰기 문항. 정적 핀 7종·빌드 PASS. 브라우저 e2e는 05~06시 RAM <3GB로 보류 → **12:52 재개(RAM 4.1GB) 5스펙 완료**: unit 88/0(1차 80/6 → 제품 결함 1건 = 목록에서 다른 Unit을 열면 복귀 기록이 새어 그 Unit 쓰기가 완료로 찍힘 → 수정; 스펙 2건; 흔들림 3건 재실행 미재현 → 대기 추가), student-home 218/0/1 SKIP, speaking 540/0, speaking-exam 216/0, writing 63/0(1차 1 FAIL = 주제 수 계약 드리프트). 참고문헌 7건 확인표(§9), 교사 가이드 2종, 파닉스 스펙(콘텐츠 없음). PR #62 Draft·QA 전용. 아래 225차 섹션 참고.)_
 _224차 갱신: 2026-10-08 (224차 — **통합 과정 구현 1차**: 운영자 설계안 v1 기준 공통 데이터 구조(과정·블록·지원 단계·기록 플래그·Unit 계약)와 회화 C1 시범 Unit "교실에서 물건 빌리기"(어휘·듣기·읽기·문형·복습 신규 활동 + 기존 말하기·쓰기 연결, QA 홈 [오늘의 학습]). 기기 임시 기록(completed/selfChecked만). e2e unit 54/0 + 회귀 4종 PASS. 전체 과정·파닉스·교사 화면은 설계만. PR #62 Draft. 아래 224차 섹션 참고.)_
@@ -42,6 +43,26 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-09 (232차) — 문법 초·중급 분리 + 레벨별 문제 모아 풀기 + 추가 문항 9 (04:35~05:00)
+
+운영자 요구 원문을 마침내 수신: "쓰기 말하기 처럼 문법도 초중급 나눠서 문제 풀 수 있게 만들어줘". 리드 해석 = 문법도 말하기·쓰기처럼 자기 수행 수준을 갖고, 학생이 수준별로 나뉜 문법 문제를 푼다. 기준: PR #62 원격 `b199dfa3`.
+
+**코드(커밋 `5b25a091`, e2e `8b851840`)**
+- `PERFORMANCE_LEVELS`에 `grammarKo` 추가: 입문 '그림·모양 보고 알맞은 말 고르기' / 기초 '한 문장 틀에서 빈칸·어순 고르기' / 발전 '질문과 대답 짝 맞추기·되묻기 고르기' / 확장 '시제·이유를 이어 알맞은 문장 고르기' / 발표 '짧은 글에서 틀린 곳 찾아 고치기'.
+- Unit이 `performance.grammar`를 선언(Unit 1·2 = 기초, Unit 3 = 발전). `validateUnit`은 값이 있을 때만 검사.
+- `catalog.js`: `grammarForUnit`이 level/levelKo를 돌려주고, 새 `grammarSetForBlock(units, course, block)`은 그 단계 Unit들의 문법 문항 전부를 모은다.
+- `UnitScreen` 문법 intent: 단계 버튼에 ' · 문법 기초/발전', 단원 줄 '📘 문법 기초 · Can I borrow …? · 관찰 2 · 문항 6', 목록 맨 위 '📘 이 단계 문법 문제 모아 풀기 (N문항)' → GrammarSetScreen(제목 '문법 문제 · Conversation · 1단계 (제안) · 기초', 안내 '점수·기록 없음 — 풀어 보고 설명을 읽어요', Unit별 카드, 문항별 설명(whyKo), 관찰은 `<details>` 접힘, 모두 답하면 '다 풀었어요', '← 단원 목록'은 선택 유지). 기록·점수 저장 0.
+- 콘텐츠: Unit당 +3 문항(총 9), 각 Unit의 자기 표현·어휘만 사용, 코드에 `// 231차 추가 문항(교사 검수 전)`. Unit 1(your/yours/you, 자 빌리기 어순, 틀린 어순 찾기) · Unit 2(Where is/are/it, It's under the chair 어순, 틀린 어순 찾기) · Unit 3(Is it in the box? → Yes, it is!, 책상 밑에 없음 → No, it isn't., 되묻기 What about the bag?). C1 세트 12문항, C2 세트 6문항.
+- 정적 핀 1건 조정: Unit 2 "Where is… 비오답" 핀이 '틀린 문장 찾기' 문항은 면제한다(그 문항에서는 정답 보기가 곧 틀린 문장이라 설계상 비오답 규칙의 예외).
+
+**클릭 경로(QA 계정)**: 홈 [📘] → Conversation → 1단계 (제안) · 문법 기초 → [📘 이 단계 문법 문제 모아 풀기 (12문항)] / 2단계 · 문법 발전 → (6문항).
+
+**검증(브라우저 1개 순차, vite preview :4193)**: 더미 env 빌드 경고 0. 정적 `testPilotUnit`·`testQaGate` 17/0·`testStudentPathContracts`·`testLazyChunkGuards` 92/92·`testBundleBudget` 32/0·`testRegistryCoverage`·`testWritingPractice` ALL PASS. mock e2e `[unit]` 227/0(1차) · `[student-home]` 223/0/1 SKIP(기존 streak fixture 한계) · `[writing]` 83/0 · `[speaking]` 608/0. 미mock 요청 0·mock 오류 0. e2e 신규: unit 시나리오 **l**(C1 → C2 세트, 개수는 데이터에서 계산, 기록·localStorage 키 미생성, 뒤로 가면 선택 유지) + l 레이아웃 360/412. Preview 실화면·실기기 미검증.
+
+**상태 구분**: 화면 연결 완료(문법 수준 라벨, 레벨별 모아 풀기, Unit 문형 활동 직행) / 콘텐츠 준비 완료 = 기초 12·발전 6, 전부 교사 검수 대기 / 미제작 = 입문·확장·발표 문법 문항, Conversation 3~6단계와 다른 5개 과정 문법 전부(준비 중).
+
+**열린 항목**: `CURRICULUM_STAGES` §12.4 질문 5개(홈 버튼, 회차 문법, 문항 형식, 교재 순서, Reading 분리)와 §11.9 레벨 이름은 운영자 답변 대기. 추가 문항 9개는 `TEACHER_REVIEW_SHEET_PILOT_UNITS_2026-10-08.md` 232차 블록에 검수 요청으로 기재. 설계 기록은 `CURRICULUM_STAGES` §12.5. 보호 범위·Paul Town 무변경, PR #62 Draft·QA 전용. 새 DB·저장소·자동 채점·배정 0.
 
 ## 2026-10-09 (231차) — Grammar 통합(최소 범위·가정 명시): 홈 📘 → 공용 선택기 intent 'grammar' → Unit 문형 활동 (03:50~04:30)
 

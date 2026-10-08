@@ -1969,3 +1969,9 @@ S16도 PASS해 run 2의 FAIL이 간헐적이었음을 확인(재현 조사는
 - 신규 시나리오: unit **k**(홈 문법 경로 — Conversation → 1단계 → Unit → 문형 활동 직행, 이야기·준비 중 과정 비활성, Unit 부제 `📘 … · 관찰 2 · 문항 3`, '← 단원' = 개요, unitRecords 키 외 새 localStorage 키 없음, 선택기 레이아웃 360×640·412×915 두 뷰포트만) · student-home **r**(📘 버튼 표시 + DOM 순서 town → unit → grammar) · **q**(비QA 계정은 버튼 없음).
 - 테스트 쪽 수정 2건(`[unit]` 1차 173/2, 제품 코드 무변경): ① 머리글 '어떤 단원의 문법을 볼까요?'는 단원 목록에서만 렌더되는데 과정 화면에서 단언 → 단원 목록으로 이동 후 단언. ② localStorage 기준값을 로그인 전에 캡처해 로그인 후 키와 비교됨 → 로그인 뒤로 캡처 위치 이동.
 - **231차 결과(2026-10-09 03:50~04:30, 브라우저 1개 순차, vite preview 포트 4193)**: `[writing]` 83/0 · `[speaking]` 608/0 · `[speaking-exam]` 216/0 · `[student-home]` 223/0/1 SKIP(기존 streak fixture 한계) · `[unit]` 1차 173/2 → 재실행 176/0(e2e 커밋 `fb7153e4`, 미mock 요청 0·mock 오류 0). 전부 mock 기반, Preview 실화면·실기기 미검증.
+
+### 232차 추가 (2026-10-09): 문법 수준 분리 + 레벨별 문제 세트
+- 신규 시나리오(e2e 커밋 `8b851840`): unit **l**(문법 단계 버튼 '문법 기초/발전' 라벨 → [이 단계 문법 문제 모아 풀기 (N문항)] → GrammarSetScreen. C1 세트 → C2 세트 순서로 확인하고 **문항 수는 데이터(`grammarSetForBlock`)에서 계산**해 비교(C1 12·C2 6은 현재값일 뿐 하드코딩하지 않음). 세트 화면에서 기록·점수·새 localStorage 키 미생성, '← 단원 목록'으로 돌아가면 선택 유지) + l 레이아웃(360/412).
+- 정적 핀 조정: Unit 2 "Where is… 비오답" 핀이 '틀린 문장 찾기' 프롬프트는 면제한다. 그 문항에서는 정답 보기가 곧 틀린 문장이라 비오답 규칙의 의도된 예외다.
+- 정적: 더미 env 빌드 경고 0. `testPilotUnit`·`testQaGate` 17/0·`testStudentPathContracts`·`testLazyChunkGuards` 92/92·`testBundleBudget` 32/0·`testRegistryCoverage`·`testWritingPractice` ALL PASS.
+- **232차 결과(2026-10-09 04:35~05:00, 브라우저 1개 순차, vite preview 포트 4193)**: `[unit]` 227/0(1차) · `[student-home]` 223/0/1 SKIP(기존 streak fixture 한계) · `[writing]` 83/0 · `[speaking]` 608/0. 미mock 요청 0·mock 오류 0. 전부 mock 기반, Preview 실화면·실기기 미검증. 추가 문항 9개는 교사 검수 전.

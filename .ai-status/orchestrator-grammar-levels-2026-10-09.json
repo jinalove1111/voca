@@ -1,0 +1,22 @@
+{
+  "agent_name": "orchestrator",
+  "role": "orchestrator",
+  "task_id": "grammar-levels-2026-10-09",
+  "task": "Split grammar by performance level (like speaking/writing) and let students solve grammar problems grouped by level; +9 grammar items",
+  "status": "completed",
+  "progress": 100,
+  "started_at": "2026-10-09T04:35:00+09:00",
+  "updated_at": "2026-10-09T05:00:00+09:00",
+  "files_owned": [
+    "docs/design/CURRICULUM_STAGES_2026-10-08.md",
+    "docs/design/TEACHER_REVIEW_SHEET_PILOT_UNITS_2026-10-08.md",
+    "handoff.md",
+    "TESTING.md",
+    "ROADMAP.md",
+    ".ai-status/orchestrator-grammar-levels-2026-10-09.json"
+  ],
+  "files_read": [],
+  "summary": "Grammar now has its own performance level (grammarKo); units declare performance.grammar (Unit 1/2 basic, Unit 3 developing). Picker offers a per-level problem set screen with no score or records.\n9 new grammar items added (3 per unit), basic 12 and developing 6, all awaiting teacher review. Code commit 5b25a091.\nStatic checks pass; browser unit 227/0, student-home 223/0/1 skip, writing 83/0, speaking 608/0.",
+  "blocker": null,
+  "next_action": "교사 검수(문형 문항 9 포함) → §12.4·§11.9 운영자 답변 → 입문/확장 문법 문항은 해당 레벨 Unit 제작 시"
+}
