@@ -260,6 +260,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 시범 Unit에서 말하기/쓰기로 나갔다가 돌아올 때(224차). unitLink가 있으면 Speaking/Writing의 뒤로는 Unit 화면으로
   const [unitLink, setUnitLink] = useState(null) // { speakingMode?: 'key'|'practice', setId?, writingItemId? } | null
   const [pilotUnits, setPilotUnits] = useState(null)
+  const [pilotUnitsFailed, setPilotUnitsFailed] = useState(false) // 226차: 청크 로드 실패 시 빈 화면 대신 안내 + 홈
   const [selectedWord, setWord]     = useState(null)
   const [selectedWordIdx, setWordIdx] = useState(0)
   const [pendingNextIdx, setPendingNextIdx] = useState(0)
@@ -848,7 +849,7 @@ function AppInner({ studentId, studentName, onLogout }) {
         <StudentHome studentName={studentName} studentData={studentData} classWords={classWords}
           hasTodaysHomework={!!getStudentClass(studentId) && getTodaysAssignmentWordIds(getStudentClass(studentId)).length > 0}
           onStartGuided={startGuidedSession} onLogout={onLogout}
-          onGo={(t) => { setSpeakingMode(t === 'speakingExam' ? 'exam' : 'menu'); if (t === 'writingCoach') setWritingLink(null); setUnitLink(null); if (t === 'unit') { loadPilotUnits().then((m) => setPilotUnits(m.UNITS)) } goFrom('home', t === 'speakingExam' ? 'speaking' : (paulTown2_5dEnabled && t === 'paulTown') ? 'proto25d' : t) }}
+          onGo={(t) => { setSpeakingMode(t === 'speakingExam' ? 'exam' : 'menu'); if (t === 'writingCoach') setWritingLink(null); setUnitLink(null); if (t === 'unit') { setPilotUnitsFailed(false); loadPilotUnits().then((m) => setPilotUnits(m.UNITS)).catch(() => setPilotUnitsFailed(true)) } goFrom('home', t === 'speakingExam' ? 'speaking' : (paulTown2_5dEnabled && t === 'paulTown') ? 'proto25d' : t) }}
           canEnterTown={(isFeatureEnabled('paulTownHomeBand') && !!attachment.stats) || paulTown2_5dEnabled}
           townEligible={townV1Enabled}
           writingEnabled={isFeatureEnabled('writingCoachEnabled') || qaTestStudent}
@@ -872,10 +873,16 @@ function AppInner({ studentId, studentName, onLogout }) {
       {qaTestStudent && screen === 'writingCoach' && (
         // 2026-10-07(222차) QA 계정: 주제별 문장 쓰기(Speaking 문항 재사용). ← 홈 / Speaking에서 왔으면 그 세트의 연습 끝 화면으로
         <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
-          <WritingPractice studentId={studentId} startItemId={unitLink?.writingItemId || writingLink?.writingItemId || null}
+          <WritingPractice studentId={studentId} linkLabel={unitLink ? '← 이 단원으로' : null} startItemId={unitLink?.writingItemId || writingLink?.writingItemId || null}
             onBack={() => { if (unitLink) setScreen('unit'); else if (writingLink) { setSpeakingMode('practiceDone'); setScreen('speaking') } else setScreen('home') }}
             onHome={() => { setWritingLink(null); setUnitLink(null); setScreen('home') }} />
         </React.Suspense>
+      )}
+      {qaTestStudent && screen === 'unit' && !pilotUnits && (
+        <div data-testid={pilotUnitsFailed ? 'unit-load-failed' : 'unit-loading'} className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
+          <p className="text-gray-700 font-bold break-keep">{pilotUnitsFailed ? '오늘의 학습을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 열어 주세요.' : '불러오는 중...'}</p>
+          <button data-testid="unit-load-home" onClick={() => { setUnitLink(null); setScreen('home') }} className="min-h-[44px] px-5 rounded-2xl font-black bg-white card-shadow text-gray-700 btn-press">← 홈으로</button>
+        </div>
       )}
       {qaTestStudent && screen === 'unit' && pilotUnits && (
         <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
