@@ -243,13 +243,26 @@ export async function run(browser, baseURL) {
   await scenario('g Unit 청크 로드 실패 → 안내·홈 복귀', VP, async ({ page, name }) => {
     await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
     await page.route('**/assets/units-*.js', (route) => route.abort())
+    // 1차 실패: 기존 stale-chunk 자동 복구(main.jsx vite:preloadError → 가드 기록 → 새로고침)가 먼저 동작한다 — 세션 복원으로 홈이 다시 뜬다
+    const reloaded = page.waitForEvent('framenavigated', { timeout: 20000 }).then(() => true).catch(() => false)
     await T(page, 'student-home-unit').click()
-    r.check(`${name} 빈 화면 대신 안내(unit-load-failed) + 홈 버튼`, !!(await waitUntil(() => T(page, 'unit-load-failed').isVisible(), { timeout: 15000 })) && (await txt(page, 'unit-load-failed')).includes('불러오지 못했어요') && (await T(page, 'unit-load-home').isVisible()))
+    const didReload = await reloaded
+    const safeEval = (fn) => page.evaluate(fn).catch(() => null)
+    r.check(`${name} 1차 실패 → 기존 stale-chunk 가드 기록 + 자동 새로고침(홈 복원)`, didReload && !!(await waitUntil(async () => (await safeEval(() => performance.getEntriesByType('navigation')[0]?.type)) === 'reload' && !!(await safeEval(() => sessionStorage.getItem('paulEasyVoca_staleChunkReloadAt'))) && (await T(page, 'student-home').isVisible().catch(() => false)), { timeout: 20000 })))
+    // 2차 실패(가드 활성 → 새로고침 안 함): 226차 안내 화면
+    await T(page, 'student-home-unit').click()
+    r.check(`${name} 2차 실패 → 빈 화면 대신 안내(unit-load-failed) + 홈 버튼`, !!(await waitUntil(() => T(page, 'unit-load-failed').isVisible(), { timeout: 15000 })) && (await txt(page, 'unit-load-failed')).includes('불러오지 못했어요') && (await T(page, 'unit-load-home').isVisible()))
+    r.check(`${name} 안내는 '새로고침'(한 번 실패한 import는 새로고침 전까지 실패로 남음) + 새로고침 버튼`, (await txt(page, 'unit-load-failed')).includes('새로고침') && (await T(page, 'unit-load-reload').isVisible()))
     await T(page, 'unit-load-home').click()
     r.check(`${name} ← 홈으로 → 학생 홈`, !!(await waitUntil(() => T(page, 'student-home').isVisible(), { timeout: 10000 })))
-    await page.unroute('**/assets/units-*.js')
     await T(page, 'student-home-unit').click()
-    r.check(`${name} 다시 열면 목록 로드`, !!(await waitUntil(() => T(page, 'unit-list').isVisible(), { timeout: 15000 })))
+    r.check(`${name} 같은 페이지에서 다시 열면 여전히 안내(브라우저 모듈 캐시) — 빈 화면 아님`, !!(await waitUntil(() => T(page, 'unit-load-failed').isVisible(), { timeout: 15000 })))
+    await page.unroute('**/assets/units-*.js')
+    const reloaded2 = page.waitForEvent('framenavigated', { timeout: 20000 }).then(() => true).catch(() => false)
+    await T(page, 'unit-load-reload').click()
+    r.check(`${name} 🔄 새로고침 → 홈 복원`, (await reloaded2) && !!(await waitUntil(() => T(page, 'student-home').isVisible().catch(() => false), { timeout: 20000 })))
+    await T(page, 'student-home-unit').click()
+    r.check(`${name} 새로고침 뒤 다시 열면 목록 로드`, !!(await waitUntil(() => T(page, 'unit-list').isVisible(), { timeout: 15000 })))
   })
 
   for (const vp of [{ width: 360, height: 640 }, { width: 390, height: 844 }, { width: 412, height: 915 }, { width: 1280, height: 800 }]) {
