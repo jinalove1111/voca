@@ -28,6 +28,24 @@ _기준: 운영자 설계안 `Paul_English_Integrated_Curriculum_v1.md`(운영 �
 - 교사 화면·배정·제출(설계안 §12): DB 없이 불가 → 설계만.
 - 비QA 학생 노출: 금지 유지(PR #62 Draft).
 
+### 2026-10-09 (229차) — 홈 Speaking·Writing·오늘의 학습 통합 진입: 6 과정 → 레벨(제안) → 단원/이야기 → 활동
+
+_QA 전용·mock e2e 기준. Preview 실화면·학습 효과 미검증. 상세는 handoff 229차, 설계 `CURRICULUM_STAGES_2026-10-08.md` §10._
+
+**완료**
+- 6 과정 구분(Phonics·Conversation·Presentation·Reading·Middle School·News Class 병행) 데이터·화면. 학원 반 이름과 대조, 레벨 라벨은 전부 '(제안)'.
+- 홈 말하기·쓰기·오늘의 학습이 같은 선택 화면으로 진입, 선택 유지/초기화, 말하기↔쓰기 링크, 빈 레벨 '콘텐츠 준비 중'.
+- 기존 이야기 10회차를 Conversation 레벨 하나씩에 배치(제안), 기초/발전 차이는 `[unit]` mock으로 화면 확인.
+- 운영자 통합 설계안 원문이 저장소에 없음을 확인(인용만 존재).
+
+**다음**
+- push → Vercel Preview 확인 → 운영자 SSO 실화면 확인.
+- 학원 레벨명 확정 후 '(제안)' 제거. Unit 3 교사 검수표. 후보 B(C2 4개월차).
+
+**보류**
+- Phonics·Presentation·Reading·Middle School·News Class 콘텐츠 전부 미제작(결정·교사 입력 대기), Conversation 15 Unit.
+- 레벨 영구 저장·자동 배정·자동 승급·자동 채점·새 DB: 의도적 제외 유지.
+
 ## 2026-10-04 (202차) — Speaking UX v2: 회화 연습 / 그림 보고 말하기 시험 분리 — 상태: 코드 완료 ✅(PR #62 브랜치, Draft), 전용 일러스트 10장은 명세만(최종본 0)
 
 - Speaking 진입 메뉴 2개(회화 연습 / 그림 보고 말하기 시험) + 홈 시험 직진입. 연습: 그림+문장+뜻+en-GB 듣기 동시, 선택 녹음. 시험: 그림+진행만 → 답 확인 → 문장·음성·다시 연습·다음 문제. 정답·합격·숙달·점수 생성 0, 자동 채점 없음(교사 확인표가 평가). 201차 SituationRecall(힌트 회상)·열린 질문 3개는 통합·제거.
