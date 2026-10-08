@@ -74,6 +74,7 @@ check('App: unit 화면은 QA 계정만(QA_ONLY_SCREENS 포함), 홈 [오늘의 
 // 225차 독립 QA 결함 수정 핀: 첫 응답만 완료 카운트, 재생 체인은 언마운트 시 중단, 말하기/쓰기 복귀 시 completed만, 자기 확인 미응답 상태
 check('225차 QA 수정: 첫 응답만 카운트·재생 alive 가드·returnedFrom 복귀 기록·자기 확인 미응답 구분·"해 봤어요" 표기', (u.match(/if \(picked === null\) onAnswered\?\.\(\)/g) || []).length === 2 && /alive\.current && i < L\.turns\.length/.test(u) && /returnedFrom && unit\.activities\.find/.test(u) && /aria-pressed=\{selfPicked\[active\.id\] === false\}/.test(u) && !/끝냈어요/.test(u) && /returnedFrom=\{unitLink \? \(unitLink\.writingItemId \? 'writing' : 'speaking'\) : null\}/.test(app))
 check('225차 QA 콘텐츠: 듣기 1번은 상황문으로 풀리지 않음(미아의 연필 수), 복습 단어 ruler·ball이 어휘에 있음, 방어 가능한 오답 없음', /얼마나/.test(UNIT_BORROW.listening.questions[0].promptKo) && ['ruler', 'ball'].every((w) => UNIT_BORROW.vocab.some((v) => v.en === w)) && !JSON.stringify(UNIT_BORROW.grammar.items).includes('I can borrow a pencil?'))
+check('225차 e2e 발견 수정: 복귀 기록(returnedFrom)은 돌아온 Unit(initialUnitId)에만 1회 적용, 목록에서 다른 Unit을 열면 비움', /returnedFrom=\{unit\.id === initialUnitId \? pendingReturn : null\}/.test(uSrc) && /const pick = \(id\) => \{ setPendingReturn\(null\); setUnitId\(id\) \}/.test(uSrc) && /onClick=\{\(\) => pick\(u\.id\)\}/.test(uSrc))
 check('Speaking 루트: initialMode key/practice + menuExits', /initialMode === 'key' && initialSetId \? 'key'/.test(strip(read('src/components/SpeakingPractice.jsx'))) && /if \(menuExits\) \{ onBack\(\); return \}/.test(strip(read('src/components/SpeakingPractice.jsx'))))
 
 if (fail) { console.log(`\nFAILED ${fail}`); process.exit(1) }

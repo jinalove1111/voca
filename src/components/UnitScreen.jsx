@@ -373,9 +373,12 @@ function UnitSpeaking({ activity, onDone }) {
 // Unit 선택(시범 목록) → UnitView. unitLink로 돌아온 경우 그 Unit을 바로 연다
 export default function UnitScreen({ units, initialUnitId = null, returnedFrom = null, studentId, onBack, onSpeaking, onWriting }) {
   const [unitId, setUnitId] = useState(initialUnitId || (units.length === 1 ? units[0].id : null))
+  // 복귀 기록(returnedFrom)은 돌아온 그 Unit(initialUnitId)에만 1회 적용 — 목록에서 다른 Unit을 열 때 새어 나가면 안 된다(225차 e2e e에서 발견)
+  const [pendingReturn, setPendingReturn] = useState(returnedFrom)
+  const pick = (id) => { setPendingReturn(null); setUnitId(id) }
   const unit = units.find((u) => u.id === unitId) || null
   if (unit) {
-    return <UnitView key={unit.id} unit={unit} studentId={studentId} returnedFrom={returnedFrom} backLabel={units.length > 1 ? '← 목록' : '← 홈'} onBack={units.length > 1 ? () => setUnitId(null) : onBack}
+    return <UnitView key={unit.id} unit={unit} studentId={studentId} returnedFrom={unit.id === initialUnitId ? pendingReturn : null} backLabel={units.length > 1 ? '← 목록' : '← 홈'} onBack={units.length > 1 ? () => pick(null) : onBack}
       onSpeaking={(a) => onSpeaking(unit.id, a)} onWriting={(a) => onWriting(unit.id, a)} />
   }
   return (
@@ -384,7 +387,7 @@ export default function UnitScreen({ units, initialUnitId = null, returnedFrom =
         <h1 className="text-xl font-black text-teal-700 pt-2">오늘의 학습</h1>
         <p className="text-base font-black text-gray-800">어떤 단원을 할까요?</p>
         {units.map((u) => (
-          <button key={u.id} data-testid={`unit-pick-${u.id}`} onClick={() => setUnitId(u.id)} className="w-full min-h-[72px] px-4 py-4 rounded-3xl text-left btn-press card-shadow text-white bg-gradient-to-br from-teal-400 to-emerald-600">
+          <button key={u.id} data-testid={`unit-pick-${u.id}`} onClick={() => pick(u.id)} className="w-full min-h-[72px] px-4 py-4 rounded-3xl text-left btn-press card-shadow text-white bg-gradient-to-br from-teal-400 to-emerald-600">
             <span className="block text-xs font-bold opacity-90">{u.courseKo} · {u.block} · {u.goalTitleKo}</span>
             <span className="block text-lg font-black">{u.titleKo}</span>
           </button>
