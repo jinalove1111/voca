@@ -1,10 +1,13 @@
-// 2026-10-07(222차) Writing 첫 버전 브라우저 시나리오 — QA 계정 홈 ✍️ → 주제 → 문항 → 직접 쓰기 → 예시 비교 → 고치기,
+// 2026-10-07(222차) Writing 첫 버전 브라우저 시나리오 — QA 계정 홈 ✍️ → (228차) 통합 선택기(과정→단계→이야기 카드 쓰기) → 문항 → 직접 쓰기 → 예시 비교 → 고치기,
 // 재진입·계정 분리(UUID 키)·Speaking [이 표현 써보기] 왕복·360/390/412/1280 레이아웃. 네트워크 전체 mock(installMocks).
 import { installMocks } from './lib/mockRoutes.mjs'
 import { createRecorder } from './lib/harness.mjs'
 import { QA_STUDENT_NAME, QA_LOGIN_PIN, QA_STUDENT_ID } from './fixtures/index.mjs'
 import { WRITING_ITEMS, writingItem } from '../../src/utils/writing/writingItems.js'
 import { draftsKey } from '../../src/utils/writing/writingDrafts.js'
+import { UNIT_LOST_BAG } from '../../src/utils/curriculum/unitLostBag.js'
+import { writingItemsForEpisode } from '../../src/utils/curriculum/catalog.js'
+import { itemsForSet } from '../../src/utils/situation/speakingSets.js'
 
 const VP = { width: 390, height: 844 }
 const T = (page, id) => page.locator(`[data-testid="${id}"]`)
@@ -30,6 +33,9 @@ function badWrites(apiCallLog) {
   return apiCallLog.filter((c) => c.url.includes('/rest/v1/') && ['POST', 'PATCH', 'PUT', 'DELETE'].includes(c.method)).filter((c) => !LOGIN_WRITES.includes(path(c.url))).map((c) => `${c.method} ${path(c.url)}`)
 }
 const W = writingItem('w-s02-03')
+// 228차: 쓰기 문항 → 이야기 회차 → 단계(카탈로그 EPISODE_PLACEMENT: ep01·ep02→C1, ep03→C2, ep05→C4)
+const EP_BLOCK = { ep01: 'C1', ep02: 'C1', ep03: 'C2', ep05: 'C4' }
+const epOfItem = (wId) => `ep${/^w-s(\d\d)-/.exec(wId)[1]}`
 
 export async function run(browser, baseURL) {
   const r = createRecorder('[writing]')
@@ -45,21 +51,31 @@ export async function run(browser, baseURL) {
     if (seed) await page.addInitScript((s) => { try { for (const [k, v] of Object.entries(s)) localStorage.setItem(k, v) } catch { /* 무시 */ } }, seed)
     const { unmockedRequests: u, apiCallLog } = await installMocks(page)
     const name = `${label} [${vp.width}x${vp.height}]`
-    const openTopics = async () => {
+    // 228차: 홈 문장 쓰기는 통합 선택기(unit-list, data-intent=writing)로 들어온다(writing-topics 없음)
+    const openPicker = async (menu = 'writing') => {
       await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
-      await T(page, 'student-home-menu-writing').click()
-      await T(page, 'writing-topics').waitFor({ state: 'visible', timeout: 15000 })
+      await T(page, `student-home-menu-${menu}`).click()
+      await T(page, 'unit-list').waitFor({ state: 'visible', timeout: 15000 })
     }
-    const openItem = async (topic, wId) => {
-      await openTopics()
-      await T(page, `writing-topic-${topic}`).click()
+    const toLevel = async (block) => {
+      await T(page, 'unit-course-conversation').click()
+      await T(page, `unit-block-${block}`).click()
+    }
+    const openStoryItems = async (ep) => {
+      await openPicker()
+      await toLevel(EP_BLOCK[ep])
+      await T(page, `story-write-${ep}`).click()
+      await T(page, 'writing-items').waitFor({ state: 'visible', timeout: 10000 })
+    }
+    const openItem = async (wId) => {
+      await openStoryItems(epOfItem(wId))
       await T(page, `writing-item-${wId}`).click()
       await T(page, 'writing-flow').waitFor({ state: 'visible', timeout: 5000 })
     }
     try {
       await page.goto(baseURL, { waitUntil: 'domcontentloaded' })
       await loginOnly(page)
-      await body({ page, name, openTopics, openItem })
+      await body({ page, name, openPicker, toLevel, openStoryItems, openItem })
       r.check(`${name} 콘솔/페이지 오류 0건`, errors.length === 0, errors.slice(0, 3).join(' | '))
       const bad = badWrites(apiCallLog)
       r.check(`${name} 로그인 외 REST 쓰기 0건(답안·이름 외부 전송 없음)`, bad.length === 0, bad.slice(0, 3).join(' | '))
@@ -72,23 +88,52 @@ export async function run(browser, baseURL) {
     unmockedRequests.push(...u)
   }
 
-  // ── a. 주제·문항 목록 ──
-  await scenario('a 주제·문항', VP, {}, async ({ page, name, openTopics }) => {
-    await openTopics()
-    const ids = await page.locator('[data-testid^="writing-topic-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')))
-    r.check(`${name} 주제는 학교생활·쇼핑 + 물건·장소 찾기(225차 Unit 2 inline 문항) 3개(빈 주제 없음)`, ids.join(',') === 'writing-topic-school,writing-topic-shopping,writing-topic-finding')
-    r.check(`${name} 임시 저장·미전송 안내`, (await txt(page, 'writing-storage-note')).includes('자동 전송되지 않아요'))
-    await T(page, 'writing-topic-school').click()
-    r.check(`${name} 학교생활 문항 5개, 영어 없음(안내만)`, (await page.locator('[data-testid^="writing-item-"]').count()) === 5 && !/[A-Za-z]/.test(await txt(page, 'writing-items')))
+  // ── a. 선택기(쓰기 의도)·이야기 카드·문항 목록 ──
+  await scenario('a 선택기·이야기 카드·문항', VP, {}, async ({ page, name, openPicker, toLevel }) => {
+    await openPicker()
+    r.check(`${name} 홈 문장 쓰기 → 통합 선택기(쓰기 의도, 과정 선택부터), 옛 주제 화면(writing-topics) 없음`, (await T(page, 'unit-list').getAttribute('data-intent')) === 'writing' && (await T(page, 'unit-list').getAttribute('data-level')) === 'course' && (await T(page, 'writing-topics').count()) === 0 && (await txt(page, 'unit-list')).includes('문장 쓰기'))
+    await toLevel('C1')
+    const unitBtns = await page.locator('button[data-testid^="unit-pick-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')))
+    r.check(`${name} 회화 1단계: Unit 버튼 2개 + 이야기 카드 ep01·ep02`, unitBtns.length === 2 && unitBtns.includes(`unit-pick-${UNIT_LOST_BAG.id}`) && (await T(page, 'unit-pick-ep01').getAttribute('data-kind')) === 'story' && (await T(page, 'unit-pick-ep02').getAttribute('data-kind')) === 'story', unitBtns.join(','))
+    r.check(`${name} 쓰기 의도: 문장 쓰기 버튼만(연습 시작·한 문장 이야기 버튼 없음), 쓰기 문항 있는 회차는 활성`, (await T(page, 'story-write-ep01').isEnabled()) && (await T(page, 'story-write-ep02').isEnabled()) && (await page.locator('button[data-testid^="story-practice-"]').count()) === 0 && (await page.locator('button[data-testid^="story-key-ep"]').count()) === 0)
+    await T(page, 'story-write-ep02').click()
+    await T(page, 'writing-items').waitFor({ state: 'visible', timeout: 5000 })
+    r.check(`${name} 2화 쓰기 → 그 회차 문항 ${writingItemsForEpisode('ep02').length}개, 영어 없음(안내만), 임시 저장 안내는 쓰기 흐름에서`, (await page.locator('[data-testid^="writing-item-w-"]').count()) === writingItemsForEpisode('ep02').length && !/[A-Za-z]/.test(await txt(page, 'writing-items')))
     await T(page, 'writing-items-back').click()
-    r.check(`${name} ← 주제`, await T(page, 'writing-topics').isVisible())
-    await T(page, 'writing-home').click()
-    r.check(`${name} ← 홈`, !!(await waitUntil(() => T(page, 'student-home').isVisible(), { timeout: 5000 })))
+    r.check(`${name} ← 목록 → 선택기, 같은 과정·단계 유지(회화 1단계, 선택 상태는 세션뿐)`, (await T(page, 'unit-list').getAttribute('data-level')) === 'unit' && (await txt(page, 'unit-list-crumb')).includes('Conversation') && (await txt(page, 'unit-list-crumb')).includes('1단계'))
+    // 2단계: 3화는 쓰기 문항이 없어 비활성
+    await T(page, 'unit-list-back').click()
+    await T(page, 'unit-block-C2').click()
+    r.check(`${name} 3화(C2): 쓰기 문항 없음 → 문장 쓰기 버튼 비활성 '쓰기 준비 중'`, (await T(page, 'story-write-ep03').isDisabled()) && (await txt(page, 'story-write-ep03')).includes('쓰기 준비 중'))
+    // 4단계: 5화 쓰기 문항 5개
+    await T(page, 'unit-list-back').click()
+    await T(page, 'unit-block-C4').click()
+    await T(page, 'story-write-ep05').click()
+    await T(page, 'writing-items').waitFor({ state: 'visible', timeout: 5000 })
+    const shopIds = await page.locator('[data-testid^="writing-item-w-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid').replace('writing-item-', '')))
+    r.check(`${name} 5화 쓰기: 쇼핑 문항 정확히 5개(${writingItemsForEpisode('ep05').map((w) => w.id).join(',')})`, shopIds.length === 5 && shopIds.join(',') === writingItemsForEpisode('ep05').map((w) => w.id).join(','), shopIds.join(','))
+    await T(page, 'writing-items-back').click()
+    r.check(`${name} 문항 목록 ← 목록 → 선택기 회화 4단계(선택 유지)`, (await T(page, 'unit-list').getAttribute('data-level')) === 'unit' && (await txt(page, 'unit-list-crumb')).includes('Conversation') && (await txt(page, 'unit-list-crumb')).includes('4단계') && (await T(page, 'story-write-ep05').isVisible()))
+    r.check(`${name} 선택 저장 키 없음(localStorage)`, !(await page.evaluate(() => Object.keys(localStorage).some((k) => /level|block|course|selection|unit.?pick/i.test(k)))))
+    // 쓰기 의도 + Unit: 그 Unit의 쓰기 문항이 바로 열린다
+    await T(page, 'unit-list-back').click()
+    await T(page, 'unit-block-C1').click()
+    await T(page, `unit-pick-${UNIT_LOST_BAG.id}`).click()
+    await T(page, 'writing-flow').waitFor({ state: 'visible', timeout: 15000 })
+    r.check(`${name} 쓰기 의도로 잃어버린 물건 Unit → Unit 개요 없이 쓰기 문항 w-u2-under`, (await T(page, 'writing-flow').getAttribute('data-item')) === 'w-u2-under' && (await T(page, 'unit-screen').count()) === 0)
+    await T(page, 'writing-input').fill("Where's my bag?")
+    await T(page, 'writing-compare').click()
+    r.check(`${name} 비교 뒤 버튼 '← 이 단원으로'(다음 문장 아님)`, (await txt(page, 'writing-next')) === '← 이 단원으로')
+    await T(page, 'writing-next').click()
+    r.check(`${name} '← 이 단원으로' → Unit 개요`, !!(await waitUntil(() => T(page, 'unit-screen').isVisible(), { timeout: 10000 })) && (await T(page, 'unit-screen').getAttribute('data-unit')) === UNIT_LOST_BAG.id)
+    await T(page, 'unit-home').click()
+    await T(page, 'unit-list-home').click()
+    r.check(`${name} 선택기 ← 홈 → 학생 홈`, !!(await waitUntil(() => T(page, 'student-home').isVisible(), { timeout: 5000 })))
   })
 
   // ── b. 쓰기 → 비교 → 고치기 ──
   await scenario('b 쓰기 흐름', VP, {}, async ({ page, name, openItem }) => {
-    await openItem('school', 'w-s02-03')
+    await openItem('w-s02-03')
     r.check(`${name} 상황·안내 보임, 예시 영어·대체 답안·듣기는 DOM에 없음`, (await txt(page, 'writing-situation')).includes(W.situationKo) && (await txt(page, 'writing-prompt')).includes(W.promptKo) && !(await inDom(page, W.en)) && (await T(page, 'writing-listen').count()) === 0 && !(await inDom(page, W.alternatives[0])))
     r.check(`${name} 빈 입력: 비교 버튼 비활성`, await T(page, 'writing-compare').isDisabled())
     await T(page, 'writing-input').fill('   \n ')
@@ -125,7 +170,7 @@ export async function run(browser, baseURL) {
   // ── c. 혼자 쓰기 + 계정 분리 ──
   const otherSeed = JSON.stringify({ 'w-s02-03': { first: 'OTHER STUDENT', revised: '', helped: false, compared: true } })
   await scenario('c 혼자 쓰기·계정 분리', VP, { seed: { [draftsKey('e2e00000-0000-4000-8000-00000000a002')]: otherSeed } }, async ({ page, name, openItem }) => {
-    await openItem('school', 'w-s02-03')
+    await openItem('w-s02-03')
     r.check(`${name} 다른 학생(UUID) 초안은 보이지 않음(새로 쓰기)`, (await T(page, 'writing-flow').getAttribute('data-step')) === 'write' && !(await inDom(page, 'OTHER STUDENT')))
     await T(page, 'writing-input').fill('Can I use your pencil?')
     await T(page, 'writing-compare').click()
@@ -134,69 +179,60 @@ export async function run(browser, baseURL) {
     r.check(`${name} 다른 학생 초안 무변경`, other === otherSeed)
   })
 
-  // ── d. Speaking 연습 끝 → 이 표현 써보기 → 돌아오기 ──
-  await scenario('d Speaking 연결', VP, {}, async ({ page, name }) => {
-    await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
-    await T(page, 'student-home-menu-speaking').click()
-    await T(page, 'speaking-topics').waitFor({ state: 'visible', timeout: 15000 })
-    await T(page, 'topic-school').click()
-    await T(page, 'story-start-ep02').click()
-    await T(page, 'speaking-practice').waitFor({ state: 'visible', timeout: 15000 })
-    for (let i = 0; i < 12; i++) await T(page, 'practice-next').click()
+  // ── d. Speaking 이야기 연습 끝 → 이 표현 써보기 → 돌아오기 (228차: 돌아오면 선택기, 같은 과정·단계) ──
+  await scenario('d Speaking 연결', VP, {}, async ({ page, name, openPicker, toLevel }) => {
+    const toStoryPractice = async (ep) => {
+      await openPicker('speaking')
+      await toLevel(EP_BLOCK[ep])
+      await T(page, `story-practice-${ep}`).click()
+      await T(page, 'speaking-practice').waitFor({ state: 'visible', timeout: 15000 })
+    }
+    const finishPractice = async (ep) => { for (let i = 0; i < itemsForSet(ep).length; i++) await T(page, 'practice-next').click() }
+    const atPickerC1 = async () => !!(await waitUntil(() => T(page, 'unit-list').isVisible(), { timeout: 10000 })) && (await T(page, 'unit-list').getAttribute('data-level')) === 'unit' && (await txt(page, 'unit-list-crumb')).includes('Conversation') && (await txt(page, 'unit-list-crumb')).includes('1단계')
+    await toStoryPractice('ep02')
+    await finishPractice('ep02')
     r.check(`${name} 2화 연습 끝: [이 표현 써보기]`, await T(page, 'practice-write').isVisible())
     await T(page, 'practice-write').click()
     await T(page, 'writing-flow').waitFor({ state: 'visible', timeout: 15000 })
     r.check(`${name} → 2화 핵심 표현의 Writing 문항(w-s02-03)`, (await T(page, 'writing-flow').getAttribute('data-item')) === 'w-s02-03')
     await T(page, 'writing-back').click()
-    r.check(`${name} ← 목록 → 원래 Speaking 2화 연습 끝 화면`, !!(await waitUntil(() => T(page, 'practice-done').isVisible(), { timeout: 10000 })) && ((await T(page, 'speaking-practice').getAttribute('data-expr')) || '').startsWith('s02-'))
-    // 링크로 다시 들어가 다음 문항 → ← 목록 → ← 주제 → ← 홈은 홈으로(Speaking이 아님)
+    r.check(`${name} ← 목록 → 선택기(회화 1단계 유지; 이야기 링크 진입이라 연습 끝 화면이 아님)`, await atPickerC1() && (await T(page, 'practice-done').count()) === 0 && (await T(page, 'writing-flow').count()) === 0)
+    // 다시 들어가 비교까지 하고 '← 단원 목록으로'
+    await T(page, 'story-practice-ep02').click()
+    await T(page, 'speaking-practice').waitFor({ state: 'visible', timeout: 15000 })
+    r.check(`${name} 복귀 뒤 같은 회차 연습을 다시 열면 1번부터(끝 화면 아님)`, (await T(page, 'practice-done').count()) === 0 && (await T(page, 'speaking-practice').getAttribute('data-expr')) === 's02-01')
+    await finishPractice('ep02')
     await T(page, 'practice-write').click()
     await T(page, 'writing-flow').waitFor({ state: 'visible', timeout: 15000 })
     await T(page, 'writing-input').fill('Can I borrow a pencil?')
     await T(page, 'writing-compare').click()
+    r.check(`${name} 이야기에서 온 쓰기: 비교 뒤 버튼은 '← 단원 목록으로'`, (await txt(page, 'writing-next')) === '← 단원 목록으로')
     await T(page, 'writing-next').click()
-    await T(page, 'writing-back').click()
-    await T(page, 'writing-items-back').click()
-    await T(page, 'writing-home').click()
-    r.check(`${name} 링크 진입 뒤 주제 화면 ← 홈 → 학생 홈`, !!(await waitUntil(() => T(page, 'student-home').isVisible(), { timeout: 10000 })))
-    await T(page, 'student-home-menu-speaking').click()
-    await T(page, 'speaking-topics').waitFor({ state: 'visible', timeout: 15000 })
-    await T(page, 'topic-school').click()
-    await T(page, 'story-start-ep02').click()
-    await T(page, 'speaking-practice').waitFor({ state: 'visible', timeout: 15000 })
-    for (let i = 0; i < 12; i++) await T(page, 'practice-next').click()
-    await T(page, 'practice-write').click()
-    await T(page, 'writing-flow').waitFor({ state: 'visible', timeout: 15000 })
-    await T(page, 'writing-back').click()
-    r.check(`${name} ← 목록 → 원래 Speaking 2화 연습 끝 화면`, !!(await waitUntil(() => T(page, 'practice-done').isVisible(), { timeout: 10000 })) && ((await T(page, 'speaking-practice').getAttribute('data-expr')) || '').startsWith('s02-'))
-    await T(page, 'practice-back-menu').click()
-    await T(page, 'speaking-menu').waitFor({ state: 'visible', timeout: 5000 })
-    await T(page, 'speaking-menu-practice').click()
-    await T(page, 'speaking-practice').waitFor({ state: 'visible', timeout: 15000 })
-    r.check(`${name} 복귀 뒤 같은 세트 연습을 다시 열면 1번부터(끝 화면 아님)`, (await T(page, 'practice-done').count()) === 0 && (await T(page, 'speaking-practice').getAttribute('data-expr')) === 's02-01')
-    await T(page, 'speaking-back').click()
-    await T(page, 'speaking-menu').waitFor({ state: 'visible', timeout: 5000 })
-    await T(page, 'speaking-menu-home').click()
+    r.check(`${name} '← 단원 목록으로' → 선택기(회화 1단계 유지)`, await atPickerC1())
+    // 선택기 ← 홈 → 홈 문장 쓰기: 링크 초기화, 선택기 처음(쓰기 의도)
+    await T(page, 'unit-list-home').click()
     await T(page, 'student-home').waitFor({ state: 'visible', timeout: 10000 })
     await T(page, 'student-home-menu-writing').click()
-    r.check(`${name} 홈에서 문장 쓰기 → 주제 화면(링크 초기화)`, !!(await waitUntil(() => T(page, 'writing-topics').isVisible(), { timeout: 10000 })))
-    await T(page, 'writing-home').click()
-    await T(page, 'student-home').waitFor({ state: 'visible', timeout: 10000 })
-    await T(page, 'student-home-menu-speaking').click()
-    await T(page, 'speaking-topics').waitFor({ state: 'visible', timeout: 15000 })
-    await T(page, 'topic-friends').click()
-    await T(page, 'story-start-ep03').click()
-    await T(page, 'speaking-practice').waitFor({ state: 'visible', timeout: 15000 })
-    for (let i = 0; i < 11; i++) await T(page, 'practice-next').click()
+    r.check(`${name} 홈에서 문장 쓰기 → 선택기 처음(쓰기 의도, 과정 선택; 링크·선택 초기화)`, !!(await waitUntil(() => T(page, 'unit-list').isVisible(), { timeout: 10000 })) && (await T(page, 'unit-list').getAttribute('data-intent')) === 'writing' && (await T(page, 'unit-list').getAttribute('data-level')) === 'course')
+    await T(page, 'unit-list-home').click()
+    // 3화(Writing 문항 없음): 연습 끝에 [이 표현 써보기] 없음
+    await toStoryPractice('ep03')
+    await finishPractice('ep03')
     r.check(`${name} 3화(Writing 문항 없음) 연습 끝: [이 표현 써보기] 없음`, (await T(page, 'practice-done').isVisible()) && (await T(page, 'practice-write').count()) === 0)
   })
 
   // ── e. 레이아웃 ──
   for (const vp of [{ width: 360, height: 640 }, { width: 390, height: 844 }, { width: 412, height: 915 }, { width: 1280, height: 800 }]) {
-    await scenario('e 레이아웃', vp, {}, async ({ page, name, openTopics }) => {
-      await openTopics()
-      r.check(`${name} 주제 화면 가로 스크롤 없음/버튼 >=44px`, (await noOverflow(page)) && (await smallButtons(page, 'writing-topics')).length === 0)
-      await T(page, 'writing-topic-shopping').click()
+    await scenario('e 레이아웃', vp, {}, async ({ page, name, openPicker }) => {
+      await openPicker()
+      r.check(`${name} 선택기(과정) 가로 스크롤 없음/버튼 >=44px`, (await noOverflow(page)) && (await smallButtons(page, 'unit-list')).length === 0, (await smallButtons(page, 'unit-list')).join(','))
+      await T(page, 'unit-course-conversation').click()
+      r.check(`${name} 선택기(단계) 가로 스크롤 없음/버튼 >=44px`, (await noOverflow(page)) && (await smallButtons(page, 'unit-list')).length === 0, (await smallButtons(page, 'unit-list')).join(','))
+      await T(page, 'unit-block-C4').click()
+      r.check(`${name} 선택기(이야기 카드) 가로 스크롤 없음/버튼 >=44px`, (await noOverflow(page)) && (await smallButtons(page, 'unit-list')).length === 0, (await smallButtons(page, 'unit-list')).join(','))
+      await T(page, 'story-write-ep05').click()
+      await T(page, 'writing-items').waitFor({ state: 'visible', timeout: 5000 })
+      r.check(`${name} 문항 목록 가로 스크롤 없음/버튼 >=44px`, (await noOverflow(page)) && (await smallButtons(page, 'writing-items')).length === 0, (await smallButtons(page, 'writing-items')).join(','))
       await T(page, 'writing-item-w-s05-09').click()
       await T(page, 'writing-flow').waitFor({ state: 'visible', timeout: 5000 })
       r.check(`${name} 쓰기 화면 가로 스크롤 없음/버튼 >=44px`, (await noOverflow(page)) && (await smallButtons(page, 'writing-flow')).length === 0, (await smallButtons(page, 'writing-flow')).join(','))

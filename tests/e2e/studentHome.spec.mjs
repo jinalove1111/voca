@@ -384,9 +384,9 @@ export async function run(browser, baseURL) {
     r.check(`${name} 문장 쓰기 카드 aria-disabled 없음`, (await c.getAttribute('aria-disabled')) === null)
     r.check(`${name} "준비 중" 배지 없음`, !((await c.textContent()) || '').includes('준비 중'))
     await c.click()
-    // 222차: QA 계정은 주제별 문장 쓰기(WritingPractice)로 연다
-    r.check(`${name} 클릭 → 문장 쓰기 주제 화면`, await page.locator('[data-testid="writing-topics"]').waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false))
-    await page.locator('[data-testid="writing-home"]').click()
+    // 228차: QA 계정은 통합 선택기(unit-list, intent writing)로 연다
+    r.check(`${name} 클릭 → 통합 선택기(쓰기 의도, writing-topics 아님)`, await page.locator('[data-testid="unit-list"][data-intent="writing"]').waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false) && (await page.locator('[data-testid="writing-topics"]').count()) === 0)
+    await page.locator('[data-testid="unit-list-home"]').click()
     r.check(`${name} 문장 쓰기 ← 홈 → 학생 홈`, await waitHome(page))
   })
 

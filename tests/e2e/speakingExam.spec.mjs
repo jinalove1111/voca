@@ -144,21 +144,17 @@ export async function run(browser, baseURL) {
     const { db, unmockedRequests: u, ttsFallbackRequests: t, apiCallLog } = await installMocks(page)
     await installSpeakCounter(page)
     const name = `${label} [${vp.width}x${vp.height}]`
-    // 219차: 첫 화면은 주제 카드 — 기존 세트 메뉴는 [전체 이야기]로 연다(기존 시나리오 계약 유지)
-    const openTopics = async () => {
+    // 228차 진입 변경: 홈 말하기 카드는 통합 선택기를 연다. 시험은 홈 '그림 시험 바로 가기'로 직진입하고,
+    // 세트 메뉴는 시험 ← 뒤로로 닿는다(SpeakingPractice 안의 메뉴는 그대로).
+    const openExam = async () => {
       await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
-      await T(page, 'student-home-menu-speaking').click()
-      await T(page, 'speaking-topics').waitFor({ state: 'visible', timeout: 15000 })
+      await T(page, 'student-home-speaking-exam').click()
+      await root(page).waitFor({ state: 'visible', timeout: 15000 })
     }
     const openMenu = async () => {
-      await openTopics()
-      await T(page, 'speaking-topics-all').click()
+      await openExam()
+      await T(page, 'exam-back').click()
       await T(page, 'speaking-menu').waitFor({ state: 'visible', timeout: 15000 })
-    }
-    const openExam = async () => {
-      await openMenu()
-      await T(page, 'speaking-menu-exam').click()
-      await root(page).waitFor({ state: 'visible', timeout: 15000 })
     }
     const reveal = () => T(page, 'exam-reveal').click()
     const next = () => T(page, 'exam-next').click()
@@ -410,22 +406,25 @@ export async function run(browser, baseURL) {
     r.check(`${name} 직진입→뒤로→메뉴 홈 → 포커스가 말하기 카드로 복귀`, !!(await waitUntil(async () => (await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))) === 'student-home-menu-speaking', { timeout: 3000 })), String(await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))))
     // 메뉴에서 연 뒤 홈으로 나와, 홈 직진입을 한 번 더 — 모드가 메뉴에 고정되지 않아야 한다
     await T(page, 'student-home-menu-speaking').click()
-    await T(page, 'speaking-topics-all').click() // 219차: 첫 화면은 주제 카드
-    await T(page, 'speaking-menu').waitFor({ state: 'visible', timeout: 10000 })
-    r.check(`${name} 말하기 카드는 여전히 메뉴로 진입`, (await root(page).count()) === 0)
+    await T(page, 'unit-list').waitFor({ state: 'visible', timeout: 15000 })
+    r.check(`${name} 말하기 카드는 통합 선택기로 진입(228차: 메뉴·주제·시험 아님)`, (await root(page).count()) === 0 && (await T(page, 'speaking-menu').count()) === 0 && (await T(page, 'speaking-topics').count()) === 0 && (await T(page, 'unit-list').getAttribute('data-intent')) === 'speaking')
   })
   await scenario('8 situationRecallV1 OFF', VP, { flags: { situationRecallV1: false } }, async ({ page, name, openMenu }) => {
     await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
     r.check(`${name} 홈 시험 바로 가기 없음`, (await T(page, 'student-home-speaking-exam').count()) === 0)
-    await openMenu()
-    r.check(`${name} 메뉴에 시험 버튼 없음 + 연습 버튼은 있음`, (await T(page, 'speaking-menu-exam').count()) === 0 && (await T(page, 'speaking-menu-practice').isVisible()))
-    await T(page, 'speaking-menu-practice').click()
+    // 228차: 시험 바로 가기가 없으면 세트 메뉴로 가는 길이 없다 — 말하기 카드 → 선택기 → 2화 이야기 연습으로 검사한다
+    await T(page, 'student-home-menu-speaking').click()
+    await T(page, 'unit-list').waitFor({ state: 'visible', timeout: 15000 })
+    r.check(`${name} 말하기 카드 → 선택기(speaking 의도), 세트 메뉴·시험 버튼 없음`, (await T(page, 'unit-list').getAttribute('data-intent')) === 'speaking' && (await T(page, 'speaking-menu').count()) === 0 && (await T(page, 'speaking-menu-exam').count()) === 0)
+    await T(page, 'unit-course-conversation').click()
+    await T(page, 'unit-block-C1').click()
+    await T(page, 'story-practice-ep02').click()
     await T(page, 'speaking-practice').waitFor({ state: 'visible', timeout: 10000 })
-    for (let i = 0; i < N; i++) await T(page, 'practice-next').click()
+    for (let i = 0; i < itemsForSet('ep02').length; i++) await T(page, 'practice-next').click()
     await T(page, 'practice-done').waitFor({ state: 'visible', timeout: 5000 })
     r.check(`${name} 완료 화면에 한글 보고 말하기 시작 버튼 없음(킬 스위치)`, (await T(page, 'practice-start-exam').count()) === 0)
     await T(page, 'practice-back-menu').click()
-    r.check(`${name} 메뉴로 → 시험 아닌 메뉴`, !!(await waitUntil(() => T(page, 'speaking-menu').isVisible(), { timeout: 5000 })) && (await root(page).count()) === 0)
+    r.check(`${name} 메뉴로 → 선택기(시험 아님)`, !!(await waitUntil(() => T(page, 'unit-list').isVisible(), { timeout: 5000 })) && (await root(page).count()) === 0)
   })
 
   // ── 9. 뷰포트 / 접근성 / 모션 ────────────────────────────────────────

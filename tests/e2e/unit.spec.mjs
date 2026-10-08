@@ -7,6 +7,8 @@ import { UNIT_BORROW } from '../../src/utils/curriculum/unitBorrow.js'
 import { UNIT_LOST_BAG } from '../../src/utils/curriculum/unitLostBag.js'
 import { UNIT_FIND_AGAIN } from '../../src/utils/curriculum/unitFindAgain.js'
 import { recordsKey } from '../../src/utils/curriculum/unitRecords.js'
+import { COURSES } from '../../src/utils/curriculum/courseModel.js'
+import { listCatalog, catalogCounts, courseCount, EMPTY_LABEL_KO } from '../../src/utils/curriculum/catalog.js'
 
 const VP = { width: 390, height: 844 }
 const T = (page, id) => page.locator(`[data-testid="${id}"]`)
@@ -39,6 +41,18 @@ const U2 = UNIT_LOST_BAG
 const U3 = UNIT_FIND_AGAIN
 const act = (kind) => U.activities.find((a) => a.kind === kind)
 const act2 = (kind) => U2.activities.find((a) => a.kind === kind)
+// 228차: 선택기 항목 수는 카탈로그(실제 Unit + 이야기 회차)에서 계산한다(하드코딩 금지)
+const UNITS_ALL = [U, U2, U3]
+const CONV_COUNTS = catalogCounts(UNITS_ALL, 'conversation')
+const EMPTY_COURSES = COURSES.filter((c) => courseCount(UNITS_ALL, c.id) === 0).map((c) => c.id)
+
+// Unit 개요 → ← 목록 → 선택기 ← 홈
+async function goHomeFromUnit(page) {
+  await T(page, 'unit-home').click()
+  await T(page, 'unit-list').waitFor({ state: 'visible', timeout: 10000 })
+  await T(page, 'unit-list-home').click()
+  await T(page, 'student-home').waitFor({ state: 'visible', timeout: 10000 })
+}
 
 export async function run(browser, baseURL) {
   const r = createRecorder('[unit]')
@@ -152,6 +166,7 @@ export async function run(browser, baseURL) {
     r.check(`${name} 말하기 → 기존 2화 한 문장 흐름(spoon 장면)`, (await T(page, 'key-scene').getAttribute('data-variant')) === 'spoon')
     await T(page, 'key-back').click()
     r.check(`${name} ← 메뉴 → Unit 화면으로 복귀`, !!(await waitUntil(() => T(page, 'unit-screen').isVisible(), { timeout: 10000 })))
+    await waitUntil(async () => (await T(page, `unit-act-${act('speaking').id}`).getAttribute('data-completed')) === 'true', { timeout: 5000 }) // 복귀 직후 기록 반영(returnedFrom effect) 대기
     r.check(`${name} 복귀 시 말하기 '해 봤어요'(참여 기록, 점수 아님), 다른 활동은 그대로 미완료`, (await T(page, `unit-act-${act('speaking').id}`).getAttribute('data-completed')) === 'true' && (await T(page, `unit-act-${act('vocab').id}`).getAttribute('data-completed')) === 'false' && (await T(page, 'unit-screen').getAttribute('data-next')) === act('vocab').id)
     await T(page, `unit-act-${act('writing').id}`).click()
     await T(page, 'writing-flow').waitFor({ state: 'visible', timeout: 15000 })
@@ -165,21 +180,25 @@ export async function run(browser, baseURL) {
     await T(page, 'writing-flow').waitFor({ state: 'visible', timeout: 15000 })
     await T(page, 'writing-back').click()
     r.check(`${name} ← 목록 → Unit 화면으로 복귀`, !!(await waitUntil(() => T(page, 'unit-screen').isVisible(), { timeout: 10000 })))
+    await waitUntil(async () => (await T(page, `unit-act-${act('writing').id}`).getAttribute('data-completed')) === 'true', { timeout: 5000 }) // 복귀 직후 기록 반영(returnedFrom effect) 대기
     r.check(`${name} 복귀 시 쓰기 '해 봤어요'`, (await T(page, `unit-act-${act('writing').id}`).getAttribute('data-completed')) === 'true')
     await goHome()
     await T(page, 'student-home-menu-speaking').click()
-    r.check(`${name} 홈에서 말하기 → 주제 화면(Unit 링크 초기화)`, !!(await waitUntil(() => T(page, 'speaking-topics').isVisible(), { timeout: 10000 })))
+    r.check(`${name} 홈에서 말하기 → 통합 선택기 처음(과정 선택, Unit 링크·선택 초기화; 228차 진입 변경)`, !!(await waitUntil(() => T(page, 'unit-list').isVisible(), { timeout: 10000 })) && (await T(page, 'unit-list').getAttribute('data-intent')) === 'speaking' && (await T(page, 'unit-list').getAttribute('data-level')) === 'course' && (await T(page, 'speaking-topics').count()) === 0)
   })
 
   await scenario('e 두 번째 Unit(잃어버린 물건) Unit 안 말하기 3단계·쓰기', VP, async ({ page, name, openUnit, goHome }) => {
     await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
     await T(page, 'student-home-unit').click()
     await T(page, 'unit-list').waitFor({ state: 'visible', timeout: 15000 })
-    r.check(`${name} 과정 선택: 회화만 열림, 나머지 4과정은 '미제작'(비활성)`, (await T(page, 'unit-list').getAttribute('data-level')) === 'course' && (await T(page, 'unit-course-conversation').isEnabled()) && (await page.locator('[data-testid^="unit-course-"][aria-disabled="true"]').count()) === 4 && (await txt(page, 'unit-course-phonics')).includes('미제작'))
+    r.check(`${name} 과정 선택: 6과정, 회화만 열림, 나머지 ${EMPTY_COURSES.length}과정은 '${EMPTY_LABEL_KO}'(비활성, '미제작' 아님), 뉴스는 '병행 가능'`, (await T(page, 'unit-list').getAttribute('data-level')) === 'course' && (await page.locator('button[data-testid^="unit-course-"]').count()) === COURSES.length && COURSES.length === 6 && (await T(page, 'unit-course-conversation').isEnabled()) && (await page.locator('[data-testid^="unit-course-"][aria-disabled="true"]').count()) === EMPTY_COURSES.length && EMPTY_COURSES.length === 5 && !EMPTY_COURSES.includes('conversation') && (await txt(page, 'unit-course-phonics')).includes(EMPTY_LABEL_KO) && !(await txt(page, 'unit-course-phonics')).includes('미제작') && (await txt(page, 'unit-course-news')).includes('병행 가능') && (await txt(page, 'unit-course-conversation')).includes(`항목 ${courseCount(UNITS_ALL, 'conversation')}개`))
     await T(page, 'unit-course-conversation').click()
-    r.check(`${name} 단계 선택: 1단계(단원 2개)·2단계(단원 1개) 열림, 3~6단계 '미제작', 기간은 운영 계획 안내`, (await T(page, 'unit-list').getAttribute('data-level')) === 'block' && (await txt(page, 'unit-block-C1')).includes('단원 2개') && (await page.locator('[data-testid^="unit-block-"][aria-disabled="true"]').count()) === 4 && (await txt(page, 'unit-block-C2')).includes('단원 1개') && (await txt(page, 'unit-list')).includes('운영 계획'))
+    const emptyBlocks = Object.entries(CONV_COUNTS).filter(([, n]) => n === 0).map(([b]) => b)
+    r.check(`${name} 단계 선택: 항목 수 = 카탈로그(Unit+이야기; C1 ${CONV_COUNTS.C1}개·C2 ${CONV_COUNTS.C2}개), 이야기가 있는 3~6단계도 열림, 빈 단계는 '${EMPTY_LABEL_KO}', 기간은 운영 계획 안내`, (await T(page, 'unit-list').getAttribute('data-level')) === 'block' && CONV_COUNTS.C1 === 4 && CONV_COUNTS.C2 === 2 && (await txt(page, 'unit-block-C1')).includes(`항목 ${CONV_COUNTS.C1}개`) && (await txt(page, 'unit-block-C2')).includes(`항목 ${CONV_COUNTS.C2}개`) && (await page.locator('[data-testid^="unit-block-"][aria-disabled="true"]').count()) === emptyBlocks.length && (await txt(page, 'unit-list')).includes('운영 계획') && (await txt(page, 'unit-block-C1')).includes('1단계') && (await txt(page, 'unit-block-C1')).includes('(제안)'), JSON.stringify(CONV_COUNTS))
+    for (const b of ['C3', 'C4', 'C5', 'C6']) r.check(`${name} ${b}: 이야기 회차가 있어 '미제작' 아님(항목 ${CONV_COUNTS[b]}개)`, CONV_COUNTS[b] > 0 ? (await T(page, `unit-block-${b}`).isEnabled()) && (await txt(page, `unit-block-${b}`)).includes(`항목 ${CONV_COUNTS[b]}개`) : (await T(page, `unit-block-${b}`).isDisabled()) && (await txt(page, `unit-block-${b}`)).includes(EMPTY_LABEL_KO))
     await T(page, 'unit-block-C1').click()
-    r.check(`${name} 목록: Unit 2개(빌리기·위치 묻기) + 말하기·쓰기 수행 수준 표기`, (await page.locator('[data-testid^="unit-pick-"]').count()) === 2 && (await txt(page, `unit-pick-${U2.id}`)).includes(U2.titleKo) && (await txt(page, `unit-pick-${U2.id}`)).includes('말하기 기초 · 쓰기 기초'))
+    const c1 = listCatalog(UNITS_ALL, 'conversation', 'C1')
+    r.check(`${name} 목록: Unit 버튼 2개(빌리기·위치 묻기) + 이야기 카드 ${c1.filter((x) => x.kind === 'story').length}개(ep01·ep02, 주제 배지) + 말하기·쓰기 수행 수준 표기`, (await page.locator('button[data-testid^="unit-pick-"]').count()) === 2 && (await page.locator('[data-testid^="unit-pick-"][data-kind="story"]').count()) === c1.filter((x) => x.kind === 'story').length && (await T(page, 'unit-pick-ep01').count()) === 1 && (await T(page, 'unit-pick-ep02').count()) === 1 && (await txt(page, 'unit-pick-ep02')).includes('학교생활') && (await txt(page, `unit-pick-${U2.id}`)).includes(U2.titleKo) && (await txt(page, `unit-pick-${U2.id}`)).includes('말하기 기초 · 쓰기 기초'))
     await T(page, `unit-pick-${U2.id}`).click()
     await T(page, 'unit-screen').waitFor({ state: 'visible', timeout: 15000 })
     r.check(`${name} Unit 2 개요: 제목·활동 7개·다음=어휘`, (await txt(page, 'unit-title')) === U2.titleKo && (await page.locator('[data-testid^="unit-act-"]').count()) === 7 && (await T(page, 'unit-screen').getAttribute('data-next')) === 'vocab')
@@ -208,11 +227,13 @@ export async function run(browser, baseURL) {
     r.check(`${name} 말하기 답 확인 뒤 [이 표현 써보기] → 이 Unit의 쓰기 문항(같은 수준)`, (await T(page, 'writing-flow').getAttribute('data-item')) === act2('writing').writingItemId)
     await T(page, 'writing-back').click()
     await waitUntil(() => T(page, 'unit-screen').isVisible(), { timeout: 10000 })
+    await waitUntil(async () => (await T(page, 'unit-act-speaking').getAttribute('data-completed')) === 'true', { timeout: 5000 }) // 복귀 직후 기록 반영(returnedFrom effect) 대기
     r.check(`${name} 말하기 완료 기록, 다음=어휘(순서 유지)`, (await T(page, 'unit-act-speaking').getAttribute('data-completed')) === 'true' && (await T(page, 'unit-screen').getAttribute('data-next')) === 'vocab')
     await T(page, 'unit-act-writing').click()
     await T(page, 'writing-flow').waitFor({ state: 'visible', timeout: 15000 })
     r.check(`${name} 쓰기 → Unit 전용 문항 ${act2('writing').writingItemId}`, (await T(page, 'writing-flow').getAttribute('data-item')) === act2('writing').writingItemId)
     await T(page, 'writing-back').click()
+    await waitUntil(async () => (await T(page, 'unit-act-writing').getAttribute('data-completed')) === 'true', { timeout: 5000 }) // 복귀 직후 기록 반영(returnedFrom effect) 대기
     r.check(`${name} ← 목록 → Unit 2 화면(쓰기 '해 봤어요')`, !!(await waitUntil(() => T(page, 'unit-screen').isVisible(), { timeout: 10000 })) && (await T(page, 'unit-screen').getAttribute('data-unit')) === U2.id && (await T(page, 'unit-act-writing').getAttribute('data-completed')) === 'true')
     await T(page, 'unit-act-grammar').click()
     for (let i = 0; i < U2.grammar.items.length; i++) { const c = U2.grammar.items[i].correct; await T(page, `unit-grammar-q-${i}-opt-${Array.isArray(c) ? c[0] : c}`).click() }
@@ -277,6 +298,7 @@ export async function run(browser, baseURL) {
     r.check(`${name} 비교: 예시는 비교용 하나, 판정 없음`, (await txt(page, 'writing-flow')).includes(U3.activities.find((a) => a.kind === 'writing') ? "It isn't under the desk." : '') && !/점수|합격|틀렸/.test(await txt(page, 'writing-flow')))
     await T(page, 'writing-next').click()
     await waitUntil(() => T(page, 'unit-screen').isVisible(), { timeout: 10000 })
+    await waitUntil(async () => (await T(page, 'unit-act-writing').getAttribute('data-completed')) === 'true', { timeout: 5000 }) // 복귀 직후 기록 반영(returnedFrom effect) 대기
     r.check(`${name} '← 이 단원으로' → Unit 3, 쓰기 '해 봤어요'`, (await T(page, 'unit-screen').getAttribute('data-unit')) === U3.id && (await T(page, 'unit-act-writing').getAttribute('data-completed')) === 'true')
     // 같은 상황 가족의 C1 Unit 2는 그대로(기록·문항 안 섞임)
     await T(page, 'unit-home').click()
@@ -294,6 +316,65 @@ export async function run(browser, baseURL) {
     r.check(`${name} 기록은 Unit별 분리(Unit 3 쓰기·Unit 2 말하기만)`, !!rec[U3.id]?.activities?.writing?.completed && !rec[U3.id]?.activities?.speaking?.completed === false && !!rec[U2.id]?.activities?.speaking?.completed && !rec[U2.id]?.activities?.writing)
     await T(page, 'unit-activity-return').click()
     await goHome()
+  })
+
+  await scenario('i 오늘의 학습(의도 없음): 이야기 카드 연습+쓰기 버튼, ← 홈이 선택을 지움', VP, async ({ page, name }) => {
+    await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
+    await T(page, 'student-home-unit').click()
+    await T(page, 'unit-list').waitFor({ state: 'visible', timeout: 15000 })
+    r.check(`${name} 오늘의 학습 선택기: 의도 없음(data-intent=none), 과정 단계에서 시작`, (await T(page, 'unit-list').getAttribute('data-intent')) === 'none' && (await T(page, 'unit-list').getAttribute('data-level')) === 'course')
+    await T(page, 'unit-course-conversation').click()
+    await T(page, 'unit-block-C1').click()
+    r.check(`${name} 이야기 카드 ep01: 연습 시작 + 한 문장 이야기 + 문장 쓰기 버튼이 모두 보임(의도 없음)`, (await T(page, 'story-practice-ep01').isVisible()) && (await T(page, 'story-key-ep01').isVisible()) && (await T(page, 'story-write-ep01').isEnabled()))
+    await T(page, 'unit-list-home').click()
+    await T(page, 'student-home').waitFor({ state: 'visible', timeout: 10000 })
+    await T(page, 'student-home-unit').click()
+    await T(page, 'unit-list').waitFor({ state: 'visible', timeout: 15000 })
+    r.check(`${name} ← 홈 뒤 다시 들어오면 과정 선택부터(선택 지워짐)`, (await T(page, 'unit-list').getAttribute('data-level')) === 'course' && (await T(page, 'unit-block-C1').count()) === 0)
+    r.check(`${name} 선택 저장 키 없음`, !(await page.evaluate(() => Object.keys(localStorage).some((k) => /level|block|course|selection/i.test(k)))))
+  })
+
+  await scenario('j 홈 말하기·쓰기 의도로 Unit을 바로 열기, 기록은 Unit별 분리', VP, async ({ page, name }) => {
+    const pickFromHome = async (menu, courseId, blockId, entryId) => {
+      await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
+      await T(page, `student-home-menu-${menu}`).click()
+      await T(page, 'unit-list').waitFor({ state: 'visible', timeout: 15000 })
+      await T(page, `unit-course-${courseId}`).click()
+      await T(page, `unit-block-${blockId}`).click()
+      await T(page, `unit-pick-${entryId}`).click()
+    }
+    // 말하기 의도 + Unit 1(빌리기): 2화 한 문장 흐름이 바로 열리고 ← 메뉴는 Unit 개요로
+    await pickFromHome('speaking', 'conversation', 'C1', U.id)
+    await T(page, 'key-flow').waitFor({ state: 'visible', timeout: 15000 })
+    r.check(`${name} 말하기 의도 + Unit 1 → Unit 개요를 거치지 않고 한 문장 흐름(spoon)`, (await T(page, 'key-scene').getAttribute('data-variant')) === 'spoon' && (await T(page, 'unit-screen').count()) === 0)
+    await T(page, 'key-back').click()
+    r.check(`${name} ← 메뉴 → Unit 1 개요(활동을 다시 열지 않음)`, !!(await waitUntil(() => T(page, 'unit-screen').isVisible(), { timeout: 10000 })) && (await T(page, 'unit-activity').count()) === 0 && (await T(page, 'key-flow').count()) === 0)
+    await goHomeFromUnit(page)
+    // 말하기 의도 + Unit 2(잃어버린 물건): Unit 안 3단계 말하기가 바로 열린다
+    await pickFromHome('speaking', 'conversation', 'C1', U2.id)
+    await T(page, 'unit-activity').waitFor({ state: 'visible', timeout: 15000 })
+    r.check(`${name} 말하기 의도 + Unit 2 → 이 Unit의 말하기 활동(unit-activity speaking, 3단계 중 1번째)`, (await T(page, 'unit-activity').getAttribute('data-kind')) === 'speaking' && (await T(page, 'unit-speaking').getAttribute('data-step')) === 'repeat' && (await T(page, 'unit-screen').count()) === 0)
+    await T(page, 'unit-speaking-next').click(); await T(page, 'unit-speaking-next').click()
+    await T(page, 'unit-speaking-reveal').click()
+    r.check(`${name} 3단계 답 확인 → 말하기 '해 봤어요'`, !!(await waitUntil(async () => (await txt(page, 'unit-activity-status')).includes('해 봤어요'), { timeout: 5000 })))
+    await T(page, 'unit-activity-back').click()
+    r.check(`${name} ← 단원 → Unit 2 개요(말하기 다시 열리지 않음)`, (await T(page, 'unit-screen').isVisible()) && (await T(page, 'unit-activity').count()) === 0 && (await T(page, 'unit-screen').getAttribute('data-unit')) === U2.id)
+    await T(page, 'unit-home').click()
+    r.check(`${name} ← 목록 → 같은 과정·단계(회화 1단계) 목록`, (await T(page, 'unit-list').getAttribute('data-level')) === 'unit' && (await txt(page, 'unit-list-crumb')).includes('Conversation') && (await txt(page, 'unit-list-crumb')).includes('1단계'))
+    await T(page, 'unit-list-home').click()
+    // 쓰기 의도 + Unit 3(함께 찾기, C2): 쓰기 문항이 바로 열린다
+    await pickFromHome('writing', 'conversation', 'C2', U3.id)
+    await T(page, 'writing-flow').waitFor({ state: 'visible', timeout: 15000 })
+    r.check(`${name} 쓰기 의도 + Unit 3 → Unit 개요 없이 쓰기 문항 w-c2-find`, (await T(page, 'writing-flow').getAttribute('data-item')) === 'w-c2-find' && (await T(page, 'unit-screen').count()) === 0)
+    await T(page, 'writing-input').fill("It isn't under the desk. It's in the bag.")
+    await T(page, 'writing-compare').click()
+    r.check(`${name} 비교 뒤 버튼은 '← 이 단원으로'`, (await txt(page, 'writing-next')) === '← 이 단원으로')
+    await T(page, 'writing-next').click()
+    await waitUntil(async () => (await T(page, 'unit-act-writing').getAttribute('data-completed')) === 'true', { timeout: 5000 }) // 복귀 직후 기록 반영(returnedFrom effect) 대기
+    r.check(`${name} '← 이 단원으로' → Unit 3 개요(쓰기 다시 열리지 않음)`, !!(await waitUntil(() => T(page, 'unit-screen').isVisible(), { timeout: 10000 })) && (await T(page, 'unit-screen').getAttribute('data-unit')) === U3.id && (await T(page, 'writing-flow').count()) === 0 && (await T(page, 'unit-act-writing').getAttribute('data-completed')) === 'true')
+    const rec = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) || '{}'), recordsKey(QA_STUDENT_ID))
+    r.check(`${name} 기록은 Unit별 분리(Unit 1 말하기, Unit 2 말하기, Unit 3 쓰기만; 서로 섞이지 않음)`, !!rec[U.id]?.activities?.speaking?.completed && !!rec[U2.id]?.activities?.speaking?.completed && !rec[U2.id]?.activities?.writing && !!rec[U3.id]?.activities?.writing?.completed && !rec[U3.id]?.activities?.speaking && !rec[U.id]?.activities?.writing, JSON.stringify(Object.fromEntries(Object.entries(rec).map(([k, v]) => [k, Object.keys(v.activities || {})]))))
+    r.check(`${name} 이름·선택 키 없음(localStorage)`, !(await page.evaluate((n) => Object.keys(localStorage).some((k) => k.includes(n) || /level|block|course|selection/i.test(k)), QA_STUDENT_NAME)))
   })
 
   await scenario('g Unit 청크 로드 실패 → 안내·홈 복귀', VP, async ({ page, name }) => {
