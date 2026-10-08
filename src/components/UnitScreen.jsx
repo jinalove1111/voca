@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { speak, stopSpeaking } from '../utils/speech'
-import { SUPPORT_STAGES, COURSES, CONVERSATION_BLOCKS, blocksForCourse, blockLabelKo, performanceById } from '../utils/curriculum/courseModel'
+import { SUPPORT_STAGES, COURSES, CONVERSATION_BLOCKS, blocksForCourse, blockLabelKo, blockMeta, isBlockProposed, performanceById } from '../utils/curriculum/courseModel'
+import { listCatalog, catalogCounts, courseCount, EMPTY_LABEL_KO } from '../utils/curriculum/catalog'
 const CONV_BLOCK_META = (b) => CONVERSATION_BLOCKS.find((x) => x.id === b) || null
 import { loadUnitRecords, markActivity, setSupportStage, activityState, nextActivityId } from '../utils/curriculum/unitRecords'
 import { SPEAKER_KO, BTN, RecorderControls, BUSY } from './SpeakingPracticeItem'
@@ -177,7 +178,7 @@ function ReviewActivity({ unit, onAllRevealed }) {
   )
 }
 
-function UnitView({ unit, studentId, onBack, backLabel = '← 홈', onSpeaking, onWriting, returnedFrom = null }) {
+function UnitView({ unit, studentId, onBack, backLabel = '← 홈', onSpeaking, onWriting, returnedFrom = null, initialActivityKind = null }) {
   const storage = useMemo(safeStorage, [])
   const [records, setRecords] = useState(() => loadUnitRecords(storage, studentId))
   const [activeId, setActiveId] = useState(null)
@@ -197,6 +198,8 @@ function UnitView({ unit, studentId, onBack, backLabel = '← 홈', onSpeaking, 
   const pickSupport = (area, stageId) => { setSupportStage(storage, studentId, unit.id, area, stageId); refresh() }
   const open = (a) => { stopSpeaking(); if (a.kind === 'speaking' && !a.steps) onSpeaking(a); else if (a.kind === 'writing') onWriting(a); else setActiveId(a.id) }
   const back = () => { stopSpeaking(); setActiveId(null) }
+  // 228차: 홈의 말하기·쓰기로 들어왔으면 이 Unit의 해당 활동을 처음 한 번만 바로 연다(없으면 Unit 화면 그대로)
+  useEffect(() => { const a = initialActivityKind && unit.activities.find((x) => x.kind === initialActivityKind); if (a) open(a) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (active) {
     const st = activityState(records, unit.id, active.id)
@@ -388,69 +391,106 @@ function UnitSpeaking({ activity, onDone, onWrite = null }) {
 }
 
 // 227차: 과정 → 단계 → Unit 선택(QA 전용). 선택은 화면 상태일 뿐 저장하지 않는다(학생별 영구 레벨·자동 배정·자동 승급 없음).
-// Unit이 없는 과정·단계는 '미제작'으로 표시만 한다. unitLink로 돌아온 경우 그 Unit을 바로 연다.
+// 228차: 홈의 말하기·쓰기·오늘의 학습이 모두 이 선택기로 들어온다(intent로 보이는 버튼만 다름). 항목 = 실제 Unit + 이야기 회차(catalog).
+// 내용이 없는 과정·단계는 EMPTY_LABEL_KO(콘텐츠 준비 중)로 비활성 표시. 주제 이름(학교생활·쇼핑 등)은 항목 안의 분류 배지로만 쓴다.
 const PERF_KO = (u) => (u.performance ? `말하기 ${performanceById(u.performance.speaking)?.titleKo} · 쓰기 ${performanceById(u.performance.writing)?.titleKo}` : null)
-export default function UnitScreen({ units, initialUnitId = null, returnedFrom = null, studentId, onBack, onSpeaking, onWriting }) {
-  const initial = units.find((u) => u.id === initialUnitId) || null
-  const [courseId, setCourseId] = useState(initial ? initial.course : null)
-  const [blockId, setBlockId] = useState(initial ? initial.block : null)
+const HEADING = { speaking: '어떤 단원에서 말해 볼까요?', writing: '어떤 단원에서 써 볼까요?' }
+const TITLE = { speaking: '말하기', writing: '문장 쓰기' }
+function StoryCard({ entry, intent, onStory }) {
+  const { id, card, placement, topics, writingItems, hasKeyFlow } = entry
+  const perf = placement.performance
+  const BTN2 = 'w-full min-h-[48px] px-4 py-2 rounded-2xl font-black text-base btn-press'
+  return (
+    <div data-testid={`unit-pick-${id}`} data-kind="story" className="w-full px-4 py-3 rounded-3xl card-shadow bg-white space-y-2">
+      <p className="text-xs font-bold text-teal-700">이야기 연습 · {card.n}화{topics.length ? ` · ${topics.map((t) => `${t.emoji} ${t.titleKo}`).join(' · ')}` : ''}</p>
+      <p className="text-xs font-bold text-gray-500">말하기 {performanceById(perf.speaking)?.titleKo} · 쓰기 {perf.writing ? performanceById(perf.writing)?.titleKo : '준비 중'}{placement.proposed ? ' (제안)' : ''}</p>
+      <p className="text-lg font-black text-gray-900 break-keep">{card.titleKo}</p>
+      <p className="text-sm text-gray-700 break-keep">{card.lineKo}</p>
+      <div className="space-y-2">
+        {intent !== 'writing' && <button data-testid={`story-practice-${id}`} onClick={() => onStory(entry, 'practice')} className={`${BTN2} text-white bg-gradient-to-br from-sky-400 to-blue-600`}>🗣️ 연습 시작</button>}
+        {intent !== 'writing' && hasKeyFlow && <button data-testid={`story-key-${id}`} onClick={() => onStory(entry, 'key')} className={`${BTN2} text-emerald-800 bg-emerald-100`}>🧠 한 문장 이야기</button>}
+        {intent !== 'speaking' && (writingItems.length > 0
+          ? <button data-testid={`story-write-${id}`} onClick={() => onStory(entry, 'writing')} className={`${BTN2} text-white bg-gradient-to-br from-teal-400 to-emerald-600`}>✍️ 문장 쓰기</button>
+          : <button data-testid={`story-write-${id}`} disabled aria-disabled="true" className={`${BTN2} bg-gray-100 text-gray-400`}>✍️ 쓰기 준비 중</button>)}
+      </div>
+      {card.keyEn && (
+        <details className="rounded-2xl bg-amber-50 border-2 border-amber-200">
+          <summary data-testid={`story-key-toggle-${id}`} className="min-h-[44px] px-4 py-2 flex items-center text-sm font-black text-amber-800 cursor-pointer list-none">💡 오늘 기억할 한 문장 보기</summary>
+          <div className="px-4 pb-3">
+            <p className="text-lg font-black text-gray-900">{card.keyEn}</p>
+            <p className="text-sm text-gray-600">{card.keyKo}</p>
+          </div>
+        </details>
+      )}
+    </div>
+  )
+}
+
+export default function UnitScreen({ units, initialUnitId = null, initialSelection = null, intent = null, returnedFrom = null, studentId, onBack, onSpeaking, onWriting, onStory, onSelectionChange }) {
+  const initial = units.find((u) => u.id === (initialSelection?.entryId || initialUnitId)) || null
+  const [courseId, setCourseId] = useState(initial ? initial.course : initialSelection?.courseId || null)
+  const [blockId, setBlockId] = useState(initial ? initial.block : (initialSelection?.courseId && initialSelection.blockId) || null)
   const [unitId, setUnitId] = useState(initial ? initial.id : null)
   // 복귀 기록(returnedFrom)은 돌아온 그 Unit(initialUnitId)에만 1회 적용 — 목록에서 다른 Unit을 열 때 새어 나가면 안 된다(225차 e2e e에서 발견)
   const [pendingReturn, setPendingReturn] = useState(returnedFrom)
-  const pick = (id) => { setPendingReturn(null); setUnitId(id) }
+  // 의도(말하기/쓰기)로 들어와 처음 여는 Unit만 그 활동을 바로 연다. 복귀로 열린 Unit·← 목록 뒤에는 다시 열지 않는다
+  const [openKind, setOpenKind] = useState(initial ? null : intent)
+  const pick = (id) => { setPendingReturn(null); if (!id) setOpenKind(null); setUnitId(id) }
+  useEffect(() => { onSelectionChange?.({ courseId, blockId, entryId: unitId }) }, [courseId, blockId, unitId]) // eslint-disable-line react-hooks/exhaustive-deps
   const unit = units.find((u) => u.id === unitId) || null
   if (unit) {
-    return <UnitView key={unit.id} unit={unit} studentId={studentId} returnedFrom={unit.id === initialUnitId ? pendingReturn : null} backLabel="← 목록" onBack={() => pick(null)}
+    return <UnitView key={unit.id} unit={unit} studentId={studentId} returnedFrom={unit.id === initial?.id ? pendingReturn : null} backLabel="← 목록" onBack={() => pick(null)} initialActivityKind={openKind}
       onSpeaking={(a) => onSpeaking(unit.id, a)} onWriting={(a) => onWriting(unit.id, a)} />
   }
   const level = !courseId ? 'course' : !blockId ? 'block' : 'unit'
   const course = COURSES.find((c) => c.id === courseId) || null
-  const inCourse = (cid) => units.filter((u) => u.course === cid)
-  const inBlock = (cid, bid) => units.filter((u) => u.course === cid && u.block === bid)
+  const counts = courseId ? catalogCounts(units, courseId) : {}
   const ITEM = 'w-full min-h-[64px] px-4 py-3 rounded-3xl text-left btn-press card-shadow'
   const back = level === 'course' ? null : level === 'block' ? () => setCourseId(null) : () => setBlockId(null)
   return (
-    <div data-testid="unit-list" data-level={level} className="min-h-screen p-4 pb-24">
+    <div data-testid="unit-list" data-level={level} data-intent={intent || 'none'} className="min-h-screen p-4 pb-24">
       <div className="max-w-lg mx-auto space-y-4">
         <div className="flex items-center gap-2 pt-2">
           <button data-testid="unit-list-home" onClick={onBack} className="min-h-[44px] px-2 font-black text-gray-600 btn-press">← 홈</button>
-          <h1 className="text-xl font-black text-teal-700">오늘의 학습</h1>
+          <h1 className="text-xl font-black text-teal-700">{TITLE[intent] || '오늘의 학습'}</h1>
         </div>
         {level !== 'course' && (
           <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-gray-600">
             <button data-testid="unit-list-back" onClick={back} className="min-h-[44px] px-2 font-black text-gray-600 btn-press">{level === 'block' ? '← 과정' : '← 단계'}</button>
-            <span data-testid="unit-list-crumb">{course?.titleKo}{blockId ? ` · ${blockLabelKo(blockId)}` : ''}</span>
+            <span data-testid="unit-list-crumb">{course?.titleEn}{blockId ? ` · ${blockLabelKo(blockId)}` : ''}</span>
           </div>
         )}
         {level === 'course' && (
           <>
             <p className="text-base font-black text-gray-800">어떤 과정을 할까요?</p>
-            {COURSES.map((c) => { const n = inCourse(c.id).length; return (
+            {COURSES.map((c) => { const n = courseCount(units, c.id); return (
               <button key={c.id} data-testid={`unit-course-${c.id}`} onClick={() => setCourseId(c.id)} disabled={n === 0} aria-disabled={n === 0} className={`${ITEM} ${n ? 'text-white bg-gradient-to-br from-teal-400 to-emerald-600' : 'bg-white text-gray-400'}`}>
-                <span className="block text-lg font-black">{c.titleKo} <span className="text-xs font-bold opacity-80">{c.monthsKo}</span></span>
-                <span className="block text-xs font-bold opacity-90">{n ? `${c.focusKo} · 단원 ${n}개` : '미제작'}</span>
+                <span className="block text-xl font-black">{c.titleEn}</span>
+                <span className="block text-xs font-bold opacity-90">{c.titleKo} · {c.monthsKo}{c.parallel && <span className="ml-1 px-2 py-0.5 rounded-full bg-white/30">병행 가능</span>}</span>
+                <span className="block text-xs font-bold opacity-90">{n ? `${c.focusKo} · 항목 ${n}개` : EMPTY_LABEL_KO}</span>
               </button>) })}
           </>
         )}
         {level === 'block' && (
           <>
             <p className="text-base font-black text-gray-800">어느 단계를 할까요? <span className="text-xs font-bold text-gray-500">(기간은 운영 계획이에요. 단계는 선생님과 정해요)</span></p>
-            {blocksForCourse(courseId).map((b) => { const n = inBlock(courseId, b).length; const meta = courseId === 'conversation' ? CONV_BLOCK_META(b) : null; return (
+            {blocksForCourse(courseId).map((b) => { const n = counts[b] || 0; const conv = courseId === 'conversation' ? CONV_BLOCK_META(b) : null; const sub = conv?.themeKo || blockMeta(courseId, b)?.descKo; return (
               <button key={b} data-testid={`unit-block-${b}`} onClick={() => setBlockId(b)} disabled={n === 0} aria-disabled={n === 0} className={`${ITEM} ${n ? 'text-white bg-gradient-to-br from-sky-400 to-indigo-500' : 'bg-white text-gray-400'}`}>
-                <span className="block text-lg font-black">{blockLabelKo(b)} {meta?.monthsKo && <span className="text-xs font-bold opacity-80">{meta.monthsKo}</span>}</span>
-                <span className="block text-xs font-bold opacity-90">{meta?.themeKo ? `${meta.themeKo} · ` : ''}{n ? `단원 ${n}개` : '미제작'}</span>
+                <span className="block text-lg font-black">{blockLabelKo(b)}{isBlockProposed(courseId, b) ? ' (제안)' : ''} {conv?.monthsKo && <span className="text-xs font-bold opacity-80">{conv.monthsKo}</span>}</span>
+                <span className="block text-xs font-bold opacity-90">{sub ? `${sub} · ` : ''}{n ? `항목 ${n}개` : EMPTY_LABEL_KO}</span>
               </button>) })}
           </>
         )}
         {level === 'unit' && (
           <>
-            <p className="text-base font-black text-gray-800">어떤 단원을 할까요?</p>
-            {inBlock(courseId, blockId).map((u) => (
-              <button key={u.id} data-testid={`unit-pick-${u.id}`} onClick={() => pick(u.id)} className={`${ITEM} text-white bg-gradient-to-br from-teal-400 to-emerald-600`}>
-                <span className="block text-xs font-bold opacity-90">{u.goalTitleKo}{PERF_KO(u) ? ` · ${PERF_KO(u)}` : ''}</span>
-                <span className="block text-lg font-black">{u.titleKo}</span>
-              </button>
-            ))}
+            <p className="text-base font-black text-gray-800">{HEADING[intent] || '어떤 단원을 할까요?'}</p>
+            {listCatalog(units, courseId, blockId).map((e) => e.kind === 'story'
+              ? <StoryCard key={e.id} entry={e} intent={intent} onStory={onStory} />
+              : (
+                <button key={e.id} data-testid={`unit-pick-${e.id}`} onClick={() => pick(e.id)} className={`${ITEM} text-white bg-gradient-to-br from-teal-400 to-emerald-600`}>
+                  <span className="block text-xs font-bold opacity-90">{e.unit.goalTitleKo}{PERF_KO(e.unit) ? ` · ${PERF_KO(e.unit)}` : ''}</span>
+                  <span className="block text-lg font-black">{e.unit.titleKo}</span>
+                </button>))}
           </>
         )}
       </div>

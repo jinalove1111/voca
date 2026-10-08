@@ -260,6 +260,9 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 시범 Unit에서 말하기/쓰기로 나갔다가 돌아올 때(224차). unitLink가 있으면 Speaking/Writing의 뒤로는 Unit 화면으로
   const [unitLink, setUnitLink] = useState(null) // { speakingMode?: 'key'|'practice', setId?, writingItemId? } | null
   const [pilotUnits, setPilotUnits] = useState(null)
+  // 228차: 홈의 말하기·쓰기·오늘의 학습이 같은 과정→단계→단원 선택기로 들어온다. 선택은 세션 상태일 뿐(저장 없음)
+  const [curriculumSel, setCurriculumSel] = useState(null) // { courseId, blockId, entryId } | null
+  const [unitIntent, setUnitIntent] = useState(null) // 'speaking' | 'writing' | null
   const [pilotUnitsFailed, setPilotUnitsFailed] = useState(false) // 226차: 청크 로드 실패 시 빈 화면 대신 안내 + 홈
   const [selectedWord, setWord]     = useState(null)
   const [selectedWordIdx, setWordIdx] = useState(0)
@@ -849,7 +852,11 @@ function AppInner({ studentId, studentName, onLogout }) {
         <StudentHome studentName={studentName} studentData={studentData} classWords={classWords}
           hasTodaysHomework={!!getStudentClass(studentId) && getTodaysAssignmentWordIds(getStudentClass(studentId)).length > 0}
           onStartGuided={startGuidedSession} onLogout={onLogout}
-          onGo={(t) => { setSpeakingMode(t === 'speakingExam' ? 'exam' : 'menu'); if (t === 'writingCoach') setWritingLink(null); setUnitLink(null); if (t === 'unit') { setPilotUnitsFailed(false); loadPilotUnits().then((m) => setPilotUnits(m.UNITS)).catch(() => setPilotUnitsFailed(true)) } goFrom('home', t === 'speakingExam' ? 'speaking' : (paulTown2_5dEnabled && t === 'paulTown') ? 'proto25d' : t) }}
+          onGo={(t) => { setSpeakingMode(t === 'speakingExam' ? 'exam' : 'menu'); if (t === 'writingCoach') setWritingLink(null); setUnitLink(null)
+            // 228차: 말하기(시험 제외)·쓰기·오늘의 학습은 모두 같은 선택기(screen 'unit')로. 이 홈은 QA 전용이다
+            const viaPicker = t === 'unit' || t === 'speaking' || t === 'writingCoach'
+            if (viaPicker) { setUnitIntent(t === 'speaking' ? 'speaking' : t === 'writingCoach' ? 'writing' : null); setPilotUnitsFailed(false); loadPilotUnits().then((m) => setPilotUnits(m.UNITS)).catch(() => setPilotUnitsFailed(true)) }
+            goFrom('home', viaPicker ? 'unit' : t === 'speakingExam' ? 'speaking' : (paulTown2_5dEnabled && t === 'paulTown') ? 'proto25d' : t) }}
           canEnterTown={(isFeatureEnabled('paulTownHomeBand') && !!attachment.stats) || paulTown2_5dEnabled}
           townEligible={townV1Enabled}
           writingEnabled={isFeatureEnabled('writingCoachEnabled') || qaTestStudent}
@@ -861,7 +868,7 @@ function AppInner({ studentId, studentName, onLogout }) {
         <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
           <SpeakingPractice studentId={studentId} initialMode={unitLink?.speakingMode || speakingMode} initialSetId={unitLink?.setId || writingLink?.setId || null} examEnabled={isFeatureEnabled('situationRecallV1')}
             menuExits={!!unitLink} onBack={() => setScreen(unitLink ? 'unit' : 'home')}
-            onWrite={(writingItemId, setId) => { setWritingLink({ writingItemId, setId }); setScreen('writingCoach') }} />
+            onWrite={(writingItemId, setId) => { if (unitLink?.storyId) setUnitLink({ ...unitLink, writingItemId }); else setWritingLink({ writingItemId, setId }); setScreen('writingCoach') }} />
         </React.Suspense>
       )}
       {qaTestStudent && screen === 'growth' && (
@@ -873,7 +880,7 @@ function AppInner({ studentId, studentName, onLogout }) {
       {qaTestStudent && screen === 'writingCoach' && (
         // 2026-10-07(222차) QA 계정: 주제별 문장 쓰기(Speaking 문항 재사용). ← 홈 / Speaking에서 왔으면 그 세트의 연습 끝 화면으로
         <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
-          <WritingPractice studentId={studentId} linkLabel={unitLink ? '← 이 단원으로' : null} startItemId={unitLink?.writingItemId || writingLink?.writingItemId || null}
+          <WritingPractice studentId={studentId} linkLabel={unitLink ? (unitLink.storyId ? '← 단원 목록으로' : '← 이 단원으로') : null} episode={unitLink?.writingEpisode || null} startItemId={unitLink?.writingItemId || writingLink?.writingItemId || null}
             onBack={() => { if (unitLink) setScreen('unit'); else if (writingLink) { setSpeakingMode('practiceDone'); setScreen('speaking') } else setScreen('home') }}
             onHome={() => { setWritingLink(null); setUnitLink(null); setScreen('home') }} />
         </React.Suspense>
@@ -884,13 +891,15 @@ function AppInner({ studentId, studentName, onLogout }) {
           <p className="text-gray-700 font-bold break-keep">{pilotUnitsFailed ? '오늘의 학습을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.' : '불러오는 중...'}</p>
           <div className="flex flex-wrap justify-center gap-2">
             {pilotUnitsFailed && <button data-testid="unit-load-reload" onClick={() => window.location.reload()} className="min-h-[44px] px-5 rounded-2xl font-black bg-teal-500 text-white btn-press">🔄 새로고침</button>}
-            <button data-testid="unit-load-home" onClick={() => { setUnitLink(null); setScreen('home') }} className="min-h-[44px] px-5 rounded-2xl font-black bg-white card-shadow text-gray-700 btn-press">← 홈으로</button>
+            <button data-testid="unit-load-home" onClick={() => { setUnitLink(null); setCurriculumSel(null); setUnitIntent(null); setScreen('home') }} className="min-h-[44px] px-5 rounded-2xl font-black bg-white card-shadow text-gray-700 btn-press">← 홈으로</button>
           </div>
         </div>
       )}
       {qaTestStudent && screen === 'unit' && pilotUnits && (
         <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
-          <UnitScreen units={pilotUnits} initialUnitId={unitLink?.unitId || null} returnedFrom={unitLink ? (unitLink.writingItemId ? 'writing' : 'speaking') : null} studentId={studentId} onBack={() => { setUnitLink(null); setScreen('home') }}
+          <UnitScreen units={pilotUnits} initialUnitId={unitLink?.unitId || null} returnedFrom={unitLink ? (unitLink.writingItemId ? 'writing' : 'speaking') : null} studentId={studentId} onBack={() => { setUnitLink(null); setCurriculumSel(null); setUnitIntent(null); setScreen('home') }}
+            intent={unitIntent} initialSelection={curriculumSel} onSelectionChange={setCurriculumSel}
+            onStory={(entry, mode) => { if (mode === 'writing') { setUnitLink({ storyId: entry.id, writingEpisode: entry.card.n }); setScreen('writingCoach') } else { setUnitLink({ storyId: entry.id, speakingMode: mode === 'key' ? 'key' : 'practice', setId: entry.id }); setScreen('speaking') } }}
             onSpeaking={(unitId, a) => { setUnitLink({ unitId, speakingMode: a.flow === 'key' ? 'key' : 'practice', setId: a.setId }); setScreen('speaking') }}
             onWriting={(unitId, a) => { setUnitLink({ unitId, writingItemId: a.writingItemId }); setScreen('writingCoach') }} />
         </React.Suspense>

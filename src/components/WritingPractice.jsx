@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { speak } from '../utils/speech'
-import { listWritingTopics, writingTopicById, writingItem } from '../utils/writing/writingItems'
+import { listWritingTopics, writingTopicById, writingItem, writingItemsForEpisode } from '../utils/writing/writingItems'
 import { loadDrafts, saveDraft, hasContent, sameSentence } from '../utils/writing/writingDrafts'
 import { SPEAKER_KO, BTN } from './SpeakingPracticeItem'
 
@@ -33,12 +33,12 @@ function TopicList({ topics, onTopic, onBack }) {
   )
 }
 
-function ItemList({ topic, drafts, onPick, onBack }) {
+function ItemList({ topic, drafts, onPick, onBack, backLabel = '← 주제' }) {
   return (
     <div data-testid="writing-items" data-topic={topic.id} className="min-h-screen p-4 pb-24">
       <div className="max-w-lg mx-auto space-y-3">
         <div className="flex items-center gap-2 pt-2">
-          <button data-testid="writing-items-back" onClick={onBack} className="min-h-[44px] px-2 font-black text-gray-600 btn-press">← 주제</button>
+          <button data-testid="writing-items-back" onClick={onBack} className="min-h-[44px] px-2 font-black text-gray-600 btn-press">{backLabel}</button>
           <h1 className="text-xl font-black text-teal-700">{topic.emoji} {topic.titleKo}</h1>
         </div>
         {topic.items.map((it, i) => {
@@ -156,14 +156,16 @@ function WriteFlow({ item, index, total, draft, onSave, onNext, onBack, nextLabe
 // startItemId: Speaking [이 표현 써보기]로 들어온 문항(w-…) — 그 문항부터 열고, ← 목록은 onBack(원래 Speaking 위치)
 // onBack: 링크(Speaking)로 들어온 문항의 ← 목록 → 원래 Speaking. onHome: 주제 화면의 ← 홈(항상 홈)
 // linkLabel: 통합 Unit 링크일 때만(App이 unitLink 있으면 전달) — 시작 문항의 비교 뒤 버튼이 '다음 문장' 대신 이 라벨로 onBack(Unit 복귀)
-export default function WritingPractice({ studentId, startItemId = null, onBack, onHome, linkLabel = null }) {
+// episode: 통합 선택기에서 이야기 회차(n화)로 들어온 경우 — 주제 목록을 건너뛰고 그 회차의 문항 목록을 바로 연다(← 목록은 onBack = 선택기)
+export default function WritingPractice({ studentId, startItemId = null, onBack, onHome, linkLabel = null, episode = null }) {
   const storage = useMemo(safeStorage, [])
   const topics = useMemo(listWritingTopics, [])
   const startItem = startItemId ? writingItem(startItemId) : null
-  const [topicId, setTopicId] = useState(startItem ? startItem.topic : null)
+  const epTopic = useMemo(() => (episode ? { id: 'ep', emoji: '✍️', titleKo: `${episode}화 문장 쓰기`, items: writingItemsForEpisode(episode).map((w) => writingItem(w.id)).filter(Boolean) } : null), [episode])
+  const [topicId, setTopicId] = useState(startItem ? startItem.topic : epTopic ? 'ep' : null)
   const [itemId, setItemId] = useState(startItem ? startItem.id : null)
   const [drafts, setDrafts] = useState(() => loadDrafts(storage, studentId))
-  const topic = topicId ? writingTopicById(topicId) : null
+  const topic = topicId === 'ep' && epTopic ? epTopic : topicId ? writingTopicById(topicId) : null
   const idx = topic && itemId ? topic.items.findIndex((x) => x.id === itemId) : -1
   const item = idx >= 0 ? topic.items[idx] : null
 
@@ -172,6 +174,6 @@ export default function WritingPractice({ studentId, startItemId = null, onBack,
 
   const linked = !!(startItem && item && item.id === startItem.id)
   if (item) return <WriteFlow key={item.id} item={item} index={idx} total={topic.items.length} draft={drafts[item.id]} onSave={save} onNext={linked && linkLabel ? onBack : next} nextLabel={linked && linkLabel ? linkLabel : null} onBack={() => (linked ? onBack() : setItemId(null))} />
-  if (topic) return <ItemList topic={topic} drafts={drafts} onPick={setItemId} onBack={() => setTopicId(null)} />
+  if (topic) return <ItemList topic={topic} drafts={drafts} onPick={setItemId} onBack={topic === epTopic ? onBack : () => setTopicId(null)} backLabel={topic === epTopic ? '← 목록' : undefined} />
   return <TopicList topics={topics} onTopic={setTopicId} onBack={onHome || onBack} />
 }
