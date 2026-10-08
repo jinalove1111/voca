@@ -1,0 +1,14 @@
+{
+  "agent_name": "orchestrator",
+  "role": "리드(데이터 모델·화면·통합·판정), docs 작성 위임",
+  "task_id": "course-level-entry-2026-10-09",
+  "task": "홈 Speaking·Writing을 과정 → 레벨 → Unit → 활동으로 통합 진입, 6 과정 구분, 기존 콘텐츠 레벨 배치",
+  "status": "in_progress",
+  "progress": 15,
+  "started_at": "2026-10-09T02:40:00+09:00",
+  "updated_at": "2026-10-09T02:40:00+09:00",
+  "files_owned": ["docs/design/CURRICULUM_STAGES_2026-10-08.md", ".ai-status/orchestrator-course-level-entry-2026-10-09.json", "src/utils/curriculum/courseModel.js", "src/utils/curriculum/catalog.js", "src/components/UnitScreen.jsx", "src/App.jsx", "src/components/WritingPractice.jsx", "scripts/testPilotUnit.mjs", "tests/e2e/unit.spec.mjs", "tests/e2e/speaking.spec.mjs", "tests/e2e/writing.spec.mjs", "tests/e2e/studentHome.spec.mjs", "handoff.md", "TESTING.md", "ROADMAP.md"],
+  "summary": "1) 설계 문서 §10에 6 과정·학원 반 이름 대조·Middle/News 제안·회차 배치·진입 규칙 기록. 2) 데이터 모델(6 과정, 회차 배치)을 구현하고 화면을 과정→레벨→Unit 흐름으로 연결. 3) e2e와 verify 실행 후 소커밋·push.",
+  "blocker": null,
+  "next_action": "data model → screen wiring → e2e → verify → commit/push"
+}
