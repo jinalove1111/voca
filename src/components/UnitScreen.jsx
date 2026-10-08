@@ -297,9 +297,10 @@ function UnitSpeaking({ activity, onDone, onWrite = null }) {
   const [slot, setSlot] = useState(0)
   const [replySlot, setReplySlot] = useState(0)
   const [revealed, setRevealed] = useState(false)
+  const [followRevealed, setFollowRevealed] = useState(false)
   const st = activity.steps[step]
   const busy = BUSY(rec.st)
-  const go = (i) => { stopSpeaking(); rec.reset('RESET'); setRevealed(false); setStep(i) }
+  const go = (i) => { stopSpeaking(); rec.reset('RESET'); setRevealed(false); setFollowRevealed(false); setStep(i) }
   const fill = (frame, word) => frame.replace('___', word)
   const says = (sp) => SPEAKER_KO[sp] || sp
   return (
@@ -355,6 +356,20 @@ function UnitSpeaking({ activity, onDone, onWrite = null }) {
               <button data-testid="unit-speaking-answer-listen" onClick={() => speak(st.model, { source: 'unit' })} disabled={busy} className={`${BTN} bg-sky-100 text-sky-700 text-base`}>🔊 듣기</button>
               {st.alternatives?.length > 0 && <p className="text-sm text-gray-600">이렇게 말해도 좋아요: {st.alternatives.join(' / ')}</p>}
               {st.reply && <p data-testid="unit-speaking-answer-reply" className="text-base text-gray-800"><span className="font-black">{says(st.reply.speaker)}:</span> {st.reply.en} <span className="text-sm text-gray-600">({st.reply.ko})</span></p>}
+              {st.followUp && (
+                // 227차(발전 수준): 상대의 되묻기에 다시 답하는 후속 — 2차 답 확인 전 영어 미마운트
+                <div data-testid="unit-speaking-followup" data-revealed={followRevealed ? 'true' : 'false'} className="pt-2 border-t border-sky-200 space-y-2">
+                  <p className="text-base font-bold text-gray-900 break-keep">🔁 {st.followUp.promptKo}</p>
+                  {followRevealed ? (
+                    <>
+                      <p data-testid="unit-speaking-followup-en" className="text-xl font-black text-gray-900">{st.followUp.model}</p>
+                      {st.followUp.alternatives?.length > 0 && <p className="text-sm text-gray-600">이렇게 말해도 좋아요: {st.followUp.alternatives.join(' / ')}</p>}
+                    </>
+                  ) : (
+                    <button data-testid="unit-speaking-followup-reveal" onClick={() => setFollowRevealed(true)} disabled={busy} className={`${BTN} bg-amber-500 text-white`}>답 확인</button>
+                  )}
+                </div>
+              )}
               {onWrite && <button data-testid="unit-speaking-to-writing" onClick={onWrite} disabled={busy} className={`${BTN} bg-amber-100 text-amber-800 text-base`}>✍️ 이 표현 써보기</button>}
             </div>
           ) : (
