@@ -1,5 +1,6 @@
 # Paul Easy Voca — Handoff
 _최종 갱신: 2026-10-08 (227차 — **레벨별 교육과정 세분화 + 레벨 구조 연결**: 전 과정 단계표(파닉스·회화 6·발표 3·RG 4·중등 후속, 월별 목표 → Unit → 차시, Unit 8항목, 미제작 표시)·말하기/쓰기 수행 수준 사다리·기존 콘텐츠 매핑 문서(`CURRICULUM_STAGES`), 데이터 계약(`PERFORMANCE_LEVELS`·`profile`·`followUp`), QA 화면 **과정 → 단계 → Unit** 선택(저장 없음), 인접 단계 실증 Unit 3 = C2 발전 "거기 아니야, 저기는?"(C1 Unit 2와 같은 목표·상황, 질문 생성·되묻기·2~3문장 쓰기). 정적 PASS; 브라우저 e2e는 RAM <3GB로 미실행(재개 시 갱신). 전부 교사 검수 대기. PR #62 Draft·QA 전용. 아래 227차 섹션 참고.)_
+_228차 갱신: 2026-10-09 (228차 — 기준 확인(merge-base `19c8d951`, 10 ahead/0 behind) + 레벨 구조 현황 보고 + 227차 보류 브라우저 e2e 재개: `[unit]` 118/0(1차 117/1 = 제품 결함, 개요 헤더가 raw 'C2' 출력 → `blockLabelKo`로 수정), `[writing]` 63/0, `[student-home]` 218/0/1 SKIP(1차 214/2/1은 dist 재빌드 겹침 = 환경). 미push·Unit 3 검수표 대기. PR #62 Draft·QA 전용. 아래 228차 섹션 참고.)_
 _226차 갱신: 2026-10-08 (226차 — **A안**: 보류 결함 2건 수정(Unit에서 들어온 쓰기는 비교 뒤 '← 이 단원으로' 복귀, 독립 Writing 흐름 유지 / Unit 청크 로드 실패 시 빈 화면 대신 안내·🔄 새로고침·← 홈) + 두 Unit 교사용 콘텐츠 검수표(기본 "미검수") + ROADMAP 통합 과정 섹션(완료/다음/보류). 정적 PASS; 브라우저 e2e(RAM ≥3GB 재개) `[unit]` 99/0(1차 90/2는 환경·설계 순서 — 기존 stale-chunk 자동 새로고침이 먼저 동작·브라우저 모듈 캐시 — 로 분류, 안내 문구·새로고침 버튼 보완), `[writing]` 63/0, `[student-home]` 218/0/1 SKIP. PR #62 Draft·QA 전용. 아래 226차 섹션 참고.)_
 _225차 갱신: 2026-10-08 (225차 — **첫 Unit 독립 검수 → 결함 6건·콘텐츠 4건 수정 + 두 번째 통합 Unit "잃어버린 물건 위치 묻기"(정보 묻기, Where's my bag? / It's under the chair.) + Unit 간·계정 간 격리**. Unit 선택 목록, Unit 안 말하기 3단계(따라 하기 → 물건 바꾸기 → 모범 없이 묻고 답하기, 답 확인 전 영어·음성 미마운트), inline 쓰기 문항. 정적 핀 7종·빌드 PASS. 브라우저 e2e는 05~06시 RAM <3GB로 보류 → **12:52 재개(RAM 4.1GB) 5스펙 완료**: unit 88/0(1차 80/6 → 제품 결함 1건 = 목록에서 다른 Unit을 열면 복귀 기록이 새어 그 Unit 쓰기가 완료로 찍힘 → 수정; 스펙 2건; 흔들림 3건 재실행 미재현 → 대기 추가), student-home 218/0/1 SKIP, speaking 540/0, speaking-exam 216/0, writing 63/0(1차 1 FAIL = 주제 수 계약 드리프트). 참고문헌 7건 확인표(§9), 교사 가이드 2종, 파닉스 스펙(콘텐츠 없음). PR #62 Draft·QA 전용. 아래 225차 섹션 참고.)_
 _224차 갱신: 2026-10-08 (224차 — **통합 과정 구현 1차**: 운영자 설계안 v1 기준 공통 데이터 구조(과정·블록·지원 단계·기록 플래그·Unit 계약)와 회화 C1 시범 Unit "교실에서 물건 빌리기"(어휘·듣기·읽기·문형·복습 신규 활동 + 기존 말하기·쓰기 연결, QA 홈 [오늘의 학습]). 기기 임시 기록(completed/selfChecked만). e2e unit 54/0 + 회귀 4종 PASS. 전체 과정·파닉스·교사 화면은 설계만. PR #62 Draft. 아래 224차 섹션 참고.)_
@@ -38,6 +39,19 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-09 (228차) — 기준 확인 + 레벨 구조 현황 보고 + 227차 보류 브라우저 e2e 재개 (01:50~02:15)
+
+운영자 지시: 스프라이트 작업 없음. `C:\voca`는 오래된 체크아웃이므로 이 워크트리에서 유효한 기준을 확인할 것. 보고 — (a) 구현된 레벨 구조 (b) 문서만 있는 단계 (c) 실제 콘텐츠가 있는 단계 (d) 최소 다음 범위. 이어서 인접 단계 Speaking·Writing 난이도 차이를 검증. 폴타운·스프라이트 보류, PR #62 Draft·QA 전용.
+
+- **기준 확인**: 워크트리 clean, 브랜치 `audit/paul-town-v2-2026-09-29`(upstream 없음), `origin/feat/paul-town-v2-clean-pr`와의 merge-base = `19c8d951`(PR #62 원격 head), 로컬 10 ahead / 0 behind(세션 시작 HEAD `f0607b4f`). `C:\voca`는 상태 근거로 쓰지 않았다.
+- **구현됨(a)**: `COURSES` 5·`CONVERSATION_BLOCKS` 6·`PERFORMANCE_LEVELS` 5·`UNIT_PROFILE_KEYS` 8·`validateUnit`의 performance/profile 검사·과정 → 단계 → Unit 선택(세션 상태만)·`recall.followUp`·말하기 → 쓰기 연결.
+- **문서만(b)**: 파닉스 P1–P5, 발표 PR1–PR3, RG1–RG4, 중등(MB), 회화 Unit 18개 중 15개(회차만 16행, 미제작 표현 10종).
+- **실제 콘텐츠(c)**: 3 Unit — `c1-borrow-classroom`(basic/basic), `c1-lost-bag-classroom`(basic/basic), `c2-find-together-classroom`(developing/developing). 전부 교사 검수 대기.
+- **최소 다음 범위(d)**: 이번 세션 = RAM 때문에 미룬 227차 인접 단계 작업의 브라우저 검증. 그다음 Unit 3 교사 검수표. 후보 B(C2 4개월차 Which colour / What about you?)는 다음 순서로 유지, 미착수.
+- **검증(여유 RAM 4.75GB, 브라우저 1개, vite preview 포트 4193, 더미 env 빌드)**: build PASS 경고 0. 정적 `testPilotUnit`·`testWritingPractice`·`testCommGoals`·`testKeySentenceFlow` 전부 PASS, `testQaGate` 17/0, `testLazyChunkGuards` 92/92, `testBundleBudget` 32/0, `testRegistryCoverage` 8/0.
+- **브라우저 e2e**: `[unit]` 1차 117/1 — "Unit 3 개요: 2단계" FAIL = **제품 결함**: `UnitScreen.jsx:246` 개요 헤더가 raw `unit.block`('C2')을 그대로 출력(선택 화면·crumb는 `blockLabelKo` 사용) → `blockLabelKo(unit.block)`로 수정(이 브랜치 커밋 "fix(unit): overview header shows stage label (2단계) instead of raw block id"), 2차 **118/0**. `[writing]` 63/0. `[student-home]` 1차 214/2/1 — m(ii) Pilot A 마을 카드 FAIL이 수정 담당 에이전트의 `dist/` 재빌드(02:05:59)와 실행 중 겹침 → 환경으로 분류(제품 아님), 안정된 dist에서 2차 **218/0/1 SKIP**(기존 streak fixture 한계). 미mock 요청 0·mock 오류 0(전 실행).
+- **미실행/남은 것**: push 안 함(원격은 아직 `19c8d951`; 다음 단계는 운영자 승인 뒤 `feat/paul-town-v2-clean-pr`로 non-force push), Unit 3 교사 검수표, Preview 로그인 실화면 확인. DB·SQL·Production·`.env`·`C:\voca`·다른 워크트리 접촉 0. PR #62 Draft·QA 전용.
 
 ## 2026-10-08 (227차) — 우선순위 변경: 레벨별 교육과정 세분화 + 기존 학습 기능에 레벨 구조 연결 (19:30~)
 
