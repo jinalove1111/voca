@@ -19,6 +19,9 @@ export const WRITING_ITEMS = [
   // 225차: 통합 Unit "잃어버린 물건 위치 묻기" 전용(이야기 회차에 없는 문장 → inline). 주제는 Speaking '물건·장소 찾기'와 같은 id
   { id: 'w-u2-under', topic: 'finding', inline: { situationKo: '미술 시간이 끝났는데 폴의 가방이 안 보여요. 미아가 의자 밑에 있는 가방을 봤어요.', roleKo: '미아가 되어 폴에게 가방이 있는 곳을 알려 줘요.', en: "It's under the chair.", ko: '의자 밑에 있어.', alternatives: ['It is under the chair.', 'Your bag is under the chair.'], reply: null, episode: null },
     promptKo: '폴이 가방을 찾고 있어요. 가방이 의자 밑에 있다고 알려 주는 말을 써 보세요.', hintWords: ['under', 'chair'], noteKo: "있는 곳을 말할 때 It's 뒤에 위치 말(under·in·on)과 장소를 붙여요.", acceptNoteKo: 'It is …나 Your bag is …로 써도 돼요.' },
+  // 227차: C2(발전) "거기 아니야, 저기는?" — 자기 문장 2~3개(부정 2 + 긍정 1). 모범은 비교용 하나일 뿐
+  { id: 'w-c2-find', topic: 'finding', inline: { situationKo: '미술 시간 뒤 미아의 필통을 함께 찾았어요. 책상 밑에도 의자 위에도 없었고, 가방 안에 있었어요.', roleKo: '폴이 되어 어디에 없었고 어디에 있었는지 써요.', en: "It isn't under the desk. It isn't on the chair. It's in the bag!", ko: '책상 밑에 없어. 의자 위에 없어. 가방 안에 있어!', alternatives: ['It is not under the desk. It is not on the chair. It is in the bag.'], reply: null, episode: null },
+    promptKo: '필통이 어디에 없고 어디에 있는지 2~3문장으로 써 보세요.', hintWords: ["isn't", 'in'], noteKo: "없는 곳은 It isn't …, 있는 곳은 It's …로 2~3문장 써요.", acceptNoteKo: "It is not / It's not도 맞아요. 순서는 달라도 돼요." },
   { id: 'w-s05-09', itemId: 's05-09', topic: 'shopping', promptKo: '바구니를 들고 계산대 앞이에요. 주인에게 값을 치르겠다고 써 보세요.', hintWords: ['pay', 'please'], noteKo: '계산할 준비가 됐을 때 써요. please를 붙이면 공손한 부탁이 돼요.', acceptNoteKo: 'Can I pay…?로 써도 돼요.' },
 ]
 
