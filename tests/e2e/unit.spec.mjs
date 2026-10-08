@@ -435,6 +435,70 @@ export async function run(browser, baseURL) {
     })
   }
 
+  await scenario('l 문법 문제 모아 풀기(레벨별)', VP, async ({ page, name }) => {
+    await toGrammarList(page)
+    await T(page, 'unit-course-conversation').click()
+    r.check(`${name} 레벨 버튼 C1 '문법 기초' / C2 '문법 발전'`, (await txt(page, 'unit-block-C1')).includes('문법 기초') && (await txt(page, 'unit-block-C2')).includes('문법 발전'), `${await txt(page, 'unit-block-C1')} | ${await txt(page, 'unit-block-C2')}`)
+    const recKey = recordsKey(QA_STUDENT_ID)
+    const runSet = async (blockId, units, levelKo, stageLabel) => {
+      await T(page, `unit-block-${blockId}`).click()
+      const total = units.reduce((s, u) => s + u.grammar.items.length, 0)
+      const btn = await txt(page, `grammar-set-${blockId}`)
+      r.check(`${name} ${blockId} 모아 풀기 버튼 '(${total}문항)'(데이터 합계)`, btn.includes('이 단계 문법 문제 모아 풀기') && btn.includes(`(${total}문항)`), btn)
+      const sub = await txt(page, `unit-pick-${units[0].id}`)
+      r.check(`${name} ${blockId} 단원 보조 줄에 '📘 문법 ${levelKo}'`, sub.includes(`📘 문법 ${levelKo}`), sub)
+      const before = await page.evaluate((k) => localStorage.getItem(k), recKey)
+      const keysBefore = await page.evaluate(() => Object.keys(localStorage).sort())
+      await T(page, `grammar-set-${blockId}`).click()
+      await T(page, 'grammar-set').waitFor({ state: 'visible', timeout: 10000 })
+      const title = await txt(page, 'grammar-set')
+      r.check(`${name} ${blockId} 세트 화면: data-block, 제목 '문법 문제'·'Conversation'·'${stageLabel}'·'${levelKo}'·'점수·기록 없음'`, (await T(page, 'grammar-set').getAttribute('data-block')) === blockId && ['문법 문제', 'Conversation', stageLabel, levelKo, '점수·기록 없음'].every((s) => title.includes(s)), title.slice(0, 120))
+      r.check(`${name} ${blockId} 단원 카드 ${units.length}개(카탈로그 순서)`, (await page.locator('[data-testid^="grammar-set-unit-"]').count()) === units.length && (await T(page, `grammar-set-unit-${units.length}`).count()) === 0)
+      r.check(`${name} ${blockId} 세트 안에 unit-grammar-q-* 없음`, (await page.locator('[data-testid^="unit-grammar-q-"]').count()) === 0)
+      const total2 = await page.locator(`[data-testid^="grammar-set-q-"][data-answered]`).count()
+      r.check(`${name} ${blockId} 문항 ${total}개 렌더`, total2 === total, String(total2))
+      const en = units[0].grammar.noticing[0].en
+      r.check(`${name} ${blockId} 관찰 문장은 접힘(보이지 않음)`, (await page.getByText(en, { exact: true }).first().isVisible().catch(() => false)) === false)
+      let n = 0
+      for (let ui = 0; ui < units.length; ui++) {
+        const items = units[ui].grammar.items
+        for (let i = 0; i < items.length; i++) {
+          r.check(`${name} ${blockId} 마지막 문항 전 grammar-set-done 없음 (${ui}-${i})`, n === total - 1 || (await T(page, 'grammar-set-done').count()) === 0)
+          const q = items[i]
+          await T(page, `grammar-set-q-${ui}-${i}-opt-${Array.isArray(q.correct) ? q.correct[0] : q.correct}`).click()
+          n++
+          if (i === 0 && ui === 0) r.check(`${name} ${blockId} 답한 뒤 -why 표시`, await T(page, `grammar-set-q-${ui}-${i}-why`).isVisible())
+        }
+      }
+      await T(page, 'grammar-set-done').waitFor({ state: 'visible', timeout: 5000 })
+      r.check(`${name} ${blockId} 전부 답하면 grammar-set-done`, await T(page, 'grammar-set-done').isVisible())
+      const after = await page.evaluate((k) => localStorage.getItem(k), recKey)
+      const keysAfter = await page.evaluate(() => Object.keys(localStorage).sort())
+      r.check(`${name} ${blockId} 세트가 Unit 기록 키를 바꾸지 않음`, before === after, `${before} -> ${after}`)
+      r.check(`${name} ${blockId} 세트가 localStorage 키를 추가하지 않음`, JSON.stringify(keysBefore) === JSON.stringify(keysAfter), keysAfter.filter((k) => !keysBefore.includes(k)).join(','))
+      await T(page, 'grammar-set-back').click()
+      await T(page, 'unit-list').waitFor({ state: 'visible', timeout: 10000 })
+      const crumb = await txt(page, 'unit-list-crumb')
+      r.check(`${name} ${blockId} ← 단원 목록: 같은 단계(unit/grammar), 세트 닫힘`, (await T(page, 'unit-list').getAttribute('data-level')) === 'unit' && (await T(page, 'unit-list').getAttribute('data-intent')) === 'grammar' && crumb.includes(stageLabel) && (await T(page, 'grammar-set').count()) === 0 && (await T(page, `grammar-set-${blockId}`).isVisible()), crumb)
+    }
+    await runSet('C1', [U, U2], '기초', '1단계')
+    await T(page, 'unit-list-back').click()
+    await T(page, 'unit-block-C2').waitFor({ state: 'visible', timeout: 10000 })
+    await runSet('C2', [U3], '발전', '2단계')
+  })
+
+  for (const vp of [{ width: 360, height: 640 }, { width: 412, height: 915 }]) {
+    await scenario('l 문법 모아 풀기 레이아웃', vp, async ({ page, name }) => {
+      await toGrammarList(page)
+      await T(page, 'unit-course-conversation').click()
+      await T(page, 'unit-block-C1').click()
+      await T(page, 'grammar-set-C1').click()
+      await T(page, 'grammar-set').waitFor({ state: 'visible', timeout: 10000 })
+      const small = await smallButtons(page, 'grammar-set')
+      r.check(`${name} 모아 풀기 가로 스크롤 없음/버튼 >=44px`, (await noOverflow(page)) && small.length === 0, small.join(','))
+    })
+  }
+
   await scenario('g Unit 청크 로드 실패 → 안내·홈 복귀', VP, async ({ page, name }) => {
     await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
     await page.route('**/assets/units-*.js', (route) => route.abort())
