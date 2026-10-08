@@ -151,6 +151,13 @@ export async function run(browser, baseURL) {
     await T(page, `unit-act-${act('writing').id}`).click()
     await T(page, 'writing-flow').waitFor({ state: 'visible', timeout: 15000 })
     r.check(`${name} 쓰기 → 기존 w-s02-03 문항`, (await T(page, 'writing-flow').getAttribute('data-item')) === act('writing').writingItemId)
+    await T(page, 'writing-input').fill('can i borrow pencil')
+    await T(page, 'writing-compare').click()
+    r.check(`${name} 비교 뒤 버튼은 '다음 문장'이 아니라 '← 이 단원으로'(226차)`, (await txt(page, 'writing-next')) === '← 이 단원으로')
+    await T(page, 'writing-next').click()
+    r.check(`${name} '← 이 단원으로' → Unit 화면`, !!(await waitUntil(() => T(page, 'unit-screen').isVisible(), { timeout: 10000 })))
+    await T(page, `unit-act-${act('writing').id}`).click()
+    await T(page, 'writing-flow').waitFor({ state: 'visible', timeout: 15000 })
     await T(page, 'writing-back').click()
     r.check(`${name} ← 목록 → Unit 화면으로 복귀`, !!(await waitUntil(() => T(page, 'unit-screen').isVisible(), { timeout: 10000 })))
     r.check(`${name} 복귀 시 쓰기 '해 봤어요'`, (await T(page, `unit-act-${act('writing').id}`).getAttribute('data-completed')) === 'true')
@@ -232,6 +239,18 @@ export async function run(browser, baseURL) {
       r.check(`${name} 물건 바꾸기 단계 가로 스크롤 없음/버튼 >=44px`, (await noOverflow(page)) && (await smallButtons(page, 'unit-activity')).length === 0, (await smallButtons(page, 'unit-activity')).join(','))
     })
   }
+
+  await scenario('g Unit 청크 로드 실패 → 안내·홈 복귀', VP, async ({ page, name }) => {
+    await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
+    await page.route('**/assets/units-*.js', (route) => route.abort())
+    await T(page, 'student-home-unit').click()
+    r.check(`${name} 빈 화면 대신 안내(unit-load-failed) + 홈 버튼`, !!(await waitUntil(() => T(page, 'unit-load-failed').isVisible(), { timeout: 15000 })) && (await txt(page, 'unit-load-failed')).includes('불러오지 못했어요') && (await T(page, 'unit-load-home').isVisible()))
+    await T(page, 'unit-load-home').click()
+    r.check(`${name} ← 홈으로 → 학생 홈`, !!(await waitUntil(() => T(page, 'student-home').isVisible(), { timeout: 10000 })))
+    await page.unroute('**/assets/units-*.js')
+    await T(page, 'student-home-unit').click()
+    r.check(`${name} 다시 열면 목록 로드`, !!(await waitUntil(() => T(page, 'unit-list').isVisible(), { timeout: 15000 })))
+  })
 
   for (const vp of [{ width: 360, height: 640 }, { width: 390, height: 844 }, { width: 412, height: 915 }, { width: 1280, height: 800 }]) {
     await scenario('d 레이아웃', vp, async ({ page, name, openUnit }) => {
