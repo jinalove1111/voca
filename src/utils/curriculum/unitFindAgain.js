@@ -31,7 +31,7 @@ export const UNIT_FIND_AGAIN = {
   titleKo: '거기 아니야, 저기는?',
   situationKo: '미술 시간 뒤 미아의 필통이 사라졌어요. 폴과 미아가 번갈아 물으며 함께 찾아요.',
   keyItemId: null,
-  performance: { speaking: 'developing', writing: 'developing' },
+  performance: { speaking: 'developing', writing: 'developing', grammar: 'developing' },
   profile: {
     prerequisitesKo: ["1단계 \"잃어버린 물건 위치 묻기\"의 Where's my …? / It's under·in …을 모범 없이 말해 본 경험", '책상·가방·의자 같은 교실 물건 이름을 듣고 알아볼 수 있다', '폴·미아 두 사람이 번갈아 말하는 6~7턴 대화를 끝까지 들을 수 있다'],
     canDoKo: ['물건이 있을 것 같은 자리를 Is it under/in/on …?으로 직접 물어 확인한다', "상대 질문에 Yes, it is. / No, it isn't.로 짧게 답한다", '아니라고 답한 뒤 What about the …?으로 다른 장소를 되물어 대화를 이어 간다', '어디에 없었고 어디에 있었는지 자기 문장 2~3개로 쓴다'],
@@ -84,6 +84,10 @@ export const UNIT_FIND_AGAIN = {
       { promptKo: '선반 위에 있는지 묻는 알맞은 문장은?', options: ['It is on the shelf?', 'Is it on the shelf?', 'Is on the shelf it?'], correct: 1, whyKo: '확인하는 질문은 Is it …? 순서로 말해요. → Is it on the shelf?' },
       { promptKo: '책상 밑에 없어요. 짧게 아니라고 대답하는 알맞은 말은?', options: ["No, it isn't.", 'No, it is.', "No, isn't it."], correct: 0, whyKo: "아니라고 할 때는 No, it isn't.예요. isn't는 is not을 줄인 말이에요." },
       { promptKo: '아니라고 한 뒤 선반을 되묻는 알맞은 말은? (맞는 것이 둘이에요)', options: ['What about the shelf?', 'Is it on the shelf?', 'What the shelf about?'], correct: [0, 1], whyKo: 'What about the shelf?도, Is it on the shelf?도 다른 곳을 되묻는 말이에요. 단어 순서가 바뀐 문장은 어색해요.' },
+      // 231차 추가 문항(교사 검수 전)
+      { promptKo: "폴: Is it in the box? 미아: ___ It's in the box.", options: ['Yes, it is!', "No, it isn't!", "Yes, it isn't!"], correct: 0, whyKo: '상자 안에 있으니 Yes, it is!이에요. 뒤 문장과 이어져요.' },
+      { promptKo: '"Is it under the desk?" 책상 밑에 없어요. 알맞은 대답은?', options: ["No, it isn't.", "Yes, it isn't.", 'No, it is.'], correct: 0, whyKo: "없으면 No, it isn't. Yes와 isn't는 안 어울려요." },
+      { promptKo: '책상 밑에 없어요. 대화를 이어 가는 알맞은 대답은?', options: ["No, it isn't. What about the bag?", "No, it isn't. What bag about the?", 'No, it is. What about the bag?'], correct: 0, whyKo: "없으면 No, it isn't. 뒤에 What about the …?로 되물어요." },
     ],
   },
   speaking: { steps: SPEAKING_STEPS },

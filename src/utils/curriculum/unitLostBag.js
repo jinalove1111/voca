@@ -25,7 +25,7 @@ export const UNIT_LOST_BAG = {
   situationKo: '미술 시간이 끝났는데 폴의 가방이 보이지 않아요. 옆자리 미아에게 물어봐요.',
   keyItemId: null,
   // 227차: 수행 수준(말하기·쓰기 따로) + 교육 프로필. 말하기는 묻고 답하는 짝이 있어 기초~발전 사이지만, 모범 없이 단계가 한 문장(묻기)이라 기초로 둔다
-  performance: { speaking: 'basic', writing: 'basic' },
+  performance: { speaking: 'basic', writing: 'basic', grammar: 'basic' },
   profile: {
     prerequisitesKo: ['가방·의자·책상 같은 교실 물건·가구 이름을 듣고 알아볼 수 있다', '1단계 "물건 빌리기"처럼 한 문장 부탁을 말해 본 경험(권장, 필수 아님)'],
     canDoKo: ['물건이 안 보일 때 Where\'s my …?로 어디 있는지 묻는다', '상대가 알려 준 위치(under / in)를 듣고 그 자리로 간다', '미아 역할로 It\'s under the chair.처럼 위치를 한 문장으로 알려 준다·쓴다'],
@@ -75,6 +75,10 @@ export const UNIT_LOST_BAG = {
       { promptKo: '가방이 의자 밑에 있어요. 빈칸에 알맞은 말은? It\'s ___ the chair.', options: ['under', 'in', 'on'], correct: 0, whyKo: '"~ 밑에"는 under예요. → It\'s under the chair.' },
       { promptKo: '가방이 있는 곳을 묻는 알맞은 문장은? (맞는 것이 둘이에요)', options: ["Where's my bag?", 'Where is my bag?', 'Where my bag is?'], correct: [0, 1], whyKo: "Where's는 Where is를 줄인 말이라 둘 다 맞아요. 'Where my bag is?'는 단어 순서가 어색해요." },
       { promptKo: '필통이 가방 안에 있다고 대답하는 알맞은 문장은?', options: ['It in the bag.', "It's in the bag.", 'Is in the bag.'], correct: 1, whyKo: "대답은 It's … 로 시작해요(It is의 줄임말). → It's in the bag." },
+      // 231차 추가 문항(교사 검수 전)
+      { promptKo: '빈칸에 알맞은 말은? Where ___ my pencil case?', options: ['is', 'are', 'it'], correct: 0, whyKo: '필통 하나는 Where is …?예요. → Where is my pencil case?' },
+      { promptKo: '가방이 의자 밑에 있다고 대답하는 알맞은 문장은?', options: ["It's under the chair.", "It's the under chair.", "It's chair under the."], correct: 0, whyKo: "순서는 It's + under + the + 장소예요. → It's under the chair." },
+      { promptKo: '단어 순서가 틀린 문장은 어느 것일까요?', options: ["Where's my bag?", 'Where my desk is?', 'Where is my chair?'], correct: 1, whyKo: '묻는 말은 Where is my desk? 순서로 말해요.' },
     ],
   },
   speaking: { steps: SPEAKING_STEPS },

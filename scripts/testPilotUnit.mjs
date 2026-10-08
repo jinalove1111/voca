@@ -1,7 +1,7 @@
 // 2026-10-08(224차) 통합 과정 공통 구조 + 시범 Unit(교실에서 물건 빌리기) — 순수 모듈·데이터 계약·기록 저장·화면 소스 핀
 import fs from 'node:fs'
 import { COURSES, CONVERSATION_BLOCKS, SUPPORT_STAGES, SUPPORT_AREAS, RECORD_FLAGS, APP_SETTABLE_FLAGS, ACTIVITY_KINDS, validateUnit, PERFORMANCE_LEVELS, UNIT_PROFILE_KEYS, blocksForCourse, blockLabelKo, isBlockProposed } from '../src/utils/curriculum/courseModel.js'
-import { EPISODE_PLACEMENT, placementErrors, listCatalog, courseCount, findEntry, grammarForUnit } from '../src/utils/curriculum/catalog.js'
+import { EPISODE_PLACEMENT, placementErrors, listCatalog, courseCount, findEntry, grammarForUnit, grammarSetForBlock } from '../src/utils/curriculum/catalog.js'
 import { writingItemsForEpisode } from '../src/utils/writing/writingItems.js'
 import { recordsKey, loadUnitRecords, markActivity, setSupportStage, activityState, nextActivityId } from '../src/utils/curriculum/unitRecords.js'
 import { COMM_GOALS } from '../src/utils/curriculum/commGoals.js'
@@ -49,7 +49,7 @@ const allEn2 = [...U2.listening.turns.map((t) => t.en), U2.reading.text, ...U2.r
 check('Unit 2 어휘는 Unit 텍스트에 실제로 나오는 말만, 위치 말은 under·in·on 3개 이하', U2.vocab.every((v) => allEn2.includes(v.en.toLowerCase())) && U2.vocab.filter((v) => /^(under|in|on)$/.test(v.en)).length <= 3, U2.vocab.filter((v) => !allEn2.includes(v.en.toLowerCase())).map((v) => v.en).join(','))
 check('Unit 2 듣기 ≤45단어·Paul/Mia만, 읽기 ≤70단어·문장 ≤9단어', U2.listening.turns.reduce((n, t) => n + t.en.split(/\s+/).length, 0) <= 45 && U2.listening.turns.every((t) => ['Paul', 'Mia'].includes(t.speaker)) && U2.reading.text.split(/\s+/).length <= 70 && U2.reading.text.split(/[.!?]["']?\s+/).every((s) => s.trim().split(/\s+/).length <= 9))
 check('Unit 2 복습·회상 상황에 영어 없음, 읽기 근거는 본문에 그대로', U2.review.every((r) => !/[A-Za-z]/.test(r.situationKo)) && U2.reading.items.every((q) => U2.reading.text.includes(q.evidence)))
-check('Unit 2 문형: Where is…(대체)를 오답으로 두지 않음, 출처 official/research/own 구분, 교재 브랜드·단원 번호 없음', U2.grammar.items.every((q) => q.options.every((o, i) => (Array.isArray(q.correct) ? q.correct.includes(i) : i === q.correct) || !/^where is my/i.test(o))) && U2.sources.every((s) => ['official', 'research', 'own'].includes(s.kind) && s.what && s.basis) && !/let'?s ?smile|\bunit ?\d|lesson ?\d|\d\s*권/i.test(JSON.stringify(U2)))
+check('Unit 2 문형: Where is…(대체)를 오답으로 두지 않음, 출처 official/research/own 구분, 교재 브랜드·단원 번호 없음', U2.grammar.items.every((q) => /틀린/.test(q.promptKo) || q.options.every((o, i) => (Array.isArray(q.correct) ? q.correct.includes(i) : i === q.correct) || !/^where is my/i.test(o))) && U2.sources.every((s) => ['official', 'research', 'own'].includes(s.kind) && s.what && s.basis) && !/let'?s ?smile|\bunit ?\d|lesson ?\d|\d\s*권/i.test(JSON.stringify(U2)))
 check('두 Unit의 문장·문항이 서로 섞이지 않음(핵심 문장이 다른 Unit 텍스트에 없음)', !JSON.stringify(U2).includes('Can I borrow') && !JSON.stringify(UNIT_BORROW).includes("Where's my"))
 const uSrc = strip(read('src/components/UnitScreen.jsx'))
 check('화면: Unit 목록(unit-list/unit-pick)·Unit 안 말하기 3단계(repeat/swap/recall)·답 확인 전 모범 미마운트·녹음기 재사용', ['data-testid="unit-list"', 'unit-pick-${e.id}', "st.kind === 'repeat'", "st.kind === 'swap'", "st.kind === 'recall'", 'RecorderControls rec={rec}', 'useLocalRecorder()'].every((t) => uSrc.includes(t)) && /revealed \? \(\s*<div data-testid="unit-speaking-answer"/.test(uSrc) && /a\.kind === 'speaking' && !a\.steps\) onSpeaking/.test(uSrc))
@@ -107,9 +107,14 @@ check('228차: 회차별 Writing 문항(5화 5개, 2화에 w-s02-03), findEntry�
 check('228차: catalog.js는 저장소(localStorage) 없음·units.js import 없음(lazy 청크 유지)', !/localStorage|sessionStorage/.test(catSrc) && !/from ['"][^'"]*units\.js['"]/.test(catSrc))
 
 // ── 문법 진입(shared picker intent 'grammar'): 문법은 과정이 아니라 Unit 안의 활동 ──
-check('문법 진입: grammarForUnit(UNITS[0]) 관찰 2·문항 3, 문법 없는 Unit은 null', grammarForUnit(UNITS[0])?.itemCount === 3 && grammarForUnit(UNITS[0]).noticingCount === 2 && grammarForUnit({ activities: [] }) === null)
+check('문법 진입: grammarForUnit(UNITS[0]) 관찰 2·문항 6, 문법 없는 Unit은 null', grammarForUnit(UNITS[0])?.itemCount === 6 && grammarForUnit(UNITS[0]).noticingCount === 2 && grammarForUnit({ activities: [] }) === null)
 check('문법 진입: 회화 C1 = Unit 2개·이야기 없음, C3 = 0개, 회화 과정 = 3개', (() => { const l = listCatalog(UNITS, 'conversation', 'C1', { intent: 'grammar' }); return l.length === 2 && l.every((e) => e.kind === 'unit' && e.grammar) })() && listCatalog(UNITS, 'conversation', 'C3', { intent: 'grammar' }).length === 0 && courseCount(UNITS, 'conversation', { intent: 'grammar' }) === 3)
 check('문법 진입: 선택기가 grammar intent 처리, 홈 버튼은 student-home-unit 뒤', /intent === 'grammar'/.test(uSrc) && /grammar: '문법'/.test(uSrc) && (() => { const h = read('src/components/StudentHome.jsx'); return h.indexOf('student-home-grammar') > h.indexOf('student-home-unit') && h.indexOf('student-home-unit') > 0 })())
+
+// ── 231차: 문법도 수행 수준(초중급)으로 나눠 단계 단위로 풀기 ──
+check('231차: PERFORMANCE_LEVELS 전부 grammarKo, U1/U2 grammar basic·U3 developing, validateUnit이 잘못된 grammar 수준 거부', PERFORMANCE_LEVELS.every((p) => p.grammarKo) && UNITS[0].performance.grammar === 'basic' && UNITS[1].performance.grammar === 'basic' && UNITS[2].performance.grammar === 'developing' && validateUnit({ ...UNITS[0], performance: { ...UNITS[0].performance, grammar: 'nope' } }).includes('performance') && validateUnit(UNITS[0]).length === 0)
+check('231차: grammarForUnit 수준(기초)·grammarSetForBlock C1 12문항/Unit 2개, C2 6문항/1개, C3 null', grammarForUnit(UNITS[0]).levelKo === '기초' && grammarForUnit(UNITS[2]).levelKo === '발전' && (() => { const a = grammarSetForBlock(UNITS, 'conversation', 'C1'); const b = grammarSetForBlock(UNITS, 'conversation', 'C2'); return a.itemCount === 12 && a.units.length === 2 && a.levelKo === '기초' && a.id === 'set-conversation-C1' && b.itemCount === 6 && b.units.length === 1 && b.levelKo === '발전' })() && grammarSetForBlock(UNITS, 'conversation', 'C3') === null)
+check('231차: 선택기에 문법 모음 화면(grammar-set-, grammar-set-back)이 있고 그 안에서 기록(markActivity)을 만들지 않음', uSrc.includes('grammar-set-') && uSrc.includes('grammar-set-back') && (() => { const i = uSrc.indexOf('function GrammarSetScreen'); const body = uSrc.slice(i, uSrc.indexOf('export default function UnitScreen')); return i > 0 && !body.includes('markActivity') && !body.includes('unit-grammar-q') })())
 
 if (fail) { console.log(`\nFAILED ${fail}`); process.exit(1) }
 console.log('\nALL PASS')

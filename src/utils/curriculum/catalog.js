@@ -37,7 +37,19 @@ const storyEntry = (epId) => {
 // 문법은 과정이 아니라 각 Unit 안의 활동(kind 'grammar')이다 — 새 콘텐츠 없이 존재 여부·개수만 읽는다
 export function grammarForUnit(unit) {
   const a = unit?.activities?.find((x) => x.kind === 'grammar')
-  return a ? { titleKo: a.titleKo, noticingCount: unit.grammar?.noticing?.length || 0, itemCount: unit.grammar?.items?.length || 0 } : null
+  const level = unit?.performance?.grammar || null
+  return a ? { titleKo: a.titleKo, noticingCount: unit.grammar?.noticing?.length || 0, itemCount: unit.grammar?.items?.length || 0, level, levelKo: performanceById(level)?.titleKo || null } : null
+}
+
+// 단계(블록) 단위 문법 문제 모음 — 순수 계산, 저장·기록 없음. 문법이 있는 Unit이 없으면 null
+export function grammarSetForBlock(units, courseId, blockId) {
+  const us = (units || []).filter((u) => u.course === courseId && u.block === blockId && grammarForUnit(u))
+  if (!us.length) return null
+  const counts = {}
+  for (const u of us) { const k = grammarForUnit(u).levelKo; if (k) counts[k] = (counts[k] || 0) + 1 }
+  const levelKo = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || null
+  const units2 = us.map((u) => ({ id: u.id, titleKo: u.titleKo, noticing: u.grammar.noticing, items: u.grammar.items }))
+  return { id: `set-${courseId}-${blockId}`, courseId, blockId, levelKo, units: units2, itemCount: units2.reduce((n, u) => n + u.items.length, 0) }
 }
 
 // 실제 Unit 먼저, 그 뒤 회차(n 순서). intent 'grammar'면 문법이 있는 Unit만(회차 제외)

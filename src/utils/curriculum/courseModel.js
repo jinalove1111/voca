@@ -29,11 +29,11 @@ export const CONVERSATION_BLOCKS = [
 // 227차: 말하기·쓰기 수행 수준 사다리(운영자 지시) — Unit이 요구하는 "실제로 하는 행동"의 크기. 학생의 영구 레벨이 아니라
 // Unit의 목표 수행이며, 말하기와 쓰기는 따로 본다(한 학생이 말하기 '발전'·쓰기 '기초'일 수 있다). 교재 번호·나이로 단정하지 않는다.
 export const PERFORMANCE_LEVELS = [
-  { id: 'entry', titleKo: '입문', speakingKo: '단어·짧은 구 말하기', writingKo: '글자·단어 쓰기' },
-  { id: 'basic', titleKo: '기초', speakingKo: '한 문장 말하기', writingKo: '문장 틀 완성·한 문장' },
-  { id: 'developing', titleKo: '발전', speakingKo: '질문·응답 주고받기', writingKo: '자기 문장 2~3개' },
-  { id: 'expanding', titleKo: '확장', speakingKo: '이유·과거 경험·계획 설명', writingKo: '연결된 짧은 글' },
-  { id: 'presenting', titleKo: '발표', speakingKo: '내용 구성·요약·후속 질문 응답', writingKo: '발표 원고 작성' },
+  { id: 'entry', titleKo: '입문', speakingKo: '단어·짧은 구 말하기', writingKo: '글자·단어 쓰기', grammarKo: '그림·모양 보고 알맞은 말 고르기' },
+  { id: 'basic', titleKo: '기초', speakingKo: '한 문장 말하기', writingKo: '문장 틀 완성·한 문장', grammarKo: '한 문장 틀에서 빈칸·어순 고르기' },
+  { id: 'developing', titleKo: '발전', speakingKo: '질문·응답 주고받기', writingKo: '자기 문장 2~3개', grammarKo: '질문과 대답 짝 맞추기·되묻기 고르기' },
+  { id: 'expanding', titleKo: '확장', speakingKo: '이유·과거 경험·계획 설명', writingKo: '연결된 짧은 글', grammarKo: '시제·이유를 이어 알맞은 문장 고르기' },
+  { id: 'presenting', titleKo: '발표', speakingKo: '내용 구성·요약·후속 질문 응답', writingKo: '발표 원고 작성', grammarKo: '짧은 글에서 틀린 곳 찾아 고치기' },
 ]
 export const performanceById = (id) => PERFORMANCE_LEVELS.find((p) => p.id === id) || null
 // 과정의 단계(블록) 목록 — 화면의 과정 → 단계 → Unit 선택에 쓴다. 단계에 Unit이 없으면 화면은 '미제작'으로 표시한다
@@ -104,7 +104,7 @@ export function validateUnit(u) {
   need(Array.isArray(u.review) && u.review.length >= 2 && u.review.every((r) => r.situationKo && r.situationKo.length <= 40 && !/[A-Za-z]/.test(r.situationKo) && r.model && Array.isArray(r.alternatives)), 'review')
   need(Array.isArray(u.sources) && u.sources.length > 0, 'sources')
   // 227차: 수행 수준(말하기·쓰기 따로)과 교육 프로필 — 있으면 유효해야 한다
-  if (u.performance !== undefined) need(u.performance && performanceById(u.performance.speaking) && performanceById(u.performance.writing), 'performance')
+  if (u.performance !== undefined) need(u.performance && performanceById(u.performance.speaking) && performanceById(u.performance.writing) && (u.performance.grammar === undefined || performanceById(u.performance.grammar)), 'performance')
   if (u.profile !== undefined) need(u.profile && UNIT_PROFILE_KEYS.every((k) => Array.isArray(u.profile[k]) && u.profile[k].length > 0 && u.profile[k].every((s) => typeof s === 'string')), 'profile')
   return errs
 }

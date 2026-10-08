@@ -9,7 +9,7 @@ export const UNIT_BORROW = {
   situationKo: '미술 시간, 폴의 필통을 열었더니 연필 대신 숟가락이 나왔어요. 앞자리 미아에게 필요한 물건을 빌려요.',
   keyItemId: 's02-03',
   // 227차: 수행 수준(말하기·쓰기 따로) + 교육 프로필(운영자 지시 8항목). 기초 = 한 문장 말하기 / 문장 틀 완성·한 문장
-  performance: { speaking: 'basic', writing: 'basic' },
+  performance: { speaking: 'basic', writing: 'basic', grammar: 'basic' },
   profile: {
     prerequisitesKo: ['교실 물건 이름(연필·지우개·필통) 몇 개를 듣고 알아볼 수 있다', '폴·미아 두 사람의 짧은 대화를 끝까지 들을 수 있다'],
     canDoKo: ['필요한 물건이 없을 때 짝에게 한 문장으로 빌려 달라고 말한다', '상대의 Sure. Here you are!에 Thank you로 반응한다', '같은 부탁을 다른 물건으로 바꿔 말하거나 쓴다'],
@@ -62,6 +62,10 @@ export const UNIT_BORROW = {
       { promptKo: '빈칸에 알맞은 말은? Can I borrow ___?', options: ['a pencil', 'pencil', 'a pencils'], correct: 0, whyKo: '연필 한 자루를 말할 때는 a pencil이라고 해요. → Can I borrow a pencil?' },
       { promptKo: '친구에게 연필을 빌려 달라고 하는 알맞은 문장은?', options: ['Can I borrow a pencil?', 'Can I borrowing a pencil?', 'Can borrow I a pencil?'], correct: 0, whyKo: '물어볼 때는 Can I borrow …? 순서로 말해요. → Can I borrow a pencil?' },
       { promptKo: '지우개를 빌려 달라고 할 때 알맞은 문장은? (맞는 것이 둘이에요)', options: ['Could I borrow your rubber?', 'Can I borrow your rubber?', 'Can borrow I your rubber?'], correct: [0, 1], whyKo: 'Could I …?도 Can I …?처럼 정중한 부탁이에요. 단어 순서가 바뀐 문장은 어색해요.' },
+      // 231차 추가 문항(교사 검수 전)
+      { promptKo: '빈칸에 알맞은 말은? Can I borrow ___ ball?', options: ['your', 'yours', 'you'], correct: 0, whyKo: '"너의 공"은 your ball이에요. → Can I borrow your ball?' },
+      { promptKo: '자를 빌려 달라고 하는 알맞은 문장은?', options: ['Can I borrow your ruler?', 'Borrow I can your ruler?', 'Can your I borrow ruler?'], correct: 0, whyKo: '순서는 Can I borrow …? 이고 끝에 물음표(?)를 써요.' },
+      { promptKo: '단어 순서가 틀린 문장은 어느 것일까요?', options: ['Can I borrow a pencil?', 'Can borrow I your ball?', 'Can I borrow your rubber?'], correct: 1, whyKo: 'Can I borrow 순서여야 해요. Can borrow I는 틀렸어요.' },
     ],
   },
   speaking: {
