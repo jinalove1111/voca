@@ -22,6 +22,24 @@ export const CONVERSATION_BLOCKS = [
   { id: 'C6', monthsKo: '16~18개월', themeKo: '계획·비교·문제 해결: 친구와 결정하기', goalIds: ['teamwork', 'suggesting', 'inviting'] },
 ]
 
+// 227차: 말하기·쓰기 수행 수준 사다리(운영자 지시) — Unit이 요구하는 "실제로 하는 행동"의 크기. 학생의 영구 레벨이 아니라
+// Unit의 목표 수행이며, 말하기와 쓰기는 따로 본다(한 학생이 말하기 '발전'·쓰기 '기초'일 수 있다). 교재 번호·나이로 단정하지 않는다.
+export const PERFORMANCE_LEVELS = [
+  { id: 'entry', titleKo: '입문', speakingKo: '단어·짧은 구 말하기', writingKo: '글자·단어 쓰기' },
+  { id: 'basic', titleKo: '기초', speakingKo: '한 문장 말하기', writingKo: '문장 틀 완성·한 문장' },
+  { id: 'developing', titleKo: '발전', speakingKo: '질문·응답 주고받기', writingKo: '자기 문장 2~3개' },
+  { id: 'expanding', titleKo: '확장', speakingKo: '이유·과거 경험·계획 설명', writingKo: '연결된 짧은 글' },
+  { id: 'presenting', titleKo: '발표', speakingKo: '내용 구성·요약·후속 질문 응답', writingKo: '발표 원고 작성' },
+]
+export const performanceById = (id) => PERFORMANCE_LEVELS.find((p) => p.id === id) || null
+// 과정의 단계(블록) 목록 — 화면의 과정 → 단계 → Unit 선택에 쓴다. 단계에 Unit이 없으면 화면은 '미제작'으로 표시한다
+export const blocksForCourse = (courseId) => (COURSES.find((c) => c.id === courseId) || { blocks: [] }).blocks
+// 블록 한국어 라벨(짧게): 회화 C1 → '1단계'
+export const blockLabelKo = (blockId) => { const m = /^[A-Z]+(\d+)$/.exec(blockId); return m ? `${m[1]}단계` : blockId }
+
+// Unit 교육 프로필(운영자 지시 8항목) — 선택 필드지만 있으면 전부 한국어 배열이어야 한다. validateUnit이 함께 검사한다
+export const UNIT_PROFILE_KEYS = ['prerequisitesKo', 'canDoKo', 'languageKo', 'activitiesKo', 'teacherCheckKo', 'supportKo', 'extensionKo', 'recycleKo']
+
 // 지원 단계(설계안 §3) — 영어 수준이 아니라 같은 목표에 주는 도움 정도. 수준(level)과 별도 필드로 둔다
 export const SUPPORT_STAGES = [
   { id: 'with-model', titleKo: '모범과 함께', descKo: '모범 문장·뜻·음성을 보고 들으며 해요' },
@@ -60,5 +78,8 @@ export function validateUnit(u) {
   need(u.speaking && u.speaking.steps.length === 3, 'speaking.steps')
   need(Array.isArray(u.review) && u.review.length >= 2 && u.review.every((r) => r.situationKo && r.situationKo.length <= 40 && !/[A-Za-z]/.test(r.situationKo) && r.model && Array.isArray(r.alternatives)), 'review')
   need(Array.isArray(u.sources) && u.sources.length > 0, 'sources')
+  // 227차: 수행 수준(말하기·쓰기 따로)과 교육 프로필 — 있으면 유효해야 한다
+  if (u.performance !== undefined) need(u.performance && performanceById(u.performance.speaking) && performanceById(u.performance.writing), 'performance')
+  if (u.profile !== undefined) need(u.profile && UNIT_PROFILE_KEYS.every((k) => Array.isArray(u.profile[k]) && u.profile[k].length > 0 && u.profile[k].every((s) => typeof s === 'string')), 'profile')
   return errs
 }
