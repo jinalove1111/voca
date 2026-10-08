@@ -854,8 +854,8 @@ function AppInner({ studentId, studentName, onLogout }) {
           onStartGuided={startGuidedSession} onLogout={onLogout}
           onGo={(t) => { setSpeakingMode(t === 'speakingExam' ? 'exam' : 'menu'); if (t === 'writingCoach') setWritingLink(null); setUnitLink(null)
             // 228차: 말하기(시험 제외)·쓰기·오늘의 학습은 모두 같은 선택기(screen 'unit')로. 이 홈은 QA 전용이다
-            const viaPicker = t === 'unit' || t === 'speaking' || t === 'writingCoach'
-            if (viaPicker) { setUnitIntent(t === 'speaking' ? 'speaking' : t === 'writingCoach' ? 'writing' : null); setPilotUnitsFailed(false); loadPilotUnits().then((m) => setPilotUnits(m.UNITS)).catch(() => setPilotUnitsFailed(true)) }
+            const viaPicker = t === 'unit' || t === 'speaking' || t === 'writingCoach' || t === 'grammar'
+            if (viaPicker) { setUnitIntent(t === 'speaking' ? 'speaking' : t === 'writingCoach' ? 'writing' : t === 'grammar' ? 'grammar' : null); setPilotUnitsFailed(false); loadPilotUnits().then((m) => setPilotUnits(m.UNITS)).catch(() => setPilotUnitsFailed(true)) }
             goFrom('home', viaPicker ? 'unit' : t === 'speakingExam' ? 'speaking' : (paulTown2_5dEnabled && t === 'paulTown') ? 'proto25d' : t) }}
           canEnterTown={(isFeatureEnabled('paulTownHomeBand') && !!attachment.stats) || paulTown2_5dEnabled}
           townEligible={townV1Enabled}

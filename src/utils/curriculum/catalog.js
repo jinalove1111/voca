@@ -31,22 +31,29 @@ const storyEntry = (epId) => {
   const card = storyCard(epId)
   const placement = EPISODE_PLACEMENT[epId]
   if (!card || !placement) return null
-  return { kind: 'story', id: epId, card, placement, topics: topicsForEpisode(epId), writingItems: writingItemsForEpisode(epId), hasKeyFlow: card.hasKeyFlow }
+  return { kind: 'story', grammar: null, id: epId, card, placement, topics: topicsForEpisode(epId), writingItems: writingItemsForEpisode(epId), hasKeyFlow: card.hasKeyFlow }
 }
 
-// 실제 Unit 먼저, 그 뒤 회차(n 순서)
-export function listCatalog(units, courseId, blockId) {
-  const us = (units || []).filter((u) => u.course === courseId && u.block === blockId).map((unit) => ({ kind: 'unit', id: unit.id, unit }))
+// 문법은 과정이 아니라 각 Unit 안의 활동(kind 'grammar')이다 — 새 콘텐츠 없이 존재 여부·개수만 읽는다
+export function grammarForUnit(unit) {
+  const a = unit?.activities?.find((x) => x.kind === 'grammar')
+  return a ? { titleKo: a.titleKo, noticingCount: unit.grammar?.noticing?.length || 0, itemCount: unit.grammar?.items?.length || 0 } : null
+}
+
+// 실제 Unit 먼저, 그 뒤 회차(n 순서). intent 'grammar'면 문법이 있는 Unit만(회차 제외)
+export function listCatalog(units, courseId, blockId, { intent } = {}) {
+  const us = (units || []).filter((u) => u.course === courseId && u.block === blockId).map((unit) => ({ kind: 'unit', id: unit.id, unit, grammar: grammarForUnit(unit) })).filter((e) => intent !== 'grammar' || e.grammar)
+  if (intent === 'grammar') return us
   const ss = STORY_EPISODES.filter((e) => EPISODE_PLACEMENT[e.id]?.course === courseId && EPISODE_PLACEMENT[e.id].block === blockId).sort((a, b) => a.n - b.n).map((e) => storyEntry(e.id)).filter(Boolean)
   return [...us, ...ss]
 }
 
-export function catalogCounts(units, courseId) {
+export function catalogCounts(units, courseId, opts) {
   const out = {}
-  for (const b of blocksForCourse(courseId)) out[b] = listCatalog(units, courseId, b).length
+  for (const b of blocksForCourse(courseId)) out[b] = listCatalog(units, courseId, b, opts).length
   return out
 }
-export const courseCount = (units, courseId) => Object.values(catalogCounts(units, courseId)).reduce((a, b) => a + b, 0)
+export const courseCount = (units, courseId, opts) => Object.values(catalogCounts(units, courseId, opts)).reduce((a, b) => a + b, 0)
 
 // 선택 복원용: Unit id 또는 회차 id
 export function findEntry(units, id) {

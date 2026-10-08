@@ -1,7 +1,7 @@
 // 2026-10-08(224차) 통합 과정 공통 구조 + 시범 Unit(교실에서 물건 빌리기) — 순수 모듈·데이터 계약·기록 저장·화면 소스 핀
 import fs from 'node:fs'
 import { COURSES, CONVERSATION_BLOCKS, SUPPORT_STAGES, SUPPORT_AREAS, RECORD_FLAGS, APP_SETTABLE_FLAGS, ACTIVITY_KINDS, validateUnit, PERFORMANCE_LEVELS, UNIT_PROFILE_KEYS, blocksForCourse, blockLabelKo, isBlockProposed } from '../src/utils/curriculum/courseModel.js'
-import { EPISODE_PLACEMENT, placementErrors, listCatalog, courseCount, findEntry } from '../src/utils/curriculum/catalog.js'
+import { EPISODE_PLACEMENT, placementErrors, listCatalog, courseCount, findEntry, grammarForUnit } from '../src/utils/curriculum/catalog.js'
 import { writingItemsForEpisode } from '../src/utils/writing/writingItems.js'
 import { recordsKey, loadUnitRecords, markActivity, setSupportStage, activityState, nextActivityId } from '../src/utils/curriculum/unitRecords.js'
 import { COMM_GOALS } from '../src/utils/curriculum/commGoals.js'
@@ -105,6 +105,11 @@ check('228차: 회화 C1 = Unit 2개 먼저 + ep01·ep02, C2 = c2 Unit + ep03', 
 check('228차: 뉴스 N1 비어 있음·뉴스 과정 0개(콘텐츠 준비 중)', listCatalog(UNITS, 'news', 'N1').length === 0 && courseCount(UNITS, 'news') === 0)
 check('228차: 회차별 Writing 문항(5화 5개, 2화에 w-s02-03), findEntry로 회차·Unit 복원', writingItemsForEpisode(5).length === 5 && writingItemsForEpisode(2).some((w) => w.id === 'w-s02-03') && findEntry(UNITS, 'ep05').kind === 'story' && findEntry(UNITS, 'c2-find-together-classroom').kind === 'unit' && findEntry(UNITS, 'nope') === null)
 check('228차: catalog.js는 저장소(localStorage) 없음·units.js import 없음(lazy 청크 유지)', !/localStorage|sessionStorage/.test(catSrc) && !/from ['"][^'"]*units\.js['"]/.test(catSrc))
+
+// ── 문법 진입(shared picker intent 'grammar'): 문법은 과정이 아니라 Unit 안의 활동 ──
+check('문법 진입: grammarForUnit(UNITS[0]) 관찰 2·문항 3, 문법 없는 Unit은 null', grammarForUnit(UNITS[0])?.itemCount === 3 && grammarForUnit(UNITS[0]).noticingCount === 2 && grammarForUnit({ activities: [] }) === null)
+check('문법 진입: 회화 C1 = Unit 2개·이야기 없음, C3 = 0개, 회화 과정 = 3개', (() => { const l = listCatalog(UNITS, 'conversation', 'C1', { intent: 'grammar' }); return l.length === 2 && l.every((e) => e.kind === 'unit' && e.grammar) })() && listCatalog(UNITS, 'conversation', 'C3', { intent: 'grammar' }).length === 0 && courseCount(UNITS, 'conversation', { intent: 'grammar' }) === 3)
+check('문법 진입: 선택기가 grammar intent 처리, 홈 버튼은 student-home-unit 뒤', /intent === 'grammar'/.test(uSrc) && /grammar: '문법'/.test(uSrc) && (() => { const h = read('src/components/StudentHome.jsx'); return h.indexOf('student-home-grammar') > h.indexOf('student-home-unit') && h.indexOf('student-home-unit') > 0 })())
 
 if (fail) { console.log(`\nFAILED ${fail}`); process.exit(1) }
 console.log('\nALL PASS')

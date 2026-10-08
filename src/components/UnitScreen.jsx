@@ -394,8 +394,8 @@ function UnitSpeaking({ activity, onDone, onWrite = null }) {
 // 228차: 홈의 말하기·쓰기·오늘의 학습이 모두 이 선택기로 들어온다(intent로 보이는 버튼만 다름). 항목 = 실제 Unit + 이야기 회차(catalog).
 // 내용이 없는 과정·단계는 EMPTY_LABEL_KO(콘텐츠 준비 중)로 비활성 표시. 주제 이름(학교생활·쇼핑 등)은 항목 안의 분류 배지로만 쓴다.
 const PERF_KO = (u) => (u.performance ? `말하기 ${performanceById(u.performance.speaking)?.titleKo} · 쓰기 ${performanceById(u.performance.writing)?.titleKo}` : null)
-const HEADING = { speaking: '어떤 단원에서 말해 볼까요?', writing: '어떤 단원에서 써 볼까요?' }
-const TITLE = { speaking: '말하기', writing: '문장 쓰기' }
+const HEADING = { speaking: '어떤 단원에서 말해 볼까요?', writing: '어떤 단원에서 써 볼까요?', grammar: '어떤 단원의 문법을 볼까요?' }
+const TITLE = { speaking: '말하기', writing: '문장 쓰기', grammar: '문법' }
 function StoryCard({ entry, intent, onStory }) {
   const { id, card, placement, topics, writingItems, hasKeyFlow } = entry
   const perf = placement.performance
@@ -444,7 +444,8 @@ export default function UnitScreen({ units, initialUnitId = null, initialSelecti
   }
   const level = !courseId ? 'course' : !blockId ? 'block' : 'unit'
   const course = COURSES.find((c) => c.id === courseId) || null
-  const counts = courseId ? catalogCounts(units, courseId) : {}
+  const opts = { intent }
+  const counts = courseId ? catalogCounts(units, courseId, opts) : {}
   const ITEM = 'w-full min-h-[64px] px-4 py-3 rounded-3xl text-left btn-press card-shadow'
   const back = level === 'course' ? null : level === 'block' ? () => setCourseId(null) : () => setBlockId(null)
   return (
@@ -463,7 +464,7 @@ export default function UnitScreen({ units, initialUnitId = null, initialSelecti
         {level === 'course' && (
           <>
             <p className="text-base font-black text-gray-800">어떤 과정을 할까요?</p>
-            {COURSES.map((c) => { const n = courseCount(units, c.id); return (
+            {COURSES.map((c) => { const n = courseCount(units, c.id, opts); return (
               <button key={c.id} data-testid={`unit-course-${c.id}`} onClick={() => setCourseId(c.id)} disabled={n === 0} aria-disabled={n === 0} className={`${ITEM} ${n ? 'text-white bg-gradient-to-br from-teal-400 to-emerald-600' : 'bg-white text-gray-400'}`}>
                 <span className="block text-xl font-black">{c.titleEn}</span>
                 <span className="block text-xs font-bold opacity-90">{c.titleKo} · {c.monthsKo}{c.parallel && <span className="ml-1 px-2 py-0.5 rounded-full bg-white/30">병행 가능</span>}</span>
@@ -484,11 +485,11 @@ export default function UnitScreen({ units, initialUnitId = null, initialSelecti
         {level === 'unit' && (
           <>
             <p className="text-base font-black text-gray-800">{HEADING[intent] || '어떤 단원을 할까요?'}</p>
-            {listCatalog(units, courseId, blockId).map((e) => e.kind === 'story'
+            {listCatalog(units, courseId, blockId, opts).map((e) => e.kind === 'story'
               ? <StoryCard key={e.id} entry={e} intent={intent} onStory={onStory} />
               : (
                 <button key={e.id} data-testid={`unit-pick-${e.id}`} onClick={() => pick(e.id)} className={`${ITEM} text-white bg-gradient-to-br from-teal-400 to-emerald-600`}>
-                  <span className="block text-xs font-bold opacity-90">{e.unit.goalTitleKo}{PERF_KO(e.unit) ? ` · ${PERF_KO(e.unit)}` : ''}</span>
+                  <span className="block text-xs font-bold opacity-90">{e.unit.goalTitleKo}{intent === 'grammar' ? ` · 📘 ${e.grammar.titleKo} · 관찰 ${e.grammar.noticingCount} · 문항 ${e.grammar.itemCount}` : PERF_KO(e.unit) ? ` · ${PERF_KO(e.unit)}` : ''}</span>
                   <span className="block text-lg font-black">{e.unit.titleKo}</span>
                 </button>))}
           </>
