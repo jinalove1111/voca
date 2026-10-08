@@ -243,7 +243,7 @@ function UnitView({ unit, studentId, onBack, backLabel = '← 홈', onSpeaking, 
           <h1 ref={headingRef} tabIndex={-1} className="text-xl font-black text-teal-700 outline-none">오늘의 학습</h1>
         </div>
         <div className="bg-amber-50 border-2 border-amber-200 rounded-3xl p-5 space-y-1">
-          <p className="text-sm font-black text-amber-700">{unit.courseKo} · {unit.block} · {unit.goalTitleKo}</p>
+          <p className="text-sm font-black text-amber-700">{unit.courseKo} · {blockLabelKo(unit.block)} · {unit.goalTitleKo}</p>
           <p data-testid="unit-title" className="text-xl font-black text-gray-900">{unit.titleKo}</p>
           <p className="text-base text-gray-800 break-keep">{unit.situationKo}</p>
         </div>
