@@ -76,7 +76,7 @@ export async function run(browser, baseURL) {
   await scenario('a 주제·문항', VP, {}, async ({ page, name, openTopics }) => {
     await openTopics()
     const ids = await page.locator('[data-testid^="writing-topic-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')))
-    r.check(`${name} 주제는 학교생활·쇼핑 2개뿐(빈 주제 없음)`, ids.join(',') === 'writing-topic-school,writing-topic-shopping')
+    r.check(`${name} 주제는 학교생활·쇼핑 + 물건·장소 찾기(225차 Unit 2 inline 문항) 3개(빈 주제 없음)`, ids.join(',') === 'writing-topic-school,writing-topic-shopping,writing-topic-finding')
     r.check(`${name} 임시 저장·미전송 안내`, (await txt(page, 'writing-storage-note')).includes('자동 전송되지 않아요'))
     await T(page, 'writing-topic-school').click()
     r.check(`${name} 학교생활 문항 5개, 영어 없음(안내만)`, (await page.locator('[data-testid^="writing-item-"]').count()) === 5 && !/[A-Za-z]/.test(await txt(page, 'writing-items')))

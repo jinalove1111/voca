@@ -21,7 +21,9 @@ async function waitUntil(fn, { timeout = 15000, interval = 100 } = {}) {
   return last
 }
 async function loginOnly(page) {
-  await page.getByPlaceholder('이름 입력...').waitFor({ state: 'visible', timeout: 90000 })
+  const home = T(page, 'student-home'); const input = page.getByPlaceholder('이름 입력...')
+  await Promise.race([home.waitFor({ state: 'visible', timeout: 90000 }), input.waitFor({ state: 'visible', timeout: 90000 })])
+  if (await home.isVisible()) return
   await page.getByPlaceholder('이름 입력...').fill(QA_STUDENT_NAME)
   await page.getByPlaceholder('PIN 4자리').fill(QA_LOGIN_PIN)
   await page.getByRole('button', { name: '시작하기!' }).click()
@@ -94,16 +96,16 @@ export async function run(browser, baseURL) {
     r.check(`${name} 대화 듣기 → 첫 문장 speak(자동 재생 아님)`, !!(await waitUntil(async () => (await speakLog(page)).length > before, { timeout: 3000 })) && (await speakLog(page))[before] === U.listening.turns[0].en)
     await T(page, `unit-listen-q-0-opt-${(U.listening.questions[0].correct + 1) % 3}`).click()
     await T(page, `unit-listen-q-0-opt-${U.listening.questions[0].correct}`).click()
-    r.check(`${name} 한 문항을 두 번 눌러도 끝나지 않음(첫 응답만 카운트)`, !(await txt(page, 'unit-activity-status')).includes('해 봤어요'))
+    r.check(`${name} 한 문항을 두 번 눌러도 끝나지 않음(첫 응답만 카운트)`, !!!(await waitUntil(async () => (await txt(page, 'unit-activity-status')).includes('해 봤어요'), { timeout: 5000 })))
     for (let i = 1; i < U.listening.questions.length; i++) await T(page, `unit-listen-q-${i}-opt-${U.listening.questions[i].correct}`).click()
-    r.check(`${name} 문항 다 답하면 끝남(점수 없음), 근거 표시`, (await txt(page, 'unit-activity-status')).includes('해 봤어요') && (await txt(page, 'unit-listen-q-0-why')).includes('맞아요') && !/점수|%/.test(await txt(page, 'unit-activity')))
+    r.check(`${name} 문항 다 답하면 끝남(점수 없음), 근거 표시`, !!(await waitUntil(async () => (await txt(page, 'unit-activity-status')).includes('해 봤어요'), { timeout: 5000 })) && (await txt(page, 'unit-listen-q-0-why')).includes('맞아요') && !/점수|%/.test(await txt(page, 'unit-activity')))
     r.check(`${name} 자기 확인: 고르기 전엔 둘 다 강조 없음`, (await T(page, 'unit-self-ok').getAttribute('aria-pressed')) === 'false' && (await T(page, 'unit-self-hard').getAttribute('aria-pressed')) === 'false')
     await T(page, 'unit-self-ok').click()
     await T(page, 'unit-activity-return').click()
     await T(page, 'unit-next').click()
     r.check(`${name} 읽기: 본문·문항 ${U.reading.items.length}개`, (await T(page, 'unit-activity').getAttribute('data-kind')) === 'reading' && (await txt(page, 'unit-reading-text')).includes(U.reading.text.slice(0, 30)))
     for (let i = 0; i < U.reading.items.length; i++) { const q = U.reading.items[i]; await T(page, `unit-reading-q-${i}-opt-${q.type === 'tf' ? (q.answer ? 1 : 0) : (q.correct + 1) % 3}`).click() }
-    r.check(`${name} 틀린 보기 골라도 '다시 보세요'+근거만(오답·점수 없음), 활동은 끝남`, (await txt(page, 'unit-reading-q-0-why')).includes('근거') && !/오답|틀렸습니다|점수/.test(await txt(page, 'unit-activity')) && (await txt(page, 'unit-activity-status')).includes('해 봤어요'))
+    r.check(`${name} 틀린 보기 골라도 '다시 보세요'+근거만(오답·점수 없음), 활동은 끝남`, (await txt(page, 'unit-reading-q-0-why')).includes('근거') && !/오답|틀렸습니다|점수/.test(await txt(page, 'unit-activity')) && !!(await waitUntil(async () => (await txt(page, 'unit-activity-status')).includes('해 봤어요'), { timeout: 5000 })))
     await T(page, 'unit-activity-return').click()
     r.check(`${name} 다음 활동=말하기(기존 흐름)`, (await T(page, 'unit-screen').getAttribute('data-next')) === act('speaking').id)
     await T(page, `unit-act-${act('grammar').id}`).click()
@@ -112,7 +114,7 @@ export async function run(browser, baseURL) {
     r.check(`${name} 생각한 뒤 확인 → 설명`, (await txt(page, 'unit-grammar-notice-0-answer')).length > 0)
     for (let i = 0; i < U.grammar.items.length; i++) { const c = U.grammar.items[i].correct; await T(page, `unit-grammar-q-${i}-opt-${Array.isArray(c) ? c[0] : c}`).click() }
     r.check(`${name} 정답이 둘인 문항: Could I…도 맞음으로 표시`, (await txt(page, `unit-grammar-q-2-why`)).includes('맞아요'))
-    r.check(`${name} 문형 활동 끝`, (await txt(page, 'unit-activity-status')).includes('해 봤어요'))
+    r.check(`${name} 문형 활동 끝`, !!(await waitUntil(async () => (await txt(page, 'unit-activity-status')).includes('해 봤어요'), { timeout: 5000 })), await txt(page, 'unit-activity-status'))
     await T(page, 'unit-activity-return').click()
     const rec = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) || '{}'), recordsKey(QA_STUDENT_ID))
     const acts = rec[U.id]?.activities || {}
@@ -128,7 +130,7 @@ export async function run(browser, baseURL) {
     await T(page, 'unit-review-0-reveal').click()
     r.check(`${name} 답 확인 → 모범·대체·듣기`, (await txt(page, 'unit-review-0-answer')).includes(U.review[0].model) && (await T(page, 'unit-review-0-listen').isVisible()))
     await T(page, 'unit-review-1-reveal').click()
-    r.check(`${name} 둘 다 확인하면 활동 끝(판정 없음)`, (await txt(page, 'unit-activity-status')).includes('해 봤어요') && !/정답|숙달|점수/.test(await txt(page, 'unit-activity')))
+    r.check(`${name} 둘 다 확인하면 활동 끝(판정 없음)`, !!(await waitUntil(async () => (await txt(page, 'unit-activity-status')).includes('해 봤어요'), { timeout: 5000 })) && !/정답|숙달|점수/.test(await txt(page, 'unit-activity')), await txt(page, 'unit-activity-status'))
     await T(page, 'unit-activity-return').click()
     await T(page, 'unit-support-speaking-with-cues').click()
     await T(page, 'unit-support-literacy-alone').click()
@@ -145,7 +147,7 @@ export async function run(browser, baseURL) {
     r.check(`${name} 말하기 → 기존 2화 한 문장 흐름(spoon 장면)`, (await T(page, 'key-scene').getAttribute('data-variant')) === 'spoon')
     await T(page, 'key-back').click()
     r.check(`${name} ← 메뉴 → Unit 화면으로 복귀`, !!(await waitUntil(() => T(page, 'unit-screen').isVisible(), { timeout: 10000 })))
-    r.check(`${name} 복귀 시 말하기 '해 봤어요'(참여 기록, 점수 아님) → 다음 활동=문형`, (await T(page, `unit-act-${act('speaking').id}`).getAttribute('data-completed')) === 'true' && (await T(page, 'unit-screen').getAttribute('data-next')) === act('grammar').id)
+    r.check(`${name} 복귀 시 말하기 '해 봤어요'(참여 기록, 점수 아님), 다른 활동은 그대로 미완료`, (await T(page, `unit-act-${act('speaking').id}`).getAttribute('data-completed')) === 'true' && (await T(page, `unit-act-${act('vocab').id}`).getAttribute('data-completed')) === 'false' && (await T(page, 'unit-screen').getAttribute('data-next')) === act('vocab').id)
     await T(page, `unit-act-${act('writing').id}`).click()
     await T(page, 'writing-flow').waitFor({ state: 'visible', timeout: 15000 })
     r.check(`${name} 쓰기 → 기존 w-s02-03 문항`, (await T(page, 'writing-flow').getAttribute('data-item')) === act('writing').writingItemId)
@@ -182,9 +184,9 @@ export async function run(browser, baseURL) {
     const rc = steps[2]
     r.check(`${name} 3단계 모범 없이: 한국어 상황만, 영어 모범·대답 DOM 없음`, (await T(page, 'unit-speaking').getAttribute('data-step')) === 'recall' && (await txt(page, 'unit-speaking')).includes(rc.situationKo) && !(await inDom(page, rc.model)) && !(await inDom(page, rc.reply.en)) && (await T(page, 'unit-speaking-answer').count()) === 0)
     r.check(`${name} 답 확인 전 speak 추가 없음`, (await speakLog(page)).length === 2)
-    r.check(`${name} 답 확인 전엔 활동 미완료`, !(await txt(page, 'unit-activity-status')).includes('해 봤어요'))
+    r.check(`${name} 답 확인 전엔 활동 미완료`, !!!(await waitUntil(async () => (await txt(page, 'unit-activity-status')).includes('해 봤어요'), { timeout: 5000 })))
     await T(page, 'unit-speaking-reveal').click()
-    r.check(`${name} 답 확인 → 모범·대체·대답, 활동 '해 봤어요'(판정 없음)`, (await txt(page, 'unit-speaking-answer-en')) === rc.model && (await txt(page, 'unit-speaking-answer')).includes(rc.alternatives[0]) && (await txt(page, 'unit-speaking-answer-reply')).includes(rc.reply.en) && (await txt(page, 'unit-activity-status')).includes('해 봤어요') && !/정답|숙달|점수/.test(await txt(page, 'unit-activity')))
+    r.check(`${name} 답 확인 → 모범·대체·대답, 활동 '해 봤어요'(판정 없음)`, (await txt(page, 'unit-speaking-answer-en')) === rc.model && (await txt(page, 'unit-speaking-answer')).includes(rc.alternatives[0]) && (await txt(page, 'unit-speaking-answer-reply')).includes(rc.reply.en) && !!(await waitUntil(async () => (await txt(page, 'unit-activity-status')).includes('해 봤어요'), { timeout: 5000 })) && !/정답|숙달|점수/.test(await txt(page, 'unit-activity')))
     await T(page, 'unit-activity-return').click()
     r.check(`${name} 말하기 완료 기록, 다음=어휘(순서 유지)`, (await T(page, 'unit-act-speaking').getAttribute('data-completed')) === 'true' && (await T(page, 'unit-screen').getAttribute('data-next')) === 'vocab')
     await T(page, 'unit-act-writing').click()
@@ -194,7 +196,7 @@ export async function run(browser, baseURL) {
     r.check(`${name} ← 목록 → Unit 2 화면(쓰기 '해 봤어요')`, !!(await waitUntil(() => T(page, 'unit-screen').isVisible(), { timeout: 10000 })) && (await T(page, 'unit-screen').getAttribute('data-unit')) === U2.id && (await T(page, 'unit-act-writing').getAttribute('data-completed')) === 'true')
     await T(page, 'unit-act-grammar').click()
     for (let i = 0; i < U2.grammar.items.length; i++) { const c = U2.grammar.items[i].correct; await T(page, `unit-grammar-q-${i}-opt-${Array.isArray(c) ? c[0] : c}`).click() }
-    r.check(`${name} Unit 2 문형 ${U2.grammar.items.length}문항 끝`, (await txt(page, 'unit-activity-status')).includes('해 봤어요'))
+    r.check(`${name} Unit 2 문형 ${U2.grammar.items.length}문항 끝`, !!(await waitUntil(async () => (await txt(page, 'unit-activity-status')).includes('해 봤어요'), { timeout: 5000 })), await txt(page, 'unit-activity-status'))
     await T(page, 'unit-activity-return').click()
     // Unit 간 격리: Unit 1 기록은 비어 있고, Unit 1 화면은 처음 상태
     const rec = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) || '{}'), recordsKey(QA_STUDENT_ID))
@@ -203,7 +205,7 @@ export async function run(browser, baseURL) {
     await T(page, 'unit-list').waitFor({ state: 'visible', timeout: 10000 })
     await T(page, `unit-pick-${U.id}`).click()
     await T(page, 'unit-screen').waitFor({ state: 'visible', timeout: 15000 })
-    r.check(`${name} Unit 1 화면: 제목·다음=어휘·말하기/쓰기 미완료(섞이지 않음)`, (await txt(page, 'unit-title')) === U.titleKo && (await T(page, 'unit-screen').getAttribute('data-next')) === 'vocab' && (await T(page, 'unit-act-speaking').getAttribute('data-completed')) === 'false' && (await T(page, 'unit-act-writing').getAttribute('data-completed')) === 'false')
+    r.check(`${name} Unit 1 화면: 제목·다음=어휘·말하기/쓰기 미완료(섞이지 않음)`, (await txt(page, 'unit-title')) === U.titleKo && (await T(page, 'unit-screen').getAttribute('data-next')) === 'vocab' && (await T(page, 'unit-act-speaking').getAttribute('data-completed')) === 'false' && (await T(page, 'unit-act-writing').getAttribute('data-completed')) === 'false', `next=${await T(page, 'unit-screen').getAttribute('data-next')} sp=${await T(page, 'unit-act-speaking').getAttribute('data-completed')} wr=${await T(page, 'unit-act-writing').getAttribute('data-completed')}`)
     await T(page, 'unit-act-review').click()
     r.check(`${name} Unit 1 복습 문항은 Unit 1 것(Unit 2 문장 없음)`, (await txt(page, 'unit-review-0')).includes(U.review[0].situationKo) && !(await inDom(page, U2.speaking.steps[2].model)))
     await T(page, 'unit-activity-back').click()
