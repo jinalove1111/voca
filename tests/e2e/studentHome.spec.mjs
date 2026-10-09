@@ -354,7 +354,7 @@ export async function run(browser, baseURL) {
     const g = page.locator('[data-testid="student-home-grammar"]')
     await g.waitFor({ state: 'visible', timeout: 15000 })
     const gt = ((await g.textContent()) || '').trim()
-    r.check(`${name} student-home-grammar 보임 + '문법' 포함`, (await g.isVisible()) && gt.includes('문법'), gt)
+    r.check(`${name} student-home-grammar 보임 + '문법 과정' 포함`, (await g.isVisible()) && gt.includes('문법 과정'), gt)
     const order = await page.evaluate(() => [...document.querySelectorAll('[data-testid="student-home"] [data-testid]')].map((e) => e.getAttribute('data-testid')).filter((t) => ['student-home-town', 'student-home-unit', 'student-home-grammar'].includes(t)))
     r.check(`${name} DOM 순서: 내 마을 → unit → grammar(Tab 8정거장 뒤)`, JSON.stringify(order) === JSON.stringify(['student-home-town', 'student-home-unit', 'student-home-grammar']), JSON.stringify(order))
   })
