@@ -73,6 +73,20 @@ _QA 전용·mock e2e 기준. 운영자 요구: "쓰기 말하기 처럼 문법�
 **보류**
 - 입문·확장·발표 문법 문항 미제작. Conversation 3~6단계와 다른 5개 과정의 문법 전부 준비 중. '(제안)' 라벨 유지.
 
+### 2026-10-10 (234차) — Grammar Easy 03~08 콘텐츠 구현(검수 전) + 검수 상태 분리
+
+_QA 전용·mock e2e 기준. 상세는 handoff 234차, 설계는 `docs/design/GRAMMAR_CURRICULUM_2026-10-10.md` §10. 5개 과정 틀과 3개 단원은 커리큘럼 완료가 아니라는 운영자 지시에 따라 Easy의 준비 중 6단원을 실제 학습 내용으로 채웠다._
+
+**완료**
+- Easy 03 am·is·are / 04 can / 05 There is·are / 06 I like / 07 Do you …? / 08 This·That: 단원마다 예문, 쉬운 설명, 구조, 비교, 오류, 연습 4유형(선택 3·빈칸 2·순서 2·만들기 2), 직접 사용. 콘텐츠 구현 완료 = Easy 8/8 + Intermediate 1.
+- 교사 검수 상태 분리(`reviewStatus`, '검수 전' 배지, 과정 버튼 'ready n/total · 검수 r'). 교사 검수 완료 0. 단원 어휘 규칙(배우지 않은 단어 금지) 검증기 추가. 새 DB·저장·자동 채점 0, 보호 범위 무변경.
+
+**다음**
+- 교사 검수(Easy 8단원) → Intermediate 02~08 콘텐츠 → Advanced → Middle School → High School. Preview 실화면 운영자 확인(SSO).
+
+**보류**
+- 미제작 25단원(Intermediate 7, Advanced 6, Middle 6, High 6). **커리큘럼 전체 완료 아님.** 로드 실패 경로·기초 링크 이동 e2e 미작성. 학교 과정의 학년·교육과정 대응 미확인. '(제안)' 라벨 유지.
+
 ### 2026-10-10 (233차) — Grammar 커리큘럼 재구성: 5 과정 + 9단계 ESL 단원
 
 _QA 전용·mock e2e 기준. 232차의 선택기 문법 intent·모아 풀기 화면을 새 문법 과정 화면으로 대체. 상세는 handoff 233차, 설계는 `docs/design/GRAMMAR_CURRICULUM_2026-10-10.md`._

@@ -78,6 +78,8 @@ _이 문서는 `CURRICULUM_STAGES_2026-10-08.md` §12(Grammar 통합, 231~232차
 | 7 | `g-easy-07` | …해요? Do you …? | 친구에게 Yes/No로 답하는 질문을 할 수 있어요 | `g-easy-06` | `present-simple-question` | — | — | 준비 중 |
 | 8 | `g-easy-08` | 이것·저것 This is | 가까운 것과 먼 것을 가리켜 말할 수 있어요 | `g-easy-03` | `this-that` | — | — | 준비 중 |
 
+_234차 주: 위 표는 233차 시점 기록이다. 03~08의 현재 상태(콘텐츠 구현 완료·교사 검수 전)는 §10에 있다._
+
 ### 3.2 Intermediate (숙련도) — ready 1 / 준비 중 7
 
 | 순서 | id | 제목 | 학습 목표 | 선수 | conceptId | 설명 예시 | 문제 유형 | 상태 |
@@ -226,6 +228,10 @@ _이 문서는 `CURRICULUM_STAGES_2026-10-08.md` §12(Grammar 통합, 231~232차
 | 관련 verify / E2E 결과 | 정적 PASS(위 회귀 행), mock e2e [grammar] 신규 스펙 a~g 최종 124/0 (통과 124 / 실패 0, 미mock 요청 0·mock 오류 0). 1차 122/2는 둘 다 테스트 측(정규식 오탐, 앱 동기화 키 `paul_easy_sync_meta`를 새 키로 계수) → 수정 |
 | 커밋 SHA | 코드 `577a00a0`, e2e `0689cd92` |
 | 단원 현황 | ready 3 / 준비 중 31 (총 34) — 코드 기준 확인(Easy 6, Intermediate 7, Advanced 6, Middle 6, High 6) |
+| (234차 추가) 단원 현황 | ready 9 / 준비 중 25 (총 34) — Easy 8/8 ready, Intermediate 1/8, Advanced·Middle·High 0. 교사 검수 완료 0 |
+| (234차 추가) 코드 커밋 | 코드 `d2842265` (Easy 03~08 콘텐츠, 데이터 계약 추가). e2e 커밋 `febadb2f`, `[grammar]` 최종 238/0 |
+| (234차 추가) 정적·빌드 | 더미 env 빌드 경고 0, GrammarCourseScreen 청크 43.8 KB(gzip 13.7 KB). `testGrammarCourses`·`testPilotUnit`·`testStudentPathContracts`·`testRegistryCoverage` ALL PASS, `testQaGate` 17/0, `testLazyChunkGuards` 95/95, `testBundleBudget` 32/0 |
+| (234차 추가) mock e2e | `[grammar]` 시나리오 h·i 추가. 1차 235/3(3건 모두 테스트 측), 최종 238/0(미mock 요청 0·mock 오류 0). `[student-home]` 223/0/1 SKIP(기존 fixture 한계)은 재실행했다. `[unit]`·`[writing]`·`[speaking]`·`[speaking-exam]`은 재실행하지 않았다(변경이 문법 화면·데이터에 한정) |
 
 ## 8. 미완료 콘텐츠 목록
 
@@ -259,3 +265,86 @@ _이 문서는 `CURRICULUM_STAGES_2026-10-08.md` §12(Grammar 통합, 231~232차
 3. be동사 단원이 `g-easy-03`이라 `g-easy-02`에서 Where's(= Where is)가 먼저 나온다. Where's를 덩어리 표현으로 먼저 가르쳐도 되는가?
 4. 빈칸·순서·만들기 문항의 오답 보기가 학생에게 자연스러운 오류인지, `whyKo` 설명이 쉬운지 확인해 달라.
 5. 중·고 단원의 주제 묶음과 순서, `basicsUnitId` 연결이 적절한지, 학교 교재와 맞는지 확인해 달라(맞추려면 교재명과 단원 순서가 필요하다).
+
+## 10. (234차) Easy 03~08 콘텐츠 구현
+
+2026-10-10 02:10~02:50. 기준: PR #62 원격 `84f78d37`, 코드 커밋 `d2842265`. 운영자 지시: 5개 과정 틀과 3개 단원은 "커리큘럼 완성"이 아니다. Easy의 준비 중 6단원을 제목·목표만이 아니라 실제로 배울 수 있는 내용(목표, 친숙한 상황, 짧은 예문+한국어, 쉬운 설명, 구조, 오류, 단계별 연습, 직접 사용, 오답 설명)으로 채운다.
+
+**커리큘럼 전체 완료 아님.** 콘텐츠 구현 완료와 교사 검수 완료를 분리해 기록한다.
+
+| 구분 | 단원 수 | 내용 |
+|---|---|---|
+| 콘텐츠 구현 완료(ready) | 9 | Easy 8(01·02는 233차, 03~08은 이번), Intermediate 1(`g-int-01`) |
+| 교사 검수 완료 | 0 | 9단원 전부 `reviewStatus: 'unreviewed'` |
+| 미제작(준비 중) | 25 | Intermediate 7, Advanced 6, Middle School 6, High School 6 |
+
+### 10.1 단원별 요약
+
+공통: 예문 4, 설명 3, 구조 2, 비교(긍정·부정·의문) 있음, 오류 2, 연습은 선택 3·빈칸 2·순서 2·만들기 2, 직접 사용은 말하기. 풀이 대상(선택+빈칸+순서)은 단원당 7문항이고 만들기 2와 직접 사용은 채점하지 않는다. 구현 상태 ready, 검수 상태 미검수, 출처 own.
+
+| 순서 | id | 제목 | 목표 | 선수 | 예문 | 오류 | 선택/빈칸/순서/만들기 | 직접 사용 | 구현 | 검수 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 3 | `g-easy-03` | 나는 …이야 am·is·are | 나와 친구가 누구인지 말할 수 있어요 | — | 4 | 2 | 3/2/2/2 | 말하기: I am … / You are my friend. | ready | 미검수 |
+| 4 | `g-easy-04` | 할 수 있어요 can | 내가 할 수 있는 것과 없는 것을 말할 수 있어요 | `g-easy-01` | 4 | 2 | 3/2/2/2 | 말하기: I can … / I can't … | ready | 미검수 |
+| 5 | `g-easy-05` | …이 있어요 There is | 방에 무엇이 있는지 말할 수 있어요 | `g-easy-02` | 4 | 2 | 3/2/2/2 | 말하기: 교실에서 보이는 것 세 가지 | ready | 미검수 |
+| 6 | `g-easy-06` | 좋아해요 I like | 내가 좋아하는 것을 말할 수 있어요 | `g-easy-03` | 4 | 2 | 3/2/2/2 | 말하기: 좋아하는 것 둘 + 안 좋아하는 것 하나 | ready | 미검수 |
+| 7 | `g-easy-07` | …해요? Do you …? | 친구에게 Yes/No로 답하는 질문을 할 수 있어요 | `g-easy-06` | 4 | 2 | 3/2/2/2 | 말하기: Do you …? 질문 세 개 | ready | 미검수 |
+| 8 | `g-easy-08` | 이것·저것 This is | 가까운 것과 먼 것을 가리켜 말할 수 있어요 | `g-easy-03` | 4 | 2 | 3/2/2/2 | 말하기: This is … / That is … 세 문장 | ready | 미검수 |
+
+`g-easy-01`·`02`는 시범 Unit 문항 6개를 그대로 쓰므로 선택 6(+빈칸 2·순서 2·만들기 2)이다. 03~08은 단원 자체 선택 문항 3개다. 만들기 문항은 `acceptNoteKo`로 다른 정답을 안내하며 자동 판정하지 않는다.
+
+### 10.2 단원 간 연결(콘텐츠 담당 메모)
+
+- 03: 선수 없음(01·02의 명사만 쓴다). 04 ← 01: 같은 can, 새 뜻(부탁 → 능력). 05 ← 02: under·in·on을 다시 쓴다.
+- 06: I like를 I am(03)과 대비한다("I am like"를 오류로 다룸). 07 ← 06: 06에서 배운 동사를 Do you …?로 묻는다. 08: 03의 is와 01의 my·your를 재사용한다.
+
+### 10.3 데이터 계약 추가(코드 `d2842265`)
+
+- `reviewStatus`('unreviewed' | 'reviewed'): 구현 상태(`status`)와 교사 검수를 분리한다. 단원 목록에 '검수 전' 배지(`grammar-unit-<id>-review`), 단원 머리에 `gu-review-status`. 과정 버튼은 'ready n/total · 검수 r'을 보여 주며 `courseCounts.reviewed`는 모든 과정에서 0이다.
+- 단원별 `words`(영어·한국어 목록)와 `practiceCounts` 도우미.
+- `validateGrammarUnit` 어휘 규칙: 예문, 구조, 비교, 오류의 right, 선택의 정답 보기, 빈칸 문장·정답, 순서 단어, 만들기·직접 사용 예시의 모든 영어 단어는 문법어(FUNCTION_WORDS), 이름(Paul·Mia), 해당 단원 `words`, 선수 단원 `words` 중 하나여야 한다. Easy는 `g-easy-01`·`02`의 words도 쓸 수 있다. 오답 보기(swimming, jumps 같은 틀린 형태)는 의도적으로 틀린 형태라 검사하지 않는다.
+
+### 10.4 연구 근거 매핑
+
+근거 표는 §6을 재사용했다. 새 논문을 추가하지 않았다. 연구 결과와 제품 판단을 구분한다.
+
+| 설계 판단 | 구분 | 근거 |
+|---|---|---|
+| 짧은 명시적 한국어 설명을 둔다 | 연구 결과에 기댄 설계 방향 | Norris & Ortega 2000, Spada & Tomita 2010, Goo et al. 2015(§6 행 1~3). 명시적 교수가 암시적보다 낫다는 메타분석. 효과 크기를 예측값으로 쓰지 않는다 |
+| 오답 시 짧은 설명 + 다시 풀기 | 연구 결과에 기댄 설계 방향 | Li 2010, Lyster & Saito 2010, Kang & Han 2015(행 4~6). 앱 형태의 다시 풀기는 검증되지 않았다 |
+| 예문을 먼저 보이고 마지막에 직접 사용 | 제품 판단(입장 논문만 참고) | Ellis 2006(행 7)은 실증 연구가 아니다 |
+| 선택 → 빈칸 → 순서 → 만들기 순서 | 제품 판단 | 직접 근거 없음. 행 8은 이해 중심 대 산출 중심 비교일 뿐 4단계 사다리를 검증하지 않았다 |
+| 단원당 개념 하나 | 제품 판단 | 근거 없음(§6 (e)). 운영자 요구 |
+
+### 10.5 교사 확인 항목(콘텐츠 담당 메모 4건 + 리드 1건)
+
+1. 03: 비교에 Are you …?, I am not이 나오지만 연습은 긍정 am·is·are만이다. 미리보기로 충분한가?
+2. 04: "Mia can jump."에 -s가 없다(3인칭 -s는 `g-int-02`). can't와 cannot을 모두 인정하는 안내가 적절한가?
+3. 05: 복수 -s와 two를 가볍게만 다룬다. 부정은 "There isn't"를 골랐다. 적절한가?
+4. 06·08: 06이 don't를 07의 Do보다 먼저 가르친다. 08의 isn't·Is this는 비교에만 나온다. 이 순서가 괜찮은가?
+5. (리드) 06 예문 "I play ball."이 자연스러운가? 대안은 "I play with a ball."이다.
+
+### 10.6 검증(2026-10-10, 브라우저 1개 순차, vite preview :4193)
+
+| 항목 | 결과 |
+|---|---|
+| 빌드 | 더미 env 빌드 경고 0. GrammarCourseScreen 청크 43.8 KB(gzip 13.7 KB) |
+| 정적 | `testGrammarCourses`·`testPilotUnit`·`testStudentPathContracts`·`testRegistryCoverage` ALL PASS, `testQaGate` 17/0, `testLazyChunkGuards` 95/95, `testBundleBudget` 32/0 |
+| mock e2e `[grammar]` | 시나리오 a 과정 문구 / b 검수 배지 / c g-easy-01 흐름 / **h** Easy ready 단원 전부 진입 → 9섹션 순서, 문항 수 = 데이터, 검수 배지, 어휘 규칙 / **i** g-easy-06 전체 연습 흐름. 1차 235/3, 최종 238/0(e2e 커밋 `febadb2f`) |
+| 1차 실패 3건 | 모두 테스트 측. 스펙이 틀린 형태 오답 보기(swimming·jumps·swims·has)를 어휘 검사 대상으로 삼았으나 검증기는 이를 의도적으로 허용한다. 스펙을 검증기에 맞춰 수정 |
+| 회귀 재실행 | `[student-home]` 223/0/1 SKIP(기존 fixture 한계) |
+| 미재실행 | `[unit]`·`[writing]`·`[speaking]`·`[speaking-exam]`은 이번에 재실행하지 않았다. 변경이 문법 화면과 데이터에 한정되어서이며 이 범위는 검증하지 않았다 |
+| 미검증 | Preview 실화면, 실기기, 교사 검수. 로드 실패 경로·기초 링크 이동 e2e는 여전히 없다 |
+
+### 10.7 미완료 25단원
+
+| 과정 | 준비 중 id | 비고 |
+|---|---|---|
+| Intermediate (7) | `g-int-02` ~ `g-int-08` | 다음 제작 순서 1 |
+| Advanced (6) | `g-adv-01` ~ `g-adv-06` | 순서 2 |
+| Middle School (6) | `g-mid-01` ~ `g-mid-06` | 순서 3 |
+| High School (6) | `g-high-01` ~ `g-high-06` | 순서 4 |
+
+운영자 지정 제작 순서: Intermediate → Advanced → Middle → High. 이번 작업 범위가 아니다. 학교 과정과 학년·교육과정 대응, 학원 교재 순서 대조는 여전히 하지 않았다.
+
+**커리큘럼 전체 완료 아님**: 25개 단원이 준비 중이고, 구현된 9개 단원도 교사 검수 전이다.

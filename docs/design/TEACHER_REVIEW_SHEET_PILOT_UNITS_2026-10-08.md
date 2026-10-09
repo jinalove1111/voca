@@ -234,3 +234,82 @@ Unit 3 (2026-10-09 추가):
 검수 상태 — Unit 3: ☒ 미검수 ☐ 검수 중 ☐ 검수 완료(교사 서명/날짜: ________ )
 
 작성 메모: "주의점" 행은 데이터 구조에서 확인한 사실만 적었고 학습 효과 판단·교재 참조는 넣지 않았다. 두 Unit 모두 교사 검수 전 콘텐츠. 검수 결과 반영은 다음 작업(문구 수정만).
+
+#### 리드 추가 (234차) — 문법 Easy 03~08 검수 요청
+
+2026-10-10. 문법 단원 6개(`g-easy-03` ~ `g-easy-08`)의 내용을 새로 채웠다. 전부 **검수 상태: ☒ 미검수**이며 검수 완료가 아니다. 선택 문항 3개는 단원 자체 문항이고, 문항의 영어는 그 단원 어휘·선수 단원 어휘·문법어만 쓴다. 만들기 문항은 예시가 유일한 정답이 아니다(안내 문구 `acceptNoteKo` 포함). 확인 요청: 영어가 자연스러운지, 한국어 설명이 초급 아동에게 쉬운지, 오답 보기가 명백히 틀린지, 만들기·직접 사용의 다른 답이 적절히 안내되는지.
+
+**콘텐츠 담당의 교사 확인 메모 4건 (전 단원 공통)**
+1. 03 비교에 Are you …?와 I am not이 나오지만 연습은 긍정 am·is·are뿐이다(미리보기).
+2. 04 "Mia can jump."에 -s가 없다(3인칭 -s는 중급 `g-int-02`). can't·cannot 모두 인정한다.
+3. 05 복수 -s와 two를 가볍게만 다룬다. 부정은 "There isn't"를 골랐다.
+4. 06이 don't를 07의 Do보다 먼저 가르친다. 08의 isn't·Is this는 비교에만 나온다.
+
+리드 표시: 06 예문 "I play ball."이 자연스러운지 확인 요청(대안: I play with a ball).
+
+##### g-easy-03 · 나는 …이야 am·is·are (선수 없음)
+- 예문: I am Paul. / You are my friend. / Mia is my friend. / We are friends.
+- 비교: I am a student. / I am not a student. / Are you a student?
+- 흔한 오류: I is Paul. → I am Paul. / Mia are my friend. → Mia is my friend.
+- 선택 3: I am a student. · We are friends. · I am not a student.
+- 빈칸 2: You ___ my friend.(are) · Mia ___ a student.(is)
+- 순서 2: I am Paul. · Mia is my friend.
+- 만들기 2: 내 이름 말하기(I am Paul.) · "너는 내 친구야" 말하기(You are my friend.)
+- 직접 사용(말하기): I am …으로 소개하고 You are my friend.라고 말한다.
+- 검수 상태: ☒ 미검수 ☐ 검수 중 ☐ 검수 완료
+
+##### g-easy-04 · 할 수 있어요 can (선수 g-easy-01)
+- 예문: I can run. / Mia can jump. / I can read a book. / I can't swim.
+- 비교: I can swim. / I can't swim. / Can you swim?
+- 흔한 오류: I can to swim. → I can swim. / Mia can jumps. → Mia can jump.
+- 선택 3: I can swim. · Mia can jump. · I can't swim.
+- 빈칸 2: I can ___ a book.(read) · I ___ run.(can)
+- 순서 2: I can run. · Mia can read a book.
+- 만들기 2: 할 수 있는 것 말하기(I can swim.) · 못 하는 것 말하기(I can't swim.)
+- 직접 사용(말하기): I can … 하나와 I can't … 하나를 말한다.
+- 검수 상태: ☒ 미검수 ☐ 검수 중 ☐ 검수 완료
+
+##### g-easy-05 · …이 있어요 There is (선수 g-easy-02)
+- 예문: There is a ball in the box. / There is a pencil on the desk. / There are two books on the shelf. / There is a cat under the chair.
+- 비교: There is a ball in the box. / There isn't a ball in the box. / Is there a ball in the box?
+- 흔한 오류: There are a pencil on the desk. → There is a pencil on the desk. / There is two books on the shelf. → There are two books on the shelf.
+- 선택 3: There is a ball in the box. · There are two books on the shelf. · There is a cat under the chair.
+- 빈칸 2: There ___ a pen in the pencil case.(is) · There ___ two books on the shelf.(are)
+- 순서 2: There is a cat under the chair. · There are two pens in the box.
+- 만들기 2: 책상 위 연필 알리기(There is a pencil on the desk.) · 선반 위 책 두 권 알리기(There are two books on the shelf.)
+- 직접 사용(말하기): 교실에서 보이는 것 세 가지를 말한다.
+- 검수 상태: ☒ 미검수 ☐ 검수 중 ☐ 검수 완료
+
+##### g-easy-06 · 좋아해요 I like (선수 g-easy-03)
+- 예문: I like apples. / I have a dog. / I play ball. / I don't like milk.
+- 비교: I like milk. / I don't like milk. / Do you like milk?
+- 흔한 오류: I am like apples. → I like apples. / I no like milk. → I don't like milk.
+- 선택 3: I like apples. · I don't like milk. · I have a dog.
+- 빈칸 2: I ___ milk.(like) · I ___ like milk.(don't)
+- 순서 2: I like apples. · I don't like milk.
+- 만들기 2: 좋아하는 것 말하기(I like apples.) · 안 좋아하는 것 말하기(I don't like milk.)
+- 직접 사용(말하기): 좋아하는 것 둘과 안 좋아하는 것 하나를 말한다.
+- 추가 확인: "I play ball."이 자연스러운가?
+- 검수 상태: ☒ 미검수 ☐ 검수 중 ☐ 검수 완료
+
+##### g-easy-07 · …해요? Do you …? (선수 g-easy-06)
+- 예문: Do you like apples? / Yes, I do. / No, I don't. / Do you have a pen?
+- 비교: Yes, I do. / No, I don't. / Do you like apples?
+- 흔한 오류: Like you apples? → Do you like apples? / Yes, I don't. → Yes, I do.
+- 선택 3: Do you like apples? · Do you have a dog? · No, I don't.
+- 빈칸 2: ___ you like milk?(Do) · Yes, I ___.(do)
+- 순서 2: Do you like apples? · Do you have a pen?
+- 만들기 2: 짝이 좋아하는 것 묻기(Do you like apples?) · 펜이 있다고 짧게 대답하기(Yes, I do.)
+- 직접 사용(말하기): Do you …? 질문 세 개를 하고 짝은 Yes, I do. / No, I don't.로만 답한다.
+- 검수 상태: ☒ 미검수 ☐ 검수 중 ☐ 검수 완료
+
+##### g-easy-08 · 이것·저것 This is (선수 g-easy-03)
+- 예문: This is my pencil. / That is your bag. / This is a pen. / That is your chair.
+- 비교: This is my pen. / This isn't my pen. / Is this your pen?
+- 흔한 오류: That are my bag. → That is my bag. / This is pencil. → This is my pencil.
+- 선택 3: This is my pencil. · That is your bag. · This is a pen.
+- 빈칸 2: ___ is my ruler.(This) · That ___ your chair.(is)
+- 순서 2: This is my pencil. · That is your bag.
+- 만들기 2: 가까운 내 물건 소개하기(This is my pencil.) · 멀리 있는 짝의 물건 말하기(That is your bag.)
+- 직접 사용(말하기): 가까운 것은 This is …, 먼 것은 That is …로 세 문장을 말한다.
+- 검수 상태: ☒ 미검수 ☐ 검수 중 ☐ 검수 완료
