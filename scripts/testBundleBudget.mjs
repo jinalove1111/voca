@@ -339,8 +339,10 @@ const PAUL_SPRITE_FILE_RE = /^paul-(idle-front|walk-(front|back|side)-[ab](-v\d+
 function isPaulSpriteAsset(filename) {
   return PAUL_SPRITE_FILE_RE.test(filename)
 }
+// 학생 모자 8종 PNG(src/assets/hats, 256x256, 각 ~30KB) — scripts/testHatImages.mjs가 개수/크기를 검증한다.
+const HAT_IMAGE_FILE_RE = /^paul-hat-(pink|red|orange|green|blue|navy|purple|gold)-[\w-]+\.png$/
 const strayImages = assetFiles.filter(
-  (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f) && !isExpectedEnvArtwork(f) && !matchEnvArtKey(f) && !isPaulSpriteAsset(f),
+  (f) => /\.(png|jpe?g|webp|gif)$/i.test(f) && !KNOWN_SAFE_IMAGE_PREFIX.test(f) && !isExpectedBatch1Image(f) && !isExpectedEnvArtwork(f) && !matchEnvArtKey(f) && !isPaulSpriteAsset(f) && !HAT_IMAGE_FILE_RE.test(f),
 )
 check(
   '마을 이미지 중 카탈로그 물리 파일 18개(Batch 1+2+3 14개 + P0 최종 아트로 추가/승격된 4개) + 환경/장식 아트워크 6개(카탈로그 아님, 2026-09-15b) + V2 환경 아트 35개(2026-09-18, 4b 섹션에서 자세히 검증) + Paul 캐릭터 스프라이트 16개(2026-09-24 Phase 6C, 4c 섹션에서 자세히 검증) 외의 예상치 못한 파일이 dist/assets에 없음',

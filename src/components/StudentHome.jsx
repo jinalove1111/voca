@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { hatById, hatTintStyle } from '../utils/attachment/hatSystem'
+import { hatImageFor, HAT_IMG_CLASS } from '../assets/hats'
 
 // 2026-10-02 학생 홈 개편 — 로그인 직후 4메뉴 홈(단어/문장/말하기/성장).
 // 순수 표시/라우팅 컴포넌트: 데이터 저장/조회 없음, 기존 Dashboard는 그대로
@@ -57,7 +58,9 @@ export default function StudentHome({ studentName, studentData, classWords, hasT
         <div className="flex items-center justify-between gap-2 pt-2">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-3xl" aria-hidden="true">
-              {hat ? <span style={hatTintStyle(hat.colorHex)}>{hat.emoji}</span> : '👑'}
+              {hat ? (hatImageFor(hat.id)
+                ? <img data-testid="student-home-hat-img" data-hat={hat.id} src={hatImageFor(hat.id)} alt={hat.name} draggable={false} className={HAT_IMG_CLASS} />
+                : <span style={hatTintStyle(hat.colorHex)}>{hat.emoji}</span>) : '👑'}
             </span>
             {/* 긴 이름 말줄임 — Tailwind 축약 클래스 대신 동일 효과의 3개 유틸을 풀어 씀 */}
             <h1 className="text-lg font-black text-purple-700 overflow-hidden text-ellipsis whitespace-nowrap max-w-[55%]">{studentName}, 안녕!</h1>
