@@ -70,7 +70,7 @@ export default function HatCollection({ studentName, hatInventory, equippedHatId
                     )}
                     <button
                       onClick={() => onEquip(isEquipped ? null : hat.id)}
-                      className={`w-full mt-2 py-2 rounded-xl font-black text-sm btn-press ${
+                      className={`w-full mt-2 py-2 min-h-[44px] rounded-xl font-black text-sm btn-press ${
                         isEquipped ? 'bg-purple-200 text-purple-700' : 'bg-purple-500 text-white hover:bg-purple-600'
                       }`}>
                       {isEquipped ? '쓰고 있어요 ✓ (벗기)' : '이 모자 쓰기'}
