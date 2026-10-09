@@ -73,6 +73,21 @@ _QA 전용·mock e2e 기준. 운영자 요구: "쓰기 말하기 처럼 문법�
 **보류**
 - 입문·확장·발표 문법 문항 미제작. Conversation 3~6단계와 다른 5개 과정의 문법 전부 준비 중. '(제안)' 라벨 유지.
 
+### 2026-10-10 (236~237차, 야간) — 문법 전 과정 34단원 콘텐츠 구현(검수 전) + 모자 헤더 1.25em + 8단계 승급 설계
+
+_QA 전용·mock e2e 기준. 상세는 handoff 236~237차, 설계는 `docs/design/GRAMMAR_CURRICULUM_2026-10-10.md` §11. 운영자 취침 중 자율 세션. 콘텐츠 구현과 교사 검수는 별개이며, 검수 전이라 커리큘럼 완료는 선언하지 않는다._
+
+**완료**
+- 문법 신규 25단원: Intermediate 02~08, Advanced 01~06, Middle School 01~06, High School 01~06. 이제 34/34 단원이 ready(Easy 8·Intermediate 8·Advanced 6·Middle 6·High 6), 교사 검수 완료 0, 미제작 0. 모든 단원이 어휘 규칙을 통과하고 `reviewStatus: 'unreviewed'`. Middle·High는 '학년·교육과정 대응 미확인' 유지.
+- `[grammar]` e2e 일반화(과정별 진입·연습, 기초 링크 이동, 로드 실패, 준비 중 안전 화면). `testBundleBudget` raw 한도 1.7 → 1.8 MB(grammar lazy 청크 최종 120.2 KB raw / 33.5 KB gzip, main gzip 불변). `[grammar]` 659/0/1 SKIP. 커밋: 학교 단원 `119e3b89`, 번들 예산 `d5c2f1bd`.
+- 홈 헤더 모자 1.25em + `GAME_REWARD_SYSTEM` 236차 해금 조건표(코드 기준). 8단계 모자 승급 설계 문서(`HAT_PROGRESSION_8_STAGES_2026-10-10.md`, 구현 없음, 플래그 OFF 전제).
+
+**다음**
+- 교사 검수 34단원(검수표 237차 블록 + 모듈 헤더 확인 항목). 학원 레벨명·교재 순서 대조(`CURRICULUM_STAGES` §11.9). Vercel Preview 실화면 운영자 확인(SSO). 과정별 청크 분리(번들 한도 대응). 8단계 승급 설계의 운영자 질문 6개 답변.
+
+**보류**
+- 학교 과정의 학년·교육과정 대응(미확인). 8단계 승급 구현(운영자 결정 전). 반-파밍 빈틈(단어별 중복 제거 없는 카운터, `fetchXpTotal` 0 폴백)과 `hat_wizard` 'mastered' 도달 가능성은 승급 구현 전에 확인할 항목. 입문·확장·발표 수준 문법 문항 미제작.
+
 ### 2026-10-10 (235차) — Paul 로고 모자 PNG 8장 적용(수집 모자 8종 색 대응)
 
 _QA 전용·mock e2e 기준. 상세는 handoff 235차. 앱에는 "8단계 모자"가 없고 XP 랭크 5·크기 5단계·수집 모자 8종이 따로 있어, 이미지 8장을 수집 모자 8종(`hatSystem.js` HAT_CATALOG)에 색 일치로 대응했다. 운영자 순서(분홍 → 빨강 → 주황 → 초록 → 파랑 → 남색 → 보라 → 금색)의 승급 체인은 적용하지 않았다._

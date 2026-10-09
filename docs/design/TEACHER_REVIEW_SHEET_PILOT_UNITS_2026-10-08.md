@@ -313,3 +313,50 @@ Unit 3 (2026-10-09 추가):
 - 만들기 2: 가까운 내 물건 소개하기(This is my pencil.) · 멀리 있는 짝의 물건 말하기(That is your bag.)
 - 직접 사용(말하기): 가까운 것은 This is …, 먼 것은 That is …로 세 문장을 말한다.
 - 검수 상태: ☒ 미검수 ☐ 검수 중 ☐ 검수 완료
+
+#### 리드 추가 (237차) — 문법 Intermediate 02~08 · Advanced 01~06 · Middle School 01~06 · High School 01~06 검수 요청
+
+2026-10-10 야간. 문법 단원 25개를 새로 채웠다. 전부 **검수 상태: ☒ 미검수**이며 검수 완료가 아니다. 단원마다 한 줄: id · 제목 · 목표 · 예문 1개 · 문항 수(선택/빈칸/순서/만들기, 전 단원 3/2/2/2) · 직접 사용 종류 · 검수. 모든 영어는 그 단원 어휘·선수 단원 어휘·문법어만 쓰며, 만들기 문항은 예시가 유일한 정답이 아니다. 확인 요청: 영어가 자연스러운지, 한국어 설명이 쉬운지, 오답 보기가 명백히 틀린지, 만들기·직접 사용의 다른 답이 적절히 안내되는지. 중·고는 학년·교육과정 대응을 주장하지 않는다.
+
+##### Intermediate 02~08
+- `g-int-02` · 엄마는 …해요 · 가족이나 친구가 하는 일을 말할 수 있어요 · "My mum likes apples." · 3/2/2/2 · 말하기 · ☒ 미검수
+- `g-int-03` · 무엇을 좋아해? · What으로 묻고 What about you?로 되물을 수 있어요 · "What do you like?" · 3/2/2/2 · 말하기 · ☒ 미검수
+- `g-int-04` · Can you …? 묻기 · 할 수 있는지 묻고 짧게 답할 수 있어요 · "Can you swim?" · 3/2/2/2 · 말하기 · ☒ 미검수
+- `g-int-05` · 지금 …하고 있어요 · 지금 하는 일을 말할 수 있어요 · "I am eating an apple." · 3/2/2/2 · 말하기 · ☒ 미검수
+- `g-int-06` · 위치 말 늘리기 · next to·behind로 위치를 더 자세히 말할 수 있어요 · "It's behind the chair." · 3/2/2/2 · 말하기 · ☒ 미검수
+- `g-int-07` · 어제 있었던 일 · 어제 있었던 일을 짧게 말할 수 있어요 · "I played with my dog yesterday." · 3/2/2/2 · 말하기 · ☒ 미검수
+- `g-int-08` · Would you like …? · 무엇을 원하는지 묻고 권할 수 있어요 · "Would you like some juice?" · 3/2/2/2 · 말하기 · ☒ 미검수
+
+교사 확인(Intermediate): int-02 does/doesn't는 비교+선택 1개뿐(easy-06 대비 Does 신규) / int-03 "What do you have in your bag?"가 자연스러운지 / int-05 with는 문법어 / int-06 explainKo 3행 재작성 / int-07 Did/didn't는 미리보기, was/were만 불규칙 / int-08 부정 = No, thank you.
+
+##### Advanced 01~06
+- `g-adv-01` · 계획 말하기 going to · 앞으로 할 일을 말할 수 있어요 · "I am going to sing tomorrow." · 3/2/2/2 · 말하기 · ☒ 미검수
+- `g-adv-02` · 비교하기 · 둘을 비교해서 말할 수 있어요 · "Paul is taller than Mia." · 3/2/2/2 · 말하기 · ☒ 미검수
+- `g-adv-03` · because·so 잇기 · 이유와 결과를 이어서 말할 수 있어요 · "I am hungry, so I eat an apple." · 3/2/2/2 · 말하기 · ☒ 미검수
+- `g-adv-04` · when·if 잇기 · 때와 조건을 이어서 말할 수 있어요 · "When it rains, I stay home." · 3/2/2/2 · 말하기 · ☒ 미검수
+- `g-adv-05` · should·have to · 해야 하는 일과 하면 좋은 일을 말할 수 있어요 · "I have to do my homework." · 3/2/2/2 · 말하기 · ☒ 미검수
+- `g-adv-06` · 해 본 적 있어요 · 해 본 경험을 말할 수 있어요 · "Have you ever been to the zoo?" · 3/2/2/2 · 말하기 · ☒ 미검수
+
+교사 확인(Advanced): 순서 문항은 정답 하나(절 순서 교체 시 칩 구두점 변동) / adv-02 bigger·taller만 / adv-03 현재시제만·compare 생략·here/she 문법어 / adv-05 have to는 I/We만 / adv-06 규칙 분사 played·visited + been(seen 제외), int-07 이후 수업 / "I play ball"·"Have you ever played ball?"이 자연스러운지.
+
+##### Middle School 01~06 (학년·교육과정 대응 미확인)
+- `g-mid-01` · 시제 정리 · 현재·과거·미래를 구분해 쓸 수 있어요 · "I play soccer today." · 3/2/2/2 · 말하기 · ☒ 미검수
+- `g-mid-02` · 조동사 can·may·must · 허락·의무를 나타내는 말을 쓸 수 있어요 · "You can open the window." · 3/2/2/2 · 말하기 · ☒ 미검수
+- `g-mid-03` · 수동태 기초 · "…당했다"는 문장을 만들 수 있어요 · "The classroom is cleaned by Mia." · 3/2/2/2 · 말하기 · ☒ 미검수
+- `g-mid-04` · 관계대명사 who·which · 두 문장을 하나로 이어 설명할 수 있어요 · "Mia is a girl who plays soccer." · 3/2/2/2 · 말하기 · ☒ 미검수
+- `g-mid-05` · 분사로 꾸미기 · -ing·-ed로 명사를 꾸밀 수 있어요 · "The running boy is Paul." · 3/2/2/2 · 말하기 · ☒ 미검수
+- `g-mid-06` · 조건문 if · 만약의 상황을 말할 수 있어요 · "If it rains, we will stay home." · 3/2/2/2 · 말하기 · ☒ 미검수
+
+교사 확인(Middle): mid-01 words 9개·mid-05 7개(목표 6 초과: 활용형·때 단어) / mid-04 plays·reads(3인칭 -s)를 int-02 선수 없이 사용 / mid-04·05 compare 생략 / mid-03 explainKo 안에 영어 능동문(검증 대상 아님) / mid-06 순서 문항은 정답 하나(대문자·쉼표) / 학년·교육과정 대응 주장 없음.
+
+##### High School 01~06 (학년·교육과정 대응 미확인)
+- `g-high-01` · 완료 시제 · 과거와 지금을 이어서 말할 수 있어요 · "I have lived here for a year." · 3/2/2/2 · 쓰기 · ☒ 미검수
+- `g-high-02` · 수동태 심화 · 시제·조동사가 있는 수동태를 쓸 수 있어요 · "This was made by Paul." · 3/2/2/2 · 쓰기 · ☒ 미검수
+- `g-high-03` · 관계사 심화 · 긴 문장 속 관계사를 해석하고 쓸 수 있어요 · "Mia is the friend who read this." · 3/2/2/2 · 쓰기 · ☒ 미검수
+- `g-high-04` · 가정법 · 사실과 다른 상황을 말할 수 있어요 · "If I were you, I would go." · 3/2/2/2 · 쓰기 · ☒ 미검수
+- `g-high-05` · 간접화법 · 남이 한 말을 전달해 말할 수 있어요 · "He said, "I am happy."" · 3/2/2/2 · 쓰기 · ☒ 미검수
+- `g-high-06` · 분사구문 · 분사로 문장을 짧게 이어 쓸 수 있어요 · "Walking home, I met Mia." · 3/2/2/2 · 쓰기 · ☒ 미검수
+
+교사 확인(High): 어휘는 사람이 직접 확인만 함 / high-01 "since 2020"은 시간이 지나면 낡음(2020은 숫자라 검증기가 무시) / high-03 which 생략 허용 / high-05 시제 일치(backshift)는 교과서 규칙 / high-06 주어가 같은 경우만 / 학년 대응 주장 없음.
+
+검수 상태 요약: 34단원(Easy 8·Intermediate 8·Advanced 6·Middle 6·High 6) 전부 ☒ 미검수. 콘텐츠 구현 완료는 교사 검수 완료가 아니다.

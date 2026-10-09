@@ -93,6 +93,8 @@ _234차 주: 위 표는 233차 시점 기록이다. 03~08의 현재 상태(콘�
 | 7 | `g-int-07` | 어제 있었던 일 | 어제 있었던 일을 짧게 말할 수 있어요 | `g-easy-06` | `past-simple` | — | — | 준비 중 |
 | 8 | `g-int-08` | Would you like …? | 무엇을 원하는지 묻고 권할 수 있어요 | `g-easy-07` | `would-you-like-some` | — | — | 준비 중 |
 
+_237차 주: 위 표의 상태는 233차 시점 기록이다. 상태는 §11 기준._
+
 ### 3.3 Advanced (숙련도) — 전부 준비 중 (6)
 
 | 순서 | id | 제목 | 학습 목표 | 선수 | conceptId | 설명 예시 | 문제 유형 | 상태 |
@@ -103,6 +105,8 @@ _234차 주: 위 표는 233차 시점 기록이다. 03~08의 현재 상태(콘�
 | 4 | `g-adv-04` | when·if 잇기 | 때와 조건을 이어서 말할 수 있어요 | `g-adv-03` | `when-if-clause` | — | — | 준비 중 |
 | 5 | `g-adv-05` | should·have to | 해야 하는 일과 하면 좋은 일을 말할 수 있어요 | `g-easy-04` | `should-have-to` | — | — | 준비 중 |
 | 6 | `g-adv-06` | 해 본 적 있어요 | 해 본 경험을 말할 수 있어요 | `g-int-07` | `present-perfect-experience` | — | — | 준비 중 |
+
+_237차 주: 상태는 §11 기준._
 
 ### 3.4 Middle School (학교) — 전부 준비 중 (6) · 학년·교육과정 대응 미확인
 
@@ -115,6 +119,8 @@ _234차 주: 위 표는 233차 시점 기록이다. 03~08의 현재 상태(콘�
 | 5 | `g-mid-05` | 분사로 꾸미기 | -ing·-ed로 명사를 꾸밀 수 있어요 | `g-mid-01` | `participle` | `g-int-05` | — | — | 준비 중 |
 | 6 | `g-mid-06` | 조건문 if | 만약의 상황을 말할 수 있어요 | `g-mid-01` | `conditional-if` | `g-easy-06` | — | — | 준비 중 |
 
+_237차 주: 상태는 §11 기준._
+
 ### 3.5 High School (학교) — 전부 준비 중 (6) · 학년·교육과정 대응 미확인
 
 | 순서 | id | 제목 | 학습 목표 | 선수 | conceptId | basicsUnitId | 설명 예시 | 문제 유형 | 상태 |
@@ -125,6 +131,8 @@ _234차 주: 위 표는 233차 시점 기록이다. 03~08의 현재 상태(콘�
 | 4 | `g-high-04` | 가정법 | 사실과 다른 상황을 말할 수 있어요 | `g-high-01` | `subjunctive-conditional` | `g-easy-06` | — | — | 준비 중 |
 | 5 | `g-high-05` | 간접화법 | 남이 한 말을 전달해 말할 수 있어요 | `g-high-01` | `reported-speech` | `g-int-07` | — | — | 준비 중 |
 | 6 | `g-high-06` | 분사구문 | 분사로 문장을 짧게 이어 쓸 수 있어요 | `g-high-01` | `participle` | `g-int-05` | — | — | 준비 중 |
+
+_237차 주: 상태는 §11 기준._
 
 참고
 - 준비 중 단원의 `basicsUnitId`가 가리키는 기초 단원 중 일부(`g-int-07`, `g-int-03`, `g-int-05`, `g-easy-03`, `g-easy-04`, `g-easy-06`)도 아직 준비 중이다. 기초 이동 링크는 대상이 준비 중이면 '준비 중'으로 보여야 한다.
@@ -231,6 +239,10 @@ _234차 주: 위 표는 233차 시점 기록이다. 03~08의 현재 상태(콘�
 | (234차 추가) 단원 현황 | ready 9 / 준비 중 25 (총 34) — Easy 8/8 ready, Intermediate 1/8, Advanced·Middle·High 0. 교사 검수 완료 0 |
 | (234차 추가) 코드 커밋 | 코드 `d2842265` (Easy 03~08 콘텐츠, 데이터 계약 추가). e2e 커밋 `febadb2f`, `[grammar]` 최종 238/0 |
 | (234차 추가) 정적·빌드 | 더미 env 빌드 경고 0, GrammarCourseScreen 청크 43.8 KB(gzip 13.7 KB). `testGrammarCourses`·`testPilotUnit`·`testStudentPathContracts`·`testRegistryCoverage` ALL PASS, `testQaGate` 17/0, `testLazyChunkGuards` 95/95, `testBundleBudget` 32/0 |
+| (237차 추가) 단원 현황 | ready 34 / 준비 중 0 (총 34) — Easy 8, Intermediate 8, Advanced 6, Middle 6, High 6 모두 ready. 교사 검수 완료 0. 상세는 §11 |
+| (237차 추가) 코드 커밋 | e2e 일반화 `8f82a313`, Intermediate+Advanced 13단원 `e1e799da`, 학교 단원 `119e3b89`, 번들 예산 1.7 → 1.8 MB `d5c2f1bd` |
+| (237차 추가) 정적·빌드 | 각 단계마다 정적 스위트 ALL PASS. grammar lazy 청크 최종 빌드 120.2 KB raw / 33.5 KB gzip, main gzip 불변. 정적 스위트 전부 PASS |
+| (237차 추가) mock e2e | `e1e799da` 기준 `[grammar]` 431/0/1 SKIP(시나리오 k는 ready 학교 단원이 없어 건너뜀), `[hats]` 67/0, `[student-home]` 223/0/1 SKIP, `[writing]` 83/0, `[speaking]` 608/0, `[unit]` 141/0. 학교 단원 추가 후 `[grammar]` 659/0/1 SKIP(상세는 §11.7) |
 | (234차 추가) mock e2e | `[grammar]` 시나리오 h·i 추가. 1차 235/3(3건 모두 테스트 측), 최종 238/0(미mock 요청 0·mock 오류 0). `[student-home]` 223/0/1 SKIP(기존 fixture 한계)은 재실행했다. `[unit]`·`[writing]`·`[speaking]`·`[speaking-exam]`은 재실행하지 않았다(변경이 문법 화면·데이터에 한정) |
 
 ## 8. 미완료 콘텐츠 목록
@@ -348,3 +360,95 @@ _234차 주: 위 표는 233차 시점 기록이다. 03~08의 현재 상태(콘�
 운영자 지정 제작 순서: Intermediate → Advanced → Middle → High. 이번 작업 범위가 아니다. 학교 과정과 학년·교육과정 대응, 학원 교재 순서 대조는 여전히 하지 않았다.
 
 **커리큘럼 전체 완료 아님**: 25개 단원이 준비 중이고, 구현된 9개 단원도 교사 검수 전이다.
+
+## 11. (236~237차, 2026-10-10 야간) Intermediate·Advanced·Middle School·High School 콘텐츠 구현
+
+2026-10-10 03:44~ 야간 자율 세션(운영자 취침 중). 기준: `5ae73092` → 체크포인트 push `e1e799da`(04:03). 진행 순서: 상태 확인 → Grammar 콘텐츠(Intermediate 7 → Advanced 6 → Middle 6 → High 6) → 모자 헤더 1.25em → 8단계 승급 설계 문서. 콘텐츠 초안은 읽기 전용 학습 설계 에이전트가 쓰고, 리드가 전달하고, 구현 에이전트가 붙여 넣어 `validateGrammarUnit`(어휘 규칙 포함)으로 검증했다. 저장소 커밋: e2e 일반화 `8f82a313`, Intermediate+Advanced 13단원 `e1e799da`, 학교 단원 `119e3b89`, 번들 예산 1.7 → 1.8 MB `d5c2f1bd`(push 완료 `d5c2f1bd`).
+
+**상태 구분 (이 절의 핵심)**
+
+| 구분 | 단원 수 | 내용 |
+|---|---|---|
+| 콘텐츠 구현 완료(ready) | 34 / 34 | Easy 8, Intermediate 8, Advanced 6, Middle School 6, High School 6 |
+| 교사 검수 완료 | 0 | 34단원 전부 `reviewStatus: 'unreviewed'` |
+| 미제작(준비 중) | 0 | — |
+
+**커리큘럼이 구현되었으나 교사 검수 전이다. "커리큘럼 완료"는 선언하지 않는다.** Middle·High는 '학년·교육과정 대응 미확인'을 유지한다(§3.4·§3.5 참고).
+
+공통 구조(신규 25단원): 예문 3~4, 쉬운 설명 3, 구조 2, 비교(필요한 단원만), 오류 2, 연습 선택 3·빈칸 2·순서 2·만들기 2, 직접 사용 1, 구현 상태 ready, 검수 미검수, 출처 own. 풀이 대상(선택+빈칸+순서)은 단원당 7문항이고 만들기와 직접 사용은 채점하지 않는다.
+
+### 11.1 Intermediate 02~08 (7단원, 직접 사용 = 말하기)
+
+| 순서 | id | 제목 | 목표 | 선수 | 문항(선/빈/순/만) | 구현 | 검수 |
+|---|---|---|---|---|---|---|---|
+| 2 | `g-int-02` | 엄마는 …해요 | 가족이나 친구가 하는 일을 말할 수 있어요 | `g-easy-06` | 3/2/2/2 | ready | 미검수 |
+| 3 | `g-int-03` | 무엇을 좋아해? | What으로 묻고 What about you?로 되물을 수 있어요 | `g-easy-07`, `g-int-01` | 3/2/2/2 | ready | 미검수 |
+| 4 | `g-int-04` | Can you …? 묻기 | 할 수 있는지 묻고 짧게 답할 수 있어요 | `g-easy-04`, `g-int-01` | 3/2/2/2 | ready | 미검수 |
+| 5 | `g-int-05` | 지금 …하고 있어요 | 지금 하는 일을 말할 수 있어요 | `g-easy-06` | 3/2/2/2 | ready | 미검수 |
+| 6 | `g-int-06` | 위치 말 늘리기 | next to·behind로 위치를 더 자세히 말할 수 있어요 | `g-easy-02` | 3/2/2/2 | ready | 미검수 |
+| 7 | `g-int-07` | 어제 있었던 일 | 어제 있었던 일을 짧게 말할 수 있어요 | `g-easy-06` | 3/2/2/2 | ready | 미검수 |
+| 8 | `g-int-08` | Would you like …? | 무엇을 원하는지 묻고 권할 수 있어요 | `g-easy-07` | 3/2/2/2 | ready | 미검수 |
+
+교사 확인(모듈 헤더 기준): int-02 does/doesn't는 비교+선택 1개뿐(easy-06 대비 Does 신규) / int-03 "What do you have in your bag?"가 자연스러운지(8단어, 예문 아님) / int-05 with는 문법어 / int-06 explainKo 3행 재작성 / int-07 Did/didn't는 미리보기, was/were만 불규칙 / int-08 부정 = No, thank you.
+
+### 11.2 Advanced 01~06 (6단원, 직접 사용 = 말하기)
+
+| 순서 | id | 제목 | 목표 | 선수 | 문항(선/빈/순/만) | 구현 | 검수 |
+|---|---|---|---|---|---|---|---|
+| 1 | `g-adv-01` | 계획 말하기 going to | 앞으로 할 일을 말할 수 있어요 | `g-int-05` | 3/2/2/2 | ready | 미검수 |
+| 2 | `g-adv-02` | 비교하기 | 둘을 비교해서 말할 수 있어요 | `g-int-03` | 3/2/2/2 | ready | 미검수 |
+| 3 | `g-adv-03` | because·so 잇기 | 이유와 결과를 이어서 말할 수 있어요 | `g-int-07` | 3/2/2/2 | ready | 미검수 |
+| 4 | `g-adv-04` | when·if 잇기 | 때와 조건을 이어서 말할 수 있어요 | `g-adv-03` | 3/2/2/2 | ready | 미검수 |
+| 5 | `g-adv-05` | should·have to | 해야 하는 일과 하면 좋은 일을 말할 수 있어요 | `g-easy-04` | 3/2/2/2 | ready | 미검수 |
+| 6 | `g-adv-06` | 해 본 적 있어요 | 해 본 경험을 말할 수 있어요 | `g-int-07` | 3/2/2/2 | ready | 미검수 |
+
+교사 확인(모듈 헤더 기준): 순서 문항은 정답 하나(절 순서 교체 시 칩 구두점 변동) / adv-02 bigger·taller만 / adv-03 현재시제만·compare 생략·here/she 문법어 / adv-05 have to는 I/We만 / adv-06 규칙 분사 played·visited + been(seen 제외), int-07 이후 수업 / "I play ball"·"Have you ever played ball?"이 자연스러운지.
+
+### 11.3 Middle School 01~06 (6단원, 직접 사용 = 말하기 · 학년·교육과정 대응 미확인)
+
+| 순서 | id | 제목 | 목표 | 선수 | basicsUnitId | 문항(선/빈/순/만) | 구현 | 검수 |
+|---|---|---|---|---|---|---|---|---|
+| 1 | `g-mid-01` | 시제 정리 | 현재·과거·미래를 구분해 쓸 수 있어요 | — | `g-int-07` | 3/2/2/2 | ready | 미검수 |
+| 2 | `g-mid-02` | 조동사 can·may·must | 허락·의무를 나타내는 말을 쓸 수 있어요 | `g-mid-01` | `g-easy-04` | 3/2/2/2 | ready | 미검수 |
+| 3 | `g-mid-03` | 수동태 기초 | "…당했다"는 문장을 만들 수 있어요 | `g-mid-01` | `g-easy-03` | 3/2/2/2 | ready | 미검수 |
+| 4 | `g-mid-04` | 관계대명사 who·which | 두 문장을 하나로 이어 설명할 수 있어요 | `g-mid-01` | `g-int-03` | 3/2/2/2 | ready | 미검수 |
+| 5 | `g-mid-05` | 분사로 꾸미기 | -ing·-ed로 명사를 꾸밀 수 있어요 | `g-mid-01` | `g-int-05` | 3/2/2/2 | ready | 미검수 |
+| 6 | `g-mid-06` | 조건문 if | 만약의 상황을 말할 수 있어요 | `g-mid-01` | `g-easy-06` | 3/2/2/2 | ready | 미검수 |
+
+교사 확인(모듈 헤더 기준): mid-01 words 9개·mid-05 7개(목표 6 초과: 활용형·때 단어) / mid-04 plays·reads(3인칭 -s)를 int-02 선수 없이 사용 / mid-04·05 compare 생략 / mid-03 explainKo 안에 영어 능동문(검증 대상 아님) / mid-06 순서 문항은 정답 하나(대문자·쉼표) / 학년·교육과정 대응 주장 없음.
+
+### 11.4 High School 01~06 (6단원, 직접 사용 = 쓰기 · 학년·교육과정 대응 미확인)
+
+| 순서 | id | 제목 | 목표 | 선수 | basicsUnitId | 문항(선/빈/순/만) | 구현 | 검수 |
+|---|---|---|---|---|---|---|---|---|
+| 1 | `g-high-01` | 완료 시제 | 과거와 지금을 이어서 말할 수 있어요 | — | `g-int-07` | 3/2/2/2 | ready | 미검수 |
+| 2 | `g-high-02` | 수동태 심화 | 시제·조동사가 있는 수동태를 쓸 수 있어요 | `g-high-01` | `g-easy-03` | 3/2/2/2 | ready | 미검수 |
+| 3 | `g-high-03` | 관계사 심화 | 긴 문장 속 관계사를 해석하고 쓸 수 있어요 | `g-high-01` | `g-int-03` | 3/2/2/2 | ready | 미검수 |
+| 4 | `g-high-04` | 가정법 | 사실과 다른 상황을 말할 수 있어요 | `g-high-01` | `g-easy-06` | 3/2/2/2 | ready | 미검수 |
+| 5 | `g-high-05` | 간접화법 | 남이 한 말을 전달해 말할 수 있어요 | `g-high-01` | `g-int-07` | 3/2/2/2 | ready | 미검수 |
+| 6 | `g-high-06` | 분사구문 | 분사로 문장을 짧게 이어 쓸 수 있어요 | `g-high-01` | `g-int-05` | 3/2/2/2 | ready | 미검수 |
+
+교사 확인(모듈 헤더 기준): 어휘는 사람이 직접 확인만 함 / high-01 "since 2020"은 시간이 지나면 낡음(2020은 숫자라 검증기가 무시) / high-03 which 생략 허용 / high-05 시제 일치(backshift)는 교과서 규칙 / high-06 주어가 같은 경우만 / 학년 대응 주장 없음.
+
+### 11.5 개념 공유 (Middle ↔ High)
+
+`passive-voice`(`g-mid-03` ↔ `g-high-02`), `relative-clause`(`g-mid-04` ↔ `g-high-03`), `participle`(`g-mid-05` ↔ `g-high-06`)는 §5 규칙대로 같은 conceptId를 공유한다. 중학은 단순한 문형, 고등은 시제·조동사·긴 문장으로 깊이와 문항 난이도를 구분하고, 기초 설명 이동(basicsUnitId)은 각 쌍이 같은 기초 단원을 가리킨다(`g-easy-03`·`g-int-03`·`g-int-05`). 같은 conceptId라는 사실이 특정 학년 대응을 뜻하지 않는다. 설명 본문(`explainKo`)은 단원별로 따로 써 있으며 과정 간 복사는 하지 않았다.
+
+### 11.6 연구 근거
+
+새 인용 없음. §6 표를 재사용했고 설계 판단은 §10.4와 같다(연구 결과에 기댄 설계 방향과 제품 판단을 구분).
+
+### 11.7 검증 (2026-10-10 야간, 브라우저 1개 순차)
+
+| 항목 | 결과 |
+|---|---|
+| 정적 | 각 단계마다 정적 스위트 ALL PASS. 모든 신규 단원이 `validateGrammarUnit`(어휘 규칙 포함) 통과 |
+| 번들 | grammar lazy 청크 최종 빌드 120.2 KB raw / 33.5 KB gzip, main gzip 불변. raw 합계 한도 1.7 → 1.8 MB 상향(`testBundleBudget`). ponytail: 과정별 청크 분리는 후속 |
+| mock e2e (`e1e799da` 기준) | `[grammar]` 431/0/1 SKIP(시나리오 k 기초 링크 이동은 ready 학교 단원이 없어 건너뜀), `[hats]` 67/0, `[student-home]` 223/0/1 SKIP(기존 fixture 한계), `[writing]` 83/0, `[speaking]` 608/0, `[unit]` 141/0 |
+| mock e2e (학교 단원 추가 후, `119e3b89`) | `[grammar]` 659/0/1 SKIP. h: 5개 과정 ready 34단원 전부 진입(9섹션 순서·문항 수·배지·어휘 검사) / i: 중·고 포함 각 과정 첫 ready 단원 전체 연습 흐름 / k: 모든 학교 단원의 [기초 설명 보기] 링크와 ← 돌아가기 통과 / l: 로드 실패 안내 통과 / SKIP 1건은 m "준비 중 단원 없음". 미mock 요청 0·mock 오류 0 |
+| e2e 일반화(`8f82a313`) | 시나리오 h·i를 과정별로 일반화, k 기초 링크 이동(Middle/High → 기초 단원 → 돌아가기), l 로드 실패 경로, m 준비 중 안전 화면 |
+| 미검증 | Vercel Preview 실화면(SSO), 실기기, 교사 검수 |
+
+### 11.8 남은 일
+
+교사 검수 34단원, 학원 레벨명·교재 순서 대조, 학교 과정의 학년·교육과정 대응, Preview 실화면 확인, 과정별 청크 분리. 모두 이 절 범위 밖이다.
