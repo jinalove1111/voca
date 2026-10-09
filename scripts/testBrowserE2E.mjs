@@ -123,6 +123,7 @@ async function main() {
       { name: '[writing]', modulePath: '../tests/e2e/writing.spec.mjs' },
       { name: '[unit]', modulePath: '../tests/e2e/unit.spec.mjs' },
       { name: '[grammar]', modulePath: '../tests/e2e/grammar.spec.mjs' },
+      { name: '[hats]', modulePath: '../tests/e2e/hats.spec.mjs' },
       { name: '[entrance]', modulePath: '../tests/e2e/entranceInputLoss.spec.mjs' },
       { name: '[town]', modulePath: '../tests/e2e/townV1.spec.mjs' },
       { name: '[stale-chunk]', modulePath: '../tests/e2e/staleChunk.spec.mjs' },
