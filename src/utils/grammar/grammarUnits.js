@@ -1,8 +1,10 @@
 // 2026-10-10 문법 단원 데이터 + 순수 도우미(저장·네트워크 없음). 스키마는 validateGrammarUnit 참고.
-// status 'ready' 9개(Easy 8개 + g-int-01. g-easy-01·02, g-int-01은 기존 시범 Unit 문형 문항을 fromUnitId로 재사용, Easy 03~08은 자체 선택 문항 3개) + 'preparing' 개요 25개(제목·학습 목표만, 화면에서 '준비 중').
+// status 'ready' 22개(Easy 8 + Intermediate 8 + Advanced 6; 아래 Easy/int-01 설명 참고. g-easy-01·02, g-int-01은 기존 시범 Unit 문형 문항을 fromUnitId로 재사용, Easy 03~08은 자체 선택 문항 3개) + 'preparing' 개요 12개(제목·학습 목표만, 화면에서 '준비 중').
 // 구현 상태(status)와 교사 검수(reviewStatus)는 별개 — 전부 'unreviewed'. 어휘 규칙은 validateGrammarUnit 참고.
 // 교사 확인(콘텐츠 담당 2026-10-10): 03 compare의 Are you…?/I am not은 미리보기일 뿐(연습은 긍정 am/is/are). 04 Mia can jump에 -s 없음(3인칭 -s는 g-int-02), can't·cannot 모두 인정.
 // 05 복수 -s와 two는 가볍게만. 06이 don't를 07의 Do보다 먼저 가르침; 06 "I play ball."이 자연스러운지 확인(대안 I play with a ball). 08의 isn't/Is this는 compare에서만.
+// 교사 확인 Intermediate: int-02 does/doesn't는 compare+선택 1개뿐(easy-06 대비 Does 신규); int-03 "What do you have in your bag?" 자연스러운지(8단어, 예문 아님); int-05 with는 문법어; int-06 explainKo 3행 재작성; int-07 Did/didn't는 미리보기, was/were만 불규칙; int-08 부정 = No, thank you.
+// 교사 확인 Advanced: 순서 문항은 정답 하나(절 순서 교체 시 칩 구두점 변동); adv-02 bigger/taller만; adv-03 현재시제만·compare 생략·here/she 문법어; adv-05 have to는 I/We만; adv-06 규칙 분사 played/visited+been(seen 제외), adv-06은 int-07 이후 수업; "I play ball"/"Have you ever played ball?" 자연스러운지.
 // 선수 연결: 04←01, 05←02, 06←03, 07←06, 08←03(+01의 my/your).
 // 초안은 콘텐츠 담당(2026-10-10), 교사 검수 전.
 //
@@ -472,25 +474,659 @@ const READY_UNITS = [
     use: { kind: 'speaking', promptKo: "짝이 필통을 숨겼어요. Is it …?로 세 번 안에 찾아 보세요. 짝은 Yes, it is. / No, it isn't.로 답해요.", exampleEn: 'Is it in the box?', exampleKo: '상자 안에 있어?' },
     sources: ['own', 'pilot:c2-find-together-classroom'],
   },
+  {
+    id: 'g-int-02', courseId: 'intermediate', order: 2,
+    titleKo: '엄마는 …해요', goalKo: '가족이나 친구가 하는 일을 말할 수 있어요',
+    conceptId: 'third-person-s', prereqIds: ['g-easy-06'], status: 'ready', reviewStatus: 'unreviewed',
+    examples: [
+      { en: 'My mum likes apples.', ko: '우리 엄마는 사과를 좋아해.' },
+      { en: 'My dad has a dog.', ko: '우리 아빠는 개가 있어.' },
+      { en: 'Mia plays tennis.', ko: '미아는 테니스를 해.' },
+      { en: 'My sister likes pizza.', ko: '내 여동생은 피자를 좋아해.' },
+    ],
+    explainKo: [
+      'I·you·we가 아닌 한 사람(엄마, 미아, 폴)이 하는 일을 말할 때는 동작 말 끝에 s를 붙여요.',
+      'like는 likes, play는 plays가 돼요. have만 has로 모양이 바뀌어요.',
+      "아니라고 할 때는 doesn't를 쓰고, 그 뒤 like는 s 없이 그대로 써요. (doesn't like)",
+    ],
+    structure: [
+      { s: 'My mum', v: 'likes', rest: 'apples.', ko: '우리 엄마는 사과를 좋아해 (한 사람이면 likes)' },
+      { s: 'My dad', v: 'has', rest: 'a dog.', ko: '우리 아빠는 개가 있어 (have는 has로 바뀌어요)' },
+    ],
+    compare: {
+      aff: { en: 'My mum likes milk.', ko: '우리 엄마는 우유를 좋아해.' },
+      neg: { en: "My mum doesn't like milk.", ko: '우리 엄마는 우유를 안 좋아해.' },
+      q: { en: 'Does your mum like milk?', ko: '너희 엄마는 우유를 좋아하셔?' },
+    },
+    errors: [
+      { wrong: 'My mum like apples.', right: 'My mum likes apples.', whyKo: '엄마 한 사람이 하는 일이라 like 끝에 s를 붙여요.' },
+      { wrong: 'Mia have a dog.', right: 'Mia has a dog.', whyKo: 'Mia 한 사람 뒤에서는 have가 has로 바뀌어요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '우리 엄마는 사과를 좋아해요. 알맞은 문장은?', options: ['My mum likes apples.', 'My mum like apples.', 'My mum apples likes.'], correct: 0, whyKo: '엄마 한 사람이라 likes예요. → My mum likes apples.' },
+        { promptKo: '미아는 개가 있어요. 알맞은 문장은?', options: ['Mia has a dog.', 'Mia have a dog.', 'Mia haves a dog.'], correct: 0, whyKo: 'have는 Mia 뒤에서 has가 돼요.' },
+        { promptKo: '우리 아빠는 우유를 안 좋아해요. 알맞은 문장은?', options: ["My dad doesn't like milk.", "My dad doesn't likes milk.", "My dad don't like milk."], correct: 0, whyKo: "한 사람이 안 할 때는 doesn't + like(s 없이)예요." },
+      ],
+      blank: [
+        { promptKo: '미아는 테니스를 해요.', en: 'Mia ___ tennis.', options: ['plays', 'play', 'playing'], correct: 0, whyKo: 'Mia 한 사람이라 plays예요. → Mia plays tennis.' },
+        { promptKo: '내 여동생은 피자를 좋아해요.', en: 'My sister ___ pizza.', options: ['likes', 'like', 'liking'], correct: 0, whyKo: '한 사람이 좋아하면 likes예요. → My sister likes pizza.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "우리 엄마는 사과를 좋아해"를 만들어요.', words: ['likes', 'My', 'apples.', 'mum'], answers: [['My', 'mum', 'likes', 'apples.']], whyKo: 'My mum likes + 좋아하는 것 순서예요.' },
+        { promptKo: '단어를 놓아 "미아는 개가 있어"를 만들어요.', words: ['has', 'Mia', 'a', 'dog.'], answers: [['Mia', 'has', 'a', 'dog.']], whyKo: 'Mia has + a dog 순서예요.' },
+      ],
+      build: [
+        { promptKo: '우리 엄마가 좋아하는 것 하나를 말하거나 써 보세요.', exampleEn: 'My mum likes pizza.', exampleKo: '우리 엄마는 피자를 좋아해.', acceptNoteKo: 'My mum likes apples. / My dad likes milk.도 맞아요. 한 사람 + likes + 좋아하는 것이면 돼요.' },
+        { promptKo: '가족이나 친구가 하는 운동 하나를 말하거나 써 보세요.', exampleEn: 'My sister plays tennis.', exampleKo: '내 여동생은 테니스를 해.', acceptNoteKo: 'Mia plays tennis. / My dad plays ball.처럼 사람이 달라도 맞아요. 한 사람 + plays면 돼요.' },
+      ],
+    },
+    use: { kind: 'speaking', promptKo: '짝에게 우리 가족 한 명이 좋아하는 것 둘을 말해요. 짝도 똑같이 해요.', exampleEn: 'My dad likes pizza. My mum likes apples.', exampleKo: '우리 아빠는 피자를 좋아해. 우리 엄마는 사과를 좋아해.' },
+    words: [{ en: 'mum', ko: '엄마' }, { en: 'dad', ko: '아빠' }, { en: 'sister', ko: '여동생, 언니, 누나' }, { en: 'pizza', ko: '피자' }, { en: 'tennis', ko: '테니스' }, { en: 'likes', ko: '좋아해' }, { en: 'has', ko: '가지고 있어' }, { en: 'plays', ko: '(놀이를) 해' }],
+    sources: ['own'],
+  },
+  {
+    id: 'g-int-03', courseId: 'intermediate', order: 3,
+    titleKo: '무엇을 좋아해?', goalKo: 'What으로 묻고 What about you?로 되물을 수 있어요',
+    conceptId: 'wh-question-what', prereqIds: ['g-easy-07', 'g-int-01'], status: 'ready', reviewStatus: 'unreviewed',
+    examples: [
+      { en: 'What do you like?', ko: '너는 무엇을 좋아해?' },
+      { en: 'I like pizza.', ko: '나는 피자를 좋아해.' },
+      { en: 'What about you, Mia?', ko: '너는 어때, 미아?' },
+      { en: 'I like music.', ko: '나는 음악을 좋아해.' },
+    ],
+    explainKo: [
+      'What do you like?는 "너는 무엇을 좋아해?" 하고 좋아하는 것을 물어요.',
+      'Do you like apples?에서 apples 자리에 What을 쓰고 맨 앞으로 보내요. Do you like는 그대로예요.',
+      '대답은 I like 뒤에 좋아하는 것을 넣고, 같은 질문을 돌려줄 때는 What about you?라고 해요.',
+    ],
+    structure: [
+      { s: 'What do you', v: 'like', rest: '?', ko: '너는 무엇을 좋아해? (What이 맨 앞에 와요)' },
+      { s: 'I', v: 'like', rest: 'pizza.', ko: '나는 피자를 좋아해 (대답은 일반 문장 순서)' },
+    ],
+    compare: {
+      aff: { en: 'I like pizza.', ko: '나는 피자를 좋아해.' },
+      neg: { en: "I don't like pizza.", ko: '나는 피자를 안 좋아해.' },
+      q: { en: 'What do you like?', ko: '너는 무엇을 좋아해?' },
+    },
+    errors: [
+      { wrong: 'What you do like?', right: 'What do you like?', whyKo: 'What 바로 다음에 do you 순서로 써요.' },
+      { wrong: 'What about your?', right: 'What about you?', whyKo: '"너는?" 하고 되물을 때는 your가 아니라 you예요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '친구에게 무엇을 좋아하는지 물어요. 알맞은 문장은?', options: ['What do you like?', 'What you like?', 'What do like you?'], correct: 0, whyKo: 'What do you like? 순서예요.' },
+        { promptKo: '친구가 "I like pizza."라고 했어요. 나도 "너는?" 하고 되물어요. 알맞은 문장은?', options: ['What about you?', 'What about your?', 'What is you?'], correct: 0, whyKo: '되물을 때는 What about you?예요.' },
+        { promptKo: '친구에게 가방 안에 무엇이 있는지 물어요. 알맞은 문장은?', options: ['What do you have in your bag?', 'What you have in your bag?', 'Do what you have in your bag?'], correct: 0, whyKo: 'What do you have …? 순서로 물어요.' },
+      ],
+      blank: [
+        { promptKo: '친구에게 무엇을 좋아하는지 물어요.', en: 'What ___ you like?', options: ['do', 'are', 'is'], correct: 0, whyKo: 'What 다음에 do you예요. → What do you like?' },
+        { promptKo: '나는 주스를 좋아한다고 말하고 친구에게 되물어요.', en: 'I like juice. ___ about you?', options: ['What', 'Do', 'Is'], correct: 0, whyKo: '되물을 때는 What about you?예요.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "너는 무엇을 좋아해?"를 만들어요.', words: ['do', 'What', 'like?', 'you'], answers: [['What', 'do', 'you', 'like?']], whyKo: 'What do you like? 순서예요.' },
+        { promptKo: '단어를 놓아 "너는 가방 안에 무엇이 있어?"를 만들어요.', words: ['bag?', 'you', 'What', 'in', 'have', 'the', 'do'], answers: [['What', 'do', 'you', 'have', 'in', 'the', 'bag?']], whyKo: 'What do you have + in the bag? 순서예요.' },
+      ],
+      build: [
+        { promptKo: '짝이 좋아하는 것을 알고 싶어요. 물어 보세요.', exampleEn: 'What do you like?', exampleKo: '너는 무엇을 좋아해?', acceptNoteKo: 'What do you like, Mia?처럼 이름을 붙여도 맞아요. What do you like?로 시작하면 돼요.' },
+        { promptKo: '내가 좋아하는 것을 말하고 짝에게 되물어 보세요.', exampleEn: 'I like apples. What about you?', exampleKo: '나는 사과를 좋아해. 너는?', acceptNoteKo: 'I like music. What about you? / I like banana juice. What about you?처럼 좋아하는 것은 자유예요. 두 문장으로 말하면 돼요.' },
+      ],
+    },
+    use: { kind: 'speaking', promptKo: '짝에게 "What do you like?"로 묻고, 짝이 대답하면 "What about you?"로 되물어요. 서로 두 번씩 해요.', exampleEn: 'What do you like? I like pizza. What about you?', exampleKo: '너는 무엇을 좋아해? 나는 피자를 좋아해. 너는?' },
+    words: [{ en: 'pizza', ko: '피자' }, { en: 'juice', ko: '주스' }, { en: 'banana', ko: '바나나' }, { en: 'music', ko: '음악' }, { en: 'bag', ko: '가방' }],
+    sources: ['own'],
+  },
+  {
+    id: 'g-int-04', courseId: 'intermediate', order: 4,
+    titleKo: 'Can you …? 묻기', goalKo: '할 수 있는지 묻고 짧게 답할 수 있어요',
+    conceptId: 'can-question-short-answer', prereqIds: ['g-easy-04', 'g-int-01'], status: 'ready', reviewStatus: 'unreviewed',
+    examples: [
+      { en: 'Can you swim?', ko: '너는 수영할 수 있어?' },
+      { en: 'Yes, I can.', ko: '응, 할 수 있어.' },
+      { en: "No, I can't.", ko: '아니, 못 해.' },
+      { en: 'Can you ride a bike?', ko: '너는 자전거를 탈 수 있어?' },
+    ],
+    explainKo: [
+      'Can you …?는 "너는 …할 수 있어?" 하고 할 수 있는지 물어요.',
+      'I can swim.에서 can을 맨 앞으로 보내고 I를 you로 바꾸면 돼요.',
+      "대답은 짧게 Yes, I can. / No, I can't.예요. 동작 말은 다시 안 써도 돼요.",
+    ],
+    structure: [
+      { s: 'Can you', v: 'ride', rest: 'a bike?', ko: '너는 자전거를 탈 수 있어? (질문이라 Can이 맨 앞에 와요)' },
+      { s: 'You', v: 'can ride', rest: 'a bike.', ko: '너는 자전거를 탈 수 있어 (일반 문장 순서)' },
+    ],
+    compare: {
+      aff: { en: 'Yes, I can.', ko: '응, 할 수 있어.' },
+      neg: { en: "No, I can't.", ko: '아니, 못 해.' },
+      q: { en: 'Can you dance?', ko: '너는 춤출 수 있어?' },
+    },
+    errors: [
+      { wrong: 'You can dance?', right: 'Can you dance?', whyKo: '질문은 Can을 맨 앞에 써요. You can으로 시작하면 질문이 아니에요.' },
+      { wrong: "Yes, I can't.", right: 'Yes, I can.', whyKo: "can't(못 해)는 No와 함께 써요. Yes 뒤에는 can을 써요." },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '친구가 춤출 수 있는지 물어요. 알맞은 문장은?', options: ['Can you dance?', 'You can dance?', 'Can dance you?'], correct: 0, whyKo: '질문은 Can you + 동작 순서예요.' },
+        { promptKo: '"Can you swim?" 수영할 수 있어요. 알맞은 짧은 대답은?', options: ['Yes, I can.', 'Yes, I do.', 'Yes, I am.'], correct: 0, whyKo: 'Can으로 물으면 Yes, I can.으로 답해요.' },
+        { promptKo: '"Can you ride a bike?" 못 타요. 알맞은 짧은 대답은?', options: ["No, I can't.", "No, I don't.", 'No, I can.'], correct: 0, whyKo: "Can으로 물으면 No, I can't.로 답해요." },
+      ],
+      blank: [
+        { promptKo: '친구가 자전거를 탈 수 있는지 물어요.', en: 'Can you ___ a bike?', options: ['ride', 'rides', 'riding'], correct: 0, whyKo: 'Can you 뒤에는 ride를 그대로 써요. → Can you ride a bike?' },
+        { promptKo: '"Can you run?" 달릴 수 있어서 짧게 대답해요.', en: 'Yes, I ___.', options: ['can', 'am', 'is'], correct: 0, whyKo: 'Can으로 물으면 Yes, I can.이에요.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "너는 자전거를 탈 수 있어?"를 만들어요.', words: ['you', 'ride', 'Can', 'a', 'bike?'], answers: [['Can', 'you', 'ride', 'a', 'bike?']], whyKo: 'Can you + 동작 + 물건 순서예요.' },
+        { promptKo: '단어를 놓아 "너는 책을 읽을 수 있어?"를 만들어요.', words: ['read', 'Can', 'book?', 'you', 'a'], answers: [['Can', 'you', 'read', 'a', 'book?']], whyKo: 'Can you read a book? 순서예요.' },
+      ],
+      build: [
+        { promptKo: '짝이 할 수 있는지 궁금한 것 하나를 물어 보세요.', exampleEn: 'Can you dance?', exampleKo: '너는 춤출 수 있어?', acceptNoteKo: 'Can you swim? / Can you sing? / Can you ride a bike?도 맞아요. Can you + 동작이면 돼요.' },
+        { promptKo: '짝이 "Can you swim?" 하고 물었어요. 사실대로 짧게 대답해 보세요.', exampleEn: 'Yes, I can.', exampleKo: '응, 할 수 있어.', acceptNoteKo: "No, I can't.도 맞아요. 사실대로 Yes, I can. / No, I can't.로 말하면 돼요. 한 문장만 정답은 아니에요." },
+      ],
+    },
+    use: { kind: 'speaking', promptKo: '짝에게 "Can you …?" 질문을 세 개 해요. 짝은 Yes, I can. / No, I can\'t.로만 답해요.', exampleEn: 'Can you ride a bike?', exampleKo: '너는 자전거를 탈 수 있어?' },
+    words: [{ en: 'dance', ko: '춤추다' }, { en: 'ride', ko: '(자전거를) 타다' }, { en: 'bike', ko: '자전거' }],
+    sources: ['own'],
+  },
+  {
+    id: 'g-int-05', courseId: 'intermediate', order: 5,
+    titleKo: '지금 …하고 있어요', goalKo: '지금 하는 일을 말할 수 있어요',
+    conceptId: 'present-continuous', prereqIds: ['g-easy-06'], status: 'ready', reviewStatus: 'unreviewed',
+    examples: [
+      { en: 'I am eating an apple.', ko: '나는 사과를 먹고 있어.' },
+      { en: 'Mia is watching TV.', ko: '미아는 TV를 보고 있어.' },
+      { en: 'What are you doing?', ko: '너는 뭐 하고 있어?' },
+      { en: 'I am drinking milk.', ko: '나는 우유를 마시고 있어.' },
+    ],
+    explainKo: [
+      'I am …ing는 "지금 …하고 있어요" 하고 지금 하는 일을 말해요.',
+      'am·is·are를 먼저 쓰고, 동작 말 끝에 ing를 붙여요. (eat은 eating)',
+      '지금 뭘 하는지 물을 때는 What are you doing?이라고 해요.',
+    ],
+    structure: [
+      { s: 'I', v: 'am eating', rest: 'an apple.', ko: '나는 사과를 먹고 있어 (am + ing)' },
+      { s: 'Mia', v: 'is watching', rest: 'TV.', ko: '미아는 TV를 보고 있어 (한 사람이면 is + ing)' },
+    ],
+    compare: {
+      aff: { en: 'I am eating an apple.', ko: '나는 사과를 먹고 있어.' },
+      neg: { en: 'I am not eating an apple.', ko: '나는 사과를 먹고 있지 않아.' },
+      q: { en: 'Are you eating an apple?', ko: '너는 사과를 먹고 있어?' },
+    },
+    errors: [
+      { wrong: 'I eating an apple.', right: 'I am eating an apple.', whyKo: 'ing 말 앞에는 am이 필요해요. am이 빠지면 안 돼요.' },
+      { wrong: 'Mia are watching TV.', right: 'Mia is watching TV.', whyKo: 'Mia는 한 사람이라 is를 써요. are는 You·We 뒤에 써요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '나는 지금 우유를 마시고 있어요. 알맞은 문장은?', options: ['I am drinking milk.', 'I drinking milk.', 'I am drink milk.'], correct: 0, whyKo: 'am + 동작 말 ing 순서예요.' },
+        { promptKo: '미아는 지금 TV를 보고 있어요. 알맞은 문장은?', options: ['Mia is watching TV.', 'Mia are watching TV.', 'Mia watching is TV.'], correct: 0, whyKo: 'Mia 뒤에는 is + ing예요.' },
+        { promptKo: '친구에게 지금 뭐 하는지 물어요. 알맞은 문장은?', options: ['What are you doing?', 'What you are doing?', 'What are you do?'], correct: 0, whyKo: 'What are you doing? 순서예요.' },
+      ],
+      blank: [
+        { promptKo: '나는 지금 사과를 먹고 있어요.', en: 'I am ___ an apple.', options: ['eating', 'eat', 'eats'], correct: 0, whyKo: 'am 뒤에는 ing 모양이에요. → I am eating an apple.' },
+        { promptKo: '미아는 지금 개와 놀고 있어요.', en: 'Mia ___ playing with a dog.', options: ['is', 'are', 'am'], correct: 0, whyKo: 'Mia 한 사람이라 is예요. → Mia is playing with a dog.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "나는 TV를 보고 있어"를 만들어요.', words: ['am', 'I', 'watching', 'TV.'], answers: [['I', 'am', 'watching', 'TV.']], whyKo: 'I am + 동작 말 ing 순서예요.' },
+        { promptKo: '단어를 놓아 "너는 뭐 하고 있어?"를 만들어요.', words: ['are', 'What', 'doing?', 'you'], answers: [['What', 'are', 'you', 'doing?']], whyKo: 'What are you doing? 순서예요.' },
+      ],
+      build: [
+        { promptKo: '지금 하고 있는 일 하나를 말하거나 써 보세요.', exampleEn: 'I am drinking milk.', exampleKo: '나는 우유를 마시고 있어.', acceptNoteKo: 'I am eating an apple. / I am watching TV.도 맞아요. 지금 하는 일이면 I am + ing로 말하면 돼요.' },
+        { promptKo: '짝이 지금 뭘 하는지 물어 보세요.', exampleEn: 'What are you doing?', exampleKo: '너는 뭐 하고 있어?', acceptNoteKo: 'What are you doing, Mia? / What is Mia doing?도 맞아요. What are(is) … doing?이면 돼요.' },
+      ],
+    },
+    use: { kind: 'speaking', promptKo: '몸짓 퀴즈예요. 짝이 먹기·마시기·TV 보기 중 하나를 몸으로 보여 줘요. "What are you doing?"으로 묻고, 짝은 "I am …ing"로 답해요.', exampleEn: 'I am eating an apple.', exampleKo: '나는 사과를 먹고 있어.' },
+    words: [{ en: 'eating', ko: '먹고 있는' }, { en: 'drinking', ko: '마시고 있는' }, { en: 'watching', ko: '보고 있는' }, { en: 'playing', ko: '놀고 있는' }, { en: 'doing', ko: '하고 있는' }, { en: 'TV', ko: '텔레비전' }],
+    sources: ['own'],
+  },
+  {
+    id: 'g-int-06', courseId: 'intermediate', order: 6,
+    titleKo: '위치 말 늘리기', goalKo: 'next to·behind로 위치를 더 자세히 말할 수 있어요',
+    conceptId: 'prepositions-place-more', prereqIds: ['g-easy-02'], status: 'ready', reviewStatus: 'unreviewed',
+    words: [{ en: 'next to', ko: '~ 옆에' }, { en: 'behind', ko: '~ 뒤에' }, { en: 'in front of', ko: '~ 앞에' }, { en: 'cat', ko: '고양이' }, { en: 'door', ko: '문' }],
+    examples: [
+      { en: "Where's the cat?", ko: '고양이 어디 있어?' },
+      { en: "It's behind the chair.", ko: '의자 뒤에 있어.' },
+      { en: 'My bag is next to the desk.', ko: '내 가방은 책상 옆에 있어.' },
+      { en: 'Paul is in front of the door.', ko: '폴은 문 앞에 있어.' },
+    ],
+    explainKo: [
+      'in·under 말고도 위치를 말하는 말이 있어요. next to는 "옆에", behind는 "뒤에", in front of는 "앞에"예요.',
+      '쓰는 순서는 같아요. It is + 위치 말 + the + 장소. (It is behind the chair.)',
+      'behind 뒤에는 of를 붙이지 않고, in front 뒤에는 of를 꼭 붙여요.',
+    ],
+    structure: [
+      { s: 'It', v: 'is', rest: 'behind the chair.', ko: '그것은 의자 뒤에 있어' },
+      { s: 'My bag', v: 'is', rest: 'next to the desk.', ko: '내 가방은 책상 옆에 있어' },
+    ],
+    errors: [
+      { wrong: 'It is behind of the chair.', right: 'It is behind the chair.', whyKo: 'behind 바로 뒤에는 of 없이 the chair를 써요.' },
+      { wrong: "It's in front the door.", right: "It's in front of the door.", whyKo: '"앞에"는 in front of예요. of가 빠지면 안 돼요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '고양이가 의자 뒤에 있어요. 알맞은 문장은?', options: ['The cat is behind the chair.', 'The cat is behind of the chair.', 'The cat behind is the chair.'], correct: 0, whyKo: 'The cat is behind + the chair 순서예요. of는 안 써요.' },
+        { promptKo: '가방이 책상 옆에 있어요. 알맞은 문장은?', options: ['My bag is next to the desk.', 'My bag is next the desk.', 'My bag next to is the desk.'], correct: 0, whyKo: '"옆에"는 next to예요. to를 빼지 않아요.' },
+        { promptKo: '폴이 문 앞에 있어요. 알맞은 문장은?', options: ['Paul is in front of the door.', 'Paul is in front the door.', 'Paul in front of is the door.'], correct: 0, whyKo: '"앞에"는 in front of예요.' },
+      ],
+      blank: [
+        { promptKo: '고양이가 상자 "뒤에" 있어요.', en: 'The cat is ___ the box.', options: ['behind', 'under', 'at'], correct: 0, whyKo: '"뒤에"는 behind예요. → The cat is behind the box.' },
+        { promptKo: '가방이 책상 "옆에" 있어요.', en: 'My bag is next ___ the desk.', options: ['to', 'of', 'at'], correct: 0, whyKo: '"옆에"는 next to예요. → My bag is next to the desk.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "미아는 책상 앞에 있어"를 만들어요.', words: ['Mia', 'is', 'in', 'front', 'of', 'the', 'desk.'], answers: [['Mia', 'is', 'in', 'front', 'of', 'the', 'desk.']], whyKo: 'Mia is + in front of + the desk 순서예요.' },
+        { promptKo: '단어를 놓아 "그것은 의자 뒤에 있어"를 만들어요.', words: ['It', 'is', 'behind', 'the', 'chair.'], answers: [['It', 'is', 'behind', 'the', 'chair.']], whyKo: 'It is + behind + the chair 순서예요.' },
+      ],
+      build: [
+        { promptKo: '고양이가 문 뒤에 있어요. 짝에게 알려 주세요.', exampleEn: 'The cat is behind the door.', exampleKo: '고양이는 문 뒤에 있어.', acceptNoteKo: "It's behind the door. / The cat is behind the chair.도 맞아요. behind + 장소면 돼요." },
+        { promptKo: '내 필통이 가방 옆에 있어요. 짝에게 알려 주세요.', exampleEn: 'My pencil case is next to the bag.', exampleKo: '내 필통은 가방 옆에 있어.', acceptNoteKo: "It's next to the bag. / My pencil case is next to the box.도 맞아요. next to + 장소면 돼요." },
+      ],
+    },
+    use: { kind: 'speaking', promptKo: '짝과 필통을 책상 위 여러 곳에 놓아 봐요. "Where\'s my pencil case?"로 묻고, 짝은 next to·behind·in front of로 알려 줘요.', exampleEn: 'My pencil case is next to the bag.', exampleKo: '내 필통은 가방 옆에 있어.' },
+    sources: ['own'],
+  },
+  {
+    id: 'g-int-07', courseId: 'intermediate', order: 7,
+    titleKo: '어제 있었던 일', goalKo: '어제 있었던 일을 짧게 말할 수 있어요',
+    conceptId: 'past-simple', prereqIds: ['g-easy-06'], status: 'ready', reviewStatus: 'unreviewed',
+    words: [{ en: 'yesterday', ko: '어제' }, { en: 'played', ko: '놀았다' }, { en: 'watched', ko: '봤다' }, { en: 'TV', ko: 'TV' }, { en: 'was', ko: '~이었다, 있었다' }, { en: 'were', ko: '~이었다, 있었다' }, { en: 'home', ko: '집' }, { en: 'did', ko: '했니 (질문에 쓰는 말)' }, { en: "didn't", ko: '안 했어' }],
+    examples: [
+      { en: 'I played with my dog yesterday.', ko: '나는 어제 개랑 놀았어.' },
+      { en: 'Mia watched TV yesterday.', ko: '미아는 어제 TV를 봤어.' },
+      { en: 'I was at home yesterday.', ko: '나는 어제 집에 있었어.' },
+      { en: 'Mia and I were at home yesterday.', ko: '미아와 나는 어제 집에 있었어.' },
+    ],
+    explainKo: [
+      '어제처럼 지난 일을 말할 때는 동작 말 끝에 -ed를 붙여요. (play → played, watch → watched)',
+      'am·is는 was, are는 were로 바꿔요. (I was, Mia was, We were)',
+      'yesterday(어제)를 같이 말하면 지난 일이라는 걸 알기 쉬워요. 이 단원은 -ed 동작 말과 was·were만 배워요.',
+    ],
+    structure: [
+      { s: 'I', v: 'played', rest: 'with my dog yesterday.', ko: '나는 어제 개랑 놀았어 (play + ed)' },
+      { s: 'We', v: 'were', rest: 'at home yesterday.', ko: '우리는 어제 집에 있었어 (are → were, am·is → was)' },
+    ],
+    compare: {
+      aff: { en: 'I played with my dog.', ko: '나는 개랑 놀았어.' },
+      neg: { en: "I didn't play with my dog.", ko: '나는 개랑 안 놀았어.' },
+      q: { en: 'Did you play with your dog?', ko: '너는 개랑 놀았어?' },
+    },
+    errors: [
+      { wrong: 'I play with my dog yesterday.', right: 'I played with my dog yesterday.', whyKo: '어제 일이면 play가 아니라 played를 써요.' },
+      { wrong: 'We was at home yesterday.', right: 'We were at home yesterday.', whyKo: 'We 뒤에는 was가 아니라 were를 써요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '미아는 어제 TV를 봤어요. 알맞은 문장은?', options: ['Mia watched TV yesterday.', 'Mia watch TV yesterday.', 'Mia watching TV yesterday.'], correct: 0, whyKo: '지난 일은 watched예요. → Mia watched TV yesterday.' },
+        { promptKo: '나는 어제 집에 있었어요. 알맞은 문장은?', options: ['I was at home yesterday.', 'I am at home yesterday.', 'I were at home yesterday.'], correct: 0, whyKo: 'I의 지난 말은 was예요. → I was at home yesterday.' },
+        { promptKo: '나는 어제 친구랑 놀았어요. 알맞은 문장은?', options: ['I played with my friend yesterday.', 'I play with my friend yesterday.', 'I playing with my friend yesterday.'], correct: 0, whyKo: '어제 일은 played예요.' },
+      ],
+      blank: [
+        { promptKo: '미아는 어제 TV를 봤어요.', en: 'Mia ___ TV yesterday.', options: ['watched', 'watch', 'watches'], correct: 0, whyKo: '어제 일이라 watched예요. → Mia watched TV yesterday.' },
+        { promptKo: '우리는 어제 집에 있었어요.', en: 'We ___ at home yesterday.', options: ['were', 'was', 'are'], correct: 0, whyKo: 'We의 지난 말은 were예요. → We were at home yesterday.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "나는 어제 개랑 놀았어"를 만들어요.', words: ['I', 'with', 'played', 'my', 'dog', 'yesterday.'], answers: [['I', 'played', 'with', 'my', 'dog', 'yesterday.']], whyKo: 'I played + with my dog + yesterday 순서예요.' },
+        { promptKo: '단어를 놓아 "미아는 어제 집에 있었어"를 만들어요.', words: ['Mia', 'was', 'at', 'home', 'yesterday.'], answers: [['Mia', 'was', 'at', 'home', 'yesterday.']], whyKo: 'Mia was + at home + yesterday 순서예요.' },
+      ],
+      build: [
+        { promptKo: '어제 한 일 하나를 말하거나 써 보세요. (TV를 봤거나 놀았어요)', exampleEn: 'I watched TV yesterday.', exampleKo: '나는 어제 TV를 봤어.', acceptNoteKo: 'I played with my dog yesterday. / Mia watched TV.도 맞아요. 지난 일이면 played·watched처럼 -ed를 붙여요.' },
+        { promptKo: '어제 어디에 있었는지 말하거나 써 보세요.', exampleEn: 'I was at home yesterday.', exampleKo: '나는 어제 집에 있었어.', acceptNoteKo: 'I was at school. / We were at home.도 맞아요. I는 was, We는 were예요.' },
+      ],
+    },
+    use: { kind: 'speaking', promptKo: '짝에게 어제 한 일 하나와 어디에 있었는지 말해요. 짝도 똑같이 해요.', exampleEn: 'I watched TV yesterday. I was at home.', exampleKo: '나는 어제 TV를 봤어. 집에 있었어.' },
+    sources: ['own'],
+  },
+  {
+    id: 'g-int-08', courseId: 'intermediate', order: 8,
+    titleKo: 'Would you like …?', goalKo: '무엇을 원하는지 묻고 권할 수 있어요',
+    conceptId: 'would-you-like-some', prereqIds: ['g-easy-07'], status: 'ready', reviewStatus: 'unreviewed',
+    words: [{ en: 'would', ko: '(정중하게) ~하겠어요?' }, { en: 'some', ko: '조금, 약간' }, { en: 'juice', ko: '주스' }, { en: 'cake', ko: '케이크' }, { en: 'please', ko: '네, 주세요' }, { en: 'thank you', ko: '고마워요' }],
+    examples: [
+      { en: 'Would you like some juice?', ko: '주스 좀 마실래?' },
+      { en: 'Yes, please.', ko: '응, 줘.' },
+      { en: 'No, thank you.', ko: '아니, 괜찮아.' },
+      { en: 'I would like some cake, please.', ko: '케이크 좀 먹고 싶어요.' },
+    ],
+    explainKo: [
+      'Would you like …?는 "…먹을래요?" 하고 정중하게 권하는 말이에요. Do you like …?(…좋아해?)와는 뜻이 달라요.',
+      '먹거나 마실 것 앞에는 some(조금)을 붙여요. (some juice, some cake)',
+      '받고 싶으면 Yes, please. 괜찮으면 No, thank you.라고 해요. 내가 원할 때는 I would like …예요.',
+    ],
+    structure: [
+      { s: 'Would you', v: 'like', rest: 'some juice?', ko: '주스 좀 마실래? (권하는 질문이라 Would가 맨 앞)' },
+      { s: 'I', v: 'would like', rest: 'some cake.', ko: '나는 케이크를 좀 먹고 싶어요 (일반 문장 순서)' },
+    ],
+    compare: {
+      aff: { en: 'Yes, please.', ko: '응, 줘.' },
+      neg: { en: 'No, thank you.', ko: '아니, 괜찮아.' },
+      q: { en: 'Would you like some juice?', ko: '주스 좀 마실래?' },
+    },
+    errors: [
+      { wrong: 'You would like some juice?', right: 'Would you like some juice?', whyKo: '권하는 질문은 Would you로 시작해요. 순서를 바꾸면 질문이 되지 않아요.' },
+      { wrong: 'No, please.', right: 'No, thank you.', whyKo: '받을 때는 Yes, please. 거절할 때는 No, thank you.예요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '친구에게 주스를 권해요. 알맞은 문장은?', options: ['Would you like some juice?', 'You would like some juice?', 'Like you would some juice?'], correct: 0, whyKo: '권하는 질문은 Would you like some …? 순서예요.' },
+        { promptKo: '"Would you like some cake?" 케이크를 먹고 싶어요. 알맞은 대답은?', options: ['Yes, please.', 'No, please.', 'Yes, no.'], correct: 0, whyKo: '받고 싶을 때는 Yes, please.예요.' },
+        { promptKo: '나는 우유를 좀 마시고 싶어요. 알맞은 문장은?', options: ['I would like some milk.', 'I would like milk some.', 'I like would some milk.'], correct: 0, whyKo: 'I would like some + 음료 순서예요.' },
+      ],
+      blank: [
+        { promptKo: '친구에게 케이크를 권해요.', en: 'Would you ___ some cake?', options: ['like', 'likes', 'to'], correct: 0, whyKo: 'Would you 뒤에는 like를 그대로 써요. → Would you like some cake?' },
+        { promptKo: '케이크가 괜찮다고 정중하게 거절해요.', en: 'No, ___ you.', options: ['thank', 'please', 'some'], correct: 0, whyKo: '거절할 때는 No, thank you.예요.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "주스 좀 마실래?"를 만들어요.', words: ['you', 'Would', 'some', 'like', 'juice?'], answers: [['Would', 'you', 'like', 'some', 'juice?']], whyKo: 'Would you like some + 음료 순서예요.' },
+        { promptKo: '단어를 놓아 "나는 우유를 좀 마시고 싶어요"를 만들어요.', words: ['milk.', 'would', 'I', 'like', 'some'], answers: [['I', 'would', 'like', 'some', 'milk.']], whyKo: 'I would like some + 음료 순서예요.' },
+      ],
+      build: [
+        { promptKo: '친구에게 주스를 권해 보세요.', exampleEn: 'Would you like some juice?', exampleKo: '주스 좀 마실래?', acceptNoteKo: 'Would you like some cake? / Would you like some milk?도 맞아요. Would you like some + 먹거나 마실 것이면 돼요.' },
+        { promptKo: '친구가 "Would you like some cake?" 하고 물었어요. 먹고 싶어요. 대답해 보세요.', exampleEn: 'Yes, please.', exampleKo: '응, 줘.', acceptNoteKo: 'Yes, please. I would like some cake. / Yes, please!도 맞아요. 먹고 싶지 않을 때는 No, thank you.라고 해요.' },
+      ],
+    },
+    use: { kind: 'speaking', promptKo: '짝에게 juice·cake·milk·apples 중 하나를 골라 "Would you like some …?"으로 권해요. 짝은 Yes, please. / No, thank you.로 답해요.', exampleEn: 'Would you like some cake?', exampleKo: '케이크 좀 먹을래?' },
+    sources: ['own'],
+  },
+  {
+    id: 'g-adv-01', courseId: 'advanced', order: 1,
+    titleKo: '계획 말하기 going to', goalKo: '앞으로 할 일을 말할 수 있어요',
+    conceptId: 'going-to-plan', prereqIds: ['g-int-05'], status: 'ready', reviewStatus: 'unreviewed',
+    words: [{ en: 'going', ko: '(…할) 예정인' }, { en: 'tomorrow', ko: '내일' }, { en: 'festival', ko: '축제' }, { en: 'sing', ko: '노래하다' }, { en: 'dance', ko: '춤추다' }],
+    examples: [
+      { en: 'I am going to sing tomorrow.', ko: '나는 내일 노래할 거야.' },
+      { en: 'Mia is going to dance at the festival.', ko: '미아는 축제에서 춤출 거야.' },
+      { en: 'We are going to sing at the festival.', ko: '우리는 축제에서 노래할 거야.' },
+    ],
+    explainKo: [
+      'am·is·are + going to + 동작 말은 "…할 거야" 하고 앞으로 할 계획을 말해요.',
+      'I 뒤에는 am, Mia처럼 한 사람 뒤에는 is, We·You 뒤에는 are를 써요.',
+      'going to 뒤의 동작 말(sing, dance)에는 s를 붙이지 않고 그대로 써요.',
+    ],
+    structure: [
+      { s: 'I', v: 'am going to', rest: 'sing tomorrow.', ko: '나는 내일 노래할 거야 (am·is·are + going to + 동작)' },
+      { s: 'Mia', v: 'is going to', rest: 'dance at the festival.', ko: '미아는 축제에서 춤출 거야 (한 사람이라 is)' },
+    ],
+    compare: {
+      aff: { en: 'I am going to sing.', ko: '나는 노래할 거야.' },
+      neg: { en: 'I am not going to sing.', ko: '나는 노래하지 않을 거야.' },
+      q: { en: 'Are you going to sing?', ko: '너는 노래할 거야?' },
+    },
+    errors: [
+      { wrong: 'I going to sing tomorrow.', right: 'I am going to sing tomorrow.', whyKo: 'going 앞에 am·is·are가 꼭 필요해요. I 뒤에는 am이에요.' },
+      { wrong: 'Mia is going to dances.', right: 'Mia is going to dance at the festival.', whyKo: 'going to 뒤의 동작 말에는 s를 붙이지 않아요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '나는 내일 노래할 거예요. 알맞은 문장은?', options: ['I am going to sing tomorrow.', 'I going to sing tomorrow.', 'I am go to sing tomorrow.'], correct: 0, whyKo: 'I am going to + 동작 순서예요.' },
+        { promptKo: '미아는 축제에서 춤출 거예요. 알맞은 문장은?', options: ['Mia is going to dance at the festival.', 'Mia are going to dance at the festival.', 'Mia is going dance at the festival.'], correct: 0, whyKo: '미아 한 사람이라 is, 그리고 going 뒤에 to가 와요.' },
+        { promptKo: '우리는 노래할 거예요. 알맞은 문장은?', options: ['We are going to sing.', 'We is going to sing.', 'We are going to sings.'], correct: 0, whyKo: 'We 뒤에는 are이고 동작 말에는 s가 없어요.' },
+      ],
+      blank: [
+        { promptKo: '나는 내일 노래할 거예요.', en: 'I am ___ to sing tomorrow.', options: ['going', 'go', 'goes'], correct: 0, whyKo: 'am going to로 계획을 말해요.' },
+        { promptKo: '미아는 내일 춤출 거예요.', en: 'Mia ___ going to dance tomorrow.', options: ['is', 'are', 'am'], correct: 0, whyKo: '미아 한 사람이라 is예요.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "나는 내일 춤출 거야"를 만들어요.', words: ['going', 'I', 'am', 'to', 'dance', 'tomorrow.'], answers: [['I', 'am', 'going', 'to', 'dance', 'tomorrow.']], whyKo: 'I am going to + 동작 + tomorrow 순서예요.' },
+        { promptKo: '단어를 놓아 "우리는 축제에서 노래할 거야"를 만들어요.', words: ['at', 'We', 'are', 'to', 'going', 'the', 'sing', 'festival.'], answers: [['We', 'are', 'going', 'to', 'sing', 'at', 'the', 'festival.']], whyKo: 'We are going to + 동작 + 장소 순서예요.' },
+      ],
+      build: [
+        { promptKo: '내일 노래할 계획을 말하거나 써 보세요.', exampleEn: 'I am going to sing tomorrow.', exampleKo: '나는 내일 노래할 거야.', acceptNoteKo: 'I am going to dance tomorrow. 처럼 동작을 바꿔도 맞아요. I am going to + 동작이면 돼요.' },
+        { promptKo: '친구들과 축제에서 춤출 계획을 말해 보세요.', exampleEn: 'We are going to dance at the festival.', exampleKo: '우리는 축제에서 춤출 거야.', acceptNoteKo: 'We are going to sing at the festival. 도 맞아요. We are going to로 시작하면 돼요.' },
+      ],
+    },
+    use: { kind: 'speaking', promptKo: '짝에게 내일이나 축제 때 할 계획 둘을 말해요. 짝은 "Are you going to …?"로 되물어요.', exampleEn: 'I am going to sing at the festival.', exampleKo: '나는 축제에서 노래할 거야.' },
+    sources: ['own'],
+  },
+  {
+    id: 'g-adv-02', courseId: 'advanced', order: 2,
+    titleKo: '비교하기', goalKo: '둘을 비교해서 말할 수 있어요',
+    conceptId: 'comparatives', prereqIds: ['g-int-03'], status: 'ready', reviewStatus: 'unreviewed',
+    words: [{ en: 'bigger', ko: '더 큰' }, { en: 'taller', ko: '키가 더 큰' }, { en: 'than', ko: '…보다' }, { en: 'ball', ko: '공' }, { en: 'box', ko: '상자' }],
+    examples: [
+      { en: 'Paul is taller than Mia.', ko: '폴은 미아보다 키가 커.' },
+      { en: 'My ball is bigger than your ball.', ko: '내 공이 네 공보다 커.' },
+      { en: 'The box is bigger than the ball.', ko: '상자가 공보다 커.' },
+      { en: 'Mia is not taller than Paul.', ko: '미아는 폴보다 키가 크지 않아.' },
+    ],
+    explainKo: [
+      '두 가지를 비교할 때는 tall, big 뒤에 -er을 붙여 taller, bigger로 말해요. "더 …한"이라는 뜻이에요.',
+      '비교하는 대상 앞에는 than을 써요. than은 "…보다"라는 뜻이에요.',
+      'big은 g를 하나 더 써서 bigger가 돼요. (tall은 taller)',
+    ],
+    structure: [
+      { s: 'Paul', v: 'is', rest: 'taller than Mia.', ko: '폴은 미아보다 키가 커 (형용사-er + than)' },
+      { s: 'The box', v: 'is', rest: 'bigger than the ball.', ko: '상자가 공보다 커' },
+    ],
+    compare: {
+      aff: { en: 'Paul is taller than Mia.', ko: '폴은 미아보다 키가 커.' },
+      neg: { en: 'Mia is not taller than Paul.', ko: '미아는 폴보다 키가 크지 않아.' },
+      q: { en: 'Is Paul taller than Mia?', ko: '폴이 미아보다 키가 커?' },
+    },
+    errors: [
+      { wrong: 'Paul is tall than Mia.', right: 'Paul is taller than Mia.', whyKo: '비교할 때는 tall에 -er을 붙여 taller로 써요.' },
+      { wrong: 'The box is bigger the ball.', right: 'The box is bigger than the ball.', whyKo: 'bigger 다음에 than이 있어야 "…보다"가 돼요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '폴이 미아보다 키가 커요. 알맞은 문장은?', options: ['Paul is taller than Mia.', 'Paul is tall than Mia.', 'Paul is taller Mia.'], correct: 0, whyKo: 'taller + than + 비교 대상 순서예요.' },
+        { promptKo: '상자가 공보다 커요. 알맞은 문장은?', options: ['The box is bigger than the ball.', 'The box is biger than the ball.', 'The box is bigger that the ball.'], correct: 0, whyKo: 'big은 g를 하나 더 써서 bigger, 그리고 than이에요.' },
+        { promptKo: '내 공이 네 공보다 커요. 알맞은 문장은?', options: ['My ball is bigger than your ball.', 'My ball is big than your ball.', 'My ball bigger is than your ball.'], correct: 0, whyKo: '…is bigger than … 순서예요.' },
+      ],
+      blank: [
+        { promptKo: '그림에서 미아가 폴보다 키가 더 커요.', en: 'Mia is ___ than Paul.', options: ['taller', 'tall', 'tallest'], correct: 0, whyKo: '둘을 비교하니 -er을 붙여 taller예요.' },
+        { promptKo: '상자가 공보다 커요.', en: 'The box is bigger ___ the ball.', options: ['than', 'that', 'in'], correct: 0, whyKo: '"…보다"는 than이에요.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "폴은 미아보다 키가 커"를 만들어요.', words: ['is', 'Paul', 'than', 'taller', 'Mia.'], answers: [['Paul', 'is', 'taller', 'than', 'Mia.']], whyKo: 'Paul is taller than + 비교 대상 순서예요.' },
+        { promptKo: '단어를 놓아 "상자가 공보다 커"를 만들어요.', words: ['bigger', 'The', 'is', 'than', 'ball.', 'the', 'box'], answers: [['The', 'box', 'is', 'bigger', 'than', 'the', 'ball.']], whyKo: 'The box is bigger than the ball. 순서예요.' },
+      ],
+      build: [
+        { promptKo: '폴과 미아 중 폴이 더 커요. 비교해서 말해 보세요.', exampleEn: 'Paul is taller than Mia.', exampleKo: '폴은 미아보다 키가 커.', acceptNoteKo: 'Mia is not taller than Paul. 도 맞아요. 형용사-er + than을 쓰면 돼요.' },
+        { promptKo: '공과 상자 중 상자가 더 커요. 비교해서 말해 보세요.', exampleEn: 'The box is bigger than the ball.', exampleKo: '상자가 공보다 커.', acceptNoteKo: 'The ball is not bigger than the box. 도 맞아요. bigger than을 쓰면 돼요.' },
+      ],
+    },
+    use: { kind: 'speaking', promptKo: '교실에서 두 가지를 골라 bigger 또는 taller로 비교해요. 짝은 "Is … bigger than …?"로 되물어요.', exampleEn: 'My ball is bigger than your ball.', exampleKo: '내 공이 네 공보다 커.' },
+    sources: ['own'],
+  },
+  {
+    id: 'g-adv-03', courseId: 'advanced', order: 3,
+    titleKo: 'because·so 잇기', goalKo: '이유와 결과를 이어서 말할 수 있어요',
+    conceptId: 'because-so', prereqIds: ['g-int-07'], status: 'ready', reviewStatus: 'unreviewed',
+    words: [{ en: 'because', ko: '…때문에' }, { en: 'so', ko: '그래서' }, { en: 'hungry', ko: '배고픈' }, { en: 'tired', ko: '피곤한' }, { en: 'eat', ko: '먹다' }, { en: 'apple', ko: '사과' }],
+    examples: [
+      { en: 'I am hungry, so I eat an apple.', ko: '나는 배고파서 사과를 먹어.' },
+      { en: 'I eat an apple because I am hungry.', ko: '나는 배고프기 때문에 사과를 먹어.' },
+      { en: 'Mia is tired, so she is not here.', ko: '미아는 피곤해서 여기 없어.' },
+      { en: 'Mia is not here because she is tired.', ko: '미아는 피곤하기 때문에 여기 없어.' },
+    ],
+    explainKo: [
+      'because는 이유를 말해요. 이유 앞에 붙여서 "…하기 때문에"라는 뜻이에요.',
+      'so는 결과를 말해요. 결과 앞에 붙여서 "그래서 …해"라는 뜻이고, so 앞에는 쉼표(,)를 써요.',
+      '같은 뜻을 두 가지로 말할 수 있어요. 결과 because 이유 / 이유, so 결과 순서예요.',
+    ],
+    structure: [
+      { s: 'I', v: 'eat', rest: 'an apple because I am hungry.', ko: '나는 배고프기 때문에 사과를 먹어 (because 뒤에 이유)' },
+      { s: 'Mia', v: 'is', rest: 'tired, so she is not here.', ko: '미아는 피곤해서 여기 없어 (so 뒤에 결과)' },
+    ],
+    errors: [
+      { wrong: 'I am hungry, because I eat an apple.', right: 'I am hungry, so I eat an apple.', whyKo: '결과(사과를 먹어) 앞에는 so를 써요. because는 이유 앞에 써요.' },
+      { wrong: 'I eat an apple so I am hungry.', right: 'I eat an apple because I am hungry.', whyKo: '이유(배고파)는 because 뒤에 와요. 이유와 결과가 바뀌면 뜻이 이상해져요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '배고파서 사과를 먹어요. so로 말해요. 알맞은 문장은?', options: ['I am hungry, so I eat an apple.', 'I am hungry, because I eat an apple.', 'I am hungry so because I eat an apple.'], correct: 0, whyKo: '결과 앞에는 so예요.' },
+        { promptKo: '배고프기 때문에 사과를 먹어요. because로 말해요. 알맞은 문장은?', options: ['I eat an apple because I am hungry.', 'I eat an apple so I am hungry.', 'I eat an apple because hungry.'], correct: 0, whyKo: 'because 뒤에는 이유 문장(I am hungry)이 와요.' },
+        { promptKo: '미아는 피곤해서 여기 없어요. 알맞은 문장은?', options: ['Mia is tired, so she is not here.', 'Mia is tired, because she is not here.', 'Mia is tired, so she not is here.'], correct: 0, whyKo: '피곤한 것이 이유이고 없는 것이 결과라 so로 이어요.' },
+      ],
+      blank: [
+        { promptKo: '피곤해서(이유) 여기 없어요(결과).', en: 'Mia is tired, ___ she is not here.', options: ['so', 'because', 'to'], correct: 0, whyKo: '결과 앞에는 so예요.' },
+        { promptKo: '배고프기 때문에 사과를 먹어요.', en: 'I eat an apple ___ I am hungry.', options: ['because', 'so', 'or'], correct: 0, whyKo: '이유 앞에는 because예요.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "미아는 피곤해서 여기 없어"를 만들어요.', words: ['so', 'Mia', 'is', 'not', 'tired,', 'she', 'is', 'here.'], answers: [['Mia', 'is', 'tired,', 'so', 'she', 'is', 'not', 'here.']], whyKo: '이유, so 결과 순서예요.' },
+        { promptKo: '단어를 놓아 "나는 배고프기 때문에 사과를 먹어"를 만들어요.', words: ['because', 'I', 'eat', 'I', 'an', 'am', 'apple', 'hungry.'], answers: [['I', 'eat', 'an', 'apple', 'because', 'I', 'am', 'hungry.']], whyKo: '결과 because 이유 순서예요.' },
+      ],
+      build: [
+        { promptKo: '배가 고파서 사과를 먹어요. because를 써서 말하거나 써 보세요.', exampleEn: 'I eat an apple because I am hungry.', exampleKo: '나는 배고프기 때문에 사과를 먹어.', acceptNoteKo: 'Because I am hungry, I eat an apple. / I am hungry, so I eat an apple.도 맞아요. 이유와 결과가 맞으면 돼요.' },
+        { promptKo: '미아가 피곤해서 여기 없어요. so를 써서 말하거나 써 보세요.', exampleEn: 'Mia is tired, so she is not here.', exampleKo: '미아는 피곤해서 여기 없어.', acceptNoteKo: 'Mia is not here because she is tired.도 맞아요. so 앞에는 이유, because 뒤에도 이유가 와요.' },
+      ],
+    },
+    use: { kind: 'speaking', promptKo: '짝에게 because 문장 하나와 so 문장 하나를 말해요. 배고픈 일, 피곤한 일을 떠올려 봐요.', exampleEn: 'Mia is not here because she is tired.', exampleKo: '미아는 피곤하기 때문에 여기 없어.' },
+    sources: ['own'],
+  },
+  {
+    id: 'g-adv-04', courseId: 'advanced', order: 4,
+    titleKo: 'when·if 잇기', goalKo: '때와 조건을 이어서 말할 수 있어요',
+    conceptId: 'when-if-clause', prereqIds: ['g-adv-03'], status: 'ready', reviewStatus: 'unreviewed',
+    examples: [
+      { en: 'When it rains, I stay home.', ko: '비가 올 때, 나는 집에 있어.' },
+      { en: 'If you are tired, you can sleep.', ko: '피곤하면 잘 수 있어.' },
+      { en: 'When I am hungry, I eat.', ko: '배고플 때, 나는 먹어.' },
+      { en: 'I play ball if it is sunny.', ko: '날이 맑으면 나는 공놀이를 해.' },
+    ],
+    explainKo: [
+      'When과 If는 두 문장을 이어 주는 말이에요. When은 "…할 때", If는 "…하면(만약)"이라는 뜻이에요.',
+      'When·If가 들어간 부분이 앞에 오면 그 뒤에 쉼표(,)를 찍어요. When it rains, I stay home.',
+      '뒤에 오면 쉼표 없이 이어 써요. I play ball if it is sunny. 뜻은 같아요.',
+    ],
+    structure: [
+      { s: 'When it', v: 'rains,', rest: 'I stay home.', ko: '비가 올 때, 나는 집에 있어 (When 부분이 앞이면 쉼표)' },
+      { s: 'I play ball', v: 'if', rest: 'it is sunny.', ko: '날이 맑으면 나는 공놀이를 해 (If 부분이 뒤면 쉼표 없음)' },
+    ],
+    errors: [
+      { wrong: 'When it is rains, I stay home.', right: 'When it rains, I stay home.', whyKo: 'rains 자체가 "비가 온다"는 뜻이라 is를 더 넣지 않아요.' },
+      { wrong: 'If you tired, you can sleep.', right: 'If you are tired, you can sleep.', whyKo: 'tired(피곤한) 앞에는 are가 필요해요. You 뒤에는 are예요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '"비가 올 때, 나는 집에 있어요." 알맞은 문장은?', options: ['When it rains, I stay home.', 'When it is rains, I stay home.', 'It rains when, I stay home.'], correct: 0, whyKo: 'When + 때를 말하는 부분, 그 뒤에 쉼표와 하는 일 순서예요.' },
+        { promptKo: '"배고플 때, 나는 먹어요." 알맞은 문장은?', options: ['When I am hungry, I eat.', 'When I hungry, I eat.', 'When I am hungry, I am eat.'], correct: 0, whyKo: 'hungry 앞에 am이 필요하고, eat 앞에는 am을 넣지 않아요.' },
+        { promptKo: '"날이 맑으면 나는 공놀이를 해요." 알맞은 문장은?', options: ['I play ball if it is sunny.', 'I play ball if is sunny it.', 'I play ball if it sunny.'], correct: 0, whyKo: 'if 뒤에도 it is sunny 순서를 그대로 써요.' },
+      ],
+      blank: [
+        { promptKo: '"만약 피곤하면, 잘 수 있어요."', en: '___ you are tired, you can sleep.', options: ['If', 'Are', 'Not'], correct: 0, whyKo: '"…하면(만약)"은 If예요. → If you are tired, you can sleep.' },
+        { promptKo: '"비가 올 때, 나는 집에 있어요."', en: 'When it ___, I stay home.', options: ['rains', 'is rains', 'raining'], correct: 0, whyKo: 'When it 뒤에는 rains만 써요. → When it rains, I stay home.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "비가 올 때, 나는 집에 있어"를 만들어요. (쉼표는 rains, 안에 있어요)', words: ['rains,', 'it', 'I', 'home.', 'stay', 'When'], answers: [['When', 'it', 'rains,', 'I', 'stay', 'home.']], whyKo: 'When it rains, 다음에 I stay home. 순서예요.' },
+        { promptKo: '단어를 놓아 "날이 맑으면 나는 공놀이를 해"를 만들어요.', words: ['if', 'sunny.', 'I', 'it', 'ball', 'is', 'play'], answers: [['I', 'play', 'ball', 'if', 'it', 'is', 'sunny.']], whyKo: '하는 일을 먼저 말하고 if 부분을 뒤에 붙여요. 이때는 쉼표가 없어요.' },
+      ],
+      build: [
+        { promptKo: '비 오는 날 내가 하는 일을 When으로 말하거나 써 보세요.', exampleEn: 'When it rains, I stay home.', exampleKo: '비가 올 때, 나는 집에 있어.', acceptNoteKo: 'When it rains, I read a book. / I stay home when it rains.도 맞아요. When으로 때를 말하고 하는 일을 이으면 돼요. When 부분이 앞이면 쉼표를 찍어요.' },
+        { promptKo: '날이 맑을 때 하고 싶은 일을 If로 말하거나 써 보세요.', exampleEn: 'If it is sunny, I play ball.', exampleKo: '날이 맑으면 나는 공놀이를 해.', acceptNoteKo: 'I play ball if it is sunny. / If it is sunny, I can swim.도 맞아요. If로 조건을 말하고 하는 일을 이으면 돼요.' },
+      ],
+    },
+    use: { kind: 'speaking', promptKo: '짝에게 "When I am …, I …" 문장 하나와 "If you are …, you can …" 문장 하나를 말해요.', exampleEn: 'When I am hungry, I eat.', exampleKo: '배고플 때, 나는 먹어.' },
+    words: [{ en: 'when', ko: '…할 때' }, { en: 'if', ko: '만약 …하면' }, { en: 'rains', ko: '비가 온다' }, { en: 'stay', ko: '머물다' }, { en: 'home', ko: '집' }, { en: 'tired', ko: '피곤한' }, { en: 'sleep', ko: '자다' }, { en: 'hungry', ko: '배고픈' }, { en: 'eat', ko: '먹다' }, { en: 'play', ko: '(놀이를) 하다' }, { en: 'ball', ko: '공' }, { en: 'sunny', ko: '맑은' }],
+    sources: ['own'],
+  },
+  {
+    id: 'g-adv-05', courseId: 'advanced', order: 5,
+    titleKo: 'should·have to', goalKo: '해야 하는 일과 하면 좋은 일을 말할 수 있어요',
+    conceptId: 'should-have-to', prereqIds: ['g-easy-04'], status: 'ready', reviewStatus: 'unreviewed',
+    examples: [
+      { en: 'I have to do my homework.', ko: '나는 숙제를 해야 해.' },
+      { en: 'You should brush your teeth.', ko: '너는 이를 닦는 게 좋아.' },
+      { en: 'We have to read a book.', ko: '우리는 책을 읽어야 해.' },
+      { en: "You shouldn't run in class.", ko: '교실에서 뛰면 안 돼.' },
+    ],
+    explainKo: [
+      'have to는 "꼭 …해야 한다"는 뜻이에요. 해야 하는 일을 말해요. have to는 한 덩어리로 써요.',
+      'should는 "…하는 게 좋다"는 뜻이에요. 조언할 때 써요. can처럼 뒤에 동작 말을 그대로 써요.',
+      "하지 않는 게 좋을 때는 shouldn't(= should not)를 써요.",
+    ],
+    structure: [
+      { s: 'I', v: 'have to', rest: 'do my homework.', ko: '나는 숙제를 해야 해 (꼭 해야 하는 일)' },
+      { s: 'You', v: 'should', rest: 'brush your teeth.', ko: '너는 이를 닦는 게 좋아 (조언)' },
+    ],
+    compare: {
+      aff: { en: 'You should read a book.', ko: '너는 책을 읽는 게 좋아.' },
+      neg: { en: "You shouldn't read a book.", ko: '너는 책을 읽지 않는 게 좋아.' },
+      q: { en: 'Should I read a book?', ko: '나 책을 읽는 게 좋을까?' },
+    },
+    errors: [
+      { wrong: 'You should to brush your teeth.', right: 'You should brush your teeth.', whyKo: 'should 바로 뒤에는 to 없이 동작 말을 써요. can과 같아요.' },
+      { wrong: 'I have do my homework.', right: 'I have to do my homework.', whyKo: '"해야 한다"는 have to예요. to까지 붙여서 써요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '"나는 숙제를 해야 해요." 알맞은 문장은?', options: ['I have to do my homework.', 'I have do my homework.', 'I should to do my homework.'], correct: 0, whyKo: '해야 하는 일은 have to + 동작이에요.' },
+        { promptKo: '"너는 이를 닦는 게 좋아." 알맞은 문장은?', options: ['You should brush your teeth.', 'You should to brush your teeth.', 'You brush should your teeth.'], correct: 0, whyKo: 'should 바로 뒤에 동작 말이 와요.' },
+        { promptKo: '"교실에서 뛰면 안 돼." 알맞은 문장은?', options: ["You shouldn't run in class.", "You shouldn't to run in class.", 'You no should run in class.'], correct: 0, whyKo: "하지 않는 게 좋을 때는 shouldn't + 동작이에요." },
+      ],
+      blank: [
+        { promptKo: '꼭 해야 하는 일이에요. "나는 숙제를 해야 해요."', en: 'I ___ to do my homework.', options: ['have', 'should', 'can'], correct: 0, whyKo: 'have to가 한 덩어리예요. → I have to do my homework.' },
+        { promptKo: '이를 닦으라고 조언해요.', en: 'You ___ brush your teeth.', options: ['should', 'to', 'are'], correct: 0, whyKo: '"…하는 게 좋다"는 should예요. → You should brush your teeth.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "나는 숙제를 해야 해"를 만들어요.', words: ['do', 'homework.', 'have', 'my', 'I', 'to'], answers: [['I', 'have', 'to', 'do', 'my', 'homework.']], whyKo: 'I have to + 동작 + 물건 순서예요.' },
+        { promptKo: '단어를 놓아 "교실에서 뛰면 안 돼"를 만들어요.', words: ["shouldn't", 'You', 'in', 'run', 'class.'], answers: [['You', "shouldn't", 'run', 'in', 'class.']], whyKo: "You shouldn't + 동작 + 장소 순서예요." },
+      ],
+      build: [
+        { promptKo: '오늘 꼭 해야 하는 일 하나를 have to로 말하거나 써 보세요.', exampleEn: 'I have to do my homework.', exampleKo: '나는 숙제를 해야 해.', acceptNoteKo: 'We have to read a book. / I have to sleep.도 맞아요. have to + 동작이면 돼요.' },
+        { promptKo: '친구가 이를 안 닦았어요. should로 조언해 보세요.', exampleEn: 'You should brush your teeth.', exampleKo: '너는 이를 닦는 게 좋아.', acceptNoteKo: 'You should sleep. / You should read a book.처럼 should + 동작이면 모두 맞아요. shouldn\'t로 말려도 돼요.' },
+      ],
+    },
+    use: { kind: 'speaking', promptKo: '짝에게 해야 하는 일 하나(have to)와 조언 하나(should)를 말해요.', exampleEn: 'I have to do my homework. You should sleep.', exampleKo: '나는 숙제를 해야 해. 너는 자는 게 좋아.' },
+    words: [{ en: 'should', ko: '…하는 게 좋다' }, { en: "shouldn't", ko: '…하지 않는 게 좋다' }, { en: 'have', ko: '가지고 있다' }, { en: 'homework', ko: '숙제' }, { en: 'brush', ko: '닦다' }, { en: 'teeth', ko: '이, 치아' }, { en: 'class', ko: '교실, 수업' }, { en: 'sleep', ko: '자다' }, { en: 'run', ko: '달리다' }, { en: 'read', ko: '읽다' }, { en: 'book', ko: '책' }],
+    sources: ['own'],
+  },
+  {
+    id: 'g-adv-06', courseId: 'advanced', order: 6,
+    titleKo: '해 본 적 있어요', goalKo: '해 본 경험을 말할 수 있어요',
+    conceptId: 'present-perfect-experience', prereqIds: ['g-int-07'], status: 'ready', reviewStatus: 'unreviewed',
+    examples: [
+      { en: 'Have you ever been to the zoo?', ko: '너는 동물원에 가 본 적 있어?' },
+      { en: 'Yes, I have. I have visited the zoo.', ko: '응, 있어. 동물원에 가 봤어.' },
+      { en: 'I have played with a dog.', ko: '나는 개와 놀아 본 적 있어.' },
+      { en: 'Have you ever played ball?', ko: '너는 공놀이를 해 본 적 있어?' },
+    ],
+    explainKo: [
+      'Have you ever …?는 "…해 본 적 있어?" 하고 경험을 묻는 말이에요.',
+      '"해 본 적 있다"는 I have + 동작의 -ed 모양이에요. play는 played, visit는 visited로 바꿔요.',
+      '대답은 Yes, I have. / No, I have not.으로 짧게 해요. "가 본 적"은 I have been to …예요.',
+    ],
+    structure: [
+      { s: 'I', v: 'have played', rest: 'with a dog.', ko: '나는 개와 놀아 본 적 있어 (have + played)' },
+      { s: 'Have you ever', v: 'been', rest: 'to the zoo?', ko: '너는 동물원에 가 본 적 있어? (질문이라 Have가 맨 앞에 와요)' },
+    ],
+    compare: {
+      aff: { en: 'I have been to the zoo.', ko: '나는 동물원에 가 본 적 있어.' },
+      neg: { en: 'I have not been to the zoo.', ko: '나는 동물원에 가 본 적 없어.' },
+      q: { en: 'Have you ever been to the zoo?', ko: '너는 동물원에 가 본 적 있어?' },
+    },
+    errors: [
+      { wrong: 'I have play with a dog.', right: 'I have played with a dog.', whyKo: 'have 뒤에는 동작 말에 -ed를 붙인 모양(played)을 써요.' },
+      { wrong: 'Do you ever been to the zoo?', right: 'Have you ever been to the zoo?', whyKo: '경험을 물을 때는 Do가 아니라 Have you ever로 시작해요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '동물원에 가 본 적 있는지 물어요. 알맞은 문장은?', options: ['Have you ever been to the zoo?', 'Do you ever been to the zoo?', 'Have you ever be to the zoo?'], correct: 0, whyKo: 'Have you ever + been to + 장소 순서예요.' },
+        { promptKo: '"나는 개와 놀아 본 적 있어요." 알맞은 문장은?', options: ['I have played with a dog.', 'I have play with a dog.', 'I played have with a dog.'], correct: 0, whyKo: 'I have + played 순서예요.' },
+        { promptKo: '"Have you ever played ball?" 해 본 적이 없어요. 알맞은 짧은 대답은?', options: ['No, I have not.', 'No, I do not.', 'No, I am not.'], correct: 0, whyKo: 'Have로 물었으니 No, I have not.으로 대답해요.' },
+      ],
+      blank: [
+        { promptKo: '"나는 동물원에 가 본 적 있어요."', en: 'I have ___ to the zoo.', options: ['been', 'be', 'was'], correct: 0, whyKo: '"가 본 적"은 have been to예요. → I have been to the zoo.' },
+        { promptKo: '"나는 개와 놀아 본 적 있어요."', en: 'I have ___ with a dog.', options: ['played', 'play', 'playing'], correct: 0, whyKo: 'have 뒤에는 -ed 모양이에요. → I have played with a dog.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "너는 동물원에 가 본 적 있어?"를 만들어요.', words: ['you', 'zoo?', 'Have', 'to', 'been', 'the', 'ever'], answers: [['Have', 'you', 'ever', 'been', 'to', 'the', 'zoo?']], whyKo: 'Have you ever + been to + 장소 순서예요.' },
+        { promptKo: '단어를 놓아 "나는 동물원에 가 봤어"를 만들어요.', words: ['the', 'visited', 'I', 'zoo.', 'have'], answers: [['I', 'have', 'visited', 'the', 'zoo.']], whyKo: 'I have + visited + 장소 순서예요.' },
+      ],
+      build: [
+        { promptKo: '짝이 공놀이를 해 본 적 있는지 Have you ever로 물어 보세요.', exampleEn: 'Have you ever played ball?', exampleKo: '너는 공놀이를 해 본 적 있어?', acceptNoteKo: 'Have you ever been to the zoo? / Have you ever visited the zoo?도 맞아요. Have you ever로 시작하고 been이나 -ed 모양을 쓰면 돼요.' },
+        { promptKo: '개와 놀아 본 적이 있어요. I have로 말하거나 써 보세요.', exampleEn: 'I have played with a dog.', exampleKo: '나는 개와 놀아 본 적 있어.', acceptNoteKo: "I have played ball. / I've played with a dog.도 맞아요. I have + -ed 모양이면 돼요." },
+      ],
+    },
+    use: { kind: 'speaking', promptKo: '짝에게 "Have you ever …?" 질문을 두 번 해요. 짝은 Yes, I have. / No, I have not.으로 답해요.', exampleEn: 'Have you ever played ball?', exampleKo: '너는 공놀이를 해 본 적 있어?' },
+    words: [{ en: 'ever', ko: '(지금까지) 한 번이라도' }, { en: 'have', ko: '가지고 있다' }, { en: 'been', ko: '(…에) 가 본' }, { en: 'visited', ko: '방문했다' }, { en: 'played', ko: '놀았다, 했다' }, { en: 'zoo', ko: '동물원' }, { en: 'dog', ko: '개' }, { en: 'ball', ko: '공' }],
+    sources: ['own'],
+  },
 ]
 
 const OUTLINE_UNITS = [
   // Easy 8개는 모두 READY_UNITS
   // Intermediate (ready g-int-01 + 아래 7 = 8)
-  P('g-int-02', 'intermediate', 2, '엄마는 …해요', '가족이나 친구가 하는 일을 말할 수 있어요', 'third-person-s', ['g-easy-06']),
-  P('g-int-03', 'intermediate', 3, '무엇을 좋아해?', 'What으로 묻고 What about you?로 되물을 수 있어요', 'wh-question-what', ['g-easy-07', 'g-int-01']),
-  P('g-int-04', 'intermediate', 4, 'Can you …? 묻기', '할 수 있는지 묻고 짧게 답할 수 있어요', 'can-question-short-answer', ['g-easy-04', 'g-int-01']),
-  P('g-int-05', 'intermediate', 5, '지금 …하고 있어요', '지금 하는 일을 말할 수 있어요', 'present-continuous', ['g-easy-06']),
-  P('g-int-06', 'intermediate', 6, '위치 말 늘리기', 'next to·behind로 위치를 더 자세히 말할 수 있어요', 'prepositions-place-more', ['g-easy-02']),
-  P('g-int-07', 'intermediate', 7, '어제 있었던 일', '어제 있었던 일을 짧게 말할 수 있어요', 'past-simple', ['g-easy-06']),
-  P('g-int-08', 'intermediate', 8, 'Would you like …?', '무엇을 원하는지 묻고 권할 수 있어요', 'would-you-like-some', ['g-easy-07']),
   // Advanced (6)
-  P('g-adv-01', 'advanced', 1, '계획 말하기 going to', '앞으로 할 일을 말할 수 있어요', 'going-to-plan', ['g-int-05']),
-  P('g-adv-02', 'advanced', 2, '비교하기', '둘을 비교해서 말할 수 있어요', 'comparatives', ['g-int-03']),
-  P('g-adv-03', 'advanced', 3, 'because·so 잇기', '이유와 결과를 이어서 말할 수 있어요', 'because-so', ['g-int-07']),
-  P('g-adv-04', 'advanced', 4, 'when·if 잇기', '때와 조건을 이어서 말할 수 있어요', 'when-if-clause', ['g-adv-03']),
-  P('g-adv-05', 'advanced', 5, 'should·have to', '해야 하는 일과 하면 좋은 일을 말할 수 있어요', 'should-have-to', ['g-easy-04']),
-  P('g-adv-06', 'advanced', 6, '해 본 적 있어요', '해 본 경험을 말할 수 있어요', 'present-perfect-experience', ['g-int-07']),
   // Middle School (6) — basicsUnitId = 먼저 볼 Easy/Intermediate 기초 단원
   P('g-mid-01', 'middleSchool', 1, '시제 정리', '현재·과거·미래를 구분해 쓸 수 있어요', 'tense-system', [], { basicsUnitId: 'g-int-07' }),
   P('g-mid-02', 'middleSchool', 2, '조동사 can·may·must', '허락·의무를 나타내는 말을 쓸 수 있어요', 'modal-verbs', ['g-mid-01'], { basicsUnitId: 'g-easy-04' }),
