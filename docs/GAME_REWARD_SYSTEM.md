@@ -225,3 +225,24 @@ weeklyReport/student-analytics 경로(실데이터만, 반응 지어내기 금�
   목표에 가까울수록 노력 증가 효과.
 - **Loss aversion 완화**: streak freeze+best 보존 — 상실 공포로 몰지 않고
   회복 서사(Comeback 밀스톤이 이미 존재)를 준다.
+
+## 2026-10-10 (235차) 모자 이미지
+
+Paul 로고 모자 PNG 8장을 수집 모자 8종(`src/utils/attachment/hatSystem.js`
+HAT_CATALOG)에 색 일치로 대응했다. 이 8종은 업적으로 각각 해금되는
+수집품이며 순차 승급 체인이 아니다. XP 랭크 5(새싹모자~왕관모자)와 모자
+크기 5단계는 별개 축이고 이번에 그림을 입히지 않았다. id·해금 기준·장착
+로직·XP·랭크는 무변경. 이전에는 🎩 이모지에 색만 입혔으며 이미지가 없으면
+지금도 그 폴백을 쓴다. 파일은 `src/assets/hats/`(256×256 투명 PNG,
+`index.js`가 id → 이미지 대응 제공). 남색/주황 대응은 운영자 확인 대기.
+
+| 모자 id | 색 | 파일 | 해금 조건 | 이름 |
+|---|---|---|---|---|
+| `hat_rose` | 분홍 | `paul-hat-pink.png` | 주 5일 학습 | 기존 유지 |
+| `hat_graduation` | 빨강 | `paul-hat-red.png` | 유닛 1 완료 | 기존 유지 |
+| `hat_chef` | 초록 | `paul-hat-green.png` | 7일 연속 | 기존 유지 |
+| `hat_explorer` | 파랑 | `paul-hat-blue.png` | 단어 10 | 기존 유지 |
+| `hat_wizard` | 보라 | `paul-hat-purple.png` | 숙달 30 | 기존 유지 |
+| `hat_crown` | 금색 | `paul-hat-gold.png` | 단어 200 | 기존 유지 |
+| `hat_starter` | 남색 | `paul-hat-navy.png` | 첫 미션 | 남색 폴 모자(기존 '검은색 폴 모자') |
+| `hat_scientist` | 주황 | `paul-hat-orange.png` | 퀴즈 100 | 주황색 폴 모자(기존 '하얀색 폴 모자') |

@@ -7,6 +7,7 @@ _231차 갱신: 2026-10-09 (231차 — **Grammar 통합(최소 범위·가정 �
 _232차 갱신: 2026-10-09 (232차 — **문법 초·중급 분리 + 레벨별 문제 모아 풀기 + 추가 문항 9**. 운영자 요구 수신("쓰기 말하기 처럼 문법도 초중급 나눠서 문제 풀 수 있게 만들어줘"). `PERFORMANCE_LEVELS`에 `grammarKo`, Unit `performance.grammar`(Unit 1·2 기초 / Unit 3 발전), `grammarSetForBlock`, 선택기 '모아 풀기' → GrammarSetScreen(점수·기록 없음). 문항 +9(Unit당 3, 교사 검수 전): 기초 12·발전 6. 정적 PASS, 더미 env 빌드 경고 0, 브라우저 mock `[unit]` 227/0·`[student-home]` 223/0/1 SKIP·`[writing]` 83/0·`[speaking]` 608/0. 코드 `5b25a091`. PR #62 Draft·QA 전용. 아래 232차 섹션 참고.)_
 _233차 갱신: 2026-10-10 (233차 — **Grammar 커리큘럼 재구성: 5 과정(Easy·Intermediate·Advanced 숙련도 + Middle·High School 학교 문법) → 단원 목록·학습 목표 → 9단계 ESL 단원 → 연습 4유형(선택·빈칸·순서·만들기)·오답 피드백·다시 풀기**. 기존 시범 Unit 문형 문항 재사용, ready 3단원(g-easy-01·02, g-int-01)·준비 중 31, 학교 문법은 '학년·교육과정 대응 미확인' 표시. 코드 `577a00a0`. 정적 PASS, 더미 env 빌드 경고 0, mock `[writing]` 83/0·`[speaking]` 608/0·`[speaking-exam]` 216/0·`[unit]` 141/0·`[student-home]` 223/0/1 SKIP, 신규 `[grammar]` 124/0. 전부 교사 검수 대기. PR #62 Draft·QA 전용. 아래 233차 섹션 참고.)_
 _234차 갱신: 2026-10-10 (234차 — **Grammar Easy 03~08 콘텐츠 구현(검수 전) + 검수 상태 분리 + 어휘 규칙**. Easy 8/8 콘텐츠 구현 완료, 교사 검수 완료 0, Intermediate 1, 미제작 25(Intermediate 7·Advanced 6·Middle 6·High 6) — **커리큘럼 전체 완료 아님**. 코드 `d2842265`. 정적 PASS, 더미 env 빌드 경고 0, `[grammar]` 238/0, `[student-home]` 223/0/1 SKIP. 클릭 경로: 홈 [📘 문법 과정] → Easy (ready 8/8 · 검수 0) → 3. 나는 …이야 am·is·are …. PR #62 Draft·QA 전용. 아래 234차 섹션 참고.)_
+_235차 갱신: 2026-10-10 (235차 — **Paul 로고 모자 PNG 8장을 기존 수집 모자 8종(`hatSystem.js` HAT_CATALOG)에 색 대응으로 적용** + HatCollection 장착 버튼 44px 수정 + 모자 이름 2건 정정. 앱에 "8단계 모자"는 없고 세 축(XP 랭크 5·크기 5단계·수집 모자 8종)이 따로 있어 수집 모자 8종에 대응(리드 판단, **운영자 확인 필요: 남색/주황 대응, 승급 체인 아님**). 점수·승급 규칙·해금·XP 무변경. 커밋 `da4f2d66`·`e4e622d9`·`a97074ef`, 이름 커밋 `f5156fa8`. 신규 `[hats]` 67/0 + 회귀 PASS. Preview 실화면(SSO)·실기기 미확인. PR #62 Draft·QA 전용. 아래 235차 섹션 참고.)_
 _226차 갱신: 2026-10-08 (226차 — **A안**: 보류 결함 2건 수정(Unit에서 들어온 쓰기는 비교 뒤 '← 이 단원으로' 복귀, 독립 Writing 흐름 유지 / Unit 청크 로드 실패 시 빈 화면 대신 안내·🔄 새로고침·← 홈) + 두 Unit 교사용 콘텐츠 검수표(기본 "미검수") + ROADMAP 통합 과정 섹션(완료/다음/보류). 정적 PASS; 브라우저 e2e(RAM ≥3GB 재개) `[unit]` 99/0(1차 90/2는 환경·설계 순서 — 기존 stale-chunk 자동 새로고침이 먼저 동작·브라우저 모듈 캐시 — 로 분류, 안내 문구·새로고침 버튼 보완), `[writing]` 63/0, `[student-home]` 218/0/1 SKIP. PR #62 Draft·QA 전용. 아래 226차 섹션 참고.)_
 _225차 갱신: 2026-10-08 (225차 — **첫 Unit 독립 검수 → 결함 6건·콘텐츠 4건 수정 + 두 번째 통합 Unit "잃어버린 물건 위치 묻기"(정보 묻기, Where's my bag? / It's under the chair.) + Unit 간·계정 간 격리**. Unit 선택 목록, Unit 안 말하기 3단계(따라 하기 → 물건 바꾸기 → 모범 없이 묻고 답하기, 답 확인 전 영어·음성 미마운트), inline 쓰기 문항. 정적 핀 7종·빌드 PASS. 브라우저 e2e는 05~06시 RAM <3GB로 보류 → **12:52 재개(RAM 4.1GB) 5스펙 완료**: unit 88/0(1차 80/6 → 제품 결함 1건 = 목록에서 다른 Unit을 열면 복귀 기록이 새어 그 Unit 쓰기가 완료로 찍힘 → 수정; 스펙 2건; 흔들림 3건 재실행 미재현 → 대기 추가), student-home 218/0/1 SKIP, speaking 540/0, speaking-exam 216/0, writing 63/0(1차 1 FAIL = 주제 수 계약 드리프트). 참고문헌 7건 확인표(§9), 교사 가이드 2종, 파닉스 스펙(콘텐츠 없음). PR #62 Draft·QA 전용. 아래 225차 섹션 참고.)_
 _224차 갱신: 2026-10-08 (224차 — **통합 과정 구현 1차**: 운영자 설계안 v1 기준 공통 데이터 구조(과정·블록·지원 단계·기록 플래그·Unit 계약)와 회화 C1 시범 Unit "교실에서 물건 빌리기"(어휘·듣기·읽기·문형·복습 신규 활동 + 기존 말하기·쓰기 연결, QA 홈 [오늘의 학습]). 기기 임시 기록(completed/selfChecked만). e2e unit 54/0 + 회귀 4종 PASS. 전체 과정·파닉스·교사 화면은 설계만. PR #62 Draft. 아래 224차 섹션 참고.)_
@@ -45,6 +46,46 @@ _192차 갱신: 2026-09-29 (192차 — **PR #62 야간 감사: 로컬 7커밋 �
 _190차 갱신: 2026-09-28 (190차 — **Phase C: 구매한 벤치를 마을의 허용 위치(고정 슬롯 3개)에 1회 배치, 배치물은 이동 장애물(PR #62)**. 로컬 state만, 새로고침 시 초기화. 공용 E2E mock의 REST 쓰기 기록 누락 수정(공허하던 쓰기 단언 4곳 실검증화). verify:e2e 2158/2158, verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 190차 섹션 참고.)_
 _189차 갱신: 2026-09-28 (189차 — **경제 단계 B 실기기 결함 수정: 가게를 닫았다 다시 열면 재구매·재차감되던 문제(PR #62)**. 구매 목록을 부모로 올리고 재구매 차단, E2E S22 추가. verify:e2e 2102/2102(S22 4뷰포트 40건 PASS), verify:all ALL DOMAINS PASS. DB·RPC·Supabase·Production 쓰기 0. 아래 189차 섹션 참고.)_
 _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1개를 Paul Dollar로 구매(화면 상태만 차감, PR #62)**: 기존 가게 오버레이 재사용, Bench $5 1개, 확인창, 성공 시 차감·"구매 완료!", 부족 시 "Paul Dollar가 부족해요", 중복 탭 1회 차감, 닫은 뒤 이동·카메라 복구, 플래그 false 회귀. DB·RPC·Supabase·Production 쓰기 0. verify:e2e 2062/2062, verify:all ALL DOMAINS PASS. 코드리뷰 APPROVE, QA PASS. 아래 188차 섹션 참고.)_
+
+## 2026-10-10 (235차) — Paul 로고 모자 PNG 8장 적용(수집 모자 8종 색 대응) + 44px 버튼 수정 + 이름 2건 정정 (03:00~03:45)
+
+운영자 지시: 첨부한 Paul 로고 모자 PNG 8장을 기존 학생 모자 시스템에 적용한다. 먼저 단계 수·기준값·이미지 대응·위치를 확인하고, 8장은 투명 배경·균일한 크기와 여백의 별도 에셋으로 등록한다. 단계가 8이 아니면 기준값을 바꾸지 말고 대응안을 보고한다. 현재 모자를 보여 주고 승급 시 바꾼다. 기존 위치를 재사용하고 Paul 얼굴 작업은 하지 않는다. 파일명은 `paul-hat-<color>.png`, 원본 유지·앱용은 최적화. 현재 단계 표시·승급 경계·새로고침 유지·PC/모바일 잘림·밝은/어두운 배경 투명도를 검증한다. 점수·승급 규칙은 유지한다. 범위는 PR #62뿐, merge·운영 배포 없음. 기준: PR #62 원격 `caa257ba`.
+
+**조사 결과: "8단계 모자"는 하나가 아니라 세 축이다**
+- A) XP 랭크 5(새싹모자/비니/탐험모자/마법모자/왕관모자): `hatColor`는 hex 문자열뿐이고 모자 그림이 없다.
+- B) 모자 크기 5단계: 배율만 바꾼다.
+- C) 수집 모자 8종(`src/utils/attachment/hatSystem.js` HAT_CATALOG): 업적으로 해금, 학생이 장착. id `hat_starter`/`hat_explorer`/`hat_chef`/`hat_scientist`/`hat_wizard`/`hat_graduation`/`hat_crown`/`hat_rose`. 이전에는 🎩 이모지를 text-shadow로 색만 입혔다.
+- D) 마을 레벨 10: 모자 없음.
+
+**리드 결정(운영자에게 표시)**: 이미지 8장을 C 축에 색 일치로 대응한다. 8종은 업적으로 각각 해금되는 수집품이지 순차 승급 체인이 아니므로, 운영자가 말한 순서(분홍 → 빨강 → 주황 → 초록 → 파랑 → 남색 → 보라 → 금색)를 단계로 적용하지 않았다. id·해금 기준·장착 로직·`colorHex`·XP·랭크·마을 레벨은 무변경. 기존 색과 맞는 6개는 그대로 대응했고, 남색(기존 '검정')과 주황(기존 '하양')은 이미지 색이 기존 색과 달라 이름을 정정했다. **운영자 확인 필요: ① 남색 → hat_starter, 주황 → hat_scientist 대응이 맞는지 ② 승급 체인이 아니라 수집 모자로 보는 것이 맞는지.**
+
+**색 대응표**
+
+| 파일 | 색 | 모자 id | 해금 조건 |
+|---|---|---|---|
+| `paul-hat-pink.png` | 분홍 | `hat_rose` | 주 5일 학습 |
+| `paul-hat-red.png` | 빨강 | `hat_graduation` | 유닛 1 완료 |
+| `paul-hat-green.png` | 초록 | `hat_chef` | 7일 연속 |
+| `paul-hat-blue.png` | 파랑 | `hat_explorer` | 단어 10 |
+| `paul-hat-purple.png` | 보라 | `hat_wizard` | 숙달 30 |
+| `paul-hat-gold.png` | 금색 | `hat_crown` | 단어 200 |
+| `paul-hat-navy.png` | 남색 | `hat_starter` | 첫 미션 |
+| `paul-hat-orange.png` | 주황 | `hat_scientist` | 퀴즈 100 |
+
+**에셋**: 원본은 `모자1~8.png`(1254×1254 RGBA, 장당 약 1.3 MB; 리드가 직접 보고 색 확인: 1 남색, 2 초록, 3 분홍, 4 금색, 5 파랑, 6 보라, 7 빨강, 8 주황). 원본은 수정하지 않았고 gitignore된 `art-staging/hats/original/`에 사본을 뒀다. `scripts/hats/buildHatAssets.py`(Pillow)가 알파 bbox 크롭 → 균일 여백 6% → 256×256 LANCZOS → 최적화 PNG로 `src/assets/hats/paul-hat-<color>.png` 8장과 `manifest.json`을 만든다. 크기: 남색 29,750 B · 초록 33,272 · 분홍 33,852 · 금색 33,997 · 파랑 32,631 · 보라 30,693 · 빨강 29,077 · 주황 29,213. 불투명 비율 0.40~0.42, 모서리 알파 0. `src/assets/hats/index.js`가 `HAT_IMAGE_BY_ID`/`HAT_COLOR_BY_ID`/`hatImageFor`/`HAT_IMG_CLASS`(1em, object-contain이라 글자 크기를 따라감)를 제공한다.
+
+**코드(커밋 `da4f2d66` 에셋+렌더+핀, `e4e622d9` 버튼 수정, `a97074ef` e2e)**
+- 렌더 위치(기존 이모지 자리 재사용): StudentHome 헤더 `student-home-hat-img`, Dashboard 아바타·'착용 중' 라벨 `dashboard-hat-img`·`dashboard-hat-label-img`, HatCollection 카드·아바타 `hat-card-img-<id>`·`hat-collection-avatar-img`, HatCeremony `hat-ceremony-img`, PaulTown 모자 걸이 `town-hat-rack-img-<id>`. 이미지가 없으면 기존 색 입힌 이모지 폴백, 아무것도 장착하지 않으면 👑.
+- 핀: 신규 `scripts/testHatImages.mjs`(8파일·이름·256×256·64 KB 이하·manifest·모든 id 대응·렌더 위치가 폴백 유지), `testBundleBudget`이 해시된 PNG 8개를 stray-image 규칙에서 제외, `testStudentPathContracts` 번들러에 .png data-URL 로더 추가.
+- 수정: HatCollection 장착/해제 버튼 36 → 44px(신규 e2e가 발견).
+- 이름 정정(문자열만): '검은색 폴 모자' → '남색 폴 모자', '하얀색 폴 모자' → '주황색 폴 모자'. HatCeremony가 "{colorName} 톱햇"을 표시하므로 `colorName`도 검은색 → 남색, 하얀색 → 주황으로 함께 바꿨다. 커밋 `f5156fa8`. 이후 정적 핀 통과, `[hats]` 재실행 67/0.
+
+**검증(브라우저 1개 순차, vite preview :4193, 전부 mock)**: 더미 env 빌드 경고 0. 정적 `testHatImages`·`testHatColorRendering` 63·`testPaulRank`·`testGamificationInvariants` 40·`testStudentPathContracts` 61·`testLazyChunkGuards`·`testBundleBudget` 32/32·`testRegistryCoverage`·`testQaGate` 17/0 ALL PASS. 신규 `[hats]` **67/0**: a 표시(헤더·대시보드·컬렉션 8색), a2 미보유는 🔒, b 장착 변경 → 빨강, 새로고침 유지(mock DB 쓰기), c 승급 경계(정답 단어 9 → 연출 없음, 10 → 파란 모자 연출 → 모자 쓰기 → 대시보드 파랑 + 인벤토리 쓰기), d 폴백 👑·비QA 무영향, e 360/1280에서 이미지가 상자 안·가로세로비 ≈ 1·모서리 알파 0(canvas)·컬렉션 가로 넘침 없음·버튼 44px 이상, e2 밝은/어두운 배경 샘플, f 색 대응표(index.js 기준). `[hats]` 1차 62/2 = 36px 버튼 → 수정 후 통과. 회귀: `[student-home]` 223/0/1 SKIP(기존 fixture 한계), `[student]` 34/0, `[town]` 528/0, `[mobile]` 178/0.
+
+**직접 확인(리드가 스크린샷을 봄)**: 최적화 PNG가 투명이고 로고가 읽힘(금색·남색 확인), 어두운(#111827)·밝은(#fff) 배경의 8색 샘플 모두 깨끗함, HatCollection 360px에서 8색이 올바르게 보임, PaulTown 모자 걸이에 8개가 보이고 금색이 선택됨, HatCeremony 상 원 안에 파란 모자, 홈 헤더에 금색 모자가 이름 옆 1em으로 보임(작지만 보이고 기존 이모지와 같은 크기).
+**미확인**: Vercel Preview 실화면(SSO 뒤, 운영자 확인), 실기기, 나머지 색의 모든 화면 개별 육안.
+
+**운영자 확인 대기**: 남색/주황 대응과 '승급 체인 아님' 판단, 홈 헤더 모자 크기 상향 여부(1em → 1.25em), Preview 실화면. 보호 범위·점수·승급·해금 규칙·DB 무변경, PR #62 Draft·QA 전용, merge·운영 배포 없음. Preview URL: https://voca-git-feat-paul-town-v2-clean-pr-jina4926952s-projects.vercel.app
 
 ## 2026-10-10 (234차) — Grammar Easy 03~08 콘텐츠 구현(검수 전) + 검수 상태 분리 + 어휘 규칙 (02:10~02:50)
 
