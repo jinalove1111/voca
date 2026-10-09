@@ -40,8 +40,8 @@ export const HAT_THRESHOLDS = {
 // ctx = { completedUnits } (유닛 완료 목록 — 호출자가 wordLibrary로 구성)
 export const HAT_CATALOG = [
   {
-    id: 'hat_starter', emoji: '🎩', name: '검은색 폴 모자',
-    colorName: '검은색', colorHex: '#2d2d2d',
+    id: 'hat_starter', emoji: '🎩', name: '남색 폴 모자',
+    colorName: '남색', colorHex: '#2d2d2d',
     desc: '첫 데일리 미션(4/4)을 완료하면 획득',
     sourceLabel: '첫 데일리 미션 완료',
     unlock: (stats) => !!stats.firstMissionDayKey,
@@ -61,8 +61,8 @@ export const HAT_CATALOG = [
     unlock: (stats) => stats.streak >= HAT_THRESHOLDS.chefStreak,
   },
   {
-    id: 'hat_scientist', emoji: '🎩', name: '하얀색 폴 모자',
-    colorName: '하얀색', colorHex: '#ECEFF1',
+    id: 'hat_scientist', emoji: '🎩', name: '주황색 폴 모자',
+    colorName: '주황색', colorHex: '#ECEFF1',
     desc: `퀴즈 정답을 ${HAT_THRESHOLDS.scientistQuizCorrect}개 모으면 획득`,
     sourceLabel: `퀴즈 정답 ${HAT_THRESHOLDS.scientistQuizCorrect}개`,
     unlock: (stats) => stats.totalQuizCorrect >= HAT_THRESHOLDS.scientistQuizCorrect,
