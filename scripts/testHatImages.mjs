@@ -43,6 +43,8 @@ check('매핑 색이 8색 전부 1회씩(중복 없음)',
   JSON.stringify(pairs.map((p) => p[1]).sort()) === JSON.stringify([...COLORS].sort()))
 for (const c of COLORS) check(`index.js가 ${c} PNG를 import`, idx.includes(`./paul-hat-${c}.png`))
 check('hatImageFor/HAT_IMG_CLASS export', /export const hatImageFor/.test(idx) && /export const HAT_IMG_CLASS/.test(idx))
+check('HAT_IMG_CLASS_LG export = 1.25em', idx.includes('export const HAT_IMG_CLASS_LG') && idx.includes('h-[1.25em] w-[1.25em]'))
+check('StudentHome 헤더 모자는 HAT_IMG_CLASS_LG', /student-home-hat-img.*className={HAT_IMG_CLASS_LG}/.test(read('src/components/StudentHome.jsx')))
 
 console.log('\n=== 렌더 지점 ===')
 const SITES = [

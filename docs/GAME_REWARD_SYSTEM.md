@@ -246,3 +246,22 @@ HAT_CATALOG)에 색 일치로 대응했다. 이 8종은 업적으로 각각 해�
 | `hat_crown` | 금색 | `paul-hat-gold.png` | 단어 200 | 기존 유지 |
 | `hat_starter` | 남색 | `paul-hat-navy.png` | 첫 미션 | 남색 폴 모자(기존 '검은색 폴 모자') |
 | `hat_scientist` | 주황 | `paul-hat-orange.png` | 퀴즈 100 | 주황색 폴 모자(기존 '하얀색 폴 모자') |
+
+## 2026-10-10 (236차) 모자 획득 조건 — 코드 기준 정확한 단위
+
+_모든 값은 `src/utils/attachment/hatSystem.js`(HAT_THRESHOLDS 30-37, HAT_CATALOG 41-104)가 `deriveAttachmentStats`(`attachmentCore.js` 45-175)의 파생 통계만 읽어 판정한다. 평가는 `evaluateHatUnlocks`(hatSystem.js 182-188), 호출은 `useAttachment.js` 115(ctx = completedUnits). 인벤토리는 append-only(한 번 얻은 모자는 회수 없음). 학생 식별은 students.id(UUID) 기준 레코드._
+
+| 모자 | 조건(코드) | 정확한 단위/정의 | 근거 |
+|---|---|---|---|
+| hat_starter (남색) | `!!stats.firstMissionDayKey` | history에서 어느 하루라도 `categoriesCompleted >= 4`(오늘의 미션 4개 카테고리 모두 목표 달성, 단어/예문/퀴즈/발음)를 달성한 적이 있음. 가장 이른 그 날짜 키. | hatSystem.js 47; attachmentCore.js 67, 77-80; useStudent.js 1394-1395 |
+| hat_explorer (파란색) | `clearedCount >= 10` | `clearedCount` = `cleared` 배열 길이(레벨업 미션 3연속 정답으로 클리어된 단어 수, 누적). 아래 정의 문단 참조. | hatSystem.js 31, 54; attachmentCore.js 145 |
+| hat_chef (초록색) | `stats.streak >= 7` | `rec.streak`(= `calcStreak(history)`): 오늘부터 거꾸로, `categoriesCompleted >= 4`인 날이 연속된 일수. 단순 "학습한 날"이 아니라 하루 미션 4/4 완료일. 오늘 미션 전이면 어제부터 센다. | hatSystem.js 32, 61; useStudent.js 766-777, 1954; attachmentCore.js 166 |
+| hat_scientist (주황색 이름/#ECEFF1) | `totalQuizCorrect >= 100` | history 전체 날짜의 `quizCorrect` 합. `recordQuizAnswer`가 정답이든 오답이든 호출되며 정답일 때만 +1. 누적, 기간 제한 없음. | hatSystem.js 33, 68; attachmentCore.js 64, 75; useStudent.js 1721-1727 |
+| hat_wizard (보라색) | `masteredCount >= 30` | `wordStatus` 값이 `'mastered'`인 단어 수. 모호함: src 안에서 `'mastered'`를 기록하는 클라이언트 코드는 찾지 못했다(`setWordKnown`/`setWordUnknown`은 `'known'`/`'unknown'`만 기록, useStudent.js 1931-1932). 값은 클라우드에서 병합돼 들어올 수 있으나(useStudent.js 498, 588-591) 쓰는 경로는 이 저장소 코드로 확인되지 않음. 실제 획득 가능 여부는 운영 데이터로 확인 필요. | hatSystem.js 34, 75; attachmentCore.js 61 |
+| hat_graduation (빨간색) | `completedUnits.length >= 1` | 현재 교재(교재 모드면 교재 소유 반)의 유닛 중, 단어가 1개 이상이고 그 유닛의 모든 단어 슬러그가 `cleared`에 있는 유닛이 1개 이상. `cleared`는 레벨업 미션 3연속 정답으로 `done`이 된 단어(`answerMission`, correctCount >= 3). 퀴즈 정답으로 쌓이는 `clearedWords`와는 다른 배열. | hatSystem.js 82; attachmentCore.js 186-194; useAttachment.js 40-70, 87; useStudent.js 1240-1252 |
+| hat_crown (금색) | `clearedCount >= 200` | hat_explorer와 같은 `clearedCount`, 임계값만 다름. | hatSystem.js 35, 89; attachmentCore.js 145 |
+| hat_rose (분홍색) | `thisWeek.daysStudied >= 5` | 월요일 시작 현재 주에서 `history[day].studied === true`인 날 수. `studied`는 그날 history 항목이 만들어질 때 true로 기록되는 값이라 "미션 완료"가 아니라 "그날 학습 기록이 생김"이다. 주가 바뀌어 0으로 돌아가도 획득한 모자는 유지. | hatSystem.js 36, 102; attachmentCore.js 69-72, 98-109; useStudent.js 230 |
+
+**clearedCount 정의(hat_explorer/hat_crown)**: `clearedCount: cleared.length`로 `cleared` 배열 길이다(attachmentCore.js 45-46, 145). 즉 레벨업 미션 3연속 정답으로 클리어된 단어 슬러그 수이며, 퀴즈 정답으로 쌓이는 `clearedWords`나 `completedWords`는 포함하지 않는다. 그 둘을 합친 별도 파생값은 정원/월드/마을 표시용 신규 필드이고 모자 판정에는 쓰지 않는다(attachmentCore.js 129-137 주석).
+
+**불확실성 요약**: (1) hat_wizard의 `'mastered'` 쓰기 경로는 코드에서 미확인. (2) hat_rose의 `studied`는 history 항목 생성 시 true로 세팅되는 것을 useStudent.js 230에서 확인했으나, 항목이 만들어지는 모든 경로(예: 관리자 백필/병합 380-381, 526)를 개별 검증하지는 않았다.

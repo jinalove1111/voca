@@ -31,3 +31,6 @@ export const hatImageFor = (hatId) => HAT_IMAGE_BY_ID[hatId] || null
 
 // 글자 크기(text-3xl 등)를 따라 커지도록 1em 박스 + object-contain.
 export const HAT_IMG_CLASS = 'inline-block h-[1em] w-[1em] object-contain align-[-0.12em] select-none'
+
+// 학생 홈 헤더 전용 1.25em(2026-10-10 운영자 지시). 다른 지점은 HAT_IMG_CLASS(1em) 유지.
+export const HAT_IMG_CLASS_LG = 'inline-block h-[1.25em] w-[1.25em] object-contain align-[-0.3em] select-none'
