@@ -1,10 +1,12 @@
 // 2026-10-10 문법 단원 데이터 + 순수 도우미(저장·네트워크 없음). 스키마는 validateGrammarUnit 참고.
-// status 'ready' 22개(Easy 8 + Intermediate 8 + Advanced 6; 아래 Easy/int-01 설명 참고. g-easy-01·02, g-int-01은 기존 시범 Unit 문형 문항을 fromUnitId로 재사용, Easy 03~08은 자체 선택 문항 3개) + 'preparing' 개요 12개(제목·학습 목표만, 화면에서 '준비 중').
+// status 'ready' 34개(Easy 8 + Intermediate 8 + Advanced 6 + Middle School 6 + High School 6; 아래 Easy/int-01 설명 참고. g-easy-01·02, g-int-01은 기존 시범 Unit 문형 문항을 fromUnitId로 재사용, Easy 03~08은 자체 선택 문항 3개), 'preparing' 0개(개요 전용 P() 도우미는 향후 단원용으로 유지, 화면에서 '준비 중').
 // 구현 상태(status)와 교사 검수(reviewStatus)는 별개 — 전부 'unreviewed'. 어휘 규칙은 validateGrammarUnit 참고.
 // 교사 확인(콘텐츠 담당 2026-10-10): 03 compare의 Are you…?/I am not은 미리보기일 뿐(연습은 긍정 am/is/are). 04 Mia can jump에 -s 없음(3인칭 -s는 g-int-02), can't·cannot 모두 인정.
 // 05 복수 -s와 two는 가볍게만. 06이 don't를 07의 Do보다 먼저 가르침; 06 "I play ball."이 자연스러운지 확인(대안 I play with a ball). 08의 isn't/Is this는 compare에서만.
 // 교사 확인 Intermediate: int-02 does/doesn't는 compare+선택 1개뿐(easy-06 대비 Does 신규); int-03 "What do you have in your bag?" 자연스러운지(8단어, 예문 아님); int-05 with는 문법어; int-06 explainKo 3행 재작성; int-07 Did/didn't는 미리보기, was/were만 불규칙; int-08 부정 = No, thank you.
 // 교사 확인 Advanced: 순서 문항은 정답 하나(절 순서 교체 시 칩 구두점 변동); adv-02 bigger/taller만; adv-03 현재시제만·compare 생략·here/she 문법어; adv-05 have to는 I/We만; adv-06 규칙 분사 played/visited+been(seen 제외), adv-06은 int-07 이후 수업; "I play ball"/"Have you ever played ball?" 자연스러운지.
+// 교사 확인 Middle: mid-01 words 9개·mid-05 7개(목표 6 초과: 활용형·때 단어); mid-04 plays/reads(3인칭 -s)를 int-02 선수 없이 사용; mid-04·05 compare 생략; mid-03 explainKo 안에 영어 능동문(검증 대상 아님); mid-06 순서 문항은 정답 하나(대문자·쉼표); 학년·교육과정 대응 주장 없음.
+// 교사 확인 High: 어휘는 사람이 직접 확인만 함; high-01 "since 2020"은 시간이 지나면 낡음(2020은 숫자라 검증기가 무시); high-03 which 생략 허용; high-05 시제 일치(backshift)는 교과서 규칙; high-06 주어가 같은 경우만; 학년 대응 주장 없음.
 // 선수 연결: 04←01, 05←02, 06←03, 07←06, 08←03(+01의 my/your).
 // 초안은 콘텐츠 담당(2026-10-10), 교사 검수 전.
 //
@@ -1121,6 +1123,598 @@ const READY_UNITS = [
     words: [{ en: 'ever', ko: '(지금까지) 한 번이라도' }, { en: 'have', ko: '가지고 있다' }, { en: 'been', ko: '(…에) 가 본' }, { en: 'visited', ko: '방문했다' }, { en: 'played', ko: '놀았다, 했다' }, { en: 'zoo', ko: '동물원' }, { en: 'dog', ko: '개' }, { en: 'ball', ko: '공' }],
     sources: ['own'],
   },
+  {
+    id: 'g-mid-01', courseId: 'middleSchool', order: 1,
+    titleKo: '시제 정리', goalKo: '현재·과거·미래를 구분해 쓸 수 있어요',
+    conceptId: 'tense-system', prereqIds: [], basicsUnitId: 'g-int-07', status: 'ready', reviewStatus: 'unreviewed',
+    examples: [
+      { en: 'I play soccer today.', ko: '나는 오늘 축구를 해.' },
+      { en: 'I played soccer yesterday.', ko: '나는 어제 축구를 했어.' },
+      { en: 'I will play soccer tomorrow.', ko: '나는 내일 축구를 할 거야.' },
+      { en: "I didn't play soccer yesterday.", ko: '나는 어제 축구를 안 했어.' },
+    ],
+    explainKo: [
+      '시제(때에 따라 달라지는 동사 모양)는 지금·지난 때·앞으로를 나눠 말해요. 과거 모양은 Intermediate 7에서 배웠어요.',
+      'today면 play(현재), yesterday면 played(과거), tomorrow면 will play(미래)를 써요.',
+      "과거의 부정·질문에는 did를 써요. did 뒤에는 played가 아니라 play처럼 동사 원래 모양을 써요.",
+    ],
+    structure: [
+      { s: 'I', v: 'played', rest: 'soccer yesterday.', ko: '나는 어제 축구를 했어 (과거: 동사 모양이 바뀜)' },
+      { s: 'I', v: 'will play', rest: 'soccer tomorrow.', ko: '나는 내일 축구를 할 거야 (미래: will + 동사 원래 모양)' },
+    ],
+    compare: {
+      aff: { en: 'I played soccer yesterday.', ko: '나는 어제 축구를 했어.' },
+      neg: { en: "I didn't play soccer yesterday.", ko: '나는 어제 축구를 안 했어.' },
+      q: { en: 'Did you play soccer yesterday?', ko: '너는 어제 축구를 했어?' },
+    },
+    errors: [
+      { wrong: 'I will played soccer tomorrow.', right: 'I will play soccer tomorrow.', whyKo: 'will 뒤에는 played가 아니라 동사 원래 모양 play를 써요.' },
+      { wrong: "I didn't played soccer yesterday.", right: "I didn't play soccer yesterday.", whyKo: "didn't 안에 이미 과거가 들어 있어서 뒤는 play로 써요." },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '어제 축구를 했어요. 알맞은 문장은?', options: ['I played soccer yesterday.', 'I play soccer yesterday.', 'I will play soccer yesterday.'], correct: 0, whyKo: 'yesterday(어제)는 과거라서 played를 써요.' },
+        { promptKo: '내일 축구를 할 거예요. 알맞은 문장은?', options: ['I will play soccer tomorrow.', 'I will played soccer tomorrow.', 'I played soccer tomorrow.'], correct: 0, whyKo: 'tomorrow(내일)는 미래라서 will + play예요.' },
+        { promptKo: '어제 축구를 안 했어요. 알맞은 문장은?', options: ["I didn't play soccer yesterday.", "I didn't played soccer yesterday.", 'I not play soccer yesterday.'], correct: 0, whyKo: "과거 부정은 didn't + 동사 원래 모양이에요." },
+      ],
+      blank: [
+        { promptKo: '어제 축구를 했어요.', en: 'I ___ soccer yesterday.', options: ['played', 'play', 'will play'], correct: 0, whyKo: 'yesterday면 과거 played예요.' },
+        { promptKo: '내일 축구를 할 거예요.', en: 'I will ___ soccer tomorrow.', options: ['play', 'played', 'did'], correct: 0, whyKo: 'will 뒤에는 play를 그대로 써요.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "너는 어제 축구를 했어?"를 만들어요.', words: ['Did', 'you', 'play', 'soccer', 'yesterday?'], answers: [['Did', 'you', 'play', 'soccer', 'yesterday?']], whyKo: 'Did you + 동사 원래 모양 순서예요.' },
+        { promptKo: '단어를 놓아 "나는 내일 축구를 할 거야"를 만들어요.', words: ['will', 'I', 'soccer', 'tomorrow.', 'play'], answers: [['I', 'will', 'play', 'soccer', 'tomorrow.']], whyKo: 'I will play + 할 일 + 때 순서예요.' },
+      ],
+      build: [
+        { promptKo: '어제 한 일 하나를 과거로 말하거나 써 보세요.', exampleEn: 'I played soccer yesterday.', exampleKo: '나는 어제 축구를 했어.', acceptNoteKo: "Mia played soccer yesterday. / I didn't play soccer yesterday.도 맞아요. 어제(yesterday)와 과거 모양이 맞으면 돼요." },
+        { promptKo: '내일 할 일 하나를 미래로 말하거나 써 보세요.', exampleEn: 'I will play soccer tomorrow.', exampleKo: '나는 내일 축구를 할 거야.', acceptNoteKo: 'Paul will play soccer tomorrow. / We will play soccer tomorrow.도 맞아요. will + 동사 원래 모양이면 돼요.' },
+      ],
+    },
+    use: { kind: 'speaking', promptKo: '어제·오늘·내일 중 때를 하나 골라 짝에게 축구 이야기를 해요. 짝은 때와 동사 모양이 맞는지 들어요.', exampleEn: 'I will play soccer tomorrow.', exampleKo: '나는 내일 축구를 할 거야.' },
+    words: [{ en: 'play', ko: '(운동을) 하다' }, { en: 'played', ko: '했다' }, { en: 'will', ko: '~할 것이다' }, { en: 'did', ko: '했다(과거 도우미)' }, { en: "didn't", ko: '~하지 않았다' }, { en: 'soccer', ko: '축구' }, { en: 'yesterday', ko: '어제' }, { en: 'today', ko: '오늘' }, { en: 'tomorrow', ko: '내일' }],
+    sources: ['own'],
+  },
+  {
+    id: 'g-mid-02', courseId: 'middleSchool', order: 2,
+    titleKo: '조동사 can·may·must', goalKo: '허락·의무를 나타내는 말을 쓸 수 있어요',
+    conceptId: 'modal-verbs', prereqIds: ['g-mid-01'], basicsUnitId: 'g-easy-04', status: 'ready', reviewStatus: 'unreviewed',
+    examples: [
+      { en: 'You can open the window.', ko: '너는 창문을 열어도 돼.' },
+      { en: 'May I open the window?', ko: '창문을 열어도 될까요?' },
+      { en: 'You must do your homework.', ko: '너는 숙제를 꼭 해야 해.' },
+      { en: "You mustn't open the door.", ko: '문을 열면 안 돼.' },
+    ],
+    explainKo: [
+      'Easy 4에서 배운 can은 "할 수 있다"뿐 아니라 "해도 된다(허락)"는 뜻도 있어요.',
+      'may는 can보다 정중하게 "해도 될까요?" 하고 허락을 구해요. must는 "꼭 해야 한다"는 뜻이에요.',
+      "조동사(동사를 도와주는 말) 뒤에는 동사 원래 모양을 써요. 하면 안 된다는 금지는 mustn't예요.",
+    ],
+    structure: [
+      { s: 'May I', v: 'open', rest: 'the window?', ko: '창문을 열어도 될까요? (허락 구하기)' },
+      { s: 'You', v: 'must', rest: 'do your homework.', ko: '너는 숙제를 꼭 해야 해 (must + 동사 원래 모양)' },
+    ],
+    compare: {
+      aff: { en: 'You must open the window.', ko: '너는 창문을 꼭 열어야 해.' },
+      neg: { en: "You mustn't open the window.", ko: '너는 창문을 열면 안 돼.' },
+      q: { en: 'May I open the window?', ko: '창문을 열어도 될까요?' },
+    },
+    errors: [
+      { wrong: 'You must to do your homework.', right: 'You must do your homework.', whyKo: 'must 바로 뒤에는 to 없이 동사 원래 모양을 써요.' },
+      { wrong: 'May I opens the window?', right: 'May I open the window?', whyKo: 'May I 뒤에는 s 없이 open을 그대로 써요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '선생님께 창문을 열어도 되는지 정중하게 물어요. 알맞은 문장은?', options: ['May I open the window?', 'May I opening the window?', 'May I opens the window?'], correct: 0, whyKo: 'May I + 동사 원래 모양이에요.' },
+        { promptKo: '숙제는 꼭 해야 해요. 알맞은 문장은?', options: ['You must do your homework.', 'You must to do your homework.', 'You must does your homework.'], correct: 0, whyKo: 'must + 동사 원래 모양이에요.' },
+        { promptKo: '문을 열면 안 돼요(금지). 알맞은 문장은?', options: ["You mustn't open the door.", 'You must open the door.', "You mustn't to open the door."], correct: 0, whyKo: "금지는 mustn't + 동사 원래 모양이에요." },
+      ],
+      blank: [
+        { promptKo: '문을 열면 안 돼요(금지).', en: 'You ___ open the door.', options: ["mustn't", 'must', 'may'], correct: 0, whyKo: "열면 안 된다는 mustn't예요." },
+        { promptKo: '문을 열어도 되는지 정중하게 물어요.', en: 'May I ___ the door?', options: ['open', 'opens', 'opening'], correct: 0, whyKo: 'May I 뒤에는 open을 그대로 써요.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "창문을 열어도 될까요?"를 만들어요.', words: ['May', 'I', 'the', 'window?', 'open'], answers: [['May', 'I', 'open', 'the', 'window?']], whyKo: 'May I + 동사 + 물건 순서예요.' },
+        { promptKo: '단어를 놓아 "너는 숙제를 꼭 해야 해"를 만들어요.', words: ['must', 'You', 'your', 'do', 'homework.'], answers: [['You', 'must', 'do', 'your', 'homework.']], whyKo: 'You must + 동사 + 물건 순서예요.' },
+      ],
+      build: [
+        { promptKo: '교실이 더워요. 선생님께 창문을 열어도 되는지 물어 보세요.', exampleEn: 'May I open the window?', exampleKo: '창문을 열어도 될까요?', acceptNoteKo: 'Can I open the window? / May I open the door?도 맞아요. May I(또는 Can I) + 동사 원래 모양이면 돼요.' },
+        { promptKo: '짝에게 숙제를 꼭 해야 한다고 말해 보세요.', exampleEn: 'You must do your homework.', exampleKo: '너는 숙제를 꼭 해야 해.', acceptNoteKo: 'I must do my homework. / We must do our homework.도 맞아요. must + 동사 원래 모양이면 돼요.' },
+      ],
+    },
+    use: { kind: 'speaking', promptKo: '짝에게 "May I …?" 질문을 하나 해요. 짝은 허락하거나 금지한다고 대답해요.', exampleEn: 'May I open the door?', exampleKo: '문을 열어도 될까요?' },
+    words: [{ en: 'may', ko: '~해도 된다' }, { en: 'must', ko: '~해야 한다' }, { en: "mustn't", ko: '~하면 안 된다' }, { en: 'open', ko: '열다' }, { en: 'window', ko: '창문' }, { en: 'door', ko: '문' }, { en: 'homework', ko: '숙제' }],
+    sources: ['own'],
+  },
+  {
+    id: 'g-mid-03', courseId: 'middleSchool', order: 3,
+    titleKo: '수동태 기초', goalKo: '"…당했다"는 문장을 만들 수 있어요',
+    conceptId: 'passive-voice', prereqIds: ['g-mid-01'], basicsUnitId: 'g-easy-03', status: 'ready', reviewStatus: 'unreviewed',
+    examples: [
+      { en: 'The classroom is cleaned by Mia.', ko: '교실은 미아가 청소해.' },
+      { en: 'The windows are opened by Paul.', ko: '창문들은 폴이 열어.' },
+      { en: 'The books are used here.', ko: '책들은 여기서 쓰여.' },
+      { en: "The window isn't opened.", ko: '창문은 열려 있지 않아.' },
+    ],
+    explainKo: [
+      'Easy 3에서 배운 is·are 뒤에 cleaned처럼 -ed 말을 붙이면 "…된다/…당한다"는 뜻이에요. 이런 문장을 수동태(받는 쪽이 주인공인 문장)라고 해요.',
+      '"Mia cleans the classroom."은 하는 사람이 주인공이고, "The classroom is cleaned by Mia."는 청소되는 교실이 주인공이에요. 하는 사람은 by 뒤에 말해요.',
+      "주인공이 하나면 is, 둘 이상이면 are를 써요. 아니라고 할 때는 isn't·aren't를 써요.",
+    ],
+    structure: [
+      { s: 'The classroom', v: 'is cleaned', rest: 'by Mia.', ko: '교실은 미아에 의해 청소돼요 (하나면 is + -ed)' },
+      { s: 'The windows', v: 'are opened', rest: 'by Paul.', ko: '창문들은 폴에 의해 열려요 (둘 이상이면 are + -ed)' },
+    ],
+    compare: {
+      aff: { en: 'The classroom is cleaned.', ko: '교실이 청소돼요.' },
+      neg: { en: "The classroom isn't cleaned.", ko: '교실이 청소되지 않아요.' },
+      q: { en: 'Is the classroom cleaned?', ko: '교실이 청소돼요?' },
+    },
+    errors: [
+      { wrong: 'The windows is opened.', right: 'The windows are opened.', whyKo: '창문이 둘 이상이면 is가 아니라 are를 써요.' },
+      { wrong: 'The classroom is clean by Mia.', right: 'The classroom is cleaned by Mia.', whyKo: '"청소된다"는 clean이 아니라 -ed가 붙은 cleaned예요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '"교실은 미아에 의해 청소돼요"를 영어로 하면?', options: ['The classroom is cleaned by Mia.', 'The classroom cleaned by Mia.', 'The classroom are cleaned by Mia.'], correct: 0, whyKo: '하나면 is + -ed예요.' },
+        { promptKo: '"창문들은 폴에 의해 열려요"를 영어로 하면?', options: ['The windows are opened by Paul.', 'The windows is opened by Paul.', 'The windows opened are by Paul.'], correct: 0, whyKo: '창문이 여러 개라 are + opened예요.' },
+        { promptKo: '"책들은 여기서 쓰여요"를 영어로 하면?', options: ['The books are used here.', 'The books is used here.', 'The books are use here.'], correct: 0, whyKo: 'are + used예요.' },
+      ],
+      blank: [
+        { promptKo: '교실은 미아에 의해 청소돼요.', en: 'The classroom is ___ by Mia.', options: ['cleaned', 'clean', 'cleaning'], correct: 0, whyKo: 'is 뒤에 -ed 말 cleaned를 써요.' },
+        { promptKo: '책들은 여기서 쓰여요.', en: 'The books ___ used here.', options: ['are', 'is', 'am'], correct: 0, whyKo: '책이 여러 권이라 are예요.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "교실은 미아에 의해 청소돼요"를 만들어요.', words: ['classroom', 'The', 'is', 'cleaned', 'by', 'Mia.'], answers: [['The', 'classroom', 'is', 'cleaned', 'by', 'Mia.']], whyKo: '주인공 + is + -ed + by 사람 순서예요.' },
+        { promptKo: '단어를 놓아 "창문들은 여기서 열려요"를 만들어요.', words: ['The', 'windows', 'are', 'opened', 'here.'], answers: [['The', 'windows', 'are', 'opened', 'here.']], whyKo: '주인공 + are + -ed 순서예요.' },
+      ],
+      build: [
+        { promptKo: '교실이 청소된다고 말하거나 써 보세요.', exampleEn: 'The classroom is cleaned by Mia.', exampleKo: '교실은 미아가 청소해.', acceptNoteKo: 'The classroom is cleaned. / The classroom is cleaned by Paul.도 맞아요. by 사람은 빼도 돼요. is + cleaned면 돼요.' },
+        { promptKo: '창문 여러 개가 열린다고 말하거나 써 보세요.', exampleEn: 'The windows are opened by Paul.', exampleKo: '창문들은 폴이 열어.', acceptNoteKo: 'The windows are opened. / The window is opened.도 맞아요. 하나면 is, 둘 이상이면 are + opened예요.' },
+      ],
+    },
+    use: { kind: 'speaking', promptKo: '교실에서 청소·열기·사용되는 것 하나를 골라 "The … is/are …" 문장으로 말해요.', exampleEn: 'The books are used here.', exampleKo: '책들은 여기서 쓰여.' },
+    words: [{ en: 'classroom', ko: '교실' }, { en: 'cleaned', ko: '청소된' }, { en: 'window', ko: '창문' }, { en: 'windows', ko: '창문들' }, { en: 'opened', ko: '열린' }, { en: 'books', ko: '책들' }, { en: 'used', ko: '쓰인' }, { en: 'by', ko: '~에 의해' }],
+    sources: ['own'],
+  },
+  {
+    id: 'g-mid-04', courseId: 'middleSchool', order: 4,
+    titleKo: '관계대명사 who·which', goalKo: '두 문장을 하나로 이어 설명할 수 있어요',
+    conceptId: 'relative-clause', prereqIds: ['g-mid-01'], basicsUnitId: 'g-int-03', status: 'ready', reviewStatus: 'unreviewed',
+    examples: [
+      { en: 'Mia is a girl who plays soccer.', ko: '미아는 축구를 하는 소녀야.' },
+      { en: 'Paul is a boy who reads books.', ko: '폴은 책을 읽는 소년이야.' },
+      { en: 'This is a book which Mia reads.', ko: '이것은 미아가 읽는 책이야.' },
+      { en: 'This is a bag which is new.', ko: '이것은 새 가방이야.' },
+    ],
+    explainKo: [
+      'Intermediate 3에서 What으로 묻는 법을 배웠어요. 이번에는 who·which(관계대명사: 앞말을 설명하며 문장을 잇는 말)를 써요.',
+      '앞말이 사람이면 who, 물건이면 which를 써요. a girl who plays soccer = 축구를 하는 소녀.',
+      '"Mia is a girl."과 "She plays soccer."를 who로 이어 한 문장으로 만들어요. 이을 때 She는 who로 바뀌어 사라져요.',
+    ],
+    structure: [
+      { s: 'Mia is a girl', v: 'who', rest: 'plays soccer.', ko: '미아는 축구를 하는 소녀야 (사람이면 who)' },
+      { s: 'This is a bag', v: 'which', rest: 'is new.', ko: '이것은 새 가방이야 (물건이면 which)' },
+    ],
+    errors: [
+      { wrong: 'Mia is a girl which plays soccer.', right: 'Mia is a girl who plays soccer.', whyKo: '소녀는 사람이라서 which가 아니라 who를 써요.' },
+      { wrong: 'This is a bag who is new.', right: 'This is a bag which is new.', whyKo: '가방은 물건이라서 who가 아니라 which를 써요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '"축구를 하는 소녀"를 말해요. 알맞은 문장은?', options: ['Mia is a girl who plays soccer.', 'Mia is a girl which plays soccer.', 'Mia is a girl who she plays soccer.'], correct: 0, whyKo: '사람이면 who이고, who 뒤에 She를 또 쓰지 않아요.' },
+        { promptKo: '"새 가방"을 설명해요. 알맞은 문장은?', options: ['This is a bag which is new.', 'This is a bag who is new.', 'This is a bag which it is new.'], correct: 0, whyKo: '물건이면 which이고, which 뒤에 it을 또 쓰지 않아요.' },
+        { promptKo: '"책을 읽는 소년"을 말해요. 알맞은 문장은?', options: ['Paul is a boy who reads books.', 'Paul is a boy which reads books.', 'Paul is who a boy reads books.'], correct: 0, whyKo: '소년(사람) 바로 뒤에 who를 써요.' },
+      ],
+      blank: [
+        { promptKo: '축구를 하는 소녀예요.', en: 'Mia is a girl ___ plays soccer.', options: ['who', 'which', 'what'], correct: 0, whyKo: '사람 뒤에는 who예요.' },
+        { promptKo: '미아가 읽는 책이에요.', en: 'This is a book ___ Mia reads.', options: ['which', 'who', 'where'], correct: 0, whyKo: '물건 뒤에는 which예요.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "폴은 책을 읽는 소년이야"를 만들어요.', words: ['Paul', 'is', 'a', 'boy', 'who', 'reads', 'books.'], answers: [['Paul', 'is', 'a', 'boy', 'who', 'reads', 'books.']], whyKo: '사람 + who + 설명 순서예요.' },
+        { promptKo: '단어를 놓아 "이것은 새 가방이야"를 만들어요.', words: ['This', 'is', 'a', 'bag', 'which', 'is', 'new.'], answers: [['This', 'is', 'a', 'bag', 'which', 'is', 'new.']], whyKo: '물건 + which + 설명 순서예요.' },
+      ],
+      build: [
+        { promptKo: '친구 한 명을 who로 소개해 보세요.', exampleEn: 'Mia is a girl who plays soccer.', exampleKo: '미아는 축구를 하는 소녀야.', acceptNoteKo: 'Mia is a girl who reads books. / Paul is a boy who plays soccer.도 맞아요. 사람 + who + 동작이면 돼요.' },
+        { promptKo: '새 책이나 가방을 which로 소개해 보세요.', exampleEn: 'This is a book which is new.', exampleKo: '이것은 새 책이야.', acceptNoteKo: 'This is a bag which is new. / This is a book which Mia reads.도 맞아요. 물건 + which + 설명이면 돼요.' },
+      ],
+    },
+    use: { kind: 'speaking', promptKo: '짝에게 친구 한 명을 "… is a girl/boy who …"로 소개해요.', exampleEn: 'Mia is a girl who plays soccer.', exampleKo: '미아는 축구를 하는 소녀야.' },
+    words: [{ en: 'which', ko: '~하는 (물건)' }, { en: 'girl', ko: '소녀' }, { en: 'boy', ko: '소년' }, { en: 'plays', ko: '(운동을) 한다' }, { en: 'reads', ko: '읽는다' }, { en: 'book', ko: '책' }, { en: 'books', ko: '책들' }, { en: 'bag', ko: '가방' }, { en: 'new', ko: '새' }],
+    sources: ['own'],
+  },
+  {
+    id: 'g-mid-05', courseId: 'middleSchool', order: 5,
+    titleKo: '분사로 꾸미기', goalKo: '-ing·-ed로 명사를 꾸밀 수 있어요',
+    conceptId: 'participle', prereqIds: ['g-mid-01'], basicsUnitId: 'g-int-05', status: 'ready', reviewStatus: 'unreviewed',
+    examples: [
+      { en: 'The running boy is Paul.', ko: '달리고 있는 소년은 폴이야.' },
+      { en: 'The sleeping cat is here.', ko: '자고 있는 고양이가 여기 있어.' },
+      { en: 'This is a broken door.', ko: '이것은 부서진 문이야.' },
+      { en: 'This is a closed door.', ko: '이것은 닫힌 문이야.' },
+    ],
+    explainKo: [
+      'Intermediate 5에서 배운 -ing(지금 하고 있어요)을 명사 앞에 쓰면 그 명사를 꾸며 줘요. running boy = 달리고 있는 소년.',
+      '-ed 말은 "…된, …해진"이라는 뜻으로 명사를 꾸며요. broken door = 부서진 문. 이런 -ing·-ed 말을 분사(동사에서 나온 꾸밈말)라고 해요.',
+      '명사가 하고 있으면 -ing, 당했거나 된 상태면 -ed를 골라요. 꾸미는 말은 명사 바로 앞에 써요.',
+    ],
+    structure: [
+      { s: 'The', v: 'running', rest: 'boy is Paul.', ko: '달리고 있는 소년은 폴이야 (-ing + 명사)' },
+      { s: 'This is a', v: 'broken', rest: 'door.', ko: '이것은 부서진 문이야 (-ed + 명사)' },
+    ],
+    errors: [
+      { wrong: 'The run boy is Paul.', right: 'The running boy is Paul.', whyKo: '"달리고 있는"은 run이 아니라 -ing를 붙인 running이에요.' },
+      { wrong: 'This is a break door.', right: 'This is a broken door.', whyKo: '"부서진"은 break가 아니라 -ed 모양 broken이에요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '"자고 있는 고양이"를 말해요. 알맞은 문장은?', options: ['The sleeping cat is here.', 'The sleep cat is here.', 'Sleeping the cat is here.'], correct: 0, whyKo: 'sleeping + 명사 순서예요.' },
+        { promptKo: '"부서진 문"을 말해요. 알맞은 문장은?', options: ['This is a broken door.', 'This is a break door.', 'This is a door broken.'], correct: 0, whyKo: 'broken을 door 앞에 써요.' },
+        { promptKo: '"달리고 있는 소년"을 말해요. 알맞은 문장은?', options: ['The running boy is Paul.', 'The run boy is Paul.', 'Running the boy is Paul.'], correct: 0, whyKo: 'running을 boy 바로 앞에 써요.' },
+      ],
+      blank: [
+        { promptKo: '자고 있는 고양이예요.', en: 'The ___ cat is here.', options: ['sleeping', 'sleep', 'sleeps'], correct: 0, whyKo: '하고 있는 모습은 -ing 모양 sleeping이에요.' },
+        { promptKo: '부서진 문이에요.', en: 'This is a ___ door.', options: ['broken', 'break', 'breaks'], correct: 0, whyKo: '"부서진"은 broken이에요.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "달리고 있는 소년은 폴이야"를 만들어요.', words: ['boy', 'The', 'is', 'running', 'Paul.'], answers: [['The', 'running', 'boy', 'is', 'Paul.']], whyKo: 'The + 꾸밈말 + 명사 순서예요.' },
+        { promptKo: '단어를 놓아 "이것은 닫힌 문이야"를 만들어요.', words: ['This', 'is', 'a', 'closed', 'door.'], answers: [['This', 'is', 'a', 'closed', 'door.']], whyKo: 'a + closed + door 순서예요.' },
+      ],
+      build: [
+        { promptKo: '자고 있는 고양이를 -ing 말로 설명해 보세요.', exampleEn: 'The sleeping cat is here.', exampleKo: '자고 있는 고양이가 여기 있어.', acceptNoteKo: 'This is a sleeping cat. / The sleeping cat is here.도 맞아요. -ing 말을 명사 앞에 쓰면 돼요.' },
+        { promptKo: '부서졌거나 닫힌 문을 -ed 말로 설명해 보세요.', exampleEn: 'This is a broken door.', exampleKo: '이것은 부서진 문이야.', acceptNoteKo: 'This is a closed door. / The closed door is here.도 맞아요. -ed 말을 명사 앞에 쓰면 돼요.' },
+      ],
+    },
+    use: { kind: 'speaking', promptKo: '교실이나 집에서 보이는 것 하나를 -ing 또는 -ed 말로 꾸며 말해요. 짝은 어떤 말이 꾸미는지 짚어요.', exampleEn: 'This is a closed door.', exampleKo: '이것은 닫힌 문이야.' },
+    words: [{ en: 'running', ko: '달리고 있는' }, { en: 'sleeping', ko: '자고 있는' }, { en: 'broken', ko: '부서진' }, { en: 'closed', ko: '닫힌' }, { en: 'boy', ko: '소년' }, { en: 'cat', ko: '고양이' }, { en: 'door', ko: '문' }],
+    sources: ['own'],
+  },
+  {
+    id: 'g-mid-06', courseId: 'middleSchool', order: 6,
+    titleKo: '조건문 if', goalKo: '만약의 상황을 말할 수 있어요',
+    conceptId: 'conditional-if', prereqIds: ['g-mid-01'], basicsUnitId: 'g-easy-06', status: 'ready', reviewStatus: 'unreviewed',
+    examples: [
+      { en: 'If it rains, we will stay home.', ko: '비가 오면 우리는 집에 있을 거야.' },
+      { en: 'If it is sunny, we will play soccer.', ko: '맑으면 우리는 축구를 할 거야.' },
+      { en: 'We will stay home if it rains.', ko: '비가 오면 우리는 집에 있을 거야.' },
+      { en: "If it doesn't rain, we will play soccer.", ko: '비가 안 오면 축구를 할 거야.' },
+    ],
+    explainKo: [
+      'Easy 6에서 배운 현재 모양(like, rains)으로 "만약 …라면"을 말해요. 이런 문장을 조건문(만약 …라면 …할 거야)이라고 해요.',
+      'If 뒤에는 앞으로의 일이어도 will을 쓰지 않고 현재 모양을 써요. If it rains, … (O) / If it will rain, … (X)',
+      '결과 부분에는 will + 동사 원래 모양을 써요. If 부분이 앞에 오면 쉼표(,)를 찍고, 뒤에 오면 쉼표가 없어요.',
+    ],
+    structure: [
+      { s: 'If it', v: 'rains,', rest: 'we will stay home.', ko: '만약 비가 오면 우리는 집에 있을 거야 (If + 현재 모양)' },
+      { s: 'We', v: 'will stay', rest: 'home if it rains.', ko: '같은 뜻이에요. If 부분을 뒤에 쓰면 쉼표가 없어요' },
+    ],
+    compare: {
+      aff: { en: 'If it rains, we will stay home.', ko: '비가 오면 우리는 집에 있을 거야.' },
+      neg: { en: "If it doesn't rain, we will play soccer.", ko: '비가 안 오면 우리는 축구를 할 거야.' },
+      q: { en: 'What will we do if it rains?', ko: '비가 오면 우리는 무엇을 할까?' },
+    },
+    errors: [
+      { wrong: 'If it will rain, we will stay home.', right: 'If it rains, we will stay home.', whyKo: 'If 뒤에는 will 대신 현재 모양 rains를 써요.' },
+      { wrong: 'If it rains, we will to stay home.', right: 'If it rains, we will stay home.', whyKo: 'will 뒤에는 to 없이 동사 원래 모양을 써요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '비가 오면 집에 있을 거예요. 알맞은 문장은?', options: ['If it rains, we will stay home.', 'If it will rain, we will stay home.', 'If it rains, we stay will home.'], correct: 0, whyKo: 'If + 현재 모양, will + 동사 원래 모양이에요.' },
+        { promptKo: '맑으면 축구를 할 거예요. 알맞은 문장은?', options: ['If it is sunny, we will play soccer.', 'If it will be sunny, we will play soccer.', 'If it is sunny, we played soccer.'], correct: 0, whyKo: 'If 뒤는 현재 모양 is, 결과는 will play예요.' },
+        { promptKo: '비가 안 오면 축구를 할 거예요. 알맞은 문장은?', options: ["If it doesn't rain, we will play soccer.", "If it doesn't rains, we will play soccer.", 'If it not rain, we will play soccer.'], correct: 0, whyKo: "doesn't 뒤에는 rain을 그대로 써요." },
+      ],
+      blank: [
+        { promptKo: '만약 비가 오면 집에 있을 거예요.', en: 'If it ___, we will stay home.', options: ['rains', 'will rain', 'rained'], correct: 0, whyKo: 'If 뒤에는 현재 모양 rains예요.' },
+        { promptKo: '비가 오면 우리는 집에 있을 거예요.', en: 'We ___ stay home if it rains.', options: ['will', 'am', 'is'], correct: 0, whyKo: '앞으로의 일은 will + 동사 원래 모양이에요.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "비가 오면 우리는 집에 있을 거야"를 만들어요(If로 시작).', words: ['If', 'it', 'rains,', 'we', 'will', 'stay', 'home.'], answers: [['If', 'it', 'rains,', 'we', 'will', 'stay', 'home.']], whyKo: 'If 부분이 앞이면 쉼표(,)를 찍어요.' },
+        { promptKo: '단어를 놓아 "비가 오면 우리는 집에 있을 거야"를 만들어요(We로 시작).', words: ['We', 'will', 'stay', 'home', 'if', 'it', 'rains.'], answers: [['We', 'will', 'stay', 'home', 'if', 'it', 'rains.']], whyKo: 'If 부분이 뒤면 쉼표가 없어요.' },
+      ],
+      build: [
+        { promptKo: '비가 오면 무엇을 할지 말하거나 써 보세요.', exampleEn: 'If it rains, we will stay home.', exampleKo: '비가 오면 우리는 집에 있을 거야.', acceptNoteKo: 'If it rains, I will stay home. / We will stay home if it rains.도 맞아요. If + 현재 모양, will + 동사 원래 모양이면 돼요.' },
+        { promptKo: '날씨가 맑으면 무엇을 할지 말하거나 써 보세요.', exampleEn: 'If it is sunny, we will play soccer.', exampleKo: '맑으면 우리는 축구를 할 거야.', acceptNoteKo: 'If it is sunny, I will play soccer. / We will play soccer if it is sunny.도 맞아요. 하는 일은 자유예요.' },
+      ],
+    },
+    use: { kind: 'speaking', promptKo: '짝에게 "If it rains, …"와 "If it is sunny, …" 계획을 하나씩 말해요.', exampleEn: 'If it rains, we will stay home.', exampleKo: '비가 오면 우리는 집에 있을 거야.' },
+    words: [{ en: 'if', ko: '만약 ~라면' }, { en: 'rains', ko: '비가 온다' }, { en: 'rain', ko: '비가 오다' }, { en: 'stay', ko: '머무르다' }, { en: 'home', ko: '집' }, { en: 'sunny', ko: '맑은' }],
+    sources: ['own'],
+  },
+  {
+    id: 'g-high-01', courseId: 'highSchool', order: 1,
+    titleKo: '완료 시제', goalKo: '과거와 지금을 이어서 말할 수 있어요',
+    conceptId: 'perfect-tense', prereqIds: [], basicsUnitId: 'g-int-07', status: 'ready', reviewStatus: 'unreviewed',
+    words: [{ en: 'have', ko: '가지고 있다 / ~했다(완료)' }, { en: 'has', ko: 'have의 한 사람용' }, { en: 'lived', ko: '살았다' }, { en: 'known', ko: '알고 있다(know의 p.p.)' }, { en: 'finished', ko: '끝냈다' }, { en: 'homework', ko: '숙제' }, { en: 'since', ko: '~이래로' }, { en: 'year', ko: '해, 년' }, { en: '2020', ko: '2020년' }],
+    examples: [
+      { en: 'I have lived here for a year.', ko: '나는 여기서 1년째 살고 있어.' },
+      { en: 'Mia has lived here since 2020.', ko: '미아는 2020년부터 여기서 살고 있어.' },
+      { en: 'We have known Mia for a year.', ko: '우리는 미아를 1년째 알고 있어.' },
+      { en: 'I have finished my homework.', ko: '나는 숙제를 끝냈어.' },
+    ],
+    explainKo: [
+      '완료 시제(현재완료)는 have/has + p.p.(과거분사)로 "과거부터 지금까지"를 말해요. 기초는 중급 "어제 있었던 일" 단원(과거)이에요.',
+      '기간은 for a year, 시작 시점은 since 2020처럼 for와 since로 말해요.',
+      'I·You·We 뒤에는 have, Mia처럼 한 사람 뒤에는 has를 써요. 방금 끝낸 일(I have finished)도 말해요.',
+    ],
+    structure: [
+      { s: 'I', v: 'have lived', rest: 'here for a year.', ko: '나는 여기서 1년째 살고 있어 (have + p.p. + 기간)' },
+      { s: 'Mia', v: 'has lived', rest: 'here since 2020.', ko: '미아는 2020년부터 살고 있어 (한 사람이라 has)' },
+    ],
+    compare: {
+      aff: { en: 'I have finished my homework.', ko: '나는 숙제를 끝냈어.' },
+      neg: { en: 'I have not finished my homework.', ko: '나는 숙제를 아직 못 끝냈어.' },
+      q: { en: 'Have you finished your homework?', ko: '너는 숙제를 끝냈어?' },
+    },
+    errors: [
+      { wrong: 'I live here since 2020.', right: 'I have lived here since 2020.', whyKo: 'since와 함께 지금까지 이어지는 일은 have + p.p.로 말해요.' },
+      { wrong: 'Mia have lived here for a year.', right: 'Mia has lived here for a year.', whyKo: 'Mia는 한 사람이라 have가 아니라 has를 써요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '미아는 2020년부터 여기서 살고 있어요. 알맞은 문장은?', options: ['Mia has lived here since 2020.', 'Mia live here since 2020.', 'Mia have lived here since 2020.'], correct: 0, whyKo: '한 사람 + 지금까지 → has + p.p.예요.' },
+        { promptKo: '우리는 미아를 1년째 알고 있어요. 알맞은 문장은?', options: ['We have known Mia for a year.', 'We know Mia since a year.', 'We has known Mia for a year.'], correct: 0, whyKo: 'We 뒤에는 have, 기간(a year)에는 for를 써요.' },
+        { promptKo: '친구에게 숙제를 끝냈는지 물어요. 알맞은 문장은?', options: ['Have you finished your homework?', 'Do you finished your homework?', 'You have finished your homework do?'], correct: 0, whyKo: '질문은 Have you + p.p.? 순서예요.' },
+      ],
+      blank: [
+        { promptKo: '미아는 2020년부터 여기서 살고 있어요.', en: 'Mia ___ lived here since 2020.', options: ['has', 'have', 'is'], correct: 0, whyKo: '한 사람이라 has예요. → Mia has lived here since 2020.' },
+        { promptKo: '"1년 동안"이라고 기간을 말해요.', en: 'We have known Mia ___ a year.', options: ['for', 'since', 'at'], correct: 0, whyKo: '기간(a year)에는 for, 시작 시점(2020)에는 since예요.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "나는 여기서 1년째 살고 있어"를 만들어요.', words: ['have', 'lived', 'I', 'here', 'for', 'a', 'year.'], answers: [['I', 'have', 'lived', 'here', 'for', 'a', 'year.']], whyKo: 'I have lived + 장소 + for + 기간 순서예요.' },
+        { promptKo: '단어를 놓아 "미아는 자기 숙제를 끝냈어"를 만들어요.', words: ['has', 'Mia', 'finished', 'her', 'homework.'], answers: [['Mia', 'has', 'finished', 'her', 'homework.']], whyKo: 'Mia has finished + 물건 순서예요.' },
+      ],
+      build: [
+        { promptKo: '숙제를 이미 끝냈어요. have를 써서 말하거나 써 보세요.', exampleEn: 'I have finished my homework.', exampleKo: '나는 숙제를 끝냈어.', acceptNoteKo: 'I have finished it. / I have finished my homework.도 맞아요. 줄임말 I\'ve finished도 맞아요. have + p.p.면 돼요.' },
+        { promptKo: '친구를 알고 지낸 기간을 for로 말하거나 써 보세요.', exampleEn: 'I have known Mia for a year.', exampleKo: '나는 미아를 1년째 알고 있어.', acceptNoteKo: 'We have known Mia for a year. / I have known Mia since 2020.도 맞아요. have known + for(기간) 또는 since(시점)이면 돼요.' },
+      ],
+    },
+    use: { kind: 'writing', promptKo: '내가 여기(동네나 학교)에서 지낸 기간을 for나 since로 한 문장 써요.', exampleEn: 'I have lived here for a year.', exampleKo: '나는 여기서 1년째 살고 있어.' },
+    sources: ['own'],
+  },
+  {
+    id: 'g-high-02', courseId: 'highSchool', order: 2,
+    titleKo: '수동태 심화', goalKo: '시제·조동사가 있는 수동태를 쓸 수 있어요',
+    conceptId: 'passive-voice', prereqIds: ['g-high-01'], basicsUnitId: 'g-easy-03', status: 'ready', reviewStatus: 'unreviewed',
+    words: [{ en: 'was', ko: '~였다/~되었다' }, { en: 'were', ko: 'was의 여러 개용' }, { en: 'be', ko: '~이다(원형)' }, { en: 'by', ko: '~에 의해' }, { en: 'made', ko: '만들어진(make의 p.p.)' }, { en: 'cleaned', ko: '청소된' }, { en: 'found', ko: '발견된' }],
+    examples: [
+      { en: 'This was made by Paul.', ko: '이것은 폴에 의해 만들어졌어.' },
+      { en: 'These were made by Mia.', ko: '이것들은 미아에 의해 만들어졌어.' },
+      { en: 'It was cleaned by Mia.', ko: '그것은 미아에 의해 청소되었어.' },
+      { en: 'It can be found here.', ko: '그것은 여기서 찾을 수 있어.' },
+    ],
+    explainKo: [
+      '수동태(be + p.p.)는 "…되다 / …당하다"를 말해요. 기초는 쉬운 "나는 …이야 am·is·are" 단원의 be동사예요.',
+      '과거 수동태는 was/were + p.p.예요. 하나면 was, 여럿이면 were를 쓰고, 한 사람은 by로 말해요.',
+      '조동사가 있으면 be를 그대로 써서 can be + p.p.가 돼요. (can is, can are는 안 돼요)',
+    ],
+    structure: [
+      { s: 'This', v: 'was made', rest: 'by Paul.', ko: '이것은 폴에 의해 만들어졌어 (was + p.p.)' },
+      { s: 'It', v: 'can be found', rest: 'here.', ko: '그것은 여기서 찾을 수 있어 (can be + p.p.)' },
+    ],
+    compare: {
+      aff: { en: 'It was made by Paul.', ko: '그것은 폴이 만들었어.' },
+      neg: { en: 'It was not made by Paul.', ko: '그것은 폴이 만든 게 아니야.' },
+      q: { en: 'Was it made by Paul?', ko: '그것은 폴이 만들었어?' },
+    },
+    errors: [
+      { wrong: 'This made by Paul.', right: 'This was made by Paul.', whyKo: 'p.p.(made) 앞에 was가 필요해요. be가 없으면 수동태가 안 돼요.' },
+      { wrong: 'It can found here.', right: 'It can be found here.', whyKo: 'can 뒤에는 be를 넣어요. can be + p.p.예요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '이것은 폴에 의해 만들어졌어요. 알맞은 문장은?', options: ['This was made by Paul.', 'This was make by Paul.', 'This made by Paul.'], correct: 0, whyKo: 'was + p.p.(made) + by …예요.' },
+        { promptKo: '이것들은 미아에 의해 만들어졌어요. 알맞은 문장은?', options: ['These were made by Mia.', 'These was made by Mia.', 'These were make by Mia.'], correct: 0, whyKo: 'These는 여럿이라 were, 그리고 p.p.(made)예요.' },
+        { promptKo: '그것은 여기서 찾을 수 있어요. 알맞은 문장은?', options: ['It can be found here.', 'It can is found here.', 'It can found here.'], correct: 0, whyKo: 'can 뒤에는 be + p.p.예요.' },
+      ],
+      blank: [
+        { promptKo: '그것은 미아에 의해 청소되었어요.', en: 'It ___ cleaned by Mia.', options: ['was', 'were', 'be'], correct: 0, whyKo: 'It은 하나라서 was예요.' },
+        { promptKo: '그것은 여기서 찾을 수 있어요.', en: 'It can ___ found here.', options: ['be', 'is', 'are'], correct: 0, whyKo: 'can 바로 뒤에는 be를 써요. → can be found' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "이것들은 미아에 의해 만들어졌어"를 만들어요.', words: ['made', 'were', 'by', 'These', 'Mia.'], answers: [['These', 'were', 'made', 'by', 'Mia.']], whyKo: 'These were + p.p. + by + 사람 순서예요.' },
+        { promptKo: '단어를 놓아 "그것은 여기서 찾을 수 있어"를 만들어요.', words: ['can', 'be', 'It', 'here.', 'found'], answers: [['It', 'can', 'be', 'found', 'here.']], whyKo: 'It can be + p.p. + 장소 순서예요.' },
+      ],
+      build: [
+        { promptKo: '미아가 청소했어요. "그것은 미아에 의해 청소되었어"를 수동태로 말하거나 써 보세요.', exampleEn: 'It was cleaned by Mia.', exampleKo: '그것은 미아에 의해 청소되었어.', acceptNoteKo: 'This was cleaned by Mia. / It was cleaned by Paul.도 맞아요. was + p.p. + by …이면 돼요.' },
+        { promptKo: '"그것은 여기서 찾을 수 있어"를 can be로 말하거나 써 보세요.', exampleEn: 'It can be found here.', exampleKo: '그것은 여기서 찾을 수 있어.', acceptNoteKo: 'This can be found here. / These can be found here.도 맞아요. can be + p.p.면 돼요.' },
+      ],
+    },
+    use: { kind: 'writing', promptKo: '폴이나 미아가 만든 물건을 하나 골라 was made by로 한 문장 써요.', exampleEn: 'This was made by Paul.', exampleKo: '이것은 폴에 의해 만들어졌어.' },
+    sources: ['own'],
+  },
+  {
+    id: 'g-high-03', courseId: 'highSchool', order: 3,
+    titleKo: '관계사 심화', goalKo: '긴 문장 속 관계사를 해석하고 쓸 수 있어요',
+    conceptId: 'relative-clause', prereqIds: ['g-high-01'], basicsUnitId: 'g-int-03', status: 'ready', reviewStatus: 'unreviewed',
+    words: [{ en: 'which', ko: '~하는 (사물)' }, { en: 'friend', ko: '친구' }, { en: 'book', ko: '책' }, { en: 'read', ko: '읽은(과거·p.p.)' }, { en: 'talked', ko: '이야기했다' }],
+    examples: [
+      { en: 'Mia is the friend who read this.', ko: '미아는 이것을 읽은 친구야.' },
+      { en: 'This is the book which Mia read.', ko: '이것은 미아가 읽은 책이야.' },
+      { en: 'This is the book Mia read.', ko: '이것은 미아가 읽은 책이야. (which 생략)' },
+      { en: 'She is the friend I talked with.', ko: '그녀는 내가 함께 이야기한 친구야.' },
+    ],
+    explainKo: [
+      '관계사(관계대명사)는 두 문장을 이어 앞의 명사를 설명해요. 기초는 중급 "무엇을 좋아해?" 단원의 who·what 같은 의문사예요.',
+      '사람은 who, 사물은 which를 쓰고, that은 둘 다 쓸 수 있어요.',
+      '관계사가 뒤 문장의 목적어(…을)일 때는 생략할 수 있어요. 전치사는 문장 끝에 둘 수 있어요: the friend I talked with.',
+    ],
+    structure: [
+      { s: 'This is the book', v: '(which)', rest: 'Mia read.', ko: '이것은 미아가 읽은 책이야 (which는 생략 가능)' },
+      { s: 'She is the friend', v: '(that)', rest: 'I talked with.', ko: '그녀는 내가 함께 이야기한 친구야 (전치사 with는 끝에)' },
+    ],
+    errors: [
+      { wrong: 'This is the book which Mia read it.', right: 'This is the book which Mia read.', whyKo: 'which가 이미 it의 역할을 해서 뒤에 it을 또 쓰지 않아요.' },
+      { wrong: 'Mia is the friend which read this.', right: 'Mia is the friend who read this.', whyKo: '사람은 who(또는 that)를 써요. which는 사물에 써요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '"미아가 읽은 책"에서 관계사를 생략한 문장은?', options: ['This is the book Mia read.', 'This is the book Mia read it.', 'This is the Mia read book.'], correct: 0, whyKo: '목적어 관계사는 생략할 수 있지만 it을 더하면 안 돼요.' },
+        { promptKo: '사람을 설명해요: "이것을 읽은 친구". 알맞은 문장은?', options: ['Mia is the friend who read this.', 'Mia is the friend which read this.', 'Mia is the friend what read this.'], correct: 0, whyKo: '사람 뒤에는 who예요.' },
+        { promptKo: '"내가 함께 이야기한 친구"를 말해요. 알맞은 문장은?', options: ['She is the friend I talked with.', 'She is the friend I talked.', 'She is the friend with I talked.'], correct: 0, whyKo: '전치사 with는 문장 끝에 와요. → I talked with' },
+      ],
+      blank: [
+        { promptKo: '사람을 설명해요.', en: 'Mia is the friend ___ read this.', options: ['who', 'which', 'it'], correct: 0, whyKo: '사람은 who예요.' },
+        { promptKo: '사물(책)을 설명해요. (생략도 가능하지만 여기서는 관계사를 써요)', en: 'This is the book ___ Mia read.', options: ['which', 'who', 'it'], correct: 0, whyKo: '사물은 which예요.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "이것은 미아가 읽은 책이야"를 만들어요.', words: ['read.', 'the', 'which', 'This', 'book', 'is', 'Mia'], answers: [['This', 'is', 'the', 'book', 'which', 'Mia', 'read.']], whyKo: '명사(book) 바로 뒤에 which가 와요.' },
+        { promptKo: '단어를 놓아 "그녀는 내가 함께 이야기한 친구야"를 만들어요.', words: ['I', 'She', 'is', 'talked', 'friend', 'the', 'with.'], answers: [['She', 'is', 'the', 'friend', 'I', 'talked', 'with.']], whyKo: 'the friend 다음에 I talked with가 와요.' },
+      ],
+      build: [
+        { promptKo: '미아가 읽은 책을 소개해요. 관계사는 써도 생략해도 돼요.', exampleEn: 'This is the book Mia read.', exampleKo: '이것은 미아가 읽은 책이야.', acceptNoteKo: 'This is the book which Mia read. / This is the book that Mia read.도 맞아요.' },
+        { promptKo: '내가 함께 이야기한 친구를 소개해요.', exampleEn: 'She is the friend I talked with.', exampleKo: '그녀는 내가 함께 이야기한 친구야.', acceptNoteKo: 'She is the friend that I talked with. / He is the friend I talked with.도 맞아요.' },
+      ],
+    },
+    use: { kind: 'writing', promptKo: '내가 읽은 책이나 함께 이야기한 친구를 관계사 문장으로 한 줄 써요.', exampleEn: 'This is the book I read.', exampleKo: '이것은 내가 읽은 책이야.' },
+    sources: ['own'],
+  },
+  {
+    id: 'g-high-04', courseId: 'highSchool', order: 4,
+    titleKo: '가정법', goalKo: '사실과 다른 상황을 말할 수 있어요',
+    conceptId: 'subjunctive-conditional', prereqIds: ['g-high-01'], basicsUnitId: 'g-easy-06', status: 'ready', reviewStatus: 'unreviewed',
+    words: [{ en: 'if', ko: '만약 ~라면' }, { en: 'were', ko: '~이라면(가정)' }, { en: 'would', ko: '~할 텐데' }, { en: 'go', ko: '가다' }, { en: 'had', ko: '가지고 있다면(have의 과거)' }, { en: 'dog', ko: '개' }, { en: 'play', ko: '놀다' }, { en: 'time', ko: '시간' }],
+    examples: [
+      { en: 'If I were you, I would go.', ko: '내가 너라면 갈 텐데.' },
+      { en: 'If I had a dog, I would play.', ko: '개가 있다면 놀 텐데.' },
+      { en: 'If I had time, I would go.', ko: '시간이 있다면 갈 텐데.' },
+      { en: 'If Mia were here, I would play.', ko: '미아가 여기 있다면 놀 텐데.' },
+    ],
+    explainKo: [
+      '가정법(과거)은 지금 사실과 다른 상황을 상상할 때 써요. 기초는 쉬운 "좋아해요 I like" 단원의 현재 문장이에요.',
+      'If + 과거형, 주어 + would + 동사 → "만약 …라면 …할 텐데". 사실과 다르다는 뜻이에요.',
+      'if절의 be동사는 I 뒤에도 were를 써요. 과거형이지만 뜻은 지금의 상상이에요.',
+    ],
+    structure: [
+      { s: 'If I', v: 'were', rest: 'you,', ko: '내가 너라면 (사실은 내가 네가 아니야)' },
+      { s: 'I', v: 'would go', rest: 'with you.', ko: '나는 너와 갈 텐데 (would + 동사)' },
+    ],
+    compare: {
+      aff: { en: 'If I were you, I would go.', ko: '내가 너라면 갈 텐데.' },
+      neg: { en: 'If I were you, I would not go.', ko: '내가 너라면 안 갈 텐데.' },
+      q: { en: 'Would you go?', ko: '너라면 갈 거야?' },
+    },
+    errors: [
+      { wrong: 'If I am you, I would go.', right: 'If I were you, I would go.', whyKo: '사실과 다른 상상이라 if절에 am이 아니라 were를 써요.' },
+      { wrong: 'If I had a dog, I will play.', right: 'If I had a dog, I would play.', whyKo: '사실과 다른 상상이라 will이 아니라 would를 써요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '"내가 너라면 갈 텐데." 알맞은 문장은?', options: ['If I were you, I would go.', 'If I am you, I would go.', 'If I were you, I will go.'], correct: 0, whyKo: 'If I were …, I would …예요.' },
+        { promptKo: '지금은 개가 없지만 있다면 놀 텐데요. 알맞은 문장은?', options: ['If I had a dog, I would play.', 'If I have a dog, I would play.', 'If I had a dog, I plays.'], correct: 0, whyKo: 'If + 과거형(had), would + 동사예요.' },
+        { promptKo: '"미아가 여기 있다면 놀 텐데." 알맞은 문장은?', options: ['If Mia were here, I would play.', 'If Mia is here, I would play.', 'If Mia were here, I play.'], correct: 0, whyKo: '가정은 If …were …, I would …예요.' },
+      ],
+      blank: [
+        { promptKo: '내가 너라면 갈 텐데요.', en: 'If I ___ you, I would go.', options: ['were', 'am', 'will'], correct: 0, whyKo: 'I 뒤에도 가정에서는 were예요.' },
+        { promptKo: '시간이 있다면 갈 텐데요.', en: 'If I had time, I ___ go.', options: ['would', 'will', 'am'], correct: 0, whyKo: '가정의 결과는 would + 동사예요.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "내가 너라면 갈 텐데"를 만들어요.', words: ['you,', 'were', 'If', 'I', 'I', 'would', 'go.'], answers: [['If', 'I', 'were', 'you,', 'I', 'would', 'go.']], whyKo: 'If I were …, I would … 순서예요.' },
+        { promptKo: '단어를 놓아 "개가 있다면 놀 텐데"를 만들어요.', words: ['If', 'I', 'had', 'a', 'dog,', 'I', 'would', 'play.'], answers: [['If', 'I', 'had', 'a', 'dog,', 'I', 'would', 'play.']], whyKo: 'If절(had) 다음에 결과(would play)가 와요.' },
+      ],
+      build: [
+        { promptKo: '내가 너라면 어떻게 할지 If I were you로 시작해 말하거나 써 보세요.', exampleEn: 'If I were you, I would go.', exampleKo: '내가 너라면 갈 텐데.', acceptNoteKo: 'If I were you, I would play. / If I were Mia, I would go.도 맞아요. If I were …, I would …이면 돼요.' },
+        { promptKo: '지금은 없지만 개가 있다면 하고 싶은 일을 말하거나 써 보세요.', exampleEn: 'If I had a dog, I would play.', exampleKo: '개가 있다면 놀 텐데.', acceptNoteKo: 'If I had time, I would go. / If I had a dog, I would play with it.도 맞아요. If + 과거형, would + 동사면 돼요.' },
+      ],
+    },
+    use: { kind: 'writing', promptKo: '"만약 …라면, …할 텐데"를 If I had …, I would …로 한 문장 써요.', exampleEn: 'If I had time, I would go.', exampleKo: '시간이 있다면 갈 텐데.' },
+    sources: ['own'],
+  },
+  {
+    id: 'g-high-05', courseId: 'highSchool', order: 5,
+    titleKo: '간접화법', goalKo: '남이 한 말을 전달해 말할 수 있어요',
+    conceptId: 'reported-speech', prereqIds: ['g-high-01'], basicsUnitId: 'g-int-07', status: 'ready', reviewStatus: 'unreviewed',
+    words: [{ en: 'said', ko: '말했다' }, { en: 'was', ko: '~였다(am의 과거)' }, { en: 'had', ko: 'have의 과거' }, { en: 'happy', ko: '행복한' }, { en: 'tired', ko: '피곤한' }],
+    examples: [
+      { en: 'He said, "I am happy."', ko: '그는 "나는 행복해."라고 말했어.' },
+      { en: 'He said that he was happy.', ko: '그는 행복하다고 말했어.' },
+      { en: 'Mia said, "I have finished."', ko: '미아는 "나는 끝냈어."라고 말했어.' },
+      { en: 'Mia said that she had finished.', ko: '미아는 끝냈다고 말했어.' },
+    ],
+    explainKo: [
+      '간접화법(남이 한 말을 전하는 말)은 said that + 문장으로 말해요. 기초는 중급 "어제 있었던 일" 단원의 과거 표현이에요.',
+      '말한 때가 과거라서 전하는 말의 시제가 한 칸 과거로 가요: am → was, have → had.',
+      '대명사도 전하는 사람 기준으로 바뀌어요: "I am happy" → he was happy. that은 생략할 수 있어요.',
+    ],
+    structure: [
+      { s: 'He', v: 'said that', rest: 'he was happy.', ko: '그는 행복하다고 말했어 (am → was)' },
+      { s: 'Mia', v: 'said that', rest: 'she had finished.', ko: '미아는 끝냈다고 말했어 (have → had)' },
+    ],
+    compare: {
+      aff: { en: 'He said that he was happy.', ko: '그는 행복하다고 말했어.' },
+      neg: { en: 'He said that he was not happy.', ko: '그는 행복하지 않다고 말했어.' },
+      q: { en: 'Was he happy?', ko: '그는 행복했어?' },
+    },
+    errors: [
+      { wrong: 'Mia said that she have finished.', right: 'Mia said that she had finished.', whyKo: '말한 때가 과거라서 have도 had로 한 칸 과거로 바꿔요.' },
+      { wrong: 'Mia said that I had finished.', right: 'Mia said that she had finished.', whyKo: '전하는 사람 기준이라 말한 사람(미아)은 I가 아니라 she예요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: 'He said, "I am happy." 이 말을 전해요. 알맞은 문장은?', options: ['He said that he was happy.', 'He said that he am happy.', 'He said that he were happy.'], correct: 0, whyKo: 'I → he, am → was로 바꿔요.' },
+        { promptKo: 'Mia said, "I have finished." 이 말을 전해요. 알맞은 문장은?', options: ['Mia said that she had finished.', 'Mia said that she have finished.', 'Mia said that she finished have.'], correct: 0, whyKo: 'I → she, have → had예요.' },
+        { promptKo: 'Mia said, "I am tired." 이 말을 전해요. 알맞은 문장은?', options: ['Mia said that she was tired.', 'Mia said that she am tired.', 'Mia said that was she tired.'], correct: 0, whyKo: 'said that + she was …순서예요.' },
+      ],
+      blank: [
+        { promptKo: '그는 행복하다고 말했어요.', en: 'He said that he ___ happy.', options: ['was', 'am', 'are'], correct: 0, whyKo: 'am이 한 칸 과거로 가서 was예요.' },
+        { promptKo: '미아는 끝냈다고 말했어요.', en: 'Mia said that she ___ finished.', options: ['had', 'have', 'has'], correct: 0, whyKo: 'have가 한 칸 과거로 가서 had예요.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "그는 피곤하다고 말했어"를 만들어요.', words: ['said', 'He', 'that', 'was', 'he', 'tired.'], answers: [['He', 'said', 'that', 'he', 'was', 'tired.']], whyKo: 'He said that he was … 순서예요.' },
+        { promptKo: '단어를 놓아 "미아는 끝냈다고 말했어"를 만들어요.', words: ['Mia', 'said', 'that', 'she', 'had', 'finished.'], answers: [['Mia', 'said', 'that', 'she', 'had', 'finished.']], whyKo: 'Mia said that she had + p.p. 순서예요.' },
+      ],
+      build: [
+        { promptKo: 'He said, "I am happy." 이 말을 said that으로 전하세요.', exampleEn: 'He said that he was happy.', exampleKo: '그는 행복하다고 말했어.', acceptNoteKo: 'He said he was happy.(that 생략)도 맞아요. He said that he was tired.처럼 바꿔도 돼요.' },
+        { promptKo: 'Mia said, "I have finished." 이 말을 전하세요.', exampleEn: 'Mia said that she had finished.', exampleKo: '미아는 끝냈다고 말했어.', acceptNoteKo: 'Mia said she had finished.(that 생략)도 맞아요. she + had + p.p.면 돼요.' },
+      ],
+    },
+    use: { kind: 'writing', promptKo: '친구가 한 말 하나를 골라 said that으로 전해 한 문장 써요.', exampleEn: 'Mia said that she was happy.', exampleKo: '미아는 행복하다고 말했어.' },
+    sources: ['own'],
+  },
+  {
+    id: 'g-high-06', courseId: 'highSchool', order: 6,
+    titleKo: '분사구문', goalKo: '분사로 문장을 짧게 이어 쓸 수 있어요',
+    conceptId: 'participle', prereqIds: ['g-high-01'], basicsUnitId: 'g-int-05', status: 'ready', reviewStatus: 'unreviewed',
+    words: [{ en: 'walking', ko: '걸으면서' }, { en: 'walked', ko: '걸었다' }, { en: 'home', ko: '집(으로)' }, { en: 'met', ko: '만났다' }, { en: 'while', ko: '~하는 동안' }, { en: 'reading', ko: '읽으면서' }, { en: 'book', ko: '책' }, { en: 'sat', ko: '앉았다' }],
+    examples: [
+      { en: 'Walking home, I met Mia.', ko: '집에 걸어가다가 미아를 만났어.' },
+      { en: 'While I walked home, I met Mia.', ko: '집에 걸어가는 동안 미아를 만났어.' },
+      { en: 'While walking home, I met Mia.', ko: '집에 걸어가는 동안 미아를 만났어.' },
+      { en: 'Reading a book, Mia sat here.', ko: '미아는 책을 읽으며 여기 앉았어.' },
+    ],
+    explainKo: [
+      '분사구문(-ing로 시작하는 짧은 구)은 "…하면서 / …할 때"를 짧게 말해요. 기초는 중급 "지금 …하고 있어요" 단원의 -ing예요.',
+      'While I walked home, I met Mia. → Walking home, I met Mia. 접속사와 앞의 주어를 빼고 동사에 -ing를 붙여요.',
+      '앞부분의 주어는 뒤 문장의 주어와 같아야 해요. 그래서 -ing 앞에 주어를 따로 쓰지 않아요.',
+    ],
+    structure: [
+      { s: 'While I walked home,', v: 'I met', rest: 'Mia.', ko: '집에 걸어가는 동안 미아를 만났어 (접속사 + 주어 + 동사)' },
+      { s: 'Walking home,', v: 'I met', rest: 'Mia.', ko: '집에 걸어가다가 미아를 만났어 (-ing로 짧게, 같은 주어는 생략)' },
+    ],
+    errors: [
+      { wrong: 'Walked home, I met Mia.', right: 'Walking home, I met Mia.', whyKo: '"…하면서"는 walked가 아니라 -ing(Walking)로 시작해요.' },
+      { wrong: 'While walk home, I met Mia.', right: 'While walking home, I met Mia.', whyKo: 'while 뒤에도 walking처럼 -ing를 써요.' },
+    ],
+    practice: {
+      choice: [
+        { promptKo: '"집에 걸어가다가 미아를 만났어요." 분사구문은?', options: ['Walking home, I met Mia.', 'Walk home, I met Mia.', 'Walked home, I met Mia.'], correct: 0, whyKo: '-ing로 시작해요. → Walking home' },
+        { promptKo: '"책을 읽으며 여기 앉았어요." 알맞은 문장은?', options: ['Reading a book, I sat here.', 'Read a book, I sat here.', 'Reads a book, I sat here.'], correct: 0, whyKo: 'Reading처럼 -ing로 시작해요.' },
+        { promptKo: 'while을 쓴 알맞은 문장은?', options: ['While walking home, I met Mia.', 'While walk home, I met Mia.', 'While walked home, I met Mia.'], correct: 0, whyKo: 'while 뒤에 -ing를 쓰면 주어와 be를 줄일 수 있어요.' },
+      ],
+      blank: [
+        { promptKo: '집에 걸어가다가 미아를 만났어요.', en: '___ home, I met Mia.', options: ['Walking', 'Walk', 'Walked'], correct: 0, whyKo: '"…하면서"는 -ing예요.' },
+        { promptKo: '집에 걸어가는 동안 미아를 만났어요.', en: 'While ___ home, I met Mia.', options: ['walking', 'walk', 'walked'], correct: 0, whyKo: 'while 뒤에도 -ing를 써요.' },
+      ],
+      order: [
+        { promptKo: '단어를 놓아 "집에 걸어가다가 미아를 만났어"를 만들어요.', words: ['Walking', 'home,', 'I', 'met', 'Mia.'], answers: [['Walking', 'home,', 'I', 'met', 'Mia.']], whyKo: '분사구문(Walking home,) 다음에 본 문장이 와요.' },
+        { promptKo: '단어를 놓아 "미아는 책을 읽으며 여기 앉았어"를 만들어요.', words: ['Reading', 'a', 'book,', 'Mia', 'sat', 'here.'], answers: [['Reading', 'a', 'book,', 'Mia', 'sat', 'here.']], whyKo: 'Reading a book, 다음에 Mia sat here.가 와요.' },
+      ],
+      build: [
+        { promptKo: 'While I walked home, I met Mia.를 분사구문으로 바꿔 말하거나 써 보세요.', exampleEn: 'Walking home, I met Mia.', exampleKo: '집에 걸어가다가 미아를 만났어.', acceptNoteKo: 'Walking home, I met Paul. / While walking home, I met Mia.도 맞아요. -ing로 시작하고 주어는 하나예요.' },
+        { promptKo: '책을 읽으며 앉아 있었어요. -ing로 시작해 말하거나 써 보세요.', exampleEn: 'Reading a book, I sat here.', exampleKo: '책을 읽으며 여기 앉았어.', acceptNoteKo: 'Reading a book, Mia sat here.도 맞아요. -ing로 시작하면 돼요.' },
+      ],
+    },
+    use: { kind: 'writing', promptKo: 'Walking home처럼 -ing로 시작해 오늘 한 일을 한 문장 써요.', exampleEn: 'Walking home, I met Mia.', exampleKo: '집에 걸어가다가 미아를 만났어.' },
+    sources: ['own'],
+  },
 ]
 
 const OUTLINE_UNITS = [
@@ -1128,19 +1722,7 @@ const OUTLINE_UNITS = [
   // Intermediate (ready g-int-01 + 아래 7 = 8)
   // Advanced (6)
   // Middle School (6) — basicsUnitId = 먼저 볼 Easy/Intermediate 기초 단원
-  P('g-mid-01', 'middleSchool', 1, '시제 정리', '현재·과거·미래를 구분해 쓸 수 있어요', 'tense-system', [], { basicsUnitId: 'g-int-07' }),
-  P('g-mid-02', 'middleSchool', 2, '조동사 can·may·must', '허락·의무를 나타내는 말을 쓸 수 있어요', 'modal-verbs', ['g-mid-01'], { basicsUnitId: 'g-easy-04' }),
-  P('g-mid-03', 'middleSchool', 3, '수동태 기초', '"…당했다"는 문장을 만들 수 있어요', 'passive-voice', ['g-mid-01'], { basicsUnitId: 'g-easy-03' }),
-  P('g-mid-04', 'middleSchool', 4, '관계대명사 who·which', '두 문장을 하나로 이어 설명할 수 있어요', 'relative-clause', ['g-mid-01'], { basicsUnitId: 'g-int-03' }),
-  P('g-mid-05', 'middleSchool', 5, '분사로 꾸미기', '-ing·-ed로 명사를 꾸밀 수 있어요', 'participle', ['g-mid-01'], { basicsUnitId: 'g-int-05' }),
-  P('g-mid-06', 'middleSchool', 6, '조건문 if', '만약의 상황을 말할 수 있어요', 'conditional-if', ['g-mid-01'], { basicsUnitId: 'g-easy-06' }),
   // High School (6)
-  P('g-high-01', 'highSchool', 1, '완료 시제', '과거와 지금을 이어서 말할 수 있어요', 'perfect-tense', [], { basicsUnitId: 'g-int-07' }),
-  P('g-high-02', 'highSchool', 2, '수동태 심화', '시제·조동사가 있는 수동태를 쓸 수 있어요', 'passive-voice', ['g-high-01'], { basicsUnitId: 'g-easy-03' }),
-  P('g-high-03', 'highSchool', 3, '관계사 심화', '긴 문장 속 관계사를 해석하고 쓸 수 있어요', 'relative-clause', ['g-high-01'], { basicsUnitId: 'g-int-03' }),
-  P('g-high-04', 'highSchool', 4, '가정법', '사실과 다른 상황을 말할 수 있어요', 'subjunctive-conditional', ['g-high-01'], { basicsUnitId: 'g-easy-06' }),
-  P('g-high-05', 'highSchool', 5, '간접화법', '남이 한 말을 전달해 말할 수 있어요', 'reported-speech', ['g-high-01'], { basicsUnitId: 'g-int-07' }),
-  P('g-high-06', 'highSchool', 6, '분사구문', '분사로 문장을 짧게 이어 쓸 수 있어요', 'participle', ['g-high-01'], { basicsUnitId: 'g-int-05' }),
 ]
 
 export const GRAMMAR_UNITS = [...READY_UNITS, ...OUTLINE_UNITS]

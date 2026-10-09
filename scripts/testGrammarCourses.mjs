@@ -34,14 +34,15 @@ check('resolveChoice: fromUnitId면 시범 Unit의 문형 문항을 합치고, �
   && resolveChoice({ practice: { choice: [{ promptKo: 'own' }] } }, UNITS).length === 1 && resolveChoice({ fromUnitId: 'nope' }, UNITS).length === 0 && resolveChoice({ fromUnitId: pilot.id }, null).length === 0)
 
 
+const READY = GRAMMAR_UNITS.filter((u) => u.status === 'ready')
+const READY_IDS = READY.map((u) => u.id)
 // ── 실제 데이터(2026-10-10 콘텐츠 초안, 교사 검수 전) ──
 const cnt = (id) => courseCounts(id)
-check('과정별 단원 수/준비: easy 8(8) · intermediate 8(8) · advanced 6(6) · middleSchool 6(0) · highSchool 6(0), 합계 34', ['easy:8:8', 'intermediate:8:8', 'advanced:6:6', 'middleSchool:6:0', 'highSchool:6:0'].every((x) => { const [id, t, r] = x.split(':'); return cnt(id).total === +t && cnt(id).ready === +r }) && GRAMMAR_UNITS.length === 34)
-check('ready 단원은 Easy 8 + Intermediate 8 + Advanced 6 = 22개뿐', GRAMMAR_UNITS.filter((u) => u.status === 'ready').map((u) => u.id).sort().join() === [...Array(8)].map((_, i) => `g-easy-0${i + 1}`).concat([...Array(8)].map((_, i) => `g-int-0${i + 1}`), [...Array(6)].map((_, i) => `g-adv-0${i + 1}`)).sort().join() && GRAMMAR_UNITS.filter((u) => u.status === 'ready').length === 22)
-check('학교 문법 단원의 basicsUnitId는 존재하고 easy/intermediate 소속', GRAMMAR_UNITS.filter((u) => u.courseId === 'middleSchool' || u.courseId === 'highSchool').every((u) => ['easy', 'intermediate'].includes(grammarUnitById(u.basicsUnitId)?.courseId)))
+check('과정별 단원 수/준비: easy 8(8) · intermediate 8(8) · advanced 6(6) · middleSchool 6(6) · highSchool 6(6), 합계 34', ['easy:8:8', 'intermediate:8:8', 'advanced:6:6', 'middleSchool:6:6', 'highSchool:6:6'].every((x) => { const [id, t, r] = x.split(':'); return cnt(id).total === +t && cnt(id).ready === +r }) && GRAMMAR_UNITS.length === 34)
+check('ready 단원은 34개 전부(Easy 8 + Intermediate 8 + Advanced 6 + Middle 6 + High 6), preparing 0개', READY_IDS.length === 34 && GRAMMAR_UNITS.every((u) => u.status === 'ready') && GRAMMAR_UNITS.filter((u) => u.status === 'preparing').length === 0)
+check('학교 문법 단원의 basicsUnitId는 존재하고 easy/intermediate 소속이며 ready·isComplete', GRAMMAR_UNITS.filter((u) => u.courseId === 'middleSchool' || u.courseId === 'highSchool').every((u) => ['easy', 'intermediate'].includes(grammarUnitById(u.basicsUnitId)?.courseId) && grammarUnitById(u.basicsUnitId).status === 'ready' && isComplete(grammarUnitById(u.basicsUnitId))))
 check('공통 개념 passive-voice·relative-clause·participle은 중등·고등 양쪽에 있음', ['passive-voice', 'relative-clause', 'participle'].every((c) => ['middleSchool', 'highSchool'].every((k) => GRAMMAR_UNITS.some((u) => u.courseId === k && u.conceptId === c))))
 check('모든 prereqIds 실재, id 형식 g-*, 숙련도 단원 order가 1부터 연속', GRAMMAR_UNITS.every((u) => u.prereqIds.every((p) => grammarUnitById(p)) && /^g-/.test(u.id)) && GRAMMAR_COURSES.every((c) => unitsForCourse(c.id).every((u, i) => u.order === i + 1)))
-const READY = GRAMMAR_UNITS.filter((u) => u.status === 'ready')
 check('ready 단원의 영어 문장은 예문·빈칸·정답 순서·예시 모두 문장당 8단어 이하(use 예시는 여러 문장 가능)', READY.every((u) => [...u.examples.map((e) => e.en), ...u.practice.blank.map((b) => b.en), ...u.practice.order.flatMap((o) => o.answers.map((a) => a.join(' '))), ...u.practice.build.map((b) => b.exampleEn), u.use.exampleEn].flatMap((t) => t.split(/(?<=[.?!])\s+/)).every((t) => t.trim().split(/\s+/).length <= 8)))
 check('g-easy-02 예문에 desk 없음', !grammarUnitById('g-easy-02').examples.some((e) => /desk/i.test(e.en)))
 check('fromUnitId 있는 ready 3개 resolveChoice = 시범 Unit 문형 문항 6개씩(fromUnitId 실재)', READY.filter((u) => u.fromUnitId).length === 3 && READY.filter((u) => u.fromUnitId).every((u) => UNITS.some((p) => p.id === u.fromUnitId) && resolveChoice(u, UNITS).length === 6 && resolveChoice(u, UNITS).length === UNITS.find((p) => p.id === u.fromUnitId).grammar.items.length))
@@ -70,7 +71,7 @@ check('홈: student-home-grammar testid 유지, 문구 "문법 과정 (Easy ~ Hi
 
 // ── 구현 상태 vs 검수 상태 · 어휘 규칙 ──
 check('FUNCTION_WORDS에 내용어 없음(borrow·like·have·play·pencil·bag 등), 문법어는 있음', ['borrow', 'like', 'have', 'play', 'pencil', 'bag', 'box', 'chair'].every((w) => !FUNCTION_WORDS.has(w)) && ['a', 'the', 'is', 'can', 'where', 'in', 'under'].every((w) => FUNCTION_WORDS.has(w)))
-check('ready 22개: reviewStatus unreviewed, words 있음, 어휘 규칙 통과, isComplete', READY.every((u) => u.reviewStatus === 'unreviewed' && u.words.length > 0 && validateGrammarUnit(u).length === 0 && isComplete(u)))
+check('ready 34개: reviewStatus unreviewed, words 있음, 어휘 규칙 통과, isComplete', READY.every((u) => u.reviewStatus === 'unreviewed' && u.words.length > 0 && validateGrammarUnit(u).length === 0 && isComplete(u)))
 const withWords = { ...okReady, words: [{ en: 'Ben', ko: '벤' }, { en: 'ten', ko: '열' }, { en: 'kind', ko: '친절' }, { en: 'b c d', ko: '문자' }] }
 const bad = { ...withWords, examples: [...withWords.examples.slice(0, 2), { en: 'I play tennis.', ko: 'x' }] }
 check('어휘 규칙: words가 있으면 통과, 미학습 단어(play, tennis)가 있으면 단어명을 담아 거부', validateGrammarUnit(withWords).length === 0 && validateGrammarUnit(bad).some((e) => /play/.test(e) && /tennis/.test(e)))
@@ -91,6 +92,12 @@ const PRO = ['intermediate', 'advanced'].flatMap((c) => unitsForCourse(c))
 check('Intermediate·Advanced: conceptId 유일, 모든 ready 단원 reviewStatus unreviewed·prereq 실재', new Set(['easy', 'intermediate', 'advanced'].flatMap((c) => unitsForCourse(c).map((u) => u.conceptId))).size === 22 && PRO.every((u) => u.reviewStatus === 'unreviewed' && u.prereqIds.every((p) => grammarUnitById(p))))
 check('practiceCounts: g-easy-01 {6,2,2,2}, g-easy-03 {3,2,2,2}', pc('g-easy-01') === '{"choice":6,"blank":2,"order":2,"build":2}' && pc('g-easy-03') === '{"choice":3,"blank":2,"order":2,"build":2}', pc('g-easy-01') + pc('g-easy-03'))
 check('Easy 03~08: 다음 단원 어휘 의존 없음(paul·mia 허용, 숫자 two는 단원 words)', ['g-easy-03', 'g-easy-04', 'g-easy-05', 'g-easy-06', 'g-easy-07', 'g-easy-08'].every((id) => validateGrammarUnit(grammarUnitById(id)).length === 0) && validateGrammarUnit({ ...grammarUnitById('g-easy-03'), examples: [...grammarUnitById('g-easy-03').examples.slice(0, 3), { en: 'I am Tom.', ko: 'x' }] }).some((e) => /tom/.test(e)))
+
+const SCH = ['middleSchool', 'highSchool'].flatMap((c) => unitsForCourse(c))
+check('학교 문법 12개 전부 ready·unreviewed·isComplete, 예문 3~4·오류 2·explainKo 3', SCH.length === 12 && SCH.every((u) => u.status === 'ready' && u.reviewStatus === 'unreviewed' && isComplete(u) && u.examples.length >= 3 && u.examples.length <= 4 && u.errors.length === 2 && u.explainKo.length === 3))
+check('모든 ready 단원: 예문 3~4·오류 2·explainKo 3', READY.every((u) => u.examples.length >= 3 && u.examples.length <= 4 && u.errors.length === 2 && u.explainKo.length >= 2 && u.explainKo.length <= 4) && SCH.every((u) => u.explainKo.length === 3))
+check('공통 개념(passive-voice·relative-clause·participle): 중등·고등 titleKo 다르고 예문 en이 하나도 겹치지 않음', ['passive-voice', 'relative-clause', 'participle'].every((c) => { const m = SCH.find((u) => u.courseId === 'middleSchool' && u.conceptId === c); const h = SCH.find((u) => u.courseId === 'highSchool' && u.conceptId === c); return m && h && m.titleKo !== h.titleKo && !m.examples.some((e) => h.examples.some((x) => x.en === e.en)) }))
+check('practiceCounts: g-mid-01·g-high-01 {3,2,2,2}', pc('g-mid-01') === '{"choice":3,"blank":2,"order":2,"build":2}' && pc('g-high-01') === '{"choice":3,"blank":2,"order":2,"build":2}', pc('g-mid-01') + pc('g-high-01'))
 
 if (fail) { console.log(`\nFAILED ${fail}`); process.exit(1) }
 console.log('\nALL PASS')
