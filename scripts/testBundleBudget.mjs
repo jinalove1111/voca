@@ -190,7 +190,9 @@ const TOWN_GZIP_BUDGET_BYTES = 15 * 1000
 // writingItems/writingDrafts ≈4KB, 전부 lazy 청크 — 학생 초기 로드에 포함되지 않음)이 더해져 1.509MB가 됐다. 이 합계는 pdf/xlsx만
 // 제외한 "모든 lazy 청크 포함" 합계라 초기 로드 무게가 아니라 코드 총량의 러너웨이 감시용이다(메인 청크 gzip ≤135KB 단언은
 // 그대로 통과). 10KB 단위의 정상 증가로 가짜 FAIL이 되지 않도록 6.7% 여유로 올린다. 수백 KB 급증은 여전히 잡힌다.
-const CORE_RAW_BUDGET_BYTES = 1.6 * 1_000_000
+// ⚠ 2026-10-10 예산 1.6MB → 1.7MB 상향 — 문법 과정 화면(GrammarCourseScreen lazy 청크 약 17KB)으로 합계가 1.606MB가 됐고, 곧 들어올 문법 단원 데이터
+// (같은 lazy 청크, 수십 KB)를 감안한 정상 증가다. 메인 청크 gzip 단언은 그대로 통과(학생 초기 로드 무게 불변). 수백 KB 급증은 여전히 잡힌다.
+const CORE_RAW_BUDGET_BYTES = 1.7 * 1_000_000
 
 // ── 1. 코드 분할 — TownScreen은 별도 청크(lazy), index.html이 직접 참조하지 않음 ──
 section('1. 코드 분할 — TownScreen 지연 로드')
@@ -518,7 +520,7 @@ for (const f of jsFiles) {
   sizeRows.push({ file: f, size, excluded })
 }
 check(
-  `핵심 시작 경로 JS 원본 합계 ≤ 1.6MB (실측 ${fmtMB(coreRaw)}MB, 관리자 전용 pdf/pdf.worker/xlsx 제외)`,
+  `핵심 시작 경로 JS 원본 합계 ≤ 1.7MB (실측 ${fmtMB(coreRaw)}MB, 관리자 전용 pdf/pdf.worker/xlsx 제외)`,
   coreRaw <= CORE_RAW_BUDGET_BYTES,
 )
 console.log(`  정보  dist/assets/*.js 전체 원본 합계(제외 없음) = ${fmtMB(totalRaw)}MB — pdf.worker/pdf/xlsx 제외분 = ${fmtMB(totalRaw - coreRaw)}MB`)

@@ -142,7 +142,7 @@ export default function StudentHome({ studentName, studentData, classWords, hasT
         <button data-testid="student-home-grammar" onClick={() => go('grammar', 'grammar')}
           className="w-full min-h-[56px] px-4 py-3 rounded-3xl text-left btn-press card-shadow text-white bg-gradient-to-br from-indigo-500 to-violet-700">
           <span className="block text-xs font-bold opacity-90">문법 (시범)</span>
-          <span className="block text-lg font-black">📘 단원의 문법 살펴보기</span>
+          <span className="block text-lg font-black">📘 문법 과정 (Easy ~ High School)</span>
         </button>
       </div>
     </div>

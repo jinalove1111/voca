@@ -10,6 +10,8 @@ const SpeakingPractice = React.lazy(() => import('./components/SpeakingPractice'
 const WritingPractice = React.lazy(() => import('./components/WritingPractice'))
 // 2026-10-08(224차) 통합 과정 시범 Unit(교실에서 물건 빌리기) — QA 계정 홈 [오늘의 학습]에서만
 const UnitScreen = React.lazy(() => import('./components/UnitScreen'))
+// 2026-10-10 문법 과정 5개(Easy~High School) — QA 계정 홈에서만. 시범 Unit 데이터(pilotUnits)를 선택 연습에 재사용
+const GrammarCourseScreen = React.lazy(() => import('./components/GrammarCourseScreen'))
 const loadPilotUnits = () => import('./utils/curriculum/units')
 import WordBrowser from './components/WordBrowser'
 import WordDetail from './components/WordDetail'
@@ -252,7 +254,7 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 로그아웃/세션 만료 등 어떤 경로로든 AppInner가 내려가면 홈 포커스 기억을 비운다.
   useEffect(() => () => resetStudentHomeState(), [])
   const [screen, setScreen]         = useState(() => (isFeatureEnabled('studentHomeMenu') && isQaTestStudent(studentId) ? 'home' : 'dashboard'))
-  const QA_ONLY_SCREENS = ['home', 'speaking', 'growth', 'proto25d', 'unit']
+  const QA_ONLY_SCREENS = ['home', 'speaking', 'growth', 'proto25d', 'unit', 'grammarCourses']
   useEffect(() => { if (!qaTestStudent && QA_ONLY_SCREENS.includes(screen)) setScreen('dashboard') }, [qaTestStudent, screen])
   const [speakingMode, setSpeakingMode] = useState('menu') // 홈의 "그림 시험 바로 가기"가 Speaking을 시험 모드로 연다
   // Speaking 연습 끝 → [이 표현 써보기] → Writing 문항 → ← 목록이면 원래 Speaking(그 세트의 연습 끝 화면)으로
@@ -854,9 +856,10 @@ function AppInner({ studentId, studentName, onLogout }) {
           onStartGuided={startGuidedSession} onLogout={onLogout}
           onGo={(t) => { setSpeakingMode(t === 'speakingExam' ? 'exam' : 'menu'); if (t === 'writingCoach') setWritingLink(null); setUnitLink(null)
             // 228차: 말하기(시험 제외)·쓰기·오늘의 학습은 모두 같은 선택기(screen 'unit')로. 이 홈은 QA 전용이다
-            const viaPicker = t === 'unit' || t === 'speaking' || t === 'writingCoach' || t === 'grammar'
-            if (viaPicker) { setUnitIntent(t === 'speaking' ? 'speaking' : t === 'writingCoach' ? 'writing' : t === 'grammar' ? 'grammar' : null); setPilotUnitsFailed(false); loadPilotUnits().then((m) => setPilotUnits(m.UNITS)).catch(() => setPilotUnitsFailed(true)) }
-            goFrom('home', viaPicker ? 'unit' : t === 'speakingExam' ? 'speaking' : (paulTown2_5dEnabled && t === 'paulTown') ? 'proto25d' : t) }}
+            const viaPicker = t === 'unit' || t === 'speaking' || t === 'writingCoach'
+            if (viaPicker) { setUnitIntent(t === 'speaking' ? 'speaking' : t === 'writingCoach' ? 'writing' : null); setPilotUnitsFailed(false); loadPilotUnits().then((m) => setPilotUnits(m.UNITS)).catch(() => setPilotUnitsFailed(true)) }
+            if (t === 'grammar') { setPilotUnitsFailed(false); loadPilotUnits().then((m) => setPilotUnits(m.UNITS)).catch(() => setPilotUnitsFailed(true)) }
+            goFrom('home', t === 'grammar' ? 'grammarCourses' : viaPicker ? 'unit' : t === 'speakingExam' ? 'speaking' : (paulTown2_5dEnabled && t === 'paulTown') ? 'proto25d' : t) }}
           canEnterTown={(isFeatureEnabled('paulTownHomeBand') && !!attachment.stats) || paulTown2_5dEnabled}
           townEligible={townV1Enabled}
           writingEnabled={isFeatureEnabled('writingCoachEnabled') || qaTestStudent}
@@ -894,6 +897,20 @@ function AppInner({ studentId, studentName, onLogout }) {
             <button data-testid="unit-load-home" onClick={() => { setUnitLink(null); setCurriculumSel(null); setUnitIntent(null); setScreen('home') }} className="min-h-[44px] px-5 rounded-2xl font-black bg-white card-shadow text-gray-700 btn-press">← 홈으로</button>
           </div>
         </div>
+      )}
+      {qaTestStudent && screen === 'grammarCourses' && !pilotUnits && (
+        <div data-testid={pilotUnitsFailed ? 'grammar-load-failed' : 'grammar-loading'} className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
+          <p className="text-gray-700 font-bold break-keep">{pilotUnitsFailed ? '문법 과정을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.' : '불러오는 중...'}</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {pilotUnitsFailed && <button data-testid="grammar-load-reload" onClick={() => window.location.reload()} className="min-h-[44px] px-5 rounded-2xl font-black bg-teal-500 text-white btn-press">🔄 새로고침</button>}
+            <button data-testid="grammar-load-home" onClick={() => setScreen('home')} className="min-h-[44px] px-5 rounded-2xl font-black bg-white card-shadow text-gray-700 btn-press">← 홈으로</button>
+          </div>
+        </div>
+      )}
+      {qaTestStudent && screen === 'grammarCourses' && pilotUnits && (
+        <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>
+          <GrammarCourseScreen units={pilotUnits} onBack={() => setScreen('home')} />
+        </React.Suspense>
       )}
       {qaTestStudent && screen === 'unit' && pilotUnits && (
         <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p className="text-gray-400 font-bold">불러오는 중...</p></div>}>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { speak, stopSpeaking } from '../utils/speech'
 import { SUPPORT_STAGES, COURSES, CONVERSATION_BLOCKS, blocksForCourse, blockLabelKo, blockMeta, isBlockProposed, performanceById } from '../utils/curriculum/courseModel'
-import { listCatalog, catalogCounts, courseCount, grammarSetForBlock, EMPTY_LABEL_KO } from '../utils/curriculum/catalog'
+import { listCatalog, catalogCounts, courseCount, EMPTY_LABEL_KO } from '../utils/curriculum/catalog'
 const CONV_BLOCK_META = (b) => CONVERSATION_BLOCKS.find((x) => x.id === b) || null
 import { loadUnitRecords, markActivity, setSupportStage, activityState, nextActivityId } from '../utils/curriculum/unitRecords'
 import { SPEAKER_KO, BTN, RecorderControls, BUSY } from './SpeakingPracticeItem'
@@ -17,7 +17,7 @@ const KIND_EMOJI = { vocab: '📖', listening: '👂', reading: '📄', speaking
 
 // 보기 고르기(규칙 평가 가능한 선택형) — 고른 뒤 맞음/다시 보기·근거 표시. 틀려도 점수 없음, 다시 고를 수 있음. correct는 숫자 또는 배열(대체 답 인정)
 const isOk = (q, i) => (Array.isArray(q.correct) ? q.correct.includes(i) : i === q.correct)
-function Choice({ q, idx, testid, onAnswered }) {
+export function Choice({ q, idx, testid, onAnswered, onPick }) {
   const [picked, setPicked] = useState(null)
   const done = picked !== null
   return (
@@ -25,7 +25,7 @@ function Choice({ q, idx, testid, onAnswered }) {
       <p className="text-base font-black text-gray-900 break-keep">{idx + 1}. {q.promptKo}</p>
       <div className="flex flex-wrap gap-2">
         {q.options.map((o, i) => (
-          <button key={o} data-testid={`${testid}-${idx}-opt-${i}`} onClick={() => { if (picked === null) onAnswered?.(); setPicked(i) }} aria-pressed={picked === i}
+          <button key={o} data-testid={`${testid}-${idx}-opt-${i}`} onClick={() => { if (picked === null) onAnswered?.(); onPick?.(isOk(q, i)); setPicked(i) }} aria-pressed={picked === i}
             className={`${BTN} text-base ${picked === i ? (isOk(q, i) ? 'bg-emerald-500 text-white' : 'bg-amber-200 text-gray-800') : 'bg-white card-shadow text-gray-700'}`}>{o}</button>
         ))}
       </div>
@@ -394,8 +394,8 @@ function UnitSpeaking({ activity, onDone, onWrite = null }) {
 // 228차: 홈의 말하기·쓰기·오늘의 학습이 모두 이 선택기로 들어온다(intent로 보이는 버튼만 다름). 항목 = 실제 Unit + 이야기 회차(catalog).
 // 내용이 없는 과정·단계는 EMPTY_LABEL_KO(콘텐츠 준비 중)로 비활성 표시. 주제 이름(학교생활·쇼핑 등)은 항목 안의 분류 배지로만 쓴다.
 const PERF_KO = (u) => (u.performance ? `말하기 ${performanceById(u.performance.speaking)?.titleKo} · 쓰기 ${performanceById(u.performance.writing)?.titleKo}` : null)
-const HEADING = { speaking: '어떤 단원에서 말해 볼까요?', writing: '어떤 단원에서 써 볼까요?', grammar: '어떤 단원의 문법을 볼까요?' }
-const TITLE = { speaking: '말하기', writing: '문장 쓰기', grammar: '문법' }
+const HEADING = { speaking: '어떤 단원에서 말해 볼까요?', writing: '어떤 단원에서 써 볼까요?' }
+const TITLE = { speaking: '말하기', writing: '문장 쓰기' }
 function StoryCard({ entry, intent, onStory }) {
   const { id, card, placement, topics, writingItems, hasKeyFlow } = entry
   const perf = placement.performance
@@ -426,34 +426,6 @@ function StoryCard({ entry, intent, onStory }) {
   )
 }
 
-// 문법 문제 모아 풀기(단계 단위) — 기록·점수 없음(markActivity 호출 없음). 관찰 문장은 접어 두고 문항이 중심
-function GrammarSetScreen({ set, course, onBack }) {
-  const [answered, setAnswered] = useState(0)
-  const done = answered >= set.itemCount
-  return (
-    <div data-testid="grammar-set" data-block={set.blockId} className="space-y-4">
-      <h2 className="text-lg font-black text-teal-700 break-keep">문법 문제 · {course?.titleEn} · {blockLabelKo(set.blockId)} (제안){set.levelKo ? ` · ${set.levelKo}` : ''}</h2>
-      <p className="text-sm text-gray-600 break-keep">점수·기록 없음 — 풀어 보고 설명을 읽어요</p>
-      {set.units.map((u, ui) => (
-        <div key={u.id} data-testid={`grammar-set-unit-${ui}`} className={`${CARD} min-w-0`}>
-          <p className="text-base font-black text-gray-900 break-keep">{u.titleKo}</p>
-          <details className="rounded-2xl bg-amber-50 border-2 border-amber-200">
-            <summary className="min-h-[44px] px-4 py-2 flex items-center text-sm font-black text-amber-800 cursor-pointer list-none">문장 살펴보기</summary>
-            <div className="px-4 pb-3 space-y-2">
-              {u.noticing.map((n, i) => (
-                <div key={i}><p className="text-lg font-black text-gray-900 break-words">{n.en}</p><p className="text-sm text-gray-700 break-keep">{n.promptKo} {n.answerKo}</p></div>
-              ))}
-            </div>
-          </details>
-          {u.items.map((q, i) => <Choice key={i} q={q} idx={i} testid={`grammar-set-q-${ui}`} onAnswered={() => setAnswered((n) => n + 1)} />)}
-        </div>
-      ))}
-      {done && <p data-testid="grammar-set-done" className="text-base font-black text-emerald-700 break-keep">다 풀었어요 — 설명을 다시 읽어 봐요</p>}
-      <button data-testid="grammar-set-back" onClick={onBack} className={`${BTN} w-full bg-white card-shadow text-gray-700`}>← 단원 목록</button>
-    </div>
-  )
-}
-
 export default function UnitScreen({ units, initialUnitId = null, initialSelection = null, intent = null, returnedFrom = null, studentId, onBack, onSpeaking, onWriting, onStory, onSelectionChange }) {
   const initial = units.find((u) => u.id === (initialSelection?.entryId || initialUnitId)) || null
   const [courseId, setCourseId] = useState(initial ? initial.course : initialSelection?.courseId || null)
@@ -462,8 +434,6 @@ export default function UnitScreen({ units, initialUnitId = null, initialSelecti
   // 복귀 기록(returnedFrom)은 돌아온 그 Unit(initialUnitId)에만 1회 적용 — 목록에서 다른 Unit을 열 때 새어 나가면 안 된다(225차 e2e e에서 발견)
   const [pendingReturn, setPendingReturn] = useState(returnedFrom)
   // 의도(말하기/쓰기)로 들어와 처음 여는 Unit만 그 활동을 바로 연다. 복귀로 열린 Unit·← 목록 뒤에는 다시 열지 않는다
-  const [setOpen, setSetOpen] = useState(false)
-  useEffect(() => { setSetOpen(false) }, [courseId, blockId])
   const [openKind, setOpenKind] = useState(initial ? null : intent)
   const pick = (id) => { setPendingReturn(null); if (!id) setOpenKind(null); setUnitId(id) }
   useEffect(() => { onSelectionChange?.({ courseId, blockId, entryId: unitId }) }, [courseId, blockId, unitId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -475,7 +445,6 @@ export default function UnitScreen({ units, initialUnitId = null, initialSelecti
   const level = !courseId ? 'course' : !blockId ? 'block' : 'unit'
   const course = COURSES.find((c) => c.id === courseId) || null
   const opts = { intent }
-  const grammarSet = intent === 'grammar' && level === 'unit' ? grammarSetForBlock(units, courseId, blockId) : null
   const counts = courseId ? catalogCounts(units, courseId, opts) : {}
   const ITEM = 'w-full min-h-[64px] px-4 py-3 rounded-3xl text-left btn-press card-shadow'
   const back = level === 'course' ? null : level === 'block' ? () => setCourseId(null) : () => setBlockId(null)
@@ -506,7 +475,7 @@ export default function UnitScreen({ units, initialUnitId = null, initialSelecti
         {level === 'block' && (
           <>
             <p className="text-base font-black text-gray-800">어느 단계를 할까요? <span className="text-xs font-bold text-gray-500">(기간은 운영 계획이에요. 단계는 선생님과 정해요)</span></p>
-            {blocksForCourse(courseId).map((b) => { const n = counts[b] || 0; const conv = courseId === 'conversation' ? CONV_BLOCK_META(b) : null; const sub = [conv?.themeKo || blockMeta(courseId, b)?.descKo, intent === 'grammar' && grammarSetForBlock(units, courseId, b)?.levelKo ? `문법 ${grammarSetForBlock(units, courseId, b).levelKo}` : null].filter(Boolean).join(' · '); return (
+            {blocksForCourse(courseId).map((b) => { const n = counts[b] || 0; const conv = courseId === 'conversation' ? CONV_BLOCK_META(b) : null; const sub = [conv?.themeKo || blockMeta(courseId, b)?.descKo].filter(Boolean).join(' · '); return (
               <button key={b} data-testid={`unit-block-${b}`} onClick={() => setBlockId(b)} disabled={n === 0} aria-disabled={n === 0} className={`${ITEM} ${n ? 'text-white bg-gradient-to-br from-sky-400 to-indigo-500' : 'bg-white text-gray-400'}`}>
                 <span className="block text-lg font-black">{blockLabelKo(b)}{isBlockProposed(courseId, b) ? ' (제안)' : ''} {conv?.monthsKo && <span className="text-xs font-bold opacity-80">{conv.monthsKo}</span>}</span>
                 <span className="block text-xs font-bold opacity-90">{sub ? `${sub} · ` : ''}{n ? `항목 ${n}개` : EMPTY_LABEL_KO}</span>
@@ -515,20 +484,14 @@ export default function UnitScreen({ units, initialUnitId = null, initialSelecti
         )}
         {level === 'unit' && (
           <>
-            {setOpen && grammarSet ? <GrammarSetScreen set={grammarSet} course={course} onBack={() => setSetOpen(false)} /> : <>
             <p className="text-base font-black text-gray-800">{HEADING[intent] || '어떤 단원을 할까요?'}</p>
-            {grammarSet && (
-              <button data-testid={`grammar-set-${blockId}`} onClick={() => setSetOpen(true)} className={`${ITEM} text-sky-800 bg-sky-100`}>
-                <span className="block text-base font-black">📘 이 단계 문법 문제 모아 풀기 ({grammarSet.itemCount}문항)</span>
-              </button>)}
             {listCatalog(units, courseId, blockId, opts).map((e) => e.kind === 'story'
               ? <StoryCard key={e.id} entry={e} intent={intent} onStory={onStory} />
               : (
                 <button key={e.id} data-testid={`unit-pick-${e.id}`} onClick={() => pick(e.id)} className={`${ITEM} text-white bg-gradient-to-br from-teal-400 to-emerald-600`}>
-                  <span className="block text-xs font-bold opacity-90">{e.unit.goalTitleKo}{intent === 'grammar' ? ` · 📘 문법 ${e.grammar.levelKo ? e.grammar.levelKo + ' · ' : ''}${e.grammar.titleKo} · 관찰 ${e.grammar.noticingCount} · 문항 ${e.grammar.itemCount}` : PERF_KO(e.unit) ? ` · ${PERF_KO(e.unit)}` : ''}</span>
+                  <span className="block text-xs font-bold opacity-90">{e.unit.goalTitleKo}{PERF_KO(e.unit) ? ` · ${PERF_KO(e.unit)}` : ''}</span>
                   <span className="block text-lg font-black">{e.unit.titleKo}</span>
                 </button>))}
-            </>}
           </>
         )}
       </div>
