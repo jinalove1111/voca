@@ -1,7 +1,7 @@
 // 2026-10-10 문법 과정 5개(Easy·Intermediate·Advanced·Middle School·High School) — 데이터 계약 + 화면/App 소스 핀. 저장·네트워크 0.
 import fs from 'node:fs'
 import { GRAMMAR_COURSES } from '../src/utils/grammar/grammarCourses.js'
-import { GRAMMAR_UNITS, SCHOOL_GRAMMAR_NOTE_KO, unitsForCourse, grammarUnitById, courseCounts, resolveChoice, validateGrammarUnit } from '../src/utils/grammar/grammarUnits.js'
+import { GRAMMAR_UNITS, SCHOOL_GRAMMAR_NOTE_KO, unitsForCourse, grammarUnitById, courseCounts, resolveChoice, validateGrammarUnit, FUNCTION_WORDS, isComplete, reviewStatusOf, practiceCounts } from '../src/utils/grammar/grammarUnits.js'
 import { UNITS } from '../src/utils/curriculum/units.js'
 
 let fail = 0
@@ -36,15 +36,15 @@ check('resolveChoice: fromUnitId면 시범 Unit의 문형 문항을 합치고, �
 
 // ── 실제 데이터(2026-10-10 콘텐츠 초안, 교사 검수 전) ──
 const cnt = (id) => courseCounts(id)
-check('과정별 단원 수/준비: easy 8(2) · intermediate 8(1) · advanced 6(0) · middleSchool 6(0) · highSchool 6(0), 합계 34', ['easy:8:2', 'intermediate:8:1', 'advanced:6:0', 'middleSchool:6:0', 'highSchool:6:0'].every((x) => { const [id, t, r] = x.split(':'); return cnt(id).total === +t && cnt(id).ready === +r }) && GRAMMAR_UNITS.length === 34)
-check('ready 단원은 g-easy-01·g-easy-02·g-int-01 세 개뿐', GRAMMAR_UNITS.filter((u) => u.status === 'ready').map((u) => u.id).join() === 'g-easy-01,g-easy-02,g-int-01')
+check('과정별 단원 수/준비: easy 8(8) · intermediate 8(1) · advanced 6(0) · middleSchool 6(0) · highSchool 6(0), 합계 34', ['easy:8:8', 'intermediate:8:1', 'advanced:6:0', 'middleSchool:6:0', 'highSchool:6:0'].every((x) => { const [id, t, r] = x.split(':'); return cnt(id).total === +t && cnt(id).ready === +r }) && GRAMMAR_UNITS.length === 34)
+check('ready 단원은 Easy 8개 + g-int-01 아홉 개뿐', GRAMMAR_UNITS.filter((u) => u.status === 'ready').map((u) => u.id).join() === 'g-easy-01,g-easy-02,g-easy-03,g-easy-04,g-easy-05,g-easy-06,g-easy-07,g-easy-08,g-int-01')
 check('학교 문법 단원의 basicsUnitId는 존재하고 easy/intermediate 소속', GRAMMAR_UNITS.filter((u) => u.courseId === 'middleSchool' || u.courseId === 'highSchool').every((u) => ['easy', 'intermediate'].includes(grammarUnitById(u.basicsUnitId)?.courseId)))
 check('공통 개념 passive-voice·relative-clause·participle은 중등·고등 양쪽에 있음', ['passive-voice', 'relative-clause', 'participle'].every((c) => ['middleSchool', 'highSchool'].every((k) => GRAMMAR_UNITS.some((u) => u.courseId === k && u.conceptId === c))))
 check('모든 prereqIds 실재, id 형식 g-*, 숙련도 단원 order가 1부터 연속', GRAMMAR_UNITS.every((u) => u.prereqIds.every((p) => grammarUnitById(p)) && /^g-/.test(u.id)) && GRAMMAR_COURSES.every((c) => unitsForCourse(c.id).every((u, i) => u.order === i + 1)))
 const READY = GRAMMAR_UNITS.filter((u) => u.status === 'ready')
 check('ready 단원의 영어 문장은 예문·빈칸·정답 순서·예시 모두 8단어 이하', READY.every((u) => [...u.examples.map((e) => e.en), ...u.practice.blank.map((b) => b.en), ...u.practice.order.flatMap((o) => o.answers.map((a) => a.join(' '))), ...u.practice.build.map((b) => b.exampleEn), u.use.exampleEn].every((t) => t.trim().split(/s+/).length <= 8)))
 check('g-easy-02 예문에 desk 없음', !grammarUnitById('g-easy-02').examples.some((e) => /desk/i.test(e.en)))
-check('ready 3개 resolveChoice = 시범 Unit 문형 문항 6개씩(fromUnitId 실재)', READY.every((u) => UNITS.some((p) => p.id === u.fromUnitId) && resolveChoice(u, UNITS).length === 6 && resolveChoice(u, UNITS).length === UNITS.find((p) => p.id === u.fromUnitId).grammar.items.length))
+check('fromUnitId 있는 ready 3개 resolveChoice = 시범 Unit 문형 문항 6개씩(fromUnitId 실재)', READY.filter((u) => u.fromUnitId).length === 3 && READY.filter((u) => u.fromUnitId).every((u) => UNITS.some((p) => p.id === u.fromUnitId) && resolveChoice(u, UNITS).length === 6 && resolveChoice(u, UNITS).length === UNITS.find((p) => p.id === u.fromUnitId).grammar.items.length))
 check('준비 중 단원은 ready 내용 없이 제목·목표만 검증, 학교 문법 안내문 export', GRAMMAR_UNITS.filter((u) => u.status === 'preparing').every((u) => u.titleKo && u.goalKo && validateGrammarUnit(u).length === 0) && /학교 문법/.test(SCHOOL_GRAMMAR_NOTE_KO))
 
 // ── 화면 소스 ──
@@ -67,6 +67,27 @@ const u = strip(read('src/components/UnitScreen.jsx'))
 check('UnitScreen: Choice를 named export, 선택기의 문법 intent·문법 모음 제거', /export function Choice\(/.test(u) && !/intent === 'grammar'/.test(u) && !u.includes('GrammarSetScreen'))
 const home = read('src/components/StudentHome.jsx')
 check('홈: student-home-grammar testid 유지, 문구 "문법 과정 (Easy ~ High School)"', home.includes('data-testid="student-home-grammar"') && home.includes('📘 문법 과정 (Easy ~ High School)'))
+
+// ── 구현 상태 vs 검수 상태 · 어휘 규칙 ──
+check('FUNCTION_WORDS에 내용어 없음(borrow·like·have·play·pencil·bag 등), 문법어는 있음', ['borrow', 'like', 'have', 'play', 'pencil', 'bag', 'box', 'chair'].every((w) => !FUNCTION_WORDS.has(w)) && ['a', 'the', 'is', 'can', 'where', 'in', 'under'].every((w) => FUNCTION_WORDS.has(w)))
+check('ready 9개: reviewStatus unreviewed, words 있음, 어휘 규칙 통과, isComplete', READY.every((u) => u.reviewStatus === 'unreviewed' && u.words.length > 0 && validateGrammarUnit(u).length === 0 && isComplete(u)))
+const withWords = { ...okReady, words: [{ en: 'Ben', ko: '벤' }, { en: 'ten', ko: '열' }, { en: 'kind', ko: '친절' }, { en: 'b c d', ko: '문자' }] }
+const bad = { ...withWords, examples: [...withWords.examples.slice(0, 2), { en: 'I play tennis.', ko: 'x' }] }
+check('어휘 규칙: words가 있으면 통과, 미학습 단어(play, tennis)가 있으면 단어명을 담아 거부', validateGrammarUnit(withWords).length === 0 && validateGrammarUnit(bad).some((e) => /play/.test(e) && /tennis/.test(e)))
+check('어휘 규칙: 선수 단원 words는 전이적으로 허용, easy는 g-easy-01/02 어휘 허용, wrong 오류 예시는 검사 제외', validateGrammarUnit({ ...withWords, courseId: 'intermediate', prereqIds: ['g-easy-02'], examples: [{ en: 'I am Ben.', ko: 'a' }, { en: 'I am ten.', ko: 'b' }, { en: 'Is it in the bag?', ko: 'c' }] }).length === 0
+  && validateGrammarUnit({ ...withWords, examples: [{ en: 'I am Ben.', ko: 'a' }, { en: 'I am ten.', ko: 'b' }, { en: 'Can I borrow a ruler?', ko: 'c' }] }).length === 0
+  && validateGrammarUnit({ ...withWords, errors: [{ wrong: 'I tennis Ben.', right: 'I am Ben.', whyKo: 'x' }, withWords.errors[1]] }).length === 0)
+check('reviewStatus 기본값 unreviewed, 잘못된 값 거부, 개요(preparing)는 isComplete 아님', reviewStatusOf({ status: 'ready' }) === 'unreviewed' && reviewStatusOf({ reviewStatus: 'reviewed' }) === 'reviewed' && validateGrammarUnit({ ...okReady, reviewStatus: 'x' }).length > 0 && GRAMMAR_UNITS.filter((u) => u.status === 'preparing').every((u) => !isComplete(u)))
+check('courseCounts.reviewed === 0 (검수 완료는 데이터에 없음)', GRAMMAR_COURSES.every((c) => courseCounts(c.id).reviewed === 0) && GRAMMAR_UNITS.every((u) => reviewStatusOf(u) === 'unreviewed'))
+check("화면: gu-review-status·data-review·'검수 전'·'검수 완료'·과정 버튼 'ready n/total · 검수 r'", sSrc.includes('gu-review-status') && sSrc.includes('data-review') && sSrc.includes('검수 전') && sSrc.includes('검수 완료') && sSrc.includes('ready {ready}/{total} · 검수 {reviewed}'))
+
+const EASY = unitsForCourse('easy')
+const pc = (id) => JSON.stringify(practiceCounts(grammarUnitById(id), UNITS))
+check('Easy 8개 전부 ready·courseCounts {8,8,0}', EASY.length === 8 && EASY.every((u) => u.status === 'ready' && isComplete(u)) && JSON.stringify(courseCounts('easy')) === '{"ready":8,"reviewed":0,"total":8}')
+check('Easy 단원마다 선택 ≥3(또는 fromUnitId)·빈칸 2·순서 2·만들기 2·예문 3~4·오류 2·use', EASY.every((u) => { const c = practiceCounts(u, UNITS); return c.choice >= 3 && c.blank >= 2 && c.order >= 2 && c.build >= 2 && u.examples.length >= 3 && u.examples.length <= 4 && u.errors.length === 2 && u.use })
+  && EASY.filter((u) => !u.fromUnitId).every((u) => u.practice.choice.length >= 3))
+check('practiceCounts: g-easy-01 {6,2,2,2}, g-easy-03 {3,2,2,2}', pc('g-easy-01') === '{"choice":6,"blank":2,"order":2,"build":2}' && pc('g-easy-03') === '{"choice":3,"blank":2,"order":2,"build":2}', pc('g-easy-01') + pc('g-easy-03'))
+check('Easy 03~08: 다음 단원 어휘 의존 없음(paul·mia 허용, 숫자 two는 단원 words)', ['g-easy-03', 'g-easy-04', 'g-easy-05', 'g-easy-06', 'g-easy-07', 'g-easy-08'].every((id) => validateGrammarUnit(grammarUnitById(id)).length === 0) && validateGrammarUnit({ ...grammarUnitById('g-easy-03'), examples: [...grammarUnitById('g-easy-03').examples.slice(0, 3), { en: 'I am Tom.', ko: 'x' }] }).some((e) => /tom/.test(e)))
 
 if (fail) { console.log(`\nFAILED ${fail}`); process.exit(1) }
 console.log('\nALL PASS')

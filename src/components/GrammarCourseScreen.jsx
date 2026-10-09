@@ -3,7 +3,7 @@ import { speak, stopSpeaking } from '../utils/speech'
 import { BTN } from './SpeakingPracticeItem'
 import { Choice } from './UnitScreen'
 import { GRAMMAR_COURSES } from '../utils/grammar/grammarCourses'
-import { unitsForCourse, grammarUnitById, courseCounts, resolveChoice, SCHOOL_GRAMMAR_NOTE_KO } from '../utils/grammar/grammarUnits'
+import { unitsForCourse, grammarUnitById, courseCounts, reviewStatusOf, resolveChoice, SCHOOL_GRAMMAR_NOTE_KO } from '../utils/grammar/grammarUnits'
 
 // 2026-10-10 문법 과정 화면(QA 전용): 과정 5개 → 단원 목록(학습 목표) → 단원 9단계. 점수·저장·DB 없음(화면 상태일 뿐).
 // 선택 연습은 기존 Choice를 그대로 재사용하고, 준비 중 단원은 비활성으로 보여 빈 화면이 없다.
@@ -85,6 +85,9 @@ function WriteCompare({ testid, q, noteKo }) {
   )
 }
 
+const ReviewBadge = ({ unit, testid }) => { const r = reviewStatusOf(unit); return (
+  <span data-testid={testid} data-review={r} className={`ml-2 text-xs px-2 py-0.5 rounded-full ${r === 'reviewed' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>{r === 'reviewed' ? '검수 완료' : '검수 전'}</span>) }
+
 function GrammarUnitView({ unit, units, from, onBasics, onBack }) {
   const [solved, setSolved] = useState({})
   const [round, setRound] = useState(0) // 전체 다시 풀기 — 연습 항목을 새로 마운트
@@ -121,7 +124,7 @@ function GrammarUnitView({ unit, units, from, onBasics, onBack }) {
             기초 설명 보기 → {basics.titleKo}{basics.status !== 'ready' ? ' (준비 중)' : ''}
           </button>)}
       </div>
-      <h2 className="text-lg font-black text-gray-900 break-keep">{unit.order}. {unit.titleKo}</h2>
+      <h2 className="text-lg font-black text-gray-900 break-keep">{unit.order}. {unit.titleKo}<ReviewBadge unit={unit} testid="gu-review-status" /></h2>
 
       <div data-testid="gu-goal" className={CARD}><p className={H}>1. 학습 목표</p><p className="text-base font-black text-gray-900 break-keep">{unit.goalKo}</p></div>
 
@@ -241,11 +244,11 @@ export default function GrammarCourseScreen({ units, onBack }) {
         {!unit && !course && (
           <>
             <p className="text-base font-black text-gray-800">어떤 과정을 할까요?</p>
-            {GRAMMAR_COURSES.map((c) => { const { ready, total } = courseCounts(c.id); return (
+            {GRAMMAR_COURSES.map((c) => { const { ready, reviewed, total } = courseCounts(c.id); return (
               <button key={c.id} data-testid={`grammar-course-${c.id}`} onClick={() => setCourseId(c.id)} className={`${ITEM} text-white bg-gradient-to-br from-indigo-500 to-violet-700`}>
                 <span className="block text-xl font-black">{c.titleEn}</span>
                 <span className="block text-xs font-bold opacity-90 break-keep">{c.titleKo} · {c.descKo}</span>
-                <span className="block text-xs font-bold opacity-90"><span className="mr-1 px-2 py-0.5 rounded-full bg-white/30">{c.kind === 'school' ? '학교 문법 (제안)' : '숙련도'}</span>준비 {ready}/{total}</span>
+                <span className="block text-xs font-bold opacity-90"><span className="mr-1 px-2 py-0.5 rounded-full bg-white/30">{c.kind === 'school' ? '학교 문법 (제안)' : '숙련도'}</span>ready {ready}/{total} · 검수 {reviewed}</span>
               </button>) })}
           </>)}
         {!unit && course && (
@@ -259,7 +262,7 @@ export default function GrammarCourseScreen({ units, onBack }) {
             {list.map((u) => { const ready = u.status === 'ready'; return (
               <button key={u.id} data-testid={`grammar-unit-${u.id}`} disabled={!ready} aria-disabled={!ready} onClick={() => { setFromId(null); setUnitId(u.id) }}
                 className={`${ITEM} ${ready ? 'text-white bg-gradient-to-br from-teal-400 to-emerald-600' : 'bg-white text-gray-400'}`}>
-                <span className="block text-lg font-black break-keep">{u.order}. {u.titleKo}{!ready && <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">준비 중</span>}</span>
+                <span className="block text-lg font-black break-keep">{u.order}. {u.titleKo}{!ready && <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">준비 중</span>}{ready && <ReviewBadge unit={u} testid={`grammar-unit-${u.id}-review`} />}</span>
                 <span className="block text-xs font-bold opacity-90 break-keep">{u.goalKo}</span>
               </button>) })}
           </div>)}
