@@ -235,8 +235,6 @@ export async function run(browser, baseURL) {
 
   await scenario('c g-easy-01 연습 전체·직접 사용·전체 다시 풀기', VP, (ctx) => practiceFlow(ctx, U1, { choiceCount: 6 }))
 
-  await scenario('i g-easy-06 연습 전체(새 단원)', VP, (ctx) => practiceFlow(ctx, grammarUnitById('g-easy-06')))
-
   await scenario('d g-int-01 비교 섹션·되묻기 순서 문항', VP, async ({ page, name, toCourses, toUnits, toUnit, status, tapOrder }) => {
     await toCourses()
     await toUnits('intermediate')
@@ -268,7 +266,7 @@ export async function run(browser, baseURL) {
     r.check(`${name} 직접 사용(말하기) 🔊 있음`, UI1.use.kind === 'speaking' && (await T(page, 'gu-use-listen').isVisible()))
   })
 
-  await scenario('e 학교 문법(중등·고등) 목록: 안내·전부 준비 중 비활성', VP, async ({ page, name, toCourses, toUnits }) => {
+  await scenario('e 학교 문법(중등·고등) 목록: 안내·ready만 활성·나머지 준비 중 비활성', VP, async ({ page, name, toCourses, toUnits }) => {
     await toCourses()
     for (const c of GRAMMAR_COURSES.filter((x) => x.kind === 'school')) {
       const list = unitsForCourse(c.id)
@@ -276,8 +274,9 @@ export async function run(browser, baseURL) {
       r.check(`${name} ${c.id} 카드: '학교 문법 (제안)' 배지·'숙련도' 아님`, card.includes('학교 문법 (제안)') && !card.includes('숙련도'), card)
       await toUnits(c.id)
       r.check(`${name} ${c.id}: 안내 '${SCHOOL_GRAMMAR_NOTE_KO}'`, (await txt(page, 'grammar-school-note')).includes('학년·교육과정 대응 미확인') && (await txt(page, 'grammar-school-note')) === SCHOOL_GRAMMAR_NOTE_KO)
-      r.check(`${name} ${c.id}: 단원 ${list.length}개 모두 비활성+'준비 중'(${list.every((u) => u.status !== 'ready') ? '데이터도 전부 preparing' : '데이터에 ready 있음'})`, list.every((u) => u.status !== 'ready') && (await Promise.all(list.map(async (u) => (await T(page, `grammar-unit-${u.id}`).isDisabled()) && (await txt(page, `grammar-unit-${u.id}`)).includes('준비 중') && (await txt(page, `grammar-unit-${u.id}`)).includes(u.titleKo)))).every(Boolean))
-      await T(page, `grammar-unit-${list[0].id}`).click({ force: true, timeout: 2000 }).catch(() => {})
+      r.check(`${name} ${c.id}: 단원 ${list.length}개, ready는 활성·그 외는 비활성+'준비 중'+제목`, (await Promise.all(list.map(async (u) => u.status === 'ready' ? await T(page, `grammar-unit-${u.id}`).isEnabled() : (await T(page, `grammar-unit-${u.id}`).isDisabled()) && (await txt(page, `grammar-unit-${u.id}`)).includes('준비 중') && (await txt(page, `grammar-unit-${u.id}`)).includes(u.titleKo)))).every(Boolean))
+      const prep = list.find((u) => u.status !== 'ready')
+      if (prep) await T(page, `grammar-unit-${prep.id}`).click({ force: true, timeout: 2000 }).catch(() => {})
       r.check(`${name} ${c.id}: 비활성 단원을 눌러도 열리지 않음(목록 유지, 빈 화면 없음)`, (await T(page, 'grammar-courses').getAttribute('data-view')) === 'units' && (await T(page, 'grammar-unit').count()) === 0 && (await T(page, 'grammar-units').isVisible()))
       await T(page, 'grammar-units-back').click()
       await T(page, `grammar-course-${c.id}`).waitFor({ state: 'visible', timeout: 5000 })
@@ -323,35 +322,115 @@ export async function run(browser, baseURL) {
     return ok
   }
 
-  await scenario('h Easy ready 단원 전부 진입·9섹션·문항 수·검수 배지·어휘', VP, async ({ page, name, toCourses, toUnits }) => {
+  const readyOf = (courseId) => unitsForCourse(courseId).filter((u) => u.status === 'ready')
+  for (const c of GRAMMAR_COURSES.filter((x) => readyOf(x.id).length > 0)) {
+    const COURSE_UNITS = unitsForCourse(c.id)
+    await scenario(`h ${c.id} ready 단원 전부 진입·9섹션·문항 수·검수 배지·어휘`, VP, async ({ page, name, toCourses, toUnits }) => {
+      await toCourses()
+      await toUnits(c.id)
+      const readyUnits = readyOf(c.id)
+      r.check(`${name} ${c.id} ready 단원 ${readyUnits.length}개(데이터), 과정 카운트와 일치`, readyUnits.length === courseCounts(c.id).ready && readyUnits.length >= 1, String(readyUnits.length))
+      for (const u of readyUnits) {
+        const n = `${name} ${u.id}`
+        await T(page, `grammar-unit-${u.id}`).click()
+        await T(page, 'grammar-unit').waitFor({ state: 'visible', timeout: 10000 })
+        await checkUnitView(page, name, u, { listen: false })
+        const p = u.practice, choice = resolveChoice(u, UNITS)
+        r.check(`${n} 문항 수: 예문 ${u.examples.length}·오류 ${u.errors.length}·선택 ${choice.length}·빈칸 ${p.blank.length}·순서 ${p.order.length}·만들기 ${p.build.length} = 데이터`,
+          (await countIds(page, /^gu-example-\d+$/)) === u.examples.length && (await countIds(page, /^gu-error-\d+$/)) === u.errors.length && (await countIds(page, /^gu-choice-\d+$/)) === choice.length &&
+          (await countIds(page, /^gu-blank-\d+$/)) === p.blank.length && (await countIds(page, /^gu-order-\d+$/)) === p.order.length && (await countIds(page, /^gu-build-\d+$/)) === p.build.length)
+        const want = reviewStatusOf(u) === 'reviewed' ? '검수 완료' : '검수 전'
+        r.check(`${n} 검수 배지 '${want}'(data-review=${reviewStatusOf(u)})${want === '검수 전' ? ', 화면 어디에도 검수 완료 없음' : ''}`,
+          (await T(page, 'gu-review-status').getAttribute('data-review')) === reviewStatusOf(u) && (await txt(page, 'gu-review-status')) === want && (want === '검수 완료' || !(await page.locator('body').innerText()).includes('검수 완료')))
+        // 어휘(선수 단원 사슬 기준): 예문 en, 단원 자체 선택 정답 보기, 순서 칩 단어는 허용 어휘 안에서만
+        const ok = allowedFor(u)
+        const seen = []
+        for (let i = 0; i < u.examples.length; i++) seen.push(await T(page, `gu-example-${i}`).locator('p').first().textContent())
+        for (let i = 0; i < (p.choice || []).length; i++) for (const j of correctSet(p.choice[i].correct)) if (typeof p.choice[i].options[j] === 'string') seen.push(await txt(page, `gu-choice-${i}-opt-${j}`)) // 오답 보기는 배운 단어의 틀린 형태라 검증기처럼 제외
+        for (let i = 0; i < p.order.length; i++) for (let j = 0; j < p.order[i].words.length; j++) seen.push(await txt(page, `gu-order-${i}-word-${j}`))
+        const unknown = [...new Set(seen.flatMap(tokenize).filter((w) => !ok.has(w)))]
+        r.check(`${n} 어휘 규칙: 화면의 영어 예문·선택 보기·순서 칩이 배운 단어만 사용`, unknown.length === 0, unknown.join(', '))
+        await T(page, 'gu-back').click()
+        await T(page, 'grammar-units').waitFor({ state: 'visible', timeout: 10000 })
+      }
+      r.check(`${name} ${c.id} ready가 아닌 단원은 '준비 중'+비활성, 검수 문구 없음`, (await Promise.all(COURSE_UNITS.filter((u) => u.status !== 'ready').map(async (u) => { const t = await txt(page, `grammar-unit-${u.id}`); return t.includes('준비 중') && !t.includes('검수') && (await T(page, `grammar-unit-${u.id}`).isDisabled()) }))).every(Boolean))
+    })
+  }
+
+  // i: 과정마다 첫 ready 단원 연습 전체 (Easy의 g-easy-01은 시나리오 c가 이미 함)
+  for (const c of GRAMMAR_COURSES) {
+    const first = readyOf(c.id)[0]
+    if (!first || first.id === U1.id) continue
+    await scenario(`i ${c.id} 첫 ready 단원(${first.id}) 연습 전체`, VP, (ctx) => practiceFlow(ctx, first))
+  }
+
+  await scenario('k 기초 설명 링크(basicsUnitId)', VP, async ({ page, name, toCourses, toUnit }) => {
+    const withBasics = GRAMMAR_UNITS.filter((u) => u.status === 'ready' && u.basicsUnitId)
+    if (withBasics.length === 0) { r.skip(`${name} 기초 설명 링크`, 'basicsUnitId가 있는 ready 단원이 아직 없음(학교 문법 과정 단원이 ready가 되면 자동 실행)'); return }
     await toCourses()
-    await toUnits('easy')
-    const readyUnits = EASY.filter((u) => u.status === 'ready')
-    r.check(`${name} Easy ready 단원 ${readyUnits.length}개(데이터), 과정 카운트와 일치`, readyUnits.length === courseCounts('easy').ready && readyUnits.length >= 1, String(readyUnits.length))
-    for (const u of readyUnits) {
-      const n = `${name} ${u.id}`
-      await T(page, `grammar-unit-${u.id}`).click()
+    for (const u of withBasics) {
+      const b = grammarUnitById(u.basicsUnitId); const n = `${name} ${u.id}→${b.id}`
+      await toUnit(u.courseId, u.id)
+      r.check(`${n} 기초 링크 표시 + 기초 단원 제목 '${b.titleKo}'`, (await T(page, 'gu-basics-link').isVisible()) && (await txt(page, 'gu-basics-link')).includes(b.titleKo), await txt(page, 'gu-basics-link').catch(() => ''))
+      await T(page, 'gu-basics-link').click()
       await T(page, 'grammar-unit').waitFor({ state: 'visible', timeout: 10000 })
-      await checkUnitView(page, name, u, { listen: false })
-      const p = u.practice, choice = resolveChoice(u, UNITS)
-      r.check(`${n} 문항 수: 예문 ${u.examples.length}·오류 ${u.errors.length}·선택 ${choice.length}·빈칸 ${p.blank.length}·순서 ${p.order.length}·만들기 ${p.build.length} = 데이터`,
-        (await countIds(page, /^gu-example-\d+$/)) === u.examples.length && (await countIds(page, /^gu-error-\d+$/)) === u.errors.length && (await countIds(page, /^gu-choice-\d+$/)) === choice.length &&
-        (await countIds(page, /^gu-blank-\d+$/)) === p.blank.length && (await countIds(page, /^gu-order-\d+$/)) === p.order.length && (await countIds(page, /^gu-build-\d+$/)) === p.build.length)
-      const want = reviewStatusOf(u) === 'reviewed' ? '검수 완료' : '검수 전'
-      r.check(`${n} 검수 배지 '${want}'(data-review=${reviewStatusOf(u)})${want === '검수 전' ? ', 화면 어디에도 검수 완료 없음' : ''}`,
-        (await T(page, 'gu-review-status').getAttribute('data-review')) === reviewStatusOf(u) && (await txt(page, 'gu-review-status')) === want && (want === '검수 완료' || !(await page.locator('body').innerText()).includes('검수 완료')))
-      // 어휘: 예문 en, 단원 자체 선택 정답 보기, 순서 칩 단어는 허용 어휘 안에서만
-      const ok = allowedFor(u)
-      const seen = []
-      for (let i = 0; i < u.examples.length; i++) seen.push(await T(page, `gu-example-${i}`).locator('p').first().textContent())
-      for (let i = 0; i < (p.choice || []).length; i++) for (const j of correctSet(p.choice[i].correct)) if (typeof p.choice[i].options[j] === 'string') seen.push(await txt(page, `gu-choice-${i}-opt-${j}`)) // 오답 보기는 배운 단어의 틀린 형태(swimming·has 등)라 검증기처럼 제외
-      for (let i = 0; i < p.order.length; i++) for (let j = 0; j < p.order[i].words.length; j++) seen.push(await txt(page, `gu-order-${i}-word-${j}`))
-      const unknown = [...new Set(seen.flatMap(tokenize).filter((w) => !ok.has(w)))]
-      r.check(`${n} 어휘 규칙: 화면의 영어 예문·선택 보기·순서 칩이 배운 단어만 사용`, unknown.length === 0, unknown.join(', '))
+      r.check(`${n} 링크 → data-unit=${b.id}, 돌아가기 버튼(단원 목록 버튼 없음)`, (await T(page, 'grammar-unit').getAttribute('data-unit')) === b.id && (await T(page, 'gu-basics-back').isVisible()) && (await T(page, 'gu-back').count()) === 0)
+      if (b.status === 'ready') {
+        const order = await idsInOrder(page, 'grammar-unit', SECTION_IDS)
+        r.check(`${n} 기초 단원(ready) 전체 섹션 표시`, JSON.stringify(order) === JSON.stringify(expectedSections(b)) && (await T(page, 'gu-preparing').count()) === 0, order.join(','))
+      } else {
+        r.check(`${n} 기초 단원(준비 중) 안전 표시: data-status=preparing + gu-preparing`, (await T(page, 'grammar-unit').getAttribute('data-status')) === 'preparing' && (await T(page, 'gu-preparing').isVisible()))
+      }
+      await T(page, 'gu-basics-back').click()
+      await T(page, 'grammar-unit').waitFor({ state: 'visible', timeout: 10000 })
+      r.check(`${n} 돌아가기 → 원래 단원(${u.id}) 복원, 단원 목록 버튼 복귀`, (await T(page, 'grammar-unit').getAttribute('data-unit')) === u.id && (await T(page, 'gu-back').isVisible()) && (await T(page, 'gu-basics-back').count()) === 0)
       await T(page, 'gu-back').click()
-      await T(page, 'grammar-units').waitFor({ state: 'visible', timeout: 10000 })
+      await T(page, 'grammar-units-back').click()
+      await T(page, 'grammar-courses').waitFor({ state: 'visible', timeout: 5000 })
     }
-    r.check(`${name} ready가 아닌 Easy 단원은 '준비 중'+비활성, 검수 문구 없음`, (await Promise.all(EASY.filter((u) => u.status !== 'ready').map(async (u) => { const t = await txt(page, `grammar-unit-${u.id}`); return t.includes('준비 중') && !t.includes('검수') && (await T(page, `grammar-unit-${u.id}`).isDisabled()) }))).every(Boolean))
+  })
+
+  // l: 문법 로드 실패 — App.jsx에서 문법 📘은 pilotUnits(units-*.js 청크)를 loadPilotUnits로 불러오고 실패하면 grammar-load-failed. unit.spec g와 같은 기법
+  await scenario('l 문법 로드 실패 → 안내·홈 복귀·새로고침 복구', VP, async ({ page, name }) => {
+    await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
+    await page.route('**/assets/units-*.js', (route) => route.abort())
+    // 1차 실패: stale-chunk 자동 복구(새로고침)가 먼저 동작 — 세션 복원으로 홈이 다시 뜬다
+    const reloaded = page.waitForEvent('framenavigated', { timeout: 20000 }).then(() => true).catch(() => false)
+    await T(page, 'student-home-grammar').click()
+    const didReload = await reloaded
+    const safeEval = (fn) => page.evaluate(fn).catch(() => null)
+    r.check(`${name} 1차 실패 → stale-chunk 가드 기록 + 자동 새로고침(홈 복원)`, didReload && !!(await waitUntil(async () => (await safeEval(() => performance.getEntriesByType('navigation')[0]?.type)) === 'reload' && !!(await safeEval(() => sessionStorage.getItem('paulEasyVoca_staleChunkReloadAt'))) && (await T(page, 'student-home').isVisible().catch(() => false)), { timeout: 20000 })))
+    // 2차 실패(가드 활성 → 새로고침 안 함): 안내 화면
+    await T(page, 'student-home-grammar').click()
+    r.check(`${name} 2차 실패 → 빈 화면 대신 안내(grammar-load-failed) + 새로고침·홈 버튼`, !!(await waitUntil(() => T(page, 'grammar-load-failed').isVisible(), { timeout: 15000 })) && (await txt(page, 'grammar-load-failed')).includes('불러오지 못했어요') && (await txt(page, 'grammar-load-failed')).includes('새로고침') && (await T(page, 'grammar-load-reload').isVisible()) && (await T(page, 'grammar-load-home').isVisible()))
+    await T(page, 'grammar-load-home').click()
+    r.check(`${name} ← 홈으로 → 학생 홈`, !!(await waitUntil(() => T(page, 'student-home').isVisible(), { timeout: 10000 })))
+    await T(page, 'student-home-grammar').click()
+    r.check(`${name} 같은 페이지에서 다시 열면 여전히 안내(브라우저 모듈 캐시) — 빈 화면 아님`, !!(await waitUntil(() => T(page, 'grammar-load-failed').isVisible(), { timeout: 15000 })))
+    await page.unroute('**/assets/units-*.js')
+    const reloaded2 = page.waitForEvent('framenavigated', { timeout: 20000 }).then(() => true).catch(() => false)
+    await T(page, 'grammar-load-reload').click()
+    r.check(`${name} 🔄 새로고침 → 홈 복원`, (await reloaded2) && !!(await waitUntil(() => T(page, 'student-home').isVisible().catch(() => false), { timeout: 20000 })))
+    await T(page, 'student-home-grammar').click()
+    r.check(`${name} 새로고침 뒤 다시 열면 과정 목록 로드`, !!(await waitUntil(() => T(page, 'grammar-courses').isVisible().catch(() => false), { timeout: 15000 })))
+  })
+
+  await scenario('m 준비 중 단원 안전 표시(과정별)', VP, async ({ page, name, toCourses, toUnits }) => {
+    await toCourses()
+    let tested = 0
+    for (const c of GRAMMAR_COURSES) {
+      const prep = unitsForCourse(c.id).find((u) => u.status !== 'ready')
+      if (!prep) continue
+      tested++
+      const { ready, total, reviewed } = courseCounts(c.id)
+      r.check(`${name} ${c.id} 카드 'ready ${ready}/${total} · 검수 ${reviewed}', ready < total`, ready < total && (await txt(page, `grammar-course-${c.id}`)).includes(`ready ${ready}/${total} · 검수 ${reviewed}`))
+      await toUnits(c.id)
+      const t = await txt(page, `grammar-unit-${prep.id}`)
+      r.check(`${name} ${c.id} ${prep.id}: 비활성+'준비 중'+제목, 검수 배지 없음`, (await T(page, `grammar-unit-${prep.id}`).isDisabled()) && t.includes('준비 중') && t.includes(prep.titleKo) && !t.includes('검수'), t)
+      await T(page, 'grammar-units-back').click()
+      await T(page, `grammar-course-${c.id}`).waitFor({ state: 'visible', timeout: 5000 })
+    }
+    if (tested === 0) r.skip(`${name} 준비 중 단원`, '모든 과정의 모든 단원이 ready — 준비 중 단원 없음')
   })
 
   for (const vp of [{ width: 360, height: 640 }, { width: 390, height: 844 }, { width: 412, height: 915 }, { width: 1280, height: 800 }]) {
