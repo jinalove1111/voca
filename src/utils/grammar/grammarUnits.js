@@ -1,5 +1,5 @@
 // 2026-10-10 문법 단원 데이터 + 순수 도우미(저장·네트워크 없음). 스키마는 validateGrammarUnit 참고.
-// status 'ready' 3개(g-easy-01·02, g-int-01 — 기존 시범 Unit의 문형 문항을 fromUnitId로 재사용) + 'preparing' 개요 32개(제목·학습 목표만, 화면에서 '준비 중').
+// status 'ready' 3개(g-easy-01·02, g-int-01 — 기존 시범 Unit의 문형 문항을 fromUnitId로 재사용) + 'preparing' 개요 31개(제목·학습 목표만, 화면에서 '준비 중').
 // 초안은 콘텐츠 담당(2026-10-10), 교사 검수 전.
 //
 // 배정 근거
