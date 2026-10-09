@@ -1,0 +1,261 @@
+# Grammar 과정 설계 — 5개 과정(Easy·Intermediate·Advanced·Middle School·High School) (2026-10-10)
+
+_이 문서는 `CURRICULUM_STAGES_2026-10-08.md` §12(Grammar 통합, 231~232차)의 "Grammar 진입 화면" 부분을 대체한다. §12는 이력으로 남는다(삭제 없음). Speaking·Writing 과정 구조는 바뀌지 않는다. 모든 내용은 **교사 검수 전**이며 검수 완료가 아니다. 범위는 PR #62뿐이고 merge·운영 배포는 없다._
+
+## 0. 요약·전제
+
+**운영자 요구(2026-10-10) 요약**
+- Grammar 최상위 과정은 5개다: Easy, Intermediate, Advanced(숙련도), Middle School, High School(학교 문법). 학년과 숙련도는 다른 축이다.
+- 중·고등 단원에서 필요하면 Easy/Intermediate의 기초 설명으로 이동할 수 있어야 한다.
+- 과정을 고르면 단원 목록과 학습 목표가 보인다.
+- 단원은 9단계 순서(§2)를 따르고, 한 화면에 개념을 과다하게 넣지 않는다.
+- Easy는 친숙한 단어와 짧은 문장을 쓴다. 학생이 배우지 않은 어휘로 평가를 왜곡하지 않는다.
+- 영작 예시는 유일한 정답이 아니다. 용어 암기 단원은 만들지 않는다.
+- 기존 문법 화면·문항·데이터를 재사용한다. 같은 문법이 여러 과정에 있으면 개념은 공유하고 깊이·난이도로 차별한다.
+- 기존 문항의 배정 근거를 기록하고, 부적절한 것만 고친다.
+- 준비 안 된 단원은 '준비 중'으로 표시한다. 중·고 학년이나 교육과정과 일치한다고 단정하지 않는다.
+- 연구 근거는 동료심사 논문·메타분석으로 하고, 연구 결과와 제품 판단을 구분한다.
+
+**가정(모두 운영자·교사 확인 전)**
+1. 학원 레벨 이름과 앱의 Easy/Intermediate/Advanced 대응은 확인되지 않았다(`CURRICULUM_STAGES` §11 참고). 이 문서의 과정 이름은 제안이다.
+2. 중·고등 과정이 실제 학년·교육과정과 맞는지 확인되지 않았다. 화면에 "학교 문법 — 학년·교육과정 대응 미확인"을 표시한다.
+3. 단원 수와 순서는 콘텐츠 설계자의 초안이다. 학원 문법 교재 순서와 대조하지 않았다.
+4. 점수, 자동 판정, 새 DB 테이블·컬럼, 영구 저장이 없다. QA 계정 전용이며 학생에게 공개하는 결정은 운영자가 한다.
+5. 교사 검수를 거치지 않은 모든 예문·문항·설명은 "검수 대기"이며 검수 완료로 표기하지 않는다.
+
+**수치 정정 메모**: 리드 지시는 "준비 중 32개"였으나 초안 목록을 세면 준비 중 31개(Easy 6, Intermediate 7, Advanced 6, Middle 6, High 6)이고 ready 3개를 더해 총 34단원이다. 이 문서는 센 값(31)을 쓴다. 리드가 32로 확정했다면 누락된 1개 단원을 알려 달라.
+
+## 1. 과정 5개
+
+| id | 영문 | 한국어 | 종류 | 설명 | 표기 규칙 |
+|---|---|---|---|---|---|
+| `easy` | Easy | 쉬운 문법 | 숙련도 | 친숙한 단어·짧은 문장으로 가장 기본 문형을 익힌다. 단원 8개 | '(제안)' |
+| `intermediate` | Intermediate | 중간 문법 | 숙련도 | Easy 문형을 질문·대답·시제로 넓힌다. 단원 8개 | '(제안)' |
+| `advanced` | Advanced | 심화 문법 | 숙련도 | 이유·조건·비교·경험처럼 문장을 이어 말한다. 단원 6개 | '(제안)' |
+| `middleSchool` | Middle School | 중학교 문법 | 학교 | 학교 문법 주제를 다룬다. 단원마다 먼저 볼 기초 단원(`basicsUnitId`)을 연결한다. 단원 6개 | '(제안)' + "학교 문법 — 학년·교육과정 대응 미확인" |
+| `highSchool` | High School | 고등학교 문법 | 학교 | 중학교 주제를 더 깊이·긴 문장으로 다룬다. 단원 6개 | '(제안)' + "학교 문법 — 학년·교육과정 대응 미확인" |
+
+- 숙련도 과정(Easy~Advanced)은 학년과 무관하다. 초등 학생이 Advanced를, 중학생이 Easy를 풀 수 있다.
+- 학교 과정(Middle·High)은 학교 문법 주제 묶음일 뿐, 특정 학년 배정이나 교과서 일치를 뜻하지 않는다.
+- 과정 이름의 '(제안)'은 운영자가 학원 이름·기준을 확정하기 전까지 유지한다.
+
+## 2. 단원 구조 9단계 ↔ 데이터 필드 ↔ 화면 섹션
+
+| 단계 | 내용 | 데이터 필드 | 화면 섹션 | testid |
+|---|---|---|---|---|
+| 1 | 학습 목표 | `goalKo`, `titleKo` | 단원 머리 | `gu-goal` |
+| 2 | 친숙한 상황·짧은 예문 + 자연스러운 한국어 | `examples[{en,ko}]` | 예문 카드(영어 듣기 버튼 `speak`) | `gu-examples`, `gu-example-<i>`, `gu-example-<i>-listen` |
+| 3 | 쉬운 한국어 설명(전문용어 풀어 쓰기) | `explainKo[]` | 설명 목록 | `gu-explain` |
+| 4 | 문장 구조(주어·동사·나머지 색·글자 라벨) | `structure[{s,v,rest,ko}]` | 구조 막대 | `gu-structure`, `gu-structure-<i>` (S/V/+ 칩 sky/emerald/amber) |
+| 5 | 긍정·부정·의문 비교(필요한 단원만) | `compare{aff,neg,q}` (없으면 생략) | 비교 표 | `gu-compare` |
+| 6 | 흔한 오류(틀린 예문 + 수정 이유) | `errors[{wrong,right,whyKo}]` | 오류 카드 | `gu-errors`, `gu-error-<i>` |
+| 7 | 단계별 연습: 선택 → 빈칸 → 순서 배열 → 문장 만들기 | `practice.choice`(`fromUnitId`의 `grammar.items` 재사용), `practice.blank`, `practice.order`, `practice.build` | 연습 영역 4단계 | `gu-practice`, `gu-step-choice`(`gu-choice-<i>-opt-<j>`), `gu-step-blank`(`gu-blank-<i>-opt-<j>`/`-why`/`-retry`), `gu-step-order`(`gu-order-<i>-word-<j>`/`-answer`/`-check`/`-clear`/`-why`/`-retry`), `gu-step-build`(`gu-build-<i>-input`/`-reveal`/`-compare`), `gu-practice-status`('풀이 N/M'), `gu-practice-done` |
+| 8 | 직접 사용(짧은 말하기/쓰기) | `use{kind,promptKo,exampleEn,exampleKo}` | 직접 사용 카드 | `gu-use`, `gu-use-listen`, `gu-use-done`, `gu-use-note`; 쓰기형은 `gu-use-input`/`-reveal`/`-compare` |
+| 9 | 오답 피드백·다시 풀기 | 각 문항 `whyKo`, 화면 재시도 상태 | 피드백 문구 + [다시 풀기] | `gu-feedback`, 문항별 `-why`/`-retry`, 전체 `gu-reset-all` |
+
+공통 필드: `id`, `courseId`, `order`, `conceptId`, `prereqIds`, `status`(`ready`/`preparing`), `fromUnitId`(기존 Unit 연결), `basicsUnitId`(중·고만), `sources`.
+
+설계 규칙
+- 한 화면에는 개념 하나만 둔다. 구조(4)와 비교(5)는 단원 목표에 필요할 때만 쓴다(Easy 1번은 비교 생략).
+- 영작 `build` 문항은 `exampleEn`을 유일 정답으로 쓰지 않고 `acceptNoteKo`로 다른 정답을 안내한다. 자동 채점하지 않는다.
+- `order` 문항은 가능한 순서가 하나뿐인 단어 묶음만 쓴다.
+- 문항의 어휘는 해당 단원의 예문·선수 단원에 나온 말로 제한한다.
+
+## 3. 과정별 단원 표
+
+문제 유형 약어: 선=선택, 빈=빈칸, 순=순서 배열, 만=문장 만들기, 사=직접 사용. 준비 중 단원은 설명·문항이 없다(`examples`·`explainKo`·`practice`가 빈 배열, `use`가 null).
+
+### 3.1 Easy (숙련도) — ready 2 / 준비 중 6
+
+| 순서 | id | 제목 | 학습 목표 | 선수(prereqIds) | conceptId | 설명 예시 | 문제 유형 | 상태 |
+|---|---|---|---|---|---|---|---|---|
+| 1 | `g-easy-01` | 부탁하기 Can I …? | 필요한 물건을 빌려 달라고 말할 수 있어요 | — | `request-can-i` | Can I borrow a pencil? / 연필 빌려도 돼? | 선 6(`c1-borrow-classroom`)·빈 2·순 2·만 2·사 | ready |
+| 2 | `g-easy-02` | 어디 있어? Where's | 물건이 어디 있는지 묻고 답할 수 있어요 | — | `where-is-location` | Where's my bag? / 내 가방 어디 있어? | 선 6(`c1-lost-bag-classroom`)·빈 2·순 2·만 2·사 | ready |
+| 3 | `g-easy-03` | 나는 …이야 am·is·are | 나와 친구가 누구인지 말할 수 있어요 | — | `be-am-is-are` | — | — | 준비 중 |
+| 4 | `g-easy-04` | 할 수 있어요 can | 내가 할 수 있는 것과 없는 것을 말할 수 있어요 | `g-easy-01` | `can-ability` | — | — | 준비 중 |
+| 5 | `g-easy-05` | …이 있어요 There is | 방에 무엇이 있는지 말할 수 있어요 | `g-easy-02` | `there-is-are` | — | — | 준비 중 |
+| 6 | `g-easy-06` | 좋아해요 I like | 내가 좋아하는 것을 말할 수 있어요 | `g-easy-03` | `present-simple-like` | — | — | 준비 중 |
+| 7 | `g-easy-07` | …해요? Do you …? | 친구에게 Yes/No로 답하는 질문을 할 수 있어요 | `g-easy-06` | `present-simple-question` | — | — | 준비 중 |
+| 8 | `g-easy-08` | 이것·저것 This is | 가까운 것과 먼 것을 가리켜 말할 수 있어요 | `g-easy-03` | `this-that` | — | — | 준비 중 |
+
+### 3.2 Intermediate (숙련도) — ready 1 / 준비 중 7
+
+| 순서 | id | 제목 | 학습 목표 | 선수 | conceptId | 설명 예시 | 문제 유형 | 상태 |
+|---|---|---|---|---|---|---|---|---|
+| 1 | `g-int-01` | Is it …? 대답·되묻기 | 있는지 확인하고 짧게 답한 뒤 되물을 수 있어요 | `g-easy-02` | `yes-no-question-short-answer` | Is it in the box? / 상자 안에 있어? | 선 6(`c2-find-together-classroom`)·빈 2·순 2·만 2·사 (비교 있음) | ready |
+| 2 | `g-int-02` | 엄마는 …해요 | 가족이나 친구가 하는 일을 말할 수 있어요 | `g-easy-06` | `third-person-s` | — | — | 준비 중 |
+| 3 | `g-int-03` | 무엇을 좋아해? | What으로 묻고 What about you?로 되물을 수 있어요 | `g-easy-07`, `g-int-01` | `wh-question-what` | — | — | 준비 중 |
+| 4 | `g-int-04` | Can you …? 묻기 | 할 수 있는지 묻고 짧게 답할 수 있어요 | `g-easy-04`, `g-int-01` | `can-question-short-answer` | — | — | 준비 중 |
+| 5 | `g-int-05` | 지금 …하고 있어요 | 지금 하는 일을 말할 수 있어요 | `g-easy-06` | `present-continuous` | — | — | 준비 중 |
+| 6 | `g-int-06` | 위치 말 늘리기 | next to·behind로 위치를 더 자세히 말할 수 있어요 | `g-easy-02` | `prepositions-place-more` | — | — | 준비 중 |
+| 7 | `g-int-07` | 어제 있었던 일 | 어제 있었던 일을 짧게 말할 수 있어요 | `g-easy-06` | `past-simple` | — | — | 준비 중 |
+| 8 | `g-int-08` | Would you like …? | 무엇을 원하는지 묻고 권할 수 있어요 | `g-easy-07` | `would-you-like-some` | — | — | 준비 중 |
+
+### 3.3 Advanced (숙련도) — 전부 준비 중 (6)
+
+| 순서 | id | 제목 | 학습 목표 | 선수 | conceptId | 설명 예시 | 문제 유형 | 상태 |
+|---|---|---|---|---|---|---|---|---|
+| 1 | `g-adv-01` | 계획 말하기 going to | 앞으로 할 일을 말할 수 있어요 | `g-int-05` | `going-to-plan` | — | — | 준비 중 |
+| 2 | `g-adv-02` | 비교하기 | 둘을 비교해서 말할 수 있어요 | `g-int-03` | `comparatives` | — | — | 준비 중 |
+| 3 | `g-adv-03` | because·so 잇기 | 이유와 결과를 이어서 말할 수 있어요 | `g-int-07` | `because-so` | — | — | 준비 중 |
+| 4 | `g-adv-04` | when·if 잇기 | 때와 조건을 이어서 말할 수 있어요 | `g-adv-03` | `when-if-clause` | — | — | 준비 중 |
+| 5 | `g-adv-05` | should·have to | 해야 하는 일과 하면 좋은 일을 말할 수 있어요 | `g-easy-04` | `should-have-to` | — | — | 준비 중 |
+| 6 | `g-adv-06` | 해 본 적 있어요 | 해 본 경험을 말할 수 있어요 | `g-int-07` | `present-perfect-experience` | — | — | 준비 중 |
+
+### 3.4 Middle School (학교) — 전부 준비 중 (6) · 학년·교육과정 대응 미확인
+
+| 순서 | id | 제목 | 학습 목표 | 선수 | conceptId | basicsUnitId | 설명 예시 | 문제 유형 | 상태 |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | `g-mid-01` | 시제 정리 | 현재·과거·미래를 구분해 쓸 수 있어요 | — | `tense-system` | `g-int-07` | — | — | 준비 중 |
+| 2 | `g-mid-02` | 조동사 can·may·must | 허락·의무를 나타내는 말을 쓸 수 있어요 | `g-mid-01` | `modal-verbs` | `g-easy-04` | — | — | 준비 중 |
+| 3 | `g-mid-03` | 수동태 기초 | "…당했다"는 문장을 만들 수 있어요 | `g-mid-01` | `passive-voice` | `g-easy-03` | — | — | 준비 중 |
+| 4 | `g-mid-04` | 관계대명사 who·which | 두 문장을 하나로 이어 설명할 수 있어요 | `g-mid-01` | `relative-clause` | `g-int-03` | — | — | 준비 중 |
+| 5 | `g-mid-05` | 분사로 꾸미기 | -ing·-ed로 명사를 꾸밀 수 있어요 | `g-mid-01` | `participle` | `g-int-05` | — | — | 준비 중 |
+| 6 | `g-mid-06` | 조건문 if | 만약의 상황을 말할 수 있어요 | `g-mid-01` | `conditional-if` | `g-easy-06` | — | — | 준비 중 |
+
+### 3.5 High School (학교) — 전부 준비 중 (6) · 학년·교육과정 대응 미확인
+
+| 순서 | id | 제목 | 학습 목표 | 선수 | conceptId | basicsUnitId | 설명 예시 | 문제 유형 | 상태 |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | `g-high-01` | 완료 시제 | 과거와 지금을 이어서 말할 수 있어요 | — | `perfect-tense` | `g-int-07` | — | — | 준비 중 |
+| 2 | `g-high-02` | 수동태 심화 | 시제·조동사가 있는 수동태를 쓸 수 있어요 | `g-high-01` | `passive-voice` | `g-easy-03` | — | — | 준비 중 |
+| 3 | `g-high-03` | 관계사 심화 | 긴 문장 속 관계사를 해석하고 쓸 수 있어요 | `g-high-01` | `relative-clause` | `g-int-03` | — | — | 준비 중 |
+| 4 | `g-high-04` | 가정법 | 사실과 다른 상황을 말할 수 있어요 | `g-high-01` | `subjunctive-conditional` | `g-easy-06` | — | — | 준비 중 |
+| 5 | `g-high-05` | 간접화법 | 남이 한 말을 전달해 말할 수 있어요 | `g-high-01` | `reported-speech` | `g-int-07` | — | — | 준비 중 |
+| 6 | `g-high-06` | 분사구문 | 분사로 문장을 짧게 이어 쓸 수 있어요 | `g-high-01` | `participle` | `g-int-05` | — | — | 준비 중 |
+
+참고
+- 준비 중 단원의 `basicsUnitId`가 가리키는 기초 단원 중 일부(`g-int-07`, `g-int-03`, `g-int-05`, `g-easy-03`, `g-easy-04`, `g-easy-06`)도 아직 준비 중이다. 기초 이동 링크는 대상이 준비 중이면 '준비 중'으로 보여야 한다.
+- 선수 문법과 `basicsUnitId`는 설계자 초안이며 교사 검수 전이다. 문법 난이도 순서를 학원 교재와 대조하지 않았다.
+- 중·고 제목의 문법 주제(수동태, 관계사, 분사, 가정법 등)는 일반적인 학교 문법 범주명일 뿐 특정 학년 교육과정 일치를 단정하지 않는다.
+
+## 4. 기존 문항 배정 근거
+
+기존 파일럿 Unit의 `grammar.items`(각 6개, 232차 기준)를 `fromUnitId`로 연결해 "선택" 연습에 그대로 쓴다. 문항을 새로 만들거나 옮기지 않았다.
+
+| 기존 Unit | 연결 단원 | 수준 | 배정 근거 |
+|---|---|---|---|
+| `c1-borrow-classroom` (빌리기) | `g-easy-01` (Easy) | 기초 | 문항 6개 모두 한 문장 틀(Can I borrow ___?) 안의 빈칸·어순이다. 기초(`grammarKo`)와 일치한다. |
+| `c1-lost-bag-classroom` (위치 묻기) | `g-easy-02` (Easy) | 기초 | 질문·대답이 나오지만 문항은 각각 한 문장 틀 안에서 고른다. 짝짓기 문항이 없다. |
+| `c2-find-together-classroom` (함께 찾기) | `g-int-01` (Intermediate) | 발전 | 질문에 맞는 대답·되묻기를 짝지어 고르는 문항이라 발전(`grammarKo`)과 일치한다. |
+
+- 어휘 의존: Easy 두 단원은 자기 Unit 어휘만 쓴다. Intermediate는 Easy-02 어휘에 shelf·box가 더해진다. 그래서 `g-int-01`의 선수가 `g-easy-02`다.
+- 경계 사례: 빌리기 3번(Could I도 가능한 다답)과 위치 묻기 2번(Where's / Where is 다답)은 한 문장 안 선택이라 기초로 유지한다.
+- **부적절 배정 없음, 변경 0.**
+
+## 5. 개념 공유·차별화 규칙
+
+같은 `conceptId`가 여러 단원·과정에 나올 수 있다. 개념 설명 본문은 공유하고, 깊이와 문항 난이도로 구분한다.
+
+| conceptId | Middle School | High School | 기초 설명 이동(basicsUnitId) |
+|---|---|---|---|
+| `passive-voice` | `g-mid-03` 수동태 기초: 현재·과거의 단순한 "…당했다" 문장 | `g-high-02` 수동태 심화: 시제·조동사가 들어간 수동태 | 둘 다 `g-easy-03`(be 동사) |
+| `relative-clause` | `g-mid-04` who·which로 두 문장을 하나로 잇기 | `g-high-03` 긴 문장 속 관계사 해석·쓰기 | 둘 다 `g-int-03`(what 질문·되묻기) |
+| `participle` | `g-mid-05` -ing·-ed로 명사 꾸미기 | `g-high-06` 분사구문으로 문장 잇기 | 둘 다 `g-int-05`(현재 진행) |
+
+규칙
+1. 같은 conceptId의 핵심 설명 문장(`explainKo`)은 과정 간에 복사하지 않고 한 곳에서 관리한다. 더 깊은 과정은 설명을 더하되 앞 과정 설명을 대체하지 않는다.
+2. 깊이 차별: 기초 과정은 한 문형·짧은 문장, 심화 과정은 시제·조동사 결합·긴 문장을 다룬다.
+3. 난이도 차별: 같은 유형(선택→빈칸→순서→만들기)이라도 문장 길이, 오답 보기의 헷갈림 정도, 어휘 수준을 올린다.
+4. 학교 과정 단원의 [기초 설명 보기]는 `basicsUnitId`의 Easy/Intermediate 단원으로 이동한다. 대상이 준비 중이면 '준비 중'을 표시한다.
+5. 중·고에서 같은 conceptId라는 사실이 두 과정이 특정 학년에 대응한다는 뜻은 아니다.
+6. 숙련도 과정 안에서는 conceptId가 중복되지 않는다. 현재 중복은 Middle/High뿐이다(`tense-system` 등 나머지는 단일).
+
+## 6. 연구 근거
+
+검증 방법: 각 DOI를 Crossref API(`api.crossref.org/works/<doi>`)로 조회해 제목·저자·연도·학술지·권호·쪽수·초록을 확인했다. Ellis 2006은 Crossref에 초록이 없어 OpenAlex 초록을 썼다(JSTOR 페이지는 열리지 않았다).
+
+"연구 결과"는 초록에 적힌 내용이고, "제품 설계 판단"은 이 앱의 판단이다. 두 열은 섞지 않는다.
+
+| # | 질문 | 제목 | 저자 | 연도 | 학술지·출판 | DOI | 검증 | 연구 결과(초록 기준) | 제품 설계 판단(연구 주장 아님) | 한계 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | a | Effectiveness of L2 Instruction: A Research Synthesis and Quantitative Meta-analysis | Norris & Ortega | 2000 | Language Learning 50(3), 417-528 | 10.1111/0023-8333.00136 | VERIFIED (Crossref) | 49개 연구(1980-1998)에서 초점 있는 L2 교수는 큰 효과가 있었다. 명시적 유형이 암시적 유형보다 낫고, Focus on Form과 Focus on Forms의 효과는 비슷하게 컸으며, 효과는 지속됐다. | 짧은 명시적 규칙 설명은 정당화된다. 암시적 방식만 고집할 필요가 없다. | 저자들이 구인 조작화가 부실해 일반화가 제한된다고 밝혔다. 결과 측정이 명시적 교수에 유리한 경우가 많고 성인 학습자가 대부분이다. |
+| 2 | a | Interactions Between Type of Instruction and Type of Language Feature: A Meta-Analysis | Spada & Tomita | 2010 | Language Learning 60(2), 263-308 | 10.1111/j.1467-9922.2010.00562.x | VERIFIED (Crossref) | 영어 문법 41개 연구에서 명시적 교수가 단순·복잡 문법 모두에서 암시적 교수보다 낫고, 통제된 지식과 자발적 사용 모두에 도움이 됐다. | 어려운 문법에도 명시적 설명을 기본값으로 삼는 것이 합리적이다. | 영어만 다룬다. 성인·상급 학습자 중심이다. 명시/암시 구분이 거칠다. |
+| 3 | a | Implicit and explicit instruction in L2 learning | Goo, Granena, Yilmaz & Novella | 2015 | *Implicit and Explicit Learning of Languages* (Studies in Bilingualism 48, Benjamins), 443-482 | 10.1075/sibil.48.18goo | VERIFIED (Crossref) | 34개 연구(Norris & Ortega의 11개 + 새 23개)에서 명시적 교수가 전반적으로 더 효과적이었다. | 1·2행과 같은 기본값을 뒷받침한다. | 대상 집단 한계는 같다. 초록은 조절 변수를 언급하지만 결과는 주지 않는다. 책 장이라 권호가 없다. |
+| 4 | b | The Effectiveness of Corrective Feedback in SLA: A Meta-Analysis | Li | 2010 | Language Learning 60(2), 309-365 | 10.1111/j.1467-9922.2010.00561.x | VERIFIED (Crossref) | 33개 연구에서 교정 피드백은 중간 크기의 지속 효과를 보였다. 암시적 피드백의 효과가 명시적보다 더 오래 유지됐다. 실험실 연구가 교실 연구보다 효과가 컸고, 짧은 처치와 외국어 환경에서 효과가 컸다. | 오답 뒤 피드백은 원칙적으로 지지된다. 피드백은 짧게 한다. | 대부분 구두 피드백·성인이다. 실험실 효과가 교실보다 부풀려 있다. 다시 풀기 반복은 검증하지 않았다. |
+| 5 | b | Oral Feedback in Classroom SLA: A Meta-Analysis | Lyster & Saito | 2010 | Studies in Second Language Acquisition 32(2), 265-302 | 10.1017/S0272263109990520 | VERIFIED (Crossref) | 교실 연구 15개(N=827)에서 교정 피드백은 유의하고 지속적인 효과를 보였다. 유도(prompt)가 재구성(recast)보다 낫고, 자유 산출 측정에서 효과가 가장 컸으며, 어린 학습자가 더 큰 이득을 봤다. | 정답만 보여 주기보다 학생이 스스로 고치게 하는 다시 풀기 단계가 더 맞다. | 앱이 아니라 교사의 구두 피드백이다. 연구가 15개뿐이다. 나이 효과는 적은 연구에 대한 단순 회귀다. |
+| 6 | b | The Efficacy of Written Corrective Feedback in Improving L2 Written Accuracy: A Meta-Analysis | Kang & Han | 2015 | Modern Language Journal 99(1), 1-18 | 10.1111/modl.12189 | VERIFIED (Crossref) | 21개 연구에서 서면 교정 피드백이 L2 글쓰기의 문법 정확도를 높였다. 효과는 숙련도·환경·장르에 따라 달랐다. | 입력한 문장에 대한 서면 교정은 그럴듯하며 효과는 학습자 수준에 따라 다르다. | 자유 글쓰기 연구이며 선택·빈칸 같은 닫힌 문항이 아니다. 아동·한국 EFL 대상이 아니다. |
+| 7 | c | Current Issues in the Teaching of Grammar: An SLA Perspective | Ellis | 2006 | TESOL Quarterly 40(1), 83-107 | 10.2307/40264512 | VERIFIED (Crossref: 제목·권호, OpenAlex: 초록). JSTOR 페이지는 열리지 않음 | 문법을 가르칠지, 무엇을·언제·어떻게 가르칠지 8개 질문을 다룬 서술형 검토다. 저자는 SLA가 확정적 답을 주지 않는다고 하며 자신의 신념으로 끝맺는다. | 의사소통 교육과정 안에서 문법을 가르치는 이유를 설명하는 근거로 쓴다. 효과 크기의 증거가 아니다. | 실증 연구가 아닌 입장 논문이다. Crossref에는 시작 쪽(83)만 있다. **끝 쪽 107은 인용 전 출판사 페이지에서 확인해야 한다.** |
+| 8 | d (추가) | Comprehension-Based Versus Production-Based Grammar Instruction: A Meta-Analysis of Comparative Studies | Shintani, Li & Ellis | 2013 | Language Learning 63(2), 296-329 | 10.1111/lang.12001 | VERIFIED (Crossref) | 35개 프로젝트에서 두 방식 모두 큰 효과였다. 수용 지식은 1주 안에는 이해 중심이 앞섰지만 격차가 줄었다. 산출 지식은 단기에는 비슷했고 지연 평가에서는 산출 중심이 더 나았다. 초기 이해 중심 우위는 대부분 Processing Instruction 때문이었다. | 인식 과제는 초기에 도움이 될 수 있다. 빈칸·순서·문장 만들기 같은 산출 과제는 오래가는 산출 이득을 위해 넣을 만하다. | 이해 중심 대 산출 중심 비교이며 인식→산출 단계 사다리를 검증한 것이 아니다. 대부분 성인 연구다. |
+| 9 | d (추가) | The Effectiveness of Processing Instruction and Production-based Instruction on L2 Grammar Acquisition: A Meta-Analysis | Shintani | 2014 | Applied Linguistics 36(3), 306-325 | 10.1093/applin/amu067 | **NOT VERIFIED** (서지 기록만 Crossref에서 확인, 초록 없음) | 기재하지 않음. 초록을 읽지 못했으므로 어떤 결과도 보고하지 않는다. | 없음. 검증된 결과가 없다. | **초록을 읽기 전에는 이 논문의 결과를 인용하지 않는다.** |
+| 10 | d, e (추가, 단일 연구) | Does it matter when you review? | Rogers & Cheung | 2020 | Studies in Second Language Acquisition 43(5), 1138-1156 | 10.1017/s0272263120000236 | VERIFIED (Crossref) | 홍콩 초등 EFL 학생 66명의 어휘 학습에서 짧은 간격 복습과 긴 간격 복습은 차이가 없었다. 저자들은 성인 실험실 결과가 아동 교실에 일반화되지 않을 수 있다고 말한다. | 성인 실험실 연구를 근거로 아동용 복습 일정을 과하게 설계하지 말라는 주의로 쓴다. | 메타분석이 아닌 단일 연구다. 문법이 아니라 어휘다. |
+
+**(e) 인지 부하·한 화면 개념 제한**: 근거를 찾지 못했다. Crossref에서 L2 문법 교수의 인지 부하를 다룬 쓸 만한 논문이 나오지 않았다. 이 점에 대해 동료심사 L2 문헌을 권하지 않는다. 인지 부하 이론은 일반 교육심리학이며 여기서 확인하지 않았다.
+
+**연구가 지지하지 않는 것**
+1. 이 앱의 정확한 순서(선택 → 빈칸 → 순서 → 만들기)와 "오답 피드백 → 다시 풀기" 반복 구조를 직접 검증한 연구는 없다.
+2. 대부분의 연구는 성인·대학생의 실험실이나 소규모 교실 연구이며 한국 EFL 아동을 다루지 않는다. 어린 학습자의 이득이 더 컸다고 보고한 것은 Lyster & Saito뿐이다.
+3. 명시적 교수의 효과는 명시적 지식에 유리한 측정 때문에 부풀려졌을 수 있다(Norris & Ortega가 지적). 효과 크기를 예측값으로 쓰지 않고 설계 방향의 근거로만 쓴다.
+
+**설계 판단별 근거와 제품 판단의 범위**
+
+| 설계 판단 | 근거 행 | 연구가 말하는 범위 | 제품 판단인 부분 |
+|---|---|---|---|
+| 명시적 설명 사용(3·4단계) | 1, 2, 3 | 명시적 교수가 암시적보다 낫다는 메타분석 결과 | 한국어 풀어쓴 설명 문장의 길이·표현, 구조 막대의 색·라벨 형태 |
+| 짧은 피드백 + 다시 풀기(9단계) | 4, 5, 6 | 교정 피드백의 지속 효과, 유도가 재구성보다 낫다는 것, 짧은 처치가 더 컸다는 것 | 재시도 횟수·방식, 앱 화면에서의 구현. 앱 형태의 다시 풀기는 검증되지 않았다 |
+| 예문 먼저·사용으로 마무리(2·8단계) | 7 | 의사소통 교육과정 안에서 문법을 가르치는 입장 논문(실증 아님) | 예문 → 설명 → 연습 → 직접 사용이라는 순서 자체 |
+| 인식 → 산출 순서(7단계) | 8 (9는 인용 금지) | 이해 중심은 초기에, 산출 중심은 지연된 산출 지식에 이점이 있다는 비교 결과 | 선택 → 빈칸 → 순서 → 만들기라는 4단계 사다리와 그 순서. 연구가 검증한 것은 두 방식의 비교뿐이다 |
+| 한 화면 개념 제한 | 근거 없음 ((e) 참고) | 해당 없음 | 전적으로 제품 판단이다. 운영자 요구이며 L2 문헌 근거를 주장하지 않는다 |
+| 복습 일정을 단순하게 유지 | 10 | 어휘 학습에서 간격 차이 없음(단일 연구) | 문법 복습 일정을 아직 설계하지 않는다는 결정 |
+
+## 7. 검증 계획
+
+결과 칸은 비어 있다. 실행 후 리드가 채운다.
+
+| 항목 | 확인 내용 | 방법 | 결과 |
+|---|---|---|---|
+| 5개 과정 선택 | 5개 과정 카드가 보이고 종류(숙련도/학교)·'(제안)'·학교 라벨이 표시된다 | 자동 E2E + 수동 | [grammar] 시나리오 a: 5개 과정·숙련도/학교 (제안) 배지·ready/전체 개수 확인. 수동·Preview 실화면 미확인 |
+| 단원 목록 | 과정마다 단원 순서·학습 목표·ready/준비 중이 맞다(Easy 8, Intermediate 8, Advanced 6, Middle 6, High 6) | 데이터 단위 테스트 + E2E | 정적 `testGrammarCourses` PASS + [grammar] 시나리오 a(개수)·b(Easy 목록) |
+| 단원 진입 | ready 3단원은 열리고 준비 중은 비활성 '준비 중'이다 | E2E | [grammar] 시나리오 b(g-easy-01)·d(g-int-01) 진입, e(중·고 전 단원 준비 중 비활성 + 학교 문법 안내). g-easy-02는 정적 검증만이고 e2e 진입 시나리오 목록에는 없음 |
+| 설명 표시 | 9단계 섹션이 순서대로 보이고, 비교는 `g-int-01`만 보이며 Easy는 생략된다 | E2E | [grammar] 시나리오 b(g-easy-01 9섹션 순서, 듣기 1회 재생)·d(g-int-01 비교 섹션) |
+| 문제 풀이 | 선택 → 빈칸 → 순서 → 만들기 → 직접 사용이 동작하고 `build`가 유일 정답을 강요하지 않는다 | E2E + 수동 | [grammar] 시나리오 c(풀이 M/M → 연습 다 했어요 → 직접 사용, 만들기는 판정 문구 없이 비교만)·d(되묻기 순서 배열). 1차 실행 테스트 측 실패 1건(정규식이 운영자 규칙 문구 '정답은 아니에요'를 판정어로 오탐) 수정 후 재실행 124/0. 수동 미확인 |
+| 오답 피드백 | 오답 시 `whyKo`가 보이고 다시 풀 수 있다 | E2E | [grammar] 시나리오 c(빈칸·순서 오답 → 설명 → 다시 풀기 → 정답, 전체 다시 풀기 → 0/M) |
+| 기초 이동 | 중·고 단원에서 `basicsUnitId`로 이동하고 대상이 준비 중이면 '준비 중'이다 | E2E | 화면에 `gu-basics-link`/`gu-basics-back`은 구현됨. 중·고 단원이 전부 준비 중이라 [grammar] 시나리오 e는 비활성 확인까지이며 기초 링크 이동 e2e는 시나리오 목록에 없음(미검증) |
+| PC/모바일 | 데스크톱·모바일 폭에서 레이아웃이 깨지지 않는다 | E2E 뷰포트 + 수동 | [grammar] 시나리오 g: 360/390/412/1280, 잘린 요소 검사 포함. 실기기·수동 미확인 |
+| 데이터 정합 | `prereqIds`·`basicsUnitId`·`fromUnitId`가 실제 id를 가리키고 순환이 없다 | 데이터 단위 테스트 | 정적 `testGrammarCourses` PASS(`validateGrammarUnit`: id 참조, 빈칸 `___`, 순서 answers가 words 사용) |
+| 회귀 | 기존 Unit 문형 활동, Speaking/Writing, 홈 흐름 불변. `npm run build`, 관련 verify | build + verify | 더미 env 빌드 경고 0. 정적 testPilotUnit·testStudentPathContracts·testRegistryCoverage·testWritingPractice·testKeySentenceFlow PASS, testQaGate 17/0, testLazyChunkGuards 95/95, testBundleBudget 32/0. mock e2e [writing] 83/0, [speaking] 608/0, [speaking-exam] 216/0, [unit] 141/0, [student-home] 223/0/1 SKIP(기존 fixture 한계) |
+
+### 구현 상태 (리드 갱신 예정)
+
+| 항목 | 값 |
+|---|---|
+| 데이터 모듈 `src/utils/grammar/` | `grammarCourses.js`(5 과정), `grammarUnits.js`(34 단원 + `validateGrammarUnit`·`resolveChoice`·`SCHOOL_GRAMMAR_NOTE_KO`) |
+| 화면(5개 과정 선택·단원 목록·단원 상세) | `GrammarCourseScreen.jsx`(lazy 청크 약 26.5 KB). 과정 목록 → 단원 목록(학습 목표, 준비 중 비활성) → 단원 9섹션, 준비 중 단원은 안전 화면. 저장 없음. `UnitScreen.jsx`에서 선택기 문법 intent와 `GrammarSetScreen` 제거(`GrammarActivity` 유지) |
+| 홈 [📘] 진입 (QA 전용) | 홈 '📘 문법 과정 (Easy ~ High School)' → `App.jsx` onGo 'grammar' → 화면 `grammarCourses`(QA_ONLY_SCREENS 6) |
+| build 결과 | 더미 env 빌드 경고 0 |
+| 관련 verify / E2E 결과 | 정적 PASS(위 회귀 행), mock e2e [grammar] 신규 스펙 a~g 최종 124/0 (통과 124 / 실패 0, 미mock 요청 0·mock 오류 0). 1차 122/2는 둘 다 테스트 측(정규식 오탐, 앱 동기화 키 `paul_easy_sync_meta`를 새 키로 계수) → 수정 |
+| 커밋 SHA | 코드 `577a00a0`, e2e `0689cd92` |
+| 단원 현황 | ready 3 / 준비 중 31 (총 34) — 코드 기준 확인(Easy 6, Intermediate 7, Advanced 6, Middle 6, High 6) |
+
+## 8. 미완료 콘텐츠 목록
+
+**준비 중 단원 31개 전부**: 설명(`examples`·`explainKo`·`structure`·`errors`), 연습 4종, 직접 사용이 비어 있다.
+
+| 과정 | 준비 중 단원 id |
+|---|---|
+| Easy (6) | `g-easy-03`, `g-easy-04`, `g-easy-05`, `g-easy-06`, `g-easy-07`, `g-easy-08` |
+| Intermediate (7) | `g-int-02`, `g-int-03`, `g-int-04`, `g-int-05`, `g-int-06`, `g-int-07`, `g-int-08` |
+| Advanced (6) | `g-adv-01` ~ `g-adv-06` |
+| Middle School (6) | `g-mid-01` ~ `g-mid-06` |
+| High School (6) | `g-high-01` ~ `g-high-06` |
+
+**수준별 문항 공백**(`PERFORMANCE_LEVELS`의 `grammarKo` 기준, §12.5 이어짐)
+- 입문(그림·모양 보고 알맞은 말 고르기): 문항 없음.
+- 확장(시제·이유를 이어 알맞은 문장 고르기): 문항 없음.
+- 발표(짧은 글에서 틀린 곳 찾아 고치기): 문항 없음.
+- 기초 12문항·발전 6문항은 있으나 교사 검수 대기다.
+
+**기타**
+- ready 3단원의 `blank`·`order`·`build`·`use`와 `errors`는 이번에 새로 쓴 초안이며 교사 검수 전이다.
+- 학교 과정과 실제 학년·교육과정의 대응, 학원 교재 순서와의 대조는 하지 않았다.
+
+## 9. 교사 확인 메모·검수 상태
+
+**검수 상태: 미검수.** 이 문서의 모든 예문·문항·설명·순서는 교사 검수 전이며 검수 완료가 아니다.
+
+교사 확인 요청
+1. 순서 배열 문항은 가능한 순서가 하나뿐이라 정답을 하나로 둔다. 여러 정답 인정은 만들기 문항의 `acceptNoteKo`에서 한다. 이 구분이 적절한가?
+2. `g-easy-01` 구조의 "I can borrow"는 어순 비교용이다. 능력의 can은 `g-easy-04`에서 따로 다룬다. 이 분리가 학생에게 헷갈리지 않는가?
+3. be동사 단원이 `g-easy-03`이라 `g-easy-02`에서 Where's(= Where is)가 먼저 나온다. Where's를 덩어리 표현으로 먼저 가르쳐도 되는가?
+4. 빈칸·순서·만들기 문항의 오답 보기가 학생에게 자연스러운 오류인지, `whyKo` 설명이 쉬운지 확인해 달라.
+5. 중·고 단원의 주제 묶음과 순서, `basicsUnitId` 연결이 적절한지, 학교 교재와 맞는지 확인해 달라(맞추려면 교재명과 단원 순서가 필요하다).

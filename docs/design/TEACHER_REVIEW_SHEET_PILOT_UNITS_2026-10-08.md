@@ -180,6 +180,21 @@ _Unit 2(C1) 대비 발전 요구: ① Yes/No 질문을 직접 만든다(Is it �
 | Unit 3 | "Is it under the desk?" 책상 밑에 없어요. 알맞은 대답은? (No, it isn't.) | 미검수 |
 | Unit 3 | 책상 밑에 없어요. 대화를 이어 가는 알맞은 대답은? (No, it isn't. What about the bag?) | 미검수 |
 
+#### 리드 추가 (233차) — 문법 과정 단원 3개 검수 요청
+문법을 5개 과정(Easy·Intermediate·Advanced·Middle School·High School)으로 재구성하며 위 Unit 문형 문항을 재사용한 문법 단원 3개를 새로 썼다(`src/utils/grammar/grammarUnits.js`, 설계 `docs/design/GRAMMAR_CURRICULUM_2026-10-10.md`). 선택 연습 6문항은 위 Unit의 기존 문항 그대로이고, 아래 예문·오류·빈칸·순서·만들기·직접 사용은 이번에 새로 쓴 초안이다. 세 단원 모두 **검수 상태: 미검수**. 체크박스는 건드리지 않았다. 학원 레벨명과 학년 대응은 확인되지 않았다.
+
+| 문법 단원 | 연결 Unit | 예문 | 흔한 오류(틀림 → 맞음) | 빈칸 | 순서 배열 | 만들기(예시, 다른 답 인정) | 직접 사용 | 검수 상태 |
+|---|---|---|---|---|---|---|---|---|
+| `g-easy-01` 부탁하기 Can I …? (Easy) | Unit 1 | Can I borrow a pencil? / …your rubber? / …your ruler? / Sure. Here you are! | Can borrow I a pencil? → Can I borrow a pencil? / Can I borrow pencil? → …a pencil? | Can I ___ your rubber? (borrow) / Can I borrow ___ ruler? (your) | Can I borrow a pencil? / Can I borrow your ruler? | 연필 빌리기 "Can I borrow a pencil?"(Could I도 인정), 공 빌리기 "Can I borrow your ball?" | 말하기: 필요한 물건을 골라 빌려 달라고 하고, 짝은 "Sure. Here you are!" | 미검수 |
+| `g-easy-02` 어디 있어? Where's (Easy) | Unit 2 | Where's my bag? / It's under the chair. / It's in the bag. / Where's my pencil case? | It in the bag. → It's in the bag. / Where my bag is? → Where's my bag? | It's ___ the bag. (in) / Where ___ my bag? (is) | Where is my bag? / It's under the chair. | 가방 위치 묻기 "Where's my bag?", 알려 주기 "It's under the chair."(Under the chair.도 괜찮음) | 말하기: 짝이 물건을 숨기면 "Where's my …?"로 묻고 "It's … the …"로 답 | 미검수 |
+| `g-int-01` Is it …? 대답·되묻기 (Intermediate) | Unit 3 | Is it in the box? / No, it isn't. / What about the bag? / Yes, it is! + 긍정·부정·의문 비교 | It is on the shelf? → Is it on the shelf? / Yes, it isn't. → No, it isn't. | Is it ___ the box? (in) / No, it ___. (isn't) | Is it in the box? / What about the bag? | "No, it isn't. What about the bag?"(두 문장으로 나눠도 됨), 선반 확인 "Is it on the shelf?" | 말하기: Is it …?로 세 번 안에 필통 찾기, 짝은 Yes, it is. / No, it isn't. | 미검수 |
+
+교사 확인 포인트
+- 순서 배열은 가능한 순서가 하나뿐인 단어 묶음만 썼다. 다른 어순도 자연스러운 문항이 있는지 확인해 달라.
+- `g-easy-02`에서 Where's를 Where is보다 먼저 덩어리로 가르쳐도 되는지(be동사 단원은 `g-easy-03`).
+- `g-easy-01` 구조 막대의 "I can borrow"는 어순 비교용이다. 능력의 can(`g-easy-04`)과 헷갈리지 않는지.
+- 만들기 문항의 "다른 답도 맞아요" 안내와 오답 보기가 학생에게 자연스러운지, `whyKo` 설명이 쉬운지.
+
 ---
 
 ## (4) 교사 확인 항목 체크리스트 (Unit 공용, Unit별로 각각 표시 — 2026-10-09 Unit 3 열 추가)
