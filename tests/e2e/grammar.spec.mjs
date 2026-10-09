@@ -6,7 +6,7 @@ import { QA_STUDENT_NAME, QA_LOGIN_PIN, QA_STUDENT_ID } from './fixtures/index.m
 import { recordsKey } from '../../src/utils/curriculum/unitRecords.js'
 import { UNITS } from '../../src/utils/curriculum/units.js'
 import { GRAMMAR_COURSES } from '../../src/utils/grammar/grammarCourses.js'
-import { GRAMMAR_UNITS, unitsForCourse, courseCounts, resolveChoice, grammarUnitById, SCHOOL_GRAMMAR_NOTE_KO } from '../../src/utils/grammar/grammarUnits.js'
+import { GRAMMAR_UNITS, unitsForCourse, courseCounts, resolveChoice, grammarUnitById, reviewStatusOf, FUNCTION_WORDS, SCHOOL_GRAMMAR_NOTE_KO } from '../../src/utils/grammar/grammarUnits.js'
 
 const VP = { width: 390, height: 844 }
 const T = (page, id) => page.locator(`[data-testid="${id}"]`)
@@ -109,6 +109,89 @@ export async function run(browser, baseURL) {
     }
   }
 
+  // 연습 전체 흐름(단원 공통): 선택(틀림 1회 후 전부 맞힘) → 빈칸(틀림→다시 풀기→맞음) → 순서(지우기·틀림·다시·맞음) → 만들기(예시 비교, 판정 없음) → 직접 사용 → 전체 다시 풀기
+  async function practiceFlow({ page, name: n0, toCourses, toUnit, status, tapOrder }, U, { choiceCount } = {}) {
+    const name = `${n0} ${U.id}`
+    await toCourses()
+    const before0 = await snap(page)
+    await toUnit(U.courseId, U.id)
+    const choice = resolveChoice(U, UNITS), p = U.practice
+    const M = choice.length + p.blank.length + p.order.length
+    r.check(`${name} 선택 ${choice.length}문항 + 빈칸 ${p.blank.length} + 순서 ${p.order.length} + 만들기 ${p.build.length} = 데이터`,
+      (choiceCount === undefined || choice.length === choiceCount) && (await countIds(page, /^gu-choice-\d+$/)) === choice.length && (await countIds(page, /^gu-blank-\d+$/)) === p.blank.length && (await countIds(page, /^gu-order-\d+$/)) === p.order.length && (await countIds(page, /^gu-build-\d+$/)) === p.build.length)
+    r.check(`${name} 시작 상태 '풀이 0/${M}', 완료 문구 없음`, (await status()) === `풀이 0/${M}` && (await T(page, 'gu-practice-done').count()) === 0, await status())
+    // ① 선택: 첫 문항은 틀린 보기 → 맞는 보기 순
+    const wrong0 = choice[0].options.findIndex((_, j) => !correctSet(choice[0].correct).includes(j))
+    if (wrong0 >= 0) { await T(page, `gu-choice-0-opt-${wrong0}`).click(); r.check(`${name} 선택 0 틀린 보기: 풀이 0/${M} 유지 + 설명`, (await status()) === `풀이 0/${M}` && (await T(page, 'gu-choice-0-why').isVisible()), await status()) }
+    for (let i = 0; i < choice.length; i++) await T(page, `gu-choice-${i}-opt-${correctSet(choice[i].correct)[0]}`).click()
+    r.check(`${name} 선택 ${choice.length}개 맞히면 '풀이 ${choice.length}/${M}'`, !!(await waitUntil(async () => (await status()) === `풀이 ${choice.length}/${M}`, { timeout: 3000 })), await status())
+    // ② 빈칸: 0번 틀림 → 이유+다시 풀기 → 초기화 → 맞음, 나머지 맞음
+    const b0 = p.blank[0], wb = b0.options.findIndex((_, j) => j !== b0.correct)
+    await T(page, `gu-blank-0-opt-${wb}`).click()
+    r.check(`${name} 빈칸 0 틀림: 이유+'다시 풀기' 표시, 풀이 수 그대로`, (await T(page, 'gu-blank-0-why').isVisible()) && (await T(page, 'gu-blank-0-retry').isVisible()) && (await status()) === `풀이 ${choice.length}/${M}` && (await T(page, 'gu-blank-0-opt-0').isDisabled()))
+    await T(page, 'gu-blank-0-retry').click()
+    r.check(`${name} 다시 풀기 → 초기화(why 없음, 보기 활성)`, (await T(page, 'gu-blank-0').getAttribute('data-answered')) === 'false' && (await T(page, 'gu-blank-0-why').count()) === 0 && (await T(page, 'gu-blank-0-opt-0').isEnabled()))
+    await T(page, `gu-blank-0-opt-${b0.correct}`).click()
+    r.check(`${name} 빈칸 0 맞음: '맞아요' + 풀이 +1`, (await txt(page, 'gu-blank-0-why')).includes('맞아요') && (await T(page, 'gu-blank-0-retry').count()) === 0 && (await status()) === `풀이 ${choice.length + 1}/${M}`, await status())
+    for (let i = 1; i < p.blank.length; i++) await T(page, `gu-blank-${i}-opt-${p.blank[i].correct}`).click()
+    r.check(`${name} 빈칸 ${p.blank.length}개 후 '풀이 ${choice.length + p.blank.length}/${M}'`, (await status()) === `풀이 ${choice.length + p.blank.length}/${M}`, await status())
+    // ③ 순서: 0번 틀린 순서 → 이유+다시 풀기, 지우기 동작, 맞는 순서, 나머지 맞음
+    const o0 = p.order[0], good0 = o0.answers[0]
+    const isGood = (seq) => o0.answers.some((a) => a.join(' ') === seq.join(' '))
+    let bad0 = [...good0].reverse(); if (isGood(bad0)) bad0 = [...good0.slice(1), good0[0]]
+    r.check(`${name} 순서 0 시작: 확인·지우기 비활성, 답 칸 비어 있음`, (await T(page, 'gu-order-0-check').isDisabled()) && (await T(page, 'gu-order-0-clear').isDisabled()) && (await txt(page, 'gu-order-0-answer')) === '')
+    await tapOrder(0, o0.words, bad0)
+    r.check(`${name} 순서 0 틀린 순서로 놓으면 답 칸에 단어가 쌓이고 칩은 비활성`, (await txt(page, 'gu-order-0-answer')) === bad0.join(' ') && (await T(page, 'gu-order-0-word-0').isDisabled()))
+    await T(page, 'gu-order-0-clear').click()
+    r.check(`${name} 지우기 → 답 칸 비움, 칩 다시 활성`, (await txt(page, 'gu-order-0-answer')) === '' && (await T(page, 'gu-order-0-word-0').isEnabled()))
+    await tapOrder(0, o0.words, bad0)
+    await T(page, 'gu-order-0-check').click()
+    r.check(`${name} 순서 0 틀림: 이유+다시 풀기, 풀이 수 그대로`, (await T(page, 'gu-order-0-why').isVisible()) && (await T(page, 'gu-order-0-retry').isVisible()) && !(await txt(page, 'gu-order-0-why')).includes('맞아요') && (await status()) === `풀이 ${choice.length + p.blank.length}/${M}`)
+    await T(page, 'gu-order-0-retry').click()
+    r.check(`${name} 순서 다시 풀기 → 답 칸 비움·확인 버튼 복귀`, (await txt(page, 'gu-order-0-answer')) === '' && (await T(page, 'gu-order-0-check').count()) === 1 && (await T(page, 'gu-order-0').getAttribute('data-answered')) === 'false')
+    await tapOrder(0, o0.words, good0)
+    await T(page, 'gu-order-0-check').click()
+    r.check(`${name} 순서 0 맞음: '맞아요'`, (await txt(page, 'gu-order-0-why')).includes('맞아요') && (await T(page, 'gu-order-0-retry').count()) === 0)
+    for (let i = 1; i < p.order.length; i++) {
+      r.check(`${name} 마지막 문항 전에는 '연습 다 했어요' 없음 (순서 ${i})`, (await T(page, 'gu-practice-done').count()) === 0)
+      await tapOrder(i, p.order[i].words, p.order[i].answers[0])
+      await T(page, `gu-order-${i}-check`).click()
+    }
+    r.check(`${name} 풀이 ${M}/${M} + '연습 다 했어요'`, !!(await waitUntil(async () => (await status()) === `풀이 ${M}/${M}`, { timeout: 3000 })) && (await T(page, 'gu-practice-done').isVisible()), await status())
+    // ④ 만들기: 입력 전 비교 비활성 → 입력 → 예시 비교(판정 없음)
+    const JUDGE = /점수|틀렸|맞았어요|정답이에요|정답!|✅|❌/
+    for (let i = 0; i < p.build.length; i++) {
+      const q = p.build[i]
+      r.check(`${name} 만들기 ${i} 입력 전 '예시와 비교' 비활성, 비교 영역 없음`, (await T(page, `gu-build-${i}-reveal`).isDisabled()) && (await T(page, `gu-build-${i}-compare`).count()) === 0)
+      await T(page, `gu-build-${i}-input`).fill('my own sentence')
+      await T(page, `gu-build-${i}-reveal`).click()
+      const c = await txt(page, `gu-build-${i}-compare`)
+      r.check(`${name} 만들기 ${i} 비교: 내 문장+예시(${q.exampleEn})+'하나의 답'+허용 안내, 판정 단어 없음`, c.includes('my own sentence') && c.includes(q.exampleEn) && c.includes('하나의 답') && c.includes(q.acceptNoteKo) && !JUDGE.test(c), c.slice(0, 120))
+    }
+    r.check(`${name} 만들기는 풀이 수에 안 들어감(여전히 ${M}/${M})`, (await status()) === `풀이 ${M}/${M}`)
+    // 직접 사용
+    const use = U.use
+    if (use.kind === 'speaking') {
+      r.check(`${name} 직접 사용(speaking): 안내문·예시 표시, 완료 문구 아직 없음`, (await txt(page, 'gu-use')).includes(use.promptKo) && (await txt(page, 'gu-use')).includes(use.exampleEn) && (await T(page, 'gu-use-done-note').count()) === 0)
+      const before = (await speakLog(page)).length
+      await T(page, 'gu-use-listen').click()
+      r.check(`${name} 직접 사용 🔊 → 예시 speak`, !!(await waitUntil(async () => (await speakLog(page)).length > before, { timeout: 3000 })) && (await speakLog(page))[before] === use.exampleEn)
+      await T(page, 'gu-use-done').click()
+      r.check(`${name} '말해 봤어요' → 완료 안내(판정 없음)`, (await txt(page, 'gu-use-done-note')).includes('괜찮아요') && !/정답|점수|틀렸/.test(await txt(page, 'gu-use')))
+    } else {
+      await T(page, 'gu-use-input').fill('my own sentence')
+      await T(page, 'gu-use-reveal').click()
+      const c = await txt(page, 'gu-use-compare')
+      r.check(`${name} 직접 사용(writing): 내 문장+예시 비교, 판정 단어 없음`, c.includes('my own sentence') && c.includes(use.exampleEn) && !JUDGE.test(c), c.slice(0, 120))
+    }
+    // 피드백 + 전체 다시 풀기
+    r.check(`${name} 피드백 섹션 + 전체 다시 풀기 버튼`, (await T(page, 'gu-feedback').isVisible()) && (await T(page, 'gu-reset-all').isVisible()))
+    await T(page, 'gu-reset-all').click()
+    r.check(`${name} 전체 다시 풀기 → '풀이 0/${M}', 완료 문구·비교·답 사라짐`, (await status()) === `풀이 0/${M}` && (await T(page, 'gu-practice-done').count()) === 0 && (await T(page, 'gu-choice-0').getAttribute('data-answered')) === 'false' && (await T(page, 'gu-build-0-compare').count()) === 0 && (await T(page, 'gu-blank-0').getAttribute('data-answered')) === 'false' && (await T(page, 'gu-order-0').getAttribute('data-answered')) === 'false', await status())
+    const su = storageUnchanged(before0, await snap(page))
+    r.check(`${name} 전체 흐름 뒤 문법 관련 새 키 없음, Unit 기록 불변(앱 자체 키 허용)`, su.ok, su.added.join(','))
+  }
+
   const EASY = unitsForCourse('easy')
   const U1 = grammarUnitById('g-easy-01')
   const UI1 = grammarUnitById('g-int-01')
@@ -119,9 +202,9 @@ export async function run(browser, baseURL) {
     const ids = await page.locator('button[data-testid^="grammar-course-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid').replace('grammar-course-', '')))
     r.check(`${name} 과정 ${GRAMMAR_COURSES.length}개, 순서 = 데이터(easy, intermediate, advanced, middleSchool, highSchool)`, JSON.stringify(ids) === JSON.stringify(GRAMMAR_COURSES.map((c) => c.id)) && JSON.stringify(ids) === JSON.stringify(['easy', 'intermediate', 'advanced', 'middleSchool', 'highSchool']), ids.join(','))
     for (const c of GRAMMAR_COURSES) {
-      const t = await txt(page, `grammar-course-${c.id}`); const { ready, total } = courseCounts(c.id)
-      r.check(`${name} ${c.id}: 제목 ${c.titleEn}·${c.titleKo}, 배지 '${c.kind === 'school' ? '학교 문법 (제안)' : '숙련도'}', 준비 ${ready}/${total}`,
-        t.includes(c.titleEn) && t.includes(c.titleKo) && t.includes(c.kind === 'school' ? '학교 문법 (제안)' : '숙련도') && (c.kind === 'school' || !t.includes('(제안)')) && t.includes(`${ready}/${total}`) && (await T(page, `grammar-course-${c.id}`).isEnabled()), t)
+      const t = await txt(page, `grammar-course-${c.id}`); const { ready, total, reviewed } = courseCounts(c.id)
+      r.check(`${name} ${c.id}: 제목 ${c.titleEn}·${c.titleKo}, 배지 '${c.kind === 'school' ? '학교 문법 (제안)' : '숙련도'}', ready ${ready}/${total} · 검수 ${reviewed}`,
+        t.includes(c.titleEn) && t.includes(c.titleKo) && t.includes(c.kind === 'school' ? '학교 문법 (제안)' : '숙련도') && (c.kind === 'school' || !t.includes('(제안)')) && t.includes(`ready ${ready}/${total} · 검수 ${reviewed}`) && !t.includes('검수 완료') && (await T(page, `grammar-course-${c.id}`).isEnabled()), t)
     }
     const sum = GRAMMAR_COURSES.reduce((s, c) => s + courseCounts(c.id).total, 0)
     r.check(`${name} 과정별 total 합 = 전체 단원 수(${GRAMMAR_UNITS.length}), 단원마다 과정 소속`, sum === GRAMMAR_UNITS.length && GRAMMAR_UNITS.every((u) => GRAMMAR_COURSES.some((c) => c.id === u.courseId)), String(sum))
@@ -137,86 +220,22 @@ export async function run(browser, baseURL) {
     for (const u of EASY) {
       const t = await txt(page, `grammar-unit-${u.id}`); const ready = u.status === 'ready'
       r.check(`${name} ${u.id}: ${u.order}번·제목·학습 목표 표시, ${ready ? '활성(준비 중 표시 없음)' : "비활성+'준비 중'"}`,
-        t.includes(`${u.order}.`) && t.includes(u.titleKo) && t.includes(u.goalKo) && (ready ? !t.includes('준비 중') && (await T(page, `grammar-unit-${u.id}`).isEnabled()) : t.includes('준비 중') && (await T(page, `grammar-unit-${u.id}`).isDisabled()) && (await T(page, `grammar-unit-${u.id}`).getAttribute('aria-disabled')) === 'true'), t)
+        t.includes(`${u.order}.`) && t.includes(u.titleKo) && t.includes(u.goalKo) && (ready ? !t.includes('준비 중') && t.includes(reviewStatusOf(u) === 'reviewed' ? '검수 완료' : '검수 전') && (await T(page, `grammar-unit-${u.id}`).isEnabled()) : t.includes('준비 중') && (await T(page, `grammar-unit-${u.id}`).isDisabled()) && (await T(page, `grammar-unit-${u.id}`).getAttribute('aria-disabled')) === 'true'), t)
     }
     await T(page, `grammar-unit-${U1.id}`).click()
     await T(page, 'grammar-unit').waitFor({ state: 'visible', timeout: 10000 })
     r.check(`${name} data-view=unit, 제목 '${U1.order}. ${U1.titleKo}'`, (await T(page, 'grammar-courses').getAttribute('data-view')) === 'unit' && (await txt(page, 'grammar-unit')).includes(`${U1.order}. ${U1.titleKo}`))
     await checkUnitView(page, name, U1)
+    r.check(`${name} ${U1.id} 검수 배지 data-review=${reviewStatusOf(U1)}`, (await T(page, 'gu-review-status').getAttribute('data-review')) === reviewStatusOf(U1) && (await txt(page, 'gu-review-status')) === (reviewStatusOf(U1) === 'reviewed' ? '검수 완료' : '검수 전'))
     r.check(`${name} 학습 목표 카드 = 데이터`, (await txt(page, 'gu-goal')).includes(U1.goalKo))
     r.check(`${name} 기초 링크·비교 섹션 없음(g-easy-01)`, (await T(page, 'gu-basics-link').count()) === 0 && (await T(page, 'gu-compare').count()) === 0)
     await T(page, 'gu-back').click()
     r.check(`${name} ← 단원 목록 → 같은 과정(easy) 목록`, (await T(page, 'grammar-units').getAttribute('data-course')) === 'easy' && (await T(page, 'grammar-unit').count()) === 0)
   })
 
-  await scenario('c g-easy-01 연습 전체·직접 사용·전체 다시 풀기', VP, async ({ page, name, toCourses, toUnit, status, tapOrder }) => {
-    await toCourses()
-    const before0 = await snap(page)
-    await toUnit('easy', U1.id)
-    const choice = resolveChoice(U1, UNITS), p = U1.practice
-    const M = choice.length + p.blank.length + p.order.length
-    r.check(`${name} 선택 ${choice.length}문항(시범 Unit 문형 문항 재사용) + 빈칸 ${p.blank.length} + 순서 ${p.order.length} + 만들기 ${p.build.length}`,
-      choice.length === 6 && (await countIds(page, /^gu-choice-\d+$/)) === choice.length && (await countIds(page, /^gu-blank-\d+$/)) === p.blank.length && (await countIds(page, /^gu-order-\d+$/)) === p.order.length && (await countIds(page, /^gu-build-\d+$/)) === p.build.length)
-    r.check(`${name} 시작 상태 '풀이 0/${M}', 완료 문구 없음`, (await status()) === `풀이 0/${M}` && (await T(page, 'gu-practice-done').count()) === 0, await status())
-    // ① 선택: 첫 문항은 틀린 보기 → 맞는 보기 순
-    const wrong0 = choice[0].options.findIndex((_, j) => !correctSet(choice[0].correct).includes(j))
-    if (wrong0 >= 0) { await T(page, `gu-choice-0-opt-${wrong0}`).click(); r.check(`${name} 선택 0 틀린 보기: 풀이 0/${M} 유지 + 설명`, (await status()) === `풀이 0/${M}` && (await T(page, 'gu-choice-0-why').isVisible()), await status()) }
-    for (let i = 0; i < choice.length; i++) await T(page, `gu-choice-${i}-opt-${correctSet(choice[i].correct)[0]}`).click()
-    r.check(`${name} 선택 ${choice.length}개 맞히면 '풀이 ${choice.length}/${M}'`, !!(await waitUntil(async () => (await status()) === `풀이 ${choice.length}/${M}`, { timeout: 3000 })), await status())
-    // ② 빈칸: 0번 틀림 → 이유+다시 풀기 → 초기화 → 맞음, 1번 맞음
-    const b0 = p.blank[0], wb = b0.options.findIndex((_, j) => j !== b0.correct)
-    await T(page, `gu-blank-0-opt-${wb}`).click()
-    r.check(`${name} 빈칸 0 틀림: 이유+'다시 풀기' 표시, 풀이 수 그대로`, (await T(page, 'gu-blank-0-why').isVisible()) && (await T(page, 'gu-blank-0-retry').isVisible()) && (await status()) === `풀이 ${choice.length}/${M}` && (await T(page, 'gu-blank-0-opt-0').isDisabled()))
-    await T(page, 'gu-blank-0-retry').click()
-    r.check(`${name} 다시 풀기 → 초기화(why 없음, 보기 활성)`, (await T(page, 'gu-blank-0').getAttribute('data-answered')) === 'false' && (await T(page, 'gu-blank-0-why').count()) === 0 && (await T(page, 'gu-blank-0-opt-0').isEnabled()))
-    await T(page, `gu-blank-0-opt-${b0.correct}`).click()
-    r.check(`${name} 빈칸 0 맞음: '맞아요' + 풀이 +1`, (await txt(page, 'gu-blank-0-why')).includes('맞아요') && (await T(page, 'gu-blank-0-retry').count()) === 0 && (await status()) === `풀이 ${choice.length + 1}/${M}`, await status())
-    await T(page, `gu-blank-1-opt-${p.blank[1].correct}`).click()
-    r.check(`${name} 빈칸 ${p.blank.length}개 후 '풀이 ${choice.length + p.blank.length}/${M}'`, (await status()) === `풀이 ${choice.length + p.blank.length}/${M}`, await status())
-    // ③ 순서: 0번 거꾸로(틀림) → 이유+다시 풀기, 지우기 동작 확인, 맞는 순서, 1번 맞음
-    const o0 = p.order[0], good0 = o0.answers[0]
-    r.check(`${name} 순서 0 시작: 확인·지우기 비활성, 답 칸 비어 있음`, (await T(page, 'gu-order-0-check').isDisabled()) && (await T(page, 'gu-order-0-clear').isDisabled()) && (await txt(page, 'gu-order-0-answer')) === '')
-    await tapOrder(0, o0.words, [...good0].reverse())
-    r.check(`${name} 순서 0 거꾸로 놓으면 답 칸에 단어가 쌓이고 칩은 비활성`, (await txt(page, 'gu-order-0-answer')) === [...good0].reverse().join(' ') && (await T(page, 'gu-order-0-word-0').isDisabled()))
-    await T(page, 'gu-order-0-clear').click()
-    r.check(`${name} 지우기 → 답 칸 비움, 칩 다시 활성`, (await txt(page, 'gu-order-0-answer')) === '' && (await T(page, 'gu-order-0-word-0').isEnabled()))
-    await tapOrder(0, o0.words, [...good0].reverse())
-    await T(page, 'gu-order-0-check').click()
-    r.check(`${name} 순서 0 틀림: 이유+다시 풀기, 풀이 수 그대로`, (await T(page, 'gu-order-0-why').isVisible()) && (await T(page, 'gu-order-0-retry').isVisible()) && !(await txt(page, 'gu-order-0-why')).includes('맞아요') && (await status()) === `풀이 ${choice.length + p.blank.length}/${M}`)
-    await T(page, 'gu-order-0-retry').click()
-    r.check(`${name} 순서 다시 풀기 → 답 칸 비움·확인 버튼 복귀`, (await txt(page, 'gu-order-0-answer')) === '' && (await T(page, 'gu-order-0-check').count()) === 1 && (await T(page, 'gu-order-0').getAttribute('data-answered')) === 'false')
-    await tapOrder(0, o0.words, good0)
-    await T(page, 'gu-order-0-check').click()
-    r.check(`${name} 순서 0 맞음: '맞아요'`, (await txt(page, 'gu-order-0-why')).includes('맞아요') && (await T(page, 'gu-order-0-retry').count()) === 0)
-    r.check(`${name} 마지막 문항 전에는 '연습 다 했어요' 없음`, (await T(page, 'gu-practice-done').count()) === 0)
-    await tapOrder(1, p.order[1].words, p.order[1].answers[0])
-    await T(page, 'gu-order-1-check').click()
-    r.check(`${name} 풀이 ${M}/${M} + '연습 다 했어요'`, !!(await waitUntil(async () => (await status()) === `풀이 ${M}/${M}`, { timeout: 3000 })) && (await T(page, 'gu-practice-done').isVisible()), await status())
-    // ④ 만들기: 입력 전 비교 비활성 → 입력 → 예시 비교(판정 없음)
-    for (let i = 0; i < p.build.length; i++) {
-      const q = p.build[i]
-      r.check(`${name} 만들기 ${i} 입력 전 '예시와 비교' 비활성, 비교 영역 없음`, (await T(page, `gu-build-${i}-reveal`).isDisabled()) && (await T(page, `gu-build-${i}-compare`).count()) === 0)
-      await T(page, `gu-build-${i}-input`).fill('my own sentence')
-      await T(page, `gu-build-${i}-reveal`).click()
-      const c = await txt(page, `gu-build-${i}-compare`)
-      r.check(`${name} 만들기 ${i} 비교: 내 문장+예시(${q.exampleEn})+'하나의 답'+허용 안내, 정답/점수/틀렸 없음`, c.includes('my own sentence') && c.includes(q.exampleEn) && c.includes('하나의 답') && c.includes(q.acceptNoteKo) && !/점수|틀렸|맞았어요|정답이에요|정답!|✅|❌/.test(c), c.slice(0, 120))
-    }
-    r.check(`${name} 만들기는 풀이 수에 안 들어감(여전히 ${M}/${M})`, (await status()) === `풀이 ${M}/${M}`)
-    // 직접 사용(말하기)
-    const use = U1.use
-    r.check(`${name} 직접 사용(${use.kind}): 안내문·예시 표시, 완료 문구 아직 없음`, use.kind === 'speaking' && (await txt(page, 'gu-use')).includes(use.promptKo) && (await txt(page, 'gu-use')).includes(use.exampleEn) && (await T(page, 'gu-use-done-note').count()) === 0)
-    const before = (await speakLog(page)).length
-    await T(page, 'gu-use-listen').click()
-    r.check(`${name} 직접 사용 🔊 → 예시 speak`, !!(await waitUntil(async () => (await speakLog(page)).length > before, { timeout: 3000 })) && (await speakLog(page))[before] === use.exampleEn)
-    await T(page, 'gu-use-done').click()
-    r.check(`${name} '말해 봤어요' → 완료 안내(판정 없음)`, (await txt(page, 'gu-use-done-note')).includes('괜찮아요') && !/정답|점수|틀렸/.test(await txt(page, 'gu-use')))
-    // 피드백 + 전체 다시 풀기
-    r.check(`${name} 피드백 섹션 + 전체 다시 풀기 버튼`, (await T(page, 'gu-feedback').isVisible()) && (await T(page, 'gu-reset-all').isVisible()))
-    await T(page, 'gu-reset-all').click()
-    r.check(`${name} 전체 다시 풀기 → '풀이 0/${M}', 완료 문구·비교·답 사라짐`, (await status()) === `풀이 0/${M}` && (await T(page, 'gu-practice-done').count()) === 0 && (await T(page, 'gu-choice-0').getAttribute('data-answered')) === 'false' && (await T(page, 'gu-build-0-compare').count()) === 0 && (await T(page, 'gu-blank-0').getAttribute('data-answered')) === 'false' && (await T(page, 'gu-order-0').getAttribute('data-answered')) === 'false', await status())
-    const su = storageUnchanged(before0, await snap(page))
-    r.check(`${name} 전체 흐름 뒤 문법 관련 새 키 없음, Unit 기록 불변(앱 자체 키 허용)`, su.ok, su.added.join(','))
-  })
+  await scenario('c g-easy-01 연습 전체·직접 사용·전체 다시 풀기', VP, (ctx) => practiceFlow(ctx, U1, { choiceCount: 6 }))
+
+  await scenario('i g-easy-06 연습 전체(새 단원)', VP, (ctx) => practiceFlow(ctx, grammarUnitById('g-easy-06')))
 
   await scenario('d g-int-01 비교 섹션·되묻기 순서 문항', VP, async ({ page, name, toCourses, toUnits, toUnit, status, tapOrder }) => {
     await toCourses()
@@ -292,6 +311,47 @@ export async function run(browser, baseURL) {
     r.check(`${name} 단원 목록에서 ← 홈 → 학생 홈`, !!(await waitUntil(() => T(page, 'student-home').isVisible(), { timeout: 10000 })))
     const su = storageUnchanged(before0, await snap(page))
     r.check(`${name} 문법 관련 새 키 없음, Unit 기록 불변(앱 자체 키 허용)`, su.ok, su.added.join(','))
+  })
+
+  // 어휘 규칙(validateGrammarUnit의 allowedTokens와 같은 규칙. 그 헬퍼는 export가 없어 여기서 같은 규칙으로 재계산): 함수어 ∪ 단원 words ∪ 선수 단원 words ∪ g-easy-01/02 words ∪ {paul, mia}
+  const tokenize = (t) => String(t ?? '').toLowerCase().split(/\s+/).map((w) => w.replace(/^[^a-z']+|[^a-z']+$/g, '')).filter((w) => /[a-z]/.test(w))
+  const wordsOf = (u) => (u?.words || []).flatMap((w) => tokenize(w.en))
+  const allowedFor = (u) => {
+    const ok = new Set([...FUNCTION_WORDS, 'paul', 'mia', ...wordsOf(u), ...wordsOf(grammarUnitById('g-easy-01')), ...wordsOf(grammarUnitById('g-easy-02'))])
+    const seen = new Set(); const walk = (id) => { if (seen.has(id)) return; seen.add(id); const p = grammarUnitById(id); if (!p) return; wordsOf(p).forEach((w) => ok.add(w)); (p.prereqIds || []).forEach(walk) }
+    ;(u.prereqIds || []).forEach(walk)
+    return ok
+  }
+
+  await scenario('h Easy ready 단원 전부 진입·9섹션·문항 수·검수 배지·어휘', VP, async ({ page, name, toCourses, toUnits }) => {
+    await toCourses()
+    await toUnits('easy')
+    const readyUnits = EASY.filter((u) => u.status === 'ready')
+    r.check(`${name} Easy ready 단원 ${readyUnits.length}개(데이터), 과정 카운트와 일치`, readyUnits.length === courseCounts('easy').ready && readyUnits.length >= 1, String(readyUnits.length))
+    for (const u of readyUnits) {
+      const n = `${name} ${u.id}`
+      await T(page, `grammar-unit-${u.id}`).click()
+      await T(page, 'grammar-unit').waitFor({ state: 'visible', timeout: 10000 })
+      await checkUnitView(page, name, u, { listen: false })
+      const p = u.practice, choice = resolveChoice(u, UNITS)
+      r.check(`${n} 문항 수: 예문 ${u.examples.length}·오류 ${u.errors.length}·선택 ${choice.length}·빈칸 ${p.blank.length}·순서 ${p.order.length}·만들기 ${p.build.length} = 데이터`,
+        (await countIds(page, /^gu-example-\d+$/)) === u.examples.length && (await countIds(page, /^gu-error-\d+$/)) === u.errors.length && (await countIds(page, /^gu-choice-\d+$/)) === choice.length &&
+        (await countIds(page, /^gu-blank-\d+$/)) === p.blank.length && (await countIds(page, /^gu-order-\d+$/)) === p.order.length && (await countIds(page, /^gu-build-\d+$/)) === p.build.length)
+      const want = reviewStatusOf(u) === 'reviewed' ? '검수 완료' : '검수 전'
+      r.check(`${n} 검수 배지 '${want}'(data-review=${reviewStatusOf(u)})${want === '검수 전' ? ', 화면 어디에도 검수 완료 없음' : ''}`,
+        (await T(page, 'gu-review-status').getAttribute('data-review')) === reviewStatusOf(u) && (await txt(page, 'gu-review-status')) === want && (want === '검수 완료' || !(await page.locator('body').innerText()).includes('검수 완료')))
+      // 어휘: 예문 en, 단원 자체 선택 정답 보기, 순서 칩 단어는 허용 어휘 안에서만
+      const ok = allowedFor(u)
+      const seen = []
+      for (let i = 0; i < u.examples.length; i++) seen.push(await T(page, `gu-example-${i}`).locator('p').first().textContent())
+      for (let i = 0; i < (p.choice || []).length; i++) for (const j of correctSet(p.choice[i].correct)) if (typeof p.choice[i].options[j] === 'string') seen.push(await txt(page, `gu-choice-${i}-opt-${j}`)) // 오답 보기는 배운 단어의 틀린 형태(swimming·has 등)라 검증기처럼 제외
+      for (let i = 0; i < p.order.length; i++) for (let j = 0; j < p.order[i].words.length; j++) seen.push(await txt(page, `gu-order-${i}-word-${j}`))
+      const unknown = [...new Set(seen.flatMap(tokenize).filter((w) => !ok.has(w)))]
+      r.check(`${n} 어휘 규칙: 화면의 영어 예문·선택 보기·순서 칩이 배운 단어만 사용`, unknown.length === 0, unknown.join(', '))
+      await T(page, 'gu-back').click()
+      await T(page, 'grammar-units').waitFor({ state: 'visible', timeout: 10000 })
+    }
+    r.check(`${name} ready가 아닌 Easy 단원은 '준비 중'+비활성, 검수 문구 없음`, (await Promise.all(EASY.filter((u) => u.status !== 'ready').map(async (u) => { const t = await txt(page, `grammar-unit-${u.id}`); return t.includes('준비 중') && !t.includes('검수') && (await T(page, `grammar-unit-${u.id}`).isDisabled()) }))).every(Boolean))
   })
 
   for (const vp of [{ width: 360, height: 640 }, { width: 390, height: 844 }, { width: 412, height: 915 }, { width: 1280, height: 800 }]) {
