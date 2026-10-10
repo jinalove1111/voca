@@ -436,7 +436,10 @@ export async function run(browser, baseURL) {
     r.check(`${name} (f1) 게임에도 그만하기(pwg-quit)가 있음`, (await T(page, 'pwg-quit').count()) === 1)
     const played = await playHammerAll(page)
     const ids = new Set(S.words.map((w) => w.id))
-    r.check(`${name} (f1) 알파벳 망치가 같은 세션 단어로 진행(${played.length}개, 모두 세션 단어)`, played.length >= 1 && played.every((w) => ids.has(w.id)) && played.length === S.words.length, played.map((w) => w.en).join())
+    // 망치는 글자 수 2~9인 단어만 쓴다(games.js gameEligible) — 세션에 긴 단어(sweet potato 등)가 섞이면 그만큼 줄어든다
+    const letters = (en) => (en.match(/[a-z]/gi) || []).length
+    const hammerable = S.words.filter((w) => letters(w.en) >= 2 && letters(w.en) <= 9).length
+    r.check(`${name} (f1) 알파벳 망치가 같은 세션 단어로 진행(${played.length}개, 모두 세션 단어)`, played.length >= 1 && played.every((w) => ids.has(w.id)) && played.length === hammerable, `${played.map((w) => w.en).join()} / 기대 ${hammerable}`)
     await T(page, 'pwg-summary').waitFor({ state: 'visible', timeout: 5000 })
     r.check(`${name} (f1) 게임 끝 → "시험 보기" 버튼`, ((await T(page, 'pwg-to-test').textContent()) || '').includes('시험 보기'))
     await T(page, 'pwg-to-test').click()

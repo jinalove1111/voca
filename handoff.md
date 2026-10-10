@@ -69,6 +69,7 @@ _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1�
 - 게임 규칙·정답 판정(`games.js`/`practice.js`)·그림·단어 데이터·공유 Voca/Speaking/Writing 파일은 그대로. 녹음 흐름 그대로.
 - 검증: 정적 `testPictureWords` 754 / `testPictureWordGames` 140, 브라우저 games 148/0, practice 107/0.
 
+- **리드 검증(252차 HEAD 빌드, 더미 env + 전 네트워크 mock, 스펙 1개씩)**: `[picture-games]` 148/0/0(2회), `[picture-practice]` 107/0/0(수정 후 2회 연속), `[picture-words]` 29/0/0, `[student]` 34/0/0, `[student-home]` 242/0/1(기존 SKIP), `[writing]` 83/0/0, `[town-world]` 146/0/0. 정적 `testPictureWords` 754/754, `testPictureWordGames` 140/140, `testBundleBudget` PASS. 변경된 src는 pictureWords 폴더와 `src/utils/pictureWords/sfx.js`뿐. 리드 수정 1건(스펙): (f1) 연습→망치 연결 단언이 세션 6단어 전부를 기대했으나 망치는 글자 수 2~9 단어만 쓴다(`gameEligible`) — 세션에 sweet potato 같은 긴 단어가 섞이면 5개가 되어 시드에 따라 실패하던 것을 기대값 계산으로 고침(앱 무변경). 가짜 미디어 장치 실측 재실행: PC·모바일 각 3단어 녹음/재생 정상(blob 16~27KB), 가로 넘침 0. 스크린샷으로 망치 화면(핑크 카드·파스텔 타일·볼륨 막대)과 연습 카드 육안 확인. **미검증**: 실제로 들리는 효과음(자동 검사는 오실레이터 시작 횟수·주파수만 확인), 실기기 스피커/마이크, 효과음이 녹음에 섞이지 않는지 실기기 확인, 실제 Preview 로그인, `[speaking]` 등 이번 라운드 미실행 스펙(공유 파일 무변경).
 ## 2026-10-11 (251차) — 그림 단어: 카드 한 장 녹음 흐름 · 연습/시험 분리 · 게임 연결
 
 운영자가 미리보기를 써 보고 "그림 + 듣기만"으로 느꼈다(녹음기가 모든 단어를 지난 뒤 세 번째 패스에 따로 있었다). 단어마다 **한 카드**에서 끝나게 바꿨다. 테스터 4명 전용 · 저장/네트워크/보상 0 · push 안 함.
