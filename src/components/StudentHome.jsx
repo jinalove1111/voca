@@ -17,7 +17,7 @@ const CARD = 'relative min-h-[9rem] rounded-3xl p-4 flex flex-col items-center j
 const SOON = 'bg-gray-300 text-gray-600'
 const ACTIVE = 'text-white bg-gradient-to-br'
 
-export default function StudentHome({ studentName, studentData, classWords, hasTodaysHomework, onStartGuided, onGo, onLogout, canEnterTown, townEligible, writingEnabled, speakingEnabled, speakingExamEnabled }) {
+export default function StudentHome({ studentName, studentData, classWords, hasTodaysHomework, onStartGuided, onGo, onLogout, canEnterTown, townEligible, writingEnabled, grammarEnabled, speakingEnabled, speakingExamEnabled }) {
   const [notice, setNotice] = useState('')
   const timerRef = useRef(null)
   const cardRefs = useRef({})
@@ -41,14 +41,18 @@ export default function StudentHome({ studentName, studentData, classWords, hasT
 
   const menus = [
     { id: 'voca', emoji: '📖', ko: '단어 연습', en: 'Voca', grad: 'from-indigo-500 to-purple-600', label: '단어 연습, 보카', onPress: () => go('voca', 'dashboard') },
-    writingEnabled
-      ? { id: 'writing', emoji: '✍️', ko: '문장 쓰기', en: 'Writing', grad: 'from-teal-400 to-emerald-600', label: '문장 쓰기, 라이팅', onPress: () => go('writing', 'writingCoach') }
-      : { id: 'writing', emoji: '✍️', ko: '문장 쓰기', en: 'Writing', soon: true, label: '문장 쓰기, 라이팅. 준비 중', onPress: () => showNotice('문장 쓰기는 곧 열려요! 조금만 기다려요') },
     // 2026-10-04 Speaking 첫 체험 — 플래그가 꺼져 있으면 기존 준비 중 카드 유지
     speakingEnabled
       ? { id: 'speaking', emoji: '🎤', ko: '말하기', en: 'Speaking', grad: 'from-sky-400 to-blue-600', label: '말하기, 스피킹', onPress: () => go('speaking', 'speaking') }
       : { id: 'speaking', emoji: '🎤', ko: '말하기', en: 'Speaking', soon: true, label: '말하기, 스피킹. 준비 중', onPress: () => showNotice('말하기는 곧 열려요! 조금만 기다려요') },
-    { id: 'growth', emoji: '🌱', ko: '나의 성장', en: 'My Growth', grad: 'from-amber-400 to-orange-500', label: '나의 성장, 마이 그로스', onPress: () => go('growth', 'growth') },
+    writingEnabled
+      ? { id: 'writing', emoji: '✍️', ko: '문장 쓰기', en: 'Writing', grad: 'from-teal-400 to-emerald-600', label: '문장 쓰기, 라이팅', onPress: () => go('writing', 'writingCoach') }
+      : { id: 'writing', emoji: '✍️', ko: '문장 쓰기', en: 'Writing', soon: true, label: '문장 쓰기, 라이팅. 준비 중', onPress: () => showNotice('문장 쓰기는 곧 열려요! 조금만 기다려요') },
+    // 2026-10-10 문법 카드 — 문법 화면은 QA 전용이라 grammarEnabled(App: qaTestStudent)가 꺼지면 준비 중
+    grammarEnabled
+      ? { id: 'grammar', emoji: '📘', ko: '문법', en: 'Grammar', grad: 'from-indigo-500 to-violet-700', label: '문법, 그래머', onPress: () => go('grammar', 'grammar') }
+      : { id: 'grammar', emoji: '📘', ko: '문법', en: 'Grammar', soon: true, label: '문법, 그래머. 준비 중', onPress: () => showNotice('문법은 곧 열려요! 조금만 기다려요') },
+    { id: 'growth', wide: true, emoji: '🌱', ko: '나의 성장', en: 'My Growth', grad: 'from-amber-400 to-orange-500', label: '나의 성장, 마이 그로스', onPress: () => go('growth', 'growth') },
   ]
 
   return (
@@ -101,7 +105,7 @@ export default function StudentHome({ studentName, studentData, classWords, hasT
               aria-label={m.label}
               aria-disabled={m.soon ? 'true' : undefined}
               onClick={m.onPress}
-              className={`${CARD} ${m.soon ? SOON : `${ACTIVE} ${m.grad}`}`}>
+              className={`${CARD} ${m.wide ? 'col-span-2' : ''} ${m.soon ? SOON : `${ACTIVE} ${m.grad}`}`}>
               {m.soon && (
                 <span className="absolute top-2 right-2 bg-white text-gray-600 text-xs font-black px-2 py-1 rounded-full">준비 중</span>
               )}
@@ -141,11 +145,6 @@ export default function StudentHome({ studentName, studentData, classWords, hasT
           className="w-full min-h-[56px] px-4 py-3 rounded-3xl text-left btn-press card-shadow text-white bg-gradient-to-br from-teal-500 to-emerald-700">
           <span className="block text-xs font-bold opacity-90">오늘의 학습 (시범)</span>
           <span className="block text-lg font-black">📚 교실에서 물건 빌리기</span>
-        </button>
-        <button data-testid="student-home-grammar" onClick={() => go('grammar', 'grammar')}
-          className="w-full min-h-[56px] px-4 py-3 rounded-3xl text-left btn-press card-shadow text-white bg-gradient-to-br from-indigo-500 to-violet-700">
-          <span className="block text-xs font-bold opacity-90">문법 (시범)</span>
-          <span className="block text-lg font-black">📘 문법 과정 (Easy ~ High School)</span>
         </button>
       </div>
     </div>

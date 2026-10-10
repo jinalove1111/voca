@@ -67,7 +67,7 @@ check("App: onGo grammar → grammarCourses, viaPicker에 grammar 없음, 선택
 const u = strip(read('src/components/UnitScreen.jsx'))
 check('UnitScreen: Choice를 named export, 선택기의 문법 intent·문법 모음 제거', /export function Choice\(/.test(u) && !/intent === 'grammar'/.test(u) && !u.includes('GrammarSetScreen'))
 const home = read('src/components/StudentHome.jsx')
-check('홈: student-home-grammar testid 유지, 문구 "문법 과정 (Easy ~ High School)"', home.includes('data-testid="student-home-grammar"') && home.includes('📘 문법 과정 (Easy ~ High School)'))
+check('홈: 문법 카드(id grammar → student-home-menu-grammar, onPress go grammar), 작은 버튼 제거', home.includes("id: 'grammar'") && home.includes("go('grammar', 'grammar')") && !home.includes('student-home-grammar'))
 
 // ── 구현 상태 vs 검수 상태 · 어휘 규칙 ──
 check('FUNCTION_WORDS에 내용어 없음(borrow·like·have·play·pencil·bag 등), 문법어는 있음', ['borrow', 'like', 'have', 'play', 'pencil', 'bag', 'box', 'chair'].every((w) => !FUNCTION_WORDS.has(w)) && ['a', 'the', 'is', 'can', 'where', 'in', 'under'].every((w) => FUNCTION_WORDS.has(w)))

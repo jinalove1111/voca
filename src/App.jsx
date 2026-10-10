@@ -863,6 +863,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           canEnterTown={(isFeatureEnabled('paulTownHomeBand') && !!attachment.stats) || paulTown2_5dEnabled}
           townEligible={townV1Enabled}
           writingEnabled={isFeatureEnabled('writingCoachEnabled') || qaTestStudent}
+          grammarEnabled={qaTestStudent}
           speakingEnabled={isFeatureEnabled('speakingPracticeV1')}
           speakingExamEnabled={isFeatureEnabled('situationRecallV1')} />
       )}
