@@ -2,6 +2,7 @@
 import fs from 'node:fs'
 import { GRAMMAR_COURSES } from '../src/utils/grammar/grammarCourses.js'
 import { GRAMMAR_UNITS, SCHOOL_GRAMMAR_NOTE_KO, unitsForCourse, grammarUnitById, courseCounts, resolveChoice, validateGrammarUnit, FUNCTION_WORDS, isComplete, reviewStatusOf, practiceCounts } from '../src/utils/grammar/grammarUnits.js'
+import { buildDeck, deckSteps, isPractice, deckCounts, cardIndexById } from '../src/utils/grammar/grammarDeck.js'
 import { UNITS } from '../src/utils/curriculum/units.js'
 
 let fail = 0
@@ -50,12 +51,24 @@ check('준비 중 단원은 ready 내용 없이 제목·목표만 검증, 학교
 
 // ── 화면 소스 ──
 const sSrc = strip(read('src/components/GrammarCourseScreen.jsx'))
-const ORDER = ['gu-goal', 'gu-examples', 'gu-explain', 'gu-structure', 'gu-compare', 'gu-errors', 'gu-practice', 'gu-use', 'gu-feedback']
-const idxs = ORDER.map((t) => sSrc.indexOf(`data-testid="${t}"`))
-check('화면: 9개 섹션 testid가 소스에 순서대로 존재', idxs.every((i) => i > 0) && idxs.every((v, i) => i === 0 || v > idxs[i - 1]), idxs.join())
-const P = ['gu-step-choice', 'gu-step-blank', 'gu-step-order', 'gu-step-build'].map((t) => sSrc.indexOf(`data-testid="${t}"`))
-check('화면: 연습 4단계 순서 선택 → 빈칸 → 순서 배열 → 문장 만들기', P.every((i) => i > 0) && P.every((v, i) => i === 0 || v > P[i - 1]))
-check('화면: 필수 testid(과정/단원 목록, 듣기, 구조 S/V/+, 다시 풀기, 진행, 기초 링크, 뒤로)', ['grammar-course-${c.id}', 'grammar-unit-${u.id}', 'grammar-units-back', 'gu-example-${i}-listen', 'gu-structure-${i}', 'gu-error-${i}', 'gu-blank-${idx}-opt-${i}', '-retry`', 'gu-order-${idx}-word-${i}', 'gu-order-${idx}-answer', 'gu-order-${idx}-check', '-compare`', 'gu-use-done', 'gu-use-listen', 'gu-practice-status', 'gu-practice-done', 'gu-basics-link', 'gu-basics-back', 'data-testid="gu-back"', '준비 중', '예시는 하나의 답일 뿐이에요', '학교 문법 (제안)', '숙련도', 'grammar-school-note', 'SCHOOL_GRAMMAR_NOTE_KO', 'gu-preparing', 'data-status="preparing"', '이 단원은 준비 중이에요'].every((t) => sSrc.includes(t)))
+const dSrc = strip(read('src/utils/grammar/grammarDeck.js'))
+const KIND_ORDER = ['goal', 'examples', 'explain', 'structure', 'compare', 'error', 'choice', 'blank', 'order', 'build', 'use', 'summary']
+const decks = READY.map((u) => { try { return { u, d: buildDeck(u, UNITS) } } catch (e) { return { u, err: String(e) } } })
+check('덱: ready 34개 전부 buildDeck가 던지지 않고 종류 순서가 goal→examples→explain→structure→[compare]→error→choice→blank→order→build→use→summary', decks.length === 34 && decks.every(({ d }) => d && d.map((c) => KIND_ORDER.indexOf(c.kind)).every((v, i, a) => v >= 0 && (i === 0 || v >= a[i - 1])) && d[0].kind === 'goal' && d.at(-1).kind === 'summary'), decks.filter((x) => x.err).map((x) => x.u.id + x.err).join())
+check('덱: 카드 id 단원 안에서 유일, 모든 카드에 kind·stepKo·title', decks.every(({ d }) => new Set(d.map((c) => c.id)).size === d.length && d.every((c) => c.kind && c.stepKo && c.title)))
+const D1 = buildDeck(grammarUnitById('g-easy-01'), UNITS), D2 = buildDeck(grammarUnitById('g-int-01'), UNITS)
+check('덱 g-easy-01: 카드 23(설명 4줄), compare 없음, 선택 6·빈칸 2·순서 2·만들기 2, 종류 순서 고정', D1.length === 23 && !D1.some((c) => c.kind === 'compare') && JSON.stringify(deckCounts(D1)) === '{"cards":23,"explain":4,"practice":10,"build":2}'
+  && D1.map((c) => c.kind).join() === 'goal,examples,explain,explain,explain,explain,structure,error,error,choice,choice,choice,choice,choice,choice,blank,blank,order,order,build,build,use,summary', D1.map((c) => c.kind).join())
+check('덱 g-int-01: compare 카드가 구조 다음 오류 앞에 있음', D2.some((c) => c.kind === 'compare') && D2.findIndex((c) => c.kind === 'compare') === D2.findIndex((c) => c.kind === 'structure') + 1 && D2.findIndex((c) => c.kind === 'compare') < D2.findIndex((c) => c.kind === 'error'), D2.map((c) => c.kind).join())
+check('덱: 카드 수 = 1+1+설명줄+1+compare+오류+연습+활용+마무리 (모든 ready 단원)', decks.every(({ u, d }) => { const pc = practiceCounts(u, UNITS); return d.length === 1 + 1 + u.explainKo.length + 1 + (u.compare ? 1 : 0) + u.errors.length + pc.choice + pc.blank + pc.order + pc.build + 1 + 1 }))
+check('덱: 설명 카드는 줄마다 예문 하나(예문[i], 없으면 첫 예문)를 함께 가짐, 목표 카드는 상황·basicsUnitId', D1.filter((c) => c.kind === 'explain').every((c, i) => c.example === grammarUnitById('g-easy-01').examples[i] && c.line === grammarUnitById('g-easy-01').explainKo[i]) && D1[0].situationKo === grammarUnitById('g-easy-01').examples[0].ko && 'basicsUnitId' in D1[0])
+check('덱: deckSteps 순서·중복 없음, isPractice는 선택·빈칸·순서만, cardIndexById', deckSteps(D1).join() === '목표,예문,설명,구조,오류,연습 · 선택,연습 · 빈칸,연습 · 순서,연습 · 만들기,활용,마무리' && D1.filter(isPractice).length === 10 && D1.filter(isPractice).every((c) => ['choice', 'blank', 'order'].includes(c.kind)) && cardIndexById(D1, 'summary') === 22 && cardIndexById(D1, 'nope') === -1)
+check('덱 모듈: 순수(React·PNG·units import 없음)', !dSrc.includes("from 'react'") && !dSrc.includes('.png') && !dSrc.includes('curriculum/units'))
+const sKeys = ['gd-root', 'gd-step', 'gd-progress', 'gd-bar', 'gd-card', 'gd-prev', 'gd-next', 'gd-next-hint', 'gd-check', 'gd-result', 'gd-why', 'gd-retry', 'gd-build-input', 'gd-build-compare', 'gd-build-example', 'gd-use-done', 'gd-use-listen', 'gd-use-input', 'gd-use-compare', 'gd-summary', 'gd-retry-wrong', 'gd-to-list', 'gd-order-clear', 'gd-order-answer', 'gd-order-word-', 'gd-blank-opt-', 'gd-example-', 'gd-structure-', 'gd-error', 'gd-explain', 'gd-compare', 'gd-goal', 'gu-basics-link', 'gu-review-status']
+check('화면: 카드 덱 testid가 소스에 모두 있음', sKeys.every((t) => sSrc.includes(t)), sKeys.filter((t) => !sSrc.includes(t)).join())
+check('화면: go()에서 stopSpeaking·window.scrollTo, 제목에 focus, Choice는 initialPicked로 복원, 다음은 확인 전 disabled, 보기 카드 max-h·overflow-y-auto', ['const go = (i) => { stopSpeaking(); window.scrollTo({ top: 0 })', 'headingRef.current?.focus()', 'initialPicked={a.picked', 'data-testid="gd-next" disabled={!ok}', 'max-h-[72vh] overflow-y-auto', 'deckStates = useRef(new Map())'].every((t) => sSrc.includes(t)))
+check('화면: 자동으로 다음 카드로 넘어가지 않음(go 호출은 prev·next·retry-wrong 3곳뿐)', sSrc.split('go(').length - 1 === 3 && sSrc.includes('const go ='), String(sSrc.split('go(').length - 1))
+check('화면: 필수 testid(과정/단원 목록, 듣기, 구조 S/V/+, 다시 풀기, 진행, 기초 링크, 뒤로)', ['grammar-course-${c.id}', 'grammar-unit-${u.id}', 'grammar-units-back', 'gd-example-${i}-listen', 'gu-basics-link', 'gu-basics-back', 'data-testid="gu-back"', '준비 중', '예시는 하나의 답일 뿐이에요', '학교 문법 (제안)', '숙련도', 'grammar-school-note', 'SCHOOL_GRAMMAR_NOTE_KO', 'gu-preparing', 'data-status="preparing"', '이 단원은 준비 중이에요'].every((t) => sSrc.includes(t)))
 check('화면: 저장·점수·네트워크 없음(localStorage/sessionStorage/fetch/supabase/점수)', !/localStorage|sessionStorage|fetch\(|supabase|markActivity|점수:/.test(sSrc))
 check('화면: speak·stopSpeaking 재사용, Choice는 UnitScreen에서 import, units.js 직접 import 없음, 언마운트 시 stopSpeaking', /import \{ speak, stopSpeaking \} from '..\/utils\/speech'/.test(sSrc) && /import \{ Choice \} from '.\/UnitScreen'/.test(sSrc) && !/curriculum\/units/.test(sSrc) && /useEffect\(\(\) => \(\) => stopSpeaking\(\), \[\]\)/.test(sSrc))
 check('화면: 준비 중 단원은 disabled(빈 화면 없음), 직접 쓴 글은 정오 판정 없음(compare만)', /disabled=\{!ready\}/.test(sSrc) && !/isCorrect|채점/.test(sSrc))
@@ -66,6 +79,7 @@ check("App: QA_ONLY_SCREENS에 grammarCourses, 렌더가 qaTestStudent 게이팅
 check("App: onGo grammar → grammarCourses, viaPicker에 grammar 없음, 선택기 intent에 grammar 없음", /t === 'grammar' \? 'grammarCourses'/.test(app) && !/const viaPicker = [^\n]*'grammar'/.test(app) && !/setUnitIntent\([^\n]*'grammar'/.test(app))
 const u = strip(read('src/components/UnitScreen.jsx'))
 check('UnitScreen: Choice를 named export, 선택기의 문법 intent·문법 모음 제거', /export function Choice\(/.test(u) && !/intent === 'grammar'/.test(u) && !u.includes('GrammarSetScreen'))
+check('UnitScreen Choice: initialPicked 선택 prop(기본 null)이 초기 상태로만 쓰임, 화면은 Choice를 initialPicked로 사용', u.includes('onPick, initialPicked = null }') && u.includes('useState(initialPicked)') && sSrc.includes('initialPicked={'))
 const home = read('src/components/StudentHome.jsx')
 check('홈: 문법 카드(id grammar → student-home-menu-grammar, onPress go grammar), 작은 버튼 제거', home.includes("id: 'grammar'") && home.includes("go('grammar', 'grammar')") && !home.includes('student-home-grammar'))
 

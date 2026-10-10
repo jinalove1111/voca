@@ -17,8 +17,8 @@ const KIND_EMOJI = { vocab: '📖', listening: '👂', reading: '📄', speaking
 
 // 보기 고르기(규칙 평가 가능한 선택형) — 고른 뒤 맞음/다시 보기·근거 표시. 틀려도 점수 없음, 다시 고를 수 있음. correct는 숫자 또는 배열(대체 답 인정)
 const isOk = (q, i) => (Array.isArray(q.correct) ? q.correct.includes(i) : i === q.correct)
-export function Choice({ q, idx, testid, onAnswered, onPick }) {
-  const [picked, setPicked] = useState(null)
+export function Choice({ q, idx, testid, onAnswered, onPick, initialPicked = null }) {
+  const [picked, setPicked] = useState(initialPicked)
   const done = picked !== null
   return (
     <div data-testid={`${testid}-${idx}`} data-answered={done ? 'true' : 'false'} className="space-y-2">
