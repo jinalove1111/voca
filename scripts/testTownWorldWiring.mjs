@@ -47,7 +47,7 @@ check('마을 테스터 목록에 실계정 4명(Kinney/Jinaa/Barry/Cookie) 존�
 check('마을 목록 e2e 합성 id 2개(a001, a002), 총 6개', town.includes('e2e00000-0000-4000-8000-00000000a001') && town.includes('e2e00000-0000-4000-8000-00000000a002') && town.length === 6)
 check('QA 목록 불변(실계정 3 + fixture 1)', qaIds.length === 4 && [PAUL, 'a63923a1-473d-4ba1-bca6-6b8685848cd3', '738443f3-2676-4b89-9f17-cc7f22aa993c', 'e2e00000-0000-4000-8000-00000000a001'].every((i) => qaIds.includes(i)))
 check('isTownWorldTester export', /export function isTownWorldTester\(/.test(qa))
-check('Dashboard/PaulTown/StudentHome 셋 다 onGoWorld를 goTownWorld로 전달(없으면 null)', count(app, /onGoWorld=\{townWorldEnabled \? goTownWorld : null\}/g) === 2 && /const goTownWorld = \(\) => \{ setWorldReturn\(null\); setScreen\('townWorld'\) \}/.test(app))
+check('Dashboard/PaulTown/StudentHome 셋 다 onGoWorld를 goTownWorld로 전달(없으면 null)', count(app, /onGoWorld=\{townWorldEnabled \? goTownWorld : null\}/g) === 3 && /const goTownWorld = \(\) => \{ setWorldReturn\(null\); setScreen\('townWorld'\) \}/.test(app))
 check('Dashboard 진입 버튼은 onGoWorld일 때만(dash-town-world)', /\{onGoWorld && \(\s*<button[^>]*data-testid="dash-town-world"/.test(dash))
 check('PaulTown 진입 카드는 onGoWorld일 때만 + 래퍼 조건 포함', /\{onGoWorld && \(\s*<button[^>]*data-testid="paul-town-world-entry"/.test(pt) && /\(onGoTown \|\| onGoWorld \|\|/.test(pt))
 check('PlaceSheet: 미션 비허용이면 tw-missions-closed + disabled', /!missionsOpen && \(\s*<p data-testid="tw-missions-closed"/.test(sheet) && /disabled=\{!missionsOpen\}/.test(sheet))
