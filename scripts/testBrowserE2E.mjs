@@ -124,6 +124,7 @@ async function main() {
       { name: '[unit]', modulePath: '../tests/e2e/unit.spec.mjs' },
       { name: '[grammar]', modulePath: '../tests/e2e/grammar.spec.mjs' },
       { name: '[grammar-scene]', modulePath: '../tests/e2e/grammarScene.spec.mjs' },
+      { name: '[grammar-scenes]', modulePath: '../tests/e2e/grammarScenes.spec.mjs' },
       { name: '[hats]', modulePath: '../tests/e2e/hats.spec.mjs' },
       { name: '[entrance]', modulePath: '../tests/e2e/entranceInputLoss.spec.mjs' },
       { name: '[town]', modulePath: '../tests/e2e/townV1.spec.mjs' },

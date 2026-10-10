@@ -193,7 +193,9 @@ const TOWN_GZIP_BUDGET_BYTES = 15 * 1000
 // ⚠ 2026-10-10 예산 1.6MB → 1.7MB 상향 — 문법 과정 화면(GrammarCourseScreen lazy 청크 약 17KB)으로 합계가 1.606MB가 됐고, 곧 들어올 문법 단원 데이터
 // (같은 lazy 청크, 수십 KB)를 감안한 정상 증가다. 메인 청크 gzip 단언은 그대로 통과(학생 초기 로드 무게 불변). 수백 KB 급증은 여전히 잡힌다.
 // ⚠ 2026-10-10 (overnight) 1.7MB → 1.8MB — 문법 과정 34단원 데이터가 lazy GrammarCourseScreen 청크(155.5KB raw / 33.5KB gzip)에 들어가 핵심 경로 raw 합계 1.747MB; main gzip 단언은 불변. 다음 단계: 과정별 데이터 청크 분리(ponytail: 한 청크, 과정 6개로 쪼개면 가능)
-const CORE_RAW_BUDGET_BYTES = 1.8 * 1_000_000
+// ⚠ 2026-10-10 (scene v2) 1.8MB → 2.0MB — 문법 34단원 그림 미션 데이터(scenes/*.js 약 140KB)와 Stage/SceneCards가 같은 lazy GrammarCourseScreen 청크(약 310KB raw)에 들어가 합계 1.905MB.
+// 문법 화면을 열 때만 받는 청크이고 메인 청크 gzip ≤135KB 단언은 불변(학생 초기 로드 무게 그대로). ponytail: 한 청크 유지 — 문법 청크가 400KB raw를 넘으면 과정별 scenes 동적 import로 분리.
+const CORE_RAW_BUDGET_BYTES = 2.0 * 1_000_000
 
 // ── 1. 코드 분할 — TownScreen은 별도 청크(lazy), index.html이 직접 참조하지 않음 ──
 section('1. 코드 분할 — TownScreen 지연 로드')
@@ -523,7 +525,7 @@ for (const f of jsFiles) {
   sizeRows.push({ file: f, size, excluded })
 }
 check(
-  `핵심 시작 경로 JS 원본 합계 ≤ 1.8MB (실측 ${fmtMB(coreRaw)}MB, 관리자 전용 pdf/pdf.worker/xlsx 제외)`,
+  `핵심 시작 경로 JS 원본 합계 ≤ 2.0MB (실측 ${fmtMB(coreRaw)}MB, 관리자 전용 pdf/pdf.worker/xlsx 제외)`,
   coreRaw <= CORE_RAW_BUDGET_BYTES,
 )
 console.log(`  정보  dist/assets/*.js 전체 원본 합계(제외 없음) = ${fmtMB(totalRaw)}MB — pdf.worker/pdf/xlsx 제외분 = ${fmtMB(totalRaw - coreRaw)}MB`)

@@ -9,6 +9,7 @@ import { UNITS } from '../../src/utils/curriculum/units.js'
 import { GRAMMAR_COURSES } from '../../src/utils/grammar/grammarCourses.js'
 import { GRAMMAR_UNITS, unitsForCourse, courseCounts, resolveChoice, grammarUnitById, reviewStatusOf, FUNCTION_WORDS, SCHOOL_GRAMMAR_NOTE_KO } from '../../src/utils/grammar/grammarUnits.js'
 import { buildDeck, deckSteps, isPractice, deckCounts } from '../../src/utils/grammar/grammarDeck.js'
+import { buildFrame } from '../../src/utils/grammar/sceneMission.js'
 
 const VP = { width: 390, height: 844 }
 const SHOTS_DIR = process.env.GRAMMAR_SHOTS_DIR || 'C:\\Users\\jinal\\AppData\\Local\\Temp\\claude\\C--voca\\4dd777a3-9f93-4c78-a984-4f4ee328e279\\scratchpad\\shots'
@@ -90,13 +91,43 @@ async function answered(page, c) {
     case 'blank': case 'order': return (await T(page, 'gd-result').count()) > 0
     case 'build': return (await T(page, 'gd-build-example').count()) > 0
     case 'use': return !c.use ? true : c.use.kind === 'speaking' ? (await T(page, 'gd-use-done-note').count()) > 0 : (await T(page, 'gd-use-example').count()) > 0
+    case 'scene': return (await T(page, 'gd-next').count()) === 0 || (await T(page, 'gd-next').isEnabled()) // 장면 카드는 "다음이 열렸는지"가 곧 답한 것(sceneCanAdvance)
     default: return true
   }
 }
 // 카드 하나를 "맞게" 끝낸다(이미 답했으면 그대로 둠)
+// 장면(scene) 카드 하나를 "맞게" 끝내는 최소 동작(add 모드 단원의 discover/compare/choose/build/read/listen). 자세한 검증은 grammarScenes.spec.mjs가 맡는다
+async function completeSceneCard(page, c) {
+  const st = c.step
+  const unit = grammarUnitById(await T(page, 'gd-root').getAttribute('data-unit'))
+  switch (c.sceneKind) {
+    case 'discover': await T(page, 'gd-card').locator(`[data-testid="scene-obj-${st.tap.obj}-0"]`).first().click(); break
+    case 'choose': await T(page, `scene-opt-${st.items[c.itemIndex].correct}`).click(); await T(page, 'scene-check').click(); break
+    case 'listen': await T(page, `scene-pic-${st.items[c.itemIndex].correct}`).click(); await T(page, 'scene-check').click(); break
+    case 'read': {
+      const n = st.pairs.length
+      for (let i = 0; i < n; i++) { await T(page, `scene-sent-${i}`).click(); await T(page, `scene-pic-${(i - 1 + n) % n}`).click() } // 그림 j는 (j+1)%n번째 문장의 장면
+      await T(page, 'scene-check').click(); break
+    }
+    case 'build': {
+      const { place } = st
+      if (place.ref !== undefined) { // 위치 놓기: 첫 관계 자리에 놓고 그 관계를 고른다
+        await T(page, `scene-tray-${place.obj}`).click()
+        await T(page, 'gd-card').locator(`[data-testid^="scene-spot-"][data-relation="${place.relations[0]}"]`).click()
+        await T(page, 'scene-opt-0').click()
+      } else { // 개수 놓기: place.n개를 놓고 놓은 수에 맞는 숫자를 고른다
+        for (let k = 0; k < place.n; k++) { await T(page, `scene-tray-${place.obj}`).click(); await T(page, 'scene-spot-0').click() }
+        await T(page, `scene-opt-${buildFrame(unit.scene, st, place.n).correct}`).click()
+      }
+      await T(page, 'scene-check').click(); break
+    }
+    default: break // compare 등은 열려 있음
+  }
+}
 async function completeCard(page, c) {
   if (await answered(page, c)) return
-  if (c.kind === 'choice') await T(page, `gd-choice-0-opt-${correctSet(c.q.correct)[0]}`).click()
+  if (c.kind === 'scene') await completeSceneCard(page, c)
+  else if (c.kind === 'choice') await T(page, `gd-choice-0-opt-${correctSet(c.q.correct)[0]}`).click()
   else if (c.kind === 'blank') { await T(page, `gd-blank-opt-${c.q.correct}`).click(); await T(page, 'gd-check').click() }
   else if (c.kind === 'order') { await tapOrder(page, c.q.words, c.q.answers[0]); await T(page, 'gd-check').click() }
   else if (c.kind === 'build') { await T(page, 'gd-build-input').fill('my own sentence'); await T(page, 'gd-build-compare').click() }
@@ -247,7 +278,7 @@ export async function run(browser, baseURL) {
         if ((await T(page, 'gd-next').count()) !== 0) bad.push('마지막 카드에 다음 버튼')
         if (!(await T(page, 'gd-prev').isEnabled())) bad.push('마지막 카드 이전 비활성')
       } else {
-        if (isPractice(c) || c.kind === 'build' || (c.kind === 'use' && c.use)) {
+        if (isPractice(c) || c.kind === 'build' || (c.kind === 'use' && c.use) || (c.kind === 'scene' && c.sceneKind === 'discover')) { // discover는 탭해야 열린다
           if (!(await T(page, 'gd-next').isDisabled()) || (await T(page, 'gd-next-hint').count()) !== 1) bad.push('답 전 다음 버튼 잠금/힌트 아님')
         } else if (!(await T(page, 'gd-next').isEnabled())) bad.push('설명 카드 다음 버튼 비활성')
       }
@@ -275,7 +306,7 @@ export async function run(browser, baseURL) {
     const byKind = (k) => deck.filter((c) => c.kind === k).length
     r.check(`${name} 덱 선택 ${choice.length} + 빈칸 ${p.blank.length} + 순서 ${p.order.length} + 만들기 ${p.build.length} = 데이터, 총 ${N}장`,
       (choiceCount === undefined || choice.length === choiceCount) && byKind('choice') === choice.length && byKind('blank') === p.blank.length && byKind('order') === p.order.length && byKind('build') === p.build.length &&
-      (await T(page, 'gd-root').getAttribute('data-total')) === String(N) && counts.practice === choice.length + p.blank.length + p.order.length)
+      (await T(page, 'gd-root').getAttribute('data-total')) === String(N) && counts.practice === choice.length + p.blank.length + p.order.length + deck.filter((c) => c.kind === 'scene' && isPractice(c)).length)
     const leave = deck.find((c) => c.kind === 'blank') || deck.find((c) => c.kind === 'order') || deck.find((c) => c.kind === 'choice')
     let rightN = 0
     const wrongIds = []
@@ -342,6 +373,13 @@ export async function run(browser, baseURL) {
         await T(page, 'gd-build-compare').click()
         const t = await txt(page, 'gd-build-example')
         r.check(`${id} 비교: 내 문장+예시(${q.exampleEn})+'하나의 답'${q.acceptNoteKo ? '+허용 안내' : ''}, 판정 단어 없음, 다음 활성`, t.includes('my own sentence') && t.includes(q.exampleEn) && t.includes('하나의 답') && (!q.acceptNoteKo || t.includes(q.acceptNoteKo)) && !JUDGE.test(t) && (await T(page, 'gd-next').isEnabled()), t.slice(0, 120))
+      } else if (c.kind === 'scene') {
+        // add 장면 카드(있으면): 한 장만·단계 이름은 위 공통 불변식이 보고, 여기서는 잠금 규칙과 맞게 풀기만 본다
+        const lockedFirst = ['discover', 'choose', 'read', 'listen', 'build'].includes(c.sceneKind)
+        r.check(`${id} 장면 카드 ${c.sceneKind}: scene-card-${c.sceneKind} 한 장, 다음 ${lockedFirst ? '잠김+힌트' : '열림'}`, (await T(page, `scene-card-${c.sceneKind}`).count()) === 1 && (lockedFirst ? await nextDisabled() : await T(page, 'gd-next').isEnabled()))
+        await completeCard(page, c)
+        r.check(`${id} 장면 카드 맞게 풀기 → 다음 활성`, await T(page, 'gd-next').isEnabled())
+        if (isPractice(c)) rightN++
       } else if (c.kind === 'use') {
         const use = c.use
         if (!use) r.check(`${id} 직접 사용 없음 → 안내 문구, 다음 활성`, (await T(page, 'gd-next').isEnabled()))
@@ -510,8 +548,8 @@ export async function run(browser, baseURL) {
         const want = reviewStatusOf(u) === 'reviewed' ? '검수 완료' : '검수 전'
         r.check(`${n} 검수 배지 '${want}'(data-review=${reviewStatusOf(u)})${want === '검수 전' ? ', 화면 어디에도 검수 완료 없음' : ''}`,
           (await T(page, 'gu-review-status').getAttribute('data-review')) === reviewStatusOf(u) && (await txt(page, 'gu-review-status')) === want && (want === '검수 완료' || !(await page.locator('body').innerText()).includes('검수 완료')))
-        // 그림 미션 단원(unit.scene)은 덱이 장면 카드뿐이라 설명 카드 순회·어휘 규칙이 맞지 않는다 — 단계 순회는 grammarScene.spec.mjs가 맡는다
-        if (u.scene) { await T(page, 'gu-back').click(); await T(page, 'grammar-units').waitFor({ state: 'visible', timeout: 10000 }); continue }
+        // 시범 그림 미션 단원(scene.mode 'full')은 덱이 장면 카드뿐이라 설명 카드 순회·어휘 규칙이 맞지 않는다 — 단계 순회는 grammarScene.spec.mjs가 맡는다. mode 'add' 단원은 표준 덱이라 아래에서 장면 카드를 풀며 지나간다(자세한 검증: grammarScenes.spec.mjs)
+        if (u.scene?.mode === 'full') { await T(page, 'gu-back').click(); await T(page, 'grammar-units').waitFor({ state: 'visible', timeout: 10000 }); continue }
         // 설명 카드들을 첫 연습 카드까지 차례로 — 단계 이름 순서, 어휘 규칙
         const fp = firstIdx(deck, isPractice)
         const ok = allowedFor(u)
@@ -522,7 +560,7 @@ export async function run(browser, baseURL) {
           if (card.kind === 'examples') for (let k = 0; k < card.examples.length; k++) seen.push(await T(page, `gd-example-${k}`).locator('p').first().textContent())
           if (card.kind === 'explain' && card.example) seen.push(await T(page, 'gd-explain').locator('p').first().textContent())
           if (card.kind === 'choice' && i === fp) for (const j of correctSet(card.q.correct)) if (typeof card.q.options[j] === 'string') seen.push(await txt(page, `gd-choice-0-opt-${j}`)) // 오답 보기는 배운 단어의 틀린 형태라 검증기처럼 제외
-          if (i < fp) await nextCard(page)
+          if (i < fp) { if (card.kind === 'scene') await completeCard(page, card); await nextCard(page) }
         }
         const wantSteps = deckSteps(deck.slice(0, fp + 1))
         r.check(`${n} 설명 구간 gd-step 순서 = deckSteps(${wantSteps.join('→')})`, JSON.stringify(steps) === JSON.stringify(wantSteps), steps.join('→'))
