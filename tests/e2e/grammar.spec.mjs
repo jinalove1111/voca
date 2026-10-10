@@ -510,6 +510,8 @@ export async function run(browser, baseURL) {
         const want = reviewStatusOf(u) === 'reviewed' ? '검수 완료' : '검수 전'
         r.check(`${n} 검수 배지 '${want}'(data-review=${reviewStatusOf(u)})${want === '검수 전' ? ', 화면 어디에도 검수 완료 없음' : ''}`,
           (await T(page, 'gu-review-status').getAttribute('data-review')) === reviewStatusOf(u) && (await txt(page, 'gu-review-status')) === want && (want === '검수 완료' || !(await page.locator('body').innerText()).includes('검수 완료')))
+        // 그림 미션 단원(unit.scene)은 덱이 장면 카드뿐이라 설명 카드 순회·어휘 규칙이 맞지 않는다 — 단계 순회는 grammarScene.spec.mjs가 맡는다
+        if (u.scene) { await T(page, 'gu-back').click(); await T(page, 'grammar-units').waitFor({ state: 'visible', timeout: 10000 }); continue }
         // 설명 카드들을 첫 연습 카드까지 차례로 — 단계 이름 순서, 어휘 규칙
         const fp = firstIdx(deck, isPractice)
         const ok = allowedFor(u)
