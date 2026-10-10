@@ -19,3 +19,19 @@ export const QA_TEST_STUDENT_IDS = Object.freeze(new Set([
 export function isQaTestStudent(studentId) {
   return typeof studentId === 'string' && QA_TEST_STUDENT_IDS.has(studentId.toLowerCase())
 }
+
+// 새 걷는 마을(paulTownWorld, 245차 2026-10-10) 테스트 전용 허용목록 — 위 QA 목록과 별개
+// (홈 메뉴/Speaking/문법/쓰기 같은 미완성 기능과 접근을 분리). Paul은 포함하지 않는다.
+// 테스터: Kinney / Jinaa / Barry / Cookie. students.id(UUID)로만 판정(규칙 4).
+export const TOWN_WORLD_TEST_STUDENT_IDS = Object.freeze(new Set([
+  'e0fe0f50-8927-44d9-9331-e454620524d9', // Kinney
+  '738443f3-2676-4b89-9f17-cc7f22aa993c', // Jinaa
+  '1056c7db-8464-45a4-9f3d-d13223c708b6', // Barry
+  'a63923a1-473d-4ba1-bca6-6b8685848cd3', // Cookie
+  'e2e00000-0000-4000-8000-00000000a001', // e2e fixture(프로덕션에 없음)
+  'e2e00000-0000-4000-8000-00000000a002', // e2e 마을 전용 합성 학생(프로덕션에 없음)
+]))
+
+export function isTownWorldTester(studentId) {
+  return typeof studentId === 'string' && TOWN_WORLD_TEST_STUDENT_IDS.has(studentId.toLowerCase())
+}

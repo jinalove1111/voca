@@ -11,7 +11,7 @@ export const missionLabel = (m) => {
 
 const FOCUSABLE = 'button:not([disabled])'
 
-export default function PlaceSheet({ place, completedUnitIds = [], wasVisited = false, onMission, onClose }) {
+export default function PlaceSheet({ place, completedUnitIds = [], wasVisited = false, missionsOpen = true, onMission, onClose }) {
   const ref = useRef(null)
   useEffect(() => { ref.current?.querySelector(FOCUSABLE)?.focus() }, [])
   const trap = (e) => {
@@ -41,6 +41,9 @@ export default function PlaceSheet({ place, completedUnitIds = [], wasVisited = 
       >
         <h2 id="tw-place-title" data-testid="tw-place-title" style={{ margin: 0, fontSize: 20, fontWeight: 900 }}>{place.nameKo}</h2>
         <p data-testid="tw-place-do" style={{ margin: '4px 0 12px', fontSize: 15, lineHeight: 1.45, wordBreak: 'keep-all' }}>{place.doKo}</p>
+        {!missionsOpen && (
+          <p data-testid="tw-missions-closed" style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 800, color: '#5d7a59' }}>이 계정은 마을 걷기와 지도 이동만 테스트해요.</p>
+        )}
         <div style={{ display: 'grid', gap: 8 }}>
           {place.missions.map((m, i) => {
             const { main, sub } = missionLabel(m)
@@ -51,10 +54,11 @@ export default function PlaceSheet({ place, completedUnitIds = [], wasVisited = 
                 type="button"
                 data-testid={`tw-mission-${i}`}
                 data-kind={m.kind}
+                disabled={!missionsOpen}
                 onClick={() => onMission?.(m, i)}
                 style={{
                   minHeight: 56, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, textAlign: 'left',
-                  padding: '8px 14px', borderRadius: 14, border: '2px solid #8fae8b', background: '#eef5e8', color: '#1f2a44', fontSize: 16, fontWeight: 800, cursor: 'pointer',
+                  padding: '8px 14px', borderRadius: 14, border: '2px solid #8fae8b', background: '#eef5e8', color: '#1f2a44', fontSize: 16, fontWeight: 800, cursor: missionsOpen ? 'pointer' : 'not-allowed', opacity: missionsOpen ? 1 : 0.6,
                 }}
               >
                 <span style={{ wordBreak: 'keep-all' }}>{main}<span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#5d7a59' }}>{sub}</span></span>

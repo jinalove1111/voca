@@ -27,7 +27,7 @@ import { TOWN_SHOP_ITEMS, shopItemState, purchasedDeco, formatDollars } from '..
 // Paul Town V1(paulTownV1, 2026-09-11) — onGoTown이 없으면(플래그 OFF 또는
 // App.jsx 미주입) 이 컴포넌트는 이 prop을 전혀 참조하지 않는 기존 분기만
 // 타므로 렌더 출력이 오늘과 바이트 단위로 동일하다.
-export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, onGo, onBack, shop, shopEnabled, onGoTown }) {
+export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, onGo, onBack, shop, shopEnabled, onGoTown, onGoWorld }) {
   const welcome = retroWelcome(stats)
   const world = computeWorldState(stats)
   const plots = gardenPlots(stats)
@@ -222,7 +222,7 @@ export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, 
         {/* 건물들 — 마을이 곧 내비게이션: 발견된 건물 카드를 누르면 해당
             화면(박물관/도서관/시계탑)으로 들어간다. 잠긴 곳은 목록/개수
             없이 부드러운 힌트 한 줄만(점진 발견 — 체크리스트 금지). */}
-        {(onGoTown || (showBuildings && (discoveredPlaces.length > 0 || anyHidden))) && (
+        {(onGoTown || onGoWorld || (showBuildings && (discoveredPlaces.length > 0 || anyHidden))) && (
           <div className="bg-white rounded-3xl card-shadow p-5">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-2xl">🗺️</span>
@@ -231,6 +231,20 @@ export default function PaulTown({ stats, hatInventory, equippedHatId, onEquip, 
             {/* Paul Town V1(paulTownV1, 2026-09-11) — 새 진입 카드 1개.
                 onGoTown이 없으면(플래그 OFF) 이 블록 자체가 렌더되지 않아
                 기존 화면과 완전히 동일하다. */}
+            {onGoWorld && (
+              <button
+                type="button"
+                data-testid="paul-town-world-entry"
+                onClick={onGoWorld}
+                className="w-full flex items-center gap-3 rounded-2xl p-3 mb-2 bg-gradient-to-r from-green-50 to-yellow-50 btn-press text-left min-h-[44px]"
+              >
+                <span className="text-2xl flex-shrink-0">🚶</span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-black text-sm text-gray-800">새 마을 걷기 (테스트)</p>
+                  <p className="text-xs text-gray-400">캐릭터로 걸어 다니고 지도로 이동해요</p>
+                </div>
+              </button>
+            )}
             {onGoTown && (
               <button
                 onClick={onGoTown}

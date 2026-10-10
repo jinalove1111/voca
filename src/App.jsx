@@ -49,7 +49,7 @@ import { shouldRefreshOnForeground } from './utils/foregroundRefreshGate'
 // (readingStudentUI와 동일한 게이팅 메커니즘, GuidedSession.jsx 기존 관례).
 import { isFeatureEnabled, subscribeFeatures } from './config/features'
 import { isPilotTownStudent } from './config/pilotTown'
-import { isQaTestStudent } from './config/qaTestAccounts'
+import { isQaTestStudent, isTownWorldTester } from './config/qaTestAccounts'
 import { fetchApprovedExamplesForWords } from './utils/curriculum/exampleLibrary'
 // Wave 4 학생 경험 폴리시(2026-08-02) — GuidedSession 완료 카드의 "오늘
 // 씨앗 심음" 안내용. 기존 Paul Town 홈 밴드(Dashboard.jsx)가 쓰는 것과
@@ -259,8 +259,9 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 로그아웃/세션 만료 등 어떤 경로로든 AppInner가 내려가면 홈 포커스 기억을 비운다.
   useEffect(() => () => resetStudentHomeState(), [])
   const [screen, setScreen]         = useState(() => (isFeatureEnabled('studentHomeMenu') && isQaTestStudent(studentId) ? 'home' : 'dashboard'))
-  const QA_ONLY_SCREENS = ['home', 'speaking', 'growth', 'proto25d', 'townWorld', 'unit', 'grammarCourses', 'grammarVillage']
+  const QA_ONLY_SCREENS = ['home', 'speaking', 'growth', 'proto25d', 'unit', 'grammarCourses', 'grammarVillage']
   useEffect(() => { if (!qaTestStudent && QA_ONLY_SCREENS.includes(screen)) setScreen('dashboard') }, [qaTestStudent, screen])
+  // 새 걷는 마을은 QA 목록과 별개 허용목록(245차) — 자격이 없으면 직접 진입 차단
   const [speakingMode, setSpeakingMode] = useState('menu') // 홈의 "그림 시험 바로 가기"가 Speaking을 시험 모드로 연다
   // Speaking 연습 끝 → [이 표현 써보기] → Writing 문항 → ← 목록이면 원래 Speaking(그 세트의 연습 끝 화면)으로
   const [writingLink, setWritingLink] = useState(null) // { writingItemId, setId } | null
@@ -337,11 +338,13 @@ function AppInner({ studentId, studentName, onLogout }) {
   const paulTown2_5dEnabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('paulTown2_5d'), () => false) && qaTestStudent
   const townReturn = !!grammarEntry && grammarEntry.returnTo === 'proto25d' && paulTown2_5dEnabled // 플래그가 꺼졌으면 홈으로
   // 하이브리드 마을(paulTownWorld) — 플래그 AND QA 계정. 세션(위치/방문)과 복귀 표식은 React 상태뿐(저장 0).
-  const townWorldEnabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('paulTownWorld'), () => false) && qaTestStudent
+  const townWorldEnabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('paulTownWorld'), () => false) && isTownWorldTester(studentId)
+  const goTownWorld = () => { setWorldReturn(null); setScreen('townWorld') }
   const [townWorldSession, setTownWorldSession] = useState({ pos: null, visited: [], done: [] })
   const [worldReturn, setWorldReturn] = useState(null) // 'world' | null — 마을에서 연 학습 화면이 끝나면 어디로 갈지
   const worldGrammar = !!grammarEntry && grammarEntry.returnTo === 'world' && townWorldEnabled
   // 학습 화면의 "마지막 출구"는 항상 이 헬퍼 하나로 결정한다(마을에서 왔으면 마을, 아니면 기존대로 홈).
+  useEffect(() => { if (!townWorldEnabled && screen === 'townWorld') setScreen('dashboard') }, [townWorldEnabled, screen])
   const learningHome = () => (worldReturn === 'world' && townWorldEnabled ? 'townWorld' : 'home')
   const openWorldMission = (placeId, mission) => {
     setWorldReturn('world'); setSpeakingMode('menu'); setWritingLink(null); setUnitLink(null); setPilotUnitsFailed(false)
@@ -988,6 +991,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           textbookOptions={textbookOptions} currentTextbookId={currentTextbookOptionId}
           onTextbookSwitch={handleTextbookSwitch}
           onHome={studentHomeEnabled ? () => setScreen('home') : undefined}
+          onGoWorld={townWorldEnabled ? goTownWorld : null}
           wallet={townShopEnabled && townShop.state ? { starsEarned: townShop.state.starsEarned, dollarsAvailable: townShop.state.dollars.available } : null} />
       )}
       {screen === 'guidedSession' && (
@@ -1145,7 +1149,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           {screen === 'paulTown' && (
             <PaulTown stats={attachment.stats} hatInventory={studentData.hatInventory}
               equippedHatId={studentData.equippedHatId} onEquip={studentData.equipHat}
-              onGo={setScreen} onBack={backToOrigin}
+              onGo={setScreen} onBack={backToOrigin} onGoWorld={townWorldEnabled ? goTownWorld : null}
               shop={townShopEnabled ? townShop : null} shopEnabled={townShopEnabled}
               onGoTown={paulTown2_5dEnabled ? () => setScreen('proto25d') : townV1Enabled ? () => setScreen('town') : null} />
           )}
@@ -1289,8 +1293,8 @@ function AppInner({ studentId, studentName, onLogout }) {
       {townWorldEnabled && screen === 'townWorld' && (
         <React.Suspense fallback={null}>
           <TownWorld initial={townWorldSession} onSessionChange={setTownWorldSession} completedUnitIds={completedUnitIds}
-            onOpenMission={openWorldMission}
-            onBack={() => { setWorldReturn(null); setScreen('home') }} />
+            onOpenMission={qaTestStudent ? openWorldMission : null}
+            onBack={() => { setWorldReturn(null); setScreen(studentHomeEnabled ? 'home' : 'dashboard') }} />
         </React.Suspense>
       )}
     </>

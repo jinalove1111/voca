@@ -358,7 +358,7 @@ export default function TownWorld({ initial, onSessionChange, completedUnitIds =
       {showJoy && <WorldJoystick onVector={onJoy} />}
 
       {sheet && (
-        <PlaceSheet place={sheet.place} completedUnitIds={completedUnitIds} wasVisited={sheet.wasVisited}
+        <PlaceSheet place={sheet.place} missionsOpen={!!onOpenMission} completedUnitIds={completedUnitIds} wasVisited={sheet.wasVisited}
           onMission={(m) => { emit(); propsRef.current.onOpenMission?.(sheet.place.id, m) }} onClose={() => setSheet(null)} />
       )}
       {mapOpen && <WorldMap currentZone={zone.id} onTravel={travel} onClose={() => setMapOpen(false)} />}

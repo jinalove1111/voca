@@ -304,7 +304,7 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 
 // P0(2026-07-15): student(이름 문자열) 대신 studentId(식별자)+studentName
 // (표시용)을 따로 받는다 — getStudentClass/getStudentUnit은 이제 id 기반.
-export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, completedUnits, completedTextbooks, pendingCeremonyHat, onDismissCeremony, textbookOptions, currentTextbookId, onTextbookSwitch, wallet = null, onHome }) {
+export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, completedUnits, completedTextbooks, pendingCeremonyHat, onDismissCeremony, textbookOptions, currentTextbookId, onTextbookSwitch, wallet = null, onHome, onGoWorld }) {
   const { stars, starsDisplay, clearedStars, stickerTypes, activeMissions, dailyProgress, liveMissionsCompleted, streak, cleared, ticketBalance, redeemTicketReward, equippedHatId, rewardLevel, rewardStarsToNext } = studentData
   // 애착 시스템(2026-07-22) — 학생 아바타의 장착 모자. 미장착이면 기존
   // 기본 아바타(👑) 그대로 — 아무것도 안 얻은/안 고른 학생 화면은 변화 0.
@@ -838,6 +838,14 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
             )}
           </div>
         </details>
+
+        {/* 새 걷는 마을 테스트 진입(245차) — 허용목록 계정에만 onGoWorld가 오며, 홈 밴드 조건과 무관하게 보인다. */}
+        {onGoWorld && (
+          <button type="button" data-testid="dash-town-world" onClick={onGoWorld}
+            className="w-full min-h-[44px] bg-white rounded-3xl card-shadow px-4 py-3 text-purple-600 font-black text-sm btn-press">
+            🏘 새 마을 걷기 (테스트)
+          </button>
+        )}
 
         {/* Paul Town 홈 밴드(v2.0, paulTownHomeBand 플래그) — 정원 한 줄
             요약 + 별→씨앗. 스티커 띠 위의 작은 흰 카드 하나(추가만 —
