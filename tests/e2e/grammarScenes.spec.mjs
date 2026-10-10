@@ -19,9 +19,12 @@ const DESKTOP = { width: 1280, height: 800 }
 const T = (page, id) => page.locator(`[data-testid="${id}"]`)
 const txt = async (page, id) => ((await T(page, id).textContent()) || '').trim()
 const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim()
+// 보기 글자를 데이터 번호 순으로 읽는다(scene-opt-<번호>의 번호 = 데이터 번호, 화면 순서와 무관) — 렌더된 집합이 데이터와 같고 번호마다 option[번호]를 담는지 한 번에 본다
+const optsByIndex = async (card) => (await card.locator('[data-testid^="scene-opt-"]').evaluateAll((els) => { const a = []; for (const e of els) a[+e.getAttribute('data-testid').split('-').pop()] = e.textContent; return a })).map(norm)
 const noOverflow = (page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
 const clipped = (page, rootId) => page.locator(`[data-testid="${rootId}"] *`).evaluateAll((els) =>
-  els.filter((el) => el.offsetParent !== null && el.getBoundingClientRect().right > window.innerWidth + 1).slice(0, 3).map((el) => `${el.tagName}:${Math.round(el.getBoundingClientRect().right)}`))
+  // SVG children are clipped by the outermost <svg> (cropped viewBox), so use rect∩svg rect, not the raw child rect
+  els.map((el) => { let s = el.ownerSVGElement; while (s && s.ownerSVGElement) s = s.ownerSVGElement; return [el, Math.min(el.getBoundingClientRect().right, s ? s.getBoundingClientRect().right : Infinity)] }).filter(([el, r]) => el.offsetParent !== null && r > window.innerWidth + 1).slice(0, 3).map(([el, r]) => `${el.tagName}:${Math.round(r)}`))
 const smallButtons = (page, rootId) => page.locator(`[data-testid="${rootId}"] button`).evaluateAll((els) =>
   els.filter((el) => el.offsetParent !== null).map((el) => [el.textContent.trim().slice(0, 20), el.getBoundingClientRect().height]).filter(([, h]) => h < 44).map(([t, h]) => `${t}:${Math.round(h)}`))
 const speakLog = (page) => page.evaluate(() => window.__speak || [])
@@ -156,7 +159,7 @@ async function layoutProblems(page, vp) {
   bad.push(...navs)
   if (vp.width <= 390 && (await T(page, 'gd-next').count()) > 0) {
     const nb = await T(page, 'gd-next').evaluate((el) => ({ bottom: el.getBoundingClientRect().bottom, ih: window.innerHeight }))
-    if (nb.bottom > nb.ih - 76) bad.push(`gd-next 위젯과 겹침 bottom ${Math.round(nb.bottom)} > ${nb.ih - 76}`)
+    if (nb.bottom > nb.ih - 84) bad.push(`gd-next 위젯과 겹침 bottom ${Math.round(nb.bottom)} > ${nb.ih - 84}`)
   }
   return bad
 }
@@ -180,6 +183,7 @@ export async function run(browser, baseURL) {
     const toCourses = async () => {
       await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
       await T(page, 'student-home-menu-grammar').click()
+      await T(page, 'grammar-village').waitFor({ state: 'visible', timeout: 20000 }); await T(page, 'gv-to-courses').click()
       await T(page, 'grammar-courses').waitFor({ state: 'visible', timeout: 20000 })
     }
     const recover = async () => { await page.goto(baseURL, { waitUntil: 'domcontentloaded' }); await loginOnly(page); await toCourses() }
@@ -257,8 +261,8 @@ export async function run(browser, baseURL) {
         const it = st.items[c.itemIndex]; const good = fillIn(it.frame, it.options[it.correct]); const w = it.options.findIndex((_, j) => j !== it.correct)
         if ((await txt(page, 'scene-frame')) !== it.frame) tag(`틀 '${await txt(page, 'scene-frame')}'≠'${it.frame}'`)
         if ((await html()).includes(norm(good))) tag('답 전 카드 HTML에 채워진 정답 문장이 있음')
-        const opts = await card.locator('[data-testid^="scene-opt-"]').allTextContents()
-        if (JSON.stringify(opts.map(norm)) !== JSON.stringify(it.options)) tag(`보기 ${JSON.stringify(opts)}≠${JSON.stringify(it.options)}`)
+        const opts = await optsByIndex(card) // add 카드는 displayOrder로 섞어 보여 주므로 화면 순서가 아니라 번호(scene-opt-<데이터 번호>)로 맞춘다
+        if (JSON.stringify(opts) !== JSON.stringify(it.options)) tag(`보기(번호순) ${JSON.stringify(opts)}≠${JSON.stringify(it.options)}`)
         if (!(await T(page, 'scene-check').isDisabled()) || !(await hint())) tag('고르기 전 확인 활성/다음 열림')
         await T(page, `scene-opt-${w}`).click()
         if ((await txt(page, 'scene-frame')) !== fillIn(it.frame, it.options[w])) tag('오답을 고르면 틀이 그 보기로 채워져야 함')
@@ -280,7 +284,7 @@ export async function run(browser, baseURL) {
         if (pos) {
           const rels = place.relations
           if ((await txt(page, 'scene-frame')) !== st.frameEn) tag(`틀 '${await txt(page, 'scene-frame')}'≠'${st.frameEn}'`)
-          const opts = (await card.locator('[data-testid^="scene-opt-"]').allTextContents()).map(norm)
+          const opts = await optsByIndex(card)
           if (JSON.stringify(opts) !== JSON.stringify(rels)) tag(`보기 ${JSON.stringify(opts)}≠relations ${JSON.stringify(rels)}`)
           const sp = await card.locator('[data-testid^="scene-spot-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-relation')))
           if (JSON.stringify([...sp].sort()) !== JSON.stringify([...rels].sort())) tag(`빈 자리 ${JSON.stringify(sp)}≠relations ${JSON.stringify(rels)}`)

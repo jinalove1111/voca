@@ -20,7 +20,8 @@ const txt = async (page, id) => ((await T(page, id).textContent()) || '').trim()
 const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim()
 const noOverflow = (page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
 const clipped = (page, rootId) => page.locator(`[data-testid="${rootId}"] *`).evaluateAll((els) =>
-  els.filter((el) => el.offsetParent !== null && el.getBoundingClientRect().right > window.innerWidth + 1).slice(0, 3).map((el) => `${el.tagName}:${Math.round(el.getBoundingClientRect().right)}`))
+  // SVG children are clipped by the outermost <svg> (cropped viewBox), so use rect∩svg rect, not the raw child rect
+  els.map((el) => { let s = el.ownerSVGElement; while (s && s.ownerSVGElement) s = s.ownerSVGElement; return [el, Math.min(el.getBoundingClientRect().right, s ? s.getBoundingClientRect().right : Infinity)] }).filter(([el, r]) => el.offsetParent !== null && r > window.innerWidth + 1).slice(0, 3).map(([el, r]) => `${el.tagName}:${Math.round(r)}`))
 const smallButtons = (page, rootId) => page.locator(`[data-testid="${rootId}"] button`).evaluateAll((els) =>
   els.filter((el) => el.offsetParent !== null).map((el) => [el.textContent.trim().slice(0, 20), el.getBoundingClientRect().height]).filter(([, h]) => h < 44).map(([t, h]) => `${t}:${Math.round(h)}`))
 const speakLog = (page) => page.evaluate(() => window.__speak || [])
@@ -159,6 +160,7 @@ export async function run(browser, baseURL) {
     const toCourses = async () => {
       await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
       await T(page, 'student-home-menu-grammar').click()
+      await T(page, 'grammar-village').waitFor({ state: 'visible', timeout: 20000 }); await T(page, 'gv-to-courses').click()
       await T(page, 'grammar-courses').waitFor({ state: 'visible', timeout: 20000 })
     }
     const open = async () => {
@@ -541,7 +543,7 @@ export async function run(browser, baseURL) {
         let widgetBad = ''
         if (vp.width <= 390 && (await T(page, 'gd-next').count()) > 0) {
           const nb = await T(page, 'gd-next').evaluate((el) => ({ bottom: el.getBoundingClientRect().bottom, right: el.getBoundingClientRect().right, ih: window.innerHeight, iw: window.innerWidth }))
-          if (nb.bottom > nb.ih - 76 || nb.right > nb.iw) widgetBad = `gd-next 위젯과 겹침 bottom ${Math.round(nb.bottom)} > ${nb.ih - 76}`
+          if (nb.bottom > nb.ih - 84 || nb.right > nb.iw) widgetBad = `gd-next 위젯과 겹침 bottom ${Math.round(nb.bottom)} > ${nb.ih - 84}`
         }
         // 그림은 카드 안(가로 전부, 세로는 카드 안에서 스크롤해 보이면 전부)에 있어야 하고 카드보다 넓으면 안 된다
         const sceneBad = await page.evaluate(() => {
@@ -603,7 +605,7 @@ export async function run(browser, baseURL) {
     r.check(`${name} 단원을 목록에서 다시 열면 처음 카드(idx 0), 푼 답 저장 안 됨`, (await idxOf(page)) === 0)
     await advanceTo(page, cardIdx('choose', 0))
     r.check(`${name} 선택 1에 다시 도착: 답 안 한 상태(저장 안 함)`, (await T(page, 'scene-result').count()) === 0 && (await T(page, 'scene-check').isDisabled()))
-    await T(page, 'gu-back').click(); await T(page, 'grammar-units-back').click(); await T(page, 'grammar-courses-home').click()
+    await T(page, 'gu-back').click(); await T(page, 'grammar-units-back').click(); await T(page, 'grammar-courses-home').click(); await T(page, 'gv-home').click()
     r.check(`${name} ← 홈 → 학생 홈`, !!(await waitUntil(() => T(page, 'student-home').isVisible(), { timeout: 10000 })))
     const su = storageUnchanged(before0, await snap(page))
     r.check(`${name} 나간 뒤에도 문법·그림 미션 관련 새 키 없음(앱 자체 키 허용), Unit 기록 불변`, su.ok, su.added.join(','))

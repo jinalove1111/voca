@@ -18,7 +18,8 @@ const txt = async (page, id) => ((await T(page, id).textContent()) || '').trim()
 const noOverflow = (page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
 // 화면 컨테이너가 overflow-x-hidden이라 문서 스크롤만으로는 잘림을 못 잡는다 — 요소가 뷰포트 오른쪽 밖으로 나갔는지도 본다
 const clipped = (page, rootId) => page.locator(`[data-testid="${rootId}"] *`).evaluateAll((els) =>
-  els.filter((el) => el.offsetParent !== null && el.getBoundingClientRect().right > window.innerWidth + 1).slice(0, 3).map((el) => `${el.tagName}:${Math.round(el.getBoundingClientRect().right)}`))
+  // SVG children are clipped by the outermost <svg> (cropped viewBox), so use rect∩svg rect, not the raw child rect
+  els.map((el) => { let s = el.ownerSVGElement; while (s && s.ownerSVGElement) s = s.ownerSVGElement; return [el, Math.min(el.getBoundingClientRect().right, s ? s.getBoundingClientRect().right : Infinity)] }).filter(([el, r]) => el.offsetParent !== null && r > window.innerWidth + 1).slice(0, 3).map(([el, r]) => `${el.tagName}:${Math.round(r)}`))
 const smallButtons = (page, rootId) => page.locator(`[data-testid="${rootId}"] button`).evaluateAll((els) =>
   els.filter((el) => el.offsetParent !== null).map((el) => [el.textContent.trim().slice(0, 20), el.getBoundingClientRect().height]).filter(([, h]) => h < 44).map(([t, h]) => `${t}:${Math.round(h)}`))
 const speakLog = (page) => page.evaluate(() => window.__speak || [])
@@ -166,6 +167,7 @@ export async function run(browser, baseURL) {
     const toCourses = async () => {
       await T(page, 'student-home').waitFor({ state: 'visible', timeout: 20000 })
       await T(page, 'student-home-menu-grammar').click()
+      await T(page, 'grammar-village').waitFor({ state: 'visible', timeout: 20000 }); await T(page, 'gv-to-courses').click()
       await T(page, 'grammar-courses').waitFor({ state: 'visible', timeout: 20000 })
     }
     const toUnits = async (courseId) => { await T(page, `grammar-course-${courseId}`).click(); await T(page, 'grammar-units').waitFor({ state: 'visible', timeout: 10000 }) }
@@ -202,7 +204,7 @@ export async function run(browser, baseURL) {
 
   await scenario('a 과정 5개·배지·개수', VP, async ({ page, name, toCourses }) => {
     await toCourses()
-    r.check(`${name} 첫 화면 data-view=courses, ← 홈 버튼`, (await T(page, 'grammar-courses').getAttribute('data-view')) === 'courses' && (await T(page, 'grammar-courses-home').isVisible()))
+    r.check(`${name} 첫 화면 data-view=courses, 마을에서 열었으니 ← 마을 지도 버튼`, (await T(page, 'grammar-courses').getAttribute('data-view')) === 'courses' && (await T(page, 'grammar-courses-home').isVisible()) && ((await T(page, 'grammar-courses-home').textContent()) || '').includes('마을 지도'))
     const ids = await page.locator('button[data-testid^="grammar-course-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid').replace('grammar-course-', '')))
     r.check(`${name} 과정 ${GRAMMAR_COURSES.length}개, 순서 = 데이터(easy, intermediate, advanced, middleSchool, highSchool)`, JSON.stringify(ids) === JSON.stringify(GRAMMAR_COURSES.map((c) => c.id)) && JSON.stringify(ids) === JSON.stringify(['easy', 'intermediate', 'advanced', 'middleSchool', 'highSchool']), ids.join(','))
     for (const c of GRAMMAR_COURSES) {
@@ -507,14 +509,15 @@ export async function run(browser, baseURL) {
     await T(page, 'gu-back').click()
     await T(page, 'grammar-units-back').click()
     r.check(`${name} 목록 ← 과정 → 과정 선택`, (await T(page, 'grammar-courses').getAttribute('data-view')) === 'courses' && (await T(page, 'grammar-course-easy').isVisible()))
-    await T(page, 'grammar-courses-home').click()
+    await T(page, 'grammar-courses-home').click(); await T(page, 'gv-home').click()
     r.check(`${name} ← 홈 → 학생 홈`, !!(await waitUntil(() => T(page, 'student-home').isVisible(), { timeout: 10000 })) && (await T(page, 'grammar-courses').count()) === 0)
     // 다시 들어오면 항상 과정 선택부터, 중간(단원 목록)에서 ← 홈도 바로 홈
     await T(page, 'student-home-menu-grammar').click()
+    await T(page, 'grammar-village').waitFor({ state: 'visible', timeout: 20000 }); await T(page, 'gv-to-courses').click()
     await T(page, 'grammar-courses').waitFor({ state: 'visible', timeout: 20000 })
     r.check(`${name} 재진입 시 과정 선택부터(선택 저장 없음)`, (await T(page, 'grammar-courses').getAttribute('data-view')) === 'courses')
     await toUnits('intermediate')
-    await T(page, 'grammar-courses-home').click()
+    await T(page, 'grammar-courses-home').click(); await T(page, 'gv-home').click()
     r.check(`${name} 단원 목록에서 ← 홈 → 학생 홈`, !!(await waitUntil(() => T(page, 'student-home').isVisible(), { timeout: 10000 })))
     const su = storageUnchanged(before0, await snap(page))
     r.check(`${name} 문법 관련 새 키 없음, Unit 기록 불변(앱 자체 키 허용)`, su.ok, su.added.join(','))
@@ -634,16 +637,20 @@ export async function run(browser, baseURL) {
     r.check(`${name} 1차 실패 → stale-chunk 가드 기록 + 자동 새로고침(홈 복원)`, didReload && !!(await waitUntil(async () => (await safeEval(() => performance.getEntriesByType('navigation')[0]?.type)) === 'reload' && !!(await safeEval(() => sessionStorage.getItem('paulEasyVoca_staleChunkReloadAt'))) && (await T(page, 'student-home').isVisible().catch(() => false)), { timeout: 20000 })))
     // 2차 실패(가드 활성 → 새로고침 안 함): 안내 화면
     await T(page, 'student-home-menu-grammar').click()
+    await T(page, 'grammar-village').waitFor({ state: 'visible', timeout: 20000 }); await T(page, 'gv-to-courses').click()
     r.check(`${name} 2차 실패 → 빈 화면 대신 안내(grammar-load-failed) + 새로고침·홈 버튼`, !!(await waitUntil(() => T(page, 'grammar-load-failed').isVisible(), { timeout: 15000 })) && (await txt(page, 'grammar-load-failed')).includes('불러오지 못했어요') && (await txt(page, 'grammar-load-failed')).includes('새로고침') && (await T(page, 'grammar-load-reload').isVisible()) && (await T(page, 'grammar-load-home').isVisible()))
     await T(page, 'grammar-load-home').click()
-    r.check(`${name} ← 홈으로 → 학생 홈`, !!(await waitUntil(() => T(page, 'student-home').isVisible(), { timeout: 10000 })))
+    await T(page, 'gv-home').click() // 마을 경유로 들어왔으니 마을로 돌아온 뒤 홈
+    r.check(`${name} ← 홈으로 → 마을 → 학생 홈`, !!(await waitUntil(() => T(page, 'student-home').isVisible(), { timeout: 10000 })))
     await T(page, 'student-home-menu-grammar').click()
+    await T(page, 'grammar-village').waitFor({ state: 'visible', timeout: 20000 }); await T(page, 'gv-to-courses').click()
     r.check(`${name} 같은 페이지에서 다시 열면 여전히 안내(브라우저 모듈 캐시) — 빈 화면 아님`, !!(await waitUntil(() => T(page, 'grammar-load-failed').isVisible(), { timeout: 15000 })))
     await page.unroute('**/assets/units-*.js')
     const reloaded2 = page.waitForEvent('framenavigated', { timeout: 20000 }).then(() => true).catch(() => false)
     await T(page, 'grammar-load-reload').click()
     r.check(`${name} 🔄 새로고침 → 홈 복원`, (await reloaded2) && !!(await waitUntil(() => T(page, 'student-home').isVisible().catch(() => false), { timeout: 20000 })))
     await T(page, 'student-home-menu-grammar').click()
+    await T(page, 'grammar-village').waitFor({ state: 'visible', timeout: 20000 }); await T(page, 'gv-to-courses').click()
     r.check(`${name} 새로고침 뒤 다시 열면 과정 목록 로드`, !!(await waitUntil(() => T(page, 'grammar-courses').isVisible().catch(() => false), { timeout: 15000 })))
   })
 
@@ -680,11 +687,11 @@ export async function run(browser, baseURL) {
       // 덱 카드 하나: 가로 스크롤·잘림 없음, 작은 버튼 없음, 이전/다음 높이 >=56, 둘 다 가로 스크롤 없이 닿을 수 있음
       const checkCard = async (label) => {
         const small = await smallButtons(page, 'gd-root'); const cl = await clipped(page, 'gd-root')
-        // 플로팅 속도 위젯(약 76px)에 가려지지 않게: 스크롤 없이 다음 버튼 바닥이 위젯 위에 있어야 함(폰 폭만)
+        // 플로팅 속도 위젯(top = innerHeight-76)에서 8px 이상 위: 스크롤 없이 다음 버튼 바닥이 위젯 위에 있어야 함(폰 폭만)
         let widgetBad = ''
         if (vp.width <= 390 && (await T(page, 'gd-next').count()) > 0) {
           const nb = await T(page, 'gd-next').evaluate((el) => ({ bottom: el.getBoundingClientRect().bottom, right: el.getBoundingClientRect().right, ih: window.innerHeight, iw: window.innerWidth }))
-          if (nb.bottom > nb.ih - 76 || nb.right > nb.iw) widgetBad = `gd-next 위젯과 겹침 bottom ${Math.round(nb.bottom)} > ${nb.ih - 76}`
+          if (nb.bottom > nb.ih - 84 || nb.right > nb.iw) widgetBad = `gd-next 위젯과 겹침 bottom ${Math.round(nb.bottom)} > ${nb.ih - 84}`
         }
         const navs = []
         for (const id of ['gd-prev', 'gd-next']) {

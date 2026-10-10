@@ -366,9 +366,12 @@ export async function run(browser, baseURL) {
     const order = await page.evaluate(() => [...document.querySelectorAll('[data-testid="student-home"] [data-testid]')].map((e) => e.getAttribute('data-testid')).filter((t) => ['student-home-town', 'student-home-unit', 'student-home-menu-growth'].includes(t)))
     r.check(`${name} DOM 순서: 나의 성장 → 내 마을 → unit`, JSON.stringify(order) === JSON.stringify(['student-home-menu-growth', 'student-home-town', 'student-home-unit']), JSON.stringify(order))
     await g.click()
-    r.check(`${name} 문법 카드 클릭 → 5코스 화면(grammar-courses)`, await page.locator('[data-testid="grammar-courses"]').waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false))
+    r.check(`${name} 문법 카드 클릭 → 문법 마을(grammar-village)`, await page.locator('[data-testid="grammar-village"]').waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false))
+    await page.locator('[data-testid="gv-to-courses"]').click()
+    r.check(`${name} 과정 목록으로 보기 → 5코스 화면(grammar-courses)`, await page.locator('[data-testid="grammar-courses"]').waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false))
     await page.locator('[data-testid="grammar-courses-home"]').click()
-    r.check(`${name} 문법 ← 홈 → 학생 홈`, await waitHome(page))
+    await page.locator('[data-testid="gv-home"]').click()
+    r.check(`${name} 문법 ← 마을 지도 → 마을 ← 홈 → 학생 홈`, await waitHome(page))
   })
 
   // ── g. 키보드 ───────────────────────────────────────────────────────
