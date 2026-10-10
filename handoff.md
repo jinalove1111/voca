@@ -71,6 +71,9 @@ _이전 갱신: 2026-09-27 (188차 — **경제 단계 B: 가게에서 상품 1�
 - **검증(구현자, 정적만)**: 더미 env 빌드 통과, `testPictureWords` 728/728, `testBundleBudget` 33/33, `testLazyChunkGuards` 104/104, `testRegistryCoverage`·`testTownWorldWiring`·`testQaGate`(17/0)·`testStudentPathContracts`(61/0) 통과. **브라우저 스펙 `tests/e2e/pictureWordPractice.spec.mjs`(`[picture-practice]`)는 작성만 했고 실행하지 않았다**(리드가 실행). 알려진 한계: 그림 `img src`의 파일명(해시 앞 slug)에 단어가 보인다(개발자 도구로만 확인 가능, 아이 화면 노출 아님).
 - **하지 않은 것**: 철자 쓰기, 그림 듣고 고르기, 보상/기록, 상점 UI·구매 SQL, 2x 이미지, 기존 18단어의 저장된 mp3 재사용, DB 반영.
 
+### 249차 정정(리드 브라우저 실행 후)
+- `[picture-practice]` 51/6 실패는 전부 **스펙 쪽** 문제였고 앱 결함이 아니었다: (1) 저장소 키 불변 단언이 앱 자체 키(`paul_easy_reward_post_hold`↔`paul_easy_sync_meta`)를 셌다 → `APP_KEY` 필터 + `picture`/`pwp` 키 0 단언으로 교체. (2) 오답 복습 후 앱은 의도대로 "모두 맞혔어요" 카드를 한 번 보여 주는데 스펙이 바로 summary를 기다렸다(오답은 정상 기록됨) → 결과 보기 클릭 추가. (3) 공유 mock이 합성 음성을 항상 실패시켜 `playWordAudio`가 3단계 translate_tts(en-GB)로 가는 것이 기존 관례 → 그 GET(`tl=en-GB`)만 허용하도록 단언 변경. 앱 코드 변경 없음. 재실행 66 PASS / 0 FAIL.
+
 ## 2026-10-11 (248차) — 그림 단어 분류 + 관리자 승인 검토 화면
 
 - 입력: 운영자 그림 151장(Dropbox `pics2`), 리드가 전부 열어 판단한 `verdicts.json`(MATCH 119/MISMATCH 16/UNCERTAIN 10/MULTIPLE 5/UNUSABLE 1)·`phonics.json`(33). 이 라운드는 이 판단을 최종으로 취급.
