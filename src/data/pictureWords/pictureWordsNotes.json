@@ -1,0 +1,606 @@
+{
+ "pics2/anchor": {
+  "shown": "닻",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/apple": {
+  "shown": "체크 천을 깐 바구니에 사과 여러 개",
+  "reason": "사과와 바구니 두 대상 — 사과 한 개는 apple1.png"
+ },
+ "pics2/apple pie": {
+  "shown": "애플파이",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/apple1": {
+  "shown": "사과",
+  "reason": "파일명 철자·번호 교정(apple)"
+ },
+ "pics2/avocado": {
+  "shown": "아보카도",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/bag": {
+  "shown": "가방",
+  "reason": "영국식 우선"
+ },
+ "pics2/bagette": {
+  "shown": "바게트",
+  "reason": "파일명 철자·번호 교정(baguette)"
+ },
+ "pics2/banana": {
+  "shown": "바나나",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/basket": {
+  "shown": "바구니",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/basketball": {
+  "shown": "농구공",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/baskettt": {
+  "shown": "basket.png와 완전히 같은 파일",
+  "reason": "중복 파일(바이트 동일) — basket.png 하나만 사용"
+ },
+ "pics2/bear": {
+  "shown": "곰 인형",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/bicycle1": {
+  "shown": "자전거",
+  "reason": "파일명 철자·번호 교정(bicycle)"
+ },
+ "pics2/board": {
+  "shown": "A자형 세움 칠판",
+  "reason": "교실 칠판이 아니라 가게 앞 세움 간판 모양"
+ },
+ "pics2/boat": {
+  "shown": "배",
+  "reason": "장난감·소형 모형 그림"
+ },
+ "pics2/book": {
+  "shown": "책",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/brauni": {
+  "shown": "브라우니",
+  "reason": "파일명 철자·번호 교정(brownie)"
+ },
+ "pics2/bread": {
+  "shown": "바구니에 바게트·크루아상·둥근 빵",
+  "reason": "빵 종류 여러 개와 바구니 — 식빵은 bread11.png"
+ },
+ "pics2/bread11": {
+  "shown": "빵",
+  "reason": "파일명 철자·번호 교정(bread)"
+ },
+ "pics2/brocolli": {
+  "shown": "브로콜리",
+  "reason": "파일명 철자·번호 교정(broccoli)"
+ },
+ "pics2/brush": {
+  "shown": "붓",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/bun": {
+  "shown": "둥근 빵 한 덩이",
+  "reason": "bun/roll/bread 중 결정 필요"
+ },
+ "pics2/butter": {
+  "shown": "버터",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/cake": {
+  "shown": "케이크",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/candy": {
+  "shown": "사탕",
+  "reason": "영국식 우선"
+ },
+ "pics2/car": {
+  "shown": "자동차",
+  "reason": "장난감·소형 모형 그림"
+ },
+ "pics2/cattail": {
+  "shown": "물가 풀(부들·갈대) 한 포기",
+  "reason": "bulrush/cattail/reeds 중 무엇으로 가르칠지 불명확, 저레벨 단어 아님"
+ },
+ "pics2/cereal": {
+  "shown": "시리얼",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/chaor": {
+  "shown": "의자",
+  "reason": "파일명 철자·번호 교정(chair)"
+ },
+ "pics2/cheese": {
+  "shown": "치즈",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/cherry": {
+  "shown": "체리",
+  "reason": "그림은 체리 두 알"
+ },
+ "pics2/chocholate": {
+  "shown": "초콜릿",
+  "reason": "파일명 철자·번호 교정(chocolate)"
+ },
+ "pics2/chocholate cake": {
+  "shown": "종이컵에 든 초콜릿 머핀",
+  "reason": "케이크가 아니라 머핀 1개"
+ },
+ "pics2/climb": {
+  "shown": "암벽·그물이 있는 놀이터 정글짐",
+  "reason": "climb은 동작 — 그림은 놀이 기구"
+ },
+ "pics2/coconut": {
+  "shown": "코코넛",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/cookie": {
+  "shown": "쿠키",
+  "reason": "영국식 우선"
+ },
+ "pics2/corn": {
+  "shown": "옥수수",
+  "reason": "영국식 우선"
+ },
+ "pics2/crayon": {
+  "shown": "크레용",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/croissant": {
+  "shown": "크루아상",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/cucumber": {
+  "shown": "오이",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/cup": {
+  "shown": "컵",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/desk": {
+  "shown": "책상",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/dock": {
+  "shown": "밧줄 기둥이 있는 나무 선착장",
+  "reason": "dock/jetty/pier 중 결정 필요"
+ },
+ "pics2/dog bowl": {
+  "shown": "강아지 밥그릇",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/donut": {
+  "shown": "도넛",
+  "reason": "영국식 우선"
+ },
+ "pics2/dress": {
+  "shown": "원피스",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/duck": {
+  "shown": "노란 고무 오리 장난감",
+  "reason": "duck(동물)으로 가르칠지 장난감으로 가르칠지 결정 필요"
+ },
+ "pics2/egg": {
+  "shown": "달걀",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/eraser": {
+  "shown": "지우개",
+  "reason": "영국식 우선"
+ },
+ "pics2/firefighter": {
+  "shown": "사다리가 달린 빨간 소방차",
+  "reason": "사람(소방관)이 아니라 차량"
+ },
+ "pics2/fishing pole": {
+  "shown": "낚싯대",
+  "reason": "영국식 우선"
+ },
+ "pics2/flower": {
+  "shown": "화분 상자에 심긴 분홍 튤립",
+  "reason": "꽃과 화분 상자"
+ },
+ "pics2/flower111": {
+  "shown": "분홍 장미 한 송이",
+  "reason": "flower로 가르칠지 rose로 가르칠지 결정 필요"
+ },
+ "pics2/flower2": {
+  "shown": "화분 상자에 심긴 노란 수선화",
+  "reason": "꽃과 화분 상자"
+ },
+ "pics2/flower3": {
+  "shown": "화분 상자에 심긴 파란 수국",
+  "reason": "꽃과 화분 상자, 저레벨 단어 아님"
+ },
+ "pics2/flower4": {
+  "shown": "분홍 장미 덤불",
+  "reason": "roses/rose bush/flowers 중 결정 필요"
+ },
+ "pics2/flower6": {
+  "shown": "허브(바질·로즈메리·차이브)가 심긴 화단",
+  "reason": "꽃보다 허브가 중심"
+ },
+ "pics2/flwoer5": {
+  "shown": "호박이 열린 텃밭 화단",
+  "reason": "꽃이 아니라 호박"
+ },
+ "pics2/glass": {
+  "shown": "유리컵",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/glasses": {
+  "shown": "청록색 테 선글라스(검은 렌즈)",
+  "reason": "렌즈가 검은 선글라스"
+ },
+ "pics2/global": {
+  "shown": "받침대 있는 지구본",
+  "reason": "global은 형용사 — 물건은 globe"
+ },
+ "pics2/glove": {
+  "shown": "장갑",
+  "reason": "그림은 한 짝"
+ },
+ "pics2/glue": {
+  "shown": "풀",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/grapefruit": {
+  "shown": "망고 한 개(잎 달린 붉은·노란 과일)",
+  "reason": "자몽이 아니라 망고 모양과 색"
+ },
+ "pics2/grapes": {
+  "shown": "포도",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/guitar": {
+  "shown": "기타",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/hamburger": {
+  "shown": "햄버거",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/helmet": {
+  "shown": "헬멧",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/honey": {
+  "shown": "꿀",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/horse": {
+  "shown": "나무 흔들 목마",
+  "reason": "살아 있는 말이 아니라 장난감"
+ },
+ "pics2/hotdog": {
+  "shown": "핫도그",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/ice crema": {
+  "shown": "아이스크림",
+  "reason": "파일명 철자·번호 교정(ice cream)"
+ },
+ "pics2/ink": {
+  "shown": "잉크",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/jacket": {
+  "shown": "재킷",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/jam": {
+  "shown": "잼",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/jump rope": {
+  "shown": "줄넘기",
+  "reason": "영국식 우선"
+ },
+ "pics2/key": {
+  "shown": "열쇠",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/kite": {
+  "shown": "연",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/kiwi": {
+  "shown": "키위",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/le,om": {
+  "shown": "레몬",
+  "reason": "파일명 철자·번호 교정(lemon)"
+ },
+ "pics2/letter": {
+  "shown": "닫힌 흰 편지 봉투",
+  "reason": "편지지·글씨가 보이지 않고 봉투만 있음"
+ },
+ "pics2/lettuceaa": {
+  "shown": "상추",
+  "reason": "파일명 철자·번호 교정(lettuce)"
+ },
+ "pics2/lunchbox'": {
+  "shown": "도시락",
+  "reason": "파일명 철자·번호 교정(lunchbox)"
+ },
+ "pics2/melon": {
+  "shown": "멜론",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/micro": {
+  "shown": "손잡이 달린 돋보기",
+  "reason": "현미경(현미경.png)이 아님"
+ },
+ "pics2/milk": {
+  "shown": "우유",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/mushroom": {
+  "shown": "무늬가 있는 장식용 버섯 3개",
+  "reason": "먹는 버섯(mushroom2323.png)과 다름, 여러 개"
+ },
+ "pics2/mushroom2323": {
+  "shown": "버섯",
+  "reason": "파일명 철자·번호 교정(mushroom)"
+ },
+ "pics2/notebook": {
+  "shown": "공책",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/onion": {
+  "shown": "양파",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/orange": {
+  "shown": "오렌지",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/palette": {
+  "shown": "팔레트",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/pancake": {
+  "shown": "팬케이크",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/pants": {
+  "shown": "끈 달린 청록색 반바지",
+  "reason": "길이가 무릎 위 — 긴 바지(trousers.png)와 다름"
+ },
+ "pics2/peach": {
+  "shown": "복숭아",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/pear": {
+  "shown": "배",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/pen": {
+  "shown": "펜",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/pencil": {
+  "shown": "연필",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/pencil sharper": {
+  "shown": "연필깎이",
+  "reason": "파일명 철자·번호 교정(pencil sharpener)"
+ },
+ "pics2/pepper": {
+  "shown": "피망",
+  "reason": "영국식 우선"
+ },
+ "pics2/pineapple": {
+  "shown": "파인애플",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/pink book": {
+  "shown": "장미 무늬 분홍 책",
+  "reason": "일기장인지 알 수 없음 — book.png와 단어가 겹침"
+ },
+ "pics2/pizza": {
+  "shown": "피자",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/pnecilcase": {
+  "shown": "필통",
+  "reason": "파일명 철자·번호 교정(pencil case)"
+ },
+ "pics2/potato": {
+  "shown": "감자",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/pumpkin": {
+  "shown": "호박",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/racket": {
+  "shown": "라켓",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/radish": {
+  "shown": "무",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/rainboot": {
+  "shown": "장화",
+  "reason": "영국식 우선 · 그림은 한 짝"
+ },
+ "pics2/rice": {
+  "shown": "밥",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/robot": {
+  "shown": "로봇",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/ruler": {
+  "shown": "자",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/sandbox": {
+  "shown": "모래 놀이터",
+  "reason": "영국식 우선"
+ },
+ "pics2/sandwich": {
+  "shown": "샌드위치",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/scarf": {
+  "shown": "목도리",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/sccoter": {
+  "shown": "킥보드",
+  "reason": "파일명 철자·번호 교정(scooter)"
+ },
+ "pics2/scissors": {
+  "shown": "가위",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/seasaw": {
+  "shown": "시소",
+  "reason": "파일명 철자·번호 교정(seesaw)"
+ },
+ "pics2/shirt": {
+  "shown": "셔츠",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/skateboard": {
+  "shown": "스케이트보드",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/skirt": {
+  "shown": "치마",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/slide": {
+  "shown": "미끄럼틀",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/sneaker": {
+  "shown": "운동화",
+  "reason": "영국식 우선 · 그림은 한 짝"
+ },
+ "pics2/soccerball": {
+  "shown": "축구공",
+  "reason": "영국식 우선"
+ },
+ "pics2/sock": {
+  "shown": "양말",
+  "reason": "그림은 한 짝"
+ },
+ "pics2/soup": {
+  "shown": "수프",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/spiral": {
+  "shown": "아이싱 올린 시나몬 롤",
+  "reason": "spiral은 모양 설명일 뿐 물건 이름이 아님"
+ },
+ "pics2/stapler": {
+  "shown": "스테이플러",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/stone": {
+  "shown": "이끼와 꽃이 낀 바위 여러 개",
+  "reason": "stone/rock/rocks 중 결정 필요(여러 개)"
+ },
+ "pics2/strawberries": {
+  "shown": "딸기",
+  "reason": "그림은 딸기 한 개"
+ },
+ "pics2/sunflower": {
+  "shown": "해바라기",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/sweater": {
+  "shown": "스웨터",
+  "reason": "영국식 우선"
+ },
+ "pics2/sweet potato": {
+  "shown": "고구마",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/t-shirt": {
+  "shown": "티셔츠",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/tape": {
+  "shown": "테이프",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/teapot": {
+  "shown": "받침 접시 위 차가 담긴 찻잔",
+  "reason": "주전자가 아님 — 찻주전자는 teapot1.png"
+ },
+ "pics2/teapot1": {
+  "shown": "찻주전자",
+  "reason": "파일명 철자·번호 교정(teapot)"
+ },
+ "pics2/tellescope": {
+  "shown": "망원경",
+  "reason": "파일명 철자·번호 교정(telescope)"
+ },
+ "pics2/tomato": {
+  "shown": "토마토",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/top": {
+  "shown": "팽이",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/train": {
+  "shown": "기차",
+  "reason": "장난감·소형 모형 그림"
+ },
+ "pics2/trousers": {
+  "shown": "바지",
+  "reason": "영국식 우선"
+ },
+ "pics2/tube": {
+  "shown": "빨강·흰색 구명 튜브(밧줄 달림)",
+  "reason": "물놀이 튜브가 아니라 구명 부표"
+ },
+ "pics2/umbrella": {
+  "shown": "우산",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/vase": {
+  "shown": "꽃병",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/watermelon": {
+  "shown": "수박",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/white brocolli": {
+  "shown": "잎에 싸인 콜리플라워",
+  "reason": "\"white broccoli\"는 단어가 아님"
+ },
+ "pics2/yoyo": {
+  "shown": "요요",
+  "reason": "파일명과 그림 일치"
+ },
+ "pics2/zucini": {
+  "shown": "애호박",
+  "reason": "파일명 철자·번호 교정(zucchini) · 영국식 우선"
+ },
+ "pics2/양배추": {
+  "shown": "양배추",
+  "reason": "파일명 철자·번호 교정((한글 파일명))"
+ },
+ "pics2/현미경": {
+  "shown": "현미경",
+  "reason": "파일명 철자·번호 교정((한글 파일명))"
+ }
+}

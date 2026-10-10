@@ -115,6 +115,8 @@ const TownScreenV2 = React.lazy(() => import('./components/town/v2/TownScreenV2'
 const Proto25DScreen = React.lazy(() => import('./components/town/proto2_5d/Proto25DScreen'))
 // 폴타운 하이브리드 2.5D 마을(paulTownWorld, 2026-10-10, 244차) — QA 전용 프로토타입. 별도 lazy 청크(프리로드 없음): 플래그 OFF면 로드 0.
 const TownWorld = React.lazy(() => import('./components/town/proto2_5d/world/TownWorld'))
+// 그림 단어 연습(249차) — 테스터 전용(isTownWorldTester). 별도 lazy 청크: 비테스터는 로드 0.
+const PictureWordPractice = React.lazy(() => import('./components/pictureWords/PictureWordPractice'))
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -340,6 +342,9 @@ function AppInner({ studentId, studentName, onLogout }) {
   // 하이브리드 마을(paulTownWorld) — 플래그 AND QA 계정. 세션(위치/방문)과 복귀 표식은 React 상태뿐(저장 0).
   const townWorldEnabled = useSyncExternalStore(subscribeFeatures, () => isFeatureEnabled('paulTownWorld'), () => false) && isTownWorldTester(studentId)
   const goTownWorld = () => { setWorldReturn(null); setScreen('townWorld') }
+  // 그림 단어 연습 — 같은 테스터 4명 목록(플래그 없음). 상태는 화면 안 React state뿐.
+  const pictureWordsEnabled = isTownWorldTester(studentId)
+  useEffect(() => { if (!pictureWordsEnabled && screen === 'pictureWords') setScreen('dashboard') }, [pictureWordsEnabled, screen])
   const [townWorldSession, setTownWorldSession] = useState({ pos: null, visited: [], done: [] })
   const [worldReturn, setWorldReturn] = useState(null) // 'world' | null — 마을에서 연 학습 화면이 끝나면 어디로 갈지
   const worldGrammar = !!grammarEntry && grammarEntry.returnTo === 'world' && townWorldEnabled
@@ -894,6 +899,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           canEnterTown={(isFeatureEnabled('paulTownHomeBand') && !!attachment.stats) || paulTown2_5dEnabled}
           onGoWorld={townWorldEnabled ? goTownWorld : null}
           townEligible={townV1Enabled}
+          onGoPictureWords={pictureWordsEnabled ? () => setScreen('pictureWords') : null}
           writingEnabled={isFeatureEnabled('writingCoachEnabled') || qaTestStudent}
           grammarEnabled={qaTestStudent}
           speakingEnabled={isFeatureEnabled('speakingPracticeV1')}
@@ -993,6 +999,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           onTextbookSwitch={handleTextbookSwitch}
           onHome={studentHomeEnabled ? () => setScreen('home') : undefined}
           onGoWorld={townWorldEnabled ? goTownWorld : null}
+          onGoPictureWords={pictureWordsEnabled ? () => setScreen('pictureWords') : null}
           wallet={townShopEnabled && townShop.state ? { starsEarned: townShop.state.starsEarned, dollarsAvailable: townShop.state.dollars.available } : null} />
       )}
       {screen === 'guidedSession' && (
@@ -1270,7 +1277,7 @@ function AppInner({ studentId, studentName, onLogout }) {
           고정 버튼이 히어로 CTA("▶ 오늘의 학습 시작")를 덮어 탭을 가로채는
           실측 회귀가 있어 대시보드에서는 렌더하지 않는다. 다른 모든 화면은
           불변. */}
-      {screen !== 'dashboard' && screen !== 'home' && screen !== 'growth' && screen !== 'speaking' && screen !== 'proto25d' && screen !== 'townWorld' && screen !== 'unit' && screen !== 'grammarVillage' && <SpeedBtn />}
+      {screen !== 'dashboard' && screen !== 'home' && screen !== 'growth' && screen !== 'speaking' && screen !== 'proto25d' && screen !== 'townWorld' && screen !== 'pictureWords' && screen !== 'unit' && screen !== 'grammarVillage' && <SpeedBtn />}
       {/* Paul Town 2.5D 프로토타입(paulTown2_5d, Stage 1, 2026-09-22) — 기존
           `screen` 상태 머신/네비게이션과 완전히 무관한 독립 dev/QA 서피스.
           내비게이션 진입점이 없다(운영자 스펙에 "학생이 진입"하는 요구
@@ -1296,6 +1303,12 @@ function AppInner({ studentId, studentName, onLogout }) {
           <TownWorld initial={townWorldSession} onSessionChange={setTownWorldSession} completedUnitIds={completedUnitIds}
             onOpenMission={qaTestStudent ? openWorldMission : null}
             onBack={() => { setWorldReturn(null); setScreen(studentHomeEnabled ? 'home' : 'dashboard') }} />
+        </React.Suspense>
+      )}
+      {/* 그림 단어 연습(249차) — 테스터만. 비테스터는 이 청크를 요청하지 않는다. */}
+      {pictureWordsEnabled && screen === 'pictureWords' && (
+        <React.Suspense fallback={null}>
+          <PictureWordPractice onExit={() => setScreen(studentHomeEnabled ? 'home' : 'dashboard')} />
         </React.Suspense>
       )}
     </>

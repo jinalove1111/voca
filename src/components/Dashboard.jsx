@@ -304,7 +304,7 @@ function RecommendationBanner({ studentData, classWords, onGo, onResumeWord, onP
 
 // P0(2026-07-15): student(이름 문자열) 대신 studentId(식별자)+studentName
 // (표시용)을 따로 받는다 — getStudentClass/getStudentUnit은 이제 id 기반.
-export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, completedUnits, completedTextbooks, pendingCeremonyHat, onDismissCeremony, textbookOptions, currentTextbookId, onTextbookSwitch, wallet = null, onHome, onGoWorld }) {
+export default function Dashboard({ studentId, studentName, studentData, classWords, onGo, onLogout, onPlayGame, onResumeWord, resumeIndex, onUnitSwitch, onStartGuided, attachmentStats, wordTextById, completedUnits, completedTextbooks, pendingCeremonyHat, onDismissCeremony, textbookOptions, currentTextbookId, onTextbookSwitch, wallet = null, onHome, onGoWorld, onGoPictureWords }) {
   const { stars, starsDisplay, clearedStars, stickerTypes, activeMissions, dailyProgress, liveMissionsCompleted, streak, cleared, ticketBalance, redeemTicketReward, equippedHatId, rewardLevel, rewardStarsToNext } = studentData
   // 애착 시스템(2026-07-22) — 학생 아바타의 장착 모자. 미장착이면 기존
   // 기본 아바타(👑) 그대로 — 아무것도 안 얻은/안 고른 학생 화면은 변화 0.
@@ -538,6 +538,13 @@ export default function Dashboard({ studentId, studentName, studentData, classWo
           <button type="button" data-testid="dash-town-world" onClick={onGoWorld}
             className="w-full min-h-[44px] bg-purple-600 hover:bg-purple-700 rounded-2xl card-shadow px-4 py-3 text-white font-black text-base btn-press">
             🏘 새 마을 걷기 (테스트)
+          </button>
+        )}
+        {/* 그림 단어 연습 테스트 진입(249차) — 허용목록 계정에만 onGoPictureWords가 온다. */}
+        {onGoPictureWords && (
+          <button type="button" data-testid="dash-picture-words" onClick={onGoPictureWords}
+            className="w-full min-h-[44px] bg-sky-600 hover:bg-sky-700 rounded-2xl card-shadow px-4 py-3 text-white font-black text-base btn-press">
+            🖼 그림 단어 연습 (테스트)
           </button>
         )}
         {/* Profile */}

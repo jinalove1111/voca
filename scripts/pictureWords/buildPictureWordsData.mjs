@@ -36,17 +36,18 @@ const entries = verdicts.map((v) => {
     if (shop === 'garden' || shop === 'decoration') tracks.push('townObject')
   }
   return {
-    id: v.id, sourceFile: v.file, asset: m.asset, status: v.status, shown: v.shown,
-    en, ko, suggested: { en: v.word, ko: v.ko }, enUS: v.us || null, reason: v.reason, shop,
+    id: v.id, sourceFile: v.file, asset: m.asset, status: v.status,
+    en, ko, suggested: { en: v.word, ko: v.ko }, enUS: v.us || null, shop,
     decision, learn, tracks,
     phonicsCandidate: ph ? { group: ph.group, pattern: ph.pattern, ipa: ph.ipa } : null,
     existingWord: v.dbWord || null, newCandidate: !v.dbWord, autoLink: v.status === 'MATCH',
-    provenance: { picture: 'viewed', en: 'from-picture', ko: 'inferred', shop: 'inferred', enUS: 'inferred', phonics: 'inferred-from-spelling', existingWord: 'string-match' },
   }
 })
 
 const by = (k) => entries.reduce((a, e) => ((a[e[k]] = (a[e[k]] || 0) + 1), a), {})
 const out = {
+  // 모든 항목에 동일 — 항목마다 반복하면 번들이 커져(2.1MB 예산) 최상위에 한 번만 둔다
+  provenance: { picture: 'viewed', en: 'from-picture', ko: 'inferred', shop: 'inferred', enUS: 'inferred', phonics: 'inferred-from-spelling', existingWord: 'string-match' },
   generated: 'by scripts/pictureWords/buildPictureWordsData.mjs — do not hand-edit',
   phonicsReview: { orderConfirmed: false, classified: false, note: '학습 순서 미확정 — 교재의 유닛별 소리 순서 확인 전까지 Phonics를 분류하지 않는다(운영자 지시). 후보 그룹은 검토용일 뿐이다.' },
   counts: {
@@ -63,6 +64,9 @@ const out = {
   pending: entries.filter((e) => ['MISMATCH', 'UNCERTAIN', 'MULTIPLE'].includes(e.status) && !e.decision).map((e) => e.id),
   entries,
 }
+// 관리자 패널 전용 설명문(그림 설명/판단 근거) — 학생 연습 청크가 공유하는 데이터 JSON을 작게 유지하려고 분리
+const notes = Object.fromEntries(verdicts.map((v) => [v.id, { shown: v.shown, reason: v.reason }]))
 fs.mkdirSync(path.join(ROOT, 'src/data/pictureWords'), { recursive: true })
 fs.writeFileSync(path.join(ROOT, 'src/data/pictureWords/pictureWords.json'), JSON.stringify(out, null, 1) + '\n')
+fs.writeFileSync(path.join(ROOT, 'src/data/pictureWords/pictureWordsNotes.json'), JSON.stringify(notes, null, 1) + '\n')
 console.log(JSON.stringify(out.counts))

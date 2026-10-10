@@ -2,6 +2,7 @@
 // 결정은 이 브라우저의 localStorage에만 저장된다. 네트워크 0, 보상 호출 0.
 import React, { useMemo, useState } from 'react'
 import { PICTURE_WORDS, COUNTS, SHOP_LABEL_KO, byStatus, phonicsGroups, shopGroups, reuseSummary, applyDecisions } from '../../data/pictureWords/index.js'
+import NOTES from '../../data/pictureWords/pictureWordsNotes.json'
 
 const IMG = import.meta.glob('../../assets/pictureWords/*.webp', { eager: true, query: '?url', import: 'default' })
 const imgUrl = (asset) => IMG[`../../assets/pictureWords/${asset}.webp`]
@@ -33,7 +34,7 @@ function Card({ e, decision, onSave, onReset }) {
     <div data-testid={`pwr-card-${e.asset}`} data-status={e.status} data-decision={state}
       className={`bg-white rounded-2xl border-2 p-3 min-w-0 ${state === 'approve' ? 'border-green-400' : state === 'exclude' ? 'border-gray-300 opacity-70' : 'border-gray-200'}`}>
       <div className="flex gap-3 min-w-0">
-        <img data-testid={`pwr-img-${e.asset}`} src={imgUrl(e.asset)} alt={e.shown} className="w-20 h-20 shrink-0 object-contain bg-gray-50 rounded-xl" />
+        <img data-testid={`pwr-img-${e.asset}`} src={imgUrl(e.asset)} alt={NOTES[e.id].shown} className="w-20 h-20 shrink-0 object-contain bg-gray-50 rounded-xl" />
         <div className="min-w-0 flex-1 text-sm break-words">
           <span className={`inline-block text-xs font-black px-2 py-0.5 rounded-full ${STATUS_CLS[e.status]}`}>{STATUS_KO[e.status]} · {e.status}</span>
           <p className="text-xs text-gray-400 mt-1">기존 파일명: {e.sourceFile}</p>
@@ -41,8 +42,8 @@ function Card({ e, decision, onSave, onReset }) {
           <p className="text-gray-700">한국어 뜻: {decision?.ko || e.ko}</p>
         </div>
       </div>
-      <p className="text-xs text-gray-600 mt-2 break-words">그림 설명: {e.shown}</p>
-      <p className="text-xs text-gray-600 break-words">판단 근거: {e.reason}</p>
+      <p className="text-xs text-gray-600 mt-2 break-words">그림 설명: {NOTES[e.id].shown}</p>
+      <p className="text-xs text-gray-600 break-words">판단 근거: {NOTES[e.id].reason}</p>
       <p className="text-[11px] text-gray-400 mt-1">그림: 직접 열어 확인 · 뜻/카테고리/미국식: 추론 · 기존 단어 대조: 문자열 비교</p>
       {editing && (
         <div className="mt-2 grid grid-cols-2 gap-2">
@@ -117,7 +118,7 @@ function ReviewTab({ decisions, onSave, onReset, onClear }) {
 function Thumb({ e }) {
   return (
     <div className="w-[72px] text-center">
-      <img src={imgUrl(e.asset)} alt={e.shown} loading="lazy" className="w-[72px] h-[72px] object-contain bg-gray-50 rounded-lg" />
+      <img src={imgUrl(e.asset)} alt={NOTES[e.id].shown} loading="lazy" className="w-[72px] h-[72px] object-contain bg-gray-50 rounded-lg" />
       <p className="text-[11px] font-bold text-gray-700 break-words">{e.en}</p>
       <p className="text-[10px] text-gray-400 break-words">{e.ko}</p>
     </div>
@@ -144,7 +145,7 @@ function ResultTab() {
               <div className="flex flex-wrap gap-2">
                 {items.map((e) => (
                   <div key={e.id} className="w-[104px] min-w-0 text-center">
-                    <img src={imgUrl(e.asset)} alt={e.shown} loading="lazy" className="w-16 h-16 mx-auto object-contain bg-gray-50 rounded-lg" />
+                    <img src={imgUrl(e.asset)} alt={NOTES[e.id].shown} loading="lazy" className="w-16 h-16 mx-auto object-contain bg-gray-50 rounded-lg" />
                     <p className="text-xs font-black text-gray-800 break-words">{e.en}</p>
                     <p className="text-[10px] text-gray-500 break-words">{e.phonicsCandidate.pattern} · {e.phonicsCandidate.ipa}</p>
                   </div>

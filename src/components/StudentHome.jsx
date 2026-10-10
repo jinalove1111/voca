@@ -17,7 +17,7 @@ const CARD = 'relative min-h-[9rem] rounded-3xl p-4 flex flex-col items-center j
 const SOON = 'bg-gray-300 text-gray-600'
 const ACTIVE = 'text-white bg-gradient-to-br'
 
-export default function StudentHome({ studentName, studentData, classWords, hasTodaysHomework, onStartGuided, onGo, onLogout, canEnterTown, townEligible, writingEnabled, grammarEnabled, speakingEnabled, speakingExamEnabled, onGoWorld }) {
+export default function StudentHome({ studentName, studentData, classWords, hasTodaysHomework, onStartGuided, onGo, onLogout, canEnterTown, townEligible, writingEnabled, grammarEnabled, speakingEnabled, speakingExamEnabled, onGoWorld, onGoPictureWords }) {
   const [notice, setNotice] = useState('')
   const timerRef = useRef(null)
   const cardRefs = useRef({})
@@ -145,6 +145,13 @@ export default function StudentHome({ studentName, studentData, classWords, hasT
           <button type="button" data-testid="student-home-town-world" onClick={onGoWorld} style={{ order: -1 }}
             className="w-full min-h-[44px] text-base font-black bg-purple-600 text-white rounded-2xl btn-press">
             🏘 새 마을 걷기 (테스트)
+          </button>
+        )}
+        {/* 그림 단어 연습 테스트 진입(249차) — 마을 버튼 바로 아래(같은 order, DOM 순서 유지) */}
+        {onGoPictureWords && (
+          <button type="button" data-testid="student-home-picture-words" onClick={onGoPictureWords} style={{ order: -1 }}
+            className="w-full min-h-[44px] text-base font-black bg-sky-600 text-white rounded-2xl btn-press">
+            🖼 그림 단어 연습 (테스트)
           </button>
         )}
         {/* 2026-10-08(224차) 통합 과정 시범 Unit(QA 전용) — 기존 Tab 순서(로그아웃→시작→카드4→그림 시험→내 마을) 뒤에 둔다 */}

@@ -1,4 +1,13 @@
 {
+ "provenance": {
+  "picture": "viewed",
+  "en": "from-picture",
+  "ko": "inferred",
+  "shop": "inferred",
+  "enUS": "inferred",
+  "phonics": "inferred-from-spelling",
+  "existingWord": "string-match"
+ },
  "generated": "by scripts/pictureWords/buildPictureWordsData.mjs — do not hand-edit",
  "phonicsReview": {
   "orderConfirmed": false,
@@ -72,7 +81,6 @@
    "sourceFile": "anchor.png",
    "asset": "anchor",
    "status": "MATCH",
-   "shown": "닻",
    "en": "anchor",
    "ko": "닻",
    "suggested": {
@@ -80,7 +88,6 @@
     "ko": "닻"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "decoration",
    "decision": null,
    "learn": true,
@@ -92,23 +99,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/apple",
    "sourceFile": "apple.png",
    "asset": "apple",
    "status": "MULTIPLE",
-   "shown": "체크 천을 깐 바구니에 사과 여러 개",
    "en": "apples",
    "ko": "사과 바구니",
    "suggested": {
@@ -116,7 +113,6 @@
     "ko": "사과 바구니"
    },
    "enUS": null,
-   "reason": "사과와 바구니 두 대상 — 사과 한 개는 apple1.png",
    "shop": "food",
    "decision": null,
    "learn": false,
@@ -124,23 +120,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/apple pie",
    "sourceFile": "apple pie.png",
    "asset": "apple-pie",
    "status": "MATCH",
-   "shown": "애플파이",
    "en": "apple pie",
    "ko": "애플파이",
    "suggested": {
@@ -148,7 +134,6 @@
     "ko": "애플파이"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -159,23 +144,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/apple1",
    "sourceFile": "apple1.png",
    "asset": "apple1",
    "status": "MATCH",
-   "shown": "사과",
    "en": "apple",
    "ko": "사과",
    "suggested": {
@@ -183,7 +158,6 @@
     "ko": "사과"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정(apple)",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -194,23 +168,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/avocado",
    "sourceFile": "avocado.png",
    "asset": "avocado",
    "status": "MATCH",
-   "shown": "아보카도",
    "en": "avocado",
    "ko": "아보카도",
    "suggested": {
@@ -218,7 +182,6 @@
     "ko": "아보카도"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -229,23 +192,13 @@
    "phonicsCandidate": null,
    "existingWord": "avocado",
    "newCandidate": false,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/bag",
    "sourceFile": "bag.png",
    "asset": "bag",
    "status": "MATCH",
-   "shown": "가방",
    "en": "bag",
    "ko": "가방",
    "suggested": {
@@ -253,7 +206,6 @@
     "ko": "가방"
    },
    "enUS": "backpack",
-   "reason": "영국식 우선",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -268,23 +220,13 @@
    },
    "existingWord": "backpack",
    "newCandidate": false,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/bagette",
    "sourceFile": "bagette.png",
    "asset": "bagette",
    "status": "MATCH",
-   "shown": "바게트",
    "en": "baguette",
    "ko": "바게트",
    "suggested": {
@@ -292,7 +234,6 @@
     "ko": "바게트"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정(baguette)",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -303,23 +244,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/banana",
    "sourceFile": "banana.png",
    "asset": "banana",
    "status": "MATCH",
-   "shown": "바나나",
    "en": "banana",
    "ko": "바나나",
    "suggested": {
@@ -327,7 +258,6 @@
     "ko": "바나나"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -338,23 +268,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/basket",
    "sourceFile": "basket.png",
    "asset": "basket",
    "status": "MATCH",
-   "shown": "바구니",
    "en": "basket",
    "ko": "바구니",
    "suggested": {
@@ -362,7 +282,6 @@
     "ko": "바구니"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "decoration",
    "decision": null,
    "learn": true,
@@ -374,23 +293,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/basketball",
    "sourceFile": "basketball.png",
    "asset": "basketball",
    "status": "MATCH",
-   "shown": "농구공",
    "en": "basketball",
    "ko": "농구공",
    "suggested": {
@@ -398,7 +307,6 @@
     "ko": "농구공"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "toy",
    "decision": null,
    "learn": true,
@@ -409,23 +317,13 @@
    "phonicsCandidate": null,
    "existingWord": "basketball",
    "newCandidate": false,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/baskettt",
    "sourceFile": "baskettt.png",
    "asset": "baskettt",
    "status": "UNUSABLE",
-   "shown": "basket.png와 완전히 같은 파일",
    "en": "basket",
    "ko": "바구니",
    "suggested": {
@@ -433,7 +331,6 @@
     "ko": "바구니"
    },
    "enUS": null,
-   "reason": "중복 파일(바이트 동일) — basket.png 하나만 사용",
    "shop": "decoration",
    "decision": null,
    "learn": false,
@@ -441,23 +338,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/bear",
    "sourceFile": "bear.png",
    "asset": "bear",
    "status": "MATCH",
-   "shown": "곰 인형",
    "en": "teddy bear",
    "ko": "곰 인형",
    "suggested": {
@@ -465,7 +352,6 @@
     "ko": "곰 인형"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "toy",
    "decision": null,
    "learn": true,
@@ -476,23 +362,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/bicycle1",
    "sourceFile": "bicycle1.png",
    "asset": "bicycle1",
    "status": "MATCH",
-   "shown": "자전거",
    "en": "bicycle",
    "ko": "자전거",
    "suggested": {
@@ -500,7 +376,6 @@
     "ko": "자전거"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정(bicycle)",
    "shop": "toy",
    "decision": null,
    "learn": true,
@@ -511,23 +386,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/board",
    "sourceFile": "board.png",
    "asset": "board",
    "status": "UNCERTAIN",
-   "shown": "A자형 세움 칠판",
    "en": "blackboard",
    "ko": "칠판",
    "suggested": {
@@ -535,7 +400,6 @@
     "ko": "칠판"
    },
    "enUS": null,
-   "reason": "교실 칠판이 아니라 가게 앞 세움 간판 모양",
    "shop": "school",
    "decision": null,
    "learn": false,
@@ -543,23 +407,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/boat",
    "sourceFile": "boat.png",
    "asset": "boat",
    "status": "MATCH",
-   "shown": "배",
    "en": "boat",
    "ko": "배",
    "suggested": {
@@ -567,7 +421,6 @@
     "ko": "배"
    },
    "enUS": null,
-   "reason": "장난감·소형 모형 그림",
    "shop": "toy",
    "decision": null,
    "learn": true,
@@ -582,23 +435,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/book",
    "sourceFile": "book.png",
    "asset": "book",
    "status": "MATCH",
-   "shown": "책",
    "en": "book",
    "ko": "책",
    "suggested": {
@@ -606,7 +449,6 @@
     "ko": "책"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -621,23 +463,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/brauni",
    "sourceFile": "brauni.png",
    "asset": "brauni",
    "status": "MATCH",
-   "shown": "브라우니",
    "en": "brownie",
    "ko": "브라우니",
    "suggested": {
@@ -645,7 +477,6 @@
     "ko": "브라우니"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정(brownie)",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -656,23 +487,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/bread",
    "sourceFile": "bread.png",
    "asset": "bread",
    "status": "MULTIPLE",
-   "shown": "바구니에 바게트·크루아상·둥근 빵",
    "en": "bread",
    "ko": "빵 바구니",
    "suggested": {
@@ -680,7 +501,6 @@
     "ko": "빵 바구니"
    },
    "enUS": null,
-   "reason": "빵 종류 여러 개와 바구니 — 식빵은 bread11.png",
    "shop": "food",
    "decision": null,
    "learn": false,
@@ -688,23 +508,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/bread11",
    "sourceFile": "bread11.png",
    "asset": "bread11",
    "status": "MATCH",
-   "shown": "빵",
    "en": "bread",
    "ko": "빵",
    "suggested": {
@@ -712,7 +522,6 @@
     "ko": "빵"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정(bread)",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -727,23 +536,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/brocolli",
    "sourceFile": "brocolli.png",
    "asset": "brocolli",
    "status": "MATCH",
-   "shown": "브로콜리",
    "en": "broccoli",
    "ko": "브로콜리",
    "suggested": {
@@ -751,7 +550,6 @@
     "ko": "브로콜리"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정(broccoli)",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -762,23 +560,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/brush",
    "sourceFile": "brush.png",
    "asset": "brush",
    "status": "MATCH",
-   "shown": "붓",
    "en": "paintbrush",
    "ko": "붓",
    "suggested": {
@@ -786,7 +574,6 @@
     "ko": "붓"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -797,23 +584,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/bun",
    "sourceFile": "bun.png",
    "asset": "bun",
    "status": "UNCERTAIN",
-   "shown": "둥근 빵 한 덩이",
    "en": "bread roll",
    "ko": "둥근 빵",
    "suggested": {
@@ -821,7 +598,6 @@
     "ko": "둥근 빵"
    },
    "enUS": "bun",
-   "reason": "bun/roll/bread 중 결정 필요",
    "shop": "food",
    "decision": null,
    "learn": false,
@@ -829,23 +605,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/butter",
    "sourceFile": "butter.png",
    "asset": "butter",
    "status": "MATCH",
-   "shown": "버터",
    "en": "butter",
    "ko": "버터",
    "suggested": {
@@ -853,7 +619,6 @@
     "ko": "버터"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -864,23 +629,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/cake",
    "sourceFile": "cake.png",
    "asset": "cake",
    "status": "MATCH",
-   "shown": "케이크",
    "en": "cake",
    "ko": "케이크",
    "suggested": {
@@ -888,7 +643,6 @@
     "ko": "케이크"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -903,23 +657,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/candy",
    "sourceFile": "candy.png",
    "asset": "candy",
    "status": "MATCH",
-   "shown": "사탕",
    "en": "sweet",
    "ko": "사탕",
    "suggested": {
@@ -927,7 +671,6 @@
     "ko": "사탕"
    },
    "enUS": "candy",
-   "reason": "영국식 우선",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -942,23 +685,13 @@
    },
    "existingWord": "sweet",
    "newCandidate": false,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/car",
    "sourceFile": "car.png",
    "asset": "car",
    "status": "MATCH",
-   "shown": "자동차",
    "en": "car",
    "ko": "자동차",
    "suggested": {
@@ -966,7 +699,6 @@
     "ko": "자동차"
    },
    "enUS": null,
-   "reason": "장난감·소형 모형 그림",
    "shop": "toy",
    "decision": null,
    "learn": true,
@@ -981,23 +713,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/cattail",
    "sourceFile": "cattail.png",
    "asset": "cattail",
    "status": "UNCERTAIN",
-   "shown": "물가 풀(부들·갈대) 한 포기",
    "en": "reeds",
    "ko": "갈대",
    "suggested": {
@@ -1005,7 +727,6 @@
     "ko": "갈대"
    },
    "enUS": "cattail",
-   "reason": "bulrush/cattail/reeds 중 무엇으로 가르칠지 불명확, 저레벨 단어 아님",
    "shop": "garden",
    "decision": null,
    "learn": false,
@@ -1013,23 +734,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/cereal",
    "sourceFile": "cereal.png",
    "asset": "cereal",
    "status": "MATCH",
-   "shown": "시리얼",
    "en": "cereal",
    "ko": "시리얼",
    "suggested": {
@@ -1037,7 +748,6 @@
     "ko": "시리얼"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -1048,23 +758,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/chaor",
    "sourceFile": "chaor.png",
    "asset": "chaor",
    "status": "MATCH",
-   "shown": "의자",
    "en": "chair",
    "ko": "의자",
    "suggested": {
@@ -1072,7 +772,6 @@
     "ko": "의자"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정(chair)",
    "shop": "furniture",
    "decision": null,
    "learn": true,
@@ -1087,23 +786,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/cheese",
    "sourceFile": "cheese.png",
    "asset": "cheese",
    "status": "MATCH",
-   "shown": "치즈",
    "en": "cheese",
    "ko": "치즈",
    "suggested": {
@@ -1111,7 +800,6 @@
     "ko": "치즈"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -1126,23 +814,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/cherry",
    "sourceFile": "cherry.png",
    "asset": "cherry",
    "status": "MATCH",
-   "shown": "체리",
    "en": "cherries",
    "ko": "체리",
    "suggested": {
@@ -1150,7 +828,6 @@
     "ko": "체리"
    },
    "enUS": null,
-   "reason": "그림은 체리 두 알",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -1161,23 +838,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/chocholate",
    "sourceFile": "chocholate.png",
    "asset": "chocholate",
    "status": "MATCH",
-   "shown": "초콜릿",
    "en": "chocolate",
    "ko": "초콜릿",
    "suggested": {
@@ -1185,7 +852,6 @@
     "ko": "초콜릿"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정(chocolate)",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -1196,23 +862,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/chocholate cake",
    "sourceFile": "chocholate cake.png",
    "asset": "chocholate-cake",
    "status": "MISMATCH",
-   "shown": "종이컵에 든 초콜릿 머핀",
    "en": "muffin",
    "ko": "머핀",
    "suggested": {
@@ -1220,7 +876,6 @@
     "ko": "머핀"
    },
    "enUS": null,
-   "reason": "케이크가 아니라 머핀 1개",
    "shop": "food",
    "decision": null,
    "learn": false,
@@ -1228,23 +883,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/climb",
    "sourceFile": "climb.png",
    "asset": "climb",
    "status": "MISMATCH",
-   "shown": "암벽·그물이 있는 놀이터 정글짐",
    "en": "climbing frame",
    "ko": "정글짐",
    "suggested": {
@@ -1252,7 +897,6 @@
     "ko": "정글짐"
    },
    "enUS": "jungle gym",
-   "reason": "climb은 동작 — 그림은 놀이 기구",
    "shop": "decoration",
    "decision": null,
    "learn": false,
@@ -1260,23 +904,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/coconut",
    "sourceFile": "coconut.png",
    "asset": "coconut",
    "status": "MATCH",
-   "shown": "코코넛",
    "en": "coconut",
    "ko": "코코넛",
    "suggested": {
@@ -1284,7 +918,6 @@
     "ko": "코코넛"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -1295,23 +928,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/cookie",
    "sourceFile": "cookie.png",
    "asset": "cookie",
    "status": "MATCH",
-   "shown": "쿠키",
    "en": "biscuit",
    "ko": "쿠키",
    "suggested": {
@@ -1319,7 +942,6 @@
     "ko": "쿠키"
    },
    "enUS": "cookie",
-   "reason": "영국식 우선",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -1330,23 +952,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/corn",
    "sourceFile": "corn.png",
    "asset": "corn",
    "status": "MATCH",
-   "shown": "옥수수",
    "en": "sweetcorn",
    "ko": "옥수수",
    "suggested": {
@@ -1354,7 +966,6 @@
     "ko": "옥수수"
    },
    "enUS": "corn",
-   "reason": "영국식 우선",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -1365,23 +976,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/crayon",
    "sourceFile": "crayon.png",
    "asset": "crayon",
    "status": "MATCH",
-   "shown": "크레용",
    "en": "crayon",
    "ko": "크레용",
    "suggested": {
@@ -1389,7 +990,6 @@
     "ko": "크레용"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -1400,23 +1000,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/croissant",
    "sourceFile": "croissant.png",
    "asset": "croissant",
    "status": "MATCH",
-   "shown": "크루아상",
    "en": "croissant",
    "ko": "크루아상",
    "suggested": {
@@ -1424,7 +1014,6 @@
     "ko": "크루아상"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -1435,23 +1024,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/cucumber",
    "sourceFile": "cucumber.png",
    "asset": "cucumber",
    "status": "MATCH",
-   "shown": "오이",
    "en": "cucumber",
    "ko": "오이",
    "suggested": {
@@ -1459,7 +1038,6 @@
     "ko": "오이"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -1470,23 +1048,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/cup",
    "sourceFile": "cup.png",
    "asset": "cup",
    "status": "MATCH",
-   "shown": "컵",
    "en": "cup",
    "ko": "컵",
    "suggested": {
@@ -1494,7 +1062,6 @@
     "ko": "컵"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "furniture",
    "decision": null,
    "learn": true,
@@ -1509,23 +1076,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/desk",
    "sourceFile": "desk.png",
    "asset": "desk",
    "status": "MATCH",
-   "shown": "책상",
    "en": "desk",
    "ko": "책상",
    "suggested": {
@@ -1533,7 +1090,6 @@
     "ko": "책상"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "furniture",
    "decision": null,
    "learn": true,
@@ -1548,23 +1104,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/dock",
    "sourceFile": "dock.png",
    "asset": "dock",
    "status": "UNCERTAIN",
-   "shown": "밧줄 기둥이 있는 나무 선착장",
    "en": "jetty",
    "ko": "선착장",
    "suggested": {
@@ -1572,7 +1118,6 @@
     "ko": "선착장"
    },
    "enUS": "dock",
-   "reason": "dock/jetty/pier 중 결정 필요",
    "shop": "decoration",
    "decision": null,
    "learn": false,
@@ -1580,23 +1125,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/dog bowl",
    "sourceFile": "dog bowl.png",
    "asset": "dog-bowl",
    "status": "MATCH",
-   "shown": "강아지 밥그릇",
    "en": "dog bowl",
    "ko": "강아지 밥그릇",
    "suggested": {
@@ -1604,7 +1139,6 @@
     "ko": "강아지 밥그릇"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "pet",
    "decision": null,
    "learn": true,
@@ -1615,23 +1149,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/donut",
    "sourceFile": "donut.png",
    "asset": "donut",
    "status": "MATCH",
-   "shown": "도넛",
    "en": "doughnut",
    "ko": "도넛",
    "suggested": {
@@ -1639,7 +1163,6 @@
     "ko": "도넛"
    },
    "enUS": "donut",
-   "reason": "영국식 우선",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -1650,23 +1173,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/dress",
    "sourceFile": "dress.png",
    "asset": "dress",
    "status": "MATCH",
-   "shown": "원피스",
    "en": "dress",
    "ko": "원피스",
    "suggested": {
@@ -1674,7 +1187,6 @@
     "ko": "원피스"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "clothes",
    "decision": null,
    "learn": true,
@@ -1689,23 +1201,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/duck",
    "sourceFile": "duck.png",
    "asset": "duck",
    "status": "UNCERTAIN",
-   "shown": "노란 고무 오리 장난감",
    "en": "rubber duck",
    "ko": "고무 오리",
    "suggested": {
@@ -1713,7 +1215,6 @@
     "ko": "고무 오리"
    },
    "enUS": null,
-   "reason": "duck(동물)으로 가르칠지 장난감으로 가르칠지 결정 필요",
    "shop": "toy",
    "decision": null,
    "learn": false,
@@ -1721,23 +1222,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/egg",
    "sourceFile": "egg.png",
    "asset": "egg",
    "status": "MATCH",
-   "shown": "달걀",
    "en": "egg",
    "ko": "달걀",
    "suggested": {
@@ -1745,7 +1236,6 @@
     "ko": "달걀"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -1760,23 +1250,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/eraser",
    "sourceFile": "eraser.png",
    "asset": "eraser",
    "status": "MATCH",
-   "shown": "지우개",
    "en": "rubber",
    "ko": "지우개",
    "suggested": {
@@ -1784,7 +1264,6 @@
     "ko": "지우개"
    },
    "enUS": "eraser",
-   "reason": "영국식 우선",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -1795,23 +1274,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/firefighter",
    "sourceFile": "firefighter.png",
    "asset": "firefighter",
    "status": "MISMATCH",
-   "shown": "사다리가 달린 빨간 소방차",
    "en": "fire engine",
    "ko": "소방차",
    "suggested": {
@@ -1819,7 +1288,6 @@
     "ko": "소방차"
    },
    "enUS": "fire truck",
-   "reason": "사람(소방관)이 아니라 차량",
    "shop": "toy",
    "decision": null,
    "learn": false,
@@ -1827,23 +1295,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/fishing pole",
    "sourceFile": "fishing pole.png",
    "asset": "fishing-pole",
    "status": "MATCH",
-   "shown": "낚싯대",
    "en": "fishing rod",
    "ko": "낚싯대",
    "suggested": {
@@ -1851,7 +1309,6 @@
     "ko": "낚싯대"
    },
    "enUS": "fishing pole",
-   "reason": "영국식 우선",
    "shop": "toy",
    "decision": null,
    "learn": true,
@@ -1862,23 +1319,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/flower",
    "sourceFile": "flower.png",
    "asset": "flower",
    "status": "MULTIPLE",
-   "shown": "화분 상자에 심긴 분홍 튤립",
    "en": "tulips",
    "ko": "튤립 화단",
    "suggested": {
@@ -1886,7 +1333,6 @@
     "ko": "튤립 화단"
    },
    "enUS": null,
-   "reason": "꽃과 화분 상자",
    "shop": "garden",
    "decision": null,
    "learn": false,
@@ -1894,23 +1340,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/flower111",
    "sourceFile": "flower111.png",
    "asset": "flower111",
    "status": "UNCERTAIN",
-   "shown": "분홍 장미 한 송이",
    "en": "rose",
    "ko": "장미",
    "suggested": {
@@ -1918,7 +1354,6 @@
     "ko": "장미"
    },
    "enUS": null,
-   "reason": "flower로 가르칠지 rose로 가르칠지 결정 필요",
    "shop": "garden",
    "decision": null,
    "learn": false,
@@ -1926,23 +1361,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/flower2",
    "sourceFile": "flower2.png",
    "asset": "flower2",
    "status": "MULTIPLE",
-   "shown": "화분 상자에 심긴 노란 수선화",
    "en": "daffodils",
    "ko": "수선화 화단",
    "suggested": {
@@ -1950,7 +1375,6 @@
     "ko": "수선화 화단"
    },
    "enUS": null,
-   "reason": "꽃과 화분 상자",
    "shop": "garden",
    "decision": null,
    "learn": false,
@@ -1958,23 +1382,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/flower3",
    "sourceFile": "flower3.png",
    "asset": "flower3",
    "status": "MULTIPLE",
-   "shown": "화분 상자에 심긴 파란 수국",
    "en": "hydrangeas",
    "ko": "수국 화단",
    "suggested": {
@@ -1982,7 +1396,6 @@
     "ko": "수국 화단"
    },
    "enUS": null,
-   "reason": "꽃과 화분 상자, 저레벨 단어 아님",
    "shop": "garden",
    "decision": null,
    "learn": false,
@@ -1990,23 +1403,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/flower4",
    "sourceFile": "flower4.png",
    "asset": "flower4",
    "status": "UNCERTAIN",
-   "shown": "분홍 장미 덤불",
    "en": "rose bush",
    "ko": "장미 덤불",
    "suggested": {
@@ -2014,7 +1417,6 @@
     "ko": "장미 덤불"
    },
    "enUS": null,
-   "reason": "roses/rose bush/flowers 중 결정 필요",
    "shop": "garden",
    "decision": null,
    "learn": false,
@@ -2022,23 +1424,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/flower6",
    "sourceFile": "flower6.png",
    "asset": "flower6",
    "status": "MISMATCH",
-   "shown": "허브(바질·로즈메리·차이브)가 심긴 화단",
    "en": "herbs",
    "ko": "허브 화단",
    "suggested": {
@@ -2046,7 +1438,6 @@
     "ko": "허브 화단"
    },
    "enUS": null,
-   "reason": "꽃보다 허브가 중심",
    "shop": "garden",
    "decision": null,
    "learn": false,
@@ -2054,23 +1445,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/flwoer5",
    "sourceFile": "flwoer5.png",
    "asset": "flwoer5",
    "status": "MISMATCH",
-   "shown": "호박이 열린 텃밭 화단",
    "en": "pumpkin patch",
    "ko": "호박 텃밭",
    "suggested": {
@@ -2078,7 +1459,6 @@
     "ko": "호박 텃밭"
    },
    "enUS": null,
-   "reason": "꽃이 아니라 호박",
    "shop": "garden",
    "decision": null,
    "learn": false,
@@ -2086,23 +1466,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/glass",
    "sourceFile": "glass.png",
    "asset": "glass",
    "status": "MATCH",
-   "shown": "유리컵",
    "en": "glass",
    "ko": "유리컵",
    "suggested": {
@@ -2110,7 +1480,6 @@
     "ko": "유리컵"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "furniture",
    "decision": null,
    "learn": true,
@@ -2125,23 +1494,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/glasses",
    "sourceFile": "glasses.png",
    "asset": "glasses",
    "status": "MISMATCH",
-   "shown": "청록색 테 선글라스(검은 렌즈)",
    "en": "sunglasses",
    "ko": "선글라스",
    "suggested": {
@@ -2149,7 +1508,6 @@
     "ko": "선글라스"
    },
    "enUS": null,
-   "reason": "렌즈가 검은 선글라스",
    "shop": "clothes",
    "decision": null,
    "learn": false,
@@ -2157,23 +1515,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/global",
    "sourceFile": "global.png",
    "asset": "global",
    "status": "MISMATCH",
-   "shown": "받침대 있는 지구본",
    "en": "globe",
    "ko": "지구본",
    "suggested": {
@@ -2181,7 +1529,6 @@
     "ko": "지구본"
    },
    "enUS": null,
-   "reason": "global은 형용사 — 물건은 globe",
    "shop": "school",
    "decision": null,
    "learn": false,
@@ -2189,23 +1536,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/glove",
    "sourceFile": "glove.png",
    "asset": "glove",
    "status": "MATCH",
-   "shown": "장갑",
    "en": "glove",
    "ko": "장갑",
    "suggested": {
@@ -2213,7 +1550,6 @@
     "ko": "장갑"
    },
    "enUS": null,
-   "reason": "그림은 한 짝",
    "shop": "clothes",
    "decision": null,
    "learn": true,
@@ -2228,23 +1564,13 @@
    },
    "existingWord": "glove",
    "newCandidate": false,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/glue",
    "sourceFile": "glue.png",
    "asset": "glue",
    "status": "MATCH",
-   "shown": "풀",
    "en": "glue stick",
    "ko": "풀",
    "suggested": {
@@ -2252,7 +1578,6 @@
     "ko": "풀"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -2263,23 +1588,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/grapefruit",
    "sourceFile": "grapefruit.png",
    "asset": "grapefruit",
    "status": "MISMATCH",
-   "shown": "망고 한 개(잎 달린 붉은·노란 과일)",
    "en": "mango",
    "ko": "망고",
    "suggested": {
@@ -2287,7 +1602,6 @@
     "ko": "망고"
    },
    "enUS": null,
-   "reason": "자몽이 아니라 망고 모양과 색",
    "shop": "food",
    "decision": null,
    "learn": false,
@@ -2295,23 +1609,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/grapes",
    "sourceFile": "grapes.png",
    "asset": "grapes",
    "status": "MATCH",
-   "shown": "포도",
    "en": "grapes",
    "ko": "포도",
    "suggested": {
@@ -2319,7 +1623,6 @@
     "ko": "포도"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -2330,23 +1633,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/guitar",
    "sourceFile": "guitar.png",
    "asset": "guitar",
    "status": "MATCH",
-   "shown": "기타",
    "en": "guitar",
    "ko": "기타",
    "suggested": {
@@ -2354,7 +1647,6 @@
     "ko": "기타"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "toy",
    "decision": null,
    "learn": true,
@@ -2365,23 +1657,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/hamburger",
    "sourceFile": "hamburger.png",
    "asset": "hamburger",
    "status": "MATCH",
-   "shown": "햄버거",
    "en": "hamburger",
    "ko": "햄버거",
    "suggested": {
@@ -2389,7 +1671,6 @@
     "ko": "햄버거"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -2400,23 +1681,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/helmet",
    "sourceFile": "helmet.png",
    "asset": "helmet",
    "status": "MATCH",
-   "shown": "헬멧",
    "en": "helmet",
    "ko": "헬멧",
    "suggested": {
@@ -2424,7 +1695,6 @@
     "ko": "헬멧"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "clothes",
    "decision": null,
    "learn": true,
@@ -2435,23 +1705,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/honey",
    "sourceFile": "honey.png",
    "asset": "honey",
    "status": "MATCH",
-   "shown": "꿀",
    "en": "honey",
    "ko": "꿀",
    "suggested": {
@@ -2459,7 +1719,6 @@
     "ko": "꿀"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -2470,23 +1729,13 @@
    "phonicsCandidate": null,
    "existingWord": "honey",
    "newCandidate": false,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/horse",
    "sourceFile": "horse.png",
    "asset": "horse",
    "status": "MISMATCH",
-   "shown": "나무 흔들 목마",
    "en": "rocking horse",
    "ko": "흔들 목마",
    "suggested": {
@@ -2494,7 +1743,6 @@
     "ko": "흔들 목마"
    },
    "enUS": null,
-   "reason": "살아 있는 말이 아니라 장난감",
    "shop": "toy",
    "decision": null,
    "learn": false,
@@ -2502,23 +1750,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/hotdog",
    "sourceFile": "hotdog.png",
    "asset": "hotdog",
    "status": "MATCH",
-   "shown": "핫도그",
    "en": "hot dog",
    "ko": "핫도그",
    "suggested": {
@@ -2526,7 +1764,6 @@
     "ko": "핫도그"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -2537,23 +1774,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/ice crema",
    "sourceFile": "ice crema.png",
    "asset": "ice-crema",
    "status": "MATCH",
-   "shown": "아이스크림",
    "en": "ice cream",
    "ko": "아이스크림",
    "suggested": {
@@ -2561,7 +1788,6 @@
     "ko": "아이스크림"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정(ice cream)",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -2572,23 +1798,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/ink",
    "sourceFile": "ink.png",
    "asset": "ink",
    "status": "MATCH",
-   "shown": "잉크",
    "en": "ink",
    "ko": "잉크",
    "suggested": {
@@ -2596,7 +1812,6 @@
     "ko": "잉크"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -2611,23 +1826,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/jacket",
    "sourceFile": "jacket.png",
    "asset": "jacket",
    "status": "MATCH",
-   "shown": "재킷",
    "en": "jacket",
    "ko": "재킷",
    "suggested": {
@@ -2635,7 +1840,6 @@
     "ko": "재킷"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "clothes",
    "decision": null,
    "learn": true,
@@ -2646,23 +1850,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/jam",
    "sourceFile": "jam.png",
    "asset": "jam",
    "status": "MATCH",
-   "shown": "잼",
    "en": "jam",
    "ko": "잼",
    "suggested": {
@@ -2670,7 +1864,6 @@
     "ko": "잼"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -2685,23 +1878,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/jump rope",
    "sourceFile": "jump rope.png",
    "asset": "jump-rope",
    "status": "MATCH",
-   "shown": "줄넘기",
    "en": "skipping rope",
    "ko": "줄넘기",
    "suggested": {
@@ -2709,7 +1892,6 @@
     "ko": "줄넘기"
    },
    "enUS": "jump rope",
-   "reason": "영국식 우선",
    "shop": "toy",
    "decision": null,
    "learn": true,
@@ -2720,23 +1902,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/key",
    "sourceFile": "key.png",
    "asset": "key",
    "status": "MATCH",
-   "shown": "열쇠",
    "en": "key",
    "ko": "열쇠",
    "suggested": {
@@ -2744,7 +1916,6 @@
     "ko": "열쇠"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "decoration",
    "decision": null,
    "learn": true,
@@ -2760,23 +1931,13 @@
    },
    "existingWord": "key",
    "newCandidate": false,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/kite",
    "sourceFile": "kite.png",
    "asset": "kite",
    "status": "MATCH",
-   "shown": "연",
    "en": "kite",
    "ko": "연",
    "suggested": {
@@ -2784,7 +1945,6 @@
     "ko": "연"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "toy",
    "decision": null,
    "learn": true,
@@ -2799,23 +1959,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/kiwi",
    "sourceFile": "kiwi.png",
    "asset": "kiwi",
    "status": "MATCH",
-   "shown": "키위",
    "en": "kiwi",
    "ko": "키위",
    "suggested": {
@@ -2823,7 +1973,6 @@
     "ko": "키위"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -2834,23 +1983,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/le,om",
    "sourceFile": "le,om.png",
    "asset": "le-om",
    "status": "MATCH",
-   "shown": "레몬",
    "en": "lemon",
    "ko": "레몬",
    "suggested": {
@@ -2858,7 +1997,6 @@
     "ko": "레몬"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정(lemon)",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -2869,23 +2007,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/letter",
    "sourceFile": "letter.png",
    "asset": "letter",
    "status": "MISMATCH",
-   "shown": "닫힌 흰 편지 봉투",
    "en": "envelope",
    "ko": "봉투",
    "suggested": {
@@ -2893,7 +2021,6 @@
     "ko": "봉투"
    },
    "enUS": null,
-   "reason": "편지지·글씨가 보이지 않고 봉투만 있음",
    "shop": "school",
    "decision": null,
    "learn": false,
@@ -2901,23 +2028,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/lettuceaa",
    "sourceFile": "lettuceaa.png",
    "asset": "lettuceaa",
    "status": "MATCH",
-   "shown": "상추",
    "en": "lettuce",
    "ko": "상추",
    "suggested": {
@@ -2925,7 +2042,6 @@
     "ko": "상추"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정(lettuce)",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -2936,23 +2052,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/lunchbox'",
    "sourceFile": "lunchbox'.png",
    "asset": "lunchbox",
    "status": "MATCH",
-   "shown": "도시락",
    "en": "lunchbox",
    "ko": "도시락",
    "suggested": {
@@ -2960,7 +2066,6 @@
     "ko": "도시락"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정(lunchbox)",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -2971,23 +2076,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/melon",
    "sourceFile": "melon.png",
    "asset": "melon",
    "status": "MATCH",
-   "shown": "멜론",
    "en": "melon",
    "ko": "멜론",
    "suggested": {
@@ -2995,7 +2090,6 @@
     "ko": "멜론"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -3006,23 +2100,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/micro",
    "sourceFile": "micro.png",
    "asset": "micro",
    "status": "MISMATCH",
-   "shown": "손잡이 달린 돋보기",
    "en": "magnifying glass",
    "ko": "돋보기",
    "suggested": {
@@ -3030,7 +2114,6 @@
     "ko": "돋보기"
    },
    "enUS": null,
-   "reason": "현미경(현미경.png)이 아님",
    "shop": "school",
    "decision": null,
    "learn": false,
@@ -3038,23 +2121,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/milk",
    "sourceFile": "milk.png",
    "asset": "milk",
    "status": "MATCH",
-   "shown": "우유",
    "en": "milk",
    "ko": "우유",
    "suggested": {
@@ -3062,7 +2135,6 @@
     "ko": "우유"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -3077,23 +2149,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/mushroom",
    "sourceFile": "mushroom.png",
    "asset": "mushroom",
    "status": "UNCERTAIN",
-   "shown": "무늬가 있는 장식용 버섯 3개",
    "en": "mushrooms",
    "ko": "버섯 장식",
    "suggested": {
@@ -3101,7 +2163,6 @@
     "ko": "버섯 장식"
    },
    "enUS": null,
-   "reason": "먹는 버섯(mushroom2323.png)과 다름, 여러 개",
    "shop": "garden",
    "decision": null,
    "learn": false,
@@ -3109,23 +2170,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/mushroom2323",
    "sourceFile": "mushroom2323.png",
    "asset": "mushroom2323",
    "status": "MATCH",
-   "shown": "버섯",
    "en": "mushroom",
    "ko": "버섯",
    "suggested": {
@@ -3133,7 +2184,6 @@
     "ko": "버섯"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정(mushroom)",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -3144,23 +2194,13 @@
    "phonicsCandidate": null,
    "existingWord": "mushroom",
    "newCandidate": false,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/notebook",
    "sourceFile": "notebook.png",
    "asset": "notebook",
    "status": "MATCH",
-   "shown": "공책",
    "en": "notebook",
    "ko": "공책",
    "suggested": {
@@ -3168,7 +2208,6 @@
     "ko": "공책"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -3179,23 +2218,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/onion",
    "sourceFile": "onion.png",
    "asset": "onion",
    "status": "MATCH",
-   "shown": "양파",
    "en": "onion",
    "ko": "양파",
    "suggested": {
@@ -3203,7 +2232,6 @@
     "ko": "양파"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -3214,23 +2242,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/orange",
    "sourceFile": "orange.png",
    "asset": "orange",
    "status": "MATCH",
-   "shown": "오렌지",
    "en": "orange",
    "ko": "오렌지",
    "suggested": {
@@ -3238,7 +2256,6 @@
     "ko": "오렌지"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -3249,23 +2266,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/palette",
    "sourceFile": "palette.png",
    "asset": "palette",
    "status": "MATCH",
-   "shown": "팔레트",
    "en": "palette",
    "ko": "팔레트",
    "suggested": {
@@ -3273,7 +2280,6 @@
     "ko": "팔레트"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -3284,23 +2290,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/pancake",
    "sourceFile": "pancake.png",
    "asset": "pancake",
    "status": "MATCH",
-   "shown": "팬케이크",
    "en": "pancake",
    "ko": "팬케이크",
    "suggested": {
@@ -3308,7 +2304,6 @@
     "ko": "팬케이크"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -3319,23 +2314,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/pants",
    "sourceFile": "pants.png",
    "asset": "pants",
    "status": "MISMATCH",
-   "shown": "끈 달린 청록색 반바지",
    "en": "shorts",
    "ko": "반바지",
    "suggested": {
@@ -3343,7 +2328,6 @@
     "ko": "반바지"
    },
    "enUS": null,
-   "reason": "길이가 무릎 위 — 긴 바지(trousers.png)와 다름",
    "shop": "clothes",
    "decision": null,
    "learn": false,
@@ -3351,23 +2335,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/peach",
    "sourceFile": "peach.png",
    "asset": "peach",
    "status": "MATCH",
-   "shown": "복숭아",
    "en": "peach",
    "ko": "복숭아",
    "suggested": {
@@ -3375,7 +2349,6 @@
     "ko": "복숭아"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -3390,23 +2363,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/pear",
    "sourceFile": "pear.png",
    "asset": "pear",
    "status": "MATCH",
-   "shown": "배",
    "en": "pear",
    "ko": "배",
    "suggested": {
@@ -3414,7 +2377,6 @@
     "ko": "배"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -3429,23 +2391,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/pen",
    "sourceFile": "pen.png",
    "asset": "pen",
    "status": "MATCH",
-   "shown": "펜",
    "en": "pen",
    "ko": "펜",
    "suggested": {
@@ -3453,7 +2405,6 @@
     "ko": "펜"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -3468,23 +2419,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/pencil",
    "sourceFile": "pencil.png",
    "asset": "pencil",
    "status": "MATCH",
-   "shown": "연필",
    "en": "pencil",
    "ko": "연필",
    "suggested": {
@@ -3492,7 +2433,6 @@
     "ko": "연필"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -3503,23 +2443,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/pencil sharper",
    "sourceFile": "pencil sharper.png",
    "asset": "pencil-sharper",
    "status": "MATCH",
-   "shown": "연필깎이",
    "en": "pencil sharpener",
    "ko": "연필깎이",
    "suggested": {
@@ -3527,7 +2457,6 @@
     "ko": "연필깎이"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정(pencil sharpener)",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -3538,23 +2467,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/pepper",
    "sourceFile": "pepper.png",
    "asset": "pepper",
    "status": "MATCH",
-   "shown": "피망",
    "en": "pepper",
    "ko": "피망",
    "suggested": {
@@ -3562,7 +2481,6 @@
     "ko": "피망"
    },
    "enUS": "bell pepper",
-   "reason": "영국식 우선",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -3573,23 +2491,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/pineapple",
    "sourceFile": "pineapple.png",
    "asset": "pineapple",
    "status": "MATCH",
-   "shown": "파인애플",
    "en": "pineapple",
    "ko": "파인애플",
    "suggested": {
@@ -3597,7 +2505,6 @@
     "ko": "파인애플"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -3608,23 +2515,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/pink book",
    "sourceFile": "pink book.png",
    "asset": "pink-book",
    "status": "UNCERTAIN",
-   "shown": "장미 무늬 분홍 책",
    "en": "book",
    "ko": "책",
    "suggested": {
@@ -3632,7 +2529,6 @@
     "ko": "책"
    },
    "enUS": null,
-   "reason": "일기장인지 알 수 없음 — book.png와 단어가 겹침",
    "shop": "school",
    "decision": null,
    "learn": false,
@@ -3640,23 +2536,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/pizza",
    "sourceFile": "pizza.png",
    "asset": "pizza",
    "status": "MATCH",
-   "shown": "피자",
    "en": "pizza",
    "ko": "피자",
    "suggested": {
@@ -3664,7 +2550,6 @@
     "ko": "피자"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -3675,23 +2560,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/pnecilcase",
    "sourceFile": "pnecilcase.png",
    "asset": "pnecilcase",
    "status": "MATCH",
-   "shown": "필통",
    "en": "pencil case",
    "ko": "필통",
    "suggested": {
@@ -3699,7 +2574,6 @@
     "ko": "필통"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정(pencil case)",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -3710,23 +2584,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/potato",
    "sourceFile": "potato.png",
    "asset": "potato",
    "status": "MATCH",
-   "shown": "감자",
    "en": "potato",
    "ko": "감자",
    "suggested": {
@@ -3734,7 +2598,6 @@
     "ko": "감자"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -3745,23 +2608,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/pumpkin",
    "sourceFile": "pumpkin.png",
    "asset": "pumpkin",
    "status": "MATCH",
-   "shown": "호박",
    "en": "pumpkin",
    "ko": "호박",
    "suggested": {
@@ -3769,7 +2622,6 @@
     "ko": "호박"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -3780,23 +2632,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/racket",
    "sourceFile": "racket.png",
    "asset": "racket",
    "status": "MATCH",
-   "shown": "라켓",
    "en": "racket",
    "ko": "라켓",
    "suggested": {
@@ -3804,7 +2646,6 @@
     "ko": "라켓"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "toy",
    "decision": null,
    "learn": true,
@@ -3815,23 +2656,13 @@
    "phonicsCandidate": null,
    "existingWord": "racket",
    "newCandidate": false,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/radish",
    "sourceFile": "radish.png",
    "asset": "radish",
    "status": "MATCH",
-   "shown": "무",
    "en": "radish",
    "ko": "무",
    "suggested": {
@@ -3839,7 +2670,6 @@
     "ko": "무"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -3850,23 +2680,13 @@
    "phonicsCandidate": null,
    "existingWord": "radish",
    "newCandidate": false,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/rainboot",
    "sourceFile": "rainboot.png",
    "asset": "rainboot",
    "status": "MATCH",
-   "shown": "장화",
    "en": "wellington boot",
    "ko": "장화",
    "suggested": {
@@ -3874,7 +2694,6 @@
     "ko": "장화"
    },
    "enUS": "rain boot",
-   "reason": "영국식 우선 · 그림은 한 짝",
    "shop": "clothes",
    "decision": null,
    "learn": true,
@@ -3885,23 +2704,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/rice",
    "sourceFile": "rice.png",
    "asset": "rice",
    "status": "MATCH",
-   "shown": "밥",
    "en": "rice",
    "ko": "밥",
    "suggested": {
@@ -3909,7 +2718,6 @@
     "ko": "밥"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -3924,23 +2732,13 @@
    },
    "existingWord": "rice",
    "newCandidate": false,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/robot",
    "sourceFile": "robot.png",
    "asset": "robot",
    "status": "MATCH",
-   "shown": "로봇",
    "en": "robot",
    "ko": "로봇",
    "suggested": {
@@ -3948,7 +2746,6 @@
     "ko": "로봇"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "toy",
    "decision": null,
    "learn": true,
@@ -3959,23 +2756,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/ruler",
    "sourceFile": "ruler.png",
    "asset": "ruler",
    "status": "MATCH",
-   "shown": "자",
    "en": "ruler",
    "ko": "자",
    "suggested": {
@@ -3983,7 +2770,6 @@
     "ko": "자"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -3994,23 +2780,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/sandbox",
    "sourceFile": "sandbox.png",
    "asset": "sandbox",
    "status": "MATCH",
-   "shown": "모래 놀이터",
    "en": "sandpit",
    "ko": "모래 놀이터",
    "suggested": {
@@ -4018,7 +2794,6 @@
     "ko": "모래 놀이터"
    },
    "enUS": "sandbox",
-   "reason": "영국식 우선",
    "shop": "decoration",
    "decision": null,
    "learn": true,
@@ -4030,23 +2805,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/sandwich",
    "sourceFile": "sandwich.png",
    "asset": "sandwich",
    "status": "MATCH",
-   "shown": "샌드위치",
    "en": "sandwich",
    "ko": "샌드위치",
    "suggested": {
@@ -4054,7 +2819,6 @@
     "ko": "샌드위치"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -4065,23 +2829,13 @@
    "phonicsCandidate": null,
    "existingWord": "sandwich",
    "newCandidate": false,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/scarf",
    "sourceFile": "scarf.png",
    "asset": "scarf",
    "status": "MATCH",
-   "shown": "목도리",
    "en": "scarf",
    "ko": "목도리",
    "suggested": {
@@ -4089,7 +2843,6 @@
     "ko": "목도리"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "clothes",
    "decision": null,
    "learn": true,
@@ -4104,23 +2857,13 @@
    },
    "existingWord": "scarf",
    "newCandidate": false,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/sccoter",
    "sourceFile": "sccoter.png",
    "asset": "sccoter",
    "status": "MATCH",
-   "shown": "킥보드",
    "en": "scooter",
    "ko": "킥보드",
    "suggested": {
@@ -4128,7 +2871,6 @@
     "ko": "킥보드"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정(scooter)",
    "shop": "toy",
    "decision": null,
    "learn": true,
@@ -4139,23 +2881,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/scissors",
    "sourceFile": "scissors.png",
    "asset": "scissors",
    "status": "MATCH",
-   "shown": "가위",
    "en": "scissors",
    "ko": "가위",
    "suggested": {
@@ -4163,7 +2895,6 @@
     "ko": "가위"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -4174,23 +2905,13 @@
    "phonicsCandidate": null,
    "existingWord": "scissors",
    "newCandidate": false,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/seasaw",
    "sourceFile": "seasaw.png",
    "asset": "seasaw",
    "status": "MATCH",
-   "shown": "시소",
    "en": "seesaw",
    "ko": "시소",
    "suggested": {
@@ -4198,7 +2919,6 @@
     "ko": "시소"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정(seesaw)",
    "shop": "decoration",
    "decision": null,
    "learn": true,
@@ -4210,23 +2930,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/shirt",
    "sourceFile": "shirt.png",
    "asset": "shirt",
    "status": "MATCH",
-   "shown": "셔츠",
    "en": "shirt",
    "ko": "셔츠",
    "suggested": {
@@ -4234,7 +2944,6 @@
     "ko": "셔츠"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "clothes",
    "decision": null,
    "learn": true,
@@ -4249,23 +2958,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/skateboard",
    "sourceFile": "skateboard.png",
    "asset": "skateboard",
    "status": "MATCH",
-   "shown": "스케이트보드",
    "en": "skateboard",
    "ko": "스케이트보드",
    "suggested": {
@@ -4273,7 +2972,6 @@
     "ko": "스케이트보드"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "toy",
    "decision": null,
    "learn": true,
@@ -4284,23 +2982,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/skirt",
    "sourceFile": "skirt.png",
    "asset": "skirt",
    "status": "MATCH",
-   "shown": "치마",
    "en": "skirt",
    "ko": "치마",
    "suggested": {
@@ -4308,7 +2996,6 @@
     "ko": "치마"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "clothes",
    "decision": null,
    "learn": true,
@@ -4323,23 +3010,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/slide",
    "sourceFile": "slide.png",
    "asset": "slide",
    "status": "MATCH",
-   "shown": "미끄럼틀",
    "en": "slide",
    "ko": "미끄럼틀",
    "suggested": {
@@ -4347,7 +3024,6 @@
     "ko": "미끄럼틀"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "decoration",
    "decision": null,
    "learn": true,
@@ -4363,23 +3039,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/sneaker",
    "sourceFile": "sneaker.png",
    "asset": "sneaker",
    "status": "MATCH",
-   "shown": "운동화",
    "en": "trainer",
    "ko": "운동화",
    "suggested": {
@@ -4387,7 +3053,6 @@
     "ko": "운동화"
    },
    "enUS": "sneaker",
-   "reason": "영국식 우선 · 그림은 한 짝",
    "shop": "clothes",
    "decision": null,
    "learn": true,
@@ -4398,23 +3063,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/soccerball",
    "sourceFile": "soccerball.png",
    "asset": "soccerball",
    "status": "MATCH",
-   "shown": "축구공",
    "en": "football",
    "ko": "축구공",
    "suggested": {
@@ -4422,7 +3077,6 @@
     "ko": "축구공"
    },
    "enUS": "soccer ball",
-   "reason": "영국식 우선",
    "shop": "toy",
    "decision": null,
    "learn": true,
@@ -4433,23 +3087,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/sock",
    "sourceFile": "sock.png",
    "asset": "sock",
    "status": "MATCH",
-   "shown": "양말",
    "en": "sock",
    "ko": "양말",
    "suggested": {
@@ -4457,7 +3101,6 @@
     "ko": "양말"
    },
    "enUS": null,
-   "reason": "그림은 한 짝",
    "shop": "clothes",
    "decision": null,
    "learn": true,
@@ -4472,23 +3115,13 @@
    },
    "existingWord": "sock",
    "newCandidate": false,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/soup",
    "sourceFile": "soup.png",
    "asset": "soup",
    "status": "MATCH",
-   "shown": "수프",
    "en": "soup",
    "ko": "수프",
    "suggested": {
@@ -4496,7 +3129,6 @@
     "ko": "수프"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -4511,23 +3143,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/spiral",
    "sourceFile": "spiral.png",
    "asset": "spiral",
    "status": "MISMATCH",
-   "shown": "아이싱 올린 시나몬 롤",
    "en": "cinnamon roll",
    "ko": "시나몬 롤",
    "suggested": {
@@ -4535,7 +3157,6 @@
     "ko": "시나몬 롤"
    },
    "enUS": null,
-   "reason": "spiral은 모양 설명일 뿐 물건 이름이 아님",
    "shop": "food",
    "decision": null,
    "learn": false,
@@ -4543,23 +3164,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/stapler",
    "sourceFile": "stapler.png",
    "asset": "stapler",
    "status": "MATCH",
-   "shown": "스테이플러",
    "en": "stapler",
    "ko": "스테이플러",
    "suggested": {
@@ -4567,7 +3178,6 @@
     "ko": "스테이플러"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -4578,23 +3188,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/stone",
    "sourceFile": "stone.png",
    "asset": "stone",
    "status": "UNCERTAIN",
-   "shown": "이끼와 꽃이 낀 바위 여러 개",
    "en": "rocks",
    "ko": "바위",
    "suggested": {
@@ -4602,7 +3202,6 @@
     "ko": "바위"
    },
    "enUS": null,
-   "reason": "stone/rock/rocks 중 결정 필요(여러 개)",
    "shop": "garden",
    "decision": null,
    "learn": false,
@@ -4610,23 +3209,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/strawberries",
    "sourceFile": "strawberries.png",
    "asset": "strawberries",
    "status": "MATCH",
-   "shown": "딸기",
    "en": "strawberry",
    "ko": "딸기",
    "suggested": {
@@ -4634,7 +3223,6 @@
     "ko": "딸기"
    },
    "enUS": null,
-   "reason": "그림은 딸기 한 개",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -4645,23 +3233,13 @@
    "phonicsCandidate": null,
    "existingWord": "strawberry",
    "newCandidate": false,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/sunflower",
    "sourceFile": "sunflower.png",
    "asset": "sunflower",
    "status": "MATCH",
-   "shown": "해바라기",
    "en": "sunflower",
    "ko": "해바라기",
    "suggested": {
@@ -4669,7 +3247,6 @@
     "ko": "해바라기"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "garden",
    "decision": null,
    "learn": true,
@@ -4681,23 +3258,13 @@
    "phonicsCandidate": null,
    "existingWord": "sunflower",
    "newCandidate": false,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/sweater",
    "sourceFile": "sweater.png",
    "asset": "sweater",
    "status": "MATCH",
-   "shown": "스웨터",
    "en": "jumper",
    "ko": "스웨터",
    "suggested": {
@@ -4705,7 +3272,6 @@
     "ko": "스웨터"
    },
    "enUS": "sweater",
-   "reason": "영국식 우선",
    "shop": "clothes",
    "decision": null,
    "learn": true,
@@ -4716,23 +3282,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/sweet potato",
    "sourceFile": "sweet potato.png",
    "asset": "sweet-potato",
    "status": "MATCH",
-   "shown": "고구마",
    "en": "sweet potato",
    "ko": "고구마",
    "suggested": {
@@ -4740,7 +3296,6 @@
     "ko": "고구마"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -4751,23 +3306,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/t-shirt",
    "sourceFile": "t-shirt.png",
    "asset": "t-shirt",
    "status": "MATCH",
-   "shown": "티셔츠",
    "en": "T-shirt",
    "ko": "티셔츠",
    "suggested": {
@@ -4775,7 +3320,6 @@
     "ko": "티셔츠"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "clothes",
    "decision": null,
    "learn": true,
@@ -4786,23 +3330,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/tape",
    "sourceFile": "tape.png",
    "asset": "tape",
    "status": "MATCH",
-   "shown": "테이프",
    "en": "tape",
    "ko": "테이프",
    "suggested": {
@@ -4810,7 +3344,6 @@
     "ko": "테이프"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -4825,23 +3358,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/teapot",
    "sourceFile": "teapot.png",
    "asset": "teapot",
    "status": "MISMATCH",
-   "shown": "받침 접시 위 차가 담긴 찻잔",
    "en": "teacup",
    "ko": "찻잔",
    "suggested": {
@@ -4849,7 +3372,6 @@
     "ko": "찻잔"
    },
    "enUS": null,
-   "reason": "주전자가 아님 — 찻주전자는 teapot1.png",
    "shop": "furniture",
    "decision": null,
    "learn": false,
@@ -4857,23 +3379,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/teapot1",
    "sourceFile": "teapot1.png",
    "asset": "teapot1",
    "status": "MATCH",
-   "shown": "찻주전자",
    "en": "teapot",
    "ko": "찻주전자",
    "suggested": {
@@ -4881,7 +3393,6 @@
     "ko": "찻주전자"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정(teapot)",
    "shop": "furniture",
    "decision": null,
    "learn": true,
@@ -4892,23 +3403,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/tellescope",
    "sourceFile": "tellescope.png",
    "asset": "tellescope",
    "status": "MATCH",
-   "shown": "망원경",
    "en": "telescope",
    "ko": "망원경",
    "suggested": {
@@ -4916,7 +3417,6 @@
     "ko": "망원경"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정(telescope)",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -4927,23 +3427,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/tomato",
    "sourceFile": "tomato.png",
    "asset": "tomato",
    "status": "MATCH",
-   "shown": "토마토",
    "en": "tomato",
    "ko": "토마토",
    "suggested": {
@@ -4951,7 +3441,6 @@
     "ko": "토마토"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -4962,23 +3451,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/top",
    "sourceFile": "top.png",
    "asset": "top",
    "status": "MATCH",
-   "shown": "팽이",
    "en": "spinning top",
    "ko": "팽이",
    "suggested": {
@@ -4986,7 +3465,6 @@
     "ko": "팽이"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "toy",
    "decision": null,
    "learn": true,
@@ -4997,23 +3475,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/train",
    "sourceFile": "train.png",
    "asset": "train",
    "status": "MATCH",
-   "shown": "기차",
    "en": "train",
    "ko": "기차",
    "suggested": {
@@ -5021,7 +3489,6 @@
     "ko": "기차"
    },
    "enUS": null,
-   "reason": "장난감·소형 모형 그림",
    "shop": "toy",
    "decision": null,
    "learn": true,
@@ -5036,23 +3503,13 @@
    },
    "existingWord": "train",
    "newCandidate": false,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/trousers",
    "sourceFile": "trousers.png",
    "asset": "trousers",
    "status": "MATCH",
-   "shown": "바지",
    "en": "trousers",
    "ko": "바지",
    "suggested": {
@@ -5060,7 +3517,6 @@
     "ko": "바지"
    },
    "enUS": "pants",
-   "reason": "영국식 우선",
    "shop": "clothes",
    "decision": null,
    "learn": true,
@@ -5071,23 +3527,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/tube",
    "sourceFile": "tube.png",
    "asset": "tube",
    "status": "MISMATCH",
-   "shown": "빨강·흰색 구명 튜브(밧줄 달림)",
    "en": "lifebuoy",
    "ko": "구명 튜브",
    "suggested": {
@@ -5095,7 +3541,6 @@
     "ko": "구명 튜브"
    },
    "enUS": "life ring",
-   "reason": "물놀이 튜브가 아니라 구명 부표",
    "shop": "decoration",
    "decision": null,
    "learn": false,
@@ -5103,23 +3548,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/umbrella",
    "sourceFile": "umbrella.png",
    "asset": "umbrella",
    "status": "MATCH",
-   "shown": "우산",
    "en": "umbrella",
    "ko": "우산",
    "suggested": {
@@ -5127,7 +3562,6 @@
     "ko": "우산"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "clothes",
    "decision": null,
    "learn": true,
@@ -5138,23 +3572,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/vase",
    "sourceFile": "vase.png",
    "asset": "vase",
    "status": "MATCH",
-   "shown": "꽃병",
    "en": "vase",
    "ko": "꽃병",
    "suggested": {
@@ -5162,7 +3586,6 @@
     "ko": "꽃병"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "furniture",
    "decision": null,
    "learn": true,
@@ -5177,23 +3600,13 @@
    },
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/watermelon",
    "sourceFile": "watermelon.png",
    "asset": "watermelon",
    "status": "MATCH",
-   "shown": "수박",
    "en": "watermelon",
    "ko": "수박",
    "suggested": {
@@ -5201,7 +3614,6 @@
     "ko": "수박"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -5212,23 +3624,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/white brocolli",
    "sourceFile": "white brocolli.png",
    "asset": "white-brocolli",
    "status": "MISMATCH",
-   "shown": "잎에 싸인 콜리플라워",
    "en": "cauliflower",
    "ko": "콜리플라워",
    "suggested": {
@@ -5236,7 +3638,6 @@
     "ko": "콜리플라워"
    },
    "enUS": null,
-   "reason": "\"white broccoli\"는 단어가 아님",
    "shop": "food",
    "decision": null,
    "learn": false,
@@ -5244,23 +3645,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": false,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": false
   },
   {
    "id": "pics2/yoyo",
    "sourceFile": "yoyo.png",
    "asset": "yoyo",
    "status": "MATCH",
-   "shown": "요요",
    "en": "yo-yo",
    "ko": "요요",
    "suggested": {
@@ -5268,7 +3659,6 @@
     "ko": "요요"
    },
    "enUS": null,
-   "reason": "파일명과 그림 일치",
    "shop": "toy",
    "decision": null,
    "learn": true,
@@ -5279,23 +3669,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/zucini",
    "sourceFile": "zucini.png",
    "asset": "zucini",
    "status": "MATCH",
-   "shown": "애호박",
    "en": "courgette",
    "ko": "애호박",
    "suggested": {
@@ -5303,7 +3683,6 @@
     "ko": "애호박"
    },
    "enUS": "zucchini",
-   "reason": "파일명 철자·번호 교정(zucchini) · 영국식 우선",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -5314,23 +3693,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/양배추",
    "sourceFile": "양배추.png",
    "asset": "kr-cabbage",
    "status": "MATCH",
-   "shown": "양배추",
    "en": "cabbage",
    "ko": "양배추",
    "suggested": {
@@ -5338,7 +3707,6 @@
     "ko": "양배추"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정((한글 파일명))",
    "shop": "food",
    "decision": null,
    "learn": true,
@@ -5349,23 +3717,13 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   },
   {
    "id": "pics2/현미경",
    "sourceFile": "현미경.png",
    "asset": "kr-microscope",
    "status": "MATCH",
-   "shown": "현미경",
    "en": "microscope",
    "ko": "현미경",
    "suggested": {
@@ -5373,7 +3731,6 @@
     "ko": "현미경"
    },
    "enUS": null,
-   "reason": "파일명 철자·번호 교정((한글 파일명))",
    "shop": "school",
    "decision": null,
    "learn": true,
@@ -5384,16 +3741,7 @@
    "phonicsCandidate": null,
    "existingWord": null,
    "newCandidate": true,
-   "autoLink": true,
-   "provenance": {
-    "picture": "viewed",
-    "en": "from-picture",
-    "ko": "inferred",
-    "shop": "inferred",
-    "enUS": "inferred",
-    "phonics": "inferred-from-spelling",
-    "existingWord": "string-match"
-   }
+   "autoLink": true
   }
  ]
 }

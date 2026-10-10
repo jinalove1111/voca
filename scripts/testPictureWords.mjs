@@ -12,6 +12,9 @@ const manifest = rd('src/assets/pictureWords/manifest.json')
 const verdicts = rd('scripts/pictureWords/source/verdicts.json')
 const E = data.entries
 const cnt = (f) => E.filter(f).length
+const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((x) => (x.isDirectory() ? walk(path.join(d, x.name)) : [path.join(d, x.name)]))
+const rel = (f) => path.relative(ROOT, f).split(path.sep).join('/')
+const importersOf = (needle) => walk(path.join(ROOT, 'src')).filter((f) => /\.(jsx?|mjs)$/.test(f)).filter((f) => fs.readFileSync(f, 'utf8').includes(needle)).map(rel)
 
 // ---- entries / status counts
 ok(E.length === 151, `151 entries (${E.length})`)
@@ -41,6 +44,10 @@ for (const e of E) {
 }
 ok(manifest.totals.bytes === total && manifest.totals.count === 151, 'manifest totals')
 
+const notes = rd('src/data/pictureWords/pictureWordsNotes.json')
+ok(E.every((e) => notes[e.id] && notes[e.id].shown && notes[e.id].reason && !('shown' in e) && !('reason' in e)), 'shown/reason live only in pictureWordsNotes.json (admin panel)')
+ok(importersOf('pictureWordsNotes').every((f) => f === 'src/components/admin/PictureWordReviewPanel.jsx'), 'notes json imported only by the admin panel')
+
 // ---- tracks / autoLink / phonics / reuse
 ok(E.every((e) => e.autoLink === (e.status === 'MATCH')), 'autoLink iff MATCH')
 ok(E.filter((e) => e.status !== 'MATCH').every((e) => e.tracks.length === 0 && e.learn === false && e.decision === null), 'non-MATCH (no decisions yet): tracks empty, learn false')
@@ -57,7 +64,7 @@ ok(E.every((e) => !('phonics' in e) && !e.tracks.includes('phonics')), 'no phoni
 ok(data.phonicsReview.orderConfirmed === false && data.phonicsReview.classified === false && /미확정/.test(data.phonicsReview.note), 'phonicsReview unconfirmed + unclassified')
 ok(cnt((e) => e.existingWord) === 18, 'existingWord 18')
 ok(E.every((e) => e.newCandidate === !e.existingWord), 'newCandidate = !existingWord')
-ok(E.every((e) => e.provenance?.picture === 'viewed' && e.provenance.ko === 'inferred'), 'provenance present')
+ok(data.provenance?.picture === 'viewed' && data.provenance.ko === 'inferred' && E.every((e) => !('provenance' in e)), 'provenance once at top level')
 ok(data.counts.total === 151 && data.counts.existingWord === 18, 'top-level counts')
 
 // ---- helper unit checks
@@ -137,16 +144,16 @@ const pracSrc = fs.readFileSync(path.join(ROOT, 'src/utils/pictureWords/practice
 ok(!/Math\.random|localStorage|sessionStorage|fetch\(|from 'react'|document\.|window\./.test(pracSrc), 'practice.js is pure (no random/storage/network/DOM)')
 
 // ---- source pins: data module
-const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((x) => (x.isDirectory() ? walk(path.join(d, x.name)) : [path.join(d, x.name)]))
-const rel = (f) => path.relative(ROOT, f).split(path.sep).join('/')
 const FORBID = /fetch\(|supabase|\/api\/|grantReward|XMLHttpRequest/
 const dataSrc = fs.readFileSync(path.join(ROOT, 'src/data/pictureWords/index.js'), 'utf8')
 ok(!FORBID.test(dataSrc), 'data module has no fetch/supabase/api/grantReward')
 ok(!/localStorage|from 'react'/.test(dataSrc), 'data module is pure (no storage/React)')
 
-// ---- isolation: only the panel (and the asset dir) may reference assets/pictureWords
-const importers = walk(path.join(ROOT, 'src')).filter((f) => /\.(jsx?|mjs)$/.test(f)).filter((f) => /assets\/pictureWords/.test(fs.readFileSync(f, 'utf8'))).map(rel)
-ok(importers.every((f) => f === 'src/components/admin/PictureWordReviewPanel.jsx'), `assets/pictureWords referenced only by the panel: ${importers.join(', ')}`)
+// ---- isolation: only the admin panel + the practice screen (and the data dir) may reference assets/pictureWords
+const importers = importersOf('assets/pictureWords')
+ok(importers.every((f) => f === 'src/components/admin/PictureWordReviewPanel.jsx' || f === 'src/components/pictureWords/PictureWordPractice.jsx'), `assets/pictureWords referenced only by the panel + practice screen: ${importers.join(', ')}`)
+const dataImporters = importersOf('data/pictureWords')
+ok(dataImporters.every((f) => f === 'src/components/admin/PictureWordReviewPanel.jsx' || f.startsWith('src/components/pictureWords/') || f.startsWith('src/data/pictureWords/')), `data/pictureWords imported only by admin panel, src/components/pictureWords/, data dir: ${dataImporters.join(', ')}`)
 
 // ---- panel source pins
 const panel = fs.readFileSync(path.join(ROOT, 'src/components/admin/PictureWordReviewPanel.jsx'), 'utf8')
@@ -161,7 +168,31 @@ for (const id of ['pwr-root', 'pwr-tab-', 'pwr-card-', 'pwr-img-', 'pwr-approve-
   ok(panel.includes(id), `testid ${id}`)
 }
 ok(panel.includes('학습 순서 미확정') && panel.includes('이 브라우저에만 저장됩니다') && panel.includes('설계 — 미구현'), 'required notices present')
-ok(!/pictureWords/.test(fs.readFileSync(path.join(ROOT, 'src/App.jsx'), 'utf8')), 'App.jsx (student shell) does not reference pictureWords')
+
+// ---- practice screen source pins (249차)
+const app = fs.readFileSync(path.join(ROOT, 'src/App.jsx'), 'utf8')
+ok(!/data\/pictureWords|assets\/pictureWords/.test(app), 'App.jsx imports neither the data nor the assets (only the lazy screen)')
+ok(/const PictureWordPractice = React\.lazy\(\(\) => import\('\.\/components\/pictureWords\/PictureWordPractice'\)\)/.test(app), 'App lazy-loads the practice screen')
+ok(app.includes('const pictureWordsEnabled = isTownWorldTester(studentId)'), 'gate = isTownWorldTester(studentId), no new flag')
+ok(/if \(!pictureWordsEnabled && screen === 'pictureWords'\) setScreen\('dashboard'\)/.test(app), 'guard effect sends non-testers back to the dashboard')
+ok(/pictureWordsEnabled && screen === 'pictureWords' && \(\s*<React\.Suspense/.test(app), 'screen rendered only for testers, under Suspense')
+ok(app.includes("screen !== 'pictureWords' && screen !== 'unit'"), 'SpeedBtn excluded on the practice screen')
+const dash = fs.readFileSync(path.join(ROOT, 'src/components/Dashboard.jsx'), 'utf8'), home = fs.readFileSync(path.join(ROOT, 'src/components/StudentHome.jsx'), 'utf8')
+ok(/onGoPictureWords && \(\s*<button[^>]*data-testid="dash-picture-words"/.test(dash) && dash.indexOf('dash-town-world') < dash.indexOf('dash-picture-words'), 'Dashboard button only with prop, after the town button')
+ok(/onGoPictureWords && \(\s*<button[^>]*data-testid="student-home-picture-words"/.test(home) && home.indexOf('student-home-town-world') < home.indexOf('student-home-picture-words'), 'StudentHome button only with prop, after the town button')
+const scr = fs.readFileSync(path.join(ROOT, 'src/components/pictureWords/PictureWordPractice.jsx'), 'utf8')
+ok(!/fetch\(|supabase|\/api\/|localStorage|sessionStorage|grantReward|markPronunciationOk|addStars|XMLHttpRequest|sendBeacon|trackEvent|productEvents/.test(scr), 'screen: no network/storage/reward/analytics')
+ok(!/data-correct|data-answer|data-right/.test(scr), 'screen: no data-correct/data-answer attributes')
+ok(/alt="그림"/.test(scr) && !/alt=\{/.test(scr), 'screen: img alt is the literal "그림"')
+ok(/useEffect\(\(\) => stopSpeaking, \[\]\)/.test(scr), 'screen: stopSpeaking on unmount')
+ok(/\{answered && \(\s*<div data-testid="pwp-feedback"[\s\S]*?<WordText word=\{word\} \/>[\s\S]*?<ListenBtn word=\{word\} \/>/.test(scr), 'quiz: feedback (word, meaning, listen) is conditionally mounted after answering')
+const quizCard = scr.slice(scr.indexOf('function QuizCard'), scr.indexOf('function Session'))
+const beforeAnswer = quizCard.slice(0, quizCard.indexOf('{answered && ('))
+ok(!/WordText|ListenBtn|pwp-word|pwp-ko|pwp-listen|\.ko/.test(beforeAnswer), 'quiz: nothing before the answered-conditional renders word/meaning/listen')
+ok(/data-testid=\{`pwp-opt-\$\{k\}`\}/.test(scr), 'quiz: positional option testids')
+ok(!/hidden|invisible|opacity-0|sr-only|display:\s*none/.test(quizCard), 'quiz: no CSS-hide tricks (conditional mount only)')
+for (const id of ['pwp-root', 'pwp-set-', 'pwp-picture', 'pwp-word', 'pwp-ko', 'pwp-listen', 'pwp-next', 'pwp-prev', 'pwp-rec', 'pwp-said', 'pwp-feedback', 'pwp-review-card', 'pwp-summary', 'pwp-summary-first-try', 'pwp-again', 'pwp-other-set', 'pwp-exit']) ok(scr.includes(id), `screen testid ${id}`)
+ok(scr.includes('useLocalRecorder') && scr.includes('RecorderControls') && /playWordAudio\(null/.test(scr), 'screen reuses recorder + playWordAudio (en-GB)')
 
 console.log(fail ? `FAIL ${fail}/${n}` : `PASS ${n}/${n} picture-word checks`)
 process.exit(fail ? 1 : 0)
